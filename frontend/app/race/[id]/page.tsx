@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { USE_MOCK, getMockRaceDetail, getMockPredictions, getMockTdData, getMockMeguPredicted } from "@/lib/mock";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
+import { MemberLockCard, MemberLockNote } from "@/components/upgrade/MemberLock";
 import { featureEnabled } from "@/lib/features";
 import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import ProbCalNote from "@/components/ProbCalNote";
@@ -299,7 +300,8 @@ export default function RaceDetailPage() {
   const [meguById, setMeguById] = useState<Record<string, MeguHorseData>>({});
   const [meguByNumber, setMeguByNumber] = useState<Record<string, MeguHorseData>>({});
   const [meguSource, setMeguSource] = useState<"db" | "mock">("mock");
-  const { isMember } = useAuthStatus();
+  const { isMember, loading: authLoading } = useAuthStatus();
+  const lock = !authLoading && !isMember;      // 匿名は勝率・複勝率まで（それ以外はサーバが落としている）
   const narrow = useNarrow();
 
   const loadSeq = useRef(0);
@@ -647,7 +649,7 @@ export default function RaceDetailPage() {
   /* ── AI予測 ── */
   const preds = predData?.predictions ?? [];
   const calibratedEv = preds.some((p) => p.ev_win_cal != null || p.ev_place_cal != null);       // EV の較正が有効なときだけ『(較正後)』と表示する
-  const hasPred = predData?.has_prediction === true && preds.some((p) => p.pred_score != null || p.composite_score != null);
+  const hasPred = predData?.has_prediction === true && preds.some((p) => p.pred_score != null || p.composite_score != null || p.win_prob != null);
   const sortedPreds = hasPred
     ? [...preds].sort((a, b) => (a.composite_rank ?? a.pred_rank ?? 99) - (b.composite_rank ?? b.pred_rank ?? 99))
     : preds;
@@ -681,6 +683,7 @@ export default function RaceDetailPage() {
         )}
       </div>
 
+      {hasPred && lock && <MemberLockNote />}
       {hasPred && <ProbCalNote pc={predData?.prob_calibration} preds={predData?.predictions} />}
 
       {!hasPred && (
@@ -691,7 +694,7 @@ export default function RaceDetailPage() {
             </div>
           )}
 
-      {forecastHorses.length > 0 && <PositionForecast horses={forecastHorses} pace={predData?.pace_forecast} gate={predData?.gate_bias} />}
+      {forecastHorses.length > 0 && !lock && <PositionForecast horses={forecastHorses} pace={predData?.pace_forecast} gate={predData?.gate_bias} />}
 
       {sortedPreds.length > 0 ? (
         <div style={{ overflowX: "auto" }}>
@@ -702,22 +705,22 @@ export default function RaceDetailPage() {
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={3}>{predData?.prob_calibration?.applied ? "予測確率（市場補正後）" : "予測確率"}</th>
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>想定オッズ</th>
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>期待値</th>
-                <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>推奨</th>
+                <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>めぐAI印</th>
               </tr>
               <tr>
-                {(["枠","馬番","馬名","勝率","連対率","複勝率","単勝","複勝",(calibratedEv ? "勝期待値(較正後)" : "勝期待値"),(calibratedEv ? "複期待値(較正後)" : "複期待値"),"印","買い判断"] as string[]).map((h, i) => {
-                  // AI columns: indices 3–9
-                  const isAiCol = i >= 3 && i <= 9;
+                {(["枠","馬番","馬名","勝率","連対率","複勝率","単勝","複勝",(calibratedEv ? "勝期待値(較正後)" : "勝期待値"),(calibratedEv ? "複期待値(較正後)" : "複期待値"),"めぐAI印","買い判断"] as string[]).map((h, i) => {
+                  // 会員限定の列: 勝率(3)・複勝率(5)以外の AI 列（連対率・想定オッズ・期待値・めぐAI印・買い判断）
+                  const isAiCol = i >= 4 && i !== 5;
                   return (
                     <th
                       key={h}
                       style={{
                         ...TH,
                         borderLeft: [3,6,8,10,12].includes(i) ? "1px solid rgba(36,48,73,0.5)" : undefined,
-                        color: isAiCol && !isMember ? "var(--text-dim)" : TH.color,
+                        color: isAiCol && lock ? "var(--text-dim)" : TH.color,
                       }}
                     >
-                      {isAiCol && !isMember ? <span style={{ marginRight: 3 }}>🔒</span> : null}{h}
+                      {isAiCol && lock ? <span style={{ marginRight: 3 }}>🔒</span> : null}{h}
                     </th>
                   );
                 })}
@@ -763,9 +766,9 @@ export default function RaceDetailPage() {
                       style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", fontSize: p.mark_type === "kesi" ? 14 : 18, fontWeight: 800, color: mark.color }}
                       title={p.mark_type === "kesi" ? p.kesi_reason || "消し（3着内に来る確率が低い）" : undefined}
                     >
-                      {p.mark_type === "kesi" ? <span style={{ border: "1.5px solid #94a3b8", borderRadius: 4, padding: "1px 4px" }}>{mark.sym}</span> : mark.sym}
+                      {lock ? <span style={{ color: "var(--text-dim)", fontSize: 12 }}>🔒</span> : p.mark_type === "kesi" ? <span style={{ border: "1.5px solid #94a3b8", borderRadius: 4, padding: "1px 4px" }}>{mark.sym}</span> : mark.sym}
                     </td>
-                    <td style={{ ...TD, fontSize: 11 }}>{p.buy_tier ?? "—"}</td>
+                    <td style={{ ...TD, fontSize: 11 }}>{lock ? "🔒" : (p.buy_tier ?? "—")}</td>
                 </tr>
                 );
               })}
@@ -790,7 +793,7 @@ export default function RaceDetailPage() {
       ) : null}
 
       <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 12 }}>
-        印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / 消: 3着内に来る確率が低い（10人気以下で複勝確率8%以下。過去の実績では約2.5%・目標5%以下。複数付くことも付かないこともある。印の上にカーソルで根拠） / —印なし。買い判断は期待値の最大で判定。期待値: {calibratedEv ? "過去の実績に合わせて較正した期待回収率。緑≥1.10 / 青≥1.00 / 灰≥0.90 / 赤＜0.90。推奨は較正後の期待値の最大で判定" : "緑≥1.3 / 青≥1.0 / 赤＜0.8"}
+        めぐAI印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / 消: 3着内に来る確率が低い（10人気以下で複勝確率8%以下。過去の実績では約2.5%・目標5%以下。複数付くことも付かないこともある。印の上にカーソルで根拠） / —印なし。買い判断は期待値の最大で判定。期待値: {calibratedEv ? "過去の実績に合わせて較正した期待回収率。緑≥1.10 / 青≥1.00 / 灰≥0.90 / 赤＜0.90。推奨は較正後の期待値の最大で判定" : "緑≥1.3 / 青≥1.0 / 赤＜0.8"}
       </p>
     </div>
   );
@@ -882,7 +885,7 @@ export default function RaceDetailPage() {
       {tab === "shutuba" && ShutubaTbl}
       {tab === "result" && ResultTbl}
       {tab === "predict" && PredPanel}
-      {tab === "bet" && <BetRecommend raceId={raceId} hasPrediction={hasPred} />}
+      {tab === "bet" && (lock ? <MemberLockCard title="推奨馬券" /> : <BetRecommend raceId={raceId} hasPrediction={hasPred} />)}
       {tab === "horses" && HorseDetails}
     </div>
   );

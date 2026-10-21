@@ -61,6 +61,9 @@ from starlette.responses import Response
 
 from src.api.auth import (
     is_developer,
+    is_member,
+    ROLE_MEMBER,
+    verify_member_login,
     requires_auth,
     is_public_path,
     verify_password,
@@ -70,6 +73,7 @@ from src.api.auth import (
     COOKIE_NAME,
 )
 from src.utils.keiba_logging import standard_log_formatter
+from src.api.tier import MEMBER_REQUIRED_BODY, member_only_path, redact_predictions, redact_race_detail
 from src.config.ports import mlflow_tracking_uri as _default_mlflow_uri
 
 
@@ -819,6 +823,9 @@ class KeibaDeploymentMiddleware(BaseHTTPMiddleware):
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         path = request.url.path
+        # 会員限定のパス（勝率・複勝率より先の情報）は匿名に 401。仕様: docs/operations/tiered_access.md
+        if request.method != "OPTIONS" and member_only_path(path) and not is_member(request):
+            return JSONResponse(MEMBER_REQUIRED_BODY, status_code=401)
         if requires_auth(path, request.method) and not is_developer(request):
             reason = classify_session(request)  # "none" | "expired" | "invalid"
             if path.startswith("/api/"):
@@ -986,8 +993,12 @@ async def login_submit(request: Request):
     form = await request.form()
     password = form.get("password", "")
     next_url = form.get("next", "/")
+    user_id = str(form.get("id", "") or "").strip()
 
-    if verify_password(password):
+    if user_id:
+        if verify_member_login(user_id, password):
+            return create_session_response(redirect_to=next_url, request=request, role=ROLE_MEMBER)
+    elif verify_password(password):
         return create_session_response(redirect_to=next_url, request=request)
 
     return templates.TemplateResponse("login.html", {
@@ -995,7 +1006,7 @@ async def login_submit(request: Request):
         "current_page": "login",
         "breadcrumbs": [],
         "next_url": next_url,
-        "error": "パスワードが正しくありません",
+        "error": "ID またはパスワードが正しくありません" if user_id else "パスワードが正しくありません",
         "session_notice": "",
     })
 
@@ -1008,7 +1019,8 @@ async def logout(request: Request):
 @app.get("/api/auth/status", response_class=JSONResponse)
 async def auth_status(request: Request):
     dev = is_developer(request)
-    out = {"is_developer": dev}
+    member = is_member(request)
+    out = {"is_developer": dev, "is_member": member, "logged_in": member, "tier": "dev" if dev else "member" if member else "public"}
     try:
         out.update(_deployment_info(include_storage=False))
     except Exception:
@@ -6774,8 +6786,28 @@ def _race_detail_cache_set(race_id: str, value: tuple) -> None:
             del _race_detail_cache[k]
 
 
+def _tiered_json(request: Request, resp, redactor):
+    """会員・開発者はそのまま、匿名は redactor で会員限定の項目を落とした JSON を返す（サーバ側で落とす）。"""
+    if is_member(request):
+        return resp
+    body = getattr(resp, "body", None)
+    if body is None:
+        return resp
+    try:
+        data = json.loads(body)
+    except (TypeError, ValueError):
+        return resp
+    if not isinstance(data, dict):
+        return resp
+    return JSONResponse(redactor(data), status_code=getattr(resp, "status_code", 200))
+
+
 @app.get("/api/race/{race_id}", response_class=JSONResponse)
-async def get_race_detail(race_id: str):
+async def get_race_detail(request: Request, race_id: str):
+    return _tiered_json(request, await _race_detail_impl(race_id), redact_race_detail)
+
+
+async def _race_detail_impl(race_id: str):
     """レースの全データをまとめて返す (60s キャッシュ)。"""
     with _race_detail_cache_lock:
         cached = _race_detail_cache.get(race_id)
@@ -6935,7 +6967,11 @@ def _prediction_freshness(data: dict) -> dict:
 
 
 @app.get("/api/race/{race_id}/predictions", response_class=JSONResponse)
-async def get_race_predictions(race_id: str):
+async def get_race_predictions(request: Request, race_id: str):
+    return _tiered_json(request, await _race_predictions_impl(race_id), redact_predictions)
+
+
+async def _race_predictions_impl(race_id: str):
     """キャッシュ済みの予測結果を返す。stg で GCS に無ければ、モックではなく出馬表の馬と最新オッズだけ（has_prediction=false）を返す。
 
     Flask v1 の GET /api/v1/races/<race_id>/predictions（PostgreSQL経由）とはデータソース・
@@ -7263,6 +7299,10 @@ async def get_bloodline_aptitude(race_id: str):
 
 @app.post("/api/race/{race_id}/predict", response_class=JSONResponse)
 async def run_race_prediction(request: Request, race_id: str):
+    return _tiered_json(request, await _run_race_prediction_impl(request, race_id), redact_predictions)
+
+
+async def _run_race_prediction_impl(request: Request, race_id: str):
     """
     指定レースの AI 予測を実行し、結果を GCS に保存して返す。
 

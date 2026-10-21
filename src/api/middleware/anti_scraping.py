@@ -64,9 +64,9 @@ def register_fastapi(app: Any, engine: AntiScraping | None = None) -> None:
                 token = ""
                 if eng.path_kind(path) == "data":
                     try:
-                        from src.api.auth import COOKIE_NAME, is_developer
+                        from src.api.auth import COOKIE_NAME, is_member
 
-                        authed = bool(is_developer(request))
+                        authed = bool(is_member(request))
                         token = request.cookies.get(COOKIE_NAME, "")
                     except Exception:  # noqa: BLE001
                         authed = False
@@ -117,10 +117,10 @@ def register_flask(app: Any, engine: AntiScraping | None = None) -> None:
             token = ""
             if eng.path_kind(path) == "data":
                 try:
-                    from src.api.auth import COOKIE_NAME, dev_auto_login_applies, _verify_token
+                    from src.api.auth import COOKIE_NAME, dev_auto_login_applies, token_role
 
                     token = request.cookies.get(COOKIE_NAME, "")
-                    authed = bool(dev_auto_login_applies(peer, request.headers) or _verify_token(token))
+                    authed = bool(dev_auto_login_applies(peer, request.headers) or token_role(token))
                 except Exception:  # noqa: BLE001
                     authed = False
             dec = eng.check(peer=peer, headers=request.headers, method=request.method, path=path, authed=authed, session_token=token)

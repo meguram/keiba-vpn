@@ -841,21 +841,28 @@ class TestQueryParamInjection(unittest.TestCase):
 # B. /api/growth-curve limit パラメータ
 # ═══════════════════════════════════════════════════════
 
+def _member_cookies() -> dict:
+    """成長曲線は会員限定のパス。パラメータ検証は会員のセッションで確かめる。"""
+    from src.api.auth import COOKIE_NAME, ROLE_MEMBER, _make_token
+
+    return {COOKIE_NAME: _make_token(role=ROLE_MEMBER)}
+
+
 class TestGrowthCurveParams(unittest.TestCase):
     """growth-curve — limit パラメータ検証。"""
 
     def test_limit_string_is_422(self):
-        r = client.get(f"/api/growth-curve/{FAKE_HORSE_ID}?limit=abc")
+        r = client.get(f"/api/growth-curve/{FAKE_HORSE_ID}?limit=abc", cookies=_member_cookies())
         self.assertEqual(r.status_code, 422)
 
     def test_limit_negative_no_500(self):
         """limit=-1: FastAPI は int 型なら受け入れる。"""
-        r = client.get(f"/api/growth-curve/{FAKE_HORSE_ID}?limit=-1")
+        r = client.get(f"/api/growth-curve/{FAKE_HORSE_ID}?limit=-1", cookies=_member_cookies())
         self.assertNotEqual(r.status_code, 500)
 
     def test_fetch_speed_index_string_is_422(self):
         """bool 型に不正文字列 → 422。"""
-        r = client.get(f"/api/growth-curve/{FAKE_HORSE_ID}?fetch_speed_index=maybe")
+        r = client.get(f"/api/growth-curve/{FAKE_HORSE_ID}?fetch_speed_index=maybe", cookies=_member_cookies())
         self.assertEqual(r.status_code, 422)
 
 

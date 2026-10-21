@@ -55,28 +55,38 @@ def _sign(payload: str) -> str:
     return hmac.new(key, payload.encode(), hashlib.sha256).hexdigest()
 
 
-def _make_token(timestamp: int | None = None) -> str:
+ROLE_DEV = "dev"
+ROLE_MEMBER = "member"
+
+
+def _make_token(timestamp: int | None = None, role: str = ROLE_DEV) -> str:
     ts = timestamp or int(time.time())
-    payload = f"dev:{ts}"
+    payload = f"{role}:{ts}"
     sig = _sign(payload)
     return f"{payload}:{sig}"
 
 
-def _verify_token(token: str) -> bool:
+def token_role(token: str) -> str | None:
+    """署名と有効期限が正しいトークンのロール（dev / member）。無効なら None。"""
     try:
         parts = token.split(":")
         if len(parts) != 3:
-            return False
+            return None
         role, ts_str, sig = parts
-        if role != "dev":
-            return False
+        if role not in (ROLE_DEV, ROLE_MEMBER):
+            return None
         ts = int(ts_str)
         if time.time() - ts > COOKIE_MAX_AGE:
-            return False
+            return None
         expected = _sign(f"{role}:{ts_str}")
-        return hmac.compare_digest(sig, expected)
+        return role if hmac.compare_digest(sig, expected) else None
     except Exception:
-        return False
+        return None
+
+
+def _verify_token(token: str) -> bool:
+    """開発者（dev）のトークンか。会員（member）のトークンは False（開発者向け機能を開かない）。"""
+    return token_role(token) == ROLE_DEV
 
 
 _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
@@ -145,6 +155,13 @@ def is_developer(request: Request) -> bool:
     return _verify_token(token)
 
 
+def is_member(request: Request) -> bool:
+    """会員限定の項目を見られるか（開発者 dev は会員を兼ねる）。"""
+    if dev_auto_login_applies(getattr(request.client, "host", None), request.headers):
+        return True
+    return token_role(request.cookies.get(COOKIE_NAME, "")) is not None
+
+
 def classify_session(request: Request) -> str:
     """セッションクッキーの状態を分類する（ユーザ向けメッセージ分岐用）。
 
@@ -163,7 +180,7 @@ def classify_session(request: Request) -> str:
         if len(parts) != 3:
             return "invalid"
         role, ts_str, sig = parts
-        if role != "dev":
+        if role not in (ROLE_DEV, ROLE_MEMBER):
             return "invalid"
         ts = int(ts_str)
         expected = _sign(f"{role}:{ts_str}")
@@ -183,8 +200,8 @@ def _request_is_secure(request: Request) -> bool:
     return forwarded.split(",")[0].strip().lower() == "https"
 
 
-def create_session_response(redirect_to: str = "/", request: Request | None = None) -> RedirectResponse:
-    token = _make_token()
+def create_session_response(redirect_to: str = "/", request: Request | None = None, role: str = ROLE_DEV) -> RedirectResponse:
+    token = _make_token(role=role)
     response = RedirectResponse(url=redirect_to, status_code=303)
     secure = _request_is_secure(request) if request is not None else False
     response.set_cookie(
@@ -212,6 +229,43 @@ def verify_password(password: str) -> bool:
         logger.warning("DEV_PASSWORD が設定されていません (.env に追加してください)")
         return False
     return hmac.compare_digest(password, dev_pw)
+
+
+# ── 会員アカウント（config/members.json。パスワードはハッシュだけを持つ） ──
+
+_MEMBERS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "config", "members.json")
+_DUMMY_SALT = bytes(16)
+
+
+def _env_on(name: str) -> bool:
+    return (os.environ.get(name) or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _load_members() -> list[dict]:
+    import json
+
+    try:
+        with open(_MEMBERS_FILE, encoding="utf-8") as f:
+            users = (json.load(f) or {}).get("users") or []
+    except (OSError, ValueError):
+        return []
+    return [u for u in users if isinstance(u, dict) and u.get("id")]
+
+
+def verify_member_login(user_id: str, password: str) -> bool:
+    """会員の ID・パスワードを検証する。requires_env の環境変数が有効でないアカウントは常に不可（既定オフ）。"""
+    user_id = (user_id or "").strip()
+    password = password or ""
+    rec = next((u for u in _load_members() if u.get("id") == user_id), None)
+    enabled = bool(rec) and (not rec.get("requires_env") or _env_on(str(rec["requires_env"])))
+    try:
+        salt = bytes.fromhex(rec["salt"]) if rec else _DUMMY_SALT
+        iters = int(rec.get("iterations") or 200000) if rec else 200000
+        want = rec["hash"] if rec else ""
+    except (KeyError, TypeError, ValueError):
+        return False
+    got = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iters).hex()  # 存在しない ID でも同じ計算量にする
+    return bool(enabled) and rec.get("algo", "pbkdf2_sha256") == "pbkdf2_sha256" and hmac.compare_digest(got, want)
 
 
 # ── ページ分類 ──

@@ -67,7 +67,9 @@ class TestHorseNamesIndexMeta(unittest.TestCase):
                 self.assertIn("2019105551", ids)
 
     def test_growth_curve_json_shape(self) -> None:
-        r = client.get("/api/growth-curve/2019105551")
+        from src.api.auth import COOKIE_NAME, ROLE_MEMBER, _make_token
+
+        r = client.get("/api/growth-curve/2019105551", cookies={COOKIE_NAME: _make_token(role=ROLE_MEMBER)})   # 会員限定のパス
         self.assertIn(r.status_code, (200, 404), r.text)
         if r.status_code == 404:
             self.assertIn("error", r.json())

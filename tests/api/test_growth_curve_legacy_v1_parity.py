@@ -121,6 +121,12 @@ class TestGrowthCurveLegacyV1Parity(unittest.TestCase):
         self.init_patcher = patch("src.api.flask_app.init_engine")
         self.init_patcher.start()
         self.flask_client = create_app().test_client()
+        # 会員限定のパスなので、会員のセッションで比べる（公開側の出し分けは tests/api/test_tiered_access.py）
+        from src.api.auth import COOKIE_NAME, ROLE_MEMBER, _make_token
+
+        token = _make_token(role=ROLE_MEMBER)
+        self.fastapi_client.cookies.set(COOKIE_NAME, token)
+        self.flask_client.set_cookie(COOKIE_NAME, token)
 
     def tearDown(self):
         self.init_patcher.stop()

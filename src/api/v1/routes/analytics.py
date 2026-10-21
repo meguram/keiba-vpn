@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
-from src.api.flask_auth import is_logged_in, require_internal, require_login
+from src.api.flask_auth import get_auth_status, is_logged_in, require_internal, require_login, require_member
 from src.api.v1.delegates import (
     get_final_odds,
     get_horse_aptitude,
@@ -50,7 +50,7 @@ def pedigree_race_note_v2():
 
 
 @bp.post("/betting/optimize")
-@require_login
+@require_member
 def betting_optimize():
     body = request.get_json(silent=True) or {}
     payload, code = optimize_betting(body)
@@ -58,7 +58,7 @@ def betting_optimize():
 
 
 @bp.get("/betting/race-values")
-@require_login
+@require_member
 def betting_race_values():
     """開催日の各レースの推奨期待回収率とレベル（hot/good/ok/pass/none）。レース選択の強調表示用。"""
     from src.api.v1.delegates import DEFAULT_MAX_TOTAL_BET, race_value_summary
@@ -80,8 +80,7 @@ def betting_race_values():
 
 @bp.get("/auth/status")
 def auth_status():
-    logged = is_logged_in()
-    return jsonify({"logged_in": logged, "is_developer": logged, "is_admin": logged, "is_member": logged})
+    return jsonify(get_auth_status())
 
 
 @bp.post("/admin/git-pull")
@@ -99,7 +98,7 @@ def auth_login():
     body = request.get_json(silent=True) or {}
     from src.api.flask_auth import login_response
 
-    return login_response(body.get("password", ""), body.get("remember", True))
+    return login_response(body.get("password", ""), body.get("remember", True), str(body.get("id") or ""))
 
 
 @bp.post("/auth/logout")

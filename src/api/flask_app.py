@@ -73,6 +73,18 @@ def create_app() -> Flask:
     app.register_blueprint(analytics_bp, url_prefix="/api/v1")
     app.register_blueprint(data_analysis_bp, url_prefix="/api/v1")
 
+    # 会員限定のパスは匿名に 401（公開は勝率・複勝率まで。仕様: docs/operations/tiered_access.md）
+    @app.before_request
+    def _member_only_gate():
+        from src.api.flask_auth import is_member_session
+        from src.api.tier import MEMBER_REQUIRED_BODY, member_only_path
+
+        if request.method != "OPTIONS" and member_only_path(request.path) and not is_member_session():
+            resp = jsonify(MEMBER_REQUIRED_BODY)
+            resp.status_code = 401
+            return resp
+        return None
+
     # 毎日のメンテナンス時間帯（KEIBA_MAINTENANCE_WINDOW=1 のときだけ働く。config/maintenance.json）
     from src.api.maintenance_mw import install_flask as _install_maintenance
 
@@ -141,7 +153,9 @@ def create_app() -> Flask:
 
         horses: list = payload.get("horses") or []
         total_horses = len(horses)
-        logged_in = _is_logged_in()
+        from src.api.flask_auth import is_member_session
+
+        logged_in = is_member_session()
         if not logged_in:
             # 非メンバー: 全馬を返すが AI 予測フィールドを null に隠蔽し馬番順にソート
             _REDACTED_FIELDS = (

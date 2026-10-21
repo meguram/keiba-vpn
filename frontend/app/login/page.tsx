@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { invalidateJson } from "@/lib/httpCache";
 
 export default function LoginPage() {
+  const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
@@ -21,10 +22,10 @@ export default function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ password, remember }),
+        body: JSON.stringify({ id: userId.trim(), password, remember }),
       });
       if (!res.ok) {
-        setError("ログイン失敗");
+        setError("ID またはパスワードが正しくありません");
         setBusy(false);
         return;
       }
@@ -40,6 +41,7 @@ export default function LoginPage() {
     <div className="mx-auto mt-16 max-w-sm card">
       <h1 className="mb-4 text-xl font-bold">ログイン</h1>
       <form onSubmit={submit} className="space-y-3">
+        <input type="text" autoComplete="username" className="w-full rounded border bg-transparent p-2" style={{ borderColor: "var(--border)" }} placeholder="ID（開発者は空欄）" value={userId} onChange={(e) => setUserId(e.target.value)} />
         <input type="password" className="w-full rounded border bg-transparent p-2" style={{ borderColor: "var(--border)" }} placeholder="パスワード" value={password} onChange={(e) => setPassword(e.target.value)} />
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />

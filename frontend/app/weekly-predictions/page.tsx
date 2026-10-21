@@ -5,6 +5,8 @@ import { Fragment, useEffect, useState, useCallback, useRef, useMemo } from "rea
 import Link from "next/link";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockPredictions } from "@/lib/mock";
 import { featureEnabled } from "@/lib/features";
+import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
+import { MemberLockNote } from "@/components/upgrade/MemberLock";
 import { LEVEL_STYLE, RaceValue, useRaceValues, valueTitle } from "@/lib/raceValue";
 import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import { WeekPicker } from "@/components/WeekPicker";
@@ -330,6 +332,9 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
   const defaultOrder = (a: PredEntry, b: PredEntry) => (a.horse_number ?? 0) - (b.horse_number ?? 0);      // 既定は馬番順
   const sorted = sortPreds(preds, sort?.key ?? null, sort?.dir ?? "asc", defaultOrder);
   const calibratedEv = preds.some((p) => p.ev_win_cal != null || p.ev_place_cal != null);     // EV の較正が有効なときだけ『(較正後)』と表示する
+  const { isMember, loading: authLoading } = useAuthStatus();
+  const lock = !authLoading && !isMember;      // 匿名は勝率・複勝率まで。それ以外の列はサーバが落としているので見出しに 🔒 を付ける
+  const LK = (label: string) => (lock ? `🔒${label}` : label);
 
   // 見出しのクリック: 1 回目=その列の向き（既定は昇順、大きいほど良い列は降順）→ 2 回目=逆 → 3 回目=元の並びに戻す
   function toggle(key: SortKey) {
@@ -416,7 +421,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
     { key: "num", label: "馬番" }, { key: "name", label: "馬名" }, { key: "bracket", label: "枠" }, { key: "sexage", label: "性齢" },
     { key: "jwt", label: "斤量" }, { key: "jockey", label: "騎手" }, { key: "trainer", label: "調教師" }, { key: "weight", label: "馬体重" },
     { key: "win", label: "勝率" }, { key: "top2", label: "連対率" }, { key: "top3", label: "複勝率" },
-    { key: "odds", label: "想定単勝" }, { key: "podds", label: "想定複勝" }, { key: "evw", label: "勝期待値" }, { key: "evp", label: "複期待値" }, { key: "tier", label: "推奨" },
+    { key: "odds", label: "想定単勝" }, { key: "podds", label: "想定複勝" }, { key: "evw", label: "勝期待値" }, { key: "evp", label: "複期待値" }, { key: "tier", label: "めぐAI印" },
   ];
   const sortBar = (
     <div className="pt-sortbar" role="group" aria-label="並び替え">
@@ -470,10 +475,10 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
               {th("name", "馬名", { textAlign: "left" }, "馬名（下段: 性齢・斤量・馬体重。馬体重は当日の発表後）")}
               {th("jockey", "騎手/調教師", { textAlign: "left" }, "騎手で並べ替え（調教師は『そのほか』から）")}
               {th("win", "勝率", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
-              {th("top2", "連対/複勝", {}, "連対率で並べ替え（複勝率は『そのほか』から）")}
-              {th("odds", "想定単勝/複勝", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "想定単勝で並べ替え（想定複勝は『そのほか』から）")}
-              {th("evw", calibratedEv ? "期待値(較正後)" : "期待値", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, evTitle)}
-              {th("tier", "推奨", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "印（◎○▲★△消）で並べ替え。下段: 買い判断（期待値の最大で判定）")}
+              {th("top2", lock ? "連対🔒/複勝" : "連対/複勝", {}, "連対率で並べ替え（複勝率は『そのほか』から）")}
+              {th("odds", LK("想定単勝/複勝"), { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "想定単勝で並べ替え（想定複勝は『そのほか』から）")}
+              {th("evw", LK(calibratedEv ? "期待値(較正後)" : "期待値"), { borderLeft: "1px solid rgba(36,48,73,0.5)" }, evTitle)}
+              {th("tier", LK("めぐAI印"), { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "印（◎○▲★△消）で並べ替え。下段: 買い判断（期待値の最大で判定）")}
             </tr>
           </thead>
           <tbody>
@@ -518,8 +523,8 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
               {th("num", "馬番")}
               {th("name", "馬名", { textAlign: "left" }, "馬名（下段: 性齢・斤量・騎手・馬体重・調教師）")}
               {th("win", "勝率", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "勝率で並べ替え（連対率・複勝率は下段、『そのほか』から並べ替え）")}
-              {th("evw", calibratedEv ? "期待値(較正後)" : "期待値", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, evTitle)}
-              {th("odds", "想定単勝", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "想定単勝で並べ替え（下段: 想定複勝）")}
+              {th("evw", LK(calibratedEv ? "期待値(較正後)" : "期待値"), { borderLeft: "1px solid rgba(36,48,73,0.5)" }, evTitle)}
+              {th("odds", LK("想定単勝"), { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "想定単勝で並べ替え（下段: 想定複勝）")}
             </tr>
           </thead>
           <tbody>
@@ -615,6 +620,8 @@ function RacePanel({
     heads ? `${heads}頭` : "",
   ].filter(Boolean);
   const failed = !loading && pred?.status === "error" && preds.length === 0;
+  const { isMember, loading: authLoading } = useAuthStatus();
+  const locked = !authLoading && !isMember;
 
   return (
     <section
@@ -699,14 +706,15 @@ function RacePanel({
           </div>
         )}
         {pred && !failed && <PredictionSourceBadge source={pred.prediction_source} note={pred.prediction_note} />}
+        {pred && !failed && locked && preds.length > 0 && <MemberLockNote />}
         {pred && !failed && <ProbCalNote pc={pred.prob_calibration} preds={preds} />}
         {pred && !failed && (
           <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} growthMeta={pred.growth_meta} />
         )}
-        {pred && !failed && preds.length > 0 && (
+        {pred && !failed && !locked && preds.length > 0 && (
           <MeguTable preds={preds} bench={pred.class_benchmark} meta={pred.expected_megu_meta} today={{ surface: race.surface, distance: Number(race.distance) || undefined }} />
         )}
-        {pred && !failed && preds.length > 0 && (
+        {pred && !failed && !locked && preds.length > 0 && (
           <PredExtras key={race.race_id} raceId={race.race_id} entries={preds} pace={pred.pace_forecast} paceUnified={pred.pace_unified} lapForecast={pred.lap_forecast} paceType={pred.pace_type} scenarioForecast={pred.scenario_forecast} gate={pred.gate_bias} steeplechase={(race.surface ?? "").startsWith("障")} />
         )}
       </div>
