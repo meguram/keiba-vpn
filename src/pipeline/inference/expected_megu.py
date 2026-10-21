@@ -482,4 +482,10 @@ def attach_expected_megu(resp: dict, race_date: str | None, base: Path | None = 
             resp["class_benchmark"] = bm
     except Exception:  # noqa: BLE001
         pass
+    try:
+        from src.pipeline.inference.growth_attach import attach_growth       # 成長度（KEIBA_GROWTH_INDEX=1 のときだけ。既定は何もしない）
+
+        resp = attach_growth(resp, race_date or "", items, base)
+    except Exception:  # noqa: BLE001
+        pass
     return resp

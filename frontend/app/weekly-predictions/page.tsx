@@ -12,6 +12,8 @@ import { RaceStrip } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
 import { BenchNote, PAST_RUNS_CSS, PastRunStrip } from "@/components/PastRuns";
 import { PredExtras } from "@/components/PredExtras";
+import { GrowthBadge } from "@/components/GrowthBadge";
+import type { Growth, GrowthMeta } from "@/lib/growth";
 import type { L3fCoherent, PaceUnified } from "@/components/PredExtras";
 import type { LapForecast } from "@/lib/lapForecast";
 import { bracketChipStyle, bracketOf } from "@/lib/bracket";
@@ -68,6 +70,7 @@ type PredEntry = {
   position_forecast?: PosFc | null;
   l3f_coherent?: L3fCoherent | null;
   tracking_v2?: TrackingV2 | null;
+  growth?: Growth | null;
 };
 
 type PredData = {
@@ -83,6 +86,7 @@ type PredData = {
   pace_forecast?: PaceForecast | null;
   pace_unified?: PaceUnified | null;
   class_benchmark?: ClassBenchmark | null;
+  growth_meta?: GrowthMeta | null;
   lap_forecast?: LapForecast | null;
   gate_bias?: GateBias | null;
   error?: string;
@@ -271,7 +275,7 @@ const TABLE_CSS = `
 `;
 
 /* ── 予測テーブル ── */
-function PredTable({ raceId, preds, hasPred, message, megu, bench }: { raceId: string; preds: PredEntry[]; hasPred: boolean; message?: string; megu?: ExpectedMeguMeta | null; bench?: ClassBenchmark | null }) {
+function PredTable({ raceId, preds, hasPred, message, megu, bench, growthMeta }: { raceId: string; preds: PredEntry[]; hasPred: boolean; message?: string; megu?: ExpectedMeguMeta | null; bench?: ClassBenchmark | null; growthMeta?: GrowthMeta | null }) {
   const TH: React.CSSProperties = {
     padding: "8px 10px", fontSize: 11, fontWeight: 600, color: "var(--text-dim)",
     textAlign: "center", borderBottom: "1px solid var(--border)", whiteSpace: "normal", lineHeight: 1.25, background: "var(--surface2)", overflow: "hidden",
@@ -437,7 +441,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench }: { raceId: s
                   <td>{wakuChip(p)}</td>
                   <td>{numChip(p)}</td>
                   <td className="l" style={{ fontWeight: 600, color: "#fff" }}>
-                    {tapCell(p, "horse", p.horse_name, "#fff")}
+                    {tapCell(p, "horse", p.horse_name, "#fff")}<GrowthBadge g={p.growth} meta={growthMeta} horse={p.horse_name} />
                     <span className="sub">{[p.sex_age, p.jockey_weight != null ? `${p.jockey_weight}kg` : null, p.weight ? fmtWeight(p.weight, p.weight_change) : null].filter(Boolean).join("　")}</span>
                   </td>
                   <td className="l">
@@ -484,7 +488,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench }: { raceId: s
                   <td>{wakuChip(p, 22)}</td>
                   <td>{numChip(p, 22)}</td>
                   <td className="l" style={{ fontWeight: 600, color: "#fff" }}>
-                    {tapCell(p, "horse", p.horse_name, "#fff")}
+                    {tapCell(p, "horse", p.horse_name, "#fff")}<GrowthBadge g={p.growth} meta={growthMeta} horse={p.horse_name} />
                     <span className="sub">{[p.sex_age, p.jockey_weight != null ? `${p.jockey_weight}kg` : null, p.jockey_name, p.weight ? fmtWeight(p.weight, p.weight_change) : null].filter(Boolean).join("　")}</span>
                     <span className="sub">{[p.trainer_name, p.buy_tier && p.buy_tier !== "—" ? `推奨 ${p.buy_tier}` : null].filter(Boolean).join("　")}</span>
                   </td>
@@ -512,7 +516,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, bench }: { raceId: s
             <div key={p.horse_number ?? i} className="pt-card" role="listitem" style={{ background: rowBgOf(p) }}>
               <div className="r1">
                 <span className="pt-nums">{wakuChip(p, 26)}{numChip(p, 26)}</span>
-                <span className="nm">{tapCell(p, "horse", p.horse_name, "#fff")}</span>
+                <span className="nm">{tapCell(p, "horse", p.horse_name, "#fff")}<GrowthBadge g={p.growth} meta={growthMeta} horse={p.horse_name} /></span>
                 {m.sym !== "-" && <span title="印" aria-label={`印 ${m.sym}`} style={{ color: m.color, fontWeight: 800, fontSize: 15 }}>{m.sym}</span>}
                 <span className="win"><b style={{ color: dim }}>{fmtPct(p.win_prob)}</b><small>勝率</small></span>
               </div>
@@ -654,7 +658,7 @@ function RacePanel({
         )}
         {pred && !failed && <PredictionSourceBadge source={pred.prediction_source} note={pred.prediction_note} />}
         {pred && !failed && (
-          <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} bench={pred.class_benchmark} />
+          <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} bench={pred.class_benchmark} growthMeta={pred.growth_meta} />
         )}
         {pred && !failed && preds.length > 0 && (
           <PredExtras key={race.race_id} raceId={race.race_id} entries={preds} pace={pred.pace_forecast} paceUnified={pred.pace_unified} lapForecast={pred.lap_forecast} gate={pred.gate_bias} steeplechase={(race.surface ?? "").startsWith("障")} />
