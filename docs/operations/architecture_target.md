@@ -412,6 +412,7 @@ python -m src.scripts.ops.cost_estimate --list-unverified                  # 公
 
 ### 7.2 フェーズ 2（API とデータの GCP 化）の作業
 GCS を正本に固定（バケットの整理・ライフサイクル・リージョン確認）→ API のコンテナ化（1 ワーカー、起動時間の短縮、必要ファイルを GCS から遅延取得）→ Cloud Run へデプロイ（最小 0、最大 3）→ VPS の nginx から呼ぶ（共有ヘッダ付き）→ ハートビート受信 API → 公開スナップショットを R2 へ。**所要の目安**: 1〜2 週間。**ロールバック**: rewrites の向き先をホストの API に戻す。**ユーザー作業**: GCP プロジェクト・請求先アカウントの確認、予算アラート（6.2）、課金エクスポート（6.3）、Secret Manager の登録。
+**実装と手順（リポジトリ側は用意済み）**: [`cloud_run_api.md`](./cloud_run_api.md)（Dockerfile.cloudrun・共有ヘッダ認証・ハートビート受信・serving_state・デプロイ/ロールバック・VPS の nginx 切替）。
 
 ### 7.3 フェーズ 3（予測生成・集計・通知の GCP 化）の作業
 `predict_race_day --mode enqueue`（Cloud Tasks）と Jobs のイメージ化（ML ライブラリ約 255MB + バンドル）、バンドルの GCS 配布と sha256 検証、shadow v4/v5 の並走、予測成績の集計 Jobs、Slack の通知 Jobs、ドリフト・凍結追跡・データヘルス。**検証**: 同じ日をホストと GCP で処理して一致を確認（数日間並走）。**ロールバック**: ホストの cron を戻す。

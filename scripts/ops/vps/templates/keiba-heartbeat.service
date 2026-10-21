@@ -1,0 +1,15 @@
+[Unit]
+Description=keiba VPS heartbeat (to GCP)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/keiba-ui/bin/heartbeat_client.py
+Nice=10
+MemoryMax=48M
+TimeoutStartSec=90
+# 秘密は /etc/keiba-ui/heartbeat.env（600 root）だけ。ユニットには書かない
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
