@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "frozen_at_jst": "2026-10-21",
+  "note": "導入可否の基準。2026 年の結果を見る前に固定する（fork readiness-audit）。2026 年は v4/v5 の学習・選択に使っていない独立データ。閾値の根拠は各項目の rationale。",
+  "verdict_rule": "全 must を満たす=導入可。must を 1 つでも満たさないが代替策で補える=条件付き。must の主要項目（精度の退化・較正の崩れ・被覆）を満たさない=不可。should は条件付きの理由として記録。",
+  "models": {
+    "ensemble_win_top2_top3": {
+      "applies_to": ["v4", "v5"],
+      "must": [
+        {"id": "C1_no_degradation", "text": "2026 年のレース単位の勝率/連対/複勝 LogLoss が、同モデルの test 2025 値 + 0.010 以内", "rationale": "同じ固定モデルの年次ゆらぎ（LOYO の年別 LogLoss の幅 ±0.006）に余裕を足した閾値。2026 年は市場に対しモデルが弱かった年（差 0.100）なので、年のゆらぎとして許す上限", "threshold": 0.010},
+        {"id": "C2_calibration", "text": "ECE（予測確率の十分位、馬単位）が 勝率≤0.006・連対≤0.010・複勝≤0.015、かつ logit 較正の傾きが 0.85〜1.15", "rationale": "期待値の計算に直接使うため。確率の過信は EV を水増しする（tp-47）"},
+        {"id": "C3_strata", "text": "頭数・面・距離帯・クラス・会場・月・履歴の浅い馬の各層（500 頭以上）で、モデルの LogLoss が『頭数だけの事前確率（k/n）』より良い", "rationale": "特定の層で素朴なベースラインより悪化する場合は導入を止める"},
+        {"id": "C4_coverage", "text": "2026 年の JRA 全レースに予測があり、NaN・欠損が無く、レース内の確率の合計が 勝率1・連対2・複勝3 に 1e-3 以内", "rationale": "全レースで出せること"},
+        {"id": "C5_runtime", "text": "T-60 以降の 1 レース分の推論時間（特徴量の組み立て含む、バッチ初回）が v4≤60 秒・v5≤90 秒", "rationale": "T-60 から発走までの運用に収まる（目安: 数十秒）"}
+      ],
+      "should": [
+        {"id": "S1_vs_prev", "text": "v5 は v4 に対し、勝率 LogLoss の差の 95% paired-bootstrap（レース単位）上限が +0.0002 未満（非劣性）。改善（上限<0）なら加点", "rationale": "v5 を v4 の代わりにしてよい根拠"},
+        {"id": "S2_top_pick", "text": "◎（勝率最上位）の 1 着率≥0.26、複勝圏率≥0.55", "rationale": "2022〜25 年の◎1着率は約 0.30、複勝圏率は約 0.60。下限はその 9 割弱"},
+        {"id": "S3_serving_parity", "text": "推論経路（V3Serving）の確率が学習側のバッチ予測と相関 0.990 以上", "rationale": "v4 は 0.9987、v5 は 0.992〜0.998 と測定済み。0.990 を下回る劣化は導入前に原因を切り分ける"}
+      ]
+    },
+    "stage_aux_models": {
+      "applies_to": ["s_time_pred", "s_time_gap", "s_rank_pred", "aux_heads"],
+      "must": [
+        {"id": "C1_rank_corr", "text": "2026 年の実測との順位相関（s_rank_pred は着順、s_time_pred は走破タイム偏差）が、test 2025 の記録値の 90% 以上", "rationale": "前段は V4/V5 の入力。退化は下流に伝わる"},
+        {"id": "C2_missing", "text": "欠損率が学習時 +5 ポイント以内", "rationale": "分布のずれの検知"}
+      ]
+    },
+    "final_odds_model": {
+      "applies_to": ["final_odds_bundle(candidate2)"],
+      "must": [
+        {"id": "C1_rank", "text": "2026 年の確定単勝オッズとの『レース内順位相関』が 0.60 以上", "rationale": "予測オッズは単勝・複勝の期待値の入力。順位相関 0.23→0.69 まで改善した記録が最良（2026 年）"},
+        {"id": "C2_sum_inv", "text": "予測単勝オッズの Σ(1/odds) がレース中央値で 1.15〜1.35（払戻率 0.8 の 1.25 を中心）", "rationale": "水準が外れると EV が系統的にずれる（tp-47）"}
+      ]
+    },
+    "pace_difficulty_lap": {
+      "applies_to": ["pace_coherence", "pace_v2", "tracking_v2", "lap_forecast"],
+      "must": [
+        {"id": "C1_corr", "text": "2026 年の実測との相関: 追走難度 v2=drain_sec と実測 Y の相関≥0.10（41 週の全てで正）、ペース想定 v2=実測の前半 3F との相関≥0.35、ラップ予想=前半3F/後半3F の MAE が基準ラップ(par)より小さく、シナリオ確率の ECE≤0.04", "rationale": "設計時の値（0.22/0.45/MAE 0.52・0.56）に対し、半分程度まで劣化したら実用でないという下限"},
+        {"id": "C2_coverage", "text": "付与率が対象レースの 75% 以上、付与できないレースは従来表示に戻る（応答が壊れない）", "rationale": "表示専用の部品の導入条件"}
+      ]
+    },
+    "ev_calibration_marks": {
+      "applies_to": ["ev_calibration", "marks"],
+      "must": [
+        {"id": "C1_ev_converge", "text": "馬ごとの較正後 EV の、2026 年の実現回収率とのずれ（最大 EV の十分位平均）が絶対値 0.12 以内", "rationale": "表示した期待値が実現に収束していること（ユーザー要望）"},
+        {"id": "C2_marks", "text": "印の数: 1 レースあたり平均 5〜9 個、◎○▲★は各 1 頭以下、△は 4 頭以下、違反 0", "rationale": "ユーザー指定の仕様"}
+      ],
+      "should": [
+        {"id": "S1_portfolio", "text": "推奨ポートフォリオの期待回収率（較正後）と実現のずれが 0.12 以内。外れる場合は『目安』と明記して表示", "rationale": "2026 年は弱い（モデルが市場に劣後した年）"}
+      ]
+    },
+    "exotic_probabilities": {
+      "applies_to": ["discounted_harville"],
+      "must": [
+        {"id": "C1_calibration", "text": "馬連/ワイド/3連複の確率の ECE（予測確率の分位、組合せ単位）が 0.003 以内、かつ素朴な Harville（α=1）より対数損失が小さい", "rationale": "組合せ券の期待値の確率側"}
+      ]
+    }
+  }
+}
