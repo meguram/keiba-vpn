@@ -91,7 +91,7 @@ export const MARK_META: Record<MarkKey, { sym: string; label: string; color: str
   honmei: { sym: "◎", label: "本命（1着優位）", color: "#ef4444" },
   pair: { sym: "○", label: "対抗（連対候補）", color: "#3b82f6" },
   star: { sym: "★", label: "中穴妙味（10〜30倍）", color: "#a78bfa" },
-  kesi: { sym: "消", label: "消し（上位5人気で複勝確率が最低）", color: "#cbd5e1" },
+  kesi: { sym: "消", label: "消し（3着内に来る確率が低い）", color: "#cbd5e1" },
 };
 
 export const FINISH_META: { key: "f1" | "f2" | "f3" | "f4p"; label: string; color: string }[] = [

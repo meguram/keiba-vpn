@@ -284,10 +284,14 @@ def assign_mece_marks(entries: list[dict], situational: bool | None = None, cfg:
         e["mark_type"] = "anchor"
 
 
-# 消印: 上位 KESI_TOP_POP 人気の馬のうち、好走（複勝）の確率がもっとも低い 1 頭（8 頭以上のレースだけ）。
-# 定義の比較（複勝確率が最小・勝率が最小・市場との差・期待値など 7 通り × 印の扱い 3 通り）は docs/html/modeling/chapters/kesi_mark.html。
-KESI_TOP_POP = 5
+# 消印: 『3 着以内に来る確率が低い』と過去の実績から確信を持って言える馬。目標は人気区分別（ユーザー確定 2026-10-21）:
+#   1〜5 人気 ≤10%（V4 の複勝確率や消し要因の信号を足した分類器でも、10% 以下と言える集合は見つからなかったので付けない）
+#   6〜9 人気 設定なし（付けない）／ 10 人気以下 ≤5%
+# 10 人気以下は、複勝確率 ≤ KESI_P3_MAX の馬に付ける。しきい値は、設計年（2022〜23）で『実績の 3 着内率の Clopper-Pearson 上側 95% 限界が 3% 以下』
+# になる最大値（目標 5% に対する余裕。ユーザーが最初に挙げた 3% を内部の基準にした）。確認 2024・参考 2025・最終 2026 はこの値の検証だけに使う。詳細と検証は docs/html/modeling/chapters/kesi_mark.html。
 KESI_MIN_FIELD = 8
+KESI_MIN_POP = 10
+KESI_P3_MAX = 0.08
 KESI_MAIN_MARKS = ("honmei", "pair", "show_val", "star")
 
 
@@ -316,11 +320,10 @@ def _popularity_order(entries: list[dict]) -> list[dict] | None:
 
 
 def assign_kesi_mark(entries: list[dict]) -> str | None:
-    """消印（mark_type='kesi'）を付与（in-place）。assign_mece_marks の後に呼ぶ。
+    """消印（mark_type='kesi'）を付与（in-place。複数頭可、0 頭のレースもある）。assign_mece_marks の後に呼ぶ。
 
-    上位 5 人気の馬のうち、◎○▲★の付いていない馬（△は消印に置き換える）から、複勝確率（top3_prob）が最小の 1 頭。
-    同じ確率なら人気が低い方。8 頭未満、または全頭の単勝オッズ（人気）が無いときは付けず、その理由を返す。付けたときは None。
-    付けた馬には kesi_reason（根拠の短文）を入れる。人気の情報が無い状態の従来の印は変わらない。
+    10 番人気以下（単勝オッズ順。実オッズがなければ予測オッズ）で、複勝確率（top3_prob）が KESI_P3_MAX 以下の馬。◎○▲★の付いた馬には付けない
+    （△は消に置き換える）。8 頭未満、または全頭の単勝オッズ（人気）が揃わないときは付けず、その理由を返す。付けた馬には kesi_reason（根拠の短文）を入れる。
     """
     for e in entries:
         e.pop("kesi_reason", None)
@@ -329,13 +332,18 @@ def assign_kesi_mark(entries: list[dict]) -> str | None:
     order = _popularity_order(entries)
     if order is None:
         return "単勝オッズ（人気）が揃っていないため付けません"
-    top = order[:KESI_TOP_POP]
-    pool = [(i, e) for i, e in enumerate(top) if (e.get("mark_type") or "none") not in KESI_MAIN_MARKS]
-    if not pool:
-        return None
-    i, pick = min(pool, key=lambda ie: (_f(ie[1], "top3_prob"), -ie[0]))
-    pick["mark_type"] = "kesi"
-    pick["kesi_reason"] = f"上位{KESI_TOP_POP}人気（{i + 1}番人気）の中で複勝確率が最も低い（{_f(pick, 'top3_prob') * 100:.0f}%）。過去の検証では、この条件の馬が3着内に来たのは約3割（他の上位人気は約5割）"
+    for i, e in enumerate(order):
+        pop = i + 1
+        if pop < KESI_MIN_POP or e.get("top3_prob") is None:
+            continue
+        if (e.get("mark_type") or "none") in KESI_MAIN_MARKS:
+            continue
+        p3 = _f(e, "top3_prob")
+        if p3 <= KESI_P3_MAX:
+            e["mark_type"] = "kesi"
+            e["kesi_reason"] = (
+                f"{pop}番人気で複勝確率{p3 * 100:.0f}%。過去の実績では、{KESI_MIN_POP}番人気以下で複勝確率{KESI_P3_MAX * 100:.0f}%以下の馬が3着以内に来たのは約2.5%"
+            )
     return None
 
 

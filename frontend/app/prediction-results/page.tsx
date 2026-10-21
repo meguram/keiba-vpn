@@ -270,7 +270,7 @@ export default function PredictionResultsPage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 10 }}>
               {(["honmei", "pair", "star", "kesi"] as MarkKey[]).map((m) => <FinishDist key={m} mark={m} c={data.summary.marks[m] ?? EMPTY_COUNTS} />)}
             </div>
-            <p style={{ ...dim, margin: "6px 0 0" }}>◎=1着優位（各レース1頭まで）・○=2連系の相手・★=10〜30倍帯で期待値が高い中穴（各レース1頭まで）・消=上位5人気の中で複勝確率が最も低い1頭（消は4着以下が多いほど当たり。8頭以上のレースだけ）。印の定義は予測画面と同じです。</p>
+            <p style={{ ...dim, margin: "6px 0 0" }}>◎=1着優位（各レース1頭まで）・○=2連系の相手・★=10〜30倍帯で期待値が高い中穴（各レース1頭まで）・消=3着内に来る確率が低い馬（10人気以下で複勝確率8%以下。複数頭付くことも付かないこともある。消は3着以内に来る割合が低いほど当たりで、目標は5%以下）。印の定義は予測画面と同じです。</p>
           </section>
 
           {scope !== "day" && (

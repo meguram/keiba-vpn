@@ -742,7 +742,7 @@ export default function RaceDetailPage() {
                     </td>
                     <td
                       style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", fontSize: p.mark_type === "kesi" ? 14 : 18, fontWeight: 800, color: mark.color }}
-                      title={p.mark_type === "kesi" ? p.kesi_reason || "消し（上位人気で好走率が低い）" : undefined}
+                      title={p.mark_type === "kesi" ? p.kesi_reason || "消し（3着内に来る確率が低い）" : undefined}
                     >
                       {p.mark_type === "kesi" ? <span style={{ border: "1.5px solid #94a3b8", borderRadius: 4, padding: "1px 4px" }}>{mark.sym}</span> : mark.sym}
                     </td>
@@ -771,7 +771,7 @@ export default function RaceDetailPage() {
       ) : null}
 
       <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 12 }}>
-        印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / 消は上位5人気の中で複勝確率が最も低い1頭（8頭以上のレース。押さずに印の上にカーソルで根拠） / —印なし。買い判断は期待値の最大で判定。期待値: {calibratedEv ? "過去の実績に合わせて較正した期待回収率。緑≥1.10 / 青≥1.00 / 灰≥0.90 / 赤＜0.90。推奨は較正後の期待値の最大で判定" : "緑≥1.3 / 青≥1.0 / 赤＜0.8"}
+        印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / 消: 3着内に来る確率が低い（10人気以下で複勝確率8%以下。過去の実績では約2.5%・目標5%以下。複数付くことも付かないこともある。印の上にカーソルで根拠） / —印なし。買い判断は期待値の最大で判定。期待値: {calibratedEv ? "過去の実績に合わせて較正した期待回収率。緑≥1.10 / 青≥1.00 / 灰≥0.90 / 赤＜0.90。推奨は較正後の期待値の最大で判定" : "緑≥1.3 / 青≥1.0 / 赤＜0.8"}
       </p>
     </div>
   );
