@@ -1,23 +1,24 @@
-"""dev 環境の UI を表示するための最小データ（実データ 1 開催日）を git で配布する。
+"""dev 環境の UI を表示するための実データ 1 開催日を、各自のローカルに置いて使う道具。
 
-どの PC でも ``git pull`` したあと次の 1 コマンドで、dev の UI が同じデータを表示できる:
+**実データのアーカイブ（``dev_fixture/real_day.tar.gz``）は git 管理しない**（公開リポジトリに netkeiba の取得データを置かない。
+netkeiba 利用規約 第14条。``dev_fixture/.gitignore`` で除外）。アーカイブが無い PC では、合成モックだけで dev の UI が動く。
 
     python3 -m src.scripts.data.dev_fixture ensure      # make dev-data と同じ
 
   1. モック（``make dev-mock`` が生成する分）が無ければ生成する
-  2. ``dev_fixture/real_day.tar.gz`` の実データを dev ストアへ展開する（既にある実データは上書きしない）
+  2. ローカルに ``dev_fixture/real_day.tar.gz`` があれば、その実データを dev ストアへ展開する（既にある実データは上書きしない）。
+     無ければ何もしない（モックのまま）
 
-配布するもの（``dev_fixture/``、git 管理）:
-  - ``real_day.tar.gz`` … UI の最小動線（週間予測 → レース詳細 → 推奨馬券）に要るカテゴリだけ
-    （race_lists / race_day_schedule / race_shutuba / race_result / race_odds / race_pair_odds /
-     race_predictions / final_odds_prediction）。AI 予測と予測オッズは実馬・実オッズから作ったモック。
-  - ``MANIFEST.json`` … 日付・件数・各ファイルのハッシュ（中身の確認用）
-アーカイブは再現可能な形式（ファイル順固定・mtime 0）なので、データが同じなら再生成しても差分が出ない。
+自分の PC に実データ日を持つ方法（任意。取得は自分の netkeiba アカウント・自分の責任で）:
+    python3 -m src.scripts.scraping.capture_dev_day --date YYYYMMDD --yes   # 取り込み（実アクセスあり）
+    python3 -m src.scripts.data.dev_fixture pack --date YYYYMMDD            # dev_fixture/ にローカル保存（git には載らない）
 
-作り直し（実データを取り直したあと）:
-    python3 -m src.scripts.data.dev_fixture pack --date 20260906
+アーカイブの中身: UI の最小動線（週間予測 → レース詳細 → 推奨馬券）に要るカテゴリだけ
+（race_lists / race_day_schedule / race_shutuba / race_result / race_odds / race_pair_odds /
+ race_predictions / final_odds_prediction）。AI 予測と予測オッズは実馬・実オッズから作ったモック。
+アーカイブは再現可能な形式（ファイル順固定・mtime 0）。
 
-注意: 中身は netkeiba から取得したデータの抜粋。
+注意: 中身は netkeiba から取得したデータの抜粋。再配布・公開しない。
 """
 
 from __future__ import annotations
@@ -130,7 +131,7 @@ def _is_mock_file(p: Path) -> bool:
 def install(force: bool = False) -> dict[str, int]:
     """アーカイブを dev ストアへ展開する。既存の実データは force でなければ上書きしない（モックは上書き）。"""
     if not ARCHIVE.is_file():
-        raise SystemExit(f"{ARCHIVE} がありません（git pull しましたか？）")
+        raise SystemExit(f"{ARCHIVE} がありません（実データ日は各自のローカルに作る。このファイルの docstring を参照）")
     roots = _roots()
     out = {"written": 0, "kept": 0}
     with tarfile.open(ARCHIVE, "r:gz") as tf:
@@ -178,7 +179,9 @@ def ensure() -> None:
         finally:
             sys.argv = old
         st = status()
-    if st["fixture_races"] and st["real_day_installed_races"] < st["fixture_races"]:
+    if not ARCHIVE.is_file():
+        print("[dev_fixture] OK: 実データのアーカイブはありません（合成モックで動きます）", flush=True)
+    elif st["fixture_races"] and st["real_day_installed_races"] < st["fixture_races"]:
         r = install()
         print(f"[dev_fixture] 実データ {st['fixture_date']} を展開しました: 書き込み {r['written']} / 既存維持 {r['kept']}", flush=True)
     else:

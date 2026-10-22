@@ -29,5 +29,10 @@ for name in "${!PAT[@]}"; do
   hits="$(SRC "${PAT[$name]}" 2>/dev/null | grep -vE "$ALLOW" | cut -d: -f1-2 | head -5 || true)"
   if [ -n "$hits" ]; then echo "検出: $name"; echo "$hits" | sed 's/^/   /'; rc=1; fi
 done
+# netkeiba の取得データ（実データの抜粋・行単位の生成物）を追跡ファイルに入れない（netkeiba 利用規約 第14条）
+FORBIDDEN='^dev_fixture/.+\.(tar\.gz|json)$|^docs/requirements/data/scrape_process_samples/.+\.json$|^notebooks/megu_index/output/nb0[145]/(megu_dataset|megu_index|megu_final)\.parquet$|^data/(dev_mock|local)/'
+if [ "$RANGE" = "--tracked" ]; then bad="$(git ls-files | grep -E "$FORBIDDEN" || true)"
+else bad="$(git diff --name-only --diff-filter=AM "$RANGE" | grep -E "$FORBIDDEN" || true)"; fi
+if [ -n "$bad" ]; then echo "検出: netkeiba の実データ置き場（コミットしない）"; echo "$bad" | head -5 | sed 's/^/   /'; rc=1; fi
 [ $rc -eq 0 ] && echo "秘密らしい文字列は見つかりませんでした" || echo "→ 該当行を消す／環境変数・Secret Manager に移す。すでに公開した値は無効化(ローテーション)する"
 exit $rc

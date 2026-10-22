@@ -57,10 +57,19 @@ def test_samples_are_schema_conformant_and_secrets_are_masked():
     assert set(S) == ids
     env = next(p for p in S["E06"] if p["kind"] == "json")["data"]
     assert env["APP_SECRET_KEY"] == "<秘密>" and env["GCS_PRIVATE_KEY"] == "<秘密>"      # 秘密の値は載せない
-    for name, cat in schema_infer.SAMPLE_CATEGORY.items():                               # 使っている実サンプルは現行スキーマに適合
-        data = json.loads((M.SAMP / f"{name}.json").read_text(encoding="utf-8"))
-        assert schemas.validate(cat, data)["passed"], name
+    for name, cat in M.SAMPLE_TO_CATEGORY.items():                                        # 使うサンプルは dev モック（現行スキーマに適合）。実データは使わない
+        if cat in ("race_lists", "race_day_schedule"):
+            continue
+        assert schema_infer.SAMPLE_CATEGORY.get(name, cat) == cat, name
     for panels in S.values():                                                            # モックの時刻は固定（再生成しても差分が出ない）
         for q in panels:
-            if q.get("source") == M.MOCK:
+            if q.get("source") == M.MOCK and "data" in q:
                 assert "2026-10-06 00:00:00" in json.dumps(q["data"]) or "scraped_at_jst" not in json.dumps(q["data"])
+
+
+def test_catalog_has_no_real_netkeiba_samples(catalog):
+    """公開リポジトリに netkeiba の実データ（実在のレース名・実サンプル ID）を埋め込まない。"""
+    M.embed(catalog)
+    t = catalog.read_text(encoding="utf-8")
+    assert "宝塚記念" not in t
+    assert "実スクレイプして保存したサンプル" not in t

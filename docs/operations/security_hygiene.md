@@ -28,3 +28,10 @@
 
 ## 既知の公開済み情報（履歴に残るため取り消せない）
 - 過去のコミットに VPS の IP・SSH ポート・管理ユーザー名が含まれる。現在の HEAD ではプレースホルダに置き換えた。IP を変えられる機会（VPS の作り直し）があれば変更する。
+
+## netkeiba の取得データを公開リポジトリに置かない
+netkeiba 利用規約 第14条は、サービスで入手したデータ等を不特定多数が知りうる状態におくことを、私的利用の範囲外とする。公開リポジトリには次を**置かない**:
+- 出馬表・結果・オッズ・過去走などの実データ（JSON・Parquet・アーカイブ・ノートブックの出力に出る行）
+- 実スクレイプのサンプル（`docs/requirements/data/scrape_process_samples/*.json`）、dev 用の実データ日（`dev_fixture/*`）、行単位の生成物（`notebooks/megu_index/output/nb0[145]/*.parquet` など）
+
+仕組み: `dev_fixture/.gitignore` などの入れ子 `.gitignore` で除外し、`scripts/dev/secret_scan.sh` が追加を拒否する。dev の表示は合成モック（`make dev-mock`）が基本。実データ日が欲しい PC は、自分の取得（`capture_dev_day`）のあと `make dev-fixture-pack` でローカルに作る。詳細と残件: `docs/operations/netkeiba_purge_report.md`。

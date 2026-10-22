@@ -1,0 +1,4 @@
+# 行単位のレース成績を含む生成物（netkeiba 由来の取得データ 約30万行）は公開リポジトリに置かない。ノートブックで再生成する
+nb01/megu_dataset.parquet
+nb04/megu_index.parquet
+nb05/megu_final.parquet

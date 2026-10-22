@@ -3,7 +3,7 @@
 各行（A01〜G05）をクリックすると、サンプル（JSON は辞書型、特徴量などはテーブル）が開く。何度実行しても同じ結果（冪等）。
 
 サンプルの出所:
-  * 実データ … docs/requirements/data/scrape_process_samples/（過去に実スクレイプして保存した 1 レース・1 頭分）と、この PC にある
+  * 実データは使わない（netkeiba 由来のため公開しない）。実スクレイプのサンプルの代わりに dev モックを使う。この PC にある
                ナレッジ・設定ファイル、data_features_reference.html に載っている先頭行
   * dev モック … make_dev_mock が生成する架空データ（スキーマ適合）。実データが手元に無いカテゴリ用
   * 変換ロジックの適用結果 … export_tables / build_horse_entity_store の変換を実サンプルに適用したもの
@@ -27,8 +27,18 @@ ROOT = Path(__file__).resolve().parents[3]
 CAT = ROOT / "docs/html/data/DATASET_CATALOG.html"
 SAMP = ROOT / "docs/requirements/data/scrape_process_samples"
 E = html.escape
-REAL = "実データ（2026-06-12 に実スクレイプして保存したサンプル）"
 MOCK = "dev モック（架空データ。スキーマ適合）"
+# netkeiba の取得データは公開リポジトリに置かない（netkeiba 利用規約 第14条）。実スクレイプのサンプルは使わず、dev モックで代替する
+REAL = MOCK
+SAMPLE_TO_CATEGORY = {
+    "nk_race_list": "race_lists", "nk_race_day_schedule": "race_day_schedule", "nk_shutuba_entries": "race_shutuba",
+    "nk_odds": "race_odds", "nk_paddock": "race_paddock", "nk_speed_index": "race_index", "nk_barometer": "race_barometer",
+    "nk_result_on_time": "race_result_on_time", "nk_db_race_result": "race_result", "nk_db_per_horse_lap": "race_result_lap",
+    "nk_horse_pedigree": "horse_pedigree_5gen", "nk_horse_training": "horse_training", "nk_shutuba_race_meta": "race_shutuba_meta",
+    "nk_db_race_info": "race_result_meta", "nk_db_payoff": "race_result_payoff", "nk_db_track": "race_result_track",
+    "nk_db_corner": "race_result_corner", "nk_db_lap": "race_result_lap_times", "nk_horse_profile": "horse_profile",
+    "nk_horse_history": "horse_race_history",
+}
 
 CSS = """
 tr.ds{cursor:pointer}tr.ds:hover td{background:rgba(79,139,255,.08)}
@@ -127,7 +137,13 @@ def _build_samples(tmp: Path) -> dict[str, list[dict[str, Any]]]:
         return d
 
     def real(name: str) -> dict[str, Any]:
-        return json.loads((SAMP / f"{name}.json").read_text(encoding="utf-8"))
+        cat = SAMPLE_TO_CATEGORY[name]
+        if cat in ("race_lists", "race_day_schedule"):                 # page_reference 側（モック生成時に tmp/pr へ書かれる）
+            d = json.loads(sorted((tmp / "pr" / cat).glob("*.json"))[0].read_text(encoding="utf-8"))
+            if "_meta" in d:                                           # 実行のたびに変わる時刻は固定する
+                d["_meta"] = {**d["_meta"], "scraped_at_jst": "2026-10-06 00:00:00"}
+            return d
+        return mock(cat)
 
     def jload(rel: str) -> Any:
         return json.loads((ROOT / rel).read_text(encoding="utf-8"))

@@ -96,9 +96,18 @@ def test_install_rejects_path_traversal(env, tmp_path):
         F.install()
 
 
-def test_committed_fixture_is_consistent():
-    """リポジトリに入っている dev_fixture/ が MANIFEST どおりで、36 レース分が展開できる。"""
-    repo_fixture = F.REPO_ROOT / "dev_fixture"
-    man = json.loads((repo_fixture / "MANIFEST.json").read_text(encoding="utf-8"))
-    assert hashlib.sha256((repo_fixture / man["archive"]).read_bytes()).hexdigest() == man["archive_sha256"]
-    assert man["races"] == 36 and all(man["counts"][c] == 36 for c in ("race_shutuba", "race_result", "race_odds", "race_pair_odds", "race_predictions"))
+def test_fixture_archive_is_not_tracked_by_git():
+    """公開リポジトリに netkeiba の実データ（アーカイブ・マニフェスト）を置かない（netkeiba 利用規約 第14条）。"""
+    import subprocess
+
+    out = subprocess.run(["git", "ls-files", "dev_fixture"], cwd=F.REPO_ROOT, capture_output=True, text=True).stdout.split()
+    assert not [f for f in out if f.endswith((".tar.gz", "MANIFEST.json"))], out
+    ign = subprocess.run(["git", "check-ignore", "-q", "dev_fixture/real_day.tar.gz"], cwd=F.REPO_ROOT)
+    assert ign.returncode == 0, "dev_fixture/real_day.tar.gz が .gitignore されていない"
+
+
+def test_ensure_without_archive_keeps_mock_only(env, capsys):
+    mock, ref = env
+    (mock / "race_shutuba").mkdir(parents=True)  # モック生成済みの状態
+    F.ensure()  # アーカイブが無くても落ちない
+    assert "合成モックで動きます" in capsys.readouterr().out

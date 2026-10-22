@@ -1,4 +1,9 @@
-# scrape_process 用・実スクレイプ JSON サンプル
+# scrape_process 用・実スクレイプ JSON サンプル（ローカル専用）
+
+**このディレクトリの `*.json` は git 管理しません**（netkeiba の取得データのため、公開リポジトリに置かない。netkeiba 利用規約 第14条）。
+手元で書き出して確認する用途のみ。コミットしないこと（`.gitignore` と `scripts/dev/secret_scan.sh` が検査します）。
+
+以下は書き出し手順の記録です。
 
 `docs/requirements/data/scrape_process.md` の「保存 JSON のサンプル（折りたたみ）」と同一内容の正本です。**ダミーではなく**、要件書 config のサンプル ID で取得した（またはローカル L2 に残っている）実データです。
 

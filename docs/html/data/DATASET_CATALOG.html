@@ -123,131 +123,130 @@ table.smp{font-size:11.5px}table.smp th,table.smp td{padding:4px 8px;white-space
 <p>「取得元」は <b>URL</b>＝外部サイトから自動取得、<b>生成</b>＝コマンドで作る、<b>手動</b>＝人が作る、のいずれか。</p>
 <h3 id="cat-A">A. 外部サイトから取得する生データ（スクレイピング）</h3><p>netkeiba / JRA 公式。認証が要るものは netkeiba プレミアム（<code>.env</code> の <code>netkeiba_id</code> / <code>netkeiba_pw</code>。<b>認証は完了済みの前提</b>）。保存先の <code>GCS_BASE</code> = <code>chuou/data/preprocessed/netkeiba/pc</code>、<code>OTHERS</code> = <code>chuou/data/others</code>（バケット <code>GCS_BUCKET</code>）。race 系は <code>/{年4桁}/{race_id}.json</code>、horse 系は <code>/{horse_id先頭4桁}/{horse_id}.json</code>。生 HTML は <code>chuou/data/raw/html/{category}/{shard}/{key}.html.gz</code>（件数上限あり）。</p>
 <div class="wrap"><table><tr><th>ID</th><th>データ</th><th>用途</th><th>取得元（URL／手動／生成）</th><th>保存先</th><th>更新・SLA</th><th>書込主体</th></tr>
-<tr class="ds" data-id="A01"><td class="id">A01</td><td><b>race_lists<br><small>開催日別レース一覧</small></b></td><td>日付軸。全取得ジョブの起点（race_id 列挙）、発走時刻表の材料</td><td>URL<br><code>https://race.netkeiba.com/top/race_list.html?kaisai_date={YYYYMMDD}</code></td><td><code>data/page_reference/race_lists/{YYYYMMDD}.json</code><br><b>GCS 非対象（local_only）</b><br>HTML 断片のみ GCS raw/html/race_lists</td><td>毎日 17:00・向こう14日分（要件書 SLA7）<br><small>旧リファレンスは 07:00 と記載 → 要統一</small></td><td>学習PC（過去分）／VPS cron（当日分, T-038 未着手）</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_lists/20230625.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">races は 36 件中 先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;date&quot;: &quot;20230625&quot;,
+<tr class="ds" data-id="A01"><td class="id">A01</td><td><b>race_lists<br><small>開催日別レース一覧</small></b></td><td>日付軸。全取得ジョブの起点（race_id 列挙）、発走時刻表の材料</td><td>URL<br><code>https://race.netkeiba.com/top/race_list.html?kaisai_date={YYYYMMDD}</code></td><td><code>data/page_reference/race_lists/{YYYYMMDD}.json</code><br><b>GCS 非対象（local_only）</b><br>HTML 断片のみ GCS raw/html/race_lists</td><td>毎日 17:00・向こう14日分（要件書 SLA7）<br><small>旧リファレンスは 07:00 と記載 → 要統一</small></td><td>学習PC（過去分）／VPS cron（当日分, T-038 未着手）</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_lists/20230625.json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">races は 36 件中 先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;date&quot;: &quot;20261004&quot;,
   &quot;races&quot;: [
     {
-      &quot;race_id&quot;: &quot;202302010601&quot;,
+      &quot;race_id&quot;: &quot;202605030201&quot;,
       &quot;round&quot;: 1,
-      &quot;venue&quot;: &quot;函館&quot;,
-      &quot;race_name&quot;: &quot;3歳未勝利&quot;
+      &quot;venue&quot;: &quot;東京&quot;,
+      &quot;race_name&quot;: &quot;3歳以上未勝利&quot;
     },
     {
-      &quot;race_id&quot;: &quot;202302010602&quot;,
-      &quot;round&quot;: 2,
-      &quot;venue&quot;: &quot;函館&quot;,
-      &quot;race_name&quot;: &quot;3歳未勝利&quot;
+      &quot;race_id&quot;: &quot;202605030205&quot;,
+      &quot;round&quot;: 5,
+      &quot;venue&quot;: &quot;東京&quot;,
+      &quot;race_name&quot;: &quot;3歳以上1勝クラス&quot;
     },
-    &quot;…（他 34 件）&quot;
+    &quot;…（他 6 件）&quot;
   ],
   &quot;_meta&quot;: {
-    &quot;race_list_source&quot;: &quot;db.netkeiba.com&quot;,
-    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:43:24&quot;
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
   }
 }</code></pre></div></details></td></tr>
-<tr class="ds" data-id="A02"><td class="id">A02</td><td><b>race_day_schedule<br><small>発走時刻スナップショット</small></b></td><td>開催日ランナーの T-15、T-45 推論の基準時刻</td><td><b>生成</b>：race_lists ＋ race_shutuba の start_time から合成<br><code>KEIBA_WRITE_RACE_DAY_SCHEDULE_ON_RACE_LIST=1</code> または <code>materialize_requirement_row_traces --schedule-date</code></td><td><code>data/page_reference/race_day_schedule/{YYYYMMDD}.json</code>（local_only）</td><td>A01 保存直後</td><td>A01 と同じ</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_day_schedule/20230625.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">slots は先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;date_fmt&quot;: &quot;20230625&quot;,
-  &quot;iso_date&quot;: &quot;2023-06-25&quot;,
+<tr class="ds" data-id="A02"><td class="id">A02</td><td><b>race_day_schedule<br><small>発走時刻スナップショット</small></b></td><td>開催日ランナーの T-15、T-45 推論の基準時刻</td><td><b>生成</b>：race_lists ＋ race_shutuba の start_time から合成<br><code>KEIBA_WRITE_RACE_DAY_SCHEDULE_ON_RACE_LIST=1</code> または <code>materialize_requirement_row_traces --schedule-date</code></td><td><code>data/page_reference/race_day_schedule/{YYYYMMDD}.json</code>（local_only）</td><td>A01 保存直後</td><td>A01 と同じ</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_day_schedule/20230625.json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">slots は先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;date_fmt&quot;: &quot;20261004&quot;,
+  &quot;iso_date&quot;: &quot;2026-10-04&quot;,
   &quot;slots&quot;: [
     {
-      &quot;race_id&quot;: &quot;202302010601&quot;,
-      &quot;venue&quot;: &quot;函館&quot;,
-      &quot;round&quot;: 1,
-      &quot;race_name&quot;: &quot;3歳未勝利&quot;,
-      &quot;start_time_str&quot;: &quot;09:50&quot;,
-      &quot;post_time_iso&quot;: &quot;2023-06-25T09:50:00+09:00&quot;,
-      &quot;time_source&quot;: &quot;shutuba&quot;
-    },
-    {
-      &quot;race_id&quot;: &quot;202305030801&quot;,
+      &quot;race_id&quot;: &quot;202605030201&quot;,
       &quot;venue&quot;: &quot;東京&quot;,
       &quot;round&quot;: 1,
-      &quot;race_name&quot;: &quot;2歳未勝利&quot;,
-      &quot;start_time_str&quot;: &quot;09:55&quot;,
-      &quot;post_time_iso&quot;: &quot;2023-06-25T09:55:00+09:00&quot;,
-      &quot;time_source&quot;: &quot;shutuba&quot;
+      &quot;race_name&quot;: &quot;3歳以上未勝利&quot;,
+      &quot;start_time_str&quot;: &quot;10:05&quot;,
+      &quot;time_source&quot;: &quot;dev_mock&quot;,
+      &quot;post_time_iso&quot;: &quot;2026-10-04T10:05:00+09:00&quot;
     },
-    &quot;…（他 34 件）&quot;
+    {
+      &quot;race_id&quot;: &quot;202605030205&quot;,
+      &quot;venue&quot;: &quot;東京&quot;,
+      &quot;round&quot;: 5,
+      &quot;race_name&quot;: &quot;3歳以上1勝クラス&quot;,
+      &quot;start_time_str&quot;: &quot;12:25&quot;,
+      &quot;time_source&quot;: &quot;dev_mock&quot;,
+      &quot;post_time_iso&quot;: &quot;2026-10-04T12:25:00+09:00&quot;
+    },
+    &quot;…（他 6 件）&quot;
   ],
   &quot;_meta&quot;: {
-    &quot;source&quot;: &quot;synthesized&quot;
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
   }
 }</code></pre></div></details></td></tr>
-<tr class="ds" data-id="A03"><td class="id">A03</td><td><b>race_shutuba<br><small>出馬表＋レース情報</small></b></td><td>予測スパイン（base_tbl）、T-45 推論、出馬表画面</td><td>URL<br><code>https://race.netkeiba.com/race/shutuba.html?race_id={race_id}</code></td><td>GCS <code>GCS_BASE/race_shutuba/{年}/{race_id}.json</code><br>raw HTML gz あり</td><td>SLA1 前日17:00 ／ SLA3 発走10分前</td><td>学習PC／VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_shutuba/2023/202309030811.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">entries は 17 頭中 先頭 2 頭に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;race_id&quot;: &quot;202309030811&quot;,
-  &quot;race_name&quot;: &quot;宝塚記念&quot;,
-  &quot;surface&quot;: &quot;芝&quot;,
-  &quot;distance&quot;: 2200,
+<tr class="ds" data-id="A03"><td class="id">A03</td><td><b>race_shutuba<br><small>出馬表＋レース情報</small></b></td><td>予測スパイン（base_tbl）、T-45 推論、出馬表画面</td><td>URL<br><code>https://race.netkeiba.com/race/shutuba.html?race_id={race_id}</code></td><td>GCS <code>GCS_BASE/race_shutuba/{年}/{race_id}.json</code><br>raw HTML gz あり</td><td>SLA1 前日17:00 ／ SLA3 発走10分前</td><td>学習PC／VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_shutuba/2023/202309030811.json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">entries は 17 頭中 先頭 2 頭に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
+  &quot;race_name&quot;: &quot;3歳以上未勝利&quot;,
+  &quot;surface&quot;: &quot;ダ&quot;,
+  &quot;distance&quot;: 1400,
   &quot;direction&quot;: &quot;右&quot;,
-  &quot;weather&quot;: &quot;曇&quot;,
+  &quot;weather&quot;: &quot;晴&quot;,
   &quot;track_condition&quot;: &quot;良&quot;,
-  &quot;start_time&quot;: &quot;15:40&quot;,
-  &quot;venue&quot;: &quot;阪神&quot;,
-  &quot;field_size&quot;: 17,
-  &quot;date&quot;: &quot;2023-06-25&quot;,
-  &quot;round&quot;: 11,
-  &quot;grade&quot;: &quot;OP&quot;,
-  &quot;race_class&quot;: &quot;サラ系３歳以上 オープン&quot;,
-  &quot;weight_rule&quot;: &quot;定量&quot;,
+  &quot;start_time&quot;: &quot;10:05&quot;,
+  &quot;venue&quot;: &quot;東京&quot;,
+  &quot;field_size&quot;: 8,
+  &quot;date&quot;: &quot;2026-10-04&quot;,
+  &quot;round&quot;: 1,
+  &quot;grade&quot;: &quot;&quot;,
+  &quot;race_class&quot;: &quot;3歳以上未勝利&quot;,
+  &quot;weight_rule&quot;: &quot;馬齢&quot;,
   &quot;course_type&quot;: &quot;&quot;,
   &quot;entries&quot;: [
     {
       &quot;horse_number&quot;: 1,
       &quot;bracket_number&quot;: 1,
-      &quot;horse_name&quot;: &quot;ライラック&quot;,
-      &quot;horse_id&quot;: &quot;2019103588&quot;,
-      &quot;sex_age&quot;: &quot;牝4&quot;,
-      &quot;jockey_weight&quot;: 56.0,
-      &quot;jockey_name&quot;: &quot;Ｍデムーロ&quot;,
-      &quot;jockey_id&quot;: &quot;05212&quot;,
-      &quot;trainer_name&quot;: &quot;相沢&quot;,
-      &quot;trainer_id&quot;: &quot;01020&quot;,
-      &quot;weight&quot;: 430,
-      &quot;weight_change&quot;: -8,
+      &quot;horse_name&quot;: &quot;モックウマ07&quot;,
+      &quot;horse_id&quot;: &quot;2021100007&quot;,
+      &quot;sex_age&quot;: &quot;牝5&quot;,
+      &quot;jockey_weight&quot;: 58.0,
+      &quot;jockey_name&quot;: &quot;モック騎手オ&quot;,
+      &quot;jockey_id&quot;: &quot;90005&quot;,
+      &quot;trainer_name&quot;: &quot;モック調教師キ&quot;,
+      &quot;trainer_id&quot;: &quot;91007&quot;,
+      &quot;weight&quot;: 483,
+      &quot;weight_change&quot;: 2,
       &quot;…&quot;: &quot;他 4 キー&quot;
     },
     {
       &quot;horse_number&quot;: 2,
-      &quot;bracket_number&quot;: 1,
-      &quot;horse_name&quot;: &quot;カラテ&quot;,
-      &quot;horse_id&quot;: &quot;2016106606&quot;,
-      &quot;sex_age&quot;: &quot;牡7&quot;,
-      &quot;jockey_weight&quot;: 58.0,
-      &quot;jockey_name&quot;: &quot;菅原明&quot;,
-      &quot;jockey_id&quot;: &quot;01179&quot;,
-      &quot;trainer_name&quot;: &quot;辻野&quot;,
-      &quot;trainer_id&quot;: &quot;01183&quot;,
-      &quot;weight&quot;: 538,
-      &quot;weight_change&quot;: 0,
+      &quot;bracket_number&quot;: 2,
+      &quot;horse_name&quot;: &quot;モックウマ62&quot;,
+      &quot;horse_id&quot;: &quot;2022100062&quot;,
+      &quot;sex_age&quot;: &quot;セ4&quot;,
+      &quot;jockey_weight&quot;: 57.0,
+      &quot;jockey_name&quot;: &quot;モック騎手キ&quot;,
+      &quot;jockey_id&quot;: &quot;90007&quot;,
+      &quot;trainer_name&quot;: &quot;モック調教師カ&quot;,
+      &quot;trainer_id&quot;: &quot;91006&quot;,
+      &quot;weight&quot;: 470,
+      &quot;weight_change&quot;: -3,
       &quot;…&quot;: &quot;他 4 キー&quot;
     },
-    &quot;…（他 15 件）&quot;
+    &quot;…（他 6 件）&quot;
   ],
   &quot;_meta&quot;: {
-    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:11:19&quot;
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
   }
 }</code></pre></div></details></td></tr>
-<tr class="ds" data-id="A04"><td class="id">A04</td><td><b>race_odds<br><small>単複オッズ</small></b></td><td>直前オッズ特徴、期待値（EV）、馬券最適化</td><td>URL（API）<br><code>https://race.netkeiba.com/odds/index.html?race_id={race_id}</code></td><td>GCS <code>…/race_odds/{年}/</code>（生 HTML なし）</td><td>SLA3 発走10分前（＋当日 17:30）</td><td>VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_odds/2023/202309030811.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;race_id&quot;: &quot;202309030811&quot;,
+<tr class="ds" data-id="A04"><td class="id">A04</td><td><b>race_odds<br><small>単複オッズ</small></b></td><td>直前オッズ特徴、期待値（EV）、馬券最適化</td><td>URL（API）<br><code>https://race.netkeiba.com/odds/index.html?race_id={race_id}</code></td><td>GCS <code>…/race_odds/{年}/</code>（生 HTML なし）</td><td>SLA3 発走10分前（＋当日 17:30）</td><td>VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_odds/2023/202309030811.json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
   &quot;entries&quot;: [
     {
       &quot;horse_number&quot;: 1,
-      &quot;win_odds&quot;: 158.9,
-      &quot;place_odds_min&quot;: 12.3,
-      &quot;place_odds_max&quot;: 30.5,
-      &quot;popularity&quot;: 13
+      &quot;win_odds&quot;: 18.9,
+      &quot;place_odds_min&quot;: 5.9,
+      &quot;place_odds_max&quot;: 8.6,
+      &quot;popularity&quot;: 5
     },
     {
       &quot;horse_number&quot;: 2,
-      &quot;win_odds&quot;: 180.2,
-      &quot;place_odds_min&quot;: 14.5,
-      &quot;place_odds_max&quot;: 36.1,
-      &quot;popularity&quot;: 15
+      &quot;win_odds&quot;: 6.5,
+      &quot;place_odds_min&quot;: 2.0,
+      &quot;place_odds_max&quot;: 3.0,
+      &quot;popularity&quot;: 3
     },
-    &quot;…（他 15 件）&quot;
+    &quot;…（他 6 件）&quot;
   ],
   &quot;_meta&quot;: {
-    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:11:27&quot;
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
   }
 }</code></pre></div></details></td></tr>
 <tr class="ds" data-id="A05"><td class="id">A05</td><td><b>race_pair_odds<br><small>2連系オッズ</small></b></td><td>馬連・ワイド等の馬券最適化</td><td>URL<br><code>odds/index.html?race_id=…&amp;type=b4〜b8</code></td><td>GCS <code>…/race_pair_odds/{年}/</code></td><td>T-15 バンドル＋当日 17:30<br><small>※旧リファレンスのみ記載。要件書に行なし</small></td><td>VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_pair_odds/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">umaren / wide / umatan は各先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
@@ -315,105 +314,99 @@ table.smp{font-size:11.5px}table.smp th,table.smp td{padding:4px 8px;white-space
     &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
   }
 }</code></pre></div></details></td></tr>
-<tr class="ds" data-id="A06"><td class="id">A06</td><td><b>race_paddock<br><small>パドック評価</small></b></td><td>直前の馬体・気配特徴</td><td>URL（<b>プレミアム要・認証済み前提</b>）<br><code>https://race.netkeiba.com/race/paddock.html?race_id={race_id}</code></td><td>GCS <code>…/race_paddock/{年}/</code></td><td>SLA3 発走10分前</td><td>VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_paddock/2023/202309030811.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;race_id&quot;: &quot;202309030811&quot;,
-  &quot;entries&quot;: [
-    {
-      &quot;horse_number&quot;: 3,
-      &quot;horse_name&quot;: &quot;イクイノックス&quot;,
-      &quot;horse_id&quot;: &quot;2019105219&quot;,
-      &quot;paddock_rank&quot;: &quot;B&quot;,
-      &quot;paddock_comment&quot;: &quot;有馬記念時と比べると見劣るが、体は仕上がっている&quot;
-    },
-    {
-      &quot;horse_number&quot;: 5,
-      &quot;horse_name&quot;: &quot;ジャスティンパレス&quot;,
-      &quot;horse_id&quot;: &quot;2019105346&quot;,
-      &quot;paddock_rank&quot;: &quot;A&quot;,
-      &quot;paddock_comment&quot;: &quot;キョロキョロして周回。踏み込み上々で好状態&quot;
-    },
-    &quot;…（他 3 件）&quot;
-  ],
-  &quot;_meta&quot;: {
-    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:11:27&quot;
-  }
-}</code></pre></div></details></td></tr>
-<tr class="ds" data-id="A07"><td class="id">A07</td><td><b>race_index<br><small>タイム指数</small></b></td><td>能力指標特徴（過去走の指数）</td><td>URL（<b>プレミアム要・認証済み前提</b>）<br><code>https://race.netkeiba.com/race/speed.html?race_id={race_id}</code></td><td>GCS <code>…/race_index/{年}/</code></td><td>SLA1 前日17:00／確定は金曜17:00</td><td>学習PC／VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_index/2023/202309030811.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;race_id&quot;: &quot;202309030811&quot;,
+<tr class="ds" data-id="A06"><td class="id">A06</td><td><b>race_paddock<br><small>パドック評価</small></b></td><td>直前の馬体・気配特徴</td><td>URL（<b>プレミアム要・認証済み前提</b>）<br><code>https://race.netkeiba.com/race/paddock.html?race_id={race_id}</code></td><td>GCS <code>…/race_paddock/{年}/</code></td><td>SLA3 発走10分前</td><td>VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_paddock/2023/202309030811.json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
   &quot;entries&quot;: [
     {
       &quot;horse_number&quot;: 1,
-      &quot;horse_name&quot;: &quot;ライラック&quot;,
-      &quot;horse_id&quot;: &quot;2019103588&quot;,
-      &quot;time_index_m&quot;: 109,
-      &quot;speed_max&quot;: 110,
-      &quot;speed_avg&quot;: 102,
-      &quot;speed_distance&quot;: 110,
-      &quot;speed_course&quot;: 110,
-      &quot;speed_recent&quot;: [
-        94,
-        109,
-        &quot;…（他 1 件）&quot;
-      ],
-      &quot;all_txt_c&quot;: [
-        4
-      ],
-      &quot;odds&quot;: 158.9,
-      &quot;popularity&quot;: 13
+      &quot;horse_name&quot;: &quot;モックウマ07&quot;,
+      &quot;horse_id&quot;: &quot;2021100007&quot;,
+      &quot;paddock_rank&quot;: &quot;A&quot;,
+      &quot;paddock_comment&quot;: &quot;模擬コメント: 落ち着いている&quot;
     },
     {
       &quot;horse_number&quot;: 2,
-      &quot;horse_name&quot;: &quot;カラテ&quot;,
-      &quot;horse_id&quot;: &quot;2016106606&quot;,
-      &quot;time_index_m&quot;: 110,
-      &quot;speed_max&quot;: 110,
-      &quot;speed_avg&quot;: 103,
-      &quot;speed_distance&quot;: 85,
-      &quot;speed_course&quot;: 97,
-      &quot;speed_recent&quot;: [
-        87,
-        110,
-        &quot;…（他 1 件）&quot;
-      ],
-      &quot;all_txt_c&quot;: [
-        7
-      ],
-      &quot;odds&quot;: 180.2,
-      &quot;popularity&quot;: 15
+      &quot;horse_name&quot;: &quot;モックウマ62&quot;,
+      &quot;horse_id&quot;: &quot;2022100062&quot;,
+      &quot;paddock_rank&quot;: &quot;A&quot;,
+      &quot;paddock_comment&quot;: &quot;模擬コメント: 落ち着いている&quot;
     },
-    &quot;…（他 15 件）&quot;
+    &quot;…（他 6 件）&quot;
   ],
   &quot;_meta&quot;: {
-    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:11:22&quot;
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
   }
 }</code></pre></div></details></td></tr>
-<tr class="ds" data-id="A08"><td class="id">A08</td><td><b>race_barometer<br><small>調子偏差値</small></b></td><td>調子特徴</td><td>URL（<b>プレミアム要・認証済み前提</b>、API）<br><code>https://race.sp.netkeiba.com/barometer/score.html?race_id={race_id}</code></td><td>GCS <code>…/race_barometer/{年}/</code>（生 HTML なし）</td><td>SLA1／金曜確定</td><td>学習PC／VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_barometer/2023/202309030811.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;race_id&quot;: &quot;202309030811&quot;,
+<tr class="ds" data-id="A07"><td class="id">A07</td><td><b>race_index<br><small>タイム指数</small></b></td><td>能力指標特徴（過去走の指数）</td><td>URL（<b>プレミアム要・認証済み前提</b>）<br><code>https://race.netkeiba.com/race/speed.html?race_id={race_id}</code></td><td>GCS <code>…/race_index/{年}/</code></td><td>SLA1 前日17:00／確定は金曜17:00</td><td>学習PC／VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_index/2023/202309030811.json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
   &quot;entries&quot;: [
     {
-      &quot;horse_number&quot;: 5,
-      &quot;horse_name&quot;: &quot;イクイノックス&quot;,
-      &quot;horse_id&quot;: &quot;2019105219&quot;,
-      &quot;finish_order&quot;: 1,
-      &quot;index_total&quot;: 113,
-      &quot;index_start&quot;: 102,
-      &quot;index_chase&quot;: 104,
-      &quot;index_closing&quot;: 106
+      &quot;horse_number&quot;: 1,
+      &quot;horse_name&quot;: &quot;モックウマ07&quot;,
+      &quot;horse_id&quot;: &quot;2021100007&quot;,
+      &quot;time_index_m&quot;: 87,
+      &quot;speed_max&quot;: 94,
+      &quot;speed_avg&quot;: 87,
+      &quot;speed_distance&quot;: 91,
+      &quot;speed_course&quot;: 91,
+      &quot;speed_recent&quot;: [
+        91,
+        92,
+        &quot;…（他 2 件）&quot;
+      ],
+      &quot;odds&quot;: 18.9,
+      &quot;popularity&quot;: 5
     },
     {
-      &quot;horse_number&quot;: 6,
-      &quot;horse_name&quot;: &quot;スルーセブンシーズ&quot;,
-      &quot;horse_id&quot;: &quot;2018105269&quot;,
-      &quot;finish_order&quot;: 2,
-      &quot;index_total&quot;: 114,
-      &quot;index_start&quot;: 100,
-      &quot;index_chase&quot;: 104,
-      &quot;index_closing&quot;: 108
+      &quot;horse_number&quot;: 2,
+      &quot;horse_name&quot;: &quot;モックウマ62&quot;,
+      &quot;horse_id&quot;: &quot;2022100062&quot;,
+      &quot;time_index_m&quot;: 99,
+      &quot;speed_max&quot;: 102,
+      &quot;speed_avg&quot;: 94,
+      &quot;speed_distance&quot;: 99,
+      &quot;speed_course&quot;: 99,
+      &quot;speed_recent&quot;: [
+        94,
+        93,
+        &quot;…（他 2 件）&quot;
+      ],
+      &quot;odds&quot;: 6.5,
+      &quot;popularity&quot;: 3
     },
-    &quot;…（他 15 件）&quot;
+    &quot;…（他 6 件）&quot;
   ],
   &quot;_meta&quot;: {
-    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:11:23&quot;
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A08"><td class="id">A08</td><td><b>race_barometer<br><small>調子偏差値</small></b></td><td>調子特徴</td><td>URL（<b>プレミアム要・認証済み前提</b>、API）<br><code>https://race.sp.netkeiba.com/barometer/score.html?race_id={race_id}</code></td><td>GCS <code>…/race_barometer/{年}/</code>（生 HTML なし）</td><td>SLA1／金曜確定</td><td>学習PC／VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_barometer/2023/202309030811.json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
+  &quot;entries&quot;: [
+    {
+      &quot;horse_number&quot;: 1,
+      &quot;horse_name&quot;: &quot;モックウマ07&quot;,
+      &quot;horse_id&quot;: &quot;2021100007&quot;,
+      &quot;finish_order&quot;: 0,
+      &quot;index_total&quot;: 106,
+      &quot;index_start&quot;: 84,
+      &quot;index_chase&quot;: 114,
+      &quot;index_closing&quot;: 94
+    },
+    {
+      &quot;horse_number&quot;: 2,
+      &quot;horse_name&quot;: &quot;モックウマ62&quot;,
+      &quot;horse_id&quot;: &quot;2022100062&quot;,
+      &quot;finish_order&quot;: 0,
+      &quot;index_total&quot;: 108,
+      &quot;index_start&quot;: 103,
+      &quot;index_chase&quot;: 83,
+      &quot;index_closing&quot;: 111
+    },
+    &quot;…（他 6 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
   }
 }</code></pre></div></details></td></tr>
 <tr class="ds" data-id="A09"><td class="id">A09</td><td><b>race_trainer_comment<br><small>厩舎コメント</small></b></td><td>直前コメント特徴（任意）</td><td>URL<br><code>race.netkeiba.com/race/comment.html?race_id=…</code></td><td>GCS <code>…/race_trainer_comment/{年}/</code></td><td>キュー投入時<br><small>※旧リファレンスのみ記載。要件書に行なし</small></td><td>キューワーカー</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_trainer_comment/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
@@ -435,243 +428,330 @@ table.smp{font-size:11.5px}table.smp th,table.smp td{padding:4px 8px;white-space
     &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
   }
 }</code></pre></div></details></td></tr>
-<tr class="ds" data-id="A10"><td class="id">A10</td><td><b>race_result_on_time<br><small>当日速報結果</small></b></td><td>AI 予測の再現・検証（確定版と別パスで保持）</td><td>URL<br><code>https://race.netkeiba.com/race/result.html?race_id={race_id}</code></td><td>GCS <code>…/race_result_on_time/{年}/</code></td><td>SLA4 発走30分後／SLA5 当日18:00</td><td>VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_result_on_time/2023/202309030811.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;race_id&quot;: &quot;202309030811&quot;,
-  &quot;race_name&quot;: &quot;宝塚記念&quot;,
-  &quot;surface&quot;: &quot;芝&quot;,
-  &quot;distance&quot;: 2200,
+<tr class="ds" data-id="A10"><td class="id">A10</td><td><b>race_result_on_time<br><small>当日速報結果</small></b></td><td>AI 予測の再現・検証（確定版と別パスで保持）</td><td>URL<br><code>https://race.netkeiba.com/race/result.html?race_id={race_id}</code></td><td>GCS <code>…/race_result_on_time/{年}/</code></td><td>SLA4 発走30分後／SLA5 当日18:00</td><td>VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_result_on_time/2023/202309030811.json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
+  &quot;race_name&quot;: &quot;3歳以上未勝利&quot;,
+  &quot;surface&quot;: &quot;ダ&quot;,
+  &quot;distance&quot;: 1400,
   &quot;direction&quot;: &quot;右&quot;,
-  &quot;weather&quot;: &quot;曇&quot;,
+  &quot;weather&quot;: &quot;晴&quot;,
   &quot;track_condition&quot;: &quot;良&quot;,
-  &quot;start_time&quot;: &quot;15:40&quot;,
-  &quot;venue&quot;: &quot;阪神&quot;,
-  &quot;date&quot;: &quot;2023-06-25&quot;,
-  &quot;round&quot;: 11,
-  &quot;grade&quot;: &quot;OP&quot;,
+  &quot;start_time&quot;: &quot;10:05&quot;,
+  &quot;venue&quot;: &quot;東京&quot;,
+  &quot;field_size&quot;: 8,
+  &quot;date&quot;: &quot;2026-10-04&quot;,
+  &quot;round&quot;: 1,
+  &quot;grade&quot;: &quot;&quot;,
+  &quot;race_class&quot;: &quot;3歳以上未勝利&quot;,
+  &quot;weight_rule&quot;: &quot;馬齢&quot;,
+  &quot;course_type&quot;: &quot;&quot;,
   &quot;entries&quot;: [
     {
       &quot;finish_position&quot;: 1,
-      &quot;bracket_number&quot;: 3,
-      &quot;horse_number&quot;: 5,
-      &quot;horse_name&quot;: &quot;イクイノックス&quot;,
-      &quot;horse_id&quot;: &quot;2019105219&quot;,
-      &quot;sex_age&quot;: &quot;牡4&quot;,
-      &quot;jockey_weight&quot;: 58.0,
-      &quot;jockey_name&quot;: &quot;ルメー&quot;,
-      &quot;jockey_id&quot;: &quot;05339&quot;,
-      &quot;finish_time&quot;: &quot;2:11.2&quot;,
-      &quot;time_sec&quot;: 131.2,
+      &quot;bracket_number&quot;: 4,
+      &quot;horse_number&quot;: 4,
+      &quot;horse_name&quot;: &quot;モックウマ36&quot;,
+      &quot;horse_id&quot;: &quot;2023100036&quot;,
+      &quot;sex_age&quot;: &quot;セ3&quot;,
+      &quot;jockey_weight&quot;: 56.0,
+      &quot;jockey_name&quot;: &quot;モック騎手ク&quot;,
+      &quot;jockey_id&quot;: &quot;90008&quot;,
+      &quot;finish_time&quot;: &quot;1:26.2&quot;,
+      &quot;time_sec&quot;: 86.2,
       &quot;margin&quot;: &quot;&quot;,
       &quot;…&quot;: &quot;他 8 キー&quot;
     },
     {
       &quot;finish_position&quot;: 2,
-      &quot;bracket_number&quot;: 3,
-      &quot;horse_number&quot;: 6,
-      &quot;horse_name&quot;: &quot;スルーセブンシーズ&quot;,
-      &quot;horse_id&quot;: &quot;2018105269&quot;,
-      &quot;sex_age&quot;: &quot;牝5&quot;,
-      &quot;jockey_weight&quot;: 56.0,
-      &quot;jockey_name&quot;: &quot;池添&quot;,
-      &quot;jockey_id&quot;: &quot;01032&quot;,
-      &quot;finish_time&quot;: &quot;2:11.2&quot;,
-      &quot;time_sec&quot;: 131.2,
-      &quot;margin&quot;: &quot;クビ&quot;,
-      &quot;…&quot;: &quot;他 8 キー&quot;
-    },
-    &quot;…（他 15 件）&quot;
-  ],
-  &quot;field_size&quot;: 17,
-  &quot;payoff&quot;: {},
-  &quot;lap_times&quot;: [],
-  &quot;pace&quot;: {},
-  &quot;corner_passing&quot;: [],
-  &quot;_meta&quot;: {
-    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:11:46&quot;
-  }
-}</code></pre></div></details></td></tr>
-<tr class="ds" data-id="A11"><td class="id">A11</td><td><b>race_result<br><small>確定結果（着順・払戻・ラップ・通過・馬場）</small></b></td><td>学習ラベル、race_result_flat、各種指数の元</td><td>URL<br><code>https://db.netkeiba.com/race/{race_id}/</code></td><td>GCS <code>…/race_result/{年}/{race_id}.json</code><br>raw HTML gz あり</td><td>SLA6 レース後の金曜17:00（上書き再取得）</td><td>学習PC／VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_result/2023/202309030811.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">entries は先頭 2 頭、payoff・corner_passing も短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;race_id&quot;: &quot;202309030811&quot;,
-  &quot;race_name&quot;: &quot;第64回宝塚記念&quot;,
-  &quot;grade&quot;: &quot;G1&quot;,
-  &quot;surface&quot;: &quot;芝&quot;,
-  &quot;direction&quot;: &quot;右&quot;,
-  &quot;distance&quot;: 2200,
-  &quot;weather&quot;: &quot;曇&quot;,
-  &quot;track_condition&quot;: &quot;良&quot;,
-  &quot;start_time&quot;: &quot;15:40&quot;,
-  &quot;date&quot;: &quot;2023-06-25&quot;,
-  &quot;venue&quot;: &quot;阪神&quot;,
-  &quot;round&quot;: 0,
-  &quot;entries&quot;: [
-    {
-      &quot;finish_position&quot;: 1,
-      &quot;bracket_number&quot;: 3,
+      &quot;bracket_number&quot;: 5,
       &quot;horse_number&quot;: 5,
-      &quot;horse_name&quot;: &quot;イクイノックス&quot;,
-      &quot;horse_id&quot;: &quot;2019105219&quot;,
-      &quot;sex_age&quot;: &quot;牡4&quot;,
-      &quot;jockey_weight&quot;: 58.0,
-      &quot;jockey_name&quot;: &quot;ルメール&quot;,
-      &quot;jockey_id&quot;: &quot;05339&quot;,
-      &quot;finish_time&quot;: &quot;2:11.2&quot;,
-      &quot;time_sec&quot;: 131.2,
-      &quot;margin&quot;: &quot;&quot;,
-      &quot;…&quot;: &quot;他 8 キー&quot;
-    },
-    {
-      &quot;finish_position&quot;: 2,
-      &quot;bracket_number&quot;: 3,
-      &quot;horse_number&quot;: 6,
-      &quot;horse_name&quot;: &quot;スルーセブンシーズ&quot;,
-      &quot;horse_id&quot;: &quot;2018105269&quot;,
-      &quot;sex_age&quot;: &quot;牝5&quot;,
+      &quot;horse_name&quot;: &quot;モックウマ40&quot;,
+      &quot;horse_id&quot;: &quot;2021100040&quot;,
+      &quot;sex_age&quot;: &quot;牡5&quot;,
       &quot;jockey_weight&quot;: 56.0,
-      &quot;jockey_name&quot;: &quot;池添謙一&quot;,
-      &quot;jockey_id&quot;: &quot;01032&quot;,
-      &quot;finish_time&quot;: &quot;2:11.2&quot;,
-      &quot;time_sec&quot;: 131.2,
-      &quot;margin&quot;: &quot;クビ&quot;,
+      &quot;jockey_name&quot;: &quot;モック騎手ウ&quot;,
+      &quot;jockey_id&quot;: &quot;90003&quot;,
+      &quot;finish_time&quot;: &quot;1:26.6&quot;,
+      &quot;time_sec&quot;: 86.6,
+      &quot;margin&quot;: &quot;2 1/2&quot;,
       &quot;…&quot;: &quot;他 8 キー&quot;
     },
-    &quot;…（他 15 件）&quot;
+    &quot;…（他 6 件）&quot;
   ],
-  &quot;field_size&quot;: 17,
   &quot;payoff&quot;: {
     &quot;単勝&quot;: {
-      &quot;numbers&quot;: &quot;5&quot;,
-      &quot;payout&quot;: &quot;130&quot;,
+      &quot;numbers&quot;: &quot;4&quot;,
+      &quot;payout&quot;: &quot;210&quot;,
       &quot;popularity&quot;: &quot;1&quot;
     },
     &quot;複勝&quot;: [
       {
-        &quot;numbers&quot;: &quot;5&quot;,
+        &quot;numbers&quot;: &quot;4&quot;,
         &quot;payout&quot;: &quot;110&quot;,
         &quot;popularity&quot;: &quot;1&quot;
       },
       {
-        &quot;numbers&quot;: &quot;6&quot;,
-        &quot;payout&quot;: &quot;560&quot;,
-        &quot;popularity&quot;: &quot;10&quot;
+        &quot;numbers&quot;: &quot;5&quot;,
+        &quot;payout&quot;: &quot;110&quot;,
+        &quot;popularity&quot;: &quot;2&quot;
       },
       &quot;…（他 1 件）&quot;
     ],
     &quot;枠連&quot;: {
-      &quot;numbers&quot;: &quot;3 - 3&quot;,
-      &quot;payout&quot;: &quot;2,280&quot;,
-      &quot;popularity&quot;: &quot;8&quot;
+      &quot;numbers&quot;: &quot;4 - 5&quot;,
+      &quot;payout&quot;: &quot;280&quot;,
+      &quot;popularity&quot;: &quot;5&quot;
     },
     &quot;馬連&quot;: {
-      &quot;numbers&quot;: &quot;5 - 6&quot;,
-      &quot;payout&quot;: &quot;2,340&quot;,
-      &quot;popularity&quot;: &quot;8&quot;
+      &quot;numbers&quot;: &quot;4 - 5&quot;,
+      &quot;payout&quot;: &quot;330&quot;,
+      &quot;popularity&quot;: &quot;6&quot;
     },
     &quot;ワイド&quot;: [
       {
-        &quot;numbers&quot;: &quot;5 - 6&quot;,
-        &quot;payout&quot;: &quot;970&quot;,
-        &quot;popularity&quot;: &quot;11&quot;
+        &quot;numbers&quot;: &quot;4 - 5&quot;,
+        &quot;payout&quot;: &quot;120&quot;,
+        &quot;popularity&quot;: &quot;4&quot;
       },
       {
-        &quot;numbers&quot;: &quot;5 - 9&quot;,
-        &quot;payout&quot;: &quot;240&quot;,
-        &quot;popularity&quot;: &quot;1&quot;
+        &quot;numbers&quot;: &quot;2 - 4&quot;,
+        &quot;payout&quot;: &quot;340&quot;,
+        &quot;popularity&quot;: &quot;4&quot;
       },
       &quot;…（他 1 件）&quot;
     ],
     &quot;馬単&quot;: {
-      &quot;numbers&quot;: &quot;5 → 6&quot;,
-      &quot;payout&quot;: &quot;2,660&quot;,
+      &quot;numbers&quot;: &quot;4 → 5&quot;,
+      &quot;payout&quot;: &quot;620&quot;,
       &quot;popularity&quot;: &quot;9&quot;
     },
     &quot;三連複&quot;: {
-      &quot;numbers&quot;: &quot;5 - 6 - 9&quot;,
-      &quot;payout&quot;: &quot;4,030&quot;,
-      &quot;popularity&quot;: &quot;14&quot;
+      &quot;numbers&quot;: &quot;2 - 4 - 5&quot;,
+      &quot;payout&quot;: &quot;1,560&quot;,
+      &quot;popularity&quot;: &quot;12&quot;
     },
     &quot;三連単&quot;: {
-      &quot;numbers&quot;: &quot;5 → 6 → 9&quot;,
-      &quot;payout&quot;: &quot;13,630&quot;,
-      &quot;popularity&quot;: &quot;36&quot;
+      &quot;numbers&quot;: &quot;4 → 5 → 2&quot;,
+      &quot;payout&quot;: &quot;7,840&quot;,
+      &quot;popularity&quot;: &quot;30&quot;
+    }
+  },
+  &quot;pace&quot;: {
+    &quot;first_half_3f&quot;: 36.6,
+    &quot;second_half_3f&quot;: 37.9,
+    &quot;t1f&quot;: 12.2,
+    &quot;t3f&quot;: 36.6,
+    &quot;l1f&quot;: 11.8,
+    &quot;l3f&quot;: 37.9
+  },
+  &quot;corner_passing&quot;: [
+    {
+      &quot;corner&quot;: 1,
+      &quot;label&quot;: &quot;1角&quot;,
+      &quot;order_text&quot;: &quot;5,4,1,7,2,6,3,8&quot;
+    },
+    {
+      &quot;corner&quot;: 2,
+      &quot;label&quot;: &quot;2角&quot;,
+      &quot;order_text&quot;: &quot;5,4,1,7,2,6,8,3&quot;
+    },
+    &quot;…（他 2 件）&quot;
+  ],
+  &quot;lap_times&quot;: [
+    12.2,
+    12.8,
+    &quot;…（他 5 件）&quot;
+  ],
+  &quot;result_schema_kind&quot;: &quot;on_time&quot;,
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div></details></td></tr>
+<tr class="ds" data-id="A11"><td class="id">A11</td><td><b>race_result<br><small>確定結果（着順・払戻・ラップ・通過・馬場）</small></b></td><td>学習ラベル、race_result_flat、各種指数の元</td><td>URL<br><code>https://db.netkeiba.com/race/{race_id}/</code></td><td>GCS <code>…/race_result/{年}/{race_id}.json</code><br>raw HTML gz あり</td><td>SLA6 レース後の金曜17:00（上書き再取得）</td><td>学習PC／VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_result/2023/202309030811.json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">entries は先頭 2 頭、payoff・corner_passing も短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
+  &quot;race_name&quot;: &quot;3歳以上未勝利&quot;,
+  &quot;surface&quot;: &quot;ダ&quot;,
+  &quot;distance&quot;: 1400,
+  &quot;direction&quot;: &quot;右&quot;,
+  &quot;weather&quot;: &quot;晴&quot;,
+  &quot;track_condition&quot;: &quot;良&quot;,
+  &quot;start_time&quot;: &quot;10:05&quot;,
+  &quot;venue&quot;: &quot;東京&quot;,
+  &quot;field_size&quot;: 8,
+  &quot;date&quot;: &quot;2026-10-04&quot;,
+  &quot;round&quot;: 1,
+  &quot;grade&quot;: &quot;&quot;,
+  &quot;race_class&quot;: &quot;3歳以上未勝利&quot;,
+  &quot;weight_rule&quot;: &quot;馬齢&quot;,
+  &quot;course_type&quot;: &quot;&quot;,
+  &quot;entries&quot;: [
+    {
+      &quot;finish_position&quot;: 1,
+      &quot;bracket_number&quot;: 4,
+      &quot;horse_number&quot;: 4,
+      &quot;horse_name&quot;: &quot;モックウマ36&quot;,
+      &quot;horse_id&quot;: &quot;2023100036&quot;,
+      &quot;sex_age&quot;: &quot;セ3&quot;,
+      &quot;jockey_weight&quot;: 56.0,
+      &quot;jockey_name&quot;: &quot;モック騎手ク&quot;,
+      &quot;jockey_id&quot;: &quot;90008&quot;,
+      &quot;finish_time&quot;: &quot;1:26.2&quot;,
+      &quot;time_sec&quot;: 86.2,
+      &quot;margin&quot;: &quot;&quot;,
+      &quot;…&quot;: &quot;他 8 キー&quot;
+    },
+    {
+      &quot;finish_position&quot;: 2,
+      &quot;bracket_number&quot;: 5,
+      &quot;horse_number&quot;: 5,
+      &quot;horse_name&quot;: &quot;モックウマ40&quot;,
+      &quot;horse_id&quot;: &quot;2021100040&quot;,
+      &quot;sex_age&quot;: &quot;牡5&quot;,
+      &quot;jockey_weight&quot;: 56.0,
+      &quot;jockey_name&quot;: &quot;モック騎手ウ&quot;,
+      &quot;jockey_id&quot;: &quot;90003&quot;,
+      &quot;finish_time&quot;: &quot;1:26.6&quot;,
+      &quot;time_sec&quot;: 86.6,
+      &quot;margin&quot;: &quot;2 1/2&quot;,
+      &quot;…&quot;: &quot;他 8 キー&quot;
+    },
+    &quot;…（他 6 件）&quot;
+  ],
+  &quot;payoff&quot;: {
+    &quot;単勝&quot;: {
+      &quot;numbers&quot;: &quot;4&quot;,
+      &quot;payout&quot;: &quot;210&quot;,
+      &quot;popularity&quot;: &quot;1&quot;
+    },
+    &quot;複勝&quot;: [
+      {
+        &quot;numbers&quot;: &quot;4&quot;,
+        &quot;payout&quot;: &quot;110&quot;,
+        &quot;popularity&quot;: &quot;1&quot;
+      },
+      {
+        &quot;numbers&quot;: &quot;5&quot;,
+        &quot;payout&quot;: &quot;110&quot;,
+        &quot;popularity&quot;: &quot;2&quot;
+      },
+      &quot;…（他 1 件）&quot;
+    ],
+    &quot;枠連&quot;: {
+      &quot;numbers&quot;: &quot;4 - 5&quot;,
+      &quot;payout&quot;: &quot;280&quot;,
+      &quot;popularity&quot;: &quot;5&quot;
+    },
+    &quot;馬連&quot;: {
+      &quot;numbers&quot;: &quot;4 - 5&quot;,
+      &quot;payout&quot;: &quot;330&quot;,
+      &quot;popularity&quot;: &quot;6&quot;
+    },
+    &quot;ワイド&quot;: [
+      {
+        &quot;numbers&quot;: &quot;4 - 5&quot;,
+        &quot;payout&quot;: &quot;120&quot;,
+        &quot;popularity&quot;: &quot;4&quot;
+      },
+      {
+        &quot;numbers&quot;: &quot;2 - 4&quot;,
+        &quot;payout&quot;: &quot;340&quot;,
+        &quot;popularity&quot;: &quot;4&quot;
+      },
+      &quot;…（他 1 件）&quot;
+    ],
+    &quot;馬単&quot;: {
+      &quot;numbers&quot;: &quot;4 → 5&quot;,
+      &quot;payout&quot;: &quot;620&quot;,
+      &quot;popularity&quot;: &quot;9&quot;
+    },
+    &quot;三連複&quot;: {
+      &quot;numbers&quot;: &quot;2 - 4 - 5&quot;,
+      &quot;payout&quot;: &quot;1,560&quot;,
+      &quot;popularity&quot;: &quot;12&quot;
+    },
+    &quot;三連単&quot;: {
+      &quot;numbers&quot;: &quot;4 → 5 → 2&quot;,
+      &quot;payout&quot;: &quot;7,840&quot;,
+      &quot;popularity&quot;: &quot;30&quot;
     }
   },
   &quot;lap_times&quot;: [
-    12.4,
-    10.5,
-    &quot;…（他 9 件）&quot;
+    12.2,
+    12.8,
+    &quot;…（他 5 件）&quot;
   ],
   &quot;pace&quot;: {
-    &quot;first_half_3f&quot;: 34.0,
-    &quot;second_half_3f&quot;: 35.5,
-    &quot;t1f&quot;: 12.4,
-    &quot;t3f&quot;: 34.0,
+    &quot;first_half_3f&quot;: 36.6,
+    &quot;second_half_3f&quot;: 37.9,
+    &quot;t1f&quot;: 12.2,
+    &quot;t3f&quot;: 36.6,
     &quot;l1f&quot;: 11.8,
-    &quot;l3f&quot;: 35.5
+    &quot;l3f&quot;: 37.9
   },
   &quot;corner_passing&quot;: [
     {
-      &quot;corner&quot;: 0,
-      &quot;label&quot;: &quot;馬場指数&quot;,
-      &quot;order_text&quot;: &quot;-7 (?)&quot;
+      &quot;corner&quot;: 1,
+      &quot;label&quot;: &quot;1角&quot;,
+      &quot;order_text&quot;: &quot;5,4,1,7,2,6,3,8&quot;
     },
     {
-      &quot;corner&quot;: 1,
-      &quot;label&quot;: &quot;1コーナー&quot;,
-      &quot;order_text&quot;: &quot;(*15,17)14(2,3,12)(1,10,13)16,7(4,9)(8,11)5,6&quot;
+      &quot;corner&quot;: 2,
+      &quot;label&quot;: &quot;2角&quot;,
+      &quot;order_text&quot;: &quot;5,4,1,7,2,6,8,3&quot;
     },
-    &quot;…（他 3 件）&quot;
+    &quot;…（他 2 件）&quot;
   ],
   &quot;_meta&quot;: {
-    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:43:28&quot;
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
   }
 }</code></pre></div></details></td></tr>
-<tr class="ds" data-id="A12"><td class="id">A12</td><td><b>race_result_lap<br><small>個別ラップ（各馬200m）</small></b></td><td>ペース・ラップモデル（pace / lap_predictor）</td><td>URL ＋ AJAX（<b>プレミアム要・認証済み前提</b>）<br>A11 と同一ページ ＋ <code>ajax_race_result_horse_laptime</code></td><td>GCS <code>…/race_result_lap/{年}/</code></td><td>SLA6（race_result 取得時に同時生成）</td><td>学習PC／VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_result_lap/2023/202309030811.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;race_id&quot;: &quot;202309030811&quot;,
+<tr class="ds" data-id="A12"><td class="id">A12</td><td><b>race_result_lap<br><small>個別ラップ（各馬200m）</small></b></td><td>ペース・ラップモデル（pace / lap_predictor）</td><td>URL ＋ AJAX（<b>プレミアム要・認証済み前提</b>）<br>A11 と同一ページ ＋ <code>ajax_race_result_horse_laptime</code></td><td>GCS <code>…/race_result_lap/{年}/</code></td><td>SLA6（race_result 取得時に同時生成）</td><td>学習PC／VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_result_lap/2023/202309030811.json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
   &quot;lap_times&quot;: [
-    12.4,
-    10.5,
-    &quot;…（他 9 件）&quot;
+    12.2,
+    12.8,
+    &quot;…（他 5 件）&quot;
   ],
   &quot;pace&quot;: {
-    &quot;first_half_3f&quot;: 34.0,
-    &quot;second_half_3f&quot;: 35.5,
-    &quot;t1f&quot;: 12.4,
-    &quot;t3f&quot;: 34.0,
+    &quot;first_half_3f&quot;: 36.6,
+    &quot;second_half_3f&quot;: 37.9,
+    &quot;t1f&quot;: 12.2,
+    &quot;t3f&quot;: 36.6,
     &quot;l1f&quot;: 11.8,
-    &quot;l3f&quot;: 35.5
+    &quot;l3f&quot;: 37.9
   },
   &quot;corner_passing&quot;: [
     {
-      &quot;corner&quot;: 0,
-      &quot;label&quot;: &quot;馬場指数&quot;,
-      &quot;order_text&quot;: &quot;-7 (?)&quot;
+      &quot;corner&quot;: 1,
+      &quot;label&quot;: &quot;1角&quot;,
+      &quot;order_text&quot;: &quot;5,4,1,7,2,6,3,8&quot;
     },
     {
-      &quot;corner&quot;: 1,
-      &quot;label&quot;: &quot;1コーナー&quot;,
-      &quot;order_text&quot;: &quot;(*15,17)14(2,3,12)(1,10,13)16,7(4,9)(8,11)5,6&quot;
+      &quot;corner&quot;: 2,
+      &quot;label&quot;: &quot;2角&quot;,
+      &quot;order_text&quot;: &quot;5,4,1,7,2,6,8,3&quot;
     },
-    &quot;…（他 3 件）&quot;
+    &quot;…（他 2 件）&quot;
   ],
   &quot;entries_lap&quot;: [
     {
-      &quot;horse_number&quot;: 5,
-      &quot;horse_id&quot;: &quot;2019105219&quot;,
-      &quot;horse_name&quot;: &quot;イクイノックス&quot;,
-      &quot;passing_order&quot;: &quot;16-16-13-9&quot;,
-      &quot;last_3f&quot;: 34.8
+      &quot;horse_number&quot;: 4,
+      &quot;horse_id&quot;: &quot;2023100036&quot;,
+      &quot;horse_name&quot;: &quot;モックウマ36&quot;,
+      &quot;passing_order&quot;: &quot;1-1-1-1&quot;,
+      &quot;last_3f&quot;: 36.6
     },
     {
-      &quot;horse_number&quot;: 6,
-      &quot;horse_id&quot;: &quot;2018105269&quot;,
-      &quot;horse_name&quot;: &quot;スルーセブンシーズ&quot;,
-      &quot;passing_order&quot;: &quot;17-17-16-12&quot;,
-      &quot;last_3f&quot;: 34.6
+      &quot;horse_number&quot;: 5,
+      &quot;horse_id&quot;: &quot;2021100040&quot;,
+      &quot;horse_name&quot;: &quot;モックウマ40&quot;,
+      &quot;passing_order&quot;: &quot;1-1-2-2&quot;,
+      &quot;last_3f&quot;: 35.5
     },
-    &quot;…（他 15 件）&quot;
+    &quot;…（他 6 件）&quot;
   ],
   &quot;_meta&quot;: {
-    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:13:01&quot;
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
   }
 }</code></pre></div></details></td></tr>
 <tr class="ds" data-id="A13"><td class="id">A13</td><td><b>horse_result<br><small>馬プロフィール＋全戦績</small></b></td><td>馬特徴、horse/result_tbl、馬詳細画面</td><td>URL<br><code>https://db.netkeiba.com/horse/{horse_id}/</code><br><code>…/horse/result/{horse_id}/</code></td><td>GCS <code>…/horse_result/{先頭4桁}/{horse_id}.json</code></td><td>SLA7 出走馬（7日以内はスキップ）</td><td>学習PC／VPS cron</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>horse_result/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">race_history は先頭 2 件に短縮。実データは horse_profile ＋ horse_race_history（B01 に実サンプル）</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
@@ -684,8 +764,8 @@ table.smp{font-size:11.5px}table.smp th,table.smp td{padding:4px 8px;white-space
   &quot;owner&quot;: &quot;モックオーナー&quot;,
   &quot;breeder&quot;: &quot;モック牧場&quot;,
   &quot;birthplace&quot;: &quot;モック町&quot;,
-  &quot;total_earnings&quot;: 1800,
-  &quot;career&quot;: &quot;6戦1勝 [1-0-1-4]&quot;,
+  &quot;total_earnings&quot;: 1500,
+  &quot;career&quot;: &quot;3戦1勝 [1-0-0-2]&quot;,
   &quot;career_record&quot;: [
     1,
     0,
@@ -708,106 +788,106 @@ table.smp{font-size:11.5px}table.smp th,table.smp td{padding:4px 8px;white-space
       &quot;horse_number&quot;: 4,
       &quot;odds&quot;: 8.7,
       &quot;popularity&quot;: 3,
-      &quot;finish_position&quot;: 5,
+      &quot;finish_position&quot;: 4,
       &quot;…&quot;: &quot;他 14 キー&quot;
     },
     {
-      &quot;date&quot;: &quot;2026/08/29&quot;,
-      &quot;venue&quot;: &quot;5東京6&quot;,
+      &quot;date&quot;: &quot;2026/09/06&quot;,
+      &quot;venue&quot;: &quot;5東京8&quot;,
       &quot;weather&quot;: &quot;晴&quot;,
-      &quot;race_round&quot;: 9,
+      &quot;race_round&quot;: 1,
       &quot;race_name&quot;: &quot;モック過去戦&quot;,
-      &quot;race_id&quot;: &quot;202605020205&quot;,
+      &quot;race_id&quot;: &quot;202605030105&quot;,
       &quot;field_size&quot;: 12,
       &quot;bracket_number&quot;: 6,
-      &quot;horse_number&quot;: 4,
-      &quot;odds&quot;: 24.5,
-      &quot;popularity&quot;: 11,
+      &quot;horse_number&quot;: 9,
+      &quot;odds&quot;: 33.4,
+      &quot;popularity&quot;: 4,
       &quot;finish_position&quot;: 1,
       &quot;…&quot;: &quot;他 14 キー&quot;
     },
-    &quot;…（他 4 件）&quot;
+    &quot;…（他 1 件）&quot;
   ],
   &quot;_meta&quot;: {
     &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
   }
 }</code></pre></div></details></td></tr>
-<tr class="ds" data-id="A14"><td class="id">A14</td><td><b>horse_pedigree_5gen<br><small>5世代血統</small></b></td><td>血統適性・10gen 展開・ped_tbl の元（不変データ）</td><td>URL<br><code>https://db.netkeiba.com/horse/ped/{horse_id}/</code></td><td>GCS <code>…/horse_pedigree_5gen/{先頭4桁}/</code><br>ローカル <code>data/local/horse_pedigree_5gen/</code></td><td>未取得のみ（取得済みはスキップ）</td><td>学習PC（一括）／キュー</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>horse_pedigree_5gen/2019/2019105219.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">ancestors は 62 件中 先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;horse_id&quot;: &quot;2019105219&quot;,
-  &quot;sex&quot;: &quot;&quot;,
-  &quot;sire&quot;: &quot;キタサンブラック&quot;,
-  &quot;dam&quot;: &quot;シャトーブランシュ&quot;,
-  &quot;dam_sire&quot;: &quot;キングヘイロー&quot;,
+<tr class="ds" data-id="A14"><td class="id">A14</td><td><b>horse_pedigree_5gen<br><small>5世代血統</small></b></td><td>血統適性・10gen 展開・ped_tbl の元（不変データ）</td><td>URL<br><code>https://db.netkeiba.com/horse/ped/{horse_id}/</code></td><td>GCS <code>…/horse_pedigree_5gen/{先頭4桁}/</code><br>ローカル <code>data/local/horse_pedigree_5gen/</code></td><td>未取得のみ（取得済みはスキップ）</td><td>学習PC（一括）／キュー</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>horse_pedigree_5gen/2019/2019105219.json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">ancestors は 62 件中 先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;horse_id&quot;: &quot;2021100001&quot;,
+  &quot;sex&quot;: &quot;牡&quot;,
+  &quot;sire&quot;: &quot;モックサイアー03&quot;,
+  &quot;dam&quot;: &quot;モックダム07&quot;,
+  &quot;dam_sire&quot;: &quot;モックサイアー16&quot;,
   &quot;ancestors&quot;: [
     {
       &quot;generation&quot;: 1,
       &quot;position&quot;: 0,
-      &quot;name&quot;: &quot;キタサンブラック&quot;,
-      &quot;horse_id&quot;: &quot;2012102013&quot;,
+      &quot;name&quot;: &quot;モックサイアー03&quot;,
+      &quot;horse_id&quot;: &quot;1990000003&quot;,
       &quot;sex&quot;: &quot;牡&quot;
     },
     {
-      &quot;generation&quot;: 2,
-      &quot;position&quot;: 0,
-      &quot;name&quot;: &quot;ブラックタイド&quot;,
-      &quot;horse_id&quot;: &quot;2001103312&quot;,
-      &quot;sex&quot;: &quot;牡&quot;
+      &quot;generation&quot;: 1,
+      &quot;position&quot;: 1,
+      &quot;name&quot;: &quot;モックダム07&quot;,
+      &quot;horse_id&quot;: &quot;1991000007&quot;,
+      &quot;sex&quot;: &quot;牝&quot;
     },
     &quot;…（他 60 件）&quot;
   ],
   &quot;ancestor_count&quot;: 62,
-  &quot;source&quot;: &quot;queue_horse_pedigree_5gen&quot;,
+  &quot;source&quot;: &quot;dev_mock&quot;,
   &quot;_meta&quot;: {
-    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:43:10&quot;
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
   }
 }</code></pre></div></details></td></tr>
-<tr class="ds" data-id="A15"><td class="id">A15</td><td><b>horse_training<br><small>調教（追い切り）履歴</small></b></td><td>調教特徴（horse/training_tbl）</td><td>URL<br><code>https://db.netkeiba.com/horse/training.html?id={horse_id}</code></td><td>GCS <code>…/horse_training/{先頭4桁}/</code><br>ローカルミラー <code>data/local/horse_training/</code></td><td>手動キュー投入／期間一括</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>horse_training/2019/2019105219.json</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">entries は先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;horse_id&quot;: &quot;2019105219&quot;,
-  &quot;total_items&quot;: 9,
+<tr class="ds" data-id="A15"><td class="id">A15</td><td><b>horse_training<br><small>調教（追い切り）履歴</small></b></td><td>調教特徴（horse/training_tbl）</td><td>URL<br><code>https://db.netkeiba.com/horse/training.html?id={horse_id}</code></td><td>GCS <code>…/horse_training/{先頭4桁}/</code><br>ローカルミラー <code>data/local/horse_training/</code></td><td>手動キュー投入／期間一括</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>horse_training/2019/2019105219.json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">entries は先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;horse_id&quot;: &quot;2021100001&quot;,
+  &quot;total_items&quot;: 3,
   &quot;pages_fetched&quot;: 1,
   &quot;entries&quot;: [
     {
-      &quot;race_info&quot;: &quot;2023/11/26  東京12R ジャパンカップ 結果 ： 1着&quot;,
-      &quot;date&quot;: &quot;2023-11-22&quot;,
+      &quot;race_info&quot;: &quot;模擬レース前の追い切り&quot;,
+      &quot;date&quot;: &quot;2026-09-27&quot;,
       &quot;day_of_week&quot;: &quot;水&quot;,
       &quot;course&quot;: &quot;美Ｗ&quot;,
       &quot;track_condition&quot;: &quot;良&quot;,
       &quot;rider&quot;: &quot;助手&quot;,
-      &quot;time_raw&quot;: &quot;84.6 67.5 52.4 37.8 11.3&quot;,
+      &quot;time_raw&quot;: &quot;12.5 13.0 12.8 11.3&quot;,
       &quot;lap_times&quot;: [
-        84.6,
-        67.5,
-        &quot;…（他 3 件）&quot;
+        12.5,
+        13.0,
+        &quot;…（他 2 件）&quot;
       ],
       &quot;position&quot;: &quot;3&quot;,
       &quot;leg_color&quot;: &quot;馬也&quot;,
-      &quot;evaluation&quot;: &quot;気配抜群&quot;,
-      &quot;rank&quot;: &quot;A&quot;,
-      &quot;…&quot;: &quot;他 1 キー&quot;
-    },
-    {
-      &quot;race_info&quot;: &quot;2023/11/26  東京12R ジャパンカップ 結果 ： 1着&quot;,
-      &quot;date&quot;: &quot;2023-11-19&quot;,
-      &quot;day_of_week&quot;: &quot;日&quot;,
-      &quot;course&quot;: &quot;美坂&quot;,
-      &quot;track_condition&quot;: &quot;良&quot;,
-      &quot;rider&quot;: &quot;助手&quot;,
-      &quot;time_raw&quot;: &quot;- 52.7 38.4 25.2 12.3&quot;,
-      &quot;lap_times&quot;: [
-        52.7,
-        38.4,
-        &quot;…（他 2 件）&quot;
-      ],
-      &quot;position&quot;: &quot;&quot;,
-      &quot;leg_color&quot;: &quot;馬也&quot;,
-      &quot;evaluation&quot;: &quot;順調&quot;,
+      &quot;evaluation&quot;: &quot;模擬評価&quot;,
       &quot;rank&quot;: &quot;C&quot;,
       &quot;…&quot;: &quot;他 1 キー&quot;
     },
-    &quot;…（他 53 件）&quot;
+    {
+      &quot;race_info&quot;: &quot;模擬レース前の追い切り&quot;,
+      &quot;date&quot;: &quot;2026-09-20&quot;,
+      &quot;day_of_week&quot;: &quot;水&quot;,
+      &quot;course&quot;: &quot;美Ｗ&quot;,
+      &quot;track_condition&quot;: &quot;良&quot;,
+      &quot;rider&quot;: &quot;助手&quot;,
+      &quot;time_raw&quot;: &quot;13.3 11.0 11.8 11.4&quot;,
+      &quot;lap_times&quot;: [
+        13.3,
+        11.0,
+        &quot;…（他 2 件）&quot;
+      ],
+      &quot;position&quot;: &quot;3&quot;,
+      &quot;leg_color&quot;: &quot;馬也&quot;,
+      &quot;evaluation&quot;: &quot;模擬評価&quot;,
+      &quot;rank&quot;: &quot;A&quot;,
+      &quot;…&quot;: &quot;他 1 キー&quot;
+    },
+    &quot;…（他 1 件）&quot;
   ],
   &quot;_meta&quot;: {
-    &quot;scraped_at_jst&quot;: &quot;2026-06-12 00:43:17&quot;
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
   }
 }</code></pre></div></details></td></tr>
 <tr class="ds" data-id="A16"><td class="id">A16</td><td><b>broodmare_mating<br><small>母馬の種付け情報</small></b></td><td>種付け日に基づく特徴（T-019）</td><td>URL：要確認（own.netkeiba 系。キーは母馬 horse_id）</td><td>GCS <code>…/broodmare_mating/{先頭4桁}/</code></td><td><b>未着手（T-019）</b></td><td>学習PC（予定）</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>broodmare_mating/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
@@ -831,26 +911,30 @@ table.smp{font-size:11.5px}table.smp th,table.smp td{padding:4px 8px;white-space
       &quot;venue_code&quot;: &quot;05&quot;,
       &quot;venue_name&quot;: &quot;東京&quot;,
       &quot;kai&quot;: 3,
+      &quot;race_day&quot;: 1,
+      &quot;weekday&quot;: &quot;土&quot;,
       &quot;is_race_day&quot;: true,
       &quot;date&quot;: &quot;2026-10-04&quot;,
+      &quot;course_position&quot;: &quot;内&quot;,
       &quot;cushion_value&quot;: 9.4,
       &quot;turf_moisture_goal&quot;: 11.0,
       &quot;turf_moisture_4corner&quot;: 11.6,
-      &quot;dirt_moisture_goal&quot;: 2.4,
-      &quot;dirt_moisture_4corner&quot;: 2.9
+      &quot;…&quot;: &quot;他 2 キー&quot;
     },
     {
       &quot;year&quot;: 2026,
       &quot;venue_code&quot;: &quot;09&quot;,
       &quot;venue_name&quot;: &quot;阪神&quot;,
       &quot;kai&quot;: 3,
+      &quot;race_day&quot;: 1,
+      &quot;weekday&quot;: &quot;土&quot;,
       &quot;is_race_day&quot;: true,
       &quot;date&quot;: &quot;2026-10-04&quot;,
+      &quot;course_position&quot;: &quot;内&quot;,
       &quot;cushion_value&quot;: 9.4,
       &quot;turf_moisture_goal&quot;: 11.0,
       &quot;turf_moisture_4corner&quot;: 11.6,
-      &quot;dirt_moisture_goal&quot;: 2.4,
-      &quot;dirt_moisture_4corner&quot;: 2.9
+      &quot;…&quot;: &quot;他 2 キー&quot;
     },
     &quot;…（他 2 件）&quot;
   ],
@@ -871,187 +955,210 @@ table.smp{font-size:11.5px}table.smp th,table.smp td{padding:4px 8px;white-space
 </table></div>
 <h3 id="cat-B">B. 取得済みデータから自動派生するデータ</h3><p>追加のスクレイピングは不要。親 JSON／HTML から機械的に生成される。</p>
 <div class="wrap"><table><tr><th>ID</th><th>データ</th><th>用途</th><th>取得元（URL／手動／生成）</th><th>保存先</th><th>更新・SLA</th><th>書込主体</th></tr>
-<tr class="ds" data-id="B01"><td class="id">B01</td><td><b>行固有派生 11 カテゴリ<br><small>race_shutuba_meta / race_result_on_time_payoff・_lap・_corner / horse_profile / horse_race_history / race_result_meta・_payoff・_track / race_result_corner / race_result_lap_times</small></b></td><td>要件表 1 行 = 1 GCS パスの原則を満たすため、親 JSON から必要フィールドだけを抽出</td><td><b>生成</b><br><code>python3 -m src.scripts.scraping.migrate_row_data_to_unique_paths --year-start 2020 --year-end 2026 --include-horses</code><br>（<code>src/scraper/row_data_extractor.py</code>）</td><td>GCS <code>GCS_BASE/{category}/…</code><br>2020–2026 で 261,173 件保存（AGENTS.md 記載）</td><td>取得後に随時／バックフィル</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON・8 種）</summary><div class="smp-p"><div class="smp-h"><b>race_shutuba_meta</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;race_id&quot;: &quot;202309030811&quot;,
-  &quot;race_name&quot;: &quot;宝塚記念&quot;,
-  &quot;surface&quot;: &quot;芝&quot;,
-  &quot;distance&quot;: 2200,
+<tr class="ds" data-id="B01"><td class="id">B01</td><td><b>行固有派生 11 カテゴリ<br><small>race_shutuba_meta / race_result_on_time_payoff・_lap・_corner / horse_profile / horse_race_history / race_result_meta・_payoff・_track / race_result_corner / race_result_lap_times</small></b></td><td>要件表 1 行 = 1 GCS パスの原則を満たすため、親 JSON から必要フィールドだけを抽出</td><td><b>生成</b><br><code>python3 -m src.scripts.scraping.migrate_row_data_to_unique_paths --year-start 2020 --year-end 2026 --include-horses</code><br>（<code>src/scraper/row_data_extractor.py</code>）</td><td>GCS <code>GCS_BASE/{category}/…</code><br>2020–2026 で 261,173 件保存（AGENTS.md 記載）</td><td>取得後に随時／バックフィル</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON・8 種）</summary><div class="smp-p"><div class="smp-h"><b>race_shutuba_meta</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
+  &quot;race_name&quot;: &quot;3歳以上未勝利&quot;,
+  &quot;surface&quot;: &quot;ダ&quot;,
+  &quot;distance&quot;: 1400,
   &quot;direction&quot;: &quot;右&quot;,
-  &quot;weather&quot;: &quot;曇&quot;,
+  &quot;weather&quot;: &quot;晴&quot;,
   &quot;track_condition&quot;: &quot;良&quot;,
-  &quot;start_time&quot;: &quot;15:40&quot;,
-  &quot;venue&quot;: &quot;阪神&quot;,
-  &quot;field_size&quot;: 17,
-  &quot;date&quot;: &quot;2023-06-25&quot;,
-  &quot;round&quot;: 11,
-  &quot;grade&quot;: &quot;OP&quot;,
-  &quot;race_class&quot;: &quot;サラ系３歳以上 オープン&quot;,
-  &quot;weight_rule&quot;: &quot;定量&quot;,
-  &quot;course_type&quot;: &quot;&quot;
-}</code></pre></div><div class="smp-p"><div class="smp-h"><b>race_result_meta</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;race_id&quot;: &quot;202309030811&quot;,
-  &quot;race_name&quot;: &quot;第64回宝塚記念&quot;,
-  &quot;grade&quot;: &quot;G1&quot;,
-  &quot;surface&quot;: &quot;芝&quot;,
+  &quot;start_time&quot;: &quot;10:05&quot;,
+  &quot;venue&quot;: &quot;東京&quot;,
+  &quot;field_size&quot;: 8,
+  &quot;date&quot;: &quot;2026-10-04&quot;,
+  &quot;round&quot;: 1,
+  &quot;grade&quot;: &quot;&quot;,
+  &quot;race_class&quot;: &quot;3歳以上未勝利&quot;,
+  &quot;weight_rule&quot;: &quot;馬齢&quot;,
+  &quot;course_type&quot;: &quot;&quot;,
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>race_result_meta</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
+  &quot;race_name&quot;: &quot;3歳以上未勝利&quot;,
+  &quot;surface&quot;: &quot;ダ&quot;,
+  &quot;distance&quot;: 1400,
   &quot;direction&quot;: &quot;右&quot;,
-  &quot;distance&quot;: 2200,
-  &quot;start_time&quot;: &quot;15:40&quot;,
-  &quot;date&quot;: &quot;2023-06-25&quot;,
-  &quot;venue&quot;: &quot;阪神&quot;,
-  &quot;round&quot;: 0,
-  &quot;field_size&quot;: 17
-}</code></pre></div><div class="smp-p"><div class="smp-h"><b>race_result_payoff</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;race_id&quot;: &quot;202309030811&quot;,
+  &quot;start_time&quot;: &quot;10:05&quot;,
+  &quot;venue&quot;: &quot;東京&quot;,
+  &quot;field_size&quot;: 8,
+  &quot;date&quot;: &quot;2026-10-04&quot;,
+  &quot;round&quot;: 1,
+  &quot;grade&quot;: &quot;&quot;,
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>race_result_payoff</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
   &quot;payoff&quot;: {
     &quot;単勝&quot;: {
-      &quot;numbers&quot;: &quot;5&quot;,
-      &quot;payout&quot;: &quot;130&quot;,
+      &quot;numbers&quot;: &quot;4&quot;,
+      &quot;payout&quot;: &quot;210&quot;,
       &quot;popularity&quot;: &quot;1&quot;
     },
     &quot;複勝&quot;: [
       {
-        &quot;numbers&quot;: &quot;5&quot;,
+        &quot;numbers&quot;: &quot;4&quot;,
         &quot;payout&quot;: &quot;110&quot;,
         &quot;popularity&quot;: &quot;1&quot;
       },
       {
-        &quot;numbers&quot;: &quot;6&quot;,
-        &quot;payout&quot;: &quot;560&quot;,
-        &quot;popularity&quot;: &quot;10&quot;
+        &quot;numbers&quot;: &quot;5&quot;,
+        &quot;payout&quot;: &quot;110&quot;,
+        &quot;popularity&quot;: &quot;2&quot;
       },
       &quot;…（他 1 件）&quot;
     ],
     &quot;枠連&quot;: {
-      &quot;numbers&quot;: &quot;3 - 3&quot;,
-      &quot;payout&quot;: &quot;2,280&quot;,
-      &quot;popularity&quot;: &quot;8&quot;
+      &quot;numbers&quot;: &quot;4 - 5&quot;,
+      &quot;payout&quot;: &quot;280&quot;,
+      &quot;popularity&quot;: &quot;5&quot;
     },
     &quot;馬連&quot;: {
-      &quot;numbers&quot;: &quot;5 - 6&quot;,
-      &quot;payout&quot;: &quot;2,340&quot;,
-      &quot;popularity&quot;: &quot;8&quot;
+      &quot;numbers&quot;: &quot;4 - 5&quot;,
+      &quot;payout&quot;: &quot;330&quot;,
+      &quot;popularity&quot;: &quot;6&quot;
     },
     &quot;ワイド&quot;: [
       {
-        &quot;numbers&quot;: &quot;5 - 6&quot;,
-        &quot;payout&quot;: &quot;970&quot;,
-        &quot;popularity&quot;: &quot;11&quot;
+        &quot;numbers&quot;: &quot;4 - 5&quot;,
+        &quot;payout&quot;: &quot;120&quot;,
+        &quot;popularity&quot;: &quot;4&quot;
       },
       {
-        &quot;numbers&quot;: &quot;5 - 9&quot;,
-        &quot;payout&quot;: &quot;240&quot;,
-        &quot;popularity&quot;: &quot;1&quot;
+        &quot;numbers&quot;: &quot;2 - 4&quot;,
+        &quot;payout&quot;: &quot;340&quot;,
+        &quot;popularity&quot;: &quot;4&quot;
       },
       &quot;…（他 1 件）&quot;
     ],
     &quot;馬単&quot;: {
-      &quot;numbers&quot;: &quot;5 → 6&quot;,
-      &quot;payout&quot;: &quot;2,660&quot;,
+      &quot;numbers&quot;: &quot;4 → 5&quot;,
+      &quot;payout&quot;: &quot;620&quot;,
       &quot;popularity&quot;: &quot;9&quot;
     },
     &quot;三連複&quot;: {
-      &quot;numbers&quot;: &quot;5 - 6 - 9&quot;,
-      &quot;payout&quot;: &quot;4,030&quot;,
-      &quot;popularity&quot;: &quot;14&quot;
+      &quot;numbers&quot;: &quot;2 - 4 - 5&quot;,
+      &quot;payout&quot;: &quot;1,560&quot;,
+      &quot;popularity&quot;: &quot;12&quot;
     },
     &quot;三連単&quot;: {
-      &quot;numbers&quot;: &quot;5 → 6 → 9&quot;,
-      &quot;payout&quot;: &quot;13,630&quot;,
-      &quot;popularity&quot;: &quot;36&quot;
+      &quot;numbers&quot;: &quot;4 → 5 → 2&quot;,
+      &quot;payout&quot;: &quot;7,840&quot;,
+      &quot;popularity&quot;: &quot;30&quot;
     }
+  },
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
   }
-}</code></pre></div><div class="smp-p"><div class="smp-h"><b>race_result_track</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;race_id&quot;: &quot;202309030811&quot;,
-  &quot;weather&quot;: &quot;曇&quot;,
-  &quot;track_condition&quot;: &quot;良&quot;
-}</code></pre></div><div class="smp-p"><div class="smp-h"><b>race_result_corner</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;race_id&quot;: &quot;202309030811&quot;,
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>race_result_track</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
+  &quot;weather&quot;: &quot;晴&quot;,
+  &quot;track_condition&quot;: &quot;良&quot;,
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>race_result_corner</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
   &quot;corner_passing&quot;: [
     {
-      &quot;corner&quot;: 0,
-      &quot;label&quot;: &quot;馬場指数&quot;,
-      &quot;order_text&quot;: &quot;-7 (?)&quot;
+      &quot;corner&quot;: 1,
+      &quot;label&quot;: &quot;1角&quot;,
+      &quot;order_text&quot;: &quot;5,4,1,7,2,6,3,8&quot;
     },
     {
-      &quot;corner&quot;: 1,
-      &quot;label&quot;: &quot;1コーナー&quot;,
-      &quot;order_text&quot;: &quot;(*15,17)14(2,3,12)(1,10,13)16,7(4,9)(8,11)5,6&quot;
+      &quot;corner&quot;: 2,
+      &quot;label&quot;: &quot;2角&quot;,
+      &quot;order_text&quot;: &quot;5,4,1,7,2,6,8,3&quot;
     },
-    &quot;…（他 3 件）&quot;
-  ]
-}</code></pre></div><div class="smp-p"><div class="smp-h"><b>race_result_lap_times</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;race_id&quot;: &quot;202309030811&quot;,
-  &quot;lap_times&quot;: [
-    12.4,
-    10.5,
-    &quot;…（他 9 件）&quot;
-  ],
-  &quot;pace&quot;: {
-    &quot;first_half_3f&quot;: 34.0,
-    &quot;second_half_3f&quot;: 35.5,
-    &quot;t1f&quot;: 12.4,
-    &quot;t3f&quot;: 34.0,
-    &quot;l1f&quot;: 11.8,
-    &quot;l3f&quot;: 35.5
-  }
-}</code></pre></div><div class="smp-p"><div class="smp-h"><b>horse_profile</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;horse_id&quot;: &quot;2019105219&quot;,
-  &quot;horse_name&quot;: &quot;イクイノックス&quot;,
-  &quot;name_en&quot;: &quot;Equinox&quot;,
-  &quot;birthday&quot;: &quot;2019年3月23日&quot;,
-  &quot;trainer&quot;: &quot;木村哲也&quot;,
-  &quot;owner&quot;: &quot;シルクレーシング&quot;,
-  &quot;breeder&quot;: &quot;ノーザンファーム&quot;,
-  &quot;birthplace&quot;: &quot;安平町&quot;,
-  &quot;total_earnings&quot;: 175655,
-  &quot;career&quot;: &quot;10戦8勝 [8-2-0-0]&quot;,
-  &quot;career_record&quot;: [
-    8,
-    2,
     &quot;…（他 2 件）&quot;
   ],
-  &quot;major_wins&quot;: [
-    &quot;23&#x27;ジャパンC(G1)&quot;
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>race_result_lap_times</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;race_id&quot;: &quot;202605030201&quot;,
+  &quot;lap_times&quot;: [
+    12.2,
+    12.8,
+    &quot;…（他 5 件）&quot;
   ],
-  &quot;sire&quot;: &quot;&quot;,
-  &quot;dam&quot;: &quot;&quot;,
-  &quot;dam_sire&quot;: &quot;&quot;
-}</code></pre></div><div class="smp-p"><div class="smp-h"><b>horse_race_history</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">race_history は先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;horse_id&quot;: &quot;2019105219&quot;,
-  &quot;horse_name&quot;: &quot;イクイノックス&quot;,
+  &quot;pace&quot;: {
+    &quot;first_half_3f&quot;: 36.6,
+    &quot;second_half_3f&quot;: 37.9,
+    &quot;t1f&quot;: 12.2,
+    &quot;t3f&quot;: 36.6,
+    &quot;l1f&quot;: 11.8,
+    &quot;l3f&quot;: 37.9
+  },
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>horse_profile</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;horse_id&quot;: &quot;2021100001&quot;,
+  &quot;horse_name&quot;: &quot;モックウマ01&quot;,
+  &quot;name_en&quot;: &quot;Mock Horse 01&quot;,
+  &quot;sex&quot;: &quot;牡&quot;,
+  &quot;birthday&quot;: &quot;2021年2月3日&quot;,
+  &quot;trainer&quot;: &quot;モック調教師ア&quot;,
+  &quot;owner&quot;: &quot;モックオーナー&quot;,
+  &quot;breeder&quot;: &quot;モック牧場&quot;,
+  &quot;birthplace&quot;: &quot;モック町&quot;,
+  &quot;total_earnings&quot;: 1500,
+  &quot;career&quot;: &quot;3戦1勝 [1-0-0-2]&quot;,
+  &quot;career_record&quot;: [
+    1,
+    0,
+    &quot;…（他 2 件）&quot;
+  ],
+  &quot;major_wins&quot;: [],
+  &quot;sire&quot;: &quot;モックサイアー03&quot;,
+  &quot;dam&quot;: &quot;モックダム07&quot;,
+  &quot;dam_sire&quot;: &quot;モックサイアー16&quot;,
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>horse_race_history</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">race_history は先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+  &quot;horse_id&quot;: &quot;2021100001&quot;,
+  &quot;horse_name&quot;: &quot;モックウマ01&quot;,
   &quot;race_history&quot;: [
     {
-      &quot;date&quot;: &quot;2023/11/26&quot;,
-      &quot;venue&quot;: &quot;5東京8&quot;,
-      &quot;weather&quot;: &quot;曇&quot;,
-      &quot;race_round&quot;: 12,
-      &quot;race_name&quot;: &quot;ジャパンC(GI)&quot;,
-      &quot;race_id&quot;: &quot;202305050812&quot;,
-      &quot;field_size&quot;: 18,
-      &quot;bracket_number&quot;: 1,
-      &quot;horse_number&quot;: 2,
-      &quot;odds&quot;: 1.3,
-      &quot;popularity&quot;: 1,
-      &quot;finish_position&quot;: 1,
+      &quot;date&quot;: &quot;2026/10/04&quot;,
+      &quot;venue&quot;: &quot;5東京2&quot;,
+      &quot;weather&quot;: &quot;晴&quot;,
+      &quot;race_round&quot;: 9,
+      &quot;race_name&quot;: &quot;3歳以上2勝クラス&quot;,
+      &quot;race_id&quot;: &quot;202605030209&quot;,
+      &quot;field_size&quot;: 8,
+      &quot;bracket_number&quot;: 4,
+      &quot;horse_number&quot;: 4,
+      &quot;odds&quot;: 8.7,
+      &quot;popularity&quot;: 3,
+      &quot;finish_position&quot;: 4,
       &quot;…&quot;: &quot;他 14 キー&quot;
     },
     {
-      &quot;date&quot;: &quot;2023/10/29&quot;,
-      &quot;venue&quot;: &quot;4東京9&quot;,
+      &quot;date&quot;: &quot;2026/09/06&quot;,
+      &quot;venue&quot;: &quot;5東京8&quot;,
       &quot;weather&quot;: &quot;晴&quot;,
-      &quot;race_round&quot;: 11,
-      &quot;race_name&quot;: &quot;天皇賞(秋)(GI)&quot;,
-      &quot;race_id&quot;: &quot;202305040911&quot;,
-      &quot;field_size&quot;: 11,
+      &quot;race_round&quot;: 1,
+      &quot;race_name&quot;: &quot;モック過去戦&quot;,
+      &quot;race_id&quot;: &quot;202605030105&quot;,
+      &quot;field_size&quot;: 12,
       &quot;bracket_number&quot;: 6,
-      &quot;horse_number&quot;: 7,
-      &quot;odds&quot;: 1.3,
-      &quot;popularity&quot;: 1,
+      &quot;horse_number&quot;: 9,
+      &quot;odds&quot;: 33.4,
+      &quot;popularity&quot;: 4,
       &quot;finish_position&quot;: 1,
       &quot;…&quot;: &quot;他 14 キー&quot;
     },
-    &quot;…（他 8 件）&quot;
-  ]
+    &quot;…（他 1 件）&quot;
+  ],
+  &quot;_meta&quot;: {
+    &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  }
 }</code></pre></div></details></td></tr>
 <tr class="ds" data-id="B02"><td class="id">B02</td><td><b>requirement_row_trace</b></td><td>要件表の行 ↔ 保存パスの整合参照</td><td><b>生成</b> <code>python3 -m src.scripts.scraping.materialize_requirement_row_traces</code></td><td>GCS <code>OTHERS/requirement_row_trace/</code></td><td>バックフィル時</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>requirement_row_trace/race_…_nk_shutuba_entries.json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
   &quot;row_id&quot;: &quot;nk_shutuba_entries&quot;,
@@ -1072,7 +1179,7 @@ table.smp{font-size:11.5px}table.smp th,table.smp td{padding:4px 8px;white-space
 <tr class="ds" data-id="B03"><td class="id">B03</td><td><b>horse_name<br><small>馬名レジストリ</small></b></td><td>馬名 → ID 検索</td><td><b>副次生成</b>（horse_result 保存のたび）</td><td>GCS <code>OTHERS/horse_name/{key}.json</code></td><td>A13 と同時</td><td>A13 と同じ</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><p class="smp-note">horse_name カテゴリ自体は save() 元が無く、馬名の検索は次の索引（data/calculated_data/knowledge/horse_name_index.json）で代替しています。</p><div class="smp-p"><div class="smp-h"><b>horse_name_index.json</b> <span class="smp-src">実データ（この PC の索引。37393 頭）</span></div><div class="smp-n">horses は先頭 2 件に短縮</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
   &quot;version&quot;: &quot;1.0&quot;,
   &quot;total_horses&quot;: 37393,
-  &quot;generated_at&quot;: &quot;2026-07-05 09:46:47&quot;,
+  &quot;generated_at&quot;: &quot;2026-10-13 22:36:36&quot;,
   &quot;source&quot;: &quot;race_shutuba_gcs&quot;,
   &quot;horses&quot;: [
     {
@@ -1143,18 +1250,54 @@ table.smp{font-size:11.5px}table.smp th,table.smp td{padding:4px 8px;white-space
   &quot;_meta&quot;: {
     &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
   }
-}</code></pre></div><div class="smp-p"><div class="smp-h"><b>race_performance/…json（スキーマ定義済み）</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">実データ観測後に置き換える</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>race_performance/…json（スキーマ未定義・形式は暫定）</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">実データ観測後に置き換える</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
   &quot;race_id&quot;: &quot;202605030201&quot;,
-  &quot;horses&quot;: [
+  &quot;year&quot;: &quot;2026&quot;,
+  &quot;meta&quot;: {
+    &quot;race_id&quot;: &quot;202605030201&quot;,
+    &quot;race_name&quot;: &quot;3歳以上未勝利&quot;,
+    &quot;surface&quot;: &quot;ダ&quot;,
+    &quot;distance&quot;: 1400,
+    &quot;direction&quot;: &quot;右&quot;,
+    &quot;weather&quot;: &quot;晴&quot;,
+    &quot;track_condition&quot;: &quot;良&quot;,
+    &quot;start_time&quot;: &quot;10:05&quot;,
+    &quot;venue&quot;: &quot;東京&quot;,
+    &quot;field_size&quot;: 8,
+    &quot;date&quot;: &quot;2026-10-04&quot;,
+    &quot;round&quot;: 1,
+    &quot;…&quot;: &quot;他 4 キー&quot;
+  },
+  &quot;entries&quot;: [
     {
-      &quot;horse_number&quot;: 1,
+      &quot;race_id&quot;: &quot;202605030201&quot;,
       &quot;horse_id&quot;: &quot;2021100007&quot;,
-      &quot;performance_rating&quot;: 95.1
+      &quot;horse_name&quot;: &quot;モックウマ07&quot;,
+      &quot;horse_number&quot;: 1,
+      &quot;race_date&quot;: &quot;20261004&quot;,
+      &quot;surface&quot;: &quot;ダ&quot;,
+      &quot;distance&quot;: 1400,
+      &quot;distance_band&quot;: &quot;1200-1599&quot;,
+      &quot;track_condition&quot;: &quot;良&quot;,
+      &quot;venue&quot;: &quot;東京&quot;,
+      &quot;venue_code&quot;: &quot;05&quot;,
+      &quot;venue_era&quot;: &quot;東京_2026&quot;,
+      &quot;…&quot;: &quot;他 28 キー&quot;
     },
     {
-      &quot;horse_number&quot;: 2,
+      &quot;race_id&quot;: &quot;202605030201&quot;,
       &quot;horse_id&quot;: &quot;2022100062&quot;,
-      &quot;performance_rating&quot;: 103.6
+      &quot;horse_name&quot;: &quot;モックウマ62&quot;,
+      &quot;horse_number&quot;: 2,
+      &quot;race_date&quot;: &quot;20261004&quot;,
+      &quot;surface&quot;: &quot;ダ&quot;,
+      &quot;distance&quot;: 1400,
+      &quot;distance_band&quot;: &quot;1200-1599&quot;,
+      &quot;track_condition&quot;: &quot;良&quot;,
+      &quot;venue&quot;: &quot;東京&quot;,
+      &quot;venue_code&quot;: &quot;05&quot;,
+      &quot;venue_era&quot;: &quot;東京_2026&quot;,
+      &quot;…&quot;: &quot;他 28 キー&quot;
     },
     &quot;…（他 6 件）&quot;
   ],
@@ -1165,12 +1308,12 @@ table.smp{font-size:11.5px}table.smp th,table.smp td{padding:4px 8px;white-space
 </table></div>
 <h3 id="cat-C">C. 特徴量ストア・学習データセット</h3><p>生成元は A 群（主に race_result／race_shutuba／horse_result）。保存先は <code>data/local/features/</code>（<code>feature_layout.py</code> の <code>FEATURES_DIR</code>。<code>data/features/</code> という表記は 2026-10-16 に AGENTS.md・各文書から改めた。§7 参照）。</p>
 <div class="wrap"><table><tr><th>ID</th><th>データ</th><th>用途</th><th>取得元（URL／手動／生成）</th><th>保存先</th><th>更新・SLA</th><th>書込主体</th></tr>
-<tr class="ds" data-id="C01"><td class="id">C01</td><td><b>race_result_flat.parquet</b></td><td>全特徴量・めぐ指数・ラベルの元表（flat）</td><td><b>生成</b> <code>python -m src.scraper.export_tables</code>（スクレイプ後に増分）</td><td><code>data/page_reference/tables/{YYYY}/race_result_flat.parquet</code></td><td>raceday-evening 後に増分</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>race_result_flat.parquet（先頭 3 行・先頭 14 列）</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">全 39 列。export_tables の変換ロジック（_data_to_flat_rows）を実サンプルに適用した結果</div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>race_id</th><th>date</th><th>venue</th><th>surface</th><th>distance</th><th>direction</th><th>grade</th><th>race_class</th><th>weather</th><th>track_condition</th><th>start_time</th><th>field_size</th><th>race_name</th><th>venue_code</th></tr><tr><td>202309030811</td><td>2023-06-25</td><td>阪神</td><td>芝</td><td>2200</td><td>右</td><td>G1</td><td></td><td>曇</td><td>良</td><td>15:40</td><td>17</td><td>第64回宝塚記念</td><td>09</td></tr><tr><td>202309030811</td><td>2023-06-25</td><td>阪神</td><td>芝</td><td>2200</td><td>右</td><td>G1</td><td></td><td>曇</td><td>良</td><td>15:40</td><td>17</td><td>第64回宝塚記念</td><td>09</td></tr><tr><td>202309030811</td><td>2023-06-25</td><td>阪神</td><td>芝</td><td>2200</td><td>右</td><td>G1</td><td></td><td>曇</td><td>良</td><td>15:40</td><td>17</td><td>第64回宝塚記念</td><td>09</td></tr></table></div></div></details></td></tr>
+<tr class="ds" data-id="C01"><td class="id">C01</td><td><b>race_result_flat.parquet</b></td><td>全特徴量・めぐ指数・ラベルの元表（flat）</td><td><b>生成</b> <code>python -m src.scraper.export_tables</code>（スクレイプ後に増分）</td><td><code>data/page_reference/tables/{YYYY}/race_result_flat.parquet</code></td><td>raceday-evening 後に増分</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>race_result_flat.parquet（先頭 3 行・先頭 14 列）</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">全 41 列。export_tables の変換ロジック（_data_to_flat_rows）を実サンプルに適用した結果</div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>race_id</th><th>date</th><th>venue</th><th>surface</th><th>distance</th><th>direction</th><th>grade</th><th>race_class</th><th>weather</th><th>track_condition</th><th>start_time</th><th>field_size</th><th>race_name</th><th>venue_code</th></tr><tr><td>202605030201</td><td>2026-10-04</td><td>東京</td><td>ダ</td><td>1400</td><td>右</td><td></td><td>3歳以上未勝利</td><td>晴</td><td>良</td><td>10:05</td><td>8</td><td>3歳以上未勝利</td><td>05</td></tr><tr><td>202605030201</td><td>2026-10-04</td><td>東京</td><td>ダ</td><td>1400</td><td>右</td><td></td><td>3歳以上未勝利</td><td>晴</td><td>良</td><td>10:05</td><td>8</td><td>3歳以上未勝利</td><td>05</td></tr><tr><td>202605030201</td><td>2026-10-04</td><td>東京</td><td>ダ</td><td>1400</td><td>右</td><td></td><td>3歳以上未勝利</td><td>晴</td><td>良</td><td>10:05</td><td>8</td><td>3歳以上未勝利</td><td>05</td></tr></table></div></div></details></td></tr>
 <tr class="ds" data-id="C02"><td class="id">C02</td><td><b>base_tbl<br><small>shutuba 4キー</small></b></td><td>予測スパイン（race_id, horse_id, jockey_id, trainer_id）</td><td><b>生成</b> <code>python -m src.pipeline.register_raw_table_features</code></td><td><code>data/local/features/base_tbl/{YYYY}/shutuba.parquet</code></td><td>出馬表取得後</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>base_tbl/2020/shutuba.parquet（先頭 3 行）</b> <span class="smp-src">実データ（data_features_reference.html に掲載の先頭行）</span></div><div class="smp-n">4 キーのみ（race_id, horse_id, jockey_id, trainer_id）</div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>race_id</th><th>horse_id</th><th>jockey_id</th><th>trainer_id</th></tr><tr><td>202001010101</td><td>2018102410</td><td>01176</td><td>00427</td></tr><tr><td>202001010101</td><td>2018105193</td><td>05339</td><td>00386</td></tr><tr><td>202001010101</td><td>2018104800</td><td>01032</td><td>01082</td></tr></table></div></div></details></td></tr>
 <tr class="ds" data-id="C03"><td class="id">C03</td><td><b>race_tbl / race_horse_tbl / horse_tbl</b></td><td>レース単位・レース×馬・馬単位（血統・プロフィール）の特徴量</td><td><b>生成</b> 同上（選別は <code>_raw_table_feature_selection.json</code>、<code>raw_table_features.py</code>）</td><td><code>data/local/features/{race_tbl,race_horse_tbl,horse_tbl}/</code></td><td>再構築時</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>race_horse_tbl 系: raw flat 由来の列（先頭 3 行・先頭 10 列）</b> <span class="smp-src">実データ（data_features_reference.html に掲載の先頭行）</span></div><div class="smp-n">race_tbl / race_horse_tbl / horse_tbl の全列は data_features_reference.html の「登録列一覧」参照</div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>race_id</th><th>horse_id</th><th>jockey_id</th><th>trainer_id</th><th>shutuba_horse_id_present</th><th>shutuba_jockey_id_present</th><th>shutuba_trainer_id_present</th><th>shutuba_distance</th><th>shutuba_surface</th><th>shutuba_venue_code</th></tr><tr><td>202001010101</td><td>2018102410</td><td>01176</td><td>00427</td><td>1</td><td>1</td><td>1</td><td>1800</td><td>芝</td><td>01</td></tr><tr><td>202001010101</td><td>2018105193</td><td>05339</td><td>00386</td><td>1</td><td>1</td><td>1</td><td>1800</td><td>芝</td><td>01</td></tr><tr><td>202001010101</td><td>2018104800</td><td>01032</td><td>01082</td><td>1</td><td>1</td><td>1</td><td>1800</td><td>芝</td><td>01</td></tr></table></div></div></details></td></tr>
 <tr class="ds" data-id="C04"><td class="id">C04</td><td><b>race_jockey_tbl / race_trainer_tbl / jockey_tbl / trainer_tbl / jockey_trainer_stats</b></td><td>騎手・調教師の成績統計特徴（マージキー検証付き）</td><td><b>生成</b> <code>python -m src.pipeline.build_jockey_trainer_stats [--years …] [--nar]</code><br>cron：<code>scripts/cron/update_jockey_trainer_stats.sh</code></td><td><code>data/local/features/{jockey_tbl,trainer_tbl,jockey_trainer_stats}/</code></td><td>定期（cron）</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>jt_race_features.parquet（先頭 3 行・先頭 12 列）</b> <span class="smp-src">実データ（data_features_reference.html に掲載の先頭行）</span></div><div class="smp-n">空欄は履歴が無い（初出走など）ための欠損</div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>race_id</th><th>horse_id</th><th>jt_row_jockey_id</th><th>jt_row_trainer_id</th><th>jt_result_date</th><th>jt_race_datetime</th><th>jk_prior_all_starts</th><th>jk_prior_all_win_rate</th><th>jk_prior_all_avg_pass_first</th><th>jk_roll10_avg_pass_first</th><th>tr_prior_all_starts</th><th>tr_prior_all_win_rate</th></tr><tr><td>202006010101</td><td>2017100847</td><td>01164</td><td>01141</td><td>2020-01-05</td><td>2020-01-05 09:55:00</td><td></td><td></td><td></td><td></td><td></td><td></td></tr><tr><td>202006010101</td><td>2017101464</td><td>01119</td><td>01132</td><td>2020-01-05</td><td>2020-01-05 09:55:00</td><td></td><td></td><td></td><td></td><td></td><td></td></tr><tr><td>202006010101</td><td>2017101747</td><td>01173</td><td>01031</td><td>2020-01-05</td><td>2020-01-05 09:55:00</td><td></td><td></td><td></td><td></td><td></td><td></td></tr></table></div></div></details></td></tr>
-<tr class="ds" data-id="C05"><td class="id">C05</td><td><b>target/rank_tbl<br><small>着順ラベル</small></b></td><td>学習ラベル（race_id, horse_id, rank）</td><td><b>生成</b> <code>python -m src.pipeline.build_rank_target [--years] [--overwrite]</code></td><td><code>data/local/features/target/rank_tbl/{YYYY}/rank.parquet</code></td><td>結果確定後</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>target/rank_tbl/2023/rank.parquet（先頭 3 行）</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">build_rank_target と同じ定義（rank = finish_position を数値化）を実サンプルに適用</div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>race_id</th><th>horse_id</th><th>rank</th></tr><tr><td>202309030811</td><td>2019105219</td><td>1.0</td></tr><tr><td>202309030811</td><td>2018105269</td><td>2.0</td></tr><tr><td>202309030811</td><td>2019105346</td><td>3.0</td></tr></table></div></div></details></td></tr>
-<tr class="ds" data-id="C06"><td class="id">C06</td><td><b>horse/ped_tbl・result_tbl・training_tbl</b></td><td>馬単位エンティティ（血統ロング表／全成績／調教）</td><td><b>生成</b> <code>python -m src.pipeline.build_horse_entity_store</code>、増分 <code>sync_ped_tbl_for_horses --horse-ids …</code></td><td><code>data/local/features/horse/{ped_tbl,result_tbl,training_tbl}/{先頭4桁}/{horse_id}.parquet</code></td><td>再構築／出馬表保存後（<code>KEIBA_SYNC_PED_TBL_ON_SHUTUBA=1</code> 時）</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>horse/ped_tbl/2019/2019105219.parquet（先頭 4 行・先頭 10 列）</b> <span class="smp-src">実データ（2026-06-12 に実スクレイプして保存したサンプル）</span></div><div class="smp-n">全 26 列（牡スロットのみのロング形式）。build_horse_entity_store の変換（_flatten_pedigree_json）を実サンプルに適用</div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>subject_horse_id</th><th>subject_horse_name</th><th>generation</th><th>position</th><th>path_fm</th><th>merged_global_depth</th><th>source</th><th>anchor_horse_id</th><th>ancestor_horse_id</th><th>ancestor_name</th></tr><tr><td>2019105219</td><td></td><td>1</td><td>0</td><td>F</td><td>1</td><td>primary</td><td></td><td>2012102013</td><td>キタサンブラック</td></tr><tr><td>2019105219</td><td></td><td>2</td><td>0</td><td>FF</td><td>2</td><td>primary</td><td></td><td>2001103312</td><td>ブラックタイド</td></tr><tr><td>2019105219</td><td></td><td>3</td><td>0</td><td>FFF</td><td>3</td><td>primary</td><td></td><td>000a00033a</td><td>サンデーサイレンスSunday Silence(米)</td></tr><tr><td>2019105219</td><td></td><td>4</td><td>0</td><td>FFFF</td><td>4</td><td>primary</td><td></td><td>000a0012bf</td><td>Halo</td></tr></table></div></div></details></td></tr>
+<tr class="ds" data-id="C05"><td class="id">C05</td><td><b>target/rank_tbl<br><small>着順ラベル</small></b></td><td>学習ラベル（race_id, horse_id, rank）</td><td><b>生成</b> <code>python -m src.pipeline.build_rank_target [--years] [--overwrite]</code></td><td><code>data/local/features/target/rank_tbl/{YYYY}/rank.parquet</code></td><td>結果確定後</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>target/rank_tbl/2023/rank.parquet（先頭 3 行）</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">build_rank_target と同じ定義（rank = finish_position を数値化）を実サンプルに適用</div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>race_id</th><th>horse_id</th><th>rank</th></tr><tr><td>202605030201</td><td>2023100036</td><td>1.0</td></tr><tr><td>202605030201</td><td>2021100040</td><td>2.0</td></tr><tr><td>202605030201</td><td>2022100062</td><td>3.0</td></tr></table></div></div></details></td></tr>
+<tr class="ds" data-id="C06"><td class="id">C06</td><td><b>horse/ped_tbl・result_tbl・training_tbl</b></td><td>馬単位エンティティ（血統ロング表／全成績／調教）</td><td><b>生成</b> <code>python -m src.pipeline.build_horse_entity_store</code>、増分 <code>sync_ped_tbl_for_horses --horse-ids …</code></td><td><code>data/local/features/horse/{ped_tbl,result_tbl,training_tbl}/{先頭4桁}/{horse_id}.parquet</code></td><td>再構築／出馬表保存後（<code>KEIBA_SYNC_PED_TBL_ON_SHUTUBA=1</code> 時）</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>horse/ped_tbl/2019/2019105219.parquet（先頭 4 行・先頭 10 列）</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">全 26 列（牡スロットのみのロング形式）。build_horse_entity_store の変換（_flatten_pedigree_json）を実サンプルに適用</div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>subject_horse_id</th><th>subject_horse_name</th><th>generation</th><th>position</th><th>path_fm</th><th>merged_global_depth</th><th>source</th><th>anchor_horse_id</th><th>ancestor_horse_id</th><th>ancestor_name</th></tr><tr><td>2019105219</td><td></td><td>1</td><td>0</td><td>F</td><td>1</td><td>primary</td><td></td><td>1990000003</td><td>モックサイアー03</td></tr><tr><td>2019105219</td><td></td><td>2</td><td>0</td><td>FF</td><td>2</td><td>primary</td><td></td><td>1990000007</td><td>モックサイアー07</td></tr><tr><td>2019105219</td><td></td><td>2</td><td>2</td><td>MF</td><td>2</td><td>primary</td><td></td><td>1990000016</td><td>モックサイアー16</td></tr><tr><td>2019105219</td><td></td><td>3</td><td>0</td><td>FFF</td><td>3</td><td>primary</td><td></td><td>1990000011</td><td>モックサイアー11</td></tr></table></div></div></details></td></tr>
 <tr class="ds" data-id="C07"><td class="id">C07</td><td><b>layer_a_train / dataset_split_manifest</b></td><td>Layer A 学習データセットと train/valid/test 分割定義</td><td><b>生成</b> <code>python3 -m src.pipeline.build_layer_a_dataset [--years]</code></td><td><code>data/modeling/layer_a_train.parquet</code>（＋ <code>.meta.json</code>）／<code>data/local/meta/modeling/dataset_split_manifest.json</code></td><td>学習前</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: layer_a_train.parquet は列数が多く、dev に未生成です（python3 -m src.pipeline.build_layer_a_dataset で学習PCに生成）。</p></details></td></tr>
 </table></div>
 <h3 id="cat-D">D. 血統・研究系データ（src/research）</h3><p>元データは A14（5gen）と C01（flat）。すべて再生成可能。クラスタ再構築の経緯は project memory「L2 Cluster Redesign」参照。</p>
@@ -1349,7 +1492,7 @@ table.smp{font-size:11.5px}table.smp th,table.smp td{padding:4px 8px;white-space
   &quot;person_id&quot;: &quot;00001&quot;,
   &quot;type&quot;: &quot;jockey&quot;,
   &quot;yearly_stats&quot;: [],
-  &quot;_fetched_at&quot;: 1791259743.904757
+  &quot;_fetched_at&quot;: 1792492560.6759543
 }</code></pre></div></details></td></tr>
 <tr class="ds" data-id="E04"><td class="id">E04</td><td><b>config/settings.yaml</b></td><td>データソース・rate limit・MLflow モデル別 serve URI・feature_policy（リーク防止のホワイトリスト）</td><td><b>手動</b>（git 管理）</td><td><code>config/settings.yaml</code></td><td>変更時</td><td>開発PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>config/settings.yaml（抜粋）</b> <span class="smp-src">設定ファイル（git 管理）</span></div><div class="smp-n">先頭 4 セクションを抜粋。dict に変換して表示</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
   &quot;project&quot;: {
@@ -1496,7 +1639,6 @@ table.smp{font-size:11.5px}table.smp th,table.smp td{padding:4px 8px;white-space
   &quot;KEIBA_DEPLOYMENT_LABEL&quot;: &quot;DEV&quot;,
   &quot;FLASK_ENV&quot;: &quot;development&quot;,
   &quot;TZ&quot;: &quot;Asia/Tokyo&quot;,
-  &quot;FLASK_PORT&quot;: &quot;5000&quot;,
   &quot;APP_SECRET_KEY&quot;: &quot;&lt;秘密&gt;&quot;,
   &quot;JWT_SECRET&quot;: &quot;&lt;秘密&gt;&quot;,
   &quot;DEV_PASSWORD&quot;: &quot;&lt;秘密&gt;&quot;,
@@ -1515,7 +1657,8 @@ table.smp{font-size:11.5px}table.smp th,table.smp td{padding:4px 8px;white-space
   &quot;GCS_CLIENT_ID&quot;: &quot;&quot;,
   &quot;GCS_CLIENT_CERT_URL&quot;: &quot;&quot;,
   &quot;KEIBA_QUEUE_BACKEND&quot;: &quot;local&quot;,
-  &quot;MLFLOW_TRACKING_URI&quot;: &quot;http://localhost:5000&quot;
+  &quot;KEIBA_DEFAULT_MODEL_VERSION&quot;: &quot;v1.0.0&quot;,
+  &quot;netkeiba_id&quot;: &quot;your_email@example.com&quot;
 }</code></pre></div></details></td></tr>
 </table></div>
 <h3 id="cat-F">F. モデル成果物・予測結果</h3><p>モデル一覧とキーは <code>src/pipeline/mlflow/catalog.py</code>（keiba_lgbm / tracking_difficulty / final_odds / pace_predictor が active、finish_order / lap_predictor / lap_lstm が planned）。</p>
@@ -1523,121 +1666,183 @@ table.smp{font-size:11.5px}table.smp th,table.smp td{padding:4px 8px;white-space
 <tr class="ds" data-id="F01"><td class="id">F01</td><td><b>models/ ローカル Booster 一式</b></td><td>keiba_lgbm 等のフォールバック推論（git 管理の 5.8MB）</td><td><b>学習の成果物をコミット</b>（<code>keiba_model.pkl</code> / <code>label_encoders.pkl</code> / <code>encoder.json</code> / <code>final_odds_bundle.json</code> / <code>pace_predictor/</code>）</td><td><code>models/</code>（git 管理）</td><td>再学習時</td><td>学習PC → git</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>models/ のファイル</b> <span class="smp-src">実データ（git 管理のモデル成果物）</span></div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>ファイル</th><th>サイズ</th></tr><tr><td>encoder.json</td><td>4,605 B</td></tr><tr><td>final_odds_bundle.json</td><td>4,617,884 B</td></tr><tr><td>keiba_model.pkl</td><td>393,508 B</td></tr><tr><td>label_encoders.pkl</td><td>2,621 B</td></tr><tr><td>pace_predictor/model_1f.txt</td><td>631,397 B</td></tr><tr><td>pace_predictor/model_3f.txt</td><td>403,344 B</td></tr></table></div></div></details></td></tr>
 <tr class="ds" data-id="F02"><td class="id">F02</td><td><b>models/ensemble/&lt;version&gt;/ ＋ latest.json</b></td><td>本番配信用アンサンブルモデル（学習PC → GCS 公開 → VPS が取得）</td><td><b>生成</b> 学習PCで学習、<code>publish_model</code>（CLI 化は T-005）</td><td>GCS <code>gs://{bucket}/models/ensemble/&lt;version&gt;/</code></td><td>再学習時</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: アンサンブルの公開（publish_model の CLI 化 T-005）が未実装のため、latest.json の実物がありません。</p></details></td></tr>
 <tr class="ds" data-id="F03"><td class="id">F03</td><td><b>MLflow（runs / artifacts / registry）</b></td><td>実験管理・モデルカタログ</td><td><b>生成</b>（学習時に自動記録）</td><td><code>mlflow/data/</code>（Docker サーバ）／<code>mlflow/runs/</code>（ローカル）。どちらも git 管理外</td><td>学習のたび</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: MLflow の runs / artifacts は dev に無く、学習PC で生成されます（形式は MLflow の標準）。</p></details></td></tr>
-<tr class="ds" data-id="F04"><td class="id">F04</td><td><b>race_predictions<br><small>AI 予測結果</small></b></td><td>T-45 予測（win/place/show 確率）・予測画面・馬券最適化</td><td><b>生成</b> <code>trigger_pre_race_predict()</code>（T-15 バンドル完了後）</td><td>GCS <code>…/race_predictions/{年}/{race_id}.json</code>（キャッシュ TTL 24h）</td><td>開催日 T-45／T-15</td><td>VPS（または GCP）</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_predictions/2026/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">horses は先頭 2 頭に短縮。スキーマ定義済み（schema_defs.json）。dev モックのため値は架空</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+<tr class="ds" data-id="F04"><td class="id">F04</td><td><b>race_predictions<br><small>AI 予測結果</small></b></td><td>T-45 予測（win/place/show 確率）・予測画面・馬券最適化</td><td><b>生成</b> <code>trigger_pre_race_predict()</code>（T-15 バンドル完了後）</td><td>GCS <code>…/race_predictions/{年}/{race_id}.json</code>（キャッシュ TTL 24h）</td><td>開催日 T-45／T-15</td><td>VPS（または GCP）</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_predictions/2026/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">horses は先頭 2 頭に短縮。スキーマ未定義のため形式は暫定（実データ観測後に確定）</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
   &quot;race_id&quot;: &quot;202605030201&quot;,
+  &quot;status&quot;: &quot;success&quot;,
+  &quot;has_prediction&quot;: true,
+  &quot;race_name&quot;: &quot;3歳以上未勝利&quot;,
+  &quot;round&quot;: 1,
+  &quot;venue&quot;: &quot;東京&quot;,
+  &quot;surface&quot;: &quot;ダ&quot;,
+  &quot;distance&quot;: 1400,
+  &quot;track_condition&quot;: &quot;良&quot;,
+  &quot;total_horses&quot;: 8,
+  &quot;elapsed_sec&quot;: 0.0,
+  &quot;model_type&quot;: &quot;dev-mock&quot;,
   &quot;model_version&quot;: &quot;dev-mock-v1&quot;,
-  &quot;predicted_at&quot;: &quot;2026-10-06T00:00:00+00:00&quot;,
-  &quot;pace_prediction&quot;: {
-    &quot;pace_category&quot;: &quot;MIDDLE&quot;,
-    &quot;lap_times&quot;: [
-      {
-        &quot;furlong_index&quot;: 1,
-        &quot;predicted_lap_sec&quot;: 13.91
-      },
-      {
-        &quot;furlong_index&quot;: 2,
-        &quot;predicted_lap_sec&quot;: 14.09
-      },
-      &quot;…（他 8 件）&quot;
-    ]
-  },
-  &quot;horses&quot;: [
+  &quot;model_description&quot;: &quot;開発用モック予測（市場オッズ+ノイズ。実モデルではありません）&quot;,
+  &quot;predictions&quot;: [
     {
-      &quot;horse_id&quot;: &quot;2021100007&quot;,
-      &quot;post_no&quot;: 1,
-      &quot;win_prob&quot;: 0.1818,
-      &quot;win_probability&quot;: 0.1818,
-      &quot;place_prob&quot;: 0.3999,
-      &quot;show_prob&quot;: 0.5199,
-      &quot;place_probability&quot;: 0.5199,
-      &quot;predicted_win_odds&quot;: 5.5,
-      &quot;predicted_place_odds&quot;: 2.5,
-      &quot;expected_win_roi&quot;: 0.57,
-      &quot;expected_show_roi&quot;: 0.37,
-      &quot;predicted_position&quot;: 1,
-      &quot;…&quot;: &quot;他 2 キー&quot;
+      &quot;horse_number&quot;: 4,
+      &quot;horse_name&quot;: &quot;モックウマ36&quot;,
+      &quot;horse_id&quot;: &quot;2023100036&quot;,
+      &quot;pred_score&quot;: -0.2817,
+      &quot;normalized_score&quot;: 67.51,
+      &quot;pred_rank&quot;: 1,
+      &quot;composite_rank&quot;: 1,
+      &quot;composite_score&quot;: -0.2817,
+      &quot;win_prob&quot;: 0.5339,
+      &quot;top2_prob&quot;: 0.7759,
+      &quot;top3_prob&quot;: 0.9036,
+      &quot;win_odds&quot;: 2.1,
+      &quot;…&quot;: &quot;他 6 キー&quot;
     },
     {
-      &quot;horse_id&quot;: &quot;2022100062&quot;,
-      &quot;post_no&quot;: 2,
-      &quot;win_prob&quot;: 0.1642,
-      &quot;win_probability&quot;: 0.1642,
-      &quot;place_prob&quot;: 0.3612,
-      &quot;show_prob&quot;: 0.4696,
-      &quot;place_probability&quot;: 0.4696,
-      &quot;predicted_win_odds&quot;: 6.1,
-      &quot;predicted_place_odds&quot;: 2.8,
-      &quot;expected_win_roi&quot;: 0.07,
-      &quot;expected_show_roi&quot;: -0.09,
-      &quot;predicted_position&quot;: 2,
-      &quot;…&quot;: &quot;他 2 キー&quot;
+      &quot;horse_number&quot;: 5,
+      &quot;horse_name&quot;: &quot;モックウマ40&quot;,
+      &quot;horse_id&quot;: &quot;2021100040&quot;,
+      &quot;pred_score&quot;: -1.0754,
+      &quot;normalized_score&quot;: 61.56,
+      &quot;pred_rank&quot;: 2,
+      &quot;composite_rank&quot;: 2,
+      &quot;composite_score&quot;: -1.0754,
+      &quot;win_prob&quot;: 0.2414,
+      &quot;top2_prob&quot;: 0.5222,
+      &quot;top3_prob&quot;: 0.7324,
+      &quot;win_odds&quot;: 2.3,
+      &quot;…&quot;: &quot;他 6 キー&quot;
     },
     &quot;…（他 6 件）&quot;
   ],
-  &quot;_mock&quot;: true,
   &quot;_meta&quot;: {
     &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
+  },
+  &quot;_cache_meta&quot;: {
+    &quot;version&quot;: 1,
+    &quot;model_key&quot;: &quot;keiba_lgbm&quot;,
+    &quot;source&quot;: &quot;dev_mock&quot;,
+    &quot;computed_at_epoch&quot;: 1791244800.0
   }
 }</code></pre></div></details></td></tr>
-<tr class="ds" data-id="F05"><td class="id">F05</td><td><b>tracking_difficulty / final_odds_prediction / finish_order_prediction</b></td><td>追走難度・最終オッズ・着順の各予測出力</td><td><b>生成</b>（各予測子）</td><td>final_odds_prediction／finish_order_prediction: GCS <code>…/{category}/{年}/{race_id}.json</code>。<b>tracking_difficulty: ローカル <code>data/calculated_data/tracking_difficulty/{race_id}.json</code></b>（<code>tracking_difficulty_service</code> が GCS から移行済み。GCS の旧データは 184 件のみ）</td><td>開催日</td><td>VPS／学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON・3 種）</summary><div class="smp-p"><div class="smp-h"><b>tracking_difficulty/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">スキーマ定義済み（schema_defs.json）。dev モックのため値は架空</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+<tr class="ds" data-id="F05"><td class="id">F05</td><td><b>tracking_difficulty / final_odds_prediction / finish_order_prediction</b></td><td>追走難度・最終オッズ・着順の各予測出力</td><td><b>生成</b>（各予測子）</td><td>final_odds_prediction／finish_order_prediction: GCS <code>…/{category}/{年}/{race_id}.json</code>。<b>tracking_difficulty: ローカル <code>data/calculated_data/tracking_difficulty/{race_id}.json</code></b>（<code>tracking_difficulty_service</code> が GCS から移行済み。GCS の旧データは 184 件のみ）</td><td>開催日</td><td>VPS／学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON・3 種）</summary><div class="smp-p"><div class="smp-h"><b>tracking_difficulty/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">スキーマ未定義のため形式は暫定</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
   &quot;race_id&quot;: &quot;202605030201&quot;,
-  &quot;status&quot;: &quot;ok&quot;,
-  &quot;pace_category&quot;: &quot;high&quot;,
-  &quot;pace_score&quot;: 84.0,
-  &quot;field_difficulty&quot;: 62.4,
+  &quot;race_date&quot;: &quot;20261004&quot;,
+  &quot;race_name&quot;: &quot;3歳以上未勝利&quot;,
+  &quot;venue&quot;: &quot;東京&quot;,
+  &quot;surface&quot;: &quot;ダ&quot;,
+  &quot;distance&quot;: 1400,
+  &quot;track_condition&quot;: &quot;良&quot;,
+  &quot;field_size&quot;: 8,
+  &quot;result_viewable&quot;: false,
+  &quot;_cache_meta&quot;: {
+    &quot;cached&quot;: true,
+    &quot;model_version&quot;: &quot;dev-mock-v1&quot;
+  },
+  &quot;_compute_meta&quot;: {
+    &quot;computed_at&quot;: &quot;2026-10-04&quot;,
+    &quot;model_version&quot;: &quot;dev-mock-v1&quot;
+  },
+  &quot;field_prev_stats&quot;: {
+    &quot;avg_ability&quot;: 13.0
+  },
+  &quot;pace_prediction&quot;: {
+    &quot;category&quot;: &quot;high&quot;
+  },
+  &quot;position_flow&quot;: [
+    8,
+    2,
+    &quot;…（他 2 件）&quot;
+  ],
   &quot;entries&quot;: [
     {
       &quot;horse_id&quot;: &quot;2021100007&quot;,
-      &quot;post_no&quot;: 1,
-      &quot;horse_name&quot;: &quot;馬1&quot;,
-      &quot;tracking_score&quot;: 51.7,
-      &quot;pace_score&quot;: 77.6,
-      &quot;position_score&quot;: 63.6,
-      &quot;difficulty_rank&quot;: 1,
-      &quot;running_style&quot;: &quot;逃&quot;,
-      &quot;pace_aptitude&quot;: &quot;high&quot;,
-      &quot;corner_positions&quot;: [
-        1,
-        2,
-        &quot;…（他 2 件）&quot;
-      ]
+      &quot;horse_name&quot;: &quot;モックウマ07&quot;,
+      &quot;horse_number&quot;: 1,
+      &quot;bracket_number&quot;: 1,
+      &quot;course_comparison&quot;: {
+        &quot;score&quot;: 28.5
+      },
+      &quot;field_factors&quot;: {
+        &quot;pace_aptitude&quot;: &quot;middle&quot;
+      },
+      &quot;form&quot;: {
+        &quot;recent_form&quot;: &quot;不調&quot;
+      },
+      &quot;gate_factors&quot;: {
+        &quot;bias&quot;: -0.97
+      },
+      &quot;neighbor_factors&quot;: {
+        &quot;inside_pressure&quot;: false
+      },
+      &quot;prev_race&quot;: {
+        &quot;finish_position&quot;: 3
+      },
+      &quot;profile&quot;: {
+        &quot;running_style&quot;: &quot;先&quot;
+      },
+      &quot;recent_3&quot;: {
+        &quot;avg_position&quot;: 5.9
+      },
+      &quot;…&quot;: &quot;他 1 キー&quot;
     },
     {
       &quot;horse_id&quot;: &quot;2022100062&quot;,
-      &quot;post_no&quot;: 2,
-      &quot;horse_name&quot;: &quot;馬2&quot;,
-      &quot;tracking_score&quot;: 74.0,
-      &quot;pace_score&quot;: 85.7,
-      &quot;position_score&quot;: 52.2,
-      &quot;difficulty_rank&quot;: 2,
-      &quot;running_style&quot;: &quot;差&quot;,
-      &quot;pace_aptitude&quot;: &quot;slow&quot;,
-      &quot;corner_positions&quot;: [
-        8,
-        7,
-        &quot;…（他 2 件）&quot;
-      ]
+      &quot;horse_name&quot;: &quot;モックウマ62&quot;,
+      &quot;horse_number&quot;: 2,
+      &quot;bracket_number&quot;: 2,
+      &quot;course_comparison&quot;: {
+        &quot;score&quot;: 50.9
+      },
+      &quot;field_factors&quot;: {
+        &quot;pace_aptitude&quot;: &quot;high&quot;
+      },
+      &quot;form&quot;: {
+        &quot;recent_form&quot;: &quot;良&quot;
+      },
+      &quot;gate_factors&quot;: {
+        &quot;bias&quot;: -0.34
+      },
+      &quot;neighbor_factors&quot;: {
+        &quot;inside_pressure&quot;: false
+      },
+      &quot;prev_race&quot;: {
+        &quot;finish_position&quot;: 9
+      },
+      &quot;profile&quot;: {
+        &quot;running_style&quot;: &quot;逃&quot;
+      },
+      &quot;recent_3&quot;: {
+        &quot;avg_position&quot;: 5.3
+      },
+      &quot;…&quot;: &quot;他 1 キー&quot;
     },
     &quot;…（他 6 件）&quot;
   ],
-  &quot;_mock&quot;: true,
-  &quot;_mock_model&quot;: &quot;stg-mock-v1&quot;,
   &quot;_meta&quot;: {
     &quot;scraped_at_jst&quot;: &quot;2026-10-06 00:00:00&quot;
   }
-}</code></pre></div><div class="smp-p"><div class="smp-h"><b>final_odds_prediction/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">スキーマ定義済み（schema_defs.json）</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
+}</code></pre></div><div class="smp-p"><div class="smp-h"><b>final_odds_prediction/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">スキーマ未定義のため形式は暫定</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
   &quot;race_id&quot;: &quot;202605030201&quot;,
-  &quot;model_version&quot;: &quot;dev-mock-v1&quot;,
-  &quot;predictions&quot;: [
+  &quot;race_name&quot;: &quot;3歳以上未勝利&quot;,
+  &quot;elapsed_sec&quot;: 0.24,
+  &quot;_cache_meta&quot;: {
+    &quot;cached&quot;: true,
+    &quot;model_version&quot;: &quot;dev-mock-v1&quot;
+  },
+  &quot;entries&quot;: [
     {
       &quot;horse_number&quot;: 1,
-      &quot;horse_id&quot;: &quot;2021100007&quot;,
-      &quot;predicted_final_win_odds&quot;: 18.2
+      &quot;source&quot;: &quot;dev-mock&quot;,
+      &quot;predicted_win_odds&quot;: 59.0,
+      &quot;predicted_place_odds_min&quot;: 1.1,
+      &quot;predicted_place_odds_max&quot;: 8.2
     },
     {
       &quot;horse_number&quot;: 2,
-      &quot;horse_id&quot;: &quot;2022100062&quot;,
-      &quot;predicted_final_win_odds&quot;: 22.1
+      &quot;source&quot;: &quot;dev-mock&quot;,
+      &quot;predicted_win_odds&quot;: 32.0,
+      &quot;predicted_place_odds_min&quot;: 7.1,
+      &quot;predicted_place_odds_max&quot;: 7.7
     },
     &quot;…（他 6 件）&quot;
   ],

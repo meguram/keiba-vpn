@@ -2,7 +2,7 @@
 
 起動済みの Next.js（フロント。/api は Flask / FastAPI へプロキシ）に対して、最小 UI（週間予測 → レース詳細 →
 推奨馬券）が使うページと API を叩く。確認するのは **アクセス可否と応答の中身が空でないこと** までで、
-stg/prod の実データが正しいかは保証しない（CI は dev フィクスチャ = dev_fixture/ の 1 開催日 + モックで動かす）。
+stg/prod の実データが正しいかは保証しない（CI は合成モックで動かす。ローカルに実データ日があればそれも使える）。
 
   python -m src.scripts.ci.smoke_endpoints --base http://127.0.0.1:23100 [--wait 180] [--require-db]
 
@@ -46,8 +46,17 @@ def wait_until_up(base: str, seconds: float) -> bool:
 
 
 def fixture_info() -> tuple[str, int]:
-    man = json.loads((REPO_ROOT / "dev_fixture" / "MANIFEST.json").read_text(encoding="utf-8"))
-    return str(man["date"]), int(man["races"])
+    """検査する開催日とレース数。実データ日のマニフェスト（ローカルのみ）があればそれ、無ければ dev ストアのモックの最新日。"""
+    mf = REPO_ROOT / "dev_fixture" / "MANIFEST.json"
+    if mf.is_file():
+        man = json.loads(mf.read_text(encoding="utf-8"))
+        return str(man["date"]), int(man["races"])
+    from src.scripts.data.dev_fixture import _roots
+
+    lists = sorted((_roots()["page_reference"] / "race_lists").glob("*.json"))
+    assert lists, "dev ストアに race_lists が無い（make dev-mock を先に）"
+    d = json.loads(lists[-1].read_text(encoding="utf-8"))
+    return str(d.get("date") or lists[-1].stem), len(d.get("races", []))
 
 
 @dataclass
@@ -130,7 +139,7 @@ def run_checks(base: str, *, require_db: bool = False) -> list[Result]:
     out.append(check(f"page {race_page_path.format(race_id=rid)}", page(race_page_path.format(race_id=rid))))
 
     def race_detail() -> str:
-        # フィクスチャ(dev_fixture/)が持つカテゴリだけを見る: 出馬表・結果・単複オッズ・2連系/3連複オッズ
+        # dev ストア（モック）が持つカテゴリだけを見る: 出馬表・結果・単複オッズ・2連系/3連複オッズ
         d = get_json(base, f"/api/race/{rid}")
         for cat in ("race_shutuba", "race_result", "race_odds"):
             assert len((d.get(cat) or {}).get("entries", [])) > 0, f"{cat} が空"
