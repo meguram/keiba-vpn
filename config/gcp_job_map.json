@@ -234,6 +234,11 @@
    "local_path": "data/local/inference/lap_forecast_models",
    "desc": "ラップ予想のモデル"
   },
+  "fitted_artifacts": {
+    "env": "KEIBA_FITTED_ARTIFACTS_DIR",
+    "local_path": "data/local/modeling/fitted_artifacts_stage",
+    "desc": "当て込まれた係数・補正表・集計表・重みの一式（config/fitted_artifacts.txt）。リポジトリ相対のパスのまま束ね、取得後は scripts/ops/fitted_artifacts.sh unpack で重ねて置く"
+  },
   "final_odds": {
    "local_path": "models/final_odds_bundle.json",
    "entry": "final_odds_bundle.json",

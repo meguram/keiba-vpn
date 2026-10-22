@@ -11,6 +11,22 @@
 4. 他の clone・他のセッション（例: keiba-vpn-28）に、書き換えの予定を伝えてある。
 5. GitHub のブランチ保護（Settings → Branches）で、`develop`・`main` への強制 push が禁止されていれば、一時的に許可する（終わったら戻す）。
 
+## 保険の確認（履歴除去の前に必須）
+履歴を書き換えると、除去したファイルの元の値は git から復元できない。**実体が 3 か所に揃っていること**を、ファイルごとの sha256 で確認する。
+```bash
+export KEIBA_GCS_BUCKET=<バケット名>        # (b) の確認に必要
+bash scripts/ops/purge_preflight.sh backup  # (c) リポジトリ外へ bundle と tar.gz を作る
+bash scripts/ops/purge_preflight.sh check   # 全部 OK で終了コード 0
+```
+| 場所 | 内容 | 確認する人 |
+|---|---|---|
+| (a) ホストの実ファイル | `config/fitted_artifacts.txt` の 88 ファイルが、手元の版と sha256 一致 | check が自動で |
+| (b) GCS `models/fitted_artifacts/` | `model_publish publish fitted_artifacts` 済みで manifest が一致 | check が自動で（読み取り専用の鍵） |
+| (c) リポジトリ外バックアップ | `git bundle`（全ブランチ）と対象ファイルの tar.gz | check が自動で |
+
+**ホスト版が正**: 学習済みの重みは、ホストが最新。開発 PC の複製と違う場合（現状 `models/final_odds_bundle.json`）は、ホストで pack と publish を行い、バックアップもホストの版から作る。
+`NG` が 1 つでもある間は、次の手順に進まない。詳細と現状の結果表は `docs/operations/fitted_artifacts.md`。
+
 ## 手順
 ### 1. バックアップ（リポジトリの外に）
 ```bash

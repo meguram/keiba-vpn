@@ -1,0 +1,43 @@
+# 当て込まれた係数・集計表を公開リポジトリに置かない（分類・影響・対策）
+
+方針（2026-10-22 確定）: 学習や集計で**データに当て込んで決めた値**（重み・係数・補正表・集計表）は git で管理しない。**人が決める設定・しきい値**は git に残す。
+対象一覧は `config/fitted_artifacts.txt`（機械が読む正）。実ファイルは各環境に残し、配布は `scripts/ops/fitted_artifacts.sh`（束ねる／展開）→ `src/ops/model_publish.py`（GCS の `models/fitted_artifacts/`）。
+
+## 分類
+**git から外したもの（当て込まれた値・集計表。88 ファイル）**
+| 種別 | パス | 理由 |
+|---|---|---|
+| 学習済みの重み・符号化器 | `models/*.pkl`、`models/encoder.json`、`models/final_odds_bundle.json`、`models/pace_predictor/*`、`config/{growth_index,tracking_difficulty_v2}/model*.txt`、`config/expected_megu/model.json`、`config/pace_type_models.json` | 学習で得た重み |
+| 当て込まれた係数・表 | `config/growth_index/{params,ped_profile}.json`、`config/megu_predict_{params,condition_weights}.json`、`config/megu_v3a/{centers.json,month_offsets.csv,par.csv}`、`config/gate_bias.json`、`config/class_benchmark.json`、`config/pace_coherence{,_v2}.json`、`config/tracking_difficulty_v2/{meta,position_effect}.json`、`config/megu_excusable.json`、`config/drift_top_features.json` | 係数・補正量・基準表・重要度（データから決めた値） |
+| 集計表 | `data/research/bloodline/**`（62 件）、`data/research/course_bloodline`（リンク） | 血統×条件の集計値 |
+
+**git に残すもの（人が決める設定・しきい値・仕様）**: `kesi_mark.json`、`megu_mark.json`、`mark_rule.json`、`maintenance.json`、`ports.env`、`anti_scraping.json`、`behavior_flags.json`、`fetch_owner.json`、`fetch_shadow.json`、`job_owner.json`、`entries_schedule.json`、`paid_zone.json`、`public_fields.json`、`members.json`、`settings.yaml`、`gcp_job_map.json`、`cost_assumptions.json`、`migration_phases.json`、`serving_state.json`、`decoupling_roles.json`、`modeling/*`、`model_feature_groups.json`、`frozen_tracking.json`、`tp59/tp62_frozen_rule.json`（凍結した判断）、`megu_v3a/{spec,meta}.json`、`megu_par_time_v2_meta.json`（学習の記録）、`drift_periods.json` ほか。
+
+## 判断が割れるもの（外していない。ユーザー判断）
+| パス | 割れる理由 |
+|---|---|
+| `config/ev_calibration.json`、`ev_calibration_pc.json`、`prob_calibration.json` | 較正の係数（当て込み）と、段の閾値・有効化の設定（人が決める）が同じファイルに混在。UI と推奨度のテストが閾値を読む。分けるなら、係数と閾値で 2 ファイルに分割する改修が先。 |
+| `config/pace_type.json` | モデルの定義、コースの幾何情報、競馬場コードが混在 |
+| `data/meta/course_master/**` | **`geo/jravan_start.json` などに JRA-VAN 由来の可能性**。JRA-VAN の規約は公表を禁じる（個人契約）。出所の確認を最優先で |
+| `data/jra_baba/cushion_*.json` | JRA 公開情報の蓄積。JRA サイトの規約で事実データの扱いは未記載 |
+| `data/meta/dormello/*.csv`、`data/knowledge/horse_peds_domain.html` | 自前の手作業の調査・生成物。外部データの転記を含みうる |
+| `docs/requirements/data/schemas/observed/` | 型・件数・キー範囲のみ（値のサンプルは無いことを走査で確認済み） |
+
+## 影響と対策
+| 影響を受けるもの | 何が起きるか | 対策 |
+|---|---|---|
+| ランタイム（ホスト） | ファイルは残るので変化なし。`git pull` しない運用 | 変更なし |
+| テスト・CI・新規 clone | 実ファイルが無く、読むテストが失敗する | `tests/conftest.py` の `_FIT_REQUIRES` で、ファイルが無ければ skip。クリーンな worktree で全体 2960 件通ることを確認 |
+| 文書の参照整合テスト | 文書が言及するパスが実在しない | `config/fitted_artifacts.txt` に載るパスは不在を許容 |
+| データカタログ | E05 のサンプルが読めない | ファイルが無ければ「サンプルなし」と注記 |
+| env-parity の `release_manifest`（config のハッシュ） | ハッシュは**実ファイル**から取るので、環境間で版が違えば差分として検出される（望ましい動作）。git 管理外になっても対象から外れない | 変更なし。配布後に照合で揃いを確認 |
+| `stage_deploy` | `--ref HEAD` では配れない（git に無い） | **作業ツリー指定（`--ref` なし）**で積む。または `fitted_artifacts.sh pack` → GCS 経由 |
+| VPS・Cloud Run・Jobs | イメージの `COPY config/` に入らない。また `gcloud builds submit` は `.gitignore` のファイルを既定で送らない | ビルド前に `model_publish fetch fitted_artifacts` → `fitted_artifacts.sh unpack` でコンテキストへ展開し、`--ignore-file`（`.gitignore` を使わない除外指定）で送る。または起動時に GCS から取得（`decoupling_plan.md` D2） |
+| 履歴除去（強制 push）後 | 履歴から元の値を取り戻せない | **除去前に `scripts/ops/purge_preflight.sh check` が全部 OK**（実体が ホスト・GCS・リポジトリ外バックアップ の 3 か所に揃う）ことを必須にする |
+
+## 今の確認結果（`purge_preflight.sh check`、2026-10-22）
+| 場所 | 一致 | 無い | 内容が違う | 次にやること |
+|---|---:|---:|---:|---|
+| (a) ホストの実ファイル | 86/88 | 1 | 1 | `config/drift_top_features.json` がホストに無い → 作業ツリー指定のステージで配置。`models/final_odds_bundle.json` は**ホスト版が正**（開発 PC の複製が古い）→ **ホストで pack する**か、ホスト版を取得して照合 |
+| (b) GCS `models/fitted_artifacts/` | 未確認 | - | - | ホストで `fitted_artifacts.sh pack` → `model_publish publish fitted_artifacts <dir>` を行い、`KEIBA_GCS_BUCKET` を指定して再確認 |
+| (c) リポジトリ外バックアップ | 0/88 | 88 | 0 | `purge_preflight.sh backup`（git bundle と tar.gz）。ホスト版を取り込んだあとに作る |
