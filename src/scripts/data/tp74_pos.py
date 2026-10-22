@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-OUT = Path(os.environ.get("TP74_OUT", "/home/jovyan/work/tp74_out"))
+OUT = Path(os.environ.get("TP74POS_OUT", "/home/jovyan/work/tp74pos_out"))
 MINING = Path(os.environ.get("TP72_OUT", "/home/jovyan/work/tp72_out")) / "mining.parquet"
 EASE = Path(os.environ.get("TP54_OUT", "/home/jovyan/work/tp54_out")) / "horse_ease.parquet"
 RQ = Path(os.environ.get("TP74_RQ", "/home/jovyan/work/keiba-vpn/data/local/modeling/shared_cache/race_quality/race_quality.parquet"))
@@ -371,7 +371,109 @@ def run_eval() -> None:
     (OUT / "results.json").write_text(json.dumps(out, ensure_ascii=False, default=float), encoding="utf-8")
     print("done", out["coverage"])
 
+# ───────────────────────── 図
+COURSES = [("05|芝", "東京芝"), ("06|ダート", "中山ダート"), ("09|芝", "阪神芝"), ("08|芝", "京都芝")]
+COLORS3 = ["#2a9d8f", "#6a6a6a", "#e07b39"]
+
+
+def _setup_plt():
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib import font_manager as fm
+
+    for cand in [*Path.home().glob(".fonts/*JP*.*"), *Path("/usr/share/fonts").glob("**/*CJK*JP*.*"), *Path("/usr/share/fonts").glob("**/NotoSansCJK-Regular.ttc")]:
+        try:
+            fm.fontManager.addfont(str(cand))
+        except (OSError, RuntimeError):
+            pass
+    have = {f.name for f in fm.fontManager.ttflist}
+    plt.rcParams["font.family"] = [n for n in ("Noto Sans CJK JP", "Noto Sans CJK SC", "Noto Sans JP", "IPAexGothic", "IPAGothic", "TakaoGothic", "Yu Gothic", "Meiryo", "DejaVu Sans") if n in have][:1] or ["DejaVu Sans"]
+    plt.rcParams["axes.unicode_minus"] = False
+    return plt
+
+
+def _panel_lines(ax, d: pd.DataFrame, xcol: str, gcol: str, ycol: str, glabels: list[str], base_line: float | None = None, scale: float = 100.0) -> None:
+    for gi, gl in enumerate(glabels):
+        xs, ys, lo, hi, thin = [], [], [], [], []
+        for b in range(4):
+            x = d[(d[xcol] == b) & (d[gcol] == gi)]
+            if len(x) < 40:
+                continue
+            t = cell_stats(x.assign(_k=0), ["_k"], ycol).iloc[0]
+            xs.append(b)
+            ys.append(t["mean"] * scale)
+            lo.append((t["mean"] - 1.96 * t["se"]) * scale)
+            hi.append((t["mean"] + 1.96 * t["se"]) * scale)
+            thin.append(t["N"] < 300)
+        if not xs:
+            continue
+        col = COLORS3[gi]
+        ax.plot(xs, ys, color=col, lw=1.8, label=gl)
+        ax.fill_between(xs, lo, hi, color=col, alpha=0.12)
+        for x0, y0, th in zip(xs, ys, thin):
+            ax.plot([x0], [y0], "o", ms=6, mfc="white" if th else col, mec=col)
+    if base_line is not None:
+        ax.axhline(base_line, color="#999", lw=0.8, ls="--")
+    ax.set_xticks(range(4))
+    ax.set_xticklabels(BAND_NAMES)
+    ax.grid(alpha=0.25)
+
+
+def _fig_courses(plt, m: pd.DataFrame, xcol: str, gcol: str, ycol: str, glabels: list[str], title: str, ylab: str, fname: Path, base_line: float | None, scale: float = 100.0) -> None:
+    fig, axs = plt.subplots(1, 4, figsize=(17, 4.2), sharey=True)
+    for ax, (cv, nm) in zip(axs, COURSES):
+        d = m[(m["cv"] == cv) & m[xcol].notna() & m[gcol].notna()]
+        _panel_lines(ax, d, xcol, gcol, ycol, glabels, base_line, scale)
+        ax.set_title(f"{nm}（{len(d):,} 出走）", fontsize=11)
+    axs[0].set_ylabel(ylab)
+    axs[0].legend(fontsize=9, loc="best")
+    fig.suptitle(title, fontsize=13)
+    fig.tight_layout(rect=(0, 0, 1, 0.92))
+    fig.savefig(fname, dpi=100)
+    plt.close(fig)
+
+
+def run_figs() -> None:
+    m = load()
+    plt = _setup_plt()
+    disc = m[m["year"].isin(DISC)]
+    disc_pf = disc[disc["pf_src"] == "pf"]
+    _fig_courses(plt, disc, "ba1", "pace3", "t3", ["スロー", "ミドル", "ハイ"], "実際の初角の位置別の3着以内率（コース別・実測ペース別。レース後にしか分からない）", "3着以内率（%）", OUT / "fig1.png", None)
+    _fig_courses(plt, disc_pf, "bp", "pace3", "t3", ["スロー", "ミドル", "ハイ"], "事前の位置取り予想の帯別の3着以内率（コース別・実測ペース別）", "3着以内率（%）", OUT / "fig2.png", None)
+    _fig_courses(plt, disc_pf, "bp", "g3", "t3", ["良", "稍重", "重・不良"], "事前の位置取り予想の帯別の3着以内率（コース別・馬場状態別）", "3着以内率（%）", OUT / "fig3.png", None)
+    _fig_courses(plt, disc_pf, "bp", "pp3", "r3", ["スロー寄り", "中間", "ハイ寄り"], "事前の位置取り予想の帯別の『実績 − 現行モデルの3着以内確率』（事前のペース予想別。0 なら織り込み済み）", "残差（pt）", OUT / "fig4.png", 0.0)
+    # 年別の推移：前（逃げ・先行）の残差を、事前のペース予想がハイ寄り／スロー寄りで
+    fig, axs = plt.subplots(1, 2, figsize=(12.5, 4.2), sharey=True)
+    for ax, (grp, lab) in zip(axs, ((0, "逃げ・先行（予想）"), (1, "差し・追込（予想）"))):
+        for pi, (pn, col) in enumerate((("ハイ寄り", "#e07b39"), ("中間", "#6a6a6a"), ("スロー寄り", "#2a9d8f"))):
+            pidx = {"ハイ寄り": 2, "中間": 1, "スロー寄り": 0}[pn]
+            xs, ys, lo, hi, thin = [], [], [], [], []
+            for y in range(2022, 2027):
+                d = m[(m["year"] == y) & (m["pp3"] == pidx) & m["bp"].notna()]
+                d = d[(d["bp"] <= 1) if grp == 0 else (d["bp"] >= 2)]
+                if len(d) < 100:
+                    continue
+                t = cell_stats(d.assign(_k=0), ["_k"], "r3").iloc[0]
+                xs.append(y); ys.append(t["mean"] * 100); lo.append((t["mean"] - 1.96 * t["se"]) * 100); hi.append((t["mean"] + 1.96 * t["se"]) * 100); thin.append(y == 2026)
+            ax.plot(xs, ys, color=col, lw=1.8, label=pn)
+            ax.fill_between(xs, lo, hi, color=col, alpha=0.12)
+            for x0, y0, th in zip(xs, ys, thin):
+                ax.plot([x0], [y0], "o", ms=6, mfc="white" if th else col, mec=col)
+        ax.axhline(0, color="#999", lw=0.8, ls="--")
+        ax.set_title(lab, fontsize=11)
+        ax.set_xticks(range(2022, 2027))
+        ax.grid(alpha=0.25)
+    axs[0].set_ylabel("実績 − 現行モデル（pt）")
+    axs[0].legend(fontsize=9)
+    fig.suptitle("事前のペース予想別に見た、位置取り予想の帯の年別の残差（2026 年は白抜き＝記述のみ）", fontsize=12)
+    fig.tight_layout(rect=(0, 0, 1, 0.92))
+    fig.savefig(OUT / "fig5.png", dpi=100)
+    plt.close(fig)
+    print("figs done")
+
+
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "prereg"
-    {"prereg": prereg, "eval": run_eval}[cmd]()
+    {"prereg": prereg, "eval": run_eval, "figs": run_figs}[cmd]()
