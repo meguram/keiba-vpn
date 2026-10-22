@@ -232,14 +232,10 @@ def apply_recovery(
     このモジュールは client に直接依存しないため、
     必要なメソッドのみをダックタイピングで呼ぶ。
     """
-    from src.scraper.client import _UA_POOL, _build_browser_headers  # 循環回避のため局所 import
-
     if tier == 1:
-        # UA ローテーションのみ
-        client._current_ua = random.choice(_UA_POOL)
-        client._session.headers.update(_build_browser_headers(client._current_ua))
+        # 待機のみ（User-Agent は変えない。偽装・回避はしない）
         logger.warning(
-            "HTTP 400 Tier1 [%s] — UA ローテーション: %s",
+            "HTTP 400 Tier1 [%s] — 待機のみ（UA・IP は変更しない）: %s",
             cause.value, url,
         )
 

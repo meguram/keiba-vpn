@@ -25,7 +25,9 @@ ENV_FLAG = "KEIBA_JRA_PUBLIC_FETCH"
 MIN_INTERVAL_SEC = float(os.environ.get("KEIBA_JRA_MIN_INTERVAL_SEC", "30"))   # 同一プロセスの最短間隔（単一接続・低頻度）
 MAX_REQUESTS_PER_DAY = int(os.environ.get("KEIBA_JRA_MAX_REQUESTS_PER_DAY", "300"))
 ALLOWED_CONTENT_TYPES = ("text/html", "text/plain")           # 画像・映像・PDF などは取らない
-USER_AGENT = "meguai-keiba/1.0 (+personal research; contact via site owner)"
+from src.scraper.identity import user_agent as _scraper_ua
+
+USER_AGENT = _scraper_ua()
 
 
 class JraFetchDisabled(RuntimeError):

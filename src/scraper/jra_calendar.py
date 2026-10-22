@@ -22,6 +22,8 @@ from typing import Any
 
 import requests
 
+from src.scraper.identity import user_agent as _scraper_ua
+
 from src.utils.keiba_logging import script_basic_config
 
 logger = logging.getLogger("scraper.jra_calendar")
@@ -49,9 +51,7 @@ class JRACalendarScraper:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.session = requests.Session()
         self.session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                          "AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "Chrome/120.0.0.0 Safari/537.36",
+            "User-Agent": _scraper_ua(),
         })
 
     def fetch_year(self, year: int) -> dict[str, Any]:

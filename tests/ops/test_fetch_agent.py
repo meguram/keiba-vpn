@@ -79,14 +79,20 @@ def test_deadline_exceeded_is_not_run():
     assert calls == [] and q.load("failed", t.task_id).outcome["reason"] == "deadline_exceeded"
 
 
-def test_access_restriction_pauses_and_does_not_retry():
+def test_access_restriction_holds_until_a_human_clears_it():
+    from src.ops import access_hold
+
     ag, q, clk, calls = make(runner=lambda t, to: fa.RunResult(rc=3, result={"errors": ["a"], "access_restriction": True}))
     t1 = ft.make_task("race-odds-t15", T0, args=RACE); q.enqueue(t1)
     t2 = ft.make_task("race-odds-t60", T0, args={"race_id": "202605040102", "date": "20261024"}); q.enqueue(t2)
     assert ag.tick().endswith(":failed")
-    assert ag.tick() == "paused"
-    clk.t += timedelta(seconds=1801)
-    assert ag._paused_until < clk()
+    assert q.load("failed", t1.task_id)                                       # 再試行せず failed
+    assert access_hold.read_hold() is not None
+    assert ag.tick() == "held"
+    clk.t += timedelta(days=1)                                                # 時間が経っても自動では再開しない
+    assert ag.tick() == "held"
+    access_hold.clear_hold()                                                  # 人が解除したあとだけ再開する
+    assert ag.tick() != "held"
 
 
 def test_weight_event_published_once():

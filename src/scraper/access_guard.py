@@ -19,6 +19,7 @@ trip すると ``AccessRestrictionDetected``（``BaseException``）を送出す�
 
 from __future__ import annotations
 
+import os
 import threading
 from datetime import datetime
 from typing import Any
@@ -71,7 +72,8 @@ class AccessGuard:
     HOSTS = ("netkeiba.com",)
 
     def __init__(self, statuses: set[int] | frozenset[int] | None = None, threshold: int = 1, *,
-                 exempt_not_found: bool = True, watch_transport_errors: bool = True, watch_block_pages: bool = True) -> None:
+                 exempt_not_found: bool = True, watch_transport_errors: bool = True, watch_block_pages: bool = True,
+                 persist: bool | None = None) -> None:
         """statuses=None は「400 以上のすべて」。集合を渡すとそのステータスだけ。"""
         self.statuses = None if statuses is None else frozenset(statuses)
         self.threshold = max(1, int(threshold))
@@ -84,6 +86,8 @@ class AccessGuard:
         self._lock = threading.Lock()
         self.seen: dict[int, int] = {}
         self.not_found = 0                     # 「ページが存在しない」として見逃した件数（参考）
+        # 制限を検知したら、キュー全体の一時停止フラグ（人が解除するまで再開しない）も立てる。None=既定（テスト実行中は立てない。KEIBA_ACCESS_GUARD_PERSIST=0 で無効）
+        self.persist = persist if persist is not None else (os.environ.get("KEIBA_ACCESS_GUARD_PERSIST", "1") != "0" and "PYTEST_CURRENT_TEST" not in os.environ)
 
     def _counts_status(self, code: int) -> bool:
         return (code >= 400) if self.statuses is None else (code in self.statuses)
@@ -93,6 +97,13 @@ class AccessGuard:
         if self._consecutive >= self.threshold and self.tripped is None:
             self.tripped = AccessRestrictionDetected(url, status, self._consecutive, kind, detail)
             self.tripped_at = datetime.now().astimezone().isoformat(timespec="seconds")
+            if self.persist:
+                try:  # 別の経路へ切り替えて続行しない。人が確認して解除するまで、キュー処理を止める
+                    from src.scraper.scrape_access_pause import write_access_pause
+
+                    write_access_pause(reason=f"アクセス制限の疑い（{kind}, HTTP {status}）: {url[:200]}")
+                except Exception:  # noqa: BLE001
+                    pass
             raise self.tripped
 
     # NetkeibaClient の応答オブザーバとして呼ばれる（ステータス判定・リトライの前）

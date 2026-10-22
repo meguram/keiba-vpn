@@ -24,6 +24,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
+from src.ops import access_hold
 from src.ops import fetch_task as ft
 from src.ops.fetch_child import RESULT_PREFIX
 from src.ops.fetch_owner import agent_tasks as owner_agent_tasks
@@ -63,6 +64,7 @@ class AgentConfig:
     poll_seconds: float = 60.0
     stale_seconds: int = 900
     access_pause_seconds: int = 1800
+    hold_on_restriction: bool = True      # 制限の疑いを受けたら、人が解除するまで新しいタスクを取らない（別経路へ切り替えない）
     python: str = sys.executable
     prune_days: int = 7
 
@@ -166,8 +168,10 @@ class FetchAgent:
         return max(1.0, min(self.cfg.poll_seconds, (nxt - now).total_seconds()))
 
     def tick(self) -> str:
-        """1 本だけ実行して終わる。戻り値: 'idle' | 'paused' | 'ran:<task_id>:<done|failed|requeued|expired|lost>'"""
+        """1 本だけ実行して終わる。戻り値: 'idle' | 'paused' | 'held'（制限の疑いで保留中。人が解除するまで動かない） | 'ran:<task_id>:<done|failed|requeued|expired|lost>'"""
         now = self.clock()
+        if self.cfg.hold_on_restriction and access_hold.read_hold() is not None:
+            return "held"
         if self._paused_until and now < self._paused_until:
             return "paused"
         self.housekeeping(now)
@@ -207,11 +211,26 @@ class FetchAgent:
         if restricted:
             outcome["access_restriction"] = True
             self._paused_until = self.clock() + timedelta(seconds=self.cfg.access_pause_seconds)
-            logger.error("アクセス制限の疑い。%d 秒 claim を止めます: %s", self.cfg.access_pause_seconds, t.task_id)
+            logger.error("アクセス制限の疑い。人が解除するまで新しいタスクを取りません（別の経路へは切り替えません）: %s", t.task_id)
+            if self.cfg.hold_on_restriction:
+                access_hold.set_hold(f"制限の疑い: task={t.task} id={t.task_id}", task_id=t.task_id)
+                self._notify_restricted(t)
             self._on_restricted(t, outcome)
         state = self.q.fail(t, outcome, self.clock(), retry=not restricted)
         self.stats["requeued" if state == "requeued" else "failed"] += 1
         return f"ran:{t.task_id}:{state}"
+
+    def _notify_restricted(self, t: ft.FetchTask) -> None:
+        """Slack に注意を出す（秘密は含めない）。通知の失敗で取得処理を止めない。"""
+        try:
+            from src.utils import slack_notify as SN
+
+            SN.notify_event("取得元のアクセス制限の疑い（取得を保留中）",
+                            [f"タスク: {t.task} ({t.task_id})", "別の User-Agent・IP・経路への切り替えは行いません。",
+                             "原因を確認し、再開してよいと判断したら VPS で `python -m src.ops.access_hold clear` を実行してください。"],
+                            severity="critical", channel="alert")
+        except Exception:  # noqa: BLE001
+            logger.exception("制限の通知に失敗")
 
     def _on_restricted(self, t: ft.FetchTask, outcome: dict[str, Any]) -> None:
         """アクセス制限の疑いを検知したとき（影モードの実行役が通知・停止の記録に使う）。"""

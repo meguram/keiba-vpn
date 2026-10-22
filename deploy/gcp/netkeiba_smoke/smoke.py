@@ -27,23 +27,17 @@ BLOCK_WORDS = ["アクセスが集中", "Access Denied", "captcha", "Forbidden",
 STOP_CODES = (403, 429)
 CONSECUTIVE_FAIL_LIMIT = 5
 
-# 本番クライアント(src/scraper/client.py の _UA_POOL の先頭 + _build_browser_headers)と同じ構成。
-# urllib は br を展開できないので Accept-Encoding だけ gzip, deflate にしている。
+# 本番クライアント(src/scraper/client.py + identity.py)と同じ方針: ブラウザを装わない固定の識別可能な UA。
+# 連絡先は環境変数 KEIBA_SCRAPER_CONTACT（メールまたは URL。イメージには焼かない。ジョブの環境変数で渡す）。
+# urllib は br を展開できないので Accept-Encoding は gzip, deflate。
+_TOKEN = "keiba-research-bot/1.0"
+_CONTACT = (os.environ.get("KEIBA_SCRAPER_CONTACT") or "").strip()
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-    "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+    "User-Agent": f"Mozilla/5.0 (compatible; {_TOKEN}; +{_CONTACT})" if _CONTACT else f"Mozilla/5.0 (compatible; {_TOKEN})",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "ja,en;q=0.8",
     "Accept-Encoding": "gzip, deflate",
     "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "Cache-Control": "max-age=0",
-    "Sec-Ch-Ua": '"Chromium";v="131", "Google Chrome";v="131", "Not?A_Brand";v="99"',
-    "Sec-Ch-Ua-Mobile": "?0",
-    "Sec-Ch-Ua-Platform": '"Windows"',
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "same-origin",
-    "Sec-Fetch-User": "?1",
 }
 
 

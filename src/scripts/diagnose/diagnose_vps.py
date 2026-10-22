@@ -150,9 +150,11 @@ def check_netkeiba(report, args):
     import urllib.error
     import urllib.request
 
+    from src.scraper.identity import user_agent as _scraper_ua
+
     req = urllib.request.Request(
         args.netkeiba_url,
-        headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"},
+        headers={"User-Agent": _scraper_ua()},
     )
     t = time.perf_counter()
     try:

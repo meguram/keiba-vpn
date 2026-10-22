@@ -9,21 +9,21 @@ netkeiba.com / smartrc.jp 用 HTTPクライアント
 - smartrc.jp アクセス対応
 - スロットリング機構 (429/503 即時停止 + 指数バックオフリトライ)
 
-Anti-Bot 対策:
-- User-Agent ローテーション (Chrome/Firefox/Edge × Windows/Mac)
-- リアルなブラウザヘッダーセット (sec-ch-ua, sec-fetch-*, etc.)
-- Referer チェーン (遷移元を自動付与)
+取得の方針（docs/operations/scraping_policy.md）:
+- User-Agent は固定の識別可能なもの（プロジェクト識別トークン＋連絡先 KEIBA_SCRAPER_CONTACT）。ブラウザを装わず、切り替えない
+- ブラウザ固有のヘッダー（sec-ch-ua, sec-fetch-* など）は付けない
+- Referer（遷移元）は通常のリンクのたどり方に合わせて付与
 - バースト制限 (短期間の連続アクセス防止)
 - セッションあたりのクールダウン (一定リクエスト数ごとに長めの休止)
 - セッションリフレッシュ (定期的に TLS/Cookie を再構築)
 
-環境変数で間隔を広げられる（ブロック回避時）:
+環境変数で間隔を広げられる（負荷を下げたいとき。制限の回避目的では使わない）:
 NETKEIBA_BURST_WINDOW, NETKEIBA_BURST_COOLDOWN_MIN/MAX,
 NETKEIBA_SESSION_COOLDOWN_INTERVAL, NETKEIBA_SESSION_COOLDOWN_MIN/MAX,
 NETKEIBA_SESSION_REFRESH_INTERVAL, NETKEIBA_THROTTLE_MIN/MAX
 NETKEIBA_MAX_CONCURRENT_REQUESTS … プロセス内の netkeiba 同時 in-flight 上限
-（キューが複数本並列で各ジョブが独立 Session を持つため、未指定時は並列度から 2〜4 程度に自動。0=制限なし・旧来の高スルー）
-NETKEIBA_GLOBAL_MAX_SLOTS … 全プロセス合算の netkeiba 同時リクエスト上限（デフォルト=4）
+（未指定時は 1。0=制限なし は使わない）
+NETKEIBA_GLOBAL_MAX_SLOTS … 全プロセス合算の netkeiba 同時リクエスト上限（デフォルト=2）
 （複数スクリプトを並行実行しても合計が常に GLOBAL_MAX_SLOTS 以下に抑えられる。0=無効）
 """
 
@@ -53,81 +53,14 @@ _ENCODING_MAP = {
 }
 
 # ---------------------------------------------------------------------------
-# User-Agent プール
+# User-Agent（固定・識別可能。ブラウザを装わない。切り替えない）
 # ---------------------------------------------------------------------------
-_UA_POOL: list[dict[str, str]] = [
-    {
-        "ua": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/131.0.0.0 Safari/537.36"
-        ),
-        "sec_ch_ua": '"Chromium";v="131", "Google Chrome";v="131", "Not?A_Brand";v="99"',
-        "platform": '"Windows"',
-    },
-    {
-        "ua": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/131.0.0.0 Safari/537.36"
-        ),
-        "sec_ch_ua": '"Chromium";v="131", "Google Chrome";v="131", "Not?A_Brand";v="99"',
-        "platform": '"macOS"',
-    },
-    {
-        "ua": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) "
-            "Gecko/20100101 Firefox/133.0"
-        ),
-        "sec_ch_ua": "",
-        "platform": "",
-    },
-    {
-        "ua": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-            "Version/18.2 Safari/605.1.15"
-        ),
-        "sec_ch_ua": "",
-        "platform": "",
-    },
-    {
-        "ua": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
-        ),
-        "sec_ch_ua": '"Chromium";v="131", "Microsoft Edge";v="131", "Not?A_Brand";v="99"',
-        "platform": '"Windows"',
-    },
-    {
-        "ua": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/130.0.0.0 Safari/537.36"
-        ),
-        "sec_ch_ua": '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
-        "platform": '"Windows"',
-    },
-    {
-        "ua": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/130.0.0.0 Safari/537.36"
-        ),
-        "sec_ch_ua": '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
-        "platform": '"macOS"',
-    },
-    {
-        "ua": (
-            "Mozilla/5.0 (X11; Linux x86_64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/131.0.0.0 Safari/537.36"
-        ),
-        "sec_ch_ua": '"Chromium";v="131", "Google Chrome";v="131", "Not?A_Brand";v="99"',
-        "platform": '"Linux"',
-    },
-]
+def _identity_ua_entry() -> dict[str, str]:
+    from src.scraper.identity import user_agent, warn_if_no_contact
+
+    warn_if_no_contact(logger)
+    return {"ua": user_agent()}
+
 
 # ---------------------------------------------------------------------------
 # Referer マッピング
@@ -267,7 +200,7 @@ def _get_netkeiba_inflight_semaphore() -> threading.Semaphore | None:
                 n = 0
         if n <= 0:
             qp = queue_load_settings.get_effective_parallel()
-            n = max(2, min(4, (qp + 2) // 3))
+            n = 1                                  # 既定は 1（取得元への負荷を最小に）。増やすときは NETKEIBA_MAX_CONCURRENT_REQUESTS を明示する
         n = max(1, min(32, n))
         _NETKEIBA_INFLIGHT_SEM = threading.Semaphore(n)
         detail = f"={raw}" if raw and raw != "0" else f"auto(parallel≈{queue_load_settings.get_effective_parallel()})"
@@ -290,11 +223,11 @@ def _get_netkeiba_inflight_semaphore() -> threading.Semaphore | None:
 #   スロット解放: ファイルを削除
 #   死活確認: ファイル名の PID が存在しない（プロセスクラッシュ）ならば古いファイルを除去
 #
-# 環境変数 NETKEIBA_GLOBAL_MAX_SLOTS で上限を変更可（デフォルト=4）
+# 環境変数 NETKEIBA_GLOBAL_MAX_SLOTS で上限を変更可（デフォルト=2）。120 秒待っても空かないときだけ best-effort で続行する
 # 0 を設定すると無効化（無制限）
 
 _GLOBAL_SLOTS_DIR = Path(__file__).resolve().parents[2] / "data" / "local" / "meta" / "netkeiba_global_slots"
-_GLOBAL_MAX_SLOTS = _env_int("NETKEIBA_GLOBAL_MAX_SLOTS", 4)
+_GLOBAL_MAX_SLOTS = _env_int("NETKEIBA_GLOBAL_MAX_SLOTS", 2)
 _GLOBAL_SLOT_LOCK = threading.Lock()   # ディレクトリ操作用スレッドロック
 
 
@@ -441,31 +374,14 @@ def _source_from_url(url: str) -> str:
 
 
 def _build_browser_headers(ua_entry: dict[str, str]) -> dict[str, str]:
-    """選択された UA エントリからリアルなブラウザヘッダーセットを構築する。"""
-    headers: dict[str, str] = {
+    """固定の識別可能な UA と、通常の HTTP クライアントが送る最小限のヘッダーを返す（ブラウザ固有のヘッダーは付けない）。"""
+    return {
         "User-Agent": ua_entry["ua"],
-        "Accept": (
-            "text/html,application/xhtml+xml,application/xml;q=0.9,"
-            "image/avif,image/webp,image/apng,*/*;q=0.8,"
-            "application/signed-exchange;v=b3;q=0.7"
-        ),
-        "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
-        "Accept-Encoding": "gzip, deflate, br",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "ja,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate",
         "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
-        "Cache-Control": "max-age=0",
     }
-
-    if ua_entry.get("sec_ch_ua"):
-        headers["Sec-Ch-Ua"] = ua_entry["sec_ch_ua"]
-        headers["Sec-Ch-Ua-Mobile"] = "?0"
-        headers["Sec-Ch-Ua-Platform"] = ua_entry.get("platform", '"Windows"')
-        headers["Sec-Fetch-Dest"] = "document"
-        headers["Sec-Fetch-Mode"] = "navigate"
-        headers["Sec-Fetch-Site"] = "same-origin"
-        headers["Sec-Fetch-User"] = "?1"
-
-    return headers
 
 
 # ── 応答オブザーバ（アクセス制限の検知など。登録が無ければ何もしない）─────────────────
@@ -528,7 +444,7 @@ class NetkeibaClient:
 
         _load_env(env_path)
 
-        self._current_ua = random.choice(_UA_POOL)
+        self._current_ua = _identity_ua_entry()
         self._raw_session = self._create_session()
 
         if cache_dir:
@@ -584,14 +500,14 @@ class NetkeibaClient:
         return session
 
     def _refresh_session(self) -> None:
-        """セッションを破棄して新しいものに切り替える。UA もローテーションする。
+        """セッションを破棄して新しいものに切り替える（TLS/接続の張り直し）。User-Agent は固定のまま変えない。
         認証クッキー (netkeiba, nkauth) は login() で再設定されるためコピーしない。"""
         _AUTH_COOKIES = {"netkeiba", "nkauth"}
         old_cookies = {k: v for k, v in self._session.cookies.items()
                        if k not in _AUTH_COOKIES}
         self._session.close()
 
-        self._current_ua = random.choice(_UA_POOL)
+        self._current_ua = _identity_ua_entry()
         self._session = self._create_session()
 
         for name, value in old_cookies.items():
@@ -711,11 +627,6 @@ class NetkeibaClient:
             referer = self._get_referer(url)
             self._session.headers["Referer"] = referer
 
-            if random.random() < 0.3:
-                self._session.headers.pop("Cache-Control", None)
-            else:
-                self._session.headers["Cache-Control"] = "max-age=0"
-
             with _netkeiba_inflight_guard(url):
                 logger.info(
                     "GET %s (attempt %d/%d)",
@@ -761,10 +672,8 @@ class NetkeibaClient:
 
             elif resp.status_code == 403:
                 logger.warning(
-                    "HTTP 403 (アクセス拒否) — UA ローテーション実施: %s", url,
+                    "HTTP 403 (アクセス拒否) — UA・IP は変えずに待機を延ばして再試行（上限あり）: %s", url,
                 )
-                self._current_ua = random.choice(_UA_POOL)
-                self._session.headers.update(_build_browser_headers(self._current_ua))
                 if attempt < _BACKOFF_MAX_RETRIES:
                     time.sleep(wait + random.uniform(5, 15))
                     wait *= _BACKOFF_FACTOR

@@ -30,6 +30,8 @@ from typing import Any
 
 import requests
 
+from src.scraper.identity import user_agent as _scraper_ua
+
 from src.utils.keiba_logging import script_basic_config
 
 logger = logging.getLogger("scraper.jra_cushion")
@@ -61,7 +63,7 @@ class JRACushionScraper:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.session = requests.Session()
         self.session.headers.update({
-            "User-Agent": "Mozilla/5.0 (compatible; keiba-ml/1.0)",
+            "User-Agent": _scraper_ua(),
         })
 
     # ── Step 1: HTMLページからPDFリンクを収集 ──

@@ -38,6 +38,8 @@ from pathlib import Path
 from typing import Any
 
 import requests
+
+from src.scraper.identity import user_agent as _scraper_ua
 from bs4 import BeautifulSoup
 
 from src.utils.keiba_logging import script_basic_config
@@ -65,9 +67,7 @@ class JRABabaLiveScraper:
         self._state_file = self.output_dir / ".last_cushion_hash"
         self.session = requests.Session()
         self.session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                          "AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "Chrome/120.0.0.0 Safari/537.36",
+            "User-Agent": _scraper_ua(),
         })
         # scrape() 1回分の構造変更の疑い（_report_structure_anomaly で蓄積し、
         # scrape() の最後にまとめて1通だけSlack通知する）。
