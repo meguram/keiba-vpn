@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "name": "tp72_female_summer_calibration",
+  "kind": "monitor_only",
+  "_doc": "tp-72 で唯一 2025 でも再現した型。買い目の規則ではなく、確率の補正項の監視用。モデル（V4/V5）にも市場にも過小評価される向きが、新しいレースでも出続けるかを同じ式で見る。章: docs/html/modeling/chapters/edge_factor_mining.html（決定ログ §62）。",
+  "definition": {"sex": "牝", "months": [7, 8], "surface": ["芝", "ダート"], "races": "JRA 平地", "min_field": 8},
+  "frozen_on": "2026-10-22",
+  "track_from": "2026-10-22",
+  "discovery_2022_2024": {"n": 14413, "win_resid_pt": 0.55, "top3_resid_pt": 0.85, "roi_win": 0.773, "roi_place": 0.790},
+  "confirm_2025": {"n": 4934, "win_z_model": 2.66, "win_z_market": 1.82, "top3_z_model": 2.75, "top3_z_market": 2.00, "roi_win": 0.738, "roi_place": 0.729},
+  "descriptive_2026": {"n": 4677, "win_z_model": 1.02, "top3_z_model": 0.76},
+  "metrics": ["実績 − モデル確率（勝ち・複勝, pt）", "実績 − 市場確率", "単勝・複勝の回収率（レース単位ブートストラップ）"],
+  "judgement": "新しいレースで残差が 0 に戻る（z<1）なら監視を終える。回収率が 100% に届く見込みはない（基準約 70% に対し +4〜7pt）ので、買い目の規則にはしない。"
+}

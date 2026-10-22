@@ -46,8 +46,9 @@ def prepare(path: Path | None = None) -> pd.DataFrame:
     d["r1"] = d["ret_win"].astype(float) / 100.0
     d["r3"] = d["ret_place"].astype(float) / 100.0
     d["odds_band"] = pd.cut(d["win_odds"], EDGES, labels=False)
-    d["b1"] = d.groupby(["year", "odds_band"])["r1"].transform("mean")
-    d["b3"] = d.groupby(["year", "odds_band"])["r3"].transform("mean")
+    d["fs_c"] = d["fs"].clip(8, 18)
+    d["b1"] = d.groupby(["year", "odds_band", "fs_c"])["r1"].transform("mean")      # 同年・同単勝オッズ帯・同頭数の平均（頭数が違うと複勝圏の確率が違うので揃える）
+    d["b3"] = d.groupby(["year", "odds_band", "fs_c"])["r3"].transform("mean")
     d["y1"] = d["win"].astype(float)
     d["y3"] = d["top3"].astype(float)
     d["rc"] = pd.factorize(d["race_id"])[0]
@@ -122,6 +123,7 @@ def boot_roi(d: pd.DataFrame, mask: np.ndarray, col: str, reps: int = 1000, seed
 def stage1(cands_path: Path, out_dir: Path) -> dict:
     d = prepare()
     nrace = int(d["rc"].max()) + 1
+    nfield = np.bincount(d["rc"].to_numpy(), minlength=nrace)
     spec = json.loads(Path(cands_path).read_text(encoding="utf-8"))
     cands = spec["candidates"]
     rows = []
@@ -133,14 +135,20 @@ def stage1(cands_path: Path, out_dir: Path) -> dict:
             mask = np.zeros(len(d), bool)
             err = str(exc)[:120]
         r = eval_mask(d, mask, nrace)
-        rows.append({**c, "stats": r, "error": err})
+        dm = mask & np.isin(d["year"].to_numpy(), DISC)
+        full = 0.0
+        if dm.sum():
+            nsel = np.bincount(d["rc"].to_numpy()[dm], minlength=nrace)
+            full = float(nsel[d["rc"].to_numpy()[dm]].__eq__(nfield[d["rc"].to_numpy()[dm]]).mean())
+        rows.append({**c, "stats": r, "error": err, "full_race_frac": full, "race_level": bool(full >= 0.9)})
     # 発見期間の検定
-    for outcome, (zm, zk) in (("win", ("z_m1", "z_k1")), ("place", ("z_m3", "z_k3"))):
+    for outcome, (zm, zk, zr) in (("win", ("z_m1", "z_k1", "z_r1")), ("place", ("z_m3", "z_k3", "z_r3"))):
         ps = []
         for r in rows:
             s = r["stats"]["disc"]
             ok = s["n"] >= MIN_RUNS and s["races"] >= MIN_RACES and not (np.isnan(s.get(zm, np.nan)) or np.isnan(s.get(zk, np.nan)))
-            z = min(s[zm], s[zk]) if ok else float("nan")
+            # 出走馬全員が当たるレース単位の条件は、勝ち（複勝）の確率の合計が 1（3）に決まっているので残差の検定が成り立たない → 回収の超過 z_r だけを検定する
+            z = (s[zr] if r["race_level"] else min(s[zm], s[zk])) if ok else float("nan")
             r[f"z_min_{outcome}"] = None if not ok else float(z)
             r[f"p_{outcome}"] = 1.0 if not ok else float(1 - phi(z))
             ps.append(r[f"p_{outcome}"])

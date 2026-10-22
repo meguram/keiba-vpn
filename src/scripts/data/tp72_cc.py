@@ -3,7 +3,7 @@
 python -m src.scripts.data.tp72_cc run [--out DIR]
 
 穴馬 = 確定の人気 9 番以下 / 単勝 12 倍以上 / 20 倍以上（3 通りを並べる）。好走 = 3 着以内 / 1 着のみ。
-対照 = 同じ年・同じ単勝オッズ帯の、好走しなかった穴馬（同年・同オッズ帯の平均好走率との差で見る）。
+対照 = 同じ年・同じ単勝オッズ帯・同じ頭数の、好走しなかった穴馬（その平均好走率との差で見る。初回実行は頭数を揃えておらず、少頭数が好走に見える対照の取り違えだったため直した）。
 記述子は tp72_desc.py の 39 個（事前に固定）。各（仕様 × 記述子 × 水準）で、その水準にいる穴馬の「好走 − 同年・同オッズ帯の平均」のレース単位クラスタ z を片側で検定し、BH。
 軽量な多変量ロジスティック回帰（L2）を併記する。市場オッズ・人気は穴馬の定義と層別にだけ使い、記述子には入れない。
 発見 2022〜2024、確認 2025 を 1 回（q<0.10 と上位）、2026 は記述統計のみ。
@@ -47,7 +47,7 @@ def wide_roi(d: pd.DataFrame, mask: np.ndarray, payoff: pd.DataFrame, partner: s
     sub["combo"] = a.astype(str).str.zfill(2) + "-" + b.astype(str).str.zfill(2)
     pw = payoff[payoff["bet_type"] == "wide"].copy()
     pw["combo"] = pw["combo"].astype(str).str.split("-").map(lambda x: f"{int(x[0]):02d}-{int(x[1]):02d}" if len(x) == 2 else "")
-    pm = pw.set_index(["race_id", "combo"])["payout"]
+    pm = pw.drop_duplicates(["race_id", "combo"]).set_index(["race_id", "combo"])["payout"]
     idx = pd.MultiIndex.from_arrays([sub["race_id"], sub["combo"]])
     ret = pm.reindex(idx).fillna(0.0).to_numpy() / 100.0
     rc = pd.factorize(sub["race_id"])[0]
@@ -71,7 +71,7 @@ def run(out_dir: Path) -> dict:
     for un, uf in UNIVERSES.items():
         um = uf(d).to_numpy()
         for on, oc in OUTCOMES.items():
-            base = d.loc[um].groupby(["year", "odds_band"])[oc].transform("mean")
+            base = d.loc[um].groupby(["year", "odds_band", "fs_c"])[oc].transform("mean")      # 同じ年・同オッズ帯・同頭数の穴馬の平均好走率（頭数を揃えないと少頭数が好走に見える）
             e = pd.Series(0.0, index=d.index)
             e.loc[um] = d.loc[um, oc] - base
             d["_e"] = e
