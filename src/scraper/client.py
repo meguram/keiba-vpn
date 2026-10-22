@@ -916,7 +916,13 @@ class NetkeibaClient:
     # ------------------------------------------------------------------
 
     def close(self):
-        self._session.close()
+        # ログイン保留中（まだ一度も通信していない）なら、閉じるためだけにログインしない。
+        # 以前は self._session に触れて遅延ログインが走り、作業の無い定期ジョブ（完了済みのバックフィルなど）が
+        # ログイン＋会員ページの確認（指数表の取得）だけを毎回行っていた。
+        raw = getattr(self, "_raw_session", None)
+        self._login_pending = False
+        if raw is not None:
+            raw.close()
 
     def __enter__(self):
         return self

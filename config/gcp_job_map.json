@@ -235,9 +235,9 @@
    "desc": "ラップ予想のモデル"
   },
   "fitted_artifacts": {
-    "env": "KEIBA_FITTED_ARTIFACTS_DIR",
-    "local_path": "data/local/modeling/fitted_artifacts_stage",
-    "desc": "当て込まれた係数・補正表・集計表・重みの一式（config/fitted_artifacts.txt）。リポジトリ相対のパスのまま束ね、取得後は scripts/ops/fitted_artifacts.sh unpack で重ねて置く"
+   "env": "KEIBA_FITTED_ARTIFACTS_DIR",
+   "local_path": "data/local/modeling/fitted_artifacts_stage",
+   "desc": "当て込まれた係数・補正表・集計表・重みの一式（config/fitted_artifacts.txt）。リポジトリ相対のパスのまま束ね、取得後は scripts/ops/fitted_artifacts.sh unpack で重ねて置く"
   },
   "final_odds": {
    "local_path": "models/final_odds_bundle.json",
@@ -2886,17 +2886,17 @@
   },
   {
    "id": "backfill-2026-fast",
-   "desc": "過去データの取りこぼし補填（2026 年 fast）",
+   "desc": "過去データの取りこぼし補填（2026 年 fast）（週1）",
    "destination": "host",
    "phase": null,
    "wave": null,
    "origin": {
     "tag": "KEIBA-VPN-ALL",
     "cron_job_id": "backfill-2026-fast",
-    "cron_utc": "0 15 * * *",
+    "cron_utc": "0 15 * * 0",
     "script": "src/scraper/backfill.py"
    },
-   "reason": "長期バックフィルは自宅 IP のホストに残す",
+   "reason": "2026-10-22 cron監査: 毎日→週1回に減らす(新しい開催日の補填のみ)。長期バックフィルは自宅 IP のホストに残す",
    "enabled": true,
    "blockers": [],
    "ready": true
@@ -2904,7 +2904,7 @@
   {
    "id": "backfill-2025-fast",
    "desc": "過去データの取りこぼし補填（2025 年 fast）",
-   "destination": "host",
+   "destination": "retire",
    "phase": null,
    "wave": null,
    "origin": {
@@ -2913,15 +2913,15 @@
     "cron_utc": "0 16 * * *",
     "script": "src/scraper/backfill.py"
    },
-   "reason": "長期バックフィルは自宅 IP のホストに残す",
-   "enabled": true,
+   "reason": "廃止(2026-10-22 cron監査): 未処理が0件で完了済み。毎回ログインと会員ページの確認だけを行っていた。新しい欠けは recent-retry・weekly-update が補う",
+   "enabled": false,
    "blockers": [],
    "ready": true
   },
   {
    "id": "backfill-2024-fast",
    "desc": "過去データの取りこぼし補填（2024 年 fast）",
-   "destination": "host",
+   "destination": "retire",
    "phase": null,
    "wave": null,
    "origin": {
@@ -2930,15 +2930,15 @@
     "cron_utc": "0 17 * * *",
     "script": "src/scraper/backfill.py"
    },
-   "reason": "長期バックフィルは自宅 IP のホストに残す",
-   "enabled": true,
+   "reason": "廃止(2026-10-22 cron監査): 未処理が0件で完了済み。毎回ログインと会員ページの確認だけを行っていた。新しい欠けは recent-retry・weekly-update が補う",
+   "enabled": false,
    "blockers": [],
    "ready": true
   },
   {
    "id": "backfill-2023-fast",
    "desc": "過去データの取りこぼし補填（2023 年 fast）",
-   "destination": "host",
+   "destination": "retire",
    "phase": null,
    "wave": null,
    "origin": {
@@ -2947,15 +2947,15 @@
     "cron_utc": "0 18 * * *",
     "script": "src/scraper/backfill.py"
    },
-   "reason": "長期バックフィルは自宅 IP のホストに残す",
-   "enabled": true,
+   "reason": "廃止(2026-10-22 cron監査): 未処理が0件で完了済み。毎回ログインと会員ページの確認だけを行っていた。新しい欠けは recent-retry・weekly-update が補う",
+   "enabled": false,
    "blockers": [],
    "ready": true
   },
   {
    "id": "backfill-2022-fast",
    "desc": "過去データの取りこぼし補填（2022 年 fast）",
-   "destination": "host",
+   "destination": "retire",
    "phase": null,
    "wave": null,
    "origin": {
@@ -2964,24 +2964,24 @@
     "cron_utc": "0 19 * * *",
     "script": "src/scraper/backfill.py"
    },
-   "reason": "長期バックフィルは自宅 IP のホストに残す",
-   "enabled": true,
+   "reason": "廃止(2026-10-22 cron監査): 未処理が0件で完了済み。毎回ログインと会員ページの確認だけを行っていた。新しい欠けは recent-retry・weekly-update が補う",
+   "enabled": false,
    "blockers": [],
    "ready": true
   },
   {
    "id": "backfill-2026-full",
-   "desc": "過去データの取りこぼし補填（2026 年 full）",
+   "desc": "過去データの取りこぼし補填（2026 年 full）（週1）",
    "destination": "host",
    "phase": null,
    "wave": null,
    "origin": {
     "tag": "KEIBA-VPN-ALL",
     "cron_job_id": "backfill-2026-full",
-    "cron_utc": "50 22 * * *",
+    "cron_utc": "50 22 * * 0",
     "script": "src/scraper/backfill.py"
    },
-   "reason": "長期バックフィルは自宅 IP のホストに残す",
+   "reason": "2026-10-22 cron監査: 毎日→週1回に減らす(新しい開催日の補填のみ)。長期バックフィルは自宅 IP のホストに残す",
    "enabled": true,
    "blockers": [],
    "ready": true
@@ -2989,7 +2989,7 @@
   {
    "id": "backfill-2025-full",
    "desc": "過去データの取りこぼし補填（2025 年 full）",
-   "destination": "host",
+   "destination": "retire",
    "phase": null,
    "wave": null,
    "origin": {
@@ -2998,15 +2998,15 @@
     "cron_utc": "0 23 * * *",
     "script": "src/scraper/backfill.py"
    },
-   "reason": "長期バックフィルは自宅 IP のホストに残す",
-   "enabled": true,
+   "reason": "廃止(2026-10-22 cron監査): 未処理が0件で完了済み。毎回ログインと会員ページの確認だけを行っていた。新しい欠けは recent-retry・weekly-update が補う",
+   "enabled": false,
    "blockers": [],
    "ready": true
   },
   {
    "id": "backfill-2024-full",
    "desc": "過去データの取りこぼし補填（2024 年 full）",
-   "destination": "host",
+   "destination": "retire",
    "phase": null,
    "wave": null,
    "origin": {
@@ -3015,8 +3015,8 @@
     "cron_utc": "0 0 * * *",
     "script": "src/scraper/backfill.py"
    },
-   "reason": "長期バックフィルは自宅 IP のホストに残す",
-   "enabled": true,
+   "reason": "廃止(2026-10-22 cron監査): 未処理が0件で完了済み。毎回ログインと会員ページの確認だけを行っていた。新しい欠けは recent-retry・weekly-update が補う",
+   "enabled": false,
    "blockers": [],
    "ready": true
   },
@@ -3090,8 +3090,8 @@
   },
   {
    "id": "horse-remarks-daily",
-   "desc": "馬の備考（毎日 03:00 JST）",
-   "destination": "host",
+   "desc": "馬の備考（廃止）",
+   "destination": "retire",
    "phase": null,
    "wave": null,
    "origin": {
@@ -3100,15 +3100,15 @@
     "cron_utc": "0 18 * * *",
     "script": "scripts/cron/horse_remarks_daily.sh"
    },
-   "reason": "VPS の許可リストに無い。03:00 はメンテナンス窓と重なるので時刻の見直しも別途",
-   "enabled": true,
+   "reason": "廃止(2026-10-22 cron監査): 現行モデルで採用ゼロ(feature_gap_audit)。1日 500〜900 件の馬ページ取得に見合わない。必要なら scripts/cron/horse_remarks_daily.sh を手動実行",
+   "enabled": false,
    "blockers": [],
    "ready": true
   },
   {
    "id": "sporthorse-births-nightly",
    "desc": "誕生日データ（外部サイト・セッション依存）",
-   "destination": "host",
+   "destination": "retire",
    "phase": null,
    "wave": null,
    "origin": {
@@ -3117,8 +3117,8 @@
     "cron_utc": "0 13 * * *",
     "script": "scripts/cron/sporthorse_births_nightly.sh"
    },
-   "reason": "外部サイトのセッションを使うためホストに残す",
-   "enabled": true,
+   "reason": "廃止(2026-10-22 cron監査): 研究専用で、活性値の仮説は不採用の結論済み。外部サイトのセッション依存。必要なときは手動実行",
+   "enabled": false,
    "blockers": [],
    "ready": true
   },
