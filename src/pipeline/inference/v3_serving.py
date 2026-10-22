@@ -73,8 +73,8 @@ def v6_enabled() -> bool:
 
 def v6_paths() -> dict:
     """v6 のバンドル・前段 S3B・追い切りの基準表・RB の履歴状態（KEIBA_V6_BUNDLE / KEIBA_V6_STAGE / KEIBA_V5_TL_REF / KEIBA_V6_RB_STATE）。"""
-    bundle = Path(os.environ.get("KEIBA_V6_BUNDLE") or WORK / "final_v6/bundle_v6_2025")
-    stage = Path(os.environ.get("KEIBA_V6_STAGE") or WORK / "final_stage" / ("v6_b_2024" if bundle.name.endswith("2024") else "v6_b_2025"))
+    bundle = Path(os.environ.get("KEIBA_V6_BUNDLE") or WORK / "final_v6e/bundle_v6_2025")
+    stage = Path(os.environ.get("KEIBA_V6_STAGE") or WORK / "final_stage" / ("v6_e_2024" if bundle.name.endswith("2024") else "v6_e_2025"))
     tl_ref = Path(os.environ.get("KEIBA_V5_TL_REF") or WORK.parent / "training_pipeline_v4/tp35/tl_reference_v2.parquet")
     rb = Path(os.environ.get("KEIBA_V6_RB_STATE") or Path(os.environ.get("KEIBA_INFERENCE_DIR") or REPO_ROOT / "data/local/inference") / "state" / "rb_v6")
     return {"bundle": bundle, "stage": stage, "tl_reference": tl_ref, "rb_state": rb}

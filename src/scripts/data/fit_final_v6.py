@@ -2,7 +2,7 @@
 
 V6_STAGE=b V5_GROUPS=CY,BEST,RB python -m src.scripts.data.fit_final_v6 --fit-end 2024   # 2020〜2024 で学習 → bundle_v6_2024 と test 2025 の予測（一度だけ。選択には使わない）
 V6_STAGE=b V5_GROUPS=CY,BEST,RB python -m src.scripts.data.fit_final_v6 --fit-end 2025   # 2020〜2025 の全行で学習 → bundle_v6_2025（2026 年は使わない）
-出力: data/local/modeling/training_pipeline/final_v6/bundle_v6_{fit_end}/、評価は final_eval_v6/（final_v5 は触らない）
+出力: data/local/modeling/training_pipeline/final_v6{V6_TAG}/bundle_v6_{fit_end}/、評価は final_eval_v6{V6_TAG}/（final_v5 は触らない）
 アンサンブルの重み: tp27_v6/ens/v6.json（v6_members の LOYO）。環境変数: V6_STAGE, V5_GROUPS, V5_FIT_THREADS（既定 6）
 前段 S3B は expanding の OOF（学習行）。推論用の全期間版の前段モデルは別（serving_v6）。
 """
@@ -30,9 +30,10 @@ from src.scripts.data import v5_select_eval as sel  # noqa: E402
 from src.scripts.data import v6_eval as ev  # noqa: E402
 
 KEY = f4.KEY
-OUT = f4.OLD / "final_v6"
-EVAL = f4.OLD / "final_eval_v6"
-TP27_V6 = f4.V4 / "tp27_v6"
+TAG = os.environ.get("V6_TAG", "")
+OUT = f4.OLD / f"final_v6{TAG}"
+EVAL = f4.OLD / f"final_eval_v6{TAG}"
+TP27_V6 = f4.V4 / f"tp27_v6{TAG}"
 f5.TP27_V5 = TP27_V6                                   # load_spec_v5 が読む LOYO の場所を v6 に向ける
 V6_GROUPS = {"PT", "GB", "CB", "OWNN", "RS59", *ev.EXTERNAL}
 

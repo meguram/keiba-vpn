@@ -17,7 +17,8 @@ from pathlib import Path
 import pandas as pd
 
 V = Path(__file__).resolve().parents[3] / "data/local/modeling/training_pipeline_v4"
-OUT = V / "tp27_v6"
+TAG = os.environ.get("V6_TAG", "")                     # 前段の版などで出力先を分ける（例 e → tp27_v6e）
+OUT = V / f"tp27_v6{TAG}"
 os.environ["TP27_OUT"] = str(OUT)
 if os.environ.get("V6_STAGE"):
     from src.scripts.data import v6_work

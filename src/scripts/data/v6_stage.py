@@ -3,6 +3,7 @@
 python -m src.scripts.data.v6_stage build a    # a: 入力 = base 175 列 + tl_（再取得版）+ CY（追い切りの新しい部分だけを入れ替える）
 python -m src.scripts.data.v6_stage build b    # b: a + 追走難度 v2（EASE2）+ ラップ予想（LAP）+ 位置取り予想（pf_early など）
 python -m src.scripts.data.v6_stage build d    # d: b の入力で、ペース補正後の走破力（時計・上がりからレース全体のペースの効果を引いた目的変数）を予測（s_adj_time / s_adj_l3f、追加列のみ）
+python -m src.scripts.data.v6_stage build e    # e: b から本番の保存値で写せない列（serving_v6.UNMAPPED）を外した前段（推論で再現できる版）
 python -m src.scripts.data.v6_stage build c    # c: b + 『レース全体のペース（結果由来）』を入力にして学習し、予測時はスロー/ミドル/ハイに差し替えて
                                               #    ラップ予想のシナリオ確率で混合（シナリオ条件付き。s_time_exp 等の追加列も出す）
 出力: $V6_OUT（既定 data/local/modeling/training_pipeline_v4/v6）/s3x_{a,b,c}.parquet
@@ -78,8 +79,13 @@ def scenario_values(T: pd.DataFrame) -> dict[str, float]:
 def make_inputs(variant: str, df: pd.DataFrame, T: pd.DataFrame, base: list[str]) -> pd.DataFrame:
     """前段の入力行列。a: base + tl_ 再取得 + CY。b/c/d: a + 追走難度 v2・ラップ予想・位置取り予想。c は学習用にペースの結果由来の列を足す。"""
     X = pd.concat([df[base].copy(), new_inputs(df)], axis=1)
-    if variant in ("b", "c", "d"):
-        X = pd.concat([X, forecast_inputs(df)], axis=1)
+    if variant in ("b", "c", "d", "e"):
+        F = forecast_inputs(df)
+        if variant == "e":                      # 本番の保存値から写せる列だけ（serving_v6.UNMAPPED を外す。推論で再現できる前段）
+            from src.pipeline.features.serving_v6 import UNMAPPED
+
+            F = F.drop(columns=[c for c in UNMAPPED if c in F.columns])
+        X = pd.concat([X, F], axis=1)
     if variant == "c":
         X["v6_pace_score"] = T["r_pace_bal"].to_numpy(dtype=float)
     for c in X.columns:
@@ -164,7 +170,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     sp = ap.add_subparsers(dest="cmd", required=True)
     b = sp.add_parser("build")
-    b.add_argument("variant", choices=["a", "b", "c", "d"])
+    b.add_argument("variant", choices=["a", "b", "c", "d", "e"])
     a = ap.parse_args()
     build(a.variant)
     return 0
