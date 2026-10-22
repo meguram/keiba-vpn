@@ -81,7 +81,7 @@ export function PaidBets({
 
       {rec.bets.length === 0 ? (
         <div style={{ padding: 24, textAlign: "center", color: "var(--text-dim)", border: "1px dashed var(--border)", borderRadius: 8 }}>
-          このレースは推奨しない水準です。買い目は出しません（見送り）。
+          このレースは見送りの水準です。買い目は出しません。
         </div>
       ) : (
         <div style={{ display: "grid", gap: 10 }}>

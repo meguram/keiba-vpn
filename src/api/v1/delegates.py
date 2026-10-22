@@ -364,7 +364,7 @@ def _value_row_paid(race: dict[str, Any], payload: dict[str, Any], code: int) ->
     base = {"race_id": race["race_id"], "round": race.get("round"), "venue": race.get("venue"), "race_name": race.get("race_name")}
     if code != 200:
         return {**base, "level": "none", "reason": "計算できません", "n_bets": 0, "tier": None}
-    tier = payload.get("race_tier") or {"level": 0, "label": "推奨しない"}
+    tier = payload.get("race_tier") or {"level": 0, "label": "見送り"}
     return {**base, "level": _PAID_LEVEL_STYLE.get(int(tier.get("level") or 0), "pass"), "tier": tier,
             "n_bets": len(payload.get("bets") or [])}
 

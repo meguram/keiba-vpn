@@ -98,7 +98,7 @@ def test_paid_payload_has_no_numbers_that_reveal_odds(mode):
         assert b["role"] in ("main", "cover") and b["yen"] == b["units"] * 100
         assert {k for k in b} .isdisjoint({"odds", "ev", "prob", "bet_amount", "kelly_fraction"})
     assert payload["total_yen"] == sum(b["yen"] for b in payload["bets"])
-    assert payload["disclaimer"] and payload["legend"][0]["label"] == "推奨しない"
+    assert payload["disclaimer"] and payload["legend"][0]["label"] == "見送り"
 
 
 def test_mode_a_uses_no_odds_at_all():
