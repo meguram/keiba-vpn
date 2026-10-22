@@ -322,8 +322,16 @@ def _value_row(race: dict[str, Any], payload: dict[str, Any], code: int) -> dict
     ev_key = "ev_calibrated" if roi_cal is not None else "ev"
     top = max(cands, key=lambda c: c.get(ev_key) or 0) if cands else None
     pcal = bool((payload.get("prob_calibration") or {}).get("applied"))
+    try:  # 開発者の表示にも、会員と同じ 5 段階の推奨度（見送り〜最注目）を添える（較正後の期待回収率から）
+        from src.utils import paid_zone as PZ
+
+        tl = PZ.level_for_roi(roi if cands else None, "C")
+        tier = next((dict(t) for t in PZ.tiers() if int(t.get("level", -1)) == tl), {"level": tl, "label": ""})
+    except Exception:  # noqa: BLE001
+        tier = None
     return {
         **base,
+        "tier": tier,
         "level": value_level(roi, len(cands), pcal),
         "prob_calibrated": pcal,
         "expected_roi": None if roi is None else round(roi, 3),

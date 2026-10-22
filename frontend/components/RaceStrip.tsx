@@ -136,7 +136,9 @@ export function RaceStrip({
               >
                 <span style={{ fontSize: 14, fontWeight: on || lv === "hot" ? 800 : 600 }}>{lv === "hot" ? `★${roundOf(r)}` : roundOf(r)}</span>
                 <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.95 }}>
-                  {v?.expected_roi != null && lv !== "pass" ? `${(v.expected_roi * 100).toFixed(0)}%` : lv === "pass" ? "見送" : "–"}
+                  {v?.tier?.label
+                    ? v.tier.label
+                    : v?.expected_roi != null && lv !== "pass" ? `${(v.expected_roi * 100).toFixed(0)}%` : lv === "pass" ? "見送" : "–"}
                 </span>
               </button>
             );
