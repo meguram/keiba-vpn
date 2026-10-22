@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { USE_MOCK, getMockRaceDetail, getMockPredictions, getMockTdData, getMockMeguPredicted } from "@/lib/mock";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
-import { MemberLockCard, MemberLockNote } from "@/components/upgrade/MemberLock";
+import { MemberLockCard, MemberLockNote, PublicModeNote } from "@/components/upgrade/MemberLock";
 import { featureEnabled } from "@/lib/features";
 import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import ProbCalNote from "@/components/ProbCalNote";
@@ -157,6 +157,7 @@ type PredEntry = {
 };
 
 type PredData = {
+  access?: { public_mode?: boolean; withheld?: string[] };
   pace_forecast?: PaceForecast;
   gate_bias?: GateBias;
   status?: string;
@@ -684,6 +685,7 @@ export default function RaceDetailPage() {
       </div>
 
       {hasPred && lock && <MemberLockNote />}
+      <PublicModeNote access={predData?.access} />
       {hasPred && <ProbCalNote pc={predData?.prob_calibration} preds={predData?.predictions} />}
 
       {!hasPred && (

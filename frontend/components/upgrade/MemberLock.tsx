@@ -28,3 +28,17 @@ export function MemberLockCard({ title }: { title: string }) {
     </div>
   );
 }
+
+/** 公開準備中の案内。サーバが公開モードで B（事実）・O（市場オッズ由来）を落としたときだけ出す（access.public_mode）。 */
+export type PublicAccess = { public_mode?: boolean; withheld?: string[] } | null | undefined;
+
+export function PublicModeNote({ access }: { access: PublicAccess }) {
+  if (!access?.public_mode) return null;
+  const w = access.withheld ?? [];
+  const parts = [w.includes("B") ? "出馬表・結果の詳細" : null, w.includes("O") ? "オッズ・期待値・買い目" : null, "指数・パドック・調教・過去走"].filter(Boolean);
+  return (
+    <p data-testid="public-mode-note" style={{ margin: "8px 0", padding: "8px 12px", fontSize: 12, borderRadius: 8, background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.3)", color: "var(--text-dim)", lineHeight: 1.6 }}>
+      ℹ️ 公開準備中のため、{parts.join("・")}は表示していません。勝率・複勝率・めぐAI印などの自前の予測は表示します。
+    </p>
+  );
+}

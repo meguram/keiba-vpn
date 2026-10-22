@@ -49,8 +49,45 @@ def _rank_by_win_prob(rows: list[dict]) -> list[dict]:
     return rows
 
 
+def _redact_predictions_public_mode(resp: dict[str, Any], role: str) -> dict[str, Any]:
+    """公開モード（config/public_fields.json の mode=public）: 開発者以外には A 分類（自前計算）だけ。B/C/O は release の許可まで出さない。"""
+    from src.utils import public_policy as P
+
+    top_ok, entry_ok = P.top_allowed_fields(role), P.entry_allowed_fields(role)
+    out = {k: v for k, v in resp.items() if k in top_ok}
+    rows = [{k: e[k] for k in entry_ok if k in e} for e in (resp.get("predictions") or []) if isinstance(e, dict)]
+    if "predictions" in resp:
+        out["predictions"] = _rank_by_win_prob(rows)
+    out["access"] = {"tier": "public" if role == "anonymous" else "member", "public_mode": True, "member_only": sorted(LOCKED_GROUPS),
+                     "withheld": _withheld()}
+    return out
+
+
+def _withheld() -> list[str]:
+    """画面に『公開準備中』と出す分類（B=事実・C=取得元固有・O=市場オッズ由来のうち、まだ出していないもの）。"""
+    from src.utils import public_policy as P
+
+    w = ["C"]
+    if not P.b_allowed():
+        w.append("B")
+    if not P.odds_allowed():
+        w.append("O")
+    return w
+
+
+def redact_predictions_member(resp: dict[str, Any]) -> dict[str, Any]:
+    """会員向け。公開モードのときだけ、B/C/O 分類を落とす。private モードでは従来どおり何も落とさない。"""
+    from src.utils import public_policy as P
+
+    return _redact_predictions_public_mode(resp, "member") if P.is_public_mode() else resp
+
+
 def redact_predictions(resp: dict[str, Any]) -> dict[str, Any]:
     """匿名向けの予測応答。許可リストの項目だけ残し、会員限定の項目は『無い』ものとして返す。"""
+    from src.utils import public_policy as P
+
+    if P.is_public_mode():
+        return _redact_predictions_public_mode(resp, "anonymous")
     out = {k: v for k, v in resp.items() if k in PUBLIC_TOP_FIELDS}
     rows = []
     for e in resp.get("predictions") or []:
@@ -70,8 +107,45 @@ RACE_DETAIL_MEMBER_KEYS = (
 SHUTUBA_MEMBER_ENTRY_KEYS = ("odds", "popularity")
 
 
+def _redact_race_detail_public_mode(resp: dict[str, Any]) -> dict[str, Any]:
+    """公開モードのレース詳細（開発者以外）。許可リスト方式: 名簿に無いキーは出さない。C/O は常に落とし、B は release の許可まで出さない。"""
+    from src.utils import public_policy as P
+
+    rd = P.section("race_detail")
+    out: dict[str, Any] = {}
+    if P.identifiers_allowed():
+        out.update({k: resp[k] for k in rd.get("header_identifiers", []) if k in resp})
+    else:
+        out["race_id"] = resp.get("race_id")
+    if P.b_allowed():
+        card = resp.get("race_shutuba")
+        if isinstance(card, dict) and isinstance(card.get("entries"), list):
+            keep = set(rd.get("shutuba_entry_B", []))
+            out["race_shutuba"] = {**{k: v for k, v in card.items() if k != "entries"},
+                                   "entries": [{k: v for k, v in e.items() if k in keep} for e in card["entries"] if isinstance(e, dict)]}
+        res = resp.get("race_result")
+        if isinstance(res, dict) and isinstance(res.get("entries"), list):
+            keep = set(rd.get("result_entry_B", []))
+            out["race_result"] = {**{k: v for k, v in res.items() if k not in ("entries", "payoff")},
+                                  "entries": [{k: v for k, v in e.items() if k in keep} for e in res["entries"] if isinstance(e, dict)]}
+            if P.odds_allowed() and "payoff" in res:
+                out["race_result"]["payoff"] = res["payoff"]
+    out["access"] = {"tier": "public", "public_mode": True, "member_only": sorted(LOCKED_GROUPS), "withheld": _withheld()}
+    return out
+
+
+def redact_race_detail_member(resp: dict[str, Any]) -> dict[str, Any]:
+    from src.utils import public_policy as P
+
+    return _redact_race_detail_public_mode(resp) if P.is_public_mode() else resp
+
+
 def redact_race_detail(resp: dict[str, Any]) -> dict[str, Any]:
     """匿名向けのレース詳細。出馬表・結果・馬の事実は残し、オッズ・指数・パドック等の付随情報は落とす。"""
+    from src.utils import public_policy as P
+
+    if P.is_public_mode():
+        return _redact_race_detail_public_mode(resp)
     out = {k: v for k, v in resp.items() if k not in RACE_DETAIL_MEMBER_KEYS}
     card = out.get("race_shutuba")
     if isinstance(card, dict) and isinstance(card.get("entries"), list):
@@ -87,6 +161,9 @@ def redact_race_detail(resp: dict[str, Any]) -> dict[str, Any]:
     out["access"] = {"tier": "public", "member_only": sorted(LOCKED_GROUPS)}
     return out
 
+
+# 会員（開発者以外）向けの redactor。private モードでは何も落とさない（従来どおり）
+MEMBER_REDACTORS = {redact_predictions: redact_predictions_member, redact_race_detail: redact_race_detail_member}
 
 # ── 会員限定のパス（匿名は 401）──
 
@@ -106,6 +183,18 @@ _MEMBER_ONLY_PATTERNS = [re.compile(p) for p in (
 def member_only_path(path: str) -> bool:
     return any(p.search(path) for p in _MEMBER_ONLY_PATTERNS)
 
+
+def owner_only_path(path: str) -> bool:
+    """公開モードで、開発者（所有者・私的利用）だけが入れるパス（取得元固有・市場オッズ由来の情報）。"""
+    from src.utils import public_policy as P
+
+    return P.owner_only_path(path)
+
+
+OWNER_REQUIRED_BODY = {
+    "error": "この情報は公開準備中です。",
+    "reason": "not_public_yet",
+}
 
 MEMBER_REQUIRED_BODY = {
     "error": "この情報は会員限定です。ログインしてください。",

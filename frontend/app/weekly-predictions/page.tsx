@@ -6,7 +6,7 @@ import Link from "next/link";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockPredictions } from "@/lib/mock";
 import { featureEnabled } from "@/lib/features";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
-import { MemberLockNote } from "@/components/upgrade/MemberLock";
+import { MemberLockNote, PublicModeNote } from "@/components/upgrade/MemberLock";
 import { LEVEL_STYLE, RaceValue, useRaceValues, valueTitle } from "@/lib/raceValue";
 import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import { WeekPicker } from "@/components/WeekPicker";
@@ -95,6 +95,7 @@ type PredEntry = {
 };
 
 type PredData = {
+  access?: { public_mode?: boolean; withheld?: string[] };
   status?: string;
   has_prediction?: boolean;
   model_description?: string;
@@ -724,6 +725,7 @@ function RacePanel({
         )}
         {pred && !failed && tab === "predict" && <PredictionSourceBadge source={pred.prediction_source} note={pred.prediction_note} />}
         {pred && !failed && tab === "predict" && locked && preds.length > 0 && <MemberLockNote />}
+        {pred && !failed && <PublicModeNote access={pred.access} />}
         {pred && !failed && tab === "predict" && <ProbCalNote pc={pred.prob_calibration} preds={preds} />}
         {pred && !failed && tab === "predict" && (
           <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} growthMeta={pred.growth_meta} />

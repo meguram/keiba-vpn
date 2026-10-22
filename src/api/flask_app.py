@@ -83,6 +83,14 @@ def create_app() -> Flask:
             resp = jsonify(MEMBER_REQUIRED_BODY)
             resp.status_code = 401
             return resp
+        # 公開モードでは、取得元固有・市場オッズ由来の情報のパスは開発者（所有者）だけ
+        from src.api.flask_auth import is_logged_in as is_developer_session
+        from src.api.tier import OWNER_REQUIRED_BODY, owner_only_path
+
+        if request.method != "OPTIONS" and owner_only_path(request.path) and not is_developer_session():
+            resp = jsonify(OWNER_REQUIRED_BODY)
+            resp.status_code = 403
+            return resp
         return None
 
     # 毎日のメンテナンス時間帯（KEIBA_MAINTENANCE_WINDOW=1 のときだけ働く。config/maintenance.json）

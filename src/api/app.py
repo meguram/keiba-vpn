@@ -73,7 +73,7 @@ from src.api.auth import (
     COOKIE_NAME,
 )
 from src.utils.keiba_logging import standard_log_formatter
-from src.api.tier import MEMBER_REQUIRED_BODY, member_only_path, redact_predictions, redact_race_detail
+from src.api.tier import MEMBER_REDACTORS, MEMBER_REQUIRED_BODY, OWNER_REQUIRED_BODY, member_only_path, owner_only_path, redact_predictions, redact_race_detail
 from src.config.ports import mlflow_tracking_uri as _default_mlflow_uri
 
 
@@ -826,6 +826,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # 会員限定のパス（勝率・複勝率より先の情報）は匿名に 401。仕様: docs/operations/tiered_access.md
         if request.method != "OPTIONS" and member_only_path(path) and not is_member(request):
             return JSONResponse(MEMBER_REQUIRED_BODY, status_code=401)
+        # 公開モードでは、取得元固有・市場オッズ由来の情報のパスは開発者（所有者）だけ。仕様: docs/operations/public_data_inventory.md
+        if request.method != "OPTIONS" and owner_only_path(path) and not is_developer(request):
+            return JSONResponse(OWNER_REQUIRED_BODY, status_code=403)
         if requires_auth(path, request.method) and not is_developer(request):
             reason = classify_session(request)  # "none" | "expired" | "invalid"
             if path.startswith("/api/"):
@@ -6788,8 +6791,12 @@ def _race_detail_cache_set(race_id: str, value: tuple) -> None:
 
 def _tiered_json(request: Request, resp, redactor):
     """会員・開発者はそのまま、匿名は redactor で会員限定の項目を落とした JSON を返す（サーバ側で落とす）。"""
+    if is_developer(request):
+        return resp                                   # 所有者（開発者）は全項目（私的利用）
     if is_member(request):
-        return resp
+        redactor = MEMBER_REDACTORS.get(redactor)     # 会員: private モードでは従来どおり全項目、公開モードでは B/C/O を落とす
+        if redactor is None:
+            return resp
     body = getattr(resp, "body", None)
     if body is None:
         return resp
