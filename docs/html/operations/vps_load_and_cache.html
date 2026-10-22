@@ -66,12 +66,12 @@ pre { background:var(--code); border:1px solid var(--border); border-radius:8px;
 <tr><td>ホスト側（API の内側）</td><td class="ok">あり</td><td>予測は LRU → ディスク → GCS のキャッシュ。レース価値は 30 秒のメモリキャッシュ。</td></tr>
 </table>
 
-<h2>4. 改善の候補（安全なものから）</h2>
+<h2>4. 改善（2026-10-22 に実施）</h2>
 <ol>
-<li><b>画像（<code>/data/image/</code>）に nginx の <code>proxy_cache</code> を入れる。</b>公開してよい静的な画像で、利用者ごとに変わらない。長い有効期限で、ホストへの往復を減らせる。</li>
-<li><b>API の GET に <code>Cache-Control: private, max-age=30</code> と <code>ETag</code> を付ける。</b>ブラウザごとの再利用だけなので、会員と匿名の応答が混ざる心配がない。</li>
-<li>nginx で API の応答を共有キャッシュにする案は<b>推奨しない</b>。応答は会員区分（匿名・会員・開発者）で内容が違うため、鍵にセッションの区分を入れないと、会員向けの内容が匿名に出る事故になる。</li>
-<li>Next.js の systemd の上限（MemoryHigh 160M）は、高負荷時の最大 140MB に近い。余裕を持たせるなら 200M に上げる案がある（VPS の予算内）。</li>
+<li><b>画像（<code>/data/image/</code>）に nginx の <code>proxy_cache</code> を入れた（実施済み）。</b>7 日までキャッシュ。同じ画像を 3 回取得して、1 回目 MISS・2 回目以降 HIT を確認。導入と取り外しは <code>scripts/ops/vps/vps_04_image_cache.sh</code>（冪等・失敗時は自動で元に戻る）。</li>
+<li><b>API の GET に <code>Cache-Control: private, max-age=30〜300</code> と <code>Vary: Cookie</code> を付けた（実施済み）。</b>許可リストは <code>config/http_cache.json</code>。ブラウザごとの再利用だけなので、会員と匿名の応答が混ざらない。ETag は処理が増えるため見送り。</li>
+<li>nginx で API の応答を共有キャッシュにする案は<b>導入しない</b>。応答は会員区分（匿名・会員・開発者）で内容が違い、鍵にセッションの区分を入れないと、会員向けの内容が匿名に出る事故になる。</li>
+<li>Next.js の systemd の上限（MemoryHigh 160M）は、高負荷時の最大 140MB に近い。余裕を持たせるなら 200M に上げる案がある（VPS の予算内。未実施）。</li>
 </ol>
 
 <h2>5. まだ測っていないこと</h2>
