@@ -181,6 +181,8 @@ PARTS: list[Part] = [
           [("course_specific_effects", "コース特注の要因（tp-31）"), ("training_pipeline_decisions", "決定ログ")]),
         C("geld_after_races", "去勢明け 2 戦目以降の成績（tp-32 GELD の拡張）。去勢明け 1・2・3・4–5・6+ 戦目ごとの勝率・連対率・複勝率・回収率、同条件のセ馬一般・現行モデルの予測とのずれ、去勢前の同じ馬との対応あり比較、層別、特徴量化の増分の簡易評価。", "結果",
           [("equipment_and_change", "馬具と『初めて・替わり』系の状況特徴（tp-32）"), ("training_pipeline_decisions", "決定ログ")]),
+        C("dam_age_firstfoal", "母の初仔・出産時年齢（1 歳刻み）・産次と、種牡馬の初年度産駒（供用年）の成績。同条件平均との差・現行モデルと市場との差・回収率、1 年ごとの図、初仔と初年度の判定の信頼度、共有表 foal_lineage、特徴量化の増分の簡易評価。", "結果",
+          [("geld_after_races", "去勢明け 2 戦目以降の成績"), ("pedigree_roi", "血統の回収率とレース質（tp-60）"), ("training_pipeline_decisions", "決定ログ")]),
         C("transport_and_stay", "輸送のありなし（厩舎の拠点×開催場）と滞在（追い切りの場所）で好走率が変わるか（tp-33）。判定できるデータの範囲、V4 の予測に対する残差、年別の再現性、特徴量の増分。", "結果",
           [("course_specific_effects", "コース特注の要因（tp-31）"), ("training_pipeline_decisions", "決定ログ")]),
         C("growth_curve_weight", "成長曲線（馬体重の変化とパフォーマンス）の特徴量化（tp-39）。馬ごとの『体重が増えると上がる／減ると上がる／無関係』の判別、母集団の成長曲線（性別×年齢×季節×馬格）と履歴の浅い馬への適用、補正ポイントの V4 への増分、megu v3a の版の記録。", "結果",
