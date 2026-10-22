@@ -10,19 +10,21 @@ code { background: #0b1428; padding: 1px 5px; border-radius: 4px; }</style></hea
 <h1>復活セット: 過去に不採用だった特徴量を、緩めた基準で分ける</h1>
 <p class='muted'>ユーザー依頼（2026-10-22）: 『今までの採用検討ログをもとに、復活する特徴量を分けておいてほしい。最終的にそれあり（復活セット）となし（今までの基準）で精度比較したい』。学習はしていない。台帳 <code>docs/operations/revival_feature_ledger.csv</code>、定義 <code>config/feature_sets.json</code>、読み出し <code>src/pipeline/features/feature_sets.py</code>、集計 <code>src/scripts/data/revival_scan.py</code>・<code>revival_ledger.py</code>。</p>
 <div class='note'><b>要点.</b><ul>
-<li><b>台帳 171 行</b>（群 143・束 16・構成 12）。採用済み 14、<b>R1 候補 6</b>、<b>R2 候補 32</b>（代表に絞ると R1 4・R2 5）、リーク・市場依存・既存と重複で不採用のまま 9、年別が取れず要再集計 105。</li>
+<li><b>台帳 199 行</b>（群 171・束 16・構成 12）。採用済み 14、<b>R1 候補 6</b>、<b>R2 候補 32</b>（代表に絞ると R1 4・R2 5）、リーク・市場依存・既存と重複で不採用のまま 9、年別が取れず要再集計 105。</li>
 <li><b>復活セットは 3 つ</b>: R1（4 群）、R1+R2（7 群）、広い版（34 群・弱いシグナルの束ねを見る）。基準は v6e（<code>z:RB@e</code>）。</li>
 <li><b>復活候補はすべて、推論側の生成経路が未整備</b>（採用済みの CY・ALL_BEST・RB・前段 e だけが本番の保存値から作れる）。そのため R に入る群は『オフライン評価では比べられるが、本番で使うには整備が要る』と読む。工数の目安を 5 節に付けた。</li>
-<li><b>注意: R1 でも、v6e に足して効く保証はない。</b> 台帳の増分は V4・V5・d_CY_BEST に対するもので、v6e（RB・前段 e）に対する増分ではない。RB に足して増分が消えた群（クラス基準・展開利・非 JRA 過去走ほか）が実際にあった。また 138 群を検定しているので、R2 の基準（S3・S4）は偶然でも一定数が通る（S4 は片側で約 16% の割合）。<b>比較の主役は R1 と、束ねた広い版で、R2 は参考</b>。</li>
+<li><b>注意: R1 でも、v6e に足して効く保証はない。</b> 台帳の増分は V4・V5・d_CY_BEST に対するもので、v6e（RB・前段 e）に対する増分ではない。RB に足して増分が消えた群（クラス基準・展開利・非 JRA 過去走ほか）が実際にあった。偽陽性は、tp-76 のシャドウ特徴量 81 単位の実測で、S1〜S3 が 0%、<b>S4 が 2.5%</b>、S5a（片側 90%）が 0%、S5b（片側 80%）が 1.2%。ただしこれは tp-76 の候補（v6e の logit への少数パラメータの追加）での値で、台帳の群（過去の評価結果の再集計）に同じ率が当てはまるとは限らない。<b>比較の主役は R1、tp-76 の優先群、束ねた広い版で、R2 は参考</b>。</li>
+<li><b>tp-76（学習前スクリーニング）の候補 28 行を台帳に追加</b>。優先1: 合成スコア・D2・D5・D5r、優先2: A2・B3、優先3: E1・E2・D4・D6、C・F・G は束に入れて除去で判断。構成 screen_p1・screen_p1p2・screen_all と、復活セットとの組合せ 3 つを追加（8 節）。血統を使う B・D は、完全な母方の 10 世代表が揃った後に再計算する。</li>
 </ul></div>
 <h2>1. 基準の段階と、通る群の数</h2>
 <table><tr><th>段階</th><th>条件（勝率の LogLoss の差。負が改善）</th><th>通る群（採用済み・リーク等を除く）</th></tr>
 <tr><td>S1（従来）</td><td>片側 95% 上限 &lt; 0 かつ 効果 ≤ −0.0002</td><td class='num'>0</td></tr>
 <tr><td>S2</td><td>2 期間以上で同符号、かつ点推定 ≤ −0.0002（区間は問わない）</td><td class='num'>6</td></tr>
 <tr><td>S3</td><td>2 期間以上で同符号、かつ点推定 ≤ −0.0001</td><td class='num'>16</td></tr>
-<tr><td>S4</td><td>懐疑的な事前分布 N(0, 0.0002²) の事後で P(効果&lt;0) ≥ 0.8</td><td class='num'>37</td></tr>
-<tr><td>S5</td><td>片側 90% 上限 &lt; 0</td><td class='num'>23</td></tr></table>
-<p class='muted'>どの段階も、連対・複勝の悪化が +0.0002 以内であること（place_ok）を条件にする。期間は、OOF が保存されていれば年（2022・2023・2024）、無ければ段階（段階 1 = 2022+2023、段階 2 = 2024）。標準誤差は、ログに残る片側 95% 上限から逆算した（OOF から再集計した群は、再集計の標準誤差を 1.4 倍して使う）。段階の定義と偽陽性率の見積りは feature-screening（別の調査）が扱い、結果が出たら取り込む。</p>
+<tr><td>S4</td><td>懐疑的な事前分布 N(0, 0.0002²) の事後で P(効果&lt;0) ≥ 0.8</td><td class='num'>51</td></tr>
+<tr><td>S5</td><td>片側 90% 上限 &lt; 0</td><td class='num'>30</td></tr></table>
+<p class='muted'>どの段階も、連対・複勝の悪化が +0.0002 以内であること（place_ok）を条件にする。期間は、OOF が保存されていれば年（2022・2023・2024）、無ければ段階（段階 1 = 2022+2023、段階 2 = 2024）。標準誤差は、ログに残る片側 95% 上限から逆算した（OOF から再集計した群は、再集計の標準誤差を 1.4 倍して使う）。偽陽性率はシャドウ特徴量の実測（tp-76）。</p>
+<p><b>候補入りの推奨基準（tp-76）: S4 かつ LOYO 3 年同符号。</b> 偽陽性率 2.5%（シャドウ 81 単位）、通る本物 13 / 27。保守的な代替は S5a（0%、7 / 27）。S2・S3 は偽陽性率 0% だが、要求する効果（−1〜−2×10⁻⁴）が候補の実力より大きく、本物が 0 / 27 で検出力が足りない。馬券の規則の基準（回収率の下限 &gt; 100% など）は緩めない。台帳の群（採用済み・リーク等を除く）のうち、この基準（年別が取れて 3 年とも負の S4）を満たすのは <b>13</b> 群（台帳 CSV の <code>s4_3y</code> 列）。R1 = S2、R2 = S3 か S4 の区分は、過去の評価の読み替えとしてそのまま残し、候補入りの判断にはこの基準を使う。</p>
 <h2>2. 復活候補（代表）</h2>
 <table><tr><th>区分</th><th>群</th><th>列数</th><th>勝率 Δ</th><th>期間</th><th>クラスタ</th><th>工数</th></tr>
 <tr><td>R1</td><td>tp32:FIRST</td><td class='num'>59</td><td class='num'>-0.000349</td><td>stage</td><td>初経験・替わり</td><td>M</td></tr>
@@ -68,14 +70,20 @@ code { background: #0b1428; padding: 1px 5px; border-radius: 4px; }</style></hea
 <tr><td>R2</td><td>tp34:R1_band</td><td class='num'>13</td><td class='num'>-0.000115</td><td>tp32:FIRST</td></tr>
 <tr><td>R2</td><td>tp34:R2_horse_pref</td><td class='num'>13</td><td class='num'>-9.2e-05</td><td>tp32:FIRST</td></tr>
 </table>
-<h2>3. 復活セットの定義（比べる 4 通り）</h2>
+<h2>3. 復活セットの定義（8 節で tp-76 の構成と組合せを追加）</h2>
 <table><tr><th>名前</th><th>内容</th><th>足す群</th><th>追加列（約）</th><th>v6_eval の構成名</th></tr>
 <tr><td><code>baseline</code></td><td>今までの基準（v6e の構成）</td><td class='num'>0</td><td class='num'>0</td><td><code>z:RB@e</code></td></tr>
 <tr><td><code>revival_r1</code></td><td>R1: S2 を満たす群の代表（クラスタごとに 1 つ）</td><td class='num'>4</td><td class='num'>84</td><td><code>z:RB+REV_tp32_FIRST+REV_tp39_GR_comp+REV_tp41_SIM_apt+REV_tp42_RL_A@e</code></td></tr>
 <tr><td><code>revival_r1r2</code></td><td>R1 + R2（S3 か S4）の代表</td><td class='num'>7</td><td class='num'>112</td><td><code>z:RB+REV_tp32_FIRST+REV_tp39_GR_comp+REV_tp41_SIM_apt+REV_tp42_RL_A+REV_tp40_IN+RS59+NJ@e</code></td></tr>
 <tr><td><code>revival_wide</code></td><td>R1・R2 の全群（冗長を含む。多数の弱いシグナルを束ねる効果を見る）</td><td class='num'>34</td><td class='num'>514</td><td><code>z:RB+REV_tp32_FIRST+REV_tp39_GR_comp+REV_tp41_SIM_apt+REV_tp42_RL_A+REV_tp41_SIM_str+REV…</code></td></tr>
+<tr><td><code>screen_p1</code></td><td>tp-76 優先1: 合成スコア + D2（競馬場×面）+ D5（4 軸の適性）+ D5r（同・種牡馬の事前なし）</td><td class='num'>4</td><td class='num'>5</td><td><code>z:RB+S76_COMPOSITE+S76_D2+S76_D5+S76_D5r@e</code></td></tr>
+<tr><td><code>screen_p1p2</code></td><td>tp-76 優先1+2: + A2（日内の内有利×枠）+ B3（めぐ指数のカルマン）</td><td class='num'>6</td><td class='num'>7</td><td><code>z:RB+S76_COMPOSITE+S76_D2+S76_D5+S76_D5r+S76_A2+S76_B3@e</code></td></tr>
+<tr><td><code>screen_all</code></td><td>tp-76 優先1〜3 + 束に入れて除去で判断（C・F・G）: + E1・E2・D4・D6 + C・F・G</td><td class='num'>13</td><td class='num'>24</td><td><code>z:RB+S76_COMPOSITE+S76_D2+S76_D5+S76_D5r+S76_A2+S76_B3+S76_E1+S76_E2+S76_D4+S76_D6+S76_C…</code></td></tr>
+<tr><td><code>revival_r1+screen_p1</code></td><td>revival_r1 + screen_p1（復活セットと tp-76 の組合せ）</td><td class='num'>8</td><td class='num'>89</td><td><code>z:RB+REV_tp32_FIRST+REV_tp39_GR_comp+REV_tp41_SIM_apt+REV_tp42_RL_A+S76_COMPOSITE+S76_D2…</code></td></tr>
+<tr><td><code>revival_r1r2+screen_p1p2</code></td><td>revival_r1r2 + screen_p1p2（復活セットと tp-76 の組合せ）</td><td class='num'>13</td><td class='num'>119</td><td><code>z:RB+REV_tp32_FIRST+REV_tp39_GR_comp+REV_tp41_SIM_apt+REV_tp42_RL_A+REV_tp40_IN+RS59+NJ+…</code></td></tr>
+<tr><td><code>revival_wide+screen_all</code></td><td>revival_wide + screen_all（復活セットと tp-76 の組合せ）</td><td class='num'>47</td><td class='num'>538</td><td><code>z:RB+REV_tp32_FIRST+REV_tp39_GR_comp+REV_tp41_SIM_apt+REV_tp42_RL_A+REV_tp41_SIM_str+REV…</code></td></tr>
 </table>
-<p class='muted'>基準 <code>baseline</code> は今までの基準（v6e = V4 + tl_ 再取得版 + CY + ALL_BEST + RB、前段 e。バンドルは 1,231 列）。足す群は、学習表と同じ行キー（race_id, horse_id）の群 parquet で、2022〜2024 年の評価行を欠けなく・重複なく覆うことを確認した（35 群、基準のフレームとの列名の重なりなし）。RS59 は v6_eval が名前で作る。後日談の変種（AF）などは学習表に列が無く、構築が要る（tp16b:AF（後日談の変種）, tp16:後日談ほか 10 群の最良）。</p>
+<p class='muted'>基準 <code>baseline</code> は今までの基準（v6e = V4 + tl_ 再取得版 + CY + ALL_BEST + RB、前段 e。バンドルは 1,231 列）。足す群は、学習表と同じ行キー（race_id, horse_id）の群 parquet で、2022〜2024 年の評価行を欠けなく・重複なく覆うことを確認した（35 群、基準のフレームとの列名の重なりなし）。RS59 は v6_eval が名前で作る。後日談の変種（AF）などは学習表に列が無く、構築が要る（tp16b:AF（後日談の変種）, tp16:後日談ほか 10 群の最良, S76_COMPOSITE）。</p>
 <h2>4. 分けた理由別の内訳（不採用のまま）</h2>
 <table><tr><th>区分</th><th>件数</th></tr>
 <tr><td>不採用のまま</td><td class='num'>89</td></tr>
@@ -107,14 +115,45 @@ code { background: #0b1428; padding: 1px 5px; border-radius: 4px; }</style></hea
 <tr><td>v6:x_NJ</td><td class='num'>16</td><td>L</td><td>非 JRA 過去走の履歴を状態表に加える</td></tr>
 <tr><td>tp16:後日談ほか 10 群の最良</td><td class='num'>—</td><td>M</td><td>推論側の生成経路を追加する</td></tr>
 </table>
+<h3>tp-76 の候補（推論コストは tp-76 の評価を引き継ぐ: 低 = S、中 = M、高 = L）</h3>
+<table><tr><th>単位</th><th>優先度</th><th>列数</th><th>工数</th><th>整備の内容</th><th>完全な10世代表の後に再計算</th></tr>
+<tr><td>D5</td><td>優先1</td><td class='num'>1</td><td>L</td><td>同上</td><td>要</td></tr>
+<tr><td>D5r</td><td>優先1</td><td class='num'>1</td><td>M</td><td>馬×条件の集計のみ（種牡馬の事前表なし）</td><td></td></tr>
+<tr><td>D2</td><td>優先1</td><td class='num'>1</td><td>L</td><td>同上</td><td>要</td></tr>
+<tr><td>合成スコア</td><td>優先1(合成スコア)</td><td class='num'>2</td><td>L</td><td>D の事前表（馬×条件・種牡馬×条件）、B の日次状態、A の日内結果が要る。係数は発見期間の外側で固定して持ち込む</td><td>要</td></tr>
+<tr><td>A2</td><td>優先2</td><td class='num'>1</td><td>M</td><td>同上</td><td></td></tr>
+<tr><td>B3</td><td>優先2</td><td class='num'>1</td><td>M</td><td>めぐ指数の履歴が必要（RB と同じ日次状態）</td><td>要</td></tr>
+<tr><td>D6</td><td>優先3</td><td class='num'>1</td><td>L</td><td>上がりの予測誤差を条件別に集計</td><td>要</td></tr>
+<tr><td>D4</td><td>優先3</td><td class='num'>1</td><td>L</td><td>同上＋クッション値</td><td>要</td></tr>
+<tr><td>E2</td><td>優先3</td><td class='num'>1</td><td>S</td><td>同上＋同日の全レースの水準（過去走は確定済み）</td><td></td></tr>
+<tr><td>E1</td><td>優先3</td><td class='num'>1</td><td>S</td><td>過去走の上がりとコースの基準表</td><td></td></tr>
+<tr><td>E4</td><td>未割当</td><td class='num'>2</td><td>S</td><td>過去走の着順・上がり・通過順</td><td></td></tr>
+<tr><td>E5</td><td>未割当</td><td class='num'>1</td><td>S</td><td>過去 5 走の上がり順位</td><td></td></tr>
+<tr><td>E3</td><td>未割当</td><td class='num'>2</td><td>S</td><td>過去走の上がりと通過順</td><td></td></tr>
+<tr><td>A3</td><td>未割当</td><td class='num'>2</td><td>M</td><td>同上</td><td></td></tr>
+<tr><td>D3</td><td>未割当</td><td class='num'>1</td><td>L</td><td>同上</td><td>要</td></tr>
+<tr><td>B1</td><td>未割当</td><td class='num'>1</td><td>M</td><td>馬ごとの状態（日次更新）と種牡馬の事前表が必要</td><td>要</td></tr>
+<tr><td>B2</td><td>未割当</td><td class='num'>2</td><td>M</td><td>同上</td><td>要</td></tr>
+<tr><td>D1</td><td>未割当</td><td class='num'>1</td><td>L</td><td>馬×条件の集計と、種牡馬×条件の事前表の 2 種が必要</td><td>要</td></tr>
+<tr><td>A1</td><td>未割当</td><td class='num'>1</td><td>M</td><td>同日の自分より前のレース結果を、開催中にその都度取り込む必要</td><td></td></tr>
+<tr><td>F2</td><td>束に入れて除去で判断</td><td class='num'>2</td><td>S</td><td>過去走の距離・タイム</td><td></td></tr>
+<tr><td>C3</td><td>束に入れて除去で判断</td><td class='num'>2</td><td>M</td><td>同上</td><td></td></tr>
+<tr><td>C1</td><td>束に入れて除去で判断</td><td class='num'>1</td><td>M</td><td>全レースの時系列更新の状態（日次）が必要</td><td></td></tr>
+<tr><td>G2</td><td>束に入れて除去で判断</td><td class='num'>1</td><td>S</td><td>同上</td><td></td></tr>
+<tr><td>C2</td><td>束に入れて除去で判断</td><td class='num'>1</td><td>M</td><td>同上＋出走馬の強さの平均</td><td></td></tr>
+<tr><td>F1</td><td>束に入れて除去で判断</td><td class='num'>3</td><td>S</td><td>過去走の日付だけ</td><td></td></tr>
+<tr><td>F3</td><td>束に入れて除去で判断</td><td class='num'>1</td><td>S</td><td>過去走の間隔だけ</td><td></td></tr>
+<tr><td>G3</td><td>束に入れて除去で判断</td><td class='num'>1</td><td>S</td><td>同上</td><td></td></tr>
+<tr><td>G1</td><td>束に入れて除去で判断</td><td class='num'>2</td><td>S</td><td>出走表と各馬の普段の位置取り</td><td></td></tr>
+</table>
 <p class='muted'>工数: S = 既存の履歴から作れる、M = 状態表の追加（RB と同じ日次更新の仕組み）、L = 取得か再構築が要る。前段 b 版で、本番の保存値から 9 列を再現できず使えなかった例があるため、採用の判断の前に、推論側のパリティ（過去日で学習側と比べる）を必須にする。</p>
 <h2>6. 比較の実行計画（学習再開後）</h2>
 <ol>
-<li><b>比べる構成</b>: A = 今までの基準（<code>z:RB@e</code>）、B = A + R1、C = A + R1 + R2、D = A + 広い版。<code>python -m src.pipeline.features.feature_sets show</code> が各構成名を出す。実行は <code>python -m src.scripts.data.v6_eval run &lt;構成名&gt; --tag rev</code>。</li>
+<li><b>比べる構成</b>: A = 今までの基準（<code>z:RB@e</code>）、B = A + R1、C = A + R1 + R2、D = A + 広い版。tp-76 の構成 E〜G と組合せ H〜J は 8 節。<code>python -m src.pipeline.features.feature_sets show</code> が各構成名を出す。実行は <code>python -m src.scripts.data.v6_eval run &lt;構成名&gt; --tag rev</code>。</li>
 <li><b>評価</b>: LOYO（2022・2023・2024）、LightGBM、seed は構成間で共通（0・1、確認で 2・3）。勝率・連対・複勝の LogLoss、レース単位の paired bootstrap。層別は、初出走・履歴 3 走未満、クラス別、面別。test 2025 は、選んだ 1 構成について 1 回だけ。2026 年は選択に使わない。</li>
 <li><b>採否</b>: 構成単位で、二段の基準（従来の S1、または緩めた S2 を満たし、連対・複勝の悪化が +0.0002 以内）。D は束ねた効果を見るためで、合計の増分がシャドウ特徴量の束を上回るかを併せて見る（feature-screening の手順）。</li>
 <li><b>推論側</b>: 採用候補になった群だけ、5 節の整備を行い、v6_parity と同じ手順で学習側との一致を確認してから shadow に入れる。</li>
-<li><b>所要の見積り</b>（過去の実績からの目安で、実測ではない）: 1 構成の LOYO 評価（3 年 × 2 seed × 3 目的）は 0.5〜1 時間、4 構成で 2〜4 時間（直列）。seed 2・3 の確認は 1〜2 時間。通った場合の LOYO アンサンブルと最終学習（v6e と同じ手順）は 8〜9 時間。</li>
+<li><b>所要の見積り</b>（過去の実績からの目安で、実測ではない）: 1 構成の LOYO 評価（3 年 × 2 seed × 3 目的）は 0.5〜1 時間、10 構成で 5〜10 時間（直列。共有 3 スロットで約 2〜4 時間）。seed 2・3 の確認は 1〜2 時間。通った場合の LOYO アンサンブルと最終学習（v6e と同じ手順）は 8〜9 時間。</li>
 </ol>
 <h2>7. 限界</h2>
 <ul>
@@ -123,5 +162,74 @@ code { background: #0b1428; padding: 1px 5px; border-radius: 4px; }</style></hea
 <li>各群は、過去の第 1 段・第 2 段の選別を通ってきた（または落ちた）ものなので、選択バイアスがある。基準を緩めた S2〜S4 は偽陽性を含む。偽陽性率の見積りは feature-screening のシャドウ特徴量で行う。</li>
 <li>2026 年は使っていない。市場オッズ・人気は特徴量にしていない（tp-29 の市場版は除外した）。</li>
 </ul>
-<p class='muted'>関連: <a href='feature_gap_audit.html'>特徴量のやり残しの棚卸し</a> / <a href='v6_features.html'>v6 への追加候補の評価</a> / <a href='training_pipeline_decisions.html'>決定ログ</a></p>
+<h2>8. tp-76（学習前スクリーニング）の候補を構成に加える</h2>
+<p>ユーザー指示（2026-10-22）: tp-76 の結果（章 <a href='feature_screening.html'>feature_screening</a>、決定ログ §71）を、復活セットの分類と構成に取り込む。学習はしていない。数字は、v6e の LOYO OOF の logit に少数の係数で足したときの 1 頭あたり LogLoss の増分 Δ3（3 目的の平均、×10⁻⁴、負が改善）。</p>
+<h3>基準の段階と、シャドウ 81 単位による偽陽性率の実測</h3>
+<table><tr><th>段階</th><th>本物が通る</th><th>偽陽性率</th></tr>
+<tr><td>S1 区間上限&lt;0 かつ ≤−2×10⁻⁴</td><td class='num'>0 / 27</td><td class='num'>0.0%</td></tr>
+<tr><td>S2 3 年同符号 かつ ≤−2×10⁻⁴</td><td class='num'>0 / 27</td><td class='num'>0.0%</td></tr>
+<tr><td>S3 3 年同符号 かつ ≤−1×10⁻⁴</td><td class='num'>0 / 27</td><td class='num'>0.0%</td></tr>
+<tr><td>S4 経験ベイズ P(効果&lt;0)≥0.8 または 局所 FDR≤0.2</td><td class='num'>13 / 27</td><td class='num'>2.5%</td></tr>
+<tr><td>S5a 片側 90% 上限&lt;0</td><td class='num'>7 / 27</td><td class='num'>0.0%</td></tr>
+<tr><td>S5b 片側 80% 上限&lt;0</td><td class='num'>13 / 27</td><td class='num'>1.2%</td></tr>
+</table>
+<h3>候補（ユーザー指定の優先度）</h3>
+<table><tr><th>単位</th><th>優先度</th><th>Δ3（LOYO）</th><th>年別 22/23/24</th><th>2025（1 回）</th><th>通る基準</th><th>工数</th><th>10世代表の後に再計算</th></tr>
+<tr><td>合成スコア</td><td>優先1(合成スコア)</td><td class='num'>-1.04</td><td class='num'>-1.4 / -0.4 / -1.4</td><td class='num'>-0.37</td><td>S4</td><td>L</td><td>要</td></tr>
+<tr><td>D5</td><td>優先1</td><td class='num'>-0.63</td><td class='num'>-0.6 / -0.4 / -0.9</td><td class='num'>-0.10</td><td>S4・S5a・S5b</td><td>L</td><td>要</td></tr>
+<tr><td>D5r</td><td>優先1</td><td class='num'>-0.50</td><td class='num'>-0.7 / -0.1 / -0.8</td><td class='num'>-0.05</td><td>S4・S5a・S5b</td><td>M</td><td></td></tr>
+<tr><td>D2</td><td>優先1</td><td class='num'>-0.42</td><td class='num'>-0.3 / -0.1 / -0.8</td><td class='num'>-0.51</td><td>S4・S5a・S5b</td><td>L</td><td>要</td></tr>
+<tr><td>A2</td><td>優先2</td><td class='num'>-0.49</td><td class='num'>-0.7 / +0.5 / -1.2</td><td class='num'>-0.37</td><td>S4・S5a・S5b</td><td>M</td><td></td></tr>
+<tr><td>B3</td><td>優先2</td><td class='num'>-0.47</td><td class='num'>-0.9 / +0.4 / -0.9</td><td class='num'>+0.04</td><td>S4・S5a・S5b</td><td>M</td><td>要</td></tr>
+<tr><td>D6</td><td>優先3</td><td class='num'>-0.86</td><td class='num'>-0.8 / -0.8 / -1.0</td><td class='num'>+0.61</td><td>S4・S5a・S5b</td><td>L</td><td>要</td></tr>
+<tr><td>D4</td><td>優先3</td><td class='num'>-0.44</td><td class='num'>-0.6 / -0.5 / -0.2</td><td class='num'>+0.23</td><td>S4・S5a・S5b</td><td>L</td><td>要</td></tr>
+<tr><td>E2</td><td>優先3</td><td class='num'>-0.18</td><td class='num'>-0.5 / -0.2 / +0.1</td><td class='num'>+0.16</td><td>S4・S5b</td><td>S</td><td></td></tr>
+<tr><td>E1</td><td>優先3</td><td class='num'>-0.14</td><td class='num'>-0.4 / +0.1 / -0.1</td><td class='num'>+0.26</td><td>S4・S5b</td><td>S</td><td></td></tr>
+<tr><td>F2</td><td>束に入れて除去で判断</td><td class='num'>-0.01</td><td class='num'>-0.3 / +0.8 / -0.5</td><td class='num'>-0.50</td><td>—</td><td>S</td><td></td></tr>
+<tr><td>C3</td><td>束に入れて除去で判断</td><td class='num'>-0.01</td><td class='num'>+0.1 / +0.1 / -0.2</td><td class='num'>+0.13</td><td>—</td><td>M</td><td></td></tr>
+<tr><td>C1</td><td>束に入れて除去で判断</td><td class='num'>-0.01</td><td class='num'>+0.0 / +0.1 / -0.1</td><td class='num'>+0.03</td><td>—</td><td>M</td><td></td></tr>
+<tr><td>G2</td><td>束に入れて除去で判断</td><td class='num'>-0.00</td><td class='num'>-0.1 / -0.1 / +0.1</td><td class='num'>-0.03</td><td>—</td><td>S</td><td></td></tr>
+<tr><td>C2</td><td>束に入れて除去で判断</td><td class='num'>+0.00</td><td class='num'>+0.1 / +0.1 / -0.2</td><td class='num'>+0.07</td><td>—</td><td>M</td><td></td></tr>
+<tr><td>F1</td><td>束に入れて除去で判断</td><td class='num'>+0.07</td><td class='num'>+0.3 / -0.1 / -0.0</td><td class='num'>-0.05</td><td>—</td><td>S</td><td></td></tr>
+<tr><td>F3</td><td>束に入れて除去で判断</td><td class='num'>+0.13</td><td class='num'>+0.3 / +0.0 / +0.1</td><td class='num'>-0.03</td><td>—</td><td>S</td><td></td></tr>
+<tr><td>G3</td><td>束に入れて除去で判断</td><td class='num'>+0.16</td><td class='num'>+0.0 / -0.1 / +0.5</td><td class='num'>+0.10</td><td>—</td><td>S</td><td></td></tr>
+<tr><td>G1</td><td>束に入れて除去で判断</td><td class='num'>+0.41</td><td class='num'>+0.3 / -0.1 / +1.0</td><td class='num'>+0.15</td><td>—</td><td>S</td><td></td></tr>
+<tr><td>D1</td><td>未割当</td><td class='num'>-0.15</td><td class='num'>-0.1 / -0.0 / -0.3</td><td class='num'>+0.24</td><td>S4・S5b</td><td>L</td><td>要</td></tr>
+<tr><td>B2</td><td>未割当</td><td class='num'>-0.14</td><td class='num'>-0.4 / +0.4 / -0.4</td><td class='num'>+0.25</td><td>S4・S5b</td><td>M</td><td>要</td></tr>
+<tr><td>B1</td><td>未割当</td><td class='num'>-0.14</td><td class='num'>-0.4 / +0.4 / -0.4</td><td class='num'>+0.16</td><td>S4・S5b</td><td>M</td><td>要</td></tr>
+<tr><td>D3</td><td>未割当</td><td class='num'>-0.11</td><td class='num'>-0.1 / +0.0 / -0.2</td><td class='num'>-0.14</td><td>S4・S5b</td><td>L</td><td>要</td></tr>
+<tr><td>A3</td><td>未割当</td><td class='num'>-0.09</td><td class='num'>-0.3 / +0.5 / -0.4</td><td class='num'>-0.33</td><td>—</td><td>M</td><td></td></tr>
+<tr><td>E3</td><td>未割当</td><td class='num'>+0.00</td><td class='num'>-0.3 / -0.1 / +0.3</td><td class='num'>+0.03</td><td>—</td><td>S</td><td></td></tr>
+<tr><td>E5</td><td>未割当</td><td class='num'>+0.05</td><td class='num'>+0.1 / +0.0 / +0.0</td><td class='num'>-0.00</td><td>—</td><td>S</td><td></td></tr>
+<tr><td>E4</td><td>未割当</td><td class='num'>+0.19</td><td class='num'>-0.2 / +0.1 / +0.7</td><td class='num'>-0.06</td><td>—</td><td>S</td><td></td></tr>
+<tr><td>A1</td><td>未割当</td><td class='num'>+0.40</td><td class='num'>+0.4 / -0.0 / +0.8</td><td class='num'>+0.04</td><td>—</td><td>M</td><td></td></tr>
+</table>
+<p class='muted'>優先1: 合成スコア・D2・D5・D5r、優先2: A2・B3、優先3: E1・E2・D4・D6、C（Elo）・F（負荷）・G（メンバー構成）は束に入れて除去で判断。指定にない単位（B1・B2・D1・D3 は tp-76 の判定で『優先』、A1・A3・E3〜E5 は『後回し』）は構成に入れず、台帳に『未割当』で残した。合成スコアは弱いシグナルの代表 26 列を L2 ロジスティックに当てはめた線形予測（係数は A 年、較正は B 年、評価は C 年。LOYO −1.04×10⁻⁴［−1.57, −0.44］、2025 年 −0.37×10⁻⁴）で、列がまだ無く、年ごとの OOF の列として保存する処理が要る。血統を使う B・D は、現状の不完全な 10 世代表（5 世代＋牡アンカー）に基づくので、完全な母方の 10 世代表が揃った後に再計算する（D5r は種牡馬の事前なしで対象外）。</p>
+<h3>構成</h3>
+<table><tr><th>名前</th><th>内容</th><th>足す群</th><th>追加列（約）</th><th>未構築</th></tr>
+<tr><td><code>revival_r1</code></td><td>R1: S2 を満たす群の代表（クラスタごとに 1 つ）</td><td class='num'>4</td><td class='num'>84</td><td></td></tr>
+<tr><td><code>revival_r1r2</code></td><td>R1 + R2（S3 か S4）の代表</td><td class='num'>7</td><td class='num'>112</td><td></td></tr>
+<tr><td><code>revival_wide</code></td><td>R1・R2 の全群（冗長を含む。多数の弱いシグナルを束ねる効果を見る）</td><td class='num'>34</td><td class='num'>514</td><td></td></tr>
+<tr><td><code>screen_p1</code></td><td>tp-76 優先1: 合成スコア + D2（競馬場×面）+ D5（4 軸の適性）+ D5r（同・種牡馬の事前なし）</td><td class='num'>4</td><td class='num'>5</td><td>S76_COMPOSITE</td></tr>
+<tr><td><code>screen_p1p2</code></td><td>tp-76 優先1+2: + A2（日内の内有利×枠）+ B3（めぐ指数のカルマン）</td><td class='num'>6</td><td class='num'>7</td><td>S76_COMPOSITE</td></tr>
+<tr><td><code>screen_all</code></td><td>tp-76 優先1〜3 + 束に入れて除去で判断（C・F・G）: + E1・E2・D4・D6 + C・F・G</td><td class='num'>13</td><td class='num'>24</td><td>S76_COMPOSITE</td></tr>
+<tr><td><code>revival_r1+screen_p1</code></td><td>revival_r1 + screen_p1（復活セットと tp-76 の組合せ）</td><td class='num'>8</td><td class='num'>89</td><td>S76_COMPOSITE</td></tr>
+<tr><td><code>revival_r1r2+screen_p1p2</code></td><td>revival_r1r2 + screen_p1p2（復活セットと tp-76 の組合せ）</td><td class='num'>13</td><td class='num'>119</td><td>S76_COMPOSITE</td></tr>
+<tr><td><code>revival_wide+screen_all</code></td><td>revival_wide + screen_all（復活セットと tp-76 の組合せ）</td><td class='num'>47</td><td class='num'>538</td><td>S76_COMPOSITE</td></tr>
+</table>
+<h3>比較の計画（更新）</h3>
+<table><tr><th>記号</th><th>構成</th><th>v6_eval の構成名（先頭）</th></tr>
+<tr><td>A</td><td><code>baseline</code></td><td><code>z:RB@e</code></td></tr>
+<tr><td>B</td><td><code>revival_r1</code></td><td><code>z:RB+REV_tp32_FIRST+REV_tp39_GR_comp+REV_tp41_SIM_apt+REV_tp42_RL_A@e</code></td></tr>
+<tr><td>C</td><td><code>revival_r1r2</code></td><td><code>z:RB+REV_tp32_FIRST+REV_tp39_GR_comp+REV_tp41_SIM_apt+REV_tp42_RL_A+REV_tp40_IN+…</code></td></tr>
+<tr><td>D</td><td><code>revival_wide</code></td><td><code>z:RB+REV_tp32_FIRST+REV_tp39_GR_comp+REV_tp41_SIM_apt+REV_tp42_RL_A+REV_tp41_SIM…</code></td></tr>
+<tr><td>E</td><td><code>screen_p1</code></td><td><code>z:RB+S76_D2+S76_D5+S76_D5r@e</code></td></tr>
+<tr><td>F</td><td><code>screen_p1p2</code></td><td><code>z:RB+S76_D2+S76_D5+S76_D5r+S76_A2+S76_B3@e</code></td></tr>
+<tr><td>G</td><td><code>screen_all</code></td><td><code>z:RB+S76_D2+S76_D5+S76_D5r+S76_A2+S76_B3+S76_E1+S76_E2+S76_D4+S76_D6+S76_C+S76_F…</code></td></tr>
+<tr><td>H</td><td><code>revival_r1+screen_p1</code></td><td><code>z:RB+REV_tp32_FIRST+REV_tp39_GR_comp+REV_tp41_SIM_apt+REV_tp42_RL_A+S76_D2+S76_D…</code></td></tr>
+<tr><td>I</td><td><code>revival_r1r2+screen_p1p2</code></td><td><code>z:RB+REV_tp32_FIRST+REV_tp39_GR_comp+REV_tp41_SIM_apt+REV_tp42_RL_A+REV_tp40_IN+…</code></td></tr>
+<tr><td>J</td><td><code>revival_wide+screen_all</code></td><td><code>z:RB+REV_tp32_FIRST+REV_tp39_GR_comp+REV_tp41_SIM_apt+REV_tp42_RL_A+REV_tp41_SIM…</code></td></tr>
+</table>
+<p class='muted'>1 構成の LOYO 評価（3 年 × 2 seed × 3 目的）は 0.5〜1 時間（過去の実績からの目安。実測ではない）。10 構成を直列で 5〜10 時間、共有 3 スロットで約 2〜4 時間。合成スコアは、学習前に OOF の列を保存する処理（tp76_screen の composite）が要る。seed 2・3 の確認と通った構成の LOYO アンサンブル・最終学習は別枠（8〜9 時間） 足す群の列は tp-76 の features.parquet（ホストの /home/jovyan/work/tp76_out/）にあり、2022〜2024 年の評価行の 94.2%（132,756 / 140,865）を覆う（残りは欠損として扱う。覆われない行の理由は要確認）。基準 A のほか、E〜J の評価は、合成スコアの列を作った後に行う（未構築の間は、構成名から外れる）。</p>
+<p class='muted'>関連: <a href='feature_screening.html'>学習前の特徴量スクリーニング（tp-76）</a> / <a href='feature_gap_audit.html'>特徴量のやり残しの棚卸し</a> / <a href='v6_features.html'>v6 への追加候補の評価</a> / <a href='training_pipeline_decisions.html'>決定ログ</a></p>
 </body></html>

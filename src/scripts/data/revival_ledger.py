@@ -23,6 +23,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
 SCAN = ROOT / "docs" / "operations" / "revival" / "revival_scan.json"
+TP76_RESULTS = ROOT / "docs" / "operations" / "revival" / "tp76_results.json"
 COLUMNS = ROOT / "docs" / "operations" / "revival" / "group_columns.json"
 LEDGER_CSV = ROOT / "docs" / "operations" / "revival_feature_ledger.csv"
 FEATURE_SETS = ROOT / "config" / "feature_sets.json"
@@ -370,7 +371,16 @@ def build_ledger(scan: dict[str, Any], col_counts: dict[str, dict[str, Any]] | N
         rows.append(_row(theme, group, info, lv, col_counts))
     for m in MANUAL_ROWS:
         rows.append(_manual_row(m))
+    tp76 = load_tp76()
+    if tp76:
+        rows.extend(tp76_rows(tp76))
     df = pd.DataFrame(rows)
+    if "s4_3y" not in df:
+        df["s4_3y"] = False
+    old = df["s4_3y"].isna()
+    df.loc[old, "s4_3y"] = [bool(r["S4"] and r["n_periods"] >= 3 and r["granularity"] == "year" and all(v < 0 for v in json.loads(r["periods"]).values()))
+                            for _, r in df[old].iterrows()]
+    df["s4_3y"] = df["s4_3y"].astype(bool)
     df["status"] = df.apply(assign_status, axis=1)
     df = pick_representatives(df)
     order = {"採用済み": 0, "R1": 1, "R2": 2, "要整備(R1)": 3, "要整備(R2)": 4, "束(参考)": 5, "要再評価(データ補完後)": 6}
@@ -508,28 +518,79 @@ def build_feature_sets(df: pd.DataFrame, columns: dict[str, dict[str, Any]]) -> 
     wide = [entry(r) for _, r in groups.iterrows()]
     # 広い版: 学習表に列がある群。tp38 の変種は採用済み ALL_BEST の列と重なるので外す
     uniq_wide = [w for w in wide if w["buildable"] and not w["id"].startswith("tp38:")]
+    s76_groups, s76_sets = tp76_sets(df)
+    base_sets = {
+        "baseline": {"base": None, "add": [], "doc": "今までの基準（v6e の構成）"},
+        "revival_r1": {"base": "baseline", "add": [x["name"] for x in r1], "doc": "R1: S2 を満たす群の代表（クラスタごとに 1 つ）"},
+        "revival_r1r2": {"base": "baseline", "add": [x["name"] for x in r1 + r2], "doc": "R1 + R2（S3 か S4）の代表"},
+        "revival_wide": {"base": "baseline", "add": [x["name"] for x in uniq_wide], "doc": "R1・R2 の全群（冗長を含む。多数の弱いシグナルを束ねる効果を見る）"},
+    }
+    all_sets = {**base_sets, **s76_sets}
+    for name, a, b in (("revival_r1+screen_p1", "revival_r1", "screen_p1"), ("revival_r1r2+screen_p1p2", "revival_r1r2", "screen_p1p2"),
+                       ("revival_wide+screen_all", "revival_wide", "screen_all")):
+        all_sets[name] = {"base": "baseline", "add": all_sets[a]["add"] + all_sets[b]["add"], "doc": f"{a} + {b}（復活セットと tp-76 の組合せ）"}
+    groups = {x["name"]: x for x in {w["name"]: w for w in wide}.values()}
+    groups.update(s76_groups)
+    for v in all_sets.values():   # 学習表に列が無い群（構築が要るもの）を除いた、すぐ評価できる群
+        v["add_ready"] = [a for a in v["add"] if groups.get(a, {}).get("buildable", True)]
+    plan_ids = [("A", "baseline"), ("B", "revival_r1"), ("C", "revival_r1r2"), ("D", "revival_wide"), ("E", "screen_p1"), ("F", "screen_p1p2"),
+                ("G", "screen_all"), ("H", "revival_r1+screen_p1"), ("I", "revival_r1r2+screen_p1p2"), ("J", "revival_wide+screen_all")]
     return {
-        "version": 1, "frozen_on": "2026-10-22",
-        "doc": "復活セット: 過去の採用検討で不採用・保留・境界だった群のうち、緩めた基準（S2〜S4）で復活するもの。台帳: docs/operations/revival_feature_ledger.csv、章: revival_feature_set.html",
+        "version": 2, "frozen_on": "2026-10-22",
+        "doc": "復活セット: 過去の採用検討で不採用・保留・境界だった群のうち、緩めた基準（S2〜S4）で復活するもの、と tp-76（学習前スクリーニング）の候補。台帳: docs/operations/revival_feature_ledger.csv、章: revival_feature_set.html",
         "criteria": {"S1": "片側95%上限<0 かつ 効果≤-0.0002（従来）", "S2": "2期間以上で同符号 かつ 点推定≤-0.0002", "S3": "2期間以上で同符号 かつ 点推定≤-0.0001",
                      "S4": "懐疑的事前分布 N(0,0.0002^2) の事後で P(効果<0)≥0.8", "S5": "片側90%上限<0", "place_ok": "連対・複勝の悪化は +0.0002 以内"},
+        "false_positive_rate": {
+            "doc": "シャドウ特徴量 81 単位（日内の並べ替え・レース内で馬をずらす）を tp-76 の手順に通した実測。tp-76 の候補（v6e の logit への少数パラメータの追加）での値で、台帳の群の再集計にそのまま当てはまるとは限らない",
+            "measured": {k: {"fpr": TP76_MEASURED_FPR[k], "real_pass": TP76_REAL_PASS[k], "n_real": 27} for k in TP76_MEASURED_FPR},
+            "recommend": "特徴量の候補入りは S4 かつ LOYO 3 年同符号（偽陽性率 2.5%）。保守的な代替は S5a（0%）。S2・S3 は偽陽性率 0% だが、要求する効果が候補の実力より大きく通る本物が 0。馬券の規則の基準は緩めない",
+        },
         "baseline": {
             "name": "v6e", "n_cols_bundle": 1231, "v6_eval_name": "z:RB@e",
             "note": "V4(owner125+self8 199+field7 451+ped32+aux27、tl_ は再取得版に差し替え)+CY37+ALL_BEST43(+差分)+RB16、前段は e 版。列の一覧は serving_v4_columns.json / serving_v5_columns.json / serving_v6.py",
             "components": [{"name": "V4", "n_cols": 1062}, {"name": "tl_ 再取得版", "n_cols": 0, "note": "差し替え"}, {"name": "CY", "n_cols": 37}, {"name": "ALL_BEST", "n_cols": 43},
                            {"name": "RB", "n_cols": 16}, {"name": "前段 e", "n_cols": 0, "note": "差し替え"}],
         },
-        "sets": {
-            "baseline": {"base": None, "add": [], "doc": "今までの基準（v6e の構成）"},
-            "revival_r1": {"base": "baseline", "add": [x["name"] for x in r1], "doc": "R1: S2 を満たす群の代表（クラスタごとに 1 つ）"},
-            "revival_r1r2": {"base": "baseline", "add": [x["name"] for x in r1 + r2], "doc": "R1 + R2（S3 か S4）の代表"},
-            "revival_wide": {"base": "baseline", "add": [x["name"] for x in uniq_wide], "doc": "R1・R2 の全群（冗長を含む。多数の弱いシグナルを束ねる効果を見る）"},
-        },
-        "groups": {x["name"]: x for x in {w["name"]: w for w in wide}.values()},
-        "unbuilt": unbuilt,
-        "comparison": {"A": "baseline", "B": "revival_r1", "C": "revival_r1r2", "D": "revival_wide"},
-        "serving_note": "復活セットの群は、推論側の生成経路が未整備（採用時に整備）。比較は学習表の列でのオフライン評価",
+        "sets": all_sets,
+        "groups": groups,
+        "unbuilt": unbuilt + [g for g, v in s76_groups.items() if not v["buildable"]],
+        "screen_unassigned": {k: v for k, v in TP76_UNASSIGNED.items()},
+        "comparison": {"plan": [{"id": i, "set": n} for i, n in plan_ids],
+                       "estimate": "1 構成の LOYO 評価（3 年 × 2 seed × 3 目的）は 0.5〜1 時間（過去の実績からの目安。実測ではない）。10 構成を直列で 5〜10 時間、共有 3 スロットで約 2〜4 時間。"
+                                   "合成スコアは、学習前に OOF の列を保存する処理（tp76_screen の composite）が要る。seed 2・3 の確認と通った構成の LOYO アンサンブル・最終学習は別枠（8〜9 時間）"},
+        "serving_note": "復活セット・tp-76 の群は、推論側の生成経路が未整備（採用時に整備）。比較は学習表の列でのオフライン評価",
     }
+
+
+def tp76_sets(df: pd.DataFrame) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    """tp-76 の候補を構成の群と構成（screen_p1・screen_p1p2・screen_all）にする。合成スコアは列がまだ無いので『構築が要る』群にする。"""
+    rank = {"S": 0, "M": 1, "L": 2}
+    t = df[df["theme"] == "tp76"]
+    groups: dict[str, dict[str, Any]] = {}
+    for name, cols in TP76_SET_COLS.items():
+        units = [u for u, g in TP76_SET_GROUP.items() if g == name]
+        rows = t[t["group"].isin(units)]
+        eff = max((e for e in rows["serving_effort"].dropna()), key=lambda e: rank.get(e, 1), default="M")
+        pri = min((TP76_PRIORITY[u] for u in units))
+        groups[name] = {"id": name, "name": name, "level": f"screen_p{pri}", "n_cols": len(cols), "cols": cols, "path": TP76_FEATURES, "units": units,
+                        "serving": "要整備", "serving_effort": eff, "buildable": True,
+                        "rerun_after_complete_10gen": any(u in TP76_RERUN_PED for u in units), "d_win": _clean(rows["d_win"].min()) if len(rows) else None}
+    comp = t[t["group"] == "合成スコア"]
+    groups["S76_COMPOSITE"] = {
+        "id": "S76_COMPOSITE", "name": "S76_COMPOSITE", "level": "screen_p1", "n_cols": 2, "cols": ["comp_win", "comp_top3"], "path": "", "units": ["合成スコア"],
+        "serving": "要整備", "serving_effort": "L", "buildable": False, "rerun_after_complete_10gen": True,
+        "d_win": _clean(comp["d_win"].iloc[0]) if len(comp) else None,
+        "build_note": "弱いシグナルの代表 26 列を L2 ロジスティックに当てはめた線形予測（勝ち用・3 着内用）。係数は A 年、較正は B 年、評価は C 年。年ごとの OOF の列として保存する処理が要る（学習再開前に tp76_screen の composite を保存形式にする）",
+    }
+    p1 = ["S76_COMPOSITE", "S76_D2", "S76_D5", "S76_D5r"]
+    p1p2 = p1 + ["S76_A2", "S76_B3"]
+    allp = p1p2 + ["S76_E1", "S76_E2", "S76_D4", "S76_D6", "S76_C", "S76_F", "S76_G"]
+    sets = {
+        "screen_p1": {"base": "baseline", "add": p1, "doc": "tp-76 優先1: 合成スコア + D2（競馬場×面）+ D5（4 軸の適性）+ D5r（同・種牡馬の事前なし）"},
+        "screen_p1p2": {"base": "baseline", "add": p1p2, "doc": "tp-76 優先1+2: + A2（日内の内有利×枠）+ B3（めぐ指数のカルマン）"},
+        "screen_all": {"base": "baseline", "add": allp, "doc": "tp-76 優先1〜3 + 束に入れて除去で判断（C・F・G）: + E1・E2・D4・D6 + C・F・G"},
+    }
+    return groups, sets
 
 
 def write_feature_sets(df: pd.DataFrame, columns: dict[str, dict[str, Any]], path: Path = FEATURE_SETS) -> dict[str, Any]:
@@ -537,6 +598,75 @@ def write_feature_sets(df: pd.DataFrame, columns: dict[str, dict[str, Any]], pat
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(cfg, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return cfg
+
+
+# ---- tp-76（学習前の特徴量スクリーニング）の候補を台帳と構成に取り込む ----
+TP76_FEATURES = "/home/jovyan/work/tp76_out/features.parquet"
+TP76_PRIORITY = {   # ユーザー指示（2026-10-22）による優先度
+    "D2": 1, "D5": 1, "D5r": 1, "A2": 2, "B3": 2, "E1": 3, "E2": 3, "D4": 3, "D6": 3,
+    "C1": 4, "C2": 4, "C3": 4, "F1": 4, "F2": 4, "F3": 4, "G1": 4, "G2": 4, "G3": 4,
+}
+TP76_PRIORITY_LABEL = {0: "優先1(合成スコア)", 1: "優先1", 2: "優先2", 3: "優先3", 4: "束に入れて除去で判断"}
+TP76_UNASSIGNED = {"B1": "tp-76 の判定は『優先』(S4・S5b)", "B2": "tp-76 の判定は『優先』(S4・S5b)", "D1": "tp-76 の判定は『優先』(S4・S5b)",
+                   "D3": "tp-76 の判定は『優先』(S4・S5b)", "A1": "tp-76 の判定は『後回し』", "A3": "tp-76 の判定は『後回し』",
+                   "E3": "tp-76 の判定は『後回し』", "E4": "tp-76 の判定は『後回し』", "E5": "tp-76 の判定は『後回し』"}
+# 構成に入れるときの群（C・F・G は族ごとにまとめる。列の重なりを避ける）
+TP76_SET_GROUP = {"D2": "S76_D2", "D5": "S76_D5", "D5r": "S76_D5r", "A2": "S76_A2", "B3": "S76_B3", "E1": "S76_E1", "E2": "S76_E2",
+                  "D4": "S76_D4", "D6": "S76_D6", "C1": "S76_C", "C2": "S76_C", "C3": "S76_C", "F1": "S76_F", "F2": "S76_F", "F3": "S76_F",
+                  "G1": "S76_G", "G2": "S76_G", "G3": "S76_G"}
+TP76_SET_COLS = {"S76_D2": ["D_venue"], "S76_D5": ["D_all"], "S76_D5r": ["D_raw_all"], "S76_A2": ["A_fit_inner"], "S76_B3": ["B_m_megu"],
+                 "S76_E1": ["E_abs"], "S76_E2": ["E_day"], "S76_D4": ["D_cush"], "S76_D6": ["D_ag_all"],
+                 "S76_C": ["C_elo", "C_rel", "C_unc"], "S76_F": ["F_n30", "F_n90", "F_since", "F_dist90", "F_burden90", "F_tataki"],
+                 "S76_G": ["G_n_front", "G_front_rank", "G_inner_front", "G_fit"]}
+TP76_RERUN_PED = {"B1", "B2", "B3", "D1", "D2", "D3", "D4", "D5", "D6"}   # D5r は種牡馬の事前なしなので対象外
+TP76_EFFORT = {"低": "S", "中": "M", "高": "L"}
+TP76_MEASURED_FPR = {"S1": 0.0, "S2": 0.0, "S3": 0.0, "S4": 0.025, "S5a": 0.0, "S5b": 0.012}   # シャドウ 81 単位（tp-76 §4）
+TP76_REAL_PASS = {"S1": 0, "S2": 0, "S3": 0, "S4": 13, "S5a": 7, "S5b": 13}
+
+
+def load_tp76(path: Path = TP76_RESULTS) -> dict[str, Any] | None:
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+
+
+def _tp76_row(unit: str, u: dict[str, Any], *, composite: bool = False) -> dict[str, Any]:
+    d3, se3 = u["d3"], max(u["se3"], 1e-9)
+    periods = {y: u[f"d3_{y}"] for y in (2022, 2023, 2024) if f"d3_{y}" in u}
+    p = u.get("pass", {})
+    pri = 0 if composite else TP76_PRIORITY.get(unit)
+    label = "未割当" if pri is None else TP76_PRIORITY_LABEL[pri]
+    sv_eff = "L" if composite else TP76_EFFORT.get(u.get("infer_cost", "中"), "M")
+    why = ("D の事前表（馬×条件・種牡馬×条件）、B の日次状態、A の日内結果が要る。係数は発見期間の外側で固定して持ち込む" if composite
+           else u.get("cost_note", ""))
+    s4 = bool(p.get("S4", (u.get("post_neg") or 0) >= 0.8))
+    s4_3y = bool(s4 and u.get("signs_neg", 0) >= 3) if not composite else True
+    ped = (unit in TP76_RERUN_PED) or composite
+    return {
+        "id": f"tp76:{unit}", "theme": "tp76", "group": unit, "kind": "group", "topic": "学習前スクリーニング（tp-76）" + f"：{u.get('family', '')}",
+        "eval_base": "v6e(LOYO OOF の logit)", "metric": "Δ3(3目的の1頭あたり平均)", "code": "src/pipeline/features/tp76_asof.py",
+        "data_dir": "" if composite else TP76_FEATURES, "n_cols": 2 if composite else len(u.get("cols", [])), "cols": ",".join(u.get("cols", [])),
+        "granularity": "year", "periods": json.dumps(periods, ensure_ascii=False), "n_periods": len(periods),
+        "d_win": d3, "se": se3, "se_source": "tp-76 のクラスタ頑健 SE", "hi95_last": d3 + Z95 * se3,
+        "d_top2": u["d_top2"], "d_top3": u["d_top3"],
+        "S1": bool(p.get("S1", False)), "S2": bool(p.get("S2", False)), "S3": bool(p.get("S3", False)), "S4": s4,
+        "S5": bool(p.get("S5a", False)), "S5b": bool(p.get("S5b", False)), "p_neg": u.get("post_neg"), "s4_3y": s4_3y,
+        "d_2025": u.get("d3_2025"), "screen_priority": label, "rerun_after_complete_10gen": bool(ped),
+        "adopted": False, "cluster": "tp76:" + str(u.get("family", "合成スコア")), "serving": "要整備", "serving_effort": sv_eff, "serving_note": why,
+        "needs_recompute": False, "reason": f"2025 年(1 回) {u.get('d3_2025', float('nan')):+.2e}／LOYO の年の符号一致 {u.get('signs_neg', '')}" + (f"／{TP76_UNASSIGNED[unit]}" if unit in TP76_UNASSIGNED else ""), "leak": "",
+        "source": "tp-76 の結果(results.json)", "status_override": f"スクリーニング({label})", "members": "[]",
+        "dup_known": False, "market_dep": False, "redundant_with": "", "overlaps_adopted": "",
+    }
+
+
+def tp76_rows(res: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = [_tp76_row(k, v) for k, v in res["units"].items()]
+    comp = res.get("composite_nested")
+    if comp:
+        c = dict(comp)
+        c.update(family="合成スコア(弱いシグナルの束)", cols=["合成スコア(勝ち用・3着内用)"], infer_cost="高", signs_neg=comp.get("signs_neg", 3))
+        c.setdefault("post_neg", None)
+        c["pass"] = {"S4": True}   # 合成スコアは LOYO の区間が 0 を外れ、3 年とも負（偽の合成スコアは悪化側）
+        rows.append(_tp76_row("合成スコア", c, composite=True))
+    return rows
 
 
 def load_scan(path: Path = SCAN) -> dict[str, Any]:

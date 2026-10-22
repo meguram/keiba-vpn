@@ -1,7 +1,7 @@
 {
- "version": 1,
+ "version": 2,
  "frozen_on": "2026-10-22",
- "doc": "復活セット: 過去の採用検討で不採用・保留・境界だった群のうち、緩めた基準（S2〜S4）で復活するもの。台帳: docs/operations/revival_feature_ledger.csv、章: revival_feature_set.html",
+ "doc": "復活セット: 過去の採用検討で不採用・保留・境界だった群のうち、緩めた基準（S2〜S4）で復活するもの、と tp-76（学習前スクリーニング）の候補。台帳: docs/operations/revival_feature_ledger.csv、章: revival_feature_set.html",
  "criteria": {
   "S1": "片側95%上限<0 かつ 効果≤-0.0002（従来）",
   "S2": "2期間以上で同符号 かつ 点推定≤-0.0002",
@@ -9,6 +9,42 @@
   "S4": "懐疑的事前分布 N(0,0.0002^2) の事後で P(効果<0)≥0.8",
   "S5": "片側90%上限<0",
   "place_ok": "連対・複勝の悪化は +0.0002 以内"
+ },
+ "false_positive_rate": {
+  "doc": "シャドウ特徴量 81 単位（日内の並べ替え・レース内で馬をずらす）を tp-76 の手順に通した実測。tp-76 の候補（v6e の logit への少数パラメータの追加）での値で、台帳の群の再集計にそのまま当てはまるとは限らない",
+  "measured": {
+   "S1": {
+    "fpr": 0.0,
+    "real_pass": 0,
+    "n_real": 27
+   },
+   "S2": {
+    "fpr": 0.0,
+    "real_pass": 0,
+    "n_real": 27
+   },
+   "S3": {
+    "fpr": 0.0,
+    "real_pass": 0,
+    "n_real": 27
+   },
+   "S4": {
+    "fpr": 0.025,
+    "real_pass": 13,
+    "n_real": 27
+   },
+   "S5a": {
+    "fpr": 0.0,
+    "real_pass": 7,
+    "n_real": 27
+   },
+   "S5b": {
+    "fpr": 0.012,
+    "real_pass": 13,
+    "n_real": 27
+   }
+  },
+  "recommend": "特徴量の候補入りは S4 かつ LOYO 3 年同符号（偽陽性率 2.5%）。保守的な代替は S5a（0%）。S2・S3 は偽陽性率 0% だが、要求する効果が候補の実力より大きく通る本物が 0。馬券の規則の基準は緩めない"
  },
  "baseline": {
   "name": "v6e",
@@ -48,7 +84,8 @@
   "baseline": {
    "base": null,
    "add": [],
-   "doc": "今までの基準（v6e の構成）"
+   "doc": "今までの基準（v6e の構成）",
+   "add_ready": []
   },
   "revival_r1": {
    "base": "baseline",
@@ -58,7 +95,13 @@
     "REV_tp41_SIM_apt",
     "REV_tp42_RL_A"
    ],
-   "doc": "R1: S2 を満たす群の代表（クラスタごとに 1 つ）"
+   "doc": "R1: S2 を満たす群の代表（クラスタごとに 1 つ）",
+   "add_ready": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A"
+   ]
   },
   "revival_r1r2": {
    "base": "baseline",
@@ -71,7 +114,16 @@
     "RS59",
     "NJ"
    ],
-   "doc": "R1 + R2（S3 か S4）の代表"
+   "doc": "R1 + R2（S3 か S4）の代表",
+   "add_ready": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A",
+    "REV_tp40_IN",
+    "RS59",
+    "NJ"
+   ]
   },
   "revival_wide": {
    "base": "baseline",
@@ -111,7 +163,267 @@
     "REV_tp34_R1_band",
     "REV_tp34_R2_horse_pref"
    ],
-   "doc": "R1・R2 の全群（冗長を含む。多数の弱いシグナルを束ねる効果を見る）"
+   "doc": "R1・R2 の全群（冗長を含む。多数の弱いシグナルを束ねる効果を見る）",
+   "add_ready": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A",
+    "REV_tp41_SIM_str",
+    "REV_tp39_GR_mga",
+    "REV_tp39_GR_pro",
+    "REV_tp42_RL_C",
+    "REV_tp40_IN",
+    "REV_tp39_GR_pt",
+    "REV_tp37_D7_text_lift",
+    "REV_tp37_CLZ",
+    "REV_tp39_KR_mga",
+    "REV_tp35_WK_roi",
+    "REV_tp39_KR_pro",
+    "REV_tp40_LY",
+    "REV_tp37_I2_zt4_cond_int",
+    "REV_tp39_SL_mga",
+    "REV_tp42_RL_B",
+    "CB",
+    "RS59",
+    "REV_tp39_KR_pt",
+    "REV_tp34_R3_tataki_gain",
+    "REV_tp39_GR_meg",
+    "REV_tp37_D7_text_flags",
+    "NJ",
+    "REV_tp34_R7_work",
+    "REV_tp32_COMBO",
+    "REV_tp33_TT_tier",
+    "REV_tp39_POP_megu",
+    "REV_tp35_LG_cls",
+    "REV_tp32_TRANSPORT",
+    "REV_tp34_R1_band",
+    "REV_tp34_R2_horse_pref"
+   ]
+  },
+  "screen_p1": {
+   "base": "baseline",
+   "add": [
+    "S76_COMPOSITE",
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r"
+   ],
+   "doc": "tp-76 優先1: 合成スコア + D2（競馬場×面）+ D5（4 軸の適性）+ D5r（同・種牡馬の事前なし）",
+   "add_ready": [
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r"
+   ]
+  },
+  "screen_p1p2": {
+   "base": "baseline",
+   "add": [
+    "S76_COMPOSITE",
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r",
+    "S76_A2",
+    "S76_B3"
+   ],
+   "doc": "tp-76 優先1+2: + A2（日内の内有利×枠）+ B3（めぐ指数のカルマン）",
+   "add_ready": [
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r",
+    "S76_A2",
+    "S76_B3"
+   ]
+  },
+  "screen_all": {
+   "base": "baseline",
+   "add": [
+    "S76_COMPOSITE",
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r",
+    "S76_A2",
+    "S76_B3",
+    "S76_E1",
+    "S76_E2",
+    "S76_D4",
+    "S76_D6",
+    "S76_C",
+    "S76_F",
+    "S76_G"
+   ],
+   "doc": "tp-76 優先1〜3 + 束に入れて除去で判断（C・F・G）: + E1・E2・D4・D6 + C・F・G",
+   "add_ready": [
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r",
+    "S76_A2",
+    "S76_B3",
+    "S76_E1",
+    "S76_E2",
+    "S76_D4",
+    "S76_D6",
+    "S76_C",
+    "S76_F",
+    "S76_G"
+   ]
+  },
+  "revival_r1+screen_p1": {
+   "base": "baseline",
+   "add": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A",
+    "S76_COMPOSITE",
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r"
+   ],
+   "doc": "revival_r1 + screen_p1（復活セットと tp-76 の組合せ）",
+   "add_ready": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A",
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r"
+   ]
+  },
+  "revival_r1r2+screen_p1p2": {
+   "base": "baseline",
+   "add": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A",
+    "REV_tp40_IN",
+    "RS59",
+    "NJ",
+    "S76_COMPOSITE",
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r",
+    "S76_A2",
+    "S76_B3"
+   ],
+   "doc": "revival_r1r2 + screen_p1p2（復活セットと tp-76 の組合せ）",
+   "add_ready": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A",
+    "REV_tp40_IN",
+    "RS59",
+    "NJ",
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r",
+    "S76_A2",
+    "S76_B3"
+   ]
+  },
+  "revival_wide+screen_all": {
+   "base": "baseline",
+   "add": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A",
+    "REV_tp41_SIM_str",
+    "REV_tp39_GR_mga",
+    "REV_tp39_GR_pro",
+    "REV_tp42_RL_C",
+    "REV_tp40_IN",
+    "REV_tp39_GR_pt",
+    "REV_tp37_D7_text_lift",
+    "REV_tp37_CLZ",
+    "REV_tp39_KR_mga",
+    "REV_tp35_WK_roi",
+    "REV_tp39_KR_pro",
+    "REV_tp40_LY",
+    "REV_tp37_I2_zt4_cond_int",
+    "REV_tp39_SL_mga",
+    "REV_tp42_RL_B",
+    "CB",
+    "RS59",
+    "REV_tp39_KR_pt",
+    "REV_tp34_R3_tataki_gain",
+    "REV_tp39_GR_meg",
+    "REV_tp37_D7_text_flags",
+    "NJ",
+    "REV_tp34_R7_work",
+    "REV_tp32_COMBO",
+    "REV_tp33_TT_tier",
+    "REV_tp39_POP_megu",
+    "REV_tp35_LG_cls",
+    "REV_tp32_TRANSPORT",
+    "REV_tp34_R1_band",
+    "REV_tp34_R2_horse_pref",
+    "S76_COMPOSITE",
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r",
+    "S76_A2",
+    "S76_B3",
+    "S76_E1",
+    "S76_E2",
+    "S76_D4",
+    "S76_D6",
+    "S76_C",
+    "S76_F",
+    "S76_G"
+   ],
+   "doc": "revival_wide + screen_all（復活セットと tp-76 の組合せ）",
+   "add_ready": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A",
+    "REV_tp41_SIM_str",
+    "REV_tp39_GR_mga",
+    "REV_tp39_GR_pro",
+    "REV_tp42_RL_C",
+    "REV_tp40_IN",
+    "REV_tp39_GR_pt",
+    "REV_tp37_D7_text_lift",
+    "REV_tp37_CLZ",
+    "REV_tp39_KR_mga",
+    "REV_tp35_WK_roi",
+    "REV_tp39_KR_pro",
+    "REV_tp40_LY",
+    "REV_tp37_I2_zt4_cond_int",
+    "REV_tp39_SL_mga",
+    "REV_tp42_RL_B",
+    "CB",
+    "RS59",
+    "REV_tp39_KR_pt",
+    "REV_tp34_R3_tataki_gain",
+    "REV_tp39_GR_meg",
+    "REV_tp37_D7_text_flags",
+    "NJ",
+    "REV_tp34_R7_work",
+    "REV_tp32_COMBO",
+    "REV_tp33_TT_tier",
+    "REV_tp39_POP_megu",
+    "REV_tp35_LG_cls",
+    "REV_tp32_TRANSPORT",
+    "REV_tp34_R1_band",
+    "REV_tp34_R2_horse_pref",
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r",
+    "S76_A2",
+    "S76_B3",
+    "S76_E1",
+    "S76_E2",
+    "S76_D4",
+    "S76_D6",
+    "S76_C",
+    "S76_F",
+    "S76_G"
+   ]
   }
  },
  "groups": {
@@ -570,17 +882,320 @@
    "d_win": -9.2e-05,
    "cluster": "初経験・替わり",
    "buildable": true
+  },
+  "S76_D2": {
+   "id": "S76_D2",
+   "name": "S76_D2",
+   "level": "screen_p1",
+   "n_cols": 1,
+   "cols": [
+    "D_venue"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "D2"
+   ],
+   "serving": "要整備",
+   "serving_effort": "L",
+   "buildable": true,
+   "rerun_after_complete_10gen": true,
+   "d_win": -4.164617873783043e-05
+  },
+  "S76_D5": {
+   "id": "S76_D5",
+   "name": "S76_D5",
+   "level": "screen_p1",
+   "n_cols": 1,
+   "cols": [
+    "D_all"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "D5"
+   ],
+   "serving": "要整備",
+   "serving_effort": "L",
+   "buildable": true,
+   "rerun_after_complete_10gen": true,
+   "d_win": -6.250774606242418e-05
+  },
+  "S76_D5r": {
+   "id": "S76_D5r",
+   "name": "S76_D5r",
+   "level": "screen_p1",
+   "n_cols": 1,
+   "cols": [
+    "D_raw_all"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "D5r"
+   ],
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "d_win": -4.997009275427591e-05
+  },
+  "S76_A2": {
+   "id": "S76_A2",
+   "name": "S76_A2",
+   "level": "screen_p2",
+   "n_cols": 1,
+   "cols": [
+    "A_fit_inner"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "A2"
+   ],
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "d_win": -4.8926435523050694e-05
+  },
+  "S76_B3": {
+   "id": "S76_B3",
+   "name": "S76_B3",
+   "level": "screen_p2",
+   "n_cols": 1,
+   "cols": [
+    "B_m_megu"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "B3"
+   ],
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": true,
+   "d_win": -4.72510304062166e-05
+  },
+  "S76_E1": {
+   "id": "S76_E1",
+   "name": "S76_E1",
+   "level": "screen_p3",
+   "n_cols": 1,
+   "cols": [
+    "E_abs"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "E1"
+   ],
+   "serving": "要整備",
+   "serving_effort": "S",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "d_win": -1.3938655413392407e-05
+  },
+  "S76_E2": {
+   "id": "S76_E2",
+   "name": "S76_E2",
+   "level": "screen_p3",
+   "n_cols": 1,
+   "cols": [
+    "E_day"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "E2"
+   ],
+   "serving": "要整備",
+   "serving_effort": "S",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "d_win": -1.7716345527624383e-05
+  },
+  "S76_D4": {
+   "id": "S76_D4",
+   "name": "S76_D4",
+   "level": "screen_p3",
+   "n_cols": 1,
+   "cols": [
+    "D_cush"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "D4"
+   ],
+   "serving": "要整備",
+   "serving_effort": "L",
+   "buildable": true,
+   "rerun_after_complete_10gen": true,
+   "d_win": -4.3939248081829636e-05
+  },
+  "S76_D6": {
+   "id": "S76_D6",
+   "name": "S76_D6",
+   "level": "screen_p3",
+   "n_cols": 1,
+   "cols": [
+    "D_ag_all"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "D6"
+   ],
+   "serving": "要整備",
+   "serving_effort": "L",
+   "buildable": true,
+   "rerun_after_complete_10gen": true,
+   "d_win": -8.624188934803916e-05
+  },
+  "S76_C": {
+   "id": "S76_C",
+   "name": "S76_C",
+   "level": "screen_p4",
+   "n_cols": 3,
+   "cols": [
+    "C_elo",
+    "C_rel",
+    "C_unc"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "C1",
+    "C2",
+    "C3"
+   ],
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "d_win": -7.094171333339136e-07
+  },
+  "S76_F": {
+   "id": "S76_F",
+   "name": "S76_F",
+   "level": "screen_p4",
+   "n_cols": 6,
+   "cols": [
+    "F_n30",
+    "F_n90",
+    "F_since",
+    "F_dist90",
+    "F_burden90",
+    "F_tataki"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "F1",
+    "F2",
+    "F3"
+   ],
+   "serving": "要整備",
+   "serving_effort": "S",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "d_win": -8.384657258190456e-07
+  },
+  "S76_G": {
+   "id": "S76_G",
+   "name": "S76_G",
+   "level": "screen_p4",
+   "n_cols": 4,
+   "cols": [
+    "G_n_front",
+    "G_front_rank",
+    "G_inner_front",
+    "G_fit"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "G1",
+    "G2",
+    "G3"
+   ],
+   "serving": "要整備",
+   "serving_effort": "S",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "d_win": -4.3410879800895144e-07
+  },
+  "S76_COMPOSITE": {
+   "id": "S76_COMPOSITE",
+   "name": "S76_COMPOSITE",
+   "level": "screen_p1",
+   "n_cols": 2,
+   "cols": [
+    "comp_win",
+    "comp_top3"
+   ],
+   "path": "",
+   "units": [
+    "合成スコア"
+   ],
+   "serving": "要整備",
+   "serving_effort": "L",
+   "buildable": false,
+   "rerun_after_complete_10gen": true,
+   "d_win": -0.00010392487680532679,
+   "build_note": "弱いシグナルの代表 26 列を L2 ロジスティックに当てはめた線形予測（勝ち用・3 着内用）。係数は A 年、較正は B 年、評価は C 年。年ごとの OOF の列として保存する処理が要る（学習再開前に tp76_screen の composite を保存形式にする）"
   }
  },
  "unbuilt": [
   "tp16b:AF（後日談の変種）",
-  "tp16:後日談ほか 10 群の最良"
+  "tp16:後日談ほか 10 群の最良",
+  "S76_COMPOSITE"
  ],
- "comparison": {
-  "A": "baseline",
-  "B": "revival_r1",
-  "C": "revival_r1r2",
-  "D": "revival_wide"
+ "screen_unassigned": {
+  "B1": "tp-76 の判定は『優先』(S4・S5b)",
+  "B2": "tp-76 の判定は『優先』(S4・S5b)",
+  "D1": "tp-76 の判定は『優先』(S4・S5b)",
+  "D3": "tp-76 の判定は『優先』(S4・S5b)",
+  "A1": "tp-76 の判定は『後回し』",
+  "A3": "tp-76 の判定は『後回し』",
+  "E3": "tp-76 の判定は『後回し』",
+  "E4": "tp-76 の判定は『後回し』",
+  "E5": "tp-76 の判定は『後回し』"
  },
- "serving_note": "復活セットの群は、推論側の生成経路が未整備（採用時に整備）。比較は学習表の列でのオフライン評価"
+ "comparison": {
+  "plan": [
+   {
+    "id": "A",
+    "set": "baseline"
+   },
+   {
+    "id": "B",
+    "set": "revival_r1"
+   },
+   {
+    "id": "C",
+    "set": "revival_r1r2"
+   },
+   {
+    "id": "D",
+    "set": "revival_wide"
+   },
+   {
+    "id": "E",
+    "set": "screen_p1"
+   },
+   {
+    "id": "F",
+    "set": "screen_p1p2"
+   },
+   {
+    "id": "G",
+    "set": "screen_all"
+   },
+   {
+    "id": "H",
+    "set": "revival_r1+screen_p1"
+   },
+   {
+    "id": "I",
+    "set": "revival_r1r2+screen_p1p2"
+   },
+   {
+    "id": "J",
+    "set": "revival_wide+screen_all"
+   }
+  ],
+  "estimate": "1 構成の LOYO 評価（3 年 × 2 seed × 3 目的）は 0.5〜1 時間（過去の実績からの目安。実測ではない）。10 構成を直列で 5〜10 時間、共有 3 スロットで約 2〜4 時間。合成スコアは、学習前に OOF の列を保存する処理（tp76_screen の composite）が要る。seed 2・3 の確認と通った構成の LOYO アンサンブル・最終学習は別枠（8〜9 時間）"
+ },
+ "serving_note": "復活セット・tp-76 の群は、推論側の生成経路が未整備（採用時に整備）。比較は学習表の列でのオフライン評価"
 }

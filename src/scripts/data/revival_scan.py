@@ -193,6 +193,8 @@ def check_sets(cfg_path: str, frame: str | None = None) -> dict:
             continue
         f = pq.ParquetFile(p)
         cols = [c for c in f.schema_arrow.names if c not in KEY]
+        if g.get("cols"):   # 1 つの parquet に複数の群の列がある場合（tp-76）は、群の列だけを調べる
+            cols = [c for c in cols if c in g["cols"]]
         coll = sorted(set(cols) & base_cols)
         for c in cols:
             if c in seen and seen[c] != name:

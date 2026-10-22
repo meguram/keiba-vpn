@@ -111,9 +111,9 @@ def _raises(fn):
     return None
 
 
-def test_external_groups_only_rev_names_and_paths_resolve():
+def test_external_groups_only_rev_and_s76_names_and_paths_resolve():
     ext = fs.external_groups()
-    assert ext and all(k.startswith("REV_") for k in ext)
+    assert ext and all(k.startswith(("REV_", "S76_")) for k in ext)
     assert all(p.is_absolute() for p, _ in ext.values())
 
 
@@ -124,3 +124,61 @@ def test_sets_exclude_leak_market_and_composition():
     ids = {rl.short_name(i) for i in df.loc[df["leak"].fillna("").ne("") | df["market_dep"].fillna(False) | df["kind"].ne("group"), "id"]}
     assert not (names & ids)
     assert json.loads(json.dumps(cfg)) == cfg
+
+
+def test_tp76_sets_and_priorities():
+    cfg = fs.load()
+    p1, p12, allp = (cfg["sets"][n]["add"] for n in ("screen_p1", "screen_p1p2", "screen_all"))
+    assert p1 == ["S76_COMPOSITE", "S76_D2", "S76_D5", "S76_D5r"]
+    assert p12 == p1 + ["S76_A2", "S76_B3"] and allp[:6] == p12
+    assert {"S76_E1", "S76_E2", "S76_D4", "S76_D6", "S76_C", "S76_F", "S76_G"} <= set(allp)
+    combo = cfg["sets"]["revival_r1+screen_p1"]["add"]
+    assert combo == cfg["sets"]["revival_r1"]["add"] + p1
+    # 既存の構成は変えない
+    assert cfg["sets"]["baseline"]["add"] == [] and len(cfg["sets"]["revival_r1"]["add"]) == 4
+
+
+def test_unbuilt_composite_is_left_out_of_eval_name():
+    cfg = fs.load()
+    assert "S76_COMPOSITE" in fs.resolve("screen_p1", cfg) and "S76_COMPOSITE" not in fs.resolve("screen_p1", cfg, ready_only=True)
+    assert "S76_COMPOSITE" not in fs.v6_eval_name("screen_p1", cfg) and "S76_D2" in fs.v6_eval_name("screen_p1", cfg)
+    assert "S76_COMPOSITE" in cfg["unbuilt"]
+
+
+def test_external_groups_include_s76_with_columns():
+    ext = fs.external_groups()
+    path, cols = ext["S76_D2"]
+    assert path.name == "features.parquet" and cols == ["D_venue"]
+    assert "S76_COMPOSITE" not in ext
+
+
+def test_s76_column_groups_do_not_overlap():
+    cfg = fs.load()
+    seen: dict[str, str] = {}
+    for n, g in cfg["groups"].items():
+        if n.startswith("S76_") and g.get("cols") and g.get("path"):
+            for c in g["cols"]:
+                assert c not in seen, (c, seen.get(c), n)
+                seen[c] = n
+
+
+def test_false_positive_rates_recorded():
+    m = fs.load()["false_positive_rate"]["measured"]
+    assert m["S4"]["fpr"] == 0.025 and m["S1"]["fpr"] == 0.0 and m["S4"]["real_pass"] == 13
+
+
+def test_tp76_rows_flags():
+    df = pd.read_csv(rl.LEDGER_CSV)
+    t = df[df["theme"] == "tp76"].set_index("group")
+    assert t.loc["D2", "screen_priority"] == "優先1" and t.loc["A2", "screen_priority"] == "優先2" and t.loc["E1", "screen_priority"] == "優先3"
+    assert t.loc["C1", "screen_priority"].startswith("束") and t.loc["A1", "screen_priority"] == "未割当"
+    assert bool(t.loc["D5", "rerun_after_complete_10gen"]) and not bool(t.loc["D5r", "rerun_after_complete_10gen"])
+    assert bool(t.loc["B3", "rerun_after_complete_10gen"]) and t.loc["E1", "serving_effort"] == "S" and t.loc["D2", "serving_effort"] == "L"
+    assert "合成スコア" in t.index
+
+
+def test_s4_3y_flag_for_ledger_groups():
+    df = pd.read_csv(rl.LEDGER_CSV)
+    assert "s4_3y" in df
+    ok = df[df["s4_3y"] == True]  # noqa: E712
+    assert (ok["n_periods"] >= 3).all()

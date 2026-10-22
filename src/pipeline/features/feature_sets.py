@@ -25,12 +25,13 @@ def set_names(cfg: dict | None = None) -> list[str]:
     return list((cfg or load())["sets"])
 
 
-def resolve(name: str, cfg: dict | None = None) -> list[str]:
-    """セットに足す群の名前（v6_eval の外部群の名前）を返す。基準は空。"""
+def resolve(name: str, cfg: dict | None = None, ready_only: bool = False) -> list[str]:
+    """セットに足す群の名前（v6_eval の外部群の名前）を返す。基準は空。ready_only なら、学習表に列がある（すぐ評価できる）群だけ。"""
     cfg = cfg or load()
     if name not in cfg["sets"]:
         raise KeyError(f"未知の特徴量セット: {name}（{', '.join(cfg['sets'])}）")
-    return list(cfg["sets"][name]["add"])
+    v = cfg["sets"][name]
+    return list(v.get("add_ready", v["add"]) if ready_only else v["add"])
 
 
 def external_groups(work_root: Path | None = None, cfg: dict | None = None) -> dict[str, tuple[Path, list[str] | None]]:
@@ -39,16 +40,16 @@ def external_groups(work_root: Path | None = None, cfg: dict | None = None) -> d
     out: dict[str, tuple[Path, list[str] | None]] = {}
     for name, g in cfg["groups"].items():
         p = g.get("path") or ""
-        if not p or not name.startswith("REV_"):
+        if not p or not name.startswith(("REV_", "S76_")):
             continue
         path = Path(p)
-        out[name] = (path if path.is_absolute() else ROOT / path, None)
+        out[name] = (path if path.is_absolute() else ROOT / path, g.get("cols") or None)
     return out
 
 
 def v6_eval_name(name: str, cfg: dict | None = None) -> str:
     """v6_eval の run に渡す構成名。基準は z:RB@e、復活セットは群を足す。"""
-    add = resolve(name, cfg)
+    add = resolve(name, cfg, ready_only=True)   # 列がまだ無い群（合成スコアなど）は、作った後に add へ戻る
     return BASELINE_NAME if not add else "z:RB+" + "+".join(add) + "@e"
 
 
@@ -62,7 +63,9 @@ def main() -> None:
     for n in ([args.name] if args.name else set_names(cfg)):
         add = resolve(n, cfg)
         cols = sum((cfg["groups"].get(a) or {}).get("n_cols") or 0 for a in add)
-        print(f"{n}: 追加 {len(add)} 群 / 約 {cols} 列 -> {v6_eval_name(n, cfg)}")
+        unready = [a for a in add if a not in resolve(n, cfg, ready_only=True)]
+        extra = f"（未構築: {', '.join(unready)}）" if unready else ""
+        print(f"{n}: 追加 {len(add)} 群 / 約 {cols} 列{extra} -> {v6_eval_name(n, cfg)[:120]}")
 
 
 if __name__ == "__main__":
