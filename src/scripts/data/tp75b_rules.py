@@ -452,7 +452,7 @@ def run_eval2(out_dir: Path) -> dict:
                "z_2025_win": s["y2025"]["e_m1"]["z"], "z_2025_top3": s["y2025"]["e_m3"]["z"], "z_2026_win": s["y2026"]["e_m1"]["z"], "z_2026_top3": s["y2026"]["e_m3"]["z"]}
         for fam in fams:
             a = r["adopt"][fam]
-            rec[fam] = {"tier": a["tier"], "adopted": a["adopted"], "final": a.get("final", False), "robust_bh": a["robust_bh"], "q_combined": a["q"], "inc_parents": a.get("inc_parents"),
+            rec[fam] = {"tier": a["tier"], "adopted": a["adopted"], "final": a.get("final", False), "robust_bh": a["robust_bh"], "q_combined": a["q"], "z": a["z"], "inc_parents": a.get("inc_parents"),
                         "inc_round1": a.get("inc_round1"), "cluster": rep_of[fam].get(r["id"])}
         ledger_rows.append(rec)
     (out_dir / "ledger_r2.json").write_text(json.dumps(ledger_rows, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
@@ -501,9 +501,46 @@ def dose_response(d: pd.DataFrame, ctx: T1.Ctx, clusters: dict) -> dict:
     return out
 
 
+def eval_personas_r2(out_dir: Path, robust_only: bool = True) -> dict:
+    """第 2 ラウンドの最終採用のうち、BH 頑健（合算の母数）なものだけを第 1 ラウンドに足して、クラスタとペルソナを再評価する。
+    事後の判断: 事前登録の基準（A/B・再現・増分）だけで採用すると 2.6〜3.5 千個になり、2025 年の標本外では偶然の期待とほぼ同じだった。BH 頑健なものだけが標本外でも再現したので、順位付けと凍結にはそれだけを使う。"""
+    d = T1.load_table(extra=make_extra())
+    ctx = T1.Ctx(d)
+    ledger1 = json.loads((out_dir / "ledger.json").read_text(encoding="utf-8"))
+    ledger2 = json.loads((out_dir / "ledger_r2.json").read_text(encoding="utf-8"))
+    fams = T1.FAMILIES
+    clusters = {}
+    used = {}
+    for fam, (col, sign) in fams.items():
+        rows_f = []
+        for x in ledger1:
+            if x["adopt"].get(fam, {}).get("adopted"):
+                rows_f.append({"id": x["id"], "expr": x["expr"], "source": x["source"], "stats": _rebuild_stats(d, ctx, x), "adopt": {fam: x["adopt"][fam]}, "round": 1})
+        n2 = 0
+        for x in ledger2:
+            a = x[fam]
+            if a["final"] and (a["robust_bh"] or not robust_only):
+                st = _rebuild_stats(d, ctx, x)
+                z = x["win_resid_z"] if col == "e_m1" else x["top3_resid_z"]
+                rows_f.append({"id": x["id"], "expr": x["expr"], "source": "第 2 ラウンド", "stats": st, "adopt": {fam: {**a, "z": sign * z, "effect": st["disc"][col]["mean"]}}, "round": 2, "c": None})
+                n2 += 1
+        used[fam] = n2
+        clusters[fam] = T1.cluster_set(d, rows_f, fam)
+        for c in clusters[fam]:
+            c["cover"] = float(c["union"][ctx.periods["disc"]].mean())
+    res = {"robust_only": robust_only, "round2_rules_used": used}
+    res["clusters"] = {fam: [{"rep": c["rep"], "round": c["rep_row"]["round"], "n_members": len(c["members"]), "members": c["members"], "weight": T1.cluster_weight(c, fam), "cover": c["cover"],
+                              "expr": c["rep_row"]["expr"], "tier": c["rep_row"]["adopt"][fam]["tier"], "robust_bh": c["rep_row"]["adopt"][fam].get("robust_bh"),
+                              "effect_pt": 100 * c["rep_row"]["adopt"][fam]["effect"]} for c in clusters[fam]] for fam in fams}
+    res["v2"] = T1.evaluate_personas(d, ctx, clusters)
+    res["dose_response"] = dose_response(d, ctx, clusters)
+    (out_dir / ("results_r2b.json" if robust_only else "results_r2_all.json")).write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+    return res
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["prereg", "eval", "reeval"])
+    ap.add_argument("cmd", choices=["prereg", "eval", "personas", "reeval"])
     ap.add_argument("frozen", nargs="?")
     ap.add_argument("--years", nargs="*", type=int, default=[2026])
     ap.add_argument("--out", default=str(OUT))
@@ -514,6 +551,9 @@ def main() -> None:
     elif a.cmd == "eval":
         r = run_eval2(Path(a.out))
         print(json.dumps(r["summary"], ensure_ascii=False, indent=1))
+    elif a.cmd == "personas":
+        r = eval_personas_r2(Path(a.out))
+        print(json.dumps(r["round2_rules_used"], ensure_ascii=False))
     else:
         print(json.dumps(T1.reeval(Path(a.frozen), a.years, loader=lambda: T1.load_table(extra=make_extra())), ensure_ascii=False, indent=1))
 
