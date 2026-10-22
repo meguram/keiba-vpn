@@ -1,2 +1,4 @@
 # 学習済みの重みは公開リポジトリに置かない
 model.txt
+params.json
+ped_profile.json

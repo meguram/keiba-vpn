@@ -1,0 +1,37 @@
+# 当て込み(fit)された係数・学習済みの重み・集計表（公開リポジトリに置かない。実ファイルは各環境に残し、GCS の models/fitted_artifacts/ で配る）。
+# 人が決める設定・しきい値（kesi_mark.json、maintenance.json、ports.env、anti_scraping.json、behavior_flags.json、fetch_*.json、paid_zone.json、public_fields.json など）は含めない。
+# 1 行 1 パス。末尾 / はディレクトリ（配下すべて）。分類の理由と判断が割れたものは docs/operations/fitted_artifacts.md。
+
+# --- 学習済みの重み・符号化器
+config/expected_megu/model.json
+config/growth_index/model.txt
+config/pace_type_models.json
+config/tracking_difficulty_v2/model.txt
+config/tracking_difficulty_v2/model_demand.txt
+models/encoder.json
+models/final_odds_bundle.json
+models/keiba_model.pkl
+models/label_encoders.pkl
+models/pace_predictor/model_1f.txt
+models/pace_predictor/model_3f.txt
+
+# --- 当て込まれた係数・補正表
+config/growth_index/params.json
+config/growth_index/ped_profile.json
+config/megu_predict_params.json
+config/megu_predict_condition_weights.json
+config/megu_v3a/centers.json
+config/megu_v3a/month_offsets.csv
+config/megu_v3a/par.csv
+config/gate_bias.json
+config/class_benchmark.json
+config/pace_coherence.json
+config/pace_coherence_v2.json
+config/tracking_difficulty_v2/meta.json
+config/tracking_difficulty_v2/position_effect.json
+config/megu_excusable.json
+config/drift_top_features.json
+
+# --- 集計表（データから集計した値）
+data/research/bloodline/
+data/research/course_bloodline/
