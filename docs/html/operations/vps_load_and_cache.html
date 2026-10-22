@@ -1,0 +1,83 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VPS（prod の画面）の負荷テストとキャッシュの現状 — keiba-vpn docs</title>
+<style>
+:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --code:#0b1428; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1100px; margin:0 auto; padding:36px 28px 80px; }
+h1 { font-size:26px; margin:0 0 6px; } h2 { font-size:19px; margin:40px 0 4px; padding-top:16px; border-top:1px solid var(--border); }
+h3 { font-size:16px; margin:22px 0 4px; }
+.muted { color:var(--muted); font-size:13px; } .sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+table { border-collapse:collapse; width:100%; margin:8px 0 14px; font-size:13.5px; }
+th,td { border:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+th { background:var(--panel); color:var(--muted); font-weight:600; white-space:nowrap; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 6px; border-radius:5px; font-size:12px; }
+pre { background:var(--code); border:1px solid var(--border); border-radius:8px; padding:10px 14px; overflow-x:auto; font-size:12.5px; line-height:1.55; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin:12px 0; }
+.when { white-space:nowrap; font-weight:600; }
+.ok { color:var(--ok); } .warn { color:var(--warn); }
+</style></head><body><main>
+
+<h1>VPS（prod の画面）の負荷テストとキャッシュの現状</h1>
+<p class="muted">測定日: 2026-10-22。対象は ConoHa VPS（2GB・3 コア）の画面（nginx → Next.js standalone）。API は含まない。</p>
+
+<div class="box"><b>結論</b>：画面だけなら、<b>同時 100 接続でもエラー 0・空きメモリ 1.3GB 以上</b>。Next.js 単体の処理能力は <b>約 400 リクエスト/秒</b>で頭打ち（CPU 1 コア分）。nginx のレート制限（1 IP あたり 240 回/分）が先に効くため、実運用では Next.js が限界に達することはない。VPS 内にローカルデータのキャッシュは無く、<b>データは毎回ホストの API から取る</b>。</div>
+
+<h2>1. 測り方</h2>
+<ul>
+<li>負荷をかける側はホスト機の Python（aiohttp）。SSH のトンネルで VPS 内の nginx（127.0.0.1:8080）、または Next.js（127.0.0.1:3000）に直接つなぐ。Cloudflare は通らない。</li>
+<li>同時接続 5 → 10 → 20 → 50 → 100 を各 30 秒（間に 8 秒の回復）。画面のページ（/login, /, /weekly-predictions, /race/…, /version.json）をランダムに取得。API は叩かない。</li>
+<li>VPS 側で 3 秒おきに、空きメモリ・load・keiba-ui / nginx / cloudflared のメモリと再起動回数を採取。</li>
+<li>中止の条件: 空きメモリ 600MB 未満、エラー率 5% 超、keiba-ui の再起動。今回は発動せず。</li>
+</ul>
+
+<h2>2. 結果</h2>
+<h3>2.1 nginx 経由（レート制限が効く）</h3>
+<p class="sub">nginx は 1 IP あたり、画面 240 回/分（burst 120）、API/画像 120 回/分（burst 60）に制限している（<code>keiba-ui-zones.conf</code>）。上限を超えた要求は 429 を即返す。</p>
+<table>
+<tr><th>同時接続</th><th>リクエスト/秒</th><th>200</th><th>429</th><th>p95 (ms)</th><th>空きメモリ最小 (MB)</th><th>nginx 最大 (MB)</th></tr>
+<tr><td>5</td><td>83</td><td>240</td><td>2,252</td><td>67</td><td>1,412</td><td>10</td></tr>
+<tr><td>20</td><td>388</td><td>152</td><td>11,488</td><td>65</td><td>1,409</td><td>16</td></tr>
+<tr><td>100</td><td>2,395</td><td>152</td><td>71,697</td><td>60</td><td>1,392</td><td>45</td></tr>
+</table>
+<p>どの段階でも 200 は 150〜240 件に留まり、残りは 429。<b>レート制限が意図どおり働き、Next.js には届いていない</b>。サーバーエラー（5xx）や再起動は 0。nginx のメモリは最大 45MB。</p>
+
+<h3>2.2 Next.js 直（レート制限を外して、アプリの限界を見る）</h3>
+<table>
+<tr><th>同時接続</th><th>リクエスト/秒</th><th>p50 (ms)</th><th>p95 (ms)</th><th>p99 (ms)</th><th>エラー</th><th>空きメモリ最小 (MB)</th><th>Next.js 最大 (MB)</th><th>load</th></tr>
+<tr><td>5</td><td>97</td><td>50</td><td>66</td><td>84</td><td>0</td><td>1,396</td><td>93</td><td>0.29</td></tr>
+<tr><td>10</td><td>191</td><td>50</td><td>76</td><td>99</td><td>0</td><td>1,384</td><td>98</td><td>0.31</td></tr>
+<tr><td>20</td><td>300</td><td>61</td><td>104</td><td>146</td><td>0</td><td>1,375</td><td>105</td><td>0.90</td></tr>
+<tr><td>50</td><td>371</td><td>125</td><td>269</td><td>361</td><td>0</td><td>1,361</td><td>120</td><td>1.16</td></tr>
+<tr><td>100</td><td>407</td><td>196</td><td>626</td><td>752</td><td>0</td><td>1,341</td><td>140</td><td>1.36</td></tr>
+</table>
+<ul>
+<li>処理能力は同時 50 付近から頭打ち（約 370〜410 回/秒）。Next.js は 1 プロセスなので、CPU 3 コアのうち 1 コア分で飽和する。それ以上は待ち時間が伸びるだけで、エラーにはならない。</li>
+<li>メモリ: Next.js は最大 140MB。systemd の上限（MemoryHigh 160M・MemoryMax 200M）の手前で、余裕は小さい。空きメモリは終始 1.3GB 以上（目標 1.0GB 以上）を満たした。</li>
+<li>終了後 10 秒で、Next.js のメモリは 84MB に戻った（リークの兆候なし）。</li>
+</ul>
+
+<h2>3. キャッシュの現状（VPS）</h2>
+<table>
+<tr><th>層</th><th>状態</th><th>備考</th></tr>
+<tr><td>VPS のローカルデータ</td><td class="warn">無し</td><td>VPS は状態を持たない設計。画面の成果物だけが乗っている。</td></tr>
+<tr><td>nginx のキャッシュ</td><td class="warn">無し</td><td><code>proxy_cache</code> の設定が無い。<code>/api/</code> と <code>/data/image/</code> は、毎回ホスト（<code>api-internal</code>）へ中継する。</td></tr>
+<tr><td>API の応答ヘッダ</td><td class="warn">キャッシュの指示なし</td><td>予測などの API は <code>Cache-Control</code> も <code>ETag</code> も付けない。画像だけ <code>ETag</code> と <code>Last-Modified</code> がある。</td></tr>
+<tr><td>ブラウザ側（画面のコード）</td><td class="ok">あり（部分的）</td><td>出走馬カード（<code>entryCard.ts</code>。取得中の重複排除つき）、汎用（<code>httpCache.ts</code>）、レース価値（<code>raceValue.ts</code>。時刻つき）のメモリキャッシュ。ただし通常の API 取得は <code>cache: "no-store"</code>。</td></tr>
+<tr><td>ホスト側（API の内側）</td><td class="ok">あり</td><td>予測は LRU → ディスク → GCS のキャッシュ。レース価値は 30 秒のメモリキャッシュ。</td></tr>
+</table>
+
+<h2>4. 改善の候補（安全なものから）</h2>
+<ol>
+<li><b>画像（<code>/data/image/</code>）に nginx の <code>proxy_cache</code> を入れる。</b>公開してよい静的な画像で、利用者ごとに変わらない。長い有効期限で、ホストへの往復を減らせる。</li>
+<li><b>API の GET に <code>Cache-Control: private, max-age=30</code> と <code>ETag</code> を付ける。</b>ブラウザごとの再利用だけなので、会員と匿名の応答が混ざる心配がない。</li>
+<li>nginx で API の応答を共有キャッシュにする案は<b>推奨しない</b>。応答は会員区分（匿名・会員・開発者）で内容が違うため、鍵にセッションの区分を入れないと、会員向けの内容が匿名に出る事故になる。</li>
+<li>Next.js の systemd の上限（MemoryHigh 160M）は、高負荷時の最大 140MB に近い。余裕を持たせるなら 200M に上げる案がある（VPS の予算内）。</li>
+</ol>
+
+<h2>5. まだ測っていないこと</h2>
+<ul>
+<li>API を伴うページ（レース詳細・週間予測のデータ取得）の負荷。ホストの API を共有するため、ホストの負荷が高い間は測らない。Cloud Run に移した後に測り直す。</li>
+<li>Cloudflare を含む実際の経路（Access の通行証が必要）。公開の準備の段階で測る。</li>
+</ul>
+
+</main></body></html>

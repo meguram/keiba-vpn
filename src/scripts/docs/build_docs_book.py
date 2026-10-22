@@ -119,6 +119,8 @@ PARTS: list[Part] = [
           see=[("tracking_difficulty_v2", "追走難度 v2 の作り直し（tp-54）の章")]),
         C("megu_v3a_rollout", "めぐ指数 v3a の本番反映の手順書（DB・GCS・日次 cron・退避とロールバック）。", "運用", src="operations/megu_v3a_rollout.md",
           see=[("megu_index_v3a", "めぐ指数 v3a の章")]),
+        C("vps_load_and_cache", "VPS（prod の画面）の段階的な負荷テストの結果（同時 100 接続でエラー 0、Next.js 単体は約 400 回/秒で頭打ち）と、VPS 内のキャッシュの現状・改善の候補。", "運用", src="html/operations/vps_load_and_cache.html"),
+        C("data_terms_and_public_policy", "取得元（netkeiba・JRA など）の規約の要点と、一般公開・有料化の方針（公開の 3 段階、公開許可リスト、有料ゾーンの推奨度、取得の姿勢）。", "運用", src="html/operations/data_terms_and_public_policy.html"),
         C("local_dataset_endpoints", "src/api/app.py のエンドポイントのうち、ローカルのデータセットを参照するものの一覧。", "参照", src="html/operations/local_dataset_endpoints.html"),
     ]),
     Part("モデリングの方針と分割", "モデルをどう作るかの考え方と、全体の設計、データの分割。", [
