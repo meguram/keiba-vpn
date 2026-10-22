@@ -1,0 +1,487 @@
+{
+ "note": "結果を見る前に件数だけで定義した型。位置の帯 × 条件の水準の組で、発見期間(2022-2024)の出走が 600 以上のものを検定する。BH は family ごと。",
+ "min_runs": 600,
+ "specs": [
+  {
+   "family": "P",
+   "band": "bp",
+   "conds": []
+  },
+  {
+   "family": "P",
+   "band": "bp",
+   "conds": [
+    "c5"
+   ]
+  },
+  {
+   "family": "P",
+   "band": "bp",
+   "conds": [
+    "cv"
+   ]
+  },
+  {
+   "family": "P",
+   "band": "bp",
+   "conds": [
+    "g3"
+   ]
+  },
+  {
+   "family": "P",
+   "band": "bp",
+   "conds": [
+    "s3"
+   ]
+  },
+  {
+   "family": "P",
+   "band": "bp",
+   "conds": [
+    "pp3"
+   ]
+  },
+  {
+   "family": "P",
+   "band": "bp",
+   "conds": [
+    "fs3"
+   ]
+  },
+  {
+   "family": "P",
+   "band": "bp",
+   "conds": [
+    "c5",
+    "pp3"
+   ]
+  },
+  {
+   "family": "P",
+   "band": "bp",
+   "conds": [
+    "c5",
+    "g3"
+   ]
+  },
+  {
+   "family": "P",
+   "band": "bp",
+   "conds": [
+    "sf",
+    "g3",
+    "pp3"
+   ]
+  },
+  {
+   "family": "P",
+   "band": "bp",
+   "conds": [
+    "sf",
+    "s3",
+    "pp3"
+   ]
+  },
+  {
+   "family": "P",
+   "band": "bp",
+   "conds": [
+    "c5",
+    "s3"
+   ]
+  },
+  {
+   "family": "P",
+   "band": "bp",
+   "conds": [
+    "cv",
+    "pp3"
+   ]
+  },
+  {
+   "family": "O1",
+   "band": "ba1",
+   "conds": []
+  },
+  {
+   "family": "O1",
+   "band": "ba1",
+   "conds": [
+    "c5"
+   ]
+  },
+  {
+   "family": "O1",
+   "band": "ba1",
+   "conds": [
+    "g3"
+   ]
+  },
+  {
+   "family": "O1",
+   "band": "ba1",
+   "conds": [
+    "s3"
+   ]
+  },
+  {
+   "family": "O1",
+   "band": "ba1",
+   "conds": [
+    "pace3"
+   ]
+  },
+  {
+   "family": "O1",
+   "band": "ba1",
+   "conds": [
+    "shape3"
+   ]
+  },
+  {
+   "family": "O1",
+   "band": "ba1",
+   "conds": [
+    "joint9"
+   ]
+  },
+  {
+   "family": "O1",
+   "band": "ba1",
+   "conds": [
+    "c5",
+    "pace3"
+   ]
+  },
+  {
+   "family": "O1",
+   "band": "ba1",
+   "conds": [
+    "sf",
+    "g3",
+    "pace3"
+   ]
+  },
+  {
+   "family": "O1",
+   "band": "ba1",
+   "conds": [
+    "sf",
+    "s3",
+    "pace3"
+   ]
+  },
+  {
+   "family": "O1",
+   "band": "ba1",
+   "conds": [
+    "c5",
+    "g3"
+   ]
+  },
+  {
+   "family": "O4",
+   "band": "ba4",
+   "conds": []
+  },
+  {
+   "family": "O4",
+   "band": "ba4",
+   "conds": [
+    "c5"
+   ]
+  },
+  {
+   "family": "O4",
+   "band": "ba4",
+   "conds": [
+    "g3"
+   ]
+  },
+  {
+   "family": "O4",
+   "band": "ba4",
+   "conds": [
+    "pace3"
+   ]
+  },
+  {
+   "family": "O4",
+   "band": "ba4",
+   "conds": [
+    "c5",
+    "pace3"
+   ]
+  },
+  {
+   "family": "O4",
+   "band": "ba4",
+   "conds": [
+    "sf",
+    "g3",
+    "pace3"
+   ]
+  },
+  {
+   "family": "M",
+   "band": "chg3",
+   "conds": []
+  },
+  {
+   "family": "M",
+   "band": "chg3",
+   "conds": [
+    "pace3"
+   ]
+  },
+  {
+   "family": "M",
+   "band": "chg3",
+   "conds": [
+    "c5"
+   ]
+  },
+  {
+   "family": "M",
+   "band": "chg3",
+   "conds": [
+    "g3"
+   ]
+  },
+  {
+   "family": "M",
+   "band": "bp",
+   "conds": [
+    "chg3"
+   ]
+  },
+  {
+   "family": "M",
+   "band": "bp",
+   "conds": [
+    "chg3",
+    "pace3"
+   ]
+  }
+ ],
+ "n_cells_by_family": {
+  "P": 519,
+  "O1": 376,
+  "O4": 187,
+  "M": 93
+ },
+ "n_cells_by_spec": {
+  "ba1×sf×s3×pace3": 72,
+  "bp×cv×pp3": 71,
+  "bp×cv": 70,
+  "ba1×c5×pace3": 70,
+  "ba4×c5×pace3": 69,
+  "bp×c5×s3": 68,
+  "bp×sf×s3×pp3": 64,
+  "bp×c5×pp3": 60,
+  "ba1×c5×g3": 59,
+  "ba4×sf×g3×pace3": 55,
+  "bp×c5×g3": 53,
+  "ba1×sf×g3×pace3": 52,
+  "bp×sf×g3×pp3": 48,
+  "ba1×joint9": 36,
+  "ba1×c5": 35,
+  "ba4×c5": 35,
+  "bp×c5": 33,
+  "bp×chg3×pace3": 33,
+  "chg3×c5": 27,
+  "ba4×pace3": 12,
+  "ba4×g3": 12,
+  "bp×chg3": 12,
+  "ba1×shape3": 12,
+  "ba1×pace3": 12,
+  "ba1×s3": 12,
+  "ba1×g3": 12,
+  "bp×fs3": 12,
+  "bp×pp3": 12,
+  "bp×s3": 12,
+  "bp×g3": 12,
+  "chg3×pace3": 9,
+  "chg3×g3": 9,
+  "ba4": 4,
+  "ba1": 4,
+  "bp": 4,
+  "chg3": 3
+ },
+ "n_cells_total": 1175,
+ "tests_per_cell": [
+  "top3 残差(両側)",
+  "複勝回収率>100%(片側)"
+ ],
+ "ladder_P": [
+  [
+   "0 要素（位置の帯のみ）",
+   []
+  ],
+  [
+   "+コース",
+   [
+    "c5"
+   ]
+  ],
+  [
+   "+コース+馬場",
+   [
+    "c5",
+    "g3"
+   ]
+  ],
+  [
+   "+コース+ペース予想",
+   [
+    "c5",
+    "pp3"
+   ]
+  ],
+  [
+   "+コース+馬場+ペース予想",
+   [
+    "c5",
+    "g3",
+    "pp3"
+   ]
+  ],
+  [
+   "+コース+馬場+ペース予想+硬さ",
+   [
+    "c5",
+    "g3",
+    "pp3",
+    "s3"
+   ]
+  ],
+  [
+   "ペース予想のみ",
+   [
+    "pp3"
+   ]
+  ]
+ ],
+ "ladder_O": [
+  [
+   "0 要素（位置の帯のみ）",
+   []
+  ],
+  [
+   "+コース",
+   [
+    "c5"
+   ]
+  ],
+  [
+   "+コース+馬場",
+   [
+    "c5",
+    "g3"
+   ]
+  ],
+  [
+   "+コース+ペース実測",
+   [
+    "c5",
+    "pace3"
+   ]
+  ],
+  [
+   "+コース+馬場+ペース実測",
+   [
+    "c5",
+    "g3",
+    "pace3"
+   ]
+  ],
+  [
+   "+コース+馬場+ペース実測+硬さ",
+   [
+    "c5",
+    "g3",
+    "pace3",
+    "s3"
+   ]
+  ],
+  [
+   "ペース実測のみ",
+   [
+    "pace3"
+   ]
+  ]
+ ],
+ "heterogeneity_P": [
+  [
+   "c5",
+   "コース（面×距離帯）"
+  ],
+  [
+   "cv",
+   "競馬場×面"
+  ],
+  [
+   "g3",
+   "馬場状態"
+  ],
+  [
+   "s3f",
+   "硬さ（面別）"
+  ],
+  [
+   "pp3",
+   "ペース予想"
+  ],
+  [
+   "fs3",
+   "頭数"
+  ],
+  [
+   "sfg3pp3",
+   "面×馬場×ペース予想"
+  ]
+ ],
+ "heterogeneity_O": [
+  [
+   "c5",
+   "コース（面×距離帯）"
+  ],
+  [
+   "g3",
+   "馬場状態"
+  ],
+  [
+   "pace3",
+   "ペース実測"
+  ],
+  [
+   "shape3",
+   "隊列実測"
+  ],
+  [
+   "joint9",
+   "ペース×隊列"
+  ],
+  [
+   "sfg3pace3",
+   "面×馬場×ペース実測"
+  ]
+ ],
+ "n_tests_primary": 2350,
+ "rows": 211548,
+ "disc_rows": 132756,
+ "cuts": {
+  "band": [
+   0.15,
+   0.35,
+   0.65
+  ],
+  "chg3": [
+   -0.1,
+   0.1
+  ],
+  "pp3": "2021 年のレース単位の P(ハイ)−P(スロー) の三分位",
+  "k_shrink": 200.0
+ }
+}
