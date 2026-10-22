@@ -199,6 +199,37 @@ def build() -> list[dict]:
     add("F18_combo", "comment_pos_dw_stable", _and("comment_pos==1", "abs(weight_change)<=4"))
     add("F18_combo", "debut_ev_good", _and("run_no==0", "ev_score>=3"))
     add("F18_combo", "debut_comment_pos", _and("run_no==0", "comment_pos==1"))
+    # F19 ブリンカー × 脚質（着用状態は SmartRC の各走の着用。脚質は as-of の過去の初角位置: 逃げ≤0.10 / 先行≤0.30 / 差し≤0.60 / 追込）
+    bl = {"first": "blk_state=='first'", "cont": "blk_state=='cont'", "off": "blk_state=='off'"}
+    for bk, be in bl.items():
+        for st in ("nige", "senko", "sashi", "oikomi"):
+            add("F19_blinker_style", f"blk_{bk}_{st}", _and(be, f"style4=='{st}'"))
+        add("F19_blinker_style", f"blk_{bk}_turf", _and(be, "is_turf==1"))
+        add("F19_blinker_style", f"blk_{bk}_dirt", _and(be, "is_turf==0"))
+        for gn, ge in DG.items():
+            add("F19_blinker_style", f"blk_{bk}_{gn}", _and(be, ge))
+        add("F19_blinker_style", f"blk_{bk}_bigfield", _and(be, "fs>=14"))
+    for sg, se in (("front", "style4=='nige'|style4=='senko'"), ("back", "style4=='sashi'|style4=='oikomi'")):
+        for sf, ss in (("turf", "is_turf==1"), ("dirt", "is_turf==0")):
+            add("F19_blinker_style", f"blk_first_{sg}_{sf}", _and(bl["first"], se, ss))
+    # F20 枠 × 脚質（全体 / 芝ダ別 / コース別 = 場×芝ダ / 頭数別）
+    dr = {"inner": "inner==1", "mid": "(inner==0)&(outer==0)&bracket_number.notna()", "outer": "outer==1"}
+    for dn, de in dr.items():
+        for st in ("nige", "senko", "sashi", "oikomi"):
+            add("F20_draw_style", f"draw_{dn}_{st}", _and(de, f"style4=='{st}'"))
+            for sf, ss in (("turf", "is_turf==1"), ("dirt", "is_turf==0")):
+                add("F20_draw_style", f"draw_{dn}_{st}_{sf}", _and(de, f"style4=='{st}'", ss))
+    names_v = {"01": "sapporo", "02": "hakodate", "03": "fukushima", "04": "niigata", "05": "tokyo", "06": "nakayama", "07": "chukyo", "08": "kyoto", "09": "hanshin", "10": "kokura"}
+    for vc, vn in names_v.items():
+        for sf, ss in (("turf", "is_turf==1"), ("dirt", "is_turf==0")):
+            for dn in ("inner", "outer"):
+                for sg, se in (("front", "style4=='nige'|style4=='senko'"), ("back", "style4=='sashi'|style4=='oikomi'")):
+                    add("F20_draw_style", f"course_{vn}_{sf}_{dn}_{sg}", _and(f"venue_code=='{vc}'", ss, dr[dn], se))
+    for fn, fe in (("big", "fs>=14"), ("small", "fs<=10")):
+        for dn in ("inner", "outer"):
+            for sg, se in (("front", "style4=='nige'|style4=='senko'"), ("back", "style4=='sashi'|style4=='oikomi'")):
+                for sf, ss in (("turf", "is_turf==1"), ("dirt", "is_turf==0")):
+                    add("F20_draw_style", f"field_{fn}_{dn}_{sg}_{sf}", _and(fe, dr[dn], se, ss))
     seen = set()
     for x in c:
         assert x["name"] not in seen, x["name"]
@@ -208,7 +239,18 @@ def build() -> list[dict]:
 
 if __name__ == "__main__":
     cs = build()
-    OUT.write_text(json.dumps({"n_candidates": len(cs), "tests_per_candidate": 2, "n_tests": 2 * len(cs), "candidates": cs}, ensure_ascii=False, indent=1), encoding="utf-8")
+    import hashlib
+
+    desc_hash = hashlib.sha256(Path(__file__).with_name("tp72_desc.py").read_bytes()).hexdigest()[:16]
+    reg = {
+        "n_candidates": len(cs), "tests_per_candidate": 2, "n_tests": 2 * len(cs),
+        "design": "第1段: 型ごとに勝ち・複勝の2アウトカムを片側検定（min(z_m, z_k) の BH）。発見2022-24、確認2025を1回、2026は記述のみ。",
+        "part_c": {"design": "穴馬（人気9番以下 / 単勝12倍以上 / 20倍以上）の好走（3着以内 / 1着）の共通要素。記述子の各水準を、同年・同オッズ帯の平均的な好走率との差で検定（レース単位クラスタ、BH）。6仕様。",
+                   "universes": ["pop>=9", "odds>=12", "odds>=20"], "outcomes": ["top3", "win"], "descriptor_file_sha256_16": desc_hash},
+        "stage2": {"design": "記述子のペア(i,j)の交互作用を、モデル残差に対して LOYO（2022-24）の外側年で測る。目的変数: 勝ち残差 / 複勝残差 / 穴馬(odds>=12)の複勝残差。BH。",
+                   "n_descriptors": 39, "n_pairs_max": 741, "targets": 3, "descriptor_file_sha256_16": desc_hash},
+        "candidates": cs}
+    OUT.write_text(json.dumps(reg, ensure_ascii=False, indent=1), encoding="utf-8")
     from collections import Counter
 
     print(len(cs), "candidates;", 2 * len(cs), "tests")

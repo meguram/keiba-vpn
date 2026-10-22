@@ -89,6 +89,20 @@ def load_oikiri() -> pd.DataFrame:
     return o
 
 
+def load_blinker() -> pd.DataFrame:
+    """その走のブリンカー着用（SmartRC の馬ごとの行。装着は出走前に決まる事実）。2026 年は表が無い。"""
+    parts = []
+    for y in YEARS:
+        f = TABLES / str(y) / "smartrc_race_flat.parquet"
+        if f.exists():
+            parts.append(pd.read_parquet(f, columns=["race_id", "hcode", "blinker"]))
+    b = pd.concat(parts, ignore_index=True)
+    b["race_id"] = b["race_id"].astype(str)
+    b["horse_id"] = b["hcode"].astype(str)
+    b["blk"] = pd.to_numeric(b["blinker"], errors="coerce").clip(0, 1)
+    return b.drop_duplicates(["race_id", "horse_id"])[["race_id", "horse_id", "blk"]]
+
+
 def parse_pass(s) -> tuple[float, float]:
     try:
         xs = [int(x) for x in str(s).replace("(", "").replace(")", "").replace("*", "").split("-") if x.strip().isdigit()]
@@ -128,6 +142,7 @@ def build() -> pd.DataFrame:
     m = m[m["surface"].isin(["芝", "ダート"])].copy()
     m = m.merge(load_extra(), on=["race_id", "horse_number"], how="left")
     m = m.merge(load_oikiri(), on=["race_id", "horse_number"], how="left")
+    m = m.merge(load_blinker(), on=["race_id", "horse_id"], how="left")
     for c in ("comment_has", "comment_pos", "comment_neg"):
         m[c] = m[c].fillna(0).astype(int) if c in m.columns else 0
 
@@ -206,6 +221,12 @@ def build() -> pd.DataFrame:
     m["prev_pos1"] = g["pos1"].shift(1)
     m["prev_posL"] = g["posL"].shift(1)
     m["pos1_chg"] = m["pos1_frac"] - m["style5"]          # 今回の初角位置 − 普段（負なら普段より前。結果由来なので機構の確認にだけ使う）
+    m["prev_blk"] = g["blk"].shift(1)
+    m["n_blk_prior"] = g["blk"].transform(lambda s: s.fillna(0).cumsum().shift(1).fillna(0))
+    m["blk_state"] = np.select(
+        [m["blk"].isna() | m["prev_blk"].isna(), (m["blk"] == 1) & (m["prev_blk"] == 1), (m["blk"] == 1) & (m["n_blk_prior"] == 0) & (m["run_no"] >= 3),
+         (m["blk"] == 0) & (m["prev_blk"] == 1), (m["blk"] == 1)], ["na", "cont", "first", "off", "again"], "none")
+    m["style4"] = np.select([m["style5"].isna(), m["style5"] <= 0.10, m["style5"] <= 0.30, m["style5"] <= 0.60], ["na", "nige", "senko", "sashi"], "oikomi")
     m["prev_ev"] = g["ev_score"].shift(1)
     m["ev_delta"] = m["ev_score"] - m["prev_ev"]
     m["ev_mean_prior"] = g["ev_score"].transform(lambda s: s.shift(1).expanding(min_periods=2).mean())

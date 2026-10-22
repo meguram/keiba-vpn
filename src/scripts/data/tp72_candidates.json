@@ -1,7 +1,28 @@
 {
- "n_candidates": 385,
+ "n_candidates": 551,
  "tests_per_candidate": 2,
- "n_tests": 770,
+ "n_tests": 1102,
+ "design": "第1段: 型ごとに勝ち・複勝の2アウトカムを片側検定（min(z_m, z_k) の BH）。発見2022-24、確認2025を1回、2026は記述のみ。",
+ "part_c": {
+  "design": "穴馬（人気9番以下 / 単勝12倍以上 / 20倍以上）の好走（3着以内 / 1着）の共通要素。記述子の各水準を、同年・同オッズ帯の平均的な好走率との差で検定（レース単位クラスタ、BH）。6仕様。",
+  "universes": [
+   "pop>=9",
+   "odds>=12",
+   "odds>=20"
+  ],
+  "outcomes": [
+   "top3",
+   "win"
+  ],
+  "descriptor_file_sha256_16": "4c510d61471a6859"
+ },
+ "stage2": {
+  "design": "記述子のペア(i,j)の交互作用を、モデル残差に対して LOYO（2022-24）の外側年で測る。目的変数: 勝ち残差 / 複勝残差 / 穴馬(odds>=12)の複勝残差。BH。",
+  "n_descriptors": 39,
+  "n_pairs_max": 741,
+  "targets": 3,
+  "descriptor_file_sha256_16": "4c510d61471a6859"
+ },
  "candidates": [
   {
    "family": "F1_sex_season",
@@ -1927,6 +1948,836 @@
    "family": "F18_combo",
    "name": "debut_comment_pos",
    "expr": "(run_no==0) & (comment_pos==1)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_nige",
+   "expr": "(blk_state=='first') & (style4=='nige')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_senko",
+   "expr": "(blk_state=='first') & (style4=='senko')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_sashi",
+   "expr": "(blk_state=='first') & (style4=='sashi')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_oikomi",
+   "expr": "(blk_state=='first') & (style4=='oikomi')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_turf",
+   "expr": "(blk_state=='first') & (is_turf==1)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_dirt",
+   "expr": "(blk_state=='first') & (is_turf==0)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_sprint",
+   "expr": "(blk_state=='first') & ((dist_band=='d_sprint'))"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_mile",
+   "expr": "(blk_state=='first') & ((dist_band=='d_mile_s')|(dist_band=='d_mile'))"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_mid_long",
+   "expr": "(blk_state=='first') & ((dist_band=='d_mid')|(dist_band=='d_long'))"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_bigfield",
+   "expr": "(blk_state=='first') & (fs>=14)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_nige",
+   "expr": "(blk_state=='cont') & (style4=='nige')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_senko",
+   "expr": "(blk_state=='cont') & (style4=='senko')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_sashi",
+   "expr": "(blk_state=='cont') & (style4=='sashi')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_oikomi",
+   "expr": "(blk_state=='cont') & (style4=='oikomi')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_turf",
+   "expr": "(blk_state=='cont') & (is_turf==1)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_dirt",
+   "expr": "(blk_state=='cont') & (is_turf==0)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_sprint",
+   "expr": "(blk_state=='cont') & ((dist_band=='d_sprint'))"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_mile",
+   "expr": "(blk_state=='cont') & ((dist_band=='d_mile_s')|(dist_band=='d_mile'))"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_mid_long",
+   "expr": "(blk_state=='cont') & ((dist_band=='d_mid')|(dist_band=='d_long'))"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_bigfield",
+   "expr": "(blk_state=='cont') & (fs>=14)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_nige",
+   "expr": "(blk_state=='off') & (style4=='nige')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_senko",
+   "expr": "(blk_state=='off') & (style4=='senko')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_sashi",
+   "expr": "(blk_state=='off') & (style4=='sashi')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_oikomi",
+   "expr": "(blk_state=='off') & (style4=='oikomi')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_turf",
+   "expr": "(blk_state=='off') & (is_turf==1)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_dirt",
+   "expr": "(blk_state=='off') & (is_turf==0)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_sprint",
+   "expr": "(blk_state=='off') & ((dist_band=='d_sprint'))"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_mile",
+   "expr": "(blk_state=='off') & ((dist_band=='d_mile_s')|(dist_band=='d_mile'))"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_mid_long",
+   "expr": "(blk_state=='off') & ((dist_band=='d_mid')|(dist_band=='d_long'))"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_bigfield",
+   "expr": "(blk_state=='off') & (fs>=14)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_front_turf",
+   "expr": "(blk_state=='first') & (style4=='nige'|style4=='senko') & (is_turf==1)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_front_dirt",
+   "expr": "(blk_state=='first') & (style4=='nige'|style4=='senko') & (is_turf==0)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_back_turf",
+   "expr": "(blk_state=='first') & (style4=='sashi'|style4=='oikomi') & (is_turf==1)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_back_dirt",
+   "expr": "(blk_state=='first') & (style4=='sashi'|style4=='oikomi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_nige",
+   "expr": "(inner==1) & (style4=='nige')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_nige_turf",
+   "expr": "(inner==1) & (style4=='nige') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_nige_dirt",
+   "expr": "(inner==1) & (style4=='nige') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_senko",
+   "expr": "(inner==1) & (style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_senko_turf",
+   "expr": "(inner==1) & (style4=='senko') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_senko_dirt",
+   "expr": "(inner==1) & (style4=='senko') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_sashi",
+   "expr": "(inner==1) & (style4=='sashi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_sashi_turf",
+   "expr": "(inner==1) & (style4=='sashi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_sashi_dirt",
+   "expr": "(inner==1) & (style4=='sashi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_oikomi",
+   "expr": "(inner==1) & (style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_oikomi_turf",
+   "expr": "(inner==1) & (style4=='oikomi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_oikomi_dirt",
+   "expr": "(inner==1) & (style4=='oikomi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_nige",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='nige')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_nige_turf",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='nige') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_nige_dirt",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='nige') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_senko",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_senko_turf",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='senko') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_senko_dirt",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='senko') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_sashi",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='sashi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_sashi_turf",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='sashi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_sashi_dirt",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='sashi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_oikomi",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_oikomi_turf",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='oikomi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_oikomi_dirt",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='oikomi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_nige",
+   "expr": "(outer==1) & (style4=='nige')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_nige_turf",
+   "expr": "(outer==1) & (style4=='nige') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_nige_dirt",
+   "expr": "(outer==1) & (style4=='nige') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_senko",
+   "expr": "(outer==1) & (style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_senko_turf",
+   "expr": "(outer==1) & (style4=='senko') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_senko_dirt",
+   "expr": "(outer==1) & (style4=='senko') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_sashi",
+   "expr": "(outer==1) & (style4=='sashi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_sashi_turf",
+   "expr": "(outer==1) & (style4=='sashi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_sashi_dirt",
+   "expr": "(outer==1) & (style4=='sashi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_oikomi",
+   "expr": "(outer==1) & (style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_oikomi_turf",
+   "expr": "(outer==1) & (style4=='oikomi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_oikomi_dirt",
+   "expr": "(outer==1) & (style4=='oikomi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_sapporo_turf_inner_front",
+   "expr": "(venue_code=='01') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_sapporo_turf_inner_back",
+   "expr": "(venue_code=='01') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_sapporo_turf_outer_front",
+   "expr": "(venue_code=='01') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_sapporo_turf_outer_back",
+   "expr": "(venue_code=='01') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_sapporo_dirt_inner_front",
+   "expr": "(venue_code=='01') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_sapporo_dirt_inner_back",
+   "expr": "(venue_code=='01') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_sapporo_dirt_outer_front",
+   "expr": "(venue_code=='01') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_sapporo_dirt_outer_back",
+   "expr": "(venue_code=='01') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hakodate_turf_inner_front",
+   "expr": "(venue_code=='02') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hakodate_turf_inner_back",
+   "expr": "(venue_code=='02') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hakodate_turf_outer_front",
+   "expr": "(venue_code=='02') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hakodate_turf_outer_back",
+   "expr": "(venue_code=='02') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hakodate_dirt_inner_front",
+   "expr": "(venue_code=='02') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hakodate_dirt_inner_back",
+   "expr": "(venue_code=='02') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hakodate_dirt_outer_front",
+   "expr": "(venue_code=='02') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hakodate_dirt_outer_back",
+   "expr": "(venue_code=='02') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_fukushima_turf_inner_front",
+   "expr": "(venue_code=='03') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_fukushima_turf_inner_back",
+   "expr": "(venue_code=='03') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_fukushima_turf_outer_front",
+   "expr": "(venue_code=='03') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_fukushima_turf_outer_back",
+   "expr": "(venue_code=='03') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_fukushima_dirt_inner_front",
+   "expr": "(venue_code=='03') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_fukushima_dirt_inner_back",
+   "expr": "(venue_code=='03') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_fukushima_dirt_outer_front",
+   "expr": "(venue_code=='03') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_fukushima_dirt_outer_back",
+   "expr": "(venue_code=='03') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_niigata_turf_inner_front",
+   "expr": "(venue_code=='04') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_niigata_turf_inner_back",
+   "expr": "(venue_code=='04') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_niigata_turf_outer_front",
+   "expr": "(venue_code=='04') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_niigata_turf_outer_back",
+   "expr": "(venue_code=='04') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_niigata_dirt_inner_front",
+   "expr": "(venue_code=='04') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_niigata_dirt_inner_back",
+   "expr": "(venue_code=='04') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_niigata_dirt_outer_front",
+   "expr": "(venue_code=='04') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_niigata_dirt_outer_back",
+   "expr": "(venue_code=='04') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_tokyo_turf_inner_front",
+   "expr": "(venue_code=='05') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_tokyo_turf_inner_back",
+   "expr": "(venue_code=='05') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_tokyo_turf_outer_front",
+   "expr": "(venue_code=='05') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_tokyo_turf_outer_back",
+   "expr": "(venue_code=='05') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_tokyo_dirt_inner_front",
+   "expr": "(venue_code=='05') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_tokyo_dirt_inner_back",
+   "expr": "(venue_code=='05') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_tokyo_dirt_outer_front",
+   "expr": "(venue_code=='05') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_tokyo_dirt_outer_back",
+   "expr": "(venue_code=='05') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_nakayama_turf_inner_front",
+   "expr": "(venue_code=='06') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_nakayama_turf_inner_back",
+   "expr": "(venue_code=='06') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_nakayama_turf_outer_front",
+   "expr": "(venue_code=='06') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_nakayama_turf_outer_back",
+   "expr": "(venue_code=='06') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_nakayama_dirt_inner_front",
+   "expr": "(venue_code=='06') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_nakayama_dirt_inner_back",
+   "expr": "(venue_code=='06') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_nakayama_dirt_outer_front",
+   "expr": "(venue_code=='06') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_nakayama_dirt_outer_back",
+   "expr": "(venue_code=='06') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_chukyo_turf_inner_front",
+   "expr": "(venue_code=='07') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_chukyo_turf_inner_back",
+   "expr": "(venue_code=='07') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_chukyo_turf_outer_front",
+   "expr": "(venue_code=='07') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_chukyo_turf_outer_back",
+   "expr": "(venue_code=='07') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_chukyo_dirt_inner_front",
+   "expr": "(venue_code=='07') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_chukyo_dirt_inner_back",
+   "expr": "(venue_code=='07') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_chukyo_dirt_outer_front",
+   "expr": "(venue_code=='07') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_chukyo_dirt_outer_back",
+   "expr": "(venue_code=='07') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kyoto_turf_inner_front",
+   "expr": "(venue_code=='08') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kyoto_turf_inner_back",
+   "expr": "(venue_code=='08') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kyoto_turf_outer_front",
+   "expr": "(venue_code=='08') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kyoto_turf_outer_back",
+   "expr": "(venue_code=='08') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kyoto_dirt_inner_front",
+   "expr": "(venue_code=='08') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kyoto_dirt_inner_back",
+   "expr": "(venue_code=='08') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kyoto_dirt_outer_front",
+   "expr": "(venue_code=='08') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kyoto_dirt_outer_back",
+   "expr": "(venue_code=='08') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hanshin_turf_inner_front",
+   "expr": "(venue_code=='09') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hanshin_turf_inner_back",
+   "expr": "(venue_code=='09') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hanshin_turf_outer_front",
+   "expr": "(venue_code=='09') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hanshin_turf_outer_back",
+   "expr": "(venue_code=='09') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hanshin_dirt_inner_front",
+   "expr": "(venue_code=='09') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hanshin_dirt_inner_back",
+   "expr": "(venue_code=='09') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hanshin_dirt_outer_front",
+   "expr": "(venue_code=='09') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hanshin_dirt_outer_back",
+   "expr": "(venue_code=='09') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kokura_turf_inner_front",
+   "expr": "(venue_code=='10') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kokura_turf_inner_back",
+   "expr": "(venue_code=='10') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kokura_turf_outer_front",
+   "expr": "(venue_code=='10') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kokura_turf_outer_back",
+   "expr": "(venue_code=='10') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kokura_dirt_inner_front",
+   "expr": "(venue_code=='10') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kokura_dirt_inner_back",
+   "expr": "(venue_code=='10') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kokura_dirt_outer_front",
+   "expr": "(venue_code=='10') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kokura_dirt_outer_back",
+   "expr": "(venue_code=='10') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_big_inner_front_turf",
+   "expr": "(fs>=14) & (inner==1) & (style4=='nige'|style4=='senko') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_big_inner_front_dirt",
+   "expr": "(fs>=14) & (inner==1) & (style4=='nige'|style4=='senko') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_big_inner_back_turf",
+   "expr": "(fs>=14) & (inner==1) & (style4=='sashi'|style4=='oikomi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_big_inner_back_dirt",
+   "expr": "(fs>=14) & (inner==1) & (style4=='sashi'|style4=='oikomi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_big_outer_front_turf",
+   "expr": "(fs>=14) & (outer==1) & (style4=='nige'|style4=='senko') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_big_outer_front_dirt",
+   "expr": "(fs>=14) & (outer==1) & (style4=='nige'|style4=='senko') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_big_outer_back_turf",
+   "expr": "(fs>=14) & (outer==1) & (style4=='sashi'|style4=='oikomi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_big_outer_back_dirt",
+   "expr": "(fs>=14) & (outer==1) & (style4=='sashi'|style4=='oikomi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_small_inner_front_turf",
+   "expr": "(fs<=10) & (inner==1) & (style4=='nige'|style4=='senko') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_small_inner_front_dirt",
+   "expr": "(fs<=10) & (inner==1) & (style4=='nige'|style4=='senko') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_small_inner_back_turf",
+   "expr": "(fs<=10) & (inner==1) & (style4=='sashi'|style4=='oikomi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_small_inner_back_dirt",
+   "expr": "(fs<=10) & (inner==1) & (style4=='sashi'|style4=='oikomi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_small_outer_front_turf",
+   "expr": "(fs<=10) & (outer==1) & (style4=='nige'|style4=='senko') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_small_outer_front_dirt",
+   "expr": "(fs<=10) & (outer==1) & (style4=='nige'|style4=='senko') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_small_outer_back_turf",
+   "expr": "(fs<=10) & (outer==1) & (style4=='sashi'|style4=='oikomi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_small_outer_back_dirt",
+   "expr": "(fs<=10) & (outer==1) & (style4=='sashi'|style4=='oikomi') & (is_turf==0)"
   }
  ]
 }
