@@ -7,6 +7,9 @@
   "scripts/ops/cutover/host_cron_switch.sh": {
    "local_data": 2
   },
+  "scripts/ops/fitted_artifacts.sh": {
+   "local_data": 2
+  },
   "scripts/ops/install_prod_status_cron.sh": {
    "local_data": 1
   },
@@ -15,6 +18,9 @@
   },
   "scripts/ops/maintenance_holding_server.py": {
    "host_port_literal": 1
+  },
+  "scripts/ops/purge_preflight.sh": {
+   "host_alias": 2
   },
   "scripts/ops/vps/backup_old_site.sh": {
    "host_alias": 1
