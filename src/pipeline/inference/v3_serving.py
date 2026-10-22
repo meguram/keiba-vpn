@@ -42,6 +42,8 @@ def default_stage_dir(bundle_dir: Path | None = None) -> Path:
     name = Path(bundle_dir).name if bundle_dir else ""
     if name.startswith(("bundle_v4", "bundle_v5")):
         return WORK / "final_stage" / ("v4_verify_2024" if name.endswith("2024") else "v4_fixed")
+    if name.startswith("bundle_v6"):
+        return WORK / "final_stage" / ("v6_e_2024" if name.endswith("2024") else "v6_e_2025")
     return WORK / "final_stage/fixed"
 
 
@@ -50,7 +52,7 @@ def default_aux_dir(bundle_dir: Path | None = None) -> Path:
     if os.environ.get("KEIBA_V3_AUX"):
         return Path(os.environ["KEIBA_V3_AUX"])
     name = Path(bundle_dir).name if bundle_dir else ""
-    return (WORK.parent / "training_pipeline_v4/final_aux") if name.startswith(("bundle_v4", "bundle_v5")) else WORK / "final_aux"
+    return (WORK.parent / "training_pipeline_v4/final_aux") if name.startswith(("bundle_v4", "bundle_v5", "bundle_v6")) else WORK / "final_aux"
 
 
 def v5_enabled() -> bool:
@@ -128,7 +130,13 @@ class V3Serving:
             self.rb_hist, self.rb_params = sv6.load_state(self.rb_state)
         self.history = sla.load_history(self.tables_dir)
         runs = apply_repair(load_runs(self.tables_dir), EMPTY_RM)
-        self.ped = spe.PedState.from_history(spe.history_from_runs(runs))
+        from src.pipeline.features import serving_parents as spar
+
+        hist_ped = spe.history_from_runs(runs)
+        if spar.enabled():              # 学習表の sire / dam_sire は血統 JSON 由来の ID（血統キー復旧後）。履歴・当日とも同じキーで数える
+            self.ped = spe.PedState.from_history(spar.get_map().attach(hist_ped), blank_pedigree=False)
+        else:
+            self.ped = spe.PedState.from_history(hist_ped)
         info = {"bundle": str(self.bundle_dir), "columns": len(self.feature_cols), "history_rows": len(self.history),
                 "history_last_date": str(self.history["date"].max()), "warm_sec": round(time.perf_counter() - t0, 1)}
         logger.info("v3 の推論準備: %s", info)
@@ -189,7 +197,9 @@ class V3Serving:
             v4cols.index = base.index
 
         tgt = base[KEYS + ["date"]].merge(cm[KEYS + ["surface", "distance", "track_condition", "venue_code"]], on=KEYS, how="left")
-        ped = self.ped.features(tgt)
+        from src.pipeline.features import serving_parents as spar
+
+        ped = self.ped.features(spar.get_map().attach(tgt) if (spar.enabled() and not self.ped.blank_pedigree) else tgt)
         extras = spe.extras_features(base[KEYS], spe.fetch_extras_rows(race_ids, storage, workers=min(workers, 4))) if storage is not None else spe.extras_features(base[KEYS], None)
         ped.index = extras.index = base.index
 

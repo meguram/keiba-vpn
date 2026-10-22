@@ -8,8 +8,8 @@
   傾向を付ける。未確定レースは同日の後のレースの「当日直前傾向」に混ざらない。
 
 注意（学習側の仕様）:
-- 出馬表の sire / dam_sire は全期間で空のため、学習表の ``sire_prior_win_rate_surface`` などは「面ごとの全体の累計勝率」になっている。
-  推論でも同じ（空のまま扱う）。血統名が入るようになったら学習表の作り直しが先。
+- 学習表の sire / dam_sire は 2026-10-17 に血統 JSON 由来の ID で復旧した（``serving_parents``。KEIBA_PED_PARENT_KEYS=0 で復旧前の挙動＝空キーに戻せる）。
+  ``sire_prior_win_rate_surface`` などは、その ID ごとの面別の累計勝率。推論も同じ ID で数える。
 - 学習側の通算成績も 2026-10-18 から『日付が厳密に前』に直したので、推論と同じ定義（以前は同一レースの他馬の結果まで数える先読みがあった）。
 """
 
@@ -23,6 +23,8 @@ import numpy as np
 import pandas as pd
 
 from src.pipeline.features.historical_entity_stats import _norm_id, strict_prior_by_date
+from src.pipeline.features.serving_parents import enabled as parent_keys_enabled
+from src.pipeline.features.serving_parents import get_map
 from src.pipeline.features.track_bias_pedigree import (
     _prior_win_rate_by_id_surface,
     _time_sort_seconds,
@@ -69,7 +71,7 @@ def load_history(tables_dir: str | Path | None = None, years: list[int] | None =
     if sb.exists():
         ped = pl.read_parquet(sb, columns=["sire", "dam_sire"])
         if int((ped["sire"].fill_null("") != "").sum()) or int((ped["dam_sire"].fill_null("") != "").sum()):
-            logger.warning("出馬表の sire/dam_sire に値が入っている。学習表は空として作られているので、学習表の作り直しと合わせて serving_layer_a を直すこと")
+            logger.warning("出馬表の sire/dam_sire に値が入っている（推論は血統 JSON 由来の ID を使うので出馬表の列は使わない）")
     return h
 
 
@@ -139,13 +141,13 @@ def _track_bias(hist: pd.DataFrame, card: pd.DataFrame) -> pd.DataFrame:
     父/母父の面別勝率は全履歴の累計が要るので、同じ関数の部品（``_prior_win_rate_by_id_surface``）を全履歴に直接当てる。"""
     cols = ["race_id", "horse_number", "date", "venue_code", "surface", "start_time", "finish_position", "last_3f", "track_condition", "distance"]
     vc = pd.to_numeric(hist["venue_code"], errors="coerce")
-    hb = hist.loc[vc.between(1, 10)].reindex(columns=cols).assign(_pending=False)
-    cb = card.reindex(columns=cols).assign(finish_position=np.nan, last_3f=np.nan, _pending=True)
+    hb = hist.loc[vc.between(1, 10)].reindex(columns=cols + ["horse_id"]).assign(_pending=False)
+    cb = card.reindex(columns=cols + ["horse_id"]).assign(finish_position=np.nan, last_3f=np.nan, _pending=True)
     cb["track_condition"] = cb["track_condition"].replace(_GOING_FULL)       # 出馬表は「稍」「不」。結果表（履歴）と同じ表記にそろえる
 
     lo = (pd.to_datetime(card["date"]).min() - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-    near = pd.concat([hb[hb["date"].astype(str) >= lo], cb], ignore_index=True)
-    sb = near[["race_id", "horse_number"]].assign(sire="", dam_sire="")
+    near = pd.concat([hb[hb["date"].astype(str) >= lo], cb], ignore_index=True).drop(columns=["horse_id"])
+    sb = near[["race_id", "horse_number"]].assign(sire="", dam_sire="")     # 馬場傾向の列は血統に依らない
     feat = build_track_bias_pedigree_features(near, sb, placeholder_unfinished_races=True, placeholder_win_3f=float("nan"))
     if feat.empty:
         feat = pd.DataFrame(columns=["race_id", "horse_number"] + _BIAS_ONLY)
@@ -157,8 +159,12 @@ def _track_bias(hist: pd.DataFrame, card: pd.DataFrame) -> pd.DataFrame:
     st = rr["start_time"]
     secs = {v: _time_sort_seconds(v) for v in st.unique()}
     rr["_st_sec"] = st.map(secs)
-    rr["sire"] = ""
-    rr["dam_sire"] = ""
+    if parent_keys_enabled():
+        # 学習表の sire / dam_sire は血統 JSON 由来の ID（2026-10-17 の血統キー復旧）。推論も同じキーで父/母父の面別勝率を数える
+        rr = get_map().attach(rr.assign(horse_id=rr["horse_id"].astype(str)))
+    else:
+        rr["sire"] = ""
+        rr["dam_sire"] = ""
     for role in ("sire", "dam_sire"):
         f = _prior_win_rate_by_id_surface(rr, role, role)
         out = out.merge(f, on=["race_id", "horse_number"], how="left")

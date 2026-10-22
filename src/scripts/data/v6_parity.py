@@ -106,6 +106,7 @@ def main() -> None:
     big = rep[(rep["mad_over_sd"] > 0.2) | (rep["nan_mismatch"] > 0.05)]
     out = {"n_big_diff": int(len(big)), "big_cols": big["col"].tolist(), "rows": int(len(m)), "races": int(m["race_id"].nunique()), "columns": int(len(rep)),
            "worst": rep.sort_values(["mad_over_sd", "nan_mismatch"], ascending=False).head(80).to_dict("records"),
+           "all": {r["col"]: {k: r.get(k) for k in ("nan_mismatch", "val_mismatch", "corr", "mad_over_sd")} for r in rows if "n" in r},
            "n_bad_nan_gt5pct": int((rep["nan_mismatch"] > 0.05).sum()), "n_bad_val_gt5pct": int((rep["val_mismatch"] > 0.05).sum()),
            "missing_in_train": rep[rep.get("note").notna()]["col"].tolist() if "note" in rep else []}
     Path(a.out).write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
