@@ -1,0 +1,642 @@
+{
+"acq:NJ": {
+"n": 16,
+"path": "/home/jovyan/work/acq/groups/NJ.parquet",
+"rows": 283714
+},
+"acq:PT": {
+"n": 7,
+"path": "/home/jovyan/work/acq/groups/PT.parquet",
+"rows": 283714
+},
+"acq:SIB": {
+"n": 15,
+"path": "/home/jovyan/work/acq/groups/SIB.parquet",
+"rows": 283714
+},
+"tp32:AGE": {
+"n": 13,
+"path": "data/local/modeling/training_pipeline_v4/tp32/groups/AGE.parquet",
+"rows": 283714
+},
+"tp32:CLASS": {
+"n": 20,
+"path": "data/local/modeling/training_pipeline_v4/tp32/groups/CLASS.parquet",
+"rows": 283714
+},
+"tp32:COMBO": {
+"n": 91,
+"path": "data/local/modeling/training_pipeline_v4/tp32/groups/COMBO.parquet",
+"rows": 283714
+},
+"tp32:DIST": {
+"n": 21,
+"path": "data/local/modeling/training_pipeline_v4/tp32/groups/DIST.parquet",
+"rows": 283714
+},
+"tp32:EQ": {
+"n": 12,
+"path": "data/local/modeling/training_pipeline_v4/tp32/groups/EQ.parquet",
+"rows": 283714
+},
+"tp32:FIRST": {
+"n": 59,
+"path": "data/local/modeling/training_pipeline_v4/tp32/groups/FIRST.parquet",
+"rows": 283714
+},
+"tp32:GELD": {
+"n": 10,
+"path": "data/local/modeling/training_pipeline_v4/tp32/groups/GELD.parquet",
+"rows": 283714
+},
+"tp32:JOCKEY": {
+"n": 15,
+"path": "data/local/modeling/training_pipeline_v4/tp32/groups/JOCKEY.parquet",
+"rows": 283714
+},
+"tp32:REST": {
+"n": 18,
+"path": "data/local/modeling/training_pipeline_v4/tp32/groups/REST.parquet",
+"rows": 283714
+},
+"tp32:SURF": {
+"n": 17,
+"path": "data/local/modeling/training_pipeline_v4/tp32/groups/SURF.parquet",
+"rows": 283714
+},
+"tp32:TRAN": {
+"n": 10,
+"path": "data/local/modeling/training_pipeline_v4/tp32/groups/TRAN.parquet",
+"rows": 283714
+},
+"tp32:TRANSPORT": {
+"n": 10,
+"path": "data/local/modeling/training_pipeline_v4/tp32/groups/TRANSPORT.parquet",
+"rows": 283714
+},
+"tp32:WEIGHT": {
+"n": 21,
+"path": "data/local/modeling/training_pipeline_v4/tp32/groups/WEIGHT.parquet",
+"rows": 283714
+},
+"tp33:TT_move": {
+"n": 9,
+"path": "data/local/modeling/training_pipeline_v4/tp33/groups/TT_move.parquet",
+"rows": 283714
+},
+"tp33:TT_rate": {
+"n": 10,
+"path": "data/local/modeling/training_pipeline_v4/tp33/groups/TT_rate.parquet",
+"rows": 283714
+},
+"tp33:TT_stay": {
+"n": 9,
+"path": "data/local/modeling/training_pipeline_v4/tp33/groups/TT_stay.parquet",
+"rows": 283714
+},
+"tp33:TT_tier": {
+"n": 6,
+"path": "data/local/modeling/training_pipeline_v4/tp33/groups/TT_tier.parquet",
+"rows": 283714
+},
+"tp34:R1_band": {
+"n": 13,
+"path": "data/local/modeling/training_pipeline_v4/tp34/groups/R1_band.parquet",
+"rows": 283714
+},
+"tp34:R2_horse_pref": {
+"n": 13,
+"path": "data/local/modeling/training_pipeline_v4/tp34/groups/R2_horse_pref.parquet",
+"rows": 283714
+},
+"tp34:R3_tataki_gain": {
+"n": 8,
+"path": "data/local/modeling/training_pipeline_v4/tp34/groups/R3_tataki_gain.parquet",
+"rows": 283714
+},
+"tp34:R4_trainer": {
+"n": 8,
+"path": "data/local/modeling/training_pipeline_v4/tp34/groups/R4_trainer.parquet",
+"rows": 283714
+},
+"tp34:R5_cross": {
+"n": 24,
+"path": "data/local/modeling/training_pipeline_v4/tp34/groups/R5_cross.parquet",
+"rows": 283714
+},
+"tp34:R6_prev": {
+"n": 14,
+"path": "data/local/modeling/training_pipeline_v4/tp34/groups/R6_prev.parquet",
+"rows": 283714
+},
+"tp34:R7_work": {
+"n": 14,
+"path": "data/local/modeling/training_pipeline_v4/tp34/groups/R7_work.parquet",
+"rows": 283714
+},
+"tp34:R8_season": {
+"n": 8,
+"path": "data/local/modeling/training_pipeline_v4/tp34/groups/R8_season.parquet",
+"rows": 283714
+},
+"tp35:LG_cls": {
+"n": 6,
+"path": "data/local/modeling/training_pipeline_v4/tp35/groups/LG_cls.parquet",
+"rows": 283714
+},
+"tp35:LG_cond": {
+"n": 17,
+"path": "data/local/modeling/training_pipeline_v4/tp35/groups/LG_cond.parquet",
+"rows": 283714
+},
+"tp35:LG_horse": {
+"n": 4,
+"path": "data/local/modeling/training_pipeline_v4/tp35/groups/LG_horse.parquet",
+"rows": 283714
+},
+"tp35:LG_race": {
+"n": 7,
+"path": "data/local/modeling/training_pipeline_v4/tp35/groups/LG_race.parquet",
+"rows": 283714
+},
+"tp35:LG_roi": {
+"n": 12,
+"path": "data/local/modeling/training_pipeline_v4/tp35/groups/LG_roi.parquet",
+"rows": 283714
+},
+"tp35:LG_stat": {
+"n": 21,
+"path": "data/local/modeling/training_pipeline_v4/tp35/groups/LG_stat.parquet",
+"rows": 283714
+},
+"tp35:WK_roi": {
+"n": 6,
+"path": "data/local/modeling/training_pipeline_v4/tp35/groups/WK_roi.parquet",
+"rows": 283714
+},
+"tp35:WK_stat": {
+"n": 19,
+"path": "data/local/modeling/training_pipeline_v4/tp35/groups/WK_stat.parquet",
+"rows": 283714
+},
+"tp37:CLZ": {
+"n": 11,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/CLZ.parquet",
+"rows": 283714
+},
+"tp37:D1_between": {
+"n": 8,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/D1_between.parquet",
+"rows": 283714
+},
+"tp37:D2_change": {
+"n": 8,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/D2_change.parquet",
+"rows": 283714
+},
+"tp37:D3_rider": {
+"n": 10,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/D3_rider.parquet",
+"rows": 283714
+},
+"tp37:D4_eval": {
+"n": 16,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/D4_eval.parquet",
+"rows": 283714
+},
+"tp37:D5_dow_pos": {
+"n": 9,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/D5_dow_pos.parquet",
+"rows": 283714
+},
+"tp37:D7_text_flags": {
+"n": 26,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/D7_text_flags.parquet",
+"rows": 283714
+},
+"tp37:D7_text_lift": {
+"n": 28,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/D7_text_lift.parquet",
+"rows": 283714
+},
+"tp37:D8_text_ctx": {
+"n": 9,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/D8_text_ctx.parquet",
+"rows": 283714
+},
+"tp37:I10_habit_cond": {
+"n": 4,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/I10_habit_cond.parquet",
+"rows": 283714
+},
+"tp37:I11_clu_course": {
+"n": 4,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/I11_clu_course.parquet",
+"rows": 283714
+},
+"tp37:I1_cls_cond": {
+"n": 4,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/I1_cls_cond.parquet",
+"rows": 283714
+},
+"tp37:I2_zt4_cond_int": {
+"n": 4,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/I2_zt4_cond_int.parquet",
+"rows": 283714
+},
+"tp37:I3_zt4_style_surf": {
+"n": 4,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/I3_zt4_style_surf.parquet",
+"rows": 283714
+},
+"tp37:I4_cls_grade": {
+"n": 4,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/I4_cls_grade.parquet",
+"rows": 283714
+},
+"tp37:I5_zt1_courseexact": {
+"n": 4,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/I5_zt1_courseexact.parquet",
+"rows": 283714
+},
+"tp37:I6_clu_zt4_cond": {
+"n": 4,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/I6_clu_zt4_cond.parquet",
+"rows": 283714
+},
+"tp37:I7_kind_int_days_cond": {
+"n": 4,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/I7_kind_int_days_cond.parquet",
+"rows": 283714
+},
+"tp37:I8_trainer_zt4": {
+"n": 4,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/I8_trainer_zt4.parquet",
+"rows": 283714
+},
+"tp37:I9_zacc_style_dist": {
+"n": 4,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/I9_zacc_style_dist.parquet",
+"rows": 283714
+},
+"tp37:KEYS": {
+"n": 11,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/KEYS.parquet",
+"rows": 283714
+},
+"tp37:TRZ": {
+"n": 30,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/TRZ.parquet",
+"rows": 283714
+},
+"tp37:TRZ_SELF": {
+"n": 6,
+"path": "data/local/modeling/training_pipeline_v4/tp37/groups/TRZ_SELF.parquet",
+"rows": 283714
+},
+"tp38:PX_cell_all": {
+"n": 17,
+"path": "/home/jovyan/work/tp38_out/groups/PX_cell_all.parquet",
+"rows": 283714
+},
+"tp38:PX_cell_gd": {
+"n": 17,
+"path": "/home/jovyan/work/tp38_out/groups/PX_cell_gd.parquet",
+"rows": 283714
+},
+"tp38:PX_cell_sd": {
+"n": 17,
+"path": "/home/jovyan/work/tp38_out/groups/PX_cell_sd.parquet",
+"rows": 283714
+},
+"tp38:PX_cell_sf": {
+"n": 17,
+"path": "/home/jovyan/work/tp38_out/groups/PX_cell_sf.parquet",
+"rows": 283714
+},
+"tp38:PX_cell_vn": {
+"n": 17,
+"path": "/home/jovyan/work/tp38_out/groups/PX_cell_vn.parquet",
+"rows": 283714
+},
+"tp38:PX_cellw_sd": {
+"n": 17,
+"path": "/home/jovyan/work/tp38_out/groups/PX_cellw_sd.parquet",
+"rows": 283714
+},
+"tp38:PX_clu": {
+"n": 12,
+"path": "/home/jovyan/work/tp38_out/groups/PX_clu.parquet",
+"rows": 283714
+},
+"tp38:PX_cross": {
+"n": 19,
+"path": "/home/jovyan/work/tp38_out/groups/PX_cross.parquet",
+"rows": 283714
+},
+"tp38:PX_emb": {
+"n": 16,
+"path": "/home/jovyan/work/tp38_out/groups/PX_emb.parquet",
+"rows": 283714
+},
+"tp38:PX_emb32": {
+"n": 32,
+"path": "/home/jovyan/work/tp38_out/groups/PX_emb32.parquet",
+"rows": 283714
+},
+"tp38:PX_ridge_als": {
+"n": 10,
+"path": "/home/jovyan/work/tp38_out/groups/PX_ridge_als.parquet",
+"rows": 283714
+},
+"tp38:PX_ridge_als2": {
+"n": 10,
+"path": "/home/jovyan/work/tp38_out/groups/PX_ridge_als2.parquet",
+"rows": 283714
+},
+"tp38:PX_ridge_fix": {
+"n": 10,
+"path": "/home/jovyan/work/tp38_out/groups/PX_ridge_fix.parquet",
+"rows": 283714
+},
+"tp38:PX_sim": {
+"n": 42,
+"path": "/home/jovyan/work/tp38_out/groups/PX_sim.parquet",
+"rows": 283714
+},
+"tp39:GR_comp": {
+"n": 8,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/GR_comp.parquet",
+"rows": 283714
+},
+"tp39:GR_meg": {
+"n": 8,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/GR_meg.parquet",
+"rows": 283714
+},
+"tp39:GR_mga": {
+"n": 8,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/GR_mga.parquet",
+"rows": 283714
+},
+"tp39:GR_pro": {
+"n": 8,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/GR_pro.parquet",
+"rows": 283714
+},
+"tp39:GR_pt": {
+"n": 8,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/GR_pt.parquet",
+"rows": 283714
+},
+"tp39:KR_comp": {
+"n": 6,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/KR_comp.parquet",
+"rows": 283714
+},
+"tp39:KR_meg": {
+"n": 6,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/KR_meg.parquet",
+"rows": 283714
+},
+"tp39:KR_mga": {
+"n": 6,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/KR_mga.parquet",
+"rows": 283714
+},
+"tp39:KR_pro": {
+"n": 6,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/KR_pro.parquet",
+"rows": 283714
+},
+"tp39:KR_pt": {
+"n": 6,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/KR_pt.parquet",
+"rows": 283714
+},
+"tp39:POP_free": {
+"n": 11,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/POP_free.parquet",
+"rows": 283714
+},
+"tp39:POP_megu": {
+"n": 6,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/POP_megu.parquet",
+"rows": 283714
+},
+"tp39:SL0_comp": {
+"n": 56,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/SL0_comp.parquet",
+"rows": 283714
+},
+"tp39:SL0_pt": {
+"n": 56,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/SL0_pt.parquet",
+"rows": 283714
+},
+"tp39:SL_comp": {
+"n": 56,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/SL_comp.parquet",
+"rows": 283714
+},
+"tp39:SL_meg": {
+"n": 56,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/SL_meg.parquet",
+"rows": 283714
+},
+"tp39:SL_mga": {
+"n": 56,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/SL_mga.parquet",
+"rows": 283714
+},
+"tp39:SL_pro": {
+"n": 56,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/SL_pro.parquet",
+"rows": 283714
+},
+"tp39:SL_pt": {
+"n": 56,
+"path": "data/local/modeling/training_pipeline_v4/tp39/groups/SL_pt.parquet",
+"rows": 283714
+},
+"tp40:CY": {
+"n": 37,
+"path": "data/local/modeling/training_pipeline_v4/tp40/groups/CY.parquet",
+"rows": 283714
+},
+"tp40:CYt": {
+"n": 11,
+"path": "data/local/modeling/training_pipeline_v4/tp40/groups/CYt.parquet",
+"rows": 283714
+},
+"tp40:IN": {
+"n": 8,
+"path": "data/local/modeling/training_pipeline_v4/tp40/groups/IN.parquet",
+"rows": 283714
+},
+"tp40:LY": {
+"n": 13,
+"path": "data/local/modeling/training_pipeline_v4/tp40/groups/LY.parquet",
+"rows": 283714
+},
+"tp40:PO": {
+"n": 4,
+"path": "data/local/modeling/training_pipeline_v4/tp40/groups/PO.parquet",
+"rows": 283714
+},
+"tp40:SF": {
+"n": 13,
+"path": "data/local/modeling/training_pipeline_v4/tp40/groups/SF.parquet",
+"rows": 283714
+},
+"tp40:TJ": {
+"n": 6,
+"path": "data/local/modeling/training_pipeline_v4/tp40/groups/TJ.parquet",
+"rows": 283714
+},
+"tp41:SIM_apt": {
+"n": 4,
+"path": "data/local/modeling/training_pipeline_v4/tp41/groups/SIM_apt.parquet",
+"rows": 283714
+},
+"tp41:SIM_ped": {
+"n": 4,
+"path": "data/local/modeling/training_pipeline_v4/tp41/groups/SIM_ped.parquet",
+"rows": 283714
+},
+"tp41:SIM_pos": {
+"n": 6,
+"path": "data/local/modeling/training_pipeline_v4/tp41/groups/SIM_pos.parquet",
+"rows": 283714
+},
+"tp41:SIM_prod": {
+"n": 2,
+"path": "data/local/modeling/training_pipeline_v4/tp41/groups/SIM_prod.parquet",
+"rows": 283714
+},
+"tp41:SIM_stable": {
+"n": 5,
+"path": "data/local/modeling/training_pipeline_v4/tp41/groups/SIM_stable.parquet",
+"rows": 283714
+},
+"tp41:SIM_str": {
+"n": 5,
+"path": "data/local/modeling/training_pipeline_v4/tp41/groups/SIM_str.parquet",
+"rows": 283714
+},
+"tp42:RL_A": {
+"n": 13,
+"path": "data/local/modeling/training_pipeline_v4/tp42/groups/RL_A.parquet",
+"rows": 283745
+},
+"tp42:RL_A2": {
+"n": 5,
+"path": "data/local/modeling/training_pipeline_v4/tp42/groups/RL_A2.parquet",
+"rows": 283745
+},
+"tp42:RL_ALL": {
+"n": 45,
+"path": "data/local/modeling/training_pipeline_v4/tp42/groups/RL_ALL.parquet",
+"rows": 283745
+},
+"tp42:RL_B": {
+"n": 16,
+"path": "data/local/modeling/training_pipeline_v4/tp42/groups/RL_B.parquet",
+"rows": 283745
+},
+"tp42:RL_C": {
+"n": 11,
+"path": "data/local/modeling/training_pipeline_v4/tp42/groups/RL_C.parquet",
+"rows": 283745
+},
+"tp57:GI_all": {
+"n": 6,
+"path": "data/local/modeling/training_pipeline_v4/tp57_growth/groups/GI_all.parquet",
+"rows": 189988
+},
+"tp57:GI_idx": {
+"n": 1,
+"path": "data/local/modeling/training_pipeline_v4/tp57_growth/groups/GI_idx.parquet",
+"rows": 189988
+},
+"tp57:GI_parts": {
+"n": 4,
+"path": "data/local/modeling/training_pipeline_v4/tp57_growth/groups/GI_parts.parquet",
+"rows": 189988
+},
+"tp60:CLU_A": {
+"n": 12,
+"path": "/home/jovyan/work/tp60_out/groups/CLU_A.parquet",
+"rows": 283714
+},
+"tp60:CLU_E": {
+"n": 12,
+"path": "/home/jovyan/work/tp60_out/groups/CLU_E.parquet",
+"rows": 283714
+},
+"tp60:DEEP_6_10": {
+"n": 41,
+"path": "/home/jovyan/work/tp60_out/groups/DEEP_6_10.parquet",
+"rows": 35794
+},
+"tp60:DEEP_TOT": {
+"n": 39,
+"path": "/home/jovyan/work/tp60_out/groups/DEEP_TOT.parquet",
+"rows": 35794
+},
+"tp60:KNN_A": {
+"n": 8,
+"path": "/home/jovyan/work/tp60_out/groups/KNN_A.parquet",
+"rows": 283714
+},
+"tp60:KNN_E": {
+"n": 8,
+"path": "/home/jovyan/work/tp60_out/groups/KNN_E.parquet",
+"rows": 283714
+},
+"tp60:PED_FAM": {
+"n": 4,
+"path": "/home/jovyan/work/tp60_out/groups/PED_FAM.parquet",
+"rows": 35794
+},
+"tp60:PQ_K16": {
+"n": 8,
+"path": "/home/jovyan/work/tp60_out/groups/PQ_K16.parquet",
+"rows": 304876
+},
+"tp60:PQ_K40": {
+"n": 8,
+"path": "/home/jovyan/work/tp60_out/groups/PQ_K40.parquet",
+"rows": 304876
+},
+"tp60:PQ_line": {
+"n": 8,
+"path": "/home/jovyan/work/tp60_out/groups/PQ_line.parquet",
+"rows": 304876
+},
+"tp60:PQ_sire30": {
+"n": 8,
+"path": "/home/jovyan/work/tp60_out/groups/PQ_sire30.parquet",
+"rows": 304876
+},
+"v6:CB": {
+"n": 9,
+"path": "data/local/modeling/training_pipeline_v4/v6/groups/CB.parquet",
+"rows": 324795
+},
+"v6:GB": {
+"n": 9,
+"path": "data/local/modeling/training_pipeline_v4/v6/groups/GB.parquet",
+"rows": 319092
+},
+"v6:OWNN": {
+"n": 5,
+"path": "data/local/modeling/training_pipeline_v4/v6/groups/OWNN.parquet",
+"rows": 388341
+},
+"v6:PT": {
+"n": 27,
+"path": "data/local/modeling/training_pipeline_v4/v6/groups/PT.parquet",
+"rows": 319092
+}
+}

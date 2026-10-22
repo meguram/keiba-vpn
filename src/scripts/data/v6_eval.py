@@ -72,6 +72,15 @@ EXTERNAL: dict[str, tuple[Path, list[str] | None]] = {
 }
 
 
+try:    # 復活セット（config/feature_sets.json）の群を、REV_ で始まる名前の外部群として読めるようにする。既存の名前は上書きしない
+    from src.pipeline.features import feature_sets as _fs
+
+    for _n, _v in _fs.external_groups().items():
+        EXTERNAL.setdefault(_n, _v)
+except (OSError, KeyError, ValueError):
+    pass
+
+
 def config_of(name: str) -> dict:
     """NAME が CONFIGS にあればそれ、無ければ 'z:群1+群2@段' の形（段は a/b/c/d、省略可）をその場で解釈する。"""
     if name in CONFIGS:

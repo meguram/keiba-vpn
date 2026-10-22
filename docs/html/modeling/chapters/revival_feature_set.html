@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>復活セット: 過去に不採用だった特徴量を、緩めた基準で分ける — keiba-vpn</title>
+<style>:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --warn:#fbbf24; }
+* { box-sizing: border-box; } body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 15px; padding: 40px 56px 96px; max-width: 1100px; margin: 0 auto; }
+a { color: var(--accent-2); } h1 { font-size: 26px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; } h3 { font-size: 16px; margin: 22px 0 8px; }
+table { border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; background: var(--panel); } th, td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; vertical-align: top; } th { background: #1b2a4d; }
+td.num { text-align: right; font-family: monospace; } .muted { color: var(--muted); font-size: 13px; } .note { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+code { background: #0b1428; padding: 1px 5px; border-radius: 4px; }</style></head>
+<body><a href="../../index.html" class="muted">← ドキュメント一覧</a>
+<h1>復活セット: 過去に不採用だった特徴量を、緩めた基準で分ける</h1>
+<p class='muted'>ユーザー依頼（2026-10-22）: 『今までの採用検討ログをもとに、復活する特徴量を分けておいてほしい。最終的にそれあり（復活セット）となし（今までの基準）で精度比較したい』。学習はしていない。台帳 <code>docs/operations/revival_feature_ledger.csv</code>、定義 <code>config/feature_sets.json</code>、読み出し <code>src/pipeline/features/feature_sets.py</code>、集計 <code>src/scripts/data/revival_scan.py</code>・<code>revival_ledger.py</code>。</p>
+<div class='note'><b>要点.</b><ul>
+<li><b>台帳 171 行</b>（群 143・束 16・構成 12）。採用済み 14、<b>R1 候補 6</b>、<b>R2 候補 32</b>（代表に絞ると R1 4・R2 5）、リーク・市場依存・既存と重複で不採用のまま 9、年別が取れず要再集計 105。</li>
+<li><b>復活セットは 3 つ</b>: R1（4 群）、R1+R2（7 群）、広い版（34 群・弱いシグナルの束ねを見る）。基準は v6e（<code>z:RB@e</code>）。</li>
+<li><b>復活候補はすべて、推論側の生成経路が未整備</b>（採用済みの CY・ALL_BEST・RB・前段 e だけが本番の保存値から作れる）。そのため R に入る群は『オフライン評価では比べられるが、本番で使うには整備が要る』と読む。工数の目安を 5 節に付けた。</li>
+<li><b>注意: R1 でも、v6e に足して効く保証はない。</b> 台帳の増分は V4・V5・d_CY_BEST に対するもので、v6e（RB・前段 e）に対する増分ではない。RB に足して増分が消えた群（クラス基準・展開利・非 JRA 過去走ほか）が実際にあった。また 138 群を検定しているので、R2 の基準（S3・S4）は偶然でも一定数が通る（S4 は片側で約 16% の割合）。<b>比較の主役は R1 と、束ねた広い版で、R2 は参考</b>。</li>
+</ul></div>
+<h2>1. 基準の段階と、通る群の数</h2>
+<table><tr><th>段階</th><th>条件（勝率の LogLoss の差。負が改善）</th><th>通る群（採用済み・リーク等を除く）</th></tr>
+<tr><td>S1（従来）</td><td>片側 95% 上限 &lt; 0 かつ 効果 ≤ −0.0002</td><td class='num'>0</td></tr>
+<tr><td>S2</td><td>2 期間以上で同符号、かつ点推定 ≤ −0.0002（区間は問わない）</td><td class='num'>6</td></tr>
+<tr><td>S3</td><td>2 期間以上で同符号、かつ点推定 ≤ −0.0001</td><td class='num'>16</td></tr>
+<tr><td>S4</td><td>懐疑的な事前分布 N(0, 0.0002²) の事後で P(効果&lt;0) ≥ 0.8</td><td class='num'>37</td></tr>
+<tr><td>S5</td><td>片側 90% 上限 &lt; 0</td><td class='num'>23</td></tr></table>
+<p class='muted'>どの段階も、連対・複勝の悪化が +0.0002 以内であること（place_ok）を条件にする。期間は、OOF が保存されていれば年（2022・2023・2024）、無ければ段階（段階 1 = 2022+2023、段階 2 = 2024）。標準誤差は、ログに残る片側 95% 上限から逆算した（OOF から再集計した群は、再集計の標準誤差を 1.4 倍して使う）。段階の定義と偽陽性率の見積りは feature-screening（別の調査）が扱い、結果が出たら取り込む。</p>
+<h2>2. 復活候補（代表）</h2>
+<table><tr><th>区分</th><th>群</th><th>列数</th><th>勝率 Δ</th><th>期間</th><th>クラスタ</th><th>工数</th></tr>
+<tr><td>R1</td><td>tp32:FIRST</td><td class='num'>59</td><td class='num'>-0.000349</td><td>stage</td><td>初経験・替わり</td><td>M</td></tr>
+<tr><td>R1</td><td>tp39:GR_comp</td><td class='num'>8</td><td class='num'>-0.000266</td><td>year</td><td>成長</td><td>M</td></tr>
+<tr><td>R1</td><td>tp41:SIM_apt</td><td class='num'>4</td><td class='num'>-0.000258</td><td>stage</td><td>似た馬・コース類似</td><td>L</td></tr>
+<tr><td>R1</td><td>tp42:RL_A</td><td class='num'>13</td><td class='num'>-0.000211</td><td>year</td><td>指数履歴</td><td>M</td></tr>
+<tr><td>R2</td><td>tp40:IN</td><td class='num'>8</td><td class='num'>-0.000194</td><td>year</td><td>追い切り</td><td>M</td></tr>
+<tr><td>R2</td><td>tp16b:AF（後日談の変種）</td><td class='num'>—</td><td class='num'>-0.00015</td><td>決定ログ</td><td>tp16b:単独</td><td>M</td></tr>
+<tr><td>R2</td><td>tp59:rs59（関係者の残差 4 列）</td><td class='num'>4</td><td class='num'>-0.00015</td><td>決定ログ</td><td>関係者・馬主</td><td>M</td></tr>
+<tr><td>R2</td><td>v6:x_NJ</td><td class='num'>16</td><td class='num'>-0.000139</td><td>year</td><td>取得済みの未使用データ</td><td>L</td></tr>
+<tr><td>R2</td><td>tp16:後日談ほか 10 群の最良</td><td class='num'>—</td><td class='num'>-0.00011</td><td>決定ログ</td><td>tp16:単独</td><td>M</td></tr>
+</table>
+<p class='muted'>勝率 Δ は期間の加重平均（負が改善）。クラスタは同じ情報を持つ群の束で、同じクラスタに複数の候補がある場合は、区分（R1 優先）と効果の大きさで代表を 1 つ選んだ。残りは 3 節の広い版にだけ入る。</p>
+<h3>冗長として代表から外した群（広い版には入る）</h3>
+<table><tr><th>区分</th><th>群</th><th>列数</th><th>勝率 Δ</th><th>代表</th></tr>
+<tr><td>R1</td><td>tp38:PX_ridge_als2</td><td class='num'>10</td><td class='num'>-0.000227</td><td>tp38:ALL_BEST（採用済み）</td></tr>
+<tr><td>R1</td><td>tp41:SIM_str</td><td class='num'>5</td><td class='num'>-0.000207</td><td>tp41:SIM_apt</td></tr>
+<tr><td>R2</td><td>tp39:GR_mga</td><td class='num'>8</td><td class='num'>-0.000224</td><td>tp42:RL_A</td></tr>
+<tr><td>R2</td><td>tp39:GR_pro</td><td class='num'>8</td><td class='num'>-0.000201</td><td>tp39:GR_comp</td></tr>
+<tr><td>R2</td><td>tp42:RL_C</td><td class='num'>11</td><td class='num'>-0.000201</td><td>tp42:RL_A</td></tr>
+<tr><td>R2</td><td>tp38:PX_ridge_fix</td><td class='num'>10</td><td class='num'>-0.00019</td><td>tp38:ALL_BEST（採用済み）</td></tr>
+<tr><td>R2</td><td>tp39:GR_pt</td><td class='num'>8</td><td class='num'>-0.000183</td><td>tp39:GR_comp</td></tr>
+<tr><td>R2</td><td>tp37:D7_text_lift</td><td class='num'>28</td><td class='num'>-0.000181</td><td>tp40:IN</td></tr>
+<tr><td>R2</td><td>tp37:CLZ</td><td class='num'>11</td><td class='num'>-0.000177</td><td>tp40:IN</td></tr>
+<tr><td>R2</td><td>tp39:KR_mga</td><td class='num'>6</td><td class='num'>-0.000174</td><td>tp39:GR_comp</td></tr>
+<tr><td>R2</td><td>tp35:WK_roi</td><td class='num'>6</td><td class='num'>-0.000172</td><td>tp40:IN</td></tr>
+<tr><td>R2</td><td>tp39:KR_pro</td><td class='num'>6</td><td class='num'>-0.000172</td><td>tp39:GR_comp</td></tr>
+<tr><td>R2</td><td>tp40:LY</td><td class='num'>13</td><td class='num'>-0.00017</td><td>tp40:IN</td></tr>
+<tr><td>R2</td><td>tp37:I2_zt4_cond_int</td><td class='num'>4</td><td class='num'>-0.000164</td><td>tp40:IN</td></tr>
+<tr><td>R2</td><td>tp39:SL_mga</td><td class='num'>56</td><td class='num'>-0.00016</td><td>tp39:GR_comp</td></tr>
+<tr><td>R2</td><td>tp42:RL_B</td><td class='num'>16</td><td class='num'>-0.000158</td><td>tp42:RL_A</td></tr>
+<tr><td>R2</td><td>v6:s_CB</td><td class='num'>9</td><td class='num'>-0.000158</td><td>tp42:RL_A</td></tr>
+<tr><td>R2</td><td>tp39:KR_pt</td><td class='num'>6</td><td class='num'>-0.000146</td><td>tp39:GR_comp</td></tr>
+<tr><td>R2</td><td>tp34:R3_tataki_gain</td><td class='num'>8</td><td class='num'>-0.000143</td><td>tp32:FIRST</td></tr>
+<tr><td>R2</td><td>tp39:GR_meg</td><td class='num'>8</td><td class='num'>-0.000143</td><td>tp42:RL_A</td></tr>
+<tr><td>R2</td><td>tp37:D7_text_flags</td><td class='num'>26</td><td class='num'>-0.000142</td><td>tp40:IN</td></tr>
+<tr><td>R2</td><td>tp34:R7_work</td><td class='num'>14</td><td class='num'>-0.000136</td><td>tp32:FIRST</td></tr>
+<tr><td>R2</td><td>tp32:COMBO</td><td class='num'>91</td><td class='num'>-0.000132</td><td>tp32:FIRST</td></tr>
+<tr><td>R2</td><td>tp33:TT_tier</td><td class='num'>6</td><td class='num'>-0.00013</td><td>tp32:FIRST</td></tr>
+<tr><td>R2</td><td>tp39:POP_megu</td><td class='num'>6</td><td class='num'>-0.000128</td><td>tp39:GR_comp</td></tr>
+<tr><td>R2</td><td>tp35:LG_cls</td><td class='num'>6</td><td class='num'>-0.000126</td><td>tp40:IN</td></tr>
+<tr><td>R2</td><td>tp32:TRANSPORT</td><td class='num'>10</td><td class='num'>-0.00012</td><td>tp32:FIRST</td></tr>
+<tr><td>R2</td><td>tp34:R1_band</td><td class='num'>13</td><td class='num'>-0.000115</td><td>tp32:FIRST</td></tr>
+<tr><td>R2</td><td>tp34:R2_horse_pref</td><td class='num'>13</td><td class='num'>-9.2e-05</td><td>tp32:FIRST</td></tr>
+</table>
+<h2>3. 復活セットの定義（比べる 4 通り）</h2>
+<table><tr><th>名前</th><th>内容</th><th>足す群</th><th>追加列（約）</th><th>v6_eval の構成名</th></tr>
+<tr><td><code>baseline</code></td><td>今までの基準（v6e の構成）</td><td class='num'>0</td><td class='num'>0</td><td><code>z:RB@e</code></td></tr>
+<tr><td><code>revival_r1</code></td><td>R1: S2 を満たす群の代表（クラスタごとに 1 つ）</td><td class='num'>4</td><td class='num'>84</td><td><code>z:RB+REV_tp32_FIRST+REV_tp39_GR_comp+REV_tp41_SIM_apt+REV_tp42_RL_A@e</code></td></tr>
+<tr><td><code>revival_r1r2</code></td><td>R1 + R2（S3 か S4）の代表</td><td class='num'>7</td><td class='num'>112</td><td><code>z:RB+REV_tp32_FIRST+REV_tp39_GR_comp+REV_tp41_SIM_apt+REV_tp42_RL_A+REV_tp40_IN+RS59+NJ@e</code></td></tr>
+<tr><td><code>revival_wide</code></td><td>R1・R2 の全群（冗長を含む。多数の弱いシグナルを束ねる効果を見る）</td><td class='num'>34</td><td class='num'>514</td><td><code>z:RB+REV_tp32_FIRST+REV_tp39_GR_comp+REV_tp41_SIM_apt+REV_tp42_RL_A+REV_tp41_SIM_str+REV…</code></td></tr>
+</table>
+<p class='muted'>基準 <code>baseline</code> は今までの基準（v6e = V4 + tl_ 再取得版 + CY + ALL_BEST + RB、前段 e。バンドルは 1,231 列）。足す群は、学習表と同じ行キー（race_id, horse_id）の群 parquet で、2022〜2024 年の評価行を欠けなく・重複なく覆うことを確認した（35 群、基準のフレームとの列名の重なりなし）。RS59 は v6_eval が名前で作る。後日談の変種（AF）などは学習表に列が無く、構築が要る（tp16b:AF（後日談の変種）, tp16:後日談ほか 10 群の最良）。</p>
+<h2>4. 分けた理由別の内訳（不採用のまま）</h2>
+<table><tr><th>区分</th><th>件数</th></tr>
+<tr><td>不採用のまま</td><td class='num'>89</td></tr>
+<tr><td>不採用のまま(リーク疑い)</td><td class='num'>4</td></tr>
+<tr><td>不採用のまま(既存と重複)</td><td class='num'>4</td></tr>
+<tr><td>不採用のまま(市場情報に依存)</td><td class='num'>1</td></tr>
+</table>
+<table><tr><th>群</th><th>理由</th></tr>
+<tr><td>tp34:R6_prev</td><td>前走の消耗の群。見かけの −0.0038 は端数リーク（決定ログ B 表）。修正後は +0.00010</td></tr>
+<tr><td>g6b:p_slow（出遅れ実ラベル)</td><td>ラベルの有無が将来の情報になる（ラベルのある走だけ学習）。第 2 段で再現せず</td></tr>
+<tr><td>tp29:コース特注適性(期待外れ/期待以上)</td><td>市場版の全部入り。複勝 −0.00022（§33）。人気に依存</td></tr>
+<tr><td>tp56:HT（馬タイプ）</td><td>基準 −0.0002 に届かず（§33）。タイプの能力差は V5 に入っている</td></tr>
+<tr><td>tp26:好走傾向が似たコース(統計のみ)</td><td>木モデルが同じ情報を持つ（§33）</td></tr>
+<tr><td>tp21:SmartRC テン1F を直接</td><td>SmartRC の保存は出走後の取得で先読みの疑い</td></tr>
+<tr><td>tp25:位置取り・テン1F の前段(tp25a)</td><td>S3 に重ねると情報が重複（§33）</td></tr>
+<tr><td>tp15:コース概形だけの類似度</td><td>b_aff_* と順位相関 0.83（§11）</td></tr>
+<tr><td>tp34:ALL_PASSED</td><td>R6_prev（端数リーク）を含む束</td></tr>
+</table>
+<p class='muted'>リーク疑い: 前走の消耗の群（R6_prev）は見かけ −0.0038 が端数リーク（修正後 +0.00010）で、台帳の数字は修正前の評価。市場依存: tp-29 は人気を使う。既存と重複: 木モデルが同じ情報を持つ（tp-15・26）、現行前段と情報が重なる（tp-25a）、タイプの能力差が V5 にある（tp-56）。</p>
+<h2>5. 推論側で再現できるか（要整備）</h2>
+<table><tr><th>群</th><th>列数</th><th>工数</th><th>整備の内容</th></tr>
+<tr><td>tp32:FIRST</td><td class='num'>59</td><td>M</td><td>as-of の構築関数 tp32_equipment は serving_v4 が読み込み済み。FIRST 用の状態表を追加</td></tr>
+<tr><td>tp39:GR_comp</td><td class='num'>8</td><td>M</td><td>馬ごとの体重×成績の履歴状態を追加（馬体重は T-60 で発表）</td></tr>
+<tr><td>tp41:SIM_apt</td><td class='num'>4</td><td>L</td><td>同じレースの全ペアの類似度が要る。出走表確定後に計算する経路を新設</td></tr>
+<tr><td>tp42:RL_A</td><td class='num'>13</td><td>M</td><td>RB と同じ指数の履歴状態を使う。as-of のレースレベルの状態表を追加</td></tr>
+<tr><td>tp40:IN</td><td class='num'>8</td><td>M</td><td>追い切りの履歴の傾き。CY の状態表を流用</td></tr>
+<tr><td>tp16b:AF（後日談の変種）</td><td class='num'>—</td><td>M</td><td>推論側の生成経路を追加する</td></tr>
+<tr><td>tp59:rs59（関係者の残差 4 列）</td><td class='num'>4</td><td>M</td><td>V5 の OOF 残差。運用側で毎日の更新が要る</td></tr>
+<tr><td>v6:x_NJ</td><td class='num'>16</td><td>L</td><td>非 JRA 過去走の履歴を状態表に加える</td></tr>
+<tr><td>tp16:後日談ほか 10 群の最良</td><td class='num'>—</td><td>M</td><td>推論側の生成経路を追加する</td></tr>
+</table>
+<p class='muted'>工数: S = 既存の履歴から作れる、M = 状態表の追加（RB と同じ日次更新の仕組み）、L = 取得か再構築が要る。前段 b 版で、本番の保存値から 9 列を再現できず使えなかった例があるため、採用の判断の前に、推論側のパリティ（過去日で学習側と比べる）を必須にする。</p>
+<h2>6. 比較の実行計画（学習再開後）</h2>
+<ol>
+<li><b>比べる構成</b>: A = 今までの基準（<code>z:RB@e</code>）、B = A + R1、C = A + R1 + R2、D = A + 広い版。<code>python -m src.pipeline.features.feature_sets show</code> が各構成名を出す。実行は <code>python -m src.scripts.data.v6_eval run &lt;構成名&gt; --tag rev</code>。</li>
+<li><b>評価</b>: LOYO（2022・2023・2024）、LightGBM、seed は構成間で共通（0・1、確認で 2・3）。勝率・連対・複勝の LogLoss、レース単位の paired bootstrap。層別は、初出走・履歴 3 走未満、クラス別、面別。test 2025 は、選んだ 1 構成について 1 回だけ。2026 年は選択に使わない。</li>
+<li><b>採否</b>: 構成単位で、二段の基準（従来の S1、または緩めた S2 を満たし、連対・複勝の悪化が +0.0002 以内）。D は束ねた効果を見るためで、合計の増分がシャドウ特徴量の束を上回るかを併せて見る（feature-screening の手順）。</li>
+<li><b>推論側</b>: 採用候補になった群だけ、5 節の整備を行い、v6_parity と同じ手順で学習側との一致を確認してから shadow に入れる。</li>
+<li><b>所要の見積り</b>（過去の実績からの目安で、実測ではない）: 1 構成の LOYO 評価（3 年 × 2 seed × 3 目的）は 0.5〜1 時間、4 構成で 2〜4 時間（直列）。seed 2・3 の確認は 1〜2 時間。通った場合の LOYO アンサンブルと最終学習（v6e と同じ手順）は 8〜9 時間。</li>
+</ol>
+<h2>7. 限界</h2>
+<ul>
+<li>増分の基準が揃っていない。V4（tp-32〜42）、V5（tp-60）、d_CY_BEST（v6）に対する値で、v6e に対する増分ではない（重複で縮む見込み）。</li>
+<li>年別の OOF が保存されていない群は、段階（2022+2023 と 2024）の 2 期間でしか符号を見られない（105 群が要再集計）。再集計は学習なしでできる範囲を超える（OOF が無い）ため、学習再開後に行う。</li>
+<li>各群は、過去の第 1 段・第 2 段の選別を通ってきた（または落ちた）ものなので、選択バイアスがある。基準を緩めた S2〜S4 は偽陽性を含む。偽陽性率の見積りは feature-screening のシャドウ特徴量で行う。</li>
+<li>2026 年は使っていない。市場オッズ・人気は特徴量にしていない（tp-29 の市場版は除外した）。</li>
+</ul>
+<p class='muted'>関連: <a href='feature_gap_audit.html'>特徴量のやり残しの棚卸し</a> / <a href='v6_features.html'>v6 への追加候補の評価</a> / <a href='training_pipeline_decisions.html'>決定ログ</a></p>
+</body></html>
