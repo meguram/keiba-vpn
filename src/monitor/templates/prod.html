@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}prod（VPS）— 監視ポータル{% endblock %}
+
+{% block head_extra %}
+<style>
+  .lamp { font-size: 22px; font-weight: 700; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
+  .kv { display: grid; grid-template-columns: 170px 1fr; gap: 4px 10px; font-size: 13px; }
+  .kv .k { color: var(--muted); }
+  .meter { height: 10px; background: var(--border); border-radius: 3px; position: relative; margin: 3px 0 8px; }
+  .meter > i { display: block; height: 100%; border-radius: 3px; }
+  .meter > b { position: absolute; top: -3px; width: 2px; height: 16px; background: var(--text); opacity: .7; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11.5px; border: 1px solid var(--border); }
+  .pill.ok { color: #3fb950; border-color: #3fb950; } .pill.bad { color: #f85149; border-color: #f85149; }
+  .pill.warn { color: #d29922; border-color: #d29922; } .pill.na { color: var(--muted); }
+  .fresh { color: var(--muted); font-size: 11.5px; font-weight: 400; text-transform: none; margin-left: 8px; }
+  .na-note { color: var(--muted); font-style: italic; font-size: 12.5px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-title"><span class="icon">🟠</span> prod（ConoHa VPS）の状況</div>
+<div class="card" id="overall"><span class="loading">読込中...</span></div>
+<div class="grid2" id="cards"></div>
+<p class="last-updated">表示は収集スクリプト（ホストの cron）が作ったキャッシュです。<span id="age">—</span>（60秒ごとに再読込）。
+  取れない項目は「未取得（理由）」と出ます。ホストを経由する収集は暫定で、最終形では VPS のハートビート（GCS）→ GCP 上のモニターに切り替えます。</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const COL = {green: '#3fb950', yellow: '#d29922', red: '#f85149', unknown: '#8b949e'};
+const LAB = {green: '正常', yellow: '注意', red: '要対応', unknown: '未確認'};
+const f = (v, n = 0) => (v == null || Number.isNaN(Number(v)) ? '—' : Number(v).toFixed(n));
+const pill = (txt, kind) => `<span class="pill ${kind}">${esc(txt)}</span>`;
+
+function card(title, sec, body) {
+  const at = sec && sec.at ? `<span class="fresh">取得 ${esc(String(sec.at).replace('T', ' ').slice(0, 19))}</span>` : '';
+  let inner;
+  if (!sec) inner = '<div class="na-note">未収集</div>';
+  else if (sec.state === 'missing') inner = `<div class="na-note">未取得（${esc(sec.reason || '')}）</div>`;
+  else if (sec.state === 'error') inner = `<div class="na-note" style="color:#f85149">未取得（取得に失敗: ${esc(sec.reason || '')}）</div>`;
+  else { try { inner = body(sec.data); } catch (e) { inner = '<div class="na-note">表示できない形式です</div>'; } }
+  return `<div class="card"><div class="card-title">${esc(title)}${at}</div>${inner}</div>`;
+}
+
+function meter(val, max, warn, crit, lowIsBad, target) {
+  if (val == null) return '';
+  const pct = Math.max(0, Math.min(100, (val / max) * 100));
+  const bad = lowIsBad ? (val < crit ? 2 : val < warn ? 1 : 0) : (val > crit ? 2 : val > warn ? 1 : 0);
+  const c = ['#3fb950', '#d29922', '#f85149'][bad];
+  return `<div class="meter"><i style="width:${pct}%;background:${c}"></i>${target != null ? `<b style="left:${Math.min(100, (target / max) * 100)}%"></b>` : ''}</div>`;
+}
+
+const vpsBody = d => {
+  const m = d.mem || {}, ui = d.ui || {}, api = d.upstream_api || {}, v = ui.json || {};
+  return `<div class="kv">
+    <span class="k">UI</span><span>${ui.code === 200 ? pill('応答 200', 'ok') : pill('応答なし ' + (ui.code ?? ''), 'bad')} ${f(ui.ms)}ms</span>
+    <span class="k">現在の版</span><span>${esc(d.current_release || v.release || '—')}</span>
+    <span class="k">環境 / commit</span><span>${esc(v.env || '—')} / ${esc((v.commit || '').slice(0, 10) || '—')}</span>
+    <span class="k">source_digest</span><span>${esc((v.source_digest || '').slice(0, 16) || '—')}</span>
+    <span class="k">VPS → API 疎通</span><span>${api.code === 200 ? pill('200', 'ok') : pill('届かない ' + (api.code ?? ''), 'bad')} ${f(api.ms)}ms（api-internal 経由）</span>
+    <span class="k">稼働時間</span><span>${f((d.uptime_s || 0) / 86400, 1)} 日 / load ${(d.load || []).map(x => f(x, 2)).join(' ')}</span>
+    <span class="k">ディスク</span><span>${f((d.disk || {}).used_pct)}% 使用（空き ${f((d.disk || {}).avail_mb)}MB）</span></div>
+    <div style="margin-top:10px;font-size:12.5px">使用メモリ ${f(m.used_mb)}MB / ${f(m.total_mb)}MB（通常時の目標 600MB 以下）</div>
+    ${meter(m.used_mb, 1000, 600, 800, false, 600)}
+    <div style="font-size:12.5px">空きメモリ（MemAvailable） ${f(m.available_mb)}MB（目標 1,000MB 以上）</div>
+    ${meter(m.available_mb, 2000, 1000, 600, true, 1000)}
+    <div style="font-size:12.5px">swap 使用 ${f(m.swap_used_mb)}MB / ${f(m.swap_total_mb)}MB（200MB 超で注意）</div>`;
+};
+
+const unitsBody = d => {
+  const u = d.units || {};
+  const rows = Object.keys(u).map(k => {
+    const x = u[k];
+    if (!x.installed) return `<tr><td>${esc(k)}</td><td colspan="3">${pill('未導入', 'na')}</td></tr>`;
+    const act = x.active === 'active' ? pill(x.sub || 'active', 'ok') : pill(x.active || '?', 'bad');
+    const dl = x.restart_delta;
+    const rs = (dl || 0) >= 1 ? pill(`+${dl}（累計 ${x.restarts}）`, 'warn') : esc(`${x.restarts ?? 0}${dl === 0 ? '（増加なし）' : ''}`);
+    return `<tr><td>${esc(k)}</td><td>${act}</td><td class="num">${rs}</td><td class="num">${x.memory_mb != null ? f(x.memory_mb, 1) + 'MB' : '—'}</td></tr>`;
+  }).join('');
+  const t = d.tunnel || {};
+  const tun = t.readable ? (t.recently_lost ? pill('接続断の記録あり', 'warn') : pill(`接続 ${t.registered ?? 0} 回登録`, 'ok')) : pill('ログ非公開（cloudflared-prod の稼働で代替）', 'na');
+  return `<table style="width:100%;font-size:12.5px"><tr><th>ユニット</th><th>状態</th><th class="num">再起動</th><th class="num">メモリ</th></tr>${rows}</table>
+    <div style="margin-top:8px;font-size:12.5px">トンネル: ${tun}</div>
+    <div class="na-note" style="margin-top:4px">再起動は systemd の NRestarts（過去の起動失敗も残る累計）。前回の収集からの増分があるときだけ注意にします。</div>`;
+};
+
+const relBody = d => {
+  const rows = (d.recent || []).map(r => `<tr><td>${esc(String(r.at || '').replace('T', ' ').slice(0, 19))}</td><td>${esc(r.release || '')}</td><td>${esc((r.commit || '').slice(0, 8))}</td><td>${r.result === 'ok' ? pill('ok', 'ok') : pill(r.result || '?', 'bad')}</td></tr>`).join('');
+  return `<table style="width:100%;font-size:12.5px"><tr><th>日時</th><th>版</th><th>commit</th><th>結果</th></tr>${rows || '<tr><td colspan="4" class="na-note">履歴なし</td></tr>'}</table>`;
+};
+
+const pubBody = d => `<div class="kv"><span class="k">URL</span><span>${esc(d.url)}</span><span class="k">応答</span><span>${esc(d.status)} → ${esc(d.redirect || '—')}</span></div>
+  <div class="na-note" style="margin-top:6px">${esc(d.note || '')}</div>`;
+
+const hbBody = d => {
+  const al = (d.alerts || []).map(a => `<li>${pill(a.severity, a.severity === 'critical' ? 'bad' : 'warn')} ${esc(a.title)} <span class="na-note">${esc(a.detail || '')}</span></li>`).join('');
+  return `<div class="kv"><span class="k">最終受信</span><span>${d.age_s != null ? Math.round(d.age_s / 60) + ' 分前' : '—'}</span></div>
+    <ul style="margin:8px 0 0 18px;padding:0;font-size:12.5px">${al || '<li>異常なし</li>'}</ul>`;
+};
+
+const schedBody = d => `<table style="width:100%;font-size:12.5px"><tr><th>予約</th><th>cron (JST)</th><th>状態</th><th>最終実行</th></tr>${
+  (d.jobs || []).map(j => `<tr><td>${esc(j.name)}</td><td>${esc(j.schedule)}</td><td>${j.state === 'ENABLED' ? pill('有効', 'ok') : pill(j.state || '?', 'warn')}</td><td>${esc(String(j.last_attempt || '—').replace('T', ' ').slice(0, 16))}</td></tr>`).join('') || '<tr><td colspan="4" class="na-note">予約なし</td></tr>'}</table>`;
+
+const smokeBody = d => `<table style="width:100%;font-size:12.5px"><tr><th>実行</th><th>開始 (UTC)</th><th>結果</th></tr>${
+  (d.executions || []).map(e => `<tr><td>${esc(e.execution)}</td><td>${esc(String(e.start || '—').replace('T', ' ').slice(0, 16))}</td><td>${esc(e.result || '')}</td></tr>`).join('') || '<tr><td colspan="3" class="na-note">実行なし</td></tr>'}</table>
+  <div class="na-note" style="margin-top:6px">503 が全件で CloudFront の「ページが表示できません」なら netkeiba 側の不調の可能性があり、判定に使わない。</div>`;
+
+const cutBody = d => {
+  const c = d.counts || {};
+  return `<div class="kv"><span class="k">合格</span><span>${c['合格'] || 0}</span><span class="k">不合格</span><span>${c['不合格'] || 0}</span><span class="k">未着手</span><span>${c['未着手'] || 0}</span>
+    <span class="k">止めてよい単位</span><span>${(d.ready_to_stop || []).map(esc).join(', ') || 'まだありません'}</span></div>
+    <div class="na-note" style="margin-top:6px">ホスト cron は、prod で数日間正常を見届けるまで止めない方針です。</div>`;
+};
+
+const shadowBody = d => `<div class="kv"><span class="k">最新レポート</span><span>${esc(d.date)}</span>${
+  Object.entries(d.report || {}).slice(0, 10).map(([k, v]) => `<span class="k">${esc(k)}</span><span>${esc(v)}</span>`).join('')}</div>`;
+
+const parBody = d => `<pre style="font-size:12px;margin:0;white-space:pre-wrap">${esc(JSON.stringify(d.summary || {}, null, 1))}</pre>`;
+
+async function load() {
+  const [ov, cards] = [document.getElementById('overall'), document.getElementById('cards')];
+  try {
+    const d = await fetch('/api/internal/prod-status').then(r => r.json());
+    const lv = (d.overall || {}).level || 'unknown', s = d.sections || {};
+    ov.innerHTML = `<span class="lamp" style="color:${COL[lv]}">● ${LAB[lv] || lv}</span>
+      <ul style="margin:8px 0 0 18px;padding:0;font-size:13px">${((d.overall || {}).reasons || []).map(r => `<li>${esc(r.message)}</li>`).join('')}</ul>`;
+    document.getElementById('age').textContent = d.collected_at ? `収集: ${d.collected_at}（${d.age_s != null ? Math.round(d.age_s / 60) + ' 分前' : '—'}）` : '未収集';
+    cards.innerHTML = [
+      card('VPS の資源と UI', s.vps, vpsBody), card('ユニットとトンネル', s.vps, unitsBody),
+      card('公開 URL の入口', s.public_entry, pubBody), card('昇格履歴（promote.sh）', s.releases, relBody),
+      card('VPS ハートビート（GCS）', s.heartbeat, hbBody), card('Cloud Scheduler の予約', s.gcp_scheduler, schedBody),
+      card('netkeiba 到達試験（Cloud Run Jobs）', s.gcp_smoke, smokeBody), card('影モード（fetch-shadow）の日次レポート', s.shadow, shadowBody),
+      card('ホスト cron 停止の判定（cutover）', s.cutover, cutBody), card('stg との差分（env parity）', s.parity, parBody),
+      card('GCP の費用', s.cost, () => ''),
+    ].join('');
+  } catch (e) { ov.innerHTML = '<span class="text-error">取得失敗</span>'; }
+}
+load();
+setInterval(load, 60000);
+</script>
+{% endblock %}

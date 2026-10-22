@@ -4,6 +4,13 @@
 {% block content %}
 <div class="page-title"><span class="icon">🔌</span> サービス詳細</div>
 
+<div class="card" id="prod-card">
+  <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+    <span>🟠 prod（ConoHa VPS）の状況</span><a href="/prod" style="color:var(--accent);text-decoration:none;text-transform:none">詳しく見る（資源・ユニット・GCP・移行の判定）→</a>
+  </div>
+  <div id="prod-summary"><span class="loading">読込中...</span></div>
+</div>
+
 <div class="card" id="model-card">
   <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
     <span>🎯 モデルの予測性能（概要）</span><a href="/models" style="color:var(--accent);text-decoration:none;text-transform:none">詳しく見る（精度の推移・寄与率）→</a>
@@ -94,7 +101,24 @@ async function loadModelPerf() {
       `</table><p class="last-updated" style="text-align:left">キャッシュ作成: ${esc(d.built_at || '—')}（${d.age_hours ?? '—'} 時間前）。2026 年はテストセット②（学習・選択に未使用）。</p>`;
   } catch (e) { el.innerHTML = '<span class="text-error">取得失敗</span>'; }
 }
+async function loadProdSummary() {
+  const el = document.getElementById('prod-summary');
+  const col = {green: '#3fb950', yellow: '#d29922', red: '#f85149', unknown: '#8b949e'};
+  const lab = {green: '正常', yellow: '注意', red: '要対応', unknown: '未確認'};
+  try {
+    const d = await fetch('/api/internal/prod-status?summary=1').then(r => r.json());
+    const lv = d.level || 'unknown';
+    const f = (v, n = 0) => (v == null ? '—' : Number(v).toFixed(n));
+    const reasons = (d.reasons || []).map(r => `<li>${esc(r.message)}</li>`).join('');
+    el.innerHTML = `<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:20px;font-weight:700;color:${col[lv]}">● ${lab[lv] || lv}</span>
+      <span class="text-muted">版: ${esc(d.release || '—')} / 空きメモリ ${f(d.mem_available_mb)}MB・使用 ${f(d.mem_used_mb)}MB</span>
+      <span class="text-muted">取得: ${esc(d.collected_at || '未収集')}${d.age_s != null ? '（' + Math.round(d.age_s / 60) + ' 分前）' : ''}</span></div>
+      <ul style="margin:8px 0 0 18px;padding:0;font-size:12.5px">${reasons}</ul>`;
+  } catch (e) { el.innerHTML = '<span class="text-error">取得失敗</span>'; }
+}
 refresh();
+loadProdSummary();
 loadModelPerf();
 setInterval(refresh, 30000);
 </script>

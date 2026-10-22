@@ -202,6 +202,32 @@ Monitor App :23900         （スタンドアロン Flask）
 
 ---
 
+### 4.y `/prod` — prod（ConoHa VPS）の状況（`/services` の最上部に要約カードも出る）
+
+**目的**: 公開（prod）の UI は VPS で動くが、監視ポータルはホストで動くため、これまで prod の状況がどこにも出なかった（`ENV_CONFIGS["prod"]` はローカルの 233xx を見るだけ）。VPS と周辺（GCP）の状況を 1 ページに集める。
+
+| カード | 内容 | データの出どころ |
+|---|---|---|
+| 全体の信号 | 緑 / 黄 / 赤 と理由 | 下の各セクションから計算（`prod_status.evaluate_overall`）|
+| VPS の資源と UI | UI の応答・版（release / env / commit / source_digest）、VPS→API(api-internal)の疎通、メモリ（使用 600MB 以下 / MemAvailable 1GB 以上の目標に対するメーター）、swap、ディスク、load、稼働時間 | VPS の採取（`vps_status_probe.py`）|
+| ユニットとトンネル | keiba-ui / nginx / cloudflared-prod / keiba-fetch-agent / 各 timer の状態・再起動（前回収集からの増分）・メモリ | 同上 |
+| 公開 URL の入口 | `app.megu-keiba.com` が Cloudflare Access のログインへ 302 するか（トンネルが落ちていても 302 になるため、生死の判定は VPS 内部の採取で行う）| ホストから HTTP |
+| 昇格履歴 | promote.sh の直近の結果 | `data/local/meta/vps_promote_history.jsonl` |
+| VPS ハートビート | 最終受信・現在の異常。クライアント導入前は『未導入』 | GCS `ops/heartbeat/latest.json`（読み取り専用の gcloud）|
+| Cloud Scheduler | 予約（smoke-auto-* など）の状態・最終実行 | 読み取り専用の gcloud |
+| netkeiba 到達試験 | netkeiba-smoke の直近の実行と各回の合否 | 読み取り専用の gcloud + `deploy/gcp/netkeiba_smoke/summarize.py` |
+| 影モード | fetch-shadow の日次レポート。導入前は『未導入』 | GCS `ops/fetch_shadow/daily/` |
+| cutover 判定 | ホスト cron を止めてよいか（合格/不合格/未着手の件数）| `cron_cutover_status --json` |
+| stg との差分 | env parity の保存結果。未導入なら『未導入』 | `data/local/meta/env_parity/latest.json` |
+| GCP の費用 | 読み取り専用の鍵に BigQuery の権限が無いため未取得（Slack の日次コスト報告を参照）| — |
+
+- **収集方式**: リクエスト時に ssh / gcloud を叩かない。ホストの cron（3 分おき）の `python -m src.scripts.ops.collect_prod_status` が `data/local/meta/prod_status/latest.json` に原子的に書き、画面はそれを読むだけ（`src/monitor/prod_status.py`）。取得失敗・未導入は『未取得（理由）』で表示し、各カードに取得時刻を出す。キャッシュが 15 分以上古いと全体の信号を黄にする。
+- **VPS に何も入れない**: 採取は `ssh keiba-vps python3 -` に読み取りだけのスクリプトを標準入力で流す（deploy ユーザーで読める範囲。新しい権限・ファイル・鍵は不要）。
+- **差し替え層**: 各セクションは `{state: ok|missing|error, at, reason, data}` の同じ形で、ソース別アダプタ（`vps_adapter` / `heartbeat_adapter` …）が作る。最終形（ホストと無関係に公開）では、VPS のハートビート（GCS）→ GCP 上のモニターに、同じ形で差し替える。
+- **通知**: `KEIBA_PROD_STATUS_NOTIFY=1` のときだけ、赤・黄を Slack（`alert` チャンネル、環境表示つき）へ。同じ内容は 1 時間に 1 回まで。既定は送らない。
+- **導入**: `sudo -n bash scripts/ops/install_prod_status_cron.sh dir` → `bash scripts/ops/install_prod_status_cron.sh cron`（jovyan の crontab に 3 分おき、タグ `KEIBA-PROD-STATUS`）。今すぐ 1 回: `… once`。外す: `… remove`。
+- 目標値と閾値: 使用 600MB 以下・MemAvailable 1GB 以上（600MB 未満は赤）・swap 200MB 超・ディスク 80%/85%・ハートビートの途絶 15 分は `docs/operations/architecture_target.md` 3.2 と `src/ops/heartbeat_schema.py` に合わせてある。
+
 ## 5. ファイル構成
 
 ```
@@ -275,6 +301,8 @@ bash scripts/server/service_start.sh --env stg --monitor
 |--------|------|------|
 | `MONITOR_PASSWORD` | 必須 | 監視ポータルのログインパスワード |
 | `MONITOR_SECRET_KEY` | 必須 | Flask セッション署名キー（ランダム 32 文字以上推奨）|
+| `KEIBA_PROD_STATUS_NOTIFY` | 任意 | `1` で prod の状況が赤・黄のとき Slack に通知（既定は送らない）|
+| `KEIBA_PROD_STATUS_DIR` | 任意 | prod 状況のキャッシュ置き場（既定 `data/local/meta/prod_status`）|
 
 既存の `DEV_PASSWORD` / `DEV_SECRET_KEY` とは別管理（目的・権限が異なるため）。
 
@@ -300,6 +328,7 @@ bash scripts/server/service_start.sh --env stg --monitor
 | `GET /api/internal/page-quality?date=YYYY-MM-DD` | ページ品質チェック結果（省略時は最新）|
 | `POST /api/internal/page-quality/run` | ページ品質チェックをオンデマンド実行 |
 | `GET /api/internal/model-perf` | モデルの予測性能（事前計算キャッシュ。`?summary=1` で /services 用の要約）|
+| `GET /api/internal/prod-status` | prod（VPS）の状況（収集キャッシュ。`?summary=1` で /services 用の要約）|
 | `GET /api/internal/data-stores` | PostgreSQL / SQLite / Parquet データストア状態（`/data-stores` ページ用）|
 
 ---

@@ -170,6 +170,22 @@ def models():
     return render_template("models.html", active="models")
 
 
+@app.route("/prod")
+@require_auth
+def prod_page():
+    return render_template("prod.html", active="prod")
+
+
+@app.route("/api/internal/prod-status")
+@require_auth
+def internal_prod_status():
+    """prod（VPS）の状況。収集スクリプトが作ったキャッシュを読むだけ（リクエスト時に ssh / gcloud は叩かない）。?summary=1 は /services 用の要約。"""
+    from src.monitor import prod_status
+
+    d = prod_status.load()
+    return jsonify(prod_status.summary(d) if request.args.get("summary") == "1" else d)
+
+
 @app.route("/api/internal/model-perf")
 @require_auth
 def internal_model_perf():
