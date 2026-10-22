@@ -31,3 +31,9 @@
 # 30 7 * * *  __PROJECT__/scripts/auto_scrape.sh weight_runner >> __PROJECT__/logs/auto_scrape_weight.log 2>&1 # KEIBA-VPN-JST
 # 推論用の履歴テーブルの増分エクスポート（当年。結果の取り込み後に 1 日 1 回）
 # 30 6 * * *  __PROJECT__/scripts/cron/export_tables_daily.sh >> __PROJECT__/logs/export_tables_daily.log 2>&1 # KEIBA-VPN-JST
+
+# ── v6 の推論用の参照データの更新（ホストは UTC。ここは JST の PC 用の目安。詳細: docs/operations/v6_state_refresh.md）
+#   RB の履歴状態（日次。export_tables_daily と feature-accumulate の後。十数秒）:
+# 20 8 * * *  __PROJECT__/scripts/cron/rb_state_daily.sh __PROJECT__ >> __PROJECT__/logs/rb_state_daily.log 2>&1 # KEIBA-V6-STATE
+#   PX のリッジ（毎週。新しい半年の 30 日前以降で、リッジが無いときだけ作る。数分）:
+# 30 3 * * 1  __PROJECT__/scripts/cron/px_ridge_window.sh __PROJECT__ >> __PROJECT__/logs/px_ridge_window.log 2>&1 # KEIBA-V6-STATE
