@@ -77,7 +77,7 @@ def test_level_for_roi_thresholds():
     assert PZ.level_for_roi(0.97, "C") == 1 and PZ.level_for_roi(1.0, "C") == 2
     assert PZ.level_for_roi(1.03, "C") == 3 and PZ.level_for_roi(1.5, "C") == 4
     assert PZ.thresholds("A")[0] > PZ.thresholds("C")[0]     # A は確信度の尺度（C と水準が違う）
-    assert [t["label"] for t in PZ.tiers()][:2] == ["推奨しない", "元返し程度"]
+    assert [t["label"] for t in PZ.tiers()][:2] == ["見送り", "標準"]
 
 
 def test_synth_pair_odds_counts_and_floor():

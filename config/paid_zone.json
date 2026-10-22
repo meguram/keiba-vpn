@@ -21,28 +21,28 @@
   "tiers": [
     {
       "level": 0,
-      "label": "推奨しない",
+      "label": "見送り",
       "short": "見送り"
     },
     {
       "level": 1,
-      "label": "元返し程度",
-      "short": "元返し"
+      "label": "標準",
+      "short": "標準"
     },
     {
       "level": 2,
-      "label": "推奨",
-      "short": "推奨"
+      "label": "注目",
+      "short": "注目"
     },
     {
       "level": 3,
-      "label": "強く推奨",
-      "short": "強推奨"
+      "label": "高注目",
+      "short": "高注目"
     },
     {
       "level": 4,
-      "label": "最も推奨",
-      "short": "最推奨"
+      "label": "最注目",
+      "short": "最注目"
     }
   ],
   "thresholds": {

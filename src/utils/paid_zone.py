@@ -76,9 +76,9 @@ def tiers() -> list[dict[str, Any]]:
     t = config().get("tiers")
     if t:
         return [dict(x) for x in t]
-    return [{"level": 0, "label": "推奨しない", "short": "見送り"}, {"level": 1, "label": "元返し程度", "short": "元返し"},
-            {"level": 2, "label": "推奨", "short": "推奨"}, {"level": 3, "label": "強く推奨", "short": "強推奨"},
-            {"level": 4, "label": "最も推奨", "short": "最推奨"}]
+    return [{"level": 0, "label": "見送り", "short": "見送り"}, {"level": 1, "label": "標準", "short": "標準"},
+            {"level": 2, "label": "注目", "short": "注目"}, {"level": 3, "label": "高注目", "short": "高注目"},
+            {"level": 4, "label": "最注目", "short": "最注目"}]
 
 
 def thresholds(m: str | None = None) -> list[float]:
