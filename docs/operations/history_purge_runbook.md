@@ -20,7 +20,7 @@ bash scripts/ops/purge_preflight.sh check   # 全部 OK で終了コード 0
 ```
 | 場所 | 内容 | 確認する人 |
 |---|---|---|
-| (a) ホストの実ファイル | `config/fitted_artifacts.txt` の 88 ファイルが、手元の版と sha256 一致 | check が自動で |
+| (a) ホストの実ファイル | `config/fitted_artifacts.txt` の 91 ファイル（外部資料の抜粋 3 件を含む）が、手元の版と sha256 一致 | check が自動で |
 | (b) GCS `models/fitted_artifacts/` | `model_publish publish fitted_artifacts` 済みで manifest が一致 | check が自動で（読み取り専用の鍵） |
 | (c) リポジトリ外バックアップ | `git bundle`（全ブランチ）と対象ファイルの tar.gz | check が自動で |
 

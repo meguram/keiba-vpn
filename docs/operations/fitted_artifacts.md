@@ -4,7 +4,7 @@
 対象一覧は `config/fitted_artifacts.txt`（機械が読む正）。実ファイルは各環境に残し、配布は `scripts/ops/fitted_artifacts.sh`（束ねる／展開）→ `src/ops/model_publish.py`（GCS の `models/fitted_artifacts/`）。
 
 ## 分類
-**git から外したもの（当て込まれた値・集計表。88 ファイル）**
+**git から外したもの（当て込まれた値・集計表。(91 ファイル)**
 | 種別 | パス | 理由 |
 |---|---|---|
 | 学習済みの重み・符号化器 | `models/*.pkl`、`models/encoder.json`、`models/final_odds_bundle.json`、`models/pace_predictor/*`、`config/{growth_index,tracking_difficulty_v2}/model*.txt`、`config/expected_megu/model.json`、`config/pace_type_models.json` | 学習で得た重み |
@@ -38,9 +38,9 @@
 ## 今の確認結果（`purge_preflight.sh check`、2026-10-22）
 | 場所 | 一致 | 無い | 内容が違う | 次にやること |
 |---|---:|---:|---:|---|
-| (a) ホストの実ファイル | 86/88 | 1 | 1 | `config/drift_top_features.json` がホストに無い → 作業ツリー指定のステージで配置。`models/final_odds_bundle.json` は**ホスト版が正**（開発 PC の複製が古い）→ **ホストで pack する**か、ホスト版を取得して照合 |
+| (a) ホストの実ファイル | 89/91 | 1 | 1 | `config/drift_top_features.json` がホストに無い → 作業ツリー指定のステージで配置。`models/final_odds_bundle.json` は**ホスト版が正**（開発 PC の複製が古い）→ **ホストで pack する**か、ホスト版を取得して照合 |
 | (b) GCS `models/fitted_artifacts/` | 未確認 | - | - | ホストで `fitted_artifacts.sh pack` → `model_publish publish fitted_artifacts <dir>` を行い、`KEIBA_GCS_BUCKET` を指定して再確認 |
-| (c) リポジトリ外バックアップ | 0/88 | 88 | 0 | `purge_preflight.sh backup`（git bundle と tar.gz）。ホスト版を取り込んだあとに作る |
+| (c) リポジトリ外バックアップ | tar.gz 0/91（bundle は作成済み・検証 OK） | 91 | 0 | `purge_preflight.sh backup`（git bundle と tar.gz）。ホスト版を取り込んだあとに作る |
 
 ## コース資料（`data/meta/course_master/**`）の監査（2026-10-22）
 第三者サイト（JRA-VAN すごトク、競馬ラボ、Wikipedia など）の**文の抜粋**を含むものは、公開リポジトリから外した（権利の都合。JRA-VAN は公表禁止）。
