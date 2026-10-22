@@ -1,0 +1,5 @@
+# 学習済みの重み・符号化器は公開リポジトリに置かない（docs/operations/model_distribution.md）
+*.pkl
+encoder.json
+final_odds_bundle.json
+pace_predictor/
