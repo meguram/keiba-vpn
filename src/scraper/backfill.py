@@ -92,6 +92,12 @@ _PHASE_CATEGORIES = {
 # 予測モデルの学習には race_result + horse_result が最重要
 
 _shutdown_requested = False
+_GUARD = None   # 過去分補填（--phase past）のときだけ設定する NightGuard（件数の上限・悪化の検知・時間窓）
+
+
+def _should_stop() -> bool:
+    """シャットダウン要求、または過去分補填の夜ごとの安全装置が止めるべきと言っているか。"""
+    return _shutdown_requested or bool(_GUARD is not None and _GUARD.should_stop())
 
 
 def _signal_handler(signum, frame):
@@ -261,7 +267,7 @@ def _run_phase_fast(runner, progress: BackfillProgress,
     logger.info("Phase fast: %d/%d 日が未処理", len(pending), len(dates))
 
     for i, date in enumerate(pending[:max_dates]):
-        if _shutdown_requested:
+        if _should_stop():
             logger.info("シャットダウン要求 — Phase fast 中断")
             break
 
@@ -281,7 +287,7 @@ def _run_phase_fast(runner, progress: BackfillProgress,
 
             races_new = 0
             for j, race in enumerate(races):
-                if _shutdown_requested:
+                if _should_stop():
                     break
                 rid = race["race_id"]
 
@@ -296,7 +302,7 @@ def _run_phase_fast(runner, progress: BackfillProgress,
                 except Exception as e:
                     logger.warning("  race_result/%s 失敗: %s", rid, e)
 
-            if not _shutdown_requested:
+            if not _should_stop():
                 progress.mark_date_done(date, "fast", {
                     "races": len(races),
                     "races_new": races_new,
@@ -342,7 +348,7 @@ def _run_phase_horse(runner, progress: BackfillProgress,
     batch_done: list[str] = []
 
     for i, hid in enumerate(pending[:max_horses]):
-        if _shutdown_requested:
+        if _should_stop():
             break
         if time.time() - start_time > MAX_RUNTIME_HOURS * 3600:
             logger.info("最大実行時間超過 — Phase horse 中断")
@@ -390,7 +396,7 @@ def _run_phase_full(runner, progress: BackfillProgress,
     categories = _PHASE_CATEGORIES["full"]
 
     for i, date in enumerate(pending[:max_dates]):
-        if _shutdown_requested:
+        if _should_stop():
             break
         if time.time() - start_time > MAX_RUNTIME_HOURS * 3600:
             break
@@ -404,7 +410,7 @@ def _run_phase_full(runner, progress: BackfillProgress,
 
         races = race_list.get("races", [])
         for j, race in enumerate(races):
-            if _shutdown_requested:
+            if _should_stop():
                 break
             rid = race["race_id"]
 
@@ -428,7 +434,7 @@ def _run_phase_full(runner, progress: BackfillProgress,
                 except Exception as e:
                     logger.warning("  %s/%s エラー: %s", cat, rid, e)
 
-        if not _shutdown_requested:
+        if not _should_stop():
             progress.mark_date_done(date, "full", {"races": len(races)})
             stats["dates_processed"] += 1
             stats["races_total"] += len(races)
@@ -439,6 +445,273 @@ def _run_phase_full(runner, progress: BackfillProgress,
             time.sleep(pause)
 
     return stats
+
+
+# ── 過去分（2016〜2019 年）の補填 ─────────────────────────────────────────────
+# 2020 年以降と同じカテゴリ・スキーマ・保存経路（HybridStorage.save → GCS）で揃える。取得の強さは backfill_guard が制限する。
+# 段階（上から順に、未完了の段階を進める）。年は新しいほうから（2019 → 2016）。
+PAST_YEARS = [2019, 2018, 2017, 2016]
+PAST_TIERS = ["fast", "horse", "cards", "lap", "odds", "pair", "index", "past", "on_time"]
+# 2019 年のレースで実際に取れることを確認したカテゴリだけ。パドック・厩舎コメント・調子偏差値は 2019 年のページに内容が無い（空の文書になる）ので取らない。
+_PAST_CARD_TIERS = {
+    "cards": [("race_shutuba", "scrape_race_card"), ("race_oikiri", "scrape_oikiri")],
+    "lap": [("race_result_lap", "scrape_race_result_lap")],
+    "odds": [("race_odds", "scrape_odds")],
+    "pair": [("race_pair_odds", "scrape_pair_odds")],
+    "index": [("race_index", "scrape_speed_index")],
+    "past": [("race_shutuba_past", "scrape_shutuba_past")],
+    "on_time": [("race_result_on_time", "scrape_race_result_on_time")],
+}
+_API_SESSION_CATS = {"race_odds", "race_pair_odds"}
+_PAST_UNAVAILABLE = {
+    "race_paddock": "2019 年のページに内容が無い（空）",
+    "race_trainer_comment": "2019 年のページに内容が無い（空）",
+    "race_barometer": "2019 年は取得できない（空）",
+}
+CALENDAR_URL = "https://race.netkeiba.com/top/calendar.html?year={year}&month={month}"
+
+
+def _past_race_dates(runner, progress: BackfillProgress, year: int) -> list[str]:
+    """その年の JRA 開催日。月間カレンダー（12 リクエスト/年）から取り、進捗ファイルに保存して使い回す。"""
+    import re
+
+    key = f"calendar_{year}"
+    cached = progress._data.get(key)
+    if cached:
+        return cached
+    dates: set[str] = set()
+    for month in range(1, 13):
+        if _should_stop():
+            return []
+        html = runner.client.fetch(CALENDAR_URL.format(year=year, month=month))
+        dates.update(d for d in re.findall(r"kaisai_date=(\d{8})", html) if d.startswith(str(year)))
+    out = sorted(dates)
+    progress._data[key] = out
+    progress.save()
+    return out
+
+
+def _run_phase_cards_past(runner, progress: BackfillProgress, dates: list[str], tier: str) -> dict:
+    """出馬表・追い切り・オッズ・タイム指数を、結果が揃った開催日について取る（既にあるカテゴリは取らない）。"""
+    cats = _PAST_CARD_TIERS[tier]
+    key = f"done_{tier}"
+    stats = {"dates_processed": 0, "fetched": 0, "missing": 0}
+    done = set(progress._data.get(key, []))
+    fast_done = set(progress._data.get("done_fast", []))
+    pending = [d for d in dates if d in fast_done and d not in done]
+    logger.info("Phase %s(past): %d 日が未処理", tier, len(pending))
+    for date in pending:
+        if _should_stop():
+            break
+        race_list = runner.storage.load("race_lists", date) or {}
+        races = race_list.get("races", [])
+        got = miss = 0
+        consecutive_miss = 0
+        for race in races:
+            if _should_stop():
+                break
+            rid = race["race_id"]
+            for cat, method in cats:
+                if _should_stop():
+                    break
+                if runner.storage.exists(cat, rid):
+                    continue
+                try:
+                    if cat == "race_result_on_time":
+                        data = getattr(runner, method)(rid, skip_existing=False, opening_date=date)
+                    else:
+                        data = getattr(runner, method)(rid, skip_existing=False)
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("  %s/%s 失敗: %s", cat, rid, e)
+                    data = None
+                if cat in _API_SESSION_CATS:
+                    # API セッションの取得は NetkeibaClient のスロットルとオブザーバを通らない。間隔を空け、件数に足す
+                    if _GUARD is not None:
+                        _GUARD.add_external(1)
+                    time.sleep(random.uniform(2.2, 4.0))
+                if data:
+                    got += 1
+                    consecutive_miss = 0
+                else:
+                    miss += 1
+                    consecutive_miss += 1
+                    if consecutive_miss >= 5 and _GUARD is not None:
+                        _GUARD.fail(f"{cat} が連続して取得できない（{consecutive_miss} 件）")
+        if not _should_stop():
+            progress.mark_date_done(date, tier, {"races": len(races), "fetched": got, "missing": miss})
+            stats["dates_processed"] += 1
+            stats["fetched"] += got
+            stats["missing"] += miss
+            _update_coverage_safe(date, runner)
+    return stats
+
+
+def _collect_past_horses(runner, progress: BackfillProgress, dates: list[str]) -> int:
+    """結果が揃った開催日の出走馬を集める（ストレージの読み込みだけで、netkeiba へは取りに行かない）。"""
+    collected = set(progress._data.get("past_horse_dates", []))
+    horses = set(progress._data.get("past_horse_ids", []))
+    fast_done = set(progress._data.get("done_fast", []))
+    n_new = 0
+    for date in dates:
+        if date in collected or date not in fast_done:
+            continue
+        for race in (runner.storage.load("race_lists", date) or {}).get("races", []):
+            res = runner.storage.load("race_result", race["race_id"]) or {}
+            for e in res.get("entries", []):
+                hid = e.get("horse_id")
+                if hid and hid not in horses:
+                    horses.add(hid)
+                    n_new += 1
+        collected.add(date)
+    progress._data["past_horse_ids"] = sorted(horses)
+    progress._data["past_horse_dates"] = sorted(collected)
+    progress.save()
+    return n_new
+
+
+def _run_phase_horse_past(runner, progress: BackfillProgress, max_horses: int | None = None) -> dict:
+    """過去分の出走馬の戦績・プロフィール・血統（5 世代）を、まだ無い馬だけ取る。"""
+    stats = {"horses_processed": 0, "horses_skipped": 0, "errors": 0}
+    done = set(progress._data.get("past_horses_done", []))
+    pending = [h for h in progress._data.get("past_horse_ids", []) if h not in done]
+    logger.info("Phase horse(past): %d 頭が未処理", len(pending))
+    batch: list[str] = []
+    for hid in pending:
+        if _should_stop() or (max_horses is not None and stats["horses_processed"] >= max_horses):
+            break
+        try:
+            if not runner.storage.exists("horse_result", hid):
+                runner.scrape_horse(hid, skip_existing=False, with_history=True)
+                stats["horses_processed"] += 1
+            else:
+                stats["horses_skipped"] += 1
+            if not _should_stop() and not runner.storage.exists("horse_pedigree_5gen", hid):
+                runner.scrape_horse_pedigree_5gen(hid, skip_existing=True)
+            batch.append(hid)
+        except Exception as e:  # noqa: BLE001
+            logger.error("馬情報取得エラー [%s]: %s", hid, e)
+            stats["errors"] += 1
+        if len(batch) >= 25:
+            progress._data["past_horses_done"] = sorted(done | set(batch))
+            progress.save()
+            done |= set(batch)
+            batch = []
+    if batch:
+        progress._data["past_horses_done"] = sorted(done | set(batch))
+        progress.save()
+    return stats
+
+
+def past_status(progress: BackfillProgress, years: list[int]) -> dict:
+    """過去分の進捗（段階ごとの完了日数と未完了日数）。"""
+    out: dict[str, Any] = {}
+    for y in years:
+        dates = progress._data.get(f"calendar_{y}", [])
+        row: dict[str, Any] = {"kaisai_days": len(dates) or None}
+        for tier in [t for t in PAST_TIERS if t != "horse"]:
+            done = set(progress._data.get(f"done_{tier}", []))
+            row[tier] = f"{sum(1 for d in dates if d in done)}/{len(dates)}" if dates else "—"
+        out[str(y)] = row
+    hs = progress._data.get("past_horse_ids", [])
+    out["horses"] = {"collected": len(hs), "done": len(progress._data.get("past_horses_done", []))}
+    return out
+
+
+def run_past(
+    years: list[int] | None = None,
+    cap: int | None = None,
+    only_dates: list[str] | None = None,
+    max_horses: int | None = None,
+    ignore_window: bool = False,
+    ignore_raceday: bool = False,
+    tiers: list[str] | None = None,
+    dry_run: bool = False,
+) -> int:
+    """過去分（既定 2019→2016）を、夜ごとの上限・悪化の検知・時間窓の内側で進める。終了コード: 0=正常（上限・時間窓での終了を含む）、2=始めなかった、3=アクセス制限の検知で全停止。"""
+    global _GUARD
+    from src.scraper import backfill_guard as bg
+    from src.scraper.access_guard import AccessGuard, AccessRestrictionDetected
+    from src.scraper.scrape_access_pause import read_access_pause
+
+    years = years or PAST_YEARS
+    tiers = tiers or PAST_TIERS
+    progress = BackfillProgress()
+    state = bg.load_state()
+    cap = cap or bg.stage_cap(state)
+
+    if dry_run:
+        print(json.dumps({"years": years, "cap_this_night": cap, "cap_max": bg.CAP_MAX, "window": bg.WINDOW,
+                          "status": past_status(progress, years), "nights_recorded": len(state.get("nights", []))},
+                         ensure_ascii=False, indent=1))
+        return 0
+
+    if (read_access_pause() or {}).get("active"):
+        logger.error("アクセスの保留が有効です（人が確認して解除するまで始めません）")
+        return 2
+    now = bg._now()
+    if bg.is_raceday(now) and not ignore_raceday:
+        logger.info("土日（開催日）は補填しません")
+        return 2
+    if not ignore_window and not bg.in_window(now):
+        logger.info("時間窓 %s（JST）の外です", bg.WINDOW)
+        return 2
+    if not bg.wait_for_quiet():
+        logger.info("他の取得が終わらないため、この夜は始めません")
+        return 2
+
+    lock = BackfillLock("past")
+    if not lock.acquire():
+        return 2
+    from src.scraper import client as _client
+    from src.scraper.run import ScraperRunner
+
+    guard = bg.NightGuard(cap=cap, window="00:00-23:59" if ignore_window else bg.WINDOW)
+    _GUARD = guard
+    rc = 0
+    ended_by = ""
+    stats: dict[str, Any] = {}
+    try:
+        runner = ScraperRunner(interval=2.0, cache=False, auto_login=True)
+        _client.add_response_observer(guard)
+        try:
+            with AccessGuard(statuses={403, 429}, watch_transport_errors=False):
+                all_dates: list[str] = []
+                for y in years:
+                    if only_dates:
+                        all_dates.extend(d for d in only_dates if d.startswith(str(y)))
+                    else:
+                        all_dates.extend(_past_race_dates(runner, progress, y))
+                logger.info("過去分: 年=%s 開催日=%d 上限=%d 件/夜", years, len(all_dates), cap)
+                for tier in tiers:
+                    if _should_stop():
+                        break
+                    if tier == "fast":
+                        stats["fast"] = _run_phase_fast(runner, progress, all_dates, max_dates=10_000)
+                    elif tier == "horse":
+                        stats["horse_collected"] = _collect_past_horses(runner, progress, all_dates)
+                        stats["horse"] = _run_phase_horse_past(runner, progress, max_horses=max_horses)
+                    else:
+                        stats[tier] = _run_phase_cards_past(runner, progress, all_dates, tier)
+        except AccessRestrictionDetected as e:
+            ended_by = f"アクセス制限の検知: {e}"
+            rc = 3
+            logger.error("%s — 全停止（人が確認して解除するまで再開しません）", ended_by)
+            try:  # 取得の実行役の保留にも反映する（モジュールがあれば）
+                from src.ops import access_hold
+
+                access_hold.set_hold(ended_by, task_id="backfill-past")
+            except Exception:  # noqa: BLE001
+                pass
+        finally:
+            _client.remove_response_observer(guard)
+        runner.client.close()
+    finally:
+        ended_by = ended_by or (guard.should_stop() or "対象を処理し終えた")
+        rec = guard.record({"ended_by": ended_by, "years": years, "stats": stats})
+        _GUARD = None
+        lock.release()
+    logger.info("=== 過去分補填 終了: %s ===", json.dumps(rec, ensure_ascii=False))
+    return rc
 
 
 def run_backfill(
@@ -559,7 +832,7 @@ def main():
     parser = argparse.ArgumentParser(description="過去データ一括取得 (Backfill)")
     parser.add_argument("--year", type=int, help="対象年度 (例: 2024)")
     parser.add_argument("--phase", default="auto",
-                        choices=["auto", "fast", "horse", "full"],
+                        choices=["auto", "fast", "horse", "full", "past"],
                         help="実行フェーズ (default: auto)")
     parser.add_argument("--max-dates", type=int, default=MAX_DATES_PER_RUN,
                         help=f"1回の実行で処理する最大日数 (default: {MAX_DATES_PER_RUN})")
@@ -567,6 +840,15 @@ def main():
                         help="取得せず計画のみ表示")
     parser.add_argument("--status", action="store_true",
                         help="進捗状況を表示して終了")
+    parser.add_argument("--years", type=int, nargs="+", default=None,
+                        help="--phase past の対象年（既定: 2019 2018 2017 2016。新しいほうから）")
+    parser.add_argument("--cap", type=int, default=None,
+                        help="--phase past の 1 夜の取得件数の上限（既定: 段階的。最初の夜は半分）")
+    parser.add_argument("--only-dates", nargs="+", default=None, help="--phase past をこの開催日（YYYYMMDD）だけにする（少量の確認用）")
+    parser.add_argument("--max-horses", type=int, default=None, help="--phase past で取る馬の数の上限（少量の確認用）")
+    parser.add_argument("--tiers", nargs="+", default=None, choices=PAST_TIERS, help="--phase past で進める段階（既定: すべて、上から順）")
+    parser.add_argument("--ignore-window", action="store_true", help="手動実行用: 夜間の時間窓を無視する（件数の上限と悪化の検知は有効）")
+    parser.add_argument("--ignore-raceday", action="store_true", help="手動実行用: 土日でも実行する")
 
     args = parser.parse_args()
 
@@ -575,6 +857,12 @@ def main():
     if args.status:
         show_status()
         return
+
+    if args.phase == "past":
+        sys.exit(run_past(
+            years=args.years, cap=args.cap, only_dates=args.only_dates, max_horses=args.max_horses,
+            ignore_window=args.ignore_window, ignore_raceday=args.ignore_raceday, tiers=args.tiers, dry_run=args.dry_run,
+        ))
 
     run_backfill(
         year=args.year,
