@@ -223,14 +223,16 @@ def geld_n(d: pd.DataFrame) -> pd.Series:
     return out.reindex(d.index)
 
 
-def load_table(models: Path | None = None) -> pd.DataFrame:
+def load_table(models: Path | None = None, extra=None) -> pd.DataFrame:
     """共通の表（tp72 の mining.parquet）に、去勢明け・母の年齢・初仔・供用年と、v6e の予測を結合する。"""
     models = models or MODELING
     d = pd.read_parquet(SRC72 / "mining.parquet")
     d["date"] = pd.to_datetime(d["date"])
     d["geld_n"] = geld_n(d)
-    fl = pd.read_parquet(models / "shared_cache/foal_lineage/foal_lineage.parquet", columns=["horse_id", "dam_age_at_foaling", "dam_first_foal", "dam_first_foal_conf", "sire_year_group"])
+    fl = pd.read_parquet(models / "shared_cache/foal_lineage/foal_lineage.parquet", columns=["horse_id", "dam_id", "dam_age_at_foaling", "dam_first_foal", "dam_first_foal_conf", "sire_year_group"])
     d = d.merge(fl.drop_duplicates("horse_id"), on="horse_id", how="left")
+    if extra is not None:
+        d = extra(d)          # 第 2 ラウンド: 前走の特徴・血統の系統など、全期間の履歴が要る列をここで足す（絞り込みの前）
     d = d[(d["fs"] >= 8) & d["finish_position"].notna() & (d["win_odds"] > 0)].copy()      # win_odds は払戻の測定のための行の絞り込み（条件には使わない）
     # v6e の予測（2022〜24: LOYO OOF、2025: bundle_v6_2024 の test 予測）。2026 は v4（bundle_v4_2025）
     oof = pd.read_parquet(models / "training_pipeline_v4/tp27_v6e/ens/v6.parquet", columns=["race_id", "horse_id", "p_win", "p_top3"])
@@ -620,11 +622,11 @@ def run_eval(out_dir: Path) -> dict:
     return res
 
 
-def reeval(frozen: Path, years: list[int]) -> dict:
+def reeval(frozen: Path, years: list[int], loader=None) -> dict:
     """凍結規則を新しいデータ（指定年）で再評価する。状態: ok（z≥0）/ watch（z<0）/ failing（z<−1.645）/ pending（n<300）。
     failing が 2 か月続く、または凍結後の累積で failing になったら失効に移す（運用は章の第 8 節）。"""
     spec = json.loads(Path(frozen).read_text(encoding="utf-8"))
-    d = load_table()
+    d = (loader or load_table)()
     ctx = Ctx(d)
     sel = np.isin(ctx.year, years)
     out = []

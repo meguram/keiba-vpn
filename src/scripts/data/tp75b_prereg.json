@@ -1,0 +1,1400 @@
+{
+ "version": 1,
+ "round": 2,
+ "design": {
+  "purpose": "原子条件の連言（2・3 条件）で、買い・消しの絞り込みを探す。第 1 ラウンドの台帳（1,070 型）と合わせて検定する。市場情報は使わない。",
+  "market_free": "原子条件は事前に分かる情報だけ。人気・オッズ・市場確率・想定オッズ・期待値は使わない（T1.market_free で検査）。",
+  "max_order": 3,
+  "order_4_plus": "標本が不足するので、事前に打ち切り",
+  "enumeration": {
+   "method": "Apriori 型の頻出集合。原子 → 2 条件 → 3 条件。サブセットがすべて頻出のものだけ延ばす。同じ次元の原子（排他・包含）は同じ連言に入れない。",
+   "min_runs_discovery": 300,
+   "min_races_discovery": 100,
+   "support_uses": "発見期間（2022–24）の該当走数・レース数だけ。結果（残差・着順・払戻）は使わない",
+   "dedup": "発見期間の該当行が第 1 ラウンドのルールまたは先に列挙した候補と完全に同じものは重複として除く"
+  },
+  "adoption": {
+   "criteria": "第 1 ラウンドと同じ（現行モデルの残差、A=95%・B=90%、年をまたぐ再現、BH FDR 10%）",
+   "bh_denominator": "第 1 ラウンドの検定可能なルールと第 2 ラウンドの候補の合算（族ごと）",
+   "increment_parent": "連言は、すべての直近の親（1 条件減らしたもの）に対し、『連言 − 親の残り』の差が B（片側 95%）の水準で採用の向きにあるときだけ採用。親と同じ効果なら親が代表",
+   "increment_round1": "第 1 ラウンドの採用ルールと該当行が重なるもの（包含≥0.9 または Jaccard≥0.5）は、重なりを除いた部分が採用の向きに有意なときだけ採用（それ以外は第 1 ラウンドが代表）",
+   "clusters": "第 1 ラウンドと合わせて、Jaccard≥0.5 または包含≥0.9 を束ねる"
+  },
+  "dose_response": "合致した買い（消し）クラスタの数が増えるほど残差が大きくなるか、条件の数（1・2・3）ごとの効果と再現率",
+  "lineage_note": "血統の系統は、現状の不完全な 10 世代表（5 世代 + 牡系アンカー）に基づく。完全な 10 世代表が揃ったら再実行する（rerun_when）。",
+  "rerun_when": [
+   "完全な 10 世代表が揃ったとき（血統の系統・母母父の系統）",
+   "v6e の 2026 年全体の予測が揃ったとき"
+  ],
+  "unavailable_atoms": [
+   "前走の不利（不利を表す列が無い）"
+  ]
+ },
+ "counts": {
+  "atoms": 224,
+  "min_support_runs": 300,
+  "min_support_races": 100,
+  "frequent_atoms": 189,
+  "pairs_checked": 16345,
+  "pairs": 11391,
+  "triples_checked": 434147,
+  "triples": 275660,
+  "duplicates_dropped": 44088,
+  "candidates": 243152,
+  "by_order": {
+   "1": 141,
+   "2": 9754,
+   "3": 233257
+  },
+  "round1_testable": 624,
+  "combined_tests_per_family": 243776,
+  "families": 4
+ },
+ "candidates_sha256": "20b0e11e63a2a95ee98aa265abe5e1261619ac87ab1db4ba1a4f7770a3bd7fd7",
+ "atoms": [
+  {
+   "name": "sire_main=Nasrullah系",
+   "dim": "sire_line",
+   "expr": "sire_main==\"Nasrullah系\"",
+   "support_disc_runs": 10285
+  },
+  {
+   "name": "sire_main=Native Dancer系",
+   "dim": "sire_line",
+   "expr": "sire_main==\"Native Dancer系\"",
+   "support_disc_runs": 32186
+  },
+  {
+   "name": "sire_main=Northern Dancer系",
+   "dim": "sire_line",
+   "expr": "sire_main==\"Northern Dancer系\"",
+   "support_disc_runs": 23843
+  },
+  {
+   "name": "sire_main=Turn-To系",
+   "dim": "sire_line",
+   "expr": "sire_main==\"Turn-To系\"",
+   "support_disc_runs": 62149
+  },
+  {
+   "name": "sire_main=非主流",
+   "dim": "sire_line",
+   "expr": "sire_main==\"非主流\"",
+   "support_disc_runs": 2743
+  },
+  {
+   "name": "sire_coarse=Kingmambo系",
+   "dim": "sire_line",
+   "expr": "sire_coarse==\"Kingmambo系\"",
+   "support_disc_runs": 22530
+  },
+  {
+   "name": "sire_coarse=Mr. Prospector系",
+   "dim": "sire_line",
+   "expr": "sire_coarse==\"Mr. Prospector系\"",
+   "support_disc_runs": 7151
+  },
+  {
+   "name": "sire_coarse=Nasrullah系その他",
+   "dim": "sire_line",
+   "expr": "sire_coarse==\"Nasrullah系その他\"",
+   "support_disc_runs": 3472
+  },
+  {
+   "name": "sire_coarse=Native Dancer系その他",
+   "dim": "sire_line",
+   "expr": "sire_coarse==\"Native Dancer系その他\"",
+   "support_disc_runs": 48
+  },
+  {
+   "name": "sire_coarse=Northern Dancer系その他",
+   "dim": "sire_line",
+   "expr": "sire_coarse==\"Northern Dancer系その他\"",
+   "support_disc_runs": 3160
+  },
+  {
+   "name": "sire_coarse=Sunday Silence系",
+   "dim": "sire_line",
+   "expr": "sire_coarse==\"Sunday Silence系\"",
+   "support_disc_runs": 50121
+  },
+  {
+   "name": "sire_coarse=その他",
+   "dim": "sire_line",
+   "expr": "sire_coarse==\"その他\"",
+   "support_disc_runs": 41981
+  },
+  {
+   "name": "sire_coarse=非主流",
+   "dim": "sire_line",
+   "expr": "sire_coarse==\"非主流\"",
+   "support_disc_runs": 2743
+  },
+  {
+   "name": "sire_fine=A.P. Indy系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"A.P. Indy系\"",
+   "support_disc_runs": 6813
+  },
+  {
+   "name": "sire_fine=Brian's Time系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Brian's Time系\"",
+   "support_disc_runs": 805
+  },
+  {
+   "name": "sire_fine=Danzig系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Danzig系\"",
+   "support_disc_runs": 4072
+  },
+  {
+   "name": "sire_fine=Devil's Bag系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Devil's Bag系\"",
+   "support_disc_runs": 1505
+  },
+  {
+   "name": "sire_fine=Galileo系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Galileo系\"",
+   "support_disc_runs": 954
+  },
+  {
+   "name": "sire_fine=Gone West系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Gone West系\"",
+   "support_disc_runs": 590
+  },
+  {
+   "name": "sire_fine=In Reality系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"In Reality系\"",
+   "support_disc_runs": 19
+  },
+  {
+   "name": "sire_fine=Kingmambo系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Kingmambo系\"",
+   "support_disc_runs": 22530
+  },
+  {
+   "name": "sire_fine=Kris S.系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Kris S.系\"",
+   "support_disc_runs": 4798
+  },
+  {
+   "name": "sire_fine=Lyphard系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Lyphard系\"",
+   "support_disc_runs": 347
+  },
+  {
+   "name": "sire_fine=Montjeu系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Montjeu系\"",
+   "support_disc_runs": 13
+  },
+  {
+   "name": "sire_fine=Mr. Prospector系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Mr. Prospector系\"",
+   "support_disc_runs": 7151
+  },
+  {
+   "name": "sire_fine=Nasrullah系その他",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Nasrullah系その他\"",
+   "support_disc_runs": 3472
+  },
+  {
+   "name": "sire_fine=Native Dancer系その他",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Native Dancer系その他\"",
+   "support_disc_runs": 48
+  },
+  {
+   "name": "sire_fine=Northern Dancer系その他",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Northern Dancer系その他\"",
+   "support_disc_runs": 3160
+  },
+  {
+   "name": "sire_fine=Nureyev系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Nureyev系\"",
+   "support_disc_runs": 80
+  },
+  {
+   "name": "sire_fine=Roberto系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Roberto系\"",
+   "support_disc_runs": 51
+  },
+  {
+   "name": "sire_fine=Sadler's Wells系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Sadler's Wells系\"",
+   "support_disc_runs": 1373
+  },
+  {
+   "name": "sire_fine=Silver Hawk系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Silver Hawk系\"",
+   "support_disc_runs": 4810
+  },
+  {
+   "name": "sire_fine=Sir Tristram系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Sir Tristram系\"",
+   "support_disc_runs": 6
+  },
+  {
+   "name": "sire_fine=Southern Halo系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Southern Halo系\"",
+   "support_disc_runs": 53
+  },
+  {
+   "name": "sire_fine=Storm Cat系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Storm Cat系\"",
+   "support_disc_runs": 11061
+  },
+  {
+   "name": "sire_fine=Sunday Silence系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Sunday Silence系\"",
+   "support_disc_runs": 50121
+  },
+  {
+   "name": "sire_fine=Unbridled系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"Unbridled系\"",
+   "support_disc_runs": 1848
+  },
+  {
+   "name": "sire_fine=War Front系",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"War Front系\"",
+   "support_disc_runs": 2783
+  },
+  {
+   "name": "sire_fine=非主流",
+   "dim": "sire_line",
+   "expr": "sire_fine==\"非主流\"",
+   "support_disc_runs": 2743
+  },
+  {
+   "name": "ds_main=Nasrullah系",
+   "dim": "dsire_line",
+   "expr": "ds_main==\"Nasrullah系\"",
+   "support_disc_runs": 10603
+  },
+  {
+   "name": "ds_main=Native Dancer系",
+   "dim": "dsire_line",
+   "expr": "ds_main==\"Native Dancer系\"",
+   "support_disc_runs": 28478
+  },
+  {
+   "name": "ds_main=Northern Dancer系",
+   "dim": "dsire_line",
+   "expr": "ds_main==\"Northern Dancer系\"",
+   "support_disc_runs": 29440
+  },
+  {
+   "name": "ds_main=Turn-To系",
+   "dim": "dsire_line",
+   "expr": "ds_main==\"Turn-To系\"",
+   "support_disc_runs": 51997
+  },
+  {
+   "name": "ds_main=非主流",
+   "dim": "dsire_line",
+   "expr": "ds_main==\"非主流\"",
+   "support_disc_runs": 7675
+  },
+  {
+   "name": "ds_coarse=Bold Ruler系",
+   "dim": "dsire_line",
+   "expr": "ds_coarse==\"Bold Ruler系\"",
+   "support_disc_runs": 145
+  },
+  {
+   "name": "ds_coarse=Hail to Reason系",
+   "dim": "dsire_line",
+   "expr": "ds_coarse==\"Hail to Reason系\"",
+   "support_disc_runs": 47
+  },
+  {
+   "name": "ds_coarse=Kingmambo系",
+   "dim": "dsire_line",
+   "expr": "ds_coarse==\"Kingmambo系\"",
+   "support_disc_runs": 9215
+  },
+  {
+   "name": "ds_coarse=Mr. Prospector系",
+   "dim": "dsire_line",
+   "expr": "ds_coarse==\"Mr. Prospector系\"",
+   "support_disc_runs": 13813
+  },
+  {
+   "name": "ds_coarse=Nasrullah系その他",
+   "dim": "dsire_line",
+   "expr": "ds_coarse==\"Nasrullah系その他\"",
+   "support_disc_runs": 6862
+  },
+  {
+   "name": "ds_coarse=Native Dancer系その他",
+   "dim": "dsire_line",
+   "expr": "ds_coarse==\"Native Dancer系その他\"",
+   "support_disc_runs": 367
+  },
+  {
+   "name": "ds_coarse=Nijinsky系",
+   "dim": "dsire_line",
+   "expr": "ds_coarse==\"Nijinsky系\"",
+   "support_disc_runs": 871
+  },
+  {
+   "name": "ds_coarse=Northern Dancer系その他",
+   "dim": "dsire_line",
+   "expr": "ds_coarse==\"Northern Dancer系その他\"",
+   "support_disc_runs": 9512
+  },
+  {
+   "name": "ds_coarse=Ribot系",
+   "dim": "dsire_line",
+   "expr": "ds_coarse==\"Ribot系\"",
+   "support_disc_runs": 30
+  },
+  {
+   "name": "ds_coarse=Sunday Silence系",
+   "dim": "dsire_line",
+   "expr": "ds_coarse==\"Sunday Silence系\"",
+   "support_disc_runs": 40783
+  },
+  {
+   "name": "ds_coarse=Turn-To系その他",
+   "dim": "dsire_line",
+   "expr": "ds_coarse==\"Turn-To系その他\"",
+   "support_disc_runs": 75
+  },
+  {
+   "name": "ds_coarse=その他",
+   "dim": "dsire_line",
+   "expr": "ds_coarse==\"その他\"",
+   "support_disc_runs": 38828
+  },
+  {
+   "name": "ds_coarse=非主流",
+   "dim": "dsire_line",
+   "expr": "ds_coarse==\"非主流\"",
+   "support_disc_runs": 7645
+  },
+  {
+   "name": "ds_fine=A.P. Indy系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"A.P. Indy系\"",
+   "support_disc_runs": 2953
+  },
+  {
+   "name": "ds_fine=Bold Ruler系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Bold Ruler系\"",
+   "support_disc_runs": 145
+  },
+  {
+   "name": "ds_fine=Brian's Time系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Brian's Time系\"",
+   "support_disc_runs": 3181
+  },
+  {
+   "name": "ds_fine=Danzig系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Danzig系\"",
+   "support_disc_runs": 6832
+  },
+  {
+   "name": "ds_fine=Devil's Bag系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Devil's Bag系\"",
+   "support_disc_runs": 2647
+  },
+  {
+   "name": "ds_fine=Galileo系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Galileo系\"",
+   "support_disc_runs": 1394
+  },
+  {
+   "name": "ds_fine=Gone West系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Gone West系\"",
+   "support_disc_runs": 1907
+  },
+  {
+   "name": "ds_fine=Hail to Reason系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Hail to Reason系\"",
+   "support_disc_runs": 47
+  },
+  {
+   "name": "ds_fine=Halo系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Halo系\"",
+   "support_disc_runs": 155
+  },
+  {
+   "name": "ds_fine=In Reality系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"In Reality系\"",
+   "support_disc_runs": 498
+  },
+  {
+   "name": "ds_fine=Kingmambo系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Kingmambo系\"",
+   "support_disc_runs": 9215
+  },
+  {
+   "name": "ds_fine=Kris S.系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Kris S.系\"",
+   "support_disc_runs": 3451
+  },
+  {
+   "name": "ds_fine=Lyphard系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Lyphard系\"",
+   "support_disc_runs": 2015
+  },
+  {
+   "name": "ds_fine=Montjeu系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Montjeu系\"",
+   "support_disc_runs": 344
+  },
+  {
+   "name": "ds_fine=Mr. Prospector系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Mr. Prospector系\"",
+   "support_disc_runs": 13813
+  },
+  {
+   "name": "ds_fine=Nasrullah系その他",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Nasrullah系その他\"",
+   "support_disc_runs": 6862
+  },
+  {
+   "name": "ds_fine=Native Dancer系その他",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Native Dancer系その他\"",
+   "support_disc_runs": 367
+  },
+  {
+   "name": "ds_fine=Nijinsky系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Nijinsky系\"",
+   "support_disc_runs": 871
+  },
+  {
+   "name": "ds_fine=Northern Dancer系その他",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Northern Dancer系その他\"",
+   "support_disc_runs": 9512
+  },
+  {
+   "name": "ds_fine=Nureyev系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Nureyev系\"",
+   "support_disc_runs": 1756
+  },
+  {
+   "name": "ds_fine=Ribot系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Ribot系\"",
+   "support_disc_runs": 30
+  },
+  {
+   "name": "ds_fine=Roberto系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Roberto系\"",
+   "support_disc_runs": 451
+  },
+  {
+   "name": "ds_fine=Sadler's Wells系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Sadler's Wells系\"",
+   "support_disc_runs": 2293
+  },
+  {
+   "name": "ds_fine=Seattle Slew系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Seattle Slew系\"",
+   "support_disc_runs": 643
+  },
+  {
+   "name": "ds_fine=Silver Hawk系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Silver Hawk系\"",
+   "support_disc_runs": 901
+  },
+  {
+   "name": "ds_fine=Sir Gaylord系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Sir Gaylord系\"",
+   "support_disc_runs": 6
+  },
+  {
+   "name": "ds_fine=Sir Tristram系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Sir Tristram系\"",
+   "support_disc_runs": 28
+  },
+  {
+   "name": "ds_fine=Southern Halo系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Southern Halo系\"",
+   "support_disc_runs": 272
+  },
+  {
+   "name": "ds_fine=Storm Cat系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Storm Cat系\"",
+   "support_disc_runs": 4235
+  },
+  {
+   "name": "ds_fine=Sunday Silence系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Sunday Silence系\"",
+   "support_disc_runs": 40783
+  },
+  {
+   "name": "ds_fine=Turn-To系その他",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Turn-To系その他\"",
+   "support_disc_runs": 75
+  },
+  {
+   "name": "ds_fine=Unbridled系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"Unbridled系\"",
+   "support_disc_runs": 2678
+  },
+  {
+   "name": "ds_fine=War Front系",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"War Front系\"",
+   "support_disc_runs": 188
+  },
+  {
+   "name": "ds_fine=非主流",
+   "dim": "dsire_line",
+   "expr": "ds_fine==\"非主流\"",
+   "support_disc_runs": 7645
+  },
+  {
+   "name": "dds_main=Nasrullah系",
+   "dim": "ddsire_line",
+   "expr": "dds_main==\"Nasrullah系\"",
+   "support_disc_runs": 145
+  },
+  {
+   "name": "dds_main=Native Dancer系",
+   "dim": "ddsire_line",
+   "expr": "dds_main==\"Native Dancer系\"",
+   "support_disc_runs": 238
+  },
+  {
+   "name": "dds_main=Northern Dancer系",
+   "dim": "ddsire_line",
+   "expr": "dds_main==\"Northern Dancer系\"",
+   "support_disc_runs": 351
+  },
+  {
+   "name": "dds_main=Turn-To系",
+   "dim": "ddsire_line",
+   "expr": "dds_main==\"Turn-To系\"",
+   "support_disc_runs": 383
+  },
+  {
+   "name": "dds_main=非主流",
+   "dim": "ddsire_line",
+   "expr": "dds_main==\"非主流\"",
+   "support_disc_runs": 190
+  },
+  {
+   "name": "dds_coarse=Bold Ruler系",
+   "dim": "ddsire_line",
+   "expr": "dds_coarse==\"Bold Ruler系\"",
+   "support_disc_runs": 2
+  },
+  {
+   "name": "dds_coarse=Kingmambo系",
+   "dim": "ddsire_line",
+   "expr": "dds_coarse==\"Kingmambo系\"",
+   "support_disc_runs": 69
+  },
+  {
+   "name": "dds_coarse=Mr. Prospector系",
+   "dim": "ddsire_line",
+   "expr": "dds_coarse==\"Mr. Prospector系\"",
+   "support_disc_runs": 111
+  },
+  {
+   "name": "dds_coarse=Nasrullah系その他",
+   "dim": "ddsire_line",
+   "expr": "dds_coarse==\"Nasrullah系その他\"",
+   "support_disc_runs": 88
+  },
+  {
+   "name": "dds_coarse=Native Dancer系その他",
+   "dim": "ddsire_line",
+   "expr": "dds_coarse==\"Native Dancer系その他\"",
+   "support_disc_runs": 4
+  },
+  {
+   "name": "dds_coarse=Nijinsky系",
+   "dim": "ddsire_line",
+   "expr": "dds_coarse==\"Nijinsky系\"",
+   "support_disc_runs": 58
+  },
+  {
+   "name": "dds_coarse=Northern Dancer系その他",
+   "dim": "ddsire_line",
+   "expr": "dds_coarse==\"Northern Dancer系その他\"",
+   "support_disc_runs": 93
+  },
+  {
+   "name": "dds_coarse=Ribot系",
+   "dim": "ddsire_line",
+   "expr": "dds_coarse==\"Ribot系\"",
+   "support_disc_runs": 37
+  },
+  {
+   "name": "dds_coarse=Sunday Silence系",
+   "dim": "ddsire_line",
+   "expr": "dds_coarse==\"Sunday Silence系\"",
+   "support_disc_runs": 275
+  },
+  {
+   "name": "dds_coarse=Turn-To系その他",
+   "dim": "ddsire_line",
+   "expr": "dds_coarse==\"Turn-To系その他\"",
+   "support_disc_runs": 0
+  },
+  {
+   "name": "dds_coarse=その他",
+   "dim": "ddsire_line",
+   "expr": "dds_coarse==\"その他\"",
+   "support_disc_runs": 417
+  },
+  {
+   "name": "dds_coarse=非主流",
+   "dim": "ddsire_line",
+   "expr": "dds_coarse==\"非主流\"",
+   "support_disc_runs": 153
+  },
+  {
+   "name": "p_dist_ext200_399",
+   "dim": "p_dist",
+   "expr": "(dist_chg>=200)&(dist_chg<400)",
+   "support_disc_runs": 18218
+  },
+  {
+   "name": "p_dist_ext400p",
+   "dim": "p_dist",
+   "expr": "dist_chg>=400",
+   "support_disc_runs": 8838
+  },
+  {
+   "name": "p_dist_short200_399",
+   "dim": "p_dist",
+   "expr": "(dist_chg<=-200)&(dist_chg>-400)",
+   "support_disc_runs": 17677
+  },
+  {
+   "name": "p_dist_short400p",
+   "dim": "p_dist",
+   "expr": "dist_chg<=-400",
+   "support_disc_runs": 8110
+  },
+  {
+   "name": "p_dist_same_dist",
+   "dim": "p_dist",
+   "expr": "(dist_chg>-200)&(dist_chg<200)",
+   "support_disc_runs": 64379
+  },
+  {
+   "name": "p_surf_turf_to_dirt",
+   "dim": "p_surf",
+   "expr": "surf_chg==\"turf_to_dirt\"",
+   "support_disc_runs": 9292
+  },
+  {
+   "name": "p_surf_dirt_to_turf",
+   "dim": "p_surf",
+   "expr": "surf_chg==\"dirt_to_turf\"",
+   "support_disc_runs": 6569
+  },
+  {
+   "name": "p_surf_same",
+   "dim": "p_surf",
+   "expr": "surf_chg==\"same\"",
+   "support_disc_runs": 101361
+  },
+  {
+   "name": "p_cls_up",
+   "dim": "p_cls",
+   "expr": "cls_chg==\"up\"",
+   "support_disc_runs": 14063
+  },
+  {
+   "name": "p_cls_down",
+   "dim": "p_cls",
+   "expr": "cls_chg==\"down\"",
+   "support_disc_runs": 4836
+  },
+  {
+   "name": "p_cls_same",
+   "dim": "p_cls",
+   "expr": "cls_chg==\"same\"",
+   "support_disc_runs": 98323
+  },
+  {
+   "name": "p_fin_1",
+   "dim": "p_fin",
+   "expr": "prev_fin==1",
+   "support_disc_runs": 9254
+  },
+  {
+   "name": "p_fin_2_3",
+   "dim": "p_fin",
+   "expr": "(prev_fin>=2)&(prev_fin<=3)",
+   "support_disc_runs": 18773
+  },
+  {
+   "name": "p_fin_4_5",
+   "dim": "p_fin",
+   "expr": "(prev_fin>=4)&(prev_fin<=5)",
+   "support_disc_runs": 18694
+  },
+  {
+   "name": "p_fin_6_9",
+   "dim": "p_fin",
+   "expr": "(prev_fin>=6)&(prev_fin<=9)",
+   "support_disc_runs": 34575
+  },
+  {
+   "name": "p_fin_10p",
+   "dim": "p_fin",
+   "expr": "prev_fin>=10",
+   "support_disc_runs": 36147
+  },
+  {
+   "name": "p_margin_0",
+   "dim": "p_margin",
+   "expr": "prev_margin==0",
+   "support_disc_runs": 11443
+  },
+  {
+   "name": "p_margin_lt0.3",
+   "dim": "p_margin",
+   "expr": "(prev_margin>0)&(prev_margin<0.3)",
+   "support_disc_runs": 12099
+  },
+  {
+   "name": "p_margin_0.3_0.8",
+   "dim": "p_margin",
+   "expr": "(prev_margin>=0.3)&(prev_margin<0.8)",
+   "support_disc_runs": 26360
+  },
+  {
+   "name": "p_margin_0.8_1.5",
+   "dim": "p_margin",
+   "expr": "(prev_margin>=0.8)&(prev_margin<1.5)",
+   "support_disc_runs": 27368
+  },
+  {
+   "name": "p_margin_1.5p",
+   "dim": "p_margin",
+   "expr": "prev_margin>=1.5",
+   "support_disc_runs": 39678
+  },
+  {
+   "name": "p_agari_1",
+   "dim": "p_agari",
+   "expr": "prev_agari_rank==1",
+   "support_disc_runs": 10775
+  },
+  {
+   "name": "p_agari_2_3",
+   "dim": "p_agari",
+   "expr": "(prev_agari_rank>=2)&(prev_agari_rank<=3)",
+   "support_disc_runs": 19666
+  },
+  {
+   "name": "p_agari_4p",
+   "dim": "p_agari",
+   "expr": "prev_agari_rank>=4",
+   "support_disc_runs": 86781
+  },
+  {
+   "name": "p_pos1_front",
+   "dim": "p_pos1",
+   "expr": "prev_pos1_frac<0.25",
+   "support_disc_runs": 36208
+  },
+  {
+   "name": "p_pos1_mid",
+   "dim": "p_pos1",
+   "expr": "(prev_pos1_frac>=0.25)&(prev_pos1_frac<0.6)",
+   "support_disc_runs": 37659
+  },
+  {
+   "name": "p_pos1_back",
+   "dim": "p_pos1",
+   "expr": "prev_pos1_frac>=0.6",
+   "support_disc_runs": 43244
+  },
+  {
+   "name": "p_posL_front",
+   "dim": "p_posL",
+   "expr": "prev_posL_frac<0.25",
+   "support_disc_runs": 37261
+  },
+  {
+   "name": "p_posL_mid",
+   "dim": "p_posL",
+   "expr": "(prev_posL_frac>=0.25)&(prev_posL_frac<0.6)",
+   "support_disc_runs": 38463
+  },
+  {
+   "name": "p_posL_back",
+   "dim": "p_posL",
+   "expr": "prev_posL_frac>=0.6",
+   "support_disc_runs": 41387
+  },
+  {
+   "name": "p_going_good",
+   "dim": "p_going",
+   "expr": "going_prev==\"good\"",
+   "support_disc_runs": 82481
+  },
+  {
+   "name": "p_going_heavy",
+   "dim": "p_going",
+   "expr": "going_prev==\"heavy\"",
+   "support_disc_runs": 34741
+  },
+  {
+   "name": "p_venue_same",
+   "dim": "p_venue",
+   "expr": "venue_chg==\"same\"",
+   "support_disc_runs": 37333
+  },
+  {
+   "name": "p_venue_diff",
+   "dim": "p_venue",
+   "expr": "venue_chg==\"diff\"",
+   "support_disc_runs": 79889
+  },
+  {
+   "name": "lay_lt14",
+   "dim": "lay",
+   "expr": "lay_days<14",
+   "support_disc_runs": 7964
+  },
+  {
+   "name": "lay_14_27",
+   "dim": "lay",
+   "expr": "(lay_days>=14)&(lay_days<28)",
+   "support_disc_runs": 36636
+  },
+  {
+   "name": "lay_28_55",
+   "dim": "lay",
+   "expr": "(lay_days>=28)&(lay_days<56)",
+   "support_disc_runs": 29379
+  },
+  {
+   "name": "lay_56_89",
+   "dim": "lay",
+   "expr": "(lay_days>=56)&(lay_days<90)",
+   "support_disc_runs": 23429
+  },
+  {
+   "name": "lay_90_179",
+   "dim": "lay",
+   "expr": "(lay_days>=90)&(lay_days<180)",
+   "support_disc_runs": 15899
+  },
+  {
+   "name": "lay_180p",
+   "dim": "lay",
+   "expr": "lay_days>=180",
+   "support_disc_runs": 4848
+  },
+  {
+   "name": "jockey_none",
+   "dim": "jockey",
+   "expr": "jchg_cls==\"none\"",
+   "support_disc_runs": 57016
+  },
+  {
+   "name": "jockey_up",
+   "dim": "jockey",
+   "expr": "jchg_cls==\"up\"",
+   "support_disc_runs": 8746
+  },
+  {
+   "name": "jockey_down",
+   "dim": "jockey",
+   "expr": "jchg_cls==\"down\"",
+   "support_disc_runs": 10369
+  },
+  {
+   "name": "jockey_top_to_top",
+   "dim": "jockey",
+   "expr": "jchg_cls==\"top_to_top\"",
+   "support_disc_runs": 3465
+  },
+  {
+   "name": "jockey_non_to_non",
+   "dim": "jockey",
+   "expr": "jchg_cls==\"non_to_non\"",
+   "support_disc_runs": 51610
+  },
+  {
+   "name": "venue_01",
+   "dim": "venue",
+   "expr": "venue_code=='01'",
+   "support_disc_runs": 5892
+  },
+  {
+   "name": "venue_02",
+   "dim": "venue",
+   "expr": "venue_code=='02'",
+   "support_disc_runs": 4822
+  },
+  {
+   "name": "venue_03",
+   "dim": "venue",
+   "expr": "venue_code=='03'",
+   "support_disc_runs": 9541
+  },
+  {
+   "name": "venue_04",
+   "dim": "venue",
+   "expr": "venue_code=='04'",
+   "support_disc_runs": 11892
+  },
+  {
+   "name": "venue_05",
+   "dim": "venue",
+   "expr": "venue_code=='05'",
+   "support_disc_runs": 21244
+  },
+  {
+   "name": "venue_06",
+   "dim": "venue",
+   "expr": "venue_code=='06'",
+   "support_disc_runs": 20205
+  },
+  {
+   "name": "venue_07",
+   "dim": "venue",
+   "expr": "venue_code=='07'",
+   "support_disc_runs": 15997
+  },
+  {
+   "name": "venue_08",
+   "dim": "venue",
+   "expr": "venue_code=='08'",
+   "support_disc_runs": 12998
+  },
+  {
+   "name": "venue_09",
+   "dim": "venue",
+   "expr": "venue_code=='09'",
+   "support_disc_runs": 16897
+  },
+  {
+   "name": "venue_10",
+   "dim": "venue",
+   "expr": "venue_code=='10'",
+   "support_disc_runs": 11718
+  },
+  {
+   "name": "turf",
+   "dim": "surface",
+   "expr": "is_turf==1",
+   "support_disc_runs": 63579
+  },
+  {
+   "name": "dirt",
+   "dim": "surface",
+   "expr": "is_turf==0",
+   "support_disc_runs": 67627
+  },
+  {
+   "name": "dist_d_sprint",
+   "dim": "dist",
+   "expr": "dist_band=='d_sprint'",
+   "support_disc_runs": 32110
+  },
+  {
+   "name": "dist_d_mile_s",
+   "dim": "dist",
+   "expr": "dist_band=='d_mile_s'",
+   "support_disc_runs": 18920
+  },
+  {
+   "name": "dist_d_mile",
+   "dim": "dist",
+   "expr": "dist_band=='d_mile'",
+   "support_disc_runs": 55785
+  },
+  {
+   "name": "dist_d_mid",
+   "dim": "dist",
+   "expr": "dist_band=='d_mid'",
+   "support_disc_runs": 19294
+  },
+  {
+   "name": "dist_d_long",
+   "dim": "dist",
+   "expr": "dist_band=='d_long'",
+   "support_disc_runs": 5097
+  },
+  {
+   "name": "going_good",
+   "dim": "going",
+   "expr": "track_condition=='良'",
+   "support_disc_runs": 92925
+  },
+  {
+   "name": "going_soft",
+   "dim": "going",
+   "expr": "track_condition!='良'",
+   "support_disc_runs": 38281
+  },
+  {
+   "name": "season_spring",
+   "dim": "season",
+   "expr": "season=='spring'",
+   "support_disc_runs": 33952
+  },
+  {
+   "name": "season_summer",
+   "dim": "season",
+   "expr": "season=='summer'",
+   "support_disc_runs": 31929
+  },
+  {
+   "name": "season_autumn",
+   "dim": "season",
+   "expr": "season=='autumn'",
+   "support_disc_runs": 30916
+  },
+  {
+   "name": "season_winter",
+   "dim": "season",
+   "expr": "season=='winter'",
+   "support_disc_runs": 34409
+  },
+  {
+   "name": "bracket_inner",
+   "dim": "bracket",
+   "expr": "bracket_number<=2",
+   "support_disc_runs": 27495
+  },
+  {
+   "name": "bracket_mid",
+   "dim": "bracket",
+   "expr": "(bracket_number>=3)&(bracket_number<=6)",
+   "support_disc_runs": 65601
+  },
+  {
+   "name": "bracket_outer",
+   "dim": "bracket",
+   "expr": "bracket_number>=7",
+   "support_disc_runs": 38110
+  },
+  {
+   "name": "field_le11",
+   "dim": "field",
+   "expr": "fs<=11",
+   "support_disc_runs": 20399
+  },
+  {
+   "name": "field_12_15",
+   "dim": "field",
+   "expr": "(fs>=12)&(fs<=15)",
+   "support_disc_runs": 48895
+  },
+  {
+   "name": "field_ge16",
+   "dim": "field",
+   "expr": "fs>=16",
+   "support_disc_runs": 61912
+  },
+  {
+   "name": "cls_c0_newcomer",
+   "dim": "cls",
+   "expr": "cls=='c0_newcomer'",
+   "support_disc_runs": 10635
+  },
+  {
+   "name": "cls_c1_maiden",
+   "dim": "cls",
+   "expr": "cls=='c1_maiden'",
+   "support_disc_runs": 48318
+  },
+  {
+   "name": "cls_c2_1win",
+   "dim": "cls",
+   "expr": "cls=='c2_1win'",
+   "support_disc_runs": 34660
+  },
+  {
+   "name": "cls_c3_2win",
+   "dim": "cls",
+   "expr": "cls=='c3_2win'",
+   "support_disc_runs": 17463
+  },
+  {
+   "name": "cls_c4_3win",
+   "dim": "cls",
+   "expr": "cls=='c4_3win'",
+   "support_disc_runs": 8600
+  },
+  {
+   "name": "cls_op",
+   "dim": "cls",
+   "expr": "cls=='op'",
+   "support_disc_runs": 6168
+  },
+  {
+   "name": "cls_g3",
+   "dim": "cls",
+   "expr": "cls=='g3'",
+   "support_disc_runs": 2826
+  },
+  {
+   "name": "cls_g2",
+   "dim": "cls",
+   "expr": "cls=='g2'",
+   "support_disc_runs": 1500
+  },
+  {
+   "name": "sex_male",
+   "dim": "sex",
+   "expr": "sex=='牡'",
+   "support_disc_runs": 69671
+  },
+  {
+   "name": "sex_female",
+   "dim": "sex",
+   "expr": "sex=='牝'",
+   "support_disc_runs": 55211
+  },
+  {
+   "name": "sex_gelding",
+   "dim": "sex",
+   "expr": "sex=='セ'",
+   "support_disc_runs": 6324
+  },
+  {
+   "name": "age_2",
+   "dim": "age",
+   "expr": "age==2",
+   "support_disc_runs": 22007
+  },
+  {
+   "name": "age_3",
+   "dim": "age",
+   "expr": "age==3",
+   "support_disc_runs": 55448
+  },
+  {
+   "name": "age_4p",
+   "dim": "age",
+   "expr": "age>=4",
+   "support_disc_runs": 53751
+  },
+  {
+   "name": "jw_le-2",
+   "dim": "jw",
+   "expr": "jw_chg<=-2",
+   "support_disc_runs": 13445
+  },
+  {
+   "name": "jw_mid",
+   "dim": "jw",
+   "expr": "(jw_chg>-2)&(jw_chg<2)",
+   "support_disc_runs": 89765
+  },
+  {
+   "name": "jw_ge2",
+   "dim": "jw",
+   "expr": "jw_chg>=2",
+   "support_disc_runs": 14012
+  },
+  {
+   "name": "wtchg_le-10",
+   "dim": "wtchg",
+   "expr": "weight_change<=-10",
+   "support_disc_runs": 7493
+  },
+  {
+   "name": "wtchg_-9_-4",
+   "dim": "wtchg",
+   "expr": "(weight_change>-10)&(weight_change<=-4)",
+   "support_disc_runs": 26051
+  },
+  {
+   "name": "wtchg_-3_3",
+   "dim": "wtchg",
+   "expr": "(weight_change>-4)&(weight_change<4)",
+   "support_disc_runs": 61636
+  },
+  {
+   "name": "wtchg_4_9",
+   "dim": "wtchg",
+   "expr": "(weight_change>=4)&(weight_change<10)",
+   "support_disc_runs": 25294
+  },
+  {
+   "name": "wtchg_ge10",
+   "dim": "wtchg",
+   "expr": "weight_change>=10",
+   "support_disc_runs": 10732
+  },
+  {
+   "name": "geld_n1",
+   "dim": "geld",
+   "expr": "geld_n==1",
+   "support_disc_runs": 627
+  },
+  {
+   "name": "geld_n2",
+   "dim": "geld",
+   "expr": "geld_n==2",
+   "support_disc_runs": 531
+  },
+  {
+   "name": "geld_n3",
+   "dim": "geld",
+   "expr": "geld_n==3",
+   "support_disc_runs": 458
+  },
+  {
+   "name": "geld_n4p",
+   "dim": "geld",
+   "expr": "geld_n>=4",
+   "support_disc_runs": 2810
+  },
+  {
+   "name": "blk_first",
+   "dim": "blk",
+   "expr": "blk_state=='first'",
+   "support_disc_runs": 2479
+  },
+  {
+   "name": "blk_again",
+   "dim": "blk",
+   "expr": "blk_state=='again'",
+   "support_disc_runs": 1475
+  },
+  {
+   "name": "blk_off",
+   "dim": "blk",
+   "expr": "blk_state=='off'",
+   "support_disc_runs": 1958
+  },
+  {
+   "name": "blk_cont",
+   "dim": "blk",
+   "expr": "blk_state=='cont'",
+   "support_disc_runs": 11752
+  },
+  {
+   "name": "dam_age_le6",
+   "dim": "dam_age",
+   "expr": "dam_age_at_foaling<=6",
+   "support_disc_runs": 14005
+  },
+  {
+   "name": "dam_age_7_14",
+   "dim": "dam_age",
+   "expr": "(dam_age_at_foaling>=7)&(dam_age_at_foaling<=14)",
+   "support_disc_runs": 78300
+  },
+  {
+   "name": "dam_age_ge15",
+   "dim": "dam_age",
+   "expr": "dam_age_at_foaling>=15",
+   "support_disc_runs": 17879
+  },
+  {
+   "name": "first_foal",
+   "dim": "first_foal",
+   "expr": "dam_first_foal==1",
+   "support_disc_runs": 8690
+  },
+  {
+   "name": "sire_year_1",
+   "dim": "sire_year",
+   "expr": "sire_year_group=='1'",
+   "support_disc_runs": 14491
+  },
+  {
+   "name": "sire_year_2",
+   "dim": "sire_year",
+   "expr": "sire_year_group=='2'",
+   "support_disc_runs": 11791
+  },
+  {
+   "name": "sire_year_既存",
+   "dim": "sire_year",
+   "expr": "sire_year_group=='既存'",
+   "support_disc_runs": 60602
+  },
+  {
+   "name": "style_nige",
+   "dim": "style",
+   "expr": "style4=='nige'",
+   "support_disc_runs": 6017
+  },
+  {
+   "name": "style_senko",
+   "dim": "style",
+   "expr": "style4=='senko'",
+   "support_disc_runs": 24078
+  },
+  {
+   "name": "style_sashi",
+   "dim": "style",
+   "expr": "style4=='sashi'",
+   "support_disc_runs": 45573
+  },
+  {
+   "name": "style_oikomi",
+   "dim": "style",
+   "expr": "style4=='oikomi'",
+   "support_disc_runs": 28474
+  },
+  {
+   "name": "first_surface",
+   "dim": "first_surf",
+   "expr": "first_surface==1",
+   "support_disc_runs": 8735
+  }
+ ]
+}
