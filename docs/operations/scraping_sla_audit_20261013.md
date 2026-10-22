@@ -96,4 +96,4 @@ JST マシン用の雛形 `scripts/cron/crontab.jst.example` を追加。**cront
 
 ## 8. 決定事項（2026-10-13）
 
-開発 PC では定期スクレイピングを回さない。cron の点検・修正が必要な場合は stg PC で行う → 手順は `docs/operations/stg_cron_instructions_20261013.md`。
+開発 PC では定期スクレイピングを回さない。cron の点検・修正が必要な場合は stg PC で行う → 現在の時間割は `docs/operations/stg_cron_schedule_20261014.md`。

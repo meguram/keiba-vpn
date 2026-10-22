@@ -185,7 +185,7 @@ class SafetyScanTest(unittest.TestCase):
             "IP": "server 192.168.0.12",
             "中核データ(語)": "めぐ指数は 62.5",
             "印": "◎ 3番",
-            "メール": "連絡は someone@gmail.com まで",
+            "メール": "連絡は sample.contact.0000@gmail.com まで",
             "外部URL": "see https://evil.example.net/x",
             "電話": "03-1234-5678",
             "郵便": "〒100-0001",

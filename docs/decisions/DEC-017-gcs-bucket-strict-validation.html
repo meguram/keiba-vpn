@@ -154,7 +154,7 @@ AREA-06 §3-3 は <code>GCS_BUCKET = os.environ["GCS_BUCKET"]</code>（KeyError 
     if not bucket:
         raise RuntimeError(
             "GCS_BUCKET environment variable is not set. "
-            "Set it in .env or export GCS_BUCKET=magu-keiba-horse-racing-ai"
+            "Set it in .env or export GCS_BUCKET=<BUCKET>"
         )
     return bucket</code></pre>
 
@@ -168,7 +168,7 @@ AREA-06 §3-3 は <code>GCS_BUCKET = os.environ["GCS_BUCKET"]</code>（KeyError 
 <h2 id="impact">影響範囲</h2>
 <ul>
 <li><code>src/config/data_paths.py</code> の <code>_gcs_bucket()</code> 変更</li>
-<li><code>.env.example</code> に <code>GCS_BUCKET=magu-keiba-horse-racing-ai</code> の記載を追加・補足</li>
+<li><code>.env.example</code> に <code>GCS_BUCKET=<BUCKET></code> の記載を追加・補足</li>
 </ul>
 
 <h2 id="notes">備考</h2>

@@ -202,7 +202,7 @@ netkeiba 利用規約（第 14・15 条）は、私的利用を超える複製�
 ### 6.3 環境の分離と反映の流れ
 
 - 現状: ホストは `KEIBA_ENV=stg`（本番相当）で、**ユーザーに見せる環境と開発・検証の環境が同じ**。`config/ports.env` には prod 用（233xx）のポート帯とプロファイルもある（「VPS クローン想定」）。
-- 推奨（(d) の構成）: 公開側は CDN（ホスト外）なので、ホストの stg を**そのまま使い続けてよい**。別の `prod` 環境を同じホストに作ると、資源の取り合いと運用の二重化になるので**作らない**。検証したい変更は、Access のオーナー限定のホスト名（例 `stg.megu-keiba.com`、Access はオーナーのみ）に別ビルドを置く案（必要になったとき。今は不要）。
+- 推奨（(d) の構成）: 公開側は CDN（ホスト外）なので、ホストの stg を**そのまま使い続けてよい**。別の `prod` 環境を同じホストに作ると、資源の取り合いと運用の二重化になるので**作らない**。検証したい変更は、Access のオーナー限定のホスト名（例 `<STG_HOST>`、Access はオーナーのみ）に別ビルドを置く案（必要になったとき。今は不要）。
 - `KEIBA_ENV=prod` は「GCP に接続する本番」の意味（AGENTS.md）。stg ホストが GCS を使っている点（`GCS_BUCKET` が設定済み）は、**公開前に「どの環境がどのクラウド資源に触るか」を一覧にして確認**（要判断）。
 - 反映の流れ:
 
@@ -225,7 +225,7 @@ netkeiba 利用規約（第 14・15 条）は、私的利用を超える複製�
 
 - **ホストの可用性（要判断）**: ホストは常時稼働の PC（Windows ドライブ上の Linux 環境。`D:\` をマウント）。電源・スリープ・OS 更新・ネットワーク断で止まる。(d) ではスナップショット方式により**閲覧は止まらない**（更新だけ止まる）が、限定側とジョブは止まる。常時稼働の設定（スリープ無効、UPS の有無、自動再起動）を確認。
 - **監視**:
-  - 監視ポータル `monitor.megu-keiba.com`（Access）。
+  - 監視ポータル `<MONITOR_HOST>`（Access）。
   - Slack の異常通知（スクレイピング、データヘルス、調教被覆、cron 失敗）。
   - **外部の稼働監視**: `app`/`monitor` は Access の背後で、外部から `/api/health` は取れない。方法は (i) ホスト内の監視（現行の watchdog・Slack）、(ii) Access の**サービストークン**（`CF-Access-Client-Id`/`Secret`）を持つ監視を許可するポリシー（Service Auth）を足し、外部監視サービスでヘッダー付きで確認。公開側（`www`/`data`）は外部監視をそのまま使える（スナップショットの `generated_at` を見て鮮度も監視）。
 - **バックアップ**: `data/local` の重要データ（予測、予測成績、メタ、台帳、キュー、特徴量ストア）と設定。`.env` は安全な保管（パスワード管理ツール）に控え、リポジトリに入れない。`data/local/meta/env_backups/` の退避は権限に注意（秘密を含む）。復旧手順（新しいホストでの再構築）を文書化（未）。
@@ -244,7 +244,7 @@ netkeiba 利用規約（第 14・15 条）は、私的利用を超える複製�
 
 - [済] `app`／`monitor` は Cloudflare Access（メール OTP、許可リスト＝オーナー 1 名）の背後。未認証は 302 でログイン画面
 - [済] 旧 `tcpexposer` の stg・monitor の公開を停止（旧 URL は 404）
-- [未] **dev のトンネル（`meguai-dev.tcpexposer.com`）が保護なしで接続されたまま**（ホストで `_loop` が動作）。今は転送先の dev フロントが起動しておらず 502 だが、**dev UI を起動するとモック UI と dev ストア（netkeiba 抜粋を含む）が保護なしで見える**。**止める、または Access の背後へ**
+- [未] **dev のトンネル（`<OLD_TUNNEL_HOST>`）が保護なしで接続されたまま**（ホストで `_loop` が動作）。今は転送先の dev フロントが起動しておらず 502 だが、**dev UI を起動するとモック UI と dev ストア（netkeiba 抜粋を含む）が保護なしで見える**。**止める、または Access の背後へ**
 - [済] スクレイピング対策を `detect` で配備（honeypot・ログイン試行制限のみ enforce）。内部ジョブは影響なし
 - [未] `anti_scraping` の `enforce` 切替（検知ログ 1〜2 週間 → auth → rate_limit → bot）
 - [要判断] ホストの `.env` のファイル権限が `rwxrwxrwx`（全員が読める）。Windows ドライブのマウントで権限が反映されない可能性。秘密（Tunnel トークン、パスワード、Webhook）が入っているため、**権限の制御ができる場所への移動、または別ユーザーが読めないことの確認**
@@ -333,5 +333,5 @@ netkeiba 利用規約（第 14・15 条）は、私的利用を超える複製�
 - cron: `sudo -n crontab -l | grep -o "# KEIBA-[A-Z0-9-]*" | sort | uniq -c`
 - `.env` の変数の有無（値は出さない）: `sudo -n grep -E "^[A-Z_0-9]+=" .env | sed -E "s/=.*/=<set>/"`
 - Access の保護: ホストから `curl -s -o /dev/null -w "%{http_code} %{redirect_url}" https://app.megu-keiba.com/`（302 ならログイン画面へ）
-- 旧 URL の停止: `https://meguai-stg.tcpexposer.com/` が 404
+- 旧 URL の停止: `https://<OLD_TUNNEL_HOST>/` が 404
 - メンテナンスの状態: `curl -s localhost:23220/api/maintenance/status`

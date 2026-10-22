@@ -87,10 +87,10 @@ cron は **10 分おき**に `entries-sync` を起動する。起動時に「い
 1. 上のファイルを配置 → API を再起動（キュー running/queued=0 のとき）→ フロントを `frontend_build.sh stg` でビルドして切替。
 2. **今週分の穴埋め**（10/24・25）: 登録後すぐ 1 回、手動で実行する。
    ```
-   ssh keiba-remote 'cd /home/jovyan/work/keiba-vpn && sudo -n bash -c "set -a; . ./.env; set +a; KEIBA_ENV=stg PYTHONPATH=. /opt/conda/bin/python3 -m src.scraper.entries_sync --force"'
+   ssh keiba-remote 'cd <HOST_REPO> && sudo -n bash -c "set -a; . ./.env; set +a; KEIBA_ENV=stg PYTHONPATH=. /opt/conda/bin/python3 -m src.scraper.entries_sync --force"'
    ```
    先に `--dry-run` で取り直す予定のレースだけ確認できる（取得しない）。
-3. cron 登録（root）: `sudo -n bash scripts/cron/install_entries_sync_cron.sh /home/jovyan/work/keiba-vpn`（タグ `KEIBA-ENTRIES-SYNC`、UTC `*/10 23,0-13`）。外すときは `--remove`。
+3. cron 登録（root）: `sudo -n bash scripts/cron/install_entries_sync_cron.sh <HOST_REPO>`（タグ `KEIBA-ENTRIES-SYNC`、UTC `*/10 23,0-13`）。外すときは `--remove`。
 4. 確認: `data/local/meta/entries_state/` にレースごとのファイルができる、`logs/entries_sync.log`、
    `curl localhost:23220/api/race-list/20261024` の各行に `entries_phase` が付く。
 

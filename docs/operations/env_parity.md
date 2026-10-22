@@ -46,8 +46,8 @@ python -m src.ops.release_manifest print
 
 # stg と prod を照合（トークンは環境変数。値は表示されない）
 python -m src.scripts.ops.env_parity_check compare \
-  --stg-api https://stg.megu-keiba.com --prod-api https://app.megu-keiba.com \
-  --stg-ui https://stg.megu-keiba.com/version.json --prod-ui https://app.megu-keiba.com/version.json
+  --stg-api https://<STG_HOST> --prod-api https://app.megu-keiba.com \
+  --stg-ui https://<STG_HOST>/version.json --prod-ui https://app.megu-keiba.com/version.json
 # ネットワークを使わず、ssh などで取った JSON 同士でも比べられる
 python -m src.scripts.ops.env_parity_check compare --stg-file stg.json --prod-file prod.json
 ```
@@ -83,4 +83,4 @@ API・モデル・config はホスト（共有）なので手順 1 の時点で 
 |---|---|---|
 | `KEIBA_MANIFEST_TOKEN` | API を動かす環境（ホスト `.env`、将来は Cloud Run の Secret）／照合を走らせる側 | マニフェスト API の合言葉。未設定なら API は無効（404）。環境ごとに分けるなら `KEIBA_MANIFEST_TOKEN_STG` / `_PROD`（照合側） |
 | `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` | 照合を走らせる側 | Cloudflare Access のサービストークン（`api-internal` 用と同じ方式） |
-| `KEIBA_PARITY_STG_API` / `KEIBA_PARITY_PROD_API` / `KEIBA_PARITY_STG_UI` / `KEIBA_PARITY_PROD_UI` | `scripts/cron/env_parity_check.sh` | 照合先 URL（既定は stg.megu-keiba.com / app.megu-keiba.com。UI は `…/version.json`） |
+| `KEIBA_PARITY_STG_API` / `KEIBA_PARITY_PROD_API` / `KEIBA_PARITY_STG_UI` / `KEIBA_PARITY_PROD_UI` | `scripts/cron/env_parity_check.sh` | 照合先 URL（既定は <STG_HOST> / app.megu-keiba.com。UI は `…/version.json`） |

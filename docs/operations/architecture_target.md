@@ -67,7 +67,7 @@
 | FastAPI | :23220 `main.py`（uvicorn **3 ワーカー**） | 1 ワーカー約 270〜540MB（実測 2026-10-21）→ **合計 約 1.1GB** | 予測・期待値・推奨などの API、スクレイピングキューのワーカー、各種 daemon スレッド。**VPS の 2GB に同居させると Next.js や取得 runner と合わせて余裕がなくなる**。Cloud Run では 1 ワーカー・2GiB にする |
 | Flask `/api/v1` | :23210 `main.py --flask-api` | 約 87MB | 分析系の API |
 | 監視ポータル | :23900 `src.monitor.app` | 約 76MB | 開発者専用 |
-| cloudflared | トンネル `meguai-stg` | 約 40MB | `app` / `monitor` を Cloudflare Access 配下で公開 |
+| cloudflared | トンネル `<TUNNEL_STG>` | 約 40MB | `app` / `monitor` を Cloudflare Access 配下で公開 |
 | PostgreSQL 14 | ローカル | 共有メモリ込み約 0.8GB | `sync_pg_from_gcs` の補助。FastAPI の一部が参照 |
 | MLflow | 127.0.0.1 | 約 480MB | 学習の記録。**ホスト PC に残す** |
 | ウォッチドッグ / ensure_monitor / ensure_postgres | cron（3 分 / 5 分） | — | 死活監視 |
@@ -403,7 +403,7 @@ python -m src.scripts.ops.cost_estimate --list-unverified                  # 公
 ### 7.1 最初にやる小さな一歩（フェーズ 1。低リスク・追加費用 0）
 **目的**: UI の常駐を最小構成の VPS に移し、メモリの余裕を実測で確認する。
 1. （ユーザー）ConoHa のコンソールで VPS を起動し、OS を最新に更新。不要サービス（スナップ、旧サイトのスタックなど）を止めて、`free -m` の used を記録（実測 約 380MB → 目標 300MB 台）。**swap を 1GB 作成**（`vm.swappiness=10`）。ファイアウォールは受信全閉（SSH は一時的に自分の IP のみ）。
-2. （ユーザー）Node.js 20 LTS・nginx・cloudflared を入れる。Zero Trust で**新しいトンネル `meguai-vps`**を作成し、トークンを VPS の `.env`（権限 600）に保存。
+2. （ユーザー）Node.js 20 LTS・nginx・cloudflared を入れる。Zero Trust で**新しいトンネル `<TUNNEL_VPS>`**を作成し、トークンを VPS の `.env`（権限 600）に保存。
 3. （ホスト）`next build`（`output: "standalone"`）で成果物を作り、VPS に配置（初回は手動、以降は pull 型）。`node server.js` を systemd で常駐（`MemoryHigh=160M` `MemoryMax=200M` `Restart=always`）。nginx は 127.0.0.1 の Next.js に中継し、静的なメンテナンス / エラーページを持つ。
 4. systemd タイマーでヘルスチェック（1 分おきに `MemAvailable`・swap・ユニット状態を採取。GCP への送信はフェーズ 2 で有効化）。
 5. Tunnel の Public Hostname に `app-new.megu-keiba.com → http://localhost:80`（VPS 側）を登録、Access に同じ `owner` ポリシー。**ホストのトンネルは残したまま**並行稼働して確認。

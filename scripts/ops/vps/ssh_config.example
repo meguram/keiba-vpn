@@ -2,7 +2,7 @@
 # ユーザーの回線は VPS への SSH でバナー交換がタイムアウトするため、ホスト機（keiba-remote）を踏み台にする（ProxyJump）。
 
 # 管理用（手元の PC から。ホスト機経由）。ユーザーが使っている alias の例
-Host rakuten-server
+Host <VPS_ALIAS>
     HostName <VPS_IP>
     Port <SSH_PORT>
     User <VPS_ADMIN_USER>

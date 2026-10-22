@@ -74,7 +74,7 @@ td.d { background: #243358; } td.n { background: #0b1428; }</style></head>
  <li>予測 API（<code>/api/race/{id}/predictions</code>）に、環境変数 <code>KEIBA_LAP_FORECAST=1</code> のときだけ <code>lap_forecast</code> を付ける（既定は無効）。保存済みの予想を読み出すだけ（<code>src/pipeline/inference/lap_forecast_service.py</code>）。</li>
  <li>保存: <code>python -m src.scripts.data.tp55_backfill --dates YYYY-MM-DD ...</code>（出馬表が書き出された日の全レース。過去分のバックフィルも同じ）。保存先 <code>data/local/inference/lap_forecast/&lt;日付&gt;/&lt;race_id&gt;.json</code>。モデルは final2026 の A（テン1F あり／なし）。</li>
  <li><code>lap_forecast</code>: <code>version, race_id, date, distance, n_laps, lap_meters, model(A_full|A_noten), pace_label, pace_prob, scenarios[{name, prob, laps, sd, first3f, last3f}], expected_laps, band80_lo, band80_hi, expected_first3f, expected_last3f, par</code>。laps はスタートから 1 区間ずつの秒。</li>
-  <li>保存済みの予想（2026-01-01〜10-18 の全開催日）: ホスト <code>/home/jovyan/work/tp55_forecast_store/&lt;日付&gt;/&lt;race_id&gt;.json</code>（リポジトリ外）。</li>
+  <li>保存済みの予想（2026-01-01〜10-18 の全開催日）: ホスト <code><HOST_HOME>/work/tp55_forecast_store/&lt;日付&gt;/&lt;race_id&gt;.json</code>（リポジトリ外）。</li>
  <li>本番へは未反映。T-60 の確定出走表（枠順確定後）で動かす。出馬表の書き出し（export_tables の差分）が前提で、書き出し前は暫定にならない（保存なし＝付かない）。</li>
 </ul>
 <h2>9. 限界と今後</h2>
@@ -83,5 +83,5 @@ td.d { background: #243358; } td.n { background: #0b1428; }</style></head>
  <li>特徴量は、馬の過去走の脚質とコースが中心。騎手の意図や当日の馬場の直前変化は入らない。2026 年のテン1F は取得できていない（SmartRC の 2026 年の表が無い）。</li>
  <li>勝率予測への応用は、第 7 節の増分の結果に従う。ペース予測は tp-25b でも不採用だった。</li>
 </ul>
-<p class="muted">コード: <code>src/pipeline/features/tp55_lapfeat.py</code>、<code>src/scripts/data/tp55_build.py</code>（表の作成）、<code>src/pipeline/models/lap_forecast.py</code>（モデル）、<code>tp55_eval.py</code>（評価）、<code>tp55_win_eval.py</code>（勝率への増分）、<code>tp55_backfill.py</code>、<code>tp55_report.py</code>。結果の生データ: ホスト <code>/home/jovyan/work/tp55_out4/</code>（特徴量 v3＝既定）、<code>tp55_out3/</code>（v2。勝率への増分 win_eval.json を含む）、<code>tp55_out/</code>（v1）。</p>
+<p class="muted">コード: <code>src/pipeline/features/tp55_lapfeat.py</code>、<code>src/scripts/data/tp55_build.py</code>（表の作成）、<code>src/pipeline/models/lap_forecast.py</code>（モデル）、<code>tp55_eval.py</code>（評価）、<code>tp55_win_eval.py</code>（勝率への増分）、<code>tp55_backfill.py</code>、<code>tp55_report.py</code>。結果の生データ: ホスト <code><HOST_HOME>/work/tp55_out4/</code>（特徴量 v3＝既定）、<code>tp55_out3/</code>（v2。勝率への増分 win_eval.json を含む）、<code>tp55_out/</code>（v1）。</p>
 </body></html>

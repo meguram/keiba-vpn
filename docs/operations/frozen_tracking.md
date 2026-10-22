@@ -49,7 +49,7 @@
 ## 止め方・やり直し
 
 - **一時停止**: crontab の該当行（`# KEIBA-FROZEN-TRACKING`）を外す。または実行時に `KEIBA_FROZEN_TRACKING=0`。
-- **登録**: ホストで root が `bash scripts/cron/install_frozen_tracking_cron.sh /home/jovyan/work/keiba-vpn`（月曜 01:30 UTC = 10:30 JST。登録前の crontab は `data/local/meta/cron_backups/` に退避される）。
+- **登録**: ホストで root が `bash scripts/cron/install_frozen_tracking_cron.sh <HOST_REPO>`（月曜 01:30 UTC = 10:30 JST。登録前の crontab は `data/local/meta/cron_backups/` に退避される）。
 - **凍結ファイルを書き換えた**場合は、追記が拒否される（ハッシュの不一致）。意図した変更なら、`FROZEN_TRACKING_DIR` を新しいディレクトリにして**別の履歴として**再開する（古い履歴は消さない・混ぜない）。
 - **手動実行**: `python -m src.scripts.data.frozen_tracking track --from 20261022`、スコアカードだけ作り直すなら `report`。
 

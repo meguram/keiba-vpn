@@ -59,7 +59,7 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
 <p>2 指標は<b>補完的</b>で、両方を使うとどの年でも片方だけより 0.03〜0.05 上がる（区間は 0 を含まない）。係数はほぼ 0.7 対 0.6 で、同じくらい重く効く。</p>
 <h2>6. 特徴量としての増分（V5 の 1,142 列に累積）</h2>
 <p>追加するのは、各走の履歴（その走より前で、指数がある直近 5 走）から作る列。めぐ指数・netkeiba のそれぞれについて、0.5〜99.5% でクリップした（2020〜2021 年の値で固定）値の ewm（0.65）・最高・中央値・トリム平均・Huber、<b>大差負けの下限（勝ち馬−40 点）をかけた ewm と加重 Huber</b>、使った走の数。V5 には めぐ指数も netkeiba のタイム指数も入っていない（V4 では netkeiba の速度指数を履歴特徴量が代わりに担うとして不採用）。先読み検査: 2023-07-01 以降の指数をすべて乱数に置き換えて作り直しても、それより前の 167,590 行の特徴量は最大差 0.0e+00（完全一致）。値は予測時点で見えるものだけ（めぐ指数は前走までに確定した値、netkeiba は次の出走前ページに載った最初の値）。</p>
-<div class="note"><b>実行待ち</b>: LightGBM での評価（<code>python -m src.scripts.data.tp65_feat run --name rb_both</code>）はホストの共有スロット待ち。結果は <code>/home/jovyan/work/tp65_out/lgb_rb_both/result.json</code>。取り込み後に <code>tp65_report</code> を再実行して、この節に反映する。</div>
+<div class="note"><b>実行待ち</b>: LightGBM での評価（<code>python -m src.scripts.data.tp65_feat run --name rb_both</code>）はホストの共有スロット待ち。結果は <code><HOST_HOME>/work/tp65_out/lgb_rb_both/result.json</code>。取り込み後に <code>tp65_report</code> を再実行して、この節に反映する。</div>
 <h2>7. 結論と、めぐ指数の改良案</h2>
 <ol>
 <li><b>分散は同様か</b>: 同じ尺度（1 点 = 0.1 秒）で、絶対どうしの全体の SD は ほぼ同程度（17.3 対 18.7）。1 走のノイズ（馬内 SD）も 11.7 対 11.9 点でほぼ同じ。差が出るのは距離帯（短距離は netkeiba、長距離はめぐ指数の方が大きい）と、深い外れ値（めぐ指数に多い）。</li>
@@ -72,5 +72,5 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
 <li>めぐ指数の係数・基準は 2022〜24 年で選んだため、2022〜24 年の比較はめぐ指数にやや楽観的。2025 年だけの比較では netkeiba が上（ewm で 0.2525 対 0.2294）。区間は ±0.025 と広く、1 年分の差は有意ではない。</li>
 <li>netkeiba の算出方法は公開情報で確認していない。外れ値処理の推定は上記の観察に基づくもの。</li>
 <li>V5 への増分の採否は、上の LightGBM の結果と、取得可否の確認を合わせて決める（市場オッズ・人気は使っていない。test 2025・2026 は選択に使っていない）。</li></ul>
-<p class="muted">コード: <code>src/scripts/data/tp65_prep.py</code>（走の表）・<code>tp65_var.py</code>（分散・予測力）・<code>tp65_feat.py</code>（特徴量・先読み検査・LightGBM）・<code>tp65_report.py</code>（この章）、テスト <code>tests/pipeline/test_tp65.py</code>。出力はホスト <code>/home/jovyan/work/tp65_out/</code>。</p>
+<p class="muted">コード: <code>src/scripts/data/tp65_prep.py</code>（走の表）・<code>tp65_var.py</code>（分散・予測力）・<code>tp65_feat.py</code>（特徴量・先読み検査・LightGBM）・<code>tp65_report.py</code>（この章）、テスト <code>tests/pipeline/test_tp65.py</code>。出力はホスト <code><HOST_HOME>/work/tp65_out/</code>。</p>
 </body></html>

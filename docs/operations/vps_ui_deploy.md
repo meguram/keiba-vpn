@@ -9,9 +9,9 @@
 | 項目 | 決定 |
 |---|---|
 | 呼び名 | **prod** = ConoHa VPS の UI（ユーザーが開く）、**stg** = ホスト機の UI（現在 `app.megu-keiba.com` で開いているもの）。見られる情報（API・データ）は同じ |
-| ホスト名（既定。変数で変更可） | prod: `app.megu-keiba.com` ／ stg: `stg.megu-keiba.com` ／ 上流 API: `api-internal.megu-keiba.com`（Service Auth のみ） ／ 切替前の確認用: `prod-test.megu-keiba.com` ／ SSH: `ssh.megu-keiba.com`（Tunnel 経由） |
-| VPS に載せるもの | Next.js（standalone）+ nginx（127.0.0.1 のみ）+ cloudflared（新トンネル `meguai-prod`）。**状態を持たない**（データ・API はホスト機のまま） |
-| API の取り方 | VPS の nginx が `api-internal.megu-keiba.com` へ中継し、**Access のサービストークン**（CF-Access-Client-Id/Secret）を **VPS のサーバー側だけ**で付ける（案 b。第 3 節） |
+| ホスト名（既定。変数で変更可） | prod: `app.megu-keiba.com` ／ stg: `<STG_HOST>` ／ 上流 API: `<API_INTERNAL_HOST>`（Service Auth のみ） ／ 切替前の確認用: `<PROD_TEST_HOST>` ／ SSH: `ssh.megu-keiba.com`（Tunnel 経由） |
+| VPS に載せるもの | Next.js（standalone）+ nginx（127.0.0.1 のみ）+ cloudflared（新トンネル `<TUNNEL_PROD>`）。**状態を持たない**（データ・API はホスト機のまま） |
+| API の取り方 | VPS の nginx が `<API_INTERNAL_HOST>` へ中継し、**Access のサービストークン**（CF-Access-Client-Id/Secret）を **VPS のサーバー側だけ**で付ける（案 b。第 3 節） |
 | ビルド | **VPS では行わない**。ホスト機か CI で `build_release.sh`、tar.gz を VPS に配布 |
 | リリース | `releases/<id>` と `current` のシンボリックリンク。**失敗時は自動で直前の版に戻す**。手動でも `rollback.sh` で即時 |
 | 昇格 | stg はメンテ窓の自動反映、**prod は手動の `promote.sh`**（承認フラグ付きの窓内自動昇格は任意） |
@@ -23,20 +23,20 @@
 ## 1. 構成図
 
 ```
-ブラウザ ──https──> Cloudflare ──(Access: メール OTP)──> Tunnel meguai-prod ──> [VPS] cloudflared
+ブラウザ ──https──> Cloudflare ──(Access: メール OTP)──> Tunnel <TUNNEL_PROD> ──> [VPS] cloudflared
                                                                               │
                                                                               ▼
                                                                   nginx 127.0.0.1:8080
                                                            ┌──────────────┴───────────────┐
                                                   ページ・静的 │                                │ /api/ /data/image/
                                                            ▼                                ▼
-                                                Next.js 127.0.0.1:3000      https://api-internal.megu-keiba.com
+                                                Next.js 127.0.0.1:3000      https://<API_INTERNAL_HOST>
                                                  (systemd: keiba-ui)         （CF-Access サービストークンを付ける）
                                                                                         │
-                                          Cloudflare ──(Access: Service Auth のみ)──> Tunnel meguai-stg ──> [ホスト機] Next.js :23200
+                                          Cloudflare ──(Access: Service Auth のみ)──> Tunnel <TUNNEL_STG> ──> [ホスト機] Next.js :23200
                                                                                                                     ├ /api/v1 → Flask :23210
                                                                                                                     └ /api    → FastAPI :23220
-stg: ブラウザ ──> stg.megu-keiba.com ──(Access: メール OTP)──> Tunnel meguai-stg ──> [ホスト機] Next.js :23200
+stg: ブラウザ ──> <STG_HOST> ──(Access: メール OTP)──> Tunnel <TUNNEL_STG> ──> [ホスト機] Next.js :23200
 ```
 
 将来 API を GCP に移したら、**nginx の `UPSTREAM_HOST` と Access のサービストークンを差し替えるだけ**で切り替わる（UI のコードは変えない）。
@@ -45,7 +45,7 @@ stg: ブラウザ ──> stg.megu-keiba.com ──(Access: メール OTP)──
 
 - ホスト名は `scripts/ops/vps/vars.env.example`（→ `vars.env`）の変数で持つ。別の名前にしたいときはここだけ直す（Cloudflare の route / Access も同じ名前にそろえる）。
 - **stg には画面左上に小さな黄色の『STG』バッジ**が出る（prod は何も出ない）。`frontend/next.config.js` が `KEIBA_ENV=stg` のビルドで `NEXT_PUBLIC_ENV_LABEL=STG` を埋める（明示指定が優先）。反映は次の stg ビルド（メンテ窓の自動反映）で入る。
-- ブックマークの扱い: 今の `app.megu-keiba.com` は **prod になる**。stg は `stg.megu-keiba.com` に変わるので、検証用のブックマークだけ作り替える。
+- ブックマークの扱い: 今の `app.megu-keiba.com` は **prod になる**。stg は `<STG_HOST>` に変わるので、検証用のブックマークだけ作り替える。
 
 ## 3. API への接続（最重要）
 
@@ -53,8 +53,8 @@ VPS の UI は、データを取る API（ホスト機の FastAPI/Flask）に届
 
 | 案 | 内容 | 利点 | 欠点 |
 |---|---|---|---|
-| (a) | VPS が `stg.megu-keiba.com/api/...` を呼ぶ | 新しいホスト名が要らない | 人間用の stg に機械の経路を相乗りさせる。Access のポリシーが混ざる（人の Allow と Service Auth）。stg を直したときに prod が巻き込まれる |
-| **(b) 推奨** | 機械専用のホスト名 `api-internal.megu-keiba.com`（ホスト機の Next.js :23200 へのトンネル route）に **Service Auth だけ**の Access をかける | 人用と機械用が分かれる。トークンの失効・ローテーションが独立。将来 GCP に差し替えやすい（このホスト名の route を付け替えるか、nginx の上流を替える） | Cloudflare の設定が 1 組増える |
+| (a) | VPS が `<STG_HOST>/api/...` を呼ぶ | 新しいホスト名が要らない | 人間用の stg に機械の経路を相乗りさせる。Access のポリシーが混ざる（人の Allow と Service Auth）。stg を直したときに prod が巻き込まれる |
+| **(b) 推奨** | 機械専用のホスト名 `<API_INTERNAL_HOST>`（ホスト機の Next.js :23200 へのトンネル route）に **Service Auth だけ**の Access をかける | 人用と機械用が分かれる。トークンの失効・ローテーションが独立。将来 GCP に差し替えやすい（このホスト名の route を付け替えるか、nginx の上流を替える） | Cloudflare の設定が 1 組増える |
 | (c) | 将来の GCP API | 常駐の可用性 | `architecture_target.md` の判断待ち |
 
 **サービストークンはブラウザに出さない**。nginx（VPS のサーバー側）が上流へのリクエストにだけ `CF-Access-Client-Id/Secret` を付ける。ブラウザは同一オリジン（`app.megu-keiba.com`）に `/api/...` を呼び、nginx が中継する（CORS 不要、Cookie は prod のホストだけに紐づく）。
@@ -98,9 +98,9 @@ OS は **Ubuntu 22.04**。手順は 24.04 でも同じ。
 
 **接続の仕方**（回線の事情でホスト経由）:
 ```bash
-# 手元の PC（~/.ssh/config に ssh_config.example の rakuten-server を追記。ProxyJump keiba-remote が肝）
-ssh rakuten-server                       # = ssh -p <SSH_PORT> -o ProxyJump=keiba-remote <VPS_ADMIN_USER>@<VPS_IP>
-scp -r scripts/ops/vps rakuten-server:/tmp/vps      # スクリプトを VPS へ（ホスト経由）
+# 手元の PC（~/.ssh/config に ssh_config.example の <VPS_ALIAS> を追記。ProxyJump keiba-remote が肝）
+ssh <VPS_ALIAS>                       # = ssh -p <SSH_PORT> -o ProxyJump=keiba-remote <VPS_ADMIN_USER>@<VPS_IP>
+scp -r scripts/ops/vps <VPS_ALIAS>:/tmp/vps      # スクリプトを VPS へ（ホスト経由）
 # 以降 VPS 上。sudo はパスワード入力が要る（実行のたびに聞かれる。自動化が必要な箇所は deploy の限定 sudoers だけ。4.5）
 sudo bash /tmp/vps/vps_01_base_setup.sh ...
 ```
@@ -115,7 +115,7 @@ sudo bash /tmp/vps/vps_00_inventory.sh        # 動いているサービス、�
 # (1) ConoHa のコントロールパネルで『イメージ保存』（保存先の容量の課金を確認）
 # (2) 任意: 旧データを tar にして取り出す（/var/www/megu-keiba 6.3GB と /home/<VPS_ADMIN_USER> 1.8GB。仮想環境・ログ・ssh 鍵は除く）
 bash /tmp/vps/backup_old_site.sh              # → ~/old_site_backup/*.tar.gz と SHA256SUMS
-# 手元/ホストに取り出す（ホスト機 keiba-remote で。ホスト機には ~/.ssh/config の rakuten-server と同じ内容が要る）
+# 手元/ホストに取り出す（ホスト機 keiba-remote で。ホスト機には ~/.ssh/config の <VPS_ALIAS> と同じ内容が要る）
 scp -P <SSH_PORT> -i <鍵> <VPS_ADMIN_USER>@<VPS_IP>:old_site_backup/* /path/to/backup/
 sha256sum -c SHA256SUMS_*                      # 取り出した後に確認。確認前に VPS を削除・再構築しない
 ```
@@ -126,7 +126,7 @@ sha256sum -c SHA256SUMS_*                      # 取り出した後に確認。�
 # ① ホスト機（keiba-remote）で、配布専用の SSH 鍵を作る（promote.sh はホスト機から VPS に入るため、鍵はホスト機に置く）
 ssh keiba-remote 'ssh-keygen -t ed25519 -N "" -f ~/.ssh/keiba_vps_ed25519 -C keiba-host-deploy && cat ~/.ssh/keiba_vps_ed25519.pub'
 #    表示された公開鍵（ssh-ed25519 AAAA… の 1 行。秘密鍵ではない）を、手元で /tmp/deploy.pub というファイルにして VPS に渡す
-scp /tmp/deploy.pub rakuten-server:/tmp/deploy.pub
+scp /tmp/deploy.pub <VPS_ALIAS>:/tmp/deploy.pub
 
 # ② VPS 上（<VPS_ADMIN_USER>）。ホスト機のグローバル IP からだけ SSH を許可する（手元の PC もホスト機経由で入るので、これで足りる）
 HOST_IP=$(ssh keiba-remote 'curl -s -m 5 https://api.ipify.org')       # 例: 175.177.45.24（家庭回線だと変わることがある。変わったら 4.4 の B へ）
@@ -147,7 +147,7 @@ sudo bash /tmp/vps/vps_01_base_setup.sh --ssh-mode ip:$HOST_IP --deploy-pubkey-f
 | **B 推奨（安定後）** | 受信を**全部閉じる**。SSH は **Cloudflare Tunnel 経由**（`ssh.megu-keiba.com` → `ssh://localhost:<SSH_PORT>`、Access で保護）。`cloudflared access ssh` を手元に入れる | 中 | 公開ポートが 0 になる。ConoHa のコンソールが保険 |
 | C | <SSH_PORT> を全体に公開（鍵のみ + fail2ban） | 最小 | 常時スキャンを受ける。初期設定の間だけ |
 
-進め方: 最初は A（ホスト機の IP）。ホスト機の IP が変わりやすいなら B に移る（Tunnel 経由の SSH が確認できたら `--ssh-mode closed`）。`~/.ssh/config` は `ssh_config.example` を参照（`rakuten-server`=手元→ホスト経由、`keiba-vps`=ホスト機→VPS）。
+進め方: 最初は A（ホスト機の IP）。ホスト機の IP が変わりやすいなら B に移る（Tunnel 経由の SSH が確認できたら `--ssh-mode closed`）。`~/.ssh/config` は `ssh_config.example` を参照（`<VPS_ALIAS>`=手元→ホスト経由、`keiba-vps`=ホスト機→VPS）。
 
 ### 4.5 ソフトウェア
 
@@ -226,8 +226,8 @@ ssh keiba-vps 'sudo /opt/keiba-ui/bin/rollback.sh keiba-ui-xxxxxxxx-202610220300
 
 - ブラウザ → prod は、Cloudflare Access の**メール認証**（stg と同じ owner ポリシーを `app` のアプリに設定）。人を増やすときは Access の許可リストにメールを足す（`go_live.md`）。
 - アプリ内の認証（`keiba_dev_session` などの Cookie）は、上流の API が発行する。nginx が `Set-Cookie` をそのまま通し、`proxy_redirect` で `Location` の上流ホスト名を相対に直す。Cookie の `Domain` は付かないので、**prod のホストだけ**に紐づく（stg のセッションとは別）。
-- サービストークンは `api-internal.megu-keiba.com` の Access アプリ（Service Auth のみ）で作る。**1 トークン = 1 用途**（VPS の UI 専用）。失効・ローテーション（Cloudflare の画面で再発行 → `set_secret.sh` で VPS に渡す → `render_nginx_access.sh`）。
-- 人間用の stg（`stg.megu-keiba.com`）と機械用（`api-internal`）を**同じ Access アプリに混ぜない**。
+- サービストークンは `<API_INTERNAL_HOST>` の Access アプリ（Service Auth のみ）で作る。**1 トークン = 1 用途**（VPS の UI 専用）。失効・ローテーション（Cloudflare の画面で再発行 → `set_secret.sh` で VPS に渡す → `render_nginx_access.sh`）。
+- 人間用の stg（`<STG_HOST>`）と機械用（`api-internal`）を**同じ Access アプリに混ぜない**。
 
 ## 8. ConoHa のセキュリティグループ（コントロールパネル側のファイアウォール）と ufw
 
@@ -251,9 +251,9 @@ ssh keiba-vps 'sudo /opt/keiba-ui/bin/rollback.sh keiba-ui-xxxxxxxx-202610220300
 | # | 作業 | 誰が |
 |---|---|---|
 | 1 | ConoHa で『イメージ保存』（旧サーバーのバックアップ） | **ユーザー** |
-| 2 | ホスト機での SSH 鍵作成と公開鍵の受け渡し、`vps_00`〜`vps_02` の実行（**sudo のパスワード入力が要るためユーザーが実行**） | **ユーザー**（コマンドは第 4 節）。出力を貼ってもらえれば Claude が確認。読み取りは Claude が `ssh rakuten-server` 経由で実行できる |
-| 3 | Cloudflare: トンネル `meguai-prod` の作成 → トークンを `set_secret.sh` で VPS に | **ユーザー**（画面の操作は第 10 節） |
-| 4 | Cloudflare: ホスト機のトンネル（`meguai-stg`）に route `stg.` / `api-internal.` を追加、Access のアプリ作成、**サービストークン作成**（Client ID/Secret は一度しか見えない） | **ユーザー** |
+| 2 | ホスト機での SSH 鍵作成と公開鍵の受け渡し、`vps_00`〜`vps_02` の実行（**sudo のパスワード入力が要るためユーザーが実行**） | **ユーザー**（コマンドは第 4 節）。出力を貼ってもらえれば Claude が確認。読み取りは Claude が `ssh <VPS_ALIAS>` 経由で実行できる |
+| 3 | Cloudflare: トンネル `<TUNNEL_PROD>` の作成 → トークンを `set_secret.sh` で VPS に | **ユーザー**（画面の操作は第 10 節） |
+| 4 | Cloudflare: ホスト機のトンネル（`<TUNNEL_STG>`）に route `stg.` / `api-internal.` を追加、Access のアプリ作成、**サービストークン作成**（Client ID/Secret は一度しか見えない） | **ユーザー** |
 | 5 | サービストークンを VPS に渡す、`render_nginx_access.sh` | **ユーザー**（コマンドは `vps_02` の最後に表示） |
 | 6 | ホスト機の `config/anti_scraping.json` に `edge_sources`（VPS の IP）を追記 | **Claude 代行可**（ホスト機の設定。承認後） |
 | 7 | `promote.sh` の実行、`build.env` の作成（stg と NEXT_PUBLIC_* をそろえる） | **Claude 代行可**（ホスト機で実行） |
@@ -275,24 +275,24 @@ ssh keiba-vps 'sudo /opt/keiba-ui/bin/rollback.sh keiba-ui-xxxxxxxx-202610220300
 
 ### ステップ 2: UI を載せる（prod-test で確認）
 Cloudflare（ユーザー）:
-1. Zero Trust → Networks → Tunnels → **Create a tunnel**（Cloudflared、名前 `meguai-prod`）。表示されるコマンドのトークンを、VPS で `set_secret.sh` に流す（`printf '%s' '<コマンド全体>' | sudo bash /opt/keiba-ui/bin/set_secret.sh /etc/cloudflared/prod.env TUNNEL_TOKEN` → `sudo systemctl restart cloudflared-prod`）。Connection Status が Connected になる。
-2. ホスト機の `meguai-stg` に route を追加: `api-internal.megu-keiba.com` → `http://localhost:23200`、`stg.megu-keiba.com` → `http://localhost:23200`。
-3. Access: (i) 既存アプリ `app` の Destinations に `stg.megu-keiba.com` を追加（ポリシー `owner` はそのまま）、(ii) 新規アプリ `api-internal`（Self-hosted、`api-internal.megu-keiba.com`）にポリシー **Action = Service Auth** のみ（Include = 作成したサービストークン）、(iii) アプリ `prod-test`（`prod-test.megu-keiba.com`、ポリシー `owner`）。
+1. Zero Trust → Networks → Tunnels → **Create a tunnel**（Cloudflared、名前 `<TUNNEL_PROD>`）。表示されるコマンドのトークンを、VPS で `set_secret.sh` に流す（`printf '%s' '<コマンド全体>' | sudo bash /opt/keiba-ui/bin/set_secret.sh /etc/cloudflared/prod.env TUNNEL_TOKEN` → `sudo systemctl restart cloudflared-prod`）。Connection Status が Connected になる。
+2. ホスト機の `<TUNNEL_STG>` に route を追加: `<API_INTERNAL_HOST>` → `http://localhost:23200`、`<STG_HOST>` → `http://localhost:23200`。
+3. Access: (i) 既存アプリ `app` の Destinations に `<STG_HOST>` を追加（ポリシー `owner` はそのまま）、(ii) 新規アプリ `api-internal`（Self-hosted、`<API_INTERNAL_HOST>`）にポリシー **Action = Service Auth** のみ（Include = 作成したサービストークン）、(iii) アプリ `prod-test`（`<PROD_TEST_HOST>`、ポリシー `owner`）。
 4. サービストークン作成: Access → Service credentials → Create Service Token（名前 `vps-ui`、期間 1 年）。**Client ID / Secret をコピーして VPS に渡す**（第 7 節）。
-5. `meguai-prod` に route: `prod-test.megu-keiba.com` → `http://localhost:8080`。
+5. `<TUNNEL_PROD>` に route: `<PROD_TEST_HOST>` → `http://localhost:8080`。
 
 ホスト機（Claude 代行）:
 6. `build.env` を stg にそろえて `promote.sh --commit <hash>`。
-7. 確認: `https://prod-test.megu-keiba.com`（メール認証 → 画面が出る、ログインが通る、予測 API が返る、`/version.json`）。`curl http://127.0.0.1:8080/api/maintenance/status`（VPS 上）が 200。
-8. 戻し方: `meguai-prod` の route と `prod-test` を消すだけ（本番に影響なし）。
+7. 確認: `https://<PROD_TEST_HOST>`（メール認証 → 画面が出る、ログインが通る、予測 API が返る、`/version.json`）。`curl http://127.0.0.1:8080/api/maintenance/status`（VPS 上）が 200。
+8. 戻し方: `<TUNNEL_PROD>` の route と `prod-test` を消すだけ（本番に影響なし）。
 
 ### ステップ 3: app を VPS に付け替える（数分の切替）
-1. stg の動作確認（`https://stg.megu-keiba.com`）が済んでいること。
-2. Cloudflare: `meguai-stg` の Routes から `app.megu-keiba.com` を**削除**（DNS の CNAME も消える）。
-3. すぐ `meguai-prod` に route `app.megu-keiba.com` → `http://localhost:8080` を追加（既存の DNS レコードを上書きするか聞かれたら承認）。**この間（1〜2 分）`app` は見られない**ので、メンテ窓（JST 03:00–04:00）を推奨。
+1. stg の動作確認（`https://<STG_HOST>`）が済んでいること。
+2. Cloudflare: `<TUNNEL_STG>` の Routes から `app.megu-keiba.com` を**削除**（DNS の CNAME も消える）。
+3. すぐ `<TUNNEL_PROD>` に route `app.megu-keiba.com` → `http://localhost:8080` を追加（既存の DNS レコードを上書きするか聞かれたら承認）。**この間（1〜2 分）`app` は見られない**ので、メンテ窓（JST 03:00–04:00）を推奨。
 4. Access のアプリ `app`（owner ポリシー）はそのまま有効（ホスト名が同じ）。
-5. 確認: `https://app.megu-keiba.com/version.json` が prod の版。画面左上に STG バッジが**出ない**。`https://stg.megu-keiba.com` には STG バッジ（次の stg ビルド後）。
-6. 戻し方: `meguai-prod` から `app` の route を消し、`meguai-stg` に `app.megu-keiba.com` → `http://localhost:23200` を戻す（1〜2 分）。
+5. 確認: `https://app.megu-keiba.com/version.json` が prod の版。画面左上に STG バッジが**出ない**。`https://<STG_HOST>` には STG バッジ（次の stg ビルド後）。
+6. 戻し方: `<TUNNEL_PROD>` から `app` の route を消し、`<TUNNEL_STG>` に `app.megu-keiba.com` → `http://localhost:23200` を戻す（1〜2 分）。
 
 ### ステップ 4: 安定確認（1 週間）
 - [ ] `health.json` が毎日 ok、Slack に異常通知が出ていない。
@@ -303,7 +303,7 @@ Cloudflare（ユーザー）:
 
 ## 11. ユーザーに決めてもらうこと
 
-1. **ホスト名**: prod=`app.megu-keiba.com`、stg=`stg.megu-keiba.com` でよいか（別の名前なら `vars.env` を変えるだけ）。
+1. **ホスト名**: prod=`app.megu-keiba.com`、stg=`<STG_HOST>` でよいか（別の名前なら `vars.env` を変えるだけ）。
 2. **SSH の公開方法**: A（ホスト機の IP だけ許可）／ B（Tunnel 経由）／ C（公開、暫定）。ホスト機のグローバル IP は固定か（変わるなら B）。
 3. **ログイン用ユーザー**: 確認済み（`<VPS_ADMIN_USER>`、鍵のみ、sudo はパスワード要）。VNC（ConoHa のコンソール）の救出用に、`<VPS_ADMIN_USER>` か root のローカルのパスワードを保管しているか。
 4. **VPS の OS**: Ubuntu 22.04 で確認済み（再構築しない場合は不要）。

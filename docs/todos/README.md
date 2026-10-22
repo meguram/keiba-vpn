@@ -104,7 +104,7 @@ TODO 全体の一覧と優先順位は `docs/html/index.html` の §14 を参照
 
 ## 7. 実行結果（学習PC・2026-10-02〜04）
 
-結果の要約は `docs/todos/verify/results/` にあります（`summary-20261002-163452.md` 初回、`summary-20261004-135912.md` 修復再実行、`summary-20261004-racedata.md` 実データ確認）。
+検証の出力（要約ファイル）は、内部の実行環境の情報を含むため公開リポジトリから外した。再実行は `bash docs/todos/verify/run_all.sh`。
 
 - 7 項目すべて OK（T-011 / T-032 は初回 NG → 原因は Windows マウント上の `node_modules` 破損。ネイティブ Linux 側で `npm ci` して解消）。
 - 実データ確認で `POST /api/v1/betting/optimize` の `KeyError: 'roi_pct'` を検出・修正済み。回帰テスト: `tests/api/test_optimize_betting.py`。

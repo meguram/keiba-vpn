@@ -18,7 +18,7 @@
 
 馬体重の検知は `race_shutuba` の取得だけで、**ログイン不要**（rescrape のセッションとは衝突しない）。
 
-## 起動・停止（ホスト PC。root で、作業ディレクトリ `/home/jovyan/work/keiba-vpn`）
+## 起動・停止（ホスト PC。root で、作業ディレクトリ `<HOST_REPO>`）
 
 ```bash
 # 開催日の朝に 1 回起動（常駐して全レースの起動が済んだら終了する）
@@ -30,8 +30,8 @@ nohup bash scripts/cron/run_auto_scrape_logged.sh "$PWD" raceday-weight-runner l
 自動起動にする場合のホストの crontab 行（UTC。`raceday-runner` と同じ 22:30 UTC = 07:30 JST）:
 
 ```
-30 22 * * * cd /home/jovyan/work/keiba-vpn && TZ=Asia/Tokyo bash scripts/cron/run_auto_scrape_logged.sh /home/jovyan/work/keiba-vpn raceday-weight-runner logs/raceday_weight_runner.log # KEIBA-VPN-ALL
-30 21 * * * cd /home/jovyan/work/keiba-vpn && TZ=Asia/Tokyo bash scripts/cron/export_tables_daily.sh /home/jovyan/work/keiba-vpn # KEIBA-VPN-ALL
+30 22 * * * cd <HOST_REPO> && TZ=Asia/Tokyo bash scripts/cron/run_auto_scrape_logged.sh <HOST_REPO> raceday-weight-runner logs/raceday_weight_runner.log # KEIBA-VPN-ALL
+30 21 * * * cd <HOST_REPO> && TZ=Asia/Tokyo bash scripts/cron/export_tables_daily.sh <HOST_REPO> # KEIBA-VPN-ALL
 ```
 
 （`export_tables_daily` は、結果の取り込みが済む時間帯に 1 日 1 回。上の 21:30 UTC = 06:30 JST は例。）crontab の変更は承認後に行う。

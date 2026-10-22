@@ -93,10 +93,10 @@ python -m src.scripts.ops.stage_deploy cancel <id>       # pending の取り消�
 ## 4. cron の登録（ホストで root。人が行う）
 
 ```bash
-ssh keiba-remote 'cd /home/jovyan/work/keiba-vpn && sudo -n bash scripts/cron/install_maintenance_deploy_cron.sh /home/jovyan/work/keiba-vpn'
+ssh keiba-remote 'cd <HOST_REPO> && sudo -n bash scripts/cron/install_maintenance_deploy_cron.sh <HOST_REPO>'
 # 開始/終了の Slack 通知も入れるとき（config/maintenance.json の notify.slack_start_end も true に）
-#   … install_maintenance_deploy_cron.sh /home/jovyan/work/keiba-vpn --with-notify
-# 外す: … install_maintenance_deploy_cron.sh /home/jovyan/work/keiba-vpn --remove
+#   … install_maintenance_deploy_cron.sh <HOST_REPO> --with-notify
+# 外す: … install_maintenance_deploy_cron.sh <HOST_REPO> --remove
 ```
 
 登録されるのは `5 18 * * *`（18:05 UTC = 03:05 JST、タグ `KEIBA-MAINTENANCE-DEPLOY`）。pending が空なら即終了する。登録前に `crontab -l` を `data/local/meta/cron_backups/` へ退避する。
@@ -106,7 +106,7 @@ ssh keiba-remote 'cd /home/jovyan/work/keiba-vpn && sudo -n bash scripts/cron/in
 
 ```bash
 # ホストで（root）: 検証だけ（何も変えない。窓の外でも可）
-cd /home/jovyan/work/keiba-vpn && sudo -n bash scripts/ops/maintenance_deploy.sh . -- --dry-run
+cd <HOST_REPO> && sudo -n bash scripts/ops/maintenance_deploy.sh . -- --dry-run
 sudo -n bash scripts/ops/maintenance_deploy.sh . -- --list
 # 窓の外で今すぐ適用（手動。前提条件の確認と自動ロールバックは同じ）
 sudo -n bash scripts/ops/maintenance_deploy.sh . -- --force-window

@@ -199,11 +199,11 @@ article.html-body pre code { background: none; border: none; padding: 0; }
 <h2 id="3">3. GCS パス設計（<code>data_paths.py</code> SSoT）</h2>
 
 <h3 id="3-1">3-1. 設計方針</h3>
-<!-- TASK-055: GCSバケット名を `keiba-vpn` から `magu-keiba-horse-racing-ai` に更新。バケットルートは環境変数 GCS_BUCKET で注入する従来方針を継続 -->
+<!-- TASK-055: GCSバケット名を `keiba-vpn` から `<BUCKET>` に更新。バケットルートは環境変数 GCS_BUCKET で注入する従来方針を継続 -->
 <ul>
 <li><code>data_paths.py</code> をパス定義の <b>Single Source of Truth（SSoT）</b> とし、全モジュールからインポートして使用する</li>
 <li>バケット名は環境変数 <code>GCS_BUCKET</code> から注入する（ハードコード禁止）</li>
-<li><b>GCS バケット</b>: <code>${GCS_BUCKET}</code>（本番値: <code>magu-keiba-horse-racing-ai</code>）/ <b>ルートプレフィックス</b>: <code>chuou/</code></li>
+<li><b>GCS バケット</b>: <code>${GCS_BUCKET}</code>（本番値: <code><BUCKET></code>）/ <b>ルートプレフィックス</b>: <code>chuou/</code></li>
 <li>スクレイピング済み JSON は <b>カテゴリ名ディレクトリ</b> 配下に配置する（layer 番号は使わない）</li>
 <li>生データと変換後データの区別はしない — GCS は「単一の永続 JSON ストア」として機能する</li>
 <li><code>race_id</code> / <code>venue_code</code> の命名規則は <code>gs://${GCS_BUCKET}/chuou/archive/jra/</code> 内の既存キーと必ず一致させること（FeatureReadyGate 参照ミス防止）</li>
@@ -258,11 +258,11 @@ data/calculated_data/
 └── horse_names.json                      ← 馬名インデックス</code></pre>
 
 <h3 id="3-3">3-3. パス定数定義（実装準拠）</h3>
-<!-- TASK-055: GCS_BUCKET デフォルト参照先を magu-keiba-horse-racing-ai に更新。features/models パスを追加 -->
+<!-- TASK-055: GCS_BUCKET デフォルト参照先を <BUCKET> に更新。features/models パスを追加 -->
 <pre><code># data_paths.py  ── GCS / ローカルパス定義 SSoT
 import os
 
-GCS_BUCKET  = os.environ["GCS_BUCKET"]   # 環境変数必須（本番値: magu-keiba-horse-racing-ai）
+GCS_BUCKET  = os.environ["GCS_BUCKET"]   # 環境変数必須（本番値: <BUCKET>）
 GCS_ROOT    = "chuou"
 GCS_BASE    = f"{GCS_ROOT}/data/preprocessed/netkeiba/pc"
 GCS_OTHERS  = f"{GCS_ROOT}/data/others"

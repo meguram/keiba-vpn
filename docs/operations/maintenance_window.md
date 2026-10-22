@@ -72,7 +72,7 @@ Next.js を入れ替える数秒間は接続できない。窓の中なら、開
 
 ```nginx
 error_page 502 503 504 /maintenance_static;
-location = /maintenance_static { internal; root /home/jovyan/work/keiba-vpn/static; rewrite ^ /maintenance.html break; add_header Retry-After 60 always; add_header Cache-Control "no-store" always; }
+location = /maintenance_static { internal; root <HOST_REPO>/static; rewrite ^ /maintenance.html break; add_header Retry-After 60 always; add_header Cache-Control "no-store" always; }
 ```
 
 ## 通知（Slack）

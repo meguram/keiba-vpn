@@ -178,7 +178,7 @@ netkeiba.com から収集した競馬データを用いて、出走馬ごとの�
 <tr><td>スキーマ管理</td><td>Alembic</td><td>全 DDL 変更をマイグレーションファイルで管理</td></tr>
 <tr><td>ML フレームワーク</td><td>LightGBM（Stage 1/2）、LSTM（Stage 3 / Phase 4）</td><td>—</td></tr>
 <tr><td>モデル管理</td><td>MLflow</td><td>keiba_lgbm(5010) / tracking_difficulty(5001) / final_odds(5003) / pace_predictor(5004)</td></tr>
-<tr><td>ストレージ</td><td>GCS（永続 JSON）+ ローカルディスクキャッシュ</td><td><code>GCS_BUCKET</code> 環境変数で注入（本番値: <code>magu-keiba-horse-racing-ai</code>）</td></tr>
+<tr><td>ストレージ</td><td>GCS（永続 JSON）+ ローカルディスクキャッシュ</td><td><code>GCS_BUCKET</code> 環境変数で注入（本番値: <code><BUCKET></code>）</td></tr>
 </table>
 
 <h3 id="2-2">2-2. フロントエンド</h3>
@@ -215,8 +215,8 @@ netkeiba.com から収集した競馬データを用いて、出走馬ごとの�
 
 <h3 id="3-2">3-2. GCS ストレージ構造</h3>
 <p>パス定義の SSoT は <code>data_paths.py</code>。バケット名は環境変数 <code>GCS_BUCKET</code> で注入（ハードコード禁止）。<br/>
-<b>本番バケット</b>: <code>magu-keiba-horse-racing-ai</code> / <b>ルートプレフィックス</b>: <code>chuou/</code></p>
-<pre><code>gs://magu-keiba-horse-racing-ai/          ← GCS_BUCKET=magu-keiba-horse-racing-ai
+<b>本番バケット</b>: <code><BUCKET></code> / <b>ルートプレフィックス</b>: <code>chuou/</code></p>
+<pre><code>gs://<BUCKET>/          ← GCS_BUCKET=<BUCKET>
 └── chuou/data/preprocessed/netkeiba/pc/
     ├── {category}/{year}/{race_id}.json       ← レース単位データ
     └── {category}/{prefix}/{horse_id}.json    ← 馬単位データ（prefix = horse_id[:4]）
@@ -232,7 +232,7 @@ data/calculated_data/horse_names.json</code></pre>
 <tr><th>層</th><th>種別</th><th>TTL</th><th>用途</th></tr>
 <tr><td>L1</td><td>メモリ LRU キャッシュ</td><td>3,600 秒</td><td>高頻度アクセスデータ</td></tr>
 <tr><td>L2</td><td>ディスクキャッシュ（<code>data/cache/</code>）</td><td>レース系 12時間 / 馬系 2日</td><td>GCS フォールバック前段</td></tr>
-<tr><td>L3</td><td>GCS（<code>gs://magu-keiba-horse-racing-ai/</code>）</td><td>永続</td><td>単一永続 JSON ストア</td></tr>
+<tr><td>L3</td><td>GCS（<code>gs://<BUCKET>/</code>）</td><td>永続</td><td>単一永続 JSON ストア</td></tr>
 </table>
 <p>読取フロー: L1 ヒット → 即返却 → L1 ミス → L2 → L3 フォールバック → L2/L1 ウォームアップ</p>
 
@@ -637,7 +637,7 @@ WHERE finish_time_sec IS NOT NULL AND last3f_sec IS NOT NULL;</code></pre>
 <tr><td>ConoHa VPS 2GB</td><td>prod サーバー全般</td><td>月額費用は未確定（AREA-05 未決定事項）</td></tr>
 <tr><td>PostgreSQL</td><td>Layer 1〜5 データ格納</td><td>VPS 上でセルフホスト</td></tr>
 <tr><td>Redis</td><td>予測結果キャッシュ</td><td>VPS 上でセルフホスト、maxmemory=128mb</td></tr>
-<tr><td>GCS</td><td>永続 JSON ストア</td><td>バケット: <code>magu-keiba-horse-racing-ai</code>（<code>GCS_BUCKET</code> 環境変数で注入）</td></tr>
+<tr><td>GCS</td><td>永続 JSON ストア</td><td>バケット: <code><BUCKET></code>（<code>GCS_BUCKET</code> 環境変数で注入）</td></tr>
 <tr><td>LightGBM</td><td>推論（セルフホスト）</td><td>外部 API 委託なし</td></tr>
 <tr><td>MLflow（×4プロセス）</td><td>モデルバージョン管理</td><td>ports: 5001/5003/5004/5010</td></tr>
 </table>

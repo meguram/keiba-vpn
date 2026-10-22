@@ -36,7 +36,7 @@
 
 ### 1.2 Cloudflare 側の設定の考え方
 
-1. **Tunnel の Public Hostname**: 1 つのトンネルに、ホスト名ごとに転送先のサービスを割り当てられる（ダッシュボードの Tunnel → Public Hostname で `app.megu-keiba.com → http://localhost:23200` など）。トークン方式（`cloudflared tunnel run`＋`TUNNEL_TOKEN`）のトンネルは**リモート管理**で、ホスト名の追加・変更は画面で行う（ホスト側の設定ファイルは不要）。監視ポータルを公開する場合は `monitor.megu-keiba.com → http://localhost:23900` を同じトンネルに足し、**同じく Access で保護**する。
+1. **Tunnel の Public Hostname**: 1 つのトンネルに、ホスト名ごとに転送先のサービスを割り当てられる（ダッシュボードの Tunnel → Public Hostname で `app.megu-keiba.com → http://localhost:23200` など）。トークン方式（`cloudflared tunnel run`＋`TUNNEL_TOKEN`）のトンネルは**リモート管理**で、ホスト名の追加・変更は画面で行う（ホスト側の設定ファイルは不要）。監視ポータルを公開する場合は `<MONITOR_HOST> → http://localhost:23900` を同じトンネルに足し、**同じく Access で保護**する。
 2. **Access のアプリ**: アプリは「ホスト名（＋任意のパス）」で定義する。**保護したいホスト名だけをアプリにする。** アプリに入っていないホスト名は Access の対象外＝誰でも見える。ワイルドカード（`*.megu-keiba.com`）のアプリは作らない（将来の公開ホスト名まで巻き込む）。ポリシーは `Allow`（対象: メールアドレス）＋ One-time PIN。デフォルトは拒否。
 3. **公開側の配信**: 公開側を Cloudflare Pages 等にする場合、トンネルは不要（Pages がホスト名を直接受ける）。ホストの Next.js を公開側にも使うと、(b) と同様に中核データと同居するため避ける。
 4. **API の CORS／Cookie**: 限定側の API の許可オリジン（CORS）は `https://app.megu-keiba.com` のみ。認証 Cookie は host-only（`Domain` を付けない）、`Secure`・`HttpOnly`・`SameSite=Lax` 以上。公開側から限定側の API を呼ばない（公開側は静的で、データを埋め込まない）。
@@ -143,7 +143,7 @@
 | ホスト名 | 用途 | 保護 |
 |---|---|---|
 | `app.megu-keiba.com` | **限定側（現行の Next.js :23200）** | Access（Allow: 許可メール） |
-| `monitor.megu-keiba.com` | 監視ポータル（:23900）。公開する場合のみ | Access（同上、さらに限定） |
+| `<MONITOR_HOST>` | 監視ポータル（:23900）。公開する場合のみ | Access（同上、さらに限定） |
 | `www.megu-keiba.com`／ルート | **空けておく**（将来の公開側）。**ルートには既存のサイトがある可能性があるので触らない** | 未設定 |
 | `stg-app.megu-keiba.com` など | 検証用が必要になったときのみ | Access |
 

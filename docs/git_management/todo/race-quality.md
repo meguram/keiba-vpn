@@ -81,7 +81,7 @@
       (2) 本セッションの`.env`には`GCS_BUCKET`が設定されておらず
       （`SLACK_WEBHOOK_URL`のみ）、`HybridStorage.gcs_enabled`はFalseになる。
       (3) `gcloud`にADCは存在するが、アクティブなアカウント・プロジェクトは
-      本プロジェクトの想定バケット（`.env.example`の`magu-keiba-horse-racing-ai`）とは
+      本プロジェクトの想定バケット（`.env.example`の`<BUCKET>`）とは
       無関係な別アカウント・別プロジェクト（Rakuten法人アカウント／
       `ccbd-ecbdp-bds-prod`）のものであり、ユーザ不在のままこの資格情報を使って
       本プロジェクト外のGCPリソースへアクセスを試みるのは越権と判断し、実施しなかった。

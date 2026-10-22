@@ -32,7 +32,7 @@
         ▼                                                     GCS(正本) ◀──── Cloud Run API / Jobs(予測・集計・通知) ◀── Scheduler/Tasks
   models/<ver>/ + latest.json(sha256)                                │
         ▲                                                            ▼
-        │ ② 読み取り専用の鍵(keiba-viewer)で必要なデータだけ取得     monitor.megu-keiba.com (Cloud Run, Access)
+        │ ② 読み取り専用の鍵(keiba-viewer)で必要なデータだけ取得     <MONITOR_HOST> (Cloud Run, Access)
 ```
 
 原則:
@@ -53,14 +53,14 @@
 
 | ID | 依存 | 場所 | 理由 | 置き換え先 | 状態 |
 |---|---|---|---|---|---|
-| D-01 | **API がホスト**。VPS の nginx → `api-internal.megu-keiba.com` → Cloudflare Tunnel(`meguai-stg`) → ホストの FastAPI :23220 | `scripts/ops/vps/templates/nginx-keiba-ui.conf`・`render_nginx_access.sh`・`vars.env`、Cloudflare の Public Hostname | ホスト停止＝API 全停止 | **Cloud Run**（`switch_api_upstream.sh cloudrun`） | 準備済み・未実施 |
+| D-01 | **API がホスト**。VPS の nginx → `<API_INTERNAL_HOST>` → Cloudflare Tunnel(`<TUNNEL_STG>`) → ホストの FastAPI :23220 | `scripts/ops/vps/templates/nginx-keiba-ui.conf`・`render_nginx_access.sh`・`vars.env`、Cloudflare の Public Hostname | ホスト停止＝API 全停止 | **Cloud Run**（`switch_api_upstream.sh cloudrun`） | 準備済み・未実施 |
 | D-02 | **予測の生成がホストの cron/常駐**（前夜保存 `raceday-eve`、馬体重検知後 `raceday-weight-runner`、T-60/T-15 の `raceday-runner`） | `src/pipeline/inference/weight_triggered_predict.py`（`save_cached`）、`scripts/cron/*`、ホストの root crontab | 予測が出なくなる | **GCP Jobs**（`predict-race`・`eve-precompute`）＋Cloud Tasks の予約。取得の合図は VPS 実行役 | 準備済み・blockers あり（モデル publish・serving_bundle） |
 | D-03 | **API が読むデータの置き場がホストのローカル**（`data/local/inference/{predictions_v3,predictions_backfill,snapshots,lap_forecast,tracking_v2}`、`data/local/prediction_results`、`data/local/meta/entries_state`、`data/page_reference/**`）。Cloud Run へは“ホストから `serving_state push`”する手作業 | `src/api/local_predictions.py`・`prediction_results_api.py`・`entries_status.py`・`entry_card.py`・`config/serving_state.json` | ホストが push しない限り古い | **Jobs が GCS に書き、Cloud Run が読む**（`serving_state` の push 元をホスト→Jobs に反転。4.1） | 設計のみ |
 | D-04 | **取得（出馬表・オッズ・馬体重・レース一覧・結果の取り直し）の cron がホスト**、秘密(netkeiba ログイン)がホストの `.env` | ホストの root crontab、`scripts/auto_scrape.sh` | データが入らない | **VPS の取得の実行役**（影モードで検証→担当を移す） | 準備済み・影モード実装済み・**ホスト継続中** |
 | D-05 | **結果の速報取得 `raceday-result-runner`**（発走 T+15）がホスト。job_map では host 分類 | ホストの cron `30 22 * * *`、`scripts/cron/run_auto_scrape_logged.sh` | 結果→予測成績・結果通知・履歴特徴量が止まる。**運用に必要なのに host になっていた** | VPS 実行役のレース別タスク＋GCP Job `slack-results` | 未着手（要タスク定義） |
 | D-06 | **モデル・バンドル・前段/補助・serving 状態がホストのパス** | `config/serving_state.json`（`KEIBA_V3_BUNDLE` 等の `local_path`）、`data/local/modeling/**` | モデルを読めない | **`model_publish`（GCS に置く）→ `latest.json`(sha256) を Jobs/Cloud Run が検証つきで取得**（4.2） | コード済み・初回 publish が未実施 |
 | D-07 | **画面のビルド・昇格・配備がホスト**（`next build`、`promote.sh`、`maintenance_deploy`、`stage_deploy`） | `scripts/ops/vps/build_release.sh`・`promote.sh`、`src/scripts/ops/{stage_deploy,maintenance_deploy}.py`、ホストの root cron | ホストが止まると配備できない（公開は動くが更新できない） | **CI（Cloud Build 等）でビルド→GCS→VPS が pull**（`pull_release` 実装済み）。API は `gcloud run deploy`（4.8） | 部分的に準備済み |
-| D-08 | **監視ポータル `monitor.megu-keiba.com` がホスト :23900**（Tunnel `meguai-stg` 経由）。ホストのファイル（`cron_runs`・`quality_health`・`page_quality`・`model_perf`）を直接読む | `src/monitor/app.py`・`cron_status.py`・`cron_failure_patterns.py`・`model_perf.py` | 監視が見えなくなる＝異常に気づけない | **Cloud Run**（最小 0）＋GCS から読む（4.6） | 未着手 |
+| D-08 | **監視ポータル `<MONITOR_HOST>` がホスト :23900**（Tunnel `<TUNNEL_STG>` 経由）。ホストのファイル（`cron_runs`・`quality_health`・`page_quality`・`model_perf`）を直接読む | `src/monitor/app.py`・`cron_status.py`・`cron_failure_patterns.py`・`model_perf.py` | 監視が見えなくなる＝異常に気づけない | **Cloud Run**（最小 0）＋GCS から読む（4.6） | 未着手 |
 | D-09 | **秘密情報がホストの `.env`**（netkeiba ログイン・GCS 鍵・Slack Webhook・`DEV_PASSWORD`/`DEV_SECRET_KEY`・Cloudflare トークン） | ホストの `.env`（root 所有 640） | ホストが運用の鍵の保管庫になっている | **Secret Manager**（GCP 側）＋VPS の `.env`（netkeiba・Cloudflare のみ）。ホストには研究に要るものだけ | 手順書あり・登録は未実施 |
 | D-10 | **ログインのセッション署名・会員名簿**（`DEV_SECRET_KEY`、`config/members.json`）がホストの値とリポジトリ | `src/api/auth.py`・`flask_auth.py` | セッションの互換が切り替え時に切れる／会員名簿がイメージ内 | Secret Manager に**同じ値**を登録して切替。名簿は当面イメージ内（更新＝再デプロイ）、会員が増えたら GCS/Firestore へ | 設計済み（cloud_run_api.md） |
 
@@ -81,8 +81,8 @@
 | ID | 依存 | 場所 | 置き換え先 |
 |---|---|---|---|
 | D-18 | ホスト用の運用道具: `stage_deploy`・`maintenance_deploy`・`server_watchdog`・`tunnel_stg_ui.sh`・`fetch_stg_health.sh`・`enable_v5_shadow.sh`・ホストの Cloudflare トンネル | `src/scripts/ops/`・`scripts/server/` | 廃止（D-07 の置き換えに含む）。ベースラインから 1 つずつ消す |
-| D-19 | **stg 環境**（`KEIBA_ENV=stg`、`stg.megu-keiba.com`、ホストのトンネル、`prod-test`） | `src/config/deployment.py`、Cloudflare | GCP 側のステージング（4.7） |
-| D-20 | 研究コードがホストの絶対パス（`/home/jovyan/work/tp*_out`、`notebook_utils.py`） | `src/scripts/data/tp*`、`src/pipeline/models/notebook_utils.py` | **対象外**（ホストは研究専用なので問題なし）。運用経路から参照しないことだけ機械検査する |
+| D-19 | **stg 環境**（`KEIBA_ENV=stg`、`<STG_HOST>`、ホストのトンネル、`prod-test`） | `src/config/deployment.py`、Cloudflare | GCP 側のステージング（4.7） |
+| D-20 | 研究コードがホストの絶対パス（`<HOST_HOME>/work/tp*_out`、`notebook_utils.py`） | `src/scripts/data/tp*`、`src/pipeline/models/notebook_utils.py` | **対象外**（ホストは研究専用なので問題なし）。運用経路から参照しないことだけ機械検査する |
 
 > `data/local` の参照の多く（機械検査で 174 件）は、`HybridStorage` のローカルキャッシュ層（GCS が正本、ローカルは読み書きの高速化）で、**実行環境に空のディレクトリがあれば動く**ので“ホスト依存”ではない。真に問題なのは、**GCS に無く、ホストにしか正本が無いデータ**で、それが D-03/D-06 に挙げたもの。
 
@@ -140,7 +140,7 @@ gs://<bucket>/models/<component>/latest.json       # {version, sha256, created_a
 
 ### 4.5 API・UI・認証
 - API: Cloud Run（最小 0・最大 3・1 ワーカー・2GiB）。共有ヘッダ `X-Keiba-Proxy-Key` と Access のサービストークン（準備済み）。
-- UI: VPS の Next.js。上流は `switch_api_upstream.sh cloudrun`。**`api-internal`（ホスト向け）の Access アプリ・Public Hostname・Tunnel `meguai-stg` のルートは、切替後に削除**する。
+- UI: VPS の Next.js。上流は `switch_api_upstream.sh cloudrun`。**`api-internal`（ホスト向け）の Access アプリ・Public Hostname・Tunnel `<TUNNEL_STG>` のルートは、切替後に削除**する。
 - 認証: `DEV_SECRET_KEY`/`DEV_PASSWORD` を Secret Manager に**ホストと同じ値**で登録（切替でセッションを切らない）。会員名簿 `config/members.json` は当面イメージ内。`KEIBA_TEST_USER` は公開前に off（`tiered_access.md`）。
 
 ### 4.6 監視ポータルの置き場（Cloud Run か VPS か）
@@ -158,7 +158,7 @@ gs://<bucket>/models/<component>/latest.json       # {version, sha256, created_a
 ### 4.7 stg の置き換え
 - 目的: 本番に出す前の確認（画面・API・モデルの切替）。ホストの stg は使わない。
 - **API**: Cloud Run の**タグ付きリビジョン**（トラフィック 0%、`https://r<TAG>---…`）。`cloudrun_smoke`＋`env_parity_check` で確認してから `promote`。
-- **画面**: CI でビルドした成果物を VPS の `prod-test.megu-keiba.com`（Access 保護）で**切替前に起動して確認**する（メモリは一時的に +100MB。確認が終わったら止める）。確認後に本番へ `install_release.sh`。
+- **画面**: CI でビルドした成果物を VPS の `<PROD_TEST_HOST>`（Access 保護）で**切替前に起動して確認**する（メモリは一時的に +100MB。確認が終わったら止める）。確認後に本番へ `install_release.sh`。
 - **モデル**: `latest.json` の“採用版”を進める前に、Jobs の手動実行（ステージング用の出力接頭辞 `staging/`）で並走し `parity_check` で比較。
 - env_parity: stg と prod の比較は「**ステージング(新リビジョン) と 現行 prod**」の比較に変わる。`release_manifest` はそのまま使える（マニフェストの取得先が Cloud Run のタグ URL になる）。
 - `KEIBA_ENV=stg` の環境は**廃止**し、`prod` の一つにする（9 章の判断）。
@@ -181,7 +181,7 @@ gs://<bucket>/models/<component>/latest.json       # {version, sha256, created_a
 | **D2** モデル publish と予測生成 | 初回 `model_publish`、Jobs `predict-race`・`eve-precompute`・`lap-forecast-*` を並走→切替。**serving_state の生成元を Jobs に反転（4.1）** | モデルの publish、Scheduler/Queue の作成、`job_map ready` | blockers の解消、`parity_check` の運用 | 同じ日をホストと GCP で処理して一致、`cron_cutover_status` 合格 | ホストの cron を戻す（`_2_cron_off` の対を実行） |
 | **D3** 取得の移行 | 影モード 5 日（開催日を含む）合格→担当を VPS に。`raceday-result-runner`・`horse-remarks-daily`・`backfill-*`(運用分) も VPS 実行役へ。**ホストの取得は“prod で数日正常”を見届けるまで継続** | 影モード有効化、`fetch_owner` の移行、IAM 条件 | タスク定義の追加(D-05/D-16/D-17)、実測、`shadow_eval` | 直近 5 日合格・開催日の T-60/T-15 が全レースで成功・Slack 異常ゼロ | 担当をホストへ戻す |
 | **D4** 通知・集計・監視を GCP へ、monitor を Cloud Run へ | Slack/集計/ドリフト/データヘルスの Jobs 切替、監視ポータルを Cloud Run 化（4.6） | Cloud Run のデプロイ・Access の付け替え | monitor の GCS 読みへの改修、Jobs の blockers 解消 | 1 週間、通知が【PROD】で届き、monitor が GCP 上で見える | ホストの monitor・cron に戻す |
-| **D5** 配備の脱ホスト・stg 置換 | CI でビルド→VPS が pull、API はタグ付きリビジョン、`prod-test` で画面確認。`api-internal`・`meguai-stg`・ホストの Access アプリを削除 | CI の用意（Cloud Build トリガ）、Cloudflare の整理 | CI 設定、`promote` の CI 化、`maintenance_deploy` 等の廃止 | ホストを使わず 1 回、UI と API を更新できた | 旧手順（ホストでビルド）に戻す |
+| **D5** 配備の脱ホスト・stg 置換 | CI でビルド→VPS が pull、API はタグ付きリビジョン、`prod-test` で画面確認。`api-internal`・`<TUNNEL_STG>`・ホストの Access アプリを削除 | CI の用意（Cloud Build トリガ）、Cloudflare の整理 | CI 設定、`promote` の CI 化、`maintenance_deploy` 等の廃止 | ホストを使わず 1 回、UI と API を更新できた | 旧手順（ホストでビルド）に戻す |
 | **D6** ホストを研究専用に | ホストの運用 cron をすべて停止（研究専用の cron のみ残す）、**鍵の権限分離(9.4)**、ホスト停止試験(6 章)を実施 | cron 停止の実行(root)、鍵の付け替え、試験の実施・確認 | `cutover_plan`、`host_dependency_scan` のベースラインを 0 に近づける | 6 章の試験に合格、1〜2 週間の観察で異常ゼロ | 停止した cron を戻す（再有効化スクリプト） |
 
 順序の注意:
@@ -197,7 +197,7 @@ gs://<bucket>/models/<component>/latest.json       # {version, sha256, created_a
 
 **準備（ホスト側。ユーザーが実行）**
 1. ホストの root crontab を退避して全行をコメントアウト（`host_cron_switch.sh disable all` 相当。研究専用の行は別に残す）。
-2. ホストの FastAPI/Flask/Next.js を停止（`server_watchdog` も止める）。ホストの Cloudflare トンネル(`meguai-stg`)を止める。
+2. ホストの FastAPI/Flask/Next.js を停止（`server_watchdog` も止める）。ホストの Cloudflare トンネル(`<TUNNEL_STG>`)を止める。
 3. ホストの `.env` から GCS 鍵・Slack・netkeiba を退避して一時的に使えなくする（任意。秘密のホスト依存を洗い出す）。
 
 **確認（Claude が可能なものは代行。ホストの読み取りは不要）**
@@ -212,7 +212,7 @@ gs://<bucket>/models/<component>/latest.json       # {version, sha256, created_a
 | 6 | 馬体重→予測 | 馬体重の発表後 | 予測が自動で出る（Jobs が起動） |
 | 7 | 結果の取り込み | 発走 T+15 | 速報結果・予測成績が更新される（D-05） |
 | 8 | 通知 | 夕方の結果通知・取得状況・異常の模擬 | **【PROD】**が Slack に届く |
-| 9 | 監視 | `https://monitor.megu-keiba.com/models` ほか | 見える（GCP 上） |
+| 9 | 監視 | `https://<MONITOR_HOST>/models` ほか | 見える（GCP 上） |
 | 10 | 死活 | VPS のハートビートを 15 分止める | `vps-watchdog` が緊急通知を出す |
 | 11 | モデル更新 | ホスト停止中に `latest.json` が無くても動く | 既存の版で動き続ける |
 | 12 | 配備 | ホストを使わず UI を 1 回更新 | CI→GCS→VPS pull が成功 |
@@ -243,7 +243,7 @@ gs://<bucket>/models/<component>/latest.json       # {version, sha256, created_a
 `python -m src.scripts.ops.host_dependency_scan [--strict] [--summary] [--update-baseline]`（`src/scripts/ops/host_dependency_scan.py`、ベースライン `config/host_dependency_baseline.json`、テスト `tests/scripts/test_host_dependency_scan.py`）。
 
 - **対象**: 運用経路のコード（`src/api`・`src/utils`・`src/ops`・`src/monitor`・`src/scraper`・`src/pipeline/inference`・`src/scripts/{ops,cloud_jobs}`・`scripts/{ops,gcp,server}`・`frontend` の実装）。研究コード(`tp*`・`research`・notebooks・モデル学習)とテストは対象外。
-- **検出する区分**: `host_path`(/home/jovyan)・`host_alias`(keiba-remote)・`host_port`/`host_port_literal`(stg の 232xx)・`api_internal`・`local_data`(data/local)・`page_reference`・`postgres`。
+- **検出する区分**: `host_path`(<HOST_HOME>)・`host_alias`(keiba-remote)・`host_port`/`host_port_literal`(stg の 232xx)・`api_internal`・`local_data`(data/local)・`page_reference`・`postgres`。
 - **方式**: 現状（310 件・108 ファイル）をベースラインにして、**増えたときだけ失敗**する。依存を減らしたら `--update-baseline` で下げる。最終形（D6）は **高重大度（host_path / host_alias / host_port / api_internal）と postgres が 0**、`local_data`/`page_reference` が“キャッシュ層のみ”。
 - 現状の高重大度（26 件）の多くは、**廃止対象の道具**（`stage_deploy`・`maintenance_deploy`・`tunnel_stg_ui.sh`・`fetch_stg_health.sh`・`enable_v5_shadow.sh`）に集中している（D-18）。これらを消せばほぼ 0 になる。
 - `tests/scripts/test_host_dependency_scan.py::test_repo_has_no_new_host_dependencies` が、運用経路に**新しいホスト依存を足していない**ことを毎回の CI で確かめる。

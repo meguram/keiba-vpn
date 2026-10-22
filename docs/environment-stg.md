@@ -19,7 +19,7 @@ TZ=Asia/Tokyo
 
 ## 一括起動（stg）
 
-本番相当のスタックを起動し、`meguai-stg.tcpexposer.com` へトンネルします。
+本番相当のスタックを起動し、`<OLD_TUNNEL_HOST>` へトンネルします。
 
 ```bash
 cd keiba-vpn
@@ -34,10 +34,10 @@ cd keiba-vpn
 | Next.js | `:3001`（`npm run dev`、実 API） |
 | Flask | `:5000` |
 | FastAPI | `:8000`（`--prod`） |
-| 公開 URL | `https://meguai-stg.tcpexposer.com/` |
+| 公開 URL | `https://<OLD_TUNNEL_HOST>/` |
 | 環境 | `KEIBA_ENV=stg`（STG バッジ・`X-Keiba-Env: stg`） |
 
-**dev** との違い: dev は `./service_start`（モック UI `:3000` のみ、`meguai-dev`）。stg は GCS・PostgreSQL・Redis を使う本番相当構成です。
+**dev** との違い: dev は `./service_start`（モック UI `:3000` のみ、`<TUNNEL_DEV>`）。stg は GCS・PostgreSQL・Redis を使う本番相当構成です。
 
 ## 一括検証（推奨）
 

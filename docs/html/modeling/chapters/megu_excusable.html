@@ -70,7 +70,7 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
 
 <h2>5. V5（1,142 列）への増分 — 未実行</h2>
 <p>V5 の 1,142 列に累積する LightGBM の評価は、ホストの共有スロット（3 本）が他の評価で埋まっているため、待ち行列に入れた（<code>tp69-A</code>、<code>tp69-X</code>）。組 A = v3b（excusable の除外なし）の 3 列（<code>v3bA_wh</code>、<code>v3bA_max5</code>、<code>v3bA_mean5</code>）、組 X = A に excusable の除外を足した 7 列。判定は既定の 2 段階評価（勝率の 95% 区間の上限 &lt; 0、効果 ≥ 0.0002、連対・複勝の悪化 ≤ 0.0002）。次走予測の結果（除外は悪化）からは、組 X が組 A を上回る見込みは低い。完了後の手順:</p>
-<pre><code>scp keiba-remote:/home/jovyan/work/tp69_out/lgb_v3b{A,X}/result.json  # それぞれ lgb_v3bA/ lgb_v3bX/ に置く
+<pre><code>scp keiba-remote:<HOST_HOME>/work/tp69_out/lgb_v3b{A,X}/result.json  # それぞれ lgb_v3bA/ lgb_v3bX/ に置く
 python -m src.scripts.data.tp69_report --in &lt;置いたディレクトリ&gt;</code></pre>
 
 <h2>6. API・UI への出し方</h2>

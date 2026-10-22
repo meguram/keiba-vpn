@@ -40,7 +40,7 @@
 5. `bash scripts/gcp/deploy_cloud_run_api.sh all`（表示確認）→ `all --apply`。イメージを Cloud Build で作り、新リビジョンを**トラフィック 0%** で作る（初回だけは仕様上 100%）。最小インスタンス 0・最大 3・同時実行 30・タイムアウト 60 秒・メモリ 2GiB。
 6. 出力されたタグ URL（`https://r<TAG>---keiba-api-….a.run.app`）で確認:
    `KEIBA_PROXY_KEY=<値> python -m src.scripts.ops.cloudrun_smoke --base <タグURL> --race-id <直近のレースID>`（鍵なし 401・鍵あり 200・ハートビート状態）。
-7. ホストとの出力比較: 上に `--compare-base https://api-internal.megu-keiba.com --compare-header CF-Access-Client-Id=CF_ID --compare-header CF-Access-Client-Secret=CF_SECRET` を足す（`CF_ID` / `CF_SECRET` は環境変数名。勝率・連対率・複勝率が馬番ごとに一致すること）。数レース・数日分で確認する。
+7. ホストとの出力比較: 上に `--compare-base https://<API_INTERNAL_HOST> --compare-header CF-Access-Client-Id=CF_ID --compare-header CF-Access-Client-Secret=CF_SECRET` を足す（`CF_ID` / `CF_SECRET` は環境変数名。勝率・連対率・複勝率が馬番ごとに一致すること）。数レース・数日分で確認する。
 8. 問題なければ `bash scripts/gcp/deploy_cloud_run_api.sh promote --apply`（最新リビジョンに 100%）。
 
 ### D. VPS の準備（◎ VPS で root。SSH はホスト経由）

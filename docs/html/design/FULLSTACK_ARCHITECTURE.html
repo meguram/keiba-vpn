@@ -223,7 +223,7 @@ flowchart TB
 <tr><td>HybridStorage</td><td>L1/L2/L3統合ストレージアクセサ</td><td>—</td><td><code>src/scraper/storage.py</code>（1,430行、クラス定義69行目）</td><td><span class="badge warn">Flask側で毎回再生成（§4）</span></td></tr>
 <tr><td>PredictionCache</td><td>Redis予測結果キャッシュ</td><td>:6379</td><td><code>src/api/cache/redis_cache.py</code></td><td><span class="badge warn">部分実装（§4）</span></td></tr>
 <tr><td>PostgreSQL</td><td>Layer1〜5 正規化テーブル</td><td>:5432</td><td><code>src/db/models.py</code>, Alembic migrations</td><td><span class="badge ok">運用中</span></td></tr>
-<tr><td>GCS</td><td>スクレイピング結果JSONの正典（SSoT）</td><td>—</td><td><code>data_paths.py</code>, バケット: <code>magu-keiba-horse-racing-ai</code></td><td><span class="badge ok">運用中</span></td></tr>
+<tr><td>GCS</td><td>スクレイピング結果JSONの正典（SSoT）</td><td>—</td><td><code>data_paths.py</code>, バケット: <code><BUCKET></code></td><td><span class="badge ok">運用中</span></td></tr>
 <tr><td>MLflow Model Serving</td><td>推論モデルサービング</td><td>:5001-5006,5010</td><td><code>src/pipeline/mlflow/catalog.py</code></td><td><span class="badge ok">一部モデルのみ active</span></td></tr>
 </table>
 

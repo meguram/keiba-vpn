@@ -33,7 +33,7 @@ PostgreSQL（5432）/ Redis（6379）、`docker-compose.serving.yml`・`mlflow/s
 ./service_start --env dev --mock --with-fastapi   # モック UI + Flask + FastAPI（autostart_dev.sh が使う構成）
 
 # 環境プロファイル
-./service_start --env stg          # 本番相当 + KEIBA_ENV=stg + meguai-stg トンネル
+./service_start --env stg          # 本番相当 + KEIBA_ENV=stg + <TUNNEL_STG> トンネル
 # stg の Next.js は本番ビルド（next build + next start）が既定。切り替えと反映手順は stg_frontend_prod_build.md（戻すときは KEIBA_STG_NEXT_MODE=dev）
 ./service_start --env prod         # 本番相当（FastAPI --prod / next build+start）
 
@@ -48,9 +48,9 @@ PostgreSQL（5432）/ Redis（6379）、`docker-compose.serving.yml`・`mlflow/s
 
 | プロファイル | 用途 | FastAPI | Flask | Next.js | MLflow（ローカル） | tcpexposer |
 |---|---|---|---|---|---|---|
-| `dev`（既定） | モック UI | `--with-fastapi` 時のみ :23120 | :23110 | mock `:23100` | オフ | `meguai-dev` → :23100 |
-| `dev --full` | ホットリロード開発 | reload :23120 | `:23110` debug | `npm run dev` | オフ | `meguai-dev` → :23100 |
-| `stg` | 本 PC・本番相当 | `--prod` :23220 | `:23210` | `dev` `:23200` 実 API | 既定オフ | `meguai-stg` → :23200 |
+| `dev`（既定） | モック UI | `--with-fastapi` 時のみ :23120 | :23110 | mock `:23100` | オフ | `<TUNNEL_DEV>` → :23100 |
+| `dev --full` | ホットリロード開発 | reload :23120 | `:23110` debug | `npm run dev` | オフ | `<TUNNEL_DEV>` → :23100 |
+| `stg` | 本 PC・本番相当 | `--prod` :23220 | `:23210` | `dev` `:23200` 実 API | 既定オフ | `<TUNNEL_STG>` → :23200 |
 | `prod` | VPS 想定（stg クローン） | `--prod` :23320 | `:23310` | `build+start` `:23300` | 既定オフ | （将来） |
 
 ポート・URL の上書き: `KEIBA_PORT_*` 環境変数（`config/ports.env` が既定）、または `scripts/server/service_start.local.env`（`.example` をコピー）。
@@ -58,18 +58,18 @@ PostgreSQL（5432）/ Redis（6379）、`docker-compose.serving.yml`・`mlflow/s
 | 起動後 URL（dev モック） | サービス |
 |---|---|
 | `http://127.0.0.1:23100` | Next.js モック（`NEXT_PUBLIC_MOCK=true`） |
-| `https://meguai-dev.tcpexposer.com/` | 上記の外部公開 |
+| `https://<OLD_TUNNEL_HOST>/` | 上記の外部公開 |
 
 | 起動後 URL（stg / prod） | サービス |
 |---|---|
 | `http://127.0.0.1:23220` | FastAPI（レガシー UI / API） |
 | `http://127.0.0.1:23210` | Flask `/api/v1` |
 | `http://127.0.0.1:23200` | Next.js（`KEIBA_API_URL=http://127.0.0.1:23210`） |
-| `https://meguai-stg.tcpexposer.com/` | stg 外部公開（Next.js :23200） |
+| `https://<OLD_TUNNEL_HOST>/` | stg 外部公開（Next.js :23200） |
 
 PostgreSQL（`:5432`）と Redis（`:6379`）はスクリプト対象外です。未起動の場合は警告を出します。ログは `logs/` に出力されます。
 
-**tcpexposer トンネル**: ワークスペース起動時に `tunnel_tcpexposer.sh autostart-all` で **dev**（`meguai-dev` → `:23100`）と **stg**（`meguai-stg` → `:23200`）を自動接続。無効化: `KEIBA_AUTO_TCPEXPOSER=0`。手動: `./scripts/server/tunnel_tcpexposer.sh stg check` / `dev stop` / `stg background`。
+**tcpexposer トンネル**: ワークスペース起動時に `tunnel_tcpexposer.sh autostart-all` で **dev**（`<TUNNEL_DEV>` → `:23100`）と **stg**（`<TUNNEL_STG>` → `:23200`）を自動接続。無効化: `KEIBA_AUTO_TCPEXPOSER=0`。手動: `./scripts/server/tunnel_tcpexposer.sh stg check` / `dev stop` / `stg background`。
 
 **環境の役割**: **dev** = モック UI のみ。**stg** = 本 PC 上の本番相当（実 API・GCS・DB）。**prod**（将来）= stg 構成を VPS へクローン。
 
@@ -408,4 +408,4 @@ NEXT_PUBLIC_MOCK=true npm run dev
 |---|---|
 | 2026-07-04 | 初版作成（FastAPI / Flask / Next.js / MLflow / インフラ / ポート競合注意） |
 | 2026-07-04 | `./service_start` 一括起動スクリプト追加 |
-| 2026-07-04 | dev/stg 分離: dev モック :3001 / stg 本番相当 :3000 + `meguai-stg` トンネル |
+| 2026-07-04 | dev/stg 分離: dev モック :3001 / stg 本番相当 :3000 + `<TUNNEL_STG>` トンネル |

@@ -12,7 +12,7 @@
 ## 4-4 の設定
 
 ```
-KEIBA_MEGU_V3A_DIR=/home/jovyan/work/keiba-vpn/config/megu_v3a
+KEIBA_MEGU_V3A_DIR=<HOST_REPO>/config/megu_v3a
 KEIBA_MEGU_V3A_DB=1
 ```
 

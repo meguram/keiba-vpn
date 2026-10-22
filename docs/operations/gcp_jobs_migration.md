@@ -81,7 +81,7 @@ Run Job の環境変数には**必ず** `KEIBA_ENV=prod`・`KEIBA_RUN_LOCATION=g
 - コンテナは毎回空で、書き込みはメモリを使います。各ジョブの `state_in`／`state_out` に**サイズ上限（max_mb）**があり、超えると取らずに失敗します。`state_in の合計 + 600MB ≤ memory_mib` も `validate` で検査します。
 - **最初に**ホストで実サイズを確認します（上限の見直し材料）:
   ```bash
-  cd /home/jovyan/work/keiba-vpn
+  cd <HOST_REPO>
   for j in jockey-trainer-stats export-tables-daily serving-state-precompute lap-forecast-morning drift-monitor-weekly; do
     PYTHONPATH=. python3 -m src.ops.state_sync plan --job $j
   done
@@ -158,7 +158,7 @@ bash scripts/gcp/deploy_cloud_run_jobs.sh run-now group g-pump --dry-run # 手�
 
 1. ホストに成果物の公開 cron を入れる（並走の間だけ）:
    ```bash
-   sudo bash scripts/cron/install_host_snapshot_cron.sh /home/jovyan/work/keiba-vpn      # 07:50 JST に host_snapshot/<日>/ へ。外すときは --remove
+   sudo bash scripts/cron/install_host_snapshot_cron.sh <HOST_REPO>      # 07:50 JST に host_snapshot/<日>/ へ。外すときは --remove
    ```
 2. 日々の確認（Cloud Shell かホスト）:
    ```bash
@@ -187,7 +187,7 @@ bash scripts/gcp/deploy_cloud_run_jobs.sh run-now group g-pump --dry-run # 手�
 
 ```bash
 # ホスト（stg）で。判定結果を作る（GCS を読むのでホストか Cloud Shell で）
-cd /home/jovyan/work/keiba-vpn
+cd <HOST_REPO>
 PYTHONPATH=. python3 -m src.scripts.ops.cron_cutover_status --json > /tmp/cutover_status.json
 PYTHONPATH=. python3 -m src.scripts.ops.cutover_plan list                       # 止める単位(cron_job_id)と波(wave1=通知・監視 → 2=予測・集計 → 3=取得)
 # 例: drift-monitor-weekly（合格していない単位は作らない。--force は検証用）
