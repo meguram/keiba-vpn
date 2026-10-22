@@ -7,6 +7,9 @@
   "scripts/ops/cutover/host_cron_switch.sh": {
    "local_data": 2
   },
+  "scripts/ops/install_prod_status_cron.sh": {
+   "local_data": 1
+  },
   "scripts/ops/maintenance_deploy.sh": {
    "local_data": 3
   },
@@ -35,8 +38,7 @@
    "host_alias": 2
   },
   "scripts/ops/vps/vars.env.example": {
-   "host_port_literal": 1,
-   "api_internal": 1
+   "host_port_literal": 1
   },
   "scripts/server/deploy_v5.sh": {
    "host_path": 1,
@@ -147,6 +149,9 @@
   },
   "src/monitor/page_quality_check.py": {
    "local_data": 2
+  },
+  "src/monitor/prod_status.py": {
+   "local_data": 4
   },
   "src/ops/fetch_shadow.py": {
    "local_data": 1
@@ -323,6 +328,9 @@
   },
   "src/scripts/ops/cloudrun_smoke.py": {
    "api_internal": 1
+  },
+  "src/scripts/ops/collect_prod_status.py": {
+   "local_data": 1
   },
   "src/scripts/ops/cron_cutover_status.py": {
    "page_reference": 1
