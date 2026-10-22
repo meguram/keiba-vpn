@@ -1,5 +1,6 @@
 "use client";
 
+import { classifyFetchThrow, classifyHttpFailure, classifyRenderError, isSessionRedirect, sessionExpired } from "@/lib/betFetch";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { USE_MOCK, getMockBetRecommendation } from "@/lib/mock";
@@ -108,7 +109,10 @@ function evColor(ev?: number, cal = false): string {
 }
 
 /** AI 予測（確率）× オッズ → 期待値 → Kelly 配分の推奨馬券。計算本体はサーバ（/api/v1/betting/optimize）。 */
-export function BetRecommend({ raceId, hasPrediction }: { raceId: string; hasPrediction: boolean }) {
+/** 馬番 → 印（買い目の各馬番に印を添えるための表示用。週間予測の『推奨馬券』タブで使う） */
+export type MarkBySeq = Record<number, { sym: string; color: string; kesi?: boolean }>;
+
+export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string; hasPrediction: boolean; marks?: MarkBySeq }) {
   const [bankroll, setBankroll] = useState("100000");
   const [cap, setCap] = useState(String(DEFAULT_MAX_TOTAL_BET));
   const [capReady, setCapReady] = useState(false);
@@ -116,6 +120,7 @@ export function BetRecommend({ raceId, hasPrediction }: { raceId: string; hasPre
   const [rec, setRec] = useState<Recommendation | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errReload, setErrReload] = useState(false);
   const [needLogin, setNeedLogin] = useState(false);
   const [mode, setMode] = useState<OddsMode>("auto");
   const [phase, setPhase] = useState<OddsPhase>("latest");
@@ -133,6 +138,7 @@ export function BetRecommend({ raceId, hasPrediction }: { raceId: string; hasPre
 
   const run = useCallback(async () => {
     setError(null);
+    setErrReload(false);
     setNeedLogin(false);
     const amount = Number(bankroll);
     if (!Number.isFinite(amount) || amount < 100) {
@@ -157,31 +163,54 @@ export function BetRecommend({ raceId, hasPrediction }: { raceId: string; hasPre
         setRec(getMockBetRecommendation(raceId, amount, mode, phase, maxTotalBet) as Recommendation);
         return;
       }
-      const res = await fetch("/api/v1/betting/optimize", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          race_id: raceId,
-          bankroll: amount,
-          max_total_bet: maxTotalBet,
-          odds_mode: mode,
-          odds_phase: phase,
-          bet_types: mode === "predicted" ? ["tansho", "fukusho"] : ["tansho", "fukusho", "umaren", "wide", "sanrenpuku"],
-        }),
-      });
+      let res: Response;
+      try {
+        res = await fetch("/api/v1/betting/optimize", {
+          method: "POST",
+          credentials: "include",
+          redirect: "manual", // ログイン画面（別オリジン）へ飛ばされたら、例外ではなく『セッション切れ』として検知する
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            race_id: raceId,
+            bankroll: amount,
+            max_total_bet: maxTotalBet,
+            odds_mode: mode,
+            odds_phase: phase,
+            bet_types: mode === "predicted" ? ["tansho", "fukusho"] : ["tansho", "fukusho", "umaren", "wide", "sanrenpuku"],
+          }),
+        });
+      } catch (e) {
+        const f = classifyFetchThrow(typeof navigator !== "undefined" ? navigator.onLine : undefined);
+        console.warn("[BetRecommend] fetch が例外:", e);
+        setError(f.message);
+        setErrReload(f.reload);
+        return;
+      }
+      if (isSessionRedirect(res)) {
+        const f = sessionExpired();
+        setError(f.message);
+        setErrReload(f.reload);
+        return;
+      }
       const body = await res.json().catch(() => ({}));
       if (res.status === 401) {
         setNeedLogin(true);
         return;
       }
       if (!res.ok) {
-        setError(body?.error ?? `推奨馬券の計算に失敗しました（HTTP ${res.status}）`);
+        const f = classifyHttpFailure(res.status, body?.error);
+        setError(f.message);
+        setErrReload(f.reload);
         return;
       }
-      setRec(applyCalibration(body as Recommendation));
-    } catch {
-      setError("推奨馬券 API に接続できませんでした");
+      try {
+        setRec(applyCalibration(body as Recommendation));
+      } catch (e) {
+        console.error("[BetRecommend] 応答の取り込みで例外:", e, body);
+        const f = classifyRenderError();
+        setError(f.message);
+        setErrReload(f.reload);
+      }
     } finally {
       setLoading(false);
     }
@@ -193,6 +222,17 @@ export function BetRecommend({ raceId, hasPrediction }: { raceId: string; hasPre
     // 予測が揃ったとき・レース/オッズ条件が変わったときに自動計算（資金の編集では再計算しない）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [raceId, hasPrediction, capReady, mode, phase]);
+
+  // 買い目の馬番に添える印（馬番が印を持たないときは何も出さない）
+  const markChip = (n: number) => {
+    const m = marks?.[n];
+    if (!m) return null;
+    return (
+      <span key={`mk-${n}`} aria-label={`${n}番の印 ${m.sym}`} style={{ color: m.color, fontWeight: 800, marginRight: 2, ...(m.kesi ? { border: "1px solid #94a3b8", borderRadius: 3, padding: "0 3px", fontSize: 11 } : {}) }}>
+        {m.sym}
+      </span>
+    );
+  };
 
   if (!hasPrediction) {
     return (
@@ -268,7 +308,19 @@ export function BetRecommend({ raceId, hasPrediction }: { raceId: string; hasPre
           <Link href={`/login?next=/race/${raceId}`} style={{ color: "var(--accent)" }}>ログインする →</Link>
         </div>
       )}
-      {error && <div style={{ padding: "12px 16px", borderRadius: 8, background: "rgba(239,68,68,0.08)", color: "var(--err)", fontSize: 13 }}>{error}</div>}
+      {error && (
+        <div role="alert" style={{ padding: "12px 16px", borderRadius: 8, background: "rgba(239,68,68,0.08)", color: "var(--err)", fontSize: 13, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ flex: "1 1 240px" }}>{error}</span>
+          <button type="button" onClick={() => run()} style={{ minHeight: 44, padding: "0 14px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text)", cursor: "pointer", fontSize: 13 }}>
+            再試行
+          </button>
+          {errReload && (
+            <button type="button" onClick={() => window.location.reload()} style={{ minHeight: 44, padding: "0 14px", borderRadius: 8, border: "1px solid var(--accent)", background: "rgba(59,130,246,0.15)", color: "var(--accent)", cursor: "pointer", fontSize: 13 }}>
+              ページを再読み込み
+            </button>
+          )}
+        </div>
+      )}
 
       {rec && (
         <>
@@ -319,7 +371,7 @@ export function BetRecommend({ raceId, hasPrediction }: { raceId: string; hasPre
                 const sections = BET_ORDER.map((bt) => ({ bt, gs: groups.filter((g) => g.bet_type === bt) })).filter((s) => s.gs.length > 0);
                 const chip = (n: number, extra?: string) => (
                   <span key={`${n}-${extra ?? ""}`} style={{ display: "inline-flex", alignItems: "baseline", gap: 3, marginRight: 6, padding: "1px 7px", borderRadius: 5, background: "rgba(125,211,252,0.12)", color: "#7dd3fc", fontWeight: 800 }}>
-                    {n}
+                    {markChip(n)}{n}
                     {names.get(n) && <span style={{ fontWeight: 400, fontSize: 11, color: "var(--text-dim)" }}>{names.get(n)}</span>}
                     {extra && <span style={{ fontWeight: 600, fontSize: 11, color: "#fff" }}>{extra}</span>}
                   </span>
@@ -329,6 +381,7 @@ export function BetRecommend({ raceId, hasPrediction }: { raceId: string; hasPre
                     const c = g.items[0];
                     return (
                       <>
+                        {(c.pair ?? []).map((n) => markChip(n))}
                         <span style={{ color: "#7dd3fc", fontWeight: 800, marginRight: 8 }}>{c.pair_label}</span>
                         <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{(c.horse_names ?? []).filter(Boolean).join(" - ")}</span>
                       </>
@@ -411,6 +464,7 @@ export function BetRecommend({ raceId, hasPrediction }: { raceId: string; hasPre
                                           {g.items.map((c, i) => (
                                             <tr key={`${c.pair_label}-${i}`}>
                                               <td style={{ ...TD, textAlign: "left", borderTop: "1px solid var(--border)" }}>
+                                                {(c.pair ?? []).map((n) => markChip(n))}
                                                 <span style={{ color: "#7dd3fc", fontWeight: 800, marginRight: 8 }}>{c.pair_label}</span>
                                                 <span style={{ color: "var(--text-dim)" }}>{(c.horse_names ?? []).filter(Boolean).join(" - ")}</span>
                                               </td>

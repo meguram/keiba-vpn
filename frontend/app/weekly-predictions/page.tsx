@@ -13,6 +13,8 @@ import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
 import { MeguTable } from "@/components/MeguTable";
+import { WeeklyBetTab } from "@/components/WeeklyBetTab";
+import { MARK_META, MARK_ORDER } from "@/lib/marks";
 import ProbCalNote from "@/components/ProbCalNote";
 import { EntriesDaySummary, EntriesStatusBadge } from "@/components/EntriesStatus";
 import type { EntriesStatus } from "@/lib/entriesStatus";
@@ -118,23 +120,12 @@ type PredData = {
 };
 
 /* ── ユーティリティ ── */
-const MARK_META: Record<string, { sym: string; color: string }> = {
-  honmei:   { sym: "◎", color: "#ef4444" },
-  pair:     { sym: "○", color: "#3b82f6" },
-  anchor:   { sym: "△", color: "#22c55e" },
-  show_val: { sym: "▲", color: "#f59e0b" },
-  star:     { sym: "★", color: "#a78bfa" },
-  kesi:     { sym: "消", color: "#cbd5e1" },
-  none:     { sym: "-", color: "var(--text-dim)" },
-};
 
 function markSym(p: PredEntry): { sym: string; color: string } {
   if (p.mark_type && MARK_META[p.mark_type]) return MARK_META[p.mark_type];
   return MARK_META.none;
 }
 
-/** 推奨列の並び順: ◎ → ○ → ▲ → ★ → △ → 消。印なしは値なし（末尾） */
-const MARK_ORDER: Record<string, number> = { honmei: 1, pair: 2, show_val: 3, star: 4, anchor: 5, kesi: 6 };
 
 /** 印の表示。消印は枠線つき（他の印と見分けがつき、色だけに頼らない）で、押さなくても理由が title で読める */
 function MarkChip({ p, size = 18 }: { p: PredEntry; size?: number }) {
@@ -622,6 +613,8 @@ function RacePanel({
   const failed = !loading && pred?.status === "error" && preds.length === 0;
   const { isMember, loading: authLoading } = useAuthStatus();
   const locked = !authLoading && !isMember;
+  const [tab, setTab] = useState<"predict" | "bet">("predict");
+  useEffect(() => { setTab("predict"); }, [race.race_id]);
 
   return (
     <section
@@ -705,16 +698,40 @@ function RacePanel({
             </button>
           </div>
         )}
-        {pred && !failed && <PredictionSourceBadge source={pred.prediction_source} note={pred.prediction_note} />}
-        {pred && !failed && locked && preds.length > 0 && <MemberLockNote />}
-        {pred && !failed && <ProbCalNote pc={pred.prob_calibration} preds={preds} />}
         {pred && !failed && (
+          <div role="tablist" aria-label="表示の切り替え" style={{ display: "flex", gap: 6, margin: "10px 0 4px", flexWrap: "wrap" }}>
+            {([["predict", "AI予測・期待値"], ["bet", "推奨馬券"]] as const).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={tab === k}
+                onClick={() => setTab(k)}
+                style={{
+                  minHeight: 44, padding: "0 16px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700,
+                  border: `1px solid ${tab === k ? "var(--accent)" : "var(--border)"}`,
+                  background: tab === k ? "rgba(59,130,246,0.15)" : "transparent",
+                  color: tab === k ? "var(--accent)" : "var(--text-dim)",
+                }}
+              >
+                {k === "bet" && locked ? "🔒 " : ""}{label}
+              </button>
+            ))}
+          </div>
+        )}
+        {pred && !failed && tab === "bet" && (
+          <WeeklyBetTab raceId={race.race_id} hasPred={hasPred} preds={preds} lock={locked} authLoading={authLoading} />
+        )}
+        {pred && !failed && tab === "predict" && <PredictionSourceBadge source={pred.prediction_source} note={pred.prediction_note} />}
+        {pred && !failed && tab === "predict" && locked && preds.length > 0 && <MemberLockNote />}
+        {pred && !failed && tab === "predict" && <ProbCalNote pc={pred.prob_calibration} preds={preds} />}
+        {pred && !failed && tab === "predict" && (
           <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} growthMeta={pred.growth_meta} />
         )}
-        {pred && !failed && !locked && preds.length > 0 && (
+        {pred && !failed && tab === "predict" && !locked && preds.length > 0 && (
           <MeguTable preds={preds} bench={pred.class_benchmark} meta={pred.expected_megu_meta} today={{ surface: race.surface, distance: Number(race.distance) || undefined }} />
         )}
-        {pred && !failed && !locked && preds.length > 0 && (
+        {pred && !failed && tab === "predict" && !locked && preds.length > 0 && (
           <PredExtras key={race.race_id} raceId={race.race_id} entries={preds} pace={pred.pace_forecast} paceUnified={pred.pace_unified} lapForecast={pred.lap_forecast} paceType={pred.pace_type} scenarioForecast={pred.scenario_forecast} gate={pred.gate_bias} steeplechase={(race.surface ?? "").startsWith("障")} />
         )}
       </div>
