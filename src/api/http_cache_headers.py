@@ -54,6 +54,9 @@ def install_fastapi(app) -> None:
 
     class _HttpCacheMW(BaseHTTPMiddleware):
         async def dispatch(self, request, call_next):
+            from src.utils import cache_epoch
+
+            cache_epoch.sync()
             resp = await call_next(request)
             ma = max_age_for(request.url.path, request.method, resp.status_code, "cache-control" in resp.headers)
             if ma:
@@ -66,6 +69,12 @@ def install_fastapi(app) -> None:
 
 def install_flask(app) -> None:
     from flask import request
+
+    @app.before_request
+    def _cache_epoch_sync():
+        from src.utils import cache_epoch
+
+        cache_epoch.sync()
 
     @app.after_request
     def _http_cache(response):

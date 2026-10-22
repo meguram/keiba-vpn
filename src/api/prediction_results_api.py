@@ -24,6 +24,10 @@ from src.pipeline.inference import prediction_results as pr
 router = APIRouter()
 _CACHE: dict[tuple, tuple[float, Any]] = {}
 _TTL = 20.0
+
+from src.utils import cache_epoch as _cache_epoch  # noqa: E402
+
+_cache_epoch.register("prediction_results_api", _CACHE.clear)
 _WEEKDAY = "月火水木金土日"
 
 

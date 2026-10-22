@@ -60,6 +60,11 @@ def load_config() -> dict:
         return {}
 
 
+from src.utils import cache_epoch as _cache_epoch  # noqa: E402
+
+_cache_epoch.register("prob_calibration.config", lambda: load_config.cache_clear())
+
+
 def is_enabled() -> bool:
     return os.environ.get("KEIBA_PROB_CALIBRATION", "") == "1" and bool(load_config().get("targets"))
 

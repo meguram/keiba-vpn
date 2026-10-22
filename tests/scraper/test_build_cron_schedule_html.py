@@ -8,6 +8,7 @@ SAMPLE = """PATH=/opt/conda/bin:/usr/bin
 0 15 * * * cd /w && TZ=Asia/Tokyo bash /w/scripts/cron/yield_to_rescrape.sh backfill -- /opt/conda/bin/python3 -m src.scraper.backfill --year 2026 --phase fast --max-dates 7 >> /w/l 2>&1 # B
 0 17 * * 1,4 cd /w && TZ=Asia/Tokyo bash /w/scripts/cron/yield_to_rescrape.sh backfill -- /opt/conda/bin/python3 -m src.scraper.backfill --year 2021 --phase fast >> /w/l 2>&1 # B
 */2 * * * * /home/x/start_remote_access.sh # KEIBA-REMOTE-ACCESS
+*/5 * * * * /home/x/unknown_tool.sh # KEIBA-UNKNOWN
 """
 
 
@@ -28,7 +29,8 @@ def test_parse_groups_and_flags():
     assert by["backfill: 2026年 結果+出馬表"].group == "backfill" and by["backfill: 2026年 結果+出馬表"].yields
     assert by["backfill: 2021年 結果+出馬表"].when == "火・金 02:00"
     assert by["サーバ死活監視"].group == "ops"
-    assert len(others) == 1 and "REMOTE-ACCESS" in others[0]
+    assert by["リモートアクセスの起動保証"].group == "ops"
+    assert len(others) == 1 and "KEIBA-UNKNOWN" in others[0]
 
 
 def test_every_job_documents_processing_and_destination():

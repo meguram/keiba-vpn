@@ -42,6 +42,11 @@ def reload() -> None:
         _cache = None
 
 
+from src.utils import cache_epoch as _cache_epoch  # noqa: E402
+
+_cache_epoch.register("public_policy", reload)
+
+
 def is_public_mode() -> bool:
     env = (os.environ.get("KEIBA_PUBLIC_MODE") or "").strip().lower()
     if env in ("public", "1", "true"):

@@ -2752,6 +2752,13 @@ def merge_db_and_list_races(db_races: list[dict], list_races: list[dict], date: 
 from src.api.response_cache import TtlCoalescingCache as _TtlCoalescingCache
 
 _RACE_LIST_CACHE = _TtlCoalescingCache()
+
+from src.utils import cache_epoch as _cache_epoch  # noqa: E402
+
+_cache_epoch.register("app.race_list_cache", _RACE_LIST_CACHE.clear)
+_cache_epoch.register("app.race_list_memos", lambda: _invalidate_race_list_caches())
+_cache_epoch.register("app.status_cache", lambda: _status_cache.clear())
+_cache_epoch.register("app.bundle_cache", lambda: _bundle_cache.clear())
 _race_list_warm_task: Any = None
 
 

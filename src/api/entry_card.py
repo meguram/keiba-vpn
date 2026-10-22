@@ -72,6 +72,11 @@ def clear_cache() -> None:
         _cache.clear()
 
 
+from src.utils import cache_epoch as _cache_epoch  # noqa: E402
+
+_cache_epoch.register("entry_card", clear_cache)
+
+
 def _load(storage: Any, cat: str, key: str) -> dict | None:
     return _cached(("load", id(storage), cat, key), lambda: storage.load(cat, key))
 

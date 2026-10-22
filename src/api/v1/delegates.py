@@ -311,7 +311,12 @@ def _calibrate_candidates(candidates_out: list[dict], prob_calibrated: bool = Fa
 # hot: 特に高い / good: 高い / ok: プラス期待 / pass: 見送り水準（買い目なし・期待回収率が基準未満）
 VALUE_LEVELS: tuple[tuple[str, float], ...] = (("hot", 1.5), ("good", 1.25), ("ok", 1.05))
 _VALUE_CACHE: dict[tuple, tuple[float, dict]] = {}
+
+from src.utils import cache_epoch as _cache_epoch  # noqa: E402
+
+_cache_epoch.register("delegates.value_cache", _VALUE_CACHE.clear)
 _VALUE_TTL_SEC = 20.0
+_VALUE_TTL_PAST_SEC = 6 * 3600.0
 
 
 def value_level(expected_roi: float | None, n_bets: int, prob_calibrated: bool = False) -> str:
@@ -395,6 +400,28 @@ def _value_row_paid(race: dict[str, Any], payload: dict[str, Any], code: int) ->
             "n_bets": len(payload.get("bets") or [])}
 
 
+def _value_ttl(date: str) -> float:
+    """終わった開催日は結果が動かないので長く使い回す（データが保存されれば cache_epoch で空になる）。当日・先の日は短く。"""
+    from datetime import datetime, timedelta, timezone
+
+    today = datetime.now(timezone(timedelta(hours=9))).strftime("%Y%m%d")
+    return _VALUE_TTL_SEC if date >= today else _VALUE_TTL_PAST_SEC
+
+
+_VALUE_WORKERS = 6
+
+
+def _map_races(fn, races: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """レースごとの計算（ストレージの読み込みで待つ時間が大半）を並列にして、順序は保つ。"""
+    from concurrent.futures import ThreadPoolExecutor
+
+    todo = [r for r in races if r.get("race_id")]
+    if len(todo) <= 1:
+        return [fn(r) for r in todo]
+    with ThreadPoolExecutor(max_workers=min(_VALUE_WORKERS, len(todo))) as ex:
+        return list(ex.map(fn, todo))
+
+
 def race_value_summary(
     date: str,
     *,
@@ -411,7 +438,7 @@ def race_value_summary(
 
     key = (date, odds_mode, odds_phase, max_total_bet, view)
     hit = _VALUE_CACHE.get(key)
-    if hit and time.time() - hit[0] < _VALUE_TTL_SEC:
+    if hit and time.time() - hit[0] < _value_ttl(date):
         return hit[1]
 
     storage = HybridStorage()
@@ -419,23 +446,19 @@ def race_value_summary(
     if view == "paid":
         from src.utils import paid_zone as PZ
 
-        prow = []
-        for r in races:
-            if not r.get("race_id"):
-                continue
+        def _one_paid(r: dict[str, Any]) -> dict[str, Any]:
             try:
                 payload, code = optimize_betting({"race_id": r["race_id"], "max_total_bet": max_total_bet}, view="paid")
             except Exception as exc:  # 1 レースの失敗で一覧全体を落とさない
                 logger.warning("race value(paid) 計算失敗 %s: %s", r["race_id"], exc)
                 payload, code = {"error": str(exc)}, 500
-            prow.append(_value_row_paid(r, payload, code))
+            return _value_row_paid(r, payload, code)
+
+        prow = _map_races(_one_paid, races)
         out = {"date": date, "view": "paid", "legend": PZ.legend(), "max_total_bet": max_total_bet, "races": prow}
         _VALUE_CACHE[key] = (time.time(), out)
         return out
-    rows = []
-    for r in races:
-        if not r.get("race_id"):
-            continue
+    def _one_full(r: dict[str, Any]) -> dict[str, Any]:
         body: dict[str, Any] = {
             "race_id": r["race_id"], "bankroll": 100000, "odds_mode": odds_mode, "odds_phase": odds_phase,
             "max_total_bet": max_total_bet, "bet_types": ["tansho", "fukusho", "umaren", "wide", "sanrenpuku"],
@@ -445,7 +468,9 @@ def race_value_summary(
         except Exception as exc:  # 1 レースの失敗で一覧全体を落とさない
             logger.warning("race value 計算失敗 %s: %s", r["race_id"], exc)
             payload, code = {"error": str(exc)}, 500
-        rows.append(_value_row(r, payload, code))
+        return _value_row(r, payload, code)
+
+    rows = _map_races(_one_full, races)
     _apply_day_ranking(rows)
     out = {
         "date": date,

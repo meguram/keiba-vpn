@@ -56,6 +56,10 @@ def load_default_alpha() -> tuple[float, float]:
     return 1.0, 1.0
 _EPS = 1e-12
 
+from src.utils import cache_epoch as _cache_epoch  # noqa: E402
+
+_cache_epoch.register("exotic_probabilities.alpha", lambda: load_default_alpha.cache_clear())
+
 
 def _normalize_win(win: Sequence[float]) -> np.ndarray:
     w = np.clip(np.asarray(win, dtype=float), _EPS, None)

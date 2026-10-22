@@ -33,6 +33,7 @@ import logging
 import os
 import tempfile
 import threading
+import weakref
 import time as _time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -94,6 +95,8 @@ class HybridStorage:
     """
 
     from src.config import data_paths as _dp
+
+    _instances: "weakref.WeakSet[HybridStorage]" = weakref.WeakSet()
 
     GCS_BASE = _dp.GCS_BASE
     GCS_OTHERS = _dp.GCS_OTHERS
@@ -202,6 +205,7 @@ class HybridStorage:
         # load() 用インメモリ LRU キャッシュ: {cache_key: (ts, data_or_None)}
         self._load_cache: dict[str, tuple[float, dict | None]] = {}
         self._load_cache_lock = threading.Lock()
+        HybridStorage._instances.add(self)
         self._gcs_call_count = 0
 
         # GCS 健全性トラッキング
@@ -471,6 +475,15 @@ class HybridStorage:
     # ── save ──────────────────────────────────────────
 
     def save(self, category: str, key: str, data: dict[str, Any]) -> bool:
+        """データを保存する（詳細は ``_save_inner``）。保存できたら、画面に関わるカテゴリはキャッシュの世代を進める。"""
+        ok = self._save_inner(category, key, data)
+        if ok:
+            from src.utils import cache_epoch
+
+            cache_epoch.bump_for_save(category)
+        return ok
+
+    def _save_inner(self, category: str, key: str, data: dict[str, Any]) -> bool:
         """データを保存する。local_only カテゴリはローカル、それ以外は GCS のみ。
 
         自動的に _meta.scraped_at タイムスタンプを付与する。
@@ -1489,3 +1502,13 @@ class HybridStorage:
 
 # ── 下位互換エイリアス ─────────────────────────────────
 JsonStorage = HybridStorage
+
+
+def _clear_all_load_caches() -> None:
+    for st in list(HybridStorage._instances):
+        st.invalidate_load_cache()
+
+
+from src.utils import cache_epoch as _cache_epoch  # noqa: E402
+
+_cache_epoch.register("storage.load_cache", _clear_all_load_caches)

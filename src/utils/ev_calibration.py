@@ -40,6 +40,10 @@ def load_config() -> dict:
         return {}
 
 
+from src.utils import cache_epoch as _cache_epoch  # noqa: E402
+
+_cache_epoch.register("ev_calibration.config", lambda: (load_config.cache_clear(), load_config_pc.cache_clear()))
+
 PC_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "ev_calibration_pc.json"
 
 
