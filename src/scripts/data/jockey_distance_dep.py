@@ -17,8 +17,13 @@ python -m src.scripts.data.jockey_distance_dep report    # 章 HTML（docs/html/
 - 定義 (d) 有力騎手 = その日より前の直近 365 日の平地勝利数の上位 10 人（5・20 は感度）。jockey-change-ev と同じ。
   モデル予測に対する残差（勝ち・3 着内。モデルは tp-59 の master の p_*）、単勝・複勝の回収率（1 出走 100 円、レース単位ブートストラップ）、
   市場の単勝確率（q_win）で統制したロジスティック回帰の有力騎手の係数。
-- 検定の族（K = 32）: 距離への依存の変化 14 本 = [分散割合の傾き(芝・ダ) 2, 位置取りの分散割合の傾き 2, 騎手交代の傾き b1−b4p 2, 持ち越し相関 b1−b4p 2,
+- 検定の族（事前登録は K = 32。標本数の理由で 29 に減った。下の「実行後の変更」を参照）: 距離への依存の変化 14 本 = [分散割合の傾き(芝・ダ) 2, 位置取りの分散割合の傾き 2, 騎手交代の傾き b1−b4p 2, 持ち越し相関 b1−b4p 2,
   有力騎手の 3 着内残差 b1−b4p 2, 勝ち残差 b1−b4p 2, 市場統制後の係数 b1−b4p 2]（BH 補正）と、有力騎手の回収率 > 100% の 18 本 = [(芝 b1,b2,b3,b4,b5 + ダ b1,b2,b3,b4p) 9 セル × 単勝・複勝]（Holm 補正）。
+- 実行後の変更（標本数の理由。効果の方向では決めていないが、最初の実行の結果は見たうえでの変更で、事前登録どおりではない。変更後に全部を再実行した）:
+  ダートの 2300 以上は約 4,000 走で検定にならないため、ダートの『長い側』は 1900 以上（b4p）にした（芝の b4p は 2300 以上のまま）。
+  両方の標本に 20 走以上ある騎手が 25 人未満の区分（1 年分の 2300 以上など）は、割合が 0 に退化するため『標本不足』として検定から外した。
+  持ち越しの最低騎乗数は 50 から 30 に下げた（長距離の騎手 × 年が少ないため）。1 年分（2025・2026・LOYO）の最小行数は 1,500 にした。
+  この結果、距離への依存の変化の族は 13 本（ダートの持ち越し 1 本が標本不足）、回収率 > 100% の族は 芝 5 + ダ 3 = 8 セル × 2 = 16 本、合わせて K = 29。
 - 期間: 発見 = 2020〜2024（モデル予測を使うものは 2022〜2024、有力騎手の順位が有効なのは 2021 年以降）、確認 = 2025 を 1 回、2026 は記述統計のみ（選択に使わない）。
   年をまたぐ再現（LOYO 相当）は、分散割合の傾きを年ごとに出して符号を見る。
 - 特徴量化の見込み: 発見期間でロジスティック回帰（オフセット = logit p）に『有力 × 距離帯』を足し、2025 の対数損失の差（レース単位ブートストラップ）を 1 回見る。モデルの学習はしない。
@@ -51,6 +56,7 @@ BAND_LABEL = {"b1": "1000〜1400", "b2": "1500〜1800", "b3": "1900〜2200", "b4
 SURF = {"芝": "芝", "ダ": "ダート"}
 Q_K = 50.0
 N_SPLIT = 5
+MIN_JOCKEYS = 25
 N_BOOT = 400
 RATE_PRIOR = 0.07
 
@@ -92,6 +98,7 @@ def build() -> None:
     d["band"] = band_of(d["distance"])
     d.loc[(d["surf"] == "ダ") & (d["band"] == "b5"), "band"] = "b4"        # ダートの 3000 以上は少数のため b4 に含める
     d["band_t"] = d["band"].replace({"b4": "b4p", "b5": "b4p"})
+    d.loc[(d["surf"] == "ダ") & (d["band"] == "b3"), "band_t"] = "b4p"      # ダートは 2300 以上が少数（約 4,000 走）のため、検定の『長い側』は 1900 以上にする
     # 成績の正規スコア
     nfin = d.groupby("race_id")["finish_position"].transform("size")
     d["z"] = norm.ppf((nfin - d["finish_position"] + 0.5) / nfin)
@@ -191,7 +198,7 @@ def ci(draws: np.ndarray) -> list[float]:
     return [float(np.quantile(draws, 0.025)), float(np.quantile(draws, 0.975))]
 
 
-def share_block(d: pd.DataFrame, resp: str, years: tuple[int, int], jcode: dict, cnt: np.ndarray, seed: int) -> dict:
+def share_block(d: pd.DataFrame, resp: str, years: tuple[int, int], jcode: dict, cnt: np.ndarray, seed: int, min_rows: int = 3000) -> dict:
     """芝・ダ × 距離帯の分散割合（点推定・区間）と、傾き・差の検定。"""
     out: dict = {"cells": {}, "tests": {}}
     nj = len(jcode)
@@ -202,7 +209,7 @@ def share_block(d: pd.DataFrame, resp: str, years: tuple[int, int], jcode: dict,
             col = "band_t" if bd == "b4p" else "band"
             m = (d["surf"] == sf) & (d[col] == bd) & d["year"].between(*years) & d[resp].notna()
             sub = d[m]
-            if len(sub) < 3000:
+            if len(sub) < min_rows:
                 continue
             y = sub[resp].to_numpy(float)
             y = y - y.mean() if resp != "z" else y
@@ -212,19 +219,23 @@ def share_block(d: pd.DataFrame, resp: str, years: tuple[int, int], jcode: dict,
             var_y = float(np.var(y))
             point = float(cov_boot(bA, bB, W, np.ones((1, nj)))[0] / var_y)
             dr = cov_boot(bA, bB, W, cnt) / var_y
-            draws[(sf, bd)] = dr
-            out["cells"][f"{sf}:{bd}"] = {"n": int(len(sub)), "horses": int(len(np.unique(h))), "share": point, "ci": ci(dr), "var_y": var_y}
+            nju = float((W > 0).sum(1).mean())
+            if nju >= MIN_JOCKEYS:      # 両方の標本に 20 走以上ある騎手が少ない区分は、割合を推定できないので検定に使わない
+                draws[(sf, bd)] = dr
+            out["cells"][f"{sf}:{bd}"] = {"n": int(len(sub)), "horses": int(len(np.unique(h))), "share": point, "ci": ci(dr), "var_y": var_y,
+                                          "n_jockeys": nju, "reliable": nju >= MIN_JOCKEYS}
     for sf in ("芝", "ダ"):
         ks = [(sf, b) for b in TEST_BANDS if (sf, b) in draws]
-        if len(ks) < 4:
+        if len(ks) < 3:
             continue
         M = np.stack([draws[k] for k in ks], 1)
         sl = slope(np.arange(len(ks), dtype=float), M)
         pt = np.array([out["cells"][f"{sf}:{b}"]["share"] for _, b in ks])
+        out["tests_cells"] = out.get("tests_cells", {}) | {sf: [b for _, b in ks]}
         st = float(slope(np.arange(len(ks), dtype=float), pt[None])[0])
         con = M[:, 0] - M[:, -1]
         out["tests"][f"{sf}:trend"] = {"stat": st, "ci": ci(sl), "p": pval2(sl)}
-        out["tests"][f"{sf}:b1-b4p"] = {"stat": float(pt[0] - pt[-1]), "ci": ci(con), "p": pval2(con)}
+        out["tests"][f"{sf}:b1-{ks[-1][1]}"] = {"stat": float(pt[0] - pt[-1]), "ci": ci(con), "p": pval2(con)}
     return out
 
 
@@ -239,14 +250,14 @@ def analyze() -> None:
 
     # (a) 分散分解: 成績・位置取りの変化。発見 2020〜2024、確認 2025、記述 2026、年ごと
     res["share_z"] = {"disc": share_block(d, "z", (2020, 2024), jcode, cnt, 100),
-                      "2025": share_block(d, "z", (2025, 2025), jcode, cnt, 200),
-                      "2026": share_block(d, "z", (2026, 2026), jcode, cnt, 300)}
+                      "2025": share_block(d, "z", (2025, 2025), jcode, cnt, 200, min_rows=1500),
+                      "2026": share_block(d, "z", (2026, 2026), jcode, cnt, 300, min_rows=1500)}
     res["share_pos"] = {"disc": share_block(d, "pos_chg_c", (2021, 2024), jcode, cnt, 400),
-                        "2025": share_block(d, "pos_chg_c", (2025, 2025), jcode, cnt, 500),
-                        "2026": share_block(d, "pos_chg_c", (2026, 2026), jcode, cnt, 600)}
+                        "2025": share_block(d, "pos_chg_c", (2025, 2025), jcode, cnt, 500, min_rows=1500),
+                        "2026": share_block(d, "pos_chg_c", (2026, 2026), jcode, cnt, 600, min_rows=1500)}
     loyo = {}
     for y in range(2020, 2025):
-        sb = share_block(d, "z", (y, y), jcode, cnt[:100], 700 + y)
+        sb = share_block(d, "z", (y, y), jcode, cnt[:100], 700 + y, min_rows=1500)
         loyo[str(y)] = {"cells": {k: v["share"] for k, v in sb["cells"].items()}, "trend": {k: v["stat"] for k, v in sb["tests"].items()}}
     res["share_z_loyo"] = loyo
     (OUT / "result.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
@@ -293,7 +304,7 @@ def analyze_rest(d: pd.DataFrame, jcode: dict, cnt: np.ndarray, res: dict) -> No
                 for bd in TEST_BANDS:
                     sub = d[(d["surf"] == sf) & (d["band_t"] == bd) & d[col].notna()]
                     g = sub.groupby(["jc", "year"])[col].agg(["mean", "size"]).reset_index()
-                    g = g[g["size"] >= 50]
+                    g = g[g["size"] >= 30]
                     rows = []
                     for y0, y1 in pl:
                         a = g[g["year"] == y0].set_index("jc"); b2 = g[g["year"] == y1].set_index("jc")
@@ -364,7 +375,7 @@ def analyze_rest(d: pd.DataFrame, jcode: dict, cnt: np.ndarray, res: dict) -> No
                     dr = race_draws(ee["race_id"].to_numpy(), ee[rc].to_numpy(float), 100.0 * np.ones(len(ee)), N_BOOT, 3 + zlib.crc32((key + bet).encode()) % 1000) * 100
                     p1 = float((dr <= 100).mean())
                     cell[f"roi_{bet}"] = {**r, "p_gt100": p1}
-                    if per == "disc":
+                    if per == "disc" and bd not in ("b4p",) if sf == "芝" else per == "disc" and bd in ("b1", "b2", "b4p"):
                         roi_p.append((f"{sf}:{bd}|{bet}", p1))
                     ne2 = ne[ne[rc].notna()]
                     cell[f"roi_{bet}_non"] = L.boot_roi(ne2["race_id"].to_numpy(), ne2[rc].to_numpy(float), n_boot=N_BOOT, seed=6)
