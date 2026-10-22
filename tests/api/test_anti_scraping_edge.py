@@ -6,7 +6,7 @@ import json
 
 from src.utils.anti_scraping import AntiScraping
 
-VPS = "160.251.250.252"
+VPS = "198.51.100.10"
 
 
 def make(tmp_path, **over):
@@ -44,7 +44,7 @@ def test_edge_header_missing_or_garbage_falls_back(tmp_path):
 
 
 def test_custom_header_name_and_cidr(tmp_path):
-    eng = make(tmp_path, edge_sources=["160.251.250.0/24"], edge_ip_header="X-Real-Client")
+    eng = make(tmp_path, edge_sources=["198.51.100.0/24"], edge_ip_header="X-Real-Client")
     assert eng.client_ip("127.0.0.1", {"cf-connecting-ip": VPS, "x-real-client": "203.0.113.20"}) == "203.0.113.20"
 
 

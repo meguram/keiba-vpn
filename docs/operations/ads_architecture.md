@@ -2,7 +2,7 @@
 
 作成: 2026-10-21。**設計書（調査＋判断材料）であり、実装・Cloudflare 設定・ホスト反映は含まない。** 法令・各社規約は公開ページの確認に基づく要約で、**断定せず「要確認」を明記**した。専門家（弁護士・広告ネットワークの窓口）の確認が要る点は第 4 節にまとめた。
 
-前提: ドメイン `megu-keiba.com`（Cloudflare に追加中）。公開経路は tcpexposer から Cloudflare Tunnel（`cloudflared` はホストで接続済み、`scripts/server/tunnel_cloudflared.sh`）＋ Cloudflare Access（メール OTP）へ移行中。スクレイピング対策は `docs/operations/anti_scraping.md`（ef25635）。現状の `megu-keiba.com` は別のサーバー（IP 160.251.250.252）を指しており、**ルートドメインに既存サイトがある可能性**がある。
+前提: ドメイン `megu-keiba.com`（Cloudflare に追加中）。公開経路は tcpexposer から Cloudflare Tunnel（`cloudflared` はホストで接続済み、`scripts/server/tunnel_cloudflared.sh`）＋ Cloudflare Access（メール OTP）へ移行中。スクレイピング対策は `docs/operations/anti_scraping.md`（ef25635）。現状の `megu-keiba.com` は別のサーバー（IP <VPS_IP>）を指しており、**ルートドメインに既存サイトがある可能性**がある。
 
 ---
 

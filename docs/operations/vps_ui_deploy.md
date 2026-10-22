@@ -1,6 +1,6 @@
 # ConoHa VPS に prod の UI を載せる手順書（stg → prod の昇格フロー）
 
-最終更新: 2026-10-21。対象: ConoHa VPS `160.251.250.252`（Ubuntu 22.04.3 LTS、メモリ 2GB / CPU 3Core / SSD 100GB、**SSH はポート 2254・鍵のみ・管理ユーザー `hogehoge`（sudo はパスワードが要る）**、36か月前払い・2028/05/18 まで）。ユーザーの回線は VPS への SSH でタイムアウトするため、**ホスト機（keiba-remote）を踏み台（ProxyJump）にする**。
+最終更新: 2026-10-21。対象: ConoHa VPS `<VPS_IP>`（Ubuntu 22.04.3 LTS、メモリ 2GB / CPU 3Core / SSD 100GB、**SSH はポート <SSH_PORT>・鍵のみ・管理ユーザー `<VPS_ADMIN_USER>`（sudo はパスワードが要る）**、36か月前払い・2028/05/18 まで）。ユーザーの回線は VPS への SSH でタイムアウトするため、**ホスト機（keiba-remote）を踏み台（ProxyJump）にする**。
 関連: `architecture_target.md`（常駐処理を GCP へ移す将来構成。別 fork が作成中。ここでは参照のみ）、`go_live.md`（一般公開）、`maintenance_deploy.md`（メンテ窓の自動反映）、`anti_scraping.md`、`slack_notifications.md`。
 スクリプト: `scripts/ops/vps/`（一覧は第 12 節）。**このリポジトリのコードは VPS へ自動では入らない。以下はユーザーが VPS 上・ホスト上で実行する手順**。
 
@@ -66,11 +66,11 @@ VPS の UI は、データを取る API（ホスト機の FastAPI/Flask）に届
 
 ### 3.2 クライアント IP とスクレイピング対策（壊れやすい点）
 
-VPS 経由の要求は、上流（ホスト機）から見ると**全員 VPS の IP（160.251.250.252）**に見える（Cloudflare が付ける `CF-Connecting-IP` は VPS の IP）。放置すると、IP 単位のレート制限が全ユーザーを 1 人として数えて巻き添えにする。
+VPS 経由の要求は、上流（ホスト機）から見ると**全員 VPS の IP（<VPS_IP>）**に見える（Cloudflare が付ける `CF-Connecting-IP` は VPS の IP）。放置すると、IP 単位のレート制限が全ユーザーを 1 人として数えて巻き添えにする。
 
 - nginx は、VPS 自身の入口で **実クライアント IP**（`real_ip_header CF-Connecting-IP`）を取り、レート制限（`limit_req`）をそこで行う。
 - 上流には `X-Keiba-Client-IP: <実 IP>` を付けて渡す。ホスト機の `anti_scraping` は、**`config/anti_scraping.json` の `edge_sources` に VPS の IP を入れたときだけ**、`cf-connecting-ip` が VPS の IP の要求に限って、このヘッダーを採用する（他の接続元が同じヘッダーを付けても無視。テスト: `tests/api/test_anti_scraping_edge.py`）。
-- 手順（ホスト機、反映は 30 秒以内）: `"edge_sources": ["160.251.250.252"]` を追記する。**入れるまでは従来どおり**（VPS の IP 1 件として数える）。まず `mode` を `detect` のまま、ログを見る。
+- 手順（ホスト機、反映は 30 秒以内）: `"edge_sources": ["<VPS_IP>"]` を追記する。**入れるまでは従来どおり**（VPS の IP 1 件として数える）。まず `mode` を `detect` のまま、ログを見る。
 
 ## 4. VPS の構成
 
@@ -80,10 +80,10 @@ VPS 経由の要求は、上流（ホスト機）から見ると**全員 VPS の
 |---|---|
 | OS | Ubuntu 22.04.3 LTS x86_64（OpenSSH 8.9）。**Docker・Node.js は入っていない** |
 | 資源 | メモリ 1,962MB（使用 646 / 利用可 1,159）、CPU 3、`/` は 99GB 中 21GB 使用。直前に再起動済み |
-| ユーザー | `hogehoge`（uid 1000、groups: sudo, ssh）。**sudo はパスワードが要る**（NOPASSWD なし）。root の SSH は不可、パスワード認証は無効（公開鍵のみ） |
-| 待受 | `0.0.0.0:2254`（SSH）、`:80`/`:443`（nginx）、`127.0.0.1:8000`（uvicorn） |
+| ユーザー | `<VPS_ADMIN_USER>`（uid 1000、groups: sudo, ssh）。**sudo はパスワードが要る**（NOPASSWD なし）。root の SSH は不可、パスワード認証は無効（公開鍵のみ） |
+| 待受 | `0.0.0.0:<SSH_PORT>`（SSH）、`:80`/`:443`（nginx）、`127.0.0.1:8000`（uvicorn） |
 | 稼働中 | `fail2ban`、`ntp`、**旧サイト**: `nginx`（`/etc/nginx/conf.d/myapp_nginx.conf`）、`uwsgi.service`（megu-ai.megu-keiba.com）、**`keiba-api.service`**（FastAPI/uvicorn 2 ワーカー、`/var/www/megu-keiba/keiba-vpn`）、`certbot.timer`（証明書は 10/17 期限切れ） |
-| ディスク | `/var/www` 6.3GB（このリポジトリの**古いコピー**、`myapp_*.conf/ini`、`scripts/`）、`/opt/venv` 2.0GB、`/home/hogehoge` 1.8GB |
+| ディスク | `/var/www` 6.3GB（このリポジトリの**古いコピー**、`myapp_*.conf/ini`、`scripts/`）、`/opt/venv` 2.0GB、`/home/<VPS_ADMIN_USER>` 1.8GB |
 
 つまり旧サイトは『このプロジェクトの初期版（FastAPI の Jinja 画面）』を VPS に置いたもの。ユーザーは**使わない**意向。旧 uvicorn（2 ワーカー）と uwsgi を止めれば、メモリは 1.5GB 以上空く（Next.js standalone に十分）。
 
@@ -94,12 +94,12 @@ OS は **Ubuntu 22.04**。手順は 24.04 でも同じ。
 1. **バックアップ**（4.2）。ConoHa の『イメージ保存』か、`backup_old_site.sh`（任意）で旧データを tar にして取り出す。
 2. 別のターミナルを**開いたまま**作業する（今のセッションは、設定を変えても切れない）。
 3. 新しい経路（`deploy` の鍵ログイン、Tunnel 経由の SSH）を**先に確認してから**、古い経路（公開ポート）を閉じる。
-4. 困ったら **ConoHa のコンソール（VNC）**で入る（`hogehoge` のローカルのパスワード、root のパスワードのどちらかが要る。パスワードマネージャに保管しておく。SSH でパスワード認証が無効でも、コンソールのログインには関係しない）。
+4. 困ったら **ConoHa のコンソール（VNC）**で入る（`<VPS_ADMIN_USER>` のローカルのパスワード、root のパスワードのどちらかが要る。パスワードマネージャに保管しておく。SSH でパスワード認証が無効でも、コンソールのログインには関係しない）。
 
 **接続の仕方**（回線の事情でホスト経由）:
 ```bash
 # 手元の PC（~/.ssh/config に ssh_config.example の rakuten-server を追記。ProxyJump keiba-remote が肝）
-ssh rakuten-server                       # = ssh -p 2254 -o ProxyJump=keiba-remote hogehoge@160.251.250.252
+ssh rakuten-server                       # = ssh -p <SSH_PORT> -o ProxyJump=keiba-remote <VPS_ADMIN_USER>@<VPS_IP>
 scp -r scripts/ops/vps rakuten-server:/tmp/vps      # スクリプトを VPS へ（ホスト経由）
 # 以降 VPS 上。sudo はパスワード入力が要る（実行のたびに聞かれる。自動化が必要な箇所は deploy の限定 sudoers だけ。4.5）
 sudo bash /tmp/vps/vps_01_base_setup.sh ...
@@ -108,15 +108,15 @@ sudo bash /tmp/vps/vps_01_base_setup.sh ...
 ### 4.2 棚卸しとバックアップ
 
 ```bash
-# VPS 上（hogehoge）。棚卸しは読み取り専用
+# VPS 上（<VPS_ADMIN_USER>）。棚卸しは読み取り専用
 sudo bash /tmp/vps/vps_00_inventory.sh        # 動いているサービス、待受ポート、cron、証明書の期限、SSH 設定を /root/vps_inventory_*.txt に
 
 # バックアップ（どちらか、または両方）
 # (1) ConoHa のコントロールパネルで『イメージ保存』（保存先の容量の課金を確認）
-# (2) 任意: 旧データを tar にして取り出す（/var/www/megu-keiba 6.3GB と /home/hogehoge 1.8GB。仮想環境・ログ・ssh 鍵は除く）
+# (2) 任意: 旧データを tar にして取り出す（/var/www/megu-keiba 6.3GB と /home/<VPS_ADMIN_USER> 1.8GB。仮想環境・ログ・ssh 鍵は除く）
 bash /tmp/vps/backup_old_site.sh              # → ~/old_site_backup/*.tar.gz と SHA256SUMS
 # 手元/ホストに取り出す（ホスト機 keiba-remote で。ホスト機には ~/.ssh/config の rakuten-server と同じ内容が要る）
-scp -P 2254 -i <鍵> hogehoge@160.251.250.252:old_site_backup/* /path/to/backup/
+scp -P <SSH_PORT> -i <鍵> <VPS_ADMIN_USER>@<VPS_IP>:old_site_backup/* /path/to/backup/
 sha256sum -c SHA256SUMS_*                      # 取り出した後に確認。確認前に VPS を削除・再構築しない
 ```
 
@@ -128,24 +128,24 @@ ssh keiba-remote 'ssh-keygen -t ed25519 -N "" -f ~/.ssh/keiba_vps_ed25519 -C kei
 #    表示された公開鍵（ssh-ed25519 AAAA… の 1 行。秘密鍵ではない）を、手元で /tmp/deploy.pub というファイルにして VPS に渡す
 scp /tmp/deploy.pub rakuten-server:/tmp/deploy.pub
 
-# ② VPS 上（hogehoge）。ホスト機のグローバル IP からだけ SSH を許可する（手元の PC もホスト機経由で入るので、これで足りる）
+# ② VPS 上（<VPS_ADMIN_USER>）。ホスト機のグローバル IP からだけ SSH を許可する（手元の PC もホスト機経由で入るので、これで足りる）
 HOST_IP=$(ssh keiba-remote 'curl -s -m 5 https://api.ipify.org')       # 例: 175.177.45.24（家庭回線だと変わることがある。変わったら 4.4 の B へ）
-sudo bash /tmp/vps/vps_01_base_setup.sh --ssh-mode ip:$HOST_IP --deploy-pubkey-file /tmp/deploy.pub --admin-user hogehoge
+sudo bash /tmp/vps/vps_01_base_setup.sh --ssh-mode ip:$HOST_IP --deploy-pubkey-file /tmp/deploy.pub --admin-user <VPS_ADMIN_USER>
 
-# ③ 別ターミナルで deploy の鍵ログインを確認（ホスト機から: ssh -p 2254 -i ~/.ssh/keiba_vps_ed25519 deploy@160.251.250.252 true）
-#    OK なら、パスワード認証・root ログインを無効にし、AllowUsers を deploy と hogehoge だけにする（実際は既に鍵のみ・root 不可。念押し）
-sudo bash /tmp/vps/vps_01_base_setup.sh --ssh-mode ip:$HOST_IP --deploy-pubkey-file /tmp/deploy.pub --admin-user hogehoge --lock-ssh
+# ③ 別ターミナルで deploy の鍵ログインを確認（ホスト機から: ssh -p <SSH_PORT> -i ~/.ssh/keiba_vps_ed25519 deploy@<VPS_IP> true）
+#    OK なら、パスワード認証・root ログインを無効にし、AllowUsers を deploy と <VPS_ADMIN_USER> だけにする（実際は既に鍵のみ・root 不可。念押し）
+sudo bash /tmp/vps/vps_01_base_setup.sh --ssh-mode ip:$HOST_IP --deploy-pubkey-file /tmp/deploy.pub --admin-user <VPS_ADMIN_USER> --lock-ssh
 ```
 
-行うこと: OS 更新、`deploy`（鍵ログイン専用）と `keibaui`（サービス実行用・ログイン不可）の作成、swap 2GB、`ufw`（受信既定拒否、SSH は指定 IP のみ）、`fail2ban`（2254）、自動セキュリティ更新。`hogehoge` はそのまま残り、管理（sudo）は従来どおり**パスワード入力**で行う。`deploy` が行えるのは第 4.5 節の 3 スクリプトだけ。
+行うこと: OS 更新、`deploy`（鍵ログイン専用）と `keibaui`（サービス実行用・ログイン不可）の作成、swap 2GB、`ufw`（受信既定拒否、SSH は指定 IP のみ）、`fail2ban`（<SSH_PORT>）、自動セキュリティ更新。`<VPS_ADMIN_USER>` はそのまま残り、管理（sudo）は従来どおり**パスワード入力**で行う。`deploy` が行えるのは第 4.5 節の 3 スクリプトだけ。
 
 ### 4.4 SSH の公開をどうするか（比較）
 
 | 案 | 内容 | 手間 | 安全性 |
 |---|---|---|---|
-| A | **ホスト機のグローバル IP だけ**に SSH(2254) を開ける（ufw と ConoHa のセキュリティグループ）。手元の PC もホスト機経由（ProxyJump）で入るので、許可するのはホスト機の IP 1 つで足りる | 小 | ホスト機の IP が変わると締め出される（コンソールで救出）。ホスト機が落ちると入れない |
-| **B 推奨（安定後）** | 受信を**全部閉じる**。SSH は **Cloudflare Tunnel 経由**（`ssh.megu-keiba.com` → `ssh://localhost:2254`、Access で保護）。`cloudflared access ssh` を手元に入れる | 中 | 公開ポートが 0 になる。ConoHa のコンソールが保険 |
-| C | 2254 を全体に公開（鍵のみ + fail2ban） | 最小 | 常時スキャンを受ける。初期設定の間だけ |
+| A | **ホスト機のグローバル IP だけ**に SSH(<SSH_PORT>) を開ける（ufw と ConoHa のセキュリティグループ）。手元の PC もホスト機経由（ProxyJump）で入るので、許可するのはホスト機の IP 1 つで足りる | 小 | ホスト機の IP が変わると締め出される（コンソールで救出）。ホスト機が落ちると入れない |
+| **B 推奨（安定後）** | 受信を**全部閉じる**。SSH は **Cloudflare Tunnel 経由**（`ssh.megu-keiba.com` → `ssh://localhost:<SSH_PORT>`、Access で保護）。`cloudflared access ssh` を手元に入れる | 中 | 公開ポートが 0 になる。ConoHa のコンソールが保険 |
+| C | <SSH_PORT> を全体に公開（鍵のみ + fail2ban） | 最小 | 常時スキャンを受ける。初期設定の間だけ |
 
 進め方: 最初は A（ホスト機の IP）。ホスト機の IP が変わりやすいなら B に移る（Tunnel 経由の SSH が確認できたら `--ssh-mode closed`）。`~/.ssh/config` は `ssh_config.example` を参照（`rakuten-server`=手元→ホスト経由、`keiba-vps`=ホスト機→VPS）。
 
@@ -159,7 +159,7 @@ bash vps_02_install_stack.sh        # Node.js 22（公式バイナリ + SHA256 �
 - **Next.js は systemd で常駐**（`keiba-ui.service`: 専用ユーザー、`Restart=always`、`MemoryHigh=700M / MemoryMax=900M`、`NODE_OPTIONS=--max-old-space-size=384`）。standalone 出力なので実行時メモリは小さい。
 - **nginx は 127.0.0.1:8080 のみ**で待ち受け、cloudflared の転送先になる。
 - **cloudflared は `cloudflared-prod.service`**。トークンは `/etc/cloudflared/prod.env`（600）。
-- **sudo にパスワードが要る前提**: `hogehoge` が VPS 上でスクリプトを実行するときは、そのつど sudo のパスワードを入力する。**自動化が必要なのは配布だけ**なので、`deploy` に `install_release.sh` / `rollback.sh` / `healthcheck.sh` の 3 つだけを NOPASSWD にする（`/etc/sudoers.d/keiba-deploy`、`vps_02` が作る。`/opt/keiba-ui/bin/` は root 所有で `deploy` は書き換えられない）。`hogehoge` 自体に NOPASSWD は付けない。
+- **sudo にパスワードが要る前提**: `<VPS_ADMIN_USER>` が VPS 上でスクリプトを実行するときは、そのつど sudo のパスワードを入力する。**自動化が必要なのは配布だけ**なので、`deploy` に `install_release.sh` / `rollback.sh` / `healthcheck.sh` の 3 つだけを NOPASSWD にする（`/etc/sudoers.d/keiba-deploy`、`vps_02` が作る。`/opt/keiba-ui/bin/` は root 所有で `deploy` は書き換えられない）。`<VPS_ADMIN_USER>` 自体に NOPASSWD は付けない。
 - Node.js は入っていないので、`vps_02` が公式バイナリ（SHA256 検証）を `/opt/node` に入れる。旧 `/opt/venv`（Python の仮想環境 2.0GB）は触らない（旧サービス停止後に不要なら削除を検討）。
 
 ### 4.6 旧サイトの停止
@@ -231,18 +231,18 @@ ssh keiba-vps 'sudo /opt/keiba-ui/bin/rollback.sh keiba-ui-xxxxxxxx-202610220300
 
 ## 8. ConoHa のセキュリティグループ（コントロールパネル側のファイアウォール）と ufw
 
-現状（実測）: セキュリティグループ **`SSH-2254`**（SSH ポート 2254）と **`IPv4v6-Web`**（80/443）が付いている。2254 も 80/443 もインターネットから到達できる。
+現状（実測）: セキュリティグループ **`SSH-<SSH_PORT>`**（SSH ポート <SSH_PORT>）と **`IPv4v6-Web`**（80/443）が付いている。<SSH_PORT> も 80/443 もインターネットから到達できる。
 
 | 段階 | ConoHa のセキュリティグループ | ufw（VPS 内） |
 |---|---|---|
-| 今 | SSH-2254 + IPv4v6-Web | （未設定） |
+| 今 | SSH-<SSH_PORT> + IPv4v6-Web | （未設定） |
 | 初期設定中 | そのまま | `--ssh-mode ip:<自分の IP>` または `keep`。80/443 は deny（旧サイトは外から見えなくなる） |
 | 新構成が動いた後 | **IPv4v6-Web を外す**（80/443 を閉じる。cloudflared は外向きなので不要） | そのまま |
-| Tunnel 経由の SSH が確認できた後 | **SSH-2254 を外す**（または自分の IP だけを許可する新しいグループに付け替える） | `--ssh-mode closed` |
+| Tunnel 経由の SSH が確認できた後 | **SSH-<SSH_PORT> を外す**（または自分の IP だけを許可する新しいグループに付け替える） | `--ssh-mode closed` |
 
 - 付け替えの場所: ConoHa のサーバー詳細画面の『ネットワーク』または『セキュリティグループ』の項目（パネルの版で名称が違う。見当たらない場合は画面を送ってもらえれば場所を案内する）。**グループを外す前に、新しい経路が使えることを確認する**（二重に閉じると、ConoHa のコンソール以外では入れなくなる）。
 - **二重設定の注意**: セキュリティグループで開けても ufw が拒否していれば届かない（逆も同じ）。切り分けは `ss -ltn`（待受）→ `ufw status verbose` → セキュリティグループの順。
-- **救出手順**: SSH で入れなくなったら、ConoHa のコンソール（VNC）で root のパスワードで入り、`ufw allow 2254/tcp` か `ufw disable` → SSH で入り直す。
+- **救出手順**: SSH で入れなくなったら、ConoHa のコンソール（VNC）で root のパスワードで入り、`ufw allow <SSH_PORT>/tcp` か `ufw disable` → SSH で入り直す。
 
 ## 9. ユーザー作業と Claude の代行
 
@@ -298,14 +298,14 @@ Cloudflare（ユーザー）:
 - [ ] `health.json` が毎日 ok、Slack に異常通知が出ていない。
 - [ ] `deploy.log` に失敗なし。メンテ窓（JST 03:00–04:00）に prod も『メンテナンス中』表示になり、終了後に復帰する。
 - [ ] anti_scraping のログ（`data/local/meta/anti_scraping/`）で、ユーザー単位の制限になっている（VPS の 1 IP に集約されていない）。`edge_sources` 設定後。
-- [ ] ConoHa の `IPv4v6-Web`（80/443）を外す。Tunnel 経由の SSH を確認して `SSH-2254` を外し、`--ssh-mode closed`。
+- [ ] ConoHa の `IPv4v6-Web`（80/443）を外す。Tunnel 経由の SSH を確認して `SSH-<SSH_PORT>` を外し、`--ssh-mode closed`。
 - [ ] 戻し方: ステップ 3 の戻し方。
 
 ## 11. ユーザーに決めてもらうこと
 
 1. **ホスト名**: prod=`app.megu-keiba.com`、stg=`stg.megu-keiba.com` でよいか（別の名前なら `vars.env` を変えるだけ）。
 2. **SSH の公開方法**: A（ホスト機の IP だけ許可）／ B（Tunnel 経由）／ C（公開、暫定）。ホスト機のグローバル IP は固定か（変わるなら B）。
-3. **ログイン用ユーザー**: 確認済み（`hogehoge`、鍵のみ、sudo はパスワード要）。VNC（ConoHa のコンソール）の救出用に、`hogehoge` か root のローカルのパスワードを保管しているか。
+3. **ログイン用ユーザー**: 確認済み（`<VPS_ADMIN_USER>`、鍵のみ、sudo はパスワード要）。VNC（ConoHa のコンソール）の救出用に、`<VPS_ADMIN_USER>` か root のローカルのパスワードを保管しているか。
 4. **VPS の OS**: Ubuntu 22.04 で確認済み（再構築しない場合は不要）。
 5. **自動更新**: VPS の自動更新（2028/05/18）は OFF のままでよいか（使い続けるなら期限前に判断）。
 6. **昇格の承認**: prod への昇格は常に手動か、承認フラグ付きの窓内自動昇格を許すか。
@@ -318,7 +318,7 @@ Cloudflare（ユーザー）:
 | `scripts/ops/vps/vars.env.example` | — | ホスト名・ポート・保持世代の変数 |
 | `vps_00_inventory.sh` | VPS（root） | 棚卸し（読み取り専用） |
 | `retire_old_site.sh` | VPS（root） | 旧サイト（keiba-api / uwsgi / nginx / certbot）の停止（`--apply --i-have-a-backup` で実行） |
-| `backup_old_site.sh` | VPS（hogehoge） | （任意）旧データを tar + SHA256 で退避 |
+| `backup_old_site.sh` | VPS（<VPS_ADMIN_USER>） | （任意）旧データを tar + SHA256 で退避 |
 | `vps_01_base_setup.sh` | VPS（root） | OS・ユーザー・swap・ufw・fail2ban・SSH |
 | `vps_02_install_stack.sh` | VPS（root） | Node.js・nginx・cloudflared・systemd・sudoers |
 | `set_secret.sh` | VPS | 秘密を標準入力から安全に書く（値を出さない・末尾改行を保証） |

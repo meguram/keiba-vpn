@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# push 前に秘密らしい文字列を検査する。有効化: git config core.hooksPath .githooks（各自の clone で 1 回）
+exec bash "$(git rev-parse --show-toplevel)/scripts/dev/secret_scan.sh" "origin/develop..HEAD"
