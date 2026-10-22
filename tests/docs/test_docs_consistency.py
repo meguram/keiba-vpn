@@ -18,6 +18,8 @@ DOCS = ROOT / "docs"
 # 実在しなくてよい参照（理由）
 ALLOW_MISSING = {
     "config/exotic_alpha.json": "validate_exotic_probabilities --write-config で生成される",
+    "config/pace_type_models.json": "学習済みの重みは公開リポジトリに置かない（各環境に配置。docs/operations/model_distribution.md）",
+    "config/expected_megu/model.json": "学習済みの重みは公開リポジトリに置かない（各環境に配置。docs/operations/model_distribution.md）",
     "scripts/cron/setup_baba_cron.sh": "削除済みである旨の記載",
     "scripts/cron/update_entity_stats_snapshot.sh": "決定記録 AREA-13 の当時の記述",
     "src/app.py": "別プロジェクト(daily_news)のファイルの記述",
