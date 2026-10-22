@@ -103,6 +103,26 @@ def load_blinker() -> pd.DataFrame:
     return b.drop_duplicates(["race_id", "horse_id"])[["race_id", "horse_id", "blk"]]
 
 
+def load_sire() -> pd.DataFrame | None:
+    """父・母父（血統表の第 1 世代・父側 / 第 2 世代・母の父）。学習表の sire 列は空なので血統表（ped_tbl）から horse_id で引く。"""
+    try:
+        import pyarrow.dataset as pads
+
+        base = ROOT / "data/local/features/horse/ped_tbl"
+        ds = pads.dataset(str(base), format="parquet")
+        cols = ["subject_horse_id", "ancestor_horse_id", "ancestor_name"]
+        t1 = ds.to_table(columns=cols, filter=(pads.field("generation") == 1) & (pads.field("path_fm") == "F")).to_pandas()
+        t2 = ds.to_table(columns=cols, filter=(pads.field("generation") == 2) & (pads.field("path_fm") == "MF")).to_pandas()
+        t1 = t1.rename(columns={"subject_horse_id": "horse_id", "ancestor_horse_id": "sire", "ancestor_name": "sire_name"})
+        t2 = t2.rename(columns={"subject_horse_id": "horse_id", "ancestor_horse_id": "dam_sire", "ancestor_name": "dam_sire_name"})
+        for t in (t1, t2):
+            t["horse_id"] = t["horse_id"].astype(str)
+        return t1.drop_duplicates("horse_id").merge(t2.drop_duplicates("horse_id"), on="horse_id", how="outer")
+    except Exception as exc:  # noqa: BLE001
+        print("sire の読み込みに失敗:", exc)
+        return None
+
+
 def parse_pass(s) -> tuple[float, float]:
     try:
         xs = [int(x) for x in str(s).replace("(", "").replace(")", "").replace("*", "").split("-") if x.strip().isdigit()]
@@ -273,15 +293,28 @@ def build() -> pd.DataFrame:
         m[f"{who[0]}_local_aff"] = np.where((m[f"{who[0]}v_one"] >= 40) & (m[f"{who[0]}a_one"] >= 200), m[f"{who[0]}v_top3f"] / m[f"{who[0]}v_one"] - m[f"{who[0]}a_top3f"] / m[f"{who[0]}a_one"], np.nan)
 
     # 種牡馬 × クッション値（芝）／季節
-    sire = None
-    mf = ROOT / "data/local/modeling/master_dataset_full_v2.parquet"
-    if mf.exists():
-        sd = pd.read_parquet(mf, columns=["race_id", "horse_id", "sire"])
-        sd["race_id"] = sd["race_id"].astype(str)
-        sd["horse_id"] = sd["horse_id"].astype(str)
-        sire = sd.drop_duplicates(["race_id", "horse_id"])
-        m = m.merge(sire, on=["race_id", "horse_id"], how="left")
-        m["sire"] = m["sire"].replace("", np.nan)
+    sire = load_sire()
+    if sire is not None:
+        m = m.merge(sire, on="horse_id", how="left")
+    ref = m[m["year"] <= 2021]
+    if "sire" in m.columns:
+        top_s = ref["sire"].value_counts().head(15).index.tolist()
+        top_ds = ref["dam_sire"].value_counts().head(10).index.tolist()
+        m["sire_rank"] = m["sire"].map({k: i for i, k in enumerate(top_s)})
+        m["damsire_rank"] = m["dam_sire"].map({k: i for i, k in enumerate(top_ds)})
+        nm = m.dropna(subset=["sire"]).drop_duplicates("sire").set_index("sire")["sire_name"]
+        nd = m.dropna(subset=["dam_sire"]).drop_duplicates("dam_sire").set_index("dam_sire")["dam_sire_name"]
+        meta_names = {"sire_top15": [str(nm.get(k, k)) for k in top_s], "damsire_top10": [str(nd.get(k, k)) for k in top_ds]}
+    else:
+        meta_names = {}
+    top_j = ref.groupby("jockey_id")["win"].sum().sort_values(ascending=False).head(12).index.tolist()
+    jm = {k: i for i, k in enumerate(top_j)}
+    m["jockey_rank"] = m["jockey_id"].astype(str).map({str(k): i for k, i in jm.items()})
+    m["prev_jockey_rank"] = m["prev_jockey_id"].astype(str).map({str(k): i for k, i in jm.items()})
+    meta_names["jockey_top12_ids"] = [str(k) for k in top_j]
+    chg = m["chg_jockey"] == 1
+    m["jchg_cls"] = np.select([chg & m["prev_jockey_rank"].isna() & m["jockey_rank"].notna(), chg & m["prev_jockey_rank"].notna() & m["jockey_rank"].isna(),
+                               chg & m["prev_jockey_rank"].notna() & m["jockey_rank"].notna(), chg], ["up", "down", "top_to_top", "non_to_non"], "none")
     if "sire" in m.columns and m["sire"].notna().mean() > 0.5:
         ss = m[m["sire"].notna()][["sire", "date", "one", "top3f"]].copy()
         m = asof_merge(m, ss, ["sire"], ["one", "top3f"], "sa_")
@@ -299,10 +332,11 @@ def build() -> pd.DataFrame:
     m = m.sort_values(["date", "race_id", "horse_number"], kind="stable").reset_index(drop=True)
     m = add_pincer(m)
     m.attrs["cuts"] = cuts
+    m.attrs["names"] = meta_names
     m.attrs["sire_coverage"] = sire_cov
     OUT.mkdir(parents=True, exist_ok=True)
     m.to_parquet(OUT / "mining.parquet", index=False)
-    (OUT / "mining_meta.json").write_text(json.dumps({"cuts": cuts, "sire_coverage": sire_cov, "rows": int(len(m)), "cols": list(m.columns)}, ensure_ascii=False, indent=1), encoding="utf-8")
+    (OUT / "mining_meta.json").write_text(json.dumps({"cuts": cuts, "names": meta_names, "sire_coverage": sire_cov, "rows": int(len(m)), "cols": list(m.columns)}, ensure_ascii=False, indent=1), encoding="utf-8")
     return m
 
 

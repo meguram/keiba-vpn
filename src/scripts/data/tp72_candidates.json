@@ -1,8 +1,8 @@
 {
- "n_candidates": 551,
+ "n_candidates": 881,
  "tests_per_candidate": 2,
- "n_tests": 1102,
- "design": "第1段: 型ごとに勝ち・複勝の2アウトカムを片側検定（min(z_m, z_k) の BH）。発見2022-24、確認2025を1回、2026は記述のみ。",
+ "n_tests": 1762,
+ "design": "第1段: 型ごとに勝ち・複勝の2アウトカムを片側検定（min(z_m, z_k) の BH）。発見2022-24、確認2025を1回、2026は記述のみ。BH は F1〜F20（ブロック1）と F21〜F23（血統×騎手。ブロック2）で別々に行い、全体の検定数も併記する。",
  "part_c": {
   "design": "穴馬（人気9番以下 / 単勝12倍以上 / 20倍以上）の好走（3着以内 / 1着）の共通要素。記述子の各水準を、同年・同オッズ帯の平均的な好走率との差で検定（レース単位クラスタ、BH）。6仕様。",
   "universes": [
@@ -14,14 +14,14 @@
    "top3",
    "win"
   ],
-  "descriptor_file_sha256_16": "4c510d61471a6859"
+  "descriptor_file_sha256_16": "7e847a0c67661c2b"
  },
  "stage2": {
   "design": "記述子のペア(i,j)の交互作用を、モデル残差に対して LOYO（2022-24）の外側年で測る。目的変数: 勝ち残差 / 複勝残差 / 穴馬(odds>=12)の複勝残差。BH。",
-  "n_descriptors": 39,
-  "n_pairs_max": 741,
+  "n_descriptors": 43,
+  "n_pairs_max": 903,
   "targets": 3,
-  "descriptor_file_sha256_16": "4c510d61471a6859"
+  "descriptor_file_sha256_16": "7e847a0c67661c2b"
  },
  "candidates": [
   {
@@ -2778,6 +2778,1656 @@
    "family": "F20_draw_style",
    "name": "field_small_outer_back_dirt",
    "expr": "(fs<=10) & (outer==1) & (style4=='sashi'|style4=='oikomi') & (is_turf==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey1",
+   "expr": "(sire_rank==0) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey2",
+   "expr": "(sire_rank==0) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey3",
+   "expr": "(sire_rank==0) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey4",
+   "expr": "(sire_rank==0) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey5",
+   "expr": "(sire_rank==0) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey6",
+   "expr": "(sire_rank==0) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey7",
+   "expr": "(sire_rank==0) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey8",
+   "expr": "(sire_rank==0) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey9",
+   "expr": "(sire_rank==0) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey10",
+   "expr": "(sire_rank==0) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey11",
+   "expr": "(sire_rank==0) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey12",
+   "expr": "(sire_rank==0) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey1",
+   "expr": "(sire_rank==1) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey2",
+   "expr": "(sire_rank==1) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey3",
+   "expr": "(sire_rank==1) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey4",
+   "expr": "(sire_rank==1) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey5",
+   "expr": "(sire_rank==1) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey6",
+   "expr": "(sire_rank==1) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey7",
+   "expr": "(sire_rank==1) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey8",
+   "expr": "(sire_rank==1) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey9",
+   "expr": "(sire_rank==1) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey10",
+   "expr": "(sire_rank==1) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey11",
+   "expr": "(sire_rank==1) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey12",
+   "expr": "(sire_rank==1) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey1",
+   "expr": "(sire_rank==2) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey2",
+   "expr": "(sire_rank==2) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey3",
+   "expr": "(sire_rank==2) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey4",
+   "expr": "(sire_rank==2) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey5",
+   "expr": "(sire_rank==2) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey6",
+   "expr": "(sire_rank==2) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey7",
+   "expr": "(sire_rank==2) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey8",
+   "expr": "(sire_rank==2) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey9",
+   "expr": "(sire_rank==2) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey10",
+   "expr": "(sire_rank==2) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey11",
+   "expr": "(sire_rank==2) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey12",
+   "expr": "(sire_rank==2) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey1",
+   "expr": "(sire_rank==3) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey2",
+   "expr": "(sire_rank==3) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey3",
+   "expr": "(sire_rank==3) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey4",
+   "expr": "(sire_rank==3) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey5",
+   "expr": "(sire_rank==3) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey6",
+   "expr": "(sire_rank==3) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey7",
+   "expr": "(sire_rank==3) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey8",
+   "expr": "(sire_rank==3) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey9",
+   "expr": "(sire_rank==3) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey10",
+   "expr": "(sire_rank==3) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey11",
+   "expr": "(sire_rank==3) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey12",
+   "expr": "(sire_rank==3) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey1",
+   "expr": "(sire_rank==4) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey2",
+   "expr": "(sire_rank==4) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey3",
+   "expr": "(sire_rank==4) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey4",
+   "expr": "(sire_rank==4) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey5",
+   "expr": "(sire_rank==4) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey6",
+   "expr": "(sire_rank==4) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey7",
+   "expr": "(sire_rank==4) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey8",
+   "expr": "(sire_rank==4) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey9",
+   "expr": "(sire_rank==4) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey10",
+   "expr": "(sire_rank==4) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey11",
+   "expr": "(sire_rank==4) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey12",
+   "expr": "(sire_rank==4) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey1",
+   "expr": "(sire_rank==5) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey2",
+   "expr": "(sire_rank==5) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey3",
+   "expr": "(sire_rank==5) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey4",
+   "expr": "(sire_rank==5) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey5",
+   "expr": "(sire_rank==5) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey6",
+   "expr": "(sire_rank==5) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey7",
+   "expr": "(sire_rank==5) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey8",
+   "expr": "(sire_rank==5) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey9",
+   "expr": "(sire_rank==5) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey10",
+   "expr": "(sire_rank==5) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey11",
+   "expr": "(sire_rank==5) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey12",
+   "expr": "(sire_rank==5) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey1",
+   "expr": "(sire_rank==6) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey2",
+   "expr": "(sire_rank==6) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey3",
+   "expr": "(sire_rank==6) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey4",
+   "expr": "(sire_rank==6) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey5",
+   "expr": "(sire_rank==6) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey6",
+   "expr": "(sire_rank==6) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey7",
+   "expr": "(sire_rank==6) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey8",
+   "expr": "(sire_rank==6) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey9",
+   "expr": "(sire_rank==6) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey10",
+   "expr": "(sire_rank==6) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey11",
+   "expr": "(sire_rank==6) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey12",
+   "expr": "(sire_rank==6) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey1",
+   "expr": "(sire_rank==7) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey2",
+   "expr": "(sire_rank==7) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey3",
+   "expr": "(sire_rank==7) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey4",
+   "expr": "(sire_rank==7) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey5",
+   "expr": "(sire_rank==7) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey6",
+   "expr": "(sire_rank==7) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey7",
+   "expr": "(sire_rank==7) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey8",
+   "expr": "(sire_rank==7) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey9",
+   "expr": "(sire_rank==7) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey10",
+   "expr": "(sire_rank==7) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey11",
+   "expr": "(sire_rank==7) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey12",
+   "expr": "(sire_rank==7) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey1",
+   "expr": "(sire_rank==8) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey2",
+   "expr": "(sire_rank==8) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey3",
+   "expr": "(sire_rank==8) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey4",
+   "expr": "(sire_rank==8) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey5",
+   "expr": "(sire_rank==8) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey6",
+   "expr": "(sire_rank==8) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey7",
+   "expr": "(sire_rank==8) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey8",
+   "expr": "(sire_rank==8) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey9",
+   "expr": "(sire_rank==8) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey10",
+   "expr": "(sire_rank==8) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey11",
+   "expr": "(sire_rank==8) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey12",
+   "expr": "(sire_rank==8) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey1",
+   "expr": "(sire_rank==9) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey2",
+   "expr": "(sire_rank==9) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey3",
+   "expr": "(sire_rank==9) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey4",
+   "expr": "(sire_rank==9) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey5",
+   "expr": "(sire_rank==9) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey6",
+   "expr": "(sire_rank==9) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey7",
+   "expr": "(sire_rank==9) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey8",
+   "expr": "(sire_rank==9) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey9",
+   "expr": "(sire_rank==9) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey10",
+   "expr": "(sire_rank==9) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey11",
+   "expr": "(sire_rank==9) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey12",
+   "expr": "(sire_rank==9) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey1",
+   "expr": "(sire_rank==10) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey2",
+   "expr": "(sire_rank==10) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey3",
+   "expr": "(sire_rank==10) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey4",
+   "expr": "(sire_rank==10) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey5",
+   "expr": "(sire_rank==10) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey6",
+   "expr": "(sire_rank==10) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey7",
+   "expr": "(sire_rank==10) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey8",
+   "expr": "(sire_rank==10) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey9",
+   "expr": "(sire_rank==10) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey10",
+   "expr": "(sire_rank==10) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey11",
+   "expr": "(sire_rank==10) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey12",
+   "expr": "(sire_rank==10) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey1",
+   "expr": "(sire_rank==11) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey2",
+   "expr": "(sire_rank==11) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey3",
+   "expr": "(sire_rank==11) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey4",
+   "expr": "(sire_rank==11) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey5",
+   "expr": "(sire_rank==11) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey6",
+   "expr": "(sire_rank==11) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey7",
+   "expr": "(sire_rank==11) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey8",
+   "expr": "(sire_rank==11) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey9",
+   "expr": "(sire_rank==11) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey10",
+   "expr": "(sire_rank==11) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey11",
+   "expr": "(sire_rank==11) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey12",
+   "expr": "(sire_rank==11) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey1",
+   "expr": "(sire_rank==12) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey2",
+   "expr": "(sire_rank==12) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey3",
+   "expr": "(sire_rank==12) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey4",
+   "expr": "(sire_rank==12) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey5",
+   "expr": "(sire_rank==12) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey6",
+   "expr": "(sire_rank==12) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey7",
+   "expr": "(sire_rank==12) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey8",
+   "expr": "(sire_rank==12) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey9",
+   "expr": "(sire_rank==12) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey10",
+   "expr": "(sire_rank==12) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey11",
+   "expr": "(sire_rank==12) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey12",
+   "expr": "(sire_rank==12) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey1",
+   "expr": "(sire_rank==13) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey2",
+   "expr": "(sire_rank==13) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey3",
+   "expr": "(sire_rank==13) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey4",
+   "expr": "(sire_rank==13) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey5",
+   "expr": "(sire_rank==13) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey6",
+   "expr": "(sire_rank==13) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey7",
+   "expr": "(sire_rank==13) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey8",
+   "expr": "(sire_rank==13) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey9",
+   "expr": "(sire_rank==13) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey10",
+   "expr": "(sire_rank==13) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey11",
+   "expr": "(sire_rank==13) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey12",
+   "expr": "(sire_rank==13) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey1",
+   "expr": "(sire_rank==14) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey2",
+   "expr": "(sire_rank==14) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey3",
+   "expr": "(sire_rank==14) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey4",
+   "expr": "(sire_rank==14) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey5",
+   "expr": "(sire_rank==14) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey6",
+   "expr": "(sire_rank==14) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey7",
+   "expr": "(sire_rank==14) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey8",
+   "expr": "(sire_rank==14) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey9",
+   "expr": "(sire_rank==14) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey10",
+   "expr": "(sire_rank==14) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey11",
+   "expr": "(sire_rank==14) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey12",
+   "expr": "(sire_rank==14) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey1",
+   "expr": "(damsire_rank==0) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey2",
+   "expr": "(damsire_rank==0) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey3",
+   "expr": "(damsire_rank==0) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey4",
+   "expr": "(damsire_rank==0) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey5",
+   "expr": "(damsire_rank==0) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey6",
+   "expr": "(damsire_rank==0) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey7",
+   "expr": "(damsire_rank==0) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey8",
+   "expr": "(damsire_rank==0) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey9",
+   "expr": "(damsire_rank==0) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey10",
+   "expr": "(damsire_rank==0) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey11",
+   "expr": "(damsire_rank==0) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey12",
+   "expr": "(damsire_rank==0) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey1",
+   "expr": "(damsire_rank==1) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey2",
+   "expr": "(damsire_rank==1) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey3",
+   "expr": "(damsire_rank==1) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey4",
+   "expr": "(damsire_rank==1) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey5",
+   "expr": "(damsire_rank==1) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey6",
+   "expr": "(damsire_rank==1) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey7",
+   "expr": "(damsire_rank==1) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey8",
+   "expr": "(damsire_rank==1) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey9",
+   "expr": "(damsire_rank==1) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey10",
+   "expr": "(damsire_rank==1) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey11",
+   "expr": "(damsire_rank==1) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey12",
+   "expr": "(damsire_rank==1) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey1",
+   "expr": "(damsire_rank==2) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey2",
+   "expr": "(damsire_rank==2) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey3",
+   "expr": "(damsire_rank==2) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey4",
+   "expr": "(damsire_rank==2) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey5",
+   "expr": "(damsire_rank==2) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey6",
+   "expr": "(damsire_rank==2) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey7",
+   "expr": "(damsire_rank==2) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey8",
+   "expr": "(damsire_rank==2) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey9",
+   "expr": "(damsire_rank==2) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey10",
+   "expr": "(damsire_rank==2) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey11",
+   "expr": "(damsire_rank==2) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey12",
+   "expr": "(damsire_rank==2) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey1",
+   "expr": "(damsire_rank==3) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey2",
+   "expr": "(damsire_rank==3) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey3",
+   "expr": "(damsire_rank==3) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey4",
+   "expr": "(damsire_rank==3) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey5",
+   "expr": "(damsire_rank==3) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey6",
+   "expr": "(damsire_rank==3) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey7",
+   "expr": "(damsire_rank==3) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey8",
+   "expr": "(damsire_rank==3) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey9",
+   "expr": "(damsire_rank==3) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey10",
+   "expr": "(damsire_rank==3) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey11",
+   "expr": "(damsire_rank==3) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey12",
+   "expr": "(damsire_rank==3) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey1",
+   "expr": "(damsire_rank==4) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey2",
+   "expr": "(damsire_rank==4) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey3",
+   "expr": "(damsire_rank==4) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey4",
+   "expr": "(damsire_rank==4) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey5",
+   "expr": "(damsire_rank==4) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey6",
+   "expr": "(damsire_rank==4) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey7",
+   "expr": "(damsire_rank==4) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey8",
+   "expr": "(damsire_rank==4) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey9",
+   "expr": "(damsire_rank==4) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey10",
+   "expr": "(damsire_rank==4) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey11",
+   "expr": "(damsire_rank==4) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey12",
+   "expr": "(damsire_rank==4) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey1",
+   "expr": "(damsire_rank==5) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey2",
+   "expr": "(damsire_rank==5) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey3",
+   "expr": "(damsire_rank==5) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey4",
+   "expr": "(damsire_rank==5) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey5",
+   "expr": "(damsire_rank==5) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey6",
+   "expr": "(damsire_rank==5) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey7",
+   "expr": "(damsire_rank==5) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey8",
+   "expr": "(damsire_rank==5) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey9",
+   "expr": "(damsire_rank==5) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey10",
+   "expr": "(damsire_rank==5) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey11",
+   "expr": "(damsire_rank==5) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey12",
+   "expr": "(damsire_rank==5) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey1",
+   "expr": "(damsire_rank==6) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey2",
+   "expr": "(damsire_rank==6) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey3",
+   "expr": "(damsire_rank==6) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey4",
+   "expr": "(damsire_rank==6) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey5",
+   "expr": "(damsire_rank==6) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey6",
+   "expr": "(damsire_rank==6) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey7",
+   "expr": "(damsire_rank==6) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey8",
+   "expr": "(damsire_rank==6) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey9",
+   "expr": "(damsire_rank==6) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey10",
+   "expr": "(damsire_rank==6) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey11",
+   "expr": "(damsire_rank==6) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey12",
+   "expr": "(damsire_rank==6) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey1",
+   "expr": "(damsire_rank==7) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey2",
+   "expr": "(damsire_rank==7) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey3",
+   "expr": "(damsire_rank==7) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey4",
+   "expr": "(damsire_rank==7) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey5",
+   "expr": "(damsire_rank==7) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey6",
+   "expr": "(damsire_rank==7) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey7",
+   "expr": "(damsire_rank==7) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey8",
+   "expr": "(damsire_rank==7) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey9",
+   "expr": "(damsire_rank==7) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey10",
+   "expr": "(damsire_rank==7) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey11",
+   "expr": "(damsire_rank==7) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey12",
+   "expr": "(damsire_rank==7) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey1",
+   "expr": "(damsire_rank==8) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey2",
+   "expr": "(damsire_rank==8) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey3",
+   "expr": "(damsire_rank==8) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey4",
+   "expr": "(damsire_rank==8) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey5",
+   "expr": "(damsire_rank==8) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey6",
+   "expr": "(damsire_rank==8) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey7",
+   "expr": "(damsire_rank==8) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey8",
+   "expr": "(damsire_rank==8) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey9",
+   "expr": "(damsire_rank==8) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey10",
+   "expr": "(damsire_rank==8) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey11",
+   "expr": "(damsire_rank==8) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey12",
+   "expr": "(damsire_rank==8) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey1",
+   "expr": "(damsire_rank==9) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey2",
+   "expr": "(damsire_rank==9) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey3",
+   "expr": "(damsire_rank==9) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey4",
+   "expr": "(damsire_rank==9) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey5",
+   "expr": "(damsire_rank==9) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey6",
+   "expr": "(damsire_rank==9) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey7",
+   "expr": "(damsire_rank==9) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey8",
+   "expr": "(damsire_rank==9) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey9",
+   "expr": "(damsire_rank==9) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey10",
+   "expr": "(damsire_rank==9) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey11",
+   "expr": "(damsire_rank==9) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey12",
+   "expr": "(damsire_rank==9) & (jockey_rank==11)"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire1_jockey_up",
+   "expr": "(sire_rank==0) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire1_jockey_down",
+   "expr": "(sire_rank==0) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire2_jockey_up",
+   "expr": "(sire_rank==1) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire2_jockey_down",
+   "expr": "(sire_rank==1) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire3_jockey_up",
+   "expr": "(sire_rank==2) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire3_jockey_down",
+   "expr": "(sire_rank==2) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire4_jockey_up",
+   "expr": "(sire_rank==3) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire4_jockey_down",
+   "expr": "(sire_rank==3) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire5_jockey_up",
+   "expr": "(sire_rank==4) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire5_jockey_down",
+   "expr": "(sire_rank==4) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire6_jockey_up",
+   "expr": "(sire_rank==5) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire6_jockey_down",
+   "expr": "(sire_rank==5) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire7_jockey_up",
+   "expr": "(sire_rank==6) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire7_jockey_down",
+   "expr": "(sire_rank==6) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire8_jockey_up",
+   "expr": "(sire_rank==7) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire8_jockey_down",
+   "expr": "(sire_rank==7) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire9_jockey_up",
+   "expr": "(sire_rank==8) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire9_jockey_down",
+   "expr": "(sire_rank==8) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire10_jockey_up",
+   "expr": "(sire_rank==9) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire10_jockey_down",
+   "expr": "(sire_rank==9) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire11_jockey_up",
+   "expr": "(sire_rank==10) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire11_jockey_down",
+   "expr": "(sire_rank==10) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire12_jockey_up",
+   "expr": "(sire_rank==11) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire12_jockey_down",
+   "expr": "(sire_rank==11) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire13_jockey_up",
+   "expr": "(sire_rank==12) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire13_jockey_down",
+   "expr": "(sire_rank==12) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire14_jockey_up",
+   "expr": "(sire_rank==13) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire14_jockey_down",
+   "expr": "(sire_rank==13) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire15_jockey_up",
+   "expr": "(sire_rank==14) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire15_jockey_down",
+   "expr": "(sire_rank==14) & (jchg_cls=='down')"
   }
  ]
 }

@@ -230,6 +230,16 @@ def build() -> list[dict]:
             for sg, se in (("front", "style4=='nige'|style4=='senko'"), ("back", "style4=='sashi'|style4=='oikomi'")):
                 for sf, ss in (("turf", "is_turf==1"), ("dirt", "is_turf==0")):
                     add("F20_draw_style", f"field_{fn}_{dn}_{sg}_{sf}", _and(fe, dr[dn], se, ss))
+    # F21 血統（種牡馬・母父）× 騎手（上位は 2020〜2021 年の出走・勝利数で固定: 種牡馬 15 / 母父 10 / 騎手 12）。階層縮約は第 2 段のペア走査で行い、ここは個別セルの素の検定。
+    for i in range(15):
+        for j in range(12):
+            add("F21_sire_jockey", f"sire{i + 1}_jockey{j + 1}", _and(f"sire_rank=={i}", f"jockey_rank=={j}"))
+    for i in range(10):
+        for j in range(12):
+            add("F22_damsire_jockey", f"damsire{i + 1}_jockey{j + 1}", _and(f"damsire_rank=={i}", f"jockey_rank=={j}"))
+    for i in range(15):
+        add("F23_sire_jockey_chg", f"sire{i + 1}_jockey_up", _and(f"sire_rank=={i}", "jchg_cls=='up'"))
+        add("F23_sire_jockey_chg", f"sire{i + 1}_jockey_down", _and(f"sire_rank=={i}", "jchg_cls=='down'"))
     seen = set()
     for x in c:
         assert x["name"] not in seen, x["name"]
@@ -244,11 +254,11 @@ if __name__ == "__main__":
     desc_hash = hashlib.sha256(Path(__file__).with_name("tp72_desc.py").read_bytes()).hexdigest()[:16]
     reg = {
         "n_candidates": len(cs), "tests_per_candidate": 2, "n_tests": 2 * len(cs),
-        "design": "第1段: 型ごとに勝ち・複勝の2アウトカムを片側検定（min(z_m, z_k) の BH）。発見2022-24、確認2025を1回、2026は記述のみ。",
+        "design": "第1段: 型ごとに勝ち・複勝の2アウトカムを片側検定（min(z_m, z_k) の BH）。発見2022-24、確認2025を1回、2026は記述のみ。BH は F1〜F20（ブロック1）と F21〜F23（血統×騎手。ブロック2）で別々に行い、全体の検定数も併記する。",
         "part_c": {"design": "穴馬（人気9番以下 / 単勝12倍以上 / 20倍以上）の好走（3着以内 / 1着）の共通要素。記述子の各水準を、同年・同オッズ帯の平均的な好走率との差で検定（レース単位クラスタ、BH）。6仕様。",
                    "universes": ["pop>=9", "odds>=12", "odds>=20"], "outcomes": ["top3", "win"], "descriptor_file_sha256_16": desc_hash},
         "stage2": {"design": "記述子のペア(i,j)の交互作用を、モデル残差に対して LOYO（2022-24）の外側年で測る。目的変数: 勝ち残差 / 複勝残差 / 穴馬(odds>=12)の複勝残差。BH。",
-                   "n_descriptors": 39, "n_pairs_max": 741, "targets": 3, "descriptor_file_sha256_16": desc_hash},
+                   "n_descriptors": 43, "n_pairs_max": 903, "targets": 3, "descriptor_file_sha256_16": desc_hash},
         "candidates": cs}
     OUT.write_text(json.dumps(reg, ensure_ascii=False, indent=1), encoding="utf-8")
     from collections import Counter

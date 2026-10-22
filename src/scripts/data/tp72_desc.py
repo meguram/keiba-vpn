@@ -76,7 +76,11 @@ def descriptors(d: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, list[str]]]:
     pf = d["pref_hard"]
     put("cush_pref", np.where(pf.isna(), -1, np.where(pf >= 0.15, 1, np.where(pf <= -0.15, 2, 0))), ["馬場好み不明確", "硬い馬場が得意", "柔らかい馬場が得意"])
     put("g1_week", np.where(d["is_g1_day"] == 1, 1, np.where(d["d_before_g1"] == 1, 2, np.where(d["d_after_g1"] == 1, 3, 0))), ["通常週", "G1開催日", "G1の前週", "G1の翌週"])
+    put("sire_group", np.where(d["sire_rank"].notna(), d["sire_rank"].fillna(0), np.where(d["sire"].notna(), 15, -1)).astype(int), [f"種牡馬上位{i + 1}" for i in range(15)] + ["その他の種牡馬"])
+    put("damsire_group", np.where(d["damsire_rank"].notna(), d["damsire_rank"].fillna(0), np.where(d["dam_sire"].notna(), 10, -1)).astype(int), [f"母父上位{i + 1}" for i in range(10)] + ["その他の母父"])
+    put("jockey_top", np.where(d["jockey_rank"].notna(), d["jockey_rank"].fillna(0), 12).astype(int), [f"有力騎手{i + 1}" for i in range(12)] + ["その他の騎手"])
+    put("jockey_cls_chg", _map(d["jchg_cls"], {"none": 0, "up": 1, "down": 2, "top_to_top": 3, "non_to_non": 4}), ["乗り替わりなし/不明", "格上げ(非有力→有力)", "格下げ(有力→非有力)", "有力→有力", "非有力→非有力"])
     return pd.DataFrame(D, index=d.index), L
 
 
-N_DESCRIPTORS_EXPECTED = 39
+N_DESCRIPTORS_EXPECTED = 43
