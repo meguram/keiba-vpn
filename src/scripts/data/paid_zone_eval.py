@@ -265,6 +265,67 @@ def _odds_extra(d: pd.DataFrame, pg: dict, pr: dict) -> dict:
     return {"trio_check": trio_check, "single_fit": single}
 
 
+def _prod_single_frames() -> pd.DataFrame:
+    fs = sorted(OUT.glob("predprod_*.parquet"))
+    return pd.concat([pd.read_parquet(f) for f in fs], ignore_index=True) if fs else pd.DataFrame(columns=["race_id", "horse_number", "pw", "pmin", "pmax"])
+
+
+def cmd_predprod(a) -> None:
+    """本番と同じ推論経路（final_odds_service.build_final_odds_response。特徴量は build_race_features）で 2025 年の想定単勝・複勝を作る。
+    評価用キャッシュの特徴量（eval_2025）とは作り方が違い、水準もずれるため、較正としきい値は本番の経路で当て直す。キャッシュには保存しない。"""
+    from src.pipeline.inference.final_odds_service import build_final_odds_response
+    from src.scraper.storage import HybridStorage
+
+    _, d, pairs, _ = load_inputs()
+    ids = sorted(set(d[d["year"] == 2025]["race_id"]) & set(pairs["race_id"]))
+    if a.shard:
+        ids = ids[a.shard[0]::a.shard[1]]
+    if a.limit:
+        ids = ids[: a.limit]
+    st = HybridStorage()
+    rows = []
+    for n, rid in enumerate(ids):
+        try:
+            pay = build_final_odds_response(rid, st, allow_scrape=False)
+        except Exception:  # noqa: BLE001
+            continue
+        for e in pay.get("entries") or []:
+            if e.get("horse_number") and e.get("predicted_win_odds"):
+                rows.append((rid, int(e["horse_number"]), float(e["predicted_win_odds"]), float(e.get("predicted_place_odds_min") or 0), float(e.get("predicted_place_odds_max") or 0)))
+        if (n + 1) % 300 == 0:
+            print(n + 1, "/", len(ids), flush=True)
+    OUT.mkdir(parents=True, exist_ok=True)
+    tag = "all" if not a.shard else f"s{a.shard[0]}of{a.shard[1]}"
+    pd.DataFrame(rows, columns=["race_id", "horse_number", "pw", "pmin", "pmax"]).to_parquet(OUT / f"predprod_{tag}.parquet", index=False)
+    print("保存:", tag, len(rows))
+
+
+def cmd_fitprod(a) -> None:
+    """本番の経路で作った 2025 年の想定単勝を、偶数番目のレースで実単勝へ較正し、奇数番目で確認する。"""
+    _, d, _, _ = load_inputs()
+    pr = _prod_single_frames()
+    ids = sorted(pr["race_id"].unique())
+    fit_ids, test_ids = set(ids[0::2]), set(ids[1::2])
+    q = d[d["year"] == 2025].merge(pr, on=["race_id", "horse_number"], how="inner")
+    la = np.log(q["win_odds"].to_numpy(float))
+    lp = np.log(q["pw"].to_numpy(float))
+    fit = q["race_id"].isin(fit_ids).to_numpy()
+    test = q["race_id"].isin(test_ids).to_numpy()
+    b, a0 = np.polyfit(lp[fit], la[fit], 1)
+    pm = q["pmin"].to_numpy(float)
+    lpm = np.log(q["place_odds_min"].to_numpy(float))
+    okp = np.isfinite(pm) & (pm > 0) & np.isfinite(lpm)
+    bp, ap = np.polyfit(np.log(pm[fit & okp]), lpm[fit & okp], 1)
+    res = {"win": {"a": round(float(a0), 4), "b": round(float(b), 4)}, "place_min": {"a": round(float(ap), 4), "b": round(float(bp), 4)},
+           "n_fit_rows": int(fit.sum()), "n_test_rows": int(test.sum()), "n_races": len(ids),
+           "test_corr": round(float(np.corrcoef(lp[test], la[test])[0, 1]), 4),
+           "test_rmse_raw": round(float(np.sqrt(np.mean((lp[test] - la[test]) ** 2))), 4),
+           "test_rmse_cal": round(float(np.sqrt(np.mean(((a0 + b * lp[test]) - la[test]) ** 2))), 4),
+           "raw_median_pred": round(float(np.median(np.exp(lp))), 2), "actual_median": round(float(np.median(np.exp(la))), 2)}
+    (OUT / "single_fit_prod.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(json.dumps(res, ensure_ascii=False))
+
+
 # ───────────────────────── 推奨度の評価 ─────────────────────────
 
 def _items(cands, bets_cfg=None) -> list[dict]:
@@ -281,11 +342,19 @@ def cmd_build(a) -> None:
     pg = {r: g for r, g in pairs.groupby("race_id")}
     pred = None
     test_ids: set[str] | None = None
+    odd_ids: set[str] = set()
+    have_ids: set[str] | None = None
+    if a.mode == "Bp":    # 本番の推論経路で作った想定単勝（predprod）。偶数番目で較正、奇数番目で評価
+        pred = _prod_single_frames()
+        pr = {(r, h): (w, mn, mx) for r, h, w, mn, mx in pred.itertuples(index=False)}
+        allids = sorted({r for r, _ in pr})
+        odd_ids = set(allids[1::2])
+        have_ids = set(allids)
     if a.mode == "B":
         pred = predicted_2025()
         pr = {(r, h): (w, mn, mx) for r, h, w, mn, mx in pred.itertuples(index=False)}
         test_ids = set(sorted({r for r, _ in pr})[1::2])   # 想定単勝の較正を当てはめていない奇数番目のレースだけで評価
-    ids = sorted(r for r in d["race_id"].unique() if r in pg and (test_ids is None or r in test_ids))
+    ids = sorted(r for r in d["race_id"].unique() if r in pg and (test_ids is None or r in test_ids) and (have_ids is None or r in have_ids))
     if a.shard:
         ids = ids[a.shard[0]::a.shard[1]]
     if a.limit:
@@ -312,11 +381,11 @@ def cmd_build(a) -> None:
             score = cal.get("expected_roi_calibrated") if cal else None
             if score is None and tot:
                 score = float(port["expected_return"]) / tot
-        elif a.mode in ("Bo", "B"):
+        elif a.mode in ("Bo", "B", "Bp"):
             if a.mode == "Bo":
                 win = {hn: o["win_odds"] for hn, o in odds.items()}
                 single = {"entries": [{"horse_number": hn, **o} for hn, o in odds.items()]}
-            else:
+            else:   # B / Bp
                 rows = {int(h): pr.get((rid, int(h))) for h in g["horse_number"]}
                 if any(v is None for v in rows.values()):
                     continue
@@ -330,14 +399,15 @@ def cmd_build(a) -> None:
         else:  # A
             cands_out = PZ.prob_only_candidates(preds)
             score = PZ.confidence_index(preds)
-        m_for_roles = "C" if a.mode == "C" else ("B" if a.mode in ("B", "Bo") else "A")
+        m_for_roles = "C" if a.mode == "C" else ("B" if a.mode in ("B", "Bo", "Bp") else "A")
         payload = PZ.build_paid_payload(cands_out, preds, race_id=rid, roi=99.0, m=m_for_roles, max_total_bet=2000) if cands_out else {"bets": []}
         pay_r = payoff.get(rid, {})
         bets = []
         for b in payload["bets"]:
             got = float((pay_r.get(BT_MAP[b["bet_type"]]) or {}).get(_combo(b["bet_type"], b["combo"]), 0.0))
             bets.append({"bt": b["bet_type"], "role": b["role"], "units": b["units"], "pay100": got})
-        out.append({"race_id": rid, "year": int(rid[:4]), "score": None if score is None else float(score), "n_runners": len(g), "bets": json.dumps(bets)})
+        out.append({"race_id": rid, "year": int(rid[:4]), "score": None if score is None else float(score), "n_runners": len(g), "bets": json.dumps(bets),
+                    "half": "test" if (a.mode != "Bp" or rid in odd_ids) else "fit"})
         if (n + 1) % 500 == 0:
             print(a.mode, n + 1, "/", len(ids), flush=True)
     OUT.mkdir(parents=True, exist_ok=True)
@@ -395,7 +465,7 @@ def cmd_report(a) -> None:
         fs = sorted(OUT.glob(f"tiers_{mode}_*.parquet"))
         return pd.concat([pd.read_parquet(f) for f in fs], ignore_index=True) if fs else None
 
-    data = {m: load(m) for m in ("C", "Bo", "B", "A")}
+    data = {m: load(m) for m in ("C", "Bo", "B", "Bp", "A")}
     c_th = PZ.thresholds("C")
     c_design = data["C"][data["C"]["year"].isin(DESIGN)]["score"].to_numpy(float) if data["C"] is not None else None
     ths = {"C": c_th}
@@ -404,11 +474,17 @@ def cmd_report(a) -> None:
             continue
         src = data["Bo" if m == "B" else m]
         ths[m] = _design_thresholds(c_design, src[src["year"].isin(DESIGN)]["score"].to_numpy(float), c_th)
+    if data["Bp"] is not None and c_design is not None:
+        # 本番の経路の想定単勝は 2025 年（out-of-sample）しか無い。しきい値は、較正を当てはめた偶数番目のレース(fit)のスコアの分位
+        # （C の設計年と同じ割合）で決め、奇数番目のレース(test)で評価する
+        bp = data["Bp"]
+        ths["Bp"] = _design_thresholds(c_design, bp[bp["half"] == "fit"]["score"].to_numpy(float), c_th)
+        data["Bp"] = bp[bp["half"] == "test"]
     res: dict = {"thresholds": ths, "tables": {}}
     for m, df in data.items():
         if df is None or m not in ths:
             continue
-        b_ids = set(data["B"]["race_id"]) if data["B"] is not None else set()
+        b_ids = set(data["Bp"]["race_id"]) if data["Bp"] is not None else (set(data["B"]["race_id"]) if data["B"] is not None else set())
         for label, years in (("設計年(2022-23)", DESIGN), ("確認年(2024-25)", CONFIRM), ("2025のみ", (2025,)), ("B比較用(2025の奇数番目)", (2025,))):
             sub = df[df["year"].isin(years)]
             if label.startswith("B比較用"):
@@ -467,14 +543,18 @@ def main() -> None:
     sp = ap.add_subparsers(dest="cmd", required=True)
     sp.add_parser("odds")
     b = sp.add_parser("build")
-    b.add_argument("--mode", required=True, choices=["C", "Bo", "B", "A"])
+    b.add_argument("--mode", required=True, choices=["C", "Bo", "B", "Bp", "A"])
     b.add_argument("--years", type=int, nargs="+", default=[2022, 2023, 2024, 2025])
     b.add_argument("--shard", type=int, nargs=2, default=None)
     b.add_argument("--limit", type=int, default=0)
     b.add_argument("--tag", default="")
     sp.add_parser("report")
+    pp = sp.add_parser("predprod")
+    pp.add_argument("--shard", type=int, nargs=2, default=None)
+    pp.add_argument("--limit", type=int, default=0)
+    sp.add_parser("fitprod")
     a = ap.parse_args()
-    {"odds": cmd_odds, "build": cmd_build, "report": cmd_report}[a.cmd](a)
+    {"odds": cmd_odds, "build": cmd_build, "report": cmd_report, "predprod": cmd_predprod, "fitprod": cmd_fitprod}[a.cmd](a)
 
 
 if __name__ == "__main__":

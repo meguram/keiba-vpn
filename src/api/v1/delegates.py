@@ -180,6 +180,24 @@ def _paid_error(payload: dict[str, Any], code: int) -> tuple[dict[str, Any], int
     return {"view": "paid", "error": str(payload.get("error") or "推奨馬券を計算できません")}, code
 
 
+def _predicted_singles(storage, race_id: str) -> dict | None:
+    """想定単勝・複勝。キャッシュに無ければその場で推論して保存する（final-odds API と同じ get_or_compute。約 0.6 秒/レース）。
+    キャッシュが空だと有料ゾーンが黙って案A（確率のみ）に落ち、推奨度が「推奨しない」に偏る（2026-10-22 の不具合）。"""
+    from src.pipeline.inference.odds_source import predicted_single_odds
+
+    single = predicted_single_odds(storage, race_id)
+    if single:
+        return single
+    try:
+        from src.pipeline.inference import final_odds_service
+
+        final_odds_service.get_or_compute(storage, race_id)
+    except Exception as exc:  # noqa: BLE001  推論できないレースは案Aに落とす
+        logger.warning("想定オッズの推論に失敗 %s: %s", race_id, exc)
+        return None
+    return predicted_single_odds(storage, race_id)
+
+
 def _paid_marks(preds: list[dict], single: dict | None) -> list[dict]:
     """有料ゾーン案A・Bの印: 実オッズ由来の項目を落とし、想定オッズ（B）または確率だけ（A）で付け直す。"""
     from src.api.local_predictions import score_entries
@@ -196,7 +214,6 @@ def _optimize_paid(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
     """会員向けの推奨馬券。レース単位の推奨度（推奨ポートフォリオ全体の期待回収率を段階にしたもの）と、
     買い目（券種ごとの組み合わせ＋区分 本線/押さえ）だけを返す。オッズ・期待値・確率・金額（Kelly 配分）の数値は出さない。
     方式は config/paid_zone.json の mode（A=確率のみ／B=想定オッズ／C=実オッズを内部で使う）。"""
-    from src.pipeline.inference.odds_source import predicted_single_odds
     from src.scraper.storage import HybridStorage
     from src.utils import paid_zone as PZ
 
@@ -231,8 +248,9 @@ def _optimize_paid(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
             return PZ.build_paid_payload(full.get("candidates") or [], preds, race_id=race_id, roi=roi, m="C", max_total_bet=cap), 200
         m = "B"  # 実オッズが無いレースは想定オッズで
 
-    single = PZ.calibrate_single(predicted_single_odds(storage, race_id)) if m == "B" else None
+    single = PZ.calibrate_single(_predicted_singles(storage, race_id)) if m == "B" else None
     if m == "B" and not single:
+        logger.warning("有料ゾーン: %s は想定単勝が得られないため案A（確率のみ）で出します", race_id)
         m = "A"
     if m == "B":
         win = {int(e["horse_number"]): float(e["win_odds"]) for e in single["entries"] if e.get("win_odds")}

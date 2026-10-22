@@ -170,3 +170,26 @@ def test_race_values_paid_view_has_tier_not_roi():
         out = delegates.race_value_summary("20260601", view="paid", max_total_bet=2000)
     assert out["view"] == "paid" and "expected_roi" not in out["races"][0] and out["races"][0]["tier"] is not None
     assert PZ.find_forbidden_keys(out) == []
+
+
+def test_mode_b_computes_predicted_singles_when_cache_is_empty():
+    """キャッシュが空でも案Aに落とさず、その場で推論して案Bで計算する（2026-10-22 の不具合の再発防止）。"""
+    single = _single([3.4, 5.0, 6.5, 8.0, 11.0, 14.0, 26.0, 36.0])
+    st = _Storage()
+    with patch.dict("os.environ", {"KEIBA_PAID_ZONE_MODE": "B"}), PZ_reload(), patch.object(PZ, "thresholds", lambda m=None: [0.1, 0.2, 0.3, 0.4]), \
+         patch("src.scraper.storage.HybridStorage", lambda: st), \
+         patch("src.pipeline.inference.race_prediction_service.load_cached", return_value={"predictions": _preds()}), \
+         patch("src.pipeline.inference.odds_source.predicted_single_odds", side_effect=[None, single]), \
+         patch("src.pipeline.inference.final_odds_service.get_or_compute") as goc:
+        payload, code = delegates.optimize_betting({"race_id": RID}, view="paid")
+    assert code == 200 and goc.call_count == 1
+    assert {b["bet_type"] for b in payload["bets"]} - {"tansho"}, "案B（想定オッズ）なら馬連などの買い目が出る"
+    assert "race_odds" not in st.loaded
+
+
+def test_payload_states_basis_and_a_note_says_confidence():
+    a, _, _ = _run("A")
+    b, _, _ = _run("B")
+    assert a["basis"] == "A" and "確信度" in a["note"]
+    assert b["basis"] == "B" and "確信度" not in b["note"]
+    assert PZ.find_forbidden_keys(a) == [] and PZ.find_forbidden_keys(b) == []

@@ -286,7 +286,9 @@ def build_paid_payload(
         "max_total_bet": max_total_bet,
         "legend": legend(),
         "disclaimer": disclaimer(),
-        "note": "オッズと期待値の数値は表示しません。推奨度は、推奨馬券全体（組み合わせ）の見通しを段階にしたものです。",
+        "basis": m,
+        "note": ("推奨度は、AI の予想の確信度（本命がどれだけ抜けているか）の目安です。オッズや期待値は使っていません。" if m == "A"
+                 else "オッズと期待値の数値は表示しません。推奨度は、推奨馬券全体（組み合わせ）の見通しを段階にしたものです。"),
     }
 
 

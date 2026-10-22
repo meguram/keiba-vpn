@@ -11,7 +11,7 @@ export type PaidBet = {
 };
 export type PaidRec = {
   view: "paid"; race_id: string; race_tier: PaidTier; bets: PaidBet[]; total_yen: number; total_units: number; unit_yen: number;
-  max_total_bet: number | null; legend: PaidTier[]; disclaimer: string; note?: string;
+  max_total_bet: number | null; legend: PaidTier[]; disclaimer: string; note?: string; basis?: "A" | "B" | "C";
 };
 
 export const TIER_STYLE: Record<number, { color: string; bg: string; border: string; desc: string }> = {
@@ -21,6 +21,15 @@ export const TIER_STYLE: Record<number, { color: string; bg: string; border: str
   3: { color: "#fde68a", bg: "rgba(245,158,11,0.20)", border: "#f59e0b", desc: "プラスの見込みが高め" },
   4: { color: "#fff", bg: "linear-gradient(135deg,#f97316,#ef4444)", border: "#fb923c", desc: "その中でも特に高い（目安）" },
 };
+
+/** 方式 A（確率のみ）の推奨度は『確信度』の段階。値段（期待回収率）の説明を出さない */
+const CONFIDENCE_DESC: Record<number, string> = {
+  0: "本命が抜けておらず、確信度が低い", 1: "確信度がやや低い", 2: "確信度は標準", 3: "確信度がやや高い", 4: "本命が抜けており、確信度が高い",
+};
+export function tierDesc(level: number, basis?: string): string {
+  if (basis === "A") return CONFIDENCE_DESC[level] ?? "";
+  return (TIER_STYLE[level] ?? TIER_STYLE[0]).desc;
+}
 
 const MARK_COLOR: Record<string, string> = { "◎": "#f87171", "○": "#60a5fa", "▲": "#fbbf24", "★": "#fb923c", "△": "#a78bfa", "消": "#94a3b8" };
 
@@ -51,7 +60,7 @@ export function PaidBets({
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
         <span style={{ fontSize: 13, color: "var(--text-dim)" }}>このレースの推奨度</span>
         <TierBadge tier={rec.race_tier} size={15} />
-        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{(TIER_STYLE[rec.race_tier.level] ?? TIER_STYLE[0]).desc}</span>
+        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{tierDesc(rec.race_tier.level, rec.basis)}</span>
       </div>
 
       <details style={{ marginBottom: 12 }}>
@@ -59,12 +68,12 @@ export function PaidBets({
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
           {rec.legend.map((t) => (
             <span key={t.level} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)" }}>
-              <TierBadge tier={t} size={12} />{(TIER_STYLE[t.level] ?? TIER_STYLE[0]).desc}
+              <TierBadge tier={t} size={12} />{tierDesc(t.level, rec.basis)}
             </span>
           ))}
         </div>
         <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 6 }}>
-          推奨度は、推奨する買い目全体（組み合わせ）の見通しを段階にした目安です。オッズや期待値の数値は表示しません。
+          {rec.note ?? "推奨度は、推奨する買い目全体（組み合わせ）の見通しを段階にした目安です。オッズや期待値の数値は表示しません。"}
         </div>
       </details>
 
