@@ -26,7 +26,7 @@
 ## 記録（`run.sh` が最後に出す行をそのまま貼る）
 | 日時 | 枠 | 送信元 IP | 合否 | 成功/計画 | 403/429 | 備考（失敗の理由・気づき） |
 |---|---|---|---|---|---:|---|
-| | weekday_noon | | | | | |
+| 2026-10-22 16:38 JST | weekday_noon | <GCP_EGRESS_IP> | PASS | 30/30 | 0 | 固定の識別可能な User-Agent。応答は全件 200（db.netkeiba.com 15件・race.netkeiba.com 15件、目印あり 30/30）。10/21 夜の 503 は netkeiba 側の不調で無効 |
 | | raceday_morning | | | | | |
 | | night | | | | | |
 
