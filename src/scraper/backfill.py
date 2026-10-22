@@ -451,7 +451,7 @@ def _run_phase_full(runner, progress: BackfillProgress,
 # 2020 年以降と同じカテゴリ・スキーマ・保存経路（HybridStorage.save → GCS）で揃える。取得の強さは backfill_guard が制限する。
 # 段階（上から順に、未完了の段階を進める）。年は新しいほうから（2019 → 2016）。
 PAST_YEARS = [2019, 2018, 2017, 2016]
-PAST_TIERS = ["fast", "horse", "cards", "lap", "odds", "pair", "index", "past", "on_time"]
+PAST_TIERS = ["fast", "horse", "cards", "lap", "odds", "pair", "index", "past", "on_time", "anchors_f"]
 # 2019 年のレースで実際に取れることを確認したカテゴリだけ。パドック・厩舎コメント・調子偏差値は 2019 年のページに内容が無い（空の文書になる）ので取らない。
 _PAST_CARD_TIERS = {
     "cards": [("race_shutuba", "scrape_race_card"), ("race_oikiri", "scrape_oikiri")],
@@ -587,6 +587,21 @@ def _run_phase_horse_past(runner, progress: BackfillProgress, max_horses: int | 
                 stats["horses_skipped"] += 1
             if not _should_stop() and not runner.storage.exists("horse_pedigree_5gen", hid):
                 runner.scrape_horse_pedigree_5gen(hid, skip_existing=True)
+            # 完全な 10 世代のための 5 世代目のアンカー。母方（path_fm が M で始まる 16 位置）を先に取り、父方は後回し（anchors_f 段階）
+            doc = runner.storage.load("horse_pedigree_5gen", hid) or {}
+            mat, pat = [], []
+            for a in doc.get("ancestors") or []:
+                aid = (a.get("horse_id") or "").strip()
+                if a.get("generation") == 5 and aid:
+                    (mat if (int(a.get("position", 0)) >> 4) & 1 else pat).append(aid)
+            for aid in mat:
+                if _should_stop():
+                    break
+                if not runner.storage.exists("horse_pedigree_5gen", aid):
+                    runner.scrape_horse_pedigree_5gen(aid, skip_existing=True)
+                    stats["anchors_m"] = stats.get("anchors_m", 0) + 1
+            pend = progress._data.setdefault("paternal_anchor_pending", [])
+            pend.extend(a for a in pat if a not in pend)
             batch.append(hid)
         except Exception as e:  # noqa: BLE001
             logger.error("馬情報取得エラー [%s]: %s", hid, e)
@@ -602,13 +617,32 @@ def _run_phase_horse_past(runner, progress: BackfillProgress, max_horses: int | 
     return stats
 
 
+def _run_phase_anchors_f(runner, progress: BackfillProgress) -> dict:
+    """父方の 5 世代目のアンカーの 5 世代表（優先度が低い。母方・他の段階の後に、余力で）。既にあるものは取らない。"""
+    stats = {"fetched": 0, "skipped": 0}
+    pend = list(progress._data.get("paternal_anchor_pending", []))
+    left = []
+    for aid in pend:
+        if _should_stop():
+            left.append(aid)
+            continue
+        if runner.storage.exists("horse_pedigree_5gen", aid):
+            stats["skipped"] += 1
+            continue
+        runner.scrape_horse_pedigree_5gen(aid, skip_existing=True)
+        stats["fetched"] += 1
+    progress._data["paternal_anchor_pending"] = left
+    progress.save()
+    return stats
+
+
 def past_status(progress: BackfillProgress, years: list[int]) -> dict:
     """過去分の進捗（段階ごとの完了日数と未完了日数）。"""
     out: dict[str, Any] = {}
     for y in years:
         dates = progress._data.get(f"calendar_{y}", [])
         row: dict[str, Any] = {"kaisai_days": len(dates) or None}
-        for tier in [t for t in PAST_TIERS if t != "horse"]:
+        for tier in [t for t in PAST_TIERS if t not in ("horse", "anchors_f")]:
             done = set(progress._data.get(f"done_{tier}", []))
             row[tier] = f"{sum(1 for d in dates if d in done)}/{len(dates)}" if dates else "—"
         out[str(y)] = row
@@ -637,10 +671,17 @@ def run_past(
     tiers = tiers or PAST_TIERS
     progress = BackfillProgress()
     state = bg.load_state()
-    cap = cap or bg.stage_cap(state)
+    from src.scraper.request_counter import count_today
+
+    budget = bg.daily_budget(count_today())
+    cap = min(cap or bg.stage_cap(state), budget) if not cap else cap
+    if not cap:
+        logger.info("今日の予算がありません（日の総上限 %d − 数えた件数 %d − 通常運用の見込み %d）", bg.TOTAL_DAILY_LIMIT, count_today(), bg.EXPECTED_WEEKDAY_OPS)
+        return 2
 
     if dry_run:
-        print(json.dumps({"years": years, "cap_this_night": cap, "cap_max": bg.CAP_MAX, "window": bg.WINDOW,
+        print(json.dumps({"years": years, "cap_this_night": cap, "cap_max": bg.CAP_MAX, "daily_budget_now": budget, "counted_today": count_today(),
+                          "total_daily_limit": bg.TOTAL_DAILY_LIMIT, "window": bg.WINDOW,
                           "status": past_status(progress, years), "nights_recorded": len(state.get("nights", []))},
                          ensure_ascii=False, indent=1))
         return 0
@@ -687,6 +728,8 @@ def run_past(
                         break
                     if tier == "fast":
                         stats["fast"] = _run_phase_fast(runner, progress, all_dates, max_dates=10_000)
+                    elif tier == "anchors_f":
+                        stats["anchors_f"] = _run_phase_anchors_f(runner, progress)
                     elif tier == "horse":
                         stats["horse_collected"] = _collect_past_horses(runner, progress, all_dates)
                         stats["horse"] = _run_phase_horse_past(runner, progress, max_horses=max_horses)
@@ -788,6 +831,32 @@ def run_backfill(
         logger.info("  %s: %s", k, v)
 
 
+def past_report() -> None:
+    """過去分補填の設定・夜ごとの結果・実効のペース・想定終了を表示する（朝の報告用）。"""
+    from src.scraper import backfill_guard as bg
+    from src.scraper.request_counter import count_today
+
+    progress = BackfillProgress()
+    state = bg.load_state()
+    nights = state.get("nights", [])
+    print("== 設定 ==")
+    print(f"  1日の総上限(全取得) {bg.TOTAL_DAILY_LIMIT} / 補填の上限 最大 {bg.CAP_MAX}（初夜 {bg.CAP_MAX // 2}）/ 通常運用の見込み {bg.EXPECTED_WEEKDAY_OPS}")
+    print(f"  時間窓 {bg.WINDOW} JST（月〜金の朝）/ 同時 1 本 / 中断: 403・429・5xx・遅延・通信エラー / 速度調整: AIMD（悪化で待ちを倍、悪化なしで戻す）")
+    print(f"  今日（JST）に数えた件数 {count_today()}")
+    print("== 夜ごとの結果 ==")
+    for n in nights[-14:]:
+        print(f"  {n.get('date')} 上限{n.get('cap')} 件数{n.get('requests')} 実効 {n.get('effective_requests_per_hour')}件/時 5xx等{n.get('bad_5xx_403_429')} 通信エラー{n.get('transport_errors')} "
+              f"中央値応答{n.get('median_latency_sec')}s 追加待ち{n.get('extra_delay_end_sec')}s 健全={n.get('healthy')} 終了理由={n.get('ended_by')}")
+    done = sum(int(n.get("requests") or 0) for n in nights)
+    print("== 進捗 ==")
+    print(json.dumps(past_status(progress, PAST_YEARS), ensure_ascii=False))
+    total_lo, total_hi = 153_000, 170_000
+    per_night = (sum(int(n.get("requests") or 0) for n in nights[-10:]) / max(1, len(nights[-10:]))) if nights else float(bg.CAP_MAX)
+    per_week = max(1.0, per_night * 5)
+    print(f"  累計 {done} 件（目安の総量 {total_lo}〜{total_hi} 件）。直近の1夜あたり {per_night:.0f} 件 → 週 {per_week:.0f} 件")
+    print(f"  想定の残り {max(0, total_lo - done) / per_week:.1f}〜{max(0, total_hi - done) / per_week:.1f} 週")
+
+
 def show_status():
     """現在の進捗状況を表示する。"""
     progress = BackfillProgress()
@@ -840,6 +909,7 @@ def main():
                         help="取得せず計画のみ表示")
     parser.add_argument("--status", action="store_true",
                         help="進捗状況を表示して終了")
+    parser.add_argument("--report", action="store_true", help="--phase past の設定・夜ごとの結果・実効ペース・想定終了を表示して終了")
     parser.add_argument("--years", type=int, nargs="+", default=None,
                         help="--phase past の対象年（既定: 2019 2018 2017 2016。新しいほうから）")
     parser.add_argument("--cap", type=int, default=None,
@@ -856,6 +926,10 @@ def main():
 
     if args.status:
         show_status()
+        return
+
+    if args.report:
+        past_report()
         return
 
     if args.phase == "past":

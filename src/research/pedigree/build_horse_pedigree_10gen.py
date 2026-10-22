@@ -93,6 +93,19 @@ def _side_of(g: int, p: int) -> str:
     return "dam_dam_line" if is_dam_dam else "dam_sire_line"
 
 
+def path_fm(g: int, p: int) -> str:
+    """generation g, position p の祖先への経路（F=父方 / M=母方、長さ g）。位置の最上位ビットが 1 代目の選択。"""
+    return "".join("M" if (p >> (g - 1 - i)) & 1 else "F" for i in range(g))
+
+
+EXPECTED_POSITIONS = 2 ** 11 - 2     # 世代 1〜10 の位置の合計（世代 g は 2^g 位置）
+EXPECTED_MATERNAL = 2 ** 10 - 1      # 母方（path_fm が M で始まる）の位置: 世代 g は 2^(g-1) 位置、1〜10 世代の合計 1,023
+
+
+def is_maternal(g: int, p: int) -> bool:
+    return bool((p >> (g - 1)) & 1)
+
+
 def load_5gen(horse_id: str) -> dict | None:
     p = _local_path_5gen(horse_id)
     if not p.exists():
@@ -138,6 +151,7 @@ def build_10gen_record(horse_id: str, idx: dict[str, dict]) -> dict | None:
             "name": nm,
             "horse_id": hid,
             "side": side,
+            "path_fm": path_fm(g, p),
         })
 
     # gen 6-10: 5gen 目祖先 X (g=5) の 5gen を展開
@@ -182,9 +196,18 @@ def build_10gen_record(horse_id: str, idx: dict[str, dict]) -> dict | None:
                 "horse_id": (sa.get("horse_id") or "").strip(),
                 "side": X_side,
                 "via": X_hid,
+                "path_fm": path_fm(mg, mp),
+                "source": "merged_gen5_sire" if p_X % 2 == 0 else "merged_gen5_dam",
+                "anchor_horse_id": X_hid,
             })
 
     ancestors_out.sort(key=lambda x: (x["generation"], x["position"]))
+    per_gen: dict[int, int] = {}
+    mat_gen: dict[int, int] = {}
+    for a_ in ancestors_out:
+        per_gen[a_["generation"]] = per_gen.get(a_["generation"], 0) + 1
+        if is_maternal(a_["generation"], a_["position"]):
+            mat_gen[a_["generation"]] = mat_gen.get(a_["generation"], 0) + 1
     out = {
         "horse_id": horse_id,
         "sex": rec.get("sex", ""),
@@ -193,6 +216,14 @@ def build_10gen_record(horse_id: str, idx: dict[str, dict]) -> dict | None:
         "dam_sire": rec.get("dam_sire", ""),
         "ancestors": ancestors_out,
         "n_ancestors": len(ancestors_out),
+        "n_expected": EXPECTED_POSITIONS,
+        "complete": len(ancestors_out) == EXPECTED_POSITIONS,
+        "fill": {str(g_): round(per_gen.get(g_, 0) / 2 ** g_, 4) for g_ in range(1, 11)},
+        "n_maternal": sum(mat_gen.values()),
+        "maternal_complete": sum(mat_gen.values()) == EXPECTED_MATERNAL,
+        "maternal_fill": {str(g_): round(mat_gen.get(g_, 0) / 2 ** (g_ - 1), 4) for g_ in range(1, 11)},
+        "paternal_fill": {str(g_): round((per_gen.get(g_, 0) - mat_gen.get(g_, 0)) / 2 ** (g_ - 1), 4) for g_ in range(1, 11)},
+        "n_unknown_ids": sum(1 for a_ in ancestors_out if not a_["horse_id"]),
         "coverage": {
             "n_5gen_ancestors": n_5gen_total,
             "n_5gen_ancestors_resolved": n_5gen_resolved,

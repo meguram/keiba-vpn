@@ -23,10 +23,22 @@ from typing import Any
 JST = timezone(timedelta(hours=9))
 STATE_PATH = Path(os.environ.get("KEIBA_BACKFILL_PAST_STATE") or Path(__file__).resolve().parents[2] / "data" / "local" / "meta" / "backfill_past_state.json")
 
-CAP_MAX = int(os.environ.get("BACKFILL_PAST_CAP_MAX", "2000"))
+# 全取得（通常運用＋補填）の 1 日の総件数の上限。2026-10-12〜10-22 の 11 日連続で HTTP 400(bot_blocked)/403/429 なしだった最大が 2,681 件（10/19）。
+# 10/8〜10/9 は 3,241・4,213 件でも制限なしだったが、その直後の 10/10〜10/11 に bot_blocked の HTTP 400 が計 2,407 件出た（3,690 件の日）。
+# 『制限なしで続いた範囲』は後者を採らず、制限後に安定して続いた 2,700 件までとする。
+TOTAL_DAILY_LIMIT = int(os.environ.get("BACKFILL_PAST_TOTAL_DAILY_LIMIT", "2700"))
+EXPECTED_WEEKDAY_OPS = int(os.environ.get("BACKFILL_PAST_EXPECTED_OPS", "1150"))   # 平日の通常運用の件数（朝の窓の後に走る分）
+CAP_MAX = int(os.environ.get("BACKFILL_PAST_CAP_MAX", str((TOTAL_DAILY_LIMIT - EXPECTED_WEEKDAY_OPS) // 100 * 100)))   # 既定 1,500（100 件単位に切り下げ）
 CAP_FIRST = CAP_MAX // 2
 WINDOW = os.environ.get("BACKFILL_PAST_WINDOW", "02:30-05:45")          # JST。この外では始めない（途中でも終端で止める）
 OTHER_FETCH_PATTERN = r"src\.scraper\.(auto_scrape|backfill)|backfill_horse_training|run_priority_rescrape|src\.scripts\.scraping\.backfill_"
+
+# AIMD 型の速度調整: 応答が悪化したら待ちを倍に増やし（乗法的に遅く）、悪化なしが続けば少しずつ戻す（加法的に速く）。
+# 戻しても、既存のスロットルより速くはならない（実績の最短間隔を超えない）。
+AIMD_CLEAN_STEP = 50              # 悪化なしが続いた件数ごとに
+AIMD_RECOVER_SEC = 0.5            # 追加の待ちをこの秒数だけ減らす
+AIMD_FIRST_DELAY = 4.0            # 悪化の最初の反応で足す待ち
+AIMD_MAX_DELAY = 60.0
 
 # 悪化の検知（その夜を中断）
 RECENT_REQUESTS = 100
@@ -75,6 +87,11 @@ def save_state(state: dict[str, Any], path: Path = STATE_PATH) -> None:
     os.replace(tmp, path)
 
 
+def daily_budget(counted_today: int, now: datetime | None = None) -> int:
+    """この夜に使える上限: 日の総上限 − その日すでに数えた件数 − これから走る通常運用の見込み。"""
+    return max(0, TOTAL_DAILY_LIMIT - int(counted_today) - EXPECTED_WEEKDAY_OPS)
+
+
 def stage_cap(state: dict[str, Any], cap_max: int = CAP_MAX) -> int:
     """最初の 1 夜は半分。直前の夜が問題なく終わったときだけ上限まで上げる。悪化した夜の翌夜は半分に戻す。"""
     nights = state.get("nights") or []
@@ -119,7 +136,7 @@ class NightGuard:
 
     HOSTS = ("netkeiba.com",)
 
-    def __init__(self, cap: int, window: str = WINDOW, clock=_now, state_path: Path = STATE_PATH) -> None:
+    def __init__(self, cap: int, window: str = WINDOW, clock=_now, state_path: Path = STATE_PATH, sleep=time.sleep) -> None:
         self.cap = int(cap)
         self.window = window
         self.clock = clock
@@ -134,6 +151,9 @@ class NightGuard:
         self._first: list[float] = []
         self.stop_reason: str | None = None
         self.started_at = clock()
+        self.extra_delay = 0.0              # AIMD: 次のリクエストの前に足す待ち（秒）
+        self._clean_run = 0
+        self.sleep = sleep
 
     # NetkeibaClient の応答オブザーバ
     def __call__(self, url: str, resp: Any) -> None:
@@ -157,10 +177,30 @@ class NightGuard:
                 if len(self._first) >= LATENCY_WINDOW:
                     self._baseline = statistics.median(self._first)
         self._evaluate()
+        self._aimd(is_bad, sec)
+
+    def _aimd(self, is_bad: bool, sec: float | None) -> None:
+        slow = sec is not None and self._baseline is not None and sec > max(2.0, self._baseline * 2.0)
+        if is_bad or slow:
+            self._clean_run = 0
+            self.extra_delay = min(AIMD_MAX_DELAY, max(AIMD_FIRST_DELAY, self.extra_delay * 2))
+        else:
+            self._clean_run += 1
+            if self._clean_run >= AIMD_CLEAN_STEP and self.extra_delay > 0:
+                self._clean_run = 0
+                self.extra_delay = max(0.0, self.extra_delay - AIMD_RECOVER_SEC)
+        if self.extra_delay > 0 and not self.stop_reason:
+            self.sleep(self.extra_delay)       # 応答の直後（次のリクエストの前）に待つ
 
     def add_external(self, n: int = 1) -> None:
-        """オブザーバを通らない取得（オッズ・2連系オッズの API セッション）を件数に足す。"""
+        """オブザーバを通らない取得（オッズ・2連系オッズの API セッション）を件数に足す（日次カウンタにも）。"""
         self.requests += n
+        try:
+            from src.scraper.request_counter import count_request
+
+            count_request(n)
+        except Exception:  # noqa: BLE001
+            pass
 
     def fail(self, reason: str) -> None:
         """呼び出し側が検知した異常（連続して取得できない等）で、その夜を止める。"""
@@ -211,6 +251,8 @@ class NightGuard:
             "transport_errors": self.transport_errors,
             "status_counts": {str(k): v for k, v in sorted(self.status_counts.items())},
             "median_latency_sec": round(statistics.median(self._latencies), 2) if self._latencies else None,
+            "extra_delay_end_sec": self.extra_delay,
+            "effective_requests_per_hour": round(self.requests / max(1e-9, (self.clock() - self.started_at).total_seconds() / 3600), 0),
             "stop_reason": self.stop_reason,
             "healthy": self.healthy(),
         }

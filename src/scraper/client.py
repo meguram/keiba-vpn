@@ -628,6 +628,10 @@ class NetkeibaClient:
             self._session.headers["Referer"] = referer
 
             with _netkeiba_inflight_guard(url):
+                if "netkeiba.com" in url:
+                    from src.scraper.request_counter import count_request
+
+                    count_request()
                 logger.info(
                     "GET %s (attempt %d/%d)",
                     url,
