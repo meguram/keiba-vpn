@@ -238,7 +238,10 @@ def _build_samples(tmp: Path) -> dict[str, list[dict[str, Any]]]:
         S["E03"] = [N("サンプルなし: meta/person/ は API が初回アクセス時に作るキャッシュ（git 管理外）で、この環境に無いため載せていません。")]
     cfg = yaml.safe_load((ROOT / "config/settings.yaml").read_text(encoding="utf-8"))
     S["E04"] = [P("config/settings.yaml（抜粋）", {k: cfg[k] for k in list(cfg)[:4]}, "設定ファイル（git 管理）", "先頭 4 セクションを抜粋。dict に変換して表示")]
-    S["E05"] = [P("config/megu_predict_params.json", jload("config/megu_predict_params.json"), "設定ファイル（git 管理）")]
+    if (ROOT / "config/megu_predict_params.json").exists():
+        S["E05"] = [P("config/megu_predict_params.json", jload("config/megu_predict_params.json"), "設定ファイル（この PC。当て込まれた係数は公開リポジトリに置かない）")]
+    else:
+        S["E05"] = [N("サンプルなし: 当て込まれた係数（megu_predict_params.json）は公開リポジトリに置かないため、この環境に無いので載せていません。")]
     env_keys: dict[str, str] = {}
     for line in (ROOT / ".env.example").read_text(encoding="utf-8").splitlines():
         m = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$", line)

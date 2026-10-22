@@ -153,6 +153,9 @@
   "src/monitor/prod_status.py": {
    "local_data": 4
   },
+  "src/ops/access_hold.py": {
+   "local_data": 1
+  },
   "src/ops/fetch_shadow.py": {
    "local_data": 1
   },

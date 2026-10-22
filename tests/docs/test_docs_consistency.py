@@ -32,6 +32,20 @@ ALLOW_MISSING = {
 _PATH = re.compile(r"((?:docs/html/|docs/decisions/|docs/|src/|scripts/|tests/|config/)[A-Za-z0-9_./\-]+\.(?:py|sh|html|md|json|yaml|env))")
 
 
+def _is_fitted(ref: str) -> bool:
+    """公開リポジトリに置かない当て込み済みファイル（config/fitted_artifacts.txt）への言及は、実在しなくてよい。"""
+    f = ROOT / "config" / "fitted_artifacts.txt"
+    if not f.is_file():
+        return False
+    for line in f.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ref == line or (line.endswith("/") and ref.startswith(line)):
+            return True
+    return False
+
+
 def _pages() -> list[Path]:
     return [p for p in DOCS.rglob("*.html") if p.name != "book.html" and "node_modules" not in p.parts]
 
@@ -44,7 +58,7 @@ def test_paths_mentioned_in_docs_exist():
     missing: dict[str, set[str]] = {}
     for p in _pages():
         for ref in set(_PATH.findall(_text(p))):
-            if "*" in ref or "YYYY" in ref or ref in ALLOW_MISSING:
+            if "*" in ref or "YYYY" in ref or ref in ALLOW_MISSING or _is_fitted(ref):
                 continue
             if not (ROOT / ref).exists():
                 missing.setdefault(ref, set()).add(str(p.relative_to(DOCS)))
