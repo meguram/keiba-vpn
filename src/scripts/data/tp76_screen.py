@@ -153,7 +153,20 @@ def build() -> None:
     meta = {"rows": len(f), "megu": mg is not None, "cols": [c for c in f.columns if c not in ("race_id", "horse_id", "date")]}
     (OUT / "build_meta.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
     print("features:", f.shape, "megu:", mg is not None)
-    leak_check(df, f)
+    leak_check(df, f, mg)
+
+
+def _pert_megu(mg: pd.DataFrame | None, pert: pd.DataFrame, sel: pd.Series) -> pd.DataFrame | None:
+    """摂動した行のめぐ指数（結果から決まる値）も、摂動した行どうしで並べ替える。"""
+    if mg is None:
+        return None
+    keys = pert.loc[sel, ["race_id", "horse_id"]]
+    m = mg.copy()
+    k = m.merge(keys.assign(_s=1), on=["race_id", "horse_id"], how="left")["_s"].notna().to_numpy()
+    rng = np.random.default_rng(11)
+    v = m.loc[k, "megu_z"].to_numpy()
+    m.loc[k, "megu_z"] = v[rng.permutation(len(v))]
+    return m
 
 
 def max_diff(a: np.ndarray, b: np.ndarray) -> float:
@@ -164,7 +177,7 @@ def max_diff(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.nanmax(np.abs(a - b))) if a.size else 0.0
 
 
-def leak_check(df: pd.DataFrame, f_full: pd.DataFrame, n_probe: int = 2) -> dict:
+def leak_check(df: pd.DataFrame, f_full: pd.DataFrame, mg: pd.DataFrame | None = None, n_probe: int = 2) -> dict:
     """(1) 日付で切って作り直した特徴量が、全期間で作った同じ行の値と一致するか（切り詰め一致）。
     (2) ある日以降の結果（着順・位置取り・上がり・タイム）を壊しても、その日までの行の特徴量が変わらないか（未来の摂動）。
     (3) 同じ日の、あるレース以降の結果を壊しても、そのレースまでの特徴量が変わらないか（同日の先読み）。"""
@@ -179,7 +192,7 @@ def leak_check(df: pd.DataFrame, f_full: pd.DataFrame, n_probe: int = 2) -> dict
     for cut in rng.choice(dates[dates > np.datetime64("2023-01-01")], n_probe, replace=False):
         cut = pd.Timestamp(cut)
         sub = df[pd.to_datetime(df["date"]) <= cut]
-        g = T.build_features(sub, consts=consts).set_index(["race_id", "horse_id"])
+        g = T.build_features(sub, consts=consts, megu=mg).set_index(["race_id", "horse_id"])
         a = key.loc[g.index, cols]
         diff = max_diff(a.to_numpy(float), g[cols].to_numpy(float))
         res["truncation"].append({"cut": str(cut.date()), "rows": len(g), "max_abs_diff": diff})
@@ -189,7 +202,7 @@ def leak_check(df: pd.DataFrame, f_full: pd.DataFrame, n_probe: int = 2) -> dict
         for c in outcome:
             v = pert.loc[late, c].to_numpy()
             pert.loc[late, c] = v[shuf]
-        h = T.build_features(pert, consts=consts).set_index(["race_id", "horse_id"])
+        h = T.build_features(pert, consts=consts, megu=_pert_megu(mg, pert, late)).set_index(["race_id", "horse_id"])
         early = g.index
         diff2 = max_diff(h.loc[early, cols].to_numpy(float), g[cols].to_numpy(float))
         res["future_perturb"].append({"cut": str(cut.date()), "max_abs_diff": diff2})
@@ -204,7 +217,7 @@ def leak_check(df: pd.DataFrame, f_full: pd.DataFrame, n_probe: int = 2) -> dict
     for c in outcome:
         v = pert.loc[sel, c].to_numpy()
         pert.loc[sel, c] = v[shuf]
-    h = T.build_features(pert, consts=consts).set_index(["race_id", "horse_id"])
+    h = T.build_features(pert, consts=consts, megu=_pert_megu(mg, pert, sel)).set_index(["race_id", "horse_id"])
     base = f_full.set_index(["race_id", "horse_id"])
     keep = base.index[(base["date"] < day) | ((base["date"] == day) & (base.index.get_level_values(0) <= mid))]
     diff3 = max_diff(h.loc[keep, cols].to_numpy(float), base.loc[keep, cols].to_numpy(float))
@@ -250,7 +263,7 @@ class Data:
         pw = pd.read_parquet(MODELS / "training_pipeline_v4/tp27_v6e/ens/v6.parquet", columns=["race_id", "horse_id", "p_win", "p_top2", "p_top3"])
         t25 = pd.read_parquet(MODELS / "training_pipeline/final_eval_v6e/test2025_predictions.parquet", columns=["race_id", "horse_id", "p_win", "p_top2", "p_top3"])
         pr = pd.concat([pw, t25], ignore_index=True).drop_duplicates(["race_id", "horse_id"])
-        base = df[["race_id", "horse_id", "finish_position", "year"]].merge(pr, on=["race_id", "horse_id"], how="inner")
+        base = df[["race_id", "horse_id", "finish_position", "year", "run_no"]].merge(pr, on=["race_id", "horse_id"], how="inner")
         m = base.merge(f, on=["race_id", "horse_id"], how="left")
         m = m[(m["year"] >= 2022) & (m["year"] <= 2025) & (m["finish_position"] > 0)].sort_values(["date", "race_id"], kind="mergesort").reset_index(drop=True)
         self.m = m
@@ -261,6 +274,7 @@ class Data:
         self.y = {"win": (fp == 1).astype(float), "top2": (fp <= 2).astype(float), "top3": (fp <= 3).astype(float)}
         lg = lambda p: np.log(np.clip(p, 1e-6, 1 - 1e-6) / (1 - np.clip(p, 1e-6, 1 - 1e-6)))
         self.off = {"win": lg(m["p_win"].to_numpy()), "top2": lg(m["p_top2"].to_numpy()), "top3": lg(m["p_top3"].to_numpy())}
+        self.nprior = m["run_no"].to_numpy()
         self.disc = np.isin(self.year, DISC)
         self.test = self.year == TEST
         self.n = len(m)
@@ -477,6 +491,36 @@ def bundle_deltas(D: Data, X, lam: float, sparse: bool = False) -> dict:
     return dl
 
 
+
+
+def composite_eval(D: Data, Xall: np.ndarray, lam: float) -> dict:
+    """合成スコア: A 年で係数、B 年で切片と傾きを較正、C 年で評価。2025 は A=2022〜23, B=2024。"""
+    comp = {t: np.full(D.n, np.nan) for t in TARGETS}
+    def one(tra, trb, te, out_mask):
+        A, B_ = design(Xall[tra], Xall[trb])
+        _, Te = design(Xall[tra], Xall[te])
+        res_ = {}
+        for t in TARGETS:
+            tt = "top3" if t == "top2" else t
+            w = fit_logit(A, D.y[tt][tra], D.off[tt][tra], lam)
+            Bm = np.column_stack([np.ones(trb.sum()), B_[:, 1:] @ w[1:]])
+            b2 = fit_logit(Bm, D.y[t][trb], D.off[t][trb], 0.0)
+            b0 = fit_logit(Bm[:, :1], D.y[t][trb], D.off[t][trb], 0.0)
+            Tm = np.column_stack([np.ones(te.sum()), Te[:, 1:] @ w[1:]])
+            y = D.y[t][te]
+            res_[t] = loss_rows(Tm, y, D.off[t][te], b2) - loss_rows(Tm[:, :1], y, D.off[t][te], b0)
+        return res_
+    for ci in DISC:
+        others = [y for y in DISC if y != ci]
+        te = D.year == ci
+        acc = [one(D.year == a, D.year == b, te, None) for a, b in ((others[0], others[1]), (others[1], others[0]))]
+        for t in TARGETS:
+            comp[t][te] = np.mean([r[t] for r in acc], axis=0)
+    r = one(np.isin(D.year, (2022, 2023)), D.year == 2024, D.test, None)
+    for t in TARGETS:
+        comp[t][D.test] = r[t]
+    return comp
+
 # ------------------------------------------------------------------ 本体
 def evaluate() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
@@ -489,6 +533,11 @@ def evaluate() -> None:
     skipped = [k for k in UNITS if k not in units]
     perms = make_perms(D, rng)
     lam_u = HYPER["ridge_lambda_unit"]
+    def dump(stage: str) -> None:
+        res["stage_done"] = stage
+        (OUT / "results.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+        print("stage:", stage, flush=True)
+
     res = {"n_rows": D.n, "n_races": int(D.race.max() + 1), "units_used": list(units), "units_skipped": skipped, "meta": meta}
     rows, labels, kinds = [], [], []
     detail = {}
@@ -497,6 +546,9 @@ def evaluate() -> None:
         dl = run_deltas(D, X, lam_u)
         s = summarize(D, dl, boot=True, rng=rng)
         s["missing_rate"] = float(np.isnan(X).any(axis=1).mean())
+        d3r = np.nanmean(np.vstack([dl[t] for t in TARGETS]), axis=0)
+        subs = {"run0": D.nprior == 0, "run1_2": (D.nprior >= 1) & (D.nprior <= 2), "run3p": D.nprior >= 3}
+        s["sub"] = {nm: {"d3": ratio_stats(d3r, D.race, D.disc & mk)[0], "d3_2025": ratio_stats(d3r, D.race, D.test & mk)[0], "n": int((D.disc & mk).sum())} for nm, mk in subs.items()}
         base_logit = D.off["win"]
         Z = np.nan_to_num((X - np.nanmean(X, 0)) / (np.nanstd(X, 0) + 1e-12))
         s["corr_base_logit"] = float(max(abs(np.corrcoef(Z[:, j], base_logit)[0, 1]) for j in range(Z.shape[1])))
@@ -523,12 +575,29 @@ def evaluate() -> None:
     res["shadow_d3_q"] = {"min": float(d_sh.min()), "p05": float(np.percentile(d_sh, 5)), "median": float(np.median(d_sh)), "p95": float(np.percentile(d_sh, 95))}
     res["shadow_units"] = {lab: {"d3": r["d3"], "se3": r["se3"]} for lab, r, kd in zip(labels, rows, kinds) if not kd}
 
+    desc = {}
+    fy = pd.to_datetime(f["date"]).dt.year
+    for c in [c for c in ALL_COLS if c in f.columns]:
+        desc[c] = {str(y): {"mean": float(f.loc[fy == y, c].mean()), "sd": float(f.loc[fy == y, c].std()), "missing": float(f.loc[fy == y, c].isna().mean())} for y in (2024, 2025, 2026)}
+    res["desc_2026"] = desc
+    dump("units")
+
     # --- 列ごと（束の材料）
     colsd = {}
     for c in [c for c in ALL_COLS if c in D.m.columns]:
         X = D.col(c)[:, None]
         s = summarize(D, run_deltas(D, X, lam_u))
         colsd[c] = {k_: s[k_] for k_ in ("d3", "se3", "signs_neg", "d3_2022", "d3_2023", "d3_2024", "d3_2025")}
+        xv = D.col(c)
+        okm = D.disc & ~np.isnan(xv)
+        zc = (xv - np.nanmean(xv[okm])) / (np.nanstd(xv[okm]) + 1e-12)
+        for t in ("win", "top3"):
+            rs = D.y[t] - 1 / (1 + np.exp(-D.off[t]))
+            colsd[c][f"resid_corr_{t}"] = float(np.corrcoef(np.nan_to_num(zc[okm]), rs[okm])[0, 1])
+        qs = np.nanpercentile(xv[okm], [20, 40, 60, 80])
+        bi = np.digitize(xv, qs)
+        colsd[c]["resid_bins_win"] = [float((D.y["win"] - 1 / (1 + np.exp(-D.off["win"])))[okm & (bi == j)].mean()) if (okm & (bi == j)).any() else None for j in range(5)]
+        colsd[c]["resid_bins_top3"] = [float((D.y["top3"] - 1 / (1 + np.exp(-D.off["top3"])))[okm & (bi == j)].mean()) if (okm & (bi == j)).any() else None for j in range(5)]
     Z = pd.DataFrame({c: pd.Series(D.col(c)).fillna(pd.Series(D.col(c)).mean()) for c in colsd})
     C = Z.corr().abs()
     red = {c: float((C[c].sum() - 1) / max(len(C) - 1, 1)) for c in C.columns}
@@ -575,66 +644,36 @@ def evaluate() -> None:
     res["bundle_shadow_curves"] = sh_curves
     kbest = int(np.argmin([c["d3"] for c in curve])) + 1
     res["bundle_k_best"] = kbest
-    res["bundle_eval_2025_at_kbest"] = {"k": kbest, "d3_2025": curve[kbest - 1]["d3_2025"]}
+    Xk = np.column_stack([D.col(c) for c in reps[:kbest]])
+    sk = summarize(D, bundle_deltas(D, Xk, lam_b), boot=True, rng=rng)
+    res["bundle_eval_2025_at_kbest"] = {"k": kbest, "d3": sk["d3"], "ci95": sk["ci95"], "d3_2025": sk["d3_2025"], "se3_2025": sk["se3_2025"],
+                                        "d_win_2025": sk["d_win_2025"], "d_top2_2025": sk["d_top2_2025"], "d_top3_2025": sk["d_top3_2025"]}
+    sens = {}
+    for lam2 in (2000.0, 20000.0):
+        cc = []
+        for kcount in range(1, len(reps) + 1):
+            X = np.column_stack([D.col(c) for c in reps[:kcount]])
+            s2 = summarize(D, bundle_deltas(D, X, lam2))
+            cc.append({"k": kcount, "d3": s2["d3"], "d3_2025": s2["d3_2025"]})
+        kb = int(np.argmin([c["d3"] for c in cc])) + 1
+        shs = []
+        for perm in perms:
+            shs.append(min(summarize(D, bundle_deltas(D, np.column_stack([D.col(c) for c in reps[:kb]])[perm], lam2))["d3"] for _ in (0,)))
+        sens[str(lam2)] = {"curve": cc, "k_best": kb, "d3_at_kbest": cc[kb - 1]["d3"], "d3_2025_at_kbest": cc[kb - 1]["d3_2025"], "shadow_d3_at_kbest": shs}
+    res["bundle_lambda_sensitivity"] = sens
+
+    dump("bundle")
 
     # --- 合成スコア（A 年で係数、B 年で較正、C 年で評価）
-    Xall = np.column_stack([D.col(c) for c in reps])
-    comp = {t: np.full(D.n, np.nan) for t in TARGETS}
-    for ci in DISC:
-        others = [y for y in DISC if y != ci]
-        accum = {t: [] for t in TARGETS}
-        for a, b in ((others[0], others[1]), (others[1], others[0])):
-            tra, trb, te = D.year == a, D.year == b, D.year == ci
-            A, B_ = design(Xall[tra], Xall[trb])
-            _, Te = design(Xall[tra], Xall[te])
-            for t in TARGETS:
-                tt = "top3" if t == "top2" else t
-                w = fit_logit(A, D.y[tt][tra], D.off[tt][tra], lam_b)
-                cb = B_[:, 1:] @ w[1:]
-                ct = Te[:, 1:] @ w[1:]
-                Bm = np.column_stack([np.ones(trb.sum()), cb])
-                b2 = fit_logit(Bm, D.y[t][trb], D.off[t][trb], 0.0)
-                b0 = fit_logit(Bm[:, :1], D.y[t][trb], D.off[t][trb], 0.0)
-                Tm = np.column_stack([np.ones(te.sum()), ct])
-                y = D.y[t][te]
-                l1 = loss_rows(Tm, y, D.off[t][te], b2)
-                l0 = loss_rows(Tm[:, :1], y, D.off[t][te], b0)
-                accum[t].append(l1 - l0)
-        for t in TARGETS:
-            comp[t][D.year == ci] = np.mean(accum[t], axis=0)
-    # 2025: A = 2022〜2023, B = 2024
-    tra = np.isin(D.year, (2022, 2023)); trb = D.year == 2024; te = D.test
-    A, B_ = design(Xall[tra], Xall[trb]); _, Te = design(Xall[tra], Xall[te])
-    for t in TARGETS:
-        tt = "top3" if t == "top2" else t
-        w = fit_logit(A, D.y[tt][tra], D.off[tt][tra], lam_b)
-        Bm = np.column_stack([np.ones(trb.sum()), B_[:, 1:] @ w[1:]])
-        b2 = fit_logit(Bm, D.y[t][trb], D.off[t][trb], 0.0); b0 = fit_logit(Bm[:, :1], D.y[t][trb], D.off[t][trb], 0.0)
-        Tm = np.column_stack([np.ones(te.sum()), Te[:, 1:] @ w[1:]])
-        comp[t][te] = loss_rows(Tm, D.y[t][te], D.off[t][te], b2) - loss_rows(Tm[:, :1], D.y[t][te], D.off[t][te], b0)
-    res["composite_nested"] = summarize(D, comp, boot=True, rng=rng)
-    # 合成スコアのシャドウ
+    res["composite_nested"] = summarize(D, composite_eval(D, Xall := np.column_stack([D.col(c) for c in reps]), lam_b), boot=True, rng=rng)
     shc = []
     for perm in perms:
-        Xs = Xall[perm]
-        cs = {t: np.full(D.n, np.nan) for t in TARGETS}
-        for ci in DISC:
-            others = [y for y in DISC if y != ci]
-            acc = {t: [] for t in TARGETS}
-            for a, b in ((others[0], others[1]), (others[1], others[0])):
-                tra, trb, te = D.year == a, D.year == b, D.year == ci
-                A, B_ = design(Xs[tra], Xs[trb]); _, Te = design(Xs[tra], Xs[te])
-                for t in TARGETS:
-                    tt = "top3" if t == "top2" else t
-                    w = fit_logit(A, D.y[tt][tra], D.off[tt][tra], lam_b)
-                    Bm = np.column_stack([np.ones(trb.sum()), B_[:, 1:] @ w[1:]])
-                    b2 = fit_logit(Bm, D.y[t][trb], D.off[t][trb], 0.0); b0 = fit_logit(Bm[:, :1], D.y[t][trb], D.off[t][trb], 0.0)
-                    Tm = np.column_stack([np.ones(te.sum()), Te[:, 1:] @ w[1:]])
-                    acc[t].append(loss_rows(Tm, D.y[t][te], D.off[t][te], b2) - loss_rows(Tm[:, :1], D.y[t][te], D.off[t][te], b0))
-            for t in TARGETS:
-                cs[t][D.year == ci] = np.mean(acc[t], axis=0)
-        shc.append(summarize(D, {t: np.where(np.isnan(cs[t]), 0, cs[t]) for t in TARGETS})["d3"])
+        c = composite_eval(D, Xall[perm], lam_b)
+        d3 = np.nanmean(np.vstack([c[t] for t in TARGETS]), axis=0)
+        shc.append(float(ratio_stats(np.where(np.isnan(d3), 0, d3), D.race, D.disc)[0]))
     res["composite_shadow_d3"] = shc
+    res["composite_sensitivity"] = {str(lam): {k_: v_ for k_, v_ in summarize(D, composite_eval(D, Xall, lam)).items() if k_ in ("d3", "se3", "d3_2025", "signs_neg")} for lam in (2000.0, 20000.0)}
+    dump("composite")
 
     # --- ルール台帳の束
     try:
@@ -655,11 +694,21 @@ def evaluate() -> None:
         for perm in perms[:2]:
             sh_r.append(summarize(D, bundle_deltas(D, Xr[perm], lam_r, sparse=True))["d3"])
         out_r["shadow_all_d3"] = sh_r
+        sens_r = {}
+        for lam2 in (4000.0, 40000.0):
+            sens_r[str(lam2)] = {}
+            for nm, idx in sets.items():
+                if not idx:
+                    continue
+                s2 = summarize(D, bundle_deltas(D, Xr[:, idx], lam2, sparse=True))
+                sens_r[str(lam2)][nm] = {k_: s2[k_] for k_ in ("d3", "se3", "d3_2025", "se3_2025", "signs_neg")}
+            sens_r[str(lam2)]["shadow_all_d3"] = [summarize(D, bundle_deltas(D, Xr[perm], lam2, sparse=True))["d3"] for perm in perms[:2]]
+        out_r["lambda_sensitivity"] = sens_r
         res["rules_bundle"] = out_r
     except Exception as e:  # noqa: BLE001
         res["rules_bundle"] = {"error": str(e)}
 
-    (OUT / "results.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+    dump("done")
     print("評価完了:", OUT / "results.json")
 
 
