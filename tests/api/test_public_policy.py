@@ -115,7 +115,12 @@ def test_owner_only_paths(monkeypatch, tmp_path):
     assert P.owner_only_path("/api/race/1/entry/2/card") is False  # private
     _set(monkeypatch, tmp_path)
     assert P.owner_only_path("/api/race/1/entry/2/card") and P.owner_only_path("/api/horse/h/detail")
-    assert P.owner_only_path("/api/v1/betting/optimize") and P.owner_only_path("/api/prediction-results")
+    assert P.owner_only_path("/api/v1/betting/simulate") and P.owner_only_path("/api/prediction-results")
+    # 有料ゾーンの推奨馬券（推奨度の段階だけの出力）は会員に出す。有料ゾーンを無効にすれば開発者専用に戻る
+    assert P.owner_only_path("/api/v1/betting/optimize") is False and P.owner_only_path("/api/v1/betting/race-values") is False
+    monkeypatch.setenv("KEIBA_PAID_ZONE", "0")
+    assert P.owner_only_path("/api/v1/betting/optimize") is True
+    monkeypatch.delenv("KEIBA_PAID_ZONE")
     assert P.owner_only_path("/api/race/1/predictions") is False   # 落として返す
     _set(monkeypatch, tmp_path, odds_derived_public=True)
     assert P.owner_only_path("/api/v1/betting/optimize") is False and P.owner_only_path("/api/horse/h/detail")

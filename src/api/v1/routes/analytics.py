@@ -49,11 +49,19 @@ def pedigree_race_note_v2():
     return jsonify(payload), code
 
 
+def _betting_view() -> str:
+    """開発者（所有者）は従来の詳細表示、会員は有料ゾーンの表示（推奨度の段階と買い目の区分だけ。オッズ・期待値・金額の数値なし）。"""
+    from src.api.flask_auth import is_logged_in
+    from src.utils import paid_zone as PZ
+
+    return "full" if (is_logged_in() or not PZ.enabled()) else "paid"
+
+
 @bp.post("/betting/optimize")
 @require_member
 def betting_optimize():
     body = request.get_json(silent=True) or {}
-    payload, code = optimize_betting(body)
+    payload, code = optimize_betting(body, view=_betting_view())
     return jsonify(payload), code
 
 
@@ -74,7 +82,7 @@ def betting_race_values():
             return jsonify({"error": "max_total_bet は 100 円以上の整数（上限なしは 0）"}), 400
     return jsonify(race_value_summary(
         date, odds_mode=request.args.get("odds_mode", "auto"), odds_phase=request.args.get("odds_phase", "latest"),
-        max_total_bet=cap,
+        max_total_bet=cap, view=_betting_view(),
     ))
 
 

@@ -118,7 +118,7 @@ def score_entries(entries: list[dict], odds: dict[int, dict], alpha: float = 0.5
     return out
 
 
-def build_payload(race_id: str, card: dict, odds_doc: dict | None, probs, source: str, label: str, alpha: float = 0.55) -> dict:
+def build_payload(race_id: str, card: dict, odds_doc: dict | None, probs, source: str, label: str, alpha: float = 0.55, market: bool = True) -> dict:
     """probs: race_id・horse_id・p_win・p_top2・p_top3 の表（pandas）。card: race_shutuba の保存内容。"""
     info = {str(e.get("horse_id") or ""): e for e in (card.get("entries") or []) if isinstance(e, dict)}
     odds: dict[int, dict] = {}
@@ -155,10 +155,12 @@ def build_payload(race_id: str, card: dict, odds_doc: dict | None, probs, source
     # 市場補正（KEIBA_PROB_CALIBRATION=1 のときだけ）: 保存済みの予測は書き換えず、読み出し時に確率・EV・印を付け直す
     from src.utils.prob_calibration import apply_prob_calibration
 
+    if not market:  # 実オッズを使わない（有料ゾーン案A・B）: 市場補正をかけない
+        return payload
     return apply_prob_calibration(payload, odds_phase=(odds_doc or {}).get("phase"), alpha=alpha)
 
 
-def load_local_prediction_payload(race_id: str, storage: Any, alpha: float = 0.55, inf: Path | None = None) -> dict | None:
+def load_local_prediction_payload(race_id: str, storage: Any, alpha: float = 0.55, inf: Path | None = None, market: bool = True) -> dict | None:
     """ローカルに予測があれば画面向けの応答にして返す。無い・読めないときは None（呼び出し側は従来の応答に進む）。"""
     try:
         card = storage.load("race_shutuba", race_id) or {}
@@ -172,11 +174,12 @@ def load_local_prediction_payload(race_id: str, storage: Any, alpha: float = 0.5
         if probs.empty or not {"horse_id", "p_win", "p_top2", "p_top3"} <= set(probs.columns):
             return None
         odds_doc = None
-        try:
-            odds_doc = storage.load("race_odds", race_id)
-        except Exception:
-            odds_doc = None
-        return build_payload(race_id, card, odds_doc, probs, source, label, alpha)
+        if market:  # market=False は実オッズに触れない
+            try:
+                odds_doc = storage.load("race_odds", race_id)
+            except Exception:
+                odds_doc = None
+        return build_payload(race_id, card, odds_doc, probs, source, label, alpha, market=market)
     except Exception:  # noqa: BLE001
         import logging
 

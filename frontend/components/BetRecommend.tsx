@@ -5,6 +5,7 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { USE_MOCK, getMockBetRecommendation } from "@/lib/mock";
 import { BetGroup, groupBets, nameMap, trioPartnerNums } from "@/lib/betGrouping";
+import { PaidBets, type PaidRec } from "@/components/PaidBets";
 
 type OddsMode = "auto" | "actual" | "predicted";
 type OddsPhase = "latest" | "t60" | "t15";
@@ -118,6 +119,7 @@ export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string;
   const [capReady, setCapReady] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [rec, setRec] = useState<Recommendation | null>(null);
+  const [paid, setPaid] = useState<PaidRec | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errReload, setErrReload] = useState(false);
@@ -204,6 +206,12 @@ export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string;
         return;
       }
       try {
+        if (body && (body as { view?: string }).view === "paid") {   // 会員向け: 推奨度の段階と買い目の区分だけの応答
+          setPaid(body as PaidRec);
+          setRec(null);
+          return;
+        }
+        setPaid(null);
         setRec(applyCalibration(body as Recommendation));
       } catch (e) {
         console.error("[BetRecommend] 応答の取り込みで例外:", e, body);
@@ -218,6 +226,7 @@ export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string;
 
   useEffect(() => {
     setRec(null);
+    setPaid(null);
     if (hasPrediction && capReady) run();
     // 予測が揃ったとき・レース/オッズ条件が変わったときに自動計算（資金の編集では再計算しない）
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -240,6 +249,10 @@ export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string;
         AI 予測がまだありません。「🤖 AI予測・期待値」タブで予測を実行すると、推奨馬券を計算します。
       </div>
     );
+  }
+
+  if (paid) {
+    return <PaidBets rec={paid} cap={cap} setCap={setCap} onRerun={run} loading={loading} />;
   }
 
   return (

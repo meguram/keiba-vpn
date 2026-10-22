@@ -10,7 +10,9 @@ export type ValueLevel = "hot" | "good" | "ok" | "pass" | "none";
 export type RaceValue = {
   race_id: string;
   level: ValueLevel;
-  expected_roi: number | null;
+  expected_roi?: number | null;
+  /** 会員向け（有料ゾーン）: 期待回収率の数値の代わりに、レース単位の推奨度の段階が来る */
+  tier?: { level: number; label: string } | null;
   max_ev?: number | null;
   n_bets?: number;
   total_bet?: number;
@@ -35,6 +37,7 @@ export function valueTitle(v: RaceValue | undefined): string {
   if (!v) return "";
   const s = LEVEL_STYLE[v.level];
   if (v.level === "none") return `${s.label}${v.reason ? `（${v.reason}）` : ""}`;
+  if (v.tier) return `推奨度: ${v.tier.label}${v.n_bets ? `｜買い目 ${v.n_bets} 点` : ""}`;
   const roi = v.expected_roi != null ? `推奨の期待回収率（較正後） ${(v.expected_roi * 100).toFixed(0)}%` : "買い目なし";
   const top = v.top_bet ? ` ／ 最有力 ${BET_JA[v.top_bet.bet_type] ?? v.top_bet.bet_type} ${v.top_bet.label}（期待値 ${v.top_bet.ev.toFixed(2)}）` : "";
   const rank = v.rank ? ` ／ その日 ${v.rank} 位${v.prob_calibrated ? "（市場補正したレースの中）" : ""}` : "";

@@ -98,6 +98,9 @@ def top_allowed_fields(role: str) -> set[str]:
     return out
 
 
+PAID_ZONE_PATH = re.compile(r"^/api/v1/betting/(optimize|race-values)$")
+
+
 def _compile(names: list[str]) -> list[re.Pattern]:
     return [re.compile(p) for p in names]
 
@@ -107,6 +110,12 @@ def owner_only_path(path: str) -> bool:
     if not is_public_mode():
         return False
     pp = section("paths_public_mode")
+    # 有料ゾーン: 推奨馬券と一覧は、会員には『推奨度の段階だけ』の出力（オッズ・期待値の数値なし）で出すので、開発者専用にしない
+    if PAID_ZONE_PATH.search(path):
+        from src.utils import paid_zone
+
+        if paid_zone.enabled():
+            return False
     pats = list(pp.get("owner_only", []))
     if not odds_allowed():
         pats += pp.get("owner_only_unless_odds_derived", [])

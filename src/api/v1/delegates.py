@@ -24,7 +24,12 @@ def _predicted_odds_for(c, predicted: dict | None) -> float | None:
     return None
 
 
-def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
+def optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool = True, forced_odds: dict | None = None,
+                     _ctx: dict | None = None) -> tuple[dict[str, Any], int]:
+    """推奨ポートフォリオ。view="paid" は会員向け（推奨度の段階と買い目の区分だけ。オッズ・期待値・金額の数値は出さない）。
+    market=False は実オッズに触れない（市場補正もしない）。forced_odds={"single":…, "pairs":…} は想定オッズで計算する（有料ゾーン案B）。"""
+    if view == "paid":
+        return _optimize_paid(body)
     from src.pipeline.inference.betting import BettingConfig, BettingOptimizer
     from src.pipeline.inference.odds_source import predicted_single_odds, resolve_odds
     from src.pipeline.inference.race_prediction_service import load_cached
@@ -43,7 +48,7 @@ def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
         try:
             from src.api.local_predictions import load_local_prediction_payload
 
-            local = load_local_prediction_payload(race_id, storage)
+            local = load_local_prediction_payload(race_id, storage, market=market)
         except Exception as exc:  # noqa: BLE001
             logger.warning("推奨用のローカル予測の読み込みに失敗 %s: %s", race_id, exc)
             local = None
@@ -51,10 +56,20 @@ def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
         already_calibrated = bool(predictions)  # 読み出し時に市場補正済み（二重に補正しない）
     if not predictions:
         return {"error": "予測結果がありません。先に推論を実行してください"}, 404
+    if _ctx is not None:
+        _ctx["predictions"] = predictions
+    if forced_odds is not None:  # 想定オッズで計算するときは、予測に付いている実オッズ由来の項目を使わない
+        from src.utils.paid_zone import strip_market
+
+        predictions = strip_market(predictions)
 
     odds_mode = str(body.get("odds_mode") or "auto").lower()
     odds_phase = str(body.get("odds_phase") or "latest").lower()
-    odds = resolve_odds(storage, race_id, mode=odds_mode, phase=odds_phase)
+    if forced_odds is not None:
+        odds = {"source": "predicted", "phase": None, "as_of": None, "available": [], "note": "想定オッズで計算", "allowed_bet_types": None,
+                "single_odds": forced_odds["single"], "pair_odds": forced_odds["pairs"]}
+    else:
+        odds = resolve_odds(storage, race_id, mode=odds_mode, phase=odds_phase)
     if odds["source"] is None and odds_mode in ("actual", "predicted"):
         what = "実オッズ" if odds_mode == "actual" else "予測オッズ"
         return {
@@ -74,7 +89,7 @@ def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
 
     pair_odds = odds["pair_odds"]
     single_odds = odds["single_odds"]
-    if odds["source"] is None:  # auto でオッズ無し: 従来どおり predictions 内のオッズ欄にフォールバック
+    if odds["source"] is None and forced_odds is None:  # auto でオッズ無し: 従来どおり predictions 内のオッズ欄にフォールバック
         pair_odds = storage.load("race_pair_odds", race_id) or {}
         single_odds = storage.load("race_odds", race_id)
 
@@ -117,7 +132,7 @@ def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
     )
 
     predicted = None
-    if odds["source"] == "actual":
+    if odds["source"] == "actual" and forced_odds is None:
         predicted = predicted_single_odds(storage, race_id)
 
     candidates_out = []
@@ -140,7 +155,8 @@ def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
             item["odds_gap"] = round(c.odds / pred_odds - 1, 3)
         candidates_out.append(item)
 
-    calibrated = _calibrate_candidates(candidates_out, bool(prob_cal_meta and prob_cal_meta.get("applied")))
+    # 想定オッズ（案B）の EV は、実オッズで当てはめた較正に通さない
+    calibrated = {} if forced_odds is not None else _calibrate_candidates(candidates_out, bool(prob_cal_meta and prob_cal_meta.get("applied")))
     return {
         "race_id": race_id,
         "bankroll": body.get("bankroll", 100000),
@@ -158,6 +174,90 @@ def optimize_betting(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
         "odds_note": odds["note"],
         **({"prob_calibration": prob_cal_meta} if prob_cal_meta else {}),
     }, 200
+
+
+def _paid_error(payload: dict[str, Any], code: int) -> tuple[dict[str, Any], int]:
+    return {"view": "paid", "error": str(payload.get("error") or "推奨馬券を計算できません")}, code
+
+
+def _paid_marks(preds: list[dict], single: dict | None) -> list[dict]:
+    """有料ゾーン案A・Bの印: 実オッズ由来の項目を落とし、想定オッズ（B）または確率だけ（A）で付け直す。"""
+    from src.api.local_predictions import score_entries
+    from src.utils import paid_zone as PZ
+
+    try:
+        return score_entries(PZ.strip_market(preds), PZ.predicted_odds_map(single))
+    except Exception as exc:  # noqa: BLE001  印が付けられなくても買い目は出す
+        logger.warning("有料ゾーンの印の計算に失敗: %s", exc)
+        return PZ.strip_market(preds)
+
+
+def _optimize_paid(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
+    """会員向けの推奨馬券。レース単位の推奨度（推奨ポートフォリオ全体の期待回収率を段階にしたもの）と、
+    買い目（券種ごとの組み合わせ＋区分 本線/押さえ）だけを返す。オッズ・期待値・確率・金額（Kelly 配分）の数値は出さない。
+    方式は config/paid_zone.json の mode（A=確率のみ／B=想定オッズ／C=実オッズを内部で使う）。"""
+    from src.pipeline.inference.odds_source import predicted_single_odds
+    from src.scraper.storage import HybridStorage
+    from src.utils import paid_zone as PZ
+
+    race_id = body.get("race_id", "")
+    if not race_id:
+        return {"view": "paid", "error": "race_id is required"}, 400
+    raw_cap = body.get("max_total_bet", PZ.default_max_total_yen())
+    cap: int | None = None
+    if raw_cap not in (None, 0):
+        try:
+            cap = int(raw_cap)
+        except (TypeError, ValueError):
+            cap = -1
+        if cap < 100:
+            return {"view": "paid", "error": "max_total_bet は 100 円以上の整数で指定してください（上限なしは null か 0）"}, 400
+
+    m = PZ.mode()
+    bts = PZ.bet_types()
+    base = {k: v for k, v in body.items() if k in ("race_id", "odds_phase", "min_prob", "kelly_fraction", "max_candidates", "top_n_for_pairs")}
+    base.update({"bet_types": bts, "max_total_bet": None, "bankroll": 100000})
+    ctx: dict[str, Any] = {}
+    storage = HybridStorage()
+
+    if m == "C":
+        full, code = optimize_betting({**base, "odds_mode": "actual"}, _ctx=ctx)
+        if code == 200 and full.get("odds_source") == "actual":
+            total = full.get("total_bet") or 0
+            roi = full.get("expected_roi_calibrated")
+            if roi is None and total:
+                roi = (full.get("expected_return") or 0) / total
+            preds = ctx.get("predictions") or []
+            return PZ.build_paid_payload(full.get("candidates") or [], preds, race_id=race_id, roi=roi, m="C", max_total_bet=cap), 200
+        m = "B"  # 実オッズが無いレースは想定オッズで
+
+    single = PZ.calibrate_single(predicted_single_odds(storage, race_id)) if m == "B" else None
+    if m == "B" and not single:
+        m = "A"
+    if m == "B":
+        win = {int(e["horse_number"]): float(e["win_odds"]) for e in single["entries"] if e.get("win_odds")}
+        forced = {"single": single, "pairs": PZ.synth_pair_odds(win)}
+        full, code = optimize_betting({**base}, market=False, forced_odds=forced, _ctx=ctx)
+        if code != 200:
+            return _paid_error(full, code)
+        total = full.get("total_bet") or 0
+        roi = (full.get("expected_return") or 0) / total if total else None
+        preds = _paid_marks(ctx.get("predictions") or [], single)
+        return PZ.build_paid_payload(full.get("candidates") or [], preds, race_id=race_id, roi=roi, m="B", max_total_bet=cap), 200
+
+    # A: 確率のみ
+    from src.api.local_predictions import load_local_prediction_payload
+    from src.pipeline.inference.race_prediction_service import load_cached
+
+    cached = load_cached(storage, race_id)
+    preds = (cached or {}).get("predictions") or []
+    if not preds:
+        local = load_local_prediction_payload(race_id, storage, market=False)
+        preds = (local or {}).get("predictions") or []
+    if not preds:
+        return {"view": "paid", "error": "予測結果がありません。先に推論を実行してください"}, 404
+    marks = _paid_marks(preds, None)
+    return PZ.build_paid_payload(PZ.prob_only_candidates(marks), marks, race_id=race_id, roi=PZ.confidence_index(marks), m="A", max_total_bet=cap), 200
 
 
 def _levels_now():
@@ -256,25 +356,56 @@ def _apply_day_ranking(rows: list[dict[str, Any]]) -> None:
         r.setdefault("rank", None)
 
 
+_PAID_LEVEL_STYLE = {4: "hot", 3: "good", 2: "ok", 1: "ok", 0: "pass"}
+
+
+def _value_row_paid(race: dict[str, Any], payload: dict[str, Any], code: int) -> dict[str, Any]:
+    """会員向け: 期待回収率などの数値は出さず、レース単位の推奨度（段階）だけ。"""
+    base = {"race_id": race["race_id"], "round": race.get("round"), "venue": race.get("venue"), "race_name": race.get("race_name")}
+    if code != 200:
+        return {**base, "level": "none", "reason": "計算できません", "n_bets": 0, "tier": None}
+    tier = payload.get("race_tier") or {"level": 0, "label": "推奨しない"}
+    return {**base, "level": _PAID_LEVEL_STYLE.get(int(tier.get("level") or 0), "pass"), "tier": tier,
+            "n_bets": len(payload.get("bets") or [])}
+
+
 def race_value_summary(
     date: str,
     *,
     odds_mode: str = "auto",
     odds_phase: str = "latest",
     max_total_bet: int | None = DEFAULT_MAX_TOTAL_BET,
+    view: str = "full",
 ) -> dict[str, Any]:
-    """開催日の全レースについて、推奨買い目の期待回収率とレベルを返す（レース選択の強調表示に使う）。"""
+    """開催日の全レースについて、推奨買い目の期待回収率とレベルを返す（レース選択の強調表示に使う）。
+    view="paid" は会員向け（推奨度の段階だけ。期待回収率の数値は出さない）。"""
     import time
 
     from src.scraper.storage import HybridStorage
 
-    key = (date, odds_mode, odds_phase, max_total_bet)
+    key = (date, odds_mode, odds_phase, max_total_bet, view)
     hit = _VALUE_CACHE.get(key)
     if hit and time.time() - hit[0] < _VALUE_TTL_SEC:
         return hit[1]
 
     storage = HybridStorage()
     races = (storage.load("race_lists", date) or {}).get("races") or []
+    if view == "paid":
+        from src.utils import paid_zone as PZ
+
+        prow = []
+        for r in races:
+            if not r.get("race_id"):
+                continue
+            try:
+                payload, code = optimize_betting({"race_id": r["race_id"], "max_total_bet": max_total_bet}, view="paid")
+            except Exception as exc:  # 1 レースの失敗で一覧全体を落とさない
+                logger.warning("race value(paid) 計算失敗 %s: %s", r["race_id"], exc)
+                payload, code = {"error": str(exc)}, 500
+            prow.append(_value_row_paid(r, payload, code))
+        out = {"date": date, "view": "paid", "legend": PZ.legend(), "max_total_bet": max_total_bet, "races": prow}
+        _VALUE_CACHE[key] = (time.time(), out)
+        return out
     rows = []
     for r in races:
         if not r.get("race_id"):
