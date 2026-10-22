@@ -151,3 +151,9 @@ esac
 stop_server
 start_server
 wait_health 25 || true
+
+# /api/v1（Flask）は別プロセス(main.py --flask-api)で、FastAPI の再起動では古いコードのまま残る。止めると server_watchdog(3分おき)が新しいコードで立ち上げ直す。
+if pgrep -f "main.py --flask-api" >/dev/null 2>&1; then
+  echo "[restart] Flask(/api/v1) を再起動します（watchdog が数分以内に新しいコードで起動）"
+  pkill -f "main.py --flask-api" 2>/dev/null || true
+fi
