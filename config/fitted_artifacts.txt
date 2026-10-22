@@ -35,3 +35,8 @@ config/drift_top_features.json
 # --- 集計表（データから集計した値）
 data/research/bloodline/
 data/research/course_bloodline/
+
+# --- 外部資料の抜粋（第三者サイトの文。公開しない。ローカルのみ保持。バックアップとホストへの配置の対象）
+data/meta/course_master/geo/jravan_start.json
+data/meta/course_master/geo/start_descriptions.json
+data/meta/course_master/geo/route_audit.json

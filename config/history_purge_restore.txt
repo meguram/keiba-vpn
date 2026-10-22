@@ -138,3 +138,7 @@ notebooks/modeling/_run_output/megu_predict_opt/metrics_summary.json
 notebooks/modeling/_run_output/megu_predict_opt/scatter_test.png
 # 再追加を防ぐ .gitignore（除去するディレクトリの中にあるもの）
 data/research/bloodline/.gitignore
+# 第三者サイトの文の抜粋を除いた版（コース資料）
+data/meta/course_master/geo/start_overrides.json
+data/meta/course_master/corrections.json
+data/meta/course_master/geo/verification_notes.json

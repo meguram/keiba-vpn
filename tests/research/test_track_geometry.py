@@ -160,10 +160,13 @@ def test_overrides_have_evidence_urls():
         if k.startswith("_"):
             continue
         assert v["start_geometry"] in ("pocket", "main_track", "chute_pocket", "home_stretch_pocket")
-        assert v["evidence"] and all(e["url"].startswith("https://") and e["summary"] for e in v["evidence"]), k
+        assert v["evidence"] and all(e["url"].startswith("https://") and e["source"] for e in v["evidence"]), k
 
 
 def test_route_audit_covers_all_courses_and_agrees_mostly(routes, master):
+    f = ROOT / "data/meta/course_master/geo/route_audit.json"
+    if not f.exists():
+        pytest.skip("独立した記述（第三者サイトの文）は公開リポジトリに置かないため、この環境には route_audit.json が無い（利用不可）")
     audit = json.loads((ROOT / "data/meta/course_master/geo/route_audit.json").read_text(encoding="utf-8"))["rows"]
     assert len(audit) == len(master)
     ok = sum(1 for r in audit if r["verdict"] == "一致")

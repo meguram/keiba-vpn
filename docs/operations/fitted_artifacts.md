@@ -18,7 +18,7 @@
 |---|---|
 | `config/ev_calibration.json`、`ev_calibration_pc.json`、`prob_calibration.json` | 較正の係数（当て込み）と、段の閾値・有効化の設定（人が決める）が同じファイルに混在。UI と推奨度のテストが閾値を読む。分けるなら、係数と閾値で 2 ファイルに分割する改修が先。 |
 | `config/pace_type.json` | モデルの定義、コースの幾何情報、競馬場コードが混在 |
-| `data/meta/course_master/**` | **`geo/jravan_start.json` などに JRA-VAN 由来の可能性**。JRA-VAN の規約は公表を禁じる（個人契約）。出所の確認を最優先で |
+| `data/meta/course_master/jra_courses.json`、`profiles_A.json` | 数値（距離・コーナー・高低差）が中心で、`evidence`／`start_position_A` に出典名つきの短い事実の記述（自分の言葉）。JRA 公式の高低断面図の数値化は事実データだが、出典は JRA。残した |
 | `data/jra_baba/cushion_*.json` | JRA 公開情報の蓄積。JRA サイトの規約で事実データの扱いは未記載 |
 | `data/meta/dormello/*.csv`、`data/knowledge/horse_peds_domain.html` | 自前の手作業の調査・生成物。外部データの転記を含みうる |
 | `docs/requirements/data/schemas/observed/` | 型・件数・キー範囲のみ（値のサンプルは無いことを走査で確認済み） |
@@ -41,3 +41,18 @@
 | (a) ホストの実ファイル | 86/88 | 1 | 1 | `config/drift_top_features.json` がホストに無い → 作業ツリー指定のステージで配置。`models/final_odds_bundle.json` は**ホスト版が正**（開発 PC の複製が古い）→ **ホストで pack する**か、ホスト版を取得して照合 |
 | (b) GCS `models/fitted_artifacts/` | 未確認 | - | - | ホストで `fitted_artifacts.sh pack` → `model_publish publish fitted_artifacts <dir>` を行い、`KEIBA_GCS_BUCKET` を指定して再確認 |
 | (c) リポジトリ外バックアップ | 0/88 | 88 | 0 | `purge_preflight.sh backup`（git bundle と tar.gz）。ホスト版を取り込んだあとに作る |
+
+## コース資料（`data/meta/course_master/**`）の監査（2026-10-22）
+第三者サイト（JRA-VAN すごトク、競馬ラボ、Wikipedia など）の**文の抜粋**を含むものは、公開リポジトリから外した（権利の都合。JRA-VAN は公表禁止）。
+| ファイル | 内容 | 扱い |
+|---|---|---|
+| `geo/jravan_start.json` | JRA-VAN すごトクの各コース解説から抜いた発走位置の文（約140件） | **HEAD から外す・履歴から除去**・ローカル保持 |
+| `geo/start_descriptions.json` | 独立収集 A/B/C（JRA 公式、netkeiba・競馬ラボ、Wikipedia・JRA-VAN 等）の記述と URL | 同上 |
+| `geo/route_audit.json` | 上の 2 つとの突き合わせ表（文を含む） | 同上 |
+| `geo/start_overrides.json` | 発走位置の上書き。根拠の `summary`（他サイトの文）を削除、出典名と URL は残した | 整理して残す・履歴から除去して整理版を戻す |
+| `corrections.json` | 補正値と根拠。JRA 公式本文・JRA-VAN の引用文を、自分の言葉の事実に書き換え | 同上 |
+| `geo/verification_notes.json` | 検証メモ。他サイトの名前とファイル名の言及を整理 | 同上 |
+| `geo/routes.json`、`geo/osm/*.json` | OpenStreetMap 由来（ODbL。帰属表示あり） | 残す |
+| `jra_courses.json`、`profiles_A.json`、`verification_issues.json` | 数値と自前の短い記述 | 残す（要確認に記載） |
+`track_geometry.py` は、独立した記述（`start_descriptions.json`）が無い環境では走行ルートの監査を行わず（利用不可）、既存の結果を変えない。`test_route_audit_*` は `route_audit.json` が無ければ skip。
+**未対応**: `docs/html/modeling/chapters/course_master_verification.html` が、`jravan_start.json` の記述と監査表の内容に言及している（`docs/html` の編集は `book.html` の再生成が要るため、触っていない。親側で、該当節の削除または言い換えと再生成が必要）。

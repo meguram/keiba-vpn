@@ -242,3 +242,13 @@ config/drift_top_features.json
 data/research/bloodline/
 data/research/course_bloodline/
 data/research/course_bloodline
+
+# L. 第三者サイト（JRA-VAN すごトク・競馬ラボ・Wikipedia 等）の文の抜粋を含むコース資料（HEAD から外した。実ファイルはローカルのみ保持）
+data/meta/course_master/geo/jravan_start.json
+data/meta/course_master/geo/start_descriptions.json
+data/meta/course_master/geo/route_audit.json
+
+# M. 同上の抜粋を含んでいたが、HEAD では抜粋を除いて残すもの（履歴から消し、先端に整理済みの版を戻す。config/history_purge_restore.txt）
+data/meta/course_master/geo/start_overrides.json
+data/meta/course_master/corrections.json
+data/meta/course_master/geo/verification_notes.json
