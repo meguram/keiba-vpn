@@ -21,6 +21,8 @@
 7. **最初の一歩（追加費用 0）**: VPS に nginx・cloudflared・Next.js standalone を載せ、`MemoryMax` とヘルスチェックを設定し、`app.megu-keiba.com` を VPS に切り替える（API は当面ホストのトンネル経由）。詳細は 7.1。
 8. **決めていただくこと**は 9 章。
 
+**追記 2026-10-22（ユーザー確定）**: 最終形は「**公開(prod)はホストPC(stg)と何のつながりもない**」。アプリの運用・データ取得・モデルの読み込み・監視はすべて VPS/GCP で完結し、ホストは**研究専用**（モデルの再学習など。運用に影響しない）。上の 4 や 3.3 の「ホスト PC はモデリングと GCS へのモデル配布のみ」は、**配布も“GCS に置く一方向”だけ**に限る。依存の監査・置き換え・移行順序・停止試験は [decoupling_plan.md](./decoupling_plan.md)。ホストの取得は「prod で数日間正常を見届けるまで」続ける。
+
 > 金額の根拠: Cloud Run の無料枠、R2 の料金は公式ページで 2026-10-21 に確認。**Cloud Run / GCS / Scheduler の単価は公式ページの本文を取得できず、作成者の知識ベース（要確認）**。付録 A に一覧、`python -m src.scripts.ops.cost_estimate --list-unverified` でも出せる。
 
 ---

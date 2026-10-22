@@ -72,6 +72,9 @@ Run Job の環境変数には**必ず** `KEIBA_ENV=prod`・`KEIBA_RUN_LOCATION=g
 
 ---
 
+### 2.1 「ホストに残す」の見直し（2026-10-22）
+最終形（公開はホストと無関係。ホストは研究専用）の観点で、host 21 件＋retire 2 件を見直した（`config/decoupling_roles.json`、`tests/ops/test_decoupling_roles.py`）。**研究専用は 5 件だけ**（`modeling`・`sporthorse-births-nightly`・`backfill-2020/2021-fast`・`keiba-remote-access`）。**運用に必要なのに host だった 12 件**（`raceday-result-runner`・`horse-remarks-daily`・`backfill-2022〜2026`・`backfill-all-horse`・`horse-training-backfill` の当年分）は VPS/GCP へ移す。廃止・置き換えは 6 件。理由と移行順序は [decoupling_plan.md](./decoupling_plan.md) の 3 章・5 章。`destination` はこの時点では変えていない（移すジョブから順に job_map を更新する）。
+
 ## 3. データとモデルの持ち込み
 
 ### 3.1 入出力（state）

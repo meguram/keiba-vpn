@@ -1,0 +1,371 @@
+{
+ "_doc": "ホスト固有の参照の許容件数(ファイル×区分)。増えたら host_dependency_scan が失敗する。 依存を減らしたら --update-baseline で下げる。",
+ "counts": {
+  "frontend/app/layout.tsx": {
+   "local_data": 1
+  },
+  "scripts/ops/cutover/host_cron_switch.sh": {
+   "local_data": 2
+  },
+  "scripts/ops/maintenance_deploy.sh": {
+   "local_data": 3
+  },
+  "scripts/ops/maintenance_holding_server.py": {
+   "host_port_literal": 1
+  },
+  "scripts/ops/vps/backup_old_site.sh": {
+   "host_alias": 1
+  },
+  "scripts/ops/vps/build_release.sh": {
+   "local_data": 1
+  },
+  "scripts/ops/vps/compare_versions.sh": {
+   "local_data": 1
+  },
+  "scripts/ops/vps/promote.sh": {
+   "local_data": 2
+  },
+  "scripts/ops/vps/promote_if_approved.sh": {
+   "local_data": 3
+  },
+  "scripts/ops/vps/publish_release.sh": {
+   "local_data": 2
+  },
+  "scripts/ops/vps/ssh_config.example": {
+   "host_alias": 2
+  },
+  "scripts/ops/vps/vars.env.example": {
+   "host_port_literal": 1,
+   "api_internal": 1
+  },
+  "scripts/server/deploy_v5.sh": {
+   "host_path": 1,
+   "local_data": 1
+  },
+  "scripts/server/enable_v5_shadow.sh": {
+   "host_path": 1,
+   "local_data": 4
+  },
+  "scripts/server/ensure_postgres.sh": {
+   "postgres": 4
+  },
+  "scripts/server/fetch_stg_health.sh": {
+   "host_alias": 2,
+   "host_path": 1,
+   "local_data": 1
+  },
+  "scripts/server/frontend_npm_install.sh": {
+   "host_path": 1
+  },
+  "scripts/server/setup_stg.sh": {
+   "postgres": 2
+  },
+  "scripts/server/tunnel_cloudflared.sh": {
+   "host_port": 1,
+   "host_port_literal": 1
+  },
+  "scripts/server/tunnel_stg_ui.sh": {
+   "host_port": 4,
+   "host_port_literal": 4,
+   "host_alias": 2
+  },
+  "src/api/app.py": {
+   "page_reference": 6,
+   "postgres": 5,
+   "local_data": 6
+  },
+  "src/api/bloodline_meta_cluster.py": {
+   "page_reference": 2,
+   "local_data": 3
+  },
+  "src/api/entries_status.py": {
+   "local_data": 1
+  },
+  "src/api/entry_card.py": {
+   "local_data": 2,
+   "page_reference": 1
+  },
+  "src/api/flask_app.py": {
+   "page_reference": 1,
+   "postgres": 4
+  },
+  "src/api/local_predictions.py": {
+   "local_data": 1
+  },
+  "src/api/megu_predict_race.py": {
+   "postgres": 2,
+   "page_reference": 1
+  },
+  "src/api/monitor_coverage.py": {
+   "postgres": 2,
+   "local_data": 1,
+   "page_reference": 2
+  },
+  "src/api/prediction_results_api.py": {
+   "local_data": 1
+  },
+  "src/api/quality_auto_remediation.py": {
+   "local_data": 1,
+   "postgres": 1
+  },
+  "src/api/quality_health.py": {
+   "local_data": 2,
+   "postgres": 1
+  },
+  "src/api/stg_mock.py": {
+   "host_path": 1,
+   "page_reference": 1
+  },
+  "src/api/v1/routes/analytics.py": {
+   "postgres": 8,
+   "local_data": 2
+  },
+  "src/api/v1/routes/data_analysis.py": {
+   "postgres": 1
+  },
+  "src/api/v1/services.py": {
+   "postgres": 2
+  },
+  "src/config/data_paths.py": {
+   "page_reference": 2,
+   "local_data": 2
+  },
+  "src/monitor/app.py": {
+   "postgres": 4,
+   "local_data": 4
+  },
+  "src/monitor/cron_failure_patterns.py": {
+   "local_data": 2,
+   "postgres": 4
+  },
+  "src/monitor/cron_status.py": {
+   "local_data": 2,
+   "postgres": 1
+  },
+  "src/monitor/model_perf.py": {
+   "local_data": 2
+  },
+  "src/monitor/page_quality_check.py": {
+   "local_data": 2
+  },
+  "src/ops/fetch_shadow.py": {
+   "local_data": 1
+  },
+  "src/ops/heartbeat_store.py": {
+   "local_data": 1
+  },
+  "src/ops/job_dispatch.py": {
+   "page_reference": 1
+  },
+  "src/ops/jobs/predict_race.py": {
+   "local_data": 1
+  },
+  "src/ops/release_manifest.py": {
+   "local_data": 1
+  },
+  "src/ops/release_publish.py": {
+   "local_data": 3
+  },
+  "src/pipeline/inference/expected_megu.py": {
+   "page_reference": 1
+  },
+  "src/pipeline/inference/growth_attach.py": {
+   "local_data": 1
+  },
+  "src/pipeline/inference/horse_growth.py": {
+   "page_reference": 3
+  },
+  "src/pipeline/inference/lap_forecast_service.py": {
+   "local_data": 2
+  },
+  "src/pipeline/inference/prediction_results.py": {
+   "local_data": 2
+  },
+  "src/pipeline/inference/tracking_v2_eval.py": {
+   "local_data": 2,
+   "page_reference": 1
+  },
+  "src/pipeline/inference/tracking_v2_service.py": {
+   "local_data": 2
+  },
+  "src/pipeline/inference/v3_serving.py": {
+   "local_data": 3
+  },
+  "src/pipeline/inference/weight_triggered_predict.py": {
+   "local_data": 3
+  },
+  "src/scraper/auto_scrape.py": {
+   "page_reference": 1,
+   "local_data": 3
+  },
+  "src/scraper/auto_scrape_queue.py": {
+   "page_reference": 3,
+   "local_data": 1
+  },
+  "src/scraper/availability_watch.py": {
+   "local_data": 2
+  },
+  "src/scraper/backfill.py": {
+   "local_data": 2
+  },
+  "src/scraper/cleanup_nar.py": {
+   "local_data": 1
+  },
+  "src/scraper/client.py": {
+   "local_data": 1
+  },
+  "src/scraper/date_complete.py": {
+   "local_data": 1
+  },
+  "src/scraper/date_coverage.py": {
+   "local_data": 6,
+   "page_reference": 1
+  },
+  "src/scraper/entries_sync.py": {
+   "local_data": 2
+  },
+  "src/scraper/export_tables.py": {
+   "page_reference": 1
+  },
+  "src/scraper/horse_pedigree_5gen_bulk.py": {
+   "local_data": 5,
+   "page_reference": 1
+  },
+  "src/scraper/horse_result_fix.py": {
+   "local_data": 2,
+   "page_reference": 1
+  },
+  "src/scraper/horse_training_local.py": {
+   "local_data": 2
+  },
+  "src/scraper/jra_baba_live.py": {
+   "page_reference": 5
+  },
+  "src/scraper/jra_calendar.py": {
+   "page_reference": 2
+  },
+  "src/scraper/jra_cushion.py": {
+   "page_reference": 1
+  },
+  "src/scraper/jra_cushion_storage.py": {
+   "local_data": 3,
+   "page_reference": 1
+  },
+  "src/scraper/jra_cushion_sync.py": {
+   "local_data": 1
+  },
+  "src/scraper/local_mirror_config.py": {
+   "local_data": 2
+  },
+  "src/scraper/local_tables.py": {
+   "local_data": 1,
+   "page_reference": 2
+  },
+  "src/scraper/new_horse_pedigree.py": {
+   "page_reference": 2
+  },
+  "src/scraper/odds_fix.py": {
+   "local_data": 2,
+   "page_reference": 1
+  },
+  "src/scraper/parse_audit.py": {
+   "page_reference": 1
+  },
+  "src/scraper/parse_drift.py": {
+   "page_reference": 1
+  },
+  "src/scraper/payoff_repair.py": {
+   "local_data": 2,
+   "page_reference": 1
+  },
+  "src/scraper/persist_context.py": {
+   "local_data": 1
+  },
+  "src/scraper/queue_job_progress.py": {
+   "local_data": 1
+  },
+  "src/scraper/race_day_schedule.py": {
+   "page_reference": 1
+  },
+  "src/scraper/recent_retry.py": {
+   "local_data": 2
+  },
+  "src/scraper/run.py": {
+   "local_data": 7
+  },
+  "src/scraper/scheduler.py": {
+   "local_data": 1
+  },
+  "src/scraper/schema_sampler.py": {
+   "local_data": 1
+  },
+  "src/scraper/schema_violations.py": {
+   "local_data": 5
+  },
+  "src/scraper/smartrc_client.py": {
+   "local_data": 1
+  },
+  "src/scraper/storage.py": {
+   "page_reference": 4,
+   "local_data": 11
+  },
+  "src/scraper/structure_monitor.py": {
+   "local_data": 3
+  },
+  "src/scraper/table_quality.py": {
+   "page_reference": 2
+  },
+  "src/scraper/timing_stats.py": {
+   "local_data": 2
+  },
+  "src/scraper/verify_horse_scrape_completeness.py": {
+   "local_data": 1
+  },
+  "src/scripts/ops/cloudrun_smoke.py": {
+   "api_internal": 1
+  },
+  "src/scripts/ops/cron_cutover_status.py": {
+   "page_reference": 1
+  },
+  "src/scripts/ops/cutover_plan.py": {
+   "host_path": 2,
+   "local_data": 1
+  },
+  "src/scripts/ops/maintenance_deploy.py": {
+   "local_data": 4,
+   "host_port_literal": 2
+  },
+  "src/scripts/ops/maintenance_notify.py": {
+   "local_data": 2
+  },
+  "src/scripts/ops/serving_state.py": {
+   "local_data": 1
+  },
+  "src/scripts/ops/stage_deploy.py": {
+   "host_port": 3,
+   "host_port_literal": 3,
+   "host_alias": 1,
+   "host_path": 1,
+   "local_data": 3
+  },
+  "src/utils/anti_scraping.py": {
+   "local_data": 2
+  },
+  "src/utils/horse_name_index.py": {
+   "local_data": 5,
+   "page_reference": 1
+  },
+  "src/utils/lap_pattern.py": {
+   "local_data": 2
+  },
+  "src/utils/maintenance.py": {
+   "local_data": 1
+  },
+  "src/utils/race_list_for_date.py": {
+   "page_reference": 1
+  },
+  "src/utils/spec_gen.py": {
+   "local_data": 1
+  }
+ }
+}
