@@ -230,8 +230,7 @@ def _build_samples(tmp: Path) -> dict[str, list[dict[str, Any]]]:
         S["E01"] = [P("myostatin_genes.json", my, "実データ（手動作成ナレッジ。この PC）", "stallions は先頭 2 件に短縮")]
     else:
         S["E01"] = [N("サンプルなし: myostatin_genes.json は手動作成ナレッジ（git 管理外）で、この環境に無いため載せていません。")]
-    S["E02"] = [P("_meta.json", jload("data/research/other_predictor_umauma/_meta.json"), "実データ（この PC）"),
-                P("articles_manifest.json", jload("data/research/other_predictor_umauma/articles_manifest.json"), "実データ（この PC）", "先頭 2 件に短縮")]
+    S["E02"] = [N("サンプルなし: 外部予想家の記事の写しは、著作権への配慮から公開リポジトリに置かない（参考にした着眼点は docs/ideas/other_predictor_ideas.md に自分の言葉で整理）。")]
     if (ROOT / "data/calculated_data/meta/person/jockey_00001.json").exists():
         S["E03"] = [P("meta/person/jockey_00001.json", jload("data/calculated_data/meta/person/jockey_00001.json"),
                       "実データ（dev にあるサンプル。yearly_stats は空）")]

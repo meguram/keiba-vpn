@@ -1434,60 +1434,7 @@ table.smp{font-size:11.5px}table.smp th,table.smp td{padding:4px 8px;white-space
     &quot;…（他 2 件）&quot;
   ]
 }</code></pre></div></details></td></tr>
-<tr class="ds" data-id="E02"><td class="id">E02</td><td><b>other_predictor_umauma<br><small>外部予想家の予想</small></b></td><td>自モデルとの突合・検証分析</td><td><b>手動／LLM 補助</b>（note 記事テキスト → 抽出 JSON。取得手順は<b>要確認</b>）</td><td><code>data/research/other_predictor_umauma/</code>（raw_notes / predictions_*.json / articles_manifest.json）</td><td>随時</td><td>開発PC（手動）</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON・2 種）</summary><div class="smp-p"><div class="smp-h"><b>_meta.json</b> <span class="smp-src">実データ（この PC）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
-  &quot;source&quot;: &quot;note.com creator yupo1004 (「うまうまー」)&quot;,
-  &quot;source_api&quot;: [
-    &quot;https://note.com/api/v2/creators/yupo1004/contents&quot;,
-    &quot;https://note.com/api/v3/notes/&lt;key&gt;&quot;
-  ],
-  &quot;collected_at&quot;: &quot;2026-09-29&quot;,
-  &quot;n_articles&quot;: 50,
-  &quot;n_races&quot;: 59,
-  &quot;article_range&quot;: &quot;2021-09-09 to 2023-01-12 (23 most recent pre-2025 articles) + 2025-01-10 to 2026-09-25 (all 27 articles from 2025 onward)&quot;,
-  &quot;methodology_version&quot;: 3,
-  &quot;methodology_note&quot;: &quot;v1/v2は note本文の自己申告テキストのみから着順を抽出していたが、v3では各レースの予想印(◉○▲△等)に対応する馬名を実際にnetkeiba.comの結果ページで検索・照合し、確認済みの着順・単勝人気を正解データとして採用している(ユーザー指示: &#x27;レース結果はnote上というよりは実際のネット検索で見つける方が確実&#x27;）。note自身の自己申告文はhit_level_noteの説明にのみ利用し、着順の根拠には使用しない。この切り替えにより、note側の記述だけでは同定できなかった複数レース(阪神ジュベナイルフィリーズ・愛知杯・共同通信杯2022・クイーンカップ2022・京都記念2022等)の的中レベルを確定でき、判定不能(Lv0)は59件中1件(オーシャンステークス、著者が明示的に対象外とした回)まで減少した。&quot;,
-  &quot;files&quot;: {
-    &quot;articles_manifest.json&quot;: &quot;50件の記事メタ情報 (key, title, date, price)&quot;,
-    &quot;raw_notes/&quot;: &quot;note.com APIから取得したHTMLタグ除去後の本文プレーンテキスト。有料記事は課金前プレビュー部分のみ。予想印・馬名の同定に使用（着順の根拠には使用しない）。&quot;,
-    &quot;predictions_raw_extraction.json&quot;: &quot;v1/v2時点の中間出力(article単位、note本文からの抽出)。参考用に保持。&quot;,
-    &quot;predictions_ground_truth.json&quot;: &quot;race単位(59件)の正解データ。honmei・marks_verified（netkeiba確認済み着順・人気）・hit_level(0-8)・データ出所を含む。docs/other_predictor/うまうまー/index.html の集計の元データ。&quot;
-  },
-  &quot;hit_level_schema&quot;: {
-    &quot;8&quot;: &quot;完全的中（順序一致）: 優先順位付き予想の通りに1-2-3着が決まる（1着予想→実際1着、2着予想→実際2着、3着候補→実際3着）。三連単的中相当。&quot;,
-    &quot;7&quot;: &quot;完全的中（順不同）: 3頭以上の印馬が1-2-3着を占めるが、優先順位と着順は一致しない。三連複的中相当。&quot;,
-    &quot;6&quot;: &quot;軸複数的中（本命1着+他1頭）: 本命が1着、かつ他の印馬1頭も3着以内（本命含め2頭馬券内）。&quot;,
-    &quot;5&quot;: &quot;軸的中（本命1着）: 本命が1着、他の印は3着以内に絡まない。&quot;,
-    &quot;4&quot;: &quot;複数的中（本命2-3着+他1頭）: 本命が2着または3着、かつ他の印馬1頭も3着以内（本命含め2頭馬券内）。&quot;,
-    &quot;3&quot;: &quot;単独的中（本命2-3着）: 本命が2着または3着、他の印は絡まない。&quot;,
-    &quot;2&quot;: &quot;ニアピン（本命4-5着）: 本命が4着または5着。&quot;,
-    &quot;1&quot;: &quot;不的中: 本命が6着以下で大敗、または人気決着で穴馬の出番なし。&quot;,
-    &quot;0&quot;: &quot;判定不能/対象外: 本命に該当する印がない、または著者自身がそのレースを分析対象外と明言している（例: オーシャンステークス＝5人気以内での決着のため参考外と著者が明記）。&quot;
-  },
-  &quot;honmei_identification_rule&quot;: [
-    &quot;1. 本文中に◉/◎の記号がある場合はその馬を本命とする。&quot;,
-    &quot;2. 記号がない場合、本文中に明示的な「本命」「本命格」の言及がある馬を本命とする。&quot;,
-    &quot;…（他 3 件）&quot;
-  ],
-  &quot;known_limitations&quot;: [
-    &quot;netkeiba.comの結果ページはWebFetchによるHTML→自然言語要約経由で取得しているため、着順・馬名の取得ミスは複数のクエリ・複数取得での整合性確認で低減しているが、単勝人気の数値等に軽微な誤りが残る可能性がある。&quot;,
-    &quot;ドバイゴールデンシャヒーン・ドバイターフ（2022年、海外G1）はnetkeiba.comでの確認ができず、note自身の記述（複勝率100%継続等）のみに基づく暫定的なhit_levelである（verification_status: unverified_international）。&quot;,
-    &quot;…（他 2 件）&quot;
-  ]
-}</code></pre></div><div class="smp-p"><div class="smp-h"><b>articles_manifest.json</b> <span class="smp-src">実データ（この PC）</span></div><div class="smp-n">先頭 2 件に短縮</div><div class="smp-t">リスト（list）</div><pre class="smp"><code>[
-  {
-    &quot;key&quot;: &quot;nd969eb0fe61c&quot;,
-    &quot;title&quot;: &quot;㊗️京成杯AHの穴馬発掘note㊗️(9087文字)&quot;,
-    &quot;date&quot;: &quot;2021-09-09&quot;,
-    &quot;price&quot;: 0
-  },
-  {
-    &quot;key&quot;: &quot;n57d653d08582&quot;,
-    &quot;title&quot;: &quot;㊗️紫苑Sの小言note㊗️&quot;,
-    &quot;date&quot;: &quot;2021-09-10&quot;,
-    &quot;price&quot;: 0
-  },
-  &quot;…（他 48 件）&quot;
-]</code></pre></div></details></td></tr>
+<tr class="ds" data-id="E02"><td class="id">E02</td><td><b>other_predictor_umauma<br><small>外部予想家の予想</small></b></td><td>自モデルとの突合・検証分析</td><td><b>手動／LLM 補助</b>（note 記事テキスト → 抽出 JSON。取得手順は<b>要確認</b>）</td><td><code>data/research/other_predictor_umauma/</code>（raw_notes / predictions_*.json / articles_manifest.json）</td><td>随時</td><td>開発PC（手動）</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: 外部予想家の記事の写しは、著作権への配慮から公開リポジトリに置かない（参考にした着眼点は docs/ideas/other_predictor_ideas.md に自分の言葉で整理）。</p></details></td></tr>
 <tr class="ds" data-id="E03"><td class="id">E03</td><td><b>meta/person<br><small>騎手・調教師プロフィール</small></b></td><td>騎手・調教師画面、統計の名寄せ</td><td>生成元スクリプトは<b>要確認</b>（dev にはサンプル 2 件のみ）</td><td><code>data/page_reference/meta/person/</code>（dev は <code>data/calculated_data/meta/person/</code>）</td><td>不明</td><td>不明</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>meta/person/jockey_00001.json</b> <span class="smp-src">実データ（dev にあるサンプル。yearly_stats は空）</span></div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{
   &quot;person_id&quot;: &quot;00001&quot;,
   &quot;type&quot;: &quot;jockey&quot;,
@@ -1663,7 +1610,7 @@ table.smp{font-size:11.5px}table.smp th,table.smp td{padding:4px 8px;white-space
 </table></div>
 <h3 id="cat-F">F. モデル成果物・予測結果</h3><p>モデル一覧とキーは <code>src/pipeline/mlflow/catalog.py</code>（keiba_lgbm / tracking_difficulty / final_odds / pace_predictor が active、finish_order / lap_predictor / lap_lstm が planned）。</p>
 <div class="wrap"><table><tr><th>ID</th><th>データ</th><th>用途</th><th>取得元（URL／手動／生成）</th><th>保存先</th><th>更新・SLA</th><th>書込主体</th></tr>
-<tr class="ds" data-id="F01"><td class="id">F01</td><td><b>models/ ローカル Booster 一式</b></td><td>keiba_lgbm 等のフォールバック推論（git 管理の 5.8MB）</td><td><b>学習の成果物をコミット</b>（<code>keiba_model.pkl</code> / <code>label_encoders.pkl</code> / <code>encoder.json</code> / <code>final_odds_bundle.json</code> / <code>pace_predictor/</code>）</td><td><code>models/</code>（git 管理）</td><td>再学習時</td><td>学習PC → git</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>models/ のファイル</b> <span class="smp-src">実データ（git 管理のモデル成果物）</span></div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>ファイル</th><th>サイズ</th></tr><tr><td>encoder.json</td><td>4,605 B</td></tr><tr><td>final_odds_bundle.json</td><td>4,617,884 B</td></tr><tr><td>keiba_model.pkl</td><td>393,508 B</td></tr><tr><td>label_encoders.pkl</td><td>2,621 B</td></tr><tr><td>pace_predictor/model_1f.txt</td><td>631,397 B</td></tr><tr><td>pace_predictor/model_3f.txt</td><td>403,344 B</td></tr></table></div></div></details></td></tr>
+<tr class="ds" data-id="F01"><td class="id">F01</td><td><b>models/ ローカル Booster 一式</b></td><td>keiba_lgbm 等のフォールバック推論（git 管理の 5.8MB）</td><td><b>学習の成果物をコミット</b>（<code>keiba_model.pkl</code> / <code>label_encoders.pkl</code> / <code>encoder.json</code> / <code>final_odds_bundle.json</code> / <code>pace_predictor/</code>）</td><td><code>models/</code>（git 管理）</td><td>再学習時</td><td>学習PC → git</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（テーブル）</summary><div class="smp-p"><div class="smp-h"><b>models/ のファイル</b> <span class="smp-src">実データ（git 管理のモデル成果物）</span></div><div class="smp-t">テーブル</div><div class="wrap"><table class="smp"><tr><th>ファイル</th><th>サイズ</th></tr><tr><td>.gitignore</td><td>179 B</td></tr><tr><td>encoder.json</td><td>4,605 B</td></tr><tr><td>final_odds_bundle.json</td><td>4,617,884 B</td></tr><tr><td>keiba_model.pkl</td><td>393,508 B</td></tr><tr><td>label_encoders.pkl</td><td>2,621 B</td></tr><tr><td>pace_predictor/model_1f.txt</td><td>631,397 B</td></tr><tr><td>pace_predictor/model_3f.txt</td><td>403,344 B</td></tr></table></div></div></details></td></tr>
 <tr class="ds" data-id="F02"><td class="id">F02</td><td><b>models/ensemble/&lt;version&gt;/ ＋ latest.json</b></td><td>本番配信用アンサンブルモデル（学習PC → GCS 公開 → VPS が取得）</td><td><b>生成</b> 学習PCで学習、<code>publish_model</code>（CLI 化は T-005）</td><td>GCS <code>gs://{bucket}/models/ensemble/&lt;version&gt;/</code></td><td>再学習時</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: アンサンブルの公開（publish_model の CLI 化 T-005）が未実装のため、latest.json の実物がありません。</p></details></td></tr>
 <tr class="ds" data-id="F03"><td class="id">F03</td><td><b>MLflow（runs / artifacts / registry）</b></td><td>実験管理・モデルカタログ</td><td><b>生成</b>（学習時に自動記録）</td><td><code>mlflow/data/</code>（Docker サーバ）／<code>mlflow/runs/</code>（ローカル）。どちらも git 管理外</td><td>学習のたび</td><td>学習PC</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプルなし</summary><p class="smp-note">サンプルなし: MLflow の runs / artifacts は dev に無く、学習PC で生成されます（形式は MLflow の標準）。</p></details></td></tr>
 <tr class="ds" data-id="F04"><td class="id">F04</td><td><b>race_predictions<br><small>AI 予測結果</small></b></td><td>T-45 予測（win/place/show 確率）・予測画面・馬券最適化</td><td><b>生成</b> <code>trigger_pre_race_predict()</code>（T-15 バンドル完了後）</td><td>GCS <code>…/race_predictions/{年}/{race_id}.json</code>（キャッシュ TTL 24h）</td><td>開催日 T-45／T-15</td><td>VPS（または GCP）</td></tr><tr class="sample"><td colspan="7"><details><summary>サンプル（辞書型 JSON）</summary><div class="smp-p"><div class="smp-h"><b>race_predictions/2026/…json</b> <span class="smp-src">dev モック（架空データ。スキーマ適合）</span></div><div class="smp-n">horses は先頭 2 頭に短縮。スキーマ未定義のため形式は暫定（実データ観測後に確定）</div><div class="smp-t">辞書型（dict）</div><pre class="smp"><code>{

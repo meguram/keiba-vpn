@@ -45,7 +45,7 @@ def test_json_samples_are_dicts_and_valid_json(catalog):
     assert len(blocks) > 35  # git 管理外のサンプル(馬名索引など)が無い CI でも満たせる下限
     kinds = [type(json.loads(b)) for b in blocks]
     assert kinds.count(dict) >= len(blocks) - 1                                          # ほぼすべて辞書型（最上位がリストの実ファイルは 1 つだけ）
-    assert s.count("辞書型（dict）") == kinds.count(dict) and "リスト（list）" in s
+    assert s.count("辞書型（dict）") == kinds.count(dict)
     assert '<table class="smp">' in s                                                    # 特徴量などは表
 
 
