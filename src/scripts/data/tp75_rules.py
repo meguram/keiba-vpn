@@ -419,6 +419,35 @@ def cluster_weight(c: dict, fam: str) -> float:
     return float(max(eff, 0.0))
 
 
+def logit_offset(p: np.ndarray, y: np.ndarray, iters: int = 30) -> float:
+    """Σ expit(logit(p)+δ) = Σ y となる δ（その条件の中で予測の平均を実績に合わせる、ロジットの定数ずらし）。"""
+    p = np.clip(p, 1e-4, 1 - 1e-4)
+    l = np.log(p / (1 - p))
+    d = 0.0
+    for _ in range(iters):
+        q = 1 / (1 + np.exp(-(l + d)))
+        g = q.sum() - y.sum()
+        h = (q * (1 - q)).sum()
+        if h <= 0:
+            break
+        step = g / h
+        d -= step
+        if abs(step) < 1e-8:
+            break
+    return float(np.clip(d, -2.0, 2.0))
+
+
+def cluster_delta(d: pd.DataFrame, c: dict, fam: str) -> float:
+    """代表ルールの発見期間での『ロジットのずれ』を、n/(n+300) で縮約したもの（買いは正、消しは負）。"""
+    col = "p_win" if fam.startswith("ev") else "p_top3"
+    ycol = "y1" if fam.startswith("ev") else "y3"
+    m = c["rep_mask"]
+    if m.sum() == 0:
+        return 0.0
+    n = int(m.sum())
+    return logit_offset(d[col].to_numpy(dtype=float)[m], d[ycol].to_numpy(dtype=float)[m]) * n / (n + SHRINK_N0)
+
+
 def score_persona(d: pd.DataFrame, buy: list[dict], kill: list[dict], fam_buy: str, fam_kill: str) -> dict[str, np.ndarray]:
     nb = np.zeros(len(d)); nk = np.zeros(len(d))
     wb = np.zeros(len(d)); wk = np.zeros(len(d))
@@ -464,48 +493,59 @@ def baseline_picks(d: pd.DataFrame, col: str, mask_year: np.ndarray, races: np.n
     return pick
 
 
-def run_eval(out_dir: Path) -> dict:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    d = load_table()
-    rules = library()
-    rows = evaluate_rules(d, rules)
-    asummary = adopt(rows)
-    ctx = Ctx(d)
-    clusters = {fam: cluster_set(d, rows, fam) for fam in FAMILIES}
-    personas = {"ev_seeker": ("ev_buy", "ev_kill"), "place_seeker": ("place_buy", "place_kill")}
-    scores = {p: score_persona(d, clusters[b], clusters[k], b, k) for p, (b, k) in personas.items()}
+NARROW_MAX_COVER = 0.15       # 事後の感度分析: 発見期間の行の 15% 以下にしか当たらない（特定の）クラスタだけを使う
+
+
+def logloss_delta(ctx: Ctx, mask: np.ndarray, y: str, p0: np.ndarray, p1: np.ndarray, reps: int = 500, seed: int = 0) -> dict:
+    """補正後（p1）と元（p0）の LogLoss の差（負 = 補正で改善）。レース単位のブートストラップ区間。"""
+    yy = ctx.cols[y]
+    eps = 1e-4
+    q0 = np.clip(p0, eps, 1 - eps); q1 = np.clip(p1, eps, 1 - eps)
+    l0 = -(yy * np.log(q0) + (1 - yy) * np.log(1 - q0)); l1 = -(yy * np.log(q1) + (1 - yy) * np.log(1 - q1))
+    if mask.sum() == 0:
+        return {"n": 0}
+    rc = ctx.rc[mask]
+    dl = (l1 - l0)[mask]
+    s = np.bincount(rc, weights=dl, minlength=ctx.nrace); c = np.bincount(rc, minlength=ctx.nrace).astype(float)
+    keep = c > 0
+    s, c = s[keep], c[keep]
+    rng = np.random.default_rng(seed)
+    n = len(s)
+    vals = np.empty(reps)
+    for k in range(reps):
+        i = rng.integers(0, n, n)
+        vals[k] = s[i].sum() / c[i].sum()
+    return {"n": int(mask.sum()), "delta": float(s.sum() / c.sum()), "lo": float(np.percentile(vals, 2.5)), "hi": float(np.percentile(vals, 97.5)), "base_ll": float(l0[mask].mean())}
+
+
+def evaluate_personas(d: pd.DataFrame, ctx: Ctx, clusters: dict[str, list[dict]]) -> dict:
+    personas = {"ev_seeker": ("ev_buy", "ev_kill", "e_m1", "y1", "p_win"), "place_seeker": ("place_buy", "place_kill", "e_m3", "y3", "p_top3")}
     periods = {"disc": ctx.periods["disc"], "y2025": ctx.periods["y2025"], "y2026": ctx.periods["y2026"]}
-    res: dict = {"adopt_summary": asummary, "clusters": {}, "personas": {}}
-    for fam, cl in clusters.items():
-        res["clusters"][fam] = [{"rep": c["rep"], "n_members": len(c["members"]), "members": c["members"], "weight": cluster_weight(c, fam),
-                                 "expr": c["rep_row"]["expr"], "source": c["rep_row"]["source"]} for c in cl]
-    for p, (fb, fk) in personas.items():
+    out: dict = {"personas": {}}
+    scores = {}
+    for p, (fb, fk, *_rest) in personas.items():
+        scores[p] = score_persona(d, clusters[fb], clusters[fk], fb, fk)
+    rk3 = d.groupby("rc")["p_top3"].rank(ascending=False, method="first").to_numpy() <= 3
+    for p, (fb, fk, ecol, ycol, pcol) in personas.items():
         sc = scores[p]
-        pr: dict = {}
+        pr: dict = {"n_buy_clusters": len(clusters[fb]), "n_kill_clusters": len(clusters[fk])}
         for dn in ("a", "b", "c"):
             for pn, my in periods.items():
                 pick = _pick_groups(d, sc[dn], my)
                 pr[f"def_{dn}/{pn}/top_group"] = eval_picks(ctx, pick, f"{p} def_{dn} {pn}")
-                # 同じレースでのモデル本命（勝率最大）との比較
                 races = np.unique(ctx.rc[pick]) if pick.any() else np.array([], int)
-                bp = baseline_picks(d, "p_win", my, races)
-                pr[f"def_{dn}/{pn}/model_top1_same_races"] = eval_picks(ctx, bp, f"model top1 on same races {pn}")
-        # 消し条件の扱い: モデル本命（勝率最大）から、消しに当たる馬を除く
+                pr[f"def_{dn}/{pn}/model_top1_same_races"] = eval_picks(ctx, baseline_picks(d, "p_win", my, races), f"model top1 on same races {pn}")
         for pn, my in periods.items():
             base = baseline_picks(d, "p_win", my)
             kill = sc["kill"]
-            allow = my & ~kill
-            filt = baseline_picks(d, "p_win", allow)
-            changed_races = np.unique(ctx.rc[base & kill]) if (base & kill).any() else np.array([], int)
+            filt = baseline_picks(d, "p_win", my & ~kill)
+            changed = np.unique(ctx.rc[base & kill]) if (base & kill).any() else np.array([], int)
             pr[f"kill_filter/{pn}/model_top1_all"] = eval_picks(ctx, base, "model top1 all")
             pr[f"kill_filter/{pn}/model_top1_excluding_kill"] = eval_picks(ctx, filt, "model top1 excluding kill")
-            pr[f"kill_filter/{pn}/changed_races_before"] = eval_picks(ctx, base & np.isin(ctx.rc, changed_races), "model top1 where top1 is a kill (before)")
-            pr[f"kill_filter/{pn}/changed_races_after"] = eval_picks(ctx, filt & np.isin(ctx.rc, changed_races), "replacement pick (after)")
-            # 複勝確率の上位 3 頭のうち消しに当たる馬 / 当たらない馬
-            rk3 = d.groupby("rc")["p_top3"].rank(ascending=False, method="first").to_numpy() <= 3
-            pr[f"kill_filter/{pn}/top3_by_ptop3_kill"] = eval_picks(ctx, rk3 & kill & my, "p_top3 上位3頭のうち消しに当たる")
-            pr[f"kill_filter/{pn}/top3_by_ptop3_other"] = eval_picks(ctx, rk3 & ~kill & my, "p_top3 上位3頭のうち消しに当たらない")
-        # スコアの帯別の残差
+            pr[f"kill_filter/{pn}/changed_races_before"] = eval_picks(ctx, base & np.isin(ctx.rc, changed), "before")
+            pr[f"kill_filter/{pn}/changed_races_after"] = eval_picks(ctx, filt & np.isin(ctx.rc, changed), "after")
+            pr[f"kill_filter/{pn}/top3_by_ptop3_kill"] = eval_picks(ctx, rk3 & kill & my, "p_top3 top3 & kill")
+            pr[f"kill_filter/{pn}/top3_by_ptop3_other"] = eval_picks(ctx, rk3 & ~kill & my, "p_top3 top3 & not kill")
         bins = {"neg": sc["b"] < 0, "zero": sc["b"] == 0}
         pos = sc["b"] > 0
         if pos.any():
@@ -514,20 +554,51 @@ def run_eval(out_dir: Path) -> dict:
         for pn, my in periods.items():
             pr[f"bins/{pn}"] = {k: {"n": int((m & my).sum()), "resid_win": cstat(ctx, m & my, "e_m1"), "resid_top3": cstat(ctx, m & my, "e_m3"),
                                     "roi_win": boot_mean(ctx, m & my, "r1"), "roi_place": boot_mean(ctx, m & my, "r3"), "top3_rate": boot_mean(ctx, m & my, "y3")} for k, m in bins.items()}
-        res["personas"][p] = pr
-    # 2 つのペルソナの一致・食い違い（スコア b の符号）
-    cross: dict = {}
+        # 補正への応用: 合致したクラスタのロジットのずれ（縮約）を足したときの LogLoss（元のモデルの確率に対する差）。2026 は v4 の予測にそのまま当てる
+        p0 = np.clip(d[pcol].to_numpy(dtype=float), 1e-4, 1 - 1e-4)
+        shift = np.zeros(len(d))
+        for c in clusters[fb]:
+            shift += cluster_delta(d, c, fb) * c["union"]
+        for c in clusters[fk]:
+            shift += cluster_delta(d, c, fk) * c["union"]
+        p1 = 1 / (1 + np.exp(-(np.log(p0 / (1 - p0)) + shift)))
+        pr["overlay"] = {pn: logloss_delta(ctx, my, ycol, p0, p1) for pn, my in periods.items()}
+        pr["overlay_shift_stats"] = {"share_shifted": float((shift != 0).mean()), "mean_abs_shift": float(np.abs(shift[shift != 0]).mean()) if (shift != 0).any() else 0.0}
+        out["personas"][p] = pr
     sev, spl = scores["ev_seeker"]["b"], scores["place_seeker"]["b"]
     quads = {"both_pos": (sev > 0) & (spl > 0), "ev_only": (sev > 0) & (spl <= 0), "place_only": (sev <= 0) & (spl > 0), "neither": (sev <= 0) & (spl <= 0)}
-    rk3 = d.groupby("rc")["p_top3"].rank(ascending=False, method="first").to_numpy() <= 3
+    cross: dict = {}
     for pn, my in periods.items():
         cross[pn] = {k: {"n": int((m & my).sum()), "top3_rate": boot_mean(ctx, m & my, "y3"), "win_rate": boot_mean(ctx, m & my, "y1"), "roi_win": boot_mean(ctx, m & my, "r1"),
                          "roi_place": boot_mean(ctx, m & my, "r3"), "resid_win": cstat(ctx, m & my, "e_m1"), "resid_top3": cstat(ctx, m & my, "e_m3")} for k, m in quads.items()}
         cross[pn]["model_top3_both_pos"] = {"n": int((rk3 & quads["both_pos"] & my).sum()), "top3_rate": boot_mean(ctx, rk3 & quads["both_pos"] & my, "y3"), "roi_place": boot_mean(ctx, rk3 & quads["both_pos"] & my, "r3")}
         cross[pn]["model_top3_not_both"] = {"n": int((rk3 & ~quads["both_pos"] & my).sum()), "top3_rate": boot_mean(ctx, rk3 & ~quads["both_pos"] & my, "y3"), "roi_place": boot_mean(ctx, rk3 & ~quads["both_pos"] & my, "r3")}
-    res["cross"] = cross
+    out["cross"] = cross
+    return out
+
+
+def run_eval(out_dir: Path) -> dict:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    d = load_table()
+    rules = library()
+    rows = evaluate_rules(d, rules)
+    asummary = adopt(rows)
+    ctx = Ctx(d)
+    clusters = {fam: cluster_set(d, rows, fam) for fam in FAMILIES}
+    disc = ctx.periods["disc"]
+    for fam, cl in clusters.items():
+        for c in cl:
+            c["cover"] = float(c["union"][disc].mean())
+    res: dict = {"adopt_summary": asummary, "clusters": {}}
+    for fam, cl in clusters.items():
+        res["clusters"][fam] = [{"rep": c["rep"], "n_members": len(c["members"]), "members": c["members"], "weight": cluster_weight(c, fam), "cover": c["cover"],
+                                 "expr": c["rep_row"]["expr"], "source": c["rep_row"]["source"], "tier": c["rep_row"]["adopt"][fam]["tier"],
+                                 "robust_bh": c["rep_row"]["adopt"][fam]["robust_bh"], "effect_pt": 100 * c["rep_row"]["adopt"][fam]["effect"]} for c in cl]
+    res["primary"] = evaluate_personas(d, ctx, clusters)
+    narrow = {fam: [c for c in cl if c["cover"] <= NARROW_MAX_COVER] for fam, cl in clusters.items()}
+    res["narrow_posthoc"] = evaluate_personas(d, ctx, narrow)
+    res["narrow_posthoc"]["note"] = f"事後の感度分析（結果を見た後に追加）: 発見期間の行の {int(NARROW_MAX_COVER * 100)}% 以下にしか当たらないクラスタだけを使う"
     res["table"] = {"rows": int(len(d)), "races": int(ctx.nrace), "by_year": {int(k): int(v) for k, v in d["year"].value_counts().sort_index().items()}}
-    # 台帳（人が見直せる形）。参考として v4 に対する残差と、回収率（測定）を併記
     ledger = []
     for r in rows:
         s = r["stats"]
@@ -550,7 +621,8 @@ def run_eval(out_dir: Path) -> dict:
 
 
 def reeval(frozen: Path, years: list[int]) -> dict:
-    """凍結規則を新しいデータ（指定年）で再評価し、失効（区間が 0 を跨ぐ・符号が反転）を挙げる。"""
+    """凍結規則を新しいデータ（指定年）で再評価する。状態: ok（z≥0）/ watch（z<0）/ failing（z<−1.645）/ pending（n<300）。
+    failing が 2 か月続く、または凍結後の累積で failing になったら失効に移す（運用は章の第 8 節）。"""
     spec = json.loads(Path(frozen).read_text(encoding="utf-8"))
     d = load_table()
     ctx = Ctx(d)
@@ -561,9 +633,13 @@ def reeval(frozen: Path, years: list[int]) -> dict:
         m = rule_mask(d, r["expr"]) & sel
         b = cstat(ctx, m, col)
         z = None if b["z"] is None else sign * b["z"]
-        lapsed = bool(z is None or z < ZB)
-        out.append({"id": r["id"], "n": b["n"], "z": z, "lapsed": lapsed, "reason": "データ不足" if z is None else ("符号の反転" if z < 0 else ("区間が 0 を跨ぐ" if lapsed else ""))})
-    return {"frozen": str(frozen), "years": years, "rules": out, "n_lapsed": sum(o["lapsed"] for o in out)}
+        if b["n"] < MIN_RUNS or z is None:
+            status = "pending"
+        else:
+            status = "failing" if z < -ZB else "watch" if z < 0 else "ok"
+        out.append({"id": r["id"], "n": b["n"], "z": z, "status": status})
+    cnt = {k: sum(o["status"] == k for o in out) for k in ("ok", "watch", "failing", "pending")}
+    return {"frozen": str(frozen), "years": years, "rules": out, "counts": cnt}
 
 
 def main() -> None:
