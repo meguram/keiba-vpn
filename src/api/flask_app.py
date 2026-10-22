@@ -70,6 +70,10 @@ def create_app() -> Flask:
             response.content_type = "application/json; charset=utf-8"
         return response
 
+    from src.api.http_cache_headers import install_flask as _install_http_cache
+
+    _install_http_cache(app)
+
     app.register_blueprint(analytics_bp, url_prefix="/api/v1")
     app.register_blueprint(data_analysis_bp, url_prefix="/api/v1")
 

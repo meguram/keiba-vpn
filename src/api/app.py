@@ -865,6 +865,11 @@ from src.api.middleware.anti_scraping import register_fastapi as _install_anti_s
 _install_anti_scraping(app)
 app.add_middleware(KeibaDeploymentMiddleware)
 
+# API の GET 応答に、ブラウザごとの短い再利用の指示を付ける（許可リストは config/http_cache.json。private なので会員と匿名は混ざらない）
+from src.api.http_cache_headers import install_fastapi as _install_http_cache
+
+_install_http_cache(app)
+
 # 毎日のメンテナンス時間帯（既定 JST 03:00–04:00）。KEIBA_MAINTENANCE_WINDOW=1 のときだけ働く（既定オフ。config/maintenance.json）
 from src.api.maintenance_mw import install_fastapi as _install_maintenance
 

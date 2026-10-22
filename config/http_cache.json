@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "_doc": "API の GET 応答に、ブラウザごとの短い再利用(Cache-Control: private, max-age)と Vary: Cookie を付ける許可リスト。共有キャッシュ(nginx/CDN)は private で使えない。会員区分(匿名/会員/開発者)で内容が変わっても、Cookie が違えば再取得になる。ここに無いパス、GET 以外、200 以外、すでに Cache-Control があるものには付けない。無効化は enabled=false。",
+  "enabled": true,
+  "rules": [
+    {"prefix": "/api/race-calendar", "max_age": 300},
+    {"prefix": "/api/scrape-dates", "max_age": 300},
+    {"prefix": "/api/megu-index-dates", "max_age": 300},
+    {"prefix": "/api/race-quality/", "max_age": 300},
+    {"prefix": "/api/race-list/", "max_age": 60},
+    {"prefix": "/api/v1/races/", "max_age": 60},
+    {"prefix": "/api/v1/horse/", "max_age": 300},
+    {"prefix": "/api/horse/", "max_age": 300},
+    {"prefix": "/api/v1/betting/race-values", "max_age": 30},
+    {"prefix": "/api/race/", "max_age": 30}
+  ],
+  "never": ["/api/health", "/api/v1/health", "/api/auth", "/api/v1/auth", "/api/admin", "/api/v1/admin", "/api/maintenance", "/api/v1/maintenance", "/api/ops", "/api/monitor"]
+}
