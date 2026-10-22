@@ -87,27 +87,41 @@ td.num { text-align: right; font-family: monospace; } .muted { color: var(--mute
 
 <h2>7. v6 の構成案と、最終学習に必要な作業</h2>
 <h3>7.1 LOYO アンサンブルでの上乗せ（v5 のアンサンブルに対して）</h3>
-<p>木・線形の 5 メンバー（lgb_extras_ped・xgb_extras_ped・lgb_extras・lgb_softmax・linear）を v6（群 RB + 前段 S3B）で作り直し、NN 2 本は v5 のまま（NN は追加群を持たない設計）で、LOYO の重みを取り直した（<code>src/scripts/data/v6_members.py</code>、出力 <code>tp27_v6/</code>）。</p>
+<p>7 メンバー（lgb_extras_ped・xgb_extras_ped・lgb_extras・lgb_softmax・linear・mtl_nn_extras_ped・mtl_nn_s）を v6（群 RB + 前段 S3B）で作り直し、LOYO の重みを取り直した（<code>v6_members.py</code>、出力 <code>tp27_v6/</code>）。前段 S3B は『前段を読む作業ディレクトリ』を差し替えて全メンバーに効かせる（<code>v6_work.py</code>。NN 2 本にも前段の差し替えは効く）。</p>
 <table><tr><th>比較</th><th>Δ勝率（上限）</th><th>Δ連対（上限）</th><th>Δ複勝（上限）</th><th>採否</th></tr>
-<tr><td>v6 vs v5（2022〜24 全体）</td><td class=num>−0.00024（−0.00012）</td><td class=num>−0.00018（−0.00006）</td><td class=num>−0.00002（+0.00064）</td><td>採用基準を満たす</td></tr>
-<tr><td>2022 年</td><td class=num>−0.00030（−0.00007）</td><td class=num>−0.00014</td><td class=num>+0.00056</td><td>—</td></tr>
-<tr><td>2023 年</td><td class=num>−0.00017（+0.00004）</td><td class=num>−0.00024（−0.00006）</td><td class=num>−0.00043</td><td>—</td></tr>
-<tr><td>2024 年</td><td class=num>−0.00023（−0.00006）</td><td class=num>−0.00016</td><td class=num>−0.00018</td><td>—</td></tr>
+<tr><td><b>v6 vs v5（2022〜24 全体）</b></td><td class=num><b>−0.00040（−0.00023）</b></td><td class=num>−0.00048（−0.00031）</td><td class=num>−0.00014（+0.00053）</td><td>採用基準を満たす</td></tr>
+<tr><td>2022 年</td><td class=num>−0.00048（−0.00023）</td><td class=num>−0.00041</td><td class=num>+0.00040</td><td>—</td></tr>
+<tr><td>2023 年</td><td class=num>−0.00039（−0.00010）</td><td class=num>−0.00059</td><td class=num>−0.00061</td><td>—</td></tr>
+<tr><td>2024 年</td><td class=num>−0.00032（−0.00009）</td><td class=num>−0.00043</td><td class=num>−0.00022</td><td>—</td></tr>
 </table>
-<p>単体の LightGBM（−0.0004〜−0.0006）より小さいが、アンサンブルでも 3 年とも負で、<b>2024 年も上限が負</b>（−0.00023、上限 −0.00006）。LOYO の重みは勝率で lgb_softmax 0.23・linear 0.23・lgb_extras 0.20・xgb 0.14・NN 0.12 など。</p>
+<p>3 年とも負で、<b>2024 年も上限が負</b>。単体の LightGBM（−0.0004〜−0.0006）とほぼ同じ大きさがアンサンブルでも残った。<span class="muted">（途中経過の注意: 最初に作った LOYO は、前段の差し替えが木・線形メンバーの入力に効いておらず、実質『RB のみ』だった（v5 比 勝率 −0.00024・上限 −0.00012、連対 −0.00018、複勝 −0.00002）。前段 S3B を実際に差し替えた版が上の表で、S3B はアンサンブルでも増分がある。）</span></p>
 <h3>7.2 採用する構成案（v6）と採用しない群</h3>
 <ul>
 <li><b>採用: v6 = V5 構成 d + RB 16 列（rb_mg_* 8・rb_nk_* 8）+ 前段 S3B（s_time_pred / s_time_gap / s_rank_pred を差し替え）</b>。軽量版 v6-lite（騎手・調教師の通算 10 列と fe_year_frac を外す、1,147 列）は LightGBM 単体で同等以上（アンサンブルでは未確認）。列を外す扱いは配備時に選べる。</li>
 <li><b>採用しない</b>: 展開タイプ（PT）・枠順バイアス（GB）・追走難度/ラップ予想の独立列とレース内相対・シナリオ条件付き前段（S3C）・ペース補正後の走破力（S3D）・馬主名の正規化（OWNN）— V5 の上に増分がない。クラス基準（CB）・展開利（PB4）・非 JRA 過去走（NJ）・rs59 — 単独は境界、RB の上で増分なし（NJ は複勝のみ改善、rs59 は運用側の更新が要る）。tp-68 の列削減・暦の列の削除 — 勝率は保つが複勝が悪化。</li>
 </ul>
+<h3>7.2b 最終学習と test 2025 の 1 回評価（bundle_v6_2024、前段 b = S3B）</h3>
+<table><tr><th>指標（test 2025・47,497 行・3,455 レース）</th><th>v5（bundle_v5_2024）</th><th>v6（前段 b）</th><th>Δ（上限）</th></tr>
+<tr><td>勝率 LogLoss</td><td class=num>0.20714</td><td class=num>0.20685</td><td class=num>−0.00029（−0.00005）</td></tr>
+<tr><td>連対</td><td class=num>0.32299</td><td class=num>0.32251</td><td class=num>−0.00049（−0.00025）</td></tr>
+<tr><td>複勝</td><td class=num>0.40560</td><td class=num>0.40514</td><td class=num>−0.00054（−0.00026）</td></tr>
+</table>
+<p>部分集合の Δ勝率: 初出走 −0.00041（上限 +0.00085）・履歴 3 走以上 −0.00027（上限 +0.00001）・新馬戦 −0.00105（上限 −0.00008）・未勝利 −0.00020・条件戦 −0.00021。<b>前段 b の入力のうち 9 列は本番の保存値から再現できない</b>ため、配備候補は『本番の保存値で写せる入力だけ』の前段 e に切り替えた（z:RB@e は valid 2022〜24 で d 比 勝率 −0.00052・上限 −0.00030、RB@b と同等。2024 年は −0.00061）。e 版は LOYO・最終学習をやり直している（出力 tp27_v6e / final_v6e / final_eval_v6e）。e 版の test 2025 は 2 回目の評価になる（選択の理由は valid の結果と serving の都合で、test の結果ではない）。</p>
 <h3>7.3 v6 最終学習・配備に必要な作業（未実施。配備・.env・MLflow 登録はユーザー判断待ち）</h3>
 <ol>
 <li><b>2026 年の確認（最後に 1 回だけ）</b>: bundle_v6_2024 / 2025 の最終学習 → test 2025 を 1 回評価（選択には使っていない）→ 2026 年（テストセット②）を 1 回。2024 年以降で効果が小さい傾向があるので、ここが採否の決め手。</li>
 <li><b>前段 S3B の本番化</b>: <code>v6_stage build b</code> は expanding の OOF。最終学習用に全期間の前段モデル 2 本（時計・順位）を学習してバンドルに入れ、推論では本番で保存済みの追走難度 v2・ラップ予想・位置取り予想（pf_early など）を入力にする。入力が OOF（学習行）と全期間学習の予測（推論行）で分布が少し違う点は v5 の ALL_BEST と同様に過去日で一致確認する。</li>
 <li><b>RB の推論実装</b>: <code>tp65_feat.asof_features</code> は学習側の関数。履歴（めぐ指数 v3b・netkeiba 指数の直近走）から 16 列を出す推論版（<code>serving_v6</code>）と、過去日での学習側との完全一致テストが要る。</li>
-<li>NN 2 本は v5 のまま、または前段差し替えで作り直す（未実施）。バンドルの増分は前段モデル 2 本ぶん（未測定。v5 の低メモリ運用の 230MB 以内かを測る）。</li>
+<li>バンドルの大きさ: bundle_v6_2024 は 157MB（bundle_v5_2024 は 158MB）で増えない。RB は特徴量（履歴状態は hist.parquet と定数）、前段 S3B/S3E は各 1.9MB。</li>
 <li>shadow 並走: <code>KEIBA_V6_SHADOW=1</code>・<code>predictions_v6/</code> を v5 の shadow と同じ設計（別系統・逐次・例外隔離）で。</li>
 </ol>
+
+<h3>7.4 推論（serving_v6）と shadow の設計（コード済み・未配備）</h3>
+<ul>
+<li><b>RB 16 列</b>: <code>src/pipeline/features/serving_v6.py</code>。学習側（<code>tp65_feat.asof_features</code>）と同じ式（<code>tp65_var</code> の関数）を、馬ごとの履歴状態（1 走 1 行のクリップ後の値と、勝ち馬−40 点の下限つきの値）と定数（2020〜2021 年の分位点・尺度）から出す。<b>学習側の値と完全一致</b>: 2025 年の 12 開催日・5,491 行で全 16 列の最大絶対差 0.0、欠損の位置も一致（合成データのテスト <code>tests/pipeline/test_serving_v6.py</code> と、ホストの <code>build_rb_state verify</code>）。同じ日に 2 走ある馬（記録の重複）は、学習側の merge_asof が日付の先頭の行を拾うのに合わせた。履歴状態は <code>python -m src.scripts.data.build_rb_state build</code>（既定の置き場 <code>data/local/inference/state/rb_v6/</code>、<code>KEIBA_V6_RB_STATE</code> で変更）。日次の更新（前日までに確定した走を足す）は shadow の導入時に cron へ。</li>
+<li><b>前段 S3B</b>: 最終モデルは <code>fit_final_stage_v6</code>（final_stage/v6_b_2024・v6_b_2025、各 1.9MB）。2024 年版の 2025 年の行の予測は expanding の OOF と完全一致（相関 1.0、最大差 0）。推論の入力は <code>V3Serving.features</code> が tl_・wc_ を履歴から、EASE2_*・lp_*・pf_* を本番の保存値（tracking_v2/・lap_forecast/ の JSON）から作る。<b>未完: 学習側にあって保存値から写せない列</b>（EASE2_full・EASE2_vs_prev・td_ease・td_l3f_ability・td_stamina、ラップ予想の馬別の交互作用 4 列）は <code>serving_v6.UNMAPPED</code>。これらを要求されると KeyError で止める（黙って欠損にしない）ので、<b>shadow は写しの実装と過去日の一致確認が済むまで動かせない</b>。</li>
+<li><b>shadow の経路</b>（v5 と同形）: <code>KEIBA_V6_SHADOW=1</code> で <code>weight_triggered_predict</code> が v6 の <code>V3Serving</code> を別に持ち、v4・v5 の後に逐次で予測して <code>predictions_v6/&lt;日&gt;/&lt;race_id&gt;.parquet</code> に保存する。失敗はイベント（v6_status / v6_error）に残すだけで v4・v5 には影響しない。パスは <code>KEIBA_V6_BUNDLE</code>（既定 final_v6/bundle_v6_2025）・<code>KEIBA_V6_STAGE</code>（既定 final_stage/v6_b_2025）・<code>KEIBA_V5_TL_REF</code>・<code>KEIBA_V6_RB_STATE</code>。release_manifest の挙動フラグに KEIBA_V6_SHADOW を追加。</li>
+</ul>
 
 <h2>8. 申し送り</h2>
 <ul>

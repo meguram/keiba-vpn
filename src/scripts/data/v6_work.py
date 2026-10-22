@@ -16,6 +16,14 @@ V = Path(__file__).resolve().parents[3] / "data/local/modeling/training_pipeline
 OUT = Path(os.environ.get("V6_OUT") or V / "v6")
 
 
+def _link(link: Path, target: Path) -> None:
+    try:
+        if not link.exists() and not link.is_symlink():
+            link.symlink_to(target)
+    except FileExistsError:                       # 同時に起動した別プロセスが先に作った
+        pass
+
+
 def use(stage: str) -> Path:
     farm = OUT / f"work_{stage}" if stage != "b" else OUT / "work"
     (farm / "oof").mkdir(parents=True, exist_ok=True)
@@ -23,14 +31,11 @@ def use(stage: str) -> Path:
         if e.name in ("v6", "oof"):
             continue
         link = farm / e.name
-        if not link.exists() and not link.is_symlink():
-            link.symlink_to(e)
+        _link(link, e)
     for e in sorted((V / "oof").iterdir()):
         if e.name == "stage_features_expanding.parquet":
             continue
-        link = farm / "oof" / e.name
-        if not link.exists() and not link.is_symlink():
-            link.symlink_to(e)
+        _link(farm / "oof" / e.name, e)
     src = OUT / f"s3x_{stage}.parquet"
     dst = farm / "oof/stage_features_expanding.parquet"
     if not dst.exists() or dst.stat().st_mtime < src.stat().st_mtime:
