@@ -424,6 +424,50 @@
     "S76_F",
     "S76_G"
    ]
+  },
+  "mat_feat": {
+   "base": "baseline",
+   "add": [
+    "S77_MAT"
+   ],
+   "add_ready": [
+    "S77_MAT"
+   ],
+   "doc": "tp-77: 基準 + 母方の完全 10 世代の構造特徴"
+  },
+  "screen_p1m": {
+   "base": "baseline",
+   "add": [
+    "S76_D5r",
+    "S77_D2m",
+    "S77_D5m"
+   ],
+   "add_ready": [
+    "S76_D5r",
+    "S77_D2m",
+    "S77_D5m"
+   ],
+   "doc": "tp-77: screen_p1 の D2・D5 を母方クラスタの事前で作り直したもの（合成スコアは GBM の特徴量にできないので除く）"
+  },
+  "mat_screen": {
+   "base": "baseline",
+   "add": [
+    "S77_MAT",
+    "S76_D5r",
+    "S77_D2m",
+    "S77_D5m",
+    "S76_A2",
+    "S77_Bm"
+   ],
+   "add_ready": [
+    "S77_MAT",
+    "S76_D5r",
+    "S77_D2m",
+    "S77_D5m",
+    "S76_A2",
+    "S77_Bm"
+   ],
+   "doc": "tp-77: 母方の構造特徴 + 母方事前の screen 優先1・2"
   }
  },
  "groups": {
@@ -1134,6 +1178,65 @@
    "rerun_after_complete_10gen": true,
    "d_win": -0.00010392487680532679,
    "build_note": "弱いシグナルの代表 26 列を L2 ロジスティックに当てはめた線形予測（勝ち用・3 着内用）。係数は A 年、較正は B 年、評価は C 年。年ごとの OOF の列として保存する処理が要る（学習再開前に tp76_screen の composite を保存形式にする）"
+  },
+  "S77_MAT": {
+   "id": "S77_MAT",
+   "name": "S77_MAT",
+   "level": "tp77_mat",
+   "n_cols": null,
+   "cols": null,
+   "path": "/home/jovyan/work/ptrain_out/mat_rows.parquet",
+   "serving": "要整備",
+   "serving_effort": "L",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "母方の完全 10 世代表から作った構造特徴（高頻度祖先の血量 40 列・SVD 8 列・クラスタ 16/40・クロス数・充足率。成績は使わない）"
+  },
+  "S77_D2m": {
+   "id": "S77_D2m",
+   "name": "S77_D2m",
+   "level": "tp77_mat",
+   "n_cols": 1,
+   "cols": [
+    "D_venue_mat"
+   ],
+   "path": "/home/jovyan/work/ptrain_out/tp76_mat.parquet",
+   "serving": "要整備",
+   "serving_effort": "L",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "D2（競馬場×面の適性）を母方クラスタ(K=40)の事前で作り直したもの"
+  },
+  "S77_D5m": {
+   "id": "S77_D5m",
+   "name": "S77_D5m",
+   "level": "tp77_mat",
+   "n_cols": 1,
+   "cols": [
+    "D_all_mat"
+   ],
+   "path": "/home/jovyan/work/ptrain_out/tp76_mat.parquet",
+   "serving": "要整備",
+   "serving_effort": "L",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "D5（4 軸の適性合計）を母方クラスタの事前で作り直したもの"
+  },
+  "S77_Bm": {
+   "id": "S77_Bm",
+   "name": "S77_Bm",
+   "level": "tp77_mat",
+   "n_cols": 2,
+   "cols": [
+    "B_m_mat",
+    "B_sd_mat"
+   ],
+   "path": "/home/jovyan/work/ptrain_out/tp76_mat.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "B（潜在能力のカルマン推定）の初出走の事前を母方クラスタにしたもの"
   }
  },
  "unbuilt": [
@@ -1197,5 +1300,6 @@
   ],
   "estimate": "1 構成の LOYO 評価（3 年 × 2 seed × 3 目的）は 0.5〜1 時間（過去の実績からの目安。実測ではない）。10 構成を直列で 5〜10 時間、共有 3 スロットで約 2〜4 時間。合成スコアは、学習前に OOF の列を保存する処理（tp76_screen の composite）が要る。seed 2・3 の確認と通った構成の LOYO アンサンブル・最終学習は別枠（8〜9 時間）"
  },
- "serving_note": "復活セット・tp-76 の群は、推論側の生成経路が未整備（採用時に整備）。比較は学習表の列でのオフライン評価"
+ "serving_note": "復活セット・tp-76 の群は、推論側の生成経路が未整備（採用時に整備）。比較は学習表の列でのオフライン評価",
+ "unbuilt_note": "S76_COMPOSITE は GBM の特徴量にできない: 係数を発見期間の外側の年で当てるため、学習行（過去の年）の値を未来の年の係数で作ることになりリークする。事後の補正器として評価する（tp-76、tp-77 の後段）"
 }

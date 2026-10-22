@@ -40,7 +40,7 @@ def external_groups(work_root: Path | None = None, cfg: dict | None = None) -> d
     out: dict[str, tuple[Path, list[str] | None]] = {}
     for name, g in cfg["groups"].items():
         p = g.get("path") or ""
-        if not p or not name.startswith(("REV_", "S76_")):
+        if not p or not name.startswith(("REV_", "S76_", "S77_")):
             continue
         path = Path(p)
         out[name] = (path if path.is_absolute() else ROOT / path, g.get("cols") or None)

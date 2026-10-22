@@ -111,9 +111,9 @@ def _raises(fn):
     return None
 
 
-def test_external_groups_only_rev_and_s76_names_and_paths_resolve():
+def test_external_groups_only_rev_s76_s77_names_and_paths_resolve():
     ext = fs.external_groups()
-    assert ext and all(k.startswith(("REV_", "S76_")) for k in ext)
+    assert ext and all(k.startswith(("REV_", "S76_", "S77_")) for k in ext)
     assert all(p.is_absolute() for p, _ in ext.values())
 
 
