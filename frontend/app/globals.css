@@ -76,13 +76,17 @@ body::before {
 }
 
 
-/* /races: PC は左にカレンダー、スマホはボトムシート */
-.races-layout { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 20px; align-items: start; }
+/* /races: PC は左にカレンダー（サイドバー）、右に開催場を横に並べる。スマホはカレンダーをボトムシートに。ページの幅（max-w-6xl）より広げて、3 場でも縦に伸びないようにする */
+.races-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; position: relative; width: min(1680px, calc(100vw - 32px)); left: 50%; margin-left: calc(min(1680px, calc(100vw - 32px)) / -2); }
 .races-cal { position: sticky; top: 12px; }
 .races-main { min-width: 0; }
+.races-venues { display: grid; grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); gap: 14px; align-items: start; }
 .races-cal-open { display: none; margin-top: 10px; min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 14px; cursor: pointer; }
+@media (max-width: 1099px) {
+  .races-venues { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+}
 @media (max-width: 899px) {
-  .races-layout { grid-template-columns: minmax(0, 1fr); }
+  .races-layout { grid-template-columns: minmax(0, 1fr); width: auto; left: 0; margin-left: 0; }
   .races-cal { display: none; }
   .races-cal-open { display: inline-flex; align-items: center; width: 100%; justify-content: center; }
 }

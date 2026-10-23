@@ -241,7 +241,7 @@ export default function RacesPage() {
               <div style={{ color: "var(--text-dim)", fontSize: 13, padding: "24px 0" }}>表示できるレースがありません。</div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14, alignItems: "start" }}>
+            <div className="races-venues" style={{ ["--cols" as string]: Math.min(Math.max(byVenue.length, 1), 3) }}>
               {byVenue.map(([v, list]) => <VenueBlock key={v} venue={v} rows={list} />)}
             </div>
           </div>
