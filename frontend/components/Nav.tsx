@@ -11,6 +11,7 @@ export function Nav() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [userName, setUserName] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [paid, setPaid] = useState(false);
 
   useEffect(() => {
     if (USE_MOCK) {
@@ -19,6 +20,7 @@ export function Nav() {
       setLoggedIn(auto);
       setUserName(auto ? "開発者" : "");
       setIsAdmin(auto);
+      setPaid(auto);
       return;
     }
     fetchAuthStatus()
@@ -26,6 +28,7 @@ export function Nav() {
         setLoggedIn(!!d.logged_in);
         setUserName(d.logged_in ? (d.user_name || (d.is_admin ? "管理者" : "会員")) : "");
         setIsAdmin(!!d.logged_in && !!d.is_admin);
+        setPaid(!!d.logged_in && !!d.is_member);
       })
       .catch(() => { /* 一時的な通信失敗・サーバエラーでは、直前のログイン表示を保つ */ });
   }, [path]);
@@ -120,7 +123,7 @@ export function Nav() {
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
           }}>
-            {loggedIn ? `👤 ${userName}` : "ゲスト"}
+            {loggedIn ? `👤 ${userName}${isAdmin ? "" : paid ? "（有料会員）" : "（無料）"}` : "ゲスト"}
           </span>
           {isAdmin && (
             <Link href="/admin/users" className="hit44" style={{

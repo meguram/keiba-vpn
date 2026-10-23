@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 
-type UserRow = { fp: string; source: "config" | "managed"; label: string | null; enabled: boolean; created_at: string | null; note: string };
+type UserRow = { fp: string; source: "config" | "managed"; label: string | null; enabled: boolean; created_at: string | null; note: string; plan?: "paid" | "free" };
 
 const API = "/api/v1/admin/users";
 
@@ -23,6 +23,7 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
+  const [plan, setPlan] = useState<"paid" | "free">("paid");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [resetFp, setResetFp] = useState<string | null>(null);
@@ -57,11 +58,15 @@ export default function AdminUsersPage() {
           ログインIDとパスワードは一方向に変換して保存します（元の値は誰にも読み出せません。忘れたときは再設定します）。パスワードは10文字以上、ログインIDは英数字と . _ @ - の3〜64文字です。
         </p>
         <form
-          onSubmit={async (e) => { e.preventDefault(); if (await act(call(API, "POST", { id: id.trim(), password: pw }), `登録しました（ログインID: ${id.trim()}）`)) { setId(""); setPw(""); } }}
+          onSubmit={async (e) => { e.preventDefault(); if (await act(call(API, "POST", { id: id.trim(), password: pw, plan }), `登録しました（ログインID: ${id.trim()}・${plan === "paid" ? "有料会員" : "無料のログイン会員"}）`)) { setId(""); setPw(""); } }}
           className="space-y-3"
         >
           <input className={input} style={{ borderColor: "var(--border)" }} placeholder="ログインID" autoComplete="off" value={id} onChange={(e) => setId(e.target.value)} />
           <input className={input} style={{ borderColor: "var(--border)" }} type="password" placeholder="初期パスワード（10文字以上）" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} />
+          <select className={input} style={{ borderColor: "var(--border)", background: "var(--surface)" }} value={plan} onChange={(e) => setPlan(e.target.value as "paid" | "free")} aria-label="会員の区分">
+            <option value="paid">有料会員（有料ゾーンを見られる）</option>
+            <option value="free">無料のログイン会員（ログインのみ・有料ゾーンは見られない）</option>
+          </select>
           <button type="submit" className="btn w-full" disabled={busy || !id.trim() || !pw}>{busy ? "処理中…" : "登録する"}</button>
         </form>
         {msg && <p className="mt-3 text-sm" style={{ color: msg.ok ? "var(--ok, #3fb950)" : "var(--err)" }}>{msg.text}</p>}
@@ -77,12 +82,14 @@ export default function AdminUsersPage() {
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span className="font-mono">{u.source === "config" ? `（動作確認用 ${u.label}）` : `指紋 ${u.fp}`}</span>
                 <span style={{ color: u.enabled ? "#3fb950" : "var(--text-dim)" }}>{u.enabled ? "有効" : "無効"}</span>
+                <span style={{ color: u.plan === "free" ? "var(--text-dim)" : "#fbbf24" }}>{u.plan === "free" ? "無料" : "有料会員"}</span>
                 {u.created_at && <span style={{ color: "var(--text-dim)" }}>{u.created_at.slice(0, 16).replace("T", " ")}</span>}
                 {u.note && <span style={{ color: "var(--text-dim)" }}>{u.note}</span>}
               </div>
               {u.source === "managed" && (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <button className="btn" disabled={busy} onClick={() => act(call(`${API}/${u.fp}/enabled`, "POST", { enabled: !u.enabled }), u.enabled ? "無効にしました（ログイン中でも使えなくなります）" : "有効にしました")}>{u.enabled ? "無効にする" : "有効にする"}</button>
+                  {u.source === "managed" && <button className="btn" disabled={busy} onClick={() => act(call(`${API}/${u.fp}/plan`, "POST", { plan: u.plan === "free" ? "paid" : "free" }), u.plan === "free" ? "有料会員にしました" : "無料のログイン会員にしました")}>{u.plan === "free" ? "有料会員にする" : "無料にする"}</button>}
                   <button className="btn" disabled={busy} onClick={() => { setResetFp(resetFp === u.fp ? null : u.fp); setNewPw(""); }}>パスワード再設定</button>
                   <button className="btn" disabled={busy} onClick={() => { if (window.confirm(`指紋 ${u.fp} のユーザーを削除します。元に戻せません。`)) void act(call(`${API}/${u.fp}`, "DELETE"), "削除しました"); }}>削除</button>
                 </div>

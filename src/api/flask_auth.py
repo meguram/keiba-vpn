@@ -13,6 +13,8 @@ from src.api.auth import (
     _make_token,
     _verify_token,
     token_role,
+    token_tier,
+    tier_fields,
     verify_member_login,
     verify_password,
 )
@@ -27,11 +29,11 @@ def is_logged_in(req: Request | None = None) -> bool:
 
 
 def is_member_session(req: Request | None = None) -> bool:
-    """会員限定の項目を見られるか（会員 member・開発者 dev）。開発者向け機能の判定は is_logged_in のまま。"""
+    """有料ゾーン（会員限定の項目）を見られるか（有料会員・開発者。無料のログイン会員は含まない）。開発者向け機能の判定は is_logged_in のまま。"""
     req = req or request
     if dev_auto_login_applies(req.remote_addr, req.headers):
         return True
-    return token_role(req.cookies.get(COOKIE_NAME, "")) is not None
+    return token_tier(req.cookies.get(COOKIE_NAME, "")) in ("dev", "paid")
 
 
 def login_response(password: str, remember: bool = True, user_id: str = ""):
@@ -100,19 +102,11 @@ def require_member(f):
 
 
 def get_auth_status() -> dict:
-    """現在のリクエストの認証状態を返す。logged_in は会員・開発者のどちらでも true。"""
+    """現在のリクエストの認証状態。ゲスト / 無料のログイン会員（free）/ 有料会員（member。有料ゾーンを見られる）/ 管理者（dev）の 4 区分。"""
     from src.api.auth import member_display_name, token_user
 
-    member = is_member_session()
-    dev = is_logged_in()
-    uid = token_user(request.cookies.get(COOKIE_NAME, "")) if member and not dev else ""
-    name = "管理者" if dev else (member_display_name(uid) if uid else ("会員" if member else ""))
-    return {
-        "logged_in": member,
-        "is_member": member,
-        "is_developer": dev,
-        "is_admin": dev,
-        "tier": "dev" if dev else "member" if member else "public",
-        "user_id": uid or None,
-        "user_name": name or None,
-    }
+    token = request.cookies.get(COOKIE_NAME, "")
+    f = tier_fields(token, dev_auto_login_applies(request.remote_addr, request.headers))
+    uid = token_user(token) if f["logged_in"] and not f["is_developer"] else ""
+    name = "管理者" if f["is_developer"] else (member_display_name(uid) if uid else ("会員" if f["logged_in"] else ""))
+    return {**f, "user_id": uid or None, "user_name": name or None}

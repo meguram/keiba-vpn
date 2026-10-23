@@ -112,6 +112,35 @@ def token_user(token: str) -> str:
     return sp[2] if sp else ""
 
 
+PLAN_PAID = "paid"
+PLAN_FREE = "free"
+
+
+def member_plan(uid: str) -> str:
+    """会員アカウントの区分。plan が無い（管理者が作った従来のアカウント）は有料会員として扱う。free のものだけが無料のログイン会員。"""
+    rec = member_record(uid) or {}
+    return PLAN_FREE if rec.get("plan") == PLAN_FREE else PLAN_PAID
+
+
+def token_tier(token: str) -> str:
+    """セッションの区分: "dev"（管理者）/ "paid"（有料会員。有料ゾーンを見られる）/ "free"（無料のログイン会員）/ ""（ゲスト・無効）。"""
+    role = token_role(token)
+    if role == ROLE_DEV:
+        return "dev"
+    if role == ROLE_MEMBER:
+        uid = token_user(token)
+        return PLAN_FREE if uid and member_plan(uid) == PLAN_FREE else PLAN_PAID
+    return ""
+
+
+def tier_fields(token: str, auto_dev: bool = False) -> dict:
+    """認証状態の共通項目（FastAPI / Flask 共通）。logged_in はログインしていれば true（無料会員も）、is_member は有料ゾーンを見られるか。"""
+    t = "dev" if auto_dev else token_tier(token)
+    paid = t in ("dev", PLAN_PAID)
+    return {"logged_in": bool(t), "is_member": paid, "is_developer": t == "dev", "is_admin": t == "dev", "plan": t or None,
+            "tier": "dev" if t == "dev" else "member" if t == PLAN_PAID else "free" if t == PLAN_FREE else "public"}
+
+
 def _verify_token(token: str) -> bool:
     """開発者（dev）のトークンか。会員（member）のトークンは False（開発者向け機能を開かない）。"""
     return token_role(token) == ROLE_DEV
@@ -184,10 +213,10 @@ def is_developer(request: Request) -> bool:
 
 
 def is_member(request: Request) -> bool:
-    """会員限定の項目を見られるか（開発者 dev は会員を兼ねる）。"""
+    """有料ゾーン（会員限定の項目）を見られるか（有料会員 paid・開発者 dev。無料のログイン会員は含まない）。"""
     if dev_auto_login_applies(getattr(request.client, "host", None), request.headers):
         return True
-    return token_role(request.cookies.get(COOKIE_NAME, "")) is not None
+    return token_tier(request.cookies.get(COOKIE_NAME, "")) in ("dev", PLAN_PAID)
 
 
 def classify_session(request: Request) -> str:

@@ -85,7 +85,7 @@ def test_cloudrun_requirements_are_subset_of_requirements():
     def names(p):
         return {re.split(r"[<>=!~\[ ]", ln.strip())[0].lower() for ln in p.read_text().splitlines() if ln.strip() and not ln.startswith("#")}
 
-    full, slim = names(ROOT / "requirements.txt"), names(ROOT / "requirements-cloudrun.txt")
+    full, slim = names(ROOT / "requirements.txt"), names(ROOT / "deploy/docker/requirements-cloudrun.txt")
     assert slim - full <= {"a2wsgi"}                     # a2wsgi だけは requirements.txt に無い（wsgi.py と同じ依存）
     for must in ("fastapi", "flask", "uvicorn", "google-cloud-storage", "pandas", "pyarrow", "lightgbm"):
         assert must in slim
@@ -94,9 +94,9 @@ def test_cloudrun_requirements_are_subset_of_requirements():
 
 
 def test_dockerfile_basics():
-    df = (ROOT / "Dockerfile.cloudrun").read_text(encoding="utf-8")
+    df = (ROOT / "deploy/docker/Dockerfile.cloudrun").read_text(encoding="utf-8")
     assert "src.api.cloudrun_entry:app" in df and "--workers 1" in df and "USER keiba" in df
     assert "COPY .env" not in df and "KEIBA_ENV=" not in df.split("CMD")[0].split("ENV")[-1]   # 環境名はデプロイ時に明示（イメージに焼かない）
-    ign = (ROOT / "Dockerfile.cloudrun.dockerignore").read_text(encoding="utf-8")
+    ign = (ROOT / "deploy/docker/Dockerfile.cloudrun.dockerignore").read_text(encoding="utf-8")
     for must in (".env", "data/", ".git/", "tests/"):
         assert must in ign

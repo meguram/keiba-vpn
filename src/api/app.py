@@ -1026,9 +1026,9 @@ async def logout(request: Request):
 
 @app.get("/api/auth/status", response_class=JSONResponse)
 async def auth_status(request: Request):
-    dev = is_developer(request)
-    member = is_member(request)
-    out = {"is_developer": dev, "is_member": member, "logged_in": member, "tier": "dev" if dev else "member" if member else "public"}
+    from src.api.auth import dev_auto_login_applies, tier_fields
+
+    out = tier_fields(request.cookies.get(COOKIE_NAME, ""), dev_auto_login_applies(getattr(request.client, "host", None), request.headers))
     try:
         out.update(_deployment_info(include_storage=False))
     except Exception:

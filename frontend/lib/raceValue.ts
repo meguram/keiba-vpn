@@ -88,7 +88,7 @@ async function fetchValues(date: string): Promise<Map<string, RaceValue>> {
 /** 開催日（YYYYMMDD）の各レースの価値。取得できるまでは空。 */
 export function useRaceValues(date: string): Map<string, RaceValue> {
   const [map, setMap] = useState<Map<string, RaceValue>>(new Map());
-  const { loading, loggedIn } = useAuthStatus();
+  const { loading, isMember: loggedIn } = useAuthStatus();
   useEffect(() => {
     let alive = true;
     if (!date && !USE_MOCK) return;

@@ -128,7 +128,15 @@ def admin_users_create():
     from src.scripts.ops import manage_users as mu
 
     body = request.get_json(silent=True) or {}
-    return _admin_users(mu.create_user, str(body.get("id") or ""), str(body.get("password") or ""))
+    return _admin_users(mu.create_user, str(body.get("id") or ""), str(body.get("password") or ""), None, str(body.get("plan") or "paid"))
+
+
+@bp.post("/admin/users/<ident>/plan")
+@require_login
+def admin_users_plan(ident: str):
+    from src.scripts.ops import manage_users as mu
+
+    return _admin_users(mu.set_plan, ident, str((request.get_json(silent=True) or {}).get("plan") or ""))
 
 
 @bp.post("/admin/users/<ident>/password")

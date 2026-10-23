@@ -89,3 +89,36 @@ def test_password_change_revokes_existing_sessions(members):
     assert auth.token_role(old) is None
     new = auth._make_token(role=auth.ROLE_MEMBER, uid="shared")
     assert auth.token_role(new) == auth.ROLE_MEMBER
+
+
+def test_four_tiers_guest_free_paid_dev(members):
+    mu.create_user("paiduser", "correct-horse-battery")                     # 区分を指定しない（従来のアカウント）は有料会員
+    mu.create_user("freeuser", "correct-horse-battery", plan="free")
+    t = lambda uid: auth._make_token(role=auth.ROLE_MEMBER, uid=uid)        # noqa: E731
+    assert auth.token_tier("") == "" and auth.token_tier("garbage") == ""            # ゲスト
+    assert auth.token_tier(t("freeuser")) == "free"
+    assert auth.token_tier(t("paiduser")) == "paid"
+    assert auth.token_tier(auth._make_token(role=auth.ROLE_DEV)) == "dev"
+    g, f, p, d = (auth.tier_fields(x) for x in ("", t("freeuser"), t("paiduser"), auth._make_token(role=auth.ROLE_DEV)))
+    assert (g["logged_in"], g["is_member"], g["tier"]) == (False, False, "public")
+    assert (f["logged_in"], f["is_member"], f["tier"]) == (True, False, "free")      # ログインはしているが有料ゾーンは不可
+    assert (p["logged_in"], p["is_member"], p["tier"]) == (True, True, "member")
+    assert (d["is_member"], d["is_admin"], d["tier"]) == (True, True, "dev")
+    mu.set_plan("freeuser", "paid")                                                  # 区分の変更は発行済みのセッションにもすぐ効く
+    assert auth.token_tier(t("freeuser")) == "paid"
+    with pytest.raises(mu.UserError):
+        mu.set_plan("freeuser", "gold")
+
+
+def test_free_member_is_not_in_paid_zone_for_requests(members):
+    from flask import Flask
+
+    from src.api import flask_auth as fa
+
+    mu.create_user("freeuser", "correct-horse-battery", plan="free")
+    mu.create_user("paiduser", "correct-horse-battery")
+    app = Flask(__name__)
+    for uid, want in (("freeuser", False), ("paiduser", True), ("", False)):
+        with app.test_request_context("/", headers={"Cookie": f"{auth.COOKIE_NAME}={auth._make_token(role=auth.ROLE_MEMBER, uid=uid) if uid else ''}"}):
+            assert fa.is_member_session() is want
+            assert fa.get_auth_status()["logged_in"] is bool(uid)

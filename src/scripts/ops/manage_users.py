@@ -119,14 +119,16 @@ def list_users() -> list[dict]:
     local = _load(_path())["users"]
     out = []
     for u in auth._read_users(auth._MEMBERS_FILE):
-        out.append({"fp": "-", "source": "config", "label": u.get("id"), "enabled": bool(not u.get("requires_env") or auth._env_on(str(u["requires_env"]))), "created_at": None, "note": f"{u.get('requires_env')} が有効なときだけ"})
+        out.append({"fp": "-", "source": "config", "label": u.get("id"), "enabled": bool(not u.get("requires_env") or auth._env_on(str(u["requires_env"]))), "created_at": None, "note": f"{u.get('requires_env')} が有効なときだけ", "plan": "paid"})
     for u in local:
-        out.append({"fp": str(u["idk"])[:8], "source": "managed", "label": None, "enabled": u.get("enabled", True) is not False, "created_at": u.get("created_at"), "note": ""})
+        out.append({"fp": str(u["idk"])[:8], "source": "managed", "label": None, "enabled": u.get("enabled", True) is not False, "created_at": u.get("created_at"), "note": "", "plan": "free" if u.get("plan") == "free" else "paid"})
     return out
 
 
-def create_user(user_id: str, password: str, billing: dict | None = None) -> str:
-    """ユーザーを作る。戻り値は指紋。billing を渡すと課金の状態（pending など）つきで作る（決済が済むまでログインできない）。"""
+def create_user(user_id: str, password: str, billing: dict | None = None, plan: str = "paid") -> str:
+    """ユーザーを作る。戻り値は指紋。plan は paid（有料会員。既定）か free（無料のログイン会員）。billing を渡すと課金の状態（pending など）つきで作る（決済が済むまでログインできない）。"""
+    if plan not in ("paid", "free"):
+        raise UserError("区分は paid（有料会員）か free（無料のログイン会員）にしてください")
     from src.api import auth
 
     uid = (user_id or "").strip()
@@ -139,7 +141,7 @@ def create_user(user_id: str, password: str, billing: dict | None = None) -> str
         k = auth.id_key(uid)
         if any(u.get("idk") == k for u in data["users"]) or any((u.get("id") or "").lower() == uid.lower() for u in auth._read_users(auth._MEMBERS_FILE)):
             raise UserError("そのログインID はすでに使われています")
-        rec = {"idk": k, **_hash(password), "role": "member", "enabled": True, "created_at": _now(), "updated_at": _now()}
+        rec = {"idk": k, **_hash(password), "role": "member", "plan": plan, "enabled": True, "created_at": _now(), "updated_at": _now()}
         if billing is not None:
             rec["billing"] = dict(billing)
         data["users"].append(rec)
@@ -205,6 +207,20 @@ def set_enabled(ident: str, on: bool) -> str:
     return str(u["idk"])[:8]
 
 
+def set_plan(ident: str, plan: str) -> str:
+    """区分を変える（paid=有料会員 / free=無料のログイン会員）。ログイン中のセッションにもすぐ効く。"""
+    if plan not in ("paid", "free"):
+        raise UserError("区分は paid（有料会員）か free（無料のログイン会員）にしてください")
+    p = _path()
+    with locked(p):
+        data = _load(p)
+        u = _resolve(data, ident)
+        u["plan"] = plan
+        u["updated_at"] = _now()
+        _save(p, data)
+    return str(u["idk"])[:8]
+
+
 def remove_user(ident: str) -> str:
     p = _path()
     data = _load(p)
@@ -239,6 +255,11 @@ def main(argv: list[str] | None = None) -> int:
         g.add_argument("--password", help="パスワードを指定する（シェルの履歴に残る）。10 文字以上")
         g.add_argument("--generate", action="store_true", help="ランダムなパスワードを作って 1 回だけ表示")
         g.add_argument("--password-stdin", action="store_true", help="標準入力 1 行目をパスワードにする")
+        if name == "add":
+            s.add_argument("--plan", choices=["paid", "free"], default="paid", help="paid=有料会員（既定）/ free=無料のログイン会員")
+    pl = sp.add_parser("plan")
+    pl.add_argument("id")
+    pl.add_argument("plan", choices=["paid", "free"])
     for name in ("disable", "enable", "remove"):
         sp.add_parser(name).add_argument("id")
     a = ap.parse_args(argv)
@@ -248,11 +269,14 @@ def main(argv: list[str] | None = None) -> int:
             if not rows:
                 print("ユーザーはいません")
             for r in rows:
-                print(f"{r['fp']:<9}{r['source']:<9}{'有効' if r['enabled'] else '無効':<5}{r['created_at'] or '-':<27}{r['label'] or ''} {r['note']}".rstrip())
+                print(f"{r['fp']:<9}{r['source']:<9}{'有効' if r['enabled'] else '無効':<5}{'有料' if r.get('plan') != 'free' else '無料':<5}{r['created_at'] or '-':<27}{r['label'] or ''} {r['note']}".rstrip())
+            return 0
+        if a.cmd == "plan":
+            print(f"区分を {'有料会員' if a.plan == 'paid' else '無料のログイン会員'} にしました（指紋 {set_plan(a.id, a.plan)}）")
             return 0
         if a.cmd in ("add", "passwd"):
             pw, gen = _get_password(a, a.id)
-            fp = create_user(a.id, pw) if a.cmd == "add" else set_password(a.id, pw)
+            fp = create_user(a.id, pw, plan=a.plan) if a.cmd == "add" else set_password(a.id, pw)
             print(("追加しました" if a.cmd == "add" else "パスワードを変更しました") + f"（指紋 {fp}）")
             if gen:
                 print(f"パスワード（この 1 回だけ表示）: {pw}")
