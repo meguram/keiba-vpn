@@ -151,8 +151,14 @@ class ApplyTest(unittest.TestCase):
         self.assertIs(once, twice)
 
     def test_pc_thresholds_for_star_and_kesi(self):
+        from unittest import mock
+
         from src.utils import race_probabilities as RP
 
+        with mock.patch("src.utils.race_probabilities.star_v1_config", return_value={}):       # 旧判定（生のEV）の水準の確認
+            self._pc_thresholds_legacy(RP)
+
+    def _pc_thresholds_legacy(self, RP):
         e = {"win_odds": 15.0, "ev_win": 0.85, "ev_place": 0.0, "top3_prob": 0.2}
         self.assertFalse(RP.qualifies_star_mark(dict(e), 0.07))                      # 従来の水準（EV>=1.0）では★にならない
         self.assertTrue(RP.qualifies_star_mark({**e, "prob_calibrated": True}, 0.07))  # 補正後の確率用の水準（0.80）では★

@@ -112,11 +112,24 @@ _STAR_EV_WIN_MIN = 1.0  # 勝率×単勝オッズ >= 1.0（100円あたり回収
 _STAR_EV_PLACE_MIN = 1.08  # 複勝のみ高EVの代替（単勝帯内で複勝妙味が強い場合）
 
 
+def star_v1_config() -> dict:
+    """v1 の★の設定（config/mark_rule.json の star_v1）。calibrated=true なら、較正後の単勝期待値（実現回収率に合わせた値）で判定する。"""
+    c = mark_rule_config().get("star_v1")
+    return c if isinstance(c, dict) else {}
+
+
 def qualifies_star_mark(entry: dict, base_prob: float) -> bool:
-    """想定単勝10〜30倍かつ期待値が高い馬か。"""
+    """想定単勝10〜30倍かつ期待値が高い馬か。star_v1.calibrated=true のときは『較正後の勝期待値 ≥ ev_win_cal_min』だけで判定する
+    （生の EV は実現回収率より高く出るので、帯 7〜30 倍の 2022〜2026 年の検証で 0.95 以上が約 100〜110% だった。評価: 決定ログ・star_band_ev）。"""
     win_odds = float(entry.get("win_odds") or 0)
-    if win_odds < _STAR_WIN_ODDS_MIN or win_odds > _STAR_WIN_ODDS_MAX:
+    sc = star_v1_config()
+    lo, hi = float(sc.get("odds_min", _STAR_WIN_ODDS_MIN)), float(sc.get("odds_max", _STAR_WIN_ODDS_MAX))
+    if win_odds < lo or win_odds > hi:
         return False
+    if sc.get("calibrated"):
+        cal = _cal_horse_ev(entry, "ev_win", "win")
+        if cal is not None:
+            return cal >= float(sc.get("ev_win_cal_min", 0.95))
     ev_win_min, ev_place_min = _STAR_EV_WIN_MIN, _STAR_EV_PLACE_MIN
     if entry.get("prob_calibrated"):
         # 市場補正した確率は EV の水準が下がる（生の EV は膨らんでいた）。★の頻度が従来に近くなる水準に置く（config/ev_calibration_pc.json の marks）

@@ -34,5 +34,12 @@
    ],
    "min_top3_mult": 0.0
   }
+ },
+ "star_v1": {
+  "calibrated": true,
+  "ev_win_cal_min": 0.95,
+  "odds_min": 10.0,
+  "odds_max": 30.0,
+  "note": "v1 の★(おすすめ穴馬)の判定。較正後の単勝期待値(config/ev_calibration.json)が ev_win_cal_min 以上＆想定単勝が odds_min〜odds_max。生のEVで判定していた従来は約75%のレースに★が出て的中率4%(2026-10-18: 27/36R で1着1頭)だったため改めた。2022-2026の検証で 10〜30倍・0.95以上は単勝約100〜110%(区間は100%を跨ぐ)。calibrated=false で従来の判定に戻る。評価: ptrain star_band_ev.py"
  }
 }

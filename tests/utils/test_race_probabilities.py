@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest import mock
 
 import pytest
 
@@ -155,7 +156,8 @@ class TestRaceProbabilities(unittest.TestCase):
             self.assertTrue(all(ts.count(k) <= 1 for k in ("honmei", "pair", "show_val", "star")))
             self.assertLessEqual(ts.count("anchor"), 4)
 
-    def test_qualifies_star_odds_band(self):
+    @mock.patch("src.utils.race_probabilities.star_v1_config", return_value={})
+    def test_qualifies_star_odds_band(self, _m):
         self.assertTrue(
             qualifies_star_mark(
                 {"win_odds": 15.0, "ev_win": 1.1, "ev_place": 0.5, "top3_prob": 0.2},
@@ -169,7 +171,8 @@ class TestRaceProbabilities(unittest.TestCase):
             )
         )
 
-    def test_assign_star_mark(self):
+    @mock.patch("src.utils.race_probabilities.star_v1_config", return_value={})
+    def test_assign_star_mark(self, _m):
         entries = [
             {"horse_number": 1, "win_prob": 0.2, "top2_prob": 0.35, "top3_prob": 0.5,
              "win_odds": 15.0, "ev_win": 1.2, "ev_place": 1.0},
@@ -237,6 +240,27 @@ def _loop_top3(w):
                 if d2 > 1e-9:
                     top3[i] += w[j] * (w[k] / d1) * (w[i] / d2)
     return np.minimum(top3, 1.0)
+
+
+class TestStarCalibrated(unittest.TestCase):
+    """★は較正後の単勝期待値で判定する（config/mark_rule.json の star_v1）。"""
+
+    CFG = {"calibrated": True, "ev_win_cal_min": 0.95, "odds_min": 10.0, "odds_max": 30.0}
+
+    def test_uses_calibrated_ev_not_raw(self):
+        with mock.patch("src.utils.race_probabilities.star_v1_config", return_value=self.CFG), \
+                mock.patch("src.utils.race_probabilities._cal_horse_ev", return_value=0.80):
+            self.assertFalse(qualifies_star_mark({"win_odds": 15.0, "ev_win": 1.6, "top3_prob": 0.3}, 0.07))     # 生の EV が高くても較正後が低ければ★にしない
+        with mock.patch("src.utils.race_probabilities.star_v1_config", return_value=self.CFG), \
+                mock.patch("src.utils.race_probabilities._cal_horse_ev", return_value=0.96):
+            self.assertTrue(qualifies_star_mark({"win_odds": 15.0, "ev_win": 1.0, "top3_prob": 0.1}, 0.07))
+            self.assertFalse(qualifies_star_mark({"win_odds": 35.0, "ev_win": 1.0, "top3_prob": 0.1}, 0.07))    # 30 倍超は対象外
+            self.assertFalse(qualifies_star_mark({"win_odds": 8.0, "ev_win": 1.0, "top3_prob": 0.1}, 0.07))     # 10 倍未満は対象外
+
+    def test_falls_back_when_calibration_unavailable(self):
+        with mock.patch("src.utils.race_probabilities.star_v1_config", return_value=self.CFG), \
+                mock.patch("src.utils.race_probabilities._cal_horse_ev", return_value=None):
+            self.assertTrue(qualifies_star_mark({"win_odds": 15.0, "ev_win": 1.2, "top3_prob": 0.1}, 0.07))     # 較正が無効のときは従来の判定
 
 
 class TestVectorizedHarville(unittest.TestCase):

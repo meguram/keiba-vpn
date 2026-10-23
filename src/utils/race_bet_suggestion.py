@@ -40,6 +40,12 @@ def _mark(entry: dict) -> str:
     return str(entry.get("mark_type") or "none")
 
 
+def _ev_star(entry: dict, key: str) -> float:
+    """★の買い目の期待値。★は較正後の期待値で選ばれる（race_probabilities.qualifies_star_mark）ので、較正後(ev_*_cal)があればそれを使う。"""
+    v = entry.get(f"{key}_cal")
+    return float(v) if v is not None else _ev(entry, key)
+
+
 def _ev(entry: dict, key: str) -> float:
     v = entry.get(key)
     try:
@@ -150,7 +156,7 @@ def suggest_race_bets(entries: list[dict]) -> dict[str, Any]:
     ):
         if not e:
             continue
-        ev = _ev(e, "ev_win")
+        ev = _ev_star(e, "ev_win") if marks == ["★"] else _ev(e, "ev_win")
         if ev >= _EV_WATCH:
             tansho_candidates.append((e, ev, label, marks))
 
@@ -185,7 +191,7 @@ def suggest_race_bets(entries: list[dict]) -> dict[str, Any]:
     ):
         if not e:
             continue
-        ev = _ev(e, "ev_place")
+        ev = _ev_star(e, "ev_place") if marks == ["★"] else _ev(e, "ev_place")
         if ev >= _EV_WATCH:
             fukusho_candidates.append((e, ev, label, marks))
     for e in anchors:
