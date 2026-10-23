@@ -165,6 +165,13 @@ def build_news(limit: int = 6) -> dict:
     return {"items": items[:limit], "latest": latest, "status": doc["status"]}
 
 
+@router.get("/api/prediction-results/mark-card", response_class=JSONResponse)
+async def prediction_results_mark_card():
+    """ホームの『印の成績』カード（◎○▲★消の 1着-2着-3着-4着以下。先週・直近5週間・年）。"""
+    today = datetime.now(pr.JST).date()
+    return JSONResponse(await asyncio.to_thread(lambda: _cached(("mark-card", today.isoformat()), lambda: pr.mark_card(today))))
+
+
 @router.get("/api/prediction-results/news", response_class=JSONResponse)
 async def prediction_results_news(limit: int = Query(6, ge=1, le=20)):
     def _run():

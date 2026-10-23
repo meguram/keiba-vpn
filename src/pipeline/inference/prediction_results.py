@@ -28,7 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_MAX_TOTAL_BET = 2000
 BET_TYPES = ["tansho", "fukusho", "umaren", "wide", "sanrenpuku"]
 BET_LABELS = {"tansho": "単勝", "fukusho": "複勝", "umaren": "馬連", "wide": "ワイド", "umatan": "馬単", "sanrenpuku": "3連複"}
-MARKS = ("honmei", "pair", "star", "kesi")
+MARKS = ("honmei", "pair", "show_val", "star", "kesi")   # ◎ ○ ▲ ★ 消（△ anchor は集計しない）
 HIGHLIGHT_MARKS = ("honmei", "pair", "star")  # 注目レース（穴の的中）に使う印。消印は『走らない』側の印なので除く
 MARK_SYMBOLS = {"honmei": "◎", "pair": "○", "star": "★", "anchor": "△", "show_val": "▲", "kesi": "消"}
 _PAYOFF_KEYS = {"単勝": "tansho", "複勝": "fukusho", "馬連": "umaren", "ワイド": "wide", "馬単": "umatan",
@@ -487,6 +487,57 @@ def period_summary(scope: str, date: str, base: Path | None = None) -> dict:
             "summary": summ, "series": series,
             "highlights": [h for x in docs for h in x.get("highlights", [])][:12],
             "notes": (docs[-1].get("notes") if docs else [])}
+
+
+def range_summary(lo: str, hi: str, base: Path | None = None) -> dict:
+    """任意の期間（YYYYMMDD の両端を含む）の合算。日次の確定/暫定の状態も持つ。"""
+    days = [d for d in list_days(base) if lo <= d <= hi]
+    docs = [x for x in (read_day(d, base) for d in days) if x]
+    return {"from": lo, "to": hi, "days": [x["date"] for x in docs],
+            "status": "final" if docs and all(x["status"] == "final" for x in docs) else "provisional",
+            "summary": merge_summaries([x["summary"] for x in docs]) if docs else summarize([])}
+
+
+MARK_ORDER = (("honmei", "◎"), ("pair", "○"), ("show_val", "▲"), ("star", "★"), ("kesi", "消"))
+
+
+def pick_card_year(days: list[str], today: _date, min_span_days: int = 59) -> int:
+    """年の集計に使う年。今年のデータが約2か月（先頭日から最新日まで）以上あれば今年、足りなければ（年初など）去年。去年にも無ければ今年。"""
+    cur = [d for d in days if d[:4] == str(today.year)]
+    if cur:
+        span = (datetime.strptime(cur[-1], "%Y%m%d").date() - datetime.strptime(cur[0], "%Y%m%d").date()).days
+        if span >= min_span_days:
+            return today.year
+    if any(d[:4] == str(today.year - 1) for d in days):
+        return today.year - 1
+    return today.year
+
+
+def mark_card(today: _date, base: Path | None = None) -> dict:
+    """ホームの『印の成績』カード: 先週（前の暦週）・直近5週間（今日までの35日）・年（pick_card_year）の ◎○▲★消 の着順分布（1着-2着-3着-4着以下）。"""
+    days = list_days(base)
+    ymd = lambda d: d.strftime("%Y%m%d")      # noqa: E731
+    mon = today - timedelta(days=today.weekday())
+    lw_lo, lw_hi = mon - timedelta(days=7), mon - timedelta(days=1)
+    y = pick_card_year(days, today)
+    specs = [("last_week", "先週", ymd(lw_lo), ymd(lw_hi)),
+             ("recent_5w", "直近5週間", ymd(today - timedelta(days=34)), ymd(today)),
+             ("year", f"{y}年", f"{y}0101", f"{y}1231")]
+    periods = []
+    for key, label, lo, hi in specs:
+        r = range_summary(lo, hi, base)
+        s = r["summary"]
+        marks = []
+        for m, sym in MARK_ORDER:
+            c = (s.get("marks") or {}).get(m) or _blank_counts()
+            n = c["n"]
+            marks.append({"key": m, "symbol": sym, "n": n, "f1": c["f1"], "f2": c["f2"], "f3": c["f3"], "f4p": c["f4p"],
+                          "text": f"{c['f1']}-{c['f2']}-{c['f3']}-{c['f4p']}",
+                          "win_rate": rate(c["f1"], n), "top2_rate": rate(c["f1"] + c["f2"], n), "top3_rate": rate(c["f1"] + c["f2"] + c["f3"], n)})
+        periods.append({"key": key, "label": label, "from": lo, "to": hi, "data_from": r["days"][0] if r["days"] else None,
+                        "data_to": r["days"][-1] if r["days"] else None, "days": len(r["days"]), "races": s["races_settled"],
+                        "status": r["status"], "marks": marks})
+    return {"as_of": ymd(today), "year": y, "periods": periods}
 
 
 def rate(num: int, den: int) -> float | None:
