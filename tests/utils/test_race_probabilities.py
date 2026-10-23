@@ -345,3 +345,25 @@ def test_buy_tier_uses_calibrated_ev_only_when_enabled(monkeypatch):
     assert buy_recommendation_tier(e) == "強推奨"
     monkeypatch.setattr(ev_calibration, "load_config", lambda: {"enabled": True, "k": {"win": 0.2}, "base": {"win": 0.8}})
     assert buy_recommendation_tier(e) == "様子見"      # 0.8 + 0.2×(1.5−0.8) = 0.94 → 様子見（0.9 以上）
+
+
+class TestStarV2Calibrated(unittest.TestCase):
+    CFG = {"calibrated": True, "ev_win_cal_min": 0.95, "odds_min": 10.0, "odds_max": 30.0}
+
+    def _entries(self):
+        n = 8
+        return [{"horse_number": i + 1, "win_prob": 0.2 if i == 0 else 0.1, "top2_prob": 0.3, "top3_prob": 0.4, "win_odds": 5.0 if i == 0 else 15.0 + i, "ev_win": 1.5, "ev_place": 1.2} for i in range(n)]
+
+    def test_v2_star_uses_calibrated_ev(self):
+        from src.utils.race_probabilities import assign_mece_marks_v2
+
+        with mock.patch("src.utils.race_probabilities.star_v1_config", return_value=self.CFG), \
+                mock.patch("src.utils.race_probabilities._cal_horse_ev", return_value=0.8):
+            es = self._entries()
+            assign_mece_marks_v2(es)
+            self.assertFalse(any(e["mark_type"] == "star" for e in es))       # 較正後が低ければ、生の期待値が高くても★は付かない
+        with mock.patch("src.utils.race_probabilities.star_v1_config", return_value=self.CFG), \
+                mock.patch("src.utils.race_probabilities._cal_horse_ev", return_value=1.0):
+            es = self._entries()
+            assign_mece_marks_v2(es)
+            self.assertEqual(sum(e["mark_type"] == "star" for e in es), 1)

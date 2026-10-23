@@ -409,10 +409,20 @@ def assign_mece_marks_v2(entries: list[dict], params: dict | None = None) -> Non
     hi = float(st["odds_max"]) if st.get("odds_max") else float("inf")
     floor3 = base * float(st["top3_floor_mult"]) * 3.0  # 複勝率の均等水準は 3/n
     star_pool = []
+    sc = star_v1_config()                      # 較正後の勝期待値で判定する設定（v1 の★と同じ。生の期待値は実現回収率より高く出る）
+    cal_mode = bool(sc.get("calibrated"))
+    if cal_mode:
+        hi = min(hi, float(sc.get("odds_max", hi)))
     for e in free():
         wo = _f(e, "win_odds")
         if wo < lo or wo > hi or _f(e, "top3_prob") < floor3:
             continue
+        if cal_mode:
+            cal = _cal_horse_ev(e, "ev_win", "win")
+            if cal is not None:
+                if cal >= float(sc.get("ev_win_cal_min", 0.95)):
+                    star_pool.append((cal, _f(e, "top3_prob"), e))
+                continue
         evw, evp = _f(e, "ev_win"), _f(e, "ev_place")
         ev = evw if st["ev"] == "win" else evp if st["ev"] == "place" else max(evw, evp)
         if ev >= float(st.get("ev_min") or 0.0) and ev > 0:

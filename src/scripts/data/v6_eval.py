@@ -133,6 +133,16 @@ def load_new(name: str, df: pd.DataFrame, F: pd.DataFrame) -> pd.DataFrame:
     raise KeyError(name)
 
 
+# 大衆（市場）の評価に間接的につながる特徴量の除外セット（接頭辞）。『-MKT_NK』のように構成名に足すと、その列を学習から外す。
+#   MKT_NK  … netkeiba 指数の履歴（公開されている評価値）
+#   MKT_JK  … 騎手・調教師の成績（人気騎手・厩舎は売れる）と、出走馬内での騎手の相対値、馬×騎手・馬×調教師の組合せ成績
+DROP_PREFIXES = {
+    "MKT_NK": ("rb_nk_",),
+    "MKT_JK": ("jockey_prior_", "trainer_prior_", "fc_jk_", "pair_hj_", "pair_ht_", "chg_jockey", "chg_trainer"),
+}
+DROP_PREFIXES["MKT_ALL"] = DROP_PREFIXES["MKT_NK"] + DROP_PREFIXES["MKT_JK"]
+
+
 def build_frame(cfg: dict, df: pd.DataFrame) -> pd.DataFrame:
     X = sel.build_frame(BASE_CFG | {}, df)
     if cfg["stage"]:
@@ -158,6 +168,12 @@ def build_frame(cfg: dict, df: pd.DataFrame) -> pd.DataFrame:
         if "-CAL" in drop:
             X = X.drop(columns=list(CAL_COLS))
     cfg = {**cfg, "new": [n for n in cfg["new"] if not n.startswith("-")]}
+    mk = [n[1:] for n in drop if n[1:] in DROP_PREFIXES]
+    if mk:
+        pre = tuple(p for n in mk for p in DROP_PREFIXES[n])
+    else:
+        pre = ()
+    pending_drop = pre
     if cfg["new"]:
         F = _forecast_frame(df)
         G = pd.concat([load_new(n, df, F) for n in cfg["new"]], axis=1)
@@ -166,6 +182,8 @@ def build_frame(cfg: dict, df: pd.DataFrame) -> pd.DataFrame:
         assert not dup, f"列名が重なる: {sorted(dup)[:5]}"
         G.index = X.index
         X = pd.concat([X, G], axis=1)
+    if pending_drop:                                  # 外部群（RB など）を足したあとで、接頭辞に当たる列を外す
+        X = X.drop(columns=[c for c in X.columns if c.startswith(pending_drop)])
     return X
 
 

@@ -72,7 +72,8 @@ def test_v2_honmei_is_max_ev_among_win_qualified():
     assert [e for e in es if e["mark_type"] == "honmei"][0] is want
 
 
-def test_v2_star_has_no_odds_ceiling_but_needs_place_floor():
+def test_v2_star_has_no_odds_ceiling_but_needs_place_floor(monkeypatch):
+    monkeypatch.setattr(RP, "star_v1_config", lambda: {})          # 従来の判定（生の期待値・上限なし）の確認
     es = _field(12)
     for e in es:
         e["mark_type"] = "none"
