@@ -662,3 +662,72 @@
     margin-top: 4px;
   }
 }
+
+
+/* ── ヒーロー（低め）とホームの 2 カラム配置 ─────────────────────────────────────────── */
+.home-root .hero {
+  padding: 18px 24px 16px;
+}
+.home-root .hero-art {
+  position: absolute;
+  inset: 0;
+  background: url('/brand/megu-banner-dark.webp') center 60% / cover no-repeat;
+  opacity: 0.55;
+  filter: saturate(1.15) contrast(1.08);
+  -webkit-mask-image: radial-gradient(ellipse 80% 100% at 50% 55%, #000 25%, transparent 100%);
+  mask-image: radial-gradient(ellipse 80% 100% at 50% 55%, #000 25%, transparent 100%);
+  pointer-events: none;
+}
+.home-root .hero-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+}
+.home-root .hero-icon-wrap {
+  width: 96px;
+  height: 96px;
+  margin: 0;
+  flex: none;
+}
+.home-root .hero-icon-wrap .icon {
+  width: 96px;
+  height: 96px;
+  display: block;
+  background: #000;
+  border-radius: 50%;
+  font-size: 0;
+  filter: drop-shadow(0 2px 16px rgba(88, 166, 255, 0.45));
+}
+.home-root .hero-icon-wrap .icon-ring { inset: -6px; }
+.home-root .hero-catch {
+  margin: 0;
+  font-size: 36px;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.75);
+}
+@media (max-width: 600px) {
+  .home-root .hero { padding: 12px 16px 12px; }
+  .home-root .hero-row { gap: 14px; }
+  .home-root .hero-icon-wrap, .home-root .hero-icon-wrap .icon { width: 68px; height: 68px; }
+  .home-root .hero-catch { font-size: 26px; }
+}
+
+.home-root .home-grid {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 14px 32px 60px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 24px;
+  align-items: start;
+}
+.home-root .home-main { min-width: 0; }
+.home-root .home-grid .main { max-width: none; margin: 0; padding: 0; }
+.home-root .home-grid .pn,
+.home-root .home-grid .mrc { max-width: none; margin: 0 0 16px; padding: 0; }
+.home-root .home-side { position: sticky; top: 56px; min-width: 0; }
+@media (max-width: 1023px) {
+  .home-root .home-grid { grid-template-columns: minmax(0, 1fr); padding: 8px 14px 40px; gap: 0; }
+  .home-root .home-side { position: static; }
+}

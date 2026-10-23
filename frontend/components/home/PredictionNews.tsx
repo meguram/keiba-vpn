@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PendingLink } from "@/components/PendingLink";
 import { getJson } from "@/lib/httpCache";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
@@ -14,7 +14,8 @@ const KIND_META: Record<NewsItem["kind"], { icon: string; accent: string }> = {
   big_miss: { icon: "⚠️", accent: "#f87171" },
 };
 
-const INTERVAL_MS = 6000;
+const INTERVAL_MS = 5000;
+const GAP = 10;
 
 const CSS = `
 .pn{max-width:1100px;margin:0 auto 16px;padding:0 20px}
@@ -27,68 +28,99 @@ const CSS = `
 .pn-dot::before{content:"";display:block;width:7px;height:7px;border-radius:50%;background:rgba(148,163,184,.4);transition:all .2s}
 .pn-dot[aria-current="true"]::before{width:18px;border-radius:4px;background:var(--accent)}
 .pn-link{margin-left:auto;font-size:12px;color:var(--accent);text-decoration:none}
-.pn-card{overflow:hidden;background:var(--surface);border:1px solid var(--border);border-radius:10px}
-.pn-track{display:flex;transition:transform .55s cubic-bezier(.4,0,.2,1)}
-.pn-slide{flex:0 0 100%;min-width:0;box-sizing:border-box;display:block;text-decoration:none;color:var(--text);padding:10px 14px;border-left:4px solid var(--pn-accent,var(--accent));min-height:68px}
+.pn-viewport{overflow:hidden;width:calc(100% + ${GAP}px);margin-right:-${GAP}px}
+.pn-track{display:flex;will-change:transform}
+.pn-track.anim{transition:transform .65s cubic-bezier(.4,0,.2,1)}
+.pn-cell{flex:0 0 calc(100% / var(--v));min-width:0;box-sizing:border-box;padding-right:${GAP}px}
+.pn-slide{display:block;height:100%;box-sizing:border-box;text-decoration:none;color:var(--text);background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--pn-accent,var(--accent));border-radius:10px;padding:10px 14px;min-height:76px}
 .pn-top{display:flex;align-items:center;gap:8px;margin-bottom:3px}
 .pn-title{font-weight:700;font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pn-badge{margin-left:auto;flex:none;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;border:1px solid}
 .pn-sub{font-size:13px;color:var(--text-dim);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-@media (prefers-reduced-motion:reduce){.pn-track{transition:none}}
-@media (max-width:640px){.pn{padding:0 12px}}
+@media (prefers-reduced-motion:reduce){.pn-track.anim{transition:none}}
+@media (max-width:767px){.pn{padding:0 12px}}
 `;
 
-/** ホーム上部の『予測ニュース』: 直近の結果まとめ・今週の累計・注目レースを、1 枚のカードの中でスライドショーのように流す（省スペース）。
- *  自動で 6 秒ごとに切り替え、マウスを乗せている間・フォーカス中・動きを減らす設定のときは止める。矢印・点で手動でも切り替えられる。
+/** ホーム上部の『予測ニュース』: PC は半幅のカードを 2 枚並べ、スマホは 1 枚で、右から左へ 1 枚ずつ流す。最後のカードのあとも止まらず、先頭へ切れ目なく流れ続ける（先頭ぶんのコピーを末尾に足し、流れ終えた瞬間に動きなしで巻き戻す）。
+ *  自動で 5 秒ごとに切り替え、マウスを乗せている間・フォーカス中・動きを減らす設定のときは止める。矢印・点・スワイプで手動でも切り替えられる。
  *  回収率（仮想購入）は会員向け。未ログインの間は回収率を除いた文言を出す。集計が1件も無ければ何も出さない。 */
 export function PredictionNews() {
   const { isMember, loading } = useAuthStatus();
   const [items, setItems] = useState<NewsItem[] | null>(null);
-  const [idx, setIdx] = useState(0);
+  const [idx, setIdx] = useState(0);          // いちばん左に見えているカード（0..n。n はコピーの先頭＝実質 0）
+  const [anim, setAnim] = useState(true);
+  const [v, setV] = useState(1);              // 同時に見えるカード数（PC 2・スマホ 1）
   const [paused, setPaused] = useState(false);
   const [reduced, setReduced] = useState(false);
   const touchX = useRef<number | null>(null);
 
   useEffect(() => {
     let alive = true;
-    getJson<{ items: NewsItem[] }>("/api/prediction-results/news?limit=5", { ttlMs: 30_000 })
+    getJson<{ items: NewsItem[] }>("/api/prediction-results/news?limit=6", { ttlMs: 30_000 })
       .then((d) => { if (alive) setItems(d.items ?? []); })
       .catch(() => { if (alive) setItems([]); });
     return () => { alive = false; };
   }, []);
 
   useEffect(() => {
-    setReduced(typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+    const mq = window.matchMedia?.("(min-width: 768px)");
+    const upd = () => setV(mq?.matches ? 2 : 1);
+    upd();
+    mq?.addEventListener?.("change", upd);
+    setReduced(!!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+    return () => mq?.removeEventListener?.("change", upd);
   }, []);
 
   const n = items?.length ?? 0;
+  const slide = n > v;                           // 見える枚数より多いときだけ流す
+  const after2Frames = (f: () => void) => requestAnimationFrame(() => requestAnimationFrame(f));
+
+  const next = useCallback(() => { if (slide) { setAnim(true); setIdx((i) => Math.min(i + 1, n)); } }, [slide, n]);
+  const prev = useCallback(() => {
+    if (!slide) return;
+    if (idx > 0) { setAnim(true); setIdx(idx - 1); return; }
+    setAnim(false); setIdx(n);                   // 先頭から戻るときは、末尾のコピーへ動きなしで移ってから 1 枚戻す
+    after2Frames(() => { setAnim(true); setIdx(n - 1); });
+  }, [slide, idx, n]);
+  const goTo = (i: number) => { setAnim(true); setIdx(i); };
+
   useEffect(() => {
-    if (n < 2 || paused || reduced) return;
-    const t = setInterval(() => setIdx((i) => (i + 1) % n), INTERVAL_MS);
+    if (!slide || paused || reduced) return;
+    const t = setInterval(next, INTERVAL_MS);
     return () => clearInterval(t);
-  }, [n, paused, reduced]);
+  }, [slide, paused, reduced, next]);
+
+  // v が変わる・件数が変わったときは位置をそろえる
+  useEffect(() => { setAnim(false); setIdx(0); after2Frames(() => setAnim(true)); }, [v, n]);
 
   if (!items || n === 0) return null;
-  const go = (i: number) => setIdx(((i % n) + n) % n);
+  const cells = slide ? [...items, ...items.slice(0, v)] : items;
+  const active = idx % n;
+  const onEnd = (e: React.TransitionEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget || e.propertyName !== "transform" || idx < n) return;
+    setAnim(false); setIdx(idx - n);             // コピーまで流れ切ったら、動きなしで先頭へ戻す（見た目は連続）
+    after2Frames(() => setAnim(true));
+  };
+  const visible = (i: number) => i >= idx && i < idx + v;
 
   return (
-    <section aria-label="予測ニュース" aria-roledescription="carousel" className="pn">
+    <section aria-label="予測ニュース" aria-roledescription="carousel" className="pn" style={{ ["--v" as string]: slide ? v : Math.max(Math.min(n, v), 1) }}>
       <style>{CSS}</style>
       <div className="pn-head">
         <h2>📰 予測ニュース</h2>
-        {n > 1 && (
+        {slide && (
           <div className="pn-ctrl">
-            <button type="button" className="pn-btn" aria-label="前のニュース" onClick={() => go(idx - 1)}>‹</button>
+            <button type="button" className="pn-btn" aria-label="前のニュース" onClick={prev}>‹</button>
             {items.map((_, i) => (
-              <button key={i} type="button" className="pn-dot" aria-label={`${i + 1} 件目`} aria-current={i === idx} onClick={() => go(i)} />
+              <button key={i} type="button" className="pn-dot" aria-label={`${i + 1} 件目`} aria-current={i === active} onClick={() => goTo(i)} />
             ))}
-            <button type="button" className="pn-btn" aria-label="次のニュース" onClick={() => go(idx + 1)}>›</button>
+            <button type="button" className="pn-btn" aria-label="次のニュース" onClick={next}>›</button>
           </div>
         )}
         <PendingLink href="/prediction-results" className="pn-link">予測成績をすべて見る →</PendingLink>
       </div>
       <div
-        className="pn-card"
+        className="pn-viewport"
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
         onFocus={() => setPaused(true)}
@@ -97,32 +129,33 @@ export function PredictionNews() {
         onTouchEnd={(e) => {
           const x0 = touchX.current;
           touchX.current = null;
-          if (x0 != null && Math.abs(e.changedTouches[0].clientX - x0) > 40) go(idx + (e.changedTouches[0].clientX < x0 ? 1 : -1));
+          if (x0 != null && Math.abs(e.changedTouches[0].clientX - x0) > 40) (e.changedTouches[0].clientX < x0 ? next : prev)();
           setTimeout(() => setPaused(false), 4000);
         }}
       >
-        <div className="pn-track" style={{ transform: `translateX(-${idx * 100}%)` }} aria-live={paused ? "polite" : "off"}>
-          {items.map((it, i) => {
+        <div className={`pn-track${anim ? " anim" : ""}`} style={{ transform: `translateX(-${slide ? (idx * 100) / v : 0}%)` }} onTransitionEnd={onEnd} aria-live={paused ? "polite" : "off"}>
+          {cells.map((it, i) => {
             const meta = KIND_META[it.kind] ?? KIND_META.day;
             const text = !loading && isMember ? it.subtitle : it.subtitle_public;
             const ok = it.badge === "確定";
+            const show = !slide || (visible(i) && i < idx + v);
             return (
-              <PendingLink
-                key={`${it.kind}-${i}`}
-                href={it.link}
-                className="pn-slide"
-                style={{ ["--pn-accent" as string]: meta.accent }}
-                aria-hidden={i !== idx}
-                tabIndex={i === idx ? 0 : -1}
-                aria-label={`${i + 1} / ${n}`}
-              >
-                <div className="pn-top">
-                  <span aria-hidden>{meta.icon}</span>
-                  <span className="pn-title">{it.title}</span>
-                  <span className="pn-badge" style={{ color: ok ? "#4ade80" : "#fbbf24", borderColor: ok ? "rgba(74,222,128,0.5)" : "rgba(251,191,36,0.5)" }}>{it.badge}</span>
-                </div>
-                <div className="pn-sub">{text}</div>
-              </PendingLink>
+              <div className="pn-cell" key={`${it.kind}-${i}`}>
+                <PendingLink
+                  href={it.link}
+                  className="pn-slide"
+                  style={{ ["--pn-accent" as string]: meta.accent }}
+                  aria-hidden={!show}
+                  tabIndex={show ? 0 : -1}
+                >
+                  <div className="pn-top">
+                    <span aria-hidden>{meta.icon}</span>
+                    <span className="pn-title">{it.title}</span>
+                    <span className="pn-badge" style={{ color: ok ? "#4ade80" : "#fbbf24", borderColor: ok ? "rgba(74,222,128,0.5)" : "rgba(251,191,36,0.5)" }}>{it.badge}</span>
+                  </div>
+                  <div className="pn-sub">{text}</div>
+                </PendingLink>
+              </div>
             );
           })}
         </div>

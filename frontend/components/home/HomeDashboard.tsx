@@ -234,16 +234,21 @@ export function HomeDashboard() {
       <DevToolbar isAdmin={isAdmin} />
 
       <div className="hero">
-        <div className="hero-icon-wrap">
-          <span className="icon-glow" />
-          <span className="icon-ring" />
-          <span className="icon" aria-hidden>🏇</span>
+        <div className="hero-art" aria-hidden />
+        <div className="hero-row">
+          <div className="hero-icon-wrap">
+            <span className="icon-glow" />
+            <span className="icon-ring" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="icon" src="/brand/megu-logo-512.png" alt="めぐ競馬のロゴ" width={96} height={96} />
+          </div>
+          <h1 className="hero-catch">めぐ競馬</h1>
         </div>
-        <h1 className="hero-catch">🏇 めぐ競馬</h1>
       </div>
 
+      <div className="home-grid">
+      <div className="home-main">
       {featureEnabled("prediction-results") && <PredictionNews />}
-      {featureEnabled("prediction-results") && <MarkResultCard />}
 
       <div className="main">
         {VISIBLE_PUBLIC.map((section) => (
@@ -257,6 +262,11 @@ export function HomeDashboard() {
             ))}
           </>
         )}
+      </div>
+      </div>
+      <aside className="home-side">
+        {featureEnabled("prediction-results") && <MarkResultCard />}
+      </aside>
       </div>
 
       {/* Pricing section — visible to non-members only */}

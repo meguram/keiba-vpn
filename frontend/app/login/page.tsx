@@ -39,6 +39,8 @@ export default function LoginPage() {
 
   return (
     <div className="mx-auto mt-16 max-w-sm card">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/brand/megu-banner-cream.webp" alt="" width={1200} height={636} className="mb-4 w-full rounded-lg" style={{ aspectRatio: "1200 / 636", objectFit: "cover" }} />
       <h1 className="mb-4 text-xl font-bold">ログイン</h1>
       <form onSubmit={submit} className="space-y-3">
         <input type="text" autoComplete="username" className="w-full rounded border bg-transparent p-2" style={{ borderColor: "var(--border)" }} placeholder="ログインID（管理者は空欄）" value={userId} onChange={(e) => setUserId(e.target.value)} />
