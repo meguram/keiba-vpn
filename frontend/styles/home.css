@@ -30,7 +30,7 @@
   right: 50%;
   margin-left: -50vw;
   margin-right: -50vw;
-  background: var(--home-bg);
+  background: transparent;
   color: var(--home-text);
   font-family: 'Noto Sans JP', -apple-system, 'Segoe UI', sans-serif;
   min-height: calc(100vh - 2.75rem);

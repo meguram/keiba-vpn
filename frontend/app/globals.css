@@ -26,6 +26,17 @@ body {
   font-family: Inter, 'Noto Sans JP', sans-serif;
 }
 
+/* ページ全体の背景: ブランド画像を画面いっぱいに薄く敷く（スクロールしても動かない。操作は邪魔しない） */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: url("/brand/megu-banner-dark.webp") center / contain no-repeat;
+  opacity: 0.18;
+}
+
 .site-main:not(:has(.home-root)) {
   @apply mx-auto max-w-6xl p-4;
 }
