@@ -41,7 +41,7 @@ const CSS = `
 @media (max-width:767px){.pn{padding:0 12px}}
 `;
 
-/** ホーム上部の『予測ニュース』: PC は半幅のカードを 2 枚並べ、スマホは 1 枚で、右から左へ 1 枚ずつ流す。最後のカードのあとも止まらず、先頭へ切れ目なく流れ続ける（先頭ぶんのコピーを末尾に足し、流れ終えた瞬間に動きなしで巻き戻す）。
+/** ホーム上部の『速報』: PC は半幅のカードを 2 枚並べ、スマホは 1 枚で、右から左へ 1 枚ずつ流す。最後のカードのあとも止まらず、先頭へ切れ目なく流れ続ける（先頭ぶんのコピーを末尾に足し、流れ終えた瞬間に動きなしで巻き戻す）。
  *  自動で 5 秒ごとに切り替え、マウスを乗せている間・フォーカス中・動きを減らす設定のときは止める。矢印・点・スワイプで手動でも切り替えられる。
  *  回収率（仮想購入）は会員向け。未ログインの間は回収率を除いた文言を出す。集計が1件も無ければ何も出さない。 */
 export function PredictionNews() {
@@ -104,17 +104,17 @@ export function PredictionNews() {
   const visible = (i: number) => i >= idx && i < idx + v;
 
   return (
-    <section aria-label="予測ニュース" aria-roledescription="carousel" className="pn" style={{ ["--v" as string]: slide ? v : Math.max(Math.min(n, v), 1) }}>
+    <section aria-label="速報" aria-roledescription="carousel" className="pn" style={{ ["--v" as string]: slide ? v : Math.max(Math.min(n, v), 1) }}>
       <style>{CSS}</style>
       <div className="pn-head">
-        <h2>📰 予測ニュース</h2>
+        <h2>📰 速報</h2>
         {slide && (
           <div className="pn-ctrl">
-            <button type="button" className="pn-btn" aria-label="前のニュース" onClick={prev}>‹</button>
+            <button type="button" className="pn-btn" aria-label="前の速報" onClick={prev}>‹</button>
             {items.map((_, i) => (
               <button key={i} type="button" className="pn-dot" aria-label={`${i + 1} 件目`} aria-current={i === active} onClick={() => goTo(i)} />
             ))}
-            <button type="button" className="pn-btn" aria-label="次のニュース" onClick={next}>›</button>
+            <button type="button" className="pn-btn" aria-label="次の速報" onClick={next}>›</button>
           </div>
         )}
         <PendingLink href="/prediction-results" className="pn-link">予測成績をすべて見る →</PendingLink>
