@@ -269,8 +269,8 @@ export function HomeDashboard() {
       </aside>
       </div>
 
-      {/* Pricing section — visible to non-members only */}
-      {!isMember && (
+      {/* 料金カード: 有料プラン（features.ts の billing）が有効で、会員でないときだけ */}
+      {featureEnabled("billing") && !isMember && (
         <section
           id="pricing"
           style={{
