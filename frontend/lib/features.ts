@@ -24,6 +24,7 @@ export const FEATURES = {
   "prediction-results": { label: "予測成績（予測結果の集計・ホームの速報）", enabled: true, paths: ["/prediction-results"] },
   auth: { label: "ログイン", enabled: true, paths: ["/login"] },
   "admin-users": { label: "ユーザー登録（管理者のみ）", enabled: true, paths: ["/admin/users"] },
+  billing: { label: "有料プランの申込み・法的表記（データ利用許諾の確認後に有効化。手順: docs/operations/billing.md）", enabled: false, paths: ["/signup", "/legal"] },
 
   // ── 無効化中（コードは残置） ──
   "megu-index": { label: "めぐ指数", enabled: false, paths: ["/megu-index"] },

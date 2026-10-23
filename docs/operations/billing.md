@@ -22,6 +22,7 @@ netkeiba のライセンス確認が済むまで、**画面には一切出さず
 - 秘密鍵は `.env` のみ（git に入れない）。可能なら制限付きキー（rk_）。
 
 ## 有効化の手順（将来）
+点検: `python3 -m src.billing.preflight`（未達の項目と対処を表示。全部 OK になってから有効化する）。申込み画面（`/signup`）と法的表記（`/legal/{tokushoho,terms,privacy}`）は実装済みで、`frontend/lib/features.ts` の `billing`（既定 false）が false の間は `/` へ戻される。
 1. データの権利（netkeiba / JRA-VAN 等）を確認し、`config/billing.json` の `license_confirmed` を `true` に。
 2. Stripe でテストモードの商品・価格を作り、`.env` に 3 つの変数と `KEIBA_BILLING=1`。`stripe listen` / テストカードで一巡確認。
 3. Webhook のエンドポイント `https://app.megu-keiba.com/api/v1/billing/webhook` を Stripe に登録。**Cloudflare Access はこのパスだけ Bypass が必要**（署名で守る）。

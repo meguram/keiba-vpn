@@ -137,3 +137,10 @@ def test_routes_404_when_off_and_webhook_end_to_end(env):
     assert c.post("/api/v1/billing/webhook", data=body, headers={"Stripe-Signature": sign(body)}).status_code == 200
     assert auth.verify_member_login("dave", PW)
     assert c.post("/api/v1/billing/signup", json={"user_id": "e", "password": PW}, headers={"Origin": "https://evil.example"}).status_code == 403
+
+
+def test_preflight_reports_unmet_while_disabled():
+    from src.billing import preflight
+
+    names = {n: ok for n, ok, _ in preflight.checks({})}
+    assert not any(v for k, v in names.items() if "KEIBA_BILLING" in k or "UI の公開" in k or "利用許諾" in k)
