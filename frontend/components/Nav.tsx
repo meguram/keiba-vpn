@@ -87,7 +87,7 @@ export function Nav() {
           gap: 8,
         }}>
           <img src="/megu-icon.png" alt="" width={22} height={22} style={{ borderRadius: "50%", display: "block" }} />
-          <span>めぐAI</span>
+          <span>めぐ競馬</span>
         </Link>
 
         {!isHome && (
