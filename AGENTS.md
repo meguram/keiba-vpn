@@ -58,6 +58,7 @@
 
 - 既存の命名・モジュール分割に合わせ、**依頼範囲だけ**変更する。
 - ファイル探索は `Read` / リポジトリ `Grep` / `Glob` を優先（巨大 `data/` の丸読みは避ける）。
+- **UI の表（`<table>`）は、すべて列ソートできる前提で作る**: 見出しは `<thead>`（複数段なら最下段が対象）に置き、本体の行に colSpan/rowSpan を使わない。`frontend/components/TableSorter.tsx` が自動で『見出しを押すと昇順→降順→元の順』にする（値は表示文字から読む。`data-sort="…"` で上書き、独自にソートを持つ表は `<table data-no-sort>`）。
 - モデリングや指標の意味を変える変更は、**`docs/html/modeling/` の該当仕様**と整合を取る。
 - スクレイパや保存形式を触る場合は、検証系スクリプト（`src/scraper/validate_storage.py` 等）の有無を確認してから進める。
 

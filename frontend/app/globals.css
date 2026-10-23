@@ -162,3 +162,10 @@ body::before {
   .mt-card { padding: 26px 16px; }
   .mt-count-num { font-size: 38px; }
 }
+
+/* 表の列ソート（components/TableSorter.tsx）: 見出しを押すと 昇順→降順→元の順 */
+th[data-sortable] { cursor: pointer; user-select: none; }
+th[data-sortable]:hover { color: var(--text); }
+th[data-sortable]::after { content: " \2195"; font-size: 0.75em; opacity: 0.3; }
+th[data-sortable][data-sort-dir="asc"]::after { content: " \25B2"; opacity: 1; }
+th[data-sortable][data-sort-dir="desc"]::after { content: " \25BC"; opacity: 1; }

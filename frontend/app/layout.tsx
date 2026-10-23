@@ -1,4 +1,5 @@
 import { EnvBadge } from "@/components/EnvBadge";
+import { TableSorter } from "@/components/TableSorter";
 import { MaintenanceShell } from "@/components/MaintenanceShell";
 import { NavProgress } from "@/components/NavProgress";
 import type { Metadata } from "next";
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ja">
       <body>
         <EnvBadge />
+        <TableSorter />
         <MaintenanceShell
           chrome={
             <>

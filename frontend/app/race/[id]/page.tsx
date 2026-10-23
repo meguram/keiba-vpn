@@ -620,7 +620,7 @@ export default function RaceDetailPage() {
   ) : (
     <div style={{ overflowX: "auto" }}>
       {checkRows && <ResultCheckPanel paceLevel={predData?.pace_forecast?.level} paceLabel={predData?.pace_forecast?.label} first3f={rd?.race_result?.pace?.first_half_3f} second3f={rd?.race_result?.pace?.second_half_3f} pos={posSummary} />}
-      <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 13 }}>
+      <table data-no-sort style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 13 }}>
         <thead style={{ background: "var(--surface2)" }}>
           <tr>
             {resultCols.map((c) => (
