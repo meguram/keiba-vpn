@@ -62,6 +62,10 @@ def _betting_view() -> str:
 def betting_optimize():
     body = request.get_json(silent=True) or {}
     payload, code = optimize_betting(body, view=_betting_view())
+    if code == 200 and body.get("race_id"):
+        from src.api.v1.delegates import attach_bet_results
+
+        attach_bet_results(payload, str(body["race_id"]))
     return jsonify(payload), code
 
 

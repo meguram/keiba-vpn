@@ -15,6 +15,8 @@ export type BetItem = {
   expected_return?: number;
   predicted_odds?: number;
   odds_gap?: number;
+  /** 結果が出ているレースの精算（仮想購入） */
+  result?: { hit: boolean; payout: number; estimated?: boolean };
 };
 
 export type GroupKind = "single" | "axis1" | "axis2" | "axis1_first" | "axis1_second";

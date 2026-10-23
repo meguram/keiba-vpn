@@ -6,6 +6,7 @@ import Link from "next/link";
 import { USE_MOCK, getMockBetRecommendation } from "@/lib/mock";
 import { BetGroup, groupBets, nameMap, trioPartnerNums } from "@/lib/betGrouping";
 import { PaidBets, type PaidRec } from "@/components/PaidBets";
+import { BetResultBanner, ResultCell, type BetResult, type RaceBetResult } from "@/components/BetResult";
 
 type OddsMode = "auto" | "actual" | "predicted";
 type OddsPhase = "latest" | "t60" | "t15";
@@ -27,11 +28,14 @@ type Candidate = {
   kelly_fraction?: number;
   bet_amount: number;
   expected_return?: number;
+  /** 結果が出ているレースの精算（仮想購入）。払戻は確定払戻（無ければ概算） */
+  result?: BetResult;
 };
 
 type ProbabilityModel = { kind: string; alpha2?: number; alpha3?: number; fitted_to?: string[] };
 
 type Recommendation = {
+  result?: RaceBetResult | null;
   probability_model?: ProbabilityModel | null;
   odds_source?: "actual" | "predicted" | null;
   odds_phase?: string | null;
@@ -100,6 +104,9 @@ function Arrow() {
   return <span style={{ margin: "0 8px 0 2px", color: "var(--text-dim)" }}>→</span>;
 }
 
+const CTH: React.CSSProperties = { ...TH, padding: "5px 10px", whiteSpace: "nowrap" };
+const CTD: React.CSSProperties = { ...TD, padding: "5px 10px", fontSize: 12.5 };
+const NOWRAP_CTD: React.CSSProperties = { ...CTD, whiteSpace: "nowrap" };
 const NOWRAP_TH: React.CSSProperties = { ...TH, whiteSpace: "nowrap" };
 const NOWRAP_TD: React.CSSProperties = { ...TD, whiteSpace: "nowrap" };
 
@@ -257,61 +264,29 @@ export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string;
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>オッズ</span>
-        {(Object.keys(MODE_LABEL) as OddsMode[]).map((m) => (
-          <button
-            key={m}
-            onClick={() => setMode(m)}
-            style={{ padding: "5px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer", border: "1px solid var(--border)",
-              background: mode === m ? "#1e3a5f" : "transparent", color: mode === m ? "#60a5fa" : "var(--text-dim)", fontWeight: mode === m ? 700 : 500 }}
-          >
-            {MODE_LABEL[m]}
-          </button>
-        ))}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, flexWrap: "wrap", fontSize: 12 }}>
+        <span style={{ color: "var(--text-dim)" }}>オッズ</span>
+        <span style={{ display: "inline-flex", border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden" }}>
+          {(Object.keys(MODE_LABEL) as OddsMode[]).map((m) => (
+            <button key={m} onClick={() => setMode(m)} style={{ padding: "4px 10px", fontSize: 12, cursor: "pointer", border: "none", background: mode === m ? "#1e3a5f" : "transparent", color: mode === m ? "#60a5fa" : "var(--text-dim)", fontWeight: mode === m ? 700 : 500 }}>
+              {MODE_LABEL[m]}
+            </button>
+          ))}
+        </span>
         {mode !== "predicted" && (
-          <select
-            value={phase}
-            onChange={(e) => setPhase(e.target.value as OddsPhase)}
-            style={{ marginLeft: 8, padding: "5px 8px", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: 12 }}
-          >
-            {(Object.keys(PHASE_LABEL) as OddsPhase[]).map((ph) => (
-              <option key={ph} value={ph}>{PHASE_LABEL[ph]}</option>
-            ))}
+          <select value={phase} onChange={(e) => setPhase(e.target.value as OddsPhase)} style={{ padding: "4px 6px", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: 12 }}>
+            {(Object.keys(PHASE_LABEL) as OddsPhase[]).map((ph) => (<option key={ph} value={ph}>{PHASE_LABEL[ph]}</option>))}
           </select>
         )}
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-        <label style={{ fontSize: 12, color: "var(--text-dim)" }}>
-          資金（円）
-          <input
-            type="number"
-            min={100}
-            step={1000}
-            value={bankroll}
-            onChange={(e) => setBankroll(e.target.value)}
-            style={{ marginLeft: 8, width: 120, padding: "6px 8px", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: 13 }}
-          />
+        <span style={{ color: "var(--border)" }}>|</span>
+        <label style={{ color: "var(--text-dim)" }}>資金
+          <input type="number" min={100} step={1000} value={bankroll} onChange={(e) => setBankroll(e.target.value)} style={{ marginLeft: 4, width: 84, padding: "3px 6px", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: 12 }} />
         </label>
-        <label style={{ fontSize: 12, color: "var(--text-dim)" }} title="1 レースの購入合計の上限。Kelly が示す額がこれより小さいときはその額。空欄か 0 で上限なし">
-          1R 購入上限（円）
-          <input
-            type="number"
-            min={0}
-            step={500}
-            value={cap}
-            placeholder="上限なし"
-            onChange={(e) => setCap(e.target.value)}
-            style={{ marginLeft: 8, width: 100, padding: "6px 8px", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: 13 }}
-          />
+        <label style={{ color: "var(--text-dim)" }} title="1 レースの購入合計の上限。Kelly が示す額がこれより小さいときはその額。空欄か 0 で上限なし">1R上限
+          <input type="number" min={0} step={500} value={cap} placeholder="なし" onChange={(e) => setCap(e.target.value)} style={{ marginLeft: 4, width: 68, padding: "3px 6px", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: 12 }} />
         </label>
-        <button
-          onClick={run}
-          disabled={loading}
-          style={{ background: "#1e3a5f", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.3)", padding: "7px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1 }}
-        >
-          {loading ? "⏳ 計算中…" : "🔄 再計算"}
+        <button onClick={run} disabled={loading} style={{ background: "#1e3a5f", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.3)", padding: "4px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1 }}>
+          {loading ? "計算中…" : "再計算"}
         </button>
       </div>
 
@@ -337,38 +312,33 @@ export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string;
 
       {rec && (
         <>
-          <div style={{ marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: 12 }}>
+          <div style={{ marginBottom: 8, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", fontSize: 12 }}>
             {rec.odds_source === "predicted" ? (
-              <span style={{ padding: "3px 10px", borderRadius: 4, background: "rgba(251,191,36,0.12)", color: "#fbbf24" }}>
-                予測オッズ（暫定・前日時点のモデル出力）
-              </span>
+              <span style={{ padding: "2px 8px", borderRadius: 4, background: "rgba(251,191,36,0.12)", color: "#fbbf24" }}>予測オッズ（暫定・前日時点）</span>
             ) : rec.odds_source === "actual" ? (
-              <span style={{ padding: "3px 10px", borderRadius: 4, background: rec.odds_phase === "t15" ? "rgba(34,197,94,0.12)" : "rgba(251,191,36,0.12)", color: rec.odds_phase === "t15" ? "#22c55e" : "#fbbf24" }}>
+              <span style={{ padding: "2px 8px", borderRadius: 4, background: rec.odds_phase === "t15" ? "rgba(34,197,94,0.12)" : "rgba(251,191,36,0.12)", color: rec.odds_phase === "t15" ? "#22c55e" : "#fbbf24" }}>
                 {rec.odds_phase === "t60" || rec.odds_phase === "t15"
-                  ? `実オッズ ${rec.odds_phase === "t60" ? "T-60" : "T-15"} ${hhmm(rec.odds_as_of)} 時点${rec.odds_phase === "t60" ? "（暫定）" : ""}`
-                  : "実オッズ（取得済みの最新値）"}
+                  ? `実オッズ ${rec.odds_phase === "t60" ? "T-60" : "T-15"} ${hhmm(rec.odds_as_of)}${rec.odds_phase === "t60" ? "（暫定）" : ""}`
+                  : "実オッズ（最新）"}
               </span>
             ) : null}
+            {[
+              ["購入", `¥${rec.total_bet.toLocaleString()}`],
+              ["期待払戻", `¥${Math.round(rec.expected_return).toLocaleString()}`],
+              [rec.calibrated ? "期待回収率(較正後)" : "期待回収率", rec.total_bet > 0 ? `${((rec.expected_return / rec.total_bet) * 100).toFixed(rec.calibrated ? 0 : 1)}%` : "—"],
+            ].map(([k, v]) => (
+              <span key={k} style={{ padding: "2px 9px", borderRadius: 999, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-dim)" }}>
+                {k} <b style={{ color: "#fff", fontSize: 13 }}>{v}</b>
+              </span>
+            ))}
+            {rec.calibrated && rec.roi_range_calibrated && (
+              <span style={{ color: "var(--text-dim)" }} title="このルールで買った場合の過去の実現回収率は、年によって幅があります（目安）">
+                過去の実績 {Math.round(rec.roi_range_calibrated[0] * 100)}〜{Math.round(rec.roi_range_calibrated[1] * 100)}%
+              </span>
+            )}
             {rec.odds_note && <span style={{ color: "var(--text-dim)" }}>{rec.odds_note}</span>}
           </div>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
-            {[
-              ["購入合計", `¥${rec.total_bet.toLocaleString()}`],
-              ["期待払戻", `¥${Math.round(rec.expected_return).toLocaleString()}`],
-              [rec.calibrated ? "期待回収率（較正後）" : "期待回収率", rec.total_bet > 0 ? `${((rec.expected_return / rec.total_bet) * 100).toFixed(rec.calibrated ? 0 : 1)}%${rec.roi_calibrated_capped ? "以上" : ""}` : "—"],
-            ].map(([k, v]) => (
-              <div key={k} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 16px" }}>
-                <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{k}</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>{v}</div>
-              </div>
-            ))}
-          </div>
-
-          {rec.calibrated && rec.roi_range_calibrated && (
-            <p style={{ fontSize: 11, color: "var(--text-dim)", margin: "-6px 0 12px", lineHeight: 1.7 }}>
-              期待回収率（較正後）は目安です。このルールで買った場合の過去の実現回収率は、年によって {Math.round(rec.roi_range_calibrated[0] * 100)}〜{Math.round(rec.roi_range_calibrated[1] * 100)}% と動きました（2022〜2026 年）。
-            </p>
-          )}
+          {rec.result && <BetResultBanner result={rec.result} />}
 
           {rec.candidates.length === 0 ? (
             <div style={{ textAlign: "center", padding: 32, color: "var(--text-dim)", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10 }}>
@@ -415,90 +385,81 @@ export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string;
                 };
                 return (
                   <>
-                    {/* 券種ごとの点数と小計 */}
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-                      {sections.map((s) => (
-                        <span key={s.bt} style={{ fontSize: 12, padding: "4px 10px", borderRadius: 6, border: `1px solid ${BET_COLOR[s.bt]}55`, color: BET_COLOR[s.bt], background: `${BET_COLOR[s.bt]}14` }}>
-                          {BET_LABEL[s.bt] ?? s.bt} {s.gs.reduce((n, g) => n + g.items.length, 0)}点 ¥{s.gs.reduce((n, g) => n + g.total, 0).toLocaleString()}
-                        </span>
-                      ))}
-                    </div>
                     <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
                       <thead style={{ background: "var(--surface2)" }}>
                         <tr>
-                          <th style={{ ...TH, textAlign: "left" }}>買い目</th>
-                          <th style={NOWRAP_TH}>点数</th>
-                          <th style={NOWRAP_TH}>オッズ</th>
-                          <th style={NOWRAP_TH}>{rec.calibrated ? "期待値（較正後）" : "期待値"}</th>
-                          <th style={NOWRAP_TH}>合計</th>
+                          <th style={{ ...CTH, textAlign: "left" }}>券種</th>
+                          <th style={{ ...CTH, textAlign: "left" }}>買い目</th>
+                          <th style={CTH}>点</th>
+                          <th style={CTH}>オッズ</th>
+                          <th style={CTH}>{rec.calibrated ? "期待値(較正後)" : "期待値"}</th>
+                          <th style={CTH}>金額</th>
+                          {rec.result && <th style={CTH}>結果</th>}
                         </tr>
                       </thead>
-                      {sections.map((s) => (
-                        <tbody key={s.bt}>
-                          <tr style={{ background: `${BET_COLOR[s.bt]}14` }}>
-                            <td colSpan={5} style={{ padding: "8px 12px", borderTop: "1px solid var(--border)", borderLeft: `4px solid ${BET_COLOR[s.bt]}`, fontWeight: 700, fontSize: 13, color: BET_COLOR[s.bt] }}>
-                              {BET_LABEL[s.bt] ?? s.bt}
-                              <span style={{ marginLeft: 10, fontWeight: 500, fontSize: 12, color: "var(--text-dim)" }}>
-                                {s.gs.reduce((n, g) => n + g.items.length, 0)}点 ／ 小計 ¥{s.gs.reduce((n, g) => n + g.total, 0).toLocaleString()}
-                              </span>
-                            </td>
-                          </tr>
-                          {s.gs.map((g) => {
-                            const multi = g.items.length > 1;
-                            const isOpen = !!open[g.key];
-                            return (
-                              <Fragment key={g.key}>
-                                <tr onClick={multi ? () => setOpen((o) => ({ ...o, [g.key]: !o[g.key] })) : undefined} style={{ cursor: multi ? "pointer" : "default" }}>
-                                  <td style={{ ...TD, textAlign: "left" }}>
-                                    {multi && <span style={{ marginRight: 6, color: "var(--text-dim)", fontSize: 11 }}>{isOpen ? "▼" : "▶"}</span>}
-                                    {describe(g)}
-                                  </td>
-                                  <td style={NOWRAP_TD}>{g.items.length}点</td>
-                                  <td style={NOWRAP_TD}>{g.oddsMin ? (g.oddsMin === g.oddsMax || !multi ? `${g.oddsMin.toFixed(1)}倍` : `${g.oddsMin.toFixed(1)}〜${g.oddsMax.toFixed(1)}倍`) : "—"}</td>
-                                  <td style={{ ...NOWRAP_TD, fontWeight: 700, color: evColor(g.evAvg, rec.calibrated) }} title={multi ? "金額加重の平均" : undefined}>{g.evAvg.toFixed(2)}</td>
-                                  <td style={{ ...NOWRAP_TD, fontWeight: 700, color: "#fff" }}>¥{g.total.toLocaleString()}</td>
-                                </tr>
-                                {multi && isOpen && (
-                                  <tr>
-                                    <td colSpan={5} style={{ padding: "4px 12px 10px 34px", background: "rgba(255,255,255,0.02)", borderTop: "1px dashed var(--border)" }}>
-                                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                                        <thead>
-                                          <tr style={{ color: "var(--text-dim)" }}>
-                                            <th style={{ ...TH, textAlign: "left", fontWeight: 500 }}>買い目</th>
-                                            <th style={{ ...TH, fontWeight: 500 }}>的中確率</th>
-                                            <th style={{ ...TH, fontWeight: 500 }}>オッズ</th>
-                                            {showPredicted && <th style={{ ...TH, fontWeight: 500 }}>予測オッズ</th>}
-                                            {showPredicted && <th style={{ ...TH, fontWeight: 500 }}>乖離</th>}
-                                            <th style={{ ...TH, fontWeight: 500 }}>期待値</th>
-                                            <th style={{ ...TH, fontWeight: 500 }}>金額</th>
+                      <tbody>
+                        {sections.flatMap((s) => s.gs.map((g, gi) => {
+                          const multi = g.items.length > 1;
+                          const isOpen = !!open[g.key];
+                          const rs = g.items.map((c) => c.result).filter((r): r is BetResult => !!r);
+                          const gHit = rs.some((r) => r.hit);
+                          const gPay = rs.reduce((n, r) => n + r.payout, 0);
+                          return (
+                            <Fragment key={g.key}>
+                              <tr onClick={multi ? () => setOpen((o) => ({ ...o, [g.key]: !o[g.key] })) : undefined} style={{ cursor: multi ? "pointer" : "default", background: gHit ? "rgba(251,191,36,0.08)" : undefined }}>
+                                <td data-sort={BET_LABEL[s.bt] ?? s.bt} style={{ ...CTD, textAlign: "left", whiteSpace: "nowrap", fontWeight: 700, color: BET_COLOR[s.bt], borderLeft: `3px solid ${BET_COLOR[s.bt]}` }}>{gi === 0 ? (BET_LABEL[s.bt] ?? s.bt) : <span style={{ opacity: 0.35 }}>〃</span>}</td>
+                                <td style={{ ...CTD, textAlign: "left" }}>
+                                  {multi && <span style={{ marginRight: 5, color: "var(--text-dim)", fontSize: 10 }}>{isOpen ? "▼" : "▶"}</span>}
+                                  {describe(g)}
+                                </td>
+                                <td style={NOWRAP_CTD}>{g.items.length}</td>
+                                <td style={NOWRAP_CTD}>{g.oddsMin ? (g.oddsMin === g.oddsMax || !multi ? `${g.oddsMin.toFixed(1)}倍` : `${g.oddsMin.toFixed(1)}〜${g.oddsMax.toFixed(1)}倍`) : "—"}</td>
+                                <td style={{ ...NOWRAP_CTD, fontWeight: 700, color: evColor(g.evAvg, rec.calibrated) }} title={multi ? "金額加重の平均" : undefined}>{g.evAvg.toFixed(2)}</td>
+                                <td style={{ ...NOWRAP_CTD, fontWeight: 700, color: "#fff" }}>¥{g.total.toLocaleString()}</td>
+                                {rec.result && <ResultCell hit={rs.length ? gHit : null} payout={gPay} hits={multi && rs.length ? rs.filter((r) => r.hit).length : undefined} n={multi ? rs.length : undefined} />}
+                              </tr>
+                              {multi && isOpen && (
+                                <tr>
+                                  <td colSpan={rec.result ? 7 : 6} style={{ padding: "4px 12px 8px 34px", background: "rgba(255,255,255,0.02)", borderTop: "1px dashed var(--border)" }}>
+                                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }} data-no-sort>
+                                      <thead>
+                                        <tr style={{ color: "var(--text-dim)" }}>
+                                          <th style={{ ...TH, textAlign: "left", fontWeight: 500 }}>買い目</th>
+                                          <th style={{ ...TH, fontWeight: 500 }}>的中確率</th>
+                                          <th style={{ ...TH, fontWeight: 500 }}>オッズ</th>
+                                          {showPredicted && <th style={{ ...TH, fontWeight: 500 }}>予測オッズ</th>}
+                                          {showPredicted && <th style={{ ...TH, fontWeight: 500 }}>乖離</th>}
+                                          <th style={{ ...TH, fontWeight: 500 }}>期待値</th>
+                                          <th style={{ ...TH, fontWeight: 500 }}>金額</th>
+                                          {rec.result && <th style={{ ...TH, fontWeight: 500 }}>結果</th>}
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {g.items.map((c, i) => (
+                                          <tr key={`${c.pair_label}-${i}`} style={{ background: c.result?.hit ? "rgba(251,191,36,0.08)" : undefined }}>
+                                            <td style={{ ...TD, textAlign: "left", borderTop: "1px solid var(--border)" }}>
+                                              {(c.pair ?? []).map((n) => markChip(n))}
+                                              <span style={{ color: "#7dd3fc", fontWeight: 800, marginRight: 8 }}>{c.pair_label}</span>
+                                              <span style={{ color: "var(--text-dim)" }}>{(c.horse_names ?? []).filter(Boolean).join(" - ")}</span>
+                                            </td>
+                                            <td style={{ ...TD, borderTop: "1px solid var(--border)" }}>{c.prob != null ? `${(c.prob * 100).toFixed(1)}%` : "—"}</td>
+                                            <td style={{ ...TD, borderTop: "1px solid var(--border)" }}>{c.odds != null ? `${c.odds.toFixed(1)}倍` : "—"}</td>
+                                            {showPredicted && <td style={{ ...TD, borderTop: "1px solid var(--border)", color: "var(--text-dim)" }}>{c.predicted_odds != null ? `${c.predicted_odds.toFixed(1)}倍` : "—"}</td>}
+                                            {showPredicted && <td style={{ ...TD, borderTop: "1px solid var(--border)", color: c.odds_gap == null ? "var(--text-dim)" : c.odds_gap > 0 ? "#22c55e" : "#f87171" }}>{c.odds_gap != null ? `${c.odds_gap > 0 ? "+" : ""}${(c.odds_gap * 100).toFixed(0)}%` : "—"}</td>}
+                                            <td style={{ ...TD, borderTop: "1px solid var(--border)", fontWeight: 700, color: evColor(c.ev, rec.calibrated) }} title={c.ev_raw != null ? `未較正の期待値 ${c.ev_raw.toFixed(2)}` : undefined}>{c.ev != null ? c.ev.toFixed(2) : "—"}</td>
+                                            <td style={{ ...TD, borderTop: "1px solid var(--border)", fontWeight: 700, color: "#fff" }}>¥{c.bet_amount.toLocaleString()}</td>
+                                            {rec.result && <ResultCell hit={c.result ? c.result.hit : null} payout={c.result?.payout ?? 0} />}
                                           </tr>
-                                        </thead>
-                                        <tbody>
-                                          {g.items.map((c, i) => (
-                                            <tr key={`${c.pair_label}-${i}`}>
-                                              <td style={{ ...TD, textAlign: "left", borderTop: "1px solid var(--border)" }}>
-                                                {(c.pair ?? []).map((n) => markChip(n))}
-                                                <span style={{ color: "#7dd3fc", fontWeight: 800, marginRight: 8 }}>{c.pair_label}</span>
-                                                <span style={{ color: "var(--text-dim)" }}>{(c.horse_names ?? []).filter(Boolean).join(" - ")}</span>
-                                              </td>
-                                              <td style={{ ...TD, borderTop: "1px solid var(--border)" }}>{c.prob != null ? `${(c.prob * 100).toFixed(1)}%` : "—"}</td>
-                                              <td style={{ ...TD, borderTop: "1px solid var(--border)" }}>{c.odds != null ? `${c.odds.toFixed(1)}倍` : "—"}</td>
-                                              {showPredicted && <td style={{ ...TD, borderTop: "1px solid var(--border)", color: "var(--text-dim)" }}>{c.predicted_odds != null ? `${c.predicted_odds.toFixed(1)}倍` : "—"}</td>}
-                                              {showPredicted && <td style={{ ...TD, borderTop: "1px solid var(--border)", color: c.odds_gap == null ? "var(--text-dim)" : c.odds_gap > 0 ? "#22c55e" : "#f87171" }}>{c.odds_gap != null ? `${c.odds_gap > 0 ? "+" : ""}${(c.odds_gap * 100).toFixed(0)}%` : "—"}</td>}
-                                              <td style={{ ...TD, borderTop: "1px solid var(--border)", fontWeight: 700, color: evColor(c.ev, rec.calibrated) }} title={c.ev_raw != null ? `未較正の期待値 ${c.ev_raw.toFixed(2)}${c.ev_calibration_validated === false ? "（この券種の較正は目安）" : ""}` : undefined}>{c.ev != null ? c.ev.toFixed(2) : "—"}</td>
-                                              <td style={{ ...TD, borderTop: "1px solid var(--border)", fontWeight: 700, color: "#fff" }}>¥{c.bet_amount.toLocaleString()}</td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </td>
-                                  </tr>
-                                )}
-                              </Fragment>
-                            );
-                          })}
-                        </tbody>
-                      ))}
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        }))}
+                      </tbody>
                     </table>
                   </>
                 );

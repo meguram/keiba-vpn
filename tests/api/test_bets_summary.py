@@ -28,3 +28,27 @@ def test_bets_summary_flags_hits_and_gives_day_and_week_roi(tmp_path, monkeypatc
 def test_bets_summary_is_member_only():
     assert tier.member_only_path("/api/prediction-results/bets-summary")
     assert not tier.member_only_path("/api/prediction-results/mark-card")
+
+
+def test_attach_bet_results_paid_and_full_views():
+    from src.api.v1.delegates import attach_bet_results
+
+    class St:
+        def load(self, cat, rid):
+            if cat != "race_result":
+                return None
+            return {"entries": [{"horse_number": n, "finish_position": p} for n, p in ((5, 1), (1, 2), (2, 3), (3, 4))],
+                    "payoff": {"単勝": {"numbers": "5", "payout": "450"}, "馬連": {"numbers": "1-5", "payout": "1,230"}}}
+
+    paid = {"view": "paid", "bets": [{"bet_type": "tansho", "combo": [5], "yen": 200}, {"bet_type": "umaren", "combo": [1, 2], "yen": 100}]}
+    out = attach_bet_results(paid, "R1", St())
+    assert out["bets"][0]["result"] == {"hit": True, "payout": 900, "estimated": False}
+    assert out["bets"][1]["result"]["hit"] is False
+    r = out["result"]
+    assert (r["invested"], r["returned"], r["hits"], r["n_bets"], r["roi"]) == (300, 900, 1, 2, 3.0)
+    assert [(f["pos"], f["no"]) for f in r["finish"]] == [(1, 5), (2, 1), (3, 2)]
+    full = {"candidates": [{"bet_type": "umaren", "pair": [5, 1], "bet_amount": 100, "odds": 12.0}]}
+    out2 = attach_bet_results(full, "R1", St())
+    assert out2["candidates"][0]["result"]["payout"] == 1230
+    none = attach_bet_results({"view": "paid", "bets": []}, "R2", type("S", (), {"load": lambda self, c, r: None})())
+    assert "result" not in none

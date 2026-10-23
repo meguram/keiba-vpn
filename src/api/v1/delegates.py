@@ -422,6 +422,42 @@ def _map_races(fn, races: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return list(ex.map(fn, todo))
 
 
+def attach_bet_results(payload: dict[str, Any], race_id: str, storage: Any | None = None) -> dict[str, Any]:
+    """結果が出ているレースなら、推奨の各買い目に的中・払戻（仮想購入）を、レース全体に結果の要約を付ける。
+    払戻は確定払戻（無ければ概算）。会員向けの応答には、オッズ・期待値の数値は足さない（invested / returned / hits だけ）。"""
+    try:
+        from src.pipeline.inference import prediction_results as pr
+        from src.scraper.storage import HybridStorage
+
+        res = pr.load_race_result(storage or HybridStorage(), race_id)
+    except Exception as exc:  # noqa: BLE001  結果が付かないだけで、推奨そのものは返す
+        logger.warning("推奨の結果の付与に失敗 %s: %s", race_id, exc)
+        return payload
+    if not res:
+        return payload
+    paid = payload.get("view") == "paid"
+    items = payload.get("bets") if paid else payload.get("candidates")
+    invested = returned = hits = 0
+    estimated = False
+    for it in items or []:
+        combo = it.get("combo") if paid else it.get("pair")
+        amount = int(it.get("yen") if paid else it.get("bet_amount") or 0)
+        hit, ret, est = pr.settle_candidate(it.get("bet_type", ""), tuple(int(x) for x in (combo or [])), amount, float(it.get("odds") or 0), res)
+        it["result"] = {"hit": bool(hit), "payout": round(ret), "estimated": bool(est)}
+        invested += amount
+        returned += ret
+        hits += int(hit)
+        estimated = estimated or (hit and est)
+    order = sorted(res["finish"].items(), key=lambda kv: kv[1])
+    payload["result"] = {
+        "status": res["status"], "official": bool(res.get("official")), "estimated": estimated,
+        "finish": [{"pos": p_, "no": n_} for n_, p_ in order if p_ <= 3],
+        "invested": invested, "returned": round(returned), "roi": round(returned / invested, 4) if invested else None,
+        "hits": hits, "n_bets": len(items or []),
+    }
+    return payload
+
+
 def race_value_summary(
     date: str,
     *,
