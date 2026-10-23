@@ -26,6 +26,27 @@ LABELS = ["~1.4", "1.5~1.9", "2.0~2.9", "3.0~3.9", "4.0~4.9", "5.0~6.9", "7.0~9.
 PRIOR_MEAN, THRESH = 0.80, 0.85
 
 
+def _use_race_odds(d: pd.DataFrame, years: list[int]) -> pd.DataFrame:
+    """race_result_flat の odds・popularity は 2025 年に壊れたレースがある（払戻と合わない）。race_odds_flat の確定単勝オッズ・人気があれば、それを優先する。"""
+    parts = []
+    for y in years:
+        p = TABLES / str(y) / "race_odds_flat.parquet"
+        if p.exists():
+            parts.append(pd.read_parquet(p, columns=["race_id", "horse_number", "win_odds", "popularity"]))
+    if not parts:
+        return d
+    o = pd.concat(parts, ignore_index=True)
+    o["race_id"] = o["race_id"].astype(str)
+    for c in ("horse_number", "win_odds", "popularity"):
+        o[c] = pd.to_numeric(o[c], errors="coerce")
+    o = o.dropna(subset=["win_odds"]).drop_duplicates(["race_id", "horse_number"]).rename(columns={"win_odds": "odds_ro", "popularity": "pop_ro"})
+    d = d.merge(o, on=["race_id", "horse_number"], how="left")
+    ok = d["odds_ro"].notna() & (d["odds_ro"] > 0)
+    d["odds"] = np.where(ok, d["odds_ro"], d["odds"])
+    d["popularity"] = np.where(ok & d["pop_ro"].notna(), d["pop_ro"], d["popularity"])
+    return d.drop(columns=["odds_ro", "pop_ro"])
+
+
 def load(years: list[int]) -> pd.DataFrame:
     cols = ["race_id", "date", "horse_number", "finish_position", "odds", "popularity", "payoff", "venue", "surface", "field_size"]
     d = pd.concat([pd.read_parquet(TABLES / str(y) / "race_result_flat.parquet", columns=cols) for y in years], ignore_index=True)
@@ -33,6 +54,7 @@ def load(years: list[int]) -> pd.DataFrame:
     for c in ("horse_number", "finish_position", "odds", "popularity", "field_size"):
         d[c] = pd.to_numeric(d[c], errors="coerce")
     d = d[d["surface"].isin(["芝", "ダート"])].dropna(subset=["horse_number", "finish_position", "odds", "popularity"])
+    d = _use_race_odds(d, years)
     d = d[(d["popularity"] >= 1) & (d["odds"] > 0)]                   # 人気・オッズのない馬（取消・除外など）は除く
     d["year"] = pd.to_datetime(d["date"]).dt.year
     rw, rp, okw, okp = [], [], [], []
