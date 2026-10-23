@@ -28,11 +28,15 @@ fi
 
 # 別ポートで起動テスト（サービスは触らない）
 TP=3101
+# 起動テスト用のポートを握っているプロセスを止める（前回のテストの残りがあると EADDRINUSE になり、残りが古い版を配ってテストが誤って失敗/成功する）
+free_test_port() { for p in $(ss -ltnp "sport = :$TP" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u); do kill "$p" 2>/dev/null || true; done; sleep 1; }
+free_test_port
 ( cd "$REL" && sudo -u keibaui env $(grep -v '^#' /etc/keiba-ui/ui.env | grep -v '^$' | xargs) PORT=$TP HOSTNAME=127.0.0.1 node server.js >/tmp/keiba-ui-smoke.log 2>&1 ) &
 SP=$!
 OK=0
 for i in $(seq 1 30); do sleep 1; c="$(curl -s -o /dev/null -w '%{http_code}' -m 3 "http://127.0.0.1:$TP/version.json" || true)"; [ "$c" = 200 ] && { OK=1; break; }; done
 pkill -P "$SP" 2>/dev/null || true; kill "$SP" 2>/dev/null || true; sleep 1
+free_test_port          # sudo の子（next-server）が残ることがあるので、ポートを握っているものを確実に止める
 [ "$OK" = 1 ] || { log "NG 起動テストに失敗: $ID（切り替えません）"; tail -5 /tmp/keiba-ui-smoke.log | tee -a "$LOG"; exit 4; }
 
 PREV="$(readlink -f "$APP_ROOT/current" 2>/dev/null || true)"
