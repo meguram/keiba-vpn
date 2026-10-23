@@ -9,6 +9,7 @@ type MarkRow = {
   f1: number; f2: number; f3: number; f4p: number;
   win_rate: number | null; top2_rate: number | null; top3_rate: number | null;
   avg_popularity: number | null; avg_odds: number | null;
+  win_avg_popularity: number | null; win_avg_odds: number | null;     // 1着だったときの平均人気・平均オッズ
 };
 type Period = { key: string; label: string; from: string; to: string; data_from: string | null; data_to: string | null; days: number; races: number; status: string; marks: MarkRow[] };
 type Card = { as_of: string; year: number; periods: Period[] };
@@ -60,6 +61,7 @@ function Row({ m }: { m: MarkRow }) {
   const showAvg = m.key !== "kesi";                          // ◎○▲★ は平均人気・平均オッズも出す
   const none = m.n === 0;
   const avg = showAvg && m.avg_popularity != null && m.avg_odds != null ? `${m.avg_popularity.toFixed(1)}人気・${m.avg_odds.toFixed(1)}倍` : null;
+  const winAvg = showAvg && m.win_avg_popularity != null && m.win_avg_odds != null ? `${m.win_avg_popularity.toFixed(1)}人気・${m.win_avg_odds.toFixed(1)}倍` : null;
   return (
     <div className="mrc-row">
       <span className="mrc-sym" style={{ color, borderColor: color, background: `${color}1f` }} aria-label={m.symbol}>{m.symbol}</span>
@@ -74,6 +76,7 @@ function Row({ m }: { m: MarkRow }) {
               {SEGMENTS.map((s) => (m[s.k] > 0 ? <i key={s.k} style={{ width: `${(m[s.k] / m.n) * 100}%`, background: s.color }} title={`${s.label} ${m[s.k]}頭`} /> : null))}
             </div>
             <div className="mrc-sub">複勝率 <b>{pct(m.top3_rate)}</b>{avg ? <>　平均 <b>{avg}</b></> : null}</div>
+            {winAvg && <div className="mrc-sub">1着時 平均 <b>{winAvg}</b></div>}
           </>
         )}
       </div>

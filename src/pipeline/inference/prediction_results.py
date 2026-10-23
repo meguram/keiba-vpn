@@ -289,11 +289,11 @@ def _blank_counts() -> dict:
     return {"n": 0, "f1": 0, "f2": 0, "f3": 0, "f4p": 0}
 
 
-MARK_EXTRA = ("pop_sum", "pop_n", "odds_sum", "odds_n")      # 印の馬の確定人気・確定単勝オッズの合計と件数（平均は読む側で割る）
+MARK_EXTRA = ("pop_sum", "pop_n", "odds_sum", "odds_n", "w_pop_sum", "w_pop_n", "w_odds_sum", "w_odds_n")      # 印の馬の確定人気・確定単勝オッズの合計と件数（w_ は 1 着だった馬だけ）。平均は読む側で割る
 
 
 def _blank_mark() -> dict:
-    return {**_blank_counts(), "pop_sum": 0, "pop_n": 0, "odds_sum": 0.0, "odds_n": 0}
+    return {**_blank_counts(), "pop_sum": 0, "pop_n": 0, "odds_sum": 0.0, "odds_n": 0, "w_pop_sum": 0, "w_pop_n": 0, "w_odds_sum": 0.0, "w_odds_n": 0}
 
 
 def add_pick_to_mark(c: dict, p: dict) -> None:
@@ -303,12 +303,14 @@ def add_pick_to_mark(c: dict, p: dict) -> None:
         return
     c["n"] += 1
     c[b] += 1
-    if p.get("popularity"):
-        c["pop_sum"] += int(p["popularity"])
-        c["pop_n"] += 1
-    if p.get("final_odds"):
-        c["odds_sum"] = round(c["odds_sum"] + float(p["final_odds"]), 4)
-        c["odds_n"] += 1
+    prefixes = ("", "w_") if b == "f1" else ("",)        # w_ は印の馬が 1 着だったときだけ
+    for pre in prefixes:
+        if p.get("popularity"):
+            c[pre + "pop_sum"] += int(p["popularity"])
+            c[pre + "pop_n"] += 1
+        if p.get("final_odds"):
+            c[pre + "odds_sum"] = round(c[pre + "odds_sum"] + float(p["final_odds"]), 4)
+            c[pre + "odds_n"] += 1
 
 
 def summarize(records: list[dict]) -> dict:
@@ -575,6 +577,8 @@ def mark_card(today: _date, base: Path | None = None) -> dict:
             n = c["n"]
             marks.append({"avg_popularity": round(c.get("pop_sum", 0) / c["pop_n"], 2) if c.get("pop_n") else None,
                           "avg_odds": round(c.get("odds_sum", 0) / c["odds_n"], 1) if c.get("odds_n") else None,
+                          "win_avg_popularity": round(c.get("w_pop_sum", 0) / c["w_pop_n"], 2) if c.get("w_pop_n") else None,
+                          "win_avg_odds": round(c.get("w_odds_sum", 0) / c["w_odds_n"], 1) if c.get("w_odds_n") else None,
                           "key": m, "symbol": sym, "n": n, "f1": c["f1"], "f2": c["f2"], "f3": c["f3"], "f4p": c["f4p"],
                           "text": f"{c['f1']}-{c['f2']}-{c['f3']}-{c['f4p']}",
                           "win_rate": rate(c["f1"], n), "top2_rate": rate(c["f1"] + c["f2"], n), "top3_rate": rate(c["f1"] + c["f2"] + c["f3"], n)})

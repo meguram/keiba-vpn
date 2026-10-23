@@ -82,3 +82,31 @@ def test_average_popularity_and_odds_in_card(tmp_path):
     assert marks["pair"]["avg_popularity"] is None and marks["pair"]["avg_odds"] is None
     merged = pr.merge_summaries([doc["summary"], doc["summary"]])
     assert merged["marks"]["honmei"]["pop_sum"] == 12 and merged["marks"]["honmei"]["odds_n"] == 6
+
+
+def test_win_only_average_popularity_and_odds():
+    c = pr._blank_mark()
+    for fin, pop, odds in ((1, 2, 4.0), (1, 1, 2.0), (3, 5, 12.0), (8, 9, 40.0)):
+        pr.add_pick_to_mark(c, {"finish": fin, "popularity": pop, "final_odds": odds})
+    assert (c["n"], c["pop_n"], c["pop_sum"]) == (4, 4, 17)                      # 全体: 平均 4.25 人気
+    assert (c["w_pop_n"], c["w_pop_sum"], c["w_odds_n"], c["w_odds_sum"]) == (2, 3, 2, 6.0)      # 1着だけ: 平均 1.5 人気・3.0 倍
+    doc = _doc("20261010", {})
+    doc["summary"]["marks"]["honmei"] = {**c, "f1": 2, "f2": 0, "f3": 1, "f4p": 1}
+    import tempfile, pathlib
+    d = pathlib.Path(tempfile.mkdtemp()); (d / "20261010.json").write_text(json.dumps(doc), encoding="utf-8")
+    m = {x["key"]: x for x in pr.mark_card(date(2026, 10, 13), d)["periods"][0]["marks"]}["honmei"]
+    assert m["win_avg_popularity"] == 1.5 and m["win_avg_odds"] == 3.0 and m["avg_popularity"] == 4.25
+    assert {x["key"]: x for x in pr.mark_card(date(2026, 10, 13), d)["periods"][0]["marks"]}["pair"]["win_avg_popularity"] is None      # 1着の馬がいなければ None
+
+
+def test_backfill_recounts_win_averages_without_reading_results(monkeypatch):
+    from src.scripts.data import backfill_prediction_marks as bf
+
+    pick = lambda fin, pop, od: {"finish": fin, "popularity": pop, "final_odds": od}          # noqa: E731
+    doc = {"summary": {"marks": {m: {"n": 0, "f1": 0, "f2": 0, "f3": 0, "f4p": 0} for m in pr.MARKS}}, "races": [
+        {"race_id": "R1", "included": True, "marks": {m: ([pick(1, 3, 6.0)] if m == "honmei" else []) for m in pr.MARKS}}]}
+    monkeypatch.setattr(pr, "load_predictions", lambda *a: (_ for _ in ()).throw(AssertionError("予測は読まない")))
+    assert bf.backfill_day(doc, None) == 1
+    h = doc["summary"]["marks"]["honmei"]
+    assert (h["f1"], h["w_pop_sum"], h["w_odds_sum"]) == (1, 3, 6.0)
+    assert bf.backfill_day(doc, None) == 0                                                    # 2 回目は何もしない

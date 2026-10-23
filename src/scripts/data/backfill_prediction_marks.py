@@ -59,7 +59,10 @@ def backfill_day(doc: dict, storage) -> int:
                     p["popularity"] = (res.get("popularity") or {}).get(hn)
                     p["final_odds"] = (res.get("odds") or {}).get(hn)
         added += 1
-    if added:
+    # 集計の項目を足したあと（1着時の人気・オッズ）は、保存済みの印の馬から数え直すだけで足りる
+    needs_recount = any("w_pop_n" not in c for c in (doc.get("summary", {}).get("marks") or {}).values()) or not (doc.get("summary", {}).get("marks"))
+    if added or needs_recount:
+        added = added or 1
         doc["summary"]["marks"] = recount_marks(doc["races"])
         doc["marks_backfilled_at"] = time.strftime("%Y-%m-%dT%H:%M:%S+09:00", time.gmtime(time.time() + 9 * 3600))
     return added
