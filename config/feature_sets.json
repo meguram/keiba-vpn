@@ -425,6 +425,54 @@
     "S76_G"
    ]
   },
+  "pace_r": {
+   "base": "baseline",
+   "add": ["S77_PACE_R"],
+   "add_ready": ["S77_PACE_R"],
+   "doc": "tp-77 追加2: 基準 + 馬の得意RPCIレンジとの合致度"
+  },
+  "pace_c": {
+   "base": "baseline",
+   "add": ["S77_PACE_C"],
+   "add_ready": ["S77_PACE_C"],
+   "doc": "tp-77 追加2: 基準 + コース別3F/5F通過時間の分布"
+  },
+  "pace_rc": {
+   "base": "baseline",
+   "add": ["S77_PACE_C", "S77_PACE_R"],
+   "add_ready": ["S77_PACE_C", "S77_PACE_R"],
+   "doc": "tp-77 追加2: 基準 + 両方"
+  },
+  "pace_e": {
+   "base": "baseline",
+   "add": ["S77_PACE_E"],
+   "add_ready": ["S77_PACE_E"],
+   "doc": "tp-77 追加2: 基準 + 馬ごとの前半3F・5F通過の推定"
+  },
+  "sire_dist": {
+   "base": "baseline",
+   "add": ["S77_SIRE"],
+   "add_ready": ["S77_SIRE"],
+   "doc": "tp-77 追加3: 基準 + 種牡馬・系統の勝利距離の統計量"
+  },
+  "cross_feat": {
+   "base": "baseline",
+   "add": ["S77_CROSS"],
+   "add_ready": ["S77_CROSS"],
+   "doc": "tp-77 追加4: 基準 + 8世代クロスの条件別の来やすさ"
+  },
+  "weight_feat": {
+   "base": "baseline",
+   "add": ["S77_WEIGHT"],
+   "add_ready": ["S77_WEIGHT"],
+   "doc": "tp-77 追加4: 基準 + 馬体重の相対値"
+  },
+  "workout_feat": {
+   "base": "baseline",
+   "add": ["S77_WORKOUT"],
+   "add_ready": ["S77_WORKOUT"],
+   "doc": "tp-77 追加5: 基準 + 調教師ごとの勝負追い切り"
+  },
   "mat_feat": {
    "base": "baseline",
    "add": [
@@ -1178,6 +1226,97 @@
    "rerun_after_complete_10gen": true,
    "d_win": -0.00010392487680532679,
    "build_note": "弱いシグナルの代表 26 列を L2 ロジスティックに当てはめた線形予測（勝ち用・3 着内用）。係数は A 年、較正は B 年、評価は C 年。年ごとの OOF の列として保存する処理が要る（学習再開前に tp76_screen の composite を保存形式にする）"
+  },
+  "S77_PACE_C": {
+   "id": "S77_PACE_C",
+   "name": "S77_PACE_C",
+   "level": "tp77_pace",
+   "n_cols": 17,
+   "cols": ["P77_c3_mean", "P77_c3_sd", "P77_c3_n", "P77_c3_going_mean", "P77_c3_going_n", "P77_c3_cls_mean", "P77_c3_cls_n", "P77_c5_mean", "P77_c5_sd", "P77_c5_n", "P77_c5_going_mean", "P77_c5_going_n", "P77_c5_cls_mean", "P77_c5_cls_n", "P77_c5m3", "P77_c3_going_gap", "P77_c5_going_gap"],
+   "path": "/home/jovyan/work/ptrain_out/pace_rows.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "tp-77 追加2: コース別の前半3F・5F通過時間の分布（過去のレースだけ。平均・標準偏差・馬場悪化時・クラス別）"
+  },
+  "S77_PACE_R": {
+   "id": "S77_PACE_R",
+   "name": "S77_PACE_R",
+   "level": "tp77_pace",
+   "n_cols": 10,
+   "cols": ["P77_pred_z", "P77_R_n", "P77_R_mu", "P77_R_sd", "P77_R_gap", "P77_R_zd", "P77_R_logm", "P77_R_kfit", "P77_R_kn", "P77_R_krel"],
+   "path": "/home/jovyan/work/ptrain_out/pace_rows.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "tp-77 追加2: 馬ごとの得意な RPCI レンジとの合致度（予想RPCI=過去の年で学習したridge、過去走の成績重み付き分布・カーネル条件付き成績）"
+  },
+  "S77_PACE_E": {
+   "id": "S77_PACE_E",
+   "name": "S77_PACE_E",
+   "level": "tp77_pace",
+   "n_cols": 14,
+   "cols": ["P77_E_n", "P77_E_lag3_ewm", "P77_E_lag5_ewm", "P77_E_lag3_last", "P77_E_lag5_last", "P77_E_d53_ewm", "P77_E_T3_exp", "P77_E_T5_exp", "P77_E_z3", "P77_E_z5", "P77_E_T3_rel", "P77_E_T3_min", "P77_E_T5_rel", "P77_E_T5_min"],
+   "path": "/home/jovyan/work/ptrain_out/pace_rows.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "tp-77 追加2: 馬ごとの前半3F・5F通過の推定（レース時計に対する遅れ秒の直近重み付き平均、コース平均を足した期待通過時間、出走馬内の相対）。推定器は前の年のラベルだけで学習"
+  },
+  "S77_SIRE": {
+   "id": "S77_SIRE",
+   "name": "S77_SIRE",
+   "level": "tp77_sire",
+   "n_cols": 35,
+   "cols": ["P77_S_sire_wd", "P77_S_sire_wsd", "P77_S_sire_wn", "P77_S_sire_gap", "P77_S_sire_z", "P77_S_sire_t3d", "P77_S_sire_t3gap", "P77_S_dsire_wd", "P77_S_dsire_wsd", "P77_S_dsire_wn", "P77_S_dsire_gap", "P77_S_dsire_z", "P77_S_dsire_t3d", "P77_S_dsire_t3gap", "P77_S_sline_wd", "P77_S_sline_wsd", "P77_S_sline_wn", "P77_S_sline_gap", "P77_S_sline_z", "P77_S_sline_t3d", "P77_S_sline_t3gap", "P77_S_smain_wd", "P77_S_smain_wsd", "P77_S_smain_wn", "P77_S_smain_gap", "P77_S_smain_z", "P77_S_smain_t3d", "P77_S_smain_t3gap", "P77_S_dline_wd", "P77_S_dline_wsd", "P77_S_dline_wn", "P77_S_dline_gap", "P77_S_dline_z", "P77_S_dline_t3d", "P77_S_dline_t3gap"],
+   "path": "/home/jovyan/work/ptrain_out/sire_rows.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "tp-77 追加3: 種牡馬・母父・父の系統(sub/main)・母父の系統ごとの勝利距離の統計量（面別・レース開催日より前の産駒の結果のみ・縮約）。今回の距離との差と z、3着内の距離の平均も"
+  },
+  "S77_CROSS": {
+   "id": "S77_CROSS",
+   "name": "S77_CROSS",
+   "level": "tp77_cross",
+   "n_cols": 28,
+   "cols": ["P77_X_n", "P77_X_blood_max", "P77_X_blood_sum", "P77_X_m_all_max", "P77_X_m_all_min", "P77_X_m_all_wmean", "P77_X_lift_c1_max", "P77_X_lift_c1_min", "P77_X_lift_c1_wmean", "P77_X_lift_c2_max", "P77_X_lift_c2_min", "P77_X_lift_c2_wmean", "P77_X_lift_c3_max", "P77_X_lift_c3_min", "P77_X_lift_c3_wmean", "P77_X_bF", "P77_X_bM", "P77_X_bspan", "P77_X_bpat", "P77_X_bmat", "P77_X_gmin", "P77_X_balance", "P77_X_g_bal_lift_c1", "P77_X_g_bal_lift_c2", "P77_X_g_lvl_lift_c1", "P77_X_g_lvl_lift_c2", "P77_X_g_near_lift_c1", "P77_X_g_near_lift_c2"],
+   "path": "/home/jovyan/work/ptrain_out/cross_rows.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "tp-77 追加4: 8世代以内（父方・母方）のクロスと、コース・馬場ごとの来やすさ（as-of。セルの平均−クロス全体の平均、疑似40走で縮約。最大・最小・血量加重平均）。父方側／母方側の血量・位置（父方内／母方内／またがる）・近さ・血量水準のグループ別の来やすさも"
+  },
+  "S77_WEIGHT": {
+   "id": "S77_WEIGHT",
+   "name": "S77_WEIGHT",
+   "level": "tp77_weight",
+   "n_cols": 9,
+   "cols": ["P77_W_rel_self", "P77_W_rel_self_z", "P77_W_rel_best", "P77_W_rel_dist", "P77_W_rel_surf", "P77_W_dslope_pred", "P77_W_rel_field", "P77_W_rel_sas", "P77_W_n"],
+   "path": "/home/jovyan/work/ptrain_out/weight_rows.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "tp-77 追加4: 馬体重の相対値（出走馬内、性別・年齢・面・距離帯の事前、自己の過去・好走時・同距離・同面との差、距離との傾き）"
+  },
+  "S77_WORKOUT": {
+   "id": "S77_WORKOUT",
+   "name": "S77_WORKOUT",
+   "level": "tp77_workout",
+   "n_cols": 75,
+   "cols": ["P77_K_n3w", "P77_K_final_n_t", "P77_K_n_views_rare", "P77_K_final_share", "P77_K_final_ratio", "P77_K_final_rarity", "P77_K_final_rare", "P77_K_final_lift_this", "P77_K_final_lift_rare", "P77_K_final_lift_usual", "P77_K_final_lift_gap", "P77_K_prevday_share", "P77_K_prevday_ratio", "P77_K_prevday_rarity", "P77_K_prevday_rare", "P77_K_prevday_lift_this", "P77_K_prevday_lift_rare", "P77_K_prevday_lift_usual", "P77_K_prevday_lift_gap", "P77_K_shape_share", "P77_K_shape_ratio", "P77_K_shape_rarity", "P77_K_shape_rare", "P77_K_shape_lift_this", "P77_K_shape_lift_rare", "P77_K_shape_lift_usual", "P77_K_shape_lift_gap", "P77_K_week1_share", "P77_K_week1_ratio", "P77_K_week1_rarity", "P77_K_week1_rare", "P77_K_week1_lift_this", "P77_K_week1_lift_rare", "P77_K_week1_lift_usual", "P77_K_week1_lift_gap", "P77_K_route_share", "P77_K_route_ratio", "P77_K_route_rarity", "P77_K_route_rare", "P77_K_route_lift_this", "P77_K_route_lift_rare", "P77_K_route_lift_usual", "P77_K_route_lift_gap", "P77_K_lap_share", "P77_K_lap_ratio", "P77_K_lap_rarity", "P77_K_lap_rare", "P77_K_lap_lift_this", "P77_K_lap_lift_rare", "P77_K_lap_lift_usual", "P77_K_lap_lift_gap", "P77_K_lapleg_share", "P77_K_lapleg_ratio", "P77_K_lapleg_rarity", "P77_K_lapleg_rare", "P77_K_lapleg_lift_this", "P77_K_lapleg_lift_rare", "P77_K_lapleg_lift_usual", "P77_K_lapleg_lift_gap", "P77_K_lapw1_share", "P77_K_lapw1_ratio", "P77_K_lapw1_rarity", "P77_K_lapw1_rare", "P77_K_lapw1_lift_this", "P77_K_lapw1_lift_rare", "P77_K_lapw1_lift_usual", "P77_K_lapw1_lift_gap", "P77_K_laproute_share", "P77_K_laproute_ratio", "P77_K_laproute_rarity", "P77_K_laproute_rare", "P77_K_laproute_lift_this", "P77_K_laproute_lift_rare", "P77_K_laproute_lift_usual", "P77_K_laproute_lift_gap"],
+   "path": "/home/jovyan/work/ptrain_out/workout_rows.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "tp-77 追加5: 調教師ごとの勝負追い切り（9つの観点＝最終追い切り・前日追い切りの有無・最終の加速と4F時計の形・1週前・最終と1週前の種別の並び・終いのラップ6区分(最終／＋脚色／1週前／最終←1週前)、それぞれでその調教師の過去の使用割合が低い＝普段と違う）と、その調教師の勝負／通常時の来やすさ（as-of、疑似30走）"
   },
   "S77_MAT": {
    "id": "S77_MAT",

@@ -175,23 +175,69 @@ def _paths(tag: str) -> tuple[Path, Path]:
     return d, d / "levels.json"
 
 
+def _oof_file(name: str) -> str:
+    """OOF の保存ファイル名。構成名が長い（復活セットの広い群など）とファイル名の上限(255)を超えるので、長いときは短縮＋ハッシュ。"""
+    import hashlib
+
+    f = f"oof_{name}.parquet"
+    return f if len(f) <= 160 else f"oof_{name[:100]}~{hashlib.sha1(name.encode()).hexdigest()[:12]}.parquet"
+
+
+def _row_mask(df: pd.DataFrame, rows: str) -> np.ndarray | None:
+    """学習・評価に使う行（平地/障害に分ける）。all は None。障害は surface に『障』を含む行（学習表は障害戦の面を『障』で持つ）。"""
+    if rows == "all":
+        return None
+    h = df["surface"].astype(str).str.contains("障").to_numpy()
+    return h if rows == "hurdle" else ~h
+
+
+def _restrict_folds(folds: list, mask: np.ndarray) -> list:
+    """各 fold の学習・検証の行を mask の行だけにする。"""
+    from dataclasses import replace
+
+    out = [replace(f, train_index=f.train_index[mask[f.train_index]], valid_index=f.valid_index[mask[f.valid_index]]) for f in folds]
+    return [f for f in out if len(f.valid_index) and len(f.train_index)]
+
+
 def cmd_run(a) -> None:
+    rows = getattr(a, "rows", "all")
+    name = a.name if rows == "all" else f"{a.name}#{rows}"       # 行を絞った結果は別名で保存する
     cfg = config_of(a.name)
     d, resp = _paths(a.tag)
     years = [int(x) for x in a.years.split(",")] if a.years else YEARS
     seeds = [int(x) for x in a.seeds.split(",")] if a.seeds else SEEDS
     res = e40._jload(resp) or {}
-    if a.name in res and (d / f"oof_{a.name}.parquet").exists():
-        _log(f"{a.name}: 既に完了")
+    if name in res and (d / _oof_file(name)).exists():
+        _log(f"{name}: 既に完了")
         return
     df, base, meta, folds, lp = t.setup()
+    mask = _row_mask(df, rows)
+    if mask is not None:
+        folds = _restrict_folds(folds, mask)
+        _log(f"{name}: 行を {rows} に絞る（対象 {int(mask.sum())} 行、fold {len(folds)}）")
     X = build_frame(cfg, df)
-    _log(f"{a.name}: 列 {X.shape[1]}（基準 d は 1,142 列）")
-    lv, oof = e40._run_subset(a.name, X, meta, folds, lp, years, seeds)
-    oof.to_parquet(d / f"oof_{a.name}.parquet", index=False)
+    _log(f"{name}: 列 {X.shape[1]}（基準 d は 1,142 列）")
+    lv, oof = e40._run_subset(name, X, meta, folds, lp, years, seeds)
+    oof.to_parquet(d / _oof_file(name), index=False)
     res = e40._jload(resp) or {}
-    res[a.name] = {"levels": lv, "cols": int(X.shape[1]), "new": cfg["new"], "stage": cfg["stage"], "years": years, "seeds": seeds}
+    res[name] = {"levels": lv, "cols": int(X.shape[1]), "new": cfg["new"], "stage": cfg["stage"], "years": years, "seeds": seeds}
     e40._jsave(resp, res)
+
+
+def cmd_rows_compare(a) -> None:
+    d, _ = _paths(a.tag)
+    pooled = pd.read_parquet(d / _oof_file(a.name))
+    split = pd.read_parquet(d / _oof_file(f"{a.name}#{a.rows}"))
+    df, base, meta, folds, lp = t.setup()
+    fin_map = meta.set_index(KEY)["finish_position"]
+    for x in (pooled, split):
+        x["race_id"], x["horse_id"] = x["race_id"].astype(str), x["horse_id"].astype(str)
+    k = split[KEY].merge(pooled[KEY], on=KEY)                      # 両方にある行だけ（同じ行・同じ順）
+    p = k.merge(pooled, on=KEY, how="left").sort_values(KEY).reset_index(drop=True)
+    q = k.merge(split, on=KEY, how="left").sort_values(KEY).reset_index(drop=True)
+    c = t._cmp(p, q, fin_map, f"{a.name}: {a.rows}のみで学習 vs プール学習（{a.rows}の行）")
+    print(json.dumps({"rows": len(k), **c}, ensure_ascii=False, indent=1, default=str))
+    (d / f"rows_compare_{_oof_file(a.name)[4:-8][:60]}_{a.rows}.json").write_text(json.dumps({"rows": len(k), **c}, ensure_ascii=False, default=str), encoding="utf-8")
 
 
 def cmd_compare(a) -> None:
@@ -200,7 +246,10 @@ def cmd_compare(a) -> None:
     fin_map = meta.set_index(KEY)["finish_position"]
     rm = pd.read_parquet(e40.OUT / "run_meta.parquet")
     rm["race_id"], rm["horse_id"] = rm["race_id"].astype(str), rm["horse_id"].astype(str)
-    oofs = {p.stem[4:]: pd.read_parquet(p) for p in sorted(d.glob("oof_*.parquet")) if not p.stem.endswith(".v5select")}
+    oofs = {p.stem[4:]: pd.read_parquet(p) for p in sorted(d.glob("oof_*.parquet")) if not p.stem.endswith(".v5select") and "~" not in p.stem}
+    for n in (e40._jload(resp) or {}):
+        if n not in oofs and (d / _oof_file(n)).exists() and len(f"oof_{n}.parquet") > 160:
+            oofs[n] = pd.read_parquet(d / _oof_file(n))
     base = a.base
     if base not in oofs:
         raise SystemExit(f"基準 {base} の OOF がありません")
@@ -238,13 +287,18 @@ def main() -> int:
     r.add_argument("--tag", default="")
     r.add_argument("--years", default="")
     r.add_argument("--seeds", default="")
+    r.add_argument("--rows", default="all", choices=["all", "flat", "hurdle"], help="学習・評価に使う行。障害と平地を分けて学習する")
+    rc = sp.add_parser("rows-compare", help="行を絞って学習した結果を、プールして学習した同じ構成の、同じ行での結果と比べる")
+    rc.add_argument("name")
+    rc.add_argument("--tag", default="")
+    rc.add_argument("--rows", required=True, choices=["flat", "hurdle"])
     c = sp.add_parser("compare")
     c.add_argument("--tag", default="")
     c.add_argument("--base", default="d_CY_BEST")
     c.add_argument("--only", default="", help="カンマ区切りの名前だけを比べる")
     sp.add_parser("list")
     a = ap.parse_args()
-    {"run": cmd_run, "compare": cmd_compare, "list": cmd_list}[a.cmd](a)
+    {"run": cmd_run, "compare": cmd_compare, "list": cmd_list, "rows-compare": cmd_rows_compare}[a.cmd](a)
     return 0
 
 

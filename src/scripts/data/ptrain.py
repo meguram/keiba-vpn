@@ -66,6 +66,12 @@ def _load_extra(src: str, df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
         G = pd.read_parquet(TP76)
     elif src == "tp76mat":
         G = pd.read_parquet(OUT / "tp76_mat.parquet")
+    elif src == "pace":
+        G = pd.read_parquet(OUT / "pace_rows.parquet")
+    elif src == "sire":
+        G = pd.read_parquet(OUT / "sire_rows.parquet")
+    elif src == "cross":
+        G = pd.read_parquet(OUT / "cross_rows.parquet")
     elif src == "mining":
         G = pd.read_parquet(MINING, columns=KEY + [c for c in cols if c != "__all__"])
     elif src == "mat":
