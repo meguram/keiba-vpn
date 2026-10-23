@@ -362,7 +362,7 @@ export function HomeDashboard() {
       )}
 
       <footer>
-        ML-AutoPilot Keiba &mdash; Multi-Agent AI Prediction System &mdash; データソース:{" "}
+        めぐ競馬 &mdash; データソース:{" "}
         <a href="https://db.netkeiba.com/" target="_blank" rel="noreferrer">
           netkeiba.com
         </a>

@@ -4,7 +4,7 @@ import { HomeDashboard } from "@/components/home/HomeDashboard";
 import "@/styles/home.css";
 
 export const metadata: Metadata = {
-  title: "ML-AutoPilot Keiba",
+  title: "めぐ競馬",
   description: "Multi-Agent Horse Racing AI Prediction System",
 };
 

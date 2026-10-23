@@ -6,7 +6,7 @@ import "./globals.css";
 import { Nav } from "@/components/Nav";
 
 export const metadata: Metadata = {
-  title: "めぐAI",
+  title: "めぐ競馬",
   description: "競馬予測・データ分析",
   // ロゴはホストの data/local/image/icon.jpg（FastAPI の /data/image/ を next.config.js の rewrites で配信）
   icons: {
