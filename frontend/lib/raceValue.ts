@@ -31,6 +31,23 @@ export const LEVEL_STYLE: Record<ValueLevel, { label: string; hint: string; colo
   none: { label: "未計算", hint: "予測またはオッズが無い", color: "#8b9bb4", bg: "transparent", border: "#35445f" },
 };
 
+/** 有料会員向けの5段階の推奨度の凡例（API の tier.label と同じ並び）。表示の色は4段階の色分けに対応させる */
+export const TIER_LEGEND: { label: string; level: ValueLevel }[] = [
+  { label: "最注目", level: "hot" }, { label: "高注目", level: "good" }, { label: "注目", level: "ok" }, { label: "標準", level: "ok" }, { label: "見送り", level: "pass" },
+];
+
+export function hasTier(values: Map<string, RaceValue>): boolean {
+  for (const v of values.values()) if (v.tier?.label) return true;
+  return false;
+}
+
+/** チップの2行目の文言: 5段階の推奨度があればそのラベル、無ければ期待回収率（開発者）、見送りは「見送」 */
+export function chipLabel(v: RaceValue | undefined): string {
+  if (v?.tier?.label) return v.tier.label;
+  const lv = v?.level ?? "none";
+  return v?.expected_roi != null && lv !== "pass" ? `${(v.expected_roi * 100).toFixed(0)}%` : lv === "pass" ? "見送" : "–";
+}
+
 const BET_JA: Record<string, string> = { tansho: "単勝", fukusho: "複勝", umaren: "馬連", wide: "ワイド", umatan: "馬単", sanrenpuku: "3連複" };
 
 export function valueTitle(v: RaceValue | undefined): string {

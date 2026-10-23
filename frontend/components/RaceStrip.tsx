@@ -3,7 +3,7 @@
 import { PendingLink } from "@/components/PendingLink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { LEVEL_STYLE, RaceValue, ValueLevel, valueTitle, mixedProbCalibration } from "@/lib/raceValue";
+import { LEVEL_STYLE, RaceValue, TIER_LEGEND, ValueLevel, chipLabel, hasTier, valueTitle, mixedProbCalibration } from "@/lib/raceValue";
 import { venuesOf } from "@/lib/weekDates";
 
 export type StripRace = { race_id: string; race_name?: string; venue?: string; round?: number | string };
@@ -136,9 +136,7 @@ export function RaceStrip({
               >
                 <span style={{ fontSize: 14, fontWeight: on || lv === "hot" ? 800 : 600 }}>{lv === "hot" ? `★${roundOf(r)}` : roundOf(r)}</span>
                 <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.95 }}>
-                  {v?.tier?.label
-                    ? v.tier.label
-                    : v?.expected_roi != null && lv !== "pass" ? `${(v.expected_roi * 100).toFixed(0)}%` : lv === "pass" ? "見送" : "–"}
+                  {chipLabel(v)}
                 </span>
               </button>
             );
@@ -152,8 +150,14 @@ export function RaceStrip({
 
       {values.size > 0 && !narrow && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", fontSize: 11, color: "var(--text-dim)" }}>
-          <span>推奨の期待回収率:</span>
-          {(["hot", "good", "ok", "pass"] as ValueLevel[]).map((k) => (
+          <span>{hasTier(values) ? "買い目の推奨度:" : "推奨の期待回収率:"}</span>
+          {hasTier(values)
+            ? TIER_LEGEND.map((t) => (
+              <span key={t.label} title={LEVEL_STYLE[t.level].hint} style={{ padding: "1px 8px", borderRadius: 6, border: `1px solid ${LEVEL_STYLE[t.level].border}`, background: LEVEL_STYLE[t.level].bg, color: LEVEL_STYLE[t.level].color, opacity: t.level === "pass" ? 0.8 : 1 }}>
+                {t.level === "hot" ? "★ " : ""}{t.label}
+              </span>
+            ))
+            : (["hot", "good", "ok", "pass"] as ValueLevel[]).map((k) => (
             <span key={k} title={LEVEL_STYLE[k].hint} style={{ padding: "1px 8px", borderRadius: 6, border: `1px solid ${LEVEL_STYLE[k].border}`, background: LEVEL_STYLE[k].bg, color: LEVEL_STYLE[k].color }}>
               {LEVEL_STYLE[k].label}
             </span>

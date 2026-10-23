@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { PendingLink } from "@/components/PendingLink";
 import { USE_MOCK, MOCK_WEEKLY_RACES } from "@/lib/mock";
-import { LEVEL_STYLE, ValueLevel, useRaceValues, valueTitle, mixedProbCalibration } from "@/lib/raceValue";
+import { LEVEL_STYLE, TIER_LEGEND, ValueLevel, chipLabel, hasTier, useRaceValues, valueTitle, mixedProbCalibration } from "@/lib/raceValue";
 import { useNarrow } from "@/components/RaceStrip";
 
 type RaceRow = { race_id: string; round: number; venue: string; race_name: string };
@@ -140,7 +140,7 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
               >
                 <span style={{ fontSize: 14, fontWeight: on || lv === "hot" ? 800 : 600 }}>{lv === "hot" ? `★${r.round}` : r.round}</span>
                 <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.95 }}>
-                  {v?.expected_roi != null && lv !== "pass" ? `${(v.expected_roi * 100).toFixed(0)}%` : lv === "pass" ? "見送" : "–"}
+                  {chipLabel(v)}
                 </span>
               </PendingLink>
             );
@@ -154,13 +154,27 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
 
       {values.size > 0 && !narrow && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", fontSize: 11, color: "var(--text-dim)" }}>
-          <span>推奨の期待回収率（較正後）:</span>
-          {(["hot", "good", "ok", "pass"] as ValueLevel[]).map((k) => (
+          {hasTier(values) ? (
+            <>
+              <span>買い目の推奨度:</span>
+              {TIER_LEGEND.map((t) => (
+                <span key={t.label} title={LEVEL_STYLE[t.level].hint} style={{ padding: "1px 8px", borderRadius: 6, border: `1px solid ${LEVEL_STYLE[t.level].border}`, background: LEVEL_STYLE[t.level].bg, color: LEVEL_STYLE[t.level].color, opacity: t.level === "pass" ? 0.8 : 1 }}>
+                  {t.level === "hot" ? "★ " : ""}{t.label}
+                </span>
+              ))}
+              <span>（過去の実績に合わせて補正した目安。年による変動が大きい）</span>
+            </>
+          ) : (
+            <>
+              <span>推奨の期待回収率（較正後）:</span>
+              {(["hot", "good", "ok", "pass"] as ValueLevel[]).map((k) => (
             <span key={k} title={LEVEL_STYLE[k].hint} style={{ padding: "1px 8px", borderRadius: 6, border: `1px solid ${LEVEL_STYLE[k].border}`, background: LEVEL_STYLE[k].bg, color: LEVEL_STYLE[k].color, opacity: k === "pass" ? 0.8 : 1 }}>
               {LEVEL_STYLE[k].label}
             </span>
           ))}
-          <span>（過去の実績に合わせて補正した目安。年による変動が大きい）</span>
+              <span>（過去の実績に合わせて補正した目安。年による変動が大きい）</span>
+            </>
+          )}
           {mixedProbCalibration(values) && <span title="オッズが出たレースは確率を市場補正して計算し、段の閾値と当日の順位を、補正しないレース（オッズ未確定・予測オッズ）とは別に付けています">※ 市場補正したレースとしないレースは基準が別</span>}
         </div>
       )}
