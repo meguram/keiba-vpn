@@ -129,7 +129,10 @@ def qualifies_star_mark(entry: dict, base_prob: float) -> bool:
     if sc.get("calibrated"):
         cal = _cal_horse_ev(entry, "ev_win", "win")
         if cal is not None:
-            return cal >= float(sc.get("ev_win_cal_min", 0.95))
+            n_field = round(1.0 / base_prob) if base_prob and base_prob > 0 else 0
+            if n_field and n_field < int(sc.get("min_field", 0)):
+                return False                                      # 少頭数のレースは人気薄が勝ちにくく、★の回収率が低い
+            return float(sc.get("ev_win_cal_min", 0.95)) <= cal < float(sc.get("ev_win_cal_max", 99.0))
     ev_win_min, ev_place_min = _STAR_EV_WIN_MIN, _STAR_EV_PLACE_MIN
     if entry.get("prob_calibrated"):
         # 市場補正した確率は EV の水準が下がる（生の EV は膨らんでいた）。★の頻度が従来に近くなる水準に置く（config/ev_calibration_pc.json の marks）
@@ -420,7 +423,7 @@ def assign_mece_marks_v2(entries: list[dict], params: dict | None = None) -> Non
         if cal_mode:
             cal = _cal_horse_ev(e, "ev_win", "win")
             if cal is not None:
-                if cal >= float(sc.get("ev_win_cal_min", 0.95)):
+                if n >= int(sc.get("min_field", 0)) and float(sc.get("ev_win_cal_min", 0.95)) <= cal < float(sc.get("ev_win_cal_max", 99.0)):
                     star_pool.append((cal, _f(e, "top3_prob"), e))
                 continue
         evw, evp = _f(e, "ev_win"), _f(e, "ev_place")

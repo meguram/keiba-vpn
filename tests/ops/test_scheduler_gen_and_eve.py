@@ -62,10 +62,10 @@ def test_run_job_memory_matches_sizes_and_secrets_not_inlined():
 
 
 def test_dockerfile_and_deploy_script_are_consistent():
-    df = Path("Dockerfile.jobs").read_text()
+    df = Path("deploy/docker/Dockerfile.jobs").read_text()
     assert 'ENTRYPOINT ["python3"]' in df and "src.ops.job_dispatch" in df and "KEIBA_ENV=prod" in df and "KEIBA_RUN_LOCATION=gcp" in df
     assert "playwright" in df and "mlflow" in df                         # ジョブに要らない依存を外している
-    assert "members.json" in Path("Dockerfile.jobs.dockerignore").read_text()
+    assert "members.json" in Path("deploy/docker/Dockerfile.jobs.dockerignore").read_text()
     sh = Path("scripts/gcp/deploy_cloud_run_jobs.sh").read_text()
     assert "--dry-run" in sh and "KEIBA_RUN_LOCATION=gcp" in sh
     r = subprocess.run(["bash", "scripts/gcp/deploy_cloud_run_jobs.sh", "show", "scheduler"], capture_output=True, text=True)

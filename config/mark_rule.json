@@ -1,5 +1,5 @@
 {
- "version": 1,
+ "version": 2,
  "note": "印の付け方の版。1=従来（v1）、2=めぐAI印 v2（ユーザー定義）。環境変数 KEIBA_MARK_RULE=v1|v2 でも上書き。既定は v1。評価: docs/html/modeling/chapters/megu_marking.html 末尾の『v2 の評価』",
  "v2": {
   "honmei": {
@@ -40,6 +40,8 @@
   "ev_win_cal_min": 0.95,
   "odds_min": 10.0,
   "odds_max": 30.0,
-  "note": "v1 の★(おすすめ穴馬)の判定。較正後の単勝期待値(config/ev_calibration.json)が ev_win_cal_min 以上＆想定単勝が odds_min〜odds_max。生のEVで判定していた従来は約75%のレースに★が出て的中率4%(2026-10-18: 27/36R で1着1頭)だったため改めた。2022-2026の検証で 10〜30倍・0.95以上は単勝約100〜110%(区間は100%を跨ぐ)。calibrated=false で従来の判定に戻る。評価: ptrain star_band_ev.py"
+  "note": "v1 の★(おすすめ穴馬)の判定。較正後の単勝期待値(config/ev_calibration.json)が ev_win_cal_min 以上＆想定単勝が odds_min〜odds_max。生のEVで判定していた従来は約75%のレースに★が出て的中率4%(2026-10-18: 27/36R で1着1頭)だったため改めた。2022-2026の検証で 10〜30倍・0.95以上は単勝約100〜110%(区間は100%を跨ぐ)。calibrated=false で従来の判定に戻る。評価: ptrain star_band_ev.py 2026-10-24: 13頭以上・較正後EV 0.95以上1.1未満に絞る(2022-26合算で単勝約145%、12頭以下は73%、1.1以上は92%。後付けの絞り込みなので区間は広い)。",
+  "min_field": 13,
+  "ev_win_cal_max": 1.1
  }
 }

@@ -26,7 +26,8 @@ def test_race_metrics_without_honmei_is_nan_for_honmei_columns():
     assert np.isnan(r["honmei_win"]) and r["n_marks"] == 0.0 and r["win_cover"] == 0.0
 
 
-def test_p0_policy_equals_production_default():
+def test_p0_policy_equals_production_default(monkeypatch):
+    monkeypatch.setenv("KEIBA_MARK_RULE", "v1")                 # P0 は v1（従来）。本番の既定が v2 でもこの比較は v1 で行う
     g = pd.DataFrame({"horse_number": range(1, 11), "p_win": [0.3, 0.2, 0.12, 0.1, 0.08, 0.06, 0.05, 0.04, 0.03, 0.02],
                       "p_top2": [0.5, 0.4, 0.25, 0.2, 0.15, 0.12, 0.1, 0.08, 0.06, 0.04],
                       "p_top3": [0.7, 0.55, 0.4, 0.3, 0.25, 0.2, 0.15, 0.12, 0.1, 0.06], "win_odds": [3.0] * 10})

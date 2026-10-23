@@ -27,3 +27,17 @@ def test_header_variants(course, surf, expected):
     assert (d["surface"], d["direction"], d["distance"]) == expected
     assert d["weather"] == "曇" and d["track_condition"] == "稍重" and d["start_time"] == "11:35"
     assert d["date"] == "2026-09-27" and d["round"] == 4
+
+
+@pytest.mark.parametrize("name,grade", [
+    ("4歳以上500万下", "1勝"), ("4歳以上1000万下", "2勝"), ("3歳以上1600万下", "3勝"),
+    ("3歳以上1勝クラス", "1勝"), ("フェアウェルS(3勝)", "3勝"), ("2歳未勝利", "未勝利"),
+])
+def test_old_class_names_map_to_current_grade(name, grade):
+    d = RaceResultParser().parse(TPL.format(name=name, course="芝右1600m", surf="芝"), race_id="201906040904")
+    assert d["grade"] == grade
+
+
+def test_old_class_name_wins_over_page_wide_text():
+    html = TPL.format(name="4歳以上500万下", course="芝右1600m", surf="芝").replace("</body>", "<div>次のレース オープン 未勝利</div></body>")
+    assert RaceResultParser().parse(html, race_id="201906040904")["grade"] == "1勝"

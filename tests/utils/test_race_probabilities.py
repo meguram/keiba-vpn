@@ -72,6 +72,7 @@ class TestRaceProbabilities(unittest.TestCase):
         self.assertEqual(types[2], "pair")
         self.assertNotEqual(types[3], "pair")
 
+    @mock.patch.dict("os.environ", {"KEIBA_MARK_RULE": "v1"})
     def test_pair_not_assigned_below_threshold(self):
         entries = [{"horse_number": i + 1, "win_prob": 1 / 12, "top2_prob": 1 / 12 * 1.1, "top3_prob": 0.25} for i in range(12)]
         assign_mece_marks(entries)
@@ -171,6 +172,7 @@ class TestRaceProbabilities(unittest.TestCase):
             )
         )
 
+    @mock.patch.dict("os.environ", {"KEIBA_MARK_RULE": "v1"})
     @mock.patch("src.utils.race_probabilities.star_v1_config", return_value={})
     def test_assign_star_mark(self, _m):
         entries = [
@@ -246,6 +248,15 @@ class TestStarCalibrated(unittest.TestCase):
     """★は較正後の単勝期待値で判定する（config/mark_rule.json の star_v1）。"""
 
     CFG = {"calibrated": True, "ev_win_cal_min": 0.95, "odds_min": 10.0, "odds_max": 30.0}
+
+    def test_field_size_and_ev_ceiling(self):
+        cfg = {**self.CFG, "min_field": 13, "ev_win_cal_max": 1.1}
+        e = {"win_odds": 15.0, "ev_win": 1.0, "top3_prob": 0.1}
+        with mock.patch("src.utils.race_probabilities.star_v1_config", return_value=cfg), mock.patch("src.utils.race_probabilities._cal_horse_ev", return_value=1.0):
+            self.assertFalse(qualifies_star_mark(e, 1 / 12))       # 12 頭以下は対象外
+            self.assertTrue(qualifies_star_mark(e, 1 / 14))
+        with mock.patch("src.utils.race_probabilities.star_v1_config", return_value=cfg), mock.patch("src.utils.race_probabilities._cal_horse_ev", return_value=1.15):
+            self.assertFalse(qualifies_star_mark(e, 1 / 14))       # 1.1 以上は対象外
 
     def test_uses_calibrated_ev_not_raw(self):
         with mock.patch("src.utils.race_probabilities.star_v1_config", return_value=self.CFG), \
