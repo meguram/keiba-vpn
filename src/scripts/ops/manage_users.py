@@ -251,6 +251,9 @@ def _get_password(args, user_id: str) -> tuple[str, bool]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from src.utils.project_env import load_project_dotenv
+
+    load_project_dotenv()      # .env / .env.<KEIBA_ENV> の秘密（DEV_SECRET_KEY など）を読む
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sp = ap.add_subparsers(dest="cmd", required=True)
     sp.add_parser("list")
