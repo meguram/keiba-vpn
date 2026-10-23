@@ -78,3 +78,14 @@ def test_token_formats_and_tampering(members):
     forged = new.replace(("ken".encode().hex()), ("admin".encode().hex()))   # uid だけ書き換えると署名が合わない
     assert auth.token_role(forged) is None
     assert auth.token_role(auth._make_token(timestamp=int(time.time()) - auth.COOKIE_MAX_AGE - 10, role=auth.ROLE_MEMBER, uid="ken")) is None
+
+
+def test_password_change_revokes_existing_sessions(members):
+    mu.create_user("shared", "correct-horse-battery")
+    old = auth._make_token(role=auth.ROLE_MEMBER, uid="shared")
+    assert auth.token_role(old) == auth.ROLE_MEMBER
+    time.sleep(1.1)
+    mu.set_password("shared", "another-long-password-1")
+    assert auth.token_role(old) is None
+    new = auth._make_token(role=auth.ROLE_MEMBER, uid="shared")
+    assert auth.token_role(new) == auth.ROLE_MEMBER

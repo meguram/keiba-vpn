@@ -97,6 +97,8 @@ def token_role(token: str) -> str | None:
             return None
         if role == ROLE_MEMBER and uid and not member_active(uid):      # 無効化・削除したユーザーのセッションは使えなくする
             return None
+        if role == ROLE_MEMBER and uid and ts < int((member_record(uid) or {}).get("pw_changed_ts") or 0):      # パスワード変更前に発行したセッションも使えなくする
+            return None
         return role
     except Exception:
         return None

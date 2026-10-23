@@ -190,6 +190,7 @@ def set_password(ident: str, password: str) -> str:
         check_password_rules("", password)
     u.update(_hash(password))
     u["updated_at"] = _now()
+    u["pw_changed_ts"] = int(time.time())          # これ以前に発行したログイン（cookie）は使えなくなる
     _save(p, data)
     return str(u["idk"])[:8]
 
