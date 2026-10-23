@@ -360,13 +360,6 @@ export function HomeDashboard() {
           </div>
         </section>
       )}
-
-      <footer>
-        めぐ競馬 &mdash; データソース:{" "}
-        <a href="https://db.netkeiba.com/" target="_blank" rel="noreferrer">
-          netkeiba.com
-        </a>
-      </footer>
     </div>
   );
 }

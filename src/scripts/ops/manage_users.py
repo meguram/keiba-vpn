@@ -48,6 +48,12 @@ def _load(path: Path) -> dict:
     try:
         d = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(d, dict) and isinstance(d.get("users"), list):
+            from src.api import auth
+
+            for u in d["users"]:      # 平文の ID を持つ旧形式の記録は、読むときに ID のキー（idk）へ変換する（次の保存で平文が消える。パスワードのハッシュはそのまま）
+                if u.get("id") and not u.get("idk"):
+                    u["idk"] = auth.id_key(str(u.pop("id")))
+                    u.pop("name", None)
             return d
     except (OSError, ValueError):
         pass

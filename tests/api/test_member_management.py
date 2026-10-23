@@ -122,3 +122,15 @@ def test_free_member_is_not_in_paid_zone_for_requests(members):
         with app.test_request_context("/", headers={"Cookie": f"{auth.COOKIE_NAME}={auth._make_token(role=auth.ROLE_MEMBER, uid=uid) if uid else ''}"}):
             assert fa.is_member_session() is want
             assert fa.get_auth_status()["logged_in"] is bool(uid)
+
+
+def test_legacy_plaintext_id_record_is_converted_and_listed(members):
+    members.parent.mkdir(parents=True, exist_ok=True)
+    import json as _j
+    members.write_text(_j.dumps({"users": [{"id": "OldUser", "name": "OldUser", "role": "member", "enabled": True, "algo": "pbkdf2_sha256", "iterations": 1000,
+                                             "salt": "00" * 16, "hash": "x", "created_at": "t", "updated_at": "t"}]}), encoding="utf-8")
+    rows = [r for r in mu.list_users() if r["fp"] != "-"]
+    assert len(rows) == 1 and rows[0]["plan"] == "paid"                      # 一覧が落ちず、区分が無い記録は有料会員
+    mu.set_plan(rows[0]["fp"], "paid")                                       # 保存すると平文の ID と name が消え、ID のキーだけになる
+    raw = members.read_text(encoding="utf-8")
+    assert "OldUser" not in raw and '"idk"' in raw and auth.member_record("OldUser") is not None
