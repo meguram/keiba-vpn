@@ -58,7 +58,7 @@ export function filterEnabledCategories(sections: CategorySection[]): CategorySe
 export const PUBLIC_CATEGORIES: CategorySection[] = [
   {
     num: "04",
-    title: "🤖 AI 予測",
+    title: "🤖 めぐAI",
     desc: "今週の予測・過去の予測結果",
     catColor: "var(--home-orange)",
     cards: [
