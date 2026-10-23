@@ -23,6 +23,7 @@ export const FEATURES = {
   betting: { label: "馬券最適化", enabled: false, paths: ["/betting"] },
   "prediction-results": { label: "予測成績（予測結果の集計・ホームの予測ニュース）", enabled: true, paths: ["/prediction-results"] },
   auth: { label: "ログイン", enabled: true, paths: ["/login"] },
+  "admin-users": { label: "ユーザー登録（管理者のみ）", enabled: true, paths: ["/admin/users"] },
 
   // ── 無効化中（コードは残置） ──
   "megu-index": { label: "めぐ指数", enabled: false, paths: ["/megu-index"] },

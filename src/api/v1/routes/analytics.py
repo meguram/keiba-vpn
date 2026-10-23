@@ -101,6 +101,60 @@ def admin_git_pull():
     return jsonify(result), code
 
 
+def _admin_users(fn, *args):
+    """会員の管理（管理者のみ）。入力の誤りは 400 と文言で返す。パスワードは記録も返しもしない。"""
+    from src.scripts.ops import manage_users as mu
+
+    try:
+        resp = jsonify({"status": "ok", "fp": fn(*args)})
+    except mu.UserError as e:
+        resp = jsonify({"error": str(e)}), 400
+    return resp
+
+
+@bp.get("/admin/users")
+@require_login
+def admin_users_list():
+    from src.scripts.ops import manage_users as mu
+
+    resp = jsonify({"users": mu.list_users()})
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@bp.post("/admin/users")
+@require_login
+def admin_users_create():
+    from src.scripts.ops import manage_users as mu
+
+    body = request.get_json(silent=True) or {}
+    return _admin_users(mu.create_user, str(body.get("id") or ""), str(body.get("password") or ""))
+
+
+@bp.post("/admin/users/<ident>/password")
+@require_login
+def admin_users_password(ident: str):
+    from src.scripts.ops import manage_users as mu
+
+    return _admin_users(mu.set_password, ident, str((request.get_json(silent=True) or {}).get("password") or ""))
+
+
+@bp.post("/admin/users/<ident>/enabled")
+@require_login
+def admin_users_enabled(ident: str):
+    from src.scripts.ops import manage_users as mu
+
+    return _admin_users(mu.set_enabled, ident, bool((request.get_json(silent=True) or {}).get("enabled")))
+
+
+@bp.delete("/admin/users/<ident>")
+@require_login
+def admin_users_delete(ident: str):
+    from src.scripts.ops import manage_users as mu
+
+    return _admin_users(mu.remove_user, ident)
+
+
 @bp.post("/auth/login")
 def auth_login():
     body = request.get_json(silent=True) or {}

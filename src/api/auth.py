@@ -282,7 +282,7 @@ def _read_users(path: str) -> list[dict]:
             users = (json.load(f) or {}).get("users") or []
     except (OSError, ValueError):
         return []
-    return [u for u in users if isinstance(u, dict) and u.get("id")]
+    return [u for u in users if isinstance(u, dict) and (u.get("id") or u.get("idk"))]
 
 
 def _load_members() -> list[dict]:
@@ -293,13 +293,48 @@ def _load_members() -> list[dict]:
         merged: dict[str, dict] = {}
         for p in paths:
             for u in _read_users(p):
-                merged[str(u["id"])] = u
+                merged[str(u.get("idk") or u.get("id"))] = u
         _members_cache.update(key=key, users=list(merged.values()))
     return _members_cache["users"]
 
 
+# ── ID・パスワードを「漏れても読めない」形で持つ ──
+# ログイン ID は平文で保存せず、サーバだけが持つ秘密（ペッパー）つきの HMAC（idk）だけを持つ。パスワードは PBKDF2 のあとにペッパーで HMAC をかける。
+# 会員ファイルだけが漏れても、誰が登録されているか・パスワードが何かは分からず、推測の検証もできない。管理者本人も元の ID・パスワードは読み出せない（再設定と、ID を入力しての照合だけ）。
+# ペッパーは KEIBA_MEMBERS_PEPPER、無ければ DEV_SECRET_KEY から導く（変えると既存ユーザーは使えなくなる＝作り直し）。
+
+
+def _pepper() -> bytes:
+    explicit = os.environ.get("KEIBA_MEMBERS_PEPPER", "")
+    if explicit:
+        return explicit.encode()
+    return hmac.new(_get_secret_key().encode(), b"keiba-members-pepper-v1", hashlib.sha256).digest()
+
+
+def normalize_id(user_id: str) -> str:
+    return (user_id or "").strip().lower()
+
+
+def id_key(user_id: str) -> str:
+    """ログイン ID の検索キー（HMAC-SHA256、ペッパーつき）。元の ID には戻せない。"""
+    return hmac.new(_pepper(), b"id:" + normalize_id(user_id).encode(), hashlib.sha256).hexdigest()
+
+
+def password_digest(password: str, salt: bytes, iterations: int) -> str:
+    """PBKDF2-SHA256 の結果にペッパーで HMAC をかけた値（algo = pbkdf2_sha256_pepper）。"""
+    pb = hashlib.pbkdf2_hmac("sha256", (password or "").encode(), salt, iterations)
+    return hmac.new(_pepper(), b"pw:" + pb, hashlib.sha256).hexdigest()
+
+
 def member_record(user_id: str) -> dict | None:
-    return next((u for u in _load_members() if u.get("id") == user_id), None)
+    """ID（平文）に対応するアカウント。新形式は idk で、動作確認用の旧形式（config/members.json の test）は id で探す。"""
+    if not normalize_id(user_id):
+        return None
+    k = id_key(user_id)
+    for u in _load_members():
+        if u.get("idk") == k or (u.get("id") and u.get("id") == (user_id or "").strip()):
+            return u
+    return None
 
 
 def member_active(user_id: str) -> bool:
@@ -309,13 +344,12 @@ def member_active(user_id: str) -> bool:
 
 
 def member_display_name(user_id: str) -> str:
-    rec = member_record(user_id) or {}
-    return str(rec.get("name") or user_id)
+    """画面に出す名前。ID は保存しないので、ログイン時に本人が入力した ID（セッションに入っている）をそのまま出す。"""
+    return (user_id or "").strip()
 
 
 def verify_member_login(user_id: str, password: str) -> bool:
-    """会員の ID・パスワードを検証する。requires_env の環境変数が有効でないアカウントは常に不可（既定オフ）。"""
-    user_id = (user_id or "").strip()
+    """会員の ID・パスワードを検証する。存在しない ID でも同じ計算量にする。無効・requires_env が未設定のアカウントは常に不可。"""
     password = password or ""
     rec = member_record(user_id)
     enabled = member_active(user_id)
@@ -325,8 +359,12 @@ def verify_member_login(user_id: str, password: str) -> bool:
         want = rec["hash"] if rec else ""
     except (KeyError, TypeError, ValueError):
         return False
-    got = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iters).hex()  # 存在しない ID でも同じ計算量にする
-    return bool(enabled) and rec.get("algo", "pbkdf2_sha256") == "pbkdf2_sha256" and hmac.compare_digest(got, want)
+    algo = (rec or {}).get("algo", "pbkdf2_sha256")
+    if algo == "pbkdf2_sha256_pepper":
+        got = password_digest(password, salt, iters)
+    else:                                   # 旧形式（config/members.json の test）
+        got = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iters).hex()
+    return bool(enabled) and algo in ("pbkdf2_sha256", "pbkdf2_sha256_pepper") and hmac.compare_digest(got, want)
 
 
 # ── ページ分類 ──
@@ -360,6 +398,8 @@ DEV_ONLY_PAGES: set[str] = {
     "/scrape-upcoming",
     # ② 馬券の最適化
     "/betting",
+    # 会員の登録・管理（管理者のみ）
+    "/admin/users",
     # ③ 馬場速度 計算ロジック解説
     "/track-speed/dev",
 }

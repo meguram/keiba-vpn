@@ -10,6 +10,7 @@ export function Nav() {
   const path = usePathname();
   const [loggedIn, setLoggedIn] = useState(false);
   const [userName, setUserName] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     if (USE_MOCK) {
@@ -17,12 +18,14 @@ export function Nav() {
       const auto = process.env.NEXT_PUBLIC_DEV_AUTO_LOGIN === "1";
       setLoggedIn(auto);
       setUserName(auto ? "開発者" : "");
+      setIsAdmin(auto);
       return;
     }
     fetchAuthStatus()
       .then((d) => {
         setLoggedIn(!!d.logged_in);
         setUserName(d.logged_in ? (d.user_name || (d.is_admin ? "管理者" : "会員")) : "");
+        setIsAdmin(!!d.logged_in && !!d.is_admin);
       })
       .catch(() => { /* 一時的な通信失敗・サーバエラーでは、直前のログイン表示を保つ */ });
   }, [path]);
@@ -119,6 +122,22 @@ export function Nav() {
           }}>
             {loggedIn ? `👤 ${userName}` : "ゲスト"}
           </span>
+          {isAdmin && (
+            <Link href="/admin/users" className="hit44" style={{
+              fontSize: 12,
+              color: "#3fb950",
+              textDecoration: "none",
+              padding: "4px 12px",
+              borderRadius: 6,
+              border: "1px solid rgba(63,185,80,0.35)",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(63,185,80,0.1)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+            >
+              ユーザ登録
+            </Link>
+          )}
           {loggedIn ? (
             <button type="button" onClick={logout} className="hit44" style={{
               fontSize: 12,

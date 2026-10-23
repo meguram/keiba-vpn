@@ -1,14 +1,16 @@
-"""会員ユーザー（ログイン ID とパスワード）の管理。パスワードはソルト付き PBKDF2-SHA256 のハッシュだけを保存し、画面にも記録にも出さない。
+"""会員ユーザー（ログイン ID とパスワード）の管理。ID もパスワードも平文では保存せず、管理者本人でも元の値は読み出せない。
+
+保存するもの: ID の HMAC（ペッパーつき。元の ID には戻せない）、パスワードの PBKDF2-SHA256＋ペッパーの HMAC、有効/無効、登録日時。表示名は持たない（ログイン中の表示は、本人が入力した ID）。
+一覧には「指紋」（ID の HMAC の先頭 8 文字）だけが出る。操作の対象は ID（入力すると照合する）か指紋で指定する。
 
   python -m src.scripts.ops.manage_users list
-  python -m src.scripts.ops.manage_users add <id> [--name 表示名] [--password 初期パスワード | --generate | --password-stdin]    # 既定は対話入力（2 回）
-  python -m src.scripts.ops.manage_users passwd <id> [--password 新パスワード | --generate | --password-stdin]
+  python -m src.scripts.ops.manage_users add <id> [--password 初期パスワード | --generate | --password-stdin]    # 既定は対話入力（2 回）
+  python -m src.scripts.ops.manage_users passwd <id|指紋> [--password 新パスワード | --generate | --password-stdin]
+  python -m src.scripts.ops.manage_users disable <id|指紋> | enable <id|指紋> | remove <id|指紋>
   （--password はシェルの履歴に残る。残したくないときは対話入力か --password-stdin を使う）
-  python -m src.scripts.ops.manage_users rename <id> --name 表示名
-  python -m src.scripts.ops.manage_users disable <id> | enable <id> | remove <id>
 
-保存先: data/local/auth/members.json（git に入れない。環境変数 KEIBA_MEMBERS_FILE で変更）。config/members.json（動作確認用の test）は読むだけで、ここからは変更しない。
-API は会員ファイルの更新を自動で読み直す（再起動不要）。無効化・削除したユーザーは、すでにログイン中でも次のリクエストから使えなくなる。
+保存先: data/local/auth/members.json（git に入れない。環境変数 KEIBA_MEMBERS_FILE で変更）。config/members.json（動作確認用の test）は読むだけ。
+API は会員ファイルの更新を自動で読み直す（再起動不要）。無効化・削除したユーザーは、ログイン中でも次のリクエストから使えなくなる。
 本番ではホストで実行する: ssh keiba-remote 'cd /home/jovyan/work/keiba-vpn && sudo -n /opt/conda/bin/python3 -m src.scripts.ops.manage_users list'
 """
 
@@ -16,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import getpass
-import hashlib
 import json
 import os
 import re
@@ -28,6 +29,11 @@ from pathlib import Path
 ITERATIONS = 600_000
 ID_RE = re.compile(r"^[A-Za-z0-9._@-]{3,64}$")
 MIN_PW = 10
+ALGO = "pbkdf2_sha256_pepper"
+
+
+class UserError(ValueError):
+    """入力の誤り（画面・CLI にそのまま出してよい文言）。"""
 
 
 def _path() -> Path:
@@ -43,7 +49,7 @@ def _load(path: Path) -> dict:
             return d
     except (OSError, ValueError):
         pass
-    return {"_comment": "ユーザー管理 CLI（src/scripts/ops/manage_users.py）が書く会員アカウント。パスワードはハッシュだけ。git に入れない。", "users": []}
+    return {"_comment": "ユーザー管理（manage_users）が書く会員アカウント。ID・パスワードは一方向のハッシュだけ（元に戻せない）。git に入れない。", "users": []}
 
 
 def _save(path: Path, data: dict) -> None:
@@ -59,144 +65,152 @@ def _save(path: Path, data: dict) -> None:
     os.replace(tmp, path)
 
 
-def hash_password(password: str) -> dict:
-    salt = secrets.token_bytes(16)
-    h = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, ITERATIONS).hex()
-    return {"algo": "pbkdf2_sha256", "iterations": ITERATIONS, "salt": salt.hex(), "hash": h}
-
-
-def check_password_rules(user_id: str, password: str) -> None:
-    if len(password) < MIN_PW:
-        raise SystemExit(f"パスワードは {MIN_PW} 文字以上にしてください")
-    if password.lower() == user_id.lower():
-        raise SystemExit("パスワードに ID と同じ文字列は使えません")
-
-
-def _get_password(args, user_id: str) -> tuple[str, bool]:
-    """(パスワード, 生成したか)。"""
-    if args.generate:
-        return secrets.token_urlsafe(12), True
-    if args.password is not None:
-        check_password_rules(user_id, args.password)
-        return args.password, False
-    if args.password_stdin:
-        pw = sys.stdin.readline().rstrip("\n")
-    else:
-        pw = getpass.getpass("パスワード: ")
-        if getpass.getpass("もう一度: ") != pw:
-            raise SystemExit("パスワードが一致しません")
-    check_password_rules(user_id, pw)
-    return pw, False
-
-
-def _find(data: dict, user_id: str) -> dict | None:
-    return next((u for u in data["users"] if u.get("id") == user_id), None)
-
-
 def _now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S+09:00", time.gmtime(time.time() + 9 * 3600))
 
 
-def cmd_list(args) -> int:
+def check_password_rules(user_id: str, password: str) -> None:
+    if len(password or "") < MIN_PW:
+        raise UserError(f"パスワードは {MIN_PW} 文字以上にしてください")
+    if (user_id and password.lower() == user_id.strip().lower()):
+        raise UserError("パスワードに ID と同じ文字列は使えません")
+
+
+def _hash(password: str) -> dict:
     from src.api import auth
 
-    local = {u["id"]: u for u in _load(_path())["users"]}
-    rows = []
+    salt = secrets.token_bytes(16)
+    return {"algo": ALGO, "iterations": ITERATIONS, "salt": salt.hex(), "hash": auth.password_digest(password, salt, ITERATIONS)}
+
+
+def _resolve(data: dict, ident: str) -> dict:
+    """ID（平文）または指紋（8 文字の 16 進）で対象を決める。見つからなければ UserError。"""
+    from src.api import auth
+
+    ident = (ident or "").strip()
+    k = auth.id_key(ident) if ident else ""
+    hit = [u for u in data["users"] if u.get("idk") == k]
+    if not hit and re.fullmatch(r"[0-9a-f]{8}", ident):
+        hit = [u for u in data["users"] if str(u.get("idk", "")).startswith(ident)]
+    if len(hit) != 1:
+        raise UserError("対象のユーザーが見つかりません（config/members.json の test は、ここからは変更できません）")
+    return hit[0]
+
+
+def list_users() -> list[dict]:
+    """一覧（ID は出ない）。fp=指紋、source=config（動作確認用）/ managed（この管理で作成）。"""
+    from src.api import auth
+
+    local = _load(_path())["users"]
+    out = []
     for u in auth._read_users(auth._MEMBERS_FILE):
-        if u["id"] not in local:
-            rows.append((u["id"], "config", u.get("name") or "", "有効" if auth.member_active(u["id"]) else f"無効（{u.get('requires_env') or '-'} が未設定）"))
-    for uid, u in local.items():
-        rows.append((uid, "管理ファイル", u.get("name") or "", "有効" if auth.member_active(uid) else "無効"))
-    if not rows:
-        print("ユーザーはいません")
-    for r in rows:
-        print("  ".join(str(x) for x in r))
-    return 0
+        out.append({"fp": "-", "source": "config", "label": u.get("id"), "enabled": bool(not u.get("requires_env") or auth._env_on(str(u["requires_env"]))), "created_at": None, "note": f"{u.get('requires_env')} が有効なときだけ"})
+    for u in local:
+        out.append({"fp": str(u["idk"])[:8], "source": "managed", "label": None, "enabled": u.get("enabled", True) is not False, "created_at": u.get("created_at"), "note": ""})
+    return out
 
 
-def cmd_add(args) -> int:
-    if not ID_RE.match(args.id):
-        raise SystemExit("ID は英数字と . _ @ - の 3〜64 文字にしてください")
+def create_user(user_id: str, password: str) -> str:
+    """ユーザーを作る。戻り値は指紋。"""
+    from src.api import auth
+
+    uid = (user_id or "").strip()
+    if not ID_RE.match(uid):
+        raise UserError("ログインID は英数字と . _ @ - の 3〜64 文字にしてください")
+    check_password_rules(uid, password)
     p = _path()
     data = _load(p)
-    if _find(data, args.id):
-        raise SystemExit(f"{args.id} はすでにあります（パスワード変更は passwd）")
-    pw, gen = _get_password(args, args.id)
-    data["users"].append({"id": args.id, "name": args.name or args.id, "role": "member", **hash_password(pw), "enabled": True, "created_at": _now(), "updated_at": _now()})
+    k = auth.id_key(uid)
+    if any(u.get("idk") == k for u in data["users"]) or any((u.get("id") or "").lower() == uid.lower() for u in auth._read_users(auth._MEMBERS_FILE)):
+        raise UserError("そのログインID はすでに使われています")
+    data["users"].append({"idk": k, **_hash(password), "role": "member", "enabled": True, "created_at": _now(), "updated_at": _now()})
     _save(p, data)
-    print(f"追加しました: {args.id}")
-    if gen:
-        print(f"パスワード（この 1 回だけ表示）: {pw}")
-    return 0
+    return k[:8]
 
 
-def _mutate(args, fn, msg: str) -> int:
+def set_password(ident: str, password: str) -> str:
     p = _path()
     data = _load(p)
-    u = _find(data, args.id)
-    if not u:
-        raise SystemExit(f"{args.id} は管理ファイルにありません（config/members.json のユーザーはここから変更できません）")
-    fn(data, u)
+    u = _resolve(data, ident)
+    if re.fullmatch(r"[A-Za-z0-9._@-]{3,64}", (ident or "").strip()) and not re.fullmatch(r"[0-9a-f]{8}", (ident or "").strip()):
+        check_password_rules(ident, password)
+    else:
+        check_password_rules("", password)
+    u.update(_hash(password))
+    u["updated_at"] = _now()
     _save(p, data)
-    print(msg.format(id=args.id))
-    return 0
+    return str(u["idk"])[:8]
 
 
-def cmd_passwd(args) -> int:
-    pw, gen = _get_password(args, args.id)
-
-    def f(d, u):
-        u.update(hash_password(pw))
-        u["updated_at"] = _now()
-
-    rc = _mutate(args, f, "パスワードを変更しました: {id}")
-    if gen:
-        print(f"パスワード（この 1 回だけ表示）: {pw}")
-    return rc
+def set_enabled(ident: str, on: bool) -> str:
+    p = _path()
+    data = _load(p)
+    u = _resolve(data, ident)
+    u["enabled"] = bool(on)
+    u["updated_at"] = _now()
+    _save(p, data)
+    return str(u["idk"])[:8]
 
 
-def cmd_rename(args) -> int:
-    def f(d, u):
-        u["name"] = args.name
-        u["updated_at"] = _now()
-
-    return _mutate(args, f, "表示名を変更しました: {id}")
-
-
-def _set_enabled(on: bool):
-    def run(args) -> int:
-        def f(d, u):
-            u["enabled"] = on
-            u["updated_at"] = _now()
-
-        return _mutate(args, f, ("有効にしました: {id}" if on else "無効にしました（ログイン中のセッションも使えなくなります）: {id}"))
-
-    return run
+def remove_user(ident: str) -> str:
+    p = _path()
+    data = _load(p)
+    u = _resolve(data, ident)
+    data["users"].remove(u)
+    _save(p, data)
+    return str(u["idk"])[:8]
 
 
-def cmd_remove(args) -> int:
-    return _mutate(args, lambda d, u: d["users"].remove(u), "削除しました: {id}")
+# ── CLI ──
+def _get_password(args, user_id: str) -> tuple[str, bool]:
+    if args.generate:
+        return secrets.token_urlsafe(12), True
+    if args.password is not None:
+        return args.password, False
+    if args.password_stdin:
+        return sys.stdin.readline().rstrip("\n"), False
+    pw = getpass.getpass("パスワード: ")
+    if getpass.getpass("もう一度: ") != pw:
+        raise UserError("パスワードが一致しません")
+    return pw, False
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sp = ap.add_subparsers(dest="cmd", required=True)
-    sp.add_parser("list").set_defaults(fn=cmd_list)
-    for name, fn in (("add", cmd_add), ("passwd", cmd_passwd)):
+    sp.add_parser("list")
+    for name in ("add", "passwd"):
         s = sp.add_parser(name)
         s.add_argument("id")
-        if name == "add":
-            s.add_argument("--name")
         g = s.add_mutually_exclusive_group()
         g.add_argument("--password", help="パスワードを指定する（シェルの履歴に残る）。10 文字以上")
         g.add_argument("--generate", action="store_true", help="ランダムなパスワードを作って 1 回だけ表示")
         g.add_argument("--password-stdin", action="store_true", help="標準入力 1 行目をパスワードにする")
-        s.set_defaults(fn=fn)
-    s = sp.add_parser("rename"); s.add_argument("id"); s.add_argument("--name", required=True); s.set_defaults(fn=cmd_rename)
-    for name, fn in (("disable", _set_enabled(False)), ("enable", _set_enabled(True)), ("remove", cmd_remove)):
-        s = sp.add_parser(name); s.add_argument("id"); s.set_defaults(fn=fn)
+    for name in ("disable", "enable", "remove"):
+        sp.add_parser(name).add_argument("id")
     a = ap.parse_args(argv)
-    return a.fn(a)
+    try:
+        if a.cmd == "list":
+            rows = list_users()
+            if not rows:
+                print("ユーザーはいません")
+            for r in rows:
+                print(f"{r['fp']:<9}{r['source']:<9}{'有効' if r['enabled'] else '無効':<5}{r['created_at'] or '-':<27}{r['label'] or ''} {r['note']}".rstrip())
+            return 0
+        if a.cmd in ("add", "passwd"):
+            pw, gen = _get_password(a, a.id)
+            fp = create_user(a.id, pw) if a.cmd == "add" else set_password(a.id, pw)
+            print(("追加しました" if a.cmd == "add" else "パスワードを変更しました") + f"（指紋 {fp}）")
+            if gen:
+                print(f"パスワード（この 1 回だけ表示）: {pw}")
+            return 0
+        fn = {"disable": lambda i: set_enabled(i, False), "enable": lambda i: set_enabled(i, True), "remove": remove_user}[a.cmd]
+        fp = fn(a.id)
+        print({"disable": "無効にしました（ログイン中のセッションも使えなくなります）", "enable": "有効にしました", "remove": "削除しました"}[a.cmd] + f"（指紋 {fp}）")
+        return 0
+    except UserError as e:
+        print(str(e), file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

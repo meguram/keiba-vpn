@@ -10,6 +10,7 @@ const DEV_ONLY_PAGES = [
   "/server-logs",
   "/scrape-upcoming",
   "/betting",
+  "/admin/users",
   "/track-speed/dev",
 ];
 
