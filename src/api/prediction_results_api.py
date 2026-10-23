@@ -183,3 +183,33 @@ async def prediction_results_news(limit: int = Query(6, ge=1, le=20)):
                     break
         return build_news(limit)
     return JSONResponse(await asyncio.to_thread(lambda: _cached(("news", limit), _run)))
+
+def _bets_block(s: dict) -> dict:
+    b = s["bets"]
+    return {"invested": b["invested"], "returned": b["returned"], "roi": pr.rate(b["returned"], b["invested"]),
+            "races_bought": b["races_bought"], "races_hit": b["races_hit"], "estimated_races": b["estimated_races"]}
+
+
+@router.get("/api/prediction-results/bets-summary", response_class=JSONResponse)
+async def prediction_results_bets_summary(date: str = Query(..., pattern=r"^\d{8}$")):
+    """レース一覧用: 指定日の各レースの仮想購入の結果（的中フラグ）と、その日・その週の回収率。会員限定（tier.py）。"""
+    def _run():
+        _ensure_dev_day(date)
+        doc = pr.read_day(date) or {}
+        wk_lo, wk_hi = pr.week_range(date)
+        wk = pr.period_summary("week", date)
+        day = pr.period_summary("day", date)
+        races = {}
+        for r in doc.get("races") or []:
+            b = r.get("bets") or {}
+            tb = b.get("total_bet") or 0
+            if not r.get("included") or not tb:
+                continue
+            ret = b.get("total_return") or 0
+            races[r["race_id"]] = {"total_bet": tb, "total_return": round(ret), "hit": ret > 0, "roi": pr.rate(ret, tb), "estimated": bool(b.get("estimated"))}
+        return {"date": date, "label": _label(date), "week": {"from": wk_lo, "to": wk_hi, "days": wk["days"], "status": wk["status"], **_bets_block(wk["summary"])},
+                "day": {"status": day["status"], **_bets_block(day["summary"])}, "races": races,
+                "note": "推奨馬券を、保存済みの最新オッズで購入したとみなした仮想購入（払戻は確定払戻）。実際の購入ではありません。"}
+    return JSONResponse(await asyncio.to_thread(lambda: _cached(("bets", date), _run)))
+
+

@@ -11,6 +11,8 @@ import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates } from "@/lib/mock";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { MemberUpgradeModal } from "@/components/upgrade/MemberUpgradeModal";
 import { formatMD, todayJst, weekdayOf, WEEKDAY_JA } from "@/lib/weekDates";
+import { LEVEL_STYLE, useRaceValues, valueTitle, type RaceValue } from "@/lib/raceValue";
+import { roiText, useBetsSummary, yen, type BetsSummary, type RaceBet } from "@/lib/betsSummary";
 
 /* レース一覧（過去の開催日ごと・開催場ごと）。未来の開催はここには出さない（今日まで。今日が開催日ならその日は含める）。
    データは GCS/ホストの開催日別一覧（/api/scrape-dates と /api/race-list/<日付>）。DB（/api/v1/races）は使わない:
@@ -62,7 +64,30 @@ function kaiNichi(raceId: string): string {
   return kai && nichi ? `${kai}回 ${nichi}日目` : "";
 }
 
-function VenueBlock({ venue, rows }: { venue: string; rows: Row[] }) {
+/** 日・週の回収率の帯（有料会員のみ）。仮想購入＝推奨馬券を保存済みの最新オッズで買ったとみなした結果 */
+function RoiBar({ b }: { b: BetsSummary }) {
+  const cell = (label: string, x: { roi: number | null; invested: number; returned: number; races_bought: number; races_hit: number }, sub?: string) => (
+    <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+      <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{label}{sub ? <span style={{ marginLeft: 6 }}>{sub}</span> : null}</div>
+      {x.races_bought > 0 ? (
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: (x.roi ?? 0) >= 1 ? "#4ade80" : "#f87171" }}>{roiText(x.roi)}</span>
+          <span style={{ fontSize: 12, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{yen(x.invested)} → {yen(x.returned)}・的中 {x.races_hit}/{x.races_bought}R</span>
+        </div>
+      ) : <div style={{ fontSize: 13, color: "var(--text-dim)", padding: "4px 0" }}>集計できる購入がありません</div>}
+    </div>
+  );
+  const w = b.week;
+  return (
+    <section aria-label="推奨馬券の回収率" title={b.note} style={{ display: "flex", gap: 20, flexWrap: "wrap", padding: "10px 14px", marginBottom: 12, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12 }}>
+      {cell(`この日の回収率（${b.label}）`, b.day, b.day.status === "final" ? "" : "暫定")}
+      {cell(`この週の回収率（${formatMD(w.from)}〜${formatMD(w.to)}）`, w, w.status === "final" ? `${w.days.length}日分` : `${w.days.length}日分・暫定`)}
+      <div style={{ flexBasis: "100%", fontSize: 10, color: "var(--text-dim)" }}>推奨馬券の仮想購入（保存済みの最新オッズで購入したとみなし、払戻は確定払戻）。実際の購入ではありません。</div>
+    </section>
+  );
+}
+
+function VenueBlock({ venue, rows, values, bets }: { venue: string; rows: Row[]; values: Map<string, RaceValue>; bets: Record<string, RaceBet> | null }) {
   const sorted = [...rows].sort((a, b) => a.round - b.round);
   const g = sorted.filter((r) => r.grade && GRADES.has(r.grade)).length;
   const cond = sorted.find((r) => r.track_condition)?.track_condition;
@@ -78,15 +103,20 @@ function VenueBlock({ venue, rows }: { venue: string; rows: Row[] }) {
       <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
         {sorted.map((r) => {
           const isG = !!r.grade && GRADES.has(r.grade);
+          const v = values.get(r.race_id);
+          const lv = v && v.level !== "none" ? v.level : null;       // 買い目の推奨度（有料会員のみ取得できる）
+          const ls = lv ? LEVEL_STYLE[lv] : null;
+          const bet = bets?.[r.race_id];
+          const hit = !!bet?.hit;
           return (
-            <li key={r.race_id} style={{ borderBottom: "1px solid var(--border)" }}>
+            <li key={r.race_id} style={{ borderBottom: "1px solid var(--border)", borderLeft: ls && lv !== "pass" ? `3px solid ${ls.border}` : "3px solid transparent", background: hit ? "rgba(251,191,36,0.10)" : undefined }}>
               <PendingLink
                 href={`/race/${r.race_id}`}
                 warm={[`/api/race/${r.race_id}`, `/api/race/${r.race_id}/predictions`]}
-                title={`${venue} ${r.round}R ${r.race_name}`}
+                title={`${venue} ${r.round}R ${r.race_name}${v ? `\n${valueTitle(v)}` : ""}${bet ? `\n仮想購入 ${yen(bet.total_bet)} → ${yen(bet.total_return)}（回収率 ${roiText(bet.roi)}）${bet.hit ? " 的中" : " 不的中"}` : ""}`}
                 style={{ display: "grid", gridTemplateColumns: "34px 44px 1fr auto", alignItems: "center", gap: 10, padding: "8px 14px", textDecoration: "none", color: "var(--text)", background: isG ? "rgba(251,191,36,0.06)" : undefined }}
               >
-                <span style={{ background: "#3b82f6", color: "#fff", borderRadius: 6, textAlign: "center", fontWeight: 700, fontSize: 13, padding: "3px 0" }}>{r.round}</span>
+                <span style={{ background: lv === "hot" ? ls!.bg : "#3b82f6", boxShadow: lv === "hot" ? ls!.glow : undefined, color: "#fff", borderRadius: 6, textAlign: "center", fontWeight: 700, fontSize: 13, padding: "3px 0" }}>{r.round}</span>
                 <span style={{ fontSize: 12, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{r.start_time ?? "—"}</span>
                 <span style={{ minWidth: 0 }}>
                   <span style={{ fontSize: 14, fontWeight: isG ? 700 : 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-block", maxWidth: "100%", verticalAlign: "middle" }}>{r.race_name}</span>
@@ -94,9 +124,15 @@ function VenueBlock({ venue, rows }: { venue: string; rows: Row[] }) {
                   {!isG && (r.grade === "OP" || r.grade === "L") && <span style={{ marginLeft: 6, fontSize: 10, color: "var(--text-dim)", border: "1px solid var(--border)", borderRadius: 4, padding: "0 5px" }}>{r.grade}</span>}
                   <span style={{ display: "block", fontSize: 11, color: "var(--text-dim)" }}>
                     {[course(r), r.entries_count ? `${r.entries_count}頭` : ""].filter(Boolean).join(" · ")}
+                    {ls && lv !== "pass" && <span style={{ marginLeft: 8, color: ls.border, fontWeight: 700 }}>{lv === "hot" ? "★ " : ""}{v?.tier?.label ?? ls.label}</span>}
                   </span>
                 </span>
-                {r.has_result && <span style={{ fontSize: 10, color: "#4ade80", border: "1px solid rgba(74,222,128,0.4)", borderRadius: 4, padding: "1px 6px", marginRight: 18 }}>結果</span>}
+                {(r.has_result || bet) && (
+                  <span style={{ display: "flex", alignItems: "center", gap: 6, marginRight: 18 }}>
+                    {hit && <span title={`推奨馬券が的中（仮想購入 ${yen(bet!.total_bet)} → ${yen(bet!.total_return)}）`} style={{ fontSize: 11, fontWeight: 800, color: "#1a1204", background: "linear-gradient(135deg,#fde68a,#f59e0b)", borderRadius: 4, padding: "1px 7px", whiteSpace: "nowrap" }}>的中 {roiText(bet!.roi)}</span>}
+                    {r.has_result && <span style={{ fontSize: 10, color: "#4ade80", border: "1px solid rgba(74,222,128,0.4)", borderRadius: 4, padding: "1px 6px" }}>結果</span>}
+                  </span>
+                )}
               </PendingLink>
             </li>
           );
@@ -120,6 +156,8 @@ export default function RacesPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const { isMember, loading: authLoading } = useAuthStatus();
   const today = todayJst();
+  const values = useRaceValues(date);          // 買い目の推奨度（有料会員のみ）
+  const betsSummary = useBetsSummary(date);    // 推奨馬券の的中・日と週の回収率（有料会員のみ）
 
   /* 開催日の一覧（過去 30 日。今日が開催日なら今日を含む）。古い日はカレンダーから選ぶ。初期は『直近の開催日』（?date= があればそれ。未来なら直近に切り替える） */
   useEffect(() => {
@@ -230,6 +268,7 @@ export default function RacesPage() {
                 <span style={{ color: "var(--text)", fontWeight: 700 }}>{date.slice(0, 4)}年{formatMD(date)}（{wd}）</span> — {byVenue.map(([v, r]) => `${v} ${r.length}R`).join(" ／ ") || "開催なし"}
               </div>
             )}
+            {betsSummary && <RoiBar b={betsSummary} />}
             {error && (
               <div role="alert" style={{ color: "var(--err)", fontSize: 13, padding: "10px 0" }}>
                 ⚠️ {error}
@@ -242,7 +281,7 @@ export default function RacesPage() {
             )}
 
             <div className="races-venues" style={{ ["--cols" as string]: Math.min(Math.max(byVenue.length, 1), 3) }}>
-              {byVenue.map(([v, list]) => <VenueBlock key={v} venue={v} rows={list} />)}
+              {byVenue.map(([v, list]) => <VenueBlock key={v} venue={v} rows={list} values={values} bets={betsSummary?.races ?? null} />)}
             </div>
           </div>
         </div>

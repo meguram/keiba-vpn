@@ -497,7 +497,12 @@ export default function RaceDetailPage() {
   });
 
   /* ── レース結果 ── */
-  const resultEntries = [...(rd?.race_result?.entries ?? [])].sort((a, b) => (Number(a.finish_position ?? a.position ?? 99)) - (Number(b.finish_position ?? b.position ?? 99)));
+  // 着順が数字で取れない馬（取消・除外・中止など）は一番下へ。数字の着順は小さい順、同じ並びのものは馬番順
+  const finishKey = (e: { finish_position?: number | string; position?: number | string }) => {
+    const n = Number(e.finish_position ?? e.position);
+    return Number.isFinite(n) && n > 0 ? n : 10_000;
+  };
+  const resultEntries = [...(rd?.race_result?.entries ?? [])].sort((a, b) => finishKey(a) - finishKey(b) || (Number(a.horse_number) || 99) - (Number(b.horse_number) || 99));
   const allTimes = resultEntries.map((e) => parseTimeSec((e.time ?? e.finish_time) as string | undefined)).filter((v): v is number => v != null && v > 0);
   const bestTime = allTimes.length ? Math.min(...allTimes) : null;
   const fieldSize = resultEntries.length;
