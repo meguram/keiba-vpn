@@ -696,7 +696,7 @@ export default function RaceDetailPage() {
             </div>
           )}
 
-      {forecastHorses.length > 0 && !lock && <PositionForecast horses={forecastHorses} pace={predData?.pace_forecast} gate={predData?.gate_bias} />}
+      {forecastHorses.length > 0 && !lock && <PositionForecast horses={forecastHorses} pace={predData?.pace_forecast} gate={predData?.gate_bias} direction={rd?.direction} />}
 
       {sortedPreds.length > 0 ? (
         <div style={{ overflowX: "auto" }}>

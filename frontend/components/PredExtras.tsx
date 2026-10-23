@@ -123,9 +123,11 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 const sec = (v?: number) => (v != null ? v.toFixed(1) : "—");
 
 export function PredExtras({
-  raceId, entries, pace: paceApi, paceUnified, gate, steeplechase, lapForecast, paceType, scenarioForecast,
+  raceId, entries, pace: paceApi, paceUnified, gate, steeplechase, lapForecast, paceType, scenarioForecast, direction,
 }: {
   raceId: string;
+  /** コースの回り（右／左／直）。展開図の向きに使う */
+  direction?: string | null;
   entries: ExtraEntry[];
   pace?: PaceForecast | null;
   paceUnified?: PaceUnified | null;
@@ -244,6 +246,7 @@ export function PredExtras({
         {hasPos || pace || pt ? (
           <PositionForecast
             embedded
+            direction={direction}
             horses={horses}
             pace={pace}
             paceType={pt}

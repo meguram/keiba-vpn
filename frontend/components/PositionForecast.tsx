@@ -158,7 +158,9 @@ function HorseList({ horses, pace, td, narrow, sel, onPick, detail, fitMap }: { 
   );
 }
 
-export function PositionForecast({ horses, pace, gate, td, tdNote, embedded, paceType, fitMap }: {
+export function PositionForecast({ horses, pace, gate, td, tdNote, embedded, paceType, fitMap, direction }: {
+  /** コースの回り（右／左／直）。左回りは、スタンドから見て馬が左→右に走るので、図の前後を左右反転する（内ラチは上のまま） */
+  direction?: string | null;
   /** 展開タイプ（pace_type）。あれば見出しとパネルをこれで出す */
   paceType?: PaceType | null;
   /** 馬ごとの展開別の有利さ（scenario_forecast から）。あれば『展開』列を置き換える */
@@ -199,6 +201,9 @@ export function PositionForecast({ horses, pace, gate, td, tdNote, embedded, pac
   const tone = PACE_TONE[PACE_TONE[chipLevel] ? chipLevel : "unknown"];
   const gtone = gate ? GATE_TONE[gate.level] : null;
   const TOP = 24, BOTTOM = 20;
+  const leftTurn = direction === "左";      // 右回り・直線・不明は従来の向き（先頭が左）
+  const mx = (x: number) => (leftTurn ? (w || 600) - x : x);      // 前後の位置（x）を回りに合わせて反転
+  const dirLabel = direction === "右" ? "右回り" : direction === "左" ? "左回り" : direction === "直" ? "直線" : "";
   const toggle = (no: number) => { setSelFrom("chart"); setSel((s) => (s === no ? null : no)); };
   const toggleList = (no: number) => { setSelFrom("list"); setSel((s) => (s === no ? null : no)); };
   const detailOf = (h: ForecastHorse) => <Detail h={h} gate={gate} td={td?.get(h.no)} scen={fitMap?.get(h.no) ?? null} fit={h.f ? paceFit(h.f.style_code, pace?.level, td?.get(h.no)?.ease_pct ?? null) : null} />;
@@ -252,35 +257,35 @@ export function PositionForecast({ horses, pace, gate, td, tdNote, embedded, pac
         <div>
           <div ref={box} style={{ position: "relative", height: hasGate ? TOP + gated.height + BOTTOM + 6 : 24 + rows * (CHIP + 4) + 8, borderRadius: 8, overflow: "hidden", background: "rgba(15,23,42,0.5)", border: "1px solid var(--border)" }}>
             {STYLE_LANES.map((l, i) => (
-              <div key={l.code} style={{ position: "absolute", top: 0, bottom: 0, left: `${l.from * 100}%`, width: `${(l.to - l.from) * 100}%`, background: i % 2 ? "rgba(148,163,184,0.06)" : "transparent", borderLeft: i ? "1px dashed rgba(148,163,184,0.25)" : "none" }}>
-                <span style={{ position: "absolute", top: 4, left: 8, fontSize: 11, fontWeight: 700, color: "var(--text-dim)" }}>{l.label}</span>
+              <div key={l.code} style={{ position: "absolute", top: 0, bottom: 0, left: `${(leftTurn ? 1 - l.to : l.from) * 100}%`, width: `${(l.to - l.from) * 100}%`, background: i % 2 ? "rgba(148,163,184,0.06)" : "transparent", ...(leftTurn ? { borderRight: i ? "1px dashed rgba(148,163,184,0.25)" : "none" } : { borderLeft: i ? "1px dashed rgba(148,163,184,0.25)" : "none" }) }}>
+                <span style={{ position: "absolute", top: 4, ...(leftTurn ? { right: 8 } : { left: 8 }), fontSize: 11, fontWeight: 700, color: "var(--text-dim)" }}>{l.label}</span>
               </div>
             ))}
             {hasGate && (
               <>
                 <div aria-hidden style={{ position: "absolute", left: 0, right: 0, top: TOP - 3, borderTop: "2px solid #e5e7eb" }} />
-                <span style={{ position: "absolute", right: 8, top: 4, fontSize: 11, fontWeight: 800, color: "#e5e7eb" }}>━ 内ラチ</span>
+                <span style={{ position: "absolute", ...(leftTurn ? { left: 8 } : { right: 8 }), top: 4, fontSize: 11, fontWeight: 800, color: "#e5e7eb" }}>━ 内ラチ</span>
                 <div aria-hidden style={{ position: "absolute", left: 0, right: 0, bottom: BOTTOM - 2, borderTop: "1px dashed rgba(148,163,184,0.45)" }} />
-                <span style={{ position: "absolute", right: 8, bottom: 3, fontSize: 11, fontWeight: 700, color: "var(--text-dim)" }}>外 ▼</span>
+                <span style={{ position: "absolute", ...(leftTurn ? { left: 8 } : { right: 8 }), bottom: 3, fontSize: 11, fontWeight: 700, color: "var(--text-dim)" }}>外 ▼</span>
               </>
             )}
             {hasGate
               ? gated.placed.map(({ h, x, y }) => (
-                  <div key={h.no} style={{ position: "absolute", top: TOP + y, left: x - CHIP / 2 }}>
+                  <div key={h.no} style={{ position: "absolute", top: TOP + y, left: mx(x) - CHIP / 2 }}>
                     <Chip h={h} ease={easeOf(h.no)} on={sel === h.no} onClick={() => toggle(h.no)} />
                   </div>
                 ))
               : placedOld.map(({ h, x, row }) => (
-                  <div key={h.no} style={{ position: "absolute", top: 24 + row * (CHIP + 4), left: x - CHIP / 2 }}>
+                  <div key={h.no} style={{ position: "absolute", top: 24 + row * (CHIP + 4), left: mx(x) - CHIP / 2 }}>
                     <Chip h={h} ease={easeOf(h.no)} on={sel === h.no} onClick={() => toggle(h.no)} />
                   </div>
                 ))}
             {!known.length && <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", fontSize: 12, color: "var(--text-dim)" }}>過去走の通過順位が取れた馬がいません</div>}
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-dim)", marginTop: 4, gap: 8 }}>
-            <span>◀ 先頭（前）</span>
-            <span style={{ textAlign: "center" }}>{hasGate ? "丸の中は馬番・枠色。横は前後の位置取り、縦は上がラチ寄り（内枠）・下が外枠" : "丸の中は馬番・枠色。近い馬は上下に重ねています"}</span>
-            <span>後方（後ろ） ▶</span>
+            <span>{leftTurn ? "◀ 後方（後ろ）" : "◀ 先頭（前）"}</span>
+            <span style={{ textAlign: "center" }}>{dirLabel && <b style={{ color: "var(--text)", marginRight: 6 }}>{dirLabel}（スタンドから見た図）</b>}{hasGate ? "丸の中は馬番・枠色。横は前後の位置取り、縦は上がラチ寄り（内枠）・下が外枠" : "丸の中は馬番・枠色。近い馬は上下に重ねています"}</span>
+            <span>{leftTurn ? "先頭（前） ▶" : "後方（後ろ） ▶"}</span>
           </div>
         </div>
       )}
