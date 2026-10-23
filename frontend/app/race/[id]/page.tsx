@@ -20,6 +20,7 @@ import { useNarrow } from "@/components/RaceStrip";
 import { raceExists } from "@/lib/raceExists";
 import { PositionForecast } from "@/components/PositionForecast";
 import type { ForecastHorse, GateBias, PaceForecast, PositionForecast as PosFc } from "@/lib/positionForecast";
+import { turnOf } from "@/lib/courseTurn";
 
 const SHOW_MEGU = featureEnabled("megu-index");
 const SHOW_TRACKING = featureEnabled("tracking-difficulty");
@@ -696,7 +697,7 @@ export default function RaceDetailPage() {
             </div>
           )}
 
-      {forecastHorses.length > 0 && !lock && <PositionForecast horses={forecastHorses} pace={predData?.pace_forecast} gate={predData?.gate_bias} direction={rd?.direction} />}
+      {forecastHorses.length > 0 && !lock && <PositionForecast horses={forecastHorses} pace={predData?.pace_forecast} gate={predData?.gate_bias} direction={turnOf(rd?.direction, rd?.venue, rd?.surface, rd?.distance)} />}
 
       {sortedPreds.length > 0 ? (
         <div style={{ overflowX: "auto" }}>

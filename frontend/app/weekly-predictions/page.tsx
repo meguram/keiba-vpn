@@ -32,6 +32,8 @@ import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/l
 
 const SHOW_HORSE_LINK = featureEnabled("horse-detail");
 /* ── 型 ── */
+import { turnOf } from "@/lib/courseTurn";
+
 type RaceItem = {
   direction?: string;
   race_id: string;
@@ -735,7 +737,7 @@ function RacePanel({
           <MeguTable preds={preds} bench={pred.class_benchmark} meta={pred.expected_megu_meta} today={{ surface: race.surface, distance: Number(race.distance) || undefined }} />
         )}
         {pred && !failed && tab === "predict" && !locked && preds.length > 0 && (
-          <PredExtras key={race.race_id} raceId={race.race_id} entries={preds} pace={pred.pace_forecast} paceUnified={pred.pace_unified} lapForecast={pred.lap_forecast} paceType={pred.pace_type} scenarioForecast={pred.scenario_forecast} gate={pred.gate_bias} steeplechase={(race.surface ?? "").startsWith("障")} direction={race.direction} />
+          <PredExtras key={race.race_id} raceId={race.race_id} entries={preds} pace={pred.pace_forecast} paceUnified={pred.pace_unified} lapForecast={pred.lap_forecast} paceType={pred.pace_type} scenarioForecast={pred.scenario_forecast} gate={pred.gate_bias} steeplechase={(race.surface ?? "").startsWith("障")} direction={turnOf(race.direction, race.venue, race.surface, race.distance)} />
         )}
       </div>
     </section>
