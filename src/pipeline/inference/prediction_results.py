@@ -533,13 +533,28 @@ def period_summary(scope: str, date: str, base: Path | None = None) -> dict:
             "notes": (docs[-1].get("notes") if docs else [])}
 
 
+def race_level_marks(records: list[dict]) -> dict[str, dict[str, int]]:
+    """印ごとのレース単位の集計（馬数ではなくレース数）: その印の馬が着順つきで出たレース数 races と、そのうち 1 頭でも 3 着以内に来たレース数 in3。"""
+    out = {m: {"races": 0, "in3": 0} for m in MARKS}
+    for r in records:
+        if not r.get("included"):
+            continue
+        for m in MARKS:
+            fins = [p.get("finish") for p in (r.get("marks") or {}).get(m, []) if p.get("finish") is not None]
+            if fins:
+                out[m]["races"] += 1
+                out[m]["in3"] += int(min(fins) <= 3)
+    return out
+
+
 def range_summary(lo: str, hi: str, base: Path | None = None) -> dict:
-    """任意の期間（YYYYMMDD の両端を含む）の合算。日次の確定/暫定の状態も持つ。"""
+    """任意の期間（YYYYMMDD の両端を含む）の合算。日次の確定/暫定の状態も持つ。race_marks は保存済みのレース記録から数えたレース単位の集計。"""
     days = [d for d in list_days(base) if lo <= d <= hi]
     docs = [x for x in (read_day(d, base) for d in days) if x]
     return {"from": lo, "to": hi, "days": [x["date"] for x in docs],
             "status": "final" if docs and all(x["status"] == "final" for x in docs) else "provisional",
-            "summary": merge_summaries([x["summary"] for x in docs]) if docs else summarize([])}
+            "summary": merge_summaries([x["summary"] for x in docs]) if docs else summarize([]),
+            "race_marks": race_level_marks([r for x in docs for r in (x.get("races") or [])])}
 
 
 MARK_ORDER = (("honmei", "◎"), ("pair", "○"), ("show_val", "▲"), ("star", "★"), ("kesi", "消"))
@@ -575,7 +590,9 @@ def mark_card(today: _date, base: Path | None = None) -> dict:
         for m, sym in MARK_ORDER:
             c = (s.get("marks") or {}).get(m) or _blank_mark()
             n = c["n"]
-            marks.append({"avg_popularity": round(c.get("pop_sum", 0) / c["pop_n"], 2) if c.get("pop_n") else None,
+            rl = (r.get("race_marks") or {}).get(m) or {"races": 0, "in3": 0}
+            marks.append({"races_with": rl["races"], "races_in3": rl["in3"], "races_in3_rate": rate(rl["in3"], rl["races"]),
+                          "avg_popularity": round(c.get("pop_sum", 0) / c["pop_n"], 2) if c.get("pop_n") else None,
                           "avg_odds": round(c.get("odds_sum", 0) / c["odds_n"], 1) if c.get("odds_n") else None,
                           "win_avg_popularity": round(c.get("w_pop_sum", 0) / c["w_pop_n"], 2) if c.get("w_pop_n") else None,
                           "win_avg_odds": round(c.get("w_odds_sum", 0) / c["w_odds_n"], 1) if c.get("w_odds_n") else None,

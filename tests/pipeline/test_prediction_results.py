@@ -86,7 +86,7 @@ def test_build_day_final_counts_mark_finish_distribution_and_roi():
     doc = pr.build_day("20261018", _storage())
     s = doc["summary"]
     assert doc["status"] == "final" and s["races_settled"] == 1
-    assert s["marks"]["honmei"] == {"n": 1, "f1": 0, "f2": 1, "f3": 0, "f4p": 0}          # ◎(1番)は 2 着
+    assert {k: s["marks"]["honmei"][k] for k in ("n", "f1", "f2", "f3", "f4p")} == {"n": 1, "f1": 0, "f2": 1, "f3": 0, "f4p": 0}          # ◎(1番)は 2 着
     assert s["marks"]["star"]["f1"] == 1 and s["marks"]["pair"]["f3"] == 1               # ★(5番)は 1 着、○(2番)は 3 着
     assert s["top1"]["f2"] == 1
     b = s["bets"]

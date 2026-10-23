@@ -110,3 +110,17 @@ def test_backfill_recounts_win_averages_without_reading_results(monkeypatch):
     h = doc["summary"]["marks"]["honmei"]
     assert (h["f1"], h["w_pop_sum"], h["w_odds_sum"]) == (1, 3, 6.0)
     assert bf.backfill_day(doc, None) == 0                                                    # 2 回目は何もしない
+
+
+def test_race_level_counts_races_not_horses(tmp_path):
+    def race(fins):
+        return {"included": True, "marks": {"kesi": [{"finish": f} for f in fins]}}
+    # 3 レース: R1 は消が 2 頭とも着外、R2 は 1 頭が 2 着と 1 頭 5 着（1 レースとして数える）、R3 は消の馬が 3 頭中 2 頭が馬券内
+    out = pr.race_level_marks([race([8, 9]), race([2, 5]), race([1, 3, 7]), {"included": False}, {"included": True, "marks": {"kesi": []}}])
+    assert out["kesi"] == {"races": 3, "in3": 2}
+    assert out["honmei"] == {"races": 0, "in3": 0}
+    doc = _doc("20261010", {"kesi": (1, 1, 0, 3)})
+    doc["races"] = [race([8, 9]), race([2, 5])]
+    (tmp_path / "20261010.json").write_text(json.dumps(doc), encoding="utf-8")
+    k = next(m for m in pr.mark_card(date(2026, 10, 13), tmp_path)["periods"][0]["marks"] if m["key"] == "kesi")
+    assert (k["races_with"], k["races_in3"], k["races_in3_rate"]) == (2, 1, 0.5)

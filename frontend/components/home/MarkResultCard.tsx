@@ -10,6 +10,7 @@ type MarkRow = {
   win_rate: number | null; top2_rate: number | null; top3_rate: number | null;
   avg_popularity: number | null; avg_odds: number | null;
   win_avg_popularity: number | null; win_avg_odds: number | null;     // 1着だったときの平均人気・平均オッズ
+  races_with: number; races_in3: number; races_in3_rate: number | null;     // その印の馬が出たレース数と、そのうち1頭でも馬券内（3着以内）に来たレース数
 };
 type Period = { key: string; label: string; from: string; to: string; data_from: string | null; data_to: string | null; days: number; races: number; status: string; marks: MarkRow[] };
 type Card = { as_of: string; year: number; periods: Period[] };
@@ -77,6 +78,7 @@ function Row({ m }: { m: MarkRow }) {
             </div>
             <div className="mrc-sub">複勝率 <b>{pct(m.top3_rate)}</b>{avg ? <>　平均 <b>{avg}</b></> : null}</div>
             {winAvg && <div className="mrc-sub">1着時 平均 <b>{winAvg}</b></div>}
+            {m.key === "kesi" && m.races_with > 0 && <div className="mrc-sub">馬券内に来たレース <b>{m.races_in3}</b> / {m.races_with}R（<b>{pct(m.races_in3_rate)}</b>）</div>}
           </>
         )}
       </div>
