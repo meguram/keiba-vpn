@@ -29,6 +29,13 @@ export function Nav() {
 
   const isHome = path === "/";
 
+  const logout = async () => {
+    try {
+      await fetch("/api/v1/auth/logout", { method: "POST", credentials: "include" });
+    } catch { /* 通信失敗でも画面は更新する（Cookie が残っていれば、まだログイン中と表示される） */ }
+    window.location.href = "/";
+  };
+
   return (
     <>
       {/* ハニーポット: 人間には見えず押せない（画面外・読み上げ対象外・フォーカス不可）。機械的にリンクをたどる収集プログラムだけが踏む。
@@ -112,7 +119,23 @@ export function Nav() {
           }}>
             {loggedIn ? `👤 ${userName}` : "ゲスト"}
           </span>
-          {!loggedIn && (
+          {loggedIn ? (
+            <button type="button" onClick={logout} className="hit44" style={{
+              fontSize: 12,
+              color: "#f0883e",
+              background: "transparent",
+              cursor: "pointer",
+              padding: "4px 12px",
+              borderRadius: 6,
+              border: "1px solid rgba(240,136,62,0.35)",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(240,136,62,0.1)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+            >
+              ログアウト
+            </button>
+          ) : (
             <Link href="/login" className="hit44" style={{
               fontSize: 12,
               color: "#58a6ff",
