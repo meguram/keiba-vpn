@@ -1005,7 +1005,7 @@ async def login_submit(request: Request):
 
     if user_id:
         if verify_member_login(user_id, password):
-            return create_session_response(redirect_to=next_url, request=request, role=ROLE_MEMBER)
+            return create_session_response(redirect_to=next_url, request=request, role=ROLE_MEMBER, uid=user_id)
     elif verify_password(password):
         return create_session_response(redirect_to=next_url, request=request)
 

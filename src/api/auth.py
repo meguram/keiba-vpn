@@ -59,29 +59,55 @@ ROLE_DEV = "dev"
 ROLE_MEMBER = "member"
 
 
-def _make_token(timestamp: int | None = None, role: str = ROLE_DEV) -> str:
+def _make_token(timestamp: int | None = None, role: str = ROLE_DEV, uid: str = "") -> str:
+    """セッショントークン。会員は uid（ログイン ID）も署名に含める（role:ts:uid16進:署名）。uid なしは従来形式（role:ts:署名）。"""
     ts = timestamp or int(time.time())
-    payload = f"{role}:{ts}"
+    payload = f"{role}:{ts}:{uid.encode().hex()}" if uid else f"{role}:{ts}"
     sig = _sign(payload)
     return f"{payload}:{sig}"
+
+
+def _split_token(token: str) -> tuple[str, str, str, str] | None:
+    """(role, ts, uid, sig)。形式が違えば None。uid は無ければ空。"""
+    parts = (token or "").split(":")
+    if len(parts) == 3:
+        return parts[0], parts[1], "", parts[2]
+    if len(parts) == 4:
+        try:
+            return parts[0], parts[1], bytes.fromhex(parts[2]).decode(), parts[3]
+        except ValueError:
+            return None
+    return None
 
 
 def token_role(token: str) -> str | None:
     """署名と有効期限が正しいトークンのロール（dev / member）。無効なら None。"""
     try:
-        parts = token.split(":")
-        if len(parts) != 3:
+        sp = _split_token(token)
+        if sp is None:
             return None
-        role, ts_str, sig = parts
+        role, ts_str, uid, sig = sp
         if role not in (ROLE_DEV, ROLE_MEMBER):
             return None
         ts = int(ts_str)
         if time.time() - ts > COOKIE_MAX_AGE:
             return None
-        expected = _sign(f"{role}:{ts_str}")
-        return role if hmac.compare_digest(sig, expected) else None
+        payload = f"{role}:{ts_str}:{uid.encode().hex()}" if uid else f"{role}:{ts_str}"
+        if not hmac.compare_digest(sig, _sign(payload)):
+            return None
+        if role == ROLE_MEMBER and uid and not member_active(uid):      # 無効化・削除したユーザーのセッションは使えなくする
+            return None
+        return role
     except Exception:
         return None
+
+
+def token_user(token: str) -> str:
+    """有効なトークンのログイン ID（会員のみ。開発者・従来形式・無効は空）。"""
+    if token_role(token) != ROLE_MEMBER:
+        return ""
+    sp = _split_token(token)
+    return sp[2] if sp else ""
 
 
 def _verify_token(token: str) -> bool:
@@ -176,18 +202,20 @@ def classify_session(request: Request) -> str:
     if not token:
         return "none"
     try:
-        parts = token.split(":")
-        if len(parts) != 3:
+        sp = _split_token(token)
+        if sp is None:
             return "invalid"
-        role, ts_str, sig = parts
+        role, ts_str, uid, sig = sp
         if role not in (ROLE_DEV, ROLE_MEMBER):
             return "invalid"
         ts = int(ts_str)
-        expected = _sign(f"{role}:{ts_str}")
-        if not hmac.compare_digest(sig, expected):
+        payload = f"{role}:{ts_str}:{uid.encode().hex()}" if uid else f"{role}:{ts_str}"
+        if not hmac.compare_digest(sig, _sign(payload)):
             return "invalid"
         if time.time() - ts > COOKIE_MAX_AGE:
             return "expired"
+        if role == ROLE_MEMBER and uid and not member_active(uid):
+            return "invalid"
         return "valid"
     except Exception:
         return "invalid"
@@ -200,8 +228,8 @@ def _request_is_secure(request: Request) -> bool:
     return forwarded.split(",")[0].strip().lower() == "https"
 
 
-def create_session_response(redirect_to: str = "/", request: Request | None = None, role: str = ROLE_DEV) -> RedirectResponse:
-    token = _make_token(role=role)
+def create_session_response(redirect_to: str = "/", request: Request | None = None, role: str = ROLE_DEV, uid: str = "") -> RedirectResponse:
+    token = _make_token(role=role, uid=uid)
     response = RedirectResponse(url=redirect_to, status_code=303)
     secure = _request_is_secure(request) if request is not None else False
     response.set_cookie(
@@ -241,23 +269,56 @@ def _env_on(name: str) -> bool:
     return (os.environ.get(name) or "").strip().lower() in ("1", "true", "yes", "on")
 
 
-def _load_members() -> list[dict]:
+# ユーザー管理（python -m src.scripts.ops.manage_users）が書く、git に入れないファイル。config/members.json（動作確認用）と合わせて読み、同じ ID は後者が優先
+MEMBERS_LOCAL_FILE = os.environ.get("KEIBA_MEMBERS_FILE") or os.path.join(os.path.dirname(_MEMBERS_FILE), "..", "data", "local", "auth", "members.json")
+_members_cache: dict = {"key": None, "users": []}
+
+
+def _read_users(path: str) -> list[dict]:
     import json
 
     try:
-        with open(_MEMBERS_FILE, encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             users = (json.load(f) or {}).get("users") or []
     except (OSError, ValueError):
         return []
     return [u for u in users if isinstance(u, dict) and u.get("id")]
 
 
+def _load_members() -> list[dict]:
+    """会員の一覧。ファイルの更新時刻が変わったときだけ読み直す（毎リクエストでも軽い）。"""
+    paths = [_MEMBERS_FILE, MEMBERS_LOCAL_FILE]
+    key = tuple((p, os.path.getmtime(p) if os.path.exists(p) else None) for p in paths)
+    if _members_cache["key"] != key:
+        merged: dict[str, dict] = {}
+        for p in paths:
+            for u in _read_users(p):
+                merged[str(u["id"])] = u
+        _members_cache.update(key=key, users=list(merged.values()))
+    return _members_cache["users"]
+
+
+def member_record(user_id: str) -> dict | None:
+    return next((u for u in _load_members() if u.get("id") == user_id), None)
+
+
+def member_active(user_id: str) -> bool:
+    """ログイン可能なユーザーか（存在し、enabled が false でなく、requires_env があればその環境変数が有効）。"""
+    rec = member_record(user_id)
+    return bool(rec) and rec.get("enabled", True) is not False and (not rec.get("requires_env") or _env_on(str(rec["requires_env"])))
+
+
+def member_display_name(user_id: str) -> str:
+    rec = member_record(user_id) or {}
+    return str(rec.get("name") or user_id)
+
+
 def verify_member_login(user_id: str, password: str) -> bool:
     """会員の ID・パスワードを検証する。requires_env の環境変数が有効でないアカウントは常に不可（既定オフ）。"""
     user_id = (user_id or "").strip()
     password = password or ""
-    rec = next((u for u in _load_members() if u.get("id") == user_id), None)
-    enabled = bool(rec) and (not rec.get("requires_env") or _env_on(str(rec["requires_env"])))
+    rec = member_record(user_id)
+    enabled = member_active(user_id)
     try:
         salt = bytes.fromhex(rec["salt"]) if rec else _DUMMY_SALT
         iters = int(rec.get("iterations") or 200000) if rec else 200000

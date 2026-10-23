@@ -302,7 +302,7 @@ export default function RaceDetailPage() {
   const [meguById, setMeguById] = useState<Record<string, MeguHorseData>>({});
   const [meguByNumber, setMeguByNumber] = useState<Record<string, MeguHorseData>>({});
   const [meguSource, setMeguSource] = useState<"db" | "mock">("mock");
-  const { isMember, loading: authLoading } = useAuthStatus();
+  const { isMember, isAdmin, loading: authLoading } = useAuthStatus();
   const lock = !authLoading && !isMember;      // 匿名は勝率・複勝率まで（それ以外はサーバが落としている）
   const narrow = useNarrow();
 
@@ -475,13 +475,6 @@ export default function RaceDetailPage() {
         {rd.grade && rd.grade !== "未勝利" && rd.grade !== "新馬" && (
           <span style={{ fontWeight: 700, fontSize: 13, padding: "4px 12px", borderRadius: 4, ...gradeStyle(rd.grade) }}>{rd.grade}</span>
         )}
-        <a
-          href={`https://race.netkeiba.com/race/shutuba.html?race_id=${raceId}`}
-          target="_blank" rel="noopener noreferrer"
-          style={{ fontSize: 12, color: "var(--accent)", textDecoration: "none", marginLeft: "auto" }}
-        >
-          🔗 netkeiba
-        </a>
       </div>
       <h1 style={{ fontSize: narrow ? 20 : 26, fontWeight: 700, color: "#fff", marginBottom: 8, overflowWrap: "anywhere" }}>{rd.race_name ?? raceId}</h1>
       {predData?.entries_status && <div style={{ margin: "0 0 10px" }}><EntriesStatusBadge status={predData.entries_status} /></div>}
@@ -665,7 +658,7 @@ export default function RaceDetailPage() {
 
   const PredPanel = (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+      {isAdmin && <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         <button
           style={{ background: "#1e3a5f", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.3)", padding: "7px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: predicting ? "not-allowed" : "pointer", opacity: predicting ? 0.6 : 1 }}
           disabled={predicting || predData?.provisional_entries === true}
@@ -683,7 +676,7 @@ export default function RaceDetailPage() {
         {hasPred && predData?.elapsed_sec != null && (
           <span style={{ fontSize: 11, color: "var(--text-dim)" }}>⏱ {predData.elapsed_sec}秒 / {predData.total_horses}頭</span>
         )}
-      </div>
+      </div>}
 
       {hasPred && lock && <MemberLockNote />}
       <PublicModeNote access={predData?.access} />
@@ -693,7 +686,7 @@ export default function RaceDetailPage() {
         <div style={{ marginBottom: 12, fontSize: 13, color: "var(--text-dim)", padding: "10px 14px", borderRadius: 8, background: "rgba(36,48,73,0.4)" }}>
           {predData?.provisional_entries === true
             ? "出馬表は公示の途中です。AI 予測は、出走馬と枠順が確定した前日以降に表示します。"
-            : "予測結果がありません。「AI予測を実行」で算出できます。"}
+            : isAdmin ? "予測結果がありません。「AI予測を実行」で算出できます。" : "予測結果はまだありません。"}
             </div>
           )}
 

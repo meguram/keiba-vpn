@@ -35,7 +35,7 @@ export function invalidateJson(prefix: string): void {
   for (const k of [...cache.keys()]) if (k.startsWith(prefix)) cache.delete(k);
 }
 
-export type AuthStatusJson = { logged_in?: boolean; is_admin?: boolean; is_member?: boolean };
+export type AuthStatusJson = { logged_in?: boolean; is_admin?: boolean; is_member?: boolean; user_id?: string | null; user_name?: string | null };
 
 /** ログイン状態。1 ページで Nav・フック・各画面が同時に呼んでも 1 回だけ取りに行く。 */
 export function fetchAuthStatus(): Promise<AuthStatusJson> {

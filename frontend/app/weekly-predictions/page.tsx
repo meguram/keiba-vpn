@@ -586,7 +586,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
 
       {!hasPred && (
         <p style={{ fontSize: 11, color: "var(--text-dim)", padding: "8px 10px" }}>
-          ※ {message ?? "予測未実行。数値は全て「—」です。レース詳細から「AI予測を実行」してください。"}
+          ※ {message ?? "予測はまだありません。数値は全て「—」です。"}
         </p>
       )}
     </div>

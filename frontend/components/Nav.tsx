@@ -9,20 +9,20 @@ import { USE_MOCK } from "@/lib/mock";
 export function Nav() {
   const path = usePathname();
   const [loggedIn, setLoggedIn] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [userName, setUserName] = useState("");
 
   useEffect(() => {
     if (USE_MOCK) {
       // mockモードではFlask認証不要。dev の自動ログインが有効ならログイン済み表示にする
       const auto = process.env.NEXT_PUBLIC_DEV_AUTO_LOGIN === "1";
       setLoggedIn(auto);
-      setIsAdmin(auto);
+      setUserName(auto ? "開発者" : "");
       return;
     }
     fetchAuthStatus()
       .then((d) => {
         setLoggedIn(!!d.logged_in);
-        setIsAdmin(!!d.logged_in && !!d.is_admin);
+        setUserName(d.logged_in ? (d.user_name || (d.is_admin ? "管理者" : "会員")) : "");
       })
       .catch(() => { /* 一時的な通信失敗・サーバエラーでは、直前のログイン表示を保つ */ });
   }, [path]);
@@ -99,33 +99,20 @@ export function Nav() {
         )}
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-          {isAdmin && (
-            <Link href="/betting" className="hit44" style={{
-              fontSize: 12,
-              color: "#3fb950",
-              textDecoration: "none",
-              padding: "4px 10px",
-              borderRadius: 6,
-              border: "1px solid rgba(63,185,80,0.3)",
-              transition: "all 0.15s",
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(63,185,80,0.1)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-            >
-              💰 馬券
-            </Link>
-          )}
-          {loggedIn ? (
-            <span style={{
-              fontSize: 12,
-              color: "#6e7681",
-              padding: "4px 10px",
-              borderRadius: 6,
-              border: "1px solid #21262d",
-            }}>
-              管理者
-            </span>
-          ) : (
+          <span title={loggedIn ? "ログイン中のユーザー" : "ログインしていません"} style={{
+            fontSize: 12,
+            color: loggedIn ? "#c9d1d9" : "#6e7681",
+            padding: "4px 10px",
+            borderRadius: 6,
+            border: "1px solid #21262d",
+            maxWidth: 160,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}>
+            {loggedIn ? `👤 ${userName}` : "ゲスト"}
+          </span>
+          {!loggedIn && (
             <Link href="/login" className="hit44" style={{
               fontSize: 12,
               color: "#58a6ff",

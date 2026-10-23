@@ -40,11 +40,13 @@ def login_response(password: str, remember: bool = True, user_id: str = ""):
         if not verify_member_login(user_id, password):
             return jsonify({"error": "invalid credentials"}), 401
         role = ROLE_MEMBER
+        uid = user_id.strip()
     else:
+        uid = ""
         if not verify_password(password):
             return jsonify({"error": "invalid password"}), 401
         role = ROLE_DEV
-    token = _make_token(role=role)
+    token = _make_token(role=role, uid=uid)
     resp = jsonify({"status": "ok", "logged_in": True, "role": role})
     max_age = COOKIE_MAX_AGE if remember else None
     resp.set_cookie(COOKIE_NAME, token, max_age=max_age, httponly=True, samesite="Lax", path="/")
@@ -99,12 +101,18 @@ def require_member(f):
 
 def get_auth_status() -> dict:
     """現在のリクエストの認証状態を返す。logged_in は会員・開発者のどちらでも true。"""
+    from src.api.auth import member_display_name, token_user
+
     member = is_member_session()
     dev = is_logged_in()
+    uid = token_user(request.cookies.get(COOKIE_NAME, "")) if member and not dev else ""
+    name = "管理者" if dev else (member_display_name(uid) if uid else ("会員" if member else ""))
     return {
         "logged_in": member,
         "is_member": member,
         "is_developer": dev,
         "is_admin": dev,
         "tier": "dev" if dev else "member" if member else "public",
+        "user_id": uid or None,
+        "user_name": name or None,
     }
