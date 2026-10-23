@@ -8,8 +8,10 @@
 
 ## 会員の管理（ホストで実行）
 
+ホストでは、API と同じ conda の Python（`/opt/conda/bin/python3`）で実行する（標準の `python3` には fastapi が無く、起動できない）。
+
 ```
-ssh keiba-remote 'cd /home/jovyan/work/keiba-vpn && sudo -n python3 -m src.scripts.ops.manage_users list'
+ssh keiba-remote 'cd /home/jovyan/work/keiba-vpn && sudo -n /opt/conda/bin/python3 -m src.scripts.ops.manage_users list'
 python -m src.scripts.ops.manage_users add <id> [--name 表示名] [--generate | --password-stdin]   # 既定は対話入力（2 回）
 python -m src.scripts.ops.manage_users passwd <id> [--generate | --password-stdin]
 python -m src.scripts.ops.manage_users rename <id> --name 表示名

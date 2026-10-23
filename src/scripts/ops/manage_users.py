@@ -8,7 +8,7 @@
 
 保存先: data/local/auth/members.json（git に入れない。環境変数 KEIBA_MEMBERS_FILE で変更）。config/members.json（動作確認用の test）は読むだけで、ここからは変更しない。
 API は会員ファイルの更新を自動で読み直す（再起動不要）。無効化・削除したユーザーは、すでにログイン中でも次のリクエストから使えなくなる。
-本番ではホストで実行する: ssh keiba-remote 'cd /home/jovyan/work/keiba-vpn && sudo -n python3 -m src.scripts.ops.manage_users list'
+本番ではホストで実行する: ssh keiba-remote 'cd /home/jovyan/work/keiba-vpn && sudo -n /opt/conda/bin/python3 -m src.scripts.ops.manage_users list'
 """
 
 from __future__ import annotations
