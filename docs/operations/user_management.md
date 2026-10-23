@@ -12,13 +12,14 @@
 
 ```
 ssh keiba-remote 'cd /home/jovyan/work/keiba-vpn && sudo -n /opt/conda/bin/python3 -m src.scripts.ops.manage_users list'
-python -m src.scripts.ops.manage_users add <id> [--name 表示名] [--generate | --password-stdin]   # 既定は対話入力（2 回）
-python -m src.scripts.ops.manage_users passwd <id> [--generate | --password-stdin]
+python -m src.scripts.ops.manage_users add <id> [--name 表示名] [--password 初期パスワード | --generate | --password-stdin]   # 既定は対話入力（2 回）
+python -m src.scripts.ops.manage_users passwd <id> [--password 新パスワード | --generate | --password-stdin]
 python -m src.scripts.ops.manage_users rename <id> --name 表示名
 python -m src.scripts.ops.manage_users disable <id> | enable <id> | remove <id>
 ```
 
 - 保存先は `data/local/auth/members.json`（**git に入れない**。環境変数 `KEIBA_MEMBERS_FILE` で変更）。パスワードはソルト付き PBKDF2-SHA256（60 万回）のハッシュだけ。ファイルの権限は 600。
+- 初期パスワードは管理者が決める: `--password 〇〇`（シェルの履歴に残る）、対話入力（`ssh -t` で 2 回入力。履歴に残らない）、`--password-stdin`。決めるのが面倒なら `--generate`。
 - パスワードは 10 文字以上、ID と同じ文字列は不可。`--generate` で作ったパスワードは、その 1 回だけ画面に出る（記録しない）。
 - API は会員ファイルの更新を自動で読み直す（再起動不要）。**無効化・削除したユーザーは、ログイン中でも次のリクエストから使えなくなる**。
 - ID は英数字と `. _ @ -` の 3〜64 文字。

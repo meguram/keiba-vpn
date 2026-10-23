@@ -61,3 +61,13 @@ def test_token_formats_and_tampering(members):
     forged = new.replace(("ken".encode().hex()), ("admin".encode().hex()))   # uid だけ書き換えると署名が合わない
     assert auth.token_role(forged) is None
     assert auth.token_role(auth._make_token(timestamp=int(time.time()) - auth.COOKIE_MAX_AGE - 10, role=auth.ROLE_MEMBER, uid="ken")) is None
+
+
+def test_password_option_sets_chosen_initial_password(members):
+    assert mu.main(["add", "ume", "--name", "梅", "--password", "my-first-password-1"]) == 0
+    assert auth.verify_member_login("ume", "my-first-password-1")
+    assert mu.main(["passwd", "ume", "--password", "another-password-22"]) == 0
+    assert auth.verify_member_login("ume", "another-password-22") and not auth.verify_member_login("ume", "my-first-password-1")
+    with pytest.raises(SystemExit):
+        mu.main(["add", "take", "--password", "short"])            # 規則（10 文字以上）は --password でも守る
+    assert "my-first-password-1" not in members.read_text(encoding="utf-8")

@@ -1,8 +1,9 @@
 """会員ユーザー（ログイン ID とパスワード）の管理。パスワードはソルト付き PBKDF2-SHA256 のハッシュだけを保存し、画面にも記録にも出さない。
 
   python -m src.scripts.ops.manage_users list
-  python -m src.scripts.ops.manage_users add <id> [--name 表示名] [--generate | --password-stdin]    # 既定は対話入力（2 回）
-  python -m src.scripts.ops.manage_users passwd <id> [--generate | --password-stdin]
+  python -m src.scripts.ops.manage_users add <id> [--name 表示名] [--password 初期パスワード | --generate | --password-stdin]    # 既定は対話入力（2 回）
+  python -m src.scripts.ops.manage_users passwd <id> [--password 新パスワード | --generate | --password-stdin]
+  （--password はシェルの履歴に残る。残したくないときは対話入力か --password-stdin を使う）
   python -m src.scripts.ops.manage_users rename <id> --name 表示名
   python -m src.scripts.ops.manage_users disable <id> | enable <id> | remove <id>
 
@@ -75,6 +76,9 @@ def _get_password(args, user_id: str) -> tuple[str, bool]:
     """(パスワード, 生成したか)。"""
     if args.generate:
         return secrets.token_urlsafe(12), True
+    if args.password is not None:
+        check_password_rules(user_id, args.password)
+        return args.password, False
     if args.password_stdin:
         pw = sys.stdin.readline().rstrip("\n")
     else:
@@ -184,6 +188,7 @@ def main(argv: list[str] | None = None) -> int:
         if name == "add":
             s.add_argument("--name")
         g = s.add_mutually_exclusive_group()
+        g.add_argument("--password", help="パスワードを指定する（シェルの履歴に残る）。10 文字以上")
         g.add_argument("--generate", action="store_true", help="ランダムなパスワードを作って 1 回だけ表示")
         g.add_argument("--password-stdin", action="store_true", help="標準入力 1 行目をパスワードにする")
         s.set_defaults(fn=fn)
