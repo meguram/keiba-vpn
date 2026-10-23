@@ -19,6 +19,8 @@ import { bracketChipStyle, bracketOf as wakuOf } from "@/lib/bracket";
 import { useNarrow } from "@/components/RaceStrip";
 import { raceExists } from "@/lib/raceExists";
 import { PositionForecast } from "@/components/PositionForecast";
+import { ResultCheckPanel, Verdict } from "@/components/ResultCheck";
+import { firstCornerPos, positionVerdict, summarizePositions } from "@/lib/resultCheck";
 import type { ForecastHorse, GateBias, PaceForecast, PositionForecast as PosFc } from "@/lib/positionForecast";
 import { turnOf } from "@/lib/courseTurn";
 
@@ -118,7 +120,7 @@ type RaceData = {
   start_time?: string;
   grade?: string;
   race_shutuba?: { entries?: RaceEntry[] };
-  race_result?: { entries?: RaceEntry[]; payoffs?: unknown[] };
+  race_result?: { entries?: RaceEntry[]; payoffs?: unknown[]; pace?: { first_half_3f?: number | null; second_half_3f?: number | null } };
   race_odds?: { win?: RaceOddsEntry[]; entries?: RaceOddsEntry[] };
   [k: string]: unknown;
 };
@@ -576,14 +578,23 @@ export default function RaceDetailPage() {
     </div>
   );
 
-  const ResultTbl = resultEntries.length === 0 ? (
+  // 結果の答え合わせ（会員向け）: めぐ印の列と、展開予想（想定の番手）と最初のコーナーの順位の突き合わせ
+  const markByNo = new Map<number, ReturnType<typeof markMeta>>();
+  (predData?.predictions ?? []).forEach((p) => { if (p.horse_number != null) markByNo.set(Number(p.horse_number), markMeta(p)); });
+  const showMark = !lock && (predData?.predictions ?? []).some((p) => !!p.mark_type);
+  const estByNo = new Map<number, { est: number | null; style: string }>();
+  (predData?.predictions ?? []).forEach((p) => { const f = p.position_forecast; if (p.horse_number != null && f) estByNo.set(Number(p.horse_number), { est: f.early_pos_est ?? null, style: f.style }); });
+  const checkRows = !lock && estByNo.size > 0 && resultEntries.length > 0;
+  const posSummary = summarizePositions(resultEntries.map((e) => ({ no: Number(e.horse_number), est: estByNo.get(Number(e.horse_number))?.est ?? null, actual: firstCornerPos(e.passing_order) })));
+  const renderResultTbl = () => resultEntries.length === 0 ? (
     <div style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>🏆 レース結果データがありません</div>
   ) : (
     <div style={{ overflowX: "auto" }}>
+      {checkRows && <ResultCheckPanel paceLevel={predData?.pace_forecast?.level} paceLabel={predData?.pace_forecast?.label} first3f={rd?.race_result?.pace?.first_half_3f} second3f={rd?.race_result?.pace?.second_half_3f} pos={posSummary} />}
       <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 13 }}>
         <thead style={{ background: "var(--surface2)" }}>
           <tr>
-            {["着順", "枠", "馬番", "馬名", "騎手", "タイム", "通過順", "上り3F", "単勝"].map(h => <th key={h} style={TH}>{h}</th>)}
+            {["着順", "枠", "馬番", "馬名", ...(showMark ? ["めぐ印"] : []), "騎手", "タイム", "通過順", ...(checkRows ? ["想定位置", "1角", "位置取り"] : []), "上り3F", "単勝"].map(h => <th key={h} style={TH}>{h}</th>)}
             {SHOW_MEGU && <th style={{ ...TH, borderLeft: "2px solid rgba(167,139,250,0.3)", color: "#a78bfa" }}>想定めぐ指数</th>}
             {SHOW_MEGU && <th style={{ ...TH, color: "#a78bfa" }}>実測めぐ指数</th>}
           </tr>
@@ -604,9 +615,22 @@ export default function RaceDetailPage() {
                 <td style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left" }}>
                   <HorseName id={e.horse_id} name={e.horse_name} />
                 </td>
+                {showMark && (() => { const mm = markByNo.get(Number(e.horse_number)); return <td style={{ ...TD, fontWeight: 800, fontSize: mm?.sym === "消" ? 13 : 17, color: mm?.color }}>{mm && mm.sym !== "—" ? mm.sym : <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>—</span>}</td>; })()}
                 <td style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{pick(e, "jockey_name", "jockey") || "—"}</td>
                 <td style={TD}>{e.time ?? e.finish_time ?? "—"}</td>
                 <td style={{ ...TD, fontSize: 11 }}>{e.passing_order ?? "—"}</td>
+                {checkRows && (() => {
+                  const est = estByNo.get(Number(e.horse_number));
+                  const act = firstCornerPos(e.passing_order);
+                  const v = positionVerdict(est?.est, act);
+                  return (
+                    <>
+                      <td style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{est?.est != null ? `${est.style} ${est.est}番手` : "—"}</td>
+                      <td style={{ ...TD, fontSize: 12 }}>{act != null ? `${act}番手` : "—"}</td>
+                      <td style={TD}>{v ? <span title={`想定${est!.est}番手 → 実際${act}番手`} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Verdict v={v.verdict} /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>{v.diff === 0 ? "ぴったり" : v.diff > 0 ? `後ろへ${v.diff}` : `前へ${-v.diff}`}</span></span> : "—"}</td>
+                    </>
+                  );
+                })()}
                 <td style={TD}>{e.last3f ?? e.last_3f ?? "—"}</td>
                 <td style={{ ...TD, color: "var(--text-dim)", fontSize: 12 }}>{resultOdds != null ? resultOdds.toFixed(1) : "—"}</td>
                 {SHOW_MEGU && (
@@ -884,7 +908,7 @@ export default function RaceDetailPage() {
 
       {/* タブコンテンツ */}
       {tab === "shutuba" && ShutubaTbl}
-      {tab === "result" && ResultTbl}
+      {tab === "result" && renderResultTbl()}
       {tab === "predict" && PredPanel}
       {tab === "bet" && (lock ? <MemberLockCard title="推奨馬券" /> : <BetRecommend raceId={raceId} hasPrediction={hasPred} />)}
       {tab === "horses" && HorseDetails}
