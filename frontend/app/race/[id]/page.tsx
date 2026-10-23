@@ -292,6 +292,7 @@ function meguColor(v: number | null): { color: string; bg: string } {
 export default function RaceDetailPage() {
   const { id: raceId } = useParams<{ id: string }>();
   const [tab, setTab] = useState<Tab>("predict");
+  const [resSort, setResSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);      // 結果表の列ソート（見出しを押すと 昇順→降順→元の順）
   const [tabInitialized, setTabInitialized] = useState(false);
   const [raceData, setRaceData] = useState<RaceData | null>(null);
   const [predData, setPredData] = useState<PredData | null>(null);
@@ -586,6 +587,34 @@ export default function RaceDetailPage() {
   (predData?.predictions ?? []).forEach((p) => { const f = p.position_forecast; if (p.horse_number != null && f) estByNo.set(Number(p.horse_number), { est: f.early_pos_est ?? null, style: f.style }); });
   const checkRows = !lock && estByNo.size > 0 && resultEntries.length > 0;
   const posSummary = summarizePositions(resultEntries.map((e) => ({ no: Number(e.horse_number), est: estByNo.get(Number(e.horse_number))?.est ?? null, actual: firstCornerPos(e.passing_order) })));
+  const MARK_RANK: Record<string, number> = { "◎": 0, "○": 1, "▲": 2, "★": 3, "△": 4, "消": 5 };
+  const resultCols: { key: string; label: string; val: (e: RaceEntry) => number | string | null }[] = [
+    { key: "pos", label: "着順", val: (e) => finishKey(e) >= 10_000 ? null : finishKey(e) },
+    { key: "waku", label: "枠", val: (e) => wakuOf(Number(e.horse_number ?? e.number), resultEntries.length, Number(e.bracket_number) || null) ?? null },
+    { key: "no", label: "馬番", val: (e) => Number(e.horse_number ?? e.number) || null },
+    { key: "name", label: "馬名", val: (e) => (e.horse_name ? String(e.horse_name) : null) },
+    ...(showMark ? [{ key: "mark", label: "めぐ印", val: (e: RaceEntry) => { const sym = markByNo.get(Number(e.horse_number))?.sym; return sym && sym in MARK_RANK ? MARK_RANK[sym] : null; } }] : []),
+    { key: "jockey", label: "騎手", val: (e) => (pick(e, "jockey_name", "jockey") || null) },
+    { key: "time", label: "タイム", val: (e) => parseTimeSec((e.time ?? e.finish_time) as string | undefined) },
+    { key: "passing", label: "通過順", val: (e) => firstCornerPos(e.passing_order) },
+    ...(checkRows ? [
+      { key: "est", label: "想定位置", val: (e: RaceEntry) => estByNo.get(Number(e.horse_number))?.est ?? null },
+      { key: "corner1", label: "1角", val: (e: RaceEntry) => firstCornerPos(e.passing_order) },
+      { key: "posdiff", label: "位置取り", val: (e: RaceEntry) => { const v = positionVerdict(estByNo.get(Number(e.horse_number))?.est, firstCornerPos(e.passing_order)); return v ? Math.abs(v.diff) : null; } },
+    ] : []),
+    { key: "l3f", label: "上り3F", val: (e) => { const n = Number(e.last3f ?? e.last_3f); return Number.isFinite(n) && n > 0 ? n : null; } },
+    { key: "odds", label: "単勝", val: (e) => positive(e.win_odds) ?? positive(e.odds) ?? oddsMap[String(e.horse_number ?? e.number ?? "")] ?? null },
+  ];
+  // 並べ替え: 値が取れない行（取消・データなし）は、昇順でも降順でも最後。同じ値は元の順（着順）のまま
+  const sortCol = resSort ? resultCols.find((c) => c.key === resSort.key) : null;
+  const sortedResult = sortCol && resSort ? [...resultEntries].sort((a, b) => {
+    const va = sortCol.val(a), vb = sortCol.val(b);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    const c = typeof va === "number" && typeof vb === "number" ? va - vb : String(va).localeCompare(String(vb), "ja");
+    return c * resSort.dir;
+  }) : resultEntries;
   const renderResultTbl = () => resultEntries.length === 0 ? (
     <div style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>🏆 レース結果データがありません</div>
   ) : (
@@ -594,13 +623,18 @@ export default function RaceDetailPage() {
       <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 13 }}>
         <thead style={{ background: "var(--surface2)" }}>
           <tr>
-            {["着順", "枠", "馬番", "馬名", ...(showMark ? ["めぐ印"] : []), "騎手", "タイム", "通過順", ...(checkRows ? ["想定位置", "1角", "位置取り"] : []), "上り3F", "単勝"].map(h => <th key={h} style={TH}>{h}</th>)}
+            {resultCols.map((c) => (
+              <th key={c.key} style={{ ...TH, cursor: "pointer", userSelect: "none" }} aria-sort={resSort?.key === c.key ? (resSort.dir === 1 ? "ascending" : "descending") : "none"} title="押すと並べ替え（昇順→降順→元の順）"
+                onClick={() => setResSort((cur) => (cur?.key !== c.key ? { key: c.key, dir: 1 } : cur.dir === 1 ? { key: c.key, dir: -1 } : null))}>
+                {c.label}<span aria-hidden style={{ marginLeft: 3, fontSize: 9, opacity: resSort?.key === c.key ? 1 : 0.3 }}>{resSort?.key === c.key ? (resSort.dir === 1 ? "▲" : "▼") : "↕"}</span>
+              </th>
+            ))}
             {SHOW_MEGU && <th style={{ ...TH, borderLeft: "2px solid rgba(167,139,250,0.3)", color: "#a78bfa" }}>想定めぐ指数</th>}
             {SHOW_MEGU && <th style={{ ...TH, color: "#a78bfa" }}>実測めぐ指数</th>}
           </tr>
         </thead>
         <tbody>
-          {resultEntries.map((e, i) => {
+          {sortedResult.map((e, i) => {
             const pos = Number(e.finish_position ?? e.position ?? 99);
             const placeColor = pos === 1 ? "#fbbf24" : pos === 2 ? "#94a3b8" : pos === 3 ? "#d97706" : "var(--text)";
             const tSec = parseTimeSec((e.time ?? e.finish_time) as string | undefined);
