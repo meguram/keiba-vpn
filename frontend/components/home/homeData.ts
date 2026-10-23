@@ -59,7 +59,7 @@ export const PUBLIC_CATEGORIES: CategorySection[] = [
   {
     num: "04",
     title: "🤖 AI 予測",
-    desc: "今週の予測・追走難度・過去の予測結果",
+    desc: "今週の予測・過去の予測結果",
     catColor: "var(--home-orange)",
     cards: [
       {
