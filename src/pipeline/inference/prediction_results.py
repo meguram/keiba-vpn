@@ -74,6 +74,14 @@ def parse_payoff(payoff: Any) -> dict[str, dict[tuple[int, ...], int]]:
     return out
 
 
+def _num_pos(x: Any) -> float | None:
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return None
+    return v if v > 0 else None
+
+
 def _finish_map(entries: list[dict]) -> dict[int, int]:
     fm: dict[int, int] = {}
     for e in entries or []:
@@ -108,7 +116,17 @@ def load_race_result(storage: Any, race_id: str) -> dict | None:
                     pdoc = None
                 if isinstance(pdoc, dict):
                     payoff = parse_payoff(pdoc.get("payoff"))
-        return {"status": status, "finish": fm, "n_runners": len(doc.get("entries") or []),
+        pop, odds = {}, {}
+        for e in doc.get("entries") or []:
+            hn = _to_int(e.get("horse_number"))
+            if hn is None:
+                continue
+            p_, o_ = _to_int(e.get("popularity")), _num_pos(e.get("odds"))
+            if p_ and p_ > 0:
+                pop[hn] = p_
+            if o_:
+                odds[hn] = o_
+        return {"status": status, "finish": fm, "n_runners": len(doc.get("entries") or []), "popularity": pop, "odds": odds,
                 "payoff": payoff, "official": bool(payoff), "date": doc.get("date")}
     return None
 
@@ -243,7 +261,8 @@ def build_race_record(race_id: str, meta: dict, storage: Any, max_total_bet: int
         hn = int(e.get("horse_number") or 0)
         return {"horse_number": hn, "horse_name": e.get("horse_name", ""), "finish": fm.get(hn),
                 "win_prob": round(float(e.get("win_prob") or 0), 4), "win_odds": e.get("win_odds"),
-                "ev_win": e.get("ev_win_cal") if e.get("ev_win_cal") is not None else e.get("ev_win"), "mark": e.get("mark_type")}
+                "ev_win": e.get("ev_win_cal") if e.get("ev_win_cal") is not None else e.get("ev_win"), "mark": e.get("mark_type"),
+                "popularity": (res.get("popularity") or {}).get(hn), "final_odds": (res.get("odds") or {}).get(hn)}
 
     rec["top1"] = pick(top1)
     rec["marks"] = {m: [pick(e) for e in entries if e.get("mark_type") == m] for m in MARKS}
@@ -270,6 +289,28 @@ def _blank_counts() -> dict:
     return {"n": 0, "f1": 0, "f2": 0, "f3": 0, "f4p": 0}
 
 
+MARK_EXTRA = ("pop_sum", "pop_n", "odds_sum", "odds_n")      # 印の馬の確定人気・確定単勝オッズの合計と件数（平均は読む側で割る）
+
+
+def _blank_mark() -> dict:
+    return {**_blank_counts(), "pop_sum": 0, "pop_n": 0, "odds_sum": 0.0, "odds_n": 0}
+
+
+def add_pick_to_mark(c: dict, p: dict) -> None:
+    """印の馬 1 頭を集計に足す（着順の区分が取れた馬だけ）。人気・オッズは、取れたものだけ平均に使う。"""
+    b = _bucket(p.get("finish"))
+    if not b:
+        return
+    c["n"] += 1
+    c[b] += 1
+    if p.get("popularity"):
+        c["pop_sum"] += int(p["popularity"])
+        c["pop_n"] += 1
+    if p.get("final_odds"):
+        c["odds_sum"] = round(c["odds_sum"] + float(p["final_odds"]), 4)
+        c["odds_n"] += 1
+
+
 def summarize(records: list[dict]) -> dict:
     """レース記録の一覧から、合算できる件数ベースの集計を作る（率は読む側で計算する）。"""
     inc = [r for r in records if r.get("included")]
@@ -277,7 +318,7 @@ def summarize(records: list[dict]) -> dict:
         "races": len(records), "races_settled": len(inc),
         "races_no_prediction": sum(1 for r in records if r.get("reason") == "no_prediction"),
         "races_no_result": sum(1 for r in records if r.get("reason") == "no_result"),
-        "top1": _blank_counts(), "marks": {m: _blank_counts() for m in MARKS},
+        "top1": _blank_counts(), "marks": {m: _blank_mark() for m in MARKS},
         "bets": {"invested": 0, "returned": 0, "races_bought": 0, "races_hit": 0, "estimated_races": 0, "by_type": {}},
         "logloss": {"n": 0, "sum": 0.0},
         "logloss_model": {"n": 0, "sum": 0.0, "sum_calibrated": 0.0},
@@ -290,10 +331,7 @@ def summarize(records: list[dict]) -> dict:
                 s[key][b] += 1
         for m in MARKS:
             for p in (r.get("marks") or {}).get(m, []):
-                b = _bucket(p.get("finish"))
-                if b:
-                    s["marks"][m]["n"] += 1
-                    s["marks"][m][b] += 1
+                add_pick_to_mark(s["marks"][m], p)
         bets = r.get("bets") or {}
         if bets.get("total_bet"):
             sb = s["bets"]
@@ -329,6 +367,10 @@ def merge_summaries(parts: list[dict]) -> dict:
             out["top1"][k] += p["top1"][k]
             for m in MARKS:
                 out["marks"][m][k] += ((p.get("marks") or {}).get(m) or {}).get(k, 0)
+        for m in MARKS:
+            src = (p.get("marks") or {}).get(m) or {}
+            for k in MARK_EXTRA:
+                out["marks"][m][k] = round(out["marks"][m][k] + src.get(k, 0), 4)
         pb, ob = p["bets"], out["bets"]
         for k in ("invested", "returned", "races_bought", "races_hit", "estimated_races"):
             ob[k] += pb[k]
@@ -529,9 +571,11 @@ def mark_card(today: _date, base: Path | None = None) -> dict:
         s = r["summary"]
         marks = []
         for m, sym in MARK_ORDER:
-            c = (s.get("marks") or {}).get(m) or _blank_counts()
+            c = (s.get("marks") or {}).get(m) or _blank_mark()
             n = c["n"]
-            marks.append({"key": m, "symbol": sym, "n": n, "f1": c["f1"], "f2": c["f2"], "f3": c["f3"], "f4p": c["f4p"],
+            marks.append({"avg_popularity": round(c.get("pop_sum", 0) / c["pop_n"], 2) if c.get("pop_n") else None,
+                          "avg_odds": round(c.get("odds_sum", 0) / c["odds_n"], 1) if c.get("odds_n") else None,
+                          "key": m, "symbol": sym, "n": n, "f1": c["f1"], "f2": c["f2"], "f3": c["f3"], "f4p": c["f4p"],
                           "text": f"{c['f1']}-{c['f2']}-{c['f3']}-{c['f4p']}",
                           "win_rate": rate(c["f1"], n), "top2_rate": rate(c["f1"] + c["f2"], n), "top3_rate": rate(c["f1"] + c["f2"] + c["f3"], n)})
         periods.append({"key": key, "label": label, "from": lo, "to": hi, "data_from": r["days"][0] if r["days"] else None,

@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { PendingLink } from "@/components/PendingLink";
 import { getJson } from "@/lib/httpCache";
 
-type MarkRow = { key: string; symbol: string; n: number; text: string; win_rate: number | null; top2_rate: number | null; top3_rate: number | null };
+type MarkRow = { key: string; symbol: string; n: number; text: string; win_rate: number | null; top2_rate: number | null; top3_rate: number | null; avg_popularity: number | null; avg_odds: number | null };
 type Period = { key: string; label: string; from: string; to: string; data_from: string | null; data_to: string | null; days: number; races: number; status: string; marks: MarkRow[] };
 type Card = { as_of: string; year: number; periods: Period[] };
 
 const md = (ymd: string) => `${Number(ymd.slice(4, 6))}/${Number(ymd.slice(6, 8))}`;
 const pct = (x: number | null) => (x == null ? "—" : `${(x * 100).toFixed(1)}%`);
 
-/** ホームの『印の成績』: ◎○▲★消 の着順（1着-2着-3着-4着以下）を、先週・直近5週間・年（今年のデータが約2か月未満なら去年）で並べる。集計が無ければ何も出さない。 */
+/** ホームの『印の成績』: ◎○▲★消 の着順（1着-2着-3着-4着以下）・◎○の勝率・◎○▲★の平均人気/オッズ（確定）を、先週・直近5週間・年（今年のデータが約2か月未満なら去年）で並べる。集計が無ければ何も出さない。 */
 export function MarkResultCard() {
   const [card, setCard] = useState<Card | null>(null);
 
@@ -44,19 +44,30 @@ export function MarkResultCard() {
             {p.races === 0 ? (
               <p style={{ margin: 0, fontSize: 12, color: "var(--text-dim)" }}>集計できるレースがありません</p>
             ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <tbody>
-                  {p.marks.map((m) => (
-                    <tr key={m.key} style={{ borderTop: "1px solid var(--border)" }}>
-                      <td style={{ padding: "5px 4px", width: 28, fontWeight: 800 }}>{m.symbol}</td>
-                      <td style={{ padding: "5px 4px", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{m.n ? m.text : "—"}</td>
-                      <td style={{ padding: "5px 4px", textAlign: "right", fontSize: 11, color: "var(--text-dim)", whiteSpace: "nowrap" }}>
-                        {m.n ? `複勝率 ${pct(m.top3_rate)}` : ""}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div>
+                {p.marks.map((m) => {
+                  const showWin = m.key === "honmei" || m.key === "pair";          // ◎○ は勝率も出す
+                  const showAvg = m.key !== "kesi";                                // ◎○▲★ は平均人気・平均オッズも出す
+                  return (
+                    <div key={m.key} style={{ borderTop: "1px solid var(--border)", padding: "6px 4px" }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: 13 }}>
+                        <span style={{ width: 22, fontWeight: 800 }}>{m.symbol}</span>
+                        <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{m.n ? m.text : "—"}</span>
+                        <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-dim)", whiteSpace: "nowrap" }}>
+                          {m.n ? `${showWin ? `勝率 ${pct(m.win_rate)}・` : ""}複勝率 ${pct(m.top3_rate)}` : ""}
+                        </span>
+                      </div>
+                      {showAvg && m.n > 0 && (m.avg_popularity != null || m.avg_odds != null) && (
+                        <div style={{ marginLeft: 30, fontSize: 11, color: "var(--text-dim)" }}>
+                          {m.avg_popularity != null ? `平均 ${m.avg_popularity.toFixed(1)}人気` : ""}
+                          {m.avg_popularity != null && m.avg_odds != null ? "・" : ""}
+                          {m.avg_odds != null ? `平均オッズ ${m.avg_odds.toFixed(1)}倍` : ""}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         ))}

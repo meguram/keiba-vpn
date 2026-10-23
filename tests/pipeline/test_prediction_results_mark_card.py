@@ -60,10 +60,25 @@ def test_backfill_adds_marks_without_touching_bets(monkeypatch):
         {"horse_number": 1, "win_prob": 0.4, "mark_type": "honmei"}, {"horse_number": 2, "win_prob": 0.3, "mark_type": "show_val"},
         {"horse_number": 3, "win_prob": 0.1, "mark_type": "kesi"}, {"horse_number": 4, "win_prob": 0.1, "mark_type": "kesi"}]}
     monkeypatch.setattr(pr, "load_predictions", lambda st, rid: preds)
-    monkeypatch.setattr(pr, "load_race_result", lambda st, rid: {"finish": {1: 1, 2: 3, 3: 2, 4: 8}})
+    monkeypatch.setattr(pr, "load_race_result", lambda st, rid: {"finish": {1: 1, 2: 3, 3: 2, 4: 8}, "popularity": {1: 2, 2: 1, 3: 6, 4: 9}, "odds": {1: 3.4, 2: 2.1, 3: 15.0, 4: 40.0}})
     assert bf.backfill_day(doc, None) == 1
     m = doc["summary"]["marks"]
-    assert m["show_val"] == {"n": 1, "f1": 0, "f2": 0, "f3": 1, "f4p": 0} and m["kesi"] == {"n": 2, "f1": 0, "f2": 1, "f3": 0, "f4p": 1}
-    assert m["honmei"]["f1"] == 1                                    # 既存の印は変えない
+    assert (m["show_val"]["n"], m["show_val"]["f3"], m["show_val"]["pop_sum"], m["show_val"]["odds_sum"]) == (1, 1, 1, 2.1)       # 2番の馬: 1人気・2.1倍
+    assert (m["kesi"]["n"], m["kesi"]["f2"], m["kesi"]["f4p"], m["kesi"]["pop_sum"]) == (2, 1, 1, 15)                              # 6人気+9人気
+    assert m["honmei"]["f1"] == 1 and m["honmei"]["pop_sum"] == 0 and m["honmei"]["pop_n"] == 0       # 既存の馬に人気が無いまま（finish だけの旧記録）は人気を足せない
+    assert doc["races"][0]["marks"]["honmei"][0]["final_odds"] is None
     assert doc["summary"]["bets"] == {"invested": 100} and doc["races"][0]["bets"] == {"total_bet": 100}       # 仮想購入は触らない
     assert bf.backfill_day(doc, None) == 0                           # 2 回目は何も足さない（冪等）
+
+
+def test_average_popularity_and_odds_in_card(tmp_path):
+    doc = _doc("20261010", {})
+    doc["summary"]["marks"]["honmei"] = {"n": 3, "f1": 1, "f2": 1, "f3": 0, "f4p": 1, "pop_sum": 6, "pop_n": 3, "odds_sum": 12.0, "odds_n": 3}
+    doc["summary"]["marks"]["pair"] = {"n": 2, "f1": 0, "f2": 1, "f3": 0, "f4p": 1, "pop_sum": 0, "pop_n": 0, "odds_sum": 0.0, "odds_n": 0}    # 人気が取れていない
+    (tmp_path / "20261010.json").write_text(json.dumps(doc), encoding="utf-8")
+    r = pr.mark_card(date(2026, 10, 13), tmp_path)
+    marks = {m["key"]: m for m in r["periods"][0]["marks"]}
+    assert marks["honmei"]["avg_popularity"] == 2.0 and marks["honmei"]["avg_odds"] == 4.0
+    assert marks["pair"]["avg_popularity"] is None and marks["pair"]["avg_odds"] is None
+    merged = pr.merge_summaries([doc["summary"], doc["summary"]])
+    assert merged["marks"]["honmei"]["pop_sum"] == 12 and merged["marks"]["honmei"]["odds_n"] == 6
