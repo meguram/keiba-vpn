@@ -17,6 +17,8 @@ API は会員ファイルの更新を自動で読み直す（再起動不要）�
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import getpass
 import json
 import os
@@ -65,6 +67,19 @@ def _save(path: Path, data: dict) -> None:
     os.replace(tmp, path)
 
 
+@contextlib.contextmanager
+def locked(path: Path | None = None):
+    """会員ファイルの読み書きを、CLI・管理 API・決済の Webhook が同時に行っても壊れないように、排他ロックで囲む。"""
+    p = (path or _path()).with_suffix(".lock")
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
 def _now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S+09:00", time.gmtime(time.time() + 9 * 3600))
 
@@ -110,8 +125,8 @@ def list_users() -> list[dict]:
     return out
 
 
-def create_user(user_id: str, password: str) -> str:
-    """ユーザーを作る。戻り値は指紋。"""
+def create_user(user_id: str, password: str, billing: dict | None = None) -> str:
+    """ユーザーを作る。戻り値は指紋。billing を渡すと課金の状態（pending など）つきで作る（決済が済むまでログインできない）。"""
     from src.api import auth
 
     uid = (user_id or "").strip()
@@ -119,13 +134,50 @@ def create_user(user_id: str, password: str) -> str:
         raise UserError("ログインID は英数字と . _ @ - の 3〜64 文字にしてください")
     check_password_rules(uid, password)
     p = _path()
-    data = _load(p)
-    k = auth.id_key(uid)
-    if any(u.get("idk") == k for u in data["users"]) or any((u.get("id") or "").lower() == uid.lower() for u in auth._read_users(auth._MEMBERS_FILE)):
-        raise UserError("そのログインID はすでに使われています")
-    data["users"].append({"idk": k, **_hash(password), "role": "member", "enabled": True, "created_at": _now(), "updated_at": _now()})
-    _save(p, data)
+    with locked(p):
+        data = _load(p)
+        k = auth.id_key(uid)
+        if any(u.get("idk") == k for u in data["users"]) or any((u.get("id") or "").lower() == uid.lower() for u in auth._read_users(auth._MEMBERS_FILE)):
+            raise UserError("そのログインID はすでに使われています")
+        rec = {"idk": k, **_hash(password), "role": "member", "enabled": True, "created_at": _now(), "updated_at": _now()}
+        if billing is not None:
+            rec["billing"] = dict(billing)
+        data["users"].append(rec)
+        _save(p, data)
     return k[:8]
+
+
+# ── 決済（Stripe）連携用 ──
+def update_billing(*, idk: str | None = None, customer: str | None = None, **fields) -> str:
+    """idk か Stripe の顧客 ID で対象を決め、billing の項目（status・customer・subscription・period_end など）を更新する。見つからなければ UserError。"""
+    p = _path()
+    with locked(p):
+        data = _load(p)
+        hit = [u for u in data["users"] if (idk and u.get("idk") == idk) or (customer and (u.get("billing") or {}).get("customer") == customer)]
+        if len(hit) != 1:
+            raise UserError("対象のユーザーが見つかりません")
+        u = hit[0]
+        b = u.setdefault("billing", {})
+        b.update({k: v for k, v in fields.items() if v is not None})
+        if customer:
+            b["customer"] = customer
+        u["updated_at"] = _now()
+        _save(p, data)
+        return str(u["idk"])[:8]
+
+
+def remove_pending(max_age_hours: float = 24.0, now: float | None = None) -> int:
+    """決済が済まないまま残っている仮登録（billing.status=pending）を、一定時間後に消す。消した件数を返す。"""
+    limit = (now if now is not None else time.time()) - max_age_hours * 3600
+    p = _path()
+    with locked(p):
+        data = _load(p)
+        keep = [u for u in data["users"] if not ((u.get("billing") or {}).get("status") == "pending" and float((u.get("billing") or {}).get("created_ts") or 0) < limit)]
+        removed = len(data["users"]) - len(keep)
+        if removed:
+            data["users"] = keep
+            _save(p, data)
+    return removed
 
 
 def set_password(ident: str, password: str) -> str:

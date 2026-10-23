@@ -337,10 +337,23 @@ def member_record(user_id: str) -> dict | None:
     return None
 
 
+def billing_allows(rec: dict, now: float | None = None, grace_days: int = 3) -> bool:
+    """課金つきのアカウントが、いま使えるか。active / trialing は可、支払い遅延（past_due）は期間の終わり＋猶予日数まで可、pending / canceled / incomplete は不可。billing が無い（管理者が作った）アカウントは対象外＝常に可。"""
+    b = rec.get("billing")
+    if not b:
+        return True
+    st = b.get("status")
+    if st in ("active", "trialing"):
+        return True
+    if st == "past_due":
+        return (now if now is not None else time.time()) <= float(b.get("period_end") or 0) + grace_days * 86400
+    return False
+
+
 def member_active(user_id: str) -> bool:
-    """ログイン可能なユーザーか（存在し、enabled が false でなく、requires_env があればその環境変数が有効）。"""
+    """ログイン可能なユーザーか（存在し、enabled が false でなく、requires_env があればその環境変数が有効。課金つきなら支払いの状態も）。"""
     rec = member_record(user_id)
-    return bool(rec) and rec.get("enabled", True) is not False and (not rec.get("requires_env") or _env_on(str(rec["requires_env"])))
+    return bool(rec) and rec.get("enabled", True) is not False and (not rec.get("requires_env") or _env_on(str(rec["requires_env"]))) and billing_allows(rec)
 
 
 def member_display_name(user_id: str) -> str:
@@ -406,6 +419,7 @@ DEV_ONLY_PAGES: set[str] = {
 
 PUBLIC_API_PREFIXES: list[str] = [
     "/api/v1/health",
+    "/api/v1/billing/",      # 無効の間は 404。webhook は Stripe の署名で守る
     "/api/v1/races/",
     "/api/v1/race-list/",
     "/api/v1/scrape-dates",
