@@ -154,7 +154,7 @@ def pipeline_status(race_id: str, resp: dict, storage: Any, *, now: datetime | N
     done = [s for s in stages if s["state"] == "done"]
     nxt = next((s for s in stages if s["state"] != "done"), None)
     complete = len(done) == len(stages)
-    at = max((s["at"] for s in done if s.get("at")), default=None)
+    at = next((s["at"] for s in stages if s["key"] == "prediction"), None)   # 完了表示の時刻 = 予測を作った時刻
     return {
         "stages": stages, "complete": complete, "done": len(done), "total": len(stages),
         "next": nxt["key"] if nxt else None, "completed_at": at if complete else None,
