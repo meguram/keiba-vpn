@@ -965,8 +965,6 @@ export default function WeeklyPredictionsPage() {
       {/* ページヘッダー */}
       <div className="wp-head" style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "18px 24px" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 12 }}>
-          <Link href="/" className="hide-narrow" style={{ fontSize: 12, color: "var(--text-dim)", textDecoration: "none" }}>← ホーム</Link>
-          <span className="hide-narrow" style={{ color: "var(--border)" }}>/</span>
           <h1 style={{ fontSize: 18, fontWeight: 700, color: "#f0f6fc", margin: 0 }}>🤖 今週のAI予測</h1>
           <p className="hide-narrow" style={{ fontSize: 12, color: "var(--text-dim)", margin: 0 }}>
             前回と次回の開催（最大2週分）の勝率・期待値を一覧表示

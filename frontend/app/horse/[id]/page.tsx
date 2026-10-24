@@ -468,9 +468,6 @@ export default function HorsePage() {
       {/* ヘッダー */}
       <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "18px 24px" }}>
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <Link href="/" style={{ fontSize: 12, color: "var(--text-dim)", textDecoration: "none" }}>← ホーム</Link>
-          </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: "#f0f6fc", margin: 0 }}>
               🐴 {loadingDetail ? "…" : horseName}
