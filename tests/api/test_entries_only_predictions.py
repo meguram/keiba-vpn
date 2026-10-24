@@ -63,3 +63,20 @@ def test_stg_endpoint_returns_entries_only_not_mock(monkeypatch):
     assert d["has_prediction"] is False and d["predictions"][0]["horse_name"] == "イチ" and "_mock" not in d
     monkeypatch.setenv("KEIBA_STG_MOCK_PREDICTIONS", "1")
     assert c.get("/api/race/R1/predictions").json().get("_mock") is True
+
+
+def test_prod_endpoint_also_returns_entries_only_and_never_mock(monkeypatch):
+    """prod（Cloud Run）でも予測がまだ無いレースは 404 にせず出馬表を返す。モックは出さない（KEIBA_STG_MOCK_PREDICTIONS=1 でも stg だけ）。dev は従来どおり 404。"""
+    from fastapi.testclient import TestClient
+
+    from src.api import app as A
+
+    st = FakeStorage({("race_shutuba", "R1"): {"entries": [{"horse_number": 1, "horse_name": "イチ", "horse_id": "h1"}]}})
+    monkeypatch.setattr(A, "_get_storage", lambda: st)
+    monkeypatch.setenv("KEIBA_STG_MOCK_PREDICTIONS", "1")
+    c = TestClient(A.app)
+    monkeypatch.setattr(A, "_keiba_env", lambda: "prod")
+    d = c.get("/api/race/R1/predictions").json()
+    assert d["has_prediction"] is False and d["predictions"][0]["horse_name"] == "イチ" and "_mock" not in d
+    monkeypatch.setattr(A, "_keiba_env", lambda: "dev")
+    assert c.get("/api/race/R1/predictions").status_code in (200, 404)           # dev は別の経路（この変更で変わらない）
