@@ -48,22 +48,24 @@ def test_portfolio_level_matches_ui_thresholds(monkeypatch):
     assert pr.portfolio_level([], None) == (0, None)
 
 
-def test_add_levels_only_adds_level_and_keeps_numbers(tmp_path, monkeypatch):
+def test_add_levels_adds_level_or_lv_block_and_keeps_existing_numbers(tmp_path, monkeypatch):
     recs = [_rec("R1", None, 1000, 3000), _rec("R2", None, 1000, 0), _rec("R3", 2, 500, 0)]
-    for r in recs:
+    for r in recs[:2]:
         r["bets"].pop("level")
-    recs[2]["bets"]["level"] = 2
-    recs[0]["marks"] = {"honmei": []}
     _write(tmp_path, "20261017", recs)
     before = json.loads((tmp_path / "20261017.json").read_text(encoding="utf-8"))
     monkeypatch.setattr(pr, "load_predictions", lambda st, rid: {"predictions": [{"win_prob": 0.2}]})
     monkeypatch.setattr(pr, "load_race_result", lambda st, rid: {"finish": {}})
-    new = {"R1": {"status": "ok", "total_bet": 1000, "level": 4, "exp_roi": 1.2}, "R2": {"status": "ok", "total_bet": 1200, "level": 1, "exp_roi": 0.98}}
+    new = {"R1": {"status": "ok", "total_bet": 1000, "total_return": 3000, "level": 4, "exp_roi": 1.2},
+           "R2": {"status": "ok", "total_bet": 1200, "total_return": 600, "level": 1, "exp_roi": 0.98}}
     monkeypatch.setattr(pr, "simulate_bets", lambda entries, st, rid, res, cap: new[rid])
     out = pr.add_levels("20261017", None, tmp_path)
-    assert out == {"races": 3, "added": 1, "already": 1, "mismatch": 1, "failed": 0}      # R2 は買い目が変わっている → 付けない
+    assert out == {"races": 3, "added": 1, "already": 1, "recomputed": 1, "failed": 0}
     after = json.loads((tmp_path / "20261017.json").read_text(encoding="utf-8"))
-    assert after["races"][0]["bets"]["level"] == 4 and "level" not in after["races"][1]["bets"]
-    assert after["summary"]["bets"]["by_level"]["4"]["returned"] == 3000
+    assert after["races"][0]["bets"]["level"] == 4
+    assert after["races"][1]["bets"]["lv"] == {"level": 1, "exp_roi": 0.98, "total_bet": 1200, "total_return": 600}
+    assert after["races"][1]["bets"]["total_bet"] == 1000                                   # 既存の購入額・払戻は変えない
+    bl = after["summary"]["bets"]["by_level"]
+    assert bl["1"] == {"races": 1, "hit": 1, "invested": 1200, "returned": 600} and bl["4"]["returned"] == 3000
     assert after["summary"]["bets"]["invested"] == before["summary"]["bets"]["invested"]
     assert after["summary"]["marks"] == before["summary"]["marks"] and after["status"] == before["status"]

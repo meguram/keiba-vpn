@@ -362,12 +362,13 @@ def summarize(records: list[dict]) -> dict:
             sb["races_bought"] += 1
             sb["races_hit"] += int(bets["total_return"] > 0)
             sb["estimated_races"] += int(bool(bets.get("estimated")))
-            lv = str(bets["level"]) if bets.get("level") is not None else "unrated"     # 推奨度が記録されていない旧データ
-            bl = sb["by_level"].setdefault(lv, dict(_BLANK_LEVEL))
-            bl["races"] += 1
-            bl["hit"] += int(bets["total_return"] > 0)
-            bl["invested"] += bets["total_bet"]
-            bl["returned"] += bets["total_return"]
+            lvb = bets.get("lv") or bets                      # 旧データは lv（現行ルールでの再計算）に推奨度と購入・払戻を持つ
+            if lvb.get("level") is not None and lvb.get("total_bet"):
+                bl = sb["by_level"].setdefault(str(lvb["level"]), dict(_BLANK_LEVEL))
+                bl["races"] += 1
+                bl["hit"] += int(lvb["total_return"] > 0)
+                bl["invested"] += lvb["total_bet"]
+                bl["returned"] += lvb["total_return"]
             for bt, v in (bets.get("by_type") or {}).items():
                 t = sb["by_type"].setdefault(bt, {"invested": 0, "returned": 0, "n": 0, "hit": 0})
                 for k in t:
@@ -508,10 +509,11 @@ def write_day(doc: dict, base: Path | None = None, *, force: bool = False) -> Pa
 
 
 def add_levels(date: str, storage: Any, base: Path | None = None, *, dry_run: bool = False) -> dict[str, int]:
-    """保存済みの日次記録に、仮想購入の推奨度（bets.level・exp_roi）だけを足す。印・着順・回収率の数値は変えない。
-    買い目を作り直して購入合計が保存済みと一致したレースだけに付ける（設定が変わって買い目が変わったレースは推奨度なしのまま）。"""
+    """保存済みの日次記録に、仮想購入の推奨度を後から足す。印・着順・既存の回収率の数値は変えない。
+    現行のルール（買い目の選び方・EV の較正）と保存済みの最新（確定）オッズで買い目を作り直し、推奨度・購入額・払戻を bets.lv に持たせる
+    （旧記録の購入額と一致するレースは bets.level にそのまま付ける）。推奨度別の集計は lv があれば lv を使う。"""
     doc = read_day(date, base)
-    out = {"races": 0, "added": 0, "already": 0, "mismatch": 0, "failed": 0}
+    out = {"races": 0, "added": 0, "already": 0, "recomputed": 0, "failed": 0}
     if not doc:
         return out
     cap = doc.get("max_total_bet", DEFAULT_MAX_TOTAL_BET)
@@ -520,7 +522,7 @@ def add_levels(date: str, storage: Any, base: Path | None = None, *, dry_run: bo
         if not rec.get("included") or not b.get("total_bet"):
             continue
         out["races"] += 1
-        if b.get("level") is not None:
+        if b.get("level") is not None or b.get("lv"):
             out["already"] += 1
             continue
         try:
@@ -531,12 +533,16 @@ def add_levels(date: str, storage: Any, base: Path | None = None, *, dry_run: bo
             logger.warning("推奨度の追記に失敗 %s: %s", rec.get("race_id"), exc)
             out["failed"] += 1
             continue
-        if not new or new.get("status") != "ok" or int(new["total_bet"]) != int(b["total_bet"]):
-            out["mismatch"] += 1
+        if not new or new.get("status") != "ok":
+            out["failed"] += 1
             continue
-        b["level"], b["exp_roi"] = new["level"], new["exp_roi"]
-        out["added"] += 1
-    if out["added"] and not dry_run:
+        if int(new["total_bet"]) == int(b["total_bet"]):
+            b["level"], b["exp_roi"] = new["level"], new["exp_roi"]
+            out["added"] += 1
+        else:
+            b["lv"] = {"level": new["level"], "exp_roi": new["exp_roi"], "total_bet": new["total_bet"], "total_return": new["total_return"]}
+            out["recomputed"] += 1
+    if (out["added"] or out["recomputed"]) and not dry_run:
         doc["summary"]["bets"]["by_level"] = summarize(doc["races"])["bets"]["by_level"]
         write_day(doc, base, force=True)
     return out
@@ -671,9 +677,9 @@ def bets_level_card(today: _date, base: Path | None = None) -> dict:
                         "data_to": r["days"][-1] if r["days"] else None, "days": len(r["days"]), "status": r["status"],
                         "levels": levels, "total": {**tot, "roi": rate(tot["returned"], tot["invested"]), "hit_rate": rate(tot["hit_races"], tot["races"])},
                         "skipped_races": (bl.get("0") or _BLANK_LEVEL)["races"],
-                        "unrated_races": max(0, (r["summary"].get("bets") or {}).get("races_bought", 0) - sum(v["races"] for v in bl.values()) + (bl.get("unrated") or _BLANK_LEVEL)["races"])})
+                        "unrated_races": max(0, (r["summary"].get("bets") or {}).get("races_bought", 0) - sum(v["races"] for v in bl.values()))})
     return {"as_of": today.strftime("%Y%m%d"), "year": y, "periods": periods,
-            "note": "推奨馬券を既定の上限（1レース2,000円）で購入したとみなした仮想購入。買い目と推奨度は保存済みの最新（確定）オッズで再計算、払戻は確定払戻。実際の購入ではありません。"}
+            "note": "推奨馬券を既定の上限（1レース2,000円）で購入したとみなした仮想購入。買い目と推奨度は現行のルールで、保存済みの最新（確定）オッズから再計算、払戻は確定払戻。実際の購入ではありません。"}
 
 
 def mark_card(today: _date, base: Path | None = None) -> dict:
