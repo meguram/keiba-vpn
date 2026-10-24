@@ -25,6 +25,9 @@ from typing import Protocol
 logger = logging.getLogger("ops.gcs_mirror")
 
 PREFIX = "ops/mirror"
+# 会員名簿（ハッシュだけ。ログインの照合に Cloud Run が使う）。ホストでは root だけが読める場所にあるため、通常の同期(jovyan)は読めずに飛ばし、
+# root の cron（scripts/cron/gcs_mirror_push_auth.sh）が上げる。Cloud Run は TREES として取り込み、src/api/auth.py の MEMBERS_LOCAL_FILE と同じ場所に置く。
+AUTH_TREES = ("data/local/auth::members.json",)
 TREES = (
     "data/local/inference/predictions_v3",
     "data/local/inference/predictions_v5",
@@ -34,6 +37,7 @@ TREES = (
     "data/local/inference/lap_forecast",
     "data/local/inference/tracking_v2",
     "data/local/meta/entries_state",
+    *AUTH_TREES,
     # 画面が読む参照データ（取得で作る・更新が速い／ほぼ固定のもの。旧 serving_state の core 群）。"<フォルダ>::<glob>" はフォルダの中の一致するファイルだけ
     "data/page_reference/race_lists",
     "data/page_reference/race_day_schedule",
@@ -97,7 +101,10 @@ def split_tree(tree: str) -> tuple[str, str]:
 def _files(root: Path, tree: str) -> list[Path]:
     d, g = split_tree(tree)
     base = root / d
-    return [p for p in base.glob(g) if p.is_file() and not _SKIP.search(p.name)] if base.exists() else []
+    try:
+        return [p for p in base.glob(g) if p.is_file() and not _SKIP.search(p.name)] if base.exists() else []
+    except PermissionError:          # root だけが読める場所（会員名簿）は、読める実行者の同期に任せて飛ばす
+        return []
 
 
 def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH_TREES, *, recent_days: float | None = None,
@@ -221,13 +228,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("action", choices=["push", "pull"])
     ap.add_argument("--recent-days", type=float, default=None, help="直近この日数に更新されたものだけ（省略=全部）")
     ap.add_argument("--dry-run", action="store_true", help="push のみ: 上げるファイルの数を表示して終わる")
+    ap.add_argument("--only-auth", action="store_true", help="会員名簿(AUTH_TREES)だけを上げる（root の cron 用）")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     from src.utils.project_env import load_project_dotenv
 
     load_project_dotenv()
     be = GcsBackend()
-    print(push(be, recent_days=a.recent_days, dry_run=a.dry_run) if a.action == "push" else pull(be, recent_days=a.recent_days))
+    trees = AUTH_TREES if a.only_auth else PUSH_TREES
+    print(push(be, trees=trees, recent_days=a.recent_days, dry_run=a.dry_run) if a.action == "push" else pull(be, recent_days=a.recent_days))
     return 0
 
 

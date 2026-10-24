@@ -165,3 +165,28 @@ def test_fetch_one_gets_a_single_file_and_remembers_misses(tmp_path, monkeypatch
     assert gm.fetch_one("data/x/NONE.json", tmp_path, g) is False          # 直前に無かったものは、短時間は問い合わせ直さない
     monkeypatch.delenv("KEIBA_MIRROR_PULL", raising=False)
     assert gm.fetch_one("data/x/R2.json", tmp_path) is False               # ミラー無効（ホスト・dev・テスト）では何もしない
+
+
+def test_members_file_is_pulled_to_the_path_auth_reads_and_unreadable_dirs_are_skipped(tmp_path, monkeypatch):
+    """Cloud Run は会員名簿を、auth.py の MEMBERS_LOCAL_FILE と同じ場所へ取り込む。root だけが読める場所は、通常の実行者の同期では飛ばす（落ちない）。"""
+    from src.api import auth
+
+    assert gm.AUTH_TREES[0].split("::")[0] == "data/local/auth" and set(gm.AUTH_TREES) <= set(gm.TREES)
+    assert auth.MEMBERS_LOCAL_FILE.replace("\\", "/").endswith("data/local/auth/members.json") or "auth/members.json" in str(auth.MEMBERS_LOCAL_FILE).replace("..", "")
+    src = tmp_path / "src"
+    _w(src, "data/local/auth/members.json", b'{"users": []}')
+    g = Fake()
+    assert gm.push(g, src, gm.AUTH_TREES)["uploaded"] == 1
+    run = tmp_path / "run"
+    assert gm.pull(g, run, gm.AUTH_TREES)["downloaded"] == 1 and (run / "data/local/auth/members.json").read_bytes() == b'{"users": []}'
+
+    from pathlib import Path
+    real_glob = Path.glob
+
+    def deny(self, pattern):
+        if "auth" in str(self):
+            raise PermissionError("root only")
+        return real_glob(self, pattern)
+
+    monkeypatch.setattr(Path, "glob", deny)
+    assert gm.push(Fake(), src, gm.AUTH_TREES) == {"seen": 0, "uploaded": 0, "would_upload": 0}
