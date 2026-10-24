@@ -91,3 +91,10 @@ def test_sync_to_gcs_uploads_every_local_day(env, tmp_path):
     for d in ("20261010", "20261011"):
         (tmp_path / f"{d}.json").write_text(json.dumps(_doc(d)), encoding="utf-8")
     assert pr.sync_to_gcs() == {"uploaded": 2} and sorted(env.objs) == ["20261010", "20261011"]
+
+
+def test_read_days_reads_remote_days_in_order_and_skips_missing(env):
+    for d in ("20261010", "20261012", "20261011"):
+        env.objs[d] = json.dumps(_doc(d))
+    out = pr.read_days(["20261010", "20261011", "20261099", "20261012"])
+    assert [x["date"] for x in out] == ["20261010", "20261011", "20261012"]

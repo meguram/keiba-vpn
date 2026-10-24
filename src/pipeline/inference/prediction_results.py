@@ -34,7 +34,7 @@ MARKS = ("honmei", "pair", "show_val", "star", "kesi")   # ◎ ○ ▲ ★ 消�
 HIGHLIGHT_MARKS = ("honmei", "pair", "star")  # 注目レース（穴の的中）に使う印。消印は『走らない』側の印なので除く
 MARK_SYMBOLS = {"honmei": "◎", "pair": "○", "star": "★", "anchor": "△", "show_val": "▲", "kesi": "消"}
 _PAYOFF_KEYS = {"単勝": "tansho", "複勝": "fukusho", "馬連": "umaren", "ワイド": "wide", "馬単": "umatan",
-                "三連複": "sanrenpuku", "3連複": "sanrenpuku"}
+                "三連複": "sanrenpuku", "3連複": "sanrenpuku", "三連単": "sanrentan", "3連単": "sanrentan"}
 
 
 def enabled() -> bool:
@@ -71,7 +71,7 @@ def parse_payoff(payoff: Any) -> dict[str, dict[tuple[int, ...], int]]:
             pay = _to_int(r.get("payout"))
             if not nums or None in nums or not pay:
                 continue
-            key = tuple(nums) if bt in ("tansho", "fukusho", "umatan") else tuple(sorted(nums))  # type: ignore[arg-type]
+            key = tuple(nums) if bt in ("tansho", "fukusho", "umatan", "sanrentan") else tuple(sorted(nums))  # type: ignore[arg-type]
             out.setdefault(bt, {})[key] = pay
     return out
 
@@ -175,27 +175,13 @@ def settle_candidate(bt: str, pair: tuple[int, ...], amount: int, odds: float, r
     """1 つの買い目を精算する。戻り値 (的中, 払戻[円], 概算か)。"""
     fm: dict[int, int] = result["finish"]
     n = result.get("n_runners") or len(fm)
-    by_pos = defaultdict(list)
-    for hn, pos in fm.items():
-        by_pos[pos].append(hn)
-    top3 = {h for h, p in fm.items() if p <= 3}
-    if bt == "tansho":
-        hit = fm.get(pair[0]) == 1
-        key: tuple[int, ...] = (pair[0],)
-    elif bt == "fukusho":
-        hit = fm.get(pair[0], 99) <= (3 if n >= 8 else 2)
-        key = (pair[0],)
-    elif bt == "umaren":
-        hit = sorted(pair) == sorted(by_pos.get(1, []) + by_pos.get(2, [])) and len(pair) == 2
-        key = tuple(sorted(pair))
-    elif bt == "wide":
-        hit = all(fm.get(h, 99) <= 3 for h in pair)
-        key = tuple(sorted(pair))
-    elif bt == "sanrenpuku":
-        hit = len(top3) == 3 and set(pair) == top3
-        key = tuple(sorted(pair))
-    else:
+    # 同着（ダッドヒート）を含め、着順から払戻の出る組合せを求める共通関数で判定する（3 着同着のワイド A-B は外れ、3 連複は 2 組が当たり、2 着同着の馬連は 2 組が当たる）
+    from src.pipeline.betting import winning_combos as W
+
+    if bt not in W.BET_TYPES or bt == "wakuren":
         return False, 0.0, False
+    key = tuple(pair) if (bt in W.ORDERED or len(pair) == 1) else tuple(sorted(pair))
+    hit = key in W.winning_combos(W.finish_groups(fm), bt, n_runners=n)
     if not hit:
         return False, 0.0, False
     per100 = (result.get("payoff") or {}).get(bt, {}).get(key)
@@ -513,13 +499,20 @@ def gcs_enabled() -> bool:
     return flag == "1" or (os.environ.get("KEIBA_RUN_LOCATION") or "").strip().lower() == "gcp"
 
 
+_GCS_BUCKET: list = []
+
+
 def _gcs_bucket():
-    from google.cloud import storage
+    """認証つきのクライアントはプロセスで 1 つ使い回す（毎回作ると 1 読みが数百 ms〜数秒になる）。"""
+    if not _GCS_BUCKET:
+        from google.cloud import storage
 
-    from src.config.gcp_credentials import build_gcp_credentials, gcp_project_id
+        from src.config.gcp_credentials import build_gcp_credentials, gcp_project_id
 
-    # .env の GCS_* のサービスアカウント（ホスト）。無ければ ADC（Cloud Run のサービスアカウント）
-    return storage.Client(project=gcp_project_id() or None, credentials=build_gcp_credentials()).bucket(os.environ["GCS_BUCKET"])
+        # .env の GCS_* のサービスアカウント（ホスト）。無ければ ADC（Cloud Run のサービスアカウント）
+        client = storage.Client(project=gcp_project_id() or None, credentials=build_gcp_credentials())
+        _GCS_BUCKET.append(client.bucket(os.environ["GCS_BUCKET"]))
+    return _GCS_BUCKET[0]
 
 
 def _gcs_get(date: str) -> str | None:
@@ -580,6 +573,16 @@ def sync_to_gcs(base: Path | None = None) -> dict[str, int]:
         n += 1
     clear_remote_cache()
     return {"uploaded": n}
+
+
+def read_days(days: list[str], base: Path | None = None) -> list[dict]:
+    """複数日をまとめて読む（見つかった日だけ、日付順）。GCS から読むときは並列にする（冷間の期間集計を数秒に収める）。"""
+    if base is None and gcs_enabled() and len(days) > 1:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=16) as ex:
+            return [x for x in ex.map(read_day, days) if x]
+    return [x for x in (read_day(d, base) for d in days) if x]
 
 
 def read_day(date: str, base: Path | None = None) -> dict | None:
@@ -699,7 +702,7 @@ def period_summary(scope: str, date: str, base: Path | None = None) -> dict:
     """期間の合算と、日別の推移（回収率・本命の勝率など）。"""
     lo, hi = period_range(scope, date)
     days = [d for d in list_days(base) if lo <= d <= hi]
-    docs = [x for x in (read_day(d, base) for d in days) if x]
+    docs = read_days(days, base)
     summ = merge_summaries([x["summary"] for x in docs]) if docs else summarize([])
     series = []
     for x in docs:
@@ -733,7 +736,7 @@ def race_level_marks(records: list[dict]) -> dict[str, dict[str, int]]:
 def range_summary(lo: str, hi: str, base: Path | None = None) -> dict:
     """任意の期間（YYYYMMDD の両端を含む）の合算。日次の確定/暫定の状態も持つ。race_marks は保存済みのレース記録から数えたレース単位の集計。"""
     days = [d for d in list_days(base) if lo <= d <= hi]
-    docs = [x for x in (read_day(d, base) for d in days) if x]
+    docs = read_days(days, base)
     return {"from": lo, "to": hi, "days": [x["date"] for x in docs],
             "status": "final" if docs and all(x["status"] == "final" for x in docs) else "provisional",
             "summary": merge_summaries([x["summary"] for x in docs]) if docs else summarize([]),
