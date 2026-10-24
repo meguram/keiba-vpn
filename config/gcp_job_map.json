@@ -30,9 +30,9 @@
    },
    "l": {
     "name": "keiba-dispatch-l",
-    "memory": "4Gi",
+    "memory": "8Gi",
     "cpu": "2",
-    "memory_mib": 4096
+    "memory_mib": 8192
    }
   },
   "scheduler_budget": {
@@ -1965,7 +1965,7 @@
      ]
     }
    ],
-   "memory_mib": 3072,
+   "memory_mib": 6144,
    "timeout_sec": 600,
    "env": [
     "KEIBA_ENV",

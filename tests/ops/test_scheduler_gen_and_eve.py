@@ -57,7 +57,7 @@ def test_unready_groups_are_not_created_by_default():
 
 def test_run_job_memory_matches_sizes_and_secrets_not_inlined():
     text = SG.render("jobs", DOC, env=ENV)
-    assert "--memory 512Mi" in text and "--memory 2Gi" in text and "--memory 4Gi" in text
+    assert "--memory 512Mi" in text and "--memory 2Gi" in text and "--memory 8Gi" in text          # l は 8Gi（predict-race の実測ピーク 4.3GB のため）
     assert "--set-secrets SLACK_WEBHOOK_URL=SLACK_WEBHOOK_URL:latest" in text and "hooks.slack.com" not in text
 
 
