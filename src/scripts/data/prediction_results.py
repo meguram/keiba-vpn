@@ -3,6 +3,7 @@
   python -m src.scripts.data.prediction_results --date 20261018            # 1 日（結果の状態で暫定/確定を自動判定）
   python -m src.scripts.data.prediction_results --from 20261001 --to 20261018   # 範囲（開催日だけ保存）
   python -m src.scripts.data.prediction_results --date 20261018 --dry-run  # 保存せず内容を表示
+  python -m src.scripts.data.prediction_results --sync-gcs   # ローカルの日次記録をすべて GCS（ops/prediction_results/）へ置く（初回の移行。GCS_BUCKET が要る）
   python -m src.scripts.data.prediction_results --from 20260301 --to 20261024 --add-levels   # 保存済みの記録に推奨度だけを追記（印・着順・回収率は変えない）
 
 稼働中の自動実行は KEIBA_PREDICTION_RESULTS=1 のときだけ（raceday-result-runner の終了時=暫定、recent-retry の確定結果取得後=確定）。
@@ -32,8 +33,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--to", dest="d_to")
     ap.add_argument("--max-total-bet", type=int, default=pr.DEFAULT_MAX_TOTAL_BET)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--sync-gcs", action="store_true", help="ローカルの日次記録を GCS へ一括で置く")
     ap.add_argument("--add-levels", action="store_true", help="保存済みの日次記録に仮想購入の推奨度だけを追記する")
     a = ap.parse_args(argv)
+    if a.sync_gcs:
+        print(pr.sync_to_gcs())
+        return 0
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     if a.date:
         days = [a.date]

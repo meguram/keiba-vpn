@@ -115,6 +115,15 @@
 - 取得で作る `data/page_reference/**`（race_lists・race_day_schedule・cushion など）は、**VPS 実行役が GCS に直接書く**（`state/` ではなく正本の接頭辞）。Jobs はそれを読む。
 - 完了条件: `serving_state push` をホストで実行していない状態で、1 週間、Cloud Run の表示が更新され続ける。
 
+#### 4.1.1 置き場所の決定（2026-10-24、ユーザー依頼: VPS か GCP のどちらかに置く。コストとレイテンシを見て決める）
+**決定: 正本は GCS（GCP）。VPS には置かない。** VPS は画面と薄い取得役だけで、API 用のデータは持たない。
+- 理由（コスト）: 日次の予測成績は 1 日 約 150KB・年 約 15MB、予測 parquet は 1 日 約 150KB。保存・読み取りとも GCS の最小課金（月 数円以下）。VPS に置くと API を VPS で動かすことになり、常駐 600MB の上限（architecture_target.md）と衝突する。
+- 理由（レイテンシ）: Cloud Run は永続ディスクを持たないため、ローカル読みは GCS 読みでしか置き換えられない。GCS の 1 オブジェクト読みは同一リージョンで数十 ms。**確定済みの日は変わらないのでプロセス内に 6 時間キャッシュ**、当日分は 60 秒。ローカルがあれば（ホスト・テスト）従来どおりローカルが先で、GCS は“無いときだけ”。さらに VPS の nginx で GET をキャッシュする案は 5 章（別途）。
+- 置き場: `gs://<GCS_BUCKET>/ops/prediction_results/<YYYYMMDD>.json`（運用の正本の接頭辞。`research/` とは分ける）。
+- 実装: `src/pipeline/inference/prediction_results.py`（`gcs_enabled` / `read_day` / `write_day` / `list_days` / `sync_to_gcs`）。**有効条件は `KEIBA_PREDICTION_RESULTS_GCS=1`、または Cloud Run/Jobs（`KEIBA_RUN_LOCATION=gcp`）。0 で無効、dev は常に無効**。書き込みの失敗はローカル保存を止めない。
+- 初回の移行: ホストで `.env` に `KEIBA_PREDICTION_RESULTS_GCS=1` を足し、`python -m src.scripts.data.prediction_results --sync-gcs`（86 日・約 15MB を 1 回）。以後は集計のたびに両方へ書く。Cloud Run には serving_state の `data/local/prediction_results/**` は不要になる。
+- 未完了（同じ方針で順に移す）: `entries_state`（出馬表の段階）、`events`（予測の経過）、予測 parquet（`predictions_v3`）。予測は `KEIBA_V3_SERVING=predict` で `race_predictions`（GCS）に保存される経路が既にあり、shadow→predict の切替（モデルの採用判断）が前提。
+
 ### 4.2 モデル: ホスト→運用の一方向の契約
 研究（ホスト）が運用に渡すのは**これだけ**。
 ```

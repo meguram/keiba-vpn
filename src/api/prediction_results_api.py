@@ -31,6 +31,7 @@ _TTL = 20.0
 from src.utils import cache_epoch as _cache_epoch  # noqa: E402
 
 _cache_epoch.register("prediction_results_api", _CACHE.clear)
+_cache_epoch.register("prediction_results_gcs", pr.clear_remote_cache)
 _WEEKDAY = "月火水木金土日"
 
 

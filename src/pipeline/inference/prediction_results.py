@@ -15,7 +15,9 @@ import json
 import logging
 import math
 import os
+import re
 import tempfile
+import time
 from collections import defaultdict
 from datetime import date as _date, datetime, timedelta, timezone
 from pathlib import Path
@@ -134,7 +136,15 @@ def load_race_result(storage: Any, race_id: str) -> dict | None:
 # ───────────────────────── 予測・仮想購入 ─────────────────────────
 
 def load_predictions(storage: Any, race_id: str) -> dict | None:
-    """GCS の race_predictions があればそれ、無ければローカルの shadow / バックフィル（画面と同じ経路）。"""
+    """最新モデル(v6e)のローカル予測 > GCS の race_predictions > ローカルの shadow / バックフィル（画面と同じ経路）。"""
+    try:
+        from src.api.local_predictions import load_primary_prediction_payload
+
+        prim = load_primary_prediction_payload(race_id, storage)
+        if prim:
+            return prim
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("v6e の予測の読み込み失敗 %s: %s", race_id, exc)
     try:
         doc = storage.load("race_predictions", race_id)
     except Exception as exc:  # noqa: BLE001
@@ -481,12 +491,100 @@ def day_path(date: str, base: Path | None = None) -> Path:
     return (base or store_dir()) / f"{date}.json"
 
 
+# ───────────────────────── GCS の置き場（ホストと切り離すため） ─────────────────────────
+# 日次の集計は小さい JSON（1 日 約 150KB・年 約 15MB）。正本をホストのローカルから GCS に移し、Cloud Run の API がローカルに依存せず読めるようにする。
+# 有効なのは KEIBA_PREDICTION_RESULTS_GCS=1、または Cloud Run/Jobs（KEIBA_RUN_LOCATION=gcp）。0 で無効。dev は GCP 禁止のため常に無効。
+# 読みはローカルが先（ホスト・テストの挙動は変えない）で、ローカルに無いときだけ GCS。確定済みの日は変わらないので長くキャッシュする。
+
+GCS_PREFIX = "ops/prediction_results"
+_REMOTE_TTL_FINAL, _REMOTE_TTL_OPEN, _REMOTE_TTL_LIST = 6 * 3600.0, 60.0, 60.0
+_REMOTE_DOCS: dict[str, tuple[float, dict | None]] = {}
+_REMOTE_LIST: list[tuple[float, list[str]]] = []
+
+
+def gcs_enabled() -> bool:
+    flag = (os.environ.get("KEIBA_PREDICTION_RESULTS_GCS") or "").strip()
+    if flag == "0" or not os.environ.get("GCS_BUCKET"):
+        return False
+    from src.config.gcp_guard import gcp_forbidden
+
+    if gcp_forbidden():
+        return False
+    return flag == "1" or (os.environ.get("KEIBA_RUN_LOCATION") or "").strip().lower() == "gcp"
+
+
+def _gcs_bucket():
+    from google.cloud import storage
+
+    return storage.Client().bucket(os.environ["GCS_BUCKET"])
+
+
+def _gcs_get(date: str) -> str | None:
+    from google.api_core.exceptions import NotFound
+
+    try:
+        return _gcs_bucket().blob(f"{GCS_PREFIX}/{date}.json").download_as_text()
+    except NotFound:
+        return None
+
+
+def _gcs_put(date: str, text: str) -> None:
+    _gcs_bucket().blob(f"{GCS_PREFIX}/{date}.json").upload_from_string(text, content_type="application/json")
+
+
+def _gcs_list() -> list[str]:
+    return sorted(b.name.rsplit("/", 1)[-1][:-5] for b in _gcs_bucket().client.list_blobs(os.environ["GCS_BUCKET"], prefix=f"{GCS_PREFIX}/")
+                  if re.fullmatch(r"\d{8}\.json", b.name.rsplit("/", 1)[-1]))
+
+
+def clear_remote_cache() -> None:
+    _REMOTE_DOCS.clear()
+    _REMOTE_LIST.clear()
+
+
+def _remote_day(date: str) -> dict | None:
+    hit = _REMOTE_DOCS.get(date)
+    if hit and time.time() - hit[0] < (_REMOTE_TTL_FINAL if (hit[1] or {}).get("status") == "final" else _REMOTE_TTL_OPEN):
+        return hit[1]
+    try:
+        text = _gcs_get(date)
+        doc = json.loads(text) if text else None
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("予測成績の GCS 読み込みに失敗 %s: %s", date, exc)
+        return hit[1] if hit else None
+    _REMOTE_DOCS[date] = (time.time(), doc)
+    return doc
+
+
+def _remote_days() -> list[str]:
+    if _REMOTE_LIST and time.time() - _REMOTE_LIST[0][0] < _REMOTE_TTL_LIST:
+        return _REMOTE_LIST[0][1]
+    try:
+        days = _gcs_list()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("予測成績の GCS 一覧に失敗: %s", exc)
+        return _REMOTE_LIST[0][1] if _REMOTE_LIST else []
+    _REMOTE_LIST[:] = [(time.time(), days)]
+    return days
+
+
+def sync_to_gcs(base: Path | None = None) -> dict[str, int]:
+    """ローカルの日次記録をすべて GCS へ置く（一括の初回移行用。何度実行しても同じ）。"""
+    n = 0
+    for d in list_days(base):
+        text = day_path(d, base).read_text(encoding="utf-8")
+        _gcs_put(d, text)
+        n += 1
+    clear_remote_cache()
+    return {"uploaded": n}
+
+
 def read_day(date: str, base: Path | None = None) -> dict | None:
     p = day_path(date, base)
     try:
         return json.loads(p.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return None
+        return _remote_day(date) if base is None and gcs_enabled() else None
 
 
 def write_day(doc: dict, base: Path | None = None, *, force: bool = False) -> Path | None:
@@ -505,6 +603,14 @@ def write_day(doc: dict, base: Path | None = None, *, force: bool = False) -> Pa
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)
+    if base is None or base == store_dir():
+        if gcs_enabled():
+            try:
+                _gcs_put(doc["date"], p.read_text(encoding="utf-8"))
+                _REMOTE_DOCS.pop(doc["date"], None)
+                _REMOTE_LIST.clear()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("予測成績の GCS への保存に失敗 %s（ローカルには保存済み）: %s", doc["date"], exc)
     return p
 
 
@@ -580,7 +686,10 @@ def period_range(scope: str, date: str) -> tuple[str, str]:
 
 def list_days(base: Path | None = None) -> list[str]:
     b = base or store_dir()
-    return sorted(p.stem for p in b.glob("[0-9]" * 8 + ".json"))
+    local = {p.stem for p in b.glob("[0-9]" * 8 + ".json")}
+    if base is None and gcs_enabled():
+        local |= set(_remote_days())
+    return sorted(local)
 
 
 def period_summary(scope: str, date: str, base: Path | None = None) -> dict:
