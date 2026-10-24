@@ -33,7 +33,6 @@ TREES = (
     "data/local/inference/snapshots",
     "data/local/inference/lap_forecast",
     "data/local/inference/tracking_v2",
-    "data/calculated_data/tracking_difficulty::20*.json",     # 追走難度・想定ラップの事前計算（/api/race/{id}/tracking-difficulty）。1 レース約 35KB・1 日 36 件。過去分は --recent-days で段階的に
     "data/local/meta/entries_state",
     # 画面が読む参照データ（取得で作る・更新が速い／ほぼ固定のもの。旧 serving_state の core 群）。"<フォルダ>::<glob>" はフォルダの中の一致するファイルだけ
     "data/page_reference/race_lists",
@@ -49,6 +48,12 @@ TREES = (
     "data/page_reference/tables::*/megu_index_flat.parquet",
     "data/page_reference/tables::*/race_result_flat.parquet",
 )
+# GCS には全部置くが、Cloud Run の起動時には取り込まない（全体で約 1GB。メモリ上のファイルシステムに載せない）もの。
+# 定期の取り込み(recent)にも含めない（一括アップロードで更新時刻が揃い、直近扱いで全部が降りてしまうため）。読まれたときに 1 件だけ取りに行く（fetch_one。一定時間より古ければ取り直す）。
+LAZY_TREES = (
+    "data/calculated_data/tracking_difficulty::20*.json",     # 追走難度・想定ラップの事前計算（/api/race/{id}/tracking-difficulty）。1 レース約 35KB・全体で約 1GB
+)
+PUSH_TREES = TREES + LAZY_TREES
 _SKIP = re.compile(r"(\.tmp|\.lock)$")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -95,12 +100,23 @@ def _files(root: Path, tree: str) -> list[Path]:
     return [p for p in base.glob(g) if p.is_file() and not _SKIP.search(p.name)] if base.exists() else []
 
 
-def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = TREES, *, recent_days: float | None = None,
-         dry_run: bool = False, workers: int = 8) -> dict[str, int]:
-    """内容が違う（または GCS に無い）ローカルのファイルだけを上げる。recent_days を付けると、その日数以内に更新されたファイルだけを見る。"""
+def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH_TREES, *, recent_days: float | None = None,
+         dry_run: bool = False, workers: int = 8, batch_bytes: int = 64 * 1024 * 1024) -> dict[str, int]:
+    """内容が違う（または GCS に無い）ローカルのファイルだけを上げる。recent_days を付けると、その日数以内に更新されたファイルだけを見る。
+    全体が大きくても、メモリに溜めるのは batch_bytes まで（溜まったら上げて空にする）。"""
     cutoff = time.time() - recent_days * 86400 if recent_days is not None else 0.0
     todo: list[tuple[str, bytes]] = []
-    seen = 0
+    seen = uploaded = would = 0
+    held = 0
+
+    def flush() -> None:
+        nonlocal todo, held, uploaded
+        if todo:
+            with ThreadPoolExecutor(max_workers=workers) as ex:
+                list(ex.map(lambda kv: backend.upload(*kv), todo))
+            uploaded += len(todo)
+        todo, held = [], 0
+
     for tree in trees:
         remote = backend.list(f"{PREFIX}/{split_tree(tree)[0]}/")
         for p in _files(root, tree):
@@ -110,11 +126,14 @@ def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = TREE
             data = p.read_bytes()
             key = f"{PREFIX}/{p.relative_to(root).as_posix()}"
             if remote.get(key, ("",))[0] != _md5(data):
-                todo.append((key, data))
-    if not dry_run and todo:
-        with ThreadPoolExecutor(max_workers=workers) as ex:
-            list(ex.map(lambda kv: backend.upload(*kv), todo))
-    return {"seen": seen, "uploaded": 0 if dry_run else len(todo), "would_upload": len(todo) if dry_run else 0}
+                if dry_run:
+                    would += 1
+                    continue
+                todo.append((key, data)); held += len(data)
+                if held >= batch_bytes:
+                    flush()
+    flush()
+    return {"seen": seen, "uploaded": uploaded, "would_upload": would}
 
 
 def pull(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = TREES, *, recent_days: float | None = None,
@@ -143,6 +162,33 @@ def pull(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = TREE
         with ThreadPoolExecutor(max_workers=workers) as ex:
             list(ex.map(_get, todo))
     return {"seen": seen, "downloaded": len(todo)}
+
+
+_MISS: dict[str, float] = {}
+
+
+def fetch_one(rel_path: str, root: Path = REPO_ROOT, backend: Backend | None = None, *, miss_ttl: float = 60.0, max_age: float | None = None) -> bool:
+    """GCS のミラーから 1 ファイルだけ取りに行く（LAZY_TREES 用。起動時に取り込まない古いデータを、読まれたときに使う）。
+    ミラーが無効（KEIBA_MIRROR_PULL が 1 でない）なら何もしない。GCS に無かった結果は miss_ttl 秒だけ覚えて、同じファイルを何度も問い合わせない。"""
+    if backend is None and os.environ.get("KEIBA_MIRROR_PULL", "").strip() != "1":
+        return False
+    now = time.time()
+    if now - _MISS.get(rel_path, 0.0) < miss_ttl:
+        return False
+    local = root / rel_path
+    if max_age is not None and local.is_file() and now - local.stat().st_mtime < max_age:
+        return False                                  # 取って間もない（max_age 秒以内）ので取り直さない
+    try:
+        be = backend or GcsBackend()
+        data = be.download(f"{PREFIX}/{rel_path}")
+    except Exception:  # noqa: BLE001  無い・通信失敗は『まだ無い』として扱う
+        _MISS[rel_path] = now
+        return False
+    local.parent.mkdir(parents=True, exist_ok=True)
+    tmp = local.with_name(local.name + ".tmp")
+    tmp.write_bytes(data)
+    os.replace(tmp, local)
+    return True
 
 
 def start_refresher(backend: Backend | None = None, root: Path = REPO_ROOT, *, interval: float = 60.0, recent_days: float = 2.0) -> threading.Thread:

@@ -133,11 +133,35 @@ def test_default_trees_cover_the_data_the_api_reads():
         assert need in dirs
 
 
-def test_tracking_difficulty_store_is_mirrored_by_race_json_only(tmp_path):
-    """Cloud Run の /api/race/{id}/tracking-difficulty は事前計算の JSON を読む。レース ID のファイルだけを上げ、索引の補助ファイルは上げない。"""
-    assert any(t.startswith("data/calculated_data/tracking_difficulty") for t in gm.TREES)
+def test_tracking_difficulty_is_pushed_but_not_bulk_pulled(tmp_path):
+    """追走難度は全体で約 1GB。GCS には全部置くが、Cloud Run の起動時（TREES の全体取り込み）には載せない。レース ID のファイルだけを上げる。"""
     d = "data/calculated_data/tracking_difficulty"
-    _w(tmp_path, f"{d}/202608040901.json", b"{}")
-    _w(tmp_path, f"{d}/_index_meta.json", b"{}")
+    assert any(t.startswith(d) for t in gm.LAZY_TREES) and not any(t.startswith(d) for t in gm.TREES) and set(gm.LAZY_TREES) <= set(gm.PUSH_TREES)
+    src = tmp_path / "src"
+    _w(src, f"{d}/202608040901.json", b"{}")
+    _w(src, f"{d}/_index_meta.json", b"{}")
     g = Fake()
-    assert gm.push(g, tmp_path, tuple(t for t in gm.TREES if "tracking_difficulty" in t))["uploaded"] == 1
+    assert gm.push(g, src, gm.LAZY_TREES)["uploaded"] == 1
+    run = tmp_path / "run"
+    assert gm.pull(g, run, TREES)["downloaded"] == 0                       # 起動時の全体取り込みには含まれない
+    assert gm.fetch_one(f"{d}/202608040901.json", run, g) is True           # 読まれたときに 1 件だけ取る
+    assert gm.fetch_one(f"{d}/202608040901.json", run, g, max_age=600.0) is False       # 取って間もないときは取り直さない
+
+
+def test_push_flushes_in_batches_so_memory_stays_bounded(tmp_path):
+    for i in range(10):
+        _w(tmp_path, f"data/local/meta/entries_state/R{i}.json", b"x" * 100)
+    g = Fake()
+    assert gm.push(g, tmp_path, ("data/local/meta/entries_state",), batch_bytes=250)["uploaded"] == 10
+
+
+def test_fetch_one_gets_a_single_file_and_remembers_misses(tmp_path, monkeypatch):
+    g = Fake()
+    g.objs["ops/mirror/data/x/R1.json"] = (b"{}", time.time())
+    assert gm.fetch_one("data/x/R1.json", tmp_path, g) is True and (tmp_path / "data/x/R1.json").read_bytes() == b"{}"
+    gm._MISS.clear()
+    assert gm.fetch_one("data/x/NONE.json", tmp_path, g) is False
+    g.objs["ops/mirror/data/x/NONE.json"] = (b"{}", time.time())
+    assert gm.fetch_one("data/x/NONE.json", tmp_path, g) is False          # 直前に無かったものは、短時間は問い合わせ直さない
+    monkeypatch.delenv("KEIBA_MIRROR_PULL", raising=False)
+    assert gm.fetch_one("data/x/R2.json", tmp_path) is False               # ミラー無効（ホスト・dev・テスト）では何もしない
