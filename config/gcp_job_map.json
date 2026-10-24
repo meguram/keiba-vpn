@@ -116,7 +116,8 @@
     "page-quality-check",
     "parity-check",
     "slack-scrape-coverage",
-    "tracking-v2-weekly"
+    "tracking-v2-weekly",
+    "rb-state-daily"
    ]
   },
   "g-1000-mon": {
@@ -126,7 +127,8 @@
    "desc": "ドリフト監視・凍結追跡（月曜）",
    "jobs": [
     "drift-monitor-weekly",
-    "frozen-tracking-weekly"
+    "frozen-tracking-weekly",
+    "px-ridge-window"
    ]
   },
   "g-sun-2200": {
@@ -156,7 +158,8 @@
    "timeout_sec": 600,
    "desc": "VPS 実行役の定期タスクを 6 時間先まで予約",
    "jobs": [
-    "reserve-fetch-tasks"
+    "reserve-fetch-tasks",
+    "shared-login"
    ]
   },
   "g-5min": {
@@ -3271,6 +3274,191 @@
     "script": "scripts/server/ensure_postgres.sh"
    },
    "reason": "PostgreSQL は廃止。sync-pg-from-gcs と同時に止める",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "shared-login",
+   "desc": "共通ログインの毎月1日のパスワード更新と Slack 通知（毎日 00:05 に起動し、月が替わっていなければ何もしない）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 2,
+   "origin": {
+    "tag": "KEIBA-SHARED-LOGIN",
+    "cron_job_id": "shared-login",
+    "cron_utc": "5 15 * * *",
+    "script": "scripts/cron/shared_login_daily.sh"
+   },
+   "group": "g-hourly",
+   "when_jst": "5 0 * * *",
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.ops.shared_login",
+      "ensure"
+     ]
+    }
+   ],
+   "memory_mib": 768,
+   "timeout_sec": 300,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "DEV_SECRET_KEY",
+    "KEIBA_SHARED_LOGIN_ID",
+    "SLACK_WEBHOOK_URL"
+   ],
+   "state_in": [
+    {
+     "path": "config",
+     "max_mb": 5
+    }
+   ],
+   "state_out": [
+    {
+     "path": "config",
+     "max_mb": 5
+    }
+   ],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "秘密(DEV_SECRET_KEY=パスワードの元・KEIBA_SHARED_LOGIN_ID・SLACK_WEBHOOK_URL)を Secret Manager に登録して Jobs の env に渡す(ユーザー作業)。パスワードは年月と秘密から決まるので、ホストと同じ値なら切替前後で同じ",
+    "『送信済みの月』の状態ファイル(shared_login_state.json)がローカル。GCS に置く形にしないと、Jobs が毎回再送する/月初に送れない"
+   ],
+   "enabled": true,
+   "ready": false
+  },
+  {
+   "id": "rb-state-daily",
+   "desc": "v6 の RB（めぐ指数/netkeiba 指数の履歴16列）の推論用の履歴状態を前日までの確定走で作り直す（日次）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-V6-STATE",
+    "cron_job_id": "rb-state-daily",
+    "cron_utc": "20 23 * * *",
+    "script": "scripts/cron/rb_state_daily.sh"
+   },
+   "group": "g-0800",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.build_rb_state",
+      "build"
+     ]
+    }
+   ],
+   "memory_mib": 2048,
+   "timeout_sec": 900,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 600
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/local/inference/state/rb_v6",
+     "max_mb": 50
+    }
+   ],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "ホストのシェル(tp65_prep → build_rb_state → 検査 → 原子的に差し替え)を 1 つのモジュールにまとめる必要がある(今は steps が build の部分だけ)",
+    "状態の出力先がホストのローカル。GCS に書き、予測のジョブが読む形にする",
+    "v6 を画面に出すかの採用判断が前提(KEIBA_PRED_MODEL。判断前でも作っておく設計)"
+   ],
+   "enabled": true,
+   "ready": false
+  },
+  {
+   "id": "px-ridge-window",
+   "desc": "v5/v6 の血統 ALL_BEST(PX)のリッジを、次の半年に入る前に作っておく（毎週。必要なときだけ実行）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-V6-STATE",
+    "cron_job_id": "px-ridge-window",
+    "cron_utc": "30 18 * * 0",
+    "script": "scripts/cron/px_ridge_window.sh"
+   },
+   "group": "g-1000-mon",
+   "when_jst": "* * * * 1",
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.build_px_state",
+      "--windows",
+      "{px_next_window}"
+     ]
+    }
+   ],
+   "memory_mib": 4096,
+   "timeout_sec": 1800,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 600
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/local/inference/state/px_v5",
+     "max_mb": 300
+    }
+   ],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "『次の半年の T0』を決めて、無ければ作る判定(今はシェルの中)を Python 側に移す。steps の {px_next_window} はその値で置き換える",
+    "リッジ(ridge_<T0>.npz)の置き場がホストのローカル。GCS に置いて予測のジョブが読む形にする",
+    "祖先表・SVD は数GBのメモリ。size=l(4Gi)で実測して収まるか確認する"
+   ],
+   "enabled": true,
+   "ready": false
+  },
+  {
+   "id": "gcs-mirror-push",
+   "desc": "ホストの出力（予測・出馬表の状態・ラップ予想・追走難度）を GCS(ops/mirror)へ差分アップロード（5分おき）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-GCS-MIRROR",
+    "cron_job_id": "gcs-mirror-push",
+    "cron_utc": "*/5 * * * *",
+    "script": "scripts/cron/gcs_mirror_push.sh"
+   },
+   "reason": "移行中の橋渡し。予測の生成と出馬表の収集が VPS/GCP で GCS に直接書くようになったら廃止する（decoupling_plan.md 4.1.1）",
    "enabled": true,
    "blockers": [],
    "ready": true

@@ -26,6 +26,7 @@
     "rotate-logs": {"role": "retire", "note": "ホストのログ。VPS は journald 100MB、GCP は Cloud Logging"},
     "ensure-monitor": {"role": "retire", "note": "監視ポータルを Cloud Run へ移すとき一緒に廃止(それまでは残す)"},
     "sync-pg-from-gcs": {"role": "retire", "note": "PostgreSQL 廃止(DB 経由の経路は 503)"},
-    "ensure-postgres": {"role": "retire", "note": "同上"}
+    "ensure-postgres": {"role": "retire", "note": "同上"},
+    "gcs-mirror-push": {"role": "retire", "note": "2026-10-24 移行中の橋渡し。予測の生成・出馬表の収集が GCS に直接書くようになったら止める"}
   }
 }
