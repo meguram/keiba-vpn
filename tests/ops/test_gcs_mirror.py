@@ -94,3 +94,21 @@ def test_refresher_pulls_everything_then_follows_new_files(tmp_path):
     assert wait("data/local/inference/tracking_v2/2026-10-24/R1.json") and wait("data/local/inference/snapshots/20261017/R0.json")
     g.objs["ops/mirror/data/local/meta/entries_state/R9.json"] = (b"new", time.time())               # 後から増えた分を追いかける
     assert wait("data/local/meta/entries_state/R9.json")
+
+
+def test_storage_client_uses_env_service_account_then_adc(monkeypatch):
+    import sys
+    import types
+
+    from src.config import gcp_credentials as gc
+
+    seen = {}
+    fake = types.SimpleNamespace(Client=lambda **kw: seen.update(kw) or object())
+    monkeypatch.setitem(sys.modules, "google.cloud.storage", fake)
+    import google.cloud as gcloud
+    monkeypatch.setattr(gcloud, "storage", fake, raising=False)
+    monkeypatch.setattr("src.config.gcp_guard.gcp_forbidden", lambda: False)
+    monkeypatch.setenv("GCS_PROJECT_ID", "proj")
+    monkeypatch.delenv("GCS_PRIVATE_KEY", raising=False)
+    gc.storage_client()
+    assert seen == {"project": "proj", "credentials": None}          # 鍵が無ければ ADC（Cloud Run の実行サービスアカウント）

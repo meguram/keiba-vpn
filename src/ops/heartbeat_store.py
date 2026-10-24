@@ -58,9 +58,9 @@ class GcsBackend:
 
     def _blob(self):
         if self._bucket is None:
-            from google.cloud import storage
+            from src.config.gcp_credentials import storage_client
 
-            self._bucket = storage.Client().bucket(self.bucket_name)
+            self._bucket = storage_client().bucket(self.bucket_name)
         return self._bucket.blob(self.name)
 
     def read(self) -> tuple[dict | None, Any]:

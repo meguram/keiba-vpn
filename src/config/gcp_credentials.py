@@ -75,6 +75,14 @@ def gcp_project_id() -> str:
     return os.environ.get("GCS_PROJECT_ID", "").strip() or os.environ.get("GCP_PROJECT_ID", "").strip()
 
 
+def storage_client():
+    """GCS のクライアント。ホスト・VPS は ``.env`` の ``GCS_*`` のサービスアカウント、Cloud Run/Jobs は ADC（実行サービスアカウント）。
+    運用コードの GCS 接続はここを通す（認証の置き場所を 1 つにして、ホスト依存の隠れた認証を作らない）。"""
+    from google.cloud import storage
+
+    return storage.Client(project=gcp_project_id() or None, credentials=build_gcp_credentials())
+
+
 def gcp_credentials_available() -> bool:
     """``.env``からGCPサービスアカウント認証情報を構築できるかどうか（副作用なし）。"""
     return gcp_service_account_info() is not None

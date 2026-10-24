@@ -47,13 +47,11 @@ class Backend(Protocol):
 
 class GcsBackend:
     def __init__(self) -> None:
-        from google.cloud import storage
-
-        from src.config.gcp_credentials import build_gcp_credentials, gcp_project_id
+        from src.config.gcp_credentials import storage_client
         from src.config.gcp_guard import assert_gcp_allowed
 
         assert_gcp_allowed("運用データの GCS ミラー")
-        self._client = storage.Client(project=gcp_project_id() or None, credentials=build_gcp_credentials())
+        self._client = storage_client()
         self._bucket = self._client.bucket(os.environ["GCS_BUCKET"])
 
     def list(self, prefix: str) -> dict[str, tuple[str, float]]:

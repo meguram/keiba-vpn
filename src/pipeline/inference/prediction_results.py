@@ -505,13 +505,9 @@ _GCS_BUCKET: list = []
 def _gcs_bucket():
     """認証つきのクライアントはプロセスで 1 つ使い回す（毎回作ると 1 読みが数百 ms〜数秒になる）。"""
     if not _GCS_BUCKET:
-        from google.cloud import storage
+        from src.config.gcp_credentials import storage_client
 
-        from src.config.gcp_credentials import build_gcp_credentials, gcp_project_id
-
-        # .env の GCS_* のサービスアカウント（ホスト）。無ければ ADC（Cloud Run のサービスアカウント）
-        client = storage.Client(project=gcp_project_id() or None, credentials=build_gcp_credentials())
-        _GCS_BUCKET.append(client.bucket(os.environ["GCS_BUCKET"]))
+        _GCS_BUCKET.append(storage_client().bucket(os.environ["GCS_BUCKET"]))   # .env の GCS_*（ホスト）／ADC（Cloud Run）
     return _GCS_BUCKET[0]
 
 

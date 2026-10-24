@@ -76,9 +76,9 @@ class GcsIO:
         if not bucket:
             raise ValueError("バケット名が空（GCS_BUCKET）")
         if client is None:
-            from google.cloud import storage  # 遅延 import
+            from src.config.gcp_credentials import storage_client  # 遅延 import
 
-            client = storage.Client()
+            client = storage_client()
         self.bucket_name = bucket
         self._bucket = client.bucket(bucket)
 
