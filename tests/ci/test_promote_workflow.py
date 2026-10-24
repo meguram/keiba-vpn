@@ -79,15 +79,21 @@ def test_stg_deploy_never_switches_traffic_or_touches_prod_assets():
     assert "promote --target" not in text and "jobs --target" not in text
     assert "publish-ui-stg" in text and not re.search(r"publish-ui(?!-stg)", text)          # 公開するのは stg 用の画面だけ（本番の公開先 ops/releases/ui/ には書かない）
     assert "api-revision --target stg" in text and "smoke --target stg" in text
-    assert "environment" not in jobs["test"] and "environment" not in jobs["build-ui"]
+    assert "environment" not in jobs["check-jobs-image"] and "environment" not in jobs["build-ui"]      # GCP に触れない job は環境も権限も持たない
+    pub = jobs["publish-stg-ui"]
+    assert pub["environment"] == "stg" and set(pub["needs"]) == {"deploy", "build-ui"}                  # 画面の公開は API のスモークと画面のビルドが通った後だけ
 
 
 def test_auth_uses_wif_without_key_files_or_secrets():
     text = _all_text()
     assert "credentials_json" not in text and "GCP_SA_KEY" not in text and "secrets." not in text.replace("secrets: inherit", "")
     for path in (WF, WF_STG):
-        auths = [s for j in _load(path)["jobs"].values() for s in _steps(j) if "google-github-actions/auth" in s.get("uses", "")]
-        assert len(auths) == 1 and "vars.WIF_PROVIDER" in auths[0]["with"]["workload_identity_provider"]
+        n = 0
+        for j in _load(path)["jobs"].values():
+            auths = [s for s in _steps(j) if "google-github-actions/auth" in s.get("uses", "")]
+            assert len(auths) <= 1 and all("vars.WIF_PROVIDER" in a["with"]["workload_identity_provider"] for a in auths)
+            n += len(auths)
+        assert n >= 1
 
 
 def test_ci_never_scrapes():
@@ -189,10 +195,15 @@ def test_ci_installs_the_production_versions_and_cpu_torch():
         assert "-c constraints-jobs.txt" in text and "torch==2.6.0+cpu" in text, name      # 本番(Jobs イメージ)と同じ版で試す
 
 
-def test_stg_manual_run_can_skip_tests_but_push_cannot():
+def test_stg_deploy_runs_in_parallel_and_leaves_tests_to_ci():
     d = _load(WF_STG)
-    assert set(_on(d)["workflow_dispatch"]["inputs"]) == {"skip_tests"}
-    assert "inputs.skip_tests" in d["jobs"]["test"]["if"] and "workflow_dispatch" in d["jobs"]["test"]["if"]      # push では常にテストする
+    assert not _on(d).get("workflow_dispatch")                                  # 手動実行の入力は無い（テストを飛ばす道は無い。そもそもここでテストをしない）
+    jobs = d["jobs"]
+    assert "test" not in jobs                                                   # 同じコミットで ci.yml が走る（二重にしない）
+    assert "stg" in _on(_load(WFDIR / "ci.yml"))["push"]["branches"]
+    for name in ("build-ui", "check-jobs-image", "deploy"):
+        assert "needs" not in jobs[name], name                                  # 互いを待たない
+    assert "build-api-image --target stg" in WF_STG.read_text(encoding="utf-8") and "check-jobs-image --target stg" in WF_STG.read_text(encoding="utf-8")
 
 
 def test_ci_checks_python311_syntax_before_tests():

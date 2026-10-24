@@ -23,6 +23,14 @@ def test_build_images_pushes_api_and_jobs_and_checks_job_modules():
     assert out.index("importlib") < out.rindex("docker push")   # 確かめてから Jobs のイメージを push
 
 
+def test_stg_steps_split_api_push_from_jobs_check():
+    api = _run("build-api-image", "stg")
+    assert api.returncode == 0 and "Dockerfile.cloudrun" in api.stdout and "Dockerfile.jobs" not in api.stdout and "docker push" in api.stdout
+    jobs = _run("check-jobs-image", "stg")
+    assert jobs.returncode == 0 and "Dockerfile.jobs" in jobs.stdout and "importlib.import_module" in jobs.stdout
+    assert "docker push" not in jobs.stdout and "gcloud" not in jobs.stdout           # push しない・GCP に触れない
+
+
 def test_stg_uses_fixed_tag_and_never_switches_traffic_or_jobs():
     r = _run("api-revision", "stg")
     assert r.returncode == 0 and "TAG=stg" in r.stdout and "deploy_cloud_run_api.sh deploy --apply" in r.stdout

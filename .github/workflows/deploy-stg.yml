@@ -1,7 +1,8 @@
 name: deploy-stg
 
 # stg ブランチへの push（develop → stg のマージ）で、stg 環境に反映する。本番の通信・Jobs・画面の公開は動かさない。
-# 流れ: テスト + 画面のビルド確認 → API/Jobs のイメージ作成 → 通信 0% のタグ付きリビジョン(rstg)を作る → スモーク
+# 流れ（並走。約 4 分）: [画面のビルド] ‖ [API のイメージ → 通信 0% のタグ付きリビジョン(rstg) → スモーク] ‖ [Jobs のイメージの読み込み確認] → 画面を公開
+# テストはここでは走らせない（同じコミットの push で ci.yml が走る＝二重になるため）。本番(master)の反映は、テストと stg 含有の確認が関門のまま。
 # 手順・設定・ロールバック: docs/operations/github_promote.md
 # 方針: 鍵ファイルは使わない（Workload Identity Federation）。取得（スクレイピング）は CI で一切しない。
 
@@ -9,11 +10,6 @@ on:
   push:
     branches: [stg]
   workflow_dispatch:
-    inputs:
-      skip_tests:
-        description: "テストを飛ばす（緊急時、または自動反映の経路そのものを確かめるときだけ）"
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -27,28 +23,35 @@ env:
   FORCE_COLOR: "0"
 
 jobs:
-  test:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_tests) }}
-    uses: ./.github/workflows/_test.yml
-
   build-ui:
-    # test が成功、または skip_tests で飛ばされたときだけ進む
-    needs: [test]
-    if: ${{ always() && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
     uses: ./.github/workflows/_build-ui.yml
     with:
       env_label: stg                         # 画面端に STG と出る
       upstream: "http://127.0.0.1:8081"      # VPS の stg 用 nginx（Cloud Run の stg タグ付きリビジョンへ中継）
 
+  # Jobs のイメージが作れて、全ジョブのモジュールを読み込めるか（push しない・GCP に接続しない。API の反映を待たせない）
+  check-jobs-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCS_BUCKET: ${{ vars.GCS_BUCKET }}
+      REGION: ${{ vars.CLOUD_RUN_REGION }}
+      SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
+    steps:
+      - uses: actions/checkout@v4   # PIN
+      - name: Jobs のイメージを作り、全ジョブの実行モジュールを読み込めるか確かめる
+        run: bash scripts/ci/deploy_gcp.sh check-jobs-image --target stg
+
   deploy:
-    needs: [test, build-ui]
-    if: ${{ always() && needs.build-ui.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: stg
     permissions:
       contents: read
       id-token: write
+    outputs:
+      tag_url: ${{ steps.revision.outputs.tag_url }}
     env:
       PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       GCS_BUCKET: ${{ vars.GCS_BUCKET }}
@@ -66,8 +69,8 @@ jobs:
       - uses: actions/setup-python@v5   # PIN
         with:
           python-version: "3.11"
-      - name: API と Jobs のイメージを作って push
-        run: bash scripts/ci/deploy_gcp.sh build-images --target stg
+      - name: API のイメージを作って push
+        run: bash scripts/ci/deploy_gcp.sh build-api-image --target stg
       - name: 通信 0% のタグ付きリビジョン（rstg）を作る
         id: revision
         run: bash scripts/ci/deploy_gcp.sh api-revision --target stg
@@ -75,11 +78,34 @@ jobs:
         env:
           SMOKE_BASE: ${{ steps.revision.outputs.tag_url }}
         run: bash scripts/ci/deploy_gcp.sh smoke --target stg
+
+  # 画面の公開は、API のスモークが通り、画面のビルドができた後だけ
+  publish-stg-ui:
+    needs: [deploy, build-ui]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: stg
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCS_BUCKET: ${{ vars.GCS_BUCKET }}
+    steps:
+      - uses: actions/checkout@v4   # PIN
+      - name: GCP に認証（Workload Identity Federation。鍵ファイルは使わない）
+        uses: google-github-actions/auth@v2   # PIN
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.WIF_SERVICE_ACCOUNT }}
+      - uses: actions/setup-python@v5   # PIN
+        with:
+          python-version: "3.11"
       - uses: actions/download-artifact@v4   # PIN
         with:
           name: ui-release
           path: release
-      - name: 画面を stg 用として GCS に公開（スモークが通った後だけ。latest.json を最後に書く。VPS が 5 分おきに取り込む）
+      - name: 画面を stg 用として GCS に公開（latest.json を最後に書く。VPS が 5 分おきに取り込む）
         env:
           PYTHONPATH: .
         run: |
@@ -94,7 +120,7 @@ jobs:
           {
             echo "### stg に反映しました"
             echo "- コミット: \`$GITHUB_SHA\`"
-            echo "- API: 通信 0% のタグ付きリビジョン \`rstg\` → ${{ steps.revision.outputs.tag_url }}"
-            echo "- 画面: ops/releases/ui-stg/ に公開しました。VPS の stg 用の画面（stg.megu-keiba.com）が 5 分おきに取り込みます（vps_05_stg_instance.sh を入れた後）"
+            echo "- API: 通信 0% のタグ付きリビジョン \`rstg\` → ${{ needs.deploy.outputs.tag_url }}"
+            echo "- 画面: ops/releases/ui-stg/ に公開しました。VPS の stg 用の画面（stg.megu-keiba.com）が 5 分おきに取り込みます"
             echo "- 本番の通信・Jobs・本番の画面は変えていません。本番へは stg → master のマージ（承認あり）"
           } >> "$GITHUB_STEP_SUMMARY"
