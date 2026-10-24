@@ -43,8 +43,8 @@ def _hhmm(dt: datetime) -> str:
     return dt.strftime("%H:%M")
 
 
-def _prediction_time(resp: dict, race_id: str, race_date: str | None) -> str | None:
-    """予測を作った時刻（ISO）。分からなければ None。"""
+def _prediction_event(resp: dict, race_id: str, race_date: str | None) -> dict[str, Any]:
+    """予測を作った時刻（at）と、馬体重が揃っていたか（weights_known。分からなければ None）。"""
     if resp.get("prediction_source") in ("shadow", "backfill"):
         from src.api import local_predictions as LP
 
@@ -53,13 +53,13 @@ def _prediction_time(resp: dict, race_id: str, race_date: str | None) -> str | N
             for line in reversed((LP.inference_dir() / "events" / f"{day}.jsonl").read_text(encoding="utf-8").splitlines()):
                 ev = json.loads(line)
                 if ev.get("race_id") == race_id and ev.get("v3_status", ev.get("status")) == "ok":
-                    return ev.get("at")
+                    return {"at": ev.get("at"), "weights_known": ev.get("weights_known")}
         except (OSError, ValueError):
             pass
         found = LP.find_local_prediction(race_id, day)
-        return _iso(found[0].stat().st_mtime) if found else None
+        return {"at": _iso(found[0].stat().st_mtime) if found else None, "weights_known": None}
     fr = resp.get("freshness") or {}
-    return _iso(float(fr["scraped_at"])) if fr.get("scraped_at") else None
+    return {"at": _iso(float(fr["scraped_at"])) if fr.get("scraped_at") else None, "weights_known": None}
 
 
 def _bets_state(race_id: str) -> dict[str, Any]:
@@ -107,9 +107,13 @@ def pipeline_status(race_id: str, resp: dict, storage: Any, *, now: datetime | N
     else:
         stages.append(_stage("entries", "waiting", f"{es.get('label') or '出馬表待ち'}（枠順の確定は前日）", es.get("updated_at")))
 
-    # 2. 馬体重
+    # 2. 馬体重（予測が済んでいれば、予測を作った時点の記録を優先する。出馬表は後の取得で上書きされるため）
+    has_pred = resp.get("has_prediction") is True
+    pev = _prediction_event(resp, race_id, race_date) if has_pred else {}
     n_entries, n_weight = int(es.get("n_entries") or 0), int(es.get("n_weight") or 0)
-    if phase == "weighed" or (n_entries and n_weight / n_entries >= 0.9):
+    if has_pred and pev.get("weights_known") is not None:
+        stages.append(_stage("weights", "done", "馬体重あり" if pev["weights_known"] else "馬体重なしで予測（期限までに未発表）", pev.get("at")))
+    elif phase == "weighed" or (n_entries and n_weight / n_entries >= 0.9):
         stages.append(_stage("weights", "done", f"{n_weight}/{n_entries}頭", es.get("updated_at")))
     elif window:
         stages.append(_stage("weights", "waiting", f"発走{WINDOW_START_MIN}〜{WINDOW_DEADLINE_MIN}分前（{_hhmm(window[0])}〜{_hhmm(window[1])}）に自動で確認"))
@@ -117,10 +121,9 @@ def pipeline_status(race_id: str, resp: dict, storage: Any, *, now: datetime | N
         stages.append(_stage("weights", "waiting", "発走の約1時間前に発表"))
 
     # 3. AI予測
-    has_pred = resp.get("has_prediction") is True
     if has_pred:
         src = {"shadow": "検証用", "backfill": "過去分の算出"}.get(str(resp.get("prediction_source") or ""), "")
-        stages.append(_stage("prediction", "done", src, _prediction_time(resp, race_id, race_date)))
+        stages.append(_stage("prediction", "done", src, pev.get("at")))
     elif window and now < window[1]:
         stages.append(_stage("prediction", "waiting", f"馬体重の確認後に自動実行（{_hhmm(window[0])}〜{_hhmm(window[1])}）"))
     else:

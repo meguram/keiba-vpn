@@ -17,7 +17,7 @@
     "O": "市場オッズに由来（オッズ・人気・期待値・買い目のオッズ）。期待値と勝率からオッズを逆算できるため、オッズと同じ扱い"
   },
   "predictions": {
-    "top_always": ["race_id", "status", "has_prediction", "total_horses", "predictions", "model_type", "model_version", "model_description", "prediction_source", "prediction_note", "entries_status", "provisional_entries", "freshness", "error", "message", "_mock"],
+    "top_always": ["race_id", "status", "has_prediction", "total_horses", "predictions", "model_type", "model_version", "model_description", "prediction_source", "prediction_note", "entries_status", "pipeline_status", "provisional_entries", "freshness", "error", "message", "_mock"],
     "top_identifiers": ["race_name", "venue", "round", "date", "start_time", "grade", "surface", "distance", "track_condition"],
     "top_A_member": ["position_forecast", "tracking_v2", "l3f_coherent", "pace_forecast", "gate_bias", "pace_unified", "pace_type", "scenario_forecast", "lap_forecast", "expected_megu", "expected_megu_meta", "growth", "growth_meta", "class_benchmark"],
     "top_O": ["bet_suggestion", "prob_calibration", "ev_calibrated"],

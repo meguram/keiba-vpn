@@ -28,7 +28,7 @@ def _resp(pred=True, phase="weighed"):
 def _bets(monkeypatch, ok=True, n=3):
     ps._BETS_CACHE.clear()
     monkeypatch.setattr(ps, "_bets_state", lambda rid: {"ok": True, "n": n} if ok else {"ok": False, "reason": "オッズがありません"})
-    monkeypatch.setattr(ps, "_prediction_time", lambda *a, **k: "2026-10-24T09:10:00+09:00")
+    monkeypatch.setattr(ps, "_prediction_event", lambda *a, **k: {"at": "2026-10-24T09:10:00+09:00", "weights_known": True})
 
 
 def test_complete_when_all_five_stages_done(monkeypatch):
@@ -68,3 +68,11 @@ def test_attach_never_raises_and_skips_mock():
     assert ps.attach_pipeline_status({"_mock": True}, RID, None) == {"_mock": True}
     out = ps.attach_pipeline_status({"has_prediction": False}, RID, None)
     assert out["pipeline_status"]["complete"] is False and out["pipeline_status"]["next"] == "entries"
+
+
+def test_weights_done_from_prediction_event_even_if_card_was_overwritten(monkeypatch):
+    _bets(monkeypatch)
+    resp = _resp(phase="final")
+    resp["entries_status"].update(n_weight=0)
+    out = ps.pipeline_status(RID, resp, St(), now=datetime(2026, 10, 24, 18, 0, tzinfo=JST))
+    assert out["stages"][1]["state"] == "done" and out["complete"] is True
