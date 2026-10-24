@@ -18,8 +18,10 @@ WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
     && rm -rf /var/lib/apt/lists/*
 COPY deploy/docker/requirements-cloudrun.txt ./requirements.txt
+# ホスト(本番の推論環境)と同じバージョンに固定する。固定しないと pandas 3.x などが入り、挙動が変わって落ちる(constraints-jobs.txt の先頭に理由)
+COPY constraints-jobs.txt ./constraints.txt
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir --prefix=/install -r requirements.txt
+    && pip install --no-cache-dir --prefix=/install -r requirements.txt -c constraints.txt
 
 FROM python:3.11-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \

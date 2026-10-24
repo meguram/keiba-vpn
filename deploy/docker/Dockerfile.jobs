@@ -22,10 +22,14 @@ WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 build-essential \
     && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt ./requirements.txt
+# ホスト(本番の推論環境)と同じバージョンに固定する。固定しないと pandas 3.x などが入り、推論が落ちる(constraints-jobs.txt の先頭に理由)
+COPY constraints-jobs.txt ./constraints.txt
 # ノートブック・テスト・ブラウザ自動操作・学習(mlflow/optuna)・Cloud SQL は、ジョブでは使わないので外す
 RUN grep -v -i -E '^(ipykernel|ipywidgets|pytest|playwright|mlflow|optuna|cloud-sql)' requirements.txt > requirements.jobs.txt \
     && pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir --prefix=/install -r requirements.jobs.txt
+    && pip install --no-cache-dir --prefix=/install -r requirements.jobs.txt -c constraints.txt \
+    # アンサンブルの NN メンバー(ensemble_bundle / zoo / tp25c_mtl)が推論で使う。CPU 版(+cpu はこの索引にしか無いので GPU 版は入らない)。ホスト(2.6.0)と出力が 6e-08 で一致することを確認済み
+    && pip install --no-cache-dir --prefix=/install --extra-index-url https://download.pytorch.org/whl/cpu "torch==2.6.0+cpu"
 
 FROM python:3.11-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
