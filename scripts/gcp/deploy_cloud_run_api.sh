@@ -70,6 +70,10 @@ images: ['${IMAGE}']
 timeout: 1200s
 YAML
   echo "# cloudbuild 設定: $cfg"; cat "$cfg"
+  # push 先のリポジトリが無ければ作る（既にあれば何もしない。--apply のときだけ存在を確認する）
+  if [ "$APPLY" = 1 ] && gcloud artifacts repositories describe "$AR_REPO" --location "$REGION" --project "$PROJECT_ID" >/dev/null 2>&1; then :; else
+    run gcloud artifacts repositories create "$AR_REPO" --repository-format=docker --location "$REGION" --project "$PROJECT_ID"
+  fi
   run gcloud builds submit --project "$PROJECT_ID" --region "$REGION" --config "$cfg" --ignore-file deploy/docker/Dockerfile.cloudrun.gcloudignore .
   rm -f "$cfg"
 }

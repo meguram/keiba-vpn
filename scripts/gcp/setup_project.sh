@@ -11,7 +11,7 @@ set -euo pipefail
 export CLOUDSDK_CORE_DISABLE_PROMPTS=1   # 未有効の API を確認する読み取りコマンドが「有効にしますか?」で止まらないようにする
 
 REGION="${REGION:-asia-northeast1}"
-AR_REPO="${AR_REPO:-keiba}"
+AR_REPO="${AR_REPO:-keiba-vpn}"     # deploy_cloud_run_{api,jobs}.sh と同じ名前（以前は keiba で、push 先が見つからず失敗した）
 BUCKET="${BUCKET:-}"
 PROJECT="${PROJECT:-$(gcloud config get-value project 2>/dev/null || true)}"
 [ -n "$PROJECT" ] && [ "$PROJECT" != "(unset)" ] || { echo "プロジェクト未設定: gcloud config set project <ID>" >&2; exit 1; }
