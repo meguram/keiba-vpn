@@ -41,9 +41,20 @@ API_IMAGE="${REG}/keiba-api:${SHORT}"; JOBS_IMAGE="${REG}/jobs:${SHORT}"
 if [ "$TARGET" = stg ]; then REV_TAG="stg"; else REV_TAG="c${SHORT}"; fi
 export PROJECT_ID GCS_BUCKET REGION SERVICE AR_REPO
 
-run() {  # 表示して、--dry-run でなければ実行
+run() {  # 表示して、--dry-run でなければ実行。失敗したら、出力の末尾を GitHub の注釈にも出す（ログの閲覧に管理者権限が要らないように）
   printf '+'; printf ' %q' "$@"; printf '\n'
-  if [ "$DRY" != 1 ]; then "$@"; fi
+  [ "$DRY" != 1 ] || return 0
+  local log rc=0 msg; log="$(mktemp)"
+  "$@" 2>&1 | tee "$log" || true
+  rc="${PIPESTATUS[0]}"
+  if [ "$rc" -ne 0 ]; then
+    if [ -n "${GITHUB_ACTIONS:-}" ]; then
+      msg="$(tail -n 25 "$log" | cut -c1-300 | sed 's/%/%25/g; s/\r//g' | awk '{printf "%s%%0A", $0}')"
+      echo "::error title=失敗（終了コード ${rc}）: ${1:-} ${2:-} ${3:-}::${msg:0:3500}"
+    fi
+    rm -f "$log"; exit "$rc"
+  fi
+  rm -f "$log"
 }
 
 case "$STEP" in
@@ -51,9 +62,9 @@ case "$STEP" in
     run gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
     # リポジトリは Cloud Shell での初回デプロイで作ってある（CI の SA には作成権限を付けない）
     run gcloud artifacts repositories describe "$AR_REPO" --location "$REGION" --project "$PROJECT_ID" --format="value(name)"
-    run env DOCKER_BUILDKIT=1 docker build -f deploy/docker/Dockerfile.cloudrun -t "$API_IMAGE" .
+    run env DOCKER_BUILDKIT=1 docker build --progress=plain -f deploy/docker/Dockerfile.cloudrun -t "$API_IMAGE" .
     run docker push "$API_IMAGE"
-    run env DOCKER_BUILDKIT=1 docker build -f deploy/docker/Dockerfile.jobs -t "$JOBS_IMAGE" .
+    run env DOCKER_BUILDKIT=1 docker build --progress=plain -f deploy/docker/Dockerfile.jobs -t "$JOBS_IMAGE" .
     # イメージの中で、gcp 向けの全ジョブの実行モジュールを読み込めるか（足りないライブラリはここで落ちる）
     run docker run --rm -e KEIBA_ENV=prod -e KEIBA_RUN_LOCATION=gcp "$JOBS_IMAGE" -c \
       "import importlib, json; jobs=json.load(open('config/gcp_job_map.json'))['jobs']; mods=sorted({s['argv'][1] for j in jobs if j['destination']=='gcp' for s in j.get('steps',[]) if s.get('argv',[''])[0]=='-m'}); [importlib.import_module(m) for m in mods]; print('imported', len(mods), 'modules')"
