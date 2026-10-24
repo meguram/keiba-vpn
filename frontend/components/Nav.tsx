@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { USE_MOCK } from "@/lib/mock";
+import { isNavActive, visibleNavItems } from "@/lib/siteNav";
 
 export function Nav() {
   const path = usePathname();
@@ -34,6 +35,7 @@ export function Nav() {
   }, [path]);
 
   const isHome = path === "/";
+  const navItems = visibleNavItems();
 
   const logout = async () => {
     try {
@@ -91,6 +93,24 @@ export function Nav() {
           <img src="/megu-icon.png" alt="" width={22} height={22} style={{ borderRadius: "50%", display: "block" }} />
           <span>めぐ競馬</span>
         </Link>
+
+        {navItems.length > 0 && (
+          <div className="nav-links" role="navigation" aria-label="メインメニュー">
+            {navItems.map((it) => {
+              const active = isNavActive(it, path);
+              return (
+                <Link
+                  key={it.id}
+                  href={it.href}
+                  className={`hit44 nav-link${active ? " is-active" : ""}`}
+                  aria-current={active ? "page" : undefined}
+                >
+                  {it.label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
 
         {!isHome && (
           <Link href="/" className="hit44 nav-home" style={{

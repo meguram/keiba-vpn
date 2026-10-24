@@ -42,6 +42,12 @@ body {
 
 .site-nav { padding: 0 20px; }
 .nav-btn, .nav-brand, .nav-home { white-space: nowrap; }
+/* 全ページ共通バーのページ導線（定義は lib/siteNav.ts）。狭い画面では横にスクロールして、項目が増えても溢れない */
+.nav-links { display: flex; align-items: center; gap: 2px; margin-left: 14px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.nav-links::-webkit-scrollbar { display: none; }
+.nav-link { white-space: nowrap; font-size: 13px; color: #8b949e; text-decoration: none; padding: 4px 10px; border-radius: 6px; transition: color 0.15s, background 0.15s; }
+.nav-link:hover { color: #f0f6fc; background: rgba(255,255,255,0.06); }
+.nav-link.is-active { color: #f0f6fc; background: rgba(88,166,255,0.14); }
 
 /* ページ全体の背景: ブランド画像を画面いっぱいに薄く敷く（スクロールしても動かない。操作は邪魔しない） */
 body::before {
@@ -198,6 +204,8 @@ th[data-sortable][data-sort-dir="desc"]::after { content: " \25BC"; opacity: 1; 
   .site-nav { padding: 0 12px; }
   .nav-brand { min-width: 0; }
   .nav-home { display: none !important; }            /* ロゴが ホーム へのリンクを兼ねる */
+  .nav-links { margin-left: 6px; flex: 1 1 auto; }
+  .nav-link { padding: 4px 8px; font-size: 12px; }
   .nav-right { gap: 6px !important; min-width: 0; }
   .nav-user { max-width: 84px !important; padding: 4px 6px !important; flex: 0 1 auto; }
   .nav-btn { padding: 4px 8px !important; }

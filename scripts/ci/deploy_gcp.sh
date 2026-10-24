@@ -6,6 +6,7 @@
 #
 #   bash scripts/ci/deploy_gcp.sh <step> --target stg|prod [--dry-run]
 #
+#   build-api-image / check-jobs-image   stg 用に build-images を 2 つに分けたもの（API の push と、Jobs の読み込み確認(push なし)を並走させる）
 #   build-images   API と Jobs のイメージを作って Artifact Registry へ push する。Jobs のイメージは、全ジョブの実行モジュールを読み込めるかまで確かめる
 #   api-revision   通信 0% のタグ付きリビジョンを作る（stg は固定のタグ rstg、prod は rc<コミット8桁>）。タグ付き URL を GITHUB_OUTPUT に書く
 #   smoke          タグ付き URL に対して、鍵なし 401・鍵あり 200 などを確かめる（src.scripts.ops.cloudrun_smoke）
@@ -58,6 +59,17 @@ run() {  # 表示して、--dry-run でなければ実行。失敗したら、�
 }
 
 case "$STEP" in
+  build-api-image)   # stg 用: API のイメージだけ（Jobs は stg で更新しないので、待たずに check-jobs-image を別 job で並走させる）
+    run gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+    run gcloud artifacts repositories describe "$AR_REPO" --location "$REGION" --project "$PROJECT_ID" --format="value(name)"
+    run env DOCKER_BUILDKIT=1 docker build --progress=plain -f deploy/docker/Dockerfile.cloudrun -t "$API_IMAGE" .
+    run docker push "$API_IMAGE"
+    ;;
+  check-jobs-image)  # stg 用: Jobs のイメージを作って全ジョブのモジュールを読み込めるかだけ確かめる（push しない。GCP に接続しない）
+    run env DOCKER_BUILDKIT=1 docker build --progress=plain -f deploy/docker/Dockerfile.jobs -t "$JOBS_IMAGE" .
+    run docker run --rm -e KEIBA_ENV=prod -e KEIBA_RUN_LOCATION=gcp "$JOBS_IMAGE" -c \
+      "import importlib, json; jobs=json.load(open('config/gcp_job_map.json'))['jobs']; mods=sorted({s['argv'][1] for j in jobs if j['destination']=='gcp' for s in j.get('steps',[]) if s.get('argv',[''])[0]=='-m'}); [importlib.import_module(m) for m in mods]; print('imported', len(mods), 'modules')"
+    ;;
   build-images)
     run gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
     # リポジトリは Cloud Shell での初回デプロイで作ってある（CI の SA には作成権限を付けない）
@@ -108,5 +120,5 @@ case "$STEP" in
     run env IMAGE="$JOBS_IMAGE" bash scripts/gcp/deploy_cloud_run_jobs.sh apply jobs ${PAR[@]+"${PAR[@]}"} --yes
     run env IMAGE="$JOBS_IMAGE" bash scripts/gcp/deploy_cloud_run_jobs.sh apply scheduler ${PAR[@]+"${PAR[@]}"} --yes
     ;;
-  *) echo "不明なステップ: $STEP（build-images / api-revision / smoke / promote / jobs）" >&2; exit 2 ;;
+  *) echo "不明なステップ: $STEP（build-images / build-api-image / check-jobs-image / api-revision / smoke / promote / jobs）" >&2; exit 2 ;;
 esac
