@@ -82,6 +82,9 @@ def load_results(years, root: Path = TABLES) -> pd.DataFrame:
     r = r[r["venue_code"].astype(str).isin(JRA)]
     for c in ("finish_position", "popularity", "odds", "time_sec", "horse_number", "field_size", "distance"):
         r[c] = pd.to_numeric(r[c], errors="coerce")
+    from src.scraper.odds_fix import apply_pandas
+
+    r = apply_pandas(r)   # 2025 年は odds が指数列だった
     return r.reset_index(drop=True)
 
 

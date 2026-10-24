@@ -686,11 +686,15 @@ def run_past(
                          ensure_ascii=False, indent=1))
         return 0
 
+    h = bg.halted()
+    if h:
+        logger.error("エラーで中断した印があります（%s）。確認して %s を削除するまで始めません", h.get("reason") or h.get("status_counts"), bg.HALT_PATH)
+        return 2
     if (read_access_pause() or {}).get("active"):
         logger.error("アクセスの保留が有効です（人が確認して解除するまで始めません）")
         return 2
     now = bg._now()
-    if bg.is_raceday(now) and not ignore_raceday:
+    if bg.SKIP_RACEDAY and bg.is_raceday(now) and not ignore_raceday:
         logger.info("土日（開催日）は補填しません")
         return 2
     if not ignore_window and not bg.in_window(now):

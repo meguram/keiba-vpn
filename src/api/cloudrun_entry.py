@@ -93,8 +93,8 @@ def _pull_serving_state() -> None:
 
 def _start_mirror_pull() -> None:
     """予測ファイル・出馬表の状態を GCS（ops/mirror/）から取り込む。起動時に全部、以降は 1 分ごとに直近分（src/ops/gcs_mirror.py）。"""
-    if (os.environ.get("KEIBA_MIRROR_PULL") or "").strip() != "1":
-        return
+    if (os.environ.get("KEIBA_MIRROR_PULL") or "").strip() != "1" or not os.environ.get("GCS_BUCKET"):
+        return              # バケットが無い環境（テスト・dev）では取り込まない
     from src.ops.gcs_mirror import start_refresher
 
     start_refresher()

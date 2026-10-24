@@ -94,6 +94,9 @@ data/research/bloodline/*.db
 data/research/bloodline/*.db-shm
 data/research/bloodline/*.db-wal
 
+# SporthorseData ブラウザセッション（クッキー。git 管理外）
+data/meta/dormello/sporthorse_session.json
+
 # dev 用モック（make dev-mock で生成）
 data/dev_mock/
 .autostart_dev.lock

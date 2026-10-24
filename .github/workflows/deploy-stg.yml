@@ -8,7 +8,12 @@ name: deploy-stg
 on:
   push:
     branches: [stg]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: "テストを飛ばす（緊急時、または自動反映の経路そのものを確かめるときだけ）"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -23,14 +28,18 @@ env:
 
 jobs:
   test:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_tests) }}
     uses: ./.github/workflows/_test.yml
 
   build-ui:
+    # test が成功、または skip_tests で飛ばされたときだけ進む
     needs: [test]
+    if: ${{ always() && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
     uses: ./.github/workflows/_build-ui.yml
 
   deploy:
     needs: [test, build-ui]
+    if: ${{ always() && needs.build-ui.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: stg

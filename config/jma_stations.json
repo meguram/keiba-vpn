@@ -1,0 +1,212 @@
+{
+ "01": {
+  "venue": "札幌",
+  "address": "北海道札幌市中央区北16条西16丁目",
+  "course_lat": 43.0726,
+  "course_lon": 141.3338,
+  "station": {
+   "type": "s",
+   "prec_no": 14,
+   "block_no": "47412",
+   "name": "札幌",
+   "lat": 43.06,
+   "lon": 141.32833,
+   "height": "17.4",
+   "has_precip": true,
+   "has_wind": true,
+   "has_temp": true,
+   "ended": false,
+   "distance_km": 1.47
+  },
+  "candidates": 15
+ },
+ "02": {
+  "venue": "函館",
+  "address": "北海道函館市湯川町1丁目8-2",
+  "course_lat": 41.7752,
+  "course_lon": 140.7777,
+  "station": {
+   "type": "a",
+   "prec_no": 23,
+   "block_no": "1462",
+   "name": "高松",
+   "lat": 41.77,
+   "lon": 140.82167,
+   "height": "34",
+   "has_precip": true,
+   "has_wind": true,
+   "has_temp": true,
+   "ended": false,
+   "distance_km": 3.69
+  },
+  "candidates": 17
+ },
+ "03": {
+  "venue": "福島",
+  "address": "福島県福島市松木町1-1",
+  "course_lat": 37.7585,
+  "course_lon": 140.4521,
+  "station": {
+   "type": "s",
+   "prec_no": 36,
+   "block_no": "47595",
+   "name": "福島",
+   "lat": 37.75833,
+   "lon": 140.47,
+   "height": "67.1",
+   "has_precip": true,
+   "has_wind": true,
+   "has_temp": true,
+   "ended": false,
+   "distance_km": 1.57
+  },
+  "candidates": 55
+ },
+ "04": {
+  "venue": "新潟",
+  "address": "新潟県新潟市北区笹山前913-1",
+  "course_lat": 37.9565,
+  "course_lon": 139.2061,
+  "station": {
+   "type": "a",
+   "prec_no": 54,
+   "block_no": "1469",
+   "name": "松浜",
+   "lat": 37.955,
+   "lon": 139.11167,
+   "height": "1",
+   "has_precip": true,
+   "has_wind": true,
+   "has_temp": true,
+   "ended": false,
+   "distance_km": 8.28
+  },
+  "candidates": 56
+ },
+ "05": {
+  "venue": "東京",
+  "address": "東京都府中市日吉町1-1",
+  "course_lat": 35.6618,
+  "course_lon": 139.4856,
+  "station": {
+   "type": "a",
+   "prec_no": 44,
+   "block_no": "1133",
+   "name": "府中",
+   "lat": 35.68333,
+   "lon": 139.48333,
+   "height": "59",
+   "has_precip": true,
+   "has_wind": true,
+   "has_temp": true,
+   "ended": false,
+   "distance_km": 2.4
+  },
+  "candidates": 31
+ },
+ "06": {
+  "venue": "中山",
+  "address": "千葉県船橋市古作1-1-1",
+  "course_lat": 35.7261,
+  "course_lon": 139.9603,
+  "station": {
+   "type": "a",
+   "prec_no": 45,
+   "block_no": "1236",
+   "name": "船橋",
+   "lat": 35.71167,
+   "lon": 140.04333,
+   "height": "28",
+   "has_precip": true,
+   "has_wind": true,
+   "has_temp": true,
+   "ended": false,
+   "distance_km": 7.67
+  },
+  "candidates": 49
+ },
+ "07": {
+  "venue": "中京",
+  "address": "愛知県豊明市間米町敷田1180",
+  "course_lat": 35.062,
+  "course_lon": 136.9905,
+  "station": {
+   "type": "a",
+   "prec_no": 51,
+   "block_no": "1638",
+   "name": "大府",
+   "lat": 34.995,
+   "lon": 136.94333,
+   "height": "32",
+   "has_precip": true,
+   "has_wind": true,
+   "has_temp": true,
+   "ended": false,
+   "distance_km": 8.6
+  },
+  "candidates": 24
+ },
+ "08": {
+  "venue": "京都",
+  "address": "京都府京都市伏見区葭島渡場島町32",
+  "course_lat": 34.9043,
+  "course_lon": 135.7283,
+  "station": {
+   "type": "a",
+   "prec_no": 61,
+   "block_no": "0598",
+   "name": "京田辺",
+   "lat": 34.83,
+   "lon": 135.76,
+   "height": "20",
+   "has_precip": true,
+   "has_wind": true,
+   "has_temp": true,
+   "ended": false,
+   "distance_km": 8.75
+  },
+  "candidates": 55
+ },
+ "09": {
+  "venue": "阪神",
+  "address": "兵庫県宝塚市駒の町1-1",
+  "course_lat": 34.7788,
+  "course_lon": 135.3611,
+  "station": {
+   "type": "a",
+   "prec_no": 62,
+   "block_no": "0602",
+   "name": "豊中",
+   "lat": 34.78333,
+   "lon": 135.43833,
+   "height": "12",
+   "has_precip": true,
+   "has_wind": true,
+   "has_temp": true,
+   "ended": false,
+   "distance_km": 7.07
+  },
+  "candidates": 47
+ },
+ "10": {
+  "venue": "小倉",
+  "address": "福岡県北九州市小倉南区北方3丁目11-1",
+  "course_lat": 33.8478,
+  "course_lon": 130.8736,
+  "station": {
+   "type": "a",
+   "prec_no": 82,
+   "block_no": "0780",
+   "name": "八幡",
+   "lat": 33.85167,
+   "lon": 130.74333,
+   "height": "20",
+   "has_precip": true,
+   "has_wind": true,
+   "has_temp": true,
+   "ended": false,
+   "distance_km": 12.04
+  },
+  "candidates": 51
+ }
+}
