@@ -658,7 +658,7 @@ function RacePanel({
               boxShadow: LEVEL_STYLE[value.level].glow,
             }}
           >
-            {value.level === "hot" ? "★ " : ""}推奨 {value.expected_roi != null ? `${(value.expected_roi * 100).toFixed(0)}%` : "見送り"}
+            {value.level === "hot" ? "★ " : ""}推奨 {value.tier?.label ?? (value.expected_roi != null ? `${(value.expected_roi * 100).toFixed(0)}%` : "見送り")}
           </span>
         )}
 
