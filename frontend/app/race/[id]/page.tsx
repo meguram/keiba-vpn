@@ -941,10 +941,6 @@ export default function RaceDetailPage() {
   /* ── レンダー ── */
   return (
     <div style={{ minHeight: "100dvh", background: "var(--bg)", color: "var(--text)", padding: narrow ? "0 2px" : 24 }}>
-      <Link href="/" className="hide-narrow" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-dim)", marginBottom: 16, textDecoration: "none" }}>
-        ← ホーム
-      </Link>
-
       {navDate && <RaceNav raceId={raceId} date={navDate} />}
       {Header}
       {!lock && <PipelineStatus status={predData?.pipeline_status} compact={narrow} />}

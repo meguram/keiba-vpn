@@ -1021,8 +1021,6 @@ export default function MeguIndexPage() {
       {/* ページヘッダー */}
       <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "18px 24px" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", alignItems: "center", gap: 12 }}>
-          <Link href="/" style={{ fontSize: 12, color: "var(--text-dim)", textDecoration: "none" }}>← ホーム</Link>
-          <span style={{ color: "var(--border)" }}>/</span>
           <h1 style={{ fontSize: 18, fontWeight: 700, color: "#f0f6fc", margin: 0 }}>📊 今週のめぐ指数</h1>
           <p style={{ fontSize: 12, color: "var(--text-dim)", margin: 0 }}>
             補正後指数（1点=0.1秒）で着差想定。想定・実測とも斤量込み
