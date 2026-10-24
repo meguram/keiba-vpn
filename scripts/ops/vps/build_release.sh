@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # prod（ConoHa VPS）用の UI リリースを作る。ホスト機（メモリに余裕がある）か CI で実行する。VPS ではビルドしない（2GB で next build は不安定）。
-#   bash scripts/ops/vps/build_release.sh [--commit <rev>] [--out <dir>] [--env-file <file>] [--upstream <url>]
+#   bash scripts/ops/vps/build_release.sh [--commit <rev>] [--out <dir>] [--env-file <file>] [--upstream <url>] [--env-label prod|stg]
 #
 # できるもの: <out>/keiba-ui-<commit8>-<日時>.tar.gz と .sha256 と .manifest.json
 # - git のコミットから作る（作業ツリーの未コミット変更は入らない）。ビルドは /tmp の作業コピーで行う（9p のドライブは遅い）。
+# - --env-label stg は stg 環境の画面用（version.json の env と画面端の環境バッジ「STG」。API の宛先は --upstream http://127.0.0.1:8081 を併せて指定）。
 # - API の宛先はビルド時に固定: 既定 http://127.0.0.1:8080（VPS の nginx。nginx がホスト機へ中継する）。
 # - stg と見られる情報を同じにするため、NEXT_PUBLIC_* は --env-file（既定 scripts/ops/vps/build.env があれば）で stg と揃える。
 set -euo pipefail
 ROOT="$(cd "$(dirname "$(readlink -f "$0")")/../../.." && pwd)"; cd "$ROOT"
-REV=HEAD; OUT="$ROOT/data/local/releases"; ENVF=""; UP="http://127.0.0.1:8080"
-while [ $# -gt 0 ]; do case "$1" in --commit) REV="$2"; shift 2;; --out) OUT="$2"; shift 2;; --env-file) ENVF="$2"; shift 2;; --upstream) UP="$2"; shift 2;; *) echo "不明な引数: $1" >&2; exit 1;; esac; done
+REV=HEAD; OUT="$ROOT/data/local/releases"; ENVF=""; UP="http://127.0.0.1:8080"; ENVLABEL=prod
+while [ $# -gt 0 ]; do case "$1" in --commit) REV="$2"; shift 2;; --out) OUT="$2"; shift 2;; --env-file) ENVF="$2"; shift 2;; --upstream) UP="$2"; shift 2;; --env-label) ENVLABEL="$2"; shift 2;; *) echo "不明な引数: $1" >&2; exit 1;; esac; done
 [ -n "$ENVF" ] || { [ -r "$ROOT/scripts/ops/vps/build.env" ] && ENVF="$ROOT/scripts/ops/vps/build.env" || true; }
 COMMIT="$(git rev-parse --verify "${REV}^{commit}")"; SHORT="${COMMIT:0:8}"; TS="$(date +%Y%m%d%H%M)"
 ID="keiba-ui-${SHORT}-${TS}"
@@ -29,9 +30,9 @@ else
 
 echo "== 3/6 version.json（画面から /version.json で見える。秘密なし）"
 mkdir -p "$WORK/frontend/public"
-printf '{"release":"%s","commit":"%s","short":"%s","built_at":"%s","env":"prod"}\n' "$ID" "$COMMIT" "$SHORT" "$(date -Is)" > "$WORK/frontend/public/version.json"
+printf '{"release":"%s","commit":"%s","short":"%s","built_at":"%s","env":"%s"}\n' "$ID" "$COMMIT" "$SHORT" "$(date -Is)" "$ENVLABEL" > "$WORK/frontend/public/version.json"
 # stg と同じ中身か照合できるよう、フロントのソースのハッシュを入れる（src/ops/release_manifest.py。標準ライブラリのみ）
-PYTHONPATH="$ROOT" python3 -m src.ops.release_manifest write-frontend-version --frontend-dir "$WORK/frontend" --env prod --out "$WORK/frontend/public/version.json" ${ENVF:+--env-file "$ENVF"} >/dev/null \
+PYTHONPATH="$ROOT" python3 -m src.ops.release_manifest write-frontend-version --frontend-dir "$WORK/frontend" --env "$ENVLABEL" --out "$WORK/frontend/public/version.json" ${ENVF:+--env-file "$ENVF"} >/dev/null \
   || echo "  (警告) source_digest を付けられませんでした。stg との照合はできません"
 
 echo "== 4/6 ビルド（負荷が高いときは待つ）"
@@ -42,7 +43,7 @@ done
   cd "$WORK/frontend"
   [ -n "$ENVF" ] && { set -a; . "$ENVF"; set +a; }
   nice -n 19 env KEIBA_ENV=prod NODE_ENV=production NEXT_OUTPUT=standalone NEXT_BUILD_CPUS=2 NEXT_TELEMETRY_DISABLED=1 \
-    KEIBA_API_URL="$UP" KEIBA_FASTAPI_URL="$UP" NEXT_PUBLIC_ENV_LABEL="" \
+    KEIBA_API_URL="$UP" KEIBA_FASTAPI_URL="$UP" NEXT_PUBLIC_ENV_LABEL="$([ "$ENVLABEL" = prod ] && echo "" || echo "$ENVLABEL")" \
     npx next build
 )
 

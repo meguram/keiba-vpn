@@ -98,3 +98,77 @@ def test_build_fetch_bundle_excludes_secrets(tmp_path):
     assert "src/ops/a.py" in names and "config/ports.env" in names and "RELEASE.json" in names
     assert not any(n.endswith(".pyc") or "anti_scraping.local" in n or "members" in n for n in names)
     assert p.name.startswith("fetch-deadbeef-") and pr.release_ts(p.name[:-7])
+
+
+# ── stg 環境の画面（kind=ui-stg）──
+
+def test_ui_stg_is_published_to_its_own_prefix_and_accepted_by_the_vps_side(tmp_path):
+    tb = tmp_path / "keiba-ui-abc12345-202610250100.tar.gz"
+    tb.write_bytes(b"payload")
+    (tmp_path / (tb.name + ".sha256")).write_text(f"{rp.sha256_file(tb)}  {tb.name}\n")
+    io_ = MemoryIO()
+    rp.publish(io_, "ui-stg", tb, commit="abc")
+    latest = json.loads(io_.get_bytes("ops/releases/ui-stg/latest.json"))
+    assert latest["tarball"] == "ops/releases/ui-stg/keiba-ui-abc12345-202610250100.tar.gz"
+    pr.validate_latest("ui-stg", latest)
+    assert io_.get_bytes("ops/releases/ui/latest.json") is None               # 本番の画面の公開先には触れない
+    with pytest.raises(Exception):
+        pr.validate_latest("ui", latest)                                      # 種別の取り違えは受理しない
+
+
+def test_ui_stg_uses_its_own_root_and_never_inherits_prod_install_env(tmp_path, monkeypatch):
+    stg = tmp_path / "stg"
+    (stg / "releases" / "keiba-ui-x-202610250100").mkdir(parents=True)
+    (stg / "current").symlink_to(stg / "releases" / "keiba-ui-x-202610250100")
+    monkeypatch.setattr(pr, "UI_STG_ROOT", stg)
+    assert pr.current_id("ui-stg") == "keiba-ui-x-202610250100"
+
+    seen = {}
+
+    class G:
+        def download(self, key, dest):
+            Path(dest).write_bytes(b"x")
+
+    def fake_run(cmd, **kw):
+        seen["cmd"], seen["env"] = cmd, kw["env"]
+
+        class R:
+            returncode, stdout, stderr = 0, "", ""
+        return R()
+
+    import hashlib
+    monkeypatch.setattr(pr, "UI_STG_ROOT", stg)
+    monkeypatch.setattr(pr.subprocess, "run", fake_run)
+    monkeypatch.setattr(pr.shutil, "chown", lambda *a, **k: None)
+    (stg / "incoming").mkdir()
+    monkeypatch.setenv("APP_ROOT", "/srv/keiba-ui")                           # 本番の値が環境に入っていても
+    monkeypatch.setenv("APP_PORT", "3000")
+    latest = {"release_id": "keiba-ui-x-202610250200", "tarball": "ops/releases/ui-stg/x.tar.gz", "sha256": hashlib.sha256(b"x").hexdigest()}
+    pr.install_ui(G(), latest, "stg")
+    assert seen["env"]["INSTANCE"] == "stg" and "APP_ROOT" not in seen["env"] and "APP_PORT" not in seen["env"]
+    assert str(seen["cmd"][1]).startswith(str(stg / "incoming"))
+
+
+def test_prod_install_does_not_set_instance(tmp_path, monkeypatch):
+    root = tmp_path / "prod"
+    (root / "incoming").mkdir(parents=True)
+    monkeypatch.setattr(pr, "UI_ROOT", root)
+    seen = {}
+
+    class G:
+        def download(self, key, dest):
+            Path(dest).write_bytes(b"x")
+
+    def fake_run(cmd, **kw):
+        seen["env"] = kw["env"]
+
+        class R:
+            returncode, stdout, stderr = 0, "", ""
+        return R()
+
+    import hashlib
+    monkeypatch.setattr(pr.subprocess, "run", fake_run)
+    monkeypatch.setattr(pr.shutil, "chown", lambda *a, **k: None)
+    monkeypatch.setenv("INSTANCE", "stg")                                      # 紛れ込んでいても、本番の導入は本番のまま
+    pr.install_ui(G(), {"release_id": "keiba-ui-y-202610250200", "tarball": "t", "sha256": hashlib.sha256(b"x").hexdigest()})
+    assert "INSTANCE" not in seen["env"]

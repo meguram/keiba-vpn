@@ -3,7 +3,7 @@
   python -m src.ops.release_publish publish-ui --file data/local/releases/keiba-ui-<commit8>-<日時>.tar.gz [--dry-run]
   python -m src.ops.release_publish build-fetch [--out data/local/releases]     # 取得の実行役のコードバンドル（src/ と取得が読む config/ の数ファイル・requirements-fetch.txt）
   python -m src.ops.release_publish publish-fetch --file <fetch バンドル.tar.gz> [--dry-run]
-  python -m src.ops.release_publish status [--kind ui|fetch]                     # latest.json と VPS の適用報告
+  python -m src.ops.release_publish status [--kind ui|ui-stg|fetch]                     # latest.json と VPS の適用報告
 
 latest.json の書き込み = 『prod に出す』という人の判断（昇格は常に手動）。VPS はメンテナンス窓（JST 03:00〜04:00）に取りに行く。
 GCS の資格情報はホストの .env（GCS_BUCKET など）。dev PC では動かない（gcp_guard）。
@@ -27,7 +27,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 PREFIX = "ops/releases"
-KINDS = ("ui", "fetch")
+KINDS = ("ui", "ui-stg", "fetch")      # ui-stg: stg 環境の画面（VPS の 2 つ目の画面。stg ブランチの push で公開）
 _ID = re.compile(r"^[A-Za-z0-9._-]{1,120}$")
 _SHA = re.compile(r"^[0-9a-f]{64}$")
 # 取得の実行役のバンドルに入れるもの（秘密・データ・ノートブック・学習物は入れない）
@@ -134,7 +134,7 @@ def _gcs_io() -> Any:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("publish-ui", "publish-fetch"):
+    for name in ("publish-ui", "publish-ui-stg", "publish-fetch"):
         p = sub.add_parser(name)
         p.add_argument("--file", required=True)
         p.add_argument("--commit", default="")
@@ -150,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "status":
         print(json.dumps(status(_gcs_io(), a.kind), ensure_ascii=False, indent=1))
         return 0
-    kind = "ui" if a.cmd == "publish-ui" else "fetch"
+    kind = {"publish-ui": "ui", "publish-ui-stg": "ui-stg"}.get(a.cmd, "fetch")
     path = Path(a.file)
     if not path.name.endswith(".tar.gz") or not path.exists():
         print("tar.gz を指定してください", file=sys.stderr)

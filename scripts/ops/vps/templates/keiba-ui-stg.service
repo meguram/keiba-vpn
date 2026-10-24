@@ -1,0 +1,28 @@
+[Unit]
+Description=keiba UI stg (Next.js standalone。stg 環境の画面。本番の画面とは別プロセス・別ポート)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=keibaui
+Group=keibaui
+WorkingDirectory=/srv/keiba-ui-stg/current
+EnvironmentFile=/etc/keiba-ui/ui-stg.env
+ExecStart=/usr/local/bin/node server.js
+Restart=always
+RestartSec=3
+# 2GB の VPS を守る。stg の画面は確認用なので、本番の画面（drop-in で 200M）より小さく抑える
+MemoryAccounting=true
+MemoryHigh=100M
+MemoryMax=160M
+LimitNOFILE=4096
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=keiba-ui-stg
+
+[Install]
+WantedBy=multi-user.target

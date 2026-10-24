@@ -76,7 +76,8 @@ def test_stg_deploy_never_switches_traffic_or_touches_prod_assets():
     dep = jobs["deploy"]
     assert dep["environment"] == "stg" and dep["permissions"]["id-token"] == "write"
     text = WF_STG.read_text(encoding="utf-8")
-    assert "promote --target" not in text and "jobs --target" not in text and "release_publish" not in text
+    assert "promote --target" not in text and "jobs --target" not in text
+    assert "publish-ui-stg" in text and not re.search(r"publish-ui(?!-stg)", text)          # 公開するのは stg 用の画面だけ（本番の公開先 ops/releases/ui/ には書かない）
     assert "api-revision --target stg" in text and "smoke --target stg" in text
     assert "environment" not in jobs["test"] and "environment" not in jobs["build-ui"]
 

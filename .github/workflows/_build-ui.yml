@@ -3,6 +3,15 @@ name: _build-ui
 # 画面のリリース（standalone）を作って成果物にする共通ジョブ。stg は『ビルドできること』の確認、master はこの成果物を GCS に公開する。
 on:
   workflow_call:
+    inputs:
+      env_label:
+        description: "prod か stg。version.json の env と画面端の環境バッジ（stg は STG と出る）"
+        type: string
+        default: prod
+      upstream:
+        description: "画面が API を呼ぶ先（VPS の nginx）。prod=8080、stg=8081（stg の nginx は Cloud Run の stg タグ付きリビジョンへ中継）"
+        type: string
+        default: "http://127.0.0.1:8080"
     outputs:
       release_id:
         value: ${{ jobs.build-ui.outputs.release_id }}
@@ -39,10 +48,13 @@ jobs:
           echo "build.env の項目数: $(wc -l < scripts/ops/vps/build.env)"
       - name: 画面のビルド（standalone）と成果物の作成
         id: build
+        env:
+          ENV_LABEL: ${{ inputs.env_label }}
+          UPSTREAM: ${{ inputs.upstream }}
         run: |
           set -euo pipefail
           out="$RUNNER_TEMP/release"; mkdir -p "$out"
-          bash scripts/ops/vps/build_release.sh --commit "$GITHUB_SHA" --out "$out" | tee "$RUNNER_TEMP/build.log"
+          bash scripts/ops/vps/build_release.sh --commit "$GITHUB_SHA" --out "$out" --env-label "$ENV_LABEL" --upstream "$UPSTREAM" | tee "$RUNNER_TEMP/build.log"
           f="$(ls "$out"/keiba-ui-*.tar.gz | head -1)"
           echo "release_id=$(basename "$f" .tar.gz)" >> "$GITHUB_OUTPUT"
           ls -l "$out"

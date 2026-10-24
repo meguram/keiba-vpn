@@ -2,7 +2,7 @@
 """pull 型デプロイ（VPS 側）。GCS の latest.json を見て、新しい版があればメンテナンス窓（JST 03:00〜04:00）に取りに行って入れ替える。
 root の systemd タイマーから実行する（SSH を閉じても配布できる）。ホストの scripts/ops/vps/publish_release.sh が latest.json を書く＝昇格。
 
-  pull_release.py --kind ui|fetch [--force] [--dry-run] [--window 03:00-04:00]
+  pull_release.py --kind ui|ui-stg|fetch [--force] [--dry-run] [--window 03:00-04:00]
 
 - ui   : tar.gz と .sha256 を /srv/keiba-ui/incoming に置き、既存の /opt/keiba-ui/bin/install_release.sh に任せる
          （sha256 検証→展開→別ポートで起動テスト→切替→確認→失敗なら自動で直前の版へ）。
@@ -35,6 +35,7 @@ _SHA = re.compile(r"^[0-9a-f]{64}$")
 _TS = re.compile(r"-(\d{12})$")
 STATE_DIR = Path(os.environ.get("KEIBA_PULL_STATE", "/var/lib/keiba-pull"))
 UI_ROOT = Path(os.environ.get("APP_ROOT", "/srv/keiba-ui"))
+UI_STG_ROOT = Path(os.environ.get("APP_ROOT_STG", "/srv/keiba-ui-stg"))     # stg 環境の画面（2 つ目。INSTANCE=stg で導入）
 FETCH_ROOT = Path(os.environ.get("KEIBA_FETCH_ROOT", "/opt/keiba-fetch"))
 INSTALL_UI = "/opt/keiba-ui/bin/install_release.sh"
 
@@ -137,14 +138,15 @@ def save_state(kind: str, st: dict) -> None:
 
 
 def current_id(kind: str) -> str | None:
-    link = (UI_ROOT if kind == "ui" else FETCH_ROOT) / "current"
+    link = {"ui": UI_ROOT, "ui-stg": UI_STG_ROOT}.get(kind, FETCH_ROOT) / "current"
     return os.path.basename(os.path.realpath(link)) if link.is_symlink() else None
 
 
 # --- 導入 --------------------------------------------------------------------------------------
-def install_ui(g: Gcs, latest: dict) -> None:
+def install_ui(g: Gcs, latest: dict, instance: str = "") -> None:
     rid = latest["release_id"]
-    inc = UI_ROOT / "incoming"
+    root = UI_STG_ROOT if instance == "stg" else UI_ROOT
+    inc = root / "incoming"
     part, final = inc / f"{rid}.tar.gz.partial", inc / f"{rid}.tar.gz"
     g.download(latest["tarball"], part)
     if sha256_file(part) != latest["sha256"]:
@@ -154,7 +156,12 @@ def install_ui(g: Gcs, latest: dict) -> None:
     Path(str(final) + ".sha256").write_text(f"{latest['sha256']}  {final.name}\n")
     shutil.chown(final, "deploy", "keibaui")
     shutil.chown(str(final) + ".sha256", "deploy", "keibaui")
-    r = subprocess.run([INSTALL_UI, str(final)], capture_output=True, text=True, timeout=900)
+    env = dict(os.environ)
+    for k in ("APP_ROOT", "APP_PORT", "PROXY_PORT", "INSTANCE"):       # 本番の値を stg の導入に持ち込まない（置き場・ポートは vars-stg.env が決める）
+        env.pop(k, None)
+    if instance:
+        env["INSTANCE"] = instance
+    r = subprocess.run([INSTALL_UI, str(final)], capture_output=True, text=True, timeout=900, env=env)
     if r.returncode != 0:
         raise PullError(f"install_release.sh が終了コード {r.returncode}（自動で直前の版に戻っているはず）: {(r.stdout + r.stderr)[-400:]}")
 
@@ -211,7 +218,7 @@ def install_fetch(g: Gcs, latest: dict) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="pull 型デプロイ（VPS）")
-    ap.add_argument("--kind", choices=("ui", "fetch"), required=True)
+    ap.add_argument("--kind", choices=("ui", "ui-stg", "fetch"), required=True)
     ap.add_argument("--force", action="store_true", help="窓の外でも・前回失敗した版でも実行")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--window", default="03:00-04:00")
@@ -229,13 +236,14 @@ def main(argv: list[str] | None = None) -> int:
     st = load_state(a.kind)
     now = datetime.now(JST)
     cur = current_id(a.kind)
-    verdict = decide(a.kind, latest, cur, now, force=a.force, window=a.window, failed_ids=st.get("failed_ids", []))
+    window = "00:00-24:00" if a.kind == "ui-stg" else a.window       # stg は窓を待たない（確認用の環境なので、公開されたらすぐ入れる）
+    verdict = decide(a.kind, latest, cur, now, force=a.force, window=window, failed_ids=st.get("failed_ids", []))
     print(f"kind={a.kind} latest={latest['release_id']} current={cur} -> {verdict}")
     if verdict != "install" or a.dry_run:
         return 0
     result, detail = "ok", ""
     try:
-        (install_ui if a.kind == "ui" else install_fetch)(g, latest)
+        (install_fetch(g, latest) if a.kind == "fetch" else install_ui(g, latest, "stg" if a.kind == "ui-stg" else ""))
     except Exception as e:  # noqa: BLE001
         result, detail = "failed", f"{type(e).__name__}: {e}"[:500]
         st["failed_ids"] = (st.get("failed_ids", []) + [latest["release_id"]])[-20:]
