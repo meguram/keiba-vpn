@@ -7127,10 +7127,10 @@ async def _race_predictions_impl(race_id: str):
     if local:
         return JSONResponse(await asyncio.to_thread(lambda: _with_entries_status(_with_position(local))))
 
-    # stg 環境: 実モデルの予測が無いレースは、予測を作り出さず『出馬表の馬 + 最新オッズ』だけを返す（実データの表示が前提）。
-    # 画面の開発用にモックが要るときだけ KEIBA_STG_MOCK_PREDICTIONS=1（応答は _mock: true）。
-    if _keiba_env() == "stg":
-        if os.environ.get("KEIBA_STG_MOCK_PREDICTIONS", "").strip() == "1":
+    # stg / prod（Cloud Run を含む）: 予測がまだ無いレース（出走表の公示後・馬体重の発表前など）は、予測を作り出さず『出馬表の馬 + 最新オッズ』だけを返す。
+    # 画面の開発用にモックが要るときだけ（stg のみ）KEIBA_STG_MOCK_PREDICTIONS=1（応答は _mock: true）。dev は従来どおり。
+    if _keiba_env() in ("stg", "prod"):
+        if _keiba_env() == "stg" and os.environ.get("KEIBA_STG_MOCK_PREDICTIONS", "").strip() == "1":
             def _mock():
                 from src.api.stg_mock import mock_predictions
                 storage = _get_storage()
