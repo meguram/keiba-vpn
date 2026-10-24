@@ -52,6 +52,8 @@ fi
 ENV_VARS="KEIBA_ENV=prod,KEIBA_RUN_LOCATION=gcp,GCS_BUCKET=${GCS_BUCKET},GCS_PROJECT_ID=${PROJECT_ID}"
 ENV_VARS+=",KEIBA_PROXY_KEY_REQUIRED=1,KEIBA_SERVING_STATE_PULL=0,KEIBA_ODDS_TRIFECTA=0"
 [ -z "$GCS_PREFIX" ] || ENV_VARS+=",GCS_PREFIX=${GCS_PREFIX}"
+# API_TEST_USER=1 のときだけテストユーザー(config/members.json の test)を有効にする。stg のタグ付きリビジョン専用（deploy_gcp.sh が付ける）
+[ "${API_TEST_USER:-0}" != 1 ] || ENV_VARS+=",KEIBA_TEST_USER=1"
 # Secret Manager（<環境変数名>=<シークレット名>:<バージョン>）。値はここに書かない
 # 秘密の名前は scripts/gcp/put_secret.sh で登録したもの（gcp_setup_runbook.md 5 章）。左が環境変数、右が Secret Manager の名前
 SECRETS="KEIBA_PROXY_KEY=KEIBA_PROXY_KEY:latest,KEIBA_HEARTBEAT_SECRET=KEIBA_HEARTBEAT_KEY:latest"
@@ -100,6 +102,13 @@ deploy() {
 }
 
 promote() {
+  # テストユーザーが有効なリビジョン(stg 用)を本番の通信に載せない
+  if [ "$APPLY" = 1 ]; then
+    local rev; rev="$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format='value(status.latestCreatedRevisionName)')"
+    if gcloud run revisions describe "$rev" --project "$PROJECT_ID" --region "$REGION" --format='value(spec.containers[0].env)' | grep -q KEIBA_TEST_USER; then
+      echo "最新のリビジョン $rev はテストユーザー有効(stg 用)のため、通信を切り替えません" >&2; exit 3
+    fi
+  fi
   run gcloud run services update-traffic "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --to-latest
 }
 

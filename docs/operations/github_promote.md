@@ -133,14 +133,16 @@ develop ──マージ──▶ stg ──push──▶ deploy-stg.yml
    鍵（JSON）は VPS が GCP の外にあるため必要。画面に出さず、手元の PC にダウンロード（Cloud Shell のメニュー → ダウンロード）して VPS へ渡し、**渡し終えたら Cloud Shell と手元の両方から消す**。
 2. **VPS に仕組みを入れる**（VPS で root）。
    ```bash
-   git clone --depth 1 --filter=blob:none --sparse https://github.com/meguram/keiba-vpn.git ~/keiba-vpn && cd ~/keiba-vpn
+   git clone --depth 1 --branch stg --filter=blob:none --sparse https://github.com/meguram/keiba-vpn.git ~/keiba-vpn && cd ~/keiba-vpn   # 既定ブランチ(main)は古く VPS 用スクリプトが無い。master に載った後は --branch master でよい
    git sparse-checkout set scripts/ops/vps
    bash scripts/ops/vps/vps_03_units.sh --dry-run          # 内容の確認（何も変更しない）
    bash scripts/ops/vps/vps_03_units.sh --with-pull-venv
    ```
-   続けて、`/etc/keiba-pull/pull.env` の `GCS_BUCKET=<バケット名>` を確認し、手順 1 の鍵を `/etc/keiba-pull/sa.json`（権限 600）に置く（`install -m 600 /dev/stdin /etc/keiba-pull/sa.json < 鍵.json`）。
+   続けて、`/etc/keiba-pull/pull.env` に `GCS_BUCKET=<バケット名>` と `GOOGLE_APPLICATION_CREDENTIALS=/etc/keiba-pull/sa.json` を書き、手順 1 の鍵を `/etc/keiba-pull/sa.json`（権限 600）に置く（`install -m 600 鍵.json /etc/keiba-pull/sa.json`）。置いた後に `vps_03_units.sh --with-pull-venv` をもう一度実行すると、取り込みタイマーが有効になる。
+   WSL から渡すときは、Cloud Shell の『ダウンロード』は `/home/<ユーザー>/` 配下しか選べないので、先にホームへ移す。手元の保存先は Windows 側（`/mnt/c/Users/<名前>/Downloads/`）。渡したら両方消す（`shred -u`）。
 3. **本番の画面を 1 回取り込む**（VPS で root）。以後は毎日 JST 03:10 に自動。
    ```bash
+   set -a; . /etc/keiba-pull/pull.env; set +a     # 手で実行するときだけ必要（タイマーは systemd が読む）
    /opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/pull_release.py --kind ui --force
    curl -s http://127.0.0.1:3000/version.json        # 公開した版（release が keiba-ui-<コミット8桁>-…）になること
    ```
@@ -150,10 +152,10 @@ develop ──マージ──▶ stg ──push──▶ deploy-stg.yml
    bash scripts/ops/vps/vps_05_stg_instance.sh --cloudrun-host rstg---keiba-api-244891111662.asia-northeast1.run.app --pull-now
    curl -s http://127.0.0.1:3002/version.json        # env が stg の版になること（stg ブランチの push で公開済みのとき）
    ```
-   前提: `/etc/nginx/keiba-proxykey.conf` があること（`docs/operations/cloud_run_api.md` の手順 11。`KEIBA_PROXY_KEY` を Secret Manager から取り出して `render_nginx_proxykey.sh`）。
+   前提: `/etc/nginx/keiba-proxykey.conf` があること（`docs/operations/cloud_run_api.md` の手順 11）。無ければ、Cloud Shell で `(umask 077; gcloud secrets versions access latest --secret=KEIBA_PROXY_KEY > ~/pk.txt)` → 手元経由で VPS の `/tmp/pk.txt` へ → `bash scripts/ops/vps/set_secret.sh /etc/keiba-ui/proxykey.env KEIBA_PROXY_KEY < /tmp/pk.txt && bash scripts/ops/vps/render_nginx_proxykey.sh && shred -u /tmp/pk.txt`（値は画面に出さない。渡したら全コピーを消す）。
 5. **Cloudflare で `stg.megu-keiba.com` の転送先を付け替える**（ダッシュボード）。Zero Trust → Networks → Tunnels。
-   - ホスト PC のトンネルの Public hostname から `stg.megu-keiba.com` を**外す**。
-   - VPS のトンネル（`cloudflared-prod`）に Public hostname `stg.megu-keiba.com` → Service `HTTP` / `localhost:8081` を**足す**。
+   - ホスト PC のトンネル（`meguai-stg`）の Routes から `stg.megu-keiba.com`（元の転送先 `http://localhost:23200`）を**外す**。`monitor` と `api-internal` は残す。
+   - VPS のトンネル（`meguai-prod`）に Public hostname `stg.megu-keiba.com` → Service `HTTP` / `localhost:8081` を**足す**。
    - Access のアプリケーション（`stg.megu-keiba.com` の認証）はそのまま。
 6. **確認**: https://stg.megu-keiba.com/ を開く（Access で認証）→ 画面端に **STG** のバッジ。以後、`stg` ブランチへの push で、この画面が最新になる（公開から最大 5 分）。
    戻すとき: 手順 5 を逆にする（ホストのトンネルに `stg.megu-keiba.com` を戻す）。

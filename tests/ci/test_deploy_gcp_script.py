@@ -30,6 +30,15 @@ def test_stg_uses_fixed_tag_and_never_switches_traffic_or_jobs():
         assert _run(step, "stg").returncode != 0              # stg では通信の切り替えも Jobs の更新もできない
 
 
+def test_test_user_is_enabled_only_on_the_stg_revision():
+    assert "API_TEST_USER=1" in _run("api-revision", "stg").stdout
+    assert "API_TEST_USER=0" in _run("api-revision", "prod").stdout
+    base = {**os.environ, "PROJECT_ID": "p", "GCS_BUCKET": "b"}
+    on = subprocess.run(["bash", "scripts/gcp/deploy_cloud_run_api.sh", "deploy", "--dry-run"], cwd=ROOT, env={**base, "API_TEST_USER": "1"}, capture_output=True, text=True)
+    off = subprocess.run(["bash", "scripts/gcp/deploy_cloud_run_api.sh", "deploy", "--dry-run"], cwd=ROOT, env={**base, "API_TEST_USER": "0"}, capture_output=True, text=True)
+    assert "KEIBA_TEST_USER=1" in on.stdout and "KEIBA_TEST_USER" not in off.stdout
+
+
 def test_prod_revision_is_tagged_with_the_commit():
     r = _run("api-revision", "prod")
     assert r.returncode == 0 and "TAG=c01234567" in r.stdout
