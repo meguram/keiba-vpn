@@ -195,6 +195,9 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--dest", required=True)
     f.add_argument("--version", default="latest")
     ns = ap.parse_args(argv)
+    from src.utils.project_env import load_project_dotenv
+
+    load_project_dotenv()           # ホストの cron/手動実行でも .env の GCS_*（バケット・サービスアカウント）を読む
     from src.ops import job_map
     from src.ops.gcs_io import default_io
 
