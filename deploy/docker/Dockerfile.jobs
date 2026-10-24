@@ -29,7 +29,7 @@ RUN grep -v -i -E '^(ipykernel|ipywidgets|pytest|playwright|mlflow|optuna|cloud-
     && pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir --prefix=/install -r requirements.jobs.txt -c constraints.txt \
     # アンサンブルの NN メンバー(ensemble_bundle / zoo / tp25c_mtl)が推論で使う。CPU 版(+cpu はこの索引にしか無いので GPU 版は入らない)。ホスト(2.6.0)と出力が 6e-08 で一致することを確認済み
-    && pip install --no-cache-dir --prefix=/install --extra-index-url https://download.pytorch.org/whl/cpu "torch==2.6.0+cpu"
+    && pip install --no-cache-dir --prefix=/install -c constraints.txt --extra-index-url https://download.pytorch.org/whl/cpu "torch==2.6.0+cpu"
 
 FROM python:3.11-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
