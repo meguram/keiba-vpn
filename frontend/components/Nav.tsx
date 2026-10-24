@@ -34,7 +34,6 @@ export function Nav() {
       .catch(() => { /* 一時的な通信失敗・サーバエラーでは、直前のログイン表示を保つ */ });
   }, [path]);
 
-  const isHome = path === "/";
   const navItems = visibleNavItems();
 
   const logout = async () => {
@@ -110,24 +109,6 @@ export function Nav() {
               );
             })}
           </div>
-        )}
-
-        {!isHome && (
-          <Link href="/" className="hit44 nav-home" style={{
-            marginLeft: 16,
-            fontSize: 12,
-            color: "#6e7681",
-            textDecoration: "none",
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            transition: "color 0.15s",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "#c9d1d9")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "#6e7681")}
-          >
-            ← ホーム
-          </Link>
         )}
 
         <div className="nav-right" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
