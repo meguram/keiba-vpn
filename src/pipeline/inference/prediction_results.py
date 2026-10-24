@@ -516,7 +516,10 @@ def gcs_enabled() -> bool:
 def _gcs_bucket():
     from google.cloud import storage
 
-    return storage.Client().bucket(os.environ["GCS_BUCKET"])
+    from src.config.gcp_credentials import build_gcp_credentials, gcp_project_id
+
+    # .env の GCS_* のサービスアカウント（ホスト）。無ければ ADC（Cloud Run のサービスアカウント）
+    return storage.Client(project=gcp_project_id() or None, credentials=build_gcp_credentials()).bucket(os.environ["GCS_BUCKET"])
 
 
 def _gcs_get(date: str) -> str | None:

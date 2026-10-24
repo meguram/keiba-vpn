@@ -37,6 +37,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--add-levels", action="store_true", help="保存済みの日次記録に仮想購入の推奨度だけを追記する")
     a = ap.parse_args(argv)
     if a.sync_gcs:
+        from src.utils.project_env import load_project_dotenv
+
+        load_project_dotenv()
         print(pr.sync_to_gcs())
         return 0
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
