@@ -11,12 +11,22 @@ import os
 from typing import Any
 
 import yaml
-import mlflow
-from mlflow.tracking import MlflowClient
 
 from src.utils.logger import get_logger
 
 logger = get_logger("MLflow")
+
+
+class _LazyMlflow:
+    """mlflow は学習・Registry を使うときだけ読む。Cloud Run の API イメージには入れない（import しただけで落ちないようにする）。"""
+
+    def __getattr__(self, name: str):
+        import mlflow as _mlflow
+
+        return getattr(_mlflow, name)
+
+
+mlflow = _LazyMlflow()
 
 _DEFAULT_EXPERIMENT = "keiba-prediction"
 _DEFAULT_MODEL_NAME = "keiba-lgbm"
@@ -155,6 +165,8 @@ def load_latest_model(model_name: str | None = None) -> tuple[Any, dict]:
     cfg = _load_mlflow_config()
     name = model_name or cfg.get("registered_model_name", _DEFAULT_MODEL_NAME)
 
+    from mlflow.tracking import MlflowClient
+
     client = MlflowClient()
 
     # まず Production ステージを探す、なければ最新バージョン
@@ -211,6 +223,8 @@ def get_experiment_history(limit: int = 10) -> list[dict]:
     """直近の学習履歴を返す。"""
     cfg = _load_mlflow_config()
     exp_name = cfg.get("experiment_name", _DEFAULT_EXPERIMENT)
+
+    from mlflow.tracking import MlflowClient
 
     client = MlflowClient()
     experiment = mlflow.get_experiment_by_name(exp_name)
