@@ -2,7 +2,7 @@
   "version": 1,
   "note": "サイトへのスクレイピング対策の設定（src/utils/anti_scraping.py）。30 秒ごとに読み直す（API の再起動は不要）。mode は off / detect（ログと通知のみ）/ enforce（実際にブロック）。既定は検知のみ。",
   "mode": {
-    "auth": "detect",
+    "auth": "enforce",
     "rate_limit": "detect",
     "bot": "detect",
     "honeypot": "enforce",
@@ -18,8 +18,6 @@
     "/api/health",
     "/api/v1/health",
     "/api/maintenance/status",
-    "/api/scrape-jobs",
-    "/api/v1/scrape-jobs",
     "/api/internal/",
     "/api/auth/status",
     "/api/v1/auth/status"
@@ -33,7 +31,12 @@
       "/api/auth/",
       "/api/v1/auth/",
       "/api/maintenance/status",
-      "/api/_hp/"
+      "/api/_hp/",
+      "/api/race/",
+      "/api/race-list/",
+      "/api/race-calendar",
+      "/api/scrape-dates",
+      "/api/prediction-results"
     ],
     "note": "enforce にすると、上の protected のうち exempt 以外の /api/* は未ログインで 401。内部ジョブ（転送ヘッダの無いループバック）は対象外。"
   },

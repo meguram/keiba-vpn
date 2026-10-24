@@ -15,10 +15,12 @@ def _doc(date, races):
 def test_bets_summary_flags_hits_and_gives_day_and_week_roi(tmp_path, monkeypatch):
     monkeypatch.setattr(pr, "store_dir", lambda: tmp_path)
     monkeypatch.setattr(api, "_is_dev", lambda: False)
+    monkeypatch.setattr(api, "is_member", lambda _request: True)
+    monkeypatch.setattr(api, "is_developer", lambda _request: True)
     api._CACHE.clear()
     (tmp_path / "20261010.json").write_text(json.dumps(_doc("20261010", [("R1", 1000, 0), ("R2", 1000, 3000)])), encoding="utf-8")      # 土曜
     (tmp_path / "20261011.json").write_text(json.dumps(_doc("20261011", [("R3", 2000, 1000)])), encoding="utf-8")                    # 日曜
-    out = json.loads(asyncio.run(api.prediction_results_bets_summary("20261010")).body)
+    out = json.loads(asyncio.run(api.prediction_results_bets_summary(object(), "20261010")).body)
     assert out["races"]["R2"]["hit"] is True and out["races"]["R1"]["hit"] is False
     assert out["day"]["roi"] == 1.5 and out["day"]["races_hit"] == 1
     assert (out["week"]["from"], out["week"]["to"]) == ("20261005", "20261011")

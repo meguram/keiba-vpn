@@ -7,14 +7,27 @@ from src.pipeline.inference import prediction_results as pr
 from tests.pipeline.test_prediction_results import _storage
 
 
-@pytest.fixture()
-def client(tmp_path, monkeypatch):
+def _build(tmp_path, monkeypatch, member: bool):
     monkeypatch.setenv("KEIBA_PREDICTION_RESULTS_DIR", str(tmp_path))
     monkeypatch.setenv("KEIBA_ENV", "stg")                      # dev の都度計算を止める
+    monkeypatch.setattr(api, "is_member", lambda _request: member)
+    monkeypatch.setattr(api, "is_developer", lambda _request: member)      # member=True は開発者の視点（全項目）
     api._CACHE.clear()
     app = FastAPI()
     app.include_router(api.router)
     return TestClient(app), tmp_path
+
+
+@pytest.fixture()
+def client(tmp_path, monkeypatch):
+    """開発者の視点（全項目が出る）。"""
+    return _build(tmp_path, monkeypatch, True)
+
+
+@pytest.fixture()
+def guest_client(tmp_path, monkeypatch):
+    """ゲスト・無料ログインの視点（オッズ・人気・仮想購入はサーバが落とす）。"""
+    return _build(tmp_path, monkeypatch, False)
 
 
 def _put(tmp_path, date, status_src="race_result", payoff=True):

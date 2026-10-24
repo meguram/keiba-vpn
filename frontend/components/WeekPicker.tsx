@@ -110,7 +110,7 @@ export function WeekPicker({ dates, today, selectedDate, loading, onSelectDate, 
   return (
     <div style={{ width: "100%" }}>
       {/* 開催の切替（前回 / 次回） */}
-      <div role="tablist" aria-label="開催週" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+      <div role="tablist" aria-label="開催週" className="wk-tabs" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
         {picked.map((p, i) => {
           const on = i === activeIdx;
           const last = i === picked.length - 1;
@@ -149,7 +149,7 @@ export function WeekPicker({ dates, today, selectedDate, loading, onSelectDate, 
       </div>
 
       {/* 選んだ開催の日付カード */}
-      <div role="group" aria-label="開催日" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      <div role="group" aria-label="開催日" className="wk-days" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         {active.week.dates.map((d) => {
           const k = dayKind(d, today);
           const on = d === selectedDate;

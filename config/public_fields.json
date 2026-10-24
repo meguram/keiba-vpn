@@ -5,9 +5,10 @@
   "_mode_doc": "private=現状（Cloudflare Access で所有者のみ。従来の匿名/会員の出し分けだけ）。public=一般公開用。匿名・会員（開発者以外）には A 分類（自前計算）だけを出し、B/C/O 分類は release の許可が true になるまで出さない。環境変数 KEIBA_PUBLIC_MODE=public|private で上書きできる。開発者（所有者・私的利用）は常に全項目。",
   "release": {
     "minimal_identifiers_public": false,
-    "b_facts_public": false,
-    "odds_derived_public": false,
-    "_doc": "minimal_identifiers_public=馬番・馬名・レースの識別だけ一般に出す／b_facts_public=出馬表・結果などの事実（B）を一般に出す／odds_derived_public=市場オッズ由来（オッズ・人気・期待値・買い目）を一般に出す。取得元（JRA-VAN などの正式ライセンス、権利者の承認など）が確定してから true にする。"
+    "b_facts_public": true,
+    "odds_derived_public": true,
+    "actual_odds_public": false,
+    "_doc": "minimal_identifiers_public=馬番・馬名・レースの識別だけ一般に出す／b_facts_public=出馬表・結果などの事実（B）を一般に出す／actual_odds_public=実オッズ（netkeiba 由来の市場オッズそのもの。単勝/複勝オッズ・人気・実オッズから 1:1 で出る生の期待値・確定払戻）を開発者以外に出す（既定 false。情報元の許可が取れるまで false。想定オッズ・較正後の期待値・印は対象外）／odds_derived_public=市場オッズ由来（オッズ・人気・期待値・買い目）を一般に出す。取得元（JRA-VAN などの正式ライセンス、権利者の承認など）が確定してから true にする。"
   },
   "classes": {
     "A": "自前計算（勝率・連対率・複勝率・印・展開予想・めぐ指数など）。公開できる",
@@ -22,7 +23,12 @@
     "top_O": ["bet_suggestion", "prob_calibration", "ev_calibrated"],
     "entry_A_anonymous": ["win_prob", "top3_prob", "show_prob", "pred_rank"],
     "entry_A_member": ["top2_prob", "place_prob", "win_prob_model", "top3_prob_model", "pred_score", "normalized_score", "composite_score", "composite_rank", "mark_type", "recommendation", "megu_mark", "kesi_reason", "position_forecast", "tracking_v2", "l3f_coherent", "expected_megu", "expected_megu_meta", "growth", "growth_meta", "class_benchmark"],
-    "entry_O": ["win_odds", "place_odds_min", "place_odds_max", "place_odds_avg", "place_odds_eff", "top2_odds_est", "popularity", "ev_win", "ev_place", "ev_top2", "ev_win_cal", "ev_place_cal", "ev_top2_cal", "expected_value", "estimated_prob", "buy_tier", "prob_calibrated", "odds_source"],
+    "entry_actual_odds": [
+    "win_odds", "place_odds_min", "place_odds_max", "place_odds_avg", "place_odds_eff", "top2_odds_est", "popularity", "odds_source",
+    "ev_win", "ev_place", "ev_top2", "expected_value"
+  ],
+  "top_actual_odds": ["bet_suggestion"],
+  "entry_O": ["win_odds", "place_odds_min", "place_odds_max", "place_odds_avg", "place_odds_eff", "top2_odds_est", "popularity", "ev_win", "ev_place", "ev_top2", "ev_win_cal", "ev_place_cal", "ev_top2_cal", "expected_value", "estimated_prob", "buy_tier", "prob_calibrated", "odds_source"],
     "entry_identifiers": ["horse_number", "horse_name"],
     "entry_B": ["horse_number", "horse_name", "bracket_number", "sex_age", "jockey_name", "jockey_weight", "trainer_name", "weight", "weight_change"],
     "entry_C": ["horse_id", "jockey_id", "trainer_id", "sire", "dam_sire"]

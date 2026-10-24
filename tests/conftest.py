@@ -18,6 +18,20 @@ def _isolate_data_health_output(monkeypatch, tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def _anti_scraping_auth_detect_only():
+    """config/anti_scraping.json の auth=enforce（未ログインの /api/* を 401）に、既存の API テストが左右されないようにする。
+    enforce の挙動は tests/api/test_anti_scraping_app.py が自前の設定で、設定ファイル自体は test_tiered_access.py が検証する。"""
+    from src.utils import anti_scraping as AS
+
+    eng = AS.get_engine()
+    saved = (eng._cfg, eng._cfg_loaded)
+    eng._cfg = AS._merge(AS.DEFAULTS, {"mode": {"auth": "detect"}})
+    eng._cfg_loaded = 1e18
+    yield
+    eng._cfg, eng._cfg_loaded = saved
+
+
+@pytest.fixture(autouse=True)
 def _unset_keiba_env(monkeypatch):
     monkeypatch.setenv("KEIBA_ENV", "")
     monkeypatch.delenv("APP_ENV", raising=False)

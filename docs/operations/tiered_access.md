@@ -37,3 +37,13 @@ UI の隠しではなく、**サーバが匿名の応答から項目を落とす
 
 - Cloudflare Access（現状は所有者のみ）の緩和は未実施。緩和するときは anti_scraping を enforce にし、`KEIBA_TEST_USER` を `off` にする（`docs/operations/go_live.md`）。
 - 有料会員の登録・課金は未実装（`config/members.json` を手で足す段階）。
+
+## 実オッズは開発者以外に出さない（`actual_odds_public`）
+
+netkeiba 由来の市場オッズそのものは、情報元の許可が取れるまで、ゲスト・無料・有料のいずれにも出さない（`config/public_fields.json` の `release.actual_odds_public=false`、既定）。開発者（所有者・私的利用）の応答は変えない。
+
+- 予測（`/api/race/{id}/predictions`）: 有料会員には `win_odds` / `place_odds_*` / `popularity` / `odds_source` / 生の期待値（`ev_win` `ev_place` `ev_top2` `expected_value`。勝率と並べると実オッズを逆算できる）/ `bet_suggestion`（文中に想定単勝）を出さない。代わりに、最終オッズ予測のキャッシュ（有料ゾーンと同じ較正後の想定オッズ）から単勝・複勝・想定人気・期待値を付ける。キャッシュが無いレースは付けない（実オッズへ落とさない）。較正後の期待値（`ev_*_cal`）・印・買い判断は出す。
+- レース詳細: `race_odds` / `race_pair_odds` / 出馬表・結果の `odds` `popularity` は元から出さない。確定払戻（`payoff`）は確定オッズそのものなので、同じフラグが true になるまで出さない。
+- 予測成績（`/api/prediction-results/*`）: 有料会員にも、印の馬の人気・確定オッズ・平均オッズ/人気、各買い目の `odds`、注目レースの『単勝N倍』を出さない（`tier.redact_prediction_results_member`）。仮想購入の金額・払戻・回収率は出す。
+- `/api/race/{id}/final-odds`（想定オッズ）は会員限定。
+- 許可が取れたら `actual_odds_public` を true にすると、上の項目が会員（開発者以外）にも出る。検証: `tests/api/test_tiered_access.py`（4 区分 × エンドポイント）、`tests/api/test_public_policy.py`。

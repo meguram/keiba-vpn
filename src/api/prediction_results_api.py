@@ -4,7 +4,8 @@
   GET /api/prediction-results/news?limit=N                                 ホーム画面のニュース風カード用
   GET /api/prediction-results/days                                         集計のある日の一覧（日付移動用）
 
-認証は予測 API（/api/race/{id}/predictions）と同じ公開の GET。回収率（仮想購入）の表示を会員向けにするかは画面側で決める。
+公開の GET だが、オッズ・人気・仮想購入（買い目・投資・払戻・回収率）は、有料会員・開発者以外（ゲスト・無料ログイン）の応答からサーバ側で落とす
+（src/api/tier.py の redact_prediction_results）。仕様: docs/operations/tiered_access.md
 dev（KEIBA_ENV が stg/prod 以外）では、集計ファイルが無い日を dev ストアから都度計算して見せる（ホストの稼働には影響しない）。
 """
 
@@ -16,9 +17,11 @@ import time
 from datetime import datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
+from src.api.auth import is_developer, is_member
+from src.api.tier import MEMBER_REQUIRED_BODY, redact_prediction_results, redact_prediction_results_member
 from src.pipeline.inference import prediction_results as pr
 
 router = APIRouter()
@@ -29,6 +32,15 @@ from src.utils import cache_epoch as _cache_epoch  # noqa: E402
 
 _cache_epoch.register("prediction_results_api", _CACHE.clear)
 _WEEKDAY = "月火水木金土日"
+
+
+def _respond(request: Request, data: Any) -> JSONResponse:
+    """開発者はそのまま、有料会員は実オッズ・人気を落とし、それ以外（ゲスト・無料）はオッズ由来の項目を全部落として返す（キャッシュは落とす前の値のまま共有）。"""
+    if is_developer(request):
+        return JSONResponse(data)
+    if is_member(request):
+        return JSONResponse(redact_prediction_results_member(data))      # 有料会員: 実オッズ・人気は出さない（actual_odds_public=false の間）
+    return JSONResponse(redact_prediction_results(request.url.path, data))
 
 
 def _is_dev() -> bool:
@@ -95,7 +107,7 @@ def _label(date: str) -> str:
 
 
 @router.get("/api/prediction-results/days", response_class=JSONResponse)
-async def prediction_result_days():
+async def prediction_result_days(request: Request):
     def _run():
         days = pr.list_days()
         out = []
@@ -104,11 +116,11 @@ async def prediction_result_days():
             if doc:
                 out.append({"date": d, "status": doc["status"], "races": doc["summary"]["races_settled"]})
         return {"days": out, "latest": out[-1]["date"] if out else None}
-    return JSONResponse(await asyncio.to_thread(lambda: _cached(("days",), _run)))
+    return _respond(request, await asyncio.to_thread(lambda: _cached(("days",), _run)))
 
 
 @router.get("/api/prediction-results", response_class=JSONResponse)
-async def prediction_results(scope: str = Query("day", pattern="^(day|week|month|season)$"),
+async def prediction_results(request: Request, scope: str = Query("day", pattern="^(day|week|month|season)$"),
                              date: str | None = Query(None, pattern=r"^\d{8}$")):
     def _run():
         d = date
@@ -126,7 +138,7 @@ async def prediction_results(scope: str = Query("day", pattern="^(day|week|month
             out["models"] = (doc or {}).get("models", [])
             out["built_at"] = (doc or {}).get("built_at")
         return out
-    return JSONResponse(await asyncio.to_thread(lambda: _cached(("pr", scope, date), _run)))
+    return _respond(request, await asyncio.to_thread(lambda: _cached(("pr", scope, date), _run)))
 
 
 def _pct(x: float | None) -> str:
@@ -166,14 +178,14 @@ def build_news(limit: int = 6) -> dict:
 
 
 @router.get("/api/prediction-results/mark-card", response_class=JSONResponse)
-async def prediction_results_mark_card():
+async def prediction_results_mark_card(request: Request):
     """ホームの『印の成績』カード（◎○▲★消の 1着-2着-3着-4着以下。先週・直近5週間・年）。"""
     today = datetime.now(pr.JST).date()
-    return JSONResponse(await asyncio.to_thread(lambda: _cached(("mark-card", today.isoformat()), lambda: pr.mark_card(today))))
+    return _respond(request, await asyncio.to_thread(lambda: _cached(("mark-card", today.isoformat()), lambda: pr.mark_card(today))))
 
 
 @router.get("/api/prediction-results/news", response_class=JSONResponse)
-async def prediction_results_news(limit: int = Query(6, ge=1, le=20)):
+async def prediction_results_news(request: Request, limit: int = Query(6, ge=1, le=20)):
     def _run():
         if _is_dev() and not pr.list_days():
             for back in range(0, 120):  # dev: 結果のある直近の日を探して一度だけ作る
@@ -182,7 +194,7 @@ async def prediction_results_news(limit: int = Query(6, ge=1, le=20)):
                 if pr.read_day(d):
                     break
         return build_news(limit)
-    return JSONResponse(await asyncio.to_thread(lambda: _cached(("news", limit), _run)))
+    return _respond(request, await asyncio.to_thread(lambda: _cached(("news", limit), _run)))
 
 def _bets_block(s: dict) -> dict:
     b = s["bets"]
@@ -191,7 +203,7 @@ def _bets_block(s: dict) -> dict:
 
 
 @router.get("/api/prediction-results/bets-summary", response_class=JSONResponse)
-async def prediction_results_bets_summary(date: str = Query(..., pattern=r"^\d{8}$")):
+async def prediction_results_bets_summary(request: Request, date: str = Query(..., pattern=r"^\d{8}$")):
     """レース一覧用: 指定日の各レースの仮想購入の結果（的中フラグ）と、その日・その週の回収率。会員限定（tier.py）。"""
     def _run():
         _ensure_dev_day(date)
@@ -210,6 +222,8 @@ async def prediction_results_bets_summary(date: str = Query(..., pattern=r"^\d{8
         return {"date": date, "label": _label(date), "week": {"from": wk_lo, "to": wk_hi, "days": wk["days"], "status": wk["status"], **_bets_block(wk["summary"])},
                 "day": {"status": day["status"], **_bets_block(day["summary"])}, "races": races,
                 "note": "推奨馬券を、保存済みの最新オッズで購入したとみなした仮想購入（払戻は確定払戻）。実際の購入ではありません。"}
-    return JSONResponse(await asyncio.to_thread(lambda: _cached(("bets", date), _run)))
+    if not is_member(request):
+        return JSONResponse(MEMBER_REQUIRED_BODY, status_code=401)
+    return _respond(request, await asyncio.to_thread(lambda: _cached(("bets", date), _run)))
 
 

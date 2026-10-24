@@ -78,7 +78,7 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
   const listHref = `/weekly-predictions?date=${date}&venue=${encodeURIComponent(cur.venue)}`;
 
   return (
-    <nav aria-label="レース移動" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: narrow ? "6px 8px" : "12px 16px", marginBottom: 16, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: narrow ? 6 : 10 }}>
+    <nav aria-label="レース移動" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: narrow ? "4px 6px" : "12px 16px", marginBottom: narrow ? 8 : 16, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: narrow ? 3 : 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: narrow ? "nowrap" : "wrap", overflowX: narrow ? "auto" : undefined }}>
         {venues.length > 1 && venues.map((v) => {
           const target = atVenue(v);
@@ -90,7 +90,7 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
               aria-current={on ? "page" : undefined}
               title={on ? "表示中の開催場" : `${v} ${target?.round ?? ""}R へ`}
               style={{
-                ...BTN, fontSize: 13, fontWeight: on ? 700 : 500, flex: "none", minHeight: narrow ? 40 : undefined,
+                ...BTN, fontSize: 13, fontWeight: on ? 700 : 500, flex: "none", minHeight: narrow ? 38 : undefined,
                 border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
                 background: on ? "rgba(59,130,246,0.15)" : "var(--surface)",
                 color: on ? "var(--accent)" : "var(--text-dim)",
@@ -104,7 +104,7 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
             </PendingLink>
           );
         })}
-        <Link href={listHref} style={{ ...BTN, marginLeft: "auto", flex: "none", minHeight: narrow ? 40 : undefined, color: "var(--accent)" }}>
+        <Link href={listHref} style={{ ...BTN, marginLeft: "auto", flex: "none", minHeight: narrow ? 38 : undefined, color: "var(--accent)" }}>
           {narrow ? "一覧へ" : `${cur.venue}の一覧へ（${date.slice(4, 6)}/${date.slice(6, 8)}）`}
         </Link>
       </div>
@@ -115,7 +115,7 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
         ) : <span style={{ ...BTN, opacity: 0.35 }}>← 前のR</span>)}
 
         <div style={narrow
-          ? { display: "flex", gap: 6, flexWrap: "nowrap", flex: 1, overflowX: "auto", padding: "4px 2px", scrollSnapType: "x proximity", WebkitOverflowScrolling: "touch" }
+          ? { display: "flex", gap: 6, flexWrap: "nowrap", flex: 1, overflowX: "auto", padding: "2px 2px", scrollSnapType: "x proximity", WebkitOverflowScrolling: "touch" }
           : { display: "flex", gap: 4, flexWrap: "wrap", flex: 1, justifyContent: "center" }}>
           {sameVenue.map((r) => {
             const on = r.race_id === raceId;
@@ -130,8 +130,8 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
                 title={`${r.round}R ${r.race_name}\n${valueTitle(v)}`}
                 data-level={lv}
                 style={{
-                  minWidth: narrow ? 48 : 46, minHeight: narrow ? 46 : undefined, flex: "none", scrollSnapAlign: "center", display: "inline-flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
-                  padding: "5px 6px", borderRadius: 8, textDecoration: "none", lineHeight: 1.15,
+                  minWidth: narrow ? 46 : 46, minHeight: narrow ? 40 : undefined, flex: "none", scrollSnapAlign: "center", display: "inline-flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
+                  padding: narrow ? "3px 5px" : "5px 6px", borderRadius: 8, textDecoration: "none", lineHeight: 1.15,
                   border: `1px solid ${st.border}`, background: st.bg, color: st.color,
                   boxShadow: [on ? "0 0 0 2px var(--bg), 0 0 0 4px #e6edf3" : "", st.glow ?? ""].filter(Boolean).join(", ") || undefined,
                   opacity: lv === "pass" || lv === "none" ? (on ? 1 : 0.9) : 1,

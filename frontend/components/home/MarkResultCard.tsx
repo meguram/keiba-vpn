@@ -130,7 +130,6 @@ export function MarkResultCard() {
         )}
         <div className="mrc-legend">
           {SEGMENTS.map((s) => <span key={s.k}><i style={{ background: s.color }} />{s.label}</span>)}
-          <span style={{ marginLeft: "auto" }}>人気・オッズは確定値</span>
         </div>
       </div>
     </section>

@@ -76,6 +76,11 @@ def odds_allowed() -> bool:
     return release("odds_derived_public")
 
 
+def actual_odds_allowed() -> bool:
+    """実オッズ（市場オッズそのもの）を開発者以外に出してよいか。情報元の許可が取れるまで false。"""
+    return release("actual_odds_public")
+
+
 def entry_allowed_fields(role: str) -> set[str]:
     """公開モードで、役割（anonymous|member）が見られる予測の行のフィールド。"""
     p = section("predictions")
@@ -84,6 +89,8 @@ def entry_allowed_fields(role: str) -> set[str]:
         out |= set(p.get("entry_A_member", []))
         if odds_allowed():
             out |= set(p.get("entry_O", []))
+            if not actual_odds_allowed():
+                out -= set(p.get("entry_actual_odds", []))
     if b_allowed():
         out |= set(p.get("entry_B", []))
     elif identifiers_allowed():
@@ -100,6 +107,8 @@ def top_allowed_fields(role: str) -> set[str]:
         out |= set(p.get("top_A_member", []))
         if odds_allowed():
             out |= set(p.get("top_O", []))
+            if not actual_odds_allowed():
+                out -= set(p.get("top_actual_odds", []))
     return out
 
 

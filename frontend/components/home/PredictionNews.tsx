@@ -27,6 +27,7 @@ const CSS = `
 .pn-dot{appearance:none;border:0;padding:0;width:18px;height:18px;background:transparent;cursor:pointer;display:grid;place-items:center}
 .pn-dot::before{content:"";display:block;width:7px;height:7px;border-radius:50%;background:rgba(148,163,184,.4);transition:all .2s}
 .pn-dot[aria-current="true"]::before{width:18px;border-radius:4px;background:var(--accent)}
+@media (hover:none) and (pointer:coarse){.pn-btn{width:40px;height:40px;font-size:16px}.pn-dot{width:26px;height:40px}}
 .pn-link{margin-left:auto;font-size:12px;color:var(--accent);text-decoration:none}
 .pn-viewport{overflow:hidden;width:calc(100% + ${GAP}px);margin-right:-${GAP}px}
 .pn-track{display:flex;will-change:transform}

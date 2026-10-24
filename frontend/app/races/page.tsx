@@ -236,7 +236,7 @@ export default function RacesPage() {
         {!authLoading && !isMember && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderRadius: 8, background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.25)", marginBottom: 16, fontSize: 13, color: "var(--text)", flexWrap: "wrap" }}>
             <span>🔒 AI予測データは会員限定です。</span>
-            <button onClick={() => setShowModal(true)} style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", fontSize: 13, padding: 0, textDecoration: "underline" }}>
+            <button className="hit44" onClick={() => setShowModal(true)} style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", fontSize: 13, padding: 0, textDecoration: "underline" }}>
               会員登録はこちら →
             </button>
           </div>

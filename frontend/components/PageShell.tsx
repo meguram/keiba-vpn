@@ -9,8 +9,8 @@ type Props = {
 
 export function PageShell({ title, description, children, note = true }: Props) {
   return (
-    <div className="space-y-4">
-      <header>
+    <div className="space-y-4 ps-root">
+      <header className="ps-head">
         <h1 className="text-2xl font-bold">{title}</h1>
         {description && <p style={{ color: "var(--text-dim)" }}>{description}</p>}
       </header>

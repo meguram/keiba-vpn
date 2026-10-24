@@ -36,6 +36,7 @@ def _reset(monkeypatch):
 def _set(monkeypatch, tmp_path, mode="public", **release):
     cfg = json.loads(P.CONFIG_PATH.read_text(encoding="utf-8"))
     cfg["mode"] = mode
+    cfg["release"].update(minimal_identifiers_public=False, b_facts_public=False, odds_derived_public=False, actual_odds_public=False)      # 実ファイルの公開許可に依存させない
     cfg["release"].update(release)
     f = tmp_path / "pf.json"
     f.write_text(json.dumps(cfg), encoding="utf-8")
@@ -82,7 +83,13 @@ def test_release_switches(monkeypatch, tmp_path):
     k = _keys(tier.redact_predictions(TOP))
     assert {"jockey_name", "weight", "sex_age"} <= k and "horse_id" not in k
     _set(monkeypatch, tmp_path, odds_derived_public=True)
-    assert "ev_win" in _keys(tier.redact_predictions_member(TOP)) and "ev_win" not in _keys(tier.redact_predictions(TOP))
+    m, g = _keys(tier.redact_predictions_member(TOP)), _keys(tier.redact_predictions(TOP))
+    assert "ev_win_cal" in m and "ev_win_cal" not in g                       # 較正後の期待値は会員に出る
+    assert not ({"ev_win", "ev_place", "ev_top2", "expected_value", "win_odds", "place_odds_min", "place_odds_max", "popularity",
+                 "top2_odds_est", "odds_source", "bet_suggestion"} & m)      # 実オッズ（と、確率から逆算できる生の期待値）は出さない
+    _set(monkeypatch, tmp_path, odds_derived_public=True, actual_odds_public=True)
+    assert {"ev_win", "win_odds", "popularity", "bet_suggestion"} <= _keys(tier.redact_predictions_member(TOP))     # 許可が取れたら出せる
+    assert "win_odds" not in _keys(tier.redact_predictions(TOP))                                                     # ゲストには常に出ない
 
 
 def test_class_c_never_leaks_under_any_release_combination(monkeypatch, tmp_path):
@@ -109,6 +116,10 @@ def test_race_detail_public_mode_levels(monkeypatch, tmp_path):
     out = tier.redact_race_detail(DETAIL)
     assert out["race_shutuba"]["entries"][0]["horse_name"] == "A" and "payoff" not in out["race_result"]
     assert "horses" not in out                                    # 馬の詳細（取得元固有の ID つき）は出さない
+    _set(monkeypatch, tmp_path, b_facts_public=True, odds_derived_public=True)
+    assert "payoff" not in tier.redact_race_detail(DETAIL)["race_result"]     # 確定払戻は確定オッズそのものなので、実オッズの許可まで出さない
+    _set(monkeypatch, tmp_path, b_facts_public=True, odds_derived_public=True, actual_odds_public=True)
+    assert "payoff" in tier.redact_race_detail(DETAIL)["race_result"]
 
 
 def test_owner_only_paths(monkeypatch, tmp_path):

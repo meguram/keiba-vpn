@@ -731,3 +731,14 @@
   .home-root .home-grid { grid-template-columns: minmax(0, 1fr); padding: 8px 14px 40px; gap: 0; }
   .home-root .home-side { position: static; }
 }
+
+/* iPhone など狭い画面: カードを詰めて一度に見える量を増やす（PC は変えない） */
+@media (max-width: 600px) {
+  .home-root .nav-card,
+  .home-root .single-card-row .nav-card { padding: 10px 12px 10px; }
+  .home-root .nav-card .card-icon { font-size: 20px; margin-bottom: 4px; }
+  .home-root .nav-card .card-title { font-size: 15px; margin-bottom: 2px; }
+  .home-root .nav-card .card-desc { font-size: 13px; line-height: 1.45; margin-bottom: 6px; }
+  .home-root .nav-card .tag { font-size: 11px; padding: 1px 6px; }
+  .home-root .mrc-legend { font-size: 11px; }
+}

@@ -28,7 +28,7 @@ function StatusBadge({ status }: { status: "final" | "provisional" }) {
 
 function Tile({ label, value, sub, locked }: { label: string; value: string; sub?: string; locked?: boolean }) {
   return (
-    <div style={{ ...card, minWidth: 0 }}>
+    <div className="pr-tile" style={{ ...card, minWidth: 0 }}>
       <div style={dim}>{label}</div>
       {locked ? (
         <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>
@@ -256,7 +256,7 @@ export default function PredictionResultsPage() {
 
       {data && kpi && !empty && (
         <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+          <div className="pr-tiles" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
             <Tile label="◎の1着率" value={pct(kpi.honmei.win)} sub={`${kpi.honmei.n}頭中`} />
             <Tile label="◎の複勝圏（3着以内）" value={pct(kpi.honmei.top3)} sub={`連対 ${pct(kpi.honmei.top2)}`} />
             <Tile label="予測1位の1着率" value={pct(kpi.top1.win)} sub={`${kpi.top1.n}レース`} />

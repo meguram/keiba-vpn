@@ -68,18 +68,17 @@ export function Nav() {
           🔧 開発モード（モックデータ表示中）— 実際のレースデータではありません
         </div>
       )}
-      <nav style={{
+      <nav className="site-nav" style={{
         position: "sticky",
         top: 0,
         zIndex: 50,
         display: "flex",
         height: 44,
         alignItems: "center",
-        padding: "0 20px",
         background: "#0d1117",
         borderBottom: "1px solid #21262d",
       }}>
-        <Link href="/" className="hit44" style={{
+        <Link href="/" className="hit44 nav-brand" style={{
           fontWeight: 700,
           fontSize: 14,
           color: "#f0f6fc",
@@ -94,7 +93,7 @@ export function Nav() {
         </Link>
 
         {!isHome && (
-          <Link href="/" className="hit44" style={{
+          <Link href="/" className="hit44 nav-home" style={{
             marginLeft: 16,
             fontSize: 12,
             color: "#6e7681",
@@ -111,8 +110,8 @@ export function Nav() {
           </Link>
         )}
 
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-          <span title={loggedIn ? "ログイン中のユーザー" : "ログインしていません"} style={{
+        <div className="nav-right" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+          <span className="nav-user" title={loggedIn ? "ログイン中のユーザー" : "ログインしていません"} style={{
             fontSize: 12,
             color: loggedIn ? "#c9d1d9" : "#6e7681",
             padding: "4px 10px",
@@ -126,7 +125,7 @@ export function Nav() {
             {loggedIn ? `👤 ${userName}${isAdmin ? "" : paid ? "（有料会員）" : "（無料）"}` : "ゲスト"}
           </span>
           {isAdmin && (
-            <Link href="/admin/users" className="hit44" style={{
+            <Link href="/admin/users" className="hit44 nav-btn" style={{
               fontSize: 12,
               color: "#3fb950",
               textDecoration: "none",
@@ -142,7 +141,7 @@ export function Nav() {
             </Link>
           )}
           {loggedIn ? (
-            <button type="button" onClick={logout} className="hit44" style={{
+            <button type="button" onClick={logout} className="hit44 nav-btn" style={{
               fontSize: 12,
               color: "#f0883e",
               background: "transparent",
@@ -158,7 +157,7 @@ export function Nav() {
               ログアウト
             </button>
           ) : (
-            <Link href="/login" className="hit44" style={{
+            <Link href="/login" className="hit44 nav-btn" style={{
               fontSize: 12,
               color: "#58a6ff",
               textDecoration: "none",

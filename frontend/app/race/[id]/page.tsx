@@ -469,8 +469,25 @@ export default function RaceDetailPage() {
   const rd = raceData;
 
   /* ── レースヘッダー ── */
-  const Header = rd ? (
-    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: narrow ? "14px 14px" : "24px 32px", marginBottom: narrow ? 14 : 24 }}>
+  const headChips = rd ? [narrow ? rd.date?.slice(5).replace("-", "/") : rd.date, rd.surface && `${narrow ? "" : "馬場: "}${rd.surface}`, rd.distance && `${rd.distance}m`, rd.direction, rd.weather && `${narrow ? "" : "☁ "}${rd.weather}`, rd.track_condition && `${narrow ? "" : "馬場: "}${rd.track_condition}`, rd.start_time && `${narrow ? "" : "🕐 "}${rd.start_time}`].filter(Boolean) : [];
+  const Header = rd ? (narrow ? (
+    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 10px", marginBottom: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+        <span style={{ background: "var(--accent)", color: "#fff", fontWeight: 800, fontSize: 13, padding: "3px 8px", borderRadius: 5, whiteSpace: "nowrap", flex: "none" }}>{rd.venue} {rd.round}R</span>
+        {rd.grade && rd.grade !== "未勝利" && rd.grade !== "新馬" && (
+          <span style={{ fontWeight: 700, fontSize: 12, padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap", flex: "none", ...gradeStyle(rd.grade) }}>{rd.grade}</span>
+        )}
+        <h1 style={{ fontSize: 17, fontWeight: 700, color: "#fff", margin: 0, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rd.race_name ?? raceId}</h1>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, overflowX: "auto", whiteSpace: "nowrap", WebkitOverflowScrolling: "touch" }}>
+        {predData?.entries_status && <span style={{ flex: "none" }}><EntriesStatusBadge status={predData.entries_status} /></span>}
+        {headChips.map((t, i) => (
+          <span key={i} style={{ flex: "none", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 4, padding: "1px 7px", fontSize: 12, color: "var(--text-dim)" }}>{t}</span>
+        ))}
+      </div>
+    </div>
+  ) : (
+    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "24px 32px", marginBottom: 24 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
         <span style={{ background: "var(--accent)", color: "#fff", fontWeight: 800, fontSize: 16, padding: "6px 14px", borderRadius: 6, minWidth: 50, textAlign: "center" }}>
           {rd.venue} {rd.round}R
@@ -489,15 +506,10 @@ export default function RaceDetailPage() {
         ))}
       </div>
     </div>
-  ) : null;
+  )) : null;
 
   /* ── 出馬表 ── */
   const shutubaEntries = [...(rd?.race_shutuba?.entries ?? [])].sort((a, b) => (Number(a.horse_number) || 99) - (Number(b.horse_number) || 99));
-  const oddsMap: Record<string, number> = {};
-  (rd?.race_odds?.win ?? rd?.race_odds?.entries ?? []).forEach((o) => {
-    const v = positive(o.odds) ?? positive(o.win_odds);
-    if (o.horse_number != null && v != null) oddsMap[String(o.horse_number)] = v;
-  });
 
   /* ── レース結果 ── */
   // 着順が数字で取れない馬（取消・除外・中止など）は一番下へ。数字の着順は小さい順、同じ並びのものは馬番順
@@ -537,14 +549,22 @@ export default function RaceDetailPage() {
     );
   }
 
+  // 実オッズ（市場の単勝・人気）は画面に出さない。右の列は自前予測（勝率・複勝率・想定単勝）
+  const predByNo = new Map<number, PredEntry>();
+  (predData?.predictions ?? []).forEach((p) => { if (p.horse_number != null) predByNo.set(Number(p.horse_number), p); });
+  const shutubaByNo = new Map<number, RaceEntry>();
+  shutubaEntries.forEach((e) => { const n = Number(e.horse_number ?? e.number); if (n > 0) shutubaByNo.set(n, e); });
+  const subLine = (e: RaceEntry) => [pick(e, "sex_age") || `${pick(e, "sex")}${pick(e, "age")}`, pick(e, "jockey_name", "jockey"), pick(e, "jockey_weight", "weight", "impost")].filter(Boolean).join(" ");
+  const pctCell = (v: number | null | undefined, red?: boolean) => (red || v == null) ? "—" : `${(v * 100).toFixed(1)}%`;
+
   const ShutubaTbl = shutubaEntries.length === 0 ? (
     <div style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>📋 出馬表データがありません</div>
   ) : (
     <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 13 }}>
+      <table className="m-sticky" style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 13 }}>
         <thead style={{ background: "var(--surface2)" }}>
           <tr>
-            {["枠", "馬番", "馬名", "性齢", "斤量", "騎手", "調教師", "単勝"].map(h => <th key={h} style={TH}>{h}</th>)}
+            {[["枠", "m-hide"], ["馬番", ""], ["馬名", ""], ["性齢", "m-hide"], ["斤量", "m-hide"], ["騎手", "m-hide"], ["調教師", "m-hide"], ["勝率", ""], ["複勝率", ""], ["想定単勝", ""]].map(([h, c]) => <th key={h} className={c || undefined} style={TH}>{h}</th>)}
             {SHOW_MEGU && <th style={{ ...TH, borderLeft: "2px solid rgba(167,139,250,0.3)", color: "#a78bfa" }}>想定めぐ指数</th>}
             {SHOW_MEGU && <th style={{ ...TH, color: "#a78bfa" }}>実測めぐ指数</th>}
           </tr>
@@ -554,21 +574,24 @@ export default function RaceDetailPage() {
             const rawNo = Number(e.horse_number ?? e.number);
             const hasNo = Number.isFinite(rawNo) && rawNo > 0;       // 馬番が未確定（特別登録・出走馬決定の段階）は 0 で来る → 『—』を出す
             const hn = hasNo ? String(rawNo) : "";
-            const oddVal = positive(e.win_odds) ?? oddsMap[hn] ?? positive(e.odds);
-            const { text: oddsText, cls: oddsColorClass } = fmtOdds(oddVal as number | undefined);
+            const pr = hasNo ? predByNo.get(rawNo) : undefined;
+            const { text: oddsText } = fmtOdds(pr?.win_odds ?? undefined);
             const megu = getMeguValues(e);
             return (
               <tr key={hasNo ? hn : `p${i}-${e.horse_id ?? ""}`} style={{ transition: "background 0.12s" }}>
-                <td style={{ ...TD, textAlign: "center" }}><BracketBadge bn={hasNo ? wakuOf(Number(hn), shutubaEntries.length, Number(e.bracket_number) || null) : null} /></td>
+                <td className="m-hide" style={{ ...TD, textAlign: "center" }}><BracketBadge bn={hasNo ? wakuOf(Number(hn), shutubaEntries.length, Number(e.bracket_number) || null) : null} /></td>
                 <td style={{ ...TD, textAlign: "center" }}><NumBadge no={hasNo ? hn : null} bn={hasNo ? wakuOf(Number(hn), shutubaEntries.length, Number(e.bracket_number) || null) : null} /></td>
-                <td style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left" }}>
+                <td className="m-name" style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left" }}>
                   <HorseName id={e.horse_id} name={e.horse_name} />
+                  <span className="m-sub">{subLine(e) || "—"}</span>
                 </td>
-                <td style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{pick(e, "sex_age") || `${pick(e, "sex")}${pick(e, "age")}` || "—"}</td>
-                <td style={TD}>{pick(e, "jockey_weight", "weight", "impost") || "—"}</td>
-                <td style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{pick(e, "jockey_name", "jockey") || "—"}</td>
-                <td style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{pick(e, "trainer_name", "trainer") || "—"}</td>
-                <td style={{ ...TD, fontWeight: 600, color: oddsColorClass.includes("red") ? "#f87171" : oddsColorClass.includes("yellow") ? "#fbbf24" : "var(--text-dim)" }}>{oddsText}</td>
+                <td className="m-hide" style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{pick(e, "sex_age") || `${pick(e, "sex")}${pick(e, "age")}` || "—"}</td>
+                <td className="m-hide" style={TD}>{pick(e, "jockey_weight", "weight", "impost") || "—"}</td>
+                <td className="m-hide" style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{pick(e, "jockey_name", "jockey") || "—"}</td>
+                <td className="m-hide" style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{pick(e, "trainer_name", "trainer") || "—"}</td>
+                <td style={TD}>{pctCell(pr?.win_prob, pr?.redacted)}</td>
+                <td style={TD}>{pctCell(pr?.top3_prob, pr?.redacted)}</td>
+                <td style={{ ...TD, color: "var(--text-dim)" }}>{lock || pr?.redacted || pr?.win_odds == null ? (lock ? "🔒" : "—") : oddsText}</td>
                 {SHOW_MEGU && <MeguCell value={megu.megu_final} title="想定めぐ指数（過去走から推定）" />}
                 {SHOW_MEGU && <MeguCell value={megu.actual_megu} title="実測めぐ指数（レース後）" borderLeft={false} />}
               </tr>
@@ -603,8 +626,8 @@ export default function RaceDetailPage() {
       { key: "posdiff", label: "位置取り", val: (e: RaceEntry) => { const v = positionVerdict(estByNo.get(Number(e.horse_number))?.est, firstCornerPos(e.passing_order)); return v ? Math.abs(v.diff) : null; } },
     ] : []),
     { key: "l3f", label: "上り3F", val: (e) => { const n = Number(e.last3f ?? e.last_3f); return Number.isFinite(n) && n > 0 ? n : null; } },
-    { key: "odds", label: "単勝", val: (e) => positive(e.win_odds) ?? positive(e.odds) ?? oddsMap[String(e.horse_number ?? e.number ?? "")] ?? null },
   ];
+  const RES_HIDE = new Set(["waku", "jockey", "passing", "est", "corner1", "posdiff"]);   // 狭い画面では畳む列（騎手は馬名の下に出す）
   // 並べ替え: 値が取れない行（取消・データなし）は、昇順でも降順でも最後。同じ値は元の順（着順）のまま
   const sortCol = resSort ? resultCols.find((c) => c.key === resSort.key) : null;
   const sortedResult = sortCol && resSort ? [...resultEntries].sort((a, b) => {
@@ -624,7 +647,7 @@ export default function RaceDetailPage() {
         <thead style={{ background: "var(--surface2)" }}>
           <tr>
             {resultCols.map((c) => (
-              <th key={c.key} style={{ ...TH, cursor: "pointer", userSelect: "none" }} aria-sort={resSort?.key === c.key ? (resSort.dir === 1 ? "ascending" : "descending") : "none"} title="押すと並べ替え（昇順→降順→元の順）"
+              <th key={c.key} className={RES_HIDE.has(c.key) ? "m-hide" : undefined} style={{ ...TH, cursor: "pointer", userSelect: "none" }} aria-sort={resSort?.key === c.key ? (resSort.dir === 1 ? "ascending" : "descending") : "none"} title="押すと並べ替え（昇順→降順→元の順）"
                 onClick={() => setResSort((cur) => (cur?.key !== c.key ? { key: c.key, dir: 1 } : cur.dir === 1 ? { key: c.key, dir: -1 } : null))}>
                 {c.label}<span aria-hidden style={{ marginLeft: 3, fontSize: 9, opacity: resSort?.key === c.key ? 1 : 0.3 }}>{resSort?.key === c.key ? (resSort.dir === 1 ? "▲" : "▼") : "↕"}</span>
               </th>
@@ -639,34 +662,33 @@ export default function RaceDetailPage() {
             const placeColor = pos === 1 ? "#fbbf24" : pos === 2 ? "#94a3b8" : pos === 3 ? "#d97706" : "var(--text)";
             const tSec = parseTimeSec((e.time ?? e.finish_time) as string | undefined);
             void tSec;
-            const resultOdds = positive(e.win_odds) ?? positive(e.odds) ?? oddsMap[String(e.horse_number ?? e.number ?? "")];
             const megu = getMeguValues(e);
             return (
               <tr key={i} style={{ transition: "background 0.12s" }}>
                 <td style={{ ...TD, fontWeight: pos <= 3 ? 800 : 400, color: placeColor, fontSize: pos <= 3 ? 15 : 13 }}>{pos <= 0 || pos >= 99 ? "—" : pos}</td>
-                <td style={{ ...TD, textAlign: "center" }}><BracketBadge bn={wakuOf(Number(e.horse_number ?? e.number), resultEntries.length, Number(e.bracket_number) || null)} /></td>
+                <td className="m-hide" style={{ ...TD, textAlign: "center" }}><BracketBadge bn={wakuOf(Number(e.horse_number ?? e.number), resultEntries.length, Number(e.bracket_number) || null)} /></td>
                 <td style={{ ...TD, textAlign: "center" }}><NumBadge no={e.horse_number ?? (e.number as number | string | undefined)} bn={wakuOf(Number(e.horse_number ?? e.number), resultEntries.length, Number(e.bracket_number) || null)} /></td>
-                <td style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left" }}>
+                <td className="m-name" style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left" }}>
                   <HorseName id={e.horse_id} name={e.horse_name} />
+                  <span className="m-sub">{[pick(e, "sex_age"), pick(e, "jockey_name", "jockey")].filter(Boolean).join(" ") || "—"}</span>
                 </td>
                 {showMark && (() => { const mm = markByNo.get(Number(e.horse_number)); return <td style={{ ...TD, fontWeight: 800, fontSize: mm?.sym === "消" ? 13 : 17, color: mm?.color }}>{mm && mm.sym !== "—" ? mm.sym : <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>—</span>}</td>; })()}
-                <td style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{pick(e, "jockey_name", "jockey") || "—"}</td>
+                <td className="m-hide" style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{pick(e, "jockey_name", "jockey") || "—"}</td>
                 <td style={TD}>{e.time ?? e.finish_time ?? "—"}</td>
-                <td style={{ ...TD, fontSize: 11 }}>{e.passing_order ?? "—"}</td>
+                <td className="m-hide" style={{ ...TD, fontSize: 11 }}>{e.passing_order ?? "—"}</td>
                 {checkRows && (() => {
                   const est = estByNo.get(Number(e.horse_number));
                   const act = firstCornerPos(e.passing_order);
                   const v = positionVerdict(est?.est, act);
                   return (
                     <>
-                      <td style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{est?.est != null ? `${est.style} ${est.est}番手` : "—"}</td>
-                      <td style={{ ...TD, fontSize: 12 }}>{act != null ? `${act}番手` : "—"}</td>
-                      <td style={TD}>{v ? <span title={`想定${est!.est}番手 → 実際${act}番手`} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Verdict v={v.verdict} /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>{v.diff === 0 ? "ぴったり" : v.diff > 0 ? `後ろへ${v.diff}` : `前へ${-v.diff}`}</span></span> : "—"}</td>
+                      <td className="m-hide" style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{est?.est != null ? `${est.style} ${est.est}番手` : "—"}</td>
+                      <td className="m-hide" style={{ ...TD, fontSize: 12 }}>{act != null ? `${act}番手` : "—"}</td>
+                      <td className="m-hide" style={TD}>{v ? <span title={`想定${est!.est}番手 → 実際${act}番手`} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Verdict v={v.verdict} /><span style={{ fontSize: 11, color: "var(--text-dim)" }}>{v.diff === 0 ? "ぴったり" : v.diff > 0 ? `後ろへ${v.diff}` : `前へ${-v.diff}`}</span></span> : "—"}</td>
                     </>
                   );
                 })()}
                 <td style={TD}>{e.last3f ?? e.last_3f ?? "—"}</td>
-                <td style={{ ...TD, color: "var(--text-dim)", fontSize: 12 }}>{resultOdds != null ? resultOdds.toFixed(1) : "—"}</td>
                 {SHOW_MEGU && (
                   <MeguCell
                     value={megu.megu_final}
@@ -719,6 +741,7 @@ export default function RaceDetailPage() {
     .sort((a, b) => Number(a.horse_number) - Number(b.horse_number))
     .map((p) => ({ no: Number(p.horse_number), name: p.horse_name ?? "", bracket: wakuOf(Number(p.horse_number), preds.length, bracketOf.get(Number(p.horse_number)) ?? (Number(p.bracket_number) || null)), f: p.position_forecast ?? null }));
 
+  const PRED_HIDE = new Set([0, 4, 7, 9, 11]);   // 枠・連対率・想定複勝・複期待値・買い判断は狭い画面で畳む
   const PredPanel = (
     <div>
       {isAdmin && <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
@@ -756,10 +779,10 @@ export default function RaceDetailPage() {
       {forecastHorses.length > 0 && !lock && <PositionForecast horses={forecastHorses} pace={predData?.pace_forecast} gate={predData?.gate_bias} direction={turnOf(rd?.direction, rd?.venue, rd?.surface, rd?.distance)} />}
 
       {sortedPreds.length > 0 ? (
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 12 }}>
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <table className="m-sticky" style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 12 }}>
             <thead style={{ background: "var(--surface2)" }}>
-              <tr>
+              <tr className="m-hide">
                 <th style={{ ...TH, textAlign: "center" }} colSpan={3}>出走馬</th>
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={3}>{predData?.prob_calibration?.applied ? "予測確率（市場補正後）" : "予測確率"}</th>
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>想定オッズ</th>
@@ -773,13 +796,14 @@ export default function RaceDetailPage() {
                   return (
                     <th
                       key={h}
+                      className={PRED_HIDE.has(i) ? "m-hide" : undefined}
                       style={{
                         ...TH,
                         borderLeft: [3,6,8,10,12].includes(i) ? "1px solid rgba(36,48,73,0.5)" : undefined,
                         color: isAiCol && lock ? "var(--text-dim)" : TH.color,
                       }}
                     >
-                      {isAiCol && lock ? <span style={{ marginRight: 3 }}>🔒</span> : null}{h}
+                      {isAiCol && lock ? <span style={{ marginRight: 3 }}>🔒</span> : null}{h === "単勝" ? <span className="m-only">想定</span> : null}{h}
                     </th>
                   );
                 })}
@@ -792,16 +816,17 @@ export default function RaceDetailPage() {
                 const rowBg = rank === 1 ? "rgba(239,68,68,0.04)" : rank === 2 ? "rgba(59,130,246,0.04)" : rank === 3 ? "rgba(34,197,94,0.04)" : undefined;
                 return (
                   <tr key={p.horse_number ?? i} style={{ background: rowBg, transition: "background 0.12s" }}>
-                    <td style={{ ...TD, textAlign: "center" }}><BracketBadge bn={wakuOf(Number(p.horse_number), preds.length, bracketOf.get(Number(p.horse_number)) ?? (Number(p.bracket_number) || null))} /></td>
+                    <td className="m-hide" style={{ ...TD, textAlign: "center" }}><BracketBadge bn={wakuOf(Number(p.horse_number), preds.length, bracketOf.get(Number(p.horse_number)) ?? (Number(p.bracket_number) || null))} /></td>
                     <td style={{ ...TD, textAlign: "center" }}><NumBadge no={p.horse_number} bn={wakuOf(Number(p.horse_number), preds.length, bracketOf.get(Number(p.horse_number)) ?? (Number(p.bracket_number) || null))} /></td>
-                    <td style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left", whiteSpace: "nowrap" }}>
+                    <td className="m-name" style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left", whiteSpace: "nowrap" }}>
                       <HorseName id={p.horse_id} name={p.horse_name} />
+                      <span className="m-sub">{[p.sex_age, p.jockey_name, p.jockey_weight].filter((x) => x != null && x !== "").join(" ") || (shutubaByNo.get(Number(p.horse_number)) ? subLine(shutubaByNo.get(Number(p.horse_number))!) : "") || "—"}</span>
                     </td>
                     {/* AI columns — redact when null or entry.redacted === true */}
                     <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", color: (p.redacted || p.win_prob == null) ? "var(--text-dim)" : undefined }}>
                       {(p.redacted || p.win_prob == null) ? "●●%" : `${(p.win_prob * 100).toFixed(1)}%`}
                     </td>
-                    <td style={{ ...TD, color: (p.redacted || p.top2_prob == null) ? "var(--text-dim)" : undefined }}>
+                    <td className="m-hide" style={{ ...TD, color: (p.redacted || p.top2_prob == null) ? "var(--text-dim)" : undefined }}>
                       {(p.redacted || p.top2_prob == null) ? "●●%" : `${(p.top2_prob * 100).toFixed(1)}%`}
                     </td>
                     <td style={{ ...TD, color: (p.redacted || p.top3_prob == null) ? "var(--text-dim)" : undefined }}>
@@ -810,7 +835,7 @@ export default function RaceDetailPage() {
                     <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", color: "var(--text-dim)" }}>
                       {(p.redacted || p.win_odds == null) ? "●●倍" : `${Number(p.win_odds).toFixed(1)}倍`}
                     </td>
-                    <td style={{ ...TD, color: "var(--text-dim)", fontSize: 11 }}>
+                    <td className="m-hide" style={{ ...TD, color: "var(--text-dim)", fontSize: 11 }}>
                       {(p.redacted || p.place_odds_min == null || p.place_odds_max == null)
                         ? "●●〜●●"
                         : `${Number(p.place_odds_min).toFixed(1)}〜${Number(p.place_odds_max).toFixed(1)}`}
@@ -818,7 +843,7 @@ export default function RaceDetailPage() {
                     <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", color: (p.redacted || (p.ev_win_cal ?? p.ev_win) == null) ? "var(--text-dim)" : evColor(p.ev_win_cal ?? p.ev_win, p.ev_win_cal != null), fontWeight: 600 }}>
                       {(p.redacted || (p.ev_win_cal ?? p.ev_win) == null) ? "●●" : Number(p.ev_win_cal ?? p.ev_win).toFixed(2)}
                     </td>
-                    <td style={{ ...TD, color: (p.redacted || (p.ev_place_cal ?? p.ev_place ?? p.expected_value) == null) ? "var(--text-dim)" : evColor(p.ev_place_cal ?? p.ev_place ?? p.expected_value, p.ev_place_cal != null), fontWeight: 600 }}>
+                    <td className="m-hide" style={{ ...TD, color: (p.redacted || (p.ev_place_cal ?? p.ev_place ?? p.expected_value) == null) ? "var(--text-dim)" : evColor(p.ev_place_cal ?? p.ev_place ?? p.expected_value, p.ev_place_cal != null), fontWeight: 600 }}>
                       {(p.redacted || (p.ev_place_cal ?? p.ev_place ?? p.expected_value) == null) ? "●●" : Number(p.ev_place_cal ?? p.ev_place ?? p.expected_value).toFixed(2)}
                     </td>
                     <td
@@ -827,7 +852,7 @@ export default function RaceDetailPage() {
                     >
                       {lock ? <span style={{ color: "var(--text-dim)", fontSize: 12 }}>🔒</span> : p.mark_type === "kesi" ? <span style={{ border: "1.5px solid #94a3b8", borderRadius: 4, padding: "1px 4px" }}>{mark.sym}</span> : mark.sym}
                     </td>
-                    <td style={{ ...TD, fontSize: 11 }}>{lock ? "🔒" : (p.buy_tier ?? "—")}</td>
+                    <td className="m-hide" style={{ ...TD, fontSize: 11 }}>{lock ? "🔒" : (p.buy_tier ?? "—")}</td>
                 </tr>
                 );
               })}
@@ -904,7 +929,7 @@ export default function RaceDetailPage() {
 
   /* ── レンダー ── */
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)", padding: narrow ? 12 : 24 }}>
+    <div style={{ minHeight: "100dvh", background: "var(--bg)", color: "var(--text)", padding: narrow ? "0 2px" : 24 }}>
       <Link href="/" className="hide-narrow" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-dim)", marginBottom: 16, textDecoration: "none" }}>
         ← ホーム
       </Link>
@@ -913,7 +938,7 @@ export default function RaceDetailPage() {
       {Header}
 
       {/* タブバー */}
-      <div role="tablist" style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--border)", paddingBottom: 0, flexWrap: "nowrap", overflowX: "auto" }}>
+      <div role="tablist" style={{ display: "flex", gap: 4, marginBottom: narrow ? 8 : 20, borderBottom: "1px solid var(--border)", paddingBottom: 0, flexWrap: "nowrap", overflowX: "auto" }}>
         {TABS.map(({ id, label }) => (
           <button
             key={id}
@@ -921,8 +946,8 @@ export default function RaceDetailPage() {
             role="tab"
             aria-selected={tab === id}
             style={{
-              padding: narrow ? "12px 14px" : "10px 20px",
-              minHeight: 44,
+              padding: narrow ? "8px 12px" : "10px 20px",
+              minHeight: narrow ? 40 : 44,
               whiteSpace: "nowrap",
               flex: "none",
               fontSize: 14,

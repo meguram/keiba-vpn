@@ -10,7 +10,7 @@ import { MemberLockNote, PublicModeNote } from "@/components/upgrade/MemberLock"
 import { LEVEL_STYLE, RaceValue, useRaceValues, valueTitle } from "@/lib/raceValue";
 import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import { WeekPicker } from "@/components/WeekPicker";
-import { RaceStrip } from "@/components/RaceStrip";
+import { RaceStrip, useNarrow } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
 import { MeguTable } from "@/components/MeguTable";
 import { WeeklyBetTab } from "@/components/WeeklyBetTab";
@@ -298,6 +298,7 @@ const TABLE_CSS = `
 .pt-chip[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);background:rgba(59,130,246,.10)}
 .pt-chip:focus-visible,.pt-select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pt-select{min-height:36px;padding:0 8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px}
+@media (hover:none) and (pointer:coarse){.pt-chip,.pt-select{min-height:44px}}
 .pt-card{display:grid;gap:6px;padding:10px 10px 10px 12px;border-bottom:1px solid rgba(36,48,73,.5)}
 .pt-card .r1{display:flex;align-items:center;gap:8px;min-width:0}
 .pt-card .pt-nums{flex:0 0 auto;display:inline-flex;gap:3px}
@@ -746,6 +747,7 @@ function RacePanel({
 
 /* ── メインページ ── */
 export default function WeeklyPredictionsPage() {
+  const narrow = useNarrow();
   const [dates, setDates] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState("");
   const [races, setRaces] = useState<RaceItem[]>([]);
@@ -957,11 +959,11 @@ export default function WeeklyPredictionsPage() {
   }, [visibleRaces, activeRaceId, races]);
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
+    <div style={{ minHeight: "100dvh", background: "var(--bg)", color: "var(--text)" }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {/* ページヘッダー */}
-      <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "18px 24px" }}>
+      <div className="wp-head" style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "18px 24px" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 12 }}>
           <Link href="/" className="hide-narrow" style={{ fontSize: 12, color: "var(--text-dim)", textDecoration: "none" }}>← ホーム</Link>
           <span className="hide-narrow" style={{ color: "var(--border)" }}>/</span>
@@ -973,7 +975,7 @@ export default function WeeklyPredictionsPage() {
       </div>
 
       {/* 開催日の選択（週単位） */}
-      <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "14px 24px" }}>
+      <div className="wp-pick" style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "14px 24px" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", flexDirection: "column", gap: 12 }}>
           <WeekPicker dates={dates} today={today} selectedDate={selectedDate} loading={loadingDates} onSelectDate={chooseDate} />
         </div>
@@ -981,13 +983,16 @@ export default function WeeklyPredictionsPage() {
 
       {/* メインコンテンツ */}
       <div className="wp-main" style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 24px" }}>
-        {/* 凡例 */}
+        {/* 凡例（狭い画面では折りたたむ） */}
+        <details className="wp-legend" open={!narrow}>
+        <summary>印・期待値の見方</summary>
         <div style={{ marginBottom: 16, padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-dim)", display: "flex", gap: 16, flexWrap: "wrap" }}>
           <span>印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / 消: 3着内に来る確率が低い（10人気以下で複勝確率が低い馬。過去の実績では約2.5%・目標5%以下。複数付くことも付かないこともある）</span>
           <span>
             期待値（過去の実績に合わせて較正した期待回収率）: <strong style={{ color: "#22c55e" }}>≥1.10</strong> / <strong style={{ color: "#60a5fa" }}>≥1.00</strong> / <strong style={{ color: "var(--text-dim)" }}>≥0.90</strong> / <strong style={{ color: "#f87171" }}>＜0.90</strong>
           </span>
         </div>
+        </details>
 
         {loadingRaces && (
           <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-dim)" }}>
