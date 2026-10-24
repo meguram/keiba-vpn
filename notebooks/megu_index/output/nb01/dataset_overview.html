@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>データ分布概要 — NB-01</title>
+  <script src="../../static/plotly-2.35.2.min.js"></script>
+  <style>
+    body{margin:0;font-family:"Noto Sans JP",sans-serif;background:#f6f8fb;color:#1f2937}
+    header{background:linear-gradient(135deg,#4c1d95,#7c3aed);color:#fff;padding:1.1rem 1.4rem}
+    header h1{margin:0;font-size:1.3rem}
+    main{max-width:1200px;margin:0 auto;padding:1rem 1.2rem 2rem}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:1rem;margin-bottom:1rem}
+    #chart{width:100%;height:480px}
+  </style>
+</head>
+<body>
+<header><h1>megu_dataset 分布概要</h1></header>
+<main>
+  <section class="card">
+    <label>パネル</label>
+    <select id="panel"></select>
+    <div id="chart"></div>
+  </section>
+</main>
+<script id="data" type="application/json">{"meta": {"n_rows": 302357}, "histograms": {"芝": {"title": "斤量補正後タイム（芝）", "counts": [2228, 164, 5685, 22616, 498, 12707, 3125, 6694, 19705, 1347, 12465, 11915, 2608, 20550, 5764, 2250, 3546, 782, 3412, 1586, 871, 2144, 844, 78, 90, 618, 739, 880, 712, 336, 267, 238, 184, 205, 331, 135, 31, 53, 8, 6, 19, 25, 25, 36, 25, 28, 28, 1, 0, 1], "edges": [53.6, 58.625, 63.649, 68.674, 73.699, 78.724, 83.748, 88.773, 93.798, 98.822, 103.847, 108.872, 113.896, 118.921, 123.946, 128.971, 133.995, 139.02, 144.045, 149.069, 154.094, 159.119, 164.143, 169.168, 174.193, 179.218, 184.242, 189.267, 194.292, 199.316, 204.341, 209.366, 214.39, 219.415, 224.44, 229.465, 234.489, 239.514, 244.539, 249.563, 254.588, 259.613, 264.637, 269.662, 274.687, 279.712, 284.736, 289.761, 294.786, 299.81, 304.835]}, "ダート": {"title": "斤量補正後タイム（ダート）", "counts": [4403, 754, 1135, 21730, 11988, 2193, 14302, 11902, 782, 5176, 5037, 7967, 10650, 21307, 18969, 5126, 1672, 1957, 1952, 456, 31, 10, 53, 757, 561, 164, 62, 7, 2, 1, 0, 8, 225, 435, 551, 531, 390, 250, 173, 58, 18, 3, 2, 0, 1, 0, 0, 0, 0, 1], "edges": [56.861, 61.054, 65.247, 69.44, 73.633, 77.826, 82.019, 86.212, 90.405, 94.599, 98.792, 102.985, 107.178, 111.371, 115.564, 119.757, 123.95, 128.143, 132.336, 136.529, 140.722, 144.916, 149.109, 153.302, 157.495, 161.688, 165.881, 170.074, 174.267, 178.46, 182.653, 186.846, 191.039, 195.233, 199.426, 203.619, 207.812, 212.005, 216.198, 220.391, 224.584, 228.777, 232.97, 237.163, 241.356, 245.55, 249.743, 253.936, 258.129, 262.322, 266.515]}, "track_dev": {"title": "馬場乖離 track_dev_sec（日×コース）", "counts": [102, 186, 270, 322, 411, 977, 1302, 1888, 2833, 3453, 6160, 8238, 12856, 13255, 15874, 18921, 26249, 26262, 27986, 30205, 27289, 21483, 14968, 12951, 7294, 4657, 4072, 2355, 1818, 1126, 1021, 1203, 451, 633, 374, 645, 74, 239, 250, 0, 230, 101, 51, 198, 73, 67, 0, 54, 0, 42], "edges": [-2.222, -2.103, -1.984, -1.865, -1.746, -1.627, -1.508, -1.389, -1.27, -1.151, -1.031, -0.912, -0.793, -0.674, -0.555, -0.436, -0.317, -0.198, -0.079, 0.04, 0.159, 0.278, 0.398, 0.517, 0.636, 0.755, 0.874, 0.993, 1.112, 1.231, 1.35, 1.469, 1.588, 1.707, 1.826, 1.946, 2.065, 2.184, 2.303, 2.422, 2.541, 2.66, 2.779, 2.898, 3.017, 3.136, 3.255, 3.375, 3.494, 3.613, 3.732]}}}</script>
+<script>
+const DATA=JSON.parse(document.getElementById('data').textContent);
+const hists=DATA.histograms;
+const panelEl=document.getElementById('panel');
+const keys=Object.keys(hists);
+function fill(el,vals){el.innerHTML='';vals.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=hists[v].title;el.appendChild(o)})}
+function render(){
+  const h=hists[panelEl.value]; if(!h)return;
+  const centers=h.edges.slice(0,-1).map((e,i)=>(e+h.edges[i+1])/2);
+  Plotly.react('chart',[{x:centers,y:h.counts,type:'bar',marker:{color:'#6366f1'}}],{title:h.title,xaxis:{title:'秒'},yaxis:{title:'件数'},margin:{t:50,b:50,l:50,r:20}},{responsive:true});
+}
+fill(panelEl,keys); panelEl.onchange=render; render();
+</script></body></html>

@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>展開タイプ（ペース × 隊列の凝縮度）と展開シナリオごとの各馬の確率（tp-61）— keiba-vpn</title>
+<style>:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --warn:#fbbf24; }
+* { box-sizing: border-box; } body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 15px; padding: 40px 56px 96px; max-width: 1100px; margin: 0 auto; }
+a { color: var(--accent-2); } h1 { font-size: 26px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; } h3 { font-size: 16px; margin: 22px 0 8px; }
+table { border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; background: var(--panel); } th, td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; vertical-align: top; } th { background: #1b2a4d; }
+.muted { color: var(--muted); font-size: 13px; } .note { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }</style></head>
+<body><a href="../../index.html" class="muted">← ドキュメント一覧</a>
+<h1>展開タイプ（ペース × 隊列の凝縮度）と、展開シナリオごとの各馬の確率（tp-61）</h1>
+<p class="muted">2026-10-21、ユーザー依頼（画面担当経由）。『逃げ・先行が向くのは、ハイペースでなく、かつ差しが決まりにくいペース（馬群が凝縮したスローは差しが決まりやすい）。その粒度でペース分析を』『向いた馬・不向きな馬が、様々な展開で優位になる予測を』『ハナを取りたい馬が複数いると単純なハイになりやすい。ペースの中の細分化を、レースラップの分析で確立』『ラップの分け方を、ネット上の文献から MECE に把握』。学習は 2020〜2023 年、選択 2024 年、確認 2025 年、2026 年はテストセット②（最終確認のみ）。市場オッズ・人気は特徴量に使っていない。</p>
+
+<div class="note"><b>要点.</b>
+<ul>
+<li><b>ご指摘の仮説は実測で支持された。ただし効くのは『ペース』と『隊列の凝縮度』の 2 軸の組み合わせで、ラップの細かい型（中緩み・加速の長さ）は脚質別の成績に上乗せしない。</b>
+  2020〜2025 年の約 1.9 万レース（実測、2026 年は含めない）で、3 着内率を脚質ごとの平常値との比で見ると、<b>スロー・縦長</b>は逃げ 1.34／追込 0.71、<b>スロー・凝縮</b>は逃げ 1.17／追込 0.94（信頼区間は重ならない）。<b>ミドル</b>でも縦長は逃げ 1.15／追込 0.79、凝縮は逃げ 0.86／追込 1.10 と逆向き。<b>ハイ・凝縮</b>は逃げ 0.64／追込 1.44 で最も差し寄り、<b>ハイ・縦長</b>は脚質差が小さい（逃げ 0.86／追込 1.11）。</li>
+<li>馬単位の LogLoss（学習 2020〜2023 → 検証 2024・2025）で、位置取りだけのモデルに対し、ペース 3 段階は 勝率 −0.00125・複勝 −0.00255、<b>隊列の凝縮度（連続値）を足すと −0.00239・−0.00433</b>。凝縮度の追加分はペース 3 段階の追加分と同程度で、<b>文献のラップ型 6 つに分けても 3 段階に上乗せしない（−0.00132・−0.00259）</b>。</li>
+<li><b>文献の分類を軸に分解して MECE の規則にした</b>（軸A 前後半のバランス → 軸B 中盤の緩み／軸C 加速の長さ → 軸E 隊列）。全レースがちょうど 1 つの型に入り（規則の網羅をテスト）、6 型の頻度は 5.8〜36.5%。データ駆動のクラスタ（k-means）とは一致が低い（ARI 0.14）。<b>『文献の型で足りる』ではなく、成績を分けるのは『ペース 3 段階 × 隊列 3 段階』</b>。</li>
+<li><b>ハナを取りたい馬が多いほどハイ寄り</b>という仮説は、方向は支持（条件を揃えて、直近 5 走の 1 角先頭率が高い馬が 1 頭増えるごとに前半 3F が約 0.15 秒速い）。<b>ただし 2 頭から急に変わる閾値は無く、1 頭目から効き</b>、ハイ（上位 25%）になる割合は 0 頭 24% → 1 頭 27% → 2 頭 32% → 3 頭以上 34% と、2 頭いても 7 割はハイにならない。事前予測の増分は小さい（ペース LogLoss −0.0039、隊列は 0）。</li>
+<li><b>事前（前日〜T-60）に出せるか: 隊列は出せる、ペースは 3 段階の UI 判定より明確に良いが限定的。</b> 2024・2025 年（学習 2020〜2023）のペース LogLoss は 現行 UI の 3 段階 1.046 → 0.995（正解率 48.0 → 49.2%）、lap_forecast（tp-55）0.985、<b>両者を混ぜて 0.977〜0.985</b>。隊列は事前分布 1.080 → 0.959（正解率 52.5%）。9 通りの展開の当たり率は 26%（最頻でも約 19%）。2026 年（テストセット②、学習 2020〜2025）でも保たれた（ペース 0.980・隊列 0.942）。</li>
+<li><b>展開シナリオごとの各馬の確率は、表示・説明用</b>。最終モデルの確率に『想定位置取りの効果』をシナリオごとに足してレース内で合計を戻す。<b>展開が当たっていた場合の上限（オラクル）</b>は 複勝 −0.0005、勝率 −0.0003〜−0.0004（2026 年は −0.00006）と小さく、<b>事前の確率で重み付けすると ±0.0001 以内（精度は変わらない）</b>。最終モデルが既に展開・脚質の特徴を持つため、精度向上ではなく『この馬は展開次第で何が変わるか』を見せる情報として使う。</li>
+</ul></div>
+
+<h2>1. 文献の分類体系と、MECE の整理</h2>
+<h3>1-1. 集めたもの</h3>
+<table>
+<tr><th>種類</th><th>件数</th><th>取れ方</th></tr>
+<tr><td>解説・予想記事（note の公開記事）</td><td>約 380 本（予想の観点の調査で集めた 249 本と、ラップの分類で検索し直した約 130 本。内容が同じものを除く）</td><td>検索 API と本文 API（無料公開分のみ、1 秒間隔）。原文は手元の <code>~/research/</code> のみに保存し、本リポジトリには入れていない</td></tr>
+<tr><td>百科事典（脚質の項）</td><td>1 本</td><td>ペース・ラップの分類の記述は薄く、手がかりにならなかった</td></tr>
+<tr><td>書籍・学術論文・JRA 公式の用語集</td><td>0 本</td><td><b>未調査</b>（検索エンジンはボット判定で止まり、回避しない。今回は note のみ）。ここが抜けているので、分類体系の網羅性は『解説記事の範囲』と明記する</td></tr>
+</table>
+<p class="muted">記事で使われている語（その語を含む記事の数、約 380 本中）: 持続力 171・瞬発力 170・ハイペース 126・スローペース 90・消耗戦 86・前傾 71・ミドルペース 59・後傾 57・ロングスパート 55・平均ペース 49・持続戦 47・前半3F 42・ラップ構成 35・加速ラップ 32・瞬発戦 31・ペースアップ 29・縦長 29・凝縮 25・PCI 20・ヨーイドン 18・中緩み 15・RPCI 12。</p>
+
+<h3>1-2. 軸への分解（出典の種類 × 軸 × 水準）</h3>
+<table>
+<tr><th>軸</th><th>文献での水準・呼び名（同じ現象の別名を統合）</th><th>本章の定義（排他的）</th></tr>
+<tr><td>A 全体のバランス<br><span class=muted>前半と後半の差、PCI/RPCI</span></td>
+ <td>ハイ＝前傾＝前崩れ／ミドル＝平均＝平坦／スロー＝後傾。判定の目安は『前半3F と後半3F の差が約 1 秒』（2000m 未満は 3F、以上は 5F を見る解説あり）。PCI 系の指数は 50 前後が平均で、大きいほど後傾（瞬発型）、小さいほど前傾（持続型）。前半の絶対値は馬場・距離で基準が変わるので差で見る、という注意も共通</td>
+ <td>『後半3F − 前半3F』の par（場×面×距離の基準ラップ）との差。<b>下位 25%（−0.8 秒以下）＝スロー（後傾）、上位 25%（+0.8 秒以上）＝ハイ（前傾）、その間＝ミドル</b>。tp-55 のラップ傾向と同じ定義で、文献の目安 ±1 秒に近い</td></tr>
+<tr><td>B 中盤の形</td><td>中緩み（4〜5F 目で緩む）、息が入る、加減速、緩まない（高速持続）</td><td>中盤で最も遅いラップが、前半と後半の平均より遅い秒数（緩み幅）。<b>距離帯ごとの 70 パーセンタイル以上を『中緩みあり』</b></td></tr>
+<tr><td>C 加速の形</td><td>瞬発（ヨーイドン＝直線だけの急加速）、ロングスパート（右肩上がり＝早めに加速して持続）、持続（加速せず平坦）、消耗（終いが落ちる）</td><td>後半で中盤より 0.2 秒以上速いラップの割合（加速の長さ）。スロー側は<b>距離帯の中央値より長いか短いか</b>で、ロングスパート／ヨーイドンを分ける。消耗は軸A のハイで中緩みなし</td></tr>
+<tr><td>D 終いの落ち</td><td>ラスト 1F・2F の落ち（消耗）／維持</td><td>軸A（後傾か前傾か）と、軸C の加速の長さに吸収（独立の水準は置かない。ラスト 1F の落ちは平均 0.5 秒で、k-means の 6 つの中心でも 0.36〜0.64 秒と差が小さい）</td></tr>
+<tr><td>E 隊列</td><td>縦長／凝縮（団子）、前受けが競らず前が残る、馬群が詰まって進路が無い</td><td>最終コーナー通過順位の記法（かっこ＝横並び、'-'＝1 馬身以上の差、'='＝大きな差）から、隣り合う馬の間の差の数（'-'＝1、'='＝3）を頭数で割った値。<b>面×距離帯ごとの三分位で 凝縮／中間／縦長</b></td></tr>
+</table>
+
+<h3>1-3. MECE の規則（ラップ型 6 つ）と検証</h3>
+<table>
+<tr><th>型</th><th>規則</th><th>文献での対応する呼び名</th><th>頻度（2020〜2023）</th></tr>
+<tr><td>slow_kick 超スロー・ヨーイドン</td><td>スロー ∧ 加速が短い</td><td>ヨーイドン型（超スロー→急加速）、瞬発戦</td><td>7.1%</td></tr>
+<tr><td>slow_spurt スロー・ロングスパート</td><td>スロー ∧ 加速が長い</td><td>右肩上がり型、ロングスパート戦</td><td>18.1%</td></tr>
+<tr><td>even_kick 均衡・中緩み再加速</td><td>ミドル ∧ 中緩みあり</td><td>中緩み、加減速</td><td>12.2%</td></tr>
+<tr><td>even_flat 均衡・平坦（持続）</td><td>ミドル ∧ 中緩みなし</td><td>平坦戦、高速持続戦</td><td>36.5%</td></tr>
+<tr><td>high_breather 前傾・息が入るハイ</td><td>ハイ ∧ 中緩みあり</td><td>直線手前スロー型（息が入るハイ）</td><td>5.8%</td></tr>
+<tr><td>high_collapse 前傾・一本調子のハイ</td><td>ハイ ∧ 中緩みなし</td><td>一本調子型（前崩れ）、消耗戦</td><td>20.2%</td></tr>
+</table>
+<ul>
+<li><b>排他・網羅</b>: 規則は先に当てはまった 1 つを返す木で、バランス・緩み幅・加速の長さの格子（約 2 万点）で必ず 6 型のいずれかになり、6 型すべてが現れることをテストで確認（<code>tests/pipeline/test_pace_type.py</code>）。ラップが読めない 134 レース（全体の 0.6%）は型を付けない。</li>
+<li><b>空・極端に小さい型</b>: 芝・マイルの slow_kick は 1.4%（距離帯×面の最小セルは 8 レース）。芝のマイルで超スローのヨーイドンが少ないのは文献の印象（東京・京都の外回りで多い）と整合するが、小さいセルは表示を控える。</li>
+<li><b>データ駆動クラスタとの一致</b>: 前半 3F・中盤・後半 3F・緩み・加速など 9 次元の k-means は、k=4 で最も安定（再現の ARI 0.92）、k=6 は 0.83（k=5: 0.66、k=7: 0.66）で、輪郭係数は 0.14 前後＝<b>連続的で、はっきり分かれた塊は無い</b>。規則の 6 型と k=6 の一致は ARI 0.14・NMI 0.21 と低い（クラスタは前半の遅さと加速の長さで分かれ、規則はバランスを先に切るため）。tp-55 の B（前半3F・中盤平均・後半3F の 3 次元 k-means 5 クラスタ）の拡張にあたり、<b>tp-35 は追い切りのラップ種別で、レースのラップ型ではない</b>。</li>
+</ul>
+
+<h2>2. 実測: 『前が残る／差しが届く』を区別できる粒度</h2>
+<p>2020〜2025 年・19,407 レース（8 頭立て以上の芝・ダートで、ペースと隊列が読めるもの。2026 年はテストセット②なので、この節の記述にも使っていない）。各馬の脚質は<b>実際の 1 角通過位置</b>（≤0.15 逃げ、≤0.35 先行、≤0.65 差し、他 追込）、ペースと隊列は上の定義。値は『その展開での 3 着内率 ÷ その脚質の全体の 3 着内率』（1 より大きいと追い風）、括弧はレース単位のブートストラップ 95% 区間。</p>
+<table><tr><th>展開（実測）</th><th>レース数</th><th>逃げ</th><th>先行</th><th>差し</th><th>追込</th></tr><tr><td>スロー・凝縮</td><td>2,526</td><td>1.17 <span class=muted>[1.14–1.20]</span></td><td>1.03 <span class=muted>[0.99–1.07]</span></td><td>0.92 <span class=muted>[0.88–0.95]</span></td><td>0.94 <span class=muted>[0.89–1.00]</span></td></tr><tr><td>スロー・中間</td><td>1,162</td><td>1.25 <span class=muted>[1.21–1.29]</span></td><td>1.08 <span class=muted>[1.02–1.13]</span></td><td>0.89 <span class=muted>[0.84–0.94]</span></td><td>0.74 <span class=muted>[0.68–0.80]</span></td></tr><tr><td>スロー・縦長</td><td>1,502</td><td>1.34 <span class=muted>[1.31–1.38]</span></td><td>1.10 <span class=muted>[1.05–1.15]</span></td><td>0.95 <span class=muted>[0.90–1.00]</span></td><td>0.71 <span class=muted>[0.65–0.76]</span></td></tr><tr><td>ミドル・凝縮</td><td>3,792</td><td>0.86 <span class=muted>[0.84–0.88]</span></td><td>0.94 <span class=muted>[0.92–0.97]</span></td><td>1.02 <span class=muted>[0.99–1.05]</span></td><td>1.10 <span class=muted>[1.05–1.14]</span></td></tr><tr><td>ミドル・中間</td><td>2,473</td><td>1.00 <span class=muted>[0.97–1.03]</span></td><td>0.99 <span class=muted>[0.96–1.03]</span></td><td>0.96 <span class=muted>[0.92–1.00]</span></td><td>0.91 <span class=muted>[0.87–0.96]</span></td></tr><tr><td>ミドル・縦長</td><td>2,996</td><td>1.15 <span class=muted>[1.12–1.17]</span></td><td>1.01 <span class=muted>[0.98–1.04]</span></td><td>0.95 <span class=muted>[0.92–0.98]</span></td><td>0.79 <span class=muted>[0.75–0.84]</span></td></tr><tr><td>ハイ・凝縮</td><td>1,537</td><td>0.64 <span class=muted>[0.60–0.67]</span></td><td>0.86 <span class=muted>[0.82–0.90]</span></td><td>1.13 <span class=muted>[1.08–1.17]</span></td><td>1.44 <span class=muted>[1.37–1.51]</span></td></tr><tr><td>ハイ・中間</td><td>1,314</td><td>0.70 <span class=muted>[0.67–0.74]</span></td><td>0.94 <span class=muted>[0.89–0.99]</span></td><td>1.07 <span class=muted>[1.03–1.12]</span></td><td>1.30 <span class=muted>[1.23–1.38]</span></td></tr><tr><td>ハイ・縦長</td><td>2,105</td><td>0.86 <span class=muted>[0.83–0.89]</span></td><td>0.99 <span class=muted>[0.95–1.03]</span></td><td>1.07 <span class=muted>[1.03–1.12]</span></td><td>1.11 <span class=muted>[1.05–1.17]</span></td></tr></table>
+<ul>
+<li>ペース（スロー→ミドル→ハイ）と隊列（凝縮→縦長）の両方で、逃げと追込の有利が<b>単調に</b>入れ替わる。ご指摘の『スローでも凝縮なら差しが届く』は、スローで逃げ 1.17／追込 0.94（凝縮）と逃げ 1.34／追込 0.71（縦長）の差として出る。逃げと追込の比で見ると、スロー・凝縮 1.24 に対し スロー・縦長 1.89。</li>
+<li><b>ミドルも一様ではない</b>: 縦長なら逃げ 1.15／追込 0.79、凝縮なら逃げ 0.86／追込 1.10。『ミドルは脚質差が小さい』は隊列を見ないときの平均で、隊列で逆向きに割れて打ち消し合っていた。</li>
+<li><b>ハイ・縦長は脚質差が小さい</b>（逃げ 0.86／追込 1.11）。『ハイなら差し』は、馬群が凝縮して全員が止まらない形のとき（ハイ・凝縮: 逃げ 0.64／追込 1.44）に強く出て、縦長だと弱い。</li>
+</ul>
+<p>馬単位の LogLoss（位置取り＋コース条件のロジスティック回帰、学習 2020〜2023 → 検証 2024・2025、小さいほど良い。位置取りのみ基準）:</p>
+<table>
+<tr><th>特徴</th><th>勝率</th><th>複勝率</th></tr>
+<tr><td>ペース 3 段階</td><td>−0.00125</td><td>−0.00255</td></tr>
+<tr><td>ペース（連続の balance）</td><td>−0.00142</td><td>−0.00280</td></tr>
+<tr><td>ペース 3 段階 ＋ 隊列 3 段階</td><td>−0.00178</td><td>−0.00348</td></tr>
+<tr><td>ペース（連続）＋ 隊列（連続: 差の数・先頭集団の割合）</td><td><b>−0.00265</b></td><td><b>−0.00471</b></td></tr>
+<tr><td>文献の規則 6 型</td><td>−0.00132</td><td>−0.00259</td></tr>
+<tr><td>文献の規則 6 型 ＋ 隊列</td><td>−0.00242</td><td>−0.00434</td></tr>
+<tr><td>k-means 6 型</td><td>−0.00059</td><td>−0.00119</td></tr>
+<tr><td>ラップ連続 9 量 ＋ 隊列（上限の目安）</td><td>−0.00515</td><td>−0.00877</td></tr>
+</table>
+<p>解釈: <b>規則の 6 型は 3 段階に上乗せしない</b>（−0.00132 vs −0.00125）。中緩みの有無・加速の長さは、同じペースの中では逃げ／追込の成績を分けない（下の表で型の中身が違うのは主にバランスの違い）。隊列を足すと 3 段階の約 2 倍の情報になる。連続量を使うほど大きい（上限）が、型に丸めると失われる。</p>
+
+<h3>ラップ型（規則）× 脚質（実測）</h3>
+<table><tr><th>ラップ型（規則）</th><th>逃げ</th><th>先行</th><th>差し</th><th>追込</th></tr><tr><td>超スロー・ヨーイドン</td><td>1.23 <span class=muted>[1.20–1.27]</span></td><td>1.03 <span class=muted>[0.99–1.09]</span></td><td>0.85 <span class=muted>[0.80–0.90]</span></td><td>0.81 <span class=muted>[0.75–0.88]</span></td></tr><tr><td>スロー・ロングスパート</td><td>1.26 <span class=muted>[1.23–1.28]</span></td><td>1.09 <span class=muted>[1.06–1.12]</span></td><td>0.95 <span class=muted>[0.92–0.99]</span></td><td>0.83 <span class=muted>[0.79–0.87]</span></td></tr><tr><td>均衡・中緩み再加速</td><td>0.97 <span class=muted>[0.94–1.00]</span></td><td>1.01 <span class=muted>[0.97–1.04]</span></td><td>0.97 <span class=muted>[0.94–1.00]</span></td><td>0.95 <span class=muted>[0.89–1.00]</span></td></tr><tr><td>均衡・平坦（持続）</td><td>1.01 <span class=muted>[0.99–1.03]</span></td><td>0.98 <span class=muted>[0.96–1.00]</span></td><td>1.00 <span class=muted>[0.97–1.02]</span></td><td>0.95 <span class=muted>[0.92–0.98]</span></td></tr><tr><td>前傾・息が入るハイ</td><td>0.68 <span class=muted>[0.64–0.72]</span></td><td>0.91 <span class=muted>[0.86–0.96]</span></td><td>1.18 <span class=muted>[1.12–1.24]</span></td><td>1.25 <span class=muted>[1.18–1.34]</span></td></tr><tr><td>前傾・一本調子（消耗）</td><td>0.78 <span class=muted>[0.76–0.80]</span></td><td>0.96 <span class=muted>[0.93–0.99]</span></td><td>1.06 <span class=muted>[1.04–1.09]</span></td><td>1.26 <span class=muted>[1.22–1.30]</span></td></tr></table>
+<ul>
+<li>型どうしの差はバランス（スロー系／ミドル系／ハイ系）でほぼ説明できる。<b>文献の『息が入るハイ（中緩みのあるハイ）は先行が残る』は、この規模のデータでは逆で、息が入るハイの逃げは 0.68、一本調子のハイの逃げは 0.78（どちらもハイは逃げに厳しい）</b>。差は小さい（区間は重ならないが、型の頻度が低い）。</li>
+<li>ミドル系（均衡・平坦／均衡・中緩み）は脚質差がほぼ無い（0.95〜1.01）。</li>
+</ul>
+
+<h2>3. ハナを取りたい馬の数と強さ</h2>
+<p>各馬について『直近 5 走（対象日より前、履歴 3 走以上）で 1 角を先頭で通過した割合』を作り、レースごとに 0.6 以上を『強い主張馬』、0.4 以上を『主張馬』と数えた（外枠・隣り合う馬・コースの最初のコーナーまでの距離・出遅れ代理は別の説明変数として作成）。13,228 レース（2020〜2025 年、出走馬の半分以上に履歴あり）。</p>
+<table>
+<tr><th>強い主張馬</th><th>レース数</th><th>前半3F の速さ（par との差、秒）</th><th>balance</th><th>ハイ（上位 25%）の割合</th><th>スロー（下位 25%）の割合</th></tr>
+<tr><td>0 頭</td><td>8,537</td><td>−0.04</td><td>−0.07</td><td>23.8%</td><td>28.1%</td></tr>
+<tr><td>1 頭</td><td>3,478</td><td>−0.25</td><td>+0.11</td><td>26.7%</td><td>21.6%</td></tr>
+<tr><td>2 頭</td><td>985</td><td>−0.42</td><td>+0.29</td><td>31.5%</td><td>16.8%</td></tr>
+<tr><td>3 頭以上</td><td>228</td><td>−0.51</td><td>+0.41</td><td>33.8%</td><td>14.0%</td></tr>
+</table>
+<p>面・距離帯・馬場・頭数・最初のコーナーまでの距離・年を揃えた回帰（0 頭との差）: 前半3F は 1 頭 −0.21 秒［−0.25, −0.18］、2 頭 −0.36 秒［−0.41, −0.31］、3 頭以上 −0.47 秒［−0.55, −0.38］。balance は +0.18／+0.34／+0.46。『主張馬（0.4 以上）』で数えても同じ形（−0.15／−0.30／−0.42 秒）。</p>
+<p><b>結論</b>: 仮説（ハナ主張馬が多いほどハイ寄り）は<b>支持される（関連）</b>。ただし (1) 2 頭から急に変わるのではなく 1 頭目から効き、1 頭増えるごとに前半3F がおよそ 0.15 秒速い、(2) ハイペースの『確定』ではなく、2 頭いてもハイ（上位 25%）になるのは約 3 割、(3) メンバー構成や距離の条件を完全には揃えられていないので因果ではない。事前予測への増分は小さい（ペース LogLoss 0.9992 → 0.9953、隊列は 0.9591 → 0.9586）。想定位置取りの分布（先行の頭数・間隔）が同じ情報の大半を持っているため。</p>
+
+<h2>4. 事前（前日〜T-60）に展開タイプを出せるか</h2>
+<p>説明変数: 想定位置取り（position_forecast）の分布（先頭 5 頭の位置・間隔・先行の頭数・分位）、UI のペース判定の入力、距離・面・馬場・頭数・クラス・場、コースごとの『縦長になりやすさ』の履歴平均、ハナ主張馬の変数（上）。LightGBM（3 クラス）を、ペースと隊列で別々に学習し、9 通りの展開の確率は<b>2 つの積</b>（独立）にした（9 クラスを直接当てるより LogLoss が良い: 1.958 vs 1.972）。</p>
+<table>
+<tr><th>対象</th><th>事前分布</th><th>UI の 3 段階（ペース判定のみ）</th><th>本章の分類器</th><th>（参考）lap_forecast（tp-55）</th></tr>
+<tr><td>ペース 2024・2025（学習 2020〜2023）</td><td>1.0653</td><td>1.0463（正解率 48.0%）</td><td>0.9953（49.2%、ECE 0.032）</td><td>0.9852（50.9%）。混ぜると 2024: 0.9773〜0.9785、2025: 0.9834〜0.9852</td></tr>
+<tr><td>隊列 2024・2025</td><td>1.0801</td><td>1.0639（44.2%）</td><td>0.9586（52.5%、ECE 0.021）</td><td>—</td></tr>
+<tr><td>9 通り（積）2024・2025</td><td>2.1356</td><td>2.0949（21.3%）</td><td>1.9583（26.0%、最頻クラスは約 19%）</td><td>—</td></tr>
+<tr><td>ペース 2026（学習 2020〜2025、テストセット②）</td><td>1.0550</td><td>1.0333（49.6%）</td><td>0.9798（50.5%、ECE 0.014）</td><td>—</td></tr>
+<tr><td>隊列 2026</td><td>1.0789</td><td>1.0656（43.9%）</td><td>0.9424（54.4%、ECE 0.024）</td><td>—</td></tr>
+</table>
+<ul>
+<li><b>隊列は事前に出せる</b>（コースの履歴と想定位置取りの分布。UI の 3 段階では全く分からない）。ペースは UI の 3 段階より明確に良いが、lap_forecast には届かない。<b>lap_forecast の確率がある場合は、自前 0.35 : lap_forecast 0.65 で混ぜる</b>（重みは 2024 年で 0.5、2025 年で 0.25 が最良だったため中間）。</li>
+<li>2026 年の想定位置取りは、馬柱の表が無いため結果表の過去走から作った近似（2025 年で本来の値との相関 0.976、UI のペース判定の一致率 91.6%）。</li>
+<li>ラップ型 6 つ（規則）の事前予測は LogLoss 1.553（事前分布 1.666、正解率 36%）で、<b>画面には出さない</b>（脚質別の成績に増分が無く、当たりにくい）。</li>
+</ul>
+
+<h2>5. 脚質ごとの有利度（API が使う表）</h2>
+<p>画面では実際の脚質ではなく<b>想定の脚質</b>しか分からないので、想定脚質（position_forecast）ごとに同じ表を作った（2020〜2025 年）。実測の脚質よりやや弱く出る（想定のずれ）。</p>
+<table><tr><th>展開</th><th>想定が逃げ</th><th>想定が先行</th><th>想定が差し</th><th>想定が追込</th></tr><tr><td>スロー・凝縮</td><td>1.22 <span class=muted>[1.15–1.29]</span></td><td>1.12 <span class=muted>[1.08–1.16]</span></td><td>0.99 <span class=muted>[0.96–1.02]</span></td><td>0.97 <span class=muted>[0.91–1.03]</span></td></tr><tr><td>スロー・中間</td><td>1.34 <span class=muted>[1.25–1.44]</span></td><td>1.10 <span class=muted>[1.04–1.17]</span></td><td>1.02 <span class=muted>[0.96–1.06]</span></td><td>0.92 <span class=muted>[0.83–1.01]</span></td></tr><tr><td>スロー・縦長</td><td>1.34 <span class=muted>[1.23–1.47]</span></td><td>1.24 <span class=muted>[1.18–1.31]</span></td><td>1.08 <span class=muted>[1.02–1.13]</span></td><td>1.03 <span class=muted>[0.92–1.13]</span></td></tr><tr><td>ミドル・凝縮</td><td>0.90 <span class=muted>[0.86–0.94]</span></td><td>0.93 <span class=muted>[0.90–0.96]</span></td><td>0.97 <span class=muted>[0.94–1.00]</span></td><td>1.02 <span class=muted>[0.97–1.08]</span></td></tr><tr><td>ミドル・中間</td><td>1.00 <span class=muted>[0.96–1.06]</span></td><td>0.98 <span class=muted>[0.94–1.02]</span></td><td>0.96 <span class=muted>[0.93–1.00]</span></td><td>0.94 <span class=muted>[0.88–1.01]</span></td></tr><tr><td>ミドル・縦長</td><td>1.11 <span class=muted>[1.06–1.16]</span></td><td>1.06 <span class=muted>[1.02–1.10]</span></td><td>1.01 <span class=muted>[0.98–1.05]</span></td><td>0.90 <span class=muted>[0.84–0.96]</span></td></tr><tr><td>ハイ・凝縮</td><td>0.70 <span class=muted>[0.64–0.77]</span></td><td>0.85 <span class=muted>[0.80–0.90]</span></td><td>1.02 <span class=muted>[0.98–1.06]</span></td><td>1.20 <span class=muted>[1.11–1.28]</span></td></tr><tr><td>ハイ・中間</td><td>0.79 <span class=muted>[0.72–0.86]</span></td><td>0.89 <span class=muted>[0.84–0.94]</span></td><td>0.97 <span class=muted>[0.93–1.02]</span></td><td>1.11 <span class=muted>[1.02–1.19]</span></td></tr><tr><td>ハイ・縦長</td><td>0.94 <span class=muted>[0.88–1.00]</span></td><td>0.98 <span class=muted>[0.94–1.03]</span></td><td>1.06 <span class=muted>[1.02–1.09]</span></td><td>1.01 <span class=muted>[0.95–1.08]</span></td></tr></table>
+<p>API の <code>style_fit</code> は、この表を展開の確率で重み付けした期待値（<code>expected_lift</code>）と、もっとも起こりやすい展開での値（<code>top_scenario_lift</code>）を返し、スコアは −1〜+1 に丸めた値（期待値は (倍率−1)/0.2、単一の展開は (倍率−1)/0.35）。</p>
+
+<h2>6. 展開シナリオごとの各馬の確率（scenario_forecast）</h2>
+<p><b>方式</b>: 最終モデルの勝率・連対率・複勝率（p）に対し、シナリオ（ペース p × 隊列 q）ごとに <code>logit p_s = logit p + φ(想定位置取り)·(B_pace[p] + B_shape[q])</code> を足し、レース内の合計を勝率 1・連対 2・複勝 3 に戻す。φ は（想定位置取り−0.5, その 2 乗, 欠損）。係数は 2022〜2025 年の実測の展開で最尤推定（L2 正則化）。『出走馬ごとの展開への適性（過去の成績を展開別に見た履歴）』も足して試したが、上乗せは無かった（オラクルの LogLoss が同じ）ので入れていない。</p>
+<table><tr><th>評価年</th><th>項目</th><th>最終モデルの LogLoss</th><th>実測の展開を知っていた（ペース＋隊列）</th><th>ペースだけ知っていた</th><th>事前の確率で重み付け</th></tr><tr><td>2024（選択）</td><td>勝率</td><td>0.20378</td><td>-0.00039</td><td>-0.00039</td><td>-0.00003</td></tr><tr><td>2024（選択）</td><td>連対率</td><td>0.32068</td><td>-0.00053</td><td>-0.00052</td><td>+0.00006</td></tr><tr><td>2024（選択）</td><td>複勝率</td><td>0.40529</td><td>-0.00047</td><td>-0.00050</td><td>+0.00014</td></tr><tr><td>2025（確認）</td><td>勝率</td><td>0.20458</td><td>-0.00026</td><td>-0.00027</td><td>+0.00005</td></tr><tr><td>2025（確認）</td><td>連対率</td><td>0.32077</td><td>-0.00044</td><td>-0.00046</td><td>+0.00000</td></tr><tr><td>2025（確認）</td><td>複勝率</td><td>0.40355</td><td>-0.00059</td><td>-0.00058</td><td>-0.00000</td></tr><tr><td>2026（テストセット②）</td><td>勝率</td><td>0.21074</td><td>-0.00006</td><td>-0.00002</td><td>-0.00003</td></tr><tr><td>2026（テストセット②）</td><td>連対率</td><td>0.33415</td><td>-0.00024</td><td>-0.00021</td><td>-0.00005</td></tr><tr><td>2026（テストセット②）</td><td>複勝率</td><td>0.41525</td><td>-0.00050</td><td>-0.00050</td><td>-0.00003</td></tr></table>
+<ul>
+<li><b>実測の展開を知っていた場合の上限</b>は複勝 −0.0005（3 年とも）、勝率 −0.0003〜−0.0004（2026 年は −0.00006）。小さいのは、最終モデルが既に脚質・ペースの特徴（F2 の pace_match など）を持ち、追い風・向かい風の大半をすでに織り込んでいるため。</li>
+<li><b>事前の確率で重み付けした確率は、最終モデルの確率から ±0.00015 以内</b>（精度は変わらず、悪化もしない）。したがって<b>この確率を馬券の判断（EV）には使わない</b>。表示・説明用。</li>
+<li>馬ごとに『展開の感度』（9 通りの勝率の logit の標準偏差）、最も有利な展開、ペース別の印（◎○）を返す。感度は位置取りの極端な馬ほど大きく、中団の馬は小さい。</li>
+</ul>
+
+<h2>7. API（既定オフ）</h2>
+<p>環境変数 <code>KEIBA_PACE_TYPE=1</code> のときだけ、予測 API の応答に <code>pace_type</code> と <code>scenario_forecast</code> を足す（位置取り予想・ペース予想・（あれば）lap_forecast の後。失敗・材料不足（8 頭未満、想定位置取りが 4 頭未満）のときは何も足さない）。設定は <code>config/pace_type.json</code>・<code>config/pace_type_models.json</code>（LightGBM のモデル文字列、約 3MB）。</p>
+<pre>pace_type: {
+  version, key: "slow_compact", label: "スロー・凝縮", note: "前に行く馬が残りやすく…。馬群が詰まったまま直線に入る。",
+  probs: { "slow_compact": 0.19, ... 9 通り（合計 1）}, pace_probs: {slow, mid, high}, shape_probs: {compact, normal, stretched},
+  scenarios: [{key, label, prob, pace, shape} ...9 件],
+  style_fit: { nige|senko|sashi|oikomi: {label, score(-1..+1), expected_lift, top_scenario_lift, top_scenario_score} },
+  confidence: "high|mid|low", basis: {pace_level, strong_front_runners, front_runners_claim, course_stretched_tendency, lap_forecast_used} }
+scenario_forecast: {
+  version, scenarios: [{key, label, prob}],
+  horses: [{ horse_number, by_scenario: { key: {win, top2, top3, fit_score(-1..+1)} }, marginal: {win, top2, top3},
+            sensitivity, sensitivity_label: "展開次第|ふつう|展開に左右されにくい", best_scenario, best_scenario_label,
+            marks_by_pace: {high, mid, slow} (◎○▲△), label: "ハイ◎・スロー○" }],
+  basis }</pre>
+
+<h2>8. 限界と次の一手</h2>
+<ul>
+<li>隊列の凝縮度は最終コーナーの通過順位の記法（約 99% のレースで読める）に依存し、『差の数』は馬身そのものではない（'-' は 1 馬身以上）。馬群の幅を距離（m）で持つデータは無い。</li>
+<li>事前に出せるのはペースが約 49〜51%、隊列が約 53%、9 通りでは 26%。展開は<b>確率として</b>見せ、1 つに決め打ちしない。</li>
+<li>書籍・学術論文・JRA 公式の用語集は未調査。note の解説記事の範囲での整理である。</li>
+<li><b>サービス時の確認</b>（ホスト、2026 年 2,476 レース、馬柱なしの近似）: 1 レース 8 ミリ秒、想定位置取りが 4 頭未満などで付かないレースが 7.6%。ハナ主張馬の変数は、実際の馬柱で数えると学習時より少し多く出る（学習側は 8 頭立て以上の芝・ダートの履歴だけを数え、サービス側は頭数の少ないレースや障害の履歴も含むため。10 レースの抜き取りで 6 レースは完全一致、4 レースで 1〜2 頭多い）。ペース・隊列の確率はこの差で動くが、ハナ主張馬の変数の寄与は小さい（ペース −0.0039、隊列 0）ので影響は限定的。</li>
+<li>scenario_forecast は精度向上にならなかった。出走馬ごとの『展開への適性』（過去走を展開別に見た履歴）も上乗せしなかったため、展開の効果は位置取りでほぼ説明される。次に試す余地は、馬体・脚質を細かく分けた適性（追込の中でも長く脚を使うタイプ／瞬発タイプ）と、進路ロス（棚卸しの候補 2・6、馬ごとの区間ラップ）。</li>
+</ul>
+
+<p class="muted">スクリプト: <code>src/scripts/data/tp61_build.py</code>（実測の展開）・<code>tp61_analysis.py</code>（セルと LogLoss）・<code>tp61_lap.py</code>（ラップ形状・k-means）・<code>tp61_taxon.py</code>（文献の規則）・<code>tp61_hana.py</code>（ハナ主張馬）・<code>tp61_pre.py</code>（事前予測）・<code>tp61_scen.py</code>（シナリオ別の確率）・<code>tp61_final.py</code>（最終学習と設定の書き出し）。関連: <a href="lap_forecast.html">ハロンごとのラップ予想（tp-55）</a> ・ <a href="pace_consistency.html">位置取り・追走難度・想定上がりの整合</a> ・ <a href="tracking_difficulty_v2.html">追走難度 v2</a> ・ <a href="handicapper_viewpoints.html">予想家の観点の調査</a> ・ <a href="training_pipeline_decisions.html">決定ログ</a></p>
+</body>
+</html>

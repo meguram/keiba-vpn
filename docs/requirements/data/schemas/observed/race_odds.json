@@ -1,0 +1,131 @@
+{
+ "category": "race_odds",
+ "conformance": {
+  "failures": {},
+  "passed": 201,
+  "validated": 201
+ },
+ "keys": {
+  "max": "202610011107",
+  "min": "202001010101"
+ },
+ "lists": {
+  "entries": {
+   "fields": {
+    "horse_number": {
+     "empty": 0,
+     "max": 18,
+     "min": 1,
+     "n": 2769,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 2769
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "place_odds_max": {
+     "empty": 0,
+     "max": 279.7,
+     "min": -3.0,
+     "n": 2769,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2769
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "place_odds_min": {
+     "empty": 0,
+     "max": 112.2,
+     "min": -3.0,
+     "n": 2769,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2769
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "popularity": {
+     "empty": 0,
+     "max": 9999,
+     "min": 1,
+     "n": 2769,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 2769
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "win_odds": {
+     "empty": 0,
+     "max": 749.5,
+     "min": -3.0,
+     "n": 2769,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 2769
+     },
+     "values": {},
+     "values_overflow": false
+    }
+   },
+   "items": 2769,
+   "records": 201
+  }
+ },
+ "nested": {},
+ "records": 201,
+ "runs": [
+  {
+   "at": "2026-10-06T05:19:46+00:00",
+   "host": "JP-CG4QN94",
+   "records": 1,
+   "source": "samples"
+  },
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
+  }
+ ],
+ "top": {
+  "entries": {
+   "empty": 0,
+   "len_max": 18,
+   "len_min": 6,
+   "n": 201,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 201
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_id": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 201,
+   "null": 0,
+   "patterns": {
+    "digits12": 201
+   },
+   "types": {
+    "str": 201
+   },
+   "values": {},
+   "values_overflow": false
+  }
+ }
+}

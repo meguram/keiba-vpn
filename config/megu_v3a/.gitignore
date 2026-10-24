@@ -1,0 +1,4 @@
+# 当て込まれた係数・補正表は公開リポジトリに置かない（config/fitted_artifacts.txt）
+centers.json
+month_offsets.csv
+par.csv

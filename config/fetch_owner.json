@@ -1,0 +1,4 @@
+{
+  "_comment": "VPS の取得の実行役が担当するタスク。ここに載せたタスクはホストの cron（scripts/auto_scrape.sh）が実行しない。段階移行の手順: docs/operations/vps_agent.md",
+  "agent_tasks": []
+}

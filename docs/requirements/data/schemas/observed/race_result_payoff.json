@@ -1,0 +1,168 @@
+{
+ "category": "race_result_payoff",
+ "conformance": {
+  "failures": {},
+  "passed": 201,
+  "validated": 201
+ },
+ "keys": {
+  "max": "202610010708",
+  "min": "202001010101"
+ },
+ "lists": {},
+ "nested": {
+  "payoff": {
+   "ワイド": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 2,
+    "n": 201,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "dict": 55,
+     "list": 146
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "三連単": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 2,
+    "n": 201,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "dict": 201
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "三連複": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 2,
+    "n": 201,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "dict": 201
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "単勝": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 2,
+    "n": 201,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "dict": 201
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "枠連": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 2,
+    "n": 194,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "dict": 194
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "複勝": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 2,
+    "n": 201,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "dict": 55,
+     "list": 146
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "馬単": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 2,
+    "n": 201,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "dict": 201
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "馬連": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 2,
+    "n": 201,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "dict": 201
+    },
+    "values": {},
+    "values_overflow": false
+   }
+  }
+ },
+ "records": 201,
+ "runs": [
+  {
+   "at": "2026-10-06T05:19:46+00:00",
+   "host": "JP-CG4QN94",
+   "records": 1,
+   "source": "samples"
+  },
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
+  }
+ ],
+ "top": {
+  "payoff": {
+   "empty": 0,
+   "len_max": 8,
+   "len_min": 7,
+   "n": 201,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 201
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_id": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 201,
+   "null": 0,
+   "patterns": {
+    "digits12": 201
+   },
+   "types": {
+    "str": 201
+   },
+   "values": {},
+   "values_overflow": false
+  }
+ }
+}

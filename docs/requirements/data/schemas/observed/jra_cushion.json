@@ -1,0 +1,341 @@
+{
+ "category": "jra_cushion",
+ "conformance": {
+  "failures": {},
+  "passed": 0,
+  "validated": 0
+ },
+ "keys": {
+  "max": "2026",
+  "min": "2020"
+ },
+ "lists": {
+  "records": {
+   "fields": {
+    "course_position": {
+     "empty": 12929,
+     "len_max": 1,
+     "len_min": 0,
+     "n": 16590,
+     "null": 0,
+     "patterns": {
+      "empty": 12929,
+      "text": 3661
+     },
+     "types": {
+      "str": 16590
+     },
+     "values": {
+      "": 12929,
+      "A": 1904,
+      "B": 1057,
+      "C": 441,
+      "D": 259
+     },
+     "values_overflow": false
+    },
+    "cushion_value": {
+     "empty": 0,
+     "max": 12.2,
+     "min": 5.4,
+     "n": 16590,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 16590
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "date": {
+     "empty": 21,
+     "len_max": 10,
+     "len_min": 0,
+     "n": 16590,
+     "null": 0,
+     "patterns": {
+      "date-iso": 16569,
+      "empty": 21
+     },
+     "types": {
+      "str": 16590
+     },
+     "values": {
+      "": 21
+     },
+     "values_overflow": false
+    },
+    "dirt_moisture_4corner": {
+     "empty": 0,
+     "max": 27.4,
+     "min": 0.4,
+     "n": 16590,
+     "null": 133,
+     "patterns": {},
+     "types": {
+      "float": 16457,
+      "null": 133
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "dirt_moisture_goal": {
+     "empty": 0,
+     "max": 19.3,
+     "min": 0.4,
+     "n": 16590,
+     "null": 133,
+     "patterns": {},
+     "types": {
+      "float": 16457,
+      "null": 133
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "is_race_day": {
+     "empty": 0,
+     "n": 16590,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "bool": 16590
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "kai": {
+     "empty": 0,
+     "max": 7,
+     "min": 1,
+     "n": 16590,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 16590
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "measurement_time": {
+     "empty": 0,
+     "len_max": 15,
+     "len_min": 13,
+     "n": 168,
+     "null": 0,
+     "patterns": {
+      "text": 168
+     },
+     "types": {
+      "str": 168
+     },
+     "values": {
+      "2月20日（金曜）10時00分": 7,
+      "2月21日（土曜）7時30分": 7,
+      "2月22日（日曜）7時30分": 7,
+      "2月27日（金曜）10時00分": 7,
+      "2月27日（金曜）10時30分": 7,
+      "2月28日（土曜）7時00分": 7,
+      "2月28日（土曜）7時30分": 7,
+      "3月13日（金曜）10時00分": 7,
+      "3月13日（金曜）10時30分": 7,
+      "3月13日（金曜）9時30分": 7,
+      "3月14日（土曜）6時30分": 7,
+      "3月14日（土曜）7時00分": 7,
+      "3月14日（土曜）7時30分": 7,
+      "3月15日（日曜）6時30分": 7,
+      "3月15日（日曜）7時00分": 7,
+      "3月15日（日曜）7時30分": 7,
+      "3月1日（日曜）7時00分": 7,
+      "3月1日（日曜）7時30分": 7,
+      "3月6日（金曜）10時00分": 7,
+      "3月6日（金曜）10時30分": 7,
+      "3月7日（土曜）7時00分": 7,
+      "3月7日（土曜）7時30分": 7,
+      "3月8日（日曜）7時00分": 7,
+      "3月8日（日曜）7時30分": 7
+     },
+     "values_overflow": false
+    },
+    "pair_index": {
+     "empty": 0,
+     "max": 5,
+     "min": 0,
+     "n": 12929,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 12929
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "race_day": {
+     "empty": 0,
+     "max": 12,
+     "min": 0,
+     "n": 16590,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 16590
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "scraped_at": {
+     "empty": 0,
+     "len_max": 19,
+     "len_min": 19,
+     "n": 168,
+     "null": 0,
+     "patterns": {
+      "text": 168
+     },
+     "types": {
+      "str": 168
+     },
+     "values": {
+      "2026-03-18T21:55:45": 168
+     },
+     "values_overflow": false
+    },
+    "turf_moisture_4corner": {
+     "empty": 0,
+     "max": 19.8,
+     "min": 1.0,
+     "n": 16590,
+     "null": 133,
+     "patterns": {},
+     "types": {
+      "float": 16457,
+      "null": 133
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "turf_moisture_goal": {
+     "empty": 0,
+     "max": 23.9,
+     "min": 6.1,
+     "n": 16590,
+     "null": 140,
+     "patterns": {},
+     "types": {
+      "float": 16450,
+      "null": 140
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "venue_code": {
+     "empty": 0,
+     "len_max": 2,
+     "len_min": 2,
+     "n": 16590,
+     "null": 0,
+     "patterns": {
+      "digits2": 16590
+     },
+     "types": {
+      "str": 16590
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "venue_name": {
+     "empty": 0,
+     "len_max": 2,
+     "len_min": 2,
+     "n": 16590,
+     "null": 0,
+     "patterns": {
+      "text": 16590
+     },
+     "types": {
+      "str": 16590
+     },
+     "values": {
+      "中京": 2037,
+      "中山": 2520,
+      "京都": 1589,
+      "函館": 630,
+      "小倉": 1449,
+      "新潟": 1540,
+      "札幌": 735,
+      "東京": 2611,
+      "福島": 1036,
+      "阪神": 2443
+     },
+     "values_overflow": false
+    },
+    "weekday": {
+     "empty": 0,
+     "len_max": 4,
+     "len_min": 3,
+     "n": 16590,
+     "null": 0,
+     "patterns": {
+      "text": 16590
+     },
+     "types": {
+      "str": 16590
+     },
+     "values": {
+      "Col1": 3899,
+      "Col2": 3934,
+      "Col3": 3850,
+      "Col4": 196,
+      "Col5": 7,
+      "土曜日": 1512,
+      "日曜日": 1512,
+      "月曜日": 161,
+      "火曜日": 28,
+      "金曜日": 1491
+     },
+     "values_overflow": false
+    },
+    "year": {
+     "empty": 0,
+     "max": 2026,
+     "min": 2020,
+     "n": 16590,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 16590
+     },
+     "values": {},
+     "values_overflow": false
+    }
+   },
+   "items": 16590,
+   "records": 49
+  }
+ },
+ "nested": {},
+ "records": 49,
+ "runs": [
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 49,
+   "source": "storage"
+  }
+ ],
+ "top": {
+  "records": {
+   "empty": 0,
+   "len_max": 433,
+   "len_min": 92,
+   "n": 49,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 49
+   },
+   "values": {},
+   "values_overflow": false
+  }
+ }
+}

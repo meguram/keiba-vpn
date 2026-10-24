@@ -1,0 +1,50 @@
+{
+  "text": "スクレイピング状況 10/18（日）開催日 ［正常］",
+  "attachments": [
+    {
+      "color": "#2eb67d",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*スクレイピング状況 10/18（日）開催日*　［正常］"
+          }
+        },
+        {
+          "type": "section",
+          "fields": [
+            {
+              "type": "mrkdwn",
+              "text": "*ジョブ*\n2 件（成功 2 / 失敗・未開始 0）"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*キュー*\n実行 0 / 待機 0 / 失敗理由 0 件"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*スキーマ違反（24h）*\n0 件"
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*タスク別*\n```グループ  件  成功  失敗/未開始\n開催日     2     2            0```"
+          }
+        },
+        {
+          "type": "context",
+          "elements": [
+            {
+              "type": "mrkdwn",
+              "text": "次回予定: 前日取得 10/19 07:00 / 開催日ランナー 10/19 07:00"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

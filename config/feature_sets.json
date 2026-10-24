@@ -1,0 +1,1444 @@
+{
+ "version": 2,
+ "frozen_on": "2026-10-22",
+ "doc": "復活セット: 過去の採用検討で不採用・保留・境界だった群のうち、緩めた基準（S2〜S4）で復活するもの、と tp-76（学習前スクリーニング）の候補。台帳: docs/operations/revival_feature_ledger.csv、章: revival_feature_set.html",
+ "criteria": {
+  "S1": "片側95%上限<0 かつ 効果≤-0.0002（従来）",
+  "S2": "2期間以上で同符号 かつ 点推定≤-0.0002",
+  "S3": "2期間以上で同符号 かつ 点推定≤-0.0001",
+  "S4": "懐疑的事前分布 N(0,0.0002^2) の事後で P(効果<0)≥0.8",
+  "S5": "片側90%上限<0",
+  "place_ok": "連対・複勝の悪化は +0.0002 以内"
+ },
+ "false_positive_rate": {
+  "doc": "シャドウ特徴量 81 単位（日内の並べ替え・レース内で馬をずらす）を tp-76 の手順に通した実測。tp-76 の候補（v6e の logit への少数パラメータの追加）での値で、台帳の群の再集計にそのまま当てはまるとは限らない",
+  "measured": {
+   "S1": {
+    "fpr": 0.0,
+    "real_pass": 0,
+    "n_real": 27
+   },
+   "S2": {
+    "fpr": 0.0,
+    "real_pass": 0,
+    "n_real": 27
+   },
+   "S3": {
+    "fpr": 0.0,
+    "real_pass": 0,
+    "n_real": 27
+   },
+   "S4": {
+    "fpr": 0.025,
+    "real_pass": 13,
+    "n_real": 27
+   },
+   "S5a": {
+    "fpr": 0.0,
+    "real_pass": 7,
+    "n_real": 27
+   },
+   "S5b": {
+    "fpr": 0.012,
+    "real_pass": 13,
+    "n_real": 27
+   }
+  },
+  "recommend": "特徴量の候補入りは S4 かつ LOYO 3 年同符号（偽陽性率 2.5%）。保守的な代替は S5a（0%）。S2・S3 は偽陽性率 0% だが、要求する効果が候補の実力より大きく通る本物が 0。馬券の規則の基準は緩めない"
+ },
+ "baseline": {
+  "name": "v6e",
+  "n_cols_bundle": 1231,
+  "v6_eval_name": "z:RB@e",
+  "note": "V4(owner125+self8 199+field7 451+ped32+aux27、tl_ は再取得版に差し替え)+CY37+ALL_BEST43(+差分)+RB16、前段は e 版。列の一覧は serving_v4_columns.json / serving_v5_columns.json / serving_v6.py",
+  "components": [
+   {
+    "name": "V4",
+    "n_cols": 1062
+   },
+   {
+    "name": "tl_ 再取得版",
+    "n_cols": 0,
+    "note": "差し替え"
+   },
+   {
+    "name": "CY",
+    "n_cols": 37
+   },
+   {
+    "name": "ALL_BEST",
+    "n_cols": 43
+   },
+   {
+    "name": "RB",
+    "n_cols": 16
+   },
+   {
+    "name": "前段 e",
+    "n_cols": 0,
+    "note": "差し替え"
+   }
+  ]
+ },
+ "sets": {
+  "baseline": {
+   "base": null,
+   "add": [],
+   "doc": "今までの基準（v6e の構成）",
+   "add_ready": []
+  },
+  "revival_r1": {
+   "base": "baseline",
+   "add": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A"
+   ],
+   "doc": "R1: S2 を満たす群の代表（クラスタごとに 1 つ）",
+   "add_ready": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A"
+   ]
+  },
+  "revival_r1r2": {
+   "base": "baseline",
+   "add": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A",
+    "REV_tp40_IN",
+    "RS59",
+    "NJ"
+   ],
+   "doc": "R1 + R2（S3 か S4）の代表",
+   "add_ready": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A",
+    "REV_tp40_IN",
+    "RS59",
+    "NJ"
+   ]
+  },
+  "revival_wide": {
+   "base": "baseline",
+   "add": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A",
+    "REV_tp41_SIM_str",
+    "REV_tp39_GR_mga",
+    "REV_tp39_GR_pro",
+    "REV_tp42_RL_C",
+    "REV_tp40_IN",
+    "REV_tp39_GR_pt",
+    "REV_tp37_D7_text_lift",
+    "REV_tp37_CLZ",
+    "REV_tp39_KR_mga",
+    "REV_tp35_WK_roi",
+    "REV_tp39_KR_pro",
+    "REV_tp40_LY",
+    "REV_tp37_I2_zt4_cond_int",
+    "REV_tp39_SL_mga",
+    "REV_tp42_RL_B",
+    "CB",
+    "RS59",
+    "REV_tp39_KR_pt",
+    "REV_tp34_R3_tataki_gain",
+    "REV_tp39_GR_meg",
+    "REV_tp37_D7_text_flags",
+    "NJ",
+    "REV_tp34_R7_work",
+    "REV_tp32_COMBO",
+    "REV_tp33_TT_tier",
+    "REV_tp39_POP_megu",
+    "REV_tp35_LG_cls",
+    "REV_tp32_TRANSPORT",
+    "REV_tp34_R1_band",
+    "REV_tp34_R2_horse_pref"
+   ],
+   "doc": "R1・R2 の全群（冗長を含む。多数の弱いシグナルを束ねる効果を見る）",
+   "add_ready": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A",
+    "REV_tp41_SIM_str",
+    "REV_tp39_GR_mga",
+    "REV_tp39_GR_pro",
+    "REV_tp42_RL_C",
+    "REV_tp40_IN",
+    "REV_tp39_GR_pt",
+    "REV_tp37_D7_text_lift",
+    "REV_tp37_CLZ",
+    "REV_tp39_KR_mga",
+    "REV_tp35_WK_roi",
+    "REV_tp39_KR_pro",
+    "REV_tp40_LY",
+    "REV_tp37_I2_zt4_cond_int",
+    "REV_tp39_SL_mga",
+    "REV_tp42_RL_B",
+    "CB",
+    "RS59",
+    "REV_tp39_KR_pt",
+    "REV_tp34_R3_tataki_gain",
+    "REV_tp39_GR_meg",
+    "REV_tp37_D7_text_flags",
+    "NJ",
+    "REV_tp34_R7_work",
+    "REV_tp32_COMBO",
+    "REV_tp33_TT_tier",
+    "REV_tp39_POP_megu",
+    "REV_tp35_LG_cls",
+    "REV_tp32_TRANSPORT",
+    "REV_tp34_R1_band",
+    "REV_tp34_R2_horse_pref"
+   ]
+  },
+  "screen_p1": {
+   "base": "baseline",
+   "add": [
+    "S76_COMPOSITE",
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r"
+   ],
+   "doc": "tp-76 優先1: 合成スコア + D2（競馬場×面）+ D5（4 軸の適性）+ D5r（同・種牡馬の事前なし）",
+   "add_ready": [
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r"
+   ]
+  },
+  "screen_p1p2": {
+   "base": "baseline",
+   "add": [
+    "S76_COMPOSITE",
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r",
+    "S76_A2",
+    "S76_B3"
+   ],
+   "doc": "tp-76 優先1+2: + A2（日内の内有利×枠）+ B3（めぐ指数のカルマン）",
+   "add_ready": [
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r",
+    "S76_A2",
+    "S76_B3"
+   ]
+  },
+  "screen_all": {
+   "base": "baseline",
+   "add": [
+    "S76_COMPOSITE",
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r",
+    "S76_A2",
+    "S76_B3",
+    "S76_E1",
+    "S76_E2",
+    "S76_D4",
+    "S76_D6",
+    "S76_C",
+    "S76_F",
+    "S76_G"
+   ],
+   "doc": "tp-76 優先1〜3 + 束に入れて除去で判断（C・F・G）: + E1・E2・D4・D6 + C・F・G",
+   "add_ready": [
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r",
+    "S76_A2",
+    "S76_B3",
+    "S76_E1",
+    "S76_E2",
+    "S76_D4",
+    "S76_D6",
+    "S76_C",
+    "S76_F",
+    "S76_G"
+   ]
+  },
+  "revival_r1+screen_p1": {
+   "base": "baseline",
+   "add": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A",
+    "S76_COMPOSITE",
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r"
+   ],
+   "doc": "revival_r1 + screen_p1（復活セットと tp-76 の組合せ）",
+   "add_ready": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A",
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r"
+   ]
+  },
+  "revival_r1r2+screen_p1p2": {
+   "base": "baseline",
+   "add": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A",
+    "REV_tp40_IN",
+    "RS59",
+    "NJ",
+    "S76_COMPOSITE",
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r",
+    "S76_A2",
+    "S76_B3"
+   ],
+   "doc": "revival_r1r2 + screen_p1p2（復活セットと tp-76 の組合せ）",
+   "add_ready": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A",
+    "REV_tp40_IN",
+    "RS59",
+    "NJ",
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r",
+    "S76_A2",
+    "S76_B3"
+   ]
+  },
+  "revival_wide+screen_all": {
+   "base": "baseline",
+   "add": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A",
+    "REV_tp41_SIM_str",
+    "REV_tp39_GR_mga",
+    "REV_tp39_GR_pro",
+    "REV_tp42_RL_C",
+    "REV_tp40_IN",
+    "REV_tp39_GR_pt",
+    "REV_tp37_D7_text_lift",
+    "REV_tp37_CLZ",
+    "REV_tp39_KR_mga",
+    "REV_tp35_WK_roi",
+    "REV_tp39_KR_pro",
+    "REV_tp40_LY",
+    "REV_tp37_I2_zt4_cond_int",
+    "REV_tp39_SL_mga",
+    "REV_tp42_RL_B",
+    "CB",
+    "RS59",
+    "REV_tp39_KR_pt",
+    "REV_tp34_R3_tataki_gain",
+    "REV_tp39_GR_meg",
+    "REV_tp37_D7_text_flags",
+    "NJ",
+    "REV_tp34_R7_work",
+    "REV_tp32_COMBO",
+    "REV_tp33_TT_tier",
+    "REV_tp39_POP_megu",
+    "REV_tp35_LG_cls",
+    "REV_tp32_TRANSPORT",
+    "REV_tp34_R1_band",
+    "REV_tp34_R2_horse_pref",
+    "S76_COMPOSITE",
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r",
+    "S76_A2",
+    "S76_B3",
+    "S76_E1",
+    "S76_E2",
+    "S76_D4",
+    "S76_D6",
+    "S76_C",
+    "S76_F",
+    "S76_G"
+   ],
+   "doc": "revival_wide + screen_all（復活セットと tp-76 の組合せ）",
+   "add_ready": [
+    "REV_tp32_FIRST",
+    "REV_tp39_GR_comp",
+    "REV_tp41_SIM_apt",
+    "REV_tp42_RL_A",
+    "REV_tp41_SIM_str",
+    "REV_tp39_GR_mga",
+    "REV_tp39_GR_pro",
+    "REV_tp42_RL_C",
+    "REV_tp40_IN",
+    "REV_tp39_GR_pt",
+    "REV_tp37_D7_text_lift",
+    "REV_tp37_CLZ",
+    "REV_tp39_KR_mga",
+    "REV_tp35_WK_roi",
+    "REV_tp39_KR_pro",
+    "REV_tp40_LY",
+    "REV_tp37_I2_zt4_cond_int",
+    "REV_tp39_SL_mga",
+    "REV_tp42_RL_B",
+    "CB",
+    "RS59",
+    "REV_tp39_KR_pt",
+    "REV_tp34_R3_tataki_gain",
+    "REV_tp39_GR_meg",
+    "REV_tp37_D7_text_flags",
+    "NJ",
+    "REV_tp34_R7_work",
+    "REV_tp32_COMBO",
+    "REV_tp33_TT_tier",
+    "REV_tp39_POP_megu",
+    "REV_tp35_LG_cls",
+    "REV_tp32_TRANSPORT",
+    "REV_tp34_R1_band",
+    "REV_tp34_R2_horse_pref",
+    "S76_D2",
+    "S76_D5",
+    "S76_D5r",
+    "S76_A2",
+    "S76_B3",
+    "S76_E1",
+    "S76_E2",
+    "S76_D4",
+    "S76_D6",
+    "S76_C",
+    "S76_F",
+    "S76_G"
+   ]
+  },
+  "pace_r": {
+   "base": "baseline",
+   "add": ["S77_PACE_R"],
+   "add_ready": ["S77_PACE_R"],
+   "doc": "tp-77 追加2: 基準 + 馬の得意RPCIレンジとの合致度"
+  },
+  "pace_c": {
+   "base": "baseline",
+   "add": ["S77_PACE_C"],
+   "add_ready": ["S77_PACE_C"],
+   "doc": "tp-77 追加2: 基準 + コース別3F/5F通過時間の分布"
+  },
+  "pace_rc": {
+   "base": "baseline",
+   "add": ["S77_PACE_C", "S77_PACE_R"],
+   "add_ready": ["S77_PACE_C", "S77_PACE_R"],
+   "doc": "tp-77 追加2: 基準 + 両方"
+  },
+  "pace_e": {
+   "base": "baseline",
+   "add": ["S77_PACE_E"],
+   "add_ready": ["S77_PACE_E"],
+   "doc": "tp-77 追加2: 基準 + 馬ごとの前半3F・5F通過の推定"
+  },
+  "sire_dist": {
+   "base": "baseline",
+   "add": ["S77_SIRE"],
+   "add_ready": ["S77_SIRE"],
+   "doc": "tp-77 追加3: 基準 + 種牡馬・系統の勝利距離の統計量"
+  },
+  "cross_feat": {
+   "base": "baseline",
+   "add": ["S77_CROSS"],
+   "add_ready": ["S77_CROSS"],
+   "doc": "tp-77 追加4: 基準 + 8世代クロスの条件別の来やすさ"
+  },
+  "weight_feat": {
+   "base": "baseline",
+   "add": ["S77_WEIGHT"],
+   "add_ready": ["S77_WEIGHT"],
+   "doc": "tp-77 追加4: 基準 + 馬体重の相対値"
+  },
+  "workout_feat": {
+   "base": "baseline",
+   "add": ["S77_WORKOUT"],
+   "add_ready": ["S77_WORKOUT"],
+   "doc": "tp-77 追加5: 基準 + 調教師ごとの勝負追い切り"
+  },
+  "mat_feat": {
+   "base": "baseline",
+   "add": [
+    "S77_MAT"
+   ],
+   "add_ready": [
+    "S77_MAT"
+   ],
+   "doc": "tp-77: 基準 + 母方の完全 10 世代の構造特徴"
+  },
+  "screen_p1m": {
+   "base": "baseline",
+   "add": [
+    "S76_D5r",
+    "S77_D2m",
+    "S77_D5m"
+   ],
+   "add_ready": [
+    "S76_D5r",
+    "S77_D2m",
+    "S77_D5m"
+   ],
+   "doc": "tp-77: screen_p1 の D2・D5 を母方クラスタの事前で作り直したもの（合成スコアは GBM の特徴量にできないので除く）"
+  },
+  "mat_screen": {
+   "base": "baseline",
+   "add": [
+    "S77_MAT",
+    "S76_D5r",
+    "S77_D2m",
+    "S77_D5m",
+    "S76_A2",
+    "S77_Bm"
+   ],
+   "add_ready": [
+    "S77_MAT",
+    "S76_D5r",
+    "S77_D2m",
+    "S77_D5m",
+    "S76_A2",
+    "S77_Bm"
+   ],
+   "doc": "tp-77: 母方の構造特徴 + 母方事前の screen 優先1・2"
+  }
+ },
+ "groups": {
+  "REV_tp32_FIRST": {
+   "id": "tp32:FIRST",
+   "name": "REV_tp32_FIRST",
+   "level": "R1",
+   "n_cols": 59.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp32/groups/FIRST.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000349,
+   "cluster": "初経験・替わり",
+   "buildable": true
+  },
+  "REV_tp39_GR_comp": {
+   "id": "tp39:GR_comp",
+   "name": "REV_tp39_GR_comp",
+   "level": "R1",
+   "n_cols": 8.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp39/groups/GR_comp.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000266,
+   "cluster": "成長",
+   "buildable": true
+  },
+  "REV_tp41_SIM_apt": {
+   "id": "tp41:SIM_apt",
+   "name": "REV_tp41_SIM_apt",
+   "level": "R1",
+   "n_cols": 4.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp41/groups/SIM_apt.parquet",
+   "serving": "要整備",
+   "serving_effort": "L",
+   "d_win": -0.000258,
+   "cluster": "似た馬・コース類似",
+   "buildable": true
+  },
+  "REV_tp38_PX_ridge_als2": {
+   "id": "tp38:PX_ridge_als2",
+   "name": "REV_tp38_PX_ridge_als2",
+   "level": "R1",
+   "n_cols": 10.0,
+   "path": "/home/jovyan/work/tp38_out/groups/PX_ridge_als2.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000227,
+   "cluster": "血統",
+   "buildable": true
+  },
+  "REV_tp42_RL_A": {
+   "id": "tp42:RL_A",
+   "name": "REV_tp42_RL_A",
+   "level": "R1",
+   "n_cols": 13.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp42/groups/RL_A.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000211,
+   "cluster": "指数履歴",
+   "buildable": true
+  },
+  "REV_tp41_SIM_str": {
+   "id": "tp41:SIM_str",
+   "name": "REV_tp41_SIM_str",
+   "level": "R1",
+   "n_cols": 5.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp41/groups/SIM_str.parquet",
+   "serving": "要整備",
+   "serving_effort": "L",
+   "d_win": -0.000207,
+   "cluster": "似た馬・コース類似",
+   "buildable": true
+  },
+  "REV_tp39_GR_mga": {
+   "id": "tp39:GR_mga",
+   "name": "REV_tp39_GR_mga",
+   "level": "R2",
+   "n_cols": 8.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp39/groups/GR_mga.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000224,
+   "cluster": "指数履歴",
+   "buildable": true
+  },
+  "REV_tp39_GR_pro": {
+   "id": "tp39:GR_pro",
+   "name": "REV_tp39_GR_pro",
+   "level": "R2",
+   "n_cols": 8.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp39/groups/GR_pro.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000201,
+   "cluster": "成長",
+   "buildable": true
+  },
+  "REV_tp42_RL_C": {
+   "id": "tp42:RL_C",
+   "name": "REV_tp42_RL_C",
+   "level": "R2",
+   "n_cols": 11.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp42/groups/RL_C.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000201,
+   "cluster": "指数履歴",
+   "buildable": true
+  },
+  "REV_tp40_IN": {
+   "id": "tp40:IN",
+   "name": "REV_tp40_IN",
+   "level": "R2",
+   "n_cols": 8.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp40/groups/IN.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000194,
+   "cluster": "追い切り",
+   "buildable": true
+  },
+  "REV_tp38_PX_ridge_fix": {
+   "id": "tp38:PX_ridge_fix",
+   "name": "REV_tp38_PX_ridge_fix",
+   "level": "R2",
+   "n_cols": 10.0,
+   "path": "/home/jovyan/work/tp38_out/groups/PX_ridge_fix.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.00019,
+   "cluster": "血統",
+   "buildable": true
+  },
+  "REV_tp39_GR_pt": {
+   "id": "tp39:GR_pt",
+   "name": "REV_tp39_GR_pt",
+   "level": "R2",
+   "n_cols": 8.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp39/groups/GR_pt.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000183,
+   "cluster": "成長",
+   "buildable": true
+  },
+  "REV_tp37_D7_text_lift": {
+   "id": "tp37:D7_text_lift",
+   "name": "REV_tp37_D7_text_lift",
+   "level": "R2",
+   "n_cols": 28.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp37/groups/D7_text_lift.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000181,
+   "cluster": "追い切り",
+   "buildable": true
+  },
+  "REV_tp37_CLZ": {
+   "id": "tp37:CLZ",
+   "name": "REV_tp37_CLZ",
+   "level": "R2",
+   "n_cols": 11.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp37/groups/CLZ.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000177,
+   "cluster": "追い切り",
+   "buildable": true
+  },
+  "REV_tp39_KR_mga": {
+   "id": "tp39:KR_mga",
+   "name": "REV_tp39_KR_mga",
+   "level": "R2",
+   "n_cols": 6.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp39/groups/KR_mga.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000174,
+   "cluster": "成長",
+   "buildable": true
+  },
+  "REV_tp35_WK_roi": {
+   "id": "tp35:WK_roi",
+   "name": "REV_tp35_WK_roi",
+   "level": "R2",
+   "n_cols": 6.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp35/groups/WK_roi.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000172,
+   "cluster": "追い切り",
+   "buildable": true
+  },
+  "REV_tp39_KR_pro": {
+   "id": "tp39:KR_pro",
+   "name": "REV_tp39_KR_pro",
+   "level": "R2",
+   "n_cols": 6.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp39/groups/KR_pro.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000172,
+   "cluster": "成長",
+   "buildable": true
+  },
+  "REV_tp40_LY": {
+   "id": "tp40:LY",
+   "name": "REV_tp40_LY",
+   "level": "R2",
+   "n_cols": 13.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp40/groups/LY.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.00017,
+   "cluster": "追い切り",
+   "buildable": true
+  },
+  "REV_tp37_I2_zt4_cond_int": {
+   "id": "tp37:I2_zt4_cond_int",
+   "name": "REV_tp37_I2_zt4_cond_int",
+   "level": "R2",
+   "n_cols": 4.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp37/groups/I2_zt4_cond_int.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000164,
+   "cluster": "追い切り",
+   "buildable": true
+  },
+  "REV_tp39_SL_mga": {
+   "id": "tp39:SL_mga",
+   "name": "REV_tp39_SL_mga",
+   "level": "R2",
+   "n_cols": 56.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp39/groups/SL_mga.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.00016,
+   "cluster": "成長",
+   "buildable": true
+  },
+  "REV_tp42_RL_B": {
+   "id": "tp42:RL_B",
+   "name": "REV_tp42_RL_B",
+   "level": "R2",
+   "n_cols": 16.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp42/groups/RL_B.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000158,
+   "cluster": "指数履歴",
+   "buildable": true
+  },
+  "CB": {
+   "id": "v6:s_CB",
+   "name": "CB",
+   "level": "R2",
+   "n_cols": 9.0,
+   "path": "data/local/modeling/training_pipeline_v4/v6/groups/CB.parquet",
+   "serving": "要整備",
+   "serving_effort": "S",
+   "d_win": -0.000158,
+   "cluster": "指数履歴",
+   "buildable": true
+  },
+  "REV_tp16b_AF（後日談の変種）": {
+   "id": "tp16b:AF（後日談の変種）",
+   "name": "REV_tp16b_AF（後日談の変種）",
+   "level": "R2",
+   "n_cols": null,
+   "path": "",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.00015,
+   "cluster": "tp16b:単独",
+   "buildable": false
+  },
+  "RS59": {
+   "id": "tp59:rs59（関係者の残差 4 列）",
+   "name": "RS59",
+   "level": "R2",
+   "n_cols": 4.0,
+   "path": "",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.00015,
+   "cluster": "関係者・馬主",
+   "buildable": true
+  },
+  "REV_tp39_KR_pt": {
+   "id": "tp39:KR_pt",
+   "name": "REV_tp39_KR_pt",
+   "level": "R2",
+   "n_cols": 6.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp39/groups/KR_pt.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000146,
+   "cluster": "成長",
+   "buildable": true
+  },
+  "REV_tp34_R3_tataki_gain": {
+   "id": "tp34:R3_tataki_gain",
+   "name": "REV_tp34_R3_tataki_gain",
+   "level": "R2",
+   "n_cols": 8.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp34/groups/R3_tataki_gain.parquet",
+   "serving": "要整備",
+   "serving_effort": "S",
+   "d_win": -0.000143,
+   "cluster": "初経験・替わり",
+   "buildable": true
+  },
+  "REV_tp39_GR_meg": {
+   "id": "tp39:GR_meg",
+   "name": "REV_tp39_GR_meg",
+   "level": "R2",
+   "n_cols": 8.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp39/groups/GR_meg.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000143,
+   "cluster": "指数履歴",
+   "buildable": true
+  },
+  "REV_tp37_D7_text_flags": {
+   "id": "tp37:D7_text_flags",
+   "name": "REV_tp37_D7_text_flags",
+   "level": "R2",
+   "n_cols": 26.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp37/groups/D7_text_flags.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000142,
+   "cluster": "追い切り",
+   "buildable": true
+  },
+  "NJ": {
+   "id": "v6:x_NJ",
+   "name": "NJ",
+   "level": "R2",
+   "n_cols": 16.0,
+   "path": "/home/jovyan/work/acq/groups/NJ.parquet",
+   "serving": "要整備",
+   "serving_effort": "L",
+   "d_win": -0.000139,
+   "cluster": "取得済みの未使用データ",
+   "buildable": true
+  },
+  "REV_tp34_R7_work": {
+   "id": "tp34:R7_work",
+   "name": "REV_tp34_R7_work",
+   "level": "R2",
+   "n_cols": 14.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp34/groups/R7_work.parquet",
+   "serving": "要整備",
+   "serving_effort": "S",
+   "d_win": -0.000136,
+   "cluster": "初経験・替わり",
+   "buildable": true
+  },
+  "REV_tp32_COMBO": {
+   "id": "tp32:COMBO",
+   "name": "REV_tp32_COMBO",
+   "level": "R2",
+   "n_cols": 91.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp32/groups/COMBO.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000132,
+   "cluster": "初経験・替わり",
+   "buildable": true
+  },
+  "REV_tp33_TT_tier": {
+   "id": "tp33:TT_tier",
+   "name": "REV_tp33_TT_tier",
+   "level": "R2",
+   "n_cols": 6.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp33/groups/TT_tier.parquet",
+   "serving": "要整備",
+   "serving_effort": "S",
+   "d_win": -0.00013,
+   "cluster": "初経験・替わり",
+   "buildable": true
+  },
+  "REV_tp39_POP_megu": {
+   "id": "tp39:POP_megu",
+   "name": "REV_tp39_POP_megu",
+   "level": "R2",
+   "n_cols": 6.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp39/groups/POP_megu.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000128,
+   "cluster": "成長",
+   "buildable": true
+  },
+  "REV_tp35_LG_cls": {
+   "id": "tp35:LG_cls",
+   "name": "REV_tp35_LG_cls",
+   "level": "R2",
+   "n_cols": 6.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp35/groups/LG_cls.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.000126,
+   "cluster": "追い切り",
+   "buildable": true
+  },
+  "REV_tp32_TRANSPORT": {
+   "id": "tp32:TRANSPORT",
+   "name": "REV_tp32_TRANSPORT",
+   "level": "R2",
+   "n_cols": 10.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp32/groups/TRANSPORT.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.00012,
+   "cluster": "初経験・替わり",
+   "buildable": true
+  },
+  "REV_tp34_R1_band": {
+   "id": "tp34:R1_band",
+   "name": "REV_tp34_R1_band",
+   "level": "R2",
+   "n_cols": 13.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp34/groups/R1_band.parquet",
+   "serving": "要整備",
+   "serving_effort": "S",
+   "d_win": -0.000115,
+   "cluster": "初経験・替わり",
+   "buildable": true
+  },
+  "REV_tp16_後日談ほか 10 群の最良": {
+   "id": "tp16:後日談ほか 10 群の最良",
+   "name": "REV_tp16_後日談ほか 10 群の最良",
+   "level": "R2",
+   "n_cols": null,
+   "path": "",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "d_win": -0.00011,
+   "cluster": "tp16:単独",
+   "buildable": false
+  },
+  "REV_tp34_R2_horse_pref": {
+   "id": "tp34:R2_horse_pref",
+   "name": "REV_tp34_R2_horse_pref",
+   "level": "R2",
+   "n_cols": 13.0,
+   "path": "data/local/modeling/training_pipeline_v4/tp34/groups/R2_horse_pref.parquet",
+   "serving": "要整備",
+   "serving_effort": "S",
+   "d_win": -9.2e-05,
+   "cluster": "初経験・替わり",
+   "buildable": true
+  },
+  "S76_D2": {
+   "id": "S76_D2",
+   "name": "S76_D2",
+   "level": "screen_p1",
+   "n_cols": 1,
+   "cols": [
+    "D_venue"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "D2"
+   ],
+   "serving": "要整備",
+   "serving_effort": "L",
+   "buildable": true,
+   "rerun_after_complete_10gen": true,
+   "d_win": -4.164617873783043e-05
+  },
+  "S76_D5": {
+   "id": "S76_D5",
+   "name": "S76_D5",
+   "level": "screen_p1",
+   "n_cols": 1,
+   "cols": [
+    "D_all"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "D5"
+   ],
+   "serving": "要整備",
+   "serving_effort": "L",
+   "buildable": true,
+   "rerun_after_complete_10gen": true,
+   "d_win": -6.250774606242418e-05
+  },
+  "S76_D5r": {
+   "id": "S76_D5r",
+   "name": "S76_D5r",
+   "level": "screen_p1",
+   "n_cols": 1,
+   "cols": [
+    "D_raw_all"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "D5r"
+   ],
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "d_win": -4.997009275427591e-05
+  },
+  "S76_A2": {
+   "id": "S76_A2",
+   "name": "S76_A2",
+   "level": "screen_p2",
+   "n_cols": 1,
+   "cols": [
+    "A_fit_inner"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "A2"
+   ],
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "d_win": -4.8926435523050694e-05
+  },
+  "S76_B3": {
+   "id": "S76_B3",
+   "name": "S76_B3",
+   "level": "screen_p2",
+   "n_cols": 1,
+   "cols": [
+    "B_m_megu"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "B3"
+   ],
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": true,
+   "d_win": -4.72510304062166e-05
+  },
+  "S76_E1": {
+   "id": "S76_E1",
+   "name": "S76_E1",
+   "level": "screen_p3",
+   "n_cols": 1,
+   "cols": [
+    "E_abs"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "E1"
+   ],
+   "serving": "要整備",
+   "serving_effort": "S",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "d_win": -1.3938655413392407e-05
+  },
+  "S76_E2": {
+   "id": "S76_E2",
+   "name": "S76_E2",
+   "level": "screen_p3",
+   "n_cols": 1,
+   "cols": [
+    "E_day"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "E2"
+   ],
+   "serving": "要整備",
+   "serving_effort": "S",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "d_win": -1.7716345527624383e-05
+  },
+  "S76_D4": {
+   "id": "S76_D4",
+   "name": "S76_D4",
+   "level": "screen_p3",
+   "n_cols": 1,
+   "cols": [
+    "D_cush"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "D4"
+   ],
+   "serving": "要整備",
+   "serving_effort": "L",
+   "buildable": true,
+   "rerun_after_complete_10gen": true,
+   "d_win": -4.3939248081829636e-05
+  },
+  "S76_D6": {
+   "id": "S76_D6",
+   "name": "S76_D6",
+   "level": "screen_p3",
+   "n_cols": 1,
+   "cols": [
+    "D_ag_all"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "D6"
+   ],
+   "serving": "要整備",
+   "serving_effort": "L",
+   "buildable": true,
+   "rerun_after_complete_10gen": true,
+   "d_win": -8.624188934803916e-05
+  },
+  "S76_C": {
+   "id": "S76_C",
+   "name": "S76_C",
+   "level": "screen_p4",
+   "n_cols": 3,
+   "cols": [
+    "C_elo",
+    "C_rel",
+    "C_unc"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "C1",
+    "C2",
+    "C3"
+   ],
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "d_win": -7.094171333339136e-07
+  },
+  "S76_F": {
+   "id": "S76_F",
+   "name": "S76_F",
+   "level": "screen_p4",
+   "n_cols": 6,
+   "cols": [
+    "F_n30",
+    "F_n90",
+    "F_since",
+    "F_dist90",
+    "F_burden90",
+    "F_tataki"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "F1",
+    "F2",
+    "F3"
+   ],
+   "serving": "要整備",
+   "serving_effort": "S",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "d_win": -8.384657258190456e-07
+  },
+  "S76_G": {
+   "id": "S76_G",
+   "name": "S76_G",
+   "level": "screen_p4",
+   "n_cols": 4,
+   "cols": [
+    "G_n_front",
+    "G_front_rank",
+    "G_inner_front",
+    "G_fit"
+   ],
+   "path": "/home/jovyan/work/tp76_out/features.parquet",
+   "units": [
+    "G1",
+    "G2",
+    "G3"
+   ],
+   "serving": "要整備",
+   "serving_effort": "S",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "d_win": -4.3410879800895144e-07
+  },
+  "S76_COMPOSITE": {
+   "id": "S76_COMPOSITE",
+   "name": "S76_COMPOSITE",
+   "level": "screen_p1",
+   "n_cols": 2,
+   "cols": [
+    "comp_win",
+    "comp_top3"
+   ],
+   "path": "",
+   "units": [
+    "合成スコア"
+   ],
+   "serving": "要整備",
+   "serving_effort": "L",
+   "buildable": false,
+   "rerun_after_complete_10gen": true,
+   "d_win": -0.00010392487680532679,
+   "build_note": "弱いシグナルの代表 26 列を L2 ロジスティックに当てはめた線形予測（勝ち用・3 着内用）。係数は A 年、較正は B 年、評価は C 年。年ごとの OOF の列として保存する処理が要る（学習再開前に tp76_screen の composite を保存形式にする）"
+  },
+  "S77_PACE_C": {
+   "id": "S77_PACE_C",
+   "name": "S77_PACE_C",
+   "level": "tp77_pace",
+   "n_cols": 17,
+   "cols": ["P77_c3_mean", "P77_c3_sd", "P77_c3_n", "P77_c3_going_mean", "P77_c3_going_n", "P77_c3_cls_mean", "P77_c3_cls_n", "P77_c5_mean", "P77_c5_sd", "P77_c5_n", "P77_c5_going_mean", "P77_c5_going_n", "P77_c5_cls_mean", "P77_c5_cls_n", "P77_c5m3", "P77_c3_going_gap", "P77_c5_going_gap"],
+   "path": "/home/jovyan/work/ptrain_out/pace_rows.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "tp-77 追加2: コース別の前半3F・5F通過時間の分布（過去のレースだけ。平均・標準偏差・馬場悪化時・クラス別）"
+  },
+  "S77_PACE_R": {
+   "id": "S77_PACE_R",
+   "name": "S77_PACE_R",
+   "level": "tp77_pace",
+   "n_cols": 10,
+   "cols": ["P77_pred_z", "P77_R_n", "P77_R_mu", "P77_R_sd", "P77_R_gap", "P77_R_zd", "P77_R_logm", "P77_R_kfit", "P77_R_kn", "P77_R_krel"],
+   "path": "/home/jovyan/work/ptrain_out/pace_rows.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "tp-77 追加2: 馬ごとの得意な RPCI レンジとの合致度（予想RPCI=過去の年で学習したridge、過去走の成績重み付き分布・カーネル条件付き成績）"
+  },
+  "S77_PACE_E": {
+   "id": "S77_PACE_E",
+   "name": "S77_PACE_E",
+   "level": "tp77_pace",
+   "n_cols": 14,
+   "cols": ["P77_E_n", "P77_E_lag3_ewm", "P77_E_lag5_ewm", "P77_E_lag3_last", "P77_E_lag5_last", "P77_E_d53_ewm", "P77_E_T3_exp", "P77_E_T5_exp", "P77_E_z3", "P77_E_z5", "P77_E_T3_rel", "P77_E_T3_min", "P77_E_T5_rel", "P77_E_T5_min"],
+   "path": "/home/jovyan/work/ptrain_out/pace_rows.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "tp-77 追加2: 馬ごとの前半3F・5F通過の推定（レース時計に対する遅れ秒の直近重み付き平均、コース平均を足した期待通過時間、出走馬内の相対）。推定器は前の年のラベルだけで学習"
+  },
+  "S77_SIRE": {
+   "id": "S77_SIRE",
+   "name": "S77_SIRE",
+   "level": "tp77_sire",
+   "n_cols": 35,
+   "cols": ["P77_S_sire_wd", "P77_S_sire_wsd", "P77_S_sire_wn", "P77_S_sire_gap", "P77_S_sire_z", "P77_S_sire_t3d", "P77_S_sire_t3gap", "P77_S_dsire_wd", "P77_S_dsire_wsd", "P77_S_dsire_wn", "P77_S_dsire_gap", "P77_S_dsire_z", "P77_S_dsire_t3d", "P77_S_dsire_t3gap", "P77_S_sline_wd", "P77_S_sline_wsd", "P77_S_sline_wn", "P77_S_sline_gap", "P77_S_sline_z", "P77_S_sline_t3d", "P77_S_sline_t3gap", "P77_S_smain_wd", "P77_S_smain_wsd", "P77_S_smain_wn", "P77_S_smain_gap", "P77_S_smain_z", "P77_S_smain_t3d", "P77_S_smain_t3gap", "P77_S_dline_wd", "P77_S_dline_wsd", "P77_S_dline_wn", "P77_S_dline_gap", "P77_S_dline_z", "P77_S_dline_t3d", "P77_S_dline_t3gap"],
+   "path": "/home/jovyan/work/ptrain_out/sire_rows.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "tp-77 追加3: 種牡馬・母父・父の系統(sub/main)・母父の系統ごとの勝利距離の統計量（面別・レース開催日より前の産駒の結果のみ・縮約）。今回の距離との差と z、3着内の距離の平均も"
+  },
+  "S77_CROSS": {
+   "id": "S77_CROSS",
+   "name": "S77_CROSS",
+   "level": "tp77_cross",
+   "n_cols": 28,
+   "cols": ["P77_X_n", "P77_X_blood_max", "P77_X_blood_sum", "P77_X_m_all_max", "P77_X_m_all_min", "P77_X_m_all_wmean", "P77_X_lift_c1_max", "P77_X_lift_c1_min", "P77_X_lift_c1_wmean", "P77_X_lift_c2_max", "P77_X_lift_c2_min", "P77_X_lift_c2_wmean", "P77_X_lift_c3_max", "P77_X_lift_c3_min", "P77_X_lift_c3_wmean", "P77_X_bF", "P77_X_bM", "P77_X_bspan", "P77_X_bpat", "P77_X_bmat", "P77_X_gmin", "P77_X_balance", "P77_X_g_bal_lift_c1", "P77_X_g_bal_lift_c2", "P77_X_g_lvl_lift_c1", "P77_X_g_lvl_lift_c2", "P77_X_g_near_lift_c1", "P77_X_g_near_lift_c2"],
+   "path": "/home/jovyan/work/ptrain_out/cross_rows.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "tp-77 追加4: 8世代以内（父方・母方）のクロスと、コース・馬場ごとの来やすさ（as-of。セルの平均−クロス全体の平均、疑似40走で縮約。最大・最小・血量加重平均）。父方側／母方側の血量・位置（父方内／母方内／またがる）・近さ・血量水準のグループ別の来やすさも"
+  },
+  "S77_WEIGHT": {
+   "id": "S77_WEIGHT",
+   "name": "S77_WEIGHT",
+   "level": "tp77_weight",
+   "n_cols": 9,
+   "cols": ["P77_W_rel_self", "P77_W_rel_self_z", "P77_W_rel_best", "P77_W_rel_dist", "P77_W_rel_surf", "P77_W_dslope_pred", "P77_W_rel_field", "P77_W_rel_sas", "P77_W_n"],
+   "path": "/home/jovyan/work/ptrain_out/weight_rows.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "tp-77 追加4: 馬体重の相対値（出走馬内、性別・年齢・面・距離帯の事前、自己の過去・好走時・同距離・同面との差、距離との傾き）"
+  },
+  "S77_WORKOUT": {
+   "id": "S77_WORKOUT",
+   "name": "S77_WORKOUT",
+   "level": "tp77_workout",
+   "n_cols": 75,
+   "cols": ["P77_K_n3w", "P77_K_final_n_t", "P77_K_n_views_rare", "P77_K_final_share", "P77_K_final_ratio", "P77_K_final_rarity", "P77_K_final_rare", "P77_K_final_lift_this", "P77_K_final_lift_rare", "P77_K_final_lift_usual", "P77_K_final_lift_gap", "P77_K_prevday_share", "P77_K_prevday_ratio", "P77_K_prevday_rarity", "P77_K_prevday_rare", "P77_K_prevday_lift_this", "P77_K_prevday_lift_rare", "P77_K_prevday_lift_usual", "P77_K_prevday_lift_gap", "P77_K_shape_share", "P77_K_shape_ratio", "P77_K_shape_rarity", "P77_K_shape_rare", "P77_K_shape_lift_this", "P77_K_shape_lift_rare", "P77_K_shape_lift_usual", "P77_K_shape_lift_gap", "P77_K_week1_share", "P77_K_week1_ratio", "P77_K_week1_rarity", "P77_K_week1_rare", "P77_K_week1_lift_this", "P77_K_week1_lift_rare", "P77_K_week1_lift_usual", "P77_K_week1_lift_gap", "P77_K_route_share", "P77_K_route_ratio", "P77_K_route_rarity", "P77_K_route_rare", "P77_K_route_lift_this", "P77_K_route_lift_rare", "P77_K_route_lift_usual", "P77_K_route_lift_gap", "P77_K_lap_share", "P77_K_lap_ratio", "P77_K_lap_rarity", "P77_K_lap_rare", "P77_K_lap_lift_this", "P77_K_lap_lift_rare", "P77_K_lap_lift_usual", "P77_K_lap_lift_gap", "P77_K_lapleg_share", "P77_K_lapleg_ratio", "P77_K_lapleg_rarity", "P77_K_lapleg_rare", "P77_K_lapleg_lift_this", "P77_K_lapleg_lift_rare", "P77_K_lapleg_lift_usual", "P77_K_lapleg_lift_gap", "P77_K_lapw1_share", "P77_K_lapw1_ratio", "P77_K_lapw1_rarity", "P77_K_lapw1_rare", "P77_K_lapw1_lift_this", "P77_K_lapw1_lift_rare", "P77_K_lapw1_lift_usual", "P77_K_lapw1_lift_gap", "P77_K_laproute_share", "P77_K_laproute_ratio", "P77_K_laproute_rarity", "P77_K_laproute_rare", "P77_K_laproute_lift_this", "P77_K_laproute_lift_rare", "P77_K_laproute_lift_usual", "P77_K_laproute_lift_gap"],
+   "path": "/home/jovyan/work/ptrain_out/workout_rows.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "tp-77 追加5: 調教師ごとの勝負追い切り（9つの観点＝最終追い切り・前日追い切りの有無・最終の加速と4F時計の形・1週前・最終と1週前の種別の並び・終いのラップ6区分(最終／＋脚色／1週前／最終←1週前)、それぞれでその調教師の過去の使用割合が低い＝普段と違う）と、その調教師の勝負／通常時の来やすさ（as-of、疑似30走）"
+  },
+  "S77_MAT": {
+   "id": "S77_MAT",
+   "name": "S77_MAT",
+   "level": "tp77_mat",
+   "n_cols": null,
+   "cols": null,
+   "path": "/home/jovyan/work/ptrain_out/mat_rows.parquet",
+   "serving": "要整備",
+   "serving_effort": "L",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "母方の完全 10 世代表から作った構造特徴（高頻度祖先の血量 40 列・SVD 8 列・クラスタ 16/40・クロス数・充足率。成績は使わない）"
+  },
+  "S77_D2m": {
+   "id": "S77_D2m",
+   "name": "S77_D2m",
+   "level": "tp77_mat",
+   "n_cols": 1,
+   "cols": [
+    "D_venue_mat"
+   ],
+   "path": "/home/jovyan/work/ptrain_out/tp76_mat.parquet",
+   "serving": "要整備",
+   "serving_effort": "L",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "D2（競馬場×面の適性）を母方クラスタ(K=40)の事前で作り直したもの"
+  },
+  "S77_D5m": {
+   "id": "S77_D5m",
+   "name": "S77_D5m",
+   "level": "tp77_mat",
+   "n_cols": 1,
+   "cols": [
+    "D_all_mat"
+   ],
+   "path": "/home/jovyan/work/ptrain_out/tp76_mat.parquet",
+   "serving": "要整備",
+   "serving_effort": "L",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "D5（4 軸の適性合計）を母方クラスタの事前で作り直したもの"
+  },
+  "S77_Bm": {
+   "id": "S77_Bm",
+   "name": "S77_Bm",
+   "level": "tp77_mat",
+   "n_cols": 2,
+   "cols": [
+    "B_m_mat",
+    "B_sd_mat"
+   ],
+   "path": "/home/jovyan/work/ptrain_out/tp76_mat.parquet",
+   "serving": "要整備",
+   "serving_effort": "M",
+   "buildable": true,
+   "rerun_after_complete_10gen": false,
+   "doc": "B（潜在能力のカルマン推定）の初出走の事前を母方クラスタにしたもの"
+  }
+ },
+ "unbuilt": [
+  "tp16b:AF（後日談の変種）",
+  "tp16:後日談ほか 10 群の最良",
+  "S76_COMPOSITE"
+ ],
+ "screen_unassigned": {
+  "B1": "tp-76 の判定は『優先』(S4・S5b)",
+  "B2": "tp-76 の判定は『優先』(S4・S5b)",
+  "D1": "tp-76 の判定は『優先』(S4・S5b)",
+  "D3": "tp-76 の判定は『優先』(S4・S5b)",
+  "A1": "tp-76 の判定は『後回し』",
+  "A3": "tp-76 の判定は『後回し』",
+  "E3": "tp-76 の判定は『後回し』",
+  "E4": "tp-76 の判定は『後回し』",
+  "E5": "tp-76 の判定は『後回し』"
+ },
+ "comparison": {
+  "plan": [
+   {
+    "id": "A",
+    "set": "baseline"
+   },
+   {
+    "id": "B",
+    "set": "revival_r1"
+   },
+   {
+    "id": "C",
+    "set": "revival_r1r2"
+   },
+   {
+    "id": "D",
+    "set": "revival_wide"
+   },
+   {
+    "id": "E",
+    "set": "screen_p1"
+   },
+   {
+    "id": "F",
+    "set": "screen_p1p2"
+   },
+   {
+    "id": "G",
+    "set": "screen_all"
+   },
+   {
+    "id": "H",
+    "set": "revival_r1+screen_p1"
+   },
+   {
+    "id": "I",
+    "set": "revival_r1r2+screen_p1p2"
+   },
+   {
+    "id": "J",
+    "set": "revival_wide+screen_all"
+   }
+  ],
+  "estimate": "1 構成の LOYO 評価（3 年 × 2 seed × 3 目的）は 0.5〜1 時間（過去の実績からの目安。実測ではない）。10 構成を直列で 5〜10 時間、共有 3 スロットで約 2〜4 時間。合成スコアは、学習前に OOF の列を保存する処理（tp76_screen の composite）が要る。seed 2・3 の確認と通った構成の LOYO アンサンブル・最終学習は別枠（8〜9 時間）"
+ },
+ "serving_note": "復活セット・tp-76 の群は、推論側の生成経路が未整備（採用時に整備）。比較は学習表の列でのオフライン評価",
+ "unbuilt_note": "S76_COMPOSITE は GBM の特徴量にできない: 係数を発見期間の外側の年で当てるため、学習行（過去の年）の値を未来の年の係数で作ることになりリークする。事後の補正器として評価する（tp-76、tp-77 の後段）"
+}

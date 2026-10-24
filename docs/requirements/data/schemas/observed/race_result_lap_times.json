@@ -1,0 +1,153 @@
+{
+ "category": "race_result_lap_times",
+ "conformance": {
+  "failures": {},
+  "passed": 201,
+  "validated": 201
+ },
+ "keys": {
+  "max": "202610010708",
+  "min": "202001010101"
+ },
+ "lists": {},
+ "nested": {
+  "pace": {
+   "first_half_3f": {
+    "empty": 0,
+    "max": 40.9,
+    "min": 28.8,
+    "n": 195,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 195
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "l1f": {
+    "empty": 0,
+    "max": 14.7,
+    "min": 10.7,
+    "n": 195,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 195
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "l3f": {
+    "empty": 0,
+    "max": 41.0,
+    "min": 33.1,
+    "n": 195,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 195
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "second_half_3f": {
+    "empty": 0,
+    "max": 41.0,
+    "min": 33.1,
+    "n": 195,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 195
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "t1f": {
+    "empty": 0,
+    "max": 13.3,
+    "min": 6.9,
+    "n": 195,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 195
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "t3f": {
+    "empty": 0,
+    "max": 40.9,
+    "min": 28.8,
+    "n": 195,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 195
+    },
+    "values": {},
+    "values_overflow": false
+   }
+  }
+ },
+ "records": 201,
+ "runs": [
+  {
+   "at": "2026-10-06T05:19:46+00:00",
+   "host": "JP-CG4QN94",
+   "records": 1,
+   "source": "samples"
+  },
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
+  }
+ ],
+ "top": {
+  "lap_times": {
+   "empty": 6,
+   "len_max": 13,
+   "len_min": 0,
+   "n": 201,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 201
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "pace": {
+   "empty": 6,
+   "len_max": 6,
+   "len_min": 0,
+   "n": 201,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 201
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_id": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 201,
+   "null": 0,
+   "patterns": {
+    "digits12": 201
+   },
+   "types": {
+    "str": 201
+   },
+   "values": {},
+   "values_overflow": false
+  }
+ }
+}

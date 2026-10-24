@@ -1,0 +1,36 @@
+{
+  "_doc": "Cloud Run の API が読む『GCS に無いローカル専用データ』の束（docs/operations/cloud_run_api.md）。push はホスト/Jobs、pull は Cloud Run の起動時。include は repo ルートからの glob、exclude は相対パスの fnmatch。",
+  "object_prefix": "serving_state",
+  "default_groups": [
+    "core"
+  ],
+  "groups": {
+    "core": {
+      "_doc": "2026-10-24: 画面が読む参照データ（race_lists・meta・pedigree 系・tables の 2 種ほか）は src/ops/gcs_mirror.py のミラー（GCS の ops/mirror/）に移した。ここは空（手動 push の束は使わない）。",
+      "include": [],
+      "exclude": [
+        "*.tmp",
+        "*.lock",
+        "*/.queue_runner_leader",
+        "data/page_reference/*.bak/*",
+        "*.bak/*"
+      ]
+    },
+    "live_compute": {
+      "_doc": "API 側でその場の推論をするときだけ（既定では取らない。予測は Jobs が作って GCS に置く設計）。概算 約90MB。",
+      "include": [
+        "data/local/inference/state/**",
+        "data/local/inference/lap_forecast_models/**",
+        "data/local/inference/features/**"
+      ],
+      "exclude": [
+        "*.tmp",
+        "*.lock"
+      ]
+    }
+  },
+  "limits": {
+    "max_total_bytes": 400000000,
+    "max_files": 60000
+  }
+}

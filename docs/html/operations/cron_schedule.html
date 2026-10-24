@@ -1,0 +1,146 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cron 登録内容（グループ別） — keiba-vpn docs</title>
+<style>
+:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --code:#0b1428; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1100px; margin:0 auto; padding:36px 28px 80px; }
+h1 { font-size:26px; margin:0 0 6px; } h2 { font-size:19px; margin:40px 0 4px; padding-top:16px; border-top:1px solid var(--border); }
+.muted { color:var(--muted); font-size:13px; } .sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+table { border-collapse:collapse; width:100%; margin:8px 0 14px; font-size:13.5px; }
+th,td { border:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+th { background:var(--panel); color:var(--muted); font-weight:600; white-space:nowrap; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 6px; border-radius:5px; font-size:12px; }
+.badge { display:inline-block; font-size:11.5px; padding:0 8px; border-radius:10px; border:1px solid var(--warn); color:var(--warn); white-space:nowrap; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin:12px 0; }
+.when { white-space:nowrap; font-weight:600; }
+</style></head><body><main>
+<h1>cron 登録内容（グループ別）</h1>
+<p class="muted">時刻はすべて <b>JST</b>（crontab 本体は UTC で記述）。最終更新: 2026-10-19（JST） / 元データ: ホストの crontab（取得時点の写し） / 再生成: <code>python -m src.scripts.docs.build_cron_schedule_html</code>。定義の正は <code>scripts/cron/setup_all_cron.sh</code>。データごとの収集→加工→統合の流れは <a href="../modeling/chapters/data_flow_schedule.html">データの収集〜加工〜統合フロー</a>。</p>
+<div class="box"><span class="badge">取り直し中は見送り</span> のジョブは、優先処理（2020-2025年の取り直し。<code>run_priority_rescrape.sh</code>）が動いている間は自動で見送り、終われば自動で通常どおり動く（<code>scripts/cron/yield_to_rescrape.sh</code>。同じ netkeiba アカウントの別セッションが取り直し側のセッションを無効にするため）。見送りの記録は <code>logs/yield_skips.log</code>。止めるには <code>data/local/meta/rescrape/YIELD_DISABLED</code> を置く。</div>
+<h2>稼働状況の点検（既知の問題）</h2><p class="sub">cron の登録内容とは別に、実際の稼働で確認された問題。直したら項目を消す。</p><table><tr><th>確認日</th><th>内容</th></tr>
+<tr><td class="when">2026-10-19</td><td>確定結果（db.netkeiba.com の race_result）は開催から数日遅れて公開される。公開前は recent-retry が 0 件で見送る（10-19 朝時点で 10-17・10-18 の 72 レースが未取得）。履歴が古くならないよう、export_tables_daily が速報結果（race_result_on_time）を race_result_flat に橋渡しし、確定結果が出たら置き換わる。</td></tr>
+<tr><td class="when">2026-10-19</td><td>週次更新の PostgreSQL 取り込みは「No module named &#x27;psycopg2&#x27;」で失敗する状態が続いている。ホストの Python には psycopg（v3）はあるが psycopg2 が無い。予測の出力（馬体重検知ランナー・特徴量の蓄積）は PostgreSQL を使わないため影響しない。</td></tr>
+<tr><td class="when">2026-10-19</td><td>馬の戦績ページの備考の補填（backfill_horse_race_remarks。約 2 万頭）は、他のスクレイピングが動いている間は待つ作りのため、進みが遅い。日次増分（horse-remarks-daily）とは別に、空いた時間に進める。</td></tr>
+<tr><td class="when">2026-10-18</td><td>ログイン後 150 リクエストでセッションを作り直したとき、認証用 cookie を捨てたまま「ログイン済み」と扱っていたため、以降が未ログインで取得されていた（調教ページ 302/450 が空、horse_training 5,261 頭の空保存の原因）。2026-10-17 に修正し、該当の馬は取り直し済み。再発したときは、空の保存件数が急に増えることで気づく（parse_audit）。</td></tr>
+<tr><td class="when">2026-10-18</td><td>git pull をホストで実行すると Next.js のビルド（.next-stg）が消える。pull のあとは Next を再起動する（運用メモ参照）。</td></tr>
+<tr><td class="when">2026-10-15</td><td>レース一覧（daily-race-lists）の状態が partial なのは、数週間先の開催日の一覧が netkeiba にまだ公開されていないため（想定内）。</td></tr>
+<tr><td class="when">2026-10-15</td><td>優先処理（2020〜2025 年の取り直し）が動いている間は、見送り対象のジョブ（レース一覧・週次更新・バロメーター・recent-retry・backfill）は動かない（logs/yield_skips.log に記録）。</td></tr>
+</table>
+<h3>見送りの記録（直近）</h3><table><tr><th>記録（logs/yield_skips.log）</th></tr>
+<tr><td><code>[2026-10-15T00:25:59+09:00] SKIP recent-retry: 優先処理(取り直し)が動いているため見送り</code></td></tr>
+<tr><td><code>[2026-10-15T01:00:01+09:00] SKIP backfill: 優先処理(取り直し)が動いているため見送り</code></td></tr>
+<tr><td><code>[2026-10-15T02:00:01+09:00] SKIP backfill: 優先処理(取り直し)が動いているため見送り</code></td></tr>
+<tr><td><code>[2026-10-15T03:00:01+09:00] SKIP backfill: 優先処理(取り直し)が動いているため見送り</code></td></tr>
+<tr><td><code>[2026-10-15T04:00:01+09:00] SKIP backfill: 優先処理(取り直し)が動いているため見送り</code></td></tr>
+<tr><td><code>[2026-10-16T02:00:01+09:00] SKIP backfill: 優先処理(取り直し)が動いているため見送り</code></td></tr>
+<tr><td><code>[2026-10-16T02:00:01+09:00] SKIP backfill: 優先処理(取り直し)が動いているため見送り</code></td></tr>
+<tr><td><code>[2026-10-17T03:00:01+09:00] SKIP backfill: 優先処理(取り直し)が動いているため見送り</code></td></tr>
+</table>
+<h2>取得データの扱い（共通）</h2><p class="sub">netkeiba を取得する全ジョブ（出馬表・オッズ・結果・指数など）は、同じ流れで保存する。</p><table><tr><th>段階</th><th>内容</th></tr><tr><td>1. 生のHTML</td><td><b>原則、保存しない。</b>ページ構造の変更を検出するためのサンプルだけを GCS に gzip で置く（カテゴリごとに最大 10 件）。ローカルには残さない。</td></tr><tr><td>2. 構造化</td><td>パーサーが HTML から項目を取り出し、<b>JSON にする</b>（出走馬の行、オッズ、着順・時計など）。値は画面に出ているまま。集計や派生量は作らない。取得時刻とスキーマ検証の結果（<code>_meta</code>）を付ける。</td></tr><tr><td>3. 検証</td><td>スキーマに合わない場合は GCS に<b>保存せず</b>、ローカルの <code>data/local/quarantine/</code> に隔離し、違反の記録を <code>data/local/meta/schema_violations/</code> に残す（既定）。</td></tr><tr><td>4. 保存先（正本）</td><td><b>GCS</b>（<code>chuou/data/preprocessed/netkeiba/pc/&lt;カテゴリ&gt;/&lt;年 または馬IDの先頭4桁&gt;/&lt;ID&gt;.json</code>）。ローカルには、メモリキャッシュと、週に 2 回以上読まれたキーだけの <code>data/cache/</code> を補助として置く。GCS と同じ形のミラー（<code>data/local/mirror/</code>）は設定で無効（ホストでは未設定）。</td></tr><tr><td>例外（ローカルのみ）</td><td>レース一覧（<code>data/page_reference/race_lists</code>）と発走時刻表（<code>data/page_reference/race_day_schedule</code>）は GCS に置かない。JRA 馬場（<code>data/page_reference/cushion</code>）もローカルで、GCS へは手動でアップロードする。</td></tr><tr><td>加工して別の場所に置くもの</td><td>取得とは別の段階で作る。履歴テーブル（Parquet、<code>data/page_reference/tables</code>）、騎手・調教師統計（<code>data/features</code>）、馬場速度指数（<code>data/analysis/track_speed</code>）、推論用の特徴量（<code>data/local/inference</code>）、DB への取り込み（PostgreSQL）。いずれも GCS の構造化JSONを元に作る。</td></tr></table>
+<h2>1日の流れ（JST）</h2><p class="sub">毎日動くジョブを時刻順に並べたもの。曜日指定のあるものは右端に曜日を付けた。</p>
+<table><tr><th>時刻</th><th>ジョブ</th><th>グループ</th></tr>
+<tr><td class="when">毎日 00:00</td><td>GCS → PostgreSQL 同期</td><td>特徴量・状態の更新</td></tr>
+<tr><td class="when">毎日 終日 5分ごと</td><td>PostgreSQL の起動保証</td><td>監視・保守</td></tr>
+<tr><td class="when">毎日 00:00</td><td>backfill: 2026年 結果+出馬表</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">毎日 終日 3分ごと</td><td>サーバ死活監視</td><td>監視・保守</td></tr>
+<tr><td class="when">毎日 終日 2分ごと</td><td>リモートアクセスの起動保証</td><td>監視・保守</td></tr>
+<tr><td class="when">毎日 終日 5分ごと</td><td>監視ポータルの起動保証</td><td>監視・保守</td></tr>
+<tr><td class="when">毎日 01:00</td><td>backfill: 2025年 結果+出馬表</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">火・金 02:00</td><td>backfill: 2021年 結果+出馬表</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">毎日 02:00</td><td>backfill: 2024年 結果+出馬表</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">水・土 03:00</td><td>backfill: 2020年 結果+出馬表</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">毎日 03:00</td><td>backfill: 2023年 結果+出馬表</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">毎日 03:00</td><td>馬の戦績ページの備考・スタート指数の日次増分</td><td>定期取得・取りこぼしの取り直し</td></tr>
+<tr><td class="when">毎日 04:00</td><td>backfill: 2022年 結果+出馬表</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">毎日 04:30</td><td>ログローテーション</td><td>監視・保守</td></tr>
+<tr><td class="when">毎日 05:00〜08:50（10分ごと）</td><td>JRA 馬場（クッション値・含水率）</td><td>開催日の流れ（前日夕方〜当日）</td></tr>
+<tr><td class="when">毎日 05:30</td><td>騎手・調教師統計</td><td>特徴量・状態の更新</td></tr>
+<tr><td class="when">毎日 06:00</td><td>backfill: 馬情報</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">毎日 06:10</td><td>直近の未取得データの取り直し（確定結果）</td><td>定期取得・取りこぼしの取り直し</td></tr>
+<tr><td class="when">毎日 07:00</td><td>レース一覧</td><td>定期取得・取りこぼしの取り直し</td></tr>
+<tr><td class="when">毎日 07:00</td><td>履歴テーブルの増分更新と、確定結果の橋渡し</td><td>特徴量・状態の更新</td></tr>
+<tr><td class="when">毎日 07:30</td><td>速報結果ランナー</td><td>開催日の流れ（前日夕方〜当日）</td></tr>
+<tr><td class="when">毎日 07:30</td><td>開催日ランナー（オッズ・出馬表）</td><td>開催日の流れ（前日夕方〜当日）</td></tr>
+<tr><td class="when">毎日 07:35</td><td>v4 サービングの当日キャッシュ</td><td>特徴量・状態の更新</td></tr>
+<tr><td class="when">毎日 07:40</td><td>厩舎コメント（レース前の厩舎の話）</td><td>開催日の流れ（前日夕方〜当日）</td></tr>
+<tr><td class="when">毎日 07:40</td><td>履歴特徴量の蓄積とサービング用バンドルの更新</td><td>特徴量・状態の更新</td></tr>
+<tr><td class="when">毎日 07:50</td><td>backfill: 2026年 補助データ</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">毎日 08:00</td><td>backfill: 2025年 補助データ</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">毎日 08:00</td><td>ページ品質チェック</td><td>監視・保守</td></tr>
+<tr><td class="when">毎日 08:00</td><td>馬体重の検知ランナー（予測の出口）</td><td>開催日の流れ（前日夕方〜当日）</td></tr>
+<tr><td class="when">毎日 08:10</td><td>v4 サービングの馬主・プロフィール状態</td><td>特徴量・状態の更新</td></tr>
+<tr><td class="when">毎日 08:30</td><td>バロメーターの取り直し</td><td>定期取得・取りこぼしの取り直し</td></tr>
+<tr><td class="when">毎日 09:00</td><td>backfill: 2024年 補助データ</td><td>過去データの補填（backfill）</td></tr>
+<tr><td class="when">毎日 17:00</td><td>レース一覧</td><td>定期取得・取りこぼしの取り直し</td></tr>
+<tr><td class="when">毎日 17:30</td><td>開催日夕方の結果・確定オッズ</td><td>開催日の流れ（前日夕方〜当日）</td></tr>
+<tr><td class="when">毎日 18:00</td><td>前日夕方の出馬表・馬柱・追い切り・SmartRC</td><td>開催日の流れ（前日夕方〜当日）</td></tr>
+<tr><td class="when">金 18:00</td><td>週次更新</td><td>定期取得・取りこぼしの取り直し</td></tr>
+<tr><td class="when">金 18:30</td><td>馬名インデックス</td><td>定期取得・取りこぼしの取り直し</td></tr>
+<tr><td class="when">金 19:30</td><td>バロメーターの取り直し</td><td>定期取得・取りこぼしの取り直し</td></tr>
+<tr><td class="when">毎日 19:40</td><td>直近の未取得データの取り直し（確定結果）</td><td>定期取得・取りこぼしの取り直し</td></tr>
+<tr><td class="when">毎日 20:00</td><td>厩舎コメント（レース前の厩舎の話）</td><td>開催日の流れ（前日夕方〜当日）</td></tr>
+<tr><td class="when">毎日 21:00</td><td>新馬の5世代血統</td><td>定期取得・取りこぼしの取り直し</td></tr>
+<tr><td class="when">日 22:00</td><td>オッズ変化の週次レポート</td><td>特徴量・状態の更新</td></tr>
+</table>
+<h2>開催日の流れ（前日夕方〜当日）（8件）</h2><p class="sub">開催日の前日夕方〜当日に、出走表・オッズ・馬体重・結果・馬場を取りに行き、各レースの予測を出す。通しの流れは「毎レースの予測出力までのワークフロー」の章。</p>
+<table><tr><th>時刻（JST）</th><th>ジョブ</th><th>内容</th><th>データの加工</th><th>保存先</th><th>直近の実行</th><th>cron（UTC）</th><th></th></tr>
+<tr><td class="when">毎日 05:00〜08:50（10分ごと）</td><td>JRA 馬場（クッション値・含水率）</td><td>開催日の朝に10分ごとにポーリング</td><td>構造化（JRA 公式ページを整形したJSON）</td><td>ローカルのみ: data/page_reference/cushion。GCS へは自動では上げない（手動アップロード）</td><td>2026-10-18 07:30 ok</td><td><code>*/10 20-23 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 07:30</td><td>速報結果ランナー</td><td>開催日のみ常駐（07:30 JST 起動）。各R 発走15分後に速報結果を取得</td><td>構造化のみ。全R後に結果テーブルの増分追記と馬場速度指数の計算（その日の確定結果が未公開のときは 0 件で見送り＝正常）</td><td>GCS: 速報結果（race_result_on_time）。ローカル: data/page_reference/tables（race_result_flat の増分）、data/analysis/track_speed（馬場速度指数）</td><td>2026-10-19 07:30 skipped（non-race-day）</td><td><code>30 22 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 07:30</td><td>開催日ランナー（オッズ・出馬表）</td><td>開催日のみ常駐（07:30 JST 起動）。各R 発走60分前にオッズ、15分前に出馬表・オッズ・馬柱などをまとめて取得（KEIBA_RACEDAY_DIRECT=1 では、全体のキューを通さず、このランナーが直接取得する）</td><td>構造化のみ（T-15 の予測トリガはモックで保存なし）</td><td>GCS: 出馬表・オッズ（phase=t60/t15 と snapshot_at の履歴を同じJSONに保持）・馬柱・追い切り・SmartRC。JRA 馬場はローカル data/page_reference/cushion</td><td>2026-10-19 07:30 skipped（non-race-day）</td><td><code>30 22 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 07:40</td><td>厩舎コメント（レース前の厩舎の話）</td><td>前日 20:00 は翌日、07:40 は当日が開催日のときだけ動く。コメントが出ているレースだけ保存し、無いレースは次回に取り直す</td><td>構造化（コメント・評価・聞き手・調教師名）</td><td>GCS: race_trainer_comment（レース後の recent-retry と同じカテゴリ。保存済みより件数が減る更新はしない）</td><td>2026-10-19 07:40 skipped（non-race-day）</td><td><code>40 22 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 08:00</td><td>馬体重の検知ランナー（予測の出口）</td><td>開催日のみ（08:00 JST 起動。非開催日は skipped）。各R 発走65〜30分前に90秒おきに出馬表を取り直し、9割以上の馬に馬体重が入ったら推論モードで特徴量を作る。KEIBA_V3_SERVING=shadow のときは、v3/v4 のアンサンブルでその場で予測し、ファイルに残す（画面・API・GCS には出さない）。KEIBA_WEIGHT_TRIGGER_MODE=predict だと既存の予測も起動する（現在は使っていない）</td><td>構造化（出馬表）+ 計算（履歴系の特徴量と、v4 は 1,135 列）+ 予測（影モード）</td><td>GCS: 出馬表。ローカルのみ: data/local/inference（features/&lt;日&gt;/・predictions_v3/&lt;日&gt;/・snapshots/&lt;日&gt;/・events/&lt;日&gt;.jsonl。GCS には上げない）</td><td>2026-10-19 08:00 skipped（non-race-day）</td><td><code>0 23 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 17:30</td><td>開催日夕方の結果・確定オッズ</td><td>速報結果・確定オッズ（phase=final）・馬連などの確定オッズ・SmartRC のまとめ取得（17:30 JST、開催日のみ）。確定オッズは phase=final で履歴化し、T-60/T-15 のスナップショットを上書きしない</td><td>構造化のみ。速報結果が取れたら馬場速度指数の計算を起動</td><td>GCS: race_result_on_time・race_odds・race_pair_odds・smartrc_race。ローカル: 取得状況 date_coverage。DB 同期を起動</td><td>2026-10-18 17:43 ok</td><td><code>30 8 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 18:00</td><td>前日夕方の出馬表・馬柱・追い切り・SmartRC</td><td>翌日が開催日のときだけ動く（18:00 JST。非開催日は skipped）。枠順・馬柱・追い切り・SmartRC を取得し、続けて、出走馬の調教ページの取り直し（KEIBA_EVE_HORSE_TRAINING）、馬主が未取得の馬の基本情報の取得（KEIBA_EVE_HORSE_PROFILE）、追走難度・想定オッズの事前計算を行う。SmartRC は出走前の値を不変のスナップショット smartrc_prerace として残す（KEIBA_EVE_SMARTRC_SNAPSHOT）</td><td>構造化 + 推定（追走難度・想定オッズ。モデルによる計算結果を保存）</td><td>GCS: race_shutuba・race_shutuba_past・race_oikiri・smartrc_race・horse_training（取り直した記録を既存の記録に統合。空や読めない結果は保存しない）・horse_result（馬主が未取得の馬だけ。既存は上書きしない）・smartrc_prerace（出走前の値。上書きしない）。追走難度・想定オッズは推定結果のキャッシュ。ローカル: 取得状況 data/local/meta/date_coverage、発走時刻表 data/page_reference/race_day_schedule（ローカルのみ）</td><td>2026-10-18 18:00 skipped（non-race-day-tomorrow）</td><td><code>0 9 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 20:00</td><td>厩舎コメント（レース前の厩舎の話）</td><td>前日 20:00 は翌日、07:40 は当日が開催日のときだけ動く。コメントが出ているレースだけ保存し、無いレースは次回に取り直す</td><td>構造化（コメント・評価・聞き手・調教師名）</td><td>GCS: race_trainer_comment（レース後の recent-retry と同じカテゴリ。保存済みより件数が減る更新はしない）</td><td>2026-10-19 07:40 skipped（non-race-day）</td><td><code>0 11 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+</table>
+<h2>定期取得・取りこぼしの取り直し（10件）</h2><p class="sub">レース一覧・確定結果・バロメーター・備考など、公開が遅れるデータの更新と再取得。</p>
+<table><tr><th>時刻（JST）</th><th>ジョブ</th><th>内容</th><th>データの加工</th><th>保存先</th><th>直近の実行</th><th>cron（UTC）</th><th></th></tr>
+<tr><td class="when">毎日 03:00</td><td>馬の戦績ページの備考・スタート指数の日次増分</td><td>直近14日に走った馬のうち、直近の出走の行が保存済みの戦績に無い馬だけ取り直す（03:00 JST。1日に数百頭）。他のスクレイピングが動いていれば止まるまで待つ作り</td><td>構造化のみ（備考・スタート指数・追走指数・上がり指数を列名ベースで保存）</td><td>GCS: horse_race_remarks（新カテゴリ。既存の horse_result は上書きしない）</td><td>—</td><td><code>0 18 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 06:10</td><td>直近の未取得データの取り直し（確定結果）</td><td>直近21日の確定結果・結果ラップ・タイム指数・厩舎コメントのうち未取得のものを、間隔と回数を制限して取得（06:10 と 19:40 JST）。確定結果（db.netkeiba.com の race_result）は数日遅れで公開されるため、公開前は未取得のまま残る（実測: 2026-10-19 朝の時点で 10-17・10-18 の 72 レースが未取得）</td><td>構造化のみ</td><td>GCS: race_result・race_result_lap・race_index・race_trainer_comment。ローカル: 試行状態 data/local/meta/recent_retry_state.json</td><td>2026-10-19 06:33 ok</td><td><code>10 21 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 07:00</td><td>レース一覧</td><td>今日から14日先までの開催日のレース一覧を毎回更新（朝・夕の2回）。それより先の日付は一覧が未公開のことが多いため、月曜だけ確認する。揃った日はアクセスしない</td><td>構造化のみ</td><td>ローカルのみ: data/page_reference/race_lists。キューにレース単位のジョブが溜まっていれば、その分は GCS へ</td><td>2026-10-19 07:32 error</td><td><code>0 22 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 08:30</td><td>バロメーターの取り直し</td><td>公開済みで未取得のものだけを取得（同じレースは12時間以上空け、最大10回まで）</td><td>構造化のみ</td><td>GCS: race_barometer</td><td>2026-10-19 08:30 ok</td><td><code>30 23 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 17:00</td><td>レース一覧</td><td>今日から14日先までの開催日のレース一覧を毎回更新（朝・夕の2回）。それより先の日付は一覧が未公開のことが多いため、月曜だけ確認する。揃った日はアクセスしない</td><td>構造化のみ</td><td>ローカルのみ: data/page_reference/race_lists。キューにレース単位のジョブが溜まっていれば、その分は GCS へ</td><td>2026-10-19 07:32 error</td><td><code>0 8 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">金 18:00</td><td>週次更新</td><td>直近10日の確定結果・タイム指数・バロメーター・馬情報</td><td>構造化 + 計算（めぐ指数）+ DB 取り込み</td><td>GCS: 確定結果・指数・バロメーター・馬情報。PostgreSQL: ETL（ホストでは psycopg2 未導入のため失敗中。最終実行は 2026-10-09 で、PostgreSQL 自体は 2026-10-15 時点で起動中）</td><td>2026-10-16 19:50 ok</td><td><code>0 9 * * 5</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">金 18:30</td><td>馬名インデックス</td><td>馬名リストと成長曲線（週次更新の後）</td><td>計算（馬名リスト・成長曲線の集計）</td><td>ローカルのみ: data/calculated_data</td><td>2026-10-16 19:50 ok</td><td><code>30 9 * * 5</code></td><td></td></tr>
+<tr><td class="when">金 19:30</td><td>バロメーターの取り直し</td><td>公開済みで未取得のものだけを取得（同じレースは12時間以上空け、最大10回まで）</td><td>構造化のみ</td><td>GCS: race_barometer</td><td>2026-10-19 08:30 ok</td><td><code>30 10 * * 5</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 19:40</td><td>直近の未取得データの取り直し（確定結果）</td><td>直近21日の確定結果・結果ラップ・タイム指数・厩舎コメントのうち未取得のものを、間隔と回数を制限して取得（06:10 と 19:40 JST）。確定結果（db.netkeiba.com の race_result）は数日遅れで公開されるため、公開前は未取得のまま残る（実測: 2026-10-19 朝の時点で 10-17・10-18 の 72 レースが未取得）</td><td>構造化のみ</td><td>GCS: race_result・race_result_lap・race_index・race_trainer_comment。ローカル: 試行状態 data/local/meta/recent_retry_state.json</td><td>2026-10-19 06:33 ok</td><td><code>40 10 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 21:00</td><td>新馬の5世代血統</td><td>今後1週間の出走予定馬のうち血統テーブル(ped_tbl)が無い馬だけを取得。無ければ何もしない</td><td>構造化（5世代表）+ 計算（10世代・ped_tbl の生成）</td><td>GCS: horse_pedigree_5gen。ローカル: data/local/horse_pedigree_5gen・horse_pedigree_10gen、data/local/features/horse/ped_tbl</td><td>2026-10-18 21:00 ok</td><td><code>0 12 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+</table>
+<h2>過去データの補填（backfill）（11件）</h2><p class="sub">年度別に、取りこぼした結果・出走表・馬情報を深夜に補う。</p>
+<table><tr><th>時刻（JST）</th><th>ジョブ</th><th>内容</th><th>データの加工</th><th>保存先</th><th>直近の実行</th><th>cron（UTC）</th><th></th></tr>
+<tr><td class="when">毎日 00:00</td><td>backfill: 2026年 結果+出馬表</td><td>2026年 結果+出馬表を補填</td><td>構造化のみ</td><td>GCS: 同じカテゴリ（馬情報は horse_result）。ローカル: 進捗台帳 data/local/meta/backfill_progress.json、取得状況 date_coverage</td><td>—</td><td><code>0 15 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 01:00</td><td>backfill: 2025年 結果+出馬表</td><td>2025年 結果+出馬表を補填</td><td>構造化のみ</td><td>GCS: 同じカテゴリ（馬情報は horse_result）。ローカル: 進捗台帳 data/local/meta/backfill_progress.json、取得状況 date_coverage</td><td>—</td><td><code>0 16 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">火・金 02:00</td><td>backfill: 2021年 結果+出馬表</td><td>2021年 結果+出馬表を補填</td><td>構造化のみ</td><td>GCS: 同じカテゴリ（馬情報は horse_result）。ローカル: 進捗台帳 data/local/meta/backfill_progress.json、取得状況 date_coverage</td><td>—</td><td><code>0 17 * * 1,4</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 02:00</td><td>backfill: 2024年 結果+出馬表</td><td>2024年 結果+出馬表を補填</td><td>構造化のみ</td><td>GCS: 同じカテゴリ（馬情報は horse_result）。ローカル: 進捗台帳 data/local/meta/backfill_progress.json、取得状況 date_coverage</td><td>—</td><td><code>0 17 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">水・土 03:00</td><td>backfill: 2020年 結果+出馬表</td><td>2020年 結果+出馬表を補填</td><td>構造化のみ</td><td>GCS: 同じカテゴリ（馬情報は horse_result）。ローカル: 進捗台帳 data/local/meta/backfill_progress.json、取得状況 date_coverage</td><td>—</td><td><code>0 18 * * 2,5</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 03:00</td><td>backfill: 2023年 結果+出馬表</td><td>2023年 結果+出馬表を補填</td><td>構造化のみ</td><td>GCS: 同じカテゴリ（馬情報は horse_result）。ローカル: 進捗台帳 data/local/meta/backfill_progress.json、取得状況 date_coverage</td><td>—</td><td><code>0 18 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 04:00</td><td>backfill: 2022年 結果+出馬表</td><td>2022年 結果+出馬表を補填</td><td>構造化のみ</td><td>GCS: 同じカテゴリ（馬情報は horse_result）。ローカル: 進捗台帳 data/local/meta/backfill_progress.json、取得状況 date_coverage</td><td>—</td><td><code>0 19 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 06:00</td><td>backfill: 馬情報</td><td>馬情報を補填</td><td>構造化のみ</td><td>GCS: 同じカテゴリ（馬情報は horse_result）。ローカル: 進捗台帳 data/local/meta/backfill_progress.json、取得状況 date_coverage</td><td>—</td><td><code>0 21 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 07:50</td><td>backfill: 2026年 補助データ</td><td>2026年 補助データを補填</td><td>構造化のみ</td><td>GCS: 同じカテゴリ（馬情報は horse_result）。ローカル: 進捗台帳 data/local/meta/backfill_progress.json、取得状況 date_coverage</td><td>—</td><td><code>50 22 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 08:00</td><td>backfill: 2025年 補助データ</td><td>2025年 補助データを補填</td><td>構造化のみ</td><td>GCS: 同じカテゴリ（馬情報は horse_result）。ローカル: 進捗台帳 data/local/meta/backfill_progress.json、取得状況 date_coverage</td><td>—</td><td><code>0 23 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+<tr><td class="when">毎日 09:00</td><td>backfill: 2024年 補助データ</td><td>2024年 補助データを補填</td><td>構造化のみ</td><td>GCS: 同じカテゴリ（馬情報は horse_result）。ローカル: 進捗台帳 data/local/meta/backfill_progress.json、取得状況 date_coverage</td><td>—</td><td><code>0 0 * * *</code></td><td><span class="badge">取り直し中は見送り</span></td></tr>
+</table>
+<h2>特徴量・状態の更新（7件）</h2><p class="sub">特徴量や推論が読むテーブル・統計・状態（サービング用バンドル・キャッシュ）・DB を更新する。</p>
+<table><tr><th>時刻（JST）</th><th>ジョブ</th><th>内容</th><th>データの加工</th><th>保存先</th><th>直近の実行</th><th>cron（UTC）</th><th></th></tr>
+<tr><td class="when">毎日 00:00</td><td>GCS → PostgreSQL 同期</td><td>直近7日の増分</td><td>加工（ETL で正規化テーブルへ）</td><td>ホスト上の PostgreSQL（keiba_db_stg。止まっていれば ensure_postgres が起動する）</td><td>—</td><td><code>0 15 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 05:30</td><td>騎手・調教師統計</td><td>統計テーブルを再生成</td><td>計算（成績の集計）</td><td>ローカルのみ: data/features/jockey_trainer_stats ほか（Parquet）</td><td>—</td><td><code>30 20 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 07:00</td><td>履歴テーブルの増分更新と、確定結果の橋渡し</td><td>推論が読む race_result_flat などを当年分だけ更新（07:00 JST）。確定結果が未公開のレースは、速報（race_result_on_time）から race_result_flat に行を足して履歴が古くならないようにする（result_source=on_time。確定結果が出たら自動で置き換わる。race_result_race には足さない）。続けてパース監査（parse_audit）とパースのずれ検査（parse_drift）を行う</td><td>加工（JSON を表に平坦化。1行=1馬の _flat と 1行=1レースの _race の Parquet）</td><td>ローカルのみ: data/page_reference/tables/&lt;年&gt;/、ログ logs/export_tables_daily.log</td><td>—</td><td><code>0 22 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 07:35</td><td>v4 サービングの当日キャッシュ</td><td>開催日の朝（07:35 JST）、その日の全レースの馬主系・馬自身の群の特徴量を先に作ってキャッシュする（update_serving_state precompute。出馬表が保存済みの日だけ。開催なしの日は何もしない）</td><td>計算（as-of。馬主・馬自身の群）</td><td>ローカルのみ: data/local/inference/state/&lt;日&gt;/（キャッシュ。作れなかった日は最初の馬体重検知で作る＝約1分遅れる）</td><td>—</td><td><code>35 22 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 07:40</td><td>履歴特徴量の蓄積とサービング用バンドルの更新</td><td>当年分の特徴量（127列）を確定結果（橋渡しを含む）から作り直し、推論モードで保存した特徴量とのずれを記録（07:40 JST）。作り直したサービング用バンドルを公開する（KEIBA_PUBLISH_SERVING_BUNDLE。既定で有効）</td><td>計算（as-of の履歴特徴量。学習と同じ計算）</td><td>ローカルのみ: data/local/modeling/feature_store/horse_history（features_&lt;年&gt;.parquet、manifest、skew/&lt;日付&gt;.json）と、小さなメモリのマシン向けのサービング用バンドル serving_bundle（約140MB）。バンドルは公開用にも書き出す（古い版は整理）。2026年は学習に使わない</td><td>2026-10-19 07:40 ok</td><td><code>40 22 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 08:10</td><td>v4 サービングの馬主・プロフィール状態</td><td>履歴にいて馬主などが未登録の馬を horse_result から補う（08:10 JST。update_serving_state profile）</td><td>加工（馬ごとの静的な状態）</td><td>ローカルのみ: data/local/inference/state/profile_dyn.parquet</td><td>—</td><td><code>10 23 * * *</code></td><td></td></tr>
+<tr><td class="when">日 22:00</td><td>オッズ変化の週次レポート</td><td>直近28日の T-15 → 最新、T-60 → 最新のオッズ変化率をオッズ帯別に集計（日曜 22:00 JST。読み取りのみ。netkeiba へはアクセスしない）</td><td>計算（オッズ帯別の変化率）</td><td>ローカル: data/local/meta/odds_drift/weekly/、latest_t15.json・latest_t60.json</td><td>—</td><td><code>0 13 * * 0</code></td><td></td></tr>
+</table>
+<h2>監視・保守（10件）</h2><p class="sub">サーバの死活監視、ログの整理、ページ構造の品質チェック。</p>
+<table><tr><th>時刻（JST）</th><th>ジョブ</th><th>内容</th><th>データの加工</th><th>保存先</th><th>直近の実行</th><th>cron（UTC）</th><th></th></tr>
+<tr><td class="when">システム起動時</td><td>PostgreSQL の起動保証（起動時）</td><td>ローカル PostgreSQL が止まっていれば起動（コンテナ再起動で落ちたままになるのを防ぐ）</td><td>データなし</td><td>—</td><td>—</td><td><code>@reboot</code></td><td></td></tr>
+<tr><td class="when">システム起動時</td><td>サーバ死活監視（起動時）</td><td>FastAPI・Flask・Next.js・MLflow を監視し、落ちていれば再起動</td><td>データなし</td><td>—</td><td>—</td><td><code>@reboot</code></td><td></td></tr>
+<tr><td class="when">システム起動時</td><td>リモートアクセスの起動保証（起動時）</td><td>リモート接続の仕組みを維持（2分ごと・起動時）</td><td>データなし</td><td>—</td><td>—</td><td><code>@reboot</code></td><td></td></tr>
+<tr><td class="when">システム起動時</td><td>監視ポータルの起動保証（起動時）</td><td>監視ポータル（Flask）が止まっていれば起動（5分ごと・起動時）</td><td>データなし</td><td>—</td><td>—</td><td><code>@reboot</code></td><td></td></tr>
+<tr><td class="when">毎日 終日 5分ごと</td><td>PostgreSQL の起動保証</td><td>ローカル PostgreSQL が止まっていれば起動（コンテナ再起動で落ちたままになるのを防ぐ）</td><td>データなし</td><td>—</td><td>—</td><td><code>*/5 * * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 終日 3分ごと</td><td>サーバ死活監視</td><td>FastAPI・Flask・Next.js・MLflow を監視し、落ちていれば再起動</td><td>データなし</td><td>—</td><td>—</td><td><code>*/3 * * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 終日 2分ごと</td><td>リモートアクセスの起動保証</td><td>リモート接続の仕組みを維持（2分ごと・起動時）</td><td>データなし</td><td>—</td><td>—</td><td><code>*/2 * * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 終日 5分ごと</td><td>監視ポータルの起動保証</td><td>監視ポータル（Flask）が止まっていれば起動（5分ごと・起動時）</td><td>データなし</td><td>—</td><td>—</td><td><code>*/5 * * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 04:30</td><td>ログローテーション</td><td>ログの整理</td><td>データなし</td><td>—</td><td>—</td><td><code>30 19 * * *</code></td><td></td></tr>
+<tr><td class="when">毎日 08:00</td><td>ページ品質チェック</td><td>スクレイパーが各ページの期待スキーマを取得できるかを確認</td><td>検査のみ</td><td>ローカル: data/local/page_quality/latest.json（過去30件は history/）</td><td>—</td><td><code>0 23 * * *</code></td><td></td></tr>
+</table>
+</main></body></html>

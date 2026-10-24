@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Git 状態 — 監視ポータル{% endblock %}
+
+{% block content %}
+<div class="page-title"><span class="icon">🌿</span> Git 状態</div>
+
+<!-- git pull ボタンカード -->
+<div class="card" style="margin-bottom:20px">
+  <div class="card-title" style="display:flex;align-items:center;gap:12px">
+    <span>🔄 git pull</span>
+    <button id="pull-btn" onclick="doPull()"
+      style="padding:6px 18px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;transition:opacity .2s">
+      git pull origin
+    </button>
+    <span id="pull-status" style="font-size:12px;color:var(--muted)"></span>
+  </div>
+  <div id="pull-result" style="display:none;margin-top:12px">
+    <pre id="pull-result-pre" style="font-size:12px;padding:10px 12px;background:var(--code-bg,#161b22);border-radius:6px;border:1px solid var(--border);white-space:pre-wrap;word-break:break-all;max-height:260px;overflow-y:auto"></pre>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <div class="card-title">最新コミット</div>
+    <div id="git-head-detail"><span class="loading">読込中...</span></div>
+  </div>
+  <div class="card">
+    <div class="card-title">ブランチ / 変更ファイル</div>
+    <div id="git-dirty"><span class="loading">読込中...</span></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">最終 git pull ログ（定期実行）</div>
+  <pre id="pull-log">読込中...</pre>
+</div>
+
+<p class="last-updated">最終更新: <span id="last-ts">—</span>（30秒ごと自動更新）</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function renderGit(d) {
+  const h = d.head || {};
+  document.getElementById('git-head-detail').innerHTML = h.hash ? `
+    <div style="margin-bottom:10px">
+      <code class="text-accent" style="font-size:14px">${h.hash}</code>
+    </div>
+    <div style="font-size:13px;margin-bottom:6px">${h.message || '—'}</div>
+    <div style="font-size:12px;color:var(--muted)">
+      <div>${h.author || '—'} &lt;${h.email || ''}&gt;</div>
+      <div>${h.date || '—'}</div>
+    </div>` : '<span class="text-muted">取得失敗</span>';
+
+  const dirtyEl = document.getElementById('git-dirty');
+  const branchBadge = d.branch
+    ? `<span class="badge badge-info" style="margin-bottom:10px;display:inline-block">🌿 ${d.branch}</span>`
+    : '';
+  if (d.dirty_count === 0) {
+    dirtyEl.innerHTML = `${branchBadge}<div class="text-ok">変更なし（clean）✅</div>`;
+  } else {
+    const rows = (d.dirty || []).slice(0, 30).map(l =>
+      `<div style="font-size:11px;font-family:monospace;padding:2px 0;border-bottom:1px solid var(--border)">${escHtml(l)}</div>`
+    ).join('');
+    dirtyEl.innerHTML = `${branchBadge}
+      <span class="badge badge-warn">${d.dirty_count} ファイル変更あり</span>
+      <div style="margin-top:10px">${rows}</div>`;
+  }
+
+  document.getElementById('pull-log').textContent = d.pull_log || '（ログなし）';
+  document.getElementById('last-ts').textContent = new Date().toLocaleTimeString('ja-JP');
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function doPull() {
+  const btn = document.getElementById('pull-btn');
+  const statusEl = document.getElementById('pull-status');
+  const resultEl = document.getElementById('pull-result');
+  const preEl = document.getElementById('pull-result-pre');
+
+  btn.disabled = true;
+  btn.textContent = '実行中...';
+  statusEl.textContent = '';
+  resultEl.style.display = 'none';
+
+  try {
+    const res = await fetch('/api/internal/git/pull', { method: 'POST' });
+    const d = await res.json();
+
+    preEl.textContent = d.output || '（出力なし）';
+    preEl.style.color = d.ok ? 'var(--ok, #3fb950)' : 'var(--err, #f85149)';
+    resultEl.style.display = 'block';
+
+    statusEl.textContent = d.ok
+      ? `✅ 成功 (${d.elapsed_s}s) ブランチ: ${d.branch}`
+      : `❌ 失敗 (${d.elapsed_s}s)`;
+    statusEl.style.color = d.ok ? 'var(--ok, #3fb950)' : 'var(--err, #f85149)';
+
+    // git 状態を再読み込み
+    if (d.ok) {
+      await refresh();
+    }
+  } catch(e) {
+    statusEl.textContent = '❌ リクエスト失敗: ' + e.message;
+    statusEl.style.color = 'var(--err, #f85149)';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'git pull origin';
+  }
+}
+
+async function refresh() {
+  try {
+    const d = await fetch('/api/internal/git').then(r => r.json());
+    renderGit(d);
+  } catch(e) { console.error(e); }
+}
+refresh();
+setInterval(refresh, 30000);
+</script>
+{% endblock %}

@@ -1,0 +1,81 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>tp-05a 実験結果レポート — keiba-vpn docs</title><style>
+:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.75 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1080px; margin:0 auto; padding:40px 28px 96px; }
+h1 { font-size:26px; margin:0 0 6px; } h2 { font-size:20px; margin:44px 0 10px; padding-top:18px; border-top:1px solid var(--border); }
+h3 { font-size:15px; color:var(--accent); margin:22px 0 6px; } .muted { color:var(--muted); font-size:13px; }
+table { border-collapse:collapse; width:100%; margin:10px 0 16px; font-size:13px; }
+th, td { border:1px solid var(--border); padding:5px 9px; text-align:right; vertical-align:top; } td:first-child, th:first-child { text-align:left; }
+th { background:var(--panel); color:var(--muted); font-weight:600; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 6px; border-radius:5px; font-size:12.5px; }
+.ok { color:var(--ok); font-weight:600; } .warn { color:var(--warn); font-weight:600; } .bad { color:var(--bad); font-weight:600; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin:12px 0; }
+.best td { background:rgba(74,222,128,.10); }
+</style></head><body><main>
+<h1>tp-05a 実験結果レポート: 勝ち馬確率の目的関数の比較</h1>
+<p class="muted">作成: 2026-10-15 20:46 / 実行コミット <code>bb535c8</code> / notebook <code>notebooks/modeling/training_pipeline/tp-05a-baseline-objectives.ipynb</code> / MLflow 実験 <code>keiba-tp-model-screen</code>（ホスト上 <code>http://127.0.0.1:23230</code>）</p>
+<div class="box" style="border-color:#fbbf24"><b class="warn">数値の前提（2026-10-16 時点）</b>: このレポートの精度・回収率は、<b>2026-10-15 の track_bias 先読みリーク修正（同日の後のレースの結果が当日傾向の特徴量に混ざる不具合）より前の LayerA・特徴量</b>で出した値です。修正後の表で影響を測ったところ、勝率 LogLoss の差は +0.00003（95% 上限 +0.00011）で<b>影響は無視できる大きさ</b>でした（確定事項ログ §24）。この数値も相対比較の結論も、そのまま使えます。確定事項は <a href="training_pipeline_decisions.html" style="color:#7aa9ff">学習パイプライン確定事項ログ</a> を参照。</div>
+<h2>1. 結論</h2><div class="box"><ul>
+<li><b>最良の方式は C1 二値 + 相対化 + 前段3列</b>（p_win LogLoss <b>0.21722</b>）。基準 A1（二値）の 0.21823 から <b>-0.00100</b>（95% 信頼区間 -0.00144〜-0.00075、3/3 fold で改善）。</li>
+<li>確率を<b>レース内で合計 1 にそろえる（M1）だけで 0.00258 改善</b>する（A1 の正規化前 0.22081 → 後 0.21823）。モデルを変えるよりも大きい改善で、必ず最終段にかける。</li>
+<li>tp-04 で採用した前段の 3 列（<code>s_time_pred</code> ほか）は、二値でも -0.00051（95% 信頼区間 -0.00075〜-0.00028）と、効果が統計的に確認できた。</li>
+<li>ランキング系（lambdarank・rank_xendcg）は温度 T=1 では較正が悪い。検証 fold で T を最適化した値（楽観的な参考値）では二値・softmax と同等まで届く。実運用の確率には使えず、順位付けの用途に限る。</li>
+<li>1 位的中率は全方式で約 30%、NDCG@3 は約 0.51 と、方式間の差が小さい。確率の質（LogLoss・race_nll）で差がつく。</li></ul></div>
+<h2>2. 実験条件</h2><table><tr><th>項目</th><th>内容</th></tr>
+<tr><td>モデル</td><td style='text-align:left'>LightGBM（固定: learning_rate 0.05、num_leaves 31、min_data_in_leaf 100、bagging 0.8、feature_fraction 0.7、lambda_l2 5、300 ラウンド）</td></tr>
+<tr><td>特徴量</td><td style='text-align:left'>tp-03 の採用セット（B0′ + 履歴特徴量 127 列、<code>speed_*</code> なし）計 175 列。前段 3 列: s_time_pred, s_time_gap, s_rank_pred。相対化はレース内の z・順位・最大との差を 14 列に追加</td></tr>
+<tr><td>検証</td><td style='text-align:left'>valid 2022・2023・2024 の expanding window（purge 7 日 + embargo 3 日）、3 seed。test 2025 は未使用（tp-06 まで）。2026 年は未使用</td></tr>
+<tr><td>学習行数・評価行数</td><td style='text-align:left'>全 283,714 行（2020〜2025 年）</td></tr>
+<tr><td>採否の基準</td><td style='text-align:left'>レース単位の paired bootstrap（1,000 回）で A1 との差の 95% 信頼区間の上限が 0 未満、かつ 3 fold 中 2 fold 以上で改善。スクリーニング = 2022・2023、確認 = 2024</td></tr>
+<tr><td>主指標</td><td style='text-align:left'>p_win の LogLoss（正規化後）。併記: race_nll（レース内で正規化した勝ち馬の負の対数尤度）、Brier、ECE、1 位的中率、NDCG@3</td></tr>
+</table>
+<h2>3. 性能比較（3 fold × 3 seed の平均）</h2>
+<svg width="760" height="254" role="img" aria-label="p_win LogLoss の比較"><text x="290" y="24" fill="#e6ecff" font-size="12" text-anchor="end">C1 二値 + 相対化 + 前段3列</text><rect x="300" y="13" width="157" height="14" fill="#4ade80" rx="3"/><text x="463" y="24" fill="#9aa7c7" font-size="11">0.21722</text><text x="290" y="50" fill="#e6ecff" font-size="12" text-anchor="end">A3 softmax + 相対化 + 前段3列</text><rect x="300" y="39" width="167" height="14" fill="#7aa9ff" rx="3"/><text x="473" y="50" fill="#9aa7c7" font-size="11">0.21731</text><text x="290" y="76" fill="#e6ecff" font-size="12" text-anchor="end">A4b rank_xendcg（T 校正・楽観）</text><rect x="300" y="65" width="177" height="14" fill="#7aa9ff" rx="3"/><text x="483" y="76" fill="#9aa7c7" font-size="11">0.21741</text><text x="290" y="102" fill="#e6ecff" font-size="12" text-anchor="end">A4a lambdarank（T 校正・楽観）</text><rect x="300" y="91" width="186" height="14" fill="#7aa9ff" rx="3"/><text x="492" y="102" fill="#9aa7c7" font-size="11">0.21749</text><text x="290" y="128" fill="#e6ecff" font-size="12" text-anchor="end">A3 softmax + 相対化</text><rect x="300" y="117" width="200" height="14" fill="#7aa9ff" rx="3"/><text x="506" y="128" fill="#9aa7c7" font-size="11">0.21763</text><text x="290" y="154" fill="#e6ecff" font-size="12" text-anchor="end">C1 二値 + 相対化</text><rect x="300" y="143" width="201" height="14" fill="#7aa9ff" rx="3"/><text x="507" y="154" fill="#9aa7c7" font-size="11">0.21764</text><text x="290" y="180" fill="#e6ecff" font-size="12" text-anchor="end">A1 + 前段3列</text><rect x="300" y="169" width="210" height="14" fill="#7aa9ff" rx="3"/><text x="516" y="180" fill="#9aa7c7" font-size="11">0.21773</text><text x="290" y="206" fill="#e6ecff" font-size="12" text-anchor="end">A3 レース内 softmax</text><rect x="300" y="195" width="223" height="14" fill="#7aa9ff" rx="3"/><text x="529" y="206" fill="#9aa7c7" font-size="11">0.21785</text><text x="290" y="232" fill="#e6ecff" font-size="12" text-anchor="end">A1 二値（基準）</text><rect x="300" y="221" width="263" height="14" fill="#7aa9ff" rx="3"/><text x="569" y="232" fill="#9aa7c7" font-size="11">0.21823</text></svg>
+<p class="muted">緑 = 最良（温度を検証 fold で最適化した値は楽観的なので、最良の判定からは除く）。rank_xendcg（T=1）は 0.228 と大きく外れるため図から外した。</p>
+<table><tr><th>方式</th><th>p_win LogLoss</th><th>race_nll</th><th>Brier</th><th>ECE</th><th>1位的中</th><th>NDCG@3</th><th>top2 LogLoss</th><th>top3 LogLoss</th><th>A1 との差</th><th>95% 区間</th><th>基準</th></tr>
+<tr><td>A1 二値（基準）</td><td>0.21823</td><td>2.0598</td><td>0.06074</td><td>0.00442</td><td>0.2981</td><td>0.5080</td><td>0.34083</td><td>0.42848</td><td>基準</td><td>—</td><td>—</td></tr>
+<tr><td>A1 + 前段3列</td><td>0.21773</td><td>2.0538</td><td>0.06065</td><td>0.00396</td><td>0.2973</td><td>0.5096</td><td>0.34032</td><td>0.42823</td><td>-0.00051</td><td>-0.00075〜-0.00028</td><td><span class=ok>採用</span></td></tr>
+<tr><td>A3 レース内 softmax</td><td>0.21785</td><td>2.0558</td><td>0.06063</td><td>0.00466</td><td>0.2958</td><td>0.5055</td><td>—</td><td>—</td><td>-0.00049</td><td>-0.00087〜-0.00013</td><td><span class=ok>採用</span></td></tr>
+<tr><td>A4a lambdarank</td><td>0.21874</td><td>2.0662</td><td>0.06080</td><td>0.00968</td><td>0.2963</td><td>0.5087</td><td>—</td><td>—</td><td>+0.00054</td><td>+0.00016〜+0.00088</td><td><span class=warn>不採用</span></td></tr>
+<tr><td>A4b rank_xendcg</td><td>0.22787</td><td>2.1770</td><td>0.06232</td><td>0.02821</td><td>0.3009</td><td>0.5137</td><td>—</td><td>—</td><td>+0.01026</td><td>+0.00960〜+0.01089</td><td><span class=warn>不採用</span></td></tr>
+<tr><td>C1 二値 + 相対化</td><td>0.21764</td><td>2.0532</td><td>0.06057</td><td>0.00397</td><td>0.2974</td><td>0.5075</td><td>0.34040</td><td>0.42818</td><td>-0.00059</td><td>-0.00091〜-0.00030</td><td><span class=ok>採用</span></td></tr>
+<tr><td>A3 softmax + 相対化</td><td>0.21763</td><td>2.0531</td><td>0.06057</td><td>0.00450</td><td>0.2993</td><td>0.5063</td><td>—</td><td>—</td><td>-0.00074</td><td>-0.00116〜-0.00033</td><td><span class=ok>採用</span></td></tr>
+<tr class="best"><td>C1 二値 + 相対化 + 前段3列</td><td>0.21722</td><td>2.0483</td><td>0.06050</td><td>0.00359</td><td>0.3013</td><td>0.5099</td><td>0.33994</td><td>0.42775</td><td>-0.00109</td><td>-0.00144〜-0.00075</td><td><span class=ok>採用</span></td></tr>
+<tr><td>A3 softmax + 相対化 + 前段3列</td><td>0.21731</td><td>2.0491</td><td>0.06054</td><td>0.00482</td><td>0.2984</td><td>0.5081</td><td>—</td><td>—</td><td>-0.00104</td><td>-0.00153〜-0.00061</td><td><span class=ok>採用</span></td></tr>
+</table>
+<h2>4. fold 別の p_win LogLoss</h2><table><tr><th>方式</th><th>valid 2022</th><th>valid 2023</th><th>valid 2024</th><th>スクリーニング(2022・2023)</th><th>確認(2024)</th><th>平均</th></tr>
+<tr><td>A1 二値（基準）</td><td>0.21907</td><td>0.21858</td><td>0.21703</td><td>0.21882</td><td>0.21703</td><td>0.21823</td></tr>
+<tr><td>A1 + 前段3列</td><td>0.21907</td><td>0.21806</td><td>0.21606</td><td>0.21856</td><td>0.21606</td><td>0.21773</td></tr>
+<tr><td>A3 レース内 softmax</td><td>0.21922</td><td>0.21826</td><td>0.21607</td><td>0.21874</td><td>0.21607</td><td>0.21785</td></tr>
+<tr><td>A4a lambdarank</td><td>0.22062</td><td>0.21850</td><td>0.21710</td><td>0.21956</td><td>0.21710</td><td>0.21874</td></tr>
+<tr><td>A4b rank_xendcg</td><td>0.22894</td><td>0.22750</td><td>0.22717</td><td>0.22822</td><td>0.22717</td><td>0.22787</td></tr>
+<tr><td>C1 二値 + 相対化</td><td>0.21858</td><td>0.21779</td><td>0.21653</td><td>0.21819</td><td>0.21653</td><td>0.21764</td></tr>
+<tr><td>A3 softmax + 相対化</td><td>0.21854</td><td>0.21828</td><td>0.21605</td><td>0.21841</td><td>0.21605</td><td>0.21763</td></tr>
+<tr><td>C1 二値 + 相対化 + 前段3列</td><td>0.21858</td><td>0.21749</td><td>0.21560</td><td>0.21804</td><td>0.21560</td><td>0.21722</td></tr>
+<tr><td>A3 softmax + 相対化 + 前段3列</td><td>0.21854</td><td>0.21803</td><td>0.21537</td><td>0.21828</td><td>0.21537</td><td>0.21731</td></tr>
+</table>
+<h2>5. 確率の整合（M1）と温度</h2><h3>二値モデル: 正規化の効果</h3><table><tr><th>方式</th><th>正規化前</th><th>正規化後</th><th>改善</th></tr>
+<tr><td>A1 二値（基準）</td><td>0.22081</td><td>0.21823</td><td>+0.00258</td></tr>
+<tr><td>A1 + 前段3列</td><td>0.22027</td><td>0.21773</td><td>+0.00254</td></tr>
+<tr><td>C1 二値 + 相対化</td><td>0.21949</td><td>0.21764</td><td>+0.00185</td></tr>
+<tr><td>C1 二値 + 相対化 + 前段3列</td><td>0.21915</td><td>0.21722</td><td>+0.00192</td></tr>
+</table><h3>ランキング系: 温度 T</h3><table><tr><th>方式</th><th>T=1 の LogLoss</th><th>最適 T</th><th>最適 T での LogLoss（楽観）</th><th>最適 T での race_nll</th></tr>
+<tr><td>A4a lambdarank</td><td>0.21874</td><td>0.838</td><td>0.21749</td><td>2.0513</td></tr>
+<tr><td>A4b rank_xendcg</td><td>0.22787</td><td>0.511</td><td>0.21741</td><td>2.0514</td></tr>
+</table><p class='muted'>最適 T は評価に使った検証 fold で求めたため、実際より良く見える（1 パラメータなので過大評価は小さい）。実運用では過去の fold で T を決める必要がある。</p>
+<h2>6. ホスト資源</h2><table><tr><th>方式</th><th>実行時間（3 fold × 3 seed）</th><th>MLflow run</th></tr>
+<tr><td>A1 二値（基準）</td><td>140 秒</td><td><code>9d7627e3cd4c</code></td></tr>
+<tr><td>A1 + 前段3列</td><td>142 秒</td><td><code>1155167d76f4</code></td></tr>
+<tr><td>A3 レース内 softmax</td><td>69 秒</td><td><code>d09df812c665</code></td></tr>
+<tr><td>A4a lambdarank</td><td>53 秒</td><td><code>fa76075787d5</code></td></tr>
+<tr><td>A4b rank_xendcg</td><td>53 秒</td><td><code>c555347c4676</code></td></tr>
+<tr><td>C1 二値 + 相対化</td><td>188 秒</td><td><code>7d0a5d746abb</code></td></tr>
+<tr><td>A3 softmax + 相対化</td><td>85 秒</td><td><code>f0cd96df0910</code></td></tr>
+<tr><td>C1 二値 + 相対化 + 前段3列</td><td>180 秒</td><td><code>9089daa07fe5</code></td></tr>
+<tr><td>A3 softmax + 相対化 + 前段3列</td><td>82 秒</td><td><code>1478eea6a924</code></td></tr>
+</table>
+<div class='box'><b>メモリ・CPU</b>: 実験全体で、この処理の最大メモリは約 2.4GB、ホスト全体の使用は約 10〜11GB（90GB の 12%）。LightGBM のスレッド数は 18（24 コアのうち 6 を他ジョブ用に空けた）、load average は 15〜18 で 24 を超えなかった。実行は 1 方式ずつ順に行い、全体の所要は約 18 分。</div>
+<h2>7. データの前提（この結果の信頼性）</h2><table><tr><th style='text-align:left'>項目</th><th style='text-align:left'>内容</th></tr><tr><td>学習データ</td><td style='text-align:left'>2020〜2025 年 20,733 レース・283,714 行。距離 0 以下、面が空、着順 0 以下はいずれも 0 行。2020〜2025 年の出馬表に文字化け・空ヘッダは 0 件</td></tr><tr><td>特徴量の再生成</td><td style='text-align:left'>障害レースの判定を変更した後に tp-02 を再実行。実行エラー 0、リーク検査（切り詰め・結果入れ替え）の不一致 0。特徴量は 7,664 行（2.7%）で変化した（2024・2025 年の各 1 レースの平地を障害と誤分類していたことの修正）</td></tr><tr><td>tp-03 の再評価</td><td style='text-align:left'>採用セット ALL の LogLoss 0.22069、B0′ 0.23375 で旧結果と一致（差 1e-5 未満、seed 間のばらつき 5e-5 より小さい）。E・F1・F5 を外すと +0.00015 で、採用の結論は不変</td></tr><tr><td>tp-04 の再実行</td><td style='text-align:left'>採用は前段 3 列（<code>s_time_pred</code>・<code>s_time_gap</code>・<code>s_rank_pred</code>）、base(2020〜) 比 −0.00086 で旧結果と同一</td></tr><tr><td>基準値</td><td style='text-align:left'>全頭に 1/頭数を割り当てるランダム予測の p_win LogLoss は 0.26095（valid 2022〜2024、10,366 レース）、1 位的中率 7.8%。最良モデルは 0.21722、的中率 30.1%</td></tr><tr><td>2026 年のデータ修復</td><td style='text-align:left'>並行して進行中だが、学習・評価には 2026 年を使っていないため、この結果には影響しない</td></tr></table>
+<h2>8. 解釈と次の実験</h2><ul><li><b>最終候補は 2 つに絞られた</b>: 二値 + 相対化 + 前段 3 列（LogLoss 0.21722）と、softmax + 相対化 + 前段 3 列（0.21731、race_nll は 2.0491 と二値の 2.0483 に近い）。差は 0.00009 と小さく、方式の違いによる誤差の多様性が期待できるため、両方を残してアンサンブル（tp-05e）で合わせる。</li><li><b>softmax は p_top2・p_top3 を直接出せない</b>。馬連・ワイド・3連複の確率には、Plackett–Luce／割引 Harville で p_top2・p_top3 を導く必要がある（既存の <code>exotic_probabilities.py</code> と接続して検証する）。</li><li><b>ランキング系の温度</b>は、過去 fold で決めた T を使った評価に直す（今回は検証 fold で最適化した楽観値）。</li><li><b>tp-05b</b>: CatBoost・XGBoost・線形（条件付きロジット）・NN（GPU）を、同じ条件で比べる。<b>tp-05c</b>: 時間減衰の重み、2020〜2021 年の扱い、early stopping。<b>tp-05d</b>: 上位候補だけを Optuna で調整（今回は固定パラメータ）。</li><li>注意: 今回は固定パラメータ・3 seed・3 fold で、<b>市場オッズとの比較は未実施</b>（tp-06）。絶対的な強さは、市場の暗黙の確率との差で判断する。</li></ul>
+<h2>9. 再現方法</h2><div class='box'><code>papermill notebooks/modeling/training_pipeline/tp-05a-baseline-objectives.ipynb …</code>（ホスト、KEIBA_ENV=stg、POLARS_MAX_THREADS=6）。成果物は <code>data/local/modeling/training_pipeline/model_screen/</code>（summary.csv・per_fold_logloss.csv・vs_A1.csv・fold_metrics.csv・report.json）。このレポートは <code>python -m src.scripts.docs.build_model_report_html</code> で作成。</div>
+</main></body></html>

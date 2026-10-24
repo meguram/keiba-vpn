@@ -1,0 +1,27 @@
+{
+  "site_name": "競馬データ研究室（仮称）",
+  "site_tagline": "競馬の予測を、確率と検証で考える個人の分析ノート",
+  "site_url": "https://www.megu-keiba.com",
+  "language": "ja",
+  "updated": "2026-10-21",
+  "ads": {
+    "enabled": false,
+    "note": "広告は審査前のため無効。有効化するときは docs/operations/ads_architecture.md のフェーズ 3 の条件（規約・法令・広告ネットワークの確認）を満たすこと。"
+  },
+  "operator": {
+    "name": "【要入力：運営者名（個人名の公開範囲は法務確認の上で決める）】",
+    "contact": "【要入力：連絡先（メールアドレスまたは外部フォームの案内）】",
+    "region": "【要入力：所在地の表示方針（請求により開示、など）】"
+  },
+  "allowed_domains": ["www.megu-keiba.com", "pub.megu-keiba.com", "schema.org", "www.w3.org", "www.sitemaps.org"],
+  "articles_order": [
+    "why-hard-over-100",
+    "expected-value-and-return",
+    "probability-calibration",
+    "reading-pace",
+    "lap-forecast",
+    "index-noise",
+    "ensemble-models",
+    "validating-predictions"
+  ]
+}

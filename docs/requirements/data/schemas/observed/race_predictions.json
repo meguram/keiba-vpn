@@ -1,0 +1,987 @@
+{
+ "category": "race_predictions",
+ "conformance": {
+  "failures": {},
+  "passed": 0,
+  "validated": 0
+ },
+ "keys": {
+  "max": "202606020609",
+  "min": "202001010101"
+ },
+ "lists": {
+  "feature_highlights": {
+   "fields": {
+    "factors": {
+     "empty": 0,
+     "len_max": 12,
+     "len_min": 3,
+     "n": 48,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "list": 48
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "horse_number": {
+     "empty": 0,
+     "max": 18,
+     "min": 1,
+     "n": 48,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 48
+     },
+     "values": {},
+     "values_overflow": false
+    }
+   },
+   "items": 48,
+   "records": 3
+  },
+  "predictions": {
+   "fields": {
+    "buy_tier": {
+     "empty": 0,
+     "len_max": 3,
+     "len_min": 1,
+     "n": 18,
+     "null": 0,
+     "patterns": {
+      "text": 18
+     },
+     "types": {
+      "str": 18
+     },
+     "values": {
+      "—": 12,
+      "強推奨": 5,
+      "推奨": 1
+     },
+     "values_overflow": false
+    },
+    "composite_rank": {
+     "empty": 0,
+     "max": 18,
+     "min": 1,
+     "n": 32,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 32
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "composite_score": {
+     "empty": 0,
+     "max": 1.2294,
+     "min": 0,
+     "n": 32,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 28,
+      "int": 4
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "estimated_prob": {
+     "empty": 0,
+     "max": 0.8038,
+     "min": 0.0,
+     "n": 32,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 32
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "ev_place": {
+     "empty": 0,
+     "max": 2.941,
+     "min": 0.0,
+     "n": 18,
+     "null": 4,
+     "patterns": {},
+     "types": {
+      "float": 14,
+      "null": 4
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "ev_top2": {
+     "empty": 0,
+     "max": 11.966,
+     "min": 0.003,
+     "n": 18,
+     "null": 5,
+     "patterns": {},
+     "types": {
+      "float": 13,
+      "null": 5
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "ev_win": {
+     "empty": 0,
+     "max": 3.357,
+     "min": 0.007,
+     "n": 18,
+     "null": 7,
+     "patterns": {},
+     "types": {
+      "float": 11,
+      "null": 7
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "expected_value": {
+     "empty": 0,
+     "max": 3.01,
+     "min": 0.0,
+     "n": 32,
+     "null": 4,
+     "patterns": {},
+     "types": {
+      "float": 28,
+      "null": 4
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "horse_id": {
+     "empty": 0,
+     "len_max": 10,
+     "len_min": 10,
+     "n": 413,
+     "null": 0,
+     "patterns": {
+      "digits10": 413
+     },
+     "types": {
+      "str": 413
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "horse_name": {
+     "empty": 0,
+     "len_max": 9,
+     "len_min": 2,
+     "n": 413,
+     "null": 0,
+     "patterns": {
+      "text": 413
+     },
+     "types": {
+      "str": 413
+     },
+     "values": {
+      "アイフレンズ": 1,
+      "アマデトワール": 1,
+      "アークライト": 1,
+      "ウインルーア": 1,
+      "キタノマンゲツ": 1,
+      "キモンルビー": 1,
+      "ギャラントウォリア": 1,
+      "クァンタムリープ": 1,
+      "クイックスタディ": 1,
+      "グッドラックスター": 1,
+      "サイモンベラーノ": 1,
+      "シゲルハクチョウザ": 1,
+      "ジュンブーケ": 1,
+      "デルマルビー": 1,
+      "ノーブルローズ": 1,
+      "バトルピアサー": 1,
+      "バーミーズ": 1,
+      "フェデネージュ": 2,
+      "フリークアウト": 1,
+      "ブライドグルーム": 1,
+      "ミッキーローズ": 1,
+      "ミツルザビクトリー": 1,
+      "ムーンフェアリー": 1,
+      "ラインキャロット": 1,
+      "ラブアンバサダー": 1
+     },
+     "values_overflow": true
+    },
+    "horse_number": {
+     "empty": 0,
+     "max": 18,
+     "min": 1,
+     "n": 413,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 413
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "mark_type": {
+     "empty": 0,
+     "len_max": 6,
+     "len_min": 4,
+     "n": 18,
+     "null": 0,
+     "patterns": {
+      "text": 18
+     },
+     "types": {
+      "str": 18
+     },
+     "values": {
+      "anchor": 2,
+      "honmei": 1,
+      "none": 12,
+      "pair": 2,
+      "star": 1
+     },
+     "values_overflow": false
+    },
+    "normalized_score": {
+     "empty": 0,
+     "max": 1.0,
+     "min": 0.0,
+     "n": 413,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 413
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "odds_confidence": {
+     "empty": 0,
+     "max": 0.7,
+     "min": 0.7,
+     "n": 18,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 18
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "odds_source": {
+     "empty": 0,
+     "len_max": 10,
+     "len_min": 10,
+     "n": 18,
+     "null": 0,
+     "patterns": {
+      "text": 18
+     },
+     "types": {
+      "str": 18
+     },
+     "values": {
+      "trajectory": 18
+     },
+     "values_overflow": false
+    },
+    "place_odds_avg": {
+     "empty": 0,
+     "max": 31.2,
+     "min": 1.1,
+     "n": 32,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 32
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "place_odds_max": {
+     "empty": 0,
+     "max": 40.5,
+     "min": 1.1,
+     "n": 32,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 32
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "place_odds_min": {
+     "empty": 0,
+     "max": 21.9,
+     "min": 1.1,
+     "n": 32,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 32
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "pred_rank": {
+     "empty": 0,
+     "max": 18,
+     "min": 1,
+     "n": 413,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 413
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "pred_score": {
+     "empty": 0,
+     "max": 86.07,
+     "min": -0.19,
+     "n": 413,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 413
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "recommendation": {
+     "empty": 12,
+     "len_max": 6,
+     "len_min": 0,
+     "n": 48,
+     "null": 0,
+     "patterns": {
+      "empty": 12,
+      "text": 36
+     },
+     "types": {
+      "str": 48
+     },
+     "values": {
+      "": 12,
+      "▲ 単穴": 2,
+      "△ 連下": 4,
+      "○ 2連相手": 2,
+      "○ 対抗": 2,
+      "◎ 1着優位": 1,
+      "◎ 本命": 2,
+      "★ 中穴妙味": 1,
+      "☆ 穴馬": 20,
+      "✓ 3列紐": 2
+     },
+     "values_overflow": false
+    },
+    "top2_odds_est": {
+     "empty": 0,
+     "max": 245.8,
+     "min": 3.1,
+     "n": 18,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 18
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "top2_prob": {
+     "empty": 0,
+     "max": 0.5796,
+     "min": 0.0,
+     "n": 18,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 18
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "top3_prob": {
+     "empty": 0,
+     "max": 0.8038,
+     "min": 0.0,
+     "n": 18,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 18
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "win_odds": {
+     "empty": 0,
+     "max": 238.0,
+     "min": 1.7,
+     "n": 32,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 32
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "win_prob": {
+     "empty": 0,
+     "max": 0.3068,
+     "min": 0.0,
+     "n": 18,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 18
+     },
+     "values": {},
+     "values_overflow": false
+    }
+   },
+   "items": 413,
+   "records": 36
+  }
+ },
+ "nested": {
+  "_cache_meta": {
+   "computed_at": {
+    "empty": 0,
+    "len_max": 32,
+    "len_min": 32,
+    "n": 33,
+    "null": 0,
+    "patterns": {
+     "text": 33
+    },
+    "types": {
+     "str": 33
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "computed_at_epoch": {
+    "empty": 0,
+    "max": 1791124049.7201421,
+    "min": 1779978392.6992812,
+    "n": 33,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 33
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "entity_id": {
+    "empty": 0,
+    "len_max": 12,
+    "len_min": 12,
+    "n": 33,
+    "null": 0,
+    "patterns": {
+     "digits12": 33
+    },
+    "types": {
+     "str": 33
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "model_key": {
+    "empty": 0,
+    "len_max": 10,
+    "len_min": 10,
+    "n": 33,
+    "null": 0,
+    "patterns": {
+     "text": 33
+    },
+    "types": {
+     "str": 33
+    },
+    "values": {
+     "keiba_lgbm": 33
+    },
+    "values_overflow": false
+   },
+   "source": {
+    "empty": 0,
+    "len_max": 18,
+    "len_min": 15,
+    "n": 33,
+    "null": 0,
+    "patterns": {
+     "text": 33
+    },
+    "types": {
+     "str": 33
+    },
+    "values": {
+     "batch_inference": 32,
+     "inference_pipeline": 1
+    },
+    "values_overflow": false
+   },
+   "version": {
+    "empty": 0,
+    "max": 1,
+    "min": 1,
+    "n": 33,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "int": 33
+    },
+    "values": {},
+    "values_overflow": false
+   }
+  },
+  "_compute_meta": {
+   "elapsed_sec": {
+    "empty": 0,
+    "max": 5.06,
+    "min": 0.6,
+    "n": 33,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 33
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "source": {
+    "empty": 0,
+    "len_max": 15,
+    "len_min": 15,
+    "n": 33,
+    "null": 0,
+    "patterns": {
+     "text": 33
+    },
+    "types": {
+     "str": 33
+    },
+    "values": {
+     "batch_inference": 33
+    },
+    "values_overflow": false
+   }
+  },
+  "bet_suggestion": {
+   "headline": {
+    "empty": 0,
+    "len_max": 16,
+    "len_min": 16,
+    "n": 1,
+    "null": 0,
+    "patterns": {
+     "text": 1
+    },
+    "types": {
+     "str": 1
+    },
+    "values": {
+     "単勝9 / 複勝9 / 複勝12": 1
+    },
+    "values_overflow": false
+   },
+   "notes": {
+    "empty": 0,
+    "len_max": 2,
+    "len_min": 2,
+    "n": 1,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "list": 1
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "picks": {
+    "empty": 0,
+    "len_max": 4,
+    "len_min": 4,
+    "n": 1,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "list": 1
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "strategy_label": {
+    "empty": 0,
+    "len_max": 11,
+    "len_min": 11,
+    "n": 1,
+    "null": 0,
+    "patterns": {
+     "text": 1
+    },
+    "types": {
+     "str": 1
+    },
+    "values": {
+     "本命軸＋2連フォロー型": 1
+    },
+    "values_overflow": false
+   }
+  },
+  "composite_params": {
+   "prob_weight": {
+    "empty": 0,
+    "max": 0.55,
+    "min": 0.55,
+    "n": 1,
+    "null": 0,
+    "patterns": {},
+    "types": {
+     "float": 1
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "source": {
+    "empty": 0,
+    "len_max": 7,
+    "len_min": 7,
+    "n": 1,
+    "null": 0,
+    "patterns": {
+     "text": 1
+    },
+    "types": {
+     "str": 1
+    },
+    "values": {
+     "default": 1
+    },
+    "values_overflow": false
+   }
+  }
+ },
+ "records": 36,
+ "runs": [
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 36,
+   "source": "storage"
+  }
+ ],
+ "top": {
+  "_cache_meta": {
+   "empty": 0,
+   "len_max": 6,
+   "len_min": 6,
+   "n": 33,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 33
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "_compute_meta": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 33,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 33
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "bet_suggestion": {
+   "empty": 0,
+   "len_max": 4,
+   "len_min": 4,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "composite_params": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "distance": {
+   "empty": 0,
+   "max": 2400,
+   "min": 1000,
+   "n": 36,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 36
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "elapsed_sec": {
+   "empty": 0,
+   "max": 69.88,
+   "min": 0.6,
+   "n": 36,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "float": 36
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "feature_highlights": {
+   "empty": 0,
+   "len_max": 18,
+   "len_min": 14,
+   "n": 3,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 3
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "mark_method": {
+   "empty": 0,
+   "len_max": 22,
+   "len_min": 18,
+   "n": 2,
+   "null": 0,
+   "patterns": {
+    "text": 2
+   },
+   "types": {
+    "str": 2
+   },
+   "values": {
+    "composite (確率×期待値)": 1
+   },
+   "values_overflow": false
+  },
+  "model_description": {
+   "empty": 0,
+   "len_max": 50,
+   "len_min": 17,
+   "n": 3,
+   "null": 0,
+   "patterns": {
+    "text": 3
+   },
+   "types": {
+    "str": 3
+   },
+   "values": {
+    "LightGBM (大衆指標排除)": 1
+   },
+   "values_overflow": false
+  },
+  "model_type": {
+   "empty": 0,
+   "len_max": 18,
+   "len_min": 12,
+   "n": 36,
+   "null": 0,
+   "patterns": {
+    "text": 36
+   },
+   "types": {
+    "str": 36
+   },
+   "values": {
+    "fallback_heuristic": 35,
+    "mlflow_model": 1
+   },
+   "values_overflow": false
+  },
+  "predictions": {
+   "empty": 0,
+   "len_max": 18,
+   "len_min": 6,
+   "n": 36,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 36
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_id": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 36,
+   "null": 0,
+   "patterns": {
+    "digits12": 36
+   },
+   "types": {
+    "str": 36
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_name": {
+   "empty": 0,
+   "len_max": 9,
+   "len_min": 4,
+   "n": 36,
+   "null": 0,
+   "patterns": {
+    "text": 36
+   },
+   "types": {
+    "str": 36
+   },
+   "values": {
+    "2歳新馬": 4,
+    "2歳未勝利": 3,
+    "3歳以上1勝クラス": 7,
+    "3歳以上2勝クラス": 1,
+    "3歳未勝利": 12,
+    "HTB賞": 1,
+    "しらかばS": 1,
+    "ニュージーランドT": 1,
+    "ヴィクトリアマイル": 1,
+    "利尻特別": 1,
+    "大倉山特別": 1,
+    "大雪HC": 1,
+    "知床特別": 1,
+    "阿見特別": 1
+   },
+   "values_overflow": false
+  },
+  "round": {
+   "empty": 0,
+   "max": 12,
+   "min": 1,
+   "n": 36,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 36
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "status": {
+   "empty": 0,
+   "len_max": 7,
+   "len_min": 7,
+   "n": 36,
+   "null": 0,
+   "patterns": {
+    "text": 36
+   },
+   "types": {
+    "str": 36
+   },
+   "values": {
+    "success": 36
+   },
+   "values_overflow": false
+  },
+  "surface": {
+   "empty": 0,
+   "len_max": 3,
+   "len_min": 1,
+   "n": 36,
+   "null": 0,
+   "patterns": {
+    "text": 36
+   },
+   "types": {
+    "str": 36
+   },
+   "values": {
+    "ダート": 16,
+    "芝": 20
+   },
+   "values_overflow": false
+  },
+  "total_horses": {
+   "empty": 0,
+   "max": 18,
+   "min": 6,
+   "n": 36,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 36
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "track_condition": {
+   "empty": 0,
+   "len_max": 1,
+   "len_min": 1,
+   "n": 36,
+   "null": 0,
+   "patterns": {
+    "text": 36
+   },
+   "types": {
+    "str": 36
+   },
+   "values": {
+    "良": 36
+   },
+   "values_overflow": false
+  },
+  "venue": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 36,
+   "null": 0,
+   "patterns": {
+    "text": 36
+   },
+   "types": {
+    "str": 36
+   },
+   "values": {
+    "中山": 3,
+    "札幌": 32,
+    "東京": 1
+   },
+   "values_overflow": false
+  }
+ }
+}

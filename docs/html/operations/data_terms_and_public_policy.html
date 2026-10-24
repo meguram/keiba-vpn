@@ -1,0 +1,78 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>取得元の規約と、公開・有料化の方針 — keiba-vpn docs</title>
+<style>
+:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --code:#0b1428; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1100px; margin:0 auto; padding:36px 28px 80px; }
+h1 { font-size:26px; margin:0 0 6px; } h2 { font-size:19px; margin:40px 0 4px; padding-top:16px; border-top:1px solid var(--border); }
+h3 { font-size:16px; margin:22px 0 4px; }
+.muted { color:var(--muted); font-size:13px; } .sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+table { border-collapse:collapse; width:100%; margin:8px 0 14px; font-size:13.5px; }
+th,td { border:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+th { background:var(--panel); color:var(--muted); font-weight:600; white-space:nowrap; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 6px; border-radius:5px; font-size:12px; }
+pre { background:var(--code); border:1px solid var(--border); border-radius:8px; padding:10px 14px; overflow-x:auto; font-size:12.5px; line-height:1.55; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin:12px 0; }
+.when { white-space:nowrap; font-weight:600; }
+.ok { color:var(--ok); } .warn { color:var(--warn); }
+</style></head><body><main>
+
+<h1>取得元の規約と、公開・有料化の方針</h1>
+<p class="muted">調査日: 2026-10-22。規約は取得ツール経由の要約で読んだもので、条文の原文での再確認と、専門家（弁護士など）への相談が前提。ここは判断の記録で、法的な結論ではない。</p>
+
+<div class="box"><b>要約</b>：データの取得元は netkeiba のみ（SmartRC は別枠）。netkeiba は、入手したデータ等を<b>不特定多数に公開すること</b>を目的を問わず私的利用の範囲外とし（第14条）、<b>営利目的の利用</b>を禁じる（第15条）。例外は「当社の承認」。このため、<b>一般公開は保留し、Cloudflare Access（所有者のみ）を維持</b>する。公開する場合も、自前の出力だけを出す設計にしてある。</div>
+
+<h2>1. 取得元ごとの規約（要点）</h2>
+<table>
+<tr><th>取得元</th><th>要点</th><th>設計への影響</th></tr>
+<tr><td>netkeiba</td><td>第14条: 私的利用を超える複製・販売・出版の禁止。不特定多数が知りうる状態に置く行為は、目的を問わず私的利用を超えるとみなす。第15条: 営利目的（準備を含む）の禁止。第16条: 設備の利用・運営への支障の禁止。第12条: ID の共有・貸与の禁止。承認の申請方法・窓口は規約に書かれていない。</td><td>公開面は自前の出力に限る。広告・有料化は、承認を得るか、取得元を切り替えるまで行わない。</td></tr>
+<tr><td>JRA（アプリの規約）</td><td>知的財産権は JRA に帰属。著作権法の範囲を超える利用の禁止。営業目的の利用の禁止。アプリのサーバー直接アクセスの禁止。</td><td>「JRA から取れば公開してよい」とは言えない。</td></tr>
+<tr><td>JRA（ウェブサイト「ご利用に際して」）</td><td>自動アクセスの禁止・頻度制限の記載なし。映像・音声・画像・記事の二次利用は事前許諾で、申請は法人に限る。出馬表・オッズなど事実データの扱いは記載なし。</td><td>テキストの事実データの取得は技術的に可能だが、法的に未確定。取得の実装は既定で無効。</td></tr>
+<tr><td>JRA-VAN（公式フォーラムの回答）</td><td>通常契約（個人）のデータは、Web 公開・広告・課金に使えない。商用は法人向けの契約が必要。</td><td>ライセンスデータへの切り替えは、法人化を伴う。</td></tr>
+<tr><td>SmartRC</td><td>利用規約が見当たらない（規約の不在は許諾ではない）。</td><td>低頻度で取得し、元の数値は表示せず、モデルの入力にだけ使う。</td></tr>
+</table>
+
+<h2>2. 個人で予想 AI を公開している事例（調査の結果）</h2>
+<ul>
+<li>自前の確率・印だけを公開している個人はいるが、<b>取得元を明記して問題なく運用できている</b>と確認できた例は見つからなかった。</li>
+<li>netkeiba に承認を問い合わせた体験談は、確認できなかった（承認が出ないことを意味しない）。</li>
+<li>netkeiba のスクレイピングでは、短時間の連続アクセスで IP 制限（約 24 時間）を受けた体験談が複数ある。</li>
+<li>有料化の論点: 特定商取引法の表記、景品表示法（「当たる」「絶対」の表現）、競馬法（購入代行の禁止・20 歳未満）。</li>
+</ul>
+
+<h2>3. 公開の 3 段階</h2>
+<table>
+<tr><th>段階</th><th>内容</th><th>状態</th></tr>
+<tr><td>1. 私的限定</td><td>Cloudflare Access で所有者のみ。</td><td class="ok">現在</td></tr>
+<tr><td>2. 非営利で、出力のみ公開</td><td>無料・広告なし。自前の出力（勝率・複勝率・印・展開予想）と、識別情報（レース番号・馬番・馬名）だけ。グレー。</td><td>承認の問い合わせの後</td></tr>
+<tr><td>3. 商用</td><td>広告・有料会員。netkeiba の承認、または取得元をライセンスデータへ切り替えることが前提。</td><td>保留</td></tr>
+</table>
+
+<h2>4. 公開してよい項目の許可リスト</h2>
+<p>正は <code>config/public_fields.json</code>。項目を A（自前計算）／B（事実）／C（取得元固有）／O（市場オッズ由来）に分け、<code>mode=public</code> では開発者以外に A だけを、サーバー側で出す。期待値と勝率が両方出るとオッズを逆算できるため、期待値と買い判断も O に分類した。台帳: <code>docs/operations/public_data_inventory.md</code>。</p>
+
+<h2>5. 有料ゾーンの「推奨度」</h2>
+<p>推奨馬券全体（ポートフォリオ）を、レース単位の 5 段階（見送り／標準／注目／高注目／最注目）に変換して出す。オッズ・期待値・購入金額の数値は出さない。方式は 3 つで、<code>config/paid_zone.json</code> の <code>mode</code> で切り替える（現在の既定は A）。</p>
+<table>
+<tr><th>方式</th><th>実オッズの使用</th><th>内容</th></tr>
+<tr><td>A（承認前の既定）</td><td>使わない</td><td>AI の確率のみ。推奨度は「レースの確信度」（勝率最大馬の勝率×頭数）の段階で、値段の見通しではない。</td></tr>
+<tr><td>B（保留）</td><td>使わない</td><td>想定オッズ（AI が予測した単勝・複勝と、そこから導いた全券種）。想定オッズのモデルの学習・較正には、過去の確定オッズを内部で使う。<b>本番と同じ入力で評価し直すと、回収率は 0.79 [0.62, 0.99]</b>（先に出した 1.07 は評価用の入力による楽観値だった）。想定単勝のモデルを本番の特徴量で作り直してから再検討する。</td></tr>
+<tr><td>C（承認後）</td><td>内部で使う</td><td>全券種の実オッズから期待値を作り、推奨度に変換する。画面には数値を出さない。</td></tr>
+</table>
+<p>評価（2024〜2025 年、確定払戻で精算）では、<b>推奨度が上がるほど回収率が上がる傾向は、どの方式でも有意ではなかった</b>。推奨度は「値段の見通し」の段階で、当たりやすさではない。表示には「目安であり、的中や回収を保証しない」を添える。詳細: <code>docs/operations/paid_zone_tiers.md</code>。</p>
+
+<h2>6. 取得の姿勢（誠実な形式）</h2>
+<ul>
+<li>User-Agent は固定で識別できるもの（連絡先入り）。ブラウザを装わない。</li>
+<li>取得間隔は平均約 3 秒、プロセスあたり同時 1 本、全体で同時 2 本まで。</li>
+<li>制限を受けたら、User-Agent・IP・経路を切り替えて続けず、停止して人の判断を待つ。</li>
+<li>不要な取得を減らす: 完了済みのバックフィルの空振りログインを止め、現行モデルで採用ゼロの取得を停止した。詳細: <code>docs/operations/cron_access_audit.md</code>、方針: <code>docs/operations/scraping_policy.md</code>。</li>
+</ul>
+
+<h2>7. 公開リポジトリの扱い</h2>
+<ul>
+<li>netkeiba の取得データの抜粋、学習済みの重みと係数、第三者サイトの文章の抜粋は、公開リポジトリに置かない（<code>.gitignore</code> と、push 前の検査 <code>scripts/dev/secret_scan.sh</code> で再発を防ぐ）。</li>
+<li>過去の履歴に残る分は、履歴の書き換えで取り除く手順を用意している（<code>docs/operations/history_purge_runbook.md</code>）。</li>
+</ul>
+
+</main></body></html>

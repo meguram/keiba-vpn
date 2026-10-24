@@ -1,0 +1,29 @@
+# ~/.ssh/config に足す。この VPS の SSH ポートは <SSH_PORT>（ConoHa のセキュリティグループ名 SSH-<SSH_PORT>）、管理ユーザーは <VPS_ADMIN_USER>（鍵のみ。sudo はパスワードが要る）。
+# ユーザーの回線は VPS への SSH でバナー交換がタイムアウトするため、ホスト機（keiba-remote）を踏み台にする（ProxyJump）。
+
+# 管理用（手元の PC から。ホスト機経由）。ユーザーが使っている alias の例
+Host <VPS_ALIAS>
+    HostName <VPS_IP>
+    Port <SSH_PORT>
+    User <VPS_ADMIN_USER>
+    IdentityFile ~/.ssh/rakuten-pc-key-2026-05-19-20-23.pem
+    ProxyJump keiba-remote
+
+# 配布用（ホスト機の ~/.ssh/config。promote.sh が使う）。ホスト機から VPS へは直接届く。deploy の鍵はホスト機で作る:
+#   ssh-keygen -t ed25519 -f ~/.ssh/keiba_vps_ed25519 -C keiba-host-deploy     # 公開鍵(.pub)だけを VPS の deploy に渡す
+Host keiba-vps
+    HostName <VPS_IP>
+    Port <SSH_PORT>
+    User deploy
+    IdentityFile ~/.ssh/keiba_vps_ed25519
+    IdentitiesOnly yes
+
+# SSH の公開ポートを閉じた後（vps_01 --ssh-mode closed）は Cloudflare Tunnel 経由に切り替える（ssh.megu-keiba.com → ssh://localhost:<SSH_PORT> の route + Access）:
+# Host keiba-vps
+#     HostName ssh.megu-keiba.com
+#     User deploy
+#     IdentityFile ~/.ssh/keiba_vps_ed25519
+#     IdentitiesOnly yes
+#     ProxyCommand cloudflared access ssh --hostname %h
+# 非対話（ホスト機の cron など）では、サービストークンを環境変数で渡す（ファイルに書かない）:
+#   export TUNNEL_SERVICE_TOKEN_ID=...  TUNNEL_SERVICE_TOKEN_SECRET=...

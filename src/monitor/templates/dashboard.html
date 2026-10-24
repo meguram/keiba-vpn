@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+{% block title %}ダッシュボード — 監視ポータル{% endblock %}
+
+{% block content %}
+<div class="page-title"><span class="icon">🏠</span> ダッシュボード</div>
+
+<!-- ユーザーアクセス URL -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-title" style="margin-bottom:10px">ユーザーアクセス URL</div>
+  <div id="access-urls"><span class="loading">読込中...</span></div>
+</div>
+
+<!-- 環境別サービス状況 -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-title" style="margin-bottom:16px">環境別サービス状況</div>
+  <div id="env-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+    <div class="loading" style="grid-column:1/-1">読込中...</div>
+  </div>
+</div>
+
+<!-- FastAPI 共通 -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-title">FastAPI :{{ ports.fastapi }}（現在の KEIBA_ENV）</div>
+  <div id="fastapi-card" style="margin-top:8px"><span class="loading">読込中...</span></div>
+</div>
+
+<!-- キュー概要 -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-title">スクレイピングキュー</div>
+  <div class="grid grid-4" id="queue-grid">
+    <div class="loading">読込中...</div>
+  </div>
+</div>
+
+<!-- Git HEAD + システム -->
+<div class="grid grid-2" style="margin-bottom:16px">
+  <div class="card">
+    <div class="card-title">Git HEAD</div>
+    <div id="git-head"><span class="loading">読込中...</span></div>
+  </div>
+  <div class="card">
+    <div class="card-title">システム概要</div>
+    <div id="sys-mini"><span class="loading">読込中...</span></div>
+  </div>
+</div>
+
+<p class="last-updated">最終更新: <span id="last-ts">—</span>（30秒ごと自動更新）</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ENV_LABELS = { dev: 'DEV', stg: 'STG', prod: 'PROD' };
+
+function statusBadge(ok, muted) {
+  return ok
+    ? `<span class="badge badge-ok">稼働中</span>`
+    : muted ? `<span class="badge badge-muted">未起動</span>` : `<span class="badge badge-error">停止</span>`;
+}
+
+function svcRow(label, svc, muted) {
+  const dot = svc.ok ? 'dot-ok' : muted ? '' : 'dot-error';
+  const ms  = svc.elapsed_ms >= 0 ? `${svc.elapsed_ms}ms` : '—';
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px">
+        <span class="dot ${dot}" style="margin-right:4px"></span>${label}
+      </span>
+      <span style="display:flex;align-items:center;gap:8px">
+        ${statusBadge(svc.ok, muted)}
+        <span class="text-muted" style="font-size:11px">HTTP ${svc.status || '—'} / ${ms}</span>
+      </span>
+    </div>`;
+}
+
+function dbRow(db, isMock) {
+  if (!db) return '';
+  // モック構成（dev）: DB接続チェック対象外
+  if (isMock || db.mock) {
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;
+                  padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;color:var(--muted)">
+          <span style="margin-right:6px;opacity:0.5">●</span>PostgreSQL
+        </span>
+        <span class="badge" style="background:rgba(88,166,255,0.12);color:#58a6ff;border:1px solid rgba(88,166,255,0.3)">
+          モック構成（DB不要）
+        </span>
+      </div>`;
+  }
+  const dot = db.ok ? 'dot-ok' : 'dot-error';
+  const ms  = db.elapsed_ms >= 0 ? `${db.elapsed_ms}ms` : '—';
+  const detail = db.ok
+    ? `<span class="text-muted" style="font-size:11px">${ms}</span>`
+    : `<span style="color:var(--error);font-size:11px">${(db.error||'接続失敗').slice(0,60)}</span>`;
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px">
+        <span class="dot ${dot}" style="margin-right:4px"></span>PostgreSQL
+      </span>
+      <span style="display:flex;align-items:center;gap:8px">
+        ${statusBadge(db.ok)}
+        ${detail}
+      </span>
+    </div>`;
+}
+
+function mkModelDataModeRow(label, info) {
+  if (!info) return '';
+  const mode = info.mode || 'no_data';
+  const badge = {
+    'mock':    '<span style="background:rgba(210,153,34,0.18);color:#d29922;border:1px solid rgba(210,153,34,0.4);border-radius:4px;padding:1px 7px;font-size:10px;font-weight:600">モック</span>',
+    'real':    '<span style="background:rgba(63,185,80,0.15);color:#3fb950;border:1px solid rgba(63,185,80,0.4);border-radius:4px;padding:1px 7px;font-size:10px;font-weight:600">実データ</span>',
+    'no_data': '<span style="background:rgba(110,118,129,0.15);color:#8b949e;border:1px solid rgba(110,118,129,0.3);border-radius:4px;padding:1px 7px;font-size:10px;font-weight:600">データなし</span>',
+    'error':   '<span style="background:rgba(239,68,68,0.12);color:#f85149;border:1px solid rgba(239,68,68,0.3);border-radius:4px;padding:1px 7px;font-size:10px;font-weight:600">エラー</span>',
+  }[mode] || '';
+  return `<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 0">
+    <span style="font-size:11px;color:var(--muted)">${label}</span>
+    ${badge}
+  </div>`;
+}
+
+function mkModelDataSection(modelData) {
+  if (!modelData) return '';
+  const sampleId = modelData.sample_race_id
+    ? `<span style="font-size:10px;color:var(--muted)">サンプル: ${modelData.sample_race_id}</span>`
+    : '<span style="font-size:10px;color:var(--muted)">サンプルレースなし</span>';
+
+  // すべて実データなら緑、混在なら黄、すべてモックなら黄、データなし/エラーはグレー
+  const modes = ['predictions', 'tracking_difficulty', 'race_quality'].map(k => (modelData[k] || {}).mode);
+  const allReal = modes.every(m => m === 'real');
+  const allMock = modes.every(m => m === 'mock');
+  const hasError = modes.some(m => m === 'error');
+  const sectionBg = allReal
+    ? 'rgba(63,185,80,0.06)' : hasError
+    ? 'rgba(239,68,68,0.06)' : 'rgba(210,153,34,0.06)';
+  const sectionBorder = allReal
+    ? 'rgba(63,185,80,0.25)' : hasError
+    ? 'rgba(239,68,68,0.25)' : 'rgba(210,153,34,0.25)';
+  const titleColor = allReal ? '#3fb950' : hasError ? '#f85149' : '#d29922';
+
+  return `
+  <div style="margin-top:8px;border:1px solid ${sectionBorder};border-radius:6px;overflow:hidden;background:${sectionBg}">
+    <div style="padding:5px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid ${sectionBorder}">
+      <span style="font-size:11px;font-weight:600;color:${titleColor}">🤖 モデルデータモード</span>
+      ${sampleId}
+    </div>
+    <div style="padding:5px 10px">
+      ${mkModelDataModeRow('AI予測 (predictions)', modelData.predictions)}
+      ${mkModelDataModeRow('追走難度 (tracking-difficulty)', modelData.tracking_difficulty)}
+      ${mkModelDataModeRow('レース質 (race-quality)', modelData.race_quality)}
+    </div>
+  </div>`;
+}
+
+function accessRow(k, e) {
+  const color = e.color || '#6e7681';
+  const pub = e.public;
+  let url = e.public_url
+    ? `<a href="${e.public_url}" target="_blank" rel="noopener" style="color:${color};font-weight:600;word-break:break-all">${e.public_url}</a>`
+    : '<span class="text-muted">公開していない（本番は別途）</span>';
+  let chip = '<span class="badge badge-muted">—</span>';
+  if (pub) {
+    chip = pub.ok ? `<span class="badge badge-ok">✅ 開ける（HTTP ${pub.status}・${pub.elapsed_ms} ms）</span>`
+                  : `<span class="badge ${e.is_local || k === 'stg' ? 'badge-error' : 'badge-warn'}">❌ 開けない（HTTP ${pub.status || '—'}）</span>`;
+  }
+  let note = '';
+  if (k === 'dev') note = pub && !pub.ok ? 'dev の画面は開発 PC で動かし、開発 PC の tcpexposer トンネルで公開する。開発 PC の起動とトンネルを確認。' : '開発 PC の画面（モック）を公開';
+  if (k === 'stg') note = `このホストの stg を公開。ホスト内の直リンク: <code>${e.next.url}</code>（SSH トンネル経由なら <code>http://localhost:${(e.next.url.match(/:(\d+)/)||[])[1]}</code>）`;
+  return `<tr><td style="white-space:nowrap;padding:6px 10px"><span style="font-weight:700;color:${color}">${e.label}</span></td>` +
+    `<td style="padding:6px 10px">${url}</td><td style="padding:6px 10px;white-space:nowrap">${chip}</td>` +
+    `<td style="padding:6px 10px;color:var(--muted);font-size:12px">${note}</td></tr>`;
+}
+
+function mkEnvCard(env, data) {
+  const color = data.color || '#6e7681';
+  const allOk = data.all_ok;
+  const anyOk = data.next.ok || data.flask.ok;
+  const other = data.is_local === false && !allOk;           // 別のマシンの環境が止まっているのは異常ではない（グレー）
+  const outerBorder = other ? '1px solid rgba(139,148,158,0.3)' : allOk
+    ? '1px solid rgba(63,185,80,0.4)'
+    : anyOk ? '1px solid rgba(210,153,34,0.4)' : '1px solid rgba(239,68,68,0.3)';
+  const headerBg = other ? 'rgba(139,148,158,0.08)' : allOk ? 'rgba(63,185,80,0.08)' : 'rgba(239,68,68,0.06)';
+
+  const publicLink = data.public_url
+    ? `<a href="${data.public_url}" target="_blank" style="font-size:11px;color:${color};text-decoration:none;opacity:0.8"
+         onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.8">
+         🔗 ${data.public_url.replace('https://', '')}
+       </a>`
+    : `<span class="text-muted" style="font-size:11px">公開URL未設定</span>`;
+
+  const dbDsn = data.db && data.db.dsn
+    ? `<span class="text-muted" style="font-size:10px;word-break:break-all">${data.db.dsn}</span>`
+    : '';
+
+  return `
+    <div style="border:${outerBorder};border-radius:10px;overflow:hidden">
+      <div style="background:${headerBg};padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-weight:700;font-size:15px;color:${color}">${data.label}</span>
+          ${other ? '<span class="badge badge-muted">別のマシンの環境</span>' : statusBadge(allOk)}
+        </div>
+        ${publicLink}
+      </div>
+      <div style="padding:8px 14px 10px">
+        ${svcRow('Next.js', data.next, other)}
+        ${svcRow('Flask API', data.flask, other)}
+        ${dbRow(data.db, data.mock_frontend)}
+        ${mkModelDataSection(data.model_data_mode || null)}
+        <div style="margin-top:6px;font-size:11px;color:var(--muted)">
+          Next: ${data.next.url} &nbsp;|&nbsp; Flask: ${data.flask.url}
+        </div>
+        ${dbDsn}
+      </div>
+    </div>`;
+}
+
+function mkQueueCell(label, num, cls) {
+  return `<div>
+    <div class="big-num ${cls}">${num}</div>
+    <div class="text-muted" style="margin-top:4px;font-size:12px">${label}</div>
+  </div>`;
+}
+
+function renderStatus(d) {
+  // 環境別カード
+  const envs = d.envs || {};
+  if (Object.keys(envs).length) {
+    document.getElementById('access-urls').innerHTML =
+      '<table style="width:100%;border-collapse:collapse;font-size:13px">' + ['dev', 'stg', 'prod'].filter(k => envs[k]).map(k => accessRow(k, envs[k])).join('') + '</table>';
+    document.getElementById('env-grid').innerHTML =
+      ['dev', 'stg', 'prod'].map(k => mkEnvCard(k, envs[k])).join('');
+  }
+
+  // FastAPI 共通
+  const fa = d.services.fastapi;
+  const faDot = fa.ok ? 'dot-ok' : 'dot-error';
+  const faMs  = fa.elapsed_ms >= 0 ? `${fa.elapsed_ms}ms` : '—';
+  document.getElementById('fastapi-card').innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="dot ${faDot}"></span>
+      ${statusBadge(fa.ok)}
+      <span class="text-muted" style="font-size:12px">HTTP ${fa.status || '—'} / ${faMs}</span>
+    </div>`;
+
+  // スクレイピングキュー
+  const q = d.queue;
+  if (q && Object.keys(q).length) {
+    document.getElementById('queue-grid').innerHTML =
+      mkQueueCell('Pending', q.pending, 'text-accent') +
+      mkQueueCell('Running', q.running, 'text-warn') +
+      mkQueueCell('Done', q.done, 'text-ok') +
+      mkQueueCell('Failed', q.failed, q.failed > 0 ? 'text-error' : 'text-muted');
+  } else {
+    document.getElementById('queue-grid').innerHTML = '<span class="text-muted">キュー情報取得失敗</span>';
+  }
+
+  // Git HEAD
+  const h = d.git_head;
+  if (h && h.hash) {
+    document.getElementById('git-head').innerHTML = `
+      <code class="text-accent">${h.hash}</code>
+      <div style="margin-top:6px;font-size:12px;color:var(--muted)">${h.message}</div>
+      <div style="margin-top:4px;font-size:11px;color:var(--muted)">${h.author} · ${h.date}</div>`;
+  } else {
+    document.getElementById('git-head').innerHTML = '<span class="text-muted">取得失敗</span>';
+  }
+
+  document.getElementById('last-ts').textContent = new Date().toLocaleTimeString('ja-JP');
+}
+
+function renderSys(d) {
+  document.getElementById('sys-mini').innerHTML = `
+    <div style="display:grid;gap:10px">
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span>CPU</span><span class="text-accent">${d.cpu_pct}%</span>
+        </div>
+        <div class="progress-wrap"><div class="progress-bar ${d.cpu_pct > 80 ? 'progress-error' : d.cpu_pct > 60 ? 'progress-warn' : 'progress-ok'}" style="width:${d.cpu_pct}%"></div></div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span>メモリ</span><span class="text-accent">${d.memory.used_gb}/${d.memory.total_gb} GB (${d.memory.pct}%)</span>
+        </div>
+        <div class="progress-wrap"><div class="progress-bar ${d.memory.pct > 85 ? 'progress-error' : d.memory.pct > 70 ? 'progress-warn' : 'progress-ok'}" style="width:${d.memory.pct}%"></div></div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span>ディスク</span><span class="text-accent">${d.disk.used_gb}/${d.disk.total_gb} GB (${d.disk.pct}%)</span>
+        </div>
+        <div class="progress-wrap"><div class="progress-bar ${d.disk.pct > 90 ? 'progress-error' : d.disk.pct > 75 ? 'progress-warn' : 'progress-ok'}" style="width:${d.disk.pct}%"></div></div>
+      </div>
+    </div>`;
+}
+
+async function refresh() {
+  try {
+    const [s, sys] = await Promise.all([
+      fetch('/api/internal/status').then(r => r.json()),
+      fetch('/api/internal/system').then(r => r.json()),
+    ]);
+    renderStatus(s);
+    renderSys(sys);
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+refresh();
+setInterval(refresh, 30000);
+</script>
+{% endblock %}

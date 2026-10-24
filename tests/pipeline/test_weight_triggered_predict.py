@@ -1,0 +1,324 @@
+import json
+from datetime import datetime, timedelta, timezone
+
+import polars as pl
+import pytest
+
+from src.pipeline.features.horse_history.common import read_runs_raw
+from src.pipeline.inference import weight_triggered_predict as wtp
+from tests.pipeline.test_horse_history import _synthetic_tables
+
+JST = timezone(timedelta(hours=9))
+
+
+@pytest.fixture(autouse=True)
+def _isolate_bundle(tmp_path, monkeypatch):
+    monkeypatch.setenv("KEIBA_SERVING_BUNDLE_DIR", str(tmp_path / "nobundle"))
+
+
+class FakeStorage:
+    def __init__(self, shutuba: dict[str, dict]):
+        self.shutuba = shutuba
+
+    def load(self, category, key, bypass_cache=False):
+        assert category == "race_shutuba" and bypass_cache
+        return self.shutuba.get(key)
+
+
+def _shutuba_from_day(tables, day: str, *, with_weight: bool) -> dict[str, dict]:
+    raw = read_runs_raw(tables).filter(pl.col("date") == day)
+    out = {}
+    for rid, g in raw.group_by("race_id", maintain_order=True):
+        rid = rid[0]
+        r0 = g.row(0, named=True)
+        entries = [
+            {"horse_number": r["horse_number"], "horse_id": r["horse_id"], "sex_age": r["sex_age"], "jockey_id": r["jockey_id"],
+             "trainer_id": r["trainer_id"], "jockey_weight": r["jockey_weight"], "weight": r["weight"] if with_weight else None,
+             "grade": r["grade"]}  # 合成データは格が馬ごとに違うので、行ごとに持たせて学習時と揃える
+            for r in g.iter_rows(named=True)
+        ]
+        out[rid] = {"race_id": rid, "date": r0["date"], "venue": "東京", "surface": r0["surface"], "distance": r0["distance"],
+                    "direction": r0["direction"], "grade": r0["grade"], "race_class": r0["race_class"], "weather": "晴",
+                    "track_condition": r0["track_condition"], "start_time": r0["start_time"], "field_size": g.height, "race_name": "x",
+                    "entries": entries}
+    return out
+
+
+@pytest.fixture(scope="module")
+def env(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("wt")
+    tables, la = _synthetic_tables(tmp)
+    raw = read_runs_raw(tables)
+    day = str(raw.filter(pl.col("date").str.starts_with("2024"))["date"].sort()[400])
+    return tables, la, day
+
+
+def _races(sh):
+    return [{"race_id": rid, "post_time": datetime(2024, 7, 6, 10, tzinfo=JST)} for rid in sh]
+
+
+def test_run_for_races_writes_features_and_events(env, tmp_path, monkeypatch):
+    tables, la, day = env
+    monkeypatch.setenv("KEIBA_INFERENCE_DIR", str(tmp_path / "inf"))
+    sh = _shutuba_from_day(tables, day, with_weight=True)
+    ctx = wtp.InferenceContext(tables_dir=tables, layer_a=la, years=list(range(2020, 2026)))
+    ctx.warm()
+    evs = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, weights_known={k: True for k in sh}, mode="features")
+    assert [e["status"] for e in evs] == ["ok"] * len(sh)
+    ymd = day.replace("-", "")
+    for rid in sh:
+        f = pl.read_parquet(tmp_path / "inf" / "features" / ymd / f"{rid}.parquet")
+        assert f.height == len(sh[rid]["entries"]) and "d_wt_dev" in f.columns
+    lines = (tmp_path / "inf" / "events" / f"{ymd}.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(lines) == len(sh) and all(json.loads(l)["weights_known"] for l in lines)
+
+
+class _FakeV3:
+    bundle_dir = type("P", (), {"name": "fake"})()
+
+    def __init__(self, fail=False):
+        self.fail = fail
+
+    def features(self, card, F, storage):
+        if self.fail:
+            raise RuntimeError("boom")
+        return F.select("race_id", "horse_id").to_pandas()
+
+    def predict(self, X):
+        out = X[["race_id", "horse_id"]].copy()
+        out["p_win"], out["p_top2"], out["p_top3"] = 0.1, 0.2, 0.3
+        return out
+
+
+def test_v3_shadow_writes_predictions_only_and_failure_does_not_break_features(env, tmp_path, monkeypatch):
+    tables, la, day = env
+    monkeypatch.setenv("KEIBA_INFERENCE_DIR", str(tmp_path / "inf"))
+    monkeypatch.setenv("KEIBA_V3_SERVING", "shadow")
+    sh = _shutuba_from_day(tables, day, with_weight=True)
+    ctx = wtp.InferenceContext(tables_dir=tables, layer_a=la, years=list(range(2020, 2026)))
+    ctx.warm()
+    ctx.v3 = _FakeV3()
+    evs = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, weights_known={k: True for k in sh}, mode="features")
+    ymd = day.replace("-", "")
+    assert all(e["status"] == "ok" and e["v3_status"] == "ok" for e in evs)
+    for rid in sh:
+        v = pl.read_parquet(tmp_path / "inf" / "predictions_v3" / ymd / f"{rid}.parquet")
+        assert v.height == len(sh[rid]["entries"]) and {"p_win", "p_top2", "p_top3"} <= set(v.columns)
+    ctx.v3 = _FakeV3(fail=True)
+    evs = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, weights_known={k: True for k in sh}, mode="features")
+    assert all(e["status"] == "ok" and e["v3_status"] == "error" and "boom" in e["v3_error"] for e in evs)
+
+
+def test_v3_payload_has_prediction_fields():
+    import pandas as pd
+
+    from src.pipeline.inference.race_day_workflow import v3_payload
+
+    class St:
+        def load(self, cat, key, **kw):
+            return {"race_name": "R", "entries": [{"horse_id": "a", "horse_number": 1, "horse_name": "A"}, {"horse_id": "b", "horse_number": 2, "horse_name": "B"}]}
+
+    P = pd.DataFrame({"race_id": ["x", "x"], "horse_id": ["a", "b"], "p_win": [0.3, 0.7], "p_top2": [0.5, 1.0], "p_top3": [0.8, 0.9]})
+    out = v3_payload("x", St(), P, model_version="v", source="s")
+    assert out["predictions"][0]["horse_id"] == "b" and out["predictions"][0]["pred_rank"] == 1
+    assert out["predictions"][0]["win_prob"] == 0.7 and out["predictions"][1]["horse_number"] == 1 and out["status"] == "success"
+
+
+def test_missing_card_is_reported_as_error_not_raised(env, tmp_path, monkeypatch):
+    tables, la, _ = env
+    monkeypatch.setenv("KEIBA_INFERENCE_DIR", str(tmp_path / "inf"))
+    ctx = wtp.InferenceContext(tables_dir=tables, layer_a=la, years=list(range(2020, 2026)))
+    evs = wtp.run_for_races([{"race_id": "202405990101", "post_time": datetime(2024, 7, 6, 10, tzinfo=JST)}], FakeStorage({}), ctx)
+    assert evs[0]["status"] == "error"
+
+
+def test_features_without_weight_match_when_weight_is_known_except_tier2(env, tmp_path, monkeypatch):
+    import numpy as np
+    from src.pipeline.features.horse_history.inference import load_tiers
+
+    tables, la, day = env
+    monkeypatch.setenv("KEIBA_INFERENCE_DIR", str(tmp_path / "inf"))
+    ctx = wtp.InferenceContext(tables_dir=tables, layer_a=la, years=list(range(2020, 2026)))
+    ctx.warm()
+    sh_w, sh_n = _shutuba_from_day(tables, day, with_weight=True), _shutuba_from_day(tables, day, with_weight=False)
+    wtp.run_for_races(_races(sh_n), FakeStorage(sh_n), ctx, mode="features")
+    ymd = day.replace("-", "")
+    no_w = {rid: pl.read_parquet(tmp_path / "inf" / "features" / ymd / f"{rid}.parquet") for rid in sh_n}
+    wtp.run_for_races(_races(sh_w), FakeStorage(sh_w), ctx, mode="features")
+    with_w = {rid: pl.read_parquet(tmp_path / "inf" / "features" / ymd / f"{rid}.parquet") for rid in sh_w}
+    tiers = load_tiers()
+    changed = set()
+    for rid in sh_w:
+        a, b = no_w[rid].sort("horse_id"), with_w[rid].sort("horse_id")
+        for c, t in tiers.items():
+            if c not in a.columns:
+                continue
+            x, y = a[c].to_numpy().astype(float), b[c].to_numpy().astype(float)
+            d = np.where(np.isnan(x) & np.isnan(y), 0.0, np.abs(x - y))
+            if (np.where(np.isnan(d), np.inf, d) > 1e-9).any():
+                changed.add((c, t))
+    # 馬体重の有無で変わってよいのは tier 2 だけ（前日に計算できる tier 0 は変わらない）
+    assert {c for c, t in changed if t == 0} == set(), changed
+
+
+def test_entries_without_weight_are_dropped_once_weights_are_announced(env, tmp_path, monkeypatch):
+    tables, la, day = env
+    monkeypatch.setenv("KEIBA_INFERENCE_DIR", str(tmp_path / "inf"))
+    sh = _shutuba_from_day(tables, day, with_weight=True)
+    rid = next(iter(sh))
+    sh[rid]["entries"][0]["weight"] = None  # 体重が発表されない馬（出走取消・除外）
+    n_other = {k: len(v["entries"]) for k, v in sh.items()}
+    ctx = wtp.InferenceContext(tables_dir=tables, layer_a=la, years=list(range(2020, 2026)))
+    ctx.warm()
+    evs = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, weights_known={k: True for k in sh}, mode="features")
+    by = {e["race_id"]: e for e in evs}
+    assert by[rid]["rows"] == n_other[rid] - 1 and by[rid]["dropped_no_weight"] == 1
+    assert all(by[k]["rows"] == n_other[k] for k in sh if k != rid)
+    # 馬体重が未発表（weights_known=False）のレースでは、体重の無い馬を外さない
+    evs2 = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, weights_known={k: False for k in sh}, mode="features")
+    assert {e["race_id"]: e["rows"] for e in evs2} == n_other
+
+
+def test_empty_race_info_is_reported_not_hung(env, tmp_path, monkeypatch):
+    tables, la, day = env
+    monkeypatch.setenv("KEIBA_INFERENCE_DIR", str(tmp_path / "inf"))
+    sh = _shutuba_from_day(tables, day, with_weight=True)
+    rids = list(sh)
+    bad = rids[0]
+    sh[bad].update({"surface": "", "distance": 0})  # 終了後に取得した出馬表のようにレース情報が空
+    for v in sh.values():
+        v["date"] = ""  # 日付は発走時刻表から補う
+    races = [{"race_id": r, "post_time": datetime.fromisoformat(day + "T10:00:00+09:00"), "start_time_str": "10:00"} for r in rids]
+    ctx = wtp.InferenceContext(tables_dir=tables, layer_a=la, years=list(range(2020, 2026)))
+    ctx.warm()
+    evs = {e["race_id"]: e for e in wtp.run_for_races(races, FakeStorage(sh), ctx, weights_known={k: True for k in sh}, mode="features")}
+    assert evs[bad]["status"] == "error" and "面・距離" in evs[bad]["error"]
+    assert all(evs[r]["status"] == "ok" for r in rids if r != bad)
+
+
+def test_build_inference_features_rejects_missing_date(env):
+    import polars as pl
+    from src.pipeline.features.horse_history.common import build_repair_map
+    from src.pipeline.features.horse_history.inference import build_inference_features
+
+    tables, la, day = env
+    card = _shutuba_from_day(tables, day, with_weight=True)
+    rid = next(iter(card))
+    rows = [{**e, "race_id": rid, "date": None, "surface": "芝", "distance": 1600, "venue_code": "05", "track_condition": "良",
+             "grade": "1勝", "race_class": "x", "direction": "左", "start_time": "10:00"} for e in card[rid]["entries"]]
+    with pytest.raises(ValueError):
+        build_inference_features(read_runs_raw(tables), pl.DataFrame(rows), build_repair_map(la))
+
+
+def test_card_frame_keeps_v3_race_columns(env):
+    tables, la, day = env
+    sh = _shutuba_from_day(tables, day, with_weight=True)
+    rid = next(iter(sh))
+    sh[rid]["weather"], sh[rid]["weight_rule"] = "晴", "馬齢"
+    sh[rid]["entries"][0].update({"bracket_number": 3, "weight_change": -4})
+    df = wtp.card_frame(FakeStorage({rid: sh[rid]}), [rid])
+    assert set(wtp.V3_CARD_EXTRA) <= set(df.columns)
+    r0 = df.row(0, named=True)
+    assert r0["bracket_number"] == 3 and r0["weight_change"] == -4 and r0["weather"] == "晴"
+
+
+def test_race_with_unassigned_horse_numbers_is_isolated(env, tmp_path, monkeypatch):
+    """枠順確定前の出馬表（馬番が全頭 0）は、そのレースだけ error にして、他のレースは通常どおり作る。"""
+    tables, la, day = env
+    monkeypatch.setenv("KEIBA_INFERENCE_DIR", str(tmp_path / "inf"))
+    sh = _shutuba_from_day(tables, day, with_weight=True)
+    rids = list(sh)
+    assert len(rids) >= 2
+    bad = rids[0]
+    for e in sh[bad]["entries"]:
+        e["horse_number"] = 0
+    ctx = wtp.InferenceContext(tables_dir=tables, layer_a=la, years=list(range(2020, 2026)))
+    ctx.warm()
+    evs = {e["race_id"]: e for e in wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, weights_known={k: True for k in sh}, mode="features")}
+    assert evs[bad]["status"] == "error" and "馬番" in evs[bad]["error"]
+    assert all(evs[r]["status"] == "ok" and evs[r]["rows"] == len(sh[r]["entries"]) for r in rids if r != bad)
+
+
+def test_all_races_unassigned_returns_errors_without_raising(env, tmp_path, monkeypatch):
+    tables, la, day = env
+    monkeypatch.setenv("KEIBA_INFERENCE_DIR", str(tmp_path / "inf"))
+    sh = _shutuba_from_day(tables, day, with_weight=False)
+    for v in sh.values():
+        for e in v["entries"]:
+            e["horse_number"] = 0
+    ctx = wtp.InferenceContext(tables_dir=tables, layer_a=la, years=list(range(2020, 2026)))
+    ctx.warm()
+    evs = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, mode="features")
+    assert len(evs) == len(sh) and all(e["status"] == "error" for e in evs)
+
+
+def test_build_inference_features_explains_empty_card(env):
+    from src.pipeline.features.horse_history.common import build_repair_map
+    from src.pipeline.features.horse_history.inference import build_inference_features
+
+    tables, la, day = env
+    sh = _shutuba_from_day(tables, day, with_weight=True)
+    for v in sh.values():
+        for e in v["entries"]:
+            e["horse_number"] = 0
+    card = wtp.fill_card_meta(wtp.card_frame(FakeStorage(sh), list(sh)), [])
+    with pytest.raises(ValueError, match="馬番"):
+        build_inference_features(read_runs_raw(tables), card, build_repair_map(la))
+
+
+def test_single_horse_and_all_debut_races_do_not_break(env):
+    """1 頭だけのレース・全頭が初出走のレースでも特徴量が作れる（空配列で落ちない）。"""
+    from src.pipeline.features.horse_history.common import build_repair_map
+    from src.pipeline.features.horse_history.inference import build_inference_features
+
+    tables, la, day = env
+    sh = _shutuba_from_day(tables, day, with_weight=True)
+    rid = next(iter(sh))
+    one = {rid: {**sh[rid], "entries": sh[rid]["entries"][:1], "field_size": 1}}
+    card = wtp.fill_card_meta(wtp.card_frame(FakeStorage(one), [rid]), [])
+    out, _ = build_inference_features(read_runs_raw(tables), card, build_repair_map(la))
+    assert out.height == 1
+
+    debut = {rid: {**sh[rid], "entries": [{**e, "horse_id": f"NEW{i:03d}"} for i, e in enumerate(sh[rid]["entries"])]}}
+    card = wtp.fill_card_meta(wtp.card_frame(FakeStorage(debut), [rid]), [])
+    out, _ = build_inference_features(read_runs_raw(tables), card, build_repair_map(la))
+    assert out.height == len(debut[rid]["entries"]) and out["f2_pace_match"].len() == out.height
+
+
+def test_v5_shadow_runs_beside_v4_and_its_failure_never_breaks_v4_or_the_features(env, tmp_path, monkeypatch):
+    """v5 は predictions_v5/ に別系統で書く。v5 が例外を出しても、v4 の shadow と特徴量・イベントは通常どおり。"""
+    tables, la, day = env
+    monkeypatch.setenv("KEIBA_INFERENCE_DIR", str(tmp_path / "inf"))
+    monkeypatch.setenv("KEIBA_V3_SERVING", "shadow")
+    sh = _shutuba_from_day(tables, day, with_weight=True)
+    ctx = wtp.InferenceContext(tables_dir=tables, layer_a=la, years=list(range(2020, 2026)))
+    ctx.warm()
+    ctx.v3 = _FakeV3()
+    ymd = day.replace("-", "")
+
+    class _V5(_FakeV3):
+        bundle_dir = type("B", (), {"name": "bundle_v5_test"})()
+
+    ctx.v5 = _V5()
+    evs = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, weights_known={k: True for k in sh}, mode="features")
+    assert all(e["status"] == "ok" and e["v3_status"] == "ok" and e["v5_status"] == "ok" and e["v5_bundle"] == "bundle_v5_test" for e in evs)
+    for rid in sh:
+        assert (tmp_path / "inf" / "predictions_v5" / ymd / f"{rid}.parquet").exists() and (tmp_path / "inf" / "predictions_v3" / ymd / f"{rid}.parquet").exists()
+    ctx.v5 = _V5(fail=True)
+    evs = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, weights_known={k: True for k in sh}, mode="features")
+    assert all(e["status"] == "ok" and e["v3_status"] == "ok" and e["v5_status"] == "error" and "boom" in e["v5_error"] for e in evs)
+    ctx.v5 = None                                                  # v5 無効（既定）のイベントに v5 のキーは出ない
+    evs = wtp.run_for_races(_races(sh), FakeStorage(sh), ctx, weights_known={k: True for k in sh}, mode="features")
+    assert all("v5_status" not in e for e in evs)
+
+
+def test_v5_paths_and_flag(monkeypatch):
+    from src.pipeline.inference import v3_serving as vs
+
+    monkeypatch.delenv("KEIBA_V5_SHADOW", raising=False)
+    assert vs.v5_enabled() is False
+    monkeypatch.setenv("KEIBA_V5_SHADOW", "1")
+    assert vs.v5_enabled() is True
+    monkeypatch.setenv("KEIBA_V5_BUNDLE", "/x/bundle_v5_2024")
+    p = vs.v5_paths()
+    assert p["bundle"].name == "bundle_v5_2024" and p["stage"].name == "v4_verify_2024" and p["tl_reference"].name == "tl_reference_v2.parquet"

@@ -1,0 +1,161 @@
+{
+ "category": "race_lists",
+ "conformance": {
+  "failures": {},
+  "passed": 201,
+  "validated": 201
+ },
+ "keys": {
+  "max": "20261206",
+  "min": "20200101"
+ },
+ "lists": {
+  "races": {
+   "fields": {
+    "race_id": {
+     "empty": 0,
+     "len_max": 12,
+     "len_min": 12,
+     "n": 3454,
+     "null": 0,
+     "patterns": {
+      "digits12": 3454
+     },
+     "types": {
+      "str": 3454
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "race_name": {
+     "empty": 0,
+     "len_max": 17,
+     "len_min": 4,
+     "n": 3454,
+     "null": 0,
+     "patterns": {
+      "text": 3454
+     },
+     "types": {
+      "str": 3454
+     },
+     "values": {
+      "2歳新馬": 3,
+      "2歳未勝利": 1,
+      "3歳1勝クラス": 99,
+      "3歳以上1勝クラス": 8,
+      "3歳新馬": 42,
+      "3歳未勝利": 880,
+      "4歳以上1勝クラス": 284,
+      "4歳以上2勝クラス": 101,
+      "HTB杯(2勝クラス)": 1,
+      "パラダイスS(L)": 1,
+      "フェアリーS(G3)": 1,
+      "リボン賞(2勝クラス)": 1,
+      "乙訓特別(2勝クラス)": 1,
+      "八ヶ岳特別(2勝クラス)": 1,
+      "初春S(3勝クラス)": 1,
+      "北海ハンデキャップ(2勝クラス)": 1,
+      "城崎特別(1勝クラス)": 1,
+      "大沼S(L)": 1,
+      "宝塚記念(G1)": 1,
+      "寿S(3勝クラス)": 1,
+      "成田特別(2勝クラス)": 1,
+      "甲州街道S(3勝クラス)": 1,
+      "舞子特別(2勝クラス)": 1,
+      "花のみちS(3勝クラス)": 1,
+      "障害4歳以上未勝利": 42
+     },
+     "values_overflow": true
+    },
+    "round": {
+     "empty": 0,
+     "max": 12,
+     "min": 1,
+     "n": 3454,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 3454
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "venue": {
+     "empty": 0,
+     "len_max": 2,
+     "len_min": 2,
+     "n": 3454,
+     "null": 0,
+     "patterns": {
+      "text": 3454
+     },
+     "types": {
+      "str": 3454
+     },
+     "values": {
+      "中京": 420,
+      "中山": 454,
+      "京都": 348,
+      "函館": 132,
+      "小倉": 288,
+      "新潟": 336,
+      "札幌": 204,
+      "東京": 564,
+      "福島": 204,
+      "阪神": 504
+     },
+     "values_overflow": false
+    }
+   },
+   "items": 3454,
+   "records": 107
+  }
+ },
+ "nested": {},
+ "records": 201,
+ "runs": [
+  {
+   "at": "2026-10-06T05:19:46+00:00",
+   "host": "JP-CG4QN94",
+   "records": 1,
+   "source": "samples"
+  },
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
+  }
+ ],
+ "top": {
+  "date": {
+   "empty": 0,
+   "len_max": 8,
+   "len_min": 8,
+   "n": 201,
+   "null": 0,
+   "patterns": {
+    "digits8": 201
+   },
+   "types": {
+    "str": 201
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "races": {
+   "empty": 94,
+   "len_max": 36,
+   "len_min": 0,
+   "n": 201,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 201
+   },
+   "values": {},
+   "values_overflow": false
+  }
+ }
+}

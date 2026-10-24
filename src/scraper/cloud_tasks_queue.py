@@ -1,0 +1,139 @@
+"""
+Cloud Tasks 経由のスクレイピングキュー投入（GCP側専用）。
+
+VPS/ConoHaとGCPの役割分担（`docs/operations/deployment-vps-vs-gcp.md`）に基づき、
+netkeibaスクレイピングのキュー投入経路を切り替えるための薄いアダプタ。
+
+- 既定（``KEIBA_QUEUE_BACKEND`` 未設定）: ``src.scraper.job_queue.ScrapeJobQueue`` の
+  ローカルJSONファイル＋ファイルロックへそのまま投入する（VPS側の既存動作を変えない）。
+- ``KEIBA_QUEUE_BACKEND=cloud_tasks``: ``enqueue_via_cloud_tasks`` を使い、ジョブ仕様
+  （``job_queue.add_job`` に渡す形式の dict）をCloud Tasksキューへ HTTP POST タスクとして
+  積む。実行は Cloud Run Jobs/サービス側の push ワーカー
+  （``POST /api/internal/cloud-tasks/process-job``、``src/api/app.py``）が
+  ``src.scraper.queue_tasks.execute_job`` を呼んで1件処理する。
+
+環境変数（``.env.example`` の「GCP側（スクレイピング・ML・スケジュール実行）専用設定」参照）:
+    KEIBA_QUEUE_BACKEND          ``cloud_tasks`` のときのみ Cloud Tasks 経路を使う（既定local）
+    GCS_PROJECT_ID / GCP_PROJECT_ID  GCPプロジェクトID（必須。``GCS_PROJECT_ID`` 優先）
+    CLOUD_TASKS_QUEUE             Cloud Tasksキュー名（既定 ``keiba-scrape-queue``）
+    CLOUD_TASKS_LOCATION          リージョン（既定 ``asia-northeast1``）
+    CLOUD_RUN_JOBS_WORKER_URL     Cloud TasksがPUSHするワーカーURL（必須）
+    CLOUD_TASKS_OIDC_SERVICE_ACCOUNT  設定時はタスクにOIDCトークンを付与（任意）
+
+GCP接続自体は疎通している前提で実装する。認証は``.env``（dev）/``.env.stg``/``.env.prod``の
+``GCS_*``サービスアカウント情報から``src.config.gcp_credentials.build_gcp_credentials()``で
+構築し、``CloudTasksClient``へ明示的に渡す（本モジュールの単体テストは
+``google.cloud.tasks_v2.CloudTasksClient``をモックして検証する）。
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+from datetime import datetime, timezone
+
+from src.config.gcp_guard import assert_gcp_allowed, gcp_forbidden
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_CLOUD_TASKS_QUEUE = "keiba-scrape-queue"
+DEFAULT_CLOUD_TASKS_LOCATION = "asia-northeast1"
+
+
+def is_cloud_tasks_backend_enabled() -> bool:
+    """``KEIBA_QUEUE_BACKEND=cloud_tasks`` のとき True（既定はローカルJSONキュー）。dev では常に False。"""
+    if os.environ.get("KEIBA_QUEUE_BACKEND", "").strip().lower() != "cloud_tasks":
+        return False
+    if gcp_forbidden():
+        logger.warning("KEIBA_ENV=dev では Cloud Tasks を使えません。ローカル JSON キューを使います")
+        return False
+    return True
+
+
+def enqueue_via_cloud_tasks(
+    job_payload: dict,
+    *,
+    queue: str | None = None,
+    location: str | None = None,
+    worker_url: str | None = None,
+    schedule_time: datetime | None = None,
+    task_id: str | None = None,
+) -> str:
+    """
+    ``job_payload``（``ScrapeJobQueue.add_job`` と同形式のジョブ仕様 dict）を
+    Cloud Tasksキューへ HTTP POST タスクとして作成する。
+
+    ``queue`` / ``location`` / ``worker_url`` を渡すと、同名の環境変数
+    （``CLOUD_TASKS_QUEUE`` / ``CLOUD_TASKS_LOCATION`` / ``CLOUD_RUN_JOBS_WORKER_URL``）
+    より優先される。
+
+    ``schedule_time``（tz付き推奨）を渡すと、その時刻までCloud Tasksが配信を保留する
+    （予約配信。最大30日先まで）。``task_id`` を渡すとタスク名が固定され、同じ名前の
+    二重登録は ``AlreadyExists`` になる（冪等な登録に使う）。
+
+    Returns:
+        作成されたタスクのフルリソース名（``projects/.../locations/.../queues/.../tasks/...``）。
+    """
+    assert_gcp_allowed("Cloud Tasks")
+    from google.cloud import tasks_v2
+
+    from src.config.gcp_credentials import build_gcp_credentials, gcp_project_id
+
+    project_id = gcp_project_id()
+    if not project_id:
+        raise ValueError("GCS_PROJECT_ID / GCP_PROJECT_ID が未設定です（Cloud Tasksキューには必須）")
+
+    queue_name = (
+        queue or os.environ.get("CLOUD_TASKS_QUEUE") or DEFAULT_CLOUD_TASKS_QUEUE
+    ).strip()
+    location_name = (
+        location
+        or os.environ.get("CLOUD_TASKS_LOCATION")
+        or DEFAULT_CLOUD_TASKS_LOCATION
+    ).strip()
+    target_url = (
+        worker_url or os.environ.get("CLOUD_RUN_JOBS_WORKER_URL") or ""
+    ).strip()
+    if not target_url:
+        raise ValueError(
+            "CLOUD_RUN_JOBS_WORKER_URL が未設定です（Cloud TasksのPush先ワーカーURLが必須）"
+        )
+
+    client = tasks_v2.CloudTasksClient(credentials=build_gcp_credentials())
+    parent = client.queue_path(project_id, location_name, queue_name)
+
+    body_bytes = json.dumps(job_payload, ensure_ascii=False, default=str).encode("utf-8")
+    http_request: dict = {
+        "http_method": tasks_v2.HttpMethod.POST,
+        "url": target_url,
+        "headers": {"Content-Type": "application/json"},
+        "body": body_bytes,
+    }
+
+    # Cloud Run等の認証付きPushワーカー向けOIDCトークン。
+    # ワーカー側の検証は KEIBA_CLOUD_TASKS_VERIFY_OIDC=1 のときのみ有効化するスタブ
+    # （POST /api/internal/cloud-tasks/process-job 内、src/api/app.py）。
+    service_account_email = os.environ.get("CLOUD_TASKS_OIDC_SERVICE_ACCOUNT", "").strip()
+    if service_account_email:
+        http_request["oidc_token"] = {"service_account_email": service_account_email}
+
+    task: dict = {"http_request": http_request}
+    if schedule_time is not None:
+        from google.protobuf import timestamp_pb2
+
+        when = schedule_time if schedule_time.tzinfo else schedule_time.astimezone()
+        ts = timestamp_pb2.Timestamp()
+        ts.FromDatetime(when.astimezone(timezone.utc).replace(tzinfo=None))
+        task["schedule_time"] = ts
+    if task_id:
+        task["name"] = client.task_path(project_id, location_name, queue_name, task_id)
+
+    response = client.create_task(request={"parent": parent, "task": task})
+    logger.info(
+        "Cloud Tasksへ投入: %s (queue=%s, location=%s)",
+        response.name,
+        queue_name,
+        location_name,
+    )
+    return response.name

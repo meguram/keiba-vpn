@@ -1,0 +1,935 @@
+"""
+netkeiba.com / smartrc.jp 用 HTTPクライアント
+
+- .env からの認証情報読み込み + ログインセッション管理
+- 自動リトライ (指数バックオフ)
+- レートリミット (robots.txt 遵守)
+- EUC-JP 自動判定
+- レスポンスキャッシュ (同一セッション内)
+- smartrc.jp アクセス対応
+- スロットリング機構 (429/503 即時停止 + 指数バックオフリトライ)
+
+取得の方針（docs/operations/scraping_policy.md）:
+- User-Agent は固定の識別可能なもの（プロジェクト識別トークン＋連絡先 KEIBA_SCRAPER_CONTACT）。ブラウザを装わず、切り替えない
+- ブラウザ固有のヘッダー（sec-ch-ua, sec-fetch-* など）は付けない
+- Referer（遷移元）は通常のリンクのたどり方に合わせて付与
+- バースト制限 (短期間の連続アクセス防止)
+- セッションあたりのクールダウン (一定リクエスト数ごとに長めの休止)
+- セッションリフレッシュ (定期的に TLS/Cookie を再構築)
+
+環境変数で間隔を広げられる（負荷を下げたいとき。制限の回避目的では使わない）:
+NETKEIBA_BURST_WINDOW, NETKEIBA_BURST_COOLDOWN_MIN/MAX,
+NETKEIBA_SESSION_COOLDOWN_INTERVAL, NETKEIBA_SESSION_COOLDOWN_MIN/MAX,
+NETKEIBA_SESSION_REFRESH_INTERVAL, NETKEIBA_THROTTLE_MIN/MAX
+NETKEIBA_MAX_CONCURRENT_REQUESTS … プロセス内の netkeiba 同時 in-flight 上限
+（未指定時は 1。0=制限なし は使わない）
+NETKEIBA_GLOBAL_MAX_SLOTS … 全プロセス合算の netkeiba 同時リクエスト上限（デフォルト=2）
+（複数スクリプトを並行実行しても合計が常に GLOBAL_MAX_SLOTS 以下に抑えられる。0=無効）
+"""
+
+from __future__ import annotations
+
+import fcntl
+import hashlib
+import logging
+import os
+import random
+import threading
+import time
+from contextlib import contextmanager
+from pathlib import Path
+from urllib.parse import urlparse
+
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+logger = logging.getLogger("scraper.client")
+
+_ENCODING_MAP = {
+    "db.netkeiba.com": "EUC-JP",
+    "race.netkeiba.com": "EUC-JP",
+    "regist.netkeiba.com": "EUC-JP",
+}
+
+# ---------------------------------------------------------------------------
+# User-Agent（固定・識別可能。ブラウザを装わない。切り替えない）
+# ---------------------------------------------------------------------------
+def _identity_ua_entry() -> dict[str, str]:
+    from src.scraper.identity import user_agent, warn_if_no_contact
+
+    warn_if_no_contact(logger)
+    return {"ua": user_agent()}
+
+
+# ---------------------------------------------------------------------------
+# Referer マッピング
+# ---------------------------------------------------------------------------
+_REFERER_MAP: dict[str, str] = {
+    "db.netkeiba.com": "https://db.netkeiba.com/",
+    "race.netkeiba.com": "https://race.netkeiba.com/",
+    "regist.netkeiba.com": "https://regist.netkeiba.com/",
+    "own.netkeiba.com": "https://own.netkeiba.com/",
+    "www.smartrc.jp": "https://www.smartrc.jp/",
+}
+
+_LOGIN_URL = "https://regist.netkeiba.com/"
+
+SMARTRC_BASE_URL = "https://www.smartrc.jp/"
+
+# ---------------------------------------------------------------------------
+# スロットリング設定
+# ---------------------------------------------------------------------------
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+_THROTTLE_CONFIG: dict[str, dict[str, float]] = {
+    "netkeiba": {
+        "min_interval": _env_float("NETKEIBA_THROTTLE_MIN", 2.2),
+        "max_interval": _env_float("NETKEIBA_THROTTLE_MAX", 4.0),
+    },
+    "smartrc": {"min_interval": 2.0, "max_interval": 4.0},
+}
+
+_SMARTRC_REQUEST_LIMIT = 200
+
+_BACKOFF_INITIAL = 5.0
+_BACKOFF_FACTOR = 2.5
+_BACKOFF_MAX_RETRIES = 3
+
+# バースト制限: 連続 N リクエスト後に追加休止（.env / 環境変数で上書き可）
+_BURST_WINDOW = _env_int("NETKEIBA_BURST_WINDOW", 14)
+_BURST_COOLDOWN_MIN = _env_float("NETKEIBA_BURST_COOLDOWN_MIN", 6.0)
+_BURST_COOLDOWN_MAX = _env_float("NETKEIBA_BURST_COOLDOWN_MAX", 12.0)
+
+# セッションクールダウン: N リクエストごとに長い休止
+_SESSION_COOLDOWN_INTERVAL = _env_int("NETKEIBA_SESSION_COOLDOWN_INTERVAL", 60)
+_SESSION_COOLDOWN_MIN = _env_float("NETKEIBA_SESSION_COOLDOWN_MIN", 22.0)
+_SESSION_COOLDOWN_MAX = _env_float("NETKEIBA_SESSION_COOLDOWN_MAX", 40.0)
+
+# セッションリフレッシュ: N リクエストごとに新しいセッション（TLS/接続の張り直し）
+_SESSION_REFRESH_INTERVAL = _env_int("NETKEIBA_SESSION_REFRESH_INTERVAL", 150)
+
+# 全ワーカー合算の「同時に空中にある netkeiba GET」上限（各ジョブが別 Client のため）
+_NETKEIBA_INFLIGHT_SEM: threading.Semaphore | None = None
+_NETKEIBA_INFLIGHT_OFF = False
+_NETKEIBA_INFLIGHT_INIT = threading.Lock()
+# queue_load_settings.json 更新でセマフォを作り直す
+_INFLIGHT_SETTINGS_MTIME: float = -1.0
+
+
+def reset_netkeiba_inflight_semaphore_cache() -> None:
+    """data/queue/queue_load_settings.json 変更後、次のリクエストで in-flight 上限を再計算。"""
+    global _NETKEIBA_INFLIGHT_SEM, _NETKEIBA_INFLIGHT_OFF, _INFLIGHT_SETTINGS_MTIME
+    with _NETKEIBA_INFLIGHT_INIT:
+        _NETKEIBA_INFLIGHT_SEM = None
+        _NETKEIBA_INFLIGHT_OFF = False
+        _INFLIGHT_SETTINGS_MTIME = -1.0
+
+
+def _queue_load_settings_mtime() -> float:
+    try:
+        from src.scraper.queue_load_settings import QUEUE_LOAD_SETTINGS
+        return float(QUEUE_LOAD_SETTINGS.stat().st_mtime)
+    except OSError:
+        return 0.0
+
+
+def _get_netkeiba_inflight_semaphore() -> threading.Semaphore | None:
+    global _NETKEIBA_INFLIGHT_SEM, _NETKEIBA_INFLIGHT_OFF, _INFLIGHT_SETTINGS_MTIME
+    from src.scraper import queue_load_settings
+
+    with _NETKEIBA_INFLIGHT_INIT:
+        mt = _queue_load_settings_mtime()
+        if _INFLIGHT_SETTINGS_MTIME < 0:
+            _INFLIGHT_SETTINGS_MTIME = mt
+        elif mt != _INFLIGHT_SETTINGS_MTIME:
+            _NETKEIBA_INFLIGHT_SEM = None
+            _NETKEIBA_INFLIGHT_OFF = False
+            _INFLIGHT_SETTINGS_MTIME = mt
+
+        if _NETKEIBA_INFLIGHT_OFF:
+            return None
+        if _NETKEIBA_INFLIGHT_SEM is not None:
+            return _NETKEIBA_INFLIGHT_SEM
+
+        ovr = queue_load_settings.netkeiba_inflight_file_override()
+        raw = (os.environ.get("NETKEIBA_MAX_CONCURRENT_REQUESTS") or "").strip()
+
+        if ovr is not None:
+            if ovr == 0:
+                _NETKEIBA_INFLIGHT_OFF = True
+                logger.info(
+                    "netkeiba 同時 in-flight: 制限なし (queue_load_settings: netkeiba_max_inflight=0)",
+                )
+                return None
+            n2 = max(1, min(32, ovr))
+            _NETKEIBA_INFLIGHT_SEM = threading.Semaphore(n2)
+            logger.info("netkeiba 同時 in-flight 上限: %d (queue_load_settings 上書き)", n2)
+            return _NETKEIBA_INFLIGHT_SEM
+
+        if raw == "0":
+            _NETKEIBA_INFLIGHT_OFF = True
+            logger.info(
+                "netkeiba 同時 in-flight: 制限なし (NETKEIBA_MAX_CONCURRENT_REQUESTS=0)",
+            )
+            return None
+
+        n = 0
+        if raw:
+            try:
+                n = int(raw)
+            except ValueError:
+                n = 0
+        if n <= 0:
+            qp = queue_load_settings.get_effective_parallel()
+            n = 1                                  # 既定は 1（取得元への負荷を最小に）。増やすときは NETKEIBA_MAX_CONCURRENT_REQUESTS を明示する
+        n = max(1, min(32, n))
+        _NETKEIBA_INFLIGHT_SEM = threading.Semaphore(n)
+        detail = f"={raw}" if raw and raw != "0" else f"auto(parallel≈{queue_load_settings.get_effective_parallel()})"
+        logger.info(
+            "netkeiba 同時 in-flight 上限: %d (NETKEIBA_MAX_CONCURRENT_REQUESTS%s)",
+            n,
+            detail,
+        )
+        return _NETKEIBA_INFLIGHT_SEM
+
+
+
+# ── プロセス横断グローバルスロット ──────────────────────────────────────────
+# 複数の Python プロセス（ancestors + patch_sex 等）が同時に netkeiba へ
+# アクセスする場合でも、合計 in-flight 数を NETKEIBA_GLOBAL_MAX_SLOTS 以下に保つ。
+#
+# 仕組み: data/meta/netkeiba_global_slots/ に 1スロット=1ファイル を作成。
+#   ファイル名: {pid}_{thread_id}_{monotonic_ns}.slot
+#   スロット獲得: ファイル数 < 上限なら作成、そうでなければ待機（最大 120 秒）
+#   スロット解放: ファイルを削除
+#   死活確認: ファイル名の PID が存在しない（プロセスクラッシュ）ならば古いファイルを除去
+#
+# 環境変数 NETKEIBA_GLOBAL_MAX_SLOTS で上限を変更可（デフォルト=2）。120 秒待っても空かないときだけ best-effort で続行する
+# 0 を設定すると無効化（無制限）
+
+_GLOBAL_SLOTS_DIR = Path(__file__).resolve().parents[2] / "data" / "local" / "meta" / "netkeiba_global_slots"
+_GLOBAL_MAX_SLOTS = _env_int("NETKEIBA_GLOBAL_MAX_SLOTS", 2)
+_GLOBAL_SLOT_LOCK = threading.Lock()   # ディレクトリ操作用スレッドロック
+
+
+def _cleanup_stale_global_slots() -> None:
+    """プロセスが死んで残ったスロットファイルを除去する。"""
+    try:
+        for p in _GLOBAL_SLOTS_DIR.glob("*.slot"):
+            try:
+                pid = int(p.stem.split("_")[0])
+                # /proc/{pid} が存在しなければ死亡プロセス
+                if not Path(f"/proc/{pid}").exists():
+                    p.unlink(missing_ok=True)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def _count_global_slots() -> int:
+    try:
+        return sum(1 for _ in _GLOBAL_SLOTS_DIR.glob("*.slot"))
+    except Exception:
+        return 0
+
+
+class _GlobalSlot:
+    """
+    コンテキストマネージャ: プロセス横断スロットを 1 つ獲得・解放する。
+    最大待機 120 秒（超過時はスロット獲得をあきらめて続行）。
+    """
+    def __init__(self) -> None:
+        self._path: Path | None = None
+
+    def __enter__(self) -> "_GlobalSlot":
+        if _GLOBAL_MAX_SLOTS <= 0:
+            return self                        # 無効化
+
+        _GLOBAL_SLOTS_DIR.mkdir(parents=True, exist_ok=True)
+        slot_path = _GLOBAL_SLOTS_DIR / (
+            f"{os.getpid()}_{threading.get_ident()}_{time.monotonic_ns()}.slot"
+        )
+
+        deadline = time.monotonic() + 120
+        while time.monotonic() < deadline:
+            with _GLOBAL_SLOT_LOCK:
+                _cleanup_stale_global_slots()
+                if _count_global_slots() < _GLOBAL_MAX_SLOTS:
+                    try:
+                        slot_path.touch()
+                        self._path = slot_path
+                        return self
+                    except Exception:
+                        pass
+            time.sleep(0.2 + random.random() * 0.3)
+
+        # タイムアウト: スロット獲得できなくても続行（制限は best-effort）
+        logger.warning("global slot timeout – proceeding without slot")
+        return self
+
+    def __exit__(self, *_) -> None:
+        if self._path:
+            try:
+                self._path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            self._path = None
+
+
+@contextmanager
+def _netkeiba_inflight_guard(url: str):
+    host = (urlparse(url).netloc or "").lower()
+    if "netkeiba.com" not in host:
+        yield
+        return
+
+    # ① プロセス内セマフォ（既存）
+    sem = _get_netkeiba_inflight_semaphore()
+    if sem is not None:
+        sem.acquire()
+    try:
+        # ② プロセス横断グローバルスロット（新規）
+        with _GlobalSlot():
+            yield
+    finally:
+        if sem is not None:
+            sem.release()
+
+
+def _load_env(env_path: str | None = None) -> dict[str, str]:
+    """
+    .env ファイルから netkeiba_id / netkeiba_pw を読み込む。
+    python-dotenv が入っていればそれを使い、なければ手動パースする。
+    """
+    if env_path is None:
+        candidates = [
+            Path.cwd() / ".env",
+            Path(__file__).resolve().parents[2] / ".env",
+        ]
+        for c in candidates:
+            if c.exists():
+                env_path = str(c)
+                break
+
+    env_vars: dict[str, str] = {}
+
+    if env_path and Path(env_path).exists():
+        with open(env_path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, val = line.partition("=")
+                env_vars[key.strip()] = val.strip().strip("'\"")
+
+    for k, v in env_vars.items():
+        if k not in os.environ:
+            os.environ[k] = v
+
+    return env_vars
+
+
+def _http_adapter_pool_maxsize() -> int:
+    """
+    requests.Session 同一オリジンあたりの同時接続数（urllib3 プール）。
+
+    旧: pool_maxsize=5 固定。SCRAPE_QUEUE_PARALLEL を上げても、ここが 5
+    だと HTTP が最大 5 本までしか並ばず、実行中ジョブ数が低く見えていた。
+    ランタイム上書きは queue_load_settings.json（get_effective_parallel）に追従。
+    """
+    from src.scraper.queue_load_settings import get_effective_parallel
+
+    explicit = _env_int("NETKEIBA_HTTP_POOL_MAXSIZE", 0)
+    if explicit > 0:
+        return max(4, min(64, explicit))
+    qp = int(get_effective_parallel())
+    return max(8, min(64, qp + 4))
+
+
+def _source_from_url(url: str) -> str:
+    """URLからソース名を判定する。"""
+    if "smartrc.jp" in url:
+        return "smartrc"
+    return "netkeiba"
+
+
+def _build_browser_headers(ua_entry: dict[str, str]) -> dict[str, str]:
+    """固定の識別可能な UA と、通常の HTTP クライアントが送る最小限のヘッダーを返す（ブラウザ固有のヘッダーは付けない）。"""
+    return {
+        "User-Agent": ua_entry["ua"],
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "ja,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate",
+        "Connection": "keep-alive",
+    }
+
+
+# ── 応答オブザーバ（アクセス制限の検知など。登録が無ければ何もしない）─────────────────
+_RESPONSE_OBSERVERS: list = []
+
+
+def add_response_observer(fn) -> None:
+    """全 GET 応答（ステータス判定の前）に ``fn(url, response)`` を呼ぶ。fn が例外を送出すればそのリクエストを中断できる。
+    fn が ``on_error(url, exc)`` を持てば、応答を得られなかった通信エラーのときにも呼ぶ。"""
+    if fn not in _RESPONSE_OBSERVERS:
+        _RESPONSE_OBSERVERS.append(fn)
+
+
+def remove_response_observer(fn) -> None:
+    if fn in _RESPONSE_OBSERVERS:
+        _RESPONSE_OBSERVERS.remove(fn)
+
+
+class NetkeibaClient:
+    """
+    netkeiba.com / smartrc.jp 専用 HTTPクライアント。
+
+    Parameters:
+        source: アクセス対象 ('netkeiba' または 'smartrc')
+        interval: リクエスト間隔 (秒) ※後方互換のため残存、throttle設定が優先
+        max_retries: 最大リトライ回数
+        timeout: タイムアウト (秒)
+        cache_dir: HTMLキャッシュディレクトリ (Noneでキャッシュ無効)
+        env_path: .env ファイルパス (Noneで自動検索)
+        auto_login: Trueなら初回リクエスト前に自動ログイン
+    """
+
+    def __init__(
+        self,
+        source: str = "netkeiba",
+        interval: float = 2.0,
+        max_retries: int = 3,
+        timeout: int = 20,
+        cache_dir: str | None = None,
+        env_path: str | None = None,
+        auto_login: bool = True,
+    ):
+        if source not in _THROTTLE_CONFIG:
+            raise ValueError(f"source は 'netkeiba' または 'smartrc' を指定してください。got: {source!r}")
+
+        self.source = source
+        self.interval = interval
+        self.timeout = timeout
+        self.cache_dir = cache_dir
+        self._max_retries = max_retries
+        self._last_request_time: float = 0
+        self._logged_in = False
+        self._premium_ok: bool | None = None  # 会員状態が実ページで効いているか（None=未確認）
+        self._env_path = env_path
+
+        self._request_count: int = 0
+        self._burst_counter: int = 0
+        self._last_url: str = ""
+        self._client_lock = threading.RLock()      # 遅延ログイン（最初の通信中にログインし、その確認でも通信する）で再入するため
+
+        _load_env(env_path)
+
+        self._current_ua = _identity_ua_entry()
+        self._raw_session = self._create_session()
+
+        if cache_dir:
+            os.makedirs(cache_dir, exist_ok=True)
+
+        # ログインは最初に通信が必要になるまで遅らせる（作業が無い定期ジョブがログインだけして終わる無駄と、
+        # 同じアカウントの別セッションを無効にする衝突を避ける）。NETKEIBA_LAZY_LOGIN=0 で従来どおり生成時にログイン。
+        lazy = os.environ.get("NETKEIBA_LAZY_LOGIN", "1").strip().lower() not in ("0", "false", "no")
+        self._login_pending = bool(auto_login) and lazy
+        if auto_login and not lazy:
+            self.login()
+
+    @property
+    def _session(self) -> requests.Session:
+        """HTTP セッション。ログインが保留中なら、最初にここへ触れたときにログインする。"""
+        if getattr(self, "_login_pending", False):
+            self._login_pending = False
+            self.login()
+        return self._raw_session
+
+    @_session.setter
+    def _session(self, value: requests.Session) -> None:
+        self._raw_session = value
+
+    # ------------------------------------------------------------------
+    # セッション構築
+    # ------------------------------------------------------------------
+
+    def _create_session(self) -> requests.Session:
+        """新しいセッションを構築してブラウザヘッダーを設定する。"""
+        session = requests.Session()
+        session.headers.update(_build_browser_headers(self._current_ua))
+
+        retry = Retry(
+            total=self._max_retries,
+            backoff_factor=1.5,
+            status_forcelist=[500, 502, 504],
+            allowed_methods=["GET", "POST"],
+        )
+        pmax = _http_adapter_pool_maxsize()
+        pconn = max(10, min(32, pmax))
+        adapter = HTTPAdapter(
+            max_retries=retry,
+            pool_maxsize=pmax,
+            pool_connections=pconn,
+        )
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+
+        from src.scraper.timing_stats import wrap_session_get
+
+        session.get = wrap_session_get(session.get)  # 実測時間の蓄積（timing_stats）
+        return session
+
+    def _refresh_session(self) -> None:
+        """セッションを破棄して新しいものに切り替える（TLS/接続の張り直し）。User-Agent は固定のまま変えない。
+        認証クッキー (netkeiba, nkauth) は login() で再設定されるためコピーしない。"""
+        _AUTH_COOKIES = {"netkeiba", "nkauth"}
+        old_cookies = {k: v for k, v in self._session.cookies.items()
+                       if k not in _AUTH_COOKIES}
+        self._session.close()
+
+        self._current_ua = _identity_ua_entry()
+        self._session = self._create_session()
+
+        for name, value in old_cookies.items():
+            self._session.cookies.set(name, value)
+
+        self._burst_counter = 0
+        logger.info(
+            "セッションリフレッシュ完了 (UA: %s...)",
+            self._current_ua["ua"][:50],
+        )
+
+    # ------------------------------------------------------------------
+    # Referer 管理
+    # ------------------------------------------------------------------
+
+    def _get_referer(self, url: str) -> str:
+        """URL に応じた適切な Referer ヘッダーを返す。"""
+        if self._last_url:
+            parsed_last = urlparse(self._last_url)
+            parsed_new = urlparse(url)
+            if parsed_last.netloc == parsed_new.netloc:
+                return self._last_url
+
+        parsed = urlparse(url)
+        return _REFERER_MAP.get(parsed.netloc, f"{parsed.scheme}://{parsed.netloc}/")
+
+    # ------------------------------------------------------------------
+    # スロットリング
+    # ------------------------------------------------------------------
+
+    def _throttle(self, source: str | None = None) -> None:
+        """ソースに応じたランダムスリープを挿入する。"""
+        src = source if source is not None else self.source
+        config = _THROTTLE_CONFIG.get(src, _THROTTLE_CONFIG["netkeiba"])
+        sleep_time = random.uniform(config["min_interval"], config["max_interval"])
+
+        jitter = random.gauss(0, sleep_time * 0.15)
+        sleep_time = max(config["min_interval"], sleep_time + jitter)
+
+        logger.debug("スロットリング: %.2f 秒待機 (source=%s)", sleep_time, src)
+        time.sleep(sleep_time)
+
+    def _rate_limit(self):
+        """後方互換用: 最低限の interval を保証する。"""
+        elapsed = time.time() - self._last_request_time
+        if elapsed < self.interval:
+            time.sleep(self.interval - elapsed)
+        self._last_request_time = time.time()
+
+    # ------------------------------------------------------------------
+    # バースト / クールダウン管理
+    # ------------------------------------------------------------------
+
+    def _check_burst(self) -> None:
+        """バースト制限とクールダウンを適用する。"""
+        self._burst_counter += 1
+
+        if self._burst_counter % _BURST_WINDOW == 0:
+            cooldown = random.uniform(_BURST_COOLDOWN_MIN, _BURST_COOLDOWN_MAX)
+            logger.info(
+                "バースト制限: %d リクエスト到達、%.1f 秒クールダウン",
+                self._burst_counter, cooldown,
+            )
+            time.sleep(cooldown)
+
+        if self._request_count > 0 and self._request_count % _SESSION_COOLDOWN_INTERVAL == 0:
+            cooldown = random.uniform(_SESSION_COOLDOWN_MIN, _SESSION_COOLDOWN_MAX)
+            logger.info(
+                "セッションクールダウン: %d リクエスト到達、%.1f 秒休止",
+                self._request_count, cooldown,
+            )
+            time.sleep(cooldown)
+
+        if (self._request_count > 0
+                and self._request_count % _SESSION_REFRESH_INTERVAL == 0):
+            logger.info("セッションリフレッシュ: %d リクエスト到達", self._request_count)
+            was_logged_in = self._logged_in
+            self._refresh_session()
+            if was_logged_in:
+                # 認証クッキーは _refresh_session で捨てているので、login() の早期 return（_logged_in が True）を避けて入り直す。
+                # これが無いと 150 リクエスト目以降は未ログインのまま進み、会員限定の表（調教・備考など）が空で返る
+                self._logged_in = False
+                self.login()
+
+    # ------------------------------------------------------------------
+    # リクエスト数管理
+    # ------------------------------------------------------------------
+
+    def _increment_request_count(self, url: str) -> None:
+        """リクエスト数をインクリメントし、上限チェックを行う。"""
+        self._request_count += 1
+        src = _source_from_url(url)
+        if src == "smartrc" and self._request_count >= _SMARTRC_REQUEST_LIMIT:
+            logger.warning(
+                "smartrc へのリクエスト数が上限 %d に達しました (現在: %d)。"
+                "セッションを切り替えることを検討してください。",
+                _SMARTRC_REQUEST_LIMIT,
+                self._request_count,
+            )
+
+    # ------------------------------------------------------------------
+    # 429/503 対応の指数バックオフリトライ
+    # ------------------------------------------------------------------
+
+    def _get_with_backoff(self, url: str) -> requests.Response:
+        """
+        GETリクエストを実行し、429/503 の場合は指数バックオフでリトライする。
+        """
+        wait = _BACKOFF_INITIAL
+        last_resp: requests.Response | None = None
+
+        for attempt in range(_BACKOFF_MAX_RETRIES + 1):
+            src = _source_from_url(url)
+            self._throttle(src)
+            self._last_request_time = time.time()
+
+            referer = self._get_referer(url)
+            self._session.headers["Referer"] = referer
+
+            with _netkeiba_inflight_guard(url):
+                if "netkeiba.com" in url:
+                    from src.scraper.request_counter import count_request
+
+                    count_request()
+                logger.info(
+                    "GET %s (attempt %d/%d)",
+                    url,
+                    attempt + 1,
+                    _BACKOFF_MAX_RETRIES + 1,
+                )
+                try:
+                    resp = self._session.get(url, timeout=self.timeout)
+                except Exception as _exc:          # 接続エラー・タイムアウト等。オブザーバ（アクセス制限の検知）に知らせてから従来どおり送出
+                    for _observer in tuple(_RESPONSE_OBSERVERS):
+                        _on_error = getattr(_observer, "on_error", None)
+                        if _on_error is not None:
+                            _on_error(url, _exc)
+                    raise
+            last_resp = resp
+            for _observer in tuple(_RESPONSE_OBSERVERS):
+                _observer(url, resp)
+
+            if resp.status_code in (429, 503):
+                if attempt < _BACKOFF_MAX_RETRIES:
+                    jitter = random.uniform(0, wait * 0.3)
+                    total_wait = wait + jitter
+                    logger.warning(
+                        "HTTP %d 受信。%.1f 秒後にリトライします (attempt %d/%d): %s",
+                        resp.status_code,
+                        total_wait,
+                        attempt + 1,
+                        _BACKOFF_MAX_RETRIES,
+                        url,
+                    )
+                    time.sleep(total_wait)
+                    wait *= _BACKOFF_FACTOR
+                    continue
+                else:
+                    logger.error(
+                        "HTTP %d: 最大リトライ回数 %d に達しました: %s",
+                        resp.status_code,
+                        _BACKOFF_MAX_RETRIES,
+                        url,
+                    )
+                    resp.raise_for_status()
+
+            elif resp.status_code == 403:
+                logger.warning(
+                    "HTTP 403 (アクセス拒否) — UA・IP は変えずに待機を延ばして再試行（上限あり）: %s", url,
+                )
+                if attempt < _BACKOFF_MAX_RETRIES:
+                    time.sleep(wait + random.uniform(5, 15))
+                    wait *= _BACKOFF_FACTOR
+                    continue
+                resp.raise_for_status()
+            elif resp.status_code == 400 and "netkeiba.com" in url:
+                from src.scraper.http400_strategy import (
+                    apply_recovery,
+                    classify_400_cause,
+                    get_recovery_tier,
+                    global_400_rate_monitor,
+                )
+                monitor = global_400_rate_monitor()
+                monitor.record()
+                cause = classify_400_cause(resp)
+                tier = get_recovery_tier(attempt, cause, monitor)
+
+                # サーキットブレーカー: 400 が短時間に多発したら自動で一時停止し、これ以上アクセスしない。
+                # (CONTENT_NOT_FOUND は正規の「無いページ」なので判定から除外する。0 を指定すると無効)
+                try:
+                    _cb_limit = int(os.environ.get("NETKEIBA_400_CIRCUIT_BREAKER", "12") or 0)
+                except ValueError:
+                    _cb_limit = 12
+                if (
+                    _cb_limit > 0
+                    and cause.value != "content_not_found"
+                    and monitor.rate_count() >= _cb_limit
+                ):
+                    from src.scraper.scrape_access_pause import read_access_pause, write_access_pause
+
+                    if not read_access_pause().get("active"):
+                        write_access_pause(
+                            reason=(
+                                f"HTTP 400 が直近 5 分間に {monitor.rate_count()} 回発生したため自動停止しました"
+                                f"(サーキットブレーカー)。最後の URL: {url[:200]}"
+                            )
+                        )
+                        logger.error(
+                            "HTTP 400 多発 (%d 回/5 分) — アクセス一時停止フラグを立てました: %s",
+                            monitor.rate_count(), url,
+                        )
+                    resp.raise_for_status()
+
+                if tier < 0:
+                    # CONTENT_NOT_FOUND でリトライ上限: 404 相当として扱う
+                    logger.warning(
+                        "HTTP 400 [%s] — コンテンツ不存在と判断し諦めます: %s",
+                        cause.value, url,
+                    )
+                    resp.raise_for_status()
+
+                if attempt < _BACKOFF_MAX_RETRIES:
+                    apply_recovery(tier, cause, self, url, attempt)
+                    wait = min(max(wait, _BACKOFF_INITIAL) * 1.2, 120.0)
+                    continue
+                resp.raise_for_status()
+            else:
+                resp.raise_for_status()
+                self._last_url = url
+                return resp
+
+        assert last_resp is not None
+        last_resp.raise_for_status()
+        return last_resp
+
+    # ------------------------------------------------------------------
+    # ログイン
+    # ------------------------------------------------------------------
+
+    def login(self) -> bool:
+        """
+        netkeiba.com にログインする。
+        認証情報は環境変数 netkeiba_id / netkeiba_pw から取得する。
+        スレッドセーフ。
+        """
+        self._login_pending = False
+        if self._logged_in:
+            return True
+        uid = os.environ.get("netkeiba_id", "")
+        pw = os.environ.get("netkeiba_pw", "")
+
+        if not uid or not pw:
+            logger.warning("ログイン情報なし (.env に netkeiba_id / netkeiba_pw を設定してください)")
+            return False
+
+        self._throttle()
+        logger.info("ログイン中... (%s)", uid[:6] + "***")
+
+        self._session.headers["Referer"] = "https://regist.netkeiba.com/?pid=login"
+
+        try:
+            resp = self._session.post(
+                _LOGIN_URL,
+                data={
+                    "pid": "login",
+                    "action": "auth",
+                    "rtn_url": "",
+                    "login_id": uid,
+                    "pswd": pw,
+                },
+                timeout=self.timeout,
+                allow_redirects=True,
+            )
+            cookies = list(self._session.cookies.keys())
+            if "nkauth" in cookies:
+                self._logged_in = True
+                logger.info("ログイン成功 (cookies: %s)", cookies)
+                if os.environ.get("KEIBA_VERIFY_LOGIN", "1") != "0":
+                    self._premium_ok = self._verify_premium()
+                return True
+            else:
+                logger.error("ログイン失敗 (nkauth cookie なし, cookies: %s)", cookies)
+                return False
+        except Exception as e:
+            logger.error("ログイン失敗: %s", e)
+            return False
+
+    def _verify_premium(self) -> bool | None:
+        """会員限定ページ（タイム指数）で全頭分の表が返るかを 1 リクエストで確認する。
+
+        ``nkauth`` クッキーがあっても会員状態が反映されず、指数表が数頭分しか返らないことがあったため。
+        確認自体に失敗したときは None（不明）として扱い、取得は止めない。
+        """
+        from bs4 import BeautifulSoup
+
+        rid = os.environ.get("KEIBA_LOGIN_PROBE_RACE_ID", "202509040410")
+        try:
+            html = self.fetch(
+                f"https://race.netkeiba.com/race/speed.html?race_id={rid}", use_cache=False
+            )
+        except Exception as e:
+            logger.warning("ログイン有効性の確認に失敗（不明として続行）: %s", e)
+            return None
+        rows = len(BeautifulSoup(html, "html.parser").select(
+            "table.SpeedIndex_Table tbody tr, table[class*='SpeedIndex'] tbody tr"))
+        if rows >= 5:
+            logger.info("ログイン有効性 OK (指数表 %d 行)", rows)
+            return True
+        logger.error("ログインは成功したが会員状態が反映されていない可能性 (指数表 %d 行)", rows)
+        return False
+
+    # ------------------------------------------------------------------
+    # プロパティ
+    # ------------------------------------------------------------------
+
+    @property
+    def is_logged_in(self) -> bool:
+        return self._logged_in
+
+    @property
+    def premium_ok(self) -> bool | None:
+        """会員限定ページが全頭分返ることを確認できたか。False のときは要ログインの取得を見送る。"""
+        return self._premium_ok
+
+    @property
+    def request_count(self) -> int:
+        """現在のセッションで発行したリクエスト総数。"""
+        return self._request_count
+
+    # ------------------------------------------------------------------
+    # エンコーディング / キャッシュ
+    # ------------------------------------------------------------------
+
+    def _detect_encoding(self, url: str) -> str:
+        for domain, enc in _ENCODING_MAP.items():
+            if domain in url:
+                return enc
+        return "UTF-8"
+
+    @staticmethod
+    def _declared_charset(resp: requests.Response) -> str | None:
+        """応答が宣言している文字コード（Content-Type → <meta charset>）。Python が知らない名前は無視する。
+
+        race.netkeiba.com は UTF-8、db.netkeiba.com は EUC-JP と混在し、サイト側の変更で入れ替わりうるため、
+        ホスト別の固定値（_ENCODING_MAP）より宣言を優先する。
+        """
+        import codecs
+        import re
+
+        cands: list[str] = []
+        m = re.search(r"charset=([\w\-]+)", resp.headers.get("Content-Type", ""), re.I)
+        if m:
+            cands.append(m.group(1))
+        m = re.search(rb"<meta[^>]+charset=[\"']?([A-Za-z0-9_\-]+)", (resp.content or b"")[:4096], re.I)
+        if m:
+            cands.append(m.group(1).decode("ascii", "ignore"))
+        for c in cands:
+            try:
+                codecs.lookup(c)
+                return c
+            except LookupError:
+                continue
+        return None
+
+    def _cache_key(self, url: str) -> Path | None:
+        if not self.cache_dir:
+            return None
+        suffix = "_auth" if self._logged_in else ""
+        # "|enc2": race.netkeiba.com を EUC-JP と誤判定して保存した文字化けキャッシュを使わないための版数
+        h = hashlib.md5((url + suffix + "|enc2").encode()).hexdigest()
+        return Path(self.cache_dir) / f"{h}.html"
+
+    # ------------------------------------------------------------------
+    # フェッチ
+    # ------------------------------------------------------------------
+
+    def fetch(self, url: str, use_cache: bool = True, encoding: str | None = None) -> str:
+        """
+        URLからHTMLを取得して文字列で返す。
+        キャッシュがあればそれを返す。
+        429/503 受信時は指数バックオフでリトライする。
+        スレッドセーフ: 複数ジョブが同一クライアントを共有しても安全。
+
+        encoding:
+            指定時はレスポンスの解釈にそのエンコーディングを使う（例: top の race_list 断片は UTF-8）。
+            未指定時は応答が宣言する文字コード（Content-Type / <meta>）、無ければホスト別の既定。
+        """
+        cache_path = self._cache_key(url)
+
+        if use_cache and cache_path and cache_path.exists():
+            logger.debug("キャッシュヒット: %s", url)
+            return cache_path.read_text(encoding="utf-8")
+
+        with self._client_lock:
+            self._increment_request_count(url)
+            self._check_burst()
+            resp = self._get_with_backoff(url)
+
+        enc = encoding or self._declared_charset(resp) or self._detect_encoding(url)
+        resp.encoding = enc
+        html = resp.text
+
+        if cache_path:
+            cache_path.write_text(html, encoding="utf-8")
+
+        return html
+
+    # ------------------------------------------------------------------
+    # クリーンアップ
+    # ------------------------------------------------------------------
+
+    def close(self):
+        # ログイン保留中（まだ一度も通信していない）なら、閉じるためだけにログインしない。
+        # 以前は self._session に触れて遅延ログインが走り、作業の無い定期ジョブ（完了済みのバックフィルなど）が
+        # ログイン＋会員ページの確認（指数表の取得）だけを毎回行っていた。
+        raw = getattr(self, "_raw_session", None)
+        self._login_pending = False
+        if raw is not None:
+            raw.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()

@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>モデル精度の総括（train / valid / test） — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+<style>.ok{color:#4ade80}.wait{color:#fbbf24}.ng{color:#f87171}.tag{font-size:12px;padding:1px 8px;border-radius:99px;border:1px solid #243358}</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>モデル精度の総括（train / valid / test）</h1>
+      <p class="meta">ソース: <code>docs/html/modeling/chapters/model_accuracy_summary.html</code></p>
+    </header>
+    <article class="html-body">
+<h1>モデル精度の総括（train / valid / test）</h1>
+<p class="muted">これまでに作った予測モデル（アンサンブル v1〜v4）の精度を、学習に使ったデータ（train）・調整に使ったデータ（valid）・最後に一度だけ見るデータ（test）で並べた総括。あわせて、<b>予測確率の帯ごとに実際はどれだけ起きたか</b>（較正表）を載せる。各実験の数値の正は <a href="training_pipeline_decisions.html">確定事項ログ</a>（§N）、調査の全体は <a href="research_overview.html">調査の全体像</a>、特徴量の採否は <a href="feature_investigation_catalog.html">特徴量調査の総覧</a>。最終更新: 2026-10-19。</p>
+
+<h2>1. 読み方</h2>
+<ul>
+  <li><b>train</b>: 最終モデルが学習に使った 2020〜2024 年の 235,458 行（17,230 レース）を、同じモデルでもう一度予測した精度（in-sample）。モデルが学習データをどれだけ覚えているかの目安で、<b>実力の評価には使わない</b>。</li>
+  <li><b>valid</b>: 2022〜2024 年を 1 年ずつ「その年を除いて学習したモデル」で予測した精度（leave-one-year-out＝LOYO）。特徴量の採否やモデルの選択に使った。</li>
+  <li><b>test 2025</b>: 2020〜2024 年だけで学習したモデルで 2025 年（3,455 レース・47,497 頭）を予測した精度。選択に使わず、最後に評価した。<b>実力に最も近い数値</b>。</li>
+  <li><b>指標</b>: LogLoss は予測確率の外れ具合（<b>小さいほど良い</b>）。AUC は「実際に起きた馬を、起きなかった馬より上に並べられる確率」（<b>大きいほど良い</b>、0.5 がでたらめ）。基準の一様予測は全馬に 1/頭数（勝率）などを割り当てた場合。</li>
+  <li>valid と test は年が違うので、数値の大小は単純には比べない（test 2025 は valid より易しい年だった可能性がある）。</li>
+</ul>
+
+<h2>2. 版別の精度（train / valid / test）</h2>
+<h3>勝率（1 着） の LogLoss（小さいほど良い）</h3>
+<table>
+<tr><th>版</th><th>train（再予測）</th><th>valid 2022〜24（LOYO）</th><th>test 2025</th><th>test − train</th></tr>
+<tr><td>一様予測（1/頭数）</td><td>-</td><td>-</td><td>0.25880</td><td>-</td></tr>
+<tr><td>v1（tp-06）</td><td>未算出</td><td>0.21488</td><td><b>0.21349</b></td><td>-</td></tr>
+<tr><td>v2（tp-06b）</td><td>未算出</td><td>0.21394</td><td><b>0.21240</b></td><td>-</td></tr>
+<tr><td>v3（tp-06c）</td><td>0.19669</td><td>0.21249</td><td><b>0.21039</b></td><td><b>+0.01370</b></td></tr>
+<tr><td>v4（tp-06d）</td><td>0.18709</td><td>0.20936</td><td><b>0.20740</b></td><td><b>+0.02031</b></td></tr>
+</table>
+<h3>連対率（2 着以内） の LogLoss（小さいほど良い）</h3>
+<table>
+<tr><th>版</th><th>train（再予測）</th><th>valid 2022〜24（LOYO）</th><th>test 2025</th><th>test − train</th></tr>
+<tr><td>一様予測（1/頭数）</td><td>-</td><td>-</td><td>0.41042</td><td>-</td></tr>
+<tr><td>v1（tp-06）</td><td>未算出</td><td>0.33720</td><td><b>0.33322</b></td><td>-</td></tr>
+<tr><td>v2（tp-06b）</td><td>未算出</td><td>0.33615</td><td><b>0.33179</b></td><td>-</td></tr>
+<tr><td>v3（tp-06c）</td><td>0.31585</td><td>0.33362</td><td><b>0.32833</b></td><td><b>+0.01248</b></td></tr>
+<tr><td>v4（tp-06d）</td><td>0.30497</td><td>0.32841</td><td><b>0.32360</b></td><td><b>+0.01863</b></td></tr>
+</table>
+<h3>複勝率（3 着以内） の LogLoss（小さいほど良い）</h3>
+<table>
+<tr><th>版</th><th>train（再予測）</th><th>valid 2022〜24（LOYO）</th><th>test 2025</th><th>test − train</th></tr>
+<tr><td>一様予測（1/頭数）</td><td>-</td><td>-</td><td>0.51685</td><td>-</td></tr>
+<tr><td>v1（tp-06）</td><td>未算出</td><td>0.42395</td><td><b>0.41887</b></td><td>-</td></tr>
+<tr><td>v2（tp-06b）</td><td>未算出</td><td>0.42227</td><td><b>0.41720</b></td><td>-</td></tr>
+<tr><td>v3（tp-06c）</td><td>0.40146</td><td>0.41941</td><td><b>0.41297</b></td><td><b>+0.01151</b></td></tr>
+<tr><td>v4（tp-06d）</td><td>0.38443</td><td>0.41262</td><td><b>0.40640</b></td><td><b>+0.02197</b></td></tr>
+</table>
+<h3>AUC（大きいほど良い）: train / valid / test の順</h3>
+<table>
+<tr><th>版</th><th>勝率</th><th>連対率</th><th>複勝率</th></tr>
+<tr><td>v1（tp-06）</td><td>-/-/0.814</td><td>-/-/0.806</td><td>-/-/0.800</td></tr>
+<tr><td>v2（tp-06b）</td><td>-/-/0.817</td><td>-/-/0.809</td><td>-/-/0.802</td></tr>
+<tr><td>v3（tp-06c）</td><td>0.860/0.821/0.823</td><td>0.838/0.810/0.815</td><td>0.825/0.803/0.809</td></tr>
+<tr><td>v4（tp-06d）</td><td>0.882/0.829/0.831</td><td>0.854/0.818/0.822</td><td>0.846/0.812/0.816</td></tr>
+</table>
+<p class="muted">valid・test の LogLoss は確定事項ログの値（v1 §8、v2 §9、v3 §29・§30、v4 §34）。v4 の valid は tp-27 の成果物（<code>tp27/ens/v4_e2.json</code>、決定ログには v3 比の差 −0.00321 のみ）。AUC の test は v1〜v3 が決定ログ、v4 は保存済みの test 予測から再計算。v3・v4 の valid の AUC と train は今回の再計算で、v3 の valid は決定ログの LogLoss（勝率 0.21249）と再計算（0.21233）に 0.0002 弱の差がある（年ごとの平均と全行まとめての違い）。v3 の test 複勝 LogLoss は決定ログ 0.41297、保存済み予測からの再計算 0.41282（ラベルの扱いの差）で、表は決定ログの値。v1・v2 の train は、学習済みモデルを保存していないため<span class="wait">未算出</span>。</p>
+
+<h2>3. 過学習の読み方</h2>
+<ul>
+  <li><b>train と test の差</b>（test − train の LogLoss）: v3 は勝率 +0.01370、連対 +0.01248、複勝 +0.01151。<b>v4 は +0.02031 / +0.01863 / +0.02197</b> と、v3 より 1.5〜2 倍大きい。v4 は 1,135 列・5 つの種（seed）・補助損失つき NN と、モデルが学習データを覚える余地が大きいため。</li>
+  <li><b>それでも test は改善している</b>: 差が広がっても、test の勝率 LogLoss は v3 0.21039 → v4 0.20740（決定ログの paired bootstrap で差 −0.00303、95% 上限 −0.00216）。学習データへの当てはまり（train）の改善（v3 0.19669 → v4 0.18709）より小さいが、未知の年でも効いている。</li>
+  <li><b>valid と test の差</b>: v4 は valid 勝率 0.20936 に対し test 0.20740 と、test の方が良い（v3・v2・v1 も同様）。valid に選択を寄せた楽観はなく、2025 年が全体にやや易しい年だった可能性が高い（原因は未検証）。</li>
+  <li>train の AUC は v3 0.860 → v4 0.882、test は 0.823 → 0.831。train の伸びが test の伸びの約 3 倍で、<b>今後さらに列やメンバーを足すほど、train と test の差は広がりやすい</b>。採否は引き続き valid と paired bootstrap で決め、train の改善は根拠にしない。</li>
+</ul>
+
+<h2>4. test 2025 の使用回数</h2>
+<p>2025 年の test は、v1（tp-06）・v2（tp-06b）・v3（tp-06c）・v4（tp-06d）の<b>4 回</b>、モデルの精度の評価に使った（各回の記録は決定ログ §8・§9・§30・§34）。以降、この年での特徴量やモデルの選択はしない。2026 年は学習にも評価にも使っていない（データが未完全）。</p>
+
+<h2>5. 予測値のレンジ別の成績（較正表）</h2>
+<p>予測確率の帯（「勝率 0.10〜0.20 と予測した馬」など）ごとに、<b>実際にどれだけ起きたか</b>を見る表。予測が現実と合っているかを確かめる。対象は最新の v4（v3 は末尾に折りたたみ）。データは <b>test 2025</b>（2020〜24 学習・一度だけの評価）と <b>valid 2022〜24</b>（LOYO）の 2 つ。</p>
+<h3>5.1 帯の決め方と列の意味</h3>
+<ul>
+  <li><b>帯</b>は固定の境界で切った: 勝率は 0.02・0.05・0.10・0.20・0.30・0.50、連対率は 0.05・0.10・0.20・0.30・0.50・0.70、複勝率は 0.10・0.20・0.30・0.50・0.70・0.85（各帯は「下限以上・上限未満」）。分位ではなく固定にしたのは、「予測 0.1〜0.2 の馬」のように意味を読めるようにするため。頭数が 400 未満の帯には<span class="wait">※少数</span>を付けた（誤差が大きい）。</li>
+  <li><b>平均予測</b>: その帯の馬の予測確率の平均。<b>実際の発生率</b>: その帯の馬のうち、実際に 1 着（連対率は 2 着以内、複勝率は 3 着以内）になった割合。<b>予測 − 実際</b>が正なら予測が高め、負なら低め。<b>95% 信頼区間</b>は発生率の誤差の幅（Wilson 法）。区間に平均予測が入っていれば、その帯の予測は現実と合っている。</li>
+  <li><b>単勝・複勝回収率</b>: その帯の馬を毎回 100 円ずつ買ったとして、払戻の合計 ÷ 投資額（確定払戻から計算、払戻が取れたレースのみ。取得率: 単勝 13,804/13,824 レース、複勝 13,609/13,824 レース）。<b>オッズは予測に使っていない</b>ので、市場とは独立に予測した確率の帯でどれだけ払戻があったかを見る<b>参考値</b>で、買い目戦略の評価ではない。複勝は払戻が桁をつなげた形式のレースがあり、分け方が一意に決まるものだけを使った。</li>
+</ul>
+<h3>5.2 較正プロット</h3>
+<p class="muted">横＝帯の平均予測、縦＝実際の発生率。破線（対角線）が理想で、点が線上にあれば予測は正確。青の塗りつぶしが test 2025、黄色の白抜きが valid 2022〜24 で、縦線は 95% 信頼区間。</p>
+<div style="display:flex;flex-wrap:wrap;gap:16px;margin:12px 0">
+<div style="flex:1 1 300px;min-width:260px"><div class="muted" style="text-align:center">勝率（1 着）</div><svg viewBox="0 0 300 300" width="100%" style="max-width:340px" role="img" aria-label="勝率（1 着）の較正プロット">
+<rect x="44" y="14" width="244" height="250" fill="#0b1428" stroke="#243358"/>
+<line x1="92.8" y1="14" x2="92.8" y2="264" stroke="#1b2a4d"/><line x1="44" y1="214.0" x2="288" y2="214.0" stroke="#1b2a4d"/>
+<line x1="141.6" y1="14" x2="141.6" y2="264" stroke="#1b2a4d"/><line x1="44" y1="164.0" x2="288" y2="164.0" stroke="#1b2a4d"/>
+<line x1="190.4" y1="14" x2="190.4" y2="264" stroke="#1b2a4d"/><line x1="44" y1="114.0" x2="288" y2="114.0" stroke="#1b2a4d"/>
+<line x1="239.2" y1="14" x2="239.2" y2="264" stroke="#1b2a4d"/><line x1="44" y1="64.0" x2="288" y2="64.0" stroke="#1b2a4d"/>
+<line x1="44.0" y1="264.0" x2="288.0" y2="14.0" stroke="#9aa7c7" stroke-dasharray="4 3"/>
+<text x="44.0" y="282" fill="#9aa7c7" font-size="10" text-anchor="middle">0.00</text><text x="38" y="267.0" fill="#9aa7c7" font-size="10" text-anchor="end">0.00</text>
+<text x="166.0" y="282" fill="#9aa7c7" font-size="10" text-anchor="middle">0.30</text><text x="38" y="142.0" fill="#9aa7c7" font-size="10" text-anchor="end">0.30</text>
+<text x="288.0" y="282" fill="#9aa7c7" font-size="10" text-anchor="middle">0.60</text><text x="38" y="17.0" fill="#9aa7c7" font-size="10" text-anchor="end">0.60</text>
+<text x="166.0" y="296" fill="#9aa7c7" font-size="10" text-anchor="middle">平均の予測確率</text>
+<text x="10" y="139.0" fill="#9aa7c7" font-size="10" text-anchor="middle" transform="rotate(-90 10 139.0)">実際の発生率</text>
+<line x1="47.3" y1="261.3" x2="47.3" y2="260.7" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="47.3" cy="261.0" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="57.5" y1="250.8" x2="57.5" y2="249.1" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="57.5" cy="250.0" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="73.2" y1="233.7" x2="73.2" y2="231.0" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="73.2" cy="232.4" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="101.6" y1="205.7" x2="101.6" y2="201.7" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="101.6" cy="203.7" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="143.0" y1="169.9" x2="143.0" y2="162.2" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="143.0" cy="166.1" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="196.3" y1="117.5" x2="196.3" y2="106.4" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="196.3" cy="112.0" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="278.8" y1="30.8" x2="278.8" y2="14.0" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="278.8" cy="16.8" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="47.2" y1="261.3" x2="47.2" y2="260.2" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="47.2" cy="260.8" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+<line x1="57.5" y1="250.8" x2="57.5" y2="247.8" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="57.5" cy="249.4" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+<line x1="73.2" y1="236.2" x2="73.2" y2="231.5" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="73.2" cy="234.0" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+<line x1="101.3" y1="208.3" x2="101.3" y2="201.3" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="101.3" cy="204.9" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+<line x1="142.8" y1="165.5" x2="142.8" y2="151.7" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="142.8" cy="158.8" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+<line x1="197.3" y1="123.6" x2="197.3" y2="104.3" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="197.3" cy="114.1" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+<line x1="281.3" y1="61.1" x2="281.3" y2="16.8" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="281.3" cy="38.8" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+</svg></div>
+<div style="flex:1 1 300px;min-width:260px"><div class="muted" style="text-align:center">連対率（2 着以内）</div><svg viewBox="0 0 300 300" width="100%" style="max-width:340px" role="img" aria-label="連対率（2 着以内）の較正プロット">
+<rect x="44" y="14" width="244" height="250" fill="#0b1428" stroke="#243358"/>
+<line x1="92.8" y1="14" x2="92.8" y2="264" stroke="#1b2a4d"/><line x1="44" y1="214.0" x2="288" y2="214.0" stroke="#1b2a4d"/>
+<line x1="141.6" y1="14" x2="141.6" y2="264" stroke="#1b2a4d"/><line x1="44" y1="164.0" x2="288" y2="164.0" stroke="#1b2a4d"/>
+<line x1="190.4" y1="14" x2="190.4" y2="264" stroke="#1b2a4d"/><line x1="44" y1="114.0" x2="288" y2="114.0" stroke="#1b2a4d"/>
+<line x1="239.2" y1="14" x2="239.2" y2="264" stroke="#1b2a4d"/><line x1="44" y1="64.0" x2="288" y2="64.0" stroke="#1b2a4d"/>
+<line x1="44.0" y1="264.0" x2="288.0" y2="14.0" stroke="#9aa7c7" stroke-dasharray="4 3"/>
+<text x="44.0" y="282" fill="#9aa7c7" font-size="10" text-anchor="middle">0.00</text><text x="38" y="267.0" fill="#9aa7c7" font-size="10" text-anchor="end">0.00</text>
+<text x="166.0" y="282" fill="#9aa7c7" font-size="10" text-anchor="middle">0.45</text><text x="38" y="142.0" fill="#9aa7c7" font-size="10" text-anchor="end">0.45</text>
+<text x="288.0" y="282" fill="#9aa7c7" font-size="10" text-anchor="middle">0.90</text><text x="38" y="17.0" fill="#9aa7c7" font-size="10" text-anchor="end">0.90</text>
+<text x="166.0" y="296" fill="#9aa7c7" font-size="10" text-anchor="middle">平均の予測確率</text>
+<text x="10" y="139.0" fill="#9aa7c7" font-size="10" text-anchor="middle" transform="rotate(-90 10 139.0)">実際の発生率</text>
+<line x1="50.0" y1="259.0" x2="50.0" y2="258.3" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="50.0" cy="258.6" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="63.8" y1="245.0" x2="63.8" y2="243.2" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="63.8" cy="244.1" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="83.2" y1="224.9" x2="83.2" y2="222.6" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="83.2" cy="223.8" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="110.5" y1="196.9" x2="110.5" y2="193.3" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="110.5" cy="195.1" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="147.9" y1="158.1" x2="147.9" y2="153.9" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="147.9" cy="156.0" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="199.9" y1="105.7" x2="199.9" y2="98.0" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="199.9" cy="101.8" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="254.0" y1="55.0" x2="254.0" y2="39.1" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="254.0" cy="46.7" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="49.8" y1="259.6" x2="49.8" y2="258.4" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="49.8" cy="259.0" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+<line x1="63.8" y1="245.8" x2="63.8" y2="242.7" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="63.8" cy="244.3" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+<line x1="83.2" y1="225.2" x2="83.2" y2="221.3" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="83.2" cy="223.3" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+<line x1="110.4" y1="200.1" x2="110.4" y2="193.8" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="110.4" cy="197.0" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+<line x1="147.9" y1="157.2" x2="147.9" y2="149.8" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="147.9" cy="153.6" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+<line x1="201.4" y1="106.2" x2="201.4" y2="92.8" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="201.4" cy="99.4" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+<line x1="256.1" y1="65.1" x2="256.1" y2="39.1" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="256.1" cy="51.2" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+</svg></div>
+<div style="flex:1 1 300px;min-width:260px"><div class="muted" style="text-align:center">複勝率（3 着以内）</div><svg viewBox="0 0 300 300" width="100%" style="max-width:340px" role="img" aria-label="複勝率（3 着以内）の較正プロット">
+<rect x="44" y="14" width="244" height="250" fill="#0b1428" stroke="#243358"/>
+<line x1="92.8" y1="14" x2="92.8" y2="264" stroke="#1b2a4d"/><line x1="44" y1="214.0" x2="288" y2="214.0" stroke="#1b2a4d"/>
+<line x1="141.6" y1="14" x2="141.6" y2="264" stroke="#1b2a4d"/><line x1="44" y1="164.0" x2="288" y2="164.0" stroke="#1b2a4d"/>
+<line x1="190.4" y1="14" x2="190.4" y2="264" stroke="#1b2a4d"/><line x1="44" y1="114.0" x2="288" y2="114.0" stroke="#1b2a4d"/>
+<line x1="239.2" y1="14" x2="239.2" y2="264" stroke="#1b2a4d"/><line x1="44" y1="64.0" x2="288" y2="64.0" stroke="#1b2a4d"/>
+<line x1="44.0" y1="264.0" x2="288.0" y2="14.0" stroke="#9aa7c7" stroke-dasharray="4 3"/>
+<text x="44.0" y="282" fill="#9aa7c7" font-size="10" text-anchor="middle">0.00</text><text x="38" y="267.0" fill="#9aa7c7" font-size="10" text-anchor="end">0.00</text>
+<text x="166.0" y="282" fill="#9aa7c7" font-size="10" text-anchor="middle">0.50</text><text x="38" y="142.0" fill="#9aa7c7" font-size="10" text-anchor="end">0.50</text>
+<text x="288.0" y="282" fill="#9aa7c7" font-size="10" text-anchor="middle">1.00</text><text x="38" y="17.0" fill="#9aa7c7" font-size="10" text-anchor="end">1.00</text>
+<text x="166.0" y="296" fill="#9aa7c7" font-size="10" text-anchor="middle">平均の予測確率</text>
+<text x="10" y="139.0" fill="#9aa7c7" font-size="10" text-anchor="middle" transform="rotate(-90 10 139.0)">実際の発生率</text>
+<line x1="55.3" y1="254.1" x2="55.3" y2="253.3" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="55.3" cy="253.7" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="79.7" y1="228.3" x2="79.7" y2="226.3" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="79.7" cy="227.3" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="104.3" y1="202.1" x2="104.3" y2="199.1" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="104.3" cy="200.6" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="138.9" y1="167.6" x2="138.9" y2="164.6" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="138.9" cy="166.1" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="186.9" y1="118.5" x2="186.9" y2="114.0" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="186.9" cy="116.3" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="229.2" y1="75.9" x2="229.2" y2="68.2" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="229.2" cy="72.0" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="267.0" y1="45.6" x2="267.0" y2="34.4" stroke="#fbbf24" stroke-opacity=".6"/>
+<circle cx="267.0" cy="39.5" r="4" fill="none" stroke="#fbbf24" stroke-width="1.6"/>
+<line x1="55.0" y1="254.8" x2="55.0" y2="253.4" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="55.0" cy="254.1" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+<line x1="79.7" y1="228.9" x2="79.7" y2="225.4" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="79.7" cy="227.1" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+<line x1="104.4" y1="205.1" x2="104.4" y2="200.0" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="104.4" cy="202.6" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+<line x1="138.7" y1="168.8" x2="138.7" y2="163.5" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="138.7" cy="166.2" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+<line x1="186.7" y1="117.2" x2="186.7" y2="109.3" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="186.7" cy="113.2" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+<line x1="229.0" y1="75.3" x2="229.0" y2="62.4" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="229.0" cy="68.6" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+<line x1="266.1" y1="57.6" x2="266.1" y2="36.9" stroke="#4f8bff" stroke-opacity=".6"/>
+<circle cx="266.1" cy="45.9" r="4" fill="#4f8bff" stroke="#4f8bff" stroke-width="1.6"/>
+</svg></div>
+</div>
+<h3>5.3 帯ごとの成績（v4）</h3>
+<h3>勝率（1 着）（v4）</h3>
+<p class="muted">test 2025（2020〜24 学習・一度だけの評価、47,497 頭）</p>
+<table>
+<tr><th>予測の帯</th><th>頭数</th><th>平均予測</th><th>実際の発生率</th><th>予測 − 実際</th><th>95% 信頼区間</th><th>単勝回収率</th><th>複勝回収率</th></tr>
+<tr><td>0.00〜0.02</td><td>18,088</td><td>0.008</td><td><b>0.008</b></td><td>+0.000</td><td>0.006〜0.009</td><td>51%</td><td>51%</td></tr>
+<tr><td>0.02〜0.05</td><td>9,955</td><td>0.033</td><td><b>0.035</b></td><td>-0.002</td><td>0.032〜0.039</td><td>83%</td><td>81%</td></tr>
+<tr><td>0.05〜0.10</td><td>8,183</td><td>0.072</td><td><b>0.072</b></td><td>-0.000</td><td>0.067〜0.078</td><td>86%</td><td>86%</td></tr>
+<tr><td>0.10〜0.20</td><td>6,641</td><td>0.141</td><td><b>0.142</b></td><td>-0.001</td><td>0.134〜0.150</td><td>84%</td><td>83%</td></tr>
+<tr><td>0.20〜0.30</td><td>2,649</td><td>0.243</td><td><b>0.253</b></td><td>-0.010</td><td>0.236〜0.269</td><td>90%</td><td>89%</td></tr>
+<tr><td>0.30〜0.50</td><td>1,648</td><td>0.377</td><td><b>0.360</b></td><td>+0.017</td><td>0.337〜0.383</td><td>85%</td><td>91%</td></tr>
+<tr><td>0.50〜1.00</td><td>333 <span class="wait">※少数</span></td><td>0.584</td><td><b>0.541</b></td><td>+0.043</td><td>0.487〜0.593</td><td>85%</td><td>92%</td></tr>
+</table>
+<p class="muted">valid 2022〜24（leave-one-year-out、140,865 頭）</p>
+<table>
+<tr><th>予測の帯</th><th>頭数</th><th>平均予測</th><th>実際の発生率</th><th>予測 − 実際</th><th>95% 信頼区間</th><th>単勝回収率</th><th>複勝回収率</th></tr>
+<tr><td>0.00〜0.02</td><td>52,162</td><td>0.008</td><td><b>0.007</b></td><td>+0.001</td><td>0.006〜0.008</td><td>47%</td><td>56%</td></tr>
+<tr><td>0.02〜0.05</td><td>30,433</td><td>0.033</td><td><b>0.034</b></td><td>-0.000</td><td>0.032〜0.036</td><td>82%</td><td>80%</td></tr>
+<tr><td>0.05〜0.10</td><td>24,210</td><td>0.072</td><td><b>0.076</b></td><td>-0.004</td><td>0.073〜0.079</td><td>86%</td><td>84%</td></tr>
+<tr><td>0.10〜0.20</td><td>20,101</td><td>0.142</td><td><b>0.145</b></td><td>-0.003</td><td>0.140〜0.150</td><td>86%</td><td>84%</td></tr>
+<tr><td>0.20〜0.30</td><td>8,055</td><td>0.243</td><td><b>0.235</b></td><td>+0.009</td><td>0.226〜0.244</td><td>85%</td><td>87%</td></tr>
+<tr><td>0.30〜0.50</td><td>5,068</td><td>0.375</td><td><b>0.365</b></td><td>+0.010</td><td>0.352〜0.378</td><td>88%</td><td>90%</td></tr>
+<tr><td>0.50〜1.00</td><td>836</td><td>0.577</td><td><b>0.593</b></td><td>-0.016</td><td>0.560〜0.626</td><td>94%</td><td>97%</td></tr>
+</table>
+<h3>連対率（2 着以内）（v4）</h3>
+<p class="muted">test 2025（2020〜24 学習・一度だけの評価、47,497 頭）</p>
+<table>
+<tr><th>予測の帯</th><th>頭数</th><th>平均予測</th><th>実際の発生率</th><th>予測 − 実際</th><th>95% 信頼区間</th><th>単勝回収率</th><th>複勝回収率</th></tr>
+<tr><td>0.00〜0.05</td><td>16,609</td><td>0.021</td><td><b>0.018</b></td><td>+0.004</td><td>0.016〜0.020</td><td>49%</td><td>49%</td></tr>
+<tr><td>0.05〜0.10</td><td>8,344</td><td>0.073</td><td><b>0.071</b></td><td>+0.002</td><td>0.066〜0.077</td><td>80%</td><td>79%</td></tr>
+<tr><td>0.10〜0.20</td><td>9,968</td><td>0.145</td><td><b>0.147</b></td><td>-0.002</td><td>0.140〜0.154</td><td>88%</td><td>86%</td></tr>
+<tr><td>0.20〜0.30</td><td>5,491</td><td>0.245</td><td><b>0.241</b></td><td>+0.004</td><td>0.230〜0.253</td><td>80%</td><td>80%</td></tr>
+<tr><td>0.30〜0.50</td><td>5,161</td><td>0.383</td><td><b>0.398</b></td><td>-0.014</td><td>0.384〜0.411</td><td>85%</td><td>88%</td></tr>
+<tr><td>0.50〜0.70</td><td>1,612</td><td>0.581</td><td><b>0.592</b></td><td>-0.012</td><td>0.568〜0.616</td><td>87%</td><td>92%</td></tr>
+<tr><td>0.70〜1.00</td><td>312 <span class="wait">※少数</span></td><td>0.782</td><td><b>0.766</b></td><td>+0.016</td><td>0.716〜0.810</td><td>83%</td><td>92%</td></tr>
+</table>
+<p class="muted">valid 2022〜24（leave-one-year-out、140,865 頭）</p>
+<table>
+<tr><th>予測の帯</th><th>頭数</th><th>平均予測</th><th>実際の発生率</th><th>予測 − 実際</th><th>95% 信頼区間</th><th>単勝回収率</th><th>複勝回収率</th></tr>
+<tr><td>0.00〜0.05</td><td>48,122</td><td>0.022</td><td><b>0.019</b></td><td>+0.003</td><td>0.018〜0.021</td><td>46%</td><td>55%</td></tr>
+<tr><td>0.05〜0.10</td><td>25,439</td><td>0.073</td><td><b>0.072</b></td><td>+0.001</td><td>0.069〜0.075</td><td>79%</td><td>79%</td></tr>
+<tr><td>0.10〜0.20</td><td>29,083</td><td>0.145</td><td><b>0.145</b></td><td>-0.000</td><td>0.141〜0.149</td><td>84%</td><td>83%</td></tr>
+<tr><td>0.20〜0.30</td><td>16,558</td><td>0.245</td><td><b>0.248</b></td><td>-0.003</td><td>0.242〜0.255</td><td>86%</td><td>82%</td></tr>
+<tr><td>0.30〜0.50</td><td>16,030</td><td>0.383</td><td><b>0.389</b></td><td>-0.006</td><td>0.381〜0.396</td><td>85%</td><td>86%</td></tr>
+<tr><td>0.50〜0.70</td><td>4,838</td><td>0.575</td><td><b>0.584</b></td><td>-0.009</td><td>0.570〜0.598</td><td>88%</td><td>91%</td></tr>
+<tr><td>0.70〜1.00</td><td>795</td><td>0.774</td><td><b>0.782</b></td><td>-0.008</td><td>0.752〜0.810</td><td>91%</td><td>97%</td></tr>
+</table>
+<h3>複勝率（3 着以内）（v4）</h3>
+<p class="muted">test 2025（2020〜24 学習・一度だけの評価、47,497 頭）</p>
+<table>
+<tr><th>予測の帯</th><th>頭数</th><th>平均予測</th><th>実際の発生率</th><th>予測 − 実際</th><th>95% 信頼区間</th><th>単勝回収率</th><th>複勝回収率</th></tr>
+<tr><td>0.00〜0.10</td><td>17,200</td><td>0.045</td><td><b>0.040</b></td><td>+0.006</td><td>0.037〜0.043</td><td>50%</td><td>50%</td></tr>
+<tr><td>0.10〜0.20</td><td>9,993</td><td>0.146</td><td><b>0.147</b></td><td>-0.001</td><td>0.141〜0.154</td><td>84%</td><td>82%</td></tr>
+<tr><td>0.20〜0.30</td><td>6,987</td><td>0.247</td><td><b>0.246</b></td><td>+0.002</td><td>0.236〜0.256</td><td>87%</td><td>83%</td></tr>
+<tr><td>0.30〜0.50</td><td>8,354</td><td>0.388</td><td><b>0.391</b></td><td>-0.003</td><td>0.381〜0.402</td><td>81%</td><td>82%</td></tr>
+<tr><td>0.50〜0.70</td><td>3,727</td><td>0.585</td><td><b>0.603</b></td><td>-0.018</td><td>0.587〜0.619</td><td>84%</td><td>89%</td></tr>
+<tr><td>0.70〜0.85</td><td>985</td><td>0.758</td><td><b>0.782</b></td><td>-0.023</td><td>0.755〜0.806</td><td>88%</td><td>93%</td></tr>
+<tr><td>0.85〜1.00</td><td>251 <span class="wait">※少数</span></td><td>0.910</td><td><b>0.873</b></td><td>+0.038</td><td>0.826〜0.908</td><td>85%</td><td>93%</td></tr>
+</table>
+<p class="muted">valid 2022〜24（leave-one-year-out、140,865 頭）</p>
+<table>
+<tr><th>予測の帯</th><th>頭数</th><th>平均予測</th><th>実際の発生率</th><th>予測 − 実際</th><th>95% 信頼区間</th><th>単勝回収率</th><th>複勝回収率</th></tr>
+<tr><td>0.00〜0.10</td><td>50,289</td><td>0.046</td><td><b>0.041</b></td><td>+0.005</td><td>0.040〜0.043</td><td>47%</td><td>55%</td></tr>
+<tr><td>0.10〜0.20</td><td>30,263</td><td>0.146</td><td><b>0.147</b></td><td>-0.000</td><td>0.143〜0.151</td><td>83%</td><td>81%</td></tr>
+<tr><td>0.20〜0.30</td><td>20,059</td><td>0.247</td><td><b>0.254</b></td><td>-0.006</td><td>0.248〜0.260</td><td>80%</td><td>82%</td></tr>
+<tr><td>0.30〜0.50</td><td>25,052</td><td>0.389</td><td><b>0.391</b></td><td>-0.002</td><td>0.385〜0.398</td><td>88%</td><td>84%</td></tr>
+<tr><td>0.50〜0.70</td><td>11,641</td><td>0.586</td><td><b>0.591</b></td><td>-0.005</td><td>0.582〜0.600</td><td>81%</td><td>87%</td></tr>
+<tr><td>0.70〜0.85</td><td>2,854</td><td>0.759</td><td><b>0.768</b></td><td>-0.009</td><td>0.752〜0.783</td><td>90%</td><td>92%</td></tr>
+<tr><td>0.85〜1.00</td><td>707</td><td>0.914</td><td><b>0.898</b></td><td>+0.016</td><td>0.874〜0.918</td><td>91%</td><td>99%</td></tr>
+</table>
+
+<h3>5.4 読み方</h3>
+<ul>
+  <li><b>全体として予測は現実とよく合っている</b>。多くの帯で平均予測と実際の発生率の差は 0.01 以内で、信頼区間に平均予測が入る（最上位の帯だけ 0.02〜0.04 の差）。test と valid の両方で同じ傾向。</li>
+  <li><b>最上位の帯はやや高めに出る</b>。勝率 0.50 以上は test で予測 0.584 に対し実際 0.541（予測が高め、頭数 333 と少なく区間は広い）、valid では逆に 0.577 に対し 0.593。複勝率 0.85 以上は test・valid とも予測がやや高め（test 0.910 → 0.873、valid 0.914 → 0.898）。<b>極端に高い予測（勝率 0.5 以上、複勝率 0.85 以上）は、数字より少し割り引いて読む</b>。</li>
+  <li><b>最も低い帯もわずかに外れる</b>。複勝率 0.10 未満は test・valid とも予測がやや高め（予測 0.045 → 実際 0.040 前後）。頭数が多い帯なので、小さくても差は本物。</li>
+  <li><b>回収率は、おおむね全帯で 80〜90% 台</b>（単勝・複勝の控除率に近い）。予測が高い帯ほど回収率が高い、という関係は見えず、<b>予測確率だけで買って儲かる帯はない</b>。これは確定オッズ（市場）が同じ情報をすでに織り込んでいることと整合する（決定ログ §10・§20・§23 の結論と同じ）。唯一、勝率 0.02 未満・複勝率 0.10 未満の最低帯は 50% 前後と低く、<b>大穴を買うほど損</b>という傾向。最上位帯は valid で 91〜99% と高めだが、test では 85〜93% で、頭数が少なく安定しない。</li>
+  <li>この表は「予測確率を、確率としてどれだけ信じてよいか」を見るもの。馬券の期待値は、予測確率と<b>投票時点のオッズ</b>の差で決まる（回収率の検証は時点別オッズの蓄積後に取り直す、決定ログ §30）。</li>
+</ul>
+<details><summary>v3 の較正表（参考）</summary>
+<h4>勝率（1 着）（v3）</h4>
+<p class="muted">test 2025</p>
+<table>
+<tr><th>予測の帯</th><th>頭数</th><th>平均予測</th><th>実際の発生率</th><th>予測 − 実際</th><th>95% 信頼区間</th><th>単勝回収率</th><th>複勝回収率</th></tr>
+<tr><td>0.00〜0.02</td><td>17,602</td><td>0.008</td><td><b>0.009</b></td><td>-0.001</td><td>0.008〜0.011</td><td>56%</td><td>54%</td></tr>
+<tr><td>0.02〜0.05</td><td>10,176</td><td>0.033</td><td><b>0.035</b></td><td>-0.002</td><td>0.032〜0.039</td><td>80%</td><td>79%</td></tr>
+<tr><td>0.05〜0.10</td><td>8,436</td><td>0.072</td><td><b>0.069</b></td><td>+0.003</td><td>0.064〜0.075</td><td>78%</td><td>82%</td></tr>
+<tr><td>0.10〜0.20</td><td>6,791</td><td>0.141</td><td><b>0.144</b></td><td>-0.003</td><td>0.136〜0.152</td><td>82%</td><td>81%</td></tr>
+<tr><td>0.20〜0.30</td><td>2,605</td><td>0.243</td><td><b>0.250</b></td><td>-0.007</td><td>0.234〜0.267</td><td>87%</td><td>88%</td></tr>
+<tr><td>0.30〜0.50</td><td>1,565</td><td>0.374</td><td><b>0.364</b></td><td>+0.010</td><td>0.341〜0.388</td><td>85%</td><td>88%</td></tr>
+<tr><td>0.50〜1.00</td><td>322 <span class="wait">※少数</span></td><td>0.594</td><td><b>0.506</b></td><td>+0.087</td><td>0.452〜0.560</td><td>80%</td><td>92%</td></tr>
+</table>
+<p class="muted">valid 2022〜24（OOF を v3 の合成式で合成した再計算）</p>
+<table>
+<tr><th>予測の帯</th><th>頭数</th><th>平均予測</th><th>実際の発生率</th><th>予測 − 実際</th><th>95% 信頼区間</th><th>単勝回収率</th><th>複勝回収率</th></tr>
+<tr><td>0.00〜0.02</td><td>49,311</td><td>0.009</td><td><b>0.008</b></td><td>+0.001</td><td>0.007〜0.009</td><td>52%</td><td>60%</td></tr>
+<tr><td>0.02〜0.05</td><td>32,053</td><td>0.033</td><td><b>0.034</b></td><td>-0.001</td><td>0.032〜0.036</td><td>77%</td><td>77%</td></tr>
+<tr><td>0.05〜0.10</td><td>25,464</td><td>0.072</td><td><b>0.075</b></td><td>-0.003</td><td>0.071〜0.078</td><td>84%</td><td>81%</td></tr>
+<tr><td>0.10〜0.20</td><td>20,721</td><td>0.141</td><td><b>0.145</b></td><td>-0.003</td><td>0.140〜0.150</td><td>81%</td><td>81%</td></tr>
+<tr><td>0.20〜0.30</td><td>7,743</td><td>0.242</td><td><b>0.236</b></td><td>+0.007</td><td>0.227〜0.245</td><td>82%</td><td>85%</td></tr>
+<tr><td>0.30〜0.50</td><td>4,769</td><td>0.372</td><td><b>0.359</b></td><td>+0.013</td><td>0.345〜0.372</td><td>84%</td><td>88%</td></tr>
+<tr><td>0.50〜1.00</td><td>804</td><td>0.579</td><td><b>0.587</b></td><td>-0.008</td><td>0.553〜0.621</td><td>94%</td><td>98%</td></tr>
+</table>
+<h4>連対率（2 着以内）（v3）</h4>
+<p class="muted">test 2025</p>
+<table>
+<tr><th>予測の帯</th><th>頭数</th><th>平均予測</th><th>実際の発生率</th><th>予測 − 実際</th><th>95% 信頼区間</th><th>単勝回収率</th><th>複勝回収率</th></tr>
+<tr><td>0.00〜0.05</td><td>16,294</td><td>0.022</td><td><b>0.021</b></td><td>+0.001</td><td>0.019〜0.023</td><td>56%</td><td>53%</td></tr>
+<tr><td>0.05〜0.10</td><td>8,408</td><td>0.073</td><td><b>0.071</b></td><td>+0.001</td><td>0.066〜0.077</td><td>79%</td><td>77%</td></tr>
+<tr><td>0.10〜0.20</td><td>10,161</td><td>0.145</td><td><b>0.144</b></td><td>+0.001</td><td>0.137〜0.151</td><td>80%</td><td>82%</td></tr>
+<tr><td>0.20〜0.30</td><td>5,658</td><td>0.245</td><td><b>0.242</b></td><td>+0.004</td><td>0.231〜0.253</td><td>80%</td><td>79%</td></tr>
+<tr><td>0.30〜0.50</td><td>5,186</td><td>0.382</td><td><b>0.393</b></td><td>-0.011</td><td>0.380〜0.407</td><td>82%</td><td>87%</td></tr>
+<tr><td>0.50〜0.70</td><td>1,490</td><td>0.576</td><td><b>0.597</b></td><td>-0.021</td><td>0.572〜0.621</td><td>87%</td><td>89%</td></tr>
+<tr><td>0.70〜1.00</td><td>300 <span class="wait">※少数</span></td><td>0.790</td><td><b>0.743</b></td><td>+0.046</td><td>0.691〜0.789</td><td>76%</td><td>92%</td></tr>
+</table>
+<p class="muted">valid 2022〜24（OOF を v3 の合成式で合成した再計算）</p>
+<table>
+<tr><th>予測の帯</th><th>頭数</th><th>平均予測</th><th>実際の発生率</th><th>予測 − 実際</th><th>95% 信頼区間</th><th>単勝回収率</th><th>複勝回収率</th></tr>
+<tr><td>0.00〜0.05</td><td>45,728</td><td>0.023</td><td><b>0.020</b></td><td>+0.003</td><td>0.019〜0.022</td><td>49%</td><td>58%</td></tr>
+<tr><td>0.05〜0.10</td><td>26,618</td><td>0.073</td><td><b>0.073</b></td><td>-0.000</td><td>0.070〜0.076</td><td>82%</td><td>77%</td></tr>
+<tr><td>0.10〜0.20</td><td>30,386</td><td>0.145</td><td><b>0.144</b></td><td>+0.001</td><td>0.140〜0.148</td><td>81%</td><td>80%</td></tr>
+<tr><td>0.20〜0.30</td><td>17,195</td><td>0.246</td><td><b>0.245</b></td><td>+0.000</td><td>0.239〜0.252</td><td>80%</td><td>79%</td></tr>
+<tr><td>0.30〜0.50</td><td>15,918</td><td>0.382</td><td><b>0.387</b></td><td>-0.005</td><td>0.379〜0.395</td><td>82%</td><td>85%</td></tr>
+<tr><td>0.50〜0.70</td><td>4,337</td><td>0.574</td><td><b>0.598</b></td><td>-0.024</td><td>0.583〜0.613</td><td>85%</td><td>91%</td></tr>
+<tr><td>0.70〜1.00</td><td>683</td><td>0.776</td><td><b>0.785</b></td><td>-0.008</td><td>0.752〜0.814</td><td>89%</td><td>96%</td></tr>
+</table>
+<h4>複勝率（3 着以内）（v3）</h4>
+<p class="muted">test 2025</p>
+<table>
+<tr><th>予測の帯</th><th>頭数</th><th>平均予測</th><th>実際の発生率</th><th>予測 − 実際</th><th>95% 信頼区間</th><th>単勝回収率</th><th>複勝回収率</th></tr>
+<tr><td>0.00〜0.10</td><td>16,919</td><td>0.046</td><td><b>0.044</b></td><td>+0.002</td><td>0.041〜0.047</td><td>57%</td><td>54%</td></tr>
+<tr><td>0.10〜0.20</td><td>10,178</td><td>0.147</td><td><b>0.146</b></td><td>+0.000</td><td>0.140〜0.153</td><td>82%</td><td>79%</td></tr>
+<tr><td>0.20〜0.30</td><td>7,127</td><td>0.248</td><td><b>0.244</b></td><td>+0.004</td><td>0.234〜0.254</td><td>76%</td><td>80%</td></tr>
+<tr><td>0.30〜0.50</td><td>8,499</td><td>0.388</td><td><b>0.389</b></td><td>-0.001</td><td>0.379〜0.399</td><td>79%</td><td>81%</td></tr>
+<tr><td>0.50〜0.70</td><td>3,598</td><td>0.584</td><td><b>0.605</b></td><td>-0.021</td><td>0.589〜0.621</td><td>84%</td><td>88%</td></tr>
+<tr><td>0.70〜0.85</td><td>910</td><td>0.758</td><td><b>0.763</b></td><td>-0.004</td><td>0.734〜0.789</td><td>86%</td><td>91%</td></tr>
+<tr><td>0.85〜1.00</td><td>266 <span class="wait">※少数</span></td><td>0.920</td><td><b>0.868</b></td><td>+0.052</td><td>0.823〜0.904</td><td>78%</td><td>93%</td></tr>
+</table>
+<p class="muted">valid 2022〜24（OOF を v3 の合成式で合成した再計算）</p>
+<table>
+<tr><th>予測の帯</th><th>頭数</th><th>平均予測</th><th>実際の発生率</th><th>予測 − 実際</th><th>95% 信頼区間</th><th>単勝回収率</th><th>複勝回収率</th></tr>
+<tr><td>0.00〜0.10</td><td>48,498</td><td>0.049</td><td><b>0.044</b></td><td>+0.004</td><td>0.042〜0.046</td><td>52%</td><td>60%</td></tr>
+<tr><td>0.10〜0.20</td><td>31,662</td><td>0.146</td><td><b>0.146</b></td><td>+0.001</td><td>0.142〜0.150</td><td>80%</td><td>77%</td></tr>
+<tr><td>0.20〜0.30</td><td>20,939</td><td>0.247</td><td><b>0.252</b></td><td>-0.005</td><td>0.246〜0.258</td><td>79%</td><td>81%</td></tr>
+<tr><td>0.30〜0.50</td><td>25,314</td><td>0.388</td><td><b>0.393</b></td><td>-0.005</td><td>0.387〜0.399</td><td>84%</td><td>81%</td></tr>
+<tr><td>0.50〜0.70</td><td>11,171</td><td>0.583</td><td><b>0.585</b></td><td>-0.002</td><td>0.576〜0.594</td><td>78%</td><td>85%</td></tr>
+<tr><td>0.70〜0.85</td><td>2,600</td><td>0.758</td><td><b>0.767</b></td><td>-0.009</td><td>0.751〜0.783</td><td>87%</td><td>91%</td></tr>
+<tr><td>0.85〜1.00</td><td>681</td><td>0.913</td><td><b>0.883</b></td><td>+0.031</td><td>0.856〜0.905</td><td>88%</td><td>97%</td></tr>
+</table>
+</details>
+
+<h2>6. 未掲載・今後</h2>
+<ul>
+  <li>v3・v4 の<b>区分別</b>（芝・ダート、距離、頭数、障害）と<b>確信度別</b>（予測 1 位の馬の確信度ごとの的中率）の内訳は、本章では未掲載。v2 までは総合実験結果の章にある。必要になったら、保存済みの test 予測（<code>final_eval_v3|v4/test2025_predictions.parquet</code>）から同じ形で出せる。</li>
+  <li>年別（2022・2023・2024・2025）の精度の並びも未掲載（年によって難しさが違うため、valid と test の差を読むのに役立つ）。</li>
+  <li>v1・v2 の train は、学習済みモデルを保存していないので算出できない（再学習すれば出せるが、現行の判断には使わない）。</li>
+</ul>
+
+<h2>7. 計算方法・実行記録</h2>
+<ul>
+  <li><b>train の再予測</b>: <code>python -m src.scripts.data.accuracy_summary --version v3|v4</code>。最終バンドル（<code>final_v3/bundle_2024</code>、<code>final_v4/bundle_v4_2024</code>、2020〜2024 年で学習）を読み込み、学習に使った行（2024-12-22 までの 235,458 行）を<code>EnsembleBundle.predict</code> で再予測して、LogLoss と AUC を計算。バンドルと学習表は読み取りのみ。実行は 2026-10-19、ホスト（stg）で <code>nice -n 15</code>・4 スレッド・直列。所要は v3 が約 5 分、v4 が約 8 分。</li>
+  <li><b>較正表と valid・test の再計算</b>: <code>python -m src.scripts.data.accuracy_calibration</code>。test は <code>final_eval_v3|v4/test2025_predictions.parquet</code>、v4 の valid は <code>tp27/ens/v4_e2.parquet</code>、v3 の valid は各メンバーの OOF を <code>ensemble_v3/ensemble_spec.json</code> の重みで合成。着順と払戻は <code>data/page_reference/tables/&lt;年&gt;/race_result_flat.parquet</code>。</li>
+  <li><b>出力</b>（ホスト）: <code>data/local/modeling/training_pipeline/accuracy_summary/</code> の <code>train_v3.json</code>、<code>train_v4.json</code>、<code>calibration.json</code>。</li>
+</ul>
+
+    </article>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">modeling/chapters/model_accuracy_summary.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

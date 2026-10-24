@@ -1,0 +1,340 @@
+{
+ "notes": [
+  "形状は OpenStreetMap の面ポリゴン。走行線は『内ラチから 3m』の線（面の穴 = 内ラチの輪を直接使う。内回り・外回りが重なる場所は骨格化した中心線から内側へ光線を飛ばして内ラチに当てる）で、周長はマスタと 3% 以内で合う（多くは 1% 以内）。",
+  "ゴール = コーナー出口 + マスタの『最後の直線の長さ』の点のうち、メインスタンドに最も近いもの。スタンド（建物）は OSM の大きな建物のうち、コース面から 230m 以内のもの。",
+  "曲率のしきい値 1/260（m⁻¹）は、本線上のスタートのコースで『最初のコーナーまでの距離』が図とマスタで最も合う値に調整した（中央値の誤差 約 1m、平均絶対誤差 約 20m）。OSM の走行線のコーナー入口は、公式のコーナー開始点より数十 m 早く検出される傾向がある（東京の芝1800・2000 など、長い直線が続く場で 90〜120m ずれる）。",
+  "引込み線 = コーナー出口の直線を後ろへ延長した先端（長さ = 距離 − 出口から ゴールまでの距離）。先端までの線が OSM の面に 80% 以上収まり、最初のコーナーまでの距離（マスタの first_curve_m または first_main_corner_m_A）が 80m 以内で合えば『実形状』。",
+  "斜めに合流する引込み線（札幌・中京・福島など）は、骨格の行き止まりの枝（先端 → 接続点）+ 接続点から先の周回路の長さが距離に合うものを採る。合わない・距離が照合できないものは『推定』にしている。",
+  "中京: OSM にダートの面が無いため、芝の内ラチの内側に幅 25m の帯があるとして推定（周長はマスタと +0.8%）。",
+  "新潟の直線 1000m は、外回りの最後の直線へつながる枝の骨格から推定（『推定』表示）。",
+  "第5ラウンドの監査: 全コースのスタート位置・区間を、複数の独立した資料（第三者サイトの記述。権利の都合で文章は公開リポジトリに置かず、ローカルのみ保持）と突き合わせた（検証の章に全表）。独立した記述と合わない発走位置は geo/start_overrides.json で上書きし、根拠の名前と URL を残している（文の抜粋は載せない）。",
+  "直したもの: 東京芝2000m（本線上 → 1コーナー奥のポケット）、東京芝1800m・中京芝1600m・札幌芝1500m・福島ダート1150m・中山芝外回り1600m（直線の延長 → 斜めに合流するポケット）、札幌ダート1000m・東京ダート1400m・中京ダート1200m・中京芝3000m・新潟芝内回り2000m（引込み線ではなく本線上）。コーナー検出のしきい値は競馬場ごとに選ぶ（福島・東京など）。",
+  "直せていない・推定のもの: ポケットのコース（位置は独立資料と OSM の面のふくらみで裏づけ、先端から本線への曲線は補間）、新潟の直線1000m、阪神内回り3200m（発走位置の資料なし）。函館ダート2400m・福島ダート1700m/2400mなど、最初のコーナーまでの距離が 30〜50m ずれる本線上のコースは、コーナー入口の定義の差（スパイラルカーブ等）による。",
+  "ポケットの最初のコーナーまでの距離の一致は、候補（先端と接続点の組）の中から距離とマスタの値が最も合うものを選んだ結果であり、独立した検証ではない。独立した検証になっているのは、(1) 先端が OSM のコース面のふくらみの中にあること、(2) スタートからゴールまでの経路長が距離と 2% 以内で合うこと、(3) 区間が独立した記述と合うこと。",
+  "障害コースは OSM の別の面（ダートの輪の内側にある芝）として背景に薄く描くだけで、経路には使わない。",
+  "複数周のコース（約 1.5 周など）は最後の周だけを描く。阪神の 3200m 内回り（1 周目は外回り）の初回の周は描いていない。"
+ ],
+ "summary": {
+  "circuits": [
+   {
+    "venue": "01",
+    "circuit": "芝|",
+    "L_run": 1634.3,
+    "lap_official": 1640.9,
+    "err": -0.004,
+    "method": "hole-direct",
+    "derived": false,
+    "goal_to_stand_m": 53.2
+   },
+   {
+    "venue": "01",
+    "circuit": "ダート|",
+    "L_run": 1490.4,
+    "lap_official": 1487.0,
+    "err": 0.0023,
+    "method": "outer-inset",
+    "derived": false,
+    "goal_to_stand_m": 75.2
+   },
+   {
+    "venue": "02",
+    "circuit": "芝|",
+    "L_run": 1616.7,
+    "lap_official": 1626.6,
+    "err": -0.0061,
+    "method": "hole-direct",
+    "derived": false,
+    "goal_to_stand_m": 46.5
+   },
+   {
+    "venue": "02",
+    "circuit": "ダート|",
+    "L_run": 1476.0,
+    "lap_official": 1475.8,
+    "err": 0.0002,
+    "method": "outer-inset",
+    "derived": false,
+    "goal_to_stand_m": 68.7
+   },
+   {
+    "venue": "03",
+    "circuit": "芝|",
+    "L_run": 1592.2,
+    "lap_official": 1600.0,
+    "err": -0.0049,
+    "method": "hole-direct",
+    "derived": false,
+    "goal_to_stand_m": 41.6
+   },
+   {
+    "venue": "03",
+    "circuit": "ダート|",
+    "L_run": 1444.8,
+    "lap_official": 1444.6,
+    "err": 0.0001,
+    "method": "hole-direct",
+    "derived": false,
+    "goal_to_stand_m": 64.7
+   },
+   {
+    "venue": "04",
+    "circuit": "芝|外",
+    "L_run": 2233.5,
+    "lap_official": 2223.0,
+    "err": 0.0047,
+    "method": "ray",
+    "derived": false,
+    "goal_to_stand_m": 101.3
+   },
+   {
+    "venue": "04",
+    "circuit": "芝|内",
+    "L_run": 1632.9,
+    "lap_official": 1623.0,
+    "err": 0.0061,
+    "method": "hole",
+    "derived": false,
+    "goal_to_stand_m": 100.7
+   },
+   {
+    "venue": "04",
+    "circuit": "ダート|",
+    "L_run": 1472.1,
+    "lap_official": 1472.5,
+    "err": -0.0003,
+    "method": "outer-inset",
+    "derived": false,
+    "goal_to_stand_m": 118.4
+   },
+   {
+    "venue": "05",
+    "circuit": "芝|",
+    "L_run": 2119.2,
+    "lap_official": 2083.1,
+    "err": 0.0173,
+    "method": "hole-direct",
+    "derived": false,
+    "goal_to_stand_m": 50.0
+   },
+   {
+    "venue": "05",
+    "circuit": "ダート|",
+    "L_run": 1902.8,
+    "lap_official": 1899.0,
+    "err": 0.002,
+    "method": "hole-direct",
+    "derived": false,
+    "goal_to_stand_m": 82.7
+   },
+   {
+    "venue": "06",
+    "circuit": "芝|外",
+    "L_run": 1839.4,
+    "lap_official": 1839.7,
+    "err": -0.0002,
+    "method": "ray",
+    "derived": false,
+    "goal_to_stand_m": 62.8
+   },
+   {
+    "venue": "06",
+    "circuit": "芝|内",
+    "L_run": 1667.1,
+    "lap_official": 1667.1,
+    "err": 0.0,
+    "method": "hole",
+    "derived": false,
+    "goal_to_stand_m": 62.3
+   },
+   {
+    "venue": "06",
+    "circuit": "ダート|",
+    "L_run": 1495.2,
+    "lap_official": 1493.0,
+    "err": 0.0015,
+    "method": "outer-inset",
+    "derived": false,
+    "goal_to_stand_m": 40.5
+   },
+   {
+    "venue": "07",
+    "circuit": "芝|",
+    "L_run": 1700.4,
+    "lap_official": 1705.9,
+    "err": -0.0032,
+    "method": "hole-direct",
+    "derived": false,
+    "goal_to_stand_m": 47.8
+   },
+   {
+    "venue": "07",
+    "circuit": "ダート|",
+    "L_run": 1541.9,
+    "lap_official": 1530.0,
+    "err": 0.0078,
+    "method": "outer-inset",
+    "derived": true,
+    "goal_to_stand_m": 71.9
+   },
+   {
+    "venue": "08",
+    "circuit": "芝|外",
+    "L_run": 1914.1,
+    "lap_official": 1894.3,
+    "err": 0.0104,
+    "method": "ray",
+    "derived": false,
+    "goal_to_stand_m": 58.4
+   },
+   {
+    "venue": "08",
+    "circuit": "芝|内",
+    "L_run": 1805.3,
+    "lap_official": 1782.8,
+    "err": 0.0126,
+    "method": "hole",
+    "derived": false,
+    "goal_to_stand_m": 58.1
+   },
+   {
+    "venue": "08",
+    "circuit": "ダート|",
+    "L_run": 1613.2,
+    "lap_official": 1607.6,
+    "err": 0.0035,
+    "method": "hole-direct",
+    "derived": false,
+    "goal_to_stand_m": 90.3
+   },
+   {
+    "venue": "09",
+    "circuit": "芝|外",
+    "L_run": 2106.8,
+    "lap_official": 2089.0,
+    "err": 0.0085,
+    "method": "ray",
+    "derived": false,
+    "goal_to_stand_m": 56.6
+   },
+   {
+    "venue": "09",
+    "circuit": "芝|内",
+    "L_run": 1691.6,
+    "lap_official": 1689.0,
+    "err": 0.0015,
+    "method": "hole",
+    "derived": false,
+    "goal_to_stand_m": 58.1
+   },
+   {
+    "venue": "09",
+    "circuit": "ダート|",
+    "L_run": 1516.5,
+    "lap_official": 1517.6,
+    "err": -0.0007,
+    "method": "hole-direct",
+    "derived": false,
+    "goal_to_stand_m": 84.1
+   },
+   {
+    "venue": "10",
+    "circuit": "芝|",
+    "L_run": 1616.0,
+    "lap_official": 1615.1,
+    "err": 0.0006,
+    "method": "hole-direct",
+    "derived": false,
+    "goal_to_stand_m": 41.8
+   },
+   {
+    "venue": "10",
+    "circuit": "ダート|",
+    "L_run": 1448.8,
+    "lap_official": 1445.4,
+    "err": 0.0024,
+    "method": "hole-direct",
+    "derived": false,
+    "goal_to_stand_m": 67.9
+   }
+  ],
+  "n_circuits": 24,
+  "max_abs_lap_err": 0.0173,
+  "courses_total": 107,
+  "start_kinds": {
+   "main": 62,
+   "chute": 38,
+   "pocket": 6,
+   "straight": 1
+  },
+  "first_curve_check": {
+   "n": 99,
+   "median_err_m": -1.0,
+   "mean_abs_err_m": 14.158585858585857,
+   "max_abs_err_m": 116.0
+  },
+  "estimated_courses": [
+   {
+    "venue": "04",
+    "course": "芝|直|1000",
+    "start": "straight",
+    "first_curve_calc": 288.0,
+    "first_curve_master": null,
+    "reasons": [
+     "直線コースは骨格の枝から推定"
+    ]
+   },
+   {
+    "venue": "09",
+    "course": "芝|内|3200",
+    "start": "chute",
+    "first_curve_calc": 572.0,
+    "first_curve_master": null,
+    "reasons": [
+     "引込み線の形は OSM の面に収まるが、最初のコーナーまでの距離が図 572m / マスタ 380.0m とずれる"
+    ]
+   }
+  ],
+  "curve_thr_by_venue": {
+   "01": {
+    "thr": 350,
+    "fc_mae_m": 9.5
+   },
+   "02": {
+    "thr": 260,
+    "fc_mae_m": 5.1
+   },
+   "03": {
+    "thr": 500,
+    "fc_mae_m": 29.1
+   },
+   "04": {
+    "thr": 260,
+    "fc_mae_m": 6.3
+   },
+   "05": {
+    "thr": 200,
+    "fc_mae_m": 5.7
+   },
+   "06": {
+    "thr": 260,
+    "fc_mae_m": 8.6
+   },
+   "07": {
+    "thr": 260,
+    "fc_mae_m": 17.4
+   },
+   "08": {
+    "thr": 260,
+    "fc_mae_m": 8.9
+   },
+   "09": {
+    "thr": 260,
+    "fc_mae_m": 25.0
+   },
+   "10": {
+    "thr": 260,
+    "fc_mae_m": 11.3
+   }
+  }
+ }
+}

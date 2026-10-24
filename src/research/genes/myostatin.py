@@ -1,0 +1,610 @@
+"""
+ミオスタチン遺伝子 (MSTN) 解析モジュール
+
+ミオスタチン遺伝子の型 (CC/CT/TT) をナレッジベースから検索し、
+子馬の遺伝子型確率を推論し、距離適性スコアを算出する。
+
+遺伝ルール:
+  - 各馬は 2つのアレル (C or T) を持つ → CC / CT / TT
+  - 親から子へ各 1アレルずつ遺伝
+  - TT: 長距離向き, CT: マイル〜中距離, CC: スプリント向き
+
+Usage:
+  from src.research.genes.myostatin import MyostatinLookup
+  mstn = MyostatinLookup()
+  mstn.get_sire_info("ディープインパクト")
+  mstn.predict_offspring("キタサンブラック", "サンデーサイレンス")
+  mstn.distance_affinity("ディープインパクト", "ロードカナロア", 2400)
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import math
+from pathlib import Path
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+from src.config.data_paths import MYOSTATIN_GENES_JSON
+
+_KB_PATH = MYOSTATIN_GENES_JSON
+
+
+class MyostatinLookup:
+    """競走馬・種牡馬ミオスタチン遺伝子ナレッジベースの検索・推論エンジン。"""
+
+    def __init__(self, kb_path: str | Path | None = None):
+        self._kb_path = Path(kb_path) if kb_path else _KB_PATH
+        self._stallions: dict[str, dict] = {}
+        self._en_index: dict[str, str] = {}
+        self._defaults: dict[str, Any] = {}
+        self._load()
+
+    def _load(self) -> None:
+        if not self._kb_path.exists():
+            logger.warning("ミオスタチンKBが見つかりません: %s", self._kb_path)
+            return
+        data = json.loads(self._kb_path.read_text(encoding="utf-8"))
+        self._defaults = data.get("population_defaults", {})
+        for s in data.get("stallions", []):
+            name = s.get("name", "")
+            if name:
+                self._stallions[name] = s
+            name_en = s.get("name_en", "")
+            if name_en:
+                self._en_index[name_en.lower()] = name
+
+    @property
+    def stallion_count(self) -> int:
+        """登録馬数（種牡馬・競走馬）を返す。"""
+        return len(self._stallions)
+
+    def list_stallions(self) -> list[str]:
+        """登録馬名のリストを返す（種牡馬・競走馬）。"""
+        return sorted(self._stallions.keys())
+
+    def get_sire_info(self, name: str) -> dict | None:
+        """馬名（日本語 or 英語）でナレッジベースを検索。種牡馬・競走馬どちらも対象。"""
+        if name in self._stallions:
+            return self._stallions[name]
+        jp_name = self._en_index.get(name.lower())
+        if jp_name:
+            return self._stallions.get(jp_name)
+        return None
+
+    def get_allele_probs(self, name: str) -> tuple[float, float]:
+        """
+        馬のアレル確率 (allele_c, allele_t) を返す。
+        KBに未登録の場合は集団デフォルト値を返す。
+        """
+        info = self.get_sire_info(name)
+        if info:
+            return (info.get("allele_c", 0.5), info.get("allele_t", 0.5))
+        defaults = self._defaults.get("japanese_thoroughbred_avg", {})
+        return (defaults.get("allele_c", 0.4), defaults.get("allele_t", 0.6))
+
+    def predict_offspring(
+        self,
+        sire_name: str,
+        dam_sire_name: str,
+    ) -> dict[str, float]:
+        """
+        父と母父の遺伝子型から、子馬の遺伝子型確率を推定する。
+
+        母の遺伝子型は不明なため、母父のアレル確率 + 母の母側デフォルト値を
+        組み合わせて母のアレル確率を推定する。
+
+        Returns: {"CC": p, "CT": p, "TT": p}
+        """
+        sire_c, sire_t = self.get_allele_probs(sire_name)
+
+        ds_c, ds_t = self.get_allele_probs(dam_sire_name)
+        dam_dam_defaults = self._defaults.get("unknown_mare_avg", {})
+        dd_c = dam_dam_defaults.get("allele_c", 0.45)
+        dd_t = dam_dam_defaults.get("allele_t", 0.55)
+
+        dam_c = ds_c * 0.5 + dd_c * 0.5
+        dam_t = ds_t * 0.5 + dd_t * 0.5
+
+        cc = sire_c * dam_c
+        tt = sire_t * dam_t
+        ct = sire_c * dam_t + sire_t * dam_c
+
+        total = cc + ct + tt
+        if total > 0:
+            cc /= total
+            ct /= total
+            tt /= total
+
+        return {"CC": round(cc, 4), "CT": round(ct, 4), "TT": round(tt, 4)}
+
+    def distance_affinity(
+        self,
+        sire_name: str,
+        dam_sire_name: str,
+        distance_m: int,
+    ) -> float:
+        """
+        推定ミオスタチン遺伝子型とレース距離の適合度を算出する。
+
+        各遺伝子型の「理想距離帯」をガウス分布でモデル化し、
+        子馬の推定遺伝子型確率で加重平均した値を返す。
+
+        Returns: 0.0〜1.0 のスコア (1.0 = 完全適合)
+        """
+        probs = self.predict_offspring(sire_name, dam_sire_name)
+        return _genotype_distance_score(probs, distance_m)
+
+    def reverse_infer(
+        self,
+        offspring_genotype: str,
+        sire_name: str | None = None,
+        dam_sire_name: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        産駒の確定遺伝子型から親の遺伝子型を逆推論する。
+
+        @Plucky_Liege のツイート等で産駒の遺伝子型が判明した際に使う。
+        例: 産駒がCC → 父も母もCアレル保有確定。
+            産駒がTT → 父も母もTアレル保有確定。
+
+        Returns: dict with inferred constraints on sire/dam
+        """
+        result: dict[str, Any] = {
+            "offspring_genotype": offspring_genotype,
+            "sire_constraints": {},
+            "dam_constraints": {},
+        }
+
+        if offspring_genotype == "CC":
+            result["sire_constraints"]["has_c"] = True
+            result["sire_constraints"]["possible_genotypes"] = ["CC", "CT"]
+            result["sire_constraints"]["excludes"] = ["TT"]
+            result["dam_constraints"]["has_c"] = True
+        elif offspring_genotype == "TT":
+            result["sire_constraints"]["has_t"] = True
+            result["sire_constraints"]["possible_genotypes"] = ["TT", "CT"]
+            result["sire_constraints"]["excludes"] = ["CC"]
+            result["dam_constraints"]["has_t"] = True
+        elif offspring_genotype == "CT":
+            result["sire_constraints"]["note"] = "CTからは親の型を限定できない"
+
+        if sire_name:
+            sire_info = self.get_sire_info(sire_name)
+            if sire_info:
+                current = sire_info.get("genotype", "")
+                if offspring_genotype == "CC" and current == "TT":
+                    result["sire_constraints"]["conflict"] = (
+                        f"{sire_name}は現在TT推定だがCC産駒が出現→CT以上に修正が必要"
+                    )
+                elif offspring_genotype == "TT" and current == "CC":
+                    result["sire_constraints"]["conflict"] = (
+                        f"{sire_name}は現在CC推定だがTT産駒が出現→CT以上に修正が必要"
+                    )
+
+        return result
+
+    _CONFIDENCE_RANK: dict[str, int] = {
+        "confirmed": 4,
+        "highly_likely": 3,
+        "estimated": 2,
+        "inferred": 1,
+        "population_default": 0,
+    }
+
+    def predict_offspring_with_basis(
+        self,
+        sire_name: str,
+        dam_sire_name: str,
+    ) -> dict[str, Any]:
+        """
+        子馬の遺伝子型確率推定に、根拠（どの情報から推定したか）と
+        総合信頼度を付与して返す。`/api/myostatin/predict` のレスポンス拡充用。
+
+        母自身の遺伝子型は常にナレッジベース外（集団デフォルト値）で補完されるため、
+        総合信頼度は「父」「母父」それぞれのKB登録状況・信頼度のうち最も低いものと、
+        母由来の不確実性を踏まえた値になる（KB登録済みでも confirmed には届かない）。
+
+        Returns:
+          {
+            "probs": {"CC": p, "CT": p, "TT": p},
+            "confidence": "confirmed" | "highly_likely" | "estimated" | "inferred" | "population_default",
+            "sire_known": bool,
+            "dam_sire_known": bool,
+            "basis": [str, ...],  # 推定根拠の説明（日本語）
+          }
+        """
+        sire_info = self.get_sire_info(sire_name)
+        dam_sire_info = self.get_sire_info(dam_sire_name) if dam_sire_name else None
+        sire_known = sire_info is not None
+        dam_sire_known = dam_sire_info is not None
+
+        sire_conf = sire_info.get("confidence", "population_default") if sire_info else "population_default"
+        dam_sire_conf = (
+            dam_sire_info.get("confidence", "population_default")
+            if dam_sire_info
+            else ("population_default" if dam_sire_name else "population_default")
+        )
+
+        probs = self.predict_offspring(sire_name, dam_sire_name)
+
+        # 母自身の遺伝子型は常に集団デフォルトで補完される(母方入力の半分は推定値)ため、
+        # 父・母父がどれだけ確定していても総合信頼度は "highly_likely" が上限となる。
+        rank = min(
+            self._CONFIDENCE_RANK.get(sire_conf, 0),
+            self._CONFIDENCE_RANK.get(dam_sire_conf, 0),
+            self._CONFIDENCE_RANK["highly_likely"],
+        )
+        overall_confidence = next(
+            (k for k, v in self._CONFIDENCE_RANK.items() if v == rank),
+            "population_default",
+        )
+
+        basis: list[str] = []
+        if sire_known:
+            basis.append(
+                f"父『{sire_name}』: KB登録済み "
+                f"{sire_info.get('genotype', '不明')}型(信頼度: {sire_conf})。"
+                f"根拠: {sire_info.get('source', '-')}"
+            )
+        else:
+            basis.append(
+                f"父『{sire_name}』: ナレッジベース未登録のため集団平均値を代用"
+                f"（C={self._defaults.get('japanese_thoroughbred_avg', {}).get('allele_c', 0.4)}, "
+                f"T={self._defaults.get('japanese_thoroughbred_avg', {}).get('allele_t', 0.6)}）"
+            )
+        if dam_sire_name:
+            if dam_sire_known:
+                basis.append(
+                    f"母父『{dam_sire_name}』: KB登録済み "
+                    f"{dam_sire_info.get('genotype', '不明')}型(信頼度: {dam_sire_conf})。"
+                    f"根拠: {dam_sire_info.get('source', '-')}"
+                )
+            else:
+                basis.append(f"母父『{dam_sire_name}』: ナレッジベース未登録のため集団平均値を代用")
+        basis.append(
+            "母自身の遺伝子型は未検査のため、母方は母父由来の確率と血統集団平均値を"
+            "50:50で混合した推定値（不確実性あり）"
+        )
+
+        return {
+            "probs": probs,
+            "confidence": overall_confidence,
+            "sire_known": sire_known,
+            "dam_sire_known": dam_sire_known,
+            "basis": basis,
+        }
+
+    def sire_allele_features(self, sire_name: str) -> dict[str, float]:
+        """パイプライン向け: 父馬のアレル特徴量を dict で返す。"""
+        c, t = self.get_allele_probs(sire_name)
+        return {"sire_mstn_c": c, "sire_mstn_t": t}
+
+    def dam_sire_allele_features(self, dam_sire_name: str) -> dict[str, float]:
+        """パイプライン向け: 母父のアレル特徴量を dict で返す。"""
+        c, t = self.get_allele_probs(dam_sire_name)
+        return {"dam_sire_mstn_c": c, "dam_sire_mstn_t": t}
+
+    def offspring_features(
+        self,
+        sire_name: str,
+        dam_sire_name: str,
+        distance_m: int = 0,
+    ) -> dict[str, float]:
+        """
+        パイプライン向け: ミオスタチン関連の全特徴量を一括生成。
+
+        生成される特徴量:
+          - sire_mstn_c, sire_mstn_t         : 父のアレル確率
+          - dam_sire_mstn_c, dam_sire_mstn_t  : 母父のアレル確率
+          - mstn_cc_prob, mstn_ct_prob, mstn_tt_prob : 子馬遺伝子型確率
+          - mstn_distance_affinity            : 距離適合度 (距離が指定された場合)
+          - mstn_speed_index                  : スプリント寄り度 (0=完全ステイヤー, 1=完全スプリンター)
+        """
+        feats: dict[str, float] = {}
+        feats.update(self.sire_allele_features(sire_name))
+        feats.update(self.dam_sire_allele_features(dam_sire_name))
+
+        probs = self.predict_offspring(sire_name, dam_sire_name)
+        feats["mstn_cc_prob"] = probs["CC"]
+        feats["mstn_ct_prob"] = probs["CT"]
+        feats["mstn_tt_prob"] = probs["TT"]
+
+        feats["mstn_speed_index"] = probs["CC"] * 1.0 + probs["CT"] * 0.5 + probs["TT"] * 0.0
+
+        if distance_m > 0:
+            feats["mstn_distance_affinity"] = _genotype_distance_score(probs, distance_m)
+        else:
+            feats["mstn_distance_affinity"] = 0.0
+
+        return feats
+
+
+# ─── 距離適合度ヘルパー ────────────────────────────
+
+_GENOTYPE_DIST_PARAMS: dict[str, tuple[float, float]] = {
+    "CC": (1200.0, 250.0),
+    "CT": (1700.0, 350.0),
+    "TT": (2200.0, 400.0),
+}
+
+
+def _gaussian(x: float, mu: float, sigma: float) -> float:
+    return math.exp(-0.5 * ((x - mu) / sigma) ** 2)
+
+
+def _genotype_distance_score(probs: dict[str, float], distance_m: int) -> float:
+    score = 0.0
+    for gtype, (mu, sigma) in _GENOTYPE_DIST_PARAMS.items():
+        score += probs.get(gtype, 0.0) * _gaussian(float(distance_m), mu, sigma)
+    return round(min(score, 1.0), 4)
+
+
+# ─── 遺伝子型再計算（ナレッジベース更新） ──────────────────
+
+def recalculate_myostatin_genotypes(json_path: str | Path | None = None) -> dict[str, Any]:
+    """
+    全ての未確定馬のミオスタチン遺伝子型を血統から再計算し、ナレッジベース JSON を更新する。
+
+    メンデルの法則に基づいてアレル確率を計算する。元は FastAPI の
+    ``/api/myostatin/recalculate`` (``src/api/app.py``) ハンドラ内に直接書かれていた処理を
+    そのまま移動したもの。同エンドポイントと ``src/scripts/cloud_jobs/myostatin_recalculate.py``
+    （Cloud Scheduler + Cloud Run Jobs 用 CLI）の両方から共通で呼ばれる。
+
+    Returns:
+        {"updated_count": int, "total_stallions": int, "updates": [...]}
+    """
+    path = Path(json_path) if json_path else _KB_PATH
+
+    # 読み込み
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # 名前→遺伝子型のマップを作成
+    stallion_map: dict[str, dict] = {}
+    for s in data["stallions"]:
+        stallion_map[s["name"]] = s
+        if s.get("name_en"):
+            stallion_map[s["name_en"]] = s
+
+    def get_alleles(name):
+        """種牡馬のアレル確率を取得"""
+        if name in stallion_map:
+            s = stallion_map[name]
+            return s.get("allele_c", 0.5), s.get("allele_t", 0.5)
+        return 0.5, 0.5  # デフォルト
+
+    def calculate_offspring_genotype(sire_c, sire_t, dam_c, dam_t):
+        """
+        父と母のアレル確率から、子のCC/CT/TT確率を計算
+
+        Args:
+            sire_c: 父がCアレルを渡す確率
+            sire_t: 父がTアレルを渡す確率
+            dam_c: 母がCアレルを渡す確率
+            dam_t: 母がTアレルを渡す確率
+
+        Returns:
+            (allele_c, allele_t, genotype, confidence)
+        """
+        # CC確率 = 父C × 母C
+        prob_cc = sire_c * dam_c
+        # TT確率 = 父T × 母T
+        prob_tt = sire_t * dam_t
+        # CT確率 = 残り
+        prob_ct = 1.0 - prob_cc - prob_tt
+
+        # 子のアレル確率
+        child_c = prob_cc + prob_ct * 0.5
+        child_t = prob_tt + prob_ct * 0.5
+
+        # 遺伝子型を推定
+        if prob_cc > 0.9:
+            genotype = "CC"
+            confidence = "highly_likely"
+        elif prob_tt > 0.9:
+            genotype = "TT"
+            confidence = "highly_likely"
+        elif prob_cc > 0.7:
+            genotype = "C?"
+            confidence = "estimated"
+        elif prob_tt > 0.7:
+            genotype = "?T"
+            confidence = "estimated"
+        elif prob_ct > 0.6:
+            genotype = "CT"
+            confidence = "estimated"
+        elif child_c > 0.6:
+            genotype = "C?"
+            confidence = "estimated"
+        elif child_t > 0.6:
+            genotype = "?T"
+            confidence = "estimated"
+        else:
+            genotype = "??"
+            confidence = "inferred"
+
+        return round(child_c, 3), round(child_t, 3), genotype, confidence
+
+    # 再計算
+    updates: list[dict[str, Any]] = []
+    for i, stallion in enumerate(data["stallions"]):
+        # 確定している場合はスキップ
+        if stallion["confidence"] == "confirmed":
+            continue
+
+        # 父の情報
+        sire_name = stallion.get("sire", "")
+        if not sire_name:
+            continue
+
+        sire_c, sire_t = get_alleles(sire_name)
+
+        # 母父の情報（母のアレル確率の推定に使用）
+        dam_sire_name = stallion.get("dam_sire", "")
+        if dam_sire_name:
+            dam_sire_c, dam_sire_t = get_alleles(dam_sire_name)
+            # 母のアレル確率は母父から推定（簡易版：母父のアレル確率を使用）
+            dam_c, dam_t = dam_sire_c, dam_sire_t
+        else:
+            # 母父不明の場合はデフォルト
+            dam_c, dam_t = 0.5, 0.5
+
+        # 子のアレル確率を計算
+        child_c, child_t, genotype, confidence = calculate_offspring_genotype(
+            sire_c, sire_t, dam_c, dam_t
+        )
+
+        # 既存より確実性が高い場合のみ更新
+        old_gt = stallion.get("genotype", "??")
+        old_conf = stallion.get("confidence", "inferred")
+
+        # 確実性のランク
+        conf_rank = {"confirmed": 4, "highly_likely": 3, "estimated": 2, "inferred": 1}
+        old_rank = conf_rank.get(old_conf, 0)
+        new_rank = conf_rank.get(confidence, 0)
+
+        # より確実な情報の場合、または同等で遺伝子型が変わる場合のみ更新
+        if new_rank >= old_rank:
+            data["stallions"][i]["genotype"] = genotype
+            data["stallions"][i]["confidence"] = confidence
+            data["stallions"][i]["allele_c"] = child_c
+            data["stallions"][i]["allele_t"] = child_t
+
+            reason = f"父{sire_name}(C={sire_c:.2f},T={sire_t:.2f})"
+            if dam_sire_name:
+                reason += f" × 母父{dam_sire_name}(C={dam_sire_c:.2f},T={dam_sire_t:.2f})"
+
+            data["stallions"][i]["source"] = f"確率計算による推測: {reason}"
+
+            if old_gt != genotype or old_conf != confidence:
+                updates.append({
+                    "name": stallion["name"],
+                    "old": f"{old_gt} ({old_conf})",
+                    "new": f"{genotype} ({confidence})",
+                    "allele_c": child_c,
+                    "allele_t": child_t,
+                })
+
+    # メタデータを更新
+    data["_meta"]["version"] = "2.3.2"
+    data["_meta"]["last_updated"] = "2026-03-24"
+
+    # 保存
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    return {
+        "updated_count": len(updates),
+        "total_stallions": len(data["stallions"]),
+        "updates": updates,
+    }
+
+
+# ─── シングルトン ──────────────────────────────────
+
+_instance: MyostatinLookup | None = None
+
+
+def get_lookup() -> MyostatinLookup:
+    """モジュールレベルのシングルトンインスタンスを取得。"""
+    global _instance
+    if _instance is None:
+        _instance = MyostatinLookup()
+    return _instance
+
+
+# ─── CLI ───────────────────────────────────────────
+
+def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="ミオスタチン遺伝子検索・推論ツール")
+    sub = parser.add_subparsers(dest="cmd")
+
+    lookup_p = sub.add_parser("lookup", help="馬の遺伝子型を検索")
+    lookup_p.add_argument("name", help="馬名（種牡馬・競走馬）")
+
+    predict_p = sub.add_parser("predict", help="子馬の遺伝子型確率を推定")
+    predict_p.add_argument("sire", help="父名")
+    predict_p.add_argument("dam_sire", help="母父名")
+    predict_p.add_argument("--distance", type=int, default=0, help="距離(m)")
+
+    sub.add_parser("list", help="登録馬一覧（種牡馬・競走馬）")
+
+    sub.add_parser("stats", help="ナレッジベース統計")
+
+    infer_p = sub.add_parser("infer", help="産駒の遺伝子型から親を逆推論")
+    infer_p.add_argument("genotype", choices=["CC", "CT", "TT"], help="産駒の遺伝子型")
+    infer_p.add_argument("--sire", help="父名")
+    infer_p.add_argument("--dam-sire", help="母父名")
+
+    args = parser.parse_args()
+    mstn = MyostatinLookup()
+
+    if args.cmd == "lookup":
+        info = mstn.get_sire_info(args.name)
+        if info:
+            print(f"馬名: {info['name']} ({info.get('name_en', '')})")
+            print(f"遺伝子型: {info.get('genotype', '不明')}")
+            print(f"信頼度: {info.get('confidence', '不明')}")
+            print(f"アレル確率: C={info.get('allele_c', '?')}, T={info.get('allele_t', '?')}")
+            print(f"平均勝距離: {info.get('avg_win_dist', '?')}m")
+            print(f"根拠: {info.get('source', '')}")
+        else:
+            print(f"'{args.name}' はナレッジベースに未登録です（種牡馬・競走馬データ）")
+            c, t = mstn.get_allele_probs(args.name)
+            print(f"デフォルト値を適用: C={c}, T={t}")
+
+    elif args.cmd == "predict":
+        probs = mstn.predict_offspring(args.sire, args.dam_sire)
+        print(f"父: {args.sire}")
+        print(f"母父: {args.dam_sire}")
+        print(f"子馬遺伝子型確率: CC={probs['CC']:.1%}, CT={probs['CT']:.1%}, TT={probs['TT']:.1%}")
+        if args.distance > 0:
+            aff = mstn.distance_affinity(args.sire, args.dam_sire, args.distance)
+            print(f"距離適合度 ({args.distance}m): {aff:.4f}")
+
+    elif args.cmd == "list":
+        for name in mstn.list_stallions():
+            info = mstn.get_sire_info(name)
+            gt = info.get("genotype", "?") if info else "?"
+            conf = info.get("confidence", "?") if info else "?"
+            print(f"  {name:20s} {gt:3s} ({conf})")
+
+    elif args.cmd == "infer":
+        result = mstn.reverse_infer(args.genotype, args.sire, args.dam_sire)
+        print(f"産駒遺伝子型: {result['offspring_genotype']}")
+        print("父への制約:")
+        for k, v in result["sire_constraints"].items():
+            print(f"  {k}: {v}")
+        print("母(系)への制約:")
+        for k, v in result["dam_constraints"].items():
+            print(f"  {k}: {v}")
+
+    elif args.cmd == "stats":
+        by_type: dict[str, int] = {}
+        by_conf: dict[str, int] = {}
+        for name in mstn.list_stallions():
+            info = mstn.get_sire_info(name)
+            if info:
+                gt = info.get("genotype", "unknown")
+                conf = info.get("confidence", "unknown")
+                by_type[gt] = by_type.get(gt, 0) + 1
+                by_conf[conf] = by_conf.get(conf, 0) + 1
+        print(f"登録馬数（種牡馬・競走馬）: {mstn.stallion_count}")
+        print("遺伝子型別:")
+        for k, v in sorted(by_type.items()):
+            print(f"  {k}: {v}頭")
+        print("信頼度別:")
+        for k, v in sorted(by_conf.items()):
+            print(f"  {k}: {v}頭")
+
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()

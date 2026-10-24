@@ -1,0 +1,643 @@
+{% extends "base.html" %}
+{% block title %}スクレイピング — 監視ポータル{% endblock %}
+
+{% block content %}
+<div class="page-title"><span class="icon">🕷️</span> スクレイピング</div>
+
+<!-- キュー概要 -->
+<div class="card">
+  <div class="card-title">キュー状態</div>
+  <div class="grid grid-4" id="queue-nums">
+    <span class="loading">読込中...</span>
+  </div>
+</div>
+
+<!-- Cron ジョブ -->
+<div class="card">
+  <div class="card-title">定期ジョブ（cron）</div>
+  <div id="cron-jobs">各 cron の状態（待機中／実行中）・最終実行・結果（成功／失敗）・失敗の原因は <a href="/cron" style="color:var(--accent)">⏱️ Cron ページ</a>にまとめています。</div>
+</div>
+
+<!-- 直近失敗ジョブ -->
+<div class="card">
+  <div class="card-title">直近失敗ジョブ（最大 20 件）</div>
+  <div id="failed-jobs"><span class="loading">読込中...</span></div>
+</div>
+
+<!-- ページ品質チェック -->
+<div class="card">
+  <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <span>ページ品質チェック — スキーマ整合性</span>
+    <div style="display:flex;align-items:center;gap:8px">
+      <select id="pq-date-select" style="font-size:11px;padding:2px 6px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:4px">
+        <option value="">最新</option>
+      </select>
+      <button onclick="runPageQuality()" id="pq-run-btn"
+              style="font-size:11px;padding:3px 10px;background:#238636;border:1px solid #2ea043;border-radius:4px;color:#fff;cursor:pointer">
+        ▶ 今すぐ実行
+      </button>
+    </div>
+  </div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.5">
+    毎朝 08:00 に各カテゴリの代表ページを実際に取得し、期待スキーマと照合します。
+    <strong style="color:#3fb950">safe</strong>＝問題なし、
+    <strong style="color:#d29922">caution</strong>＝新フィールドあり（後方互換）、
+    <strong style="color:#f85149">out</strong>＝必須フィールド欠損またはパースエラー
+  </div>
+  <div id="pq-summary" style="margin-bottom:12px"></div>
+  <div id="pq-results"><span class="loading">読込中...</span></div>
+</div>
+
+<!-- カバレッジカレンダー -->
+<div class="card" id="coverage-card">
+  <div class="card-title" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <span>カバレッジカレンダー</span>
+    <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+      <button onclick="calStep(-1)" style="padding:2px 10px;font-size:13px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:4px;cursor:pointer">‹</button>
+      <select id="cal-year"  onchange="loadCoverage()" style="font-size:12px;padding:3px 6px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:4px"></select>
+      <select id="cal-month" onchange="loadCoverage()" style="font-size:12px;padding:3px 6px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:4px"></select>
+      <button onclick="calStep(+1)" style="padding:2px 10px;font-size:13px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:4px;cursor:pointer">›</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;font-size:11px;color:var(--muted)">
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#3fb950;vertical-align:middle;margin-right:4px"></span>完全</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#d29922;vertical-align:middle;margin-right:4px"></span>一部</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#f85149;vertical-align:middle;margin-right:4px"></span>不完全</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--border);vertical-align:middle;margin-right:4px"></span>開催なし</span>
+    </div>
+  </div>
+  <div id="coverage-calendar"><span class="loading">読込中...</span></div>
+</div>
+
+<!-- 日付クリック時の詳細マトリクス -->
+<div class="card" id="date-matrix-card" style="display:none">
+  <div class="card-title" style="display:flex;align-items:center;gap:10px">
+    <span>📅 <span id="matrix-date-label">—</span> — スクレイピング完了状況</span>
+    <button onclick="closeMatrix()" style="margin-left:auto;padding:2px 10px;font-size:12px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:4px;cursor:pointer">✕ 閉じる</button>
+  </div>
+  <div id="date-matrix-content"><span class="loading">読込中...</span></div>
+</div>
+
+<p class="last-updated">最終更新: <span id="last-ts">—</span>（30秒ごと自動更新）</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function mkQueueCell(label, num, cls) {
+  return `<div><div class="big-num ${cls}">${num}</div><div class="text-muted" style="margin-top:4px;font-size:12px">${label}</div></div>`;
+}
+
+function elapsedLabel(isoTs) {
+  if (!isoTs) return '—';
+  const d = new Date(isoTs.replace(' ', 'T'));
+  const diffMs = Date.now() - d.getTime();
+  if (isNaN(diffMs)) return isoTs;
+  const h = Math.floor(diffMs / 3600000);
+  const m = Math.floor((diffMs % 3600000) / 60000);
+  if (h > 48) return `${Math.floor(h / 24)}日前`;
+  if (h > 0) return `${h}時間${m}分前`;
+  return `${m}分前`;
+}
+
+// ストレージタグの色定義（グローバル）
+const TAG_STYLE = {
+  'GCS':           {bg:'rgba(88,166,255,.15)',  border:'#58a6ff', text:'#58a6ff', icon:'☁️'},
+  'Local Cache':   {bg:'rgba(139,148,158,.12)', border:'#8b949e', text:'#8b949e', icon:'💾'},
+  'Local only':    {bg:'rgba(63,185,80,.15)',   border:'#3fb950', text:'#3fb950', icon:'📂'},
+  'Features Store':{bg:'rgba(188,140,255,.15)', border:'#bc8cff', text:'#bc8cff', icon:'⚙️'},
+  'System':        {bg:'rgba(210,153,34,.15)',  border:'#d29922', text:'#d29922', icon:'🔧'},
+  'Cache':         {bg:'rgba(139,148,158,.12)', border:'#8b949e', text:'#8b949e', icon:'💾'},
+};
+
+function tagPill(tagName) {
+  const s = TAG_STYLE[tagName] || {bg:'rgba(255,255,255,.1)',border:'#fff',text:'#fff',icon:'📦'};
+  return `<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:10px;
+                border:1px solid ${s.border};background:${s.bg};color:${s.text};
+                font-size:10px;font-weight:600;white-space:nowrap">${s.icon} ${tagName}</span>`;
+}
+
+function renderTableRows(tables) {
+  return (tables || []).map(t => {
+    const tagHtml = (t.tags || []).map(tag => tagPill(tag)).join(' ');
+    const pathLines = (t.paths || []).map(p => {
+      const style = TAG_STYLE[p.tag] || {};
+      const safePath = (p.path || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      return `<div style="display:flex;align-items:baseline;gap:6px;margin-top:3px;margin-left:2px">
+        <span style="font-size:9px;min-width:52px;text-align:right;color:${style.text||'#aaa'};font-weight:600">${p.tag}</span>
+        <code style="font-size:10px;color:#c9d1d9;word-break:break-all;
+                     background:rgba(255,255,255,.04);padding:1px 6px;border-radius:3px;cursor:pointer"
+              onclick="navigator.clipboard.writeText('${safePath}').then(()=>{this.style.outline='1px solid #3fb950';setTimeout(()=>this.style.outline='',1200)}).catch(()=>{})"
+              title="クリックでコピー">${p.path}</code>
+      </div>`;
+    }).join('');
+    return `
+      <div style="border:1px solid var(--border);border-radius:5px;padding:8px 12px;margin-bottom:6px;background:rgba(255,255,255,.02)">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <code style="font-size:12px;color:#e6edf3;font-weight:600">${t.name}</code>
+          <span style="font-size:11px;color:var(--muted)">${t.label}</span>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;margin-left:4px">${tagHtml}</div>
+        </div>
+        ${t.description ? `<div style="font-size:10px;color:var(--muted);margin-top:4px">${t.description}</div>` : ''}
+        ${pathLines}
+      </div>`;
+  }).join('');
+}
+
+function renderScraping(d) {
+  const jobs = d.jobs || {};
+  document.getElementById('queue-nums').innerHTML =
+    mkQueueCell('Pending', jobs.pending_count ?? '—', 'text-accent') +
+    mkQueueCell('Running', jobs.running_count ?? '—', 'text-warn') +
+    mkQueueCell('Done', jobs.done_count ?? '—', 'text-ok') +
+    mkQueueCell('Failed', jobs.failed_count ?? '—', (jobs.failed_count > 0) ? 'text-error' : 'text-muted');
+
+  // 直近失敗ジョブ
+  const failures = jobs.recent_failures || jobs.failed_jobs || [];
+  if (failures.length) {
+    let rows = failures.slice(0, 20).map(f => `<tr>
+      <td><code style="font-size:11px">${f.job_id || f.id || '—'}</code></td>
+      <td>${f.category || '—'}</td>
+      <td>${f.failure_reason || f.reason || '—'}</td>
+      <td style="color:var(--muted);font-size:11px">${f.failed_at || f.updated_at || '—'}</td>
+    </tr>`).join('');
+    document.getElementById('failed-jobs').innerHTML = `
+      <table>
+        <thead><tr><th>Job ID</th><th>カテゴリ</th><th>失敗理由</th><th>日時</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } else if (jobs.failed_count === 0) {
+    document.getElementById('failed-jobs').innerHTML = '<span class="text-ok">失敗ジョブなし ✅</span>';
+  } else {
+    document.getElementById('failed-jobs').innerHTML = '<span class="text-muted">詳細データなし</span>';
+  }
+
+  document.getElementById('last-ts').textContent = new Date().toLocaleTimeString('ja-JP');
+}
+
+// ── ページ品質チェック ──────────────────────────────────────────────────────
+
+const PQ_TAG_STYLE = {
+  safe:    {bg:'rgba(63,185,80,.15)',  border:'#3fb950', text:'#3fb950', icon:'✅', label:'SAFE'},
+  caution: {bg:'rgba(210,153,34,.15)', border:'#d29922', text:'#d29922', icon:'⚠️', label:'CAUTION'},
+  out:     {bg:'rgba(248,81,73,.15)',  border:'#f85149', text:'#f85149', icon:'❌', label:'OUT'},
+  unknown: {bg:'rgba(139,148,158,.1)', border:'#8b949e', text:'#8b949e', icon:'—',  label:'不明'},
+};
+
+function pqTagBadge(tag) {
+  const s = PQ_TAG_STYLE[tag] || PQ_TAG_STYLE.unknown;
+  return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:12px;
+                border:1px solid ${s.border};background:${s.bg};color:${s.text};
+                font-size:11px;font-weight:700">${s.icon} ${s.label}</span>`;
+}
+
+function renderPageQuality(d) {
+  // 履歴セレクタの更新
+  const sel = document.getElementById('pq-date-select');
+  const curVal = sel.value;
+  sel.innerHTML = '<option value="">最新</option>' +
+    (d.history_dates || []).map(dt => `<option value="${dt}"${dt===curVal?' selected':''}>${dt}</option>`).join('');
+
+  // サマリーバー
+  const tag = d.summary_tag || 'unknown';
+  const s = PQ_TAG_STYLE[tag] || PQ_TAG_STYLE.unknown;
+  const runAt = d.run_at ? new Date(d.run_at).toLocaleString('ja-JP') : '—';
+  document.getElementById('pq-summary').innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+                padding:10px 14px;border-radius:6px;border:1px solid ${s.border};
+                background:${s.bg}">
+      <div style="font-size:18px;font-weight:700;color:${s.text}">${s.icon} 総合: ${s.label}</div>
+      <div style="font-size:12px;color:var(--muted)">実行日時: ${runAt}</div>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <span class="badge badge-ok">✅ SAFE: ${d.safe_count ?? 0}</span>
+        <span class="badge badge-warn">⚠️ CAUTION: ${d.caution_count ?? 0}</span>
+        <span class="badge badge-error">❌ OUT: ${d.out_count ?? 0}</span>
+      </div>
+    </div>
+    ${d.note ? `<div style="margin-top:8px;font-size:12px;color:var(--muted)">${d.note}</div>` : ''}`;
+
+  // 結果テーブル
+  const results = d.results || [];
+  if (!results.length) {
+    document.getElementById('pq-results').innerHTML = '<span class="text-muted">結果なし</span>';
+    return;
+  }
+
+  const rows = results.map(r => {
+    const rs = PQ_TAG_STYLE[r.tag] || PQ_TAG_STYLE.unknown;
+    const missing = (r.validation_summary?.top_missing || []);
+    const extraKeys = (r.extra_keys || []);
+    const errorText = r.error ? `<div style="font-size:10px;color:#f85149;margin-top:2px;font-family:monospace">${r.error}</div>` : '';
+    const missingText = missing.length
+      ? `<div style="font-size:10px;color:#f85149;margin-top:2px">必須フィールド欠損: ${missing.join(', ')}</div>` : '';
+    const cautionText = extraKeys.length
+      ? `<div style="font-size:10px;color:#d29922;margin-top:2px">新フィールド検出: ${extraKeys.join(', ')}</div>` : '';
+    const loginNote = r.requires_login
+      ? `<span style="font-size:9px;color:var(--muted);margin-left:4px">(要ログイン)</span>` : '';
+
+    return `<tr>
+      <td style="padding:8px 10px">
+        <div style="font-weight:600;font-size:13px">${r.label}${loginNote}</div>
+        <div style="font-size:10px;color:var(--muted);font-family:monospace;margin-top:2px;word-break:break-all">
+          <a href="${r.url}" target="_blank" rel="noopener"
+             style="color:var(--accent);text-decoration:none">${r.url}</a>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:1px">カテゴリ: <code>${r.category}</code></div>
+        ${errorText}${missingText}${cautionText}
+      </td>
+      <td style="padding:8px 10px;text-align:center;white-space:nowrap">${pqTagBadge(r.tag)}</td>
+      <td style="padding:8px 10px;text-align:right;font-size:11px;color:var(--muted);white-space:nowrap">
+        ${r.elapsed_sec != null ? r.elapsed_sec + 's' : '—'}
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('pq-results').innerHTML = `
+    <table style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border)">
+          <th style="padding:6px 10px;text-align:left;font-size:11px;color:var(--muted);font-weight:600">カテゴリ / URL</th>
+          <th style="padding:6px 10px;text-align:center;font-size:11px;color:var(--muted);font-weight:600">判定</th>
+          <th style="padding:6px 10px;text-align:right;font-size:11px;color:var(--muted);font-weight:600">所要時間</th>
+        </tr>
+      </thead>
+      <tbody style="border-top:1px solid var(--border)">${rows}</tbody>
+    </table>`;
+}
+
+async function loadPageQuality(dateStr) {
+  try {
+    const url = '/api/internal/page-quality' + (dateStr ? `?date=${dateStr}` : '');
+    const d = await fetch(url).then(r => r.json());
+    renderPageQuality(d);
+  } catch(e) {
+    document.getElementById('pq-results').innerHTML = `<span class="text-muted">取得失敗: ${e}</span>`;
+  }
+}
+
+async function runPageQuality() {
+  const btn = document.getElementById('pq-run-btn');
+  btn.disabled = true;
+  btn.textContent = '実行中...';
+  try {
+    const resp = await fetch('/api/internal/page-quality/run', {method:'POST'}).then(r => r.json());
+    if (resp.pid) {
+      btn.textContent = `起動済み (PID: ${resp.pid})`;
+      setTimeout(() => { btn.disabled=false; btn.textContent='▶ 今すぐ実行'; }, 5000);
+    } else {
+      btn.textContent = resp.error || 'エラー';
+      setTimeout(() => { btn.disabled=false; btn.textContent='▶ 今すぐ実行'; }, 3000);
+    }
+  } catch(e) {
+    btn.textContent = 'エラー';
+    setTimeout(() => { btn.disabled=false; btn.textContent='▶ 今すぐ実行'; }, 3000);
+  }
+}
+
+document.getElementById('pq-date-select').addEventListener('change', function() {
+  loadPageQuality(this.value);
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// カバレッジカレンダー
+// ══════════════════════════════════════════════════════════════════════
+
+const DOW_LABELS = ['月','火','水','木','金','土','日'];
+
+// セレクタ初期化
+(function initCalSelectors() {
+  const now = new Date();
+  const yEl = document.getElementById('cal-year');
+  const mEl = document.getElementById('cal-month');
+  for (let y = 2020; y <= now.getFullYear() + 1; y++) {
+    yEl.innerHTML += `<option value="${y}"${y===now.getFullYear()?' selected':''}>${y}年</option>`;
+  }
+  for (let m = 1; m <= 12; m++) {
+    mEl.innerHTML += `<option value="${m}"${m===now.getMonth()+1?' selected':''}>${m}月</option>`;
+  }
+})();
+
+function calStep(delta) {
+  const yEl = document.getElementById('cal-year');
+  const mEl = document.getElementById('cal-month');
+  let y = parseInt(yEl.value), m = parseInt(mEl.value);
+  m += delta;
+  if (m < 1)  { m = 12; y--; }
+  if (m > 12) { m = 1;  y++; }
+  yEl.value = y;
+  mEl.value = m;
+  loadCoverage();
+}
+
+function dayColor(status, pct) {
+  if (status === 'gray')  return 'var(--border)';
+  if (status === 'green') return '#3fb950';
+  // red: pct で濃さを変える (50%未満→真っ赤, 50-99%→黄色寄り)
+  if (pct < 50) return '#f85149';
+  return '#d29922';
+}
+
+function dayTextColor(status) {
+  if (status === 'gray') return 'var(--muted)';
+  return '#fff';
+}
+
+async function loadCoverage() {
+  const y = document.getElementById('cal-year').value;
+  const m = document.getElementById('cal-month').value;
+  const el = document.getElementById('coverage-calendar');
+  el.innerHTML = '<span class="loading">読込中...</span>';
+  try {
+    const d = await fetch(`/api/internal/coverage/month?year=${y}&month=${m}`).then(r => r.json());
+    renderCoverageCalendar(d, y, m);
+  } catch(e) {
+    el.innerHTML = `<span class="text-muted">取得失敗: ${e}</span>`;
+  }
+}
+
+function renderCoverageCalendar(d, y, m) {
+  const days = d.days || [];
+  const firstWeekday = d.first_weekday ?? 0; // 0=月
+  const totalDays = d.days_in_month || 31;
+
+  const greenDays = days.filter(x => x.status === 'green').length;
+  const redDays   = days.filter(x => x.status === 'red').length;
+  const yellowDays= days.filter(x => x.status !== 'gray' && x.pct >= 50 && x.pct < 100).length;
+  const raceDays  = days.filter(x => x.status !== 'gray').length;
+
+  // サマリーバー
+  let summaryHtml = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;font-size:12px">
+      <span class="badge badge-ok">✅ 完全: ${greenDays}日</span>
+      <span class="badge badge-warn">⚠️ 一部: ${yellowDays}日</span>
+      <span class="badge badge-error">❌ 不完全: ${redDays - yellowDays}日</span>
+      <span class="badge badge-muted">🏟️ 開催: ${raceDays}日</span>
+    </div>`;
+
+  // カレンダーグリッド
+  // 曜日ヘッダー
+  let gridHtml = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px">`;
+  DOW_LABELS.forEach((d, i) => {
+    const color = i === 5 ? '#58a6ff' : i === 6 ? '#f85149' : 'var(--muted)';
+    gridHtml += `<div style="text-align:center;font-size:10px;font-weight:700;color:${color};padding:2px 0">${d}</div>`;
+  });
+  gridHtml += `</div>`;
+
+  // 日付グリッド
+  gridHtml += `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">`;
+
+  // 最初の空白セル (月曜=0 起点)
+  for (let i = 0; i < firstWeekday; i++) {
+    gridHtml += `<div></div>`;
+  }
+
+  for (const dayObj of days) {
+    const { day, status, pct, total_races, date, per_cat } = dayObj;
+    const bg = dayColor(status, pct);
+    const tc = dayTextColor(status);
+    const hasRace = status !== 'gray';
+
+    // per_cat からカテゴリ別完了率ツールチップ
+    let tooltip = `${date}`;
+    if (hasRace) {
+      tooltip += `\n${total_races}レース / ${pct}%完了`;
+      if (per_cat && Object.keys(per_cat).length) {
+        tooltip += '\n──────────';
+        for (const [cat, info] of Object.entries(per_cat)) {
+          const pctCat = typeof info === 'object' ? (info.pct ?? info) : info;
+          tooltip += `\n${cat}: ${typeof pctCat === 'number' ? pctCat.toFixed(0) : pctCat}%`;
+        }
+      }
+    } else {
+      tooltip += '\n開催なし';
+    }
+
+    const cursorStyle = hasRace ? 'cursor:pointer' : 'cursor:default';
+    const clickAttr = hasRace ? `onclick="openDateMatrix('${date}')"` : '';
+    const hoverStyle = hasRace ? `onmouseover="this.style.outline='2px solid #fff';this.style.zIndex=1" onmouseout="this.style.outline='';this.style.zIndex=''"` : '';
+
+    // 曜日判定 (0=月)
+    const dowIdx = (firstWeekday + day - 1) % 7;
+    const isSat = dowIdx === 5, isSun = dowIdx === 6;
+    let borderCol = 'transparent';
+    if (!hasRace && isSat) borderCol = 'rgba(88,166,255,.3)';
+    if (!hasRace && isSun) borderCol = 'rgba(248,81,73,.3)';
+
+    gridHtml += `
+      <div title="${tooltip}"
+           ${clickAttr} ${hoverStyle}
+           style="position:relative;aspect-ratio:1;border-radius:4px;
+                  background:${bg};border:2px solid ${borderCol};
+                  display:flex;flex-direction:column;align-items:center;justify-content:center;
+                  ${cursorStyle};transition:outline .1s;min-height:36px">
+        <span style="font-size:11px;font-weight:700;color:${tc};line-height:1">${day}</span>
+        ${hasRace ? `<span style="font-size:8px;color:${tc};opacity:.85;line-height:1;margin-top:1px">${pct >= 100 ? '✓' : pct.toFixed(0)+'%'}</span>` : ''}
+      </div>`;
+  }
+
+  gridHtml += `</div>`;
+
+  document.getElementById('coverage-calendar').innerHTML = summaryHtml + gridHtml;
+}
+
+// ── 日付詳細マトリクス ────────────────────────────────────────────────
+
+let _currentMatrixDate = null;
+
+async function openDateMatrix(date) {
+  if (_currentMatrixDate === date) {
+    closeMatrix();
+    return;
+  }
+  _currentMatrixDate = date;
+
+  const card = document.getElementById('date-matrix-card');
+  const content = document.getElementById('date-matrix-content');
+  const label = document.getElementById('matrix-date-label');
+
+  // 年月日の整形
+  const y = date.slice(0, 4), mo = date.slice(4, 6), d = date.slice(6, 8);
+  label.textContent = `${y}年${parseInt(mo)}月${parseInt(d)}日`;
+  card.style.display = 'block';
+  content.innerHTML = '<span class="loading">読込中...</span>';
+
+  // スクロール
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  try {
+    const data = await fetch(`/api/internal/coverage/date-matrix?date=${date}`).then(r => r.json());
+    renderDateMatrix(data);
+  } catch(e) {
+    content.innerHTML = `<span class="text-muted">取得失敗: ${e}</span>`;
+  }
+}
+
+function closeMatrix() {
+  _currentMatrixDate = null;
+  document.getElementById('date-matrix-card').style.display = 'none';
+}
+
+function renderDateMatrix(data) {
+  const content = document.getElementById('date-matrix-content');
+  const raceIds   = data.race_ids   || [];
+  const categories = data.categories || [];
+  const raceMeta  = data.race_meta  || {};
+  const matrix    = data.matrix     || {};
+
+  if (!raceIds.length) {
+    content.innerHTML = '<span class="text-muted">この日のレースデータが見つかりません</span>';
+    return;
+  }
+
+  // 全体の完了状況サマリー
+  let totalCells = 0, okCells = 0;
+  for (const rid of raceIds) {
+    for (const cat of categories) {
+      const v = matrix[rid]?.[cat.key];
+      if (v !== undefined) { totalCells++; if (v) okCells++; }
+    }
+  }
+  const overallPct = totalCells > 0 ? ((okCells / totalCells) * 100).toFixed(1) : 0;
+
+  // カテゴリごとの完了数
+  const catStats = {};
+  for (const cat of categories) {
+    let ok = 0, total = 0;
+    for (const rid of raceIds) {
+      const v = matrix[rid]?.[cat.key];
+      if (v !== undefined) { total++; if (v) ok++; }
+    }
+    catStats[cat.key] = { ok, total };
+  }
+
+  // ヘッダー (カテゴリ)
+  let th = `<th style="position:sticky;left:0;z-index:2;background:var(--surface);padding:6px 10px;
+                         font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap;
+                         border-right:1px solid var(--border);border-bottom:2px solid var(--border)">
+              レース
+            </th>`;
+  for (const cat of categories) {
+    const { ok, total } = catStats[cat.key];
+    const allOk = ok === total;
+    const noneOk = ok === 0;
+    const hc = allOk ? '#3fb950' : noneOk ? '#8b949e' : '#d29922';
+    th += `<th style="padding:4px 6px;font-size:10px;color:var(--muted);font-weight:600;
+                       text-align:center;border-bottom:2px solid var(--border);min-width:56px;
+                       white-space:nowrap;border-right:1px solid var(--border)">
+             <div style="color:${hc};font-weight:700;font-size:10px">${ok}/${total}</div>
+             <div style="font-size:9px;margin-top:1px">${cat.label}</div>
+           </th>`;
+  }
+
+  // 行 (レースごと)
+  let tbody = '';
+  for (const rid of raceIds) {
+    const meta = raceMeta[rid] || {};
+    const venue  = meta.venue    || '';
+    const raceNo = meta.race_no  || '?';
+    const name   = meta.race_name || rid;
+
+    // レース行の全体完了状況
+    let rowOk = 0, rowTotal = 0;
+    for (const cat of categories) {
+      const v = matrix[rid]?.[cat.key];
+      if (v !== undefined) { rowTotal++; if (v) rowOk++; }
+    }
+    const rowAllOk = rowOk === rowTotal;
+    const rowPct = rowTotal > 0 ? Math.round((rowOk / rowTotal) * 100) : 0;
+    const rowBg = rowAllOk ? 'rgba(63,185,80,.04)' : rowOk === 0 ? 'rgba(255,255,255,.01)' : 'rgba(210,153,34,.04)';
+
+    let cells = '';
+    for (const cat of categories) {
+      const val = matrix[rid]?.[cat.key];
+      let cellContent, cellBg, cellTitle;
+
+      if (val === true) {
+        cellContent = `<span style="color:#3fb950;font-size:14px">✓</span>`;
+        cellBg = 'rgba(63,185,80,.08)';
+        cellTitle = '取得済み';
+      } else if (val === false) {
+        cellContent = `<span style="color:#f85149;font-size:14px">✗</span>`;
+        cellBg = 'rgba(248,81,73,.07)';
+        cellTitle = '未取得';
+      } else {
+        cellContent = `<span style="color:var(--border);font-size:12px">—</span>`;
+        cellBg = 'transparent';
+        cellTitle = '対象外';
+      }
+
+      // クリックでスクレイピング元URL を開く
+      let clickAttr = '';
+      if (cat.url_template) {
+        const url = cat.url_template.replace('{rid}', rid);
+        cellTitle += `\n${url}`;
+        clickAttr = `onclick="window.open('${url}','_blank')" style="cursor:pointer;"`;
+      }
+
+      cells += `<td title="${cellTitle}" ${clickAttr}
+                    style="text-align:center;padding:6px 4px;background:${cellBg};
+                           border-right:1px solid var(--border);border-bottom:1px solid rgba(255,255,255,.04)">
+                  ${cellContent}
+                </td>`;
+    }
+
+    tbody += `<tr style="background:${rowBg}">
+      <td style="position:sticky;left:0;z-index:1;background:var(--surface);padding:6px 10px;
+                  border-right:1px solid var(--border);border-bottom:1px solid rgba(255,255,255,.04);
+                  white-space:nowrap;font-size:12px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px;color:var(--muted);min-width:14px">${raceNo}R</span>
+          <span style="font-weight:600;color:var(--text);max-width:140px;overflow:hidden;text-overflow:ellipsis" title="${name}">${venue} ${name}</span>
+          <span style="margin-left:auto;font-size:10px;color:${rowAllOk ? '#3fb950' : rowPct > 0 ? '#d29922' : 'var(--muted)'};white-space:nowrap">${rowOk}/${rowTotal}</span>
+        </div>
+      </td>
+      ${cells}
+    </tr>`;
+  }
+
+  // カテゴリ別 ✅/❌ サマリー行
+  let catSummaryRow = `<tr style="border-top:2px solid var(--border);background:rgba(0,0,0,.2)">
+    <td style="position:sticky;left:0;z-index:1;background:rgba(0,0,0,.3);padding:5px 10px;
+                border-right:1px solid var(--border);font-size:10px;color:var(--muted);font-weight:700">
+      完了率
+    </td>`;
+  for (const cat of categories) {
+    const { ok, total } = catStats[cat.key];
+    const pct = total > 0 ? Math.round((ok / total) * 100) : 0;
+    const col = pct === 100 ? '#3fb950' : pct === 0 ? '#8b949e' : '#d29922';
+    catSummaryRow += `<td style="text-align:center;padding:5px 4px;border-right:1px solid var(--border)">
+      <span style="font-size:10px;font-weight:700;color:${col}">${pct}%</span>
+    </td>`;
+  }
+  catSummaryRow += '</tr>';
+
+  content.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+      <span style="font-size:13px;color:var(--muted)">${raceIds.length}レース / ${categories.length}カテゴリ</span>
+      <span class="badge ${overallPct >= 100 ? 'badge-ok' : overallPct > 0 ? 'badge-warn' : 'badge-muted'}">
+        全体完了率 ${overallPct}%
+      </span>
+      <span style="font-size:11px;color:var(--muted)">セルクリック → スクレイピング元 URL を開く</span>
+    </div>
+    <div style="overflow-x:auto;border-radius:6px;border:1px solid var(--border)">
+      <table style="border-collapse:collapse;width:100%;min-width:600px">
+        <thead><tr>${th}</tr></thead>
+        <tbody>${tbody}${catSummaryRow}</tbody>
+      </table>
+    </div>`;
+}
+
+// ── 全体リフレッシュ ──────────────────────────────────────────────────────
+
+async function refresh() {
+  try {
+    const scraping = await fetch('/api/internal/scraping').then(r => r.json());
+    renderScraping(scraping);
+  } catch(e) {
+    console.error(e);
+  }
+}
+refresh();
+loadPageQuality('');
+loadCoverage();
+setInterval(refresh, 30000);
+</script>
+{% endblock %}

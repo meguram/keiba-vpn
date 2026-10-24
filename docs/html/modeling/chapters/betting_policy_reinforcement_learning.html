@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>馬券推奨レイヤと強化学習 — 設計議論 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>馬券推奨レイヤと強化学習 — 設計議論</h1>
+      <p class="meta">ソース: <code>docs/html/modeling/chapters/betting_policy_reinforcement_learning.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+    </header>
+    <article class="md-body">
+<h1 id="_1">馬券推奨レイヤと強化学習（報酬を最大化するよう行動を学習する手法） — 設計議論</h1>
+<h2 id="1">1. このドキュメントの対象範囲</h2>
+<p>本ドキュメントは、予測システム全体における次の <strong>2 つのレイヤの役割と境界</strong> を明確にします。</p>
+<table>
+<thead>
+<tr>
+<th>レイヤ</th>
+<th>役割</th>
+<th>主な手法（想定）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>確率モデル（Stage6 まで）</strong></td>
+<td>レース直前情報のみで <strong>勝率・連帯率・複勝率</strong>（<code>p_win</code>, <code>p_top2</code>, <code>p_top3</code>）を推定する</td>
+<td>従来の <strong>教師あり学習</strong>（GBDT / ランキング / NN 等）。<code>docs/html/modeling/</code> の母表・split・OOF 方針が主。</td>
+</tr>
+<tr>
+<td><strong>馬券推奨レイヤ（本書）</strong></td>
+<td><strong>オッズ</strong>・<strong>モデル確率</strong>・<strong>予測印</strong>を統合し、期待値と制約のバランスを取りながら <strong>推奨券種・組合せ・印の結びつけ</strong> を出力する</td>
+<td><strong>強化学習によるポリシー学習</strong>を第一候補とする。「もう一段の勾配ブースティング」ではない。</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>期待値計算</strong>（<code>model_prob × オッズ</code> から求めるエッジ、safe_ev（安全な期待値の閾値）など）は推奨レイヤの <strong>構成要素</strong> ですが、<strong>それだけで完結させません</strong>。印との一貫性・券種間のトレードオフ・資金制約下での連続した意思決定を <strong>強化学習で統合</strong>します。</li>
+</ul>
+<p>関連ドキュメント: <code>betting_backtest_dataset_spec.html</code>（データ契約・safe_ev）、<code>pre_race_feature_whitelist.html</code>（LayerA/LayerB）、<code>staged_probability_pipeline.html</code>（Stage7）</p>
+<hr />
+<h2 id="2">2. なぜ推奨部分を「機械学習の延長」と切り分けるか</h2>
+<ol>
+<li>
+<p><strong>目的関数が違う</strong><br />
+   確率モデルは <strong>校正精度</strong>（LogLoss / Brier / ECE）を最適化します。馬券推奨レイヤは <strong>長期的なリターン・最大損失の抑制・的中体験（印の説得力）</strong> など、複数の目標と制約のバランスを取る必要があります。</p>
+</li>
+<li>
+<p><strong>買える組み合わせが膨大で選択が難しい</strong><br />
+   馬単・三連系の組み合わせ数は非常に大きく、<strong>単純に期待値が最大の選択肢を選ぶ</strong>方法では分散が極端になりやすいです。資金制約や同一レース内の相関も同時に扱う必要があります。</p>
+</li>
+<li>
+<p><strong>オッズ情報（LayerB）が状態の中心になる</strong><br />
+   オッズは他の参加者の動向に応じて変化する非定常な情報です。確率モデルの学習では除外していたオッズ情報が、推奨レイヤでは意思決定の核心的な入力となります。</p>
+</li>
+<li>
+<p><strong>予測印は「人間が読める中間表現」</strong><br />
+   印（◎○▲△など）は UI と説明責任のための記号です。確率ベクトルから一貫した印を学習するよりも、<strong>ポリシーが印と券を同時に出力する</strong>方が自然に一貫性を保てます。</p>
+</li>
+</ol>
+<hr />
+<h2 id="3-mdp">3. 行動サイクル（状態→行動→報酬のサイクル、強化学習の基本構造）の骨格（概念）</h2>
+<p>強化学習では「エージェント（推奨エンジン）が環境（レースと市場）を観測し、行動（券の選択）を行い、報酬（回収結果）を受け取る」サイクルを繰り返します。</p>
+<h3 id="31">3.1 エージェントと環境</h3>
+<ul>
+<li><strong>エージェント</strong>: 馬券推奨エンジン（1 ユーザーまたは 1 ポリシー単位で構成可能）。</li>
+<li><strong>環境</strong>: <strong>開催日・レースの時系列</strong>（過去データを使った検証では履歴の再生、本番ではリアルタイムのデータ）。各ステップで「そのレースの市場スナップショット＋確率テーブル」が観測されます。</li>
+</ul>
+<h3 id="32-state">3.2 状態（State）の典型的な構成要素</h3>
+<table>
+<thead>
+<tr><th>カテゴリ</th><th>主な要素</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>モデル側</strong></td><td><code>p_win</code>（勝率）、<code>p_top2</code>（連帯率）、<code>p_top3</code>（複勝率）、校正後確率、不確実性の指標、ランキングスコア、多段 stage の中間出力（任意）</td></tr>
+<tr><td><strong>市場側</strong></td><td><code>win_odds</code>（単勝オッズ）、<code>place_odds_*</code>（複勝オッズ）、組合せオッズの要約、人気順、オッズ変化率（取得できる場合）</td></tr>
+<tr><td><strong>文脈情報</strong></td><td><code>venue_code</code>（競馬場）、<code>surface</code>（芝/ダート）、<code>field_size</code>（頭数）、重賞フラグ、残高・当日累積損益（連続する行動の記録に使う場合）</td></tr>
+<tr><td><strong>印候補</strong></td><td>ルールベースまたは別モデルで生成した印ラベル候補（◎○▲△など）を multi-hot または embedding 形式で入力</td></tr>
+</tbody>
+</table>
+<h3 id="33-action">3.3 行動（Action）</h3>
+<p>組み合わせが膨大なため、<strong>階層的な設計</strong>が必須です。</p>
+<ol>
+<li><strong>レベル1（券種選択）</strong>: 単勝のみ / 複勝まで / 馬連を含むなど — 少数の離散選択。</li>
+<li><strong>レベル2（組み合わせ・金額）</strong>: 各券種で <strong>上位 K 組</strong> または <strong>金額付き離散バケット</strong>（100円×{0,1,2,5}）を選ぶ。</li>
+<li><strong>レベル3（印）</strong>: 「今回の推奨セットに含める印の集合」と「券との対応」— <strong>同一ポリシーが出力</strong>することで一貫性が保ちやすくなる。</li>
+</ol>
+<p><strong>行動空間を絞ること</strong>が学習の成否を左右します。初期段階では、1 レース = 1 回の意思決定として扱う <strong>状況適応型選択学習（Contextual Bandit）</strong> に近い設計から始めるのが現実的です。</p>
+<h3 id="34-reward">3.4 報酬（Reward）</h3>
+<p>「そのレースの払戻 − 投資」だけを報酬にすると、的中のノイズが大きすぎて学習が安定しません。以下の候補を組み合わせます。</p>
+<table>
+<thead>
+<tr><th>報酬種別</th><th>内容</th><th>注意点</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>短期報酬</strong></td><td>safe_ev で重み付けした実現エッジ</td><td><code>betting_backtest_dataset_spec.html</code> の定義と整合させる</td></tr>
+<tr><td><strong>リスク調整報酬</strong></td><td><code>return − λ * drawdown_penalty</code> や Sharpe 比に近い形</td><td>レース単位ではノイズが大きいため、開催単位で集約する</td></tr>
+<tr><td><strong>印の一貫性ペナルティ</strong></td><td>印と買い推奨が矛盾する場合に負の報酬を与える</td><td>ルールベースで実装可</td></tr>
+<tr><td><strong>スパース問題への対策</strong></td><td>「買わない」判断にも小さな報酬を与えることを検討</td><td>「何も買わない」退化に陥るリスクがあるため慎重に設計する</td></tr>
+</tbody>
+</table>
+<hr />
+<h2 id="4-rl">4. 「バランスの良い期待値」と強化学習の関係</h2>
+<ul>
+<li><strong>期待値</strong>は <strong>行動のスコアリング関数</strong> として使うのが自然です（Q 値や advantage の形で <code>f(p, odds, stake)</code> を計算する）。</li>
+<li><strong>バランスを取る</strong>手段は、<strong>報酬設計と制約</strong> に落とし込みます。具体的には次のようなものです。
+  <ul>
+    <li>高オッズ偏重を <code>safe_ev</code> の <strong>buffer</strong> で抑える（安全域の考え方を強化学習の報酬に組み込む）。</li>
+    <li>券種ごとに <strong>上限 stake</strong>（最大賭け金額）や <strong>Kelly 基準に基づくクリップ</strong> を環境側の制約として設定する。</li>
+  </ul>
+</li>
+<li><strong>強化学習は期待値を「置き換える」のではなく、「方策の学習信号として統合する」</strong> ものです。<br />
+  たとえば、<strong>ルールベースの期待値フィルタで候補を絞り、残った候補に対して方策勾配を適用する</strong>二段構えの設計でも機能します。</li>
+</ul>
+<hr />
+<h2 id="5">5. 予測印との結びつけ（商品設計）</h2>
+<h3 id="51">5.1 印の役割</h3>
+<ul>
+<li><strong>説明のための表現</strong>: ユーザーが「なぜこの券を推奨するのか」を直感的に理解するための圧縮記号（◎○▲△）。</li>
+<li><strong>出力次元の削減</strong>: 印の種類は少ないため、<strong>方策の出力空間を絞る</strong>のに利用できる。</li>
+</ul>
+<h3 id="52">5.2 実装パターン</h3>
+<table>
+<thead>
+<tr>
+<th>パターン</th>
+<th>内容</th>
+<th>メリット / デメリット</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>A. 印を状態のみ</strong></td>
+<td>別モジュールが印候補を生成し、RL は券と金額のみ選択</td>
+<td>印と券のズレが出やすい → ペナルティで調整</td>
+</tr>
+<tr>
+<td><strong>B. 印を行動の一部</strong></td>
+<td>行動 = (印セット, 券種, 組) の joint</td>
+<td>一貫性は高いが学習難易度上昇</td>
+</tr>
+<tr>
+<td><strong>C. 階層 RL</strong></td>
+<td>高レベルが「印ストーリー」、低レベルが具体券</td>
+<td>解釈性と探索の分離</td>
+</tr>
+</tbody>
+</table>
+<p>推奨: <strong>初期はパターン A + ペナルティ</strong> で実装し、データが積み上がったら <strong>パターン B へ移行</strong>します。</p>
+<hr />
+<h2 id="6">6. 学習パラダイムの比較</h2>
+<table>
+<thead>
+<tr><th>手法</th><th>概要</th><th>適した状況・メリット</th><th>リスク・注意点</th></tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>6.1 オンライン強化学習</strong></td>
+<td>実際の馬券購入でデータを集めながら探索する</td>
+<td>リアルタイムの適応が可能</td>
+<td>金銭的コストと評判リスクが非常に大きい。<strong>本番環境では採用しない</strong>方針</td>
+</tr>
+<tr>
+<td><strong>6.2 過去データから学ぶ強化学習（Offline RL）</strong></td>
+<td><code>(状態, 行動, 報酬, 次の状態)</code> のログを過去データ検証またはシャドウ運用から蓄積して学習する</td>
+<td>CQL / IQL など、学習ポリシーとログ生成ポリシーのずれに強い手法が使える</td>
+<td>オッズは仮説シナリオとして扱う必要がある。確定オッズでの近似に留まると宣言しておく</td>
+</tr>
+<tr>
+<td><strong>6.3 状況適応型選択学習（Contextual Bandit）</strong></td>
+<td>1 レース = 1 回の意思決定とし、次のレースとは独立とみなす簡略モデル</td>
+<td>LinUCB / Thompson Sampling から始められる。実装が最もシンプルで強化学習への橋渡しとして最優先</td>
+<td>レース間の依存関係（残高の変化など）を無視する近似</td>
+</tr>
+<tr>
+<td><strong>6.4 行動クローン（BC）＋微調整</strong></td>
+<td>human の判断または safe_ev ルールの行動を模倣し、その後小規模なオフライン強化学習で改善する</td>
+<td>ルールベースの行動が「教師ポリシー」の下限となり、極端に悪い行動を取りにくくなる</td>
+<td>模倣元の品質に依存する。BC だけでは改善の上限がある</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="7-mdp">7. 過去データを使った検証での行動サイクル（バックテスト環境）</h2>
+<ul>
+<li><code>betting_backtest_dataset</code> が <strong>遷移のシミュレーター</strong> となります。</li>
+<li><strong>1 ステップ = 1 レース</strong>（または 1 開催日）で、報酬は <code>payout_table</code>（払戻）と <code>stake</code>（賭け金）から計算します。</li>
+<li><strong>状態の変化</strong>: 主に <strong>残高</strong> と <strong>累積指標</strong> が変化します（レース特徴は次サンプルとは独立とみなす近似も許容されます）。</li>
+</ul>
+<h3 id="71">7.1 評価指標の役割分担</h3>
+<p>確率モデルの評価指標と推奨レイヤの評価指標を混同しないことが重要です。</p>
+<table>
+<thead>
+<tr>
+<th>種別</th>
+<th>指標例</th>
+<th>注意</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>確率品質</strong></td>
+<td>LogLoss, ECE</td>
+<td>確率モデル（Stage6）の責務。強化学習で改善しようとしない（役割の混同を禁止）。</td>
+</tr>
+<tr>
+<td><strong>戦略品質</strong></td>
+<td>ROI, maxDD, avg_safe_ev, selection_rate</td>
+<td>強化学習ポリシーの責務。テスト期間のみで報告する。</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="8">8. リスクと対策（設計レビュー用チェックリスト）</h2>
+<table>
+<thead>
+<tr><th>リスク項目</th><th>確認内容</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>データリーク</strong></td><td>強化学習の学習データに、確率モデルのテスト期間の予測が混入していないか確認する</td></tr>
+<tr><td><strong>オッズの因果問題</strong></td><td>仮説シナリオ（実際と異なる条件での評価）の前提を文書化しているか確認する</td></tr>
+<tr><td><strong>探索の安全性</strong></td><td>本番では確率ポリシー＋閾値によって行動をクリップしているか確認する</td></tr>
+<tr><td><strong>分布のドリフト</strong></td><td>モデルやオッズ分布の変化を検知し、ポリシーの再学習トリガーが設定されているか確認する</td></tr>
+<tr><td><strong>説明責任</strong></td><td>印・券・期待値の追跡ログを同一 <code>run_id</code> で保存しているか確認する</td></tr>
+<tr><td><strong>規制・倫理</strong></td><td>自動投票の可否は製品ポリシーで判断する（この技術文書では参照のみ）</td></tr>
+</tbody>
+</table>
+<hr />
+<h2 id="9">9. 実装ロードマップ（提案）</h2>
+<ol>
+<li><strong>Phase 0（強化学習なし）</strong><br />
+   safe_ev（安全な期待値の閾値）＋ 閾値 ＋ 券種別ルールで <strong>ベースラインの推奨</strong> と <strong>印の機械的マッピング</strong> を実装する。このとき強化学習で使えるログ形式に記録を整えておく。</li>
+<li><strong>Phase 1（状況適応型選択学習：Contextual Bandit）</strong><br />
+   候補券を有限個に絞り込み、過去ログから <strong>方策を改善</strong>（LinUCB またはニューラル bandit）する。</li>
+<li><strong>Phase 2（過去データから学ぶ強化学習：Offline RL）</strong><br />
+   Q 関数または <strong>制約付き方策最適化</strong> を使い、開催単位の報酬を導入する。</li>
+<li><strong>Phase 3（階層構造・印との joint 出力）</strong><br />
+   十分なデータ量と安全性の担保が揃ってから着手する。</li>
+</ol>
+<hr />
+<h2 id="10">10. 成果物（契約）</h2>
+<table>
+<thead>
+<tr><th>成果物</th><th>内容・要件</th></tr>
+</thead>
+<tbody>
+<tr><td><code>betting_policy_manifest.json</code></td><td>ポリシー種別（<code>rule_baseline</code> / <code>bandit_v1</code> / <code>offline_rl_v1</code>）、参照する確率モデルのバージョン、オッズのスナップショット時刻を記録する（既存案を拡張）</td></tr>
+<tr><td>バックテスト出力</td><td><code>policy_action_id</code>（ポリシーの行動 ID）と <code>mark_binding</code>（印と券の対応）を含める</td></tr>
+<tr><td>MLflow Run</td><td>方策学習・検証再現のジョブごとに Run を作成し、manifest の <code>policy_version</code> と <code>mlflow_run_id</code> を相互参照する。確率モデルとは別の experiment 名を使うことを推奨</td></tr>
+</tbody>
+</table>
+<hr />
+<h2 id="11">11. まとめ</h2>
+<table>
+<thead>
+<tr><th>対象領域</th><th>方針</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>勝率・連帯率・複勝率の推定</strong></td><td>従来の教師あり機械学習で進める</td></tr>
+<tr><td><strong>馬券推奨</strong></td><td>オッズ・確率・印・資金制約を統合した意思決定問題として扱い、強化学習（まず状況適応型選択学習、次に過去データ学習）で取り組む</td></tr>
+<tr><td><strong>期待値の位置づけ</strong></td><td>核心的な情報だがそれだけで完結させない。バランスは報酬設計・制約・階層的な行動設計で表現する</td></tr>
+<tr><td><strong>ログ整合性</strong></td><td>既存の safe_ev と過去データ検証の仕様にログのフォーマットを合わせることで、研究と製品両方での成功確率を高める</td></tr>
+</tbody>
+</table>
+    </article>
+    <nav class="doc-nav">
+      <a href="betting_backtest_dataset_spec.html">← betting_backtest_dataset 仕様</a>
+      <a href="feature_engineering_exploration.html">特徴量エンジニアリング — 探索メモ（新要素の発見） →</a>
+    </nav>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">modeling/betting_policy_reinforcement_learning.html</span>
+    </footer>
+  <h2 id="12">12. 実装結果（2026-10-16 追記）</h2>
+<p>本書の設計を、過去データのバックテストとして実装した（<code>src/pipeline/betting/{ticket_env,policy}.py</code>、<code>notebooks/modeling/training_pipeline/tp-08-betting-rl.ipynb</code>）。結果と解釈は
+<a href="training_pipeline_decisions.html" style="color:#7aa9ff">決定ログ</a> §10 と <a href="modeling_experiment_report.html" style="color:#7aa9ff">実験結果レポート</a> §4。要点: 確定オッズに対して控除率を上回る優位は見つからず（回収率は最良でも約 88%）、見送りが自由なら全見送りが最適になる。購入時点のオッズのスナップショットが貯まってからの再検証が前提。</p>
+</main>
+</div>
+</body>
+</html>

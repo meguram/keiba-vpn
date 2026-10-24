@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>血統ドメイン知識ベース</title>
+<style>
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #faf9f7; --surface: #fff; --border: #e6e3de; --accent: #3b82c4; --accent-dark: #2563a8;
+  --text: #2c2825; --muted: #7a736a; --sidebar-w: 260px;
+  --font: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+}
+body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+.header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; align-items: center; gap: 16px; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+.header h1 { font-size: 17px; font-weight: 700; color: var(--text); }
+.header-sub { font-size: 12px; color: var(--muted); }
+.search-wrap { margin-left: auto; position: relative; }
+.search-wrap input { width: 200px; padding: 7px 12px 7px 32px; border: 1px solid var(--border); border-radius: 20px; font-family: var(--font); font-size: 13px; background: var(--bg); outline: none; transition: border .15s, box-shadow .15s; }
+.search-wrap input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,196,.12); background: #fff; }
+.search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px; pointer-events: none; }
+.layout { display: flex; flex: 1; overflow: hidden; }
+nav.sidebar { width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; flex-shrink: 0; padding: 8px 0 16px; }
+nav.sidebar::-webkit-scrollbar { width: 5px; }
+nav.sidebar::-webkit-scrollbar-thumb { background: #d4cfc8; border-radius: 3px; }
+.cat-group { border-bottom: 1px solid #f0ece6; }
+.cat-header { width: 100%; display: flex; align-items: center; gap: 6px; padding: 9px 14px; background: none; border: none; cursor: pointer; font-family: var(--font); font-size: 12.5px; font-weight: 600; color: var(--text); text-align: left; transition: background .1s; }
+.cat-header:hover { background: #f5f0eb; }
+.cat-label { flex: 1; }
+.cat-count { font-size: 11px; color: var(--muted); background: #f0ece6; border-radius: 10px; padding: 1px 7px; font-weight: 400; }
+.toggle-icon { font-size: 11px; color: var(--muted); transition: transform .2s; }
+.cat-header.open .toggle-icon { transform: rotate(180deg); }
+.cat-items { list-style: none; display: none; }
+.cat-items.expanded { display: block; }
+.item { display: block; width: 100%; padding: 6px 14px 6px 24px; background: none; border: none; font-family: var(--font); font-size: 13px; color: var(--text); text-align: left; cursor: pointer; transition: background .1s, color .1s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item:hover { background: #f5f0eb; }
+.item.active { background: #eef4fb; color: var(--accent); font-weight: 600; }
+.main { flex: 1; overflow-y: auto; padding: 24px 28px; max-width: 860px; }
+.main::-webkit-scrollbar { width: 6px; }
+.main::-webkit-scrollbar-thumb { background: #d4cfc8; border-radius: 3px; }
+.breadcrumb { font-size: 12px; color: var(--muted); margin-bottom: 14px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.bc-sep { color: #c5bfb8; }
+.bc-cur { color: var(--text); font-weight: 600; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 22px 26px; box-shadow: 0 1px 4px rgba(0,0,0,.04); }
+.card-head { margin-bottom: 16px; }
+.entry-name-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-top: 2px; }
+.card-name { font-size: 22px; font-weight: 700; color: var(--text); line-height: 1.3; }
+.card-meta { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 11.5px; font-weight: 600; color: #fff; letter-spacing: .3px; }
+.cat-tag { font-size: 11.5px; color: var(--muted); background: #f0ece6; border-radius: 4px; padding: 2px 8px; }
+.nk-btn { display: inline-block; padding: 4px 12px; background: #f0f7ff; border: 1px solid #bdd6f0; border-radius: 5px; font-size: 12px; color: var(--accent); text-decoration: none; transition: background .1s; }
+.nk-btn:hover { background: #dbeeff; }
+.divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+.content-body { font-size: 13.5px; line-height: 1.85; color: #3a3530; }
+.content-body p { margin-bottom: 4px; }
+.content-body p.label { font-weight: 700; color: var(--text); margin-top: 10px; margin-bottom: 3px; }
+.content-body p.num { padding-left: 2px; }
+.content-body p.star { color: #c0392b; }
+.content-body p.bullet { padding-left: 14px; }
+.content-body p.arrow { padding-left: 14px; color: #555; }
+.content-body p.nlist { padding-left: 14px; }
+.content-body p.empty { color: var(--muted); font-style: italic; }
+.content-body div.spacer { height: 6px; }
+.welcome { text-align: center; padding: 60px 20px; color: var(--muted); }
+.welcome h2 { font-size: 18px; margin-bottom: 10px; color: #8a8078; }
+.welcome p { font-size: 13.5px; }
+.edit-btn { flex-shrink: 0; padding: 5px 13px; margin-top: 4px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 5px; font-size: 12px; cursor: pointer; color: #555; transition: background .12s; white-space: nowrap; }
+.edit-btn:hover { background: #eaeaea; }
+.edit-textarea { width: 100%; min-height: 280px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 6px; font-family: var(--font); font-size: 13.5px; line-height: 1.75; color: var(--text); background: #fff; resize: vertical; outline: none; }
+.edit-textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,196,.12); }
+.edit-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+.btn-save { padding: 7px 18px; background: var(--accent); color: #fff; border: none; border-radius: 5px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.btn-save:hover { background: var(--accent-dark); }
+.btn-cancel { padding: 7px 14px; background: #f5f5f5; color: #555; border: 1px solid #ddd; border-radius: 5px; font-size: 13px; cursor: pointer; }
+.btn-cancel:hover { background: #eaeaea; }
+.btn-reset { padding: 7px 14px; background: #fff5f5; color: #c0392b; border: 1px solid #f5b7b1; border-radius: 5px; font-size: 13px; cursor: pointer; margin-left: auto; }
+.btn-reset:hover { background: #fde8e8; }
+.edited-mark { font-size: 10.5px; color: #27ae60; font-weight: 600; background: #eafaf1; border: 1px solid #a9dfbf; border-radius: 10px; padding: 1px 8px; margin-left: 6px; }
+.edit-dot { display: inline-block; width: 6px; height: 6px; background: #27ae60; border-radius: 50%; margin-left: 5px; vertical-align: middle; }
+.search-results { position: absolute; top: calc(100% + 6px); right: 0; width: 320px; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12); z-index: 100; max-height: 360px; overflow-y: auto; display: none; }
+.search-results.visible { display: block; }
+.sr-header { padding: 10px 14px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); background: #f9f7f4; border-radius: 8px 8px 0 0; }
+.sr-list { padding: 4px 0; }
+.sr-item { display: block; width: 100%; padding: 8px 14px; background: none; border: none; font-family: var(--font); font-size: 13px; color: var(--text); text-align: left; cursor: pointer; transition: background .1s; }
+.sr-item:hover { background: #f5f0eb; }
+.sr-cat { font-size: 11px; color: var(--muted); margin-left: 6px; }
+
+
+/* ── Add entry button & modal ───────────────── */
+.cat-header-row { display: flex; align-items: stretch; }
+.cat-header-row .cat-header { flex: 1; }
+.add-entry-btn {
+  flex-shrink: 0;
+  width: 28px;
+  background: none;
+  border: none;
+  border-left: 1px solid #f0ece6;
+  cursor: pointer;
+  font-size: 16px;
+  color: #aaa;
+  transition: background .1s, color .1s;
+  padding: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.add-entry-btn:hover { background: #eef4fb; color: var(--accent); }
+
+.modal-backdrop {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 200;
+  align-items: center; justify-content: center;
+}
+.modal-backdrop.visible { display: flex; }
+.modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 28px 28px 22px;
+  width: 480px;
+  max-width: 95vw;
+  box-shadow: 0 8px 32px rgba(0,0,0,.18);
+}
+.modal-title { font-size: 16px; font-weight: 700; margin-bottom: 20px; color: var(--text); }
+.modal-field { margin-bottom: 14px; }
+.modal-field label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
+.modal-field input, .modal-field select {
+  width: 100%; padding: 8px 12px;
+  border: 1px solid var(--border); border-radius: 6px;
+  font-family: var(--font); font-size: 13px; color: var(--text);
+  outline: none; transition: border .15s;
+}
+.modal-field input:focus, .modal-field select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,196,.12); }
+.modal-field textarea {
+  width: 100%; min-height: 160px; padding: 8px 12px;
+  border: 1px solid var(--border); border-radius: 6px;
+  font-family: var(--font); font-size: 13px; color: var(--text);
+  resize: vertical; outline: none; transition: border .15s;
+}
+.modal-field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,196,.12); }
+.modal-actions { display: flex; gap: 8px; margin-top: 18px; }
+.modal-error { color: #c0392b; font-size: 12px; margin-top: 6px; display: none; }
+.custom-mark { font-size: 10px; color: #e67e22; background: #fef9f0; border: 1px solid #f5c97a; border-radius: 10px; padding: 1px 7px; margin-left: 5px; }
+.btn-delete-custom { padding: 7px 14px; background: #fff5f5; color: #c0392b; border: 1px solid #f5b7b1; border-radius: 5px; font-size: 13px; cursor: pointer; }
+.btn-delete-custom:hover { background: #fde8e8; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>&#x1F434; 血統ドメイン知識ベース</h1>
+  <span class="header-sub">馬名をサイドバーから選択</span>
+  <div class="search-wrap">
+    <span class="search-icon">&#x1F50D;</span>
+    <input type="text" id="searchInput" placeholder="馬名を検索..." autocomplete="off" oninput="onSearch(this.value)" onblur="setTimeout(()=>hideSearch(),200)">
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+      <div class="cat-group">
+        <div class="cat-header-row">
+          <button class="cat-header" id="toggle_各国の血統特徴" onclick="toggleCat('各国の血統特徴')">
+            <span class="cat-label">各国の血統特徴</span>
+            <span class="cat-count">3</span>
+            <span class="toggle-icon">&#9662;</span>
+          </button>
+          <button class="add-entry-btn" onclick="openAddModal('各国の血統特徴')" title="各国の血統特徴に追加">+</button>
+        </div>
+        <ul class="cat-items" id="items_各国の血統特徴">
+          <li><button class="item" id="nav_日本" onclick="showEntry('日本')">日本</button></li>
+          <li><button class="item" id="nav_オーストラリア" onclick="showEntry('オーストラリア')">オーストラリア</button></li>
+          <li><button class="item" id="nav_ドイツ" onclick="showEntry('ドイツ')">ドイツ</button></li>
+        </ul>
+      </div>
+      <div class="cat-group">
+        <div class="cat-header-row">
+          <button class="cat-header" id="toggle_特定の海外レース" onclick="toggleCat('特定の海外レース')">
+            <span class="cat-label">特定の海外レース</span>
+            <span class="cat-count">3</span>
+            <span class="toggle-icon">&#9662;</span>
+          </button>
+          <button class="add-entry-btn" onclick="openAddModal('特定の海外レース')" title="特定の海外レースに追加">+</button>
+        </div>
+        <ul class="cat-items" id="items_特定の海外レース">
+          <li><button class="item" id="nav_凱旋門賞" onclick="showEntry('凱旋門賞')">凱旋門賞</button></li>
+          <li><button class="item" id="nav_英ダービー" onclick="showEntry('英ダービー')">英ダービー</button></li>
+          <li><button class="item" id="nav_海外 → 日本への参戦" onclick="showEntry('海外 → 日本への参戦')">海外 → 日本への参戦</button></li>
+        </ul>
+      </div>
+      <div class="cat-group">
+        <div class="cat-header-row">
+          <button class="cat-header" id="toggle_大枠分類" onclick="toggleCat('大枠分類')">
+            <span class="cat-label">大枠分類</span>
+            <span class="cat-count">5</span>
+            <span class="toggle-icon">&#9662;</span>
+          </button>
+          <button class="add-entry-btn" onclick="openAddModal('大枠分類')" title="大枠分類に追加">+</button>
+        </div>
+        <ul class="cat-items" id="items_大枠分類">
+          <li><button class="item" id="nav_長距離的スタミナ" onclick="showEntry('長距離的スタミナ')">長距離的スタミナ</button></li>
+          <li><button class="item" id="nav_パワー寄りスタミナ" onclick="showEntry('パワー寄りスタミナ')">パワー寄りスタミナ</button></li>
+          <li><button class="item" id="nav_道悪欧州瞬発力" onclick="showEntry('道悪欧州瞬発力')">道悪欧州瞬発力</button></li>
+          <li><button class="item" id="nav_在来牝系" onclick="showEntry('在来牝系')">在来牝系</button></li>
+          <li><button class="item" id="nav_早熟" onclick="showEntry('早熟')">早熟</button></li>
+        </ul>
+      </div>
+      <div class="cat-group">
+        <div class="cat-header-row">
+          <button class="cat-header" id="toggle_系統組み合わせ" onclick="toggleCat('系統組み合わせ')">
+            <span class="cat-label">系統組み合わせ</span>
+            <span class="cat-count">4</span>
+            <span class="toggle-icon">&#9662;</span>
+          </button>
+          <button class="add-entry-btn" onclick="openAddModal('系統組み合わせ')" title="系統組み合わせに追加">+</button>
+        </div>
+        <ul class="cat-items" id="items_系統組み合わせ">
+          <li><button class="item" id="nav_父サンデー系 × 母米国軽" onclick="showEntry('父サンデー系 × 母米国軽')">父サンデー系 × 母米国軽</button></li>
+          <li><button class="item" id="nav_父欧州 × 母米国" onclick="showEntry('父欧州 × 母米国')">父欧州 × 母米国</button></li>
+          <li><button class="item" id="nav_父Storm Cat × 母米国" onclick="showEntry('父Storm Cat × 母米国')">父Storm Cat × 母米国</button></li>
+          <li><button class="item" id="nav_父Storm Cat × 母欧州" onclick="showEntry('父Storm Cat × 母欧州')">父Storm Cat × 母欧州</button></li>
+        </ul>
+      </div>
+      <div class="cat-group">
+        <div class="cat-header-row">
+          <button class="cat-header" id="toggle_種牡馬" onclick="toggleCat('種牡馬')">
+            <span class="cat-label">種牡馬</span>
+            <span class="cat-count">240</span>
+            <span class="toggle-icon">&#9662;</span>
+          </button>
+          <button class="add-entry-btn" onclick="openAddModal('種牡馬')" title="種牡馬に追加">+</button>
+        </div>
+        <ul class="cat-items" id="items_種牡馬">
+          <li><button class="item" id="nav_第四フロリースカツプ" onclick="showEntry('第四フロリースカツプ')">第四フロリースカツプ</button></li>
+          <li><button class="item" id="nav_アグネスタキオン" onclick="showEntry('アグネスタキオン')">アグネスタキオン</button></li>
+          <li><button class="item" id="nav_アジアエクスプレス" onclick="showEntry('アジアエクスプレス')">アジアエクスプレス</button></li>
+          <li><button class="item" id="nav_アドマイヤマーズ" onclick="showEntry('アドマイヤマーズ')">アドマイヤマーズ</button></li>
+          <li><button class="item" id="nav_アドマイヤムーン" onclick="showEntry('アドマイヤムーン')">アドマイヤムーン</button></li>
+          <li><button class="item" id="nav_アメリカンペイトリオット" onclick="showEntry('アメリカンペイトリオット')">アメリカンペイトリオット</button></li>
+          <li><button class="item" id="nav_アラジ" onclick="showEntry('アラジ')">アラジ</button></li>
+          <li><button class="item" id="nav_アルアイン" onclick="showEntry('アルアイン')">アルアイン</button></li>
+          <li><button class="item" id="nav_アンバーシャダイ" onclick="showEntry('アンバーシャダイ')">アンバーシャダイ</button></li>
+          <li><button class="item" id="nav_イスラボニータ" onclick="showEntry('イスラボニータ')">イスラボニータ</button></li>
+          <li><button class="item" id="nav_インディチャンプ" onclick="showEntry('インディチャンプ')">インディチャンプ</button></li>
+          <li><button class="item" id="nav_ウインブライト" onclick="showEntry('ウインブライト')">ウインブライト</button></li>
+          <li><button class="item" id="nav_ウォーエンブレム" onclick="showEntry('ウォーエンブレム')">ウォーエンブレム</button></li>
+          <li><button class="item" id="nav_エタン" onclick="showEntry('エタン')">エタン</button></li>
+          <li><button class="item" id="nav_エピファネイア" onclick="showEntry('エピファネイア')">エピファネイア</button></li>
+          <li><button class="item" id="nav_エフフォーリア" onclick="showEntry('エフフォーリア')">エフフォーリア</button></li>
+          <li><button class="item" id="nav_オルフェーヴル" onclick="showEntry('オルフェーヴル')">オルフェーヴル</button></li>
+          <li><button class="item" id="nav_カラヴァッジオ" onclick="showEntry('カラヴァッジオ')">カラヴァッジオ</button></li>
+          <li><button class="item" id="nav_カリフォルニアクローム" onclick="showEntry('カリフォルニアクローム')">カリフォルニアクローム</button></li>
+          <li><button class="item" id="nav_キズナ" onclick="showEntry('キズナ')">キズナ</button></li>
+          <li><button class="item" id="nav_キタサンブラック" onclick="showEntry('キタサンブラック')">キタサンブラック</button></li>
+          <li><button class="item" id="nav_キングカメハメハ" onclick="showEntry('キングカメハメハ')">キングカメハメハ</button></li>
+          <li><button class="item" id="nav_キングズベスト" onclick="showEntry('キングズベスト')">キングズベスト</button></li>
+          <li><button class="item" id="nav_キングヘイロー" onclick="showEntry('キングヘイロー')">キングヘイロー</button></li>
+          <li><button class="item" id="nav_クロフネ" onclick="showEntry('クロフネ')">クロフネ</button></li>
+          <li><button class="item" id="nav_ゴールドアクター" onclick="showEntry('ゴールドアクター')">ゴールドアクター</button></li>
+          <li><button class="item" id="nav_ゴールドシップ" onclick="showEntry('ゴールドシップ')">ゴールドシップ</button></li>
+          <li><button class="item" id="nav_サクラバクシンオー" onclick="showEntry('サクラバクシンオー')">サクラバクシンオー</button></li>
+          <li><button class="item" id="nav_サートゥルナーリア" onclick="showEntry('サートゥルナーリア')">サートゥルナーリア</button></li>
+          <li><button class="item" id="nav_サトノクラウン" onclick="showEntry('サトノクラウン')">サトノクラウン</button></li>
+          <li><button class="item" id="nav_サトノダイヤモンド" onclick="showEntry('サトノダイヤモンド')">サトノダイヤモンド</button></li>
+          <li><button class="item" id="nav_ザファクター" onclick="showEntry('ザファクター')">ザファクター</button></li>
+          <li><button class="item" id="nav_サリオス" onclick="showEntry('サリオス')">サリオス</button></li>
+          <li><button class="item" id="nav_サンデーサイレンス" onclick="showEntry('サンデーサイレンス')">サンデーサイレンス</button></li>
+          <li><button class="item" id="nav_シスキン" onclick="showEntry('シスキン')">シスキン</button></li>
+          <li><button class="item" id="nav_シーホーク" onclick="showEntry('シーホーク')">シーホーク</button></li>
+          <li><button class="item" id="nav_ジャッジアンジェルーチ" onclick="showEntry('ジャッジアンジェルーチ')">ジャッジアンジェルーチ</button></li>
+          <li><button class="item" id="nav_ジャングルポケット" onclick="showEntry('ジャングルポケット')">ジャングルポケット</button></li>
+          <li><button class="item" id="nav_シャンハイボビー" onclick="showEntry('シャンハイボビー')">シャンハイボビー</button></li>
+          <li><button class="item" id="nav_ジョーカプチーノ" onclick="showEntry('ジョーカプチーノ')">ジョーカプチーノ</button></li>
+          <li><button class="item" id="nav_シンボリクリスエス" onclick="showEntry('シンボリクリスエス')">シンボリクリスエス</button></li>
+          <li><button class="item" id="nav_シンボリルドルフ" onclick="showEntry('シンボリルドルフ')">シンボリルドルフ</button></li>
+          <li><button class="item" id="nav_スクリーンヒーロー" onclick="showEntry('スクリーンヒーロー')">スクリーンヒーロー</button></li>
+          <li><button class="item" id="nav_ステイゴールド" onclick="showEntry('ステイゴールド')">ステイゴールド</button></li>
+          <li><button class="item" id="nav_スニッツェル" onclick="showEntry('スニッツェル')">スニッツェル</button></li>
+          <li><button class="item" id="nav_スピードシンボリ" onclick="showEntry('スピードシンボリ')">スピードシンボリ</button></li>
+          <li><button class="item" id="nav_スペシャルウィーク" onclick="showEntry('スペシャルウィーク')">スペシャルウィーク</button></li>
+          <li><button class="item" id="nav_スワーヴリチャード" onclick="showEntry('スワーヴリチャード')">スワーヴリチャード</button></li>
+          <li><button class="item" id="nav_セントクレスピン" onclick="showEntry('セントクレスピン')">セントクレスピン</button></li>
+          <li><button class="item" id="nav_ダイワメジャー" onclick="showEntry('ダイワメジャー')">ダイワメジャー</button></li>
+          <li><button class="item" id="nav_タリスマニック" onclick="showEntry('タリスマニック')">タリスマニック</button></li>
+          <li><button class="item" id="nav_タワーオブロンドン" onclick="showEntry('タワーオブロンドン')">タワーオブロンドン</button></li>
+          <li><button class="item" id="nav_ダンカーク" onclick="showEntry('ダンカーク')">ダンカーク</button></li>
+          <li><button class="item" id="nav_ダンシングブレーヴ" onclick="showEntry('ダンシングブレーヴ')">ダンシングブレーヴ</button></li>
+          <li><button class="item" id="nav_ダンスインザダーク" onclick="showEntry('ダンスインザダーク')">ダンスインザダーク</button></li>
+          <li><button class="item" id="nav_チチカステナンゴ" onclick="showEntry('チチカステナンゴ')">チチカステナンゴ</button></li>
+          <li><button class="item" id="nav_ディスクリートキャット" onclick="showEntry('ディスクリートキャット')">ディスクリートキャット</button></li>
+          <li><button class="item" id="nav_ティッカネン" onclick="showEntry('ティッカネン')">ティッカネン</button></li>
+          <li><button class="item" id="nav_ディープインパクト" onclick="showEntry('ディープインパクト')">ディープインパクト</button></li>
+          <li><button class="item" id="nav_ディープブリランテ" onclick="showEntry('ディープブリランテ')">ディープブリランテ</button></li>
+          <li><button class="item" id="nav_デインヒル" onclick="showEntry('デインヒル')">デインヒル</button></li>
+          <li><button class="item" id="nav_デクラレーションオブウォー" onclick="showEntry('デクラレーションオブウォー')">デクラレーションオブウォー</button></li>
+          <li><button class="item" id="nav_テスコボーイ" onclick="showEntry('テスコボーイ')">テスコボーイ</button></li>
+          <li><button class="item" id="nav_トウカイテイオー" onclick="showEntry('トウカイテイオー')">トウカイテイオー</button></li>
+          <li><button class="item" id="nav_トニービン" onclick="showEntry('トニービン')">トニービン</button></li>
+          <li><button class="item" id="nav_トライマイベスト" onclick="showEntry('トライマイベスト')">トライマイベスト</button></li>
+          <li><button class="item" id="nav_ドリームジャーニー" onclick="showEntry('ドリームジャーニー')">ドリームジャーニー</button></li>
+          <li><button class="item" id="nav_ドレフォン" onclick="showEntry('ドレフォン')">ドレフォン</button></li>
+          <li><button class="item" id="nav_ドゥラメンテ" onclick="showEntry('ドゥラメンテ')">ドゥラメンテ</button></li>
+          <li><button class="item" id="nav_ナイスダンサー" onclick="showEntry('ナイスダンサー')">ナイスダンサー</button></li>
+          <li><button class="item" id="nav_ノーアテンション" onclick="showEntry('ノーアテンション')">ノーアテンション</button></li>
+          <li><button class="item" id="nav_ノーザンテースト" onclick="showEntry('ノーザンテースト')">ノーザンテースト</button></li>
+          <li><button class="item" id="nav_ノヴェリスト" onclick="showEntry('ノヴェリスト')">ノヴェリスト</button></li>
+          <li><button class="item" id="nav_パーソロン" onclick="showEntry('パーソロン')">パーソロン</button></li>
+          <li><button class="item" id="nav_ハーツクライ" onclick="showEntry('ハーツクライ')">ハーツクライ</button></li>
+          <li><button class="item" id="nav_ハービンジャー" onclick="showEntry('ハービンジャー')">ハービンジャー</button></li>
+          <li><button class="item" id="nav_ビッグアーサー" onclick="showEntry('ビッグアーサー')">ビッグアーサー</button></li>
+          <li><button class="item" id="nav_ビーチパトロール" onclick="showEntry('ビーチパトロール')">ビーチパトロール</button></li>
+          <li><button class="item" id="nav_ヒンドスタン" onclick="showEntry('ヒンドスタン')">ヒンドスタン</button></li>
+          <li><button class="item" id="nav_ファインニードル" onclick="showEntry('ファインニードル')">ファインニードル</button></li>
+          <li><button class="item" id="nav_ファルブラヴ" onclick="showEntry('ファルブラヴ')">ファルブラヴ</button></li>
+          <li><button class="item" id="nav_フィエールマン" onclick="showEntry('フィエールマン')">フィエールマン</button></li>
+          <li><button class="item" id="nav_フォーティナイナー" onclick="showEntry('フォーティナイナー')">フォーティナイナー</button></li>
+          <li><button class="item" id="nav_フジキセキ" onclick="showEntry('フジキセキ')">フジキセキ</button></li>
+          <li><button class="item" id="nav_ブライアンズタイム" onclick="showEntry('ブライアンズタイム')">ブライアンズタイム</button></li>
+          <li><button class="item" id="nav_ブラックタイド" onclick="showEntry('ブラックタイド')">ブラックタイド</button></li>
+          <li><button class="item" id="nav_ブリックスアンドモルタル" onclick="showEntry('ブリックスアンドモルタル')">ブリックスアンドモルタル</button></li>
+          <li><button class="item" id="nav_フレンチデピュティ" onclick="showEntry('フレンチデピュティ')">フレンチデピュティ</button></li>
+          <li><button class="item" id="nav_ヘニーヒューズ" onclick="showEntry('ヘニーヒューズ')">ヘニーヒューズ</button></li>
+          <li><button class="item" id="nav_ベンバトル" onclick="showEntry('ベンバトル')">ベンバトル</button></li>
+          <li><button class="item" id="nav_ポエティックフレア" onclick="showEntry('ポエティックフレア')">ポエティックフレア</button></li>
+          <li><button class="item" id="nav_マインドユアビスケッツ" onclick="showEntry('マインドユアビスケッツ')">マインドユアビスケッツ</button></li>
+          <li><button class="item" id="nav_マルゼンスキー" onclick="showEntry('マルゼンスキー')">マルゼンスキー</button></li>
+          <li><button class="item" id="nav_マンハッタンカフェ" onclick="showEntry('マンハッタンカフェ')">マンハッタンカフェ</button></li>
+          <li><button class="item" id="nav_メジロマックイーン" onclick="showEntry('メジロマックイーン')">メジロマックイーン</button></li>
+          <li><button class="item" id="nav_メンデス" onclick="showEntry('メンデス')">メンデス</button></li>
+          <li><button class="item" id="nav_モーリス" onclick="showEntry('モーリス')">モーリス</button></li>
+          <li><button class="item" id="nav_モンジュー" onclick="showEntry('モンジュー')">モンジュー</button></li>
+          <li><button class="item" id="nav_ラインゴールド" onclick="showEntry('ラインゴールド')">ラインゴールド</button></li>
+          <li><button class="item" id="nav_ラストタイクーン" onclick="showEntry('ラストタイクーン')">ラストタイクーン</button></li>
+          <li><button class="item" id="nav_ラブリーデイ" onclick="showEntry('ラブリーデイ')">ラブリーデイ</button></li>
+          <li><button class="item" id="nav_リアルインパクト" onclick="showEntry('リアルインパクト')">リアルインパクト</button></li>
+          <li><button class="item" id="nav_リアルシャダイ" onclick="showEntry('リアルシャダイ')">リアルシャダイ</button></li>
+          <li><button class="item" id="nav_リアルスティール" onclick="showEntry('リアルスティール')">リアルスティール</button></li>
+          <li><button class="item" id="nav_リオンディーズ" onclick="showEntry('リオンディーズ')">リオンディーズ</button></li>
+          <li><button class="item" id="nav_リマンド" onclick="showEntry('リマンド')">リマンド</button></li>
+          <li><button class="item" id="nav_ルーラーシップ" onclick="showEntry('ルーラーシップ')">ルーラーシップ</button></li>
+          <li><button class="item" id="nav_ロージズインメイ" onclick="showEntry('ロージズインメイ')">ロージズインメイ</button></li>
+          <li><button class="item" id="nav_ロードカナロア" onclick="showEntry('ロードカナロア')">ロードカナロア</button></li>
+          <li><button class="item" id="nav_ワークフォース" onclick="showEntry('ワークフォース')">ワークフォース</button></li>
+          <li><button class="item" id="nav_ヴィクトワールピサ" onclick="showEntry('ヴィクトワールピサ')">ヴィクトワールピサ</button></li>
+          <li><button class="item" id="nav_Acatenango" onclick="showEntry('Acatenango')">Acatenango</button></li>
+          <li><button class="item" id="nav_Affirmed" onclick="showEntry('Affirmed')">Affirmed</button></li>
+          <li><button class="item" id="nav_Ahonoora" onclick="showEntry('Ahonoora')">Ahonoora</button></li>
+          <li><button class="item" id="nav_Alibhai" onclick="showEntry('Alibhai')">Alibhai</button></li>
+          <li><button class="item" id="nav_Alzao" onclick="showEntry('Alzao')">Alzao</button></li>
+          <li><button class="item" id="nav_Alleged" onclick="showEntry('Alleged')">Alleged</button></li>
+          <li><button class="item" id="nav_Anabaa" onclick="showEntry('Anabaa')">Anabaa</button></li>
+          <li><button class="item" id="nav_Aureole" onclick="showEntry('Aureole')">Aureole</button></li>
+          <li><button class="item" id="nav_Blushing Groom" onclick="showEntry('Blushing Groom')">Blushing Groom</button></li>
+          <li><button class="item" id="nav_Bold Ruler" onclick="showEntry('Bold Ruler')">Bold Ruler</button></li>
+          <li><button class="item" id="nav_Brigadier Gerard" onclick="showEntry('Brigadier Gerard')">Brigadier Gerard</button></li>
+          <li><button class="item" id="nav_Buckpasser" onclick="showEntry('Buckpasser')">Buckpasser</button></li>
+          <li><button class="item" id="nav_Bull Dog" onclick="showEntry('Bull Dog')">Bull Dog</button></li>
+          <li><button class="item" id="nav_Busted" onclick="showEntry('Busted')">Busted</button></li>
+          <li><button class="item" id="nav_Cadeaux Genereux" onclick="showEntry('Cadeaux Genereux')">Cadeaux Genereux</button></li>
+          <li><button class="item" id="nav_Caerleon" onclick="showEntry('Caerleon')">Caerleon</button></li>
+          <li><button class="item" id="nav_Cape Cross" onclick="showEntry('Cape Cross')">Cape Cross</button></li>
+          <li><button class="item" id="nav_Caro" onclick="showEntry('Caro')">Caro</button></li>
+          <li><button class="item" id="nav_Cozzene" onclick="showEntry('Cozzene')">Cozzene</button></li>
+          <li><button class="item" id="nav_Crimson Satan" onclick="showEntry('Crimson Satan')">Crimson Satan</button></li>
+          <li><button class="item" id="nav_Danehill Dancer" onclick="showEntry('Danehill Dancer')">Danehill Dancer</button></li>
+          <li><button class="item" id="nav_Danzig" onclick="showEntry('Danzig')">Danzig</button></li>
+          <li><button class="item" id="nav_Dark Angel" onclick="showEntry('Dark Angel')">Dark Angel</button></li>
+          <li><button class="item" id="nav_Darshaan" onclick="showEntry('Darshaan')">Darshaan</button></li>
+          <li><button class="item" id="nav_Delta Judge" onclick="showEntry('Delta Judge')">Delta Judge</button></li>
+          <li><button class="item" id="nav_Distant Relative" onclick="showEntry('Distant Relative')">Distant Relative</button></li>
+          <li><button class="item" id="nav_Dixieland Band" onclick="showEntry('Dixieland Band')">Dixieland Band</button></li>
+          <li><button class="item" id="nav_Dominion" onclick="showEntry('Dominion')">Dominion</button></li>
+          <li><button class="item" id="nav_Dr. Fager" onclick="showEntry('Dr. Fager')">Dr. Fager</button></li>
+          <li><button class="item" id="nav_Dubawi" onclick="showEntry('Dubawi')">Dubawi</button></li>
+          <li><button class="item" id="nav_Dynaformer" onclick="showEntry('Dynaformer')">Dynaformer</button></li>
+          <li><button class="item" id="nav_Exceed And Excel" onclick="showEntry('Exceed And Excel')">Exceed And Excel</button></li>
+          <li><button class="item" id="nav_Fairy King" onclick="showEntry('Fairy King')">Fairy King</button></li>
+          <li><button class="item" id="nav_Fappiano" onclick="showEntry('Fappiano')">Fappiano</button></li>
+          <li><button class="item" id="nav_Francis S." onclick="showEntry('Francis S.')">Francis S.</button></li>
+          <li><button class="item" id="nav_Frankel" onclick="showEntry('Frankel')">Frankel</button></li>
+          <li><button class="item" id="nav_Galileo" onclick="showEntry('Galileo')">Galileo</button></li>
+          <li><button class="item" id="nav_Giant's Causeway" onclick="showEntry('Giant's Causeway')">Giant's Causeway</button></li>
+          <li><button class="item" id="nav_Gone West" onclick="showEntry('Gone West')">Gone West</button></li>
+          <li><button class="item" id="nav_Graustark" onclick="showEntry('Graustark')">Graustark</button></li>
+          <li><button class="item" id="nav_Green Dancer" onclick="showEntry('Green Dancer')">Green Dancer</button></li>
+          <li><button class="item" id="nav_Green Desert" onclick="showEntry('Green Desert')">Green Desert</button></li>
+          <li><button class="item" id="nav_Grey Sovereign" onclick="showEntry('Grey Sovereign')">Grey Sovereign</button></li>
+          <li><button class="item" id="nav_Hail to Reason" onclick="showEntry('Hail to Reason')">Hail to Reason</button></li>
+          <li><button class="item" id="nav_Halo" onclick="showEntry('Halo')">Halo</button></li>
+          <li><button class="item" id="nav_Herbager" onclick="showEntry('Herbager')">Herbager</button></li>
+          <li><button class="item" id="nav_High Top" onclick="showEntry('High Top')">High Top</button></li>
+          <li><button class="item" id="nav_His Majesty" onclick="showEntry('His Majesty')">His Majesty</button></li>
+          <li><button class="item" id="nav_Hyperion" onclick="showEntry('Hyperion')">Hyperion</button></li>
+          <li><button class="item" id="nav_Iffraaj" onclick="showEntry('Iffraaj')">Iffraaj</button></li>
+          <li><button class="item" id="nav_In Reality" onclick="showEntry('In Reality')">In Reality</button></li>
+          <li><button class="item" id="nav_Invincible Spirit" onclick="showEntry('Invincible Spirit')">Invincible Spirit</button></li>
+          <li><button class="item" id="nav_Justify" onclick="showEntry('Justify')">Justify</button></li>
+          <li><button class="item" id="nav_Kingmambo" onclick="showEntry('Kingmambo')">Kingmambo</button></li>
+          <li><button class="item" id="nav_Konigsstuhl" onclick="showEntry('Konigsstuhl')">Konigsstuhl</button></li>
+          <li><button class="item" id="nav_Kris" onclick="showEntry('Kris')">Kris</button></li>
+          <li><button class="item" id="nav_Kris. S" onclick="showEntry('Kris. S')">Kris. S</button></li>
+          <li><button class="item" id="nav_Le Fabuleux" onclick="showEntry('Le Fabuleux')">Le Fabuleux</button></li>
+          <li><button class="item" id="nav_Le Havre" onclick="showEntry('Le Havre')">Le Havre</button></li>
+          <li><button class="item" id="nav_Lemon Drop Kid" onclick="showEntry('Lemon Drop Kid')">Lemon Drop Kid</button></li>
+          <li><button class="item" id="nav_Lombard" onclick="showEntry('Lombard')">Lombard</button></li>
+          <li><button class="item" id="nav_Lomitas" onclick="showEntry('Lomitas')">Lomitas</button></li>
+          <li><button class="item" id="nav_Lord at War" onclick="showEntry('Lord at War')">Lord at War</button></li>
+          <li><button class="item" id="nav_Lost Code" onclick="showEntry('Lost Code')">Lost Code</button></li>
+          <li><button class="item" id="nav_Lyphard" onclick="showEntry('Lyphard')">Lyphard</button></li>
+          <li><button class="item" id="nav_Machiavellian" onclick="showEntry('Machiavellian')">Machiavellian</button></li>
+          <li><button class="item" id="nav_Mahmoud" onclick="showEntry('Mahmoud')">Mahmoud</button></li>
+          <li><button class="item" id="nav_Mill Reef" onclick="showEntry('Mill Reef')">Mill Reef</button></li>
+          <li><button class="item" id="nav_Miswaki" onclick="showEntry('Miswaki')">Miswaki</button></li>
+          <li><button class="item" id="nav_Monsun" onclick="showEntry('Monsun')">Monsun</button></li>
+          <li><button class="item" id="nav_More Than Ready" onclick="showEntry('More Than Ready')">More Than Ready</button></li>
+          <li><button class="item" id="nav_Mossborough" onclick="showEntry('Mossborough')">Mossborough</button></li>
+          <li><button class="item" id="nav_Mr. Prospector" onclick="showEntry('Mr. Prospector')">Mr. Prospector</button></li>
+          <li><button class="item" id="nav_Nasrullah" onclick="showEntry('Nasrullah')">Nasrullah</button></li>
+          <li><button class="item" id="nav_Night Shift" onclick="showEntry('Night Shift')">Night Shift</button></li>
+          <li><button class="item" id="nav_Nijinsky" onclick="showEntry('Nijinsky')">Nijinsky</button></li>
+          <li><button class="item" id="nav_Niniski" onclick="showEntry('Niniski')">Niniski</button></li>
+          <li><button class="item" id="nav_Northern Dancer" onclick="showEntry('Northern Dancer')">Northern Dancer</button></li>
+          <li><button class="item" id="nav_Noverre" onclick="showEntry('Noverre')">Noverre</button></li>
+          <li><button class="item" id="nav_" onclick="showEntry('')"></button></li>
+          <li><button class="item" id="nav_Nureyev" onclick="showEntry('Nureyev')">Nureyev</button></li>
+          <li><button class="item" id="nav_Petingo" onclick="showEntry('Petingo')">Petingo</button></li>
+          <li><button class="item" id="nav_Pine Bluff" onclick="showEntry('Pine Bluff')">Pine Bluff</button></li>
+          <li><button class="item" id="nav_Princely Gift" onclick="showEntry('Princely Gift')">Princely Gift</button></li>
+          <li><button class="item" id="nav_Princequillo" onclick="showEntry('Princequillo')">Princequillo</button></li>
+          <li><button class="item" id="nav_Rahy" onclick="showEntry('Rahy')">Rahy</button></li>
+          <li><button class="item" id="nav_Raise a Native" onclick="showEntry('Raise a Native')">Raise a Native</button></li>
+          <li><button class="item" id="nav_Ribot" onclick="showEntry('Ribot')">Ribot</button></li>
+          <li><button class="item" id="nav_Roberto" onclick="showEntry('Roberto')">Roberto</button></li>
+          <li><button class="item" id="nav_Rockefella" onclick="showEntry('Rockefella')">Rockefella</button></li>
+          <li><button class="item" id="nav_Round Table" onclick="showEntry('Round Table')">Round Table</button></li>
+          <li><button class="item" id="nav_Sadler’s Wells" onclick="showEntry('Sadler’s Wells')">Sadler’s Wells</button></li>
+          <li><button class="item" id="nav_Sanctus" onclick="showEntry('Sanctus')">Sanctus</button></li>
+          <li><button class="item" id="nav_Sassafras" onclick="showEntry('Sassafras')">Sassafras</button></li>
+          <li><button class="item" id="nav_Sea The Stars" onclick="showEntry('Sea The Stars')">Sea The Stars</button></li>
+          <li><button class="item" id="nav_Seattle Slew" onclick="showEntry('Seattle Slew')">Seattle Slew</button></li>
+          <li><button class="item" id="nav_Secretariat" onclick="showEntry('Secretariat')">Secretariat</button></li>
+          <li><button class="item" id="nav_Seeking the Gold" onclick="showEntry('Seeking the Gold')">Seeking the Gold</button></li>
+          <li><button class="item" id="nav_Shamardal" onclick="showEntry('Shamardal')">Shamardal</button></li>
+          <li><button class="item" id="nav_Shirley Heights" onclick="showEntry('Shirley Heights')">Shirley Heights</button></li>
+          <li><button class="item" id="nav_Sicambre" onclick="showEntry('Sicambre')">Sicambre</button></li>
+          <li><button class="item" id="nav_Silver Hawk" onclick="showEntry('Silver Hawk')">Silver Hawk</button></li>
+          <li><button class="item" id="nav_Sir Gaylord" onclick="showEntry('Sir Gaylord')">Sir Gaylord</button></li>
+          <li><button class="item" id="nav_Sir Ivor" onclick="showEntry('Sir Ivor')">Sir Ivor</button></li>
+          <li><button class="item" id="nav_Sir Tristram" onclick="showEntry('Sir Tristram')">Sir Tristram</button></li>
+          <li><button class="item" id="nav_Siyouni" onclick="showEntry('Siyouni')">Siyouni</button></li>
+          <li><button class="item" id="nav_Star Kingdom" onclick="showEntry('Star Kingdom')">Star Kingdom</button></li>
+          <li><button class="item" id="nav_Storm cat" onclick="showEntry('Storm cat')">Storm cat</button></li>
+          <li><button class="item" id="nav_Strawberry Road" onclick="showEntry('Strawberry Road')">Strawberry Road</button></li>
+          <li><button class="item" id="nav_Surumu" onclick="showEntry('Surumu')">Surumu</button></li>
+          <li><button class="item" id="nav_Tiger Hill" onclick="showEntry('Tiger Hill')">Tiger Hill</button></li>
+          <li><button class="item" id="nav_Tiznow" onclick="showEntry('Tiznow')">Tiznow</button></li>
+          <li><button class="item" id="nav_Thatching" onclick="showEntry('Thatching')">Thatching</button></li>
+          <li><button class="item" id="nav_Theatrical" onclick="showEntry('Theatrical')">Theatrical</button></li>
+          <li><button class="item" id="nav_The Axe" onclick="showEntry('The Axe')">The Axe</button></li>
+          <li><button class="item" id="nav_The Tetrarch" onclick="showEntry('The Tetrarch')">The Tetrarch</button></li>
+          <li><button class="item" id="nav_Tom Fool" onclick="showEntry('Tom Fool')">Tom Fool</button></li>
+          <li><button class="item" id="nav_Top Ville" onclick="showEntry('Top Ville')">Top Ville</button></li>
+          <li><button class="item" id="nav_Tourbillon" onclick="showEntry('Tourbillon')">Tourbillon</button></li>
+          <li><button class="item" id="nav_Tudor Minstrel" onclick="showEntry('Tudor Minstrel')">Tudor Minstrel</button></li>
+          <li><button class="item" id="nav_Turn-to" onclick="showEntry('Turn-to')">Turn-to</button></li>
+          <li><button class="item" id="nav_Unbridled" onclick="showEntry('Unbridled')">Unbridled</button></li>
+          <li><button class="item" id="nav_Unbridled's Song" onclick="showEntry('Unbridled's Song')">Unbridled's Song</button></li>
+          <li><button class="item" id="nav_Urban Sea" onclick="showEntry('Urban Sea')">Urban Sea</button></li>
+          <li><button class="item" id="nav_Vaguely Noble" onclick="showEntry('Vaguely Noble')">Vaguely Noble</button></li>
+          <li><button class="item" id="nav_Vice Regent" onclick="showEntry('Vice Regent')">Vice Regent</button></li>
+          <li><button class="item" id="nav_Wild Risk" onclick="showEntry('Wild Risk')">Wild Risk</button></li>
+          <li><button class="item" id="nav_Woodman" onclick="showEntry('Woodman')">Woodman</button></li>
+          <li><button class="item" id="nav_Zabeel" onclick="showEntry('Zabeel')">Zabeel</button></li>
+        </ul>
+      </div>
+      <div class="cat-group">
+        <div class="cat-header-row">
+          <button class="cat-header" id="toggle_牝系" onclick="toggleCat('牝系')">
+            <span class="cat-label">牝系</span>
+            <span class="cat-count">19</span>
+            <span class="toggle-icon">&#9662;</span>
+          </button>
+          <button class="add-entry-btn" onclick="openAddModal('牝系')" title="牝系に追加">+</button>
+        </div>
+        <ul class="cat-items" id="items_牝系">
+          <li><button class="item" id="nav_ウインドインハーヘア" onclick="showEntry('ウインドインハーヘア')">ウインドインハーヘア</button></li>
+          <li><button class="item" id="nav_クラフテイワイフ" onclick="showEntry('クラフテイワイフ')">クラフテイワイフ</button></li>
+          <li><button class="item" id="nav_サクラハゴロモ" onclick="showEntry('サクラハゴロモ')">サクラハゴロモ</button></li>
+          <li><button class="item" id="nav_シーザリオ" onclick="showEntry('シーザリオ')">シーザリオ</button></li>
+          <li><button class="item" id="nav_スカーレットブーケ" onclick="showEntry('スカーレットブーケ')">スカーレットブーケ</button></li>
+          <li><button class="item" id="nav_ソラリア" onclick="showEntry('ソラリア')">ソラリア</button></li>
+          <li><button class="item" id="nav_ダンシングキイ" onclick="showEntry('ダンシングキイ')">ダンシングキイ</button></li>
+          <li><button class="item" id="nav_ハッピートレイルズ" onclick="showEntry('ハッピートレイルズ')">ハッピートレイルズ</button></li>
+          <li><button class="item" id="nav_モシーン" onclick="showEntry('モシーン')">モシーン</button></li>
+          <li><button class="item" id="nav_ラスティックベル" onclick="showEntry('ラスティックベル')">ラスティックベル</button></li>
+          <li><button class="item" id="nav_ワンオブアクライン" onclick="showEntry('ワンオブアクライン')">ワンオブアクライン</button></li>
+          <li><button class="item" id="nav_ヴアインゴールド" onclick="showEntry('ヴアインゴールド')">ヴアインゴールド</button></li>
+          <li><button class="item" id="nav_Allegretta" onclick="showEntry('Allegretta')">Allegretta</button></li>
+          <li><button class="item" id="nav_Ballade" onclick="showEntry('Ballade')">Ballade</button></li>
+          <li><button class="item" id="nav_Brigid" onclick="showEntry('Brigid')">Brigid</button></li>
+          <li><button class="item" id="nav_Highclere" onclick="showEntry('Highclere')">Highclere</button></li>
+          <li><button class="item" id="nav_My Bupers" onclick="showEntry('My Bupers')">My Bupers</button></li>
+          <li><button class="item" id="nav_Monevassia" onclick="showEntry('Monevassia')">Monevassia</button></li>
+          <li><button class="item" id="nav_Pacific Princess" onclick="showEntry('Pacific Princess')">Pacific Princess</button></li>
+        </ul>
+      </div>
+  </nav>
+
+  <div class="main" id="content">
+    <div class="welcome">
+      <h2>血統ドメイン知識ベース</h2>
+      <p>左サイドバーのカテゴリを開き、馬名をクリックすると血統メモが表示されます</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const ENTRIES = [{"id": "日本", "name": "日本", "cat": "各国の血統特徴", "etype": "", "badgeColor": "#3a7bd5", "badgeLabel": "地域", "nkUrl": "", "content": "【特徴】\n❶在来牝系由来は以下の特徴を持つ馬が多い\n・高いスタミナ\n・レースを使ってパフォーマンスが上がる\n・鈍い走りをするタイプが多いので、野芝の福島等でパフォUP\n\nnetkeibaより\n【競馬の歴史】下総御料牧場が輸入した主要な基礎繁殖牝馬を紹介 ゴールドシップ・トウカイテイオーなどを輩出\nアメリカ・南米・北米\n【特徴】\n❶スピード持続血統が多い\n❷スピード持続血統×斤量増加 -> パフォ低下確率大"}, {"id": "オーストラリア", "name": "オーストラリア", "cat": "各国の血統特徴", "etype": "", "badgeColor": "#3a7bd5", "badgeLabel": "地域", "nkUrl": "", "content": "【特徴】\n❶平坦コースでコーナー角もきつい\n❷洋芝&スピードが必要（日本換算でパワーのいる道悪馬場）\n❸オーストラリアの重要レースはメルボルンカップ（G1/芝3200）\n❹メイン系統は以下のライン\n★中〜長距離\n・Sir Gaylord -> Sir Ivor -> Sir Tristram -> Zabeel\n・Strawberry Load\n★短～中距離\n・デインヒル\n❺テンが遅く、持続力に優れたタイプが多い\n・モーリス産駒の活躍が多い\n・デインヒルの登場頻度が多い\n❻使ってよくなるタイプが多い\n❼豪州血統は外差しに強い\n\n【例】\n・マイネルファンロン\n-> 3代母父Zabeelからのマイネヌーヴェル牝系\n-> 上がりのかかる舞台で長く脚を使い、大外から差し切る競馬\n・Hitotsu\n-> モーリス×3代父にデインヒル\n-> 豪ダービーを制覇\n・Strawberry Road\n-> 使ってよくなるタイプ\n-> ドウデュース、リバティアイランドが同じ位置にこの血を持つ"}, {"id": "ドイツ", "name": "ドイツ", "cat": "各国の血統特徴", "etype": "", "badgeColor": "#3a7bd5", "badgeLabel": "地域", "nkUrl": "", "content": "【特徴】\n❶ ドイツ血統はイン差しに強い -> 馬群リスクが低い\n❷ 日本の高速馬場に対応可能。東京芝や春の京都芝で強い。\n❸ ライン牝系という概念があり、ドイツは生まれた仔の名前の頭文字を母親と同じにするというルールがありこれにより日本では主に以下のラインが存在\n1. Sライン:\nSchwarz Kutte -> Schwarzliesel -> Schwarzgold -> Schwarzblaurot -> Suleika | Scheherezade | Sabrina\n2. Mライン: \nMorning Breeze -> Morchel -> Motette -> Monacensia -> Monasia -> Mosella -> Monsun\n3. Aライン: \nArabis -> Arkebuse -> Aster -> Asterblute -> Alameda -> Almyra -> Anatevka -> Allegretta | Amethysta | Anna Charlotta | Alya\nAggravate -> Acatenango\n4. Kライン:\nKilleen -> Katinka -> Kaiserwurde -> Kaiserkrone -> Kronung -> Konigskronung -> Konigsstuhl\n❹ A(Acatenango) / Sライン / Kライン の血統は高いスピードを持つ因子で、これらを母方に持つ馬はダービーで好走できるほどのスピードを伝えている。例: サリオス(20,日本ダービー🥈) / ヴェルトライゼンデ(20,日本ダービー🥉) / エイシンフラッシュ(10,日本ダービー🥇) / ヴェロックス(19,日本ダービー🥉)\n❺ A(Allegretta)ラインの血統はパワーを伝える系統で多くの凱旋門賞馬を輩出している。\n❻Lombardが入ると重たい血統となり欧州のタフ馬場でパワーを発揮できる。"}, {"id": "凱旋門賞", "name": "凱旋門賞", "cat": "特定の海外レース", "etype": "", "badgeColor": "#e67e22", "badgeLabel": "海外レース", "nkUrl": "", "content": "【前提】\n・欧州は道中隊列を組み、風の影響を最小限にさえながら追走しつつ、最後は瞬間的な加速力を何度も使う能力が必要。\n・日本馬が好走するためには、パワー＆瞬間的加速力を共に持つ血統的要素が必要。欧州はこの要素を当たり前にように持っている。\n・Dangiz系 / Ahonoora系 / Grey Sovereign系 は欧州的スピード持続力\n・ドイツ血統の扱いが重要\n・良馬場開催時にも適用可能\n・さらにパワーに優れたドイツ血統 Lombart(-> Allegretta)も活躍"}, {"id": "英ダービー", "name": "英ダービー", "cat": "特定の海外レース", "etype": "", "badgeColor": "#e67e22", "badgeLabel": "海外レース", "nkUrl": "", "content": "【前提】\n・エプソム競馬場は直線下り坂コース\n・ここで強い馬は急坂でパフォーマンスを低下させることが多く、コース形態的にアスコット競馬場とは真逆の成績になりやすい\n-> オーギュストロダンは英ダービーを圧巻のパフォーマンスで勝利するもアスコット競馬場のキングジョージⅥ＆QESで完敗の内容"}, {"id": "海外 → 日本への参戦", "name": "海外 → 日本への参戦", "cat": "特定の海外レース", "etype": "", "badgeColor": "#e67e22", "badgeLabel": "海外レース", "nkUrl": "", "content": "★調教の違い\n❶欧州調教馬\n-> 欧州瞬発力が出やすい\n※欧州×米国で日本にもギリギリ対応できるくらいのスピードと持続力を兼ね揃えた欧州瞬発力タイプができあがる\n❷日本調教馬\n-> 持続力優位になる\n\n★必要な要素\n・米国要素や欧州短距離血統を置いて、日本のスピード持続に最低限対応させる\n-> Tom Fool, Bold Ruler(Secretariat), Mr. Prospector, Buck Passer, In Reality, Sir Gaylord, Dr. Fager\n・例\n1. Ouija Board: 2006/11/26 JC 3着, 2005/11/27 JC 5着\n（Tom Fool）\n2. グランドグローリー: 2021/11/28 JC 5着, 2022/11/27 JC 6着\n（Mr. Prospector, Bold Ruler, Sir Gaylord）\n3. Snow Fairy: 2010/11/14 エリ女 1着, 2011/11/13 エリ女 1着\n（Mr. Prospector, In Reality, Bold Ruler）"}, {"id": "長距離的スタミナ", "name": "長距離的スタミナ", "cat": "大枠分類", "etype": "", "badgeColor": "#5e60ce", "badgeLabel": "大枠", "nkUrl": "", "content": "★高速馬場Hペース\n\n・アンバーシャダイ\n・エタン\n・リマンド\n・Aureole\n・Sicambre\n・Tudor Minstrel"}, {"id": "パワー寄りスタミナ", "name": "パワー寄りスタミナ", "cat": "大枠分類", "etype": "", "badgeColor": "#5e60ce", "badgeLabel": "大枠", "nkUrl": "", "content": "★タフな長距離対応\n\n・Mossborough\n・Damascus"}, {"id": "道悪欧州瞬発力", "name": "道悪欧州瞬発力", "cat": "大枠分類", "etype": "", "badgeColor": "#5e60ce", "badgeLabel": "大枠", "nkUrl": "", "content": "★Hペース&減速ラップ消耗戦\n\n・Ribot\n・Mill Reef"}, {"id": "在来牝系", "name": "在来牝系", "cat": "大枠分類", "etype": "", "badgeColor": "#5e60ce", "badgeLabel": "大枠", "nkUrl": "", "content": "★高速馬場Hペース / 野芝スタミナレース質\n\n・\n\n★父方\n・燃費の悪い走り\n\n★母方\n・スタミナの補強"}, {"id": "早熟", "name": "早熟", "cat": "大枠分類", "etype": "", "badgeColor": "#5e60ce", "badgeLabel": "大枠", "nkUrl": "", "content": "★仕上がり早の馬が多い（すぐ枯れるとは限らない）\n\n・Affirmed\n・Le Fabuleux"}, {"id": "父サンデー系 × 母米国軽", "name": "父サンデー系 × 母米国軽", "cat": "系統組み合わせ", "etype": "", "badgeColor": "#795548", "badgeLabel": "系統", "nkUrl": "", "content": "・晴れた芝でスピードを生かせる"}, {"id": "父欧州 × 母米国", "name": "父欧州 × 母米国", "cat": "系統組み合わせ", "etype": "", "badgeColor": "#795548", "badgeLabel": "系統", "nkUrl": "", "content": "・欧州スプリントに流行りの血統"}, {"id": "父Storm Cat × 母米国", "name": "父Storm Cat × 母米国", "cat": "系統組み合わせ", "etype": "", "badgeColor": "#795548", "badgeLabel": "系統", "nkUrl": "", "content": "・軽いスピードに振れた血統"}, {"id": "父Storm Cat × 母欧州", "name": "父Storm Cat × 母欧州", "cat": "系統組み合わせ", "etype": "", "badgeColor": "#795548", "badgeLabel": "系統", "nkUrl": "", "content": "・欧州瞬発力に振れた血統"}, {"id": "第四フロリースカツプ", "name": "第四フロリースカツプ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a002371/", "content": "スピードある寄りの在来牝系"}, {"id": "アグネスタキオン", "name": "アグネスタキオン", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1998101516/", "content": "ロイヤルスキーの影響で仕上がり早の馬が多く2歳から活躍できる馬が多い。"}, {"id": "アジアエクスプレス", "name": "アジアエクスプレス", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "", "content": "Storm Cat直系で前半から速い流れの持続力勝負に強い種牡馬。馬場が渋って柔らかくなるとさらに打点が上がるタイプが多い。"}, {"id": "アドマイヤマーズ", "name": "アドマイヤマーズ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2016104422/", "content": "Sassafrasのスタミナ&欧州要素の高い牝系にダイワメジャーでタフな馬場で瞬発力要素を伝える因子。産駒の活躍場所が野芝率高い可能性あり注意。"}, {"id": "アドマイヤムーン", "name": "アドマイヤムーン", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2003102991/", "content": "道悪適性を大きく高める因子。後継としてファインニードル産駒にも同様の適性を伝える。"}, {"id": "アメリカンペイトリオット", "name": "アメリカンペイトリオット", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a013bba/", "content": ""}, {"id": "アラジ", "name": "アラジ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/000a00003b/", "content": "- Congaree(キラーグレイシス -> キラーアビリティ)\n\nNoverreと3/4同血となっており、Le Fabuluexの影響を強く受けていることにより早期成熟要因を強める。キラーアビリティは2歳時にホープフルSを勝利したものの3歳での活躍は乏しかった。"}, {"id": "アルアイン", "name": "アルアイン", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "", "content": "【出資コメント】\n　母にキンカメ&サンデー系がベスト。母4世代以降でHaloや軽い米国スピードがあると良い。母父サンデー系は微妙な可能性高。"}, {"id": "アンバーシャダイ", "name": "アンバーシャダイ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1977103827/", "content": "- メジロライアン\n\n　高いスタミナと晩成要素を付与する系統。サクラハゴロモと全兄弟。"}, {"id": "イスラボニータ", "name": "イスラボニータ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2011103565/", "content": "追記"}, {"id": "インディチャンプ", "name": "インディチャンプ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2015104688/", "content": "この馬自身は米国快速牝系にステゴ×キンカメを合わせることで速い馬場に対応可能な欧州瞬発力のタイプ。おそらく産駒にもこの欧州瞬発力の要素が伝わる可能性が高そう。そうすると、ドンピシャのレース質では勝てるが、そのほかは勝ちきれない惜しい競馬が続くタイプに。"}, {"id": "ウインブライト", "name": "ウインブライト", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2014100222/", "content": "牝系が高いスピード持続血統のステゴ産駒なので、中距離の欧州瞬発力ベクトルになり、TSの求められないロンスパ持続力勝負に強い産駒が多い。また、道悪で打点が上がるタイプも多め。\n\n【出資コメント】\n　スピード不足が否めないタイプのせいか、母系にはサンデー（Halo系）+ミスプロが両立しているとよさそう。アドマイヤムーン（ミスプロ×サンデー）とニックス？\n-> 2,3歳の活躍期待度があまり高くなく、出資価値やや低め。"}, {"id": "ウォーエンブレム", "name": "ウォーエンブレム", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a00fa35/", "content": "追記"}, {"id": "エタン", "name": "エタン", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000045/", "content": "高い持続力血統。スタミナを伝える因子。"}, {"id": "エピファネイア", "name": "エピファネイア", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2010104155/", "content": "馬場はある程度綺麗目がよく、重馬場以上になるとややパフォーマンス低下。牝系に位置するLe Fabuleuxの血により、速いタイミングから高いスピードを出せるような硬さを出すことができるものの、古馬になってからは硬すぎて切れがなくなって通用しなくなってくる。シーザリオの主張が激しく、シンボリクリスエスらしさはあまり出ない。\n\n【出資コメント】\nLe Fabuleuxの仕上がり早要素を自身以上に産駒に伝えやすい（隔世遺伝？）"}, {"id": "エフフォーリア", "name": "エフフォーリア", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "", "content": "【出資コメント】\n　隔世遺伝が発生するのであれば、エピファネイアらしさは出てきそう。Shapen Upの仕上がり早要素 vs Katies牝系の成長力がどう出るか。産駒の場体特徴的には、ロベルトハーツ要素が出がちで、適性としては中距離スピード要素より。馬場の速い芝中山（9月あたり）等合いそう。"}, {"id": "オルフェーヴル", "name": "オルフェーヴル", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2008102636/", "content": "速い上り(33-34秒前半)を求められるとスピード負けする馬が多い産駒。パワー質な瞬発力を有しているため、上りのかかる舞台でぐんぐん伸びてくることができる。母系の深いところに入ることでメジロマックイーン系統のスタミナが付与される可能性も高い。瞬発力に長けたHyperionの強烈なクロスがあるノーザンテーストの4×3クロスを持つことにより、エンジンの点火が遅いものの何度も蒸かしてスピードを上げていく瞬発力優位な走りができるもののTSを持続するようなスタミナ面はない。このような走りはスピードを出しにくいタフな馬場で効力を発揮するため、本馬も凱旋門賞で欧州馬と引けを取らない瞬発力は発揮することができた。"}, {"id": "カラヴァッジオ", "name": "カラヴァッジオ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2019105126/", "content": "軽い牝系のスピード持続をクロスすることで前半から速い流れを終始持続する流れを得意とする産駒が多い。中緩みして瞬発力を求められるとパフォ低下しやすい。"}, {"id": "カリフォルニアクローム", "name": "カリフォルニアクローム", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a012602/", "content": "高いスピード持続力の系統。米国要素高く、溜めて切れるというよりは、HペースでTSが要求されないスタミナ質な持続力の流れで打点を発揮するタイプが多い。"}, {"id": "キズナ", "name": "キズナ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2010105827/", "content": "父Damascus＆牝系に位置するPacific Princess牝系が持つMossboroughの血が欧州のタフな馬場に対応できるパワーとスタミナを補完している。この要素を後世に強く伝えているため、ダートにも対応できる産駒が多い。"}, {"id": "キタサンブラック", "name": "キタサンブラック", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2012102013/", "content": "- イクイノックス\n- ヒップホップソウル\n\n　ディープインパクト産駒よりもディープインパクトらしさを伝える。イメージとしては2000m以下に強いディープインパクト産駒。前半ゆったり運びながら4-5Fにかけて長く脚を使う能力が高く、仕掛けどころでの反応の良さも持ち合わせている馬が多い。母系に米国系統を持つことで芝マイル前後を得意とする馬の割合が高くなる。欧州系統でもう少し中距離に触れる形。血統構成的には晩成傾向が強い。"}, {"id": "キングカメハメハ", "name": "キングカメハメハ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.sp.netkeiba.com/horse/ped/2001103460/", "content": "- レッツゴードンキ\n\n　スロー展開の上がり勝負で勝つようなキレ味タイプが多い。有馬記念でこのキンカメ産駒が好走するのはスロー展開のみ。レッツゴードンキはドスロー瞬発力勝負の桜花賞で勝利。自身の瞬発力も伝えつつ、配合相手である母系の特徴を増強させることが多い。母がキンカメ×サンデーの場合、成長すると瞬発力に振れるタイプが出てくる。(例: ソダシ)\n　京都の3000m超えレースに対応できるタイプが少なく、雨が降って追走力やラストのスピードが求められないタフな馬場になってやっと食い込めるかどうかの血統。"}, {"id": "キングズベスト", "name": "キングズベスト", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0022d2/", "content": "- エイシンフラッシュ\n\n　母系にはドイツのパワー持続力の根源であるLombardを含みながら父系でMr. Prospectorによるスピードも補完。欧州のパワースタミナ戦で通用する因子を伝えるため最後の最後でもうひと伸びできるスピード持続力を発揮できる。"}, {"id": "キングヘイロー", "name": "キングヘイロー", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1995104427/", "content": "Lyphard系ではあるものの、Sir Gaylordの4×4クロスによりSir Iver色の強い因子を伝える。急カーブよりは緩いカーブでパフォUP。"}, {"id": "クロフネ", "name": "クロフネ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1998110135/", "content": "母父クロフネ×父欧州血統でよく走る馬が生まれる。高いスピード持続力を持ちつつ、母ブルーアヴェニューから欧州と相性の良い因子を多く伝える。欧州種牡馬の直仔だと日本のスピードに対応できないことが多いが、サンデーやキンカメ直系で対応可能。母父にクロフネを持つヴェラアズールは欧州の良さとサンデーからのスピードがうまく絡み合った結果、欧州のように馬群が凝縮した22'ジャパンカップで得意な欧州的瞬発力勝負となった。"}, {"id": "ゴールドアクター", "name": "ゴールドアクター", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2011105266/", "content": "追記"}, {"id": "ゴールドシップ", "name": "ゴールドシップ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2009102739/", "content": "在来牝系で使ってよくなるタイプ。この馬だけだと足りないスピードの部分を母系で補うことにより、芝で対応できるようになる。瞬間的な加速力がない分長く脚を使うことができる。"}, {"id": "サクラバクシンオー", "name": "サクラバクシンオー", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1989108341/", "content": "母であるサクラハゴロモからスタミナ要素を引き継いだことで、この馬自身は短距離でスタート時から全速力で駆け抜けそのスピードを維持するような走りを見せてきた。母母クリアアンバーはアンバーシャダイと全兄弟となっており、この馬もその影響が出て晩成要素がやや強め。"}, {"id": "サートゥルナーリア", "name": "サートゥルナーリア", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2016104505/", "content": "スペシャルウィークタイプ or Storm Cat & Ribot のどちらかが現れるタイプがほとんど。前者はブエナビスタっぽく短い脚でコンパクトな馬体になることで脚の回転数を出せるタイプとなり打点が高い馬が多く、後者は馬体に緩さが出やすい傾向にあり、脚長でやや勝ち上がり率が低い。\n\n【出資コメント】\n①胴が長くて脚が短く重心低め（スペシャルウィーク寄）-> 若くから走る\n②胴が詰まって足が長く体高高め（ロードカナロア寄）-> 走るなら時間がかかりそう"}, {"id": "サトノクラウン", "name": "サトノクラウン", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2012104668/", "content": "基本的には中距離で高いパフォーマンスを発揮する因子を伝える。欧州気質の強い血統なので前向きなタイプかつ使って良くなるタイプが多い。"}, {"id": "サトノダイヤモンド", "name": "サトノダイヤモンド", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2013106101/", "content": "南米牝系でテンから速い流れで脚を使わされるとパフォ低下しやすい産駒が多い。"}, {"id": "ザファクター", "name": "ザファクター", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0130d0/", "content": "Dangiz直系"}, {"id": "サリオス", "name": "サリオス", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "", "content": "【出資コメント】\n　ハーツクライ後継は自身の特徴をそのまま伝えがち。ハーツ&ドイツ特有の堅さを見せるので、1800前後のスピード感 + 広めのコースで。"}, {"id": "サンデーサイレンス", "name": "サンデーサイレンス", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a00033a/", "content": "- アドマイヤグルーヴ\n- ディープインパクト\n\n　自身の瞬発力も程よく伝えつつ、母方の血を増強させるようなタイプ。道中の基礎スピード補完もできるため、急なペースアップにもある程度対応はできる。母がキンカメ×サンデーの場合、成長すると瞬発力に振れるタイプが出てくる。(例: ソダシ)"}, {"id": "シスキン", "name": "シスキン", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a01aa3d/", "content": "芝マイル前後の距離で脚を溜めながら高いTS持続力を発揮する産駒が多い。"}, {"id": "シーホーク", "name": "シーホーク", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a00000d/", "content": "父HerbagerはBallade牝系のもととなる種牡馬でこの血が牝系にいると平坦パフォが上がる。"}, {"id": "ジャッジアンジェルーチ", "name": "ジャッジアンジェルーチ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000d30/", "content": "Bold Rulerの柔らかさが伝わることでスピードの強化につながる因子。"}, {"id": "ジャングルポケット", "name": "ジャングルポケット", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1998101786/", "content": "高いスタミナを伝える因子。"}, {"id": "シャンハイボビー", "name": "シャンハイボビー", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0127e4/", "content": "全体的にパワー持続力を伝える因子で、前傾ラップの持続力勝負に強い産駒が多い。牝系に米国快速要素を合わせることで前半からの速い流れに対応しながらTSの求められないスピード持続力勝負に強い馬が生まれる（マリアズハート）。"}, {"id": "ジョーカプチーノ", "name": "ジョーカプチーノ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2006100529/", "content": "スタミナ特化の欧州牝系に、欧州要素の濃い持続力血統を重ね合わせた形でTS値に限界がありながらも後半長い脚を使って持続力を発揮できる産駒が多い。ラップ差の小さい持続ラップでスピード持続力を発揮する形。"}, {"id": "シンボリクリスエス", "name": "シンボリクリスエス", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1999110099/", "content": "母父シンボリクリスエスを持つ馬は4-6月の東京/京都芝と相性が良い。Seattle Slewの影響を強く受けた因子で、成長すると筋肉質な部分が強調されてマイル的スピード志向となる。母父にこの馬を持つ場合、牡馬なら3歳、牝馬なら4歳。もともと中距離で走っていた馬がマイルにシフトするようになる馬が出てくる。(例: マジックキャッスル)。父サンデー系×母父シンボリクリスエスで4-6月の東京/京都芝に強くなる。"}, {"id": "シンボリルドルフ", "name": "シンボリルドルフ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1981107017/", "content": "追記"}, {"id": "スクリーンヒーロー", "name": "スクリーンヒーロー", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2004103328/", "content": "1980年代に活躍した母母ダイナアクトレスの影響で荒れた野芝でのパフォーマンスを上げる血統に。父グラスワンダーは中山を得意としており、産駒にもその傾向が引き継がれる。"}, {"id": "ステイゴールド", "name": "ステイゴールド", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1994108729/", "content": "追記"}, {"id": "スニッツェル", "name": "スニッツェル", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a010eaa/", "content": "使って良くなる豪州血統。"}, {"id": "スピードシンボリ", "name": "スピードシンボリ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1963100089/", "content": "追記"}, {"id": "スペシャルウィーク", "name": "スペシャルウィーク", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1995103211/", "content": "在来牝系のシラオキとセントクレスピンで長距離対応可能なスタミナ強化。これを牝系に持つ、エピファネイアは産駒に細い馬体を生かして長い距離を得意とする馬が多い。"}, {"id": "スワーヴリチャード", "name": "スワーヴリチャード", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2014106083/", "content": "牝系Le Fabuleuxで早熟度合いが高い血統。2歳から活躍を出し、好走を連発する傾向にあるので負けるまで買うのがベスト。使い減りするタイプなので、使い過ぎの参戦には注意。\n\n【出資コメント】\nLe Fabuleuxの仕上がり早要素を自身以上に産駒に伝えやすい（隔世遺伝？）"}, {"id": "セントクレスピン", "name": "セントクレスピン", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.sp.netkeiba.com/horse/ped/000a0004b5/", "content": "父Aureoleの気性難血統。深い部分でもこの血が一つ入るだけで気性が荒くなる。"}, {"id": "ダイワメジャー", "name": "ダイワメジャー", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/2001103114/", "content": "- マテンロウオリオン\n- セリフォス\n\n　スカーレット一族からの馬格&粘り腰がよく受け継がれており、平場でも逃げて驚異的な粘りを見せるようなパターンが多い。"}, {"id": "タリスマニック", "name": "タリスマニック", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a013425/", "content": "牝系でスピードを増強したSadler's Wells直系で軽めの芝で高い瞬発力を出してきたタイプ。この産駒は日本だとややスピード不足になるので、ダートや芝道悪で高い瞬発力を発揮。芝なら中距離、ダートなら短いところで好成績。産駒には溜めて一瞬の脚を使うタイプが多い。"}, {"id": "タワーオブロンドン", "name": "タワーオブロンドン", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2015101621/", "content": "欧州スピード要素。3歳以降500kgを超えるような馬は1200m、480kgを下回るような馬は1600mが合いそう。"}, {"id": "ダンカーク", "name": "ダンカーク", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a012185/", "content": "米国らしいスピード持続力の系統。前半から速い流れで後半TS値の要求されない高い持続力を求められるレース質で好走するタイプが多い。"}, {"id": "ダンシングブレーヴ", "name": "ダンシングブレーヴ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0000cc/", "content": "追記"}, {"id": "ダンスインザダーク", "name": "ダンスインザダーク", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1993109188/", "content": "京都で強いパフォーマンス(ボッケリーニ)を発揮できる中長距離血統因子であることから多くの菊花賞好走馬を輩出している。母方に入るとRaise a Native&Tom FoolのNative Partner牝系で軽いスピード持続力の増強につながり、父方だとNijinsky&Ribotによる距離的スタミナの増強になり菊花賞などで適性を示す。なお、軽いスピード自体が根幹に存在するため、ステイヤー万能レベルのガソリン搭載量はなく、天皇賞・春だとスタミナ面での後押しが足りず菊花賞ほど相性はよくない。"}, {"id": "チチカステナンゴ", "name": "チチカステナンゴ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a011135/", "content": "牝系は比較的速い血が多く、Grey Sovereign直系で欧州的なスピード持続力を伝える血。この産駒はマイル前後の芝道悪で高い瞬発力を発揮できるタイプが多い。"}, {"id": "ディスクリートキャット", "name": "ディスクリートキャット", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0113a1/", "content": "欧州Storm Catに高いスピードスタミナの牝系を混ぜることで、この産駒はHペースで高いスタミナを発揮するタイプが多い。"}, {"id": "ティッカネン", "name": "ティッカネン", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000d88/", "content": "追記"}, {"id": "ディープインパクト", "name": "ディープインパクト", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2002100816/", "content": "Highclere牝系の高いスタミナとBustedによる古馬の成長力や下り坂への高い適性、道中溜めて最後に速い上りを使える因子を母から受け継ぐとともに、Sir IvorやサンデーサイレンスからTurn-to由来の軽いスピード強化ということで中長距離かつ直線平坦のスピード勝負に強い産駒を多く輩出する。　　\n　母父にこの血が入ると牝系のスタミナ要素が強く出てくる。ディープ直系はテンが遅めなので下り坂スタートはプラス。急な上り坂への適性は高くないが、距離を短くすることでその不安をカバーすることはできる。前半から速くないコースや下りスタートの中山1200等は適性が高くなる。\n　また、Sir Ivorの要素からも、コーナー角が急なところよりも緩いコーナー角の方がパフォ高い。"}, {"id": "ディープブリランテ", "name": "ディープブリランテ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2009105084/", "content": "追記"}, {"id": "デインヒル", "name": "デインヒル", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0000d1/", "content": "追記"}, {"id": "デクラレーションオブウォー", "name": "デクラレーションオブウォー", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0136f6/", "content": "Northern Dancer & Blushing Groomの要素を強く産駒に伝える血統なので、芝の道悪で欧州瞬発力を生かした高打点を出すタイプが多い。"}, {"id": "テスコボーイ", "name": "テスコボーイ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000355/", "content": "追記"}, {"id": "トウカイテイオー", "name": "トウカイテイオー", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1988101025/", "content": "追記"}, {"id": "トニービン", "name": "トニービン", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1983109006/", "content": "アイリッシュダンス(-> ハーツクライ)\n\n　大舞台で1強の馬が横綱競馬をした場合に流れ込んでくるのはこの血(Grey Sovereign)を持つようなタイプが多い('18JC、'94日本ダービー、'06天皇賞春)。タフさも兼ねそろえており、レースの反動が出にくい。この血が母方に入るとトニービンの母Severn Bridgeの持つHyperionの2×4の影響が強まり、瞬発力＆加速力を引き出すものの、父方に入ると出してこない。"}, {"id": "トライマイベスト", "name": "トライマイベスト", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000378/", "content": "追記"}, {"id": "ドリームジャーニー", "name": "ドリームジャーニー", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2004102753/", "content": "この産駒は、全弟のオルフェーブルと比較してノーザンテーストの伝達力が弱いことでステイゴールド×メジロマックイーンの要素（ディクタス&パーソロン）を強く伝える。よってオルフェーブルよりも欧州瞬発力が強くなり、タフ馬場での中緩みに強くなる。"}, {"id": "ドレフォン", "name": "ドレフォン", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a013b82/", "content": "- ジオグリフ\n- ウォーターリヒト\n- デシエルト\n\n　毛色で受け継いでいる特徴が違う説が出ている。\n栗毛: 3代父のStorm CatとTrempolinoを引き継いでおり、欧州的な瞬発加速性能の強化。ジオグリフはそのスピードを持続できずに終わってしまう。\n黒鹿毛: 3代父のStorm Catと母父Ghostzapperを引き継いでおり、スピードの持続力に長けた血統になる。"}, {"id": "ドゥラメンテ", "name": "ドゥラメンテ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2012104511/", "content": "- リバティアイランド\n- ドゥレッツァ\n- スターズオンアース\n\nドゥラメンテ自身はキンカメ×サンデー系で瞬間的な加速力に優れたタイプではあるものの、母方の特徴を生かすキンカメ＆サンデーがともに入っていることで種牡馬としてはより母方を生かすような特徴が強い。タイプによってはドゥラメンテの要素をほとんど持っていない(母方の生き写しのような)ものもいる(ドゥラドーレス、リバティアイランドなど)。母方をうまく出し切れなかった場合にドゥラメンテらしさが出てくる。\n　キンカメ産駒が苦手としている京都長距離を克服する馬を輩出することもしばしばあり、これはサンデー系の特徴を強く出していることによりキンカメの相性の悪さが出づらいことによるもの。\n　気位が高い対応であるため、ポジションは馬自身に選ばせる方が良いことに働くことが多い。行きたがる部分を無理矢理抑えるような乗り方をするとかかって終わりやすい。古風な日本ジョッキーだと抑え込ませて支配するタイプが多いので気持ちよくいかせて脚を溜められる外国人ジョッキー / 横山家がベスト。なお、リバティアイランドは米国のダッシュ力のようなものが少ない欧州/豪州が豊富な血統になると行きたがる面は見せず出たなりで控える競馬が多くなる。ここを最大限に生かせればペースに関係なく脚を溜められるようなタイプ。"}, {"id": "ナイスダンサー", "name": "ナイスダンサー", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000249/", "content": "- トウカイナチュラル (-> トウカイテイオー)"}, {"id": "ノーアテンション", "name": "ノーアテンション", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000c78/", "content": "- スーパークリーク\n\n　長距離向きのスタミナを伝える。父Green Dancerはフィエールマンも母父に受け継いでいる。坂が苦手なタイプが多い。"}, {"id": "ノーザンテースト", "name": "ノーザンテースト", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000258/", "content": "Hyperionを父に持つLady Angelaの3×2という強烈なクロスが入っていることにより、高いスタミナと瞬発力、古馬になってからの成長力を伝える。このノーザンテーストの4×3クロスを持つオルフェーヴルはエンジンのかかりは遅いものの何度もギアを上げていく高い瞬発力を発揮できる。"}, {"id": "ノヴェリスト", "name": "ノヴェリスト", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a012230/", "content": "父MonsunはSurumuによるドイツ血統らしいスピード質な瞬発力血統を持っているため高速馬場でも対応するスピードも伝えつつ、母系にはNijinsky×Night Shiftでスピード持続力を補完するバランスの良い配合。"}, {"id": "パーソロン", "name": "パーソロン", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a00026d/", "content": "瞬間的な加速力を増強する因子。"}, {"id": "ハーツクライ", "name": "ハーツクライ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2001103038/", "content": "ドウデュース\n\n　2歳～3歳は4代母My Bupers牝系の軽い米国質なスピードを伝えつつ、加齢に伴ってトニービン&Lyphardの欧州的要素が強まってくる。ドウデュースはダービーまでは最高速で駆け抜ける軽いスピードの高さを生かしてきたが、その後は持続力の高い末脚を武器にした硬い走りへとシフトしている。タフな馬場よりはスピードの出やすい馬場でパフォーマンスが高い。\n　母父ハーツクライで軽いスピードを伝える。"}, {"id": "ハービンジャー", "name": "ハービンジャー", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a011996/", "content": "欧州血統。パワー質なスピード持続力を有している分、瞬間的加速力に乏しいのでエンジンの点火に時間がかかるタイプ。日本の馬場では中緩み->キレが求められると伸び負けてしまうが、中間で速いラップが持続したり、下り坂の助けがあると伸びてこれる産駒が多い。牝馬は柔軟性優位なので同産駒の牡馬よりも瞬発力のある馬が多い。緩い欧州質な馬場で欧州っぽい乗り方をすると瞬間的な脚を使えるタイプもいる。良馬場で持続力を生かすタイプが渋った馬場で瞬間的な脚を使う可能性あり。(例: ナミュール)\n　前が離して逃げる展開になった場合に高いパフォーマンスを発揮する馬が一定存在。(24'オークス: チェルヴィニア)"}, {"id": "ビッグアーサー", "name": "ビッグアーサー", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2011103328/", "content": "父方に入ると、Kingmanbo × Sadler's Wells の影響を受けやすく1200mなら欧州的な脚になりやすい。子には瞬間的な加速力が伝わる。"}, {"id": "ビーチパトロール", "name": "ビーチパトロール", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2005102218/", "content": "追記"}, {"id": "ヒンドスタン", "name": "ヒンドスタン", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a00043f/", "content": "追記"}, {"id": "ファインニードル", "name": "ファインニードル", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2013100612/", "content": "アドマイヤムーン&Crimson Saint&Sharpen Upにより芝の重不良で高打点を出せる。"}, {"id": "ファルブラヴ", "name": "ファルブラヴ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1998190004/", "content": "エリシオと3/4同血。Fairy King × Slewpy( Seattle Slew)で持続力大幅強化。"}, {"id": "フィエールマン", "name": "フィエールマン", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2015105075/", "content": "母父Green Dancer系にラインゴールドで長距離質なスタミナを牝系に持つディープ系。産駒特徴として、急坂相性の悪い走りが多く、勾配変化の少ないレースの方が合う。レース質があっていなくても、スタミナを生かして馬券内に食い込むタイプがしばしば。"}, {"id": "フォーティナイナー", "name": "フォーティナイナー", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000134/", "content": "母方にこの血が入ると、Ribot要素が強く出てパワースタミナに強いタイプが多い。芝道悪に適性を示す。"}, {"id": "フジキセキ", "name": "フジキセキ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1992109618/", "content": "母方に入るとIn Realityが強く出るため、開催前半のスピード馬場で。母父Le Fabuleuxの影響で直系でも牝系でも早い時期から活躍する馬が多い。"}, {"id": "ブライアンズタイム", "name": "ブライアンズタイム", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000082/", "content": "最後辛いところでもうひと伸びできる根性とスタミナを伝える因子で、直線が短い & 急坂 & 上りのかかる馬場に高い適性を示す産駒が多い。Dynaformerとほとんど同じ血統構成。"}, {"id": "ブラックタイド", "name": "ブラックタイド", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2001103312/", "content": "ディープインパクトと全兄弟ではあるものの、こちらのほうが馬格があってどちらかというとパワー寄り。"}, {"id": "ブリックスアンドモルタル", "name": "ブリックスアンドモルタル", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a014377/", "content": "Storm Cat系のうち、欧州系に振れたGiant's Causewayにより、瞬間的な加速力はあるが、コーナリング性能低いため、産駒としては小回り成績が良くない馬が多い。"}, {"id": "フレンチデピュティ", "name": "フレンチデピュティ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a00013a/", "content": "高いスピード持続力を伝える。根幹としてパワー要素も存在するため、ダートでスピードを発揮することもできる馬を多く輩出する。キンカメ×フレンチデピュティで圧倒的持続力の強化。\n　母父にこの馬がいる場合、芝を走るタイプはDeputy MinisterとBold Rulerが（牝馬だとBold Ruler寄り）、ダートを走るタイプはHold Your Peaceが出てくる。"}, {"id": "ヘニーヒューズ", "name": "ヘニーヒューズ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a011155/", "content": "この産駒は良馬場ダートに強いパワー血統も、凍結防止剤がまかれるとさすがにパワー不足になるタイプ。"}, {"id": "ベンバトル", "name": "ベンバトル", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "", "content": "【出資コメント】\n　母にサンデー＆米国系を合わせることで日本のスピードに対応しているイメージ。勝ち星を上げている馬のほぼすべてがこれ。"}, {"id": "ポエティックフレア", "name": "ポエティックフレア", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "", "content": "わかりやすい濃厚な欧州の血統構成。完全欧州の中では割と速さはある方。"}, {"id": "マインドユアビスケッツ", "name": "マインドユアビスケッツ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a01392e/", "content": "中間緩まない持続ラップで高い適性を示す馬が多い。"}, {"id": "マルゼンスキー", "name": "マルゼンスキー", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0003bd/", "content": "追記"}, {"id": "マンハッタンカフェ", "name": "マンハッタンカフェ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1998101554/", "content": "ドイツのSライン牝系。春のタフ寄りの馬場に高い相性を持つ馬が多い。中京ダート1800が庭。"}, {"id": "メジロマックイーン", "name": "メジロマックイーン", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1987107235/", "content": "超ステイヤー血統で牝系に入ることによって高いスタミナ面を伝える。"}, {"id": "メンデス", "name": "メンデス", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000210/", "content": "Linamix (-> Diamilina -> Dialafara -> Tower Of London)\n\nGrey Sovereignの影響でフランスよりのスピードを強く引き出す因子。"}, {"id": "モーリス", "name": "モーリス", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2011100655/", "content": "自身の特徴を強く伝えるタイプ。Silver Hawk直系×在来牝系の影響で、この部分の遺伝がほとんどとなり、高い持続力を伝える。雨よりも晴れ馬場の方が相性○。\n　使ってよくなるタイプが多いので、間隔をあまり空けない豪州の競馬にフィットしやすい。"}, {"id": "モンジュー", "name": "モンジュー", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1996190001/", "content": "母方にいるTop Villeの血により、欧州の中でもスピード寄りの因子を伝える。また、母方のGrey Sovereignの影響も加わり、さらなるスピードの増強につながっている。モンジュー直仔であれば父Sadler's Wellsを強く引き出す可能性が高いが、母父にこのモンジューが入ると上記の要素が強く伝わる可能性が出てくる。"}, {"id": "ラインゴールド", "name": "ラインゴールド", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0003c4/", "content": "Princely Gift直系ではあるものの、かなり重いタイプで凱旋門賞を勝つような馬。長距離質なスタミナ要素を伝える。"}, {"id": "ラストタイクーン", "name": "ラストタイクーン", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0001d6/", "content": "1600～2000mで高いパフォーマンスを発揮する系統。"}, {"id": "ラブリーデイ", "name": "ラブリーデイ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2010104298/", "content": "この馬自身は欧州的なスタミナで長距離対応可能なスタミナにダンスインザダークのスピードが付与された欧州瞬発力タイプの馬で、産駒にも近い能力が伝わっている形。芝では道悪馬場で高い瞬発力を発揮する馬が多い。"}, {"id": "リアルインパクト", "name": "リアルインパクト", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2008103244/", "content": "この産駒は、ディープ直系も基本は牝系の影響で持続力寄りになるが、短距離領域では瞬発力質に傾く因子。"}, {"id": "リアルシャダイ", "name": "リアルシャダイ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0002a6/", "content": "ジェイズジュエリー (-> アドマイヤジュピタ | センティナリー -> アレグロブリランテ)\n\n　ゆっくり追走しながら最後に速い脚を使える血統。アドマイヤジュピタは'08天皇賞春でこの特徴を生かしての勝利。短い距離で走るよりは長い距離で良さを発揮するタイプ。"}, {"id": "リアルスティール", "name": "リアルスティール", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2012104889/", "content": "- レーベンスティール\n\n　3歳4月末〜5月頭の成長力が高い馬が特徴的。"}, {"id": "リオンディーズ", "name": "リオンディーズ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2013105915/", "content": "- テーオーロイヤル\n\n　足元が強くないタイプが多いので、芝なら馬場が緩くなるとパフォーマンスを上げるタイプが多い。\n\n【出資コメント】\n隔世遺伝の影響か、Le Fabuleuxの要素が自信程強く出ず、時間をかけながらパフォーマンスを上げるタイプが目立つ"}, {"id": "リマンド", "name": "リマンド", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0002ae/", "content": "- アグネスレディー\n\n　スタミナを増強させる因子。京都の坂越えなどに対応できたり、タフ馬場でのスタミナ比べの後押しとなる。"}, {"id": "ルーラーシップ", "name": "ルーラーシップ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2007103143/", "content": "マスクトディーヴァ\n\n　母父のトニービンの影響で持続ラップが連発するスタミナ質のきつい流れでも問題なく追走できる要素を持ちつつ、レース間隔が短くてもパフォーマンスを発揮できるタフさも伝えている。阪神マイルが庭。"}, {"id": "ロージズインメイ", "name": "ロージズインメイ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a010a10/", "content": "母父Speak Johnのタフさが伝わることで粘りの持久力が高さにつながる。長距離に対して適性を示すタイプやバテ合いの展開でもうひと踏ん張りできるタイプが多く生まれる。"}, {"id": "ロードカナロア", "name": "ロードカナロア", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2008103552/", "content": "アーモンドアイ\n\n　Mr. Prospector & In Realityが強く出るタイプで良馬場のスピード勝負に強い馬が多い。古馬になって年齢を重ねてくるとStorm Cat要素が主張してきて道悪馬場への適性が出てくることがある。"}, {"id": "ワークフォース", "name": "ワークフォース", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.sp.netkeiba.com/horse/ped/000a011a7f/", "content": "Lombart -> Allegretta -> キングズベストのラインで産まれ、この馬も道悪凱旋門賞を制覇で、子にも強い重さを伝える。"}, {"id": "ヴィクトワールピサ", "name": "ヴィクトワールピサ", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/2007102923/", "content": "母父Machiavellianや4代父Bustedの影響で下り坂への高い適性を示す。"}, {"id": "Acatenango", "name": "Acatenango", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001f0b/", "content": "急坂を苦手とする平坦巧者。その要素を後世にも伝える。"}, {"id": "Affirmed", "name": "Affirmed", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001785/", "content": "米国ダート中距離馬。最低限のスピードを伝えるとともに、早熟性強く、牝系に入ると2歳から高いパフォーマンスを発揮させる血統。"}, {"id": "Ahonoora", "name": "Ahonoora", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a00176c/", "content": "欧州の軽いスピード要素を伝える血。この血があると、日本のマイル以下で走れるスピードが保管される馬が多い。"}, {"id": "Alibhai", "name": "Alibhai", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/000a0011b9/", "content": "長距離対応可能なスタミナを伝える因子。この血がクロスしているDixieland Bandを持つ馬は長距離で強いタイプが多い。"}, {"id": "Alzao", "name": "Alzao", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001cb4/", "content": "- ウインドインハーヘア\n\n　Lyphard×Sir Ivorで馬力のあるパワースピード質な持続力を伝える。"}, {"id": "Alleged", "name": "Alleged", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0012f7/", "content": "Ribot系で欧州的なパワーを伝えている。"}, {"id": "Anabaa", "name": "Anabaa", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0022e2/", "content": "長距離適性を伝えるスタミナ因子。溜めてキレるというよりも持続的なラップでスタミナを発揮する因子。"}, {"id": "Aureole", "name": "Aureole", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000dc0/", "content": "気性難ではあるものの母方に入ることで長距離質なスタミナを伝える。ディープインパクトの5代母Hypericumがこの馬と3/4同血。\nBletchingly\n\n　オーストラリアの芝短距離馬。パワー持続力の短距離馬の因子。"}, {"id": "Blushing Groom", "name": "Blushing Groom", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/000a001340/", "content": "長く良い脚を使える血統で京都外回りに適性を示す。コーナリング時のスピードの乗り方が良くなるタイプが多い。"}, {"id": "Bold Ruler", "name": "Bold Ruler", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000e94/", "content": "追記"}, {"id": "Brigadier Gerard", "name": "Brigadier Gerard", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001354/", "content": "この馬自身が欧州1600～2000mで高いスピードを発揮するタイプで中距離に対応できるスピードを伝える。"}, {"id": "Buckpasser", "name": "Buckpasser", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000e0e/", "content": "追記"}, {"id": "Bull Dog", "name": "Bull Dog", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0011ea/", "content": "- Bull Lea (-> Bull Page -> Flaming Page -> Nijinsky)\n\nNijinskyの母父に位置するように、この血が濃いとパワー質な高いスピード持続力を伝える因子となる。"}, {"id": "Busted", "name": "Busted", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000e0d/", "content": "- Mtoto\n\n　晩成のステイヤー血統。-> 成長力とスプリント/長距離適性。下り坂コースへの適性は高い。テンが遅い分、後半速い上りを使える点で京都長距離に高い適性を示す。"}, {"id": "Cadeaux Genereux", "name": "Cadeaux Genereux", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001e13/", "content": "- Toylsome (-> Tijuana -> Torquator Tasso)\n- レッドカドー\n\n　スタミナ質の高いスピード持続力因子。短距離志向が強く、速い流れの中で長くスピードを維持させるような血統。使い方によっては長距離でも対応可能でこの血を父に持つレッドカドーは'13天皇賞(春)で3着に好走。Torquator Tassoの母方にも存在。\n　牝系にエタンがいることでスタミナ質の持続力につながる。"}, {"id": "Caerleon", "name": "Caerleon", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0016eb/", "content": "追記"}, {"id": "Cape Cross", "name": "Cape Cross", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0022ae/", "content": "Danzigのスパート持続力とAhonooraの欧州スピードをバランスよく伝える。"}, {"id": "Caro", "name": "Caro", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0010ed/", "content": "この血が入ると、レコードが出るような高速馬場で相対的に高い打点を発揮するタイプが多い。この血が牝系に入った南米牝系のパラダセール等はわかりやすい。"}, {"id": "Cozzene", "name": "Cozzene", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/000a001bda/", "content": "追記"}, {"id": "Crimson Satan", "name": "Crimson Satan", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000dd2/", "content": "- スカーレットインク(スカーレットブーケ -> ダイワメジャー)\n\n　筋肉量を増強させる因子。スカーレット一族にはこの要素が強く伝わっており、大きな馬格を受け継いでいる馬が多い。"}, {"id": "Danehill Dancer", "name": "Danehill Dancer", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a002309/", "content": "- \n\n　父デインヒル色の強い欧州血統。ラスト1Fで減速し12.0を超える時計がかかるような展開で強いタイプを輩出する因子。"}, {"id": "Danzig", "name": "Danzig", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0000d3/", "content": "ある程度軽いスピードを伝える因子。加えてNorthern Dancer系の中でもパワー質なスピード持続力に長けた血統なのでタフなスピード勝負に合う。京都外回りとの相性はよい。"}, {"id": "Dark Angel", "name": "Dark Angel", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0122b4/", "content": "欧州短距離血統。牝系Night Shiftの影響でパワー質なスピード持続力を伝える。この産駒は牝系に軽いスピードがない場合、良馬場だとややTS不足になりやすい。"}, {"id": "Darshaan", "name": "Darshaan", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0019b1/", "content": "Mill Reef - Never Bend直系で欧州瞬発力を伝える"}, {"id": "Delta Judge", "name": "Delta Judge", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000ed5/", "content": "父系のAlibhai経由でスタミナ積載量を底上げする血統。牝系にこの因子を持つシルヴァーソニックが長距離のスタミナ比べで強いのはこの因子の補助があるため。"}, {"id": "Distant Relative", "name": "Distant Relative", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001c67/", "content": "この血を牝系に持つ（さらに父キンカメだとアツい）配合は勝ちきれない競馬が続きながらも東京2500mで好成績を残す馬が多い。（ヒートオンビート、ラストドラフト、キングズパレス）"}, {"id": "Dixieland Band", "name": "Dixieland Band", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0017b2/", "content": "母父Delta Judgeから高いスタミナを受け継いでおり、産駒にもその特徴を伝える。急坂に強いので、中山などで高いパフォーマンスを発揮する。"}, {"id": "Dominion", "name": "Dominion", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001b88/", "content": "- Nomination\n\n　84', 85'の英愛2歳リーディングサイアーということもあり、この馬を内包している馬は比較的早めに仕上がる可能性がある。"}, {"id": "Dr. Fager", "name": "Dr. Fager", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.sp.netkeiba.com/horse/ped/000a000407/", "content": "- Ellie Milove(レツィーナ -> ハーツイストワール)\n\n　強いスピード因子。アメリカダート1600レコード持ち馬。日本でも高速スピードに対応することが可能になる。"}, {"id": "Dubawi", "name": "Dubawi", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0115e2/", "content": "モンテロッソ　(-> ビリーバー)\nドバウィハイツ (-> キングズパレス)\n\n　ドバイ芝で高い適性を示す。ほかにもパワー質な直線平坦コースも向く。"}, {"id": "Dynaformer", "name": "Dynaformer", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001dd9/", "content": "Roberto × His Majesty(Ribot) でブライアンズタイムと近い血統構成。高いスタミナを伝える因子。"}, {"id": "Exceed And Excel", "name": "Exceed And Excel", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a010a61/", "content": "マーゴッドディド (-> ジャスティンミラノ)\n\n　オーストラリアの短距離馬らしく、溜めて最後に一脚使う力を伝える。日本で走る場面としては外差し一閃のキレ勝負の流れが多い。瞬間的な加速ではなく、溜めた脚を一気に開放するようなタイプ。"}, {"id": "Fairy King", "name": "Fairy King", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001bde/", "content": "ファルブラヴ\n\n　Sadler's Wellsの全兄弟。こちらはHail to Reasonの要素があまりなく、どちらかというと瞬発力はなくNureyevに近い持続力タイプ。よって急坂でパフォーマンスを発揮するというSadler's Wellsとは逆の適性を示すことも多い(マジックキャッスル)ため平坦が向く。さらにSeattle Slewと相性が良い。"}, {"id": "Fappiano", "name": "Fappiano", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001702/", "content": "追記"}, {"id": "Francis S.", "name": "Francis S.", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000f14/", "content": "Blue Eyed Momo -> スヰート -> メジロアサマ ラインと根幹が同じで距離を伸ばしても対応できる要素となる。"}, {"id": "Frankel", "name": "Frankel", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a01239b/", "content": "牝系のMossboroughの影響で直仔は距離の融通が利きやすい因子を伝える。一方母父に入ると牝系のさらに深い部分にあるCircassiaの要素が強く出ることにより欧州短距離質の馬が多くなる。（母父の牝系が強く伝わる理論）"}, {"id": "Galileo", "name": "Galileo", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.sp.netkeiba.com/horse/ped/000a00232b/", "content": "Lombard -> Allegretta から繋がるパワー質の重たい血統により日本では結果が残せていない。父ディープインパクト×母父Galileoはサクソンウォリアー、オーギュストロダンなど少ない産駒数でも欧州で結果を残せている。欧州界のサンデーのような存在で、欧州馬同士の比較をする際にはほかの血統を見ていく必要がある。\n　母父にこの血が入ると、基本は持続力寄りもタフな馬場で瞬発力を発揮できるようになる。欧州的な脚により、3,4角から長く脚を蒸かしていける馬が多い。"}, {"id": "Giant's Causeway", "name": "Giant's Causeway", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0022e1/", "content": "Rahyから平坦で強い要素を受け継いでおり、産駒にも継承。コーナリングが不器用な馬が多い。"}, {"id": "Gone West", "name": "Gone West", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001be1/", "content": "父Mr. Prospector×母父Secretariatで米国らしい軽いスピードの持続力。年齢を増すごとに前脚の出が悪くなって硬さが出てくる馬が多くなり、高い持続力の要素を強めることがある。これが顕著に現れたのが母父にこの血を持つタイトルホルダー。長距離で溜めてキレるといったエンジンの再点火が可能な欧州の瞬発力らしい走りから、阪神2200でレコードを出すような高いスピードの持続力を生かす走りへとシフトしてきた。\n　底力には欠ける要素で牝系に入ると前哨戦に強いタイプが多い。"}, {"id": "Graustark", "name": "Graustark", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001220/", "content": "高いスタミナ血統因子。His Majestyと全兄弟。"}, {"id": "Green Dancer", "name": "Green Dancer", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001353/", "content": "長距離質なスタミナを伝えながらも、後継に急坂でパフォを落とすタイプが多い因子。中山などは急坂でやや減速しつつも上りきった後の平坦で一伸びすることで2,3着量産する。（シンエンペラー、レッドバンデ…）"}, {"id": "Green Desert", "name": "Green Desert", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0017d2/", "content": "- メジロダーリング\n- Cape Cross (-> Ouija Board)\n\n　日本の超高速スピードに対応できるスピードとそれを持続するスタミナ因子を伝える。直仔のメジロダーリングは01'アイビスSDを制覇。母母Courtly DeeがTSを長く維持するスタミナ面に長けている牝系なので、馬によっては長距離質なレースで高いパフォーマンスを発揮できる。24' 天皇賞春勝ち馬のテーオーロイヤルも4代母にCourtly Deeを持っている。"}, {"id": "Grey Sovereign", "name": "Grey Sovereign", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000dd4/", "content": "母方に入ることにより、スピードの増強の役目を担う。速い上りを出すことを補助する。春の芝開催は母方にトニービンではないGrey Sovereign系を持っているとスピード対応できるようになって良い。"}, {"id": "Hail to Reason", "name": "Hail to Reason", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000f2b/", "content": "欧州の馬場に対応できる高い瞬発力を伝える因子。"}, {"id": "Halo", "name": "Halo", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0012bf/", "content": "追記"}, {"id": "Herbager", "name": "Herbager", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000f32/", "content": "この血から直仔でBallade牝系に伝えるパターンがメジャー。この血が入った牝系は平坦でパフォが上がる。"}, {"id": "High Top", "name": "High Top", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0015e1/", "content": "Dante直系でじりっぽいパワーを伝える因子。これが牝系に入ると、勝ち切るスピードは出せないがじりじりと脚を使い上位争いに参加するタイプが多くなる。"}, {"id": "His Majesty", "name": "His Majesty", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000628/", "content": "高いスタミナ血統因子。Graustarkと全兄弟。"}, {"id": "Hyperion", "name": "Hyperion", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000f3d/", "content": "晩成型の成長力と高いスタミナ因子を伝える。この馬のクロスが重なるとスタミナを生かしたラストの瞬発力が増すため、このクロスに富んだノーザンテーストを濃く受け継ぐオルフェーヴルのようなタイプは何発も加速していくような瞬発力を発揮できる。"}, {"id": "Iffraaj", "name": "Iffraaj", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0111d1/", "content": "欧州短距離で活躍した父に欧州の軽いスピードと持続力を合わせた血統で、この産駒は日本の芝短距離で高いパワースピードの持続力を発揮する馬が多い。道悪馬場の前傾ラップで打点を出せるタイプ。"}, {"id": "In Reality", "name": "In Reality", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0010e2/", "content": "追記"}, {"id": "Invincible Spirit", "name": "Invincible Spirit", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a01056d/", "content": "欧州要素満載ではあるが、Green Desertで日本の馬場対応可能なスピードとスタミナを伝えつつ、牝系でさらなるスタミナ値の増強を担っている。よってこの馬の産駒にはパワー質な短距離で活躍する馬が多い。母父にこれが入ると、Rockefellaのクロスで高いスタミナが伝わる。"}, {"id": "Justify", "name": "Justify", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "", "content": "Storm Cat直系でこの特徴を強く引き継ぎ、母方を生かす優秀血統。米と欧の中間で高いスピード持続力を発揮する。母方に何を合わせるかで色々な方向にシフト。欧州を合わせれば欧州血統。"}, {"id": "Kingmambo", "name": "Kingmambo", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001d7e/", "content": "- キングカメハメハ\n\n　キンカメ系にキレ味を伝えているのがこの血統因子。MonevassiaがNureyev系統を強く引き継いでいる代わりにこの馬はSanctus系統を引き継いでいるため、同じ血統構成でもほぼ真逆の特徴を示す。"}, {"id": "Konigsstuhl", "name": "Konigsstuhl", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001ecc/", "content": "ドイツのKライン牝系。高いスピード質な瞬発力を伝える因子。"}, {"id": "Kris", "name": "Kris", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001678/", "content": "追記"}, {"id": "Kris. S", "name": "Kris. S", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0016f2/", "content": "追記"}, {"id": "Le Fabuleux", "name": "Le Fabuleux", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000e44/", "content": "- Principia(シーザリオ -> エピファネイア)\n- Fabuleux Jane(ダンスールファビュルー -> アラジ | Noverre -> Le Havre)\n\n　早熟性を強める因子。2歳時点である程度の完成度まで到達する。その後の成長が見られにくい点で、エピファネイア産駒などば4歳に突入してから通用しなくなる馬が多く出てくる。体の身体能力全体を使ってくるような走りを伝えるため、これが牝系に入ることでパフォーマンスレベルの底上げが叶う分、反動が大きくなる。"}, {"id": "Le Havre", "name": "Le Havre", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a01198f/", "content": "Brushing Groom -> Rahyのラインでフランス寄りの血統×母系ドイツ血統で道悪を得意とする血統。"}, {"id": "Lemon Drop Kid", "name": "Lemon Drop Kid", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0022d0/", "content": "追記"}, {"id": "Lombard", "name": "Lombard", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0017ef/", "content": "- Allegretta(-> Urban Sea -> Sea The Stars | Galileo)\n\n　パワー系統のドイツ血統。"}, {"id": "Lomitas", "name": "Lomitas", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a00fe91/", "content": "ドイツ血統。母父Surumuの影響により、スピード質なドイツ血統となっている。スタミナというよりは欧州的な瞬発力を伝える。"}, {"id": "Lord at War", "name": "Lord at War", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a00193d/", "content": "追記"}, {"id": "Lost Code", "name": "Lost Code", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001d39/", "content": "- マジックコード(-> パールコード | ハットトリック)\n\n　サンデー系と掛け合わさることで平坦×スピードの適性が強くなり、京都外回りや香港などでパフォーマンスを上げる。"}, {"id": "Lyphard", "name": "Lyphard", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001205/", "content": "Northern Dancerの中でも日本向きのスピードを伝える因子。「春のLyphard」という格言がある通り、春に好成績を残す産駒が多い。根拠としてはスピードにかけるもののパワー質な瞬発力が高く、芝の道悪や洋芝に高い適性を示すため。日本の競馬場は野芝のみ（新潟）、洋芝のみ（函館、札幌）、野芝と洋芝を併用するオーバーシード仕様（他の7場）に分かれており、野芝が寒冷期（11〜3月）に育成が止まり休眠期に入る、いわゆる冬枯れを引き起こすため、洋芝の主張が激しくなってくる。これにより、パワーが求められLyphard産駒の激走が到来する。\n　Alzaoやキングヘイロー経由でこの血が受け継がれると、Sir Iver要素を強く伝える。"}, {"id": "Machiavellian", "name": "Machiavellian", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001c1d/", "content": "欧州マイルで走るようなスピードにミスプロをつけることで、子にもタフな瞬発力を伝えている。\nお"}, {"id": "Mahmoud", "name": "Mahmoud", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a00115d/", "content": "追記"}, {"id": "Mill Reef", "name": "Mill Reef", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000e32/", "content": "この馬の5×3クロスを持つローエングリンが非サンデー持ちで欧州血統なりにも高いスピードを使えるようなタイプ。ローエングリンは高速馬場や欧州マイルで好成績を収めている。"}, {"id": "Miswaki", "name": "Miswaki", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0017b0/", "content": "ミスパサの軽いスピードを伝える因子。"}, {"id": "Monsun", "name": "Monsun", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a010db6/", "content": "- ノヴェリスト\n\n　ドイツ血統。直系ならパワー(欧州ならスピードのあるパワー)、母方なら瞬間的な加速力の要素を伝える。やや力のいる馬場で内差しを決めてくると好走確率がぐっと跳ね上がる。"}, {"id": "More Than Ready", "name": "More Than Ready", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a00fcdd/", "content": "Halo系 & Woodman(Mr.Prospector×Buckpasser) & Nasrullah & Turn-to系の超快速血統因子。"}, {"id": "Mossborough", "name": "Mossborough", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000e35/", "content": "高いパワースタミナ因子。距離融通が利くタイプが多い。これを含むキズナ産駒はこの特徴を出す馬が多い。"}, {"id": "Mr. Prospector", "name": "Mr. Prospector", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001607/", "content": "超高速馬場かつ軽い馬場で適応するために必要な血。しかし、歴史的には2016年の東京芝が1番軽くて速い馬場となっていたことに比べ、近年では高速馬場でも欧州的なパワー（Frankelなどの欧州短距離血統）も求められるようになってきた。母父にBuckpasserと掛け合わせることによって、ダートでのみ走ってきた馬の中でも欧州で走れるタイプが増えてきた。"}, {"id": "Nasrullah", "name": "Nasrullah", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000f88/", "content": "追記"}, {"id": "Night Shift", "name": "Night Shift", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001c5c/", "content": "Northern Dancer×Chop Chopでノーザンテーストに近い構成。とはいうもののHyperionの厚いクロスが入らないためにノーザンテーストのような瞬発力は伝えずに、代わりにNijinskyの母父系にいるBull Dogのクロスが入ることにより、似た系統であるDanzigやNijinskyのようなパワー質なスピード持続力を伝える因子となる。"}, {"id": "Nijinsky", "name": "Nijinsky", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000dfe/", "content": "京都の外回りに強い血統。Northern Dancer系の中でもパワー質なスピード持続力に長けた血統。"}, {"id": "Niniski", "name": "Niniski", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a00199e/", "content": "追記"}, {"id": "Northern Dancer", "name": "Northern Dancer", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000e04/", "content": "再加速性能を伝える。これにより、長く良い脚を使えるようになる。"}, {"id": "Noverre", "name": "Noverre", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/000a0103cf/", "content": "- Le Havre\n\nBrushing Groom -> Rahyのラインでフランス寄りの血統。3代父のLe Fabuluexによる早期成長力の増進の影響で2歳後半から高い完成度を示す。アラジとは3/4同血。"}, {"id": "", "name": "", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "", "content": ""}, {"id": "Nureyev", "name": "Nureyev", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/000a001676/", "content": "Sadler's Wells / Fairy King と3/4同血。"}, {"id": "Petingo", "name": "Petingo", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000fb2/", "content": "当馬が無敗で英最優秀2歳牡馬を獲得したこともあり、産駒には2,3歳から活躍する馬が多い早熟血統。"}, {"id": "Pine Bluff", "name": "Pine Bluff", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001ea3/", "content": "全体的に柔らかさの強い血統構成で、Almahmoudの4×4クロスによりさらなる柔らかいスピードの強化につなげる。"}, {"id": "Princely Gift", "name": "Princely Gift", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000fc8/", "content": "操縦性の高さにつながる因子で、これを持っている馬は鞍上の指示への反応速度が速く柔軟な競馬ができるタイプが多い。"}, {"id": "Princequillo", "name": "Princequillo", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/000a000fc9/", "content": "追記"}, {"id": "Rahy", "name": "Rahy", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001c5e/", "content": "Ballade牝系の要素が強く出てくることで平坦で高いパフォーマンスを発揮できる要素を持つ。"}, {"id": "Raise a Native", "name": "Raise a Native", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000e46/", "content": "軽いスピード因子を伝える。この血を直系で持つことで高いスピード値を補完することが可能。"}, {"id": "Ribot", "name": "Ribot", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000fdf/", "content": "スタミナの高い欧州瞬発力の血統。牝系にこれが入るだけでHペース耐性や芝道悪での高い瞬発力を発揮できる要素となる。"}, {"id": "Roberto", "name": "Roberto", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0012cb/", "content": "パワー持続力。TS値自体はそこまで出ないながらも後半長く脚を使う持続力を付与する。遠くから影響を与えるほどの因子ではなく、間接的にこの要素が種牡馬に伝わり、その特徴を産駒が受ける形がほとんど。"}, {"id": "Rockefella", "name": "Rockefella", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000fe4/", "content": "長距離質なスタミナを伝える因子。メガスターダムは父ニホンピロウイナーの超スプリンター血統の裏でこのRockefellaがクロスすることで中距離で結果を残しつつ02'菊花賞で3着に好走している。"}, {"id": "Round Table", "name": "Round Table", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000e3b/", "content": "欧州の速い馬場で必要な血。日本に入るとやや短めの距離でパワー持続力を発揮できる。"}, {"id": "Sadler’s Wells", "name": "Sadler’s Wells", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a00185d/", "content": "欧州で高い瞬発力を発揮する血統。日本だと馬場が軽すぎて寄与率は低い。要素としては3代父のHail to Reasonからきていると考えられる。直系だと自身のパワーを強く伝えてしまうので、他の部分でスピードの補完が必要となる。世代を重ねることで成長に伴いこのパワー要素は薄れていく馬が多い。"}, {"id": "Sanctus", "name": "Sanctus", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000ff4/", "content": "追記"}, {"id": "Sassafras", "name": "Sassafras", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000ddc/", "content": "- ツリーオブノレッジ (-> Theatrical ->Royal Anthem -> パレスルーマー -> ジャスティンパレス)\n\n　スタミナを伝える因子。この系統であるTheatricalを持つ牝馬は比較的柔らかさがあって後ろから差してこれるタイプが多いが、牡馬はズブい馬が多い。"}, {"id": "Sea The Stars", "name": "Sea The Stars", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a011c78/", "content": "追記"}, {"id": "Seattle Slew", "name": "Seattle Slew", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0015fc/", "content": "Fairy Kingとの相性が良い。軽いスピードの持続力に長けた血統。中間で緩まない持続ラップになるとサンデーサイレンス×Seattle Slewが良く走る。成長するにつれて筋肉質な場隊に変化していくため、中距離->マイル路線にシフトする馬が出てくる。"}, {"id": "Secretariat", "name": "Secretariat", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000ded/", "content": "米国ダートの1600~2400のレンジで6Rのレコードを出すほどの快速血統。この血を牝系に持つと、軽いスピードの持続力を伝える。"}, {"id": "Seeking the Gold", "name": "Seeking the Gold", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001bea/", "content": "Mr. Prospector × Buckpasserで軽いスピードの血を伝える因子。"}, {"id": "Shamardal", "name": "Shamardal", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a010c92/", "content": "道悪の凱旋門賞で好走する産駒が出るほどのパワー欧州瞬発力の因子。"}, {"id": "Shirley Heights", "name": "Shirley Heights", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a00135e/", "content": "欧州瞬発力。この血自体の影響力は高くないものの、この血の牝系はTS値よりもタフ馬場瞬発力で戦いたい。"}, {"id": "Sicambre", "name": "Sicambre", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000ffd/", "content": "- Passionata (-> Callianire -> Caraniya -> Special Dancer -> マーゴットディド)\n\n　日本の長距離を走る血統。長い距離で最後に使える脚を残せるスタミナ因子。"}, {"id": "Silver Hawk", "name": "Silver Hawk", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0019b4/", "content": "Roberto系の中でもスピード < 持続力に寄った因子で瞬発力勝負に弱い分、スタミナ質な伸び脚を見せる。"}, {"id": "Sir Gaylord", "name": "Sir Gaylord", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000dda/", "content": "豪州血統。前半は出脚遅めも、道中溜めながら後半は長く良い脚を使う。パワーを伴うスピードの持続になるので、ラストややスタミナ質な持続力勝負に強い。"}, {"id": "Sir Ivor", "name": "Sir Ivor", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000dd9/", "content": "Sir Gaylord直仔で豪州要素を強く伝える。前半は出脚遅めも、道中溜めながら後半は長く良い脚を使う。パワーを伴うスピードの持続になるので、ラストはややスタミナ質な持続力勝負に強い。"}, {"id": "Sir Tristram", "name": "Sir Tristram", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/000a00184f/", "content": "追記"}, {"id": "Siyouni", "name": "Siyouni", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a012056/", "content": "追記"}, {"id": "Star Kingdom", "name": "Star Kingdom", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a00121d/", "content": "オーストラリアで活躍した血統で2400m前後のスタミナを補完する因子。"}, {"id": "Storm cat", "name": "Storm cat", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001a98/", "content": "力のいる馬場でも対応できるスパート時のスピード値の底上げ。日本の芝(洋芝密度の高い芝)に雨が降った場合には相対的に高いパフォーマンスを発揮する。欧州血統と組み合わさることでさらなる道悪適性の強化につながる。\n　牝系に入るとTS値の増加に寄与することで瞬発力のタイプになる馬が多い。"}, {"id": "Strawberry Road", "name": "Strawberry Road", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1979109007/", "content": "- Strawberry Reason (-> Vindication -> ダストアンドダイヤモンズ -> ドウデュース)\n- Milva (-> All American -> ヤンキーローズ -> リバティアイランド)\n\n　オーストラリアのNijinsky系統。2400mで走れるスタミナを増強しつつ、叩いて良化する因子を伝える。ドウデュースやリバティアイランドはこの血を有している。また、長期休暇で馬体を緩ませやすく、使ってからのほうがパフォーマンスが上昇するとともに疲れも残りづらい点もこの2頭に共通。間隔が空いてのレースになるとスタート時に出脚の鈍さが出てくることもしばしば。マイラー体型に見えるものの、レース適性としては序盤ゆっくり入りつつ中盤から長く脚を使いたい中距離(2000-2500m)タイプが多い。エンジンの点火が遅い分、パワーの求められるスピード持続力勝負。"}, {"id": "Surumu", "name": "Surumu", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001d10/", "content": "ドイツ牝系。直系だとスタミナ、母方に入ることによって瞬発力を付与する。"}, {"id": "Tiger Hill", "name": "Tiger Hill", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1995190004/", "content": "牝系に入っているRockefellaおよびAureoleが高いスタミナを伝えていることで、この血自体も高いスタミナを伝える。長距離に対応できる体力を補助する因子。"}, {"id": "Tiznow", "name": "Tiznow", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a00fa4b/", "content": "追記"}, {"id": "Thatching", "name": "Thatching", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0017da/", "content": "- Itching (-> Stitching -> ミスペンバリー -> パンサラッサ)\n\n　短い距離質の欧州スピードを伝える。この馬自身も欧州のスプリントで結果を残してきているので、日本で走るなら1800m前後が限界。"}, {"id": "Theatrical", "name": "Theatrical", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001bed/", "content": "- Royal Anthem (-> パレスルーマー -> ジャスティンパレス)\n\n　母父Sassafrasの影響で高いスタミナを伝える。この血を持つ牝馬は比較的柔らかさがあって後ろから差してこれるタイプが多いが、牡馬はズブい馬が多い。"}, {"id": "The Axe", "name": "The Axe", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000de7/", "content": "米国の軽いスピード要素。"}, {"id": "The Tetrarch", "name": "The Tetrarch", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001139/", "content": "高いスピード持続力を後世に伝える。シルヴァーソニックは唯一血統表に顔を出す芦毛のこの馬の特徴をずっと引き継いでいるため、オルフェーブル産駒でも比較的長い末脚を使うことができていると考えられる。"}, {"id": "Tom Fool", "name": "Tom Fool", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001032/", "content": "米国快速で軽いスピードを伝える因子。米国ダートマイル前後で2Rのレコード記録。"}, {"id": "Top Ville", "name": "Top Ville", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001841/", "content": "欧州の要素を持ちつつもその中で高いスピードを伝える。"}, {"id": "Tourbillon", "name": "Tourbillon", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "", "content": "長距離スタミナの血。日本ではパーソロン系で伝わっている。"}, {"id": "Tudor Minstrel", "name": "Tudor Minstrel", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000df7/", "content": "長距離質なスタミナを伝える因子。"}, {"id": "Turn-to", "name": "Turn-to", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/000a001042/", "content": "追記"}, {"id": "Unbridled", "name": "Unbridled", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001cd0/", "content": "追記"}, {"id": "Unbridled's Song", "name": "Unbridled's Song", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a002071/", "content": "追記"}, {"id": "Urban Sea", "name": "Urban Sea", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/1989109105/", "content": "- Galileo\n- Sea The Stars\n\n　ドイツのパワー系因子であるLombard -> Allegretta -> Urban Sea のライン。凱旋門賞馬を輩出する名牝で後世にもそのパワーを伝えている。"}, {"id": "Vaguely Noble", "name": "Vaguely Noble", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000db7/", "content": "逃げると後続がなかなかとらえきれない粘着質なスピードを見せる要素を伝える。スマートファルコンはこの因子が5×3で内包されており、逃げて強いパフォーマンスを発揮してきた。"}, {"id": "Vice Regent", "name": "Vice Regent", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0007e5/", "content": "Deputy Minister(フレンイデピュティ -> クロフネ)\n\n　追記"}, {"id": "Wild Risk", "name": "Wild Risk", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a000e4e/", "content": "- Noverre\n\n　この血から多数の早熟血統を輩出しており、この血が牝系に入ると早熟度合いが高まる。"}, {"id": "Woodman", "name": "Woodman", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.netkeiba.com/horse/ped/000a001beb/", "content": "ミスパサの軽いスピードを伝える。"}, {"id": "Zabeel", "name": "Zabeel", "cat": "種牡馬", "etype": "", "badgeColor": "#2e7d32", "badgeLabel": "種牡馬", "nkUrl": "https://db.sp.netkeiba.com/horse/ped/000a001dcf/", "content": "- マイネルファンロン\n- コスモキュランダ\n\n　スピードの最高速度は低いものの、3,4角から長く脚を使える因子で直線スタミナ質な展開で外差しが効いてくる場合に強い。"}, {"id": "ウインドインハーヘア", "name": "ウインドインハーヘア", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0003a2/", "content": "脚を溜めることができればパフォが上がるタイプが多い。母父ディープでこの傾向が出ることがある。（例: ピューロマジック）"}, {"id": "クラフテイワイフ", "name": "クラフテイワイフ", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "https://db.netkeiba.com/horse/ped/000a006212/", "content": "- キョウエイフォルテ (-> フォルテピアノ -> パルティトゥーラ -> タスティエーラ)\n- エヴリウィスパー (-> トーセンホマレボシ)\n\n　高速馬場に対応できるレベルのスピードを伝える。重い種牡馬を掛け合わせてもレコード勝負に対応できるほどの影響を与える快速牝系。良馬場でより高いパフォーマンス発揮する。"}, {"id": "サクラハゴロモ", "name": "サクラハゴロモ", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "https://db.netkeiba.com/horse/ped/1984104366/", "content": "- サクラバクシンオー\n\n　天皇賞・春 / 有馬記念を勝ったアンバーシャダイの全妹でそもそもの要素としてはスタミナ面の要素を伝える。ここでもスタミナは全速力を長く使うようなイメージ。サクラバクシンオーはアンバーシャダイとは異なり短距離での構想が目立ったが、これはスタート時から全速力で走ってしまうようなタイプだっただけに長い距離で走らせることが難しかったパターン。"}, {"id": "シーザリオ", "name": "シーザリオ", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "https://db.sp.netkeiba.com/horse/ped/2002100844/", "content": "- エピファネイア\n\n　4代父に潜むLe Fabuluexの血により早熟性を強める。代表産駒のエピファネイアの早熟説を裏付ける存在がこれ。2歳〜3歳前半でほぼ完成するような成長の早さ。"}, {"id": "スカーレットブーケ", "name": "スカーレットブーケ", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "https://db.sp.netkeiba.com/horse/ped/1988107320/", "content": "- ダイワメジャー\n- ダイワスカーレット\n\n　母父Crimson Satanからの筋肉量の増強がなされており、馬格の増大に繋がっている。スカーレット一族は基本的に馬格の大きな馬が多い。また、スピードの粘り腰も強いため、前からしぶとい。"}, {"id": "ソラリア", "name": "ソラリア", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "https://db.netkeiba.com/horse/ped/000a012945/", "content": "- カレンブーケドール\n\n　チリ産の牝系で南米らしく平坦に高い適性を示すことが多い。"}, {"id": "ダンシングキイ", "name": "ダンシングキイ", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0062c2/", "content": "- ダンスインザダーク\n- ダンスインザムード\n\nサンデーサイレンスと掛け合わせることによってダンスインザダークやダンスインザムードを輩出。このラインは直線平坦コースである京都に対して高い舞台適性を示す。どちらかというと京都外回りのほうが向く。"}, {"id": "ハッピートレイルズ", "name": "ハッピートレイルズ", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "", "content": "パワー要素を伝えつつ、牝系のAureoleがHighclere牝系のHypericsmと3/4同血で高いスタミナ補完。仕上がりの早い馬も多い。"}, {"id": "モシーン", "name": "モシーン", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "https://db.netkeiba.com/horse/ped/000a01216a/", "content": "この血の牝系は豪州血統らしく使って良くなるタイプが多い。"}, {"id": "ラスティックベル", "name": "ラスティックベル", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "https://db.netkeiba.com/horse/ped/000a00647d/", "content": "- インディスユニゾン(-> クロノロジスト -> クロノジェネシス)\n- フサイチエアデール(-> グリッターカーラ -> ジャポニカーラ -> ビザンチンドリーム)\n\nFrancis S.により距離を持たせている。加えてRaise a Nativeのクロスにより軽いスピードを伝えている。欧州血統と相性がよく、組み合わせることで欧州要素が強い構成の中でも日本の速い時計に対応できる。"}, {"id": "ワンオブアクライン", "name": "ワンオブアクライン", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "https://db.netkeiba.com/horse/ped/000a00639c/", "content": "この血を牝系に含む馬は中京相性が高い。中盤が緩んだ場合に瞬間的な加速力が出せて打点が上がる。"}, {"id": "ヴアインゴールド", "name": "ヴアインゴールド", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "https://db.netkeiba.com/horse/000a00614a/", "content": "ベルセゾン (-> マチカネハヤテ -> ウォーターピオニー -> ウォーターリヒト)\nビハインドザマスク (-> マスクオフ -> マスクトディーヴァ)\n\n　平坦向きで京都外回りのパフォーマンスが高い。この牝系は1200-1600mで活躍する馬が多い。"}, {"id": "Allegretta", "name": "Allegretta", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "https://db.netkeiba.com/horse/ped/000a009786/", "content": "- キングズベスト\n- Urban Sea(-> Galileo | Sea The Stars)\n- Turbaine\n\n　ドイツ血統のパワーに優れたLombardラインから。道悪凱旋賞馬のUrban Seaを輩出するとともに、Urban Sea産駒からは凱旋門賞馬Sea The Starsを輩出。凱旋門賞馬券内の馬の9割近くがこの血を持っている。"}, {"id": "Ballade", "name": "Ballade", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0085ed/", "content": "- Glorious Song(-> Rahy | Morn of Song | シングスピール | Ring of Music | シャンソネット)\n- Devil's Bag (-> タイキシャトル)\n- Angelic Song (-> レディバラード -> ダノンバラード)\n\n　平坦でパフォーマンスを上げるスピード系で夏の新潟などで好成績を残すことが多い。"}, {"id": "Brigid", "name": "Brigid", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "https://db.netkeiba.com/horse/ped/000a011661/", "content": "早熟血統。春までは高いレベルで安定するがそれ以降は通用レベルが低くなりやすい。春のレースに対して、レースパフォーマンスがどのくらい維持できているかが大切。レース間隔が短い場合には終わりが速くなるので注意。かなりの快速牝系であるため、相手に欧州のパワー要素を付与しても速い馬が生まれることが多く、構成にもその速さが伝わっていく。"}, {"id": "Highclere", "name": "Highclere", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "https://db.netkeiba.com/horse/ped/000a008341/", "content": "Burghclere(-> ウインドインハーヘア -> ディープインパクト)\n\n　上り坂で低い適性を示しながら下り坂でパフォーマンスを上げる特徴を伝える。この血を3代母にもつディープインパクトは京都開催の天皇賞春と中山でパフォーマンスレベルに差が出ていた。また、欧州最強馬Baaeedも2000m戦ではアスコット競馬場で4着と生涯唯一の敗戦を遂げている。ディープインパクト産駒のオーギュストロダンはこの影響を受けてか、キングジョージ（アスコット競馬場）で敗戦（この時登り始めのタイミングで止まってしまった。）も、下りの英ダービー（エプソム競馬場）で勝利。母母Hypericumがスタミナ豊富なAureoleと3/4同血でHyperionのクロスも加わり産駒に高いスタミナ値を付与する牝系となっている。"}, {"id": "My Bupers", "name": "My Bupers", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "https://db.netkeiba.com/horse/ped/000a0082bc/", "content": "- ビューパーダンス (-> アイリッシュダンス -> ハーツクライ)\n\n　軽いスピード因子を伝える牝系。パワー馬場だとパフォーマンスが下がる産駒が多い。"}, {"id": "Monevassia", "name": "Monevassia", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "https://db.netkeiba.com/horse/ped/000a011709/", "content": "キングマンボの全姉ではあるものの特徴としては同じとは言いにくい。キングマンボはミスプロ系の特徴に加えて母母母父のSanctusが強く効いているため、一瞬のスピードが強みではあるが、このMonevassiaは母父のNureyevが強く効いているようで、どちらかというとダートでも走れるようなパワー持続力タイプが生まれてくるため、キレ負けしやすくなる（例: リアルスティール）。サンデー×Nureyevに近づくイメージ（例: トゥザヴィクトリー、ゴールドアリュール）。"}, {"id": "Pacific Princess", "name": "Pacific Princess", "cat": "牝系", "etype": "", "badgeColor": "#e84393", "badgeLabel": "牝系", "nkUrl": "https://db.netkeiba.com/horse/ped/000a008ea8/", "content": "- パシフィカス (-> ビワハヤヒデ | ナリタブライアン)\n\n　父Damascusおよび母のMossboroughをはじめHyperionの厚いクロスなどが重なったことでスタミナに長けた因子が濃く内包されており、産駒にも受け継がれている。2代後も菊花賞を制覇する馬が複数産まれたりと、世代を超えてもこの要素が強く伝わっている。"}];
+const MAP = {};
+ENTRIES.forEach(e => MAP[e.id] = e);
+
+const STORE = 'ped_edit_';
+function hasEdit(id){ return localStorage.getItem(STORE+id) !== null; }
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s){ return esc(s).replace(/"/g,'&quot;'); }
+
+function htmlToText(html){
+  return html
+    .replace(/<div class="spacer"><\/div>/g,'\n')
+    .replace(/<br\s*\/?>/gi,'\n')
+    .replace(/<\/p>/gi,'\n')
+    .replace(/<[^>]+>/g,'')
+    .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'")
+    .replace(/\n{3,}/g,'\n\n').trim();
+}
+
+function textToHtml(text){
+  if(!text||!text.trim()) return '<p class="empty">（記載なし）</p>';
+  return text.split('\n').map(line=>{
+    const t=line.trim();
+    if(!t) return '<div class="spacer"></div>';
+    const e=t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    if(/^【.+】/.test(t)) return '<p class="label">'+e+'</p>';
+    if(/^[❶❷❸❹❺❻❼❽❾]/.test(t)) return '<p class="num">'+e+'</p>';
+    if(t.startsWith('★')) return '<p class="star">'+e+'</p>';
+    if(t.startsWith('・')||/^- /.test(t)) return '<p class="bullet">'+e+'</p>';
+    if(/^->/.test(t)) return '<p class="arrow">'+e+'</p>';
+    if(/^\d+\.\s/.test(t)) return '<p class="nlist">'+e+'</p>';
+    return '<p>'+e+'</p>';
+  }).join('\n');
+}
+
+function getContentHtml(id){
+  const saved=localStorage.getItem(STORE+id);
+  return textToHtml(saved!==null ? saved : (MAP[id]?.content||''));
+}
+function getContentText(id){
+  const saved=localStorage.getItem(STORE+id);
+  return saved!==null ? saved : htmlToText(MAP[id]?.content||'');
+}
+
+function updateSidebarMark(id){
+  const nav=document.getElementById('nav_'+id);
+  if(!nav) return;
+  const existing=nav.querySelector('.edit-dot');
+  if(hasEdit(id)){
+    if(!existing){const d=document.createElement('span');d.className='edit-dot';d.title='ローカル編集済み';nav.appendChild(d);}
+  }else{existing?.remove();}
+}
+function initEditMarks(){ ENTRIES.forEach(e=>updateSidebarMark(e.id)); }
+
+function toggleCat(id){
+  const ul=document.getElementById('items_'+id);
+  const tog=document.getElementById('toggle_'+id);
+  if(!ul) return;
+  const open=ul.classList.contains('expanded');
+  ul.classList.toggle('expanded',!open);
+  tog.classList.toggle('open',!open);
+}
+
+function showEntry(id){
+  const e=MAP[id];
+  if(!e) return;
+  document.querySelectorAll('.item').forEach(el=>el.classList.remove('active'));
+  const nav=document.getElementById('nav_'+id);
+  if(nav){ nav.classList.add('active'); nav.scrollIntoView({block:'nearest'}); }
+  const nkHtml=e.nkUrl ? '<a class="nk-btn" href="'+e.nkUrl+'" target="_blank" rel="noopener">netkeiba 血統ページ</a>' : '';
+  const editedMark=hasEdit(id) ? '<span class="edited-mark">✏ 編集済み</span>' : '';
+  const catTagHtml=e.badgeLabel!==e.cat ? '<span class="cat-tag">'+esc(e.cat)+'</span>' : '';
+  const customMark=e.isCustom ? '<span class="custom-mark">カスタム</span>' : '';
+  const delBtn=e.isCustom ? '<button class="btn-delete-custom" onclick="deleteCustomEntry(\''+escAttr(id)+'\')" style="margin-left:auto">削除</button>' : '';
+  document.getElementById('content').innerHTML=
+    '<div class="breadcrumb">'+
+      '<span>🏠</span><span class="bc-sep">›</span>'+
+      '<span>'+esc(e.cat)+'</span><span class="bc-sep">›</span>'+
+      '<span class="bc-cur">'+esc(e.name)+'</span>'+editedMark+
+    '</div>'+
+    '<div class="card">'+
+      '<div class="card-head">'+
+        '<div class="entry-name-row">'+
+          '<span class="card-name">'+esc(e.name)+'</span>'+customMark+
+          '<button class="edit-btn" onclick="startEdit(\''+escAttr(e.id)+'\')">&#9999;&#65039; 編集</button>'+
+          delBtn+
+        '</div>'+
+        '<div class="card-meta">'+
+          '<span class="badge" style="background:'+e.badgeColor+'">'+esc(e.badgeLabel)+'</span>'+
+          catTagHtml+nkHtml+
+        '</div>'+
+      '</div>'+
+      '<hr class="divider">'+
+      '<div class="content-body">'+getContentHtml(id)+'</div>'+
+    '</div>';
+}
+
+function startEdit(id){
+  const e=MAP[id];
+  if(!e) return;
+  const currentText=getContentText(id);
+  const nkHtml=e.nkUrl ? '<a class="nk-btn" href="'+e.nkUrl+'" target="_blank" rel="noopener">netkeiba 血統ページ</a>' : '';
+  const editedMark=hasEdit(id) ? '<span class="edited-mark">&#9999; 編集済み</span>' : '';
+  const catTagHtml=e.badgeLabel!==e.cat ? '<span class="cat-tag">'+esc(e.cat)+'</span>' : '';
+  document.getElementById('content').innerHTML=
+    '<div class="breadcrumb">'+
+      '<span>🏠</span><span class="bc-sep">›</span>'+
+      '<span>'+esc(e.cat)+'</span><span class="bc-sep">›</span>'+
+      '<span class="bc-cur">'+esc(e.name)+'</span>'+editedMark+
+    '</div>'+
+    '<div class="card">'+
+      '<div class="card-head">'+
+        '<div class="entry-name-row"><span class="card-name">'+esc(e.name)+'</span></div>'+
+        '<div class="card-meta">'+
+          '<span class="badge" style="background:'+e.badgeColor+'">'+esc(e.badgeLabel)+'</span>'+
+          catTagHtml+nkHtml+
+        '</div>'+
+      '</div>'+
+      '<hr class="divider">'+
+      '<textarea class="edit-textarea" id="edit_ta_'+escAttr(id)+'">'+esc(currentText)+'</textarea>'+
+      '<div class="edit-actions">'+
+        '<button class="btn-save" onclick="saveEdit(\''+escAttr(id)+'\')">保存</button>'+
+        '<button class="btn-cancel" onclick="cancelEdit(\''+escAttr(id)+'\')">キャンセル</button>'+
+        (hasEdit(id) ? '<button class="btn-reset" onclick="resetEdit(\''+escAttr(id)+'\')">リセット（元に戻す）</button>' : '')+
+      '</div>'+
+    '</div>';
+  document.getElementById('edit_ta_'+id)?.focus();
+}
+
+function saveEdit(id){
+  const ta=document.getElementById('edit_ta_'+id);
+  if(!ta) return;
+  localStorage.setItem(STORE+id,ta.value.trim());
+  updateSidebarMark(id);
+  showEntry(id);
+}
+function cancelEdit(id){ showEntry(id); }
+function resetEdit(id){
+  if(!confirm('このエントリの編集をリセットして元のデータに戻しますか？')) return;
+  localStorage.removeItem(STORE+id);
+  updateSidebarMark(id);
+  showEntry(id);
+}
+
+function onSearch(q){
+  const r=document.getElementById('searchResults');
+  if(!q.trim()){ r.classList.remove('visible'); return; }
+  const lq=q.toLowerCase();
+  const hits=ENTRIES.filter(e=>e.name.toLowerCase().includes(lq)||e.cat.toLowerCase().includes(lq)).slice(0,20);
+  if(!hits.length){ r.innerHTML='<div class="sr-header">0件</div>'; r.classList.add('visible'); return; }
+  const items=hits.map(e=>'<button class="sr-item" onmousedown="pickSearch(\''+escAttr(e.id)+'\')">'+esc(e.name)+'<span class="sr-cat">'+esc(e.cat)+'</span></button>').join('');
+  r.innerHTML='<div class="sr-header">'+hits.length+'件</div><div class="sr-list">'+items+'</div>';
+  r.classList.add('visible');
+}
+function pickSearch(id){
+  document.getElementById('searchInput').value='';
+  document.getElementById('searchResults').classList.remove('visible');
+  const e=MAP[id];
+  if(e){
+    const ul=document.getElementById('items_'+e.cat);
+    const tog=document.getElementById('toggle_'+e.cat);
+    if(ul&&!ul.classList.contains('expanded')){ ul.classList.add('expanded'); if(tog) tog.classList.add('open'); }
+  }
+  showEntry(id);
+}
+function hideSearch(){ document.getElementById('searchResults').classList.remove('visible'); }
+
+
+// ── Custom entry management ───────────────────
+const CUSTOM_KEY = 'ped_custom_entries';
+
+const CAT_BADGE_MAP = {
+  '種牡馬': { color: '#2e7d32', label: '種牡馬' },
+  '牝系':   { color: '#e84393', label: '牝系' },
+  '各国の血統特徴': { color: '#3a7bd5', label: '地域' },
+  '特定の海外レース': { color: '#e67e22', label: '海外レース' },
+  '大枠分類': { color: '#5e60ce', label: '大枠' },
+  '系統組み合わせ': { color: '#795548', label: '系統' },
+};
+
+function loadCustomEntries() {
+  const stored = localStorage.getItem(CUSTOM_KEY);
+  if (!stored) return;
+  let customs;
+  try { customs = JSON.parse(stored); } catch(e) { return; }
+  customs.forEach(e => {
+    if (MAP[e.id]) return; // skip if already exists (static entry)
+    MAP[e.id] = e;
+    appendSidebarItem(e.cat, e.id, e.name);
+    updateCatCount(e.cat);
+  });
+}
+
+function appendSidebarItem(cat, id, name) {
+  const ul = document.getElementById('items_' + cat);
+  if (!ul) return;
+  const li = document.createElement('li');
+  const btn = document.createElement('button');
+  btn.className = 'item';
+  btn.id = 'nav_' + id;
+  btn.textContent = name;
+  btn.onclick = () => showEntry(id);
+  li.appendChild(btn);
+  ul.appendChild(li);
+}
+
+function sortCatItems(cat) {
+  const ul = document.getElementById('items_' + cat);
+  if (!ul) return;
+  const items = Array.from(ul.querySelectorAll('li'));
+  items.sort((a, b) => {
+    const na = a.querySelector('button.item')?.textContent || '';
+    const nb = b.querySelector('button.item')?.textContent || '';
+    return na.localeCompare(nb, 'ja');
+  });
+  items.forEach(li => ul.appendChild(li));
+}
+
+function sortAllCats() {
+  document.querySelectorAll('.cat-items').forEach(ul => {
+    const catId = ul.id.replace('items_', '');
+    sortCatItems(catId);
+  });
+}
+
+function updateCatCount(cat) {
+  const tog = document.getElementById('toggle_' + cat);
+  if (!tog) return;
+  const countEl = tog.querySelector('.cat-count');
+  if (!countEl) return;
+  const ul = document.getElementById('items_' + cat);
+  if (!ul) return;
+  const n = ul.querySelectorAll('button.item').length;
+  countEl.textContent = n;
+}
+
+let _addModalCat = '';
+
+function checkModalName(val) {
+  const name = val.trim();
+  const errEl = document.getElementById('modal-name-error');
+  const saveBtn = document.getElementById('modal-save-btn');
+  if (name && MAP[name]) {
+    errEl.style.display = 'block';
+    saveBtn.disabled = true;
+    saveBtn.style.opacity = '0.45';
+    saveBtn.style.cursor = 'not-allowed';
+  } else {
+    errEl.style.display = 'none';
+    saveBtn.disabled = false;
+    saveBtn.style.opacity = '';
+    saveBtn.style.cursor = '';
+  }
+}
+
+function openAddModal(cat) {
+  _addModalCat = cat;
+  document.getElementById('modal-cat').value = cat;
+  document.getElementById('modal-name').value = '';
+  document.getElementById('modal-url').value = '';
+  document.getElementById('modal-content').value = '';
+  document.getElementById('modal-name-error').style.display = 'none';
+  const saveBtn = document.getElementById('modal-save-btn');
+  saveBtn.disabled = false;
+  saveBtn.style.opacity = '';
+  saveBtn.style.cursor = '';
+  document.getElementById('addModal').classList.add('visible');
+  setTimeout(() => document.getElementById('modal-name').focus(), 50);
+}
+
+function closeAddModal(e) {
+  if (e && e.target !== document.getElementById('addModal')) return;
+  document.getElementById('addModal').classList.remove('visible');
+}
+
+function saveNewEntry() {
+  const name = document.getElementById('modal-name').value.trim();
+  const url  = document.getElementById('modal-url').value.trim();
+  const text = document.getElementById('modal-content').value.trim();
+  const cat  = _addModalCat;
+  const errEl = document.getElementById('modal-name-error');
+
+  if (!name) { document.getElementById('modal-name').focus(); return; }
+
+  if (MAP[name]) {
+    errEl.style.display = 'block';
+    document.getElementById('modal-name').focus();
+    return;
+  }
+  errEl.style.display = 'none';
+
+  const badge = CAT_BADGE_MAP[cat] || { color: '#607d8b', label: cat };
+  const entry = {
+    id: name, name, cat,
+    etype: '', badgeColor: badge.color, badgeLabel: badge.label,
+    nkUrl: url, content: '', isCustom: true,
+  };
+
+  // Store content text (will be picked up by getContentHtml via STORE)
+  if (text) localStorage.setItem(STORE + name, text);
+
+  // Persist to CUSTOM_KEY
+  const stored = localStorage.getItem(CUSTOM_KEY);
+  const customs = stored ? JSON.parse(stored) : [];
+  customs.push(entry);
+  localStorage.setItem(CUSTOM_KEY, JSON.stringify(customs));
+
+  // Register in MAP and sidebar
+  MAP[name] = entry;
+  appendSidebarItem(cat, name, name);
+  sortCatItems(cat);
+  updateCatCount(cat);
+  updateSidebarMark(name);
+
+  // Expand the category if not open
+  const ul = document.getElementById('items_' + cat);
+  const tog = document.getElementById('toggle_' + cat);
+  if (ul && !ul.classList.contains('expanded')) {
+    ul.classList.add('expanded');
+    if (tog) tog.classList.add('open');
+  }
+
+  document.getElementById('addModal').classList.remove('visible');
+  showEntry(name);
+}
+
+function deleteCustomEntry(id) {
+  if (!confirm('"' + id + '" を削除しますか？（この操作は取り消せません）')) return;
+
+  // Remove from CUSTOM_KEY
+  const stored = localStorage.getItem(CUSTOM_KEY);
+  if (stored) {
+    const customs = JSON.parse(stored).filter(e => e.id !== id);
+    localStorage.setItem(CUSTOM_KEY, JSON.stringify(customs));
+  }
+
+  // Remove content edit if exists
+  localStorage.removeItem(STORE + id);
+
+  // Remove from MAP
+  const cat = MAP[id]?.cat;
+  delete MAP[id];
+
+  // Remove sidebar item
+  const nav = document.getElementById('nav_' + id);
+  if (nav) nav.closest('li')?.remove();
+  if (cat) updateCatCount(cat);
+
+  // Show welcome screen
+  document.getElementById('content').innerHTML =
+    '<div class="welcome"><h2>エントリを削除しました</h2><p>サイドバーから別のエントリを選択してください</p></div>';
+}
+
+document.querySelectorAll('.cat-header')[0]?.click();
+initEditMarks();
+loadCustomEntries();
+sortAllCats();
+
+</script>
+
+<!-- Add Entry Modal -->
+<div class="modal-backdrop" id="addModal" onclick="closeAddModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">&#43; 新しいエントリを追加</div>
+    <div class="modal-field">
+      <label>カテゴリ</label>
+      <input type="text" id="modal-cat" readonly style="background:#f5f0eb;cursor:default;">
+    </div>
+    <div class="modal-field">
+      <label>馬名・名称 <span style="color:#c0392b">*</span></label>
+      <input type="text" id="modal-name" placeholder="例: ロードカナロア" autocomplete="off" oninput="checkModalName(this.value)">
+      <div class="modal-error" id="modal-name-error">同じ名前のエントリが既に存在します。</div>
+    </div>
+    <div class="modal-field">
+      <label>netkeiba 血統ページ URL（任意）</label>
+      <input type="url" id="modal-url" placeholder="https://db.netkeiba.com/horse/ped/.../">
+    </div>
+    <div class="modal-field">
+      <label>メモ（任意）</label>
+      <textarea id="modal-content" placeholder="馬の特徴・血統的な特性などを自由に記述できます。&#10;&#10;【ラベル】や ・箇条書き、★重要 なども使えます。"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-save" id="modal-save-btn" onclick="saveNewEntry()">追加</button>
+      <button class="btn-cancel" onclick="closeAddModal()">キャンセル</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

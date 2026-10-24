@@ -1,0 +1,10 @@
+# ノートブック（特徴量エンジニアリング可視化）用
+# 使い方: pip install -r notebooks/feature_engineering/requirements.txt
+# ルートの requirements.txt は先に入れておくこと
+
+jupyterlab>=4.0.0
+ipykernel>=6.25.0
+nbconvert>=7.10.0
+matplotlib>=3.8.0
+seaborn>=0.13.0
+pyarrow>=14.0.0

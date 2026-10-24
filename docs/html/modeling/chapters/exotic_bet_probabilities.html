@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>馬連・ワイド・3連複の確率モデル — keiba-vpn</title>
+<style>
+:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --code-bg:#0b1428; --ok:#34d399; --warn:#fbbf24; }
+* { box-sizing: border-box; }
+body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.85; font-size: 15px; padding: 40px 56px 96px; max-width: 920px; margin: 0 auto; }
+code, pre { font-family: "JetBrains Mono", ui-monospace, monospace; }
+pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; overflow-x: auto; font-size: 13px; line-height: 1.7; }
+code { background: var(--code-bg); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+pre code { background: none; padding: 0; }
+a { color: var(--accent-2); }
+h1 { font-size: 26px; margin: 0 0 8px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; } h3 { font-size: 16px; margin: 24px 0 8px; color: var(--accent-2); }
+.lead { color: var(--muted); margin-bottom: 28px; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0 18px; font-size: 13.5px; background: var(--panel); }
+th, td { border: 1px solid var(--border); padding: 7px 12px; text-align: left; vertical-align: top; }
+th { background: #1b2a4d; } td.num { text-align: right; font-family: "JetBrains Mono", monospace; }
+.note { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; margin: 14px 0; font-size: 14px; }
+.ok { border-left-color: var(--ok); }
+.muted { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<a href="../../index.html" class="muted">← ドキュメント一覧</a>
+<h1>馬連・ワイド・3連複の確率モデル</h1>
+<p class="lead">勝率・連対率・複勝率の 3 つのモデル出力から、馬連・ワイド・馬単・3連複の的中確率を<strong>同じ着順分布</strong>で一貫して計算し、期待値（確率 × オッズ）に使う。実装は <code>src/pipeline/inference/exotic_probabilities.py</code>、馬券最適化への組み込みは <code>betting.py</code>。</p>
+
+<h2>1. 結論</h2>
+<ul>
+  <li>着順は <strong>Plackett–Luce（= Harville）に着順ステージごとの減衰指数 α を付けたモデル</strong>（Benter 型の割引 Harville）で生成する。α=1 なら Harville。</li>
+  <li>α2（2 着目）・α3（3 着目）は文献の定数を使わず、<strong>そのレースのモデルが出した連対率・複勝率に合うよう 1 レースごとに当てはめる</strong>（周辺確率の整合）。</li>
+  <li>当てはめると、勝率・連対率・複勝率と、馬連・ワイド・3連複が矛盾なく同じ分布から出る。総和の制約（馬連 1 / ワイド 3 / 3連複 1）は自動で満たされる。</li>
+  <li>真の分布が既知のシミュレーションでは、組合せ確率の誤差が Harville の <strong>1/6〜1/9</strong> に下がる。実データ 36 レースの市場オッズとの乖離（KL）も <strong>馬連 36%・ワイド 48%・3連複 47%</strong> 小さくなる。</li>
+  <li class="muted" style="list-style:none">ただし実際の着順に対する対数損失は 36 レースでは差が出なかった（§7）。「確率が現実に近づいた」とまでは言えず、較正は検証待ち。</li>
+</ul>
+
+<h2>2. 記号</h2>
+<table>
+<tr><th>記号</th><th>意味</th><th>出どころ</th></tr>
+<tr><td><code>w_i</code></td><td>勝率 P(馬 i が 1 着)。総和 1</td><td>モデル出力 <code>win_prob</code></td></tr>
+<tr><td><code>q_i</code></td><td>連対率 P(i が 2 着以内)。総和 2</td><td><code>top2_prob</code>（任意）</td></tr>
+<tr><td><code>r_i</code></td><td>複勝率 P(i が 3 着以内)。総和 3</td><td><code>top3_prob</code>（任意）</td></tr>
+<tr><td><code>α2, α3</code></td><td>2・3 着目の減衰指数（≤1 で後ろの着順ほど荒れる）</td><td>q, r に合わせて当てはめ</td></tr>
+</table>
+
+<h2>3. 着順の生成モデル</h2>
+<pre><code>P(i が 1 着)                 = w_i                                  （α1 = 1）
+P(j が 2 着 | i が 1 着)      = w_j^α2 / Σ_{k≠i} w_k^α2
+P(k が 3 着 | i, j が 1-2 着) = w_k^α3 / Σ_{k∉{i,j}} w_k^α3</code></pre>
+<p>この形は Benter (1994) の rank-level dampening（<code>P(π) = Π_r λ_{π(r)}^{α_r} / Σ_{k∈残り} λ_k^{α_r}</code>、α_r∈(0,1]）で、Lo &amp; Bacon-Shone の割引 Harville と同系統。α=1 で Harville (1973)。</p>
+<p class="muted">なぜ割引か: Harville は「1 着を除いた残りの中での強さ比」で 2・3 着を決めるため、人気馬が 2・3 着にも入りやすくなり、穴馬の連対・複勝を過小評価する（HZR 1981 以降の実証で知られる）。α&lt;1 は 2・3 着の決まり方を荒れさせ、これを緩める。</p>
+
+<h2>4. 各馬券の的中確率</h2>
+<table>
+<tr><th>馬券</th><th>的中条件</th><th>確率</th></tr>
+<tr><td>単勝</td><td>i が 1 着</td><td><code>w_i</code></td></tr>
+<tr><td>複勝</td><td>i が 3 着以内</td><td><code>r_i</code>（モデル出力を総和 3 に正規化。無ければ着順分布の周辺確率）</td></tr>
+<tr><td>馬単</td><td>i→j</td><td><code>P2[i,j] = w_i · w_j^α2 / Σ_{k≠i} w_k^α2</code></td></tr>
+<tr><td>馬連</td><td>{i,j} が 1-2 着（順不同）</td><td><code>P2[i,j] + P2[j,i]</code>（総和 1）</td></tr>
+<tr><td>3連複</td><td>{i,j,k} が 1-3 着（順不同）</td><td>6 通りの順列 <code>P3</code> の和（総和 1）</td></tr>
+<tr><td>ワイド</td><td>i, j がともに 3 着以内</td><td><code>Σ_k 3連複{i,j,k}</code>（総和 3）</td></tr>
+</table>
+<p>期待値は <code>EV = 確率 × オッズ</code>。ワイドは払戻に幅があるため下限オッズ、複勝も下限オッズ（<code>BettingConfig.wide_use_min_odds / fukusho_use_min_odds</code>）。JRA の払戻率は単勝・複勝 80%、枠連・馬連・ワイド 77.5%、馬単・3連複 75%（控除後）で、<strong>確率が市場と同じなら EV の期待値は払戻率</strong>になる（EV&gt;1 は市場より有利だとモデルが言っている場合のみ）。</p>
+
+<h2>5. 当てはめ手順</h2>
+<ol>
+  <li><code>q</code>・<code>r</code> を、各 ≤1 を保ったまま総和 2・3 に正規化する（反復スケーリング）。</li>
+  <li><code>q</code> があれば α2 を連対率の二乗誤差最小で決める（連対率は α3 に依存しない）。</li>
+  <li><code>r</code> があれば、その α2 のもとで α3 を複勝率の二乗誤差最小で決める。</li>
+  <li><code>r</code> だけのときは α2=α3 を複勝率に合わせる。どちらも無ければ α=1（Harville）。</li>
+  <li>探索範囲は 0.2〜1.5（黄金分割法）。18 頭でも 1ms 台。</li>
+</ol>
+<p>3 着目までの確率は <code>n³</code> 配列で厳密に計算する（n≤18）。</p>
+
+<h2>6. 文献</h2>
+<table>
+<tr><th>文献</th><th>使い方</th><th>確認</th></tr>
+<tr><td>Harville, D. A. (1973) "Assigning probabilities to the outcomes of multi-entry competitions", <em>JASA</em> 68(342)</td><td>基本形（α=1）</td><td>既知（本文は未参照）</td></tr>
+<tr><td>Plackett (1975) / Luce (1959)</td><td>Harville と同じ選択モデル</td><td>Pearce (2026) 内の式 (1) で確認</td></tr>
+<tr><td>Benter, W. (1994) "Computer based horse race handicapping and wagering systems", in <em>Efficiency of Racetrack Betting Markets</em></td><td>ステージ別減衰指数 α_r を持つモデル</td><td>式 (2) を Pearce (2026) で確認（下記）</td></tr>
+<tr><td>Lo, V. S. Y. &amp; Bacon-Shone, J. (1994) "A comparison between two models for predicting ordering probabilities in multiple-entry competitions", <em>The Statistician</em> 43(2)</td><td>Harville の割引（べき乗）修正</td><td>書誌のみ既知。本文は未参照</td></tr>
+<tr><td>Henery, R. J. (1981) <em>JRSS B</em> 43(1); Stern, H. (1990) <em>JASA</em> 85</td><td>正規/ガンマ分布に基づく別系統の着順モデル（今回は不採用。§8）</td><td>書誌のみ既知</td></tr>
+<tr><td>Hausch, Ziemba &amp; Rubinstein (1981) <em>Management Science</em> 27(12)</td><td>Harville の複勝・連系の偏りの実証</td><td>書誌のみ既知</td></tr>
+<tr><td>Pearce, M. (2026) "Efficient Bayesian Inference for Benter Models on Ranked Data", arXiv:2608.23825</td><td>Benter モデルの定義の確認（<code>p[π|λ,α] = Π_r λ_{π(r)}^{α_r} / Σ_{k∈残り} λ_k^{α_r}</code>、α_r∈(0,1]、競馬発祥）</td><td>本文を取得して確認</td></tr>
+</table>
+<div class="note">文献に載っている α の数値（例: 0.7〜0.8 台）はここでは<strong>使っていない</strong>。国・年代・コースで変わるうえ、本文を確認できていないため、レースごとにモデルの連対率・複勝率へ当てはめる設計にした。</div>
+
+<h2>7. 検証</h2>
+<p><code>python3 -m src.scripts.data.validate_exotic_probabilities synthetic|market</code> で再現できる。</p>
+<h3>7.1 シミュレーション（真の分布が既知）</h3>
+<p>Thurstone 型（能力 + 正規ノイズで着順を決める。Harville とは別物）で 12 レース × 20 万試行を作り、真の勝率・連対率・複勝率を与えたときの組合せ確率の誤差（真の確率で重み付けした平均相対誤差）。</p>
+<table>
+<tr><th>馬券</th><th>Harville（勝率のみ）</th><th>割引 Harville（勝率+連対率+複勝率）</th></tr>
+<tr><td>馬連</td><td class="num">0.158</td><td class="num">0.026</td></tr>
+<tr><td>ワイド</td><td class="num">0.230</td><td class="num">0.024</td></tr>
+<tr><td>3連複</td><td class="num">0.327</td><td class="num">0.040</td></tr>
+</table>
+<p class="muted">σ=0.5 でも同様（馬連 0.211→0.020、ワイド 0.272→0.024、3連複 0.407→0.035）。当てはめた α は α2≈0.72〜0.76、α3≈0.59〜0.65。</p>
+
+<h3>7.2 実データ 36 レース（2026-09-06 札幌・中山・阪神）</h3>
+<p>市場確率は 1/オッズを払戻率で割り戻して作る（単勝→勝率、複勝オッズ中央値→複勝率、馬連→連対率）。</p>
+<table>
+<tr><th>KL(市場 || モデル)（小さいほど良い）</th><th>3連複</th><th>馬連</th><th>ワイド</th></tr>
+<tr><td>Harville（勝率のみ）</td><td class="num">0.1249</td><td class="num">0.0473</td><td class="num">0.0709</td></tr>
+<tr><td>割引（勝率+複勝率）※馬連・3連複の市場情報を使わない</td><td class="num">0.0734</td><td class="num">0.0409</td><td class="num">0.0401</td></tr>
+<tr><td>割引（勝率+連対率+複勝率）</td><td class="num">0.0666</td><td class="num">0.0304</td><td class="num">0.0370</td></tr>
+</table>
+<table>
+<tr><th>実際の着順に対する −log P（小さいほど良い）</th><th>3連複</th><th>馬連</th><th>ワイド</th></tr>
+<tr><td>Harville</td><td class="num">4.624</td><td class="num">3.596</td><td class="num">2.609</td></tr>
+<tr><td>割引（勝率+複勝率）</td><td class="num">4.707</td><td class="num">3.626</td><td class="num">2.632</td></tr>
+<tr><td>割引（勝率+連対率+複勝率）</td><td class="num">4.677</td><td class="num">3.585</td><td class="num">2.627</td></tr>
+<tr><td class="muted">市場（参考）</td><td class="num">4.523</td><td class="num">3.517</td><td class="num">2.610</td></tr>
+</table>
+<p class="muted">当てはめた α の平均: 勝率+複勝率のみ α2=α3=0.728、勝率+連対率+複勝率 α2=0.715・α3=0.727。方法が違ってもほぼ同じ値に収束した。</p>
+
+<div class="note">
+<strong>読み方と限界</strong>
+<ul>
+  <li>市場との乖離（KL）は明確に改善した。馬連・3連複の市場情報を使わない設定（勝率+複勝率のみ）でも改善しているので、循環ではない。</li>
+  <li>実現した着順の対数損失は<strong>差が出ていない</strong>（36 レースでは標準誤差が差より大きい）。「市場と近い」ことは示せたが「現実に近い」ことは未検証。</li>
+  <li>この検証の勝率・複勝率は市場由来。本番のモデル出力（勝率・連対率・複勝率）での検証は、予測の蓄積後に同じスクリプトで行う。</li>
+</ul>
+</div>
+
+<h3>7.3 学習済みモデルの出力での検証・調整（後で実施）</h3>
+<p>上の検証の勝率・複勝率は市場由来で、本番モデルの出力ではない。モデルが学習できたら、<strong>保存された予測（race_predictions）と実際の結果</strong>で次のコマンドを回して検証・調整する。コードは用意済みで、モックの予測は既定で除外される（<code>_meta.mock_prediction</code> / <code>dev_mock</code>）。</p>
+<pre><code># 評価だけ（期間はレース数が 200 以上になるように）
+python3 -m src.scripts.data.validate_exotic_probabilities predictions --from 20260101 --to 20261231
+
+# 全レース共通 α を config/exotic_alpha.json に書く（連対率・複勝率が無いときの既定値になる）
+python3 -m src.scripts.data.validate_exotic_probabilities predictions --from 20260101 --to 20261231 --write-config</code></pre>
+<table>
+<tr><th>出力</th><th>見方</th></tr>
+<tr><td>全レース共通 α2, α3</td><td>実際の 2・3 着の対数尤度が最大になる値（勝率を worth とした Benter 型の最尤推定）。0.7 前後なら Harville は後ろの着順を過度に人気馬へ寄せている</td></tr>
+<tr><td>−log P（Harville / レースごとの当てはめ / 共通 α）</td><td>馬連・ワイド・3連複の実現確率の対数損失。標準誤差を併記するので、差が誤差より大きいか確認する</td></tr>
+<tr><td>較正 win / top2 / top3</td><td>Brier・対数損失と、予測確率を 10 分位に分けた「予測平均 → 実測」。ここが崩れていれば、割引 Harville より先に勝率・連対率・複勝率の較正が必要</td></tr>
+</table>
+<ul>
+  <li><code>--write-config</code> はレース数が <code>--min-races</code>（既定 200）未満、またはモック予測を含むときは書かない。</li>
+  <li>レースごとの当てはめ（連対率・複勝率あり）が共通 α より良ければ、予測側が連対率・複勝率を出し続ける運用が有利。同程度なら共通 α でも足りる。</li>
+  <li>期間を変えて（例: 前半学習・後半評価）α が安定しているかも確認する。モデルを更新したら再実行する。</li>
+</ul>
+
+<h2>8. 制約・今後</h2>
+<ul>
+  <li><strong>入力の質に依存</strong>: 連対率・複勝率が較正されていなければ、割引後の確率も歪む。勝率・連対率・複勝率の較正（実績との照合）が先。</li>
+  <li><strong>連対率が無いときは α2=α3 の近似</strong>（複勝率だけで 2 着目と 3 着目を同一視）。</li>
+  <li>Henery（正規）・Stern（ガンマ）型は着順分布の形が違い、馬ごとのばらつきも表現できる。必要になれば同じ <code>RankDistribution</code> の差し替えで比較できる（周辺確率に合わせる枠組みは共通）。</li>
+  <li>市場オッズとの併用（Benter の 2 段階: モデル確率と市場確率を混ぜる）は未実装。DEC-026 の「市場対比」と合わせて検討。</li>
+  <li>3連単は対象外（<code>P3</code> がそのまま使える）。</li>
+</ul>
+
+<h2>9. 実装マップ</h2>
+<table>
+<tr><th>場所</th><th>内容</th></tr>
+<tr><td><code>src/pipeline/inference/exotic_probabilities.py</code></td><td><code>RankDistribution</code>（着順分布・各馬券確率）、<code>fit_rank_distribution</code>（α の当てはめ）、<code>normalize_marginal</code></td></tr>
+<tr><td><code>src/pipeline/inference/betting.py</code></td><td>予測に <code>win_prob</code> があれば割引 Harville（<code>BettingConfig.prob_model="auto"</code>）。無ければ従来の softmax + Harville。応答に <code>probability_model</code>（α と当てはめ誤差）</td></tr>
+<tr><td><code>src/scripts/data/validate_exotic_probabilities.py</code></td><td>シミュレーション/市場での検証</td></tr>
+<tr><td><code>config/exotic_alpha.json</code>（任意・<code>--write-config</code> で作成）</td><td>連対率・複勝率が無いときの既定 α2, α3。無ければ Harville（1.0, 1.0）</td></tr>
+<tr><td><code>tests/pipeline/test_exotic_probabilities.py</code></td><td>総和・Harville 一致・α 復元・シミュレーション優位・組み込み</td></tr>
+</table>
+</body>
+</html>

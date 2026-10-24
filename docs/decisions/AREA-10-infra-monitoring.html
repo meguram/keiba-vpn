@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AREA-10 インフラ・サーバーモニタリング要件 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+  color: var(--text); line-height: 1.75; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+aside.sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+  border-right: 1px solid var(--border); padding: 28px 22px;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.brand .logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #4f8bff, #a78bfa);
+  display: grid; place-items: center; font-weight: 700; color: white;
+  font-size: 13px; box-shadow: var(--shadow);
+}
+.brand .title { font-weight: 700; font-size: 14px; }
+.brand .sub { color: var(--muted); font-size: 11px; }
+nav.toc { font-size: 13px; }
+nav.toc h4 {
+  color: var(--muted); margin: 16px 0 6px;
+  text-transform: uppercase; letter-spacing: .14em;
+  font-size: 10px; font-weight: 700;
+}
+nav.toc a {
+  display: block; color: var(--text); padding: 6px 10px;
+  border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+  line-height: 1.4;
+}
+nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+main.content { padding: 48px 56px 96px; max-width: 980px; width: 100%; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+}
+header.hero .eyebrow { color: var(--accent-2); font-size: 12px; letter-spacing: .2em; font-weight: 700; text-transform: uppercase; }
+header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+header.hero .meta code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+article.html-body { color: #d8e0f7; }
+article.html-body h2 { font-size: 1.35rem; margin: 2.4em 0 0.6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px; }
+article.html-body h3 { font-size: 1.1rem; margin: 1.6em 0 0.5em; color: var(--accent-2); scroll-margin-top: 24px; }
+article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+article.html-body p { margin: 0.75em 0; }
+article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+article.html-body li { margin: 0.35em 0; }
+article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+article.html-body table { width: 100%; border-collapse: collapse; margin: 1em 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13px; }
+article.html-body th, article.html-body td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+article.html-body th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+article.html-body tr:last-child td { border-bottom: 0; }
+article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+article.html-body pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 1em 0; }
+article.html-body code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+article.html-body pre code { background: none; border: none; padding: 0; }
+.badge { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .06em; background: rgba(79,139,255,.15); color: var(--accent-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.badge.final { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.dev { background: rgba(167,139,250,.16); color: #a78bfa; }
+.callout { border-left: 3px solid var(--accent); background: rgba(79,139,255,.08); padding: 12px 16px; border-radius: 8px; margin: 1em 0; }
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout.danger { border-left-color: #f87171; background: rgba(248,113,113,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+  main.content { padding: 28px 20px 80px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Decisions · AREA-10</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../html/index.html">← ドキュメント一覧</a>
+      <a href="MASTER.html">↑ マスター仕様書</a>
+      <h4>AREA-10</h4>
+      <a href="#0">0. 前提条件</a>
+      <a href="#1">1. リソース監視しきい値</a>
+      <a class="toc-h3" href="#1-1">1-1 CPU</a>
+      <a class="toc-h3" href="#1-2">1-2 メモリ</a>
+      <a class="toc-h3" href="#1-3">1-3 ディスク・ストレージ</a>
+      <a class="toc-h3" href="#1-4">1-4 ネットワーク</a>
+      <a href="#2">2. プロセス死活監視</a>
+      <a class="toc-h3" href="#2-1">2-1 Watchdog（3分ごと自動確認）</a>
+      <a class="toc-h3" href="#2-2">2-2 Watchdog が検出しない障害</a>
+      <a href="#3">3. アラート設計</a>
+      <a class="toc-h3" href="#3-1">3-1 通知チャネル</a>
+      <a class="toc-h3" href="#3-2">3-2 ログ設計</a>
+      <a href="#4">4. メトリクス収集実装（ツール未決定）</a>
+      <a class="toc-h3" href="#4-1">4-1 収集対象メトリクス</a>
+      <a class="toc-h3" href="#4-2">4-2 SLO 定義（非機能要件）</a>
+      <a href="#5">5. VPS メモリ制約対応</a>
+      <a class="toc-h3" href="#5-1">5-1 プロセス優先順位</a>
+      <a class="toc-h3" href="#5-2">5-2 メモリ節約設定</a>
+      <a href="#6">6. 未決定事項</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DECISIONS · AREA-10</div>
+      <h1>AREA-10 — インフラ・サーバーモニタリング要件</h1>
+      <p class="meta">
+        <span class="badge final">FINAL</span>
+        最終更新: 2026-07-06　|　統合: AREA-04 §6（監視・アラート）拡張
+      </p>
+    </header>
+
+    <article class="html-body">
+
+<h2 id="0">0. 前提条件</h2>
+<p><b>監視対象</b>: keiba-vpn の全プロセス（API サーバー / MLflow / スクレイパー / Watchdog / PostgreSQL / Redis）</p>
+
+<h3 id="0-env-matrix">環境マトリックス</h3>
+<table>
+<tr><th>環境</th><th>サーバー</th><th>RAM 制約</th><th>備考</th></tr>
+<tr><td><b>prod</b></td><td>ConoHa VPS</td><td><b>2GB（ハード制約）</b></td><td>§1-2・§5 のメモリ制限はすべて prod 専用</td></tr>
+<tr><td><b>stg</b></td><td>別サーバー（prod より大容量）</td><td>制約なし（実測値で設定）</td><td>2GB 制限設定を適用しないこと</td></tr>
+<tr><td><b>dev</b></td><td>別サーバー（prod より大容量）</td><td>制約なし（実測値で設定）</td><td>2GB 制限設定を適用しないこと</td></tr>
+</table>
+
+<div class="callout warn">
+  <h4>注意</h4>
+  <p>以下の §1-2（メモリしきい値）および §5（メモリ制約対応）は <b>prod 環境専用</b> の設定である。dev/stg 環境では RAM 容量に応じた独自のしきい値を運用判断で設定すること。</p>
+</div>
+
+<h2 id="1">1. リソース監視しきい値</h2>
+
+<h3 id="1-1">1-1. CPU</h3>
+<table>
+<tr><th>メトリクス</th><th>警告（WARN）</th><th>危険（CRIT）</th><th>対処</th></tr>
+<tr><td>平均 CPU 使用率（1分）</td><td>≥ 70%</td><td>≥ 90%</td><td>スクレイパー同時スロット数を削減</td></tr>
+<tr><td>推論バッチ実行中の CPU</td><td>≥ 90%（一時的可）</td><td>≥ 90% が 10分継続</td><td>バッチ実行時間帯を見直し</td></tr>
+</table>
+
+<h3 id="1-2">1-2. メモリ（<b>prod 専用</b>: ConoHa VPS RAM 2GB 上限）</h3>
+<div class="callout info">
+  <h4>dev/stg は対象外</h4>
+  <p>dev/stg は RAM 容量が異なるため、下記しきい値は適用しない。実環境の搭載 RAM に合わせて別途設定すること。</p>
+</div>
+<table>
+<tr><th>プロセス</th><th>通常使用量目安</th><th>上限（kill 対象）</th><th>備考</th></tr>
+<tr><td>Flask API（<code>flask_app.py</code>）</td><td>80-120 MB</td><td>300 MB</td><td>推論結果 Redis キャッシュ効果込み</td></tr>
+<tr><td>PostgreSQL</td><td>100-200 MB</td><td>400 MB</td><td><code>shared_buffers</code> 64MB 推奨（§5-2 参照）</td></tr>
+<tr><td>Redis</td><td>30-80 MB</td><td>150 MB</td><td><code>maxmemory 128mb</code> 設定（§5-2 参照）</td></tr>
+<tr><td>MLflow サーバー×4</td><td>各 80-150 MB</td><td>各 250 MB</td><td>keiba_lgbm / tracking_difficulty / final_odds / pace_predictor</td></tr>
+<tr><td>スクレイパー（SLA 3 T-15バンドル）</td><td>60-100 MB</td><td>200 MB</td><td>バンドル実行時はスパイクに注意</td></tr>
+<tr><td><b>合計上限目安</b></td><td>550-850 MB</td><td><b>1,800 MB</b></td><td>残 200MB はカーネル・OS 予備</td></tr>
+</table>
+
+<p><b>全体アラート（prod 専用）</b>:</p>
+<ul>
+<li>使用率 ≥ 80%（1,640 MB）: WARN — スクレイパー1スロット削減</li>
+<li>使用率 ≥ 90%（1,840 MB）: CRIT — 非必須プロセス（MLflow PLANNED）を停止</li>
+</ul>
+
+<h3 id="1-3">1-3. ディスク・ストレージ</h3>
+<table>
+<tr><th>パス</th><th>用途</th><th>WARN</th><th>CRIT</th><th>対処</th></tr>
+<tr><td><code>/</code> (root)</td><td>OS + アプリ</td><td>70% 使用</td><td>85% 使用</td><td>ログローテーション実施</td></tr>
+<tr><td><code>data/cache/</code></td><td>L2 ディスクキャッシュ</td><td>2 GB</td><td>4 GB</td><td><code>disk_cache_cleanup</code> 強制実行</td></tr>
+<tr><td><code>data/queue/</code></td><td>ジョブキュー</td><td>100 MB</td><td>500 MB</td><td>完了済みジョブを削除</td></tr>
+<tr><td><code>data/calculated_data/</code></td><td>計算済みデータ</td><td>1 GB</td><td>3 GB</td><td>古い指数ファイルをアーカイブ</td></tr>
+<tr><td>PostgreSQL データディレクトリ</td><td>DB データ</td><td>5 GB</td><td>10 GB</td><td>古い scrape_runs レコードを VACUUM</td></tr>
+<tr><td>ログ (<code>logs/</code>)</td><td>アプリログ</td><td>500 MB</td><td>1 GB</td><td><code>rotate_logs</code> cron が 04:30 JST に実行</td></tr>
+</table>
+
+<p><b>ディスク成長速度の目安</b>:</p>
+<ul>
+<li><code>data/cache/</code>: SLA 3 T-15バンドル実行で 1日あたり最大 50 MB 増加</li>
+<li>PostgreSQL: race_odds_snapshot（Layer 5 時系列）が最大成長源。月 100-200 MB 増加見込み</li>
+</ul>
+
+<h3 id="1-4">1-4. ネットワーク</h3>
+<table>
+<tr><th>メトリクス</th><th>WARN</th><th>CRIT</th><th>備考</th></tr>
+<tr><td>受信帯域（netkeiba スクレイピング）</td><td>10 Mbps 継続</td><td>50 Mbps 継続</td><td>リクエスト間隔 2.2-4.0 秒で自然に制限</td></tr>
+<tr><td>送受信エラー率</td><td>≥ 1%</td><td>≥ 5%</td><td>IP ブロック検知の指標</td></tr>
+<tr><td>外向き GCS 転送量</td><td>—</td><td>—</td><td>GCS 転送費は AREA-05 に計上</td></tr>
+</table>
+
+<h2 id="2">2. プロセス死活監視</h2>
+
+<h3 id="2-1">2-1. Watchdog（3分ごと自動確認）</h3>
+<p>Watchdog（<code>server_watchdog</code>、cron <code>*/3 * * * *</code>）が以下を監視し、停止時は自動再起動する。</p>
+<table>
+<tr><th>プロセス</th><th>監視方法</th><th>自動再起動</th><th>再起動失敗時のアラート</th></tr>
+<tr><td>Flask API</td><td><code>/api/v1/health</code> HTTP GET</td><td>○</td><td>CRIT アラート</td></tr>
+<tr><td>MLflow keiba_lgbm（port 5010）</td><td>HTTP GET</td><td>○</td><td>WARN アラート</td></tr>
+<tr><td>MLflow tracking_difficulty（5001）</td><td>HTTP GET</td><td>○</td><td>WARN アラート</td></tr>
+<tr><td>MLflow final_odds（5003）</td><td>HTTP GET</td><td>○</td><td>WARN アラート</td></tr>
+<tr><td>MLflow pace_predictor（5004）</td><td>HTTP GET</td><td>○</td><td>WARN アラート</td></tr>
+<tr><td>PostgreSQL</td><td><code>pg_isready</code></td><td>△（<code>systemctl start</code>）</td><td>CRIT アラート</td></tr>
+<tr><td>Redis</td><td><code>redis-cli ping</code></td><td>△（<code>systemctl start</code>）</td><td>WARN アラート</td></tr>
+<tr><td>Flower（port 5555）</td><td>HTTP GET <code>http://localhost:5555</code></td><td>△（再起動）</td><td>WARN アラート（Celery タスクキュー監視ツール）</td></tr>
+</table>
+
+<h3 id="2-2">2-2. Watchdog が検出しない障害</h3>
+<p>以下は Watchdog の監視外のため別途 cron またはログアラートで対応する。</p>
+<table>
+<tr><th>障害パターン</th><th>検知方法</th><th>対処</th></tr>
+<tr><td>スクレイパーのサイレント失敗（HTTPエラーなしに空データ取得）</td><td><code>scrape_runs</code> テーブルの SUCCESS 率監視</td><td>週次レポートで確認</td></tr>
+<tr><td>PostgreSQL スロークエリ（≥ 5秒）</td><td><code>pg_stat_statements</code> のログ</td><td>インデックス追加・クエリ見直し</td></tr>
+<tr><td>GCS 書き込み失敗</td><td><code>scrape_runs.status = 'FAILED'</code> 連続検知</td><td>手動 GCS 認証確認</td></tr>
+<tr><td>Redis OOM（<code>maxmemory</code> 超過）</td><td>Redis の <code>WARN OUT OF MEMORY</code> ログ</td><td><code>maxmemory-policy allkeys-lru</code> が蒸発対象を削除</td></tr>
+</table>
+
+<h2 id="3">3. アラート設計</h2>
+
+<h3 id="3-1">3-1. 通知チャネル（未決定事項 OP-4、AREA-04 §9 参照）</h3>
+<p>現時点ではアラート通知チャネルは未決定（Slack / メール / PagerDuty のいずれか）。
+以下のトリガーを通知対象と定める。</p>
+<table>
+<tr><th>重大度</th><th>トリガー条件</th><th>期待対応時間</th></tr>
+<tr><td>CRIT</td><td>メモリ使用率 ≥ 90%、Flask API 再起動失敗、PostgreSQL 停止</td><td>即時（&lt; 15分）</td></tr>
+<tr><td>WARN</td><td>メモリ使用率 ≥ 80%、任意 MLflow プロセス停止・再起動、scrape_runs FAILED 率 ≥ 5%、<code>api_latency_p95 &gt; 500ms</code> 継続</td><td>当日中（&lt; 4時間）</td></tr>
+<tr><td>INFO</td><td>Watchdog が自動再起動を実施、ディスク使用率 ≥ 70%</td><td>翌日までに確認</td></tr>
+</table>
+
+<h3 id="3-2">3-2. ログ設計</h3>
+<table>
+<tr><th>ログファイル</th><th>対象プロセス</th><th>ローテーション</th><th>保持期間</th></tr>
+<tr><td><code>logs/api.log</code></td><td>Flask API</td><td>日次</td><td>30日</td></tr>
+<tr><td><code>logs/scraper.log</code></td><td>スクレイパー全般</td><td>日次</td><td>14日</td></tr>
+<tr><td><code>logs/watchdog.log</code></td><td>Watchdog</td><td>日次</td><td>7日</td></tr>
+<tr><td><code>logs/cron.log</code></td><td>Cron ジョブ全般</td><td>日次</td><td>14日</td></tr>
+<tr><td><code>logs/mlflow/</code></td><td>MLflow サーバー×4</td><td>週次</td><td>30日</td></tr>
+</table>
+<p>ローテーション cron: <code>30 19 * * *</code>（JST 04:30）、削除: <code>0 3 * * *</code>（JST 12:00）</p>
+
+<h2 id="4">4. メトリクス収集実装（ツール未決定）</h2>
+<div class="callout info">
+  <h4>未決定事項 OP-3</h4>
+  <p>監視基盤ツール（Prometheus / Grafana / Alertmanager / <b>Flower</b> (port 5555, Celery タスクキュー監視) / Sentry 等）は AREA-04 §9 参照。
+  以下は収集すべきメトリクスの定義。ツール選定後に実装する。</p>
+</div>
+
+<h3 id="4-1">4-1. 収集対象メトリクス</h3>
+<pre><code># システム系（10秒〜1分間隔）
+node_cpu_usage_percent
+node_memory_used_bytes
+node_memory_available_bytes
+node_disk_read_bytes_total
+node_disk_write_bytes_total
+node_filesystem_used_bytes{path="/data/cache"}
+node_filesystem_used_bytes{path="/data/queue"}
+node_network_receive_errors_total
+node_network_transmit_errors_total
+
+# アプリ系（1分間隔）
+keiba_api_response_time_p50_ms
+keiba_api_response_time_p95_ms   # アラート閾値: &gt; 500ms で WARN
+keiba_api_response_time_p99_ms
+keiba_api_error_rate_percent
+keiba_scrape_success_rate_daily
+keiba_scrape_runs_failed_total
+keiba_prediction_cache_hit_rate
+keiba_mlflow_process_up{model="keiba_lgbm"}
+keiba_mlflow_process_up{model="tracking_difficulty"}
+keiba_mlflow_process_up{model="final_odds"}
+keiba_mlflow_process_up{model="pace_predictor"}
+
+# DB 系（5分間隔）
+pg_active_connections
+pg_slow_queries_count{threshold="5s"}
+pg_table_size_bytes{table="race_odds_snapshot"}
+pg_table_size_bytes{table="scrape_runs"}
+redis_used_memory_bytes
+redis_hit_rate_percent</code></pre>
+
+<h3 id="4-2">4-2. SLO 定義（非機能要件）</h3>
+<p>AREA-01 §5（N- 番号）との対応:</p>
+<table>
+<tr><th>SLO</th><th>目標値</th><th>メトリクス</th><th>関連要件</th></tr>
+<tr><td>API キャッシュヒット時レスポンス</td><td>≤ 200 ms</td><td><code>keiba_api_response_time_p99_ms{cache="hit"}</code></td><td>N-1</td></tr>
+<tr><td>API レイテンシ (p95) アラート閾値</td><td>≤ 500 ms</td><td><code>keiba_api_response_time_p95_ms</code></td><td>アラート閾値（超過で WARN）</td></tr>
+<tr><td>API キャッシュミス時レスポンス</td><td>≤ 2,000 ms</td><td><code>keiba_api_response_time_p99_ms{cache="miss"}</code></td><td>N-2</td></tr>
+<tr><td>スクレイピング成功率</td><td>≥ 99% / 月</td><td><code>keiba_scrape_success_rate_monthly</code></td><td>N-6</td></tr>
+<tr><td>DB 反映遅延</td><td>≤ 10 分</td><td><code>keiba_etl_lag_minutes</code></td><td>N-7</td></tr>
+<tr><td>オッズスナップショット欠損率</td><td>≤ 1%</td><td><code>keiba_odds_snapshot_missing_rate</code></td><td>N-8</td></tr>
+<tr><td>推論バッチ完了（発走3時間前）</td><td>100%</td><td><code>keiba_inference_batch_on_time_rate</code></td><td>N-9</td></tr>
+</table>
+
+<h2 id="5">5. VPS メモリ制約対応（<b>prod 専用</b>: ConoHa VPS 2GB）</h2>
+<div class="callout warn">
+  <h4>prod 環境専用</h4>
+  <p>このセクションの設定はすべて <b>prod 環境のみ</b> に適用する。dev/stg には適用しないこと。</p>
+</div>
+
+<h3 id="5-1">5-1. プロセス優先順位（OOM Kill 対象の順序）</h3>
+<p>メモリ逼迫時の停止優先順位（低い番号 = 先に停止対象）:</p>
+<ol>
+<li>MLflow lap_lstm（PLANNED 状態・未使用）</li>
+<li>MLflow lap_predictor（PLANNED 状態）</li>
+<li>MLflow pace_predictor（非レース日は不要）</li>
+<li>MLflow final_odds（SLA 1 完了後は不要）</li>
+<li>Redis（一時停止可・再起動後にキャッシュ再構築）</li>
+<li>MLflow tracking_difficulty</li>
+<li>MLflow keiba_lgbm（最重要推論モデル・最後まで維持）</li>
+<li>PostgreSQL（停止=サービス停止）</li>
+<li>Flask API（停止=サービス停止）</li>
+</ol>
+
+<h3 id="5-2">5-2. メモリ節約設定（prod 環境のみ適用）</h3>
+<pre><code># PostgreSQL: /etc/postgresql/*/main/postgresql.conf  [prod のみ]
+shared_buffers = 64MB          # デフォルト 128MB から削減（2GB 制約）
+work_mem = 4MB
+maintenance_work_mem = 32MB
+max_connections = 20           # デフォルト 100 から削減（2GB 制約）
+
+# Redis: /etc/redis/redis.conf  [prod のみ]
+maxmemory 128mb
+maxmemory-policy allkeys-lru   # LRU でキャッシュ蒸発
+
+# Flask API: gunicorn workers  [prod のみ]
+workers = 2                    # VPS 2GB では 2 workers 推奨
+worker_class = sync
+timeout = 120</code></pre>
+
+<p><b>dev/stg の設定</b>:</p>
+<ul>
+<li><code>shared_buffers</code>: PostgreSQL デフォルト（128MB）または搭載 RAM の 25% を目安に設定</li>
+<li><code>max_connections</code>: 負荷テストの実測値に応じて設定（デフォルト 100 が出発点）</li>
+<li><code>maxmemory</code>: Redis デフォルト（無制限）または搭載 RAM の 20-30% を目安に設定</li>
+<li><code>workers</code>: CPU コア数 × 2 + 1（gunicorn 推奨式）</li>
+</ul>
+
+<h2 id="6">6. 未決定事項</h2>
+<table>
+<tr><th>#</th><th>項目</th><th>関連</th></tr>
+<tr><td>MON-1</td><td>監視基盤ツール選定（Prometheus + Grafana + Alertmanager + <b>Flower</b> (port 5555) / Sentry / Datadog / 自作スクリプト）</td><td>AREA-04 OP-3</td></tr>
+<tr><td>MON-2</td><td>アラート通知チャネル（Slack / メール / LINE）と宛先</td><td>AREA-04 OP-4</td></tr>
+<tr><td>MON-3</td><td>PostgreSQL <code>shared_buffers</code> 最適値（実負荷計測後に調整）</td><td>AREA-04 OP-1</td></tr>
+<tr><td>MON-4</td><td><code>scrape_runs</code> テーブルの成長監視・VACUUM スケジュール設計</td><td>AREA-06 DM-4</td></tr>
+</table>
+
+    </article>
+  </main>
+</div>
+</body>
+</html>

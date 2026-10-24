@@ -1,0 +1,91 @@
+{
+  "text": "結果 2026/10/18（日）［確定］ 回収率 130.0% 損益 +¥3,000",
+  "attachments": [
+    {
+      "color": "#2eb67d",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*結果 2026/10/18（日）［確定］*\n推奨馬券 回収率 *130.0%*　損益 *+¥3,000*　的中 5/12R"
+          }
+        },
+        {
+          "type": "section",
+          "fields": [
+            {
+              "type": "mrkdwn",
+              "text": "*購入 → 払戻*\n¥10,000 → ¥13,000"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*的中レース*\n5/12 (41.7%)"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*◎ 勝率*\n4/12 (33.3%)"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*◎ 3着内*\n9/12 (75.0%)"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*勝率1位の的中*\n3/12 (25.0%)"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*対象レース*\n12R（予測なし 0R / 結果なし 0R）"
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*券種別*\n```券種    購入    払戻  回収率  的中/点\n単勝   2,000   3,000    150%      2/6\n3連複  8,000  10,000    125%     3/30```"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*印別の着順*\n```印  頭数  1着  連対  3着内\n◎     12  33%   58%    75%\n○     12  17%   42%    50%\n消     9   0%    0%     0%```"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*消印*　9頭のうち3着内 0頭（0.0%）（目標 5%以下）"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*注目*\n• 東京1R ◎テスト（勝率50%）は8着"
+          }
+        },
+        {
+          "type": "context",
+          "elements": [
+            {
+              "type": "mrkdwn",
+              "text": "勝ち馬の LogLoss 平均 2.400（12R）"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "モデル: v4"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "<https://example.invalid/prediction-results?scope=day&date=20261018|詳細を開く>"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

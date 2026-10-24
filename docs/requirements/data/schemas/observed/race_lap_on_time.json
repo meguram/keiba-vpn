@@ -1,0 +1,858 @@
+{
+ "category": "race_lap_on_time",
+ "conformance": {
+  "failures": {},
+  "passed": 0,
+  "validated": 0
+ },
+ "keys": {
+  "max": "202508040412",
+  "min": "202503030301"
+ },
+ "lists": {},
+ "nested": {
+  "1000": {
+   "0": {
+    "empty": 0,
+    "len_max": 4,
+    "len_min": 4,
+    "n": 69,
+    "null": 0,
+    "patterns": {
+     "numeric-str": 69
+    },
+    "types": {
+     "str": 69
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "1": {
+    "empty": 0,
+    "len_max": 6,
+    "len_min": 4,
+    "n": 69,
+    "null": 0,
+    "patterns": {
+     "numeric-str": 38,
+     "text": 31
+    },
+    "types": {
+     "str": 69
+    },
+    "values": {
+     "1:00.0": 1,
+     "1:00.2": 3,
+     "1:00.3": 2,
+     "1:00.4": 1,
+     "1:00.5": 1,
+     "1:00.6": 3,
+     "1:00.7": 1,
+     "1:01.1": 1,
+     "1:01.2": 1,
+     "1:01.3": 2,
+     "1:01.5": 3,
+     "1:01.6": 1,
+     "1:01.8": 2,
+     "1:01.9": 1,
+     "1:02.0": 1,
+     "1:02.1": 1,
+     "1:03.3": 1,
+     "1:03.4": 2,
+     "1:03.6": 1,
+     "1:03.8": 1,
+     "1:03.9": 1
+    },
+    "values_overflow": false
+   }
+  },
+  "1200": {
+   "0": {
+    "empty": 0,
+    "len_max": 4,
+    "len_min": 4,
+    "n": 69,
+    "null": 0,
+    "patterns": {
+     "numeric-str": 69
+    },
+    "types": {
+     "str": 69
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "1": {
+    "empty": 0,
+    "len_max": 6,
+    "len_min": 6,
+    "n": 69,
+    "null": 0,
+    "patterns": {
+     "text": 69
+    },
+    "types": {
+     "str": 69
+    },
+    "values": {
+     "1:07.3": 3,
+     "1:08.6": 2,
+     "1:08.8": 2,
+     "1:08.9": 2,
+     "1:09.0": 2,
+     "1:09.2": 3,
+     "1:09.3": 2,
+     "1:09.5": 1,
+     "1:10.6": 1,
+     "1:11.0": 2,
+     "1:11.2": 2,
+     "1:11.6": 2,
+     "1:11.7": 3,
+     "1:12.3": 2,
+     "1:12.5": 3,
+     "1:12.9": 1,
+     "1:13.1": 2,
+     "1:13.5": 1,
+     "1:13.6": 1,
+     "1:14.0": 2,
+     "1:14.3": 2,
+     "1:14.4": 3,
+     "1:14.8": 2,
+     "1:15.5": 1,
+     "1:16.3": 2
+    },
+    "values_overflow": true
+   }
+  },
+  "1400": {
+   "0": {
+    "empty": 0,
+    "len_max": 4,
+    "len_min": 4,
+    "n": 56,
+    "null": 0,
+    "patterns": {
+     "numeric-str": 56
+    },
+    "types": {
+     "str": 56
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "1": {
+    "empty": 0,
+    "len_max": 6,
+    "len_min": 6,
+    "n": 56,
+    "null": 0,
+    "patterns": {
+     "text": 56
+    },
+    "types": {
+     "str": 56
+    },
+    "values": {
+     "1:19.6": 1,
+     "1:20.3": 1,
+     "1:20.4": 1,
+     "1:20.5": 1,
+     "1:21.1": 1,
+     "1:21.2": 1,
+     "1:22.1": 3,
+     "1:22.9": 1,
+     "1:23.1": 1,
+     "1:23.2": 1,
+     "1:23.4": 2,
+     "1:23.6": 1,
+     "1:23.8": 2,
+     "1:24.6": 2,
+     "1:24.7": 2,
+     "1:25.1": 1,
+     "1:25.3": 1,
+     "1:25.9": 1,
+     "1:26.0": 1,
+     "1:26.6": 3,
+     "1:26.7": 2,
+     "1:26.8": 1,
+     "1:28.3": 1,
+     "1:28.7": 1,
+     "1:28.9": 2
+    },
+    "values_overflow": true
+   }
+  },
+  "1600": {
+   "0": {
+    "empty": 0,
+    "len_max": 4,
+    "len_min": 4,
+    "n": 45,
+    "null": 0,
+    "patterns": {
+     "numeric-str": 45
+    },
+    "types": {
+     "str": 45
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "1": {
+    "empty": 0,
+    "len_max": 6,
+    "len_min": 6,
+    "n": 45,
+    "null": 0,
+    "patterns": {
+     "text": 45
+    },
+    "types": {
+     "str": 45
+    },
+    "values": {
+     "1:32.5": 1,
+     "1:33.4": 2,
+     "1:33.5": 1,
+     "1:33.6": 1,
+     "1:34.1": 1,
+     "1:34.4": 2,
+     "1:34.5": 1,
+     "1:34.8": 1,
+     "1:34.9": 3,
+     "1:35.0": 1,
+     "1:35.1": 1,
+     "1:35.2": 1,
+     "1:35.7": 2,
+     "1:36.5": 1,
+     "1:37.3": 3,
+     "1:37.5": 2,
+     "1:38.3": 3,
+     "1:38.5": 1,
+     "1:38.7": 1,
+     "1:39.2": 1,
+     "1:39.7": 2,
+     "1:40.5": 1,
+     "1:40.8": 1,
+     "1:41.4": 1,
+     "1:41.9": 2
+    },
+    "values_overflow": true
+   }
+  },
+  "1800": {
+   "0": {
+    "empty": 0,
+    "len_max": 4,
+    "len_min": 4,
+    "n": 32,
+    "null": 0,
+    "patterns": {
+     "numeric-str": 32
+    },
+    "types": {
+     "str": 32
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "1": {
+    "empty": 0,
+    "len_max": 6,
+    "len_min": 6,
+    "n": 32,
+    "null": 0,
+    "patterns": {
+     "text": 32
+    },
+    "types": {
+     "str": 32
+    },
+    "values": {
+     "1:45.3": 1,
+     "1:45.5": 1,
+     "1:45.9": 1,
+     "1:46.0": 1,
+     "1:46.2": 1,
+     "1:46.3": 1,
+     "1:46.5": 1,
+     "1:46.8": 1,
+     "1:46.9": 2,
+     "1:47.4": 1,
+     "1:47.7": 2,
+     "1:48.0": 1,
+     "1:48.7": 1,
+     "1:49.1": 1,
+     "1:49.2": 1,
+     "1:49.6": 2,
+     "1:50.0": 1,
+     "1:51.1": 1,
+     "1:51.4": 1,
+     "1:51.9": 1,
+     "1:53.4": 1,
+     "1:53.6": 1,
+     "1:54.4": 1,
+     "1:54.5": 1,
+     "1:54.6": 1
+    },
+    "values_overflow": true
+   }
+  },
+  "200": {
+   "0": {
+    "empty": 0,
+    "len_max": 4,
+    "len_min": 3,
+    "n": 69,
+    "null": 0,
+    "patterns": {
+     "numeric-str": 69
+    },
+    "types": {
+     "str": 69
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "1": {
+    "empty": 0,
+    "len_max": 4,
+    "len_min": 3,
+    "n": 69,
+    "null": 0,
+    "patterns": {
+     "numeric-str": 69
+    },
+    "types": {
+     "str": 69
+    },
+    "values": {},
+    "values_overflow": false
+   }
+  },
+  "2000": {
+   "0": {
+    "empty": 0,
+    "len_max": 4,
+    "len_min": 4,
+    "n": 14,
+    "null": 0,
+    "patterns": {
+     "numeric-str": 14
+    },
+    "types": {
+     "str": 14
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "1": {
+    "empty": 0,
+    "len_max": 6,
+    "len_min": 6,
+    "n": 14,
+    "null": 0,
+    "patterns": {
+     "text": 14
+    },
+    "types": {
+     "str": 14
+    },
+    "values": {
+     "1:58.9": 1,
+     "1:59.3": 1,
+     "1:59.5": 1,
+     "1:59.7": 1,
+     "2:00.8": 1,
+     "2:01.1": 2,
+     "2:01.3": 1,
+     "2:01.6": 1,
+     "2:01.9": 1,
+     "2:02.9": 1,
+     "2:03.3": 1,
+     "2:06.3": 1,
+     "2:07.8": 1
+    },
+    "values_overflow": false
+   }
+  },
+  "2200": {
+   "0": {
+    "empty": 0,
+    "len_max": 4,
+    "len_min": 4,
+    "n": 4,
+    "null": 0,
+    "patterns": {
+     "numeric-str": 4
+    },
+    "types": {
+     "str": 4
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "1": {
+    "empty": 0,
+    "len_max": 6,
+    "len_min": 6,
+    "n": 4,
+    "null": 0,
+    "patterns": {
+     "text": 4
+    },
+    "types": {
+     "str": 4
+    },
+    "values": {
+     "2:11.0": 1,
+     "2:15.9": 1,
+     "2:18.2": 1,
+     "2:21.3": 1
+    },
+    "values_overflow": false
+   }
+  },
+  "2400": {
+   "0": {
+    "empty": 0,
+    "len_max": 4,
+    "len_min": 4,
+    "n": 3,
+    "null": 0,
+    "patterns": {
+     "numeric-str": 3
+    },
+    "types": {
+     "str": 3
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "1": {
+    "empty": 0,
+    "len_max": 6,
+    "len_min": 6,
+    "n": 3,
+    "null": 0,
+    "patterns": {
+     "text": 3
+    },
+    "types": {
+     "str": 3
+    },
+    "values": {
+     "2:28.2": 1,
+     "2:29.8": 1,
+     "2:34.6": 1
+    },
+    "values_overflow": false
+   }
+  },
+  "2600": {
+   "0": {
+    "empty": 0,
+    "len_max": 4,
+    "len_min": 4,
+    "n": 2,
+    "null": 0,
+    "patterns": {
+     "numeric-str": 2
+    },
+    "types": {
+     "str": 2
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "1": {
+    "empty": 0,
+    "len_max": 6,
+    "len_min": 6,
+    "n": 2,
+    "null": 0,
+    "patterns": {
+     "text": 2
+    },
+    "types": {
+     "str": 2
+    },
+    "values": {
+     "2:40.6": 1,
+     "2:41.4": 1
+    },
+    "values_overflow": false
+   }
+  },
+  "400": {
+   "0": {
+    "empty": 0,
+    "len_max": 4,
+    "len_min": 4,
+    "n": 69,
+    "null": 0,
+    "patterns": {
+     "numeric-str": 69
+    },
+    "types": {
+     "str": 69
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "1": {
+    "empty": 0,
+    "len_max": 4,
+    "len_min": 4,
+    "n": 69,
+    "null": 0,
+    "patterns": {
+     "numeric-str": 69
+    },
+    "types": {
+     "str": 69
+    },
+    "values": {},
+    "values_overflow": false
+   }
+  },
+  "600": {
+   "0": {
+    "empty": 0,
+    "len_max": 4,
+    "len_min": 4,
+    "n": 69,
+    "null": 0,
+    "patterns": {
+     "numeric-str": 69
+    },
+    "types": {
+     "str": 69
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "1": {
+    "empty": 0,
+    "len_max": 4,
+    "len_min": 4,
+    "n": 69,
+    "null": 0,
+    "patterns": {
+     "numeric-str": 69
+    },
+    "types": {
+     "str": 69
+    },
+    "values": {},
+    "values_overflow": false
+   }
+  },
+  "800": {
+   "0": {
+    "empty": 0,
+    "len_max": 4,
+    "len_min": 4,
+    "n": 69,
+    "null": 0,
+    "patterns": {
+     "numeric-str": 69
+    },
+    "types": {
+     "str": 69
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "1": {
+    "empty": 0,
+    "len_max": 4,
+    "len_min": 4,
+    "n": 69,
+    "null": 0,
+    "patterns": {
+     "numeric-str": 69
+    },
+    "types": {
+     "str": 69
+    },
+    "values": {},
+    "values_overflow": false
+   }
+  },
+  "race_id": {
+   "0": {
+    "empty": 0,
+    "len_max": 12,
+    "len_min": 12,
+    "n": 69,
+    "null": 0,
+    "patterns": {
+     "digits12": 69
+    },
+    "types": {
+     "str": 69
+    },
+    "values": {},
+    "values_overflow": false
+   },
+   "1": {
+    "empty": 0,
+    "len_max": 12,
+    "len_min": 12,
+    "n": 69,
+    "null": 0,
+    "patterns": {
+     "digits12": 69
+    },
+    "types": {
+     "str": 69
+    },
+    "values": {},
+    "values_overflow": false
+   }
+  },
+  "タイトル": {
+   "0": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 3,
+    "n": 69,
+    "null": 0,
+    "patterns": {
+     "text": 69
+    },
+    "types": {
+     "str": 69
+    },
+    "values": {
+     "ラップ": 69
+    },
+    "values_overflow": false
+   },
+   "1": {
+    "empty": 0,
+    "len_max": 3,
+    "len_min": 3,
+    "n": 69,
+    "null": 0,
+    "patterns": {
+     "text": 69
+    },
+    "types": {
+     "str": 69
+    },
+    "values": {
+     "ペース": 69
+    },
+    "values_overflow": false
+   }
+  }
+ },
+ "records": 69,
+ "runs": [
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 69,
+   "source": "storage"
+  }
+ ],
+ "top": {
+  "1000": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 69,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 69
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "1200": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 69,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 69
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "1400": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 56,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 56
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "1600": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 45,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 45
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "1800": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 32,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 32
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "200": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 69,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 69
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "2000": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 14,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 14
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "2200": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 4,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 4
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "2400": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 3,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 3
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "2600": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 2,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 2
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "400": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 69,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 69
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "600": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 69,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 69
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "800": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 69,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 69
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_id": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 69,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 69
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "タイトル": {
+   "empty": 0,
+   "len_max": 2,
+   "len_min": 2,
+   "n": 69,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 69
+   },
+   "values": {},
+   "values_overflow": false
+  }
+ }
+}

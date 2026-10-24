@@ -1,0 +1,4 @@
+# 第三者サイトの文の抜粋は公開リポジトリに置かない（ローカルのみ保持。config/history_purge_paths.txt）
+jravan_start.json
+start_descriptions.json
+route_audit.json

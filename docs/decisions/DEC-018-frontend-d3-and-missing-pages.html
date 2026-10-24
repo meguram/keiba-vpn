@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DEC-018 フロントエンド: D3.js 依存追加と未実装ページ対応 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+  color: var(--text); line-height: 1.75; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+aside.sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+  border-right: 1px solid var(--border); padding: 28px 22px;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.brand .logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #4f8bff, #a78bfa);
+  display: grid; place-items: center; font-weight: 700; color: white;
+  font-size: 13px; box-shadow: var(--shadow);
+}
+.brand .title { font-weight: 700; font-size: 14px; }
+.brand .sub { color: var(--muted); font-size: 11px; }
+nav.toc { font-size: 13px; }
+nav.toc h4 {
+  color: var(--muted); margin: 16px 0 6px;
+  text-transform: uppercase; letter-spacing: .14em;
+  font-size: 10px; font-weight: 700;
+}
+nav.toc a {
+  display: block; color: var(--text); padding: 6px 10px;
+  border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+  line-height: 1.4;
+}
+nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+main.content { padding: 48px 56px 96px; max-width: 980px; width: 100%; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+}
+header.hero .eyebrow { color: var(--accent-2); font-size: 12px; letter-spacing: .2em; font-weight: 700; text-transform: uppercase; }
+header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+header.hero .meta code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+article.html-body { color: #d8e0f7; }
+article.html-body h2 { font-size: 1.35rem; margin: 2.4em 0 0.6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px; }
+article.html-body h3 { font-size: 1.1rem; margin: 1.6em 0 0.5em; color: var(--accent-2); scroll-margin-top: 24px; }
+article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+article.html-body p { margin: 0.75em 0; }
+article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+article.html-body li { margin: 0.35em 0; }
+article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+article.html-body table { width: 100%; border-collapse: collapse; margin: 1em 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13px; }
+article.html-body th, article.html-body td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+article.html-body th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+article.html-body tr:last-child td { border-bottom: 0; }
+article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+article.html-body pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 1em 0; }
+article.html-body code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+article.html-body pre code { background: none; border: none; padding: 0; }
+.badge { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .06em; background: rgba(79,139,255,.15); color: var(--accent-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.badge.final { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.dev { background: rgba(167,139,250,.16); color: #a78bfa; }
+.callout { border-left: 3px solid var(--accent); background: rgba(79,139,255,.08); padding: 12px 16px; border-radius: 8px; margin: 1em 0; }
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout.danger { border-left-color: #f87171; background: rgba(248,113,113,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+  main.content { padding: 28px 20px 80px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Decisions · DEC-018</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../html/index.html">← ドキュメント一覧</a>
+      <a href="MASTER.html">↑ マスター仕様書</a>
+      <h4>関連 AREA</h4>
+      <a href="AREA-02-frontend.html">AREA-02 — フロントエンド</a>
+      <h4>DEC-018</h4>
+      <a href="#context">コンテキスト</a>
+      <a href="#decision">決定事項</a>
+      <a href="#comparison">選択肢と比較</a>
+      <a href="#impact">影響範囲</a>
+      <a href="#notes">備考</a>
+      <a href="#followup-2026-07-08">後続変更（2026-07-08）</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DECISIONS · DEC-018</div>
+      <h1>DEC-018 — フロントエンド: D3.js 依存追加と未実装ページ対応</h1>
+      <p class="meta">
+        日付: 2026-07-04　|　担当: Orchestrator　|　関連AREA: <code>AREA-02</code>　|　矛盾ID: S-6-A/B/C
+      </p>
+    </header>
+
+    <article class="html-body">
+
+<div class="callout danger">
+  <h4>ステータス: superseded（一部廃止）</h4>
+  <p>本 DEC は 2026-07-04 に accepted として決定されたが、2026-07-08 の後続変更により一部廃止（superseded）となった。詳細は本文末尾「後続変更（2026-07-08）」を参照。</p>
+</div>
+
+<table>
+<tr><td>日付</td><td>2026-07-04</td></tr>
+<tr><td>ステータス</td><td><s>accepted</s> → <b>superseded（一部廃止）</b></td></tr>
+<tr><td>担当</td><td>Orchestrator</td></tr>
+<tr><td>関連 AREA</td><td>AREA-02</td></tr>
+<tr><td>矛盾ID</td><td>S-6-A/B/C</td></tr>
+<tr><td>後続変更</td><td>2026-07-08: <code>/pedigree-map</code>・<code>/bloodline-cluster</code> 削除済み（下記参照）</td></tr>
+</table>
+
+<h2 id="context">コンテキスト</h2>
+<p>
+AREA-02 §5-1 は D3.js v7 を必須として血統マップ（<code>/pedigree-map</code>）に使用すると定義しているが、<code>frontend/package.json</code> に <code>d3</code> が未記載で <code>npm install</code> 後に使えない状態。また <code>/bloodline</code>（14分析タイプ）と <code>/ai-sla</code> の2ページが未実装で 404 になる。Next.js の API リライト先ポートはフロントエンドのデフォルトが 5000（Flask）に設定されており、FastAPI（8000）との混在時に混乱が生じる可能性がある。
+</p>
+
+<h2 id="decision">決定事項</h2>
+<ol>
+<li><code>frontend/package.json</code> に <code>d3@^7</code> を追加する。</li>
+<li><code>/bloodline</code> は空の <code>page.tsx</code>（"under construction" 表示）を作成し URL を有効化する。</li>
+<li><code>/ai-sla</code> は AREA-04 の Cron SLA 表をそのまま表示するシンプルな静的ページとして実装する。</li>
+<li><code>frontend/next.config.js</code> の <code>KEIBA_API_URL</code> デフォルトは <code>http://127.0.0.1:5000</code>（Flask）を維持する（DEC-013 と整合）。</li>
+</ol>
+
+<h2 id="comparison">選択肢と比較</h2>
+<table>
+<tr><th>選択肢</th><th>メリット</th><th>デメリット</th></tr>
+<tr><td>D3追加 + placeholder（採用）</td><td>依存欠落解消・ルーティング有効化</td><td>血統マップ完全実装は別タスク</td></tr>
+<tr><td>現状維持</td><td>工数ゼロ</td><td>血統マップが実行時エラー・ページが 404</td></tr>
+</table>
+
+<h2 id="impact">影響範囲</h2>
+<ul>
+<li><code>frontend/package.json</code> に <code>"d3": "^7.0.0"</code> 追加</li>
+<li><code>frontend/app/bloodline/page.tsx</code> 新規作成（placeholder）</li>
+<li><code>frontend/app/ai-sla/page.tsx</code> 新規作成（Cron SLA 静的表示）</li>
+</ul>
+
+<h2 id="notes">備考</h2>
+<p>
+血統マップの完全な D3.js フォースグラフ実装は Phase 3 以降の作業。本 DEC は依存関係欠落とルーティングの404を解消することのみを対象とする。
+</p>
+
+<h2 id="followup-2026-07-08">後続変更（2026-07-08）</h2>
+<p>
+本 DEC が対象とした2ページは、その後 UI として不要と判断され削除された。
+</p>
+<table>
+<tr><th>ページ</th><th>対応</th></tr>
+<tr><td><code>/pedigree-map</code>（血統構造マップ）</td><td><code>frontend/app/pedigree-map/</code> ディレクトリごと削除。D3.js フォースグラフ実装は未着手のまま廃止。</td></tr>
+<tr><td><code>/bloodline-cluster</code>（メタクラスタ判定）</td><td><code>frontend/app/bloodline-cluster/</code> ディレクトリごと削除。</td></tr>
+</table>
+<div class="callout warn">
+  <h4>決定事項2の扱い</h4>
+  <p>この変更により本 DEC の決定事項「2. <code>/bloodline</code> は空の <code>page.tsx</code> を作成し URL を有効化する」のうち <code>/pedigree-map</code> と <code>/bloodline-cluster</code> に関する部分は実質無効となった。D3.js 依存の追加（決定事項1）および <code>/ai-sla</code> の静的ページ実装（決定事項3）は引き続き有効。</p>
+</div>
+
+    </article>
+  </main>
+</div>
+</body>
+</html>

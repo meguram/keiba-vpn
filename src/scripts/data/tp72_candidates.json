@@ -1,0 +1,4433 @@
+{
+ "n_candidates": 881,
+ "tests_per_candidate": 2,
+ "n_tests": 1762,
+ "design": "第1段: 型ごとに勝ち・複勝の2アウトカムを片側検定（min(z_m, z_k) の BH）。発見2022-24、確認2025を1回、2026は記述のみ。BH は F1〜F20（ブロック1）と F21〜F23（血統×騎手。ブロック2）で別々に行い、全体の検定数も併記する。",
+ "part_c": {
+  "design": "穴馬（人気9番以下 / 単勝12倍以上 / 20倍以上）の好走（3着以内 / 1着）の共通要素。記述子の各水準を、同年・同オッズ帯の平均的な好走率との差で検定（レース単位クラスタ、BH）。6仕様。",
+  "universes": [
+   "pop>=9",
+   "odds>=12",
+   "odds>=20"
+  ],
+  "outcomes": [
+   "top3",
+   "win"
+  ],
+  "descriptor_file_sha256_16": "7e847a0c67661c2b"
+ },
+ "stage2": {
+  "design": "記述子のペア(i,j)の交互作用を、モデル残差に対して LOYO（2022-24）の外側年で測る。目的変数: 勝ち残差 / 複勝残差 / 穴馬(odds>=12)の複勝残差。BH。",
+  "n_descriptors": 43,
+  "n_pairs_max": 903,
+  "targets": 3,
+  "descriptor_file_sha256_16": "7e847a0c67661c2b"
+ },
+ "candidates": [
+  {
+   "family": "F1_sex_season",
+   "name": "male_spring",
+   "expr": "(sex=='牡') & (season=='spring')"
+  },
+  {
+   "family": "F1_sex_season",
+   "name": "male_summer",
+   "expr": "(sex=='牡') & (season=='summer')"
+  },
+  {
+   "family": "F1_sex_season",
+   "name": "male_autumn",
+   "expr": "(sex=='牡') & (season=='autumn')"
+  },
+  {
+   "family": "F1_sex_season",
+   "name": "male_winter",
+   "expr": "(sex=='牡') & (season=='winter')"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "male_m01",
+   "expr": "(sex=='牡') & (month==1)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "male_m02",
+   "expr": "(sex=='牡') & (month==2)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "male_m03",
+   "expr": "(sex=='牡') & (month==3)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "male_m04",
+   "expr": "(sex=='牡') & (month==4)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "male_m05",
+   "expr": "(sex=='牡') & (month==5)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "male_m06",
+   "expr": "(sex=='牡') & (month==6)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "male_m07",
+   "expr": "(sex=='牡') & (month==7)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "male_m08",
+   "expr": "(sex=='牡') & (month==8)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "male_m09",
+   "expr": "(sex=='牡') & (month==9)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "male_m10",
+   "expr": "(sex=='牡') & (month==10)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "male_m11",
+   "expr": "(sex=='牡') & (month==11)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "male_m12",
+   "expr": "(sex=='牡') & (month==12)"
+  },
+  {
+   "family": "F1_sex_season",
+   "name": "female_spring",
+   "expr": "(sex=='牝') & (season=='spring')"
+  },
+  {
+   "family": "F1_sex_season",
+   "name": "female_summer",
+   "expr": "(sex=='牝') & (season=='summer')"
+  },
+  {
+   "family": "F1_sex_season",
+   "name": "female_autumn",
+   "expr": "(sex=='牝') & (season=='autumn')"
+  },
+  {
+   "family": "F1_sex_season",
+   "name": "female_winter",
+   "expr": "(sex=='牝') & (season=='winter')"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "female_m01",
+   "expr": "(sex=='牝') & (month==1)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "female_m02",
+   "expr": "(sex=='牝') & (month==2)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "female_m03",
+   "expr": "(sex=='牝') & (month==3)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "female_m04",
+   "expr": "(sex=='牝') & (month==4)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "female_m05",
+   "expr": "(sex=='牝') & (month==5)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "female_m06",
+   "expr": "(sex=='牝') & (month==6)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "female_m07",
+   "expr": "(sex=='牝') & (month==7)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "female_m08",
+   "expr": "(sex=='牝') & (month==8)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "female_m09",
+   "expr": "(sex=='牝') & (month==9)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "female_m10",
+   "expr": "(sex=='牝') & (month==10)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "female_m11",
+   "expr": "(sex=='牝') & (month==11)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "female_m12",
+   "expr": "(sex=='牝') & (month==12)"
+  },
+  {
+   "family": "F1_sex_season",
+   "name": "gelding_spring",
+   "expr": "(sex=='セ') & (season=='spring')"
+  },
+  {
+   "family": "F1_sex_season",
+   "name": "gelding_summer",
+   "expr": "(sex=='セ') & (season=='summer')"
+  },
+  {
+   "family": "F1_sex_season",
+   "name": "gelding_autumn",
+   "expr": "(sex=='セ') & (season=='autumn')"
+  },
+  {
+   "family": "F1_sex_season",
+   "name": "gelding_winter",
+   "expr": "(sex=='セ') & (season=='winter')"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "gelding_m01",
+   "expr": "(sex=='セ') & (month==1)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "gelding_m02",
+   "expr": "(sex=='セ') & (month==2)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "gelding_m03",
+   "expr": "(sex=='セ') & (month==3)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "gelding_m04",
+   "expr": "(sex=='セ') & (month==4)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "gelding_m05",
+   "expr": "(sex=='セ') & (month==5)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "gelding_m06",
+   "expr": "(sex=='セ') & (month==6)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "gelding_m07",
+   "expr": "(sex=='セ') & (month==7)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "gelding_m08",
+   "expr": "(sex=='セ') & (month==8)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "gelding_m09",
+   "expr": "(sex=='セ') & (month==9)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "gelding_m10",
+   "expr": "(sex=='セ') & (month==10)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "gelding_m11",
+   "expr": "(sex=='セ') & (month==11)"
+  },
+  {
+   "family": "F2_sex_month",
+   "name": "gelding_m12",
+   "expr": "(sex=='セ') & (month==12)"
+  },
+  {
+   "family": "F3_female_summer",
+   "name": "female_summer_a3",
+   "expr": "(sex=='牝') & (is_summer==1) & (age_grp=='a3')"
+  },
+  {
+   "family": "F3_female_summer",
+   "name": "female_summer_a4p",
+   "expr": "(sex=='牝') & (is_summer==1) & (age_grp=='a4p')"
+  },
+  {
+   "family": "F3_female_summer",
+   "name": "female_summer_turf",
+   "expr": "(sex=='牝') & (is_summer==1) & (is_turf==1)"
+  },
+  {
+   "family": "F3_female_summer",
+   "name": "female_summer_dirt",
+   "expr": "(sex=='牝') & (is_summer==1) & (is_turf==0)"
+  },
+  {
+   "family": "F3_female_summer",
+   "name": "female_summer_local",
+   "expr": "(sex=='牝') & (is_summer==1) & (is_local==1)"
+  },
+  {
+   "family": "F3_female_summer",
+   "name": "female_summer_central",
+   "expr": "(sex=='牝') & (is_summer==1) & (is_local==0)"
+  },
+  {
+   "family": "F3_female_summer",
+   "name": "female_summer_a3_turf_local",
+   "expr": "(sex=='牝') & (is_summer==1) & (age_grp=='a3') & (is_turf==1) & (is_local==1)"
+  },
+  {
+   "family": "F3_female_summer",
+   "name": "female_summer_a3_turf_central",
+   "expr": "(sex=='牝') & (is_summer==1) & (age_grp=='a3') & (is_turf==1) & (is_local==0)"
+  },
+  {
+   "family": "F3_female_summer",
+   "name": "female_summer_a3_dirt_local",
+   "expr": "(sex=='牝') & (is_summer==1) & (age_grp=='a3') & (is_turf==0) & (is_local==1)"
+  },
+  {
+   "family": "F3_female_summer",
+   "name": "female_summer_a3_dirt_central",
+   "expr": "(sex=='牝') & (is_summer==1) & (age_grp=='a3') & (is_turf==0) & (is_local==0)"
+  },
+  {
+   "family": "F3_female_summer",
+   "name": "female_summer_a4p_turf_local",
+   "expr": "(sex=='牝') & (is_summer==1) & (age_grp=='a4p') & (is_turf==1) & (is_local==1)"
+  },
+  {
+   "family": "F3_female_summer",
+   "name": "female_summer_a4p_turf_central",
+   "expr": "(sex=='牝') & (is_summer==1) & (age_grp=='a4p') & (is_turf==1) & (is_local==0)"
+  },
+  {
+   "family": "F3_female_summer",
+   "name": "female_summer_a4p_dirt_local",
+   "expr": "(sex=='牝') & (is_summer==1) & (age_grp=='a4p') & (is_turf==0) & (is_local==1)"
+  },
+  {
+   "family": "F3_female_summer",
+   "name": "female_summer_a4p_dirt_central",
+   "expr": "(sex=='牝') & (is_summer==1) & (age_grp=='a4p') & (is_turf==0) & (is_local==0)"
+  },
+  {
+   "family": "F4_age_season",
+   "name": "a3_summer_prev2_top3",
+   "expr": "(age==3) & (is_summer==1) & (prev_fin<=3) & (prev2_fin<=3)"
+  },
+  {
+   "family": "F4_age_season",
+   "name": "a3_summer_prev_win",
+   "expr": "(age==3) & (is_summer==1) & (prev_fin==1)"
+  },
+  {
+   "family": "F4_age_season",
+   "name": "a4p_summer_rest90",
+   "expr": "(age>=4) & (is_summer==1) & (lay_days>=90)"
+  },
+  {
+   "family": "F4_age_season",
+   "name": "a4p_summer_rest180",
+   "expr": "(age>=4) & (is_summer==1) & (lay_days>=180)"
+  },
+  {
+   "family": "F4_age_season",
+   "name": "a3_summer_rest90",
+   "expr": "(age==3) & (is_summer==1) & (lay_days>=90)"
+  },
+  {
+   "family": "F4_age_season",
+   "name": "female_a4p_summer_rest90",
+   "expr": "(sex=='牝') & (age>=4) & (is_summer==1) & (lay_days>=90)"
+  },
+  {
+   "family": "F5_sire_cond",
+   "name": "sire_summer_aff0.05",
+   "expr": "(sire_summer_aff>=0.05) & (is_summer==1)"
+  },
+  {
+   "family": "F5_sire_cond",
+   "name": "sire_winter_aff0.05",
+   "expr": "(sire_winter_aff>=0.05) & (season=='winter')"
+  },
+  {
+   "family": "F5_sire_cond",
+   "name": "sire_hard_aff0.05",
+   "expr": "(sire_hard_aff>=0.05) & (cush_bin==2)"
+  },
+  {
+   "family": "F5_sire_cond",
+   "name": "sire_soft_aff0.05",
+   "expr": "(sire_soft_aff>=0.05) & (cush_bin==0)"
+  },
+  {
+   "family": "F5_sire_cond",
+   "name": "sire_summer_aff0.1",
+   "expr": "(sire_summer_aff>=0.1) & (is_summer==1)"
+  },
+  {
+   "family": "F5_sire_cond",
+   "name": "sire_winter_aff0.1",
+   "expr": "(sire_winter_aff>=0.1) & (season=='winter')"
+  },
+  {
+   "family": "F5_sire_cond",
+   "name": "sire_hard_aff0.1",
+   "expr": "(sire_hard_aff>=0.1) & (cush_bin==2)"
+  },
+  {
+   "family": "F5_sire_cond",
+   "name": "sire_soft_aff0.1",
+   "expr": "(sire_soft_aff>=0.1) & (cush_bin==0)"
+  },
+  {
+   "family": "F6_horse_season",
+   "name": "seas_aff0.25",
+   "expr": "seas_aff>=0.25"
+  },
+  {
+   "family": "F6_horse_season",
+   "name": "seas_aff0.25_summer",
+   "expr": "(seas_aff>=0.25) & (season=='summer')"
+  },
+  {
+   "family": "F6_horse_season",
+   "name": "seas_aff0.25_winter",
+   "expr": "(seas_aff>=0.25) & (season=='winter')"
+  },
+  {
+   "family": "F6_horse_season",
+   "name": "seas_aff0.4",
+   "expr": "seas_aff>=0.4"
+  },
+  {
+   "family": "F6_horse_season",
+   "name": "seas_aff0.4_summer",
+   "expr": "(seas_aff>=0.4) & (season=='summer')"
+  },
+  {
+   "family": "F6_horse_season",
+   "name": "seas_aff0.4_winter",
+   "expr": "(seas_aff>=0.4) & (season=='winter')"
+  },
+  {
+   "family": "F7_weight",
+   "name": "winter_dw_up",
+   "expr": "(season=='winter') & (weight_change>=10)"
+  },
+  {
+   "family": "F7_weight",
+   "name": "all_dw_up",
+   "expr": "weight_change>=10"
+  },
+  {
+   "family": "F7_weight",
+   "name": "winter_dw_down",
+   "expr": "(season=='winter') & (weight_change<=-10)"
+  },
+  {
+   "family": "F7_weight",
+   "name": "all_dw_down",
+   "expr": "weight_change<=-10"
+  },
+  {
+   "family": "F7_weight",
+   "name": "winter_dev_up",
+   "expr": "(season=='winter') & (wt_dev>=8)"
+  },
+  {
+   "family": "F7_weight",
+   "name": "all_dev_up",
+   "expr": "wt_dev>=8"
+  },
+  {
+   "family": "F7_weight",
+   "name": "winter_dev_down",
+   "expr": "(season=='winter') & (wt_dev<=-8)"
+  },
+  {
+   "family": "F7_weight",
+   "name": "all_dev_down",
+   "expr": "wt_dev<=-8"
+  },
+  {
+   "family": "F9_local",
+   "name": "t_local_aff0.05",
+   "expr": "(t_local_aff>=0.05) & (is_local==1)"
+  },
+  {
+   "family": "F9_local",
+   "name": "j_local_aff0.05",
+   "expr": "(j_local_aff>=0.05) & (is_local==1)"
+  },
+  {
+   "family": "F9_local",
+   "name": "t_local_aff0.05_summer",
+   "expr": "(t_local_aff>=0.05) & (is_local==1) & (is_summer==1)"
+  },
+  {
+   "family": "F9_local",
+   "name": "j_local_aff0.05_summer",
+   "expr": "(j_local_aff>=0.05) & (is_local==1) & (is_summer==1)"
+  },
+  {
+   "family": "F9_local",
+   "name": "t_local_aff0.1",
+   "expr": "(t_local_aff>=0.1) & (is_local==1)"
+  },
+  {
+   "family": "F9_local",
+   "name": "j_local_aff0.1",
+   "expr": "(j_local_aff>=0.1) & (is_local==1)"
+  },
+  {
+   "family": "F9_local",
+   "name": "t_local_aff0.1_summer",
+   "expr": "(t_local_aff>=0.1) & (is_local==1) & (is_summer==1)"
+  },
+  {
+   "family": "F9_local",
+   "name": "j_local_aff0.1_summer",
+   "expr": "(j_local_aff>=0.1) & (is_local==1) & (is_summer==1)"
+  },
+  {
+   "family": "F9_local",
+   "name": "tj_local_aff0.05",
+   "expr": "(t_local_aff>=0.05) & (j_local_aff>=0.05) & (is_local==1)"
+  },
+  {
+   "family": "F10_meeting",
+   "name": "day1",
+   "expr": "day_no==1"
+  },
+  {
+   "family": "F10_meeting",
+   "name": "day1_turf",
+   "expr": "(day_no==1) & (is_turf==1)"
+  },
+  {
+   "family": "F10_meeting",
+   "name": "day1_dirt",
+   "expr": "(day_no==1) & (is_turf==0)"
+  },
+  {
+   "family": "F10_meeting",
+   "name": "first_week",
+   "expr": "day_no<=2"
+  },
+  {
+   "family": "F10_meeting",
+   "name": "first_week_turf",
+   "expr": "(day_no<=2) & (is_turf==1)"
+  },
+  {
+   "family": "F10_meeting",
+   "name": "first_week_dirt",
+   "expr": "(day_no<=2) & (is_turf==0)"
+  },
+  {
+   "family": "F10_meeting",
+   "name": "last_week",
+   "expr": "day_no>=day_max-1"
+  },
+  {
+   "family": "F10_meeting",
+   "name": "last_week_turf",
+   "expr": "(day_no>=day_max-1) & (is_turf==1)"
+  },
+  {
+   "family": "F10_meeting",
+   "name": "last_week_dirt",
+   "expr": "(day_no>=day_max-1) & (is_turf==0)"
+  },
+  {
+   "family": "F10_meeting",
+   "name": "first_week_turf_inner",
+   "expr": "(day_no<=2) & (is_turf==1) & (inner==1)"
+  },
+  {
+   "family": "F10_meeting",
+   "name": "first_week_turf_outer",
+   "expr": "(day_no<=2) & (is_turf==1) & (outer==1)"
+  },
+  {
+   "family": "F10_meeting",
+   "name": "first_week_turf_front",
+   "expr": "(day_no<=2) & (is_turf==1) & (style_grp=='front')"
+  },
+  {
+   "family": "F10_meeting",
+   "name": "first_week_turf_closer",
+   "expr": "(day_no<=2) & (is_turf==1) & (style_grp=='closer')"
+  },
+  {
+   "family": "F10_meeting",
+   "name": "last_week_turf_inner",
+   "expr": "(day_no>=day_max-1) & (is_turf==1) & (inner==1)"
+  },
+  {
+   "family": "F10_meeting",
+   "name": "last_week_turf_outer",
+   "expr": "(day_no>=day_max-1) & (is_turf==1) & (outer==1)"
+  },
+  {
+   "family": "F10_meeting",
+   "name": "last_week_turf_front",
+   "expr": "(day_no>=day_max-1) & (is_turf==1) & (style_grp=='front')"
+  },
+  {
+   "family": "F10_meeting",
+   "name": "last_week_turf_closer",
+   "expr": "(day_no>=day_max-1) & (is_turf==1) & (style_grp=='closer')"
+  },
+  {
+   "family": "F11_g1",
+   "name": "g1day_notg1",
+   "expr": "(is_g1_day==1) & (~grade.astype('str').str.contains('G1|GI|Ｇ１'))"
+  },
+  {
+   "family": "F11_g1",
+   "name": "g1day_notg1_turf",
+   "expr": "((is_g1_day==1) & (~grade.astype('str').str.contains('G1|GI|Ｇ１'))) & (is_turf==1)"
+  },
+  {
+   "family": "F11_g1",
+   "name": "g1day_notg1_dirt",
+   "expr": "((is_g1_day==1) & (~grade.astype('str').str.contains('G1|GI|Ｇ１'))) & (is_turf==0)"
+  },
+  {
+   "family": "F11_g1",
+   "name": "before_g1",
+   "expr": "d_before_g1==1"
+  },
+  {
+   "family": "F11_g1",
+   "name": "before_g1_turf",
+   "expr": "(d_before_g1==1) & (is_turf==1)"
+  },
+  {
+   "family": "F11_g1",
+   "name": "before_g1_dirt",
+   "expr": "(d_before_g1==1) & (is_turf==0)"
+  },
+  {
+   "family": "F11_g1",
+   "name": "after_g1",
+   "expr": "d_after_g1==1"
+  },
+  {
+   "family": "F11_g1",
+   "name": "after_g1_turf",
+   "expr": "(d_after_g1==1) & (is_turf==1)"
+  },
+  {
+   "family": "F11_g1",
+   "name": "after_g1_dirt",
+   "expr": "(d_after_g1==1) & (is_turf==0)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush0_front_inner",
+   "expr": "(cush_bin==0) & (style_grp=='front') & (inner==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush0_front_mid",
+   "expr": "(cush_bin==0) & (style_grp=='front') & ((inner==0)&(outer==0))"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush0_front_outer",
+   "expr": "(cush_bin==0) & (style_grp=='front') & (outer==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush0_mid_inner",
+   "expr": "(cush_bin==0) & (style_grp=='mid') & (inner==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush0_mid_mid",
+   "expr": "(cush_bin==0) & (style_grp=='mid') & ((inner==0)&(outer==0))"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush0_mid_outer",
+   "expr": "(cush_bin==0) & (style_grp=='mid') & (outer==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush0_closer_inner",
+   "expr": "(cush_bin==0) & (style_grp=='closer') & (inner==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush0_closer_mid",
+   "expr": "(cush_bin==0) & (style_grp=='closer') & ((inner==0)&(outer==0))"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush0_closer_outer",
+   "expr": "(cush_bin==0) & (style_grp=='closer') & (outer==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush1_front_inner",
+   "expr": "(cush_bin==1) & (style_grp=='front') & (inner==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush1_front_mid",
+   "expr": "(cush_bin==1) & (style_grp=='front') & ((inner==0)&(outer==0))"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush1_front_outer",
+   "expr": "(cush_bin==1) & (style_grp=='front') & (outer==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush1_mid_inner",
+   "expr": "(cush_bin==1) & (style_grp=='mid') & (inner==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush1_mid_mid",
+   "expr": "(cush_bin==1) & (style_grp=='mid') & ((inner==0)&(outer==0))"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush1_mid_outer",
+   "expr": "(cush_bin==1) & (style_grp=='mid') & (outer==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush1_closer_inner",
+   "expr": "(cush_bin==1) & (style_grp=='closer') & (inner==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush1_closer_mid",
+   "expr": "(cush_bin==1) & (style_grp=='closer') & ((inner==0)&(outer==0))"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush1_closer_outer",
+   "expr": "(cush_bin==1) & (style_grp=='closer') & (outer==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush2_front_inner",
+   "expr": "(cush_bin==2) & (style_grp=='front') & (inner==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush2_front_mid",
+   "expr": "(cush_bin==2) & (style_grp=='front') & ((inner==0)&(outer==0))"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush2_front_outer",
+   "expr": "(cush_bin==2) & (style_grp=='front') & (outer==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush2_mid_inner",
+   "expr": "(cush_bin==2) & (style_grp=='mid') & (inner==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush2_mid_mid",
+   "expr": "(cush_bin==2) & (style_grp=='mid') & ((inner==0)&(outer==0))"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush2_mid_outer",
+   "expr": "(cush_bin==2) & (style_grp=='mid') & (outer==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush2_closer_inner",
+   "expr": "(cush_bin==2) & (style_grp=='closer') & (inner==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush2_closer_mid",
+   "expr": "(cush_bin==2) & (style_grp=='closer') & ((inner==0)&(outer==0))"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_cush2_closer_outer",
+   "expr": "(cush_bin==2) & (style_grp=='closer') & (outer==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist0_front_inner",
+   "expr": "(dmoist_bin==0) & (style_grp=='front') & (inner==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist0_front_mid",
+   "expr": "(dmoist_bin==0) & (style_grp=='front') & ((inner==0)&(outer==0))"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist0_front_outer",
+   "expr": "(dmoist_bin==0) & (style_grp=='front') & (outer==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist0_mid_inner",
+   "expr": "(dmoist_bin==0) & (style_grp=='mid') & (inner==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist0_mid_mid",
+   "expr": "(dmoist_bin==0) & (style_grp=='mid') & ((inner==0)&(outer==0))"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist0_mid_outer",
+   "expr": "(dmoist_bin==0) & (style_grp=='mid') & (outer==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist0_closer_inner",
+   "expr": "(dmoist_bin==0) & (style_grp=='closer') & (inner==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist0_closer_mid",
+   "expr": "(dmoist_bin==0) & (style_grp=='closer') & ((inner==0)&(outer==0))"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist0_closer_outer",
+   "expr": "(dmoist_bin==0) & (style_grp=='closer') & (outer==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist1_front_inner",
+   "expr": "(dmoist_bin==1) & (style_grp=='front') & (inner==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist1_front_mid",
+   "expr": "(dmoist_bin==1) & (style_grp=='front') & ((inner==0)&(outer==0))"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist1_front_outer",
+   "expr": "(dmoist_bin==1) & (style_grp=='front') & (outer==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist1_mid_inner",
+   "expr": "(dmoist_bin==1) & (style_grp=='mid') & (inner==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist1_mid_mid",
+   "expr": "(dmoist_bin==1) & (style_grp=='mid') & ((inner==0)&(outer==0))"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist1_mid_outer",
+   "expr": "(dmoist_bin==1) & (style_grp=='mid') & (outer==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist1_closer_inner",
+   "expr": "(dmoist_bin==1) & (style_grp=='closer') & (inner==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist1_closer_mid",
+   "expr": "(dmoist_bin==1) & (style_grp=='closer') & ((inner==0)&(outer==0))"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist1_closer_outer",
+   "expr": "(dmoist_bin==1) & (style_grp=='closer') & (outer==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist2_front_inner",
+   "expr": "(dmoist_bin==2) & (style_grp=='front') & (inner==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist2_front_mid",
+   "expr": "(dmoist_bin==2) & (style_grp=='front') & ((inner==0)&(outer==0))"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist2_front_outer",
+   "expr": "(dmoist_bin==2) & (style_grp=='front') & (outer==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist2_mid_inner",
+   "expr": "(dmoist_bin==2) & (style_grp=='mid') & (inner==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist2_mid_mid",
+   "expr": "(dmoist_bin==2) & (style_grp=='mid') & ((inner==0)&(outer==0))"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist2_mid_outer",
+   "expr": "(dmoist_bin==2) & (style_grp=='mid') & (outer==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist2_closer_inner",
+   "expr": "(dmoist_bin==2) & (style_grp=='closer') & (inner==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist2_closer_mid",
+   "expr": "(dmoist_bin==2) & (style_grp=='closer') & ((inner==0)&(outer==0))"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "dirt_moist2_closer_outer",
+   "expr": "(dmoist_bin==2) & (style_grp=='closer') & (outer==1)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_moist0_front",
+   "expr": "(tmoist_bin==0) & (style_grp=='front')"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_moist0_mid",
+   "expr": "(tmoist_bin==0) & (style_grp=='mid')"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_moist0_closer",
+   "expr": "(tmoist_bin==0) & (style_grp=='closer')"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_moist1_front",
+   "expr": "(tmoist_bin==1) & (style_grp=='front')"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_moist1_mid",
+   "expr": "(tmoist_bin==1) & (style_grp=='mid')"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_moist1_closer",
+   "expr": "(tmoist_bin==1) & (style_grp=='closer')"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_moist2_front",
+   "expr": "(tmoist_bin==2) & (style_grp=='front')"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_moist2_mid",
+   "expr": "(tmoist_bin==2) & (style_grp=='mid')"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "turf_moist2_closer",
+   "expr": "(tmoist_bin==2) & (style_grp=='closer')"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "cush_harder_front",
+   "expr": "(cush_delta_day>=1.0) & (is_turf==1) & (style_grp=='front')"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "cush_harder_closer",
+   "expr": "(cush_delta_day>=1.0) & (is_turf==1) & (style_grp=='closer')"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "cush_softer_front",
+   "expr": "(cush_delta_day<=-1.0) & (is_turf==1) & (style_grp=='front')"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "cush_softer_closer",
+   "expr": "(cush_delta_day<=-1.0) & (is_turf==1) & (style_grp=='closer')"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "pref_hard0.15_today_hard",
+   "expr": "(pref_hard>=0.15) & (cush_bin==2)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "pref_soft0.15_today_soft",
+   "expr": "(pref_hard<=-0.15) & (cush_bin==0)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "pref_hard0.25_today_hard",
+   "expr": "(pref_hard>=0.25) & (cush_bin==2)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "pref_soft0.25_today_soft",
+   "expr": "(pref_hard<=-0.25) & (cush_bin==0)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "today_harder_than_last_by2",
+   "expr": "(is_turf==1) & (cushion_value-prev_cush>=2)"
+  },
+  {
+   "family": "F12_cushion",
+   "name": "today_softer_than_last_by2",
+   "expr": "(is_turf==1) & (cushion_value-prev_cush<=-2)"
+  },
+  {
+   "family": "F13_pace",
+   "name": "lone_front",
+   "expr": "(front==1)&(n_front==1)"
+  },
+  {
+   "family": "F13_pace",
+   "name": "lone_front_turf",
+   "expr": "((front==1)&(n_front==1)) & (is_turf==1)"
+  },
+  {
+   "family": "F13_pace",
+   "name": "lone_front_dirt",
+   "expr": "((front==1)&(n_front==1)) & (is_turf==0)"
+  },
+  {
+   "family": "F13_pace",
+   "name": "front_crowd_closer",
+   "expr": "(closer==1)&(n_front>=3)"
+  },
+  {
+   "family": "F13_pace",
+   "name": "front_crowd_closer_turf",
+   "expr": "((closer==1)&(n_front>=3)) & (is_turf==1)"
+  },
+  {
+   "family": "F13_pace",
+   "name": "front_crowd_closer_dirt",
+   "expr": "((closer==1)&(n_front>=3)) & (is_turf==0)"
+  },
+  {
+   "family": "F13_pace",
+   "name": "front_crowd_mid",
+   "expr": "(style_grp=='mid')&(n_front>=3)"
+  },
+  {
+   "family": "F13_pace",
+   "name": "front_crowd_mid_turf",
+   "expr": "((style_grp=='mid')&(n_front>=3)) & (is_turf==1)"
+  },
+  {
+   "family": "F13_pace",
+   "name": "front_crowd_mid_dirt",
+   "expr": "((style_grp=='mid')&(n_front>=3)) & (is_turf==0)"
+  },
+  {
+   "family": "F13_pace",
+   "name": "lone_front_bigfield",
+   "expr": "(front==1)&(n_front<=1)&(fs>=12)"
+  },
+  {
+   "family": "F13_pace",
+   "name": "lone_front_bigfield_turf",
+   "expr": "((front==1)&(n_front<=1)&(fs>=12)) & (is_turf==1)"
+  },
+  {
+   "family": "F13_pace",
+   "name": "lone_front_bigfield_dirt",
+   "expr": "((front==1)&(n_front<=1)&(fs>=12)) & (is_turf==0)"
+  },
+  {
+   "family": "F13_pace",
+   "name": "closer_crowd_front",
+   "expr": "(front==1)&(n_closer>=5)"
+  },
+  {
+   "family": "F13_pace",
+   "name": "closer_crowd_front_turf",
+   "expr": "((front==1)&(n_closer>=5)) & (is_turf==1)"
+  },
+  {
+   "family": "F13_pace",
+   "name": "closer_crowd_front_dirt",
+   "expr": "((front==1)&(n_closer>=5)) & (is_turf==0)"
+  },
+  {
+   "family": "F14_prev",
+   "name": "prev_agari_top2_fin6p",
+   "expr": "(prev_agari_rank<=2)&(prev_fin>=6)"
+  },
+  {
+   "family": "F14_prev",
+   "name": "prev_agari_top2_fin6p_turf",
+   "expr": "((prev_agari_rank<=2)&(prev_fin>=6)) & (is_turf==1)"
+  },
+  {
+   "family": "F14_prev",
+   "name": "prev_agari_top2_fin6p_dirt",
+   "expr": "((prev_agari_rank<=2)&(prev_fin>=6)) & (is_turf==0)"
+  },
+  {
+   "family": "F14_prev",
+   "name": "prev_agari1_fin4p",
+   "expr": "(prev_agari_rank==1)&(prev_fin>=4)"
+  },
+  {
+   "family": "F14_prev",
+   "name": "prev_agari1_fin4p_turf",
+   "expr": "((prev_agari_rank==1)&(prev_fin>=4)) & (is_turf==1)"
+  },
+  {
+   "family": "F14_prev",
+   "name": "prev_agari1_fin4p_dirt",
+   "expr": "((prev_agari_rank==1)&(prev_fin>=4)) & (is_turf==0)"
+  },
+  {
+   "family": "F14_prev",
+   "name": "prev_late_agari3",
+   "expr": "(prev_posL_frac>=0.7)&(prev_agari_rank<=3)"
+  },
+  {
+   "family": "F14_prev",
+   "name": "prev_late_agari3_turf",
+   "expr": "((prev_posL_frac>=0.7)&(prev_agari_rank<=3)) & (is_turf==1)"
+  },
+  {
+   "family": "F14_prev",
+   "name": "prev_late_agari3_dirt",
+   "expr": "((prev_posL_frac>=0.7)&(prev_agari_rank<=3)) & (is_turf==0)"
+  },
+  {
+   "family": "F14_prev",
+   "name": "prev_pop3_fin10p",
+   "expr": "(prev_pop<=3)&(prev_fin>=10)"
+  },
+  {
+   "family": "F14_prev",
+   "name": "prev_pop3_fin10p_turf",
+   "expr": "((prev_pop<=3)&(prev_fin>=10)) & (is_turf==1)"
+  },
+  {
+   "family": "F14_prev",
+   "name": "prev_pop3_fin10p_dirt",
+   "expr": "((prev_pop<=3)&(prev_fin>=10)) & (is_turf==0)"
+  },
+  {
+   "family": "F14_prev",
+   "name": "prev_pop3_fin7p",
+   "expr": "(prev_pop<=3)&(prev_fin>=7)"
+  },
+  {
+   "family": "F14_prev",
+   "name": "prev_pop3_fin7p_turf",
+   "expr": "((prev_pop<=3)&(prev_fin>=7)) & (is_turf==1)"
+  },
+  {
+   "family": "F14_prev",
+   "name": "prev_pop3_fin7p_dirt",
+   "expr": "((prev_pop<=3)&(prev_fin>=7)) & (is_turf==0)"
+  },
+  {
+   "family": "F14_prev",
+   "name": "prev_pop10p_top3",
+   "expr": "(prev_pop>=10)&(prev_fin<=3)"
+  },
+  {
+   "family": "F14_prev",
+   "name": "prev_pop10p_top3_turf",
+   "expr": "((prev_pop>=10)&(prev_fin<=3)) & (is_turf==1)"
+  },
+  {
+   "family": "F14_prev",
+   "name": "prev_pop10p_top3_dirt",
+   "expr": "((prev_pop>=10)&(prev_fin<=3)) & (is_turf==0)"
+  },
+  {
+   "family": "F15_misc",
+   "name": "first_turf",
+   "expr": "(first_surface==1) & (is_turf==1)"
+  },
+  {
+   "family": "F15_misc",
+   "name": "first_dirt",
+   "expr": "(first_surface==1) & (is_turf==0)"
+  },
+  {
+   "family": "F15_misc",
+   "name": "dist_up200",
+   "expr": "dist_chg>=200"
+  },
+  {
+   "family": "F15_misc",
+   "name": "dist_up400",
+   "expr": "dist_chg>=400"
+  },
+  {
+   "family": "F15_misc",
+   "name": "dist_dn200",
+   "expr": "dist_chg<=-200"
+  },
+  {
+   "family": "F15_misc",
+   "name": "dist_dn400",
+   "expr": "dist_chg<=-400"
+  },
+  {
+   "family": "F15_misc",
+   "name": "jw_dn2",
+   "expr": "jw_chg<=-2"
+  },
+  {
+   "family": "F15_misc",
+   "name": "jw_up2",
+   "expr": "jw_chg>=2"
+  },
+  {
+   "family": "F15_misc",
+   "name": "jw_dn3",
+   "expr": "jw_chg<=-3"
+  },
+  {
+   "family": "F15_misc",
+   "name": "jw_up3",
+   "expr": "jw_chg>=3"
+  },
+  {
+   "family": "F15_misc",
+   "name": "fs_le9",
+   "expr": "fs<=9"
+  },
+  {
+   "family": "F15_misc",
+   "name": "fs_ge16",
+   "expr": "fs>=16"
+  },
+  {
+   "family": "F15_misc",
+   "name": "fs_ge14_inner",
+   "expr": "(fs>=14)&(inner==1)"
+  },
+  {
+   "family": "F15_misc",
+   "name": "fs_ge14_outer",
+   "expr": "(fs>=14)&(outer==1)"
+  },
+  {
+   "family": "F15_misc",
+   "name": "lay_le13",
+   "expr": "(lay_days<=13)&(run_no>0)"
+  },
+  {
+   "family": "F15_misc",
+   "name": "lay_14_27",
+   "expr": "(lay_days>=14)&(lay_days<=27)&(run_no>0)"
+  },
+  {
+   "family": "F15_misc",
+   "name": "lay_28_62",
+   "expr": "(lay_days>=28)&(lay_days<=62)"
+  },
+  {
+   "family": "F15_misc",
+   "name": "lay_63_119",
+   "expr": "(lay_days>=63)&(lay_days<=119)"
+  },
+  {
+   "family": "F15_misc",
+   "name": "lay_120_365",
+   "expr": "(lay_days>=120)&(lay_days<=365)"
+  },
+  {
+   "family": "F15_misc",
+   "name": "lay_gt365",
+   "expr": "lay_days>365"
+  },
+  {
+   "family": "F15_misc",
+   "name": "debut",
+   "expr": "run_no==0"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_pin",
+   "expr": "(d1_pin==1) & (d1_self_nl==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_p1",
+   "expr": "(d1_p1==1) & (d1_self_nl==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_edge",
+   "expr": "(d1_edge==1) & (d1_self_nl==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_in1",
+   "expr": "(d1_in1==1) & (d1_self_nl==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_any",
+   "expr": "(d1_cnt>=1) & (d1_self_nl==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_pin",
+   "expr": "(d2_pin==1) & (d2_self_nl==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_p1",
+   "expr": "(d2_p1==1) & (d2_self_nl==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_edge",
+   "expr": "(d2_edge==1) & (d2_self_nl==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_in1",
+   "expr": "(d2_in1==1) & (d2_self_nl==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_any",
+   "expr": "(d2_cnt>=1) & (d2_self_nl==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d3_pin",
+   "expr": "(d3_pin==1) & (d3_self_nl==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d3_p1",
+   "expr": "(d3_p1==1) & (d3_self_nl==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d3_edge",
+   "expr": "(d3_edge==1) & (d3_self_nl==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d3_in1",
+   "expr": "(d3_in1==1) & (d3_self_nl==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d3_any",
+   "expr": "(d3_cnt>=1) & (d3_self_nl==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_pin_front",
+   "expr": "((d1_pin==1) & (d1_self_nl==1)) & (style_grp=='front')"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_pin_mid",
+   "expr": "((d1_pin==1) & (d1_self_nl==1)) & (style_grp=='mid')"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_pin_closer",
+   "expr": "((d1_pin==1) & (d1_self_nl==1)) & (style_grp=='closer')"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_pin_turf",
+   "expr": "((d1_pin==1) & (d1_self_nl==1)) & (is_turf==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_pin_dirt",
+   "expr": "((d1_pin==1) & (d1_self_nl==1)) & (is_turf==0)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_pin_sprint",
+   "expr": "((d1_pin==1) & (d1_self_nl==1)) & ((dist_band=='d_sprint'))"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_pin_mile",
+   "expr": "((d1_pin==1) & (d1_self_nl==1)) & ((dist_band=='d_mile_s')|(dist_band=='d_mile'))"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_pin_mid_long",
+   "expr": "((d1_pin==1) & (d1_self_nl==1)) & ((dist_band=='d_mid')|(dist_band=='d_long'))"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_pin_bigfield",
+   "expr": "((d1_pin==1) & (d1_self_nl==1)) & (fs>=14)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_pin_cush0",
+   "expr": "((d1_pin==1) & (d1_self_nl==1)) & (cush_bin==0)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_pin_cush1",
+   "expr": "((d1_pin==1) & (d1_self_nl==1)) & (cush_bin==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_pin_cush2",
+   "expr": "((d1_pin==1) & (d1_self_nl==1)) & (cush_bin==2)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_p1_front",
+   "expr": "((d1_p1==1) & (d1_self_nl==1)) & (style_grp=='front')"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_p1_mid",
+   "expr": "((d1_p1==1) & (d1_self_nl==1)) & (style_grp=='mid')"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_p1_closer",
+   "expr": "((d1_p1==1) & (d1_self_nl==1)) & (style_grp=='closer')"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_p1_turf",
+   "expr": "((d1_p1==1) & (d1_self_nl==1)) & (is_turf==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_p1_dirt",
+   "expr": "((d1_p1==1) & (d1_self_nl==1)) & (is_turf==0)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_p1_sprint",
+   "expr": "((d1_p1==1) & (d1_self_nl==1)) & ((dist_band=='d_sprint'))"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_p1_mile",
+   "expr": "((d1_p1==1) & (d1_self_nl==1)) & ((dist_band=='d_mile_s')|(dist_band=='d_mile'))"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_p1_mid_long",
+   "expr": "((d1_p1==1) & (d1_self_nl==1)) & ((dist_band=='d_mid')|(dist_band=='d_long'))"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_p1_bigfield",
+   "expr": "((d1_p1==1) & (d1_self_nl==1)) & (fs>=14)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_p1_cush0",
+   "expr": "((d1_p1==1) & (d1_self_nl==1)) & (cush_bin==0)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_p1_cush1",
+   "expr": "((d1_p1==1) & (d1_self_nl==1)) & (cush_bin==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d1_p1_cush2",
+   "expr": "((d1_p1==1) & (d1_self_nl==1)) & (cush_bin==2)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_pin_front",
+   "expr": "((d2_pin==1) & (d2_self_nl==1)) & (style_grp=='front')"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_pin_mid",
+   "expr": "((d2_pin==1) & (d2_self_nl==1)) & (style_grp=='mid')"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_pin_closer",
+   "expr": "((d2_pin==1) & (d2_self_nl==1)) & (style_grp=='closer')"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_pin_turf",
+   "expr": "((d2_pin==1) & (d2_self_nl==1)) & (is_turf==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_pin_dirt",
+   "expr": "((d2_pin==1) & (d2_self_nl==1)) & (is_turf==0)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_pin_sprint",
+   "expr": "((d2_pin==1) & (d2_self_nl==1)) & ((dist_band=='d_sprint'))"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_pin_mile",
+   "expr": "((d2_pin==1) & (d2_self_nl==1)) & ((dist_band=='d_mile_s')|(dist_band=='d_mile'))"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_pin_mid_long",
+   "expr": "((d2_pin==1) & (d2_self_nl==1)) & ((dist_band=='d_mid')|(dist_band=='d_long'))"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_pin_bigfield",
+   "expr": "((d2_pin==1) & (d2_self_nl==1)) & (fs>=14)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_pin_cush0",
+   "expr": "((d2_pin==1) & (d2_self_nl==1)) & (cush_bin==0)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_pin_cush1",
+   "expr": "((d2_pin==1) & (d2_self_nl==1)) & (cush_bin==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_pin_cush2",
+   "expr": "((d2_pin==1) & (d2_self_nl==1)) & (cush_bin==2)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_p1_front",
+   "expr": "((d2_p1==1) & (d2_self_nl==1)) & (style_grp=='front')"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_p1_mid",
+   "expr": "((d2_p1==1) & (d2_self_nl==1)) & (style_grp=='mid')"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_p1_closer",
+   "expr": "((d2_p1==1) & (d2_self_nl==1)) & (style_grp=='closer')"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_p1_turf",
+   "expr": "((d2_p1==1) & (d2_self_nl==1)) & (is_turf==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_p1_dirt",
+   "expr": "((d2_p1==1) & (d2_self_nl==1)) & (is_turf==0)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_p1_sprint",
+   "expr": "((d2_p1==1) & (d2_self_nl==1)) & ((dist_band=='d_sprint'))"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_p1_mile",
+   "expr": "((d2_p1==1) & (d2_self_nl==1)) & ((dist_band=='d_mile_s')|(dist_band=='d_mile'))"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_p1_mid_long",
+   "expr": "((d2_p1==1) & (d2_self_nl==1)) & ((dist_band=='d_mid')|(dist_band=='d_long'))"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_p1_bigfield",
+   "expr": "((d2_p1==1) & (d2_self_nl==1)) & (fs>=14)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_p1_cush0",
+   "expr": "((d2_p1==1) & (d2_self_nl==1)) & (cush_bin==0)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_p1_cush1",
+   "expr": "((d2_p1==1) & (d2_self_nl==1)) & (cush_bin==1)"
+  },
+  {
+   "family": "F16_pincer",
+   "name": "d2_p1_cush2",
+   "expr": "((d2_p1==1) & (d2_self_nl==1)) & (cush_bin==2)"
+  },
+  {
+   "family": "F17_season_style",
+   "name": "spring_turf_front",
+   "expr": "(season=='spring') & (is_turf==1) & (style_grp=='front')"
+  },
+  {
+   "family": "F17_season_style",
+   "name": "spring_turf_closer",
+   "expr": "(season=='spring') & (is_turf==1) & (style_grp=='closer')"
+  },
+  {
+   "family": "F17_season_style",
+   "name": "spring_dirt_front",
+   "expr": "(season=='spring') & (is_turf==0) & (style_grp=='front')"
+  },
+  {
+   "family": "F17_season_style",
+   "name": "spring_dirt_closer",
+   "expr": "(season=='spring') & (is_turf==0) & (style_grp=='closer')"
+  },
+  {
+   "family": "F17_season_style",
+   "name": "summer_turf_front",
+   "expr": "(season=='summer') & (is_turf==1) & (style_grp=='front')"
+  },
+  {
+   "family": "F17_season_style",
+   "name": "summer_turf_closer",
+   "expr": "(season=='summer') & (is_turf==1) & (style_grp=='closer')"
+  },
+  {
+   "family": "F17_season_style",
+   "name": "summer_dirt_front",
+   "expr": "(season=='summer') & (is_turf==0) & (style_grp=='front')"
+  },
+  {
+   "family": "F17_season_style",
+   "name": "summer_dirt_closer",
+   "expr": "(season=='summer') & (is_turf==0) & (style_grp=='closer')"
+  },
+  {
+   "family": "F17_season_style",
+   "name": "autumn_turf_front",
+   "expr": "(season=='autumn') & (is_turf==1) & (style_grp=='front')"
+  },
+  {
+   "family": "F17_season_style",
+   "name": "autumn_turf_closer",
+   "expr": "(season=='autumn') & (is_turf==1) & (style_grp=='closer')"
+  },
+  {
+   "family": "F17_season_style",
+   "name": "autumn_dirt_front",
+   "expr": "(season=='autumn') & (is_turf==0) & (style_grp=='front')"
+  },
+  {
+   "family": "F17_season_style",
+   "name": "autumn_dirt_closer",
+   "expr": "(season=='autumn') & (is_turf==0) & (style_grp=='closer')"
+  },
+  {
+   "family": "F17_season_style",
+   "name": "winter_turf_front",
+   "expr": "(season=='winter') & (is_turf==1) & (style_grp=='front')"
+  },
+  {
+   "family": "F17_season_style",
+   "name": "winter_turf_closer",
+   "expr": "(season=='winter') & (is_turf==1) & (style_grp=='closer')"
+  },
+  {
+   "family": "F17_season_style",
+   "name": "winter_dirt_front",
+   "expr": "(season=='winter') & (is_turf==0) & (style_grp=='front')"
+  },
+  {
+   "family": "F17_season_style",
+   "name": "winter_dirt_closer",
+   "expr": "(season=='winter') & (is_turf==0) & (style_grp=='closer')"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_dw_up",
+   "expr": "(lay_days>=90) & (weight_change>=10)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_dw_down",
+   "expr": "(lay_days>=90) & (weight_change<=-10)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_dw_stable",
+   "expr": "(lay_days>=90) & (abs(weight_change)<=4)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_dev_up",
+   "expr": "(lay_days>=90) & (wt_dev>=8)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_dev_down",
+   "expr": "(lay_days>=90) & (wt_dev<=-8)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_dev_stable",
+   "expr": "(lay_days>=90) & (abs(wt_dev)<=4)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_ev_good",
+   "expr": "(lay_days>=90) & (ev_score>=3)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_ev_up",
+   "expr": "(lay_days>=90) & (ev_delta>=1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_ev_down",
+   "expr": "(lay_days>=90) & (ev_delta<=-1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest180_dw_up",
+   "expr": "(lay_days>=180) & (weight_change>=10)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest180_dw_down",
+   "expr": "(lay_days>=180) & (weight_change<=-10)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest180_dw_stable",
+   "expr": "(lay_days>=180) & (abs(weight_change)<=4)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest180_dev_up",
+   "expr": "(lay_days>=180) & (wt_dev>=8)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest180_dev_down",
+   "expr": "(lay_days>=180) & (wt_dev<=-8)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest180_dev_stable",
+   "expr": "(lay_days>=180) & (abs(wt_dev)<=4)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest180_ev_good",
+   "expr": "(lay_days>=180) & (ev_score>=3)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest180_ev_up",
+   "expr": "(lay_days>=180) & (ev_delta>=1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest180_ev_down",
+   "expr": "(lay_days>=180) & (ev_delta<=-1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "dw_up_ev_good",
+   "expr": "(weight_change>=10) & (ev_score>=3)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "dw_up_ev_up",
+   "expr": "(weight_change>=10) & (ev_delta>=1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "dw_down_ev_good",
+   "expr": "(weight_change<=-10) & (ev_score>=3)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "dw_down_ev_up",
+   "expr": "(weight_change<=-10) & (ev_delta>=1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "dw_stable_ev_good",
+   "expr": "(abs(weight_change)<=4) & (ev_score>=3)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "dw_stable_ev_up",
+   "expr": "(abs(weight_change)<=4) & (ev_delta>=1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "dev_up_ev_good",
+   "expr": "(wt_dev>=8) & (ev_score>=3)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "dev_up_ev_up",
+   "expr": "(wt_dev>=8) & (ev_delta>=1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "dev_down_ev_good",
+   "expr": "(wt_dev<=-8) & (ev_score>=3)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "dev_down_ev_up",
+   "expr": "(wt_dev<=-8) & (ev_delta>=1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "dev_stable_ev_good",
+   "expr": "(abs(wt_dev)<=4) & (ev_score>=3)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "dev_stable_ev_up",
+   "expr": "(abs(wt_dev)<=4) & (ev_delta>=1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_dw_up_ev_good",
+   "expr": "(lay_days>=90) & (weight_change>=10) & (ev_score>=3)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_dw_up_ev_up",
+   "expr": "(lay_days>=90) & (weight_change>=10) & (ev_delta>=1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_dw_down_ev_good",
+   "expr": "(lay_days>=90) & (weight_change<=-10) & (ev_score>=3)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_dw_down_ev_up",
+   "expr": "(lay_days>=90) & (weight_change<=-10) & (ev_delta>=1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_dw_stable_ev_good",
+   "expr": "(lay_days>=90) & (abs(weight_change)<=4) & (ev_score>=3)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_dw_stable_ev_up",
+   "expr": "(lay_days>=90) & (abs(weight_change)<=4) & (ev_delta>=1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_dev_up_ev_good",
+   "expr": "(lay_days>=90) & (wt_dev>=8) & (ev_score>=3)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_dev_up_ev_up",
+   "expr": "(lay_days>=90) & (wt_dev>=8) & (ev_delta>=1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_dev_down_ev_good",
+   "expr": "(lay_days>=90) & (wt_dev<=-8) & (ev_score>=3)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_dev_down_ev_up",
+   "expr": "(lay_days>=90) & (wt_dev<=-8) & (ev_delta>=1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_dev_stable_ev_good",
+   "expr": "(lay_days>=90) & (abs(wt_dev)<=4) & (ev_score>=3)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "rest90_dev_stable_ev_up",
+   "expr": "(lay_days>=90) & (abs(wt_dev)<=4) & (ev_delta>=1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "a3_spsm_dw_up6",
+   "expr": "((age==3) & (month>=3) & (month<=8)) & (weight_change>=6)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "a3_spsm_dw_up6_ev_good",
+   "expr": "((age==3) & (month>=3) & (month<=8)) & (weight_change>=6) & (ev_score>=3)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "a3_spsm_dw_up6_ev_up",
+   "expr": "((age==3) & (month>=3) & (month<=8)) & (weight_change>=6) & (ev_delta>=1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "a3_spsm_dev_up6",
+   "expr": "((age==3) & (month>=3) & (month<=8)) & (wt_dev>=6)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "a3_spsm_dev_up6_ev_good",
+   "expr": "((age==3) & (month>=3) & (month<=8)) & (wt_dev>=6) & (ev_score>=3)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "a3_spsm_dev_up6_ev_up",
+   "expr": "((age==3) & (month>=3) & (month<=8)) & (wt_dev>=6) & (ev_delta>=1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "comment_pos",
+   "expr": "comment_pos==1"
+  },
+  {
+   "family": "F18_combo",
+   "name": "comment_pos_rest90",
+   "expr": "(comment_pos==1) & (lay_days>=90)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "comment_pos_ev_up",
+   "expr": "(comment_pos==1) & (ev_delta>=1)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "comment_pos_dw_stable",
+   "expr": "(comment_pos==1) & (abs(weight_change)<=4)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "debut_ev_good",
+   "expr": "(run_no==0) & (ev_score>=3)"
+  },
+  {
+   "family": "F18_combo",
+   "name": "debut_comment_pos",
+   "expr": "(run_no==0) & (comment_pos==1)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_nige",
+   "expr": "(blk_state=='first') & (style4=='nige')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_senko",
+   "expr": "(blk_state=='first') & (style4=='senko')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_sashi",
+   "expr": "(blk_state=='first') & (style4=='sashi')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_oikomi",
+   "expr": "(blk_state=='first') & (style4=='oikomi')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_turf",
+   "expr": "(blk_state=='first') & (is_turf==1)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_dirt",
+   "expr": "(blk_state=='first') & (is_turf==0)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_sprint",
+   "expr": "(blk_state=='first') & ((dist_band=='d_sprint'))"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_mile",
+   "expr": "(blk_state=='first') & ((dist_band=='d_mile_s')|(dist_band=='d_mile'))"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_mid_long",
+   "expr": "(blk_state=='first') & ((dist_band=='d_mid')|(dist_band=='d_long'))"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_bigfield",
+   "expr": "(blk_state=='first') & (fs>=14)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_nige",
+   "expr": "(blk_state=='cont') & (style4=='nige')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_senko",
+   "expr": "(blk_state=='cont') & (style4=='senko')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_sashi",
+   "expr": "(blk_state=='cont') & (style4=='sashi')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_oikomi",
+   "expr": "(blk_state=='cont') & (style4=='oikomi')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_turf",
+   "expr": "(blk_state=='cont') & (is_turf==1)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_dirt",
+   "expr": "(blk_state=='cont') & (is_turf==0)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_sprint",
+   "expr": "(blk_state=='cont') & ((dist_band=='d_sprint'))"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_mile",
+   "expr": "(blk_state=='cont') & ((dist_band=='d_mile_s')|(dist_band=='d_mile'))"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_mid_long",
+   "expr": "(blk_state=='cont') & ((dist_band=='d_mid')|(dist_band=='d_long'))"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_cont_bigfield",
+   "expr": "(blk_state=='cont') & (fs>=14)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_nige",
+   "expr": "(blk_state=='off') & (style4=='nige')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_senko",
+   "expr": "(blk_state=='off') & (style4=='senko')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_sashi",
+   "expr": "(blk_state=='off') & (style4=='sashi')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_oikomi",
+   "expr": "(blk_state=='off') & (style4=='oikomi')"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_turf",
+   "expr": "(blk_state=='off') & (is_turf==1)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_dirt",
+   "expr": "(blk_state=='off') & (is_turf==0)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_sprint",
+   "expr": "(blk_state=='off') & ((dist_band=='d_sprint'))"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_mile",
+   "expr": "(blk_state=='off') & ((dist_band=='d_mile_s')|(dist_band=='d_mile'))"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_mid_long",
+   "expr": "(blk_state=='off') & ((dist_band=='d_mid')|(dist_band=='d_long'))"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_off_bigfield",
+   "expr": "(blk_state=='off') & (fs>=14)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_front_turf",
+   "expr": "(blk_state=='first') & (style4=='nige'|style4=='senko') & (is_turf==1)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_front_dirt",
+   "expr": "(blk_state=='first') & (style4=='nige'|style4=='senko') & (is_turf==0)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_back_turf",
+   "expr": "(blk_state=='first') & (style4=='sashi'|style4=='oikomi') & (is_turf==1)"
+  },
+  {
+   "family": "F19_blinker_style",
+   "name": "blk_first_back_dirt",
+   "expr": "(blk_state=='first') & (style4=='sashi'|style4=='oikomi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_nige",
+   "expr": "(inner==1) & (style4=='nige')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_nige_turf",
+   "expr": "(inner==1) & (style4=='nige') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_nige_dirt",
+   "expr": "(inner==1) & (style4=='nige') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_senko",
+   "expr": "(inner==1) & (style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_senko_turf",
+   "expr": "(inner==1) & (style4=='senko') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_senko_dirt",
+   "expr": "(inner==1) & (style4=='senko') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_sashi",
+   "expr": "(inner==1) & (style4=='sashi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_sashi_turf",
+   "expr": "(inner==1) & (style4=='sashi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_sashi_dirt",
+   "expr": "(inner==1) & (style4=='sashi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_oikomi",
+   "expr": "(inner==1) & (style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_oikomi_turf",
+   "expr": "(inner==1) & (style4=='oikomi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_inner_oikomi_dirt",
+   "expr": "(inner==1) & (style4=='oikomi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_nige",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='nige')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_nige_turf",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='nige') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_nige_dirt",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='nige') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_senko",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_senko_turf",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='senko') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_senko_dirt",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='senko') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_sashi",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='sashi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_sashi_turf",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='sashi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_sashi_dirt",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='sashi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_oikomi",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_oikomi_turf",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='oikomi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_mid_oikomi_dirt",
+   "expr": "((inner==0)&(outer==0)&bracket_number.notna()) & (style4=='oikomi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_nige",
+   "expr": "(outer==1) & (style4=='nige')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_nige_turf",
+   "expr": "(outer==1) & (style4=='nige') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_nige_dirt",
+   "expr": "(outer==1) & (style4=='nige') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_senko",
+   "expr": "(outer==1) & (style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_senko_turf",
+   "expr": "(outer==1) & (style4=='senko') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_senko_dirt",
+   "expr": "(outer==1) & (style4=='senko') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_sashi",
+   "expr": "(outer==1) & (style4=='sashi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_sashi_turf",
+   "expr": "(outer==1) & (style4=='sashi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_sashi_dirt",
+   "expr": "(outer==1) & (style4=='sashi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_oikomi",
+   "expr": "(outer==1) & (style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_oikomi_turf",
+   "expr": "(outer==1) & (style4=='oikomi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "draw_outer_oikomi_dirt",
+   "expr": "(outer==1) & (style4=='oikomi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_sapporo_turf_inner_front",
+   "expr": "(venue_code=='01') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_sapporo_turf_inner_back",
+   "expr": "(venue_code=='01') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_sapporo_turf_outer_front",
+   "expr": "(venue_code=='01') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_sapporo_turf_outer_back",
+   "expr": "(venue_code=='01') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_sapporo_dirt_inner_front",
+   "expr": "(venue_code=='01') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_sapporo_dirt_inner_back",
+   "expr": "(venue_code=='01') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_sapporo_dirt_outer_front",
+   "expr": "(venue_code=='01') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_sapporo_dirt_outer_back",
+   "expr": "(venue_code=='01') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hakodate_turf_inner_front",
+   "expr": "(venue_code=='02') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hakodate_turf_inner_back",
+   "expr": "(venue_code=='02') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hakodate_turf_outer_front",
+   "expr": "(venue_code=='02') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hakodate_turf_outer_back",
+   "expr": "(venue_code=='02') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hakodate_dirt_inner_front",
+   "expr": "(venue_code=='02') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hakodate_dirt_inner_back",
+   "expr": "(venue_code=='02') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hakodate_dirt_outer_front",
+   "expr": "(venue_code=='02') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hakodate_dirt_outer_back",
+   "expr": "(venue_code=='02') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_fukushima_turf_inner_front",
+   "expr": "(venue_code=='03') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_fukushima_turf_inner_back",
+   "expr": "(venue_code=='03') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_fukushima_turf_outer_front",
+   "expr": "(venue_code=='03') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_fukushima_turf_outer_back",
+   "expr": "(venue_code=='03') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_fukushima_dirt_inner_front",
+   "expr": "(venue_code=='03') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_fukushima_dirt_inner_back",
+   "expr": "(venue_code=='03') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_fukushima_dirt_outer_front",
+   "expr": "(venue_code=='03') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_fukushima_dirt_outer_back",
+   "expr": "(venue_code=='03') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_niigata_turf_inner_front",
+   "expr": "(venue_code=='04') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_niigata_turf_inner_back",
+   "expr": "(venue_code=='04') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_niigata_turf_outer_front",
+   "expr": "(venue_code=='04') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_niigata_turf_outer_back",
+   "expr": "(venue_code=='04') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_niigata_dirt_inner_front",
+   "expr": "(venue_code=='04') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_niigata_dirt_inner_back",
+   "expr": "(venue_code=='04') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_niigata_dirt_outer_front",
+   "expr": "(venue_code=='04') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_niigata_dirt_outer_back",
+   "expr": "(venue_code=='04') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_tokyo_turf_inner_front",
+   "expr": "(venue_code=='05') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_tokyo_turf_inner_back",
+   "expr": "(venue_code=='05') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_tokyo_turf_outer_front",
+   "expr": "(venue_code=='05') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_tokyo_turf_outer_back",
+   "expr": "(venue_code=='05') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_tokyo_dirt_inner_front",
+   "expr": "(venue_code=='05') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_tokyo_dirt_inner_back",
+   "expr": "(venue_code=='05') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_tokyo_dirt_outer_front",
+   "expr": "(venue_code=='05') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_tokyo_dirt_outer_back",
+   "expr": "(venue_code=='05') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_nakayama_turf_inner_front",
+   "expr": "(venue_code=='06') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_nakayama_turf_inner_back",
+   "expr": "(venue_code=='06') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_nakayama_turf_outer_front",
+   "expr": "(venue_code=='06') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_nakayama_turf_outer_back",
+   "expr": "(venue_code=='06') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_nakayama_dirt_inner_front",
+   "expr": "(venue_code=='06') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_nakayama_dirt_inner_back",
+   "expr": "(venue_code=='06') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_nakayama_dirt_outer_front",
+   "expr": "(venue_code=='06') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_nakayama_dirt_outer_back",
+   "expr": "(venue_code=='06') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_chukyo_turf_inner_front",
+   "expr": "(venue_code=='07') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_chukyo_turf_inner_back",
+   "expr": "(venue_code=='07') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_chukyo_turf_outer_front",
+   "expr": "(venue_code=='07') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_chukyo_turf_outer_back",
+   "expr": "(venue_code=='07') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_chukyo_dirt_inner_front",
+   "expr": "(venue_code=='07') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_chukyo_dirt_inner_back",
+   "expr": "(venue_code=='07') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_chukyo_dirt_outer_front",
+   "expr": "(venue_code=='07') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_chukyo_dirt_outer_back",
+   "expr": "(venue_code=='07') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kyoto_turf_inner_front",
+   "expr": "(venue_code=='08') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kyoto_turf_inner_back",
+   "expr": "(venue_code=='08') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kyoto_turf_outer_front",
+   "expr": "(venue_code=='08') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kyoto_turf_outer_back",
+   "expr": "(venue_code=='08') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kyoto_dirt_inner_front",
+   "expr": "(venue_code=='08') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kyoto_dirt_inner_back",
+   "expr": "(venue_code=='08') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kyoto_dirt_outer_front",
+   "expr": "(venue_code=='08') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kyoto_dirt_outer_back",
+   "expr": "(venue_code=='08') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hanshin_turf_inner_front",
+   "expr": "(venue_code=='09') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hanshin_turf_inner_back",
+   "expr": "(venue_code=='09') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hanshin_turf_outer_front",
+   "expr": "(venue_code=='09') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hanshin_turf_outer_back",
+   "expr": "(venue_code=='09') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hanshin_dirt_inner_front",
+   "expr": "(venue_code=='09') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hanshin_dirt_inner_back",
+   "expr": "(venue_code=='09') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hanshin_dirt_outer_front",
+   "expr": "(venue_code=='09') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_hanshin_dirt_outer_back",
+   "expr": "(venue_code=='09') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kokura_turf_inner_front",
+   "expr": "(venue_code=='10') & (is_turf==1) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kokura_turf_inner_back",
+   "expr": "(venue_code=='10') & (is_turf==1) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kokura_turf_outer_front",
+   "expr": "(venue_code=='10') & (is_turf==1) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kokura_turf_outer_back",
+   "expr": "(venue_code=='10') & (is_turf==1) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kokura_dirt_inner_front",
+   "expr": "(venue_code=='10') & (is_turf==0) & (inner==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kokura_dirt_inner_back",
+   "expr": "(venue_code=='10') & (is_turf==0) & (inner==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kokura_dirt_outer_front",
+   "expr": "(venue_code=='10') & (is_turf==0) & (outer==1) & (style4=='nige'|style4=='senko')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "course_kokura_dirt_outer_back",
+   "expr": "(venue_code=='10') & (is_turf==0) & (outer==1) & (style4=='sashi'|style4=='oikomi')"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_big_inner_front_turf",
+   "expr": "(fs>=14) & (inner==1) & (style4=='nige'|style4=='senko') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_big_inner_front_dirt",
+   "expr": "(fs>=14) & (inner==1) & (style4=='nige'|style4=='senko') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_big_inner_back_turf",
+   "expr": "(fs>=14) & (inner==1) & (style4=='sashi'|style4=='oikomi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_big_inner_back_dirt",
+   "expr": "(fs>=14) & (inner==1) & (style4=='sashi'|style4=='oikomi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_big_outer_front_turf",
+   "expr": "(fs>=14) & (outer==1) & (style4=='nige'|style4=='senko') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_big_outer_front_dirt",
+   "expr": "(fs>=14) & (outer==1) & (style4=='nige'|style4=='senko') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_big_outer_back_turf",
+   "expr": "(fs>=14) & (outer==1) & (style4=='sashi'|style4=='oikomi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_big_outer_back_dirt",
+   "expr": "(fs>=14) & (outer==1) & (style4=='sashi'|style4=='oikomi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_small_inner_front_turf",
+   "expr": "(fs<=10) & (inner==1) & (style4=='nige'|style4=='senko') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_small_inner_front_dirt",
+   "expr": "(fs<=10) & (inner==1) & (style4=='nige'|style4=='senko') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_small_inner_back_turf",
+   "expr": "(fs<=10) & (inner==1) & (style4=='sashi'|style4=='oikomi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_small_inner_back_dirt",
+   "expr": "(fs<=10) & (inner==1) & (style4=='sashi'|style4=='oikomi') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_small_outer_front_turf",
+   "expr": "(fs<=10) & (outer==1) & (style4=='nige'|style4=='senko') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_small_outer_front_dirt",
+   "expr": "(fs<=10) & (outer==1) & (style4=='nige'|style4=='senko') & (is_turf==0)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_small_outer_back_turf",
+   "expr": "(fs<=10) & (outer==1) & (style4=='sashi'|style4=='oikomi') & (is_turf==1)"
+  },
+  {
+   "family": "F20_draw_style",
+   "name": "field_small_outer_back_dirt",
+   "expr": "(fs<=10) & (outer==1) & (style4=='sashi'|style4=='oikomi') & (is_turf==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey1",
+   "expr": "(sire_rank==0) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey2",
+   "expr": "(sire_rank==0) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey3",
+   "expr": "(sire_rank==0) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey4",
+   "expr": "(sire_rank==0) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey5",
+   "expr": "(sire_rank==0) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey6",
+   "expr": "(sire_rank==0) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey7",
+   "expr": "(sire_rank==0) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey8",
+   "expr": "(sire_rank==0) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey9",
+   "expr": "(sire_rank==0) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey10",
+   "expr": "(sire_rank==0) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey11",
+   "expr": "(sire_rank==0) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire1_jockey12",
+   "expr": "(sire_rank==0) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey1",
+   "expr": "(sire_rank==1) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey2",
+   "expr": "(sire_rank==1) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey3",
+   "expr": "(sire_rank==1) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey4",
+   "expr": "(sire_rank==1) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey5",
+   "expr": "(sire_rank==1) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey6",
+   "expr": "(sire_rank==1) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey7",
+   "expr": "(sire_rank==1) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey8",
+   "expr": "(sire_rank==1) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey9",
+   "expr": "(sire_rank==1) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey10",
+   "expr": "(sire_rank==1) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey11",
+   "expr": "(sire_rank==1) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire2_jockey12",
+   "expr": "(sire_rank==1) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey1",
+   "expr": "(sire_rank==2) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey2",
+   "expr": "(sire_rank==2) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey3",
+   "expr": "(sire_rank==2) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey4",
+   "expr": "(sire_rank==2) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey5",
+   "expr": "(sire_rank==2) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey6",
+   "expr": "(sire_rank==2) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey7",
+   "expr": "(sire_rank==2) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey8",
+   "expr": "(sire_rank==2) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey9",
+   "expr": "(sire_rank==2) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey10",
+   "expr": "(sire_rank==2) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey11",
+   "expr": "(sire_rank==2) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire3_jockey12",
+   "expr": "(sire_rank==2) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey1",
+   "expr": "(sire_rank==3) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey2",
+   "expr": "(sire_rank==3) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey3",
+   "expr": "(sire_rank==3) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey4",
+   "expr": "(sire_rank==3) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey5",
+   "expr": "(sire_rank==3) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey6",
+   "expr": "(sire_rank==3) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey7",
+   "expr": "(sire_rank==3) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey8",
+   "expr": "(sire_rank==3) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey9",
+   "expr": "(sire_rank==3) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey10",
+   "expr": "(sire_rank==3) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey11",
+   "expr": "(sire_rank==3) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire4_jockey12",
+   "expr": "(sire_rank==3) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey1",
+   "expr": "(sire_rank==4) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey2",
+   "expr": "(sire_rank==4) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey3",
+   "expr": "(sire_rank==4) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey4",
+   "expr": "(sire_rank==4) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey5",
+   "expr": "(sire_rank==4) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey6",
+   "expr": "(sire_rank==4) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey7",
+   "expr": "(sire_rank==4) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey8",
+   "expr": "(sire_rank==4) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey9",
+   "expr": "(sire_rank==4) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey10",
+   "expr": "(sire_rank==4) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey11",
+   "expr": "(sire_rank==4) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire5_jockey12",
+   "expr": "(sire_rank==4) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey1",
+   "expr": "(sire_rank==5) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey2",
+   "expr": "(sire_rank==5) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey3",
+   "expr": "(sire_rank==5) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey4",
+   "expr": "(sire_rank==5) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey5",
+   "expr": "(sire_rank==5) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey6",
+   "expr": "(sire_rank==5) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey7",
+   "expr": "(sire_rank==5) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey8",
+   "expr": "(sire_rank==5) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey9",
+   "expr": "(sire_rank==5) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey10",
+   "expr": "(sire_rank==5) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey11",
+   "expr": "(sire_rank==5) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire6_jockey12",
+   "expr": "(sire_rank==5) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey1",
+   "expr": "(sire_rank==6) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey2",
+   "expr": "(sire_rank==6) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey3",
+   "expr": "(sire_rank==6) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey4",
+   "expr": "(sire_rank==6) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey5",
+   "expr": "(sire_rank==6) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey6",
+   "expr": "(sire_rank==6) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey7",
+   "expr": "(sire_rank==6) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey8",
+   "expr": "(sire_rank==6) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey9",
+   "expr": "(sire_rank==6) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey10",
+   "expr": "(sire_rank==6) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey11",
+   "expr": "(sire_rank==6) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire7_jockey12",
+   "expr": "(sire_rank==6) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey1",
+   "expr": "(sire_rank==7) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey2",
+   "expr": "(sire_rank==7) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey3",
+   "expr": "(sire_rank==7) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey4",
+   "expr": "(sire_rank==7) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey5",
+   "expr": "(sire_rank==7) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey6",
+   "expr": "(sire_rank==7) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey7",
+   "expr": "(sire_rank==7) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey8",
+   "expr": "(sire_rank==7) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey9",
+   "expr": "(sire_rank==7) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey10",
+   "expr": "(sire_rank==7) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey11",
+   "expr": "(sire_rank==7) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire8_jockey12",
+   "expr": "(sire_rank==7) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey1",
+   "expr": "(sire_rank==8) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey2",
+   "expr": "(sire_rank==8) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey3",
+   "expr": "(sire_rank==8) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey4",
+   "expr": "(sire_rank==8) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey5",
+   "expr": "(sire_rank==8) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey6",
+   "expr": "(sire_rank==8) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey7",
+   "expr": "(sire_rank==8) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey8",
+   "expr": "(sire_rank==8) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey9",
+   "expr": "(sire_rank==8) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey10",
+   "expr": "(sire_rank==8) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey11",
+   "expr": "(sire_rank==8) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire9_jockey12",
+   "expr": "(sire_rank==8) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey1",
+   "expr": "(sire_rank==9) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey2",
+   "expr": "(sire_rank==9) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey3",
+   "expr": "(sire_rank==9) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey4",
+   "expr": "(sire_rank==9) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey5",
+   "expr": "(sire_rank==9) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey6",
+   "expr": "(sire_rank==9) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey7",
+   "expr": "(sire_rank==9) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey8",
+   "expr": "(sire_rank==9) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey9",
+   "expr": "(sire_rank==9) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey10",
+   "expr": "(sire_rank==9) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey11",
+   "expr": "(sire_rank==9) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire10_jockey12",
+   "expr": "(sire_rank==9) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey1",
+   "expr": "(sire_rank==10) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey2",
+   "expr": "(sire_rank==10) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey3",
+   "expr": "(sire_rank==10) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey4",
+   "expr": "(sire_rank==10) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey5",
+   "expr": "(sire_rank==10) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey6",
+   "expr": "(sire_rank==10) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey7",
+   "expr": "(sire_rank==10) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey8",
+   "expr": "(sire_rank==10) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey9",
+   "expr": "(sire_rank==10) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey10",
+   "expr": "(sire_rank==10) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey11",
+   "expr": "(sire_rank==10) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire11_jockey12",
+   "expr": "(sire_rank==10) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey1",
+   "expr": "(sire_rank==11) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey2",
+   "expr": "(sire_rank==11) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey3",
+   "expr": "(sire_rank==11) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey4",
+   "expr": "(sire_rank==11) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey5",
+   "expr": "(sire_rank==11) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey6",
+   "expr": "(sire_rank==11) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey7",
+   "expr": "(sire_rank==11) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey8",
+   "expr": "(sire_rank==11) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey9",
+   "expr": "(sire_rank==11) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey10",
+   "expr": "(sire_rank==11) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey11",
+   "expr": "(sire_rank==11) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire12_jockey12",
+   "expr": "(sire_rank==11) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey1",
+   "expr": "(sire_rank==12) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey2",
+   "expr": "(sire_rank==12) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey3",
+   "expr": "(sire_rank==12) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey4",
+   "expr": "(sire_rank==12) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey5",
+   "expr": "(sire_rank==12) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey6",
+   "expr": "(sire_rank==12) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey7",
+   "expr": "(sire_rank==12) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey8",
+   "expr": "(sire_rank==12) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey9",
+   "expr": "(sire_rank==12) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey10",
+   "expr": "(sire_rank==12) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey11",
+   "expr": "(sire_rank==12) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire13_jockey12",
+   "expr": "(sire_rank==12) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey1",
+   "expr": "(sire_rank==13) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey2",
+   "expr": "(sire_rank==13) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey3",
+   "expr": "(sire_rank==13) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey4",
+   "expr": "(sire_rank==13) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey5",
+   "expr": "(sire_rank==13) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey6",
+   "expr": "(sire_rank==13) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey7",
+   "expr": "(sire_rank==13) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey8",
+   "expr": "(sire_rank==13) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey9",
+   "expr": "(sire_rank==13) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey10",
+   "expr": "(sire_rank==13) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey11",
+   "expr": "(sire_rank==13) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire14_jockey12",
+   "expr": "(sire_rank==13) & (jockey_rank==11)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey1",
+   "expr": "(sire_rank==14) & (jockey_rank==0)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey2",
+   "expr": "(sire_rank==14) & (jockey_rank==1)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey3",
+   "expr": "(sire_rank==14) & (jockey_rank==2)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey4",
+   "expr": "(sire_rank==14) & (jockey_rank==3)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey5",
+   "expr": "(sire_rank==14) & (jockey_rank==4)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey6",
+   "expr": "(sire_rank==14) & (jockey_rank==5)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey7",
+   "expr": "(sire_rank==14) & (jockey_rank==6)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey8",
+   "expr": "(sire_rank==14) & (jockey_rank==7)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey9",
+   "expr": "(sire_rank==14) & (jockey_rank==8)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey10",
+   "expr": "(sire_rank==14) & (jockey_rank==9)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey11",
+   "expr": "(sire_rank==14) & (jockey_rank==10)"
+  },
+  {
+   "family": "F21_sire_jockey",
+   "name": "sire15_jockey12",
+   "expr": "(sire_rank==14) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey1",
+   "expr": "(damsire_rank==0) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey2",
+   "expr": "(damsire_rank==0) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey3",
+   "expr": "(damsire_rank==0) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey4",
+   "expr": "(damsire_rank==0) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey5",
+   "expr": "(damsire_rank==0) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey6",
+   "expr": "(damsire_rank==0) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey7",
+   "expr": "(damsire_rank==0) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey8",
+   "expr": "(damsire_rank==0) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey9",
+   "expr": "(damsire_rank==0) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey10",
+   "expr": "(damsire_rank==0) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey11",
+   "expr": "(damsire_rank==0) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire1_jockey12",
+   "expr": "(damsire_rank==0) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey1",
+   "expr": "(damsire_rank==1) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey2",
+   "expr": "(damsire_rank==1) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey3",
+   "expr": "(damsire_rank==1) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey4",
+   "expr": "(damsire_rank==1) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey5",
+   "expr": "(damsire_rank==1) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey6",
+   "expr": "(damsire_rank==1) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey7",
+   "expr": "(damsire_rank==1) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey8",
+   "expr": "(damsire_rank==1) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey9",
+   "expr": "(damsire_rank==1) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey10",
+   "expr": "(damsire_rank==1) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey11",
+   "expr": "(damsire_rank==1) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire2_jockey12",
+   "expr": "(damsire_rank==1) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey1",
+   "expr": "(damsire_rank==2) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey2",
+   "expr": "(damsire_rank==2) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey3",
+   "expr": "(damsire_rank==2) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey4",
+   "expr": "(damsire_rank==2) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey5",
+   "expr": "(damsire_rank==2) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey6",
+   "expr": "(damsire_rank==2) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey7",
+   "expr": "(damsire_rank==2) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey8",
+   "expr": "(damsire_rank==2) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey9",
+   "expr": "(damsire_rank==2) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey10",
+   "expr": "(damsire_rank==2) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey11",
+   "expr": "(damsire_rank==2) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire3_jockey12",
+   "expr": "(damsire_rank==2) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey1",
+   "expr": "(damsire_rank==3) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey2",
+   "expr": "(damsire_rank==3) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey3",
+   "expr": "(damsire_rank==3) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey4",
+   "expr": "(damsire_rank==3) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey5",
+   "expr": "(damsire_rank==3) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey6",
+   "expr": "(damsire_rank==3) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey7",
+   "expr": "(damsire_rank==3) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey8",
+   "expr": "(damsire_rank==3) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey9",
+   "expr": "(damsire_rank==3) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey10",
+   "expr": "(damsire_rank==3) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey11",
+   "expr": "(damsire_rank==3) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire4_jockey12",
+   "expr": "(damsire_rank==3) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey1",
+   "expr": "(damsire_rank==4) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey2",
+   "expr": "(damsire_rank==4) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey3",
+   "expr": "(damsire_rank==4) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey4",
+   "expr": "(damsire_rank==4) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey5",
+   "expr": "(damsire_rank==4) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey6",
+   "expr": "(damsire_rank==4) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey7",
+   "expr": "(damsire_rank==4) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey8",
+   "expr": "(damsire_rank==4) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey9",
+   "expr": "(damsire_rank==4) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey10",
+   "expr": "(damsire_rank==4) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey11",
+   "expr": "(damsire_rank==4) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire5_jockey12",
+   "expr": "(damsire_rank==4) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey1",
+   "expr": "(damsire_rank==5) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey2",
+   "expr": "(damsire_rank==5) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey3",
+   "expr": "(damsire_rank==5) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey4",
+   "expr": "(damsire_rank==5) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey5",
+   "expr": "(damsire_rank==5) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey6",
+   "expr": "(damsire_rank==5) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey7",
+   "expr": "(damsire_rank==5) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey8",
+   "expr": "(damsire_rank==5) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey9",
+   "expr": "(damsire_rank==5) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey10",
+   "expr": "(damsire_rank==5) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey11",
+   "expr": "(damsire_rank==5) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire6_jockey12",
+   "expr": "(damsire_rank==5) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey1",
+   "expr": "(damsire_rank==6) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey2",
+   "expr": "(damsire_rank==6) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey3",
+   "expr": "(damsire_rank==6) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey4",
+   "expr": "(damsire_rank==6) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey5",
+   "expr": "(damsire_rank==6) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey6",
+   "expr": "(damsire_rank==6) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey7",
+   "expr": "(damsire_rank==6) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey8",
+   "expr": "(damsire_rank==6) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey9",
+   "expr": "(damsire_rank==6) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey10",
+   "expr": "(damsire_rank==6) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey11",
+   "expr": "(damsire_rank==6) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire7_jockey12",
+   "expr": "(damsire_rank==6) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey1",
+   "expr": "(damsire_rank==7) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey2",
+   "expr": "(damsire_rank==7) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey3",
+   "expr": "(damsire_rank==7) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey4",
+   "expr": "(damsire_rank==7) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey5",
+   "expr": "(damsire_rank==7) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey6",
+   "expr": "(damsire_rank==7) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey7",
+   "expr": "(damsire_rank==7) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey8",
+   "expr": "(damsire_rank==7) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey9",
+   "expr": "(damsire_rank==7) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey10",
+   "expr": "(damsire_rank==7) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey11",
+   "expr": "(damsire_rank==7) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire8_jockey12",
+   "expr": "(damsire_rank==7) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey1",
+   "expr": "(damsire_rank==8) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey2",
+   "expr": "(damsire_rank==8) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey3",
+   "expr": "(damsire_rank==8) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey4",
+   "expr": "(damsire_rank==8) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey5",
+   "expr": "(damsire_rank==8) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey6",
+   "expr": "(damsire_rank==8) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey7",
+   "expr": "(damsire_rank==8) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey8",
+   "expr": "(damsire_rank==8) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey9",
+   "expr": "(damsire_rank==8) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey10",
+   "expr": "(damsire_rank==8) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey11",
+   "expr": "(damsire_rank==8) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire9_jockey12",
+   "expr": "(damsire_rank==8) & (jockey_rank==11)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey1",
+   "expr": "(damsire_rank==9) & (jockey_rank==0)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey2",
+   "expr": "(damsire_rank==9) & (jockey_rank==1)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey3",
+   "expr": "(damsire_rank==9) & (jockey_rank==2)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey4",
+   "expr": "(damsire_rank==9) & (jockey_rank==3)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey5",
+   "expr": "(damsire_rank==9) & (jockey_rank==4)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey6",
+   "expr": "(damsire_rank==9) & (jockey_rank==5)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey7",
+   "expr": "(damsire_rank==9) & (jockey_rank==6)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey8",
+   "expr": "(damsire_rank==9) & (jockey_rank==7)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey9",
+   "expr": "(damsire_rank==9) & (jockey_rank==8)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey10",
+   "expr": "(damsire_rank==9) & (jockey_rank==9)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey11",
+   "expr": "(damsire_rank==9) & (jockey_rank==10)"
+  },
+  {
+   "family": "F22_damsire_jockey",
+   "name": "damsire10_jockey12",
+   "expr": "(damsire_rank==9) & (jockey_rank==11)"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire1_jockey_up",
+   "expr": "(sire_rank==0) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire1_jockey_down",
+   "expr": "(sire_rank==0) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire2_jockey_up",
+   "expr": "(sire_rank==1) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire2_jockey_down",
+   "expr": "(sire_rank==1) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire3_jockey_up",
+   "expr": "(sire_rank==2) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire3_jockey_down",
+   "expr": "(sire_rank==2) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire4_jockey_up",
+   "expr": "(sire_rank==3) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire4_jockey_down",
+   "expr": "(sire_rank==3) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire5_jockey_up",
+   "expr": "(sire_rank==4) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire5_jockey_down",
+   "expr": "(sire_rank==4) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire6_jockey_up",
+   "expr": "(sire_rank==5) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire6_jockey_down",
+   "expr": "(sire_rank==5) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire7_jockey_up",
+   "expr": "(sire_rank==6) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire7_jockey_down",
+   "expr": "(sire_rank==6) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire8_jockey_up",
+   "expr": "(sire_rank==7) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire8_jockey_down",
+   "expr": "(sire_rank==7) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire9_jockey_up",
+   "expr": "(sire_rank==8) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire9_jockey_down",
+   "expr": "(sire_rank==8) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire10_jockey_up",
+   "expr": "(sire_rank==9) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire10_jockey_down",
+   "expr": "(sire_rank==9) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire11_jockey_up",
+   "expr": "(sire_rank==10) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire11_jockey_down",
+   "expr": "(sire_rank==10) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire12_jockey_up",
+   "expr": "(sire_rank==11) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire12_jockey_down",
+   "expr": "(sire_rank==11) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire13_jockey_up",
+   "expr": "(sire_rank==12) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire13_jockey_down",
+   "expr": "(sire_rank==12) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire14_jockey_up",
+   "expr": "(sire_rank==13) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire14_jockey_down",
+   "expr": "(sire_rank==13) & (jchg_cls=='down')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire15_jockey_up",
+   "expr": "(sire_rank==14) & (jchg_cls=='up')"
+  },
+  {
+   "family": "F23_sire_jockey_chg",
+   "name": "sire15_jockey_down",
+   "expr": "(sire_rank==14) & (jchg_cls=='down')"
+  }
+ ]
+}

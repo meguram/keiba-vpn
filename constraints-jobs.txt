@@ -1,0 +1,49 @@
+# Jobs イメージ（Dockerfile.jobs）で、ホスト(学習・本番推論に使っている環境)と同じバージョンに固定するための制約。
+# 使い方: pip install -r requirements.txt -c constraints-jobs.txt（torch は CPU 版: --extra-index-url https://download.pytorch.org/whl/cpu）
+# 理由: requirements.txt は >= 指定のため、素で入れると pandas 3.x などになり、ホストと挙動が変わる(実測: factory_self.py が pandas 3 で落ちた)。
+# 学習済みモデルの pickle は scikit-learn 1.3.1 / lightgbm 4.6 で作ったもの。上げるときは、新しい版で同じ予測が出ることを確認してから(autonomy_check と rehearsal)。
+# 2026-10-24 にホスト(Python 3.11.6)の実バージョンから作成。
+alembic==1.20.0
+beautifulsoup4==4.12.2
+catboost==1.2.10
+cloud-sql-python-connector==1.22.0
+fastapi==0.135.2
+flask==3.1.3
+google-cloud-bigquery==3.46.1
+google-cloud-storage==3.10.1
+google-cloud-tasks==2.26.0
+httpx==0.28.1
+ipykernel==7.4.0
+ipywidgets==8.1.1
+jinja2==3.1.2
+joblib==1.3.2
+jsonschema==4.26.0
+lightgbm==4.6.0
+matplotlib==3.8.0
+mlflow==3.10.1
+numpy==1.26.4
+optuna==4.8.0
+pandas==2.1.1
+playwright==1.58.0
+polars==2.0.0
+psutil==5.9.5
+psycopg==3.3.4
+pyarrow==23.0.1
+pykakasi==2.3.0
+pymupdf==1.27.2.2
+pytest-cov==7.1.0
+pytest-timeout==2.4.0
+pytest==9.0.3
+python-dotenv==1.2.2
+python-multipart==0.0.22
+pyyaml==6.0.1
+redis==8.0.1
+requests==2.31.0
+schedule==1.2.2
+scikit-learn==1.3.1
+scipy==1.11.3
+sqlalchemy==2.0.22
+statsmodels==0.14.0
+torch==2.6.0
+uvicorn==0.42.0
+xgboost==3.2.0

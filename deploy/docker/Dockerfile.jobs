@@ -1,0 +1,53 @@
+# =============================================================================
+# deploy/docker/Dockerfile.jobs — Cloud Run Jobs（予測生成・集計・通知・監視）用イメージ。ディスパッチャ 1 本が全ジョブの入口
+# =============================================================================
+#
+# 起動は ``python3 -m src.ops.job_dispatch group <グループ>`` / ``job <ジョブ>``（Scheduler と Cloud Tasks が Run Job の args を上書きして渡す）。
+# 実行してよいジョブは config/gcp_job_map.json の allowlist だけ（任意のコマンドは渡せない）。
+#
+# - 学習済みモデル（バンドル 160〜330MB）はイメージに入れない。ジョブの起動時に GCS の models/<component>/latest.json から
+#   sha256 を検証して取る（src/ops/model_publish.py）。モデルを更新してもイメージの作り直しは不要。
+# - 入力データ（履歴テーブルなど）も入れない。job_map の state_in を GCS の state/ から実行前に取り、state_out を実行後に上げる（src/ops/state_sync.py）。
+# - 取得（netkeiba）は VPS の実行役の仕事で、このイメージには playwright・ノートブック・テスト・学習用の依存を入れない（秘密も入れない）。
+# - 認証はサービスアカウント（keiba-jobs）を Run Job に割り当てる。鍵ファイルは作らない・入れない。
+#
+# ビルド（Cloud Shell。無料枠内）:
+#   gcloud builds submit --tag asia-northeast1-docker.pkg.dev/$PROJECT/keiba-vpn/jobs:latest --file deploy/docker/Dockerfile.jobs .   # もしくは docker build -f deploy/docker/Dockerfile.jobs
+# 手元の確認（GCP に繋がない）:
+#   docker run --rm -e KEIBA_ENV=dev <image> -m src.ops.job_dispatch list
+# =============================================================================
+
+FROM python:3.11-slim AS builder
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 build-essential \
+    && rm -rf /var/lib/apt/lists/*
+COPY requirements.txt ./requirements.txt
+# ホスト(本番の推論環境)と同じバージョンに固定する。固定しないと pandas 3.x などが入り、推論が落ちる(constraints-jobs.txt の先頭に理由)
+COPY constraints-jobs.txt ./constraints.txt
+# ノートブック・テスト・ブラウザ自動操作・学習(mlflow/optuna)・Cloud SQL は、ジョブでは使わないので外す
+RUN grep -v -i -E '^(ipykernel|ipywidgets|pytest|playwright|mlflow|optuna|cloud-sql)' requirements.txt > requirements.jobs.txt \
+    && pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir --prefix=/install -r requirements.jobs.txt -c constraints.txt \
+    # アンサンブルの NN メンバー(ensemble_bundle / zoo / tp25c_mtl)が推論で使う。CPU 版(+cpu はこの索引にしか無いので GPU 版は入らない)。ホスト(2.6.0)と出力が 6e-08 で一致することを確認済み
+    && pip install --no-cache-dir --prefix=/install --extra-index-url https://download.pytorch.org/whl/cpu "torch==2.6.0+cpu"
+
+FROM python:3.11-slim AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 1000 keiba
+WORKDIR /app
+COPY --from=builder /install /usr/local
+COPY src/ ./src/
+COPY config/ ./config/
+COPY main.py ./main.py
+RUN mkdir -p /app/logs /app/data/local /app/data/page_reference && chown -R keiba:keiba /app
+USER keiba
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    TZ=Asia/Tokyo \
+    KEIBA_ENV=prod \
+    KEIBA_RUN_LOCATION=gcp \
+    KEIBA_INFERENCE_ENGINE=bundle
+# Cloud Run の args が引数になる（例: -m src.ops.job_dispatch group g-0700）。既定は許可リストの一覧表示。
+ENTRYPOINT ["python3"]
+CMD ["-m", "src.ops.job_dispatch", "list"]

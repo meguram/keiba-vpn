@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+
+{% block title %}仕様書 — めぐ競馬 監視ポータル{% endblock %}
+
+{% block head_extra %}
+<style>
+  .specs-layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  .specs-sidebar {
+    position: sticky;
+    top: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .specs-sidebar-header {
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    border-bottom: 1px solid var(--border);
+  }
+  .specs-group-label {
+    padding: 8px 14px 4px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    opacity: .7;
+  }
+  .specs-file-link {
+    display: block;
+    padding: 7px 14px;
+    font-size: 12px;
+    color: var(--text);
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background .12s, color .12s;
+    border-left: 3px solid transparent;
+  }
+  .specs-file-link:hover {
+    background: rgba(88,166,255,.08);
+    color: var(--accent);
+    border-left-color: var(--accent);
+  }
+  .specs-file-link.active {
+    background: rgba(88,166,255,.14);
+    color: var(--accent);
+    border-left-color: var(--accent);
+    font-weight: 600;
+  }
+  .specs-content-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 28px 32px;
+    min-height: 400px;
+  }
+  .specs-empty {
+    color: var(--muted);
+    text-align: center;
+    padding: 60px 0;
+    font-size: 14px;
+  }
+  .specs-empty .icon { font-size: 36px; display: block; margin-bottom: 12px; }
+
+  /* Markdown コンテンツ スタイル */
+  .md-body { line-height: 1.75; color: var(--text); }
+  .md-body h1 { font-size: 22px; font-weight: 700; margin: 0 0 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); color: var(--accent); }
+  .md-body h2 { font-size: 17px; font-weight: 700; margin: 28px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .md-body h3 { font-size: 14px; font-weight: 700; margin: 20px 0 8px; color: var(--text); }
+  .md-body h4 { font-size: 13px; font-weight: 600; margin: 14px 0 6px; color: var(--muted); }
+  .md-body p { margin: 0 0 12px; }
+  .md-body ul, .md-body ol { padding-left: 20px; margin: 0 0 12px; }
+  .md-body li { margin-bottom: 4px; }
+  .md-body blockquote {
+    border-left: 3px solid var(--accent);
+    margin: 12px 0;
+    padding: 8px 16px;
+    background: rgba(88,166,255,.06);
+    border-radius: 0 6px 6px 0;
+    color: var(--muted);
+  }
+  .md-body blockquote p { margin-bottom: 0; }
+  .md-body code {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 12px;
+    background: rgba(255,255,255,.07);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: #e8c77d;
+  }
+  .md-body pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    margin: 12px 0;
+  }
+  .md-body pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--text);
+    font-size: 12px;
+    white-space: pre;
+  }
+  .md-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 13px;
+  }
+  .md-body th, .md-body td {
+    padding: 7px 12px;
+    border: 1px solid var(--border);
+    text-align: left;
+  }
+  .md-body th {
+    background: rgba(255,255,255,.04);
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+  }
+  .md-body tr:hover td { background: rgba(255,255,255,.02); }
+  .md-body hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+  .md-body a { color: var(--accent); text-decoration: none; }
+  .md-body a:hover { text-decoration: underline; }
+  .md-body del { color: var(--muted); }
+
+  .specs-filename-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .specs-filename-bar .filename {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 10px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-title">
+  <span class="icon">📝</span>仕様書
+</div>
+
+<div class="specs-layout">
+  <!-- サイドバー: ファイル一覧 -->
+  <div class="specs-sidebar">
+    <div class="specs-sidebar-header">ドキュメント一覧</div>
+
+    {% if groups.master %}
+    <div class="specs-group-label">マスター</div>
+    {% for f in groups.master %}
+    <a class="specs-file-link {% if f == current_file %}active{% endif %}" href="/specs/{{ f }}" title="{{ f }}">
+      📌 {{ f | replace('.md', '') }}
+    </a>
+    {% endfor %}
+    {% endif %}
+
+    {% if groups.area %}
+    <div class="specs-group-label">AREA 要件</div>
+    {% for f in groups.area %}
+    <a class="specs-file-link {% if f == current_file %}active{% endif %}" href="/specs/{{ f }}" title="{{ f }}">
+      📄 {{ f | replace('.md', '') }}
+    </a>
+    {% endfor %}
+    {% endif %}
+
+    {% if groups.dec %}
+    <div class="specs-group-label">決定記録 (DEC)</div>
+    {% for f in groups.dec %}
+    <a class="specs-file-link {% if f == current_file %}active{% endif %}" href="/specs/{{ f }}" title="{{ f }}">
+      ✅ {{ f | replace('.md', '') }}
+    </a>
+    {% endfor %}
+    {% endif %}
+  </div>
+
+  <!-- コンテンツエリア -->
+  <div class="specs-content-area">
+    {% if content %}
+    <div class="specs-filename-bar">
+      <span class="filename">docs/decisions/{{ current_file }}</span>
+    </div>
+    <div class="md-body">{{ content | safe }}</div>
+    {% else %}
+    <div class="specs-empty">
+      <span class="icon">📂</span>
+      左のリストからドキュメントを選択してください
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

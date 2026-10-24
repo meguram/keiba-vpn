@@ -1,0 +1,12 @@
+[Unit]
+Description=keiba pull 型デプロイ (fetch) — 毎日 JST 03:20（メンテナンス窓 03:00〜04:00 の中）
+
+[Timer]
+# VPS のタイムゾーンは vps_01 で Asia/Tokyo にしてある。窓の外では pull_release.py 自身も何もしない
+OnCalendar=*-*-* 03:20:00
+RandomizedDelaySec=120
+Persistent=false
+Unit=keiba-release-pull@fetch.service
+
+[Install]
+WantedBy=timers.target

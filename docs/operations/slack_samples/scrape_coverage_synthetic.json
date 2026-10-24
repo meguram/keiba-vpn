@@ -1,0 +1,52 @@
+{
+  "text": "週次カバレッジ 10/18",
+  "attachments": [
+    {
+      "color": "#e01e5a",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*週次カバレッジ 10/18*"
+          }
+        },
+        {
+          "type": "section",
+          "fields": [
+            {
+              "type": "mrkdwn",
+              "text": "*データヘルス*\nwarn（fail 0 / warn 1）"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*2020年以降の充足*\n未達"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*調教の被覆*\n20%（2026-10、下限 90%）"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*スキーマ違反（7日）*\n53 件"
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*未達の理由*\n• 評価期間の開始が 2020-01-01 より後（2026-07-08）"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*指摘*\n• インフラ: PostgreSQL: (psycopg.OperationalError) connection failed: connection to server at \"127.0.0.1\", port 5432 failed: C"
+          }
+        }
+      ]
+    }
+  ]
+}

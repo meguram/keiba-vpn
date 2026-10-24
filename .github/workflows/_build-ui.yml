@@ -1,0 +1,60 @@
+name: _build-ui
+
+# 画面のリリース（standalone）を作って成果物にする共通ジョブ。stg は『ビルドできること』の確認、master はこの成果物を GCS に公開する。
+on:
+  workflow_call:
+    outputs:
+      release_id:
+        value: ${{ jobs.build-ui.outputs.release_id }}
+
+permissions:
+  contents: read
+
+jobs:
+  build-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      release_id: ${{ steps.build.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@v4   # PIN
+      - uses: actions/setup-node@v4   # PIN
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v5   # PIN
+        with:
+          python-version: "3.11"
+      - name: NEXT_PUBLIC_* を stg と揃える（リポジトリの Variables。値は文書に書かない）
+        env:
+          NEXT_PUBLIC_DEFAULT_RACE_DATE: ${{ vars.NEXT_PUBLIC_DEFAULT_RACE_DATE }}
+          NEXT_PUBLIC_PICKER_PAST_DAYS: ${{ vars.NEXT_PUBLIC_PICKER_PAST_DAYS }}
+          NEXT_PUBLIC_ENABLE_FEATURES: ${{ vars.NEXT_PUBLIC_ENABLE_FEATURES }}
+        run: |
+          : > scripts/ops/vps/build.env
+          for k in NEXT_PUBLIC_DEFAULT_RACE_DATE NEXT_PUBLIC_PICKER_PAST_DAYS NEXT_PUBLIC_ENABLE_FEATURES; do
+            v="${!k:-}"; [ -n "$v" ] && printf '%s=%s\n' "$k" "$v" >> scripts/ops/vps/build.env
+          done
+          echo "build.env の項目数: $(wc -l < scripts/ops/vps/build.env)"
+      - name: 画面のビルド（standalone）と成果物の作成
+        id: build
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/release"; mkdir -p "$out"
+          bash scripts/ops/vps/build_release.sh --commit "$GITHUB_SHA" --out "$out" | tee "$RUNNER_TEMP/build.log"
+          f="$(ls "$out"/keiba-ui-*.tar.gz | head -1)"
+          echo "release_id=$(basename "$f" .tar.gz)" >> "$GITHUB_OUTPUT"
+          ls -l "$out"
+      - name: 成果物の sha256 を検算
+        run: |
+          cd "$RUNNER_TEMP/release" && sha256sum -c ./*.sha256
+      - uses: actions/upload-artifact@v4   # PIN
+        with:
+          name: ui-release
+          path: |
+            ${{ runner.temp }}/release/*.tar.gz
+            ${{ runner.temp }}/release/*.sha256
+            ${{ runner.temp }}/release/*.manifest.json
+          retention-days: 14
+          if-no-files-found: error

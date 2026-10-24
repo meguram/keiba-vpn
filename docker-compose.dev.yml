@@ -1,0 +1,41 @@
+# Dev 環境用: PostgreSQL 15 + Redis 7
+# 起動: docker compose -f docker-compose.dev.yml up -d
+# 停止: docker compose -f docker-compose.dev.yml down
+#
+# DATABASE_URL=postgresql://keiba_user:keiba_pass@localhost:5432/keiba_db
+# REDIS_URL=redis://localhost:6379/0
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: keiba-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: keiba_user
+      POSTGRES_PASSWORD: keiba_pass
+      POSTGRES_DB: keiba_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - keiba_pg_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keiba_user -d keiba_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: keiba-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  keiba_pg_dev:
+    driver: local

@@ -1,0 +1,13 @@
+{
+  "_comment": "有料会員の決済の設定（秘密は入れない。キーは環境変数 STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET / STRIPE_PRICE_ID）。license_confirmed が false の間は、本番キー（sk_live_）では有効にならない。データの利用許諾（netkeiba など）を確認してから true にする。",
+  "license_confirmed": false,
+  "plan_label": "月額プラン",
+  "grace_days": 3,
+  "trial_days": 0,
+  "success_url": "https://app.megu-keiba.com/login?billing=success",
+  "cancel_url": "https://app.megu-keiba.com/?billing=cancel",
+  "portal_return_url": "https://app.megu-keiba.com/",
+  "allowed_origins": ["https://app.megu-keiba.com"],
+  "signup_per_ip_per_hour": 5,
+  "pending_ttl_hours": 24
+}

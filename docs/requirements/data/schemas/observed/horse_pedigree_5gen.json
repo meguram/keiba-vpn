@@ -1,0 +1,366 @@
+{
+ "category": "horse_pedigree_5gen",
+ "conformance": {
+  "failures": {},
+  "passed": 201,
+  "validated": 201
+ },
+ "keys": {
+  "max": "2024106880",
+  "min": "2019105219"
+ },
+ "lists": {
+  "ancestors": {
+   "fields": {
+    "generation": {
+     "empty": 0,
+     "max": 5,
+     "min": 1,
+     "n": 12462,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 12462
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "horse_id": {
+     "empty": 0,
+     "len_max": 10,
+     "len_min": 10,
+     "n": 12462,
+     "null": 0,
+     "patterns": {
+      "digits10": 1422,
+      "text": 11040
+     },
+     "types": {
+      "str": 12462
+     },
+     "values": {
+      "000a0000cc": 1,
+      "000a000258": 1,
+      "000a00033a": 217,
+      "000a000355": 1,
+      "000a000364": 1,
+      "000a0003a2": 1,
+      "000a00058e": 1,
+      "000a00062c": 1,
+      "000a000d30": 1,
+      "000a000e04": 267,
+      "000a000e0d": 1,
+      "000a000f2b": 207,
+      "000a001205": 3,
+      "000a0012bf": 257,
+      "000a0019b6": 159,
+      "000a001cb4": 1,
+      "000a007459": 171,
+      "000a007c8d": 1,
+      "000a008341": 1,
+      "000a008824": 1,
+      "000a008aad": 1,
+      "000a008c1d": 159,
+      "000a008c1e": 215,
+      "000a009170": 1,
+      "000a00922c": 1
+     },
+     "values_overflow": true
+    },
+    "name": {
+     "empty": 0,
+     "len_max": 33,
+     "len_min": 2,
+     "n": 12462,
+     "null": 0,
+     "patterns": {
+      "text": 12462
+     },
+     "types": {
+      "str": 12462
+     },
+     "values": {
+      "Alzao": 1,
+      "Burghclere": 1,
+      "Busted": 1,
+      "Cosmah": 171,
+      "Hail to Reason": 207,
+      "Halo": 257,
+      "Highclere": 1,
+      "Honest Pleasure": 1,
+      "Lady Rebecca": 1,
+      "Lyphard": 3,
+      "Mountain Flower": 159,
+      "Understanding": 159,
+      "Wishing Well": 215,
+      "アンジェリカ": 1,
+      "オトメゴコロ": 1,
+      "キタサンブラック": 1,
+      "クリアアンバー": 1,
+      "サクラハゴロモ": 1,
+      "サクラバクシンオー": 1,
+      "サクラユタカオー": 1,
+      "シュガーハート": 1,
+      "ジャッジアンジェルーチ": 1,
+      "テスコボーイ": 1,
+      "ノーザンテースト": 1,
+      "ブラックタイド": 1
+     },
+     "values_overflow": true
+    },
+    "position": {
+     "empty": 0,
+     "max": 31,
+     "min": 0,
+     "n": 12462,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 12462
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "sex": {
+     "empty": 3312,
+     "len_max": 1,
+     "len_min": 0,
+     "n": 4278,
+     "null": 0,
+     "patterns": {
+      "empty": 3312,
+      "text": 966
+     },
+     "types": {
+      "str": 4278
+     },
+     "values": {
+      "": 3312,
+      "牝": 483,
+      "牡": 483
+     },
+     "values_overflow": false
+    }
+   },
+   "items": 12462,
+   "records": 201
+  }
+ },
+ "nested": {},
+ "records": 201,
+ "runs": [
+  {
+   "at": "2026-10-06T05:19:46+00:00",
+   "host": "JP-CG4QN94",
+   "records": 1,
+   "source": "samples"
+  },
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
+  }
+ ],
+ "top": {
+  "ancestor_count": {
+   "empty": 0,
+   "max": 62,
+   "min": 62,
+   "n": 201,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 201
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "ancestors": {
+   "empty": 0,
+   "len_max": 62,
+   "len_min": 62,
+   "n": 201,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 201
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "dam": {
+   "empty": 0,
+   "len_max": 30,
+   "len_min": 3,
+   "n": 201,
+   "null": 0,
+   "patterns": {
+    "text": 201
+   },
+   "types": {
+    "str": 201
+   },
+   "values": {
+    "アスコルティ": 1,
+    "エバーブロッサム": 1,
+    "カレンオプシス": 1,
+    "グローブ": 1,
+    "コウユーユメダンス": 1,
+    "サイモンガーランド": 1,
+    "サウスエンピリカル": 1,
+    "シェアザストーリー": 1,
+    "シャトーブランシュ": 1,
+    "ジヴェルニーアート": 1,
+    "スウェアトウショウ": 1,
+    "スプリングレイン": 1,
+    "センシュアルドレス": 1,
+    "ニシノカザブエ": 1,
+    "ハッピーパウダー": 1,
+    "パープルセイル": 1,
+    "フォレガFolega(英)": 1,
+    "ベネフィット": 1,
+    "マジカルデイ": 1,
+    "マチカネハヤテ": 1,
+    "ムーンハウリング": 1,
+    "ライゼリート": 1,
+    "リリークラウン": 1,
+    "ルアンジュ": 1,
+    "レティセントガール": 1
+   },
+   "values_overflow": true
+  },
+  "dam_sire": {
+   "empty": 0,
+   "len_max": 32,
+   "len_min": 3,
+   "n": 201,
+   "null": 0,
+   "patterns": {
+    "text": 201
+   },
+   "types": {
+    "str": 201
+   },
+   "values": {
+    "All American": 1,
+    "Danehill Dancer(愛)": 1,
+    "Dubai Millennium(英)": 1,
+    "Giant's Causeway(米)": 2,
+    "Mayakovsky": 1,
+    "Oasis Dream(英)": 1,
+    "アグネスタキオン": 4,
+    "ウォーニングWarning(英)": 1,
+    "キングカメハメハ": 7,
+    "キングヘイロー": 1,
+    "クロフネ": 4,
+    "ゴールドアリュール": 4,
+    "サクラバクシンオー": 3,
+    "サムライハート": 1,
+    "ステイゴールド": 3,
+    "ゼンノロブロイ": 4,
+    "ダイワメジャー": 3,
+    "ダンスインザダーク": 1,
+    "ディープインパクト": 11,
+    "ネオユニヴァース": 7,
+    "ハーツクライ": 5,
+    "ハービンジャーHarbinger(英)": 1,
+    "フジキセキ": 3,
+    "マンハッタンカフェ": 6,
+    "メジロマックイーン": 1
+   },
+   "values_overflow": true
+  },
+  "horse_id": {
+   "empty": 0,
+   "len_max": 10,
+   "len_min": 10,
+   "n": 201,
+   "null": 0,
+   "patterns": {
+    "digits10": 201
+   },
+   "types": {
+    "str": 201
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "sex": {
+   "empty": 69,
+   "len_max": 0,
+   "len_min": 0,
+   "n": 69,
+   "null": 0,
+   "patterns": {
+    "empty": 69
+   },
+   "types": {
+    "str": 69
+   },
+   "values": {
+    "": 69
+   },
+   "values_overflow": false
+  },
+  "sire": {
+   "empty": 0,
+   "len_max": 32,
+   "len_min": 3,
+   "n": 201,
+   "null": 0,
+   "patterns": {
+    "text": 201
+   },
+   "types": {
+    "str": 201
+   },
+   "values": {
+    "アドマイヤムーン": 2,
+    "エピファネイア": 4,
+    "オルフェーヴル": 2,
+    "カレンブラックヒル": 2,
+    "キタサンブラック": 6,
+    "グレーターロンドン": 1,
+    "サトノクラウン": 3,
+    "スクリーンヒーロー": 1,
+    "タニノギムレット": 1,
+    "ダイワメジャー": 1,
+    "デクラレーションオブウォー": 2,
+    "トーセンラー": 2,
+    "ドゥラメンテ": 2,
+    "ノボジャック": 1,
+    "バゴBago(仏)": 3,
+    "ビッグアーサー": 2,
+    "モンテロッソMonterosso(英)": 1,
+    "ラブリーデイ": 1,
+    "リアルインパクト": 1,
+    "リアルスティール": 3,
+    "リオンディーズ": 5,
+    "ルーラーシップ": 3,
+    "ロードカナロア": 2,
+    "ワンアンドオンリー": 1,
+    "ヴィクトワールピサ": 2
+   },
+   "values_overflow": true
+  },
+  "source": {
+   "empty": 0,
+   "len_max": 25,
+   "len_min": 6,
+   "n": 201,
+   "null": 0,
+   "patterns": {
+    "text": 201
+   },
+   "types": {
+    "str": 201
+   },
+   "values": {
+    "netkeiba": 1,
+    "phase1": 8
+   },
+   "values_overflow": false
+  }
+ }
+}

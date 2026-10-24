@@ -1,0 +1,65 @@
+<!doctype html><html lang='ja'><head><meta charset='utf-8'><title>想定位置取り・追走難度・想定上がりの連動（tp-53）</title><style>:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --warn:#fbbf24; }
+* { box-sizing: border-box; } body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 15px; padding: 40px 56px 96px; max-width: 1100px; margin: 0 auto; }
+a { color: var(--accent-2); } h1 { font-size: 26px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; } h3 { font-size: 16px; margin: 22px 0 8px; }
+table { border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; background: var(--panel); } th, td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; vertical-align: top; } th { background: #1b2a4d; }
+td.num { text-align: right; font-family: monospace; } .muted { color: var(--muted); font-size: 13px; } .note { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+.hm { overflow: auto; max-height: 760px; border: 1px solid var(--border); } table.hm { font-size: 9px; margin: 0; } table.hm td { width: 14px; height: 14px; min-width: 14px; padding: 0; text-align: center; font-size: 8px; line-height: 14px; border: 1px solid #1b2a4d; }
+table.hm th.v { height: 150px; padding: 0; vertical-align: bottom; } table.hm th.v div { writing-mode: vertical-rl; white-space: nowrap; font-size: 9px; padding: 2px 0; } table.hm th.h { white-space: nowrap; font-size: 9px; padding: 0 4px; text-align: right; position: sticky; left: 0; }
+td.d { background: #243358; } td.n { background: #0b1428; }</style></head><body>
+<h1>想定位置取り・追走難度・想定上がりの連動（tp-53）</h1>
+<p class="muted">ユーザー指摘（2026-10-20）: 想定位置取りと、追走難度、想定上がりがうまく連動していない気がする。結果から読み取れる関係と、予測値との関係の差分を確認する。
+対象: 2020〜2025 年の 20,270 レース・28.3 万頭（追走難度側は事前計算の保存物、位置取り側は馬柱から同じ関数で再計算、実測は確定結果）。</p>
+
+<h2>1. 要点</h2>
+<ul>
+<li><b>連動していません。原因は設計です。</b>この 3 つは別系統で作られ、共通のペース想定がありません。位置取り（隊列）は馬柱の通過順位だけの集計、追走難度・想定上がりは別のルールで、画面の「展開」の見出しは位置取り側のペース、上がりの基準は追走側のペースに由来します。</li>
+<li><b>追走側のペースは実測と無関係です。</b>91% のレースが「ミドル」、実測の前半 3F との相関は −0.02（位置取り側の先行勢の圧力は −0.33）。追走側の脚質の分布は 92% が「差し」で、逃げ・先行が 0 頭のレースが 82%（位置取り側は逃げ・先行が平均 4.6 頭）。</li>
+<li><b>想定上がりは位置取りにほとんど反応しません。</b>実測では、後ろの馬ほど上がりが速く（全体で最後方と先頭の差 約 0.9 秒、ペースが速いほど大きい: ハイ −1.4 / ミドル −0.8 / スロー −0.3）、追走側の想定上がりでは同じ傾きが −0.15（全期間）で、2024〜25 年はほぼ 0（2023 年は −0.25）、追走側が「ハイ」と判定したレースでは符号が逆です。</li>
+<li><b>整合層（既定オフ）で連動を回復できます。</b>位置取り側の先行勢からペースを推定し、位置取り×ペースで上がり偏差を決め、同条件の中央値と自己の過去の上がり偏差を足す。2023〜2025 年の walk-forward で、上がり偏差の相関は 0.07〜0.16 → 0.35〜0.36、MAE は 0.76〜0.93 → 0.69〜0.70、ペース 3 分類の一致は 37〜40%（全部ミドルと答えるだけでも 39〜40%）→ 46〜47%。</li>
+<li>V4/V5 の勝率予測への影響はありません（これらの値は V4/V5 の入力ではなく、画面表示用です）。</li>
+</ul>
+
+<h2>2. 2 つのペース定義は一致せず、追走側は実測と無関係</h2>
+<p>位置取り側（逃げ・先行の頭数から ハイ/ミドル/スロー）と追走側（pace_prediction.pace_type）の一致率は <b>26.2%</b>（追走側の 91.0% が「ミドル」）。実測のペース（前半 3F の同条件 z で 3 分類）との一致率は、位置取り側 37.9%、追走側 39.1% で、どちらも低い（全部『ミドル』と答えるだけで 39〜40% 取れるので、位置取り側 38〜39%・追走側 37〜40% は、その水準を超えていない）。ただし相関で見ると、位置取り側は実測と意味のある関係があり、追走側はほぼ無関係です。</p>
+<table><tr><th>位置取り側のペース ＼ 追走側のペース</th><th>ハイ</th><th>ミドル</th><th>スロー</th></tr><tr><td>ハイ</td><td class='num'>86</td><td class='num'>52</td><td class='num'>92</td></tr><tr><td>ミドル</td><td class='num'>5,667</td><td class='num'>4,172</td><td class='num'>6,975</td></tr><tr><td>スロー</td><td class='num'>553</td><td class='num'>353</td><td class='num'>591</td></tr></table>
+<table><tr><th>ペースの指標</th><th>実測の前半3F（同条件で標準化・小さいほど速い）との相関</th></tr><tr><td>pf_pressure</td><td class='num'>-0.331</td></tr><tr><td>pf_front</td><td class='num'>-0.273</td></tr><tr><td>pf_stalker</td><td class='num'>-0.306</td></tr><tr><td>td_pace_index</td><td class='num'>-0.024</td></tr><tr><td>td_pressure</td><td class='num'>-0.128</td></tr><tr><td>td_front</td><td class='num'>+0.017</td></tr><tr><td>td_stalker</td><td class='num'>-0.002</td></tr><tr><td>td_first3f</td><td class='num'>+0.005</td></tr></table>
+<p>位置取り側の「逃げが 0 頭のレースは『スロー』」は実測の傾向と合っています（実測 z の平均 +0.50、前半が遅い）。ご指摘の例（202604040101 新潟 1R: 位置取り側スロー・逃げ 0・先行 6、追走側ミドル・先行 3）は、逃げ 0 頭でも先行 3〜6 頭いることが多く、追走側の脚質判定が先行を数えていないために食い違います。</p>
+<table><tr><th>位置取り側の『逃げ』の頭数</th><th>レース数</th><th>実測の前半3F z の平均（大きいほど遅い）</th><th>『スロー』判定の割合</th></tr><tr><td>0頭</td><td class='num'>5,946</td><td class='num'>+0.500</td><td class='num'>71.0%</td></tr><tr><td>1頭</td><td class='num'>5,621</td><td class='num'>+0.032</td><td class='num'>61.1%</td></tr><tr><td>2頭</td><td class='num'>4,264</td><td class='num'>-0.103</td><td class='num'>0.0%</td></tr><tr><td>3頭以上</td><td class='num'>4,437</td><td class='num'>-0.290</td><td class='num'>0.0%</td></tr></table>
+
+<h2>3. 結果から読み取れる関係と、予測値の関係</h2>
+<p>実測（レース内で平均を引いた上がり偏差 ~ 初角位置）は、全体で相関 -0.239、位置が後ろ1.0あたり約 -0.836 秒。追走側の想定上がりの傾きは -0.148（実測の 5 分の 1 以下）。</p>
+<table><tr><th>ペース（実測）</th><th>実測 2020〜25（位置が後ろ1.0あたりの上がり偏差・秒）</th><th>追走側の想定上がり 2020〜25</th><th>実測 2025</th><th>追走側 2025</th><th>整合層（新）2025</th></tr><tr><td>ハイ</td><td class='num'>-1.400</td><td class='num'>-0.184</td><td class='num'>-1.423</td><td class='num'>-0.009</td><td class='num'>-0.818</td></tr><tr><td>ミドル</td><td class='num'>-0.796</td><td class='num'>-0.159</td><td class='num'>-0.828</td><td class='num'>-0.027</td><td class='num'>-0.684</td></tr><tr><td>スロー</td><td class='num'>-0.290</td><td class='num'>-0.105</td><td class='num'>-0.473</td><td class='num'>-0.019</td><td class='num'>-0.595</td></tr><tr><td>全体</td><td class='num'>-0.836</td><td class='num'>-0.148</td><td class='num'>-0.941</td><td class='num'>-0.020</td><td class='num'>-0.710</td></tr></table>
+<table><tr><th>予測値どうしの連動 / 実測</th><th>相関</th></tr><tr><td>td_l3f~td_early</td><td class='num'>-0.068</td></tr><tr><td>td_l3f~pf_early</td><td class='num'>-0.106</td></tr><tr><td>td_l3f~td_stamina</td><td class='num'>-0.078</td></tr><tr><td>td_early~td_stamina</td><td class='num'>+0.984</td></tr><tr><td>td_early~td_ease</td><td class='num'>-0.452</td></tr><tr><td>act_l3f~act_early</td><td class='num'>-0.239</td></tr></table>
+<table><tr><th>組合せ（レース内で平均を引いた相関）</th><th>相関</th><th>頭数</th></tr><tr><td>td_early~act_early</td><td class='num'>+0.177</td><td class='num'>281,326</td></tr><tr><td>pf_early~act_early</td><td class='num'>+0.528</td><td class='num'>253,278</td></tr><tr><td>td_early~pf_early</td><td class='num'>+0.348</td><td class='num'>254,782</td></tr><tr><td>td_l3f~act_l3f</td><td class='num'>+0.121</td><td class='num'>272,536</td></tr><tr><td>td_stamina~act_l3f</td><td class='num'>-0.071</td><td class='num'>272,536</td></tr><tr><td>td_ease~act_l3f</td><td class='num'>+0.019</td><td class='num'>272,536</td></tr><tr><td>td_stamina~act_early</td><td class='num'>+0.194</td><td class='num'>281,326</td></tr><tr><td>td_ease~act_early</td><td class='num'>-0.016</td><td class='num'>281,326</td></tr></table>
+<p>追走側の「楽さ」（ease_pct）と「温存度」（stamina_index）は、位置取りの言い換えに近い（温存度は追走側の位置と相関 0.98）ため、上がりの予測に新しい情報を足していません。個別の位置取りの当たりも、追走側 +0.177、位置取り側 +0.528 と、位置取り側のほうが大幅に良い。</p>
+
+<h2>4. 原因の切り分け</h2>
+<ol>
+<li><b>(a) 3 つが独立に作られている</b>: 位置取り側（馬柱だけのルール）と追走側（別のルールとスコア）が別々の脚質判定を持つ。追走側の脚質は 差し 91.9%・先行 5.0%・追込 2.6%・逃げ 0.5%、位置取り側は 差し(中団) 39.6%・先行 24.9%・追込 23.5%・逃げ 12.1%。</li>
+<li><b>(b) ペースの共有が無い</b>: 位置取り側の先行勢の数が追走側のペース・想定上がりに伝わらない。追走側のペース指数は実測と無相関。</li>
+<li><b>(c) 想定上がりの水準が不安定</b>: 追走側の基準上がり（last_3f_baseline_sec）は、実測のレース中央値に対し MAE 1.7〜2.3 秒、ダートで偏り −2.2 秒（芝 −0.1 秒）。同条件の中央値（前年まで）なら MAE 0.74〜0.77 秒・相関 0.87〜0.88。</li>
+<li><b>(d) 馬の上がり能力の測り方</b>: 近走の上がり『秒』の加重平均で、条件（芝/ダ・距離・馬場）の補正がなく、サンプルが無い馬（41%）は基準のまま。自己の過去の上がり偏差（同条件の中央値との差）は、単独で実測との相関 0.34〜0.36 と最も効く。</li>
+<li>(e) 特徴量の先読み・時点ずれ: 追走側の保存物は pre_race_only=True で対象日より前の走だけを使っており、先読みは見つからなかった（lgbm は heuristic）。</li>
+</ol>
+<table><tr><th>年</th><th>追走側の基準上がり: MAE(秒) / 偏り / 相関</th><th>同条件の中央値（前年まで）: MAE / 偏り / 相関</th></tr><tr><td>2023</td><td class='num'>1.73 / -1.23 / 0.43</td><td class='num'>0.77 / +0.09 / 0.87</td></tr><tr><td>2024</td><td class='num'>1.95 / -1.03 / 0.29</td><td class='num'>0.74 / +0.12 / 0.88</td></tr><tr><td>2025</td><td class='num'>2.29 / -0.91 / 0.18</td><td class='num'>0.76 / +0.20 / 0.88</td></tr></table>
+
+<h2>5. 整合層（pace_coherence）の検証</h2>
+<p>位置取り側の位置取り（枠補正後）と先行勢の数だけを入力にして、(1) 前半 3F の z を推定、(2) 位置取り×ペース z（×距離・芝）で上がり偏差を決め、(3) 自己の過去の上がり偏差（同条件の中央値との差の直近 5 走平均）を足す。同条件の表と係数は学習年より前だけで作り（walk-forward）、最終版は 2020〜2025 年で作る。</p>
+<table><tr><th>年（学習は前年まで）</th><th>ペース 3 分類の一致率: 新</th><th>位置取り側</th><th>追走側</th><th>全部ミドルと答える</th><th>ペース相関: 新</th><th>上がり偏差の相関: 新 / 既存</th><th>MAE(秒): 新 / 既存 / 全員0</th></tr><tr><td>2023</td><td class='num'>46.6%</td><td class='num'>38.0%</td><td class='num'>39.5%</td><td class='num'>39.9%</td><td class='num'>+0.425</td><td class='num'>+0.360 / +0.159</td><td class='num'>0.696 / 0.926 / 0.752</td></tr><tr><td>2024</td><td class='num'>45.5%</td><td class='num'>37.8%</td><td class='num'>36.7%</td><td class='num'>38.5%</td><td class='num'>+0.398</td><td class='num'>+0.362 / +0.076</td><td class='num'>0.689 / 0.805 / 0.746</td></tr><tr><td>2025</td><td class='num'>45.5%</td><td class='num'>38.8%</td><td class='num'>38.4%</td><td class='num'>40.3%</td><td class='num'>+0.390</td><td class='num'>+0.353 / +0.073</td><td class='num'>0.696 / 0.758 / 0.749</td></tr></table>
+<table><tr><th>上がり偏差の予測（相関 / MAE 秒）</th><th>2023</th><th>2024</th><th>2025</th></tr><tr><td>位置×ペース＋自己の過去上がり（傾きの上限つき・採用）</td><td class='num'>+0.360 / 0.696</td><td class='num'>+0.362 / 0.689</td><td class='num'>+0.353 / 0.696</td></tr><tr><td>位置×ペース＋自己の過去上がり</td><td class='num'>+0.360 / 0.696</td><td class='num'>+0.362 / 0.689</td><td class='num'>+0.352 / 0.696</td></tr><tr><td>位置×ペースのみ</td><td class='num'>+0.166 / 0.739</td><td class='num'>+0.162 / 0.734</td><td class='num'>+0.148 / 0.739</td></tr><tr><td>自己の過去上がりのみ</td><td class='num'>+0.347 / 0.700</td><td class='num'>+0.353 / 0.692</td><td class='num'>+0.344 / 0.698</td></tr><tr><td>TD既存（そのまま）</td><td class='num'>+0.159 / 0.926</td><td class='num'>+0.076 / 0.805</td><td class='num'>+0.073 / 0.758</td></tr><tr><td>TD既存（最良の線形再較正）</td><td class='num'>+0.159 / 0.739</td><td class='num'>+0.076 / 0.743</td><td class='num'>+0.073 / 0.747</td></tr><tr><td>全員 0（偏差なし）</td><td class='num'>+0.000 / 0.752</td><td class='num'>+0.000 / 0.746</td><td class='num'>+0.000 / 0.749</td></tr></table>
+<p><b>読み方</b>: 上がり偏差の改善の大半は『自己の過去の上がり偏差』（単独で相関 0.34〜0.35）から来ており、『位置×ペース』の結合だけでは相関 0.15〜0.16 だが、傾きが実測に近づく（追走側はほぼ 0 → 新は −0.55〜−0.88 と実測 −0.36〜−1.47 の順序（スロー < ミドル < ハイ）と一致）。つまり<b>連動の回復は位置×ペースの項、精度の向上は自己の過去の上がりの項</b>が担う。</p>
+<table><tr><th>項目</th><th>係数</th></tr><tr><td>ペース z: pf_front</td><td class='num'>-0.261</td></tr><tr><td>ペース z: pf_stalker</td><td class='num'>-0.203</td></tr><tr><td>ペース z: pf_pressure</td><td class='num'>+0.908</td></tr><tr><td>ペース z: surf</td><td class='num'>-0.005</td></tr><tr><td>ペース z: dist_k</td><td class='num'>-0.583</td></tr><tr><td>ペース z: wet</td><td class='num'>+0.003</td></tr><tr><td>上がり偏差: e</td><td class='num'>-0.312</td></tr><tr><td>上がり偏差: e_z</td><td class='num'>+0.713</td></tr><tr><td>上がり偏差: e_dist</td><td class='num'>-0.008</td></tr><tr><td>上がり偏差: e_surf</td><td class='num'>+0.076</td></tr><tr><td>上がり偏差: prior</td><td class='num'>+0.423</td></tr></table>
+
+<h2>6. 実装と導入（画面表示用・既定オフ）</h2>
+<ul>
+<li><code>src/pipeline/inference/pace_coherence.py</code>（<code>config/pace_coherence.json</code> に係数と同条件の表）。環境変数 <code>KEIBA_PACE_COHERENCE=1</code> のときだけ、予測 API の応答に <code>pace_unified</code>（z・ハイ/ミドル/スロー・想定の前半 3F・基準の上がり）と、各馬の <code>l3f_coherent</code>（上がり偏差・想定の上がり秒・順位）を足す。無効・設定なし・材料不足のときは何もしない。</li>
+<li>画面は <code>pace_unified</code> を見出しのペースに使い、<code>l3f_coherent</code> を想定上がりに使えば、位置取り・ペース・上がりが同じ流れになる（UI の編集は keiba-vpn-72 の担当）。追走側の既存の値は残る（併記できる）。</li>
+<li>V4/V5 の入力ではない（<code>tracking_difficulty</code>・<code>position_forecast</code> は特徴量にもサービングにも使われていない）ため、再学習は不要。</li>
+</ul>
+<h2>7. 限界</h2>
+<ul>
+<li>『整合層』は実測の関係を作るだけで、予測の当たりを保証しない（上がり偏差の相関は 0.35 前後）。追走難度（ease_pct）自体の再設計（stamina と位置の重複の解消）は未実施。</li>
+<li>位置取りは枠順補正後の過去走ベースの集計で、実際の隊列とは別。初出走・履歴の浅い馬は位置取りも上がりも出ない。</li>
+<li>ペースの 3 分類の閾値（±0.5 SD）は 3 分位に近いが、実測のペースは連続量。</li>
+</ul>
+</body></html>

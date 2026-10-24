@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>keiba-vpn アーキテクチャ・ヘルスチェック — 2026-09-30（全件解消）</title>
+<style>
+  :root {
+    --page-plane:     #f9f9f7;
+    --surface:        #fcfcfb;
+    --surface-alt:    #f3f2ee;
+    --ink-primary:    #0b0b0b;
+    --ink-secondary:  #52514e;
+    --ink-muted:      #898781;
+    --border:         rgba(11,11,11,0.10);
+    --gridline:       #e1e0d9;
+    --status-good:    #0ca30c;
+    --status-warning: #fab219;
+    --status-critical:#d03b3b;
+    --success-text:   #006300;
+  }
+  body { font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+         max-width: 1150px; margin: 0 auto; padding: 32px 16px 48px;
+         background: var(--page-plane); color: var(--ink-primary); line-height: 1.6; }
+  h1 { font-size: 1.6em; margin-bottom: 4px; }
+  .meta { color: var(--ink-secondary); font-size: 0.9em; margin-bottom: 24px; }
+  h2 { border-bottom: 1px solid var(--gridline); padding-bottom: 6px; margin-top: 40px; }
+  h3 { margin-top: 28px; }
+  .cards { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0 24px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+          padding: 14px 18px; min-width: 140px; }
+  .card .dot-label { display: flex; align-items: center; gap: 6px; font-size: 0.8em;
+                      color: var(--ink-secondary); margin-bottom: 6px; }
+  .card .dot-label::before { content: ""; width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .card.total .dot-label::before { background: var(--ink-muted); }
+  .card.ok .dot-label::before { background: var(--status-good); }
+  .card.warn .dot-label::before { background: var(--status-warning); }
+  .card.crit .dot-label::before { background: var(--status-critical); }
+  .card .num { font-size: 1.9em; font-weight: 700; font-variant-numeric: tabular-nums; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 28px; font-size: 0.9em;
+          background: var(--surface); }
+  th, td { border: 1px solid var(--gridline); padding: 5px 9px; text-align: left; vertical-align: top; }
+  th { background: var(--surface-alt); color: var(--ink-secondary); font-weight: 600; position: sticky; top: 0; }
+  code { background: var(--surface-alt); padding: 1px 5px; border-radius: 4px; font-size: 0.92em; }
+  .status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px;
+            border-radius: 999px; background: var(--surface); border: 1px solid var(--border);
+            font-weight: 600; font-size: 0.82em; white-space: nowrap; }
+  .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .status-ok::before { background: var(--status-good); }
+  .status-warn::before { background: var(--status-warning); }
+  .status-crit::before { background: var(--status-critical); }
+  .issue { background: var(--surface); border: 1px solid var(--border);
+           border-left: 4px solid var(--status-warning); border-radius: 8px;
+           padding: 10px 14px; margin: 10px 0; }
+  .issue h4 { margin: 0 0 6px; display: flex; align-items: center; gap: 6px; }
+  .issue h4::before { content: ""; width: 8px; height: 8px; border-radius: 50%;
+                      background: var(--status-warning); flex: 0 0 auto; display: inline-block; }
+  .issue[style*="status-good"] h4::before { background: var(--status-good); }
+  footer { color: var(--ink-muted); font-size: 0.85em; margin-top: 40px;
+           border-top: 1px solid var(--gridline); padding-top: 12px; }
+</style>
+</head>
+<body>
+
+<h1>keiba-vpn アーキテクチャ・ヘルスチェック（全件解消・確認版）</h1>
+<div class="meta">
+  実行日: 2026-09-30（同日3回目・前回レポートを上書き） ／ 対象コミット: <code>a69c505</code> ／
+  実行者: Claude（evaluate-keiba-architecture skill）
+</div>
+
+<h2>1. サマリー</h2>
+<div class="cards">
+  <div class="card total"><div class="dot-label">総エンドポイント数</div><div class="num">268</div></div>
+  <div class="card ok"><div class="dot-label">OK</div><div class="num">268</div></div>
+  <div class="card warn"><div class="dot-label">警告</div><div class="num">0</div></div>
+  <div class="card crit"><div class="dot-label">重大</div><div class="num">0</div></div>
+</div>
+<p>
+今回、前回残っていた警告7件すべてに対応した。growth-curve・tracking-difficulty（計5件）はv1へのパラメータ・
+precomputeエンドポイント追加によりパリティを実現し「解消」。race predictions（2件）は、実際に3系統ある書き込みパスの
+どれも自動実行されていないこと（crontab等で確認済み）・T-15自動トリガが未完成コードであることを確認した上で
+「現状は実害無しと判断し統合は見送り」とした（<code>docs/operations/service-endpoints.md</code>に判断根拠と
+将来の再検討条件を記録）。総エンドポイント268件、OK 268件・警告0件・重大0件。
+</p>
+
+<h2>2. 層別エンドポイント一覧</h2>
+
+<h3>2-1. FastAPI legacy — <code>src/api/app.py</code>（:8000, DEC-013により段階廃止予定）</h3>
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Handler</th><th>Status</th><th>所見</th></tr></thead>
+<tbody>
+<tr><td>GET</td><td><code>/api/health</code></td><td>health_check (L880)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/html-archive/cleanup</code></td><td>html_archive_cleanup (L896)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/login</code></td><td>login_page (L914)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/login</code></td><td>login_submit (L928)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/logout</code></td><td>logout (L946)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/auth/status</code></td><td>auth_status (L951)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/</code></td><td>dashboard (L962)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/predictions</code></td><td>get_predictions (L972)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/gcs-stats</code></td><td>get_gcs_stats (L980)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/monitor</code></td><td>scrape_monitor_page (L1374)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/scrape-status</code></td><td>get_scrape_status (L1792)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/date-race-matrix</code></td><td>get_date_race_matrix (L1985)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/monitor/context</code></td><td>get_monitor_context (L2096)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/date-raw-matrix</code></td><td>get_date_raw_matrix (L2119)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/date-calculated-matrix</code></td><td>get_date_calculated_matrix (L2141)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/quality-check/enqueue</code></td><td>post_quality_check_enqueue (L2166)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/quality-check/jobs</code></td><td>get_quality_check_jobs (L2177)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/quality-check/health</code></td><td>get_quality_check_health (L2184)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/monitor/opening-date-info</code></td><td>get_opening_date_info (L2197)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/quality-check/remediate</code></td><td>post_quality_check_remediate (L2217)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/quality-check/calendar</code></td><td>get_quality_check_calendar (L2239)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-missing</code></td><td>scrape_missing (L2296)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/row-data-coverage</code></td><td>get_row_data_coverage (L2400)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/monitor/missing-dates-summary</code></td><td>api_monitor_missing_dates_summary (L2413)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/scrape-dates</code></td><td>get_scraped_dates (L2486)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/race-list/{date}</code></td><td>get_race_list_for_date (L2618)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/megu-index-dates</code></td><td>get_megu_index_dates (L2778)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/scrape-summary-all</code></td><td>get_scrape_summary_all (L2822)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/coverage-calendar</code></td><td>get_coverage_calendar (L2986)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/data/{category}/{key}</code></td><td>get_raw_data (L3166)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/horse/{horse_id}/detail</code></td><td>api_horse_detail (L3226)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/horse/{horse_id}/recent_races</code></td><td>api_horse_recent_races (L3306)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/horse/{horse_id}/race_performance_history</code></td><td>api_horse_race_performance_history (L3401)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/race/{race_id}/bundle</code></td><td>api_race_bundle (L3618)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/person/{ptype}/{person_id}/stats</code></td><td>api_person_stats (L3696)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/data-viewer</code></td><td>data_viewer (L4020)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-trigger</code></td><td>trigger_scrape (L4360)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/scrape-jobs</code></td><td>get_scrape_jobs (L4447)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/upcoming-races</code></td><td>get_upcoming_races (L4561)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/add</code></td><td>add_to_scrape_queue (L4702)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/scrape-queue/status</code></td><td>get_scrape_queue_status (L4746)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/scrape-queue/progress</code></td><td>api_scrape_queue_progress (L4794)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/scrape-queue/worker-logs</code></td><td>api_scrape_queue_worker_logs (L4813)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/worker-logs/clear</code></td><td>api_scrape_queue_worker_logs_clear (L4834)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/resume</code></td><td>api_scrape_queue_resume (L4849)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/dismiss-auto-cleared-notice</code></td><td>api_scrape_queue_dismiss_auto_cleared_notice (L4887)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/recover</code></td><td>api_scrape_queue_recover (L4906)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/kick</code></td><td>api_scrape_queue_kick (L4933)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/verify-horse-coverage</code></td><td>api_scrape_queue_verify_horse_coverage (L5144)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/migrate-precheck</code></td><td>api_scrape_queue_migrate_precheck (L5190)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/scrape-queue/local-mirror-config</code></td><td>api_scrape_queue_local_mirror_config_get (L5219)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/local-mirror-config</code></td><td>api_scrape_queue_local_mirror_config_post (L5247)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/scrape-queue/load-settings</code></td><td>api_scrape_queue_load_settings_get (L5283)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/load-settings</code></td><td>api_scrape_queue_load_settings_post (L5297)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/scrape-queue/tasks</code></td><td>scrape_queue_task_catalog (L5339)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/add-job</code></td><td>scrape_queue_add_generic_job (L5354)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/enqueue-incomplete-dates</code></td><td>scrape_queue_enqueue_incomplete_dates (L5385)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/clear</code></td><td>clear_scrape_queue (L5410)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/hourly-maintenance-run</code></td><td>api_scrape_queue_hourly_maintenance_run (L5429)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/stop-and-clear</code></td><td>api_scrape_queue_stop_and_clear (L5467)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/failed/requeue</code></td><td>scrape_queue_failed_requeue (L5488)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/failed/remove</code></td><td>scrape_queue_failed_remove (L5523)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/add-batch</code></td><td>add_batch_to_scrape_queue (L5559)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/scrape-queue/enqueue-scrape-period</code></td><td>api_scrape_queue_enqueue_scrape_period (L6071)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/check-scraped-status</code></td><td>check_scraped_status (L6264)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/fetch-future-calendar</code></td><td>fetch_future_calendar (L6299)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/fetch-future-calendar/status</code></td><td>get_calendar_fetch_status (L6342)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/race/{race_id}</code></td><td>race_detail_page (L6479)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/race/{race_id}</code></td><td>get_race_detail (L6511)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/race/{race_id}/predictions</code></td><td>get_race_predictions (L6608)</td><td><span class="status status-ok">OK</span></td><td>[調査完了] v1とデータソース・レスポンス形状は異なるが、両者とも自動書き込みパスが未稼働（crontab確認済み・手動トリガのみ）のため実害無し。詳細は <code>docs/operations/service-endpoints.md</code>「レース予測の書き込みパスが3系統ある」参照。</td></tr>
+<tr><td>GET</td><td><code>/api/race/{race_id}/bloodline-aptitude</code></td><td>get_bloodline_aptitude (L6646)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/race/{race_id}/predict</code></td><td>run_race_prediction (L6787)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/race/{race_id}/result-status</code></td><td>api_race_result_status (L6972)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/tracking-difficulty/status</code></td><td>api_tracking_difficulty_status (L6983)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/race/{race_id}/tracking-difficulty</code></td><td>api_tracking_difficulty (L7000)</td><td><span class="status status-ok">OK</span></td><td>[解消済み] v1 (<code>/api/v1/races/&lt;race_id&gt;/tracking-difficulty</code>) にパラメータ完全パリティを追加。</td></tr>
+<tr><td>POST</td><td><code>/api/race/{race_id}/tracking-difficulty/precompute</code></td><td>api_precompute_tracking_difficulty (L7046)</td><td><span class="status status-ok">OK</span></td><td>[解消済み] v1に同等の <code>POST /api/v1/races/&lt;race_id&gt;/tracking-difficulty/precompute</code> を新規追加し対称化。</td></tr>
+<tr><td>GET</td><td><code>/api/race-quality/meta</code></td><td>api_race_quality_meta (L7081)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/race-quality/day</code></td><td>api_race_quality_day (L7095)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/race-quality/race</code></td><td>api_race_quality_race (L7121)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/race-quality/entrants-aptitude</code></td><td>api_race_quality_entrants_aptitude (L7157)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/race/{race_id}/final-odds</code></td><td>api_final_odds (L7182)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/race/{race_id}/final-odds/precompute</code></td><td>api_precompute_final_odds (L7206)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/inference/health</code></td><td>api_inference_health (L7232)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/tracking-difficulty/train</code></td><td>api_train_tracking_difficulty (L7259)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/structure-status</code></td><td>get_structure_status (L7457)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/structure-report</code></td><td>get_structure_report (L7474)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/structure-check</code></td><td>trigger_structure_check (L7487)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/structure-check/schedule</code></td><td>get_structure_check_schedule (L7537)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/admin/cron-jobs</code></td><td>get_cron_jobs (L7563)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/admin/cron-jobs/disk-cache-cleanup/trigger</code></td><td>trigger_disk_cache_cleanup (L7658)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/admin/cron-jobs/queue-maintain/trigger</code></td><td>trigger_queue_maintain (L7689)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/admin/cron-jobs/logs-retention/trigger</code></td><td>trigger_logs_retention (L7719)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/admin/cron-jobs/daily-shutuba/trigger</code></td><td>trigger_daily_shutuba (L7749)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/admin/system-stats</code></td><td>get_system_stats (L7910)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/admin/auto-scrape-status</code></td><td>get_auto_scrape_status (L8034)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/admin/auto-scrape/{task}/trigger</code></td><td>trigger_auto_scrape (L8068)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/structure-fingerprints</code></td><td>get_structure_fingerprints (L8088)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/train</code></td><td>trigger_training (L8123)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/train/status</code></td><td>get_training_status (L8170)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/train/ensemble</code></td><td>trigger_ensemble_training (L8187)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/train/ensemble/status</code></td><td>get_ensemble_training_status (L8261)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/model/info</code></td><td>get_model_info (L8273)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/odds/train</code></td><td>train_odds_model (L8320)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/odds/train/status</code></td><td>get_odds_training_status (L8359)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/odds/snapshot/{race_id}</code></td><td>record_odds_snapshot (L8380)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/odds/history/{race_id}</code></td><td>get_odds_history (L8406)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/odds/predict/{race_id}</code></td><td>get_predicted_odds_api (L8425)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/simulation/run</code></td><td>run_composite_simulation (L8455)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/simulation/status</code></td><td>get_simulation_status (L8498)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/simulation/params</code></td><td>get_current_composite_params (L8510)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/backfill/status</code></td><td>get_backfill_status (L8535)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/backfill/start</code></td><td>start_backfill (L8589)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/race-lists-backfill/status</code></td><td>race_lists_backfill_status (L8657)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/race-lists-backfill/start</code></td><td>race_lists_backfill_start (L8712)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/race-lists-backfill/stop</code></td><td>race_lists_backfill_stop (L8818)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/betting</code></td><td>betting_page (L8869)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/betting/optimize</code></td><td>api_betting_optimize (L8878)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/betting/pair-odds/{race_id}</code></td><td>api_pair_odds (L8968)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/tracking-difficulty</code></td><td>tracking_difficulty_page (L9030)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/ai-sla</code></td><td>ai_sla_page (L9039)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/race-quality</code></td><td>race_quality_page (L9044)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/scrape</code></td><td>scrape_management_page (L9068)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/scrape-control</code></td><td>scrape_control_page (L9081)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/queue-status</code></td><td>queue_status_page (L9087)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/cron-jobs</code></td><td>cron_jobs_page (L9093)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/admin/server-logs</code></td><td>api_admin_server_logs (L9177)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/server-logs</code></td><td>server_logs_page (L9217)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/scrape-upcoming</code></td><td>scrape_upcoming_page (L9231)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/bloodline-vector</code></td><td>bloodline_vector_page (L9237)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/pedigree-map</code></td><td>pedigree_map_page (L9265)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/note-aptitude-race</code></td><td>note_aptitude_race_page (L9274)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/pedigree-map</code></td><td>api_pedigree_map (L9288)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/pedigree-map/tags</code></td><td>api_pedigree_map_tags (L9318)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/pedigree-map/cluster-hierarchy</code></td><td>api_pedigree_map_cluster_hierarchy (L9334)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/pedigree-map/tags-full</code></td><td>api_pedigree_map_tags_full (L9347)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/stallion-sire-tree</code></td><td>api_stallion_sire_tree (L9368)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/stallion-sire-tree/rebuild</code></td><td>api_stallion_sire_tree_rebuild (L9742)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/stallion-sire-tree/rebuild/status</code></td><td>api_stallion_sire_tree_rebuild_status (L9760)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/stallion-sire-tree/l1-groups</code></td><td>api_stallion_sire_tree_l1_groups (L9785)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/stallion-sire-tree/roots</code></td><td>api_stallion_sire_tree_roots (L9846)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/stallion-sire-tree/node/{horse_id}</code></td><td>api_stallion_sire_tree_node (L9894)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/stallion-sire-tree/bms-stats/{horse_id}</code></td><td>api_stallion_sire_tree_bms_stats (L9923)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/stallion-sire-tree/search</code></td><td>api_stallion_sire_tree_search (L9979)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/pedigree/note-aptitude</code></td><td>api_pedigree_note_aptitude (L10002)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/pedigree/note-aptitude/table</code></td><td>api_pedigree_note_aptitude_table (L10053)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/pedigree/race-note-3d</code></td><td>api_pedigree_race_note_3d (L10077)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/pedigree/race-note-3d-compare</code></td><td>api_pedigree_race_note_3d_compare (L10131)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/pedigree/race-note-3d-v2</code></td><td>api_pedigree_race_note_3d_v2 (L10183)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/pedigree/week-races</code></td><td>api_pedigree_week_races (L10207)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/pedigree/rebuild-sire-factor-stats</code></td><td>api_rebuild_sire_factor_stats (L10221)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/pedigree/tune-weights</code></td><td>api_pedigree_tune_weights (L10265)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/pedigree/race-ensure-5gen</code></td><td>api_pedigree_race_ensure_5gen (L10295)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/pedigree/race-ensure-5gen/status</code></td><td>api_pedigree_race_ensure_5gen_status (L10326)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/pedigree/race-ensure-5gen/cancel</code></td><td>api_pedigree_race_ensure_5gen_cancel (L10345)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/pedigree/batch-race-ensure-5gen</code></td><td>api_pedigree_batch_race_ensure_5gen (L10372)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/bloodline</code></td><td>bloodline_page (L10428)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/bloodline/analyze</code></td><td>api_bloodline_analyze (L10437)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/bloodline/status</code></td><td>api_bloodline_status (L10503)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/bloodline/surfaces</code></td><td>api_bloodline_surfaces (L10544)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/bloodline/data/{analysis_type}</code></td><td>api_bloodline_data (L10555)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/bloodline-cluster</code></td><td>bloodline_cluster_page (L10660)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/bloodline-cluster/meta</code></td><td>api_bloodline_cluster_meta (L10669)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/bloodline-cluster/lookup</code></td><td>api_bloodline_cluster_lookup (L10684)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/bloodline-cluster/lookup-by-id</code></td><td>api_bloodline_cluster_lookup_id (L10691)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/bloodline-cluster/sire-info</code></td><td>api_bloodline_cluster_sire_info (L10698)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/bloodline-cluster/clusters</code></td><td>api_bloodline_cluster_clusters (L10708)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/bloodline-cluster/suggest</code></td><td>api_bloodline_cluster_suggest (L10715)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/bloodline-cluster/reload</code></td><td>api_bloodline_cluster_reload (L10723)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/admin/bloodline-cluster/artifact-status</code></td><td>api_admin_bl_artifact_status (L10894)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/admin/bloodline-cluster/rebuild/{target}</code></td><td>api_admin_bl_rebuild (L10937)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/admin/bloodline-cluster/job-status</code></td><td>api_admin_bl_job_status (L10987)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/admin/bloodline-cluster/reload</code></td><td>api_admin_bl_reload (L10993)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/bloodline-cluster/tags</code></td><td>api_bloodline_cluster_tags (L11005)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/bloodline-cluster/stats</code></td><td>api_bloodline_cluster_stats (L11020)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/bloodline-cluster/sire-presence-stats</code></td><td>api_bloodline_cluster_sire_presence_stats (L11065)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/pedigree-map/condition-ranking</code></td><td>api_pedigree_map_condition_ranking (L11100)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/pedigree-map/progeny-under-condition</code></td><td>api_pedigree_map_progeny_under_condition (L11133)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/bloodline-cluster/sire-heatmap</code></td><td>api_bloodline_cluster_sire_heatmap (L11169)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/bloodline-cluster/sire-summary-card</code></td><td>api_bloodline_cluster_sire_summary_card (L11191)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/bloodline-cluster/sire-best-conditions</code></td><td>api_bloodline_cluster_sire_best_conditions (L11201)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/bloodline-cluster/sire-presence-horses</code></td><td>api_bloodline_cluster_sire_presence_horses (L11228)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/bloodline-cluster/horse-aptitude</code></td><td>api_bloodline_cluster_horse_aptitude (L11278)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/bloodline-cluster/horse-name-suggest</code></td><td>api_bloodline_cluster_horse_name_suggest (L11304)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/course-bloodline</code></td><td>course_bloodline_page_redirect (L11346)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/course-profiles</code></td><td>api_course_profiles (L11357)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/course-bloodline/analyze</code></td><td>api_course_bloodline_analyze (L11375)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/course-bloodline/status</code></td><td>api_course_bl_status (L11429)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/course-bloodline/surfaces</code></td><td>api_course_bl_surfaces (L11440)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/course-bloodline/data/{analysis_type}</code></td><td>api_course_bl_data (L11448)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/cushion/data</code></td><td>api_cushion_data (L11553)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/cushion/stats</code></td><td>api_cushion_stats (L11575)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/cushion/scrape</code></td><td>api_cushion_scrape (L11598)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/cushion/scrape/status</code></td><td>api_cushion_scrape_status (L11630)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/cushion/admin/sync-gcs</code></td><td>api_cushion_admin_sync_gcs (L11639)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/cushion/admin/sync-preprocessed</code></td><td>api_cushion_admin_sync_preprocessed (L11668)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/cushion/live</code></td><td>api_cushion_live (L11723)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/cushion/live/status</code></td><td>api_cushion_live_status (L11755)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/cushion/live/check</code></td><td>api_cushion_live_check (L11799)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/cushion/schedule</code></td><td>api_cushion_schedule (L11809)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/auto-scrape/status</code></td><td>api_auto_scrape_status (L11842)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/auto-scrape/run</code></td><td>api_auto_scrape_run (L11991)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/auto-scrape/run-status</code></td><td>api_auto_scrape_run_status (L12028)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/admin/invalidate-race-list-caches</code></td><td>api_invalidate_race_list_caches (L12050)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/track-speed</code></td><td>track_speed_page (L12081)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/track-speed/dev</code></td><td>track_speed_dev_page (L12090)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/track-speed/meta</code></td><td>api_track_speed_meta (L12103)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/track-speed/dates</code></td><td>api_track_speed_dates (L12124)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/track-speed/venues</code></td><td>api_track_speed_venues (L12133)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/track-speed/day</code></td><td>api_track_speed_day (L12144)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/track-speed/status</code></td><td>track_speed_status (L12156)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/track-speed/rebuild-baselines</code></td><td>track_speed_rebuild_baselines (L12168)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/track-speed/assign</code></td><td>track_speed_assign (L12176)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/track-speed/validate-perf</code></td><td>api_validate_perf (L12191)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/track-speed/race-horses</code></td><td>api_race_horses (L12203)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/track-speed/by-category</code></td><td>api_track_speed_by_category (L12283)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/myostatin</code></td><td>myostatin_page (L12355)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/myostatin</code></td><td>myostatin_data (L12363)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/myostatin/predict</code></td><td>myostatin_predict (L12377)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>POST</td><td><code>/api/myostatin/recalculate</code></td><td>myostatin_recalculate (L12399)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/growth-curve</code></td><td>growth_curve_page (L12568)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/growth-curve/status</code></td><td>api_growth_curve_status (L12662)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/growth-curve/{horse_id}</code></td><td>growth_curve_data (L12674)</td><td><span class="status status-ok">OK</span></td><td>[解消済み] v1 (<code>/api/v1/horse/&lt;horse_id&gt;/growth-curve</code>) にパラメータ完全パリティを追加。同一サービス関数を呼ぶ薄いラッパーが2層存在する状態は、DEC-013移行期の意図的な並行運用として問題なし。</td></tr>
+<tr><td>GET</td><td><code>/api/horse-names/index-meta</code></td><td>horse_names_index_meta (L12812)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/horse-names/search</code></td><td>search_horse_names (L12823)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/pedigree-race-stats</code></td><td>pedigree_race_stats_page (L12964)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/pedigree-race-stats/meta</code></td><td>api_pedigree_race_stats_meta (L12972)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/pedigree-race-stats/query</code></td><td>api_pedigree_race_stats_query (L12999)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/pedigree-race-stats/lineage-meta</code></td><td>api_pedigree_race_stats_lineage_meta (L13314)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+</tbody>
+</table>
+
+<h3>2-2. Flask /api/v1 — <code>src/api/flask_app.py</code>（:5000, DEC-013により仕様上の正）</h3>
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Handler</th><th>Status</th><th>所見</th></tr></thead>
+<tbody>
+<tr><td>GET</td><td><code>/api/v1/health</code></td><td>health (L75)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/v1/races</code></td><td>api_races (L79)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/v1/races/today</code></td><td>api_races_today (L89)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/v1/races/&lt;race_id&gt;</code></td><td>api_race_detail (L101)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/v1/races/&lt;race_id&gt;/entries</code></td><td>api_race_entries (L110)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/v1/races/&lt;race_id&gt;/predictions</code></td><td>api_predictions (L119)</td><td><span class="status status-ok">OK</span></td><td>[調査完了] legacyとデータソース・レスポンス形状は異なるが、両者とも自動書き込みパスが未稼働のため実害無し。詳細は <code>docs/operations/service-endpoints.md</code> 参照。</td></tr>
+<tr><td>GET</td><td><code>/api/v1/races/&lt;race_id&gt;/predictions/laps</code></td><td>api_prediction_laps (L159)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/v1/races/&lt;race_id&gt;/results</code></td><td>api_race_results (L169)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/v1/races/&lt;race_id&gt;/megu-index</code></td><td>api_megu_index (L200)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/v1/horse/&lt;horse_id&gt;/megu-index-history</code></td><td>api_horse_megu_index_history (L235)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/v1/races/&lt;race_id&gt;/megu-index-predicted</code></td><td>api_megu_index_predicted (L328)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/v1/races/&lt;race_id&gt;/tracking-difficulty</code></td><td>api_tracking_difficulty (L356)</td><td><span class="status status-ok">OK</span></td><td>[解消済み] legacyと同等のrefreshパラメータを追加し完全パリティ。HybridStorage()直接生成も既に解消済み。</td></tr>
+<tr><td>POST</td><td><code>/api/v1/races/&lt;race_id&gt;/tracking-difficulty/precompute</code></td><td>api_precompute_tracking_difficulty (L378)</td><td><span class="status status-ok">OK</span></td><td>[新規追加] legacyのprecomputeトリガーと対称化するため新規追加（require_internalで保護）。</td></tr>
+<tr><td>GET</td><td><code>/api/v1/horse/&lt;horse_id&gt;/growth-curve</code></td><td>api_growth_curve (L400)</td><td><span class="status status-ok">OK</span></td><td>[解消済み] legacyと同等のパラメータ（force_refresh等）を追加し完全パリティ。HybridStorage()直接生成も既に解消済み。</td></tr>
+<tr><td>POST</td><td><code>/api/v1/admin/users/&lt;user_id&gt;/member</code></td><td>admin_set_member (L422)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>GET</td><td><code>/api/v1/track-speed/day</code></td><td>api_track_speed_day (L447)</td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+</tbody>
+</table>
+
+<h3>2-3. Monitor（開発者専用） — <code>src/monitor/app.py</code>（:9090）</h3>
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Handler</th><th>Status</th><th>所見</th></tr></thead>
+<tbody>
+<tr><td>GET/POST</td><td><code>/login</code></td><td>login (L118)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/logout</code></td><td>logout (L130)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/</code></td><td>dashboard (L137)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/services</code></td><td>services (L143)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/scraping</code></td><td>scraping (L149)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/data</code></td><td>data (L155)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/system</code></td><td>system (L161)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/logs</code></td><td>logs (L167)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/git</code></td><td>git (L178)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/api/internal/status</code></td><td>internal_status (L349)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/api/internal/system</code></td><td>internal_system (L397)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/api/internal/git</code></td><td>internal_git (L476)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>POST</td><td><code>/api/internal/git/pull</code></td><td>internal_git_pull (L527)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/api/internal/logs</code></td><td>internal_logs (L584)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/api/internal/coverage/month</code></td><td>internal_coverage_month (L613)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/api/internal/coverage/date-matrix</code></td><td>internal_coverage_date_matrix (L685)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/api/internal/scraping</code></td><td>internal_scraping (L755)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/api/internal/cron-jobs</code></td><td>internal_cron_jobs (L902)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/api/internal/page-quality</code></td><td>internal_page_quality (L1183)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>POST</td><td><code>/api/internal/page-quality/run</code></td><td>internal_page_quality_run (L1228)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/data-stores</code></td><td>page_data_stores (L1411)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/specs</code></td><td>specs (L1432)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/specs/&lt;path:filename&gt;</code></td><td>specs_file (L1444)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+<tr><td>GET</td><td><code>/api/internal/data-stores</code></td><td>internal_data_stores (L1469)</td><td><span class="status status-ok">OK</span></td><td>docs/monitoring-portal.md に記載あり（前回の未記載10ルートも追記済み）</td></tr>
+</tbody>
+</table>
+
+<h2>3. パス整合性チェック</h2>
+<table>
+<thead><tr><th>参照元</th><th>パス</th><th>実在</th><th>所見</th></tr></thead>
+<tbody>
+<tr><td>AGENTS.md</td><td><code>config</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>data</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>data/analysis/pedigree</code></td><td><span class="status status-ok">OK（想定内）</span></td><td>GCS専用データ/未生成ローカルアーティファクト等、本開発機では未マテリアライズが正常なケース（下記注記参照）</td></tr>
+<tr><td>AGENTS.md</td><td><code>data/features</code></td><td><span class="status status-ok">OK（想定内）</span></td><td>GCS専用データ/未生成ローカルアーティファクト等、本開発機では未マテリアライズが正常なケース（下記注記参照）</td></tr>
+<tr><td>AGENTS.md</td><td><code>data/local</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>data/meta/structure</code></td><td><span class="status status-ok">OK（想定内）</span></td><td>GCS専用データ/未生成ローカルアーティファクト等、本開発機では未マテリアライズが正常なケース（下記注記参照）</td></tr>
+<tr><td>AGENTS.md</td><td><code>data/page_reference</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>data/page_reference/BUNDLE.md</code></td><td><span class="status status-ok">OK（要確認）</span></td><td>プレースホルダーとして新規作成（ファイル冒頭に明記）。他ドキュメントから確認できた情報のみで再構成しており、実際にバンドルコピーの経験がある人による内容確認は引き続き必要（要確認状態を維持、これは意図的）。</td></tr>
+<tr><td>AGENTS.md</td><td><code>data/page_reference/race_day_schedule</code></td><td><span class="status status-ok">OK（想定内）</span></td><td>GCS専用データ/未生成ローカルアーティファクト等、本開発機では未マテリアライズが正常なケース（下記注記参照）</td></tr>
+<tr><td>AGENTS.md</td><td><code>docs</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>docs/html</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>docs/html/data/data_features_reference.html</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>docs/html/design/mlflow_platform.html</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>docs/html/modeling</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>docs/monitoring-portal.md</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>docs/operations</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>docs/requirements/data/scrape_process.md</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>mlflow</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>models</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>notebooks</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>scripts</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>scripts/cron/update_jockey_trainer_stats.sh</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>scripts/run_after_scrape_missing_5gen_10gen_chain.sh</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>src</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>src/api</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>src/api/app.py</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>src/config</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>src/monitor</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>src/pipeline</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>src/pipeline/mlflow/catalog.py</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>src/research</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>src/research/pedigree/backtest_</code></td><td><span class="status status-ok">OK（想定内）</span></td><td>GCS専用データ/未生成ローカルアーティファクト等、本開発機では未マテリアライズが正常なケース（下記注記参照）</td></tr>
+<tr><td>AGENTS.md</td><td><code>src/scraper</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>src/scraper/requirement_row_catalog.py</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>src/scraper/row_data_extractor.py</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>src/scraper/validate_storage.py</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>src/scripts</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>src/utils</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>static</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>templates</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>tests</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>tests/research/manual/verify_</code></td><td><span class="status status-ok">OK（想定内）</span></td><td>GCS専用データ/未生成ローカルアーティファクト等、本開発機では未マテリアライズが正常なケース（下記注記参照）</td></tr>
+<tr><td>AGENTS.md</td><td><code>tests/scraper/manual/netkeiba_horse_page_smoke.py</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>AGENTS.md</td><td><code>tests/scraper/manual/netkeiba_speed_index_smoke.py</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>data/queue/scrape_queue.json</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>data/skill_logs/architecture_eval/20260930.html</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>mlflow/runs/artifacts</code></td><td><span class="status status-ok">OK（想定内）</span></td><td>GCS専用データ/未生成ローカルアーティファクト等、本開発機では未マテリアライズが正常なケース（下記注記参照）</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>mlflow/server/docker-compose.yml</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>scripts/cron/git_pull_hourly.sh</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>scripts/server</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>scripts/server/restart_server.sh</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>scripts/server/run_inference.sh</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>scripts/server/run_uvicorn_dev.sh</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>scripts/server/service_start.local.env</code></td><td><span class="status status-ok">OK（想定内）</span></td><td>GCS専用データ/未生成ローカルアーティファクト等、本開発機では未マテリアライズが正常なケース（下記注記参照）</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>scripts/server/service_start.sh</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>scripts/server/start_flask_api.sh</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>src/api/app.py</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>src/api/v1/delegates.py</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>src/pipeline/inference/inference_pipeline.py</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>src/pipeline/inference/pre_race_predict_trigger.py</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>src/pipeline/mlflow/catalog.py</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>src/scripts/data/etl_stg_db.py</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>src/scripts/maintenance/batch_inference_all_races.py</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>docs/operations/service-endpoints.md</td><td><code>templates/race/race_detail.html</code></td><td><span class="status status-ok">OK</span></td><td>—</td></tr>
+<tr><td>config/settings.yaml</td><td><code>data/meta/logs/smartrc_access.log</code></td><td><span class="status status-ok">OK（想定内）</span></td><td>GCS専用データ/未生成ローカルアーティファクト等、本開発機では未マテリアライズが正常なケース（下記注記参照）</td></tr>
+</tbody>
+</table>
+
+<p style="color: var(--ink-muted); font-size:0.9em;">
+参考: パス整合性チェックのスクリプトは <code>backtest_*.py</code> のようなglobパターンを
+<code>*</code> で切り詰めて誤検知する既知の制限がある。また <code>data/features</code>・
+<code>data/meta/structure</code>・<code>data/page_reference/race_day_schedule</code>・<code>mlflow/runs/artifacts</code>・
+<code>scripts/server/service_start.local.env</code> はコード上は有効な参照だが、本開発機ではGCS専用データや
+未生成のローカルアーティファクト、<code>.example</code>からのコピー待ちであるため未マテリアライズなのは正常
+（バグではない）。<code>data/skill_logs/architecture_eval/20260930.html</code> は本レポート自身への自己参照
+（<code>docs/operations/service-endpoints.md</code>内のリンク）で、問題ではない。
+</p>
+
+
+<h2>4. 今回の対応ログ</h2>
+
+<div class="issue" style="border-left-color: var(--status-good);">
+  <h4 style="--dot: var(--status-good);">growth-curve / tracking-difficulty のパリティ対応</h4>
+  <p>v1（<code>src/api/flask_app.py</code>）に、legacyが持っていた追加パラメータ（<code>force_refresh</code>・
+  <code>fetch_speed_index</code>・<code>allow_compute</code>・<code>jra_only</code>・<code>limit</code>・<code>refresh</code>）
+  と <code>POST .../tracking-difficulty/precompute</code> を追加し、両機能とも完全パリティを実現。
+  既存呼び出しへの影響が無い追加のみの変更であることを <code>make test</code>（439 passed）で確認済み。
+  両者は元から同一サービス関数（<code>growth_curve_service.get_growth_curve</code> /
+  <code>tracking_difficulty_service.get_or_compute</code>）を呼ぶ薄いルーティング層であり、DEC-013移行期の
+  意図的な並行公開として問題ないと判断。</p>
+</div>
+<div class="issue" style="border-left-color: var(--status-good);">
+  <h4 style="--dot: var(--status-good);">race predictions の実態調査（マージは見送り）</h4>
+  <p>legacyとv1でレスポンス形状が異なる（v1=<code>horses</code>キー、legacy=<code>predictions</code>キー。
+  legacyの画面JSは<code>predictions</code>を前提とするため、形状を揃えずに統合すると画面が壊れる）ことを確認したため、
+  コードの統合は行わなかった。一方で <code>crontab -l</code>・<code>/etc/cron.d/</code>・systemd timer を確認した結果、
+  レース予測を書き込む3系統（PostgreSQL向けの推論パイプライン・legacy管理者用手動トリガ・バッチCLI）は
+  <b>いずれも自動実行されておらず、すべて手動トリガのみ</b>であることが判明。T-15自動トリガ本体
+  （<code>pre_race_predict_trigger.py</code>）もdocstring上「後補完」の未完成コードであることを確認した。
+  したがって現時点で2層が自動的に食い違うリスクは無く、対応不要と判断。詳細は
+  <code>docs/operations/service-endpoints.md</code>「レース予測の書き込みパスが3系統ある」に記録し、
+  将来これらの自動化に着手する前に再検討すべき旨を明記した。</p>
+</div>
+
+
+<h2>5. 次回チェックへの引き継ぎ</h2>
+<ul>
+  <li>race predictions: <code>pre_race_predict_trigger.py</code>の本実装、<code>run_inference.sh</code>や
+      <code>sync_pg_from_gcs.sh</code>のcron登録、またはlegacy側の廃止のいずれかに着手する前に、
+      <code>docs/operations/service-endpoints.md</code>「レース予測の書き込みパスが3系統ある」を必ず再確認すること。</li>
+  <li><code>data/page_reference/BUNDLE.md</code>はプレースホルダーのまま。実際にバンドルコピーの経験がある人に
+      内容確認を依頼すること（意図的に「要確認」を維持）。</li>
+  <li>267ルートのうち深掘りしたのは重複・既知課題関連のみ。<code>bloodline-cluster</code> / <code>pedigree</code> /
+      <code>track-speed</code> 系（legacyに多数存在）は次回の深掘り候補。</li>
+</ul>
+
+<footer>
+  Generated by <code>.claude/skills/evaluate-keiba-architecture</code>（同日3回目の再実行） — 出力先:
+  <code>data/skill_logs/architecture_eval/20260930.html</code>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DEC-027 SmartRC の取得を継続する — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+  color: var(--text); line-height: 1.75; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+aside.sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+  border-right: 1px solid var(--border); padding: 28px 22px;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.brand .logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #4f8bff, #a78bfa);
+  display: grid; place-items: center; font-weight: 700; color: white;
+  font-size: 13px; box-shadow: var(--shadow);
+}
+.brand .title { font-weight: 700; font-size: 14px; }
+.brand .sub { color: var(--muted); font-size: 11px; }
+nav.toc { font-size: 13px; }
+nav.toc h4 {
+  color: var(--muted); margin: 16px 0 6px;
+  text-transform: uppercase; letter-spacing: .14em;
+  font-size: 10px; font-weight: 700;
+}
+nav.toc a {
+  display: block; color: var(--text); padding: 6px 10px;
+  border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+  line-height: 1.4;
+}
+nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+main.content { padding: 48px 56px 96px; max-width: 980px; width: 100%; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+}
+header.hero .eyebrow { color: var(--accent-2); font-size: 12px; letter-spacing: .2em; font-weight: 700; text-transform: uppercase; }
+header.hero h1 { margin: 8px 0 10px; font-size: 26px; line-height: 1.35; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+article.html-body h2 { font-size: 1.35rem; margin: 2.4em 0 0.6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px; }
+article.html-body h3 { font-size: 1.1rem; margin: 1.6em 0 0.5em; color: var(--accent-2); scroll-margin-top: 24px; }
+article.html-body p { margin: 0.75em 0; }
+article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+article.html-body li { margin: 0.35em 0; }
+article.html-body table { width: 100%; border-collapse: collapse; margin: 1em 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13px; }
+article.html-body th, article.html-body td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+article.html-body th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+article.html-body tr:last-child td { border-bottom: 0; }
+article.html-body pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 1em 0; }
+article.html-body code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+article.html-body pre code { background: none; border: none; padding: 0; }
+.badge { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .06em; background: rgba(79,139,255,.15); color: var(--accent-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.badge.final { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.revised { background: rgba(251,191,36,.14); color: #fbbf24; }
+.callout { border-left: 3px solid var(--accent); background: rgba(79,139,255,.08); padding: 12px 16px; border-radius: 8px; margin: 1em 0; }
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout.danger { border-left-color: #f87171; background: rgba(248,113,113,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+.decision-card { background: linear-gradient(180deg, #182747, #131f3c); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; margin: 14px 0; border-left: 4px solid var(--accent); }
+.decision-title { font-size: 1rem; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+  main.content { padding: 28px 20px 80px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <div class="brand"><div class="logo">KV</div><div><div class="title">keiba-vpn</div><div class="sub">Decisions · DEC-027</div></div></div>
+  <nav class="toc">
+    <a href="../html/index.html">← ドキュメント一覧</a>
+    <a href="MASTER.html">↑ マスター仕様書</a>
+    <a href="DEC-024-accuracy-target-and-scraping-scope.html">→ DEC-024（置き換え元）</a>
+    <a href="AREA-06-data.html">→ AREA-06（データ）</a>
+    <h4>DEC-027</h4>
+    <a href="#context">1. コンテキスト</a>
+    <a href="#decisions">2. 決定事項</a>
+    <a href="#options">3. 選択肢と比較</a>
+    <a href="#impact">4. 影響範囲</a>
+    <a href="#notes">5. 備考</a>
+  </nav>
+</aside>
+<main class="content">
+<header class="hero">
+  <div class="eyebrow">DECISIONS · DEC-027</div>
+  <h1>DEC-027: SmartRC の取得を継続する（DEC-024 の除外を見直す）</h1>
+  <p class="meta"><span class="badge final">ACCEPTED</span> 日付: 2026-10-16 | 担当: プロダクトオーナー | 関連: DEC-024, AREA-06, AREA-07</p>
+</header>
+<article class="html-body">
+
+<h2 id="context">1. コンテキスト</h2>
+<p><a href="DEC-024-accuracy-target-and-scraping-scope.html">DEC-024</a>（2026-07-06）は SmartRC を取得対象から除外し、SmartRC 由来の特徴量（<code>cr_value</code>・<code>first_furlong_time</code>・<code>estimated_popularity</code>）を廃止すると決めた。しかし実装には反映されず、前日夕方・開催日夕方のキューの <code>smartrc</code> タスクは動き続け、GCS の <code>smartrc_race</code> には 2020〜2026 年の全レース分（2026-10-16 時点で 23,024 件、年 3,456 件前後）が溜まっている。</p>
+<p>取りたいデータは、<b>出走馬のスタート後 1F のタイム（テン1F）</b>である。位置取り予測（序盤の隊列）とペース予測（前半の流れ）に使えるが、netkeiba にも JRA 公式にも馬ごとのテン1Fは載っていない。保存データには出走馬ごとの過去 5 走のテン1F（<code>h1_ten1f</code>〜<code>h5_ten1f</code>）、<code>ten1f_best</code> とその順位、全戦績（<code>fullresults</code>）がある。</p>
+
+<h2 id="decisions">2. 決定事項</h2>
+<div class="decision-card"><div class="decision-title">D-1: 毎日の SmartRC 取得を継続する</div>
+<p>前日夕方（<code>EVE_TASKS</code>）と開催日夕方（<code>EVENING_TASKS</code>）の <code>smartrc</code> タスクを、そのまま続ける。DEC-024 §2 の「SmartRC 除外」と §3 は本決定で置き換える。コード除去（T-034）は中止する。</p></div>
+<div class="decision-card"><div class="decision-title">D-2: 不足レースを補完する</div>
+<p>race_result があって smartrc_race が無いレース（2026-10-16 時点で 448 件: 2024 年 2、2025 年 1、2026 年 445）を取得して埋める。</p></div>
+<div class="decision-card"><div class="decision-title">D-3: 特徴量としての採用は検証してから決める</div>
+<p>テン1F由来の特徴量は、保存済みのデータだけ（追加アクセスなし）で ablation し、学習パイプラインの採否基準（全 fold で悪化なし、かつ改善幅 ≥ max(0.0001, 2×sd)）を満たしたものだけを採用する。結果は <a href="../html/modeling/chapters/training_pipeline_decisions.html">確定事項ログ</a>に記録する。</p></div>
+<div class="decision-card"><div class="decision-title">D-4: 取り扱いの条件</div>
+<ul>
+<li><b>先読みの防止:</b> <code>runners</code> の過去 5 走（<code>h1_</code>〜<code>h5_</code>）は発走前時点の値として使える。<code>fullresults</code> は取得時点までの全戦績を含むので、使うなら当該レース日より前の行だけにする。当該レース自身のテン1Fは目的変数にだけ使い、特徴量には使わない。</li>
+<li><b>再配布をしない:</b> 生データは非公開の GCS バケットにだけ置く。公開リポジトリ・UI・外部へは出さない（項目名・件数・統計は可）。</li>
+<li><b>アクセスは控えめに:</b> 直列・1 リクエスト 0.5 秒以上の間隔（<code>SmartRCClient</code> の既定）。必要な <code>runners/view</code>・<code>horses/view</code>・<code>fullresults/view</code> に限る。</li>
+<li><b>止められるようにする:</b> <code>EVE_TASKS</code> / <code>EVENING_TASKS</code> から <code>smartrc</code> を外せば取得が止まる。</li>
+</ul></div>
+<div class="callout warn"><h4>未確認: SmartRC の利用規約</h4>
+<p>取得は、サイトが画面表示に使っている JSON（<code>smartrc.php</code>）を認証なしで呼ぶ形である。利用規約（自動取得・再利用の可否）はサイトの画面から確認できず、<b>未確認</b>である。規約上できないと分かった場合は取得を止め、保存済みデータの扱いを改めて決める。</p></div>
+
+<h2 id="options">3. 選択肢と比較</h2>
+<table>
+<tr><th>選択肢</th><th>メリット</th><th>デメリット</th></tr>
+<tr><td>取得を継続（採用）</td><td>馬ごとのテン1Fが手に入る。履歴は既に 2020〜2026 年分がある</td><td>規約が未確認。外部サイトへの依存</td></tr>
+<tr><td>除外のまま止める（DEC-024）</td><td>規約リスクが無い</td><td>位置取り・ペース予測に使えるデータを失う</td></tr>
+<tr><td>代替データ（通過順位とラップからの推定、JRA-VAN などの正規データ）</td><td>規約上の懸念が小さい</td><td>馬ごとのテン1Fそのものではない。有料の可能性</td></tr>
+</table>
+
+<h2 id="impact">4. 影響範囲</h2>
+<ul>
+<li>DATASOURCES / DATASET_CATALOG / データ取得・保存先リファレンス / DATA_HEALTH: 「除外」の記述を「継続（DEC-027）」に更新。</li>
+<li>T-034（SmartRC コードの除去）: 中止。<code>config/settings.yaml</code> の <code>smartrc</code> 設定は残す。</li>
+<li>データ健全性の対象に <code>smartrc_race</code> を加えるかは別途検討（現在は対象外で、取得計画に出てこない）。</li>
+</ul>
+
+<h2 id="notes">5. 備考</h2>
+<p>DEC-024 §1（複勝的中率 ≥ 40%）と netkeiba・JRA 公式の扱いは、本決定の影響を受けない。ablation の結果で有効性が無ければ、取得の継続を再検討する。</p>
+<p style="color:var(--muted); font-size:13px;">Last updated: 2026-10-16</p>
+</article>
+</main>
+</div>
+</body>
+</html>

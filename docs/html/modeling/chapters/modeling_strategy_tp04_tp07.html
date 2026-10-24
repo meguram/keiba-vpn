@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>モデリング戦略書（tp-04 〜 tp-07） — keiba-vpn docs</title>
+<style>
+  :root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --code:#0b1428; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.75 "Noto Sans JP",system-ui,sans-serif; }
+  main { max-width:1040px; margin:0 auto; padding:40px 28px 96px; }
+  h1 { font-size:26px; margin:0 0 6px; } h2 { font-size:20px; margin:46px 0 10px; padding-top:18px; border-top:1px solid var(--border); }
+  h3 { font-size:15px; color:var(--accent); margin:22px 0 6px; }
+  .muted { color:var(--muted); font-size:13px; }
+  table { border-collapse:collapse; width:100%; margin:10px 0 16px; font-size:13.5px; }
+  th, td { border:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+  th { background:var(--panel); color:var(--muted); font-weight:600; white-space:nowrap; }
+  code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 6px; border-radius:5px; font-size:12.5px; }
+  .ok { color:var(--ok); font-weight:600; } .warn { color:var(--warn); font-weight:600; }
+  .box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin:12px 0; }
+  a { color:var(--accent); word-break:break-all; }
+</style>
+</head>
+<body>
+<main>
+<h1>モデリング戦略書（tp-04 〜 tp-07）</h1>
+<p class="muted">特徴量（<a href="feature_strategy_tp03_tp04.html">特徴量戦略書</a>）を使って、どうモデリングするかの方針。既存ドキュメントを確認したうえで、踏襲・更新・矛盾の解消を整理し、精度を上げられる手法を網羅的に検証して最良のものを採用する手順をまとめる。確定した結果は <a href="training_pipeline_decisions.html">確定事項ログ</a> に記録する。最終更新: 2026-10-14。</p>
+
+<div class="box">
+<b>基本方針</b>
+<ul>
+  <li><b>精度を上げられる手法はすべて検証し、最良のものを採用する。</b>アンサンブル、ニューラルネット、ランキング目的関数、レース内 softmax、サンプル重み、単調制約、較正などを、同じ手順・同じ指標で比べる（§4）。</li>
+  <li><b>選択が必要なときは、両方実施して良い方を採用する。</b>代替案は切り替え可能な形で残し、比較の根拠を確定事項ログに記録する。</li>
+  <li><b>時系列で正しく比べる:</b> 分割は tp-01 で確定した 1 年単位の expanding window（valid 2022・2023・2024、purge 7 日 + embargo 3 日）。test 2025 は最終候補だけ一度。2026 年は使わない。</li>
+  <li><b>LayerA にオッズ・人気を入れない。</b>市場との合成は LayerB（§9）。</li>
+</ul>
+</div>
+
+<h2>1. 既存ドキュメントの整理（踏襲・更新・矛盾の解消）</h2>
+<p class="muted">確認した対象: <code>docs/html/modeling/</code> の全 HTML、<code>docs/html/design/ml_pipeline.html</code>・<code>mlflow_platform.html</code>・<code>inference_services.html</code>、DEC-019・022・024・026、AREA-07、<code>config/settings.yaml</code>、<code>src/pipeline/models/</code>・<code>mlflow/</code>・<code>inference/</code>、既存 notebook（<code>2026-07-06-gold-medal-baseline</code>、<code>nb-08-t1-win-prob</code>）。</p>
+<table>
+<tr><th>項目</th><th>既存の記述（出典）</th><th>本戦略での扱い</th></tr>
+<tr><td>最終確率モデル</td><td>p_win・p_top2・p_top3 を別々のモデル（ModelA/B/C）と、任意の順位スコア（ModelD）。LightGBM と CatBoost の 2 本柱（<code>staged_probability_pipeline</code> Stage6、<code>ml_pipeline</code>）。</td><td>踏襲（Phase 0）。そのうえで NN・XGBoost・ランキング・レース内 softmax を追加検証（§4）。</td></tr>
+<tr><td>確率の整合</td><td>3 方式が併存: (a) binary → レース内 softmax → Harville（DEC-022・AREA-07）、(b) 3 モデルの直接予測 + 較正（staged）、(c) 割引 Harville（Benter 型、α≈0.72。<code>exotic_bet_probabilities</code>）。</td><td><b>3 方式を比較して採用</b>（§3、実験 A・F）。矛盾を解消せず、評価で決める。</td></tr>
+<tr><td>ハイパーパラメータ調整</td><td>inner CV の集約スコアを主指標、上位 3〜5 件を valid で確認、test は一度。凍結順は 母表・TE → 単一モデル族 → 別モデル族 → ランキング枝 → 多段 → L2。TPE + Pruner、粗→細。保存項目も規定（<code>hyperparameter_tuning_workflow</code> §2〜7）。</td><td>踏襲。<b>実装は未接続</b>（<code>n_optuna_trials</code> はタグのみ）のため、tp-05d で実装。gold-medal の主指標は AUC だが、文書どおり <b>LogLoss</b> に統一。</td></tr>
+<tr><td>確率較正</td><td>温度スケーリングと Platt を優先、isotonic は過学習に注意。OOF または valid のみで fit、test では fit しない（<code>advanced_modeling_techniques</code> §3.3）。</td><td>踏襲。<b>実装なし</b>（<code>calibration_eval.py</code> は未作成）のため tp-06 で実装。Dirichlet／beta 較正、較正後のレース内正規化を追加して比較（実験 F）。</td></tr>
+<tr><td>評価指標・ゲート</td><td>一次は LogLoss・Brier・ECE、二次は ROI。ランキングは NDCG。T-1 のゲートは AUC≥0.65 かつ LogLoss≤0.65（AREA-07 §6-2）。DEC-026（PROPOSED）は市場の implied probability との差を追加。</td><td>一次・二次の区分は踏襲。<b>LogLoss≤0.65 は実測（p_win で約 0.22〜0.24）に対して緩すぎる</b>ため、ゲートとして使わない。ベースライン比と市場対比の相対ゲートに置き換える（§5）。</td></tr>
+<tr><td>分割</td><td>manifest の <code>rolling_origin_folds</code> は半年単位。<code>ensemble_trainer.py</code> は <code>GroupKFold</code>（purge なし）。</td><td>tp-01 で確定した 1 年単位の expanding window に統一。<code>GroupKFold</code> の OOF は使わない（時間リーク）。</td></tr>
+<tr><td>オッズ</td><td>DEC-022・AREA-07 §4-3 は暫定オッズ（<code>rel_odds_rank</code>）を特徴量にする前提。ホワイトリストは LayerA 禁止。</td><td><b>ホワイトリストを優先</b>。市場情報は LayerB のみ。</td></tr>
+<tr><td>予測時点</td><td>「発走 10 分前」（ホワイトリスト）、「前日 18 時のバッチ」（<code>inference_services</code>）、T-60／T-15（運用）が併存。</td><td><b>決定（2026-10-14 ユーザー指示）:</b> 予測は<b>馬体重の発表後（T-60）のみ</b>回す。前日夜の別バージョンは作らない。前日までに用意できる部分は先に計算してキャッシュし、T-60 の処理時間を短くする（§11）。</td></tr>
+<tr><td>タスク番号</td><td>AREA-07 の T-xx と DEC-019 の T-xx が一致しない（T-8 = ペース／T-10 = ペース、など）。AREA-07 の T-5 は内部で矛盾。</td><td>本書は特徴量戦略書の P1〜P7 を正とし、旧 T 番号との対応表を付ける（§12）。</td></tr>
+<tr><td>単調制約・サンプル重み・不均衡対策</td><td>どの文書にも規定がなく、<code>trainer.py</code>・<code>ensemble_trainer.py</code> にも使用箇所がない。</td><td>新規の検証項目として扱う（実験 C・D）。</td></tr>
+<tr><td>保存モデルの一致確認</td><td>「保存モデルを読み直して OOF と一致を確認する」手順は、どの文書にも規定がない。</td><td>tp-07 で新設（§8）。</td></tr>
+<tr><td>推論側の特徴量</td><td><code>race_prediction_service.py</code> は <code>keiba_model.pkl</code> と <code>encoder.json</code> を使う。tp-02 の 127 列を推論時に作る実装は見当たらない。</td><td>学習と推論で同じ as-of 計算を使うための共通化が必要。tp-07 の後続課題（§11）。</td></tr>
+<tr><td>SmartRC</td><td>DEC-024 は除外としたが、DEC-027（2026-10-16）で取得の継続に見直した。<code>settings.yaml</code> に <code>smartrc.enabled: true</code> と whitelist が残る。</td><td>tp-02 の入力にはまだ含めていない。テン1F（スタート後 1F）を位置取り・ペース予測に使えるか、保存済みデータで ablation して決める。</td></tr>
+<tr><td>既存 notebook</td><td>gold-medal はモック母表・<code>PurgedGroupTimeSeriesSplit</code>・オッズを使う特徴量・AUC 目的。nb-08 は層化分割と、<code>GroupKFold</code> の OOF（時間リーク）、valid を early stopping に使いながら test を直接評価。</td><td>骨格のみ再利用（§7）。分割・母表・目的関数・OOF は作り直す。</td></tr>
+</table>
+
+<h2>2. 全体の進め方（段階的な絞り込み）</h2>
+<div class="box" style="padding:10px 8px"><svg viewBox="0 0 1000 250" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans JP, system-ui, sans-serif" role="img" aria-label="モデリングの段階的な絞り込み"><defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7aa9ff"/></marker></defs>
+<rect x="20" y="18" width="210" height="62" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
+<text x="125.0" y="45.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">Phase 0  ベースライン</text>
+<text x="125.0" y="62.05" text-anchor="middle" font-size="12" fill="#b9c6e8">LightGBM・固定パラメータ</text>
+<rect x="270" y="18" width="210" height="62" rx="8" fill="#1c2f58" stroke="#4f8bff" stroke-width="1.4"/>
+<text x="375.0" y="45.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">Phase 1  目的関数の比較</text>
+<text x="375.0" y="62.05" text-anchor="middle" font-size="12" fill="#b9c6e8">二値・softmax・ランキング</text>
+<line x1="230" y1="49" x2="270" y2="49" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah2)"/>
+<rect x="520" y="18" width="210" height="62" rx="8" fill="#1c2f58" stroke="#4f8bff" stroke-width="1.4"/>
+<text x="625.0" y="45.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">Phase 2  モデル族・NN</text>
+<text x="625.0" y="62.05" text-anchor="middle" font-size="12" fill="#b9c6e8">CatBoost・XGB・NN・線形</text>
+<line x1="480" y1="49" x2="520" y2="49" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah2)"/>
+<rect x="770" y="18" width="210" height="62" rx="8" fill="#1c2f58" stroke="#4f8bff" stroke-width="1.4"/>
+<text x="875.0" y="45.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">Phase 3  重み・特徴処理</text>
+<text x="875.0" y="62.05" text-anchor="middle" font-size="12" fill="#b9c6e8">recency・相対化・単調制約</text>
+<line x1="730" y1="49" x2="770" y2="49" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah2)"/>
+<line x1="875" y1="80" x2="875" y2="118" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah2)"/>
+<line x1="875" y1="118" x2="125" y2="118" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah2)"/>
+<line x1="125" y1="118" x2="125" y2="140" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah2)"/>
+<rect x="20" y="140" width="210" height="62" rx="8" fill="#1c2f58" stroke="#4f8bff" stroke-width="1.4"/>
+<text x="125.0" y="167.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">Phase 4  ハイパーパラメータ調整</text>
+<text x="125.0" y="184.05" text-anchor="middle" font-size="12" fill="#b9c6e8">Optuna（上位候補のみ）</text>
+<rect x="270" y="140" width="210" height="62" rx="8" fill="#1c2f58" stroke="#4f8bff" stroke-width="1.4"/>
+<text x="375.0" y="167.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">Phase 5  アンサンブル</text>
+<text x="375.0" y="184.05" text-anchor="middle" font-size="12" fill="#b9c6e8">ブレンド・スタッキング</text>
+<line x1="230" y1="171" x2="270" y2="171" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah2)"/>
+<rect x="520" y="140" width="210" height="62" rx="8" fill="#1c2f58" stroke="#4f8bff" stroke-width="1.4"/>
+<text x="625.0" y="167.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">Phase 6  確率較正・後処理</text>
+<text x="625.0" y="184.05" text-anchor="middle" font-size="12" fill="#b9c6e8">温度・Platt・整合</text>
+<line x1="480" y1="171" x2="520" y2="171" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah2)"/>
+<rect x="770" y="140" width="210" height="62" rx="8" fill="#3a2f12" stroke="#fbbf24" stroke-width="1.4"/>
+<text x="875.0" y="167.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">Phase 7  最終評価と再学習</text>
+<text x="875.0" y="184.05" text-anchor="middle" font-size="12" fill="#b9c6e8">test 2025 は一度だけ</text>
+<line x1="730" y1="171" x2="770" y2="171" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah2)"/>
+<text x="20" y="236" font-size="12" fill="#9aa7c7">スクリーニング: fold 2022・2023 ／ 確認: fold 2024（有望な候補のみ）／ 最終: test 2025（最終候補 1〜3 個を一度だけ）。各 Phase で「両方試して良い方を採用」。</text></svg></div>
+<ul>
+  <li><b>スクリーニング:</b> fold 2022・2023 で、候補を広く比べる。固定パラメータ・同じ特徴量・3 シード。</li>
+  <li><b>確認:</b> 有望な候補だけを fold 2024 で確認する。選択に使った期間と確認の期間を分けて、実験数の増加による CV への過剰適合を抑える。</li>
+  <li><b>最終:</b> 最終候補 1〜3 個だけを test 2025 で一度評価する。モデル選定が終わってから、2020〜2025 年で本番再学習する（<code>production_refit_after_selection</code>）。</li>
+  <li><b>入力:</b> tp-03 で採用した特徴量セット（<code>adopted_features.json</code>）と、tp-04 の前段予測（OOF）。</li>
+</ul>
+
+<h2>3. 目的変数と確率の整合</h2>
+<table>
+<tr><th>方式</th><th>内容</th><th>長所・短所</th></tr>
+<tr><td>M1 直接 3 モデル</td><td>p_win・p_top2・p_top3 を別々の二値モデルで予測し、較正。レース内で Σp_win = 1、Σp_top2 = 2、Σp_top3 = 3 になるよう後で正規化（反復比例）。</td><td>単純で強い基準。出走馬同士の関係をモデルが直接は見ない。</td></tr>
+<tr><td>M2 レース内 softmax（条件付きロジット／Plackett-Luce）</td><td>馬ごとのスコアをレース内で softmax し、着順の尤度を最大化。p_top2・p_top3 は Plackett-Luce（または割引 Harville）で導く。LightGBM はカスタム目的関数、NN は標準の損失で学習。</td><td>Benter 型で、レース内の確率の整合が学習時に取れる。top2・top3 は導出のため精度が劣る可能性がある。</td></tr>
+<tr><td>M3 ランキング → 確率</td><td>LambdaRank／YetiRank／<code>rank:ndcg</code> のスコアを、レース内 softmax と温度で疑似確率にする。</td><td>順位付けに強い。確率の較正が必須。</td></tr>
+<tr><td>M4 併用</td><td>M1・M2・M3 の出力をスタッキング／ブレンドする。</td><td>最終候補。多様性が効く可能性が高い。</td></tr>
+</table>
+<p>採用は、p_win・p_top2・p_top3 それぞれの LogLoss と、レース内 softmax 化した負の対数尤度（race_nll）、ECE で比べて決める。出力の整合ルール（レース内の合計）は、どの方式でも最終段で必ずかける。</p>
+
+<h2>4. 検証カタログ（精度向上のための実験一覧）</h2>
+<p class="muted">優先度: ★★★ = 最初に必ず検証、★★ = 効果が見込める、★ = 余力があれば。計算資源は、GBDT は CPU 20 スレッド（XGBoost・CatBoost は GPU 可）、NN は GPU（PyTorch は導入済み）。</p>
+<h3>A. 目的関数・定式化</h3>
+<table>
+<tr><th>ID</th><th>手法</th><th>狙い</th><th>優先度</th></tr>
+<tr><td>A1</td><td>二値（LogLoss）で p_win・p_top2・p_top3（M1）</td><td>基準</td><td>★★★</td></tr>
+<tr><td>A2</td><td>多クラス（1 着／2〜3 着／それ以外）または順序</td><td>top2・top3 の整合</td><td>★★</td></tr>
+<tr><td>A3</td><td>レース内 softmax（listwise のクロスエントロピー。LightGBM カスタム目的、NN）（M2）</td><td>レース内の競合を学習時に考慮</td><td>★★★</td></tr>
+<tr><td>A4</td><td>ランキング: LambdaRank、<code>rank_xendcg</code>、YetiRank、<code>rank:ndcg</code>（M3）</td><td>順位付けに最適化</td><td>★★★</td></tr>
+<tr><td>A5</td><td>回帰（正規化着順、走破タイムの差）→ 確率に変換</td><td>着順の大きさを使う</td><td>★★</td></tr>
+<tr><td>A6</td><td>Plackett-Luce の全順位尤度（NN）</td><td>1〜3 着以外の順位情報も使う</td><td>★★</td></tr>
+<tr><td>A7</td><td>ペアワイズ（PairLogit など）</td><td>順位付けの別定式化</td><td>★</td></tr>
+</table>
+<h3>B. モデル族</h3>
+<table>
+<tr><th>ID</th><th>手法</th><th>狙い</th><th>優先度</th></tr>
+<tr><td>B1</td><td>LightGBM（<code>gbdt</code>、DART、GOSS、<code>extra_trees</code>、<code>linear_tree</code>）</td><td>基準と派生</td><td>★★★</td></tr>
+<tr><td>B2</td><td>CatBoost（Ordered boosting、深さ、カテゴリ特徴、GPU。<code>border_count=254</code> に固定）</td><td>カテゴリに強い。LightGBM と多様性</td><td>★★★</td></tr>
+<tr><td>B3</td><td>XGBoost（GPU、<code>hist</code>）</td><td>多様性</td><td>★★</td></tr>
+<tr><td>B4</td><td>線形／GLM（Benter 型の条件付きロジット、正則化つきロジスティック）</td><td>基準と、スタッキングの多様性</td><td>★★★</td></tr>
+<tr><td>B5</td><td>MLP + カテゴリ埋め込み（騎手・調教師・種牡馬・競馬場）</td><td>GBDT と異なる誤差</td><td>★★★</td></tr>
+<tr><td>B6</td><td>レース内 Transformer／DeepSets（出走馬同士の注意）</td><td>展開・競合の相互作用を直接学習</td><td>★★★</td></tr>
+<tr><td>B7</td><td>FT-Transformer、TabNet、NODE などの表データ向け NN</td><td>表データでの NN の上限確認</td><td>★★</td></tr>
+<tr><td>B8</td><td>過去走の系列モデル（GRU／Transformer）。tp-02 の履歴特徴量と併用または代替</td><td>手作りの履歴特徴量の取りこぼし</td><td>★★</td></tr>
+<tr><td>B9</td><td>マルチタスク NN（p_win・p_top2・p_top3 に、位置取り・上がり・ペース・走破タイムの補助タスク）</td><td>補助タスクによる表現学習</td><td>★★</td></tr>
+<tr><td>B10</td><td>NGBoost、ベイズ階層モデル（騎手・調教師・種牡馬の変量効果）</td><td>不確実性の扱い</td><td>★</td></tr>
+</table>
+<h3>C. 特徴量の処理</h3>
+<table>
+<tr><th>ID</th><th>手法</th><th>狙い</th><th>優先度</th></tr>
+<tr><td>C1</td><td>レース内の相対化（z、順位、最良との差）をモデル入力に追加</td><td>ランキング系で効果が大きいことが多い</td><td>★★★</td></tr>
+<tr><td>C2</td><td>カテゴリの扱い: 時系列の target encoding、CatBoost の Ordered TE、NN の埋め込み、頻度・希少カテゴリ</td><td>騎手・調教師・種牡馬</td><td>★★★</td></tr>
+<tr><td>C3</td><td>欠損: NA のまま／<code>has_*</code> 追加／NN 用の補完</td><td>取得データの欠損の影響</td><td>★★</td></tr>
+<tr><td>C4</td><td>NN 用の数値変換（quantile transform、log）</td><td>NN の学習安定化</td><td>★★</td></tr>
+<tr><td>C5</td><td>単調制約（Elo、<code>sr_exp</code> など能力系の特徴量）</td><td>外挿・過学習の抑制</td><td>★★</td></tr>
+<tr><td>C6</td><td>特徴量選択: 相関クラスタの代表、null importance、SHAP（tp-03 の採用セットを基準）</td><td>ノイズの除去</td><td>★★</td></tr>
+</table>
+<h3>D. 重み・サンプル</h3>
+<table>
+<tr><th>ID</th><th>手法</th><th>狙い</th><th>優先度</th></tr>
+<tr><td>D1</td><td>新しいデータほど重みを大きくする（半減期 1・2・3 年）</td><td>時代ずれ・トレンドへの追従</td><td>★★★</td></tr>
+<tr><td>D2</td><td>助走期間（2020〜2021 年）の除外／低重み</td><td>履歴が短い行の影響</td><td>★★★</td></tr>
+<tr><td>D3</td><td>adversarial validation による重要度の再重み付け</td><td>分布差の補正</td><td>★★</td></tr>
+<tr><td>D4</td><td>頭数による重み、focal loss／クラス重み（勝率 7%）、ラベル平滑化</td><td>不均衡・ノイズ</td><td>★★</td></tr>
+</table>
+<h3>E. アンサンブル</h3>
+<table>
+<tr><th>ID</th><th>手法</th><th>狙い</th><th>優先度</th></tr>
+<tr><td>E1</td><td>複数シードの平均</td><td>分散の低減</td><td>★★★</td></tr>
+<tr><td>E2</td><td>単純平均、対数オッズ平均、幾何平均、順位平均</td><td>基準のブレンド</td><td>★★★</td></tr>
+<tr><td>E3</td><td>OOF で重みを最適化（非負・合計 1、LogLoss 最小）、Greedy Ensemble Selection</td><td>最適な組み合わせ</td><td>★★★</td></tr>
+<tr><td>E4</td><td>スタッキング（L2: ロジスティック、浅い GBDT。入力に logit とレース内統計）</td><td>非線形な組み合わせ</td><td>★★★</td></tr>
+<tr><td>E5</td><td>モデル族をまたいだ混成（GBDT + NN + 線形）、目的関数をまたいだ混成（M1 + M2 + M3）</td><td>誤差の多様性</td><td>★★★</td></tr>
+<tr><td>E6</td><td>特徴量サブセットの違い、年ブロックの bagging、SWA／スナップショット（NN）</td><td>分散の低減</td><td>★★</td></tr>
+</table>
+<h3>F. 較正・後処理</h3>
+<table>
+<tr><th>ID</th><th>手法</th><th>狙い</th><th>優先度</th></tr>
+<tr><td>F1</td><td>温度スケーリング、Platt</td><td>既存方針どおりの基準</td><td>★★★</td></tr>
+<tr><td>F2</td><td>isotonic、beta／Dirichlet 較正</td><td>非線形な歪みの補正</td><td>★★</td></tr>
+<tr><td>F3</td><td>較正後のレース内正規化（反復比例）、softmax の温度</td><td>合計の整合</td><td>★★★</td></tr>
+<tr><td>F4</td><td>top2・top3 の整合: 直接モデル、Harville、割引 Harville（α はレースごと）の比較</td><td>連対率・複勝率の精度</td><td>★★★</td></tr>
+<tr><td>F5</td><td>セグメント別の較正（芝ダ、競馬場、頭数）</td><td>セグメントの偏り</td><td>★★</td></tr>
+</table>
+<h3>G. ハイパーパラメータ調整</h3>
+<table>
+<tr><th>ID</th><th>手法</th><th>狙い</th><th>優先度</th></tr>
+<tr><td>G1</td><td>Optuna（TPE、CMA-ES）、枝刈り（Hyperband／ASHA）</td><td>探索の効率化</td><td>★★★</td></tr>
+<tr><td>G2</td><td>粗→細（年サブセットで粗く探索 → 全年で再評価）</td><td>計算量の削減</td><td>★★★</td></tr>
+<tr><td>G3</td><td>多目的（LogLoss と複雑さ・学習時間）</td><td>実運用の制約</td><td>★</td></tr>
+</table>
+<h3>H. 学習の工夫</h3>
+<table>
+<tr><th>ID</th><th>手法</th><th>狙い</th><th>優先度</th></tr>
+<tr><td>H1</td><td>early stopping の基準を valid の LogLoss に統一（test は使わない）、学習率の減衰</td><td>過学習の抑制</td><td>★★★</td></tr>
+<tr><td>H2</td><td>NN: 正則化（dropout、weight decay）、馬の並び順に依存しない学習（permutation augmentation）</td><td>レース内モデルの安定化</td><td>★★</td></tr>
+</table>
+<h3>実施の順序</h3>
+<ol>
+  <li><b>Phase 0:</b> A1 + B1・B2・B3・B4（固定パラメータ）。tp-03 の採用セットで基準を作る。</li>
+  <li><b>Phase 1:</b> 目的関数 A2〜A7 と C1（相対化）。GBDT のまま比較する。</li>
+  <li><b>Phase 2:</b> NN（B5〜B9）と B10。PyTorch の導入が必要。</li>
+  <li><b>Phase 3:</b> 重み・特徴処理 C2〜C6、D1〜D4。</li>
+  <li><b>Phase 4:</b> 上位候補だけを G1・G2 で調整。</li>
+  <li><b>Phase 5:</b> アンサンブル E1〜E6。</li>
+  <li><b>Phase 6:</b> 較正・後処理 F1〜F5。</li>
+  <li><b>Phase 7:</b> 最終候補を test 2025 で一度評価し、本番再学習。</li>
+</ol>
+
+<h2>5. 比較の公平性と採否基準</h2>
+<table>
+<tr><th>項目</th><th>内容</th></tr>
+<tr><td>固定する条件</td><td>特徴量セット、fold（valid 2022・2023・2024）、purge 7 日 + embargo 3 日、シード（3 つ以上）、early stopping の基準を揃える。比較する要素以外は動かさない。</td></tr>
+<tr><td>主指標</td><td>p_win の LogLoss（fold 平均）。併記: p_top2・p_top3 の LogLoss、race_nll（レース内 softmax 化した負の対数尤度）、Brier、ECE、NDCG@3、top-1 的中率。ROI は参考値（二次）。</td></tr>
+<tr><td>差の統計的な扱い</td><td>レース単位のペアド・ブートストラップで、LogLoss の差の 95% 信頼区間を出す。シード間のばらつき（約 0.0001）を下回る差は採用の根拠にしない。</td></tr>
+<tr><td>採否基準</td><td>差の信頼区間の上限が 0 より小さい（改善）、かつ 3 fold 中 2 fold 以上で改善。同等なら、単純で学習・推論が速いものを採用する。<b>これは当初の原則。実際に使った基準は段階ごとに違う</b>（下の 5.1 の表。確定事項ログが正）。</td></tr>
+<tr><td>実験数の管理</td><td>段階的に絞り込み、確認は fold 2024、最終は test 2025 とする（§2）。試行数が多い比較は Holm 補正または、スクリーニングと確認の二段階で扱う。</td></tr>
+<tr><td>ゲート（相対）</td><td>ベースライン（B0 + 固定パラメータの LightGBM）に対する LogLoss の改善。可能なら市場の implied probability との差（DEC-026 の案）。既存の絶対値のゲート（LogLoss≤0.65）は使わない。</td></tr>
+<tr><td>セグメント別の確認</td><td>競馬場、芝ダ×距離、季節、頭数、京都改修後、クッション観測あり、パドック有無で悪化がないこと。adversarial validation の AUC も追跡する。</td></tr>
+</table>
+
+<h3>5.1 実際に使った採否基準（段階別。2026-10-16 時点）</h3>
+<table>
+<tr><th>段階</th><th>採否基準</th><th>出所</th></tr>
+<tr><td>tp-03 特徴量の ablation</td><td>共通の全 fold で悪化せず、平均が改善し、改善幅が max(0.0001, 2×seed 間のばらつき) 以上。相関が約 0.9 以上のものは代表 1 つ</td><td>確定事項ログ §5</td></tr>
+<tr><td>tp-05a〜e 目的関数・モデル族・調整</td><td>レース単位の paired bootstrap（1,000 回）で、差の 95% 信頼区間の上限が 0 未満、かつ 3 fold 中 2 fold 以上で改善（上の原則と同じ）</td><td>確定事項ログ §7・§8、tp-05a 実験レポート</td></tr>
+<tr><td>tp-05f〜i 精度向上の探索</td><td>差の 95% 信頼区間の上限 &lt; 0、かつ連対・複勝が悪化しない（0.0002 以内）。valid 2022〜2024 だけで決める</td><td>確定事項ログ §9</td></tr>
+<tr><td>tp-15・tp-16 追加特徴量</td><td>上限 &lt; 0、かつ効果 ≥ 0.0002、連対・複勝が 0.0002 を超えて悪化しない（tp-15 は複勝が悪化しない）</td><td>確定事項ログ §11、tp-16 notebook（結果は未記録）</td></tr>
+</table>
+<p class="muted">tp-04 の前段モデルの採用基準は確定事項ログ §6 を参照。</p>
+
+<h2>6. 各 notebook の戦略</h2>
+<table>
+<tr><th>notebook</th><th>役割</th><th>主な内容</th><th>出力</th></tr>
+<tr><td><code>tp-04</code></td><td>前段予測（P1〜P6）</td><td>特徴量戦略書 §4・§8 のとおり。各予測量は LightGBM を基準にし、CatBoost・NN を比較。時系列 OOF。精度の基準（P3 は一様予測を明確に下回ること）。</td><td>OOF（<code>data/local/modeling/training_pipeline/oof/</code>）、MLflow <code>keiba-tp-stage</code></td></tr>
+<tr><td><code>tp-05a</code></td><td>ベースラインと目的関数の比較</td><td>Phase 0・1（A1〜A7、B1〜B4、C1）。</td><td>比較表、MLflow <code>keiba-tp-model-screen</code></td></tr>
+<tr><td><code>tp-05b</code></td><td>モデル族と NN</td><td>Phase 2（B5〜B10）。GPU。PyTorch の導入と、NN 用の前処理（C3・C4）。</td><td>NN の学習曲線、比較表</td></tr>
+<tr><td><code>tp-05c</code></td><td>重み・特徴処理</td><td>Phase 3（C2〜C6、D1〜D4）。</td><td>採用する重み・処理、比較表</td></tr>
+<tr><td><code>tp-05d</code></td><td>ハイパーパラメータ調整</td><td>Phase 4（G1〜G3）。上位候補のみ。Optuna の保存項目（<code>study_id</code>、<code>git_commit</code>、<code>feature_list_hash</code>、各 trial の params・fold スコア・処理時間）を記録。</td><td>最良パラメータ、MLflow <code>keiba-tp-hpo</code></td></tr>
+<tr><td><code>tp-05e</code></td><td>アンサンブル</td><td>Phase 5（E1〜E6）。OOF だけでブレンド重み・スタッキングを学習。</td><td>最終候補（1〜3 個）、MLflow <code>keiba-tp-ensemble</code></td></tr>
+<tr><td><code>tp-06</code></td><td>確率較正・評価</td><td>Phase 6・7（F1〜F5）。全指標、セグメント別、市場対比（市場の implied probability、最終オッズ予測）、バックテスト（ROI は参考）。test 2025 は一度だけ。</td><td>評価レポート、較正器</td></tr>
+<tr><td><code>tp-07</code></td><td>最終再学習・登録・推論の一致確認</td><td>2020〜2025 年で再学習（<code>production_refit_after_selection</code>）。MLflow Registry に登録（<code>log_lightgbm_and_register</code> 等。NN は専用の登録）。保存モデルを読み直して OOF／test の予測と一致を確認（許容誤差を決める）。特徴量の列名・順序の検証。学習時と推論時の as-of 計算の一致テスト。</td><td>登録モデル、モデルカード、一致確認のレポート</td></tr>
+</table>
+
+<h2>7. 既存 notebook・コードの再利用と作り直し</h2>
+<table>
+<tr><th>対象</th><th>再利用する部分</th><th>作り直す部分</th></tr>
+<tr><td><code>2026-07-06-gold-medal-baseline</code></td><td>骨格（<code>ModelingTarget</code>／<code>run_pipeline</code>）、Stage A（分類）＋Stage B（lambdarank）の構成、複数シード平均、alpha の Nelder-Mead、Greedy Ensemble Selection、null importance、メタスタッキング、Optuna の目的関数の骨格。</td><td>モック母表、<code>PurgedGroupTimeSeriesSplit</code>（<code>time_split.yearly_expanding_folds</code> に置換）、オッズ・人気を使う特徴量、AUC 目的。</td></tr>
+<tr><td><code>nb-08-t1-win-prob</code></td><td>前段 OOF を parquet で結合する構造、Harville の適用、単勝シミュレーション。</td><td><code>load_master()</code>（層化分割）、<code>GroupKFold</code> の OOF（時間リーク）、valid を early stopping に使いながら test を直接評価している点。</td></tr>
+<tr><td><code>ensemble_trainer.py</code></td><td>LGBM・XGB・CatBoost・MLP の OOF を <code>LogisticRegression</code> でメタ学習する構成。</td><td><code>GroupKFold</code>（purge なし）の OOF を、時系列 fold に置換。</td></tr>
+<tr><td><code>model_registry.py</code>／<code>mlflow/train_utils.py</code></td><td>sha256・ライブラリの版の記録、互換性チェック、<code>start_training_run</code>、列名・順序のマニフェスト。</td><td>NN の登録（flavor）と、複数モデルをまとめたアンサンブルの登録。</td></tr>
+</table>
+
+<h2>8. MLflow の記録設計</h2>
+<table>
+<tr><th>実験名</th><th>内容</th></tr>
+<tr><td><code>keiba-tp-stage</code></td><td>tp-04 の前段予測。</td></tr>
+<tr><td><code>keiba-tp-model-screen</code></td><td>tp-05a のスクリーニング（9 方式）。</td></tr>
+<tr><td><code>keiba-tp-model-zoo</code></td><td>tp-05b〜c と tp-05f〜i のモデル族・追加特徴量の比較（初版の設計にない実験名）。</td></tr>
+<tr><td><code>keiba-tp-hpo</code></td><td>tp-05d の Optuna（1 study = 1 親 run、trial = 子 run）。</td></tr>
+<tr><td><code>keiba-tp-ensemble</code></td><td>tp-05e のブレンド・スタッキング。</td></tr>
+<tr><td><code>keiba-tp-final-eval</code></td><td>tp-06・tp-06b の test 2025 の評価（実際の実験名）。tp-07 の本番再学習・登録に使う名前は未決（初版の予定は <code>keiba-tp-final</code>）。</td></tr>
+<tr><td>その他</td><td><code>keiba-tp-ablation</code>（tp-03）、<code>keiba-tp-dataset</code>、<code>keiba-tp-features</code>、<code>keiba-tp-segment</code>、<code>keiba-tp-betting-rl</code>（tp-08）、<code>keiba-tp-betting-compare</code>・<code>-staking</code>・<code>-predicted-odds</code>・<code>-lab</code>（tp-09〜14）、<code>keiba-tp-course-similarity</code>、<code>keiba-tp-odds-drift</code>・<code>-odds-model</code>、<code>keiba-tp-feature-bakeoff</code>、<code>keiba-tp-imputation</code>、<code>keiba-tp-hierarchical-stacking</code>、<code>keiba-tp-training-laps</code>（コードと notebook 内の実験名から）。</td></tr>
+</table>
+<p>すべての run に、次のタグ・パラメータ・成果物を残す: <code>split_manifest_version</code>、<code>data_version</code>、<code>git_commit</code>、<code>feature_list_hash</code>、<code>primary_metric</code>、<code>study_id</code>、<code>model_family</code>、<code>objective</code>、シード、fold ごとの指標、特徴量リストと採用設定（JSON）、OOF のサンプル、較正曲線、ブートストラップの結果。実験の一覧は確定事項ログにも要約を残す。</p>
+
+<h2>9. LayerB（市場との合成）</h2>
+<ul>
+  <li>LayerA の確率（オッズ非依存）と市場の implied probability を、Benter 型の 2 段階ロジットで合成する。オッズの時点（T-60／T-15）は学習と運用で揃える。</li>
+  <li>予測オッズ（最終オッズ予測モデル。単勝・複勝のみ）の使い方と、三連複など複合馬券の確率（割引 Harville。α は p_top2・p_top3 から当てはめ）は、LayerA の確率の確定後に扱う。</li>
+  <li>期待値と推奨馬券は、較正後の確率を使う。ゲート（ROI＞−5%、Sharpe＞0.3、MDD＜30%）は AREA-07 §10-9 の値を参考にする。<b>（2026-10-16 注）</b> ROI＞−5% は回収率 95% 超と読めるが、tp-08・tp-11 の結果（確定オッズで最良でも約 88%）はこのゲートに届いていない。ゲートは「購入判断に使える優位がある」ことの目安で、未達の現状は UI で「損失を抑える配分」と位置づける（確定事項ログ §10・§12）。</li>
+</ul>
+
+<h2>10. 運用時の予測フロー（前日の準備と T-60）</h2>
+<p><b>決定:</b> 予測は馬体重の発表後（T-60）にだけ回す。馬体重を使う特徴量（<code>d_wt_*</code>、<code>sr_load_*</code>、<code>sr_exp</code>）を妥協せずに使える一方、発表後の処理時間が限られる。そこで、前日までに用意できる部分を先に計算してキャッシュし、T-60 では残りだけを計算する二段階の推論にする。</p>
+<div class="box" style="padding:10px 8px"><svg viewBox="0 0 1000 220" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans JP, system-ui, sans-serif" role="img" aria-label="運用時の予測タイムライン"><defs><marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7aa9ff"/></marker></defs>
+<rect x="20" y="18" width="210" height="40" rx="8" fill="#17324a" stroke="#2f8f9d" stroke-width="1.4"/>
+<text x="125.0" y="34.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">前日まで</text>
+<text x="125.0" y="51.05" text-anchor="middle" font-size="12" fill="#b9c6e8">出走・枠順・斤量の確定後</text>
+<rect x="20" y="70" width="210" height="112" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
+<text x="125.0" y="106.2" text-anchor="middle" font-size="12" fill="#e6ecff" font-weight="700">tier 0 を先に計算してキャッシュ</text>
+<text x="125.0" y="122.2" text-anchor="middle" font-size="11" fill="#b9c6e8">履歴・Elo・上がり・得意な舞台</text>
+<text x="125.0" y="138.2" text-anchor="middle" font-size="11" fill="#b9c6e8">位置取り・隊列（P1・P2）</text>
+<text x="125.0" y="154.2" text-anchor="middle" font-size="11" fill="#b9c6e8">ペース予測の事前版（P3）</text>
+<rect x="270" y="18" width="210" height="40" rx="8" fill="#17324a" stroke="#2f8f9d" stroke-width="1.4"/>
+<text x="375.0" y="34.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">当日朝</text>
+<text x="375.0" y="51.05" text-anchor="middle" font-size="12" fill="#b9c6e8">馬場状態・天候の発表後</text>
+<rect x="270" y="70" width="210" height="112" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
+<text x="375.0" y="106.2" text-anchor="middle" font-size="12" fill="#e6ecff" font-weight="700">tier 1 を追加で計算</text>
+<text x="375.0" y="122.2" text-anchor="middle" font-size="11" fill="#b9c6e8">馬場状態・クッション値・含水率</text>
+<text x="375.0" y="138.2" text-anchor="middle" font-size="11" fill="#b9c6e8">P7 馬場差(90分前の同日R)</text>
+<text x="375.0" y="154.2" text-anchor="middle" font-size="11" fill="#b9c6e8">P3 の更新</text>
+<rect x="520" y="18" width="210" height="40" rx="8" fill="#1c2f58" stroke="#4f8bff" stroke-width="1.4"/>
+<text x="625.0" y="34.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">T-60 前後（馬体重の検知後）</text>
+<text x="625.0" y="51.05" text-anchor="middle" font-size="12" fill="#b9c6e8">T-65 から確認・期限 T-30</text>
+<rect x="520" y="70" width="210" height="112" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
+<text x="625.0" y="106.2" text-anchor="middle" font-size="12" fill="#e6ecff" font-weight="700">tier 2 を計算</text>
+<text x="625.0" y="122.2" text-anchor="middle" font-size="11" fill="#b9c6e8">馬体重・増減（d_wt_*、sr_load_*）</text>
+<text x="625.0" y="138.2" text-anchor="middle" font-size="11" fill="#b9c6e8">sr_exp の確定、P4〜P6</text>
+<text x="625.0" y="154.2" text-anchor="middle" font-size="11" fill="#b9c6e8">最終モデル → 較正 → 確率</text>
+<rect x="770" y="18" width="210" height="40" rx="8" fill="#3a2f12" stroke="#fbbf24" stroke-width="1.4"/>
+<text x="875.0" y="34.05" text-anchor="middle" font-size="13" fill="#e6ecff" font-weight="700">T-15 以降</text>
+<text x="875.0" y="51.05" text-anchor="middle" font-size="12" fill="#b9c6e8">オッズが出た後</text>
+<rect x="770" y="70" width="210" height="112" rx="8" fill="#15213c" stroke="#243358" stroke-width="1.4"/>
+<text x="875.0" y="114.2" text-anchor="middle" font-size="12" fill="#e6ecff" font-weight="700">LayerB（市場との合成）</text>
+<text x="875.0" y="130.2" text-anchor="middle" font-size="11" fill="#b9c6e8">期待値・推奨馬券</text>
+<text x="875.0" y="146.2" text-anchor="middle" font-size="11" fill="#b9c6e8">オッズ時点は T-60／T-15 で固定</text>
+<line x1="230" y1="38" x2="270" y2="38" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah3)"/>
+<line x1="480" y1="38" x2="520" y2="38" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah3)"/>
+<line x1="730" y1="38" x2="770" y2="38" stroke="#7aa9ff" stroke-width="1.6" marker-end="url(#ah3)"/>
+<text x="20" y="206" font-size="12" fill="#9aa7c7">前日に準備できる部分を先に計算し、馬体重の発表後（T-60）は tier 2 の計算と最終モデルの推論だけを回して、処理時間を短縮する。</text></svg></div>
+<h3>10.1 特徴量の可用時点（tier）</h3>
+<table>
+<tr><th>tier</th><th>確定する時点</th><th>該当する特徴量・予測量</th></tr>
+<tr><td><b>tier 0</b></td><td>前日まで（出走馬・枠順・斤量の確定後）</td><td>馬の履歴に基づく A・B・C・E・G（<code>pc_*</code> の履歴部分）・H の能力部分（<code>sr_perf_*</code>）、Elo（<code>f3_*</code>。出走馬が決まった後）、F1・F2・F5（出走馬の構成に依存）、D のうち休養日数など、P1・P2、P3 の事前版。枠順・馬番・斤量に依存するものは、枠順確定後に計算できる。</td></tr>
+<tr><td><b>tier 1</b></td><td>当日朝（馬場状態・天候の発表後）</td><td>馬場状態（<code>going</code>）に依存する特徴量、クッション値・含水率、当日の馬場差 P7（同日の先行レースが終わるたびに更新）、P3 の更新。</td></tr>
+<tr><td><b>tier 2</b></td><td>T-60 前後（馬体重の検知後）</td><td>馬体重・増減（<code>d_wt_dev</code>、<code>d_wt_chg_now</code> など）、<code>sr_load_*</code> と <code>sr_exp</code>・<code>sr_exp6</code>・<code>sr_exp_rel</code> の確定、馬体重に依存する前段予測（P4〜P6）、最終モデルの推論、較正。</td></tr>
+</table>
+<p>実測（摂動法、2026-10-14）: 127 特徴量のうち tier 0 が 110、tier 1 が 7（馬場状態 6 + <code>sr_var_today</code>）、tier 2 が 10（馬体重に依存する <code>d_wt_*</code> 2 と <code>sr_load_*</code>・<code>sr_exp*</code> 8）。ファミリー別の表、生データ別の依存先、運用への示唆は <a href="feature_strategy_tp03_tp04.html">特徴量戦略書</a> の「特徴量と生データの依存関係」。上の表の分類は、斤量・性齢は前日に確定すること、<code>sr_exp_rank</code> が tier 2 であることを含めて実測と一致した。</p>
+<h3>10.2 実装方針</h3>
+<ul>
+  <li><b>学習は常に全特徴量:</b> 学習データでは tier にかかわらず全特徴量を使う（発表後の予測を前提とするため、前日版の別モデルは作らない）。</li>
+  <li><b>tier の表を作る:</b> tp-02 で特徴量ごとの可用時点を <code>feature_tiers.json</code> に出力し、推論の計算を tier ごとに分ける。tp-07 の一致確認では、tier 0 を前日に計算した値と、T-60 に一括で計算した値が一致することも確かめる。</li>
+  <li><b>T-60 の処理時間の予算を決める:</b> tier 2 の計算と推論（最終モデル、較正、LayerB の準備）を、発走までの間に十分終える時間に収める。tp-07 で実測して、基準を決める。</li>
+  <li><b>馬体重の発表時刻:</b> 基本的に発走の 1 時間前に発表される（ユーザー情報）。起点（T-60）とは合うが、T-60 ちょうどの取得は発表の直前にあたる可能性があるため、T-65 から 1〜2 分間隔で確認して検知する。発表のばらつきは、レース当日の実績（<code>availability_watch</code>）で確認する。未発表のレースは期限（T-30）まで待機・再試行し、入らなければ前走の馬体重で代替する。</li>
+  <li><b>前日のキャッシュ:</b> 出走馬や斤量が前日以降に変わる（出走取消、騎手変更）場合は、該当レースの tier 0 を再計算する。</li>
+</ul>
+
+<h3>10.3 T-X での成立性の調査結果（2026-10-14）</h3>
+<div class="box" style="border-color:#fbbf24"><b>状態の更新（2026-10-16）:</b> 以下は <b>10-14 の調査時点</b>の記述。指摘した不足のうち、馬体重の検知ランナー・推論モード・<code>export_tables</code> の定期化は<b>10-14〜15 に実装・cron 登録済み</b>（項目ごとの状態は下の「本番ランナーの変更」）。残りは、予測の起動点の一本化、馬体重の発表時刻の実測、tier 分割の運用確認、tp-07。</div>
+<div class="box"><b>結論（10-14 時点）:</b> この方針は<b>現行の実装では成立しない</b>が、修正すれば成立する見込み。詳細（実装が各 T-X で行うこと、データの可用時点の根拠、ノード別の判定、食い違い、修正案、時間予算）は <a href="feature_strategy_tp03_tp04.html">特徴量戦略書</a> 末尾の「図の実運用での成立性」。</div>
+<ul>
+  <li>（10-14 時点）T-60 の取得はオッズのみで、馬体重を含む出馬表は T-15 まで入らない。予測の起動点も T-15（モック）と T-45（疑似ビルダー）で、tp-02 の特徴量を使っていない。</li>
+  <li>（10-14 時点）当日の出走馬を結果なしの行として履歴に足す推論モードと、tier ごとの分割が未実装。→ 推論モードは 10-15 までに実装済み（<code>horse_history/inference.py</code>、<code>feature_tiers.json</code>）。</li>
+  <li>馬体重の発表は基本的に発走の 1 時間前（ユーザー情報）で、起点（T-60）とは合う。ただし発表の直前に取得しないよう、固定時刻ではなく<b>馬体重の検知で起動</b>する（T-65 から 1〜2 分間隔で確認、9 割以上の馬に馬体重が入った時点で予測、期限は T-30。入らなければ前走の馬体重で代替し <code>has_*</code> を付ける）。</li>
+  <li>P7 は、T-60 に使える同日の先行レースが「発走 90 分以上前」のものだけ。実データで先行レースが使えるのは全体の 62%（第 1〜3R は 0%）。使えないレースは前の開催日の値で補う。学習側も同じ制約で作った（<code>sr_var_today</code>）。</li>
+  <li>時間予算は約 30 秒を目標、上限 120 秒。予測の公開期限は T-30（LayerB の T-15 より前）。</li>
+</ul>
+<h4>本番ランナーの変更（2026-10-14〜15 に実施。状態は 2026-10-16 時点）</h4>
+<ol>
+  <li>T-60 の取得に出馬表（<code>race_shutuba</code>）を足す。<b>実装済み</b>: 検知ランナー（<code>raceday-weight-runner</code>）が発走 65〜30 分前に出馬表を再取得する。</li>
+  <li>馬体重の検知による予測の起動（T-75〜T-30）。<b>検知は実装済み・cron 登録済み</b>（毎日 08:00 JST に起動して各 R を待つ）。ただし既定では<b>特徴量の作成までで、予測は起動しない</b>。</li>
+  <li>推論モード（朝に tier 0・1 をキャッシュ、T-60 は tier 2 だけ）。<b>推論モードは実装済み</b>。tier 0・1 のキャッシュと T-60 の tier 2 だけの計算になっているかは未確認。</li>
+  <li><code>export_tables</code> の定期化: <b>実装済み</b>（<code>export_tables_daily</code>、05:30 JST）。予測の起動点の一本化: <b>未</b>。馬体重の発表時刻の実測（<code>availability_watch</code> を 10/17〜18 に実行）: <b>未了</b>。</li>
+</ol>
+<p class="muted">注: 本番の cron（<code>daily-race-lists</code> など）が同じ netkeiba アカウントで繰り返しログインしている。取り直しスクレイピングのセッションが無効になる要因になりうる（調査中。第 5 章のリスク欄）。</p>
+
+<h2>11. 計算資源、リスク、確認したいこと</h2>
+<table>
+<tr><th>項目</th><th>内容</th></tr>
+<tr><td>計算資源</td><td>ホスト PC は CPU 24 スレッド（学習は 20）、RTX 4070 Ti 12GB、RAM 90GB。XGBoost（<code>device=cuda</code>）と CatBoost（GPU）は動作確認済み。LightGBM は CPU のみ。<b>PyTorch（torch 2.6.0 + CUDA 12.4）を 2026-10-14 に導入済み</b>（GPU で行列積と簡易な MLP 学習を確認。XGBoost の CUDA、CatBoost の GPU、LightGBM、polars、MLflow が引き続き動くことも確認）。Optuna の並列数は <code>compute.optuna_workers</code> で決める。</td></tr>
+<tr><td>リスク: 実験数の増加</td><td>比較する手法が多く、CV への過剰適合のおそれ。スクリーニング／確認／最終の分離と、信頼区間・補正で抑える。</td></tr>
+<tr><td>リスク: 推論側の特徴量</td><td>（2026-10-16 更新）推論時に 127 列を作る推論モードは実装済み（<code>horse_history/inference.py</code>）。毎日の蓄積（07:40）で学習側との食い違いを記録している。学習時と推論時の一致確認は tp-07 の対象。</td></tr>
+<tr><td>リスク: データ</td><td>（2026-10-16 更新）<code>race_index</code>・調教師コメントの取り直しは<b>完了</b>（2026-10-15、確定事項ログ §4）。tp-01・tp-02 は再実行済みで、tp-03 以降はその結果で確定している。</td></tr>
+<tr><td>決定済み</td><td>(1) 予測は馬体重の発表後（T-60）のみ。前日までに用意できる部分は先に計算する（§10）。(2) NN の検証のために、ホスト PC に PyTorch（CUDA 版）を導入する（導入済み）。</td></tr>
+<tr><td>リスク: 馬体重の発表時刻</td><td>基本は発走 1 時間前だが、発表のばらつきは未計測。未発表のレースは期限（T-30）まで待機し、入らなければ前走の馬体重で代替する（§10.2）。</td></tr>
+</table>
+
+<h2>12. 旧タスク番号との対応表</h2>
+<table>
+<tr><th>本書・特徴量戦略書</th><th>内容</th><th>AREA-07 の T 番号</th><th>旧 notebook</th></tr>
+<tr><td>P1</td><td>位置取り・脚質</td><td>T-6（脚質）・T-5（位置取り）</td><td><code>nb-03</code>・<code>nb-06</code></td></tr>
+<tr><td>P3</td><td>ペース（前傾・平均・後傾、RPCI）</td><td>T-8</td><td><code>nb-04</code></td></tr>
+<tr><td>P4</td><td>上がり 3F（ペース別の条件付き）</td><td>T-4</td><td><code>nb-05</code></td></tr>
+<tr><td>P5</td><td>走破タイム</td><td>T-9</td><td><code>nb-07</code></td></tr>
+<tr><td>P6</td><td>正規化着順</td><td>T-5 の一部</td><td><code>nb-06</code></td></tr>
+<tr><td>最終確率（tp-05）</td><td>p_win・p_top2・p_top3</td><td>T-1〜T-3</td><td><code>nb-08</code></td></tr>
+</table>
+<p class="muted">AREA-07 と DEC-019 で T 番号の定義が食い違っている（T-8 = ペース／T-10 = ペース、T-5 の教師データなど）。本書では P 番号を正とする。</p>
+
+<h2>13. 出典</h2>
+<ul>
+  <li>既存ドキュメント: <code>docs/html/modeling/chapters/staged_probability_pipeline.html</code>、<code>modeling_coding_strategy.html</code>、<code>hyperparameter_tuning_workflow.html</code>、<code>train_valid_test_split_strategy.html</code>、<code>advanced_modeling_techniques.html</code>、<code>final_odds_model.html</code>、<code>exotic_bet_probabilities.html</code>、<code>pre_race_feature_whitelist.html</code>、<code>reference_insights.html</code>、<code>docs/html/design/ml_pipeline.html</code>・<code>mlflow_platform.html</code>・<code>inference_services.html</code>、DEC-019・022・024・026、AREA-07。</li>
+  <li>文献・手法の出典は <a href="feature_strategy_tp03_tp04.html">特徴量戦略書</a> §10（Benter 型の合成、Plackett-Luce、Elo など）。ランキング目的関数・NN・アンサンブルの手法は、一般的な手法として挙げており、本書では個別の文献の取得は行っていない（実験で効果を確認する）。</li>
+</ul>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "updated": "2026-10-21",
+  "min_field": 8,
+  "min_pop": 10,
+  "p3_max": 0.08,
+  "main_marks": ["honmei", "pair", "show_val", "star"],
+  "target_upper": 0.05,
+  "p3_max_pc": 0.06,
+  "evidence_pc": {
+    "model": "V4 OOF を市場補正した確率（tp-70、勝率=C3・複勝=C6、前年までで当てはめ）。KEIBA_PROB_CALIBRATION=1 で補正したレースだけ p3_max_pc を使う",
+    "rule": "10人気以下で補正後の複勝確率が 6% 以下",
+    "rate": {"design2023": 0.0247, "confirm2024": 0.0248, "ref2025": 0.0246, "final2026": 0.0244},
+    "upper": {"design2023": 0.0277, "confirm2024": 0.0278, "ref2025": 0.0275, "final2026": 0.0279},
+    "count_vs_raw": "補正なし 8% 比 +2.8%（8% のまま補正後の確率に当てると +17%）"
+  },
+  "evidence": {
+    "model": "V4 OOF（tp-36 frame_all）。V5 に切り替わったら python -m src.scripts.data.tp67_opt recheck で再確認",
+    "periods": "設計2022-23 / 確認2024 / 参考2025 / 最終2026（3着内率の Clopper-Pearson 95% 上側限界）",
+    "rate": {"design": 0.0261, "confirm": 0.0232, "ref2025": 0.0260, "final2026": 0.0268},
+    "upper": {"design": 0.0283, "confirm": 0.0262, "ref2025": 0.0291, "final2026": 0.0306},
+    "past_rate_text": "約2.5%"
+  },
+  "alternatives": {
+    "conservative": {"p3_max": 0.05, "per_race": 2.55, "upper_max": 0.0205},
+    "aggressive": {"p3_max": 0.12, "per_race": 4.25, "upper_max": 0.0369}
+  },
+  "history": [
+    {"version": 1, "rule": "上位5人気のうち、◎○▲★以外で複勝確率が最小の1頭", "status": "廃止（未配備）", "result": "消印の馬の3着内率 28.6〜31.2%（目標 10% に届かず）"},
+    {"version": 2, "rule": "10人気以下で複勝確率が p3_max 以下（複数頭可）", "p3_max": 0.08, "status": "現行", "result": "3着内率 2.3〜2.7%、上側限界 3.1% 以下（目標 5%）"}
+  ]
+}

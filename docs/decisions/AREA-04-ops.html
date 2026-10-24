@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AREA-04 運用最適化要件 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+  color: var(--text); line-height: 1.75; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+aside.sidebar {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+  border-right: 1px solid var(--border); padding: 28px 22px;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.brand .logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #4f8bff, #a78bfa);
+  display: grid; place-items: center; font-weight: 700; color: white;
+  font-size: 13px; box-shadow: var(--shadow);
+}
+.brand .title { font-weight: 700; font-size: 14px; }
+.brand .sub { color: var(--muted); font-size: 11px; }
+nav.toc { font-size: 13px; }
+nav.toc h4 {
+  color: var(--muted); margin: 16px 0 6px;
+  text-transform: uppercase; letter-spacing: .14em;
+  font-size: 10px; font-weight: 700;
+}
+nav.toc a {
+  display: block; color: var(--text); padding: 6px 10px;
+  border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+  line-height: 1.4;
+}
+nav.toc a:hover { background: rgba(79,139,255,.08); border-left-color: var(--accent); text-decoration: none; }
+nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+main.content { padding: 48px 56px 96px; max-width: 980px; width: 100%; }
+header.hero {
+  padding: 28px 32px 24px; border-radius: 18px;
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+              radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+              linear-gradient(180deg, #16213f, #111a36);
+  border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+}
+header.hero .eyebrow { color: var(--accent-2); font-size: 12px; letter-spacing: .2em; font-weight: 700; text-transform: uppercase; }
+header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+header.hero .meta code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+article.html-body { color: #d8e0f7; }
+article.html-body h2 { font-size: 1.35rem; margin: 2.4em 0 0.6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px; }
+article.html-body h3 { font-size: 1.1rem; margin: 1.6em 0 0.5em; color: var(--accent-2); scroll-margin-top: 24px; }
+article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+article.html-body p { margin: 0.75em 0; }
+article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+article.html-body li { margin: 0.35em 0; }
+article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+article.html-body table { width: 100%; border-collapse: collapse; margin: 1em 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13px; }
+article.html-body th, article.html-body td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+article.html-body th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: .06em; }
+article.html-body tr:last-child td { border-bottom: 0; }
+article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+article.html-body pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 1em 0; }
+article.html-body code { background: #1a2748; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+article.html-body pre code { background: none; border: none; padding: 0; }
+.badge { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: .06em; background: rgba(79,139,255,.15); color: var(--accent-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.badge.final { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.dev { background: rgba(167,139,250,.16); color: #a78bfa; }
+.callout { border-left: 3px solid var(--accent); background: rgba(79,139,255,.08); padding: 12px 16px; border-radius: 8px; margin: 1em 0; }
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout.info { border-left-color: #38bdf8; background: rgba(56,189,248,.07); }
+.callout.danger { border-left-color: #f87171; background: rgba(248,113,113,.07); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+  main.content { padding: 28px 20px 80px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Decisions · AREA-04</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../html/index.html">← ドキュメント一覧</a>
+      <a href="MASTER.html">↑ マスター仕様書</a>
+      <h4>AREA-04</h4>
+      <a href="#1">1. 概要</a>
+      <a href="#2">2. Cron スケジュール・SLA（実装準拠）</a>
+      <a class="toc-h3" href="#2-0">2-0 スクレイピング対象カテゴリ × タスク対応表</a>
+      <a class="toc-h3" href="#2-1">2-1 常時監視</a>
+      <a class="toc-h3" href="#2-2">2-2 定期取得（毎日）</a>
+      <a class="toc-h3" href="#2-3">2-3 開催日リアルタイム</a>
+      <a class="toc-h3" href="#2-4">2-4 週次</a>
+      <a class="toc-h3" href="#2-5">2-5 バックフィル（夜間 / 年度別）</a>
+      <a href="#3">3. プロセス分離</a>
+      <a href="#4">4. VPS メモリバジェット</a>
+      <a href="#5">5. Circuit Breaker</a>
+      <a class="toc-h3" href="#5-1">5-1 スクレイパーのリトライ制御</a>
+      <a class="toc-h3" href="#5-2">5-2 結果スクレイパーのリトライ</a>
+      <a class="toc-h3" href="#5-3">5-3 要対応事項</a>
+      <a href="#6">6. 監視・アラート</a>
+      <a class="toc-h3" href="#6-1">6-1 スクレイピング成功率監視（N-6、R-2）</a>
+      <a class="toc-h3" href="#6-2">6-2 実行ログ管理（F-5）</a>
+      <a class="toc-h3" href="#6-3">6-3 API パフォーマンス監視</a>
+      <a class="toc-h3" href="#6-4">6-4 推論バッチ完了監視</a>
+      <a class="toc-h3" href="#6-5">6-5 モデル品質モニタリング（Phase 4 以降）</a>
+      <a class="toc-h3" href="#6-6">6-6 テンポラルリーク検知</a>
+      <a class="toc-h3" href="#6-7">6-7 フロントエンド性能監視（TASK-049 追加）</a>
+      <a href="#7">7. デプロイ</a>
+      <a class="toc-h3" href="#7-1">7-1 スキーママイグレーション</a>
+      <a class="toc-h3" href="#7-2">7-2 デプロイ順序（依存関係）</a>
+      <a href="#8">8. Docker 構成</a>
+      <a class="toc-h3" href="#8-1">8-1 使用イメージバージョン</a>
+      <a class="toc-h3" href="#8-2">8-2 Python ライブラリバージョン</a>
+      <a class="toc-h3" href="#8-3">8-3 nginx リバースプロキシ設定</a>
+      <a class="toc-h3" href="#8-4">8-4 Docker Compose サービス定義（抜粋）</a>
+      <a class="toc-h3" href="#8-5">8-5 Dockerfile（backend）</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DECISIONS · AREA-04</div>
+      <h1>AREA-04 — 運用最適化要件（Cron SLA / プロセス分離 / Circuit Breaker / 監視・アラート / デプロイ / ロールバック）</h1>
+      <p class="meta">
+        <span class="badge final">FINAL</span>
+        最終更新: 2026-07-06　|　統合: DEC-001（統合済み）, TASK-049（統合済み）
+      </p>
+    </header>
+
+    <article class="html-body">
+
+<h2 id="1">1. 概要</h2>
+<p>
+本仕様書は keiba-vpn プロジェクトの運用最適化要件を定義する。Cron ジョブ SLA・プロセス分離・Circuit Breaker・監視・アラート・デプロイ・ロールバックを対象とする。
+</p>
+<p>
+ConoHa VPS 2GB 構成を前提に、UI の見た目を一切変えずに<b>パフォーマンス・可用性・運用コスト</b>の3軸を最大化する。フロントエンドのキャッシュ最適化・バンドル削減、バックエンドの N+1 解消・BFF 集約、インフラの OOM 防止設計の3方向で同時進行する。
+</p>
+
+<h2 id="2">2. Cron スケジュール・SLA（実装準拠）</h2>
+<p>
+システムタイムゾーン: UTC。cron 記述は UTC。実行スクリプトは <code>TZ=Asia/Tokyo</code> を付与して JST で動作。<br />
+実装: <code>scripts/cron/setup_all_cron.sh</code>（マスター） + <code>src/scraper/auto_scrape.py</code>（タスク定義）
+</p>
+
+<h3 id="2-0">2-0. スクレイピング対象カテゴリ × タスク対応表</h3>
+<table>
+<tr><th>ストレージカテゴリ</th><th>書込タスク</th><th>タイミング（JST）</th><th>備考</th></tr>
+<tr><td><code>race_lists</code></td><td><code>daily-race-lists</code></td><td>07:00・17:00 毎日</td><td>今日〜14日先の全開催日</td></tr>
+<tr><td><code>jra_cushion</code></td><td><code>jra-baba-morning</code></td><td>05:00-08:50 毎10分（開催日のみ）</td><td>クッション値・含水率</td></tr>
+<tr><td><code>race_shutuba</code></td><td><code>raceday-eve</code>（主）・<code>raceday-runner</code>（FB）</td><td>18:00 前日 / T-15分</td><td>出馬表（枠順・騎手確定版）</td></tr>
+<tr><td><code>race_shutuba_past</code></td><td><code>raceday-eve</code></td><td>18:00 前日</td><td>馬柱（過去5走）</td></tr>
+<tr><td><code>race_oikiri</code></td><td><code>raceday-eve</code>・<code>backfill-full</code></td><td>18:00 前日 / 深夜</td><td>追い切りタイム</td></tr>
+<tr><td><code>horse_training</code></td><td><code>raceday-eve</code></td><td>18:00 前日</td><td>調教師コメント</td></tr>
+<tr><td><code>race_detail</code></td><td><code>raceday-runner</code>（T-15）</td><td>T-15分 各R</td><td>出走確定情報</td></tr>
+<tr><td><code>race_odds</code></td><td><code>raceday-runner</code>（T-15）・<code>backfill-full</code></td><td>T-15分 / 深夜</td><td>単勝・馬連オッズ</td></tr>
+<tr><td><code>race_paddock</code></td><td><code>raceday-runner</code>（T-15）</td><td>T-15分 各R</td><td>パドックコメント</td></tr>
+<tr><td><code>race_barometer</code></td><td><code>raceday-runner</code>（T-15）・<code>backfill-full</code></td><td>T-15分 / 深夜</td><td>レースバロメーター</td></tr>
+<tr><td><code>race_trainer_comment</code></td><td><code>raceday-runner</code>（T-15）</td><td>T-15分 各R</td><td>調教師コメント（当日）</td></tr>
+<tr><td><code>race_result_on_time</code></td><td><code>raceday-result-runner</code>（T+15）</td><td>T+15分 各R</td><td>速報結果</td></tr>
+<tr><td><code>race_result</code></td><td><code>raceday-evening</code>・<code>weekly-update</code>・<code>backfill-fast</code></td><td>17:30 / 17:30金 / 深夜</td><td>確定着順・タイム</td></tr>
+<tr><td><code>race_pair_odds</code></td><td><code>raceday-evening</code>・<code>weekly-update</code></td><td>17:30</td><td>馬連・3連複確定オッズ</td></tr>
+<tr><td><code>race_index</code></td><td><code>raceday-evening</code>・<code>weekly-update</code>・<code>backfill-full</code></td><td>17:30 / 17:30金 / 深夜</td><td>速度指数・偏差値</td></tr>
+<tr><td><code>horse_result</code></td><td><code>weekly-update</code>・<code>backfill-horse</code></td><td>17:30 金曜 / 06:00 毎日</td><td>馬個別戦績</td></tr>
+<tr><td><code>horse_name_index</code></td><td><code>horse-name-index</code></td><td>18:00 金曜</td><td>馬名→horse_id マッピング</td></tr>
+<tr><td><code>growth_curve</code></td><td><code>horse-name-index</code></td><td>18:00 金曜</td><td>成長曲線（calculated_data）</td></tr>
+<tr><td>騎手・調教師統計</td><td><code>update_jt_stats</code></td><td>05:30 毎日</td><td><code>data/features/jockey_trainer_stats/</code></td></tr>
+</table>
+
+<h3 id="2-1">2-1. 常時監視</h3>
+<table>
+<tr><th>SLA</th><th>cron（UTC）</th><th>JST</th><th>タスク</th><th>内容</th></tr>
+<tr><td>Watchdog</td><td><code>*/3 * * * *</code></td><td>常時 3分ごと</td><td><code>server_watchdog</code></td><td>API + MLflow プロセス死活監視・自動再起動。<code>@reboot</code> にも登録（起動後 15秒待機）</td></tr>
+<tr><td>構造監視</td><td>毎日 JST 06:00</td><td>06:00</td><td><code>structure-scheduler</code></td><td>ページ構造変更検知、<code>versions.json</code> 更新</td></tr>
+<tr><td>ログ保全</td><td><code>30 19 * * *</code></td><td>04:30</td><td><code>rotate_logs</code></td><td>ログローテーション。JST 12:00 に保全期間超ファイル削除</td></tr>
+<tr><td>キャッシュ保守</td><td>86,400 秒ごと（起動直後+以降毎日）</td><td>—</td><td><code>disk_cache_cleanup</code></td><td><code>data/cache/</code> の古ファイル削除（週次アクセス &lt; 2回は対象）</td></tr>
+<tr><td>キュー保守</td><td>3,600 秒ごと</td><td>—</td><td><code>queue_hourly_maintain</code></td><td>失敗ジョブを待機状態に戻し・完了レコード削除</td></tr>
+</table>
+
+<h3 id="2-2">2-2. 定期取得（毎日）</h3>
+<table>
+<tr><th>SLA</th><th>cron（UTC）</th><th>JST</th><th>タスク名</th><th>実行内容</th><th>非開催日動作</th></tr>
+<tr><td>SLA 0a</td><td><code>0 22 * * *</code></td><td>07:00</td><td><code>daily-race-lists</code></td><td>今日〜末尾の全開催日 race_lists 取得・更新</td><td>実行（全曜日）</td></tr>
+<tr><td>SLA 0b</td><td><code>0 8 * * *</code></td><td>17:00</td><td><code>daily-race-lists</code></td><td>同上（夕方更新）</td><td>実行（全曜日）</td></tr>
+<tr><td>JT統計</td><td><code>30 20 * * *</code></td><td>05:30</td><td><code>update_jt_stats</code></td><td>騎手・調教師統計再生成</td><td>実行（全曜日）</td></tr>
+<tr><td>SLA 1</td><td><code>0 9 * * *</code></td><td>18:00</td><td><code>raceday-eve</code></td><td><b>翌日が開催日のみ</b>: race_shutuba + race_shutuba_past + race_oikiri + horse_training → 追走難度・最終オッズ precompute</td><td>即終了</td></tr>
+<tr><td>SLA 2</td><td><code>*/10 20-23 * * *</code></td><td>05:00-08:50 毎10分</td><td><code>jra-baba-morning</code></td><td>jra_cushion（クッション値・含水率）ポーリング</td><td>開催日のみ実取得</td></tr>
+</table>
+
+<h3 id="2-3">2-3. 開催日リアルタイム</h3>
+<table>
+<tr><th>SLA</th><th>cron（UTC）</th><th>JST</th><th>タスク名</th><th>実行内容</th></tr>
+<tr><td>SLA 3</td><td><code>30 22 * * *</code></td><td>07:30</td><td><code>raceday-runner</code></td><td>開催日常駐。各R 発走 <b>T-15分</b> に T-15バンドル（race_detail + race_odds + race_paddock + race_barometer + race_trainer_comment + JRA馬場ライブ）→ AI 予測トリガ</td></tr>
+<tr><td>SLA 4</td><td><code>30 22 * * *</code></td><td>07:30</td><td><code>raceday-result-runner</code></td><td>開催日常駐。各R 発走 <b>T+15分</b> に race_result_on_time（速報結果）取得</td></tr>
+<tr><td>SLA 5</td><td><code>30 8 * * *</code></td><td>17:30</td><td><code>raceday-evening</code></td><td>確定結果（race_result）+ race_pair_odds + race_index → 馬場速度指数計算トリガ</td></tr>
+</table>
+
+<h3 id="2-4">2-4. 週次</h3>
+<table>
+<tr><th>SLA</th><th>cron（UTC）</th><th>JST</th><th>タスク名</th><th>実行内容</th></tr>
+<tr><td>SLA 6</td><td><code>0 9 * * 5</code></td><td>18:00 金曜</td><td><code>weekly-update</code></td><td><b>直近10日</b>の開催日: <code>race_result</code>（確定）・<code>race_pair_odds</code>・<code>race_index</code>・<code>horse_result</code> 一括更新 → 完了後 <code>date_coverage</code> / めぐ指数→GCS / PG 増分同期</td></tr>
+<tr><td>—</td><td><code>30 9 * * 5</code></td><td>18:30 金曜</td><td><code>horse-name-index</code></td><td>馬名リスト（<code>horse_name_index</code>）+ 成長曲線（<code>growth_curve</code>）→ <code>calculated_data</code> 一括更新</td></tr>
+</table>
+
+<h3 id="2-5">2-5. バックフィル（夜間 / 年度別）</h3>
+<table>
+<tr><th>cron（UTC）</th><th>JST</th><th>対象年</th><th>フェーズ</th><th>最大件数</th></tr>
+<tr><td><code>0 15 * * *</code></td><td>00:00</td><td>2026</td><td>fast（race_result + race_shutuba）</td><td>7日分</td></tr>
+<tr><td><code>0 16 * * *</code></td><td>01:00</td><td>2025</td><td>fast</td><td>5日分</td></tr>
+<tr><td><code>0 17 * * *</code></td><td>02:00</td><td>2024</td><td>fast</td><td>5日分</td></tr>
+<tr><td><code>0 18 * * *</code></td><td>03:00</td><td>2023</td><td>fast</td><td>5日分</td></tr>
+<tr><td><code>0 19 * * *</code></td><td>04:00</td><td>2022</td><td>fast</td><td>5日分</td></tr>
+<tr><td><code>0 21 * * *</code></td><td>06:00</td><td>全年</td><td>horse（<code>horse_result</code> 一括）</td><td>一括</td></tr>
+<tr><td><code>30 22 * * *</code></td><td>07:30</td><td>2026</td><td>full（<code>race_index</code>・<code>race_odds</code>・<code>race_barometer</code>・<code>race_oikiri</code> 等補助データ）</td><td>5日分</td></tr>
+<tr><td><code>0 23 * * *</code></td><td>08:00</td><td>2025</td><td>full（同上）</td><td>3日分</td></tr>
+<tr><td><code>0 0 * * *</code></td><td>09:00</td><td>2024</td><td>full（同上）</td><td>3日分</td></tr>
+<tr><td><code>0 17 * * 1,4</code></td><td>02:00 月木</td><td>2021</td><td>fast（週2回）</td><td>5日分</td></tr>
+<tr><td><code>0 18 * * 2,5</code></td><td>03:00 火金</td><td>2020</td><td>fast（週2回）</td><td>5日分</td></tr>
+</table>
+
+<h2 id="3">3. プロセス分離</h2>
+<table>
+<tr><th>プロセス種別</th><th>役割</th><th>備考</th></tr>
+<tr><td>スクレイパープロセス</td><td>netkeiba.com データ収集</td><td>グローバル最大同時 4スロット、バースト制限付き</td></tr>
+<tr><td>スナップショット集計バッチ</td><td><code>*_stats_snapshot</code> 生成</td><td><code>as_of_race_id</code> 紐付け、results 収集完了後に起動</td></tr>
+<tr><td>追走難度 precompute</td><td><code>tracking_difficulty</code> キャッシュ事前計算</td><td>raceday-eve 完了後に起動（<code>KEIBA_EVE_PRECOMPUTE_TRACKING=1</code>）</td></tr>
+<tr><td>最終オッズ precompute</td><td><code>final_odds_prediction</code> キャッシュ事前計算</td><td>raceday-eve 完了後に起動（<code>KEIBA_EVE_PRECOMPUTE_FINAL_ODDS=1</code>）</td></tr>
+<tr><td>AI 予測トリガ</td><td>T-15バンドル完了後に Stage 1→2 推論実行</td><td><code>KEIBA_PRE_RACE_PREDICT_ENABLED=1</code> 時に起動</td></tr>
+<tr><td>推論バッチプロセス</td><td>Stage 1 → Stage 2 順次推論・結果書込</td><td>発走 3 時間前までに完了（N-9）; systemd MemoryMax=512M, CPUQuota=60%</td></tr>
+<tr><td>API サーバー（Flask / Gunicorn）</td><td>REST API 提供・Redis キャッシュ参照</td><td>キャッシュヒット ≤ 200 ms（N-1）、ミス ≤ 2,000 ms（N-2）; systemd MemoryMax=384M</td></tr>
+<tr><td>DDL マイグレーションプロセス</td><td>Alembic スキーマバージョン管理</td><td>デプロイ時に独立実行（N-11）</td></tr>
+<tr><td>ETL 集約バッチ</td><td><code>aggregate_predictions.py</code> による馬単位ファイル → manifest.json → full.json 生成</td><td>Phase 2 以降。<code>scrape_runs</code> テーブルに完了記録</td></tr>
+</table>
+
+<p><b>シングル IP 環境制約</b>: netkeiba.com スクレイパーはグローバルスロット 4 以内を厳守し、IP ブロックを防止する。</p>
+
+<h2 id="4">4. VPS メモリバジェット</h2>
+<!-- TASK-049 決定により具体的な割り当て値を追記。旧「要対応」記述を置き換え -->
+<p>ConoHa VPS 2GB 制約下での systemd MemoryMax 設定を以下の通り確定する。</p>
+<table>
+<tr><th>プロセス</th><th>systemd サービス名</th><th>MemoryMax</th><th>CPUQuota</th></tr>
+<tr><td>推論バッチ</td><td><code>keiba-infer.service</code></td><td>512MB</td><td>60%</td></tr>
+<tr><td>Web サーバー（Gunicorn）</td><td><code>keiba-web.service</code></td><td>384MB</td><td>—</td></tr>
+<tr><td>Redis</td><td><code>redis.conf</code> maxmemory</td><td>128MB</td><td>—</td></tr>
+<tr><td>全プロセス合計</td><td>—</td><td>≤ 1.5GB</td><td>—</td></tr>
+</table>
+<div class="callout info">
+  <h4>注</h4>
+  <p>残余 512MB は PostgreSQL・OS・その他プロセス向け。LightGBM / LSTM モデルロード時のメモリ見積もりは推論バッチ 512MB 上限内に収めること。</p>
+</div>
+<div class="callout warn">
+  <h4>要対応 (OP-1)</h4>
+  <p>各モデルロード時の実測メモリ使用量を計測し、512MB 制約との適合を確認すること（後続 DEC で報告）。</p>
+</div>
+
+<h2 id="5">5. Circuit Breaker</h2>
+<p>DEC-001 には Circuit Breaker パターンの明示的な記述は存在しないが、以下のリトライ・バックオフ設定がその代替機能を一部担っている。</p>
+
+<h3 id="5-1">5-1. スクレイパーのリトライ制御</h3>
+<pre><code>netkeiba.com:
+  リクエスト間隔: 2.2〜4.0 秒（ランダム + ガウスジッター）
+  バースト制限: 14 req ごとに 6〜12 秒クールダウン
+  セッションクールダウン: 60 req ごとに 22〜40 秒
+  セッションリフレッシュ: 150 req ごとに TLS/Cookie 再構築
+  グローバル最大同時スロット: 4
+  UA ローテーション: Chrome/Firefox/Edge × Windows/Mac/Linux 8種
+  429/503 バックオフ: 初期 5s・係数 2.5・最大 3 リトライ
+  403: UA 即時ローテーション後リトライ
+  日次上限: 5,000 req / セッション上限: 500 req</code></pre>
+
+<h3 id="5-2">5-2. 結果スクレイパーのリトライ</h3>
+<pre><code>results:
+  trigger: "発走予定時刻 + 35分"
+  retry: "5分間隔 × 最大6回"  # 合計最大 30 分間リトライ</code></pre>
+
+<h3 id="5-3">5-3. 要対応事項</h3>
+<div class="callout warn">
+  <h4>後続 DEC で以下を確定する必要がある</h4>
+  <ul>
+    <li>Circuit Breaker ライブラリの選定（例: <code>pybreaker</code>・<code>tenacity</code>）</li>
+    <li>閾値定義: 連続失敗 N 回でオープン状態遷移、クールダウン時間</li>
+    <li>Circuit Breaker 適用対象: netkeiba.com HTTP クライアント・Redis・PostgreSQL 接続</li>
+  </ul>
+</div>
+
+<h2 id="6">6. 監視・アラート</h2>
+
+<h3 id="6-1">6-1. スクレイピング成功率監視（N-6、R-2）</h3>
+<table>
+<tr><th>項目</th><th>目標値</th><th>アラート条件</th></tr>
+<tr><td>スクレイピング成功率</td><td>≥ 99% / 月</td><td>週次で閾値以下になった場合に通知（R-2 対策）</td></tr>
+<tr><td>DB 反映遅延</td><td>≤ 10 分</td><td>超過時アラート（N-7）</td></tr>
+<tr><td>オッズスナップショット欠損率（発走前 5 分以内）</td><td>≤ 1%</td><td>超過時アラート（N-8）</td></tr>
+</table>
+
+<h3 id="6-2">6-2. 実行ログ管理（F-5）</h3>
+<pre><code>-- scrape_runs テーブル（スクレイプ実行ログ）
+-- カラム: target_type, status, retry_count
+-- 監視基盤はこのテーブルを参照して成功率・失敗率を集計すること
+-- Phase 2 以降: ETL 集約ステップ（aggregate_predictions.py）の完了もこのテーブルに記録する</code></pre>
+
+<h3 id="6-3">6-3. API パフォーマンス監視</h3>
+<!-- TASK-049 により BFF エンドポイント追加に伴い項目を追記 -->
+<table>
+<tr><th>項目</th><th>SLO</th></tr>
+<tr><td>キャッシュヒット時レスポンスタイム</td><td>≤ 200 ms</td></tr>
+<tr><td>キャッシュミス時レスポンスタイム</td><td>≤ 2,000 ms</td></tr>
+<tr><td>BFF エンドポイント <code>GET /api/v1/races/{race_id}/full</code> レスポンスタイム (p95)</td><td>≤ 300 ms</td></tr>
+<tr><td>Redis キャッシュヒット率（<code>predictions:{race_id}:full</code>）</td><td>≥ 80%</td></tr>
+<tr><td>Gunicorn OOM Kill 発生率</td><td>0件/月</td></tr>
+</table>
+
+<h3 id="6-4">6-4. 推論バッチ完了監視</h3>
+<p>発走 3 時間前までに推論バッチが完了していない場合はアラートを発報する。</p>
+
+<h3 id="6-5">6-5. モデル品質モニタリング（Phase 4 以降）</h3>
+<ul>
+  <li>特徴量重要度のモニタリング</li>
+  <li>データドリフト検知</li>
+  <li>障害・エラー通知アラートの整備</li>
+</ul>
+
+<h3 id="6-6">6-6. テンポラルリーク検知</h3>
+<ul>
+  <li>CI パイプラインにおいてテストデータ時系列分割によるリーク検知テストを自動実行する。</li>
+  <li><code>as_of_race_id</code> 紐付けの単体テストを必須化する（F-3 実装時）。</li>
+</ul>
+
+<h3 id="6-7">6-7. フロントエンド性能監視（TASK-049 追加）</h3>
+<table>
+<tr><th>項目</th><th>目標値</th></tr>
+<tr><td>静的データ系 Flask への無駄リクエスト削減率</td><td>≥ 60% 削減</td></tr>
+<tr><td>初回 JS バンドルサイズ（チャートライブラリ分離後）</td><td>≥ 30% 削減</td></tr>
+<tr><td>モバイル LCP（dynamic import 適用後）</td><td>≤ 2.5s</td></tr>
+<tr><td>GCS リクエスト数（full.json 一本化後）</td><td>N回 → 1回/レース</td></tr>
+</table>
+
+<h2 id="7">7. デプロイ</h2>
+
+<h3 id="7-1">7-1. スキーママイグレーション</h3>
+<ul>
+  <li>DDL 変更は <b>Alembic</b> でバージョン管理し、全スキーマ変更をマイグレーションファイルとして記録する。</li>
+  <li>デプロイ時はマイグレーションプロセスを API サーバー起動前に独立実行する。</li>
+</ul>
+
+<h3 id="7-2">7-2. デプロイ順序（依存関係）</h3>
+<pre><code>1. DDL マイグレーション実行（Alembic）
+2. スクレイパープロセス起動
+3. API サーバー（Flask / Gunicorn）起動
+4. 推論バッチプロセス起動
+5. Cron ジョブ有効化</code></pre>
+
+<h2 id="8">8. Docker 構成</h2>
+<p>ConoHa VPS 環境での Docker Compose 構成を以下の通り定義する。</p>
+
+<h3 id="8-1">8-1. 使用イメージバージョン</h3>
+<table>
+<tr><th>サービス</th><th>ベースイメージ</th><th>備考</th></tr>
+<tr><td>backend</td><td><code>python:3.11-slim</code></td><td>Python バージョンは <b>3.11</b> に統一</td></tr>
+<tr><td>redis</td><td><code>redis:7-alpine</code></td><td>Redis 7 系（セキュリティ・パフォーマンス向上）</td></tr>
+<tr><td>nginx</td><td><code>nginx:stable-alpine</code></td><td>リバースプロキシ</td></tr>
+</table>
+<div class="callout info">
+  <h4>注</h4>
+  <p>Python バージョンは <code>3.11</code> に統一する。<code>3.10</code> 以前の記述が他ファイルに残っている場合は <code>3.11</code> に修正すること。</p>
+</div>
+
+<h3 id="8-2">8-2. Python ライブラリバージョン</h3>
+<table>
+<tr><th>ライブラリ</th><th>バージョン</th><th>備考</th></tr>
+<tr><td>lightgbm</td><td><code>4.x</code>（4.0 以上）</td><td>LightGBM 4 系を使用。3.x 系の記述は <code>&gt;=4.0,&lt;5.0</code> に更新</td></tr>
+<tr><td>Flask</td><td><code>2.x</code> / <code>3.x</code></td><td>既存 flask_app.py に準拠</td></tr>
+</table>
+
+<h3 id="8-3">8-3. nginx リバースプロキシ設定</h3>
+<p>Flask（Gunicorn）は <b>5000 番ポート</b>で起動する。nginx upstream の <code>proxy_pass</code> は必ず <code>http://backend:5000</code> を指定すること。</p>
+<pre><code>upstream backend_app {
+    server backend:5000;
+}
+
+server {
+    listen 80;
+
+    location /api/ {
+        proxy_pass http://backend:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location / {
+        proxy_pass http://backend:5000;
+        proxy_set_header Host $host;
+    }
+}</code></pre>
+<div class="callout danger">
+  <h4>注意（P1-4）</h4>
+  <p><code>proxy_pass http://backend:8000</code> は誤り。Flask は 8000 番ではなく <b>5000 番</b>で起動するため、8000 のままにすると 502 Bad Gateway が発生する。必ず <code>backend:5000</code> を使用すること。</p>
+</div>
+
+<h3 id="8-4">8-4. Docker Compose サービス定義（抜粋）</h3>
+<pre><code>services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Flask / Gunicorn は 5000 番ポートで起動
+    expose:
+      - "5000"
+    environment:
+      - FLASK_ENV=production
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+
+  nginx:
+    image: nginx:stable-alpine
+    ports:
+      - "80:80"
+    depends_on:
+      - backend</code></pre>
+
+<h3 id="8-5">8-5. Dockerfile（backend）</h3>
+<pre><code>FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 5000
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "src.api.flask_app:app"]</code></pre>
+<div class="callout warn">
+  <h4>要対応</h4>
+  <p><code>requirements.txt</code> に <code>lightgbm&gt;=4.0,&lt;5.0</code> を記述すること（3.x 系は非対応）。</p>
+</div>
+
+    </article>
+  </main>
+</div>
+</body>
+</html>

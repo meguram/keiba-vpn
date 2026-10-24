@@ -1,0 +1,17 @@
+[Unit]
+Description=cloudflared (Cloudflare Tunnel: meguai-prod)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# /etc/cloudflared/prod.env に TUNNEL_TOKEN=... （set_secret.sh で書く。画面・ログ・ps に出ない）
+EnvironmentFile=/etc/cloudflared/prod.env
+ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate --loglevel info run
+Restart=always
+RestartSec=5
+TimeoutStartSec=0
+NoNewPrivileges=true
+SyslogIdentifier=cloudflared-prod
+
+[Install]
+WantedBy=multi-user.target

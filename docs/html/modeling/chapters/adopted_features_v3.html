@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>採用している特徴量（アンサンブル v3・301 列） — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+<style>.ok{color:#4ade80}.wait{color:#fbbf24}.ng{color:#f87171}.tag{font-size:12px;padding:1px 8px;border-radius:99px;border:1px solid #243358}</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>採用している特徴量（アンサンブル v3・301 列）</h1>
+      <p class="meta">ソース: <code>docs/html/modeling/chapters/adopted_features_v3.html</code></p>
+    </header>
+    <article class="html-body">
+<h1>採用している特徴量（アンサンブル v3・301 列）</h1>
+<p class="muted">現行の最終モデル（アンサンブル v3）が使う特徴量を、意味のあるグループに分けて示す。数は、ホストの <code>final_v3/bundle_2025/bundle.json</code> にある 7 メンバーの <code>feature_cols</code> の和集合（301 列）を、列名の接頭辞ごとに数えたもの。採否の根拠は <a href="training_pipeline_decisions.html">確定事項ログ</a>（§N）。調査全体は <a href="research_overview.html">調査の全体像</a>。最終更新: 2026-10-17。</p>
+
+<h2>1. 全体の構成</h2>
+<table>
+<tr><th>大分類</th><th>列数</th><th>中身</th></tr>
+<tr><td>LayerA（レースの条件・基本情報・通算成績）</td><td>48</td><td>レース条件と出走時の情報 20 + 馬場傾向 12 + 騎手・調教師・馬の通算成績 16</td></tr>
+<tr><td>履歴（馬の過去走プロファイル）</td><td>127</td><td>過去走から作る能力・適性・展開・レーティング（11 ファミリー）</td></tr>
+<tr><td>前段モデル・相対化・追い切りラップ</td><td>95</td><td>前段モデルの予測 3 + レース内の相対化 42 + 追い切りラップ 50</td></tr>
+<tr><td>血統・追い切り評価（追加）</td><td>31</td><td>血統×条件 24 + 追い切り評価・厩舎コメント 7</td></tr>
+<tr><td><b>合計</b></td><td><b>301</b></td><td>48 + 127 + 95 + 31</td></tr>
+</table>
+<p>メンバーごとの列数は、lgb_extras_ped・xgb_extras_ped・nn_extras_ped が 301、lgb_extras が 277（血統を除く）、lgb_softmax・linear・nn_s が 270（血統と追加を除く）。</p>
+
+<h2>2. LayerA（48 列）</h2>
+<table>
+<tr><th>グループ</th><th>列数</th><th>代表的な列</th><th>意味</th><th>採用の根拠</th><th>注意点</th></tr>
+<tr><td>レース条件・枠・体重</td><td>20</td><td><code>surface</code> <code>distance</code> <code>grade</code> <code>track_condition</code> <code>bracket_number</code> <code>jockey_weight</code> <code>weight</code> <code>weight_change</code> <code>age</code></td><td>レースの条件と、出走時の基本情報</td><td>tp-03 の土台（B0）</td><td>推論の出馬表が枠番・体重増減などを落としていたため補った（§32）</td></tr>
+<tr><td>馬場傾向・血統×馬場傾向</td><td>12</td><td><code>track_bias_winner_3f_*</code> <code>sire_prior_win_rate_surface</code> <code>dam_sire_prior_win_rate_surface</code> <code>sire/dam_sire_x_track_bias_*</code></td><td>当日・前日の勝ち馬の上がり、父・母父との交互作用</td><td>tp-03（B0）</td><td>先読みリークは修正済みで影響 +0.00003（§24）。学習表の sire / dam_sire は全行空だったため、血統ではなく芝ダ別の全体平均になっている（§31）</td></tr>
+<tr><td>通算成績</td><td>16</td><td><code>jockey_prior_*</code> <code>trainer_prior_*</code> <code>horse_prior_*</code></td><td>騎手・調教師・馬の通算の勝数・勝率・複勝率（その時点まで）</td><td>tp-03（B0）</td><td>学習側は同じレースの他馬の結果まで数える先読みがあり、推論では再現できない（影響は小、§32。tp-07 で直す）</td></tr>
+</table>
+
+<h2>3. 履歴（127 列）</h2>
+<p>馬の過去走から作る特徴量（tp-02 で生成、tp-03 で全採用）。対象日より前の情報だけを使い、リーク検査で不一致 0 を確認している。</p>
+<table>
+<tr><th>ファミリー</th><th>列数</th><th>代表的な列</th><th>意味</th><th>注意点</th></tr>
+<tr><td>A 上がり・脚質</td><td>14</td><td><code>a_l3fz_ewm2</code> <code>a_style</code> <code>a_trend</code></td><td>上がり 3F と脚質の過去走プロファイル</td><td></td></tr>
+<tr><td>B 得意な舞台</td><td>17</td><td><code>b_aff_venue</code> <code>b_aff_going</code> <code>b_dist_pred</code></td><td>競馬場・馬場・距離などの適性</td><td></td></tr>
+<tr><td>C レースの質</td><td>17</td><td><code>c_res_ewm2</code> <code>c_cls_ewm2</code> <code>c_opp_step</code></td><td>過去走の内容と相手関係</td><td></td></tr>
+<tr><td>D 休養・体重</td><td>10</td><td><code>d_rest</code> <code>d_wt_dev</code> <code>d_prev_fin</code></td><td>レース間隔・馬体重の偏差・前走着順</td><td></td></tr>
+<tr><td>E 信頼度</td><td>3</td><td><code>e_n_l3f</code> <code>e_res_std5</code></td><td>履歴の件数とばらつき</td><td></td></tr>
+<tr><td>F1 条件類似度</td><td>4</td><td><code>f1_sim_res</code> <code>f1_sim_z</code></td><td>条件が近い過去走の成績</td><td></td></tr>
+<tr><td>F2 展開</td><td>17</td><td><code>f2_pace_match</code> <code>f2_pressure</code> <code>f2_lone_front</code></td><td>脚質と想定ペースの相性</td><td></td></tr>
+<tr><td>F3 Elo</td><td>10</td><td><code>f3_r</code> <code>f3_E</code> <code>f3_r_gap</code></td><td>Elo 評価値と相手関係</td><td>K=300 は 2021-12-21 以前のデータで固定</td></tr>
+<tr><td>F5 クラスタ</td><td>3</td><td><code>f5_cl</code> <code>f5_aff</code> <code>f5_win</code></td><td>クラスタ適性</td><td><code>f5_n</code> は時代の目印になるため除外</td></tr>
+<tr><td>G（pc_）ペース指数</td><td>13</td><td><code>pc_pci_ewm2</code> <code>pc_rpci_ewm3</code> <code>pc_adv</code></td><td>RPCI・PCI などのペース指数</td><td></td></tr>
+<tr><td>H（sr_）標準条件レーティング</td><td>19</td><td><code>sr_perf_ewm2</code> <code>sr_exp</code> <code>sr_load_dev</code></td><td>標準条件に換算した能力値</td><td><code>sr_var_today</code> / <code>sr_var_n</code> は同日の結果の扱いが学習と推論でずれる（約 0.00023、§32）</td></tr>
+</table>
+<p class="muted">ファミリーごとの列の一覧は、ホストの <code>features/feature_families.json</code> と <code>ablation_nospeed/adopted_features.json</code>。個々の列の定義（式）は確定事項ログ §3 と特徴量戦略書。</p>
+
+<h2>4. 前段モデル・相対化・追い切りラップ（95 列）</h2>
+<table>
+<tr><th>グループ</th><th>列数</th><th>代表的な列</th><th>意味</th><th>採用の根拠</th><th>注意点</th></tr>
+<tr><td>前段モデルの出力</td><td>3</td><td><code>s_time_pred</code> <code>s_time_gap</code> <code>s_rank_pred</code></td><td>走破タイム・順位の予測値</td><td>tp-04（valid で −0.00086）、tp-05a（−0.00051）</td><td>2020〜2021 年は欠損。学習時は OOF、推論時は全期間モデルの予測</td></tr>
+<tr><td>レース内の相対化</td><td>42</td><td><code>*_rz</code> <code>*_rrank</code> <code>*_rgap</code></td><td>14 列について、同じレースの出走馬との z 値・順位・最大との差</td><td>tp-05a（−0.00059、3 分割すべてで改善）</td><td>拡張版は有意差なし（tp-05f）</td></tr>
+<tr><td>追い切りラップ</td><td>50</td><td><code>tl_f_t4z</code> <code>tl_f_t1z</code> <code>tl_f_accelz</code> <code>tl_w1_*</code> <code>tl_w2_*</code> <code>tl_n_work_14</code> <code>tl_has_training</code></td><td>標準化した時計・加速度・日数・脚色</td><td>tp-19 で勝率 −0.00136、tp-23 で v3 に採用</td><td>馬別調教ページの最新記録が前日夕方までに必要。記録が無い馬は欠損で埋めて動く。<code>tl_f</code> が最終追い切り、<code>tl_w1</code> / <code>tl_w2</code> がその前の追い切りという読みは、列名からの推測で未確認</td></tr>
+</table>
+
+<h2>5. 血統・追い切り評価（追加 31 列）</h2>
+<table>
+<tr><th>グループ</th><th>列数</th><th>代表的な列</th><th>意味</th><th>採用の根拠</th><th>注意点</th></tr>
+<tr><td>追い切り評価・厩舎コメント</td><td>7</td><td><code>oikiri_eval</code> <code>has_comment</code> <code>comment_len</code> <code>comment_pos</code> <code>comment_neg</code></td><td>追い切りの評価（A〜D）とコメントの特徴</td><td>tp-05g（勝率 0.21637 → 0.21549）</td><td>前日夕方〜夜に確定するので T-60 に間に合う</td></tr>
+<tr><td>血統×条件（ped_）</td><td>24</td><td><code>ped_sire_sd_win</code> <code>ped_sire_go_win</code> <code>ped_dam_sire_vn_t3</code></td><td>父・母父 × 面・距離・馬場・競馬場の産駒成績</td><td>tp-05g。単独では不採用だが、害がないので追い切り評価と併せて採用</td><td>学習表の血統名が空だったため、現状は全体平均（§31）。tp-24 の評価では ped_* は不採用、父系 6 列を採用。血統入りの表での再学習は tp-07 で判断</td></tr>
+</table>
+
+<h2>6. 採用しなかった候補・保留</h2>
+<table>
+<tr><th>候補</th><th>結果</th><th>節</th></tr>
+<tr><td>speed_*</td><td>効果が −0.0004 と小さく不要</td><td>§5</td></tr>
+<tr><td>時代ずれ対策、履歴 127 → 92 列の相関整理</td><td>どちらも不採用</td><td>§5</td></tr>
+<tr><td>前段 P1 位置取り・P3 ペース・展開マッチ m_*・P4 上がり</td><td>上積みなし</td><td>§6</td></tr>
+<tr><td>季節性・京都改修・Glicko の RD・近交係数・最終追い切り日</td><td>不採用</td><td>§13</td></tr>
+<tr><td>後日談（相手の次走の成績）</td><td>効果が最小効果量 0.0002 に届かず。将来の候補</td><td>§13・§27</td></tr>
+<tr><td>クッション値・含水率</td><td>訂正後のデータでも不採用</td><td>§13・§27</td></tr>
+<tr><td>欠損の補完・RankGauss</td><td>不採用</td><td>§14</td></tr>
+<tr><td>特徴量グループごとの階層スタッキング</td><td>不採用</td><td>§15</td></tr>
+<tr><td>NN の ID 埋め込み・注意層・相対化の拡張</td><td>不採用</td><td>§9</td></tr>
+<tr><td>クラス・コース別などの専用モデル</td><td>不採用</td><td>§19</td></tr>
+<tr><td>調教師×パターン採点（TL_B）、調教師内の相対化（TL_AT）、12 列の縮小版</td><td>上乗せなし</td><td>§17・§26</td></tr>
+<tr><td><b>SmartRC のテン1F</b></td><td><b>保留</b>。p_win は中立、位置取り・テン1F の予測は約 1% 改善。次の特徴量ラウンドで候補群として再評価</td><td>§16</td></tr>
+<tr><td>血統名入りの学習表への作り直し</td><td>効果なし（tp-24 の評価）。作り直しは tp-07 で判断</td><td>§31</td></tr>
+</table>
+
+<h2>7. 列の正本と未確認の点</h2>
+<ul>
+  <li>v3 の 301 列: ホストの <code>data/local/modeling/training_pipeline/final_v3/bundle_2025/bundle.json</code>（<code>members</code> の <code>feature_cols</code>）。</li>
+  <li>推論側の列定義: <code>src/pipeline/features/serving_layer_a.py</code>（<code>RACE_COLS</code> / <code>PRIOR_COLS</code> / <code>BIAS_COLS</code> / <code>DERIVED_COLS</code>）、<code>serving_ped_extras.py</code>（<code>EXTRAS_COLUMNS</code>）、<code>serving_stage_rel.py</code>（<code>STAGE_COLS</code>）。</li>
+  <li>履歴 127 列の各列の意味（式）は、ここではファミリー単位の説明にとどめている。個別の定義は <code>horse_history/</code> の実装と確定事項ログ §3 を参照。</li>
+</ul>
+
+    </article>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">modeling/chapters/adopted_features_v3.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,57 @@
+{
+  "_doc": "ドリフト診断・監視の期間定義と警報の閾値。診断/監視の指標は『報告・警報のみ』に使い、モデルや閾値の選択・学習には使わない（2026 年はテストセット②）。2027 年以降をテストセット③にするときは、このファイルの monitor と prediction_sources だけを更新する。",
+  "usage": "report_and_alert_only",
+  "train": {
+    "from": "2020-01-01",
+    "to": "2025-12-31",
+    "note": "v4/v5 の最終バンドル（bundle_*_2025）の学習期間"
+  },
+  "test1": {
+    "from": "2025-01-01",
+    "to": "2025-12-31",
+    "note": "テストセット①。v1〜v5 の評価に使った（bundle_*_2024 の1回評価）。選択には使わない"
+  },
+  "test2": {
+    "from": "2026-01-01",
+    "to": "2026-12-31",
+    "note": "テストセット②。学習・検証・選択・再学習に含めない。ドリフト検知と独立確認用"
+  },
+  "monitor": {
+    "from": "2027-01-01",
+    "to": null,
+    "note": "テストセット③の候補。2026 を再学習に含めない限り 2027 は test2 と同じ『学習外』。含めた場合は train.to を更新する"
+  },
+  "baseline": {
+    "from": "2022-01-01",
+    "to": "2025-12-31",
+    "note": "管理図の基準（モデルと市場の差の変動幅）。2022-2024 は LOYO の OOF、2025 は bundle_*_2024 の1回評価"
+  },
+  "prediction_sources": {
+    "oof_dir_note": "2022-2024 は training_pipeline_v4/tp27_v5/ens/v5.parquet（v4 アンサンブルの LOYO OOF）",
+    "oof": "data/local/modeling/training_pipeline_v4/tp27_v5/ens/v5.parquet",
+    "test1": "data/local/modeling/training_pipeline/final_eval_v4/test2025_predictions.parquet",
+    "forward_dirs": [
+      "data/local/inference/predictions_backfill/bundle_v4_2025",
+      "data/local/inference/predictions_v3"
+    ],
+    "v5_shadow_dir": "data/local/inference/predictions_v5"
+  },
+  "alert": {
+    "window_weeks": 8,
+    "gap_sigma_k": 3.0,
+    "cusum_k": 0.5,
+    "cusum_h": 5.0,
+    "psi_warn": 0.1,
+    "psi_alert": 0.25,
+    "psi_alert_min_features": 5,
+    "missing_rate_jump": 0.1,
+    "top_features": 50,
+    "coverage_floor": 0.9,
+    "ece_roi": 0.012,
+    "slope_lo": 0.85,
+    "slope_hi": 1.15,
+    "min_races_window": 150,
+    "ewma_lambda": 0.2,
+    "note": "gap は『モデル勝率 LL − 市場(確定単勝)勝率 LL』。限界は基準期間(2022-2025 の窓)の平均±kσ（k=3、注意は 2σ）。注意＝1 項目が 2σ 超え／警告＝独立な 2 群以上が連続 2 週／要対応＝差が 3σ 超えを 4 週連続、または ECE 勝率>ece_roi か logit 傾きが範囲外を 2 週連続。窓内のレース数が min_races_window 未満は判定保留。CUSUM/EWMA は週次の差（基準の週次の平均・σ）。値は式と慣例（CUSUM k=0.5・h=5、EWMA λ=0.2）で決め、2026 年の結果で調整していない（ただし診断で 2026 年のデータは見ている）"
+  }
+}

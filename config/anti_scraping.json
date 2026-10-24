@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "note": "サイトへのスクレイピング対策の設定（src/utils/anti_scraping.py）。30 秒ごとに読み直す（API の再起動は不要）。mode は off / detect（ログと通知のみ）/ enforce（実際にブロック）。既定は検知のみ。",
+  "mode": {
+    "auth": "enforce",
+    "rate_limit": "detect",
+    "bot": "detect",
+    "honeypot": "enforce",
+    "login": "enforce",
+    "session": "detect"
+  },
+  "trusted_proxies": ["127.0.0.1", "::1"],
+  "client_ip_headers": ["cf-connecting-ip", "x-real-ip", "x-forwarded-for"],
+  "allowlist_ips": [],
+  "edge_sources": [],
+  "edge_ip_header": "x-keiba-client-ip",
+  "internal_path_prefixes": [
+    "/api/health",
+    "/api/v1/health",
+    "/api/maintenance/status",
+    "/api/internal/",
+    "/api/auth/status",
+    "/api/v1/auth/status"
+  ],
+  "static_prefixes": ["/static/", "/_next/", "/data/image/", "/favicon", "/robots.txt"],
+  "auth": {
+    "protected_prefixes": ["/api/"],
+    "public_exempt_prefixes": [
+      "/api/health",
+      "/api/v1/health",
+      "/api/auth/",
+      "/api/v1/auth/",
+      "/api/maintenance/status",
+      "/api/_hp/",
+      "/api/race/",
+      "/api/race-list/",
+      "/api/race-calendar",
+      "/api/scrape-dates",
+      "/api/prediction-results"
+    ],
+    "note": "enforce にすると、上の protected のうち exempt 以外の /api/* は未ログインで 401。内部ジョブ（転送ヘッダの無いループバック）は対象外。"
+  },
+  "rate_limit": {
+    "data_per_min": 120,
+    "data_burst_per_10s": 40,
+    "page_per_min": 180,
+    "static_per_min": 600,
+    "user_data_per_min": 240,
+    "distinct_races_per_5min": 60,
+    "distinct_horses_per_5min": 120,
+    "window_note": "正規の画面は 1 回の表示で数十リクエストを出す。週間予測（36R）を開いても distinct_races は 40 未満になる想定"
+  },
+  "block": {
+    "tiers": [
+      {"after_violations": 3, "seconds": 900},
+      {"after_violations": 8, "seconds": 86400},
+      {"after_violations": 20, "seconds": 604800}
+    ],
+    "violation_decay_seconds": 3600
+  },
+  "bot": {
+    "threshold": 6,
+    "decay_seconds": 600,
+    "weights": {
+      "ua_missing": 4,
+      "ua_scraper_lib": 5,
+      "ua_headless": 4,
+      "claims_browser_without_sec_fetch": 3,
+      "no_accept_language_on_data": 1,
+      "no_referer_on_data": 1,
+      "no_cookie_on_data": 1,
+      "api_without_page_visit": 2,
+      "enumeration": 4,
+      "inhuman_speed": 3
+    },
+    "scraper_ua_patterns": [
+      "python-requests", "python-urllib", "aiohttp", "httpx", "curl/", "wget/", "scrapy", "go-http-client",
+      "java/", "okhttp", "libwww-perl", "node-fetch", "axios/", "undici", "apache-httpclient", "mechanize",
+      "httpclient", "postmanruntime", "insomnia", "colly", "phantomjs", "selenium", "puppeteer"
+    ],
+    "headless_ua_patterns": ["headlesschrome", "headless", "phantomjs"],
+    "page_visit_memory_seconds": 1800,
+    "enumeration_sequential_run": 8
+  },
+  "honeypot": {
+    "path_prefixes": ["/api/_hp/", "/api/archive/", "/api/export/", "/api/dump/", "/api/all-predictions"],
+    "block_seconds": 604800
+  },
+  "login": {
+    "paths": ["/login", "/api/v1/auth/login", "/api/auth/login"],
+    "max_failures": 5,
+    "window_seconds": 900,
+    "lockout_seconds": [900, 3600, 86400],
+    "global_failures_per_hour_alert": 30
+  },
+  "session": {
+    "distinct_ips_window_seconds": 600,
+    "distinct_ips_limit": 4,
+    "block_seconds": 900
+  },
+  "log": {
+    "dir": "data/local/meta/anti_scraping",
+    "same_event_throttle_seconds": 60
+  },
+  "notify": {
+    "enabled_note": "Slack 通知は KEIBA_SLACK_NOTIFY=1 のときだけ。急増の警報は blocks_per_hour_alert を超えたとき。",
+    "blocks_per_hour_alert": 50
+  }
+}

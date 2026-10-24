@@ -1,0 +1,178 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, stg, develop]
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: keiba
+          POSTGRES_PASSWORD: keiba
+          POSTGRES_DB: keiba
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+
+    env:
+      DATABASE_URL: postgresql+psycopg://keiba:keiba@localhost:5432/keiba
+      REDIS_URL: redis://localhost:6379/0
+      GCS_BUCKET: ""
+      DEV_PASSWORD: test-dev-password
+      DEV_SECRET_KEY: test-secret
+      HORSE_NAME_INDEX_DISABLE_BOOTSTRAP: "1"
+      KEIBA_RUN_LIVE_API_TESTS: "0"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OS dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgomp1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          python -c "import pytest_cov; print('pytest-cov', pytest_cov.__version__)"
+
+      - name: Alembic migration check
+        run: alembic upgrade head
+
+      - name: No shuffle in time split (static)
+        run: python -m src.scripts.ci.check_no_shuffle
+
+      - name: Unit & integration tests
+        run: |
+          set -euxo pipefail
+          mkdir -p data/local/image
+          python -m pytest --version
+          python -m pytest tests/pipeline/test_build_rank_target.py -v --tb=short 2>&1 | tee /tmp/pytest_ci.log
+          python -m pytest tests/ --ignore=tests/scraper/manual --ignore=tests/research/manual --tb=short -ra 2>&1 | tee -a /tmp/pytest_ci.log
+
+      # ログの閲覧には管理者権限が要るため、失敗したテスト名と末尾を annotation にも出す（権限なしでも原因が分かる）
+      - name: Surface test failures as annotations
+        if: failure()
+        run: |
+          [ -f /tmp/pytest_ci.log ] || { echo "::error title=pytest::テスト実行ログがありません（テスト開始前の失敗）"; exit 0; }
+          grep -E '^(FAILED|ERROR) ' /tmp/pytest_ci.log | head -n 10 | while IFS= read -r l; do echo "::error title=pytest failure::${l:0:500}"; done || true
+          tail -n 4 /tmp/pytest_ci.log | while IFS= read -r l; do echo "::warning title=pytest tail::${l:0:300}"; done || true
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm install --ignore-scripts
+      - run: npm run lint
+      - run: npm run build
+        env:
+          KEIBA_API_URL: http://127.0.0.1:5000
+
+  # develop への push で「ユーザーが触る画面・API にサーバ経由でアクセスでき、dev フィクスチャのデータで応答する」ことを確認する。
+  # 確認できるのはアクセス可否と応答が空でないこと（CI は dev フィクスチャ = dev_fixture/ の 1 開催日 + モック。実データの正しさは保証しない）。
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: keiba
+          POSTGRES_PASSWORD: keiba
+          POSTGRES_DB: keiba
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      KEIBA_ENV: dev
+      DATABASE_URL: postgresql+psycopg://keiba:keiba@localhost:5432/keiba
+      GCS_BUCKET: ""
+      DEV_PASSWORD: test-dev-password
+      DEV_SECRET_KEY: test-secret
+      HORSE_NAME_INDEX_DISABLE_BOOTSTRAP: "1"
+      FRONT_PORT: "23100"
+      FLASK_PORT: "23110"
+      FASTAPI_PORT: "23120"
+      KEIBA_API_URL: http://127.0.0.1:23110
+      KEIBA_FASTAPI_URL: http://127.0.0.1:23120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OS dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgomp1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          cd frontend && npm install --ignore-scripts
+
+      - name: Prepare DB and dev data (mock + real-day fixture)
+        run: |
+          alembic upgrade head
+          python -m src.scripts.data.dev_fixture ensure
+
+      - name: Build frontend (dev profile)
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_DEFAULT_RACE_DATE: "20260906"
+          NEXT_PUBLIC_PICKER_PAST_DAYS: "150"
+          NEXT_PUBLIC_DEV_AUTO_LOGIN: "1"
+        run: npm run build
+
+      - name: Start servers (Flask / FastAPI / Next.js)
+        run: |
+          mkdir -p logs
+          FLASK_PORT=$FLASK_PORT nohup python main.py --flask-api > logs/ci_flask.log 2>&1 &
+          nohup python main.py --prod --workers 1 --host 127.0.0.1 --port $FASTAPI_PORT > logs/ci_fastapi.log 2>&1 &
+          (cd frontend && nohup npm run start -- -p $FRONT_PORT > ../logs/ci_next.log 2>&1 &)
+
+      - name: Smoke check user-facing pages and APIs
+        run: python -m src.scripts.ci.smoke_endpoints --base http://127.0.0.1:$FRONT_PORT --wait 240 --require-db
+
+      - name: Show server logs on failure
+        if: failure()
+        run: |
+          for f in logs/ci_flask.log logs/ci_fastapi.log logs/ci_next.log; do
+            echo "::group::$f"; tail -n 60 "$f" || true; echo "::endgroup::"
+            tail -n 3 "$f" | while IFS= read -r l; do echo "::warning title=$f::${l:0:300}"; done || true
+          done

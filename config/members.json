@@ -1,0 +1,14 @@
+{
+  "_comment": "会員アカウント（パスワードはソルト付き PBKDF2-SHA256 のハッシュだけを置く）。requires_env が指す環境変数が 1/true のときだけ有効（既定オフ）。test/test は動作確認用で、公開環境では KEIBA_TEST_USER を付けない。",
+  "users": [
+    {
+      "id": "test",
+      "role": "member",
+      "algo": "pbkdf2_sha256",
+      "iterations": 200000,
+      "salt": "6b65696261746573742d73616c743031",
+      "hash": "3cdc1b2ef786629de695433bd1f9159399326014a943d0f904d62db31b702698",
+      "requires_env": "KEIBA_TEST_USER"
+    }
+  ]
+}

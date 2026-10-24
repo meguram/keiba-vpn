@@ -1,0 +1,66 @@
+# =============================================================================
+# deploy/docker/Dockerfile.gcp-jobs — 【旧】GCP Cloud Run Jobs（スクレイピング・ML学習・定期バッチ）用イメージ
+#
+# ※ 2026-10-21: 予測生成・集計・通知・監視のジョブは deploy/docker/Dockerfile.jobs（ディスパッチャ経由・docs/operations/gcp_jobs_migration.md）に置き換わりました。
+#    取得は VPS の実行役、学習はホストなので、このイメージは新規には使いません（経緯として残置）。
+# =============================================================================
+#
+# docs/operations/deployment-vps-vs-gcp.md の役割分担どおり、重い処理
+# （スクレイピング・ML学習・バックテスト・定期バッチ）はすべてGCP側で実行する。
+# このイメージは scripts/gcp/deploy_cloud_run_jobs.sh が生成する
+# `gcloud run jobs deploy --image=... --command=python3 --args=-m,<module>,...`
+# から呼び出される（起動コマンドはgcloud側で明示指定されるため、本イメージの
+# CMD/ENTRYPOINTは実質上書きされる。ローカル確認用に素のpythonを既定にしている）。
+#
+# deploy/docker/Dockerfile.serving と異なり、こちらは src/ 配下のスクレイピング本体・学習コードも
+# すべて必要（例: src.scraper.run structure-check、src.pipeline.build_jockey_trainer_stats、
+# src.scripts.cloud_jobs.* 等。詳細は docs/operations/gcp-cloud-run-jobs.md のジョブ一覧）。
+# notebooks/docs/tests は不要なため含めない。
+#
+# ビルド例:
+#   docker build -f deploy/docker/Dockerfile.gcp-jobs \
+#     -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/keiba-vpn/cloud-jobs:latest .
+# =============================================================================
+
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgomp1 \
+        build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+FROM python:3.11-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 1000 keiba
+
+WORKDIR /app
+
+COPY --from=builder /install /usr/local
+
+# スクレイピング本体・学習コードを含む src/ 全体（notebooks/docs/tests/scripts/dataは含めない）
+COPY src/ ./src/
+# settings.yaml・megu_* 等の非シークレット設定。.env* はdeploy/docker/Dockerfile.gcp-jobs.dockerignoreで除外。
+# GCP側はCloud Run Jobsの実行サービスアカウントのADCを使うのが基本で、
+# 明示的に認証したい場合のみ環境変数（GCS_*）をジョブ側に設定する（鍵ファイルは使わない）
+COPY config/ ./config/
+COPY requirements.txt ./requirements.txt
+
+RUN mkdir -p /app/logs /app/data/local/image && chown -R keiba:keiba /app
+
+USER keiba
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    TZ=Asia/Tokyo
+
+# gcloud run jobs deploy が --command/--args で上書きする想定。ローカル確認用の既定値。
+CMD ["python3", "--version"]

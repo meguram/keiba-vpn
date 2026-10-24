@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>血統適性マップ — レース | めぐ競馬</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0a0c10; --surface:#12151c; --surface2:#181c25; --border:#1e2330;
+  --text:#e8eaf0; --muted:#8890a0;
+  --accent:#5b7cfa; --accent2:#38d9a9; --warn:#fbbf24;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP',sans-serif;overflow:hidden;height:100vh}
+.gnav+.main-layout{height:calc(100vh - 44px)}
+.main-layout{display:grid;grid-template-columns:260px 1fr 290px;grid-template-rows:1fr;height:calc(100vh - 44px)}
+
+/* ── Sidebar ── */
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.sidebar-inner{flex:1;overflow-y:auto;padding:12px;min-height:0}
+.section-lbl{font-size:.65rem;font-weight:700;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin:10px 0 5px}
+.race-group-date{font-size:.68rem;color:var(--muted);background:var(--surface2);padding:2px 7px;border-radius:3px;margin:6px 0 3px}
+.race-item{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:5px;cursor:pointer;font-size:.78rem;transition:.12s;border-left:2px solid transparent;color:var(--text)}
+.race-item:hover{background:var(--surface2)}
+.race-item.active{background:#1a1f3a;border-left-color:var(--accent);color:#fff}
+.venue-badge{font-size:.68rem;background:var(--surface2);padding:1px 5px;border-radius:3px;color:var(--muted);white-space:nowrap;flex-shrink:0}
+.race-name-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.course-card{background:var(--surface2);border-radius:6px;padding:10px 12px;margin:10px 12px 0;font-size:.78rem}
+.course-card .c-title{font-weight:700;font-size:.88rem;margin-bottom:6px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{display:inline-block;padding:.15em .55em;border-radius:3px;font-size:.72rem;margin:.1em}
+.p-turf{background:#0d3320;color:#5eead4}
+.p-dirt{background:#3a2206;color:#fbbf24}
+.p-dist{background:#1a1f3a;color:#818cf8}
+.p-cond{background:#2a1230;color:#c084fc}
+.p-date{background:var(--surface);color:var(--muted)}
+.no-data{padding:32px 16px;text-align:center;color:var(--muted);font-size:.8rem}
+
+/* ── Map ── */
+.map-col{display:flex;flex-direction:column;background:var(--bg);min-height:0;overflow:hidden}
+.map-toolbar{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);min-height:40px}
+.map-toolbar .m-title{font-size:.82rem;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.legend-row{display:flex;align-items:center;gap:4px;font-size:.7rem;color:var(--muted);flex-shrink:0}
+.legend-swatch{width:16px;height:8px;border-radius:2px}
+.map-area{flex:1;position:relative;overflow:hidden;cursor:grab}
+.map-area:active{cursor:grabbing}
+#race-svg{width:100%;height:100%;display:block}
+.map-loader{display:none;position:absolute;inset:0;background:rgba(10,12,16,.75);align-items:center;justify-content:center;color:var(--muted);font-size:.82rem;z-index:5}
+.map-loader.show{display:flex}
+.zone-legend{padding:6px 12px;border-top:1px solid var(--border);background:var(--surface);display:flex;gap:8px;flex-wrap:wrap;min-height:30px}
+.zl-item{display:flex;align-items:center;gap:4px;font-size:.7rem;color:var(--muted)}
+.zl-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+/* axis overlays */
+.ax-overlay{position:absolute;inset:0;pointer-events:none;z-index:2}
+.ax-lbl{position:absolute;font-size:.65rem;color:#374151;font-weight:500;white-space:nowrap;background:rgba(10,12,16,.55);padding:.1em .35em;border-radius:3px;line-height:1.3}
+.ax-left{bottom:28px;left:8px}
+.ax-right{bottom:28px;right:8px;text-align:right}
+.ax-top{top:8px;left:50%;transform:translateX(-50%)}
+.ax-bottom{bottom:28px;left:50%;transform:translateX(-50%)}
+.ax-reset{position:absolute;bottom:8px;right:8px;pointer-events:auto;font-size:.65rem;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:.2em .5em;cursor:pointer;z-index:3}
+.ax-reset:hover{color:var(--text)}
+/* sidebar collapsible dates */
+.race-group-date{display:flex;align-items:center;justify-content:space-between;font-size:.68rem;color:var(--muted);background:var(--surface2);padding:3px 7px;border-radius:3px;margin:6px 0 2px;cursor:pointer;user-select:none}
+.race-group-date .dg-arrow{transition:transform .15s}
+.race-group-date.collapsed .dg-arrow{transform:rotate(-90deg)}
+.race-group-body{overflow:hidden}
+.race-group-body.collapsed{display:none}
+/* venue sub-group */
+.venue-group-hdr{display:flex;align-items:center;justify-content:space-between;font-size:.68rem;color:var(--accent);padding:3px 8px 3px 12px;cursor:pointer;user-select:none;margin:2px 0 1px}
+.venue-group-hdr .vg-arrow{font-size:.6rem;transition:transform .15s;color:var(--muted)}
+.venue-group-hdr.collapsed .vg-arrow{transform:rotate(-90deg)}
+.venue-group-body{overflow:hidden;padding-left:8px}
+.venue-group-body.collapsed{display:none}
+
+/* ── Horse list ── */
+.horse-panel{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.hp-header{padding:8px 12px;border-bottom:1px solid var(--border);font-size:.72rem;color:var(--muted);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.hp-list{flex:1;overflow-y:auto;min-height:0}
+.hc{padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:.1s}
+.hc:hover{background:var(--surface2)}
+.hc.hl{background:#1a1f3a}
+.hc-row1{display:flex;align-items:center;gap:5px;margin-bottom:3px}
+.hc-num{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0}
+.hc-name{font-weight:600;font-size:.82rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hc-l2{font-size:.66rem;padding:.1em .4em;border-radius:3px;white-space:nowrap;flex-shrink:0}
+.hc-sire{font-size:.7rem;color:var(--muted);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-row{display:flex;align-items:center;gap:5px}
+.bar-label{font-size:.68rem;color:var(--muted);width:54px;flex-shrink:0}
+.bar-track{flex:1;height:4px;border-radius:2px;background:var(--border);overflow:hidden}
+.bar-fill{height:100%;border-radius:2px;transition:.3s}
+.bar-val{font-size:.7rem;width:36px;text-align:right;flex-shrink:0}
+.top-conds{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px}
+.tc-tag{font-size:.64rem;background:var(--surface2);padding:.1em .38em;border-radius:3px;color:var(--muted)}
+.tc-pos{color:#34d399}
+.tc-neg{color:#f87171}
+.tc-neu{color:var(--muted)}
+
+/* ── Tooltip ── */
+.tooltip{
+  position:fixed;background:rgba(18,21,28,.97);border:1px solid var(--accent);
+  border-radius:6px;padding:9px 12px;font-size:.75rem;pointer-events:none;
+  z-index:200;max-width:220px;display:none;line-height:1.55;backdrop-filter:blur(8px)
+}
+.tt-name{font-weight:700;color:#fff;margin-bottom:3px}
+.tt-l2{display:inline-block;padding:.1em .4em;border-radius:3px;font-size:.68rem;margin-bottom:4px}
+.tt-line{color:var(--muted)}
+.tt-match{color:var(--accent2);font-weight:700}
+
+/* ── Rank medals ── */
+.rank-badge{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;flex-shrink:0;line-height:1}
+.rank-1-badge{background:linear-gradient(135deg,#78510a,#f59e0b);color:#fff;box-shadow:0 0 7px rgba(251,191,36,.5)}
+.rank-2-badge{background:linear-gradient(135deg,#374151,#9ca3af);color:#fff;box-shadow:0 0 5px rgba(156,163,175,.35)}
+.rank-3-badge{background:linear-gradient(135deg,#5a2d0c,#b45309);color:#fff;box-shadow:0 0 5px rgba(180,83,9,.35)}
+.rank-other-badge{background:var(--surface2);color:var(--muted)}
+.hc.rank-1{border-left-color:#f59e0b!important;background:rgba(245,158,11,.06)!important}
+.hc.rank-2{border-left-color:#9ca3af!important;background:rgba(156,163,175,.04)!important}
+.hc.rank-3{border-left-color:#b45309!important;background:rgba(180,83,9,.04)!important}
+/* ── Top-3 summary bar ── */
+.top3-bar{padding:7px 10px;border-bottom:1px solid var(--border);display:flex;gap:5px;align-items:center;background:var(--surface);flex-shrink:0;min-height:36px;flex-wrap:wrap}
+.top3-label{font-size:.63rem;color:var(--muted);white-space:nowrap;flex-shrink:0;margin-right:2px}
+.top3-chip{display:flex;align-items:center;gap:4px;font-size:.7rem;padding:.2em .5em;border-radius:4px;white-space:nowrap;cursor:pointer;transition:.1s;overflow:hidden;max-width:100px}
+.top3-chip:hover{filter:brightness(1.2)}
+.top3-chip .chip-score{font-size:.62rem;opacity:.8}
+/* ── Score bar ── */
+.bar-track{background:var(--surface2)!important}
+.bar-fill-wrap{position:relative;flex:1;height:6px;border-radius:3px;background:var(--surface2);overflow:hidden}
+.bar-fill2{height:100%;border-radius:3px;transition:.35s}
+.score-val{font-size:.72rem;font-weight:600;width:40px;text-align:right;flex-shrink:0}
+/* individual adjustment indicator */
+.ind-badge{font-size:.6rem;padding:.1em .4em;border-radius:3px;background:#0f2a1a;color:#34d399;border:1px solid #34d39944;flex-shrink:0;white-space:nowrap}
+.spd-hi{font-size:.6rem;padding:.1em .35em;border-radius:3px;background:#0f1f2a;color:#60a5fa;border:1px solid #60a5fa44;flex-shrink:0;white-space:nowrap}
+.spd-lo{font-size:.6rem;padding:.1em .35em;border-radius:3px;background:#2a1010;color:#f97316;border:1px solid #f9731644;flex-shrink:0;white-space:nowrap}
+</style>
+</head>
+<body>
+{% include 'partials/_nav.html' %}
+
+<div class="main-layout">
+  <!-- ── Left sidebar ─────────────────────────────── -->
+  <div class="sidebar">
+    <div class="sidebar-inner" id="sidebar-inner">
+      <div class="section-lbl">今週のレース</div>
+      <div id="race-list"><div class="no-data">読み込み中…</div></div>
+    </div>
+    <div id="course-card"></div>
+  </div>
+
+  <!-- ── Map center ───────────────────────────────── -->
+  <div class="map-col">
+    <div class="map-toolbar">
+      <span class="m-title" id="map-title">レースを選択してください</span>
+      <span class="legend-row">
+        <span class="legend-swatch" style="border:2px dashed #3b82f6;background:rgba(59,130,246,.1)"></span>
+        過去好走域
+      </span>
+      <span class="legend-row" id="today-leg" style="display:none">
+        <span class="legend-swatch" style="border:2px dashed #f97316;background:rgba(249,115,22,.1)"></span>
+        当日傾向
+      </span>
+    </div>
+    <div class="map-area" id="map-area">
+      <div class="map-loader" id="map-loader">データ取得中…</div>
+      <svg id="race-svg" viewBox="-8 -6 16 12" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="ax-overlay" id="ax-overlay">
+        <div class="ax-lbl ax-left" id="ax-left"></div>
+        <div class="ax-lbl ax-right" id="ax-right"></div>
+        <div class="ax-lbl ax-top" id="ax-top"></div>
+      </div>
+      <button class="ax-reset" id="ax-reset" title="リセット" style="display:none">⌂ リセット</button>
+    </div>
+    <div class="zone-legend" id="zone-legend"></div>
+  </div>
+
+  <!-- ── Right: horse list ───────────────────────── -->
+  <div class="horse-panel">
+    <div class="hp-header">
+      <span id="hp-count">—</span>
+      <span>コース適性順</span>
+    </div>
+    <div class="top3-bar" id="top3-bar" style="display:none"></div>
+    <div class="hp-list" id="hp-list"><div class="no-data">レースを選択してください</div></div>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+(function(){
+const API_V2  = '{{ api_prefix }}/api/pedigree/race-note-3d-v2';
+const API_WK  = '{{ api_prefix }}/api/pedigree/week-races';
+
+let cur = null;
+
+// ── Utils ──────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const svgNS = 'http://www.w3.org/2000/svg';
+function mkel(tag, attrs={}, text='') {
+  const el = document.createElementNS(svgNS, tag);
+  Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k, v));
+  if (text) el.textContent = text;
+  return el;
+}
+function bracketBg(n) {
+  return ['#fff','#000','#e03','#00d','#dd0','#080','#e60','#c8f'][(n-1)%8]||'#555';
+}
+function bracketFg(n) { return n===1?'#000':n===2?'#fff':'#fff'; }
+function matchColor(v) {
+  return v>=1.08?'#34d399':v>=1.03?'#60a5fa':v>=0.97?'#94a3b8':'#f87171';
+}
+function fmt3(v) { return v!=null?v.toFixed(3):'—'; }
+
+// ── Load week races ────────────────────────────────────────────────────────
+const _WK_CACHE_KEY = 'week_races_v3';
+const _WK_CACHE_TTL = 5 * 60 * 1000; // 5 min
+
+async function loadWeekRaces() {
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(_WK_CACHE_KEY) || 'null');
+    if (cached && Date.now() - cached.ts < _WK_CACHE_TTL) {
+      renderRaceList(cached.races);
+      return;
+    }
+  } catch {}
+  try {
+    const r = await fetch(API_WK);
+    if (!r.ok) { $('race-list').innerHTML = '<div class="no-data">取得失敗</div>'; return; }
+    const d = await r.json();
+    try { sessionStorage.setItem(_WK_CACHE_KEY, JSON.stringify({ts: Date.now(), races: d.races || []})); } catch {}
+    renderRaceList(d.races || []);
+  } catch(e) {
+    $('race-list').innerHTML = `<div class="no-data">通信エラー</div>`;
+  }
+}
+
+function renderRaceList(races) {
+  if (!races.length) {
+    $('race-list').innerHTML = '<div class="no-data">今週の開催レースがありません</div>';
+    return;
+  }
+  // date → venue → races
+  const dateOrder = [];
+  const byDate = {};
+  races.forEach(r => {
+    const dk = r.date || '';
+    const dl = r.date_label || r.date;
+    if (!byDate[dk]) { byDate[dk] = {label: dl, venues: {}, venueOrder: []}; dateOrder.push(dk); }
+    const v = r.venue || '?';
+    if (!byDate[dk].venues[v]) { byDate[dk].venues[v] = []; byDate[dk].venueOrder.push(v); }
+    byDate[dk].venues[v].push(r);
+  });
+
+  let h = '';
+  let gIdx = 0;
+
+  dateOrder.forEach(dateKey => {
+    const {label, venues, venueOrder} = byDate[dateKey];
+    const dgId = `dg-${gIdx++}`;
+
+    h += `<div class="race-group-date collapsed" onclick="toggleDateGroup('${dgId}',this)">
+      <span>${label}</span><span class="dg-arrow">▾</span>
+    </div>`;
+    h += `<div id="${dgId}" class="race-group-body collapsed">`;
+
+    venueOrder.forEach(venue => {
+      const vrs = venues[venue];
+      const vgId = `vg-${gIdx++}`;
+      h += `<div class="venue-group-hdr collapsed" onclick="toggleVenueGroup('${vgId}',this)">
+        <span>${venue}（${vrs.length}R）</span><span class="vg-arrow">▾</span>
+      </div>`;
+      h += `<div id="${vgId}" class="venue-group-body collapsed">`;
+      vrs.forEach(r => {
+        const rnd = r.round ? `R${r.round} ` : '';
+        h += `<div class="race-item" data-rid="${r.race_id}" onclick="selRace('${r.race_id}',this)">
+          <span class="race-name-txt">${rnd}${r.race_name||r.race_id}</span>
+        </div>`;
+      });
+      h += `</div>`;
+    });
+
+    h += `</div>`;
+  });
+  $('race-list').innerHTML = h;
+}
+
+window.toggleDateGroup = function(gid, hdr) {
+  const body = $(gid);
+  const collapsed = body.classList.toggle('collapsed');
+  hdr.classList.toggle('collapsed', collapsed);
+};
+
+window.toggleVenueGroup = function(vgid, hdr) {
+  const body = $(vgid);
+  const collapsed = body.classList.toggle('collapsed');
+  hdr.classList.toggle('collapsed', collapsed);
+};
+
+// ── Select race ───────────────────────────────────────────────────────────
+window.selRace = async function(raceId, el) {
+  document.querySelectorAll('.race-item').forEach(x => x.classList.remove('active'));
+  if (el) el.classList.add('active');
+
+  $('map-loader').classList.add('show');
+  $('hp-list').innerHTML = '<div class="no-data">取得中…</div>';
+  $('map-title').textContent = '取得中…';
+  _resetView();
+
+  try {
+    const res = await fetch(`${API_V2}?race_id=${raceId}`);
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      $('hp-list').innerHTML = `<div class="no-data">${data.error||'データなし'}<br><span style="font-size:.72rem;color:var(--muted)">race_shutuba または race_result を先に取得してください</span></div>`;
+      $('map-title').textContent = 'データなし';
+      $('top3-bar').style.display = 'none';
+      drawEmptyMap();
+      return;
+    }
+    cur = data;
+    renderAll(data);
+    if (data.no_horse_data) {
+      $('hp-list').innerHTML = '<div class="no-data">出走データ未取得<br><span style="font-size:.72rem;color:var(--muted)">スクレイプ後に再表示されます</span></div>';
+      $('hp-count').textContent = '未取得';
+      $('top3-bar').style.display = 'none';
+    }
+  } catch(e) {
+    $('hp-list').innerHTML = `<div class="no-data">通信エラー: ${e}</div>`;
+  } finally {
+    $('map-loader').classList.remove('show');
+  }
+};
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function renderAll(data) {
+  renderCourseCard(data.course);
+  drawMap(data);
+  renderHorseList(data);
+  const c = data.course;
+  const distPart = c.distance ? `${c.distance}m` : '';
+  $('map-title').textContent =
+    `${c.venue||''}${c.surface||''}${distPart}${c.track_condition?` [${c.track_condition}]`:''}` +
+    (c.race_name ? `  ${c.race_name}` : '');
+}
+
+function renderCourseCard(c) {
+  const sc = c.surface==='芝'?'p-turf':c.surface==='ダート'?'p-dirt':'';
+  const surfacePill = c.surface ? `<span class="pill ${sc}">${c.surface}</span>` : '';
+  const distPill = c.distance
+    ? `<span class="pill p-dist">${c.distance}m · ${c.distance_class||''}</span>`
+    : '';
+  $('course-card').innerHTML = `<div class="course-card">
+    <div class="c-title">${c.race_name||'—'}</div>
+    ${surfacePill}${distPill}
+    ${c.track_condition?`<span class="pill p-cond">${c.track_condition}</span>`:''}
+    ${c.date?`<span class="pill p-date">${c.date}</span>`:''}
+    ${c.venue&&!c.surface?`<span class="pill" style="background:var(--surface2);color:var(--muted)">${c.venue}</span>`:''}
+  </div>`;
+}
+
+// ── SVG pan/zoom state ─────────────────────────────────────────────────────
+let _vcx = 0, _vcy = 0, _zoom = 1;
+let _drag = null, _mapReady = false;
+
+function _applyViewBox() {
+  const w = 16 / _zoom, h = 12 / _zoom;
+  $('race-svg').setAttribute('viewBox', `${_vcx - w/2} ${_vcy - h/2} ${w} ${h}`);
+  const isDefault = Math.abs(_zoom-1)<0.01 && Math.abs(_vcx)<0.01 && Math.abs(_vcy)<0.01;
+  $('ax-reset').style.display = isDefault ? 'none' : '';
+}
+
+function _resetView() { _vcx = 0; _vcy = 0; _zoom = 1; _applyViewBox(); }
+
+function _autoFitHorses(horses, bz, sd) {
+  if (!horses.length) return;
+  // Compute bounding box in SVG coords: horse (pos_x, -pos_y), zones (x, -y)
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  horses.forEach(h => {
+    minX = Math.min(minX, h.pos_x); maxX = Math.max(maxX, h.pos_x);
+    minY = Math.min(minY, -h.pos_y); maxY = Math.max(maxY, -h.pos_y);
+  });
+  if (bz) { minX=Math.min(minX,bz.x); maxX=Math.max(maxX,bz.x); minY=Math.min(minY,-bz.y); maxY=Math.max(maxY,-bz.y); }
+  if (sd) { minX=Math.min(minX,sd.x); maxX=Math.max(maxX,sd.x); minY=Math.min(minY,-sd.y); maxY=Math.max(maxY,-sd.y); }
+  const pad = 1.5;
+  const spanX = maxX - minX + pad * 2;
+  const spanY = maxY - minY + pad * 2;
+  _vcx = (minX + maxX) / 2;
+  _vcy = (minY + maxY) / 2;
+  _zoom = Math.max(0.8, Math.min(5, Math.min(16 / spanX, 12 / spanY)));
+  _applyViewBox();
+}
+
+function setupMapInteraction() {
+  if (_mapReady) return;
+  _mapReady = true;
+  const area = $('map-area');
+  const svg  = $('race-svg');
+
+  svg.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = svg.getBoundingClientRect();
+    const w = 16/_zoom, h = 12/_zoom;
+    const mx = (_vcx - w/2) + (e.clientX - rect.left) / rect.width * w;
+    const my = (_vcy - h/2) + (e.clientY - rect.top)  / rect.height * h;
+    const factor = e.deltaY < 0 ? 1.25 : 0.8;
+    _zoom = Math.max(0.25, Math.min(12, _zoom * factor));
+    const w2 = 16/_zoom, h2 = 12/_zoom;
+    _vcx = mx - (e.clientX - rect.left) / rect.width * w2 + w2/2;
+    _vcy = my - (e.clientY - rect.top)  / rect.height * h2 + h2/2;
+    _applyViewBox();
+  }, {passive: false});
+
+  svg.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    _drag = {x: e.clientX, y: e.clientY, cx: _vcx, cy: _vcy};
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', e => {
+    if (!_drag) return;
+    const rect = svg.getBoundingClientRect();
+    const w = 16/_zoom, h = 12/_zoom;
+    _vcx = _drag.cx - (e.clientX - _drag.x) / rect.width * w;
+    _vcy = _drag.cy - (e.clientY - _drag.y) / rect.height * h;
+    _applyViewBox();
+  });
+  window.addEventListener('mouseup', () => { _drag = null; });
+
+  $('ax-reset').addEventListener('click', _resetView);
+}
+
+// ── SVG map ────────────────────────────────────────────────────────────────
+function drawEmptyMap() {
+  const svg = $('race-svg');
+  svg.innerHTML = '';
+  $('zone-legend').innerHTML = '';
+  $('ax-left').textContent = '';
+  $('ax-right').textContent = '';
+  $('ax-top').textContent = '';
+}
+
+function drawMap(data) {
+  const svg = $('race-svg');
+  svg.innerHTML = '';
+
+  const horses   = data.horses   || [];
+  const clusters = data.l2_clusters || [];
+  const bz = data.best_zone;
+  const sd = data.same_day_tendency;
+  const al = data.axis_labels || {};
+
+  // Update axis overlay labels
+  $('ax-left').textContent  = al.x_neg ? `← ${al.x_neg}` : '';
+  $('ax-right').textContent = al.x_pos ? `${al.x_pos} →` : '';
+  $('ax-top').textContent   = al.y_pos ? `↑ ${al.y_pos}` : '';
+  setupMapInteraction();
+
+  // Grid
+  const grid = mkel('g', {opacity:'0.06'});
+  for(let x=-7;x<=7;x++) grid.appendChild(mkel('line',{x1:x,y1:-6,x2:x,y2:6,stroke:'#6b7280','stroke-width':'0.04'}));
+  for(let y=-6;y<=6;y++) grid.appendChild(mkel('line',{x1:-7,y1:y,x2:7,y2:y,stroke:'#6b7280','stroke-width':'0.04'}));
+  svg.appendChild(grid);
+
+  // Cluster aptitude background zones — drawn from pre-computed cluster_course_match
+  clusters.forEach(cl => {
+    const dev = (cl.cluster_course_match||1.0) - 1.0;
+    if (Math.abs(dev) < 0.02) return;
+    const a = Math.min(0.22, 0.04 + Math.abs(dev) * 1.5);
+    const fill = dev > 0 ? `rgba(52,211,153,${a})` : `rgba(248,113,113,${a})`;
+    const strk = dev > 0 ? 'rgba(52,211,153,0.5)' : 'rgba(248,113,113,0.5)';
+    svg.appendChild(mkel('ellipse', {
+      cx: cl.pos_x, cy: -cl.pos_y, rx: '1.3', ry: '1.0',
+      fill, stroke: strk, 'stroke-width': '0.04',
+      'stroke-dasharray': '0.3 0.15', opacity: '0.85',
+    }));
+  });
+
+  // L2 cluster labels (background)
+  clusters.filter(c=>c.horse_count>0).forEach(cl => {
+    const lbl = (cl.name||'').slice(0,9);
+    svg.appendChild(mkel('rect',{x:cl.pos_x-1.1,y:-cl.pos_y-0.3,width:'2.2',height:'0.62',rx:'0.12',fill:cl.color,opacity:'0.1'}));
+    svg.appendChild(mkel('text',{x:cl.pos_x,y:-cl.pos_y+0.15,fill:cl.color,'font-size':'0.28','text-anchor':'middle',opacity:'0.5'},lbl));
+  });
+
+  // Best zone ellipse
+  if (bz) {
+    const r = Math.max(bz.r||0.5, 0.5);
+    svg.appendChild(mkel('ellipse',{
+      cx:bz.x, cy:-bz.y, rx:r*1.2, ry:r*0.8,
+      fill:'rgba(59,130,246,0.07)',stroke:'#3b82f6','stroke-width':'0.07','stroke-dasharray':'0.25 0.12'
+    }));
+  }
+  // Same-day zone ellipse
+  if (sd) {
+    const r = Math.max(sd.r||0.5, 0.5);
+    svg.appendChild(mkel('ellipse',{
+      cx:sd.x, cy:-sd.y, rx:r*1.2, ry:r*0.8,
+      fill:'rgba(249,115,22,0.07)',stroke:'#f97316','stroke-width':'0.07','stroke-dasharray':'0.25 0.12'
+    }));
+    $('today-leg').style.display = '';
+  } else {
+    $('today-leg').style.display = 'none';
+  }
+
+  // Cluster aptitude ellipses — drawn BEFORE horse dots (background layer)
+  if (horses.length >= 2) {
+    const cg = {};
+    horses.forEach(h => {
+      const k = h.dominant_l2 >= 0 ? h.dominant_l2 : '__unk';
+      (cg[k] = cg[k] || []).push(h);
+    });
+    Object.entries(cg).forEach(([, ch]) => {
+      if (ch.length < 2) return;
+      const avgX = ch.reduce((s,h) => s + h.pos_x, 0) / ch.length;
+      const avgY = ch.reduce((s,h) => s - h.pos_y, 0) / ch.length;
+      const vX = ch.reduce((s,h) => s + (h.pos_x - avgX) ** 2, 0) / ch.length;
+      const vY = ch.reduce((s,h) => s + (-h.pos_y - avgY) ** 2, 0) / ch.length;
+      const rx = Math.max(Math.sqrt(vX) + 0.35, 0.4);
+      const ry = Math.max(Math.sqrt(vY) + 0.35, 0.4);
+      const avgM = ch.reduce((s,h) => s + (h.course_match||1), 0) / ch.length;
+      const dev = avgM - 1.0;
+      if (Math.abs(dev) < 0.015) return;  // 中立クラスターは描画スキップ
+      const a = Math.min(0.28, 0.07 + Math.abs(dev) * 0.8);
+      const fill  = dev > 0 ? `rgba(52,211,153,${a})` : `rgba(248,113,113,${a})`;
+      const strk  = dev > 0 ? '#34d399' : '#f87171';
+      svg.appendChild(mkel('ellipse', {
+        cx: avgX, cy: avgY, rx: String(rx), ry: String(ry),
+        fill, stroke: strk, 'stroke-width': '0.06',
+        'stroke-dasharray': '0.2 0.1', opacity: '0.75',
+      }));
+    });
+  }
+
+  // Pre-sort horses by course_match to know field rank
+  const nHorses = horses.length;
+  const rankColors = {1:'#f59e0b', 2:'#9ca3af', 3:'#b45309'};
+
+  // Horse dots — draw low-rank first so top horses render on top
+  const sortedByRank = [...horses].sort((a,b) => (b.course_match||0) - (a.course_match||0));
+  [...sortedByRank].reverse().forEach(h => {
+    const rank = h.course_match_rank || (sortedByRank.indexOf(h) + 1);
+    const isTop3 = rank <= 3;
+    const baseR = rank === 1 ? 0.36 : rank === 2 ? 0.32 : rank === 3 ? 0.30 : 0.24;
+    // opacity: top = bright, bottom = dim
+    const opac = rank <= 3 ? 0.95 : Math.max(0.45, 0.85 - (rank - 4) * 0.04);
+
+    const g = mkel('g', {'data-hid': h.horse_id, 'data-rank': rank, 'data-base-r': baseR, style:'cursor:pointer'});
+
+    // Medal ring for top 3
+    if (isTop3) {
+      const mc = rankColors[rank];
+      const ringR = baseR + 0.14;
+      g.appendChild(mkel('circle', {
+        cx: h.pos_x, cy: -h.pos_y, r: String(ringR),
+        fill: mc + '22', stroke: mc, 'stroke-width': '0.07',
+        opacity: '0.85'
+      }));
+    }
+
+    g.appendChild(mkel('circle', {
+      cx: h.pos_x, cy: -h.pos_y, r: String(baseR),
+      fill: h.l2_color||'#888', opacity: String(opac),
+      stroke: '#0a0c10', 'stroke-width': isTop3 ? '0.05' : '0.03'
+    }));
+    g.appendChild(mkel('text', {
+      x: h.pos_x, y: -h.pos_y + (baseR * 0.38),
+      fill: '#fff', 'font-size': String(baseR * 0.68),
+      'text-anchor': 'middle', 'pointer-events': 'none', 'font-weight': isTop3 ? '700' : '400'
+    }, String(h.horse_number||'')));
+
+    // Rank label above top-3 dots
+    if (isTop3) {
+      const mc = rankColors[rank];
+      const lblY = -(h.pos_y) - baseR - 0.22;
+      const bg = mkel('rect', {
+        x: h.pos_x - 0.18, y: lblY - 0.13, width: '0.36', height: '0.18',
+        rx: '0.07', fill: mc, opacity: '0.9'
+      });
+      const lbl = mkel('text', {
+        x: h.pos_x, y: lblY,
+        fill: '#000', 'font-size': '0.13', 'font-weight': '700',
+        'text-anchor': 'middle', 'pointer-events': 'none'
+      }, String(rank));
+      g.appendChild(bg);
+      g.appendChild(lbl);
+    }
+
+    g.addEventListener('mouseenter', e => showTT(e, h));
+    g.addEventListener('mouseleave', hideTT);
+    g.addEventListener('click', () => hlHorse(h.horse_id));
+    svg.appendChild(g);
+  });
+
+  renderZoneLegend(data);
+  _autoFitHorses(horses, bz, sd);
+}
+
+function renderZoneLegend(data) {
+  const el = $('zone-legend');
+  const present = (data.l2_clusters||[]).filter(c=>c.horse_count>0)
+    .sort((a,b) => (b.cluster_course_match||1) - (a.cluster_course_match||1));
+  el.innerHTML = present.map(c => {
+    const dev = (c.cluster_course_match||1.0) - 1.0;
+    const pct = Math.round(dev * 100);
+    const badge = Math.abs(pct) >= 2
+      ? `<span style="font-size:0.75em;margin-left:3px;color:${dev>=0?'#34d399':'#f87171'}">${dev>=0?'+':''}${pct}%</span>`
+      : '';
+    return `<span class="zl-item"><span class="zl-dot" style="background:${c.color}"></span>${c.name||`L2-${c.l2_id}`} (${c.horse_count})${badge}</span>`;
+  }).join('');
+}
+
+// ── Horse list ────────────────────────────────────────────────────────────
+const MEDAL_COLORS = {1:'#f59e0b', 2:'#9ca3af', 3:'#b45309'};
+
+function renderTop3Bar(horses) {
+  const bar = $('top3-bar');
+  const top3 = horses.slice(0, 3);
+  if (!top3.length) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  const chips = top3.map((h, i) => {
+    const rank = i + 1;
+    const mc = MEDAL_COLORS[rank];
+    return `<span class="top3-chip" style="background:${mc}1a;border:1px solid ${mc}66;color:${mc}"
+        onclick="hlHorse('${h.horse_id}')">
+      <strong>${rank}</strong>
+      <span style="overflow:hidden;text-overflow:ellipsis;max-width:62px">${h.horse_name}</span>
+      <span class="chip-score">${h.course_match.toFixed(3)}</span>
+    </span>`;
+  }).join('');
+  bar.innerHTML = `<span class="top3-label">適性TOP</span>${chips}`;
+}
+
+function renderHorseList(data) {
+  const horses = [...(data.horses||[])].sort((a,b) => b.course_match - a.course_match);
+  $('hp-count').textContent = `${horses.length} 頭`;
+  if (!horses.length) {
+    $('hp-list').innerHTML = '<div class="no-data">出走データなし</div>';
+    $('top3-bar').style.display = 'none';
+    return;
+  }
+
+  renderTop3Bar(horses);
+
+  const maxV = horses[0].course_match;
+  const minV = horses[horses.length - 1].course_match;
+  const range = maxV - minV || 0.01;
+
+  $('hp-list').innerHTML = horses.map((h, idx) => {
+    const rank = idx + 1;
+    const pct = Math.round(((h.course_match - minV) / range) * 100);
+    const col = matchColor(h.course_match);
+    const mc = MEDAL_COLORS[rank];
+    const l2s = `background:${h.l2_color}22;color:${h.l2_color};border:1px solid ${h.l2_color}44`;
+    const rankBadgeCls = rank <= 3 ? `rank-${rank}-badge` : 'rank-other-badge';
+    const cardCls = rank <= 3 ? ` rank-${rank}` : '';
+    const barColor = rank <= 3 ? `linear-gradient(90deg,${mc}55,${mc})` : `linear-gradient(90deg,${col}44,${col})`;
+    const scoreColor = rank <= 3 ? mc : col;
+    // レース条件別 lift を表示（全体 top_conds ではなく今回のコース条件に対する評価）
+    const raceConds = (data.cond_keys||[]);
+    const condTags = raceConds.map(k => {
+      const v = (h.lift||{})[k];
+      if (v == null) return '';
+      const diff = v - 1;
+      const cls = diff >= 0.03 ? 'tc-pos' : diff <= -0.03 ? 'tc-neg' : 'tc-neu';
+      const label = k.replace(/^win_[vsd]_/, '').replace('win_heavy', '重馬場');
+      return `<span class="tc-tag ${cls}">${label} ${diff>=0?'+':''}${(diff*100).toFixed(0)}%</span>`;
+    }).filter(Boolean).join('');
+    return `<div class="hc${cardCls}" id="hc-${h.horse_id}" onclick="hlHorse('${h.horse_id}')">
+      <div class="hc-row1">
+        <span class="rank-badge ${rankBadgeCls}">${rank}</span>
+        <span class="hc-num" style="background:${bracketBg(h.bracket_number)};color:${bracketFg(h.bracket_number)}">${h.horse_number}</span>
+        <span class="hc-name">${h.horse_name}</span>
+        <span class="hc-l2" style="${l2s}">${h.l2_name||`L2-${h.dominant_l2}`}</span>
+      </div>
+      <div class="hc-sire">父: ${h.sire_name||'—'}　母父: ${h.bms_name||'—'}${h.ind_adj?` <span class="ind-badge">実績補正 ${h.ind_n_cond}走</span>`:''
+        }${(()=>{const f=(h.lift||{}).win_fast;if(f==null)return '';const p=Math.round((f-1)*100);if(Math.abs(p)<12)return '';return p>=0?` <span class="spd-hi">⚡速+${p}%</span>`:`<span class="spd-lo">◎低${p}%</span>`;})()
+        }</div>
+      <div class="bar-row">
+        <span class="bar-label">コース適性</span>
+        <div class="bar-fill-wrap"><div class="bar-fill2" style="width:${pct}%;background:${barColor}"></div></div>
+        <span class="score-val" style="color:${scoreColor}">${h.course_match.toFixed(3)}</span>
+      </div>
+      ${condTags?`<div class="top-conds">${condTags}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// ── Highlight ──────────────────────────────────────────────────────────────
+window.hlHorse = function(hid) {
+  document.querySelectorAll('.hc').forEach(c => c.classList.remove('hl'));
+  const card = $(`hc-${hid}`);
+  if (card) { card.classList.add('hl'); card.scrollIntoView({block:'nearest',behavior:'smooth'}); }
+
+  document.querySelectorAll('[data-hid]').forEach(g => {
+    const circles = g.querySelectorAll('circle');
+    if (!circles.length) return;
+    const isThis = g.dataset.hid === hid;
+    const rank = parseInt(g.dataset.rank || '99');
+    const baseR = parseFloat(g.dataset.baseR || '0.24');
+    // main fill circle is the last circle (rings come before it)
+    const mainCircle = circles[circles.length - 1];
+    if (isThis) {
+      mainCircle.setAttribute('r', String(baseR + 0.12));
+      mainCircle.setAttribute('opacity', '1');
+      mainCircle.setAttribute('stroke-width', '0.09');
+    } else {
+      mainCircle.setAttribute('r', String(baseR));
+      const opac = rank <= 3 ? '0.85' : '0.4';
+      mainCircle.setAttribute('opacity', opac);
+      mainCircle.setAttribute('stroke-width', rank <= 3 ? '0.05' : '0.03');
+    }
+  });
+};
+
+// ── Tooltip ───────────────────────────────────────────────────────────────
+function showTT(e, h) {
+  const tt = $('tooltip');
+  const condKeys = (cur&&cur.course.cond_keys)||[];
+  const lifts = condKeys.map(k=>{
+    const v=(h.lift||{})[k];
+    if(v==null) return null;
+    const s = v>=1?`+${((v-1)*100).toFixed(0)}%`:`${((v-1)*100).toFixed(0)}%`;
+    return `${k.replace('win_','')} <strong>${s}</strong>`;
+  }).filter(Boolean).join('  ');
+
+  tt.innerHTML = `<div class="tt-name">${h.horse_name}</div>
+    <span class="tt-l2" style="background:${h.l2_color}22;color:${h.l2_color}">${h.l2_name||''}</span>
+    <div class="tt-line">父: ${h.sire_name||'—'}</div>
+    <div class="tt-line">母父: ${h.bms_name||'—'}</div>
+    ${h.bms_root_name?`<div class="tt-line">母父系: ${h.bms_root_name}</div>`:''}
+    <div class="tt-line" style="margin-top:4px">コース適性: <span class="tt-match">${fmt3(h.course_match)}</span>${h.ind_adj?` <span style="color:#34d399;font-size:.68rem">実績補正(${(h.ind_weight*100).toFixed(0)}%)</span>`:''}</div>
+    ${lifts?`<div class="tt-line" style="font-size:.7rem;margin-top:2px">${lifts}</div>`:''}`;
+  tt.style.display = 'block';
+  moveTT(e);
+}
+function moveTT(e) {
+  const tt=$('tooltip');
+  tt.style.left=(e.clientX+14)+'px';
+  tt.style.top=(e.clientY+10)+'px';
+}
+function hideTT() { $('tooltip').style.display='none'; }
+document.addEventListener('mousemove', e => {
+  if($('tooltip').style.display!=='none') moveTT(e);
+});
+
+// ── URL param ─────────────────────────────────────────────────────────────
+const initRid = new URLSearchParams(location.search).get('race_id')||'';
+
+// ── Init ──────────────────────────────────────────────────────────────────
+(async function(){
+  await loadWeekRaces();
+  if (initRid) {
+    const el = document.querySelector(`[data-rid="${initRid}"]`);
+    selRace(initRid, el);
+  }
+})();
+})();
+</script>
+</body>
+</html>

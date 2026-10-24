@@ -1,0 +1,228 @@
+{
+ "category": "race_pair_odds",
+ "conformance": {
+  "failures": {},
+  "passed": 200,
+  "validated": 200
+ },
+ "keys": {
+  "max": "202610011107",
+  "min": "202001010101"
+ },
+ "lists": {
+  "umaren": {
+   "fields": {
+    "odds": {
+     "empty": 0,
+     "max": 36822.1,
+     "min": -3.0,
+     "n": 17774,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 17774
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "pair": {
+     "empty": 0,
+     "len_max": 2,
+     "len_min": 2,
+     "n": 17774,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "list": 17774
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "popularity": {
+     "empty": 0,
+     "max": 9999,
+     "min": 1,
+     "n": 17774,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 17774
+     },
+     "values": {},
+     "values_overflow": false
+    }
+   },
+   "items": 17774,
+   "records": 200
+  },
+  "umatan": {
+   "fields": {
+    "odds": {
+     "empty": 0,
+     "max": 99999.9,
+     "min": -3.0,
+     "n": 35548,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 35548
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "pair": {
+     "empty": 0,
+     "len_max": 2,
+     "len_min": 2,
+     "n": 35548,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "list": 35548
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "popularity": {
+     "empty": 0,
+     "max": 9999,
+     "min": 1,
+     "n": 35548,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 35548
+     },
+     "values": {},
+     "values_overflow": false
+    }
+   },
+   "items": 35548,
+   "records": 200
+  },
+  "wide": {
+   "fields": {
+    "odds_max": {
+     "empty": 0,
+     "max": 5009.8,
+     "min": -3.0,
+     "n": 17774,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 17774
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "odds_min": {
+     "empty": 0,
+     "max": 4993.6,
+     "min": -3.0,
+     "n": 17774,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 17774
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "pair": {
+     "empty": 0,
+     "len_max": 2,
+     "len_min": 2,
+     "n": 17774,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "list": 17774
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "popularity": {
+     "empty": 0,
+     "max": 9999,
+     "min": 1,
+     "n": 17774,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 17774
+     },
+     "values": {},
+     "values_overflow": false
+    }
+   },
+   "items": 17774,
+   "records": 200
+  }
+ },
+ "nested": {},
+ "records": 200,
+ "runs": [
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
+  }
+ ],
+ "top": {
+  "race_id": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "digits12": 200
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "umaren": {
+   "empty": 0,
+   "len_max": 153,
+   "len_min": 10,
+   "n": 200,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 200
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "umatan": {
+   "empty": 0,
+   "len_max": 306,
+   "len_min": 20,
+   "n": 200,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 200
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "wide": {
+   "empty": 0,
+   "len_max": 153,
+   "len_min": 10,
+   "n": 200,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 200
+   },
+   "values": {},
+   "values_overflow": false
+  }
+ }
+}

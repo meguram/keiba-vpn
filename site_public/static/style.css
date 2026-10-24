@@ -1,0 +1,42 @@
+/* 公開側サイトの最小スタイル。外部フォント・外部スクリプトは使わない（軽量・Cookie なし）。 */
+:root{--bg:#fbfbfd;--fg:#1c2230;--muted:#5b6478;--line:#dfe3ec;--accent:#1f5fd1;--accent-bg:#eaf1fd;--note-bg:#fff6e5;--note-line:#f0cf8a;--code-bg:#f2f4f9;--maxw:46rem}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1424;--fg:#e6ebf7;--muted:#9aa5bf;--line:#26314d;--accent:#8db4ff;--accent-bg:#17233f;--note-bg:#2a2414;--note-line:#6b5a22;--code-bg:#141c30}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.85 "Hiragino Sans","Noto Sans JP","Yu Gothic",system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.skip{position:absolute;left:-999px;top:0;background:var(--accent);color:#fff;padding:.5rem 1rem;z-index:10}
+.skip:focus{left:0}
+header.site{border-bottom:1px solid var(--line)}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 1rem}
+header.site .wrap{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.5rem;padding-top:.8rem;padding-bottom:.8rem}
+.brand{font-weight:700;color:var(--fg);text-decoration:none}
+nav.main ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:.2rem .9rem;font-size:.92rem}
+main{padding:1.5rem 0 3rem}
+h1{font-size:1.6rem;line-height:1.4;margin:.2rem 0 1rem}
+h2{font-size:1.25rem;line-height:1.5;margin:2.2rem 0 .6rem;padding-bottom:.25rem;border-bottom:1px solid var(--line)}
+h3{font-size:1.05rem;margin:1.6rem 0 .4rem}
+p,ul,ol,table,dl{margin:.8rem 0}
+.lead{color:var(--muted);font-size:1.02rem}
+.meta{color:var(--muted);font-size:.85rem}
+.note{background:var(--note-bg);border:1px solid var(--note-line);border-radius:.5rem;padding:.7rem 1rem;font-size:.92rem}
+.note strong{display:block;margin-bottom:.2rem}
+.card-list{list-style:none;padding:0;display:grid;gap:.8rem}
+.card-list li{border:1px solid var(--line);border-radius:.6rem;padding:.8rem 1rem;background:var(--accent-bg)}
+.card-list a{font-weight:700;text-decoration:none}
+.card-list p{margin:.3rem 0 0;font-size:.92rem;color:var(--muted)}
+table{border-collapse:collapse;width:100%;font-size:.92rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:.4rem .6rem;text-align:left;vertical-align:top}
+th{background:var(--accent-bg)}
+code{background:var(--code-bg);padding:.05rem .3rem;border-radius:.25rem;font-size:.9em}
+dt{font-weight:700;margin-top:.9rem}
+dd{margin:.2rem 0 0 0}
+details{border:1px solid var(--line);border-radius:.5rem;padding:.5rem .9rem;margin:.6rem 0}
+summary{cursor:pointer;font-weight:700}
+.placeholder{background:#ffe3e3;color:#7a1010;padding:0 .25rem;border-radius:.2rem}
+footer.site{border-top:1px solid var(--line);padding:1.5rem 0 2.5rem;font-size:.88rem;color:var(--muted)}
+footer.site ul{list-style:none;padding:0;margin:.5rem 0;display:flex;flex-wrap:wrap;gap:.3rem 1rem}
+/* 広告枠（無効時は出力しない。レイアウト確認用の --preview-ads でだけ表示）。CLS 対策で高さを固定する */
+.ad-slot{min-height:250px;margin:1.5rem 0;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.8rem}
+@media (min-width:48rem){h1{font-size:1.9rem}}

@@ -1,0 +1,299 @@
+horse_id,name,birth_year,birth_month,birth_day,source_url,note
+000a001139,The Tetrarch,1911,4,22,https://www.ballylinchstud.ie/about-us/the-tetrarch/ ; https://sporthorse-data.com/pedigree/tetrarch ; https://thevaulthorseracing.wordpress.com/tag/herod/,独立した複数の出典が 1911-04-22 で一致
+000a001124,Swynford,1907,1,,https://en.wikipedia.org/wiki/Swynford,Wikipedia 本文に 'January 1907'（日は不明）
+000a001849,Deputy Minister,1979,5,17,https://www.wikidata.org/wiki/Q4817311,Wikidata(参照付き)
+000a0010fb,Icecapade,1969,4,4,https://www.wikidata.org/wiki/Q11282173,Wikidata(参照付き)
+000a000082,Brian's Time,1985,5,28,https://www.wikidata.org/wiki/Q4962908,Wikidata(参照付き)
+000a0000ed,ディクタス,1967,4,11,https://www.wikidata.org/wiki/Q11320008,Wikidata(参照付き)
+000a001ecc,Konigsstuhl,1976,5,17,https://www.wikidata.org/wiki/Q1796466,Wikidata(参照付き)
+000a00fa4b,Tiznow,1997,3,12,https://www.wikidata.org/wiki/Q11318930,Wikidata(参照付き)
+000a0000cc,Dancing Brave,1983,5,11,https://www.wikidata.org/wiki/Q3013377 ; https://en.wikipedia.org/wiki/Dancing_Brave,Wikidata + 英語版 Wikipedia 冒頭文が一致
+000a000efe,Exclusive Native,1965,4,17,https://www.wikidata.org/wiki/Q5419688 ; https://en.wikipedia.org/wiki/Exclusive_Native,Wikidata + 英語版 Wikipedia 冒頭文が一致
+000a000dd9,Sir Ivor,1965,5,5,https://www.wikidata.org/wiki/Q7527349 ; https://en.wikipedia.org/wiki/Sir_Ivor,Wikidata + 英語版 Wikipedia 冒頭文が一致
+000a000258,ノーザンテースト,1971,3,15,https://ja.wikipedia.org/wiki/ノーザンテースト,日本語版 Wikipedia 冒頭文（1971年3月15日 - 2004年12月11日）
+000a001177,Son-in-Law,1911,4,22,https://en.wikipedia.org/wiki/Son-in-Law,英語版 Wikipedia 冒頭文
+000a001127,Isonomy,1875,5,,https://en.wikipedia.org/wiki/Isonomy,英語版 Wikipedia 冒頭文（月のみ）
+000a000628,His Majesty,1968,4,17,https://www.wikidata.org/wiki/Q11330029 ; https://en.wikipedia.org/wiki/His_Majesty_(horse),Wikidata + 英語版 Wikipedia 冒頭文が一致
+000a0012cb,Roberto,1969,3,16,https://en.wikipedia.org/wiki/Roberto_%28horse%29,英語版 Wikipedia 冒頭文
+000a001598,Bold Reasoning,1968,4,29,https://www.wikidata.org/wiki/Q4939066 ; https://en.wikipedia.org/wiki/Bold_Reasoning,英語版 Wikipedia 冒頭文
+000a0014ce,Riverman,1969,3,22,https://www.wikidata.org/wiki/Q3433509 ; https://en.wikipedia.org/wiki/Riverman,英語版 Wikipedia 冒頭文
+000a0016f2,Kris S. (米),1977,4,25,https://www.wikidata.org/wiki/Q6437279 ; https://en.wikipedia.org/wiki/Kris_S.,英語版 Wikipedia 冒頭文
+000a000e32,Mill Reef(米),1968,2,23,https://www.wikidata.org/wiki/Q3314241 ; https://en.wikipedia.org/wiki/Mill_Reef,英語版 Wikipedia 冒頭文
+000a00013a,フレンチデピュティFrench Deputy(米),1992,1,30,https://www.wikidata.org/wiki/Q11334069 ; https://ja.wikipedia.org/wiki/%E3%83%95%E3%83%AC%E3%83%B3%E3%83%81%E3%83%87%E3%83%94%E3%83%A5%E3%83%86%E3%82%A3,日本語版 Wikipedia 冒頭文
+000a0017b0,Miswaki,1978,2,22,https://www.wikidata.org/wiki/Q11164164 ; https://en.wikipedia.org/wiki/Miswaki,英語版 Wikipedia 冒頭文
+000a0010fa,Raja Baba,1968,4,5,https://www.wikidata.org/wiki/Q7285398 ; https://en.wikipedia.org/wiki/Raja_Baba,英語版 Wikipedia 冒頭文
+000a001d10,Surumu,1974,2,26,https://www.wikidata.org/wiki/Q2368704 ; https://en.wikipedia.org/wiki/Surumu,英語版 Wikipedia 冒頭文
+000a001617,Pleasant Colony,1978,5,4,https://www.wikidata.org/wiki/Q11335830 ; https://en.wikipedia.org/wiki/Pleasant_Colony,英語版 Wikipedia 冒頭文
+000a0003c7,トウショウボーイ,1973,4,15,https://ja.wikipedia.org/wiki/%E3%83%88%E3%82%A6%E3%82%B7%E3%83%A7%E3%82%A6%E3%83%9C%E3%83%BC%E3%82%A4,日本語版 Wikipedia 冒頭文
+000a0017c9,Irish River (仏),1976,4,2,https://www.wikidata.org/wiki/Q6071184 ; https://en.wikipedia.org/wiki/Irish_River,英語版 Wikipedia 冒頭文
+000a0017e6,Seattle Song,1981,2,19,https://www.wikidata.org/wiki/Q7442173 ; https://en.wikipedia.org/wiki/Seattle_Song,英語版 Wikipedia 冒頭文
+000a001fb6,Marju(愛),1988,3,12,https://www.wikidata.org/wiki/Q6766369 ; https://en.wikipedia.org/wiki/Marju,英語版 Wikipedia 冒頭文
+000a00135e,Shirley Heights(英),1975,3,1,https://www.wikidata.org/wiki/Q7498762 ; https://en.wikipedia.org/wiki/Shirley_Heights_%28horse%29,英語版 Wikipedia 冒頭文
+000a00181a,Private Account,1976,4,26,https://www.wikidata.org/wiki/Q7246040 ; https://en.wikipedia.org/wiki/Private_Account,英語版 Wikipedia 冒頭文
+000a01176a,パイロPyro(米),2005,2,19,https://en.wikipedia.org/wiki/Pyro_%28horse%29 ; https://ja.wikipedia.org/wiki/%E3%83%91%E3%82%A4%E3%83%AD,英語版 Wikipedia 冒頭文
+000a011099,シニスターミニスターSinister Minister(米),2003,3,29,https://www.wikidata.org/wiki/Q16949922 ; https://ja.wikipedia.org/wiki/%E3%82%B7%E3%83%8B%E3%82%B9%E3%82%BF%E3%83%BC%E3%83%9F%E3%83%8B%E3%82%B9%E3%82%BF%E3%83%BC_%28%E7%AB%B6%E8%B5%B0%E9%A6%AC%29,日本語版 Wikipedia 冒頭文
+000a00fe3c,Candy Stripes (米),1982,4,12,https://www.wikidata.org/wiki/Q5032144 ; https://en.wikipedia.org/wiki/Candy_Stripes,英語版 Wikipedia 冒頭文
+000a00fa34,スウェプトオーヴァーボードSwept Overboard(米),1997,2,6,https://www.wikidata.org/wiki/Q11311208 ; https://en.wikipedia.org/wiki/Swept_Overboard ; https://ja.wikipedia.org/wiki/%E3%82%B9%E3%82%A6%E3%82%A7%E3%83%97%E3%83%88%E3%82%AA%E3%83%BC%E3%83%B4%E3%82%A1%E3%83%BC%E3%83%9C%E3%83%BC%E3%83%89,Wikidata(参照付き)
+000a011e9c,マジェスティックウォリアーMajestic Warrior(米),2005,4,9,https://www.wikidata.org/wiki/Q55972479 ; https://ja.wikipedia.org/wiki/%E3%83%9E%E3%82%B8%E3%82%A7%E3%82%B9%E3%83%86%E3%82%A3%E3%83%83%E3%82%AF%E3%82%A6%E3%82%A9%E3%83%AA%E3%82%A2%E3%83%BC,Wikidata(参照付き)
+000a00184b,Mt. Livermore,1981,4,21,https://www.wikidata.org/wiki/Q124737984,Wikidata(参照付き)
+000a00fdbe,Dixie Union(米),1997,3,7,https://www.wikidata.org/wiki/Q5284902 ; https://en.wikipedia.org/wiki/Dixie_Union_%28horse%29,英語版 Wikipedia 冒頭文
+000a010cdf,Harlan's Holiday (米),1999,4,6,https://www.wikidata.org/wiki/Q17015177 ; https://en.wikipedia.org/wiki/Harlan%27s_Holiday,Wikidata(参照付き)
+000a00214a,Cherokee Run,1990,3,15,https://www.wikidata.org/wiki/Q5092197 ; https://en.wikipedia.org/wiki/Cherokee_Run,英語版 Wikipedia 冒頭文
+000a0012c0,Stop the Music,1970,3,23,https://www.wikidata.org/wiki/Q7619769 ; https://en.wikipedia.org/wiki/Stop_the_Music_%28horse%29,英語版 Wikipedia 冒頭文
+000a00185a,Capote,1984,3,25,https://en.wikipedia.org/wiki/Capote_%28horse%29,英語版 Wikipedia 冒頭文
+000a0015ca,Known Fact,1977,3,17,https://www.wikidata.org/wiki/Q6423452 ; https://en.wikipedia.org/wiki/Known_Fact,英語版 Wikipedia 冒頭文
+000a000249,ナイスダンサー,1969,3,6,https://ja.wikipedia.org/wiki/%E3%83%8A%E3%82%A4%E3%82%B9%E3%83%80%E3%83%B3%E3%82%B5%E3%83%BC,日本語版 Wikipedia 冒頭文
+000a00021b,ミルジョージ,1975,4,12,https://ja.wikipedia.org/wiki/%E3%83%9F%E3%83%AB%E3%82%B8%E3%83%A7%E3%83%BC%E3%82%B8,日本語版 Wikipedia 冒頭文
+000a002109,Devil His Due,1989,4,18,https://www.wikidata.org/wiki/Q16991733 ; https://en.wikipedia.org/wiki/Devil_His_Due,英語版 Wikipedia 冒頭文
+000a001fa3,Silver Deputy,1985,2,25,https://www.wikidata.org/wiki/Q7516003 ; https://en.wikipedia.org/wiki/Silver_Deputy,英語版 Wikipedia 冒頭文
+000a00022a,モガミ,1976,5,18,https://ja.wikipedia.org/wiki/%E3%83%A2%E3%82%AC%E3%83%9F,日本語版 Wikipedia 冒頭文
+000a000f87,Nashua,1952,4,14,https://www.wikidata.org/wiki/Q6966906 ; https://en.wikipedia.org/wiki/Nashua_%28horse%29,英語版 Wikipedia 冒頭文
+000a010d0c,Macho Uno(米),1998,4,24,https://www.wikidata.org/wiki/Q6723821 ; https://en.wikipedia.org/wiki/Macho_Uno,英語版 Wikipedia 冒頭文
+000a000e0e,Buckpasser,1963,2,13,https://www.wikidata.org/wiki/Q4983454 ; https://en.wikipedia.org/wiki/Buckpasser_%28horse%29,英語版 Wikipedia 冒頭文
+000a001d88,Summer Squall(米),1987,3,12,https://www.wikidata.org/wiki/Q7637446 ; https://en.wikipedia.org/wiki/Summer_Squall,Wikidata(参照付き)
+000a000daa,Ack Ack,1966,2,24,https://www.wikidata.org/wiki/Q4674229 ; https://en.wikipedia.org/wiki/Ack_Ack_%28horse%29,英語版 Wikipedia 冒頭文
+000a002161,Distant View,1991,5,9,https://www.wikidata.org/wiki/Q11320057 ; https://en.wikipedia.org/wiki/Distant_View,Wikidata + Wikipedia 冒頭文が一致
+000a00fc4c,ファスリエフFasliyev(米),1997,2,9,https://www.wikidata.org/wiki/Q5436832 ; https://en.wikipedia.org/wiki/Fasliyev,Wikidata(参照付き)
+000a0108d1,ケイムホームCame Home(米),1999,3,29,https://www.wikidata.org/wiki/Q5025841 ; https://en.wikipedia.org/wiki/Came_Home ; https://ja.wikipedia.org/wiki/%E3%82%B1%E3%82%A4%E3%83%A0%E3%83%9B%E3%83%BC%E3%83%A0,英語版 Wikipedia 冒頭文
+000a000fc7,Prince John,1953,4,6,https://www.wikidata.org/wiki/Q7244105 ; https://en.wikipedia.org/wiki/Prince_John_%28horse%29,英語版 Wikipedia 冒頭文
+000a00207d,Deputed Testamony,1980,5,7,https://www.wikidata.org/wiki/Q16991692 ; https://en.wikipedia.org/wiki/Deputed_Testamony,英語版 Wikipedia 冒頭文
+000a000dda,Sir Gaylord,1959,2,12,https://www.wikidata.org/wiki/Q7526825 ; https://en.wikipedia.org/wiki/Sir_Gaylord,Wikidata + Wikipedia 冒頭文が一致
+000a000e48,Red God,1954,2,15,https://www.wikidata.org/wiki/Q7304192 ; https://en.wikipedia.org/wiki/Red_God,英語版 Wikipedia 冒頭文
+000a000065,ベリファBellypha(愛),1976,2,28,https://www.wikidata.org/wiki/Q15615760 ; https://en.wikipedia.org/wiki/Bellypha ; https://ja.wikipedia.org/wiki/%E3%83%99%E3%83%AA%E3%83%95%E3%82%A1,Wikidata(参照付き)
+000a001e83,Cryptoclearance (米),1984,4,9,https://www.wikidata.org/wiki/Q5190874 ; https://en.wikipedia.org/wiki/Cryptoclearance,英語版 Wikipedia 冒頭文
+000a00198e,Bates Motel (米),1979,5,17,https://www.wikidata.org/wiki/Q4868813 ; https://en.wikipedia.org/wiki/Bates_Motel_%28horse%29,Wikidata(参照付き)
+000a001138,Tetratema,1917,4,27,https://www.wikidata.org/wiki/Q7706757 ; https://en.wikipedia.org/wiki/Tetratema,英語版 Wikipedia 冒頭文
+000a000320,ソヴィエトスターSoviet Star(米),1984,4,20,https://www.wikidata.org/wiki/Q11315477 ; https://en.wikipedia.org/wiki/Soviet_Star,Wikidata + Wikipedia 冒頭文が一致
+000a000cda,ラシアンルーブル,1980,3,30,https://ja.wikipedia.org/wiki/%E3%83%A9%E3%82%B7%E3%82%A2%E3%83%B3%E3%83%AB%E3%83%BC%E3%83%96%E3%83%AB,日本語版 Wikipedia 冒頭文
+000a001b4f,Risen Star,1985,3,25,https://www.wikidata.org/wiki/Q7336008 ; https://en.wikipedia.org/wiki/Risen_Star,英語版 Wikipedia 冒頭文
+000a00fa4a,Smadoun,1990,2,2,https://www.wikidata.org/wiki/Q11313273,Wikidata(参照付き)
+000a011135,チチカステナンゴChichicastenango(仏),1998,5,3,https://www.wikidata.org/wiki/Q11317941,Wikidata(参照付き)
+000a001cce,Easy Goer,1986,3,21,https://www.wikidata.org/wiki/Q5331132 ; https://en.wikipedia.org/wiki/Easy_Goer,英語版 Wikipedia 冒頭文
+000a00fdb2,Pleasant Tap,1987,5,8,https://www.wikidata.org/wiki/Q7203981 ; https://en.wikipedia.org/wiki/Pleasant_Tap,英語版 Wikipedia 冒頭文
+000a000b3b,サンシー,1969,3,25,https://ja.wikipedia.org/wiki/%E3%82%B5%E3%83%B3%E3%82%B7%E3%83%BC,日本語版 Wikipedia 冒頭文
+000a00fa33,カリズマティックCharismatic(米),1996,3,13,https://www.wikidata.org/wiki/Q5074405 ; https://en.wikipedia.org/wiki/Charismatic_%28horse%29,Wikidata(参照付き)
+000a000687,Lord Avie,1978,4,25,https://www.wikidata.org/wiki/Q6678939 ; https://en.wikipedia.org/wiki/Lord_Avie,Wikidata(参照付き)
+000a001997,Greinton,1981,3,5,https://www.wikidata.org/wiki/Q5607322 ; https://en.wikipedia.org/wiki/Greinton_%28horse%29,英語版 Wikipedia 冒頭文
+000a001dd9,Dynaformer,1985,4,1,https://www.wikidata.org/wiki/Q5318887 ; https://en.wikipedia.org/wiki/Dynaformer,英語版 Wikipedia 冒頭文
+000a002329,Sinndar(愛),1997,2,27,https://www.wikidata.org/wiki/Q3485021 ; https://en.wikipedia.org/wiki/Sinndar,英語版 Wikipedia 冒頭文
+000a011329,Ride the Rails (米),1991,3,5,https://www.wikidata.org/wiki/Q61994476,Wikidata(参照付き)
+000a011dc0,ベーカバドBehkabad(仏),2007,3,21,https://www.wikidata.org/wiki/Q11337268 ; https://en.wikipedia.org/wiki/Behkabad ; https://ja.wikipedia.org/wiki/%E3%83%99%E3%83%BC%E3%82%AB%E3%83%90%E3%83%89,Wikidata(参照付き)
+000a001021,Tenerani,1944,4,14,https://www.wikidata.org/wiki/Q7699707 ; https://en.wikipedia.org/wiki/Tenerani,英語版 Wikipedia 冒頭文
+000a001b29,Baldski,1974,5,15,https://www.wikidata.org/wiki/Q55071860 ; https://en.wikipedia.org/wiki/Baldski,Wikidata + Wikipedia 冒頭文が一致
+000a001190,Reigh Count,1925,4,13,https://www.wikidata.org/wiki/Q7310091 ; https://en.wikipedia.org/wiki/Reigh_Count,英語版 Wikipedia 冒頭文
+000a001033,Tom Rolfe(米),1962,4,14,https://www.wikidata.org/wiki/Q7817407 ; https://en.wikipedia.org/wiki/Tom_Rolfe,英語版 Wikipedia 冒頭文
+000a0007a3,Stage Door Johnny,1965,5,22,https://www.wikidata.org/wiki/Q7596788 ; https://en.wikipedia.org/wiki/Stage_Door_Johnny,英語版 Wikipedia 冒頭文
+000a011f5b,Mister Frisky,1987,4,2,https://www.wikidata.org/wiki/Q6880123 ; https://en.wikipedia.org/wiki/Mister_Frisky,英語版 Wikipedia 冒頭文
+000a010a96,Northern Afleet,1993,1,23,https://www.wikidata.org/wiki/Q30645894 ; https://en.wikipedia.org/wiki/Northern_Afleet,英語版 Wikipedia 冒頭文
+000a0002f9,シアンモア,1924,4,7,https://ja.wikipedia.org/wiki/%E3%82%B7%E3%82%A2%E3%83%B3%E3%83%A2%E3%82%A2,日本語版 Wikipedia 冒頭文
+000a000e28,Bold Bidder,1962,3,22,https://www.wikidata.org/wiki/Q4939046 ; https://en.wikipedia.org/wiki/Bold_Bidder,英語版 Wikipedia 冒頭文
+000a001018,Sword Dancer,1956,4,24,https://www.wikidata.org/wiki/Q7659267 ; https://en.wikipedia.org/wiki/Sword_Dancer_%28horse%29,英語版 Wikipedia 冒頭文
+000a001fbd,Private Terms,1985,4,6,https://www.wikidata.org/wiki/Q7246165 ; https://en.wikipedia.org/wiki/Private_Terms,英語版 Wikipedia 冒頭文
+000a011625,コマンズCommands(豪),1996,9,28,https://en.wikipedia.org/wiki/Commands_%28horse%29,英語版 Wikipedia 冒頭文
+000a0016ef,Sovereign Dancer,1975,1,24,https://www.wikidata.org/wiki/Q7571594 ; https://en.wikipedia.org/wiki/Sovereign_Dancer,英語版 Wikipedia 冒頭文
+000a001252,Eight Thirty,1936,3,27,https://www.wikidata.org/wiki/Q5349023 ; https://en.wikipedia.org/wiki/Eight_Thirty,英語版 Wikipedia 冒頭文
+000a000e89,Bimelech,1937,2,27,https://www.wikidata.org/wiki/Q4913736 ; https://en.wikipedia.org/wiki/Bimelech,英語版 Wikipedia 冒頭文
+000a002273,Bertrando,1989,2,18,https://www.wikidata.org/wiki/Q4895908 ; https://en.wikipedia.org/wiki/Bertrando,Wikidata + Wikipedia 冒頭文が一致
+000a011cff,Quality Road,2006,3,23,https://www.wikidata.org/wiki/Q7268758 ; https://en.wikipedia.org/wiki/Quality_Road,Wikidata(参照付き)
+000a000db5,Val de Loir,1959,5,7,https://www.wikidata.org/wiki/Q7909179 ; https://en.wikipedia.org/wiki/Val_de_Loir,英語版 Wikipedia 冒頭文
+000a000270,Peaks and Valleys,1992,5,1,https://www.wikidata.org/wiki/Q7157899 ; https://en.wikipedia.org/wiki/Peaks_and_Valleys,Wikidata(参照付き)
+000a0014ad,Pavot,1942,1,27,https://www.wikidata.org/wiki/Q17108943 ; https://en.wikipedia.org/wiki/Pavot,英語版 Wikipedia 冒頭文
+000a011227,フォーティナイナーズサンFourty Niners Son(米),2001,2,2,https://ja.wikipedia.org/wiki/%E3%83%95%E3%82%A9%E3%83%BC%E3%83%86%E3%82%A3%E3%83%8A%E3%82%A4%E3%83%8A%E3%83%BC%E3%82%BA%E3%82%B5%E3%83%B3,日本語版 Wikipedia 冒頭文
+000a00108d,Mourne,1954,3,24,https://www.wikidata.org/wiki/Q22320845,Wikidata(参照付き)
+000a002220,Siphon,1991,11,11,https://en.wikipedia.org/wiki/Siphon_%28horse%29,英語版 Wikipedia 冒頭文
+000a00004b,バチアーBachir(愛),1997,3,8,https://www.wikidata.org/wiki/Q11327749 ; https://en.wikipedia.org/wiki/Bachir,Wikidata(参照付き)
+000a000d99,スキャターザゴールドScatter the Gold(加),1997,2,26,https://www.wikidata.org/wiki/Q11311404 ; https://en.wikipedia.org/wiki/Scatter_the_Gold,英語版 Wikipedia 冒頭文
+000a0022fb,Favorite Trick,1995,4,20,https://www.wikidata.org/wiki/Q5438639 ; https://en.wikipedia.org/wiki/Favorite_Trick,Wikidata + Wikipedia 冒頭文が一致
+000a010525,Ghostzapper (米),2000,4,6,https://www.wikidata.org/wiki/Q5557464 ; https://en.wikipedia.org/wiki/Ghostzapper,英語版 Wikipedia 冒頭文
+000a01053b,Azamour(愛),2001,3,8,https://www.wikidata.org/wiki/Q4832218 ; https://en.wikipedia.org/wiki/Azamour,Wikidata + Wikipedia 冒頭文が一致
+000a010a66,Sky Mesa,2000,1,21,https://www.wikidata.org/wiki/Q11311272,Wikidata(参照付き)
+000a000ec7,Crafty Admiral,1948,6,6,https://www.wikidata.org/wiki/Q16952484 ; https://en.wikipedia.org/wiki/Crafty_Admiral,英語版 Wikipedia 冒頭文
+000a000eda,Determine,1951,4,7,https://www.wikidata.org/wiki/Q5265697 ; https://en.wikipedia.org/wiki/Determine_%28horse%29,英語版 Wikipedia 冒頭文
+000a00129d,Dark Star,1950,4,4,https://www.wikidata.org/wiki/Q16989123 ; https://en.wikipedia.org/wiki/Dark_Star_%28horse%29,英語版 Wikipedia 冒頭文
+000a001b46,Skywalker (米),1982,3,4,https://www.wikidata.org/wiki/Q7538100 ; https://en.wikipedia.org/wiki/Skywalker_%28horse%29,英語版 Wikipedia 冒頭文
+000a002075,Halling,1991,3,14,https://en.wikipedia.org/wiki/Halling_%28horse%29,英語版 Wikipedia 冒頭文
+000a01025b,Stuka (米),1990,2,23,https://en.wikipedia.org/wiki/Stuka_%28horse%29,英語版 Wikipedia 冒頭文
+000a000f2a,Habitat,1966,5,4,https://en.wikipedia.org/wiki/Habitat_%28horse%29,英語版 Wikipedia 冒頭文
+000a000484,ノーザンディクテイター,1974,1,28,https://ja.wikipedia.org/wiki/%E3%83%8E%E3%83%BC%E3%82%B6%E3%83%B3%E3%83%87%E3%82%A3%E3%82%AF%E3%83%86%E3%82%A4%E3%82%BF%E3%83%BC,日本語版 Wikipedia 冒頭文
+000a00212d,Spectrum,1992,5,8,https://en.wikipedia.org/wiki/Spectrum_%28horse%29,英語版 Wikipedia 冒頭文
+000a002246,Editor's Note,1993,4,26,https://www.wikidata.org/wiki/Q5338720 ; https://en.wikipedia.org/wiki/Editor%27s_Note,英語版 Wikipedia 冒頭文
+000a00fa46,Horse Chestnut,1995,8,19,https://www.wikidata.org/wiki/Q5905399 ; https://en.wikipedia.org/wiki/Horse_Chestnut_%28horse%29,英語版 Wikipedia 冒頭文
+000a01053e,Smarty Jones(米),2001,2,28,https://www.wikidata.org/wiki/Q7544171 ; https://en.wikipedia.org/wiki/Smarty_Jones,英語版 Wikipedia 冒頭文
+000a010751,Is It True,1986,5,12,https://www.wikidata.org/wiki/Q6075437 ; https://en.wikipedia.org/wiki/Is_It_True_%28horse%29,英語版 Wikipedia 冒頭文
+000a0114c3,Johan Cruyff,1994,3,27,https://www.wikidata.org/wiki/Q10920078,Wikidata(参照付き)
+000a00004d,ボールドリックBaldric(米),1961,5,16,https://www.wikidata.org/wiki/Q4850474 ; https://en.wikipedia.org/wiki/Baldric_%28horse%29 ; https://ja.wikipedia.org/wiki/%E3%83%9C%E3%83%BC%E3%83%AB%E3%83%89%E3%83%AA%E3%83%83%E3%82%AF,英語版 Wikipedia 冒頭文
+000a000f44,Intentionally,1956,4,2,https://www.wikidata.org/wiki/Q6044492 ; https://en.wikipedia.org/wiki/Intentionally_%28horse%29,英語版 Wikipedia 冒頭文
+000a0003eb,シャトーゲイChateaugay(米),1960,2,29,https://www.wikidata.org/wiki/Q5087563 ; https://en.wikipedia.org/wiki/Chateaugay_%28horse%29 ; https://ja.wikipedia.org/wiki/%E3%82%B7%E3%83%A3%E3%83%88%E3%83%BC%E3%82%B2%E3%82%A4_%28%E7%AB%B6%E8%B5%B0%E9%A6%AC%29,Wikidata + Wikipedia 冒頭文が一致
+000a000166,ハバット,1971,1,25,https://ja.wikipedia.org/wiki/%E3%83%8F%E3%83%90%E3%83%83%E3%83%88,日本語版 Wikipedia 冒頭文
+000a00042c,ジルドレ,1953,4,12,https://ja.wikipedia.org/wiki/%E3%82%B8%E3%83%AB%E3%83%89%E3%83%AC_%28%E7%AB%B6%E8%B5%B0%E9%A6%AC%29,日本語版 Wikipedia 冒頭文
+000a000f35,Hill Gail,1949,4,19,https://www.wikidata.org/wiki/Q5762129 ; https://en.wikipedia.org/wiki/Hill_Gail,英語版 Wikipedia 冒頭文
+000a000e1d,Blakeney(英),1966,3,28,https://www.wikidata.org/wiki/Q4924613 ; https://en.wikipedia.org/wiki/Blakeney_%28horse%29,英語版 Wikipedia 冒頭文
+000a00144b,Johnstown,1936,3,12,https://en.wikipedia.org/wiki/Johnstown_%28horse%29,英語版 Wikipedia 冒頭文
+000a0019c0,Ballot,1904,4,18,https://en.wikipedia.org/wiki/Ballot_%28horse%29,英語版 Wikipedia 冒頭文
+000a001259,Gallant Fox,1927,3,23,https://www.wikidata.org/wiki/Q5518861 ; https://en.wikipedia.org/wiki/Gallant_Fox,英語版 Wikipedia 冒頭文
+000a00100f,Stymie,1941,4,4,https://www.wikidata.org/wiki/Q7629759 ; https://en.wikipedia.org/wiki/Stymie_%28horse%29,英語版 Wikipedia 冒頭文
+000a000564,Bustino,1971,4,14,https://www.wikidata.org/wiki/Q5002201 ; https://en.wikipedia.org/wiki/Bustino,英語版 Wikipedia 冒頭文
+000a000b2b,メジロアサマ,1966,2,23,https://ja.wikipedia.org/wiki/%E3%83%A1%E3%82%B8%E3%83%AD%E3%82%A2%E3%82%B5%E3%83%9E,日本語版 Wikipedia 冒頭文
+000a00102d,Tim Tam,1955,4,19,https://www.wikidata.org/wiki/Q7804372 ; https://en.wikipedia.org/wiki/Tim_Tam_%28horse%29,英語版 Wikipedia 冒頭文
+000a0012a3,Alchimist,1930,3,2,https://www.wikidata.org/wiki/Q2640289,Wikidata(参照付き)
+000a0016bd,Master Derby (米),1972,4,24,https://www.wikidata.org/wiki/Q6785010 ; https://en.wikipedia.org/wiki/Master_Derby,英語版 Wikipedia 冒頭文
+000a00125b,Bold Venture,1933,3,4,https://www.wikidata.org/wiki/Q4939079 ; https://en.wikipedia.org/wiki/Bold_Venture_%28horse%29,英語版 Wikipedia 冒頭文
+000a000493,Pensive,1941,2,5,https://www.wikidata.org/wiki/Q7164808 ; https://en.wikipedia.org/wiki/Pensive,英語版 Wikipedia 冒頭文
+000a001b40,Hero's Honor,1980,4,28,https://www.wikidata.org/wiki/Q97861197 ; https://en.wikipedia.org/wiki/Hero%27s_Honor,Wikidata(参照付き)
+000a000419,フィディオン,1972,5,26,https://ja.wikipedia.org/wiki/%E3%83%95%E3%82%A3%E3%83%87%E3%82%A3%E3%82%AA%E3%83%B3,日本語版 Wikipedia 冒頭文
+000a000489,On-And-On,1956,4,24,https://en.wikipedia.org/wiki/On-And-On,英語版 Wikipedia 冒頭文
+000a000e47,Reviewer,1966,4,30,https://www.wikidata.org/wiki/Q7318397 ; https://en.wikipedia.org/wiki/Reviewer_%28horse%29,英語版 Wikipedia 冒頭文
+000a000f0d,First Landing,1956,3,7,https://www.wikidata.org/wiki/Q5453176 ; https://en.wikipedia.org/wiki/First_Landing_%28horse%29,英語版 Wikipedia 冒頭文
+000a001017,Swoon's Son,1953,2,13,https://www.wikidata.org/wiki/Q7659238 ; https://en.wikipedia.org/wiki/Swoon%27s_Son,英語版 Wikipedia 冒頭文
+000a001602,Best Turn,1966,5,7,https://www.wikidata.org/wiki/Q125916084 ; https://en.wikipedia.org/wiki/Best_Turn,Wikidata(参照付き)
+000a0017ca,Believe It,1975,2,9,https://www.wikidata.org/wiki/Q20715256 ; https://en.wikipedia.org/wiki/Believe_It_%28horse%29,英語版 Wikipedia 冒頭文
+000a0017ac,Exceller,1973,5,12,https://www.wikidata.org/wiki/Q5419442 ; https://en.wikipedia.org/wiki/Exceller,英語版 Wikipedia 冒頭文
+000a0003f9,ダンディルート,1972,5,10,https://ja.wikipedia.org/wiki/%E3%83%80%E3%83%B3%E3%83%87%E3%82%A3%E3%83%AB%E3%83%BC%E3%83%88,日本語版 Wikipedia 冒頭文
+000a000104,ダストコマンダーDust Commander(米),1967,2,8,https://www.wikidata.org/wiki/Q5316978 ; https://en.wikipedia.org/wiki/Dust_Commander ; https://ja.wikipedia.org/wiki/%E3%83%80%E3%82%B9%E3%83%88%E3%82%B3%E3%83%9E%E3%83%B3%E3%83%80%E3%83%BC,Wikidata(参照付き)
+000a001292,Brokers Tip,1930,3,16,https://www.wikidata.org/wiki/Q4973554 ; https://en.wikipedia.org/wiki/Brokers_Tip,英語版 Wikipedia 冒頭文
+000a000fd1,Quadrangle,1961,4,16,https://www.wikidata.org/wiki/Q7268310 ; https://en.wikipedia.org/wiki/Quadrangle_%28horse%29,英語版 Wikipedia 冒頭文
+000a001228,Embrujo,1936,9,20,https://www.wikidata.org/wiki/Q130442817 ; https://en.wikipedia.org/wiki/Embrujo,Wikidata(参照付き)
+000a001925,Tresiete,1926,10,7,https://www.wikidata.org/wiki/Q128402087 ; https://en.wikipedia.org/wiki/Tresiete,Wikidata(参照付き)
+000a0001af,ジュニアス,1976,3,15,https://ja.wikipedia.org/wiki/%E3%82%B8%E3%83%A5%E3%83%8B%E3%82%A2%E3%82%B9,日本語版 Wikipedia 冒頭文
+000a000e06,No Robbery,1960,3,30,https://www.wikidata.org/wiki/Q7044914 ; https://en.wikipedia.org/wiki/No_Robbery,英語版 Wikipedia 冒頭文
+000a000afe,アローエクスプレス,1967,4,10,https://ja.wikipedia.org/wiki/%E3%82%A2%E3%83%AD%E3%83%BC%E3%82%A8%E3%82%AF%E3%82%B9%E3%83%97%E3%83%AC%E3%82%B9,日本語版 Wikipedia 冒頭文
+000a0010ef,Arts and Letters,1966,4,1,https://www.wikidata.org/wiki/Q4801503 ; https://en.wikipedia.org/wiki/Arts_and_Letters,英語版 Wikipedia 冒頭文
+000a001225,Seductor,1943,8,28,https://www.wikidata.org/wiki/Q130442865 ; https://en.wikipedia.org/wiki/Seductor,Wikidata + Wikipedia 冒頭文が一致
+000a0013f1,Count Turf,1948,4,27,https://www.wikidata.org/wiki/Q5176713 ; https://en.wikipedia.org/wiki/Count_Turf,英語版 Wikipedia 冒頭文
+000a000e37,Ridan,1959,2,21,https://www.wikidata.org/wiki/Q7332351 ; https://en.wikipedia.org/wiki/Ridan_%28horse%29,英語版 Wikipedia 冒頭文
+000a001a9a,Medaille d'Or,1976,5,23,https://www.wikidata.org/wiki/Q113905841,Wikidata(参照付き)
+000a00191c,Codex,1977,2,28,https://en.wikipedia.org/wiki/Codex_%28horse%29,英語版 Wikipedia 冒頭文
+000a000351,ターゴワイス,1970,4,10,https://ja.wikipedia.org/wiki/%E3%82%BF%E3%83%BC%E3%82%B4%E3%83%AF%E3%82%A4%E3%82%B9,日本語版 Wikipedia 冒頭文
+000a001612,Sham,1970,4,9,https://en.wikipedia.org/wiki/Sham_%28horse%29,英語版 Wikipedia 冒頭文
+000a001b98,Old Man,1901,9,27,https://en.wikipedia.org/wiki/Old_Man_%28horse%29,英語版 Wikipedia 冒頭文
+000a0010cd,Nigromante,1944,10,11,https://www.wikidata.org/wiki/Q130442815 ; https://en.wikipedia.org/wiki/Nigromante,Wikidata(参照付き)
+000a0011df,Roi Dagobert,1964,2,16,https://www.wikidata.org/wiki/Q7359857,Wikidata(参照付き)
+000a00196d,Lashkari,1981,4,3,https://www.wikidata.org/wiki/Q6493229 ; https://en.wikipedia.org/wiki/Lashkari_%28horse%29,英語版 Wikipedia 冒頭文
+000a00044d,カウアイキング,1963,4,3,https://ja.wikipedia.org/wiki/%E3%82%AB%E3%82%A6%E3%82%A2%E3%82%A4%E3%82%AD%E3%83%B3%E3%82%B0,日本語版 Wikipedia 冒頭文
+000a0016cc,Head Play,1930,4,2,https://www.wikidata.org/wiki/Q16995018 ; https://en.wikipedia.org/wiki/Head_Play,英語版 Wikipedia 冒頭文
+000a000458,ラヴァンダン,1953,3,8,https://ja.wikipedia.org/wiki/%E3%83%A9%E3%83%B4%E3%82%A1%E3%83%B3%E3%83%80%E3%83%B3,日本語版 Wikipedia 冒頭文
+000a001b7c,George Smith,1913,4,30,https://en.wikipedia.org/wiki/George_Smith_%28horse%29,英語版 Wikipedia 冒頭文
+000a0017d9,Sunny's Halo,1980,2,11,https://www.wikidata.org/wiki/Q16951787 ; https://en.wikipedia.org/wiki/Sunny%27s_Halo,Wikidata(参照付き)
+000a0012bd,Little Current(米),1971,4,5,https://www.wikidata.org/wiki/Q6649704 ; https://en.wikipedia.org/wiki/Little_Current_%28horse%29,英語版 Wikipedia 冒頭文
+000a000467,マグニテュード,1975,3,16,https://ja.wikipedia.org/wiki/%E3%83%9E%E3%82%B0%E3%83%8B%E3%83%86%E3%83%A5%E3%83%BC%E3%83%89,日本語版 Wikipedia 冒頭文
+000a000bac,キタノカチドキ,1971,3,27,https://ja.wikipedia.org/wiki/%E3%82%AD%E3%82%BF%E3%83%8E%E3%82%AB%E3%83%81%E3%83%89%E3%82%AD,日本語版 Wikipedia 冒頭文
+000a000f47,Jaipur,1959,4,8,https://www.wikidata.org/wiki/Q6124118 ; https://en.wikipedia.org/wiki/Jaipur_%28horse%29,英語版 Wikipedia 冒頭文
+000a0001d5,ラークスパー,1959,1,,https://ja.wikipedia.org/wiki/%E3%83%A9%E3%83%BC%E3%82%AF%E3%82%B9%E3%83%91%E3%83%BC_%28%E7%AB%B6%E8%B5%B0%E9%A6%AC%29,日本語版 Wikipedia 冒頭文
+000a0016f0,Hard Tack,1926,3,25,https://www.wikidata.org/wiki/Q3783326 ; https://en.wikipedia.org/wiki/Hard_Tack_%28horse%29,英語版 Wikipedia 冒頭文
+000a011997,American Post,2001,2,3,https://www.wikidata.org/wiki/Q22006679 ; https://en.wikipedia.org/wiki/American_Post,Wikidata(参照付き)
+000a000490,パーシア,1956,3,30,https://ja.wikipedia.org/wiki/%E3%83%91%E3%83%BC%E3%82%B7%E3%82%A2,日本語版 Wikipedia 冒頭文
+000a000ef1,Emerson,1958,7,17,https://en.wikipedia.org/wiki/Emerson_%28horse%29,英語版 Wikipedia 冒頭文
+000a0004e1,テュデナム,1970,2,21,https://ja.wikipedia.org/wiki/%E3%83%86%E3%83%A5%E3%83%87%E3%83%8A%E3%83%A0,日本語版 Wikipedia 冒頭文
+000a010a79,Tejano Run,1992,5,5,https://www.wikidata.org/wiki/Q7695192 ; https://en.wikipedia.org/wiki/Tejano_Run,英語版 Wikipedia 冒頭文
+000a000dc8,Candy Spots,1960,4,14,https://www.wikidata.org/wiki/Q5032135 ; https://en.wikipedia.org/wiki/Candy_Spots,英語版 Wikipedia 冒頭文
+000a00197d,Spend a Buck,1982,5,15,https://www.wikidata.org/wiki/Q7576270 ; https://en.wikipedia.org/wiki/Spend_a_Buck,Wikidata(参照付き)
+000a000ba6,タニノチカラ,1969,4,14,https://ja.wikipedia.org/wiki/%E3%82%BF%E3%83%8B%E3%83%8E%E3%83%81%E3%82%AB%E3%83%A9,日本語版 Wikipedia 冒頭文
+000a00fffd,Chester House,1995,2,1,https://www.wikidata.org/wiki/Q5093610 ; https://en.wikipedia.org/wiki/Chester_House,Wikidata(参照付き)
+000a0008b6,ミナミホマレ,1939,3,31,https://ja.wikipedia.org/wiki/%E3%83%9F%E3%83%8A%E3%83%9F%E3%83%9B%E3%83%9E%E3%83%AC,日本語版 Wikipedia 冒頭文
+000a000c78,ノーアテンション,1978,3,1,https://ja.wikipedia.org/wiki/%E3%83%8E%E3%83%BC%E3%82%A2%E3%83%86%E3%83%B3%E3%82%B7%E3%83%A7%E3%83%B3,日本語版 Wikipedia 冒頭文
+000a001bf2,Big Burn,1970,5,16,https://www.wikidata.org/wiki/Q100297589,Wikidata(参照付き)
+000a000fcd,Prove It,1957,6,2,https://www.wikidata.org/wiki/Q7252317 ; https://en.wikipedia.org/wiki/Prove_It_%28horse%29,英語版 Wikipedia 冒頭文
+000a001b2a,Tank's Prospect(米),1982,5,2,https://www.wikidata.org/wiki/Q7683451 ; https://en.wikipedia.org/wiki/Tank%27s_Prospect,Wikidata(参照付き)
+000a000b68,タイテエム,1969,4,14,https://ja.wikipedia.org/wiki/%E3%82%BF%E3%82%A4%E3%83%86%E3%82%A8%E3%83%A0,日本語版 Wikipedia 冒頭文
+000a000031,Angle Light,1970,4,18,https://www.wikidata.org/wiki/Q4763344 ; https://en.wikipedia.org/wiki/Angle_Light,英語版 Wikipedia 冒頭文
+000a001614,Avatar,1972,3,10,https://en.wikipedia.org/wiki/Avatar_%28horse%29,英語版 Wikipedia 冒頭文
+000a001e7c,Pass Catcher,1968,4,6,https://www.wikidata.org/wiki/Q7142377 ; https://en.wikipedia.org/wiki/Pass_Catcher,英語版 Wikipedia 冒頭文
+000a0021e1,Concern,1991,2,14,https://en.wikipedia.org/wiki/Concern_%28horse%29,英語版 Wikipedia 冒頭文
+000a01139f,Authorized,2004,2,14,https://www.wikidata.org/wiki/Q4825957 ; https://en.wikipedia.org/wiki/Authorized_%28horse%29,Wikidata + Wikipedia 冒頭文が一致
+000a001591,Successor,1964,3,27,https://www.wikidata.org/wiki/Q7632652 ; https://en.wikipedia.org/wiki/Successor_%28horse%29,英語版 Wikipedia 冒頭文
+000a000d3e,フラッシュオブスティール,1983,3,10,https://ja.wikipedia.org/wiki/%E3%83%95%E3%83%A9%E3%83%83%E3%82%B7%E3%83%A5%E3%82%AA%E3%83%96%E3%82%B9%E3%83%86%E3%82%A3%E3%83%BC%E3%83%AB,日本語版 Wikipedia 冒頭文
+000a001e8f,Beau Genius,1985,5,20,https://www.wikidata.org/wiki/Q4877359 ; https://en.wikipedia.org/wiki/Beau_Genius,Wikidata + Wikipedia 冒頭文が一致
+000a001b44,Manila,1983,2,5,https://en.wikipedia.org/wiki/Manila_%28horse%29,英語版 Wikipedia 冒頭文
+000a010533,Doyen(愛),2000,4,22,https://www.wikidata.org/wiki/Q5303719 ; https://en.wikipedia.org/wiki/Doyen_%28horse%29,英語版 Wikipedia 冒頭文
+000a0111ff,Rockport Harbor,2002,4,7,https://www.wikidata.org/wiki/Q99485080,Wikidata(参照付き)
+000a001fb7,Air Forbes Won,1979,4,13,https://www.wikidata.org/wiki/Q74114900 ; https://en.wikipedia.org/wiki/Air_Forbes_Won,英語版 Wikipedia 冒頭文
+000a0017d0,Fit to Fight,1979,4,5,https://www.wikidata.org/wiki/Q5455404 ; https://en.wikipedia.org/wiki/Fit_to_Fight,英語版 Wikipedia 冒頭文
+000a00fce2,Priolo,1987,3,17,https://www.wikidata.org/wiki/Q7245356 ; https://en.wikipedia.org/wiki/Priolo_%28horse%29,英語版 Wikipedia 冒頭文
+000a010bee,Observatory,1997,2,17,https://en.wikipedia.org/wiki/Observatory_%28horse%29,英語版 Wikipedia 冒頭文
+000a000afb,コントライトContrite(米),1968,2,18,https://www.wikidata.org/wiki/Q11303118,Wikidata(参照付き)
+000a00fa3c,Poliglote,1992,4,19,https://www.wikidata.org/wiki/Q57778116,Wikidata(参照付き)
+000a001a97,Tasso,1983,4,20,https://en.wikipedia.org/wiki/Tasso_%28horse%29,英語版 Wikipedia 冒頭文
+000a011594,Closing Argument,2002,4,4,https://www.wikidata.org/wiki/Q5135436 ; https://en.wikipedia.org/wiki/Closing_Argument_%28horse%29,英語版 Wikipedia 冒頭文
+000a00fcd7,Skip Away,1993,4,4,https://www.wikidata.org/wiki/Q7535640 ; https://en.wikipedia.org/wiki/Skip_Away,Wikidata(参照付き)
+000a015e56,Sir Barton,1916,4,26,https://www.wikidata.org/wiki/Q3961979 ; https://en.wikipedia.org/wiki/Sir_Barton,英語版 Wikipedia 冒頭文
+000a00023b,マイスワローMy Swallow(英),1968,2,22,https://www.wikidata.org/wiki/Q11339710 ; https://en.wikipedia.org/wiki/My_Swallow,英語版 Wikipedia 冒頭文
+000a0017dc,Vanlandingham,1981,4,28,https://www.wikidata.org/wiki/Q7915072 ; https://en.wikipedia.org/wiki/Vanlandingham,英語版 Wikipedia 冒頭文
+000a001ca1,Zephyr Bay,1970,9,1,https://www.wikidata.org/wiki/Q22006451 ; https://en.wikipedia.org/wiki/Zephyr_Bay,Wikidata(参照付き)
+000a001ff4,Second Set,1988,4,28,https://www.wikidata.org/wiki/Q22006542 ; https://en.wikipedia.org/wiki/Second_Set_%28horse%29,Wikidata(参照付き)
+000a000bec,シルバーランド,1970,3,28,https://ja.wikipedia.org/wiki/%E3%82%B7%E3%83%AB%E3%83%90%E3%83%BC%E3%83%A9%E3%83%B3%E3%83%89,日本語版 Wikipedia 冒頭文
+000a0120e9,Val Royal,1996,4,7,https://www.wikidata.org/wiki/Q7909142 ; https://en.wikipedia.org/wiki/Val_Royal,英語版 Wikipedia 冒頭文
+000a001be7,Pancho Villa,1982,4,27,https://www.wikidata.org/wiki/Q113905728,Wikidata(参照付き)
+000a013643,Free House,1994,3,22,https://www.wikidata.org/wiki/Q5499875 ; https://en.wikipedia.org/wiki/Free_House_%28horse%29,Wikidata(参照付き)
+000a0114ba,Invasor,2002,8,3,https://www.wikidata.org/wiki/Q2743391 ; https://en.wikipedia.org/wiki/Invasor_%28horse%29,英語版 Wikipedia 冒頭文
+000a011f17,Old Fashioned,2006,1,27,https://en.wikipedia.org/wiki/Old_Fashioned_%28horse%29,英語版 Wikipedia 冒頭文
+000a01173c,Half Ours (米),2003,3,27,https://www.wikidata.org/wiki/Q5641735 ; https://en.wikipedia.org/wiki/Half_Ours,英語版 Wikipedia 冒頭文
+000a01180b,Sharp Humor,2003,4,21,https://www.wikidata.org/wiki/Q7490322 ; https://en.wikipedia.org/wiki/Sharp_Humor,英語版 Wikipedia 冒頭文
+000a00224c,Morvich,1919,4,23,https://www.wikidata.org/wiki/Q17019814 ; https://en.wikipedia.org/wiki/Morvich,英語版 Wikipedia 冒頭文
+000a001dff,Success Express,1985,2,25,https://www.wikidata.org/wiki/Q7632566 ; https://en.wikipedia.org/wiki/Success_Express,英語版 Wikipedia 冒頭文
+000a000d1d,グランドオペラGrand Opera(米),1984,2,11,https://www.wikidata.org/wiki/Q11300297,Wikidata(参照付き)
+000a0015e9,Sensitive Prince,1975,4,1,https://www.wikidata.org/wiki/Q7451054 ; https://en.wikipedia.org/wiki/Sensitive_Prince,英語版 Wikipedia 冒頭文
+000a0123f5,Midshipman (米),2006,3,26,https://www.wikidata.org/wiki/Q6843006 ; https://en.wikipedia.org/wiki/Midshipman_%28horse%29,英語版 Wikipedia 冒頭文
+000a010d4a,Rail Link(英),2003,3,26,https://www.wikidata.org/wiki/Q3417685 ; https://en.wikipedia.org/wiki/Rail_Link_%28horse%29,英語版 Wikipedia 冒頭文
+000a010ff4,Noblequest (仏),1982,2,2,https://www.wikidata.org/wiki/Q131404312,Wikidata(参照付き)
+000a000955,メイヂヒカリ,1952,3,24,https://ja.wikipedia.org/wiki/%E3%83%A1%E3%82%A4%E3%83%82%E3%83%92%E3%82%AB%E3%83%AA,日本語版 Wikipedia 冒頭文
+000a000d8c,ザグレブZagreb(米),1993,5,14,https://www.wikidata.org/wiki/Q11306348 ; https://en.wikipedia.org/wiki/Zagreb_%28horse%29,英語版 Wikipedia 冒頭文
+000a000307,シンバー,1970,3,14,https://ja.wikipedia.org/wiki/%E3%82%B7%E3%83%B3%E3%83%90%E3%83%BC,日本語版 Wikipedia 冒頭文
+000a0115e9,Volksraad,1988,2,5,https://www.wikidata.org/wiki/Q7940286 ; https://en.wikipedia.org/wiki/Volksraad_%28horse%29,英語版 Wikipedia 冒頭文
+000a0002f7,Shecky Greene,1970,1,30,https://www.wikidata.org/wiki/Q102241092 ; https://sporthorse-data.com/pedigree/shecky-greene ; https://alchetron.com/Shecky-Greene,Wikidata（サブプランで取得）・SporthorseData・Alchetron・生産記録の投稿が 1970-01-30 で一致
+000a0104d9,Hussonet,1991,1,29,https://www.wikidata.org/wiki/Q107002560 ; https://sporthorse-data.com/pedigree/hussonet,Wikidata と SporthorseData が 1991-01-29 で一致
+000a001993,Electioneer,1904,4,20,https://www.wikidata.org/wiki/Q110594588 ; https://en.wikipedia.org/wiki/Electioneer,"Wikipedia 本文 'foaled April 20, 1904' と Wikidata が一致（1904 年生まれの米国馬）"
+000a001150,Bay Ronald,1893,5,3,https://www.wikidata.org/wiki/Q4874084 ; https://en.wikipedia.org/wiki/Bay_Ronald,英語版 Wikipedia 冒頭文
+000a00171c,Disguise,1897,5,10,https://en.wikipedia.org/wiki/Disguise_%28horse%29,英語版 Wikipedia 冒頭文
+000a000434,ガーサント,1949,4,5,https://www.wikidata.org/wiki/Q11296502,Wikidata(参照付き)（Wikidata 一括照会）
+000a0012a4,Herold,1917,5,5,https://www.wikidata.org/wiki/Q1433915,Wikidata(参照付き)（Wikidata 一括照会）
+000a000e4d,Worden,1949,3,7,https://www.wikidata.org/wiki/Q96415515,Wikidata(参照付き)（Wikidata 一括照会）
+000a00fb8e,Harlan (米),1989,3,2,https://www.wikidata.org/wiki/Q107552028,Wikidata(参照付き)（Wikidata 一括照会）
+000a01124c,Posse,2000,2,11,https://www.wikidata.org/wiki/Q11339171,Wikidata(参照付き)（Wikidata 一括照会）
+000a0022a2,Our Emblem,1991,3,7,https://www.wikidata.org/wiki/Q17361617,Wikidata(参照付き)（Wikidata 一括照会）
+000a0003ff,ダイアトム,1962,6,13,https://www.wikidata.org/wiki/Q5272127,Wikidata(参照付き)（Wikidata 一括照会）
+000a000937,ボストニアン,1950,5,13,https://www.wikidata.org/wiki/Q11338612,Wikidata(参照付き)（Wikidata 一括照会）
+000a000234,ムーティエMoutiers(仏),1958,3,16,https://www.wikidata.org/wiki/Q11343230,Wikidata(参照付き)（Wikidata 一括照会）
+000a0130d0,ザファクター,2008,3,15,https://www.wikidata.org/wiki/Q55972474,Wikidata(参照付き)（Wikidata 一括照会）
+000a0122b0,Acclamation,1999,4,26,https://www.wikidata.org/wiki/Q131630757,Wikidata(参照付き)（Wikidata 一括照会）
+000a000b10,ダンシングキャップ,1968,2,5,https://www.wikidata.org/wiki/Q11317465,Wikidata(参照付き)（Wikidata 一括照会）
+000a0008d8,クリノハナ,1949,5,18,https://www.wikidata.org/wiki/Q11299394,Wikidata(参照付き)（Wikidata 一括照会）
+000a016336,Foxhall,1878,4,2,https://www.wikidata.org/wiki/Q5477158,Wikidata(参照付き)（Wikidata 一括照会）
+000a001d4b,Botafogo,1914,11,7,https://www.wikidata.org/wiki/Q8251165,Wikidata(参照付き)（Wikidata 一括照会）
+000a00091b,ヒロサクラ,1940,3,9,https://www.wikidata.org/wiki/Q17361614,Wikidata(参照付き)（Wikidata 一括照会）
+000a010753,Yes It's True,1996,3,31,https://www.wikidata.org/wiki/Q64780159,Wikidata(参照付き)（Wikidata 一括照会）
+000a0008ad,マルタケ,1936,5,26,https://www.wikidata.org/wiki/Q11341318,Wikidata(参照付き)（Wikidata 一括照会）
+000a000872,コイワヰ,1908,5,1,https://www.wikidata.org/wiki/Q11301835,Wikidata(参照付き)（Wikidata 一括照会）
+000a0108d0,Officer,1999,2,14,https://www.wikidata.org/wiki/Q11292216,Wikidata(参照付き)（Wikidata 一括照会）
+000a0008c7,クモノハナ,1947,3,15,https://www.wikidata.org/wiki/Q11298823,Wikidata(参照付き)（Wikidata 一括照会）
+000a000169,ハンセル,1988,3,12,https://www.wikidata.org/wiki/Q5651011,Wikidata(参照付き)（Wikidata 一括照会）
+000a0008ab,シーマー,1944,3,22,https://www.wikidata.org/wiki/Q11308902,Wikidata(参照付き)（Wikidata 一括照会）
+000a0008b5,カブトヤマ,1930,3,5,https://www.wikidata.org/wiki/Q11294629,Wikidata(参照付き)（Wikidata 一括照会）
+000a000d53,シェリフズスター,1985,4,27,https://www.wikidata.org/wiki/Q11306984,Wikidata(参照付き)（Wikidata 一括照会）
+000a0008a2,ハクシヨウ,1924,5,8,https://www.wikidata.org/wiki/Q11326285,Wikidata(参照付き)（Wikidata 一括照会）
+000a00091e,ミハルオー,1945,4,30,https://www.wikidata.org/wiki/Q11342486,Wikidata(参照付き)（Wikidata 一括照会）
+000a000d96,ミシックトライブMythic Tribe(米),1996,2,16,https://www.wikidata.org/wiki/Q11341992,Wikidata(参照付き)（Wikidata 一括照会）
+000a0008ed,ミツハタ,1948,4,20,https://www.wikidata.org/wiki/Q11342279,Wikidata(参照付き)（Wikidata 一括照会）
+000a000bea,カーネルシンボリ,1971,2,22,https://www.wikidata.org/wiki/Q11295685,Wikidata(参照付き)（Wikidata 一括照会）
+000a000aa7,ヒカルタカイ,1964,4,9,https://www.wikidata.org/wiki/Q11329953,Wikidata(参照付き)（Wikidata 一括照会）
+000a000a40,ハクズイコウ,1961,3,19,https://www.wikidata.org/wiki/Q24877159,Wikidata(参照付き)（Wikidata 一括照会）
+000a000827,カンパラ,1976,2,19,https://www.jbis.jp/horse/0000336378/,"JBIS（Kampala(GB)、Date of Birth Feb 19,1976）。ユーザー提示の URL を 1 回だけ取得"
+000a00184d,Hold Your Peace,1969,1,4,https://sporthorse-data.com/pedigree/hold-your-peace,ユーザーがブラウザで目視確認
+000a000e44,Le Fabuleux,1961,2,12,https://sporthorse-data.com/pedigree/le-fabuleux,ユーザーがブラウザで目視確認
+000a001678,Kris,1976,3,23,https://sporthorse-data.com/pedigree/kris,ユーザーがブラウザで目視確認
+000a0017b2,Dixieland Band,1980,3,20,https://sporthorse-data.com/pedigree/dixieland-band,ユーザーがブラウザで目視確認
+000a001a8e,Shareef Dancer,1980,3,3,https://sporthorse-data.com/pedigree/shareef-dancer,ユーザーがブラウザで目視確認
+000a0021eb,Classic Go Go,1978,2,11,https://sporthorse-data.com/pedigree/classic-go-go,ユーザーがブラウザで目視確認
+000a00185f,Wild Again (米),1980,5,22,https://sporthorse-data.com/pedigree/wild-again,ユーザーがブラウザで目視確認
+000a000477,Mr. Leader,1966,3,18,https://sporthorse-data.com/pedigree/mr-leader,ユーザーがブラウザで目視確認
+000a001c0e,Meadowlake,1983,3,12,https://sporthorse-data.com/pedigree/meadowlake,ユーザーがブラウザで目視確認
+000a001679,Arctic Tern,1973,5,11,https://sporthorse-data.com/pedigree/arctic-tern,ユーザーがブラウザで目視確認
+000a001604,Cox's Ridge,1974,4,4,https://sporthorse-data.com/pedigree/coxs-ridge,ユーザーがブラウザで目視確認
+000a002276,Tale of the Cat(米),1994,4,13,https://sporthorse-data.com/pedigree/tale-cat,ユーザーがブラウザで目視確認
+000a0000e3,Deploy,1987,5,15,https://sporthorse-data.com/pedigree/deploy,ユーザーがブラウザで目視確認
+000a002326,Orpen,1996,5,20,https://sporthorse-data.com/pedigree/orpen,ユーザーがブラウザで目視確認
+000a001fee,General Meeting,1988,4,3,https://sporthorse-data.com/pedigree/general-meeting,ユーザーがブラウザで目視確認
+000a001dbb,Runaway Groom,1979,4,11,https://sporthorse-data.com/pedigree/runaway-groom,ユーザーがブラウザで目視確認
+000a0103b9,ヨハネスブルグ,1999,2,23,https://sporthorse-data.com/pedigree/johannesburg,ユーザーがブラウザで目視確認
+000a00fdb3,Old Trieste,1995,3,2,https://sporthorse-data.com/pedigree/old-trieste,ユーザーがブラウザで目視確認
+000a001e7d,Carson City,1987,4,4,https://sporthorse-data.com/pedigree/carson-city,ユーザーがブラウザで目視確認
+000a00fa4c,Cee's Tizzy,1987,4,21,https://sporthorse-data.com/pedigree/cees-tizzy,ユーザーがブラウザで目視確認

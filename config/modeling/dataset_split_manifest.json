@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "policy_name": "pre_race_probability_dataset_split",
+  "description": "レース直前確率モデル向けの時系列 split と segment 評価セット定義。分割単位は race 単位で、京都は改修後 era を補助評価セットとして持つ。",
+  "cv_policy": {
+    "primary_scheme": "purged_group_time_series_split",
+    "group_key": "race_id",
+    "time_key": "race_date",
+    "purge_window_days": 7,
+    "embargo_days": 3,
+    "notes": [
+      "OOF target encoding・OOF aggregate features を作る都合上、validation 直前の学習データも embargo で除外する",
+      "同一開催週の情報に引きずられた leakage を抑えるため、最初は conservative な purge/embargo を採用する"
+    ]
+  },
+  "base_filters": {
+    "scope": "JRA only",
+    "grain": "race_id + horse_number",
+    "exclude_tables_from_features": [
+      "race_result",
+      "race_result_lap",
+      "race_barometer",
+      "smartrc_race"
+    ]
+  },
+  "protocols": {
+    "model_selection_primary": {
+      "train_years": ["2020", "2021", "2022", "2023"],
+      "valid_years": ["2024"],
+      "test_years": ["2025"],
+      "notes": [
+        "最初の正式比較は 2020-2023 train / 2024 valid / 2025 test",
+        "train, valid, test は race 単位で完全分離する"
+      ]
+    },
+    "production_refit_after_selection": {
+      "train_years": ["2020", "2021", "2022", "2023", "2024", "2025"],
+      "valid_years": [],
+      "test_years": [],
+      "notes": [
+        "モデル選定完了後の本番再学習にのみ使う",
+        "2025 を test に使った後で production refit に含める"
+      ]
+    }
+  },
+  "rolling_origin_folds": [
+    {
+      "fold_id": "fold_1",
+      "train": {
+        "date_from": "2020-01-01",
+        "date_to": "2022-12-31"
+      },
+      "valid": {
+        "date_from": "2023-01-01",
+        "date_to": "2023-06-30"
+      }
+    },
+    {
+      "fold_id": "fold_2",
+      "train": {
+        "date_from": "2020-01-01",
+        "date_to": "2023-06-30"
+      },
+      "valid": {
+        "date_from": "2023-07-01",
+        "date_to": "2023-12-31"
+      }
+    },
+    {
+      "fold_id": "fold_3",
+      "train": {
+        "date_from": "2020-01-01",
+        "date_to": "2023-12-31"
+      },
+      "valid": {
+        "date_from": "2024-01-01",
+        "date_to": "2024-12-31"
+      }
+    }
+  ],
+  "special_sets": {
+    "kyoto_post_renovation_valid": {
+      "years": ["2023", "2024"],
+      "filters": {
+        "venue_code": ["08"],
+        "race_date_from": "2023-04-22",
+        "venue_era": ["kyoto_post_20230422"]
+      },
+      "purpose": "現行京都条件への補助評価"
+    },
+    "kyoto_post_renovation_test": {
+      "years": ["2025"],
+      "filters": {
+        "venue_code": ["08"],
+        "venue_era": ["kyoto_post_20230422"]
+      },
+      "purpose": "現行京都条件での最終評価"
+    },
+    "cushion_observed_test": {
+      "years": ["2025"],
+      "filters": {
+        "has_cushion_value": true
+      },
+      "purpose": "クッション観測あり subset の評価"
+    },
+    "with_paddock_test": {
+      "years": ["2025"],
+      "filters": {
+        "has_paddock": true
+      },
+      "purpose": "パドック情報あり subset の評価"
+    },
+    "without_paddock_test": {
+      "years": ["2025"],
+      "filters": {
+        "has_paddock": false
+      },
+      "purpose": "パドック非依存性能の評価"
+    }
+  },
+  "segment_evaluations": [
+    {
+      "segment_id": "by_venue",
+      "group_by": ["venue_code"]
+    },
+    {
+      "segment_id": "by_surface_distance",
+      "group_by": ["surface", "distance_bucket"]
+    },
+    {
+      "segment_id": "by_season",
+      "group_by": ["season", "surface"]
+    },
+    {
+      "segment_id": "by_field_size",
+      "group_by": ["field_size_bucket"]
+    },
+    {
+      "segment_id": "by_market_bucket",
+      "group_by": ["win_odds_bucket"]
+    }
+  ],
+  "constraints": {
+    "split_unit": "race_id",
+    "no_random_row_split": true,
+    "feature_aggregation_must_be_train_fold_local": true,
+    "target_encoding_must_be_train_fold_local": true,
+    "oof_features_must_respect_purge_embargo": true,
+    "calibration_must_use_validation_or_oof_only": true
+  }
+}

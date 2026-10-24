@@ -1,0 +1,14 @@
+{
+ "blend": {
+  "a_model": 0.31552092197816906,
+  "b_market": 0.7590632105479028,
+  "source": "data/local/modeling/betting/tp36/final2026.json",
+  "fit": "tp36_final2026: fit_benter(2022-2025 の edge_frame)。2026 年以降のレースにも同じ係数を使う（凍結）"
+ },
+ "frozen_at": "2026-10-21",
+ "reference_sd": {
+  "tp59": 13.488565523171621,
+  "tp62": 2.332265323341566
+ },
+ "reference_sd_note": "買ったレース 1 つあたりの払戻倍率の標準偏差（2026-01〜10 のバックテスト。確証までの件数の見積もり用の参考値）"
+}

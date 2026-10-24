@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>keiba-vpn アーキテクチャ・ヘルスチェック — {{DATE}}</title>
+<style>
+  /*
+    配色ルール（ライトモードのみ）。dataviz skill の references/palette.md
+    「Status palette (fixed)」「Chart chrome & ink」をそのまま採用する。
+    重要: warning(#fab219) は光サーフェス上でコントラスト1.79:1しかなく、テキスト色や
+    塗り背景として単体で使うと視認性が悪く「配色が悪い」印象になる（実測で確認済み）。
+    そのためステータス色は必ず「小さいドット + 濃色テキストのラベル」として使う
+    （色だけで意味を持たせない = icon + label mitigation）。カードやテーブルの
+    背景に彩度の高い色を直接塗らないこと。
+  */
+  :root {
+    --page-plane:     #f9f9f7;
+    --surface:        #fcfcfb;
+    --surface-alt:    #f3f2ee;
+    --ink-primary:    #0b0b0b;
+    --ink-secondary:  #52514e;
+    --ink-muted:      #898781;
+    --border:         rgba(11,11,11,0.10);
+    --gridline:       #e1e0d9;
+    --status-good:    #0ca30c;
+    --status-warning: #fab219;
+    --status-critical:#d03b3b;
+    --success-text:   #006300;
+  }
+  body { font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+         max-width: 1150px; margin: 0 auto; padding: 32px 16px 48px;
+         background: var(--page-plane); color: var(--ink-primary); line-height: 1.6; }
+  h1 { font-size: 1.6em; margin-bottom: 4px; }
+  .meta { color: var(--ink-secondary); font-size: 0.9em; margin-bottom: 24px; }
+  h2 { border-bottom: 1px solid var(--gridline); padding-bottom: 6px; margin-top: 40px; }
+  h3 { margin-top: 28px; }
+  .cards { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0 24px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+          padding: 14px 18px; min-width: 140px; }
+  .card .dot-label { display: flex; align-items: center; gap: 6px; font-size: 0.8em;
+                      color: var(--ink-secondary); margin-bottom: 6px; }
+  .card .dot-label::before { content: ""; width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .card.total .dot-label::before { background: var(--ink-muted); }
+  .card.ok .dot-label::before { background: var(--status-good); }
+  .card.warn .dot-label::before { background: var(--status-warning); }
+  .card.crit .dot-label::before { background: var(--status-critical); }
+  .card .num { font-size: 1.9em; font-weight: 700; font-variant-numeric: tabular-nums; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 28px; font-size: 0.9em;
+          background: var(--surface); }
+  th, td { border: 1px solid var(--gridline); padding: 5px 9px; text-align: left; vertical-align: top; }
+  th { background: var(--surface-alt); color: var(--ink-secondary); font-weight: 600; position: sticky; top: 0; }
+  code { background: var(--surface-alt); padding: 1px 5px; border-radius: 4px; font-size: 0.92em; }
+  .status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px;
+            border-radius: 999px; background: var(--surface); border: 1px solid var(--border);
+            font-weight: 600; font-size: 0.82em; white-space: nowrap; }
+  .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .status-ok::before { background: var(--status-good); }
+  .status-warn::before { background: var(--status-warning); }
+  .status-crit::before { background: var(--status-critical); }
+  .issue { background: var(--surface); border: 1px solid var(--border);
+           border-left: 4px solid var(--status-warning); border-radius: 8px;
+           padding: 10px 14px; margin: 10px 0; }
+  .issue.crit { border-left-color: var(--status-critical); }
+  .issue h4 { margin: 0 0 6px; display: flex; align-items: center; gap: 6px; }
+  .issue h4::before { content: ""; width: 8px; height: 8px; border-radius: 50%;
+                      background: var(--status-warning); flex: 0 0 auto; display: inline-block; }
+  .issue.crit h4::before { background: var(--status-critical); }
+  .issue .fix { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--gridline);
+                color: var(--ink-secondary); }
+  .issue .fix::before { content: "解決策: "; font-weight: 600; color: var(--ink-primary); }
+  .success-text { color: var(--success-text); font-weight: 600; }
+  footer { color: var(--ink-muted); font-size: 0.85em; margin-top: 40px;
+           border-top: 1px solid var(--gridline); padding-top: 12px; }
+</style>
+</head>
+<body>
+
+<h1>keiba-vpn アーキテクチャ・ヘルスチェック</h1>
+<div class="meta">
+  実行日: {{DATE}} ／ 対象コミット: <code>{{COMMIT}}</code> ／ 実行者: Claude (evaluate-keiba-architecture skill)
+</div>
+
+<!--
+  以下はレポート作成時の構成ガイド。実際のレポートではこのコメントを削除し、
+  各セクションを調査結果で埋めること。ステータスは必ず class="status status-ok|status-warn|status-crit"
+  （ドット+ラベル、上記CSS参照）を使う。彩度の高い背景色でテキストを塗らないこと。
+-->
+
+<h2>1. サマリー</h2>
+<div class="cards">
+  <div class="card total"><div class="dot-label">総エンドポイント数</div><div class="num">{{TOTAL_ENDPOINTS}}</div></div>
+  <div class="card ok"><div class="dot-label">OK</div><div class="num">{{OK_COUNT}}</div></div>
+  <div class="card warn"><div class="dot-label">警告</div><div class="num">{{WARN_COUNT}}</div></div>
+  <div class="card crit"><div class="dot-label">重大</div><div class="num">{{CRIT_COUNT}}</div></div>
+</div>
+<p>{{SUMMARY_TEXT}}（今回の総括を2〜3文で。前回レポートとの差分があれば言及する）</p>
+
+<h2>2. 層別エンドポイント一覧</h2>
+<!-- レイヤーごとに1テーブル: FastAPI legacy (:8000) / Flask v1 (:5000) / monitor (:9090) -->
+<h3>2-1. FastAPI legacy — <code>src/api/app.py</code>（:8000）</h3>
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Handler</th><th>Status</th><th>所見</th></tr></thead>
+<tbody>
+<tr><td>GET</td><td><code>/api/health</code></td><td>...</td>
+  <td><span class="status status-ok">OK</span></td><td>...</td></tr>
+</tbody>
+</table>
+
+<h3>2-2. Flask /api/v1 — <code>src/api/flask_app.py</code>（:5000, 仕様上の正）</h3>
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Handler</th><th>Status</th><th>所見</th></tr></thead>
+<tbody></tbody>
+</table>
+
+<h3>2-3. Monitor（開発者専用） — <code>src/monitor/app.py</code>（:9090）</h3>
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Handler</th><th>Status</th><th>所見</th></tr></thead>
+<tbody></tbody>
+</table>
+
+<h2>3. パス整合性チェック</h2>
+<table>
+<thead><tr><th>参照元</th><th>パス</th><th>実在</th><th>所見</th></tr></thead>
+<tbody>
+<tr><td>config/settings.yaml</td><td><code>data/raw</code></td>
+  <td><span class="status status-crit">なし</span></td><td>...</td></tr>
+</tbody>
+</table>
+
+<h2>4. 冗長設計・移行負債の指摘</h2>
+<div class="issue crit">
+  <h4>例: 同一機能が FastAPI legacy と Flask v1 に重複実装されている</h4>
+  <p>該当ファイル・行、なぜ問題か（DEC-013/DEC-015との不整合など）を記述。</p>
+  <div class="fix">具体的な対応（どちらを残すか、移行手順）。</div>
+</div>
+
+<h2>5. 次回チェックへの引き継ぎ</h2>
+<ul>
+  <li>今回未確認・要追調査の項目</li>
+</ul>
+
+<footer>
+  Generated by <code>.claude/skills/evaluate-keiba-architecture</code> — 出力先: <code>data/skill_logs/architecture_eval/{{DATE}}.html</code>
+</footer>
+
+</body>
+</html>

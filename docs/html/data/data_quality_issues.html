@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>データ品質の既知の問題と対応 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+<style>.ok{color:#4ade80}.wait{color:#fbbf24}.ng{color:#f87171}.tag{font-size:12px;padding:1px 8px;border-radius:99px;border:1px solid #243358}</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>データ品質の既知の問題と対応</h1>
+      <p class="meta">ソース: <code>docs/html/data/data_quality_issues.html</code></p>
+    </header>
+    <article class="html-body">
+<h1>データ品質の既知の問題と対応</h1>
+<p class="muted">2026-10-13〜20 に見つかったデータ・実装の問題を、解決済みと未解決に分けて 1 か所にまとめた。調査への影響と採否は <a href="../modeling/chapters/training_pipeline_decisions.html">学習パイプラインの確定事項ログ</a>の §33 B。データの存在・スキーマ適合の検査は <a href="DATA_HEALTH.html">データヘルスチェック</a>。最終更新: 2026-10-20。</p>
+
+<h2>1. 解決済み</h2>
+<table>
+<tr><th>問題</th><th>影響</th><th>原因と対応</th></tr>
+<tr><td>学習表の sire / dam_sire が全行空</td><td>血統系の特徴量が条件別の全体平均だった（tp-24）</td><td>出馬表ページに血統が無く空保存。血統 JSON から horse_id で父・母父を引く（<code>pedigree_keys</code>）。v4 で差し替え</td></tr>
+<tr><td>出馬表の course_type（内回り/外回り）が全行空</td><td>外回りと内回りの区別が全特徴量から欠落</td><td>正規表現が実書式に合わなかった。パーサー修正、過去分はコースマスタから導出</td></tr>
+<tr><td>horse_training（追い切り）の空保存 5,261 件（14.1%）</td><td>2021 年最終走の 2,598 頭が TL_A 被覆 57% の主因</td><td>HTTP クライアントが 150 リクエストごとのセッション更新後に再ログインせず、匿名で取得していた。修正して全件を再取得（被覆 83/57/76% → 98/95/97%）</td></tr>
+<tr><td>horse_result の列ずれ（通過順の一致 0.6%、上り 1.1%）</td><td>horse_result を入力にする派生と最終オッズモデルの学習データ。v3/v4 は flat 由来で無関係</td><td>会員表示の 33 列を固定位置で読んでいた。列名ベースに修正し、flat から補正するオーバーレイで直して最終オッズモデルを再学習</td></tr>
+<tr><td>払戻 JSON で複勝・ワイドの複数行が区切りなしに連結</td><td>2024 年〜2026 年 3 月に約 5,900 レース（2026 年は 1〜3 月の 587 レース）。連結したレースは採点できず、評価から外れていた。人気は復元できない</td><td>補正表（<code>payoff_fix_*.parquet</code>）を作り、<code>payoff_repair.apply_fix</code> で評価に適用（曖昧 108 → 9 レース、2026 年は 10 レースを補正しない）。現行のパーサーは新規取得分を正しく割れる</td></tr>
+<tr><td>確定結果の公開遅延（2026-10-17）</td><td>結果ランナーが空振りし、履歴の最終日が進まなかった</td><td>速報結果から橋渡し（<code>bridge_on_time_results</code>）。確定結果が公開されれば入れ替わる</td></tr>
+<tr><td>2025 年 5〜12 月の結果ページで、指数列を読んで単勝オッズ・人気が破損（約 2,100 レース）</td><td>race_result_flat の 2025 年のオッズ・人気は使えない。Σ(1/odds) が 1.25 からずれる</td><td><code>odds_fix</code> の補正表（race_odds 由来）で置き換え。列ずれの日次検査（<code>parse_audit</code>）と年別ドリフト監査を追加</td></tr>
+<tr><td>出馬表フラットが 1 レース 1 頭に潰れる（2026 年 134 レース）</td><td>枠順確定前の出馬表は馬番が全頭 0。重複除去が馬番だったため</td><td>重複除去を馬 ID に変更。元 JSON から復元（<code>repair_shutuba_flat_collapsed</code>、36,909 → 38,431 行）</td></tr>
+<tr><td>特徴量生成が馬番 0 のレースで空配列エラー（<code>horse_history/match.py</code>）</td><td>2026-06-06・06-07 の予測が作れない。1 レースの失敗で同じバッチの全レースが error</td><td>馬番が未確定のレースだけを error にして他は通常どおり作る（<code>weight_triggered_predict</code>）。回帰テスト追加</td></tr>
+<tr><td>2026 年の単勝オッズが壊れた 2 レース（2026-02-08、Σ(1/odds)=0.18）</td><td>tp-36 の 2026 年の結果が高く出ていた</td><td>Σ(1/odds) が 1.0〜1.6 の外のレースを除外する検査を、2026 年の評価すべてに入れた</td></tr>
+<tr><td>期待値の水準が高く出る 2 か所（連対 EV の「単勝オッズ×1.65」、複勝 EV の（下限+上限）/2）</td><td>ほぼ全馬が EV≥1 で「強推奨」、買い目提案の 93% が「高」</td><td>連対は馬連プールと整合する公正オッズ、複勝は下限＋0.3×幅に修正（tp-47）。さらに表示を実績に較正（tp-49）</td></tr>
+<tr><td>3 連単オッズのバックフィルが DNS の一時不調で自動中断</td><td>8 件連続失敗（アクセス制限ではない）</td><td><code>--retry-failed</code> で再開し、9,711 レースを保存して完了</td></tr>
+<tr><td>「累積和 − 自分」の浮動小数点の端数</td><td>今回勝ったときだけ値が厳密に 0 になり、木モデルが拾って見かけの改善（R6 で −0.0038）</td><td>累積和を 1 行ずらす共通関数に置き換え、先読みテストを端数まで一致に強化。V4 の全採用群を監査して実害なしを確認</td></tr>
+<tr><td>含水率の欠け・4 コーナー通過順の入れ替わり（2020〜2024 年）</td><td>クッション値・含水率の特徴量（tp-16）</td><td>ローカルと GCS（jra_cushion）に補完・訂正を反映し、旧版は退避。tp-16b で再評価（不採用）</td></tr>
+</table>
+
+<h2>2. 未解決・対応待ち</h2>
+<table>
+<tr><th>問題</th><th>影響</th><th>状況・次の手</th></tr>
+<tr><td>2025 年のオッズ破損の修復漏れ 21 レース（275 行）</td><td>補正表で直らず、flat のオッズが壊れたまま</td><td>GCS の書き換えが必要なため未実施（既存データの上書きになる。バックアップのうえ承認を得て実施）</td></tr>
+<tr><td>結果画面の払戻表示（<code>race_result_display</code>）が補正表を使っていない</td><td>2026 年 1〜3 月の結果画面が連結のまま出る可能性</td><td>評価側は補正済み。画面側は未対応</td></tr>
+<tr><td>2026-06-06・07・10-17 の出馬表の元 JSON が部分的（06-06 は 194/404 頭、10-17 は 319/345 頭）</td><td>この日の予測・フラットは復元できる範囲に限られる</td><td>06-06・07 の予測は評価から除外のまま</td></tr>
+<tr><td>3 連単オッズの恒常的なデータなし 9 レースと、人気薄の組合せの欠け（平均 0.3〜0.4%）</td><td>取消や不成立の可能性。欠けが 3% 以上のレースは評価から除外（2024〜26 年に 164〜214 レース/年）</td><td>評価側で除外。原因の特定はバックフィル完了後の課題</td></tr>
+<tr><td>3 連複のオッズ（<code>race_pair_odds</code> の sanrenpuku）が過去分で 0 件</td><td>3 連複の過去の価格は 3 連単の実オッズから見る必要がある</td><td>取得は 3 連複 API（type=7）の応答形式を確認済みだが、過去分は取れていない</td></tr>
+<tr><td>馬主が ID を持たない（名前キー）</td><td>表記ゆれの恐れ。v4 の効果の大半は馬主系で、取得時点（2026）の値</td><td>owner_id の解析は実装済み。実 HTML の確認と約 39,000 頭の再取得が必要</td></tr>
+<tr><td>ホストの repo が最新から古く、ファイル単位で反映している</td><td><code>git pull</code> は衝突と画面データの破損の恐れがあり使えない</td><td>反映はバックアップ付きのスクリプトで（<a href="../operations/raceday_prediction_workflow.html">運用の章</a>）。一括更新の整理は別途</td></tr>
+<tr><td>horse_training（調教）が 2026 年 4 月から取り直されていない</td><td>運用予測の調教系 87 列（tl_・wc_）が約 95% の行で欠損。出走行の被覆は 4 月 79%、5 月 18%、6〜9 月 5〜6%（10/18 のみ 100%）。テストセット②の評価・ドリフト監視にも影響</td><td>前日夕方の取り直し（<code>KEIBA_EVE_HORSE_TRAINING=1</code>）が 10/17 から稼働。過去分 8,437 頭（約 14 時間）は穴埋めスクリプト（<code>backfill_horse_training_recent</code>、40 頭パイロット済み）と夜間 cron（未登録）。予測 API に被覆の注記（<code>KEIBA_TRAINING_COVERAGE</code>）。手順: <code>docs/operations/training_fetch.md</code>、決定ログ §54</td></tr>
+<tr><td>購入時点のオッズが確定オッズと違う</td><td>馬券の評価は確定オッズで精算しており、購入時点の値ではない</td><td>T-60 / T-15 / 直前（T-10/T-5/T-2）の実オッズを蓄積中（10/24 夜〜10/25 から直前分が貯まる）</td></tr>
+</table>
+
+<h2>3. 再発を防ぐ仕組み</h2>
+<ul>
+  <li><b>保存前のスキーマ検証</b>: <code>HybridStorage.save</code> が必ず検証し、不合格は理由と項目を記録（<code>python -m src.scraper.schema_violations</code>）。</li>
+  <li><b>日次の列ずれ検査</b>（<code>parse_audit</code>）: Σ(1/odds) が払戻率から決まる範囲（約 1.0〜1.6）にあるか、人気が 1〜頭数の範囲か、馬体重が 300〜700kg かを、取得の翌日までに見つける。</li>
+  <li><b>評価側の検査</b>: 2026 年の評価はすべて、Σ(1/odds) が 1.0〜1.6 の外のレースと払戻が曖昧なレースを除外する。</li>
+  <li><b>先読みテスト</b>: 統計量は「そのレース日より前」で作り、完全一致テスト（端数まで）を付ける。</li>
+</ul>
+</article>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">data/data_quality_issues.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

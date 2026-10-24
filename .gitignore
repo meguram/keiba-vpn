@@ -1,0 +1,102 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+.venv/
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# Environment（秘密情報はコミットしない）
+.env
+.env.*
+!.env.example
+!.env.stg.example
+!.env.prod.example
+!frontend/.env.local.example
+
+# IDE（共有したい設定のみ追跡）
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 実行時・ログ
+*.pid
+.server.log
+*.log
+logs/
+.service_start.profile
+scripts/server/service_start.local.env
+
+# バックアップ・一時
+api/app.py.bak_*
+*.bak
+tmp/*
+!tmp/.gitkeep
+
+# ML（再生成可）
+catboost_info/
+mlflow/data/
+mlflow/runs/
+mlruns
+
+# ランタイム生成データ（horse_result 保存時に自動更新されるため追跡しない）
+data/knowledge/horse_name_index.json
+
+# スクレイプ・キュー由来の生成物（GCS が正、ローカルは再取得可）
+data/cache/
+# Bloodline SQLite（サイズ大・ローカル生成。GitHub 100MB 制限対象のため追跡しない）
+data/bloodline/
+data/calculated_data/
+data/local/
+data/queue/
+data/page_reference/*
+!data/page_reference/BUNDLE.md
+*.pre_page_ref_bak/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Frontend
+frontend/node_modules
+frontend/.next/
+frontend/.next-dev/
+frontend/.next-stg/
+frontend/.next-prod/
+frontend/tsconfig.tsbuildinfo
+
+# 資格情報
+*.pem
+credentials.json
+keiba-vpn-local
+keiba-vpn-local.pub
+
+# プロセス横断スロットファイル（スクレイパー並列数制御用）
+data/meta/netkeiba_global_slots/
+gcp-service-account.json
+gcp-service-account.*.json
+
+# bloodline DB
+data/research/bloodline/*.db
+data/research/bloodline/*.db-shm
+data/research/bloodline/*.db-wal
+
+# dev 用モック（make dev-mock で生成）
+data/dev_mock/
+.autostart_dev.lock
+
+# ensure_monitor.sh のロック
+.ensure_monitor.lock

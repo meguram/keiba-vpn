@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-toolsai.jupyter",
+    "ms-toolsai.jupyter-renderers",
+    "ms-vscode.live-server",
+    "rupesh9369.htmlpreview-vscode"
+  ],
+  "unwantedRecommendations": []
+}

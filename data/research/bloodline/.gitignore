@@ -1,0 +1,3 @@
+# 集計表は公開リポジトリに置かない（config/fitted_artifacts.txt）
+*
+!.gitignore

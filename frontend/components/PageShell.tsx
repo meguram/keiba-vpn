@@ -1,0 +1,21 @@
+import { AnalysisNote } from "@/components/Nav";
+
+type Props = {
+  title: string;
+  description?: string;
+  children?: React.ReactNode;
+  note?: boolean;
+};
+
+export function PageShell({ title, description, children, note = true }: Props) {
+  return (
+    <div className="space-y-4 ps-root">
+      <header className="ps-head">
+        <h1 className="text-2xl font-bold">{title}</h1>
+        {description && <p style={{ color: "var(--text-dim)" }}>{description}</p>}
+      </header>
+      {children}
+      {note && <AnalysisNote />}
+    </div>
+  );
+}

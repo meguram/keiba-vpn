@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>調査の全体像と今後の予定 — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+<style>.ok{color:#4ade80}.wait{color:#fbbf24}.ng{color:#f87171}.tag{font-size:12px;padding:1px 8px;border-radius:99px;border:1px solid #243358}</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>調査の全体像と今後の予定</h1>
+      <p class="meta">ソース: <code>docs/html/modeling/chapters/research_overview.html</code></p>
+    </header>
+    <article class="html-body">
+<h1>調査の全体像と今後の予定</h1>
+<p class="muted">特徴量・モデリング・馬券の調査を、結果と状態つきで 1 か所にまとめた一覧。詳しい数値と根拠は <a href="training_pipeline_decisions.html">学習パイプラインの確定事項ログ</a>（各行の「節」列、§N）。現行の特徴量は <a href="adopted_features_v3.html">採用している特徴量</a>。最終更新: 2026-10-20（tp-50 は実施中で、結果は完了後に反映）。</p>
+
+<h2>1. 現在地</h2>
+<ul>
+  <li><b>最終モデル</b>: アンサンブル v4（7 メンバー、特徴量 1,135 列＝v3 の 301 列 + 追加 834 列）。2025 年の test（一度だけ評価）で、勝率 LogLoss 0.20740（v3 は 0.21039）、連対 0.32360、複勝 0.40640（§34）。v3 までの経緯は §29・§30。<b>v5 の候補</b>は、tp-40 の <b>CY</b>（調教の今回サイクル内の推移 37 列。第 2 段で勝率 −0.00030、上限 −0.00002。効果は履歴の浅い馬に集中）を暫定採用、境界の同時追加 ALL_BEST（tp-38、43 列）と ALL_PASSED（tp-39）、保留の RL_C（tp-42、11 列）。<b>v5 の再学習は未判断</b>で、累積（tp-27）とアンサンブル（LOYO）で確かめてから決める（§36〜§38）。</li>
+  <li><b>特徴量探索の総括</b>: 2026-10-16〜20 に、馬自身・関係者・レース環境・追い切り・血統・成長・出遅れ・似た馬など、思いつく限りを 2 段階（valid 2022〜23 で粗く → 2024・新 seed で確認）で調べた。V4 に足せたのは<b>馬主系・補助ヘッド・G1/G3 の通過群・種牡馬 ID×条件</b>までで、その後に調べた約 100 群は、第 1 段で通っても第 2 段で再現しないものが大半だった。探索は<b>ほぼ頭打ち</b>。</li>
+  <li><b>推論</b>: v3・v4 の推論経路（当日の特徴量の組み立て）は実装済みで、学習時の予測との相関は 0.998 前後（§32）。ホストでは <code>KEIBA_V3_SERVING=shadow</code>（結果をファイルに保存するだけ）で、2026-10-19 に v4 のバンドルに切り替わった。<b>predict（本番の予測として画面に出す）は未承認</b>で、v4 の shadow の結果が出る 10/24 の開催週末以降に判断する。</li>
+  <li><b>印と期待値（2026-10-20 に本番へ反映）</b>: 印は<b>◎○▲★が各 1 頭、△が最大 4 頭</b>になった（旧ルールでは 1 レース平均 11.7 個、出走馬の 89% に付いていたのが、平均 6.5 個に）。レースの状況（突出・荒れ・拮抗・通常）で基準を切り替える案は印の質を下げたので不採用（既定オフ、<a href="mark_rules.html">印のルール</a>）。期待値の式は監査して<b>2 か所の水準の誤り</b>（連対 EV の「単勝オッズ×1.65」、複勝 EV の中央値オッズ）を直し（<a href="ev_calibration_audit.html">tp-47</a>）、さらに表示する期待値を過去の実績に合わせて<b>較正</b>した（<a href="ev_calibration_adopt.html">tp-49</a>。馬ごとの期待値は 2023〜25 年と 2026 年で実現と収束。推奨ポートフォリオの期待回収率は 2026 年に収束せず、年別の範囲を併記した目安）。レース価値の色分けの閾値は較正後の 1.03・1.00・0.97 に変えた。本番へはホストの 13 ファイル単位で反映した（ホストの repo は最新から古く、一括更新はしない。ロールバックのスクリプトあり、<a href="../../operations/raceday_prediction_workflow.html">運用の章</a>）。</li>
+  <li><b>過去分の予測の算出</b>（継続実行中）: GCS に予測が無い 2026 年のレースを、推論経路で後から算出する<b>バックフィル</b>が別セッションで走っている（出力は確率のみで、印・期待値は API の読み出し時に計算するので、予測の作り直しは不要）。完了後に、<b>予測成績の日次集計の再集計</b>（印・期待値の新しい定義で）を行う。画面には「算出済み（参考）」「検証用（参考）」として出す（<a href="../../../operations/prediction_backfill.md">運用メモ</a>）。</li>
+  <li><b>予測成績</b>（2026-10-19）: その日の結果が揃った時点で、予測と着順を突き合わせて集計する仕組みを入れた（速報結果で暫定、確定結果で上書き）。ホストのニュース風カードと専用ページ「予測成績」に出す（<a href="../../../operations/prediction_results.md">運用メモ</a>）。</li>
+  <li><b>めぐ指数</b>: 2026-10-19 に v3a へ全面更新し、DB・GCS・日次 cron まで反映した（<a href="megu_index_v3a.html">めぐ指数 v3a</a>）。v4 の特徴量にはめぐ指数由来の列は含まれず、v4 への上積みはほぼ 0。</li>
+  <li><b>最終の再学習・登録（tp-07）</b>: 進行中。検証用の bundle の一致確認と MLflow 登録スクリプトは済み。血統の復旧（§31）と先読みの直しを含めた表での再学習は、v5 の判断（上）と合わせて行う。</li>
+  <li><b>馬券</b>: 確定オッズで回収率 100% 超（区間下限が 100% 超）の方策は、tp-36・43・44・45・48 のいずれでも<b>見つかっていない</b>。最も近かった候補（混合の単勝 EV≥1.2＝2023〜25 年 159%、複勝の EV≥2.0＝113%）も、未使用の 2026 年では 47%・69% に落ちて再現しなかった（2026 年の訂正は <a href="betting_edge_search.html">tp-36</a>、<a href="trifecta_true_odds.html">tp-48</a>）。強化学習は tp-36 では固定ルールに勝てず、tp-50（最新モデル＋修正後 EV、強化学習ほか）を<b>実施中</b>（結果は完了後に反映）。</li>
+  <li><b>オッズの自前蓄積</b>: 時点別オッズ（T-60 / T-15）に加え、<b>発走直前の T-10 / T-5 / T-2</b>（単勝・複勝のみ、<code>KEIBA_ODDS_LATE_SNAPSHOTS=1</code>）を 2026-10-20 にホストへ反映した。次の開催日（10/24 夜〜10/25）から貯まる。<b>3 連単の確定オッズ</b>（<code>race_trifecta_odds</code>、<code>KEIBA_ODDS_TRIFECTA=1</code>）は過去分のバックフィルが完了した（2024〜2026 年 9,711 レース）。約 1 年分（約 3,456 レース）貯まってから「最後の 5 分のオッズ低下と回収率」を検証する。</li>
+  <li><b>画面の配信</b>: stg の画面は 2026-10-19 に本番ビルド運用（<code>next build</code> + <code>next start</code>）に切り替えた。クリック後の待ち表示・先読み・API のキャッシュと合わせ、週間予測の一覧が出るまでが 8〜12 秒から約 1.7 秒に短縮した（<a href="../../../operations/stg_frontend_prod_build.md">運用メモ</a>）。</li>
+  <li><b>データ品質</b>: 払戻 JSON の連結（2026 年 1〜3 月）・2025 年のオッズ破損・出馬表フラットの潰れ・horse_training の空保存などを見つけて補正した。解決済みと未解決は <a href="../../data/data_quality_issues.html">データ品質の既知の問題</a>にまとめた。</li>
+  <li><b>数値の注意</b>: 本ログの多くの LogLoss は 2026-10-15 の track_bias 先読みリーク修正より前の特徴量で出した値。影響は +0.00003 で無視できる大きさ（tp-22、§24）ので、相対比較の結論はそのまま使える。</li>
+</ul>
+
+<h2>2. 調査の一覧（結果と状態）</h2>
+<p class="muted">状態: <span class="ok">完了</span>＝結論が出ている / <span class="wait">進行中・保留</span> / 採否は「採用・不採用・保留」で別に示す。</p>
+<table>
+<tr><th>調査</th><th>結果（採否と主な数値）</th><th>状態</th><th>節</th></tr>
+<tr><td>tp-00〜02・01b、データ完全化</td><td>母表・分割・欠損監査。2020〜2025 年を学習・検証・test に分割</td><td class="ok">完了</td><td>§1〜4・§18</td></tr>
+<tr><td>tp-03 特徴量 ablation</td><td><b>採用</b>: 履歴 127 列（勝率 LogLoss 0.23375 → 0.22069）。時代ずれ対策は不採用</td><td class="ok">完了</td><td>§5</td></tr>
+<tr><td>tp-04 前段モデル</td><td><b>採用</b>: s_time_pred / s_time_gap / s_rank_pred の 3 列のみ</td><td class="ok">完了</td><td>§6</td></tr>
+<tr><td>tp-05a〜e・tp-06</td><td>目的関数・モデル族・Optuna・アンサンブル v1（test 2025: 0.21349）</td><td class="ok">完了</td><td>§7・§8</td></tr>
+<tr><td>tp-05f〜i・tp-06b</td><td><b>採用</b>: 追い切り評価・厩舎コメント。アンサンブル v2（test 2025: 0.21240）</td><td class="ok">完了</td><td>§9</td></tr>
+<tr><td>tp-05j〜n</td><td>専用化・ランキング学習・多層スタッキングは<b>不採用</b></td><td class="ok">完了</td><td>§19</td></tr>
+<tr><td>tp-15 コース類似度</td><td><b>不採用</b></td><td class="ok">完了</td><td>§11</td></tr>
+<tr><td>tp-16 特徴量 bake-off</td><td><b>不採用</b>: 季節性・京都改修・Glicko の RD・クッション値・近交係数。後日談は将来の候補</td><td class="ok">完了</td><td>§13</td></tr>
+<tr><td>tp-16b 後日談の変種・訂正後クッション値</td><td><b>不採用</b>（効果が最小効果量 0.0002 に届かず）</td><td class="ok">完了</td><td>§27</td></tr>
+<tr><td>tp-17 欠損の補完・外れ値</td><td><b>不採用</b></td><td class="ok">完了</td><td>§14</td></tr>
+<tr><td>tp-18 階層スタッキング</td><td><b>不採用</b></td><td class="ok">完了</td><td>§15</td></tr>
+<tr><td>tp-19・19b 追い切りラップ</td><td><b>採用</b>: TL_A（勝率 −0.00136）。調教師別の採点・調教師内の相対化は上乗せなし</td><td class="ok">完了</td><td>§17・§26</td></tr>
+<tr><td>tp-21 SmartRC のテン1F</td><td>p_win は中立、位置取り・テン1F の予測は約 1% 改善。<b>採否は保留</b>（次の特徴量ラウンドで再評価）</td><td class="wait">完了（採否保留）</td><td>§16</td></tr>
+<tr><td>tp-22 先読みリーク修正の影響</td><td>+0.00003 で無視できる</td><td class="ok">完了</td><td>§24</td></tr>
+<tr><td>tp-23・tp-06c アンサンブル v3</td><td><b>採用</b>: v2 の 7 メンバーに TL_A を足して再学習。test 2025 は 0.21039</td><td class="ok">完了</td><td>§29・§30</td></tr>
+<tr><td>tp-24 血統キーの復旧</td><td>学習表の sire / dam_sire が全行空だった問題を復旧。父系 6 列は<b>採用</b>、ped_* 24 列は不採用（効果なし）。表の作り直しは tp-07 で判断</td><td class="ok">完了</td><td>§31</td></tr>
+<tr><td>v3 の推論経路</td><td>301 列の組み立て。学習との差の主因は出馬表の列落ち（修正済み）。残る差は sr_var_*・先読み</td><td class="wait">実装済み・shadow 運用中</td><td>§32</td></tr>
+<tr><td>tp-07 最終再学習・登録</td><td>検証用 bundle 一致確認・MLflow 登録スクリプト追加済み。本番用の再学習は未実施</td><td class="wait">進行中</td><td>§0・§32</td></tr>
+<tr><td>馬券 tp-08・09・11・13・14</td><td>確定オッズでは優位なし。回収率は最良でも約 88%</td><td class="ok">完了</td><td>§10・§12・§20・§23</td></tr>
+<tr><td>馬券 tp-10・12・12b・20</td><td>オッズのドリフト対策と予測オッズ。誤差が約 14% 減っても 100% に届かない</td><td class="ok">完了</td><td>§21・§22・§25・§28</td></tr>
+<tr><td>tp-25a・25b 位置取り・ペース</td><td>前段精度は上がったが、現行の前段 3 列と情報が重なり<b>不採用</b>（−0.00012／最良 −0.00020）</td><td class="ok">完了</td><td>§33</td></tr>
+<tr><td>tp-25c・25e 補助タスク NN</td><td><b>採用</b>: 補助ヘッドの予測 27 列と補助損失つき NN（v3 の 7 メンバーに LOYO −0.00026）</td><td class="ok">完了</td><td>§33</td></tr>
+<tr><td>tp-26・29・31 コース関連</td><td>コース対応づけ・期待外れ/期待以上・コース特注は<b>不採用</b>（最良 −0.00019 以内。V4 が吸収済み）</td><td class="ok">完了</td><td>§33</td></tr>
+<tr><td>特徴量ファクトリー G1〜G4・tp-27 v4 統合</td><td><b>採用</b>: 馬主系 125 列（−0.00226）、補助列、G1 の 8 群、G3 の 7 群、種牡馬 ID×条件。累積でアンサンブルは v3 比 −0.00345</td><td class="ok">完了</td><td>§33</td></tr>
+<tr><td>tp-06d アンサンブル v4</td><td><b>採用</b>: test 2025 の勝率 0.20740（v3 比 −0.00303）</td><td class="ok">完了</td><td>§34</td></tr>
+<tr><td>tp-28・35・37 追い切りの派生</td><td>パターン別成績・ラップ分類×調教師・コース・前週土日・残りの余地（24 群）は全て第 2 段で<b>不採用</b>。記者コメントは V4 の残差と関連（否定的 −20%）だが特徴量にしても基準未満</td><td class="ok">完了</td><td>§33</td></tr>
+<tr><td>tp-30・32・33・34 状況・荒れ度</td><td>荒れ度・馬具/初経験・輸送/滞在・休養明け/間隔は<b>不採用</b>（初経験が境界）。休み明け初戦の複勝残差 −0.0071 は V4 が吸収</td><td class="ok">完了</td><td>§33</td></tr>
+<tr><td>出遅れ率（代理・実ラベル）</td><td><b>不採用</b>: 実ラベルの第 1 段 −0.00073 が第 2 段で −0.00005 に縮小</td><td class="ok">完了</td><td>§33</td></tr>
+<tr><td>tp-38 血統の位置・クロス・類似種牡馬</td><td>個別の群は第 2 段で再現せず不採用。同時追加 ALL_BEST（43 列）は勝率 −0.00031（上限がほぼ 0）、複勝 −0.00209 で<b>境界</b></td><td class="wait">境界（v5 判断時に確認）</td><td>§36</td></tr>
+<tr><td>tp-39 成長曲線</td><td>馬ごとの傾きは再現せず（前半/後半 r≈0）。通過 9 群は全て第 2 段で<b>不採用</b>。ALL_PASSED −0.00028（上限 +0.00005）は境界</td><td class="ok">完了</td><td>§33</td></tr>
+<tr><td>tp-40 調教の調子・成長</td><td><b>CY を暫定採用</b>（第 2 段 −0.00030、上限 −0.00002。初出走 −0.00159、新馬戦 −0.00240）。馬ごとの傾きは再現せず</td><td class="wait">暫定採用（v5 判断時に累積で確認）</td><td>§38</td></tr>
+<tr><td>tp-41 似た馬は着順が近い</td><td>仮説は部分的に成立（適性・馬番・位置取りが近いと一緒に 3 着以内）。特徴量 SIM_* は第 2 段で<b>不採用</b>。組合せ券の確率補正は 3 連複の対数損失 −0.0112 と小さな改善だが、回収率は改善せず本番未投入</td><td class="ok">完了</td><td>§33</td></tr>
+<tr><td>tp-42 めぐ指数のレースレベル特徴</td><td>第 2 段 −0.00026（上限 +0.00006）。tp-39 の列と相関 0.86 で足し算にならない。<b>保留</b>（採用時は RL_C の 11 列）</td><td class="wait">保留</td><td>§37</td></tr>
+<tr><td>馬券 tp-36 100% 超の探索</td><td>区間下限が 100% を超える方策なし。混合の単勝 EV≥1.2 が 159%（reality check p=0.053）だが 2026 年で 47%。強化学習は固定ルールに勝てず</td><td class="ok">完了（見つからず）</td><td>§33</td></tr>
+<tr><td>馬券 tp-43・46 印と買い方</td><td>荒れ度・状況別に印を切り替えても回収率・印の質は改善せず<b>不採用</b>。印の個数を平均 11.7 → 6.5 個に絞った</td><td class="ok">完了</td><td>§33</td></tr>
+<tr><td>馬券 tp-44・45 実績者の手法・予測オッズの乖離</td><td>公開記録で検証できるものなし。プール間の不整合は最良 82.9%。予測オッズとの乖離 g 単独は買いの信号にならない（最良 83.6%）</td><td class="ok">完了（100% 超なし）</td><td>§33</td></tr>
+<tr><td>tp-47・49 期待値の水準と較正</td><td>式は正しいが水準が高く出る 2 か所を修正。表示を実績に較正（馬ごとの EV は収束、推奨ポートフォリオは年で動く）。2026-10-20 に本番反映</td><td class="ok">完了（反映済み）</td><td>§33</td></tr>
+<tr><td>馬券 tp-48 3 連単の実オッズ</td><td>345 方策で区間下限が 100% 超なし（最良の下限 96%）。2026 年の 1 回評価（規則 12 本を事前固定）も複勝 EV≥2.0 で 69%</td><td class="ok">完了（100% 超なし）</td><td>§33</td></tr>
+<tr><td>馬券 tp-50 最適化（強化学習ほか）</td><td>最新モデル＋修正後 EV で、強化学習（バンディット・方策勾配・オフライン RL・リーグ）と非 RL（実現リターン予測・ポートフォリオ最適化・ベイズ最適化）を大規模に評価中</td><td class="wait">実施中（結果は完了後に反映）</td><td>—</td></tr>
+</table>
+
+<h2>3. これからの調査</h2>
+<table>
+<tr><th>項目</th><th>内容</th><th>状態</th><th>節・関連</th></tr>
+<tr><td>v5 の再学習の判断</td><td>候補: CY（tp-40）、ALL_BEST（tp-38）、ALL_PASSED（tp-39）、RL_C（tp-42）。累積（tp-27）とアンサンブル（LOYO）で確認。採用するなら tp-07 の再学習（血統入りの表、先読みの修正、追い切りの再取得版 tl_）と同梱</td><td class="wait">判断待ち</td><td>§36〜§38</td></tr>
+<tr><td>馬券 tp-50 の結果の反映</td><td>強化学習ほかの大規模評価（実施中）。区間下限が 100% 超になるか、「賭けない」に収束する理由の整理</td><td class="wait">実施中</td><td>—</td></tr>
+<tr><td>直前オッズ（T-10 / T-5 / T-2）の蓄積と検証</td><td>10/24 夜〜10/25 の開催日に動作を確認（<code>late_odds_report.py</code>、欠損 5% 未満・取得時刻のずれ 95% 点 +120 秒以内）。約 1 年分たまってから「最後の 5 分のオッズ低下と回収率」を、最終オッズ・予測オッズとの乖離を揃えて検証</td><td class="wait">蓄積開始待ち</td><td><a href="../../operations/raceday_prediction_workflow.html">運用の章</a></td></tr>
+<tr><td>購入時点の実オッズでの馬券の再検証</td><td>T-60 / T-15 / 直前のオッズで、期待値の較正を含めて再評価（現状の検証は確定オッズ）。組合せ券の確率補正（tp-41）の本番投入も、2025 年の独立確認と実オッズの確認の後</td><td class="wait">蓄積待ち</td><td>§33</td></tr>
+<tr><td>v4 の predict への切替</td><td>shadow の予測を実結果で確認してから、画面に出すか判断</td><td class="wait">10/24 の開催週末の後</td><td>§32・§34</td></tr>
+<tr><td>予測成績の再集計</td><td>予測のバックフィル完了後、印・期待値の新しい定義で日次集計を作り直す</td><td class="wait">バックフィル完了待ち</td><td><a href="../../../operations/prediction_results.md">運用メモ</a></td></tr>
+<tr><td>追い切りの記者コメント</td><td>馬別調教ページの最終週に付く（出走馬の約 30%）。V4 の残差と関連（否定的 −20%）が見つかったが、特徴量・傾け直しとも基準未満。取得は前日夕方に可能。使い道を再検討</td><td class="wait">未検討</td><td>§33</td></tr>
+<tr><td>馬具の前向き検証・馬主 ID キー化</td><td>出走前の SmartRC を蓄積して馬具・初経験を再評価。馬主は名前キーなので owner_id を取る（解析は実装済み、実 HTML の確認と約 39,000 頭の再取得が必要）</td><td class="wait">蓄積中・未着手</td><td>§33</td></tr>
+<tr><td>枠バイアスの特徴量化・WIN5 の持ち越し</td><td>期待は大きくない（説明率 約 0.3%）。WIN5 は持ち越し日に期待回収率が 140〜144% になりうるが、全組合せには数千万円が要る</td><td class="wait">未着手</td><td>—</td></tr>
+<tr><td>推論の残る差の解消</td><td>同日結果の反映（<code>sr_var_*</code>）、学習側の先読みの解消</td><td class="wait">v5 と同梱</td><td>§32</td></tr>
+</table>
+
+<h2>4. 本書で食い違いのある箇所（確認済み）</h2>
+<ul>
+  <li><b>要件定義書（<code>docs/html/index.html</code>）</b>は 2026-10-16 時点の記述で、「特徴量ビルダーは MOCK・約 1000 特徴量が TODO」「実データで学習したアンサンブルの経路はまだ成立していない」と書いてある。実際には履歴 127 列を含む学習済みモデルと v3 の推論経路が稼働しているので、現状はこの章と確定事項ログを正とする。要件定義書は <code>/update-requirements</code> で再生成する。</li>
+  <li>設計の章（<a href="feature_strategy_tp03_tp04.html">特徴量戦略書</a>・<a href="modeling_strategy_tp04_tp07.html">モデリング戦略書</a>・<a href="modeling_experiment_report.html">総合実験結果</a>）は v2 までの記述が中心。v3 と tp-21〜24 は確定事項ログ §16・§24・§29〜32 が正。</li>
+</ul>
+
+    </article>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">modeling/chapters/research_overview.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

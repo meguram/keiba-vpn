@@ -1,0 +1,309 @@
+{% extends "base.html" %}
+{% block title %}モデル性能 — 監視ポータル{% endblock %}
+
+{% block head_extra %}
+<style>
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 14px; cursor: pointer; font-size: 12.5px; user-select: none; }
+  .chip.on { border-color: var(--accent); background: rgba(88,166,255,.12); }
+  .chip.off { opacity: .55; }
+  .chip .sw { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .ctl { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 4px; font-size: 12.5px; color: var(--muted); }
+  .note { color: var(--muted); font-size: 12px; line-height: 1.6; margin: 6px 0 0; }
+  .chart-host svg { width: 100%; height: auto; display: block; }
+  .chart-host text { fill: var(--muted); font-size: 11px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; margin: 6px 0 0; }
+  .legend .sw { width: 18px; height: 3px; display: inline-block; vertical-align: middle; margin-right: 5px; border-radius: 2px; }
+  .nodata { color: var(--muted); font-style: italic; padding: 24px 0; text-align: center; }
+  .bar-row { display: grid; grid-template-columns: 230px 1fr 60px; gap: 8px; align-items: center; font-size: 12px; padding: 2px 0; }
+  .bar-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-row .bar { height: 10px; background: var(--border); border-radius: 3px; position: relative; }
+  .bar-row .bar > i { display: block; height: 100%; border-radius: 3px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .best { color: var(--accent2); font-weight: 700; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-title"><span class="icon">🎯</span> モデルの予測性能</div>
+
+<div class="card">
+  <div class="card-title">表示するバージョン（クリックで切り替え・複数選択で重ね描き）</div>
+  <div class="chips" id="chips"><span class="loading">読込中...</span></div>
+  <div class="ctl">
+    <label>指標 <select id="metric"></select></label>
+    <label>確率の種類 <select id="head"><option value="win">勝率（1着）</option><option value="top2">連対率（2着以内）</option><option value="top3">複勝率（3着以内）</option></select></label>
+    <span id="built"></span>
+  </div>
+  <p class="note">
+    <b>テストセット</b>: 2025 年は v1〜v5 の選択に使い終わった評価用データ（テストセット①）。<b>2026 年は学習にも選択にも使っていない独立データ（テストセット②）</b>で、「本番の推移」はこの 2026 年の予測を後から実着順と突き合わせたものです。
+    LogLoss は小さいほど良く、Top1 的中率は大きいほど良い値です。
+  </p>
+</div>
+
+<div class="card">
+  <div class="card-title">一覧（バージョン別）</div>
+  <div id="summary"><span class="loading">読込中...</span></div>
+</div>
+
+<div class="card">
+  <div class="card-title">① 本番での推移（2026 年・週別。テストセット②）</div>
+  <div class="chart-host" id="chart-prod"></div>
+  <div class="legend" id="legend-prod"></div>
+  <p class="note">白抜きの点は 1 週間のレース数が少ない（30 レース未満）週で、誤差が大きく読み取りに向きません。帯は約 95% 区間（LogLoss は ±1.96 標準誤差、Top1 的中率は Wilson 区間）。データの無い版・期間は線を引きません。shadow は日付ごとに設定が変わる影運用の予測です。</p>
+</div>
+
+<div class="card">
+  <div class="card-title">② 学習・評価時点の推移（年別。最後の点が test 2025）</div>
+  <div class="chart-host" id="chart-eval"></div>
+  <div class="legend" id="legend-eval"></div>
+  <p class="note">年別の点は学習時の検証（valid）の値。出力が残っている版だけで、無い版は test 2025 の 1 点だけです。検証の年は学習に使った年の外ですが、モデルの選択に使っているため、test 2025 より楽観的になりえます。</p>
+</div>
+
+<div class="card">
+  <div class="card-title">校正（予測した確率と実際の割合。対角線に近いほど良い。test 2025）</div>
+  <div class="chart-host" id="chart-rel"></div>
+  <div class="legend" id="legend-rel"></div>
+</div>
+
+<div class="card">
+  <div class="card-title">特徴量の寄与率（LightGBM 系メンバーのゲイン重要度）</div>
+  <div id="imp-top"></div>
+  <hr class="divider">
+  <div id="imp-group"></div>
+  <p class="note" id="imp-note"></p>
+</div>
+
+<div class="card">
+  <div class="card-title">MLflow に登録された個別モデル（run の履歴）</div>
+  <div id="mlflow"><span class="loading">読込中...</span></div>
+</div>
+
+<p class="last-updated">キャッシュの作成: <span id="last-ts">—</span>（重い計算は事前に実行。この画面は読むだけ）</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const COLORS = ['#58a6ff', '#3fb950', '#d29922', '#f778ba', '#a371f7', '#79c0ff', '#ff9e64'];
+const fmt = (v, d = 4) => (v === null || v === undefined || Number.isNaN(v)) ? '—' : Number(v).toFixed(d);
+const pct = (v, d = 1) => (v === null || v === undefined) ? '—' : (v * 100).toFixed(d) + '%';
+
+// 指標: id, 表示名, 本番の列, 年別の列, test 2025 の取り方, 小さいほど良いか
+const METRICS = [
+  { id: 'win_logloss',  label: '勝率 LogLoss',   prod: 'win_logloss',  ev: 'win_logloss',  test: m => ((m.test2025 || {}).metrics || {}).win?.logloss,  low: true,  d: 4 },
+  { id: 'top2_logloss', label: '連対率 LogLoss', prod: 'top2_logloss', ev: 'top2_logloss', test: m => ((m.test2025 || {}).metrics || {}).top2?.logloss, low: true,  d: 4 },
+  { id: 'top3_logloss', label: '複勝率 LogLoss', prod: 'top3_logloss', ev: 'top3_logloss', test: m => ((m.test2025 || {}).metrics || {}).top3?.logloss, low: true,  d: 4 },
+  { id: 'top1_hit',     label: 'Top1 的中率（勝率最大の馬が 1 着）', prod: 'top1_hit', ev: 'top1_hit', test: m => ((m.test2025 || {}).top1 || {}).hit, low: false, d: 4, pct: true },
+  { id: 'win_ece',      label: '勝率の校正誤差（ECE）', prod: 'win_ece', ev: 'ece_win', test: m => ((m.test2025 || {}).metrics || {}).win?.ece, low: true, d: 4 },
+];
+let DATA = null;
+const state = { selected: new Set(), metric: 'win_logloss', head: 'win' };
+
+function colorOf(key) { const i = DATA.models.findIndex(m => m.key === key); return COLORS[(i < 0 ? 0 : i) % COLORS.length]; }
+function sel() { return DATA.models.filter(m => state.selected.has(m.key)); }
+function metricDef() { return METRICS.find(x => x.id === state.metric) || METRICS[0]; }
+
+// ── 折れ線（SVG。外部ライブラリなし）──
+function lineChart(hostId, legendId, labels, series, opt) {
+  const host = document.getElementById(hostId), leg = document.getElementById(legendId);
+  const any = series.some(s => s.points.some(p => p && p.y != null));
+  leg.innerHTML = series.map(s => `<span><span class="sw" style="background:${s.color}"></span>${esc(s.name)}${s.points.some(p => p && p.y != null) ? '' : ' <span class="text-muted">（データなし）</span>'}</span>`).join('');
+  if (!any || !labels.length) { host.innerHTML = '<div class="nodata">データなし</div>'; return; }
+  const W = 900, H = 300, L = 62, R = 16, T = 14, B = 46;
+  let ys = [];
+  series.forEach(s => s.points.forEach(p => { if (p && p.y != null) { ys.push(p.y); if (p.lo != null) ys.push(p.lo); if (p.hi != null) ys.push(p.hi); } }));
+  let y0 = Math.min(...ys), y1 = Math.max(...ys);
+  if (y0 === y1) { y0 -= 0.01; y1 += 0.01; }
+  const pad = (y1 - y0) * 0.08; y0 -= pad; y1 += pad;
+  const X = i => L + (labels.length === 1 ? (W - L - R) / 2 : i * (W - L - R) / (labels.length - 1));
+  const Y = v => T + (1 - (v - y0) / (y1 - y0)) * (H - T - B);
+  let g = '';
+  for (let k = 0; k <= 4; k++) {
+    const v = y0 + (y1 - y0) * k / 4, y = Y(v);
+    g += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="#30363d" stroke-width="1"/><text x="${L - 6}" y="${y + 4}" text-anchor="end">${opt.pct ? (v * 100).toFixed(1) + '%' : v.toFixed(opt.d)}</text>`;
+  }
+  const step = Math.max(1, Math.ceil(labels.length / 12));
+  labels.forEach((lb, i) => { if (i % step === 0) g += `<text x="${X(i)}" y="${H - B + 16}" text-anchor="middle">${esc(lb.short || lb)}</text>`; });
+  series.forEach(s => {
+    // 帯
+    const seg = [];
+    let cur = [];
+    s.points.forEach((p, i) => { if (p && p.y != null) cur.push([i, p]); else { if (cur.length) seg.push(cur); cur = []; } });
+    if (cur.length) seg.push(cur);
+    seg.forEach(sg => {
+      const up = sg.filter(([, p]) => p.hi != null && p.lo != null);
+      if (up.length > 1) {
+        const top = up.map(([i, p]) => `${X(i)},${Y(p.hi)}`).join(' L');
+        const bot = up.slice().reverse().map(([i, p]) => `${X(i)},${Y(p.lo)}`).join(' L');
+        g += `<path d="M${top} L${bot} Z" fill="${s.color}" opacity="0.13"/>`;
+      }
+      if (sg.length > 1) g += `<path d="M${sg.map(([i, p]) => `${X(i)},${Y(p.y)}`).join(' L')}" fill="none" stroke="${s.color}" stroke-width="2"/>`;
+      sg.forEach(([i, p]) => {
+        const fill = p.faded ? '#0d1117' : s.color;
+        g += `<circle cx="${X(i)}" cy="${Y(p.y)}" r="3.6" fill="${fill}" stroke="${s.color}" stroke-width="1.6"><title>${esc(s.name)} ${esc(labels[i].full || labels[i])}: ${opt.pct ? pct(p.y, 2) : fmt(p.y, opt.d)}${p.n != null ? '（' + p.n + ' レース）' : ''}${p.faded ? ' ※少数のため参考' : ''}</title></circle>`;
+      });
+    });
+  });
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opt.aria || '推移')}">${g}</svg>`;
+}
+
+function prodChart() {
+  const md = metricDef(), ms = sel();
+  const weeks = [...new Set(ms.flatMap(m => (m.prod_series || []).map(r => r.week)))].sort();
+  const start = {}; ms.forEach(m => (m.prod_series || []).forEach(r => start[r.week] = r.start));
+  const labels = weeks.map(w => ({ short: (start[w] || w).slice(5), full: `${w}（${start[w] || ''} 〜）` }));
+  const series = ms.map(m => {
+    const by = Object.fromEntries((m.prod_series || []).map(r => [r.week, r]));
+    return { name: m.label, color: colorOf(m.key), points: weeks.map(w => {
+      const r = by[w]; if (!r || r[md.prod] == null) return null;
+      let lo = null, hi = null;
+      if (md.id === 'win_logloss' && r.win_logloss_se != null) { lo = r.win_logloss - 1.96 * r.win_logloss_se; hi = r.win_logloss + 1.96 * r.win_logloss_se; }
+      if (md.id === 'top1_hit' && r.top1_ci) { lo = r.top1_ci[0]; hi = r.top1_ci[1]; }
+      return { y: r[md.prod], lo, hi, n: r.n_races, faded: r.low_sample };
+    }) };
+  });
+  lineChart('chart-prod', 'legend-prod', labels, series, { d: md.d, pct: md.pct, aria: '本番での週別の推移' });
+}
+
+function evalChart() {
+  const md = metricDef(), ms = sel();
+  const years = [...new Set(ms.flatMap(m => (m.eval_series || []).map(r => r.year).filter(y => y != null)).concat(ms.filter(m => m.test2025).map(() => 2025)))].sort();
+  const labels = years.map(y => ({ short: String(y), full: `${y}年` }));
+  const series = ms.map(m => {
+    const by = {}; (m.eval_series || []).forEach(r => { if (r.year != null) by[r.year] = r[md.ev]; });
+    const t = md.test(m); if (t != null) by[2025] = t;       // 2025 は test の値
+    return { name: m.label, color: colorOf(m.key), points: years.map(y => by[y] == null ? null : { y: by[y], faded: false }) };
+  });
+  lineChart('chart-eval', 'legend-eval', labels, series, { d: md.d, pct: md.pct, aria: '年別の推移' });
+}
+
+function relChart() {
+  const ms = sel(), host = document.getElementById('chart-rel'), leg = document.getElementById('legend-rel');
+  const head = state.head;
+  const data = ms.map(m => ({ m, bins: (((m.test2025 || {}).metrics || {})[head] || {}).reliability || [] })).filter(d => d.bins.length);
+  leg.innerHTML = ms.map(m => `<span><span class="sw" style="background:${colorOf(m.key)}"></span>${esc(m.label)}${data.find(d => d.m.key === m.key) ? '' : ' <span class="text-muted">（データなし）</span>'}</span>`).join('');
+  if (!data.length) { host.innerHTML = '<div class="nodata">データなし</div>'; return; }
+  const W = 900, H = 340, L = 62, R = 16, T = 14, B = 44;
+  const mx = Math.max(...data.flatMap(d => d.bins.flatMap(b => [b.pred, b.obs]))) * 1.08;
+  const X = v => L + v / mx * (W - L - R), Y = v => T + (1 - v / mx) * (H - T - B);
+  let g = '';
+  for (let k = 0; k <= 4; k++) { const v = mx * k / 4; g += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="#30363d"/><text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">${(v * 100).toFixed(0)}%</text><text x="${X(v)}" y="${H - B + 16}" text-anchor="middle">${(v * 100).toFixed(0)}%</text>`; }
+  g += `<line x1="${X(0)}" y1="${Y(0)}" x2="${X(mx)}" y2="${Y(mx)}" stroke="#8b949e" stroke-dasharray="5 4"/><text x="${W / 2}" y="${H - 6}" text-anchor="middle">予測した確率（等頻度の 10 区間の平均）</text><text transform="translate(14 ${H / 2}) rotate(-90)" text-anchor="middle">実際の割合</text>`;
+  data.forEach(d => {
+    const c = colorOf(d.m.key);
+    g += `<path d="M${d.bins.map(b => `${X(b.pred)},${Y(b.obs)}`).join(' L')}" fill="none" stroke="${c}" stroke-width="2"/>`;
+    d.bins.forEach(b => { g += `<circle cx="${X(b.pred)}" cy="${Y(b.obs)}" r="3.4" fill="${c}"><title>${esc(d.m.label)} 予測 ${pct(b.pred, 2)} → 実際 ${pct(b.obs, 2)}（${b.n} 件）</title></circle>`; });
+  });
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="校正曲線">${g}</svg>`;
+}
+
+// ── 一覧 ──
+function summaryTable() {
+  const ms = DATA.models;
+  const best = (vals, low) => { const v = vals.filter(x => x != null); if (v.length < 2) return null; return low ? Math.min(...v) : Math.max(...v); };
+  const T = m => (m.test2025 || {}), M = (m, h) => ((T(m).metrics || {})[h] || {});
+  const cols = [
+    ['test 2025 勝率 LogLoss', m => M(m, 'win').logloss, true, 4], ['連対 LogLoss', m => M(m, 'top2').logloss, true, 4], ['複勝 LogLoss', m => M(m, 'top3').logloss, true, 4],
+    ['勝率 AUC', m => M(m, 'win').auc, false, 4], ['勝率 Brier', m => M(m, 'win').brier, true, 5], ['勝率 ECE', m => M(m, 'win').ece, true, 4],
+    ['Top1 的中率', m => (T(m).top1 || {}).hit, false, 4, true], ['3 着内率(Top1)', m => (T(m).top1 || {}).in_top3, false, 4, true],
+  ];
+  const bests = cols.map(c => best(ms.map(m => c[1](m)), c[2]));
+  let h = '<div style="overflow-x:auto"><table><tr><th>バージョン</th>' + cols.map(c => `<th class="num">${esc(c[0])}</th>`).join('') + '<th class="num">test レース数</th><th class="num">2026 本番 勝率LL</th><th class="num">2026 レース数</th></tr>';
+  ms.forEach(m => {
+    if (m.status === 'not_computed') { h += `<tr><td>${esc(m.label)}</td><td colspan="${cols.length + 3}" class="text-muted">未計算</td></tr>`; return; }
+    h += `<tr><td><span class="dot" style="background:${colorOf(m.key)}"></span>${esc(m.label)}</td>`;
+    if (!m.test2025) {
+      const pt0 = m.prod_total || {};
+      h += `<td colspan="${cols.length + 1}" class="text-muted">test 2025 の評価出力なし（データなし）</td><td class="num">${fmt(pt0.win_logloss, 4)}</td><td class="num">${pt0.n_races ?? '—'}</td></tr>`;
+      return;
+    }
+    cols.forEach((c, i) => { const v = c[1](m); h += `<td class="num ${v != null && bests[i] === v ? 'best' : ''}">${c[4] ? pct(v, 2) : fmt(v, c[3])}</td>`; });
+    const pt = m.prod_total || {};
+    h += `<td class="num">${T(m).n_races ?? '—'}</td><td class="num">${fmt(pt.win_logloss, 4)}</td><td class="num">${pt.n_races ?? '—'}</td></tr>`;
+  });
+  h += '</table></div>';
+  // 学習・構成
+  h += '<div style="overflow-x:auto;margin-top:12px"><table><tr><th>バージョン</th><th>学習の終わり</th><th class="num">学習行数</th><th class="num">特徴量数</th><th>メンバー</th><th>追加群</th><th>MLflow</th><th>作成</th></tr>';
+  ms.forEach(m => {
+    const x = m.meta || {};
+    h += `<tr><td>${esc(m.label)}</td><td>${esc(x.fit_end ?? '—')}</td><td class="num">${x.train_rows ? Number(x.train_rows).toLocaleString() : '—'}</td><td class="num">${x.n_features ?? '—'}</td>` +
+      `<td style="font-size:12px">${(x.members || []).map(esc).join('・') || '—'}${x.seeds ? `（各 ${x.seeds} シード）` : ''}</td><td>${(x.groups || []).map(esc).join('・') || '—'}</td>` +
+      `<td>${x.mlflow_name ? esc(x.mlflow_name) : '—'}</td><td style="font-size:12px;color:var(--muted)">${esc(x.fit_info_mtime || '—')}</td></tr>`;
+  });
+  h += '</table></div>';
+  document.getElementById('summary').innerHTML = h;
+}
+
+// ── 寄与率 ──
+function importance() {
+  const ms = sel(), head = state.head === 'top2' ? 'top3' : state.head;     // 重要度は勝率と複勝率の 2 種類
+  const withImp = ms.filter(m => m.importance && m.importance.heads && m.importance.heads[head]);
+  const top = document.getElementById('imp-top'), grp = document.getElementById('imp-group');
+  const headName = head === 'win' ? '勝率' : '複勝率';
+  if (!withImp.length) { top.innerHTML = '<div class="nodata">選択中のバージョンに特徴量の寄与率は未計算です</div>'; grp.innerHTML = ''; return; }
+  const p = withImp[0], hd = p.importance.heads[head];
+  const mx = Math.max(...hd.top_features.map(f => f.share));
+  top.innerHTML = `<div style="font-weight:600;margin-bottom:6px">${esc(p.label)}：${headName}ヘッドの上位 ${Math.min(20, hd.top_features.length)} 特徴量（寄与率 %）</div>` +
+    hd.top_features.slice(0, 20).map(f => `<div class="bar-row"><div class="name" title="${esc(f.name)}（${esc(f.group)}）">${esc(f.name)} <span class="text-muted">${esc(f.group)}</span></div><div class="bar"><i style="width:${f.share / mx * 100}%;background:${colorOf(p.key)}"></i></div><div class="num" style="text-align:right">${(f.share * 100).toFixed(2)}</div></div>`).join('');
+  const groups = [...new Set(withImp.flatMap(m => m.importance.heads[head].by_group.map(g => g.group)))];
+  const order = groups.sort((a, b) => (withImp[0].importance.heads[head].by_group.find(g => g.group === b)?.share || 0) - (withImp[0].importance.heads[head].by_group.find(g => g.group === a)?.share || 0));
+  let h = `<div style="font-weight:600;margin-bottom:6px">群別の寄与率（${headName}ヘッド・合計 100%）</div><div style="overflow-x:auto"><table><tr><th>群</th>` + withImp.map(m => `<th>${esc(m.label)}</th>`).join('') + '</tr>';
+  order.forEach(gname => {
+    h += `<tr><td style="white-space:nowrap">${esc(gname)}</td>` + withImp.map(m => {
+      const s = m.importance.heads[head].by_group.find(g => g.group === gname)?.share;
+      return `<td style="min-width:150px"><div style="display:flex;align-items:center;gap:6px"><div class="bar" style="height:8px;width:90px;background:var(--border);border-radius:3px"><i style="display:block;height:100%;width:${(s || 0) * 100 / Math.max(0.01, 0.5) }%;max-width:100%;background:${colorOf(m.key)};border-radius:3px"></i></div><span style="font-size:12px">${s == null ? '—' : (s * 100).toFixed(1) + '%'}</span></div></td>`;
+    }).join('') + '</tr>';
+  });
+  grp.innerHTML = h + '</table></div>';
+  const un = withImp.map(m => `${m.label}: ${(m.importance.heads[head].unclassified_share * 100).toFixed(1)}%`).join('、');
+  document.getElementById('imp-note').textContent = `${p.importance.note} 未分類の割合 — ${un}。使った LightGBM メンバー: ${(p.importance.members || []).map(x => x.name).join('・')}。`;
+}
+
+// ── MLflow ──
+function mlflowSection() {
+  const ml = DATA.mlflow || {}, keys = Object.keys(ml);
+  const el = document.getElementById('mlflow');
+  if (!keys.length) { el.innerHTML = '<div class="nodata">MLflow の run 履歴は未計算（または MLflow に接続できませんでした）</div>'; return; }
+  el.innerHTML = '<div style="overflow-x:auto"><table><tr><th>モデル</th><th>状態</th><th>登録名</th><th class="num">run 数</th><th>直近の run</th><th>直近の指標</th></tr>' + keys.map(k => {
+    const x = ml[k], runs = x.runs || [], last = runs[runs.length - 1];
+    const mets = last ? Object.entries(last.metrics || {}).slice(0, 5).map(([a, b]) => `${esc(a)}=${fmt(b, 4)}`).join('　') : '—';
+    return `<tr><td>${esc(x.title)}</td><td>${x.lifecycle === 'active' ? '<span class="badge badge-ok">運用</span>' : '<span class="badge badge-muted">計画</span>'}</td><td style="font-size:12px">${esc(x.registered_name)}</td><td class="num">${runs.length}</td><td style="font-size:12px;color:var(--muted)">${last ? esc(last.start) : '履歴なし'}</td><td style="font-size:12px">${mets}</td></tr>`;
+  }).join('') + '</table></div><p class="note">run ごとの指標の推移は MLflow の画面で確認できます。ここには直近の値だけを出します。</p>';
+}
+
+function renderAll() {
+  summaryTable(); prodChart(); evalChart(); relChart(); importance(); mlflowSection();
+}
+
+function renderChips() {
+  document.getElementById('chips').innerHTML = DATA.models.map(m =>
+    `<span class="chip ${state.selected.has(m.key) ? 'on' : 'off'}" data-k="${esc(m.key)}"><span class="sw" style="background:${colorOf(m.key)}"></span>${esc(m.label)}${m.status === 'not_computed' ? ' <span class="text-muted">未計算</span>' : ''}</span>`).join('');
+  document.querySelectorAll('.chip').forEach(c => c.onclick = () => {
+    const k = c.dataset.k; if (state.selected.has(k)) { if (state.selected.size > 1) state.selected.delete(k); } else state.selected.add(k);
+    renderChips(); renderAll();
+  });
+}
+
+async function load() {
+  try {
+    DATA = await fetch('/api/internal/model-perf').then(r => r.json());
+  } catch (e) { document.getElementById('chips').innerHTML = '<span class="text-error">取得失敗</span>'; return; }
+  if (DATA.status !== 'ok') {
+    document.getElementById('chips').innerHTML = '<span class="text-muted">未計算です。ホストで次を実行してください（重い処理は heavy_run.sh 経由）:</span>';
+    document.getElementById('summary').innerHTML = `<pre>/tmp/heavy_run.sh model-perf python -m src.scripts.data.model_perf_cache build</pre>`;
+    return;
+  }
+  // 既定の選択: 新しい版（v4・v5）と shadow。無ければ最初の 1 つ
+  const pref = DATA.models.filter(m => m.status !== 'not_computed' && ['ens_v4', 'ens_v5', 'shadow'].includes(m.key));
+  (pref.length ? pref : DATA.models.slice(0, 1)).forEach(m => state.selected.add(m.key));
+  document.getElementById('metric').innerHTML = METRICS.map(m => `<option value="${m.id}">${esc(m.label)}</option>`).join('');
+  document.getElementById('metric').onchange = e => { state.metric = e.target.value; prodChart(); evalChart(); };
+  document.getElementById('head').onchange = e => { state.head = e.target.value; relChart(); importance(); };
+  document.getElementById('built').textContent = `キャッシュ作成: ${DATA.built_at || '—'}（${DATA.age_hours ?? '—'} 時間前）`;
+  document.getElementById('last-ts').textContent = DATA.built_at || '—';
+  renderChips(); renderAll();
+}
+load();
+</script>
+{% endblock %}

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}サービス詳細 — 監視ポータル{% endblock %}
+
+{% block content %}
+<div class="page-title"><span class="icon">🔌</span> サービス詳細</div>
+
+<div class="card" id="prod-card">
+  <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+    <span>🟠 prod（ConoHa VPS）の状況</span><a href="/prod" style="color:var(--accent);text-decoration:none;text-transform:none">詳しく見る（資源・ユニット・GCP・移行の判定）→</a>
+  </div>
+  <div id="prod-summary"><span class="loading">読込中...</span></div>
+</div>
+
+<div class="card" id="model-card">
+  <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+    <span>🎯 モデルの予測性能（概要）</span><a href="/models" style="color:var(--accent);text-decoration:none;text-transform:none">詳しく見る（精度の推移・寄与率）→</a>
+  </div>
+  <div id="model-perf"><span class="loading">読込中...</span></div>
+</div>
+
+<div id="svc-detail"><span class="loading">読込中...</span></div>
+
+<p class="last-updated">最終更新: <span id="last-ts">—</span>（30秒ごと自動更新）</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const SVCS = [['next', 'Next.js（画面）'], ['flask', 'Flask（API）'], ['fastapi', 'FastAPI'], ['mlflow', 'MLflow']];
+const portOf = url => (String(url || '').match(/:(\d+)/) || [])[1] || '—';
+
+function svcRow(env, key, label) {
+  const s = env[key];
+  if (!s) return '';
+  let badge;
+  if (s.ok) badge = '<span class="badge badge-ok">✅ 稼働中</span>';
+  else if (env.is_local) badge = '<span class="badge badge-error">❌ 停止</span>';
+  else badge = '<span class="badge badge-muted">— 未起動（この環境は別のマシンで動かす）</span>';
+  const ms = s.elapsed_ms >= 0 ? `${s.elapsed_ms} ms` : '—';
+  const b = s.body || {};
+  let detail = '';
+  if (key === 'fastapi' && b.uptime_seconds != null) {
+    const up = Math.floor(b.uptime_seconds), h = Math.floor(up / 3600), m = Math.floor((up % 3600) / 60);
+    detail = `環境 ${esc(b.keiba_env || '—')}・起動 ${h}h ${m}m・GCS ${esc(b.gcs_bucket || '—')}`;
+  } else if (key === 'flask' && b.version != null) {
+    detail = `バージョン ${esc(b.version)}・環境 ${esc(b.environment || '—')}`;
+  }
+  return `<tr><td style="white-space:nowrap">${esc(label)}</td><td style="color:var(--muted)">:${portOf(s.url)}</td><td>${badge}</td>` +
+    `<td style="color:var(--muted);font-size:12px;white-space:nowrap">HTTP ${s.status || '—'}・${ms}</td><td style="color:var(--muted);font-size:12px">${detail}</td></tr>`;
+}
+
+function envCard(env) {
+  if (!env) return '';
+  const rows = SVCS.map(([k, l]) => svcRow(env, k, l)).join('');
+  const where = env.is_local
+    ? '<span class="badge badge-info">このマシンの環境（ここで動かす）</span>'
+    : '<span class="badge badge-muted">別のマシンの環境（ここでは動かさない）</span>';
+  const db = env.db && env.db.ok === true ? '<span class="badge badge-ok">PostgreSQL 接続OK</span>'
+    : env.db && env.db.ok === false ? `<span class="badge ${env.is_local ? 'badge-error' : 'badge-muted'}">PostgreSQL 接続不可</span>`
+    : '<span class="badge badge-muted">DB チェック対象外（モック）</span>';
+  const pchip = env.public ? (env.public.ok ? '<span class="badge badge-ok">開ける</span>' : `<span class="badge ${env.is_local ? 'badge-error' : 'badge-muted'}">開けない（HTTP ${env.public.status || '—'}）</span>`) : '';
+  const pub = env.public_url ? `<a href="${esc(env.public_url)}" target="_blank" rel="noopener" style="color:var(--accent);font-size:12px">${esc(env.public_url)}</a> ${pchip}` : '';
+  const mdm = env.model_data_mode && env.model_data_mode.predictions ? `予測データ: ${esc(env.model_data_mode.predictions.mode)}` : '';
+  return `<div class="card" style="border-left:4px solid ${esc(env.color)}">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+      <span style="font-size:17px;font-weight:700;color:${esc(env.color)}">${esc(env.label)}</span>${where}${db}
+      <span style="margin-left:auto">${pub}</span></div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">${rows}</table>
+    ${mdm ? `<div style="margin-top:8px;font-size:12px;color:var(--muted)">${mdm}</div>` : ''}
+  </div>`;
+}
+
+function renderSvc(d) {
+  const order = ['dev', 'stg', 'prod'];
+  const envs = d.envs || {};
+  const local = d.local_env;
+  const sorted = [local, ...order.filter(k => k !== local)].filter(k => envs[k]);       // このマシンの環境を先頭に
+  document.getElementById('svc-detail').innerHTML =
+    `<p style="margin:0 0 12px;color:var(--muted);font-size:12.5px">環境（dev / stg / prod）ごとに表示。<b>このマシンの環境</b>のサーバが止まっていれば異常（赤）。ほかの環境のサーバは別のマシンで動くので、ここで止まっていても異常ではありません（グレー）。</p>` +
+    sorted.map(k => envCard(envs[k])).join('');
+  document.getElementById('last-ts').textContent = new Date().toLocaleTimeString('ja-JP');
+}
+
+async function refresh() {
+  try {
+    const d = await fetch('/api/internal/status').then(r => r.json());
+    renderSvc(d);
+  } catch (e) {
+    document.getElementById('svc-detail').innerHTML = '<span class="text-error">取得失敗</span>';
+  }
+}
+async function loadModelPerf() {
+  const el = document.getElementById('model-perf');
+  try {
+    const d = await fetch('/api/internal/model-perf?summary=1').then(r => r.json());
+    if (d.status !== 'ok' || !(d.rows || []).length) { el.innerHTML = '<span class="text-muted">未計算です（ホストで model_perf_cache build を実行すると表示されます）</span>'; return; }
+    const f = (v, n = 4) => (v == null ? '—' : Number(v).toFixed(n));
+    el.innerHTML = '<table><tr><th>バージョン</th><th style="text-align:right">test 2025 勝率LogLoss</th><th style="text-align:right">Top1 的中率</th><th style="text-align:right">2026 本番 勝率LogLoss</th><th style="text-align:right">2026 レース数</th></tr>' +
+      d.rows.map(r => r.status === 'not_computed' ? `<tr><td>${esc(r.label)}</td><td colspan="4" class="text-muted">未計算</td></tr>`
+        : `<tr><td>${esc(r.label)}</td><td style="text-align:right">${f(r.test_win_logloss)}</td><td style="text-align:right">${r.test_top1_hit == null ? '—' : (r.test_top1_hit * 100).toFixed(1) + '%'}</td><td style="text-align:right">${f(r.prod_win_logloss)}</td><td style="text-align:right">${r.prod_races ?? '—'}</td></tr>`).join('') +
+      `</table><p class="last-updated" style="text-align:left">キャッシュ作成: ${esc(d.built_at || '—')}（${d.age_hours ?? '—'} 時間前）。2026 年はテストセット②（学習・選択に未使用）。</p>`;
+  } catch (e) { el.innerHTML = '<span class="text-error">取得失敗</span>'; }
+}
+async function loadProdSummary() {
+  const el = document.getElementById('prod-summary');
+  const col = {green: '#3fb950', yellow: '#d29922', red: '#f85149', unknown: '#8b949e'};
+  const lab = {green: '正常', yellow: '注意', red: '要対応', unknown: '未確認'};
+  try {
+    const d = await fetch('/api/internal/prod-status?summary=1').then(r => r.json());
+    const lv = d.level || 'unknown';
+    const f = (v, n = 0) => (v == null ? '—' : Number(v).toFixed(n));
+    const reasons = (d.reasons || []).map(r => `<li>${esc(r.message)}</li>`).join('');
+    el.innerHTML = `<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:20px;font-weight:700;color:${col[lv]}">● ${lab[lv] || lv}</span>
+      <span class="text-muted">版: ${esc(d.release || '—')} / 空きメモリ ${f(d.mem_available_mb)}MB・使用 ${f(d.mem_used_mb)}MB</span>
+      <span class="text-muted">取得: ${esc(d.collected_at || '未収集')}${d.age_s != null ? '（' + Math.round(d.age_s / 60) + ' 分前）' : ''}</span></div>
+      <ul style="margin:8px 0 0 18px;padding:0;font-size:12.5px">${reasons}</ul>`;
+  } catch (e) { el.innerHTML = '<span class="text-error">取得失敗</span>'; }
+}
+refresh();
+loadProdSummary();
+loadModelPerf();
+setInterval(refresh, 30000);
+</script>
+{% endblock %}

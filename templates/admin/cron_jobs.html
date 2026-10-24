@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>定期実行ジョブ | Keiba</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface2: #1c2128;
+    --border: #21262d; --text: #c9d1d9; --text-dim: #8b949e;
+    --accent: #58a6ff; --green: #3fb950; --yellow: #d29922;
+    --red: #f85149; --purple: #a371f7; --orange: #fb923c;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  .main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
+  h1 { font-size: 20px; font-weight: 700; color: #f0f6fc; margin-bottom: 4px; }
+  .subtitle { font-size: 12px; color: var(--text-dim); margin-bottom: 24px; }
+
+  .job-grid { display: grid; gap: 16px; }
+
+  .job-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px 24px; display: grid;
+    grid-template-columns: 1fr auto; gap: 0 20px; align-items: start;
+  }
+  .job-card.running { border-color: rgba(88,166,255,0.35); box-shadow: 0 0 0 1px rgba(88,166,255,0.12); }
+
+  .job-left { min-width: 0; }
+  .job-right { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; padding-top: 2px; }
+
+  .job-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .job-name { font-size: 15px; font-weight: 700; color: #f0f6fc; }
+  .job-desc { font-size: 12px; color: var(--text-dim); margin-bottom: 14px; line-height: 1.5; }
+
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
+  }
+  .status-badge.running { background: rgba(88,166,255,0.15); color: var(--accent); border: 1px solid rgba(88,166,255,0.3); }
+  .status-badge.idle    { background: rgba(63,185,80,0.12); color: var(--green); border: 1px solid rgba(63,185,80,0.25); }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .status-dot.pulse { animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  .meta-row { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: var(--text-dim); }
+  .meta-item { display: flex; flex-direction: column; gap: 2px; }
+  .meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: #6e7681; }
+  .meta-value { color: var(--text); font-weight: 500; }
+  .meta-value.ok   { color: var(--green); }
+  .meta-value.warn { color: var(--yellow); }
+  .meta-value.err  { color: var(--red); }
+  .meta-value.none { color: #6e7681; font-style: italic; }
+
+  .schedule-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(163,113,247,0.1); border: 1px solid rgba(163,113,247,0.25);
+    color: var(--purple); padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+  }
+  .schedule-chip svg { width: 12px; height: 12px; opacity: 0.8; }
+
+  .data-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .data-tag {
+    display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;
+    background: rgba(56,189,248,0.07); border: 1px solid rgba(56,189,248,0.2); color: #7dd3fc;
+  }
+  .data-tag.key {
+    font-family: 'SFMono-Regular', Consolas, monospace; font-size: 10px;
+    background: rgba(56,189,248,0.13); border-color: rgba(56,189,248,0.35); color: #38bdf8;
+  }
+
+  .result-box {
+    margin-top: 12px; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px 14px; font-size: 11.5px; color: var(--text-dim);
+    font-family: 'SFMono-Regular', Consolas, monospace; line-height: 1.6;
+    max-height: 100px; overflow-y: auto; word-break: break-all;
+  }
+  .result-box.err { border-color: rgba(248,81,73,0.3); color: var(--red); }
+
+  .trigger-btn {
+    background: #238636; color: #fff; border: none; border-radius: 6px;
+    padding: 8px 18px; font-size: 12px; font-weight: 700; cursor: pointer;
+    transition: background .15s; white-space: nowrap;
+  }
+  .trigger-btn:hover:not(:disabled) { background: #2ea043; }
+  .trigger-btn:disabled { background: #30363d; color: #6e7681; cursor: not-allowed; }
+  .trigger-btn.running-btn { background: #1f4a8a; color: var(--accent); }
+
+  .run-count { font-size: 11px; color: #6e7681; white-space: nowrap; }
+
+  .refresh-bar { display: flex; justify-content: flex-end; margin-bottom: 16px; gap: 8px; align-items: center; }
+  .refresh-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim); border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; }
+  .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .auto-label { font-size: 11px; color: #6e7681; }
+
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 10px 16px; font-size: 12px; color: #c9d1d9; z-index: 9999;
+    box-shadow: 0 4px 12px rgba(0,0,0,.4); display: none;
+    animation: fadeIn .2s;
+  }
+  .toast.show { display: block; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+
+  @media(max-width:600px) {
+    .job-card { grid-template-columns: 1fr; }
+    .job-right { align-items: flex-start; }
+  }
+
+  /* ── AI モデリング SLA ── */
+  .ai-section { margin-top: 32px; }
+  .ai-section-title { font-size: 15px; font-weight: 700; color: #f0f6fc; margin-bottom: 4px; }
+  .ai-section-sub   { font-size: 12px; color: var(--text-dim); margin-bottom: 20px; }
+
+  .trigger-block { margin-bottom: 24px; }
+
+  .trigger-hdr {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px; border-radius: 8px; margin-bottom: 12px;
+    border-left: 3px solid transparent;
+  }
+  .trigger-hdr.ta { background: rgba(251,146,60,0.07); border-left-color: #fb923c; }
+  .trigger-hdr.tb { background: rgba(88,166,255,0.07); border-left-color: var(--accent); }
+
+  .t-badge {
+    font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 20px;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .ta .t-badge { background: rgba(251,146,60,0.15); color: #fb923c; border: 1px solid rgba(251,146,60,0.3); }
+  .tb .t-badge { background: rgba(88,166,255,0.15); color: var(--accent); border: 1px solid rgba(88,166,255,0.3); }
+
+  .t-info .t-main { font-size: 13px; font-weight: 600; color: #f0f6fc; }
+  .t-info .t-sub  { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  /* パイプラインフロー */
+  .pipe-flow {
+    display: flex; align-items: center; flex-wrap: wrap;
+    gap: 0; row-gap: 6px; margin-bottom: 12px; padding: 0 4px;
+  }
+  .pipe-chip {
+    font-size: 11px; font-weight: 600; padding: 4px 10px;
+    border-radius: 5px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text);
+    white-space: nowrap;
+  }
+  .pipe-chip.c-data-a { background: rgba(251,146,60,0.12); border-color: rgba(251,146,60,.3); color: #fb923c; }
+  .pipe-chip.c-data-b { background: rgba(88,166,255,0.12); border-color: rgba(88,166,255,.3); color: var(--accent); }
+  .pipe-chip.c-model  { background: rgba(163,113,247,0.12); border-color: rgba(163,113,247,.3); color: var(--purple); }
+  .pipe-chip.c-out    { background: rgba(63,185,80,0.10);   border-color: rgba(63,185,80,.3);   color: var(--green); }
+  .pipe-arrow { color: var(--text-dim); font-size: 13px; padding: 0 5px; }
+  .pipe-plus  { color: var(--text-dim); font-size: 11px; padding: 0 4px; font-weight: 600; }
+
+  /* モデルカードグリッド */
+  .ai-model-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+  }
+
+  .ai-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 8px;
+    transition: border-color .15s;
+  }
+  .ai-card:hover { border-color: rgba(88,166,255,0.4); }
+
+  .ai-card-top { display: flex; align-items: flex-start; gap: 9px; }
+  .ai-card-icon {
+    width: 30px; height: 30px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0;
+  }
+  .ic-purple { background: rgba(163,113,247,0.12); }
+  .ic-cyan   { background: rgba(56,189,248,0.10); }
+  .ic-green  { background: rgba(63,185,80,0.10); }
+  .ic-orange { background: rgba(251,146,60,0.12); }
+  .ic-blue   { background: rgba(88,166,255,0.12); }
+
+  .ai-card-name { font-size: 12px; font-weight: 700; color: #f0f6fc; line-height: 1.35; }
+  .ai-card-badge {
+    display: inline-block; font-size: 9px; font-weight: 700;
+    padding: 1px 6px; border-radius: 8px; margin-top: 3px;
+  }
+  .badge-a       { background: rgba(251,146,60,0.15);   color: #fb923c; }
+  .badge-b       { background: rgba(88,166,255,0.15);   color: var(--accent); }
+  .badge-derived { background: rgba(163,113,247,0.15);  color: var(--purple); }
+
+  .ai-card-desc { font-size: 11px; color: var(--text-dim); line-height: 1.55; flex: 1; }
+
+  .ai-card-meta { border-top: 1px solid var(--border); padding-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+  .ai-meta-row  { display: flex; gap: 6px; font-size: 10.5px; align-items: flex-start; }
+  .ai-meta-lbl  { color: #6e7681; flex-shrink: 0; width: 40px; }
+  .ai-meta-val  { color: var(--text-dim); line-height: 1.4; }
+  .ai-meta-val a { color: var(--accent); text-decoration: none; }
+  .ai-meta-val a:hover { text-decoration: underline; }
+  .ai-meta-val code {
+    background: var(--surface2); padding: 1px 5px; border-radius: 3px;
+    font-size: 9.5px; color: #7dd3fc;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+  }
+
+  /* 推論可否ステータスバッジ */
+  .ready-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 700; padding: 2px 8px;
+    border-radius: 20px; white-space: nowrap;
+  }
+  .ready-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+  .ready-ml      { background: rgba(63,185,80,0.14);   color: var(--green);  border: 1px solid rgba(63,185,80,.35); }
+  .ready-heur    { background: rgba(210,153,34,0.14);  color: var(--yellow); border: 1px solid rgba(210,153,34,.3); }
+  .ready-none    { background: rgba(248,81,73,0.12);   color: var(--red);    border: 1px solid rgba(248,81,73,.3); }
+
+  .ai-card-status { display: flex; justify-content: flex-end; margin-top: 2px; }
+</style>
+</head>
+<body>
+{% include 'partials/_nav.html' %}
+<div class="main">
+  <h1>定期実行ジョブ</h1>
+  <p class="subtitle">サーバーが自動実行するバックグラウンドジョブの一覧と状態</p>
+
+  <div class="refresh-bar">
+    <span class="auto-label" id="autoLabel">30秒ごとに自動更新</span>
+    <button class="refresh-btn" onclick="loadJobs(); loadAutoScrapeJobs()">今すぐ更新</button>
+  </div>
+
+  <div class="job-grid" id="jobGrid">
+    <div style="color:#8b949e;padding:40px;text-align:center">読み込み中...</div>
+  </div>
+
+  <h2 style="font-size:15px;font-weight:700;color:#f0f6fc;margin-top:32px;margin-bottom:4px">スクレイピング自動実行 (外部 cron)</h2>
+  <p class="subtitle">crontab で定期実行されるスクレイピングジョブ。最終実行日時は <code style="font-size:10px;color:#7dd3fc">data/local/meta/auto_scrape_status.json</code> と同期します。</p>
+  <p class="subtitle" id="autoScrapeQueueNote" style="max-width:920px;margin-bottom:12px;line-height:1.55;border-left:3px solid #238636;padding-left:12px;color:#8b949e">
+    <strong style="color:#c9d1d9">キューについて:</strong>
+    ここから起動する <code style="font-size:11px;color:#7dd3fc">auto_scrape</code> の <strong>netkeiba 取得は既定でスクレイピングキュー（<code style="font-size:11px">data/queue/scrape_queue.json</code>）経由</strong>です（<code style="font-size:10px">KEIBA_AUTO_SCRAPE_USE_QUEUE=0</code> で直取得に切り替え）。JRA 馬場ライブ・馬名インデックス等は別系統です。期間一括は <code style="font-size:10px;color:#7dd3fc">run_external_cron_month_coverage.py</code> が窓内の全開催日に対し金曜 <code style="font-size:10px">weekly-update</code> 相当（レース結果・指数は上書き、馬プロフィールは成績上書き＋血統は別キューで未保持のみ）をキュー投入したうえで、出馬表・指数（<code style="font-size:10px">race_shutuba</code> / <code style="font-size:10px">smartrc</code>）を載せます。例:
+    <code style="font-size:10px;color:#7dd3fc">python3 scripts/run_external_cron_month_coverage.py</code>
+  </p>
+  <div class="job-grid" id="autoScrapeGrid">
+    <div style="color:#8b949e;padding:40px;text-align:center">読み込み中...</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       AI モデリング SLA
+       ═══════════════════════════════════════════ -->
+  <div class="ai-section">
+    <h2 class="ai-section-title">🤖 AI モデリング推論 (cron トリガー連動)</h2>
+    <p class="ai-section-sub">スクレイパー cron 完了を受けて連鎖実行されるモデル推論パイプライン</p>
+
+    <!-- ── Trigger A ── -->
+    <div class="trigger-block">
+      <div class="trigger-hdr ta">
+        <span class="t-badge">Trigger A</span>
+        <div class="t-info">
+          <div class="t-main">前日 18:00 — 出馬表・調教データ取得完了後</div>
+          <div class="t-sub">raceday-eve cron：race_shutuba / race_shutuba_past / race_oikiri が揃った時点でトリガー</div>
+        </div>
+      </div>
+
+      <div class="pipe-flow">
+        <span class="pipe-chip c-data-a">前日18時データ取得</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-chip c-model">位置取り</span>
+        <span class="pipe-plus">+</span>
+        <span class="pipe-chip c-model">ペース</span>
+        <span class="pipe-plus">+</span>
+        <span class="pipe-chip c-model">上り3F</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-chip c-model">追走難度分析</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-chip c-out"><a href="/tracking-difficulty" style="color:inherit;text-decoration:none">/race 追走難度</a></span>
+      </div>
+      <div class="pipe-flow" style="margin-bottom:14px">
+        <span class="pipe-chip c-data-a">前日18時データ取得</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-chip c-model">単複オッズ予測</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-chip c-out"><a href="/race" style="color:inherit;text-decoration:none">/race 想定オッズ</a></span>
+      </div>
+
+      <div class="ai-model-grid">
+
+        <div class="ai-card">
+          <div class="ai-card-top">
+            <div class="ai-card-icon ic-purple">📍</div>
+            <div>
+              <div class="ai-card-name">位置取り予測</div>
+              <span class="ai-card-badge badge-a">Trigger A</span>
+              <span class="ready-badge ready-ml" title="tracking-difficulty-lgbm v2 (local MLflow)">READY</span>
+            </div>
+          </div>
+          <div class="ai-card-desc">各馬の想定ポジション（逃・先行・差し・追込）の確率分布。近走脚質・コース・ペース傾向を考慮。</div>
+          <div class="ai-card-meta">
+            <div class="ai-meta-row"><span class="ai-meta-lbl">入力</span><span class="ai-meta-val">race_shutuba / shutuba_past / race_index</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">出力</span><span class="ai-meta-val">馬ごとの位置取り確率分布</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">利用先</span><span class="ai-meta-val">追走難度分析（中間モデル）</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">モデル</span><span class="ai-meta-val"><code>tracking-difficulty-lgbm</code> v2</span></div>
+          </div>
+        </div>
+
+        <div class="ai-card">
+          <div class="ai-card-top">
+            <div class="ai-card-icon ic-cyan">⚡</div>
+            <div>
+              <div class="ai-card-name">ペース予測</div>
+              <span class="ai-card-badge badge-a">Trigger A</span>
+              <span class="ready-badge ready-ml" title="pace-lap-time-predictor-1f/3f v1 (local MLflow, 2022-2025学習)">READY</span>
+            </div>
+          </div>
+          <div class="ai-card-desc">レース全体のペース（ハイ/ミドル/スロー）を予測。逃げ頭数・前走ペース・距離・コース傾向から算出。</div>
+          <div class="ai-card-meta">
+            <div class="ai-meta-row"><span class="ai-meta-lbl">入力</span><span class="ai-meta-val">race_shutuba / shutuba_past / race_index</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">出力</span><span class="ai-meta-val">前半1F・3F ラップタイム（秒）</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">利用先</span><span class="ai-meta-val">追走難度分析（中間モデル）</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">モデル</span><span class="ai-meta-val"><code>pace-lap-time-predictor-1f/3f</code> (MLflow, 1F MAE=0.191s)</span></div>
+          </div>
+        </div>
+
+        <div class="ai-card">
+          <div class="ai-card-top">
+            <div class="ai-card-icon ic-green">🏃</div>
+            <div>
+              <div class="ai-card-name">上り3F予測</div>
+              <span class="ai-card-badge badge-a">Trigger A</span>
+              <span class="ready-badge ready-heur" title="ML モデルなし・近走実績とペースから規則的に推定">Heuristic</span>
+            </div>
+          </div>
+          <div class="ai-card-desc">各馬の上り3ハロンタイムを予測。近走実績・馬場・距離適性・脚質を特徴量として使用。</div>
+          <div class="ai-card-meta">
+            <div class="ai-meta-row"><span class="ai-meta-lbl">入力</span><span class="ai-meta-val">race_shutuba / shutuba_past / race_index</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">出力</span><span class="ai-meta-val">馬ごとの上り3F推定タイム</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">利用先</span><span class="ai-meta-val">追走難度分析（中間モデル）</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">モデル</span><span class="ai-meta-val"><code>_estimate_horse_final_3f()</code> ルールベース</span></div>
+          </div>
+        </div>
+
+        <div class="ai-card">
+          <div class="ai-card-top">
+            <div class="ai-card-icon ic-purple">🔬</div>
+            <div>
+              <div class="ai-card-name">追走難度分析</div>
+              <span class="ai-card-badge badge-derived">Derived</span>
+              <span class="ready-badge ready-ml" title="tracking-difficulty-lgbm v2 (local MLflow, 241 trees)">READY</span>
+            </div>
+          </div>
+          <div class="ai-card-desc">位置取り・ペース・上り3F を統合し、各馬の追走難度スコアと展開パターンを算出。</div>
+          <div class="ai-card-meta">
+            <div class="ai-meta-row"><span class="ai-meta-lbl">入力</span><span class="ai-meta-val">上記3モデルの出力</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">出力</span><span class="ai-meta-val">難度スコア・展開パターン</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">利用先</span><span class="ai-meta-val"><a href="/tracking-difficulty">/tracking-difficulty</a> · レース詳細</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">モデル</span><span class="ai-meta-val"><code>tracking-difficulty-lgbm</code> v2 · 241 trees</span></div>
+          </div>
+        </div>
+
+        <div class="ai-card">
+          <div class="ai-card-top">
+            <div class="ai-card-icon ic-orange">💴</div>
+            <div>
+              <div class="ai-card-name">単複オッズ予測</div>
+              <span class="ai-card-badge badge-a">Trigger A</span>
+              <span class="ready-badge ready-ml" title="models/final_odds_bundle.json (win / place_min / place_max, 2026-05-21学習)">READY</span>
+            </div>
+          </div>
+          <div class="ai-card-desc">LightGBM 3ヘッド（単勝/複勝下限/複勝上限）で回帰予測。前日18時時点のデータのみ使用（リーク排除）。</div>
+          <div class="ai-card-meta">
+            <div class="ai-meta-row"><span class="ai-meta-lbl">入力</span><span class="ai-meta-val">shutuba / shutuba_past / oikiri / race_index（前日18時）</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">モデル</span><span class="ai-meta-val"><code>models/final_odds_bundle.json</code> 3ヘッド</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">登録先</span><span class="ai-meta-val"><code>keiba-final-odds-lgbm</code></span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">利用先</span><span class="ai-meta-val"><a href="/race">/race</a> 🤖 AI予測「想定オッズ」</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Trigger B ── -->
+    <div class="trigger-block">
+      <div class="trigger-hdr tb">
+        <span class="t-badge">Trigger B</span>
+        <div class="t-info">
+          <div class="t-main">当日レース 15分前 — オッズ取得完了後</div>
+          <div class="t-sub">raceday-runner cron：race_odds 取得完了時点でトリガー</div>
+        </div>
+      </div>
+
+      <div class="pipe-flow" style="margin-bottom:14px">
+        <span class="pipe-chip c-data-b">当日15分前データ取得</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-chip c-model">勝率 / 連対率 / 複勝率予測</span>
+        <span class="pipe-arrow">→</span>
+        <span class="pipe-chip c-out"><a href="/race" style="color:inherit;text-decoration:none">/race 予測確率・印・買い目</a></span>
+      </div>
+
+      <div class="ai-model-grid">
+
+        <div class="ai-card">
+          <div class="ai-card-top">
+            <div class="ai-card-icon ic-blue">🏆</div>
+            <div>
+              <div class="ai-card-name">勝率 / 連対率 / 複勝率予測</div>
+              <span class="ai-card-badge badge-b">Trigger B</span>
+              <span class="ready-badge ready-none" title="keiba-lgbm 未登録・ローカルファイルなし → ヒューリスティックで代替中">未学習</span>
+            </div>
+          </div>
+          <div class="ai-card-desc">当日オッズ・馬場・枠順を加味して各馬の勝率・連対率・複勝率を出力。Harville 法で正規化。</div>
+          <div class="ai-card-meta">
+            <div class="ai-meta-row"><span class="ai-meta-lbl">入力</span><span class="ai-meta-val">race_shutuba / oikiri / race_index / race_odds（当日15分前）</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">モデル</span><span class="ai-meta-val" style="color:var(--red)"><code>keiba-lgbm</code> 未登録・ファイルなし → ヒューリスティック代替中</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">登録先</span><span class="ai-meta-val"><code>keiba-lgbm-nopi</code> (予定)</span></div>
+            <div class="ai-meta-row"><span class="ai-meta-lbl">利用先</span><span class="ai-meta-val"><a href="/race">/race</a> 🤖 AI予測「予測確率・印・買い目提案」</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const JOB_META = {
+  structure_check:    { icon: '🔍', label: '構造チェック' },
+  disk_cache_cleanup: { icon: '🗑️', label: 'ディスクキャッシュ' },
+  queue_maintain:     { icon: '⚙️', label: 'キューメンテ' },
+  logs_retention:     { icon: '📋', label: 'ログ削除' },
+  // auto-scrape external cron jobs (both hyphen and underscore keys)
+  'daily-race-lists': { icon: '📅', label: 'レース日程' },
+  daily_race_lists:   { icon: '📅', label: 'レース日程' },
+  'catchup-missing':  { icon: '🔄', label: '欠損補完' },
+  catchup_missing:    { icon: '🔄', label: '欠損補完' },
+  'raceday-result-runner': { icon: '🏇', label: '速報結果常駐' },
+  raceday_result_runner:   { icon: '🏇', label: '速報結果常駐' },
+  'raceday-runner':   { icon: '🏇', label: '開催日常駐' },
+  raceday_runner:     { icon: '🏇', label: '開催日常駐' },
+  'raceday-eve':      { icon: '📋', label: '前日準備' },
+  raceday_eve:        { icon: '📋', label: '前日準備' },
+  'raceday-evening':  { icon: '🏁', label: '結果取得' },
+  raceday_evening:    { icon: '🏁', label: '結果取得' },
+  'weekly-update':    { icon: '📊', label: '週次更新' },
+  weekly_update:      { icon: '📊', label: '週次更新' },
+  'horse-name-index': { icon: '📝', label: '馬名インデックス' },
+  horse_name_index:   { icon: '📝', label: '馬名インデックス' },
+  'growth-curve-weekly': { icon: '📈', label: '成長曲線週次' },
+  growth_curve_weekly:   { icon: '📈', label: '成長曲線週次' },
+  'jra-baba-morning': { icon: '🌾', label: 'JRA馬場' },
+  jra_baba_morning:   { icon: '🌾', label: 'JRA馬場' },
+};
+
+let autoTimer = null;
+
+function fmtDate(iso) {
+  if (!iso) return null;
+  try {
+    const d = new Date(iso);
+    const pad = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  } catch { return iso; }
+}
+
+function elapsedSince(iso) {
+  if (!iso) return '';
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (diff < 60)  return `${diff}秒前`;
+  if (diff < 3600) return `${Math.floor(diff/60)}分前`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}時間前`;
+  return `${Math.floor(diff/86400)}日前`;
+}
+
+function resultSummary(r) {
+  if (!r) return { text: '—', cls: 'none' };
+  if (r.error) return { text: `エラー: ${r.error}`, cls: 'err' };
+  if (r.status === 'error') return { text: `エラー: ${r.error || '不明'}`, cls: 'err' };
+  if (r.status === 'skipped') return { text: `スキップ: ${r.reason || ''}`, cls: 'warn' };
+  const parts = [];
+  if (r.removed != null)     parts.push(`削除: ${r.removed}件`);
+  if (r.bytes_freed != null) parts.push(`解放: ${(r.bytes_freed/1024).toFixed(1)}KB`);
+  if (r.snapshot_removed)    parts.push(`スナップショット: ${r.snapshot_removed}件`);
+  if (r.requeued != null)    parts.push(`待機戻し: ${r.requeued}件`);
+  if (r.completed_removed != null) parts.push(`完了削除: ${r.completed_removed}件`);
+  if (r.severity)            parts.push(`severity: ${r.severity}`);
+  if (r.critical != null)    parts.push(`critical: ${r.critical}`);
+  if (r.ok_dates != null)    parts.push(`取得日: ${Array.isArray(r.ok_dates) ? r.ok_dates.length : r.ok_dates}件`);
+  if (r.target_dates != null) parts.push(`対象日: ${Array.isArray(r.target_dates) ? r.target_dates.length : r.target_dates}件`);
+  if (parts.length === 0 && r.status === 'ok') return { text: '正常完了', cls: 'ok' };
+  if (parts.length === 0) return { text: '正常完了', cls: 'ok' };
+  return { text: parts.join(' / '), cls: 'ok' };
+}
+
+function renderCard(job) {
+  const meta = JOB_META[job.id] || JOB_META[job.id.replace(/-/g,'_')] || { icon: '🔄', label: job.name };
+  const isRunning = !!job.running;
+  const res = resultSummary(job.last_result);
+  const lastRunFmt = fmtDate(job.last_run);
+  const nextRunFmt = fmtDate(job.next_run);
+  const elapsed = job.last_run ? elapsedSince(job.last_run) : null;
+
+  return `
+<div class="job-card${isRunning ? ' running' : ''}" id="card-${job.id}">
+  <div class="job-left">
+    <div class="job-header">
+      <span class="job-name">${meta.icon} ${job.name}</span>
+      ${isRunning
+        ? `<span class="status-badge running"><span class="status-dot pulse"></span>実行中</span>`
+        : `<span class="status-badge idle"><span class="status-dot"></span>待機中</span>`}
+      <span class="schedule-chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        ${job.schedule}
+      </span>
+    </div>
+    <div class="job-desc">${job.description}</div>
+    ${job.tags && job.tags.length ? `<div class="data-tags">${job.tags.map(t => {
+      const isKey = /^[a-zA-Z][a-zA-Z0-9_]*$/.test(t);
+      return `<span class="data-tag${isKey ? ' key' : ''}">${t}</span>`;
+    }).join('')}</div>` : ''}
+
+    <div class="meta-row">
+      <div class="meta-item">
+        <span class="meta-label">最終実行</span>
+        <span class="meta-value${lastRunFmt ? '' : ' none'}">${lastRunFmt ? lastRunFmt + (elapsed ? ` (${elapsed})` : '') : '未実行'}</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">次回実行</span>
+        <span class="meta-value${nextRunFmt ? '' : ' none'}">${nextRunFmt || '不明'}</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">実行回数</span>
+        <span class="meta-value">${job.run_count ?? 0}回</span>
+      </div>
+    </div>
+
+    ${job.last_result ? `<div class="result-box${res.cls === 'err' ? ' err' : ''}">
+      <span class="meta-value ${res.cls}">${res.text}</span>
+    </div>` : ''}
+  </div>
+
+  <div class="job-right">
+    <button
+      class="trigger-btn${isRunning ? ' running-btn' : ''}"
+      onclick="triggerJob('${job.id}', '${job.trigger_endpoint}')"
+      ${isRunning ? 'disabled' : ''}
+      id="btn-${job.id}"
+    >${isRunning ? '実行中...' : '今すぐ実行'}</button>
+    <span class="run-count">通算 ${job.run_count ?? 0} 回</span>
+  </div>
+</div>`;
+}
+
+async function loadJobs() {
+  try {
+    const res = await fetch('/api/admin/cron-jobs');
+    const data = await res.json();
+    const jobs = data.jobs || [];
+    if (!jobs.length) {
+      document.getElementById('jobGrid').innerHTML = '<div style="color:#8b949e;padding:40px;text-align:center">ジョブが見つかりません</div>';
+      return;
+    }
+    document.getElementById('jobGrid').innerHTML = jobs.map(renderCard).join('');
+  } catch (e) {
+    document.getElementById('jobGrid').innerHTML = `<div style="color:#f85149;padding:20px">読み込みエラー: ${e.message}</div>`;
+  }
+}
+
+async function loadAutoScrapeJobs() {
+  try {
+    const res = await fetch('/api/admin/auto-scrape-status');
+    const data = await res.json();
+    const jobs = data.jobs || [];
+    const noteEl = document.getElementById('autoScrapeQueueNote');
+    if (noteEl && data.scraping_queue_note && !noteEl.dataset.apiNoteDone) {
+      const d = document.createElement('div');
+      d.style.marginTop = '10px';
+      d.style.fontSize = '12px';
+      d.style.color = '#8b949e';
+      const strong = document.createElement('strong');
+      strong.style.color = '#c9d1d9';
+      strong.textContent = 'API からの補足: ';
+      d.appendChild(strong);
+      d.appendChild(document.createTextNode(data.scraping_queue_note));
+      noteEl.appendChild(d);
+      noteEl.dataset.apiNoteDone = '1';
+    }
+    if (!jobs.length) {
+      document.getElementById('autoScrapeGrid').innerHTML = '<div style="color:#8b949e;padding:40px;text-align:center">ジョブが見つかりません</div>';
+      return;
+    }
+    document.getElementById('autoScrapeGrid').innerHTML = jobs.map(renderCard).join('');
+  } catch (e) {
+    document.getElementById('autoScrapeGrid').innerHTML = `<div style="color:#f85149;padding:20px">読み込みエラー: ${e.message}</div>`;
+  }
+}
+
+async function triggerJob(jobId, endpoint) {
+  const btn = document.getElementById(`btn-${jobId}`);
+  if (btn) { btn.disabled = true; btn.textContent = '起動中...'; }
+  const meta = JOB_META[jobId] || JOB_META[jobId.replace(/-/g,'_')];
+  try {
+    const res = await fetch(endpoint, { method: 'POST' });
+    const data = await res.json();
+    if (data.status === 'started') {
+      showToast(`✓ ${meta?.label || jobId} を起動しました`);
+    } else if (data.status === 'already_running') {
+      showToast(`⚠ ${meta?.label || jobId} はすでに実行中です`);
+    } else {
+      showToast(`✓ ${data.status}`);
+    }
+  } catch (e) {
+    showToast(`✗ 起動エラー: ${e.message}`, true);
+    if (btn) { btn.disabled = false; btn.textContent = '今すぐ実行'; }
+  }
+  // 少し待ってから再読み込み
+  setTimeout(() => { loadJobs(); loadAutoScrapeJobs(); }, 800);
+}
+
+function showToast(msg, isError = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.borderColor = isError ? '#f85149' : '#3fb950';
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// 初回ロード
+loadJobs();
+loadAutoScrapeJobs();
+
+// 30秒ごとに自動更新
+autoTimer = setInterval(() => { loadJobs(); loadAutoScrapeJobs(); }, 30000);
+
+// 経過時間表示を1分ごとに更新
+setInterval(() => {
+  if (document.querySelector('.job-card')) { loadJobs(); loadAutoScrapeJobs(); }
+}, 60000);
+</script>
+</body>
+</html>

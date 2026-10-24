@@ -1,0 +1,32 @@
+{
+  "_doc": "ホスト(stg)に分類されている gcp_job_map のジョブを、最終形(ホストは研究専用)の観点で見直した結果。role: research_only=ホストに残してよい研究用 / ops_required=公開の運用に必要なので VPS/GCP へ移す / retire=廃止または別の仕組みに置き換え。詳細は docs/operations/decoupling_plan.md。",
+  "version": 1,
+  "roles": {
+    "modeling": {"role": "research_only", "note": "学習・評価・特徴量の再構築・ノートブック・MLflow。成果物は model_publish で GCS に一方向に渡す"},
+    "sporthorse-births-nightly": {"role": "retire", "note": "2026-10-22 cron監査: 研究専用で不採用の結論済み。必要なときは手動実行"},
+    "backfill-2020-fast": {"role": "research_only", "note": "古い年の取りこぼし補填。学習データの完全性のため。公開の予測(出走馬の履歴)に使う年は 2022 以降で別扱い"},
+    "backfill-2021-fast": {"role": "research_only", "note": "同上"},
+    "keiba-remote-access": {"role": "research_only", "note": "開発者がホストに入るための仕組み。運用経路に含めない"},
+
+    "raceday-result-runner": {"role": "ops_required", "target": "vps", "note": "各R 発走 T+15 の速報結果。結果は予測成績・結果通知・履歴特徴量の元。VPS 実行役のレース別タスク(race-result-per-race 相当)+ GCP Job(slack-results)へ"},
+    "horse-remarks-daily": {"role": "retire", "note": "2026-10-22 cron監査: 採用ゼロ。1日 476〜929 件の取得に見合わないため廃止"},
+    "backfill-2022-fast": {"role": "retire", "note": "2026-10-22 cron監査: 未処理 0 件で完了済み。毎回ログインと会員ページの確認だけをしていたため廃止"},
+    "backfill-2023-fast": {"role": "retire", "note": "2026-10-22 cron監査: 未処理 0 件で完了済み。毎回ログインと会員ページの確認だけをしていたため廃止"},
+    "backfill-2024-fast": {"role": "retire", "note": "2026-10-22 cron監査: 未処理 0 件で完了済み。毎回ログインと会員ページの確認だけをしていたため廃止"},
+    "backfill-2025-fast": {"role": "retire", "note": "2026-10-22 cron監査: 未処理 0 件で完了済み。毎回ログインと会員ページの確認だけをしていたため廃止"},
+    "backfill-2026-fast": {"role": "ops_required", "target": "vps", "note": "同上(当年は毎日の取得の取りこぼし回収)"},
+    "backfill-2024-full": {"role": "retire", "note": "2026-10-22 cron監査: 未処理 0 件で完了済み。毎回ログインと会員ページの確認だけをしていたため廃止"},
+    "backfill-2025-full": {"role": "retire", "note": "2026-10-22 cron監査: 未処理 0 件で完了済み。毎回ログインと会員ページの確認だけをしていたため廃止"},
+    "backfill-2026-full": {"role": "ops_required", "target": "gcp", "note": "同上"},
+    "backfill-all-horse": {"role": "ops_required", "target": "vps", "note": "馬情報の一括補填。出走馬の分は new-horse-pedigree と recent-retry が毎日取るので、全馬の一括は低頻度の週次に落とす"},
+    "horse-training-backfill": {"role": "ops_required", "target": "vps", "note": "当年の調教は公開の特徴量(調教被覆)に直結するので VPS/GCP へ。過去年の取り直しだけはホスト(研究)でよい。docs/operations/training_fetch.md"},
+
+    "maintenance-deploy": {"role": "retire", "note": "ホスト用の窓内自動反映。Cloud Run のリビジョン(タグ付き→切替)と VPS の pull 型配備(pull_release)に置き換える"},
+    "server-watchdog": {"role": "retire", "note": "ホストの API/UI 常駐の死活。VPS は systemd、API は Cloud Run が持つ"},
+    "rotate-logs": {"role": "retire", "note": "ホストのログ。VPS は journald 100MB、GCP は Cloud Logging"},
+    "ensure-monitor": {"role": "retire", "note": "監視ポータルを Cloud Run へ移すとき一緒に廃止(それまでは残す)"},
+    "sync-pg-from-gcs": {"role": "retire", "note": "PostgreSQL 廃止(DB 経由の経路は 503)"},
+    "ensure-postgres": {"role": "retire", "note": "同上"},
+    "gcs-mirror-push": {"role": "retire", "note": "2026-10-24 移行中の橋渡し。予測の生成・出馬表の収集が GCS に直接書くようになったら止める"}
+  }
+}

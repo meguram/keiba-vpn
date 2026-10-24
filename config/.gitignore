@@ -1,0 +1,10 @@
+# 学習済みの重みは公開リポジトリに置かない
+pace_type_models.json
+gate_bias.json
+class_benchmark.json
+pace_coherence.json
+pace_coherence_v2.json
+megu_predict_params.json
+megu_predict_condition_weights.json
+megu_excusable.json
+drift_top_features.json

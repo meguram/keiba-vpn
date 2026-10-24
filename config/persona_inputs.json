@@ -1,0 +1,335 @@
+{
+ "version": 1,
+ "doc": "予想家ペルソナごとの入力（基準フレーム z:RB@e の列を接頭辞で割り当て、ペルソナ固有の追加列を足す）。市場オッズ・人気は含めない。入力の重なりは ptrain inputs で記録する。血統予想家は母方のみ（父方の列は入れない）。",
+ "core": {
+  "exact": [
+   "distance",
+   "field_size",
+   "round",
+   "bracket_number",
+   "age",
+   "surface",
+   "direction",
+   "grade",
+   "race_class",
+   "venue_code",
+   "course_type",
+   "sex",
+   "horse_number",
+   "start_hour",
+   "weight",
+   "weight_change",
+   "weight_dev"
+  ],
+  "prefix": [
+   "fr_class",
+   "fr_dist",
+   "fr_is_",
+   "fr_grade",
+   "fr_age",
+   "fr_field",
+   "fr_full",
+   "fr_small",
+   "fe_"
+  ]
+ },
+ "personas": {
+  "ability": {
+   "label": "能力重視家（本命党）",
+   "prefix": [
+    "o_",
+    "ob_",
+    "c_",
+    "seq_",
+    "sr_",
+    "rb_",
+    "td_",
+    "z_",
+    "lag",
+    "margin_",
+    "horse_prior_",
+    "d_",
+    "rest_",
+    "e_",
+    "f1_",
+    "f5_",
+    "f3_",
+    "tl_",
+    "wc_",
+    "jockey_",
+    "trainer_",
+    "pair_",
+    "chg_jockey",
+    "chg_trainer",
+    "chg_surface",
+    "chg_venue",
+    "chg_direction",
+    "lay_"
+   ],
+   "exact": [
+    "z",
+    "zg",
+    "zc",
+    "zc_rel"
+   ],
+   "extra": {
+    "tp76": [
+     "B_m",
+     "B_sd",
+     "B_m_megu",
+     "C_elo",
+     "C_rel",
+     "C_unc",
+     "F_n30",
+     "F_n90",
+     "F_since",
+     "F_dist90",
+     "F_burden90",
+     "F_tataki"
+    ]
+   }
+  },
+  "lap": {
+   "label": "ラップ予想家",
+   "prefix": [
+    "a_",
+    "pc_",
+    "mtl_",
+    "s_",
+    "f2_",
+    "frp_",
+    "exp_n_dist",
+    "exp_win_dist",
+    "e_"
+   ],
+   "exact": [],
+   "extra": {
+    "tp76": [
+     "E_abs",
+     "E_day",
+     "E_sustain",
+     "E_accel",
+     "E_unlucky_prev",
+     "E_unlucky_m3",
+     "E_std5"
+    ],
+    "pace": [
+     "P77_pred_z",
+     "P77_R_n",
+     "P77_R_mu",
+     "P77_R_sd",
+     "P77_R_gap",
+     "P77_R_zd",
+     "P77_R_logm",
+     "P77_R_kfit",
+     "P77_R_kn",
+     "P77_R_krel"
+    ]
+   }
+  },
+  "going": {
+   "label": "馬場質予想家",
+   "prefix": [
+    "track_",
+    "b_aff_going",
+    "b_aff_course",
+    "b_n_going",
+    "b_n_course",
+    "chg_going",
+    "exp_n_going",
+    "exp_win_going",
+    "exp_first_going",
+    "exp_n_course",
+    "exp_win_course",
+    "exp_n_venue_surface",
+    "exp_win_venue_surface"
+   ],
+   "exact": [
+    "weather"
+   ],
+   "extra": {
+    "mining": [
+     "cushion_value",
+     "turf_moisture_goal",
+     "turf_moisture_4corner",
+     "dirt_moisture_goal",
+     "dirt_moisture_4corner",
+     "cush_delta_day",
+     "prev_cush",
+     "c_n_hard",
+     "c_fp_hard",
+     "c_n_soft",
+     "c_fp_soft",
+     "pref_hard"
+    ],
+    "tp76": [
+     "D_going",
+     "D_cush",
+     "D_venue",
+     "E_day"
+    ]
+   }
+  },
+  "bias": {
+   "label": "トラックバイアス予想家",
+   "prefix": [
+    "fdr_",
+    "f2_",
+    "frp_",
+    "frn_",
+    "track_bias",
+    "mtl_t_pos",
+    "mtl_ten",
+    "mtl_c1",
+    "exp_n_course",
+    "exp_win_course",
+    "exp_n_direction",
+    "exp_win_direction"
+   ],
+   "exact": [],
+   "extra": {
+    "tp76": [
+     "A_day_n",
+     "A_fit_front",
+     "A_fit_inner",
+     "G_n_front",
+     "G_front_rank",
+     "G_inner_front",
+     "G_fit"
+    ],
+    "mining": [
+     "inner",
+     "outer",
+     "kai",
+     "day_no",
+     "day_max"
+    ],
+    "pace": [
+     "P77_c3_mean",
+     "P77_c3_sd",
+     "P77_c3_n",
+     "P77_c3_going_mean",
+     "P77_c3_going_n",
+     "P77_c3_cls_mean",
+     "P77_c3_cls_n",
+     "P77_c5_mean",
+     "P77_c5_sd",
+     "P77_c5_n",
+     "P77_c5_going_mean",
+     "P77_c5_going_n",
+     "P77_c5_cls_mean",
+     "P77_c5_cls_n",
+     "P77_c5m3",
+     "P77_c3_going_gap",
+     "P77_c5_going_gap",
+     "P77_E_n",
+     "P77_E_lag3_ewm",
+     "P77_E_lag5_ewm",
+     "P77_E_lag3_last",
+     "P77_E_lag5_last",
+     "P77_E_d53_ewm",
+     "P77_E_T3_exp",
+     "P77_E_T5_exp",
+     "P77_E_z3",
+     "P77_E_z5",
+     "P77_E_T3_rel",
+     "P77_E_T3_min",
+     "P77_E_T5_rel",
+     "P77_E_T5_min"
+    ]
+   }
+  },
+  "pedigree": {
+   "label": "血統予想家（母方）",
+   "prefix": [
+    "dam_",
+    "pd_dam_sire",
+    "attr_"
+   ],
+   "exact": [],
+   "extra": {
+    "mat": [
+     "__all__"
+    ],
+    "tp76": [
+     "D_dist_mat",
+     "D_venue_mat",
+     "D_going_mat",
+     "D_cush_mat",
+     "D_all_mat",
+     "D_raw_all",
+     "D_ag_all_mat",
+     "B_m_mat",
+     "B_sd_mat"
+    ],
+    "sire": [
+     "P77_S_sire_wd",
+     "P77_S_sire_wsd",
+     "P77_S_sire_wn",
+     "P77_S_sire_gap",
+     "P77_S_sire_z",
+     "P77_S_sire_t3d",
+     "P77_S_sire_t3gap",
+     "P77_S_dsire_wd",
+     "P77_S_dsire_wsd",
+     "P77_S_dsire_wn",
+     "P77_S_dsire_gap",
+     "P77_S_dsire_z",
+     "P77_S_dsire_t3d",
+     "P77_S_dsire_t3gap",
+     "P77_S_sline_wd",
+     "P77_S_sline_wsd",
+     "P77_S_sline_wn",
+     "P77_S_sline_gap",
+     "P77_S_sline_z",
+     "P77_S_sline_t3d",
+     "P77_S_sline_t3gap",
+     "P77_S_smain_wd",
+     "P77_S_smain_wsd",
+     "P77_S_smain_wn",
+     "P77_S_smain_gap",
+     "P77_S_smain_z",
+     "P77_S_smain_t3d",
+     "P77_S_smain_t3gap",
+     "P77_S_dline_wd",
+     "P77_S_dline_wsd",
+     "P77_S_dline_wn",
+     "P77_S_dline_gap",
+     "P77_S_dline_z",
+     "P77_S_dline_t3d",
+     "P77_S_dline_t3gap"
+    ],
+    "cross": [
+     "P77_X_n",
+     "P77_X_blood_max",
+     "P77_X_blood_sum",
+     "P77_X_m_all_max",
+     "P77_X_m_all_min",
+     "P77_X_m_all_wmean",
+     "P77_X_lift_c1_max",
+     "P77_X_lift_c1_min",
+     "P77_X_lift_c1_wmean",
+     "P77_X_lift_c2_max",
+     "P77_X_lift_c2_min",
+     "P77_X_lift_c2_wmean",
+     "P77_X_lift_c3_max",
+     "P77_X_lift_c3_min",
+     "P77_X_lift_c3_wmean",
+     "P77_X_bF",
+     "P77_X_bM",
+     "P77_X_bspan",
+     "P77_X_bpat",
+     "P77_X_bmat",
+     "P77_X_gmin",
+     "P77_X_balance",
+     "P77_X_g_bal_lift_c1",
+     "P77_X_g_bal_lift_c2",
+     "P77_X_g_lvl_lift_c1",
+     "P77_X_g_lvl_lift_c2",
+     "P77_X_g_near_lift_c1",
+     "P77_X_g_near_lift_c2"
+    ]
+   }
+  }
+ }
+}

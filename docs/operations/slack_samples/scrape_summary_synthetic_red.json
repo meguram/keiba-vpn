@@ -1,0 +1,86 @@
+{
+  "text": "スクレイピング状況 10/18（日）開催日 ［要対応］",
+  "attachments": [
+    {
+      "color": "#e01e5a",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*スクレイピング状況 10/18（日）開催日*　［要対応］"
+          }
+        },
+        {
+          "type": "section",
+          "fields": [
+            {
+              "type": "mrkdwn",
+              "text": "*ジョブ*\n7 件（成功 5 / 失敗・未開始 3）"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*キュー*\n実行 0 / 待機 2 / 失敗理由 8 件"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*スキーマ違反（24h）*\n34 件"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*調教の被覆*\n20%（2026-10）"
+            },
+            {
+              "type": "mrkdwn",
+              "text": "*データヘルス*\nwarn（欠損リスト 0 件）"
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*タスク別*\n```グループ      件  成功  失敗/未開始\n開催日         3     3            0\n定期取得       2     1            1\nバックフィル   1     0            1\n夜間           1     1            1```"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*問題のあるジョブ*\n```ジョブ          状態    最終開始     所要\n直近の取り直し  失敗×1  10/18 18:00  5m00s\n調教の取り直し  失敗×3  10/18 18:00  5m00s\n夜間の一括取得  未開始  10/18 18:00  5m00s```"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*取得結果（最終実行）*\n• barometer-retry: ok saved=0 pending=0 error_count=0\n• raceday-eve: ok races=8 shutuba=8 error_count=0\n• raceday-runner: error reason=no-race-list\n• raceday-result-runner: error reason=no-race-list\n• raceday-evening: error reason=no-races"
+          }
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*スキーマ違反の多いカテゴリ（24h）*\nrace_shutuba 20, horse_result 14"
+          }
+        },
+        {
+          "type": "context",
+          "elements": [
+            {
+              "type": "mrkdwn",
+              "text": "次回予定: 前日取得 10/19 07:00 / 開催日ランナー 10/19 07:00 / 確定オッズ 10/19 07:00 / レース一覧 10/19 07:00"
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": "*検知中の異常*\n• [緊急] 調教の取り直し が連続 3 回失敗\n• [緊急] 取得の停止の兆候（ネットワーク/アクセス拒否）\n• [注意] 夜間の一括取得 が予定時刻から 95 分たっても始まっていない\n• [緊急] 取得の停止の兆候: 403/429/DNS 系の失敗が 6 件\n• [注意] スキーマ違反が急増（24時間で 34 件、通常の中央値 3）\n• [緊急] 調教データの被覆が低下（2026-10: 20%）"
+          }
+        }
+      ]
+    }
+  ]
+}

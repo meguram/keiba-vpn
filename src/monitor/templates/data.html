@@ -1,0 +1,332 @@
+{% extends "base.html" %}
+{% block title %}データカバレッジ — 監視ポータル{% endblock %}
+
+{% block head_extra %}
+<style>
+  /* ── カレンダー ── */
+  .cal-nav { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+  .cal-nav select { min-width:80px; }
+  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .cal-header { text-align:center; font-size:11px; color:var(--muted); font-weight:600; padding:4px 0; }
+  .cal-day {
+    aspect-ratio:1;
+    border-radius:6px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    font-size:13px; font-weight:600; cursor:pointer;
+    border:2px solid transparent;
+    transition:transform .1s, border-color .15s;
+    min-height:44px;
+  }
+  .cal-day:hover { transform:scale(1.06); }
+  .cal-day.active { border-color:#fff; }
+  .cal-day.green { background:rgba(63,185,80,.25); color:var(--accent2); }
+  .cal-day.green:hover { background:rgba(63,185,80,.4); }
+  .cal-day.red { background:rgba(248,81,73,.2); color:var(--danger); }
+  .cal-day.red:hover { background:rgba(248,81,73,.35); }
+  .cal-day.gray { background:rgba(139,148,158,.1); color:var(--muted); cursor:default; }
+  .cal-day.empty { background:transparent; cursor:default; }
+  .cal-day .day-num { font-size:15px; line-height:1; }
+  .cal-day .day-sub { font-size:9px; margin-top:2px; opacity:.8; }
+
+  /* ── マトリクス ── */
+  .matrix-wrap { overflow-x:auto; }
+  .matrix-table { border-collapse:collapse; white-space:nowrap; font-size:12px; min-width:100%; }
+  .matrix-table th {
+    background:var(--surface); padding:6px 8px;
+    border:1px solid var(--border); text-align:center;
+    font-size:10px; color:var(--muted); font-weight:600;
+    position:sticky; top:0; z-index:2;
+  }
+  .matrix-table th.row-header {
+    position:sticky; left:0; z-index:3;
+    background:var(--surface); text-align:left;
+    min-width:100px;
+  }
+  .matrix-table td {
+    border:1px solid var(--border); padding:4px 6px;
+    text-align:center; vertical-align:middle;
+  }
+  .matrix-table td.row-label {
+    position:sticky; left:0; background:var(--surface);
+    text-align:left; font-weight:600; z-index:1; padding-left:10px;
+  }
+  .matrix-table tr:hover td { filter:brightness(1.1); }
+  .cell-ok  { background:rgba(63,185,80,.22); color:var(--accent2); font-size:14px; }
+  .cell-ng  { background:rgba(248,81,73,.18); color:var(--danger); font-size:14px; }
+  .cell-na  { background:rgba(139,148,158,.1); color:var(--muted); font-size:12px; }
+  .cat-url-link { color:var(--accent); text-decoration:none; font-size:9px; display:block; }
+  .cat-url-link:hover { text-decoration:underline; }
+  .venue-sep td { background:rgba(255,255,255,.04) !important; font-size:11px; color:var(--muted); padding:2px 10px; }
+
+  /* ── カバレッジ凡例 ── */
+  .legend { display:flex; gap:16px; flex-wrap:wrap; font-size:12px; margin-bottom:12px; }
+  .legend-item { display:flex; align-items:center; gap:6px; }
+  .legend-dot { width:12px; height:12px; border-radius:3px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-title"><span class="icon">📊</span> データカバレッジ</div>
+
+<!-- GCS 統計 -->
+<div class="card" id="gcs-card">
+  <div class="card-title">GCS / ストレージ</div>
+  <div id="gcs-info"><span class="loading">読込中...</span></div>
+</div>
+
+<!-- カバレッジカレンダー -->
+<div class="card">
+  <div class="card-title">カバレッジカレンダー</div>
+
+  <div class="cal-nav">
+    <select id="sel-year"></select>
+    <select id="sel-month"></select>
+    <button onclick="loadCalendar()" style="padding:5px 14px">表示</button>
+    <span class="text-muted" style="font-size:12px" id="cal-stat"></span>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:rgba(63,185,80,.4)"></div>完全（全カテゴリ 100%）</div>
+    <div class="legend-item"><div class="legend-dot" style="background:rgba(248,81,73,.35)"></div>不完全（欠損あり）</div>
+    <div class="legend-item"><div class="legend-dot" style="background:rgba(139,148,158,.15)"></div>レースなし</div>
+  </div>
+
+  <div class="cal-grid" id="cal-weekdays">
+    <div class="cal-header">月</div>
+    <div class="cal-header">火</div>
+    <div class="cal-header">水</div>
+    <div class="cal-header">木</div>
+    <div class="cal-header">金</div>
+    <div class="cal-header" style="color:#58a6ff">土</div>
+    <div class="cal-header" style="color:#f85149">日</div>
+  </div>
+  <div class="cal-grid" id="cal-grid" style="margin-top:4px">
+    <span class="loading">読込中...</span>
+  </div>
+</div>
+
+<!-- 日付別マトリクス -->
+<div class="card" id="matrix-card" style="display:none">
+  <div class="card-title" id="matrix-title">—</div>
+  <div id="matrix-summary" style="margin-bottom:12px"></div>
+  <div class="matrix-wrap">
+    <div id="matrix-content"><span class="loading">読込中...</span></div>
+  </div>
+</div>
+
+<p class="last-updated">最終更新: <span id="last-ts">—</span></p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── 初期化 ──────────────────────────────────────────────────────
+const now = new Date();
+let curYear = now.getFullYear();
+let curMonth = now.getMonth() + 1;
+let selectedDate = null;
+
+// セレクト初期化
+function initSelects() {
+  const ySel = document.getElementById('sel-year');
+  for (let y = curYear; y >= 2020; y--) {
+    const o = document.createElement('option');
+    o.value = y; o.textContent = y + '年';
+    if (y === curYear) o.selected = true;
+    ySel.appendChild(o);
+  }
+  const mSel = document.getElementById('sel-month');
+  for (let m = 1; m <= 12; m++) {
+    const o = document.createElement('option');
+    o.value = m; o.textContent = m + '月';
+    if (m === curMonth) o.selected = true;
+    mSel.appendChild(o);
+  }
+}
+
+// ── カレンダー ──────────────────────────────────────────────────
+async function loadCalendar() {
+  const year = document.getElementById('sel-year').value;
+  const month = document.getElementById('sel-month').value;
+  curYear = parseInt(year);
+  curMonth = parseInt(month);
+
+  document.getElementById('cal-grid').innerHTML = '<span class="loading">読込中...</span>';
+  document.getElementById('matrix-card').style.display = 'none';
+  selectedDate = null;
+
+  try {
+    const d = await fetch(`/api/internal/coverage/month?year=${year}&month=${month}`).then(r => r.json());
+    renderCalendar(d);
+  } catch(e) {
+    document.getElementById('cal-grid').innerHTML = '<span class="text-error">取得失敗</span>';
+  }
+}
+
+function renderCalendar(d) {
+  const grid = document.getElementById('cal-grid');
+  const firstWd = d.first_weekday; // 0=月, 6=日
+  const days = d.days;
+
+  let html = '';
+
+  // 空白セル（月の開始前）
+  for (let i = 0; i < firstWd; i++) {
+    html += '<div class="cal-day empty"></div>';
+  }
+
+  let raceCount = 0, greenCount = 0, redCount = 0;
+  for (const day of days) {
+    const cls = day.status; // 'green' | 'red' | 'gray'
+    const subText = day.status === 'gray'
+      ? ''
+      : day.pct + '%';
+    const clickable = day.status !== 'gray';
+    const onclick = clickable ? `onclick="selectDate('${day.date}', this)"` : '';
+    const title = day.status === 'gray'
+      ? 'レースなし'
+      : `${day.total_races}R / ${day.pct}%`;
+
+    html += `<div class="cal-day ${cls}" ${onclick} title="${title}" data-date="${day.date}">
+      <span class="day-num">${day.day}</span>
+      ${subText ? `<span class="day-sub">${subText}</span>` : ''}
+    </div>`;
+
+    if (day.status !== 'gray') raceCount++;
+    if (day.status === 'green') greenCount++;
+    if (day.status === 'red') redCount++;
+  }
+
+  grid.innerHTML = html;
+
+  const total = raceCount;
+  document.getElementById('cal-stat').textContent =
+    `開催日 ${total}日 — 完全 ${greenCount}日 / 欠損 ${redCount}日`;
+  document.getElementById('last-ts').textContent = new Date().toLocaleTimeString('ja-JP');
+}
+
+// ── 日付クリック ────────────────────────────────────────────────
+async function selectDate(date, el) {
+  // ハイライト切り替え
+  document.querySelectorAll('.cal-day.active').forEach(d => d.classList.remove('active'));
+  el.classList.add('active');
+  selectedDate = date;
+
+  const card = document.getElementById('matrix-card');
+  card.style.display = 'block';
+  document.getElementById('matrix-title').textContent =
+    `${date.slice(0,4)}年${parseInt(date.slice(4,6))}月${parseInt(date.slice(6,8))}日 — レース×カテゴリ マトリクス`;
+  document.getElementById('matrix-content').innerHTML = '<span class="loading">読込中...</span>';
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  try {
+    const d = await fetch(`/api/internal/coverage/date-matrix?date=${date}`).then(r => r.json());
+    renderMatrix(d);
+  } catch(e) {
+    document.getElementById('matrix-content').innerHTML = '<span class="text-error">取得失敗: ' + e.message + '</span>';
+  }
+}
+
+function renderMatrix(d) {
+  const raceIds = d.race_ids || [];
+  const categories = d.categories || [];
+  const raceMeta = d.race_meta || {};
+  const matrix = d.matrix || {};
+
+  if (!raceIds.length) {
+    document.getElementById('matrix-content').innerHTML = '<span class="text-muted">レースデータなし</span>';
+    return;
+  }
+
+  // 統計サマリー
+  let totalCells = 0, okCells = 0;
+  for (const rid of raceIds) {
+    const row = matrix[rid] || {};
+    for (const cat of categories) {
+      totalCells++;
+      if (row[cat.key]) okCells++;
+    }
+  }
+  const pct = totalCells > 0 ? Math.round(okCells / totalCells * 100) : 0;
+  const pctColor = pct >= 100 ? 'var(--accent2)' : pct >= 70 ? 'var(--warn)' : 'var(--danger)';
+  document.getElementById('matrix-summary').innerHTML = `
+    <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+      <span class="badge badge-info">${raceIds.length}レース</span>
+      <span class="badge badge-info">${categories.length}カテゴリ</span>
+      <span style="font-size:13px">カバレッジ:
+        <strong style="color:${pctColor}">${okCells}/${totalCells} (${pct}%)</strong>
+      </span>
+    </div>`;
+
+  // 競馬場ごとにグループ化
+  const venueMap = {};
+  for (const rid of raceIds) {
+    const meta = raceMeta[rid] || { venue: '不明', race_num: 0 };
+    if (!venueMap[meta.venue]) venueMap[meta.venue] = [];
+    venueMap[meta.venue].push({ rid, ...meta });
+  }
+
+  // ヘッダー行
+  let thead = '<thead><tr>';
+  thead += '<th class="row-header">開催場 / R</th>';
+  for (const cat of categories) {
+    const urlEx = cat.url_template
+      ? `<a class="cat-url-link" href="${cat.url_template.replace('{rid}', raceIds[0])}" target="_blank" title="${cat.url_template}">↗URL</a>`
+      : '';
+    thead += `<th title="${cat.key}">${cat.label}<br>${urlEx}</th>`;
+  }
+  thead += '</tr></thead>';
+
+  // データ行
+  let tbody = '<tbody>';
+  for (const [venue, races] of Object.entries(venueMap)) {
+    // 場区切り行
+    tbody += `<tr class="venue-sep"><td colspan="${categories.length + 1}">🏇 ${venue}</td></tr>`;
+
+    for (const { rid, race_num } of races.sort((a,b) => a.race_num - b.race_num)) {
+      tbody += '<tr>';
+      tbody += `<td class="row-label">${venue} ${race_num}R</td>`;
+      const row = matrix[rid] || {};
+      for (const cat of categories) {
+        const val = row[cat.key];
+        if (val === true) {
+          tbody += '<td class="cell-ok">✓</td>';
+        } else if (val === false) {
+          tbody += '<td class="cell-ng">✗</td>';
+        } else {
+          tbody += '<td class="cell-na">—</td>';
+        }
+      }
+      tbody += '</tr>';
+    }
+  }
+  tbody += '</tbody>';
+
+  document.getElementById('matrix-content').innerHTML =
+    `<table class="matrix-table">${thead}${tbody}</table>`;
+}
+
+// ── GCS 情報 ────────────────────────────────────────────────────
+async function loadGCS() {
+  try {
+    const d = await fetch('/api/internal/status').then(r => r.json());
+    const body = d.services.fastapi.body || {};
+    document.getElementById('gcs-info').innerHTML = `
+      <div class="grid grid-2">
+        <div><div class="card-title">バケット名</div>
+          <code class="text-accent">${body.gcs_bucket || '—'}</code></div>
+        <div><div class="card-title">GCS ステータス</div>
+          ${body.gcs_bucket
+            ? '<span class="badge badge-ok">有効</span>'
+            : '<span class="badge badge-warn">無効 (ローカルのみ)</span>'}</div>
+      </div>`;
+  } catch(e) {
+    document.getElementById('gcs-info').innerHTML = '<span class="text-muted">取得失敗</span>';
+  }
+}
+
+// ── 起動 ────────────────────────────────────────────────────────
+initSelects();
+loadGCS();
+loadCalendar();
+</script>
+{% endblock %}

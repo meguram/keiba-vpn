@@ -1,0 +1,39 @@
+# keiba-vpn スクレイピング cron 雛形（マシンのローカル TZ が JST の PC 用）
+#
+# setup_all_cron.sh は UTC マシン前提で時刻を書いているため、JST の PC にそのまま install すると 9 時間ずれる。
+# JST の PC ではこのファイルを参考に crontab -e で登録する（既存の他プロジェクト行は残す）。
+#   登録: (crontab -l | grep -v KEIBA-VPN-JST; sed -e 's#__PROJECT__#'"$PWD"'#g' scripts/cron/crontab.jst.example | grep -v '^#' | grep -v '^$') | crontab -
+#
+# 設計メモ:
+#  - 全ジョブは scripts/auto_scrape.sh 経由（conda の python を使う）。cron から python3 を直接呼ぶと
+#    PATH 上の python3 に bs4 が無く import で失敗する。
+#  - runner / result_runner / raceday は土日だけでなく毎日起動する（非開催日は数秒でスキップ終了）。
+#    月曜（祝日）開催など土日以外の開催日を取りこぼさないため。
+#  - eve も毎日（翌日が開催日のときだけ動く）。日曜・月曜開催の前日夕方に出馬表・馬柱・追い切りを取る。
+#  - 時刻は setup_all_cron.sh の設計（JST）に揃えた。
+
+0 7  * * *  __PROJECT__/scripts/auto_scrape.sh race_lists >> __PROJECT__/logs/auto_scrape_race_lists.log 2>&1 # KEIBA-VPN-JST
+0 17 * * *  __PROJECT__/scripts/auto_scrape.sh race_lists >> __PROJECT__/logs/auto_scrape_race_lists.log 2>&1 # KEIBA-VPN-JST
+*/10 5-9 * * *  __PROJECT__/scripts/auto_scrape.sh baba >> __PROJECT__/logs/jra_baba.log 2>&1 # KEIBA-VPN-JST
+30 7 * * *  __PROJECT__/scripts/auto_scrape.sh runner >> __PROJECT__/logs/auto_scrape.log 2>&1 # KEIBA-VPN-JST
+30 7 * * *  __PROJECT__/scripts/auto_scrape.sh result_runner >> __PROJECT__/logs/auto_scrape_result.log 2>&1 # KEIBA-VPN-JST
+30 17 * * * __PROJECT__/scripts/auto_scrape.sh raceday >> __PROJECT__/logs/auto_scrape.log 2>&1 # KEIBA-VPN-JST
+0 18 * * *  __PROJECT__/scripts/auto_scrape.sh eve >> __PROJECT__/logs/auto_scrape.log 2>&1 # KEIBA-VPN-JST
+0 18 * * 5  __PROJECT__/scripts/auto_scrape.sh weekly >> __PROJECT__/logs/auto_scrape.log 2>&1 # KEIBA-VPN-JST
+30 18 * * 5 __PROJECT__/scripts/auto_scrape.sh name_index >> __PROJECT__/logs/auto_scrape.log 2>&1 # KEIBA-VPN-JST
+30 19 * * 5 __PROJECT__/scripts/auto_scrape.sh barometer >> __PROJECT__/logs/auto_scrape.log 2>&1 # KEIBA-VPN-JST
+30 8 * * *  __PROJECT__/scripts/auto_scrape.sh barometer >> __PROJECT__/logs/auto_scrape.log 2>&1 # KEIBA-VPN-JST
+0 9  * * *  __PROJECT__/scripts/auto_scrape.sh catchup >> __PROJECT__/logs/auto_scrape_catchup.log 2>&1 # KEIBA-VPN-JST
+30 5 * * *  __PROJECT__/scripts/cron/update_jockey_trainer_stats.sh >> __PROJECT__/logs/jockey_trainer_stats.log 2>&1 # KEIBA-VPN-JST
+
+# ── 任意（既定は未登録。登録するときは行頭の「# 」を外して上の登録コマンドを使う。詳細: docs/operations/raceday_weight_trigger.md）
+# 馬体重の検知ランナー（各R T-65〜T-30 に出馬表を取り直し、特徴量・予測を起動）
+# 30 7 * * *  __PROJECT__/scripts/auto_scrape.sh weight_runner >> __PROJECT__/logs/auto_scrape_weight.log 2>&1 # KEIBA-VPN-JST
+# 推論用の履歴テーブルの増分エクスポート（当年。結果の取り込み後に 1 日 1 回）
+# 30 6 * * *  __PROJECT__/scripts/cron/export_tables_daily.sh >> __PROJECT__/logs/export_tables_daily.log 2>&1 # KEIBA-VPN-JST
+
+# ── v6 の推論用の参照データの更新（ホストは UTC。ここは JST の PC 用の目安。詳細: docs/operations/v6_state_refresh.md）
+#   RB の履歴状態（日次。export_tables_daily と feature-accumulate の後。十数秒）:
+# 20 8 * * *  __PROJECT__/scripts/cron/rb_state_daily.sh __PROJECT__ >> __PROJECT__/logs/rb_state_daily.log 2>&1 # KEIBA-V6-STATE
+#   PX のリッジ（毎週。新しい半年の 30 日前以降で、リッジが無いときだけ作る。数分）:
+# 30 3 * * 1  __PROJECT__/scripts/cron/px_ridge_window.sh __PROJECT__ >> __PROJECT__/logs/px_ridge_window.log 2>&1 # KEIBA-V6-STATE

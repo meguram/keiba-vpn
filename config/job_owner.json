@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "owners": {},
+  "notes": "ホストの cron ジョブのうち、GCP / VPS が引き継いだものを cron_job_id で載せる（値: gcp | vps | retire）。空の間は何も奪わない。載せる順序・手順: docs/operations/gcp_jobs_migration.md"
+}

@@ -1,0 +1,55 @@
+{
+ "category": "race_result_on_time_payoff",
+ "conformance": {
+  "failures": {},
+  "passed": 200,
+  "validated": 200
+ },
+ "keys": {
+  "max": "202610010708",
+  "min": "202001010101"
+ },
+ "lists": {},
+ "nested": {
+  "payoff": {}
+ },
+ "records": 200,
+ "runs": [
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 200,
+   "source": "storage"
+  }
+ ],
+ "top": {
+  "payoff": {
+   "empty": 200,
+   "len_max": 0,
+   "len_min": 0,
+   "n": 200,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "dict": 200
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_id": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 200,
+   "null": 0,
+   "patterns": {
+    "digits12": 200
+   },
+   "types": {
+    "str": 200
+   },
+   "values": {},
+   "values_overflow": false
+  }
+ }
+}

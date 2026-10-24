@@ -1,0 +1,33 @@
+# Cloud Run の API（deploy/docker/Dockerfile.cloudrun）用。requirements.txt から、API が使わないものを外した最小集合。
+# 外したもの: ipykernel/ipywidgets（ノートブック）、pytest 系、playwright・pymupdf・schedule（取得は VPS の実行役）、
+#   torch・mlflow・optuna（学習）、matplotlib・statsmodels、alembic/psycopg/cloud-sql（DB は廃止予定。flask_app は import だけ sqlalchemy を要るので sqlalchemy は残し、DB 接続の経路は 503 を返す）、
+#   redis（未設定ならメモリにフォールバック）、bigquery（コスト報告は Jobs 側）。
+# 注意: API は遅延 import が多い。新しい import を足したら tests/api/test_cloudrun_entry.py の要件チェックを通すこと。
+fastapi>=0.104.0
+flask>=3.0.0
+uvicorn>=0.24.0
+python-multipart>=0.0.6
+httpx>=0.27.0
+python-dotenv>=1.0.0
+jinja2>=3.1.0
+pyyaml>=6.0.0
+requests>=2.31.0
+psutil>=5.9
+a2wsgi>=1.10.0
+pykakasi>=2.3.0
+beautifulsoup4>=4.12.0
+jsonschema>=4.20.0
+markdown>=3.4
+pandas>=2.0.0
+pyarrow>=14.0.0
+polars>=1.0.0
+numpy>=1.24.0
+scipy>=1.11.0
+scikit-learn>=1.3.0
+lightgbm>=4.0.0
+xgboost>=2.0.0
+catboost>=1.2.0
+joblib>=1.3.0
+sqlalchemy>=2.0.0
+google-cloud-storage>=2.0.0
+google-cloud-tasks>=2.0.0

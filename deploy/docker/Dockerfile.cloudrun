@@ -1,0 +1,50 @@
+# =============================================================================
+# deploy/docker/Dockerfile.cloudrun — Cloud Run の API（FastAPI + Flask /api/v1 + /ops を 1 コンテナで）
+# =============================================================================
+# 設計: docs/operations/architecture_target.md（フェーズ 2）/ docs/operations/cloud_run_api.md
+#   - 1 ワーカー・読み取り専用（lifespan のスケジューラ/取得ワーカーは動かさない: src/api/cloudrun_entry.py）
+#   - 起動を速く: ML ライブラリは遅延 import（起動時の RSS は約 60MB）。必要なローカル専用データは起動時に GCS から取り込む
+#   - メモリ 2GiB に収める: コンテナの書き込み層もメモリ扱い。ディスクキャッシュは書かない（DISK_L2_MIN_WEEKLY_ACCESSES）
+#   - 秘密はイメージに入れない（.env 除外）。GCS は Cloud Run のサービスアカウント（ADC）、鍵類は Secret Manager から環境変数へ
+#
+# ビルド（Cloud Build。ユーザーが実行）: bash scripts/gcp/deploy_cloud_run_api.sh build
+# ローカル確認:
+#   docker build -f deploy/docker/Dockerfile.cloudrun -t keiba-api:local .
+#   docker run --rm -p 8080:8080 -e KEIBA_ENV=dev keiba-api:local   # dev は GCS に触れずモックで動く
+# =============================================================================
+
+FROM python:3.11-slim AS builder
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+COPY deploy/docker/requirements-cloudrun.txt ./requirements.txt
+# ホスト(本番の推論環境)と同じバージョンに固定する。固定しないと pandas 3.x などが入り、挙動が変わって落ちる(constraints-jobs.txt の先頭に理由)
+COPY constraints-jobs.txt ./constraints.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir --prefix=/install -r requirements.txt -c constraints.txt
+
+FROM python:3.11-slim AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 1000 keiba
+WORKDIR /app
+COPY --from=builder /install /usr/local
+
+COPY src/ ./src/
+COPY templates/ ./templates/
+COPY static/ ./static/
+COPY config/ ./config/
+RUN mkdir -p /app/logs /app/data/local/image /app/data/local/meta /app/data/page_reference /app/data/cache \
+    && chown -R keiba:keiba /app
+USER keiba
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
+    TZ=Asia/Tokyo \
+    KEIBA_RUN_LOCATION=gcp \
+    PORT=8080
+
+EXPOSE 8080
+# KEIBA_ENV は必ず実行時に明示する（deploy_cloud_run_api.sh が KEIBA_ENV=prod を渡す。未設定だと起動を拒否）
+CMD ["sh", "-c", "exec python -m uvicorn src.api.cloudrun_entry:app --host 0.0.0.0 --port ${PORT} --workers 1 --timeout-keep-alive 75 --no-access-log"]

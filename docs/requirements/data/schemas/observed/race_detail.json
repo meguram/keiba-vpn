@@ -1,0 +1,645 @@
+{
+ "category": "race_detail",
+ "conformance": {
+  "failures": {},
+  "passed": 1,
+  "validated": 1
+ },
+ "keys": {
+  "max": "202602010802",
+  "min": "202602010802"
+ },
+ "lists": {
+  "entries": {
+   "fields": {
+    "bracket_number": {
+     "empty": 0,
+     "max": 8,
+     "min": 1,
+     "n": 12,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 12
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "dam_sire": {
+     "empty": 12,
+     "len_max": 0,
+     "len_min": 0,
+     "n": 12,
+     "null": 0,
+     "patterns": {
+      "empty": 12
+     },
+     "types": {
+      "str": 12
+     },
+     "values": {
+      "": 12
+     },
+     "values_overflow": false
+    },
+    "horse_id": {
+     "empty": 0,
+     "len_max": 10,
+     "len_min": 10,
+     "n": 12,
+     "null": 0,
+     "patterns": {
+      "digits10": 12
+     },
+     "types": {
+      "str": 12
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "horse_name": {
+     "empty": 0,
+     "len_max": 24,
+     "len_min": 15,
+     "n": 12,
+     "null": 0,
+     "patterns": {
+      "text": 12
+     },
+     "types": {
+      "str": 12
+     },
+     "values": {
+      "��≪�������鴻�＜�≪�����": 1,
+      "��吾�ｃ�鴻�������ャ�若��": 1,
+      "��違����ゃ����純��": 1,
+      "�����ゃ�激�ｃ��������": 1,
+      "�����鴻�����������": 1,
+      "��������泣�潟�����": 1,
+      "������������������": 1
+     },
+     "values_overflow": false
+    },
+    "horse_number": {
+     "empty": 0,
+     "max": 12,
+     "min": 1,
+     "n": 12,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 12
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "jockey_id": {
+     "empty": 0,
+     "len_max": 5,
+     "len_min": 5,
+     "n": 12,
+     "null": 0,
+     "patterns": {
+      "digits5": 12
+     },
+     "types": {
+      "str": 12
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "jockey_name": {
+     "empty": 0,
+     "len_max": 10,
+     "len_min": 3,
+     "n": 12,
+     "null": 0,
+     "patterns": {
+      "text": 12
+     },
+     "types": {
+      "str": 12
+     },
+     "values": {
+      "筝劫��": 1,
+      "篏�������": 1,
+      "絨閽�": 1,
+      "罔�絮援��": 1,
+      "��峨ぇ箙�篆�": 1,
+      "��峨����育��": 1,
+      "��峨�����臂�": 1,
+      "��渇群���": 1,
+      "��臥�����": 1,
+      "�����傑��": 1,
+      "������": 1,
+      "������絮�": 1
+     },
+     "values_overflow": false
+    },
+    "jockey_weight": {
+     "empty": 0,
+     "max": 57.0,
+     "min": 52.0,
+     "n": 12,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 12
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "odds": {
+     "empty": 0,
+     "max": 0.0,
+     "min": 0.0,
+     "n": 12,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "float": 12
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "past_races": {
+     "empty": 1,
+     "len_max": 5,
+     "len_min": 0,
+     "n": 12,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "list": 12
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "popularity": {
+     "empty": 0,
+     "max": 0,
+     "min": 0,
+     "n": 12,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 12
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "sex_age": {
+     "empty": 0,
+     "len_max": 4,
+     "len_min": 4,
+     "n": 12,
+     "null": 0,
+     "patterns": {
+      "text": 12
+     },
+     "types": {
+      "str": 12
+     },
+     "values": {
+      "���3": 12
+     },
+     "values_overflow": false
+    },
+    "sire": {
+     "empty": 12,
+     "len_max": 0,
+     "len_min": 0,
+     "n": 12,
+     "null": 0,
+     "patterns": {
+      "empty": 12
+     },
+     "types": {
+      "str": 12
+     },
+     "values": {
+      "": 12
+     },
+     "values_overflow": false
+    },
+    "speed_avg": {
+     "empty": 0,
+     "max": 75,
+     "min": 0,
+     "n": 12,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 12
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "speed_course": {
+     "empty": 0,
+     "max": 70,
+     "min": 0,
+     "n": 12,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 12
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "speed_distance": {
+     "empty": 0,
+     "max": 70,
+     "min": 0,
+     "n": 12,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 12
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "speed_max": {
+     "empty": 0,
+     "max": 94,
+     "min": 0,
+     "n": 12,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 12
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "speed_recent": {
+     "empty": 0,
+     "len_max": 3,
+     "len_min": 3,
+     "n": 12,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "list": 12
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "trainer_id": {
+     "empty": 0,
+     "len_max": 5,
+     "len_min": 5,
+     "n": 12,
+     "null": 0,
+     "patterns": {
+      "digits5": 12
+     },
+     "types": {
+      "str": 12
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "trainer_name": {
+     "empty": 0,
+     "len_max": 8,
+     "len_min": 4,
+     "n": 12,
+     "null": 0,
+     "patterns": {
+      "text": 12
+     },
+     "types": {
+      "str": 12
+     },
+     "values": {
+      "紊у�����": 1,
+      "紊����": 1,
+      "罩����": 1,
+      "膕�莪�": 1,
+      "蕭�罘�綽�": 1,
+      "��よ�����": 1,
+      "��医涯": 1,
+      "��贋��絖�": 1,
+      "���腴�": 1,
+      "������": 3
+     },
+     "values_overflow": false
+    },
+    "weight": {
+     "empty": 0,
+     "max": 550,
+     "min": 404,
+     "n": 12,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 12
+     },
+     "values": {},
+     "values_overflow": false
+    },
+    "weight_change": {
+     "empty": 0,
+     "max": 18,
+     "min": -12,
+     "n": 12,
+     "null": 0,
+     "patterns": {},
+     "types": {
+      "int": 12
+     },
+     "values": {},
+     "values_overflow": false
+    }
+   },
+   "items": 12,
+   "records": 1
+  }
+ },
+ "nested": {},
+ "records": 1,
+ "runs": [
+  {
+   "at": "2026-10-06T14:54:24+00:00",
+   "host": "961fd3e51b1a",
+   "records": 1,
+   "source": "storage"
+  }
+ ],
+ "top": {
+  "course_type": {
+   "empty": 1,
+   "len_max": 0,
+   "len_min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "empty": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "": 1
+   },
+   "values_overflow": false
+  },
+  "date": {
+   "empty": 1,
+   "len_max": 0,
+   "len_min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "empty": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "": 1
+   },
+   "values_overflow": false
+  },
+  "direction": {
+   "empty": 1,
+   "len_max": 0,
+   "len_min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "empty": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "": 1
+   },
+   "values_overflow": false
+  },
+  "distance": {
+   "empty": 0,
+   "max": 0,
+   "min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "entries": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "list": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "field_size": {
+   "empty": 0,
+   "max": 0,
+   "min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "grade": {
+   "empty": 1,
+   "len_max": 0,
+   "len_min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "empty": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "": 1
+   },
+   "values_overflow": false
+  },
+  "race_class": {
+   "empty": 1,
+   "len_max": 0,
+   "len_min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "empty": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "": 1
+   },
+   "values_overflow": false
+  },
+  "race_id": {
+   "empty": 0,
+   "len_max": 12,
+   "len_min": 12,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "digits12": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "race_name": {
+   "empty": 0,
+   "len_max": 11,
+   "len_min": 11,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "text": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "3罩恰��������": 1
+   },
+   "values_overflow": false
+  },
+  "round": {
+   "empty": 0,
+   "max": 2,
+   "min": 2,
+   "n": 1,
+   "null": 0,
+   "patterns": {},
+   "types": {
+    "int": 1
+   },
+   "values": {},
+   "values_overflow": false
+  },
+  "start_time": {
+   "empty": 1,
+   "len_max": 0,
+   "len_min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "empty": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "": 1
+   },
+   "values_overflow": false
+  },
+  "surface": {
+   "empty": 1,
+   "len_max": 0,
+   "len_min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "empty": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "": 1
+   },
+   "values_overflow": false
+  },
+  "track_condition": {
+   "empty": 1,
+   "len_max": 0,
+   "len_min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "empty": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "": 1
+   },
+   "values_overflow": false
+  },
+  "venue": {
+   "empty": 1,
+   "len_max": 0,
+   "len_min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "empty": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "": 1
+   },
+   "values_overflow": false
+  },
+  "weather": {
+   "empty": 1,
+   "len_max": 0,
+   "len_min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "empty": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "": 1
+   },
+   "values_overflow": false
+  },
+  "weight_rule": {
+   "empty": 1,
+   "len_max": 0,
+   "len_min": 0,
+   "n": 1,
+   "null": 0,
+   "patterns": {
+    "empty": 1
+   },
+   "types": {
+    "str": 1
+   },
+   "values": {
+    "": 1
+   },
+   "values_overflow": false
+  }
+ }
+}

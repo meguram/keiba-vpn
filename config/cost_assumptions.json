@@ -1,0 +1,411 @@
+{
+  "_meta": {
+    "purpose": "移行後の月額コスト見積もり(src/scripts/ops/cost_estimate.py)の前提。数値を変えて再計算できる。docs/operations/architecture_target.md が参照する。",
+    "updated": "2026-10-21",
+    "how_to_recalculate": "python -m src.scripts.ops.cost_estimate --scenario all  /  --fx 160  /  --set prices.gcs_tokyo_standard_gb_month=0.025  /  --format md",
+    "verified_legend": "verified=true は公式の公開ページで 2026-10-21 に確認した値。false は作成者の知識ベース(要確認)。実績は GCP の課金エクスポートで置き換える(gcp_daily_cost_report.py)。"
+  },
+  "fx_jpy_per_usd": 150,
+  "budget_jpy_per_month": 2000,
+  "seconds_per_month": 2592000,
+  "prices": {
+    "cloud_run_vcpu_second": {
+      "value": 2.4e-05,
+      "verified": false,
+      "source": "Cloud Run 料金(Tier 1, リクエスト課金)。東京=Tier 1 の想定"
+    },
+    "cloud_run_gib_second": {
+      "value": 2.5e-06,
+      "verified": false,
+      "source": "同上"
+    },
+    "cloud_run_request_per_million": {
+      "value": 0.4,
+      "verified": false,
+      "source": "同上"
+    },
+    "cloud_run_idle_vcpu_second": {
+      "value": 2.5e-06,
+      "verified": false,
+      "source": "最小インスタンスのアイドル時(Tier 1)"
+    },
+    "cloud_run_idle_gib_second": {
+      "value": 2.5e-06,
+      "verified": false,
+      "source": "同上"
+    },
+    "cloud_run_job_vcpu_second": {
+      "value": 1.8e-05,
+      "verified": false,
+      "source": "Cloud Run Jobs(インスタンス課金, Tier 1)"
+    },
+    "cloud_run_job_gib_second": {
+      "value": 2e-06,
+      "verified": false,
+      "source": "同上"
+    },
+    "gcs_tokyo_standard_gb_month": {
+      "value": 0.023,
+      "verified": false,
+      "source": "Cloud Storage Standard, asia-northeast1"
+    },
+    "gcs_class_a_per_1000": {
+      "value": 0.005,
+      "verified": false,
+      "source": "Class A 操作(書き込み・一覧)"
+    },
+    "gcs_class_b_per_1000": {
+      "value": 0.0004,
+      "verified": false,
+      "source": "Class B 操作(読み取り)"
+    },
+    "internet_egress_gb": {
+      "value": 0.12,
+      "verified": false,
+      "source": "GCP から外部への送信(アジア発・Premium の目安)"
+    },
+    "scheduler_job_month": {
+      "value": 0.1,
+      "verified": false,
+      "source": "Cloud Scheduler(無料枠 3 ジョブ/請求先アカウント)"
+    },
+    "secret_manager_version_month": {
+      "value": 0.06,
+      "verified": false,
+      "source": "Secret Manager 有効バージョン"
+    },
+    "artifact_registry_gb_month": {
+      "value": 0.1,
+      "verified": false,
+      "source": "Artifact Registry(無料枠 0.5GB)"
+    },
+    "logging_gib": {
+      "value": 0.5,
+      "verified": false,
+      "source": "Cloud Logging 取り込み(無料枠 50GiB/月)"
+    },
+    "gce_e2_micro_tokyo_hour": {
+      "value": 0.0104,
+      "verified": false,
+      "source": "e2-micro 東京(無料枠は米国 3 リージョンのみ)"
+    },
+    "gce_pd_standard_gb_month": {
+      "value": 0.044,
+      "verified": false,
+      "source": "標準永続ディスク 東京"
+    },
+    "gce_external_ipv4_hour": {
+      "value": 0.005,
+      "verified": false,
+      "source": "外部 IPv4(使用中)。2024-02 以降は有料の認識"
+    },
+    "cloud_sql_f1_micro_month": {
+      "value": 12.0,
+      "verified": false,
+      "source": "docs/operations/cost-estimate.md の試算(db-f1-micro, HDD 10GB, バックアップ込み $11〜13)"
+    },
+    "cloud_nat_month": {
+      "value": 32.0,
+      "verified": false,
+      "source": "docs/operations/cost-estimate.md の試算(固定送信 IP 用 Cloud NAT)"
+    },
+    "r2_storage_gb_month": {
+      "value": 0.015,
+      "verified": true,
+      "source": "Cloudflare R2 料金ページ(2026-10-21)。egress は無料"
+    },
+    "r2_class_a_per_million": {
+      "value": 4.5,
+      "verified": true,
+      "source": "同上"
+    },
+    "r2_class_b_per_million": {
+      "value": 0.36,
+      "verified": true,
+      "source": "同上"
+    }
+  },
+  "free_tier": {
+    "cloud_run_requests": {
+      "value": 2000000,
+      "verified": true,
+      "source": "GCP Free Tier(リクエスト課金): 月 200 万リクエスト"
+    },
+    "cloud_run_vcpu_seconds": {
+      "value": 180000,
+      "verified": true,
+      "source": "同上: 月 18 万 vCPU 秒"
+    },
+    "cloud_run_gib_seconds": {
+      "value": 360000,
+      "verified": true,
+      "source": "同上: 月 36 万 GiB 秒"
+    },
+    "gcs_gb_month_us_regions_only": {
+      "value": 5,
+      "verified": true,
+      "source": "Cloud Storage: 5GB-月。us-east1/us-west1/us-central1 のみ(東京は対象外)"
+    },
+    "scheduler_jobs": {
+      "value": 3,
+      "verified": false,
+      "source": "Cloud Scheduler 無料 3 ジョブ(請求先アカウント単位)"
+    },
+    "secret_manager_versions": {
+      "value": 6,
+      "verified": true,
+      "source": "Secret Manager: 有効バージョン 6 個、アクセス 1 万回/月"
+    },
+    "artifact_registry_gb": {
+      "value": 0.5,
+      "verified": true,
+      "source": "Artifact Registry: 0.5GB"
+    },
+    "logging_gib": {
+      "value": 50,
+      "verified": true,
+      "source": "Cloud Logging: 50GiB/月"
+    },
+    "firestore_gib": {
+      "value": 1,
+      "verified": true,
+      "source": "Firestore: 1GiB、読み取り 5 万/書き込み 2 万/削除 2 万 per 日"
+    },
+    "bigquery_storage_gib": {
+      "value": 10,
+      "verified": true,
+      "source": "BigQuery: ストレージ 10GiB、クエリ 1TiB/月"
+    },
+    "gce_e2_micro_us_only": {
+      "value": 1,
+      "verified": true,
+      "source": "e2-micro 月 1 台。us-west1/us-central1/us-east1 のみ(東京は対象外)"
+    },
+    "r2_storage_gb": {
+      "value": 10,
+      "verified": true,
+      "source": "Cloudflare R2: 10GB-月、Class A 100 万、Class B 1,000 万 per 月"
+    },
+    "r2_class_a": {
+      "value": 1000000,
+      "verified": true,
+      "source": "同上"
+    },
+    "r2_class_b": {
+      "value": 10000000,
+      "verified": true,
+      "source": "同上"
+    },
+    "cloudflare_access_users": {
+      "value": 50,
+      "verified": false,
+      "source": "Cloudflare Zero Trust Free: 50 ユーザーまで(Access・Tunnel は 0 円)"
+    }
+  },
+  "scenarios": {
+    "A_budget_core": {
+      "description": "【第一案・2026-10-21 改訂】UI=VPS(常駐は Next.js standalone・nginx・cloudflared・ヘルスチェックのみ、前払い済み)。API・予測生成・集計・通知・ドリフト監視・Slack は GCP(Cloud Run 最小 0 + Cloud Run Jobs + Cloud Scheduler/Cloud Tasks)。VPS には『取得の薄い実行役』(GCS のタスクを pull して実行、MemoryMax あり)だけを置く。データは GCS(東京)、公開スナップショットは R2。",
+      "components": [
+        "cloud_run_service",
+        "cloud_run_jobs",
+        "gcs",
+        "scheduler",
+        "secret_manager",
+        "artifact_registry",
+        "logging",
+        "cloudflare_r2"
+      ],
+      "usage": {
+        "low": {
+          "cloud_run_service": {
+            "requests": 50000,
+            "avg_seconds": 0.3,
+            "vcpu": 1,
+            "gib": 2,
+            "cold_starts": 150,
+            "cold_seconds": 8,
+            "min_instances": 0
+          },
+          "cloud_run_jobs": {
+            "vcpu_seconds": 60000,
+            "gib_seconds": 130000
+          },
+          "gcs": {
+            "stored_gb": 20,
+            "class_a_ops": 150000,
+            "class_b_ops": 845000,
+            "egress_gb": 1.0
+          },
+          "scheduler": {
+            "jobs": 6
+          },
+          "secret_manager": {
+            "versions": 6
+          },
+          "artifact_registry": {
+            "gb": 1.0
+          },
+          "logging": {
+            "gib": 5
+          },
+          "cloudflare_r2": {
+            "stored_gb": 1,
+            "class_a_ops": 30000,
+            "class_b_ops": 1000000
+          }
+        },
+        "high": {
+          "cloud_run_service": {
+            "requests": 420000,
+            "avg_seconds": 0.5,
+            "vcpu": 1,
+            "gib": 2,
+            "cold_starts": 600,
+            "cold_seconds": 10,
+            "min_instances": 0
+          },
+          "cloud_run_jobs": {
+            "vcpu_seconds": 170000,
+            "gib_seconds": 440000
+          },
+          "gcs": {
+            "stored_gb": 100,
+            "class_a_ops": 600000,
+            "class_b_ops": 4045000,
+            "egress_gb": 8.0
+          },
+          "scheduler": {
+            "jobs": 14
+          },
+          "secret_manager": {
+            "versions": 10
+          },
+          "artifact_registry": {
+            "gb": 2.5
+          },
+          "logging": {
+            "gib": 20
+          },
+          "cloudflare_r2": {
+            "stored_gb": 5,
+            "class_a_ops": 100000,
+            "class_b_ops": 6000000
+          }
+        }
+      },
+      "_notes": "requests にはハートビート(5 分おき 約 8,640 回)・アラート判定(15 分おき)を含む。class_b_ops には VPS の実行役が 60 秒おきに GCS のタスクを確認する分(約 4.3 万回)を含む。Scheduler は 6〜14 ジョブ(無料 3)。"
+    },
+    "B_scrape_on_cloud_run_jobs": {
+      "description": "A に加えて、開催日ランナー・前日取得・夜間取得も GCP(Cloud Run Jobs)で実行する案。VPS の実行役を使わない。送信元 IP が固定でなく、GCP の IP からの到達は未検証(要試験)。",
+      "extends": "A_budget_core",
+      "components_add": [],
+      "usage_add": {
+        "low": {
+          "cloud_run_jobs": {
+            "vcpu_seconds": 90000,
+            "gib_seconds": 90000
+          }
+        },
+        "high": {
+          "cloud_run_jobs": {
+            "vcpu_seconds": 260000,
+            "gib_seconds": 260000
+          }
+        }
+      }
+    },
+    "C_api_min_instance_1": {
+      "description": "A に加えて、API の最小インスタンスを常時 1 にしてコールドスタートをなくす案(1 vCPU / 2GiB)。",
+      "extends": "A_budget_core",
+      "usage_override": {
+        "low": {
+          "cloud_run_service": {
+            "min_instances": 1,
+            "cold_starts": 0
+          }
+        },
+        "high": {
+          "cloud_run_service": {
+            "min_instances": 1,
+            "cold_starts": 0
+          }
+        }
+      }
+    },
+    "D_cloud_sql": {
+      "description": "A に加えて、Cloud SQL(PostgreSQL, db-f1-micro)を常設する案(従来の確定案)。",
+      "extends": "A_budget_core",
+      "components_add": [
+        "cloud_sql"
+      ],
+      "usage_add": {
+        "low": {
+          "cloud_sql": {
+            "instances": 1
+          }
+        },
+        "high": {
+          "cloud_sql": {
+            "instances": 1
+          }
+        }
+      }
+    },
+    "E_gce_tokyo_resident": {
+      "description": "A に加えて、東京の e2-micro(常時起動、外部 IPv4 付き)を『GCP の常駐機』として置く案。無料枠は米国のみなので東京は有料。",
+      "extends": "A_budget_core",
+      "components_add": [
+        "gce"
+      ],
+      "usage_add": {
+        "low": {
+          "gce": {
+            "instances": 1,
+            "disk_gb": 20
+          }
+        },
+        "high": {
+          "gce": {
+            "instances": 1,
+            "disk_gb": 30
+          }
+        }
+      }
+    },
+    "F_literal_all_gcp": {
+      "description": "ユーザー方針を文字どおりに実装した場合の上限: API 最小インスタンス 1 + Cloud SQL + 東京 e2-micro(取得用常駐機) + Cloud NAT(固定 IP)。",
+      "extends": "C_api_min_instance_1",
+      "components_add": [
+        "cloud_sql",
+        "gce",
+        "cloud_nat"
+      ],
+      "usage_add": {
+        "low": {
+          "cloud_sql": {
+            "instances": 1
+          },
+          "gce": {
+            "instances": 1,
+            "disk_gb": 20
+          },
+          "cloud_nat": {
+            "enabled": 0
+          }
+        },
+        "high": {
+          "cloud_sql": {
+            "instances": 1
+          },
+          "gce": {
+            "instances": 1,
+            "disk_gb": 30
+          },
+          "cloud_nat": {
+            "enabled": 1
+          }
+        }
+      }
+    }
+  }
+}

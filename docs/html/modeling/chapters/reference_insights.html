@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>参考資料から反映した設計メモ — keiba-vpn docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+
+  :root {
+    --bg: #0f172a; --panel: #15213c; --border: #243358;
+    --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+    --accent-2: #7aa9ff; --code-bg: #0b1428;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: linear-gradient(180deg, #0b1226 0%, #0f172a 60%, #0b1226 100%);
+    color: var(--text); line-height: 1.75; font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, .mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: linear-gradient(180deg, #0a1124 0%, #0d1632 100%);
+    border-right: 1px solid var(--border); padding: 28px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand .logo {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, #4f8bff, #a78bfa);
+    display: grid; place-items: center; font-weight: 700; color: white;
+    font-size: 13px; box-shadow: var(--shadow);
+  }
+  .brand .title { font-weight: 700; font-size: 14px; }
+  .brand .sub { color: var(--muted); font-size: 11px; }
+  nav.toc { font-size: 13px; }
+  nav.toc h4 {
+    color: var(--muted); margin: 16px 0 6px;
+    text-transform: uppercase; letter-spacing: .14em;
+    font-size: 10px; font-weight: 700;
+  }
+  nav.toc a {
+    display: block; color: var(--text); padding: 6px 10px;
+    border-radius: 8px; margin: 2px 0; border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+  nav.toc a:hover {
+    background: rgba(79,139,255,.08); border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  nav.toc a.active {
+    background: rgba(79,139,255,.12); border-left-color: var(--accent); color: #fff;
+  }
+  nav.toc a.toc-h3 { padding-left: 22px; font-size: 12px; color: var(--muted); }
+  main.content { padding: 48px 56px 96px; max-width: 960px; width: 100%; }
+  header.hero {
+    padding: 28px 32px 24px; border-radius: 18px;
+    background: radial-gradient(1200px 400px at 0% 0%, rgba(79,139,255,.18), transparent 60%),
+                radial-gradient(800px 400px at 100% 100%, rgba(167,139,250,.18), transparent 60%),
+                linear-gradient(180deg, #16213f, #111a36);
+    border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 32px;
+  }
+  header.hero .eyebrow {
+    color: var(--accent-2); font-size: 12px; letter-spacing: .2em;
+    font-weight: 700; text-transform: uppercase;
+  }
+  header.hero h1 { margin: 8px 0 10px; font-size: 28px; line-height: 1.35; }
+  header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  header.hero .meta code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12px;
+  }
+  article.html-body { color: #d8e0f7; }
+  article.html-body h1 {
+    font-size: 1.6rem; margin: 1.6em 0 0.6em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h2 {
+    font-size: 1.25rem; margin: 2em 0 0.6em; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #e8eeff; scroll-margin-top: 24px;
+  }
+  article.html-body h3 {
+    font-size: 1.05rem; margin: 1.4em 0 0.5em;
+    color: var(--accent-2); scroll-margin-top: 24px;
+  }
+  article.html-body h4 { font-size: 0.95rem; margin: 1.2em 0 0.4em; color: #c9d6ff; }
+  article.html-body p { margin: 0.75em 0; }
+  article.html-body ul, article.html-body ol { padding-left: 1.4em; margin: 0.6em 0; }
+  article.html-body li { margin: 0.35em 0; }
+  article.html-body blockquote {
+    border-left: 3px solid var(--accent); background: rgba(79,139,255,.08);
+    margin: 1em 0; padding: 12px 16px; border-radius: 0 8px 8px 0; color: #e7eeff;
+  }
+  article.html-body hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+  article.html-body table {
+    width: 100%; border-collapse: collapse; margin: 1em 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; font-size: 13px;
+  }
+  article.html-body th, article.html-body td {
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border);
+  }
+  article.html-body th {
+    background: #1a2748; color: var(--muted); font-weight: 600;
+    font-size: 11px; letter-spacing: .06em;
+  }
+  article.html-body tr:last-child td { border-bottom: 0; }
+  article.html-body tr:hover td { background: rgba(79,139,255,.04); }
+  article.html-body pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; overflow-x: auto;
+    font-size: 12.5px; line-height: 1.55; margin: 1em 0;
+  }
+  article.html-body code {
+    background: #1a2748; border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff;
+  }
+  article.html-body pre code { background: none; border: none; padding: 0; }
+  article.html-body img { max-width: 100%; border-radius: 8px; }
+  article.html-body .mermaid {
+    background: #0b1428; border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 1em 0;
+  }
+  .doc-nav {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 48px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .doc-nav a {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  }
+  .doc-nav a:hover { border-color: var(--accent); text-decoration: none; }
+  footer.page-footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .index-section { margin-top: 32px; }
+  .index-section h2 {
+    font-size: 18px; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px; margin: 0 0 14px; color: var(--accent-2);
+  }
+  .doc-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .doc-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .doc-card:hover { border-color: var(--accent); }
+  .doc-card a.title {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: block; margin-bottom: 6px;
+  }
+  .doc-card a.title:hover { color: var(--accent-2); text-decoration: none; }
+  .doc-card .path {
+    font-size: 11px; color: var(--muted);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .doc-card .desc { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.sidebar { position: relative; height: auto; max-height: 40vh; }
+    main.content { padding: 28px 20px 80px; }
+  }
+
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  if (typeof mermaid !== "undefined") {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
+  }
+});
+</script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">KV</div>
+      <div>
+        <div class="title">keiba-vpn</div>
+        <div class="sub">Documentation</div>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="../../index.html">← ドキュメント一覧</a>
+    </nav>
+  </aside>
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">DOCUMENTATION</div>
+      <h1>参考資料から反映した設計メモ</h1>
+      <p class="meta">ソース: <code>docs/html/modeling/chapters/reference_insights.html</code> · 生成: 2026-05-20 06:01 UTC</p>
+    </header>
+    <article class="md-body">
+<h1 id="_1">参考資料から反映した設計メモ</h1>
+<h2 id="_2">目的</h2>
+<p>このメモは、レース直前確率モデル向けのデータ準備企画書を改善する際に参照した外部資料と、そこから得た知見の反映ポイントをまとめたものです。</p>
+<h2 id="_3">参照資料</h2>
+<table>
+<thead>
+<tr><th>資料名</th><th>主な知見</th></tr>
+</thead>
+<tbody>
+<tr><td><a href="https://syslab.k.hosei.ac.jp/abst/2023-MN-RM.pdf">法政大学 経営数理工学研究室 2023年度卒論要旨 PDF</a></td><td>ベースラインを先に固定する戦略、時系列分割の必要性、EDA と欠損点検</td></tr>
+<tr><td><a href="https://qiita.com/umaro_ai/items/d1e0b61f90098ee7fbcb">Qiita: 機械学習で競馬の回収率140%超を達成</a></td><td>1着・2着以内・3着以内の分離、オッズを使わない能力モデル設計</td></tr>
+<tr><td><a href="https://qiita.com/dijzpeb/items/db74aa9726aaf55201eb">Qiita: 「機械学習で競馬予想」をガチで作る</a></td><td>継続開発・バージョン管理・差分比較の重要性</td></tr>
+<tr><td><a href="https://speakerdeck.com/shoheimitani/machine-learning-with-horse-racing">Speaker Deck: 競馬で学ぶ機械学習の基本と実践</a></td><td>確率の信頼性（logloss/Brier）を先に評価、時系列 split、高オッズ帯の安全域</td></tr>
+<tr><td><a href="https://medium.com/@prathik.codes/how-to-do-target-encoding-without-data-leakage-the-right-way-280bd24fbc81">How to Do Target Encoding Without Data Leakage</a></td><td>OOF target encoding の正しい実装方法</td></tr>
+<tr><td><a href="https://github.com/amerob/kaggle-for-ml-engineers">amerob/kaggle-for-ml-engineers</a></td><td>Kaggle テーブルデータ実践パターン</td></tr>
+<tr><td><a href="https://github.com/thomastschinkel/autofepg">autofepg</a></td><td>特徴量エンジニアリング自動化</td></tr>
+<tr><td><a href="https://towardsdatascience.com/benchmarking-categorical-encoders-9c322bd77ee8">Benchmarking Categorical Encoders</a></td><td>カテゴリエンコーダの比較・選定基準</td></tr>
+<tr><td><a href="https://en.wikipedia.org/wiki/Purged_cross-validation">Purged cross-validation</a></td><td>時系列 CV における purge / embargo の理論</td></tr>
+<tr><td><a href="https://www.waylandz.com/quant-book-en/Time-Series-Cross-Validation-Purged-CV">Background: Time Series Cross-Validation (Purged CV)</a></td><td>Purged CV の実装ガイド</td></tr>
+</tbody>
+</table>
+<h2 id="_4">既存コードから反映した点</h2>
+<table>
+<thead>
+<tr><th>モジュール</th><th>役割</th></tr>
+</thead>
+<tbody>
+<tr><td><code>src/pipeline/models/tracking_difficulty.py</code></td><td>脚質プロファイル・位置取り予測</td></tr>
+<tr><td><code>src/pipeline/models/pace_predictor.py</code></td><td>ラップタイム・ペース分類予測</td></tr>
+<tr><td><code>src/research/pedigree/bloodline_distance.py</code></td><td>父・母父と距離適性の関係整理</td></tr>
+<tr><td><code>src/research/race/race_quality_model.py</code></td><td>脚質タイプ別好走率のベイズ推定</td></tr>
+</tbody>
+</table>
+<h2 id="_5">実装戦略の補足</h2>
+<table>
+<thead>
+<tr><th>ドキュメント</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td><code>docs/html/modeling/chapters/modeling_coding_strategy.html</code></td><td>Polars・省メモリ・コーディング規約</td></tr>
+<tr><td><code>docs/html/modeling/chapters/race_performance_rating_system.html</code></td><td>レースパフォーマンス算出システム設計</td></tr>
+</tbody>
+</table>
+<h2 id="_6">反映したポイント</h2>
+<table>
+<thead>
+<tr><th>#</th><th>ポイント</th><th>反映先</th></tr>
+</thead>
+<tbody>
+<tr><td>1</td><td>ベースラインを先に固定する</td><td><code>pre_race_feature_whitelist.html</code>, <code>horse_pre_race_dataset_spec.html</code></td></tr>
+<tr><td>2</td><td>確率の信頼性を ROI より先に評価する</td><td><code>betting_backtest_dataset_spec.html</code>, <code>dataset_split_manifest.json</code></td></tr>
+<tr><td>3</td><td>時系列順での分割（TimeSeriesSplit）を採用する</td><td><code>dataset_split_manifest.json</code></td></tr>
+<tr><td>4</td><td>1着・2着以内・3着以内を分けて持つ</td><td><code>horse_pre_race_dataset_spec.html</code>, <code>betting_backtest_dataset_spec.html</code></td></tr>
+<tr><td>5</td><td>継続開発を前提に成果物をバージョン管理する</td><td><code>horse_pre_race_dataset_spec.html</code>, <code>betting_backtest_dataset_spec.html</code></td></tr>
+<tr><td>6</td><td>EDA と欠損・外れ値の点検を必須にする</td><td><code>horse_pre_race_dataset_spec.html</code></td></tr>
+<tr><td>7</td><td>市場情報はモデル本体と意思決定層で分離する</td><td><code>pre_race_feature_whitelist.html</code>, <code>betting_backtest_dataset_spec.html</code></td></tr>
+<tr><td>8</td><td>OOF target encoding を正式採用する</td><td><code>horse_pre_race_dataset_spec.html</code>, <code>advanced_modeling_techniques.html</code></td></tr>
+<tr><td>9</td><td>Purge / embargo 付き CV を採用する</td><td><code>dataset_split_manifest.json</code>, <code>advanced_modeling_techniques.html</code></td></tr>
+<tr><td>10</td><td>CatBoost / LightGBM の 2 モデル比較を行う</td><td><code>advanced_modeling_techniques.html</code></td></tr>
+<tr><td>11</td><td>期待値の安全域をルール化する</td><td><code>betting_backtest_dataset_spec.html</code></td></tr>
+<tr><td>12</td><td>追加特徴量は必ず差分比較する</td><td><code>horse_pre_race_dataset_spec.html</code>, <code>advanced_modeling_techniques.html</code></td></tr>
+<tr><td>13</td><td>位置取りを前段モデルで予測する</td><td><code>staged_probability_pipeline.html</code>, <code>horse_pre_race_dataset_spec.html</code></td></tr>
+<tr><td>14</td><td>ペースを前段モデルで予測する</td><td><code>staged_probability_pipeline.html</code>, <code>horse_pre_race_dataset_spec.html</code></td></tr>
+<tr><td>15</td><td>血統適性を当日のコースバイアスと組み合わせる</td><td><code>staged_probability_pipeline.html</code>, <code>horse_pre_race_dataset_spec.html</code></td></tr>
+<tr><td>16</td><td>Polars 中心の省メモリ実装を前提にする</td><td><code>modeling_coding_strategy.html</code>, <code>horse_pre_race_dataset_spec.html</code>, <code>advanced_modeling_techniques.html</code></td></tr>
+</tbody>
+</table>
+<h2 id="1">1. ベースラインを先に固定する</h2>
+<p>Speaker Deck と法政大の資料では、まずシンプルな指数中心のベースモデルを作り、そこから特徴量（予測に使う数値）を段階的に追加・比較する流れが有効であることが示されていました。</p>
+<table>
+<thead>
+<tr><th>採用内容</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>BaselineV1</code> の定義</td><td>最初の比較基準となるシンプルなモデル</td></tr>
+<tr><td><code>ExtendedV1</code> を別出力として用意</td><td>追加特徴量を積み上げたモデル</td></tr>
+<tr><td>差分評価</td><td>追加特徴量の効果は BaselineV1 との差分で評価</td></tr>
+</tbody>
+</table>
+<h2 id="2-roi">2. 確率の信頼性を ROI より先に評価する</h2>
+<p>Speaker Deck では、期待値が 1 を超えていても、高オッズ帯ではわずかな確率誤差で簡単に損失になることが強調されていました。<code>logloss</code> や <code>Brier score</code> のような確率の信頼性指標が特に重要とされていました。</p>
+<table>
+<thead>
+<tr><th>評価優先度</th><th>指標</th><th>位置づけ</th></tr>
+</thead>
+<tbody>
+<tr><td>一次</td><td><code>log_loss</code>, <code>Brier score</code>, <code>ECE</code></td><td>確率の信頼性評価</td></tr>
+<tr><td>二次</td><td>ROI</td><td>収益評価（後段）</td></tr>
+<tr><td>安全域</td><td><code>safe_ev</code>（安全域付き期待値）, <code>buffer</code></td><td>高オッズ帯での判定バッファ</td></tr>
+</tbody>
+</table>
+<h2 id="3-timeseriessplit">3. 時系列順での分割（TimeSeriesSplit）を採用する</h2>
+<p>法政大資料と Speaker Deck の両方で、競馬モデルでは時間順での検証が不可欠であることが示されていました。</p>
+<table>
+<thead>
+<tr><th>設定</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td>期間分割</td><td><code>2020-2023 train / 2024 valid / 2025 test</code></td></tr>
+<tr><td>fold 方式</td><td><code>rolling-origin</code> fold</td></tr>
+<tr><td>禁止事項</td><td>行単位のランダム split は禁止</td></tr>
+<tr><td>encoding</td><td>カテゴリ encoding や集計は train fold 内のデータのみで作成</td></tr>
+</tbody>
+</table>
+<h2 id="4-123">4. 1着・2着以内・3着以内を分けて持つ</h2>
+<p>Qiita の 140% 記事では、1着指数・2着以内指数・3着以内指数を並行して扱う設計が示されており、本プロジェクトの目標とも合致していました。</p>
+<table>
+<thead>
+<tr><th>種別</th><th>ラベル</th><th>確率出力</th></tr>
+</thead>
+<tbody>
+<tr><td>1着</td><td><code>is_win</code></td><td><code>p_win</code></td></tr>
+<tr><td>2着以内</td><td><code>is_top2</code></td><td><code>p_top2</code></td></tr>
+<tr><td>3着以内</td><td><code>is_top3</code></td><td><code>p_top3</code></td></tr>
+</tbody>
+</table>
+<h2 id="5-mlops">5. 継続開発を前提に成果物をバージョン管理する</h2>
+<p>Qiita の <code>dijzpeb</code> 記事では、単発の notebook で終わらせず、ソースコード・データ・モデル・実験結果を整理して継続的に改善できる形にする重要性が強調されていました。</p>
+<table>
+<thead>
+<tr><th>採用内容</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>data_version</code>, <code>code_version</code>, <code>source_table_versions</code></td><td>成果物ファイルにバージョン情報を保存</td></tr>
+<tr><td><code>dataset_profile.json</code>, <code>feature_missingness.csv</code>, <code>label_balance.json</code></td><td>監査成果物として出力</td></tr>
+<tr><td><code>bet_policy_thresholds.json</code></td><td>閾値ルールを外部設定ファイルで管理</td></tr>
+</tbody>
+</table>
+<h2 id="6-eda">6. EDA と欠損・外れ値の点検を必須にする</h2>
+<p>法政大資料と Speaker Deck では、特徴量を設計する前に分布・欠損・相関・外れ値を点検することが重要だと示されていました。</p>
+<table>
+<thead>
+<tr><th>必須成果物</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td><code>dataset_profile.json</code></td><td>データ全体の分布・基本統計</td></tr>
+<tr><td><code>feature_missingness.csv</code></td><td>特徴量ごとの欠損率</td></tr>
+<tr><td><code>segment_coverage.csv</code></td><td>セグメント別カバレッジ</td></tr>
+<tr><td><code>outlier_watchlist.csv</code></td><td>外れ値の監視リスト</td></tr>
+</tbody>
+</table>
+<h2 id="7">7. 市場情報はモデル本体と意思決定層で分離する</h2>
+<p>Qiita の 140% 記事は「オッズを特徴量に使わない能力モデル」を示し、Speaker Deck は「期待値計算には市場価格が必要」と示していました。この相反する要求を整理するため、以下のように 2 層に分けました。</p>
+<table>
+<thead>
+<tr><th>レイヤ</th><th>役割</th><th>オッズの扱い</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>LayerA</strong></td><td>能力・状態推定モデル</td><td>オッズに依存しない</td></tr>
+<tr><td><strong>LayerB</strong></td><td>意思決定・馬券最適化レイヤ</td><td>オッズを使う</td></tr>
+</tbody>
+</table>
+<h2 id="8-oof-target-encoding">8. OOF target encoding を正式採用する</h2>
+<p>Kaggle の実践では、target encoding は強力である一方、データリークを起こしやすいため、OOF（Out-of-Fold）方式を前提にすることが定石です。また、出現が少ないカテゴリは全体平均に縮小（shrink）し、未知カテゴリにはフォールバックを持たせることが一般的です。</p>
+<table>
+<thead>
+<tr><th>採用内容</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td>OOF target encoding</td><td>fold 外データのみで encoding を計算</td></tr>
+<tr><td>CatBoost-style ordered target encoding</td><td>時系列順序を保持した encoding</td></tr>
+<tr><td>OOF aggregate features</td><td>集計特徴量も OOF 方式で生成</td></tr>
+<tr><td><code>encoding_recipe_version</code></td><td>再現性のためのバージョン管理</td></tr>
+</tbody>
+</table>
+<h2 id="9-purged-embargo-cv">9. Purge / embargo 付き CV を採用する</h2>
+<p>Kaggle の時系列・非 IID タスクでは、通常の KFold より <code>PurgedGroupTimeSeriesSplit</code> の方が安全であるという知見が多数あります。近い時点のデータが学習・検証に同時に入ることで生じるリークを防ぐための仕組みです。</p>
+<table>
+<thead>
+<tr><th>設定</th><th>内容</th></tr>
+</thead>
+<tbody>
+<tr><td><code>cv_policy.primary_scheme</code></td><td><code>purged_group_time_series_split</code></td></tr>
+<tr><td><code>purge_window_days</code></td><td>学習・検証に同時利用しない期間（除外ウィンドウ）</td></tr>
+<tr><td><code>embargo_days</code></td><td>学習後の待機期間</td></tr>
+<tr><td>OOF 特徴量</td><td>purge / embargo のルールに従う</td></tr>
+</tbody>
+</table>
+<h2 id="10-catboost-lightgbm">10. CatBoost / LightGBM の 2 モデル比較を行う</h2>
+<p>Kaggle のテーブルデータ実践では、カテゴリ変数の処理に強い CatBoost と、高速で拡張しやすい LightGBM（いずれも GBDT、木を積み上げた機械学習モデル）の比較とアンサンブルが定番とされています。</p>
+<table>
+<thead>
+<tr><th>採用内容</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td>LightGBM baseline</td><td>高速で拡張しやすい GBDT</td></tr>
+<tr><td>CatBoost baseline</td><td>カテゴリ変数の処理に強い GBDT</td></tr>
+<tr><td>OOF blending</td><td>複数モデルのアンサンブル</td></tr>
+</tbody>
+</table>
+<h2 id="11">11. 期待値の安全域をルール化する</h2>
+<p>Speaker Deck と Qiita の実践例では、高オッズ帯での期待値判定はわずかな確率誤差に弱く、そのまま買い続けると破綻しやすいことが繰り返し示されていました。</p>
+<table>
+<thead>
+<tr><th>採用内容</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>safe_ev</code>（安全域付き期待値）</td><td>確率誤差を考慮した安全域付き期待値</td></tr>
+<tr><td><code>buffer</code>（判定バッファ）</td><td>高オッズ帯での判定バッファ</td></tr>
+<tr><td><code>bet_policy_thresholds.json</code></td><td>閾値の外部ファイル管理</td></tr>
+</tbody>
+</table>
+<h2 id="12-kaggle">12. 追加特徴量は必ず差分比較する</h2>
+<p>Kaggle の実践では、「手法を追加したら必ず OOF / holdout で差分比較する」流れが徹底されています。思い込みによる過剰な特徴量追加を防ぐために重要なプロセスです。</p>
+<table>
+<thead>
+<tr><th>採用内容</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>BaselineV1</code> / <code>ExtendedV1</code> の 2 本立て</td><td>追加特徴量の効果を差分で測定</td></tr>
+<tr><td>ablation study</td><td>特徴量ブロック単位の寄与測定</td></tr>
+<tr><td>feature block ごとの ON/OFF 比較</td><td>各特徴グループの単独寄与を検証</td></tr>
+<tr><td>adversarial validation</td><td>学習・テスト分布のずれ検出</td></tr>
+</tbody>
+</table>
+<h2 id="13">13. 位置取りを前段モデルで予測する</h2>
+<p>既存の <code>src/pipeline/models/tracking_difficulty.py</code> には、脚質プロファイル・隣枠影響・頭数・コース条件から <code>position_deviation</code>（位置取りのずれ）を学習する設計があります。</p>
+<table>
+<thead>
+<tr><th>追加特徴量</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>expected_first_corner_pos</code></td><td>予測される第1コーナー通過順</td></tr>
+<tr><td><code>tracking_difficulty_score</code></td><td>位置取りの難しさスコア</td></tr>
+<tr><td><code>front_run_probability</code> / <code>stalker_probability</code> / <code>closer_probability</code></td><td>脚質確率（逃げ / 番手 / 差し）</td></tr>
+</tbody>
+</table>
+<p>位置取りモデルを最終確率モデルの前段に組み込む。</p>
+<h2 id="14">14. ペースを前段モデルで予測する</h2>
+<p>既存の <code>src/pipeline/models/pace_predictor.py</code> には、距離・馬場・頭数・前に行きたい馬の比率からラップタイムを予測する実装があります。</p>
+<table>
+<thead>
+<tr><th>追加特徴量</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>pred_lap_1f</code> / <code>pred_lap_3f</code></td><td>予測ラップタイム</td></tr>
+<tr><td><code>pred_pace_class</code></td><td>予測ペース分類（ハイ / ミドル / スロー）</td></tr>
+<tr><td><code>pred_energy_distribution</code></td><td>エネルギー分配の予測</td></tr>
+</tbody>
+</table>
+<p>ペースシナリオを Stage3 として独立したモジュールに分ける。</p>
+<h2 id="15">15. 血統適性を当日のコースバイアスと組み合わせる</h2>
+<p>既存の <code>src/research/pedigree/bloodline_distance.py</code> は父・母父と距離適性の関係を整理しており、<code>src/research/race/race_quality_model.py</code> は「そのレースでどの脚質タイプが好走したか」をベイズ推定で計算しています。この 2 つを組み合わせると、血統適性（静的な距離適性）とコースバイアス（当日の馬場タイプ）の相互作用として血統を扱う設計になります。</p>
+<table>
+<thead>
+<tr><th>追加した考え方</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>day prior + same-day posterior</code></td><td>事前分布（血統） + 当日更新（馬場）のベイズ的組み合わせ</td></tr>
+<tr><td><code>contextual_bloodline_fit</code></td><td>文脈に応じた血統フィットスコア</td></tr>
+<tr><td><code>same_day_sire_cluster_bias</code></td><td>当日の父系クラスターバイアス</td></tr>
+<tr><td><code>bloodline_day_fit_speed/stamina/mud/burst</code></td><td>スピード / スタミナ / 道悪 / 瞬発別の血統適合度</td></tr>
+</tbody>
+</table>
+<h2 id="16-polars">16. Polars 中心の省メモリ実装を前提にする</h2>
+<p>現在のデータ量と WSL 環境では、全年・全列を pandas で一括処理するとメモリ不足や不安定な動作が起きやすくなります。</p>
+<table>
+<thead>
+<tr><th>採用内容</th><th>説明</th></tr>
+</thead>
+<tbody>
+<tr><td><code>polars scan_parquet()</code> を第一選択</td><td>遅延評価でメモリ効率が高い</td></tr>
+<tr><td>fold 単位で materialize</td><td>fold 単位でメモリ上に展開する</td></tr>
+<tr><td>OOF / stage 出力は都度 Parquet に保存</td><td>中間成果物をファイルで管理</td></tr>
+<tr><td><code>float32</code> / <code>int8</code> への型削減</td><td>メモリ使用量を削減</td></tr>
+</tbody>
+</table>
+<h2 id="_7">まとめ</h2>
+<p>参考資料の知見を反映した結果、設計は「何を作るか」だけでなく、以下まで含む形に強化されました。</p>
+<table>
+<thead>
+<tr><th>強化された観点</th><th>具体的な内容</th></tr>
+</thead>
+<tbody>
+<tr><td>どう比較・検証するか</td><td>BaselineV1 / ExtendedV1 の 2 本立て、ablation study</td></tr>
+<tr><td>どの指標で良し悪しを判断するか</td><td>logloss / Brier score / ECE を一次評価、ROI は二次評価</td></tr>
+<tr><td>どこでリークや過大評価が起きやすいか</td><td>target encoding の OOF 化、time series split、purge / embargo</td></tr>
+<tr><td>継続的に改善できる構造にするにはどうするか</td><td>バージョン管理、監査成果物の出力、外部設定ファイル</td></tr>
+</tbody>
+</table>
+    </article>
+    <nav class="doc-nav">
+      <a href="race_performance_rating_system.html">← レースパフォーマンス算出システム設計</a>
+      <a href="staged_probability_pipeline.html">多段階レース直前確率パイプライン設計 →</a>
+    </nav>
+    <footer class="page-footer">
+      <span>keiba-vpn documentation</span>
+      <span class="mono">modeling/reference_insights.html</span>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

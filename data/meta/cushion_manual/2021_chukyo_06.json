@@ -1,0 +1,15 @@
+{
+  "source": "JRA 馬場情報アーカイブ 2021pdf/chukyo06.pdf（画像のみの PDF のため、表の数値を目で書き起こした）",
+  "note": "2021 年 第6回中京競馬 含水率・クッション値。金曜日は開催日ではない。",
+  "records": [
+    {"year": 2021, "venue_code": "07", "venue_name": "中京", "kai": 6, "pair_index": 0, "weekday": "金曜日", "date": "2021-12-03", "is_race_day": false, "race_day": 0, "course_position": "", "cushion_value": 9.7, "turf_moisture_goal": 14.5, "turf_moisture_4corner": 14.0, "dirt_moisture_goal": 9.9, "dirt_moisture_4corner": 8.9},
+    {"year": 2021, "venue_code": "07", "venue_name": "中京", "kai": 6, "pair_index": 0, "weekday": "土曜日", "date": "2021-12-04", "is_race_day": true, "race_day": 0, "course_position": "", "cushion_value": 10.3, "turf_moisture_goal": 14.5, "turf_moisture_4corner": 14.0, "dirt_moisture_goal": 8.2, "dirt_moisture_4corner": 7.2},
+    {"year": 2021, "venue_code": "07", "venue_name": "中京", "kai": 6, "pair_index": 0, "weekday": "日曜日", "date": "2021-12-05", "is_race_day": true, "race_day": 0, "course_position": "", "cushion_value": 9.9, "turf_moisture_goal": 13.3, "turf_moisture_4corner": 13.8, "dirt_moisture_goal": 7.2, "dirt_moisture_4corner": 6.5},
+    {"year": 2021, "venue_code": "07", "venue_name": "中京", "kai": 6, "pair_index": 1, "weekday": "金曜日", "date": "2021-12-10", "is_race_day": false, "race_day": 0, "course_position": "", "cushion_value": 9.7, "turf_moisture_goal": 14.3, "turf_moisture_4corner": 14.1, "dirt_moisture_goal": 11.9, "dirt_moisture_4corner": 11.1},
+    {"year": 2021, "venue_code": "07", "venue_name": "中京", "kai": 6, "pair_index": 1, "weekday": "土曜日", "date": "2021-12-11", "is_race_day": true, "race_day": 0, "course_position": "", "cushion_value": 9.9, "turf_moisture_goal": 14.0, "turf_moisture_4corner": 13.1, "dirt_moisture_goal": 8.7, "dirt_moisture_4corner": 8.9},
+    {"year": 2021, "venue_code": "07", "venue_name": "中京", "kai": 6, "pair_index": 1, "weekday": "日曜日", "date": "2021-12-12", "is_race_day": true, "race_day": 0, "course_position": "", "cushion_value": 10.2, "turf_moisture_goal": 13.3, "turf_moisture_4corner": 13.1, "dirt_moisture_goal": 8.2, "dirt_moisture_4corner": 8.0},
+    {"year": 2021, "venue_code": "07", "venue_name": "中京", "kai": 6, "pair_index": 2, "weekday": "金曜日", "date": "2021-12-17", "is_race_day": false, "race_day": 0, "course_position": "", "cushion_value": 7.7, "turf_moisture_goal": 14.8, "turf_moisture_4corner": 15.6, "dirt_moisture_goal": 17.8, "dirt_moisture_4corner": 17.8},
+    {"year": 2021, "venue_code": "07", "venue_name": "中京", "kai": 6, "pair_index": 2, "weekday": "土曜日", "date": "2021-12-18", "is_race_day": true, "race_day": 0, "course_position": "", "cushion_value": 8.9, "turf_moisture_goal": 14.9, "turf_moisture_4corner": 16.7, "dirt_moisture_goal": 17.8, "dirt_moisture_4corner": 15.9},
+    {"year": 2021, "venue_code": "07", "venue_name": "中京", "kai": 6, "pair_index": 2, "weekday": "日曜日", "date": "2021-12-19", "is_race_day": true, "race_day": 0, "course_position": "", "cushion_value": 9.3, "turf_moisture_goal": 14.2, "turf_moisture_4corner": 14.5, "dirt_moisture_goal": 12.7, "dirt_moisture_4corner": 12.6}
+  ]
+}

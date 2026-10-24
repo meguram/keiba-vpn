@@ -1,0 +1,303 @@
+{
+ "id": "tp76",
+ "title": "学習前の特徴量スクリーニング（候補 A〜G）",
+ "frozen_before_eval": true,
+ "base_model": "v6e（LOYO OOF 2022〜2024、test 2025 = bundle_v6_2024 の予測）。市場オッズ・人気は特徴量にも係数にも使わない。2026 は選択に使わず記述のみ",
+ "n_units": 27,
+ "n_columns": 32,
+ "units": {
+  "A1": {
+   "cols": [
+    "A_fit_front"
+   ],
+   "family": "A 同日バイアス",
+   "infer_cost": "中",
+   "cost_note": "同日の自分より前のレース結果を、開催中にその都度取り込む必要"
+  },
+  "A2": {
+   "cols": [
+    "A_fit_inner"
+   ],
+   "family": "A 同日バイアス",
+   "infer_cost": "中",
+   "cost_note": "同上"
+  },
+  "A3": {
+   "cols": [
+    "A_fit_front",
+    "A_fit_inner"
+   ],
+   "family": "A 同日バイアス",
+   "infer_cost": "中",
+   "cost_note": "同上"
+  },
+  "B1": {
+   "cols": [
+    "B_m"
+   ],
+   "family": "B 潜在能力",
+   "infer_cost": "中",
+   "cost_note": "馬ごとの状態（日次更新）と種牡馬の事前表が必要"
+  },
+  "B2": {
+   "cols": [
+    "B_m",
+    "B_sd"
+   ],
+   "family": "B 潜在能力",
+   "infer_cost": "中",
+   "cost_note": "同上"
+  },
+  "B3": {
+   "cols": [
+    "B_m_megu"
+   ],
+   "family": "B 潜在能力",
+   "infer_cost": "中",
+   "cost_note": "めぐ指数の履歴が必要（RB と同じ日次状態）"
+  },
+  "C1": {
+   "cols": [
+    "C_elo"
+   ],
+   "family": "C 対戦関係",
+   "infer_cost": "中",
+   "cost_note": "全レースの時系列更新の状態（日次）が必要"
+  },
+  "C2": {
+   "cols": [
+    "C_rel"
+   ],
+   "family": "C 対戦関係",
+   "infer_cost": "中",
+   "cost_note": "同上＋出走馬の強さの平均"
+  },
+  "C3": {
+   "cols": [
+    "C_rel",
+    "C_unc"
+   ],
+   "family": "C 対戦関係",
+   "infer_cost": "中",
+   "cost_note": "同上"
+  },
+  "D1": {
+   "cols": [
+    "D_dist"
+   ],
+   "family": "D 条件別適性",
+   "infer_cost": "高",
+   "cost_note": "馬×条件の集計と、種牡馬×条件の事前表の 2 種が必要"
+  },
+  "D2": {
+   "cols": [
+    "D_venue"
+   ],
+   "family": "D 条件別適性",
+   "infer_cost": "高",
+   "cost_note": "同上"
+  },
+  "D3": {
+   "cols": [
+    "D_going"
+   ],
+   "family": "D 条件別適性",
+   "infer_cost": "高",
+   "cost_note": "同上"
+  },
+  "D4": {
+   "cols": [
+    "D_cush"
+   ],
+   "family": "D 条件別適性",
+   "infer_cost": "高",
+   "cost_note": "同上＋クッション値"
+  },
+  "D5": {
+   "cols": [
+    "D_all"
+   ],
+   "family": "D 条件別適性",
+   "infer_cost": "高",
+   "cost_note": "同上"
+  },
+  "D5r": {
+   "cols": [
+    "D_raw_all"
+   ],
+   "family": "D 条件別適性",
+   "infer_cost": "中",
+   "cost_note": "馬×条件の集計のみ（種牡馬の事前表なし）"
+  },
+  "D6": {
+   "cols": [
+    "D_ag_all"
+   ],
+   "family": "D 条件別適性",
+   "infer_cost": "高",
+   "cost_note": "上がりの予測誤差を条件別に集計"
+  },
+  "E1": {
+   "cols": [
+    "E_abs"
+   ],
+   "family": "E 上がりの形",
+   "infer_cost": "低",
+   "cost_note": "過去走の上がりとコースの基準表"
+  },
+  "E2": {
+   "cols": [
+    "E_day"
+   ],
+   "family": "E 上がりの形",
+   "infer_cost": "低",
+   "cost_note": "同上＋同日の全レースの水準（過去走は確定済み）"
+  },
+  "E3": {
+   "cols": [
+    "E_sustain",
+    "E_accel"
+   ],
+   "family": "E 上がりの形",
+   "infer_cost": "低",
+   "cost_note": "過去走の上がりと通過順"
+  },
+  "E4": {
+   "cols": [
+    "E_unlucky_prev",
+    "E_unlucky_m3"
+   ],
+   "family": "E 上がりの形",
+   "infer_cost": "低",
+   "cost_note": "過去走の着順・上がり・通過順"
+  },
+  "E5": {
+   "cols": [
+    "E_std5"
+   ],
+   "family": "E 上がりの形",
+   "infer_cost": "低",
+   "cost_note": "過去 5 走の上がり順位"
+  },
+  "F1": {
+   "cols": [
+    "F_n30",
+    "F_n90",
+    "F_since"
+   ],
+   "family": "F 負荷・疲労",
+   "infer_cost": "低",
+   "cost_note": "過去走の日付だけ"
+  },
+  "F2": {
+   "cols": [
+    "F_dist90",
+    "F_burden90"
+   ],
+   "family": "F 負荷・疲労",
+   "infer_cost": "低",
+   "cost_note": "過去走の距離・タイム"
+  },
+  "F3": {
+   "cols": [
+    "F_tataki"
+   ],
+   "family": "F 負荷・疲労",
+   "infer_cost": "低",
+   "cost_note": "過去走の間隔だけ"
+  },
+  "G1": {
+   "cols": [
+    "G_n_front",
+    "G_front_rank"
+   ],
+   "family": "G メンバー構成",
+   "infer_cost": "低",
+   "cost_note": "出走表と各馬の普段の位置取り"
+  },
+  "G2": {
+   "cols": [
+    "G_inner_front"
+   ],
+   "family": "G メンバー構成",
+   "infer_cost": "低",
+   "cost_note": "同上"
+  },
+  "G3": {
+   "cols": [
+    "G_fit"
+   ],
+   "family": "G メンバー構成",
+   "infer_cost": "低",
+   "cost_note": "同上"
+  }
+ },
+ "optional_unit": "B3（めぐ指数への適用）はめぐ指数の表を読めたときだけ作る。読めない場合は 26 単位とし、結果にその旨を書く",
+ "metric": "Δ3 = 3 目的（勝ち・2 着内・3 着内）の 1 頭あたり 2 値 LogLoss の増分の平均（負 = 改善）。基準は切片だけ再較正した v6e",
+ "model": "offset = logit(v6e 確率)、切片 + 候補の標準化した列（欠損率が 2% 超の列は欠損フラグ付き）の係数をロジスティック回帰（L2）で当てはめる",
+ "folds": "LOYO: 2022/2023/2024 のそれぞれを保留して他の 2 年で当てはめ、保留年で評価。2025 は 2022〜2024 で当てはめて 1 回だけ評価",
+ "ci": "レース単位のクラスタ（比推定量の標準誤差）と、報告用にはレース単位ブートストラップ B=500",
+ "criteria": {
+  "S1": "Δ3 の 95% 区間上限 < 0 かつ Δ3 ≤ −0.0002",
+  "S2": "LOYO の 3 年すべて Δ3 < 0 かつ プールの点推定 ≤ −0.0002",
+  "S3": "LOYO の 3 年すべて Δ3 < 0 かつ プールの点推定 ≤ −0.0001",
+  "S4": "経験ベイズ（候補の効果の分布に正規事前、モーメント法）で P(効果<0) ≥ 0.8、または局所 FDR ≤ 0.2（帰無はシャドウの z 分布）",
+  "S5": "片側 90%（S5a）または 80%（S5b）で上限 < 0"
+ },
+ "shadow": {
+  "design": "候補の列ごとに偽の特徴量を作る。P = 同じ日の中で行の値を並べ替える（分布と欠損の構造は同じで情報だけ壊す）、H = 同じレース内で馬を 1 つずらして別の馬に付ける。1 単位につき 3 本（P, H, P）",
+  "n_shadow_units": 81,
+  "judgement": "各基準の偽陽性率 = 偽の単位のうち基準を満たした割合。本物の最良 Δ3 が偽の最良 Δ3 を上回るかも併記（Boruta 型）"
+ },
+ "bundle": {
+  "weak_signal": "個別の Δ3 が小さくても、LOYO の 3 年で符号が一致した列は『弱いシグナル』として束に入れる",
+  "order": "符号の一貫年数（多い順）→ 冗長性（他の列との平均絶対相関、低い順）。効果の大きさでは並べない",
+  "redundancy": "|相関| > 0.85 の列は同じクラスタに束ね、代表を 1 列選ぶ",
+  "curve": "順に 1 列ずつ足した束の Δ3（LOYO）を曲線にし、同じ列数のシャドウ束（P, H, P の 3 本）と比べる。2025 は曲線の最小点の列数で 1 回だけ評価",
+  "composite": "全代表列を L2 ロジスティックで当てはめた線形予測を合成スコア（勝ち用・3 着内用の 2 本）にする。係数は A 年で当てはめ、切片と傾きは B 年で較正し、C 年で評価（発見年の外側の年に当てる）"
+ },
+ "rules_bundle": {
+  "source": "docs/operations/tp75_rule_ledger.csv（1,070 型、市場非依存）の expr を該当フラグにして L2 ロジスティックで束ねる。全ルール／採用済みのみ／未採用のみ の 3 通り＋日内並べ替えのシャドウ",
+  "pending": "tp-75b（第 2 ラウンド、連言ルール）の結果が出たら追加で取り込む"
+ },
+ "hyper": {
+  "ridge_lambda_unit": 1.0,
+  "ridge_lambda_bundle": 200.0,
+  "ridge_lambda_rules": 400.0,
+  "missing_indicator_if_rate_over": 0.02,
+  "bootstrap_B": 500,
+  "seed": 76,
+  "corr_cluster_threshold": 0.85
+ },
+ "params": {
+  "front_k": 20.0,
+  "habit_hl": 3.0,
+  "habit_k": 1.0,
+  "kal_q_ratio": 0.08,
+  "kal_sire_k": 30.0,
+  "elo_k0": 0.15,
+  "elo_k1": 0.85,
+  "elo_c": 3.0,
+  "apt_kh": 3.0,
+  "apt_ks": 30.0,
+  "ag_hl": 3.0,
+  "ag_k": 1.0,
+  "front_thr": 0.35
+ },
+ "fit_end": "2021-12-31",
+ "notes": [
+  "血統（種牡馬）は現状の不完全な 10 世代表（5 世代＋牡アンカー）に基づく。完全な表が揃ったら B・D を再実行する（印: rerun_after_complete_10gen）",
+  "少数パラメータの加法的な増分は GBM の非線形・交互作用を過小評価する。判定は『不採用』ではなく本試験の優先度"
+ ],
+ "rerun_after_complete_10gen": [
+  "B1",
+  "B2",
+  "B3",
+  "D1",
+  "D2",
+  "D3",
+  "D4",
+  "D5",
+  "D6"
+ ]
+}

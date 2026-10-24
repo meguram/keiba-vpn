@@ -1,0 +1,14 @@
+{
+  "race_id": "202309030811",
+  "lap_times": [12.0, 11.5],
+  "pace": {},
+  "corner_passing": [1, 2],
+  "entries_lap": [
+    {
+      "horse_number": 1,
+      "horse_id": "2019105219",
+      "horse_name": "イクイノックス",
+      "passing_order": "1-1-1-1"
+    }
+  ]
+}

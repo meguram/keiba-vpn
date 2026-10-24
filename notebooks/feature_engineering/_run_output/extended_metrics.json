@@ -1,0 +1,56 @@
+[
+  {
+    "feature": "field_speed_gap_std",
+    "description_ja": "レース内 (speed_max-speed_avg) の std — 指数の形のばらつき",
+    "null_pct": 0.0,
+    "ks_24_25": 0.06249783949529708,
+    "ks_p": 2.9960996237301517e-40,
+    "spearman_vs_speed_pct": -0.04306045450195315,
+    "spearman_vs_field_std": 0.3245619050802462
+  },
+  {
+    "feature": "field_std_minus_iqr",
+    "description_ja": "std - IQR — 外れ値由来の「追加混戦」成分",
+    "null_pct": 0.0,
+    "ks_24_25": 0.03173686912089424,
+    "ks_p": 1.0805875335517507e-10,
+    "spearman_vs_speed_pct": 0.014304891762564307,
+    "spearman_vs_field_std": 0.2470355917865725
+  },
+  {
+    "feature": "bracket_trader_interaction",
+    "description_ja": "bracket_std * (1 - trainer_share) — 枠分散と厩舎集中度の合成",
+    "null_pct": 0.0,
+    "ks_24_25": 0.021542539276220185,
+    "ks_p": 3.7059875422696165e-05,
+    "spearman_vs_speed_pct": -0.1557023480010438,
+    "spearman_vs_field_std": 0.2052585575709171
+  },
+  {
+    "feature": "field_std_surface_z",
+    "description_ja": "同一 race_year×surface 内での field_std の z（相対化）",
+    "null_pct": 0.0,
+    "ks_24_25": 0.0324570870742458,
+    "ks_p": 3.65150434038478e-11,
+    "spearman_vs_speed_pct": -0.05678052208376941,
+    "spearman_vs_field_std": 0.9198457214178624
+  },
+  {
+    "feature": "field_speed_std_per_sqrt_n",
+    "description_ja": "field_std / sqrt(field_size) — 頭数補正混戦度",
+    "null_pct": 0.0,
+    "ks_24_25": 0.06436052469579745,
+    "ks_p": 1.1632009230310632e-42,
+    "spearman_vs_speed_pct": -0.0492423267764828,
+    "spearman_vs_field_std": 0.9910791529861818
+  },
+  {
+    "feature": "field_weight_cv",
+    "description_ja": "斤量の変動係数（レース内）",
+    "null_pct": 0.0,
+    "ks_24_25": 0.014674318927245023,
+    "ks_p": 0.012707772048846318,
+    "spearman_vs_speed_pct": -0.042194312572347015,
+    "spearman_vs_field_std": 0.15385246337790257
+  }
+]
