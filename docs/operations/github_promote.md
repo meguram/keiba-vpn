@@ -72,7 +72,8 @@ develop ──マージ──▶ stg ──push──▶ deploy-stg.yml
    | `SMOKE_RACE_ID` | スモークで使うレース ID（データのある直近のレース。例 `202604040301`） |
    | `ENABLE_JOBS_DEPLOY` | 最初は未設定。Jobs の準備ができたら `true` |
    | `JOBS_PARALLEL` | 未設定のままでよい（既定 `1` = 並走）。完全移行のときに `0` |
-   | `NEXT_PUBLIC_DEFAULT_RACE_DATE` `NEXT_PUBLIC_PICKER_PAST_DAYS` `NEXT_PUBLIC_ENABLE_FEATURES` | stg の画面と同じ値（`scripts/ops/vps/build.env.example` 参照） |
+   | `NEXT_PUBLIC_PICKER_PAST_DAYS` `NEXT_PUBLIC_ENABLE_FEATURES` | stg の画面と同じ値（`150` / 空でよい。`scripts/ops/vps/build.env.example` 参照） |
+   - **`NEXT_PUBLIC_DEFAULT_RACE_DATE` は設定しない。** 週間予測の既定日は、画面が自動で選ぶ（今日が開催日なら今日、無ければ次回の開催の最初の開催日。`frontend/lib/weekDates.ts` の `pickTwoWeeks`／`firstDateOf`）。固定値は dev で実データの日を見るための上書き用で、本番のビルドに入れると開催週が替わるたびに古くなる。
    - **Secrets に入れるものは、ありません**（鍵ファイルを作っていないため）。
 6. **アクションを SHA 固定する**（任意だが推奨）
    ```bash
