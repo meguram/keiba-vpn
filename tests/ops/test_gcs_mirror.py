@@ -76,3 +76,21 @@ def test_pull_recent_days_skips_objects_not_updated_recently(tmp_path):
     g.objs["ops/mirror/data/local/meta/entries_state/NEW.json"] = (b"n", time.time())
     assert gm.pull(g, tmp_path, TREES, recent_days=2)["downloaded"] == 1
     assert (tmp_path / "data/local/meta/entries_state/NEW.json").exists() and not (tmp_path / "data/local/meta/entries_state/OLD.json").exists()
+
+
+def test_refresher_pulls_everything_then_follows_new_files(tmp_path):
+    g = Fake()
+    g.objs["ops/mirror/data/local/inference/tracking_v2/2026-10-24/R1.json"] = (b"1", time.time())
+    g.objs["ops/mirror/data/local/inference/snapshots/20261017/R0.json"] = (b"0", time.time() - 30 * 86400)     # 古い分も全体の取り込みで届く
+    gm.start_refresher(g, tmp_path, interval=0.05, recent_days=1)
+
+    def wait(path):
+        for _ in range(100):
+            if (tmp_path / path).exists():
+                return True
+            time.sleep(0.05)
+        return False
+
+    assert wait("data/local/inference/tracking_v2/2026-10-24/R1.json") and wait("data/local/inference/snapshots/20261017/R0.json")
+    g.objs["ops/mirror/data/local/meta/entries_state/R9.json"] = (b"new", time.time())               # 後から増えた分を追いかける
+    assert wait("data/local/meta/entries_state/R9.json")

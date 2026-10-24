@@ -30,6 +30,9 @@ TREES = (
     "data/local/inference/predictions_v5",
     "data/local/inference/predictions_v6",
     "data/local/inference/predictions_backfill",
+    "data/local/inference/snapshots",
+    "data/local/inference/lap_forecast",
+    "data/local/inference/tracking_v2",
     "data/local/meta/entries_state",
 )
 _SKIP = re.compile(r"(\.tmp|\.lock)$")
@@ -131,10 +134,14 @@ def start_refresher(backend: Backend | None = None, root: Path = REPO_ROOT, *, i
         while True:
             try:
                 be = be or GcsBackend()
-                r = pull(be, root, recent_days=None if first else recent_days)
-                if first or r["downloaded"]:
-                    logger.info("gcs_mirror pull: %s", r)
-                first = False
+                if first:     # 起動直後は直近分を先に（表示に要る分を数秒で）、続けて全体
+                    logger.info("gcs_mirror pull(直近): %s", pull(be, root, recent_days=recent_days))
+                    logger.info("gcs_mirror pull(全体): %s", pull(be, root))
+                    first = False
+                else:
+                    r = pull(be, root, recent_days=recent_days)
+                    if r["downloaded"]:
+                        logger.info("gcs_mirror pull: %s", r)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("gcs_mirror pull に失敗（次回に再試行）: %s", exc)
             time.sleep(interval)

@@ -17,10 +17,7 @@
         "data/page_reference/bloodline_vector/**",
         "data/page_reference/pedigree_race_index/**",
         "data/page_reference/tables/*/megu_index_flat.parquet",
-        "data/page_reference/tables/*/race_result_flat.parquet",
-        "data/local/inference/snapshots/**",
-        "data/local/inference/lap_forecast/**",
-        "data/local/inference/tracking_v2/**"
+        "data/page_reference/tables/*/race_result_flat.parquet"
       ],
       "exclude": ["*.tmp", "*.lock", "*/.queue_runner_leader", "data/page_reference/*.bak/*", "*.bak/*"]
     },
