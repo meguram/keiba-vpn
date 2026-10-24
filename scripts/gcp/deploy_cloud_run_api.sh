@@ -31,6 +31,8 @@ TAG="${TAG:-$(date +%Y%m%d-%H%M%S)}"
 IMAGE="${IMAGE:-${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${SERVICE}:${TAG}}"
 RUN_SA="${RUN_SA:-keiba-api@${PROJECT_ID}.iam.gserviceaccount.com}"     # setup_project.sh が作る（gcp_setup_runbook.md 2 章）。旧 setup_cloud_run_api.sh の keiba-api-run は使わない
 MEMORY="${MEMORY:-2Gi}"; CPU="${CPU:-1}"
+# CPU は常時割り当て(--no-cpu-throttling)にする: GCS からの取り込み(src/ops/gcs_mirror.py の常駐スレッド)がリクエストの合間にも進むため。
+# 最小インスタンス 0 なので、課金はインスタンスが生きている間(最後のリクエストから約 15 分)だけ。起動時は --cpu-boost で速くする。
 MIN_INSTANCES="${MIN_INSTANCES:-0}"; MAX_INSTANCES="${MAX_INSTANCES:-3}"
 CONCURRENCY="${CONCURRENCY:-30}"; TIMEOUT="${TIMEOUT:-60}"
 GCS_BUCKET="${GCS_BUCKET:-YOUR_GCS_BUCKET}"
@@ -82,7 +84,7 @@ deploy() {
     --service-account "$RUN_SA" \
     --memory "$MEMORY" --cpu "$CPU" --min-instances "$MIN_INSTANCES" --max-instances "$MAX_INSTANCES" \
     --concurrency "$CONCURRENCY" --timeout "$TIMEOUT" \
-    --cpu-throttling --execution-environment gen2 \
+    --no-cpu-throttling --cpu-boost --execution-environment gen2 \
     --port 8080 --ingress all --allow-unauthenticated \
     --set-env-vars "$ENV_VARS" --set-secrets "$SECRETS" \
     "${traffic[@]}"
