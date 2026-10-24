@@ -99,8 +99,11 @@ def test_changes_layoff_distance_and_jockey_change_by_ids():
     ch = c["horse"]["changes"]
     assert ch["layoff_days"] == 14 and ch["distance_change"] == 200
     assert ch["jockey_changed"] is True and ch["previous_jockey"] == "森田誠也"        # 前走は J9、今回は J1 → 乗り替わり
+    # キャッシュのキーは id(storage)。前のストレージが解放されると同じ番号が再利用され、古い結果が返ることがある（環境で変わる）ので、替えるたびに空にする
+    E.clear_cache()
     s2 = make_storage({("race_shutuba", "202608040101"): {"entries": [{"horse_id": "H1", "jockey_id": "J1", "jockey_name": "騎手A"}]}})
     assert E.build_entry_card(RID, "H1", s2)["horse"]["changes"]["jockey_changed"] is False
+    E.clear_cache()
     s3 = make_storage({("race_shutuba", "202608040101"): None, ("race_result", "202608040101"): None})
     assert E.build_entry_card(RID, "H1", s3)["horse"]["changes"]["jockey_changed"] is None        # 前走の騎手 id が分からないときは断定しない
 

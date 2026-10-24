@@ -52,7 +52,8 @@ class Tp39AsOfTest(unittest.TestCase):
             self.assertFalse(r["violations_own"], (g, "自分の結果に依存", r["violations_own"]))
 
     def test_truncation_gives_identical_features(self):
-        """その日以降のデータを丸ごと捨てても、その日までの行の特徴量は bit 単位で同じ。"""
+        """その日以降のデータを丸ごと捨てても、その日までの行の特徴量は同じ（浮動小数の丸め誤差 1e-9 以内）。
+        未来のデータを使っていれば値が大きく変わるので、漏れの検出には十分。bit 単位の一致は、ライブラリの版（合計の順序）で崩れるため求めない。"""
         _, cut = _mid_race(self.df)
         full = _build(self.df, self.consts)
         part = _build(self.df[self.df["date"] <= cut].reset_index(drop=True), self.consts)
@@ -61,7 +62,7 @@ class Tp39AsOfTest(unittest.TestCase):
             self.assertGreater(len(m), 50)
             for c in [c for c in full[g].columns if c not in KEY]:
                 x, y = m[c].to_numpy(float), m[c + "__p"].to_numpy(float)
-                same = (x == y) | (np.isnan(x) & np.isnan(y))
+                same = np.isclose(x, y, rtol=1e-9, atol=1e-12, equal_nan=True)
                 self.assertTrue(same.all(), (g, c, int((~same).sum())))
 
     def test_constants_depend_only_on_fit_years(self):

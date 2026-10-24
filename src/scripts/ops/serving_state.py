@@ -41,6 +41,8 @@ def load_config(path: Path = CONFIG_PATH) -> dict:
 def select_files(root: Path, group: dict) -> list[Path]:
     seen: dict[str, Path] = {}
     for pat in group.get("include") or []:
+        # Python 3.11 の glob は『dir/**』がディレクトリだけに一致する（3.13 はファイルにも一致）。どちらでも同じになるよう『dir/**/*』にする
+        pat = pat[:-2] + "**/*" if pat.endswith("/**") else pat
         for p in root.glob(pat):
             if p.is_file() and not p.is_symlink():
                 seen[p.relative_to(root).as_posix()] = p
