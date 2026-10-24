@@ -387,6 +387,27 @@
   "src/ops/gcs_mirror.py": {
    "local_data": 8,
    "page_reference": 12
+  },
+  "scripts/ops/vps/promote_oneshot.sh": {
+   "host_path": 1,
+   "host_alias": 1
+  },
+  "src/scripts/ops/manage_users.py": {
+   "local_data": 1,
+   "host_path": 1,
+   "host_alias": 1
+  },
+  "src/scraper/backfill_guard.py": {
+   "local_data": 1
+  },
+  "src/scraper/request_counter.py": {
+   "local_data": 1
+  },
+  "src/utils/cache_epoch.py": {
+   "local_data": 1
+  },
+  "src/scraper/jma_weather.py": {
+   "page_reference": 1
   }
  }
 }
