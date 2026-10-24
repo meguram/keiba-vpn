@@ -23,7 +23,7 @@ PUBLIC_TOP_FIELDS = (
     "race_id", "race_name", "venue", "round", "date", "start_time", "grade", "surface", "distance",
     "track_condition", "status", "has_prediction", "total_horses", "predictions",
     "model_type", "model_version", "model_description", "prediction_source", "prediction_note",
-    "entries_status", "provisional_entries", "freshness", "error", "message", "_mock",
+    "entries_status", "pipeline_status", "provisional_entries", "freshness", "error", "message", "_mock",
 )
 
 # 匿名の応答から落とす（= 会員限定）の説明。UI の鍵表示と docs の表の元

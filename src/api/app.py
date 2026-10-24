@@ -7004,8 +7004,10 @@ async def _race_predictions_impl(race_id: str):
     def _with_entries_status(resp: dict) -> dict:
         # 出馬表の公示の段階（特別登録／出走馬決定／出馬表確定／馬体重発表済み）と最終更新。収集側の状態ファイルを読むだけ
         from src.api.entries_status import attach_entries_status
+        from src.api.pipeline_status import attach_pipeline_status
 
-        return attach_entries_status(resp, race_id, _get_storage())
+        # 予測パイプライン（出馬表→馬体重→AI予測→オッズ→推奨買い目）の進み具合。entries_status を読むので後に付ける
+        return attach_pipeline_status(attach_entries_status(resp, race_id, _get_storage()), race_id, _get_storage())
 
     def _with_kesi(resp: dict) -> dict:
         # 市場補正（KEIBA_PROB_CALIBRATION=1 のときだけ。実オッズが揃うレースで確率・EV・印を付け直す。保存済みの予測は書き換えない）

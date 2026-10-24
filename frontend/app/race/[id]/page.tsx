@@ -14,6 +14,7 @@ import type { ProbCalibration } from "@/lib/probCalibration";
 import { EntriesStatusBadge } from "@/components/EntriesStatus";
 import type { EntriesStatus } from "@/lib/entriesStatus";
 import { BetRecommend } from "@/components/BetRecommend";
+import { PipelineStatus, type PipelineStatusData } from "@/components/PipelineStatus";
 import { RaceNav } from "@/components/RaceNav";
 import { bracketChipStyle, bracketOf as wakuOf } from "@/lib/bracket";
 import { useNarrow } from "@/components/RaceStrip";
@@ -177,6 +178,8 @@ type PredData = {
   prob_calibration?: ProbCalibration | null;
   /** 出馬表の公示の段階（特別登録／出走馬決定／出馬表確定／馬体重発表済み）と最終更新 */
   entries_status?: EntriesStatus | null;
+  /** 予測パイプライン（出馬表→馬体重→AI予測→オッズ→推奨買い目）の進み具合 */
+  pipeline_status?: PipelineStatusData | null;
   provisional_entries?: boolean;
   [k: string]: unknown;
 };
@@ -370,6 +373,14 @@ export default function RaceDetailPage() {
   useEffect(() => {
     loadRace();
   }, [loadRace]);
+
+  // 予測パイプラインが途中（馬体重待ち・予測待ちなど）の間は 60 秒ごとに予測を取り直し、完了表示に切り替える
+  const pipelineOpen = !!predData?.pipeline_status && !predData.pipeline_status.complete && !predData.pipeline_status.race_over;
+  useEffect(() => {
+    if (!pipelineOpen || USE_MOCK) return;
+    const t = setInterval(() => { if (!document.hidden) loadPrediction(); }, 60_000);
+    return () => clearInterval(t);
+  }, [pipelineOpen, loadPrediction]);
 
   // レース移動ナビ用の開催日（YYYYMMDD）。読み込み中も直前の値を保つのでナビは消えない
   useEffect(() => {
@@ -936,6 +947,7 @@ export default function RaceDetailPage() {
 
       {navDate && <RaceNav raceId={raceId} date={navDate} />}
       {Header}
+      {!lock && <PipelineStatus status={predData?.pipeline_status} compact={narrow} />}
 
       {/* タブバー */}
       <div role="tablist" style={{ display: "flex", gap: 4, marginBottom: narrow ? 8 : 20, borderBottom: "1px solid var(--border)", paddingBottom: 0, flexWrap: "nowrap", overflowX: "auto" }}>
