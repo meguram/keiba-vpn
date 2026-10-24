@@ -180,3 +180,15 @@ def test_publish_dry_run_with_fake_tarball(tmp_path):
     res = RP.publish(None, "ui", t, commit="abcdef12" * 5, dry_run=True)
     assert res["dry_run"] is True and res["latest"]["kind"] == "ui"
     json.dumps(res)
+
+
+def test_ci_installs_the_production_versions_and_cpu_torch():
+    for name in ("_test.yml", "ci.yml"):
+        text = (WFDIR / name).read_text(encoding="utf-8")
+        assert "-c constraints-jobs.txt" in text and "torch==2.6.0+cpu" in text, name      # 本番(Jobs イメージ)と同じ版で試す
+
+
+def test_stg_manual_run_can_skip_tests_but_push_cannot():
+    d = _load(WF_STG)
+    assert set(_on(d)["workflow_dispatch"]["inputs"]) == {"skip_tests"}
+    assert "inputs.skip_tests" in d["jobs"]["test"]["if"] and "workflow_dispatch" in d["jobs"]["test"]["if"]      # push では常にテストする
