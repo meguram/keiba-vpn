@@ -18,7 +18,9 @@ case "$NAME" in
   SLACK_WEBHOOK_URL|SLACK_WEBHOOK_URL_PROD|SLACK_WEBHOOK_URL_STG)    READERS="keiba-api keiba-jobs" ;;
   KEIBA_PROXY_KEY)      READERS="keiba-api" ;;
   KEIBA_HEARTBEAT_KEY)  READERS="keiba-api" ;;
-  APP_SECRET_KEY|JWT_SECRET|DEV_SECRET_KEY|DEV_PASSWORD) READERS="keiba-api" ;;
+  APP_SECRET_KEY|JWT_SECRET|DEV_PASSWORD) READERS="keiba-api" ;;
+  DEV_SECRET_KEY)       READERS="keiba-api keiba-jobs" ;;      # jobs: 共通ログインの月次更新(shared-login)がパスワードの元として使う
+  KEIBA_SHARED_LOGIN_ID) READERS="keiba-jobs" ;;                 # 共通ログインの ID(shared-login)
   R2_CREDENTIALS)       READERS="keiba-jobs" ;;
   *) echo "未登録の名前です: $NAME（scripts/gcp/put_secret.sh の表と docs/operations/gcp_setup_runbook.md 5 章に足してから）" >&2; exit 2 ;;
 esac

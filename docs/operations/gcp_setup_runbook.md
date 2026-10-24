@@ -123,7 +123,9 @@ echo "$PROJECT $REGION $BILLING_ACCOUNT"
 | `SLACK_WEBHOOK_URL`（または `_PROD` / `_STG`） | Slack の Incoming Webhook URL | api, jobs | 環境別に分けるなら `_PROD`/`_STG` |
 | `KEIBA_PROXY_KEY` | VPS の nginx が付ける `X-Keiba-Proxy-Key` の値 | api | VPS の `.env`（権限 600）にも同じ値。長いランダム文字列 |
 | `KEIBA_HEARTBEAT_KEY` | VPS → `/ops/heartbeat` の認証 | api | |
-| `APP_SECRET_KEY` / `JWT_SECRET` / `DEV_SECRET_KEY` / `DEV_PASSWORD` | アプリのセッション署名・開発者ログイン | api | ホストの `.env` と**同じ値**にする（セッションの互換）。Cloud Run へ移すまでは登録だけ |
+| `APP_SECRET_KEY` / `JWT_SECRET` / `DEV_PASSWORD` | アプリのセッション署名・開発者ログイン | api | ホストの `.env` と**同じ値**にする（セッションの互換）。Cloud Run へ移すまでは登録だけ |
+| `DEV_SECRET_KEY` | セッション署名。共通ログインのパスワードの元にもなる | api, jobs | ホストの `.env` と**同じ値**（同じなら月次のパスワードも切替前後で同じ）。jobs は shared-login ジョブが読む |
+| `KEIBA_SHARED_LOGIN_ID` | 共通ログインの ID | jobs | ホストの `.env` と同じ値 |
 | `R2_CREDENTIALS` | Cloudflare R2 のキー（JSON 1 つにまとめる） | jobs | 公開スナップショットを置くときだけ |
 
 - **GCP に置かないもの**: netkeiba のログイン（取得は VPS の実行役のみ）、Cloudflare のトンネルトークン・Access のサービストークン（VPS 側）、`GCS_PRIVATE_KEY`（SA を使うので不要）。
