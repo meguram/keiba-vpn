@@ -4,7 +4,7 @@
 
 | push 先 | ワークフロー | 反映先 | 承認 |
 |---|---|---|---|
-| `stg` | `.github/workflows/deploy-stg.yml` | stg 環境: API の通信 0% のタグ付きリビジョン（`rstg`）＋スモーク。画面は「ビルドできること」の確認まで | なし（Environment `stg`） |
+| `stg` | `.github/workflows/deploy-stg.yml` | stg 環境: API の通信 0% のタグ付きリビジョン（`rstg`）＋スモーク。画面は STG バッジつきでビルドして `ops/releases/ui-stg/` に公開（VPS の 2 つ目の画面 `stg.megu-keiba.com` が 5 分おきに取り込む。**8 章の準備が済んでから**） | なし（Environment `stg`） |
 | `master` | `.github/workflows/promote.yml` | 本番: API の通信を新リビジョンへ切り替え／Jobs の更新／画面を GCS に公開（VPS が窓で取得） | **あり**（Environment `production` の Required reviewers、1 回） |
 
 共通の部品: `_test.yml`（テスト）・`_build-ui.yml`（画面のビルド）。手順の本体は `scripts/ci/deploy_gcp.sh`（手元で `--dry-run` して確かめられる）。
@@ -119,3 +119,43 @@ develop ──マージ──▶ stg ──push──▶ deploy-stg.yml
 | `build.env` の項目数が 0 | Variables の `NEXT_PUBLIC_*` が未設定 |
 | 承認の画面が出ない | Environment `production` に Required reviewers が未設定、または Deployment branches が `master` でない |
 | VPS が取り込まない | 窓（03:10）前／同じ版の失敗を記録済み（`--force` で解除）。`python -m src.ops.release_publish status --kind ui` の `applied/vps.json` を見る |
+
+## 8. VPS の取り込みと、stg 環境（stg.megu-keiba.com）をホストから独立させる
+
+**現状の事実**: 本番の画面を VPS に入れる pull 型の仕組み（`pull_release.py`・タイマー・取り込み用の資格情報）は、VPS に**まだ入っていない**。`master` の反映が `ops/releases/ui/` に公開した画面は、これを入れるまで VPS に届かない（それまでは `promote.sh` の SSH で入れていた）。`stg.megu-keiba.com` も今はホスト PC の画面を指している。以下で、どちらも VPS が GCS から自分で取り込む形にする。順番に、VPS は **root** で行う（VPS の SSH ユーザー `deploy` はリリースの導入しか `sudo` できない）。
+
+1. **取り込み用の資格情報**（Cloud Shell）。読み取り専用で、`ops/releases/` と `applied/vps.json` の書き込みだけ。
+   ```bash
+   cd ~/keiba-vpn && git pull
+   GCS_BUCKET=<バケット名> bash scripts/gcp/setup_pull_sa.sh                        # 表示だけ
+   GCS_BUCKET=<バケット名> bash scripts/gcp/setup_pull_sa.sh --apply --make-key /tmp/keiba-pull-sa.json
+   ```
+   鍵（JSON）は VPS が GCP の外にあるため必要。画面に出さず、手元の PC にダウンロード（Cloud Shell のメニュー → ダウンロード）して VPS へ渡し、**渡し終えたら Cloud Shell と手元の両方から消す**。
+2. **VPS に仕組みを入れる**（VPS で root）。
+   ```bash
+   git clone --depth 1 --filter=blob:none --sparse https://github.com/meguram/keiba-vpn.git ~/keiba-vpn && cd ~/keiba-vpn
+   git sparse-checkout set scripts/ops/vps
+   bash scripts/ops/vps/vps_03_units.sh --dry-run          # 内容の確認（何も変更しない）
+   bash scripts/ops/vps/vps_03_units.sh --with-pull-venv
+   ```
+   続けて、`/etc/keiba-pull/pull.env` の `GCS_BUCKET=<バケット名>` を確認し、手順 1 の鍵を `/etc/keiba-pull/sa.json`（権限 600）に置く（`install -m 600 /dev/stdin /etc/keiba-pull/sa.json < 鍵.json`）。
+3. **本番の画面を 1 回取り込む**（VPS で root）。以後は毎日 JST 03:10 に自動。
+   ```bash
+   /opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/pull_release.py --kind ui --force
+   curl -s http://127.0.0.1:3000/version.json        # 公開した版（release が keiba-ui-<コミット8桁>-…）になること
+   ```
+4. **stg 用の 2 つ目の画面を入れる**（VPS で root）。本番の画面・nginx の本番の設定には触れない。
+   ```bash
+   bash scripts/ops/vps/vps_05_stg_instance.sh --dry-run
+   bash scripts/ops/vps/vps_05_stg_instance.sh --cloudrun-host rstg---keiba-api-244891111662.asia-northeast1.run.app --pull-now
+   curl -s http://127.0.0.1:3002/version.json        # env が stg の版になること（stg ブランチの push で公開済みのとき）
+   ```
+   前提: `/etc/nginx/keiba-proxykey.conf` があること（`docs/operations/cloud_run_api.md` の手順 11。`KEIBA_PROXY_KEY` を Secret Manager から取り出して `render_nginx_proxykey.sh`）。
+5. **Cloudflare で `stg.megu-keiba.com` の転送先を付け替える**（ダッシュボード）。Zero Trust → Networks → Tunnels。
+   - ホスト PC のトンネルの Public hostname から `stg.megu-keiba.com` を**外す**。
+   - VPS のトンネル（`cloudflared-prod`）に Public hostname `stg.megu-keiba.com` → Service `HTTP` / `localhost:8081` を**足す**。
+   - Access のアプリケーション（`stg.megu-keiba.com` の認証）はそのまま。
+6. **確認**: https://stg.megu-keiba.com/ を開く（Access で認証）→ 画面端に **STG** のバッジ。以後、`stg` ブランチへの push で、この画面が最新になる（公開から最大 5 分）。
+   戻すとき: 手順 5 を逆にする（ホストのトンネルに `stg.megu-keiba.com` を戻す）。
+
+メモリ: 2 つ目の画面の上限は 160MB（常駐の合計に足しても、2GB の VPS に十分な余裕。`tests/ops/test_vps_units.py` が上限を検査）。

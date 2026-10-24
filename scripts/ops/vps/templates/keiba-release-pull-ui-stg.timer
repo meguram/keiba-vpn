@@ -1,0 +1,12 @@
+[Unit]
+Description=keiba pull 型デプロイ (ui-stg) — stg の画面。5 分おきに GCS の latest.json を見て、新しい版があればすぐ入れる（窓は待たない）
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30
+Persistent=false
+Unit=keiba-release-pull@ui-stg.service
+
+[Install]
+WantedBy=timers.target

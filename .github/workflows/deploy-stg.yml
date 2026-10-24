@@ -36,6 +36,9 @@ jobs:
     needs: [test]
     if: ${{ always() && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
     uses: ./.github/workflows/_build-ui.yml
+    with:
+      env_label: stg                         # 画面端に STG と出る
+      upstream: "http://127.0.0.1:8081"      # VPS の stg 用 nginx（Cloud Run の stg タグ付きリビジョンへ中継）
 
   deploy:
     needs: [test, build-ui]
@@ -72,11 +75,26 @@ jobs:
         env:
           SMOKE_BASE: ${{ steps.revision.outputs.tag_url }}
         run: bash scripts/ci/deploy_gcp.sh smoke --target stg
+      - uses: actions/download-artifact@v4   # PIN
+        with:
+          name: ui-release
+          path: release
+      - name: 画面を stg 用として GCS に公開（スモークが通った後だけ。latest.json を最後に書く。VPS が 5 分おきに取り込む）
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          pip install google-cloud-storage python-dotenv
+          (cd release && sha256sum -c ./*.sha256)
+          f="$(ls release/keiba-ui-*.tar.gz | head -1)"
+          python -m src.ops.release_publish publish-ui-stg --file "$f" --commit "$GITHUB_SHA"
+          python -m src.ops.release_publish status --kind ui-stg
       - name: 結果の要約
         run: |
           {
             echo "### stg に反映しました"
             echo "- コミット: \`$GITHUB_SHA\`"
             echo "- API: 通信 0% のタグ付きリビジョン \`rstg\` → ${{ steps.revision.outputs.tag_url }}"
-            echo "- 本番の通信・Jobs・画面は変えていません。本番へは stg → master のマージ（承認あり）"
+            echo "- 画面: ops/releases/ui-stg/ に公開しました。VPS の stg 用の画面（stg.megu-keiba.com）が 5 分おきに取り込みます（vps_05_stg_instance.sh を入れた後）"
+            echo "- 本番の通信・Jobs・本番の画面は変えていません。本番へは stg → master のマージ（承認あり）"
           } >> "$GITHUB_STEP_SUMMARY"
