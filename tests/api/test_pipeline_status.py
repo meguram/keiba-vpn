@@ -76,3 +76,13 @@ def test_weights_done_from_prediction_event_even_if_card_was_overwritten(monkeyp
     resp["entries_status"].update(n_weight=0)
     out = ps.pipeline_status(RID, resp, St(), now=datetime(2026, 10, 24, 18, 0, tzinfo=JST))
     assert out["stages"][1]["state"] == "done" and out["complete"] is True
+
+
+def test_weights_done_when_prediction_exists_but_no_event_log(monkeypatch):
+    # Cloud Run: events のログが無く、出馬表の馬体重も取り直しで消えている。予測があれば馬体重の工程は済んでいる
+    _bets(monkeypatch)
+    monkeypatch.setattr(ps, "_prediction_event", lambda *a, **k: {"at": "2026-10-24T09:10:00+09:00", "weights_known": None})
+    resp = _resp(phase="final")
+    resp["entries_status"].update(n_weight=0)
+    out = ps.pipeline_status(RID, resp, St(), now=datetime(2026, 10, 24, 18, 0, tzinfo=JST))
+    assert out["stages"][1]["state"] == "done" and out["complete"] is True

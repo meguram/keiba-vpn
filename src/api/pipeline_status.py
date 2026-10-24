@@ -1,7 +1,7 @@
 """開催日の予測パイプライン（出馬表 → 馬体重 → AI予測 → オッズ → 推奨買い目）の進み具合を API に付ける。
 
 読み取りだけ（スクレイプ・推論は起動しない）。全工程が済んだとき ``complete=True`` になり、UI が『完了』を出せる。
-予測の時刻は、ローカル予測なら ``data/local/inference/events/<日>.jsonl`` の ``at``、GCS の予測なら ``_meta.scraped_at``。
+予測の時刻は、ローカル予測なら推論ディレクトリの ``events/<日>.jsonl`` の ``at``、GCS の予測なら ``_meta.scraped_at``。
 """
 
 from __future__ import annotations
@@ -113,6 +113,8 @@ def pipeline_status(race_id: str, resp: dict, storage: Any, *, now: datetime | N
     n_entries, n_weight = int(es.get("n_entries") or 0), int(es.get("n_weight") or 0)
     if has_pred and pev.get("weights_known") is not None:
         stages.append(_stage("weights", "done", "馬体重あり" if pev["weights_known"] else "馬体重なしで予測（期限までに未発表）", pev.get("at")))
+    elif has_pred and phase not in ("weighed",) and not (n_entries and n_weight / n_entries >= 0.9):
+        stages.append(_stage("weights", "done", "予測済み（経過の記録なし）", pev.get("at")))     # Cloud Run には events が無い。予測があれば馬体重の工程は過ぎている
     elif phase == "weighed" or (n_entries and n_weight / n_entries >= 0.9):
         stages.append(_stage("weights", "done", f"{n_weight}/{n_entries}頭", es.get("updated_at")))
     elif window:

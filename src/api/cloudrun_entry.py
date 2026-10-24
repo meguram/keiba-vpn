@@ -11,6 +11,7 @@ lifespan を動かさなくても FastAPI のルーティングは動く。app.p
   KEIBA_ENV                必須（prod）。未設定なら起動を拒否（暗黙の prod を防ぐ）。
   KEIBA_RUN_LOCATION=gcp   Slack 通知の実行場所表示。
   KEIBA_PROXY_KEY_REQUIRED=1 / KEIBA_PROXY_KEY / KEIBA_PROXY_KEY_NEXT   共有ヘッダ認証（src/api/middleware/proxy_key.py）。
+  KEIBA_MIRROR_PULL=1      予測ファイル・出馬表の状態を GCS（ops/mirror/）から取り込む常駐スレッドを起動（既定 1）。
   KEIBA_SERVING_STATE_PULL=1  起動時に GCS の serving_state（config/serving_state.json）を取り込む。
   KEIBA_HEARTBEAT_SECRET / _NEXT   VPS ハートビートの署名鍵。
 """
@@ -35,6 +36,7 @@ _DEFAULTS = {
     "DISK_L2_MIN_WEEKLY_ACCESSES": "1000000",   # ディスクの L2 キャッシュは書かない（メモリを食うため）
     "KEIBA_BLOODLINE_PRELOAD": "0",
     "LOGS_RETENTION_DISABLED": "1",
+    "KEIBA_MIRROR_PULL": "1",                   # 予測ファイル・出馬表の状態を GCS から取り込む（src/ops/gcs_mirror.py）
 }
 
 Scope = dict[str, Any]
@@ -89,11 +91,21 @@ def _pull_serving_state() -> None:
         logger.info("serving_state: %s", r)
 
 
+def _start_mirror_pull() -> None:
+    """予測ファイル・出馬表の状態を GCS（ops/mirror/）から取り込む。起動時に全部、以降は 1 分ごとに直近分（src/ops/gcs_mirror.py）。"""
+    if (os.environ.get("KEIBA_MIRROR_PULL") or "").strip() != "1":
+        return
+    from src.ops.gcs_mirror import start_refresher
+
+    start_refresher()
+
+
 def build_app() -> ASGIApp:
     for k, v in _DEFAULTS.items():
         os.environ.setdefault(k, v)
     require_explicit_env()
     _pull_serving_state()
+    _start_mirror_pull()
 
     from fastapi import FastAPI
 
