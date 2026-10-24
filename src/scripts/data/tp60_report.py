@@ -572,7 +572,7 @@ def build(src: Path) -> str:
 <h3>7.3 重複の整理</h3>
 <p>候補 {dsel['n_before_dedup']} 頭のうち、父子関係にある、または競走馬での総血量の相関が 0.5 以上の種牡馬は産駒数の多い方を代表にまとめ、<b>代表 {dsel['n_after_dedup']} 頭</b>にした。例: """)
     ex = [r for r in dsel["reps"] if r["merged"]][:6]
-    a("、".join(f"{short(names, r['id'])}（{'・'.join(short(names, m['id']) + f' {m['corr']:+.2f}' for m in r['merged'][:3])} を統合）" for r in ex) + "。</p>")
+    a("、".join(short(names, r['id']) + "（" + "・".join(short(names, m['id']) + " " + format(m['corr'], '+.2f') for m in r['merged'][:3]) + " を統合）" for r in ex) + "。</p>")
 
     sm = deff["summary"]
     a("<h3>7.4 深い血量（6〜10 世代）は効くか</h3>")

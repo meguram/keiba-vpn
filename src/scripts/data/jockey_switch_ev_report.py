@@ -34,10 +34,10 @@ def e(x) -> str:
 
 
 def table(head: list[str], rows: list[list], num_from: int = 1) -> str:
-    h = "".join(f"<th{' class=\"n\"' if i >= num_from else ''}>{e(c)}</th>" for i, c in enumerate(head))
+    h = "".join("<th" + (' class="n"' if i >= num_from else '') + f">{e(c)}</th>" for i, c in enumerate(head))
     b = ""
     for r in rows:
-        b += "<tr>" + "".join(f"<td{' class=\"n\"' if i >= num_from else ''}>{e(c)}</td>" for i, c in enumerate(r)) + "</tr>"
+        b += "<tr>" + "".join("<td" + (' class="n"' if i >= num_from else '') + f">{e(c)}</td>" for i, c in enumerate(r)) + "</tr>"
     return f"<table><tr>{h}</tr>{b}</table>"
 
 

@@ -53,6 +53,8 @@ jobs:
           # 本番(ホスト/Jobs)と同じバージョンで試す(constraints-jobs.txt)。torch は CPU 版(アンサンブルの NN メンバーが使う。本番の Jobs イメージと同じ)
           pip install -r requirements.txt -c constraints-jobs.txt
           pip install --extra-index-url https://download.pytorch.org/whl/cpu "torch==2.6.0+cpu"
+      - name: 構文検査（Python 3.11。CI・ホスト・Jobs のイメージの版。3.12 以降でしか書けない構文を入れない）
+        run: python -m compileall -q src tests scripts main.py
       - name: Alembic migration check
         run: alembic upgrade head
       - name: No shuffle in time split (static)
