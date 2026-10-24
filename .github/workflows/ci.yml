@@ -55,6 +55,8 @@ jobs:
           pip install --extra-index-url https://download.pytorch.org/whl/cpu "torch==2.6.0+cpu"
           python -c "import pytest_cov; print('pytest-cov', pytest_cov.__version__)"
 
+      - name: 構文検査（Python 3.11。CI・ホスト・Jobs のイメージの版。3.12 以降でしか書けない構文を入れない）
+        run: python -m compileall -q src tests scripts main.py
       - name: Alembic migration check
         run: alembic upgrade head
 

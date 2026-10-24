@@ -23,6 +23,13 @@ import numpy as np
 
 from src.research.race.track_geometry import Q_STEP, circuit_key_for, route_points
 
+_VOTE_JA = {True: "あり", False: "なし", None: "不明"}
+
+
+def _votes_ja(r: dict) -> str:
+    """ゴール前の坂の各判定者の票を『名前:あり/なし/不明』で並べる（f-string の入れ子は Python 3.11 で書けないため関数に出す）。"""
+    return " ".join(f"{k}:{_VOTE_JA.get(v, '不明')}" for k, v in (r.get("goal_slope_votes") or {}).items())
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MASTER = REPO_ROOT / "data/meta/course_master/jra_courses.json"
 ROUTES = REPO_ROOT / "data/meta/course_master/geo/routes.json"
@@ -258,7 +265,7 @@ def info_table(r: dict, course: dict | None = None, circ: dict | None = None) ->
         ("周長", f'{fnum(r.get("lap_length_m"))}m {badge(r.get("lap_length_m_status"), agree("lap_length_m_agree"))}'),
         ("最後の直線", f'{fnum(r.get("final_straight_m"))}m {badge(r.get("final_straight_m_status"), agree("final_straight_m_agree"))}'),
         ("コース全体の高低差", f'{fnum(r.get("elevation_range_m"))}m {badge(r.get("elevation_range_m_status"), agree("elevation_range_m_agree"))}'),
-        ("ゴール前の坂", (f'あり：残り {fnum(r.get("goal_slope_start"), 0)}〜{fnum(r.get("goal_slope_end"), 0)}m、高低差 {fnum(r.get("goal_slope_rise"))}m ' if r.get("goal_slope_exists") else "なし ") + f'<span class="mut">（3 者の判断 {esc(" ".join(f"{k}:{ {True: "あり", False: "なし", None: "不明"}.get(v, "不明")}" for k, v in (r.get("goal_slope_votes") or {}).items()))}）</span>'),
+        ("ゴール前の坂", (f'あり：残り {fnum(r.get("goal_slope_start"), 0)}〜{fnum(r.get("goal_slope_end"), 0)}m、高低差 {fnum(r.get("goal_slope_rise"))}m ' if r.get("goal_slope_exists") else "なし ") + f'<span class="mut">（3 者の判断 {esc(_votes_ja(r))}）</span>'),
         ("ほかの坂", esc("　".join(f'{s.get("direction")}：{s.get("zone_from")}→{s.get("zone_to")}（残り{fnum(s.get("start_before_goal_m"), 0)}〜{fnum(s.get("end_before_goal_m"), 0)}m）{fnum(s.get("rise_m"))}m' for s in (r.get("other_slopes") or []) if abs(s.get("rise_m") or 0) >= 0.8) or "—")),
         ("周回の注記", esc(r.get("n_laps_note") or ("最後の周は " + r["last_lap_variant"] + "回り" if r.get("last_lap_variant") else ""))) if (r.get("n_laps_note") or r.get("last_lap_variant")) else ("", ""),
         ("コーナーの形", esc(f'{r.get("corner_radius_class_A") or "—"}　{"スパイラルカーブ" if r.get("spiral_curve") else ""}')),

@@ -192,3 +192,10 @@ def test_stg_manual_run_can_skip_tests_but_push_cannot():
     d = _load(WF_STG)
     assert set(_on(d)["workflow_dispatch"]["inputs"]) == {"skip_tests"}
     assert "inputs.skip_tests" in d["jobs"]["test"]["if"] and "workflow_dispatch" in d["jobs"]["test"]["if"]      # push では常にテストする
+
+
+def test_ci_checks_python311_syntax_before_tests():
+    for name in ("_test.yml", "ci.yml"):
+        text = (WFDIR / name).read_text(encoding="utf-8")
+        assert 'python-version: "3.11"' in text and "compileall -q src tests scripts main.py" in text, name
+        assert text.index("compileall") < text.index("pytest"), name       # テストの収集より前に、構文の誤りをはっきり出す
