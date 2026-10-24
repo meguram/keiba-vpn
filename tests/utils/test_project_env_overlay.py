@@ -52,3 +52,12 @@ class TestEnvOverlay(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_find_project_root_works_in_a_slim_image_without_marker_files(tmp_path, monkeypatch):
+    # Cloud Run/Jobs のイメージには .env.example も requirements.txt も無い。cwd がどこでも、コードの位置からルートが決まる
+    from src.utils import project_env as pe
+
+    monkeypatch.chdir(tmp_path)
+    root = pe.find_project_root()
+    assert (root / "src" / "utils" / "project_env.py").is_file()

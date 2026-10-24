@@ -24,6 +24,10 @@ def find_project_root(start: Path | None = None) -> Path:
     for parent in [cur, *cur.parents]:
         if (parent / ".env.example").is_file() and (parent / "requirements.txt").is_file():
             return parent
+    # 配布イメージ（Cloud Run/Jobs）には .env.example も requirements.txt も入らない。このファイルの位置（<root>/src/utils/）から決める
+    here = Path(__file__).resolve().parents[2]
+    if (here / "src").is_dir() and (here / "config").is_dir():
+        return here
     raise FileNotFoundError(
         "keiba-vpn プロジェクトルートが見つかりません。"
         "カレントディレクトリがリポジトリ内か、.env.example / requirements.txt が存在するか確認してください。"
