@@ -81,7 +81,7 @@ def test_stg_deploy_never_switches_traffic_or_touches_prod_assets():
     assert "api-revision --target stg" in text and "smoke --target stg" in text
     assert "environment" not in jobs["check-jobs-image"] and "environment" not in jobs["build-ui"]      # GCP に触れない job は環境も権限も持たない
     pub = jobs["publish-stg-ui"]
-    assert pub["environment"] == "stg" and set(pub["needs"]) == {"deploy", "build-ui"}                  # 画面の公開は API のスモークと画面のビルドが通った後だけ
+    assert pub["environment"] == "stg" and set(pub["needs"]) == {"changes", "build-ui"}                # 画面の公開は画面のビルドが通った後だけ（API の反映は待たない）
 
 
 def test_auth_uses_wif_without_key_files_or_secrets():
@@ -202,7 +202,8 @@ def test_stg_deploy_runs_in_parallel_and_leaves_tests_to_ci():
     assert "test" not in jobs                                                   # 同じコミットで ci.yml が走る（二重にしない）
     assert "stg" in _on(_load(WFDIR / "ci.yml"))["push"]["branches"]
     for name in ("build-ui", "check-jobs-image", "deploy"):
-        assert "needs" not in jobs[name], name                                  # 互いを待たない
+        assert jobs[name]["needs"] == ["changes"], name                         # 互いを待たない（何を反映するかの判定だけを待つ）
+    assert "ui == 'true'" in jobs["build-ui"]["if"] and "api == 'true'" in jobs["deploy"]["if"] and "api == 'true'" in jobs["check-jobs-image"]["if"]
     assert "build-api-image --target stg" in WF_STG.read_text(encoding="utf-8") and "check-jobs-image --target stg" in WF_STG.read_text(encoding="utf-8")
 
 

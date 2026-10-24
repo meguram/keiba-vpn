@@ -13,14 +13,16 @@ VPS は、公開された画面を `pull_release.py` が窓（毎日 JST 03:10�
 ## 1. 全体の流れ
 
 ```
-develop ──マージ──▶ stg ──push──▶ deploy-stg.yml（4 つの job を並走。約 4 分。テストは同じ push の ci.yml が行うので、ここでは行わない）
+develop ──マージ──▶ stg ──push──▶ deploy-stg.yml（変更されたファイルで動く job を選び、並走。画面だけの変更は約 2 分、API の変更は約 4 分。
+                                    文書・テストだけの変更は何も動かさない。判定は scripts/ci/stg_changes.sh。手動実行・判定不能のときは両方動かす。
+                                    テストは同じ push の ci.yml が行うので、ここでは行わない）
                                     build-ui          画面が standalone でビルドできる（STG バッジつき）
                                     check-jobs-image  Jobs のイメージを作り、全ジョブの実行モジュールを読み込めるか（push しない・GCP に触れない）
                                     deploy（環境 stg） WIF で GCP に認証（鍵なし）
                                          build-api-image  API のイメージを作って push
                                          api-revision     通信 0% のタグ付きリビジョン rstg（stg だけテストユーザー test/test が有効）
                                          smoke            鍵なし 401・鍵あり 200・ハートビート（失敗なら失敗のまま）
-                                    publish-stg-ui    上の deploy と build-ui が通った後だけ、画面を ops/releases/ui-stg/ に公開
+                                    publish-stg-ui    build-ui が通った後だけ、画面を ops/releases/ui-stg/ に公開（API の deploy は待たない）
         stg ──マージ──▶ master ──push──▶ promote.yml
                                     ① verify-stg        このコミットが stg に含まれること（含まれなければ止める）
                                     ② test + build-ui
