@@ -289,6 +289,9 @@ def _prior_win_rate_by_id_surface(
     return out
 
 
+HURDLE_L3F_MEDIAN_MAX = 25.0      # レース内の上がり（正の値）の中央値がこれ未満なら障害戦とみなす
+
+
 def build_track_bias_pedigree_features(
     race_result_df: pd.DataFrame,
     shutuba_df: pd.DataFrame,
@@ -370,6 +373,13 @@ def build_track_bias_pedigree_features(
         if col in rr.columns:
             rr[col] = rr.groupby("race_id", sort=False)[col].transform(lambda s: s.ffill().bfill())
 
+    # 障害戦の面を「障」にそろえる。結果表（race_result_flat）は障害戦の面を約 77% で「芝」「ダート」と持っており、そのままだと
+    # 障害の勝ち馬の上がり（約 11 秒＝別の量）が同日・同場の平地の平均に混ざる。平地の上がり中央値は 33 秒以上なので、25 秒未満で判定する。
+    if "last_3f" in rr.columns:
+        _l3 = pd.to_numeric(rr["last_3f"], errors="coerce")
+        _med = _l3.where(_l3 > 0).groupby(rr["race_id"], sort=False).transform("median")
+        rr.loc[(_med < HURDLE_L3F_MEDIAN_MAX).fillna(False), "surface"] = "障"
+
     rr["surface_group"] = rr["surface"].map(surface_group)
     rr["venue_code"] = rr["venue_code"].map(_norm_venue)
     rr["_d"] = pd.to_datetime(rr["date"], errors="coerce").dt.normalize()
@@ -388,6 +398,7 @@ def build_track_bias_pedigree_features(
     if not w_win.empty:
         w_win = w_win.drop_duplicates(subset=["race_id"], keep="first")
     w_win["win_3f"] = pd.to_numeric(w_win.get("last_3f"), errors="coerce")
+    w_win["win_3f"] = w_win["win_3f"].where(w_win["win_3f"] > 0)      # 上がりが 0 以下の勝ち馬は解析不良の行（平均を引き下げる）なので欠損として扱う
 
     g_fine = ["_d", "venue_code", "surface_group", "cond_bucket", "dist_band"]
     g_coarse = ["_d", "venue_code", "surface_group"]

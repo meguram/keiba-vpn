@@ -26,11 +26,14 @@ STATE_PATH = Path(os.environ.get("KEIBA_BACKFILL_PAST_STATE") or Path(__file__).
 # 全取得（通常運用＋補填）の 1 日の総件数の上限。2026-10-12〜10-22 の 11 日連続で HTTP 400(bot_blocked)/403/429 なしだった最大が 2,681 件（10/19）。
 # 10/8〜10/9 は 3,241・4,213 件でも制限なしだったが、その直後の 10/10〜10/11 に bot_blocked の HTTP 400 が計 2,407 件出た（3,690 件の日）。
 # 『制限なしで続いた範囲』は後者を採らず、制限後に安定して続いた 2,700 件までとする。
-TOTAL_DAILY_LIMIT = int(os.environ.get("BACKFILL_PAST_TOTAL_DAILY_LIMIT", "2700"))
+UNLIMITED = 10**9
+TOTAL_DAILY_LIMIT = int(os.environ.get("BACKFILL_PAST_TOTAL_DAILY_LIMIT", "0"))   # 0＝日の総件数の上限なし（2026-10-23 ユーザー指示。実績の目安は 2,700 件/日）
 EXPECTED_WEEKDAY_OPS = int(os.environ.get("BACKFILL_PAST_EXPECTED_OPS", "1150"))   # 平日の通常運用の件数（朝の窓の後に走る分）
-CAP_MAX = int(os.environ.get("BACKFILL_PAST_CAP_MAX", str((TOTAL_DAILY_LIMIT - EXPECTED_WEEKDAY_OPS) // 100 * 100)))   # 既定 1,500（100 件単位に切り下げ）
+CAP_MAX = int(os.environ.get("BACKFILL_PAST_CAP_MAX", "0"))   # 0＝1 回の件数の上限なし
 CAP_FIRST = CAP_MAX // 2
-WINDOW = os.environ.get("BACKFILL_PAST_WINDOW", "02:30-05:45")          # JST。この外では始めない（途中でも終端で止める）
+WINDOW = os.environ.get("BACKFILL_PAST_WINDOW", "00:00-24:00")          # JST。既定は終日（時間帯による調整はしない）。狭めればその外では始めない・途中でも終端で止める
+PACE_PER_HOUR = float(os.environ.get("BACKFILL_PAST_PACE_PER_HOUR", "0"))   # 追加の一定間隔（件/時）。既定 0＝無効（間隔は取得クライアントの待ち NETKEIBA_THROTTLE_MIN/MAX＝補填の起動スクリプトで 1.8〜2.2 秒）
+SKIP_RACEDAY = os.environ.get("BACKFILL_PAST_SKIP_RACEDAY", "0") == "1"   # 1 で土日（開催日）は始めない。既定は曜日で分けず、日の総件数の上限と他の取得への譲りで抑える
 OTHER_FETCH_PATTERN = r"src\.scraper\.(auto_scrape|backfill)|backfill_horse_training|run_priority_rescrape|src\.scripts\.scraping\.backfill_"
 
 # AIMD 型の速度調整: 応答が悪化したら待ちを倍に増やし（乗法的に遅く）、悪化なしが続けば少しずつ戻す（加法的に速く）。
@@ -42,8 +45,9 @@ AIMD_MAX_DELAY = 60.0
 
 # 悪化の検知（その夜を中断）
 RECENT_REQUESTS = 100
-MAX_BAD_IN_RECENT = 3            # 直近 100 件の中の 403/429/5xx がこの件数に達したら中断
-MAX_TRANSPORT_ERRORS = 2         # 通信エラー（接続・タイムアウト）がこの件数に達したら中断
+MAX_BAD_IN_RECENT = 1            # 直近 100 件の中の 400/403/429/5xx がこの件数に達したら中断（1＝エラー 1 件で即中断）
+MAX_TRANSPORT_ERRORS = 1         # 通信エラー（接続・タイムアウト）がこの件数に達したら中断（1＝即中断）
+HALT_PATH = Path(os.environ.get("KEIBA_BACKFILL_PAST_HALT") or STATE_PATH.parent / "backfill_past_halt.json")   # エラーで止めた印。人が確認して削除するまで再開しない
 LATENCY_WINDOW = 30
 LATENCY_FACTOR = 2.5             # 直近の応答時間の中央値が、その夜の最初の基準の何倍を超えたら中断
 LATENCY_ABS_SEC = 8.0            # 基準に関わらず、中央値がこの秒数を超えたら中断
@@ -89,16 +93,29 @@ def save_state(state: dict[str, Any], path: Path = STATE_PATH) -> None:
 
 def daily_budget(counted_today: int, now: datetime | None = None) -> int:
     """この夜に使える上限: 日の総上限 − その日すでに数えた件数 − これから走る通常運用の見込み。"""
+    if TOTAL_DAILY_LIMIT <= 0:
+        return UNLIMITED
     return max(0, TOTAL_DAILY_LIMIT - int(counted_today) - EXPECTED_WEEKDAY_OPS)
 
 
-def stage_cap(state: dict[str, Any], cap_max: int = CAP_MAX) -> int:
+def stage_cap(state: dict[str, Any], cap_max: int | None = None) -> int:
     """最初の 1 夜は半分。直前の夜が問題なく終わったときだけ上限まで上げる。悪化した夜の翌夜は半分に戻す。"""
+    cap_max = CAP_MAX if cap_max is None else cap_max
+    if cap_max <= 0:
+        return UNLIMITED
     nights = state.get("nights") or []
     if not nights:
         return cap_max // 2
     last = nights[-1]
     return cap_max if last.get("healthy") else cap_max // 2
+
+
+def halted() -> dict[str, Any] | None:
+    """エラーで止めた印があれば中身を返す（人が確認して HALT_PATH を削除するまで再開しない）。"""
+    try:
+        return json.loads(HALT_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
 
 
 def other_fetch_running() -> bool:
@@ -136,7 +153,8 @@ class NightGuard:
 
     HOSTS = ("netkeiba.com",)
 
-    def __init__(self, cap: int, window: str = WINDOW, clock=_now, state_path: Path = STATE_PATH, sleep=time.sleep) -> None:
+    def __init__(self, cap: int, window: str = WINDOW, clock=_now, state_path: Path = STATE_PATH, sleep=time.sleep,
+                 pace_per_hour: float = PACE_PER_HOUR, yield_to_others: bool = True) -> None:
         self.cap = int(cap)
         self.window = window
         self.clock = clock
@@ -154,6 +172,18 @@ class NightGuard:
         self.extra_delay = 0.0              # AIMD: 次のリクエストの前に足す待ち（秒）
         self._clean_run = 0
         self.sleep = sleep
+        self.pace_sec = 3600.0 / pace_per_hour if pace_per_hour and pace_per_hour > 0 else 0.0
+        self.yield_to_others = yield_to_others
+        self.busy = other_fetch_running
+
+    def _pace(self) -> None:
+        """一定間隔で取る: 応答のあと pace_sec 待ち、他の取得が動いている間はさらに待つ（同時 1 本を保つ）。5 秒刻みで、止める理由が出たら抜ける。"""
+        waited = 0.0
+        while waited < self.pace_sec and not self.stop_reason:
+            self.sleep(min(5.0, self.pace_sec - waited))
+            waited += 5.0
+        while self.yield_to_others and not self.stop_reason and self.busy():
+            self.sleep(15.0)
 
     # NetkeibaClient の応答オブザーバ
     def __call__(self, url: str, resp: Any) -> None:
@@ -162,7 +192,7 @@ class NightGuard:
         code = int(getattr(resp, "status_code", 0) or 0)
         self.requests += 1
         self.status_counts[code] = self.status_counts.get(code, 0) + 1
-        is_bad = code in (403, 429) or 500 <= code < 600
+        is_bad = code in (400, 403, 429) or 500 <= code < 600
         self._recent_bad.append(1 if is_bad else 0)
         if is_bad:
             self.bad += 1
@@ -178,6 +208,7 @@ class NightGuard:
                     self._baseline = statistics.median(self._first)
         self._evaluate()
         self._aimd(is_bad, sec)
+        self._pace()
 
     def _aimd(self, is_bad: bool, sec: float | None) -> None:
         slow = sec is not None and self._baseline is not None and sec > max(2.0, self._baseline * 2.0)
@@ -231,6 +262,10 @@ class NightGuard:
             return self.stop_reason
         if self.requests >= self.cap:
             return f"この夜の上限 {self.cap} 件に到達"
+        from src.scraper.request_counter import count_today
+
+        if TOTAL_DAILY_LIMIT > 0 and count_today() >= TOTAL_DAILY_LIMIT:
+            return f"日の総件数が上限 {TOTAL_DAILY_LIMIT} 件に到達"
         if not in_window(self.clock(), self.window):
             return f"時間窓 {self.window}（JST）の外"
         return None
@@ -258,6 +293,11 @@ class NightGuard:
         }
         if extra:
             rec.update(extra)
+        if self.bad or self.transport_errors:
+            halt = {"at": rec["ended"], "reason": self.stop_reason, "bad": self.bad, "transport_errors": self.transport_errors, "status_counts": rec["status_counts"]}
+            hp = HALT_PATH if self.state_path == STATE_PATH else self.state_path.with_name("backfill_past_halt.json")
+            hp.parent.mkdir(parents=True, exist_ok=True)
+            hp.write_text(json.dumps(halt, ensure_ascii=False, indent=1), encoding="utf-8")
         state.setdefault("nights", []).append(rec)
         state["nights"] = state["nights"][-60:]
         save_state(state, self.state_path)
