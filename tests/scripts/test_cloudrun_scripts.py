@@ -47,7 +47,7 @@ def test_deploy_default_and_dry_run_execute_nothing(fake_gcloud):
     assert "--min-instances 0" in out and "--max-instances 3" in out and "--timeout 60" in out
     assert 20 <= int(re.search(r"--concurrency (\d+)", out).group(1)) <= 40
     assert "KEIBA_ENV=prod" in out and "KEIBA_RUN_LOCATION=gcp" in out and "KEIBA_PROXY_KEY_REQUIRED=1" in out
-    assert "--set-secrets" in out and "KEIBA_PROXY_KEY=keiba-proxy-key:latest" in out and "--no-traffic" not in out.split("gcloud builds")[0]
+    assert "--set-secrets" in out and "KEIBA_PROXY_KEY=KEIBA_PROXY_KEY:latest" in out and "--no-traffic" not in out.split("gcloud builds")[0]
 
 
 def test_deploy_apply_calls_gcloud(fake_gcloud):

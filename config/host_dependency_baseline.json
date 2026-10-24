@@ -385,7 +385,8 @@
    "local_data": 1
   },
   "src/ops/gcs_mirror.py": {
-   "local_data": 8
+   "local_data": 8,
+   "page_reference": 12
   }
  }
 }

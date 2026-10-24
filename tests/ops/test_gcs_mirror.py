@@ -112,3 +112,22 @@ def test_storage_client_uses_env_service_account_then_adc(monkeypatch):
     monkeypatch.delenv("GCS_PRIVATE_KEY", raising=False)
     gc.storage_client()
     assert seen == {"project": "proj", "credentials": None}          # 鍵が無ければ ADC（Cloud Run の実行サービスアカウント）
+
+
+def test_tree_with_glob_only_mirrors_matching_files(tmp_path):
+    g = Fake()
+    trees = ("data/page_reference/tables::*/race_result_flat.parquet",)
+    _w(tmp_path, "data/page_reference/tables/2025/race_result_flat.parquet", b"keep")
+    _w(tmp_path, "data/page_reference/tables/2025/race_odds_flat.parquet", b"skip")        # 巨大な他の表は対象外
+    _w(tmp_path, "data/page_reference/tables/2025/_chunks_race_result/part.parquet", b"skip")
+    assert gm.push(g, tmp_path, trees)["uploaded"] == 1
+    assert list(g.objs) == ["ops/mirror/data/page_reference/tables/2025/race_result_flat.parquet"]
+    run = tmp_path / "cloudrun"
+    assert gm.pull(g, run, trees) == {"seen": 1, "downloaded": 1}
+    assert gm.split_tree("a/b") == ("a/b", "**/*")
+
+
+def test_default_trees_cover_the_data_the_api_reads():
+    dirs = {gm.split_tree(t)[0] for t in gm.TREES}
+    for need in ("data/page_reference/race_lists", "data/page_reference/tables", "data/local/inference/predictions_v3", "data/local/meta/entries_state"):
+        assert need in dirs

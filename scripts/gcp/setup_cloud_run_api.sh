@@ -6,6 +6,8 @@
 set -uo pipefail
 PROJECT_ID="${PROJECT_ID:-YOUR_GCP_PROJECT_ID}"; REGION="${REGION:-asia-northeast1}"; AR_REPO="${AR_REPO:-keiba-vpn}"
 GCS_BUCKET="${GCS_BUCKET:-YOUR_GCS_BUCKET}"
+# 【旧】2026-10-24: 実行サービスアカウントと秘密の初期設定は scripts/gcp/setup_project.sh と put_secret.sh（docs/operations/gcp_setup_runbook.md 2・5 章）に一本化した。
+# このスクリプトの keiba-api-run と小文字の秘密名（keiba-proxy-key など）は deploy_cloud_run_api.sh から参照されない。使わないこと。
 RUN_SA_ID="keiba-api-run"; RUN_SA="${RUN_SA_ID}@${PROJECT_ID}.iam.gserviceaccount.com"
 APPLY=0; [ "${1:-}" = "--apply" ] && APPLY=1
 run() { printf '+'; printf ' %q' "$@"; printf '\n'; if [ "$APPLY" = 1 ]; then "$@" || echo "  (失敗/既存のため続行)"; fi; }

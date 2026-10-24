@@ -1,25 +1,20 @@
 {
   "_doc": "Cloud Run の API が読む『GCS に無いローカル専用データ』の束（docs/operations/cloud_run_api.md）。push はホスト/Jobs、pull は Cloud Run の起動時。include は repo ルートからの glob、exclude は相対パスの fnmatch。",
   "object_prefix": "serving_state",
-  "default_groups": ["core"],
+  "default_groups": [
+    "core"
+  ],
   "groups": {
     "core": {
-      "_doc": "表示に必要な最小（概算 圧縮前 約150MB）。tables は 2.9GB のうち megu_index_flat と race_result_flat（約61MB）だけ。",
-      "include": [
-        "data/page_reference/race_lists/**",
-        "data/page_reference/race_day_schedule/**",
-        "data/page_reference/meta/**",
-        "data/page_reference/cushion/**",
-        "data/page_reference/track_speed/**",
-        "data/page_reference/knowledge/**",
-        "data/page_reference/pedigree_map/**",
-        "data/page_reference/note_aptitude_race_l3/**",
-        "data/page_reference/bloodline_vector/**",
-        "data/page_reference/pedigree_race_index/**",
-        "data/page_reference/tables/*/megu_index_flat.parquet",
-        "data/page_reference/tables/*/race_result_flat.parquet"
-      ],
-      "exclude": ["*.tmp", "*.lock", "*/.queue_runner_leader", "data/page_reference/*.bak/*", "*.bak/*"]
+      "_doc": "2026-10-24: 画面が読む参照データ（race_lists・meta・pedigree 系・tables の 2 種ほか）は src/ops/gcs_mirror.py のミラー（GCS の ops/mirror/）に移した。ここは空（手動 push の束は使わない）。",
+      "include": [],
+      "exclude": [
+        "*.tmp",
+        "*.lock",
+        "*/.queue_runner_leader",
+        "data/page_reference/*.bak/*",
+        "*.bak/*"
+      ]
     },
     "live_compute": {
       "_doc": "API 側でその場の推論をするときだけ（既定では取らない。予測は Jobs が作って GCS に置く設計）。概算 約90MB。",
@@ -28,8 +23,14 @@
         "data/local/inference/lap_forecast_models/**",
         "data/local/inference/features/**"
       ],
-      "exclude": ["*.tmp", "*.lock"]
+      "exclude": [
+        "*.tmp",
+        "*.lock"
+      ]
     }
   },
-  "limits": {"max_total_bytes": 400000000, "max_files": 60000}
+  "limits": {
+    "max_total_bytes": 400000000,
+    "max_files": 60000
+  }
 }

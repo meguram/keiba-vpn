@@ -29,7 +29,7 @@ SERVICE="${SERVICE:-keiba-api}"
 AR_REPO="${AR_REPO:-keiba-vpn}"
 TAG="${TAG:-$(date +%Y%m%d-%H%M%S)}"
 IMAGE="${IMAGE:-${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${SERVICE}:${TAG}}"
-RUN_SA="${RUN_SA:-keiba-api-run@${PROJECT_ID}.iam.gserviceaccount.com}"
+RUN_SA="${RUN_SA:-keiba-api@${PROJECT_ID}.iam.gserviceaccount.com}"     # setup_project.sh が作る（gcp_setup_runbook.md 2 章）。旧 setup_cloud_run_api.sh の keiba-api-run は使わない
 MEMORY="${MEMORY:-2Gi}"; CPU="${CPU:-1}"
 MIN_INSTANCES="${MIN_INSTANCES:-0}"; MAX_INSTANCES="${MAX_INSTANCES:-3}"
 CONCURRENCY="${CONCURRENCY:-30}"; TIMEOUT="${TIMEOUT:-60}"
@@ -48,12 +48,13 @@ fi
 
 # 平文の環境変数（秘密を含めない）。KEIBA_ENV=prod / KEIBA_RUN_LOCATION=gcp は必須（通知に PROD・GCP と出る）
 ENV_VARS="KEIBA_ENV=prod,KEIBA_RUN_LOCATION=gcp,GCS_BUCKET=${GCS_BUCKET},GCS_PROJECT_ID=${PROJECT_ID}"
-ENV_VARS+=",KEIBA_PROXY_KEY_REQUIRED=1,KEIBA_SERVING_STATE_PULL=1,KEIBA_ODDS_TRIFECTA=0"
+ENV_VARS+=",KEIBA_PROXY_KEY_REQUIRED=1,KEIBA_SERVING_STATE_PULL=0,KEIBA_ODDS_TRIFECTA=0"
 [ -z "$GCS_PREFIX" ] || ENV_VARS+=",GCS_PREFIX=${GCS_PREFIX}"
 # Secret Manager（<環境変数名>=<シークレット名>:<バージョン>）。値はここに書かない
-SECRETS="KEIBA_PROXY_KEY=keiba-proxy-key:latest,KEIBA_HEARTBEAT_SECRET=keiba-heartbeat-secret:latest"
-SECRETS+=",SLACK_WEBHOOK_URL=keiba-slack-webhook:latest,DEV_SECRET_KEY=keiba-dev-secret-key:latest,DEV_PASSWORD=keiba-dev-password:latest"
-[ "${WITH_NEXT_KEY:-0}" != 1 ] || SECRETS+=",KEIBA_PROXY_KEY_NEXT=keiba-proxy-key-next:latest"
+# 秘密の名前は scripts/gcp/put_secret.sh で登録したもの（gcp_setup_runbook.md 5 章）。左が環境変数、右が Secret Manager の名前
+SECRETS="KEIBA_PROXY_KEY=KEIBA_PROXY_KEY:latest,KEIBA_HEARTBEAT_SECRET=KEIBA_HEARTBEAT_KEY:latest"
+SECRETS+=",SLACK_WEBHOOK_URL=SLACK_WEBHOOK_URL:latest,DEV_SECRET_KEY=DEV_SECRET_KEY:latest,DEV_PASSWORD=DEV_PASSWORD:latest"
+[ "${WITH_NEXT_KEY:-0}" != 1 ] || SECRETS+=",KEIBA_PROXY_KEY_NEXT=KEIBA_PROXY_KEY_NEXT:latest"
 
 # deploy/docker/Dockerfile.cloudrun を指定するため、cloudbuild 設定を一時生成する
 build() {

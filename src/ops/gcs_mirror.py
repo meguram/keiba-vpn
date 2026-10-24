@@ -34,6 +34,19 @@ TREES = (
     "data/local/inference/lap_forecast",
     "data/local/inference/tracking_v2",
     "data/local/meta/entries_state",
+    # 画面が読む参照データ（取得で作る・更新が速い／ほぼ固定のもの。旧 serving_state の core 群）。"<フォルダ>::<glob>" はフォルダの中の一致するファイルだけ
+    "data/page_reference/race_lists",
+    "data/page_reference/race_day_schedule",
+    "data/page_reference/meta",
+    "data/page_reference/cushion",
+    "data/page_reference/track_speed",
+    "data/page_reference/knowledge",
+    "data/page_reference/pedigree_map",
+    "data/page_reference/note_aptitude_race_l3",
+    "data/page_reference/bloodline_vector",
+    "data/page_reference/pedigree_race_index",
+    "data/page_reference/tables::*/megu_index_flat.parquet",
+    "data/page_reference/tables::*/race_result_flat.parquet",
 )
 _SKIP = re.compile(r"(\.tmp|\.lock)$")
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -69,9 +82,16 @@ def _md5(data: bytes) -> str:
     return base64.b64encode(hashlib.md5(data).digest()).decode()
 
 
+def split_tree(tree: str) -> tuple[str, str]:
+    """``"dir"`` または ``"dir::glob"``（glob はフォルダからの相対）。"""
+    d, _, g = tree.partition("::")
+    return d, g or "**/*"
+
+
 def _files(root: Path, tree: str) -> list[Path]:
-    base = root / tree
-    return [p for p in base.rglob("*") if p.is_file() and not _SKIP.search(p.name)] if base.exists() else []
+    d, g = split_tree(tree)
+    base = root / d
+    return [p for p in base.glob(g) if p.is_file() and not _SKIP.search(p.name)] if base.exists() else []
 
 
 def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = TREES, *, recent_days: float | None = None,
@@ -81,7 +101,7 @@ def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = TREE
     todo: list[tuple[str, bytes]] = []
     seen = 0
     for tree in trees:
-        remote = backend.list(f"{PREFIX}/{tree}/")
+        remote = backend.list(f"{PREFIX}/{split_tree(tree)[0]}/")
         for p in _files(root, tree):
             if p.stat().st_mtime < cutoff:
                 continue
@@ -102,8 +122,8 @@ def pull(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = TREE
     cutoff = time.time() - recent_days * 86400 if recent_days is not None else 0.0
     todo: list[str] = []
     seen = 0
-    for tree in trees:
-        for key, (md5, updated) in backend.list(f"{PREFIX}/{tree}/").items():
+    for d in dict.fromkeys(split_tree(t)[0] for t in trees):      # tables のように 1 フォルダに複数の glob があっても、一覧は 1 回
+        for key, (md5, updated) in backend.list(f"{PREFIX}/{d}/").items():
             if updated < cutoff:
                 continue
             seen += 1
