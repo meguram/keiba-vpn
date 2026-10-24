@@ -203,8 +203,8 @@
  "models": {
   "bundle_v4": {
    "env": "KEIBA_V3_BUNDLE",
-   "local_path": "data/local/modeling/training_pipeline/final_v3/bundle_2025",
-   "desc": "v4 アンサンブルのバンドル（影モード）。実体のパスはホストで確認"
+   "local_path": "data/local/modeling/training_pipeline/final_v4/bundle_v4_2025",
+   "desc": "v4 アンサンブルのバンドル（現在の画面・集計のモデル）"
   },
   "stage_v4": {
    "env": "KEIBA_V3_STAGE",
