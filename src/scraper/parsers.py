@@ -139,6 +139,22 @@ class RaceResultParser:
     _GRADE_MAP = {"(G1)": "G1", "(G2)": "G2", "(G3)": "G3", "(Ｇ１)": "G1", "(Ｇ２)": "G2", "(Ｇ３)": "G3",
                   "(GI)": "G1", "(GII)": "G2", "(GIII)": "G3",
                   "(L)": "L", "オープン": "OP", "3勝": "3勝", "2勝": "2勝", "1勝": "1勝", "未勝利": "未勝利", "新馬": "新馬"}
+    # 2019 年 6 月の改称前の条件クラス名（500万下→1勝クラス、1000万下→2勝、1600万下→3勝）。2016〜2019 年前半のページはこの表記
+    _OLD_CLASS_MAP = {"1600万下": "3勝", "1000万下": "2勝", "500万下": "1勝"}
+
+    @classmethod
+    def class_from_name(cls, race_name: str) -> str:
+        """レース名にクラスが明記されていれば現行の呼び方で返す（なければ空）。旧名称（500万下など）・未勝利・新馬・N勝クラス・(N勝)。"""
+        name = race_name or ""
+        for key, val in cls._OLD_CLASS_MAP.items():
+            if key in name:
+                return val
+        if "未勝利" in name:
+            return "未勝利"
+        if "新馬" in name:
+            return "新馬"
+        m = re.search(r"([123])勝(?:クラス|\))", name)
+        return f"{m.group(1)}勝" if m else ""
 
     def parse(self, html: str, race_id: str = "") -> dict[str, Any]:
         soup = BeautifulSoup(html, "html.parser")
@@ -191,11 +207,14 @@ class RaceResultParser:
         raw_name = safe_text(name_tag)
         info["race_name"] = re.sub(r"\(G[I1-3]+\)|\(Ｇ[１-３]\)", "", raw_name).strip()
 
-        grade = "その他"
-        for key, val in self._GRADE_MAP.items():
-            if key in raw_name or key in str(soup):
-                grade = val
-                break
+        # レース名のクラス表記（旧クラス名・未勝利・新馬・N勝）は確定情報なので最優先（下の判定はページ全体の文字列も見るため、周辺の「オープン」「未勝利」「(3勝)」に引きずられうる）
+        grade = self.class_from_name(raw_name)
+        if not grade:
+            grade = "その他"
+            for key, val in self._GRADE_MAP.items():
+                if key in raw_name or key in str(soup):
+                    grade = val
+                    break
         info["grade"] = grade
 
         data_tag = self._RACE_DATA.select_one(soup)
