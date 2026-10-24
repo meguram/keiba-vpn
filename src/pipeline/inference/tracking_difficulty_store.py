@@ -45,9 +45,19 @@ def _is_valid_meta(meta: dict | None) -> bool:
     return True
 
 
+def _fetch_remote(race_id: str) -> None:
+    try:
+        from src.ops.gcs_mirror import fetch_one
+
+        fetch_one(f"data/calculated_data/tracking_difficulty/{str(race_id).strip()}.json", max_age=600.0)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("追走難度の GCS 取得をスキップ %s: %s", race_id, exc)
+
+
 def load_local(race_id: str) -> dict | None:
     """ローカル事前計算 JSON を読む（TTL なし、version のみ検証）。"""
     path = _path_for(race_id)
+    _fetch_remote(race_id)                        # Cloud Run: 起動時に取り込まない分を、読まれたときに GCS から 1 件だけ取る（10 分より古ければ取り直す）
     if not path.is_file():
         return None
     try:
