@@ -9,8 +9,8 @@
 #       POOL（github-pool） PROVIDER（github-provider） DEPLOY_SA（keiba-deployer）
 #
 # 作るもの
-#  1. Workload Identity Pool と OIDC Provider。入れる条件: リポジトリが GITHUB_REPO、ブランチが main、Environment が production
-#     （＝承認の関門を通った main の job だけが、この身元を使える。フォークや他のブランチ、承認前の job は入れない）
+#  1. Workload Identity Pool と OIDC Provider。入れる条件: リポジトリが GITHUB_REPO、かつ『master + Environment production（承認あり）』または『stg + Environment stg』
+#     （＝承認の関門を通った master の job と、stg ブランチの job だけが、この身元を使える。フォークや他のブランチ、承認前の job は入れない）
 #  2. デプロイ用 SA（keiba-deployer）に roles/iam.workloadIdentityUser（上の Pool のこのリポジトリだけ）
 #  3. デプロイ用 SA にバケットの ops/releases/ 接頭辞だけへの roles/storage.objectUser（IAM Conditions）
 # 作らないもの: サービスアカウントの鍵（JSON）。鍵は一切作らない。
@@ -42,13 +42,18 @@ if ! exists gcloud iam workload-identity-pools describe "$POOL" --location=globa
   run gcloud iam workload-identity-pools create "$POOL" --location=global --project "$PROJECT_ID" \
     --display-name="GitHub Actions"
 fi
-COND="assertion.repository=='$REPO' && assertion.ref=='refs/heads/main' && assertion.environment=='production'"
+# master ブランチ + Environment production（承認あり）／stg ブランチ + Environment stg だけが、この身元を使える
+COND="assertion.repository=='$REPO' && ((assertion.ref=='refs/heads/master' && assertion.environment=='production') || (assertion.ref=='refs/heads/stg' && assertion.environment=='stg'))"
 if ! exists gcloud iam workload-identity-pools providers describe "$PROVIDER" --workload-identity-pool="$POOL" --location=global --project "$PROJECT_ID"; then
   run gcloud iam workload-identity-pools providers create-oidc "$PROVIDER" --workload-identity-pool="$POOL" --location=global \
     --project "$PROJECT_ID" --display-name="GitHub" \
     --issuer-uri="https://token.actions.githubusercontent.com" \
     --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.ref=assertion.ref,attribute.environment=assertion.environment" \
     --attribute-condition="$COND"
+else
+  # 既にある Provider も条件を最新にする（以前は main + production のみだった）
+  run gcloud iam workload-identity-pools providers update-oidc "$PROVIDER" --workload-identity-pool="$POOL" --location=global \
+    --project "$PROJECT_ID" --attribute-condition="$COND"
 fi
 
 echo "== 2/3 デプロイ用 SA をこのリポジトリの身元から使えるようにする（鍵は作らない）"

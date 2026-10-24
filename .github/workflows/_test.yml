@@ -1,0 +1,65 @@
+name: _test
+
+# stg / master の反映ワークフローから呼ばれる共通のテスト（ci.yml と同じ内容）。単独では動かない。
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_COLOR: "0"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: keiba
+          POSTGRES_PASSWORD: keiba
+          POSTGRES_DB: keiba
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgresql+psycopg://keiba:keiba@localhost:5432/keiba
+      REDIS_URL: redis://localhost:6379/0
+      GCS_BUCKET: ""
+      DEV_PASSWORD: test-dev-password
+      DEV_SECRET_KEY: test-secret
+      HORSE_NAME_INDEX_DISABLE_BOOTSTRAP: "1"
+      KEIBA_RUN_LIVE_API_TESTS: "0"
+    steps:
+      - uses: actions/checkout@v4   # PIN
+      - name: Install OS dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgomp1
+      - uses: actions/setup-python@v5   # PIN
+        with:
+          python-version: "3.11"
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Alembic migration check
+        run: alembic upgrade head
+      - name: No shuffle in time split (static)
+        run: python -m src.scripts.ci.check_no_shuffle
+      - name: Secret scan (tracked files)
+        run: bash scripts/dev/secret_scan.sh --tracked
+      - name: Unit & integration tests
+        run: |
+          set -euxo pipefail
+          mkdir -p data/local/image
+          python -m pytest tests/pipeline/test_build_rank_target.py -v --tb=short
+          python -m pytest tests/ --ignore=tests/scraper/manual --ignore=tests/research/manual --tb=short -ra

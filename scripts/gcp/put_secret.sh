@@ -16,7 +16,7 @@ PROJECT="${PROJECT:-$(gcloud config get-value project 2>/dev/null || true)}"
 # 秘密名 → 読めるサービスアカウント（最小権限）
 case "$NAME" in
   SLACK_WEBHOOK_URL|SLACK_WEBHOOK_URL_PROD|SLACK_WEBHOOK_URL_STG)    READERS="keiba-api keiba-jobs" ;;
-  KEIBA_PROXY_KEY)      READERS="keiba-api" ;;
+  KEIBA_PROXY_KEY)      READERS="keiba-api keiba-deployer" ;;      # deployer: CI のスモークが鍵つきで API を叩く
   KEIBA_HEARTBEAT_KEY)  READERS="keiba-api" ;;
   APP_SECRET_KEY|JWT_SECRET|DEV_PASSWORD) READERS="keiba-api" ;;
   DEV_SECRET_KEY)       READERS="keiba-api keiba-jobs" ;;      # jobs: 共通ログインの月次更新(shared-login)がパスワードの元として使う

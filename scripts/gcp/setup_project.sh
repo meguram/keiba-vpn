@@ -30,6 +30,9 @@ if ! gcloud artifacts repositories describe "$AR_REPO" --location "$REGION" --pr
   run gcloud artifacts repositories create "$AR_REPO" --repository-format=docker --location "$REGION" \
     --description="keiba containers" --project "$PROJECT"
 fi
+# 古いイメージの自動掃除（パッケージごとに新しい 3 版は残し、それ以外で 7 日より古いものを削除）。Jobs のイメージは 1 版 数 GB（torch 入り）
+run gcloud artifacts repositories set-cleanup-policies "$AR_REPO" --location "$REGION" --project "$PROJECT" --no-dry-run \
+  --policy=<(printf '[{"name":"keep-recent","action":{"type":"Keep"},"mostRecentVersions":{"keepCount":3}},{"name":"delete-old","action":{"type":"Delete"},"condition":{"olderThan":"604800s"}}]')
 
 echo "== 3. サービスアカウント"
 declare -A SA_DESC=(
@@ -62,6 +65,9 @@ bind_project keiba-scheduler run.invoker          # Jobs の起動・API の呼�
 bind_project keiba-deployer run.admin
 bind_project keiba-deployer artifactregistry.writer
 bind_project keiba-deployer cloudbuild.builds.editor
+bind_project keiba-deployer cloudscheduler.admin     # CI(master)が Jobs の Scheduler を更新する（deploy_gcp.sh jobs）
+bind_project keiba-deployer cloudtasks.admin         # 同: 予測のキュー(keiba-predict)
+bind_project keiba-deployer serviceusage.serviceUsageConsumer   # gcloud が API を使うために必要
 for target in keiba-api keiba-jobs keiba-scheduler; do   # deployer が各 SA でサービス/ジョブを動かせるように
   run gcloud iam service-accounts add-iam-policy-binding "$target@$PROJECT.iam.gserviceaccount.com" \
     --member "serviceAccount:keiba-deployer@$PROJECT.iam.gserviceaccount.com" --role roles/iam.serviceAccountUser \

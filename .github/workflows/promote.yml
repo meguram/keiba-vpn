@@ -1,27 +1,27 @@
 name: promote
 
-# main への push（develop → main のマージ）で、prod の画面を『次の窓で取り込まれる版』として GCS に公開する。
-# 流れ: テスト → 画面のビルド → 【承認】 → GCS に公開（latest.json を最後に書く）。VPS は pull_release.py が窓（JST 03:10）に取りに行く。
-# 手順・設定・ロールバック: docs/operations/github_promote.md
+# master ブランチへの push（stg → master のマージ）で、本番に反映する。stg に入っていないコミットは出さない。
+# 流れ: stg に含まれるか確認 → テスト + 画面のビルド → 【承認】 → API の通信 0% リビジョン → スモーク → 通信を切り替え → Jobs の更新 → 画面を GCS に公開
+# 画面は、VPS が pull_release.py で窓（JST 03:10）に取りに行く。手順・設定・ロールバック: docs/operations/github_promote.md
 # 方針: 鍵ファイルは使わない（Workload Identity Federation）。取得（スクレイピング）は CI で一切しない。
 #       当てはめ済みの係数（config/fitted_artifacts.txt）はビルドに含まれない（実行時に GCS から取得）。
+# 承認は 1 回: Environment「production」の Required reviewers。反映の工程は 1 つの job にまとめてある（途中で承認待ちにならない）。
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   workflow_dispatch:
     inputs:
       skip_tests:
         description: "テストを飛ばす（緊急時のみ）"
         type: boolean
         default: false
-      deploy_target:
-        description: "昇格の対象（api は Cloud Run 移行後に有効化）"
-        type: choice
-        options: [ui, api]
-        default: ui
+      skip_stg_check:
+        description: "stg に含まれるかの確認を飛ばす（緊急時のみ）"
+        type: boolean
+        default: false
 
-# 既定は最小権限。公開ジョブだけ id-token: write を足す
+# 既定は最小権限。反映の job だけ id-token: write を足す
 permissions:
   contents: read
 
@@ -34,127 +34,64 @@ env:
   FORCE_COLOR: "0"
 
 jobs:
-  test:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_tests) }}
+  # stg で確認していないコミットを本番に出さない。master の先頭が、stg に含まれる（fast-forward）か、stg を取り込んだマージコミットであること。
+  verify-stg:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_stg_check) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: keiba
-          POSTGRES_PASSWORD: keiba
-          POSTGRES_DB: keiba
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
-    env:
-      DATABASE_URL: postgresql+psycopg://keiba:keiba@localhost:5432/keiba
-      REDIS_URL: redis://localhost:6379/0
-      GCS_BUCKET: ""
-      DEV_PASSWORD: test-dev-password
-      DEV_SECRET_KEY: test-secret
-      HORSE_NAME_INDEX_DISABLE_BOOTSTRAP: "1"
-      KEIBA_RUN_LIVE_API_TESTS: "0"
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4   # PIN
-      - name: Install OS dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgomp1
-      - uses: actions/setup-python@v5   # PIN
         with:
-          python-version: "3.11"
-      - name: Install Python dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: Alembic migration check
-        run: alembic upgrade head
-      - name: No shuffle in time split (static)
-        run: python -m src.scripts.ci.check_no_shuffle
-      - name: Secret scan (tracked files)
-        run: bash scripts/dev/secret_scan.sh --tracked
-      - name: Unit & integration tests
-        run: |
-          set -euxo pipefail
-          mkdir -p data/local/image
-          python -m pytest tests/pipeline/test_build_rank_target.py -v --tb=short
-          python -m pytest tests/ --ignore=tests/scraper/manual --ignore=tests/research/manual --tb=short -ra
-
-  build-ui:
-    needs: [test]
-    # test が成功、または skip_tests で飛ばされたときだけ進む
-    if: ${{ always() && (needs.test.result == 'success' || needs.test.result == 'skipped') && (github.event_name != 'workflow_dispatch' || inputs.deploy_target == 'ui') }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    outputs:
-      release_id: ${{ steps.build.outputs.release_id }}
-    steps:
-      - uses: actions/checkout@v4   # PIN
-      - uses: actions/setup-node@v4   # PIN
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - uses: actions/setup-python@v5   # PIN
-        with:
-          python-version: "3.11"
-      - name: NEXT_PUBLIC_* を stg と揃える（リポジトリの Variables。値は文書に書かない）
-        env:
-          NEXT_PUBLIC_DEFAULT_RACE_DATE: ${{ vars.NEXT_PUBLIC_DEFAULT_RACE_DATE }}
-          NEXT_PUBLIC_PICKER_PAST_DAYS: ${{ vars.NEXT_PUBLIC_PICKER_PAST_DAYS }}
-          NEXT_PUBLIC_ENABLE_FEATURES: ${{ vars.NEXT_PUBLIC_ENABLE_FEATURES }}
-        run: |
-          : > scripts/ops/vps/build.env
-          for k in NEXT_PUBLIC_DEFAULT_RACE_DATE NEXT_PUBLIC_PICKER_PAST_DAYS NEXT_PUBLIC_ENABLE_FEATURES; do
-            v="${!k:-}"; [ -n "$v" ] && printf '%s=%s\n' "$k" "$v" >> scripts/ops/vps/build.env
-          done
-          echo "build.env の項目数: $(wc -l < scripts/ops/vps/build.env)"
-      - name: 画面のビルド（standalone）と成果物の作成
-        id: build
+          fetch-depth: 0
+      - name: master の先頭が stg に含まれること
         run: |
           set -euo pipefail
-          out="$RUNNER_TEMP/release"; mkdir -p "$out"
-          bash scripts/ops/vps/build_release.sh --commit "$GITHUB_SHA" --out "$out" | tee "$RUNNER_TEMP/build.log"
-          f="$(ls "$out"/keiba-ui-*.tar.gz | head -1)"
-          echo "release_id=$(basename "$f" .tar.gz)" >> "$GITHUB_OUTPUT"
-          ls -l "$out"
-      - name: 成果物の sha256 を検算
-        run: |
-          cd "$RUNNER_TEMP/release" && sha256sum -c ./*.sha256
-      - uses: actions/upload-artifact@v4   # PIN
-        with:
-          name: ui-release
-          path: |
-            ${{ runner.temp }}/release/*.tar.gz
-            ${{ runner.temp }}/release/*.sha256
-            ${{ runner.temp }}/release/*.manifest.json
-          retention-days: 14
-          if-no-files-found: error
+          git fetch origin stg
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/stg; then
+            echo "OK: $GITHUB_SHA は stg に含まれています"
+          elif [ "$(git rev-list --parents -n1 "$GITHUB_SHA" | wc -w)" -ge 3 ] && git merge-base --is-ancestor "${GITHUB_SHA}^2" origin/stg; then
+            echo "OK: stg(${GITHUB_SHA}^2) を取り込んだマージです"
+          else
+            echo "::error::このコミットは stg に含まれていません。develop → stg → master の順にマージしてください（スカッシュマージは使わない）"
+            exit 1
+          fi
+
+  test:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_tests) }}
+    uses: ./.github/workflows/_test.yml
+
+  build-ui:
+    # test が成功、または skip_tests で飛ばされたときだけ進む
+    needs: [test]
+    if: ${{ always() && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
+    uses: ./.github/workflows/_build-ui.yml
 
   # 承認の関門: Environment「production」の Required reviewers（リポジトリ設定でユーザーが追加）が承認するまで、この job は始まらない。
-  publish-ui:
-    needs: [build-ui]
+  # 工程は上から順。スモークに失敗したら通信は切り替わらず、以降（Jobs・画面の公開）も進まない。
+  deploy:
+    needs: [verify-stg, build-ui]
+    if: ${{ always() && (needs.verify-stg.result == 'success' || needs.verify-stg.result == 'skipped') && needs.build-ui.result == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 90
     environment: production
     permissions:
       contents: read
       id-token: write
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCS_BUCKET: ${{ vars.GCS_BUCKET }}
+      REGION: ${{ vars.CLOUD_RUN_REGION }}
+      SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
+      SMOKE_RACE_ID: ${{ vars.SMOKE_RACE_ID }}
+      ENABLE_JOBS_DEPLOY: ${{ vars.ENABLE_JOBS_DEPLOY }}
+      JOBS_PARALLEL: ${{ vars.JOBS_PARALLEL }}
     steps:
       - uses: actions/checkout@v4   # PIN
       - uses: actions/download-artifact@v4   # PIN
         with:
           name: ui-release
           path: release
-      - name: 成果物の検算（承認の間に差し替わっていないこと）
+      - name: 画面の成果物の検算（承認の間に差し替わっていないこと）
         run: |
           cd release && sha256sum -c ./*.sha256 && ls -l
       - name: GCP に認証（Workload Identity Federation。鍵ファイルは使わない）
@@ -162,14 +99,27 @@ jobs:
         with:
           workload_identity_provider: ${{ vars.WIF_PROVIDER }}
           service_account: ${{ vars.WIF_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2   # PIN
       - uses: actions/setup-python@v5   # PIN
         with:
           python-version: "3.11"
       - name: 公開に必要な最小限の依存
         run: pip install google-cloud-storage python-dotenv
-      - name: GCS に公開（latest.json を最後に書く）
+      - name: API と Jobs のイメージを作って push
+        run: bash scripts/ci/deploy_gcp.sh build-images --target prod
+      - name: API の通信 0% のタグ付きリビジョンを作る
+        id: revision
+        run: bash scripts/ci/deploy_gcp.sh api-revision --target prod
+      - name: スモーク（失敗したら通信は切り替えない）
         env:
-          GCS_BUCKET: ${{ vars.GCS_BUCKET }}
+          SMOKE_BASE: ${{ steps.revision.outputs.tag_url }}
+        run: bash scripts/ci/deploy_gcp.sh smoke --target prod
+      - name: 通信を新リビジョンに切り替える（戻すときは scripts/gcp/rollback_cloud_run_api.sh）
+        run: bash scripts/ci/deploy_gcp.sh promote --target prod
+      - name: Jobs の更新（ENABLE_JOBS_DEPLOY=true のときだけ。JOBS_PARALLEL=1 の間は並走=影モード）
+        run: bash scripts/ci/deploy_gcp.sh jobs --target prod
+      - name: 画面を GCS に公開（latest.json を最後に書く）
+        env:
           PYTHONPATH: .
         run: |
           set -euo pipefail
@@ -179,75 +129,9 @@ jobs:
       - name: 結果の要約
         run: |
           {
-            echo "### 公開しました"
-            echo "- 版: \`${{ needs.build-ui.outputs.release_id }}\`"
+            echo "### 本番に反映しました"
             echo "- コミット: \`$GITHUB_SHA\`"
-            echo "- VPS は次の窓（毎日 JST 03:10）に取得します。確認: \`python -m src.ops.release_publish status --kind ui\`"
+            echo "- API: 新リビジョンに通信を切り替え済み → ${{ steps.revision.outputs.tag_url }}"
+            echo "- Jobs: ENABLE_JOBS_DEPLOY=${ENABLE_JOBS_DEPLOY:-未設定}（true のときだけ更新）。並走(影モード): JOBS_PARALLEL=${JOBS_PARALLEL:-1}"
+            echo "- 画面: \`${{ needs.build-ui.outputs.release_id }}\`。VPS は次の窓（毎日 JST 03:10）に取得します"
           } >> "$GITHUB_STEP_SUMMARY"
-
-  # Cloud Run 移行後に有効化するスケルトン。既定は無効（リポジトリの Variables: ENABLE_API_PROMOTE=true で有効）。
-  # 流れ: 通信 0% のタグ付きリビジョンを作る → スモーク → 別の承認（Environment production-traffic）で通信を切り替える。
-  api-revision:
-    if: ${{ vars.ENABLE_API_PROMOTE == 'true' && github.event_name == 'workflow_dispatch' && inputs.deploy_target == 'api' }}
-    needs: [test]
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: production
-    permissions:
-      contents: read
-      id-token: write
-    outputs:
-      revision_tag: ${{ steps.deploy.outputs.revision_tag }}
-    steps:
-      - uses: actions/checkout@v4   # PIN
-      - uses: google-github-actions/auth@v2   # PIN
-        with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
-          service_account: ${{ vars.WIF_SERVICE_ACCOUNT }}
-      - uses: google-github-actions/setup-gcloud@v2   # PIN
-      - name: イメージをビルドして、通信 0% のリビジョンを作る
-        id: deploy
-        env:
-          PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-          GCS_BUCKET: ${{ vars.GCS_BUCKET }}
-          REGION: ${{ vars.CLOUD_RUN_REGION }}
-          SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
-        run: |
-          set -euo pipefail
-          tag="c${GITHUB_SHA:0:8}"
-          export TAG="$tag"
-          # 実体は scripts/gcp/deploy_cloud_run_api.sh。deploy の新リビジョンは --no-traffic で作られる（通信は切り替わらない）
-          bash scripts/gcp/deploy_cloud_run_api.sh build --apply
-          bash scripts/gcp/deploy_cloud_run_api.sh deploy --apply
-          echo "revision_tag=$tag" >> "$GITHUB_OUTPUT"
-      - name: スモーク（ホストの API と確率を比べる。URL と対象レースはリポジトリの Variables）
-        env:
-          SMOKE_BASE: ${{ vars.CLOUDRUN_SMOKE_BASE }}
-          SMOKE_RACE_ID: ${{ vars.SMOKE_RACE_ID }}
-          SMOKE_COMPARE_BASE: ${{ vars.SMOKE_COMPARE_BASE }}
-          PYTHONPATH: .
-        run: |
-          [ -n "$SMOKE_BASE" ] && [ -n "$SMOKE_RACE_ID" ] || { echo "::error::CLOUDRUN_SMOKE_BASE / SMOKE_RACE_ID が未設定。通信は切り替えません"; exit 1; }
-          python -m src.scripts.ops.cloudrun_smoke --base "$SMOKE_BASE" --race-id "$SMOKE_RACE_ID" ${SMOKE_COMPARE_BASE:+--compare-base "$SMOKE_COMPARE_BASE"} \
-            || { echo "::error::スモークに失敗。通信は切り替えません"; exit 1; }
-
-  api-traffic:
-    if: ${{ vars.ENABLE_API_PROMOTE == 'true' && github.event_name == 'workflow_dispatch' && inputs.deploy_target == 'api' }}
-    needs: [api-revision]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: production-traffic   # 別の承認者（リポジトリ設定）。通信の切り替えは、リビジョン作成とは別に承認する
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v4   # PIN
-      - uses: google-github-actions/auth@v2   # PIN
-        with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
-          service_account: ${{ vars.WIF_SERVICE_ACCOUNT }}
-      - uses: google-github-actions/setup-gcloud@v2   # PIN
-      - name: 通信を新リビジョンに切り替える（戻すときは rollback_cloud_run_api.sh）
-        run: |
-          PROJECT_ID="${{ vars.GCP_PROJECT_ID }}" GCS_BUCKET="${{ vars.GCS_BUCKET }}" REGION="${{ vars.CLOUD_RUN_REGION }}" SERVICE="${{ vars.CLOUD_RUN_SERVICE }}" \
-            bash scripts/gcp/deploy_cloud_run_api.sh promote --apply

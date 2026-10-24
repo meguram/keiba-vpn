@@ -74,6 +74,9 @@ YAML
   if [ "$APPLY" = 1 ] && gcloud artifacts repositories describe "$AR_REPO" --location "$REGION" --project "$PROJECT_ID" >/dev/null 2>&1; then :; else
     run gcloud artifacts repositories create "$AR_REPO" --repository-format=docker --location "$REGION" --project "$PROJECT_ID"
   fi
+  # 古いイメージの自動掃除（パッケージごとに新しい 3 版は残し、それ以外で 7 日より古いものを削除。直前の版へ戻せる範囲は残る。Jobs のイメージは 1 版 数 GB なので溜めない）
+  run gcloud artifacts repositories set-cleanup-policies "$AR_REPO" --location "$REGION" --project "$PROJECT_ID" --no-dry-run \
+    --policy=<(printf '[{"name":"keep-recent","action":{"type":"Keep"},"mostRecentVersions":{"keepCount":3}},{"name":"delete-old","action":{"type":"Delete"},"condition":{"olderThan":"604800s"}}]')
   run gcloud builds submit --project "$PROJECT_ID" --region "$REGION" --config "$cfg" --ignore-file deploy/docker/Dockerfile.cloudrun.gcloudignore .
   rm -f "$cfg"
 }
