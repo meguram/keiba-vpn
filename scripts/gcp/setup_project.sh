@@ -55,7 +55,7 @@ bind_project() { # SA ロール（roles/ が無ければ補う）
 }
 bind_bucket() { # SA ロール
   run gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member "serviceAccount:$1@$PROJECT.iam.gserviceaccount.com" \
-    --role "$2" --quiet >/dev/null
+    --role "$2" --condition=None --quiet >/dev/null     # 条件つきの権限（WIF の ops/releases/ 限定）が入った後は、条件なしの明示が要る
 }
 
 echo "== 4. 最小権限（プロジェクト）"
