@@ -184,6 +184,15 @@ async def prediction_results_mark_card(request: Request):
     return _respond(request, await asyncio.to_thread(lambda: _cached(("mark-card", today.isoformat()), lambda: pr.mark_card(today))))
 
 
+@router.get("/api/prediction-results/bets-by-level", response_class=JSONResponse)
+async def prediction_results_bets_by_level(request: Request):
+    """ホーム用: 印の成績と同じ期間（先週・直近5週間・年）の、推奨馬券の仮想購入の回収率（推奨度 1〜4 別。見送りは含めない）。会員限定（tier.py）。"""
+    if not is_member(request):
+        return JSONResponse(MEMBER_REQUIRED_BODY, status_code=401)
+    today = datetime.now(pr.JST).date()
+    return _respond(request, await asyncio.to_thread(lambda: _cached(("bets-by-level", today.isoformat()), lambda: pr.bets_level_card(today))))
+
+
 @router.get("/api/prediction-results/news", response_class=JSONResponse)
 async def prediction_results_news(request: Request, limit: int = Query(6, ge=1, le=20)):
     def _run():

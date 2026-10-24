@@ -54,3 +54,7 @@ def test_attach_bet_results_paid_and_full_views():
     assert out2["candidates"][0]["result"]["payout"] == 1230
     none = attach_bet_results({"view": "paid", "bets": []}, "R2", type("S", (), {"load": lambda self, c, r: None})())
     assert "result" not in none
+
+
+def test_bets_by_level_is_member_only():
+    assert tier.member_only_path("/api/prediction-results/bets-by-level")

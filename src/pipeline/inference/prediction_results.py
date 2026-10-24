@@ -224,8 +224,25 @@ def simulate_bets(predictions: list[dict], storage: Any, race_id: str, result: d
                           "odds": float(c.odds), "hit": bool(hit), "return": round(ret)})
     for b in by_type.values():
         b["returned"] = round(b["returned"])
+    level, exp_roi = portfolio_level(portfolio.get("candidates") or [], portfolio.get("expected_roi"))
     return {"status": "ok", "total_bet": total_bet, "total_return": round(total_ret), "by_type": by_type,
-            "candidates": cands_out, "estimated": estimated, "odds_phase": odds.get("phase")}
+            "candidates": cands_out, "estimated": estimated, "odds_phase": odds.get("phase"), "level": level, "exp_roi": exp_roi}
+
+
+def portfolio_level(cands: list[Any], raw_roi: float | None) -> tuple[int, float | None]:
+    """推奨ポートフォリオの推奨度（0=見送り〜4=最注目）と期待回収率。画面（会員の推奨度）と同じく、
+    EV の較正が有効なら較正後の期待回収率、無効なら従来の値から決める。"""
+    from src.utils import paid_zone as PZ
+    from src.utils.ev_calibration import calibrate_portfolio
+
+    roi = raw_roi
+    try:
+        cal = calibrate_portfolio([{"bet_type": c.bet_type, "ev": c.ev, "bet_amount": c.bet_amount} for c in cands])
+        if cal is not None and cal.get("expected_roi") is not None:
+            roi = cal["expected_roi"]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("推奨度の較正に失敗: %s", exc)
+    return PZ.level_for_roi(roi if cands else None, "C"), (round(float(roi), 3) if roi is not None else None)
 
 
 # ───────────────────────── 1 レース・1 日の集計 ─────────────────────────
@@ -285,6 +302,9 @@ def build_race_record(race_id: str, meta: dict, storage: Any, max_total_bet: int
     return rec
 
 
+_BLANK_LEVEL = {"races": 0, "hit": 0, "invested": 0, "returned": 0}
+
+
 def _blank_counts() -> dict:
     return {"n": 0, "f1": 0, "f2": 0, "f3": 0, "f4p": 0}
 
@@ -321,7 +341,7 @@ def summarize(records: list[dict]) -> dict:
         "races_no_prediction": sum(1 for r in records if r.get("reason") == "no_prediction"),
         "races_no_result": sum(1 for r in records if r.get("reason") == "no_result"),
         "top1": _blank_counts(), "marks": {m: _blank_mark() for m in MARKS},
-        "bets": {"invested": 0, "returned": 0, "races_bought": 0, "races_hit": 0, "estimated_races": 0, "by_type": {}},
+        "bets": {"invested": 0, "returned": 0, "races_bought": 0, "races_hit": 0, "estimated_races": 0, "by_type": {}, "by_level": {}},
         "logloss": {"n": 0, "sum": 0.0},
         "logloss_model": {"n": 0, "sum": 0.0, "sum_calibrated": 0.0},
     }
@@ -342,6 +362,12 @@ def summarize(records: list[dict]) -> dict:
             sb["races_bought"] += 1
             sb["races_hit"] += int(bets["total_return"] > 0)
             sb["estimated_races"] += int(bool(bets.get("estimated")))
+            lv = str(bets["level"]) if bets.get("level") is not None else "unrated"     # 推奨度が記録されていない旧データ
+            bl = sb["by_level"].setdefault(lv, dict(_BLANK_LEVEL))
+            bl["races"] += 1
+            bl["hit"] += int(bets["total_return"] > 0)
+            bl["invested"] += bets["total_bet"]
+            bl["returned"] += bets["total_return"]
             for bt, v in (bets.get("by_type") or {}).items():
                 t = sb["by_type"].setdefault(bt, {"invested": 0, "returned": 0, "n": 0, "hit": 0})
                 for k in t:
@@ -380,6 +406,10 @@ def merge_summaries(parts: list[dict]) -> dict:
             t = ob["by_type"].setdefault(bt, {"invested": 0, "returned": 0, "n": 0, "hit": 0})
             for k in t:
                 t[k] += v[k]
+        for lv, v in (pb.get("by_level") or {}).items():
+            t = ob["by_level"].setdefault(lv, dict(_BLANK_LEVEL))
+            for k in t:
+                t[k] += v.get(k, 0)
         out["logloss"]["n"] += p["logloss"]["n"]
         out["logloss"]["sum"] = round(out["logloss"]["sum"] + p["logloss"]["sum"], 4)
         lm = p.get("logloss_model") or {}
@@ -477,6 +507,41 @@ def write_day(doc: dict, base: Path | None = None, *, force: bool = False) -> Pa
     return p
 
 
+def add_levels(date: str, storage: Any, base: Path | None = None, *, dry_run: bool = False) -> dict[str, int]:
+    """保存済みの日次記録に、仮想購入の推奨度（bets.level・exp_roi）だけを足す。印・着順・回収率の数値は変えない。
+    買い目を作り直して購入合計が保存済みと一致したレースだけに付ける（設定が変わって買い目が変わったレースは推奨度なしのまま）。"""
+    doc = read_day(date, base)
+    out = {"races": 0, "added": 0, "already": 0, "mismatch": 0, "failed": 0}
+    if not doc:
+        return out
+    cap = doc.get("max_total_bet", DEFAULT_MAX_TOTAL_BET)
+    for rec in doc.get("races") or []:
+        b = rec.get("bets") or {}
+        if not rec.get("included") or not b.get("total_bet"):
+            continue
+        out["races"] += 1
+        if b.get("level") is not None:
+            out["already"] += 1
+            continue
+        try:
+            pred, res = load_predictions(storage, rec["race_id"]), load_race_result(storage, rec["race_id"])
+            entries = [e for e in (pred or {}).get("predictions") or [] if e.get("win_prob") is not None]
+            new = simulate_bets(entries, storage, rec["race_id"], res, cap) if entries and res else None
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("推奨度の追記に失敗 %s: %s", rec.get("race_id"), exc)
+            out["failed"] += 1
+            continue
+        if not new or new.get("status") != "ok" or int(new["total_bet"]) != int(b["total_bet"]):
+            out["mismatch"] += 1
+            continue
+        b["level"], b["exp_roi"] = new["level"], new["exp_roi"]
+        out["added"] += 1
+    if out["added"] and not dry_run:
+        doc["summary"]["bets"]["by_level"] = summarize(doc["races"])["bets"]["by_level"]
+        write_day(doc, base, force=True)
+    return out
+
+
 def aggregate_day(date: str, storage: Any, *, max_total_bet: int | None = DEFAULT_MAX_TOTAL_BET,
                   base: Path | None = None) -> dict:
     """集計して保存する。レース記録が 1 件も無い日（開催なし）は保存しない。"""
@@ -572,16 +637,49 @@ def pick_card_year(days: list[str], today: _date, min_span_days: int = 59) -> in
     return today.year
 
 
-def mark_card(today: _date, base: Path | None = None) -> dict:
-    """ホームの『印の成績』カード: 先週（前の暦週）・直近5週間（今日までの35日）・年（pick_card_year）の ◎○▲★消 の着順分布（1着-2着-3着-4着以下）。"""
-    days = list_days(base)
+def card_period_specs(today: _date, base: Path | None = None) -> tuple[int, list[tuple[str, str, str, str]]]:
+    """ホームのカードの期間（先週・直近5週間・年）。印の成績と推奨馬券の回収率で同じ期間を使う。"""
     ymd = lambda d: d.strftime("%Y%m%d")      # noqa: E731
     mon = today - timedelta(days=today.weekday())
     lw_lo, lw_hi = mon - timedelta(days=7), mon - timedelta(days=1)
-    y = pick_card_year(days, today)
-    specs = [("last_week", "先週", ymd(lw_lo), ymd(lw_hi)),
-             ("recent_5w", "直近5週間", ymd(today - timedelta(days=34)), ymd(today)),
-             ("year", f"{y}年", f"{y}0101", f"{y}1231")]
+    y = pick_card_year(list_days(base), today)
+    return y, [("last_week", "先週", ymd(lw_lo), ymd(lw_hi)),
+               ("recent_5w", "直近5週間", ymd(today - timedelta(days=34)), ymd(today)),
+               ("year", f"{y}年", f"{y}0101", f"{y}1231")]
+
+
+def bets_level_card(today: _date, base: Path | None = None) -> dict:
+    """ホームの『推奨馬券の回収率（推奨度別）』: 印の成績と同じ期間で、推奨度 1〜4（標準〜最注目）ごとの仮想購入の回収率。
+    見送り（推奨度 0）は回収率に含めず、レース数だけ別に返す。推奨度を記録していない旧データのレースは unrated_races に数える。"""
+    from src.utils import paid_zone as PZ
+
+    y, specs = card_period_specs(today, base)
+    labels = {int(t["level"]): t.get("short") or t["label"] for t in PZ.tiers()}
+    periods = []
+    for key, label, lo, hi in specs:
+        r = range_summary(lo, hi, base)
+        bl = (r["summary"].get("bets") or {}).get("by_level") or {}
+        levels = []
+        for lv in sorted(labels, reverse=True):
+            if lv == 0:
+                continue
+            c = bl.get(str(lv)) or _BLANK_LEVEL
+            levels.append({"level": lv, "label": labels[lv], "races": c["races"], "hit_races": c["hit"], "hit_rate": rate(c["hit"], c["races"]),
+                           "invested": c["invested"], "returned": c["returned"], "roi": rate(c["returned"], c["invested"])})
+        tot = {k: sum(x[k] for x in levels) for k in ("races", "hit_races", "invested", "returned")}
+        periods.append({"key": key, "label": label, "from": lo, "to": hi, "data_from": r["days"][0] if r["days"] else None,
+                        "data_to": r["days"][-1] if r["days"] else None, "days": len(r["days"]), "status": r["status"],
+                        "levels": levels, "total": {**tot, "roi": rate(tot["returned"], tot["invested"]), "hit_rate": rate(tot["hit_races"], tot["races"])},
+                        "skipped_races": (bl.get("0") or _BLANK_LEVEL)["races"],
+                        "unrated_races": max(0, (r["summary"].get("bets") or {}).get("races_bought", 0) - sum(v["races"] for v in bl.values()) + (bl.get("unrated") or _BLANK_LEVEL)["races"])})
+    return {"as_of": today.strftime("%Y%m%d"), "year": y, "periods": periods,
+            "note": "推奨馬券を既定の上限（1レース2,000円）で購入したとみなした仮想購入。買い目と推奨度は保存済みの最新（確定）オッズで再計算、払戻は確定払戻。実際の購入ではありません。"}
+
+
+def mark_card(today: _date, base: Path | None = None) -> dict:
+    """ホームの『印の成績』カード: 先週（前の暦週）・直近5週間（今日までの35日）・年（pick_card_year）の ◎○▲★消 の着順分布（1着-2着-3着-4着以下）。"""
+    ymd = lambda d: d.strftime("%Y%m%d")      # noqa: E731
+    y, specs = card_period_specs(today, base)
     periods = []
     for key, label, lo, hi in specs:
         r = range_summary(lo, hi, base)
