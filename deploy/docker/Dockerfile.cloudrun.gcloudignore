@@ -1,4 +1,4 @@
-# Dockerfile.cloudrun 専用（BuildKit は "<Dockerfile名>.dockerignore" を優先する）。秘密・大物をビルドコンテキストに入れない。
+# gcloud builds submit --ignore-file 用（Cloud Build へ上げるソースから、重い・秘密のものを外す）。deploy/docker/Dockerfile.cloudrun.dockerignore と同じ方針
 .git/
 .github/
 notebooks/
@@ -9,7 +9,6 @@ data/
 mlflow/
 frontend/
 site_public/
-migrations/
 alembic/
 output/
 models/
@@ -19,11 +18,12 @@ tmp/
 .vscode/
 .claude/
 .pytest_cache/
+node_modules/
 .env
 .env.*
 config/gcp-service-account.json
 config/gcp-service-account.*.json
 config/*.local.json
 **/__pycache__/
-**/*.pyc
+*.pyc
 *.ipynb

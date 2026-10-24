@@ -73,7 +73,7 @@ gcloud artifacts repositories describe keiba-vpn --location $REGION >/dev/null 2
 gcloud builds submit --config - . <<'YAML'
 steps:
 - name: gcr.io/cloud-builders/docker
-  args: ['build','-f','Dockerfile.jobs','-t','asia-northeast1-docker.pkg.dev/$PROJECT_ID/keiba-vpn/jobs:latest','.']
+  args: ['build','-f','deploy/docker/Dockerfile.jobs','-t','asia-northeast1-docker.pkg.dev/$PROJECT_ID/keiba-vpn/jobs:latest','.']
 images: ['asia-northeast1-docker.pkg.dev/$PROJECT_ID/keiba-vpn/jobs:latest']
 YAML
 MSG

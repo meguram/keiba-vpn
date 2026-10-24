@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Cloud Run の API（Dockerfile.cloudrun）のビルド・デプロイ。設計: docs/operations/cloud_run_api.md
+# Cloud Run の API（deploy/docker/Dockerfile.cloudrun）のビルド・デプロイ。設計: docs/operations/cloud_run_api.md
 #
 # 既定は『コマンドを表示するだけ』（何も実行しない）。実際に実行するのは --apply を付けたときだけ。
 # dev PC は GCP に接続できない（gcp_guard）。実行はユーザーの Cloud Shell / ホスト PC から。
@@ -55,19 +55,19 @@ SECRETS="KEIBA_PROXY_KEY=keiba-proxy-key:latest,KEIBA_HEARTBEAT_SECRET=keiba-hea
 SECRETS+=",SLACK_WEBHOOK_URL=keiba-slack-webhook:latest,DEV_SECRET_KEY=keiba-dev-secret-key:latest,DEV_PASSWORD=keiba-dev-password:latest"
 [ "${WITH_NEXT_KEY:-0}" != 1 ] || SECRETS+=",KEIBA_PROXY_KEY_NEXT=keiba-proxy-key-next:latest"
 
-# Dockerfile.cloudrun を指定するため、cloudbuild 設定を一時生成する
+# deploy/docker/Dockerfile.cloudrun を指定するため、cloudbuild 設定を一時生成する
 build() {
   local cfg; cfg="$(mktemp --suffix=.yaml)"
   cat > "$cfg" <<YAML
 steps:
   - name: gcr.io/cloud-builders/docker
     env: ['DOCKER_BUILDKIT=1']
-    args: ['build', '-f', 'Dockerfile.cloudrun', '-t', '${IMAGE}', '.']
+    args: ['build', '-f', 'deploy/docker/Dockerfile.cloudrun', '-t', '${IMAGE}', '.']
 images: ['${IMAGE}']
 timeout: 1200s
 YAML
   echo "# cloudbuild 設定: $cfg"; cat "$cfg"
-  run gcloud builds submit --project "$PROJECT_ID" --region "$REGION" --config "$cfg" --ignore-file Dockerfile.cloudrun.gcloudignore .
+  run gcloud builds submit --project "$PROJECT_ID" --region "$REGION" --config "$cfg" --ignore-file deploy/docker/Dockerfile.cloudrun.gcloudignore .
   rm -f "$cfg"
 }
 

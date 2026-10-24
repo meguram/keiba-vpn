@@ -1,5 +1,5 @@
 # =============================================================================
-# Dockerfile.serving — VPS（ConoHa, 2GB軽量）向けサービング専用イメージ
+# deploy/docker/Dockerfile.serving — VPS（ConoHa, 2GB軽量）向けサービング専用イメージ
 # =============================================================================
 #
 # 目的: VPSに git リポジトリ全体（notebooks/docs/tests/scripts/cron 用スクリプト等）を
@@ -9,13 +9,13 @@
 # 設計の背景・詳細は docs/operations/cicd-design.md を参照。
 #
 # ビルド:
-#   docker build -f Dockerfile.serving -t keiba-vpn-serving:local .
+#   docker build -f deploy/docker/Dockerfile.serving -t keiba-vpn-serving:local .
 # 実行確認:
 #   docker run --rm -p 8000:8000 --env-file .env keiba-vpn-serving:local
 #
 # 含めるもの: main.py / src/（下記注記のとおり全体） / templates/ / static/ / requirements.txt
 # 含めないもの: notebooks/ docs/ tests/ scripts/ data/ mlflow/ frontend/ .git/ 等
-#   （Dockerfile.serving.dockerignore でビルドコンテキストからも除外する）
+#   （deploy/docker/Dockerfile.serving.dockerignore でビルドコンテキストからも除外する）
 #
 # 注記（import 調査の結果・2026-10-02）:
 #   当初の想定は「src/scraper/ のスクレイピング実行コード本体（run.py・job_queue.py 等）は
@@ -72,12 +72,12 @@ COPY --from=builder /install /usr/local
 COPY main.py ./main.py
 COPY wsgi.py ./wsgi.py
 # src/ 全体を含める（上記「注記」参照。notebooks/docs/tests/scripts/data/mlflow は
-# Dockerfile.serving.dockerignore でそもそもビルドコンテキストに入らない）
+# deploy/docker/Dockerfile.serving.dockerignore でそもそもビルドコンテキストに入らない）
 COPY src/ ./src/
 COPY templates/ ./templates/
 COPY static/ ./static/
 # settings.yaml・megu_* 等の非シークレット設定。GCP認証情報は.envのGCS_*で管理し、
-# .env* はDockerfile.serving.dockerignoreでイメージから除外、実行時にdocker-compose.serving.ymlの
+# .env* はdeploy/docker/Dockerfile.serving.dockerignoreでイメージから除外、実行時にdocker-compose.serving.ymlの
 # env_fileで注入する（鍵ファイルは使わない）
 COPY config/ ./config/
 

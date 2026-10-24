@@ -1,4 +1,4 @@
-# Cloud Run の API（Dockerfile.cloudrun）用。requirements.txt から、API が使わないものを外した最小集合。
+# Cloud Run の API（deploy/docker/Dockerfile.cloudrun）用。requirements.txt から、API が使わないものを外した最小集合。
 # 外したもの: ipykernel/ipywidgets（ノートブック）、pytest 系、playwright・pymupdf・schedule（取得は VPS の実行役）、
 #   torch・mlflow・optuna（学習）、matplotlib・statsmodels、alembic/psycopg/cloud-sql（DB は廃止予定。flask_app は import だけ sqlalchemy を要るので sqlalchemy は残し、DB 接続の経路は 503 を返す）、
 #   redis（未設定ならメモリにフォールバック）、bigquery（コスト報告は Jobs 側）。

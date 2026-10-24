@@ -1,5 +1,5 @@
 # =============================================================================
-# Dockerfile.cloudrun — Cloud Run の API（FastAPI + Flask /api/v1 + /ops を 1 コンテナで）
+# deploy/docker/Dockerfile.cloudrun — Cloud Run の API（FastAPI + Flask /api/v1 + /ops を 1 コンテナで）
 # =============================================================================
 # 設計: docs/operations/architecture_target.md（フェーズ 2）/ docs/operations/cloud_run_api.md
 #   - 1 ワーカー・読み取り専用（lifespan のスケジューラ/取得ワーカーは動かさない: src/api/cloudrun_entry.py）
@@ -9,7 +9,7 @@
 #
 # ビルド（Cloud Build。ユーザーが実行）: bash scripts/gcp/deploy_cloud_run_api.sh build
 # ローカル確認:
-#   docker build -f Dockerfile.cloudrun -t keiba-api:local .
+#   docker build -f deploy/docker/Dockerfile.cloudrun -t keiba-api:local .
 #   docker run --rm -p 8080:8080 -e KEIBA_ENV=dev keiba-api:local   # dev は GCS に触れずモックで動く
 # =============================================================================
 
@@ -17,7 +17,7 @@ FROM python:3.11-slim AS builder
 WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
     && rm -rf /var/lib/apt/lists/*
-COPY requirements-cloudrun.txt ./requirements.txt
+COPY deploy/docker/requirements-cloudrun.txt ./requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir --prefix=/install -r requirements.txt
 

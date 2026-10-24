@@ -1,8 +1,8 @@
-# Dockerfile.serving 専用の .dockerignore（BuildKit: "<Dockerfile名>.dockerignore" は
+# deploy/docker/Dockerfile.serving 専用の .dockerignore（BuildKit: "<Dockerfile名>.dockerignore" は
 # 既定の .dockerignore より優先される）。
 #
 # 目的: サービング用イメージのビルドコンテキストに、重い・不要なディレクトリや
-# シークレットを一切含めない。Dockerfile.serving 側は `COPY src/ ./src/` 等の
+# シークレットを一切含めない。deploy/docker/Dockerfile.serving 側は `COPY src/ ./src/` 等の
 # ディレクトリ単位コピーを使っているため、ここで除外しておかないとビルドコンテキスト
 # 転送時に取り込まれてしまう。
 
@@ -18,7 +18,6 @@ scripts/
 data/
 mlflow/
 frontend/
-migrations/
 alembic/
 output/
 models/

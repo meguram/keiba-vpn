@@ -1,4 +1,4 @@
-# Dockerfile.gcp-jobs 専用の .dockerignore（Dockerfile.serving.dockerignoreと同様の意図）。
+# deploy/docker/Dockerfile.gcp-jobs 専用の .dockerignore（deploy/docker/Dockerfile.serving.dockerignoreと同様の意図）。
 .git/
 .github/
 
@@ -9,7 +9,6 @@ scripts/
 data/
 mlflow/
 frontend/
-migrations/
 alembic/
 output/
 models/
@@ -37,4 +36,3 @@ templates/
 static/
 main.py
 wsgi.py
-config/members.json

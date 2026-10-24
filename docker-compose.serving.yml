@@ -5,7 +5,7 @@
 # 役割分担（docs/operations/deployment-vps-vs-gcp.md）に従い、VPSには
 # 「ページ公開・ユーザー向けAPIサービング」に必要な最小構成のみを置く。
 #
-#   - api   : Dockerfile.serving でビルドしたイメージ（本番は GHCR からpull。
+#   - api   : deploy/docker/Dockerfile.serving でビルドしたイメージ（本番は GHCR からpull。
 #             ローカル確認時のみ `build:` を使う）
 #   - redis : サービング側のリクエストキャッシュ。自己ホストのまま継続
 #             （docs/operations/deployment-vps-vs-gcp.md「ブリッジが必要な点」2.参照。
@@ -36,7 +36,7 @@ services:
     # 以下の build を有効にして `docker compose -f docker-compose.serving.yml build` する。
     # build:
     #   context: .
-    #   dockerfile: Dockerfile.serving
+    #   dockerfile: deploy/docker/Dockerfile.serving
     container_name: keiba-api-serving
     restart: unless-stopped
     ports:

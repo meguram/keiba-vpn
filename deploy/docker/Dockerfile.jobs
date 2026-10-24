@@ -1,5 +1,5 @@
 # =============================================================================
-# Dockerfile.jobs — Cloud Run Jobs（予測生成・集計・通知・監視）用イメージ。ディスパッチャ 1 本が全ジョブの入口
+# deploy/docker/Dockerfile.jobs — Cloud Run Jobs（予測生成・集計・通知・監視）用イメージ。ディスパッチャ 1 本が全ジョブの入口
 # =============================================================================
 #
 # 起動は ``python3 -m src.ops.job_dispatch group <グループ>`` / ``job <ジョブ>``（Scheduler と Cloud Tasks が Run Job の args を上書きして渡す）。
@@ -12,7 +12,7 @@
 # - 認証はサービスアカウント（keiba-jobs）を Run Job に割り当てる。鍵ファイルは作らない・入れない。
 #
 # ビルド（Cloud Shell。無料枠内）:
-#   gcloud builds submit --tag asia-northeast1-docker.pkg.dev/$PROJECT/keiba-vpn/jobs:latest --file Dockerfile.jobs .   # もしくは docker build -f Dockerfile.jobs
+#   gcloud builds submit --tag asia-northeast1-docker.pkg.dev/$PROJECT/keiba-vpn/jobs:latest --file deploy/docker/Dockerfile.jobs .   # もしくは docker build -f deploy/docker/Dockerfile.jobs
 # 手元の確認（GCP に繋がない）:
 #   docker run --rm -e KEIBA_ENV=dev <image> -m src.ops.job_dispatch list
 # =============================================================================
