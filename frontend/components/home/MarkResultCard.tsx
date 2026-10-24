@@ -20,6 +20,7 @@ type LevelRow = { level: number; label: string; races: number; hit_races: number
 type LevelPeriod = { key: string; levels: LevelRow[]; total: { races: number; hit_races: number; invested: number; returned: number; roi: number | null; hit_rate: number | null }; skipped_races: number; unrated_races: number };
 type LevelCard = { periods: LevelPeriod[]; note?: string };
 
+const SMALL_SAMPLE = 30;   // これ未満のレース数では回収率を目安にしない注記を出す
 const yen = (n: number) => `${Math.round(n).toLocaleString("ja-JP")}円`;
 // 回収率の色: 100%以上=緑、80%以上=黄、それ未満=灰
 const roiColor = (r: number | null) => (r == null ? "var(--text-dim)" : r >= 1 ? "#4ade80" : r >= 0.8 ? "#fbbf24" : "var(--text-dim)");
@@ -128,6 +129,9 @@ function LevelSection({ p, note }: { p: LevelPeriod; note?: string }) {
             <span className="mrc-lv-roi" style={{ color: roiColor(p.total.roi) }}>{pct(p.total.roi)}</span>
           </div>
         </div>
+      )}
+      {bought > 0 && bought < SMALL_SAMPLE && (
+        <div className="mrc-bets-note" style={{ color: "#fbbf24" }}>対象が{bought}レースと少なく、1回の的中で回収率が大きく動きます。目安にはなりません（{SMALL_SAMPLE}レース以上で参考になります）。</div>
       )}
       <div className="mrc-bets-note">
         見送り{p.skipped_races}Rは除く{p.unrated_races > 0 ? `・推奨度の記録が無い${p.unrated_races}Rも除く` : ""}。{note ?? ""}
