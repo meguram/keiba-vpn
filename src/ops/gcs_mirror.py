@@ -33,6 +33,7 @@ TREES = (
     "data/local/inference/snapshots",
     "data/local/inference/lap_forecast",
     "data/local/inference/tracking_v2",
+    "data/calculated_data/tracking_difficulty::20*.json",     # 追走難度・想定ラップの事前計算（/api/race/{id}/tracking-difficulty）。1 レース約 35KB・1 日 36 件。過去分は --recent-days で段階的に
     "data/local/meta/entries_state",
     # 画面が読む参照データ（取得で作る・更新が速い／ほぼ固定のもの。旧 serving_state の core 群）。"<フォルダ>::<glob>" はフォルダの中の一致するファイルだけ
     "data/page_reference/race_lists",

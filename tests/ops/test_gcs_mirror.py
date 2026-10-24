@@ -131,3 +131,13 @@ def test_default_trees_cover_the_data_the_api_reads():
     dirs = {gm.split_tree(t)[0] for t in gm.TREES}
     for need in ("data/page_reference/race_lists", "data/page_reference/tables", "data/local/inference/predictions_v3", "data/local/meta/entries_state"):
         assert need in dirs
+
+
+def test_tracking_difficulty_store_is_mirrored_by_race_json_only(tmp_path):
+    """Cloud Run の /api/race/{id}/tracking-difficulty は事前計算の JSON を読む。レース ID のファイルだけを上げ、索引の補助ファイルは上げない。"""
+    assert any(t.startswith("data/calculated_data/tracking_difficulty") for t in gm.TREES)
+    d = "data/calculated_data/tracking_difficulty"
+    _w(tmp_path, f"{d}/202608040901.json", b"{}")
+    _w(tmp_path, f"{d}/_index_meta.json", b"{}")
+    g = Fake()
+    assert gm.push(g, tmp_path, tuple(t for t in gm.TREES if "tracking_difficulty" in t))["uploaded"] == 1
