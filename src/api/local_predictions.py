@@ -48,11 +48,37 @@ def shadow_model_label(day: str, inf: Path | None = None) -> str:
     return Path(os.environ.get("KEIBA_V3_BUNDLE") or "").name or "shadow"
 
 
+PRIMARY_LABEL = "bundle_v6_2025"
+
+
+def primary_model() -> str:
+    """画面・集計・推奨が参照する予測モデル。既定は v6e（最新の親モデル）。KEIBA_PRED_MODEL=legacy で従来（shadow=v4 > バックフィル）に戻す。"""
+    m = (os.environ.get("KEIBA_PRED_MODEL") or "v6e").strip().lower()
+    return "legacy" if m in ("legacy", "v4", "v5", "off") else "v6e"
+
+
+def find_primary_prediction(race_id: str, day: str, inf: Path | None = None) -> tuple[Path, str, str] | None:
+    """v6e の予測（当日の shadow=predictions_v6、無ければ v6e のバックフィル）。KEIBA_PRED_MODEL=legacy のときは常に None。"""
+    if primary_model() != "v6e" or not day or len(day) != 8:
+        return None
+    inf = inf or inference_dir()
+    live = inf / "predictions_v6" / day / f"{race_id}.parquet"
+    if live.exists():
+        return live, "shadow", PRIMARY_LABEL
+    back = inf / "predictions_backfill" / PRIMARY_LABEL / day / f"{race_id}.parquet"
+    if back.exists():
+        return back, "backfill", PRIMARY_LABEL
+    return None
+
+
 def find_local_prediction(race_id: str, day: str, inf: Path | None = None) -> tuple[Path, str, str] | None:
-    """(parquet のパス, source, モデル名)。優先順位は shadow > バックフィル。"""
+    """(parquet のパス, source, モデル名)。優先順位は v6e（既定）> shadow(v4) > バックフィル。"""
     inf = inf or inference_dir()
     if not day or len(day) != 8:
         return None
+    prim = find_primary_prediction(race_id, day, inf)
+    if prim:
+        return prim
     shadow = inf / "predictions_v3" / day / f"{race_id}.parquet"
     if shadow.exists():
         return shadow, "shadow", shadow_model_label(day, inf)
@@ -142,12 +168,13 @@ def build_payload(race_id: str, card: dict, odds_doc: dict | None, probs, source
         })
     scored = score_entries(entries, odds, alpha)
     note = SOURCE_NOTE.get(source, "")
-    mtype = "ensemble_v4" if "v4" in label else "ensemble_v3"
+    mtype = "ensemble_v6e" if "v6" in label else "ensemble_v5" if "v5" in label else "ensemble_v4" if "v4" in label else "ensemble_v3"
     payload = {
         "race_id": race_id, "race_name": card.get("race_name", ""), "venue": card.get("venue", ""), "round": card.get("round", 0),
         "surface": card.get("surface", ""), "distance": card.get("distance", 0), "track_condition": card.get("track_condition", ""),
         "status": "success", "has_prediction": True, "model_type": mtype, "model_version": label,
-        "model_description": f"アンサンブル（{label}）の確率 — {'算出済み（参考）' if source == 'backfill' else '検証用（shadow）'}",
+        "model_description": (f"アンサンブル v6e（{label}）の確率 — {'算出済み（過去分）' if source == 'backfill' else '当日の予測'}" if "v6" in label
+                              else f"アンサンブル（{label}）の確率 — {'算出済み（参考）' if source == 'backfill' else '検証用（shadow）'}"),
         "total_horses": len(scored), "predictions": scored,
         "prediction_source": source, "prediction_note": note,
         "_compute_meta": {"source": source, "model": label},
@@ -158,6 +185,19 @@ def build_payload(race_id: str, card: dict, odds_doc: dict | None, probs, source
     if not market:  # 実オッズを使わない（有料ゾーン案A・B）: 市場補正をかけない
         return payload
     return apply_prob_calibration(payload, odds_phase=(odds_doc or {}).get("phase"), alpha=alpha)
+
+
+def load_primary_prediction_payload(race_id: str, storage: Any, alpha: float = 0.55, inf: Path | None = None, market: bool = True) -> dict | None:
+    """v6e の予測がローカルにあるレースだけ、その応答を返す（GCS の古い予測より優先するために使う）。無ければ None。"""
+    if primary_model() != "v6e":
+        return None
+    try:
+        card = storage.load("race_shutuba", race_id) or {}
+        if not find_primary_prediction(race_id, _day_of(card), inf):
+            return None
+    except Exception:  # noqa: BLE001
+        return None
+    return load_local_prediction_payload(race_id, storage, alpha=alpha, inf=inf, market=market)
 
 
 def load_local_prediction_payload(race_id: str, storage: Any, alpha: float = 0.55, inf: Path | None = None, market: bool = True) -> dict | None:

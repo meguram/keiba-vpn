@@ -71,7 +71,11 @@ def predicted_single_odds(storage, race_id: str) -> dict | None:
             "place_odds_min": float(e.get("predicted_place_odds_min") or 0.0),
             "place_odds_max": float(e.get("predicted_place_odds_max") or 0.0),
         })
-    return {"entries": entries} if entries else None
+    if not entries:
+        return None
+    sources = {str(e.get("source") or "") for e in (cached or {}).get("entries") or []}
+    # 想定オッズの出所: 決定ログ §77 のモデル（sec77）か、従来の最終オッズ予測（legacy）か
+    return {"entries": entries, "odds_model": "sec77" if sources == {"sec77"} else "legacy"}
 
 
 def _load(storage, category: str, race_id: str) -> dict | None:

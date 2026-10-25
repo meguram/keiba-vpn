@@ -28,6 +28,11 @@ def optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool =
                      _ctx: dict | None = None) -> tuple[dict[str, Any], int]:
     """推奨ポートフォリオ。view="paid" は会員向け（推奨度の段階と買い目の区分だけ。オッズ・期待値・金額の数値は出さない）。
     market=False は実オッズに触れない（市場補正もしない）。forced_odds={"single":…, "pairs":…} は想定オッズで計算する（有料ゾーン案B）。"""
+    if _ctx is None and forced_odds is None and market:
+        from src.pipeline.inference import target_bets as TB
+
+        if TB.available():  # 既定方策 target（目標払戻つきの 3連複）。KEIBA_BET_STRATEGY=legacy で従来方式へ戻せる
+            return _optimize_target(body, view)
     if view == "paid":
         return _optimize_paid(body)
     from src.pipeline.inference.betting import BettingConfig, BettingOptimizer
@@ -40,9 +45,19 @@ def optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool =
         return {"error": "race_id is required"}, 400
 
     storage = HybridStorage()
-    cached = load_cached(storage, race_id)
-    predictions = (cached or {}).get("predictions") or []
+    predictions: list = []
     already_calibrated = False
+    try:  # 最新モデル(v6e)のローカル予測があれば、GCS の古い予測より優先する（KEIBA_PRED_MODEL=legacy で従来）
+        from src.api.local_predictions import load_primary_prediction_payload
+
+        _prim = load_primary_prediction_payload(race_id, storage, market=market)
+        predictions = (_prim or {}).get("predictions") or []
+        already_calibrated = bool(predictions)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("v6e の予測の読み込みに失敗 %s: %s", race_id, exc)
+    if not predictions:
+        cached = load_cached(storage, race_id)
+        predictions = (cached or {}).get("predictions") or []
     if not predictions:
         # 画面（/api/race/{id}/predictions）と同じく、GCS に無ければホストのローカル予測（shadow / バックフィル）を使う
         try:
@@ -176,6 +191,85 @@ def optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool =
     }, 200
 
 
+def _optimize_target(body: dict[str, Any], view: str) -> tuple[dict[str, Any], int]:
+    """既定方策 target（src/pipeline/inference/target_bets.py）。開発者・有料会員のどちらにも同じ内容（購入額・想定払戻・的中率の目安）を返す。
+    実オッズは計画にも応答にも使わない（想定オッズ＝AI の予測だけ）。view="paid" のときだけ会員向けの外枠（凡例・免責）を付ける。"""
+    from src.api.local_predictions import load_local_prediction_payload
+    from src.pipeline.inference import target_bets as TB
+    from src.pipeline.inference.race_prediction_service import load_cached
+    from src.scraper.storage import HybridStorage
+    from src.utils import paid_zone as PZ
+
+    race_id = body.get("race_id", "")
+    if not race_id:
+        return {"view": view, "error": "race_id is required"}, 400
+    raw_cap = body.get("max_total_bet", DEFAULT_MAX_TOTAL_BET)
+    cap: int | None = None
+    if raw_cap not in (None, 0):
+        try:
+            cap = int(raw_cap)
+        except (TypeError, ValueError):
+            cap = -1
+        if cap < 100:
+            return {"view": view, "error": "max_total_bet は 100 円以上の整数で指定してください（上限なしは null か 0）"}, 400
+
+    storage = HybridStorage()
+    from src.api.local_predictions import load_primary_prediction_payload
+
+    preds = ((load_primary_prediction_payload(race_id, storage, market=False)) or {}).get("predictions") or []
+    if not preds:
+        cached = load_cached(storage, race_id)
+        preds = (cached or {}).get("predictions") or []
+    if not preds:
+        local = load_local_prediction_payload(race_id, storage, market=False)
+        preds = (local or {}).get("predictions") or []
+    if not preds:
+        return {"view": view, "error": "予測結果がありません。先に推論を実行してください"}, 404
+    single = PZ.calibrate_single(_predicted_singles(storage, race_id))
+    marked = _paid_marks(preds, single)
+    out = TB.build_target_portfolio(marked, single, cap, race_id=race_id)
+    try:  # 推奨馬券を正として、印は買い目から決め直す（買い目が無いレースは従来の印のまま）
+        from src.pipeline.inference import bet_marks as BM
+
+        hm = BM.aligned_mark_types(marked, out.get("bets") if out.get("status") == "bet" else None)
+        if hm:
+            BM.relabel_legs(out, hm)
+            out["horse_marks"] = {str(h): m for h, m in hm.items()}
+    except Exception as exc:  # noqa: BLE001  印が揃えられなくても買い目は出す
+        logger.warning("買い目からの印の付け直しに失敗 %s: %s", race_id, exc)
+    cfg = TB.config()
+    tier = PZ.tier_info(int(out.get("level") or 0))
+    return {
+        "view": view, **out, "race_tier": tier, "legend": PZ.legend(), "max_total_bet": cap,
+        "disclaimer": cfg.get("notice") or PZ.disclaimer(), "evidence": cfg.get("evidence"),
+        "note": "購入額は『当たったときに払戻が約%g倍になる』ように決めています。倍率・払戻は想定オッズ（AI の予測）で、実際のオッズではありません。" % out["target_multiple"],
+    }, 200
+
+
+_MARKS_CACHE: dict[str, tuple[float, dict[int, str] | None]] = {}
+_MARKS_TTL_SEC = 120.0
+
+
+def bet_horse_marks(race_id: str) -> dict[int, str] | None:
+    """推奨馬券（既定プラン・既定の購入上限）から決めた 馬番 → mark_type。推奨が無い・計算できないレースは None（従来の印のまま）。"""
+    import time
+
+    hit = _MARKS_CACHE.get(race_id)
+    if hit and time.time() - hit[0] < _MARKS_TTL_SEC:
+        return hit[1]
+    marks: dict[int, str] | None = None
+    try:
+        payload, code = optimize_betting({"race_id": race_id, "max_total_bet": DEFAULT_MAX_TOTAL_BET}, view="full")
+        if code == 200 and payload.get("horse_marks"):
+            marks = {int(h): m for h, m in payload["horse_marks"].items()}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("買い目からの印の取得に失敗 %s: %s", race_id, exc)
+    if len(_MARKS_CACHE) > 2000:
+        _MARKS_CACHE.clear()
+    _MARKS_CACHE[race_id] = (time.time(), marks)
+    return marks
+
+
 def _paid_error(payload: dict[str, Any], code: int) -> tuple[dict[str, Any], int]:
     return {"view": "paid", "error": str(payload.get("error") or "推奨馬券を計算できません")}, code
 
@@ -267,8 +361,12 @@ def _optimize_paid(body: dict[str, Any]) -> tuple[dict[str, Any], int]:
     from src.api.local_predictions import load_local_prediction_payload
     from src.pipeline.inference.race_prediction_service import load_cached
 
-    cached = load_cached(storage, race_id)
-    preds = (cached or {}).get("predictions") or []
+    from src.api.local_predictions import load_primary_prediction_payload
+
+    preds = ((load_primary_prediction_payload(race_id, storage, market=False)) or {}).get("predictions") or []
+    if not preds:
+        cached = load_cached(storage, race_id)
+        preds = (cached or {}).get("predictions") or []
     if not preds:
         local = load_local_prediction_payload(race_id, storage, market=False)
         preds = (local or {}).get("predictions") or []
@@ -397,7 +495,7 @@ def _value_row_paid(race: dict[str, Any], payload: dict[str, Any], code: int) ->
         return {**base, "level": "none", "reason": "予測待ち" if code == 404 else "計算できません", "n_bets": 0, "tier": None}
     tier = payload.get("race_tier") or {"level": 0, "label": "見送り"}
     return {**base, "level": _PAID_LEVEL_STYLE.get(int(tier.get("level") or 0), "pass"), "tier": tier,
-            "n_bets": len(payload.get("bets") or [])}
+            "n_bets": len(payload.get("bets") or []), **({"basis": "target"} if payload.get("strategy") == "target" else {})}
 
 
 def _value_ttl(date: str) -> float:
@@ -435,14 +533,14 @@ def attach_bet_results(payload: dict[str, Any], race_id: str, storage: Any | Non
         return payload
     if not res:
         return payload
-    paid = payload.get("view") == "paid"
+    paid = payload.get("view") == "paid" or payload.get("strategy") == "target"
     items = payload.get("bets") if paid else payload.get("candidates")
     invested = returned = hits = 0
     estimated = False
     for it in items or []:
         combo = it.get("combo") if paid else it.get("pair")
         amount = int(it.get("yen") if paid else it.get("bet_amount") or 0)
-        hit, ret, est = pr.settle_candidate(it.get("bet_type", ""), tuple(int(x) for x in (combo or [])), amount, float(it.get("odds") or 0), res)
+        hit, ret, est = pr.settle_candidate(it.get("bet_type", ""), tuple(int(x) for x in (combo or [])), amount, float(it.get("odds") or it.get("est_multiple") or 0), res)
         it["result"] = {"hit": bool(hit), "payout": round(ret), "estimated": bool(est)}
         invested += amount
         returned += ret
@@ -479,7 +577,9 @@ def race_value_summary(
 
     storage = HybridStorage()
     races = (storage.load("race_lists", date) or {}).get("races") or []
-    if view == "paid":
+    from src.pipeline.inference import target_bets as TB
+
+    if view == "paid" or TB.available():       # 既定方策 target は、開発者にも会員と同じ『推奨度の段階』の一覧を返す
         from src.utils import paid_zone as PZ
 
         def _one_paid(r: dict[str, Any]) -> dict[str, Any]:
@@ -491,7 +591,8 @@ def race_value_summary(
             return _value_row_paid(r, payload, code)
 
         prow = _map_races(_one_paid, races)
-        out = {"date": date, "view": "paid", "legend": PZ.legend(), "max_total_bet": max_total_bet, "races": prow}
+        out = {"date": date, "view": "paid", "legend": PZ.legend(), "max_total_bet": max_total_bet, "races": prow,
+               **({"strategy": "target"} if TB.available() else {})}
         _VALUE_CACHE[key] = (time.time(), out)
         return out
     def _one_full(r: dict[str, Any]) -> dict[str, Any]:

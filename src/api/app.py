@@ -7057,8 +7057,25 @@ async def _race_predictions_impl(race_id: str):
             logger.warning("EV の較正の付与に失敗 %s: %s", race_id, exc)
             return resp
 
+    def _with_bet_marks(resp: dict) -> dict:
+        # 推奨馬券を正とし、印（◎○▲△）は買い目から決める。推奨が無いレース・計算できないレースは従来の印のまま
+        try:
+            preds = resp.get("predictions")
+            if not isinstance(preds, list) or not preds or not resp.get("has_prediction", True):
+                return resp
+            from src.api.v1.delegates import bet_horse_marks
+            from src.pipeline.inference import bet_marks as BM
+
+            marks = bet_horse_marks(race_id)
+            if not marks:
+                return resp
+            return {**resp, "predictions": BM.apply_to_entries(preds, marks), "marks_basis": "bets"}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("買い目からの印の付与に失敗 %s: %s", race_id, exc)
+            return resp
+
     def _with_position(resp: dict) -> dict:
-        resp = _with_calibrated_ev(resp)
+        resp = _with_bet_marks(_with_calibrated_ev(resp))
         # 過去走の通過順位から作る位置取り予想（実モデルの予測ではない）。失敗しても予測の応答は返す
         try:
             from src.pipeline.inference.position_forecast import attach_position_forecast
@@ -7109,6 +7126,16 @@ async def _race_predictions_impl(race_id: str):
         except Exception as exc:  # noqa: BLE001
             logger.warning("想定めぐ指数の付与に失敗 %s: %s", race_id, exc)
             return resp
+
+    # 最新モデル（v6e、KEIBA_PRED_MODEL）の予測がローカルにあれば、GCS に残っている古いモデルの予測より優先する
+    def _primary():
+        from src.api.local_predictions import load_primary_prediction_payload
+
+        return load_primary_prediction_payload(race_id, _get_storage(), alpha=_load_composite_params().get("prob_weight", _DEFAULT_PROB_WEIGHT))
+
+    primary = await asyncio.to_thread(_primary)
+    if primary:
+        return JSONResponse(await asyncio.to_thread(lambda: _with_entries_status(_with_position(primary))))
 
     data = await asyncio.to_thread(
         lambda: _get_storage().load("race_predictions", race_id))

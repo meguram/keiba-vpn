@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { PendingLink } from "@/components/PendingLink";
 import { USE_MOCK, MOCK_WEEKLY_RACES } from "@/lib/mock";
-import { LEVEL_STYLE, TIER_LEGEND, ValueLevel, chipLabel, hasTier, useRaceValues, valueTitle, mixedProbCalibration } from "@/lib/raceValue";
+import { LEVEL_STYLE, TIER_LEGEND, TARGET_TIER_HINT, ValueLevel, chipLabel, hasTier, isTargetValues, useRaceValues, valueTitle, mixedProbCalibration } from "@/lib/raceValue";
 import { useNarrow } from "@/components/RaceStrip";
 
 type RaceRow = { race_id: string; round: number; venue: string; race_name: string };
@@ -158,11 +158,11 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
             <>
               <span>買い目の推奨度:</span>
               {TIER_LEGEND.map((t) => (
-                <span key={t.label} title={LEVEL_STYLE[t.level].hint} style={{ padding: "1px 8px", borderRadius: 6, border: `1px solid ${LEVEL_STYLE[t.level].border}`, background: LEVEL_STYLE[t.level].bg, color: LEVEL_STYLE[t.level].color, opacity: t.level === "pass" ? 0.8 : 1 }}>
+                <span key={t.label} title={isTargetValues(values) ? TARGET_TIER_HINT[t.label] : LEVEL_STYLE[t.level].hint} style={{ padding: "1px 8px", borderRadius: 6, border: `1px solid ${LEVEL_STYLE[t.level].border}`, background: LEVEL_STYLE[t.level].bg, color: LEVEL_STYLE[t.level].color, opacity: t.level === "pass" ? 0.8 : 1 }}>
                   {t.level === "hot" ? "★ " : ""}{t.label}
                 </span>
               ))}
-              <span>（過去の実績に合わせて補正した目安。年による変動が大きい）</span>
+              <span>{isTargetValues(values) ? "（選んだ買い目のどれかが当たる確率の大きさ。回収率の高さではありません）" : "（過去の実績に合わせて補正した目安。年による変動が大きい）"}</span>
             </>
           ) : (
             <>

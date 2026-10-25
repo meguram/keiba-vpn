@@ -84,6 +84,8 @@ class RankDistribution:
     win: np.ndarray
     alpha2: float = 1.0
     alpha3: float = 1.0
+    lam2: np.ndarray | None = None  # 2 着目の強さ（馬ごと）。None なら win**alpha2
+    lam3: np.ndarray | None = None  # 3 着目の強さ（馬ごと）。None なら win**alpha3
     _p2: np.ndarray = field(init=False, repr=False)  # [i, j] = i が 1 着, j が 2 着
     _p3: np.ndarray = field(init=False, repr=False)  # [i, j, k] = i, j, k の順
 
@@ -91,7 +93,8 @@ class RankDistribution:
         w = _normalize_win(self.win)
         self.win = w
         n = len(w)
-        l2, l3 = w ** self.alpha2, w ** self.alpha3
+        l2 = np.clip(np.asarray(self.lam2, dtype=float), _EPS, None) if self.lam2 is not None else w ** self.alpha2
+        l3 = np.clip(np.asarray(self.lam3, dtype=float), _EPS, None) if self.lam3 is not None else w ** self.alpha3
         s2, s3 = l2.sum(), l3.sum()
         p2 = np.zeros((n, n))
         for i in range(n):
@@ -245,4 +248,103 @@ def fit_rank_distribution(
         rep.top2_rmse_after = float(np.sqrt(np.mean((dist.top2() - t2) ** 2)))
     if t3 is not None:
         rep.top3_rmse_after = float(np.sqrt(np.mean((dist.top3() - t3) ** 2)))
+    return dist, rep
+
+
+def fit_marginal_distribution(
+    win: Sequence[float],
+    top2: Sequence[float],
+    top3: Sequence[float],
+    *,
+    iters: int = 60,
+    tol: float = 1e-7,
+) -> tuple[RankDistribution, FitReport]:
+    """勝率・連対率・複勝率の 3 つの周辺確率に**馬ごとに**厳密に合わせた着順分布（周辺確率一致の Plackett–Luce）。
+
+    割引 Harville（``fit_rank_distribution``）は 2・3 着目の強さを w^α の 1 パラメータで決めるため、
+    馬ごとの連対率・複勝率のずれ（粘る馬・止まる馬）を表せない。ここでは 2 着目・3 着目の強さ λ2_j, λ3_j を馬ごとの自由度にし、
+    P(j が 2 着以内)=連対率_j、P(j が 3 着以内)=複勝率_j となるよう乗法的な反復で求める（不動点: λ ← λ·(目標/現在)^η）。
+    勝率は 1 着目で厳密に保たれる。収束しないレースでも、反復中で最も誤差の小さい解を返す。
+    """
+    w = _normalize_win(win)
+    n = len(w)
+    t2 = normalize_marginal(top2, 2.0)
+    t3 = normalize_marginal(top3, 3.0)
+    t2 = np.maximum(t2, w)  # 連対率 ≥ 勝率、複勝率 ≥ 連対率 の整合
+    t3 = np.maximum(t3, t2)
+    rep = FitReport(alpha2=1.0, alpha3=1.0, used_top2=True, used_top3=True)
+    base = RankDistribution(w, 1.0, 1.0)
+    rep.top2_rmse_before = float(np.sqrt(np.mean((base.top2() - t2) ** 2)))
+    rep.top3_rmse_before = float(np.sqrt(np.mean((base.top3() - t3) ** 2)))
+    if n < 3:
+        return base, rep
+    l2, l3 = w.copy(), w.copy()
+    best = (np.inf, l2.copy(), l3.copy())
+    eta = 0.7
+    for _ in range(iters):
+        d = RankDistribution(w, 1.0, 1.0, lam2=l2, lam3=l3)
+        e2, e3 = d.top2(), d.top3()
+        err = float(np.sqrt(np.mean((e2 - t2) ** 2) + np.mean((e3 - t3) ** 2)))
+        if err < best[0]:
+            best = (err, l2.copy(), l3.copy())
+        if err < tol:
+            break
+        # 2 着目の強さは連対率で、3 着目の強さは複勝率で合わせる（2 着目の分布が決まってから 3 着目を直す）
+        l2 = l2 * (np.maximum(t2 - w, _EPS) / np.maximum(e2 - w, _EPS)) ** eta
+        l3 = l3 * (np.maximum(t3 - t2, _EPS) / np.maximum(e3 - e2, _EPS)) ** eta
+        l2 = np.clip(l2 / l2.max(), 1e-9, None)
+        l3 = np.clip(l3 / l3.max(), 1e-9, None)
+    _, l2, l3 = best
+    dist = RankDistribution(w, 1.0, 1.0, lam2=l2, lam3=l3)
+    rep.top2_rmse_after = float(np.sqrt(np.mean((dist.top2() - t2) ** 2)))
+    rep.top3_rmse_after = float(np.sqrt(np.mean((dist.top3() - t3) ** 2)))
+    return dist, rep
+
+
+DEFAULT_BLEND_THETA = 0.6
+
+
+def load_blend_theta() -> float:
+    """周辺確率一致（θ=1）と共通 α の Harville 型（θ=0）の混合比。``config/exotic_alpha.json`` の ``blend_theta``、無ければ 0.6。"""
+    try:
+        t = float(json.loads(ALPHA_CONFIG.read_text(encoding="utf-8")).get("blend_theta", DEFAULT_BLEND_THETA))
+        return t if 0.0 <= t <= 1.0 else DEFAULT_BLEND_THETA
+    except (OSError, ValueError, TypeError):
+        return DEFAULT_BLEND_THETA
+
+
+def fit_blend_distribution(
+    win: Sequence[float],
+    top2: Sequence[float],
+    top3: Sequence[float],
+    *,
+    theta: float | None = None,
+    alpha2: float | None = None,
+    alpha3: float | None = None,
+) -> tuple[RankDistribution, FitReport]:
+    """周辺確率一致（``fit_marginal_distribution``）と共通 α の割引 Harville の、2・3 着目の強さの対数線形ブレンド。
+
+    log λ_r = θ · log λ_r(周辺一致) + (1−θ) · α_r · log 勝率。θ=1 で周辺一致、θ=0 で共通 α の割引 Harville。
+    2022〜2024 年の OOF 約 1 万レースの検証（docs/html/modeling/chapters/exotic_bet_probabilities.html §10）で、
+    複勝・馬連・ワイド・3連複は周辺一致寄り、馬単・3連単は共通 α 寄りが良く、θ=0.5〜0.7 は全券種で割引 Harville
+    （レースごと当てはめ）より対数スコアが良かった。単一の分布から全券種を出すため θ=0.6 を既定にしている。
+    """
+    d2, d3 = load_default_alpha()
+    a2 = d2 if alpha2 is None else alpha2
+    a3 = d3 if alpha3 is None else alpha3
+    th = load_blend_theta() if theta is None else float(theta)
+    base, rep = fit_marginal_distribution(win, top2, top3)
+    if base.n < 3:
+        return base, rep
+    w = base.win
+    lw = np.log(np.clip(w, _EPS, None))
+    l2 = np.exp(th * np.log(np.clip(base.lam2, _EPS, None)) + (1 - th) * a2 * lw)
+    l3 = np.exp(th * np.log(np.clip(base.lam3, _EPS, None)) + (1 - th) * a3 * lw)
+    dist = RankDistribution(w, 1.0, 1.0, lam2=l2, lam3=l3)
+    t2 = np.maximum(normalize_marginal(top2, 2.0), w)
+    t3 = np.maximum(normalize_marginal(top3, 3.0), t2)
+    rep = FitReport(alpha2=a2, alpha3=a3, used_top2=True, used_top3=True,
+                    top2_rmse_before=rep.top2_rmse_before, top3_rmse_before=rep.top3_rmse_before,
+                    top2_rmse_after=float(np.sqrt(np.mean((dist.top2() - t2) ** 2))),
+                    top3_rmse_after=float(np.sqrt(np.mean((dist.top3() - t3) ** 2))))
     return dist, rep

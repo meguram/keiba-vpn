@@ -174,6 +174,8 @@ def calibrate_single(single: dict | None) -> dict | None:
     cw, cp = cal.get("win"), cal.get("place_min")
     if not single or not (cw or cp):
         return single
+    if single.get("odds_model") == "sec77":   # §77 のモデルは学習時に市場の水準へ較正済み。旧モデル用の較正を重ねない
+        return single
     out = []
     for e in single.get("entries") or []:
         e = dict(e)

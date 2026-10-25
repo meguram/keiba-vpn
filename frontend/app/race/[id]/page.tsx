@@ -166,6 +166,8 @@ type PredData = {
   gate_bias?: GateBias;
   status?: string;
   has_prediction?: boolean;
+  /** "bets" = 印を推奨馬券（買い目）から決めている */
+  marks_basis?: string;
   model_type?: string;
   model_description?: string;
   prediction_source?: string;
@@ -888,6 +890,7 @@ export default function RaceDetailPage() {
       ) : null}
 
       <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 12 }}>
+        {predData?.marks_basis === "bets" ? "めぐAI印（推奨馬券から決定。付随情報）: ◎=買い目の購入額が最大の馬・○▲=2・3番手・△=買い目に入るその他の馬・買い目に入らない馬は印なし / " : null}
         めぐAI印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / 消: 3着内に来る確率が低い（10人気以下で複勝確率8%以下。過去の実績では約2.5%・目標5%以下。複数付くことも付かないこともある。印の上にカーソルで根拠） / —印なし。買い判断は期待値の最大で判定。期待値: {calibratedEv ? "過去の実績に合わせて較正した期待回収率。緑≥1.10 / 青≥1.00 / 灰≥0.90 / 赤＜0.90。推奨は較正後の期待値の最大で判定" : "緑≥1.3 / 青≥1.0 / 赤＜0.8"}
       </p>
     </div>
