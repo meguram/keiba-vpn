@@ -79,6 +79,7 @@ Run Job の環境変数には**必ず** `KEIBA_ENV=prod`・`KEIBA_RUN_LOCATION=g
 
 ### 3.1 入出力（state）
 - コンテナは毎回空で、書き込みはメモリを使います。各ジョブの `state_in`／`state_out` に**サイズ上限（max_mb）**があり、超えると取らずに失敗します。`state_in の合計 + 600MB ≤ memory_mib` も `validate` で検査します。
+- 大きい表（`data/page_reference/tables` は実測 約 2.9GB。うち `smartrc_race_race` が 2.2GB）は、エントリに **`include`**（`path` からの相対の glob のリスト。例 `"*/race_result_flat.parquet"`）を付けて、そのジョブが読むファイルだけを取る・上げる。`plan` も include で絞って測る。`predict-race` は約 190MB、`rb-state-daily` は約 150MB（2026-10-26 にホストで実測）。他のジョブ（`jockey-trainer-stats`・`feature-accumulate`・`serving-state-precompute`・`lap-forecast-*`・`tracking-v2-weekly`・`drift-monitor-weekly`・`px-ridge-window`）の include は、各ジョブが読む表の洗い出しがまだ。`export-tables-daily` は当年（`{year}`）だけを入出力にする設計。
 - **最初に**ホストで実サイズを確認します（上限の見直し材料）:
   ```bash
   cd <HOST_REPO>

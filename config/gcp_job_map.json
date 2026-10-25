@@ -2017,7 +2017,14 @@
     },
     {
      "path": "data/page_reference/tables",
-     "max_mb": 600
+     "max_mb": 250,
+     "include": [
+      "*/race_result_flat.parquet",
+      "*/race_result_race.parquet",
+      "*/race_shutuba_flat.parquet",
+      "*/race_shutuba_past_flat.parquet",
+      "*/megu_index_flat.parquet"
+     ]
     }
    ],
    "state_out": [
@@ -2052,7 +2059,7 @@
    },
    "blockers": [
     "モデル一式の publish（bundle_v6e・stage_v6e・tl_reference_v5・serving_bundle。公開済み 2026-10-26）→ 済。残り: Jobs のイメージで 1 レース手動実行し、ピークのメモリを Cloud Run のメトリクスで確認（ホストの実測は準備だけで RSS 2.3GB）",
-    "コンテナ上の履歴テーブルの用意（state_in の page_reference/tables）"
+    "履歴表は v6 の準備が読む race_result_flat/race_result_race/race_shutuba_flat（ホストで実測 約 93MB）+ 念のため race_shutuba_past_flat・megu_index_flat だけ取る（include。全体 2.9GB のうち約 190MB）。1 レース手動実行で足りない表が無いか確認"
    ],
    "enabled": true,
    "ready": false,
@@ -3385,7 +3392,13 @@
    "state_in": [
     {
      "path": "data/page_reference/tables",
-     "max_mb": 600
+     "max_mb": 200,
+     "include": [
+      "*/race_index_flat.parquet",
+      "*/race_shutuba_past_flat.parquet",
+      "*/race_result_flat.parquet",
+      "*/megu_index_flat.parquet"
+     ]
     }
    ],
    "state_out": [

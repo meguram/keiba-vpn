@@ -189,3 +189,21 @@ def test_host_snapshot_cron_installer_is_valid_shell():
     import subprocess
 
     assert subprocess.run(["bash", "-n", "scripts/cron/install_host_snapshot_cron.sh"]).returncode == 0
+
+
+def test_state_include_limits_files_in_plan_pull_and_push(tmp_path):
+    root = tmp_path / "r"
+    for y in ("2025", "2026"):
+        _write(root / f"data/t/{y}/race_result_flat.parquet", b"a" * 100)
+        _write(root / f"data/t/{y}/smartrc_race_race.parquet", b"b" * 5000)
+    entries = [{"path": "data/t", "max_mb": 1, "include": ["*/race_result_flat.parquet"]}]
+    assert SS.plan(entries, root)[0]["files"] == 2 and SS.plan([{"path": "data/t", "max_mb": 1}], root)[0]["files"] == 4
+    io = MemoryIO()
+    SS.push(io, [{"path": "data/t", "max_mb": 1}], root)                       # 先に全部上げておく
+    dest = tmp_path / "d"
+    got = SS.pull(io, entries, dest)
+    assert got["downloaded"] == 2 and (dest / "data/t/2026/race_result_flat.parquet").exists() and not (dest / "data/t/2026/smartrc_race_race.parquet").exists()
+    dest2 = tmp_path / "d2"
+    io2 = MemoryIO()
+    SS.push(io2, entries, root)
+    assert sorted(io2.list("state/")) == ["state/data/t/2025/race_result_flat.parquet", "state/data/t/2026/race_result_flat.parquet"]
