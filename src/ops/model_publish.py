@@ -115,13 +115,21 @@ def resolve_version(io: BlobIO, component: str, version: str = "latest") -> dict
     return json.loads(raw.decode("utf-8"))
 
 
-def fetch(io: BlobIO, component: str, dest_root: Path, *, version: str = "latest", max_mb: int | None = None) -> Path:
-    """検証つきで ``dest_root/<component>/<version>/`` に取得して、そのパスを返す。取得済み（検証済み印あり）なら何もしない。"""
+def fetch(io: BlobIO, component: str, dest_root: Path, *, version: str = "latest", max_mb: int | None = None, only_prefix: str | None = None) -> Path:
+    """検証つきで ``dest_root/<component>/<version>/`` に取得して、そのパスを返す。取得済み（検証済み印あり）なら何もしない。
+    only_prefix を指定すると、そのパスで始まるファイルだけを取る（大きい一式のうち設定ファイルだけが要るとき）。"""
     manifest = resolve_version(io, component, version)
     version = manifest["version"]
+    if only_prefix:
+        manifest = {**manifest, "files": [r for r in manifest["files"] if r["path"].startswith(only_prefix)],
+                    "total_bytes": sum(r["size"] for r in manifest["files"] if r["path"].startswith(only_prefix))}
+        if not manifest["files"]:
+            raise ModelIntegrityError(f"{component}/{version}: {only_prefix} で始まるファイルがありません")
     if max_mb and manifest["total_bytes"] > max_mb * MB:
         raise ModelIntegrityError(f"{component}/{version}: {manifest['total_bytes'] / MB:.0f}MB が上限 {max_mb}MB を超える")
     final = Path(dest_root) / component / version
+    if only_prefix:
+        final = final.with_name(f"{version}.{only_prefix.strip('/').replace('/', '_')}")
     marker = final / ".verified.json"
     if marker.is_file():
         try:
@@ -194,6 +202,7 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--component", required=True)
     f.add_argument("--dest", required=True)
     f.add_argument("--version", default="latest")
+    f.add_argument("--only-prefix", default=None, help="このパスで始まるファイルだけ取る（例: config/）")
     ns = ap.parse_args(argv)
     from src.utils.project_env import load_project_dotenv
 
@@ -213,7 +222,7 @@ def main(argv: list[str] | None = None) -> int:
         src = Path(ns.src or models[ns.component]["local_path"])
         print(json.dumps(publish(io, ns.component, src, version=ns.version), ensure_ascii=False))
         return 0
-    path = fetch(io, ns.component, Path(ns.dest), version=ns.version)
+    path = fetch(io, ns.component, Path(ns.dest), version=ns.version, only_prefix=ns.only_prefix)
     print(json.dumps({"component": ns.component, "path": str(path)}, ensure_ascii=False))
     return 0
 

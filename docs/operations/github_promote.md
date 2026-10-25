@@ -35,7 +35,7 @@ develop ──マージ──▶ stg ──push──▶ deploy-stg.yml（変更
 
 - **スモークに失敗したら通信は切り替わらず、以降（Jobs・画面の公開）も進まない。**
 - **取得（スクレイピング）は CI で一切しない。**
-- **当てはめ済みの係数・重み（`config/fitted_artifacts.txt`）は CI のビルドに含まれない。** API やジョブが実行時に GCS（`models/fitted_artifacts/`）から取得する。
+- **当てはめ済みの係数・重み（`config/fitted_artifacts.txt`）は git に無い。** API イメージのビルド直前に、`deploy_gcp.sh` の `fetch_fitted` が GCS（`models/fitted_artifacts/`）の `config/` 配下だけを検証つきで取り、`./config` に重ねてからビルドする（約 6MB。血統集計 `data/` と `models/` は入れない）。取れなかったとき、stg は警告して係数なしで続行し、prod は中止する。ホストで係数を更新したら `fitted_artifacts.sh pack` → `model_publish publish --component fitted_artifacts --from <dir>` で GCS に上げ、次のデプロイで入る。Jobs のイメージは実行時取得。
 - マージは **マージコミットか fast-forward**（スカッシュ不可）。スカッシュすると「stg に含まれる」ことを確認できず、`verify-stg` で止まる。
 - Jobs の更新は、Cloud Shell でキュー・Run Job・IAM を整えるまでは無効（`ENABLE_JOBS_DEPLOY` が `true` でない）。完全移行（並走を終える）ときに `JOBS_PARALLEL=0` にする。
 - VPS の nginx の向き先（`switch_api_upstream.sh cloudrun`）は 1 回きりの作業で、この自動化の対象外。

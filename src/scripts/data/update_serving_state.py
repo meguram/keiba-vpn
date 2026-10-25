@@ -52,6 +52,16 @@ def _storage():
     return HybridStorage()
 
 
+def attach_birthday(new: pd.DataFrame, attrs: pd.DataFrame) -> pd.DataFrame:
+    """profile の行に誕生日を補う。すでに birthday 列があるときは、欠けている行だけ attrs の値で埋める（重複列にしない）。"""
+    if "birthday" not in attrs.columns:
+        return new
+    b = attrs.rename_axis("horse_id").reset_index()[["horse_id", "birthday"]].rename(columns={"birthday": "_birthday_attr"})
+    out = new.merge(b, on="horse_id", how="left")
+    out["birthday"] = out["birthday"].where(out["birthday"].notna(), out["_birthday_attr"]) if "birthday" in out.columns else out["_birthday_attr"]
+    return out.drop(columns="_birthday_attr")
+
+
 def cmd_profile(limit: int) -> None:
     f = sv.V4Features()
     f.warm()
@@ -67,8 +77,7 @@ def cmd_profile(limit: int) -> None:
     p = sv.STATE_DIR / "profile_dyn.parquet"
     p.parent.mkdir(parents=True, exist_ok=True)
     old = pd.read_parquet(p) if p.exists() else pd.DataFrame()
-    at = f.hist.attrs.reindex(miss)
-    new = new.merge(at.rename_axis("horse_id").reset_index()[["horse_id", "birthday"]] if "birthday" in at.columns else new[["horse_id"]], on="horse_id", how="left") if "birthday" in at.columns else new
+    new = attach_birthday(new, f.hist.attrs.reindex(miss))
     pd.concat([old, new], ignore_index=True).drop_duplicates("horse_id", keep="last").to_parquet(p, index=False)
     print(f"保存 {p}（{len(new)} 頭、{time.time() - t0:.0f}s）")
 
