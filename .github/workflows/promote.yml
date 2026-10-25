@@ -126,6 +126,15 @@ jobs:
           f="$(ls release/keiba-ui-*.tar.gz | head -1)"
           python -m src.ops.release_publish publish-ui --file "$f" --commit "$GITHUB_SHA"
           python -m src.ops.release_publish status --kind ui
+      - name: 取得役のコードを GCS に公開（kind=fetch。latest.json を最後に書く。VPS の keiba-release-pull-fetch.timer が JST 03:20 に取り込む）
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          out="$(python -m src.ops.release_publish build-fetch --out "$RUNNER_TEMP/fetch" | tail -n1)"
+          ls -l "$out"
+          python -m src.ops.release_publish publish-fetch --file "$out" --commit "$GITHUB_SHA"
+          python -m src.ops.release_publish status --kind fetch
       - name: 結果の要約
         run: |
           {
@@ -134,4 +143,5 @@ jobs:
             echo "- API: 新リビジョンに通信を切り替え済み → ${{ steps.revision.outputs.tag_url }}"
             echo "- Jobs: ENABLE_JOBS_DEPLOY=${ENABLE_JOBS_DEPLOY:-未設定}（true のときだけ更新）。並走(影モード): JOBS_PARALLEL=${JOBS_PARALLEL:-1}"
             echo "- 画面: \`${{ needs.build-ui.outputs.release_id }}\`。VPS は次の窓（毎日 JST 03:10）に取得します"
+            echo "- 取得役のコード: GCS の ops/releases/fetch/ に公開済み。VPS は毎日 JST 03:20 に取り込みます"
           } >> "$GITHUB_STEP_SUMMARY"

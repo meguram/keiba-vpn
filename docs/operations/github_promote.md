@@ -34,6 +34,7 @@ develop ──マージ──▶ stg ──push──▶ deploy-stg.yml（変更
 ```
 
 - **スモークに失敗したら通信は切り替わらず、以降（Jobs・画面の公開）も進まない。**
+- **取得役のコード（kind=fetch）も、画面と同じ工程で GCS の `ops/releases/fetch/` に公開する**（`release_publish.py build-fetch` → `publish-fetch`、`latest.json` を最後に書く）。VPS の `keiba-release-pull-fetch.timer` が毎日 JST 03:20 に取り込む。ホストで `publish_release.sh --fetch` を実行する必要はない。
 - **取得（スクレイピング）は CI で一切しない。**
 - **当てはめ済みの係数・重み（`config/fitted_artifacts.txt`）は git に無い。** API イメージのビルド直前に、`deploy_gcp.sh` の `fetch_fitted` が GCS（`models/fitted_artifacts/`）の `config/` 配下だけを検証つきで取り、`./config` に重ねてからビルドする（約 6MB。血統集計 `data/` と `models/` は入れない）。取れなかったとき、stg は警告して係数なしで続行し、prod は中止する。ホストで係数を更新したら `fitted_artifacts.sh pack` → `model_publish publish --component fitted_artifacts --from <dir>` で GCS に上げ、次のデプロイで入る。Jobs のイメージは実行時取得。
 - マージは **マージコミットか fast-forward**（スカッシュ不可）。スカッシュすると「stg に含まれる」ことを確認できず、`verify-stg` で止まる。
