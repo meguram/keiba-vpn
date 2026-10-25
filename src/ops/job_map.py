@@ -266,6 +266,11 @@ def validate(doc: dict[str, Any], *, known_fetch_tasks: set[str] | None = None, 
             for m in j.get("models") or []:
                 if m not in models:
                     errs.append(f"{jid}: 未定義のモデル {m}")
+            from src.ops import gcs_mirror as _gm
+
+            for t in j.get("mirror_out") or []:
+                if not _gm.tree_known(t):
+                    errs.append(f"{jid}: mirror_out の {t} は gcs_mirror の PUSH_TREES の配下ではない（画面が読めない）")
             tot = sum(int(s.get("max_mb", 0)) for s in j.get("state_in") or [])
             if tot > int(rt.get("state_total_budget_mb", 1500)):
                 errs.append(f"{jid}: state_in の合計 {tot}MB が予算を超える")

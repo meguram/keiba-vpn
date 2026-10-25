@@ -126,6 +126,28 @@ jobs:
           f="$(ls release/keiba-ui-*.tar.gz | head -1)"
           python -m src.ops.release_publish publish-ui --file "$f" --commit "$GITHUB_SHA"
           python -m src.ops.release_publish status --kind ui
+      - name: VPS が画面を取り込むのを待つ（UI_WAIT_MINUTES が 0 または未設定なら待たない。API と画面の版ずれが続く時間の確認用）
+        env:
+          PYTHONPATH: .
+          UI_WAIT_MINUTES: ${{ vars.UI_WAIT_MINUTES }}
+        run: |
+          set -uo pipefail
+          res="$(python -m src.ops.release_publish wait-applied --kind ui --minutes "${UI_WAIT_MINUTES:-0}")" || true
+          echo "$res"
+          case "$res" in
+            *'"result": "ok"'*) echo "VPS が新しい画面を取り込みました" ;;
+            *'"result": "skipped"'*) ;;
+            *) echo "::warning title=画面の取り込みを確認できません::API は新しい版に切り替え済みですが、VPS の画面がまだ古い可能性があります（API と画面の版ずれ）。VPS の keiba-release-pull-ui を確認してください: ${res}" ;;
+          esac
+      - name: 取得役のコードを GCS に公開（kind=fetch。latest.json を最後に書く。VPS の keiba-release-pull-fetch.timer が JST 03:20 に取り込む）
+        env:
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          out="$(python -m src.ops.release_publish build-fetch --out "$RUNNER_TEMP/fetch" | tail -n1)"
+          ls -l "$out"
+          python -m src.ops.release_publish publish-fetch --file "$out" --commit "$GITHUB_SHA"
+          python -m src.ops.release_publish status --kind fetch
       - name: 結果の要約
         run: |
           {
@@ -134,4 +156,5 @@ jobs:
             echo "- API: 新リビジョンに通信を切り替え済み → ${{ steps.revision.outputs.tag_url }}"
             echo "- Jobs: ENABLE_JOBS_DEPLOY=${ENABLE_JOBS_DEPLOY:-未設定}（true のときだけ更新）。並走(影モード): JOBS_PARALLEL=${JOBS_PARALLEL:-1}"
             echo "- 画面: \`${{ needs.build-ui.outputs.release_id }}\`。VPS は次の窓（毎日 JST 03:10）に取得します"
+            echo "- 取得役のコード: GCS の ops/releases/fetch/ に公開済み。VPS は毎日 JST 03:20 に取り込みます"
           } >> "$GITHUB_STEP_SUMMARY"

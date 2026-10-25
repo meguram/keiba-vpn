@@ -197,7 +197,8 @@ def build_target_portfolio(entries: list[dict], single: dict | None, max_total_b
     total = int(sum(b["yen"] for b in bets))
     any_hit = float(min(sum(cand["p"][j] for j in idx), 1.0))
     return {**base, "status": "bet", "skip_reason": None, "bets": bets, "total_yen": total, "any_hit_rate_pct": round(any_hit * 100, 1),
-            "target_payout_yen": int(prm.mult * budget), "level": tier_level(any_hit), "odds_basis": cand["basis"]}
+            "target_payout_yen": int(prm.mult * budget), "level": tier_level(any_hit), "odds_basis": cand["basis"],
+            **_portfolio_ev(cand, np.asarray(idx), np.asarray(stakes))}
 
 
 # ───────────────────────── 全券種・プラン方式 ─────────────────────────
@@ -285,6 +286,14 @@ def all_candidates(entries: list[dict], single: dict | None) -> dict[str, Any] |
             "perms": perm, "hn": hn, "entries": ents, "basis": basis, "n": n}
 
 
+def _portfolio_ev(cand: dict, idx: np.ndarray, stakes: np.ndarray) -> dict[str, Any]:
+    """買い目全体を購入したときの期待払戻（円）と期待回収率（倍）。『的中確率 × 購入額 × 想定倍率』の和（同時に当たる組合せがあっても期待値は足し算でよい）。"""
+    st = np.asarray(stakes, dtype=float)
+    ret = float(np.sum(np.asarray(cand["p"])[idx] * st * np.asarray(cand["odds"])[idx]))
+    total = float(np.sum(st))
+    return {"expected_payout_yen": int(round(ret, -1)), "portfolio_ev": round(ret / total, 2) if total > 0 else None}
+
+
 def _fmt_bets(cand: dict, idx: np.ndarray, stakes: np.ndarray) -> list[dict]:
     by_hn = {int(e["horse_number"]): e for e in cand["entries"]}
     bets = []
@@ -335,7 +344,7 @@ def build_plans(entries: list[dict], single: dict | None, max_total_bet: int | N
                 item.update(status="skip", skip_reason="レースの期待値が水準（%.2f）に届きません（このレース %.2f）" % (thr, ev or 0.0), bets=[], total_yen=0, level=0, race_ev=round(ev, 2) if ev else None)
             else:
                 item.update(status="bet", skip_reason=None, bets=_fmt_bets(cand, idx, st), total_yen=int(np.sum(st)), any_hit_rate_pct=round(hit * 100, 1),
-                            level=race_ev_level(ev), race_ev=round(ev, 2), target_payout_yen=int(prm.mult * budget))
+                            level=race_ev_level(ev), race_ev=round(ev, 2), target_payout_yen=int(prm.mult * budget), **_portfolio_ev(cand, idx, st))
         else:
             prm = PT.TargetParams(mult=float((cfg.get("pattern") or {}).get("mult", 5.0)), k=float(pc.get("k", 2.0)), tau=float(pc.get("tau", 1.0)),
                                   max_bets=pc.get("max_bets"), budget=budget)
@@ -345,11 +354,11 @@ def build_plans(entries: list[dict], single: dict | None, max_total_bet: int | N
             else:
                 any_hit = float(min(np.sum(cand["p"][idx]), 1.0))
                 item.update(status="bet", skip_reason=None, bets=_fmt_bets(cand, idx, st), total_yen=int(np.sum(st)), any_hit_rate_pct=round(any_hit * 100, 1),
-                            level=tier_level(any_hit), race_ev=None, target_payout_yen=int(prm.mult * budget))
+                            level=tier_level(any_hit), race_ev=None, target_payout_yen=int(prm.mult * budget), **_portfolio_ev(cand, idx, st))
         out.append(item)
     default_id = cfg.get("default_plan") or out[0]["id"]
     d = next((x for x in out if x["id"] == default_id), out[0])
     base = {"strategy": "target", "race_id": race_id, "budget_yen": budget, "target_multiple": float((cfg.get("pattern") or {}).get("mult", 5.0)),
             "safety_k": float((cfg.get("pattern") or {}).get("k", 2.0)), "unit_yen": PT.UNIT, "odds_basis": cand["basis"], "default_plan": d["id"], "plans": out}
-    keys = ("status", "skip_reason", "bets", "total_yen", "level", "race_ev", "any_hit_rate_pct", "target_payout_yen")
+    keys = ("status", "skip_reason", "bets", "total_yen", "level", "race_ev", "any_hit_rate_pct", "target_payout_yen", "expected_payout_yen", "portfolio_ev")
     return {**base, **{k: d[k] for k in keys if k in d}, "max_bets": len(d.get("bets") or [])}

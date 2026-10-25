@@ -45,13 +45,15 @@ def ctx(io, runner, tmp_path, **kw) -> D.Ctx:
     alerts: list[tuple] = []
     pushes: list[Any] = []
     pulls: list[Any] = []
+    mirrors: list[Any] = []
     c = D.Ctx(io=io, root=tmp_path, now_fn=lambda: NOW, runner=runner, base_env={"KEIBA_ENV": "stg"}, memory_limit_mib=kw.pop("memory_limit_mib", 4096),
               alert=lambda *a, **k: alerts.append((a, k)),
               pull=lambda io_, entries, root, **k: pulls.append(entries) or {"downloaded": 0},
               push=lambda io_, entries, root, **k: pushes.append(entries) or {"uploaded": 0},
               fetch_model=kw.pop("fetch_model", lambda io_, name, d: tmp_path / "models" / name),
+              mirror=kw.pop("mirror", lambda trees, **k: mirrors.append((list(trees), k)) or {"uploaded": 0}),
               peak_fn=lambda: 123, **kw)
-    c.alerts, c.pushes, c.pulls = alerts, pushes, pulls     # type: ignore[attr-defined]
+    c.alerts, c.pushes, c.pulls, c.mirrors = alerts, pushes, pulls, mirrors     # type: ignore[attr-defined]
     return c
 
 
@@ -232,3 +234,26 @@ def test_default_runner_real_process_and_timeout():
 def test_container_memory_limit_env_override(monkeypatch):
     monkeypatch.setenv("KEIBA_DISPATCH_MEMORY_MIB", "2048")
     assert D.container_memory_limit_mib() == 2048
+
+
+def test_mirror_out_pushes_to_mirror_except_in_parallel_run(tmp_path, patch_doc):
+    patch_doc([J("a", mirror_out=["data/local/inference/predictions_v6"])])
+    c = ctx(MemoryIO(), Rec(), tmp_path)
+    assert D.run_group("g1", c) == 0
+    assert c.mirrors[0][0] == ["data/local/inference/predictions_v6"] and c.mirrors[0][1]["since_epoch"] > 0
+    c2 = ctx(MemoryIO(), Rec(), tmp_path)
+    c2.base_env["KEIBA_PARALLEL_RUN"] = "1"
+    assert D.run_group("g1", c2) == 0 and c2.mirrors == []                          # 並走期間はホストの出力を上書きしない
+    c3 = ctx(MemoryIO(), Rec({"mod.a": 1}), tmp_path)
+    D.run_group("g1", c3)
+    assert c3.mirrors == []                                                         # 失敗したジョブの出力は上げない
+
+
+def test_mirror_failure_fails_the_job(tmp_path, patch_doc):
+    patch_doc([J("a", mirror_out=["data/local/inference/predictions_v6"])])
+
+    def boom(trees, **k):
+        raise RuntimeError("gcs down")
+
+    c = ctx(MemoryIO(), Rec(), tmp_path, mirror=boom)
+    assert D.run_group("g1", c) != 0

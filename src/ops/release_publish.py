@@ -122,6 +122,26 @@ def status(io_: Any, kind: str) -> dict[str, Any]:
     return out
 
 
+def wait_applied(io_: Any, kind: str, release_id: str, *, minutes: float, interval_sec: float = 20.0,
+                 sleep: Any = None, clock: Any = None) -> dict[str, Any]:
+    """VPS が release_id を取り込んだ（applied/vps.json の release_id が一致）のを待つ。minutes 経っても揃わなければ打ち切る（失敗にはしない）。
+    result は ok / failed（VPS が取り込みに失敗と報告）/ timeout。"""
+    import time
+
+    sleep = sleep or time.sleep
+    clock = clock or time.monotonic
+    end = clock() + minutes * 60
+    last: dict[str, Any] | None = None
+    while True:
+        raw = io_.get_bytes(key_of(kind, "applied/vps.json"))
+        last = json.loads(raw) if raw else None
+        if last and last.get("release_id") == release_id:
+            return {"result": "ok" if str(last.get("result", "ok")).lower() in ("ok", "applied", "success") else "failed", "applied": last}
+        if clock() >= end:
+            return {"result": "timeout", "applied": last}
+        sleep(interval_sec)
+
+
 def _gcs_io() -> Any:
     from dotenv import load_dotenv
 
@@ -143,12 +163,22 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--out", default=str(ROOT / "data/local/releases"))
     s = sub.add_parser("status")
     s.add_argument("--kind", choices=KINDS, default="ui")
+    w = sub.add_parser("wait-applied", help="VPS が公開した版を取り込むのを待つ（minutes=0 なら待たない）。揃わなくても終了コードは 0（注釈で知らせる）")
+    w.add_argument("--kind", choices=KINDS, default="ui")
+    w.add_argument("--release-id", default="")
+    w.add_argument("--minutes", type=float, default=0.0)
     a = ap.parse_args(argv)
     if a.cmd == "build-fetch":
         print(build_fetch_bundle(Path(a.out)))
         return 0
     if a.cmd == "status":
         print(json.dumps(status(_gcs_io(), a.kind), ensure_ascii=False, indent=1))
+        return 0
+    if a.cmd == "wait-applied":
+        io_ = _gcs_io()
+        rid = a.release_id or ((json.loads(io_.get_bytes(key_of(a.kind, "latest.json")) or b"{}")).get("release_id") or "")
+        res = wait_applied(io_, a.kind, rid, minutes=a.minutes) if a.minutes > 0 else {"result": "skipped", "applied": None}
+        print(json.dumps({"release_id": rid, **res}, ensure_ascii=False))
         return 0
     kind = {"publish-ui": "ui", "publish-ui-stg": "ui-stg"}.get(a.cmd, "fetch")
     path = Path(a.file)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""pull 型デプロイ（VPS 側）。GCS の latest.json を見て、新しい版があればメンテナンス窓（JST 03:00〜04:00）に取りに行って入れ替える。
+"""pull 型デプロイ（VPS 側）。GCS の latest.json を見て、新しい版があれば入れ替える（画面はすぐ。取得の実行役はメンテナンス窓 JST 03:00〜04:00 の中だけ）。
 root の systemd タイマーから実行する（SSH を閉じても配布できる）。ホストの scripts/ops/vps/publish_release.sh が latest.json を書く＝昇格。
 
   pull_release.py --kind ui|ui-stg|fetch [--force] [--dry-run] [--window 03:00-04:00]
@@ -72,6 +72,11 @@ def validate_latest(kind: str, d: object) -> dict:
     if tb != f"{PREFIX}/{kind}/{rid}.tar.gz":
         raise PullError("latest.json の tarball のパスが想定外です")
     return d
+
+
+def effective_window(kind: str, cli_window: str) -> str:
+    """画面（ui・ui-stg）は窓を待たず、公開されたらすぐ入れる（入れ替えは数秒で無停止。API が昇格直後に切り替わるので、古い画面を残さない）。取得の実行役（fetch）は窓の中だけ。"""
+    return "00:00-24:00" if kind in ("ui", "ui-stg") else cli_window
 
 
 def decide(kind: str, latest: dict, current_id: str | None, now: datetime, *, force: bool, window: str, failed_ids: list[str]) -> str:
@@ -236,7 +241,7 @@ def main(argv: list[str] | None = None) -> int:
     st = load_state(a.kind)
     now = datetime.now(JST)
     cur = current_id(a.kind)
-    window = "00:00-24:00" if a.kind == "ui-stg" else a.window       # stg は窓を待たない（確認用の環境なので、公開されたらすぐ入れる）
+    window = effective_window(a.kind, a.window)
     verdict = decide(a.kind, latest, cur, now, force=a.force, window=window, failed_ids=st.get("failed_ids", []))
     print(f"kind={a.kind} latest={latest['release_id']} current={cur} -> {verdict}")
     if verdict != "install" or a.dry_run:

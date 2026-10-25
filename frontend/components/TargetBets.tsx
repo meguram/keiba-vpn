@@ -16,10 +16,13 @@ export type TargetRec = {
   target_payout_yen?: number; any_hit_rate_pct?: number; max_total_bet: number | null; disclaimer: string; evidence?: string; note?: string;
   odds_basis?: "sec77" | "predicted" | "own"; result?: RaceBetResult | null;
   default_plan?: string; race_ev?: number | null; plans?: TargetPlan[];
+  /** 買い目全体を購入したときの期待払戻（円）と期待回収率（倍）。AI の確率×想定オッズの値（実オッズではない） */
+  expected_payout_yen?: number; portfolio_ev?: number | null;
 };
 export type TargetPlan = {
   id: string; label: string; note: string; evidence: string; kind: string; status: "bet" | "skip"; skip_reason: string | null;
   bets: TargetBet[]; total_yen: number; any_hit_rate_pct?: number; race_ev?: number | null; target_payout_yen?: number; level: number;
+  expected_payout_yen?: number; portfolio_ev?: number | null;
 };
 
 const TARGET_DESC: Record<number, string> = {
@@ -45,7 +48,8 @@ export function TargetBets({
   const [pid, setPid] = useState<string | null>(null);
   const plan = rec.plans?.find((p) => p.id === (pid ?? rec.default_plan)) ?? null;
   const view = plan ? { ...rec, bets: plan.bets, status: plan.status, skip_reason: plan.skip_reason, total_yen: plan.total_yen, any_hit_rate_pct: plan.any_hit_rate_pct,
-    target_payout_yen: plan.target_payout_yen, evidence: plan.evidence, race_ev: plan.race_ev, result: plan.id === rec.default_plan ? rec.result : null } : rec;
+    target_payout_yen: plan.target_payout_yen, evidence: plan.evidence, race_ev: plan.race_ev,
+    expected_payout_yen: plan.expected_payout_yen, portfolio_ev: plan.portfolio_ev, result: plan.id === rec.default_plan ? rec.result : null } : rec;
   const hasResult = !!view.result;
   const yen = (n: number) => `${n.toLocaleString()}円`;
   return (
@@ -133,9 +137,18 @@ export function TargetBets({
             <tr>
               <td colSpan={hasResult ? 6 : 5} style={{ padding: "6px 10px", textAlign: "right", fontSize: 13, borderTop: "1px solid var(--border)" }}>
                 合計 <b>{yen(view.total_yen)}</b>
-                {view.any_hit_rate_pct != null && <span style={{ color: "var(--text-dim)", marginLeft: 8, fontSize: 11.5 }}>（どれかが当たる確率 約{rec.any_hit_rate_pct}%）</span>}
+                {view.any_hit_rate_pct != null && <span style={{ color: "var(--text-dim)", marginLeft: 8, fontSize: 11.5 }}>（どれかが当たる確率 約{view.any_hit_rate_pct}%）</span>}
               </td>
             </tr>
+            {view.portfolio_ev != null && view.expected_payout_yen != null && (
+              <tr>
+                <td colSpan={hasResult ? 6 : 5} style={{ padding: "2px 10px 8px", textAlign: "right", fontSize: 13 }}>
+                  期待払戻 <b>約{yen(view.expected_payout_yen)}</b>
+                  <span style={{ marginLeft: 8 }}>期待回収率 <b style={{ color: view.portfolio_ev >= 1 ? "var(--green, #4ade80)" : "var(--red, #f87171)" }}>{Math.round(view.portfolio_ev * 100)}%</b></span>
+                  <span style={{ color: "var(--text-dim)", marginLeft: 8, fontSize: 11.5 }}>（AI の確率×想定オッズによる値。実際の回収を保証しません）</span>
+                </td>
+              </tr>
+            )}
           </tfoot>
         </table>
         </div>

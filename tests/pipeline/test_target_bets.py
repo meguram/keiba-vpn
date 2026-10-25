@@ -136,3 +136,31 @@ def test_build_plans_returns_all_plans_and_default_pattern():
         for b in p["bets"]:                       # どの買い目が当たっても払戻の想定が目標(5倍)以上（安全係数込み）
             assert b["est_payout_yen"] >= 5 * 10000 * (1.0 if p["kind"] == "pattern" else 0.0) * 0.99 or p["kind"] != "pattern"
             assert "odds" not in b                  # 実オッズのキーを出さない
+
+
+def test_portfolio_ev_matches_sum_of_hit_rate_times_payout_for_every_plan():
+    """買い目全体の期待払戻・期待回収率 = Σ(的中確率×購入額×想定倍率)。表示中の各買い目の数字から再計算しても一致する。"""
+    ents, single = _field(16, seed=3, noise=0.5)
+    out = TB.build_target_portfolio(ents, single, 2000)
+    assert out["plans"], "プラン方式の応答であること"
+    seen = 0
+    for p in out["plans"]:
+        if p["status"] != "bet":
+            assert "portfolio_ev" not in p and "expected_payout_yen" not in p
+            continue
+        seen += 1
+        exp = sum(b["hit_rate_pct"] / 100 * b["est_payout_yen"] for b in p["bets"])
+        assert p["portfolio_ev"] == pytest.approx(exp / p["total_yen"], abs=0.05)
+        assert p["expected_payout_yen"] == pytest.approx(exp, rel=0.02, abs=30)
+        if p.get("race_ev") is not None:                     # pattern_all の race_ev は同じ量
+            assert p["portfolio_ev"] == pytest.approx(p["race_ev"], abs=0.02)
+    assert seen >= 1
+    d = next(x for x in out["plans"] if x["id"] == out["default_plan"])
+    if d["status"] == "bet":
+        assert out["portfolio_ev"] == d["portfolio_ev"] and out["expected_payout_yen"] == d["expected_payout_yen"]
+
+
+def test_portfolio_ev_helper_basic():
+    cand = {"p": np.array([0.2, 0.1, 0.05]), "odds": np.array([10.0, 30.0, 100.0])}
+    r = TB._portfolio_ev(cand, np.array([0, 2]), np.array([100.0, 200.0]))
+    assert r["expected_payout_yen"] == 1200 and r["portfolio_ev"] == 4.0        # 0.2*100*10 + 0.05*200*100 = 200+1000
