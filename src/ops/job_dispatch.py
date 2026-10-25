@@ -145,6 +145,7 @@ class Ctx:
     alert: Callable[..., Any] | None = None
     pull: Callable[..., Any] | None = None
     push: Callable[..., Any] | None = None
+    mirror: Callable[..., Any] | None = None
     fetch_model: Callable[..., Path] | None = None
     peak_fn: Callable[[], int] = _children_peak_mib
 
@@ -158,6 +159,10 @@ class Ctx:
 
             self.pull = self.pull or state_sync.pull
             self.push = self.push or state_sync.push
+        if self.mirror is None:
+            from src.ops import gcs_mirror
+
+            self.mirror = gcs_mirror.push_trees
         if self.fetch_model is None:
             from src.ops import model_publish
 
@@ -288,6 +293,13 @@ def run_job(job: dict[str, Any], ctx: Ctx, params: dict[str, str], *, tick: date
             rec["state"]["push"] = ctx.push(ctx.io, job.get("state_out") or [], ctx.root, since=started_epoch, params=params)
         except Exception as exc:  # noqa: BLE001
             rec["state"]["push_error"] = str(exc)
+            status = FAILED
+    if status in (OK, PARTIAL) and job.get("mirror_out") and env.get("KEIBA_PARALLEL_RUN") != "1":
+        # 画面（Cloud Run）が読む場所 ops/mirror へ。並走期間はホストの出力を上書きしないよう上げない
+        try:
+            rec["state"]["mirror"] = ctx.mirror(job["mirror_out"], since_epoch=started_epoch)
+        except Exception as exc:  # noqa: BLE001
+            rec["state"]["push_error"] = f"mirror: {exc}"
             status = FAILED
     reason = None
     if status == FAILED:

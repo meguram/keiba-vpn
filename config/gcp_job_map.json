@@ -701,7 +701,10 @@
     "min_consecutive_success": 4,
     "window_days": 21,
     "parity_min_days": 3
-   }
+   },
+   "mirror_out": [
+    "data/local/inference/lap_forecast"
+   ]
   },
   {
    "id": "slack-scrape-summary-morning",
@@ -1481,7 +1484,10 @@
     "min_consecutive_success": 4,
     "window_days": 21,
     "parity_min_days": 3
-   }
+   },
+   "mirror_out": [
+    "data/local/inference/tracking_v2"
+   ]
   },
   {
    "id": "reserve-race-day",
@@ -1643,7 +1649,10 @@
     "min_consecutive_success": 4,
     "window_days": 21,
     "parity_min_days": 3
-   }
+   },
+   "mirror_out": [
+    "data/local/inference/lap_forecast"
+   ]
   },
   {
    "id": "horse-name-index",
@@ -1963,10 +1972,6 @@
    "size": "l",
    "trigger": "cloud_tasks",
    "when_jst": null,
-   "parallel_env": {
-    "KEIBA_V3_SERVING": "shadow",
-    "KEIBA_V5_SHADOW": "1"
-   },
    "steps": [
     {
      "argv": [
@@ -2003,11 +2008,7 @@
     "bundle_v6e",
     "stage_v6e",
     "tl_reference_v5",
-    "serving_bundle",
-    "bundle_v4",
-    "stage_v4",
-    "aux_v4",
-    "bundle_v5"
+    "serving_bundle"
    ],
    "state_in": [
     {
@@ -2029,23 +2030,18 @@
      "max_mb": 30
     },
     {
-     "path": "data/local/inference/predictions_v3",
-     "max_mb": 30
-    },
-    {
-     "path": "data/local/inference/predictions_v5",
-     "max_mb": 30
-    },
-    {
      "path": "data/local/inference/events",
      "max_mb": 5
+    },
+    {
+     "path": "data/local/inference/predictions_v6",
+     "max_mb": 30
     }
    ],
    "parity": {
     "kind": "parquet_frame",
     "paths": [
-     "data/local/inference/predictions_v3/{date}",
-     "data/local/inference/predictions_v5/{date}"
+     "data/local/inference/predictions_v6/{date}"
     ],
     "keys": [
      "race_id",
@@ -2055,9 +2051,8 @@
     "atol": 1e-06
    },
    "blockers": [
-    "モデル一式の publish（bundle_v6e・stage_v6e・tl_reference_v5・serving_bundle・fitted_artifacts。RB の履歴状態は rb-state-daily が state/ に出す）",
-    "コンテナ上の履歴テーブルの用意（出走馬の履歴だけで足りる bundle エンジンを使う）",
-    "v4/v5 は画面が参照しない影モードの出力。外すと取得量と時間が減る（外す判断は parity_check の後）"
+    "モデル一式の publish（bundle_v6e・stage_v6e・tl_reference_v5・serving_bundle。公開済み 2026-10-26）→ 済。残り: Jobs のイメージで 1 レース手動実行し、ピークのメモリを Cloud Run のメトリクスで確認（ホストの実測は準備だけで RSS 2.3GB）",
+    "コンテナ上の履歴テーブルの用意（state_in の page_reference/tables）"
    ],
    "enabled": true,
    "ready": false,
@@ -2065,7 +2060,11 @@
     "min_consecutive_success": 4,
     "window_days": 21,
     "parity_min_days": 3
-   }
+   },
+   "mirror_out": [
+    "data/local/inference/predictions_v6",
+    "data/local/inference/snapshots"
+   ]
   },
   {
    "id": "event-pump",
