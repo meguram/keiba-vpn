@@ -46,14 +46,17 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def tree_files(src: Path) -> list[tuple[str, Path]]:
-    """(相対パス, 実体)。単一ファイルならファイル名 1 件。"""
+def tree_files(src: Path, include: list[str] | None = None) -> list[tuple[str, Path]]:
+    """(相対パス, 実体)。単一ファイルならファイル名 1 件。include（相対パスの glob のリスト）を渡すと、一致するファイルだけ。"""
+    import fnmatch
+
     src = Path(src)
     if src.is_file():
         return [(src.name, src)]
     if not src.is_dir():
         raise FileNotFoundError(f"モデルのパスがありません: {src}")
-    return [(f.relative_to(src).as_posix(), f) for f in sorted(src.rglob("*")) if f.is_file() and not f.name.startswith(".")]
+    rows = [(f.relative_to(src).as_posix(), f) for f in sorted(src.rglob("*")) if f.is_file() and not f.name.startswith(".")]
+    return [(r, f) for r, f in rows if not include or any(fnmatch.fnmatch(r, g) for g in include)]
 
 
 def build_manifest(component: str, version: str, files: list[tuple[str, Path]], *, now: datetime | None = None) -> dict[str, Any]:
@@ -73,8 +76,8 @@ def _manifest_key(component: str, version: str) -> str:
     return f"{PREFIX}/{component}/{version}/manifest.json"
 
 
-def publish(io: BlobIO, component: str, src: Path, *, version: str | None = None, now: datetime | None = None) -> dict[str, Any]:
-    files = tree_files(src)
+def publish(io: BlobIO, component: str, src: Path, *, version: str | None = None, now: datetime | None = None, include: list[str] | None = None) -> dict[str, Any]:
+    files = tree_files(src, include)
     if not files:
         raise FileNotFoundError(f"空のモデルディレクトリ: {src}")
     now = now or datetime.now(timezone.utc)
@@ -220,7 +223,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if ns.cmd == "publish":
         src = Path(ns.src or models[ns.component]["local_path"])
-        print(json.dumps(publish(io, ns.component, src, version=ns.version), ensure_ascii=False))
+        print(json.dumps(publish(io, ns.component, src, version=ns.version, include=models[ns.component].get("include")), ensure_ascii=False))
         return 0
     path = fetch(io, ns.component, Path(ns.dest), version=ns.version, only_prefix=ns.only_prefix)
     print(json.dumps({"component": ns.component, "path": str(path)}, ensure_ascii=False))

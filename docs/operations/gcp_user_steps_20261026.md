@@ -146,6 +146,19 @@ bash scripts/gcp/deploy_cloud_run_jobs.sh run-now job event-pump --yes
 ```
 - 確認: `gcloud storage cat gs://$BUCKET/ops/job_runs/event-pump/latest.json | python3 -m json.tool | grep -E '"status"|"reason"'` → `"status": "ok"`
 
+### B5-pre. v6e の予測に必要なモデルと state を GCS に上げる（ホストで実行。**B5 の前に必須**。2026-10-26 の初回は、これが無くて v6 の準備が失敗していた）
+v6e の特徴量づくりは、`bundle_v6e` のほかに、補助モデル（`aux_v4`）・v4 の学習表（`v4_train_table` 92MB）・`factory` の 5 ファイル（`v6_factory`）・血統 ID 表（`ped_keys`）を読む（ホストで 1 レースを実際に動かして読むファイルを洗い出した）。手元から（書き込み。同じ内容は再アップロードされない）:
+```bash
+ssh keiba-remote 'bash -s -- aux_v4 v4_train_table v6_factory ped_keys' < scripts/gcp/publish_models_from_host.sh
+```
+Jobs の入力 state（`state/`）にホストの実ファイル（`inference/state`＝RB・px の状態、`feature_store/horse_history`、履歴表の必要分）を種まきする（約 280MB）:
+```bash
+ssh keiba-remote 'bash -s -- predict-race rb-state-daily' < scripts/gcp/seed_state_from_host.sh
+```
+- 確認（Cloud Shell）: `gcloud storage ls gs://$BUCKET/models/` に `aux_v4/ v4_train_table/ v6_factory/ ped_keys/` が増える。`gcloud storage ls gs://$BUCKET/state/data/local/modeling/feature_store/horse_history/` に `features_2026.parquet`。
+- 注意: この種まきの時点で履歴が止まる。日次で更新する Jobs（`export-tables-daily`・`feature-accumulate`・`serving-state-precompute`・`px-ridge-window`・`rb-state-daily`）が ready になるまで、Jobs の予測は種まきの日までの履歴で作られる（並走の確認用。本番の表示は変わらない）。
+- イメージの更新: この変更（`predict-race` の models / state_in / 失敗の検出）は `config/gcp_job_map.json` にあり、**Jobs のイメージに焼き込み**。次の master 昇格で作り直されたイメージで、B2（`apply jobs`）を実行し直す（既存の Run Job は `apply jobs` を再実行すれば新しいイメージに更新される）。
+
 ### B5. predict-race を 1 レースだけ（並走なので本番の表示は変わらない）
 **`gcloud run jobs execute --args` には `--arg` を渡せない**（`--args` の短縮と解釈され「`--arg` cannot be specified multiple times」になる。2026-10-26 に判明）。Cloud Tasks が本番でやるのと同じ **Cloud Run Admin API の REST 呼び出し**で起動する（イメージの再作成は不要）:
 ```bash
@@ -155,6 +168,8 @@ RACE_ID=202608040901; DATE=20261025; curl -s -X POST -H "Authorization: Bearer $
 - 状態: `gcloud run jobs executions list --job keiba-dispatch-l --region $REGION --limit 1`（`COMPLETE` になるまで待つ。2〜3 分）
 - 確認 1: `gcloud storage cat gs://$BUCKET/ops/job_runs/predict-race/latest.json | python3 -m json.tool | grep -E '"status"|"reason"|duration_sec|memory_peak_mib|memory_limit_mib|"parallel"'` → `status ok`、`parallel true`。**`memory_peak_mib` を keiba-vpn-37 に伝える。**
 - 確認 2: `gcloud storage ls gs://$BUCKET/state/data/local/inference/predictions_v6/20261025/` に `202608040901.parquet`
+- 確認 3（v6e のモデルで作られたか）: 出力の parquet に model_version 列は無い（`race_id, horse_id, p_win, p_top2, p_top3`）。実行のイベントで見る: `gcloud storage cat gs://$BUCKET/state/data/local/inference/events/20261025.jsonl | grep 202608040901` に **`"v6_status": "ok"` と `"v6_bundle": "bundle_v6_2025"`**。値の突き合わせ（ホストと同じレース）: Cloud Shell で `gcloud storage cp gs://$BUCKET/state/data/local/inference/predictions_v6/20261025/202608040901.parquet /tmp/jobs.parquet`、ホストで同じファイルの `p_win` を読んで比べる（種まきの履歴が同じなら一致するはず。履歴の日付が違うと小さく違う）。
+- 失敗の見え方（直した）: 以前は v6 の準備が失敗しても `status ok` だったが、今は **`predict_race` が rc≠0**（準備の失敗・予測の失敗）、さらに `job_map` の `require_out` で『`predictions_v6/{date}/{race_id}.parquet` が作られていない』ときも `status failed`（理由に「出力が作られていない」）になる。
 - 失敗の典型: `FileNotFoundError … page_reference/tables/…`（足りない表。ファイル名を伝える）、`Out of memory`（メモリ。伝える）。
 - 戻す: `gcloud storage rm -r gs://$BUCKET/state/data/local/inference/predictions_v6/20261025/`
 - 次の昇格のあと（`job_dispatch` が `KEY=VALUE` の位置引数を受ける版）は、`gcloud` でも書ける: `ALLOW_UNREADY=1 bash scripts/gcp/deploy_cloud_run_jobs.sh run-now job predict-race race_id=$RACE_ID date=$DATE --yes`（オプションは job_id より前に置く: Python 3.11 の argparse の制約）。
@@ -167,5 +182,5 @@ export IMAGE=$REGION-docker.pkg.dev/$PROJECT/keiba-vpn/keiba-api:<8桁> && bash 
 ```bash
 bash scripts/gcp/deploy_cloud_run_monitor.sh --apply
 ```
-- 確認: `curl -s $(gcloud run services describe keiba-monitor --region $REGION --format='value(status.url)')/healthz` → `{"status":"ok"}`
+- 確認: `curl -s $(gcloud run services describe keiba-monitor --region $REGION --format='value(status.url)')/api/health` → `{"status":"ok"}`
 - 戻す: `gcloud run services delete keiba-monitor --region $REGION --quiet`

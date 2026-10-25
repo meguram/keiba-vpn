@@ -5,7 +5,7 @@
 見るもの: VPS のハートビート（``ops/heartbeat/latest.json``）、Jobs の最新の実行（``ops/job_runs/<job>/latest.json``）、当日の異常
 （``ops/alerts/<日>/``）、画面・取得役の配布（``ops/releases/<kind>/latest.json`` と ``applied/vps.json``）、切替判定
 （``ops/cutover/status.json``）、成果物の一致（``ops/parity/<日>/``）。ホスト（研究用）の監視 ``src/monitor/app.py`` は別物で、運用の監視には使わない。
-認証: Cloud Run は共有ヘッダ ``X-Keiba-Proxy-Key`` で守り（``KEIBA_PROXY_KEY_REQUIRED=1``）、前段に Cloudflare Access を置く。``/healthz`` だけ除外。
+認証: Cloud Run は共有ヘッダ ``X-Keiba-Proxy-Key`` で守り（``KEIBA_PROXY_KEY_REQUIRED=1``）、前段に Cloudflare Access を置く。``/api/health`` だけ除外。
 """
 
 from __future__ import annotations
@@ -192,14 +192,14 @@ def create_app(io: Any | None = None, now_fn: Any = time.time, job_ids: list[tup
 
     @app.before_request
     def _auth():
-        if request.path == "/healthz":
+        if request.path == "/api/health":
             return None
         if not _proxy_key_ok(request.headers):
             return jsonify({"error": "unauthorized", "reason": "proxy_key"}), 401
         return None
 
-    @app.get("/healthz")
-    def healthz():
+    @app.get("/api/health")
+    def api_health():
         return jsonify({"status": "ok"})
 
     @app.get("/api/overview")

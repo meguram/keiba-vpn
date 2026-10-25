@@ -207,3 +207,15 @@ def test_state_include_limits_files_in_plan_pull_and_push(tmp_path):
     io2 = MemoryIO()
     SS.push(io2, entries, root)
     assert sorted(io2.list("state/")) == ["state/data/t/2025/race_result_flat.parquet", "state/data/t/2026/race_result_flat.parquet"]
+
+
+def test_publish_include_limits_files(tmp_path):
+    d = tmp_path / "factory"
+    _write(d / "conn/horse_profile.parquet", b"a" * 10)
+    _write(d / "src/ped_anc.parquet", b"b" * 10)
+    _write(d / "big/unused.parquet", b"c" * 1000)
+    io = MemoryIO()
+    r = MP.publish(io, "v6_factory", d, include=["conn/*", "src/ped_anc.parquet"])
+    assert r["files"] == 2
+    got = MP.fetch(io, "v6_factory", tmp_path / "cache")
+    assert (got / "conn/horse_profile.parquet").exists() and not (got / "big/unused.parquet").exists()

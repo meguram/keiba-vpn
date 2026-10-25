@@ -105,6 +105,20 @@ def _children_peak_mib() -> int:
     return int(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss // 1024)     # Linux は KB
 
 
+def missing_outputs(job: dict[str, Any], root: Path, params: dict[str, str], since_epoch: float) -> list[str]:
+    """require_out の各パターン（root からの glob）で、since_epoch 以降に更新されたファイルが無いものを返す。"""
+    miss: list[str] = []
+    for pat in job.get("require_out") or []:
+        try:
+            rendered = render(pat, params)
+        except KeyError:
+            miss.append(pat)
+            continue
+        if not any(p.is_file() and p.stat().st_mtime >= since_epoch for p in Path(root).glob(rendered)):
+            miss.append(rendered)
+    return miss
+
+
 def default_runner(argv: list[str], env: dict[str, str], timeout: float, cwd: str) -> tuple[int, list[str]]:
     """子プロセスを実行して標準出力へ流しつつ、末尾 TAIL_LINES 行を返す。時間切れは kill して rc=124。"""
     tail: deque[str] = deque(maxlen=TAIL_LINES)
@@ -289,6 +303,12 @@ def run_job(job: dict[str, Any], ctx: Ctx, params: dict[str, str], *, tick: date
             status = FAILED
             break
     if status in (OK, PARTIAL):
+        # 『ok なのに出力なし』を失敗にする: job_map の require_out（root からの glob。{date} など）に、実行中に作られた/更新されたファイルが 1 つも無ければ失敗
+        missing = missing_outputs(job, ctx.root, params, started_epoch)
+        if missing:
+            rec["state"]["missing_out"] = missing
+            status = FAILED
+    if status in (OK, PARTIAL):
         try:
             rec["state"]["push"] = ctx.push(ctx.io, job.get("state_out") or [], ctx.root, since=started_epoch, params=params)
         except Exception as exc:  # noqa: BLE001
@@ -304,7 +324,8 @@ def run_job(job: dict[str, Any], ctx: Ctx, params: dict[str, str], *, tick: date
     reason = None
     if status == FAILED:
         bad = next((s for s in rec["steps"] if s["rc"] not in (0,)), None)
-        reason = (rec["state"].get("push_error") or (f"step rc={bad['rc']}: " + " ".join(bad["argv"][:3]) if bad else "失敗"))
+        reason = (rec["state"].get("push_error") or (f"step rc={bad['rc']}: " + " ".join(bad["argv"][:3]) if bad else None)
+                  or (("出力が作られていない: " + ", ".join(rec["state"]["missing_out"])) if rec["state"].get("missing_out") else "失敗"))
     out = finish(status, reason)
     if status == FAILED:
         lines = [reason or "失敗"] + ([s for s in (rec["steps"][-1]["tail"][-5:])] if rec["steps"] else [])

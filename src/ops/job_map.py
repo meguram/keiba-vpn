@@ -268,6 +268,10 @@ def validate(doc: dict[str, Any], *, known_fetch_tasks: set[str] | None = None, 
                     errs.append(f"{jid}: 未定義のモデル {m}")
             from src.ops import gcs_mirror as _gm
 
+            outs = [o["path"] for o in j.get("state_out") or []] + list(j.get("mirror_out") or [])
+            for pat in j.get("require_out") or []:
+                if not any(pat == o or pat.startswith(o.rstrip("/") + "/") for o in outs):
+                    errs.append(f"{jid}: require_out の {pat} が state_out / mirror_out の配下ではない（作っても上げない・確認できない）")
             for t in j.get("mirror_out") or []:
                 if not _gm.tree_known(t):
                     errs.append(f"{jid}: mirror_out の {t} は gcs_mirror の PUSH_TREES の配下ではない（画面が読めない）")
