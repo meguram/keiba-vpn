@@ -21,7 +21,7 @@
 | 前夜の分離 | `src/scraper/auto_scrape.py`（`raceday-eve-fetch`）・`src/ops/jobs/eve_precompute.py` | `raceday-eve` を「取得（VPS）」と「計算（GCP）」に分けた。計算は従来と同じ `_eve_precomputes` |
 | 予測ジョブ | `src/ops/jobs/predict_race.py` | 1 レースの特徴量づくり＋予測（従来の `run_for_races`。VPS は ML を持たない） |
 | 監視 | `src/ops/vps_watchdog.py` | VPS のハートビート（15 分途絶=緊急、MemAvailable<1.0GB×3 回=注意、<600MB=緊急、swap>200MB、ユニット failed／再起動多発、ディスク>80%）＋取得タスクの滞留・失敗＋予約の鮮度 |
-| コマンド生成 | `src/ops/scheduler_gen.py`・`scripts/gcp/deploy_cloud_run_jobs.sh`・`Dockerfile.jobs` | Cloud Run Jobs（3 つ）・Scheduler（グループごと）・Cloud Tasks キューの `gcloud` コマンドを対応表から生成。既定は表示のみ、`--dry-run` あり |
+| コマンド生成 | `src/ops/scheduler_gen.py`・`scripts/gcp/deploy_cloud_run_jobs.sh`・`deploy/docker/Dockerfile.jobs` | Cloud Run Jobs（3 つ）・Scheduler（グループごと）・Cloud Tasks キューの `gcloud` コマンドを対応表から生成。既定は表示のみ、`--dry-run` あり |
 | 並走検証 | `src/scripts/ops/parity_check.py` | ホストと GCP の成果物（parquet／JSON／ファイル）を許容誤差つきで比較、`ops/parity/` に記録、Slack に要約 |
 | 切替判定 | `src/scripts/ops/cron_cutover_status.py` | ジョブごとの合否表（機械判定）。同じ cron_job_id のジョブが全部合格したときだけ「止めてよい」 |
 | 切替の適用 | `src/ops/job_owner.py`・`config/job_owner.json`・`scripts/cron/cron_run.sh`・`scripts/ops/cutover/host_cron_switch.sh`・`src/scripts/ops/cutover_plan.py` | 担当の切替（ホストの cron が何もしなくなる）→ crontab の行のコメントアウト。バックアップ・再有効化つき |
@@ -135,7 +135,7 @@ bash scripts/gcp/deploy_cloud_run_jobs.sh apply jobs --parallel          # Run J
 # → 4.0 の 2 を実行
 bash scripts/gcp/deploy_cloud_run_jobs.sh run-now group g-pump --dry-run # 手動で 1 グループ試す前の確認
 ```
-- `--parallel` は予測を**影モード**に固定します（`predict-race` の `parallel_env`: `KEIBA_V3_SERVING=shadow`・`KEIBA_V5_SHADOW=1`）。GCP の予測が本番の `race_predictions` を上書きしません。
+- `--parallel`（`KEIBA_PARALLEL_RUN=1`）の間、ジョブの出力は `state/` にだけ上がり、画面が読む `ops/mirror`（job_map の `mirror_out`）には**上げません**。ホストの出力を上書きしないためです。担当を切り替えるとき（`--parallel` を付けずに `jobs` を再 apply）から `mirror_out` が有効になります。`predict-race` は v6e だけを作ります（v4/v5 の影モードは 2026-10-26 にやめた。画面は参照しない）。メモリはホストの実測で、v6 の準備だけでピーク RSS 2.3GB・約 12 秒（これに、メモリ上のファイルシステム: モデル約 0.3GB・履歴表 約 0.6GB と、レース計算が加わる）。6GiB 設定は、Jobs で 1 レース実行してピークを確かめるまで維持する。
 - **Scheduler は「準備できたジョブ」があるグループだけ**作られます（`apply scheduler`）。準備の完了は、blockers を解消してから `python -m src.ops.job_map ready <ジョブ> --note "確認した内容"` で記録し、再度 `apply scheduler` します（作成は冪等）。最初に動くのは `reserve-fetch-tasks`／`event-pump`／`odds-drift-weekly` で、他は blockers の解消待ちです。
 
 ### 4.2 着手順と、ジョブごとの blockers の解消方法
