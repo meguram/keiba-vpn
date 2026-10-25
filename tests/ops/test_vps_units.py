@@ -48,11 +48,13 @@ def test_agent_unit_is_hardened_and_off_by_default():
     assert "PASSWORD" not in text and "SECRET" not in text      # 秘密はユニットに書かない
 
 
-def test_pull_timers_sit_inside_maintenance_window():
-    for kind, hhmm in (("ui", "03:10"), ("fetch", "03:20")):
-        t = load(f"keiba-release-pull-{kind}.timer")
-        assert t["Timer"]["OnCalendar"].startswith(f"*-*-* {hhmm}")
-        assert t["Timer"]["Unit"] == f"keiba-release-pull@{kind}.service"
+def test_pull_timers_ui_is_periodic_and_fetch_sits_inside_maintenance_window():
+    ui = load("keiba-release-pull-ui.timer")["Timer"]          # 画面は窓を待たず数分おき(昇格で API が先に切り替わるため)
+    assert "OnCalendar" not in ui and ui["OnUnitActiveSec"] == "3min"
+    assert ui["Unit"] == "keiba-release-pull@ui.service"
+    t = load("keiba-release-pull-fetch.timer")["Timer"]         # 取得の実行役は窓の中(03:20)だけ
+    assert t["OnCalendar"].startswith("*-*-* 03:20")
+    assert t["Unit"] == "keiba-release-pull@fetch.service"
     assert "--kind %i" in (T / "keiba-release-pull@.service").read_text(encoding="utf-8")
 
 
