@@ -985,6 +985,7 @@ export default function WeeklyPredictionsPage() {
         <details className="wp-legend" open={!narrow}>
         <summary>印・期待値の見方</summary>
         <div style={{ marginBottom: 16, padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-dim)", display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <span>推奨馬券が出るレースの印は推奨馬券から決まります（◎=買い目の購入額が最大・○▲=2・3番手・△=買い目に入るその他の馬・買い目に入らない馬は印なし）。見送りのレースは下の定義のままです。</span>
           <span>印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / 消: 3着内に来る確率が低い（10人気以下で複勝確率が低い馬。過去の実績では約2.5%・目標5%以下。複数付くことも付かないこともある）</span>
           <span>
             期待値（過去の実績に合わせて較正した期待回収率）: <strong style={{ color: "#22c55e" }}>≥1.10</strong> / <strong style={{ color: "#60a5fa" }}>≥1.00</strong> / <strong style={{ color: "var(--text-dim)" }}>≥0.90</strong> / <strong style={{ color: "#f87171" }}>＜0.90</strong>

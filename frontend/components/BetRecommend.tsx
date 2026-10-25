@@ -6,6 +6,7 @@ import Link from "next/link";
 import { USE_MOCK, getMockBetRecommendation } from "@/lib/mock";
 import { BetGroup, groupBets, nameMap, trioPartnerNums } from "@/lib/betGrouping";
 import { PaidBets, type PaidRec } from "@/components/PaidBets";
+import { TargetBets, type TargetRec } from "@/components/TargetBets";
 import { BetResultBanner, ResultCell, type BetResult, type RaceBetResult } from "@/components/BetResult";
 
 type OddsMode = "auto" | "actual" | "predicted";
@@ -127,6 +128,7 @@ export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string;
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [rec, setRec] = useState<Recommendation | null>(null);
   const [paid, setPaid] = useState<PaidRec | null>(null);
+  const [target, setTarget] = useState<TargetRec | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errReload, setErrReload] = useState(false);
@@ -213,6 +215,13 @@ export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string;
         return;
       }
       try {
+        if (body && (body as { strategy?: string }).strategy === "target") {   // 既定方策: 目標払戻つきの 3連複（開発者・会員とも同じ内容）
+          setTarget(body as TargetRec);
+          setPaid(null);
+          setRec(null);
+          return;
+        }
+        setTarget(null);
         if (body && (body as { view?: string }).view === "paid") {   // 会員向け: 推奨度の段階と買い目の区分だけの応答
           setPaid(body as PaidRec);
           setRec(null);
@@ -234,6 +243,7 @@ export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string;
   useEffect(() => {
     setRec(null);
     setPaid(null);
+    setTarget(null);
     if (hasPrediction && capReady) run();
     // 予測が揃ったとき・レース/オッズ条件が変わったときに自動計算（資金の編集では再計算しない）
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -258,6 +268,9 @@ export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string;
     );
   }
 
+  if (target) {
+    return <TargetBets rec={target} cap={cap} setCap={setCap} onRerun={run} loading={loading} />;
+  }
   if (paid) {
     return <PaidBets rec={paid} cap={cap} setCap={setCap} onRerun={run} loading={loading} />;
   }

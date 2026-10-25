@@ -116,3 +116,46 @@ def test_shadow_label_comes_from_the_day_table_when_present(tmp_path, monkeypatc
     assert LP.find_local_prediction("R1", "20261018", tmp_path)[2] == "bundle_2025"
     d = LP.load_local_prediction_payload("R1", _storage(), inf=tmp_path)
     assert d["model_version"] == "bundle_2025" and d["model_type"] == "ensemble_v3"
+
+
+def test_primary_v6e_wins_over_shadow_and_other_backfills(tmp_path, monkeypatch):
+    monkeypatch.delenv("KEIBA_PRED_MODEL", raising=False)
+    _put(tmp_path / "predictions_v3" / "20261018" / "R1.parquet", _probs())
+    _put(tmp_path / "predictions_backfill" / "bundle_v5_2025" / "20261018" / "R1.parquet", _probs())
+    assert LP.find_local_prediction("R1", "20261018", tmp_path)[1] == "shadow"          # v6e が無ければ従来どおり v4 の shadow
+    _put(tmp_path / "predictions_backfill" / LP.PRIMARY_LABEL / "20261018" / "R1.parquet", _probs())
+    p, src, label = LP.find_local_prediction("R1", "20261018", tmp_path)
+    assert src == "backfill" and label == LP.PRIMARY_LABEL                               # v6e のバックフィル > v4 の shadow
+    _put(tmp_path / "predictions_v6" / "20261018" / "R1.parquet", _probs())
+    p, src, label = LP.find_local_prediction("R1", "20261018", tmp_path)
+    assert src == "shadow" and label == LP.PRIMARY_LABEL and "predictions_v6" in str(p)  # 当日の v6e > v6e のバックフィル
+
+
+def test_legacy_switch_restores_shadow_first(tmp_path, monkeypatch):
+    _put(tmp_path / "predictions_v3" / "20261018" / "R1.parquet", _probs())
+    _put(tmp_path / "predictions_v6" / "20261018" / "R1.parquet", _probs())
+    monkeypatch.setenv("KEIBA_PRED_MODEL", "legacy")
+    assert LP.primary_model() == "legacy" and LP.find_primary_prediction("R1", "20261018", tmp_path) is None
+    assert "predictions_v3" in str(LP.find_local_prediction("R1", "20261018", tmp_path)[0])
+    assert LP.load_primary_prediction_payload("R1", _storage(), inf=tmp_path) is None
+
+
+def test_primary_payload_is_labelled_v6e_and_none_without_v6(tmp_path, monkeypatch):
+    monkeypatch.delenv("KEIBA_PRED_MODEL", raising=False)
+    _put(tmp_path / "predictions_v3" / "20261018" / "R1.parquet", _probs())
+    assert LP.load_primary_prediction_payload("R1", _storage(), inf=tmp_path) is None   # v6e が無いレースは GCS / 従来の経路に任せる
+    _put(tmp_path / "predictions_v6" / "20261018" / "R1.parquet", _probs())
+    d = LP.load_primary_prediction_payload("R1", _storage(), inf=tmp_path)
+    assert d["model_type"] == "ensemble_v6e" and d["model_version"] == LP.PRIMARY_LABEL and "v6e" in d["model_description"]
+
+
+def test_v6_enabled_follows_primary_model_unless_explicit(monkeypatch):
+    from src.pipeline.inference import v3_serving as vs
+
+    monkeypatch.delenv("KEIBA_V6_SHADOW", raising=False)
+    monkeypatch.delenv("KEIBA_PRED_MODEL", raising=False)
+    assert vs.v6_enabled() is True
+    monkeypatch.setenv("KEIBA_PRED_MODEL", "legacy")
+    assert vs.v6_enabled() is False
+    monkeypatch.setenv("KEIBA_V6_SHADOW", "1")
+    assert vs.v6_enabled() is True

@@ -249,3 +249,51 @@ def test_collect_predicted_races_excludes_mock_predictions():
     races, skipped = collect_predicted_races(S(), ["real", "mock", "none"])
     assert [r["rid"] for r in races] == ["real"] and skipped["mock"] == 1 and skipped["no_prediction"] == 1
     assert [r["rid"] for r in collect_predicted_races(S(), ["real", "mock"], include_mock=True)[0]] == ["real", "mock"]
+
+
+# ── 周辺確率一致の Plackett–Luce / ブレンド（2026-10-24 追加） ──
+from src.pipeline.inference.exotic_probabilities import fit_blend_distribution, fit_marginal_distribution  # noqa: E402
+
+
+def _marg(n=12, seed=1):
+    rng = np.random.default_rng(seed)
+    w = rng.dirichlet(np.ones(n))
+    t2 = np.clip(w * 2.1 + rng.normal(0, 0.01, n), 0.01, 0.95)
+    t3 = np.clip(w * 3.0 + 0.05 + rng.normal(0, 0.01, n), 0.02, 0.97)
+    return w, t2, t3
+
+
+@pytest.mark.parametrize("n", [5, 8, 14, 18])
+def test_marginal_fit_matches_marginals_and_sums(n):
+    w, t2, t3 = _marg(n, seed=n)
+    d, rep = fit_marginal_distribution(w, t2, t3)
+    t2n, t3n = normalize_marginal(t2, 2.0), normalize_marginal(t3, 3.0)
+    t2n = np.maximum(t2n, d.win)
+    t3n = np.maximum(t3n, t2n)
+    assert np.allclose(d.win, w / w.sum()) and abs(d._p3.sum() - 1.0) < 1e-9
+    assert np.abs(d.top2() - t2n).max() < 5e-3 and np.abs(d.top3() - t3n).max() < 5e-3
+    assert rep.top3_rmse_after <= rep.top3_rmse_before + 1e-12
+
+
+def test_rank_distribution_default_strengths_unchanged():
+    w = _win()
+    a = RankDistribution(w, 0.8, 0.7)
+    b = RankDistribution(w, 1.0, 1.0, lam2=(w / w.sum()) ** 0.8, lam3=(w / w.sum()) ** 0.7)
+    assert np.allclose(a._p3, b._p3)
+
+
+def test_blend_theta_endpoints():
+    w, t2, t3 = _marg()
+    full, _ = fit_blend_distribution(w, t2, t3, theta=1.0)
+    marg, _ = fit_marginal_distribution(w, t2, t3)
+    assert np.allclose(full._p3, marg._p3, atol=1e-9)
+    zero, _ = fit_blend_distribution(w, t2, t3, theta=0.0, alpha2=0.8, alpha3=0.7)
+    assert np.allclose(zero._p3, RankDistribution(w, 0.8, 0.7)._p3, atol=1e-9)
+    mid, rep = fit_blend_distribution(w, t2, t3, theta=0.6, alpha2=0.8, alpha3=0.7)
+    assert abs(mid._p3.sum() - 1.0) < 1e-9 and rep.top3_rmse_after is not None
+
+
+def test_blend_small_field_returns_valid():
+    w = np.array([0.6, 0.4])
+    d, _ = fit_blend_distribution(w, [0.9, 0.9], [1.0, 1.0])
+    assert d.n == 2 and abs(d.win.sum() - 1.0) < 1e-9

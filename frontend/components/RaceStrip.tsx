@@ -3,7 +3,7 @@
 import { PendingLink } from "@/components/PendingLink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { LEVEL_STYLE, RaceValue, TIER_LEGEND, ValueLevel, chipLabel, hasTier, valueTitle, mixedProbCalibration } from "@/lib/raceValue";
+import { LEVEL_STYLE, RaceValue, TIER_LEGEND, TARGET_TIER_HINT, ValueLevel, chipLabel, hasTier, isTargetValues, valueTitle, mixedProbCalibration } from "@/lib/raceValue";
 import { venuesOf } from "@/lib/weekDates";
 
 export type StripRace = { race_id: string; race_name?: string; venue?: string; round?: number | string };
@@ -153,7 +153,7 @@ export function RaceStrip({
           <span>{hasTier(values) ? "買い目の推奨度:" : "推奨の期待回収率:"}</span>
           {hasTier(values)
             ? TIER_LEGEND.map((t) => (
-              <span key={t.label} title={LEVEL_STYLE[t.level].hint} style={{ padding: "1px 8px", borderRadius: 6, border: `1px solid ${LEVEL_STYLE[t.level].border}`, background: LEVEL_STYLE[t.level].bg, color: LEVEL_STYLE[t.level].color, opacity: t.level === "pass" ? 0.8 : 1 }}>
+              <span key={t.label} title={isTargetValues(values) ? TARGET_TIER_HINT[t.label] : LEVEL_STYLE[t.level].hint} style={{ padding: "1px 8px", borderRadius: 6, border: `1px solid ${LEVEL_STYLE[t.level].border}`, background: LEVEL_STYLE[t.level].bg, color: LEVEL_STYLE[t.level].color, opacity: t.level === "pass" ? 0.8 : 1 }}>
                 {t.level === "hot" ? "★ " : ""}{t.label}
               </span>
             ))
@@ -162,7 +162,7 @@ export function RaceStrip({
               {LEVEL_STYLE[k].label}
             </span>
           ))}
-          <span>（確率はモデルの出力で未検証。目安として参照）</span>
+          <span>{isTargetValues(values) ? "（選んだ買い目のどれかが当たる確率の大きさ。回収率の高さではありません）" : "（確率はモデルの出力で未検証。目安として参照）"}</span>
           {mixedProbCalibration(values) && <span title="オッズが出たレースは確率を市場補正して計算し、段の閾値と当日の順位を、補正しないレース（オッズ未確定・予測オッズ）とは別に付けています">※ 市場補正したレースとしないレースは基準が別</span>}
         </div>
       )}

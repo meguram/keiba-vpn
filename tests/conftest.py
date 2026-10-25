@@ -32,6 +32,12 @@ def _anti_scraping_auth_detect_only():
 
 
 @pytest.fixture(autouse=True)
+def _legacy_bet_strategy_by_default(monkeypatch):
+    """推奨馬券の既定は方策 target（KEIBA_BET_STRATEGY 未設定）。従来方式の既存テストは legacy に固定し、target の挙動は tests/*/test_target_bets*.py が自前で指定する。"""
+    monkeypatch.setenv("KEIBA_BET_STRATEGY", "legacy")
+
+
+@pytest.fixture(autouse=True)
 def _unset_keiba_env(monkeypatch):
     monkeypatch.setenv("KEIBA_ENV", "")
     monkeypatch.delenv("APP_ENV", raising=False)
@@ -39,6 +45,8 @@ def _unset_keiba_env(monkeypatch):
 # --- 公開リポジトリに置かない『当て込まれた係数・重み・集計表』（config/fitted_artifacts.txt）を使うテスト ---
 # 新規 clone・CI には実ファイルが無いので、無ければ skip する（ホストなど実ファイルのある環境では実行される）。
 _FIT_REQUIRES: dict[str, list[str]] = {
+    "tests/pipeline/test_target_bets.py": ["config/odds_pred/odds_pred_config.json"],
+    "tests/api/test_target_bets_api.py": ["config/odds_pred/odds_pred_config.json"],
     "tests/pipeline/test_megu_v3a.py::test_committed_model_loads_and_env_switch": ["config/megu_v3a/par.csv", "config/megu_v3a/centers.json", "config/megu_v3a/month_offsets.csv"],
     "tests/scripts/test_reflect_megu_v3a_to_db.py": ["config/megu_v3a/par.csv", "config/megu_v3a/centers.json"],
     "tests/pipeline/test_pace_coherence.py": ["config/pace_coherence.json"],

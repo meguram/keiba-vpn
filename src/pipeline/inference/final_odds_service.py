@@ -31,9 +31,22 @@ def load_cached_response(storage, race_id: str) -> dict | None:
     return FinalOddsCache.load_cached(storage, race_id)
 
 
+def _is_sec77(payload: dict | None) -> bool:
+    ents = (payload or {}).get("entries") or []
+    return bool(ents) and all(e.get("source") == "sec77" for e in ents)
+
+
 def save_cached_response(
     storage, race_id: str, payload: dict, *, source: str = "api"
 ) -> None:
+    # §77 のモデル（sec77）で保存した想定オッズを、従来モデルの結果で上書きしない（期限内のとき）
+    if not _is_sec77(payload):
+        try:
+            if _is_sec77(FinalOddsCache.load_cached(storage, race_id)):
+                logger.info("sec77 の想定オッズが有効なので従来モデルの結果は保存しない: %s", race_id)
+                return
+        except Exception:  # noqa: BLE001
+            pass
     FinalOddsCache.save_cached(storage, race_id, payload, source=source)
 
 
