@@ -93,7 +93,29 @@ gcloud iam service-accounts keys create /tmp/fetch-sa.json --iam-account keiba-f
 → 安全に VPS の `/etc/keiba-fetch/sa.json`（`chmod 640 root:keibafetch`）へ移し、`shred -u /tmp/fetch-sa.json`。
 - 確認: `gcloud storage buckets get-iam-policy gs://$BUCKET --format=json | grep -c keiba-fetch`（条件つき 4 件＋閲覧 1 件。同じ SA の行数で数える）
 - 戻す: `gcloud iam service-accounts delete keiba-fetch@$PROJECT.iam.gserviceaccount.com`
-- 注意: 影モードをやめて取得の担当を移すときは、**本番のデータの接頭辞への書き込み**（`race_shutuba` 等のカテゴリ）が別に要る。そのときに範囲を決めて、この手順に足す（今は付けない）。
+
+**keiba-fetch に付ける権限の範囲（全体。いま付けるもの／付けないもの）**
+
+| 範囲（バケット内の接頭辞） | 権限 | いま付ける？ | 用途 |
+|---|---|---|---|
+| `ops/fetch_tasks/` | 読み書き・一覧 | **付ける** | タスク表（pending/running/done/failed）の取得・claim・結果 |
+| `ops/events/` | 読み書き・一覧 | **付ける** | 馬体重の検知などのイベント |
+| `shadow/` | 読み書き・一覧 | **付ける**（影モードの間） | 影モードの取得結果（本番と同じパスを `shadow/<日付>/` に付け替えて書く） |
+| `ops/fetch_tasks_shadow/` | 読み書き・一覧 | **付ける**（影モードの間） | 影モードのタスク表 |
+| バケット全体 | 読み取りだけ（`objectViewer`） | **付ける** | 影モードで本番の保存物と比較するため読む |
+| `chuou/data/preprocessed/netkeiba/pc/`（レース・馬の取得データ。`GCS_BASE`） | 読み書き・一覧 | **付けない**（取得の担当を移す日に付ける） | 本番の取得データの書き込み（`race_shutuba` など） |
+| `chuou/data/others/`（クッション値・気象など） | 読み書き・一覧 | **付けない**（同上） | 同上 |
+| `ops/mirror/data/page_reference/`、`ops/mirror/data/local/meta/entries_state/` | 読み書き・一覧 | **付けない**（同上。範囲は D3 の実施時に確定） | 画面が読む参照データ（race_lists・race_day_schedule・出馬表の段階）を VPS が直接書く場合 |
+| `models/`、`ops/releases/`、`state/`、`ops/job_runs/` ほか | なし | **付けない（永久に）** | 取得役は触らない。配布の取り込みは別の SA（`setup_pull_sa.sh`。鍵も別） |
+
+担当を移す日（`fetch_owner.json` の `agent_tasks` にタスクを足す日。`vps_agent.md` 5 章）に、同じ形で足す（**いまは実行しない**）:
+```bash
+BUCKET=$BUCKET bash scripts/gcp/make_iam_condition.sh chuou/data/preprocessed/netkeiba/pc/ fetch-prod-data > /tmp/cond_pd.yaml && gcloud storage buckets add-iam-policy-binding gs://$BUCKET --member "serviceAccount:keiba-fetch@$PROJECT.iam.gserviceaccount.com" --role roles/storage.objectUser --condition-from-file /tmp/cond_pd.yaml
+```
+```bash
+BUCKET=$BUCKET bash scripts/gcp/make_iam_condition.sh chuou/data/others/ fetch-prod-others > /tmp/cond_po.yaml && gcloud storage buckets add-iam-policy-binding gs://$BUCKET --member "serviceAccount:keiba-fetch@$PROJECT.iam.gserviceaccount.com" --role roles/storage.objectUser --condition-from-file /tmp/cond_po.yaml
+```
+- **担当を移す前に確認すること**: ①バケットのソフト削除（誤削除・上書きからの復元）が有効か: `gcloud storage buckets describe gs://$BUCKET --format='value(soft_delete_policy.retentionDurationSeconds)'`（0 なら有効化を検討。既定は 7 日）。②取得役が書く保存物のカテゴリ（`race_shutuba`・`race_result`・`race_odds` ほか）が、上の 2 接頭辞に収まること（`src/scraper/storage.py` の `GCS_BASE` / `GCS_OTHERS` 配下）。③書き込みの鍵は VPS の `/etc/keiba-fetch/sa.json` だけ。鍵を漏らすと本番データを書き換えられるので、権限を足す日に鍵も作り直す。
 
 ## B. master 昇格（承認）の後。Jobs のイメージができてから
 昇格の要約（GitHub Actions の promote）に出る、昇格コミットの先頭 8 桁を `<8桁>` に入れる。
