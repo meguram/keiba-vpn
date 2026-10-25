@@ -8,6 +8,10 @@
    "host_alias": 2,
    "host_path": 1
   },
+  "scripts/gcp/seed_state_from_host.sh": {
+   "host_alias": 2,
+   "host_path": 1
+  },
   "scripts/ops/cutover/host_cron_switch.sh": {
    "local_data": 2
   },

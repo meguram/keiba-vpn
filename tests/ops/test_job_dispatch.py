@@ -257,3 +257,50 @@ def test_mirror_failure_fails_the_job(tmp_path, patch_doc):
 
     c = ctx(MemoryIO(), Rec(), tmp_path, mirror=boom)
     assert D.run_group("g1", c) != 0
+
+
+@pytest.mark.parametrize("argv", [
+    ["job", "predict-race", "race_id=1", "date=2"],
+    ["job", "--allow-unready", "predict-race", "race_id=1", "date=2"],
+    ["job", "predict-race", "--arg", "race_id=1", "--arg", "date=2"],
+])
+def test_job_args_can_be_passed_positionally_for_gcloud(monkeypatch, argv):
+    """gcloud run jobs execute --args は '--arg' を繰り返せない（--args の短縮と解釈される）ので、KEY=VALUE を位置引数でも渡せる。
+    Python 3.11（Jobs のイメージ）の argparse は、位置引数の間にオプションを挟むと失敗する。オプションは job_id より前に置く（3.13 では挟んでも通るので、このテストは 3.11 でも通る形だけ）。"""
+    calls = []
+    monkeypatch.setattr(D, "run_single", lambda job_id, c, extra=None: calls.append((job_id, extra)) or 0)
+    monkeypatch.setattr(job_map, "validate", lambda doc: [])
+    monkeypatch.setattr("src.ops.gcs_io.default_io", lambda: MemoryIO())
+    assert D.main(argv) == 0
+    assert calls == [("predict-race", {"race_id": "1", "date": "2"})]
+
+
+def test_require_out_fails_job_when_no_output_was_written(tmp_path, patch_doc):
+    """『ok なのに出力なし』（例外を握りつぶして rc=0 で終わる）を失敗にする。"""
+    patch_doc([J("a", require_out=["data/out/{today}/x.parquet"], state_out=[{"path": "data/out", "max_mb": 1}])])
+    c = ctx(MemoryIO(), Rec(), tmp_path)
+    assert D.run_group("g1", c) != 0 and c.pushes == []                       # 出力が無い → 失敗・state は上げない
+    assert any("出力が作られていない" in (a[0][1][0] if a[0][1] else "") for a in c.alerts)
+
+
+def test_require_out_passes_when_output_is_fresh_and_ignores_stale_files(tmp_path, patch_doc):
+    out = tmp_path / "data/out/20261024"
+    out.mkdir(parents=True)
+    stale = out / "x.parquet"
+    stale.write_bytes(b"old")
+    import os
+    os.utime(stale, (1, 1))                                                  # 古いファイル（今回の実行より前）だけでは通さない
+
+    class Writer(Rec):
+        def __init__(self, write: bool):
+            super().__init__()
+            self.write = write
+
+        def __call__(self, argv, env, timeout, cwd):
+            if self.write:
+                stale.write_bytes(b"new")
+            return super().__call__(argv, env, timeout, cwd)
+
+    patch_doc([J("a", require_out=["data/out/{today}/x.parquet"])])
+    assert D.run_group("g1", ctx(MemoryIO(), Writer(False), tmp_path)) != 0
+    assert D.run_group("g1", ctx(MemoryIO(), Writer(True), tmp_path)) == 0

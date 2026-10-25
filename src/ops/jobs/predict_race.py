@@ -36,7 +36,12 @@ def run(race_id: str, date: str, *, weights_known: bool = True, storage: Any | N
         from src.pipeline.inference.weight_triggered_predict import InferenceContext
 
         ctx = InferenceContext()
-        ctx.warm()
+        info = ctx.warm()
+        # 準備の失敗は warm() が握りつぶして続行する設計（ホスト向け）。Jobs では『v6e が作れない』なら止める（ok なのに出力なしを作らない）
+        from src.pipeline.inference import v3_serving as _vs
+
+        if _vs.v6_enabled() and (info.get("v6") or {}).get("error"):
+            raise RuntimeError(f"v6 の準備に失敗: {info['v6']['error']}")
     if run_for_races is None:
         from src.pipeline.inference.weight_triggered_predict import run_for_races
     return run_for_races([row], storage, ctx, weights_known={race_id: weights_known})
@@ -56,7 +61,12 @@ def main(argv: list[str] | None = None) -> int:
     load_project_dotenv()
     events = run(ns.race_id, ns.date, weights_known=bool(ns.weights_known))
     print(json.dumps(events, ensure_ascii=False, default=str))
-    return 0 if events and all(e.get("status") == "ok" for e in events) else 1
+    from src.pipeline.inference import v3_serving as _vs
+
+    v6_bad = [e.get("race_id") for e in events if _vs.v6_enabled() and e.get("v6_status") != "ok"]
+    if v6_bad:
+        print(f"v6 の予測が作られていない: {v6_bad}（v6_status / v6_error を確認）", file=sys.stderr)
+    return 0 if events and all(e.get("status") == "ok" for e in events) and not v6_bad else 1
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@
   - 今日の異常通知（`ops/alerts/<日>/`）
   - 画面・取得役の配布（`ops/releases/<kind>/latest.json` と VPS が報告する `applied/vps.json`。版ずれが一目で分かる）
   - 成果物の一致（`ops/parity/<日>/`）と切替判定（`ops/cutover/status.json`）
-  - `/` が表（全体の信号つき）、`/api/overview` が同じ内容の JSON、`/healthz` が起動確認（鍵なし）。
+  - `/` が表（全体の信号つき）、`/api/overview` が同じ内容の JSON、`/api/health` が起動確認（鍵なし。※ `/healthz` は Cloud Run の前段(Google Frontend)が横取りして HTML の 404 を返すので使わない）。
 - 認証は API と同じ共有ヘッダ `X-Keiba-Proxy-Key`（`KEIBA_PROXY_KEY_REQUIRED=1`）。前段の Cloudflare Access / VPS の nginx が付ける。
 - 配備は `scripts/gcp/deploy_cloud_run_monitor.sh`（既定は表示のみ、`--apply` で実行）。**イメージは API と同じ**（起動コマンドだけ `uvicorn --factory src.monitor.cloud_app:asgi_app`）。メモリ 512Mi・最大 1 台・最小 0。
 
@@ -33,7 +33,7 @@
    bash scripts/gcp/deploy_cloud_run_monitor.sh            # 表示だけ
    bash scripts/gcp/deploy_cloud_run_monitor.sh --apply
    ```
-4. 起動確認: `curl -s $(gcloud run services describe keiba-monitor --region asia-northeast1 --format='value(status.url)')/healthz`（`{"status":"ok"}`）。鍵を付けて `/api/overview` が返ること。
+4. 起動確認: `curl -s $(gcloud run services describe keiba-monitor --region asia-northeast1 --format='value(status.url)')/api/health`（`{"status":"ok"}`）。鍵を付けて `/api/overview` が返ること。
 5. 公開の道（VPS と Cloudflare。ここは VPS 側の担当）: `monitor.megu-keiba.com` の向き先を、ホストの :23900 から「VPS の nginx → keiba-monitor の Cloud Run URL（`X-Keiba-Proxy-Key` を付与）」に切り替える。Cloudflare Access の保護は今のまま。切り替えが済んでから、ホスト側の Tunnel のルートを外す。
 
 ## 3. 費用

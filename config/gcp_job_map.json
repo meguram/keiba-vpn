@@ -214,7 +214,11 @@
   "aux_v4": {
    "env": "KEIBA_V3_AUX",
    "local_path": "data/local/modeling/training_pipeline_v4/final_aux",
-   "desc": "補助モデル"
+   "include": [
+    "meta.pkl",
+    "model_s*.pkl"
+   ],
+   "desc": "補助ヘッドの最終モデル（v6e の特徴量づくりが使う。meta.pkl と model_s*.pkl だけで約1MB）。バンドル名で場所を決める既定が Jobs の取得先と合わないので、環境変数で指す"
   },
   "bundle_v5": {
    "env": "KEIBA_V5_BUNDLE",
@@ -257,6 +261,30 @@
    "env": "KEIBA_V6_STAGE",
    "local_path": "data/local/modeling/training_pipeline/final_stage/v6_e_2025",
    "desc": "v6e の前段 S3B（約2MB）"
+  },
+  "v4_train_table": {
+   "env": "KEIBA_V4_TRAIN_TABLE",
+   "local_path": "data/local/modeling/training_pipeline_v4/features/train_table.parquet",
+   "entry": "train_table.parquet",
+   "desc": "v4 の群（馬主・馬自身・メンバー構成・種牡馬 ID）の特徴量づくりが読む学習表（約92MB）"
+  },
+  "v6_factory": {
+   "local_path": "data/local/modeling/training_pipeline/factory",
+   "install_to": "data/local/modeling/training_pipeline/factory",
+   "include": [
+    "conn/horse_profile.parquet",
+    "self/attrs_frozen.json",
+    "self/horse_attrs.parquet",
+    "src/ped_anc.parquet",
+    "src/ped_horse.parquet"
+   ],
+   "desc": "v6e の特徴量づくりが固定パスで読む factory のうち、使う 5 ファイルだけ（全体は 1.4GB）。取得後にその固定パスへシンボリックリンクを張る"
+  },
+  "ped_keys": {
+   "local_path": "data/local/modeling/training_pipeline_ped/pedigree_keys.parquet",
+   "entry": "pedigree_keys.parquet",
+   "install_to": "data/local/modeling/training_pipeline_ped/pedigree_keys.parquet",
+   "desc": "学習表の sire / dam_sire の ID 対応表（約0.4MB）。固定パスを読むので取得後にそこへ置く"
   }
  },
  "jobs": [
@@ -704,6 +732,9 @@
    },
    "mirror_out": [
     "data/local/inference/lap_forecast"
+   ],
+   "require_out": [
+    "data/local/inference/lap_forecast/{today_iso}/*.json"
    ]
   },
   {
@@ -1431,7 +1462,10 @@
       "src.ops.jobs.eve_precompute",
       "--date",
       "{tomorrow}"
-     ]
+     ],
+     "env": {
+      "KEIBA_TRACKING_V2": "1"
+     }
     }
    ],
    "memory_mib": 3072,
@@ -1451,7 +1485,11 @@
     "bundle_v6e",
     "stage_v6e",
     "tl_reference_v5",
-    "serving_bundle"
+    "serving_bundle",
+    "aux_v4",
+    "v4_train_table",
+    "v6_factory",
+    "ped_keys"
    ],
    "state_in": [
     {
@@ -1487,6 +1525,9 @@
    },
    "mirror_out": [
     "data/local/inference/tracking_v2"
+   ],
+   "require_out": [
+    "data/local/inference/tracking_v2/{tomorrow_iso}/*.json"
    ]
   },
   {
@@ -1652,6 +1693,9 @@
    },
    "mirror_out": [
     "data/local/inference/lap_forecast"
+   ],
+   "require_out": [
+    "data/local/inference/lap_forecast/{tomorrow_iso}/*.json"
    ]
   },
   {
@@ -2008,7 +2052,11 @@
     "bundle_v6e",
     "stage_v6e",
     "tl_reference_v5",
-    "serving_bundle"
+    "serving_bundle",
+    "aux_v4",
+    "v4_train_table",
+    "v6_factory",
+    "ped_keys"
    ],
    "state_in": [
     {
@@ -2025,6 +2073,10 @@
       "*/race_shutuba_past_flat.parquet",
       "*/megu_index_flat.parquet"
      ]
+    },
+    {
+     "path": "data/local/modeling/feature_store/horse_history",
+     "max_mb": 60
     }
    ],
    "state_out": [
@@ -2058,8 +2110,8 @@
     "atol": 1e-06
    },
    "blockers": [
-    "モデル一式の publish（bundle_v6e・stage_v6e・tl_reference_v5・serving_bundle。公開済み 2026-10-26）→ 済。残り: Jobs のイメージで 1 レース手動実行し、ピークのメモリを Cloud Run のメトリクスで確認（ホストの実測は準備だけで RSS 2.3GB）",
-    "履歴表は v6 の準備が読む race_result_flat/race_result_race/race_shutuba_flat（ホストで実測 約 93MB）+ 念のため race_shutuba_past_flat・megu_index_flat だけ取る（include。全体 2.9GB のうち約 190MB）。1 レース手動実行で足りない表が無いか確認"
+    "Jobs で 1 レース手動実行して、predictions_v6 が出力され、ホストの同レースの予測と一致すること（2026-10-26 の初回は v6 の準備が失敗していたのに ok だった。fail-fast と require_out を追加）",
+    "state/ の種まき（ホストで state_sync push --job predict-race --which in）: data/local/inference/state（rb_v6・px_v5 を含む）・data/local/modeling/feature_store/horse_history・tables。これらを日次で更新する Jobs（export-tables-daily・feature-accumulate・serving-state-precompute・px-ridge-window・rb-state-daily）が ready になるまで、履歴は種まき時点で止まる"
    ],
    "enabled": true,
    "ready": false,
@@ -2071,6 +2123,9 @@
    "mirror_out": [
     "data/local/inference/predictions_v6",
     "data/local/inference/snapshots"
+   ],
+   "require_out": [
+    "data/local/inference/predictions_v6/{date}/{race_id}.parquet"
    ]
   },
   {
@@ -3414,7 +3469,10 @@
     "Jobs のイメージで 1 回手動実行して、state/rb_v6 が GCS に出ること（gcloud run jobs execute）"
    ],
    "enabled": true,
-   "ready": false
+   "ready": false,
+   "require_out": [
+    "data/local/inference/state/rb_v6/hist.parquet"
+   ]
   },
   {
    "id": "px-ridge-window",
