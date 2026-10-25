@@ -104,7 +104,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: 公開に必要な最小限の依存
-        run: pip install google-cloud-storage python-dotenv
+        run: pip install google-cloud-storage python-dotenv uvicorn
       - name: API と Jobs のイメージを作って push
         run: bash scripts/ci/deploy_gcp.sh build-images --target prod
       - name: API の通信 0% のタグ付きリビジョンを作る

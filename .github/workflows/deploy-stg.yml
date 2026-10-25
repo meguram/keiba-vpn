@@ -93,7 +93,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: 係数の取得に必要な依存
-        run: pip install google-cloud-storage python-dotenv
+        run: pip install google-cloud-storage python-dotenv uvicorn
       - name: API のイメージを作って push
         run: bash scripts/ci/deploy_gcp.sh build-api-image --target stg
       - name: 通信 0% のタグ付きリビジョン（rstg）を作る
