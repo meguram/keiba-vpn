@@ -117,6 +117,7 @@ def run_checks(base: str, *, require_db: bool = False) -> list[Result]:
         d = get_json(base, "/api/scrape-dates")
         dates = [x if isinstance(x, str) else x.get("date") for x in d.get("dates", [])]
         assert date in dates, f"フィクスチャ日 {date} が開催日一覧に無い: {dates}"
+        state["dates"] = dates
         return f"{len(dates)} 日"
     out.append(check("api /api/scrape-dates", scrape_dates))
 
@@ -141,8 +142,16 @@ def run_checks(base: str, *, require_db: bool = False) -> list[Result]:
     def race_detail() -> str:
         # dev ストア（モック）が持つカテゴリだけを見る: 出馬表・結果・単複オッズ・2連系/3連複オッズ
         d = get_json(base, f"/api/race/{rid}")
-        for cat in ("race_shutuba", "race_result", "race_odds"):
+        for cat in ("race_shutuba", "race_odds"):
             assert len((d.get(cat) or {}).get("entries", [])) > 0, f"{cat} が空"
+        if not (d.get("race_result") or {}).get("entries"):
+            # 合成モックの最新日は『これから開催』で結果が無い。結果は、それより前の開催日の先頭レースで確かめる
+            earlier = sorted(x for x in state.get("dates", []) if x < date)
+            assert earlier, "race_result が空で、結果を確かめられる前の開催日も無い"
+            prev = get_json(base, f"/api/race-list/{earlier[-1]}").get("races", [])
+            assert prev, f"前の開催日 {earlier[-1]} にレースが無い"
+            dp = get_json(base, f"/api/race/{prev[0]['race_id']}")
+            assert len((dp.get("race_result") or {}).get("entries", [])) > 0, f"race_result が空（{earlier[-1]}）"
         assert (d.get("race_pair_odds") or {}).get("umaren"), "race_pair_odds（馬連）が空"
         assert d["race_shutuba"].get("race_name"), "出馬表のレース名が空"
         return d["race_shutuba"]["race_name"]
