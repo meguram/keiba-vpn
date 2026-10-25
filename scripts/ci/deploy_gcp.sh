@@ -68,11 +68,12 @@ fetch_fitted() {  # 当て込んだ係数（git に無い。config/fitted_artifa
     echo "係数を取り込みました: $(find "$src/config" -type f | wc -l) ファイル"
   else
     printf '%s\n' "$out" | tail -n 8
+    local why; why="$(printf '%s\n' "$out" | grep -v -i 'warn' | tail -n 4 | cut -c1-240 | sed 's/%/%25/g; s/\r//g' | awk '{printf "%s%%0A", $0}')"
     if [ "$TARGET" = prod ]; then
-      echo "::error title=係数の取得に失敗（prod は中止）::models/fitted_artifacts/ の config/ を取れませんでした。ホストで fitted_artifacts を publish し、CI の SA に GCS の読み取り権限があるか確認してください"
+      echo "::error title=係数の取得に失敗（prod は中止）::models/fitted_artifacts/ の config/ を取れませんでした。ホストで fitted_artifacts を publish し、CI の SA に GCS の読み取り権限があるか確認してください%0A${why:0:1500}"
       exit 1
     fi
-    echo "::warning title=係数の取得に失敗（stg は続行）::係数なしのイメージになります（推奨馬券の新方式などが縮退）"
+    echo "::warning title=係数の取得に失敗（stg は続行）::係数なしのイメージになります（推奨馬券の新方式などが縮退）%0A${why:0:1500}"
   fi
 }
 
