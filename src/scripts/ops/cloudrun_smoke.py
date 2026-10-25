@@ -31,6 +31,16 @@ def fetch(url: str, headers: dict[str, str] | None = None, timeout: float = 30.0
         return 0, type(exc).__name__.encode()
 
 
+def fetch_warm(url: str, headers: dict[str, str] | None = None, timeout: float = 75.0, retries: int = 1) -> tuple[int, bytes]:
+    """初回の予測は、モデルや履歴の読み込みで 30 秒を超えることがある(Cloud Run の要求上限は 60 秒)。待ち時間を延ばし、応答が無かった(0)ときは 1 回だけ取り直す。"""
+    code, body = fetch(url, headers, timeout)
+    for _ in range(retries):
+        if code != 0:
+            break
+        code, body = fetch(url, headers, timeout)
+    return code, body
+
+
 def prob_table(body: bytes) -> dict[int, tuple[float | None, ...]]:
     try:
         d = json.loads(body)
@@ -79,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     if not key:
         check("鍵あり確認", False, f"環境変数 {a.key_env} が空です")
     else:
-        code, body = fetch(base + pred, {"X-Keiba-Proxy-Key": key})
+        code, body = fetch_warm(base + pred, {"X-Keiba-Proxy-Key": key})
         check("鍵ありの予測 API が 200", code == 200, f"HTTP {code}")
         check("鍵ありの /api/v1/health が 200", fetch(base + "/api/v1/health", {"X-Keiba-Proxy-Key": key})[0] == 200)
         sc, sb = fetch(base + "/ops/heartbeat/status", {"X-Keiba-Proxy-Key": key})
