@@ -141,3 +141,23 @@ def test_pull_sa_setup_is_least_privilege_and_creates_no_key_by_default():
     assert "endsWith" in out and "/applied/vps.json" in out                            # 書き込めるのは取り込み結果の報告だけ
     k = subprocess.run(["bash", str(ROOT_DIR / "scripts/gcp/setup_pull_sa.sh"), "--make-key", "/tmp/x.json"], env=env, capture_output=True, text=True)
     assert "keys create /tmp/x.json" in k.stdout.replace("\\", "") and not Path("/tmp/x.json").exists()      # --apply なしでは作らない
+
+
+# ── 監視ポータルの VPS 側の入口 ──
+
+def test_monitor_proxy_script_parses_and_dry_run_renders_without_leftovers(tmp_path):
+    assert subprocess.run(["bash", "-n", "scripts/ops/vps/vps_06_monitor_proxy.sh"]).returncode == 0
+    vars_file = tmp_path / "vars.env"
+    vars_file.write_text("MONITOR_CLOUDRUN_HOST=keiba-monitor-abc.asia-northeast1.run.app\n", encoding="utf-8")
+    r = subprocess.run(["bash", "scripts/ops/vps/vps_06_monitor_proxy.sh", "--dry-run"], capture_output=True, text=True,
+                       env={**os.environ, "VARS_FILE": str(vars_file)})
+    assert r.returncode == 0 and "127.0.0.1:8082" in r.stdout and "keiba-monitor-abc" in r.stdout
+    r2 = subprocess.run(["bash", "scripts/ops/vps/vps_06_monitor_proxy.sh", "--dry-run"], capture_output=True, text=True,
+                        env={**os.environ, "VARS_FILE": str(tmp_path / "none.env")})
+    assert r2.returncode == 2 and "MONITOR_CLOUDRUN_HOST" in r2.stderr          # 設定が無ければ何も置かない
+
+
+def test_monitor_proxy_template_sends_the_shared_key_and_listens_locally():
+    t = (T / "nginx-keiba-monitor.conf").read_text(encoding="utf-8")
+    assert "listen 127.0.0.1:__MONITOR_PORT__" in t and "include /etc/nginx/keiba-proxykey.conf" in t
+    assert "PASSWORD" not in t and "SECRET" not in t
