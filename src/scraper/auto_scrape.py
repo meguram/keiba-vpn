@@ -1628,6 +1628,7 @@ def show_status():
         "feature-accumulate":    "履歴特徴量の蓄積 (当年分を作り直し、推論モードとのずれを記録)",
         "daily-race-lists":      "日次レース一覧 (今日〜カレンダー末尾)",
         "entries-sync":          "出馬表の段階収集 (特別登録→出走馬決定→前日確定。10分おき起動・checkpoint のみ取得)",
+        "shutuba-audit":         "出馬表の取りこぼし検査 (過去7日で馬番が確定しないままのレースを再取得)",
         "jra-baba-morning":      "JRA馬場情報 (朝ポーリング 05:00-09:00)",
     }
 
@@ -1738,6 +1739,15 @@ def task_entries_sync():
     _save_status("entries-sync", result)
 
 
+def task_shutuba_audit():
+    """過去 7 日の開催日で、馬番が 1 頭にも入っていない出馬表（登録段階のまま）を再取得キューに入れる。entries-sync は未来のレースだけなので、その取りこぼしを拾う。"""
+    from src.scraper.shutuba_audit import run_audit
+
+    result = run_audit(days=7, enqueue=True)
+    logger.info("shutuba-audit: %s", {k: result.get(k) for k in ("stale", "to_enqueue", "gave_up", "queue_bulk_add")})
+    _save_status("shutuba-audit", result)
+
+
 TASKS = {
     "raceday-eve":            task_raceday_eve,
     "raceday-eve-fetch":      task_raceday_eve_fetch,
@@ -1755,6 +1765,7 @@ TASKS = {
     "feature-accumulate":     task_feature_accumulate,
     "daily-race-lists":       task_daily_race_lists,
     "entries-sync":           task_entries_sync,
+    "shutuba-audit":          task_shutuba_audit,
     "jra-baba-morning":       task_jra_baba_morning,
 }
 

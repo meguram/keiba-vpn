@@ -336,7 +336,7 @@ def _value_row(race: dict[str, Any], payload: dict[str, Any], code: int) -> dict
     rid = race["race_id"]
     base = {"race_id": rid, "round": race.get("round"), "venue": race.get("venue"), "race_name": race.get("race_name")}
     if code != 200:
-        return {**base, "level": "none", "reason": payload.get("error", "計算できません"), "expected_roi": None, "n_bets": 0}
+        return {**base, "level": "none", "reason": "予測待ち" if code == 404 else payload.get("error", "計算できません"), "expected_roi": None, "n_bets": 0}
     cands = payload.get("candidates") or []
     total = payload.get("total_bet") or 0
     roi_raw = (payload.get("expected_return") or 0) / total if total else None
@@ -394,7 +394,7 @@ def _value_row_paid(race: dict[str, Any], payload: dict[str, Any], code: int) ->
     """会員向け: 期待回収率などの数値は出さず、レース単位の推奨度（段階）だけ。"""
     base = {"race_id": race["race_id"], "round": race.get("round"), "venue": race.get("venue"), "race_name": race.get("race_name")}
     if code != 200:
-        return {**base, "level": "none", "reason": "計算できません", "n_bets": 0, "tier": None}
+        return {**base, "level": "none", "reason": "予測待ち" if code == 404 else "計算できません", "n_bets": 0, "tier": None}
     tier = payload.get("race_tier") or {"level": 0, "label": "見送り"}
     return {**base, "level": _PAID_LEVEL_STYLE.get(int(tier.get("level") or 0), "pass"), "tier": tier,
             "n_bets": len(payload.get("bets") or [])}

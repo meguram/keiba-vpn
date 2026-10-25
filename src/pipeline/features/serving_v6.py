@@ -144,6 +144,9 @@ def lap_race_columns(j: dict) -> dict[str, float]:
     by = {s["name"]: float(s["prob"]) for s in j["scenarios"]}
     exp, par = np.asarray(j["expected_laps"], float), np.asarray(j["par"], float)
     n = len(exp)
+    if len(par) != n:  # 保存した期待ラップと par の本数が食い違う予想は差が取れない（保存なしと同じ欠損にする）
+        return {"lp_p_slow": by.get("スロー", np.nan), "lp_p_mid": by.get("ミドル", np.nan), "lp_p_high": by.get("ハイ", np.nan),
+                "lp_exp_f3_dev": np.nan, "lp_exp_l3_dev": np.nan, "lp_exp_lap0_dev": np.nan}
     dev = exp - par
     return {"lp_p_slow": by.get("スロー", np.nan), "lp_p_mid": by.get("ミドル", np.nan), "lp_p_high": by.get("ハイ", np.nan),
             "lp_exp_f3_dev": float(dev[:3].sum()), "lp_exp_l3_dev": float(dev[max(n - 3, 0):n].sum()), "lp_exp_lap0_dev": float(dev[0])}

@@ -110,3 +110,17 @@ cron は **10 分おき**に `entries-sync` を起動する。起動時に「い
 - 金曜 16 時／土曜 10 時の確定で、枠番・馬番が入る正確な時刻と、netkeiba の反映の遅れ。
 - 特別登録の公示直後（日曜夕）の、登録馬の数と騎手の有無。
 - `entries_decided_at`・checkpoint の時刻は `config/entries_schedule.json` で変更できる。
+
+## 9. 古い出馬表を出さないための仕組み（2026-10-25 追加）
+
+2026-05-24 などの 84 レースで、登録段階（馬番 0・頭数が多い）の出馬表が確定後も更新されず、予測が作れなかった。entries-sync は未来のレースだけを取り直すため、導入前（10/21 より前）の取りこぼしは拾えなかった。
+
+| 層 | 対策 | 場所 |
+|---|---|---|
+| 取得 | 確定済み（全頭に馬番）の出馬表を、馬番が 1 頭も無い内容で上書きする保存は破棄（警告ログ） | `HybridStorage.save`（`_shutuba_regresses`） |
+| 取得 | 過去 7 日で馬番が確定しないままの出馬表を毎日再取得（1 レース 3 回まで。状態 `data/local/meta/shutuba_audit_state.json`） | `src/scraper/shutuba_audit.py`、タスク `shutuba-audit`、cron: `scripts/cron/install_shutuba_audit_cron.sh`（JST 06:40、承認後に root で登録） |
+| 保存 | 保存のたびに、すでにあるディスクキャッシュ（`data/cache/race_shutuba`）を新しい内容で更新（書けなければ削除） | `_refresh_existing_local_cache` |
+| 読み出し | 出馬表のメモリ・ディスクキャッシュの保持を 5 分に短縮（`LOAD_CACHE_TTL_FRESH_SEC`）。世代ファイルが届かない本番（Cloud Run）でも最長 5 分で最新 | `_mem_ttl` / `_local_cache_ttl` |
+| 読み出し | 世代ファイルの更新が間引かれた保存も、20 秒後に 1 回反映（プロセス終了時にも反映） | `src/utils/cache_epoch.py`（`bump_for_save`） |
+
+手動: 一覧のみ `python -m src.scraper.shutuba_audit --days 30`、投入まで `--enqueue`、期間指定は `--since YYYYMMDD --until YYYYMMDD`。

@@ -136,3 +136,10 @@ def test_value_row_carries_prob_calibrated_flag():
     assert row["prob_calibrated"] is True
     plain, code = _payload(0.96)
     assert D._value_row({"race_id": "r"}, plain, code)["prob_calibrated"] is False
+
+
+def test_value_row_marks_missing_prediction_as_waiting():
+    race = {"race_id": "r", "round": 1, "venue": "x", "race_name": "y"}
+    assert D._value_row(race, {"error": "予測結果がありません。先に推論を実行してください"}, 404)["reason"] == "予測待ち"
+    assert D._value_row_paid(race, {"error": "x"}, 404)["reason"] == "予測待ち"
+    assert D._value_row_paid(race, {"error": "x"}, 500)["reason"] == "計算できません"

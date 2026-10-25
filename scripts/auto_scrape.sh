@@ -87,6 +87,9 @@ case "${1:-}" in
   entries_sync)
     TASK="entries-sync"             # 出馬表の段階収集（10 分おき。checkpoint の時刻だけ取得）
     ;;
+  shutuba_audit)
+    TASK="shutuba-audit"            # 過去7日で馬番が確定しないままの出馬表を再取得（1日1回）
+    ;;
   baba)
     TASK="jra-baba-morning"
     ;;
