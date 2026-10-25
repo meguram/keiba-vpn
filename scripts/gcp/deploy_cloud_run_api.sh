@@ -54,6 +54,8 @@ ENV_VARS+=",KEIBA_PROXY_KEY_REQUIRED=1,KEIBA_SERVING_STATE_PULL=0,KEIBA_ODDS_TRI
 # 画面の数値・表示に効く機能フラグ（ホストの .env と揃える。無いと Cloud Run だけ確率の市場補正・位置取り整合・追走難度などが外れ、ホストと値が食い違う）
 ENV_VARS+=",KEIBA_PROB_CALIBRATION=1,KEIBA_PACE_TYPE=1,KEIBA_PACE_COHERENCE=1,KEIBA_PACE_COHERENCE_V2=1,KEIBA_GROWTH_INDEX=1"
 ENV_VARS+=",KEIBA_LAP_FORECAST=1,KEIBA_TRACKING_V2=1,KEIBA_TRAINING_COVERAGE=1,KEIBA_PREDICTION_RESULTS=1,KEIBA_PREDICTION_RESULTS_GCS=1"
+# 毎日 JST 03:00-04:00 は『メンテナンス中』(503)。設定は config/maintenance.json。この時間に stg/prod へ push すると、スモークが 503 を受けて落ちる
+ENV_VARS+=",KEIBA_MAINTENANCE_WINDOW=1"
 [ -z "$GCS_PREFIX" ] || ENV_VARS+=",GCS_PREFIX=${GCS_PREFIX}"
 # API_TEST_USER=1 のときだけテストユーザー(config/members.json の test)を有効にする。stg のタグ付きリビジョン専用（deploy_gcp.sh が付ける）
 [ "${API_TEST_USER:-0}" != 1 ] || ENV_VARS+=",KEIBA_TEST_USER=1"
