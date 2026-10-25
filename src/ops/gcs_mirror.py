@@ -223,6 +223,19 @@ def start_refresher(backend: Backend | None = None, root: Path = REPO_ROOT, *, i
     return t
 
 
+def tree_known(tree: str) -> bool:
+    """job_map の mirror_out に書ける木か（PUSH_TREES のどれかの配下）。"""
+    d = split_tree(tree)[0].rstrip("/")
+    return any(d == split_tree(t)[0] or d.startswith(split_tree(t)[0] + "/") for t in PUSH_TREES)
+
+
+def push_trees(trees: list[str] | tuple[str, ...], *, since_epoch: float | None = None, backend: Backend | None = None, root: Path = REPO_ROOT) -> dict[str, int]:
+    """Jobs が作った出力（予測・ラップ予想など）を ops/mirror へ上げる。since_epoch 以降に更新されたファイルだけ。"""
+    be = backend or GcsBackend()
+    recent = (time.time() - since_epoch) / 86400 if since_epoch else None
+    return push(be, root, tuple(trees), recent_days=recent)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("action", choices=["push", "pull"])

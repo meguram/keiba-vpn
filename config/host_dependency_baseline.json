@@ -4,6 +4,10 @@
   "frontend/app/layout.tsx": {
    "local_data": 1
   },
+  "scripts/gcp/publish_models_from_host.sh": {
+   "host_alias": 2,
+   "host_path": 1
+  },
   "scripts/ops/cutover/host_cron_switch.sh": {
    "local_data": 2
   },
@@ -184,6 +188,10 @@
   },
   "src/ops/jobs/predict_race.py": {
    "local_data": 1
+  },
+  "src/ops/jobs/rb_state.py": {
+   "local_data": 4,
+   "page_reference": 1
   },
   "src/ops/release_manifest.py": {
    "local_data": 1

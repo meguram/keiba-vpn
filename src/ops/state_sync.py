@@ -43,19 +43,35 @@ def expand(entries: list[dict[str, Any]], params: dict[str, str] | None = None) 
     return out
 
 
-def _files(root: Path, rel: str) -> list[Path]:
+def includes(entries: list[dict[str, Any]], params: dict[str, str] | None = None) -> list[list[str] | None]:
+    """expand() と同じ順の、エントリごとの include（``path`` からの相対パスの glob。省略 = すべて）。
+    大きい表のうち、そのジョブが実際に読むファイルだけを取る・上げるために使う（例: ``"*/race_result_flat.parquet"``）。"""
+    out: list[list[str] | None] = []
+    for e in entries or []:
+        inc = e.get("include")
+        out.append([str(x) for x in inc] if inc else None)
+    return out
+
+
+def _match(rel_in_dir: str, inc: list[str] | None) -> bool:
+    import fnmatch
+
+    return inc is None or any(fnmatch.fnmatch(rel_in_dir, g) for g in inc)
+
+
+def _files(root: Path, rel: str, inc: list[str] | None = None) -> list[Path]:
     p = root / rel
     if p.is_file():
         return [p]
     if not p.is_dir():
         return []
-    return sorted(f for f in p.rglob("*") if f.is_file())
+    return sorted(f for f in p.rglob("*") if f.is_file() and _match(f.relative_to(p).as_posix(), inc))
 
 
 def plan(entries: list[dict[str, Any]], root: Path, params: dict[str, str] | None = None) -> list[dict[str, Any]]:
     rows = []
-    for rel, max_mb in expand(entries, params):
-        files = _files(root, rel)
+    for (rel, max_mb), inc in zip(expand(entries, params), includes(entries, params)):
+        files = _files(root, rel, inc)
         mb = sum(f.stat().st_size for f in files) / MB
         rows.append({"path": rel, "exists": bool(files), "files": len(files), "local_mb": round(mb, 1), "max_mb": max_mb,
                      "over": bool(max_mb and mb > max_mb)})
@@ -66,9 +82,9 @@ def pull(io: BlobIO, entries: list[dict[str, Any]], root: Path, *, prefix: str =
          params: dict[str, str] | None = None) -> dict[str, Any]:
     """GCS → ローカル。上限超過は何も取らずに ``StateBudgetError``。既にある同サイズのファイルは取り直さない。"""
     plan_rows = []
-    for rel, max_mb in expand(entries, params):
+    for (rel, max_mb), inc in zip(expand(entries, params), includes(entries, params)):
         keys = io.list(f"{prefix}/{rel}")
-        keys = [k for k in keys if k == f"{prefix}/{rel}" or k.startswith(f"{prefix}/{rel}/")]
+        keys = [k for k in keys if k == f"{prefix}/{rel}" or (k.startswith(f"{prefix}/{rel}/") and _match(k[len(prefix) + len(rel) + 2:], inc))]
         total = sum(io.size(k) or 0 for k in keys)
         if max_mb and total > max_mb * MB:
             raise StateBudgetError(f"state {rel}: {total / MB:.0f}MB が上限 {max_mb}MB を超える（メモリ上のディスクを使い切る）")
@@ -92,8 +108,8 @@ def push(io: BlobIO, entries: list[dict[str, Any]], root: Path, *, prefix: str =
          since: float | None = None, params: dict[str, str] | None = None) -> dict[str, Any]:
     """ローカル → GCS。``since``（epoch 秒）以降に更新されたファイルだけ上げる。上限超過は ``StateBudgetError``。"""
     todo: list[tuple[Path, str]] = []
-    for rel, max_mb in expand(entries, params):
-        files = _files(root, rel)
+    for (rel, max_mb), inc in zip(expand(entries, params), includes(entries, params)):
+        files = _files(root, rel, inc)
         mb = sum(f.stat().st_size for f in files)
         if max_mb and mb > max_mb * MB:
             raise StateBudgetError(f"state {rel}: {mb / MB:.0f}MB が上限 {max_mb}MB を超える（上限を見直すか出力を絞る）")

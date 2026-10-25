@@ -34,6 +34,7 @@ develop ──マージ──▶ stg ──push──▶ deploy-stg.yml（変更
 ```
 
 - **スモークに失敗したら通信は切り替わらず、以降（Jobs・画面の公開）も進まない。**
+- **取得役のコード（kind=fetch）も、画面と同じ工程で GCS の `ops/releases/fetch/` に公開する**（`release_publish.py build-fetch` → `publish-fetch`、`latest.json` を最後に書く）。VPS の `keiba-release-pull-fetch.timer` が毎日 JST 03:20 に取り込む。ホストで `publish_release.sh --fetch` を実行する必要はない。
 - **取得（スクレイピング）は CI で一切しない。**
 - **当てはめ済みの係数・重み（`config/fitted_artifacts.txt`）は git に無い。** API イメージのビルド直前に、`deploy_gcp.sh` の `fetch_fitted` が GCS（`models/fitted_artifacts/`）の `config/` 配下だけを検証つきで取り、`./config` に重ねてからビルドする（約 6MB。血統集計 `data/` と `models/` は入れない）。取れなかったとき、stg は警告して係数なしで続行し、prod は中止する。ホストで係数を更新したら `fitted_artifacts.sh pack` → `model_publish publish --component fitted_artifacts --from <dir>` で GCS に上げ、次のデプロイで入る。Jobs のイメージは実行時取得。
 - マージは **マージコミットか fast-forward**（スカッシュ不可）。スカッシュすると「stg に含まれる」ことを確認できず、`verify-stg` で止まる。
@@ -165,3 +166,10 @@ develop ──マージ──▶ stg ──push──▶ deploy-stg.yml（変更
    戻すとき: 手順 5 を逆にする（ホストのトンネルに `stg.megu-keiba.com` を戻す）。
 
 メモリ: 2 つ目の画面の上限は 160MB（常駐の合計に足しても、2GB の VPS に十分な余裕。`tests/ops/test_vps_units.py` が上限を検査）。
+
+
+## API と画面の版ずれ（2026-10-26 の障害から）
+- 画面（VPS）は pull 型、API（Cloud Run）は昇格の直後に 100% 切替なので、**昇格から VPS が画面を取り込むまで、古い画面が新しい API の応答を読む時間ができる**。逆（新しい画面が古い API を読む）も、公開の順序次第で起きる。
+- **ルール（後方互換）**: 1 回の昇格で API の応答を**壊す変更（項目の削除・改名・形の変更）を入れない**。足すだけにし、画面は無い項目を許す。壊す変更は 2 段（①新旧どちらも返す API と、新旧どちらも読める画面を出す → ②古い方を消す）に分ける。
+- **確認**: `vars.UI_WAIT_MINUTES`（既定 0＝待たない）に分数を入れると、promote が UI の公開後、VPS が `applied/vps.json` に同じ版を報告するのを待ち、揃わなければ警告の注釈を出す（失敗にはしない）。VPS のタイマーが数分おきになったら 10 などにする。
+- 窓（JST 03:00–04:00）: 画面の入れ替えは数秒で無停止なので、取り込みを窓に限る必要はない。ただし確認 URL は窓の対象外（`/login`）にする。

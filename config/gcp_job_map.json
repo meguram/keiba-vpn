@@ -247,6 +247,16 @@
    "entry": "final_odds_bundle.json",
    "install_to": "models/final_odds_bundle.json",
    "desc": "想定オッズのモデル（LightGBM のヘッド一式を 1 つの JSON に）。コードが固定パス models/final_odds_bundle.json を読むので、取得後にそこへ置く"
+  },
+  "bundle_v6e": {
+   "env": "KEIBA_V6_BUNDLE",
+   "local_path": "data/local/modeling/training_pipeline/final_v6e/bundle_v6_2025",
+   "desc": "v6e アンサンブルのバンドル（現在の画面・集計・推奨の親モデル。約167MB）"
+  },
+  "stage_v6e": {
+   "env": "KEIBA_V6_STAGE",
+   "local_path": "data/local/modeling/training_pipeline/final_stage/v6_e_2025",
+   "desc": "v6e の前段 S3B（約2MB）"
   }
  },
  "jobs": [
@@ -691,7 +701,10 @@
     "min_consecutive_success": 4,
     "window_days": 21,
     "parity_min_days": 3
-   }
+   },
+   "mirror_out": [
+    "data/local/inference/lap_forecast"
+   ]
   },
   {
    "id": "slack-scrape-summary-morning",
@@ -1434,7 +1447,11 @@
     "KEIBA_EVE_PRECOMPUTE_FINAL_ODDS"
    ],
    "models": [
-    "final_odds"
+    "final_odds",
+    "bundle_v6e",
+    "stage_v6e",
+    "tl_reference_v5",
+    "serving_bundle"
    ],
    "state_in": [
     {
@@ -1467,7 +1484,10 @@
     "min_consecutive_success": 4,
     "window_days": 21,
     "parity_min_days": 3
-   }
+   },
+   "mirror_out": [
+    "data/local/inference/tracking_v2"
+   ]
   },
   {
    "id": "reserve-race-day",
@@ -1629,7 +1649,10 @@
     "min_consecutive_success": 4,
     "window_days": 21,
     "parity_min_days": 3
-   }
+   },
+   "mirror_out": [
+    "data/local/inference/lap_forecast"
+   ]
   },
   {
    "id": "horse-name-index",
@@ -1949,10 +1972,6 @@
    "size": "l",
    "trigger": "cloud_tasks",
    "when_jst": null,
-   "parallel_env": {
-    "KEIBA_V3_SERVING": "shadow",
-    "KEIBA_V5_SHADOW": "1"
-   },
    "steps": [
     {
      "argv": [
@@ -1986,10 +2005,8 @@
     "KEIBA_PROB_CALIBRATION"
    ],
    "models": [
-    "bundle_v4",
-    "stage_v4",
-    "aux_v4",
-    "bundle_v5",
+    "bundle_v6e",
+    "stage_v6e",
     "tl_reference_v5",
     "serving_bundle"
    ],
@@ -2000,7 +2017,14 @@
     },
     {
      "path": "data/page_reference/tables",
-     "max_mb": 600
+     "max_mb": 250,
+     "include": [
+      "*/race_result_flat.parquet",
+      "*/race_result_race.parquet",
+      "*/race_shutuba_flat.parquet",
+      "*/race_shutuba_past_flat.parquet",
+      "*/megu_index_flat.parquet"
+     ]
     }
    ],
    "state_out": [
@@ -2013,23 +2037,18 @@
      "max_mb": 30
     },
     {
-     "path": "data/local/inference/predictions_v3",
-     "max_mb": 30
-    },
-    {
-     "path": "data/local/inference/predictions_v5",
-     "max_mb": 30
-    },
-    {
      "path": "data/local/inference/events",
      "max_mb": 5
+    },
+    {
+     "path": "data/local/inference/predictions_v6",
+     "max_mb": 30
     }
    ],
    "parity": {
     "kind": "parquet_frame",
     "paths": [
-     "data/local/inference/predictions_v3/{date}",
-     "data/local/inference/predictions_v5/{date}"
+     "data/local/inference/predictions_v6/{date}"
     ],
     "keys": [
      "race_id",
@@ -2039,8 +2058,8 @@
     "atol": 1e-06
    },
    "blockers": [
-    "モデル一式の publish と serving_bundle の配布",
-    "コンテナ上の履歴テーブルの用意（出走馬の履歴だけで足りる bundle エンジンを使う）"
+    "モデル一式の publish（bundle_v6e・stage_v6e・tl_reference_v5・serving_bundle。公開済み 2026-10-26）→ 済。残り: Jobs のイメージで 1 レース手動実行し、ピークのメモリを Cloud Run のメトリクスで確認（ホストの実測は準備だけで RSS 2.3GB）",
+    "履歴表は v6 の準備が読む race_result_flat/race_result_race/race_shutuba_flat（ホストで実測 約 93MB）+ 念のため race_shutuba_past_flat・megu_index_flat だけ取る（include。全体 2.9GB のうち約 190MB）。1 レース手動実行で足りない表が無いか確認"
    ],
    "enabled": true,
    "ready": false,
@@ -2048,7 +2067,11 @@
     "min_consecutive_success": 4,
     "window_days": 21,
     "parity_min_days": 3
-   }
+   },
+   "mirror_out": [
+    "data/local/inference/predictions_v6",
+    "data/local/inference/snapshots"
+   ]
   },
   {
    "id": "event-pump",
@@ -3353,8 +3376,7 @@
     {
      "argv": [
       "-m",
-      "src.scripts.data.build_rb_state",
-      "build"
+      "src.ops.jobs.rb_state"
      ]
     }
    ],
@@ -3370,7 +3392,13 @@
    "state_in": [
     {
      "path": "data/page_reference/tables",
-     "max_mb": 600
+     "max_mb": 200,
+     "include": [
+      "*/race_index_flat.parquet",
+      "*/race_shutuba_past_flat.parquet",
+      "*/race_result_flat.parquet",
+      "*/megu_index_flat.parquet"
+     ]
     }
    ],
    "state_out": [
@@ -3383,9 +3411,7 @@
     "kind": "none"
    },
    "blockers": [
-    "ホストのシェル(tp65_prep → build_rb_state → 検査 → 原子的に差し替え)を 1 つのモジュールにまとめる必要がある(今は steps が build の部分だけ)",
-    "状態の出力先がホストのローカル。GCS に書き、予測のジョブが読む形にする",
-    "v6 を画面に出すかの採用判断が前提(KEIBA_PRED_MODEL。判断前でも作っておく設計)"
+    "Jobs のイメージで 1 回手動実行して、state/rb_v6 が GCS に出ること（gcloud run jobs execute）"
    ],
    "enabled": true,
    "ready": false

@@ -1,10 +1,12 @@
 [Unit]
-Description=keiba pull 型デプロイ (ui) — 毎日 JST 03:10（メンテナンス窓 03:00〜04:00 の中）
+Description=keiba pull 型デプロイ (ui) — 3 分おきに GCS の latest.json を見て、新しい版があればすぐ入れる（窓を待たない）
 
 [Timer]
-# VPS のタイムゾーンは vps_01 で Asia/Tokyo にしてある。窓の外では pull_release.py 自身も何もしない
-OnCalendar=*-*-* 03:10:00
-RandomizedDelaySec=120
+# 昇格で API が先に切り替わるので、画面も数分で追いつかせる（古い画面×新しい API の時間を作らない）。
+# 変化が無ければ latest.json の GET 1 回で終わる（1 日 約 480 回。費用はほぼ 0）。入れ替えは数秒で無停止
+OnBootSec=2min
+OnUnitActiveSec=3min
+RandomizedDelaySec=20
 Persistent=false
 Unit=keiba-release-pull@ui.service
 
