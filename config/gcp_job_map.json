@@ -257,11 +257,6 @@
    "env": "KEIBA_V6_STAGE",
    "local_path": "data/local/modeling/training_pipeline/final_stage/v6_e_2025",
    "desc": "v6e の前段 S3B（約2MB）"
-  },
-  "rb_state_v6": {
-   "env": "KEIBA_V6_RB_STATE",
-   "local_path": "data/local/inference/state/rb_v6",
-   "desc": "v6e の RB の履歴状態（約6MB。rb-state-daily が日次で作り直す。更新のたびに publish が要る）"
   }
  },
  "jobs": [
@@ -1452,7 +1447,6 @@
     "final_odds",
     "bundle_v6e",
     "stage_v6e",
-    "rb_state_v6",
     "tl_reference_v5",
     "serving_bundle"
    ],
@@ -2008,7 +2002,6 @@
    "models": [
     "bundle_v6e",
     "stage_v6e",
-    "rb_state_v6",
     "tl_reference_v5",
     "serving_bundle",
     "bundle_v4",
@@ -2062,7 +2055,7 @@
     "atol": 1e-06
    },
    "blockers": [
-    "モデル一式の publish（bundle_v6e・stage_v6e・rb_state_v6・tl_reference_v5・serving_bundle・fitted_artifacts を、ホストで publish 専用の鍵で）",
+    "モデル一式の publish（bundle_v6e・stage_v6e・tl_reference_v5・serving_bundle・fitted_artifacts。RB の履歴状態は rb-state-daily が state/ に出す）",
     "コンテナ上の履歴テーブルの用意（出走馬の履歴だけで足りる bundle エンジンを使う）",
     "v4/v5 は画面が参照しない影モードの出力。外すと取得量と時間が減る（外す判断は parity_check の後）"
    ],
@@ -3377,8 +3370,7 @@
     {
      "argv": [
       "-m",
-      "src.scripts.data.build_rb_state",
-      "build"
+      "src.ops.jobs.rb_state"
      ]
     }
    ],
@@ -3407,9 +3399,7 @@
     "kind": "none"
    },
    "blockers": [
-    "ホストのシェル(tp65_prep → build_rb_state → 検査 → 原子的に差し替え)を 1 つのモジュールにまとめる必要がある(今は steps が build の部分だけ)",
-    "状態の出力先がホストのローカル。GCS に書き、予測のジョブが読む形にする",
-    "v6 を画面に出すかの採用判断が前提(KEIBA_PRED_MODEL。判断前でも作っておく設計)"
+    "Jobs のイメージで 1 回手動実行して、state/rb_v6 が GCS に出ること（gcloud run jobs execute）"
    ],
    "enabled": true,
    "ready": false

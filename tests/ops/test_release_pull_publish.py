@@ -172,3 +172,21 @@ def test_prod_install_does_not_set_instance(tmp_path, monkeypatch):
     monkeypatch.setenv("INSTANCE", "stg")                                      # 紛れ込んでいても、本番の導入は本番のまま
     pr.install_ui(G(), {"release_id": "keiba-ui-y-202610250200", "tarball": "t", "sha256": hashlib.sha256(b"x").hexdigest()})
     assert "INSTANCE" not in seen["env"]
+
+
+def test_wait_applied_ok_failed_timeout():
+    io_ = MemoryIO()
+    clock = {"t": 0.0}
+    slept = []
+
+    def sleep(sec):
+        slept.append(sec)
+        clock["t"] += sec
+        if len(slept) == 2:      # 2 回目の待ちのあとで VPS が報告する
+            io_.put_bytes(rp.key_of("ui", "applied/vps.json"), json.dumps({"release_id": "r1", "result": "ok"}).encode())
+
+    res = rp.wait_applied(io_, "ui", "r1", minutes=5, interval_sec=20, sleep=sleep, clock=lambda: clock["t"])
+    assert res["result"] == "ok" and len(slept) == 2
+    io_.put_bytes(rp.key_of("ui", "applied/vps.json"), json.dumps({"release_id": "r2", "result": "rolled_back"}).encode())
+    assert rp.wait_applied(io_, "ui", "r2", minutes=1, sleep=sleep, clock=lambda: clock["t"])["result"] == "failed"
+    assert rp.wait_applied(io_, "ui", "r3", minutes=1, interval_sec=30, sleep=sleep, clock=lambda: clock["t"])["result"] == "timeout"

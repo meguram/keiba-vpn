@@ -126,6 +126,19 @@ jobs:
           f="$(ls release/keiba-ui-*.tar.gz | head -1)"
           python -m src.ops.release_publish publish-ui --file "$f" --commit "$GITHUB_SHA"
           python -m src.ops.release_publish status --kind ui
+      - name: VPS が画面を取り込むのを待つ（UI_WAIT_MINUTES が 0 または未設定なら待たない。API と画面の版ずれが続く時間の確認用）
+        env:
+          PYTHONPATH: .
+          UI_WAIT_MINUTES: ${{ vars.UI_WAIT_MINUTES }}
+        run: |
+          set -uo pipefail
+          res="$(python -m src.ops.release_publish wait-applied --kind ui --minutes "${UI_WAIT_MINUTES:-0}")" || true
+          echo "$res"
+          case "$res" in
+            *'"result": "ok"'*) echo "VPS が新しい画面を取り込みました" ;;
+            *'"result": "skipped"'*) ;;
+            *) echo "::warning title=画面の取り込みを確認できません::API は新しい版に切り替え済みですが、VPS の画面がまだ古い可能性があります（API と画面の版ずれ）。VPS の keiba-release-pull-ui を確認してください: ${res}" ;;
+          esac
       - name: 取得役のコードを GCS に公開（kind=fetch。latest.json を最後に書く。VPS の keiba-release-pull-fetch.timer が JST 03:20 に取り込む）
         env:
           PYTHONPATH: .

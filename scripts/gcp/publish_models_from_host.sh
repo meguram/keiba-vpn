@@ -2,7 +2,7 @@
 # ホスト（keiba-remote）の学習済みモデルを GCS(models/<component>/)へ公開する。ホストの git は古く・未コミットが多いので pull せず、
 # origin/develop のコードだけを一時ディレクトリへ展開して model_publish を動かす（ホストの作業ツリーには触れない）。
 #
-#   手元から: ssh keiba-remote 'bash -s -- bundle_v6e stage_v6e rb_state_v6 tl_reference_v5' < scripts/gcp/publish_models_from_host.sh
+#   手元から: ssh keiba-remote 'bash -s -- bundle_v6e stage_v6e tl_reference_v5' < scripts/gcp/publish_models_from_host.sh
 #   ホスト上で（このファイルを置いた場合）: bash publish_models_from_host.sh bundle_v6e …
 #   引数なし: 何も公開せず、公開できるコンポーネントと、ホスト上の実体のサイズだけを表示する（既定は確認のみ）
 #
