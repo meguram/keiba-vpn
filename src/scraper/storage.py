@@ -464,18 +464,66 @@ class HybridStorage:
         return (category not in self._LOCAL_CACHE_EXCLUDE
                 and self.CATEGORY_MAP.get(category) != "local_only")
 
-    def _local_cache_ttl(self, key: str) -> float:
+    # 取得のたびに内容が変わるカテゴリ。別プロセス（取得側）の保存を世代ファイルで知れない環境（Cloud Run 等）でも古いまま出さないよう、保持を短くする
+    _FRESH_CATEGORIES = frozenset({"race_shutuba"})
+
+    def _fresh_cap(self, category: str) -> float | None:
+        if category not in self._FRESH_CATEGORIES:
+            return None
+        try:
+            return float(os.environ.get("LOAD_CACHE_TTL_FRESH_SEC", "300"))
+        except ValueError:
+            return 300.0
+
+    def _mem_ttl(self, category: str) -> float:
+        cap = self._fresh_cap(category)
+        return self._mem_cache_ttl if cap is None else min(self._mem_cache_ttl, cap)
+
+    def _local_cache_ttl(self, key: str, category: str = "") -> float:
         """ディスク L2 の TTL（.env DISK_L2_TTL_*、過去年は長め）。"""
         current_year = datetime.now(JST).strftime("%Y")
         key_year = key[:4] if len(key) >= 4 else ""
-        if key_year and key_year < current_year:
-            return self._disk_ttl_past
-        return self._disk_ttl_current
+        ttl = self._disk_ttl_past if key_year and key_year < current_year else self._disk_ttl_current
+        cap = self._fresh_cap(category)
+        return ttl if cap is None else min(ttl, cap)
+
+    def _refresh_existing_local_cache(self, category: str, key: str, data: dict[str, Any]) -> None:
+        """保存した内容で、すでにあるディスク L2 のファイルを更新する（書けなければ消す）。古い内容を読み出し側に残さない。"""
+        path = self._local_cache_path(category, key)
+        if not path.exists():
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+            return
+        except Exception as e:  # noqa: BLE001
+            logger.warning("ディスクキャッシュを更新できない（消して再読込に任せる）[%s/%s]: %s", category, key, e)
+        try:
+            path.unlink(missing_ok=True)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("古いディスクキャッシュを消せない（TTL まで古いまま）[%s/%s]: %s", category, key, e)
+
+    def _shutuba_regresses(self, key: str, data: dict[str, Any]) -> bool:
+        """確定済み（全頭に馬番）の出馬表を、馬番が 1 頭も無い内容で上書きしようとしているか（取得の取り違え・古いページ）。"""
+        try:
+            from src.scraper import entries_phase as EP
+
+            old = self.load("race_shutuba", key, bypass_cache=True)
+            if not old:
+                return False
+            o = EP.classify_entries(old, old.get("date"))
+            n = EP.classify_entries(data, data.get("date") or old.get("date"))
+            return EP.PHASE_RANK[o["phase"]] >= EP.PHASE_RANK[EP.PHASE_FINAL] and n["n_numbered"] == 0
+        except Exception:  # noqa: BLE001
+            return False
 
     # ── save ──────────────────────────────────────────
 
     def save(self, category: str, key: str, data: dict[str, Any]) -> bool:
         """データを保存する（詳細は ``_save_inner``）。保存できたら、画面に関わるカテゴリはキャッシュの世代を進める。"""
+        if category == "race_shutuba" and self._shutuba_regresses(key, data):
+            logger.warning("確定済みの出馬表を、馬番の無い内容で上書きしようとしたので破棄: %s", key)
+            return True
         ok = self._save_inner(category, key, data)
         if ok:
             from src.utils import cache_epoch
@@ -570,6 +618,7 @@ class HybridStorage:
             self.invalidate_blob_cache(category)
             self._cache_put(f"{category}/{key}", data)
             if gated:
+                self._refresh_existing_local_cache(category, key, data)
                 self._weekly_disk_l2_maybe_write(category, key, data)
             self._maybe_write_local_mirror(category, key, data)
             return True
@@ -696,7 +745,7 @@ class HybridStorage:
         if not bypass_cache:
             with self._load_cache_lock:
                 cached = self._load_cache.get(cache_key)
-            if cached and (_time.time() - cached[0]) < self._mem_cache_ttl:
+            if cached and (_time.time() - cached[0]) < self._mem_ttl(category):
                 mem = cached[1]
                 if mem is not None and self._is_locally_cached(category):
                     self._bump_disk_hot_l2_access(category, key)
@@ -759,7 +808,7 @@ class HybridStorage:
         if not bypass_cache:
             with self._load_cache_lock:
                 cached = self._load_cache.get(cache_key)
-            if cached and cached[1] is not None and (_time.time() - cached[0]) < self._mem_cache_ttl:
+            if cached and cached[1] is not None and (_time.time() - cached[0]) < self._mem_ttl(category):
                 return cached[1]
         data = self._dev_store.read(category, key, self.CATEGORY_MAP.get(category, "race"))
         if data is not None:
@@ -824,7 +873,7 @@ class HybridStorage:
                 return None
             if not allow_stale:
                 age = _time.time() - path.stat().st_mtime
-                if age > self._local_cache_ttl(key):
+                if age > self._local_cache_ttl(key, category):
                     return None
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
@@ -1001,7 +1050,7 @@ class HybridStorage:
         cache_key = f"{category}/{key}"
         with self._load_cache_lock:
             cached = self._load_cache.get(cache_key)
-        if cached and (_time.time() - cached[0]) < self._mem_cache_ttl:
+        if cached and (_time.time() - cached[0]) < self._mem_ttl(category):
             return cached[1] is not None
 
         year = key[:4] if len(key) >= 4 else "unknown"

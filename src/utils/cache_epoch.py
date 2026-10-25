@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import atexit
 import json
 import logging
 import os
@@ -69,9 +70,42 @@ def bump_for_save(category: str) -> None:
         return
     now = time.monotonic()
     if now - _seen["bumped"] < _BUMP_MIN_INTERVAL_SEC:
+        _schedule_trailing_bump(category, _BUMP_MIN_INTERVAL_SEC - (now - _seen["bumped"]))  # 間引いた保存も、間隔が空いたあとに 1 回反映する
         return
     _seen["bumped"] = now
     bump(f"save:{category}")
+
+
+_pending: dict[str, threading.Timer | None] = {"timer": None}
+
+
+def _fire_trailing(category: str) -> None:
+    with _lock:
+        _pending["timer"] = None
+    _seen["bumped"] = time.monotonic()
+    bump(f"save:{category}:trailing")
+
+
+def _schedule_trailing_bump(category: str, delay: float) -> None:
+    with _lock:
+        if _pending["timer"] is not None:
+            return
+        t = threading.Timer(max(delay, 0.0) + 0.5, _fire_trailing, args=(category,))
+        t.daemon = True
+        _pending["timer"] = t
+        t.start()
+
+
+def flush_pending() -> None:
+    """間引かれた保存の世代更新が残っていれば、今すぐ 1 回行う（プロセス終了時に呼ばれる）。"""
+    with _lock:
+        t, _pending["timer"] = _pending["timer"], None
+    if t is not None:
+        t.cancel()
+        bump("save:flush")
+
+
+atexit.register(flush_pending)
 
 
 def sync(force: bool = False) -> bool:

@@ -43,6 +43,7 @@ ENDPOINTS: tuple[Endpoint, ...] = (
              (Fetch("daily-race-lists", "毎日 07:00（設計は 17:00 も）"),)),
     Endpoint("race_card", "出馬表", "日曜夕に特別登録（登録馬・暫定）→ 木曜に出走馬決定 → 前日の金16時/土10時に枠番・馬番が確定。馬体重は当日", "medium", True, ("race_shutuba", "date_cards"),
              (Fetch("entries-sync", "10分おき起動。日曜18:30/19:30・月〜水 08:30/20:00・木 12:30〜21:30・金 10:00〜18:30・土 10:05〜12:30 の checkpoint で未来の開催日の出馬表を段階的に取得（config/entries_schedule.json）"),
+              Fetch("shutuba-audit", "毎日 1 回。過去 7 日で馬番が確定しないままの出馬表を再取得（試行は 1 レース 3 回まで）"),
               Fetch("raceday-eve", "前日 18:00（最終確認）", "race_shutuba", _EVE),
               Fetch("raceday-runner", "各R T-15", "race_shutuba", _Q + "T15_RACE_TASKS"),
               Fetch("raceday-weight-runner", "各R T-65〜T-30（馬体重の検知。cron 未登録・手動起動）", "race_shutuba", _Q + "WEIGHT_WATCH_TASKS"))),

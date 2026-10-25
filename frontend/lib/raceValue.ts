@@ -13,6 +13,8 @@ export type RaceValue = {
   expected_roi?: number | null;
   /** 会員向け（有料ゾーン）: 期待回収率の数値の代わりに、レース単位の推奨度の段階が来る */
   tier?: { level: number; label: string } | null;
+  /** "target" = 既定方策（目標払戻つきの 3連複）。推奨度は『どれかが当たる確率の大きさ』で、回収率の高さではない */
+  basis?: string;
   max_ev?: number | null;
   n_bets?: number;
   total_bet?: number;
@@ -36,6 +38,16 @@ export const TIER_LEGEND: { label: string; level: ValueLevel }[] = [
   { label: "最注目", level: "hot" }, { label: "高注目", level: "good" }, { label: "注目", level: "ok" }, { label: "標準", level: "ok" }, { label: "見送り", level: "pass" },
 ];
 
+export const TARGET_TIER_HINT: Record<string, string> = {
+  "最注目": "選んだ買い目のどれかが当たる確率が高い（それでも約10〜15%）", "高注目": "どれかが当たる確率がやや高い", "注目": "どれかが当たる確率は標準",
+  "標準": "どれかが当たる確率は低め", "見送り": "条件を満たす買い目がない",
+};
+
+export function isTargetValues(values: Map<string, RaceValue>): boolean {
+  for (const v of values.values()) if (v.basis === "target") return true;
+  return false;
+}
+
 export function hasTier(values: Map<string, RaceValue>): boolean {
   for (const v of values.values()) if (v.tier?.label) return true;
   return false;
@@ -45,6 +57,7 @@ export function hasTier(values: Map<string, RaceValue>): boolean {
 export function chipLabel(v: RaceValue | undefined): string {
   if (v?.tier?.label) return v.tier.label;
   const lv = v?.level ?? "none";
+  if (lv === "none" && v?.reason === "予測待ち") return "予測前";
   return v?.expected_roi != null && lv !== "pass" ? `${(v.expected_roi * 100).toFixed(0)}%` : lv === "pass" ? "見送" : "–";
 }
 

@@ -203,6 +203,9 @@
   "src/pipeline/inference/lap_forecast_service.py": {
    "local_data": 2
   },
+  "src/pipeline/inference/odds_sec77.py": {
+   "local_data": 2
+  },
   "src/pipeline/inference/prediction_results.py": {
    "local_data": 2
   },
@@ -335,6 +338,9 @@
   },
   "src/scraper/schema_violations.py": {
    "local_data": 5
+  },
+  "src/scraper/shutuba_audit.py": {
+   "local_data": 2
   },
   "src/scraper/smartrc_client.py": {
    "local_data": 1

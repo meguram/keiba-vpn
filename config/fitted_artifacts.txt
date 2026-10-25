@@ -4,6 +4,7 @@
 
 # --- 学習済みの重み・符号化器
 config/expected_megu/model.json
+config/expected_megu/hem.json
 config/growth_index/model.txt
 config/pace_type_models.json
 config/tracking_difficulty_v2/model.txt
@@ -17,6 +18,7 @@ models/pace_predictor/model_3f.txt
 
 # --- 当て込まれた係数・補正表
 config/growth_index/params.json
+config/odds_pred/odds_pred_config.json
 config/growth_index/ped_profile.json
 config/megu_predict_params.json
 config/megu_predict_condition_weights.json

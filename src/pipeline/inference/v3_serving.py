@@ -69,8 +69,12 @@ def v5_paths() -> dict:
 
 
 def v6_enabled() -> bool:
-    """v6 を v4/v5 の shadow と並走させる（KEIBA_V6_SHADOW=1）。出力は predictions_v6/<日>/<race_id>.parquet。v4・v5 の経路には影響しない。"""
-    return (os.environ.get("KEIBA_V6_SHADOW") or "").strip().lower() in ("1", "true", "on", "yes")
+    """v6e の予測を作る（出力は predictions_v6/<日>/<race_id>.parquet。v4・v5 の経路には影響しない）。
+    KEIBA_V6_SHADOW=1/0 で明示できる。未設定のときは、画面が v6e を主に参照する設定（KEIBA_PRED_MODEL、既定 v6e）なら有効。"""
+    raw = (os.environ.get("KEIBA_V6_SHADOW") or "").strip().lower()
+    if raw:
+        return raw in ("1", "true", "on", "yes")
+    return (os.environ.get("KEIBA_PRED_MODEL") or "v6e").strip().lower() not in ("legacy", "v4", "v5", "off")
 
 
 def v6_paths() -> dict:

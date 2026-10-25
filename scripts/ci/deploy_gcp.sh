@@ -58,10 +58,30 @@ run() {  # 表示して、--dry-run でなければ実行。失敗したら、�
   rm -f "$log"
 }
 
+fetch_fitted() {  # 当て込んだ係数（git に無い。config/fitted_artifacts.txt）のうち config/ 配下を、GCS(models/fitted_artifacts/)から取ってビルドの前に ./config へ重ねる
+  if [ "$DRY" = 1 ]; then echo "+ （GCS models/fitted_artifacts/ の config/ 配下を検証つきで取得して ./config に重ねる。git 管理のファイルは上書きしない）"; return 0; fi
+  local d out src
+  d="$(mktemp -d)"
+  if out="$(PYTHONPATH=. python3 -m src.ops.model_publish fetch --component fitted_artifacts --dest "$d" --only-prefix config/ 2>&1)"; then
+    src="$(printf '%s\n' "$out" | grep '^{' | tail -n1 | python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["path"])')"
+    cp -rn "$src/config/." config/
+    echo "係数を取り込みました: $(find "$src/config" -type f | wc -l) ファイル"
+  else
+    printf '%s\n' "$out" | tail -n 8
+    local why; why="$(printf '%s\n' "$out" | grep -v -i 'warn' | tail -n 4 | cut -c1-240 | sed 's/%/%25/g; s/\r//g' | awk '{printf "%s%%0A", $0}')"
+    if [ "$TARGET" = prod ]; then
+      echo "::error title=係数の取得に失敗（prod は中止）::models/fitted_artifacts/ の config/ を取れませんでした。ホストで fitted_artifacts を publish し、CI の SA に GCS の読み取り権限があるか確認してください%0A${why:0:1500}"
+      exit 1
+    fi
+    echo "::warning title=係数の取得に失敗（stg は続行）::係数なしのイメージになります（推奨馬券の新方式などが縮退）%0A${why:0:1500}"
+  fi
+}
+
 case "$STEP" in
   build-api-image)   # stg 用: API のイメージだけ（Jobs は stg で更新しないので、待たずに check-jobs-image を別 job で並走させる）
     run gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
     run gcloud artifacts repositories describe "$AR_REPO" --location "$REGION" --project "$PROJECT_ID" --format="value(name)"
+    fetch_fitted
     run env DOCKER_BUILDKIT=1 docker build --progress=plain -f deploy/docker/Dockerfile.cloudrun -t "$API_IMAGE" .
     run docker push "$API_IMAGE"
     ;;
@@ -74,6 +94,7 @@ case "$STEP" in
     run gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
     # リポジトリは Cloud Shell での初回デプロイで作ってある（CI の SA には作成権限を付けない）
     run gcloud artifacts repositories describe "$AR_REPO" --location "$REGION" --project "$PROJECT_ID" --format="value(name)"
+    fetch_fitted
     run env DOCKER_BUILDKIT=1 docker build --progress=plain -f deploy/docker/Dockerfile.cloudrun -t "$API_IMAGE" .
     run docker push "$API_IMAGE"
     run env DOCKER_BUILDKIT=1 docker build --progress=plain -f deploy/docker/Dockerfile.jobs -t "$JOBS_IMAGE" .

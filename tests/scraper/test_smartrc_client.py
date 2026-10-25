@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 
 import pytest
 
@@ -22,7 +23,8 @@ class _Resp:
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     sleeps = []
-    monkeypatch.setattr(S.time, "sleep", lambda s: sleeps.append(s))
+    me = threading.get_ident()   # time.sleep はプロセス全体で差し替わるので、他のスレッド（前のテストの残り等）の sleep は数えない
+    monkeypatch.setattr(S.time, "sleep", lambda s: sleeps.append(s) if threading.get_ident() == me else None)
     c = S.SmartRCClient(interval=0.0, jitter=0.0, backoff=(1, 2), cooldown=600, state_path=tmp_path / "state.json")
     c.sleeps = sleeps
     return c

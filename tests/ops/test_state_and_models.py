@@ -95,6 +95,16 @@ def test_publish_fetch_roundtrip_and_idempotent(tmp_path):
     assert MP.fetch(io, "bundle_v5", tmp_path / "cache") == got                                   # 検証済みなら取り直さない
 
 
+def test_fetch_only_prefix_takes_just_those_files(tmp_path):
+    io = MemoryIO()
+    MP.publish(io, "bundle_v5", _model(tmp_path))
+    got = MP.fetch(io, "bundle_v5", tmp_path / "cache", only_prefix="m/")
+    assert (got / "m/model.txt").is_file() and not (got / "meta.json").exists()
+    assert MP.fetch(io, "bundle_v5", tmp_path / "cache", only_prefix="m/") == got                 # 検証済みなら取り直さない
+    with pytest.raises(MP.ModelIntegrityError):
+        MP.fetch(io, "bundle_v5", tmp_path / "cache", only_prefix="nothing/")
+
+
 def test_latest_is_written_last_and_points_to_manifest(tmp_path):
     io = MemoryIO()
     MP.publish(io, "c", _model(tmp_path))
