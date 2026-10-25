@@ -336,6 +336,9 @@
   "src/scraper/schema_violations.py": {
    "local_data": 5
   },
+  "src/scraper/shutuba_audit.py": {
+   "local_data": 2
+  },
   "src/scraper/smartrc_client.py": {
    "local_data": 1
   },
