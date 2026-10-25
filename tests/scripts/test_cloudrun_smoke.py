@@ -72,3 +72,21 @@ def test_diff_tables():
     a = M.prob_table(json.dumps({"predictions": T}).encode())
     assert M.diff_tables(a, dict(a)) == []
     assert M.diff_tables(a, {1: a[1]}) and M.diff_tables(a, {**a, 2: (0.1, 0.3, None)})
+
+
+def test_fetch_warm_retries_once_when_no_response_and_extends_the_wait(monkeypatch):
+    calls = []
+
+    def fake_fetch(url, headers=None, timeout=30.0):
+        calls.append(timeout)
+        return (0, b"TimeoutError") if len(calls) == 1 else (200, b"{}")
+
+    monkeypatch.setattr(M, "fetch", fake_fetch)
+    assert M.fetch_warm("http://x/api") == (200, b"{}")
+    assert calls == [75.0, 75.0]                              # 初回の読み込みで応答が遅れても 1 回取り直す
+
+
+def test_fetch_warm_does_not_retry_real_http_errors(monkeypatch):
+    calls = []
+    monkeypatch.setattr(M, "fetch", lambda url, headers=None, timeout=30.0: (calls.append(1), (500, b"x"))[1])
+    assert M.fetch_warm("http://x/api")[0] == 500 and len(calls) == 1
