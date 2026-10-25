@@ -46,8 +46,11 @@ run() {  # 表示して、--dry-run でなければ実行。失敗したら、�
   printf '+'; printf ' %q' "$@"; printf '\n'
   [ "$DRY" != 1 ] || return 0
   local log rc=0 msg; log="$(mktemp)"
-  "$@" 2>&1 | tee "$log" || true
+  # `cmd | tee || true` だと失敗時に || true が走って PIPESTATUS が true の結果に上書きされ、失敗が成功になる（2026-10-26 に判明）。set +e で囲み、パイプの直後に取る
+  set +e
+  "$@" 2>&1 | tee "$log"
   rc="${PIPESTATUS[0]}"
+  set -e
   if [ "$rc" -ne 0 ]; then
     if [ -n "${GITHUB_ACTIONS:-}" ]; then
       msg="$(tail -n 25 "$log" | cut -c1-300 | sed 's/%/%25/g; s/\r//g' | awk '{printf "%s%%0A", $0}')"

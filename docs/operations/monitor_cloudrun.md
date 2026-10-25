@@ -18,9 +18,10 @@
    ```bash
    PROJECT=$(gcloud config get-value project); BUCKET=<運用のバケット>
    gcloud iam service-accounts create keiba-monitor --display-name "keiba monitor (read-only ops/)"
+   # 読み取り(get)は resource.name、一覧(list)は objectListPrefix で別々に条件が要る。両方を式に入れる（条件はファイルで渡す）
+   BUCKET=$BUCKET bash scripts/gcp/make_iam_condition.sh ops/ ops-read > /tmp/cond_monitor.yaml
    gcloud storage buckets add-iam-policy-binding gs://$BUCKET \
-     --member "serviceAccount:keiba-monitor@$PROJECT.iam.gserviceaccount.com" --role roles/storage.objectViewer \
-     --condition "title=ops-read,expression=resource.name.startsWith(\"projects/_/buckets/$BUCKET/objects/ops/\")"
+     --member "serviceAccount:keiba-monitor@$PROJECT.iam.gserviceaccount.com" --role roles/storage.objectViewer --condition-from-file /tmp/cond_monitor.yaml
    ```
 2. 秘密 `KEIBA_PROXY_KEY` に、この SA の読み取りを許す（API と同じ秘密を使う）:
    ```bash

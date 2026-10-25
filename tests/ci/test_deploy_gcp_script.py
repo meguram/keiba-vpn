@@ -70,3 +70,21 @@ def test_promote_is_prod_only_and_jobs_are_opt_in_and_parallel_by_default():
     assert on.stdout.count("--parallel") == 2 and "apply queue" in on.stdout and "apply scheduler" in on.stdout   # 既定は並走(影モード)
     full = _run("jobs", "prod", ENABLE_JOBS_DEPLOY="true", JOBS_PARALLEL="0")
     assert "--parallel" not in full.stdout
+
+
+def _run_fn(cmd: str) -> subprocess.CompletedProcess:
+    """deploy_gcp.sh の run() だけを取り出して実コマンドで動かす（DRY=0）。"""
+    body = subprocess.run(["sed", "-n", "/^run() {/,/^}/p", str(SH)], capture_output=True, text=True, check=True).stdout
+    assert body.startswith("run()")
+    return subprocess.run(["bash", "-c", f"set -euo pipefail\nDRY=0\n{body}\n{cmd}\necho AFTER"], capture_output=True, text=True)
+
+
+def test_run_propagates_failure_of_the_command():
+    """`cmd | tee || true` だと失敗が成功に化けて、docker build/push やスモークの失敗を見逃していた。"""
+    r = _run_fn("run bash -c 'echo boom; exit 3'")
+    assert r.returncode == 3 and "AFTER" not in r.stdout and "boom" in r.stdout
+
+
+def test_run_continues_after_success():
+    r = _run_fn("run bash -c 'echo fine'")
+    assert r.returncode == 0 and "AFTER" in r.stdout and "fine" in r.stdout
