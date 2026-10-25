@@ -45,6 +45,7 @@ export function hasTier(values: Map<string, RaceValue>): boolean {
 export function chipLabel(v: RaceValue | undefined): string {
   if (v?.tier?.label) return v.tier.label;
   const lv = v?.level ?? "none";
+  if (lv === "none" && v?.reason === "予測待ち") return "予測前";
   return v?.expected_roi != null && lv !== "pass" ? `${(v.expected_roi * 100).toFixed(0)}%` : lv === "pass" ? "見送" : "–";
 }
 
