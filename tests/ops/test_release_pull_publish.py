@@ -190,3 +190,13 @@ def test_wait_applied_ok_failed_timeout():
     io_.put_bytes(rp.key_of("ui", "applied/vps.json"), json.dumps({"release_id": "r2", "result": "rolled_back"}).encode())
     assert rp.wait_applied(io_, "ui", "r2", minutes=1, sleep=sleep, clock=lambda: clock["t"])["result"] == "failed"
     assert rp.wait_applied(io_, "ui", "r3", minutes=1, interval_sec=30, sleep=sleep, clock=lambda: clock["t"])["result"] == "timeout"
+
+
+def test_effective_window_ui_is_all_day_but_fetch_keeps_the_window():
+    assert pr.effective_window("ui", "03:00-04:00") == "00:00-24:00"
+    assert pr.effective_window("ui-stg", "03:00-04:00") == "00:00-24:00"
+    assert pr.effective_window("fetch", "03:00-04:00") == "03:00-04:00"
+    noon = datetime(2026, 10, 26, 12, 0, tzinfo=pr.JST)
+    latest = {"release_id": "keiba-ui-aaaaaaaa-202610260000", "sha256": "0" * 64, "tarball": "x"}
+    assert pr.decide("ui", latest, "keiba-ui-bbbbbbbb-202610250000", noon, force=False, window=pr.effective_window("ui", "03:00-04:00"), failed_ids=[]) == "install"
+    assert pr.decide("fetch", latest, "keiba-ui-bbbbbbbb-202610250000", noon, force=False, window=pr.effective_window("fetch", "03:00-04:00"), failed_ids=[]) == "waiting_for_window"
