@@ -19,6 +19,23 @@ sudo -n git fetch -q origin
 sudo -n git archive origin/develop src config scripts requirements.txt | tar -x -C "$NEW"
 [ ! -f "$REPO/.env" ] || ln -sf "$REPO/.env" "$NEW/.env"
 
+# publish 専用の鍵（models/ だけに書ける別 SA: keiba-publisher。docs/operations/publisher_sa.md）があれば、.env の運用の鍵より優先して使う。
+# .env は上書きしない設定（dotenv の既定）で読まれるので、先に環境変数へ入れておけばこちらが効く。
+KEY="${KEIBA_PUBLISHER_KEY:-$HOME/.config/keiba-gcp/publisher.json}"
+if [ -f "$KEY" ]; then
+  eval "$("$PY" - "$KEY" <<'EOF2'
+import json, shlex, sys
+k = json.load(open(sys.argv[1]))
+for env, f in (("GCS_TYPE", "type"), ("GCS_PROJECT_ID", "project_id"), ("GCS_PRIVATE_KEY_ID", "private_key_id"), ("GCS_PRIVATE_KEY", "private_key"),
+               ("GCS_CLIENT_EMAIL", "client_email"), ("GCS_CLIENT_ID", "client_id")):
+    print(f"export {env}={shlex.quote(str(k.get(f, '')))}")
+EOF2
+)"
+  echo "publish 専用の鍵（$KEY）を使います"
+else
+  echo "注意: publish 専用の鍵が無いので .env の鍵を使います（切り離し後は publisher.json に替える）"
+fi
+
 # job_map の models から、ホスト上の実体のパスを引く（local_path はリポジトリ相対）
 list_models() {
   (cd "$NEW" && "$PY" - <<'EOF'
