@@ -39,7 +39,6 @@ WORKDIR /app
 COPY --from=builder /install /usr/local
 COPY src/ ./src/
 COPY config/ ./config/
-COPY main.py ./main.py
 RUN mkdir -p /app/logs /app/data/local /app/data/page_reference && chown -R keiba:keiba /app
 USER keiba
 ENV PYTHONUNBUFFERED=1 \

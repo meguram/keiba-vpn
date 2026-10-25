@@ -10,11 +10,11 @@
    ```
 2. `models/` の接頭辞だけに限った書き込み権限を付ける（上書きと読み取りを含む `objectUser`。`latest.json` の上書きに要る）:
    ```bash
+   BUCKET=$BUCKET bash scripts/gcp/make_iam_condition.sh models/ models-write > /tmp/cond_publisher.yaml
    gcloud storage buckets add-iam-policy-binding gs://$BUCKET \
-     --member "serviceAccount:keiba-publisher@$PROJECT.iam.gserviceaccount.com" --role roles/storage.objectUser \
-     --condition "title=models-write,expression=resource.name.startsWith(\"projects/_/buckets/$BUCKET/objects/models/\")"
+     --member "serviceAccount:keiba-publisher@$PROJECT.iam.gserviceaccount.com" --role roles/storage.objectUser --condition-from-file /tmp/cond_publisher.yaml
    ```
-   ※ 一覧（`storage.objects.list`）も同じ条件に入る。`models/` の外は一覧も書き込みもできない。
+   ※ 読み書き（get/create/delete）は `resource.name`、一覧（list）は `objectListPrefix` で別々に条件が要るので、式に両方を入れている。`models/` の外は一覧も書き込みもできない。
 3. 鍵を作ってホストに置く（ホストは GCP の外なので鍵ファイルが要る。置く場所は決め打ち）:
    ```bash
    gcloud iam service-accounts keys create publisher.json --iam-account keiba-publisher@$PROJECT.iam.gserviceaccount.com
