@@ -26,6 +26,9 @@ class TestShutubaFreshness(unittest.TestCase):
         self.base = Path(self._dir.name)
         with mock.patch.dict(os.environ, {"GCS_BUCKET": ""}):
             self.st = HybridStorage(base_dir=str(self.base), bucket_name="")
+        patcher = mock.patch.object(cache_epoch, "bump_for_save")  # 実際の世代ファイルを書き換えない
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_refresh_existing_local_cache_overwrites_old_file(self) -> None:
         p = self.st._local_cache_path("race_shutuba", "202601010101")
