@@ -55,22 +55,8 @@ bash scripts/gcp/deploy_cloud_run_jobs.sh run-now job event-pump --yes
 - 失敗したら: ログ `gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="keiba-dispatch-m"' --limit 30 --format='value(textPayload)' --freshness=30m` を 37 に渡す。直すまで次へ進まない。
 
 ## ⑨ predict-race を 1 レースだけ手動で（並走なので本番の表示は変わらない）
-レースは、ホストに v6e の予測がある最近のもの（例: 2026-10-25 の `202608040901`）。まず `--dry-run`（ジョブの定義とパラメータの展開だけ確認。モデルや state は取らず、何も書かない）:
-```bash
-gcloud run jobs execute keiba-dispatch-l --region $REGION --wait \
-  --args=-m,src.ops.job_dispatch,job,predict-race,--allow-unready,--dry-run,--arg,race_id=202608040901,--arg,date=20261025
-```
-通ったら実行（`--dry-run` を外す）:
-```bash
-gcloud run jobs execute keiba-dispatch-l --region $REGION --wait \
-  --args=-m,src.ops.job_dispatch,job,predict-race,--allow-unready,--arg,race_id=202608040901,--arg,date=20261025
-```
-- 確認 1（実行記録）: `gcloud storage cat gs://$GCS_BUCKET/ops/job_runs/predict-race/latest.json | python3 -m json.tool | grep -E '"status"|"reason"|duration_sec|memory_peak_mib|memory_limit_mib|"parallel"'`
-  → `status ok`、`parallel true`、**`memory_peak_mib` を 37 に伝える**（8GiB から下げられるかの材料。ホストの準備だけで RSS 2.3GB）。
-- 確認 2（出力）: `gcloud storage ls gs://$GCS_BUCKET/state/data/local/inference/predictions_v6/20261025/` に `202608040901.parquet` があること。
-- 確認 3（本番に影響していないこと）: `gcloud storage ls gs://$GCS_BUCKET/ops/mirror/data/local/inference/predictions_v6/20261025/ | grep 202608040901` の更新時刻が、この実行より前（ホストの 5 分おきの同期）であること。
-- 失敗の典型: 足りない表（`FileNotFoundError ... page_reference/tables/...`）→ そのファイル名を 37 に渡す（`predict-race` の `state_in.include` に足す）。メモリ超過（Out of memory）→ 同じく 37 に（設定を上げる）。
-- 戻す: 出力は `state/` だけなので放置でよい。消すなら `gcloud storage rm -r gs://$GCS_BUCKET/state/data/local/inference/predictions_v6/20261025/`。
+手順の正は `gcp_user_steps_20261026.md` の B5。要点: `gcloud run jobs execute --args` は `--arg` を繰り返せない（`--args` の短縮と解釈される）ので、Cloud Run Admin API の REST（Cloud Tasks と同じ形）で起動する。`KEY=VALUE` を位置引数で受ける版（次の昇格以降）なら `ALLOW_UNREADY=1 bash scripts/gcp/deploy_cloud_run_jobs.sh run-now job predict-race race_id=… date=… --yes`（オプションは job_id より前）。
+確認は `ops/job_runs/predict-race/latest.json`（`status`・`parallel`・`memory_peak_mib`）と `state/data/local/inference/predictions_v6/<日>/<race_id>.parquet`。戻すのは `state/` の該当日を削除するだけ。
 
 ## 通ったら（37 経由で判断）
 1. `python -m src.ops.job_map ready predict-race --note "<確認した内容>"`（コミットして次の昇格に入れる）。

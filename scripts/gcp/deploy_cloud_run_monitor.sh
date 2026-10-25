@@ -33,5 +33,5 @@ run gcloud run deploy "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --im
   --port 8080 --ingress all --allow-unauthenticated \
   --command python --args=-m,uvicorn,--factory,src.monitor.cloud_app:asgi_app,--host,0.0.0.0,--port,8080 \
   --set-env-vars "$ENV_VARS" --set-secrets "$SECRETS"
-echo "# 確認: curl -s \$(gcloud run services describe $SERVICE --region $REGION --format='value(status.url)')/healthz   （鍵なしで 200）"
+echo "# 確認: curl -s \$(gcloud run services describe $SERVICE --region $REGION --format='value(status.url)')/api/health   （鍵なしで 200）"
 echo "# 画面: ヘッダ X-Keiba-Proxy-Key 付きで / を開く（前段の VPS nginx / Cloudflare Access が付ける）"

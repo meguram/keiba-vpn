@@ -126,6 +126,38 @@ def test_predict_race_cli_rejects_bad_race_id():
     assert PR.main(["--race-id", "123", "--date", "20261024"]) == 2
 
 
+def test_predict_race_cli_fails_when_v6_prediction_was_not_made(monkeypatch):
+    """features が ok でも v6 の予測が作られていない（準備や予測の失敗）なら rc≠0。『ok なのに出力なし』を作らない（2026-10-26）。"""
+    monkeypatch.delenv("KEIBA_PRED_MODEL", raising=False)
+    monkeypatch.delenv("KEIBA_V6_SHADOW", raising=False)
+    base = {"race_id": "202605040101", "status": "ok"}
+    for ev, want in (({**base, "v6_status": "ok"}, 0), ({**base, "v6_status": "error", "v6_error": "x"}, 1), ({**base, "v6_status": "missing"}, 1), (dict(base), 1)):
+        monkeypatch.setattr(PR, "run", lambda *a, _ev=ev, **k: [_ev])
+        assert PR.main(["--race-id", "202605040101", "--date", "20261024"]) == want, ev
+    monkeypatch.setenv("KEIBA_V6_SHADOW", "0")                       # v6 を使わない構成なら、v6 の有無は問わない
+    monkeypatch.setattr(PR, "run", lambda *a, **k: [dict(base)])
+    assert PR.main(["--race-id", "202605040101", "--date", "20261024"]) == 0
+
+
+def test_predict_race_run_raises_when_v6_warm_failed(monkeypatch):
+    import types
+    import src.pipeline.inference.weight_triggered_predict as wtp
+
+    class Ctx:
+        def warm(self):
+            return {"engine": "bundle", "v6": {"error": "FileNotFoundError: final_aux/meta.pkl"}}
+
+    monkeypatch.setattr(wtp, "InferenceContext", Ctx)
+    monkeypatch.delenv("KEIBA_V6_SHADOW", raising=False)
+    monkeypatch.delenv("KEIBA_PRED_MODEL", raising=False)
+    import src.pipeline.inference.race_day_workflow as wf
+    monkeypatch.setattr(wf, "load_day_schedule", lambda st, d: [])
+    import pytest
+
+    with pytest.raises(RuntimeError, match="v6 の準備に失敗"):
+        PR.run("202605040101", "20261024", storage=object())
+
+
 # ── 異常通知 ──
 
 def test_alerting_records_and_sends_through_send_payload(monkeypatch):
