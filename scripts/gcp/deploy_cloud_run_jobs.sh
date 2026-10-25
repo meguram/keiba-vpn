@@ -105,7 +105,11 @@ else:
 print(d["runtime"]["run_jobs"][size]["name"])
 PYEOF
 )"
-    CMD=(gcloud run jobs execute "$SIZE" --project "$PROJECT_ID" --region "${REGION:-asia-northeast1}" --wait "--args=-m,src.ops.job_dispatch,$KIND,$NAME")
+    # KEY=VALUE（race_id=… date=…）は位置引数で渡す（gcloud の --args は '--arg' を繰り返せない）。オプションは job_id より前（Python 3.11 の argparse の制約）。
+    #   ALLOW_UNREADY=1 で --allow-unready、DISPATCH_DRY_RUN=1 で --dry-run。例: ALLOW_UNREADY=1 run-now job predict-race race_id=202608040901 date=20261025
+    OPTS=""; [ "${ALLOW_UNREADY:-0}" != 1 ] || OPTS+=",--allow-unready"; [ "${DISPATCH_DRY_RUN:-0}" != 1 ] || OPTS+=",--dry-run"
+    KV=""; for a in "${ARGS[@]:3}"; do KV+=",$a"; done
+    CMD=(gcloud run jobs execute "$SIZE" --project "$PROJECT_ID" --region "${REGION:-asia-northeast1}" --wait "--args=-m,src.ops.job_dispatch,$KIND$OPTS,$NAME$KV")
     echo "${CMD[*]}"
     if [ "$DRY" = 1 ]; then echo "（--dry-run: 実行していません）"; exit 0; fi
     confirm

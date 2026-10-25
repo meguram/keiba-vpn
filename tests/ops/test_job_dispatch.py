@@ -257,3 +257,19 @@ def test_mirror_failure_fails_the_job(tmp_path, patch_doc):
 
     c = ctx(MemoryIO(), Rec(), tmp_path, mirror=boom)
     assert D.run_group("g1", c) != 0
+
+
+@pytest.mark.parametrize("argv", [
+    ["job", "predict-race", "race_id=1", "date=2"],
+    ["job", "--allow-unready", "predict-race", "race_id=1", "date=2"],
+    ["job", "predict-race", "--arg", "race_id=1", "--arg", "date=2"],
+])
+def test_job_args_can_be_passed_positionally_for_gcloud(monkeypatch, argv):
+    """gcloud run jobs execute --args は '--arg' を繰り返せない（--args の短縮と解釈される）ので、KEY=VALUE を位置引数でも渡せる。
+    Python 3.11（Jobs のイメージ）の argparse は、位置引数の間にオプションを挟むと失敗する。オプションは job_id より前に置く（3.13 では挟んでも通るので、このテストは 3.11 でも通る形だけ）。"""
+    calls = []
+    monkeypatch.setattr(D, "run_single", lambda job_id, c, extra=None: calls.append((job_id, extra)) or 0)
+    monkeypatch.setattr(job_map, "validate", lambda doc: [])
+    monkeypatch.setattr("src.ops.gcs_io.default_io", lambda: MemoryIO())
+    assert D.main(argv) == 0
+    assert calls == [("predict-race", {"race_id": "1", "date": "2"})]

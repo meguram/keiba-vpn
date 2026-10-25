@@ -370,6 +370,7 @@ def main(argv: list[str] | None = None) -> int:
     j = sub.add_parser("job")
     j.add_argument("job_id")
     j.add_argument("--arg", action="append", default=[], help="KEY=VALUE（race_id, date など）")
+    j.add_argument("kv", nargs="*", help="KEY=VALUE を位置引数でも渡せる（gcloud run jobs execute --args は --arg を繰り返せない・--args の短縮と解釈されるため）")
     sub.add_parser("list")
     for p in (g, j):
         p.add_argument("--allow-unready", action="store_true")
@@ -392,7 +393,7 @@ def main(argv: list[str] | None = None) -> int:
     ctx = Ctx(io=io, now_fn=now_fn, memory_limit_mib=container_memory_limit_mib(), allow_unready=ns.allow_unready, dry_run=ns.dry_run)
     if ns.cmd == "group":
         return run_group(ns.group_id, ctx)
-    extra = dict(a.split("=", 1) for a in ns.arg)
+    extra = dict(a.split("=", 1) for a in [*ns.arg, *ns.kv])
     return run_single(ns.job_id, ctx, extra=extra)
 
 

@@ -147,18 +147,17 @@ bash scripts/gcp/deploy_cloud_run_jobs.sh run-now job event-pump --yes
 - 確認: `gcloud storage cat gs://$BUCKET/ops/job_runs/event-pump/latest.json | python3 -m json.tool | grep -E '"status"|"reason"'` → `"status": "ok"`
 
 ### B5. predict-race を 1 レースだけ（並走なので本番の表示は変わらない）
-定義の確認だけ（何も書かない）:
+**`gcloud run jobs execute --args` には `--arg` を渡せない**（`--args` の短縮と解釈され「`--arg` cannot be specified multiple times」になる。2026-10-26 に判明）。Cloud Tasks が本番でやるのと同じ **Cloud Run Admin API の REST 呼び出し**で起動する（イメージの再作成は不要）:
 ```bash
-gcloud run jobs execute keiba-dispatch-l --region $REGION --wait --args=-m,src.ops.job_dispatch,job,predict-race,--allow-unready,--dry-run,--arg,race_id=202608040901,--arg,date=20261025
+RACE_ID=202608040901; DATE=20261025; curl -s -X POST -H "Authorization: Bearer $(gcloud auth print-access-token)" -H "Content-Type: application/json" "https://run.googleapis.com/v2/projects/$PROJECT/locations/$REGION/jobs/keiba-dispatch-l:run" -d "{\"overrides\":{\"containerOverrides\":[{\"args\":[\"-m\",\"src.ops.job_dispatch\",\"job\",\"predict-race\",\"--allow-unready\",\"--arg\",\"race_id=$RACE_ID\",\"--arg\",\"date=$DATE\"]}]}}"
 ```
-実行:
-```bash
-gcloud run jobs execute keiba-dispatch-l --region $REGION --wait --args=-m,src.ops.job_dispatch,job,predict-race,--allow-unready,--arg,race_id=202608040901,--arg,date=20261025
-```
+（レスポンスの `name` に `operations/…` が出れば起動済み。`--dry-run` で定義だけ確認したいときは、`"--allow-unready",` の後に `"--dry-run",` を足す。）
+- 状態: `gcloud run jobs executions list --job keiba-dispatch-l --region $REGION --limit 1`（`COMPLETE` になるまで待つ。2〜3 分）
 - 確認 1: `gcloud storage cat gs://$BUCKET/ops/job_runs/predict-race/latest.json | python3 -m json.tool | grep -E '"status"|"reason"|duration_sec|memory_peak_mib|memory_limit_mib|"parallel"'` → `status ok`、`parallel true`。**`memory_peak_mib` を keiba-vpn-37 に伝える。**
 - 確認 2: `gcloud storage ls gs://$BUCKET/state/data/local/inference/predictions_v6/20261025/` に `202608040901.parquet`
 - 失敗の典型: `FileNotFoundError … page_reference/tables/…`（足りない表。ファイル名を伝える）、`Out of memory`（メモリ。伝える）。
 - 戻す: `gcloud storage rm -r gs://$BUCKET/state/data/local/inference/predictions_v6/20261025/`
+- 次の昇格のあと（`job_dispatch` が `KEY=VALUE` の位置引数を受ける版）は、`gcloud` でも書ける: `ALLOW_UNREADY=1 bash scripts/gcp/deploy_cloud_run_jobs.sh run-now job predict-race race_id=$RACE_ID date=$DATE --yes`（オプションは job_id より前に置く: Python 3.11 の argparse の制約）。
 
 ### B6. 監視ポータル（keiba-monitor）のデプロイ（A4 のあと。API と同じイメージ。`keiba-api:<8桁>`）
 ```bash
