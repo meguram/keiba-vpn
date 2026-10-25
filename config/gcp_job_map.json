@@ -247,6 +247,21 @@
    "entry": "final_odds_bundle.json",
    "install_to": "models/final_odds_bundle.json",
    "desc": "想定オッズのモデル（LightGBM のヘッド一式を 1 つの JSON に）。コードが固定パス models/final_odds_bundle.json を読むので、取得後にそこへ置く"
+  },
+  "bundle_v6e": {
+   "env": "KEIBA_V6_BUNDLE",
+   "local_path": "data/local/modeling/training_pipeline/final_v6e/bundle_v6_2025",
+   "desc": "v6e アンサンブルのバンドル（現在の画面・集計・推奨の親モデル。約167MB）"
+  },
+  "stage_v6e": {
+   "env": "KEIBA_V6_STAGE",
+   "local_path": "data/local/modeling/training_pipeline/final_stage/v6_e_2025",
+   "desc": "v6e の前段 S3B（約2MB）"
+  },
+  "rb_state_v6": {
+   "env": "KEIBA_V6_RB_STATE",
+   "local_path": "data/local/inference/state/rb_v6",
+   "desc": "v6e の RB の履歴状態（約6MB。rb-state-daily が日次で作り直す。更新のたびに publish が要る）"
   }
  },
  "jobs": [
@@ -1434,7 +1449,12 @@
     "KEIBA_EVE_PRECOMPUTE_FINAL_ODDS"
    ],
    "models": [
-    "final_odds"
+    "final_odds",
+    "bundle_v6e",
+    "stage_v6e",
+    "rb_state_v6",
+    "tl_reference_v5",
+    "serving_bundle"
    ],
    "state_in": [
     {
@@ -1986,12 +2006,15 @@
     "KEIBA_PROB_CALIBRATION"
    ],
    "models": [
+    "bundle_v6e",
+    "stage_v6e",
+    "rb_state_v6",
+    "tl_reference_v5",
+    "serving_bundle",
     "bundle_v4",
     "stage_v4",
     "aux_v4",
-    "bundle_v5",
-    "tl_reference_v5",
-    "serving_bundle"
+    "bundle_v5"
    ],
    "state_in": [
     {
@@ -2039,8 +2062,9 @@
     "atol": 1e-06
    },
    "blockers": [
-    "モデル一式の publish と serving_bundle の配布",
-    "コンテナ上の履歴テーブルの用意（出走馬の履歴だけで足りる bundle エンジンを使う）"
+    "モデル一式の publish（bundle_v6e・stage_v6e・rb_state_v6・tl_reference_v5・serving_bundle・fitted_artifacts を、ホストで publish 専用の鍵で）",
+    "コンテナ上の履歴テーブルの用意（出走馬の履歴だけで足りる bundle エンジンを使う）",
+    "v4/v5 は画面が参照しない影モードの出力。外すと取得量と時間が減る（外す判断は parity_check の後）"
    ],
    "enabled": true,
    "ready": false,
