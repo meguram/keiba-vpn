@@ -184,3 +184,15 @@ def test_predicted_singles_does_not_compute_legacy_when_required(monkeypatch):
     monkeypatch.setenv("KEIBA_TARGET_REQUIRE_SEC77", "0")
     delegates._predicted_singles(_Storage(), RID)
     assert called
+
+
+def test_response_has_only_the_default_plan_with_at_most_five_patterns():
+    for seed in range(2, 12):
+        preds = _preds(seed=seed)
+        payload, code = _call("full", {"max_total_bet": 2000}, preds=preds, single={**_single(preds, seed=seed), "odds_model": "sec77"})
+        assert code == 200
+        assert [p["id"] for p in payload.get("plans") or []] in ([], [payload["default_plan"]])
+        if payload["status"] == "bet":
+            assert 1 <= len(payload["bets"]) <= 5 and [b["priority"] for b in payload["bets"]] == list(range(1, len(payload["bets"]) + 1))
+            return
+    pytest.skip("この乱数では見送り")
