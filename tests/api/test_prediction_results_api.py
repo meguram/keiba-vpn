@@ -30,9 +30,12 @@ def guest_client(tmp_path, monkeypatch):
     return _build(tmp_path, monkeypatch, False)
 
 
-def _put(tmp_path, date, status_src="race_result", payoff=True):
+def _put(tmp_path, date, status_src="race_result", payoff=True, level=1):
     doc = pr.build_day("20261018", _storage(status_src, with_payoff=payoff))
     doc["date"] = date
+    for r in doc["races"]:
+        if r.get("included"):
+            r["bets"]["level"] = level                  # 推奨度（0=見送り）。回収率は標準以上のレースだけで集計される
     pr.write_day(doc, tmp_path)
 
 
@@ -98,3 +101,22 @@ def test_rated_block_is_not_shown_to_guests(guest_client):
     _put(tmp, "20261018")
     gd = g.get("/api/prediction-results?scope=day&date=20261018").json()
     assert "rated" not in gd and not any("rated" in k for pt in gd["series"] for k in pt)
+
+
+def test_roi_never_includes_skipped_races(client):
+    c, tmp = client
+    _put(tmp, "20261018", level=0)                      # 見送りのレース（購入額はあるが推奨度は 0）
+    n = c.get("/api/prediction-results/news?limit=10").json()["items"]
+    assert all("回収率" not in i["subtitle"] and i["roi"] is None for i in n if i["kind"] in ("day", "week"))
+    b = c.get("/api/prediction-results/bets-summary?date=20261018").json()
+    assert b["races"] == {} and b["day"]["roi"] is None and b["day"]["races_bought"] == 0 and b["week"]["invested"] == 0
+    d = c.get("/api/prediction-results?scope=day&date=20261018").json()
+    assert d["rated"]["counts"]["rated"] == 0 and d["rated"]["kpi"]["roi"] is None and d["rated"]["kpi"]["invested"] == 0
+    assert not any(h["kind"] == "big_return" for h in d["highlights"])
+
+
+def test_bets_summary_counts_only_standard_or_above(client):
+    c, tmp = client
+    _put(tmp, "20261018", level=1)
+    b = c.get("/api/prediction-results/bets-summary?date=20261018").json()
+    assert len(b["races"]) == 1 and b["day"]["races_bought"] == 1 and b["day"]["roi"] is not None

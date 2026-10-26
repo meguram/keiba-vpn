@@ -717,6 +717,12 @@ def rated_counts(records: list[dict], min_level: int = RATED_MIN_LEVEL) -> dict[
             "skipped": sum(1 for x in lv if x is not None and x < min_level), "unrated": sum(1 for x in lv if x is None)}
 
 
+def _rated_highlights(doc: dict) -> list[dict]:
+    """注目レースのうち、推奨馬券の払戻（big_return）は推奨度が標準以上のレースだけ（見送りのレースの購入は出さない）。"""
+    ok = {r["race_id"] for r in rated_records(doc.get("races") or [])}
+    return [h for h in doc.get("highlights", []) if h.get("kind") != "big_return" or h.get("race_id") in ok]
+
+
 def period_summary(scope: str, date: str, base: Path | None = None) -> dict:
     """期間の合算と、日別の推移（回収率・本命の勝率など）。rated_* は推奨度が標準以上のレースだけの集計。"""
     lo, hi = period_range(scope, date)
@@ -740,7 +746,7 @@ def period_summary(scope: str, date: str, base: Path | None = None) -> dict:
             "statuses": {x["date"]: x["status"] for x in docs},
             "status": "final" if docs and all(x["status"] == "final" for x in docs) else "provisional",
             "summary": summ, "rated_summary": rated_summ, "rated_counts": counts, "series": series,
-            "highlights": [h for x in docs for h in x.get("highlights", [])][:12],
+            "highlights": [h for x in docs for h in _rated_highlights(x)][:12],
             "notes": (docs[-1].get("notes") if docs else [])}
 
 
