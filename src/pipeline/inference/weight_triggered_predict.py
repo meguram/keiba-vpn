@@ -60,6 +60,7 @@ class InferenceContext:
         self.v3 = None
         self.v5 = None            # v5 の shadow（v4 と並走。失敗しても v4 の経路・本番予測には影響しない）
         self.v6 = None            # v6 の shadow（v4・v5 と並走。v5 と同じ形・失敗しても他の経路には影響しない）
+        self.sec77 = None         # §77 の想定オッズ用の特徴量づくり（v6 の V3Serving。v6 の shadow が有効ならそれを共有）
 
     def engine(self) -> str:
         """bundle: 出走馬の履歴だけを読む（小さなメモリで動く）。full: 全履歴から作る。auto: バンドルがあれば bundle。"""
@@ -108,6 +109,23 @@ class InferenceContext:
         except Exception as exc:  # v6 が使えなくても v4・v5 の経路は続ける
             logger.exception("v6 の準備に失敗: %s", exc)
             self.v6, info["v6"] = None, {"error": str(exc)}
+        self.sec77 = None
+        try:
+            from src.pipeline.inference import odds_sec77 as os77
+
+            if os77.available():
+                if self.v6 is not None:
+                    self.sec77 = self.v6
+                else:
+                    from src.pipeline.inference import v3_serving as vs
+
+                    pth = vs.v6_paths()
+                    self.sec77 = vs.V3Serving(pth["bundle"], pth["stage"], tl_reference=pth["tl_reference"])
+                    self.sec77.rb_state = pth["rb_state"]
+                    info["sec77"] = self.sec77.warm()
+        except Exception as exc:  # 想定オッズ（§77）が使えなくても予測は続ける（従来の想定オッズのまま）
+            logger.exception("sec77 の準備に失敗: %s", exc)
+            self.sec77, info["sec77"] = None, {"error": str(exc)}
         return info
 
     def _warm_history(self) -> dict:
@@ -282,15 +300,18 @@ def run_for_races(
                 logger.exception("v5 の予測に失敗（v4 には影響しない）: %s", ids)
                 v5_err = str(exc)
         v6p, v6_err, v6_sec = {}, None, 0.0
+        X6, sec77_status = None, {}
         if getattr(ctx, "v6", None) is not None:
             try:
                 t_v6 = time.perf_counter()
-                P6 = ctx.v6.predict(ctx.v6.features(card, F, storage))
+                X6 = ctx.v6.features(card, F, storage)
+                P6 = ctx.v6.predict(X6)
                 v6p = {k: g for k, g in P6.groupby("race_id")}
                 v6_sec = time.perf_counter() - t_v6
             except Exception as exc:
                 logger.exception("v6 の予測に失敗（v4・v5 には影響しない）: %s", ids)
                 v6_err = str(exc)
+        sec77_status = _save_sec77_odds(ctx, card, F, storage, X6, ids)
     except Exception as exc:
         logger.exception("特徴量の作成に失敗: %s", ids)
         for r in races:
@@ -318,6 +339,7 @@ def run_for_races(
             "weights_known": bool(weights_known.get(rid, info["weights_known_ratio"] >= 0.9)),
             "going_known": info["going_known"], "build_sec": info["build_sec"], "batch_races": info["races"], "engine": info.get("engine", "full"),
             "history_last_date": ctx.history_last_date, "dropped_no_weight": int(dropped.get(rid, 0)),
+            "sec77": sec77_status.get(rid, "error"),      # 推奨馬券の想定オッズ(§77)を保存できたか（ok 以外だと stg/prod の推奨は準備中）
         }
         if getattr(ctx, "v3", None) is not None:
             ev["v3_status"] = "error" if v3_err else ("ok" if rid in v3p else "missing")
@@ -380,3 +402,41 @@ def run_for_races(
         events.append(ev)
         logger.info("[weight-trigger] %s ok rows=%d weights_known=%s build=%.1fs", rid, part.height, ev["weights_known"], info["build_sec"])
     return events_bad + events
+
+
+
+def _save_sec77_odds(ctx, card, F, storage, X6, ids) -> dict[str, str]:
+    """§77 の想定単勝・想定複勝を計算して、最終オッズ予測のキャッシュに保存する（odds_source.predicted_single_odds を通る全表示が使う）。
+    失敗しても予測の本体・他の経路には影響しない。ただし stg/prod の推奨馬券は sec77 が無いレースには出さない（target_bets.require_sec77）ので、
+    作れなかった理由をレースごとに返し（イベントの sec77 欄）、モデルが無いときは ERROR で記録する。戻り値: race_id → ok / no_model / disabled / no_numbers / error。"""
+    from src.pipeline.inference import odds_sec77 as os77
+
+    rids = sorted({str(x) for x in card["race_id"].unique().to_list()})
+    srv = getattr(ctx, "sec77", None)
+    if srv is None:
+        why = "disabled" if not os77.enabled() else "no_model"
+        if why == "no_model":
+            logger.error("[sec77] 想定オッズ(§77)のモデルが無いため作れません（推奨馬券は準備中になります）: %s dir=%s", ids, os77.MODEL_DIR)
+        return {r: why for r in rids}
+    out: dict[str, str] = {}
+    try:
+        t0 = time.perf_counter()
+        X = X6 if (X6 is not None and srv is getattr(ctx, "v6", None)) else srv.features(card, F, storage)
+        R = os77.predict_frame(X)
+        cp = card.to_pandas()
+        cp["race_id"], cp["horse_id"] = cp["race_id"].astype(str), cp["horse_id"].astype(str)
+        sec = time.perf_counter() - t0
+        for rid, g in R.groupby("race_id"):
+            c = cp[cp["race_id"] == rid]
+            hn = {h: int(n) for h, n in zip(c["horse_id"], c["horse_number"].fillna(0)) if n and int(n) > 0}
+            name = str(c["race_name"].iloc[0]) if "race_name" in c.columns and len(c) else ""
+            payload = os77.payload_for_race(g, hn, name, elapsed=sec)
+            if payload and os77.save_for_race(storage, payload):
+                out[str(rid)] = "ok"
+            else:
+                out[str(rid)] = "no_numbers" if not payload else "error"
+                logger.warning("[sec77] 馬番が揃わない／保存できない: %s", rid)
+    except Exception:  # noqa: BLE001
+        logger.exception("[sec77] 想定オッズの計算・保存に失敗（推奨馬券は準備中になります）: %s", ids)
+        out = {**{r: "error" for r in rids}, **{k: v for k, v in out.items() if v == "ok"}}
+    return {**{r: "error" for r in rids if r not in out}, **out}

@@ -300,6 +300,11 @@
    "entry": "layer_a.parquet",
    "install_to": "data/local/modeling/training_pipeline/layer_a.parquet",
    "desc": "馬柱の過去走から作る補修表（last_3f・馬体重の補正）の元（約98MB）。feature-accumulate が固定パスを読む。無いと補修なしで特徴量が変わる"
+  },
+  "odds_sec77": {
+   "env": "ODDS_SEC77_DIR",
+   "local_path": "data/local/modeling/odds_pred/serving",
+   "desc": "想定オッズ（決定ログ §77 のモデル。share_model.txt・place_model.txt・meta.json、約20MB）。推奨馬券の想定オッズの正で、無いと stg/prod の推奨馬券は準備中になる。再学習のたびに公開し直す"
   }
  },
  "jobs": [
@@ -1538,7 +1543,8 @@
     "aux_v4",
     "v4_train_table",
     "v6_factory",
-    "ped_keys"
+    "ped_keys",
+    "odds_sec77"
    ],
    "state_in": [
     {
@@ -2222,7 +2228,8 @@
     "aux_v4",
     "v4_train_table",
     "v6_factory",
-    "ped_keys"
+    "ped_keys",
+    "odds_sec77"
    ],
    "state_in": [
     {
@@ -3775,7 +3782,8 @@
     "aux_v4",
     "v4_train_table",
     "v6_factory",
-    "ped_keys"
+    "ped_keys",
+    "odds_sec77"
    ],
    "state_in": [
     {

@@ -79,6 +79,24 @@ def available() -> bool:
     return strategy() == "target" and bool(config()) and bool((odds_pred_config().get("poly2") or {}).get("sanrenpuku"))
 
 
+def require_sec77() -> bool:
+    """推奨馬券を、§77 のモデル（sec77）の想定オッズがあるレースにだけ出すか。検証・集計と同じ基準に固定するための安全弁。
+    stg / prod（KEIBA_ENV が明示）では既定で有効。KEIBA_TARGET_REQUIRE_SEC77=0/1 で上書き。"""
+    v = (os.environ.get("KEIBA_TARGET_REQUIRE_SEC77") or "").strip().lower()
+    if v:
+        return v not in ("0", "false", "no", "off")
+    return (os.environ.get("KEIBA_ENV") or "").strip().lower() in ("stg", "prod")
+
+
+def pending_odds_plan(race_id: str, cap: int | None) -> dict[str, Any]:
+    """sec77 の想定オッズが未準備のレース。従来モデルの想定オッズでは推奨を作らず、理由を付けて見送りの形で返す（odds_pending=True）。"""
+    budget = int(cap) if cap else default_budget()
+    prm = params(budget)
+    return {"strategy": "target", "race_id": race_id, "budget_yen": budget, "target_multiple": prm.mult, "safety_k": prm.k, "max_bets": prm.max_bets,
+            "unit_yen": PT.UNIT, "status": "skip", "level": 0, "bets": [], "total_yen": 0, "odds_basis": "pending", "odds_pending": True,
+            "skip_reason": "想定オッズ（検証と同じモデル）の準備中のため、推奨馬券はまだ出せません"}
+
+
 def default_budget() -> int:
     return int(config().get("default_budget_unlimited", PT.DEFAULT_BUDGET))
 
