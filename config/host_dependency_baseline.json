@@ -193,6 +193,9 @@
   "src/ops/jobs/predict_race.py": {
    "local_data": 1
   },
+  "src/ops/jobs/px_ridge.py": {
+   "local_data": 1
+  },
   "src/ops/jobs/rb_state.py": {
    "local_data": 4,
    "page_reference": 1
