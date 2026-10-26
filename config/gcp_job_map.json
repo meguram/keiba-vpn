@@ -33,6 +33,12 @@
     "memory": "8Gi",
     "cpu": "2",
     "memory_mib": 8192
+   },
+   "xl": {
+    "name": "keiba-dispatch-xl",
+    "memory": "16Gi",
+    "cpu": "4",
+    "memory_mib": 16384
    }
   },
   "scheduler_budget": {
@@ -79,21 +85,13 @@
     "serving-state-profile"
    ]
   },
-  "g-0700-cost": {
-   "cron_jst": "0 7 * * *",
-   "size": "s",
-   "timeout_sec": 300,
-   "desc": "GCP 日次コスト報告（想定 vs 実績・急増警告。予算超過の早期警戒）",
-   "jobs": [
-    "gcp-daily-cost-report"
-   ]
-  },
   "g-0730-shadow": {
    "cron_jst": "30 7 * * *",
    "size": "s",
    "timeout_sec": 600,
-   "desc": "影モード（VPS の取得の並走検証）の日次集計",
+   "desc": "影モード(VPS の取得の並走検証)の日次集計 + GCP 日次コスト報告（想定 vs 実績・急増警告。予算超過の早期警戒）",
    "jobs": [
+    "gcp-daily-cost-report",
     "fetch-shadow-report"
    ]
   },
@@ -197,6 +195,15 @@
    "desc": "夜のスクレイピング状況サマリー",
    "jobs": [
     "slack-scrape-summary-eve"
+   ]
+  },
+  "g-0730-dayprep": {
+   "cron_jst": "30 7 * * *",
+   "size": "xl",
+   "timeout_sec": 1800,
+   "desc": "開催日の朝に、その日の全レースの日単位キャッシュ(v4_day・px_day)だけを作る（予測は作らない）。ピーク約12GBなので 16GiB",
+   "jobs": [
+    "day-prep"
    ]
   }
  },
@@ -854,7 +861,7 @@
     "cron_utc": null,
     "script": "src/scripts/cloud_jobs/gcp_daily_cost_report.py（新規。ホストには無い）"
    },
-   "group": "g-0700-cost",
+   "group": "g-0730-shadow",
    "when_jst": null,
    "steps": [
     {
@@ -2061,7 +2068,7 @@
    "state_in": [
     {
      "path": "data/local/inference/state",
-     "max_mb": 100
+     "max_mb": 150
     },
     {
      "path": "data/page_reference/tables",
@@ -3546,6 +3553,97 @@
    "enabled": true,
    "blockers": [],
    "ready": true
+  },
+  {
+   "id": "day-prep",
+   "desc": "開催日の朝: その日の全レースの日単位キャッシュ(state/<日>/v4_day.parquet・px_day.parquet)だけを作る。predict-race が state から読む（予測は作らない）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 2,
+   "group": "g-0730-dayprep",
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.ops.jobs.day_prep",
+      "--date",
+      "{today}"
+     ]
+    }
+   ],
+   "memory_mib": 16384,
+   "timeout_sec": 1800,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_V3_SERVING",
+    "KEIBA_V5_SHADOW",
+    "KEIBA_V3_BUNDLE",
+    "KEIBA_V3_STAGE",
+    "KEIBA_V3_AUX",
+    "KEIBA_V5_BUNDLE",
+    "KEIBA_V5_STAGE",
+    "KEIBA_V5_TL_REF",
+    "KEIBA_SERVING_BUNDLE_DIR",
+    "KEIBA_INFERENCE_ENGINE",
+    "KEIBA_PROB_CALIBRATION"
+   ],
+   "models": [
+    "bundle_v6e",
+    "stage_v6e",
+    "tl_reference_v5",
+    "serving_bundle",
+    "aux_v4",
+    "v4_train_table",
+    "v6_factory",
+    "ped_keys"
+   ],
+   "state_in": [
+    {
+     "path": "data/local/inference/state",
+     "max_mb": 150
+    },
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 250,
+     "include": [
+      "*/race_result_flat.parquet",
+      "*/race_result_race.parquet",
+      "*/race_shutuba_flat.parquet",
+      "*/race_shutuba_past_flat.parquet",
+      "*/megu_index_flat.parquet"
+     ]
+    },
+    {
+     "path": "data/local/modeling/feature_store/horse_history",
+     "max_mb": 60
+    }
+   ],
+   "blockers": [
+    "ホストの実測: ピーク RSS 約 12GB・約 85 秒（2026-10-26）。Jobs の 16GiB で 1 回手動実行して、state/<日>/ にキャッシュが出ること"
+   ],
+   "enabled": true,
+   "ready": false,
+   "requires_race_day": "today",
+   "state_out": [
+    {
+     "path": "data/local/inference/state",
+     "max_mb": 150
+    }
+   ],
+   "require_out": [
+    "data/local/inference/state/{today_iso}/px_day.parquet",
+    "data/local/inference/state/{today_iso}/v4_day.parquet"
+   ],
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "(新規)",
+    "cron_utc": "",
+    "script": "src.ops.jobs.day_prep（predict-race の日単位部分を朝に分離）"
+   }
   }
  ]
 }

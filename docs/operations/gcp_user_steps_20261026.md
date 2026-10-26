@@ -126,16 +126,16 @@ export IMAGE=$REGION-docker.pkg.dev/$PROJECT/keiba-vpn/jobs:<8桁> && gcloud art
 ```
 - 期待: `sha256:…` が出る。**`Image not found` なら止めて keiba-vpn-37 へ**（CI の jobs ビルドが失敗している）。
 
-### B2. Run Job（s / m / l。同じイメージ。並走モード）
+### B2. Run Job（s / m / l / xl。同じイメージ。並走モード。xl は day-prep 用の 16GiB）
 ```bash
 git checkout <昇格したコミット> && bash scripts/gcp/deploy_cloud_run_jobs.sh apply jobs --parallel --yes
 ```
-- 確認: `gcloud run jobs list --region $REGION --format='table(name,spec.template.spec.template.spec.containers[0].resources.limits.memory)'` → `s 512Mi / m 2Gi / l 8Gi`。`gcloud run jobs describe keiba-dispatch-l --region $REGION --format=json | grep -c KEIBA_PARALLEL_RUN` が 1 以上。
-- 戻す: `for s in s m l; do gcloud run jobs delete keiba-dispatch-$s --region $REGION --quiet; done`
+- 確認: `gcloud run jobs list --region $REGION --format='table(name,spec.template.spec.template.spec.containers[0].resources.limits.memory)'` → `s 512Mi / m 2Gi / l 8Gi / xl 16Gi`。`gcloud run jobs describe keiba-dispatch-l --region $REGION --format=json | grep -c KEIBA_PARALLEL_RUN` が 1 以上。
+- 戻す: `for s in s m l xl; do gcloud run jobs delete keiba-dispatch-$s --region $REGION --quiet; done`
 
 ### B3. Run Job の起動権限（Run Job を作った後）
 ```bash
-for j in keiba-dispatch-s keiba-dispatch-m keiba-dispatch-l; do gcloud run jobs add-iam-policy-binding $j --region $REGION --member "serviceAccount:keiba-scheduler@$PROJECT.iam.gserviceaccount.com" --role roles/run.developer; done
+for j in keiba-dispatch-s keiba-dispatch-m keiba-dispatch-l keiba-dispatch-xl; do gcloud run jobs add-iam-policy-binding $j --region $REGION --member "serviceAccount:keiba-scheduler@$PROJECT.iam.gserviceaccount.com" --role roles/run.developer; done
 ```
 - 確認: `gcloud run jobs get-iam-policy keiba-dispatch-l --region $REGION | grep keiba-scheduler`
 - 戻す: `add-iam-policy-binding` を `remove-iam-policy-binding` に替える。
@@ -158,6 +158,17 @@ ssh keiba-remote 'bash -s -- predict-race rb-state-daily' < scripts/gcp/seed_sta
 - 確認（Cloud Shell）: `gcloud storage ls gs://$BUCKET/models/` に `aux_v4/ v4_train_table/ v6_factory/ ped_keys/` が増える。`gcloud storage ls gs://$BUCKET/state/data/local/modeling/feature_store/horse_history/` に `features_2026.parquet`。
 - 注意: この種まきの時点で履歴が止まる。日次で更新する Jobs（`export-tables-daily`・`feature-accumulate`・`serving-state-precompute`・`px-ridge-window`・`rb-state-daily`）が ready になるまで、Jobs の予測は種まきの日までの履歴で作られる（並走の確認用。本番の表示は変わらない）。
 - イメージの更新: この変更（`predict-race` の models / state_in / 失敗の検出）は `config/gcp_job_map.json` にあり、**Jobs のイメージに焼き込み**。次の master 昇格で作り直されたイメージで、B2（`apply jobs`）を実行し直す（既存の Run Job は `apply jobs` を再実行すれば新しいイメージに更新される）。
+
+### B5-day. day-prep（その日の日単位キャッシュだけを作る。**B5 の前に 1 回**）
+**なぜ**: `predict-race` を「新しいコンテナで 1 レースだけ」動かすと、v6e は毎回、その日の全レース分の日単位の計算（PX・馬主/馬自身の群）をやり直す。ホスト実測でピーク RSS 約 12GB・約 90 秒 → 8GiB で OOM（2026-10-26 の `memory_peak_mib 6848` で強制終了）。そこで朝に 1 回だけ 16GiB の Run Job（`keiba-dispatch-xl`）でキャッシュ（`state/<日>/v4_day.parquet`・`px_day.parquet`。計 0.7MB）を作って `state/` に上げ、`predict-race` はそれを読むだけにした（実測: ピーク RSS 4.1GB・約 31 秒）。予測（`predictions_v6`）は作らない。
+実行（REST。`gcloud run jobs execute --args` は `--arg` を渡せないため）:
+```bash
+DATE=20261025; ISO=2026-10-25; curl -s -X POST -H "Authorization: Bearer $(gcloud auth print-access-token)" -H "Content-Type: application/json" "https://run.googleapis.com/v2/projects/$PROJECT/locations/$REGION/jobs/keiba-dispatch-xl:run" -d "{\"overrides\":{\"containerOverrides\":[{\"args\":[\"-m\",\"src.ops.job_dispatch\",\"job\",\"day-prep\",\"--allow-unready\",\"--arg\",\"today=$DATE\",\"--arg\",\"today_iso=$ISO\"]}]}}"
+```
+- 状態: `gcloud run jobs executions list --job keiba-dispatch-xl --region $REGION --limit 1`（2〜3 分）
+- 確認: `gcloud storage ls gs://$BUCKET/state/data/local/inference/state/$ISO/` に `px_day.parquet` と `v4_day.parquet`。実行記録 `gcloud storage cat gs://$BUCKET/ops/job_runs/day-prep/latest.json | python3 -m json.tool | grep -E '"status"|"reason"|memory_peak_mib|duration_sec'` → `status ok`。**`memory_peak_mib` を keiba-vpn-37 に伝える**（約 12000 の見込み。16384 に収まること）。
+- 戻す: `gcloud storage rm -r gs://$BUCKET/state/data/local/inference/state/$ISO/`
+- 本番の運用: `g-0730-dayprep`（毎日 JST 07:30、開催日だけ）が自動で行う（Scheduler は `day-prep` を ready にしてから）。
 
 ### B5. predict-race を 1 レースだけ（並走なので本番の表示は変わらない）
 **`gcloud run jobs execute --args` には `--arg` を渡せない**（`--args` の短縮と解釈され「`--arg` cannot be specified multiple times」になる。2026-10-26 に判明）。Cloud Tasks が本番でやるのと同じ **Cloud Run Admin API の REST 呼び出し**で起動する（イメージの再作成は不要）:

@@ -20,7 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PATH = REPO_ROOT / "config" / "gcp_job_map.json"
 
 DESTINATIONS = ("gcp", "vps", "host", "retire")
-SIZES = ("s", "m", "l")
+SIZES = ("s", "m", "l", "xl")
 PARITY_KINDS = ("none", "parquet_frame", "json_tree", "file_hash")
 _ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 
@@ -278,7 +278,7 @@ def validate(doc: dict[str, Any], *, known_fetch_tasks: set[str] | None = None, 
             tot = sum(int(s.get("max_mb", 0)) for s in j.get("state_in") or [])
             if tot > int(rt.get("state_total_budget_mb", 1500)):
                 errs.append(f"{jid}: state_in の合計 {tot}MB が予算を超える")
-            if j.get("memory_mib", 0) > run_jobs.get("l", {}).get("memory_mib", 4096):
+            if j.get("memory_mib", 0) > max((v.get("memory_mib", 0) for v in run_jobs.values()), default=4096):
                 errs.append(f"{jid}: メモリが最大サイズを超える")
             if j.get("memory_mib", 0) and tot and tot + 600 > j["memory_mib"] and j.get("enabled"):
                 errs.append(f"{jid}: state_in {tot}MB + 実行メモリ 600MB が memory_mib {j['memory_mib']} を超える（コンテナのディスクはメモリ上）")
