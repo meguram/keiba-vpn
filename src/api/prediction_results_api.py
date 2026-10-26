@@ -162,20 +162,23 @@ def build_news(limit: int = 6) -> dict:
     badge = "確定" if doc["status"] == "final" else "暫定"
     k = _kpi(doc["summary"])
     h = k["honmei"]
+    # 回収率は、推奨度が標準以上のレースだけの仮想購入（見送りのレースを含めない）。対象が無ければ出さない
+    k_roi = _kpi(pr.summarize(pr.rated_records(doc.get("races") or [])))["roi"]
     items: list[dict] = []
     f1 = doc["summary"]["marks"]["honmei"]["f1"]
     pub = f"本命 {f1}/{h['n']}R が1着・複勝圏 {_pct(h['top3'])}" if h["n"] else "集計できるレースがありません"
-    sub = pub + (f"・回収率 {_pct(k['roi'])}" if k["roi"] is not None else "")
+    sub = pub + (f"・回収率 {_pct(k_roi)}" if k_roi is not None else "")
     items.append({"kind": "day", "title": f"{_label(latest)} 結果まとめ", "subtitle": sub, "subtitle_public": pub, "badge": badge,
-                  "date": latest, "link": f"/prediction-results?scope=day&date={latest}", "roi": k["roi"]})
+                  "date": latest, "link": f"/prediction-results?scope=day&date={latest}", "roi": k_roi})
     wk = pr.period_summary("week", latest)
     if len(wk["days"]) >= 1:
         wk_k = _kpi(wk["summary"])
+        wk_roi = _kpi(wk["rated_summary"])["roi"]
         wh = wk_k["honmei"]
         wpub = f"本命1着率 {_pct(wh['win'])}（{wh['n']}R）・複勝圏 {_pct(wh['top3'])}"
-        items.append({"kind": "week", "title": "今週の累計", "subtitle": wpub + (f"・回収率 {_pct(wk_k['roi'])}" if wk_k["roi"] is not None else ""),
+        items.append({"kind": "week", "title": "今週の累計", "subtitle": wpub + (f"・回収率 {_pct(wk_roi)}" if wk_roi is not None else ""),
                       "subtitle_public": wpub, "badge": "確定" if wk["status"] == "final" else "暫定", "date": latest,
-                      "link": f"/prediction-results?scope=week&date={latest}", "roi": wk_k["roi"]})
+                      "link": f"/prediction-results?scope=week&date={latest}", "roi": wk_roi})
     shown = [hl for hl in doc.get("highlights", []) if hl["kind"] != "big_miss"]  # 外れた予想は速報に出さない
     for hl in shown[: max(0, limit - len(items))]:
         items.append({"kind": hl["kind"], "title": {"ana_hit": "注目: 穴馬が好走", "big_return": "注目: 大きな払戻"}.get(hl["kind"], "注目"),
@@ -228,16 +231,17 @@ async def prediction_results_bets_summary(request: Request, date: str = Query(..
         wk = pr.period_summary("week", date)
         day = pr.period_summary("day", date)
         races = {}
+        ok = {r["race_id"] for r in pr.rated_records(doc.get("races") or [])}      # 見送り（推奨度の記録なしを含む）のレースの購入は出さない
         for r in doc.get("races") or []:
             b = r.get("bets") or {}
             tb = b.get("total_bet") or 0
-            if not r.get("included") or not tb:
+            if not r.get("included") or not tb or r["race_id"] not in ok:
                 continue
             ret = b.get("total_return") or 0
             races[r["race_id"]] = {"total_bet": tb, "total_return": round(ret), "hit": ret > 0, "roi": pr.rate(ret, tb), "estimated": bool(b.get("estimated"))}
-        return {"date": date, "label": _label(date), "week": {"from": wk_lo, "to": wk_hi, "days": wk["days"], "status": wk["status"], **_bets_block(wk["summary"])},
-                "day": {"status": day["status"], **_bets_block(day["summary"])}, "races": races,
-                "note": "推奨馬券を、保存済みの最新オッズで購入したとみなした仮想購入（払戻は確定払戻）。実際の購入ではありません。"}
+        return {"date": date, "label": _label(date), "week": {"from": wk_lo, "to": wk_hi, "days": wk["days"], "status": wk["status"], **_bets_block(wk["rated_summary"])},
+                "day": {"status": day["status"], **_bets_block(day["rated_summary"])}, "races": races,
+                "note": "推奨度が標準以上のレースの推奨馬券を、保存済みの最新オッズで購入したとみなした仮想購入（払戻は確定払戻）。見送りのレースは含めません。実際の購入ではありません。"}
     if not is_member(request):
         return JSONResponse(MEMBER_REQUIRED_BODY, status_code=401)
     return _respond(request, await asyncio.to_thread(lambda: _cached(("bets", date), _run)))

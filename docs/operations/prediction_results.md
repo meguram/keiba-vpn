@@ -34,7 +34,7 @@
 - `GET /api/prediction-results/news?limit=N`（ホストのカード用。`subtitle_public` は回収率を除いた文言）
 - `GET /api/prediction-results/days`
 
-**推奨度が標準以上の集計**: 応答の `kpi`・`summary`・`series` は全体（見送りを含む）。会員・開発者の応答には `rated`（推奨度 1=標準 以上のレースだけの `kpi`・`summary`、件数 `counts`＝settled/rated/skipped/unrated、`legend`）と、`series[].honmei_win_rated`・`roi_rated` が付く（匿名には tier.py の許可リストで出ない）。推奨度はレース記録の `bets.lv.level`（現行ルールの再計算）があればそれ、無ければ `bets.level`。未記録のレースは標準以上に入れず `unrated` に数える。保存済みの日次ファイルは書き換えず、読み出し時に集計する。画面（予測成績）は、会員には標準以上のレースを主な集計にし、印の着順分布は『標準以上』と『全体』を並べて出す。
+**推奨度が標準以上の集計**: 応答の `kpi`・`summary`・`series` は全体（見送りを含む）。会員・開発者の応答には `rated`（推奨度 1=標準 以上のレースだけの `kpi`・`summary`、件数 `counts`＝settled/rated/skipped/unrated、`legend`）と、`series[].honmei_win_rated`・`roi_rated` が付く（匿名には tier.py の許可リストで出ない）。推奨度はレース記録の `bets.lv.level`（現行ルールの再計算）があればそれ、無ければ `bets.level`。未記録のレースは標準以上に入れず `unrated` に数える。保存済みの日次ファイルは書き換えず、読み出し時に集計する。**見送り（推奨度 0）のレースを含む回収率は、どの画面・APIの集計でも出さない**（ニュースの回収率、レース一覧の日・週の回収率と各レースの的中、予測成績の回収率・券種別・推移、注目レースの推奨馬券の払戻はすべて標準以上のレースだけ。推奨度が未記録のレースは見送りと区別できないため含めない）。画面（予測成績）は、会員には標準以上のレースを主な集計にし、印の着順分布は『標準以上』と『全体』を並べて出す。
 
 予測 API と同じ公開の GET。回収率（仮想購入）の表示は画面側で会員向けにしている。dev では、集計ファイルが無い日を dev ストアから都度作る。
 

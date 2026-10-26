@@ -74,15 +74,15 @@ function RoiBar({ b }: { b: BetsSummary }) {
           <span style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: (x.roi ?? 0) >= 1 ? "#4ade80" : "#f87171" }}>{roiText(x.roi)}</span>
           <span style={{ fontSize: 12, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{yen(x.invested)} → {yen(x.returned)}・的中 {x.races_hit}/{x.races_bought}R</span>
         </div>
-      ) : <div style={{ fontSize: 13, color: "var(--text-dim)", padding: "4px 0" }}>集計できる購入がありません</div>}
+      ) : <div style={{ fontSize: 13, color: "var(--text-dim)", padding: "4px 0" }}>推奨度が標準以上の購入がありません</div>}
     </div>
   );
   const w = b.week;
   return (
     <section aria-label="推奨馬券の回収率" title={b.note} style={{ display: "flex", gap: 20, flexWrap: "wrap", padding: "10px 14px", marginBottom: 12, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12 }}>
-      {cell(`この日の回収率（${b.label}）`, b.day, b.day.status === "final" ? "" : "暫定")}
-      {cell(`この週の回収率（${formatMD(w.from)}〜${formatMD(w.to)}）`, w, w.status === "final" ? `${w.days.length}日分` : `${w.days.length}日分・暫定`)}
-      <div style={{ flexBasis: "100%", fontSize: 10, color: "var(--text-dim)" }}>推奨馬券の仮想購入（保存済みの最新オッズで購入したとみなし、払戻は確定払戻）。実際の購入ではありません。</div>
+      {cell(`この日の回収率・標準以上（${b.label}）`, b.day, b.day.status === "final" ? "" : "暫定")}
+      {cell(`この週の回収率・標準以上（${formatMD(w.from)}〜${formatMD(w.to)}）`, w, w.status === "final" ? `${w.days.length}日分` : `${w.days.length}日分・暫定`)}
+      <div style={{ flexBasis: "100%", fontSize: 10, color: "var(--text-dim)" }}>推奨度が標準以上のレースの推奨馬券の仮想購入（見送りのレースは含めません。保存済みの最新オッズで購入したとみなし、払戻は確定払戻）。実際の購入ではありません。</div>
     </section>
   );
 }
