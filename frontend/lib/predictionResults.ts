@@ -85,7 +85,7 @@ export type PredictionResults = {
 };
 
 export type NewsItem = {
-  kind: "day" | "week" | "ana_hit" | "big_return" | "big_miss";
+  kind: "day" | "week" | "hit";
   title: string;
   subtitle: string;
   subtitle_public: string;

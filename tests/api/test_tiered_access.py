@@ -390,10 +390,10 @@ def test_prediction_results_hides_odds_and_bets_from_guest_and_free(tier_env):
 def test_prediction_results_news_for_guest_has_only_public_text(tier_env):
     _, c = _fastapi()
     full = _get(c, "/api/prediction-results/news?limit=10", "dev").json()
-    assert any("回収率" in i["subtitle"] for i in full["items"]) and any("単勝" in i["subtitle"] for i in full["items"])
+    assert any("回収率" in i["subtitle"] for i in full["items"]) and any(i["kind"] == "hit" for i in full["items"])
     for t in ("guest", "free"):
         items = _get(c, "/api/prediction-results/news?limit=10", t).json()["items"]
-        assert items and {i["kind"] for i in items} <= {"day", "week", "big_miss"}
+        assert items and {i["kind"] for i in items} <= {"day", "week", "hit", "big_miss"}
         for i in items:
             assert "roi" not in i and i["subtitle"] == i["subtitle_public"]
             assert not any(w in i["subtitle"] for w in ("回収率", "単勝", "倍", "円")), i["subtitle"]

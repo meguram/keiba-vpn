@@ -9,9 +9,7 @@ import type { NewsItem } from "@/lib/predictionResults";
 const KIND_META: Record<NewsItem["kind"], { icon: string; accent: string }> = {
   day: { icon: "📰", accent: "var(--accent)" },
   week: { icon: "📈", accent: "#34d399" },
-  ana_hit: { icon: "🎯", accent: "#f59e0b" },
-  big_return: { icon: "💰", accent: "#f59e0b" },
-  big_miss: { icon: "⚠️", accent: "#f87171" },
+  hit: { icon: "🎯", accent: "#f59e0b" },
 };
 
 const INTERVAL_MS = 5000;
