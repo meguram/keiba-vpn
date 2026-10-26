@@ -160,6 +160,7 @@ class Ctx:
     pull: Callable[..., Any] | None = None
     push: Callable[..., Any] | None = None
     mirror: Callable[..., Any] | None = None
+    mirror_pull: Callable[..., Any] | None = None
     fetch_model: Callable[..., Path] | None = None
     peak_fn: Callable[[], int] = _children_peak_mib
 
@@ -177,6 +178,10 @@ class Ctx:
             from src.ops import gcs_mirror
 
             self.mirror = gcs_mirror.push_trees
+        if self.mirror_pull is None:
+            from src.ops import gcs_mirror as _gm
+
+            self.mirror_pull = _gm.pull_trees
         if self.fetch_model is None:
             from src.ops import model_publish
 
@@ -186,8 +191,12 @@ class Ctx:
 # ───────────────────────── ガード ─────────────────────────
 
 def _race_day_exists(io: BlobIO, date: str) -> bool:
-    doc = read_json(io, f"state/data/page_reference/race_lists/{date}.json")
-    return bool(doc and (doc.get("races") if isinstance(doc, dict) else doc))
+    # state/ に無ければ、画面と取得役が使う ops/mirror を読む（読み取りだけ。2026-10-26: state/ に race_lists の種まきが無く、開催日なのに skipped になった）
+    for key in (f"state/data/page_reference/race_lists/{date}.json", f"ops/mirror/data/page_reference/race_lists/{date}.json"):
+        doc = read_json(io, key)
+        if doc and (doc.get("races") if isinstance(doc, dict) else doc):
+            return True
+    return False
 
 
 def check_guards(job: dict[str, Any], params: dict[str, str], ctx: Ctx, now: datetime) -> tuple[str, str] | None:
@@ -274,6 +283,8 @@ def run_job(job: dict[str, Any], ctx: Ctx, params: dict[str, str], *, tick: date
             models[name] = v
             install(spec_models, name, path, ctx.root)
         rec["state"]["pull"] = ctx.pull(ctx.io, job.get("state_in") or [], ctx.root, params=params)
+        if job.get("mirror_in"):      # 画面・取得役と同じ ops/mirror から参照データ（race_lists・発走時刻表など）を読む（読み取りだけ）
+            rec["state"]["mirror_in"] = ctx.mirror_pull(job["mirror_in"], recent_days=float(job.get("mirror_in_days", 14)))
     except Exception as exc:  # noqa: BLE001
         reason = f"準備に失敗: {type(exc).__name__}: {exc}"
         out = finish(FAILED, reason)

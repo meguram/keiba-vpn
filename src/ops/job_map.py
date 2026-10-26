@@ -272,6 +272,9 @@ def validate(doc: dict[str, Any], *, known_fetch_tasks: set[str] | None = None, 
             for pat in j.get("require_out") or []:
                 if not any(pat == o or pat.startswith(o.rstrip("/") + "/") for o in outs):
                     errs.append(f"{jid}: require_out の {pat} が state_out / mirror_out の配下ではない（作っても上げない・確認できない）")
+            for t in j.get("mirror_in") or []:
+                if not _gm.tree_known(t):
+                    errs.append(f"{jid}: mirror_in の {t} は gcs_mirror の PUSH_TREES の配下ではない（ops/mirror に無い）")
             for t in j.get("mirror_out") or []:
                 if not _gm.tree_known(t):
                     errs.append(f"{jid}: mirror_out の {t} は gcs_mirror の PUSH_TREES の配下ではない（画面が読めない）")
