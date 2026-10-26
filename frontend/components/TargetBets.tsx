@@ -8,7 +8,7 @@ import { TIER_STYLE, type PaidLeg, type PaidTier } from "@/components/PaidBets";
  *  倍率・払戻は想定オッズ（AI の予測）で、実オッズは使わない・出さない。 */
 export type TargetBet = {
   bet_type: string; bet_label: string; combo: number[]; combo_label: string; legs: PaidLeg[];
-  yen: number; est_multiple: number; est_payout_yen: number; hit_rate_pct: number; result?: BetResult;
+  yen: number; est_multiple: number; est_payout_yen: number; hit_rate_pct: number; ev_line_multiple?: number | null; result?: BetResult;
 };
 export type TargetRec = {
   strategy: "target"; view: string; race_id: string; status: "bet" | "skip"; skip_reason: string | null;
@@ -112,6 +112,7 @@ export function TargetBets({
               <th style={TH} title="想定オッズ（AI の予測）。実際のオッズではありません">想定倍率</th>
               <th style={TH} title="購入額×想定倍率。当たったときの目安">想定払戻</th>
               <th style={TH} title="この組み合わせが的中する確率（AI の予測）">的中率</th>
+              <th style={TH} title="直前の実際のオッズがこの倍率以上なら、AI の的中確率から見て期待値が1以上になります（損益分岐＝1÷的中確率）。購入の最終判断は実際のオッズでお願いします">期待値ライン</th>
               {hasResult && <th style={TH}>結果</th>}
             </tr>
           </thead>
@@ -130,6 +131,7 @@ export function TargetBets({
                 <td style={{ ...TD, whiteSpace: "nowrap" }} data-sort={b.est_multiple}>{b.est_multiple.toFixed(1)}倍</td>
                 <td style={{ ...TD, whiteSpace: "nowrap" }} data-sort={b.est_payout_yen}>約{yen(b.est_payout_yen)}</td>
                 <td style={{ ...TD, whiteSpace: "nowrap" }} data-sort={b.hit_rate_pct}>{b.hit_rate_pct.toFixed(1)}%</td>
+                <td style={{ ...TD, whiteSpace: "nowrap", fontWeight: 700 }} data-sort={b.ev_line_multiple ?? 0}>{b.ev_line_multiple != null ? `${b.ev_line_multiple.toFixed(1)}倍以上` : "—"}</td>
                 {hasResult && <ResultCell hit={b.result ? b.result.hit : null} payout={b.result?.payout ?? 0} />}
               </tr>
             ))}

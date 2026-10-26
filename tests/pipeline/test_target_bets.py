@@ -66,6 +66,7 @@ def test_portfolio_constraints_for_budgets(budget):
             assert b["yen"] * b["est_multiple"] >= 5.0 * b0 * 2.0 - 100 * b["est_multiple"]
             assert b["est_payout_yen"] >= 5.0 * b0
         assert r["level"] in (1, 2, 3, 4) and 0 < r["any_hit_rate_pct"] <= 100
+        assert all(abs(b["ev_line_multiple"] - 1 / (b["hit_rate_pct"] / 100)) <= 0.06 + 0.002 * b["ev_line_multiple"] for b in r["bets"]), "期待値ライン＝1÷的中確率"
 
 
 def test_skip_when_no_edge_and_when_field_is_small():

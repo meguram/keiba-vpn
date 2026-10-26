@@ -241,11 +241,19 @@ def portfolio_level(cands: list[Any], raw_roi: float | None) -> tuple[int, float
     return PZ.level_for_roi(roi if cands else None, "C"), (round(float(roi), 3) if roi is not None else None)
 
 
+TARGET_ODDS_BASIS = "sec77"      # 推奨度・仮想購入の集計に使う想定オッズの出所（決定ログ §77 のモデル。検証と同じ基準）。従来モデルの想定オッズで作った記録は集計に入れない
+
+
 def simulate_target_bets(storage: Any, race_id: str, result: dict, max_total_bet: int | None = DEFAULT_MAX_TOTAL_BET) -> dict:
     """画面に出している推奨馬券（既定方策 target。delegates._optimize_target と同じ計算）を、既定上限で購入したとして精算する。
     推奨度（level）は画面のレース推奨度と同じ。見送り（level 0）は買い目なし（total_bet=0）。"""
     from src.api.v1.delegates import _optimize_target      # 画面と同じ計算を使う（API 層の関数だが、計算本体で副作用はない）
 
+    from src.pipeline.inference.odds_source import predicted_single_odds
+
+    single = predicted_single_odds(storage, race_id)       # キャッシュだけを見る（従来モデルでその場計算して基準を混ぜない）
+    if not single or single.get("odds_model") != TARGET_ODDS_BASIS:
+        return {"status": "basis", "strategy": "target", "basis": (single or {}).get("odds_model") or "none"}
     payload, code = _optimize_target({"race_id": race_id, "max_total_bet": max_total_bet}, "full", storage)
     if code != 200:
         return {"status": "error", "strategy": "target", "error": str(payload.get("error") or code)[:120]}
@@ -268,7 +276,7 @@ def simulate_target_bets(storage: Any, race_id: str, result: dict, max_total_bet
         t["hit"] += int(hit)
     for t in by_type.values():
         t["returned"] = round(t["returned"])
-    return {"status": "ok", "strategy": "target", "level": level, "total_bet": total_bet, "total_return": round(total_ret), "by_type": by_type,
+    return {"status": "ok", "strategy": "target", "basis": TARGET_ODDS_BASIS, "level": level, "total_bet": total_bet, "total_return": round(total_ret), "by_type": by_type,
             "estimated": estimated, "n_bets": len(bets)}
 
 
@@ -736,7 +744,7 @@ RATED_MIN_LEVEL = 1       # 推奨度が『標準』以上（0=見送りは含�
 def record_level(r: dict) -> int | None:
     """レース記録の推奨度（0=見送り〜4=最注目）。画面の推奨馬券（target）の仮想購入 bets_t の推奨度。未記録・計算できなかったレースは None。"""
     bt = r.get("bets_t") or {}
-    return int(bt["level"]) if bt.get("status") == "ok" and bt.get("level") is not None else None
+    return int(bt["level"]) if bt.get("status") == "ok" and bt.get("basis") == TARGET_ODDS_BASIS and bt.get("level") is not None else None
 
 
 def target_view(r: dict) -> dict:
@@ -792,7 +800,7 @@ def add_target_bets(date: str, storage: Any, base: Path | None = None, *, dry_ru
         if not rec.get("included"):
             continue
         out["races"] += 1
-        if (rec.get("bets_t") or {}).get("status") == "ok":
+        if record_level(rec) is not None:               # 検証と同じ基準(sec77)で計算済み
             out["already"] += 1
             continue
         if max_races is not None and out["added"] + out["failed"] >= max_races:
@@ -803,6 +811,12 @@ def add_target_bets(date: str, storage: Any, base: Path | None = None, *, dry_ru
         except Exception as exc:  # noqa: BLE001
             logger.warning("推奨馬券(target)の追記に失敗 %s: %s", rec.get("race_id"), exc)
             out["failed"] += 1
+            continue
+        if new and new.get("status") == "basis":        # sec77 の想定オッズがまだ無い日。基準が違う記録を残さず、集計から外す（後で再試行）
+            had = bool(rec.get("bets_t"))
+            rec["bets_t"] = new
+            out["basis"] = out.get("basis", 0) + 1
+            out["added"] += int(had)                     # 古い基準の記録を外したときだけ書き戻す
             continue
         if not new or new.get("status") != "ok":
             out["failed"] += 1
@@ -922,7 +936,7 @@ def bets_level_card(today: _date, base: Path | None = None) -> dict:
                         "levels": levels, "total": {**tot, "roi": rate(tot["returned"], tot["invested"]), "hit_rate": rate(tot["hit_races"], tot["races"])},
                         "skipped_races": (bl.get("0") or _BLANK_LEVEL)["races"], "unrated_races": unrated})
     return {"as_of": today.strftime("%Y%m%d"), "year": y, "periods": periods,
-            "note": "画面に出している推奨馬券（3連複・目標払戻）を既定の上限（1レース2,000円）で購入したとみなした仮想購入。推奨度は画面のレース推奨度と同じ、払戻は確定払戻。実際の購入ではありません。"}
+            "note": "画面に出している推奨馬券（既定プラン: 全券種・縛りなし。想定オッズは §77 のモデル）を既定の上限（1レース2,000円）で購入したとみなした仮想購入。推奨度は画面のレース推奨度と同じ、払戻は確定払戻。実際の購入ではありません。"}
 
 
 def mark_card(today: _date, base: Path | None = None) -> dict:
