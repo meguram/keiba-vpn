@@ -126,6 +126,11 @@ ul.bullets li::before {
   </p>
 </header>
 
+<div class="callout warn">
+  <h4>このページはホスト（dev / stg）上のサーバー構成</h4>
+  <p>公開（prod）は、画面=VPS（nginx + Next.js）、API=Cloud Run、予測などの定期処理=Cloud Run Jobs、取得=VPS の取得役へ移行中です（取得と予測生成はまだホストが担当）。現行の構成と到達点は「公開基盤の現在の構成と脱ホスト移行」の章を参照してください。</p>
+</div>
+
 <div class="callout info">
   <h4>ポートの正は <code>config/ports.env</code></h4>
   <p>他アプリが既定で使う 3000 / 5000 / 8000 / 9090 を避け、<b>dev=231xx / stg=232xx / prod=233xx / 監視ポータル=23900</b> に集約している（一覧は <code>docs/operations/service-endpoints.md</code>）。PostgreSQL（5432）・Redis（6379）・MLflow Model Serving（5001〜5010）・VPS 用 <code>docker-compose.serving.yml</code>（FastAPI 8000）は従来のポートのまま。このページの旧番号（3000 / 3001 / 5000 / 8000）は 2026-10 に現行値へ更新済み。</p>

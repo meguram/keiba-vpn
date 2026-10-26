@@ -171,8 +171,9 @@ def build_news(limit: int = 6) -> dict:
         items.append({"kind": "week", "title": "今週の累計", "subtitle": wpub + (f"・回収率 {_pct(wk_k['roi'])}" if wk_k["roi"] is not None else ""),
                       "subtitle_public": wpub, "badge": "確定" if wk["status"] == "final" else "暫定", "date": latest,
                       "link": f"/prediction-results?scope=week&date={latest}", "roi": wk_k["roi"]})
-    for hl in doc.get("highlights", [])[: max(0, limit - len(items))]:
-        items.append({"kind": hl["kind"], "title": {"ana_hit": "注目: 穴馬が好走", "big_return": "注目: 大きな払戻", "big_miss": "注目: 大きく外れた"}.get(hl["kind"], "注目"),
+    shown = [hl for hl in doc.get("highlights", []) if hl["kind"] != "big_miss"]  # 外れた予想は速報に出さない
+    for hl in shown[: max(0, limit - len(items))]:
+        items.append({"kind": hl["kind"], "title": {"ana_hit": "注目: 穴馬が好走", "big_return": "注目: 大きな払戻"}.get(hl["kind"], "注目"),
                       "subtitle": hl["text"], "subtitle_public": hl["text"], "badge": badge, "date": latest,
                       "link": f"/race/{hl['race_id']}", "roi": None})
     return {"items": items[:limit], "latest": latest, "status": doc["status"]}
