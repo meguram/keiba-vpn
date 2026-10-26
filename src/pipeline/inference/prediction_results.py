@@ -694,23 +694,52 @@ def list_days(base: Path | None = None) -> list[str]:
     return sorted(local)
 
 
+RATED_MIN_LEVEL = 1       # 推奨度が『標準』以上（0=見送りは含めない）
+
+
+def record_level(r: dict) -> int | None:
+    """レース記録の推奨度（0=見送り〜4=最注目）。現行ルールでの再計算（bets.lv）があればそれ、無ければ bets.level。記録が無ければ None。"""
+    b = r.get("bets") or {}
+    lv = (b.get("lv") or b).get("level")
+    return int(lv) if lv is not None else None
+
+
+def rated_records(records: list[dict], min_level: int = RATED_MIN_LEVEL) -> list[dict]:
+    """推奨度が min_level 以上のレース記録だけ（推奨度が未記録のレースは含めない）。"""
+    return [r for r in records if r.get("included") and (record_level(r) is not None) and record_level(r) >= min_level]
+
+
+def rated_counts(records: list[dict], min_level: int = RATED_MIN_LEVEL) -> dict[str, int]:
+    """集計できたレース settled を、標準以上 rated・見送り skipped・推奨度が未記録 unrated に分けた件数。"""
+    inc = [r for r in records if r.get("included")]
+    lv = [record_level(r) for r in inc]
+    return {"settled": len(inc), "rated": sum(1 for x in lv if x is not None and x >= min_level),
+            "skipped": sum(1 for x in lv if x is not None and x < min_level), "unrated": sum(1 for x in lv if x is None)}
+
+
 def period_summary(scope: str, date: str, base: Path | None = None) -> dict:
-    """期間の合算と、日別の推移（回収率・本命の勝率など）。"""
+    """期間の合算と、日別の推移（回収率・本命の勝率など）。rated_* は推奨度が標準以上のレースだけの集計。"""
     lo, hi = period_range(scope, date)
     days = [d for d in list_days(base) if lo <= d <= hi]
     docs = read_days(days, base)
     summ = merge_summaries([x["summary"] for x in docs]) if docs else summarize([])
+    rated_by_day = [summarize(rated_records(x.get("races") or [])) for x in docs]
+    rated_summ = merge_summaries(rated_by_day) if docs else summarize([])
+    counts = {k: sum(rated_counts(x.get("races") or [])[k] for x in docs) for k in ("settled", "rated", "skipped", "unrated")}
     series = []
-    for x in docs:
+    for x, rs in zip(docs, rated_by_day):
         s = x["summary"]
         inv = s["bets"]["invested"]
+        rinv = rs["bets"]["invested"]
         series.append({"date": x["date"], "status": x["status"], "roi": (s["bets"]["returned"] / inv) if inv else None,
                        "honmei_win": (s["marks"]["honmei"]["f1"] / s["marks"]["honmei"]["n"]) if s["marks"]["honmei"]["n"] else None,
+                       "roi_rated": (rs["bets"]["returned"] / rinv) if rinv else None,
+                       "honmei_win_rated": (rs["marks"]["honmei"]["f1"] / rs["marks"]["honmei"]["n"]) if rs["marks"]["honmei"]["n"] else None,
                        "races": s["races_settled"]})
     return {"scope": scope, "date": date, "from": lo, "to": hi, "days": [x["date"] for x in docs],
             "statuses": {x["date"]: x["status"] for x in docs},
             "status": "final" if docs and all(x["status"] == "final" for x in docs) else "provisional",
-            "summary": summ, "series": series,
+            "summary": summ, "rated_summary": rated_summ, "rated_counts": counts, "series": series,
             "highlights": [h for x in docs for h in x.get("highlights", [])][:12],
             "notes": (docs[-1].get("notes") if docs else [])}
 

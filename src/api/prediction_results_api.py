@@ -130,8 +130,13 @@ async def prediction_results(request: Request, scope: str = Query("day", pattern
             d = days[-1] if days else datetime.now().strftime("%Y%m%d")
         _ensure_dev_day(d)
         ps = pr.period_summary(scope, d)
+        from src.utils import paid_zone as PZ
+
         out: dict[str, Any] = {**{k: ps[k] for k in ("scope", "date", "from", "to", "days", "statuses", "status", "series", "highlights", "notes")},
                                "kpi": _kpi(ps["summary"]), "summary": ps["summary"], "label": _label(d)}
+        # 推奨度（レース期待値）が標準以上のレースだけの集計。推奨度は会員向けなので、tier.py の許可リストが匿名の応答からは落とす
+        out["rated"] = {"min_level": pr.RATED_MIN_LEVEL, "label": "標準以上", "counts": ps["rated_counts"],
+                        "kpi": _kpi(ps["rated_summary"]), "summary": ps["rated_summary"], "legend": PZ.legend()}
         if scope == "day":
             doc = pr.read_day(d)
             out["races"] = (doc or {}).get("races", [])
