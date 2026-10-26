@@ -171,27 +171,100 @@ def test_old_saved_marks_with_many_pairs_and_old_anchor_still_aggregate():
     assert pr.MARK_SYMBOLS["anchor"] == "△"
 
 
-def _rec(level, f1_finish, bet=100, ret=0, lv=None):
+def _rec(level, f1_finish, bet=100, ret=0, status="ok"):
     pick = {"horse_number": 1, "horse_name": "a", "finish": f1_finish, "win_prob": 0.3}
-    bets = {"total_bet": bet, "total_return": ret, "by_type": {}, "level": level}
-    if lv is not None:
-        bets["lv"] = {"level": lv, "total_bet": bet, "total_return": ret}
-    return {"race_id": f"r{level}{f1_finish}", "included": True, "top1": pick, "marks": {"honmei": [pick]}, "bets": bets, "winner_logloss": 1.0}
+    bt = {"status": status, "strategy": "target", "basis": "sec77", "level": level, "total_bet": bet if level else 0, "total_return": ret if level else 0,
+          "by_type": {"sanrenpuku": {"invested": bet, "returned": ret, "n": 1, "hit": int(ret > 0)}} if level else {}, "estimated": False}
+    rec = {"race_id": f"r{level}{f1_finish}", "included": True, "venue": "東京", "round": 1, "top1": pick, "marks": {"honmei": [pick]}, "winner_logloss": 1.0,
+           "bets": {"total_bet": 999, "total_return": 0, "by_type": {}, "level": 3}}      # 従来の最適化の仮想購入（集計には使わない）
+    if level is not None:
+        rec["bets_t"] = bt
+    return rec
 
 
-def test_rated_records_keep_standard_or_above_and_skip_unrecorded():
-    recs = [_rec(0, 1, 0), _rec(1, 1, ret=200), _rec(3, 5), _rec(None, 1), _rec(0, 2, lv=2), {"race_id": "x", "included": False}]
-    assert [r["race_id"] for r in pr.rated_records(recs)] == ["r11", "r35", "r02"]        # 現行ルールの再計算（lv）があればそれを使う
-    assert pr.rated_counts(recs) == {"settled": 5, "rated": 3, "skipped": 1, "unrated": 1}
-    s = pr.summarize(pr.rated_records(recs))
-    assert s["marks"]["honmei"]["f1"] == 1 and s["marks"]["honmei"]["n"] == 3 and s["races_settled"] == 3
+def test_rated_records_use_target_level_and_target_bets_only():
+    recs = [_rec(0, 1), _rec(1, 1, ret=200), _rec(3, 5), _rec(None, 1), _rec(2, 2, status="error"), {"race_id": "x", "included": False}]
+    rated = pr.rated_records(recs)
+    assert [r["race_id"] for r in rated] == ["r11", "r35"]
+    assert rated[0]["bets"]["total_bet"] == 100 and rated[0]["bets"]["total_return"] == 200       # 従来の bets（999円）ではなく target の購入
+    assert pr.rated_counts(recs) == {"settled": 5, "rated": 2, "skipped": 1, "unrated": 2}          # 計算できなかった(error)・未記録は unrated
+    s = pr.summarize(rated)
+    assert s["marks"]["honmei"]["n"] == 2 and s["races_settled"] == 2 and s["bets"]["invested"] == 200 and s["bets"]["returned"] == 200
+
+
+def test_level_summary_counts_skipped_and_unrated_separately():
+    recs = [_rec(0, 1), _rec(1, 1, ret=300), _rec(1, 4), _rec(None, 1)]
+    by, unrated = pr.level_summary(recs)
+    assert unrated == 1 and by["0"]["races"] == 1 and by["0"]["invested"] == 0
+    assert by["1"] == {"races": 2, "hit": 1, "invested": 200, "returned": 300}
 
 
 def test_period_summary_has_rated_summary_series_and_counts(tmp_path):
-    recs = [_rec(0, 1, 0), _rec(2, 1, ret=300), _rec(1, 4)]
+    recs = [_rec(0, 1), _rec(2, 1, bet=200, ret=300), _rec(1, 4)]
     pr.write_day({"date": "20261018", "status": "final", "summary": pr.summarize(recs), "highlights": [], "races": recs, "notes": []}, tmp_path)
     p = pr.period_summary("day", "20261018", tmp_path)
     assert p["summary"]["marks"]["honmei"]["n"] == 3 and p["rated_summary"]["marks"]["honmei"]["n"] == 2
     assert p["rated_counts"] == {"settled": 3, "rated": 2, "skipped": 1, "unrated": 0}
     pt = p["series"][0]
-    assert pt["honmei_win"] == pytest.approx(2 / 3) and pt["honmei_win_rated"] == pytest.approx(1 / 2) and pt["roi_rated"] == pytest.approx(300 / 200)
+    assert pt["honmei_win"] == pytest.approx(2 / 3) and pt["honmei_win_rated"] == pytest.approx(1 / 2) and pt["roi_rated"] == pytest.approx(300 / 300)
+
+
+def test_simulate_target_bets_settles_displayed_plan_and_skip_has_no_purchase(monkeypatch):
+    from src.api.v1 import delegates as D
+
+    result = {"finish": {1: 1, 2: 2, 3: 3, 4: 4}, "n_runners": 4, "payoff": {"sanrenpuku": {(1, 2, 3): 5000}}}
+    bets = [{"bet_type": "sanrenpuku", "combo": [1, 2, 3], "yen": 200, "est_multiple": 40.0}, {"bet_type": "sanrenpuku", "combo": [1, 2, 4], "yen": 100, "est_multiple": 30.0}]
+    monkeypatch.setattr(D, "_optimize_target", lambda body, view, storage=None: ({"status": "bet", "level": 3, "bets": bets}, 200))
+    from src.pipeline.inference import odds_source as OS
+
+    monkeypatch.setattr(OS, "predicted_single_odds", lambda storage, rid: {"entries": [], "odds_model": "sec77"})
+    out = pr.simulate_target_bets(object(), "r", result)
+    assert out["status"] == "ok" and out["basis"] == "sec77" and out["level"] == 3 and out["total_bet"] == 300 and out["total_return"] == 10000 and out["by_type"]["sanrenpuku"]["hit"] == 1
+    monkeypatch.setattr(D, "_optimize_target", lambda body, view, storage=None: ({"status": "skip", "level": 0, "bets": []}, 200))
+    skip = pr.simulate_target_bets(object(), "r", result)
+    assert skip["level"] == 0 and skip["total_bet"] == 0 and skip["total_return"] == 0
+    monkeypatch.setattr(D, "_optimize_target", lambda body, view, storage=None: ({"error": "予測結果がありません"}, 404))
+    assert pr.simulate_target_bets(object(), "r", result)["status"] == "error"
+
+
+def test_add_target_bets_fills_only_missing_races_and_keeps_existing(tmp_path, monkeypatch):
+    recs = [_rec(None, 1), _rec(2, 1)]
+    recs[0]["race_id"], recs[1]["race_id"] = "a", "b"
+    pr.write_day({"date": "20261018", "status": "final", "summary": pr.summarize(recs), "highlights": [], "races": recs, "notes": []}, tmp_path)
+    monkeypatch.setattr(pr, "load_race_result", lambda storage, rid: {"finish": {1: 1}})
+    monkeypatch.setattr(pr, "simulate_target_bets", lambda storage, rid, res, cap: {"status": "ok", "level": 1, "total_bet": 100, "total_return": 0, "by_type": {}, "estimated": False})
+    out = pr.add_target_bets("20261018", object(), tmp_path)
+    assert out == {"races": 2, "added": 1, "already": 1, "failed": 0}
+    doc = pr.read_day("20261018", tmp_path)
+    assert doc["races"][0]["bets_t"]["level"] == 1 and doc["races"][1]["bets_t"]["level"] == 2
+
+
+def test_cli_skip_final_does_not_reaggregate_final_days(monkeypatch, capsys):
+    from src.scraper import storage as st
+    from src.scripts.data import prediction_results as cli
+
+    docs = {"20261017": {"status": "final"}, "20261018": {"status": "provisional"}}
+    called: list[str] = []
+    monkeypatch.setattr(st, "HybridStorage", lambda *a, **k: object())
+    monkeypatch.setattr(cli.pr, "read_day", lambda d, base=None: docs.get(d))
+    monkeypatch.setattr(cli.pr, "aggregate_day",
+                        lambda d, storage, **k: called.append(d) or {"saved": True, "status": "final", "summary": {"races_settled": 0}})
+    assert cli.main(["--from", "20261017", "--to", "20261018", "--skip-final"]) == 0
+    assert called == ["20261018"] and "確定済みのため再集計しない" in capsys.readouterr().out
+
+
+def test_target_bets_not_simulated_on_legacy_odds_and_old_records_are_unrated(tmp_path, monkeypatch):
+    from src.pipeline.inference import odds_source as OS
+
+    monkeypatch.setattr(OS, "predicted_single_odds", lambda storage, rid: {"entries": [], "odds_model": "legacy"})
+    assert pr.simulate_target_bets(object(), "r", {"finish": {1: 1}})["status"] == "basis"
+    monkeypatch.setattr(OS, "predicted_single_odds", lambda storage, rid: None)
+    assert pr.simulate_target_bets(object(), "r", {"finish": {1: 1}})["basis"] == "none"
+    old = {"race_id": "x", "included": True, "bets_t": {"status": "ok", "level": 4, "total_bet": 2000, "total_return": 0}}      # 基準を記録していない古い記録
+    assert pr.record_level(old) is None and pr.rated_records([old]) == []
+    # 古い記録は再計算の対象。sec77 が無い日は基準違いの記録を外す
+    pr.write_day({"date": "20261018", "status": "final", "summary": pr.summarize([old]), "highlights": [], "races": [old], "notes": []}, tmp_path)
+    monkeypatch.setattr(pr, "load_race_result", lambda storage, rid: {"finish": {1: 1}})
+    monkeypatch.setattr(pr, "simulate_target_bets", lambda storage, rid, res, cap: {"status": "basis", "basis": "legacy"})
+    out = pr.add_target_bets("20261018", object(), tmp_path)
+    assert out["basis"] == 1 and pr.read_day("20261018", tmp_path)["races"][0]["bets_t"]["status"] == "basis"

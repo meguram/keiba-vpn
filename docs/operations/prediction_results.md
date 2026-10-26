@@ -34,9 +34,45 @@
 - `GET /api/prediction-results/news?limit=N`（ホストのカード用。`subtitle_public` は回収率を除いた文言）
 - `GET /api/prediction-results/days`
 
-**推奨度が標準以上の集計**: 応答の `kpi`・`summary`・`series` は全体（見送りを含む）。会員・開発者の応答には `rated`（推奨度 1=標準 以上のレースだけの `kpi`・`summary`、件数 `counts`＝settled/rated/skipped/unrated、`legend`）と、`series[].honmei_win_rated`・`roi_rated` が付く（匿名には tier.py の許可リストで出ない）。推奨度はレース記録の `bets.lv.level`（現行ルールの再計算）があればそれ、無ければ `bets.level`。未記録のレースは標準以上に入れず `unrated` に数える。保存済みの日次ファイルは書き換えず、読み出し時に集計する。**見送り（推奨度 0）のレースを含む回収率は、どの画面・APIの集計でも出さない**（ニュースの回収率、レース一覧の日・週の回収率と各レースの的中、予測成績の回収率・券種別・推移、注目レースの推奨馬券の払戻はすべて標準以上のレースだけ。推奨度が未記録のレースは見送りと区別できないため含めない）。画面（予測成績）は、会員には標準以上のレースを主な集計にし、印の着順分布は『標準以上』と『全体』を並べて出す。
+**推奨度が標準以上の集計（2026-10-26）**: 回収率・購入・的中の集計は、**画面に出している推奨馬券（既定方策 target＝既定プランは全券種・縛りなし、`delegates._optimize_target` と同じ計算）**を既定上限で購入したとみなした仮想購入だけを使い、**推奨度が標準以上（見送りを除く）のレースだけ**で出す。レース記録の `bets_t`（status/level/total_bet/total_return/by_type）がその記録で、`level` は画面のレース推奨度（0=見送り〜4）。従来の最適化（単勝・複勝・馬連など）の `bets` は参考として残すが、画面の集計には使わない。見送りを含む回収率は、どの画面・APIの集計でも出さない（ニュース・レース一覧・予測成績・注目レースの払戻・ホームの推奨度別）。会員・開発者の応答に `rated`（標準以上のレースの `kpi`・`summary`、件数 `counts`＝settled/rated/skipped/unrated、`legend`）と `series[].honmei_win_rated`・`roi_rated` が付く（匿名には tier.py の許可リストで出ない）。`bets_t` が無い（未記録・計算できなかった）レースは見送りと区別できないため標準以上に入れず `unrated` に数える。
+
+**集計に使う想定オッズの基準（2026-10-26 修正）**: 推奨度・仮想購入 `bets_t` は、決定ログ §77 のモデル（sec77）の想定オッズで作ったものだけを集計に入れる（記録の `basis=sec77`）。従来モデルの想定オッズで作った記録（`basis` なし）は集計に入れず、『推奨度の記録なし』に数える。理由: 2026 年 1〜8 月の記録が、検証と別の（誤差の大きい）想定オッズで作られ、ほぼ全レースが『最注目』になり回収率が約 50% に落ちていたため（原因調査: 想定オッズの 24 時間キャッシュが切れ、従来モデルでその場計算されていた）。sec77 のキャッシュは期限切れにしない。sec77 が無い日は `status=basis` として外し、`odds_sec77_backfill` のあと `--add-target-bets` で再計算する。画面の推奨馬券の各買い目には、期待値ライン（`ev_line_multiple`＝1÷的中確率。実際のオッズがこの倍率以上なら期待値が1以上）を出す。
+
+**ホスト・予測成績ページの表示（2026-10-26）**: 印（◎○★消）に伴う表示は、ホストの『推奨馬券の成績』（先週・直近5週間・年。推奨度別の購入・的中・回収率。会員のみ）と予測成績ページ（印の着順分布・◎の的中率・レース別の印）から外した。速報（`/api/prediction-results/news`）は『{日}結果まとめ』『今週の累計』（推奨馬券の購入・的中・回収率。標準以上のレースだけ。匿名は集計レース数のみ）と、会員向けの『今日の的中レース』（推奨馬券を出した＝標準以上のレースのうち的中したレース名だけ。評価的な言い回しや金額は付けない）。API の印のデータ（`marks`・`mark-card`）は残している。
+
+**既存の日に `bets_t` を足す（初回と、モデル・推奨ロジックを変えたとき）**: 新しい日は集計時に自動で付く。保存済みの日（確定済みを含む）は次の CLI で追記する（印・着順・既存の数値は変えない。冪等。`nice` をつけて直列で）。追記後、GCS に置く運用なら `KEIBA_PREDICTION_RESULTS_GCS=1` で書き戻され、`--sync-gcs` で一括でも置ける。
+```
+nice -n 19 python -m src.scripts.data.prediction_results --from 20260101 --to 20261025 --add-target-bets
+```
 
 予測 API と同じ公開の GET。回収率（仮想購入）の表示は画面側で会員向けにしている。dev では、集計ファイルが無い日を dev ストアから都度作る。
+
+## GCP で動かす（ホスト非依存・2026-10-26 定義）
+
+最終形は、集計・`bets_t` の追記・通知をすべて Cloud Run Jobs が担当し、ホストを使わない。
+
+| 項目 | 内容 |
+|---|---|
+| ジョブ | `prediction-results-refresh`（`config/gcp_job_map.json`、グループ `g-results`＝JST 12–21 時の 20 分おき・土日月火）。直近 10 日のうち確定済みでない日を集計し（`--skip-final`）、続けて `--add-target-bets` で `bets_t` の欠けを埋める（冪等）。`slack-results` はその後に実行（送信は別） |
+| 入力 | 結果・オッズ・出馬表は GCS の正本（`HybridStorage`）。予測は `race_predictions`（GCS）→ `state/` の `predictions_v6` など（`state_in` で約 60MB まで）。画面の推奨馬券と同じ計算（`delegates._optimize_target`）がイメージ内の設定だけで動く |
+| 出力 | `gs://<bucket>/ops/prediction_results/<日>.json`（Cloud Run の API が読む正本）。`KEIBA_RUN_LOCATION=gcp` では自動で GCS に書く |
+
+**一度だけの種まき → 初回実行 → 確認（順番どおり。1〜2 は開発 PC から、3〜5 は Cloud Shell）**
+
+1. 【開発 PC】ホストで過去分に `bets_t` を足す（`.env` の `KEIBA_PREDICTION_RESULTS_GCS=1` で GCS にも書かれる）。
+   `ssh keiba-remote 'sudo -n bash /tmp/backfill_target_bets.sh --from 20260101 --to 20261025'`（まず `--from 20261019 --to 20261025`、`--dry-run` で件数確認）
+2. 【開発 PC】予測の種まき（ホストの古い git は触らず、origin/develop のコードで実行）:
+   `ssh keiba-remote 'bash -s -- prediction-results-refresh' < scripts/gcp/seed_state_from_host.sh`（引数なしだと `plan` で実サイズだけ表示。上限 60MB を超えたら止まる）
+3. 【Cloud Shell】Run Job を最新の対応表で作り直し、Scheduler を作る（`--parallel` の間は state/ にだけ出力）:
+   `bash scripts/gcp/deploy_cloud_run_jobs.sh apply jobs --parallel`
+4. 【Cloud Shell】1 回だけ手動実行（`ready` 記録前なので `ALLOW_UNREADY=1`）:
+   `ALLOW_UNREADY=1 bash scripts/gcp/deploy_cloud_run_jobs.sh run-now job prediction-results-refresh`
+   → ログで『確定済みのため再集計しない』（確定済みの日）と、各日の `bets_t` 追記の件数が出ること。
+5. 【Cloud Shell】確認 → ready 記録 → Scheduler 作成:
+   - `gsutil cat gs://$GCS_BUCKET/ops/prediction_results/20261025.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(1 for r in d['races'] if r.get('bets_t')), len(d['races']))"` で `bets_t` つきの件数がレース数に近いこと
+   - `python -m src.scripts.ops.parity_check auto --date 20261025 --write` がホストの記録と一致
+   - `python -m src.ops.job_map ready prediction-results-refresh --note "確認した内容"` → `bash scripts/gcp/deploy_cloud_run_jobs.sh apply scheduler`
+6. 一致して 1 開催週（土日→月火の確定まで）観察できたら、ホストの `.env` の `KEIBA_PREDICTION_RESULTS=1` を外し、`config/job_owner.json` に載せる（`docs/operations/gcp_jobs_migration.md` の 4.4）。
 
 ## 反映・有効化・ロールバック
 

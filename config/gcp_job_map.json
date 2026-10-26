@@ -181,11 +181,12 @@
    ]
   },
   "g-results": {
-   "cron_jst": "*/20 15-20 * * 0,6",
+   "cron_jst": "*/20 12-21 * * 0,1,2,6",
    "size": "m",
    "timeout_sec": 900,
-   "desc": "予測成績の通知（土日）",
+   "desc": "予測成績の集計（土日は暫定、月・火は確定）と通知",
    "jobs": [
+    "prediction-results-refresh",
     "slack-results"
    ]
   },
@@ -299,6 +300,11 @@
    "entry": "layer_a.parquet",
    "install_to": "data/local/modeling/training_pipeline/layer_a.parquet",
    "desc": "馬柱の過去走から作る補修表（last_3f・馬体重の補正）の元（約98MB）。feature-accumulate が固定パスを読む。無いと補修なしで特徴量が変わる"
+  },
+  "odds_sec77": {
+   "env": "ODDS_SEC77_DIR",
+   "local_path": "data/local/modeling/odds_pred/serving",
+   "desc": "想定オッズ（決定ログ §77 のモデル。share_model.txt・place_model.txt・meta.json、約20MB）。推奨馬券の想定オッズの正で、無いと stg/prod の推奨馬券は準備中になる。再学習のたびに公開し直す"
   }
  },
  "jobs": [
@@ -767,7 +773,7 @@
     "atol": 1e-06
    },
    "blockers": [
-    "モデル lap_models を GCS に publish（python -m src.ops.model_publish publish）"
+    "モデル lap_models は GCS に公開済み(2026-10-25)。Jobs で 1 回手動実行して、ラップ予想がホストと一致することを確認"
    ],
    "enabled": true,
    "ready": false,
@@ -1537,7 +1543,8 @@
     "aux_v4",
     "v4_train_table",
     "v6_factory",
-    "ped_keys"
+    "ped_keys",
+    "odds_sec77"
    ],
    "state_in": [
     {
@@ -1580,8 +1587,7 @@
     "atol": 1e-06
    },
    "blockers": [
-    "想定オッズのモデル final_odds を GCS に publish（python -m src.ops.model_publish publish --component final_odds）",
-    "取得の raceday-eve-fetch が VPS の担当になる（または GCS の出馬表が揃う）こと"
+    "final_odds は公開済み(2026-10-25)。取得の raceday-eve-fetch が VPS の担当になる（または GCS の出馬表が揃う）こと。揃ったら Jobs で 1 回手動実行して確認"
    ],
    "enabled": true,
    "ready": false,
@@ -1757,7 +1763,7 @@
     "atol": 1e-06
    },
    "blockers": [
-    "モデル lap_models を GCS に publish"
+    "モデル lap_models は GCS に公開済み(2026-10-25)。Jobs で 1 回手動実行して、ラップ予想がホストと一致することを確認"
    ],
    "enabled": true,
    "ready": false,
@@ -1997,6 +2003,95 @@
    }
   },
   {
+   "id": "prediction-results-refresh",
+   "desc": "予測成績の日次集計（暫定→確定）と、推奨度つきの仮想購入(bets_t)の追記。ホストの raceday-result-runner / recent-retry 内の集計の置き換え。Slack 送信とは別（送らなくても集計は更新する）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 1,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "(新規)",
+    "cron_utc": "",
+    "script": "src.scripts.data.prediction_results（raceday-result-runner・recent-retry の終了処理から分離）"
+   },
+   "group": "g-results",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.prediction_results",
+      "--from",
+      "{days_ago_10}",
+      "--to",
+      "{today}",
+      "--skip-final"
+     ]
+    },
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.prediction_results",
+      "--from",
+      "{days_ago_10}",
+      "--to",
+      "{today}",
+      "--add-target-bets"
+     ]
+    }
+   ],
+   "memory_mib": 2048,
+   "timeout_sec": 900,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_PREDICTION_RESULTS",
+    "KEIBA_PROB_CALIBRATION"
+   ],
+   "state_in": [
+    {
+     "path": "data/local/inference",
+     "max_mb": 60,
+     "include": [
+      "predictions_v3/*",
+      "predictions_v5/*",
+      "predictions_v6/*",
+      "predictions_backfill/*"
+     ],
+     "desc": "集計が読む予測（v6e → shadow → バックフィルの順）だけ。state/ や lap_forecast_models は読まない"
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/local/prediction_results",
+     "max_mb": 50
+    }
+   ],
+   "parity": {
+    "kind": "json_tree",
+    "paths": [
+     "data/local/prediction_results"
+    ],
+    "keys": [],
+    "rtol": 1e-06,
+    "atol": 1e-06
+   },
+   "blockers": [
+    "過去分の予測（predictions_backfill・predictions_v3）と集計済みの日次記録を、ホストから GCS へ一度だけ種まきする（python -m src.ops.state_sync push --job prediction-results-refresh --which in、python -m src.scripts.data.prediction_results --sync-gcs）",
+    "predict-race（GCP）が出す predictions_v6 が state に届くこと（predict-race の blockers が先）"
+   ],
+   "enabled": true,
+   "ready": false,
+   "cutover": {
+    "min_consecutive_success": 4,
+    "window_days": 21,
+    "parity_min_days": 3
+   }
+  },
+  {
    "id": "slack-results",
    "desc": "当日の予測成績の通知（土日 15:00〜20:59 の 20 分おき）",
    "destination": "gcp",
@@ -2068,7 +2163,7 @@
     "atol": 1e-06
    },
    "blockers": [
-    "予測成績の集計（prediction_results）の入力（予測・確定結果）が GCS から届くこと"
+    "prediction-results-refresh（集計）が GCP で動き、予測成績が GCS に出ること"
    ],
    "enabled": true,
    "ready": false,
@@ -2133,7 +2228,8 @@
     "aux_v4",
     "v4_train_table",
     "v6_factory",
-    "ped_keys"
+    "ped_keys",
+    "odds_sec77"
    ],
    "state_in": [
     {
@@ -3686,7 +3782,8 @@
     "aux_v4",
     "v4_train_table",
     "v6_factory",
-    "ped_keys"
+    "ped_keys",
+    "odds_sec77"
    ],
    "state_in": [
     {

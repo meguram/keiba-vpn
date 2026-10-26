@@ -7,8 +7,8 @@ import { PendingLink } from "@/components/PendingLink";
 import { getJson } from "@/lib/httpCache";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import {
-  FINISH_META, MARK_META, SCOPES, dayLabel, pct, periodKey, periodLabel, raceLevel, shiftDate, yen,
-  type Counts, type MarkKey, type PredictionResults, type RaceRecord, type SeriesPoint,
+  SCOPES, dayLabel, pct, periodKey, periodLabel, raceLevel, shiftDate, yen,
+  type PredictionResults, type RaceRecord, type SeriesPoint,
 } from "@/lib/predictionResults";
 
 type DaysInfo = { days: { date: string; status: string; races: number }[]; latest: string | null };
@@ -42,58 +42,16 @@ function Tile({ label, value, sub, locked }: { label: string; value: string; sub
   );
 }
 
-/** ◎○★消 の着順分布（1着/2着/3着/4着以下）を、件数つきの積み上げ棒で。色だけに頼らず、各区間に数字とラベルを出す。 */
-const EMPTY_COUNTS: Counts = { n: 0, f1: 0, f2: 0, f3: 0, f4p: 0 };
-
-function FinishDist({ mark, c }: { mark: MarkKey; c: Counts }) {
-  const m = MARK_META[mark];
-  return (
-    <div style={{ ...card }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
-        <span style={{ fontSize: 22, color: m.color, fontWeight: 800 }} aria-hidden>{m.sym}</span>
-        <span style={{ fontWeight: 700 }}>{m.label}</span>
-        <span style={{ ...dim, marginLeft: "auto" }}>{c.n} 頭</span>
-      </div>
-      {c.n === 0 ? (
-        <div style={dim}>この期間に印のついた馬の結果がありません</div>
-      ) : (
-        <>
-          <div role="img" aria-label={`${m.sym}の着順: ` + FINISH_META.map((f) => `${f.label}${c[f.key]}頭`).join("、")}
-            style={{ display: "flex", height: 28, borderRadius: 6, overflow: "hidden", background: "var(--surface2)" }}>
-            {FINISH_META.map((f) => c[f.key] > 0 && (
-              <div key={f.key} style={{ width: `${(c[f.key] / c.n) * 100}%`, background: f.color, display: "flex", alignItems: "center",
-                justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", minWidth: 0 }}>
-                {c[f.key] / c.n >= 0.08 ? c[f.key] : ""}
-              </div>
-            ))}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginTop: 8 }}>
-            {FINISH_META.map((f) => (
-              <div key={f.key} style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 11, color: "var(--text-dim)", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 2, background: f.color, display: "inline-block" }} aria-hidden />{f.label}
-                </div>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>{c[f.key]}<span style={{ fontSize: 11, color: "var(--text-dim)" }}>（{pct(c[f.key] / c.n)}）</span></div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-/** 日別推移の折れ線（回収率・本命の1着率）。外部ライブラリなしの SVG。 */
-function Trend({ series, showRoi }: { series: SeriesPoint[]; showRoi: boolean }) {
+/** 日別推移の折れ線（推奨馬券の回収率）。外部ライブラリなしの SVG。 */
+function Trend({ series }: { series: SeriesPoint[] }) {
   const W = 640, H = 200, L = 40, R = 12, T = 12, B = 30;
   if (series.length < 2) return <div style={dim}>推移は 2 日分以上の集計がそろうと表示されます。</div>;
-  const roiVals = showRoi ? series.map((s) => s.roi).filter((v): v is number => v != null) : [];
-  const hwVals = series.map((s) => s.honmei_win).filter((v): v is number => v != null);
-  const maxY = Math.max(1.2, ...roiVals, ...hwVals) * 1.05;
+  const roiVals = series.map((s) => s.roi).filter((v): v is number => v != null);
+  const maxY = Math.max(1.2, ...roiVals) * 1.05;
   const x = (i: number) => L + (i / (series.length - 1)) * (W - L - R);
   const y = (v: number) => T + (1 - v / maxY) * (H - T - B);
-  const line = (key: "roi" | "honmei_win") =>
-    series.map((s, i) => (s[key] == null ? null : `${x(i).toFixed(1)},${y(s[key] as number).toFixed(1)}`)).filter(Boolean).join(" ");
+  const line = () =>
+    series.map((s, i) => (s.roi == null ? null : `${x(i).toFixed(1)},${y(s.roi).toFixed(1)}`)).filter(Boolean).join(" ");
   const ticks = [0, 0.5, 1, Math.floor(maxY * 2) / 2].filter((v, i, a) => v <= maxY && a.indexOf(v) === i);
   return (
     <div>
@@ -109,18 +67,15 @@ function Trend({ series, showRoi }: { series: SeriesPoint[]; showRoi: boolean })
             {series.length > 8 && i % 2 ? "" : dayLabel(s.date).slice(0, -3)}
           </text>
         ))}
-        {showRoi && <polyline points={line("roi")} fill="none" stroke="#34d399" strokeWidth="2.5" />}
-        <polyline points={line("honmei_win")} fill="none" stroke="#60a5fa" strokeWidth="2.5" />
+        <polyline points={line()} fill="none" stroke="#34d399" strokeWidth="2.5" />
         {series.map((s, i) => (
           <g key={s.date}>
-            {showRoi && s.roi != null && <circle cx={x(i)} cy={y(s.roi)} r="3.5" fill="#34d399"><title>{dayLabel(s.date)} 回収率 {pct(s.roi)}（{s.status === "final" ? "確定" : "暫定"}）</title></circle>}
-            {s.honmei_win != null && <circle cx={x(i)} cy={y(s.honmei_win)} r="3.5" fill="#60a5fa"><title>{dayLabel(s.date)} 本命1着率 {pct(s.honmei_win)}</title></circle>}
+            {s.roi != null && <circle cx={x(i)} cy={y(s.roi)} r="3.5" fill="#34d399"><title>{dayLabel(s.date)} 回収率 {pct(s.roi)}（{s.status === "final" ? "確定" : "暫定"}）</title></circle>}
           </g>
         ))}
       </svg>
       <div style={{ display: "flex", gap: 14, fontSize: 12, color: "var(--text-dim)", flexWrap: "wrap" }}>
-        <span><b style={{ color: "#60a5fa" }}>━</b> ◎の1着率</span>
-        {showRoi && <span><b style={{ color: "#34d399" }}>━</b> 仮想購入の回収率（破線＝100%）</span>}
+        <span><b style={{ color: "#34d399" }}>━</b> 推奨馬券の回収率（破線＝100%）</span>
       </div>
     </div>
   );
@@ -146,7 +101,7 @@ function RaceCard({ r, member, levelLabels }: { r: RaceRecord; member: boolean; 
       </div>
     );
   }
-  const b = r.bets;
+  const b = r.bets_t?.status === "ok" ? { total_bet: r.bets_t.total_bet ?? 0, total_return: r.bets_t.total_return ?? 0, estimated: r.bets_t.estimated } : null;
   const lv = member ? raceLevel(r) : null;
   return (
     <PendingLink href={`/race/${r.race_id}`} style={{ ...card, display: "block", textDecoration: "none", color: "var(--text)" }}>
@@ -162,18 +117,6 @@ function RaceCard({ r, member, levelLabels }: { r: RaceRecord; member: boolean; 
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 10px", marginTop: 8, alignItems: "center", fontSize: 13 }}>
         <span style={dim}>予測1位</span>
         <span>{r.top1?.horse_number}番 {r.top1?.horse_name} <FinishChip pos={r.top1?.finish} /> <span style={dim}>勝率{pct(r.top1?.win_prob)}</span></span>
-        {(["honmei", "pair", "star", "kesi"] as MarkKey[]).map((m) => (r.marks?.[m]?.length ? (
-          <span key={m} style={{ display: "contents" }}>
-            <span style={{ color: MARK_META[m].color, fontWeight: 800 }}>{MARK_META[m].sym}</span>
-            <span>
-              {r.marks![m].map((p, i) => (
-                <span key={p.horse_number} style={{ marginRight: 8, whiteSpace: "nowrap" }}>
-                  {i > 0 ? "" : ""}{p.horse_number}番 {p.horse_name} <FinishChip pos={p.finish} />
-                </span>
-              ))}
-            </span>
-          </span>
-        ) : null))}
         <span style={dim}>結果</span>
         <span>{(r.result_top3 ?? []).map((x) => `${x.finish}着 ${x.horse_number}番`).join(" / ")}</span>
         {member && lv != null && lv >= 1 && b && b.total_bet > 0 && (
@@ -225,9 +168,10 @@ export default function PredictionResultsPage() {
   const useRated = !!rated && rated.counts.rated > 0;                      // 会員: 推奨度が標準以上のレースだけで集計（無ければ全体）
   const kpi = useRated ? rated!.kpi : data?.kpi;
   const levelLabels = useMemo(() => Object.fromEntries((rated?.legend ?? []).map((t) => [t.level, t.short || t.label])) as Record<number, string>, [rated]);
-  const trendSeries = useMemo(() => (data?.series ?? []).map((p) => (rated ? { ...p, honmei_win: useRated ? (p.honmei_win_rated ?? null) : p.honmei_win, roi: p.roi_rated ?? null } : p)), [data, rated, useRated]);
+  const trendSeries = useMemo(() => (data?.series ?? []).map((p) => ({ ...p, roi: p.roi_rated ?? null })), [data]);
   const empty = !!data && data.summary.races_settled === 0;
   const races = useMemo(() => (data?.races ?? []), [data]);
+  const hits = useMemo(() => (member && scope === "day" ? races.filter((r) => r.included && (raceLevel(r) ?? 0) >= 1 && (r.bets_t?.total_return ?? 0) > 0) : []), [member, scope, races]);   // 推奨馬券を出したレースのうち、的中したレースだけ
 
   return (
     <PageShell title="予測成績" description="予測と実際の結果の突き合わせ。毎日、最終レースの後に集計します（確定結果が入ると自動で『確定』に更新）。" note={false}>
@@ -269,41 +213,22 @@ export default function PredictionResultsPage() {
             <div style={{ ...card, fontSize: 13 }}>
               <b>集計の対象: 推奨度（レース期待値）が『{rated.label}』以上のレース</b>
               {useRated
-                ? <> — {rated.counts.rated}/{rated.counts.settled} レース（見送り {rated.counts.skipped}{rated.counts.unrated > 0 ? `・推奨度の記録なし ${rated.counts.unrated}` : ""}）。下の数字はこの{rated.counts.rated}レースの集計で、印の着順分布は『全体』も並べています。</>
+                ? <> — {rated.counts.rated}/{rated.counts.settled} レースに参戦（約 {(rated.counts.settled / rated.counts.rated).toFixed(1)} レースに1回。見送り {rated.counts.skipped}{rated.counts.unrated > 0 ? `・推奨度の記録なし ${rated.counts.unrated}` : ""}）。下の数字はこの{rated.counts.rated}レースの集計です。</>
                 : <> — 該当するレースがありません（見送り {rated.counts.skipped}・推奨度の記録なし {rated.counts.unrated}）。下は全体の集計です。</>}
             </div>
           )}
 
           <div className="pr-tiles" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
-            <Tile label="◎の1着率" value={pct(kpi.honmei.win)} sub={`${kpi.honmei.n}頭中`} />
-            <Tile label="◎の複勝圏（3着以内）" value={pct(kpi.honmei.top3)} sub={`連対 ${pct(kpi.honmei.top2)}`} />
             <Tile label="予測1位の1着率" value={pct(kpi.top1.win)} sub={`${kpi.top1.n}レース`} />
             <Tile label="仮想購入の回収率（標準以上）" value={useRated ? pct(kpi.roi) : "—"} sub={useRated ? `${yen(kpi.invested)} → ${yen(kpi.returned)}` : "推奨度が標準以上のレースがありません"} locked={!member} />
             <Tile label="的中レース（購入）" value={useRated ? `${kpi.races_hit}/${kpi.races_bought}` : "—"} sub="標準以上のレースで推奨馬券をどれか当てた" locked={!member} />
             <Tile label="確率の精度" value={kpi.winner_logloss == null ? "—" : kpi.winner_logloss.toFixed(3)} sub={kpi.winner_logloss_model ? `勝ち馬の対数損失（小さいほど良い）。市場補正済みの${kpi.winner_logloss_model.n}レースは モデルのみ ${kpi.winner_logloss_model.model.toFixed(3)} → 補正後 ${kpi.winner_logloss_model.calibrated.toFixed(3)}` : "勝ち馬の対数損失（小さいほど良い）"} />
           </div>
 
-          <section aria-label="印ごとの着順分布">
-            <h2 style={h2}>◎・○・★・消 の着順分布</h2>
-            {useRated && (
-              <>
-                <h3 style={h3}>推奨度が{rated!.label}以上のレース（{rated!.counts.rated}レース）</h3>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 10 }}>
-                  {(["honmei", "pair", "star", "kesi"] as MarkKey[]).map((m) => <FinishDist key={m} mark={m} c={rated!.summary.marks[m] ?? EMPTY_COUNTS} />)}
-                </div>
-                <h3 style={{ ...h3, marginTop: 14 }}>全体（見送りを含む {data.summary.races_settled}レース）</h3>
-              </>
-            )}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 10 }}>
-              {(["honmei", "pair", "star", "kesi"] as MarkKey[]).map((m) => <FinishDist key={m} mark={m} c={data.summary.marks[m] ?? EMPTY_COUNTS} />)}
-            </div>
-            <p style={{ ...dim, margin: "6px 0 0" }}>◎=1着優位（各レース1頭まで）・○=2連系の相手・★=10〜30倍帯で期待値が高い中穴（各レース1頭まで）・消=3着内に来る確率が低い馬（10人気以下で複勝確率8%以下。複数頭付くことも付かないこともある。消は3着以内に来る割合が低いほど当たりで、目標は5%以下）。印の定義は予測画面と同じです。</p>
-          </section>
-
-          {scope !== "day" && (
+          {member && useRated && scope !== "day" && (
             <section aria-label="日別の推移">
               <h2 style={h2}>日別の推移</h2>
-              <div style={card}><Trend series={trendSeries} showRoi={member} /></div>
+              <div style={card}><Trend series={trendSeries} /></div>
             </section>
           )}
 
@@ -328,13 +253,13 @@ export default function PredictionResultsPage() {
             </section>
           )}
 
-          {data.highlights.length > 0 && (
-            <section aria-label="注目レース">
-              <h2 style={h2}>注目レース</h2>
+          {hits.length > 0 && (
+            <section aria-label="的中したレース">
+              <h2 style={h2}>的中したレース（推奨馬券を出したレース）</h2>
               <div style={{ display: "grid", gap: 8 }}>
-                {data.highlights.map((h, i) => (
-                  <PendingLink key={i} href={`/race/${h.race_id}`} style={{ ...card, textDecoration: "none", color: "var(--text)", padding: "10px 14px", minHeight: 44 }}>
-                    <span aria-hidden>{h.kind === "ana_hit" ? "🎯 " : h.kind === "big_return" ? "💰 " : "⚠️ "}</span>{h.text}
+                {hits.map((r) => (
+                  <PendingLink key={r.race_id} href={`/race/${r.race_id}`} style={{ ...card, textDecoration: "none", color: "var(--text)", padding: "10px 14px", minHeight: 44 }}>
+                    {r.venue}{r.round}R {r.race_name}
                   </PendingLink>
                 ))}
               </div>

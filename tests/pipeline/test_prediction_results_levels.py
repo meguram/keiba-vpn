@@ -23,20 +23,26 @@ def test_summarize_and_merge_split_bets_by_level():
     assert m["bets"]["by_level"]["2"]["invested"] == 2000
 
 
+def _trec(rid, level, tb, ret):
+    """画面の推奨馬券(target)の仮想購入 bets_t を持つレース記録。level=None は bets_t の無い（未記録の）レース。"""
+    r = {"race_id": rid, "included": True, "bets": {"total_bet": 1, "total_return": 0, "estimated": False}}
+    if level is not None:
+        r["bets_t"] = {"status": "ok", "basis": "sec77", "level": level, "total_bet": tb, "total_return": ret, "estimated": False, "by_type": {}}
+    return r
+
+
 def test_bets_level_card_excludes_skipped_and_reports_unrated(tmp_path):
-    _write(tmp_path, "20261017", [_rec("R1", 3, 1000, 1500), _rec("R2", 3, 1000, 0), _rec("R3", 0, 500, 0), _rec("R4", None, 800, 0)])
-    # 旧データ（推奨度の記録が無い日）: by_level を持たない
+    _write(tmp_path, "20261017", [_trec("R1", 3, 1000, 1500), _trec("R2", 3, 1000, 0), _trec("R3", 0, 0, 0), _trec("R4", None, 0, 0)])
+    # 旧データ（画面の推奨馬券 target の仮想購入が無い日）
     old = [{"race_id": "R9", "included": True, "bets": {"total_bet": 700, "total_return": 0, "estimated": False}}]
-    doc = {"date": "20261010", "status": "final", "summary": pr.summarize(old), "highlights": [], "races": old}
-    doc["summary"]["bets"].pop("by_level")
-    (tmp_path / "20261010.json").write_text(json.dumps(doc), encoding="utf-8")
+    _write(tmp_path, "20261010", old)
     out = pr.bets_level_card(date(2026, 10, 24), tmp_path)
     p = next(x for x in out["periods"] if x["key"] == "recent_5w")
     assert [x["level"] for x in p["levels"]] == [4, 3, 2, 1]               # 見送り(0)は行に出さない
     l3 = next(x for x in p["levels"] if x["level"] == 3)
     assert (l3["races"], l3["hit_races"], l3["invested"], l3["returned"], l3["roi"]) == (2, 1, 2000, 1500, 0.75)
     assert p["total"]["invested"] == 2000 and p["skipped_races"] == 1
-    assert p["unrated_races"] == 2                                           # 旧データ 1R + 推奨度なし 1R
+    assert p["unrated_races"] == 2                                           # 旧データ 1R + 未記録 1R
 
 
 def test_portfolio_level_matches_ui_thresholds(monkeypatch):

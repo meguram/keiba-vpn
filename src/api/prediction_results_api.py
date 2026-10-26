@@ -151,6 +151,29 @@ def _pct(x: float | None) -> str:
     return "-" if x is None else f"{x * 100:.0f}%"
 
 
+def _race_names(races: list[dict], cap: int = 6) -> str:
+    names = [f"{r.get('venue', '')}{r.get('round', '')}R" for r in races]
+    return "・".join(names[:cap]) + (f" ほか{len(names) - cap}R" if len(names) > cap else "")
+
+
+def _hit_item(doc: dict, latest: str, badge: str) -> dict | None:
+    """速報の『的中レース』。推奨馬券を出した（推奨度が標準以上の）レースのうち、的中したレース名だけを事実として並べる。評価的な言い回しや金額は使わない。無ければ出さない。会員向け。"""
+    hits = [r for r in pr.rated_records([r for r in doc.get("races") or [] if r.get("included")]) if (r.get("bets") or {}).get("total_return")]
+    if not hits:
+        return None
+    today = datetime.now(pr.JST).strftime("%Y%m%d")
+    return {"kind": "hit", "title": f"{'今日' if latest == today else _label(latest)}の的中レース", "subtitle": _race_names(hits), "subtitle_public": "",
+            "badge": badge, "date": latest, "link": f"/prediction-results?scope=day&date={latest}", "roi": None}
+
+
+def _bets_sentence(summary: dict) -> str | None:
+    """推奨馬券（標準以上のレース）の購入・的中・回収率を一文にする。購入が無ければ None。"""
+    b = summary["bets"]
+    if not b["races_bought"]:
+        return None
+    return f"推奨馬券 {b['races_bought']}R購入・{b['races_hit']}R的中・回収率 {_pct(pr.rate(b['returned'], b['invested']))}"
+
+
 def build_news(limit: int = 6) -> dict:
     days = pr.list_days()
     if not days:
@@ -160,30 +183,21 @@ def build_news(limit: int = 6) -> dict:
     if not doc:
         return {"items": []}
     badge = "確定" if doc["status"] == "final" else "暫定"
-    k = _kpi(doc["summary"])
-    h = k["honmei"]
-    # 回収率は、推奨度が標準以上のレースだけの仮想購入（見送りのレースを含めない）。対象が無ければ出さない
-    k_roi = _kpi(pr.summarize(pr.rated_records(doc.get("races") or [])))["roi"]
+    rated = pr.summarize(pr.rated_records(doc.get("races") or []))      # 推奨度が標準以上のレースの推奨馬券だけ（見送りは含めない）
+    k_roi = _kpi(rated)["roi"]
     items: list[dict] = []
-    f1 = doc["summary"]["marks"]["honmei"]["f1"]
-    pub = f"本命 {f1}/{h['n']}R が1着・複勝圏 {_pct(h['top3'])}" if h["n"] else "集計できるレースがありません"
-    sub = pub + (f"・回収率 {_pct(k_roi)}" if k_roi is not None else "")
-    items.append({"kind": "day", "title": f"{_label(latest)} 結果まとめ", "subtitle": sub, "subtitle_public": pub, "badge": badge,
+    pub = f"{doc['summary']['races_settled']}R を集計"
+    items.append({"kind": "day", "title": f"{_label(latest)} 結果まとめ", "subtitle": _bets_sentence(rated) or pub, "subtitle_public": pub, "badge": badge,
                   "date": latest, "link": f"/prediction-results?scope=day&date={latest}", "roi": k_roi})
     wk = pr.period_summary("week", latest)
     if len(wk["days"]) >= 1:
-        wk_k = _kpi(wk["summary"])
-        wk_roi = _kpi(wk["rated_summary"])["roi"]
-        wh = wk_k["honmei"]
-        wpub = f"本命1着率 {_pct(wh['win'])}（{wh['n']}R）・複勝圏 {_pct(wh['top3'])}"
-        items.append({"kind": "week", "title": "今週の累計", "subtitle": wpub + (f"・回収率 {_pct(wk_roi)}" if wk_roi is not None else ""),
-                      "subtitle_public": wpub, "badge": "確定" if wk["status"] == "final" else "暫定", "date": latest,
-                      "link": f"/prediction-results?scope=week&date={latest}", "roi": wk_roi})
-    shown = [hl for hl in doc.get("highlights", []) if hl["kind"] != "big_miss"]  # 外れた予想は速報に出さない
-    for hl in shown[: max(0, limit - len(items))]:
-        items.append({"kind": hl["kind"], "title": {"ana_hit": "注目: 穴馬が好走", "big_return": "注目: 大きな払戻"}.get(hl["kind"], "注目"),
-                      "subtitle": hl["text"], "subtitle_public": hl["text"], "badge": badge, "date": latest,
-                      "link": f"/race/{hl['race_id']}", "roi": None})
+        wk_pub = f"{wk['summary']['races_settled']}R を集計"
+        items.append({"kind": "week", "title": "今週の累計", "subtitle": _bets_sentence(wk["rated_summary"]) or wk_pub, "subtitle_public": wk_pub,
+                      "badge": "確定" if wk["status"] == "final" else "暫定", "date": latest,
+                      "link": f"/prediction-results?scope=week&date={latest}", "roi": _kpi(wk["rated_summary"])["roi"]})
+    hit = _hit_item(doc, latest, badge)
+    if hit:
+        items.append(hit)
     return {"items": items[:limit], "latest": latest, "status": doc["status"]}
 
 
@@ -231,17 +245,16 @@ async def prediction_results_bets_summary(request: Request, date: str = Query(..
         wk = pr.period_summary("week", date)
         day = pr.period_summary("day", date)
         races = {}
-        ok = {r["race_id"] for r in pr.rated_records(doc.get("races") or [])}      # 見送り（推奨度の記録なしを含む）のレースの購入は出さない
-        for r in doc.get("races") or []:
+        for r in pr.rated_records(doc.get("races") or []):      # 標準以上のレースの、画面の推奨馬券(target)の仮想購入。見送り・未記録のレースは出さない
             b = r.get("bets") or {}
             tb = b.get("total_bet") or 0
-            if not r.get("included") or not tb or r["race_id"] not in ok:
+            if not tb:
                 continue
             ret = b.get("total_return") or 0
             races[r["race_id"]] = {"total_bet": tb, "total_return": round(ret), "hit": ret > 0, "roi": pr.rate(ret, tb), "estimated": bool(b.get("estimated"))}
-        return {"date": date, "label": _label(date), "week": {"from": wk_lo, "to": wk_hi, "days": wk["days"], "status": wk["status"], **_bets_block(wk["rated_summary"])},
-                "day": {"status": day["status"], **_bets_block(day["rated_summary"])}, "races": races,
-                "note": "推奨度が標準以上のレースの推奨馬券を、保存済みの最新オッズで購入したとみなした仮想購入（払戻は確定払戻）。見送りのレースは含めません。実際の購入ではありません。"}
+        return {"date": date, "label": _label(date), "week": {"from": wk_lo, "to": wk_hi, "days": wk["days"], "status": wk["status"], "counts": wk["rated_counts"], **_bets_block(wk["rated_summary"])},
+                "day": {"status": day["status"], "counts": day["rated_counts"], **_bets_block(day["rated_summary"])}, "races": races,
+                "note": "推奨度が標準以上のレースの推奨馬券（画面に出している既定プラン・想定オッズは §77 のモデル）を購入したとみなした仮想購入（払戻は確定払戻）。見送りのレースは含めません。実際の購入ではありません。"}
     if not is_member(request):
         return JSONResponse(MEMBER_REQUIRED_BODY, status_code=401)
     return _respond(request, await asyncio.to_thread(lambda: _cached(("bets", date), _run)))

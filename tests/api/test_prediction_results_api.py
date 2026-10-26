@@ -34,8 +34,9 @@ def _put(tmp_path, date, status_src="race_result", payoff=True, level=1):
     doc = pr.build_day("20261018", _storage(status_src, with_payoff=payoff))
     doc["date"] = date
     for r in doc["races"]:
-        if r.get("included"):
-            r["bets"]["level"] = level                  # 推奨度（0=見送り）。回収率は標準以上のレースだけで集計される
+        if r.get("included"):         # 画面の推奨馬券(target)の仮想購入。level 0 は見送り（購入なし）
+            r["bets_t"] = {"status": "ok", "strategy": "target", "basis": "sec77", "level": level, "total_bet": 1000 if level else 0, "total_return": 3000 if level else 0,
+                           "by_type": {"sanrenpuku": {"invested": 1000, "returned": 3000, "n": 1, "hit": 1}} if level else {}, "estimated": False}
     pr.write_day(doc, tmp_path)
 
 
@@ -120,3 +121,28 @@ def test_bets_summary_counts_only_standard_or_above(client):
     _put(tmp, "20261018", level=1)
     b = c.get("/api/prediction-results/bets-summary?date=20261018").json()
     assert len(b["races"]) == 1 and b["day"]["races_bought"] == 1 and b["day"]["roi"] is not None
+
+
+def test_news_has_factual_hit_item_without_evaluative_wording(client):
+    c, tmp = client
+    _put(tmp, "20261018")
+    items = c.get("/api/prediction-results/news?limit=20").json()["items"]
+    assert {i["kind"] for i in items} <= {"day", "week", "hit"}
+    assert not any(w in (i["title"] + i["subtitle"]) for i in items for w in ("大きな払戻", "穴馬", "注目:", "大きく外れた", "本命", "◎"))
+    hit = next((i for i in items if i["kind"] == "hit"), None)
+    assert hit and hit["title"].endswith("の的中レース") and "R" in hit["subtitle"] and "円" not in hit["subtitle"]
+
+
+def test_hit_news_only_lists_races_with_recommended_bets(client):
+    c, tmp = client
+    _put(tmp, "20261018", level=0)                       # 見送り（買い目推奨なし）のレースは的中レースに出さない
+    items = c.get("/api/prediction-results/news?limit=20").json()["items"]
+    assert not any(i["kind"] == "hit" for i in items)
+
+
+def test_news_for_guests_has_no_hit_and_no_bets(guest_client):
+    g, tmp = guest_client
+    _put(tmp, "20261018")
+    items = g.get("/api/prediction-results/news?limit=20").json()["items"]
+    assert items and not any(i["kind"] == "hit" for i in items)
+    assert not any(w in i["subtitle"] for i in items for w in ("推奨馬券", "回収率", "円"))

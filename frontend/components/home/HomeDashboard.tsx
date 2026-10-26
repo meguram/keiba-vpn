@@ -16,7 +16,7 @@ import { FeatureId, featureEnabled } from "@/lib/features";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { MemberUpgradeModal } from "@/components/upgrade/MemberUpgradeModal";
 import { PredictionNews } from "@/components/home/PredictionNews";
-import { MarkResultCard } from "./MarkResultCard";
+import { BetResultCard } from "./BetResultCard";
 
 function NavCard({
   card,
@@ -265,7 +265,7 @@ export function HomeDashboard() {
       </div>
       </div>
       <aside className="home-side">
-        {featureEnabled("prediction-results") && <MarkResultCard />}
+        {featureEnabled("prediction-results") && <BetResultCard />}
       </aside>
       </div>
 

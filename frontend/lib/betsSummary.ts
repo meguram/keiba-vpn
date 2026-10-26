@@ -5,7 +5,8 @@ import { USE_MOCK } from "@/lib/mock";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 
 export type RaceBet = { total_bet: number; total_return: number; hit: boolean; roi: number | null; estimated: boolean };
-export type BetsBlock = { invested: number; returned: number; roi: number | null; races_bought: number; races_hit: number; estimated_races: number; status: string };
+export type RatedCounts = { settled: number; rated: number; skipped: number; unrated: number };
+export type BetsBlock = { counts?: RatedCounts; invested: number; returned: number; roi: number | null; races_bought: number; races_hit: number; estimated_races: number; status: string };
 export type BetsSummary = { date: string; label: string; week: BetsBlock & { from: string; to: string; days: string[] }; day: BetsBlock; races: Record<string, RaceBet>; note: string };
 
 const cache = new Map<string, { at: number; v: BetsSummary }>();

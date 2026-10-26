@@ -45,6 +45,8 @@ export type RaceRecord = {
   marks?: Record<MarkKey, RacePick[]>;
   result_top3?: { horse_number: number; finish: number }[];
   bets?: { total_bet: number; total_return: number; estimated?: boolean; status?: string; level?: number | null; lv?: { level?: number | null } };
+  /** 画面に出している推奨馬券（target）の仮想購入。level は画面のレース推奨度（0=見送り〜4）。未記録のレースには無い */
+  bets_t?: { status: string; level?: number; total_bet?: number; total_return?: number; estimated?: boolean };
 };
 
 /** 推奨度（レース期待値）が『標準』以上のレースだけの集計。会員・開発者の応答にだけ付く。 */
@@ -83,7 +85,7 @@ export type PredictionResults = {
 };
 
 export type NewsItem = {
-  kind: "day" | "week" | "ana_hit" | "big_return" | "big_miss";
+  kind: "day" | "week" | "hit";
   title: string;
   subtitle: string;
   subtitle_public: string;
@@ -100,22 +102,8 @@ export const SCOPES: { id: PredictionResults["scope"]; label: string }[] = [
   { id: "season", label: "シーズン" },
 ];
 
-export const MARK_META: Record<MarkKey, { sym: string; label: string; color: string }> = {
-  honmei: { sym: "◎", label: "本命（1着優位）", color: "#ef4444" },
-  pair: { sym: "○", label: "対抗（連対候補）", color: "#3b82f6" },
-  star: { sym: "★", label: "中穴妙味（10〜30倍）", color: "#a78bfa" },
-  kesi: { sym: "消", label: "消し（3着内に来る確率が低い）", color: "#cbd5e1" },
-};
-
-export const FINISH_META: { key: "f1" | "f2" | "f3" | "f4p"; label: string; color: string }[] = [
-  { key: "f1", label: "1着", color: "#f59e0b" },
-  { key: "f2", label: "2着", color: "#94a3b8" },
-  { key: "f3", label: "3着", color: "#b45309" },
-  { key: "f4p", label: "4着以下", color: "#334155" },
-];
-
-/** レース記録の推奨度（0=見送り〜4=最注目）。現行ルールでの再計算（lv）があればそれ。未記録は null。 */
-export const raceLevel = (r: RaceRecord): number | null => r.bets?.lv?.level ?? r.bets?.level ?? null;
+/** レース記録の推奨度（0=見送り〜4=最注目）。画面の推奨馬券（target）の仮想購入のもの。未記録は null。 */
+export const raceLevel = (r: RaceRecord): number | null => (r.bets_t?.status === "ok" ? r.bets_t.level ?? null : null);
 
 export const pct = (x: number | null | undefined, digits = 0): string => (x == null ? "—" : `${(x * 100).toFixed(digits)}%`);
 export const yen = (x: number): string => `${Math.round(x).toLocaleString()}円`;

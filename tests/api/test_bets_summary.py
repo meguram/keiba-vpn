@@ -7,7 +7,8 @@ from src.pipeline.inference import prediction_results as pr
 
 
 def _doc(date, races):
-    recs = [{"race_id": rid, "included": True, "bets": {"total_bet": tb, "total_return": ret, "estimated": False, "level": 1}} for rid, tb, ret in races]
+    recs = [{"race_id": rid, "included": True, "venue": "東京", "round": 1, "bets": {"total_bet": 1, "total_return": 0, "estimated": False},
+             "bets_t": {"status": "ok", "basis": "sec77", "level": 1, "total_bet": tb, "total_return": ret, "estimated": False, "by_type": {}}} for rid, tb, ret in races]
     s = pr.summarize(recs)
     return {"date": date, "status": "final", "summary": s, "highlights": [], "races": recs}
 

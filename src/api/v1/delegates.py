@@ -246,7 +246,7 @@ def _optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool 
     }, 200
 
 
-def _optimize_target(body: dict[str, Any], view: str) -> tuple[dict[str, Any], int]:
+def _optimize_target(body: dict[str, Any], view: str, storage: Any | None = None) -> tuple[dict[str, Any], int]:
     """既定方策 target（src/pipeline/inference/target_bets.py）。開発者・有料会員のどちらにも同じ内容（購入額・想定払戻・的中率の目安）を返す。
     実オッズは計画にも応答にも使わない（想定オッズ＝AI の予測だけ）。view="paid" のときだけ会員向けの外枠（凡例・免責）を付ける。"""
     from src.api.local_predictions import load_local_prediction_payload
@@ -268,7 +268,7 @@ def _optimize_target(body: dict[str, Any], view: str) -> tuple[dict[str, Any], i
         if cap < 100:
             return {"view": view, "error": "max_total_bet は 100 円以上の整数で指定してください（上限なしは null か 0）"}, 400
 
-    storage = HybridStorage()
+    storage = storage or HybridStorage()
     from src.api.local_predictions import load_primary_prediction_payload
 
     preds = ((load_primary_prediction_payload(race_id, storage, market=False)) or {}).get("predictions") or []
@@ -280,7 +280,12 @@ def _optimize_target(body: dict[str, Any], view: str) -> tuple[dict[str, Any], i
         preds = (local or {}).get("predictions") or []
     if not preds:
         return {"view": view, "error": "予測結果がありません。先に推論を実行してください"}, 404
-    single = PZ.calibrate_single(_predicted_singles(storage, race_id))
+    raw_single = _predicted_singles(storage, race_id)
+    if TB.require_sec77() and not (raw_single and raw_single.get("odds_model") == "sec77"):
+        out = TB.pending_odds_plan(race_id, cap)      # 検証と別の想定オッズ（従来モデル）で推奨を作らない
+        return {"view": view, **out, "race_tier": PZ.tier_info(0), "legend": PZ.legend(), "max_total_bet": cap,
+                "disclaimer": TB.config().get("notice") or PZ.disclaimer(), "evidence": TB.config().get("evidence"), "note": out["skip_reason"]}, 200
+    single = PZ.calibrate_single(raw_single)
     marked = _paid_marks(preds, single)
     out = TB.build_target_portfolio(marked, single, cap, race_id=race_id)
     try:  # 推奨馬券を正として、印は買い目から決め直す（買い目が無いレースは従来の印のまま）
@@ -337,6 +342,10 @@ def _predicted_singles(storage, race_id: str) -> dict | None:
     single = predicted_single_odds(storage, race_id)
     if single:
         return single
+    from src.pipeline.inference import target_bets as _TB
+
+    if _TB.require_sec77():     # 従来モデルでその場計算しても推奨には使わない（キャッシュも汚さない）
+        return None
     try:
         from src.pipeline.inference import final_odds_service
 

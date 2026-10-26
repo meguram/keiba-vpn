@@ -241,6 +241,45 @@ def portfolio_level(cands: list[Any], raw_roi: float | None) -> tuple[int, float
     return PZ.level_for_roi(roi if cands else None, "C"), (round(float(roi), 3) if roi is not None else None)
 
 
+TARGET_ODDS_BASIS = "sec77"      # 推奨度・仮想購入の集計に使う想定オッズの出所（決定ログ §77 のモデル。検証と同じ基準）。従来モデルの想定オッズで作った記録は集計に入れない
+
+
+def simulate_target_bets(storage: Any, race_id: str, result: dict, max_total_bet: int | None = DEFAULT_MAX_TOTAL_BET) -> dict:
+    """画面に出している推奨馬券（既定方策 target。delegates._optimize_target と同じ計算）を、既定上限で購入したとして精算する。
+    推奨度（level）は画面のレース推奨度と同じ。見送り（level 0）は買い目なし（total_bet=0）。"""
+    from src.api.v1.delegates import _optimize_target      # 画面と同じ計算を使う（API 層の関数だが、計算本体で副作用はない）
+
+    from src.pipeline.inference.odds_source import predicted_single_odds
+
+    single = predicted_single_odds(storage, race_id)       # キャッシュだけを見る（従来モデルでその場計算して基準を混ぜない）
+    if not single or single.get("odds_model") != TARGET_ODDS_BASIS:
+        return {"status": "basis", "strategy": "target", "basis": (single or {}).get("odds_model") or "none"}
+    payload, code = _optimize_target({"race_id": race_id, "max_total_bet": max_total_bet}, "full", storage)
+    if code != 200:
+        return {"status": "error", "strategy": "target", "error": str(payload.get("error") or code)[:120]}
+    level = int(payload.get("level") or 0)
+    bets = (payload.get("bets") or []) if payload.get("status") == "bet" else []
+    total_bet = 0
+    total_ret = 0.0
+    estimated = False
+    by_type: dict[str, dict] = {}
+    for b in bets:
+        amount = int(b.get("yen") or 0)
+        hit, ret, est = settle_candidate(str(b.get("bet_type") or ""), tuple(int(x) for x in b.get("combo") or []), amount, float(b.get("est_multiple") or 0), result)
+        estimated = estimated or (hit and est)
+        total_bet += amount
+        total_ret += ret
+        t = by_type.setdefault(b["bet_type"], {"invested": 0, "returned": 0.0, "n": 0, "hit": 0})
+        t["invested"] += amount
+        t["returned"] += ret
+        t["n"] += 1
+        t["hit"] += int(hit)
+    for t in by_type.values():
+        t["returned"] = round(t["returned"])
+    return {"status": "ok", "strategy": "target", "basis": TARGET_ODDS_BASIS, "level": level, "total_bet": total_bet, "total_return": round(total_ret), "by_type": by_type,
+            "estimated": estimated, "n_bets": len(bets)}
+
+
 # ───────────────────────── 1 レース・1 日の集計 ─────────────────────────
 
 def _bucket(pos: int | None) -> str | None:
@@ -295,6 +334,11 @@ def build_race_record(race_id: str, meta: dict, storage: Any, max_total_bet: int
     except Exception as exc:  # noqa: BLE001
         logger.warning("仮想購入の計算失敗 %s: %s", race_id, exc)
         rec["bets"] = {"status": "error", "total_bet": 0, "total_return": 0.0, "by_type": {}, "candidates": [], "estimated": False}
+    try:      # 画面の推奨馬券（target）の仮想購入。推奨度の集計（見送りを除く）はこちらを使う
+        rec["bets_t"] = simulate_target_bets(storage, race_id, res, max_total_bet)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("推奨馬券(target)の仮想購入の計算失敗 %s: %s", race_id, exc)
+        rec["bets_t"] = {"status": "error", "strategy": "target", "error": str(exc)[:120]}
     return rec
 
 
@@ -422,9 +466,9 @@ def highlights(records: list[dict], limit_each: int = 3) -> list[dict]:
     for r in records:
         if not r.get("included"):
             continue
-        label = f"{r['venue']}{r['round']}R"
+        label = f"{r.get('venue', '')}{r.get('round', '')}R"
         for m in HIGHLIGHT_MARKS:
-            for p in r["marks"].get(m, []):
+            for p in (r.get("marks") or {}).get(m, []):
                 f = p.get("finish")
                 if f and f <= 3 and (p.get("win_odds") or 0) >= 10:
                     ana.append({"kind": "ana_hit", "race_id": r["race_id"], "value": p["win_odds"],
@@ -698,15 +742,21 @@ RATED_MIN_LEVEL = 1       # 推奨度が『標準』以上（0=見送りは含�
 
 
 def record_level(r: dict) -> int | None:
-    """レース記録の推奨度（0=見送り〜4=最注目）。現行ルールでの再計算（bets.lv）があればそれ、無ければ bets.level。記録が無ければ None。"""
-    b = r.get("bets") or {}
-    lv = (b.get("lv") or b).get("level")
-    return int(lv) if lv is not None else None
+    """レース記録の推奨度（0=見送り〜4=最注目）。画面の推奨馬券（target）の仮想購入 bets_t の推奨度。未記録・計算できなかったレースは None。"""
+    bt = r.get("bets_t") or {}
+    return int(bt["level"]) if bt.get("status") == "ok" and bt.get("basis") == TARGET_ODDS_BASIS and bt.get("level") is not None else None
+
+
+def target_view(r: dict) -> dict:
+    """集計用に、レース記録の bets を画面の推奨馬券（target）の仮想購入に差し替えたコピー。"""
+    bt = r.get("bets_t") or {}
+    return {**r, "bets": {"status": "ok", "total_bet": bt.get("total_bet", 0), "total_return": bt.get("total_return", 0), "by_type": bt.get("by_type") or {},
+                         "estimated": bool(bt.get("estimated")), "level": bt.get("level"), "candidates": []}}
 
 
 def rated_records(records: list[dict], min_level: int = RATED_MIN_LEVEL) -> list[dict]:
-    """推奨度が min_level 以上のレース記録だけ（推奨度が未記録のレースは含めない）。"""
-    return [r for r in records if r.get("included") and (record_level(r) is not None) and record_level(r) >= min_level]
+    """推奨度が min_level 以上のレース記録だけ（bets が画面の推奨馬券の仮想購入に差し替わっている。未記録のレースは含めない）。"""
+    return [target_view(r) for r in records if r.get("included") and (record_level(r) is not None) and record_level(r) >= min_level]
 
 
 def rated_counts(records: list[dict], min_level: int = RATED_MIN_LEVEL) -> dict[str, int]:
@@ -717,10 +767,71 @@ def rated_counts(records: list[dict], min_level: int = RATED_MIN_LEVEL) -> dict[
             "skipped": sum(1 for x in lv if x is not None and x < min_level), "unrated": sum(1 for x in lv if x is None)}
 
 
+def level_summary(records: list[dict]) -> tuple[dict[str, dict], int]:
+    """推奨度ごと（画面の推奨馬券 target の仮想購入）の レース数・的中・購入・払戻。推奨度が未記録のレース数も返す。"""
+    out: dict[str, dict] = {}
+    unrated = 0
+    for r in records:
+        if not r.get("included"):
+            continue
+        lv = record_level(r)
+        if lv is None:
+            unrated += 1
+            continue
+        bt = r["bets_t"]
+        c = out.setdefault(str(lv), dict(_BLANK_LEVEL))
+        c["races"] += 1
+        if bt.get("total_bet"):
+            c["hit"] += int(bt["total_return"] > 0)
+            c["invested"] += bt["total_bet"]
+            c["returned"] += bt["total_return"]
+    return out, unrated
+
+
+def add_target_bets(date: str, storage: Any, base: Path | None = None, *, dry_run: bool = False, max_races: int | None = None) -> dict[str, int]:
+    """保存済みの日次記録に、画面の推奨馬券（target）の仮想購入 bets_t を後から足す。印・着順・既存の数値は変えない。
+    すでに bets_t がある（計算できた）レースは飛ばす。確定済みの日にも追記できる（force で書き戻す）。"""
+    doc = read_day(date, base)
+    out = {"races": 0, "added": 0, "already": 0, "failed": 0}
+    if not doc:
+        return out
+    cap = doc.get("max_total_bet", DEFAULT_MAX_TOTAL_BET)
+    for rec in doc.get("races") or []:
+        if not rec.get("included"):
+            continue
+        out["races"] += 1
+        if record_level(rec) is not None:               # 検証と同じ基準(sec77)で計算済み
+            out["already"] += 1
+            continue
+        if max_races is not None and out["added"] + out["failed"] >= max_races:
+            continue
+        try:
+            res = load_race_result(storage, rec["race_id"])
+            new = simulate_target_bets(storage, rec["race_id"], res, cap) if res else None
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("推奨馬券(target)の追記に失敗 %s: %s", rec.get("race_id"), exc)
+            out["failed"] += 1
+            continue
+        if new and new.get("status") == "basis":        # sec77 の想定オッズがまだ無い日。基準が違う記録を残さず、集計から外す（後で再試行）
+            had = bool(rec.get("bets_t"))
+            rec["bets_t"] = new
+            out["basis"] = out.get("basis", 0) + 1
+            out["added"] += int(had)                     # 古い基準の記録を外したときだけ書き戻す
+            continue
+        if not new or new.get("status") != "ok":
+            out["failed"] += 1
+            continue
+        rec["bets_t"] = new
+        out["added"] += 1
+    if out["added"] and not dry_run:
+        write_day(doc, base, force=True)
+    return out
+
+
 def _rated_highlights(doc: dict) -> list[dict]:
-    """注目レースのうち、推奨馬券の払戻（big_return）は推奨度が標準以上のレースだけ（見送りのレースの購入は出さない）。"""
-    ok = {r["race_id"] for r in rated_records(doc.get("races") or [])}
-    return [h for h in doc.get("highlights", []) if h.get("kind") != "big_return" or h.get("race_id") in ok]
+    """注目レース。推奨馬券の払戻（big_return）は、標準以上のレースの画面の推奨馬券（target）の仮想購入から作り直す（見送りのレースの購入は出さない）。"""
+    rated_big = [h for h in highlights(rated_records(doc.get("races") or []), limit_each=3) if h["kind"] == "big_return"]
+    return [h for h in doc.get("highlights", []) if h.get("kind") != "big_return"] + rated_big
 
 
 def period_summary(scope: str, date: str, base: Path | None = None) -> dict:
@@ -771,7 +882,8 @@ def range_summary(lo: str, hi: str, base: Path | None = None) -> dict:
     return {"from": lo, "to": hi, "days": [x["date"] for x in docs],
             "status": "final" if docs and all(x["status"] == "final" for x in docs) else "provisional",
             "summary": merge_summaries([x["summary"] for x in docs]) if docs else summarize([]),
-            "race_marks": race_level_marks([r for x in docs for r in (x.get("races") or [])])}
+            "race_marks": race_level_marks([r for x in docs for r in (x.get("races") or [])]),
+            "level_summary": level_summary([r for x in docs for r in (x.get("races") or [])])}
 
 
 MARK_ORDER = (("honmei", "◎"), ("pair", "○"), ("show_val", "▲"), ("star", "★"), ("kesi", "消"))
@@ -810,7 +922,7 @@ def bets_level_card(today: _date, base: Path | None = None) -> dict:
     periods = []
     for key, label, lo, hi in specs:
         r = range_summary(lo, hi, base)
-        bl = (r["summary"].get("bets") or {}).get("by_level") or {}
+        bl, unrated = r["level_summary"]
         levels = []
         for lv in sorted(labels, reverse=True):
             if lv == 0:
@@ -822,10 +934,9 @@ def bets_level_card(today: _date, base: Path | None = None) -> dict:
         periods.append({"key": key, "label": label, "from": lo, "to": hi, "data_from": r["days"][0] if r["days"] else None,
                         "data_to": r["days"][-1] if r["days"] else None, "days": len(r["days"]), "status": r["status"],
                         "levels": levels, "total": {**tot, "roi": rate(tot["returned"], tot["invested"]), "hit_rate": rate(tot["hit_races"], tot["races"])},
-                        "skipped_races": (bl.get("0") or _BLANK_LEVEL)["races"],
-                        "unrated_races": max(0, (r["summary"].get("bets") or {}).get("races_bought", 0) - sum(v["races"] for v in bl.values()))})
+                        "skipped_races": (bl.get("0") or _BLANK_LEVEL)["races"], "unrated_races": unrated})
     return {"as_of": today.strftime("%Y%m%d"), "year": y, "periods": periods,
-            "note": "推奨馬券を既定の上限（1レース2,000円）で購入したとみなした仮想購入。買い目と推奨度は現行のルールで、保存済みの最新（確定）オッズから再計算、払戻は確定払戻。実際の購入ではありません。"}
+            "note": "画面に出している推奨馬券（既定プラン: 全券種・縛りなし。想定オッズは §77 のモデル）を既定の上限（1レース2,000円）で購入したとみなした仮想購入。推奨度は画面のレース推奨度と同じ、払戻は確定払戻。実際の購入ではありません。"}
 
 
 def mark_card(today: _date, base: Path | None = None) -> dict:
@@ -875,6 +986,10 @@ def refresh_for_dates(dates: list[str], *, reason: str = "") -> dict:
             try:
                 doc = aggregate_day(d, storage)
                 out[d] = f"{doc['status']}:{doc['summary']['races_settled']}R" + ("" if doc.get("saved") else ":not_saved")
+                try:      # 確定済みの日は上書きされないので、画面の推奨馬券(target)の仮想購入が無いレースだけ追記する
+                    add_target_bets(d, storage)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("推奨馬券(target)の追記に失敗 %s (%s): %s", d, reason, exc)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("予測結果の集計に失敗 %s (%s): %s", d, reason, exc)
                 out[d] = "error"

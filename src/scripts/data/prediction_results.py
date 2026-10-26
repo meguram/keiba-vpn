@@ -5,6 +5,7 @@
   python -m src.scripts.data.prediction_results --date 20261018 --dry-run  # 保存せず内容を表示
   python -m src.scripts.data.prediction_results --sync-gcs   # ローカルの日次記録をすべて GCS（ops/prediction_results/）へ置く（初回の移行。GCS_BUCKET が要る）
   python -m src.scripts.data.prediction_results --from 20260301 --to 20261024 --add-levels   # 保存済みの記録に推奨度だけを追記（印・着順・回収率は変えない）
+  python -m src.scripts.data.prediction_results --from 20260101 --to 20261025 --add-target-bets   # 保存済みの記録に、画面の推奨馬券(target)の仮想購入と推奨度を追記（標準以上の集計に必要。nice で直列）
 
 稼働中の自動実行は KEIBA_PREDICTION_RESULTS=1 のときだけ（raceday-result-runner の終了時=暫定、recent-retry の確定結果取得後=確定）。
 この CLI は環境変数に関係なく動く。ホストでは nice をつけて直列で実行する。
@@ -26,6 +27,25 @@ def _dates(a: str, b: str) -> list[str]:
     return [(d0 + timedelta(days=i)).strftime("%Y%m%d") for i in range((d1 - d0).days + 1)]
 
 
+RECENT_DAYS = 7
+
+
+def _alert_missing_basis(missing: dict[str, int]) -> None:
+    """直近の日に、検証と同じ想定オッズ(sec77)が無く推奨馬券を集計できないレースがあれば通知する（過去の再計算待ちの日は対象にしない）。"""
+    cut = (datetime.now() - timedelta(days=RECENT_DAYS)).strftime("%Y%m%d")
+    recent = {d: n for d, n in missing.items() if d >= cut}
+    if not recent:
+        return
+    lines = [f"{d}: {n}R" for d, n in sorted(recent.items())]
+    logging.getLogger(__name__).error("想定オッズ(sec77)が無く推奨馬券を集計できないレース: %s", lines)
+    try:
+        from src.ops.alerting import notify
+
+        notify("想定オッズ(§77)が未作成のレースがあります", lines + ["予測ジョブ(predict-race)のイベントの sec77 欄と、モデル odds_sec77 の公開を確認"], severity="warning", job="prediction-results-refresh")
+    except Exception:  # noqa: BLE001  通知の失敗で集計を止めない
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--date")
@@ -35,6 +55,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--sync-gcs", action="store_true", help="ローカルの日次記録を GCS へ一括で置く")
     ap.add_argument("--add-levels", action="store_true", help="保存済みの日次記録に仮想購入の推奨度だけを追記する")
+    ap.add_argument("--add-target-bets", action="store_true", help="保存済みの日次記録に、画面の推奨馬券（target）の仮想購入（推奨度つき）を追記する。推奨度の集計（見送りを除く）に必要")
+    ap.add_argument("--skip-final", action="store_true", help="確定済みの日は再集計しない（定期実行用。過去の予測が手元に無い環境で確定済みの記録を劣化させない）")
     a = ap.parse_args(argv)
     if a.sync_gcs:
         from src.utils.project_env import load_project_dotenv
@@ -43,6 +65,9 @@ def main(argv: list[str] | None = None) -> int:
         print(pr.sync_to_gcs())
         return 0
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    from src.utils.project_env import load_project_dotenv
+
+    load_project_dotenv()           # GCS_BUCKET・KEIBA_ENV・KEIBA_PREDICTION_RESULTS_GCS などを .env から（--sync-gcs と同じ）
     if a.date:
         days = [a.date]
     elif a.d_from and a.d_to:
@@ -53,6 +78,17 @@ def main(argv: list[str] | None = None) -> int:
     from src.scraper.storage import HybridStorage
 
     storage = HybridStorage()
+    if a.add_target_bets:
+        missing: dict[str, int] = {}
+        for d in days:
+            if pr.read_day(d) is None:
+                continue
+            res = pr.add_target_bets(d, storage, dry_run=a.dry_run)
+            print(d, res)
+            if res.get("basis"):
+                missing[d] = res["basis"]
+        _alert_missing_basis(missing)
+        return 0
     if a.add_levels:
         for d in days:
             if pr.read_day(d) is None:
@@ -60,6 +96,9 @@ def main(argv: list[str] | None = None) -> int:
             print(d, pr.add_levels(d, storage, dry_run=a.dry_run))
         return 0
     for d in days:
+        if a.skip_final and (prev := pr.read_day(d)) and prev.get("status") == "final":
+            print(f"{d}: 確定済みのため再集計しない")
+            continue
         if a.dry_run:
             doc = pr.build_day(d, storage, a.max_total_bet)
             doc.pop("races", None)

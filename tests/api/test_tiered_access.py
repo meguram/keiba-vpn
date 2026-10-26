@@ -270,7 +270,8 @@ def tier_env(monkeypatch, tmp_path):
     doc["date"] = "20261018"
     for r in doc["races"]:
         if r.get("included"):
-            r["bets"]["level"] = 1                      # 推奨度が標準（見送りでない）のレースにする。回収率は標準以上のレースだけで集計される
+            r["bets_t"] = {"status": "ok", "strategy": "target", "basis": "sec77", "level": 1, "total_bet": 1000, "total_return": 3000, "estimated": False,
+                           "by_type": {"sanrenpuku": {"invested": 1000, "returned": 3000, "n": 1, "hit": 1}}}      # 標準のレース。回収率は標準以上のレースだけで集計される
     pr.write_day(doc, tmp_path)
     from src.api import prediction_results_api as api
 
@@ -389,10 +390,10 @@ def test_prediction_results_hides_odds_and_bets_from_guest_and_free(tier_env):
 def test_prediction_results_news_for_guest_has_only_public_text(tier_env):
     _, c = _fastapi()
     full = _get(c, "/api/prediction-results/news?limit=10", "dev").json()
-    assert any("回収率" in i["subtitle"] for i in full["items"]) and any("単勝" in i["subtitle"] for i in full["items"])
+    assert any("回収率" in i["subtitle"] for i in full["items"]) and any(i["kind"] == "hit" for i in full["items"])
     for t in ("guest", "free"):
         items = _get(c, "/api/prediction-results/news?limit=10", t).json()["items"]
-        assert items and {i["kind"] for i in items} <= {"day", "week", "big_miss"}
+        assert items and {i["kind"] for i in items} <= {"day", "week", "hit", "big_miss"}
         for i in items:
             assert "roi" not in i and i["subtitle"] == i["subtitle_public"]
             assert not any(w in i["subtitle"] for w in ("回収率", "単勝", "倍", "円")), i["subtitle"]

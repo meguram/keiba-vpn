@@ -139,3 +139,48 @@ def test_race_value_rows_are_tiers_for_both_views():
             for r in out["races"]:
                 assert r["basis"] == "target" and r["tier"]["label"] and r["level"] in ("hot", "good", "ok", "pass")
                 assert not (set(r) & {"expected_roi", "max_ev", "top_bet"})
+
+
+# ── 想定オッズの基準(sec77)の固定: 検証と別の想定オッズで推奨を作らない ──
+def test_require_sec77_defaults_on_only_for_stg_and_prod(monkeypatch):
+    monkeypatch.delenv("KEIBA_TARGET_REQUIRE_SEC77", raising=False)
+    for env, want in (("stg", True), ("prod", True), ("dev", False), ("", False)):
+        monkeypatch.setenv("KEIBA_ENV", env)
+        assert TB.require_sec77() is want
+    monkeypatch.setenv("KEIBA_ENV", "prod")
+    monkeypatch.setenv("KEIBA_TARGET_REQUIRE_SEC77", "0")
+    assert TB.require_sec77() is False
+    monkeypatch.setenv("KEIBA_ENV", "dev")
+    monkeypatch.setenv("KEIBA_TARGET_REQUIRE_SEC77", "1")
+    assert TB.require_sec77() is True
+
+
+@pytest.mark.parametrize("view", ["paid", "full"])
+@pytest.mark.parametrize("odds_model", ["legacy", None])
+def test_without_sec77_odds_no_bets_are_recommended_when_required(monkeypatch, view, odds_model):
+    monkeypatch.setenv("KEIBA_TARGET_REQUIRE_SEC77", "1")
+    preds = _preds()
+    sg = None if odds_model is None else {**_single(preds), "odds_model": odds_model}
+    payload, code = _call(view, {"max_total_bet": 2000}, preds=preds, single=sg)
+    assert code == 200 and payload["status"] == "skip" and payload["level"] == 0 and payload["bets"] == []
+    assert payload["odds_pending"] is True and payload["odds_basis"] == "pending" and payload["skip_reason"]
+
+
+def test_with_sec77_odds_bets_are_recommended_when_required(monkeypatch):
+    monkeypatch.setenv("KEIBA_TARGET_REQUIRE_SEC77", "1")
+    preds = _preds()
+    payload, code = _call("full", {"max_total_bet": 2000}, preds=preds, single={**_single(preds), "odds_model": "sec77"})
+    assert code == 200 and not payload.get("odds_pending") and payload.get("odds_basis") in (None, "sec77")
+
+
+def test_predicted_singles_does_not_compute_legacy_when_required(monkeypatch):
+    from src.pipeline.inference import final_odds_service
+
+    called = []
+    monkeypatch.setattr(final_odds_service, "get_or_compute", lambda *a, **k: called.append(1))
+    monkeypatch.setattr("src.pipeline.inference.odds_source.predicted_single_odds", lambda storage, rid: None)
+    monkeypatch.setenv("KEIBA_TARGET_REQUIRE_SEC77", "1")
+    assert delegates._predicted_singles(_Storage(), RID) is None and not called
+    monkeypatch.setenv("KEIBA_TARGET_REQUIRE_SEC77", "0")
+    delegates._predicted_singles(_Storage(), RID)
+    assert called
