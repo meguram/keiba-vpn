@@ -22,6 +22,21 @@ class FinalOddsCache(InferenceCacheMixin):
     model_key = "final_odds"
     cache_version = 1
 
+    @classmethod
+    def load_cached(cls, storage, entity_id: str) -> dict | None:
+        """§77 のモデル（sec77）の想定オッズは期限切れにしない（過去日の予測成績を、同じ想定オッズで再現できるように）。従来モデルは従来どおり 24 時間。"""
+        hit = super().load_cached(storage, entity_id)
+        if hit is not None or not cls.cache_enabled():
+            return hit
+        blob = storage.load(cls.cache_category(), entity_id)
+        meta = (blob or {}).get("_cache_meta") or {} if isinstance(blob, dict) else {}
+        if isinstance(blob, dict) and _is_sec77(blob) and meta.get("version") == cls.cache_version and meta.get("model_key") == cls.model_key:
+            out = {k: v for k, v in blob.items() if k != "_cache_meta"}
+            out["_from_cache"] = True
+            out["_cache_meta"] = meta
+            return out
+        return None
+
 
 def cache_enabled() -> bool:
     return FinalOddsCache.cache_enabled()

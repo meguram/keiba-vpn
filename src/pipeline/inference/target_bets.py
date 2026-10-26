@@ -155,6 +155,12 @@ def sanrenpuku_candidates(entries: list[dict], single: dict | None) -> dict[str,
     return {"hn": hn, "tri": tri[keep], "p": p_own[keep], "odds": odds[keep], "basis": basis, "entries": ents, "n": n}
 
 
+def _ev_line(p: float) -> float | None:
+    """期待値ライン: 実際のオッズ（倍）がこの値以上なら、自前の的中確率から見て期待値が 1 以上（損益分岐＝1÷的中確率）。"""
+    p = float(p)
+    return round(1.0 / p, 1) if p > 0 else None
+
+
 def tier_level(total_hit_prob: float | None) -> int:
     """推奨度（1〜4）: 選んだ買い目のどれかが当たる確率の大きさ。しきい値は config/target_bets.json（検証期間の四分位）。"""
     if total_hit_prob is None:
@@ -192,7 +198,7 @@ def build_target_portfolio(entries: list[dict], single: dict | None, max_total_b
         mult = float(cand["odds"][j])
         bets.append({"bet_type": "sanrenpuku", "bet_label": "3連複", "combo": combo, "combo_label": "-".join(str(h) for h in combo), "legs": legs,
                      "yen": int(st), "est_multiple": round(mult, 1), "est_payout_yen": int(round(st / PT.UNIT * mult * PT.UNIT, -1)),
-                     "hit_rate_pct": round(float(cand["p"][j]) * 100, 2)})
+                     "hit_rate_pct": round(float(cand["p"][j]) * 100, 2), "ev_line_multiple": _ev_line(cand["p"][j])})
     bets.sort(key=lambda b: -b["hit_rate_pct"])
     total = int(sum(b["yen"] for b in bets))
     any_hit = float(min(sum(cand["p"][j] for j in idx), 1.0))
@@ -306,7 +312,7 @@ def _fmt_bets(cand: dict, idx: np.ndarray, stakes: np.ndarray) -> list[dict]:
         mult = float(cand["odds"][j])
         bets.append({"bet_type": BT_KEY[t], "bet_label": BT_JA[t], "combo": nums, "combo_label": BT_SEP[t].join(str(h) for h in nums) if t not in (0, 1) else str(nums[0]),
                      "legs": legs, "yen": int(st), "est_multiple": round(mult, 1), "est_payout_yen": int(round(st / PT.UNIT * mult * PT.UNIT, -1)),
-                     "hit_rate_pct": round(float(cand["p"][j]) * 100, 2)})
+                     "hit_rate_pct": round(float(cand["p"][j]) * 100, 2), "ev_line_multiple": _ev_line(cand["p"][j])})
     bets.sort(key=lambda b: -b["hit_rate_pct"])
     return bets
 

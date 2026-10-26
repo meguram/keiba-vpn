@@ -27,7 +27,7 @@ def _trec(rid, level, tb, ret):
     """画面の推奨馬券(target)の仮想購入 bets_t を持つレース記録。level=None は bets_t の無い（未記録の）レース。"""
     r = {"race_id": rid, "included": True, "bets": {"total_bet": 1, "total_return": 0, "estimated": False}}
     if level is not None:
-        r["bets_t"] = {"status": "ok", "level": level, "total_bet": tb, "total_return": ret, "estimated": False, "by_type": {}}
+        r["bets_t"] = {"status": "ok", "basis": "sec77", "level": level, "total_bet": tb, "total_return": ret, "estimated": False, "by_type": {}}
     return r
 
 

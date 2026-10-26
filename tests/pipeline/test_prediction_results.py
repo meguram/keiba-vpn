@@ -173,7 +173,7 @@ def test_old_saved_marks_with_many_pairs_and_old_anchor_still_aggregate():
 
 def _rec(level, f1_finish, bet=100, ret=0, status="ok"):
     pick = {"horse_number": 1, "horse_name": "a", "finish": f1_finish, "win_prob": 0.3}
-    bt = {"status": status, "strategy": "target", "level": level, "total_bet": bet if level else 0, "total_return": ret if level else 0,
+    bt = {"status": status, "strategy": "target", "basis": "sec77", "level": level, "total_bet": bet if level else 0, "total_return": ret if level else 0,
           "by_type": {"sanrenpuku": {"invested": bet, "returned": ret, "n": 1, "hit": int(ret > 0)}} if level else {}, "estimated": False}
     rec = {"race_id": f"r{level}{f1_finish}", "included": True, "venue": "東京", "round": 1, "top1": pick, "marks": {"honmei": [pick]}, "winner_logloss": 1.0,
            "bets": {"total_bet": 999, "total_return": 0, "by_type": {}, "level": 3}}      # 従来の最適化の仮想購入（集計には使わない）
@@ -215,8 +215,11 @@ def test_simulate_target_bets_settles_displayed_plan_and_skip_has_no_purchase(mo
     result = {"finish": {1: 1, 2: 2, 3: 3, 4: 4}, "n_runners": 4, "payoff": {"sanrenpuku": {(1, 2, 3): 5000}}}
     bets = [{"bet_type": "sanrenpuku", "combo": [1, 2, 3], "yen": 200, "est_multiple": 40.0}, {"bet_type": "sanrenpuku", "combo": [1, 2, 4], "yen": 100, "est_multiple": 30.0}]
     monkeypatch.setattr(D, "_optimize_target", lambda body, view, storage=None: ({"status": "bet", "level": 3, "bets": bets}, 200))
+    from src.pipeline.inference import odds_source as OS
+
+    monkeypatch.setattr(OS, "predicted_single_odds", lambda storage, rid: {"entries": [], "odds_model": "sec77"})
     out = pr.simulate_target_bets(object(), "r", result)
-    assert out["status"] == "ok" and out["level"] == 3 and out["total_bet"] == 300 and out["total_return"] == 10000 and out["by_type"]["sanrenpuku"]["hit"] == 1
+    assert out["status"] == "ok" and out["basis"] == "sec77" and out["level"] == 3 and out["total_bet"] == 300 and out["total_return"] == 10000 and out["by_type"]["sanrenpuku"]["hit"] == 1
     monkeypatch.setattr(D, "_optimize_target", lambda body, view, storage=None: ({"status": "skip", "level": 0, "bets": []}, 200))
     skip = pr.simulate_target_bets(object(), "r", result)
     assert skip["level"] == 0 and skip["total_bet"] == 0 and skip["total_return"] == 0
@@ -248,3 +251,20 @@ def test_cli_skip_final_does_not_reaggregate_final_days(monkeypatch, capsys):
                         lambda d, storage, **k: called.append(d) or {"saved": True, "status": "final", "summary": {"races_settled": 0}})
     assert cli.main(["--from", "20261017", "--to", "20261018", "--skip-final"]) == 0
     assert called == ["20261018"] and "確定済みのため再集計しない" in capsys.readouterr().out
+
+
+def test_target_bets_not_simulated_on_legacy_odds_and_old_records_are_unrated(tmp_path, monkeypatch):
+    from src.pipeline.inference import odds_source as OS
+
+    monkeypatch.setattr(OS, "predicted_single_odds", lambda storage, rid: {"entries": [], "odds_model": "legacy"})
+    assert pr.simulate_target_bets(object(), "r", {"finish": {1: 1}})["status"] == "basis"
+    monkeypatch.setattr(OS, "predicted_single_odds", lambda storage, rid: None)
+    assert pr.simulate_target_bets(object(), "r", {"finish": {1: 1}})["basis"] == "none"
+    old = {"race_id": "x", "included": True, "bets_t": {"status": "ok", "level": 4, "total_bet": 2000, "total_return": 0}}      # 基準を記録していない古い記録
+    assert pr.record_level(old) is None and pr.rated_records([old]) == []
+    # 古い記録は再計算の対象。sec77 が無い日は基準違いの記録を外す
+    pr.write_day({"date": "20261018", "status": "final", "summary": pr.summarize([old]), "highlights": [], "races": [old], "notes": []}, tmp_path)
+    monkeypatch.setattr(pr, "load_race_result", lambda storage, rid: {"finish": {1: 1}})
+    monkeypatch.setattr(pr, "simulate_target_bets", lambda storage, rid, res, cap: {"status": "basis", "basis": "legacy"})
+    out = pr.add_target_bets("20261018", object(), tmp_path)
+    assert out["basis"] == 1 and pr.read_day("20261018", tmp_path)["races"][0]["bets_t"]["status"] == "basis"
