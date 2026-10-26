@@ -93,6 +93,7 @@ th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px
 <tr><td>VPS 取得役が <code>race_lists</code>・発走時刻表・<code>entries_state</code> を <code>ops/mirror</code> へ push</td><td><span class="badge red">未実装</span></td><td>ホストの <code>gcs-mirror-push</code> の代替。ホスト停止に必須</td></tr>
 <tr><td>影モード（VPS 取得をホストと並走検証）</td><td><span class="badge amber">未有効</span></td><td>認証・コード・自己点検は合格。直近 5 日（開催日を含む）の合格が関門</td></tr>
 <tr><td>ジョブの担当移譲（<code>job_owner.json</code>）</td><td><span class="badge red">0 件</span></td><td><code>owners</code> は空。全 cron がホスト担当</td></tr>
+<tr><td>予測成績の集計（<code>prediction-results-refresh</code>）を GCP で動かす</td><td><span class="badge amber">定義済み・未実行</span></td><td>集計（暫定→確定）と推奨度つき仮想購入 <code>bets_t</code> の追記を Jobs が担当（土日・月・火 12–21 時、20 分おき。Slack 送信とは別）。入力は <code>predictions_*</code> と日次記録のみ（約 40MB）。<b>過去分は研究用ホストから GCS へ一度だけ種まき</b>し、以後ホストは使わない。手順: <code>docs/operations/prediction_results.md</code> の「GCP で動かす」</td></tr>
 <tr><td><code>entries_state</code>・<code>events</code>・予測 parquet の GCS 化</td><td><span class="badge red">未了</span></td><td>Cloud Run だけで出馬表の段階が更新される状態にする</td></tr>
 <tr><td>ホストの権限を読み取り専用 + <code>models/</code> publish のみへ</td><td><span class="badge amber">途中</span></td><td>publisher の越境確認は合格。ホスト側の鍵の付け替えが残る</td></tr>
 <tr><td>ホスト依存の機械検査（<code>host_dependency_scan</code>）</td><td><span class="badge amber">途中</span></td><td>高重大度（host_path / host_alias / host_port / api_internal）と postgres を 0 にする</td></tr>
@@ -148,7 +149,22 @@ th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px
 </table>
 <p>影モードは「開催日を含む直近 5 日」が要るため、10/27 に開始しないと 10/31–11/1 の開催日が 5 日に入らない。</p>
 
-<h2>5. 関連する章</h2>
+<h2>5. ホスト無しにするまでに残っていること</h2>
+<p>ID は「ホスト PC からの完全な切り離し」の監査（D-xx）。<b>すべて GCP / VPS 側での実行や設定が要り、開発 PC からは進められない</b>（開発 PC は GCP に接続しない）。手順は Cloud Shell 用に書き出して渡す。</p>
+<table>
+<thead><tr><th>順</th><th>残り</th><th>ID</th><th>完了の条件</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>予測成績の集計（<code>prediction-results-refresh</code>）の初回実行と、過去分の種まき（ホストから GCS へ一度だけ）</td><td>D-03・D-11</td><td>Jobs の実行で <code>ops/prediction_results/</code> が更新され、ホストの記録と <code>bets_t</code> が一致</td></tr>
+<tr><td>2</td><td><code>day-prep</code> → <code>predict-race</code> を実機で動かす（<code>predictions_v6</code> が出る）</td><td>D-02・D-06</td><td>ホストの同レースの予測と一致（<code>parity_check</code>）</td></tr>
+<tr><td>3</td><td><code>entries_state</code>・<code>events</code>・予測 parquet の GCS 化、取得役の <code>ops/mirror</code> push</td><td>D-03</td><td>Cloud Run だけで出馬表の段階・予測が更新される</td></tr>
+<tr><td>4</td><td>取得の cron を VPS の取得役へ（影モード 5 日合格 → 担当移譲）。結果の速報取得 <code>raceday-result-runner</code> も VPS のレース別タスクへ</td><td>D-04・D-05・D-17</td><td><code>cron_cutover_status</code> 合格</td></tr>
+<tr><td>5</td><td>担当移譲（<code>config/job_owner.json</code> は現在 0 件）。通知・集計 → 予測 → 取得の順にジョブ単位で載せ、ホストの cron 行を止める</td><td>D-11〜D-16</td><td>ジョブごとの切替判定に合格</td></tr>
+<tr><td>6</td><td>stg を GCP 側のステージングへ（ホストのトンネル・<code>KEIBA_ENV=stg</code> を廃止）。秘密を Secret Manager へ</td><td>D-09・D-19</td><td>ホスト停止試験の確認表に合格</td></tr>
+</tbody>
+</table>
+<p>過去の予測（バックフィル）は GCP では作り直せないため、順 1 の種まきだけは研究用ホストから行う。以後、ホストは研究（学習・検証）専用になり、運用データは書かない。</p>
+
+<h2>6. 関連する章</h2>
 <ul>
   <li>全体の方針と依存の監査: 「ホスト PC からの完全な切り離し」</li>
   <li>実行基盤の設計: 「Cloud Run API」「GCP Jobs への移行」「VPS 取得の実行役」「監視ポータルの Cloud Run 版」「publish 専用 SA」</li>
