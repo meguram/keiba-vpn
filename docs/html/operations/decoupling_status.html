@@ -93,6 +93,7 @@ th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px
 <tr><td>VPS 取得役が <code>race_lists</code>・発走時刻表・<code>entries_state</code> を <code>ops/mirror</code> へ push</td><td><span class="badge red">未実装</span></td><td>ホストの <code>gcs-mirror-push</code> の代替。ホスト停止に必須</td></tr>
 <tr><td>影モード（VPS 取得をホストと並走検証）</td><td><span class="badge amber">未有効</span></td><td>認証・コード・自己点検は合格。直近 5 日（開催日を含む）の合格が関門</td></tr>
 <tr><td>ジョブの担当移譲（<code>job_owner.json</code>）</td><td><span class="badge red">0 件</span></td><td><code>owners</code> は空。全 cron がホスト担当</td></tr>
+<tr><td>予測成績の集計（<code>prediction-results-refresh</code>）を GCP で動かす</td><td><span class="badge amber">定義済み・未実行</span></td><td>集計（暫定→確定）と推奨度つき仮想購入 <code>bets_t</code> の追記を Jobs が担当（土日・月・火 12–21 時、20 分おき。Slack 送信とは別）。入力は <code>predictions_*</code> と日次記録のみ（約 40MB）。<b>過去分は研究用ホストから GCS へ一度だけ種まき</b>し、以後ホストは使わない。手順: <code>docs/operations/prediction_results.md</code> の「GCP で動かす」</td></tr>
 <tr><td><code>entries_state</code>・<code>events</code>・予測 parquet の GCS 化</td><td><span class="badge red">未了</span></td><td>Cloud Run だけで出馬表の段階が更新される状態にする</td></tr>
 <tr><td>ホストの権限を読み取り専用 + <code>models/</code> publish のみへ</td><td><span class="badge amber">途中</span></td><td>publisher の越境確認は合格。ホスト側の鍵の付け替えが残る</td></tr>
 <tr><td>ホスト依存の機械検査（<code>host_dependency_scan</code>）</td><td><span class="badge amber">途中</span></td><td>高重大度（host_path / host_alias / host_port / api_internal）と postgres を 0 にする</td></tr>

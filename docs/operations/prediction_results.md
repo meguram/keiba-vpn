@@ -43,6 +43,22 @@ nice -n 19 python -m src.scripts.data.prediction_results --from 20260101 --to 20
 
 予測 API と同じ公開の GET。回収率（仮想購入）の表示は画面側で会員向けにしている。dev では、集計ファイルが無い日を dev ストアから都度作る。
 
+## GCP で動かす（ホスト非依存・2026-10-26 定義）
+
+最終形は、集計・`bets_t` の追記・通知をすべて Cloud Run Jobs が担当し、ホストを使わない。
+
+| 項目 | 内容 |
+|---|---|
+| ジョブ | `prediction-results-refresh`（`config/gcp_job_map.json`、グループ `g-results`＝JST 12–21 時の 20 分おき・土日月火）。直近 10 日を集計し、続けて `--add-target-bets` で `bets_t` の欠けを埋める（冪等）。`slack-results` はその後に実行（送信は別） |
+| 入力 | 結果・オッズ・出馬表は GCS の正本（`HybridStorage`）。予測は `race_predictions`（GCS）→ `state/` の `predictions_v6` など（`state_in` で約 60MB まで）。画面の推奨馬券と同じ計算（`delegates._optimize_target`）がイメージ内の設定だけで動く |
+| 出力 | `gs://<bucket>/ops/prediction_results/<日>.json`（Cloud Run の API が読む正本）。`KEIBA_RUN_LOCATION=gcp` では自動で GCS に書く |
+
+**一度だけの種まき（研究用ホストから GCS へ。以後ホストは使わない）**: 過去分の予測と `bets_t` つき日次記録は、GCP では作り直せない（過去の予測はホストでバックフィルしたもの）。
+1. ホストで過去分に `bets_t` を足す（`scripts/ops/backfill_target_bets.sh`。`.env` の `KEIBA_PREDICTION_RESULTS_GCS=1` により GCS へも書かれる）。
+2. 予測の種まき: `python -m src.ops.state_sync push --job prediction-results-refresh --which in`。
+3. Jobs で 1 回手動実行し、`ops/prediction_results/` が更新されること・ホストの記録と `bets_t` が一致することを確認（`parity_check`）。
+4. 一致したらホストの `.env` の `KEIBA_PREDICTION_RESULTS=1` を外し、`config/job_owner.json` に載せる（手順: `docs/operations/gcp_jobs_migration.md`）。
+
 ## 反映・有効化・ロールバック
 
 1. コードをホストへ反映（`config` や DB の変更は無い）→ API 再起動 → Next の再ビルド・切替。
