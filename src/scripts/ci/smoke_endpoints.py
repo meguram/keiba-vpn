@@ -170,6 +170,9 @@ def run_checks(base: str, *, require_db: bool = False) -> list[Result]:
             "race_id": rid, "bankroll": 10000, "max_total_bet": 2000, "odds_mode": "auto",
             "bet_types": ["tansho", "fukusho", "umaren", "wide", "sanrenpuku"],
         })
+        if d.get("skipped"):        # 見送り（推奨度 0）のレースは買い目を返さない仕様。計算が通って見送りと判定されたことを確かめる
+            assert d.get("candidates", []) == [] and not d.get("total_bet") and d.get("skip_reason"), f"見送りなのに買い目・金額が残っている: {d}"
+            return "見送り（買い目なし）"
         assert len(d.get("candidates", [])) > 0, f"買い目が空（odds_note={d.get('odds_note')}）"
         assert 0 < d.get("total_bet", 0) <= 2000, f"合計金額が上限の範囲外: {d.get('total_bet')}"
         return f"{len(d['candidates'])}点 / {d['total_bet']}円"
