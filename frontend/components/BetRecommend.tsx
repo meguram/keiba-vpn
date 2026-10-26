@@ -36,6 +36,8 @@ type Candidate = {
 type ProbabilityModel = { kind: string; alpha2?: number; alpha3?: number; fitted_to?: string[] };
 
 type Recommendation = {
+  /** 見送り（推奨度 0）のレース。サーバが買い目・金額・期待値を返さない */
+  skipped?: boolean;
   result?: RaceBetResult | null;
   probability_model?: ProbabilityModel | null;
   odds_source?: "actual" | "predicted" | null;
@@ -325,6 +327,7 @@ export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string;
 
       {rec && (
         <>
+          {!rec.skipped && (
           <div style={{ marginBottom: 8, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", fontSize: 12 }}>
             {rec.odds_source === "predicted" ? (
               <span style={{ padding: "2px 8px", borderRadius: 4, background: "rgba(251,191,36,0.12)", color: "#fbbf24" }}>予測オッズ（暫定・前日時点）</span>
@@ -351,11 +354,12 @@ export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string;
             )}
             {rec.odds_note && <span style={{ color: "var(--text-dim)" }}>{rec.odds_note}</span>}
           </div>
+          )}
           {rec.result && <BetResultBanner result={rec.result} />}
 
           {rec.candidates.length === 0 ? (
             <div style={{ textAlign: "center", padding: 32, color: "var(--text-dim)", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10 }}>
-              期待値が基準（1.05）を超える買い目がありません。このレースは見送りが妥当です。
+              {rec.skipped ? "このレースは見送りです（推奨馬券はありません）。" : "期待値が基準（1.05）を超える買い目がありません。このレースは見送りが妥当です。"}
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
