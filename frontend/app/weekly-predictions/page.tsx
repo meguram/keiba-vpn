@@ -14,7 +14,6 @@ import { RaceStrip, useNarrow } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
 import { MeguTable } from "@/components/MeguTable";
 import { WeeklyBetTab } from "@/components/WeeklyBetTab";
-import { MARK_META, MARK_ORDER } from "@/lib/marks";
 import ProbCalNote from "@/components/ProbCalNote";
 import { EntriesDaySummary, EntriesStatusBadge } from "@/components/EntriesStatus";
 import type { EntriesStatus } from "@/lib/entriesStatus";
@@ -68,9 +67,6 @@ type PredEntry = {
   weight?: number | null;
   weight_change?: number | null;
   popularity?: number | null;
-  mark_type?: string;
-  /** 消印（mark_type='kesi'）の根拠の短文 */
-  kesi_reason?: string;
   pred_rank?: number;
   composite_rank?: number;
   win_prob?: number | null;
@@ -125,31 +121,6 @@ type PredData = {
 
 /* ── ユーティリティ ── */
 
-function markSym(p: PredEntry): { sym: string; color: string } {
-  if (p.mark_type && MARK_META[p.mark_type]) return MARK_META[p.mark_type];
-  return MARK_META.none;
-}
-
-
-/** 印の表示。消印は枠線つき（他の印と見分けがつき、色だけに頼らない）で、押さなくても理由が title で読める */
-function MarkChip({ p, size = 18 }: { p: PredEntry; size?: number }) {
-  const m = markSym(p);
-  if (m.sym === "-") return <span style={{ color: "var(--text-dim)" }}>-</span>;
-  const kesi = p.mark_type === "kesi";
-  return (
-    <span
-      title={kesi ? p.kesi_reason || "消し（3着内に来る確率が低い）" : "印"}
-      aria-label={`印 ${m.sym}`}
-      style={{
-        color: m.color, fontWeight: 800, fontSize: size, lineHeight: 1,
-        ...(kesi ? { border: "1.5px solid #94a3b8", borderRadius: 4, padding: "1px 4px", fontSize: Math.round(size * 0.75) } : {}),
-      }}
-    >
-      {m.sym}
-    </span>
-  );
-}
-
 function fmtPct(v: number | null | undefined): string {
   if (v == null) return "-";
   return `${(v * 100).toFixed(1)}%`;
@@ -196,17 +167,8 @@ function RaceSummaryBadges({ preds }: { preds: PredEntry[] }) {
   if (!hasP.length) return null;
   const evOk = hasP.filter((p) => (p.ev_win_cal ?? p.ev_win ?? 0) >= 1.0).length;
   const evGreat = hasP.filter((p) => (p.ev_win_cal != null ? p.ev_win_cal >= 1.1 : (p.ev_win ?? 0) >= 1.3)).length;
-  const honmei = hasP.find((p) => p.mark_type === "honmei");
   return (
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-      {honmei && (
-        <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: "rgba(239,68,68,0.12)", color: "#ef4444" }}>
-          ◎ {honmei.horse_id && SHOW_HORSE_LINK
-            ? <a href={`/horse/${honmei.horse_id}`} target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "none" }}>{honmei.horse_name ?? `馬番${honmei.horse_number}`}</a>
-            : (honmei.horse_name ?? `馬番${honmei.horse_number}`)
-          }
-        </span>
-      )}
       {evGreat > 0 && (
         <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 4, background: "rgba(34,197,94,0.10)", color: "#22c55e" }}>
           EV≥1.3: {evGreat}頭
@@ -228,6 +190,8 @@ function fmtWeight(w: number | null | undefined, d: number | null | undefined): 
 }
 
 /* ── 列での並べ替え ── */
+const BUY_TIER_RANK: Record<string, number> = { 強推奨: 1, 推奨: 2, 様子見: 3 };   // 買い判断の並び（小さいほど強い）
+
 type SortKey = "num" | "name" | "bracket" | "sexage" | "jwt" | "jockey" | "trainer" | "weight" | "win" | "top2" | "top3" | "odds" | "podds" | "evw" | "evp" | "tier";
 type SortDir = "asc" | "desc";
 
@@ -253,7 +217,7 @@ const SORT_VALUE: Record<SortKey, (p: PredEntry) => number | string | null> = {
   podds: (p) => p.place_odds_min ?? null,
   evw: (p) => p.ev_win_cal ?? p.ev_win ?? null,
   evp: (p) => p.ev_place_cal ?? p.ev_place ?? p.expected_value ?? null,
-  tier: (p) => (p.mark_type && MARK_ORDER[p.mark_type]) || null,
+  tier: (p) => BUY_TIER_RANK[p.buy_tier ?? ""] ?? null,
 };
 // 『大きいほど良い』列は、最初のクリックを降順にする（勝率・連対率・複勝率・期待値・馬体重）
 const DESC_FIRST = new Set<SortKey>(["win", "top2", "top3", "evw", "evp", "weight"]);
@@ -417,7 +381,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
     { key: "num", label: "馬番" }, { key: "name", label: "馬名" }, { key: "bracket", label: "枠" }, { key: "sexage", label: "性齢" },
     { key: "jwt", label: "斤量" }, { key: "jockey", label: "騎手" }, { key: "trainer", label: "調教師" }, { key: "weight", label: "馬体重" },
     { key: "win", label: "勝率" }, { key: "top2", label: "連対率" }, { key: "top3", label: "複勝率" },
-    { key: "odds", label: "想定単勝" }, { key: "podds", label: "想定複勝" }, { key: "evw", label: "勝期待値" }, { key: "evp", label: "複期待値" }, { key: "tier", label: "めぐAI印" },
+    { key: "odds", label: "想定単勝" }, { key: "podds", label: "想定複勝" }, { key: "evw", label: "勝期待値" }, { key: "evp", label: "複期待値" }, { key: "tier", label: "買い判断" },
   ];
   const sortBar = (
     <div className="pt-sortbar" role="group" aria-label="並び替え">
@@ -474,7 +438,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
               {th("top2", lock ? "連対🔒/複勝" : "連対/複勝", {}, "連対率で並べ替え（複勝率は『そのほか』から）")}
               {th("odds", LK("想定単勝/複勝"), { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "想定単勝で並べ替え（想定複勝は『そのほか』から）")}
               {th("evw", LK(calibratedEv ? "期待値(較正後)" : "期待値"), { borderLeft: "1px solid rgba(36,48,73,0.5)" }, evTitle)}
-              {th("tier", LK("めぐAI印"), { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "印（◎○▲★△消）で並べ替え。下段: 買い判断（期待値の最大で判定）")}
+              {th("tier", LK("買い判断"), { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "買い判断で並べ替え（期待値の最大で判定）")}
             </tr>
           </thead>
           <tbody>
@@ -497,7 +461,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
                   <td style={{ color: dim }}>{fmtPct(p.top2_prob)}<span className="sub" style={{ color: dim }}>{fmtPct(p.top3_prob)}</span></td>
                   <td className="sep" style={{ color: "var(--text-dim)" }}>{fmtOdds(p.win_odds)}<span className="sub">{placeOdds(p)}</span></td>
                   <td className="sep" style={{ background: ev.w.bg, fontWeight: hasPred ? 700 : 400, color: ev.w.color }}>{ev.w.text}<span className="sub" style={{ color: ev.pl.color }}>{ev.pl.text}</span></td>
-                  <td className="sep"><MarkChip p={p} /><span className="sub" style={{ color: "var(--text-dim)" }}>{p.buy_tier && p.buy_tier !== "—" ? p.buy_tier : ""}</span></td>
+                  <td className="sep" style={{ color: "var(--text-dim)" }}>{p.buy_tier && p.buy_tier !== "—" ? p.buy_tier : "—"}</td>
                 </tr>
                 </Fragment>
               );
@@ -532,7 +496,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
                   <td>{wakuChip(p, 22)}</td>
                   <td>{numChip(p, 22)}</td>
                   <td className="l" style={{ fontWeight: 600, color: "#fff" }}>
-                    {p.mark_type && p.mark_type !== "none" ? <><MarkChip p={p} size={14} /> </> : null}{tapCell(p, "horse", p.horse_name, "#fff")}<GrowthBadge g={p.growth} meta={growthMeta} horse={p.horse_name} />
+                    {tapCell(p, "horse", p.horse_name, "#fff")}<GrowthBadge g={p.growth} meta={growthMeta} horse={p.horse_name} />
                     <span className="sub">{[p.sex_age, p.jockey_weight != null ? `${p.jockey_weight}kg` : null, p.jockey_name, p.weight ? fmtWeight(p.weight, p.weight_change) : null].filter(Boolean).join("　")}</span>
                     <span className="sub">{[p.trainer_name, p.buy_tier && p.buy_tier !== "—" ? `買い判断 ${p.buy_tier}` : null].filter(Boolean).join("　")}</span>
                   </td>
@@ -551,7 +515,6 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
       <div className="pt-v-card" role="list">
         {sorted.map((p, i) => {
           const ev = evOf(p);
-          const m = markSym(p);
           const bar = (v: number | null | undefined, c: string) => (
             <span className="pt-bar"><i style={{ ["--w" as string]: `${Math.min(100, Math.max(0, (v ?? 0) * 100))}%`, ["--c" as string]: c } as React.CSSProperties} /></span>
           );
@@ -560,7 +523,6 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
               <div className="r1">
                 <span className="pt-nums">{wakuChip(p, 26)}{numChip(p, 26)}</span>
                 <span className="nm">{tapCell(p, "horse", p.horse_name, "#fff")}<GrowthBadge g={p.growth} meta={growthMeta} horse={p.horse_name} /></span>
-                {m.sym !== "-" && <MarkChip p={p} size={15} />}
                 <span className="win"><b style={{ color: dim }}>{fmtPct(p.win_prob)}</b><small>勝率</small></span>
               </div>
               <div className="r2">
@@ -725,7 +687,7 @@ function RacePanel({
           </div>
         )}
         {pred && !failed && tab === "bet" && (
-          <WeeklyBetTab raceId={race.race_id} hasPred={hasPred} preds={preds} lock={locked} authLoading={authLoading} />
+          <WeeklyBetTab raceId={race.race_id} hasPred={hasPred} lock={locked} authLoading={authLoading} />
         )}
         {pred && !failed && tab === "predict" && <PredictionSourceBadge source={pred.prediction_source} note={pred.prediction_note} />}
         {pred && !failed && tab === "predict" && locked && preds.length > 0 && <MemberLockNote />}

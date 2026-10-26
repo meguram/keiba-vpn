@@ -30,7 +30,6 @@ export type TargetPlan = {
 const TARGET_DESC: Record<number, string> = {
   0: "見送り（レースの期待値が水準未満、または条件を満たす買い目なし）", 1: "レースの期待値は水準を超えた程度", 2: "レースの期待値はやや高い", 3: "レースの期待値が高い", 4: "レースの期待値が特に高い（それでも当たらないレースが大半）",
 };
-const MARK_COLOR: Record<string, string> = { "◎": "#f87171", "○": "#60a5fa", "▲": "#fbbf24", "★": "#fb923c", "△": "#a78bfa", "消": "#94a3b8" };
 const TH: CSSProperties = { padding: "5px 8px", textAlign: "right", fontSize: 12, color: "var(--text-dim)", fontWeight: 600, whiteSpace: "nowrap" };
 const TD: CSSProperties = { padding: "5px 8px", textAlign: "right", fontSize: 12.5, borderTop: "1px solid var(--border)", verticalAlign: "middle" };
 
@@ -123,7 +122,7 @@ export function TargetBets({
                   <span style={{ fontSize: 11.5, color: "var(--text-dim)", marginRight: 6 }}>{b.bet_label}</span><span style={{ fontWeight: 800, marginRight: 8 }}>{b.combo_label}</span>
                   <span style={{ display: "flex", flexWrap: "wrap", gap: "0 10px", fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>
                     {b.legs.map((l) => (
-                      <span key={l.horse_number} style={{ whiteSpace: "nowrap" }}><span style={{ color: MARK_COLOR[l.mark] ?? "inherit", fontWeight: 800, marginRight: 1 }}>{l.mark}</span>{l.horse_name}</span>
+                      <span key={l.horse_number} style={{ whiteSpace: "nowrap" }}>{l.horse_name}</span>
                     ))}
                   </span>
                 </td>

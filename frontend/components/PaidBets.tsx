@@ -34,7 +34,6 @@ export function tierDesc(level: number, basis?: string): string {
   return (TIER_STYLE[level] ?? TIER_STYLE[0]).desc;
 }
 
-const MARK_COLOR: Record<string, string> = { "◎": "#f87171", "○": "#60a5fa", "▲": "#fbbf24", "★": "#fb923c", "△": "#a78bfa", "消": "#94a3b8" };
 
 export function TierBadge({ tier, size = 14 }: { tier: PaidTier; size?: number }) {
   const s = TIER_STYLE[tier.level] ?? TIER_STYLE[0];
@@ -110,7 +109,7 @@ export function PaidBets({
                   <span style={{ fontWeight: 800, marginRight: 8 }}>{b.combo_label}</span>
                   <span style={{ display: "inline-flex", flexWrap: "wrap", gap: "0 10px", fontSize: 12, color: "var(--text-dim)" }}>
                     {b.legs.map((l) => (
-                      <span key={l.horse_number}><span style={{ color: MARK_COLOR[l.mark] ?? "inherit", fontWeight: 800, marginRight: 1 }}>{l.mark}</span>{l.horse_name}</span>
+                      <span key={l.horse_number}>{l.horse_name}</span>
                     ))}
                   </span>
                 </td>

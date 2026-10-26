@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 /* 会員限定の項目を案内する表示。サーバは匿名の応答から該当項目を落としている（表示を隠しているだけではない）。 */
-export const MEMBER_ONLY_ITEMS = "連対率・想定オッズ・期待値・めぐAI印・買い判断・展開予想・推奨馬券";
+export const MEMBER_ONLY_ITEMS = "連対率・想定オッズ・期待値・買い判断・展開予想・推奨馬券";
 
 /** 予測表の上に出す 1 行の案内 */
 export function MemberLockNote() {
@@ -22,7 +22,7 @@ export function MemberLockCard({ title }: { title: string }) {
       <div style={{ fontSize: 40, marginBottom: 8 }}>🔒</div>
       <h2 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 8px" }}>{title}は会員限定です</h2>
       <p style={{ fontSize: 13, color: "var(--text-dim)", margin: "0 0 16px", lineHeight: 1.6 }}>
-        勝率・複勝率は誰でも見られます。想定オッズ・期待値・めぐAI印・推奨馬券は、ログインした会員の方にお見せしています。
+        勝率・複勝率は誰でも見られます。想定オッズ・期待値・推奨馬券は、ログインした会員の方にお見せしています。
       </p>
       <Link href="/login" className="btn">ログイン</Link>
     </div>
@@ -38,7 +38,7 @@ export function PublicModeNote({ access }: { access: PublicAccess }) {
   const parts = [w.includes("B") ? "出馬表・結果の詳細" : null, w.includes("O") ? "オッズ・期待値・買い目" : null, "指数・パドック・調教・過去走"].filter(Boolean);
   return (
     <p data-testid="public-mode-note" style={{ margin: "8px 0", padding: "8px 12px", fontSize: 12, borderRadius: 8, background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.3)", color: "var(--text-dim)", lineHeight: 1.6 }}>
-      ℹ️ 公開準備中のため、{parts.join("・")}は表示していません。勝率・複勝率・めぐAI印などの自前の予測は表示します。
+      ℹ️ 公開準備中のため、{parts.join("・")}は表示していません。勝率・複勝率などの自前の予測は表示します。
     </p>
   );
 }

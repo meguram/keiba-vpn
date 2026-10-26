@@ -102,20 +102,6 @@ export const SCOPES: { id: PredictionResults["scope"]; label: string }[] = [
   { id: "season", label: "シーズン" },
 ];
 
-export const MARK_META: Record<MarkKey, { sym: string; label: string; color: string }> = {
-  honmei: { sym: "◎", label: "本命（1着優位）", color: "#ef4444" },
-  pair: { sym: "○", label: "対抗（連対候補）", color: "#3b82f6" },
-  star: { sym: "★", label: "中穴妙味（10〜30倍）", color: "#a78bfa" },
-  kesi: { sym: "消", label: "消し（3着内に来る確率が低い）", color: "#cbd5e1" },
-};
-
-export const FINISH_META: { key: "f1" | "f2" | "f3" | "f4p"; label: string; color: string }[] = [
-  { key: "f1", label: "1着", color: "#f59e0b" },
-  { key: "f2", label: "2着", color: "#94a3b8" },
-  { key: "f3", label: "3着", color: "#b45309" },
-  { key: "f4p", label: "4着以下", color: "#334155" },
-];
-
 /** レース記録の推奨度（0=見送り〜4=最注目）。画面の推奨馬券（target）の仮想購入のもの。未記録は null。 */
 export const raceLevel = (r: RaceRecord): number | null => (r.bets_t?.status === "ok" ? r.bets_t.level ?? null : null);
 
