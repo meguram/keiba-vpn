@@ -14,20 +14,26 @@ while [ $# -gt 0 ]; do case "$1" in --from) FROM="$2"; shift 2;; --to) TO="$2"; 
 load1=$(cut -d' ' -f1 /proc/loadavg); ok=$("$PY" -c "print(1 if $load1 < 14 else 0)")
 [ "$ok" = 1 ] || { echo "load が高い($load1)ので中止します。下がってからもう一度" >&2; exit 1; }
 
+# 安全: 消すのは /tmp/keiba-backfill-* の作業ディレクトリだけ。ホストの data/ は、最後に『リンク』を張るだけで、中身を消す・書き換える操作はしない
+case "$WORK" in /tmp/keiba-backfill-*) ;; *) echo "WORK は /tmp/keiba-backfill-* にしてください: $WORK" >&2; exit 1;; esac
+
 echo "== 1/3 コードを取り込む: GitHub の $REF → $WORK"
+[ -L "$WORK" ] && { echo "WORK がリンクです。中止: $WORK" >&2; exit 1; }
+[ -e "$WORK/data" ] && [ -L "$WORK/data" ] && rm -f "$WORK/data"      # 前回のリンクは、リンクだけを消す（中身には触れない）
 rm -rf "$WORK"; git clone -q --depth 1 --branch "$REF" https://github.com/meguram/keiba-vpn.git "$WORK"
 echo "   $(git -C "$WORK" log --oneline -1)"
 
-echo "== 2/3 データ・設定をつなぐ（ホストのものをそのまま使う）"
-rm -rf "$WORK/data"; ln -s "$REPO/data" "$WORK/data"
-for f in .env .env.stg .env.prod; do [ -e "$REPO/$f" ] && ln -sf "$REPO/$f" "$WORK/$f" || true; done
+echo "== 2/3 学習済みの係数をコピーし、データ・設定をつなぐ（ホストのものをそのまま使う。data/ は触らずリンクだけ）"
 n=0
 while IFS= read -r line; do
-  case "$line" in ''|\#*) continue;; esac
+  case "$line" in ''|\#*|data/*) continue;; esac           # data/ の行は、リンクで済むのでコピーしない
   line="${line%/}"; src="$REPO/$line"
-  if [ -e "$src" ]; then mkdir -p "$WORK/$(dirname "$line")"; rm -rf "$WORK/$line"; cp -a "$src" "$WORK/$line"; n=$((n+1)); fi
+  if [ -e "$src" ]; then mkdir -p "$WORK/$(dirname "$line")"; cp -a "$src" "$WORK/$(dirname "$line")/"; n=$((n+1)); fi
 done < "$WORK/config/fitted_artifacts.txt"
 echo "   学習済みの係数 $n 件をコピー"
+for f in .env .env.stg .env.prod; do if [ -e "$REPO/$f" ]; then ln -sf "$REPO/$f" "$WORK/$f"; fi; done
+rm -rf "$WORK/data"                       # ここはクローンした実体のディレクトリ（まだリンクではない）
+ln -s "$REPO/data" "$WORK/data"
 
 echo "== 3/3 追記（$FROM〜$TO。直近 10 日 → それ以前。${DRY:-書き込みあり}）"
 cd "$WORK"; export PYTHONPATH="$WORK" KEIBA_ENV="${KEIBA_ENV:-stg}" TZ=Asia/Tokyo
