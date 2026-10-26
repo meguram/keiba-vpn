@@ -27,6 +27,25 @@ def _dates(a: str, b: str) -> list[str]:
     return [(d0 + timedelta(days=i)).strftime("%Y%m%d") for i in range((d1 - d0).days + 1)]
 
 
+RECENT_DAYS = 7
+
+
+def _alert_missing_basis(missing: dict[str, int]) -> None:
+    """直近の日に、検証と同じ想定オッズ(sec77)が無く推奨馬券を集計できないレースがあれば通知する（過去の再計算待ちの日は対象にしない）。"""
+    cut = (datetime.now() - timedelta(days=RECENT_DAYS)).strftime("%Y%m%d")
+    recent = {d: n for d, n in missing.items() if d >= cut}
+    if not recent:
+        return
+    lines = [f"{d}: {n}R" for d, n in sorted(recent.items())]
+    logging.getLogger(__name__).error("想定オッズ(sec77)が無く推奨馬券を集計できないレース: %s", lines)
+    try:
+        from src.ops.alerting import notify
+
+        notify("想定オッズ(§77)が未作成のレースがあります", lines + ["予測ジョブ(predict-race)のイベントの sec77 欄と、モデル odds_sec77 の公開を確認"], severity="warning", job="prediction-results-refresh")
+    except Exception:  # noqa: BLE001  通知の失敗で集計を止めない
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--date")
@@ -60,10 +79,15 @@ def main(argv: list[str] | None = None) -> int:
 
     storage = HybridStorage()
     if a.add_target_bets:
+        missing: dict[str, int] = {}
         for d in days:
             if pr.read_day(d) is None:
                 continue
-            print(d, pr.add_target_bets(d, storage, dry_run=a.dry_run))
+            res = pr.add_target_bets(d, storage, dry_run=a.dry_run)
+            print(d, res)
+            if res.get("basis"):
+                missing[d] = res["basis"]
+        _alert_missing_basis(missing)
         return 0
     if a.add_levels:
         for d in days:

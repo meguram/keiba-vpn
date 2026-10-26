@@ -44,7 +44,21 @@
 - 旧モデル用の想定オッズの較正（`paid_zone.calibrate_single`）は sec77 には重ねない（学習時に市場の水準へ較正済み）。
 - 学習・保存: `python -m src.scripts.data.odds_sec77_fit fit`（`data/local/modeling/odds_pred/serving/`。再学習のたびに実行）。過去日の算出・比較: `python -m src.scripts.data.odds_sec77_backfill --from … --to … [--dry-run]`。
 - 有効化: モデルが存在すれば既定で有効。`KEIBA_ODDS_SEC77=0` で無効（従来の想定オッズに戻る）。特徴量づくりのために、ホストの予測プロセス（weight_triggered_predict）が v6 の V3Serving をもう 1 つ読み込む（v6 の shadow が有効ならそれを共有）。
-- 期限: キャッシュの有効期間は従来と同じ（既定 24 時間）。期限が切れた後は従来の想定オッズに戻る。
+- 期限: sec77 のキャッシュは期限切れにしない（`FinalOddsCache.load_cached`）。従来モデルの結果だけ 24 時間。
+
+### 基準の固定（2026-10-26。2026 年 1〜8 月の推奨馬券が約 50% に落ちた原因の再発防止）
+
+検証と別の想定オッズ（従来モデル）で推奨・集計が作られると、ほぼ全レースが最注目になり回収率が崩れる。次の 5 つで、基準が違うものは**出さない・数えない・気づける**ようにした。
+
+| 守り | 内容 |
+|---|---|
+| 推奨を出さない | stg/prod（`KEIBA_ENV` が明示）では既定で `KEIBA_TARGET_REQUIRE_SEC77=1` 相当。sec77 が無いレースは `status=skip`・`odds_pending=true`・`odds_basis=pending`（『想定オッズの準備中』）を返し、従来モデルでその場計算もしない（`target_bets.require_sec77` / `delegates._optimize_target`・`_predicted_singles`）。dev は既定オフ（`=1` で試せる） |
+| 集計に数えない | 予測成績の `bets_t` は `basis=sec77` の記録だけ集計。sec77 が無い日は `status=basis` で外し、後で再計算（`prediction_results.TARGET_ODDS_BASIS`） |
+| 失効させない | sec77 のキャッシュは期限切れにしない |
+| 作れる環境に載せる | モデル `odds_sec77`（`ODDS_SEC77_DIR`）を `config/gcp_job_map.json` の models に追加し、`bundle_v6e` を使う全ジョブ（predict-race・eve-precompute・day-prep）に載せる。ホストからの公開: `bash scripts/gcp/publish_models_from_host.sh odds_sec77`（**再学習のたびに公開し直す**）。`tests/pipeline/test_sec77_status.py` が載せ忘れを検出 |
+| 気づける | 予測ジョブのイベントに `sec77`（ok / no_model / disabled / no_numbers / error）をレースごとに記録し、モデルが無いときは ERROR ログ。`prediction-results-refresh`（`--add-target-bets`）は直近 7 日に sec77 が無いレースがあれば通知（`KEIBA_SLACK_NOTIFY=1` で Slack） |
+
+sec77 を再学習・更新したときは、`odds_sec77_fit` → `publish_models_from_host.sh odds_sec77` → 過去分の `backfill_target_bets.sh --sec77` の順で、検証・本番・集計の基準を揃える。
 
 ## プラン方式（全券種・縛りなしが既定、2026-10-25）
 - 既定プラン `pattern_all`: 単勝・複勝・馬連・ワイド・馬単・3連複・3連単を、券種・馬を自由に組み合わせる。購入額 s_i = ceil(M·B·k/想定オッズ_i)（M=5, k=2.0）で、どれか1つ当たれば払戻 ≥ M·B。上位3着の全順列（MB60）の確率和で『どれか当たる確率』を厳密に数え（`portfolio_pattern.py`）、費用対効果上位50件から最大5点をビームサーチ（幅12、厳密列挙との一致 30/40、平均差 0.0014）で最大化。

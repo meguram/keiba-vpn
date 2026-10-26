@@ -32,6 +32,9 @@ while IFS= read -r line; do
   if [ -e "$src" ]; then mkdir -p "$WORK/$(dirname "$line")"; cp -a "$src" "$WORK/$(dirname "$line")/"; n=$((n+1)); fi
 done < "$WORK/config/fitted_artifacts.txt"
 echo "   学習済みの係数 $n 件をコピー"
+for m in odds_sec77_backfill odds_sec77_fit; do      # リポジトリに未コミットの研究用スクリプトは、ホストのものを使う
+  [ -e "$WORK/src/scripts/data/$m.py" ] || { [ -e "$REPO/src/scripts/data/$m.py" ] && cp "$REPO/src/scripts/data/$m.py" "$WORK/src/scripts/data/"; }
+done
 for f in .env .env.stg .env.prod; do if [ -e "$REPO/$f" ]; then ln -sf "$REPO/$f" "$WORK/$f"; fi; done
 rm -rf "$WORK/data"                       # ここはクローンした実体のディレクトリ（まだリンクではない）
 ln -s "$REPO/data" "$WORK/data"
