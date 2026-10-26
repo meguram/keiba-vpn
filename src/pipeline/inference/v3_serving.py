@@ -263,8 +263,16 @@ class V3Serving:
         if getattr(self, "_px_cache", None) is None:
             self._px_cache = {}
         want = c[KEYS].astype(str)
+        sd = getattr(getattr(self, "v4", None), "state_dir", None)
+        path = Path(sd) / day / "px_day.parquet" if sd else None       # v4 の日単位キャッシュ(v4_day.parquet)と同じ場所。別プロセス（Jobs の次のレース）でも使い回す
         have = self._px_cache.get(day)
+        if have is None and path is not None and path.exists():
+            try:
+                have = pd.read_parquet(path)
+            except Exception as exc:  # noqa: BLE001  壊れた/読めないキャッシュは作り直す
+                logger.warning("PX の日単位キャッシュを読めない（作り直す）: %s %s", path, exc)
         if have is not None and len(want.merge(have[KEYS], on=KEYS, how="left", indicator=True).query("_merge == 'left_only'")) == 0:
+            self._px_cache[day] = have
             return have
         if getattr(self, "px", None) is None:
             self.px = sv5px.PXFeatures(self.v4.hist.field_hist)
@@ -276,6 +284,12 @@ class V3Serving:
             card["field_size"] = card.groupby("race_id")["horse_id"].transform("count")
         out = self.px.day(card)
         self._px_cache[day] = out
+        if path is not None:
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                out.to_parquet(path, index=False)
+            except Exception as exc:  # noqa: BLE001  保存できなくても予測は続ける
+                logger.warning("PX の日単位キャッシュを保存できなかった: %s %s", path, exc)
         return out
 
     def _day_card(self, c: pd.DataFrame, storage: Any) -> pd.DataFrame | None:

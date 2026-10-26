@@ -219,3 +219,14 @@ def test_publish_include_limits_files(tmp_path):
     assert r["files"] == 2
     got = MP.fetch(io, "v6_factory", tmp_path / "cache")
     assert (got / "conn/horse_profile.parquet").exists() and not (got / "big/unused.parquet").exists()
+
+
+def test_state_include_accepts_params(tmp_path):
+    root = tmp_path / "r"
+    for y in ("2025", "2026"):
+        _write(root / f"data/t/{y}/race_result_flat.parquet", b"a" * 10)
+        _write(root / f"data/t/{y}/smartrc_race_race.parquet", b"b" * 1000)
+    entries = [{"path": "data/t", "max_mb": 1, "include": ["{year}/race_result_*.parquet", "{prev_year}/race_result_*.parquet"]}]
+    rows = SS.plan(entries, root, {"year": "2026", "prev_year": "2025"})
+    assert rows[0]["files"] == 2
+    assert SS.plan(entries, root, {"year": "2026", "prev_year": "2024"})[0]["files"] == 1

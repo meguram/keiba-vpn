@@ -49,8 +49,16 @@ def includes(entries: list[dict[str, Any]], params: dict[str, str] | None = None
     out: list[list[str] | None] = []
     for e in entries or []:
         inc = e.get("include")
+        if inc and params:                                   # include の glob にも {year} などを使える（path と同じ置換）
+            inc = [_fill(str(x), params) for x in inc]
         out.append([str(x) for x in inc] if inc else None)
     return out
+
+
+def _fill(text: str, params: dict[str, str]) -> str:
+    for k, v in params.items():
+        text = text.replace("{" + k + "}", v)
+    return text
 
 
 def _match(rel_in_dir: str, inc: list[str] | None) -> bool:
@@ -157,6 +165,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--which", choices=["in", "out"], default=None, help="plan/push/pull の対象（既定: pull=in, push=out, plan=両方）")
     ap.add_argument("--param", action="append", default=[], help="KEY=VALUE（パスの {KEY} を置換）")
     ns = ap.parse_args(argv)
+    from src.utils.project_env import load_project_dotenv
+
+    load_project_dotenv()           # ホストでの手動実行・種まき（seed_state_from_host.sh）でも .env の GCS_*（バケット・資格情報）を読む。Jobs には .env が無いので何もしない
     from src.ops import job_map
 
     if ns.action == "snapshot":
