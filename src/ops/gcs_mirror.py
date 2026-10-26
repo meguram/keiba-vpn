@@ -223,6 +223,11 @@ def start_refresher(backend: Backend | None = None, root: Path = REPO_ROOT, *, i
     return t
 
 
+def pull_trees(trees: list[str] | tuple[str, ...], *, recent_days: float | None = 14.0, backend: Backend | None = None, root: Path = REPO_ROOT) -> dict[str, int]:
+    """Jobs が読む参照データ（race_lists・race_day_schedule など）を ops/mirror からローカルへ取り込む。読み取りだけ。recent_days 以内に更新されたものだけ。"""
+    return pull(backend or GcsBackend(), root, tuple(trees), recent_days=recent_days)
+
+
 def tree_known(tree: str) -> bool:
     """job_map の mirror_out に書ける木か（PUSH_TREES のどれかの配下）。"""
     d = split_tree(tree)[0].rstrip("/")

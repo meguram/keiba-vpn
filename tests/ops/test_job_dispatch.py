@@ -46,14 +46,16 @@ def ctx(io, runner, tmp_path, **kw) -> D.Ctx:
     pushes: list[Any] = []
     pulls: list[Any] = []
     mirrors: list[Any] = []
+    pulled: list[Any] = []
     c = D.Ctx(io=io, root=tmp_path, now_fn=lambda: NOW, runner=runner, base_env={"KEIBA_ENV": "stg"}, memory_limit_mib=kw.pop("memory_limit_mib", 4096),
               alert=lambda *a, **k: alerts.append((a, k)),
               pull=lambda io_, entries, root, **k: pulls.append(entries) or {"downloaded": 0},
               push=lambda io_, entries, root, **k: pushes.append(entries) or {"uploaded": 0},
               fetch_model=kw.pop("fetch_model", lambda io_, name, d: tmp_path / "models" / name),
               mirror=kw.pop("mirror", lambda trees, **k: mirrors.append((list(trees), k)) or {"uploaded": 0}),
+              mirror_pull=kw.pop("mirror_pull", lambda trees, **k: pulled.append((list(trees), k)) or {"downloaded": 0}),
               peak_fn=lambda: 123, **kw)
-    c.alerts, c.pushes, c.pulls, c.mirrors = alerts, pushes, pulls, mirrors     # type: ignore[attr-defined]
+    c.alerts, c.pushes, c.pulls, c.mirrors, c.mirror_pulled = alerts, pushes, pulls, mirrors, pulled     # type: ignore[attr-defined]
     return c
 
 
@@ -304,3 +306,20 @@ def test_require_out_passes_when_output_is_fresh_and_ignores_stale_files(tmp_pat
     patch_doc([J("a", require_out=["data/out/{today}/x.parquet"])])
     assert D.run_group("g1", ctx(MemoryIO(), Writer(False), tmp_path)) != 0
     assert D.run_group("g1", ctx(MemoryIO(), Writer(True), tmp_path)) == 0
+
+
+def test_mirror_in_pulls_reference_data_before_steps(tmp_path, patch_doc):
+    patch_doc([J("a", mirror_in=["data/page_reference/race_lists"], mirror_in_days=7)])
+    c = ctx(MemoryIO(), Rec(), tmp_path)
+    assert D.run_group("g1", c) == 0
+    assert c.mirror_pulled == [(["data/page_reference/race_lists"], {"recent_days": 7.0})]
+
+
+def test_race_day_guard_falls_back_to_ops_mirror(tmp_path, patch_doc):
+    """state/ に race_lists の種まきが無くても、画面と取得役が使う ops/mirror に開催日があれば skipped にしない（2026-10-26）。"""
+    patch_doc([J("a", requires_race_day="today")])
+    io = MemoryIO()
+    assert D.run_group("g1", ctx(io, Rec(), tmp_path)) == 0                      # どちらにも無い → 開催日でない
+    r = Rec()
+    write_json(io, "ops/mirror/data/page_reference/race_lists/20261024.json", {"races": [{"race_id": "202605040101"}]})
+    assert D.run_group("g1", ctx(io, r, tmp_path)) == 0 and len(r.calls) == 1    # ops/mirror にある → 実行
