@@ -24,8 +24,63 @@ def _predicted_odds_for(c, predicted: dict | None) -> float | None:
     return None
 
 
+SKIP_NOTE = "このレースは見送りです（推奨馬券はありません）。"
+
+
+def is_skipped_payload(payload: dict[str, Any]) -> bool:
+    """推奨の応答が『見送り』（推奨度 0）か。方策 target はレースの推奨度、会員向けは race_tier、従来の詳細表示は較正後の期待回収率から決める。"""
+    if payload.get("error") or payload.get("skipped"):
+        return bool(payload.get("skipped"))
+    if payload.get("strategy") == "target":
+        return int(payload.get("level") or 0) == 0
+    tier = payload.get("race_tier")
+    if payload.get("view") == "paid" and isinstance(tier, dict):
+        return int(tier.get("level") or 0) == 0
+    cands = payload.get("candidates") or []
+    total = payload.get("total_bet") or 0
+    if not cands or not total:
+        return False
+    from src.utils import paid_zone as PZ
+
+    roi = payload.get("expected_roi_calibrated")
+    if roi is None:
+        roi = (payload.get("expected_return") or 0) / total
+    return PZ.level_for_roi(roi, "C") == 0
+
+
+def hide_skipped_bets(payload: dict[str, Any]) -> dict[str, Any]:
+    """見送りのレースは、推奨馬券（買い目・他プランの買い目・金額・期待値・的中率）を一切返さない。推奨度（race_tier / level）と見送りの理由だけ残す。"""
+    if not is_skipped_payload(payload):
+        return payload
+    for k in ("bets", "candidates", "plans"):
+        if k in payload:
+            payload[k] = []
+    for k in ("any_hit_rate_pct", "target_payout_yen", "expected_payout_yen", "portfolio_ev", "horse_marks", "roi_pct", "roi_pct_calibrated",
+              "expected_roi_calibrated", "expected_return_calibrated", "roi_range_calibrated", "race_ev"):
+        payload.pop(k, None)
+    for k in ("total_yen", "total_bet", "expected_return"):
+        if k in payload:
+            payload[k] = 0
+    if "status" in payload or payload.get("strategy") == "target":
+        payload["status"] = "skip"
+    if "max_bets" in payload:
+        payload["max_bets"] = 0
+    payload["skip_reason"] = payload.get("skip_reason") or SKIP_NOTE
+    payload["skipped"] = True
+    return payload
+
+
 def optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool = True, forced_odds: dict | None = None,
-                     _ctx: dict | None = None) -> tuple[dict[str, Any], int]:
+                     _ctx: dict | None = None, hide_skipped: bool = True) -> tuple[dict[str, Any], int]:
+    """推奨ポートフォリオ。見送り（推奨度 0）のレースは買い目を返さない（hide_skipped=False は内部の計算用）。"""
+    payload, code = _optimize_betting(body, view=view, market=market, forced_odds=forced_odds, _ctx=_ctx)
+    if code == 200 and hide_skipped and forced_odds is None and _ctx is None:
+        payload = hide_skipped_bets(payload)
+    return payload, code
+
+
+def _optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool = True, forced_odds: dict | None = None,
+                      _ctx: dict | None = None) -> tuple[dict[str, Any], int]:
     """推奨ポートフォリオ。view="paid" は会員向け（推奨度の段階と買い目の区分だけ。オッズ・期待値・金額の数値は出さない）。
     market=False は実オッズに触れない（市場補正もしない）。forced_odds={"single":…, "pairs":…} は想定オッズで計算する（有料ゾーン案B）。"""
     if _ctx is None and forced_odds is None and market:
@@ -523,6 +578,8 @@ def _map_races(fn, races: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def attach_bet_results(payload: dict[str, Any], race_id: str, storage: Any | None = None) -> dict[str, Any]:
     """結果が出ているレースなら、推奨の各買い目に的中・払戻（仮想購入）を、レース全体に結果の要約を付ける。
     払戻は確定払戻（無ければ概算）。会員向けの応答には、オッズ・期待値の数値は足さない（invested / returned / hits だけ）。"""
+    if payload.get("skipped"):          # 見送りのレースは、仮想購入の結果も付けない
+        return payload
     try:
         from src.pipeline.inference import prediction_results as pr
         from src.scraper.storage import HybridStorage
@@ -601,7 +658,7 @@ def race_value_summary(
             "max_total_bet": max_total_bet, "bet_types": ["tansho", "fukusho", "umaren", "wide", "sanrenpuku"],
         }
         try:
-            payload, code = optimize_betting(body)
+            payload, code = optimize_betting(body, hide_skipped=False)          # 一覧の段の計算には元の応答を使う
         except Exception as exc:  # 1 レースの失敗で一覧全体を落とさない
             logger.warning("race value 計算失敗 %s: %s", r["race_id"], exc)
             payload, code = {"error": str(exc)}, 500

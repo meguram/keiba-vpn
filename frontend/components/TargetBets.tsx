@@ -16,6 +16,8 @@ export type TargetRec = {
   target_payout_yen?: number; any_hit_rate_pct?: number; max_total_bet: number | null; disclaimer: string; evidence?: string; note?: string;
   odds_basis?: "sec77" | "predicted" | "own"; result?: RaceBetResult | null;
   default_plan?: string; race_ev?: number | null; plans?: TargetPlan[];
+  /** 見送り（推奨度 0）のレース。サーバが買い目・他プラン・金額を返さない */
+  skipped?: boolean;
   /** 買い目全体を購入したときの期待払戻（円）と期待回収率（倍）。AI の確率×想定オッズの値（実オッズではない） */
   expected_payout_yen?: number; portfolio_ev?: number | null;
 };
@@ -78,9 +80,9 @@ export function TargetBets({
         </span>
       </div>
 
-      <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, lineHeight: 1.6 }}>
+      {!rec.skipped && <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, lineHeight: 1.6 }}>
         予算 <b style={{ color: "var(--text)" }}>{yen(rec.budget_yen)}</b> に対し、どれか1つ当たれば払戻が約 <b style={{ color: "var(--text)" }}>{rec.target_multiple}倍（{yen(rec.target_payout_yen ?? rec.budget_yen * rec.target_multiple)}）</b>になる購入額にしています（3連複・最大3点）。
-      </div>
+      </div>}
 
       {rec.plans && rec.plans.length > 1 && (
         <div role="tablist" aria-label="プラン" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6, marginBottom: 6 }}>

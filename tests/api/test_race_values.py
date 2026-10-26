@@ -27,7 +27,7 @@ def fake(monkeypatch):
         def load(self, cat, key):
             return {"races": [{"race_id": r, "round": i + 1, "venue": "札幌", "race_name": r} for i, r in enumerate(rois)]}
 
-    def opt(body):
+    def opt(body, **_kw):
         roi = rois[body["race_id"]]
         if roi is None:
             return {"error": "予測結果がありません"}, 404
