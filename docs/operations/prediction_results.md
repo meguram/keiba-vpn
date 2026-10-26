@@ -34,7 +34,12 @@
 - `GET /api/prediction-results/news?limit=N`（ホストのカード用。`subtitle_public` は回収率を除いた文言）
 - `GET /api/prediction-results/days`
 
-**推奨度が標準以上の集計**: 応答の `kpi`・`summary`・`series` は全体（見送りを含む）。会員・開発者の応答には `rated`（推奨度 1=標準 以上のレースだけの `kpi`・`summary`、件数 `counts`＝settled/rated/skipped/unrated、`legend`）と、`series[].honmei_win_rated`・`roi_rated` が付く（匿名には tier.py の許可リストで出ない）。推奨度はレース記録の `bets.lv.level`（現行ルールの再計算）があればそれ、無ければ `bets.level`。未記録のレースは標準以上に入れず `unrated` に数える。保存済みの日次ファイルは書き換えず、読み出し時に集計する。**見送り（推奨度 0）のレースを含む回収率は、どの画面・APIの集計でも出さない**（ニュースの回収率、レース一覧の日・週の回収率と各レースの的中、予測成績の回収率・券種別・推移、注目レースの推奨馬券の払戻はすべて標準以上のレースだけ。推奨度が未記録のレースは見送りと区別できないため含めない）。画面（予測成績）は、会員には標準以上のレースを主な集計にし、印の着順分布は『標準以上』と『全体』を並べて出す。
+**推奨度が標準以上の集計（2026-10-26）**: 回収率・購入・的中の集計は、**画面に出している推奨馬券（既定方策 target＝3連複・目標払戻、`delegates._optimize_target` と同じ計算）**を既定上限で購入したとみなした仮想購入だけを使い、**推奨度が標準以上（見送りを除く）のレースだけ**で出す。レース記録の `bets_t`（status/level/total_bet/total_return/by_type）がその記録で、`level` は画面のレース推奨度（0=見送り〜4）。従来の最適化（単勝・複勝・馬連など）の `bets` は参考として残すが、画面の集計には使わない。見送りを含む回収率は、どの画面・APIの集計でも出さない（ニュース・レース一覧・予測成績・注目レースの払戻・ホームの推奨度別）。会員・開発者の応答に `rated`（標準以上のレースの `kpi`・`summary`、件数 `counts`＝settled/rated/skipped/unrated、`legend`）と `series[].honmei_win_rated`・`roi_rated` が付く（匿名には tier.py の許可リストで出ない）。`bets_t` が無い（未記録・計算できなかった）レースは見送りと区別できないため標準以上に入れず `unrated` に数える。
+
+**既存の日に `bets_t` を足す（初回と、モデル・推奨ロジックを変えたとき）**: 新しい日は集計時に自動で付く。保存済みの日（確定済みを含む）は次の CLI で追記する（印・着順・既存の数値は変えない。冪等。`nice` をつけて直列で）。追記後、GCS に置く運用なら `KEIBA_PREDICTION_RESULTS_GCS=1` で書き戻され、`--sync-gcs` で一括でも置ける。
+```
+nice -n 19 python -m src.scripts.data.prediction_results --from 20260101 --to 20261025 --add-target-bets
+```
 
 予測 API と同じ公開の GET。回収率（仮想購入）の表示は画面側で会員向けにしている。dev では、集計ファイルが無い日を dev ストアから都度作る。
 

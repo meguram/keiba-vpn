@@ -231,17 +231,16 @@ async def prediction_results_bets_summary(request: Request, date: str = Query(..
         wk = pr.period_summary("week", date)
         day = pr.period_summary("day", date)
         races = {}
-        ok = {r["race_id"] for r in pr.rated_records(doc.get("races") or [])}      # 見送り（推奨度の記録なしを含む）のレースの購入は出さない
-        for r in doc.get("races") or []:
+        for r in pr.rated_records(doc.get("races") or []):      # 標準以上のレースの、画面の推奨馬券(target)の仮想購入。見送り・未記録のレースは出さない
             b = r.get("bets") or {}
             tb = b.get("total_bet") or 0
-            if not r.get("included") or not tb or r["race_id"] not in ok:
+            if not tb:
                 continue
             ret = b.get("total_return") or 0
             races[r["race_id"]] = {"total_bet": tb, "total_return": round(ret), "hit": ret > 0, "roi": pr.rate(ret, tb), "estimated": bool(b.get("estimated"))}
-        return {"date": date, "label": _label(date), "week": {"from": wk_lo, "to": wk_hi, "days": wk["days"], "status": wk["status"], **_bets_block(wk["rated_summary"])},
-                "day": {"status": day["status"], **_bets_block(day["rated_summary"])}, "races": races,
-                "note": "推奨度が標準以上のレースの推奨馬券を、保存済みの最新オッズで購入したとみなした仮想購入（払戻は確定払戻）。見送りのレースは含めません。実際の購入ではありません。"}
+        return {"date": date, "label": _label(date), "week": {"from": wk_lo, "to": wk_hi, "days": wk["days"], "status": wk["status"], "counts": wk["rated_counts"], **_bets_block(wk["rated_summary"])},
+                "day": {"status": day["status"], "counts": day["rated_counts"], **_bets_block(day["rated_summary"])}, "races": races,
+                "note": "推奨度が標準以上のレースの推奨馬券（画面に出している3連複・目標払戻）を購入したとみなした仮想購入（払戻は確定払戻）。見送りのレースは含めません。実際の購入ではありません。"}
     if not is_member(request):
         return JSONResponse(MEMBER_REQUIRED_BODY, status_code=401)
     return _respond(request, await asyncio.to_thread(lambda: _cached(("bets", date), _run)))
