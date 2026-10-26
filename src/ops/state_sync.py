@@ -49,8 +49,16 @@ def includes(entries: list[dict[str, Any]], params: dict[str, str] | None = None
     out: list[list[str] | None] = []
     for e in entries or []:
         inc = e.get("include")
+        if inc and params:                                   # include の glob にも {year} などを使える（path と同じ置換）
+            inc = [_fill(str(x), params) for x in inc]
         out.append([str(x) for x in inc] if inc else None)
     return out
+
+
+def _fill(text: str, params: dict[str, str]) -> str:
+    for k, v in params.items():
+        text = text.replace("{" + k + "}", v)
+    return text
 
 
 def _match(rel_in_dir: str, inc: list[str] | None) -> bool:

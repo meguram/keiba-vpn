@@ -77,11 +77,12 @@
    "cron_jst": "0 7 * * *",
    "size": "l",
    "timeout_sec": 5400,
-   "desc": "履歴テーブル → サービング状態 → 履歴特徴量 → プロファイル（直列）",
+   "desc": "履歴テーブル(当年) → 履歴特徴量とサービング用バンドル → テーブルの drift 検査（直列。serving-state-* は day-prep に置き換えて無効）",
    "jobs": [
     "export-tables-daily",
-    "serving-state-precompute",
     "feature-accumulate",
+    "parse-drift-daily",
+    "serving-state-precompute",
     "serving-state-profile"
    ]
   },
@@ -292,6 +293,12 @@
    "entry": "pedigree_keys.parquet",
    "install_to": "data/local/modeling/training_pipeline_ped/pedigree_keys.parquet",
    "desc": "学習表の sire / dam_sire の ID 対応表（約0.4MB）。固定パスを読むので取得後にそこへ置く"
+  },
+  "layer_a": {
+   "local_path": "data/local/modeling/training_pipeline/layer_a.parquet",
+   "entry": "layer_a.parquet",
+   "install_to": "data/local/modeling/training_pipeline/layer_a.parquet",
+   "desc": "馬柱の過去走から作る補修表（last_3f・馬体重の補正）の元（約98MB）。feature-accumulate が固定パスを読む。無いと補修なしで特徴量が変わる"
   }
  },
  "jobs": [
@@ -391,19 +398,6 @@
       "{years}"
      ],
      "allow_fail": true
-    },
-    {
-     "argv": [
-      "-m",
-      "src.scraper.parse_drift",
-      "--baseline",
-      "2020-{prev_year}",
-      "--recent",
-      "{year}",
-      "--months",
-      "3"
-     ],
-     "allow_fail": true
     }
    ],
    "memory_mib": 3072,
@@ -418,13 +412,33 @@
    "state_in": [
     {
      "path": "data/page_reference/tables",
-     "max_mb": 600
+     "max_mb": 150,
+     "include": [
+      "{year}/race_result_*.parquet",
+      "{year}/race_shutuba_flat.parquet",
+      "{year}/race_shutuba_race.parquet",
+      "{year}/_export_report.json",
+      "{prev_year}/race_result_*.parquet",
+      "{prev_year}/race_shutuba_flat.parquet",
+      "{prev_year}/race_shutuba_race.parquet",
+      "{prev_year}/_export_report.json"
+     ]
     }
    ],
    "state_out": [
     {
      "path": "data/page_reference/tables",
-     "max_mb": 600
+     "max_mb": 150,
+     "include": [
+      "{year}/race_result_*.parquet",
+      "{year}/race_shutuba_flat.parquet",
+      "{year}/race_shutuba_race.parquet",
+      "{year}/_export_report.json",
+      "{prev_year}/race_result_*.parquet",
+      "{prev_year}/race_shutuba_flat.parquet",
+      "{prev_year}/race_shutuba_race.parquet",
+      "{prev_year}/_export_report.json"
+     ]
     }
    ],
    "parity": {
@@ -440,14 +454,14 @@
     "atol": 0.0
    },
    "blockers": [
-    "state_in の実サイズが未確認（flat は年別。当年だけ取る設計に要確認）"
+    "Jobs で 1 回手動実行（当年のファイルを state から取り、GCS の生データから増分を追記）。ホストで同じ入力に対して実行し『すでにエクスポート済み』で出力が変わらないことは確認済み（2.3 秒・344MB）"
    ],
    "enabled": true,
    "ready": false
   },
   {
    "id": "serving-state-precompute",
-   "desc": "サービング状態（約62MB）の事前計算",
+   "desc": "サービング状態（約62MB）の事前計算【2026-10-26 day-prep に置き換え（v4_day と px_day を 1 回で作る）。無効化】",
    "destination": "gcp",
    "phase": 3,
    "wave": 2,
@@ -508,9 +522,9 @@
     "atol": 0.0
    },
    "blockers": [
-    "export-tables-daily と同じ state を共有（同じグループで直列に実行する）"
+    "day-prep に置き換えたため無効（profile_dyn は day-prep が不足分を GCS から補う）"
    ],
-   "enabled": true,
+   "enabled": false,
    "ready": false
   },
   {
@@ -537,10 +551,13 @@
       "src.scraper.auto_scrape",
       "--task",
       "feature-accumulate"
-     ]
+     ],
+     "env": {
+      "KEIBA_PUBLISH_SERVING_BUNDLE": "0"
+     }
     }
    ],
-   "memory_mib": 4096,
+   "memory_mib": 6144,
    "timeout_sec": 2400,
    "env": [
     "KEIBA_ENV",
@@ -551,18 +568,25 @@
    ],
    "state_in": [
     {
-     "path": "data/local/modeling/feature_store/horse_history",
-     "max_mb": 900
+     "path": "data/page_reference/tables",
+     "max_mb": 60,
+     "include": [
+      "*/race_result_flat.parquet"
+     ]
     },
     {
-     "path": "data/page_reference/tables",
-     "max_mb": 600
+     "path": "data/local/modeling/feature_store/horse_history",
+     "max_mb": 60
     }
    ],
    "state_out": [
     {
      "path": "data/local/modeling/feature_store/horse_history",
-     "max_mb": 900
+     "max_mb": 60
+    },
+    {
+     "path": "data/local/modeling/feature_store/serving_bundle",
+     "max_mb": 200
     }
    ],
    "parity": {
@@ -578,15 +602,21 @@
     "atol": 1e-09
    },
    "blockers": [
-    "feature_store の GCS 配置と容量が未確定（2026 年は学習に使わないが推論用バンドルの元）",
-    "コンテナのディスクはメモリ上（4Gi の枠に入るか実測が必要）"
+    "Jobs で 1 回手動実行（ホストでは 28 秒・ピーク RSS 3.6GB。出力 features_2026.parquet は host と全列一致を確認済み）。serving_bundle は state/ に出し、predict-race / day-prep / eve-precompute が state_in で読む"
    ],
    "enabled": true,
-   "ready": false
+   "ready": false,
+   "models": [
+    "layer_a"
+   ],
+   "require_out": [
+    "data/local/modeling/feature_store/horse_history/features_{year}.parquet",
+    "data/local/modeling/feature_store/serving_bundle/meta.json"
+   ]
   },
   {
    "id": "serving-state-profile",
-   "desc": "サービング状態のプロファイル更新",
+   "desc": "サービング状態のプロファイル更新【2026-10-26 day-prep に置き換え（v4_day と px_day を 1 回で作る）。無効化】",
    "destination": "gcp",
    "phase": 3,
    "wave": 2,
@@ -641,9 +671,9 @@
     "atol": 0.0
    },
    "blockers": [
-    "serving-state-precompute の準備完了後（依存ジョブ）"
+    "day-prep に置き換えたため無効（profile_dyn は day-prep が不足分を GCS から補う）"
    ],
-   "enabled": true,
+   "enabled": false,
    "ready": false
   },
   {
@@ -1475,7 +1505,7 @@
      }
     }
    ],
-   "memory_mib": 3072,
+   "memory_mib": 6144,
    "timeout_sec": 2400,
    "env": [
     "KEIBA_ENV",
@@ -1492,7 +1522,6 @@
     "bundle_v6e",
     "stage_v6e",
     "tl_reference_v5",
-    "serving_bundle",
     "aux_v4",
     "v4_train_table",
     "v6_factory",
@@ -1501,7 +1530,26 @@
    "state_in": [
     {
      "path": "data/local/inference/state",
-     "max_mb": 100
+     "max_mb": 150
+    },
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 250,
+     "include": [
+      "*/race_result_flat.parquet",
+      "*/race_result_race.parquet",
+      "*/race_shutuba_flat.parquet",
+      "*/race_shutuba_past_flat.parquet",
+      "*/megu_index_flat.parquet"
+     ]
+    },
+    {
+     "path": "data/local/modeling/feature_store/horse_history",
+     "max_mb": 60
+    },
+    {
+     "path": "data/local/modeling/feature_store/serving_bundle",
+     "max_mb": 200
     }
    ],
    "state_out": [
@@ -2059,7 +2107,6 @@
     "bundle_v6e",
     "stage_v6e",
     "tl_reference_v5",
-    "serving_bundle",
     "aux_v4",
     "v4_train_table",
     "v6_factory",
@@ -2084,6 +2131,10 @@
     {
      "path": "data/local/modeling/feature_store/horse_history",
      "max_mb": 60
+    },
+    {
+     "path": "data/local/modeling/feature_store/serving_bundle",
+     "max_mb": 200
     }
    ],
    "state_out": [
@@ -3499,13 +3550,11 @@
     {
      "argv": [
       "-m",
-      "src.scripts.data.build_px_state",
-      "--windows",
-      "{px_next_window}"
+      "src.ops.jobs.px_ridge"
      ]
     }
    ],
-   "memory_mib": 4096,
+   "memory_mib": 6144,
    "timeout_sec": 1800,
    "env": [
     "KEIBA_ENV",
@@ -3516,26 +3565,38 @@
    ],
    "state_in": [
     {
+     "path": "data/local/inference/state/px_v5",
+     "max_mb": 40
+    },
+    {
      "path": "data/page_reference/tables",
-     "max_mb": 600
+     "max_mb": 250,
+     "include": [
+      "*/race_result_flat.parquet",
+      "*/race_result_race.parquet",
+      "*/race_shutuba_flat.parquet",
+      "*/race_shutuba_past_flat.parquet",
+      "*/megu_index_flat.parquet"
+     ]
     }
    ],
    "state_out": [
     {
      "path": "data/local/inference/state/px_v5",
-     "max_mb": 300
+     "max_mb": 40
     }
    ],
    "parity": {
     "kind": "none"
    },
    "blockers": [
-    "『次の半年の T0』を決めて、無ければ作る判定(今はシェルの中)を Python 側に移す。steps の {px_next_window} はその値で置き換える",
-    "リッジ(ridge_<T0>.npz)の置き場がホストのローカル。GCS に置いて予測のジョブが読む形にする",
-    "祖先表・SVD は数GBのメモリ。size=l(4Gi)で実測して収まるか確認する"
+    "次の半年の T0 の 30 日前（2026-12-02）以降の月曜に初めて実際にリッジを作る。それまで確認するには手動で --today 2026-12-10 を渡して実行（ホストでの実測は未了。祖先表・SVD は数 GB の見込み）"
    ],
    "enabled": true,
-   "ready": false
+   "ready": false,
+   "models": [
+    "v4_train_table"
+   ]
   },
   {
    "id": "gcs-mirror-push",
@@ -3595,7 +3656,6 @@
     "bundle_v6e",
     "stage_v6e",
     "tl_reference_v5",
-    "serving_bundle",
     "aux_v4",
     "v4_train_table",
     "v6_factory",
@@ -3620,6 +3680,10 @@
     {
      "path": "data/local/modeling/feature_store/horse_history",
      "max_mb": 60
+    },
+    {
+     "path": "data/local/modeling/feature_store/serving_bundle",
+     "max_mb": 200
     }
    ],
    "blockers": [
@@ -3644,6 +3708,56 @@
     "cron_utc": "",
     "script": "src.ops.jobs.day_prep（predict-race の日単位部分を朝に分離）"
    }
+  },
+  {
+   "id": "parse-drift-daily",
+   "desc": "flat テーブルの列ごとの空・文字化けの急増の検査（基準 2020〜前年 と 当年の直近）。export-tables-daily から分離（全年の flat 約 260MB を読むため）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 2,
+   "group": "g-0700",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scraper.parse_drift",
+      "--baseline",
+      "2020-{prev_year}",
+      "--recent",
+      "{year}",
+      "--months",
+      "3"
+     ]
+    }
+   ],
+   "memory_mib": 6144,
+   "timeout_sec": 1200,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 320,
+     "include": [
+      "*/*_flat.parquet"
+     ]
+    }
+   ],
+   "state_out": [],
+   "blockers": [
+    "Jobs で 1 回手動実行して、全年の flat（約 260MB）の種まき（state_sync push --job parse-drift-daily --which in）と所要・メモリを確認"
+   ],
+   "enabled": true,
+   "ready": false,
+   "depends": [
+    "export-tables-daily"
+   ]
   }
  ]
 }
