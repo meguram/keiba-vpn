@@ -332,9 +332,10 @@ class V4Groups:
     def _with_history(name: str, hist: pd.DataFrame, tdf: pd.DataFrame, cols_re: str | None = None, **kw) -> pd.DataFrame:
         import re
 
-        cols = list(dict.fromkeys(list(hist.columns) + list(tdf.columns)))
-        B = pd.concat([hist.reindex(columns=cols), tdf.reindex(columns=cols)], ignore_index=True)
-        B = B.sort_values(["date", "race_id", "horse_number"], kind="stable").reset_index(drop=True)
+        # 履歴(32万行 × 26 列)に当日の行(263 列)の列を足すと 32万 × 263 列になる。列をそろえた複製(reindex)を 2 つ作ってから連結・並べ替え・採番し直すと
+        # 同じ大きさのコピーが 4 つ並んでピークが約 3GB 増えるので、reindex を挟まず連結し、並べ替えと採番を 1 回で行う（結果は同じ）
+        B = pd.concat([hist, tdf], ignore_index=True, sort=False)
+        B = B.sort_values(["date", "race_id", "horse_number"], kind="stable", ignore_index=True)
         with fast_asof(tdf["date"].min()):
             f = ff.build_group(name, B, **kw)
         if cols_re:

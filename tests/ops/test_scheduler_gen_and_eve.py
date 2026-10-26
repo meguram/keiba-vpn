@@ -23,17 +23,17 @@ def test_generated_script_is_valid_bash_and_idempotent():
     p = Path("/tmp/_gen_test.sh")
     p.write_text(text)
     assert subprocess.run(["bash", "-n", str(p)]).returncode == 0
-    assert text.count("gcloud run jobs deploy") == 3                      # s / m / l の 3 つだけ
+    assert text.count("gcloud run jobs deploy") == 4                      # s / m / l / xl の 4 つだけ（xl は day-prep 用の 16GiB）
     assert text.count("gcloud scheduler jobs update http") == len(DOC["scheduler_groups"])
     assert "scheduler jobs describe" in text and "queues describe" in text
 
 
 def test_env_marks_prod_gcp_for_distinguishable_notifications():
     text = SG.render("jobs", DOC, env=ENV)
-    assert text.count("KEIBA_ENV=prod,KEIBA_RUN_LOCATION=gcp") == 3
+    assert text.count("KEIBA_ENV=prod,KEIBA_RUN_LOCATION=gcp") == 4
     assert "KEIBA_PARALLEL_RUN" not in text
     assert text.count("KEIBA_PARALLEL_RUN=1") == 0
-    assert SG.render("jobs", DOC, env=ENV, parallel=True).count("KEIBA_PARALLEL_RUN=1") == 3
+    assert SG.render("jobs", DOC, env=ENV, parallel=True).count("KEIBA_PARALLEL_RUN=1") == 4
 
 
 def test_scheduler_targets_run_api_with_group_args_and_service_account():
@@ -57,7 +57,7 @@ def test_unready_groups_are_not_created_by_default():
 
 def test_run_job_memory_matches_sizes_and_secrets_not_inlined():
     text = SG.render("jobs", DOC, env=ENV)
-    assert "--memory 512Mi" in text and "--memory 2Gi" in text and "--memory 8Gi" in text          # l は 8Gi（predict-race の実測ピーク 4.3GB のため）
+    assert "--memory 512Mi" in text and "--memory 2Gi" in text and "--memory 8Gi" in text and "--memory 16Gi" in text          # l は 8Gi（predict-race の実測ピーク 4.3GB のため）
     assert "--set-secrets SLACK_WEBHOOK_URL=SLACK_WEBHOOK_URL:latest" in text and "hooks.slack.com" not in text
 
 

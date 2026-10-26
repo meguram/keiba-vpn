@@ -126,16 +126,16 @@ export IMAGE=$REGION-docker.pkg.dev/$PROJECT/keiba-vpn/jobs:<8桁> && gcloud art
 ```
 - 期待: `sha256:…` が出る。**`Image not found` なら止めて keiba-vpn-37 へ**（CI の jobs ビルドが失敗している）。
 
-### B2. Run Job（s / m / l。同じイメージ。並走モード）
+### B2. Run Job（s / m / l / xl。同じイメージ。並走モード。xl は day-prep 用の 16GiB）
 ```bash
 git checkout <昇格したコミット> && bash scripts/gcp/deploy_cloud_run_jobs.sh apply jobs --parallel --yes
 ```
-- 確認: `gcloud run jobs list --region $REGION --format='table(name,spec.template.spec.template.spec.containers[0].resources.limits.memory)'` → `s 512Mi / m 2Gi / l 8Gi`。`gcloud run jobs describe keiba-dispatch-l --region $REGION --format=json | grep -c KEIBA_PARALLEL_RUN` が 1 以上。
-- 戻す: `for s in s m l; do gcloud run jobs delete keiba-dispatch-$s --region $REGION --quiet; done`
+- 確認: `gcloud run jobs list --region $REGION --format='table(name,spec.template.spec.template.spec.containers[0].resources.limits.memory)'` → `s 512Mi / m 2Gi / l 8Gi / xl 16Gi`。`gcloud run jobs describe keiba-dispatch-l --region $REGION --format=json | grep -c KEIBA_PARALLEL_RUN` が 1 以上。
+- 戻す: `for s in s m l xl; do gcloud run jobs delete keiba-dispatch-$s --region $REGION --quiet; done`
 
 ### B3. Run Job の起動権限（Run Job を作った後）
 ```bash
-for j in keiba-dispatch-s keiba-dispatch-m keiba-dispatch-l; do gcloud run jobs add-iam-policy-binding $j --region $REGION --member "serviceAccount:keiba-scheduler@$PROJECT.iam.gserviceaccount.com" --role roles/run.developer; done
+for j in keiba-dispatch-s keiba-dispatch-m keiba-dispatch-l keiba-dispatch-xl; do gcloud run jobs add-iam-policy-binding $j --region $REGION --member "serviceAccount:keiba-scheduler@$PROJECT.iam.gserviceaccount.com" --role roles/run.developer; done
 ```
 - 確認: `gcloud run jobs get-iam-policy keiba-dispatch-l --region $REGION | grep keiba-scheduler`
 - 戻す: `add-iam-policy-binding` を `remove-iam-policy-binding` に替える。
@@ -158,6 +158,17 @@ ssh keiba-remote 'bash -s -- predict-race rb-state-daily' < scripts/gcp/seed_sta
 - 確認（Cloud Shell）: `gcloud storage ls gs://$BUCKET/models/` に `aux_v4/ v4_train_table/ v6_factory/ ped_keys/` が増える。`gcloud storage ls gs://$BUCKET/state/data/local/modeling/feature_store/horse_history/` に `features_2026.parquet`。
 - 注意: この種まきの時点で履歴が止まる。日次で更新する Jobs（`export-tables-daily`・`feature-accumulate`・`serving-state-precompute`・`px-ridge-window`・`rb-state-daily`）が ready になるまで、Jobs の予測は種まきの日までの履歴で作られる（並走の確認用。本番の表示は変わらない）。
 - イメージの更新: この変更（`predict-race` の models / state_in / 失敗の検出）は `config/gcp_job_map.json` にあり、**Jobs のイメージに焼き込み**。次の master 昇格で作り直されたイメージで、B2（`apply jobs`）を実行し直す（既存の Run Job は `apply jobs` を再実行すれば新しいイメージに更新される）。
+
+### B5-day. day-prep（その日の日単位キャッシュだけを作る。**B5 の前に 1 回**）
+**なぜ**: `predict-race` を「新しいコンテナで 1 レースだけ」動かすと、v6e は毎回、その日の全レース分の日単位の計算（PX・馬主/馬自身の群）をやり直す。ホスト実測でピーク RSS 約 12GB・約 90 秒 → 8GiB で OOM（2026-10-26 の `memory_peak_mib 6848` で強制終了）。そこで朝に 1 回だけ 16GiB の Run Job（`keiba-dispatch-xl`）でキャッシュ（`state/<日>/v4_day.parquet`・`px_day.parquet`。計 0.7MB）を作って `state/` に上げ、`predict-race` はそれを読むだけにした（実測: ピーク RSS 4.1GB・約 31 秒）。予測（`predictions_v6`）は作らない。
+実行（REST。`gcloud run jobs execute --args` は `--arg` を渡せないため）:
+```bash
+DATE=20261025; ISO=2026-10-25; curl -s -X POST -H "Authorization: Bearer $(gcloud auth print-access-token)" -H "Content-Type: application/json" "https://run.googleapis.com/v2/projects/$PROJECT/locations/$REGION/jobs/keiba-dispatch-xl:run" -d "{\"overrides\":{\"containerOverrides\":[{\"args\":[\"-m\",\"src.ops.job_dispatch\",\"job\",\"day-prep\",\"--allow-unready\",\"--arg\",\"today=$DATE\",\"--arg\",\"today_iso=$ISO\"]}]}}"
+```
+- 状態: `gcloud run jobs executions list --job keiba-dispatch-xl --region $REGION --limit 1`（2〜3 分）
+- 確認: `gcloud storage ls gs://$BUCKET/state/data/local/inference/state/$ISO/` に `px_day.parquet` と `v4_day.parquet`。実行記録 `gcloud storage cat gs://$BUCKET/ops/job_runs/day-prep/latest.json | python3 -m json.tool | grep -E '"status"|"reason"|memory_peak_mib|duration_sec'` → `status ok`。**`memory_peak_mib` を keiba-vpn-37 に伝える**（約 12000 の見込み。16384 に収まること）。
+- 戻す: `gcloud storage rm -r gs://$BUCKET/state/data/local/inference/state/$ISO/`
+- 本番の運用: `g-0730-dayprep`（毎日 JST 07:30、開催日だけ）が自動で行う（Scheduler は `day-prep` を ready にしてから）。
 
 ### B5. predict-race を 1 レースだけ（並走なので本番の表示は変わらない）
 **`gcloud run jobs execute --args` には `--arg` を渡せない**（`--args` の短縮と解釈され「`--arg` cannot be specified multiple times」になる。2026-10-26 に判明）。Cloud Tasks が本番でやるのと同じ **Cloud Run Admin API の REST 呼び出し**で起動する（イメージの再作成は不要）:
@@ -184,3 +195,24 @@ bash scripts/gcp/deploy_cloud_run_monitor.sh --apply
 ```
 - 確認: `curl -s $(gcloud run services describe keiba-monitor --region $REGION --format='value(status.url)')/api/health` → `{"status":"ok"}`
 - 戻す: `gcloud run services delete keiba-monitor --region $REGION --quiet`
+
+### B7. 日次で履歴を更新する Jobs（2026-10-26 に入力を洗い出し）。ホストの cron を止める前提の部品
+**何が変わったか**: 履歴の更新（`export-tables-daily`→`feature-accumulate`→`parse-drift-daily`、g-0700）を Jobs で行い、結果を `state/` に出す。`predict-race` / `day-prep` / `eve-precompute` はサービング用バンドル（約 150MB）を**モデルではなく `state/` から**読む（日次で変わるため）。`serving-state-precompute` / `serving-state-profile` は `day-prep` に置き換えて無効。`px-ridge-window` は次の半年の 30 日前から、無ければ作る（Python 化）。
+#### B7a. layer_a（feature-accumulate の補修表。98MB、1 回）をホストから公開（ホストで実行）
+```bash
+ssh keiba-remote 'bash -s -- layer_a' < scripts/gcp/publish_models_from_host.sh
+```
+#### B7b. state の種まき（ホストで実行。約 350MB。同じサイズのファイルは取り直さない）
+```bash
+ssh keiba-remote 'bash -s -- predict-race day-prep eve-precompute rb-state-daily export-tables-daily feature-accumulate parse-drift-daily px-ridge-window' < scripts/gcp/seed_state_from_host.sh
+```
+（引数なしで実行すると、各ジョブの state_in の実サイズだけが出る。上限を超えたら止まる。）
+#### B7c. 手動で g-0700 を 1 回（並走なので本番には出ない）
+`export-tables-daily` → `feature-accumulate` → `parse-drift-daily` の順に直列で動く（`keiba-dispatch-l`）:
+```bash
+curl -s -X POST -H "Authorization: Bearer $(gcloud auth print-access-token)" -H "Content-Type: application/json" "https://run.googleapis.com/v2/projects/$PROJECT/locations/$REGION/jobs/keiba-dispatch-l:run" -d '{"overrides":{"containerOverrides":[{"args":["-m","src.ops.job_dispatch","group","g-0700","--allow-unready"]}]}}'
+```
+- 確認（各ジョブの実行記録）: `for j in export-tables-daily feature-accumulate parse-drift-daily; do echo "== $j"; gcloud storage cat gs://$BUCKET/ops/job_runs/$j/latest.json | python3 -m json.tool | grep -E '"status"|"reason"|duration_sec|memory_peak_mib'; done`
+- 期待: すべて `"status": "ok"`。ホスト実測は export 2.3 秒・344MB、feature-accumulate 28 秒・RSS 3.6GB（出力はホストと全列一致）。`feature-accumulate` が `serving_bundle`（`state/data/local/modeling/feature_store/serving_bundle/meta.json`）と `horse_history/features_<年>.parquet` を作る。
+- 失敗の典型: `FileNotFoundError … layer_a.parquet`（B7a 未了）、`StateBudgetError`（上限超過。メッセージのパスを伝える）。
+- 戻す: 出力は `state/` だけ。消すなら `gcloud storage rm -r gs://$BUCKET/state/data/local/modeling/feature_store/`。
