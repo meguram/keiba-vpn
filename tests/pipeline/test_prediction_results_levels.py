@@ -15,11 +15,11 @@ def _write(tmp_path, d, recs):
 
 def test_summarize_and_merge_split_bets_by_level():
     a = pr.summarize([_rec("R1", 4, 1000, 3000), _rec("R2", 4, 1000, 0), _rec("R3", 0, 500, 0)])
-    assert a["bets"]["by_level"]["4"] == {"races": 2, "hit": 1, "invested": 2000, "returned": 3000}
+    assert a["bets"]["by_level"]["4"] == {"races": 2, "bought": 2, "hit": 1, "invested": 2000, "returned": 3000}
     assert a["bets"]["by_level"]["0"]["races"] == 1
     b = pr.summarize([_rec("R4", 4, 1000, 1000), _rec("R5", 2, 2000, 1000)])
     m = pr.merge_summaries([a, b])
-    assert m["bets"]["by_level"]["4"] == {"races": 3, "hit": 2, "invested": 3000, "returned": 4000}
+    assert m["bets"]["by_level"]["4"] == {"races": 3, "bought": 3, "hit": 2, "invested": 3000, "returned": 4000}
     assert m["bets"]["by_level"]["2"]["invested"] == 2000
 
 
@@ -27,7 +27,7 @@ def _trec(rid, level, tb, ret):
     """画面の推奨馬券(target)の仮想購入 bets_t を持つレース記録。level=None は bets_t の無い（未記録の）レース。"""
     r = {"race_id": rid, "included": True, "bets": {"total_bet": 1, "total_return": 0, "estimated": False}}
     if level is not None:
-        r["bets_t"] = {"status": "ok", "basis": "sec77", "level": level, "total_bet": tb, "total_return": ret, "estimated": False, "by_type": {}}
+        r["bets_t"] = {"status": "ok", "basis": "sec77", "selection": "actual_ge_est", "level": level, "total_bet": tb, "total_return": ret, "estimated": False, "by_type": {}}
     return r
 
 
@@ -72,6 +72,6 @@ def test_add_levels_adds_level_or_lv_block_and_keeps_existing_numbers(tmp_path, 
     assert after["races"][1]["bets"]["lv"] == {"level": 1, "exp_roi": 0.98, "total_bet": 1200, "total_return": 600}
     assert after["races"][1]["bets"]["total_bet"] == 1000                                   # 既存の購入額・払戻は変えない
     bl = after["summary"]["bets"]["by_level"]
-    assert bl["1"] == {"races": 1, "hit": 1, "invested": 1200, "returned": 600} and bl["4"]["returned"] == 3000
+    assert bl["1"] == {"races": 1, "bought": 1, "hit": 1, "invested": 1200, "returned": 600} and bl["4"]["returned"] == 3000
     assert after["summary"]["bets"]["invested"] == before["summary"]["bets"]["invested"]
     assert after["summary"]["marks"] == before["summary"]["marks"] and after["status"] == before["status"]

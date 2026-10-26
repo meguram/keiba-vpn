@@ -254,7 +254,7 @@ async def prediction_results_bets_summary(request: Request, date: str = Query(..
             races[r["race_id"]] = {"total_bet": tb, "total_return": round(ret), "hit": ret > 0, "roi": pr.rate(ret, tb), "estimated": bool(b.get("estimated"))}
         return {"date": date, "label": _label(date), "week": {"from": wk_lo, "to": wk_hi, "days": wk["days"], "status": wk["status"], "counts": wk["rated_counts"], **_bets_block(wk["rated_summary"])},
                 "day": {"status": day["status"], "counts": day["rated_counts"], **_bets_block(day["rated_summary"])}, "races": races,
-                "note": "推奨度が標準以上のレースの推奨馬券（画面に出している既定プラン・想定オッズは §77 のモデル）を購入したとみなした仮想購入（払戻は確定払戻）。見送りのレースは含めません。実際の購入ではありません。"}
+                "note": "推奨度が標準以上のレースの推奨馬券（最大5パターン・想定オッズは §77 のモデル）のうち、実際のオッズ（確定）が想定オッズ以上のパターンだけを購入したとみなした仮想購入（払戻は確定払戻）。見送りのレースは含めません。実際の購入ではありません。"}
     if not is_member(request):
         return JSONResponse(MEMBER_REQUIRED_BODY, status_code=401)
     return _respond(request, await asyncio.to_thread(lambda: _cached(("bets", date), _run)))

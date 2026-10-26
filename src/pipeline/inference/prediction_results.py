@@ -244,6 +244,41 @@ def portfolio_level(cands: list[Any], raw_roi: float | None) -> tuple[int, float
 TARGET_ODDS_BASIS = "sec77"      # 推奨度・仮想購入の集計に使う想定オッズの出所（決定ログ §77 のモデル。検証と同じ基準）。従来モデルの想定オッズで作った記録は集計に入れない
 
 
+TARGET_SELECTION = "actual_ge_est"     # 購入とみなす条件: 5 パターンのうち、実際のオッズ(確定)が想定オッズ以上のものだけ
+
+
+def actual_odds_map(storage: Any, race_id: str) -> dict[tuple[str, tuple[int, ...]], float]:
+    """保存済みの実オッズ（最新＝確定）を {(券種, 組合せ): 倍率} にする。複勝・ワイドは下限、順序なしの券種は昇順の組合せをキーにする。取得できなかった券種は含めない。"""
+    from src.pipeline.inference.betting import BettingConfig, BettingOptimizer
+    from src.pipeline.inference.odds_source import resolve_odds
+
+    out: dict[tuple[str, tuple[int, ...]], float] = {}
+    try:
+        odds = resolve_odds(storage, race_id, mode="actual", phase="latest")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("実オッズの読み込みに失敗 %s: %s", race_id, exc)
+        odds = {"source": None}
+    if odds.get("source") is not None:
+        m = BettingOptimizer(BettingConfig(wide_use_min_odds=True, fukusho_use_min_odds=True))._build_odds_map(odds.get("pair_odds") or {}, None, odds.get("single_odds"))
+        for bt, mm in m.items():
+            for key, v in mm.items():
+                k = tuple(sorted(int(x) for x in key)) if bt in ("umaren", "wide", "sanrenpuku") else tuple(int(x) for x in key)
+                if v and v > 0:
+                    out[(bt, k)] = float(v)
+    try:
+        doc = storage.load("race_trifecta_odds", race_id)
+    except Exception:  # noqa: BLE001
+        doc = None
+    for row in (doc or {}).get("trifecta") or []:
+        try:
+            a, b, c, o = int(row[0]), int(row[1]), int(row[2]), float(row[3])
+        except (TypeError, ValueError, IndexError):
+            continue
+        if 0 < o < 999999:
+            out[("sanrentan", (a, b, c))] = o
+    return out
+
+
 def simulate_target_bets(storage: Any, race_id: str, result: dict, max_total_bet: int | None = DEFAULT_MAX_TOTAL_BET) -> dict:
     """画面に出している推奨馬券（既定方策 target。delegates._optimize_target と同じ計算）を、既定上限で購入したとして精算する。
     推奨度（level）は画面のレース推奨度と同じ。見送り（level 0）は買い目なし（total_bet=0）。"""
@@ -259,25 +294,44 @@ def simulate_target_bets(storage: Any, race_id: str, result: dict, max_total_bet
         return {"status": "error", "strategy": "target", "error": str(payload.get("error") or code)[:120]}
     level = int(payload.get("level") or 0)
     bets = (payload.get("bets") or []) if payload.get("status") == "bet" else []
+    amap = actual_odds_map(storage, race_id) if bets else {}
     total_bet = 0
     total_ret = 0.0
+    all_bet = 0
+    all_ret = 0.0
     estimated = False
+    n_unknown = 0
     by_type: dict[str, dict] = {}
+    patterns = []
     for b in bets:
         amount = int(b.get("yen") or 0)
-        hit, ret, est = settle_candidate(str(b.get("bet_type") or ""), tuple(int(x) for x in b.get("combo") or []), amount, float(b.get("est_multiple") or 0), result)
+        bt = str(b.get("bet_type") or "")
+        combo = tuple(int(x) for x in b.get("combo") or [])
+        est_mult = float(b.get("est_multiple") or 0)
+        hit, ret, est = settle_candidate(bt, combo, amount, est_mult, result)
+        key = tuple(sorted(combo)) if bt in ("umaren", "wide", "sanrenpuku") else combo
+        act = amap.get((bt, key))
+        passed = act is not None and act >= est_mult
+        n_unknown += int(act is None)
+        all_bet += amount
+        all_ret += ret
+        patterns.append({"bet_type": bt, "combo": list(combo), "yen": amount, "est_multiple": est_mult, "actual_multiple": act, "passed": passed, "hit": hit,
+                         "return": round(ret) if passed else 0})
+        if not passed:
+            continue
         estimated = estimated or (hit and est)
         total_bet += amount
         total_ret += ret
-        t = by_type.setdefault(b["bet_type"], {"invested": 0, "returned": 0.0, "n": 0, "hit": 0})
+        t = by_type.setdefault(bt, {"invested": 0, "returned": 0.0, "n": 0, "hit": 0})
         t["invested"] += amount
         t["returned"] += ret
         t["n"] += 1
         t["hit"] += int(hit)
     for t in by_type.values():
         t["returned"] = round(t["returned"])
-    return {"status": "ok", "strategy": "target", "basis": TARGET_ODDS_BASIS, "level": level, "total_bet": total_bet, "total_return": round(total_ret), "by_type": by_type,
-            "estimated": estimated, "n_bets": len(bets)}
+    return {"status": "ok", "strategy": "target", "basis": TARGET_ODDS_BASIS, "selection": TARGET_SELECTION, "level": level, "total_bet": total_bet,
+            "total_return": round(total_ret), "by_type": by_type, "estimated": estimated, "n_bets": len(bets), "n_pass": sum(1 for x in patterns if x["passed"]),
+            "n_unknown": n_unknown, "all": {"total_bet": all_bet, "total_return": round(all_ret)}, "patterns": patterns}
 
 
 # ───────────────────────── 1 レース・1 日の集計 ─────────────────────────
@@ -342,7 +396,7 @@ def build_race_record(race_id: str, meta: dict, storage: Any, max_total_bet: int
     return rec
 
 
-_BLANK_LEVEL = {"races": 0, "hit": 0, "invested": 0, "returned": 0}
+_BLANK_LEVEL = {"races": 0, "bought": 0, "hit": 0, "invested": 0, "returned": 0}      # races=その推奨度のレース数、bought=うち実際に購入とみなしたレース数
 
 
 def _blank_counts() -> dict:
@@ -406,6 +460,7 @@ def summarize(records: list[dict]) -> dict:
             if lvb.get("level") is not None and lvb.get("total_bet"):
                 bl = sb["by_level"].setdefault(str(lvb["level"]), dict(_BLANK_LEVEL))
                 bl["races"] += 1
+                bl["bought"] += 1
                 bl["hit"] += int(lvb["total_return"] > 0)
                 bl["invested"] += lvb["total_bet"]
                 bl["returned"] += lvb["total_return"]
@@ -744,7 +799,8 @@ RATED_MIN_LEVEL = 1       # 推奨度が『標準』以上（0=見送りは含�
 def record_level(r: dict) -> int | None:
     """レース記録の推奨度（0=見送り〜4=最注目）。画面の推奨馬券（target）の仮想購入 bets_t の推奨度。未記録・計算できなかったレースは None。"""
     bt = r.get("bets_t") or {}
-    return int(bt["level"]) if bt.get("status") == "ok" and bt.get("basis") == TARGET_ODDS_BASIS and bt.get("level") is not None else None
+    return int(bt["level"]) if (bt.get("status") == "ok" and bt.get("basis") == TARGET_ODDS_BASIS and bt.get("selection") == TARGET_SELECTION
+                                and bt.get("level") is not None) else None
 
 
 def target_view(r: dict) -> dict:
@@ -782,6 +838,7 @@ def level_summary(records: list[dict]) -> tuple[dict[str, dict], int]:
         c = out.setdefault(str(lv), dict(_BLANK_LEVEL))
         c["races"] += 1
         if bt.get("total_bet"):
+            c["bought"] += 1
             c["hit"] += int(bt["total_return"] > 0)
             c["invested"] += bt["total_bet"]
             c["returned"] += bt["total_return"]
@@ -928,15 +985,16 @@ def bets_level_card(today: _date, base: Path | None = None) -> dict:
             if lv == 0:
                 continue
             c = bl.get(str(lv)) or _BLANK_LEVEL
-            levels.append({"level": lv, "label": labels[lv], "races": c["races"], "hit_races": c["hit"], "hit_rate": rate(c["hit"], c["races"]),
+            levels.append({"level": lv, "label": labels[lv], "races": c["bought"], "hit_races": c["hit"], "hit_rate": rate(c["hit"], c["bought"]),
+                           "no_buy_races": c["races"] - c["bought"],
                            "invested": c["invested"], "returned": c["returned"], "roi": rate(c["returned"], c["invested"])})
-        tot = {k: sum(x[k] for x in levels) for k in ("races", "hit_races", "invested", "returned")}
+        tot = {k: sum(x[k] for x in levels) for k in ("races", "hit_races", "invested", "returned", "no_buy_races")}
         periods.append({"key": key, "label": label, "from": lo, "to": hi, "data_from": r["days"][0] if r["days"] else None,
                         "data_to": r["days"][-1] if r["days"] else None, "days": len(r["days"]), "status": r["status"],
                         "levels": levels, "total": {**tot, "roi": rate(tot["returned"], tot["invested"]), "hit_rate": rate(tot["hit_races"], tot["races"])},
-                        "skipped_races": (bl.get("0") or _BLANK_LEVEL)["races"], "unrated_races": unrated})
+                        "skipped_races": (bl.get("0") or _BLANK_LEVEL)["races"], "unrated_races": unrated, "no_buy_races": tot["no_buy_races"]})
     return {"as_of": today.strftime("%Y%m%d"), "year": y, "periods": periods,
-            "note": "画面に出している推奨馬券（既定プラン: 全券種・縛りなし。想定オッズは §77 のモデル）を既定の上限（1レース2,000円）で購入したとみなした仮想購入。推奨度は画面のレース推奨度と同じ、払戻は確定払戻。実際の購入ではありません。"}
+            "note": "画面に出している推奨馬券（最大5パターン。想定オッズは §77 のモデル）のうち、実際のオッズ（確定）が想定オッズ以上のパターンだけを購入したとみなした仮想購入。推奨度は画面のレース推奨度と同じ、払戻は確定払戻。実際の購入ではありません。"}
 
 
 def mark_card(today: _date, base: Path | None = None) -> dict:

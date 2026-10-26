@@ -35,7 +35,7 @@ def _put(tmp_path, date, status_src="race_result", payoff=True, level=1):
     doc["date"] = date
     for r in doc["races"]:
         if r.get("included"):         # 画面の推奨馬券(target)の仮想購入。level 0 は見送り（購入なし）
-            r["bets_t"] = {"status": "ok", "strategy": "target", "basis": "sec77", "level": level, "total_bet": 1000 if level else 0, "total_return": 3000 if level else 0,
+            r["bets_t"] = {"status": "ok", "strategy": "target", "basis": "sec77", "selection": "actual_ge_est", "level": level, "total_bet": 1000 if level else 0, "total_return": 3000 if level else 0,
                            "by_type": {"sanrenpuku": {"invested": 1000, "returned": 3000, "n": 1, "hit": 1}} if level else {}, "estimated": False}
     pr.write_day(doc, tmp_path)
 

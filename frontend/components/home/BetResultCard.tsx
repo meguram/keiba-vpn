@@ -5,11 +5,11 @@ import { PendingLink } from "@/components/PendingLink";
 import { getJson } from "@/lib/httpCache";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 
-type LevelRow = { level: number; label: string; races: number; hit_races: number; hit_rate: number | null; invested: number; returned: number; roi: number | null };
+type LevelRow = { level: number; label: string; races: number; no_buy_races?: number; hit_races: number; hit_rate: number | null; invested: number; returned: number; roi: number | null };
 type LevelPeriod = {
   key: string; label: string; from: string; to: string; data_from: string | null; data_to: string | null; days: number;
   levels: LevelRow[]; total: { races: number; hit_races: number; invested: number; returned: number; roi: number | null; hit_rate: number | null };
-  skipped_races: number; unrated_races: number;
+  skipped_races: number; unrated_races: number; no_buy_races?: number;
 };
 type LevelCard = { periods: LevelPeriod[]; note?: string };
 
@@ -74,7 +74,7 @@ function LevelSection({ p, note }: { p: LevelPeriod; note?: string }) {
         <div className="mrc-bets-note" style={{ color: "#fbbf24" }}>対象が{bought}レースと少なく、1回の的中で回収率が大きく動きます。目安にはなりません（{SMALL_SAMPLE}レース以上で参考になります）。</div>
       )}
       <div className="mrc-bets-note">
-        見送り{p.skipped_races}Rは除く{p.unrated_races > 0 ? `・推奨度の記録が無い${p.unrated_races}Rも除く` : ""}。{note ?? ""}
+        見送り{p.skipped_races}Rは除く{(p.no_buy_races ?? 0) > 0 ? `・実際のオッズが想定オッズに届かず購入しなかった${p.no_buy_races}Rも除く` : ""}{p.unrated_races > 0 ? `・推奨度の記録が無い${p.unrated_races}Rも除く` : ""}。{note ?? ""}
       </div>
     </div>
   );
@@ -98,7 +98,7 @@ export function BetResultCard() {
   if (!lv || !lv.periods.some((p) => p.days > 0)) return null;
   const cur = lv.periods.find((p) => p.key === sel && p.days > 0) ?? lv.periods.find((p) => p.days > 0) ?? lv.periods[0];
 
-  const allRaces = cur.total.races + cur.skipped_races + cur.unrated_races;   // 集計できた全レース（購入＋見送り＋推奨度の記録なし）
+  const allRaces = cur.total.races + (cur.no_buy_races ?? 0) + cur.skipped_races + cur.unrated_races;   // 集計できた全レース（購入＋推奨は出たが実オッズが想定未満で購入せず＋見送り＋推奨度の記録なし）
 
   return (
     <section aria-label="推奨馬券の成績" className="mrc">

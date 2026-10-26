@@ -234,7 +234,7 @@ export default function PredictionResultsPage() {
 
           {member && useRated && Object.keys(kpi.by_type).length > 0 && (
             <section aria-label="券種別の仮想購入">
-              <h2 style={h2}>券種別の仮想購入（推奨度が標準以上のレースで、推奨馬券を上限 2,000 円/Rで買った場合）</h2>
+              <h2 style={h2}>券種別の仮想購入（推奨度が標準以上のレースで、推奨馬券の5パターンのうち、実際のオッズ（確定）が想定オッズ以上のものだけを買った場合）</h2>
               <div style={{ ...card, overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                   <thead><tr style={{ color: "var(--text-dim)", textAlign: "right" }}>

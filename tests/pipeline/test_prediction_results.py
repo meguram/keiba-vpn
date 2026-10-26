@@ -173,7 +173,7 @@ def test_old_saved_marks_with_many_pairs_and_old_anchor_still_aggregate():
 
 def _rec(level, f1_finish, bet=100, ret=0, status="ok"):
     pick = {"horse_number": 1, "horse_name": "a", "finish": f1_finish, "win_prob": 0.3}
-    bt = {"status": status, "strategy": "target", "basis": "sec77", "level": level, "total_bet": bet if level else 0, "total_return": ret if level else 0,
+    bt = {"status": status, "strategy": "target", "basis": "sec77", "selection": "actual_ge_est", "level": level, "total_bet": bet if level else 0, "total_return": ret if level else 0,
           "by_type": {"sanrenpuku": {"invested": bet, "returned": ret, "n": 1, "hit": int(ret > 0)}} if level else {}, "estimated": False}
     rec = {"race_id": f"r{level}{f1_finish}", "included": True, "venue": "東京", "round": 1, "top1": pick, "marks": {"honmei": [pick]}, "winner_logloss": 1.0,
            "bets": {"total_bet": 999, "total_return": 0, "by_type": {}, "level": 3}}      # 従来の最適化の仮想購入（集計には使わない）
@@ -196,7 +196,7 @@ def test_level_summary_counts_skipped_and_unrated_separately():
     recs = [_rec(0, 1), _rec(1, 1, ret=300), _rec(1, 4), _rec(None, 1)]
     by, unrated = pr.level_summary(recs)
     assert unrated == 1 and by["0"]["races"] == 1 and by["0"]["invested"] == 0
-    assert by["1"] == {"races": 2, "hit": 1, "invested": 200, "returned": 300}
+    assert by["1"] == {"races": 2, "bought": 2, "hit": 1, "invested": 200, "returned": 300}
 
 
 def test_period_summary_has_rated_summary_series_and_counts(tmp_path):
@@ -218,13 +218,56 @@ def test_simulate_target_bets_settles_displayed_plan_and_skip_has_no_purchase(mo
     from src.pipeline.inference import odds_source as OS
 
     monkeypatch.setattr(OS, "predicted_single_odds", lambda storage, rid: {"entries": [], "odds_model": "sec77"})
+    monkeypatch.setattr(pr, "actual_odds_map", lambda storage, rid: {("sanrenpuku", (1, 2, 3)): 40.0, ("sanrenpuku", (1, 2, 4)): 31.0})      # どちらも実オッズ >= 想定オッズ
     out = pr.simulate_target_bets(object(), "r", result)
     assert out["status"] == "ok" and out["basis"] == "sec77" and out["level"] == 3 and out["total_bet"] == 300 and out["total_return"] == 10000 and out["by_type"]["sanrenpuku"]["hit"] == 1
+    assert out["selection"] == "actual_ge_est" and out["n_pass"] == 2 and out["n_unknown"] == 0
     monkeypatch.setattr(D, "_optimize_target", lambda body, view, storage=None: ({"status": "skip", "level": 0, "bets": []}, 200))
     skip = pr.simulate_target_bets(object(), "r", result)
     assert skip["level"] == 0 and skip["total_bet"] == 0 and skip["total_return"] == 0
     monkeypatch.setattr(D, "_optimize_target", lambda body, view, storage=None: ({"error": "予測結果がありません"}, 404))
     assert pr.simulate_target_bets(object(), "r", result)["status"] == "error"
+
+
+def test_simulate_target_bets_buys_only_patterns_whose_actual_odds_reach_the_estimate(monkeypatch):
+    from src.api.v1 import delegates as D
+    from src.pipeline.inference import odds_source as OS
+
+    result = {"finish": {1: 1, 2: 2, 3: 3, 4: 4}, "n_runners": 4, "payoff": {"sanrenpuku": {(1, 2, 3): 5000}}}
+    bets = [{"bet_type": "sanrenpuku", "combo": [1, 2, 3], "yen": 200, "est_multiple": 40.0},       # 的中だが実オッズ 30 < 想定 40 → 買わない
+            {"bet_type": "sanrenpuku", "combo": [1, 2, 4], "yen": 100, "est_multiple": 30.0},       # 実オッズ 35 >= 30 → 買う（外れ）
+            {"bet_type": "umaren", "combo": [1, 2], "yen": 100, "est_multiple": 5.0}]               # 実オッズが取れていない → 買わない（判断できない）
+    monkeypatch.setattr(D, "_optimize_target", lambda body, view, storage=None: ({"status": "bet", "level": 2, "bets": bets}, 200))
+    monkeypatch.setattr(OS, "predicted_single_odds", lambda storage, rid: {"entries": [], "odds_model": "sec77"})
+    monkeypatch.setattr(pr, "actual_odds_map", lambda storage, rid: {("sanrenpuku", (1, 2, 3)): 30.0, ("sanrenpuku", (1, 2, 4)): 35.0})
+    out = pr.simulate_target_bets(object(), "r", result)
+    assert out["total_bet"] == 100 and out["total_return"] == 0 and out["n_pass"] == 1 and out["n_unknown"] == 1 and out["n_bets"] == 3
+    assert out["all"] == {"total_bet": 400, "total_return": 10500}                                  # 条件なしの参考値
+    assert [p["passed"] for p in out["patterns"]] == [False, True, False] and out["level"] == 2
+
+
+def test_records_without_the_selection_rule_are_not_counted():
+    old = {"included": True, "bets_t": {"status": "ok", "basis": "sec77", "level": 2, "total_bet": 100, "total_return": 0, "by_type": {}}}
+    assert pr.record_level(old) is None
+    assert pr.record_level({**old, "bets_t": {**old["bets_t"], "selection": "actual_ge_est"}}) == 2
+
+
+def test_actual_odds_map_normalizes_keys_and_skips_capped_trifecta():
+    class St:
+        def load(self, category, key):
+            if category == "race_odds":
+                return {"phase": "final", "entries": [{"horse_number": 1, "win_odds": 3.0, "place_odds_min": 1.5, "place_odds_max": 2.0}]}
+            if category == "race_pair_odds":
+                return {"phase": "final", "umaren": [{"pair": [2, 1], "odds": 9.0}], "wide": [{"pair": [1, 2], "odds_min": 3.0, "odds_max": 4.0}],
+                        "umatan": [{"pair": [2, 1], "odds": 20.0}], "sanrenpuku": [{"combo": [3, 1, 2], "odds": 50.0}]}
+            if category == "race_trifecta_odds":
+                return {"trifecta": [[1, 2, 3, 300.0, 1], [1, 3, 2, 999999, 2]]}
+            return None
+
+    m = pr.actual_odds_map(St(), "r")
+    assert m[("tansho", (1,))] == 3.0 and m[("fukusho", (1,))] == 1.5 and m[("umaren", (1, 2))] == 9.0 and m[("wide", (1, 2))] == 3.0
+    assert m[("umatan", (2, 1))] == 20.0 and m[("sanrenpuku", (1, 2, 3))] == 50.0
+    assert m[("sanrentan", (1, 2, 3))] == 300.0 and ("sanrentan", (1, 3, 2)) not in m
 
 
 def test_add_target_bets_fills_only_missing_races_and_keeps_existing(tmp_path, monkeypatch):
