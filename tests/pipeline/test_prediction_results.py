@@ -234,3 +234,17 @@ def test_add_target_bets_fills_only_missing_races_and_keeps_existing(tmp_path, m
     assert out == {"races": 2, "added": 1, "already": 1, "failed": 0}
     doc = pr.read_day("20261018", tmp_path)
     assert doc["races"][0]["bets_t"]["level"] == 1 and doc["races"][1]["bets_t"]["level"] == 2
+
+
+def test_cli_skip_final_does_not_reaggregate_final_days(monkeypatch, capsys):
+    from src.scraper import storage as st
+    from src.scripts.data import prediction_results as cli
+
+    docs = {"20261017": {"status": "final"}, "20261018": {"status": "provisional"}}
+    called: list[str] = []
+    monkeypatch.setattr(st, "HybridStorage", lambda *a, **k: object())
+    monkeypatch.setattr(cli.pr, "read_day", lambda d, base=None: docs.get(d))
+    monkeypatch.setattr(cli.pr, "aggregate_day",
+                        lambda d, storage, **k: called.append(d) or {"saved": True, "status": "final", "summary": {"races_settled": 0}})
+    assert cli.main(["--from", "20261017", "--to", "20261018", "--skip-final"]) == 0
+    assert called == ["20261018"] and "確定済みのため再集計しない" in capsys.readouterr().out
