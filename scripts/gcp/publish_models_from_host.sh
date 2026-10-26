@@ -4,6 +4,7 @@
 #
 #   手元から: ssh keiba-remote 'bash -s -- bundle_v6e stage_v6e tl_reference_v5' < scripts/gcp/publish_models_from_host.sh
 #   ホスト上で（このファイルを置いた場合）: bash publish_models_from_host.sh bundle_v6e …
+#   status: GCS 側の公開状況（published / 版 / 作成日時）だけを表示（書き込みなし）
 #   引数なし: 何も公開せず、公開できるコンポーネントと、ホスト上の実体のサイズだけを表示する（既定は確認のみ）
 #
 # 公開は latest.json を最後に書く（書いた瞬間が昇格）。同じ内容なら再アップロードしない。component の一覧は config/gcp_job_map.json の models。
@@ -45,6 +46,11 @@ for k, v in json.load(open("config/gcp_job_map.json"))["models"].items():
 EOF
   )
 }
+
+if [ "${1:-}" = "status" ]; then      # GCS 側の公開状況だけを表示する（書き込みなし）
+  cd "$NEW" && PYTHONPATH=. "$PY" -m src.ops.model_publish status 2>&1 | grep -v -i warn
+  exit 0
+fi
 
 if [ "$#" -eq 0 ]; then
   echo "公開できるコンポーネント（ホスト上の実体とサイズ）:"

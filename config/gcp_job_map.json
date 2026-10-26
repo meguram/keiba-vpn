@@ -768,7 +768,7 @@
     "atol": 1e-06
    },
    "blockers": [
-    "モデル lap_models を GCS に publish（python -m src.ops.model_publish publish）"
+    "モデル lap_models は GCS に公開済み(2026-10-25)。Jobs で 1 回手動実行して、ラップ予想がホストと一致することを確認"
    ],
    "enabled": true,
    "ready": false,
@@ -1581,8 +1581,7 @@
     "atol": 1e-06
    },
    "blockers": [
-    "想定オッズのモデル final_odds を GCS に publish（python -m src.ops.model_publish publish --component final_odds）",
-    "取得の raceday-eve-fetch が VPS の担当になる（または GCS の出馬表が揃う）こと"
+    "final_odds は公開済み(2026-10-25)。取得の raceday-eve-fetch が VPS の担当になる（または GCS の出馬表が揃う）こと。揃ったら Jobs で 1 回手動実行して確認"
    ],
    "enabled": true,
    "ready": false,
@@ -1758,7 +1757,7 @@
     "atol": 1e-06
    },
    "blockers": [
-    "モデル lap_models を GCS に publish"
+    "モデル lap_models は GCS に公開済み(2026-10-25)。Jobs で 1 回手動実行して、ラップ予想がホストと一致することを確認"
    ],
    "enabled": true,
    "ready": false,

@@ -88,6 +88,7 @@ th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px
 <tr><td>CI/CD（develop→stg→master）</td><td><span class="badge green">済</span></td><td>昇格 3 回。失敗の握りつぶしも修正済み</td></tr>
 <tr><td>権限分離（keiba-publisher / keiba-fetch / keiba-monitor）</td><td><span class="badge green">済</span></td><td>publisher は <code>ops/</code> へ書くと 403</td></tr>
 <tr><td>Jobs の基盤（キュー・Run Job s/m/l/xl・IAM）</td><td><span class="badge green">済</span></td><td>費用は月 2,000 円以内の枠で設計</td></tr>
+<tr><td>モデルの GCS 公開（<code>models/</code> 15 コンポーネント）</td><td><span class="badge green">済</span></td><td>2026-10-26 に公開状況を確認（<code>bundle_v6e</code>・<code>stage_v6e</code>・<code>final_odds</code>・<code>lap_models</code> ほか全件）。学習し直したら再公開</td></tr>
 <tr><td><code>predict-race</code> が v6e の出力を実際に出す</td><td><span class="badge amber">途中</span></td><td>必要ファイルの不足とメモリ超過を修正中。日単位キャッシュを朝の <code>day-prep</code> に分離</td></tr>
 <tr><td>Jobs が <code>ops/mirror</code> から入力を読む（9a63b2f）</td><td><span class="badge amber">未昇格</span></td><td>次の昇格で反映</td></tr>
 <tr><td>VPS 取得役が <code>race_lists</code>・発走時刻表・<code>entries_state</code> を <code>ops/mirror</code> へ push</td><td><span class="badge red">未実装</span></td><td>ホストの <code>gcs-mirror-push</code> の代替。ホスト停止に必須</td></tr>
