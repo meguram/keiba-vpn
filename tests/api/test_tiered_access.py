@@ -268,6 +268,9 @@ def tier_env(monkeypatch, tmp_path):
     monkeypatch.setattr(auth, "member_record", lambda uid: recs.get(uid))
     doc = pr.build_day("20261018", _storage())
     doc["date"] = "20261018"
+    for r in doc["races"]:
+        if r.get("included"):
+            r["bets"]["level"] = 1                      # 推奨度が標準（見送りでない）のレースにする。回収率は標準以上のレースだけで集計される
     pr.write_day(doc, tmp_path)
     from src.api import prediction_results_api as api
 

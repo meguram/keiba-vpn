@@ -176,7 +176,7 @@ function RaceCard({ r, member, levelLabels }: { r: RaceRecord; member: boolean; 
         ) : null))}
         <span style={dim}>結果</span>
         <span>{(r.result_top3 ?? []).map((x) => `${x.finish}着 ${x.horse_number}番`).join(" / ")}</span>
-        {member && b && b.total_bet > 0 && (
+        {member && lv != null && lv >= 1 && b && b.total_bet > 0 && (
           <>
             <span style={dim}>仮想購入</span>
             <span style={{ fontWeight: 700, color: b.total_return >= b.total_bet ? "#34d399" : "var(--text)" }}>
@@ -225,7 +225,7 @@ export default function PredictionResultsPage() {
   const useRated = !!rated && rated.counts.rated > 0;                      // 会員: 推奨度が標準以上のレースだけで集計（無ければ全体）
   const kpi = useRated ? rated!.kpi : data?.kpi;
   const levelLabels = useMemo(() => Object.fromEntries((rated?.legend ?? []).map((t) => [t.level, t.short || t.label])) as Record<number, string>, [rated]);
-  const trendSeries = useMemo(() => (data?.series ?? []).map((p) => (useRated ? { ...p, honmei_win: p.honmei_win_rated ?? null, roi: p.roi_rated ?? null } : p)), [data, useRated]);
+  const trendSeries = useMemo(() => (data?.series ?? []).map((p) => (rated ? { ...p, honmei_win: useRated ? (p.honmei_win_rated ?? null) : p.honmei_win, roi: p.roi_rated ?? null } : p)), [data, rated, useRated]);
   const empty = !!data && data.summary.races_settled === 0;
   const races = useMemo(() => (data?.races ?? []), [data]);
 
@@ -278,8 +278,8 @@ export default function PredictionResultsPage() {
             <Tile label="◎の1着率" value={pct(kpi.honmei.win)} sub={`${kpi.honmei.n}頭中`} />
             <Tile label="◎の複勝圏（3着以内）" value={pct(kpi.honmei.top3)} sub={`連対 ${pct(kpi.honmei.top2)}`} />
             <Tile label="予測1位の1着率" value={pct(kpi.top1.win)} sub={`${kpi.top1.n}レース`} />
-            <Tile label="仮想購入の回収率" value={pct(kpi.roi)} sub={`${yen(kpi.invested)} → ${yen(kpi.returned)}`} locked={!member} />
-            <Tile label="的中レース（購入）" value={`${kpi.races_hit}/${kpi.races_bought}`} sub="推奨馬券をどれか当てた" locked={!member} />
+            <Tile label="仮想購入の回収率（標準以上）" value={useRated ? pct(kpi.roi) : "—"} sub={useRated ? `${yen(kpi.invested)} → ${yen(kpi.returned)}` : "推奨度が標準以上のレースがありません"} locked={!member} />
+            <Tile label="的中レース（購入）" value={useRated ? `${kpi.races_hit}/${kpi.races_bought}` : "—"} sub="標準以上のレースで推奨馬券をどれか当てた" locked={!member} />
             <Tile label="確率の精度" value={kpi.winner_logloss == null ? "—" : kpi.winner_logloss.toFixed(3)} sub={kpi.winner_logloss_model ? `勝ち馬の対数損失（小さいほど良い）。市場補正済みの${kpi.winner_logloss_model.n}レースは モデルのみ ${kpi.winner_logloss_model.model.toFixed(3)} → 補正後 ${kpi.winner_logloss_model.calibrated.toFixed(3)}` : "勝ち馬の対数損失（小さいほど良い）"} />
           </div>
 
@@ -307,9 +307,9 @@ export default function PredictionResultsPage() {
             </section>
           )}
 
-          {member && Object.keys(kpi.by_type).length > 0 && (
+          {member && useRated && Object.keys(kpi.by_type).length > 0 && (
             <section aria-label="券種別の仮想購入">
-              <h2 style={h2}>券種別の仮想購入（推奨馬券を上限 2,000 円/Rで買った場合）</h2>
+              <h2 style={h2}>券種別の仮想購入（推奨度が標準以上のレースで、推奨馬券を上限 2,000 円/Rで買った場合）</h2>
               <div style={{ ...card, overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                   <thead><tr style={{ color: "var(--text-dim)", textAlign: "right" }}>
