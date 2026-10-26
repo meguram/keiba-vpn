@@ -121,9 +121,8 @@ function evColor(ev?: number, cal = false): string {
 
 /** AI 予測（確率）× オッズ → 期待値 → Kelly 配分の推奨馬券。計算本体はサーバ（/api/v1/betting/optimize）。 */
 /** 馬番 → 印（買い目の各馬番に印を添えるための表示用。週間予測の『推奨馬券』タブで使う） */
-export type MarkBySeq = Record<number, { sym: string; color: string; kesi?: boolean }>;
 
-export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string; hasPrediction: boolean; marks?: MarkBySeq }) {
+export function BetRecommend({ raceId, hasPrediction }: { raceId: string; hasPrediction: boolean }) {
   const [bankroll, setBankroll] = useState("100000");
   const [cap, setCap] = useState(String(DEFAULT_MAX_TOTAL_BET));
   const [capReady, setCapReady] = useState(false);
@@ -251,17 +250,6 @@ export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [raceId, hasPrediction, capReady, mode, phase]);
 
-  // 買い目の馬番に添える印（馬番が印を持たないときは何も出さない）
-  const markChip = (n: number) => {
-    const m = marks?.[n];
-    if (!m) return null;
-    return (
-      <span key={`mk-${n}`} aria-label={`${n}番の印 ${m.sym}`} style={{ color: m.color, fontWeight: 800, marginRight: 2, ...(m.kesi ? { border: "1px solid #94a3b8", borderRadius: 3, padding: "0 3px", fontSize: 11 } : {}) }}>
-        {m.sym}
-      </span>
-    );
-  };
-
   if (!hasPrediction) {
     return (
       <div style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>
@@ -371,7 +359,7 @@ export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string;
                 const sections = BET_ORDER.map((bt) => ({ bt, gs: groups.filter((g) => g.bet_type === bt) })).filter((s) => s.gs.length > 0);
                 const chip = (n: number, extra?: string) => (
                   <span key={`${n}-${extra ?? ""}`} style={{ display: "inline-flex", alignItems: "baseline", gap: 3, marginRight: 6, padding: "1px 7px", borderRadius: 5, background: "rgba(125,211,252,0.12)", color: "#7dd3fc", fontWeight: 800 }}>
-                    {markChip(n)}{n}
+                    {n}
                     {names.get(n) && <span style={{ fontWeight: 400, fontSize: 11, color: "var(--text-dim)" }}>{names.get(n)}</span>}
                     {extra && <span style={{ fontWeight: 600, fontSize: 11, color: "#fff" }}>{extra}</span>}
                   </span>
@@ -381,7 +369,6 @@ export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string;
                     const c = g.items[0];
                     return (
                       <>
-                        {(c.pair ?? []).map((n) => markChip(n))}
                         <span style={{ color: "#7dd3fc", fontWeight: 800, marginRight: 8 }}>{c.pair_label}</span>
                         <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{(c.horse_names ?? []).filter(Boolean).join(" - ")}</span>
                       </>
@@ -455,8 +442,7 @@ export function BetRecommend({ raceId, hasPrediction, marks }: { raceId: string;
                                         {g.items.map((c, i) => (
                                           <tr key={`${c.pair_label}-${i}`} style={{ background: c.result?.hit ? "rgba(251,191,36,0.08)" : undefined }}>
                                             <td style={{ ...TD, textAlign: "left", borderTop: "1px solid var(--border)" }}>
-                                              {(c.pair ?? []).map((n) => markChip(n))}
-                                              <span style={{ color: "#7dd3fc", fontWeight: 800, marginRight: 8 }}>{c.pair_label}</span>
+                                                                    <span style={{ color: "#7dd3fc", fontWeight: 800, marginRight: 8 }}>{c.pair_label}</span>
                                               <span style={{ color: "var(--text-dim)" }}>{(c.horse_names ?? []).filter(Boolean).join(" - ")}</span>
                                             </td>
                                             <td style={{ ...TD, borderTop: "1px solid var(--border)" }}>{c.prob != null ? `${(c.prob * 100).toFixed(1)}%` : "—"}</td>

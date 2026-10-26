@@ -132,9 +132,6 @@ type PredEntry = {
   horse_number?: number;
   horse_name?: string;
   horse_id?: string;
-  mark_type?: string;
-  /** 消印（mark_type='kesi'）の根拠の短文 */
-  kesi_reason?: string;
   recommendation?: string;
   pred_rank?: number;
   composite_rank?: number;
@@ -167,7 +164,6 @@ type PredData = {
   status?: string;
   has_prediction?: boolean;
   /** "bets" = 印を推奨馬券（買い目）から決めている */
-  marks_basis?: string;
   model_type?: string;
   model_description?: string;
   prediction_source?: string;
@@ -201,24 +197,6 @@ function fmtOdds(v: number | null | undefined): { text: string; cls: string } {
   if (n < 5) return { text: n.toFixed(1), cls: "text-red-400" };
   if (n < 15) return { text: n.toFixed(1), cls: "text-yellow-400" };
   return { text: n.toFixed(1), cls: "text-gray-400" };
-}
-
-const MARK_META: Record<string, { sym: string; color: string; bg: string }> = {
-  honmei:   { sym: "◎", color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
-  pair:     { sym: "○", color: "#3b82f6", bg: "rgba(59,130,246,0.12)" },
-  anchor:   { sym: "△", color: "#22c55e", bg: "rgba(34,197,94,0.12)" },
-  show_val: { sym: "▲", color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
-  star:     { sym: "★", color: "#a78bfa", bg: "rgba(167,139,250,0.12)" },
-  kesi:     { sym: "消", color: "#cbd5e1", bg: "rgba(148,163,184,0.14)" },
-  none:     { sym: "—", color: "var(--text-dim)", bg: "transparent" },
-};
-
-function markMeta(p: PredEntry) {
-  if (p.mark_type && MARK_META[p.mark_type]) return MARK_META[p.mark_type];
-  const r = String(p.recommendation ?? "");
-  if (r.includes("◎") || r.includes("1着")) return MARK_META.honmei;
-  if (r.includes("○") || r.includes("2連")) return MARK_META.pair;
-  return MARK_META.none;
 }
 
 function gradeStyle(grade: string | undefined): React.CSSProperties {
@@ -615,21 +593,16 @@ export default function RaceDetailPage() {
     </div>
   );
 
-  // 結果の答え合わせ（会員向け）: めぐ印の列と、展開予想（想定の番手）と最初のコーナーの順位の突き合わせ
-  const markByNo = new Map<number, ReturnType<typeof markMeta>>();
-  (predData?.predictions ?? []).forEach((p) => { if (p.horse_number != null) markByNo.set(Number(p.horse_number), markMeta(p)); });
-  const showMark = !lock && (predData?.predictions ?? []).some((p) => !!p.mark_type);
+  // 結果の答え合わせ（会員向け）: 展開予想（想定の番手）と最初のコーナーの順位の突き合わせ
   const estByNo = new Map<number, { est: number | null; style: string }>();
   (predData?.predictions ?? []).forEach((p) => { const f = p.position_forecast; if (p.horse_number != null && f) estByNo.set(Number(p.horse_number), { est: f.early_pos_est ?? null, style: f.style }); });
   const checkRows = !lock && estByNo.size > 0 && resultEntries.length > 0;
   const posSummary = summarizePositions(resultEntries.map((e) => ({ no: Number(e.horse_number), est: estByNo.get(Number(e.horse_number))?.est ?? null, actual: firstCornerPos(e.passing_order) })));
-  const MARK_RANK: Record<string, number> = { "◎": 0, "○": 1, "▲": 2, "★": 3, "△": 4, "消": 5 };
   const resultCols: { key: string; label: string; val: (e: RaceEntry) => number | string | null }[] = [
     { key: "pos", label: "着順", val: (e) => finishKey(e) >= 10_000 ? null : finishKey(e) },
     { key: "waku", label: "枠", val: (e) => wakuOf(Number(e.horse_number ?? e.number), resultEntries.length, Number(e.bracket_number) || null) ?? null },
     { key: "no", label: "馬番", val: (e) => Number(e.horse_number ?? e.number) || null },
     { key: "name", label: "馬名", val: (e) => (e.horse_name ? String(e.horse_name) : null) },
-    ...(showMark ? [{ key: "mark", label: "めぐ印", val: (e: RaceEntry) => { const sym = markByNo.get(Number(e.horse_number))?.sym; return sym && sym in MARK_RANK ? MARK_RANK[sym] : null; } }] : []),
     { key: "jockey", label: "騎手", val: (e) => (pick(e, "jockey_name", "jockey") || null) },
     { key: "time", label: "タイム", val: (e) => parseTimeSec((e.time ?? e.finish_time) as string | undefined) },
     { key: "passing", label: "通過順", val: (e) => firstCornerPos(e.passing_order) },
@@ -685,7 +658,6 @@ export default function RaceDetailPage() {
                   <HorseName id={e.horse_id} name={e.horse_name} />
                   <span className="m-sub">{[pick(e, "sex_age"), pick(e, "jockey_name", "jockey")].filter(Boolean).join(" ") || "—"}</span>
                 </td>
-                {showMark && (() => { const mm = markByNo.get(Number(e.horse_number)); return <td style={{ ...TD, fontWeight: 800, fontSize: mm?.sym === "消" ? 13 : 17, color: mm?.color }}>{mm && mm.sym !== "—" ? mm.sym : <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>—</span>}</td>; })()}
                 <td className="m-hide" style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{pick(e, "jockey_name", "jockey") || "—"}</td>
                 <td style={TD}>{e.time ?? e.finish_time ?? "—"}</td>
                 <td className="m-hide" style={{ ...TD, fontSize: 11 }}>{e.passing_order ?? "—"}</td>
@@ -754,7 +726,7 @@ export default function RaceDetailPage() {
     .sort((a, b) => Number(a.horse_number) - Number(b.horse_number))
     .map((p) => ({ no: Number(p.horse_number), name: p.horse_name ?? "", bracket: wakuOf(Number(p.horse_number), preds.length, bracketOf.get(Number(p.horse_number)) ?? (Number(p.bracket_number) || null)), f: p.position_forecast ?? null }));
 
-  const PRED_HIDE = new Set([0, 4, 7, 9, 11]);   // 枠・連対率・想定複勝・複期待値・買い判断は狭い画面で畳む
+  const PRED_HIDE = new Set([0, 4, 7, 9, 10]);   // 枠・連対率・想定複勝・複期待値・買い判断は狭い画面で畳む
   const PredPanel = (
     <div>
       {isAdmin && <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
@@ -800,11 +772,11 @@ export default function RaceDetailPage() {
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={3}>{predData?.prob_calibration?.applied ? "予測確率（市場補正後）" : "予測確率"}</th>
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>想定オッズ</th>
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>期待値</th>
-                <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>めぐAI印</th>
+                <th style={{ ...TH, borderLeft: "1px solid var(--border)" }}>買い判断</th>
               </tr>
               <tr>
-                {(["枠","馬番","馬名","勝率","連対率","複勝率","単勝","複勝",(calibratedEv ? "勝期待値(較正後)" : "勝期待値"),(calibratedEv ? "複期待値(較正後)" : "複期待値"),"めぐAI印","買い判断"] as string[]).map((h, i) => {
-                  // 会員限定の列: 勝率(3)・複勝率(5)以外の AI 列（連対率・想定オッズ・期待値・めぐAI印・買い判断）
+                {(["枠","馬番","馬名","勝率","連対率","複勝率","単勝","複勝",(calibratedEv ? "勝期待値(較正後)" : "勝期待値"),(calibratedEv ? "複期待値(較正後)" : "複期待値"),"買い判断"] as string[]).map((h, i) => {
+                  // 会員限定の列: 勝率(3)・複勝率(5)以外の AI 列（連対率・想定オッズ・期待値・買い判断）
                   const isAiCol = i >= 4 && i !== 5;
                   return (
                     <th
@@ -812,7 +784,7 @@ export default function RaceDetailPage() {
                       className={PRED_HIDE.has(i) ? "m-hide" : undefined}
                       style={{
                         ...TH,
-                        borderLeft: [3,6,8,10,12].includes(i) ? "1px solid rgba(36,48,73,0.5)" : undefined,
+                        borderLeft: [3,6,8,10].includes(i) ? "1px solid rgba(36,48,73,0.5)" : undefined,
                         color: isAiCol && lock ? "var(--text-dim)" : TH.color,
                       }}
                     >
@@ -824,7 +796,6 @@ export default function RaceDetailPage() {
             </thead>
             <tbody>
               {sortedPreds.map((p, i) => {
-                const mark = markMeta(p);
                 const rank = p.composite_rank ?? p.pred_rank ?? 0;
                 const rowBg = rank === 1 ? "rgba(239,68,68,0.04)" : rank === 2 ? "rgba(59,130,246,0.04)" : rank === 3 ? "rgba(34,197,94,0.04)" : undefined;
                 return (
@@ -859,12 +830,6 @@ export default function RaceDetailPage() {
                     <td className="m-hide" style={{ ...TD, color: (p.redacted || (p.ev_place_cal ?? p.ev_place ?? p.expected_value) == null) ? "var(--text-dim)" : evColor(p.ev_place_cal ?? p.ev_place ?? p.expected_value, p.ev_place_cal != null), fontWeight: 600 }}>
                       {(p.redacted || (p.ev_place_cal ?? p.ev_place ?? p.expected_value) == null) ? "●●" : Number(p.ev_place_cal ?? p.ev_place ?? p.expected_value).toFixed(2)}
                     </td>
-                    <td
-                      style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", fontSize: p.mark_type === "kesi" ? 14 : 18, fontWeight: 800, color: mark.color }}
-                      title={p.mark_type === "kesi" ? p.kesi_reason || "消し（3着内に来る確率が低い）" : undefined}
-                    >
-                      {lock ? <span style={{ color: "var(--text-dim)", fontSize: 12 }}>🔒</span> : p.mark_type === "kesi" ? <span style={{ border: "1.5px solid #94a3b8", borderRadius: 4, padding: "1px 4px" }}>{mark.sym}</span> : mark.sym}
-                    </td>
                     <td className="m-hide" style={{ ...TD, fontSize: 11 }}>{lock ? "🔒" : (p.buy_tier ?? "—")}</td>
                 </tr>
                 );
@@ -890,8 +855,7 @@ export default function RaceDetailPage() {
       ) : null}
 
       <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 12 }}>
-        {predData?.marks_basis === "bets" ? "めぐAI印（推奨馬券から決定。付随情報）: ◎=買い目の購入額が最大の馬・○▲=2・3番手・△=買い目に入るその他の馬・買い目に入らない馬は印なし / " : null}
-        めぐAI印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / 消: 3着内に来る確率が低い（10人気以下で複勝確率8%以下。過去の実績では約2.5%・目標5%以下。複数付くことも付かないこともある。印の上にカーソルで根拠） / —印なし。買い判断は期待値の最大で判定。期待値: {calibratedEv ? "過去の実績に合わせて較正した期待回収率。緑≥1.10 / 青≥1.00 / 灰≥0.90 / 赤＜0.90。推奨は較正後の期待値の最大で判定" : "緑≥1.3 / 青≥1.0 / 赤＜0.8"}
+        買い判断は期待値の最大で判定。期待値: {calibratedEv ? "過去の実績に合わせて較正した期待回収率。緑≥1.10 / 青≥1.00 / 灰≥0.90 / 赤＜0.90。推奨は較正後の期待値の最大で判定" : "緑≥1.3 / 青≥1.0 / 赤＜0.8"}
       </p>
     </div>
   );

@@ -207,8 +207,8 @@ export function PositionForecast({ horses, pace, gate, td, tdNote, embedded, pac
   const toggle = (no: number) => { setSelFrom("chart"); setSel((s) => (s === no ? null : no)); };
   const toggleList = (no: number) => { setSelFrom("list"); setSel((s) => (s === no ? null : no)); };
   const detailOf = (h: ForecastHorse) => <Detail h={h} gate={gate} td={td?.get(h.no)} scen={fitMap?.get(h.no) ?? null} fit={h.f ? paceFit(h.f.style_code, pace?.level, td?.get(h.no)?.ease_pct ?? null) : null} />;
-  const hasTd = !!td && td.size > 0;
-  const easeOf = (no: number) => td?.get(no)?.ease_pct ?? null;
+  const hasTd = false;                           // 追走難度のマーキング・凡例は非表示（ユーザー指示 2026-10-25）
+  const easeOf = (_no: number): number | null => null;
 
   if (!horses.length) return null;
   return (
@@ -302,14 +302,7 @@ export function PositionForecast({ horses, pace, gate, td, tdNote, embedded, pac
           {[80, 65, 50, 35, 20].map((v) => { const e = easeTone(v); return <span key={v} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span aria-hidden style={{ width: 9, height: 9, borderRadius: 999, background: e.color }} />{e.word}</span>; })}
         </div>
       )}
-      {embedded && fitMap && (
-        <div aria-label="列の意味" style={{ marginTop: 6, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.6 }}>
-          <b style={{ color: "var(--text)" }}>左右され度</b>＝ペース・隊列によって有利不利が変わる度合い（展開次第／標準／安定）。<b style={{ color: "var(--text)" }}>追走難度</b>＝想定位置取りを取るのに楽か大変か。別の指標です。
-        </div>
-      )}
-      {tdNote}
       {cur && !(embedded && selFrom === "list") && detailOf(cur)}
-      {embedded && <HorseList fitMap={fitMap} horses={horses} pace={pace} td={td} narrow={narrow} sel={sel} onPick={toggleList} detail={(h) => (selFrom === "list" ? detailOf(h) : null)} />}
     </section>
   );
 }
