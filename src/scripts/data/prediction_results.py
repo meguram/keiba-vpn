@@ -45,6 +45,9 @@ def main(argv: list[str] | None = None) -> int:
         print(pr.sync_to_gcs())
         return 0
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    from src.utils.project_env import load_project_dotenv
+
+    load_project_dotenv()           # GCS_BUCKET・KEIBA_ENV・KEIBA_PREDICTION_RESULTS_GCS などを .env から（--sync-gcs と同じ）
     if a.date:
         days = [a.date]
     elif a.d_from and a.d_to:
