@@ -741,10 +741,6 @@
       "*/race_shutuba_flat.parquet",
       "*/smartrc_race_flat.parquet"
      ]
-    },
-    {
-     "path": "data/page_reference/race_lists",
-     "max_mb": 50
     }
    ],
    "state_out": [
@@ -785,6 +781,9 @@
    ],
    "require_out": [
     "data/local/inference/lap_forecast/{today_iso}/*.json"
+   ],
+   "mirror_in": [
+    "data/page_reference/race_lists"
    ]
   },
   {
@@ -1596,6 +1595,10 @@
    ],
    "require_out": [
     "data/local/inference/tracking_v2/{tomorrow_iso}/*.json"
+   ],
+   "mirror_in": [
+    "data/page_reference/race_lists",
+    "data/page_reference/race_day_schedule"
    ]
   },
   {
@@ -1641,22 +1644,13 @@
     "KEIBA_ODDS_LATE_SNAPSHOTS",
     "KEIBA_ODDS_TRIFECTA"
    ],
-   "state_in": [
-    {
-     "path": "data/page_reference/race_day_schedule",
-     "max_mb": 20
-    },
-    {
-     "path": "data/page_reference/race_lists",
-     "max_mb": 50
-    }
-   ],
+   "state_in": [],
    "state_out": [],
    "parity": {
     "kind": "none"
    },
    "blockers": [
-    "発走時刻表 race_day_schedule が GCS の state/ に届くこと（daily-race-lists を VPS が実行した後に push）"
+    "race_lists / 発走時刻表は ops/mirror（mirror_in）から読む。ホスト停止後は VPS の取得役(daily-race-lists)が ops/mirror へ上げる形にする（keiba-vpn-37 の担当）"
    ],
    "enabled": true,
    "ready": false,
@@ -1664,7 +1658,11 @@
     "min_consecutive_success": 4,
     "window_days": 21,
     "parity_min_days": 3
-   }
+   },
+   "mirror_in": [
+    "data/page_reference/race_lists",
+    "data/page_reference/race_day_schedule"
+   ]
   },
   {
    "id": "lap-forecast-eve",
@@ -1733,10 +1731,6 @@
       "*/race_shutuba_flat.parquet",
       "*/smartrc_race_flat.parquet"
      ]
-    },
-    {
-     "path": "data/page_reference/race_lists",
-     "max_mb": 50
     }
    ],
    "state_out": [
@@ -1777,6 +1771,9 @@
    ],
    "require_out": [
     "data/local/inference/lap_forecast/{tomorrow_iso}/*.json"
+   ],
+   "mirror_in": [
+    "data/page_reference/race_lists"
    ]
   },
   {
@@ -2210,6 +2207,10 @@
    ],
    "require_out": [
     "data/local/inference/predictions_v6/{date}/{race_id}.parquet"
+   ],
+   "mirror_in": [
+    "data/page_reference/race_lists",
+    "data/page_reference/race_day_schedule"
    ]
   },
   {
@@ -3733,7 +3734,11 @@
     "cron_job_id": "(新規)",
     "cron_utc": "",
     "script": "src.ops.jobs.day_prep（predict-race の日単位部分を朝に分離）"
-   }
+   },
+   "mirror_in": [
+    "data/page_reference/race_lists",
+    "data/page_reference/race_day_schedule"
+   ]
   },
   {
    "id": "parse-drift-daily",
