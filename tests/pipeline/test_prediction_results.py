@@ -169,3 +169,29 @@ def test_old_saved_marks_with_many_pairs_and_old_anchor_still_aggregate():
     assert [x["horse_number"] for x in rec["marks"]["pair"]] == [2, 3]
     assert [e["mark_type"] for e in preds] == ["honmei", "pair", "pair", "anchor", "show_val", "show_val"]
     assert pr.MARK_SYMBOLS["anchor"] == "△"
+
+
+def _rec(level, f1_finish, bet=100, ret=0, lv=None):
+    pick = {"horse_number": 1, "horse_name": "a", "finish": f1_finish, "win_prob": 0.3}
+    bets = {"total_bet": bet, "total_return": ret, "by_type": {}, "level": level}
+    if lv is not None:
+        bets["lv"] = {"level": lv, "total_bet": bet, "total_return": ret}
+    return {"race_id": f"r{level}{f1_finish}", "included": True, "top1": pick, "marks": {"honmei": [pick]}, "bets": bets, "winner_logloss": 1.0}
+
+
+def test_rated_records_keep_standard_or_above_and_skip_unrecorded():
+    recs = [_rec(0, 1, 0), _rec(1, 1, ret=200), _rec(3, 5), _rec(None, 1), _rec(0, 2, lv=2), {"race_id": "x", "included": False}]
+    assert [r["race_id"] for r in pr.rated_records(recs)] == ["r11", "r35", "r02"]        # 現行ルールの再計算（lv）があればそれを使う
+    assert pr.rated_counts(recs) == {"settled": 5, "rated": 3, "skipped": 1, "unrated": 1}
+    s = pr.summarize(pr.rated_records(recs))
+    assert s["marks"]["honmei"]["f1"] == 1 and s["marks"]["honmei"]["n"] == 3 and s["races_settled"] == 3
+
+
+def test_period_summary_has_rated_summary_series_and_counts(tmp_path):
+    recs = [_rec(0, 1, 0), _rec(2, 1, ret=300), _rec(1, 4)]
+    pr.write_day({"date": "20261018", "status": "final", "summary": pr.summarize(recs), "highlights": [], "races": recs, "notes": []}, tmp_path)
+    p = pr.period_summary("day", "20261018", tmp_path)
+    assert p["summary"]["marks"]["honmei"]["n"] == 3 and p["rated_summary"]["marks"]["honmei"]["n"] == 2
+    assert p["rated_counts"] == {"settled": 3, "rated": 2, "skipped": 1, "unrated": 0}
+    pt = p["series"][0]
+    assert pt["honmei_win"] == pytest.approx(2 / 3) and pt["honmei_win_rated"] == pytest.approx(1 / 2) and pt["roi_rated"] == pytest.approx(300 / 200)
