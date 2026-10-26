@@ -12,7 +12,7 @@ import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { MemberUpgradeModal } from "@/components/upgrade/MemberUpgradeModal";
 import { formatMD, todayJst, weekdayOf, WEEKDAY_JA } from "@/lib/weekDates";
 import { LEVEL_STYLE, useRaceValues, valueTitle, type RaceValue } from "@/lib/raceValue";
-import { roiText, useBetsSummary, yen, type BetsSummary, type RaceBet } from "@/lib/betsSummary";
+import { roiText, useBetsSummary, yen, type BetsSummary, type RaceBet, type RatedCounts } from "@/lib/betsSummary";
 
 /* レース一覧（過去の開催日ごと・開催場ごと）。未来の開催はここには出さない（今日まで。今日が開催日ならその日は含める）。
    データは GCS/ホストの開催日別一覧（/api/scrape-dates と /api/race-list/<日付>）。DB（/api/v1/races）は使わない:
@@ -66,7 +66,10 @@ function kaiNichi(raceId: string): string {
 
 /** 日・週の回収率の帯（有料会員のみ）。仮想購入＝推奨馬券を保存済みの最新オッズで買ったとみなした結果 */
 function RoiBar({ b }: { b: BetsSummary }) {
-  const cell = (label: string, x: { roi: number | null; invested: number; returned: number; races_bought: number; races_hit: number }, sub?: string) => (
+  const emptyText = (c?: RatedCounts) =>
+    c && c.unrated > 0 && c.rated === 0 ? `推奨度の記録がまだありません（未記録 ${c.unrated}R${c.skipped ? `・見送り ${c.skipped}R` : ""}）`
+      : c && c.settled > 0 ? `推奨度が標準以上のレースがありません（見送り ${c.skipped}R）` : "集計できるレースがありません";
+  const cell = (label: string, x: { roi: number | null; invested: number; returned: number; races_bought: number; races_hit: number; counts?: RatedCounts }, sub?: string) => (
     <div style={{ flex: "1 1 220px", minWidth: 0 }}>
       <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{label}{sub ? <span style={{ marginLeft: 6 }}>{sub}</span> : null}</div>
       {x.races_bought > 0 ? (
@@ -74,7 +77,7 @@ function RoiBar({ b }: { b: BetsSummary }) {
           <span style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: (x.roi ?? 0) >= 1 ? "#4ade80" : "#f87171" }}>{roiText(x.roi)}</span>
           <span style={{ fontSize: 12, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{yen(x.invested)} → {yen(x.returned)}・的中 {x.races_hit}/{x.races_bought}R</span>
         </div>
-      ) : <div style={{ fontSize: 13, color: "var(--text-dim)", padding: "4px 0" }}>推奨度が標準以上の購入がありません</div>}
+      ) : <div style={{ fontSize: 13, color: "var(--text-dim)", padding: "4px 0" }}>{emptyText(x.counts)}</div>}
     </div>
   );
   const w = b.week;

@@ -246,7 +246,7 @@ def _optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool 
     }, 200
 
 
-def _optimize_target(body: dict[str, Any], view: str) -> tuple[dict[str, Any], int]:
+def _optimize_target(body: dict[str, Any], view: str, storage: Any | None = None) -> tuple[dict[str, Any], int]:
     """既定方策 target（src/pipeline/inference/target_bets.py）。開発者・有料会員のどちらにも同じ内容（購入額・想定払戻・的中率の目安）を返す。
     実オッズは計画にも応答にも使わない（想定オッズ＝AI の予測だけ）。view="paid" のときだけ会員向けの外枠（凡例・免責）を付ける。"""
     from src.api.local_predictions import load_local_prediction_payload
@@ -268,7 +268,7 @@ def _optimize_target(body: dict[str, Any], view: str) -> tuple[dict[str, Any], i
         if cap < 100:
             return {"view": view, "error": "max_total_bet は 100 円以上の整数で指定してください（上限なしは null か 0）"}, 400
 
-    storage = HybridStorage()
+    storage = storage or HybridStorage()
     from src.api.local_predictions import load_primary_prediction_payload
 
     preds = ((load_primary_prediction_payload(race_id, storage, market=False)) or {}).get("predictions") or []

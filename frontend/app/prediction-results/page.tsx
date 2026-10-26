@@ -146,7 +146,7 @@ function RaceCard({ r, member, levelLabels }: { r: RaceRecord; member: boolean; 
       </div>
     );
   }
-  const b = r.bets;
+  const b = r.bets_t?.status === "ok" ? { total_bet: r.bets_t.total_bet ?? 0, total_return: r.bets_t.total_return ?? 0, estimated: r.bets_t.estimated } : null;
   const lv = member ? raceLevel(r) : null;
   return (
     <PendingLink href={`/race/${r.race_id}`} style={{ ...card, display: "block", textDecoration: "none", color: "var(--text)" }}>
