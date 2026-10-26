@@ -735,7 +735,12 @@
    "state_in": [
     {
      "path": "data/page_reference/tables",
-     "max_mb": 600
+     "max_mb": 120,
+     "include": [
+      "*/race_result_flat.parquet",
+      "*/race_shutuba_flat.parquet",
+      "*/smartrc_race_flat.parquet"
+     ]
     },
     {
      "path": "data/page_reference/race_lists",
@@ -746,6 +751,14 @@
     {
      "path": "data/local/inference/lap_forecast",
      "max_mb": 50
+    },
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 20,
+     "include": [
+      "{year}/race_shutuba_flat.parquet",
+      "{year}/race_shutuba_race.parquet"
+     ]
     }
    ],
    "parity": {
@@ -1714,7 +1727,12 @@
    "state_in": [
     {
      "path": "data/page_reference/tables",
-     "max_mb": 600
+     "max_mb": 120,
+     "include": [
+      "*/race_result_flat.parquet",
+      "*/race_shutuba_flat.parquet",
+      "*/smartrc_race_flat.parquet"
+     ]
     },
     {
      "path": "data/page_reference/race_lists",
@@ -1725,6 +1743,14 @@
     {
      "path": "data/local/inference/lap_forecast",
      "max_mb": 50
+    },
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 20,
+     "include": [
+      "{year}/race_shutuba_flat.parquet",
+      "{year}/race_shutuba_race.parquet"
+     ]
     }
    ],
    "parity": {

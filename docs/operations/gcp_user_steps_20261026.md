@@ -195,3 +195,24 @@ bash scripts/gcp/deploy_cloud_run_monitor.sh --apply
 ```
 - 確認: `curl -s $(gcloud run services describe keiba-monitor --region $REGION --format='value(status.url)')/api/health` → `{"status":"ok"}`
 - 戻す: `gcloud run services delete keiba-monitor --region $REGION --quiet`
+
+### B7. 日次で履歴を更新する Jobs（2026-10-26 に入力を洗い出し）。ホストの cron を止める前提の部品
+**何が変わったか**: 履歴の更新（`export-tables-daily`→`feature-accumulate`→`parse-drift-daily`、g-0700）を Jobs で行い、結果を `state/` に出す。`predict-race` / `day-prep` / `eve-precompute` はサービング用バンドル（約 150MB）を**モデルではなく `state/` から**読む（日次で変わるため）。`serving-state-precompute` / `serving-state-profile` は `day-prep` に置き換えて無効。`px-ridge-window` は次の半年の 30 日前から、無ければ作る（Python 化）。
+#### B7a. layer_a（feature-accumulate の補修表。98MB、1 回）をホストから公開（ホストで実行）
+```bash
+ssh keiba-remote 'bash -s -- layer_a' < scripts/gcp/publish_models_from_host.sh
+```
+#### B7b. state の種まき（ホストで実行。約 350MB。同じサイズのファイルは取り直さない）
+```bash
+ssh keiba-remote 'bash -s -- predict-race day-prep eve-precompute rb-state-daily export-tables-daily feature-accumulate parse-drift-daily px-ridge-window' < scripts/gcp/seed_state_from_host.sh
+```
+（引数なしで実行すると、各ジョブの state_in の実サイズだけが出る。上限を超えたら止まる。）
+#### B7c. 手動で g-0700 を 1 回（並走なので本番には出ない）
+`export-tables-daily` → `feature-accumulate` → `parse-drift-daily` の順に直列で動く（`keiba-dispatch-l`）:
+```bash
+curl -s -X POST -H "Authorization: Bearer $(gcloud auth print-access-token)" -H "Content-Type: application/json" "https://run.googleapis.com/v2/projects/$PROJECT/locations/$REGION/jobs/keiba-dispatch-l:run" -d '{"overrides":{"containerOverrides":[{"args":["-m","src.ops.job_dispatch","group","g-0700","--allow-unready"]}]}}'
+```
+- 確認（各ジョブの実行記録）: `for j in export-tables-daily feature-accumulate parse-drift-daily; do echo "== $j"; gcloud storage cat gs://$BUCKET/ops/job_runs/$j/latest.json | python3 -m json.tool | grep -E '"status"|"reason"|duration_sec|memory_peak_mib'; done`
+- 期待: すべて `"status": "ok"`。ホスト実測は export 2.3 秒・344MB、feature-accumulate 28 秒・RSS 3.6GB（出力はホストと全列一致）。`feature-accumulate` が `serving_bundle`（`state/data/local/modeling/feature_store/serving_bundle/meta.json`）と `horse_history/features_<年>.parquet` を作る。
+- 失敗の典型: `FileNotFoundError … layer_a.parquet`（B7a 未了）、`StateBudgetError`（上限超過。メッセージのパスを伝える）。
+- 戻す: 出力は `state/` だけ。消すなら `gcloud storage rm -r gs://$BUCKET/state/data/local/modeling/feature_store/`。
