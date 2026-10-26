@@ -165,3 +165,10 @@ def test_portfolio_ev_helper_basic():
     cand = {"p": np.array([0.2, 0.1, 0.05]), "odds": np.array([10.0, 30.0, 100.0])}
     r = TB._portfolio_ev(cand, np.array([0, 2]), np.array([100.0, 200.0]))
     assert r["expected_payout_yen"] == 1200 and r["portfolio_ev"] == 4.0        # 0.2*100*10 + 0.05*200*100 = 200+1000
+
+
+def test_bets_are_ordered_by_priority_and_expose_no_expected_value():
+    bets = [{"hit_rate_pct": 10.0}, {"hit_rate_pct": 30.0}, {"hit_rate_pct": 20.0}, {"hit_rate_pct": 25.0}]
+    out = TB.prioritize(bets, [1.1, 1.1, 2.0, 0.9])         # 期待値の大きい順。同値は的中率の高い順
+    assert [b["hit_rate_pct"] for b in out] == [20.0, 30.0, 10.0, 25.0] and [b["priority"] for b in out] == [1, 2, 3, 4]
+    assert not ({"ev", "expected_value", "odds"} & set(out[0]))

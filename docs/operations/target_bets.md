@@ -21,12 +21,12 @@
 
 ## 入力と出力
 - 入力: 自前の勝率・連対率・複勝率（保存済み予測）、想定単勝・想定複勝（既定は §77 のモデル `sec77`。下の『想定オッズの出所』）。**実オッズは使わない・出さない**。
-- 出力（`POST /api/v1/betting/optimize`）: `strategy:"target"`、`status`（bet/skip）、`bets[]`（`combo`、`yen`、`est_multiple`＝想定倍率、`est_payout_yen`＝想定払戻、`hit_rate_pct`）、`any_hit_rate_pct`、`race_tier`（推奨度）。`/betting/race-values` は推奨度の段階（`basis:"target"`）。
+- 出力（`POST /api/v1/betting/optimize`）: `strategy:"target"`、`status`（bet/skip）、`bets[]`（`combo`、`yen`、`est_multiple`＝想定倍率（集計用。画面には出さない）、`est_payout_yen`＝想定払戻、`hit_rate_pct`、`ev_line_multiple`＝期待値ライン、`priority`＝推奨順。1 が最優先で、想定オッズで見た期待値の大きい順）、`any_hit_rate_pct`、`race_tier`（推奨度）。`/betting/race-values` は推奨度の段階（`basis:"target"`）。
 - 見せる相手: 開発者・有料会員。ゲスト・無料は従来どおり 401。
 
 ## 注意（画面にも出している）
 - 当たったときの払戻水準を固定する方式で、**期待値・回収率 100% 超を保証しない**（検証の回収率は 2025 年で 1.215、95% 区間 0.99〜1.46）。的中率は約 6%。約 94% のレースで購入額を失う。
-- 想定倍率・想定払戻は AI の予測で、実際のオッズとは異なる。
+- 想定倍率・想定払戻は AI の予測で、実際のオッズとは異なる。画面の買い目表は『推奨順・買い目・購入額・想定払戻・的中率・期待値ライン』で、想定倍率の代わりに期待値ライン（1÷的中確率）を出す。利用者は上から、直前の実オッズが期待値ライン以上のものを選ぶ。
 - 想定単勝・複勝が §77 のモデルで作られていない（キャッシュなしで従来モデルや自前確率に戻った）レースは、検証より入力の質が落ちる。応答の `odds_basis` で区別できる（`sec77` / `predicted`=従来 / `own`=自前確率から）。
 
 ## ロールバック
