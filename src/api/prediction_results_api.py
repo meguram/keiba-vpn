@@ -130,8 +130,13 @@ async def prediction_results(request: Request, scope: str = Query("day", pattern
             d = days[-1] if days else datetime.now().strftime("%Y%m%d")
         _ensure_dev_day(d)
         ps = pr.period_summary(scope, d)
+        from src.utils import paid_zone as PZ
+
         out: dict[str, Any] = {**{k: ps[k] for k in ("scope", "date", "from", "to", "days", "statuses", "status", "series", "highlights", "notes")},
                                "kpi": _kpi(ps["summary"]), "summary": ps["summary"], "label": _label(d)}
+        # 推奨度（レース期待値）が標準以上のレースだけの集計。推奨度は会員向けなので、tier.py の許可リストが匿名の応答からは落とす
+        out["rated"] = {"min_level": pr.RATED_MIN_LEVEL, "label": "標準以上", "counts": ps["rated_counts"],
+                        "kpi": _kpi(ps["rated_summary"]), "summary": ps["rated_summary"], "legend": PZ.legend()}
         if scope == "day":
             doc = pr.read_day(d)
             out["races"] = (doc or {}).get("races", [])
@@ -171,8 +176,9 @@ def build_news(limit: int = 6) -> dict:
         items.append({"kind": "week", "title": "今週の累計", "subtitle": wpub + (f"・回収率 {_pct(wk_k['roi'])}" if wk_k["roi"] is not None else ""),
                       "subtitle_public": wpub, "badge": "確定" if wk["status"] == "final" else "暫定", "date": latest,
                       "link": f"/prediction-results?scope=week&date={latest}", "roi": wk_k["roi"]})
-    for hl in doc.get("highlights", [])[: max(0, limit - len(items))]:
-        items.append({"kind": hl["kind"], "title": {"ana_hit": "注目: 穴馬が好走", "big_return": "注目: 大きな払戻", "big_miss": "注目: 大きく外れた"}.get(hl["kind"], "注目"),
+    shown = [hl for hl in doc.get("highlights", []) if hl["kind"] != "big_miss"]  # 外れた予想は速報に出さない
+    for hl in shown[: max(0, limit - len(items))]:
+        items.append({"kind": hl["kind"], "title": {"ana_hit": "注目: 穴馬が好走", "big_return": "注目: 大きな払戻"}.get(hl["kind"], "注目"),
                       "subtitle": hl["text"], "subtitle_public": hl["text"], "badge": badge, "date": latest,
                       "link": f"/race/{hl['race_id']}", "roi": None})
     return {"items": items[:limit], "latest": latest, "status": doc["status"]}

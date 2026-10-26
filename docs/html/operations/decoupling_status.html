@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>公開基盤の現在の構成と脱ホスト移行 — keiba-vpn</title>
+<style>
+:root {
+  --bg: #0f172a; --panel: #15213c; --border: #243358;
+  --text: #e6ecff; --muted: #9aa7c7; --accent: #4f8bff;
+  --accent-2: #7aa9ff; --code-bg: #0b1428;
+}
+body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 15px; padding: 40px 56px 96px; max-width: 980px; margin: 0 auto; }
+code, pre { font-family: "JetBrains Mono", monospace; }
+a { color: var(--accent-2); }
+h2 { font-size: 1.2rem; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+h3 { font-size: 1.05rem; color: var(--accent-2); margin: 1.6em 0 0.5em; }
+pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; }
+code { background: #1a2748; border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; font-size: 12.5px; color: #cfe2ff; }
+pre code { background: none; border: none; padding: 0; color: #c9d8ff; }
+table { width: 100%; border-collapse: collapse; margin: 1.2em 0; background: var(--panel); border: 1px solid var(--border); font-size: 13px; }
+th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { background: #1a2748; color: var(--muted); font-weight: 600; font-size: 11px; }
+.badge { font-family: "JetBrains Mono", monospace; font-size: 10px; border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+.badge.green { background: rgba(52,211,153,.14); color: #34d399; }
+.badge.amber { background: rgba(251,191,36,.14); color: #fbbf24; }
+.badge.red { background: rgba(248,113,113,.14); color: #f87171; }
+.callout { border-left: 3px solid var(--accent); background: rgba(79,139,255,.08); padding: 12px 16px; border-radius: 8px; margin: 12px 0; }
+.callout.warn { border-left-color: #fbbf24; background: rgba(251,191,36,.06); }
+.callout h4 { margin: 0 0 6px; font-size: 13px; }
+.callout p { margin: 0; font-size: 13.5px; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <h1>公開基盤の現在の構成と脱ホスト移行</h1>
+  <p>公開（prod）をホスト PC（keiba-remote）と無関係に動かすための、現行の構成・移行の到達点・停止試験の手順。<b>2026-10-26 昼時点</b>の記録で、進むごとに書き換える。詳細な設計は同じ部の各章を参照。</p>
+</header>
+
+<div class="callout warn">
+  <h4>結論（2026-10-26 時点）</h4>
+  <p><b>「ホストを止めても取得・予測・買い目算出・表示が続く」ことは、まだ確認できていない。</b>画面（VPS）→ API（Cloud Run）の経路は動いているが、取得と予測生成の担当はまだホストにある。ホスト停止試験に合格するまでは「移行途中」。</p>
+</div>
+
+<h2>1. 目標と原則</h2>
+<p>公開は<b>ホスト PC と何のつながりもない状態</b>にする。運用・取得・モデル読み込み・監視は VPS と GCP だけで完結し、ホストは<b>再学習などの研究専用</b>にする（確定 2026-10-22。経緯と全依存の監査は「脱ホスト計画」の章）。</p>
+<ul>
+  <li>ホストから運用へ渡すのは、成果物（モデルバンドルなど）を GCS に<b>置く一方向</b>だけ。運用側からホストを呼ばない。</li>
+  <li>運用データの<b>正本は GCS</b>（<code>ops/</code> 接頭辞）。ホストのローカルは正本にならない。</li>
+  <li>環境名は prod 一つ。確認用の stg は、ホスト上の stg ではなく GCP のタグ付きリビジョンに置き換える。</li>
+  <li>順序の条件: 「prod で数日間、取得が正常に通るのを見届けるまで、ホストの取得は続ける」（影モード 5 日がコードの関門）。</li>
+</ul>
+
+<h2>2. 現行の構成</h2>
+<pre><code>[ブラウザ] ── 公開の画面（VPS: nginx + Next.js + cloudflared。3 分おきに GCS から画面を取り込む）
+                  │ 上流（switch_api_upstream.sh で host / cloudrun を切替）
+                  ▼
+              Cloud Run API ◀── GCS（正本: ops/ ・ ops/mirror ・ models/ ・ state/）
+                  ▲                    ▲
+   Cloud Run Jobs（s/m/l/xl）          │ 一方向 publish（keiba-publisher: models/ のみ書ける）
+   day-prep → predict-race ほか        │
+   Scheduler / Cloud Tasks             ホスト PC（研究専用へ移行中。学習・評価・MLflow）
+                  ▲
+   VPS の取得役（keiba-fetch）── 出馬表・オッズ・馬体重・結果を取得
+   監視ポータル（Cloud Run・読み取り専用で ops/ を読む）</code></pre>
+
+<table>
+<thead><tr><th>役割</th><th>担当（現行）</th><th>移行先（最終形）</th></tr></thead>
+<tbody>
+<tr><td>画面の配信</td><td>VPS（画面は GCS から取り込み、配備は CI の昇格）</td><td>同左（完了）</td></tr>
+<tr><td>API</td><td>Cloud Run（2026-10-25 に prod 昇格、VPS の上流を切替）</td><td>同左（完了）</td></tr>
+<tr><td>監視ポータル</td><td>Cloud Run（読み取り専用）</td><td>同左（完了）</td></tr>
+<tr><td>配備</td><td>develop→stg→master の push で CI（昇格は GitHub 承認）</td><td>同左（完了。ホストでのビルドは廃止対象）</td></tr>
+<tr><td>モデルの置き場</td><td>GCS <code>models/</code>（<code>latest.json</code> の sha256 検証つき）</td><td>同左（公開済み）</td></tr>
+<tr><td>データ取得</td><td><b>ホストの cron</b>（<code>auto_scrape.sh</code>）</td><td>VPS の取得役（影モードで並走検証中の段階）</td></tr>
+<tr><td>予測の生成</td><td><b>ホスト</b>（前夜・馬体重検知後・T-60/T-15）</td><td>Cloud Run Jobs（<code>day-prep</code>→<code>predict-race</code>）</td></tr>
+<tr><td>結果の取り込み・通知・集計</td><td><b>ホスト</b></td><td>VPS 取得役 + Jobs（<code>slack-*</code> ほか）</td></tr>
+</tbody>
+</table>
+
+<h2>3. 移行の到達点</h2>
+<table>
+<thead><tr><th>項目</th><th>状態</th><th>備考</th></tr></thead>
+<tbody>
+<tr><td>Cloud Run API の prod 昇格・上流切替</td><td><span class="badge green">済</span></td><td>健康確認 200（keiba_env=prod）</td></tr>
+<tr><td>監視ポータルの Cloud Run 化・VPS の入口</td><td><span class="badge green">済</span></td><td>読み取り専用の SA</td></tr>
+<tr><td>CI/CD（develop→stg→master）</td><td><span class="badge green">済</span></td><td>昇格 3 回。失敗の握りつぶしも修正済み</td></tr>
+<tr><td>権限分離（keiba-publisher / keiba-fetch / keiba-monitor）</td><td><span class="badge green">済</span></td><td>publisher は <code>ops/</code> へ書くと 403</td></tr>
+<tr><td>Jobs の基盤（キュー・Run Job s/m/l/xl・IAM）</td><td><span class="badge green">済</span></td><td>費用は月 2,000 円以内の枠で設計</td></tr>
+<tr><td><code>predict-race</code> が v6e の出力を実際に出す</td><td><span class="badge amber">途中</span></td><td>必要ファイルの不足とメモリ超過を修正中。日単位キャッシュを朝の <code>day-prep</code> に分離</td></tr>
+<tr><td>Jobs が <code>ops/mirror</code> から入力を読む（9a63b2f）</td><td><span class="badge amber">未昇格</span></td><td>次の昇格で反映</td></tr>
+<tr><td>VPS 取得役が <code>race_lists</code>・発走時刻表・<code>entries_state</code> を <code>ops/mirror</code> へ push</td><td><span class="badge red">未実装</span></td><td>ホストの <code>gcs-mirror-push</code> の代替。ホスト停止に必須</td></tr>
+<tr><td>影モード（VPS 取得をホストと並走検証）</td><td><span class="badge amber">未有効</span></td><td>認証・コード・自己点検は合格。直近 5 日（開催日を含む）の合格が関門</td></tr>
+<tr><td>ジョブの担当移譲（<code>job_owner.json</code>）</td><td><span class="badge red">0 件</span></td><td><code>owners</code> は空。全 cron がホスト担当</td></tr>
+<tr><td><code>entries_state</code>・<code>events</code>・予測 parquet の GCS 化</td><td><span class="badge red">未了</span></td><td>Cloud Run だけで出馬表の段階が更新される状態にする</td></tr>
+<tr><td>ホストの権限を読み取り専用 + <code>models/</code> publish のみへ</td><td><span class="badge amber">途中</span></td><td>publisher の越境確認は合格。ホスト側の鍵の付け替えが残る</td></tr>
+<tr><td>ホスト依存の機械検査（<code>host_dependency_scan</code>）</td><td><span class="badge amber">途中</span></td><td>高重大度（host_path / host_alias / host_port / api_internal）と postgres を 0 にする</td></tr>
+</tbody>
+</table>
+
+<h2>4. 移行テスト（ホスト停止試験）の段階</h2>
+<table>
+<thead><tr><th>段階</th><th>やること</th><th>通過条件</th><th>戻し方</th></tr></thead>
+<tbody>
+<tr><td>① 並走</td><td>Jobs を <code>--parallel</code> で動かす（出力は <code>state/</code> のみで、画面は変わらない）</td><td><code>parity_check</code> と <code>cron_cutover_status</code> が一致</td><td>Jobs を pause</td></tr>
+<tr><td>② 影モード</td><td>VPS の取得をホストと並走</td><td>直近 5 日（開催日を含む）合格。T-60/T-15 が全レースで成功。Slack 異常ゼロ</td><td><code>KEIBA_FETCH_SHADOW_ENABLED=0</code></td></tr>
+<tr><td>③ 担当移譲</td><td>低リスク（通知・集計・監視）→ 予測生成 → 取得の順に、ジョブ単位で <code>job_owner set</code> → ホストの cron 行を停止</td><td>ジョブごとに <code>cron_cutover_status</code> 合格</td><td><code>host_cron_switch.sh enable</code> → <code>job_owner unset</code></td></tr>
+<tr><td>④ 模擬停止</td><td>ホストの cron・API・トンネルを止め、<code>.env</code> の GCS 鍵・Slack・netkeiba を退避</td><td>次節の確認表</td><td>cron とトンネルを復元</td></tr>
+<tr><td>⑤ 実停止</td><td>ホストを停止（または別ネットワークへ）。1〜2 週間観察</td><td>異常ゼロ</td><td>停止した cron を再有効化</td></tr>
+</tbody>
+</table>
+
+<h3>確認表（模擬停止・実停止で毎回）</h3>
+<ol>
+  <li>匿名・会員で画面を開く（匿名は勝率・複勝率のみ、会員は期待値・印・推奨馬券）。</li>
+  <li>直近の開催日のレース詳細に、予測・期待値・印・展開が出る。</li>
+  <li><code>POST /api/v1/betting/optimize</code> が候補を返す（404/503 でない）。</li>
+  <li>木曜の <code>entries-sync</code> で出馬表の <code>phase</code> が更新される。</li>
+  <li>開催日の T-60/T-15 でオッズのスナップショットが積まれ、画面が変わる。</li>
+  <li>馬体重の発表後、予測が自動で出る。</li>
+  <li>発走後に速報結果と予測成績が更新される。</li>
+  <li>通知が【PROD】で Slack に届く。</li>
+  <li>監視ポータルが見える。VPS のハートビートを 15 分止めると緊急通知が出る。</li>
+  <li>ホストから <code>latest.json</code> が来なくても既存の版で動き続ける。ホストを使わず画面を 1 回更新できる。</li>
+  <li>ホストから運用データ（<code>ops/</code>）へ書き込めない。</li>
+</ol>
+
+<h3>安全のための約束</h3>
+<ul>
+  <li>ホストは並走で合格を見届けるまで止めない。取得を含む単位は、影モードの基準を満たすまで、担当移譲も cron 停止もコードが拒否する。</li>
+  <li>同じタスクを両方が取る時間を作らない（<code>fetch_owner</code> で排他）。影モード中は netkeiba への取得が増える（上限 800 件/日）ので、ホストのバックフィルと時間帯をずらす。</li>
+  <li>メンテ窓（毎日 JST 03:00–04:00）に push・昇格をしない（スモークが 503 で落ちる）。</li>
+  <li>壊す変更は 2 段にする（新旧両対応→旧を消す）。API は昇格直後に切り替わるため。</li>
+  <li>秘密（鍵・パスワード）は画面・リポジトリに出さず、配置後に作業用の控えを消す。</li>
+</ul>
+
+<h3>日程の目安</h3>
+<table>
+<thead><tr><th>時期</th><th>内容</th></tr></thead>
+<tbody>
+<tr><td>10/26–10/27</td><td>取得役の <code>ops/mirror</code> push の実装、9a63b2f の昇格、影モードの開始</td></tr>
+<tr><td>10/31–11/1（開催日）</td><td>影モードと Jobs の並走を実機で確認（ホストは動かしたまま。停止試験ではなくリハーサル）</td></tr>
+<tr><td>11/2〜</td><td>並走結果を判定し、合格したジョブから担当を移す</td></tr>
+<tr><td>11/7–11/8（開催日）</td><td>模擬停止の試験（初回）</td></tr>
+<tr><td>その後</td><td>合格なら実停止、1〜2 週間観察</td></tr>
+</tbody>
+</table>
+<p>影モードは「開催日を含む直近 5 日」が要るため、10/27 に開始しないと 10/31–11/1 の開催日が 5 日に入らない。</p>
+
+<h2>5. 関連する章</h2>
+<ul>
+  <li>全体の方針と依存の監査: 「ホスト PC からの完全な切り離し」</li>
+  <li>実行基盤の設計: 「Cloud Run API」「GCP Jobs への移行」「VPS 取得の実行役」「監視ポータルの Cloud Run 版」「publish 専用 SA」</li>
+  <li>配備: 「develop→stg→master の昇格」</li>
+  <li>ポートは <code>config/ports.env</code>、カテゴリ数は <code>schema_defs.json</code>、cron は <code>cron_schedule</code>、確定事項は <code>training_pipeline_decisions</code> が正。この章には写さない。</li>
+</ul>
+
+</body>
+</html>

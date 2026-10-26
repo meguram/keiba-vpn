@@ -71,7 +71,30 @@ def test_news_orders_day_week_then_highlights_and_hides_roi_in_public_text(clien
     assert n["items"][0]["link"] == "/prediction-results?scope=day&date=20261018"
 
 
+def test_news_never_includes_big_miss(client):
+    c, tmp = client
+    _put(tmp, "20261018")
+    n = c.get("/api/prediction-results/news?limit=20").json()
+    assert "big_miss" not in {i["kind"] for i in n["items"]}
+    assert not any("大きく外れた" in i["title"] for i in n["items"])
+
+
 def test_bad_params_are_rejected(client):
     c, _ = client
     assert c.get("/api/prediction-results?scope=year").status_code == 422
     assert c.get("/api/prediction-results?scope=day&date=2026-10-18").status_code == 422
+
+
+def test_rated_block_has_standard_or_above_aggregate_for_members(client):
+    c, tmp = client
+    _put(tmp, "20261018")
+    d = c.get("/api/prediction-results?scope=day&date=20261018").json()
+    assert d["rated"]["label"] == "標準以上" and d["rated"]["min_level"] == 1
+    assert set(d["rated"]["counts"]) == {"settled", "rated", "skipped", "unrated"} and "marks" in d["rated"]["kpi"]
+
+
+def test_rated_block_is_not_shown_to_guests(guest_client):
+    g, tmp = guest_client
+    _put(tmp, "20261018")
+    gd = g.get("/api/prediction-results?scope=day&date=20261018").json()
+    assert "rated" not in gd and not any("rated" in k for pt in gd["series"] for k in pt)

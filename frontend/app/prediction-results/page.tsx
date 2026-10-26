@@ -7,7 +7,7 @@ import { PendingLink } from "@/components/PendingLink";
 import { getJson } from "@/lib/httpCache";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import {
-  FINISH_META, MARK_META, SCOPES, dayLabel, pct, periodKey, periodLabel, shiftDate, yen,
+  FINISH_META, MARK_META, SCOPES, dayLabel, pct, periodKey, periodLabel, raceLevel, shiftDate, yen,
   type Counts, type MarkKey, type PredictionResults, type RaceRecord, type SeriesPoint,
 } from "@/lib/predictionResults";
 
@@ -137,7 +137,7 @@ function FinishChip({ pos }: { pos: number | null | undefined }) {
   );
 }
 
-function RaceCard({ r, member }: { r: RaceRecord; member: boolean }) {
+function RaceCard({ r, member, levelLabels }: { r: RaceRecord; member: boolean; levelLabels: Record<number, string> }) {
   if (!r.included) {
     return (
       <div style={{ ...card, opacity: 0.7 }}>
@@ -147,11 +147,16 @@ function RaceCard({ r, member }: { r: RaceRecord; member: boolean }) {
     );
   }
   const b = r.bets;
+  const lv = member ? raceLevel(r) : null;
   return (
     <PendingLink href={`/race/${r.race_id}`} style={{ ...card, display: "block", textDecoration: "none", color: "var(--text)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <span style={{ background: "#3b82f6", color: "#fff", borderRadius: 6, padding: "1px 8px", fontWeight: 700, fontSize: 12 }}>{r.venue}{r.round}R</span>
         <span style={{ fontWeight: 700, fontSize: 14 }}>{r.race_name}</span>
+        {lv != null && (
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "1px 8px", borderRadius: 999, border: "1px solid var(--border)",
+            color: lv >= 1 ? "#fbbf24" : "var(--text-dim)" }}>推奨度 {levelLabels[lv] ?? lv}</span>
+        )}
         {r.result_status === "provisional" && <span style={{ ...dim, marginLeft: "auto" }}>暫定</span>}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 10px", marginTop: 8, alignItems: "center", fontSize: 13 }}>
@@ -216,7 +221,11 @@ export default function PredictionResultsPage() {
 
   const latest = days?.latest ?? "";
   const canNext = !!latest && !!date && periodKey(scope, shiftDate(date, scope, 1)) <= periodKey(scope, latest);
-  const kpi = data?.kpi;
+  const rated = member ? data?.rated : undefined;
+  const useRated = !!rated && rated.counts.rated > 0;                      // 会員: 推奨度が標準以上のレースだけで集計（無ければ全体）
+  const kpi = useRated ? rated!.kpi : data?.kpi;
+  const levelLabels = useMemo(() => Object.fromEntries((rated?.legend ?? []).map((t) => [t.level, t.short || t.label])) as Record<number, string>, [rated]);
+  const trendSeries = useMemo(() => (data?.series ?? []).map((p) => (useRated ? { ...p, honmei_win: p.honmei_win_rated ?? null, roi: p.roi_rated ?? null } : p)), [data, useRated]);
   const empty = !!data && data.summary.races_settled === 0;
   const races = useMemo(() => (data?.races ?? []), [data]);
 
@@ -256,6 +265,15 @@ export default function PredictionResultsPage() {
 
       {data && kpi && !empty && (
         <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
+          {rated && (
+            <div style={{ ...card, fontSize: 13 }}>
+              <b>集計の対象: 推奨度（レース期待値）が『{rated.label}』以上のレース</b>
+              {useRated
+                ? <> — {rated.counts.rated}/{rated.counts.settled} レース（見送り {rated.counts.skipped}{rated.counts.unrated > 0 ? `・推奨度の記録なし ${rated.counts.unrated}` : ""}）。下の数字はこの{rated.counts.rated}レースの集計で、印の着順分布は『全体』も並べています。</>
+                : <> — 該当するレースがありません（見送り {rated.counts.skipped}・推奨度の記録なし {rated.counts.unrated}）。下は全体の集計です。</>}
+            </div>
+          )}
+
           <div className="pr-tiles" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
             <Tile label="◎の1着率" value={pct(kpi.honmei.win)} sub={`${kpi.honmei.n}頭中`} />
             <Tile label="◎の複勝圏（3着以内）" value={pct(kpi.honmei.top3)} sub={`連対 ${pct(kpi.honmei.top2)}`} />
@@ -267,6 +285,15 @@ export default function PredictionResultsPage() {
 
           <section aria-label="印ごとの着順分布">
             <h2 style={h2}>◎・○・★・消 の着順分布</h2>
+            {useRated && (
+              <>
+                <h3 style={h3}>推奨度が{rated!.label}以上のレース（{rated!.counts.rated}レース）</h3>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 10 }}>
+                  {(["honmei", "pair", "star", "kesi"] as MarkKey[]).map((m) => <FinishDist key={m} mark={m} c={rated!.summary.marks[m] ?? EMPTY_COUNTS} />)}
+                </div>
+                <h3 style={{ ...h3, marginTop: 14 }}>全体（見送りを含む {data.summary.races_settled}レース）</h3>
+              </>
+            )}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 10 }}>
               {(["honmei", "pair", "star", "kesi"] as MarkKey[]).map((m) => <FinishDist key={m} mark={m} c={data.summary.marks[m] ?? EMPTY_COUNTS} />)}
             </div>
@@ -276,7 +303,7 @@ export default function PredictionResultsPage() {
           {scope !== "day" && (
             <section aria-label="日別の推移">
               <h2 style={h2}>日別の推移</h2>
-              <div style={card}><Trend series={data.series} showRoi={member} /></div>
+              <div style={card}><Trend series={trendSeries} showRoi={member} /></div>
             </section>
           )}
 
@@ -318,7 +345,7 @@ export default function PredictionResultsPage() {
             <section aria-label="レース別の予測と結果">
               <h2 style={h2}>レース別の『予測 → 結果』</h2>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 10 }}>
-                {races.map((r) => <RaceCard key={r.race_id} r={r} member={member} />)}
+                {races.map((r) => <RaceCard key={r.race_id} r={r} member={member} levelLabels={levelLabels} />)}
               </div>
             </section>
           )}
@@ -338,4 +365,5 @@ export default function PredictionResultsPage() {
 }
 
 const h2: React.CSSProperties = { fontSize: 16, fontWeight: 700, margin: "0 0 8px" };
+const h3: React.CSSProperties = { fontSize: 14, fontWeight: 700, margin: "0 0 6px", color: "var(--text-dim)" };
 const navBtn: React.CSSProperties = { width: 44, height: 44, border: "1px solid var(--border)", borderRadius: 10, background: "var(--surface)", color: "var(--text)", cursor: "pointer", fontSize: 14 };

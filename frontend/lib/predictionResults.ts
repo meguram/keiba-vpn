@@ -44,12 +44,22 @@ export type RaceRecord = {
   top1?: RacePick;
   marks?: Record<MarkKey, RacePick[]>;
   result_top3?: { horse_number: number; finish: number }[];
-  bets?: { total_bet: number; total_return: number; estimated?: boolean; status?: string };
+  bets?: { total_bet: number; total_return: number; estimated?: boolean; status?: string; level?: number | null; lv?: { level?: number | null } };
+};
+
+/** 推奨度（レース期待値）が『標準』以上のレースだけの集計。会員・開発者の応答にだけ付く。 */
+export type RatedBlock = {
+  min_level: number;
+  label: string;
+  counts: { settled: number; rated: number; skipped: number; unrated: number };
+  kpi: Kpi;
+  summary: { marks: Record<MarkKey, Counts> };
+  legend: { level: number; label: string; short: string }[];
 };
 
 export type Highlight = { kind: "ana_hit" | "big_return" | "big_miss"; race_id: string; value: number; text: string };
 
-export type SeriesPoint = { date: string; status: "final" | "provisional"; roi: number | null; honmei_win: number | null; races: number };
+export type SeriesPoint = { date: string; status: "final" | "provisional"; roi: number | null; honmei_win: number | null; races: number; roi_rated?: number | null; honmei_win_rated?: number | null };
 
 export type PredictionResults = {
   scope: "day" | "week" | "month" | "season";
@@ -62,6 +72,7 @@ export type PredictionResults = {
   status: "final" | "provisional";
   kpi: Kpi;
   summary: { races: number; races_settled: number; races_no_prediction: number; races_no_result: number; marks: Record<MarkKey, Counts> };
+  rated?: RatedBlock;
   series: SeriesPoint[];
   highlights: Highlight[];
   notes: string[];
@@ -102,6 +113,9 @@ export const FINISH_META: { key: "f1" | "f2" | "f3" | "f4p"; label: string; colo
   { key: "f3", label: "3着", color: "#b45309" },
   { key: "f4p", label: "4着以下", color: "#334155" },
 ];
+
+/** レース記録の推奨度（0=見送り〜4=最注目）。現行ルールでの再計算（lv）があればそれ。未記録は null。 */
+export const raceLevel = (r: RaceRecord): number | null => r.bets?.lv?.level ?? r.bets?.level ?? null;
 
 export const pct = (x: number | null | undefined, digits = 0): string => (x == null ? "—" : `${(x * 100).toFixed(digits)}%`);
 export const yen = (x: number): string => `${Math.round(x).toLocaleString()}円`;
