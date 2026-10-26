@@ -288,6 +288,8 @@ def _optimize_target(body: dict[str, Any], view: str, storage: Any | None = None
     single = PZ.calibrate_single(raw_single)
     marked = _paid_marks(preds, single)
     out = TB.build_target_portfolio(marked, single, cap, race_id=race_id)
+    if out.get("plans"):      # 画面に出すのは既定のプラン（最大5パターン）だけ。馬券別の補助プランは返さない
+        out["plans"] = [p for p in out["plans"] if p.get("id") == out.get("default_plan")]
     try:  # 推奨馬券を正として、印は買い目から決め直す（買い目が無いレースは従来の印のまま）
         from src.pipeline.inference import bet_marks as BM
 

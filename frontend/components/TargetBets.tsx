@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import { BetResultBanner, ResultCell, type BetResult, type RaceBetResult } from "@/components/BetResult";
 import { TIER_STYLE, type PaidLeg, type PaidTier } from "@/components/PaidBets";
 
@@ -47,8 +47,7 @@ function Badge({ tier }: { tier: PaidTier }) {
 export function TargetBets({
   rec, cap, setCap, onRerun, loading,
 }: { rec: TargetRec; cap: string; setCap: (v: string) => void; onRerun: () => void; loading: boolean }) {
-  const [pid, setPid] = useState<string | null>(null);
-  const plan = rec.plans?.find((p) => p.id === (pid ?? rec.default_plan)) ?? null;
+  const plan = rec.plans?.find((p) => p.id === rec.default_plan) ?? null;
   const view = plan ? { ...rec, bets: plan.bets, status: plan.status, skip_reason: plan.skip_reason, total_yen: plan.total_yen, any_hit_rate_pct: plan.any_hit_rate_pct,
     target_payout_yen: plan.target_payout_yen, evidence: plan.evidence, race_ev: plan.race_ev,
     expected_payout_yen: plan.expected_payout_yen, portfolio_ev: plan.portfolio_ev, result: plan.id === rec.default_plan ? rec.result : null } : rec;
@@ -81,25 +80,13 @@ export function TargetBets({
       </div>
 
       {!rec.skipped && <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, lineHeight: 1.6 }}>
-        予算 <b style={{ color: "var(--text)" }}>{yen(rec.budget_yen)}</b> に対し、どれか1つ当たれば払戻が約 <b style={{ color: "var(--text)" }}>{rec.target_multiple}倍（{yen(rec.target_payout_yen ?? rec.budget_yen * rec.target_multiple)}）</b>になる購入額にしています（3連複・最大3点）。
+        推奨馬券は最大5パターンです。1パターンは1つの馬券で、購入額は『当たれば払戻が予算 <b style={{ color: "var(--text)" }}>{yen(rec.budget_yen)}</b> の約 <b style={{ color: "var(--text)" }}>{rec.target_multiple}倍</b>になる』額にしています。
       </div>}
 
-      {rec.plans && rec.plans.length > 1 && (
-        <div role="tablist" aria-label="プラン" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 6, marginBottom: 6 }}>
-          {rec.plans.map((p) => (
-            <button key={p.id} role="tab" aria-selected={p.id === plan?.id} onClick={() => setPid(p.id)} title={p.note}
-              style={{ flex: "0 0 auto", padding: "5px 12px", borderRadius: 999, fontSize: 12.5, cursor: "pointer", whiteSpace: "nowrap", minHeight: 32,
-                border: `1px solid ${p.id === plan?.id ? "var(--accent)" : "var(--border)"}`, background: p.id === plan?.id ? "rgba(96,165,250,0.18)" : "transparent", color: "var(--text)" }}>
-              {p.label}{p.status === "skip" ? "（見送り）" : ""}
-            </button>
-          ))}
-        </div>
-      )}
       {!rec.skipped && <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, lineHeight: 1.6 }}>
-        買い目は推奨度の高い順です。購入の直前に実際のオッズを見て、<b style={{ color: "var(--text)" }}>期待値ライン以上のものを上から</b>選んでください（期待値ライン未満の買い目は、AI の的中確率から見て期待値が1を下回ります）。
+        パターンは推奨度の高い順です。購入の直前に実際のオッズを見て、<b style={{ color: "var(--text)" }}>期待値ライン以上のものを上から</b>選んでください（期待値ライン未満は、AI の的中確率から見て期待値が1を下回ります）。
       </div>}
-      {plan?.note && <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>{plan.note}{view.race_ev != null && ` レース期待値 ${view.race_ev.toFixed(2)}（想定）。`}</div>}
-
+      
       {view.result && <BetResultBanner result={view.result} />}
 
       {view.status === "skip" || view.bets.length === 0 ? (
@@ -111,7 +98,7 @@ export function TargetBets({
         <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", background: "var(--surface)" }}>
           <thead style={{ background: "var(--surface2)" }}>
             <tr>
-              <th style={TH} title="推奨度の高い順（1 が最優先）。上から、期待値ラインを超えているものを選びます">推奨順</th>
+              <th style={TH} title="推奨度の高い順（1 が最優先）。上から、期待値ラインを超えているものを選びます">パターン</th>
               <th style={{ ...TH, textAlign: "left" }}>買い目</th>
               <th style={TH}>購入額</th>
               <th style={TH} title="購入額×想定オッズ（AI の予測）。当たったときの目安">想定払戻</th>
@@ -143,7 +130,7 @@ export function TargetBets({
           <tfoot>
             <tr>
               <td colSpan={hasResult ? 7 : 6} style={{ padding: "6px 10px", textAlign: "right", fontSize: 13, borderTop: "1px solid var(--border)" }}>
-                合計 <b>{yen(view.total_yen)}</b>
+                全パターンを購入した場合の合計 <b>{yen(view.total_yen)}</b>
                 {view.any_hit_rate_pct != null && <span style={{ color: "var(--text-dim)", marginLeft: 8, fontSize: 11.5 }}>（どれかが当たる確率 約{view.any_hit_rate_pct}%）</span>}
               </td>
             </tr>
