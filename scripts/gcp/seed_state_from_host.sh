@@ -14,7 +14,7 @@ cd "$REPO"; sudo -n git fetch -q origin; sudo -n git archive origin/develop src 
 cd "$NEW"
 Y="$(TZ=Asia/Tokyo date +%Y)"; PARAMS=(--param "year=$Y" --param "prev_year=$((Y - 1))")
 if [ "$#" -eq 0 ]; then
-  for j in predict-race day-prep eve-precompute rb-state-daily export-tables-daily feature-accumulate parse-drift-daily px-ridge-window; do echo "== $j (plan)"; PYTHONPATH=. "$PY" -m src.ops.state_sync plan --job "$j" --which in --root "$REPO" "${PARAMS[@]}" 2>&1 | grep -v -i warn; done
+  for j in prediction-results-refresh predict-race day-prep eve-precompute rb-state-daily export-tables-daily feature-accumulate parse-drift-daily px-ridge-window; do echo "== $j (plan)"; PYTHONPATH=. "$PY" -m src.ops.state_sync plan --job "$j" --which in --root "$REPO" "${PARAMS[@]}" 2>&1 | grep -v -i warn; done
   echo "上げるには、ジョブ名を引数に渡してください（例: predict-race rb-state-daily）。"; exit 0
 fi
 for j in "$@"; do

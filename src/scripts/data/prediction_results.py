@@ -37,6 +37,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sync-gcs", action="store_true", help="ローカルの日次記録を GCS へ一括で置く")
     ap.add_argument("--add-levels", action="store_true", help="保存済みの日次記録に仮想購入の推奨度だけを追記する")
     ap.add_argument("--add-target-bets", action="store_true", help="保存済みの日次記録に、画面の推奨馬券（target）の仮想購入（推奨度つき）を追記する。推奨度の集計（見送りを除く）に必要")
+    ap.add_argument("--skip-final", action="store_true", help="確定済みの日は再集計しない（定期実行用。過去の予測が手元に無い環境で確定済みの記録を劣化させない）")
     a = ap.parse_args(argv)
     if a.sync_gcs:
         from src.utils.project_env import load_project_dotenv
@@ -71,6 +72,9 @@ def main(argv: list[str] | None = None) -> int:
             print(d, pr.add_levels(d, storage, dry_run=a.dry_run))
         return 0
     for d in days:
+        if a.skip_final and (prev := pr.read_day(d)) and prev.get("status") == "final":
+            print(f"{d}: 確定済みのため再集計しない")
+            continue
         if a.dry_run:
             doc = pr.build_day(d, storage, a.max_total_bet)
             doc.pop("races", None)

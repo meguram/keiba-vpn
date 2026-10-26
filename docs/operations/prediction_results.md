@@ -49,15 +49,26 @@ nice -n 19 python -m src.scripts.data.prediction_results --from 20260101 --to 20
 
 | 項目 | 内容 |
 |---|---|
-| ジョブ | `prediction-results-refresh`（`config/gcp_job_map.json`、グループ `g-results`＝JST 12–21 時の 20 分おき・土日月火）。直近 10 日を集計し、続けて `--add-target-bets` で `bets_t` の欠けを埋める（冪等）。`slack-results` はその後に実行（送信は別） |
+| ジョブ | `prediction-results-refresh`（`config/gcp_job_map.json`、グループ `g-results`＝JST 12–21 時の 20 分おき・土日月火）。直近 10 日のうち確定済みでない日を集計し（`--skip-final`）、続けて `--add-target-bets` で `bets_t` の欠けを埋める（冪等）。`slack-results` はその後に実行（送信は別） |
 | 入力 | 結果・オッズ・出馬表は GCS の正本（`HybridStorage`）。予測は `race_predictions`（GCS）→ `state/` の `predictions_v6` など（`state_in` で約 60MB まで）。画面の推奨馬券と同じ計算（`delegates._optimize_target`）がイメージ内の設定だけで動く |
 | 出力 | `gs://<bucket>/ops/prediction_results/<日>.json`（Cloud Run の API が読む正本）。`KEIBA_RUN_LOCATION=gcp` では自動で GCS に書く |
 
-**一度だけの種まき（研究用ホストから GCS へ。以後ホストは使わない）**: 過去分の予測と `bets_t` つき日次記録は、GCP では作り直せない（過去の予測はホストでバックフィルしたもの）。
-1. ホストで過去分に `bets_t` を足す（`scripts/ops/backfill_target_bets.sh`。`.env` の `KEIBA_PREDICTION_RESULTS_GCS=1` により GCS へも書かれる）。
-2. 予測の種まき: `python -m src.ops.state_sync push --job prediction-results-refresh --which in`。
-3. Jobs で 1 回手動実行し、`ops/prediction_results/` が更新されること・ホストの記録と `bets_t` が一致することを確認（`parity_check`）。
-4. 一致したらホストの `.env` の `KEIBA_PREDICTION_RESULTS=1` を外し、`config/job_owner.json` に載せる（手順: `docs/operations/gcp_jobs_migration.md`）。
+**一度だけの種まき → 初回実行 → 確認（順番どおり。1〜2 は開発 PC から、3〜5 は Cloud Shell）**
+
+1. 【開発 PC】ホストで過去分に `bets_t` を足す（`.env` の `KEIBA_PREDICTION_RESULTS_GCS=1` で GCS にも書かれる）。
+   `ssh keiba-remote 'sudo -n bash /tmp/backfill_target_bets.sh --from 20260101 --to 20261025'`（まず `--from 20261019 --to 20261025`、`--dry-run` で件数確認）
+2. 【開発 PC】予測の種まき（ホストの古い git は触らず、origin/develop のコードで実行）:
+   `ssh keiba-remote 'bash -s -- prediction-results-refresh' < scripts/gcp/seed_state_from_host.sh`（引数なしだと `plan` で実サイズだけ表示。上限 60MB を超えたら止まる）
+3. 【Cloud Shell】Run Job を最新の対応表で作り直し、Scheduler を作る（`--parallel` の間は state/ にだけ出力）:
+   `bash scripts/gcp/deploy_cloud_run_jobs.sh apply jobs --parallel`
+4. 【Cloud Shell】1 回だけ手動実行（`ready` 記録前なので `ALLOW_UNREADY=1`）:
+   `ALLOW_UNREADY=1 bash scripts/gcp/deploy_cloud_run_jobs.sh run-now job prediction-results-refresh`
+   → ログで『確定済みのため再集計しない』（確定済みの日）と、各日の `bets_t` 追記の件数が出ること。
+5. 【Cloud Shell】確認 → ready 記録 → Scheduler 作成:
+   - `gsutil cat gs://$GCS_BUCKET/ops/prediction_results/20261025.json | python3 -c "import json,sys; d=json.load(sys.stdin); print(sum(1 for r in d['races'] if r.get('bets_t')), len(d['races']))"` で `bets_t` つきの件数がレース数に近いこと
+   - `python -m src.scripts.ops.parity_check auto --date 20261025 --write` がホストの記録と一致
+   - `python -m src.ops.job_map ready prediction-results-refresh --note "確認した内容"` → `bash scripts/gcp/deploy_cloud_run_jobs.sh apply scheduler`
+6. 一致して 1 開催週（土日→月火の確定まで）観察できたら、ホストの `.env` の `KEIBA_PREDICTION_RESULTS=1` を外し、`config/job_owner.json` に載せる（`docs/operations/gcp_jobs_migration.md` の 4.4）。
 
 ## 反映・有効化・ロールバック
 

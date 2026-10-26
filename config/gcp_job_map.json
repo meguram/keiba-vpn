@@ -2019,7 +2019,8 @@
       "--from",
       "{days_ago_10}",
       "--to",
-      "{today}"
+      "{today}",
+      "--skip-final"
      ]
     },
     {
@@ -2046,10 +2047,6 @@
     "KEIBA_PROB_CALIBRATION"
    ],
    "state_in": [
-    {
-     "path": "data/local/prediction_results",
-     "max_mb": 50
-    },
     {
      "path": "data/local/inference",
      "max_mb": 60,
