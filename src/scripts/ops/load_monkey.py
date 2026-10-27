@@ -170,7 +170,7 @@ def browse_plan(pools: dict[str, Any], rng: random.Random) -> list[tuple[str, fl
     return plan
 
 
-async def vu_browse(client: Any, target: Target, pools: dict[str, Any], stats: Stats, stop: asyncio.Event, seed: int, timeout: float, no_pages: bool) -> None:
+async def vu_browse(client: Any, target: Target, pools: dict[str, Any], stats: Stats, stop: asyncio.Event, seed: int, timeout: float, no_pages: bool, public_only: bool = False) -> None:
     rng = random.Random(seed)
     await asyncio.sleep(rng.uniform(0, 2.0))           # 一斉に始めない
     while not stop.is_set():
@@ -178,6 +178,8 @@ async def vu_browse(client: Any, target: Target, pools: dict[str, Any], stats: S
             if stop.is_set():
                 return
             if no_pages and not path.startswith("/api"):
+                continue
+            if public_only and path.startswith("/api/v1/"):      # 匿名の利用者は会員向け（推奨度など）を呼ばない
                 continue
             await fetch(client, target, path, stats, timeout)
             try:
@@ -245,7 +247,7 @@ async def run_step(a: argparse.Namespace, target: Target, pools: dict[str, Any],
     limits = httpx.Limits(max_connections=n + 20, max_keepalive_connections=n + 20)
     async with httpx.AsyncClient(limits=limits, verify=False) as client:
         if a.mode == "browse":
-            tasks = [asyncio.create_task(vu_browse(client, target, pools, stats, stop, a.seed * 1000 + i, a.timeout, a.no_pages)) for i in range(n)]
+            tasks = [asyncio.create_task(vu_browse(client, target, pools, stats, stop, a.seed * 1000 + i, a.timeout, a.no_pages, a.public_only)) for i in range(n)]
         else:
             tasks = [asyncio.create_task(vu_single(client, target, a.path, stats, stop, a.timeout, pools, a.seed * 1000 + i, a.post_json)) for i in range(n)]
         t0 = time.time()
@@ -278,7 +280,7 @@ def _child(args: dict[str, Any], n: int, hold: float, pools: dict[str, Any], idx
         limits = httpx.Limits(max_connections=n + 20, max_keepalive_connections=n + 20)
         async with httpx.AsyncClient(limits=limits, verify=False) as client:
             if a.mode == "browse":
-                tasks = [asyncio.create_task(vu_browse(client, target, pools, stats, stop, a.seed * 1000 + i, a.timeout, a.no_pages)) for i in range(n)]
+                tasks = [asyncio.create_task(vu_browse(client, target, pools, stats, stop, a.seed * 1000 + i, a.timeout, a.no_pages, a.public_only)) for i in range(n)]
             else:
                 tasks = [asyncio.create_task(vu_single(client, target, a.path, stats, stop, a.timeout, pools, a.seed * 1000 + i, a.post_json)) for i in range(n)]
             await asyncio.sleep(hold)
@@ -407,6 +409,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--timeout", type=float, default=30.0, help="1 リクエストの待ち上限（秒）")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--procs", type=int, default=1, help="負荷発生プロセス数（段の並列数がこの 4 倍以上のときに分割。1 プロセスは 400〜500 req/s で頭打ち）")
+    ap.add_argument("--public-only", action="store_true", help="browse で会員向け API（/api/v1/）を呼ばない（匿名の利用者の画面遷移）")
     ap.add_argument("--no-pages", action="store_true", help="browse で Next.js のページを除く")
     ap.add_argument("--fastapi", default=local_url("fastapi", "stg"))
     ap.add_argument("--flask", default=local_url("flask", "stg"))
