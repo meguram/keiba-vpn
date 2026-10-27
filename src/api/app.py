@@ -759,9 +759,17 @@ async def lifespan(app):
     except Exception:
         logger.warning("レース一覧の先読みを開始できません", exc_info=True)
 
+    global _prewarm_task
+    try:
+        _prewarm_task = _start_prewarm()
+    except Exception:
+        logger.warning("画面の事前生成を開始できません", exc_info=True)
+
     yield
 
     # 終了処理
+    if _prewarm_task is not None:
+        _prewarm_task.cancel()
     _scheduler_stop.set()
     _queue_worker_stop.set()
     _disk_cache_cleanup_stop.set()
@@ -2765,6 +2773,11 @@ _race_list_warm_task: Any = None
 @app.get("/api/race-list/{date}", response_class=JSONResponse)
 async def get_race_list_for_date(date: str, with_result_status: bool = True):
     """指定日付のレース一覧を会場別に返す（結果データ有無オプション付き）。"""
+    return await race_list_payload(date, with_result_status)
+
+
+async def race_list_payload(date: str, with_result_status: bool = True, refresh: bool = False, max_age: float | None = None):
+    """``refresh`` は事前生成(src.api.prewarm)用: 手元のキャッシュを使わず計算し直して、事前生成も更新する。"""
     def _load():
         from src.utils.race_result_availability import batch_race_result_status
 
@@ -2950,11 +2963,69 @@ async def get_race_list_for_date(date: str, with_result_status: bool = True):
         return {"date": date, "venues": venues, "races": races}
     from src.api.response_cache import race_list_ttl
 
-    ttl = race_list_ttl(date)
-    result = await _RACE_LIST_CACHE.get_or_compute(
-        (date, bool(with_result_status)), ttl, lambda: asyncio.to_thread(_load), stale_max=ttl * 10
-    )
+    ttl = 0.0 if refresh else race_list_ttl(date)
+
+    async def _build():
+        from src.api import prerender
+
+        resp = await prerender.cached_response(
+            "race_list", f"{date}_{int(bool(with_result_status))}", lambda: _race_list_response(_load), deps=prerender.race_ids_deps(date), refresh=refresh, max_age=max_age
+        )
+        return json.loads(resp.body)
+
+    result = await _RACE_LIST_CACHE.get_or_compute((date, bool(with_result_status)), ttl, _build, stale_max=ttl * 10)
     return JSONResponse(result)
+
+
+async def _race_list_response(load):
+    return JSONResponse(await asyncio.to_thread(load))
+
+
+async def _prewarm_race_list(date: str, max_age: float) -> list[str]:
+    from src.api import prerender, prewarm
+
+    body = None if prewarm.stale("race_list", f"{date}_1", max_age, True) else prerender.get("race_list", f"{date}_1")
+    if body is None:
+        body = (await race_list_payload(date, True, refresh=True, max_age=max_age)).body
+    return [r["race_id"] for r in (json.loads(body).get("races") or []) if r.get("race_id")]
+
+
+async def _prewarm_race(race_id: str, max_age: float, only_if_stale: bool) -> int:
+    """1 レースの AI 予測とレース詳細を事前生成する。作り直した件数を返す（1 レースの失敗は他を止めない）。"""
+    from src.api import prerender, prewarm
+
+    n = 0
+    try:
+        if prewarm.stale("predictions", race_id, max_age, only_if_stale):
+            await prerender.cached_response("predictions", race_id, lambda: _race_predictions_compute(race_id), refresh=True, max_age=max_age)
+            n += 1
+        if prewarm.stale("race_detail", race_id, max_age, only_if_stale):
+            with _race_detail_cache_lock:
+                _race_detail_cache.pop(race_id, None)
+            await prerender.cached_response("race_detail", race_id, lambda: _race_detail_compute(race_id), refresh=True, max_age=max_age)
+            n += 1
+    except Exception:
+        logger.warning("事前生成に失敗 %s", race_id, exc_info=True)
+    return n
+
+
+def _start_prewarm() -> Any:
+    """KEIBA_PREWARM=1 のとき、直近の開催日の画面の応答を先に作るループを始める（docs/operations/prewarm.md）。"""
+    from src.api import prerender, prewarm
+    from src.api.v1.delegates import prewarm_race_values
+
+    if not prerender.enabled():
+        return None
+    hooks = prewarm.Hooks(
+        stems=lambda: list(_cached_race_list_stems(_get_storage())),
+        race_list=_prewarm_race_list,
+        warm_race=_prewarm_race,
+        warm_values=prewarm_race_values,
+    )
+    return asyncio.get_running_loop().create_task(prewarm.run_forever(hooks))
+
+
+_prewarm_task: Any = None
 
 
 async def _warm_race_lists() -> None:
@@ -6827,6 +6898,12 @@ async def get_race_detail(request: Request, race_id: str):
 
 
 async def _race_detail_impl(race_id: str):
+    from src.api import prerender
+
+    return await prerender.cached_response("race_detail", race_id, lambda: _race_detail_compute(race_id))
+
+
+async def _race_detail_compute(race_id: str):
     """レースの全データをまとめて返す (60s キャッシュ)。"""
     with _race_detail_cache_lock:
         cached = _race_detail_cache.get(race_id)
@@ -6991,6 +7068,12 @@ async def get_race_predictions(request: Request, race_id: str):
 
 
 async def _race_predictions_impl(race_id: str):
+    from src.api import prerender
+
+    return await prerender.cached_response("predictions", race_id, lambda: _race_predictions_compute(race_id))
+
+
+async def _race_predictions_compute(race_id: str):
     """キャッシュ済みの予測結果を返す。stg で GCS に無ければ、モックではなく出馬表の馬と最新オッズだけ（has_prediction=false）を返す。
 
     Flask v1 の GET /api/v1/races/<race_id>/predictions（PostgreSQL経由）とはデータソース・

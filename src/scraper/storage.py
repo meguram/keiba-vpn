@@ -529,6 +529,12 @@ class HybridStorage:
             from src.utils import cache_epoch
 
             cache_epoch.bump_for_save(category)
+            try:       # このレース/開催日の事前生成の応答を無効にし、作り直しの対象にする（KEIBA_PREWARM=1 のときだけ。失敗しても保存は成功扱い）
+                from src.api import prerender
+
+                prerender.mark_from_save(category, key)
+            except Exception:  # noqa: BLE001
+                pass
         return ok
 
     def _save_inner(self, category: str, key: str, data: dict[str, Any]) -> bool:
