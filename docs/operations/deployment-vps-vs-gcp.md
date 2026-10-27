@@ -141,7 +141,7 @@ GCP側に投げるべきか、という論点について、コスト・レイ�
 [cicd-design.md](./cicd-design.md)。要点のみここに記す。
 
 - **VPSにgitリポジトリ全体をpull/checkoutさせない**。代わりにCI側でサービング専用の
-  軽量Dockerイメージ（[`Dockerfile.serving`](../../Dockerfile.serving)）をビルドし、
+  軽量Dockerイメージ（[`deploy/docker/Dockerfile.serving`](../../Dockerfile.serving)）をビルドし、
   VPSはそのイメージだけを受け取って動かす（[`docker-compose.serving.yml`](../../docker-compose.serving.yml)）。
   VPS上に実際に必要なファイルは`docker-compose.serving.yml`・`.env`・`.env.<環境>`
   程度まで減る（GCP認証情報は`.env`内の`GCS_*`）。
@@ -150,7 +150,7 @@ GCP側に投げるべきか、という論点について、コスト・レイ�
   `src/api/app.py`の実際のimportをgrepした結果、`src/scraper`・`src/research`・
   `src/pipeline`の大半が開発者専用の管理画面・手動トリガー系エンドポイントから遅延import
   されており安全に分離できなかったため、現時点では`src/`全体を含めている
-  （将来整理の余地ありと`Dockerfile.serving`内にコメントで明記）。
+  （将来整理の余地ありと`deploy/docker/Dockerfile.serving`内にコメントで明記）。
 - サービング用イメージ: [`.github/workflows/deploy-vps.yml`](../../.github/workflows/deploy-vps.yml)が
   `stg`/`master`へのpushでビルドしGHCR（ghcr.io）へpushし、VPSへSSHして
   `docker compose pull && up -d`相当を実行する。

@@ -297,3 +297,7 @@ horse_id,name,birth_year,birth_month,birth_day,source_url,note
 000a00fdb3,Old Trieste,1995,3,2,https://sporthorse-data.com/pedigree/old-trieste,ユーザーがブラウザで目視確認
 000a001e7d,Carson City,1987,4,4,https://sporthorse-data.com/pedigree/carson-city,ユーザーがブラウザで目視確認
 000a00fa4c,Cee's Tizzy,1987,4,21,https://sporthorse-data.com/pedigree/cees-tizzy,ユーザーがブラウザで目視確認
+000a010651,Notebook,1985,3,14,https://sporthorse-data.com/pedigree/notebook,ユーザーがブラウザで目視確認
+000a001f0b,Acatenango,1982,4,13,https://sporthorse-data.com/pedigree/acatenango,ユーザーがブラウザで目視確認
+000a00115e,Blenheim,1927,4,16,https://sporthorse-data.com/pedigree/blenheim,ユーザーがブラウザで目視確認
+000a0019a3,Phone Trick,1984,4,10,https://sporthorse-data.com/pedigree/phone-trick,ユーザーがブラウザで目視確認（netkeiba の生年 1982 と異なるが、ユーザーがページを見て確認）

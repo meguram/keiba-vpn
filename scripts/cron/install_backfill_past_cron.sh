@@ -5,9 +5,9 @@
 set -eu
 PROJECT_DIR="${1:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)}"
 TAG="KEIBA-BACKFILL-PAST"
-# cron は UTC。17:45 UTC（日〜木）= 02:45 JST（月〜金）。時間窓 02:30-05:45 JST の内側で、05:45 JST までに止まる。
-# 土日（開催日）の朝は走らない。21:00 UTC（06:00 JST）の backfill-all-horse より前に終わる。他の取得が動いていれば最大 30 分待ち、待ちきれなければその夜は始めない。
-LINE="45 17 * * 0-4 cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${PROJECT_DIR}/scripts/cron/cron_run.sh backfill-past -- bash ${PROJECT_DIR}/scripts/cron/yield_to_rescrape.sh backfill-past -- bash ${PROJECT_DIR}/scripts/cron/backfill_past_night.sh ${PROJECT_DIR} >> ${PROJECT_DIR}/logs/backfill_past.cron.log 2>&1 # ${TAG}"
+# 毎時 05 分に起動する（実行中は flock で何もしない＝実質つねに 1 本が一定ペースで進み、終わったら 1 時間以内に再開）。時間帯・曜日では分けない。
+# ペースは backfill_guard が一定間隔（既定 62.5 件/時）に保ち、他の取得が動いている間は待ち、日の総件数が上限に達したら止める。
+LINE="5 * * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${PROJECT_DIR}/scripts/cron/cron_run.sh backfill-past -- bash ${PROJECT_DIR}/scripts/cron/yield_to_rescrape.sh backfill-past -- bash ${PROJECT_DIR}/scripts/cron/backfill_past_night.sh ${PROJECT_DIR} >> ${PROJECT_DIR}/logs/backfill_past.cron.log 2>&1 # ${TAG}"
 mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/data/local/meta/cron_backups"
 BK="${PROJECT_DIR}/data/local/meta/cron_backups/crontab_before_backfill_past_$(date +%Y%m%d_%H%M%S).txt"
 crontab -l 2>/dev/null > "$BK" || true

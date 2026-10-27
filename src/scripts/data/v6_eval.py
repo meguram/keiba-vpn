@@ -69,6 +69,15 @@ EXTERNAL: dict[str, tuple[Path, list[str] | None]] = {
     "NJ": (WORK / "acq/groups/NJ.parquet", None),
     "RB": (WORK / "tp65_out/rob.parquet", None),
     "PB4": (WORK / "tp64_out/pb_features.parquet", ["pb_ben_m3", "pb_ben_1", "pb_exp_rel", "pb_pos_sd5"]),
+    "IMP": (Path(__file__).resolve().parents[3] / "data/local/modeling/ptrain/imp_rows.parquet", None),
+    "C1X": (Path(__file__).resolve().parents[3] / "data/local/modeling/ptrain/c1x_rows.parquet", ["c1x_pos", "c1x_ph", "c1x_delta"]),
+    "USR": (Path(__file__).resolve().parents[3] / "data/local/modeling/ptrain/usr_rows.parquet", None),
+    "TENKAI": (Path(__file__).resolve().parents[3] / "data/local/modeling/ptrain/tenkai_rows.parquet", None),
+    "TENKAI_NT": (Path(__file__).resolve().parents[3] / "data/local/modeling/ptrain/tenkai_nt_rows.parquet", None),
+    "HEM": (Path(__file__).resolve().parents[3] / "data/local/modeling/hem/HEM.parquet", None),
+    "CUR": (Path(__file__).resolve().parents[3] / "data/local/modeling/hem/CUR.parquet", None),
+    "AUXH": (Path(__file__).resolve().parents[3] / "data/local/modeling/training_pipeline/auxh/aux_H.parquet", None),
+    "AUXC": (Path(__file__).resolve().parents[3] / "data/local/modeling/training_pipeline/auxh/aux_C.parquet", None),
 }
 
 
@@ -167,6 +176,8 @@ def build_frame(cfg: dict, df: pd.DataFrame) -> pd.DataFrame:
             X = X.drop(columns=["fe_year_frac"])
         if "-CAL" in drop:
             X = X.drop(columns=list(CAL_COLS))
+        if "-MTL" in drop:
+            X = X.drop(columns=[c for c in X.columns if c.startswith("mtl_")])
     cfg = {**cfg, "new": [n for n in cfg["new"] if not n.startswith("-")]}
     mk = [n[1:] for n in drop if n[1:] in DROP_PREFIXES]
     if mk:

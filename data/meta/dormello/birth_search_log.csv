@@ -1,5 +1,5 @@
 horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,note
-000a00115e,Blenheim,candidate,1927,4,16,https://sporthorse-data.com/pedigree/blenheim-1,2026-10-17,SporthorseData 1 件のみ（元ページは 403 で未確認）。Wikipedia は年のみ（2026-10-19 再確認: 他に独立した出典は見つからず保留のまま）
+000a00115e,Blenheim,adopted,1927,4,16,https://sporthorse-data.com/pedigree/blenheim,2026-10-19,ユーザーがブラウザで目視確認
 000a000fc9,Princequillo,no_data,1940,,,,2026-10-17,各サイト年のみ。'01/01/1940' は仮置きで不採用
 000a00115d,Mahmoud,no_data,1933,,,,2026-10-17,Britannica・JBIS・Wikidata いずれも年のみ
 000a0019b6,Understanding,no_data,1963,,,,2026-10-17,検索結果に該当なし
@@ -79,10 +79,10 @@ horse_id,name,status,birth_year,birth_month,birth_day,source_urls,searched_at,no
 000a00fdb3,Old Trieste,adopted,1995,3,2,https://sporthorse-data.com/pedigree/old-trieste,2026-10-19,ユーザーがブラウザで目視確認
 000a001e7d,Carson City,adopted,1987,4,4,https://sporthorse-data.com/pedigree/carson-city,2026-10-19,ユーザーがブラウザで目視確認
 000a00fa4c,Cee's Tizzy,adopted,1987,4,21,https://sporthorse-data.com/pedigree/cees-tizzy,2026-10-19,ユーザーがブラウザで目視確認
-000a010651,Notebook,no_data,1985,,,,2026-10-17,
-000a001f0b,Acatenango,no_data,1982,,,https://www.wikidata.org/wiki/Q338164 ; https://en.wikipedia.org/wiki/Acatenango_%28horse%29,2026-10-17,
-000a0019a3,Phone Trick,no_data,1982,,,,2026-10-17,
-000a00085c,トウルヌソルTournesol(英),no_data,1922,,,https://www.wikidata.org/wiki/Q11321111,2026-10-17,
+000a010651,Notebook,adopted,1985,3,14,https://sporthorse-data.com/pedigree/notebook,2026-10-19,ユーザーがブラウザで目視確認
+000a001f0b,Acatenango,adopted,1982,4,13,https://sporthorse-data.com/pedigree/acatenango,2026-10-19,ユーザーがブラウザで目視確認
+000a0019a3,Phone Trick,adopted,1984,4,10,https://sporthorse-data.com/pedigree/phone-trick,2026-10-19,ユーザーがブラウザで目視確認（netkeiba の生年 1982 と異なるが、ユーザーがページを見て確認）
+000a00085c,トウルヌソルTournesol(英),no_data,1922,,,https://sporthorse-data.com/pedigree/tournesol,2026-10-19,ユーザー確認: 記載なし
 000a011099,シニスターミニスターSinister Minister(米),adopted,2003,3,29,https://www.wikidata.org/wiki/Q16949922 ; https://ja.wikipedia.org/wiki/%E3%82%B7%E3%83%8B%E3%82%B9%E3%82%BF%E3%83%BC%E3%83%9F%E3%83%8B%E3%82%B9%E3%82%BF%E3%83%BC_%28%E7%AB%B6%E8%B5%B0%E9%A6%AC%29,2026-10-17,日本語版 Wikipedia 冒頭文
 000a000e05,Northfields,no_data,1968,,,https://www.wikidata.org/wiki/Q63969506,2026-10-17,
 000a00fe3c,Candy Stripes (米),adopted,1982,4,12,https://www.wikidata.org/wiki/Q5032144 ; https://en.wikipedia.org/wiki/Candy_Stripes,2026-10-17,英語版 Wikipedia 冒頭文

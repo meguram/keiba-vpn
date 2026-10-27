@@ -16,6 +16,7 @@ import sys
 from typing import Any
 
 from src.scraper.storage import HybridStorage
+from src.scraper.odds_fix import fix_result as _fix_result_odds
 from src.utils.distance_band import distance_group_key
 from src.utils.logger import get_logger
 
@@ -81,7 +82,7 @@ def run_aggregation(storage: HybridStorage, week_label: str, dry_run: bool = Fal
     for race_key in sorted(all_race_keys):
         race_id = race_key.replace(".json", "")
         try:
-            result = storage.load("race_result", race_id)
+            result = _fix_result_odds(storage.load("race_result", race_id))
         except Exception:
             skipped += 1
             continue

@@ -27,7 +27,7 @@
 これらを置かなければ動かない状態は「必要最低限」とは言えず、しかもgitチェックオペレーション
 自体がVPSの軽量リソースを消費する。
 
-**解決策**: サービングに必要なものだけを含む軽量Dockerイメージ（[`Dockerfile.serving`](../../Dockerfile.serving)）
+**解決策**: サービングに必要なものだけを含む軽量Dockerイメージ（[`deploy/docker/Dockerfile.serving`](../../Dockerfile.serving)）
 を**CI側（GitHub Actions）でビルド**し、GHCR（GitHub Container Registry）にpushする。
 VPSは`docker compose pull`でこの**完成済みイメージ**を取得するだけでよく、ソースコードの
 チェックアウトもビルドも一切発生しない。VPS上に実際に置く必要があるのは次の3種類のみ:
@@ -40,8 +40,8 @@ VPSは`docker compose pull`でこの**完成済みイメージ**を取得する�
 
 イメージの中身は`main.py`・`src/`・`templates/`・`static/`・`requirements.txt`のみで、
 `notebooks/`・`docs/`・`tests/`・`scripts/`・`data/`・`mlflow/`は含まれない
-（`Dockerfile.serving.dockerignore`でビルドコンテキストからも除外）。
-同じ理由でGCP側のバッチ実行用イメージも[`Dockerfile.gcp-jobs`](../../Dockerfile.gcp-jobs)として
+（`deploy/docker/Dockerfile.serving.dockerignore`でビルドコンテキストからも除外）。
+同じ理由でGCP側のバッチ実行用イメージも[`deploy/docker/Dockerfile.gcp-jobs`](../../Dockerfile.gcp-jobs)として
 分離している（サービング用イメージと混在させない）。
 
 ### `src/`を分割せず全体を含めている理由（既知の制約）
@@ -64,7 +64,7 @@ VPSは`docker compose pull`でこの**完成済みイメージ**を取得する�
 （dev-only管理画面を含む）を1つずつ洗い出し、不要なものをエンドポイント単位で削除・
 あるいはプロキシ化（GCP Cloud Run Jobs呼び出しへの置き換え）する必要があり、本対応の
 スコープを超える。安全重視のため、**現時点では`src/`全体をサービングイメージに含める**
-選択をした（`Dockerfile.serving`内にコメントで明記）。
+選択をした（`deploy/docker/Dockerfile.serving`内にコメントで明記）。
 
 **将来整理の余地**: [deployment-vps-vs-gcp.md](./deployment-vps-vs-gcp.md)のVPS側TODO
 「スクレイピング・予測実行の手動トリガー系エンドポイントを、GCP側Cloud Run Jobs/Cloud Tasksを
@@ -77,7 +77,7 @@ app.py側から無くなり、サービングイメージから安全に除外�
 （学習系）・`pymupdf`/`playwright`（スクレイピング系）はサービングには本来不要だが、
 `src/`全体を含める上記の判断と合わせて、まずは「確実に動く」ことを優先し全量をインストールする。
 **将来的な最適化の余地**: `requirements-serving.txt`（サービングに必要な最小集合）を切り出し、
-`Dockerfile.serving`側だけこれを使うようにすればイメージサイズ・ビルド時間を削減できる。
+`deploy/docker/Dockerfile.serving`側だけこれを使うようにすればイメージサイズ・ビルド時間を削減できる。
 
 ## VPSに実際に必要になるファイル一覧
 
@@ -182,7 +182,7 @@ GHCRへのpush自体は`${{ secrets.GITHUB_TOKEN }}`（GitHub Actionsが自動�
 
 ## GCP側（Cloud Run Jobs）のデプロイ
 
-[`deploy-gcp.yml`](../../.github/workflows/deploy-gcp.yml)は[`Dockerfile.gcp-jobs`](../../Dockerfile.gcp-jobs)
+[`deploy-gcp.yml`](../../.github/workflows/deploy-gcp.yml)は[`deploy/docker/Dockerfile.gcp-jobs`](../../Dockerfile.gcp-jobs)
 から`src/scripts/cloud_jobs/`ほか既存バッチ用コードを含むイメージをビルドしArtifact Registryへ
 push後、既存の[`scripts/gcp/deploy_cloud_run_jobs.sh`](../../scripts/gcp/deploy_cloud_run_jobs.sh)
 を`list`で得たジョブ名ごとに`--apply`する（このスクリプトは`--apply`に単一ジョブ名の明示を
