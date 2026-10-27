@@ -349,6 +349,12 @@ PARTS: list[Part] = [
         C("cost", "GCS のコスト分析レポート（GCS の操作コストのみ。2026-04 時点）。GCP 全体の試算は docs/operations/cost-estimate.md。", "結果", src="html/design/cost.html", status="snapshot",
           note="数値の基準日は 2026-04。"),
     ]),
+    Part("最終アーキテクチャ", "この本のまとめ。stg／prod を VPS と GCP でどう動かし、データ取得のスケジュールとユーザーへの表示がどうつながるかを、図と表で通して見る。", [
+        C("final_architecture", "最終アーキテクチャ（stg／prod × VPS／GCP）の全体図。部品の担当、stg と prod の違いと配備の流れ、cron／Scheduler によるデータ取得の時間割（週・日・1 レース）、ユーザーに表示されるまでの流れとキャッシュ、止まったときの動き、費用の約束、現在の到達点。",
+          "設計", src="html/design/final_architecture.html",
+          see=[("decoupling_status", "現在の到達点と停止試験"), ("architecture_target", "役割分担と費用の根拠"), ("vps_agent", "VPS の取得役"), ("gcp_jobs_migration", "Jobs の一覧と時刻"),
+               ("cloud_run_api", "API の Cloud Run 化"), ("github_promote", "GitHub Actions による反映"), ("cron_schedule", "cron の登録内容")]),
+    ]),
     Part("決定記録", "なぜそう決めたかの記録。当時の判断の履歴で、書き換えず、古くなったものは注記を足す。", _decision_chapters(), label="付録A"),
 ]
 for _i, _p in enumerate(PARTS):

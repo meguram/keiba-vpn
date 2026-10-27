@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>最終アーキテクチャ（stg／prod × VPS／GCP）と、データ取得・表示の全体像 — keiba-vpn docs</title>
+<style>
+:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --code-bg:#0b1428; }
+* { box-sizing: border-box; }
+body { font-family: "Noto Sans JP", system-ui, sans-serif; background:#0b1226; color:var(--text); line-height:1.8; font-size:15px; margin:0; }
+main.content { max-width: 1120px; margin: 0 auto; padding: 32px 28px 80px; }
+header.hero { padding: 22px 26px; border-radius:16px; border:1px solid var(--border); background: linear-gradient(180deg,#16213f,#111a36); margin-bottom: 24px; }
+header.hero h1 { margin: 4px 0 6px; font-size: 26px; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+article.html-body h2 { font-size: 1.3rem; margin: 2.2em 0 .6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+article.html-body h3 { font-size: 1.05rem; margin: 1.6em 0 .5em; color: var(--accent-2); }
+a { color: var(--accent-2); }
+code { background: var(--code-bg); padding: 1px 6px; border-radius: 5px; font-size: .9em; }
+table { border-collapse: collapse; width: 100%; margin: 10px 0 18px; font-size: 13.5px; }
+th, td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; vertical-align: top; }
+th { background: var(--panel); color: var(--accent-2); white-space: nowrap; }
+.fa-fig { margin: 14px 0 6px; }
+.fa-svg { display: block; max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: 14px; }
+.fa-cap { color: var(--muted); font-size: 13px; margin: 6px 2px 18px; }
+.fa-box { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 14px 0; }
+.fa-box.warn { border-left-color: #fbbf24; }
+.fa-box.ok { border-left-color: #34d399; }
+.fa-box p { margin: 4px 0; }
+.fa-tag { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 12px; border: 1px solid; margin-right: 4px; white-space: nowrap; }
+.t-vps { color:#34d399; border-color:#34d399; } .t-gcp { color:#7aa9ff; border-color:#7aa9ff; } .t-host { color:#c084fc; border-color:#c084fc; } .t-cf { color:#f6821f; border-color:#f6821f; }
+</style>
+</head>
+<body>
+<main class="content">
+<header class="hero">
+  <h1>最終アーキテクチャ（stg／prod × VPS／GCP）と、データ取得・表示の全体像</h1>
+  <p class="meta">この本のまとめの章。「どこで何が動き、データがどう流れ、ユーザーの画面に出るか」を 1 か所で見渡す。最終形の記録で、2026-10-27 時点の到達点は 9 章。時刻はすべて JST。</p>
+</header>
+<article class="html-body">
+
+<h2 id="fa-summary">1. 3 行でいうと</h2>
+<div class="fa-box ok">
+  <p><b>画面は VPS、計算と保存は GCP、研究は別の PC。</b>ユーザーが開く画面と入口は ConoHa VPS に置き、予測・集計・保存・API は Google Cloud（Cloud Run／Jobs／GCS）が担う。研究用 PC は学習と評価だけで、運用データには書かない。</p>
+  <p><b>stg と prod は同じ作りで、違うのは「どの版か」と「誰が見られるか」。</b>stg は確認用の版（API は Cloud Run のタグ付きリビジョン、画面は VPS の 2 つ目）、prod は本番の版。どちらも GitHub への push で配備される。</p>
+  <p><b>止まっても他が動く。</b>各段階（予約・取得・予測・集計・表示）は GCS を介してつながり、直接は呼び合わない。研究用 PC が止まっても、運用には影響しない。</p>
+</div>
+
+<h2 id="fa-overview">2. 全体構成図</h2>
+<div class="fa-fig"><svg class="fa-svg" viewBox="0 0 1120 700" width="100%" role="img" aria-label="全体構成図" xmlns="http://www.w3.org/2000/svg"><rect width="1120" height="700" rx="14" fill="#0e1730"/><rect x="40" y="20" width="260" height="60" rx="10" fill="#a78bfa" fill-opacity="0.13" stroke="#a78bfa" stroke-width="1.6"/>
+<text x="170.0" y="45.0" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">ユーザーのブラウザ</text>
+<text x="170.0" y="64.0" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">匿名／会員／開発者</text>
+<rect x="40" y="110" width="260" height="56" rx="10" fill="#f6821f" fill-opacity="0.13" stroke="#f6821f" stroke-width="1.6"/>
+<text x="170.0" y="133.1" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">Cloudflare</text>
+<text x="170.0" y="152.1" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">DNS・Tunnel・Access（認証）</text>
+<polyline points="170,80 170,110" fill="none" stroke="#a78bfa" stroke-width="1.8"/>
+<polygon points="170,110 165.6,102.0 174.4,102.0" fill="#a78bfa"/>
+<circle cx="192" cy="95" r="11" fill="#0b1226" stroke="#fbbf24" stroke-width="1.6"/><text x="192" y="99.5" text-anchor="middle" font-size="12" font-weight="700" fill="#fbbf24" font-family="Noto Sans JP, system-ui, sans-serif">①</text>
+<rect x="40" y="200" width="500" height="360" rx="14" fill="#34d399" fill-opacity="0.05" stroke="#34d399" stroke-width="1.4" stroke-dasharray="2 5"/><text x="526" y="224" text-anchor="end" font-size="13" font-weight="700" fill="#34d399" font-family="Noto Sans JP, system-ui, sans-serif">ConoHa VPS（2GB・常駐は最小）</text>
+<rect x="60" y="245" width="130" height="130" rx="10" fill="#34d399" fill-opacity="0.13" stroke="#34d399" stroke-width="1.6"/>
+<text x="125.0" y="286.1" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">nginx</text>
+<text x="125.0" y="305.1" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">入口・振り分け</text>
+<text x="125.0" y="324.1" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">画像キャッシュ</text>
+<text x="125.0" y="343.1" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">（7 日）</text>
+<rect x="215" y="245" width="150" height="56" rx="10" fill="#34d399" fill-opacity="0.13" stroke="#34d399" stroke-width="1.6"/>
+<text x="290.0" y="268.1" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">画面 prod</text>
+<text x="290.0" y="287.1" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">Next.js（app.）</text>
+<rect x="215" y="319" width="150" height="56" rx="10" fill="#34d399" fill-opacity="0.13" stroke="#34d399" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="290.0" y="342.1" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">画面 stg</text>
+<text x="290.0" y="361.1" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">Next.js（stg.）</text>
+<rect x="385" y="245" width="135" height="56" rx="10" fill="#34d399" fill-opacity="0.13" stroke="#34d399" stroke-width="1.6"/>
+<text x="452.5" y="268.2" text-anchor="middle" font-size="12" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">新版の取り込み</text>
+<text x="452.5" y="286.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">3 分／5 分おき</text>
+<rect x="385" y="319" width="135" height="56" rx="10" fill="#34d399" fill-opacity="0.13" stroke="#34d399" stroke-width="1.6"/>
+<text x="452.5" y="342.2" text-anchor="middle" font-size="12" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">生存報告</text>
+<text x="452.5" y="360.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">5 分おき</text>
+<rect x="60" y="420" width="460" height="70" rx="10" fill="#34d399" fill-opacity="0.13" stroke="#34d399" stroke-width="1.6"/>
+<text x="290.0" y="450.1" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">取得役  keiba-fetch-agent</text>
+<text x="290.0" y="469.1" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">GCS のタスク表を 60 秒おきに見て、取得元へ 1 本ずつ取得（メモリ上限 250MB）</text>
+<text x="290" y="520" text-anchor="middle" font-size="11.5" fill="#34d399" font-family="Noto Sans JP, system-ui, sans-serif">VPS に置くのは「画面」「入口」「薄い取得役」だけ。計算・保存・予約は置かない</text>
+<polyline points="125,166 125,245" fill="none" stroke="#f6821f" stroke-width="1.8"/>
+<polygon points="125,245 120.6,237.0 129.4,237.0" fill="#f6821f"/>
+<circle cx="147" cy="205" r="11" fill="#0b1226" stroke="#f6821f" stroke-width="1.6"/><text x="147" y="209.5" text-anchor="middle" font-size="12" font-weight="700" fill="#f6821f" font-family="Noto Sans JP, system-ui, sans-serif">②</text>
+<polyline points="190,273 215,273" fill="none" stroke="#34d399" stroke-width="1.8"/>
+<polygon points="215,273 207.0,277.4 207.0,268.6" fill="#34d399"/>
+<polyline points="190,347 215,347" fill="none" stroke="#34d399" stroke-width="1.8"/>
+<polygon points="215,347 207.0,351.4 207.0,342.6" fill="#34d399"/>
+<rect x="620" y="200" width="460" height="360" rx="14" fill="#4f8bff" fill-opacity="0.05" stroke="#4f8bff" stroke-width="1.4" stroke-dasharray="2 5"/><text x="1066" y="224" text-anchor="end" font-size="13" font-weight="700" fill="#4f8bff" font-family="Noto Sans JP, system-ui, sans-serif">Google Cloud（asia-northeast1）</text>
+<rect x="640" y="245" width="200" height="76" rx="10" fill="#4f8bff" fill-opacity="0.13" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="740.0" y="268.6" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">Cloud Run API</text>
+<text x="740.0" y="287.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">prod：通信 100%</text>
+<text x="740.0" y="306.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">stg：タグ rstg（0%）</text>
+<rect x="640" y="336" width="200" height="52" rx="10" fill="#4f8bff" fill-opacity="0.13" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="740.0" y="357.2" text-anchor="middle" font-size="12" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">Cloud Run 監視ポータル</text>
+<text x="740.0" y="375.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">（読み取り専用）</text>
+<rect x="860" y="245" width="200" height="56" rx="10" fill="#4f8bff" fill-opacity="0.13" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="960.0" y="268.2" text-anchor="middle" font-size="12" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">Cloud Scheduler／Tasks</text>
+<text x="960.0" y="286.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">司令塔（時刻・予約）</text>
+<rect x="860" y="316" width="200" height="72" rx="10" fill="#4f8bff" fill-opacity="0.13" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="960.0" y="338.2" text-anchor="middle" font-size="12" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">Cloud Run Jobs</text>
+<text x="960.0" y="356.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">予測・集計・前夜の計算</text>
+<text x="960.0" y="374.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">（s／m／l／xl）</text>
+<rect x="640" y="415" width="420" height="60" rx="10" fill="#4f8bff" fill-opacity="0.13" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="850.0" y="440.1" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">GCS（データの正本）</text>
+<text x="850.0" y="459.1" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">ops/  models/  state/  生データ（race_*）</text>
+<rect x="640" y="490" width="420" height="50" rx="10" fill="#4f8bff" fill-opacity="0.07" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="850.0" y="519.2" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">Secret Manager・Artifact Registry・Cloud Logging</text>
+<polyline points="125,375 125,398 580,398 580,283 640,283" fill="none" stroke="#34d399" stroke-width="1.8"/>
+<polygon points="640,283 632.0,287.4 632.0,278.6" fill="#34d399"/>
+<circle cx="430" cy="398" r="11" fill="#0b1226" stroke="#fbbf24" stroke-width="1.6"/><text x="430" y="402.5" text-anchor="middle" font-size="12" font-weight="700" fill="#fbbf24" font-family="Noto Sans JP, system-ui, sans-serif">③</text>
+<text x="280" y="390" text-anchor="middle" font-size="11" fill="#34d399" font-family="Noto Sans JP, system-ui, sans-serif">/api/*（共有鍵つき）</text>
+<polyline points="520,450 640,450" fill="none" stroke="#34d399" stroke-width="1.8"/>
+<polygon points="640,450 632.0,454.4 632.0,445.6" fill="#34d399"/>
+<polygon points="520,450 528.0,445.6 528.0,454.4" fill="#34d399"/>
+<circle cx="580" cy="450" r="11" fill="#0b1226" stroke="#fbbf24" stroke-width="1.6"/><text x="580" y="454.5" text-anchor="middle" font-size="12" font-weight="700" fill="#fbbf24" font-family="Noto Sans JP, system-ui, sans-serif">⑥</text>
+<polyline points="850,415 850,283 840,283" fill="none" stroke="#4f8bff" stroke-width="1.8"/>
+<polygon points="840,283 848.0,278.6 848.0,287.4" fill="#4f8bff"/>
+<circle cx="850" cy="350" r="11" fill="#0b1226" stroke="#fbbf24" stroke-width="1.6"/><text x="850" y="354.5" text-anchor="middle" font-size="12" font-weight="700" fill="#fbbf24" font-family="Noto Sans JP, system-ui, sans-serif">④</text>
+<polyline points="740,415 740,388" fill="none" stroke="#4f8bff" stroke-width="1.8"/>
+<polygon points="740,388 744.4,396.0 735.6,396.0" fill="#4f8bff"/>
+<polyline points="960,301 960,316" fill="none" stroke="#4f8bff" stroke-width="1.8"/>
+<polygon points="960,316 955.6,308.0 964.4,308.0" fill="#4f8bff"/>
+<polyline points="960,388 960,415" fill="none" stroke="#4f8bff" stroke-width="1.8"/>
+<polygon points="960,415 955.6,407.0 964.4,407.0" fill="#4f8bff"/>
+<circle cx="985" cy="402" r="11" fill="#0b1226" stroke="#fbbf24" stroke-width="1.6"/><text x="985" y="406.5" text-anchor="middle" font-size="12" font-weight="700" fill="#fbbf24" font-family="Noto Sans JP, system-ui, sans-serif">⑤</text>
+<rect x="40" y="610" width="260" height="70" rx="10" fill="#f87171" fill-opacity="0.13" stroke="#f87171" stroke-width="1.6"/>
+<text x="170.0" y="640.0" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">取得元サイト</text>
+<text x="170.0" y="659.0" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">netkeiba・JRA・SmartRC</text>
+<polyline points="170,610 170,490" fill="none" stroke="#f87171" stroke-width="1.8"/>
+<polygon points="170,490 174.4,498.0 165.6,498.0" fill="#f87171"/>
+<circle cx="195" cy="580" r="11" fill="#0b1226" stroke="#f87171" stroke-width="1.6"/><text x="195" y="584.5" text-anchor="middle" font-size="12" font-weight="700" fill="#f87171" font-family="Noto Sans JP, system-ui, sans-serif">⑦</text>
+<rect x="350" y="610" width="270" height="70" rx="10" fill="#c9d1d9" fill-opacity="0.13" stroke="#c9d1d9" stroke-width="1.6"/>
+<text x="485.0" y="630.5" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">GitHub Actions</text>
+<text x="485.0" y="649.5" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">develop → stg → master</text>
+<text x="485.0" y="668.5" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">テスト・ビルド・配備</text>
+<polyline points="620,645 700,645 700,560" fill="none" stroke="#c9d1d9" stroke-width="1.8"/>
+<polygon points="700,560 704.4,568.0 695.6,568.0" fill="#c9d1d9"/>
+<circle cx="668" cy="645" r="11" fill="#0b1226" stroke="#c9d1d9" stroke-width="1.6"/><text x="668" y="649.5" text-anchor="middle" font-size="12" font-weight="700" fill="#c9d1d9" font-family="Noto Sans JP, system-ui, sans-serif">⑧</text>
+<rect x="790" y="610" width="270" height="70" rx="10" fill="#c084fc" fill-opacity="0.13" stroke="#c084fc" stroke-width="1.6"/>
+<text x="925.0" y="630.5" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">研究用 PC（keiba-remote）</text>
+<text x="925.0" y="649.5" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">学習・評価・MLflow</text>
+<text x="925.0" y="668.5" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">運用データには書かない</text>
+<polyline points="930,610 930,560" fill="none" stroke="#c084fc" stroke-width="1.8"/>
+<polygon points="930,560 934.4,568.0 925.6,568.0" fill="#c084fc"/>
+<circle cx="955" cy="585" r="11" fill="#0b1226" stroke="#c084fc" stroke-width="1.6"/><text x="955" y="589.5" text-anchor="middle" font-size="12" font-weight="700" fill="#c084fc" font-family="Noto Sans JP, system-ui, sans-serif">⑨</text></svg></div>
+<p class="fa-cap">図 1　全体構成。緑＝VPS、青＝Google Cloud、橙＝Cloudflare、紫＝ユーザー／研究用 PC、赤＝取得元、灰＝GitHub。丸数字は下の表。</p>
+
+<table>
+<thead><tr><th>番号</th><th>流れ</th><th>中身</th></tr></thead>
+<tbody>
+<tr><td>①</td><td>ブラウザ → Cloudflare</td><td>HTTPS。stg と監視ポータルは Cloudflare Access（メール認証）の内側。</td></tr>
+<tr><td>②</td><td>Cloudflare → VPS</td><td>VPS の cloudflared（Tunnel）が外向きに接続して受け、nginx に渡す。VPS の入口を外に開けない。</td></tr>
+<tr><td>③</td><td>nginx → Cloud Run API</td><td><code>/api/*</code> を共有鍵のヘッダ（<code>X-Keiba-Proxy-Key</code>）つきで Cloud Run へ。画面（Next.js）は VPS 内で返す。</td></tr>
+<tr><td>④</td><td>GCS → Cloud Run</td><td>API は GCS の予測・出馬表・オッズ・モデルを読んで返す。書き込みを前提にしない（読み取り中心）。</td></tr>
+<tr><td>⑤</td><td>Scheduler／Tasks → Jobs → GCS</td><td>時刻に起動する Jobs が、予約・予測・集計を行い、結果を GCS に書く。</td></tr>
+<tr><td>⑥</td><td>取得役 ⇄ GCS</td><td>取得役は GCS のタスク表を 60 秒おきに見て実行し、取った生データと結果を GCS に保存する。</td></tr>
+<tr><td>⑦</td><td>取得役 → 取得元</td><td>netkeiba・JRA・SmartRC へ、間隔を守って 1 本ずつアクセスする（同時 1 本）。</td></tr>
+<tr><td>⑧</td><td>GitHub → Google Cloud</td><td>鍵を持たない認証（WIF）で、イメージのビルドと Cloud Run への配備を行う。画面の成果物は GCS に公開し、VPS が取り込む。</td></tr>
+<tr><td>⑨</td><td>研究用 PC → GCS</td><td>学習したモデルを <code>models/</code> に置く一方向だけ。専用の権限（<code>keiba-publisher</code>）は <code>models/</code> の外に書けない。</td></tr>
+</tbody></table>
+
+<h3>部品の担当（誰が何を持つか）</h3>
+<table>
+<thead><tr><th>場所</th><th>常駐／実行するもの</th><th>持たないもの</th></tr></thead>
+<tbody>
+<tr><td><span class="fa-tag t-vps">VPS 取得役</span></td><td>nginx・Next.js（prod／stg）・cloudflared・取得役・新版の取り込み・生存報告。通常の使用量は 600MB 以下、<code>MemoryMax</code> で上限を固定。</td><td>cron の司令塔、API、予測、DB、Slack の秘密</td></tr>
+<tr><td><span class="fa-tag t-gcp">Cloud Run</span></td><td>API（FastAPI＋Flask＋<code>/ops/*</code> を 1 コンテナ、最小 0／最大 3）、監視ポータル（読み取り専用）</td><td>取得キュー・定期処理（Jobs の担当）、ローカルディスクの永続化</td></tr>
+<tr><td><span class="fa-tag t-gcp">GCP Jobs</span></td><td>予約・前夜の計算・予測・集計・通知・ドリフト監視。メモリ別に s／m／l／xl の 4 種類。</td><td>常駐。時刻か合図のときだけ起動</td></tr>
+<tr><td><span class="fa-tag t-gcp">GCS</span></td><td>データの正本（<code>ops/</code> 運用データ、<code>models/</code> モデル、<code>state/</code> 状態、生データ）。</td><td>—</td></tr>
+<tr><td><span class="fa-tag t-cf">Cloudflare</span></td><td>DNS・Tunnel・Access（認証）。</td><td>データ</td></tr>
+<tr><td><span class="fa-tag t-host">ホスト（移行まで）</span></td><td>学習・評価・MLflow、過去データの補填（夜間）。最終形では研究専用。</td><td>運用データへの書き込み（読み取り＋<code>models/</code> の公開のみ）</td></tr>
+</tbody></table>
+
+<h2 id="fa-envs">3. stg と prod</h2>
+<table>
+<thead><tr><th></th><th>stg（確認用）</th><th>prod（本番）</th></tr></thead>
+<tbody>
+<tr><td>画面</td><td><code>stg.megu-keiba.com</code>（VPS の 2 つ目の画面。左上に黄色の STG バッジ）。<code>ops/releases/ui-stg/</code> から 5 分おきに取り込み</td><td><code>app.megu-keiba.com</code>（VPS）。<code>ops/releases/ui/</code> から 3 分おきに取り込み</td></tr>
+<tr><td>API</td><td>Cloud Run のタグ付きリビジョン <code>rstg</code>（通信 0%、タグ URL でだけ到達）。テストユーザー（test／test）が有効</td><td>Cloud Run サービス <code>keiba-api</code>（通信 100%）</td></tr>
+<tr><td>データ</td><td>prod と同じ GCS を読む（見える情報は同じ）</td><td>GCS（正本）</td></tr>
+<tr><td>配備の契機</td><td><code>stg</code> ブランチへの push（承認なし）</td><td><code>master</code> ブランチへの push ＋ 本人の承認 1 回（GitHub の <code>production</code> 環境）</td></tr>
+<tr><td>確認</td><td>スモーク（鍵なし 401／鍵あり 200／ハートビート）。画面で目視</td><td>0% のままスモーク → 通信を 100% に切り替え → 画面を公開</td></tr>
+<tr><td>見られる人</td><td>Cloudflare Access（本人のメール認証）</td><td>Access または公開（公開時は許可リストの項目だけ。匿名は勝率・複勝率まで）</td></tr>
+<tr><td>戻し方</td><td>—</td><td>API：<code>rollback_cloud_run_api.sh</code> で 1 つ前のリビジョンへ（数秒）。画面：<code>latest.json</code> を前の版に戻す</td></tr>
+</tbody></table>
+
+<div class="fa-fig"><svg class="fa-svg" viewBox="0 0 1120 310" width="100%" role="img" aria-label="配備フロー" xmlns="http://www.w3.org/2000/svg"><rect width="1120" height="310" rx="14" fill="#0e1730"/><rect x="30" y="30" width="320" height="130" rx="10" fill="#c9d1d9" fill-opacity="0.13" stroke="#c9d1d9" stroke-width="1.6"/>
+<text x="190.0" y="68.8" text-anchor="middle" font-size="15" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">develop</text>
+<text x="190.0" y="89.8" text-anchor="middle" font-size="14" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">開発・テスト</text>
+<text x="190.0" y="110.8" text-anchor="middle" font-size="14" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">開発 PC は GCP に</text>
+<text x="190.0" y="131.8" text-anchor="middle" font-size="14" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">接続しない（モック）</text>
+<rect x="400" y="30" width="320" height="130" rx="10" fill="#f6821f" fill-opacity="0.13" stroke="#f6821f" stroke-width="1.6"/>
+<text x="560.0" y="58.2" text-anchor="middle" font-size="15" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">stg ブランチ</text>
+<text x="560.0" y="79.2" text-anchor="middle" font-size="14" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">push で自動：テスト → ビルド</text>
+<text x="560.0" y="100.2" text-anchor="middle" font-size="14" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">API：タグ rstg の新リビジョン</text>
+<text x="560.0" y="121.2" text-anchor="middle" font-size="14" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">（通信 0%）＋スモーク</text>
+<text x="560.0" y="142.2" text-anchor="middle" font-size="14" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">画面：STG バッジつきで公開</text>
+<rect x="770" y="30" width="320" height="130" rx="10" fill="#4f8bff" fill-opacity="0.13" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="930.0" y="58.2" text-anchor="middle" font-size="15" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">master ブランチ</text>
+<text x="930.0" y="79.2" text-anchor="middle" font-size="14" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">push → 本人の承認 1 回</text>
+<text x="930.0" y="100.2" text-anchor="middle" font-size="14" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">API：0% → スモーク → 100%</text>
+<text x="930.0" y="121.2" text-anchor="middle" font-size="14" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">Jobs 更新（有効時）</text>
+<text x="930.0" y="142.2" text-anchor="middle" font-size="14" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">画面：prod として公開</text>
+<polyline points="350,95 400,95" fill="none" stroke="#9fb4e8" stroke-width="1.8"/>
+<polygon points="400,95 392.0,99.4 392.0,90.6" fill="#9fb4e8"/>
+<polyline points="720,95 770,95" fill="none" stroke="#9fb4e8" stroke-width="1.8"/>
+<polygon points="770,95 762.0,99.4 762.0,90.6" fill="#9fb4e8"/>
+<text x="375" y="82" text-anchor="middle" font-size="11" fill="#8fa0cc" font-family="Noto Sans JP, system-ui, sans-serif">マージ</text>
+<text x="745" y="82" text-anchor="middle" font-size="11" fill="#8fa0cc" font-family="Noto Sans JP, system-ui, sans-serif">マージ</text>
+<rect x="400" y="200" width="320" height="66" rx="10" fill="#34d399" fill-opacity="0.13" stroke="#34d399" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="560.0" y="228.1" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">stg.megu-keiba.com</text>
+<text x="560.0" y="247.1" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">VPS が 5 分おきに取り込む</text>
+<rect x="770" y="200" width="320" height="66" rx="10" fill="#34d399" fill-opacity="0.13" stroke="#34d399" stroke-width="1.6"/>
+<text x="930.0" y="228.1" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">app.megu-keiba.com</text>
+<text x="930.0" y="247.1" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">VPS が 3 分おきに取り込む</text>
+<polyline points="560,160 560,200" fill="none" stroke="#34d399" stroke-width="1.8"/>
+<polygon points="560,200 555.6,192.0 564.4,192.0" fill="#34d399"/>
+<polyline points="930,160 930,200" fill="none" stroke="#34d399" stroke-width="1.8"/>
+<polygon points="930,200 925.6,192.0 934.4,192.0" fill="#34d399"/>
+<text x="560" y="292" text-anchor="middle" font-size="12" fill="#8fa0cc" font-family="Noto Sans JP, system-ui, sans-serif">スモークが失敗したら通信は切り替わらない</text>
+<text x="930" y="292" text-anchor="middle" font-size="12" fill="#8fa0cc" font-family="Noto Sans JP, system-ui, sans-serif">戻す：API は数秒で 1 つ前のリビジョンへ</text></svg></div>
+<p class="fa-cap">図 2　配備の流れ。<code>develop → stg → master</code> の順にマージする（マージコミットか fast-forward。スカッシュすると「stg に含まれる」確認で止まる）。</p>
+<div class="fa-box warn">
+  <p><b>守ること：</b>毎日 JST 03:00–04:00 はメンテナンス表示（02:30 から事前告知）なので、この間に push・昇格しない（スモークが 503 で落ちる）。API は昇格直後に切り替わるため、壊す変更は 2 段（新旧両対応 → 旧を消す）にする。</p>
+</div>
+
+<h2 id="fa-schedule">4. データ取得のスケジュール（cron／Scheduler）</h2>
+<p>「いつ・誰が・何を取り、どこに置くか」の最終形。時刻を決めるのは GCP（Scheduler と、前夜に作る予約）で、実際に取るのは VPS の取得役、計算するのは Jobs。取得元サイトにアクセスするのは取得役だけ（同時 1 本）。</p>
+
+<h3>4.1 データが流れる順番</h3>
+<div class="fa-fig"><svg class="fa-svg" viewBox="0 0 1120 330" width="100%" role="img" aria-label="データの流れ" xmlns="http://www.w3.org/2000/svg"><rect width="1120" height="330" rx="14" fill="#0e1730"/><rect x="22" y="22" width="156" height="26" rx="13" fill="#4f8bff" fill-opacity="0.25" stroke="#4f8bff"/>
+<text x="100.0" y="40" text-anchor="middle" font-size="12" fill="#eaf0ff" font-family="Noto Sans JP, system-ui, sans-serif">GCP Jobs</text>
+<rect x="22" y="62" width="156" height="124" rx="10" fill="#4f8bff" fill-opacity="0.13" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="100.0" y="90.5" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">① 予約</text>
+<text x="100.0" y="109.5" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">前夜に翌開催日の</text>
+<text x="100.0" y="128.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">全レースの取得タスクを</text>
+<text x="100.0" y="147.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">予約。定期の取得は</text>
+<text x="100.0" y="166.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">毎時 6 時間先まで予約</text>
+<polyline points="178,124 206,124" fill="none" stroke="#9fb4e8" stroke-width="1.8"/>
+<polygon points="206,124 198.0,128.4 198.0,119.6" fill="#9fb4e8"/>
+<rect x="206" y="22" width="156" height="26" rx="13" fill="#34d399" fill-opacity="0.25" stroke="#34d399"/>
+<text x="284.0" y="40" text-anchor="middle" font-size="12" fill="#eaf0ff" font-family="Noto Sans JP, system-ui, sans-serif">VPS 取得役</text>
+<rect x="206" y="62" width="156" height="124" rx="10" fill="#34d399" fill-opacity="0.13" stroke="#34d399" stroke-width="1.6"/>
+<text x="284.0" y="90.5" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">② 取得</text>
+<text x="284.0" y="109.5" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">期限が来たタスクを</text>
+<text x="284.0" y="128.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">1 本ずつ実行。出馬表・</text>
+<text x="284.0" y="147.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">オッズ・馬体重・結果を</text>
+<text x="284.0" y="166.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">取得して保存</text>
+<polyline points="362,124 390,124" fill="none" stroke="#9fb4e8" stroke-width="1.8"/>
+<polygon points="390,124 382.0,128.4 382.0,119.6" fill="#9fb4e8"/>
+<rect x="390" y="22" width="156" height="26" rx="13" fill="#34d399" fill-opacity="0.25" stroke="#34d399"/>
+<text x="468.0" y="40" text-anchor="middle" font-size="12" fill="#eaf0ff" font-family="Noto Sans JP, system-ui, sans-serif">VPS → GCP</text>
+<rect x="390" y="62" width="156" height="124" rx="10" fill="#34d399" fill-opacity="0.13" stroke="#34d399" stroke-width="1.6"/>
+<text x="468.0" y="90.5" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">③ 検知</text>
+<text x="468.0" y="109.5" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">馬体重の発表を検知し、</text>
+<text x="468.0" y="128.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">イベントを置く。毎分</text>
+<text x="468.0" y="147.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">event-pump が拾い、</text>
+<text x="468.0" y="166.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">予測を予約</text>
+<polyline points="546,124 574,124" fill="none" stroke="#9fb4e8" stroke-width="1.8"/>
+<polygon points="574,124 566.0,128.4 566.0,119.6" fill="#9fb4e8"/>
+<rect x="574" y="22" width="156" height="26" rx="13" fill="#4f8bff" fill-opacity="0.25" stroke="#4f8bff"/>
+<text x="652.0" y="40" text-anchor="middle" font-size="12" fill="#eaf0ff" font-family="Noto Sans JP, system-ui, sans-serif">GCP Jobs</text>
+<rect x="574" y="62" width="156" height="124" rx="10" fill="#4f8bff" fill-opacity="0.13" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="652.0" y="90.5" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">④ 予測</text>
+<text x="652.0" y="109.5" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">predict-race が 1 レース</text>
+<text x="652.0" y="128.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">ずつ予測。モデルは</text>
+<text x="652.0" y="147.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">GCS の models/ から</text>
+<text x="652.0" y="166.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">読み、予測を保存</text>
+<polyline points="730,124 758,124" fill="none" stroke="#9fb4e8" stroke-width="1.8"/>
+<polygon points="758,124 750.0,128.4 750.0,119.6" fill="#9fb4e8"/>
+<rect x="758" y="22" width="156" height="26" rx="13" fill="#4f8bff" fill-opacity="0.25" stroke="#4f8bff"/>
+<text x="836.0" y="40" text-anchor="middle" font-size="12" fill="#eaf0ff" font-family="Noto Sans JP, system-ui, sans-serif">GCP Jobs</text>
+<rect x="758" y="62" width="156" height="124" rx="10" fill="#4f8bff" fill-opacity="0.13" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="836.0" y="90.5" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">⑤ 集計</text>
+<text x="836.0" y="109.5" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">予測成績・前夜の計算・</text>
+<text x="836.0" y="128.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">朝のキャッシュ・通知。</text>
+<text x="836.0" y="147.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">結果が確定したら</text>
+<text x="836.0" y="166.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">成績を確定</text>
+<polyline points="914,124 942,124" fill="none" stroke="#9fb4e8" stroke-width="1.8"/>
+<polygon points="942,124 934.0,128.4 934.0,119.6" fill="#9fb4e8"/>
+<rect x="942" y="22" width="156" height="26" rx="13" fill="#4f8bff" fill-opacity="0.25" stroke="#4f8bff"/>
+<text x="1020.0" y="40" text-anchor="middle" font-size="12" fill="#eaf0ff" font-family="Noto Sans JP, system-ui, sans-serif">Cloud Run API</text>
+<rect x="942" y="62" width="156" height="124" rx="10" fill="#4f8bff" fill-opacity="0.13" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="1020.0" y="90.5" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">⑥ 表示</text>
+<text x="1020.0" y="109.5" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">GCS を読み、会員区分で</text>
+<text x="1020.0" y="128.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">項目を絞って返す。</text>
+<text x="1020.0" y="147.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">VPS の画面が</text>
+<text x="1020.0" y="166.6" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">ブラウザへ届ける</text>
+<rect x="20" y="236" width="1080" height="44" rx="10" fill="#4f8bff" fill-opacity="0.16" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="560" y="263" text-anchor="middle" font-size="13" fill="#eaf0ff" font-family="Noto Sans JP, system-ui, sans-serif">GCS（正本）  ops/fetch_tasks・ops/events  →  生データ（race_*）  →  race_predictions・ops/ 集計  →  models/・state/</text>
+<polyline points="100.0,186 100.0,236" fill="none" stroke="#9fb4e8" stroke-width="1.8" stroke-dasharray="5 4"/>
+<polygon points="100.0,236 95.6,228.0 104.4,228.0" fill="#9fb4e8"/>
+<polygon points="100.0,186 104.4,194.0 95.6,194.0" fill="#9fb4e8"/>
+<polyline points="284.0,186 284.0,236" fill="none" stroke="#9fb4e8" stroke-width="1.8" stroke-dasharray="5 4"/>
+<polygon points="284.0,236 279.6,228.0 288.4,228.0" fill="#9fb4e8"/>
+<polygon points="284.0,186 288.4,194.0 279.6,194.0" fill="#9fb4e8"/>
+<polyline points="468.0,186 468.0,236" fill="none" stroke="#9fb4e8" stroke-width="1.8" stroke-dasharray="5 4"/>
+<polygon points="468.0,236 463.6,228.0 472.4,228.0" fill="#9fb4e8"/>
+<polyline points="652.0,186 652.0,236" fill="none" stroke="#9fb4e8" stroke-width="1.8" stroke-dasharray="5 4"/>
+<polygon points="652.0,236 647.6,228.0 656.4,228.0" fill="#9fb4e8"/>
+<polyline points="836.0,186 836.0,236" fill="none" stroke="#9fb4e8" stroke-width="1.8" stroke-dasharray="5 4"/>
+<polygon points="836.0,236 831.6,228.0 840.4,228.0" fill="#9fb4e8"/>
+<polyline points="1020.0,236 1020.0,186" fill="none" stroke="#9fb4e8" stroke-width="1.8" stroke-dasharray="5 4"/>
+<polygon points="1020.0,186 1024.4,194.0 1015.6,194.0" fill="#9fb4e8"/>
+<text x="560" y="308" text-anchor="middle" font-size="12" fill="#8fa0cc" font-family="Noto Sans JP, system-ui, sans-serif">点線：各段階が GCS を読み書きする。段階どうしは GCS を介してつながり、直接は呼び合わない（どれかが止まっても他は動く）</text></svg></div>
+<p class="fa-cap">図 3　取得 → 保存 → 予測 → 集計 → 表示。段階どうしは GCS を介してつながる。</p>
+
+<h3>4.2 週のリズム（出馬表が育つ順）</h3>
+<p>JRA の公示に沿って、未来のレースの出馬表を<b>段階的</b>に取り、画面には「いまの段階と最終更新」を出す。10 分おきに <code>entries-sync</code> が起動するが、実際に取るのは下の時刻（窓 25 分）だけ。</p>
+<table>
+<thead><tr><th>段階</th><th>時期</th><th>わかること</th><th>収集の時刻（JST）</th></tr></thead>
+<tbody>
+<tr><td>特別登録</td><td>開催の約 6 日前（日曜夕）</td><td>登録馬（重賞・特別）</td><td>日 18:30・19:30 ／ 月火水 08:30・20:00</td></tr>
+<tr><td>出走馬の決定</td><td>木曜</td><td>平場も出る。枠・馬番はまだ</td><td>木 12:30・15:30・17:30・19:30・21:30</td></tr>
+<tr><td>出馬表の確定</td><td>金曜 16 時（土曜開催）／土曜 10 時（日曜開催）</td><td>枠番・馬番。以後も取消・騎手変更はありうる</td><td>金 10:00・16:05・16:30・17:15・18:30 ／ 土 10:05・10:30・11:15・12:30</td></tr>
+<tr><td>馬体重の発表</td><td>当日、発走の約 1 時間前</td><td>馬体重と増減</td><td>各レースの T-65〜T-30（4.4 節）</td></tr>
+</tbody></table>
+
+<h3>4.3 1 日の時間割</h3>
+<p>毎日動くもの。「どこで」は最終形の担当で、<span class="fa-tag t-host">ホスト（移行まで）</span> は移行が終わるまでの現状（9 章）。</p>
+<table>
+<thead><tr><th>時刻（JST）</th><th>何をする</th><th>どこで</th></tr></thead>
+<tbody>
+<tr><td>05:00〜08:59（10 分おき）</td><td>JRA の馬場（クッション値・含水率）</td><td><span class="fa-tag t-vps">VPS 取得役</span></td></tr>
+<tr><td>05:30</td><td>騎手・調教師の統計</td><td><span class="fa-tag t-gcp">GCP Jobs</span></td></tr>
+<tr><td>06:10</td><td>直近の未取得の取り直し（朝）</td><td><span class="fa-tag t-vps">VPS 取得役</span></td></tr>
+<tr><td>07:00</td><td>レース一覧（朝）</td><td><span class="fa-tag t-vps">VPS 取得役</span></td></tr>
+<tr><td>07:00</td><td>履歴テーブルの更新 → 履歴特徴量とサービング用バンドル → 列の急増検査（直列）</td><td><span class="fa-tag t-gcp">GCP Jobs</span></td></tr>
+<tr><td>07:30</td><td>開催日の朝：その日の全レースの日単位キャッシュ（day-prep、16GiB）／ラップ予想（当日）／朝のサマリー（Slack）／日次コスト報告</td><td><span class="fa-tag t-gcp">GCP Jobs</span></td></tr>
+<tr><td>07:30〜（開催日）</td><td>各レースの T-60／T-15 などのオッズ。前夜に予約済みのタスクを、時刻が来たものから実行</td><td><span class="fa-tag t-vps">VPS 取得役</span></td></tr>
+<tr><td>07:40</td><td>厩舎コメント（朝）</td><td><span class="fa-tag t-vps">VPS 取得役</span></td></tr>
+<tr><td>08:00〜（開催日）</td><td>各レースの馬体重の検知（T-65〜T-30、180 秒おき）。発表を見つけたらイベントを置く</td><td><span class="fa-tag t-vps">VPS 取得役</span></td></tr>
+<tr><td>08:00〜16:59 毎分（土日月）</td><td>event-pump：イベントを拾って予測（predict-race）を予約</td><td><span class="fa-tag t-gcp">GCP Jobs</span></td></tr>
+<tr><td>08:00</td><td>ページ品質検査・並走検証（月曜は取得の網羅状況と追走難度 v2 の突き合わせも）</td><td><span class="fa-tag t-gcp">GCP Jobs</span></td></tr>
+<tr><td>08:30</td><td>バロメーターの取り直し</td><td><span class="fa-tag t-vps">VPS 取得役</span></td></tr>
+<tr><td>12:00〜21:59、20 分おき（土日月火）</td><td>予測成績の集計（土日は暫定、月火は確定）と推奨度つきの仮想購入の追記、結果の通知</td><td><span class="fa-tag t-gcp">GCP Jobs</span></td></tr>
+<tr><td>17:00</td><td>レース一覧（夕）</td><td><span class="fa-tag t-vps">VPS 取得役</span></td></tr>
+<tr><td>17:30</td><td>開催日の夕方：速報結果・確定オッズ</td><td><span class="fa-tag t-vps">VPS 取得役</span></td></tr>
+<tr><td>18:00</td><td>前日夕方の取得（出馬表・馬柱・追い切り・SmartRC）。金曜は週次更新（直近 10 日の確定結果・指数）も</td><td><span class="fa-tag t-vps">VPS 取得役</span></td></tr>
+<tr><td>19:10・19:40</td><td>前夜の計算（追走難度・追走難度 v2・想定オッズ）、<b>翌開催日の全レースの取得タスクの予約</b>、ラップ予想（翌日）。2 回走らせて取得の遅れを吸収（何度走らせても同じ結果）。金曜は馬名インデックスも</td><td><span class="fa-tag t-gcp">GCP Jobs</span></td></tr>
+<tr><td>19:30</td><td>直近の未取得の取り直し（夕）。金曜はバロメーターも</td><td><span class="fa-tag t-vps">VPS 取得役</span></td></tr>
+<tr><td>20:00</td><td>厩舎コメント（夜）</td><td><span class="fa-tag t-vps">VPS 取得役</span></td></tr>
+<tr><td>21:00</td><td>新馬の 5 世代血統</td><td><span class="fa-tag t-vps">VPS 取得役</span></td></tr>
+<tr><td>21:30</td><td>夜のスクレイピング状況サマリー</td><td><span class="fa-tag t-gcp">GCP Jobs</span></td></tr>
+<tr><td>毎時 :05</td><td>VPS 取得役の定期タスクを 6 時間先まで予約</td><td><span class="fa-tag t-gcp">GCP Jobs</span></td></tr>
+<tr><td>00:05</td><td>共通ログインの更新（実際に変わるのは毎月 1 日）</td><td><span class="fa-tag t-gcp">GCP Jobs</span></td></tr>
+<tr><td>5 分おき</td><td>VPS の生存監視（死活・メモリ・ユニット・ディスク）。15 分おきに取得異常を通知</td><td><span class="fa-tag t-gcp">GCP Jobs</span></td></tr>
+<tr><td>3 分おき</td><td>画面の新版を GCS から取り込む（prod。stg は 5 分おき）</td><td><span class="fa-tag t-vps">VPS 取得役</span></td></tr>
+<tr><td>03:00–04:00</td><td>メンテナンス表示（<code>config/maintenance.json</code>）。取得役の新版の取り込みは 03:20</td><td>—</td></tr>
+</tbody></table>
+
+<h3>4.4 開催日の 1 レース</h3>
+<div class="fa-fig"><svg class="fa-svg" viewBox="0 0 1120 350" width="100%" role="img" aria-label="1 レースの時間軸" xmlns="http://www.w3.org/2000/svg"><rect width="1120" height="350" rx="14" fill="#0e1730"/><line x1="60.0" y1="170" x2="1060.0" y2="170" stroke="#566a9a" stroke-width="2"/>
+<line x1="60.0" y1="164" x2="60.0" y2="176" stroke="#566a9a"/>
+<text x="60.0" y="194" text-anchor="middle" font-size="11" fill="#8fa0cc" font-family="Noto Sans JP, system-ui, sans-serif">T-70</text>
+<line x1="171.11111111111111" y1="164" x2="171.11111111111111" y2="176" stroke="#566a9a"/>
+<text x="171.11111111111111" y="194" text-anchor="middle" font-size="11" fill="#8fa0cc" font-family="Noto Sans JP, system-ui, sans-serif">T-60</text>
+<line x1="282.22222222222223" y1="164" x2="282.22222222222223" y2="176" stroke="#566a9a"/>
+<text x="282.22222222222223" y="194" text-anchor="middle" font-size="11" fill="#8fa0cc" font-family="Noto Sans JP, system-ui, sans-serif">T-50</text>
+<line x1="393.3333333333333" y1="164" x2="393.3333333333333" y2="176" stroke="#566a9a"/>
+<text x="393.3333333333333" y="194" text-anchor="middle" font-size="11" fill="#8fa0cc" font-family="Noto Sans JP, system-ui, sans-serif">T-40</text>
+<line x1="504.44444444444446" y1="164" x2="504.44444444444446" y2="176" stroke="#566a9a"/>
+<text x="504.44444444444446" y="194" text-anchor="middle" font-size="11" fill="#8fa0cc" font-family="Noto Sans JP, system-ui, sans-serif">T-30</text>
+<line x1="615.5555555555555" y1="164" x2="615.5555555555555" y2="176" stroke="#566a9a"/>
+<text x="615.5555555555555" y="194" text-anchor="middle" font-size="11" fill="#8fa0cc" font-family="Noto Sans JP, system-ui, sans-serif">T-20</text>
+<line x1="726.6666666666666" y1="164" x2="726.6666666666666" y2="176" stroke="#566a9a"/>
+<text x="726.6666666666666" y="194" text-anchor="middle" font-size="11" fill="#8fa0cc" font-family="Noto Sans JP, system-ui, sans-serif">T-10</text>
+<line x1="837.7777777777777" y1="164" x2="837.7777777777777" y2="176" stroke="#566a9a"/>
+<text x="837.7777777777777" y="194" text-anchor="middle" font-size="11" fill="#8fa0cc" font-family="Noto Sans JP, system-ui, sans-serif">発走</text>
+<line x1="948.8888888888889" y1="164" x2="948.8888888888889" y2="176" stroke="#566a9a"/>
+<text x="948.8888888888889" y="194" text-anchor="middle" font-size="11" fill="#8fa0cc" font-family="Noto Sans JP, system-ui, sans-serif">T+10</text>
+<line x1="1060.0" y1="164" x2="1060.0" y2="176" stroke="#566a9a"/>
+<text x="1060.0" y="194" text-anchor="middle" font-size="11" fill="#8fa0cc" font-family="Noto Sans JP, system-ui, sans-serif">T+20</text>
+<rect x="115.55555555555556" y="120" width="388.8888888888889" height="26" rx="6" fill="#34d399" fill-opacity="0.3" stroke="#34d399"/>
+<text x="310.0" y="138" text-anchor="middle" font-size="12" fill="#eafff6" font-family="Noto Sans JP, system-ui, sans-serif">馬体重の検知（180 秒おき）</text>
+<text x="310.0" y="110" text-anchor="middle" font-size="11" fill="#34d399" font-family="Noto Sans JP, system-ui, sans-serif">VPS 取得役</text>
+<circle cx="171.11111111111111" cy="170" r="7" fill="#34d399"/>
+<text x="171.11111111111111" y="232" text-anchor="middle" font-size="12" fill="#34d399" font-family="Noto Sans JP, system-ui, sans-serif">T-60：オッズ</text>
+<text x="171.11111111111111" y="250" text-anchor="middle" font-size="11" fill="#34d399" font-family="Noto Sans JP, system-ui, sans-serif">（単勝・複勝など）</text>
+<rect x="193.33333333333331" y="60" width="333.3333333333333" height="26" rx="6" fill="#4f8bff" fill-opacity="0.3" stroke="#4f8bff"/>
+<text x="360.0" y="78" text-anchor="middle" font-size="12" fill="#eaf1ff" font-family="Noto Sans JP, system-ui, sans-serif">予測を作る（馬体重の検知の直後）</text>
+<text x="360.0" y="50" text-anchor="middle" font-size="11" fill="#4f8bff" font-family="Noto Sans JP, system-ui, sans-serif">GCP Jobs（predict-race）</text>
+<circle cx="337.77777777777777" cy="170" r="6" fill="none" stroke="#4f8bff" stroke-width="2"/>
+<text x="337.77777777777777" y="270" text-anchor="middle" font-size="11.5" fill="#4f8bff" font-family="Noto Sans JP, system-ui, sans-serif">T-45：馬体重が取れなくても</text>
+<text x="337.77777777777777" y="286" text-anchor="middle" font-size="11.5" fill="#4f8bff" font-family="Noto Sans JP, system-ui, sans-serif">予測を出す（保険）</text>
+<circle cx="671.1111111111111" cy="170" r="7" fill="#34d399"/>
+<text x="671.1111111111111" y="232" text-anchor="middle" font-size="12" fill="#34d399" font-family="Noto Sans JP, system-ui, sans-serif">T-15：オッズ一式</text>
+<text x="671.1111111111111" y="250" text-anchor="middle" font-size="11" fill="#34d399" font-family="Noto Sans JP, system-ui, sans-serif">（バンドル）</text>
+<rect x="726.6666666666666" y="120" width="88.88888888888891" height="26" rx="6" fill="none" stroke="#34d399" stroke-dasharray="5 4"/>
+<text x="771.1111111111111" y="138" text-anchor="middle" font-size="11.5" fill="#34d399" font-family="Noto Sans JP, system-ui, sans-serif">T-10／5／2</text>
+<text x="771.1111111111111" y="110" text-anchor="middle" font-size="11" fill="#34d399" font-family="Noto Sans JP, system-ui, sans-serif">直前オッズ（任意）</text>
+<circle cx="837.7777777777777" cy="170" r="7" fill="#f3f6ff"/>
+<circle cx="1004.4444444444445" cy="170" r="7" fill="#f87171"/>
+<text x="1004.4444444444445" y="232" text-anchor="middle" font-size="12" fill="#f87171" font-family="Noto Sans JP, system-ui, sans-serif">T+15：速報結果</text>
+<text x="1004.4444444444445" y="250" text-anchor="middle" font-size="11" fill="#f87171" font-family="Noto Sans JP, system-ui, sans-serif">→ 払戻・成績へ</text>
+<text x="560" y="330" text-anchor="middle" font-size="12" fill="#8fa0cc" font-family="Noto Sans JP, system-ui, sans-serif">「T-60」は発走の 60 分前。最初のオッズだけ取り、T-15 に一式を取る（運用の約束）。点線は有効化したときだけ。</text></svg></div>
+<p class="fa-cap">図 4　1 レースの時間軸。取得（緑）と予測（青）。予測は「馬体重が出たら」が基本で、出なくても T-45 に出す。</p>
+<table>
+<thead><tr><th>いつ</th><th>何が起きる</th><th>どこで</th></tr></thead>
+<tbody>
+<tr><td>前夜 19:10</td><td>翌日の全レースについて、T-60／T-15／（任意で）T-10・5・2 の取得タスクと、馬体重の検知タスクを予約</td><td><span class="fa-tag t-gcp">GCP Jobs</span></td></tr>
+<tr><td>T-65〜T-30</td><td>出馬表を取り直して馬体重の発表を探す（180 秒おき）。見つかればイベントを置く（見つかった後は取らない）</td><td><span class="fa-tag t-vps">VPS 取得役</span></td></tr>
+<tr><td>T-60 前後</td><td>オッズ（最初の 1 回）。同じころ、イベントをきっかけに予測を作る</td><td><span class="fa-tag t-vps">VPS 取得役</span>／<span class="fa-tag t-gcp">GCP Jobs</span></td></tr>
+<tr><td>T-45</td><td>馬体重の検知が間に合わなかったレースの予測を出す（保険）</td><td><span class="fa-tag t-gcp">GCP Jobs</span></td></tr>
+<tr><td>T-15</td><td>オッズ一式（単複・馬連・ワイド・馬単・3 連複）。画面の期待値と推奨馬券はこの値で更新</td><td><span class="fa-tag t-vps">VPS 取得役</span></td></tr>
+<tr><td>T-10／5／2</td><td>単複だけの直前オッズ（<code>KEIBA_ODDS_LATE_SNAPSHOTS=1</code> のときだけ）</td><td><span class="fa-tag t-vps">VPS 取得役</span></td></tr>
+<tr><td>T+15</td><td>速報結果。払戻と合わせて予測成績に反映</td><td><span class="fa-tag t-vps">VPS 取得役</span>（移行まで <span class="fa-tag t-host">ホスト（移行まで）</span>）</td></tr>
+</tbody></table>
+
+<h3>4.5 週・月・手動で動くもの</h3>
+<table>
+<thead><tr><th>周期</th><th>何をする</th><th>どこで</th></tr></thead>
+<tbody>
+<tr><td>月曜 10:00</td><td>ドリフト監視（特徴量の抜き取り）、凍結候補の前向き追跡</td><td><span class="fa-tag t-gcp">GCP Jobs</span></td></tr>
+<tr><td>日曜 22:00</td><td>オッズ乖離（T-15 と T-60）の週次集計</td><td><span class="fa-tag t-gcp">GCP Jobs</span></td></tr>
+<tr><td>金曜 18:00</td><td>週次更新（直近 10 日の確定結果・指数・バロメーター）、馬名インデックス（19:10 の枠）</td><td><span class="fa-tag t-vps">VPS 取得役</span>／<span class="fa-tag t-gcp">GCP Jobs</span></td></tr>
+<tr><td>夜間（週次〜月〜木）</td><td>過去データの取りこぼし補填、調教の取り直し（1 晩 2,200 頭）</td><td><span class="fa-tag t-host">ホスト（移行まで）</span>（研究側の回線）</td></tr>
+<tr><td>随時（手動）</td><td>学習・評価・特徴量の再構築 → モデルを GCS の <code>models/</code> に公開。学習し直したら再公開</td><td><span class="fa-tag t-host">ホスト（移行まで）</span></td></tr>
+</tbody></table>
+<p>廃止（最終形では動かさない）：2022〜2025 年の定期補填、馬の備考、誕生日データ、PostgreSQL の同期。</p>
+
+<h2 id="fa-display">5. ユーザーへのデータ表示フロー</h2>
+<div class="fa-fig"><svg class="fa-svg" viewBox="0 0 1120 380" width="100%" role="img" aria-label="表示フロー" xmlns="http://www.w3.org/2000/svg"><rect width="1120" height="380" rx="14" fill="#0e1730"/><rect x="20" y="40" width="190" height="88" rx="10" fill="#a78bfa" fill-opacity="0.13" stroke="#a78bfa" stroke-width="1.6"/>
+<text x="115.0" y="68.9" text-anchor="middle" font-size="14" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">ブラウザ</text>
+<text x="115.0" y="88.9" text-anchor="middle" font-size="13" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">画面を開く</text>
+<text x="115.0" y="108.9" text-anchor="middle" font-size="13" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">/api を呼ぶ</text>
+<rect x="242" y="40" width="190" height="88" rx="10" fill="#f6821f" fill-opacity="0.13" stroke="#f6821f" stroke-width="1.6"/>
+<text x="337.0" y="68.9" text-anchor="middle" font-size="14" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">Cloudflare</text>
+<text x="337.0" y="88.9" text-anchor="middle" font-size="13" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">TLS・Access</text>
+<text x="337.0" y="108.9" text-anchor="middle" font-size="13" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">（Tunnel で VPS へ）</text>
+<rect x="464" y="40" width="190" height="88" rx="10" fill="#34d399" fill-opacity="0.13" stroke="#34d399" stroke-width="1.6"/>
+<text x="559.0" y="68.9" text-anchor="middle" font-size="14" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">VPS  nginx → Next.js</text>
+<text x="559.0" y="88.9" text-anchor="middle" font-size="13" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">画面の殻を返す</text>
+<text x="559.0" y="108.9" text-anchor="middle" font-size="13" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">/api は Cloud Run へ</text>
+<rect x="686" y="40" width="190" height="88" rx="10" fill="#4f8bff" fill-opacity="0.13" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="781.0" y="68.9" text-anchor="middle" font-size="14" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">Cloud Run API</text>
+<text x="781.0" y="88.9" text-anchor="middle" font-size="13" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">GCS を読んで</text>
+<text x="781.0" y="108.9" text-anchor="middle" font-size="13" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">会員区分で項目を絞る</text>
+<rect x="908" y="40" width="190" height="88" rx="10" fill="#4f8bff" fill-opacity="0.13" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="1003.0" y="68.9" text-anchor="middle" font-size="14" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">GCS</text>
+<text x="1003.0" y="88.9" text-anchor="middle" font-size="13" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">予測・出馬表・オッズ</text>
+<text x="1003.0" y="108.9" text-anchor="middle" font-size="13" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">（正本）</text>
+<polyline points="210,84 242,84" fill="none" stroke="#9fb4e8" stroke-width="1.8"/>
+<polygon points="242,84 234.0,88.4 234.0,79.6" fill="#9fb4e8"/>
+<circle cx="226" cy="66" r="11" fill="#0b1226" stroke="#fbbf24" stroke-width="1.6"/><text x="226" y="70.5" text-anchor="middle" font-size="12" font-weight="700" fill="#fbbf24" font-family="Noto Sans JP, system-ui, sans-serif">1</text>
+<polyline points="432,84 464,84" fill="none" stroke="#9fb4e8" stroke-width="1.8"/>
+<polygon points="464,84 456.0,88.4 456.0,79.6" fill="#9fb4e8"/>
+<circle cx="448" cy="66" r="11" fill="#0b1226" stroke="#fbbf24" stroke-width="1.6"/><text x="448" y="70.5" text-anchor="middle" font-size="12" font-weight="700" fill="#fbbf24" font-family="Noto Sans JP, system-ui, sans-serif">2</text>
+<polyline points="654,84 686,84" fill="none" stroke="#9fb4e8" stroke-width="1.8"/>
+<polygon points="686,84 678.0,88.4 678.0,79.6" fill="#9fb4e8"/>
+<circle cx="670" cy="66" r="11" fill="#0b1226" stroke="#fbbf24" stroke-width="1.6"/><text x="670" y="70.5" text-anchor="middle" font-size="12" font-weight="700" fill="#fbbf24" font-family="Noto Sans JP, system-ui, sans-serif">3</text>
+<polyline points="876,84 908,84" fill="none" stroke="#9fb4e8" stroke-width="1.8"/>
+<polygon points="908,84 900.0,88.4 900.0,79.6" fill="#9fb4e8"/>
+<circle cx="892" cy="66" r="11" fill="#0b1226" stroke="#fbbf24" stroke-width="1.6"/><text x="892" y="70.5" text-anchor="middle" font-size="12" font-weight="700" fill="#fbbf24" font-family="Noto Sans JP, system-ui, sans-serif">4</text>
+<text x="560" y="24" text-anchor="middle" font-size="12" fill="#8fa0cc" font-family="Noto Sans JP, system-ui, sans-serif">リクエスト</text>
+<rect x="20" y="168" width="190" height="112" rx="10" fill="#fbbf24" fill-opacity="0.07" stroke="#fbbf24" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="115.0" y="192.2" text-anchor="middle" font-size="12" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">ここで効く工夫</text>
+<text x="115.0" y="210.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">前回の表示を先に出す</text>
+<text x="115.0" y="228.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">（sessionStorage）</text>
+<text x="115.0" y="246.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">取得済みの予測は 45 秒</text>
+<text x="115.0" y="264.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">メモリに保持・先読み</text>
+<polyline points="115,128 115,168" fill="none" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="5 4"/>
+<polygon points="115,168 110.6,160.0 119.4,160.0" fill="#fbbf24"/>
+<rect x="242" y="168" width="190" height="112" rx="10" fill="#fbbf24" fill-opacity="0.07" stroke="#fbbf24" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="337.0" y="210.2" text-anchor="middle" font-size="12" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">ここで効く工夫</text>
+<text x="337.0" y="228.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">（キャッシュなし）</text>
+<text x="337.0" y="246.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">Access で本人確認</text>
+<polyline points="337,128 337,168" fill="none" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="5 4"/>
+<polygon points="337,168 332.6,160.0 341.4,160.0" fill="#fbbf24"/>
+<rect x="464" y="168" width="190" height="112" rx="10" fill="#fbbf24" fill-opacity="0.07" stroke="#fbbf24" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="559.0" y="201.2" text-anchor="middle" font-size="12" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">ここで効く工夫</text>
+<text x="559.0" y="219.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">画像は nginx に 7 日</text>
+<text x="559.0" y="237.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">画面の殻は VPS が返す</text>
+<text x="559.0" y="255.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">（データの計算なし）</text>
+<polyline points="559,128 559,168" fill="none" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="5 4"/>
+<polygon points="559,168 554.6,160.0 563.4,160.0" fill="#fbbf24"/>
+<rect x="686" y="168" width="190" height="112" rx="10" fill="#fbbf24" fill-opacity="0.07" stroke="#fbbf24" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="781.0" y="192.2" text-anchor="middle" font-size="12" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">ここで効く工夫</text>
+<text x="781.0" y="210.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">事前生成した応答を</text>
+<text x="781.0" y="228.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">ディスクから返す</text>
+<text x="781.0" y="246.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">なければプロセス内</text>
+<text x="781.0" y="264.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">キャッシュ→計算</text>
+<polyline points="781,128 781,168" fill="none" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="5 4"/>
+<polygon points="781,168 776.6,160.0 785.4,160.0" fill="#fbbf24"/>
+<rect x="908" y="168" width="190" height="112" rx="10" fill="#fbbf24" fill-opacity="0.07" stroke="#fbbf24" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="1003.0" y="201.2" text-anchor="middle" font-size="12" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">ここで効く工夫</text>
+<text x="1003.0" y="219.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">（正本）</text>
+<text x="1003.0" y="237.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">更新は保存した</text>
+<text x="1003.0" y="255.2" text-anchor="middle" font-size="11" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">レース単位で反映</text>
+<polyline points="1003,128 1003,168" fill="none" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="5 4"/>
+<polygon points="1003,168 998.6,160.0 1007.4,160.0" fill="#fbbf24"/>
+<rect x="20" y="304" width="1080" height="56" rx="10" fill="#c9d1d9" fill-opacity="0.06" stroke="#c9d1d9" stroke-width="1.6"/>
+<text x="560.0" y="336.4" text-anchor="middle" font-size="12.5" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">応答の項目は会員区分で決まる：匿名＝勝率・複勝率まで／会員＝想定オッズ・期待値・印・推奨馬券／開発者＝全項目（サーバー側で落とす許可リスト方式）</text></svg></div>
+<p class="fa-cap">図 5　画面を開いてから予測が出るまで。①〜④ が往路。黄色の破線は、各所で待ちを減らす工夫。</p>
+
+<h3>5.1 画面を開くと起きること</h3>
+<table>
+<thead><tr><th>順</th><th>何が起きる</th><th>待ちを減らす工夫</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>ブラウザが <code>app.megu-keiba.com</code> を開く。Cloudflare が受け、Tunnel で VPS の nginx へ。</td><td>画面の殻（HTML・JS・CSS）は VPS が返す。データの計算は含まない</td></tr>
+<tr><td>2</td><td>画面の JS が <code>/api/*</code> を呼ぶ（開催日の一覧 → レース一覧 → レースの予測）。</td><td>URL に <code>?race=</code> があれば、一覧を待たずにそのレースの予測を先に取り始める。一覧が出たら同じ日の他のレースも裏で先読み</td></tr>
+<tr><td>3</td><td>nginx が <code>/api/*</code> を Cloud Run API へ中継（共有鍵と接続元 IP を付ける）。</td><td>Cloud Run は最小 0（待機コストなし）。待ちの目立つ最初の 1 回は、画面側の先読みと前回表示で隠す</td></tr>
+<tr><td>4</td><td>API が GCS の予測・出馬表・オッズ・モデルを読み、<b>会員区分で項目を絞って</b>返す。</td><td>事前生成した応答があればディスクから返す（なければ従来どおり計算）。保存のあったレースだけ作り直す</td></tr>
+<tr><td>5</td><td>ブラウザに描画。直前に見たレースは前回の表示を先に出し、最新が届いたら差し替える。</td><td>取得済みの予測は 45 秒メモリに保持（一覧⇔詳細で共有）。ログアウトで前回表示は消す</td></tr>
+</tbody></table>
+
+<h3>5.2 会員区分と見える項目</h3>
+<table>
+<thead><tr><th>区分</th><th>見える項目</th><th>決め方</th></tr></thead>
+<tbody>
+<tr><td>匿名</td><td>勝率・複勝率まで</td><td>サーバーが応答から項目を落とす（許可リスト方式）。会員限定のパスは 401</td></tr>
+<tr><td>会員</td><td>想定オッズ・期待値・印（めぐ AI）・推奨馬券・付随情報</td><td><code>config/members.json</code>（ハッシュのみ）。共通ログインは毎月 1 日に更新</td></tr>
+<tr><td>開発者（所有者）</td><td>全項目</td><td>本人の認証</td></tr>
+</tbody></table>
+<p>一般公開（不特定多数）に出してよい項目の正は <code>config/public_fields.json</code>。公開モードでは、自前の計算（A）だけを開発者以外に出す。取得元の規約に沿った設計。</p>
+
+<h3>5.3 キャッシュの層</h3>
+<table>
+<thead><tr><th>層</th><th>場所</th><th>保持</th><th>無効になるとき</th></tr></thead>
+<tbody>
+<tr><td>前回表示</td><td>ブラウザ（タブの間だけ）</td><td>30 分まで</td><td>ログイン区分が変わった・ログアウト・最新が届いた</td></tr>
+<tr><td>画面内メモリ</td><td>ブラウザ</td><td>予測 45 秒など</td><td>期限・強制更新</td></tr>
+<tr><td>HTTP</td><td>ブラウザ（<code>private</code>）</td><td>30〜300 秒</td><td>期限・Cookie の違い</td></tr>
+<tr><td>画像</td><td>VPS の nginx</td><td>7 日</td><td>期限・手動のパージ</td></tr>
+<tr><td>事前生成</td><td>API 側のディスク（一時領域）</td><td>300 秒（古い開催日は 6 時間）</td><td>そのレースの保存があった・配備や手動クリア</td></tr>
+<tr><td>プロセス内</td><td>API のメモリ</td><td>数十秒〜</td><td>データ保存の世代が進んだ</td></tr>
+</tbody></table>
+<div class="fa-box">
+  <p>事前生成は <code>KEIBA_PREWARM=1</code> のときだけ働く（既定オフ）。保存の世代が頻繁に進む開催日は、作り直しの間だけ従来どおり計算になる。Cloud Run では、保存する Jobs と API が別のコンテナなので「変更に反応して作り直す」仕組みは効かず、期限で追従する（詳細：<code>docs/operations/prewarm.md</code>）。</p>
+</div>
+
+<h2 id="fa-failure">6. 止まったとき、どうなるか</h2>
+<table>
+<thead><tr><th>止まるもの</th><th>ユーザーの画面</th><th>裏の動き</th><th>復旧</th></tr></thead>
+<tbody>
+<tr><td>研究用 PC</td><td>影響なし</td><td>学習・補填が止まるだけ。運用データには書いていない</td><td>起動し直す</td></tr>
+<tr><td>VPS</td><td>画面が開けない</td><td>GCP の予測・集計は続く。取得役も止まるので、期限が来た取得タスクは失敗として残り、生存報告の途絶で Slack に緊急通知</td><td>VPS を再起動。画面は GCS の最新版を再度取り込む</td></tr>
+<tr><td>Cloud Run API</td><td>予測が出ない（画面の殻は出る）</td><td>Jobs と取得は続き、GCS に溜まる</td><td>1 つ前のリビジョンへ（数秒）</td></tr>
+<tr><td>取得元が遮断</td><td>新しいデータが入らない</td><td>アクセス制限の疑いは再試行せず、30 分取得を止めて通知</td><td>間隔を空けて再開</td></tr>
+<tr><td>GCS</td><td>全体が止まる（正本）</td><td>—</td><td>復旧待ち（唯一の共通点）</td></tr>
+</tbody></table>
+
+<h2 id="fa-cost">7. 費用と守る約束</h2>
+<ul>
+  <li><b>月額の目標：GCP＋Cloudflare＋ConoHa の合計で 2,000 円以内。</b>VPS は前払い済み（2028-05 まで）。Cloud Run は最小インスタンス 0 で無料枠にほぼ収まる。最小 1 にすると約 2,900 円/月増えて予算を超える。日次のコスト報告（想定と実績、急増の警告）で見張る。</li>
+  <li><b>VPS のメモリ：</b>常駐 600MB 以下、空き 1GB 以上。取得役は上限 250MB で、超えたら最初に止まる。</li>
+  <li><b>取得は 1 本ずつ。</b>netkeiba への同時アクセスは 1、日の上限と間隔を守る。同じタスクを 2 か所で取らない（担当を 1 つに決める）。</li>
+  <li><b>鍵を作らない・貼らない。</b>GitHub から GCP へは WIF。VPS と研究用 PC の鍵は役割ごとに分け、権限は最小（<code>models/</code> への公開だけ、<code>ops/</code> の読み取りだけ、など）。</li>
+  <li><b>環境名は prod 一つ。</b>確認用の stg は、ホスト上の環境ではなく、GCP のタグ付きリビジョンと VPS の 2 つ目の画面に置く。</li>
+</ul>
+
+<h2 id="fa-glossary">8. 用語</h2>
+<table>
+<thead><tr><th>語</th><th>意味</th></tr></thead>
+<tbody>
+<tr><td>取得役</td><td>VPS で動く小さな実行プログラム。GCS のタスク表を見て、期限の来た取得を 1 本ずつ行う。</td></tr>
+<tr><td>Jobs</td><td>Cloud Run Jobs。時刻か合図のときだけ起動して終わる計算（予測・集計など）。</td></tr>
+<tr><td>タグ付きリビジョン（rstg）</td><td>Cloud Run の新しい版を、通信を流さずに試せる専用 URL つきで置いたもの。stg の API。</td></tr>
+<tr><td>T-60／T-15</td><td>発走の 60 分前／15 分前。</td></tr>
+<tr><td>WIF</td><td>Workload Identity Federation。GitHub の実行が、鍵ファイルなしで GCP に入るための仕組み。</td></tr>
+<tr><td>事前生成</td><td>アクセスされる前に応答を作って置いておくこと（prewarm）。</td></tr>
+</tbody></table>
+
+<h2 id="fa-now">9. 現在の到達点（2026-10-27）と、最終形との差</h2>
+<div class="fa-box warn">
+  <p><b>最終形はまだ移行途中。</b>「ホストを止めても取得・予測・表示が続く」ことは、まだ確認できていない。画面（VPS）→ API（Cloud Run）の経路は動いているが、取得と予測の生成の担当は、まだホスト（keiba-remote）にある。</p>
+</div>
+<table>
+<thead><tr><th>項目</th><th>最終形</th><th>現状</th></tr></thead>
+<tbody>
+<tr><td>画面の配信（prod）</td><td>VPS（GCS から取り込み）</td><td>完了</td></tr>
+<tr><td>API</td><td>Cloud Run</td><td>完了（2026-10-25 に prod へ昇格、VPS の上流を切替）</td></tr>
+<tr><td>監視ポータル</td><td>Cloud Run（読み取り専用）</td><td>完了</td></tr>
+<tr><td>配備</td><td>develop → stg → master の push</td><td>完了（昇格 3 回）</td></tr>
+<tr><td>権限の分離</td><td>publisher／fetch／monitor</td><td>完了（publisher が <code>ops/</code> に書くと 403）</td></tr>
+<tr><td>モデルの置き場</td><td>GCS <code>models/</code></td><td>公開済み（15 コンポーネント）</td></tr>
+<tr><td>データ取得</td><td>VPS の取得役</td><td>影モードで並走検証の段階（ホストの cron が本番の担当）</td></tr>
+<tr><td>予測の生成</td><td>Cloud Run Jobs（day-prep → predict-race）</td><td>実機で出力を確かめている途中。現状はホスト</td></tr>
+<tr><td>結果の取り込み・通知・集計</td><td>VPS の取得役＋Jobs</td><td>定義済み・未実行のものあり。現状はホスト</td></tr>
+<tr><td>stg</td><td>VPS の 2 つ目の画面＋ <code>rstg</code></td><td>確認用の環境として、ホスト上の stg が現役（移行の完了まで）</td></tr>
+</tbody></table>
+<p>ホスト停止試験は、並走 → 影モード（直近 5 日） → 担当移譲 → 模擬停止 → 実停止の順に進める。進み具合は「公開基盤の現在の構成と脱ホスト移行」の章を見る。</p>
+
+<h3>関連する章</h3>
+<ul>
+  <li><a href="../operations/decoupling_status.html">公開基盤の現在の構成と脱ホスト移行</a>（到達点・停止試験の手順）</li>
+  <li><a href="../../operations/architecture_target.md">運用の最終形の全体設計</a>（役割分担・費用の根拠）</li>
+  <li><a href="../../operations/vps_agent.md">VPS の常駐最小構成と取得の実行役</a></li>
+  <li><a href="../../operations/gcp_jobs_migration.md">GCP Jobs への移行</a>（ジョブの一覧と時刻）</li>
+  <li><a href="../../operations/cloud_run_api.md">API の Cloud Run 化</a></li>
+  <li><a href="../../operations/github_promote.md">GitHub Actions による反映</a></li>
+  <li><a href="../operations/cron_schedule.html">cron の登録内容</a>／<a href="../operations/raceday_prediction_workflow.html">開催日の予測までの流れ</a></li>
+</ul>
+
+</article>
+</main>
+</body>
+</html>
