@@ -131,26 +131,47 @@ function initialValues(date: string): Map<string, RaceValue> | null {
   return st?.races ? toMap(st.races) : null;
 }
 
-/** 開催日（YYYYMMDD）の各レースの価値。前回の内容があれば先に出し、裏で更新する。認証の確認とは並行して取りに行く。 */
-export function useRaceValues(date: string): Map<string, RaceValue> {
-  const [map, setMap] = useState<Map<string, RaceValue>>(new Map());
+export type RaceValuesState = { values: Map<string, RaceValue>; loading: boolean; failed: boolean };
+
+/** 開催日（YYYYMMDD）の各レースの価値と、取得の状態。前回の内容があれば先に出し、裏で更新する。認証の確認とは並行して取りに行く。 */
+export function useRaceValuesState(date: string): RaceValuesState {
+  const [state, setState] = useState<RaceValuesState>({ values: new Map(), loading: true, failed: false });
   const { loading, isMember: loggedIn } = useAuthStatus();
   useEffect(() => {
     let alive = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     if (!date && !USE_MOCK) return;
-    if (!USE_MOCK && !loading && !loggedIn) { setMap(new Map()); return; }   // ログイン必須の API。未ログインと分かったら呼ばない
+    if (!USE_MOCK && !loading && !loggedIn) { setState({ values: new Map(), loading: false, failed: false }); return; }   // ログイン必須の API。未ログインと分かったら呼ばない
     const first = initialValues(date);
-    if (first) setMap(first);
+    setState(first ? { values: first, loading: true, failed: false } : (s) => ({ values: s.values, loading: true, failed: false }));
     const run = (attempt: number) => {
-      fetchValues(date).then((m) => alive && setMap(m)).catch(() => {
-        if (alive && attempt < 3) timer = setTimeout(() => run(attempt + 1), 1500 * (attempt + 1));   // 一時的な失敗は前回の表示を残して再取得
+      fetchValues(date).then((m) => alive && setState({ values: m, loading: false, failed: false })).catch(() => {
+        if (!alive) return;
+        if (attempt < 3) timer = setTimeout(() => run(attempt + 1), 1500 * (attempt + 1));   // 一時的な失敗は前回の表示を残して再取得
+        else setState((s) => ({ values: s.values, loading: false, failed: true }));
       });
     };
     run(0);
     return () => { alive = false; if (timer) clearTimeout(timer); };
   }, [date, loading, loggedIn]);
-  return map;
+  return state;
+}
+
+export function useRaceValues(date: string): Map<string, RaceValue> {
+  return useRaceValuesState(date).values;
+}
+
+/** チップの2行目: まだ取得中なら『…』、取得に失敗したら『!』（読み込み中・失敗を『–』（未計算）と見分けられるように） */
+export function chipText(v: RaceValue | undefined, st?: { loading: boolean; failed: boolean }): string {
+  if (!v && st?.loading) return "…";
+  if (!v && st?.failed) return "!";
+  return chipLabel(v);
+}
+
+export function chipHint(v: RaceValue | undefined, st?: { loading: boolean; failed: boolean }): string {
+  if (!v && st?.loading) return "推奨度を取得中です";
+  if (!v && st?.failed) return "推奨度を取得できませんでした（ページを再読み込みすると再取得します）";
+  return valueTitle(v);
 }
 
 /** 市場補正したレースとしないレースが同じ日に混ざっているか（混ざっていると段の基準と順位が別になるので凡例に注記する） */

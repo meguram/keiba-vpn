@@ -11,6 +11,7 @@ import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates } from "@/lib/mock";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { MemberUpgradeModal } from "@/components/upgrade/MemberUpgradeModal";
 import { formatMD, todayJst, weekdayOf, WEEKDAY_JA } from "@/lib/weekDates";
+import { LoadingNotice } from "@/components/LoadingNotice";
 import { LEVEL_STYLE, useRaceValues, valueTitle, type RaceValue } from "@/lib/raceValue";
 import { roiText, useBetsSummary, yen, type BetsSummary, type RaceBet, type RatedCounts } from "@/lib/betsSummary";
 
@@ -278,7 +279,7 @@ export default function RacesPage() {
                 <button onClick={() => { setError(""); setReloadKey((n) => n + 1); }} style={{ marginLeft: 10, minHeight: 36, padding: "0 12px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface2)", color: "var(--text)", cursor: "pointer" }}>再読み込み</button>
               </div>
             )}
-            {loadingRaces && <div style={{ color: "var(--text-dim)", fontSize: 13, padding: "24px 0" }}>読み込み中…</div>}
+            {loadingRaces && <LoadingNotice what="レース一覧" padding="24px 0" onRetry={() => setReloadKey((n) => n + 1)} />}
             {!loadingRaces && !loadingDates && !error && rows.length === 0 && (
               <div style={{ color: "var(--text-dim)", fontSize: 13, padding: "24px 0" }}>表示できるレースがありません。</div>
             )}

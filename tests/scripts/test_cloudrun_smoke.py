@@ -86,7 +86,17 @@ def test_fetch_warm_retries_once_when_no_response_and_extends_the_wait(monkeypat
     assert calls == [75.0, 75.0]                              # 初回の読み込みで応答が遅れても 1 回取り直す
 
 
-def test_fetch_warm_does_not_retry_real_http_errors(monkeypatch):
+def test_fetch_warm_retries_gateway_timeout_then_succeeds(monkeypatch):
+    seq = iter([(504, b"timeout"), (200, b"{}")])
     calls = []
+    monkeypatch.setattr(M, "fetch", lambda url, headers=None, timeout=30.0: (calls.append(1), next(seq))[1])
+    assert M.fetch_warm("http://x/api") == (200, b"{}") and len(calls) == 2      # コールドスタートで 60 秒を超えた 504 は、温まった 2 回目で通す
+
+
+def test_fetch_warm_gives_up_after_retries_and_does_not_retry_real_http_errors(monkeypatch):
+    calls = []
+    monkeypatch.setattr(M, "fetch", lambda url, headers=None, timeout=30.0: (calls.append(1), (504, b"x"))[1])
+    assert M.fetch_warm("http://x/api")[0] == 504 and len(calls) == 3
+    calls.clear()
     monkeypatch.setattr(M, "fetch", lambda url, headers=None, timeout=30.0: (calls.append(1), (500, b"x"))[1])
     assert M.fetch_warm("http://x/api")[0] == 500 and len(calls) == 1
