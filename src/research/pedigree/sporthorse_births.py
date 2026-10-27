@@ -360,8 +360,13 @@ def apply(results_path: Path, d: Path) -> None:
         if r.get("status") == "ok" and src:
             url_map[r["horse_id"]] = src
     upsert_log(d / "birth_search_log.csv", log_rows)
+    man_is_new = not man_p.exists()
+    man_p.parent.mkdir(parents=True, exist_ok=True)
     with open(man_p, "a", encoding="utf-8", newline="") as f:
-        csv.writer(f).writerows(man_rows)
+        w = csv.writer(f)
+        if man_is_new:
+            w.writerow(["horse_id", "name", "birth_year", "birth_month", "birth_day", "source_url", "note"])
+        w.writerows(man_rows)
     if url_map:
         urls_p.parent.mkdir(parents=True, exist_ok=True)
         with open(urls_p, "w", encoding="utf-8", newline="") as f:
