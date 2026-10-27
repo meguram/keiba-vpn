@@ -602,25 +602,57 @@ def attach_bet_results(payload: dict[str, Any], race_id: str, storage: Any | Non
     if not res:
         return payload
     paid = payload.get("view") == "paid" or payload.get("strategy") == "target"
+    flat = payload.get("strategy") == "target"         # パターン別の推奨は、金額を見せず『条件を満たしたパターンを 100 円ずつ買った場合』で精算する
     items = payload.get("bets") if paid else payload.get("candidates")
+    amap: dict = {}
+    if flat:
+        try:
+            amap = pr.actual_odds_map(storage or HybridStorage(), race_id) if items else {}
+        except Exception as exc:  # noqa: BLE001  条件の判定ができないだけ
+            logger.warning("確定オッズの読み込みに失敗 %s: %s", race_id, exc)
     invested = returned = hits = 0
+    all_returned = all_hits = 0
     estimated = False
+    counted = 0
+    rows = []
     for it in items or []:
         combo = it.get("combo") if paid else it.get("pair")
-        amount = int(it.get("yen") if paid else it.get("bet_amount") or 0)
-        hit, ret, est = pr.settle_candidate(it.get("bet_type", ""), tuple(int(x) for x in (combo or [])), amount, float(it.get("odds") or it.get("est_multiple") or 0), res)
-        it["result"] = {"hit": bool(hit), "payout": round(ret), "estimated": bool(est)}
+        amount = pr.FLAT_STAKE_YEN if flat else int(it.get("yen") if paid else it.get("bet_amount") or 0)
+        bt = it.get("bet_type", "")
+        cmb = tuple(int(x) for x in (combo or []))
+        hit, ret, est = pr.settle_candidate(bt, cmb, amount, float(it.get("odds") or it.get("est_multiple") or 0), res)
+        res_item: dict[str, Any] = {"hit": bool(hit), "payout": round(ret), "estimated": bool(est)}
+        if flat:
+            key = tuple(sorted(cmb)) if bt in ("umaren", "wide", "sanrenpuku") else cmb
+            act = amap.get((bt, key))
+            em = float(it.get("est_multiple") or 0)
+            res_item["actual_multiple"] = act
+            res_item["passed"] = (act is not None and act >= em) if (amap and em) else None
+        it["result"] = res_item
+        rows.append((it, amount, hit, ret, est))
+    condition_known = flat and any(r[0]["result"].get("passed") is not None for r in rows)
+    for it, amount, hit, ret, est in rows:
+        all_returned += ret
+        all_hits += int(hit)
+        if flat and condition_known and it["result"].get("passed") is not True:
+            continue
         invested += amount
         returned += ret
         hits += int(hit)
+        counted += 1
         estimated = estimated or (hit and est)
     order = sorted(res["finish"].items(), key=lambda kv: kv[1])
     payload["result"] = {
         "status": res["status"], "official": bool(res.get("official")), "estimated": estimated,
         "finish": [{"pos": p_, "no": n_} for n_, p_ in order if p_ <= 3],
         "invested": invested, "returned": round(returned), "roi": round(returned / invested, 4) if invested else None,
-        "hits": hits, "n_bets": len(items or []),
+        "hits": hits, "n_bets": counted if flat else len(items or []),
     }
+    if flat:
+        payload["result"].update({
+            "stake_yen": pr.FLAT_STAKE_YEN, "condition": "actual_ge_est", "condition_known": bool(condition_known), "n_patterns": len(rows),
+            "all": {"invested": pr.FLAT_STAKE_YEN * len(rows), "returned": round(all_returned), "hits": all_hits},
+        })
     return payload
 
 

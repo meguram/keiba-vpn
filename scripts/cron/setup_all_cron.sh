@@ -122,8 +122,9 @@ PATH=/opt/conda/bin:/usr/local/bin:/usr/bin:/bin
 # 開催日以外は自動スキップ
 */10 20-23 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${CRON_RUN} jra-baba-morning -- bash ${RUNNER} ${PROJECT_DIR} jra-baba-morning logs/jra_baba_morning.log # KEIBA-VPN-ALL
 
-# ── 騎手・調教師統計 ─────────── UTC: 20:30 / JST: 05:30 ────────── # KEIBA-VPN-ALL
-30 20 * * * bash ${CRON_RUN} update_jockey_trainer_stats -- ${UPDATE_JT} # KEIBA_JT_STATS
+# ── 騎手・調教師統計 ─────────── UTC: 22:15 / JST: 07:15 ────────── # KEIBA-VPN-ALL
+# export_tables_daily（UTC 22:00・約 3 分）の後に回す。前日夕方に確定した結果（月曜夕方に出る週末分）をその日の集計に入れるため
+15 22 * * * bash ${CRON_RUN} update_jockey_trainer_stats -- ${UPDATE_JT} # KEIBA_JT_STATS
 
 # ── SLA 3: 開催日ランナー ───────── UTC: 22:30 / JST: 07:30 ──────── # KEIBA-VPN-ALL
 # 常駐プロセス: 全レース終了まで内部ループで待機・実行

@@ -336,6 +336,7 @@ MEMBER_REDACTORS = {redact_predictions: redact_predictions_member, redact_race_d
 
 _MEMBER_ONLY_PATTERNS = [re.compile(p) for p in (
     r"^/api/race/[^/]+/(tracking-difficulty|bundle|bloodline-aptitude|final-odds)",
+    r"^/api/race/[^/]+/result$",
     r"^/api/predictions$",
     r"^/api/growth-curve/(?!status)",
     r"^/api/race-quality/",

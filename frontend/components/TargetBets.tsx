@@ -44,15 +44,16 @@ function Badge({ tier }: { tier: PaidTier }) {
   );
 }
 
-export function TargetBets({
-  rec, cap, setCap, onRerun, loading,
-}: { rec: TargetRec; cap: string; setCap: (v: string) => void; onRerun: () => void; loading: boolean }) {
+export function TargetBets({ rec }: { rec: TargetRec }) {
   const plan = rec.plans?.find((p) => p.id === rec.default_plan) ?? null;
   const view = plan ? { ...rec, bets: plan.bets, status: plan.status, skip_reason: plan.skip_reason, total_yen: plan.total_yen, any_hit_rate_pct: plan.any_hit_rate_pct,
     target_payout_yen: plan.target_payout_yen, evidence: plan.evidence, race_ev: plan.race_ev,
     expected_payout_yen: plan.expected_payout_yen, portfolio_ev: plan.portfolio_ev, result: plan.id === rec.default_plan ? rec.result : null } : rec;
   const hasResult = !!view.result;
   const yen = (n: number) => `${n.toLocaleString()}円`;
+  const n = view.bets.length;
+  // 条件を満たしたパターンを 100 円ずつ買った場合（金額の配分は使わない）。期待回収率は AI の的中確率×想定倍率の平均
+  const expRoi = n > 0 ? view.bets.reduce((a, b) => a + (b.hit_rate_pct / 100) * b.est_multiple, 0) / n : null;
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
@@ -72,21 +73,14 @@ export function TargetBets({
             </div>
           </div>
         </details>
-        <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <label style={{ fontSize: 12, color: "var(--text-dim)" }} htmlFor="target-cap">購入上限</label>
-          <input id="target-cap" value={cap} onChange={(e) => setCap(e.target.value)} inputMode="numeric" placeholder="なし" style={{ width: 76, padding: "3px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", color: "inherit", fontSize: 16 }} />
-          <button onClick={onRerun} disabled={loading} style={{ padding: "3px 11px", borderRadius: 6, fontSize: 12, cursor: "pointer", border: "1px solid var(--border)", background: "transparent", color: "var(--text)" }}>{loading ? "計算中…" : "再計算"}</button>
-        </span>
       </div>
 
       {!rec.skipped && <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, lineHeight: 1.6 }}>
-        推奨馬券は最大5パターンです。1パターンは1つの馬券で、購入額は『当たれば払戻が予算 <b style={{ color: "var(--text)" }}>{yen(rec.budget_yen)}</b> の約 <b style={{ color: "var(--text)" }}>{rec.target_multiple}倍</b>になる』額にしています。
+        推奨馬券は最大5パターンです（1パターン＝1つの馬券）。<b style={{ color: "var(--text)" }}>条件を満たしたパターンをすべて100円ずつ買った場合</b>で集計します。
+        パターンは推奨度の高い順です。購入の直前に実際のオッズを見て、<b style={{ color: "var(--text)" }}>期待値ライン以上のもの</b>を選んでください（期待値ライン未満は、AI の的中確率から見て期待値が1を下回ります）。
+        結果が出たあとは、確定オッズが想定オッズ以上だったパターンだけを購入したものとして集計します。
       </div>}
 
-      {!rec.skipped && <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, lineHeight: 1.6 }}>
-        パターンは推奨度の高い順です。購入の直前に実際のオッズを見て、<b style={{ color: "var(--text)" }}>期待値ライン以上のものを上から</b>選んでください（期待値ライン未満は、AI の的中確率から見て期待値が1を下回ります）。
-      </div>}
-      
       {view.result && <BetResultBanner result={view.result} />}
 
       {view.status === "skip" || view.bets.length === 0 ? (
@@ -100,16 +94,15 @@ export function TargetBets({
             <tr>
               <th style={TH} title="推奨度の高い順（1 が最優先）。上から、期待値ラインを超えているものを選びます">パターン</th>
               <th style={{ ...TH, textAlign: "left" }}>買い目</th>
-              <th style={TH}>購入額</th>
-              <th style={TH} title="購入額×想定オッズ（AI の予測）。当たったときの目安">想定払戻</th>
               <th style={TH} title="この組み合わせが的中する確率（AI の予測）">的中率</th>
               <th style={TH} title="直前の実際のオッズがこの倍率以上なら、AI の的中確率から見て期待値が1以上になります（損益分岐＝1÷的中確率）。購入の最終判断は実際のオッズでお願いします">期待値ライン</th>
-              {hasResult && <th style={TH}>結果</th>}
+              {hasResult && <th style={TH} title="確定オッズが想定オッズ以上なら条件を満たし、集計の対象になります">条件</th>}
+              {hasResult && <th style={TH} title="100円あたりの払戻">結果（100円）</th>}
             </tr>
           </thead>
           <tbody>
             {view.bets.map((b, i) => (
-              <tr key={b.bet_type + b.combo.join("-")} style={{ background: b.result?.hit ? "rgba(251,191,36,0.08)" : undefined }}>
+              <tr key={b.bet_type + b.combo.join("-")} style={{ background: b.result?.hit && b.result.passed !== false ? "rgba(251,191,36,0.08)" : undefined, opacity: b.result?.passed === false ? 0.55 : undefined }}>
                 <td style={{ ...TD, fontWeight: 700 }} data-sort={b.priority ?? i + 1}>{b.priority ?? i + 1}</td>
                 <td style={{ ...TD, textAlign: "left" }} data-sort={b.combo.join(" ")}>
                   <span style={{ fontSize: 11.5, color: "var(--text-dim)", marginRight: 6 }}>{b.bet_label}</span><span style={{ fontWeight: 800, marginRight: 8 }}>{b.combo_label}</span>
@@ -119,26 +112,32 @@ export function TargetBets({
                     ))}
                   </span>
                 </td>
-                <td style={{ ...TD, whiteSpace: "nowrap" }} data-sort={b.yen}>{yen(b.yen)}</td>
-                <td style={{ ...TD, whiteSpace: "nowrap" }} data-sort={b.est_payout_yen}>約{yen(b.est_payout_yen)}</td>
                 <td style={{ ...TD, whiteSpace: "nowrap" }} data-sort={b.hit_rate_pct}>{b.hit_rate_pct.toFixed(1)}%</td>
                 <td style={{ ...TD, whiteSpace: "nowrap", fontWeight: 700 }} data-sort={b.ev_line_multiple ?? 0}>{b.ev_line_multiple != null ? `${b.ev_line_multiple.toFixed(1)}倍以上で購入` : "—"}</td>
+                {hasResult && (
+                  <td style={{ ...TD, whiteSpace: "nowrap" }} data-sort={b.result?.passed == null ? "" : b.result.passed ? "1" : "0"}
+                    title={b.result?.actual_multiple != null ? `確定オッズ ${b.result.actual_multiple.toFixed(1)}倍` : undefined}>
+                    {b.result?.passed == null ? <span style={{ color: "var(--text-dim)" }}>—</span>
+                      : b.result.passed ? <span style={{ color: "var(--green, #4ade80)", fontWeight: 700 }}>○ {b.result.actual_multiple != null ? `${b.result.actual_multiple.toFixed(1)}倍` : ""}</span>
+                      : <span style={{ color: "var(--text-dim)" }}>× {b.result.actual_multiple != null ? `${b.result.actual_multiple.toFixed(1)}倍` : "未取得"}</span>}
+                  </td>
+                )}
                 {hasResult && <ResultCell hit={b.result ? b.result.hit : null} payout={b.result?.payout ?? 0} />}
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={hasResult ? 7 : 6} style={{ padding: "6px 10px", textAlign: "right", fontSize: 13, borderTop: "1px solid var(--border)" }}>
-                全パターンを購入した場合の合計 <b>{yen(view.total_yen)}</b>
+              <td colSpan={hasResult ? 6 : 4} style={{ padding: "6px 10px", textAlign: "right", fontSize: 13, borderTop: "1px solid var(--border)" }}>
+                全{n}パターンを100円ずつ購入した場合（{yen(n * 100)}）
                 {view.any_hit_rate_pct != null && <span style={{ color: "var(--text-dim)", marginLeft: 8, fontSize: 11.5 }}>（どれかが当たる確率 約{view.any_hit_rate_pct}%）</span>}
               </td>
             </tr>
-            {view.portfolio_ev != null && view.expected_payout_yen != null && (
+            {expRoi != null && (
               <tr>
-                <td colSpan={hasResult ? 7 : 6} style={{ padding: "2px 10px 8px", textAlign: "right", fontSize: 13 }}>
-                  期待払戻 <b>約{yen(view.expected_payout_yen)}</b>
-                  <span style={{ marginLeft: 8 }}>期待回収率 <b style={{ color: view.portfolio_ev >= 1 ? "var(--green, #4ade80)" : "var(--red, #f87171)" }}>{Math.round(view.portfolio_ev * 100)}%</b></span>
+                <td colSpan={hasResult ? 6 : 4} style={{ padding: "2px 10px 8px", textAlign: "right", fontSize: 13 }}>
+                  期待払戻 <b>約{yen(Math.round(expRoi * n * 100 / 10) * 10)}</b>
+                  <span style={{ marginLeft: 8 }}>期待回収率 <b style={{ color: expRoi >= 1 ? "var(--green, #4ade80)" : "var(--red, #f87171)" }}>{Math.round(expRoi * 100)}%</b></span>
                   <span style={{ color: "var(--text-dim)", marginLeft: 8, fontSize: 11.5 }}>（AI の確率×想定オッズによる値。実際の回収を保証しません）</span>
                 </td>
               </tr>

@@ -111,6 +111,9 @@ class Target:
             key = os.environ.get(a.key_env, "")
             if key:
                 self.headers["X-Keiba-Proxy-Key"] = key
+            cookie = os.environ.get(a.cookie_env, "") if a.cookie_env else ""
+            if cookie:
+                self.headers["Cookie"] = cookie
         else:
             from src.api.auth import COOKIE_NAME, ROLE_DEV, _make_token
 
@@ -123,10 +126,13 @@ class Target:
         return self.bases[kind].rstrip("/") + path
 
 
-async def fetch(client: Any, target: Target, path: str, stats: Stats, timeout: float) -> int:
+async def fetch(client: Any, target: Target, path: str, stats: Stats, timeout: float, body: str = "") -> int:
     t0 = time.perf_counter()
     try:
-        r = await client.get(target.url(path), headers=target.headers, timeout=timeout)
+        if body:
+            r = await client.post(target.url(path), headers={**target.headers, "Content-Type": "application/json"}, content=body.encode("utf-8"), timeout=timeout)
+        else:
+            r = await client.get(target.url(path), headers=target.headers, timeout=timeout)
         ms = (time.perf_counter() - t0) * 1000
         code = r.status_code
         stats.add(_generic(path), str(code), ms, 200 <= code < 300)
@@ -181,16 +187,18 @@ async def vu_browse(client: Any, target: Target, pools: dict[str, Any], stats: S
                 pass
 
 
-async def vu_single(client: Any, target: Target, path: str, stats: Stats, stop: asyncio.Event, timeout: float, pools: dict[str, Any], seed: int) -> None:
+async def vu_single(client: Any, target: Target, path: str, stats: Stats, stop: asyncio.Event, timeout: float, pools: dict[str, Any], seed: int, body: str = "") -> None:
     """path に {race_id} / {date} があれば、リクエストごとにサンプルからランダムに選ぶ（誰も開いていないキーを当て続ける）。"""
     rng = random.Random(seed)
     items = pools.get("items") or []
     while not stop.is_set():
-        p = path
-        if items and ("{race_id}" in p or "{date}" in p):
+        p, b = path, body
+        if items and any(k in p + b for k in ("{race_id}", "{date}", "{horse_id}")):
             it = rng.choice(items)
-            p = p.replace("{race_id}", it["race_id"]).replace("{date}", it["date"])
-        await fetch(client, target, p, stats, timeout)
+            hid = rng.choice(it.get("horse_ids") or [""])
+            p = p.replace("{race_id}", it["race_id"]).replace("{date}", it["date"]).replace("{horse_id}", hid)
+            b = b.replace("{race_id}", it["race_id"]).replace("{date}", it["date"]).replace("{horse_id}", hid)
+        await fetch(client, target, p, stats, timeout, b)
 
 
 async def monitor(a: argparse.Namespace, target: Target, samples: list[dict[str, Any]], abort: asyncio.Event, reason: list[str], stop: asyncio.Event) -> None:
@@ -239,7 +247,7 @@ async def run_step(a: argparse.Namespace, target: Target, pools: dict[str, Any],
         if a.mode == "browse":
             tasks = [asyncio.create_task(vu_browse(client, target, pools, stats, stop, a.seed * 1000 + i, a.timeout, a.no_pages)) for i in range(n)]
         else:
-            tasks = [asyncio.create_task(vu_single(client, target, a.path, stats, stop, a.timeout, pools, a.seed * 1000 + i)) for i in range(n)]
+            tasks = [asyncio.create_task(vu_single(client, target, a.path, stats, stop, a.timeout, pools, a.seed * 1000 + i, a.post_json)) for i in range(n)]
         t0 = time.time()
         while time.time() - t0 < hold and not abort.is_set():
             await asyncio.sleep(0.5)
@@ -272,7 +280,7 @@ def _child(args: dict[str, Any], n: int, hold: float, pools: dict[str, Any], idx
             if a.mode == "browse":
                 tasks = [asyncio.create_task(vu_browse(client, target, pools, stats, stop, a.seed * 1000 + i, a.timeout, a.no_pages)) for i in range(n)]
             else:
-                tasks = [asyncio.create_task(vu_single(client, target, a.path, stats, stop, a.timeout, pools, a.seed * 1000 + i)) for i in range(n)]
+                tasks = [asyncio.create_task(vu_single(client, target, a.path, stats, stop, a.timeout, pools, a.seed * 1000 + i, a.post_json)) for i in range(n)]
             await asyncio.sleep(hold)
             stop.set()
             await asyncio.wait(tasks, timeout=a.timeout + 5)
@@ -405,6 +413,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--next", default=local_url("frontend", "stg"))
     ap.add_argument("--all-base", help="1 つの URL に全部当てる（Cloud Run のタグ付き URL など）。鍵は --key-env の環境変数から X-Keiba-Proxy-Key で付ける")
     ap.add_argument("--key-env", default="KEIBA_PROXY_KEY")
+    ap.add_argument("--cookie-env", default="", help="この環境変数の値（name=value）を Cookie として付ける（会員でログインした状態で測る）")
+    ap.add_argument("--post-json", default="", help="single: 指定すると POST で当てる本文（{race_id} / {date} はサンプルから差し替え）")
     ap.add_argument("--health", default="/api/health")
     ap.add_argument("--pids", default="", help="メモリ(RSS)を見るプロセス ID（カンマ区切り）")
     ap.add_argument("--max-load-per-core", type=float, default=0.8)

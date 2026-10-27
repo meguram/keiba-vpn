@@ -117,7 +117,7 @@ def test_result_attachment_uses_est_multiple_when_payoff_is_missing():
     res = {"status": "provisional", "official": False, "finish": {a: 1, b: 2, c: 3}, "payoff": {}, "popularity": {}, "odds": {}, "n_runners": 14}
     with patch("src.pipeline.inference.prediction_results.load_race_result", return_value=res):
         out = delegates.attach_bet_results(payload, RID, storage=_Storage())
-    assert out["result"]["n_bets"] == len(out["bets"]) and out["result"]["invested"] == payload["total_yen"]
+    assert out["result"]["invested"] == 100 * out["result"]["n_bets"] and out["result"]["n_patterns"] == len(out["bets"])
     assert all("result" in x for x in out["bets"])
 
 

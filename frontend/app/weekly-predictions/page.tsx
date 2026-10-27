@@ -15,6 +15,8 @@ import { RaceStrip, useNarrow } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
 import { MeguTable } from "@/components/MeguTable";
 import { WeeklyBetTab } from "@/components/WeeklyBetTab";
+import { RaceResult } from "@/components/RaceResult";
+import { useRaceResult } from "@/lib/hooks/useRaceResult";
 import ProbCalNote from "@/components/ProbCalNote";
 import { EntriesDaySummary, EntriesStatusBadge } from "@/components/EntriesStatus";
 import type { EntriesStatus } from "@/lib/entriesStatus";
@@ -559,9 +561,10 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
 
 /* ── 選んだ 1 レースの表示 ── */
 function RacePanel({
-  race, pred, loading, onReload, value,
+  race, pred, loading, onReload, value, date,
 }: {
   race: RaceItem;
+  date?: string;
   pred: PredData | null;
   loading: boolean;
   onReload: (id: string) => void;
@@ -581,8 +584,21 @@ function RacePanel({
   const failed = !loading && pred?.status === "error" && preds.length === 0;
   const { isMember, loading: authLoading } = useAuthStatus();
   const locked = !authLoading && !isMember;
-  const [tab, setTab] = useState<"predict" | "bet">("predict");
-  useEffect(() => { setTab("predict"); }, [race.race_id]);
+  const [tab, setTab] = useState<"predict" | "bet" | "result">("predict");
+  const { result, started } = useRaceResult(race.race_id, race.date || date, race.start_time, !authLoading && !locked);
+  const userPicked = useRef(false);
+  useEffect(() => { userPicked.current = false; setTab("predict"); }, [race.race_id]);
+  // 結果が出たレースを開いたときは、結果を先に見せる（ユーザーが自分でタブを選んだ後は動かさない）
+  useEffect(() => { if (result && !userPicked.current) setTab("result"); }, [result?.status, result?.official, race.race_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const predRank = useMemo(() => {
+    const m: Record<number, number> = {};
+    for (const p of preds) {
+      const r = p.composite_rank ?? p.pred_rank;
+      if (p.horse_number != null && r) m[p.horse_number] = r;
+    }
+    return m;
+  }, [preds]);
+  const tabs: [typeof tab, string][] = [["predict", "AI予測・期待値"], ["bet", "推奨馬券"], ...(result ? [["result", "レース結果"] as [typeof tab, string]] : started && !locked ? [["result", "レース結果（待ち）"] as [typeof tab, string]] : [])];
 
   return (
     <section
@@ -663,13 +679,13 @@ function RacePanel({
         )}
         {pred && !failed && (
           <div role="tablist" aria-label="表示の切り替え" style={{ display: "flex", gap: 6, margin: "10px 0 4px", flexWrap: "wrap" }}>
-            {([["predict", "AI予測・期待値"], ["bet", "推奨馬券"]] as const).map(([k, label]) => (
+            {tabs.map(([k, label]) => (
               <button
                 key={k}
                 type="button"
                 role="tab"
                 aria-selected={tab === k}
-                onClick={() => setTab(k)}
+                onClick={() => { userPicked.current = true; setTab(k); }}
                 style={{
                   minHeight: 44, padding: "0 16px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700,
                   border: `1px solid ${tab === k ? "var(--accent)" : "var(--border)"}`,
@@ -683,8 +699,11 @@ function RacePanel({
           </div>
         )}
         {pred && !failed && tab === "bet" && (
-          <WeeklyBetTab raceId={race.race_id} hasPred={hasPred} lock={locked} authLoading={authLoading} />
+          <WeeklyBetTab raceId={race.race_id} hasPred={hasPred} lock={locked} authLoading={authLoading} resultKey={result ? `${result.status}-${result.official ? 1 : 0}` : ""} />
         )}
+        {pred && !failed && tab === "result" && (result
+          ? <RaceResult result={result} predRank={predRank} />
+          : <div role="status" style={{ padding: "16px 0", color: "var(--text-dim)", fontSize: 13 }}>レース結果を待っています。発走の約15分後に速報を取得し、取得でき次第この画面に表示します（1分ごとに自動で確認します）。</div>)}
         {pred && !failed && tab === "predict" && <PredictionSourceBadge source={pred.prediction_source} note={pred.prediction_note} />}
         {pred && !failed && tab === "predict" && locked && preds.length > 0 && <MemberLockNote />}
         {pred && !failed && <PublicModeNote access={pred.access} />}
@@ -1042,6 +1061,7 @@ export default function WeeklyPredictionsPage() {
                 loading={loadingPred[activeRace.race_id] ?? false}
                 onReload={(id) => { void loadPred(id, true); }}
                 value={raceValues.get(activeRace.race_id)}
+                date={selectedDate}
               />
             )}
           </>

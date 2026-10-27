@@ -7622,6 +7622,20 @@ def _tracking_difficulty_public_payload(data: dict) -> dict:
     return {k: v for k, v in data.items() if not k.startswith("_")}
 
 
+@app.get("/api/race/{race_id}/result", response_class=JSONResponse)
+async def api_race_result(race_id: str):
+    """レース結果（着順・払戻）。確定があれば確定、無ければ発走 +15 分に取る速報。無いときは available=false。"""
+    if not (race_id.isdigit() and len(race_id) == 12):
+        return JSONResponse({"error": "race_id は 12 桁の数字です"}, status_code=400)
+
+    def _run():
+        from src.pipeline.inference.race_result_view import build_result_view
+
+        return build_result_view(_get_storage(), race_id)
+
+    return JSONResponse(await asyncio.to_thread(_run))
+
+
 @app.get("/api/race/{race_id}/result-status", response_class=JSONResponse)
 async def api_race_result_status(race_id: str):
     """レース結果（確定・速報）の有無と結果ページ URL。"""

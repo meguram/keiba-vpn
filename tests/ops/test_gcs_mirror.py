@@ -190,3 +190,14 @@ def test_members_file_is_pulled_to_the_path_auth_reads_and_unreadable_dirs_are_s
 
     monkeypatch.setattr(Path, "glob", deny)
     assert gm.push(Fake(), src, gm.AUTH_TREES) == {"seen": 0, "uploaded": 0, "would_upload": 0}
+
+
+def test_jockey_trainer_lookups_are_mirrored_for_the_entry_card(tmp_path):
+    """出馬表の騎手・調教師カードの集計（lookup）が Cloud Run に届く（無いと『この騎手の集計がありません』になる）。"""
+    names = ["jockey_tbl/lookup_jockey.parquet", "jockey_tbl/lookup_jockey_slices.parquet", "trainer_tbl/lookup_trainer.parquet",
+             "trainer_tbl/lookup_trainer_slices.parquet", "jockey_trainer_stats/_manifest.json"]
+    for n in names:
+        _w(tmp_path, "data/local/features/" + n, b"x")
+    _w(tmp_path, "data/local/features/jockey_trainer_stats/_merge_spec.json", b"x")
+    got = {str(p.relative_to(tmp_path / "data/local/features")) for t in gm.PUSH_TREES for p in gm._files(tmp_path, t) if "features" in str(p)}
+    assert got == set(names)

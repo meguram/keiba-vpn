@@ -244,6 +244,7 @@ def portfolio_level(cands: list[Any], raw_roi: float | None) -> tuple[int, float
 TARGET_ODDS_BASIS = "sec77"      # 推奨度・仮想購入の集計に使う想定オッズの出所（決定ログ §77 のモデル。検証と同じ基準）。従来モデルの想定オッズで作った記録は集計に入れない
 
 
+FLAT_STAKE_YEN = 100     # 条件を満たしたパターンを 1 つ 100 円ずつ買った場合の集計（flat）に使う額
 TARGET_SELECTION = "actual_ge_est"     # 購入とみなす条件: 5 パターンのうち、実際のオッズ(確定)が想定オッズ以上のものだけ
 
 
@@ -301,6 +302,8 @@ def simulate_target_bets(storage: Any, race_id: str, result: dict, max_total_bet
     all_ret = 0.0
     estimated = False
     n_unknown = 0
+    flat_n = flat_hit = 0
+    flat_ret = 0.0
     by_type: dict[str, dict] = {}
     patterns = []
     for b in bets:
@@ -315,10 +318,14 @@ def simulate_target_bets(storage: Any, race_id: str, result: dict, max_total_bet
         n_unknown += int(act is None)
         all_bet += amount
         all_ret += ret
+        _, ret100, _ = settle_candidate(bt, combo, FLAT_STAKE_YEN, est_mult, result)
         patterns.append({"bet_type": bt, "combo": list(combo), "yen": amount, "est_multiple": est_mult, "actual_multiple": act, "passed": passed, "hit": hit,
-                         "return": round(ret) if passed else 0})
+                         "return": round(ret) if passed else 0, "return_flat": round(ret100) if passed else 0})
         if not passed:
             continue
+        flat_n += 1
+        flat_hit += int(hit)
+        flat_ret += ret100
         estimated = estimated or (hit and est)
         total_bet += amount
         total_ret += ret
@@ -331,7 +338,8 @@ def simulate_target_bets(storage: Any, race_id: str, result: dict, max_total_bet
         t["returned"] = round(t["returned"])
     return {"status": "ok", "strategy": "target", "basis": TARGET_ODDS_BASIS, "selection": TARGET_SELECTION, "level": level, "total_bet": total_bet,
             "total_return": round(total_ret), "by_type": by_type, "estimated": estimated, "n_bets": len(bets), "n_pass": sum(1 for x in patterns if x["passed"]),
-            "n_unknown": n_unknown, "all": {"total_bet": all_bet, "total_return": round(all_ret)}, "patterns": patterns}
+            "n_unknown": n_unknown, "all": {"total_bet": all_bet, "total_return": round(all_ret)}, "patterns": patterns,
+            "flat": {"stake_yen": FLAT_STAKE_YEN, "total_bet": FLAT_STAKE_YEN * flat_n, "total_return": round(flat_ret), "n": flat_n, "hits": flat_hit}}
 
 
 # ───────────────────────── 1 レース・1 日の集計 ─────────────────────────

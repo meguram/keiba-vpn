@@ -28,6 +28,7 @@ PREFIX = "ops/mirror"
 # 会員名簿（ハッシュだけ。ログインの照合に Cloud Run が使う）。ホストでは root だけが読める場所にあるため、通常の同期(jovyan)は読めずに飛ばし、
 # root の cron（scripts/cron/gcs_mirror_push_auth.sh）が上げる。Cloud Run は TREES として取り込み、src/api/auth.py の MEMBERS_LOCAL_FILE と同じ場所に置く。
 AUTH_TREES = ("data/local/auth::members.json",)
+_FEATURES = "data/local/features"
 TREES = (
     "data/local/inference/predictions_v3",
     "data/local/inference/predictions_v5",
@@ -49,6 +50,10 @@ TREES = (
     "data/page_reference/note_aptitude_race_l3",
     "data/page_reference/bloodline_vector",
     "data/page_reference/pedigree_race_index",
+    # 出馬表の騎手・調教師カード（条件別の成績）の集計。毎朝の再生成（export_tables_daily の後）で更新され、5 分おきの push で Cloud Run に届く（約 560KB）
+    f"{_FEATURES}/jockey_tbl::lookup_jockey*.parquet",
+    f"{_FEATURES}/trainer_tbl::lookup_trainer*.parquet",
+    f"{_FEATURES}/jockey_trainer_stats::_manifest.json",
     "data/page_reference/tables::*/megu_index_flat.parquet",
     "data/page_reference/tables::*/race_result_flat.parquet",
 )
