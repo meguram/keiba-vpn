@@ -1,6 +1,6 @@
 "use client";
 
-import { PRED_TTL_MS, fetchRaceList, getJson, hasFreshJson, prefetchJson } from "@/lib/httpCache";
+import { PRED_TTL_MS, fetchRaceList, getJson, hasFreshJson, prefetchJson, readStored } from "@/lib/httpCache";
 import { Fragment, useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockPredictions } from "@/lib/mock";
@@ -758,7 +758,7 @@ export default function WeeklyPredictionsPage() {
     const r = q.get("race");
     if (r) {
       setSelectedRaceId(r);
-      if (!USE_MOCK) prefetchJson(`/api/race/${r}/predictions`, { ttlMs: PRED_TTL_MS });      // 日付・一覧の取得を待たずに、開くレースの予測を先に取り始める
+      if (!USE_MOCK) prefetchJson(`/api/race/${r}/predictions`, { ttlMs: PRED_TTL_MS, persist: true });      // 日付・一覧の取得を待たずに、開くレースの予測を先に取り始める
     }
   }, []);
 
@@ -871,11 +871,22 @@ export default function WeeklyPredictionsPage() {
       setLoadingPred((prev) => ({ ...prev, [raceId]: false }));
       return;
     }
+    // 前回このタブで見た内容があれば先に出して（取得中を出さない）、最新を取れたら差し替える
+    const url = `/api/race/${raceId}/predictions`;
+    let hadStale = false;
+    if (!force) {
+      const prev = readStored<PredData>(url);
+      if (prev) {
+        hadStale = true;
+        setPreds((p) => (p[raceId] ? p : { ...p, [raceId]: prev }));
+        setLoadingPred((p) => ({ ...p, [raceId]: false }));
+      }
+    }
     try {
-      const d = await getJson<PredData>(`/api/race/${raceId}/predictions`, { ttlMs: PRED_TTL_MS, force }).catch((): PredData => ({ status: "error", predictions: [] }));
-      setPreds((prev) => ({ ...prev, [raceId]: d }));
+      const d = await getJson<PredData>(url, { ttlMs: PRED_TTL_MS, force, persist: true }).catch((): PredData => ({ status: "error", predictions: [] }));
+      if (!(hadStale && d.status === "error")) setPreds((prev) => ({ ...prev, [raceId]: d }));      // 最新が取れなくても、先に出した前回の内容は消さない
     } catch {
-      setPreds((prev) => ({ ...prev, [raceId]: { status: "error", predictions: [] } }));
+      if (!hadStale) setPreds((prev) => ({ ...prev, [raceId]: { status: "error", predictions: [] } }));
     } finally {
       setLoadingPred((prev) => ({ ...prev, [raceId]: false }));
     }
@@ -886,7 +897,7 @@ export default function WeeklyPredictionsPage() {
   const warmPred = useCallback((id: string) => {
     if (USE_MOCK) return;
     if (warmTimer.current) clearTimeout(warmTimer.current);
-    warmTimer.current = setTimeout(() => prefetchJson(`/api/race/${id}/predictions`, { ttlMs: PRED_TTL_MS }), 150);
+    warmTimer.current = setTimeout(() => prefetchJson(`/api/race/${id}/predictions`, { ttlMs: PRED_TTL_MS, persist: true }), 150);
   }, []);
 
   /* 選んだレースの予測だけを取得する（素早く切り替えたときは最後に選んだものだけ。取得済みは即表示）。
@@ -910,7 +921,7 @@ export default function WeeklyPredictionsPage() {
     const worker = async () => {
       while (!cancelled && i < ids.length) {
         const id = ids[i++];
-        await getJson(`/api/race/${id}/predictions`, { ttlMs: PRED_TTL_MS }).catch(() => undefined);
+        await getJson(`/api/race/${id}/predictions`, { ttlMs: PRED_TTL_MS, persist: true }).catch(() => undefined);
       }
     };
     const t = setTimeout(() => { void worker(); void worker(); }, 300);
