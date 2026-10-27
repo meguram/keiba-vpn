@@ -41,3 +41,32 @@ def test_fastapi_headers(monkeypatch):
     assert r.headers["cache-control"] == "private, max-age=30" and "cookie" in r.headers["vary"].lower()
     assert "cache-control" not in c.get("/api/v1/auth/status").headers
     assert c.get("/api/race-calendar").headers["cache-control"] == "no-store"      # すでにある指示は上書きしない
+
+
+def test_shared_cache_only_for_anonymous(monkeypatch):
+    cfg = {**CFG, "rules": [{"prefix": "/api/race/", "max_age": 30, "s_maxage": 45}, {"prefix": "/api/race-calendar", "max_age": 300}]}
+    monkeypatch.setattr(H, "config", lambda: cfg)
+    app = FastAPI()
+
+    @app.get("/api/race/{rid}")
+    def race(rid: str):
+        return {"id": rid}
+
+    @app.get("/api/race-calendar")
+    def cal():
+        return {"a": 1}
+
+    H.install_fastapi(app)
+    c = TestClient(app)
+    anon = c.get("/api/race/1")
+    assert anon.headers["cache-control"] == "public, max-age=30, s-maxage=45" and "cookie" in anon.headers["vary"].lower()
+    assert c.get("/api/race/1", headers={"Cookie": "keiba_dev_session=x"}).headers["cache-control"] == "private, max-age=30"
+    assert c.get("/api/race/1", headers={"Authorization": "Bearer x"}).headers["cache-control"] == "private, max-age=30"
+    assert c.get("/api/race-calendar").headers["cache-control"] == "private, max-age=300"     # s_maxage の無いルールは常に private
+
+
+def test_dev_auto_login_is_not_anonymous(monkeypatch):
+    monkeypatch.setenv("KEIBA_ENV", "dev")
+    assert H.is_anonymous_request("", "", "127.0.0.1", {"host": "localhost:23110"}) is False
+    assert H.is_anonymous_request("", "", "203.0.113.5", {"host": "stg.example.com"}) is True
+    assert H.is_anonymous_request("a=b", "", "203.0.113.5", {}) is False
