@@ -624,6 +624,20 @@ def attach_bet_results(payload: dict[str, Any], race_id: str, storage: Any | Non
     return payload
 
 
+def _value_pkey(date: str, odds_mode: str, odds_phase: str, max_total_bet: int | None, view: str) -> str:
+    return f"{date}_{odds_mode}_{odds_phase}_{max_total_bet}_{view}"
+
+
+def prewarm_race_values(date: str, view: str, max_age: float, only_if_stale: bool = True) -> int:
+    """既定のパラメータ（画面の初期表示と同じ）のレース選択の期待値表示を事前生成する。作り直したら 1。"""
+    from src.api import prewarm
+
+    if not prewarm.stale("race_values", _value_pkey(date, "auto", "latest", DEFAULT_MAX_TOTAL_BET, view), max_age, only_if_stale):
+        return 0
+    race_value_summary(date, view=view, refresh=True, prerender_max_age=max_age)
+    return 1
+
+
 def race_value_summary(
     date: str,
     *,
@@ -631,16 +645,32 @@ def race_value_summary(
     odds_phase: str = "latest",
     max_total_bet: int | None = DEFAULT_MAX_TOTAL_BET,
     view: str = "full",
+    refresh: bool = False,
+    prerender_max_age: float | None = None,
 ) -> dict[str, Any]:
     """開催日の全レースについて、推奨買い目の期待回収率とレベルを返す（レース選択の強調表示に使う）。
-    view="paid" は会員向け（推奨度の段階だけ。期待回収率の数値は出さない）。"""
+    view="paid" は会員向け（推奨度の段階だけ。期待回収率の数値は出さない）。
+    事前生成(KEIBA_PREWARM=1, src.api.prerender)があればそれを返す。``refresh`` は事前生成側が計算し直して置くとき。"""
+    from src.api import prerender
+
+    pkey = _value_pkey(date, odds_mode, odds_phase, max_total_bet, view)
+    return prerender.cached_json(
+        "race_values", pkey,
+        lambda: _race_value_summary_compute(date, odds_mode=odds_mode, odds_phase=odds_phase, max_total_bet=max_total_bet, view=view, refresh=refresh),
+        deps=prerender.race_ids_deps(date), max_age=prerender_max_age, refresh=refresh,
+    )
+
+
+def _race_value_summary_compute(
+    date: str, *, odds_mode: str, odds_phase: str, max_total_bet: int | None, view: str, refresh: bool = False,
+) -> dict[str, Any]:
     import time
 
     from src.scraper.storage import HybridStorage
 
     key = (date, odds_mode, odds_phase, max_total_bet, view)
     hit = _VALUE_CACHE.get(key)
-    if hit and time.time() - hit[0] < _value_ttl(date):
+    if hit and not refresh and time.time() - hit[0] < _value_ttl(date):
         return hit[1]
 
     storage = HybridStorage()

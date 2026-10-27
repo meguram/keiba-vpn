@@ -19,6 +19,7 @@ from typing import Callable
 logger = logging.getLogger(__name__)
 
 _FILE = Path(os.environ.get("KEIBA_CACHE_EPOCH_FILE") or Path(__file__).resolve().parents[2] / "data" / "local" / "meta" / "cache_epoch.json")
+_HARD_FILE = Path(os.environ.get("KEIBA_CACHE_EPOCH_HARD_FILE") or _FILE.with_name("cache_epoch_hard.json"))
 _clearers: dict[str, Callable[[], object]] = {}
 _lock = threading.Lock()
 _seen: dict[str, float] = {"mtime": -1.0, "checked": 0.0, "bumped": 0.0}
@@ -56,12 +57,26 @@ def clear_all(reason: str = "") -> list[str]:
 def bump(reason: str = "") -> None:
     """世代ファイルを更新する。次に ``sync()`` を呼んだ全プロセスがキャッシュを空にする。"""
     try:
-        _FILE.parent.mkdir(parents=True, exist_ok=True)
-        tmp = _FILE.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"at": time.time(), "reason": reason}, ensure_ascii=False), encoding="utf-8")
-        os.replace(tmp, _FILE)
+        _write(_FILE, reason)
+        if not reason.startswith("save:"):      # 保存以外（配備・設定変更・手動クリア）は『全部作り直し』の世代も進める
+            _write(_HARD_FILE, reason)
     except OSError as exc:
         logger.warning("世代ファイルを書けません: %s", exc)
+
+
+def _write(path: Path, reason: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"at": time.time(), "reason": reason}, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def hard_current() -> int:
+    """保存以外の理由（配備・設定変更・手動クリア）で進んだ世代。事前生成の応答はこれが変わると全部無効、保存では（レース単位で）無効になる。"""
+    try:
+        return _HARD_FILE.stat().st_mtime_ns
+    except OSError:
+        return 0
 
 
 def bump_for_save(category: str) -> None:
@@ -106,6 +121,14 @@ def flush_pending() -> None:
 
 
 atexit.register(flush_pending)
+
+
+def current() -> int:
+    """世代ファイルの更新時刻(ns)。ディスクに置く事前生成の応答が『いまの世代で作られたか』の判定に使う（無ければ 0）。"""
+    try:
+        return _FILE.stat().st_mtime_ns
+    except OSError:
+        return 0
 
 
 def sync(force: bool = False) -> bool:
