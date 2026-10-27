@@ -106,8 +106,20 @@ def _signal_handler(signum, frame):
     _shutdown_requested = True
 
 
-signal.signal(signal.SIGINT, _signal_handler)
-signal.signal(signal.SIGTERM, _signal_handler)
+def _install_signal_handlers() -> None:
+    """CLI 実行（メインスレッド）のときだけ登録する。API のワーカースレッドから import されると signal.signal が ValueError になり、/api/backfill/status が常に 500 になっていた。"""
+    import threading
+
+    if threading.current_thread() is not threading.main_thread():
+        return
+    try:
+        signal.signal(signal.SIGINT, _signal_handler)
+        signal.signal(signal.SIGTERM, _signal_handler)
+    except ValueError:
+        pass
+
+
+_install_signal_handlers()
 
 
 class BackfillProgress:

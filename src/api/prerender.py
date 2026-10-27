@@ -1,6 +1,8 @@
 """画面に出す応答（会員区分で項目を落とす前のもの）を、プロセス・ワーカーをまたいでディスクに事前生成して使い回す。
 
-- 有効化は ``KEIBA_PREWARM=1``（既定オフ。オフのときは何も読み書きせず、従来どおりその場で計算する）。
+- 有効化は ``KEIBA_PREWARM=1``（置き場 + 先に作る係 ``src.api.prewarm``）か ``KEIBA_PRERENDER=1``（置き場だけ。Cloud Run のように
+  CPU が少なく、先に作る係を動かしたくない所で、要求されたときに作った応答を ``KEIBA_PRERENDER_MAX_AGE_SEC`` 秒使い回す）。
+  どちらも未設定（既定）なら何も読み書きせず、従来どおりその場で計算する。同じキーの同時要求は 1 本にまとめる（先の 1 本が作る間、他は待って結果を読む）。
 - 保存先: 一時領域の ``keiba-prerender/<kind>/<key>.json``（``KEIBA_PRERENDER_DIR`` で変更。ホストの data 配下に依存せず、Cloud Run でも動く）。1 行目にメタ、2 行目以降が応答本体。
 - 無効になる条件（読まれなくなる）:
   1. 期限切れ（``max_age``）
@@ -26,11 +28,31 @@ from typing import Any, Awaitable, Callable, Iterable
 from src.utils import cache_epoch
 
 DEFAULT_MAX_AGE_SEC = 300.0
+_PRUNE_EVERY_SEC = 60.0
 _KEY_RE = re.compile(r"^(?:\d{12}|\d{8})$")      # race_id（12 桁）または開催日（8 桁）
 
 
 def enabled() -> bool:
+    return os.environ.get("KEIBA_PREWARM", "").strip() == "1" or os.environ.get("KEIBA_PRERENDER", "").strip() == "1"
+
+
+def warmer_enabled() -> bool:
+    """先に作る係（周回・変更への反応）を動かすか。``KEIBA_PRERENDER=1`` だけのときは動かさない。"""
     return os.environ.get("KEIBA_PREWARM", "").strip() == "1"
+
+
+def default_max_age() -> float:
+    try:
+        return float(os.environ.get("KEIBA_PRERENDER_MAX_AGE_SEC") or DEFAULT_MAX_AGE_SEC)
+    except ValueError:
+        return DEFAULT_MAX_AGE_SEC
+
+
+def _max_bytes() -> int:
+    try:
+        return int(float(os.environ.get("KEIBA_PRERENDER_MAX_MB") or 300) * 1024 * 1024)
+    except ValueError:
+        return 300 * 1024 * 1024
 
 
 def base_dir() -> Path:
@@ -188,10 +210,60 @@ def age(kind: str, key: str) -> float | None:
     return None
 
 
-def put(kind: str, key: str, body: bytes, *, since_ns: int, hard: int, deps: Iterable[str] = (), max_age: float = DEFAULT_MAX_AGE_SEC) -> None:
+_last_prune = 0.0
+
+
+def prune_size(max_bytes: int | None = None) -> int:
+    """置き場の合計が上限を超えていたら、古い応答から消す（メモリ上の /tmp を使う Cloud Run で膨らまないように）。消した数を返す。"""
+    cap = max_bytes if max_bytes is not None else _max_bytes()
+    files: list[tuple[float, int, str]] = []
+    total = 0
+    try:
+        for kind in os.scandir(_dir()):
+            if not kind.is_dir() or kind.name.startswith("_"):
+                continue
+            for e in os.scandir(kind.path):
+                try:
+                    st = e.stat()
+                except OSError:
+                    continue
+                files.append((st.st_mtime, st.st_size, e.path))
+                total += st.st_size
+    except OSError:
+        return 0
+    n = 0
+    if total <= cap:
+        return 0
+    for _, size, path in sorted(files):
+        try:
+            os.unlink(path)
+            total -= size
+            n += 1
+        except OSError:
+            pass
+        if total <= cap * 0.8:
+            break
+    return n
+
+
+def _maybe_prune() -> None:
+    global _last_prune
+    now = time.time()
+    if now - _last_prune < _PRUNE_EVERY_SEC:
+        return
+    _last_prune = now
+    try:
+        prune_size()
+    except Exception:
+        pass
+
+
+def put(kind: str, key: str, body: bytes, *, since_ns: int, hard: int, deps: Iterable[str] = (), max_age: float | None = None) -> None:
     """``since_ns``/``hard`` は計算を始める前の時刻・世代（計算中に deps のデータが保存されたら、この応答は読まれない）。失敗しても何もしない。"""
     if not enabled():
         return
+    max_age = max_age or default_max_age()
+    _maybe_prune()
     p = _path(kind, key)
     try:
         _mkdirs(p.parent)
@@ -214,25 +286,49 @@ def _resolve_deps(deps: Any, body: bytes) -> list[str]:
         return []
 
 
+_flights: dict[str, Any] = {}
+
+
 async def cached_response(kind: str, key: str, compute: Callable[[], Awaitable[Any]], *, deps: Any = None, max_age: float | None = None, refresh: bool = False) -> Any:
     """``compute`` は JSONResponse を返す。事前生成があればそれを返し、無ければ計算して 200 のものを書き込む（他ワーカーも使える）。
+    同じキーの同時要求は 1 本だけ計算し、他は待って結果を読む（人気のレースに一斉に来ても、1 回しか計算しない）。
     ``deps`` は応答が依存する race_id/開催日（または本体から求める関数）。省略時は ``[key]``。"""
     if not enabled():
         return await compute()
+    import asyncio
+
     from starlette.responses import Response
 
-    if not refresh:
-        body = get(kind, key)
-        if body is not None:
-            return Response(content=body, media_type="application/json")
-    since, hard = time.time_ns(), cache_epoch.hard_current()
-    resp = await compute()
-    body = getattr(resp, "body", None)
-    if body is not None and getattr(resp, "status_code", 200) == 200:
-        put(kind, key, bytes(body), since_ns=since, hard=hard, deps=_resolve_deps(deps if deps is not None else [key], bytes(body)), max_age=max_age or DEFAULT_MAX_AGE_SEC)
-    return resp
+    async def run() -> Any:
+        since, hard = time.time_ns(), cache_epoch.hard_current()
+        resp = await compute()
+        body = getattr(resp, "body", None)
+        if body is not None and getattr(resp, "status_code", 200) == 200:
+            put(kind, key, bytes(body), since_ns=since, hard=hard, deps=_resolve_deps(deps if deps is not None else [key], bytes(body)), max_age=max_age)
+        return resp
+
+    if refresh:
+        return await run()
+    body = get(kind, key)
+    if body is not None:
+        return Response(content=body, media_type="application/json")
+    token = f"{kind}/{key}"
+    lock = _flights.get(token)
+    if lock is None:
+        lock = _flights[token] = asyncio.Lock()
+    try:
+        async with lock:
+            body = get(kind, key)                         # 先の 1 本が作り終えていれば、それを読む
+            if body is not None:
+                return Response(content=body, media_type="application/json")
+            return await run()
+    finally:
+        if not lock.locked() and _flights.get(token) is lock:
+            _flights.pop(token, None)
 
 
+_sync_flights: dict[str, threading.Lock] = {}
+_flight_guard = threading.Lock()
 _refreshing: set[str] = set()
 _refreshing_lock = threading.Lock()
 
@@ -252,7 +348,7 @@ def _store_json(kind: str, key: str, compute: Callable[[], dict[str, Any]], deps
     out = compute()
     try:
         raw = json.dumps(out, ensure_ascii=False).encode("utf-8")
-        put(kind, key, raw, since_ns=since, hard=hard, deps=_resolve_deps(deps if deps is not None else [key], raw), max_age=max_age or DEFAULT_MAX_AGE_SEC)
+        put(kind, key, raw, since_ns=since, hard=hard, deps=_resolve_deps(deps if deps is not None else [key], raw), max_age=max_age)
     except (TypeError, ValueError):
         pass
     return out
@@ -297,7 +393,18 @@ def cached_json(
                 return json.loads(body)
             except ValueError:
                 pass
-    return _store_json(kind, key, compute, deps, max_age)
+    token = f"{kind}/{key}"
+    with _flight_guard:
+        lock = _sync_flights.setdefault(token, threading.Lock())
+    with lock:
+        if not refresh:
+            body = get(kind, key)                         # 先の 1 本が作り終えていれば、それを読む
+            if body is not None:
+                try:
+                    return json.loads(body)
+                except ValueError:
+                    pass
+        return _store_json(kind, key, compute, deps, max_age)
 
 
 def race_ids_deps(date: str) -> Callable[[bytes], list[str]]:

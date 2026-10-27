@@ -14,6 +14,9 @@ lifespan を動かさなくても FastAPI のルーティングは動く。app.p
   KEIBA_MIRROR_PULL=1      予測ファイル・出馬表の状態を GCS（ops/mirror/）から取り込む常駐スレッドを起動（既定 1）。
   KEIBA_SERVING_STATE_PULL=1  起動時に GCS の serving_state（config/serving_state.json）を取り込む。
   KEIBA_HEARTBEAT_SECRET / _NEXT   VPS ハートビートの署名鍵。
+  KEIBA_WARMUP_ON_START=1  受付（ポートを開く）の前に、直近のレースの予測・詳細を 1 回呼んで、モデル・履歴の読み込みを済ませる。
+                           新しいインスタンスの最初の予測が 30〜45 秒かかり、急増時にタイムアウトしていたため。失敗・時間切れでも起動は続ける。
+  KEIBA_PRERENDER=1        応答の置き場だけ有効にする（要求されたときに作った応答を KEIBA_PRERENDER_MAX_AGE_SEC 秒使い回す。src/api/prerender.py）。
 """
 
 from __future__ import annotations
@@ -54,11 +57,47 @@ def _wsgi_bridge(wsgi_app: Any) -> ASGIApp:
         return WSGIMiddleware(wsgi_app)
 
 
+WARMUP_TIMEOUT_SEC = 150.0     # Cloud Run の起動プローブ（TCP。既定 240 秒）に収める
+MIRROR_WAIT_SEC = 60.0
+
+
+async def warm_sequence(get: Callable[[str], Awaitable[tuple[int, Any]]], today: str | None = None) -> list[str]:
+    """直近の開催日のレース一覧 → 先頭レースの予測・詳細を呼ぶ。呼んだパスを返す（失敗しても続ける）。"""
+    from datetime import datetime, timedelta, timezone
+
+    today = today or datetime.now(timezone(timedelta(hours=9))).strftime("%Y%m%d")
+    called: list[str] = []
+
+    async def call(path: str) -> Any:
+        called.append(path)
+        try:
+            status, doc = await get(path)
+            return doc if status == 200 else None
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("ウォームアップ %s に失敗: %s", path, exc)
+            return None
+
+    await call("/api/v1/health")
+    doc = await call("/api/scrape-dates")
+    raw = (doc or {}).get("dates", []) if isinstance(doc, dict) else (doc or [])
+    dates = sorted({x if isinstance(x, str) else str(x.get("date")) for x in raw if x})
+    past = [d for d in dates if d <= today]
+    if not past:
+        return called
+    rl = await call(f"/api/race-list/{past[-1]}")
+    races = [r["race_id"] for r in ((rl or {}).get("races") or []) if isinstance(r, dict) and r.get("race_id")]
+    if races:
+        await call(f"/api/race/{races[0]}/predictions")
+        await call(f"/api/race/{races[0]}")
+    return called
+
+
 class Gateway:
-    """パスで 3 つの ASGI アプリに振り分ける。lifespan は何もせず完了を返す。"""
+    """パスで 3 つの ASGI アプリに振り分ける。lifespan は、起動時ウォームアップ（あれば）を済ませてから完了を返す。"""
 
     def __init__(self, fastapi_app: ASGIApp, flask_asgi: ASGIApp, ops_app: ASGIApp) -> None:
         self.fastapi_app, self.flask_asgi, self.ops_app = fastapi_app, flask_asgi, ops_app
+        self.warmup: Callable[[], Awaitable[None]] | None = None
 
     @staticmethod
     def route_for(path: str) -> str:
@@ -74,6 +113,13 @@ class Gateway:
             while True:
                 msg = await receive()
                 if msg["type"] == "lifespan.startup":
+                    if self.warmup is not None:       # uvicorn は lifespan の完了後にポートを開く = 温まるまで要求が来ない
+                        import asyncio
+
+                        try:
+                            await asyncio.wait_for(self.warmup(), timeout=WARMUP_TIMEOUT_SEC)
+                        except Exception as exc:  # noqa: BLE001  時間切れ・失敗でも起動は続ける
+                            logger.warning("起動時ウォームアップを打ち切り: %r", exc)
                     await send({"type": "lifespan.startup.complete"})
                 elif msg["type"] == "lifespan.shutdown":
                     await send({"type": "lifespan.shutdown.complete"})
@@ -118,7 +164,31 @@ def build_app() -> ASGIApp:
     ops.include_router(build_router())
     gateway = Gateway(fastapi_app, _wsgi_bridge(create_app()), ops)
     # /ops/heartbeat（POST）は共有ヘッダではなく HMAC 署名で認証する。/ops/heartbeat/status・/check は共有ヘッダが要る
-    return ProxyKeyMiddleware(gateway, exempt_paths=(*DEFAULT_EXEMPT, "/ops/heartbeat"))
+    outer = ProxyKeyMiddleware(gateway, exempt_paths=(*DEFAULT_EXEMPT, "/ops/heartbeat"))
+    if (os.environ.get("KEIBA_WARMUP_ON_START") or "").strip() == "1":
+        gateway.warmup = lambda: _warmup(outer)
+    return outer
+
+
+async def _warmup(outer: ASGIApp) -> None:
+    """取り込み（直近分）の完了を待ち、自分自身に ASGI で要求を送って予測の初回コスト（モデル・履歴の読み込み）を先に払う。"""
+    import asyncio
+
+    import httpx
+
+    t0 = asyncio.get_running_loop().time()
+    if (os.environ.get("KEIBA_MIRROR_PULL") or "").strip() == "1" and os.environ.get("GCS_BUCKET"):
+        from src.ops.gcs_mirror import initial_recent_pulled
+
+        await asyncio.to_thread(initial_recent_pulled.wait, MIRROR_WAIT_SEC)
+    headers = {"X-Keiba-Proxy-Key": os.environ.get("KEIBA_PROXY_KEY", "")}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=outer), base_url="http://warmup", headers=headers, timeout=120) as c:
+        async def get(path: str) -> tuple[int, Any]:
+            r = await c.get(path)
+            return r.status_code, (r.json() if r.status_code == 200 else None)
+
+        called = await warm_sequence(get)
+    logger.info("起動時ウォームアップ完了: %d 件・%.1f 秒", len(called), asyncio.get_running_loop().time() - t0)
 
 
 app = build_app() if os.environ.get("KEIBA_CLOUDRUN_LAZY") != "1" else None  # テストは KEIBA_CLOUDRUN_LAZY=1 で import だけする

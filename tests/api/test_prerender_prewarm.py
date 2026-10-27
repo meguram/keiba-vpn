@@ -299,3 +299,40 @@ def test_stale_is_not_served_across_hard_epoch_or_beyond_limit(store):
     assert prerender.get_stale("sv", "k2", 0.0) is None
     cache_epoch.bump("deploy")                                   # 配備: 古い版は返さない
     assert prerender.get_stale("sv", "k2", 1800) is None
+
+
+def test_store_only_flag_enables_cache_but_not_the_warmer(tmp_path, monkeypatch):
+    monkeypatch.delenv("KEIBA_PREWARM", raising=False)
+    monkeypatch.setenv("KEIBA_PRERENDER", "1")
+    monkeypatch.setenv("KEIBA_PRERENDER_DIR", str(tmp_path / "pre"))
+    monkeypatch.setenv("KEIBA_PRERENDER_MAX_AGE_SEC", "7")
+    monkeypatch.setattr(cache_epoch, "_FILE", tmp_path / "epoch.json")
+    monkeypatch.setattr(cache_epoch, "_HARD_FILE", tmp_path / "epoch_hard.json")
+    assert prerender.enabled() and not prerender.warmer_enabled() and prerender.default_max_age() == 7.0
+    prerender.put("k", "a", b"{}", since_ns=time.time_ns(), hard=cache_epoch.hard_current())
+    assert prerender.get("k", "a") == b"{}" and prerender._read("k", "a")[0]["max_age"] == 7.0
+
+
+def test_concurrent_identical_misses_compute_once(store):
+    calls = []
+
+    async def compute():
+        calls.append(1)
+        await asyncio.sleep(0.05)
+        return JSONResponse({"v": len(calls)})
+
+    async def go():
+        rs = await asyncio.gather(*[prerender.cached_response("sf", "x", compute, deps=[RID]) for _ in range(10)])
+        return [json.loads(r.body) for r in rs]
+
+    out = asyncio.run(go())
+    assert len(calls) == 1 and all(o == {"v": 1} for o in out)
+
+
+def test_prune_size_removes_oldest_first(store):
+    for i in range(5):
+        prerender.put("pr", f"k{i}", b"x" * 1000, since_ns=time.time_ns(), hard=cache_epoch.hard_current())
+        os.utime(prerender._path("pr", f"k{i}"), (1000 + i, 1000 + i))
+    assert prerender.prune_size(max_bytes=3000) >= 2
+    left = {p.name for p in (prerender.base_dir() / "pr").iterdir()}
+    assert "k4.json" in left and "k0.json" not in left
