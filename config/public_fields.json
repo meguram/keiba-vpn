@@ -52,6 +52,7 @@
       "^/api/v1/races/[^/]+/(final-odds|megu-index|megu-index-predicted|tracking-difficulty|predictions/laps)"
     ],
     "owner_only_unless_odds_derived": [
+      "^/api/race/[^/]+/result$",
       "^/api/v1/betting/",
       "^/api/prediction-results"
     ],
