@@ -1,3 +1,4 @@
+"""manual_checklist.py のテスト（サイトへのアクセスは一切行わない純粋ロジックのみ）。"""
 import json
 import re
 
@@ -76,3 +77,75 @@ def test_build_rows_includes_sire_name():
     rows = mc.build_rows(anc, zone, {}, set(), 10, "https://x.test/p", {"a": {"sire": "Kalamoun", "sire_id": "s"}})
     assert rows[0]["sire"] == "Kalamoun"
     assert mc.build_rows(anc, zone, {}, set(), 10, "https://x.test/p")[0]["sire"] == ""
+
+
+# --- a05e360（レビュー時に追加したテスト） ---
+
+
+def test_slug_strips_apostrophes_and_symbols():
+    assert mc.slug("Devil's Bag") == "devils-bag"
+    assert mc.slug("Northern Dancer (can)") == "northern-dancer"
+
+
+def test_slug_candidates_removes_stopwords_in_priority_order():
+    cands = mc.slug_candidates("The Tetrarch")
+    assert cands[0] == "tetrarch"
+    assert "the-tetrarch" in cands  # ストップワード無しの候補も残る
+
+
+def test_slug_candidates_removes_known_examples():
+    assert mc.slug_candidates("Key to the Mint")[0] == "key-mint"
+    assert mc.slug_candidates("Tale of the Cat")[0] == "tale-cat"
+    assert mc.slug_candidates("In The Wings")[0] == "wings"
+
+
+def test_slug_candidates_includes_numbered_suffixes():
+    cands = mc.slug_candidates("Kampala")
+    assert "kampala" in cands
+    assert "kampala-1" in cands
+
+
+def test_latin_name_prefers_name_en_when_it_has_latin_chars():
+    rec = {"name": "サンデーサイレンス", "name_en": "Sunday Silence"}
+    assert mc.latin_name(rec, "サンデーサイレンス") == "Sunday Silence"
+
+
+def test_latin_name_falls_back_to_stripping_katakana_from_ancestor_name():
+    assert mc.latin_name({}, "ノーザンテーストNorthern Taste") == "Northern Taste"
+
+
+def test_latin_name_returns_empty_when_no_latin_chars_anywhere():
+    assert mc.latin_name({}, "サンデーサイレンス") == ""
+
+
+def test_build_rows_filters_year_precision_and_min_year_and_sorts_by_impact():
+    ancestors = {
+        "a": {"name": "A", "birthday": "1970", "precision": "year"},
+        "b": {"name": "B", "birthday": "1970", "precision": "year"},
+        "c": {"name": "C", "birthday": "1970-01-02", "precision": "day"},  # 除外: day precision
+        "d": {"name": "D", "birthday": "1890", "precision": "year"},  # 除外: 1900 未満
+    }
+    zone = [
+        {"stallion_id": "a", "min_gen": "2", "n_horses": "10"},
+        {"stallion_id": "b", "min_gen": "3", "n_horses": "99"},
+        {"stallion_id": "c", "min_gen": "1", "n_horses": "50"},
+        {"stallion_id": "d", "min_gen": "1", "n_horses": "50"},
+    ]
+    rows = mc.build_rows(ancestors, zone, {}, set(), limit=10, base_url="https://sporthorse-data.com/pedigree")
+    assert [r["horse_id"] for r in rows] == ["b", "a"]  # 影響度(n_horses)降順
+    assert rows[0]["url"].startswith("https://sporthorse-data.com/pedigree/")
+
+
+def test_build_rows_excludes_manually_already_done_horses():
+    ancestors = {"a": {"name": "A", "birthday": "1970", "precision": "year"}}
+    zone = [{"stallion_id": "a", "min_gen": "1", "n_horses": "10"}]
+    rows = mc.build_rows(ancestors, zone, {}, {"a"}, limit=10, base_url="https://sporthorse-data.com/pedigree")
+    assert rows == []
+
+
+def test_render_embeds_json_data_and_escapes_closing_script_tags():
+    rows = [{"horse_id": "a", "name": "A</script>", "name_en": "", "year": 1970, "impact": 1,
+             "url": "https://example.com/a", "candidates": [], "sire": ""}]
+    html_out = mc.render(rows)
+    assert "<\\/script>" in html_out
+    assert "</script>" not in html_out.split("const DATA")[1].split(";")[0]
