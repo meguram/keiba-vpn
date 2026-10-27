@@ -48,6 +48,53 @@ def default_max_age() -> float:
         return DEFAULT_MAX_AGE_SEC
 
 
+PAST_RACE_MAX_AGE_SEC = 6 * 3600.0
+
+
+def _past_race_max_age() -> float:
+    try:
+        return float(os.environ.get("KEIBA_PRERENDER_PAST_MAX_AGE_SEC") or PAST_RACE_MAX_AGE_SEC)
+    except ValueError:
+        return PAST_RACE_MAX_AGE_SEC
+
+
+def race_max_age(body: bytes, *, today: str | None = None) -> float | None:
+    """レースの応答の保持時間。終わった開催日（JST の今日より前）で結果まで揃っていれば長く使い回し、それ以外は既定（None）。
+
+    Cloud Run には保存の目印（mark_dirty）が届かないので、短い max_age が唯一の更新手段になっている。結果が確定した日の応答は
+    ほぼ変わらないので、毎回作り直さない（race-values の過去日と同じ 6 時間。配備・手動クリアで世代が進めば読まれなくなる）。
+    日付は レース詳細の ``date``、予測の ``entries_status.race_date`` から読む。"""
+    try:
+        d = json.loads(body)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(d, dict):
+        return None
+    es = d.get("entries_status") if isinstance(d.get("entries_status"), dict) else {}
+    digits = re.sub(r"\D", "", str(d.get("date") or es.get("race_date") or ""))[:8]
+    if len(digits) != 8:
+        return None
+    if today is None:
+        from datetime import timedelta, timezone
+
+        today = datetime.now(timezone(timedelta(hours=9))).strftime("%Y%m%d")
+    if digits >= today:
+        return None
+    if "race_result" in d and not d.get("race_result"):   # レース詳細で結果がまだ取れていない日は、取れるまで短いまま
+        return None
+    return _past_race_max_age()
+
+
+def _resolve_max_age(max_age: Any, body: bytes) -> float | None:
+    """``max_age`` は秒数か、応答本体から秒数（None なら既定）を求める関数。"""
+    if not callable(max_age):
+        return max_age
+    try:
+        return max_age(body)
+    except Exception:
+        return None
+
+
 def _max_bytes() -> int:
     try:
         return int(float(os.environ.get("KEIBA_PRERENDER_MAX_MB") or 300) * 1024 * 1024)
@@ -289,7 +336,7 @@ def _resolve_deps(deps: Any, body: bytes) -> list[str]:
 _flights: dict[str, Any] = {}
 
 
-async def cached_response(kind: str, key: str, compute: Callable[[], Awaitable[Any]], *, deps: Any = None, max_age: float | None = None, refresh: bool = False) -> Any:
+async def cached_response(kind: str, key: str, compute: Callable[[], Awaitable[Any]], *, deps: Any = None, max_age: Any = None, refresh: bool = False) -> Any:
     """``compute`` は JSONResponse を返す。事前生成があればそれを返し、無ければ計算して 200 のものを書き込む（他ワーカーも使える）。
     同じキーの同時要求は 1 本だけ計算し、他は待って結果を読む（人気のレースに一斉に来ても、1 回しか計算しない）。
     ``deps`` は応答が依存する race_id/開催日（または本体から求める関数）。省略時は ``[key]``。"""
@@ -304,7 +351,8 @@ async def cached_response(kind: str, key: str, compute: Callable[[], Awaitable[A
         resp = await compute()
         body = getattr(resp, "body", None)
         if body is not None and getattr(resp, "status_code", 200) == 200:
-            put(kind, key, bytes(body), since_ns=since, hard=hard, deps=_resolve_deps(deps if deps is not None else [key], bytes(body)), max_age=max_age)
+            put(kind, key, bytes(body), since_ns=since, hard=hard, deps=_resolve_deps(deps if deps is not None else [key], bytes(body)),
+                max_age=_resolve_max_age(max_age, bytes(body)))
         return resp
 
     if refresh:
@@ -348,7 +396,7 @@ def _store_json(kind: str, key: str, compute: Callable[[], dict[str, Any]], deps
     out = compute()
     try:
         raw = json.dumps(out, ensure_ascii=False).encode("utf-8")
-        put(kind, key, raw, since_ns=since, hard=hard, deps=_resolve_deps(deps if deps is not None else [key], raw), max_age=max_age)
+        put(kind, key, raw, since_ns=since, hard=hard, deps=_resolve_deps(deps if deps is not None else [key], raw), max_age=_resolve_max_age(max_age, raw))
     except (TypeError, ValueError):
         pass
     return out

@@ -6912,7 +6912,7 @@ async def get_race_detail(request: Request, race_id: str):
 async def _race_detail_impl(race_id: str):
     from src.api import prerender
 
-    return await prerender.cached_response("race_detail", race_id, lambda: _race_detail_compute(race_id))
+    return await prerender.cached_response("race_detail", race_id, lambda: _race_detail_compute(race_id), max_age=prerender.race_max_age)
 
 
 async def _race_detail_compute(race_id: str):
@@ -7082,7 +7082,7 @@ async def get_race_predictions(request: Request, race_id: str):
 async def _race_predictions_impl(race_id: str):
     from src.api import prerender
 
-    return await prerender.cached_response("predictions", race_id, lambda: _race_predictions_compute(race_id))
+    return await prerender.cached_response("predictions", race_id, lambda: _race_predictions_compute(race_id), max_age=prerender.race_max_age)
 
 
 async def _race_predictions_compute(race_id: str):

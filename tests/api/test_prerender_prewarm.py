@@ -336,3 +336,28 @@ def test_prune_size_removes_oldest_first(store):
     assert prerender.prune_size(max_bytes=3000) >= 2
     left = {p.name for p in (prerender.base_dir() / "pr").iterdir()}
     assert "k4.json" in left and "k0.json" not in left
+
+
+def test_race_max_age_is_long_only_for_finished_past_races():
+    today = "20261027"
+    past = prerender.PAST_RACE_MAX_AGE_SEC
+    detail = lambda date, result: json.dumps({"race_id": RID, "date": date, "race_result": result}).encode()
+    preds = lambda date: json.dumps({"race_id": RID, "entries_status": {"race_date": date}}).encode()
+    assert prerender.race_max_age(detail("2026-10-25", {"entries": [1]}), today=today) == past
+    assert prerender.race_max_age(detail("2026-10-25", None), today=today) is None      # 結果が未取得の過去日は短いまま
+    assert prerender.race_max_age(detail("2026-10-27", {"entries": [1]}), today=today) is None  # 当日は短いまま
+    assert prerender.race_max_age(preds("2026-10-25"), today=today) == past
+    assert prerender.race_max_age(preds("2026-11-01"), today=today) is None
+    assert prerender.race_max_age(json.dumps({"race_id": RID}).encode(), today=today) is None  # 日付が無ければ既定
+    assert prerender.race_max_age(b"not json", today=today) is None
+
+
+def test_cached_response_applies_max_age_function(store):
+    body = {"race_id": RID, "entries_status": {"race_date": "2020-01-01"}}
+
+    async def compute():
+        return JSONResponse(body)
+
+    asyncio.run(prerender.cached_response("predictions", RID, compute, max_age=prerender.race_max_age))
+    meta = json.loads(prerender._path("predictions", RID).read_bytes().split(b"\n", 1)[0])
+    assert meta["max_age"] == prerender.PAST_RACE_MAX_AGE_SEC
