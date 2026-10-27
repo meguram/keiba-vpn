@@ -1,6 +1,6 @@
 "use client";
 
-import { getJson, invalidateJson } from "@/lib/httpCache";
+import { PRED_TTL_MS, getJson, invalidateJson } from "@/lib/httpCache";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -300,7 +300,7 @@ export default function RaceDetailPage() {
       return;
     }
     try {
-      const d = await getJson<PredData>(`/api/race/${raceId}/predictions`, { ttlMs: 15_000 });
+      const d = await getJson<PredData>(`/api/race/${raceId}/predictions`, { ttlMs: PRED_TTL_MS });
       if (seq === undefined || seq === loadSeq.current) setPredData(d);
     } catch { /* ignore */ }
   }, [raceId]);

@@ -1,6 +1,6 @@
 "use client";
 
-import { fetchRaceList, getJson, prefetchJson } from "@/lib/httpCache";
+import { PRED_TTL_MS, fetchRaceList, getJson, hasFreshJson, prefetchJson } from "@/lib/httpCache";
 import { Fragment, useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockPredictions } from "@/lib/mock";
@@ -756,7 +756,10 @@ export default function WeeklyPredictionsPage() {
     const v = q.get("venue");
     if (v) setSelectedVenue(v);
     const r = q.get("race");
-    if (r) setSelectedRaceId(r);
+    if (r) {
+      setSelectedRaceId(r);
+      if (!USE_MOCK) prefetchJson(`/api/race/${r}/predictions`, { ttlMs: PRED_TTL_MS });      // 日付・一覧の取得を待たずに、開くレースの予測を先に取り始める
+    }
   }, []);
 
   function firstRaceOf(v: string): RaceItem | undefined {
@@ -869,7 +872,7 @@ export default function WeeklyPredictionsPage() {
       return;
     }
     try {
-      const d = await getJson<PredData>(`/api/race/${raceId}/predictions`, { ttlMs: 15_000, force }).catch((): PredData => ({ status: "error", predictions: [] }));
+      const d = await getJson<PredData>(`/api/race/${raceId}/predictions`, { ttlMs: PRED_TTL_MS, force }).catch((): PredData => ({ status: "error", predictions: [] }));
       setPreds((prev) => ({ ...prev, [raceId]: d }));
     } catch {
       setPreds((prev) => ({ ...prev, [raceId]: { status: "error", predictions: [] } }));
@@ -883,7 +886,7 @@ export default function WeeklyPredictionsPage() {
   const warmPred = useCallback((id: string) => {
     if (USE_MOCK) return;
     if (warmTimer.current) clearTimeout(warmTimer.current);
-    warmTimer.current = setTimeout(() => prefetchJson(`/api/race/${id}/predictions`, { ttlMs: 15_000 }), 150);
+    warmTimer.current = setTimeout(() => prefetchJson(`/api/race/${id}/predictions`, { ttlMs: PRED_TTL_MS }), 150);
   }, []);
 
   /* 選んだレースの予測だけを取得する（素早く切り替えたときは最後に選んだものだけ。取得済みは即表示）。
@@ -891,10 +894,29 @@ export default function WeeklyPredictionsPage() {
   useEffect(() => {
     if (!activeRaceId || preds[activeRaceId] || loadingPred[activeRaceId]) return;
     const id = activeRaceId;
-    const timer = setTimeout(() => { void loadPred(id); }, 120);
+    // 取得済み（先読み済み）なら待たずに表示。そうでなくても、素早い切替の連打をまとめる程度（60ms）だけ待つ
+    const wait = hasFreshJson(`/api/race/${id}/predictions`, PRED_TTL_MS) ? 0 : 60;
+    const timer = setTimeout(() => { void loadPred(id); }, wait);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRaceId, preds]);
+
+  /* 一覧が出たら、その日の他のレースの予測も裏で先に取っておく（選んだときは待たずに出る）。選択中のレースの取得を優先し、2 本ずつ */
+  useEffect(() => {
+    if (USE_MOCK || !races.length) return;
+    let cancelled = false;
+    const ids = [...visibleRaces, ...races.filter((r) => !visibleRaces.includes(r))].map((r) => r.race_id).filter((id) => id && id !== activeRaceId).slice(0, 40);
+    let i = 0;
+    const worker = async () => {
+      while (!cancelled && i < ids.length) {
+        const id = ids[i++];
+        await getJson(`/api/race/${id}/predictions`, { ttlMs: PRED_TTL_MS }).catch(() => undefined);
+      }
+    };
+    const t = setTimeout(() => { void worker(); void worker(); }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [races]);
 
   /* 既定のレース（先頭）が選ばれたときも URL に race を入れる（再読み込み・共有で同じレースが開く） */
   useEffect(() => {

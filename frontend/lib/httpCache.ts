@@ -4,6 +4,9 @@ type Entry<T = unknown> = { at: number; promise: Promise<T> };
 
 const cache = new Map<string, Entry>();
 
+/** AI 予測 API の画面側の保持時間。一覧での先読みと、詳細ページ・レース切替で同じ値を使い、先読みした分をそのまま使えるようにする。 */
+export const PRED_TTL_MS = 45_000;
+
 export type JsonOpts = { ttlMs?: number; credentials?: RequestCredentials; force?: boolean };
 
 /** 失敗（HTTP エラー・通信エラー）は覚えない。404 など「結果が無い」ことを返したいときは okOnly=false で呼ぶ側が扱う。 */
@@ -29,6 +32,12 @@ export function getJson<T>(url: string, opts: JsonOpts = {}): Promise<T> {
 export function prefetchJson(url: string, opts: JsonOpts = {}): void {
   if (typeof window === "undefined") return;
   getJson(url, opts).catch(() => { /* 先読みの失敗は無視 */ });
+}
+
+/** 取得済み（または取得中）で新鮮なら true。待たずに表示できるかの判定用。 */
+export function hasFreshJson(url: string, ttlMs = 15_000): boolean {
+  const hit = cache.get(url);
+  return !!hit && Date.now() - hit.at < ttlMs;
 }
 
 export function invalidateJson(prefix: string): void {

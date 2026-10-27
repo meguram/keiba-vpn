@@ -8,7 +8,7 @@
 `.env` に `KEIBA_PREWARM=1`（既定オフ。stg/prod の API と Flask の両方に同じ .env が読まれること）。オフのときは従来どおりその場で計算する。
 
 ## 仕組み
-- 置き場: `data/local/cache/prerender/<kind>/<key>.json`（`KEIBA_PRERENDER_DIR`。遅いディスクなら速いローカルへ）。`src/api/prerender.py`。
+- 置き場: 一時領域の `keiba-prerender/<kind>/<key>.json`（Linux は `/tmp/keiba-prerender/`。`KEIBA_PRERENDER_DIR` で変更。ホストの `data` 配下に依存せず Cloud Run でも動く。複数ユーザーのプロセスが書けるよう権限は 777）。`src/api/prerender.py`。
   kind は `predictions`・`race_detail`・`race_list`・`race_values`（Flask のレース選択の期待値表示）。
 - 置くのは匿名/会員の出し分け前の全項目の版。取り出した後に各 API が従来どおり項目を落とす（`src/api/tier.py`）。
 - **読まれなくなる条件**（その場計算に戻る）: ①期限切れ ②保存以外の世代（配備・設定変更・手動 `clear_caches`。`cache_epoch.hard_current`）が進んだ
@@ -19,13 +19,13 @@
   - ファイル出力: 予測（`predictions_v6`/`predictions_v3`/`predictions_backfill`）・追走難度・ラップ予想・出馬表の状態（`entries_state`）。
     作る側が 15 秒ごとに直近の開催日のファイルの更新時刻を見て拾う（書く側の改修は不要）。
   - 手で付ける: `python3 -c "from src.api import prerender; prerender.mark_dirty(['<race_id>'])"`（`KEIBA_PREWARM=1` が必要）。
-- **作る側**: `src/api/prewarm.py`。API(FastAPI) の起動時に始まり、`data/local/meta/prewarm.lock` を取れた 1 ワーカーだけが動く（落ちたら別ワーカーが引き継ぐ）。
+- **作る側**: `src/api/prewarm.py`。API(FastAPI) の起動時に始まり、`<置き場>/_state/prewarm.lock` を取れた 1 ワーカーだけが動く（落ちたら別ワーカーが引き継ぐ）。
   - **変更に反応**: 目印が付いたら 3 秒まとめてから、そのレースの予測・詳細を作り直し、続けてその開催日の一覧と期待値表示（paid/full）を作り直す。
     開催日の目印（`race_lists` の更新）は、一覧を作り直して増えたレースも拾う。窓の外のレース（過去分の補填）は無視。
   - **周回（安全網）**: 60 秒ごと、および配備などで世代が進んだとき。窓内の全開催日を見て、無効・期限の半分を過ぎたものだけ作り直す。
   - 対象: `config/prewarm.json` の窓（既定 過去 14 日〜先 7 日の開催日）。hot＝これからの開催日＋直近 3 日（期限 300 秒）、cold＝それより前（6 時間）。
   - ホストの負荷が高い（1 分平均 > コア数×0.5）周回は見送る。目印のファイルは 3 日で掃除。
-  - 状況: `data/local/meta/prewarm_status.json`（周回・変更ごとの件数・作り直し数・エラー数）。
+  - 状況: `<置き場>/_state/prewarm_status.json`（周回・変更ごとの件数・作り直し数・エラー数）。
 
 ## 既知の限界
 - 目印は同じホスト（同じファイルシステム）で保存した分だけ見える。Cloud Run など、保存する側（Jobs）と API が別の場所の環境では、
@@ -37,4 +37,4 @@
 
 ## 確認
 - `python3 -m pytest tests/api/test_prerender_prewarm.py`
-- 動作確認: `KEIBA_PREWARM=1` で API を起動し、`prewarm_status.json` と `data/local/cache/prerender/` を見る。
+- 動作確認: `KEIBA_PREWARM=1` で API を起動し、`prewarm_status.json` と `/tmp/keiba-prerender/` を見る。

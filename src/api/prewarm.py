@@ -184,10 +184,9 @@ class Warmer:
         try:
             from src.api.local_predictions import inference_dir
 
-            root = inference_dir()
+            keys += _scan_inference(inference_dir(), days, since_ns)
         except Exception:
-            root = _ROOT / "data" / "local" / "inference"
-        keys += _scan_inference(root, days, since_ns)
+            pass
         try:
             from src.scraper.entries_sync import state_dir
 
@@ -267,8 +266,8 @@ def try_lead() -> bool:
     try:
         import fcntl
 
-        path = Path(os.environ.get("KEIBA_PREWARM_LOCK") or _ROOT / "data" / "local" / "meta" / "prewarm.lock")
-        path.parent.mkdir(parents=True, exist_ok=True)
+        path = Path(os.environ.get("KEIBA_PREWARM_LOCK") or prerender.state_dir() / "prewarm.lock")
+        prerender._mkdirs(path.parent)
         fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o644)
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -282,9 +281,9 @@ def try_lead() -> bool:
 
 
 def _write_status(doc: dict[str, Any]) -> None:
-    p = Path(os.environ.get("KEIBA_PREWARM_STATUS") or _ROOT / "data" / "local" / "meta" / "prewarm_status.json")
+    p = Path(os.environ.get("KEIBA_PREWARM_STATUS") or prerender.state_dir() / "prewarm_status.json")
     try:
-        p.parent.mkdir(parents=True, exist_ok=True)
+        prerender._mkdirs(p.parent)
         tmp = p.with_suffix(".tmp")
         tmp.write_text(json.dumps({"pid": os.getpid(), "at": datetime.now(_JST).isoformat(timespec="seconds"), **doc}, ensure_ascii=False), encoding="utf-8")
         os.replace(tmp, p)

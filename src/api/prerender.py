@@ -1,7 +1,7 @@
 """画面に出す応答（会員区分で項目を落とす前のもの）を、プロセス・ワーカーをまたいでディスクに事前生成して使い回す。
 
 - 有効化は ``KEIBA_PREWARM=1``（既定オフ。オフのときは何も読み書きせず、従来どおりその場で計算する）。
-- 保存先: ``data/local/cache/prerender/<kind>/<key>.json``（``KEIBA_PRERENDER_DIR`` で変更）。1 行目にメタ、2 行目以降が応答本体。
+- 保存先: 一時領域の ``keiba-prerender/<kind>/<key>.json``（``KEIBA_PRERENDER_DIR`` で変更。ホストの data 配下に依存せず、Cloud Run でも動く）。1 行目にメタ、2 行目以降が応答本体。
 - 無効になる条件（読まれなくなる）:
   1. 期限切れ（``max_age``）
   2. 保存以外の世代（配備・設定変更・手動クリア。``cache_epoch.hard_current``）が進んだ
@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 import re
+import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
@@ -23,7 +24,6 @@ from typing import Any, Awaitable, Callable, Iterable
 
 from src.utils import cache_epoch
 
-_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MAX_AGE_SEC = 300.0
 _KEY_RE = re.compile(r"^(?:\d{12}|\d{8})$")      # race_id（12 桁）または開催日（8 桁）
 
@@ -32,8 +32,32 @@ def enabled() -> bool:
     return os.environ.get("KEIBA_PREWARM", "").strip() == "1"
 
 
+def base_dir() -> Path:
+    return Path(os.environ.get("KEIBA_PRERENDER_DIR") or Path(tempfile.gettempdir()) / "keiba-prerender")
+
+
+def state_dir() -> Path:
+    """事前生成の作る側のロック・状況ファイルの置き場（応答と同じ領域）。"""
+    return base_dir() / "_state"
+
+
 def _dir() -> Path:
-    return Path(os.environ.get("KEIBA_PRERENDER_DIR") or _ROOT / "data" / "local" / "cache" / "prerender")
+    return base_dir()
+
+
+def _mkdirs(d: Path) -> None:
+    """複数のプロセス（API・Flask・取得役。実行ユーザーが違うことがある）が書けるよう、作った置き場は誰でも書ける権限にする。"""
+    todo = []
+    p = d
+    while not p.exists() and p != p.parent and (p == d or p.parent == base_dir() or p == base_dir()):
+        todo.append(p)
+        p = p.parent
+    d.mkdir(parents=True, exist_ok=True)
+    for q in todo:
+        try:
+            os.chmod(q, 0o777)
+        except OSError:
+            pass
 
 
 def _dirty_dir() -> Path:
@@ -56,15 +80,20 @@ def mark_dirty(keys: Iterable[str]) -> int:
     n = 0
     d = _dirty_dir()
     try:
-        d.mkdir(parents=True, exist_ok=True)
+        _mkdirs(d)
         for k in keys:
             if not _KEY_RE.match(str(k)):
                 continue
             p = d / str(k)
+            tmp = d / f".{k}.{os.getpid()}.tmp"      # 別ユーザーが作った目印も置き換えられるよう、更新ではなく作り直して差し替える
+            tmp.write_bytes(b"")
             t = time.time_ns()
-            with open(p, "a"):
+            os.utime(tmp, ns=(t, t))
+            try:
+                os.chmod(tmp, 0o666)
+            except OSError:
                 pass
-            os.utime(p, ns=(t, t))
+            os.replace(tmp, p)
             n += 1
     except OSError:
         pass
@@ -164,10 +193,14 @@ def put(kind: str, key: str, body: bytes, *, since_ns: int, hard: int, deps: Ite
         return
     p = _path(kind, key)
     try:
-        p.parent.mkdir(parents=True, exist_ok=True)
+        _mkdirs(p.parent)
         tmp = p.with_name(f"{p.name}.{os.getpid()}.tmp")
         meta = json.dumps({"hard": hard, "since": since_ns, "at": time.time(), "max_age": max_age, "deps": sorted(set(deps))}, ensure_ascii=False).encode("utf-8")
         tmp.write_bytes(meta + b"\n" + body)
+        try:
+            os.chmod(tmp, 0o666)
+        except OSError:
+            pass
         os.replace(tmp, p)
     except OSError:
         pass
