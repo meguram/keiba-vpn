@@ -624,6 +624,9 @@ def attach_bet_results(payload: dict[str, Any], race_id: str, storage: Any | Non
     return payload
 
 
+_VALUE_STALE_OK_SEC = 1800.0     # 推奨度の一覧は、更新直後の数秒〜数十秒の古さより待たされないことを優先する
+
+
 def _value_pkey(date: str, odds_mode: str, odds_phase: str, max_total_bet: int | None, view: str) -> str:
     return f"{date}_{odds_mode}_{odds_phase}_{max_total_bet}_{view}"
 
@@ -658,6 +661,8 @@ def race_value_summary(
         "race_values", pkey,
         lambda: _race_value_summary_compute(date, odds_mode=odds_mode, odds_phase=odds_phase, max_total_bet=max_total_bet, view=view, refresh=refresh),
         deps=prerender.race_ids_deps(date), max_age=prerender_max_age, refresh=refresh,
+        stale_ok_sec=_VALUE_STALE_OK_SEC,
+        recompute=lambda: _race_value_summary_compute(date, odds_mode=odds_mode, odds_phase=odds_phase, max_total_bet=max_total_bet, view=view, refresh=True),
     )
 
 

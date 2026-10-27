@@ -7,7 +7,7 @@ import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockPredictions } fro
 import { featureEnabled } from "@/lib/features";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { MemberLockNote, PublicModeNote } from "@/components/upgrade/MemberLock";
-import { LEVEL_STYLE, RaceValue, useRaceValues, valueTitle } from "@/lib/raceValue";
+import { LEVEL_STYLE, RaceValue, prefetchRaceValues, useRaceValues, valueTitle } from "@/lib/raceValue";
 import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip, useNarrow } from "@/components/RaceStrip";
@@ -755,6 +755,11 @@ export default function WeeklyPredictionsPage() {
     const q = new URLSearchParams(window.location.search);
     const v = q.get("venue");
     if (v) setSelectedVenue(v);
+    const dq = q.get("date");
+    if (dq && /^\d{8}$/.test(dq) && !USE_MOCK) {         // 開催日一覧・認証の確認を待たずに、開く日のレース一覧と推奨度を先に取り始める
+      prefetchJson(`/api/race-list/${dq}`, { ttlMs: 60_000 });
+      prefetchRaceValues(dq);
+    }
     const r = q.get("race");
     if (r) {
       setSelectedRaceId(r);
@@ -821,6 +826,12 @@ export default function WeeklyPredictionsPage() {
         const list: string[] = d.dates ?? d ?? [];
         setDates(list);
         if (list.length) setSelectedDate(initial(list));
+        if (list.length) {                                  // 近い開催日の推奨度も裏で温めておく（日付を切り替えたときすぐ出る）
+          const t0 = new Date();
+          const day = (x: string) => Date.UTC(+x.slice(0, 4), +x.slice(4, 6) - 1, +x.slice(6, 8));
+          const near = list.filter((x) => Math.abs(day(x) - Date.UTC(t0.getFullYear(), t0.getMonth(), t0.getDate())) <= 7 * 86400000).slice(0, 8);
+          setTimeout(() => near.forEach(prefetchRaceValues), 800);
+        }
       } catch (e: unknown) {
         setDatesError(`開催日の一覧を取得できませんでした（${e instanceof Error ? e.message : String(e)}）`);
       } finally {
