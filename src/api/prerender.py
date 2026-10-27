@@ -17,6 +17,7 @@ import json
 import os
 import re
 import tempfile
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -232,17 +233,21 @@ async def cached_response(kind: str, key: str, compute: Callable[[], Awaitable[A
     return resp
 
 
-def cached_json(kind: str, key: str, compute: Callable[[], dict[str, Any]], *, deps: Any = None, max_age: float | None = None, refresh: bool = False) -> dict[str, Any]:
-    """同期版（Flask 側）。dict を JSON にして置く。"""
+_refreshing: set[str] = set()
+_refreshing_lock = threading.Lock()
+
+
+def get_stale(kind: str, key: str, max_stale_sec: float) -> bytes | None:
+    """期限切れ・データ更新の目印があっても、``max_stale_sec`` 以内に作られた版（世代が同じものに限る）。無ければ None。"""
     if not enabled():
-        return compute()
-    if not refresh:
-        body = get(kind, key)
-        if body is not None:
-            try:
-                return json.loads(body)
-            except ValueError:
-                pass
+        return None
+    hit = _read(kind, key)
+    if hit and hit[0].get("hard") == cache_epoch.hard_current() and (time.time() - float(hit[0].get("at") or 0)) < max_stale_sec:
+        return hit[1]
+    return None
+
+
+def _store_json(kind: str, key: str, compute: Callable[[], dict[str, Any]], deps: Any, max_age: float | None) -> dict[str, Any]:
     since, hard = time.time_ns(), cache_epoch.hard_current()
     out = compute()
     try:
@@ -251,6 +256,48 @@ def cached_json(kind: str, key: str, compute: Callable[[], dict[str, Any]], *, d
     except (TypeError, ValueError):
         pass
     return out
+
+
+def _refresh_in_background(kind: str, key: str, compute: Callable[[], dict[str, Any]], deps: Any, max_age: float | None) -> None:
+    token = f"{kind}/{key}"
+    with _refreshing_lock:
+        if token in _refreshing:
+            return
+        _refreshing.add(token)
+
+    def _run() -> None:
+        try:
+            _store_json(kind, key, compute, deps, max_age)
+        except Exception:
+            pass
+        finally:
+            with _refreshing_lock:
+                _refreshing.discard(token)
+
+    threading.Thread(target=_run, name=f"prerender-refresh-{kind}", daemon=True).start()
+
+
+def cached_json(
+    kind: str, key: str, compute: Callable[[], dict[str, Any]], *, deps: Any = None, max_age: float | None = None, refresh: bool = False,
+    stale_ok_sec: float = 0, recompute: Callable[[], dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """同期版（Flask 側）。dict を JSON にして置く。
+    ``stale_ok_sec`` を指定すると、無効・期限切れでもその秒数以内の版があれば先にそれを返し、裏で ``recompute``（省略時 ``compute``）で作り直す
+    （表示の鮮度より待ち時間を優先する画面向け。作り直しはキーごとに 1 本だけ）。"""
+    if not enabled():
+        return compute()
+    if not refresh:
+        body = get(kind, key)
+        if body is None and stale_ok_sec > 0:
+            body = get_stale(kind, key, stale_ok_sec)
+            if body is not None:
+                _refresh_in_background(kind, key, recompute or compute, deps, max_age)
+        if body is not None:
+            try:
+                return json.loads(body)
+            except ValueError:
+                pass
+    return _store_json(kind, key, compute, deps, max_age)
 
 
 def race_ids_deps(date: str) -> Callable[[bytes], list[str]]:

@@ -270,3 +270,32 @@ def test_try_lead_is_exclusive(tmp_path, monkeypatch):
     os.close(fd)
     os.close(prewarm._lock_fd)
     monkeypatch.setattr(prewarm, "_lock_fd", None)
+
+
+def test_cached_json_serves_stale_then_refreshes_in_background(store):
+    calls = []
+
+    def compute():
+        calls.append(1)
+        return {"v": len(calls)}
+
+    kw = dict(deps=[RID], max_age=300.0, stale_ok_sec=1800)
+    assert prerender.cached_json("sv", "k", compute, **kw) == {"v": 1}
+    assert prerender.cached_json("sv", "k", compute, **kw) == {"v": 1} and len(calls) == 1
+    prerender.mark_dirty([RID])                                  # データ更新: 通常は無効になる
+    assert prerender.get("sv", "k") is None
+    assert prerender.cached_json("sv", "k", compute, **kw) == {"v": 1}      # 古い版を先に返す
+    for _ in range(100):
+        if len(calls) == 2 and prerender.get("sv", "k") is not None:
+            break
+        time.sleep(0.02)
+    assert prerender.cached_json("sv", "k", compute, **kw) == {"v": 2}      # 裏で作り直された
+
+
+def test_stale_is_not_served_across_hard_epoch_or_beyond_limit(store):
+    prerender.cached_json("sv", "k2", lambda: {"v": 1}, stale_ok_sec=1800)
+    prerender.mark_dirty([ "202605030299"])
+    assert prerender.get_stale("sv", "k2", 1800) is not None
+    assert prerender.get_stale("sv", "k2", 0.0) is None
+    cache_epoch.bump("deploy")                                   # 配備: 古い版は返さない
+    assert prerender.get_stale("sv", "k2", 1800) is None
