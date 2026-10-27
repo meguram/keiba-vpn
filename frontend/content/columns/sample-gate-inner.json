@@ -1,0 +1,29 @@
+{
+  "slug": "sample-gate-inner",
+  "title": "【サンプル】短距離戦は内枠が有利なのか",
+  "claim": "芝1200mでは内枠が有利",
+  "verdict": "inconclusive",
+  "summary": "画面確認用のサンプル記事です。数値はすべてダミーで、実データの集計ではありません。",
+  "categories": ["gate/inner-outer", "course/distance"],
+  "published": "2026-10-27",
+  "dataset": { "period": "（ダミー）", "conditions": "（ダミー）", "sample": "（ダミー）" },
+  "draft": true,
+  "body": [
+    { "type": "note", "text": "この記事は表示確認用のサンプルです（draft: true のため本番には出ません）。数値はダミーです。" },
+    { "type": "heading", "text": "調べたこと" },
+    { "type": "text", "text": "枠番ごとの勝率・複勝率・単勝回収率を比較し、内枠（1〜2枠）と外枠（7〜8枠）で差があるかを確認する。" },
+    { "type": "stats", "items": [
+      { "label": "内枠 複勝率", "value": "00.0%", "sub": "1〜2枠" },
+      { "label": "外枠 複勝率", "value": "00.0%", "sub": "7〜8枠" },
+      { "label": "対象レース", "value": "0", "sub": "ダミー" }
+    ] },
+    { "type": "heading", "text": "枠番別の成績" },
+    { "type": "table", "columns": ["枠番", "出走数", "勝率", "複勝率", "単勝回収率"], "rows": [
+      [1, 0, "0.0%", "0.0%", "0%"],
+      [2, 0, "0.0%", "0.0%", "0%"],
+      [8, 0, "0.0%", "0.0%", "0%"]
+    ], "caption": "ダミーの表" },
+    { "type": "heading", "text": "結論" },
+    { "type": "text", "text": "（実データで集計した結果と、その解釈をここに書く）" }
+  ]
+}
