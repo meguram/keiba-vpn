@@ -3014,7 +3014,7 @@ def _start_prewarm() -> Any:
     from src.api import prerender, prewarm
     from src.api.v1.delegates import prewarm_race_values
 
-    if not prerender.enabled():
+    if not prerender.warmer_enabled():
         return None
     hooks = prewarm.Hooks(
         stems=lambda: list(_cached_race_list_stems(_get_storage())),
@@ -4854,6 +4854,7 @@ _UPCOMING_RACES_DEFAULT_TTL = 300.0
 
 @app.get("/api/upcoming-races", response_class=JSONResponse)
 async def get_upcoming_races(
+    request: Request,
     start_date: str = None,
     end_date: str = None,
     local_only: str | None = Query(
@@ -4877,8 +4878,8 @@ async def get_upcoming_races(
     """
     now = _time.time()
     skip_remote = str(local_only or "").strip().lower() in ("1", "true", "yes", "on")
-    if gcp_forbidden():
-        skip_remote = True  # dev はローカルの race_lists（モック）だけで完結させる
+    if gcp_forbidden() or not is_developer(request):
+        skip_remote = True  # dev はローカルの race_lists（モック）だけで完結させる。開発者以外の GET は netkeiba に取得に行かない
     default_window = start_date is None and end_date is None
     if default_window and not skip_remote:
         uc = _UPCOMING_RACES_DEFAULT_CACHE
@@ -4953,9 +4954,13 @@ async def get_upcoming_races(
                 if skip_remote:
                     races = []
                 else:
-                    if client is None:
-                        client = NetkeibaClient(auto_login=True)
-                    races = fetch_races_for_kaisai_date(client, date_compact, use_cache=True)
+                    try:
+                        if client is None:
+                            client = NetkeibaClient(auto_login=True)
+                        races = fetch_races_for_kaisai_date(client, date_compact, use_cache=True)
+                    except Exception as exc:  # 1 日の取得失敗で一覧全体を 500 にしない
+                        logger.warning("upcoming-races: %s の取得に失敗: %s", date_compact, exc)
+                        races = []
 
             if races:
                 if not include_date_in_data_viewer_race_list(
@@ -12160,7 +12165,7 @@ async def api_bloodline_cluster_horse_aptitude(
         calc = _get_horse_apt_calc()
         result = calc.compute(horse_id=horse_id, horse_name=horse_name)
     except FileNotFoundError as e:
-        return JSONResponse({"error": f"artifacts not found: {e}"}, status_code=500)
+        return JSONResponse({"error": f"artifacts not found: {e}"}, status_code=503)
     if "error" in result:
         return JSONResponse(result, status_code=404)
     return JSONResponse(result)
@@ -12178,7 +12183,7 @@ async def api_bloodline_cluster_horse_name_suggest(
     try:
         calc = _get_horse_apt_calc()
     except FileNotFoundError as e:
-        return JSONResponse({"items": [], "error": str(e)}, status_code=500)
+        return JSONResponse({"items": [], "error": str(e)}, status_code=503)
     q_norm = q.strip()
     if not q_norm:
         return JSONResponse({"items": []})
@@ -13757,6 +13762,12 @@ async def api_pedigree_race_stats_meta():
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+_PED_STATS_CACHE: dict = {}
+_PED_STATS_TTL_SEC = 3600.0
+_PED_STATS_MAX_ENTRIES = 64
+_PED_STATS_SLOTS = threading.BoundedSemaphore(2)
+
+
 @app.get("/api/pedigree-race-stats/query", response_class=JSONResponse)
 async def api_pedigree_race_stats_query(
     date_from: Optional[str] = Query(None),
@@ -13779,6 +13790,54 @@ async def api_pedigree_race_stats_query(
     count_mode: str = Query("unique", description="unique=ユニーク馬数 / appearances=出現回数（クロス込み）"),
     top_n: int = Query(50, description="上位N件"),
     exclude_trunk: bool = Query(False, description="根幹血統を除外（派生・非主流固有のみ表示）"),
+):
+    """血統傾向分析。全期間・無条件の集計は 1 回 80 秒かかるため、絞り込み条件を 1 つ以上必須にし、
+    結果を 1 時間キャッシュ、同時実行は 2 本まで（超えたら 503）、重い集計はスレッドで動かして他の要求を止めない。"""
+    from src.utils import cache_epoch
+
+    args = dict(date_from=date_from, date_to=date_to, venues=venues, surface=surface, dist_min=dist_min, dist_max=dist_max, track_conditions=track_conditions, grades=grades, finish_min=finish_min, finish_max=finish_max, pop_min=pop_min, pop_max=pop_max, odds_min=odds_min, odds_max=odds_max, cat=cat, gen_min=gen_min, gen_max=gen_max, count_mode=count_mode, top_n=top_n, exclude_trunk=exclude_trunk)
+    narrowing = ("date_from", "date_to", "venues", "surface", "dist_min", "dist_max", "track_conditions", "grades",
+                 "finish_min", "finish_max", "pop_min", "pop_max", "odds_min", "odds_max")
+    key = (cache_epoch.current(), tuple(sorted((k, str(v)) for k, v in args.items())))
+    hit = _PED_STATS_CACHE.get(key)
+    if hit and _time.time() - hit[0] < _PED_STATS_TTL_SEC:
+        return JSONResponse(hit[1])
+    if not any(args[n] not in (None, "") for n in narrowing):
+        return JSONResponse({"error": "絞り込み条件を 1 つ以上指定してください（期間・開催場・馬場・距離・グレード・着順・人気・オッズのいずれか）。全期間の無条件集計は重いため受け付けません。"}, status_code=400)
+    if not _PED_STATS_SLOTS.acquire(blocking=False):
+        return JSONResponse({"error": "血統傾向分析が混み合っています。少し待ってからやり直してください。"}, status_code=503, headers={"Retry-After": "10"})
+    try:
+        resp = await asyncio.to_thread(_pedigree_race_stats_query_impl, **args)
+    finally:
+        _PED_STATS_SLOTS.release()
+    if getattr(resp, "status_code", 200) == 200 and getattr(resp, "body", None):
+        if len(_PED_STATS_CACHE) >= _PED_STATS_MAX_ENTRIES:
+            _PED_STATS_CACHE.pop(min(_PED_STATS_CACHE, key=lambda k: _PED_STATS_CACHE[k][0]), None)
+        _PED_STATS_CACHE[key] = (_time.time(), json.loads(resp.body))
+    return resp
+
+
+def _pedigree_race_stats_query_impl(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    venues: Optional[str] = None,
+    surface: Optional[str] = None,
+    dist_min: Optional[int] = None,
+    dist_max: Optional[int] = None,
+    track_conditions: Optional[str] = None,
+    grades: Optional[str] = None,
+    finish_min: Optional[int] = None,
+    finish_max: Optional[int] = None,
+    pop_min: Optional[int] = None,
+    pop_max: Optional[int] = None,
+    odds_min: Optional[float] = None,
+    odds_max: Optional[float] = None,
+    cat: Optional[str] = None,
+    gen_min: Optional[int] = None,
+    gen_max: Optional[int] = None,
+    count_mode: str = "unique",
+    top_n: int = 50,
+    exclude_trunk: bool = False,
 ):
     """
     条件で絞り込み後の血統カテゴリ別種牡馬カウント分布を返す（10世代対応）。

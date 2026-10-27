@@ -750,7 +750,7 @@ def get_horse_aptitude(horse_id: str | None, horse_name: str | None) -> tuple[di
         calc = HorseAptitudeProfileCalc()
         result = calc.compute(horse_id=horse_id, horse_name=horse_name)
     except FileNotFoundError as exc:
-        return {"error": f"artifacts not found: {exc}"}, 500
+        return {"error": f"artifacts not found: {exc}"}, 503
     if "error" in result:
         return result, 404
     return result, 200

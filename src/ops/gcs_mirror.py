@@ -198,6 +198,9 @@ def fetch_one(rel_path: str, root: Path = REPO_ROOT, backend: Backend | None = N
     return True
 
 
+initial_recent_pulled = threading.Event()      # 起動直後の「直近分」の取り込みが終わった（成否を問わず）。Cloud Run の起動時ウォームアップが待つ
+
+
 def start_refresher(backend: Backend | None = None, root: Path = REPO_ROOT, *, interval: float = 60.0, recent_days: float = 2.0) -> threading.Thread:
     """Cloud Run 用: 起動時に全部を取り込み、以降は interval 秒ごとに直近の更新分だけを取り込む常駐スレッド。失敗しても API は止めない。"""
     def run() -> None:
@@ -207,7 +210,10 @@ def start_refresher(backend: Backend | None = None, root: Path = REPO_ROOT, *, i
             try:
                 be = be or GcsBackend()
                 if first:     # 起動直後は直近分を先に（表示に要る分を数秒で）、続けて全体
-                    logger.info("gcs_mirror pull(直近): %s", pull(be, root, recent_days=recent_days))
+                    try:
+                        logger.info("gcs_mirror pull(直近): %s", pull(be, root, recent_days=recent_days))
+                    finally:
+                        initial_recent_pulled.set()
                     logger.info("gcs_mirror pull(全体): %s", pull(be, root))
                     first = False
                 else:

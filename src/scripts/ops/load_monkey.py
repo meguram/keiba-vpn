@@ -387,6 +387,8 @@ async def amain(a: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from src.config.ports import local_url
+
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("mode", choices=["browse", "single"])
     ap.add_argument("--path", help="single: 当てるパス（例 /api/race/202604040301/predictions）")
@@ -398,9 +400,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--procs", type=int, default=1, help="負荷発生プロセス数（段の並列数がこの 4 倍以上のときに分割。1 プロセスは 400〜500 req/s で頭打ち）")
     ap.add_argument("--no-pages", action="store_true", help="browse で Next.js のページを除く")
-    ap.add_argument("--fastapi", default="http://127.0.0.1:23220")
-    ap.add_argument("--flask", default="http://127.0.0.1:23210")
-    ap.add_argument("--next", default="http://127.0.0.1:23200")
+    ap.add_argument("--fastapi", default=local_url("fastapi", "stg"))
+    ap.add_argument("--flask", default=local_url("flask", "stg"))
+    ap.add_argument("--next", default=local_url("frontend", "stg"))
     ap.add_argument("--all-base", help="1 つの URL に全部当てる（Cloud Run のタグ付き URL など）。鍵は --key-env の環境変数から X-Keiba-Proxy-Key で付ける")
     ap.add_argument("--key-env", default="KEIBA_PROXY_KEY")
     ap.add_argument("--health", default="/api/health")

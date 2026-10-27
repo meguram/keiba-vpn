@@ -403,6 +403,8 @@ def write_outputs(out: Path, rows: list[dict[str, Any]], eps: list[Endpoint], ti
 # ───────── CLI ─────────
 
 def main(argv: list[str] | None = None) -> int:
+    from src.config.ports import local_url
+
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("mode", choices=["pools", "inproc", "http", "list"])
     ap.add_argument("--out", default=str(Path(tempfile.gettempdir()) / "keiba-latency-monkey"))
@@ -413,9 +415,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--budget-min", type=float, default=40)
     ap.add_argument("--only", help="エンドポイント名の部分一致（絞り込み）")
     ap.add_argument("--skip-file", help="外すエンドポイントの JSON 配列（inproc で外部通信を試みたもの）")
-    ap.add_argument("--fastapi", default="http://127.0.0.1:23220")
-    ap.add_argument("--flask", default="http://127.0.0.1:23210")
-    ap.add_argument("--next", default="http://127.0.0.1:23200")
+    ap.add_argument("--fastapi", default=local_url("fastapi", "stg"))
+    ap.add_argument("--flask", default=local_url("flask", "stg"))
+    ap.add_argument("--next", default=local_url("frontend", "stg"))
     ap.add_argument("--pages", action="store_true", help="http モードで Next.js のページも測る")
     ap.add_argument("--allow-net", action="store_true", help="inproc でも外部通信を遮断しない（既定は遮断）")
     a = ap.parse_args(argv)
