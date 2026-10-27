@@ -3,7 +3,7 @@
 import { PendingLink } from "@/components/PendingLink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { LEVEL_STYLE, RaceValue, TIER_LEGEND, TARGET_TIER_HINT, ValueLevel, chipLabel, hasTier, isTargetValues, valueTitle, mixedProbCalibration } from "@/lib/raceValue";
+import { LEVEL_STYLE, RaceValue, TIER_LEGEND, TARGET_TIER_HINT, ValueLevel, chipHint, chipText, hasTier, isTargetValues, mixedProbCalibration } from "@/lib/raceValue";
 import { venuesOf } from "@/lib/weekDates";
 
 export type StripRace = { race_id: string; race_name?: string; venue?: string; round?: number | string };
@@ -31,12 +31,14 @@ export function useNarrow(): boolean {
  * 開催場タブ（★ = 特に価値の高いレースの数）、R チップ（推奨の期待回収率で色分け）、前後の R ボタン。
  */
 export function RaceStrip({
-  races, venue, onVenue, values, selectedRaceId, onSelectRace, onWarm,
+  races, venue, onVenue, values, valuesState, selectedRaceId, onSelectRace, onWarm,
 }: {
   races: StripRace[];
   venue: string;
   onVenue: (v: string) => void;
   values: Map<string, RaceValue>;
+  /** 推奨度の取得状態（取得中は『…』、失敗は『!』を出して、未計算の『–』と区別する） */
+  valuesState?: { loading: boolean; failed: boolean };
   selectedRaceId: string;
   onSelectRace: (raceId: string) => void;
   /** マウスが乗った／触れ始めたレースを先読みするためのコールバック（任意。GET だけに使う） */
@@ -122,7 +124,7 @@ export function RaceStrip({
                 onTouchStart={() => onWarm?.(r.race_id)}
                 onFocus={() => onWarm?.(r.race_id)}
                 aria-current={on ? "true" : undefined}
-                title={`${roundOf(r)}R ${r.race_name ?? ""}\n${valueTitle(v)}`}
+                title={`${roundOf(r)}R ${r.race_name ?? ""}\n${chipHint(v, valuesState)}`}
                 data-level={lv}
                 style={{
                   minWidth: narrow ? 48 : 46, minHeight: narrow ? 46 : undefined, flex: "none", scrollSnapAlign: "center",
@@ -136,7 +138,7 @@ export function RaceStrip({
               >
                 <span style={{ fontSize: 14, fontWeight: on || lv === "hot" ? 800 : 600 }}>{lv === "hot" ? `★${roundOf(r)}` : roundOf(r)}</span>
                 <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.95 }}>
-                  {chipLabel(v)}
+                  {chipText(v, valuesState)}
                 </span>
               </button>
             );

@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>負荷がかかったときの動きと対応（本番運用）— keiba-vpn docs</title>
+<style>
+:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --code-bg:#0b1428; }
+* { box-sizing: border-box; }
+body { font-family: "Noto Sans JP", system-ui, sans-serif; background:#0b1226; color:var(--text); line-height:1.8; font-size:15px; margin:0; }
+main.content { max-width: 1120px; margin: 0 auto; padding: 32px 28px 80px; }
+header.hero { padding: 22px 26px; border-radius:16px; border:1px solid var(--border); background: linear-gradient(180deg,#16213f,#111a36); margin-bottom: 24px; }
+header.hero h1 { margin: 4px 0 6px; font-size: 26px; }
+header.hero .meta { color: var(--muted); font-size: 13px; margin: 0; }
+article.html-body h2 { font-size: 1.3rem; margin: 2.2em 0 .6em; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+article.html-body h3 { font-size: 1.05rem; margin: 1.6em 0 .5em; color: var(--accent-2); }
+a { color: var(--accent-2); }
+code { background: var(--code-bg); padding: 1px 6px; border-radius: 5px; font-size: .9em; }
+pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; }
+.muted { color: var(--muted); font-size: 12px; }
+table { border-collapse: collapse; width: 100%; margin: 10px 0 18px; font-size: 13.5px; }
+th, td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; vertical-align: top; }
+th { background: var(--panel); color: var(--accent-2); white-space: nowrap; }
+.fa-fig { margin: 14px 0 6px; }
+.fa-svg { display: block; max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: 14px; }
+.fa-cap { color: var(--muted); font-size: 13px; margin: 6px 2px 18px; }
+.fa-box { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 14px 0; }
+.fa-box.warn { border-left-color: #fbbf24; }
+.fa-box.ok { border-left-color: #34d399; }
+.fa-box p { margin: 4px 0; }
+.good { color:#34d399; } .mid { color:#fbbf24; } .bad { color:#f87171; }
+</style>
+</head>
+<body>
+<main class="content">
+<header class="hero">
+  <h1>負荷がかかったときの動きと対応</h1>
+  <p class="meta">本番運用の章。どこまで耐えられるか（実測）、超えたとき何が起きるか、症状ごとに何をするか、容量を増やす手段。2026-10-27 時点。</p>
+</header>
+<article class="html-body">
+
+<h2 id="pl-summary">1. 3 行でいうと</h2>
+<div class="fa-box ok">
+  <p><b>通常の利用は余裕がある。</b>画面（VPS）は同時 100 接続でもエラー 0、AI予測は Cloud Run で「別々のレースを 40 人が同時に見ても快適、同じレースなら 80 人」（2026-10-27 の実測）。実際の閲覧は 1 人あたり 1 秒に 0.2〜0.3 回ほどなので、体感ではこの数字の数倍の人数を支えられる。</p>
+  <p><b>限界を超えても、落ちずに「断る・待たせる」。</b>入口で 429（回数超過）、API が忙しいときは 503 か待ち行列、60 秒を超えると 504。データが壊れる・止まったまま戻らない、は測定では起きなかった。負荷を止めると 0.1〜数秒で元の速さに戻る。</p>
+  <p><b>弱いのは「新しい台が立ち上がるとき」と「同じ口に集中する重い計算」。</b>Cloud Run は最小 0 台なので、急に人が増えると新しい台の起動中に 429 や数十秒の待ちが出る。これを避けるには、費用と引き換えに最小 1 台にする（§7）。</p>
+</div>
+
+<h2 id="pl-path">2. 負荷の通り道</h2>
+<div class="fa-fig"><svg class="fa-svg" viewBox="0 0 1120 285" width="100%" role="img" aria-label="負荷の通り道と、各段の上限" xmlns="http://www.w3.org/2000/svg"><rect width="1120" height="285" rx="14" fill="#0e1730"/><rect x="30" y="70" width="170" height="64" rx="10" fill="#a78bfa" fill-opacity="0.13" stroke="#a78bfa" stroke-width="1.6"/>
+<text x="115.0" y="97.0" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">ブラウザ</text>
+<text x="115.0" y="116.0" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">前回表示・自動再試行</text>
+<rect x="245" y="70" width="170" height="64" rx="10" fill="#f6821f" fill-opacity="0.13" stroke="#f6821f" stroke-width="1.6"/>
+<text x="330.0" y="97.0" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">Cloudflare</text>
+<text x="330.0" y="116.0" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">Access・Tunnel</text>
+<rect x="460" y="70" width="180" height="64" rx="10" fill="#34d399" fill-opacity="0.13" stroke="#34d399" stroke-width="1.6"/>
+<text x="550.0" y="97.0" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">VPS の nginx</text>
+<text x="550.0" y="116.0" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">IP ごとの回数制限</text>
+<rect x="710" y="30" width="200" height="64" rx="10" fill="#34d399" fill-opacity="0.13" stroke="#34d399" stroke-width="1.6"/>
+<text x="810.0" y="57.0" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">画面 Next.js</text>
+<text x="810.0" y="76.0" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">1 プロセス 約 400 req/s</text>
+<rect x="710" y="150" width="200" height="64" rx="10" fill="#4f8bff" fill-opacity="0.13" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="810.0" y="177.1" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">Cloud Run API</text>
+<text x="810.0" y="196.1" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">同時 30 × 最大 3 台</text>
+<rect x="955" y="150" width="130" height="64" rx="10" fill="#4f8bff" fill-opacity="0.13" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="1020.0" y="177.1" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">GCS</text>
+<text x="1020.0" y="196.1" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">正本・保存</text>
+<polyline points="200,102 245,102" fill="none" stroke="#a78bfa" stroke-width="1.8"/>
+<polygon points="245,102 237.0,106.4 237.0,97.6" fill="#a78bfa"/>
+<polyline points="415,102 460,102" fill="none" stroke="#f6821f" stroke-width="1.8"/>
+<polygon points="460,102 452.0,106.4 452.0,97.6" fill="#f6821f"/>
+<polyline points="640,102 675,102 675,62 710,62" fill="none" stroke="#34d399" stroke-width="1.8"/>
+<polygon points="710,62 702.0,66.4 702.0,57.6" fill="#34d399"/>
+<polyline points="640,102 675,102 675,182 710,182" fill="none" stroke="#34d399" stroke-width="1.8"/>
+<polygon points="710,182 702.0,186.4 702.0,177.6" fill="#34d399"/>
+<polyline points="910,182 955,182" fill="none" stroke="#4f8bff" stroke-width="1.8"/>
+<polygon points="955,182 947.0,186.4 947.0,177.6" fill="#4f8bff"/>
+<circle cx="44" cy="60" r="11" fill="#0b1226" stroke="#fbbf24" stroke-width="1.6"/><text x="44" y="64.5" text-anchor="middle" font-size="12" font-weight="700" fill="#fbbf24" font-family="Noto Sans JP, system-ui, sans-serif">①</text>
+<circle cx="259" cy="60" r="11" fill="#0b1226" stroke="#fbbf24" stroke-width="1.6"/><text x="259" y="64.5" text-anchor="middle" font-size="12" font-weight="700" fill="#fbbf24" font-family="Noto Sans JP, system-ui, sans-serif">②</text>
+<circle cx="474" cy="60" r="11" fill="#0b1226" stroke="#fbbf24" stroke-width="1.6"/><text x="474" y="64.5" text-anchor="middle" font-size="12" font-weight="700" fill="#fbbf24" font-family="Noto Sans JP, system-ui, sans-serif">③</text>
+<circle cx="724" cy="22" r="11" fill="#0b1226" stroke="#fbbf24" stroke-width="1.6"/><text x="724" y="26.5" text-anchor="middle" font-size="12" font-weight="700" fill="#fbbf24" font-family="Noto Sans JP, system-ui, sans-serif">④</text>
+<circle cx="724" cy="142" r="11" fill="#0b1226" stroke="#fbbf24" stroke-width="1.6"/><text x="724" y="146.5" text-anchor="middle" font-size="12" font-weight="700" fill="#fbbf24" font-family="Noto Sans JP, system-ui, sans-serif">⑤</text>
+<circle cx="969" cy="142" r="11" fill="#0b1226" stroke="#fbbf24" stroke-width="1.6"/><text x="969" y="146.5" text-anchor="middle" font-size="12" font-weight="700" fill="#fbbf24" font-family="Noto Sans JP, system-ui, sans-serif">⑥</text>
+<text x="560" y="40" text-anchor="middle" font-size="11.5" fill="#aab8dc" font-family="Noto Sans JP, system-ui, sans-serif">画面の殻（HTML・JS）</text>
+<text x="805" y="236" text-anchor="middle" font-size="11.5" fill="#aab8dc" font-family="Noto Sans JP, system-ui, sans-serif">AI予測・一覧・レース詳細（Gateway：FastAPI／Flask）</text>
+<text x="30" y="260" text-anchor="start" font-size="11.5" fill="#fbbf24" font-family="Noto Sans JP, system-ui, sans-serif">超えたときの合図：③ 429（回数超過）　④ 待ち行列が伸びて遅くなる　⑤ 新しい台の起動中は 429、60 秒を超えると 504　⑥ 止まると全体が止まる</text></svg></div>
+<p class="fa-cap">図 1　ユーザーの要求が通る段と、段ごとの上限。①〜⑥ は §3 の表の番号に対応する。全体の構成は前の章「最終アーキテクチャ」を参照。</p>
+
+<h2 id="pl-limits">3. 段ごとの上限と、超えたときに起きること</h2>
+<table>
+<thead><tr><th>#</th><th>段</th><th>上限（根拠）</th><th>超えたとき</th><th>利用者に見えること</th></tr></thead>
+<tbody>
+<tr><td>①</td><td>ブラウザ</td><td>—</td><td>失敗したら自動で再試行。前回見た予測は先に出して、裏で更新する</td><td>待つ間は回転表示。1 秒超で「取得中」、4 秒超で「通常より時間がかかっています」、10 秒超で「もう一度取得する」ボタン。推奨度のチップは「…」（取得中）や「!」（失敗）</td></tr>
+<tr><td>②</td><td>Cloudflare</td><td>Access の認証。設定上の回数制限は置いていない</td><td>—（公開経路を含む負荷は<b>未計測</b>）</td><td>—</td></tr>
+<tr><td>③</td><td>VPS の nginx</td><td>実クライアント IP ごと、<b>画面 240 回/分（burst 120）、API・画像 120 回/分（burst 60）</b>（設定）</td><td><b>429</b> を即返す。VPS の Next.js・API には届かない。同じ IP（会社・学校の回線）の利用者は上限を共有する</td><td>一部の読み込みが失敗する。しばらく待てば戻る</td></tr>
+<tr><td>④</td><td>画面 Next.js（VPS）</td><td>1 プロセスで<b>約 400 req/s</b>（実測。同時 50 付近から頭打ち）。メモリは最大 140MB（systemd の上限 200MB）</td><td>エラーにはならず、待ち行列が伸びて遅くなる（同時 100 で p95 0.6 秒）</td><td>表示が遅くなる</td></tr>
+<tr><td>⑤</td><td>Cloud Run API（prod・stg 共通の作り）</td><td>1 台 1 vCPU・同時 30・最大 3 台、要求の待ち上限 60 秒、<b>最小 0 台</b>（設定）。実測の処理能力は §4</td><td>台が足りない間は<b>429</b>、60 秒を超えると<b>504</b>。計算が重いと遅くなる。DB や成果物が無いときは 500 でなく<b>503</b>（<code>Retry-After</code> つき）</td><td>新しい台の起動中（約 40 秒かかっていたものを、起動時の読み込みで短縮）は、最初の数人が待つか失敗する</td></tr>
+<tr><td>⑥</td><td>GCS</td><td>正本の置き場</td><td>止まると全体が止まる（前の章 §6）。負荷では実測上問題なし</td><td>—</td></tr>
+<tr><td>—</td><td>計画的な停止</td><td>毎日 JST 03:00〜04:00（02:30 から事前告知）</td><td>一般向けの経路は <b>503＋<code>Retry-After</code></b>。ヘルスチェック・ログイン・運用 API は除外。有効化は <code>KEIBA_MAINTENANCE_WINDOW=1</code>（既定オフ）</td><td>『メンテナンス中』の画面</td></tr>
+</tbody></table>
+
+<h3>ホスト上の API（stg の一部。参考）</h3>
+<p>stg ホストの API は、Cloud Run と作りが違う。FastAPI は uvicorn が<b>ワーカーごとに同時 100 を超えると 503 を即返す</b>（落ちない・メモリも増えない）。Flask（<code>/api/v1</code>）は開発用サーバーで上限が無く、<b>エラーにならず待ち行列が伸びるだけ</b>で、メモリは増えたまま戻らない。800 並列では待ち受けの backlog が溢れる。</p>
+
+<h2 id="pl-measure">4. 実測した容量</h2>
+<p>測り方：<code>latency_monkey</code>（全 GET を、最初のアクセスと誰かが開いた後で測る）と <code>load_monkey</code>（同時数を段階的に増やす。1 段 15〜30 秒）。快適 = p95 1 秒未満かつエラー 0.5% 未満、許容 = p95 3 秒未満かつエラー 1% 未満、崩壊 = エラー 10% 以上か p95 15 秒以上。詳しい表は <a href="../../operations/capacity_and_latency_20261027.md">docs/operations/capacity_and_latency_20261027.md</a>。</p>
+
+<h3>4.0 アクセスポイント別の最大同時接続（Cloud Run API。2026-10-27 実測）</h3><p>1 つのアクセスポイントだけに、待ち時間なしで当て続けた結果（Cloud Run のタグ付きリビジョンに直接。台数は最大 3 台まで自動で増える）。<b>『同時に使える人数の目安』は、快適な処理量（req/s）に 20 秒を掛けた値</b>で、1 人がその API を 20 秒に 1 回呼ぶ（レースを切り替えて読む）想定。実際の 1 画面は複数の API を呼ぶので、<b>その画面が呼ぶ API のうち一番小さい値</b>が画面の目安になる。測定の最大は 80 並列で、『80』は『それ以上も快適かもしれない』を含む。</p><h4>(1) ログインしなくても見られるゾーン（匿名）</h4><table><thead><tr><th>アクセスポイント</th><th>1 件の速さ（中央値）</th><th>快適な最大の同時リクエスト</th><th>そのときの処理量（req/s）</th><th>同時に使える人数の目安</th><th>許容の最大</th><th>崩壊した並列数</th></tr></thead><tbody><tr><td>ログイン状態<br><code>/api/auth/status</code><br><span class="muted">全画面が最初に呼ぶ</span></td><td>26ms</td><td><b>80</b></td><td>747.5</td><td><b>約14,950人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>開催日の一覧<br><code>/api/scrape-dates</code></td><td>22ms</td><td><b>80</b></td><td>586.5</td><td><b>約11,730人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>レース一覧<br><code>/api/race-list/{日}</code><br><span class="muted">開催日を開く</span></td><td>1.1秒</td><td><b>80</b></td><td>458.1</td><td><b>約9,162人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>AI予測（勝率・複勝率まで）<br><code>/api/race/{id}/predictions</code><br><span class="muted">匿名は項目を絞った版</span></td><td>2.3秒</td><td><b>40</b></td><td>282.8</td><td><b>約5,656人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>レース詳細（出馬表）<br><code>/api/race/{id}</code><br><span class="muted">匿名は項目を絞った版</span></td><td>145ms</td><td><b>20</b></td><td>79.7</td><td><b>約1,594人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>馬・騎手・調教師カード<br><code>/api/race/{id}/entry/{馬}/card</code><br><span class="muted">タップしたとき</span></td><td>114ms</td><td><b>80</b></td><td>209.9</td><td><b>約4,198人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>画面のページ（HTML）<br><code>/weekly-predictions</code> など<br><span class="muted">VPS の Next.js。nginx の回数制限を外して直に測定（10-22）</span></td><td>約 200ms</td><td><b>100</b></td><td>407</td><td><b>約8,100人</b></td><td>100</td><td>測定範囲では崩壊せず</td></tr></tbody></table><h4>(2) ログインした会員だけが見られるゾーン（匿名は 401 を即返す）</h4><table><thead><tr><th>アクセスポイント</th><th>1 件の速さ（中央値）</th><th>快適な最大の同時リクエスト</th><th>そのときの処理量（req/s）</th><th>同時に使える人数の目安</th><th>許容の最大</th><th>崩壊した並列数</th></tr></thead><tbody><tr><td>AI予測（全項目）<br><code>/api/race/{id}/predictions</code><br><span class="muted">会員は期待値・印・展開まで</span></td><td>144ms</td><td><b>40</b></td><td>169.8</td><td><b>約3,396人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>レース詳細（全項目）<br><code>/api/race/{id}</code></td><td>172ms</td><td><b>10</b></td><td>27.2</td><td><b>約544人</b></td><td>40</td><td>測定範囲では崩壊せず</td></tr><tr><td>レースのまとめ取得<br><code>/api/race/{id}/bundle</code></td><td>136ms</td><td><b>10</b></td><td>32.9</td><td><b>約658人</b></td><td>40</td><td>測定範囲では崩壊せず</td></tr><tr><td>オッズ<br><code>/api/race/{id}/final-odds</code></td><td>84ms</td><td><b>80</b></td><td>265.6</td><td><b>約5,312人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>推奨馬券（パターン）<br><code>POST /api/v1/betting/optimize</code><br><span class="muted">『推奨馬券』タブ</span></td><td>197ms</td><td><b>5</b></td><td>18.0</td><td><b>約360人</b></td><td>20</td><td>測定範囲では崩壊せず</td></tr><tr><td>推奨度（R チップ）<br><code>/api/v1/betting/race-values</code><br><span class="muted">開催日ごと。前回値を先出し</span></td><td>7.1秒</td><td><b>40</b></td><td>176.0</td><td><b>約3,520人</b></td><td>40</td><td>測定範囲では崩壊せず</td></tr><tr><td>追走難度<br><code>/api/race/{id}/tracking-difficulty</code></td><td>42ms</td><td><b>40</b></td><td>144.4</td><td><b>約2,888人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>推奨馬券の成績<br><code>/api/prediction-results/bets-summary</code></td><td>38ms</td><td><b>80</b></td><td>203.8</td><td><b>約4,076人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>レース質（開催日）<br><code>/api/race-quality/day</code></td><td>8.9秒</td><td><b>—</b></td><td>—</td><td><b>—</b></td><td>—</td><td>5</td></tr><tr><td>レース結果<br><code>/api/race/{id}/result</code><br><span class="muted">結果タブ</span></td><td>28ms</td><td><b>80</b></td><td>414.9</td><td><b>約8,298人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr></tbody></table><h4>(3) 画面遷移を混ぜた同時利用者（API のみ。考える時間つきで、1 人あたり約 0.8 req/s）</h4><table><thead><tr><th>ゾーン</th><th></th><th colspan="2">実測</th><th colspan="2">目安</th><th>崩壊</th></tr></thead><tbody><tr><td>匿名（開催日一覧 → レース一覧 → 数レースの AI 予測と詳細）</td><td>—</td><td colspan="2">快適 <b>200</b> 人（許容 200 人。測定は 200 人まで）</td><td colspan="2"><b>約600人</b>（実際の閲覧は 1 人 0.25 req/s 前後で、測定の 3 分の 1 の負荷）</td><td>測定範囲では崩壊せず</td></tr><tr><td>会員（上に加えて推奨度・推奨馬券の API）</td><td>—</td><td colspan="2">快適 <b>50</b> 人（許容 200 人。測定は 200 人まで）</td><td colspan="2"><b>約150人</b>（実際の閲覧は 1 人 0.25 req/s 前後で、測定の 3 分の 1 の負荷）</td><td>測定範囲では崩壊せず</td></tr></tbody></table><div class="fa-box warn"><p><b>読み方の注意。</b>(a) 1 人が 1 秒に何回も押し続ける場合や、同じ回線（NAT）の大人数は、nginx の回数制限（画面 240 回/分・API 120 回/分）で 429 になる。(b) 新しい台が立ち上がる段（20〜100 並列付近）で一時的に遅く／429 になることがある（段ごとの凸凹）。(c) 測定に使えたレースは予測のある 6 件で、人気のレースを大勢が見る状況に近い（応答の再利用が効く）。まだ誰も開いていないレースの最初の 1 回は 1〜3 秒かかる。(d) 会員向けの重いもの（レース詳細の全項目・まとめ取得は約 30 req/s、推奨馬券は約 18 req/s、レース質は 1 秒未満に 1 回）が、会員ゾーンの上限を決めている。</p></div>
+
+<h3>4.1 Cloud Run API（prod と同じ作り。stg のタグ付きリビジョンで計測）</h3>
+<table>
+<thead><tr><th>対象</th><th>改善前</th><th>改善後（2026-10-27）</th></tr></thead>
+<tbody>
+<tr><td>AI予測（同じレースを繰り返す）</td><td>1 並列 p50 880ms。<b>5 並列で崩壊</b>（p50 42 秒）</td><td>1 並列 p50 <b>25ms</b>。10 並列まで p95 115ms、<b>80 並列まで快適</b>（約 290 req/s）、150 並列で悪化（p95 4.4 秒・エラーなし）</td></tr>
+<tr><td>AI予測（レースをランダムに選ぶ）</td><td>計測不能</td><td>初回は 1.4〜3 秒（計算が走る）。<b>5〜40 並列は快適</b>（p95 0.06〜0.9 秒・エラー 0%）</td></tr>
+<tr><td>開催日一覧</td><td>40 並列まで快適、150 で悪化</td><td>同じ（40 並列まで快適、80 許容、150 悪化。止めると 0.1 秒で回復）</td></tr>
+<tr><td>新しい台の最初の要求</td><td>37〜44 秒</td><td>起動時の読み込みを終えてから受け付ける（20 並列の段で 429 が 16 件・48 秒待ちが 1 件出た）</td></tr>
+</tbody></table>
+
+<h3>4.2 VPS の画面（nginx → Next.js）</h3>
+<table>
+<thead><tr><th>同時接続</th><th>req/s</th><th>p95</th><th>エラー</th><th>空きメモリ</th></tr></thead>
+<tbody>
+<tr><td>5〜20</td><td>97〜300</td><td>66〜104ms</td><td>0</td><td>1.3GB 以上</td></tr>
+<tr><td>50</td><td>371</td><td>269ms</td><td>0</td><td>1.3GB 以上</td></tr>
+<tr><td>100</td><td>407</td><td>626ms</td><td>0</td><td>1.3GB 以上</td></tr>
+</tbody></table>
+<p>nginx 経由では、上の回数制限で 429 が返り、Next.js にはほとんど届かない（同時 100 でも 5xx・再起動なし）。詳細は <a href="vps_load_and_cache.html">VPS（prod の画面）の負荷テストとキャッシュの現状</a>。</p>
+
+<h3>4.3 ホスト stg の API（参考。画面遷移を混ぜた負荷、1 人あたり約 0.8 req/s）</h3>
+<table>
+<thead><tr><th>同時利用者</th><th>p95</th><th>エラー</th><th>判定</th></tr></thead>
+<tbody>
+<tr><td>100〜200</td><td>53〜86ms</td><td>0%</td><td class="good">快適</td></tr>
+<tr><td>400</td><td>183ms</td><td>1.2%（503）</td><td class="mid">悪化（境目）</td></tr>
+<tr><td>1,600</td><td>7.0 秒</td><td>24%（503）</td><td class="bad">崩壊</td></tr>
+</tbody></table>
+<p>崩壊しても落ちず、負荷を止めて 1 秒以内に回復した（メモリ増・再起動なし）。</p>
+
+<h2 id="pl-how">5. 1 回の AI予測が処理される流れ（応答の再利用）</h2>
+<div class="fa-fig"><svg class="fa-svg" viewBox="0 0 1120 405" width="100%" role="img" aria-label="AI予測の要求が処理される流れ" xmlns="http://www.w3.org/2000/svg"><rect width="1120" height="405" rx="14" fill="#0e1730"/><rect x="30" y="70" width="150" height="60" rx="10" fill="#a78bfa" fill-opacity="0.13" stroke="#a78bfa" stroke-width="1.6"/>
+<text x="105.0" y="95.0" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">要求</text>
+<text x="105.0" y="114.0" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">AI予測 /api/race/…</text>
+<rect x="235" y="70" width="170" height="60" rx="10" fill="#fbbf24" fill-opacity="0.13" stroke="#fbbf24" stroke-width="1.6"/>
+<text x="320.0" y="95.0" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">応答の置き場に</text>
+<text x="320.0" y="114.0" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">有効な版がある？</text>
+<rect x="235" y="190" width="170" height="60" rx="10" fill="#fbbf24" fill-opacity="0.13" stroke="#fbbf24" stroke-width="1.6"/>
+<text x="320.0" y="215.1" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">同じレースを</text>
+<text x="320.0" y="234.1" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">計算中の要求がある？</text>
+<rect x="480" y="190" width="170" height="60" rx="10" fill="#4f8bff" fill-opacity="0.13" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="565.0" y="215.1" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">その結果を待って</text>
+<text x="565.0" y="234.1" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">読む（計算は 1 回）</text>
+<rect x="235" y="290" width="170" height="60" rx="10" fill="#4f8bff" fill-opacity="0.13" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="320.0" y="315.1" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">計算する</text>
+<text x="320.0" y="334.1" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">約 1〜3 秒（1 vCPU）</text>
+<rect x="480" y="290" width="170" height="60" rx="10" fill="#4f8bff" fill-opacity="0.13" stroke="#4f8bff" stroke-width="1.6"/>
+<text x="565.0" y="315.1" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">置き場に保存</text>
+<text x="565.0" y="334.1" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">120 秒使い回す</text>
+<rect x="730" y="70" width="170" height="60" rx="10" fill="#34d399" fill-opacity="0.13" stroke="#34d399" stroke-width="1.6"/>
+<text x="815.0" y="95.0" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">そのまま返す</text>
+<text x="815.0" y="114.0" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">約 25 ミリ秒</text>
+<rect x="730" y="290" width="170" height="60" rx="10" fill="#34d399" fill-opacity="0.13" stroke="#34d399" stroke-width="1.6"/>
+<text x="815.0" y="315.1" text-anchor="middle" font-size="13" fill="#f3f6ff" font-weight="700" font-family="Noto Sans JP, system-ui, sans-serif">返す</text>
+<text x="815.0" y="334.1" text-anchor="middle" font-size="12" fill="#c9d3ee" font-family="Noto Sans JP, system-ui, sans-serif">（待った人も同時に）</text>
+<polyline points="180,100 235,100" fill="none" stroke="#9fb4e8" stroke-width="1.8"/>
+<polygon points="235,100 227.0,104.4 227.0,95.6" fill="#9fb4e8"/>
+<polyline points="405,100 730,100" fill="none" stroke="#34d399" stroke-width="1.8"/>
+<polygon points="730,100 722.0,104.4 722.0,95.6" fill="#34d399"/>
+<text x="565" y="92" text-anchor="middle" font-size="11.5" fill="#34d399" font-family="Noto Sans JP, system-ui, sans-serif">ある</text>
+<polyline points="320,130 320,190" fill="none" stroke="#fbbf24" stroke-width="1.8"/>
+<polygon points="320,190 315.6,182.0 324.4,182.0" fill="#fbbf24"/>
+<text x="344" y="165" text-anchor="start" font-size="11.5" fill="#fbbf24" font-family="Noto Sans JP, system-ui, sans-serif">ない</text>
+<polyline points="405,220 480,220" fill="none" stroke="#4f8bff" stroke-width="1.8"/>
+<polygon points="480,220 472.0,224.4 472.0,215.6" fill="#4f8bff"/>
+<text x="442" y="212" text-anchor="middle" font-size="11.5" fill="#4f8bff" font-family="Noto Sans JP, system-ui, sans-serif">ある</text>
+<polyline points="320,250 320,290" fill="none" stroke="#fbbf24" stroke-width="1.8"/>
+<polygon points="320,290 315.6,282.0 324.4,282.0" fill="#fbbf24"/>
+<text x="344" y="275" text-anchor="start" font-size="11.5" fill="#fbbf24" font-family="Noto Sans JP, system-ui, sans-serif">ない</text>
+<polyline points="405,320 480,320" fill="none" stroke="#4f8bff" stroke-width="1.8"/>
+<polygon points="480,320 472.0,324.4 472.0,315.6" fill="#4f8bff"/>
+<polyline points="650,320 730,320" fill="none" stroke="#34d399" stroke-width="1.8"/>
+<polygon points="730,320 722.0,324.4 722.0,315.6" fill="#34d399"/>
+<polyline points="565,190 565,160 815,160 815,130" fill="none" stroke="#34d399" stroke-width="1.8" stroke-dasharray="5 4"/>
+<polygon points="815,130 819.4,138.0 810.6,138.0" fill="#34d399"/>
+<text x="700" y="152" text-anchor="middle" font-size="11.5" fill="#aab8dc" font-family="Noto Sans JP, system-ui, sans-serif">待った結果を返す</text>
+<text x="30" y="385" text-anchor="start" font-size="11.5" fill="#aab8dc" font-family="Noto Sans JP, system-ui, sans-serif">データが保存された（予測・出馬表など）レースの版は、その瞬間から読まれなくなる。配備や手動クリアでも一斉に無効になる。</text></svg></div>
+<p class="fa-cap">図 2　Cloud Run は <code>KEIBA_PRERENDER=1</code>。同じキーの同時要求は計算 1 回にまとめる。置き場が膨らまないよう、合計サイズに上限を設け、古い版から消す。</p>
+<p>この仕組みで、AI予測の限界は「同時 2〜3 人」から「別々のレースで 40 人以上、同じレースで 80 人」になった。匿名・会員・開発者の項目の出し分けは、置き場から取り出した後で行う（置き場には全項目の版だけを置く）。</p>
+
+<h2 id="pl-runbook">6. 症状別の対応（運用手順）</h2>
+<table>
+<thead><tr><th>見えている症状</th><th>考えられる原因</th><th>まず確認</th><th>対応</th></tr></thead>
+<tbody>
+<tr><td>API が 429 を返す（一部の人だけ）</td><td>nginx の IP ごとの回数制限、または Cloud Run が台を増やす途中</td><td>nginx のログに <code>limiting requests</code> があるか／Cloud Run のログに 429 があるか</td><td>nginx なら同じ IP の連打（NAT 内の大人数）。上限は <code>nginx-zones.conf</code>（<code>rate</code>・<code>burst</code>）で調整。Cloud Run なら数十秒で収まる。繰り返すなら最小インスタンスを増やす（§7）</td></tr>
+<tr><td>API が 503（<code>Retry-After</code> つき）</td><td>DB・成果物が無い、またはホストの FastAPI が同時上限に達した、またはメンテナンス窓</td><td>本文の <code>reason</code>／<code>X-Keiba-Maintenance</code> ヘッダー／時刻（03:00〜04:00 か）</td><td>メンテナンスなら待つ。<code>db_error</code> ならマイグレーションの適用を確認。同時上限なら負荷が下がれば自然に戻る</td></tr>
+<tr><td>504、または予測が出るまで数十秒</td><td>Cloud Run が新しい台を起動中、または重い計算が詰まっている</td><td>Cloud Run のインスタンス数・コンテナ起動のログ。<code>/api/race/…/predictions</code> が 2 回目以降も遅いか</td><td>起動中なら数十秒で解消。毎回遅いなら <code>KEIBA_PRERENDER</code>・<code>KEIBA_WARMUP_ON_START</code> が有効か確認（配備の環境変数）。予測の事前計算（前夜の Job）が動いたかも確認</td></tr>
+<tr><td>画面は出るがデータが「…」「!」のまま</td><td>推奨度などの個別 API が失敗または遅い</td><td>ブラウザの開発者ツールで該当 API のステータス</td><td>401 は会員区分の問題（負荷ではない）。それ以外は上の API の症状に従う。画面側は自動で再試行する</td></tr>
+<tr><td>画面そのものが遅い・開かない</td><td>VPS の Next.js（1 プロセス）が飽和、または VPS が止まった</td><td>VPS の CPU・空きメモリ、<code>keiba-ui</code> のメモリ（200MB 上限）と再起動回数</td><td>空きメモリ 1GB 未満になる前に、重い処理を止める。Next.js の再起動。VPS 停止なら前の章 §6（生存報告の途絶で Slack に緊急通知）</td></tr>
+<tr><td>急に全体が 5xx</td><td>配備直後の不具合、または GCS の障害</td><td>直近の配備、<code>/api/health</code></td><td>Cloud Run は 1 つ前のリビジョンへ（数秒）。GCS は復旧待ち</td></tr>
+</tbody></table>
+<div class="fa-box warn">
+  <p><b>やってはいけないこと。</b>負荷が高いときに、取得元（netkeiba）への取得を増やして穴埋めしない（アクセス制限の疑いは再試行せず 30 分止める決まり）。研究用 PC の重い処理（学習・補填）と、負荷試験を同時に走らせない（ホストの負荷は最大でもコア数×0.8 まで）。</p>
+</div>
+
+<h2 id="pl-mitigations">7. 負荷を和らげる仕組みと、容量を増やす手段</h2>
+<h3>7.1 すでに入っている仕組み</h3>
+<ul>
+  <li><b>応答の再利用</b>：API 側で作った応答を共有の置き場に置く（開催日の一覧・各レースの予測・レース詳細・期待値表示）。<code>KEIBA_PREWARM=1</code> なら先に作る係が回り、<code>KEIBA_PRERENDER=1</code> なら要求されたときに作ったものを使い回す。</li>
+  <li><b>同じ計算の一本化</b>：同じキーの同時要求は 1 回だけ計算し、他は結果を待つ。</li>
+  <li><b>古い版を先に返す</b>：期限切れでも一定時間内なら先に返し、裏で作り直す（表示の鮮度より待ち時間を優先する画面）。</li>
+  <li><b>起動時の読み込み</b>：Cloud Run の新しい台は、データ取り込みと主要データの読み込みを終えてから受け付ける（<code>KEIBA_WARMUP_ON_START=1</code>）。</li>
+  <li><b>ブラウザ側</b>：前回表示の先出し、並行取得、自動再試行、段階的な待ち表示（1・4・10 秒）。</li>
+  <li><b>入口の制限</b>：nginx の IP ごとの回数制限。画像は 7 日キャッシュ。API の GET には <code>Cache-Control: private</code> を付ける（会員区分で内容が違うため共有キャッシュは使わない）。</li>
+  <li><b>重い API の守り</b>：絞り込み無しの血統集計は 400、同時数の上限、スレッドでの実行。</li>
+</ul>
+
+<h3>7.2 容量を増やす手段（効く順）</h3>
+<table>
+<thead><tr><th>手段</th><th>効果</th><th>費用・注意</th></tr></thead>
+<tbody>
+<tr><td>Cloud Run の最小インスタンスを 1 にする</td><td>新しい台の起動待ち・429 が最初の 1 台分なくなる</td><td>約 2,900 円/月増。月額 2,000 円の予算を超えるので、<b>ユーザーの判断が必要</b>（未設定）</td></tr>
+<tr><td>Cloud Run の最大インスタンスを増やす（現状 3）</td><td>同時に捌ける人数が台数に比例</td><td>使った分だけの課金。ただし計算が重い API は CPU が 1 台 1 vCPU で頭打ち</td></tr>
+<tr><td>応答を使い回す秒数を延ばす（<code>KEIBA_PRERENDER_MAX_AGE_SEC</code>、現状 120）</td><td>計算の回数が減る</td><td>データ更新は「保存されたレースの版は読まれない」ので、更新の反映は遅れない。置き場の上限は <code>KEIBA_PRERENDER_MAX_MB</code>（既定 300）</td></tr>
+<tr><td>nginx の回数制限を緩める</td><td>NAT 内の大人数が 429 になりにくい</td><td>緩めるほど Next.js・API に直接届く。実測の上限（Next.js 約 400 req/s）を超えない範囲で</td></tr>
+<tr><td>Next.js を複数プロセスにする／Flask を本番用サーバーにする</td><td>VPS の画面・ホストの Flask の頭打ちが上がる</td><td>未実施（§8）</td></tr>
+</tbody></table>
+
+<h3>7.3 あるレースの AI予測を 1,000〜10,000 人が同時に見るときの方針（提案・未実装）</h3>
+<p>見積り：1 人が 20 秒に 1 回開くとして、<b>10,000 人 ＝ 約 500 req/s、1,000 人 ＝ 約 50 req/s</b>。いまの Cloud Run（最大 3 台）で匿名の AI予測が快適に捌ける量は約 280 req/s（§4.0）なので、1,000 人は今のままでも収まるが、10,000 人は届かない。台数を増やすより、<b>全員に同じ内容を返すものを、サーバーに来させない</b>のが効く。</p>
+<table>
+<thead><tr><th>順</th><th>手段</th><th>効果</th><th>注意</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><b>匿名向けの AI予測を CDN（Cloudflare）に載せる。</b>Cookie のない要求の応答だけ <code>Cache-Control: public, s-maxage=30〜60</code>（<code>stale-while-revalidate</code> つき）にし、会員（Cookie あり）は従来どおり <code>private</code>。Cloudflare のキャッシュルールで『ログイン Cookie があればキャッシュしない』とする</td><td>10,000 人でも API に届くのは『レース数 × エッジ拠点数 ÷ 30 秒』ほど（数 req/s）。API の負荷が人数にほぼ比例しなくなる</td><td>鮮度は最大 30〜60 秒遅れる（予測は前夜に確定するので問題になりにくい）。匿名の版は『全員同じ内容』であることが条件（オッズ・期待値を含めない現在の仕様どおり）。現在は Cloudflare Access の内側なので、一般公開（public モード）への切り替えと合わせて有効にする</td></tr>
+<tr><td>2</td><td><b>匿名の AI予測を『静的な JSON』にして置く。</b>予測が保存されたとき（イベント）に、匿名の版を GCS の公開用の置き場に書き、画面はそれを読む（API を通さない）</td><td>API・Cloud Run を介さない。人数にほぼ依存せず、費用も配信量だけ</td><td>置き場の更新を予測・出馬表の保存に結びつける必要がある（応答の再利用の仕組みを流用できる）。会員向けの全項目の版は従来の API</td></tr>
+<tr><td>3</td><td><b>画面の殻も CDN で配る。</b>JS・CSS（<code>_next/static</code>）を長期キャッシュ、HTML を短い <code>s-maxage</code></td><td>VPS の Next.js（約 400 req/s、1 プロセス）を飽和させない。VPS は前払い済みで増やせない</td><td>HTML に会員区分で変わる部分があるものはキャッシュしない（殻だけ）</td></tr>
+<tr><td>4</td><td>Cloud Run の最小インスタンスを 1〜2、最大を 10 前後に（人が集まる開催日・時間帯だけ上げる運用でもよい）</td><td>急増時の起動待ち（数十秒の待ちと 429）を避ける。同時に捌ける量が台数に比例</td><td>最小 1 で約 2,900 円/月増（予算 2,000 円を超えるのでユーザーの判断が必要）</td></tr>
+<tr><td>5</td><td>予測を前夜に作り終えておく（実施済みの前夜計算）、会員向けの重い API（レース詳細の全項目・まとめ取得・推奨馬券）は §4.0 の上限が低いので、画面を開いた直後に全部は呼ばず必要なタブを開いたときだけ呼ぶ</td><td>会員ゾーンの上限（約 20〜30 req/s）を、同時に呼ぶ人数に対して余裕のある範囲に保つ</td><td>会員が 1,000 人規模になるときは、会員の全項目の版も『会員は全員同じ内容』なので、同じ考え方（会員用のキャッシュ）で共有できる</td></tr>
+</tbody></table>
+<div class="fa-box ok">
+  <p><b>結論：</b>1 と 3（CDN）と 4 の組み合わせで、10,000 人が同じレースの AI予測を見ても、API には数 req/s しか届かない設計にできる。実装前に、Cloudflare を通した状態で分散した負荷（k6 など）を 10,000 同時相当まで当てて確かめる。</p>
+</div>
+
+<h2 id="pl-retest">8. 再測定の方法と、まだ残っていること</h2>
+<h3>8.1 再測定のコマンド</h3>
+<pre>python -m src.scripts.ops.latency_monkey pools --out /tmp/lm/pools.json
+python -m src.scripts.ops.latency_monkey http --pools /tmp/lm/pools.json --out /tmp/lm/http
+python -m src.scripts.ops.load_monkey single --path /api/race/{race_id}/predictions --pools /tmp/lm/pools.json --steps 2,5,10,20,40 --procs 4 --out /tmp/lm/load
+python -m src.scripts.ops.load_monkey browse --pools /tmp/lm/pools.json --steps 5,10,25,50,100 --out /tmp/lm/browse</pre>
+<p>Cloud Run のタグ付きリビジョンに当てるときは <code>--all-base https://rstg---…run.app</code> を付け、鍵は環境変数（<code>KEIBA_PROXY_KEY</code>）で渡す（Secret Manager から取り出す。gcloud の操作は研究用ホスト <code>keiba-remote</code> 経由）。本番の URL には当てない。この PC の負荷でガードが働くので、Cloud Run が相手のときは <code>--max-load-per-core 1000 --min-mem-gb 0</code> を付ける。</p>
+
+<h3>8.2 残っていること</h3>
+<table>
+<thead><tr><th>項目</th><th>状況</th></tr></thead>
+<tbody>
+<tr><td>公開経路（Cloudflare → VPS → Cloud Run）を通した負荷、および 7.3 の CDN 化後の再測定</td><td>未計測（Access の通行証が必要）。公開前に計る</td></tr>
+<tr><td>Cloud Run で画面遷移を混ぜた負荷（会員向け API を含む）</td><td>未計測（鍵だけでは会員向けが 401 になるため）</td></tr>
+<tr><td>Flask（開発用サーバー）の本番用サーバー化と同時数の上限</td><td>未実施</td></tr>
+<tr><td><code>/api/health</code> が API の同時上限を共有する</td><td>未対応（負荷中に監視が誤検知しうる）</td></tr>
+<tr><td>Next.js の複数プロセス化（またはより軽い配信）</td><td>未実施</td></tr>
+<tr><td>Cloud Run に残った過去のタグ付きリビジョン（<code>rc…</code>、11 個）</td><td>後始末が必要（トラフィックは流れていない）</td></tr>
+</tbody></table>
+
+<h2 id="pl-now">9. この章で参照する章</h2>
+<ul>
+  <li><a href="../design/final_architecture.html">最終アーキテクチャ（stg／prod × VPS／GCP）</a>（全体図・止まったときの動き・費用の約束）</li>
+  <li><a href="vps_load_and_cache.html">VPS（prod の画面）の負荷テストとキャッシュの現状</a></li>
+  <li><a href="../../operations/capacity_and_latency_20261027.md">レイテンシと同時接続の限界（計測の全表）</a></li>
+  <li><a href="../../operations/prewarm.md">画面の応答の事前生成</a></li>
+  <li><a href="../../operations/maintenance_window.md">メンテナンス時間帯</a></li>
+</ul>
+
+</article>
+</main>
+</body>
+</html>

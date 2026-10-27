@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockBetRecommendation } from "@/lib/mock";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
+import { getJson, prefetchJson, readStored } from "@/lib/httpCache";
 
 /** レースの「価値」= 推奨買い目の期待回収率（バックエンド delegates.race_value_summary と同じ区分） */
 export type ValueLevel = "hot" | "good" | "ok" | "pass" | "none";
@@ -96,37 +97,81 @@ function mockValues(): RaceValue[] {
   return rows;
 }
 
-const cache = new Map<string, { at: number; map: Map<string, RaceValue> }>();
 const TTL_MS = 30_000;
+const lastGood = new Map<string, Map<string, RaceValue>>();
 
+export function raceValuesUrl(date: string): string {
+  return `/api/v1/betting/race-values?date=${date}`;
+}
+
+function toMap(rows: RaceValue[]): Map<string, RaceValue> {
+  return new Map(rows.map((r) => [r.race_id, r]));
+}
+
+/** 失敗（401・通信エラー）は空で上書きしない: 取得に失敗したら例外にし、呼ぶ側が前回の表示を残す。 */
 async function fetchValues(date: string): Promise<Map<string, RaceValue>> {
-  const hit = cache.get(date);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.map;
-  let rows: RaceValue[] = [];
-  if (USE_MOCK) {
-    rows = mockValues();
-  } else {
-    // ログイン必須。未ログイン（401）や失敗のときは強調表示なし
-    const res = await fetch(`/api/v1/betting/race-values?date=${date}`, { credentials: "include" });
-    if (res.ok) rows = (await res.json()).races ?? [];
-  }
-  const map = new Map(rows.map((r) => [r.race_id, r]));
-  cache.set(date, { at: Date.now(), map });
+  if (USE_MOCK) return toMap(mockValues());
+  const doc = await getJson<{ races?: RaceValue[] }>(raceValuesUrl(date), { ttlMs: TTL_MS, credentials: "include", persist: true });
+  const map = toMap(doc.races ?? []);
+  lastGood.set(date, map);
   return map;
 }
 
-/** 開催日（YYYYMMDD）の各レースの価値。取得できるまでは空。 */
-export function useRaceValues(date: string): Map<string, RaceValue> {
-  const [map, setMap] = useState<Map<string, RaceValue>>(new Map());
+/** 先に取り始めておく（日付の確定や認証の確認を待たない）。ログイン前なら 401 で失敗するだけで何も残らない。 */
+export function prefetchRaceValues(date: string): void {
+  if (USE_MOCK || !date) return;
+  prefetchJson(raceValuesUrl(date), { ttlMs: TTL_MS, credentials: "include", persist: true });
+}
+
+function initialValues(date: string): Map<string, RaceValue> | null {
+  if (USE_MOCK || !date) return null;
+  const g = lastGood.get(date);
+  if (g) return g;
+  const st = readStored<{ races?: RaceValue[] }>(raceValuesUrl(date));
+  return st?.races ? toMap(st.races) : null;
+}
+
+export type RaceValuesState = { values: Map<string, RaceValue>; loading: boolean; failed: boolean };
+
+/** 開催日（YYYYMMDD）の各レースの価値と、取得の状態。前回の内容があれば先に出し、裏で更新する。認証の確認とは並行して取りに行く。 */
+export function useRaceValuesState(date: string): RaceValuesState {
+  const [state, setState] = useState<RaceValuesState>({ values: new Map(), loading: true, failed: false });
   const { loading, isMember: loggedIn } = useAuthStatus();
   useEffect(() => {
     let alive = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     if (!date && !USE_MOCK) return;
-    if (!USE_MOCK && (loading || !loggedIn)) return;   // ログイン必須の API。未ログインで呼ぶと 401 になる
-    fetchValues(date).then((m) => alive && setMap(m)).catch(() => alive && setMap(new Map()));
-    return () => { alive = false; };
+    if (!USE_MOCK && !loading && !loggedIn) { setState({ values: new Map(), loading: false, failed: false }); return; }   // ログイン必須の API。未ログインと分かったら呼ばない
+    const first = initialValues(date);
+    setState(first ? { values: first, loading: true, failed: false } : (s) => ({ values: s.values, loading: true, failed: false }));
+    const run = (attempt: number) => {
+      fetchValues(date).then((m) => alive && setState({ values: m, loading: false, failed: false })).catch(() => {
+        if (!alive) return;
+        if (attempt < 3) timer = setTimeout(() => run(attempt + 1), 1500 * (attempt + 1));   // 一時的な失敗は前回の表示を残して再取得
+        else setState((s) => ({ values: s.values, loading: false, failed: true }));
+      });
+    };
+    run(0);
+    return () => { alive = false; if (timer) clearTimeout(timer); };
   }, [date, loading, loggedIn]);
-  return map;
+  return state;
+}
+
+export function useRaceValues(date: string): Map<string, RaceValue> {
+  return useRaceValuesState(date).values;
+}
+
+/** チップの2行目: まだ取得中なら『…』、取得に失敗したら『!』（読み込み中・失敗を『–』（未計算）と見分けられるように） */
+export function chipText(v: RaceValue | undefined, st?: { loading: boolean; failed: boolean }): string {
+  if (!v && st?.loading) return "…";
+  if (!v && st?.failed) return "!";
+  return chipLabel(v);
+}
+
+export function chipHint(v: RaceValue | undefined, st?: { loading: boolean; failed: boolean }): string {
+  if (!v && st?.loading) return "推奨度を取得中です";
+  if (!v && st?.failed) return "推奨度を取得できませんでした（ページを再読み込みすると再取得します）";
+  return valueTitle(v);
 }
 
 /** 市場補正したレースとしないレースが同じ日に混ざっているか（混ざっていると段の基準と順位が別になるので凡例に注記する） */

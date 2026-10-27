@@ -56,6 +56,9 @@ ENV_VARS+=",KEIBA_PROB_CALIBRATION=1,KEIBA_PACE_TYPE=1,KEIBA_PACE_COHERENCE=1,KE
 ENV_VARS+=",KEIBA_LAP_FORECAST=1,KEIBA_TRACKING_V2=1,KEIBA_TRAINING_COVERAGE=1,KEIBA_PREDICTION_RESULTS=1,KEIBA_PREDICTION_RESULTS_GCS=1"
 # 毎日 JST 03:00-04:00 は『メンテナンス中』(503)。設定は config/maintenance.json。この時間に stg/prod へ push すると、スモークが 503 を受けて落ちる
 ENV_VARS+=",KEIBA_MAINTENANCE_WINDOW=1"
+# 応答の使い回し(置き場のみ・120 秒)と、起動時ウォームアップ。1 インスタンス(1 vCPU)の予測は 1 回 0.8 秒で、同じレースへの一斉アクセスと、
+# 新インスタンスの最初の予測(30〜45 秒)が負荷試験(2026-10-27)で崩れた原因。docs/operations/capacity_and_latency_20261027.md
+ENV_VARS+=",KEIBA_PRERENDER=1,KEIBA_PRERENDER_MAX_AGE_SEC=120,KEIBA_WARMUP_ON_START=1"
 [ -z "$GCS_PREFIX" ] || ENV_VARS+=",GCS_PREFIX=${GCS_PREFIX}"
 # API_TEST_USER=1 のときだけテストユーザー(config/members.json の test)を有効にする。stg のタグ付きリビジョン専用（deploy_gcp.sh が付ける）
 [ "${API_TEST_USER:-0}" != 1 ] || ENV_VARS+=",KEIBA_TEST_USER=1"

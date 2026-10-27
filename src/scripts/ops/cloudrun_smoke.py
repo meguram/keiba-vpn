@@ -31,11 +31,12 @@ def fetch(url: str, headers: dict[str, str] | None = None, timeout: float = 30.0
         return 0, type(exc).__name__.encode()
 
 
-def fetch_warm(url: str, headers: dict[str, str] | None = None, timeout: float = 75.0, retries: int = 1) -> tuple[int, bytes]:
-    """初回の予測は、モデルや履歴の読み込みで 30 秒を超えることがある(Cloud Run の要求上限は 60 秒)。待ち時間を延ばし、応答が無かった(0)ときは 1 回だけ取り直す。"""
+def fetch_warm(url: str, headers: dict[str, str] | None = None, timeout: float = 75.0, retries: int = 2) -> tuple[int, bytes]:
+    """初回の予測は、モデルや履歴の読み込みで 30〜60 秒かかることがある(Cloud Run の要求上限は 60 秒で、超えると 504)。
+    待ち時間を延ばし、応答が無かった(0)・502/503/504 のときは取り直す（最初の要求でインスタンスが温まる）。"""
     code, body = fetch(url, headers, timeout)
     for _ in range(retries):
-        if code != 0:
+        if code not in (0, 502, 503, 504):
             break
         code, body = fetch(url, headers, timeout)
     return code, body

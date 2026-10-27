@@ -1,6 +1,6 @@
 "use client";
 
-import { fetchAuthStatus } from "@/lib/httpCache";
+import { clearStored, fetchAuthStatus } from "@/lib/httpCache";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -37,6 +37,7 @@ export function Nav() {
   const navItems = visibleNavItems();
 
   const logout = async () => {
+    clearStored();         // 会員向けの内容を、このタブに残さない
     try {
       await fetch("/api/v1/auth/logout", { method: "POST", credentials: "include" });
     } catch { /* 通信失敗でも画面は更新する（Cookie が残っていれば、まだログイン中と表示される） */ }

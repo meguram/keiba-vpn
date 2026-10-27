@@ -349,6 +349,16 @@ PARTS: list[Part] = [
         C("cost", "GCS のコスト分析レポート（GCS の操作コストのみ。2026-04 時点）。GCP 全体の試算は docs/operations/cost-estimate.md。", "結果", src="html/design/cost.html", status="snapshot",
           note="数値の基準日は 2026-04。"),
     ]),
+    Part("本番運用", "本番（prod）と確認用（stg）をどう動かし、負荷がかかったときに何が起きて何をするか。最終アーキテクチャ（VPS／GCP の全体図・データ取得の時間割・画面表示の流れ）と、負荷の限界・超えたときの動き・症状別の対応をまとめる。", [
+        C("final_architecture", "最終アーキテクチャ（stg／prod × VPS／GCP）の全体図。部品の担当、stg と prod の違いと配備の流れ、cron／Scheduler によるデータ取得の時間割（週・日・1 レース）、ユーザーに表示されるまでの流れとキャッシュ、止まったときの動き、費用の約束、現在の到達点。",
+          "設計", src="html/design/final_architecture.html",
+          see=[("decoupling_status", "現在の到達点と停止試験"), ("architecture_target", "役割分担と費用の根拠"), ("vps_agent", "VPS の取得役"), ("gcp_jobs_migration", "Jobs の一覧と時刻"),
+               ("cloud_run_api", "API の Cloud Run 化"), ("github_promote", "GitHub Actions による反映"), ("cron_schedule", "cron の登録内容"), ("production_load", "負荷がかかったときの動きと対応")]),
+        C("production_load", "負荷がかかったときの動きと対応。通り道ごとの上限（nginx の回数制限・Next.js・Cloud Run）、実測した同時接続の限界（改善前後）、超えたときに起きること（429／503／504・待ち行列）、AI予測が応答の再利用で処理される流れ、症状別の運用手順、容量を増やす手段と費用、再測定の方法と残課題。",
+          "運用", src="html/operations/production_load.html",
+          see=[("final_architecture", "最終アーキテクチャ（全体図・止まったときの動き・費用の約束）"), ("vps_load_and_cache", "VPS（prod の画面）の負荷テストとキャッシュ"), ("cloud_run_api", "API の Cloud Run 化"),
+               ("vps_agent", "VPS の取得役"), ("decoupling_status", "現在の到達点と停止試験")]),
+    ]),
     Part("決定記録", "なぜそう決めたかの記録。当時の判断の履歴で、書き換えず、古くなったものは注記を足す。", _decision_chapters(), label="付録A"),
 ]
 for _i, _p in enumerate(PARTS):

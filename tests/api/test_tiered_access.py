@@ -270,7 +270,7 @@ def tier_env(monkeypatch, tmp_path):
     doc["date"] = "20261018"
     for r in doc["races"]:
         if r.get("included"):
-            r["bets_t"] = {"status": "ok", "strategy": "target", "basis": "sec77", "level": 1, "total_bet": 1000, "total_return": 3000, "estimated": False,
+            r["bets_t"] = {"status": "ok", "strategy": "target", "basis": "sec77", "selection": "actual_ge_est", "level": 1, "total_bet": 1000, "total_return": 3000, "estimated": False,
                            "by_type": {"sanrenpuku": {"invested": 1000, "returned": 3000, "n": 1, "hit": 1}}}      # 標準のレース。回収率は標準以上のレースだけで集計される
     pr.write_day(doc, tmp_path)
     from src.api import prediction_results_api as api

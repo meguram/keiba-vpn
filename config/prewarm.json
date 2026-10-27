@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "_doc": "ユーザーが訪れやすい画面の応答を先に作ってディスクに置く(事前生成)設定。有効化は .env の KEIBA_PREWARM=1(既定オフ)。データ保存・ファイル出力があったレースだけ数秒後に作り直し(debounce_sec)、cycle_sec ごとに窓内を点検する。仕様: docs/operations/prewarm.md",
+  "past_days": 14,
+  "future_days": 7,
+  "hot_past_days": 0,
+  "hot_max_age_sec": 900,
+  "cold_max_age_sec": 21600,
+  "cycle_sec": 60,
+  "race_gap_sec": 0.2,
+  "max_load_per_core": 0.5,
+  "value_views": [
+    "paid",
+    "full"
+  ],
+  "debounce_sec": 3,
+  "scan_sec": 15,
+  "tick_sec": 2
+}

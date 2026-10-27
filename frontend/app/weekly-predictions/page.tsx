@@ -1,19 +1,22 @@
 "use client";
 
-import { fetchRaceList, getJson, prefetchJson } from "@/lib/httpCache";
+import { PRED_TTL_MS, fetchRaceList, getJson, hasFreshJson, prefetchJson, readStored } from "@/lib/httpCache";
 import { Fragment, useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockPredictions } from "@/lib/mock";
 import { featureEnabled } from "@/lib/features";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { MemberLockNote, PublicModeNote } from "@/components/upgrade/MemberLock";
-import { LEVEL_STYLE, RaceValue, useRaceValues, valueTitle } from "@/lib/raceValue";
+import { LEVEL_STYLE, RaceValue, prefetchRaceValues, useRaceValuesState, valueTitle } from "@/lib/raceValue";
+import { LoadingNotice } from "@/components/LoadingNotice";
 import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip, useNarrow } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
 import { MeguTable } from "@/components/MeguTable";
 import { WeeklyBetTab } from "@/components/WeeklyBetTab";
+import { RaceResult } from "@/components/RaceResult";
+import { useRaceResult } from "@/lib/hooks/useRaceResult";
 import ProbCalNote from "@/components/ProbCalNote";
 import { EntriesDaySummary, EntriesStatusBadge } from "@/components/EntriesStatus";
 import type { EntriesStatus } from "@/lib/entriesStatus";
@@ -558,9 +561,10 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
 
 /* ── 選んだ 1 レースの表示 ── */
 function RacePanel({
-  race, pred, loading, onReload, value,
+  race, pred, loading, onReload, value, date,
 }: {
   race: RaceItem;
+  date?: string;
   pred: PredData | null;
   loading: boolean;
   onReload: (id: string) => void;
@@ -580,8 +584,21 @@ function RacePanel({
   const failed = !loading && pred?.status === "error" && preds.length === 0;
   const { isMember, loading: authLoading } = useAuthStatus();
   const locked = !authLoading && !isMember;
-  const [tab, setTab] = useState<"predict" | "bet">("predict");
-  useEffect(() => { setTab("predict"); }, [race.race_id]);
+  const [tab, setTab] = useState<"predict" | "bet" | "result">("predict");
+  const { result, started } = useRaceResult(race.race_id, race.date || date, race.start_time, !authLoading && !locked);
+  const userPicked = useRef(false);
+  useEffect(() => { userPicked.current = false; setTab("predict"); }, [race.race_id]);
+  // 結果が出たレースを開いたときは、結果を先に見せる（ユーザーが自分でタブを選んだ後は動かさない）
+  useEffect(() => { if (result && !userPicked.current) setTab("result"); }, [result?.status, result?.official, race.race_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const predRank = useMemo(() => {
+    const m: Record<number, number> = {};
+    for (const p of preds) {
+      const r = p.composite_rank ?? p.pred_rank;
+      if (p.horse_number != null && r) m[p.horse_number] = r;
+    }
+    return m;
+  }, [preds]);
+  const tabs: [typeof tab, string][] = [["predict", "AI予測・期待値"], ["bet", "推奨馬券"], ...(result ? [["result", "レース結果"] as [typeof tab, string]] : started && !locked ? [["result", "レース結果（待ち）"] as [typeof tab, string]] : [])];
 
   return (
     <section
@@ -647,12 +664,7 @@ function RacePanel({
       </div>
 
       <div className="wp-race-body" style={{ borderTop: "1px solid var(--border)", padding: "0 18px 14px" }}>
-        {(loading || (!pred && !failed)) && (
-          <div role="status" style={{ padding: "20px 0", textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
-            <div style={{ width: 24, height: 24, border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 8px" }} />
-            予測データを取得中…
-          </div>
-        )}
+        {(loading || (!pred && !failed)) && <LoadingNotice what="予測データ" onRetry={() => onReload(race.race_id)} />}
         {failed && (
           <div role="alert" style={{ margin: "14px 0", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, padding: "12px 16px", color: "var(--err)", fontSize: 13, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <span>⚠️ このレースの予測を取得できませんでした。</span>
@@ -667,13 +679,13 @@ function RacePanel({
         )}
         {pred && !failed && (
           <div role="tablist" aria-label="表示の切り替え" style={{ display: "flex", gap: 6, margin: "10px 0 4px", flexWrap: "wrap" }}>
-            {([["predict", "AI予測・期待値"], ["bet", "推奨馬券"]] as const).map(([k, label]) => (
+            {tabs.map(([k, label]) => (
               <button
                 key={k}
                 type="button"
                 role="tab"
                 aria-selected={tab === k}
-                onClick={() => setTab(k)}
+                onClick={() => { userPicked.current = true; setTab(k); }}
                 style={{
                   minHeight: 44, padding: "0 16px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700,
                   border: `1px solid ${tab === k ? "var(--accent)" : "var(--border)"}`,
@@ -687,8 +699,11 @@ function RacePanel({
           </div>
         )}
         {pred && !failed && tab === "bet" && (
-          <WeeklyBetTab raceId={race.race_id} hasPred={hasPred} lock={locked} authLoading={authLoading} />
+          <WeeklyBetTab raceId={race.race_id} hasPred={hasPred} lock={locked} authLoading={authLoading} resultKey={result ? `${result.status}-${result.official ? 1 : 0}` : ""} />
         )}
+        {pred && !failed && tab === "result" && (result
+          ? <RaceResult result={result} predRank={predRank} />
+          : <div role="status" style={{ padding: "16px 0", color: "var(--text-dim)", fontSize: 13 }}>レース結果を待っています。発走の約15分後に速報を取得し、取得でき次第この画面に表示します（1分ごとに自動で確認します）。</div>)}
         {pred && !failed && tab === "predict" && <PredictionSourceBadge source={pred.prediction_source} note={pred.prediction_note} />}
         {pred && !failed && tab === "predict" && locked && preds.length > 0 && <MemberLockNote />}
         {pred && !failed && <PublicModeNote access={pred.access} />}
@@ -720,7 +735,7 @@ export default function WeeklyPredictionsPage() {
   const [racesError, setRacesError] = useState("");
   const [datesError, setDatesError] = useState("");
   const [datesReload, setDatesReload] = useState(0);
-  const raceValues = useRaceValues(selectedDate);
+  const { values: raceValues, loading: valuesLoading, failed: valuesFailed } = useRaceValuesState(selectedDate);
   const [selectedVenue, setSelectedVenue] = useState("");
   const [selectedRaceId, setSelectedRaceId] = useState("");
   const today = useMemo(() => todayJst(), []);
@@ -755,8 +770,16 @@ export default function WeeklyPredictionsPage() {
     const q = new URLSearchParams(window.location.search);
     const v = q.get("venue");
     if (v) setSelectedVenue(v);
+    const dq = q.get("date");
+    if (dq && /^\d{8}$/.test(dq) && !USE_MOCK) {         // 開催日一覧・認証の確認を待たずに、開く日のレース一覧と推奨度を先に取り始める
+      prefetchJson(`/api/race-list/${dq}`, { ttlMs: 60_000 });
+      prefetchRaceValues(dq);
+    }
     const r = q.get("race");
-    if (r) setSelectedRaceId(r);
+    if (r) {
+      setSelectedRaceId(r);
+      if (!USE_MOCK) prefetchJson(`/api/race/${r}/predictions`, { ttlMs: PRED_TTL_MS, persist: true });      // 日付・一覧の取得を待たずに、開くレースの予測を先に取り始める
+    }
   }, []);
 
   function firstRaceOf(v: string): RaceItem | undefined {
@@ -818,6 +841,12 @@ export default function WeeklyPredictionsPage() {
         const list: string[] = d.dates ?? d ?? [];
         setDates(list);
         if (list.length) setSelectedDate(initial(list));
+        if (list.length) {                                  // 近い開催日の推奨度も裏で温めておく（日付を切り替えたときすぐ出る）
+          const t0 = new Date();
+          const day = (x: string) => Date.UTC(+x.slice(0, 4), +x.slice(4, 6) - 1, +x.slice(6, 8));
+          const near = list.filter((x) => Math.abs(day(x) - Date.UTC(t0.getFullYear(), t0.getMonth(), t0.getDate())) <= 7 * 86400000).slice(0, 8);
+          setTimeout(() => near.forEach(prefetchRaceValues), 800);
+        }
       } catch (e: unknown) {
         setDatesError(`開催日の一覧を取得できませんでした（${e instanceof Error ? e.message : String(e)}）`);
       } finally {
@@ -868,11 +897,22 @@ export default function WeeklyPredictionsPage() {
       setLoadingPred((prev) => ({ ...prev, [raceId]: false }));
       return;
     }
+    // 前回このタブで見た内容があれば先に出して（取得中を出さない）、最新を取れたら差し替える
+    const url = `/api/race/${raceId}/predictions`;
+    let hadStale = false;
+    if (!force) {
+      const prev = readStored<PredData>(url);
+      if (prev) {
+        hadStale = true;
+        setPreds((p) => (p[raceId] ? p : { ...p, [raceId]: prev }));
+        setLoadingPred((p) => ({ ...p, [raceId]: false }));
+      }
+    }
     try {
-      const d = await getJson<PredData>(`/api/race/${raceId}/predictions`, { ttlMs: 15_000, force }).catch((): PredData => ({ status: "error", predictions: [] }));
-      setPreds((prev) => ({ ...prev, [raceId]: d }));
+      const d = await getJson<PredData>(url, { ttlMs: PRED_TTL_MS, force, persist: true }).catch((): PredData => ({ status: "error", predictions: [] }));
+      if (!(hadStale && d.status === "error")) setPreds((prev) => ({ ...prev, [raceId]: d }));      // 最新が取れなくても、先に出した前回の内容は消さない
     } catch {
-      setPreds((prev) => ({ ...prev, [raceId]: { status: "error", predictions: [] } }));
+      if (!hadStale) setPreds((prev) => ({ ...prev, [raceId]: { status: "error", predictions: [] } }));
     } finally {
       setLoadingPred((prev) => ({ ...prev, [raceId]: false }));
     }
@@ -883,7 +923,7 @@ export default function WeeklyPredictionsPage() {
   const warmPred = useCallback((id: string) => {
     if (USE_MOCK) return;
     if (warmTimer.current) clearTimeout(warmTimer.current);
-    warmTimer.current = setTimeout(() => prefetchJson(`/api/race/${id}/predictions`, { ttlMs: 15_000 }), 150);
+    warmTimer.current = setTimeout(() => prefetchJson(`/api/race/${id}/predictions`, { ttlMs: PRED_TTL_MS, persist: true }), 150);
   }, []);
 
   /* 選んだレースの予測だけを取得する（素早く切り替えたときは最後に選んだものだけ。取得済みは即表示）。
@@ -891,10 +931,29 @@ export default function WeeklyPredictionsPage() {
   useEffect(() => {
     if (!activeRaceId || preds[activeRaceId] || loadingPred[activeRaceId]) return;
     const id = activeRaceId;
-    const timer = setTimeout(() => { void loadPred(id); }, 120);
+    // 取得済み（先読み済み）なら待たずに表示。そうでなくても、素早い切替の連打をまとめる程度（60ms）だけ待つ
+    const wait = hasFreshJson(`/api/race/${id}/predictions`, PRED_TTL_MS) ? 0 : 60;
+    const timer = setTimeout(() => { void loadPred(id); }, wait);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRaceId, preds]);
+
+  /* 一覧が出たら、その日の他のレースの予測も裏で先に取っておく（選んだときは待たずに出る）。選択中のレースの取得を優先し、2 本ずつ */
+  useEffect(() => {
+    if (USE_MOCK || !races.length) return;
+    let cancelled = false;
+    const ids = [...visibleRaces, ...races.filter((r) => !visibleRaces.includes(r))].map((r) => r.race_id).filter((id) => id && id !== activeRaceId).slice(0, 40);
+    let i = 0;
+    const worker = async () => {
+      while (!cancelled && i < ids.length) {
+        const id = ids[i++];
+        await getJson(`/api/race/${id}/predictions`, { ttlMs: PRED_TTL_MS, persist: true }).catch(() => undefined);
+      }
+    };
+    const t = setTimeout(() => { void worker(); void worker(); }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [races]);
 
   /* 既定のレース（先頭）が選ばれたときも URL に race を入れる（再読み込み・共有で同じレースが開く） */
   useEffect(() => {
@@ -955,12 +1014,7 @@ export default function WeeklyPredictionsPage() {
         </div>
         </details>
 
-        {loadingRaces && (
-          <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-dim)" }}>
-            <div style={{ width: 36, height: 36, border: "3px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 12px" }} />
-            <p style={{ fontSize: 14 }}>レース一覧を読み込み中…</p>
-          </div>
-        )}
+        {loadingRaces && <LoadingNotice what="レース一覧" size={36} padding="60px 0" onRetry={() => loadRaces(selectedDate)} />}
 
         {(datesError || racesError) && (
           <div role="alert" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, padding: "14px 18px", color: "var(--err)", fontSize: 13, marginBottom: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -990,6 +1044,7 @@ export default function WeeklyPredictionsPage() {
               venue={activeVenue}
               onVenue={chooseVenue}
               values={raceValues}
+              valuesState={{ loading: valuesLoading, failed: valuesFailed }}
               selectedRaceId={activeRaceId}
               onSelectRace={chooseRace}
               onWarm={warmPred}
@@ -1006,6 +1061,7 @@ export default function WeeklyPredictionsPage() {
                 loading={loadingPred[activeRace.race_id] ?? false}
                 onReload={(id) => { void loadPred(id, true); }}
                 value={raceValues.get(activeRace.race_id)}
+                date={selectedDate}
               />
             )}
           </>

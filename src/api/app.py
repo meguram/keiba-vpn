@@ -759,9 +759,17 @@ async def lifespan(app):
     except Exception:
         logger.warning("レース一覧の先読みを開始できません", exc_info=True)
 
+    global _prewarm_task
+    try:
+        _prewarm_task = _start_prewarm()
+    except Exception:
+        logger.warning("画面の事前生成を開始できません", exc_info=True)
+
     yield
 
     # 終了処理
+    if _prewarm_task is not None:
+        _prewarm_task.cancel()
     _scheduler_stop.set()
     _queue_worker_stop.set()
     _disk_cache_cleanup_stop.set()
@@ -2765,6 +2773,11 @@ _race_list_warm_task: Any = None
 @app.get("/api/race-list/{date}", response_class=JSONResponse)
 async def get_race_list_for_date(date: str, with_result_status: bool = True):
     """指定日付のレース一覧を会場別に返す（結果データ有無オプション付き）。"""
+    return await race_list_payload(date, with_result_status)
+
+
+async def race_list_payload(date: str, with_result_status: bool = True, refresh: bool = False, max_age: float | None = None):
+    """``refresh`` は事前生成(src.api.prewarm)用: 手元のキャッシュを使わず計算し直して、事前生成も更新する。"""
     def _load():
         from src.utils.race_result_availability import batch_race_result_status
 
@@ -2950,11 +2963,69 @@ async def get_race_list_for_date(date: str, with_result_status: bool = True):
         return {"date": date, "venues": venues, "races": races}
     from src.api.response_cache import race_list_ttl
 
-    ttl = race_list_ttl(date)
-    result = await _RACE_LIST_CACHE.get_or_compute(
-        (date, bool(with_result_status)), ttl, lambda: asyncio.to_thread(_load), stale_max=ttl * 10
-    )
+    ttl = 0.0 if refresh else race_list_ttl(date)
+
+    async def _build():
+        from src.api import prerender
+
+        resp = await prerender.cached_response(
+            "race_list", f"{date}_{int(bool(with_result_status))}", lambda: _race_list_response(_load), deps=prerender.race_ids_deps(date), refresh=refresh, max_age=max_age
+        )
+        return json.loads(resp.body)
+
+    result = await _RACE_LIST_CACHE.get_or_compute((date, bool(with_result_status)), ttl, _build, stale_max=ttl * 10)
     return JSONResponse(result)
+
+
+async def _race_list_response(load):
+    return JSONResponse(await asyncio.to_thread(load))
+
+
+async def _prewarm_race_list(date: str, max_age: float) -> list[str]:
+    from src.api import prerender, prewarm
+
+    body = None if prewarm.stale("race_list", f"{date}_1", max_age, True) else prerender.get("race_list", f"{date}_1")
+    if body is None:
+        body = (await race_list_payload(date, True, refresh=True, max_age=max_age)).body
+    return [r["race_id"] for r in (json.loads(body).get("races") or []) if r.get("race_id")]
+
+
+async def _prewarm_race(race_id: str, max_age: float, only_if_stale: bool) -> int:
+    """1 レースの AI 予測とレース詳細を事前生成する。作り直した件数を返す（1 レースの失敗は他を止めない）。"""
+    from src.api import prerender, prewarm
+
+    n = 0
+    try:
+        if prewarm.stale("predictions", race_id, max_age, only_if_stale):
+            await prerender.cached_response("predictions", race_id, lambda: _race_predictions_compute(race_id), refresh=True, max_age=max_age)
+            n += 1
+        if prewarm.stale("race_detail", race_id, max_age, only_if_stale):
+            with _race_detail_cache_lock:
+                _race_detail_cache.pop(race_id, None)
+            await prerender.cached_response("race_detail", race_id, lambda: _race_detail_compute(race_id), refresh=True, max_age=max_age)
+            n += 1
+    except Exception:
+        logger.warning("事前生成に失敗 %s", race_id, exc_info=True)
+    return n
+
+
+def _start_prewarm() -> Any:
+    """KEIBA_PREWARM=1 のとき、直近の開催日の画面の応答を先に作るループを始める（docs/operations/prewarm.md）。"""
+    from src.api import prerender, prewarm
+    from src.api.v1.delegates import prewarm_race_values
+
+    if not prerender.warmer_enabled():
+        return None
+    hooks = prewarm.Hooks(
+        stems=lambda: list(_cached_race_list_stems(_get_storage())),
+        race_list=_prewarm_race_list,
+        warm_race=_prewarm_race,
+        warm_values=prewarm_race_values,
+    )
+    return asyncio.get_running_loop().create_task(prewarm.run_forever(hooks))
+
+
+_prewarm_task: Any = None
 
 
 async def _warm_race_lists() -> None:
@@ -4783,6 +4854,7 @@ _UPCOMING_RACES_DEFAULT_TTL = 300.0
 
 @app.get("/api/upcoming-races", response_class=JSONResponse)
 async def get_upcoming_races(
+    request: Request,
     start_date: str = None,
     end_date: str = None,
     local_only: str | None = Query(
@@ -4806,8 +4878,8 @@ async def get_upcoming_races(
     """
     now = _time.time()
     skip_remote = str(local_only or "").strip().lower() in ("1", "true", "yes", "on")
-    if gcp_forbidden():
-        skip_remote = True  # dev はローカルの race_lists（モック）だけで完結させる
+    if gcp_forbidden() or not is_developer(request):
+        skip_remote = True  # dev はローカルの race_lists（モック）だけで完結させる。開発者以外の GET は netkeiba に取得に行かない
     default_window = start_date is None and end_date is None
     if default_window and not skip_remote:
         uc = _UPCOMING_RACES_DEFAULT_CACHE
@@ -4882,9 +4954,13 @@ async def get_upcoming_races(
                 if skip_remote:
                     races = []
                 else:
-                    if client is None:
-                        client = NetkeibaClient(auto_login=True)
-                    races = fetch_races_for_kaisai_date(client, date_compact, use_cache=True)
+                    try:
+                        if client is None:
+                            client = NetkeibaClient(auto_login=True)
+                        races = fetch_races_for_kaisai_date(client, date_compact, use_cache=True)
+                    except Exception as exc:  # 1 日の取得失敗で一覧全体を 500 にしない
+                        logger.warning("upcoming-races: %s の取得に失敗: %s", date_compact, exc)
+                        races = []
 
             if races:
                 if not include_date_in_data_viewer_race_list(
@@ -6827,6 +6903,12 @@ async def get_race_detail(request: Request, race_id: str):
 
 
 async def _race_detail_impl(race_id: str):
+    from src.api import prerender
+
+    return await prerender.cached_response("race_detail", race_id, lambda: _race_detail_compute(race_id))
+
+
+async def _race_detail_compute(race_id: str):
     """レースの全データをまとめて返す (60s キャッシュ)。"""
     with _race_detail_cache_lock:
         cached = _race_detail_cache.get(race_id)
@@ -6991,6 +7073,12 @@ async def get_race_predictions(request: Request, race_id: str):
 
 
 async def _race_predictions_impl(race_id: str):
+    from src.api import prerender
+
+    return await prerender.cached_response("predictions", race_id, lambda: _race_predictions_compute(race_id))
+
+
+async def _race_predictions_compute(race_id: str):
     """キャッシュ済みの予測結果を返す。stg で GCS に無ければ、モックではなく出馬表の馬と最新オッズだけ（has_prediction=false）を返す。
 
     Flask v1 の GET /api/v1/races/<race_id>/predictions（PostgreSQL経由）とはデータソース・
@@ -7532,6 +7620,20 @@ async def _run_race_prediction_impl(request: Request, race_id: str):
 def _tracking_difficulty_public_payload(data: dict) -> dict:
     """クライアント向けに内部メタキーを除去。"""
     return {k: v for k, v in data.items() if not k.startswith("_")}
+
+
+@app.get("/api/race/{race_id}/result", response_class=JSONResponse)
+async def api_race_result(race_id: str):
+    """レース結果（着順・払戻）。確定があれば確定、無ければ発走 +15 分に取る速報。無いときは available=false。"""
+    if not (race_id.isdigit() and len(race_id) == 12):
+        return JSONResponse({"error": "race_id は 12 桁の数字です"}, status_code=400)
+
+    def _run():
+        from src.pipeline.inference.race_result_view import build_result_view
+
+        return build_result_view(_get_storage(), race_id)
+
+    return JSONResponse(await asyncio.to_thread(_run))
 
 
 @app.get("/api/race/{race_id}/result-status", response_class=JSONResponse)
@@ -12077,7 +12179,7 @@ async def api_bloodline_cluster_horse_aptitude(
         calc = _get_horse_apt_calc()
         result = calc.compute(horse_id=horse_id, horse_name=horse_name)
     except FileNotFoundError as e:
-        return JSONResponse({"error": f"artifacts not found: {e}"}, status_code=500)
+        return JSONResponse({"error": f"artifacts not found: {e}"}, status_code=503)
     if "error" in result:
         return JSONResponse(result, status_code=404)
     return JSONResponse(result)
@@ -12095,7 +12197,7 @@ async def api_bloodline_cluster_horse_name_suggest(
     try:
         calc = _get_horse_apt_calc()
     except FileNotFoundError as e:
-        return JSONResponse({"items": [], "error": str(e)}, status_code=500)
+        return JSONResponse({"items": [], "error": str(e)}, status_code=503)
     q_norm = q.strip()
     if not q_norm:
         return JSONResponse({"items": []})
@@ -13674,6 +13776,12 @@ async def api_pedigree_race_stats_meta():
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+_PED_STATS_CACHE: dict = {}
+_PED_STATS_TTL_SEC = 3600.0
+_PED_STATS_MAX_ENTRIES = 64
+_PED_STATS_SLOTS = threading.BoundedSemaphore(2)
+
+
 @app.get("/api/pedigree-race-stats/query", response_class=JSONResponse)
 async def api_pedigree_race_stats_query(
     date_from: Optional[str] = Query(None),
@@ -13696,6 +13804,54 @@ async def api_pedigree_race_stats_query(
     count_mode: str = Query("unique", description="unique=ユニーク馬数 / appearances=出現回数（クロス込み）"),
     top_n: int = Query(50, description="上位N件"),
     exclude_trunk: bool = Query(False, description="根幹血統を除外（派生・非主流固有のみ表示）"),
+):
+    """血統傾向分析。全期間・無条件の集計は 1 回 80 秒かかるため、絞り込み条件を 1 つ以上必須にし、
+    結果を 1 時間キャッシュ、同時実行は 2 本まで（超えたら 503）、重い集計はスレッドで動かして他の要求を止めない。"""
+    from src.utils import cache_epoch
+
+    args = dict(date_from=date_from, date_to=date_to, venues=venues, surface=surface, dist_min=dist_min, dist_max=dist_max, track_conditions=track_conditions, grades=grades, finish_min=finish_min, finish_max=finish_max, pop_min=pop_min, pop_max=pop_max, odds_min=odds_min, odds_max=odds_max, cat=cat, gen_min=gen_min, gen_max=gen_max, count_mode=count_mode, top_n=top_n, exclude_trunk=exclude_trunk)
+    narrowing = ("date_from", "date_to", "venues", "surface", "dist_min", "dist_max", "track_conditions", "grades",
+                 "finish_min", "finish_max", "pop_min", "pop_max", "odds_min", "odds_max")
+    key = (cache_epoch.current(), tuple(sorted((k, str(v)) for k, v in args.items())))
+    hit = _PED_STATS_CACHE.get(key)
+    if hit and _time.time() - hit[0] < _PED_STATS_TTL_SEC:
+        return JSONResponse(hit[1])
+    if not any(args[n] not in (None, "") for n in narrowing):
+        return JSONResponse({"error": "絞り込み条件を 1 つ以上指定してください（期間・開催場・馬場・距離・グレード・着順・人気・オッズのいずれか）。全期間の無条件集計は重いため受け付けません。"}, status_code=400)
+    if not _PED_STATS_SLOTS.acquire(blocking=False):
+        return JSONResponse({"error": "血統傾向分析が混み合っています。少し待ってからやり直してください。"}, status_code=503, headers={"Retry-After": "10"})
+    try:
+        resp = await asyncio.to_thread(_pedigree_race_stats_query_impl, **args)
+    finally:
+        _PED_STATS_SLOTS.release()
+    if getattr(resp, "status_code", 200) == 200 and getattr(resp, "body", None):
+        if len(_PED_STATS_CACHE) >= _PED_STATS_MAX_ENTRIES:
+            _PED_STATS_CACHE.pop(min(_PED_STATS_CACHE, key=lambda k: _PED_STATS_CACHE[k][0]), None)
+        _PED_STATS_CACHE[key] = (_time.time(), json.loads(resp.body))
+    return resp
+
+
+def _pedigree_race_stats_query_impl(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    venues: Optional[str] = None,
+    surface: Optional[str] = None,
+    dist_min: Optional[int] = None,
+    dist_max: Optional[int] = None,
+    track_conditions: Optional[str] = None,
+    grades: Optional[str] = None,
+    finish_min: Optional[int] = None,
+    finish_max: Optional[int] = None,
+    pop_min: Optional[int] = None,
+    pop_max: Optional[int] = None,
+    odds_min: Optional[float] = None,
+    odds_max: Optional[float] = None,
+    cat: Optional[str] = None,
+    gen_min: Optional[int] = None,
+    gen_max: Optional[int] = None,
+    count_mode: str = "unique",
+    top_n: int = 50,
+    exclude_trunk: bool = False,
 ):
     """
     条件で絞り込み後の血統カテゴリ別種牡馬カウント分布を返す（10世代対応）。

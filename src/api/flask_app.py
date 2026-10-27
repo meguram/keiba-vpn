@@ -57,11 +57,28 @@ def _is_logged_in() -> bool:
     return _verify_token(token)
 
 
+def _fnum(x) -> float | None:
+    """DB の数値列（Decimal/None）を JSON 用の float にする。None は None のまま。"""
+    return None if x is None else float(x)
+
+
 def create_app() -> Flask:
     app = Flask(__name__)
     # UTF-8 日本語を \uXXXX にエスケープしない（文字化け防止）
     app.config["JSON_ENSURE_ASCII"] = False
     app.json.ensure_ascii = False
+
+    @app.errorhandler(Exception)
+    def _db_errors_as_503(exc):
+        """DB につながらない・スキーマが古い等は 500 ではなく 503（原因が利用者の要求ではなく、準備ができていない状態のため）。それ以外は従来どおり。"""
+        if any(c.__name__ == "SQLAlchemyError" for c in type(exc).__mro__):
+            app.logger.exception("DB エラー: %s %s", request.method, request.path)
+            return jsonify({"error": "database unavailable", "reason": "db_error"}), 503, {"Retry-After": "30"}
+        from werkzeug.exceptions import HTTPException
+
+        if isinstance(exc, HTTPException):
+            return exc
+        raise exc
 
     @app.after_request
     def set_charset(response):
@@ -258,14 +275,14 @@ def create_app() -> Flask:
                 "megu_index": [
                     {
                         "horse_id": r.horse_id,
-                        "megu_index": float(r.megu_index),
-                        "finish_time_sec": float(r.finish_time_sec) if r.finish_time_sec else None,
-                        "par_time_sec": float(r.par_time_sec) if r.par_time_sec else None,
-                        "adjusted_time_sec": float(r.adjusted_time_sec) if r.adjusted_time_sec else None,
-                        "delta_pace_sec": float(r.delta_pace_sec),
-                        "delta_track_sec": float(r.delta_track_sec),
-                        "delta_weight_sec": float(r.delta_weight_sec),
-                        "delta_level_sec": float(r.delta_level_sec),
+                        "megu_index": _fnum(r.megu_index),
+                        "finish_time_sec": _fnum(r.finish_time_sec) or None,
+                        "par_time_sec": _fnum(r.par_time_sec) or None,
+                        "adjusted_time_sec": _fnum(r.adjusted_time_sec) or None,
+                        "delta_pace_sec": _fnum(r.delta_pace_sec),
+                        "delta_track_sec": _fnum(r.delta_track_sec),
+                        "delta_weight_sec": _fnum(r.delta_weight_sec),
+                        "delta_level_sec": _fnum(r.delta_level_sec),
                     }
                     for r in rows
                 ],

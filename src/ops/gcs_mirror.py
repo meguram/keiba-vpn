@@ -28,6 +28,7 @@ PREFIX = "ops/mirror"
 # 会員名簿（ハッシュだけ。ログインの照合に Cloud Run が使う）。ホストでは root だけが読める場所にあるため、通常の同期(jovyan)は読めずに飛ばし、
 # root の cron（scripts/cron/gcs_mirror_push_auth.sh）が上げる。Cloud Run は TREES として取り込み、src/api/auth.py の MEMBERS_LOCAL_FILE と同じ場所に置く。
 AUTH_TREES = ("data/local/auth::members.json",)
+_FEATURES = "data/local/features"
 TREES = (
     "data/local/inference/predictions_v3",
     "data/local/inference/predictions_v5",
@@ -49,6 +50,10 @@ TREES = (
     "data/page_reference/note_aptitude_race_l3",
     "data/page_reference/bloodline_vector",
     "data/page_reference/pedigree_race_index",
+    # 出馬表の騎手・調教師カード（条件別の成績）の集計。毎朝の再生成（export_tables_daily の後）で更新され、5 分おきの push で Cloud Run に届く（約 560KB）
+    f"{_FEATURES}/jockey_tbl::lookup_jockey*.parquet",
+    f"{_FEATURES}/trainer_tbl::lookup_trainer*.parquet",
+    f"{_FEATURES}/jockey_trainer_stats::_manifest.json",
     "data/page_reference/tables::*/megu_index_flat.parquet",
     "data/page_reference/tables::*/race_result_flat.parquet",
 )
@@ -198,6 +203,9 @@ def fetch_one(rel_path: str, root: Path = REPO_ROOT, backend: Backend | None = N
     return True
 
 
+initial_recent_pulled = threading.Event()      # 起動直後の「直近分」の取り込みが終わった（成否を問わず）。Cloud Run の起動時ウォームアップが待つ
+
+
 def start_refresher(backend: Backend | None = None, root: Path = REPO_ROOT, *, interval: float = 60.0, recent_days: float = 2.0) -> threading.Thread:
     """Cloud Run 用: 起動時に全部を取り込み、以降は interval 秒ごとに直近の更新分だけを取り込む常駐スレッド。失敗しても API は止めない。"""
     def run() -> None:
@@ -207,7 +215,10 @@ def start_refresher(backend: Backend | None = None, root: Path = REPO_ROOT, *, i
             try:
                 be = be or GcsBackend()
                 if first:     # 起動直後は直近分を先に（表示に要る分を数秒で）、続けて全体
-                    logger.info("gcs_mirror pull(直近): %s", pull(be, root, recent_days=recent_days))
+                    try:
+                        logger.info("gcs_mirror pull(直近): %s", pull(be, root, recent_days=recent_days))
+                    finally:
+                        initial_recent_pulled.set()
                     logger.info("gcs_mirror pull(全体): %s", pull(be, root))
                     first = False
                 else:

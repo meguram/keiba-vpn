@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { PendingLink } from "@/components/PendingLink";
 import { USE_MOCK, MOCK_WEEKLY_RACES } from "@/lib/mock";
-import { LEVEL_STYLE, TIER_LEGEND, TARGET_TIER_HINT, ValueLevel, chipLabel, hasTier, isTargetValues, useRaceValues, valueTitle, mixedProbCalibration } from "@/lib/raceValue";
+import { LEVEL_STYLE, TIER_LEGEND, TARGET_TIER_HINT, ValueLevel, chipHint, chipText, hasTier, isTargetValues, useRaceValuesState, mixedProbCalibration } from "@/lib/raceValue";
 import { useNarrow } from "@/components/RaceStrip";
 
 type RaceRow = { race_id: string; round: number; venue: string; race_name: string };
@@ -40,7 +40,8 @@ const BTN: React.CSSProperties = {
 /** レース詳細の上部ナビ: 同じ開催場の前後のレース・R 一覧・他の開催場（同じ R）へ移動する。date は YYYYMMDD。 */
 export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
   const [rows, setRows] = useState<RaceRow[]>([]);
-  const values = useRaceValues(date);
+  const { values, loading: valuesLoading, failed: valuesFailed } = useRaceValuesState(date);
+  const valuesState = { loading: valuesLoading, failed: valuesFailed };
   const narrow = useNarrow();
 
   useEffect(() => {
@@ -127,7 +128,7 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
                 key={r.race_id}
                 href={`/race/${r.race_id}`}
                 aria-current={on ? "page" : undefined}
-                title={`${r.round}R ${r.race_name}\n${valueTitle(v)}`}
+                title={`${r.round}R ${r.race_name}\n${chipHint(v, valuesState)}`}
                 data-level={lv}
                 style={{
                   minWidth: narrow ? 46 : 46, minHeight: narrow ? 40 : undefined, flex: "none", scrollSnapAlign: "center", display: "inline-flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
@@ -140,7 +141,7 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
               >
                 <span style={{ fontSize: 14, fontWeight: on || lv === "hot" ? 800 : 600 }}>{lv === "hot" ? `★${r.round}` : r.round}</span>
                 <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.95 }}>
-                  {chipLabel(v)}
+                  {chipText(v, valuesState)}
                 </span>
               </PendingLink>
             );

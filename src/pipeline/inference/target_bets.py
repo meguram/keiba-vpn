@@ -173,6 +173,16 @@ def sanrenpuku_candidates(entries: list[dict], single: dict | None) -> dict[str,
     return {"hn": hn, "tri": tri[keep], "p": p_own[keep], "odds": odds[keep], "basis": basis, "entries": ents, "n": n}
 
 
+def prioritize(bets: list[dict], evs: list[float]) -> list[dict]:
+    """買い目を推奨度の高い順（想定オッズで見た期待値＝的中確率×想定倍率の大きい順。同値は的中率の高い順）に並べ、priority（1 が最優先）を付ける。
+    期待値そのものは応答に出さない。利用者は上から、直前の実オッズが期待値ライン以上のものを選ぶ。"""
+    order = sorted(range(len(bets)), key=lambda i: (-evs[i], -bets[i]["hit_rate_pct"]))
+    out = []
+    for rank, i in enumerate(order, 1):
+        out.append({**bets[i], "priority": rank})
+    return out
+
+
 def _ev_line(p: float) -> float | None:
     """期待値ライン: 実際のオッズ（倍）がこの値以上なら、自前の的中確率から見て期待値が 1 以上（損益分岐＝1÷的中確率）。"""
     p = float(p)
@@ -217,7 +227,7 @@ def build_target_portfolio(entries: list[dict], single: dict | None, max_total_b
         bets.append({"bet_type": "sanrenpuku", "bet_label": "3連複", "combo": combo, "combo_label": "-".join(str(h) for h in combo), "legs": legs,
                      "yen": int(st), "est_multiple": round(mult, 1), "est_payout_yen": int(round(st / PT.UNIT * mult * PT.UNIT, -1)),
                      "hit_rate_pct": round(float(cand["p"][j]) * 100, 2), "ev_line_multiple": _ev_line(cand["p"][j])})
-    bets.sort(key=lambda b: -b["hit_rate_pct"])
+    bets = prioritize(bets, [float(cand["p"][j]) * float(cand["odds"][j]) for j in idx])
     total = int(sum(b["yen"] for b in bets))
     any_hit = float(min(sum(cand["p"][j] for j in idx), 1.0))
     return {**base, "status": "bet", "skip_reason": None, "bets": bets, "total_yen": total, "any_hit_rate_pct": round(any_hit * 100, 1),
@@ -331,8 +341,7 @@ def _fmt_bets(cand: dict, idx: np.ndarray, stakes: np.ndarray) -> list[dict]:
         bets.append({"bet_type": BT_KEY[t], "bet_label": BT_JA[t], "combo": nums, "combo_label": BT_SEP[t].join(str(h) for h in nums) if t not in (0, 1) else str(nums[0]),
                      "legs": legs, "yen": int(st), "est_multiple": round(mult, 1), "est_payout_yen": int(round(st / PT.UNIT * mult * PT.UNIT, -1)),
                      "hit_rate_pct": round(float(cand["p"][j]) * 100, 2), "ev_line_multiple": _ev_line(cand["p"][j])})
-    bets.sort(key=lambda b: -b["hit_rate_pct"])
-    return bets
+    return prioritize(bets, [float(cand["p"][j]) * float(cand["odds"][j]) for j in idx])
 
 
 def race_ev_level(ev: float | None) -> int:

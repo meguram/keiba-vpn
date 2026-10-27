@@ -288,6 +288,8 @@ def _optimize_target(body: dict[str, Any], view: str, storage: Any | None = None
     single = PZ.calibrate_single(raw_single)
     marked = _paid_marks(preds, single)
     out = TB.build_target_portfolio(marked, single, cap, race_id=race_id)
+    if out.get("plans"):      # 画面に出すのは既定のプラン（最大5パターン）だけ。馬券別の補助プランは返さない
+        out["plans"] = [p for p in out["plans"] if p.get("id") == out.get("default_plan")]
     try:  # 推奨馬券を正として、印は買い目から決め直す（買い目が無いレースは従来の印のまま）
         from src.pipeline.inference import bet_marks as BM
 
@@ -600,26 +602,75 @@ def attach_bet_results(payload: dict[str, Any], race_id: str, storage: Any | Non
     if not res:
         return payload
     paid = payload.get("view") == "paid" or payload.get("strategy") == "target"
+    flat = payload.get("strategy") == "target"         # パターン別の推奨は、金額を見せず『条件を満たしたパターンを 100 円ずつ買った場合』で精算する
     items = payload.get("bets") if paid else payload.get("candidates")
+    amap: dict = {}
+    if flat:
+        try:
+            amap = pr.actual_odds_map(storage or HybridStorage(), race_id) if items else {}
+        except Exception as exc:  # noqa: BLE001  条件の判定ができないだけ
+            logger.warning("確定オッズの読み込みに失敗 %s: %s", race_id, exc)
     invested = returned = hits = 0
+    all_returned = all_hits = 0
     estimated = False
+    counted = 0
+    rows = []
     for it in items or []:
         combo = it.get("combo") if paid else it.get("pair")
-        amount = int(it.get("yen") if paid else it.get("bet_amount") or 0)
-        hit, ret, est = pr.settle_candidate(it.get("bet_type", ""), tuple(int(x) for x in (combo or [])), amount, float(it.get("odds") or it.get("est_multiple") or 0), res)
-        it["result"] = {"hit": bool(hit), "payout": round(ret), "estimated": bool(est)}
+        amount = pr.FLAT_STAKE_YEN if flat else int(it.get("yen") if paid else it.get("bet_amount") or 0)
+        bt = it.get("bet_type", "")
+        cmb = tuple(int(x) for x in (combo or []))
+        hit, ret, est = pr.settle_candidate(bt, cmb, amount, float(it.get("odds") or it.get("est_multiple") or 0), res)
+        res_item: dict[str, Any] = {"hit": bool(hit), "payout": round(ret), "estimated": bool(est)}
+        if flat:
+            key = tuple(sorted(cmb)) if bt in ("umaren", "wide", "sanrenpuku") else cmb
+            act = amap.get((bt, key))
+            em = float(it.get("est_multiple") or 0)
+            res_item["actual_multiple"] = act
+            res_item["passed"] = (act is not None and act >= em) if (amap and em) else None
+        it["result"] = res_item
+        rows.append((it, amount, hit, ret, est))
+    condition_known = flat and any(r[0]["result"].get("passed") is not None for r in rows)
+    for it, amount, hit, ret, est in rows:
+        all_returned += ret
+        all_hits += int(hit)
+        if flat and condition_known and it["result"].get("passed") is not True:
+            continue
         invested += amount
         returned += ret
         hits += int(hit)
+        counted += 1
         estimated = estimated or (hit and est)
     order = sorted(res["finish"].items(), key=lambda kv: kv[1])
     payload["result"] = {
         "status": res["status"], "official": bool(res.get("official")), "estimated": estimated,
         "finish": [{"pos": p_, "no": n_} for n_, p_ in order if p_ <= 3],
         "invested": invested, "returned": round(returned), "roi": round(returned / invested, 4) if invested else None,
-        "hits": hits, "n_bets": len(items or []),
+        "hits": hits, "n_bets": counted if flat else len(items or []),
     }
+    if flat:
+        payload["result"].update({
+            "stake_yen": pr.FLAT_STAKE_YEN, "condition": "actual_ge_est", "condition_known": bool(condition_known), "n_patterns": len(rows),
+            "all": {"invested": pr.FLAT_STAKE_YEN * len(rows), "returned": round(all_returned), "hits": all_hits},
+        })
     return payload
+
+
+_VALUE_STALE_OK_SEC = 1800.0     # 推奨度の一覧は、更新直後の数秒〜数十秒の古さより待たされないことを優先する
+
+
+def _value_pkey(date: str, odds_mode: str, odds_phase: str, max_total_bet: int | None, view: str) -> str:
+    return f"{date}_{odds_mode}_{odds_phase}_{max_total_bet}_{view}"
+
+
+def prewarm_race_values(date: str, view: str, max_age: float, only_if_stale: bool = True) -> int:
+    """既定のパラメータ（画面の初期表示と同じ）のレース選択の期待値表示を事前生成する。作り直したら 1。"""
+    from src.api import prewarm
+
+    if not prewarm.stale("race_values", _value_pkey(date, "auto", "latest", DEFAULT_MAX_TOTAL_BET, view), max_age, only_if_stale):
+        return 0
+    race_value_summary(date, view=view, refresh=True, prerender_max_age=max_age)
+    return 1
 
 
 def race_value_summary(
@@ -629,16 +680,34 @@ def race_value_summary(
     odds_phase: str = "latest",
     max_total_bet: int | None = DEFAULT_MAX_TOTAL_BET,
     view: str = "full",
+    refresh: bool = False,
+    prerender_max_age: float | None = None,
 ) -> dict[str, Any]:
     """開催日の全レースについて、推奨買い目の期待回収率とレベルを返す（レース選択の強調表示に使う）。
-    view="paid" は会員向け（推奨度の段階だけ。期待回収率の数値は出さない）。"""
+    view="paid" は会員向け（推奨度の段階だけ。期待回収率の数値は出さない）。
+    事前生成(KEIBA_PREWARM=1, src.api.prerender)があればそれを返す。``refresh`` は事前生成側が計算し直して置くとき。"""
+    from src.api import prerender
+
+    pkey = _value_pkey(date, odds_mode, odds_phase, max_total_bet, view)
+    return prerender.cached_json(
+        "race_values", pkey,
+        lambda: _race_value_summary_compute(date, odds_mode=odds_mode, odds_phase=odds_phase, max_total_bet=max_total_bet, view=view, refresh=refresh),
+        deps=prerender.race_ids_deps(date), max_age=prerender_max_age, refresh=refresh,
+        stale_ok_sec=_VALUE_STALE_OK_SEC,
+        recompute=lambda: _race_value_summary_compute(date, odds_mode=odds_mode, odds_phase=odds_phase, max_total_bet=max_total_bet, view=view, refresh=True),
+    )
+
+
+def _race_value_summary_compute(
+    date: str, *, odds_mode: str, odds_phase: str, max_total_bet: int | None, view: str, refresh: bool = False,
+) -> dict[str, Any]:
     import time
 
     from src.scraper.storage import HybridStorage
 
     key = (date, odds_mode, odds_phase, max_total_bet, view)
     hit = _VALUE_CACHE.get(key)
-    if hit and time.time() - hit[0] < _value_ttl(date):
+    if hit and not refresh and time.time() - hit[0] < _value_ttl(date):
         return hit[1]
 
     storage = HybridStorage()
@@ -713,7 +782,7 @@ def get_horse_aptitude(horse_id: str | None, horse_name: str | None) -> tuple[di
         calc = HorseAptitudeProfileCalc()
         result = calc.compute(horse_id=horse_id, horse_name=horse_name)
     except FileNotFoundError as exc:
-        return {"error": f"artifacts not found: {exc}"}, 500
+        return {"error": f"artifacts not found: {exc}"}, 503
     if "error" in result:
         return result, 404
     return result, 200
