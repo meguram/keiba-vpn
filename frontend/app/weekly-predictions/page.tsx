@@ -7,7 +7,8 @@ import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockPredictions } fro
 import { featureEnabled } from "@/lib/features";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { MemberLockNote, PublicModeNote } from "@/components/upgrade/MemberLock";
-import { LEVEL_STYLE, RaceValue, prefetchRaceValues, useRaceValues, valueTitle } from "@/lib/raceValue";
+import { LEVEL_STYLE, RaceValue, prefetchRaceValues, useRaceValuesState, valueTitle } from "@/lib/raceValue";
+import { LoadingNotice } from "@/components/LoadingNotice";
 import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip, useNarrow } from "@/components/RaceStrip";
@@ -647,12 +648,7 @@ function RacePanel({
       </div>
 
       <div className="wp-race-body" style={{ borderTop: "1px solid var(--border)", padding: "0 18px 14px" }}>
-        {(loading || (!pred && !failed)) && (
-          <div role="status" style={{ padding: "20px 0", textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
-            <div style={{ width: 24, height: 24, border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 8px" }} />
-            予測データを取得中…
-          </div>
-        )}
+        {(loading || (!pred && !failed)) && <LoadingNotice what="予測データ" onRetry={() => onReload(race.race_id)} />}
         {failed && (
           <div role="alert" style={{ margin: "14px 0", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, padding: "12px 16px", color: "var(--err)", fontSize: 13, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <span>⚠️ このレースの予測を取得できませんでした。</span>
@@ -720,7 +716,7 @@ export default function WeeklyPredictionsPage() {
   const [racesError, setRacesError] = useState("");
   const [datesError, setDatesError] = useState("");
   const [datesReload, setDatesReload] = useState(0);
-  const raceValues = useRaceValues(selectedDate);
+  const { values: raceValues, loading: valuesLoading, failed: valuesFailed } = useRaceValuesState(selectedDate);
   const [selectedVenue, setSelectedVenue] = useState("");
   const [selectedRaceId, setSelectedRaceId] = useState("");
   const today = useMemo(() => todayJst(), []);
@@ -999,12 +995,7 @@ export default function WeeklyPredictionsPage() {
         </div>
         </details>
 
-        {loadingRaces && (
-          <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-dim)" }}>
-            <div style={{ width: 36, height: 36, border: "3px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 12px" }} />
-            <p style={{ fontSize: 14 }}>レース一覧を読み込み中…</p>
-          </div>
-        )}
+        {loadingRaces && <LoadingNotice what="レース一覧" size={36} padding="60px 0" onRetry={() => loadRaces(selectedDate)} />}
 
         {(datesError || racesError) && (
           <div role="alert" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, padding: "14px 18px", color: "var(--err)", fontSize: 13, marginBottom: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -1034,6 +1025,7 @@ export default function WeeklyPredictionsPage() {
               venue={activeVenue}
               onVenue={chooseVenue}
               values={raceValues}
+              valuesState={{ loading: valuesLoading, failed: valuesFailed }}
               selectedRaceId={activeRaceId}
               onSelectRace={chooseRace}
               onWarm={warmPred}

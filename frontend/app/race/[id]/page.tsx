@@ -21,6 +21,7 @@ import { useNarrow } from "@/components/RaceStrip";
 import { raceExists } from "@/lib/raceExists";
 import { PositionForecast } from "@/components/PositionForecast";
 import { ResultCheckPanel, Verdict } from "@/components/ResultCheck";
+import { LoadingNotice } from "@/components/LoadingNotice";
 import { firstCornerPos, positionVerdict, summarizePositions } from "@/lib/resultCheck";
 import type { ForecastHorse, GateBias, PaceForecast, PositionForecast as PosFc } from "@/lib/positionForecast";
 import { turnOf } from "@/lib/courseTurn";
@@ -421,10 +422,8 @@ export default function RaceDetailPage() {
     return (
       <div style={{ padding: 24 }}>
         {navDate && <RaceNav raceId={raceId} date={navDate} />}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh", flexDirection: "column", gap: 12 }}>
-        <div style={{ width: 40, height: 40, border: "3px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-        <p style={{ color: "var(--text-dim)", fontSize: 14 }}>レースデータを読み込み中…</p>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
+        <LoadingNotice what="レースデータ" size={40} onRetry={() => { void loadRace(); }} />
       </div>
       </div>
     );
