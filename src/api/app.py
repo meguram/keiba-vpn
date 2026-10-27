@@ -511,8 +511,15 @@ def _try_acquire_queue_runner_leader() -> bool:
     """
     Uvicorn 複数ワーカーそれぞれがキューループを回すと同一 JSON を壊すため、
     非ブロッキング flock で先着1プロセスだけが True を返す。
+
+    dev は常に False。キュー（data/queue）は環境で分かれていないので、同じ PC の dev が担当を取ると
+    運用のジョブを取って dev ストアに保存してしまう。
     """
     global _queue_runner_leader_fh
+    from src.config.deployment import keiba_env
+
+    if keiba_env() == "dev":
+        return False
     try:
         import fcntl
     except ImportError:
