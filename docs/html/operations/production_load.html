@@ -17,6 +17,7 @@ article.html-body h3 { font-size: 1.05rem; margin: 1.6em 0 .5em; color: var(--ac
 a { color: var(--accent-2); }
 code { background: var(--code-bg); padding: 1px 6px; border-radius: 5px; font-size: .9em; }
 pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; }
+.muted { color: var(--muted); font-size: 12px; }
 table { border-collapse: collapse; width: 100%; margin: 10px 0 18px; font-size: 13.5px; }
 th, td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; vertical-align: top; }
 th { background: var(--panel); color: var(--accent-2); white-space: nowrap; }
@@ -103,6 +104,8 @@ th { background: var(--panel); color: var(--accent-2); white-space: nowrap; }
 
 <h2 id="pl-measure">4. 実測した容量</h2>
 <p>測り方：<code>latency_monkey</code>（全 GET を、最初のアクセスと誰かが開いた後で測る）と <code>load_monkey</code>（同時数を段階的に増やす。1 段 15〜30 秒）。快適 = p95 1 秒未満かつエラー 0.5% 未満、許容 = p95 3 秒未満かつエラー 1% 未満、崩壊 = エラー 10% 以上か p95 15 秒以上。詳しい表は <a href="../../operations/capacity_and_latency_20261027.md">docs/operations/capacity_and_latency_20261027.md</a>。</p>
+
+<h3>4.0 アクセスポイント別の最大同時接続（Cloud Run API。2026-10-27 実測）</h3><p>1 つのアクセスポイントだけに、待ち時間なしで当て続けた結果（Cloud Run のタグ付きリビジョンに直接。台数は最大 3 台まで自動で増える）。<b>『同時に使える人数の目安』は、快適な処理量（req/s）に 20 秒を掛けた値</b>で、1 人がその API を 20 秒に 1 回呼ぶ（レースを切り替えて読む）想定。実際の 1 画面は複数の API を呼ぶので、<b>その画面が呼ぶ API のうち一番小さい値</b>が画面の目安になる。測定の最大は 80 並列で、『80』は『それ以上も快適かもしれない』を含む。</p><h4>(1) ログインしなくても見られるゾーン（匿名）</h4><table><thead><tr><th>アクセスポイント</th><th>1 件の速さ（中央値）</th><th>快適な最大の同時リクエスト</th><th>そのときの処理量（req/s）</th><th>同時に使える人数の目安</th><th>許容の最大</th><th>崩壊した並列数</th></tr></thead><tbody><tr><td>ログイン状態<br><code>/api/auth/status</code><br><span class="muted">全画面が最初に呼ぶ</span></td><td>26ms</td><td><b>80</b></td><td>747.5</td><td><b>約14,950人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>開催日の一覧<br><code>/api/scrape-dates</code></td><td>22ms</td><td><b>80</b></td><td>586.5</td><td><b>約11,730人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>レース一覧<br><code>/api/race-list/{日}</code><br><span class="muted">開催日を開く</span></td><td>1.1秒</td><td><b>80</b></td><td>458.1</td><td><b>約9,162人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>AI予測（勝率・複勝率まで）<br><code>/api/race/{id}/predictions</code><br><span class="muted">匿名は項目を絞った版</span></td><td>2.3秒</td><td><b>40</b></td><td>282.8</td><td><b>約5,656人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>レース詳細（出馬表）<br><code>/api/race/{id}</code><br><span class="muted">匿名は項目を絞った版</span></td><td>145ms</td><td><b>20</b></td><td>79.7</td><td><b>約1,594人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>馬・騎手・調教師カード<br><code>/api/race/{id}/entry/{馬}/card</code><br><span class="muted">タップしたとき</span></td><td>114ms</td><td><b>80</b></td><td>209.9</td><td><b>約4,198人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>画面のページ（HTML）<br><code>/weekly-predictions</code> など<br><span class="muted">VPS の Next.js。nginx の回数制限を外して直に測定（10-22）</span></td><td>約 200ms</td><td><b>100</b></td><td>407</td><td><b>約8,100人</b></td><td>100</td><td>測定範囲では崩壊せず</td></tr></tbody></table><h4>(2) ログインした会員だけが見られるゾーン（匿名は 401 を即返す）</h4><table><thead><tr><th>アクセスポイント</th><th>1 件の速さ（中央値）</th><th>快適な最大の同時リクエスト</th><th>そのときの処理量（req/s）</th><th>同時に使える人数の目安</th><th>許容の最大</th><th>崩壊した並列数</th></tr></thead><tbody><tr><td>AI予測（全項目）<br><code>/api/race/{id}/predictions</code><br><span class="muted">会員は期待値・印・展開まで</span></td><td>144ms</td><td><b>40</b></td><td>169.8</td><td><b>約3,396人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>レース詳細（全項目）<br><code>/api/race/{id}</code></td><td>172ms</td><td><b>10</b></td><td>27.2</td><td><b>約544人</b></td><td>40</td><td>測定範囲では崩壊せず</td></tr><tr><td>レースのまとめ取得<br><code>/api/race/{id}/bundle</code></td><td>136ms</td><td><b>10</b></td><td>32.9</td><td><b>約658人</b></td><td>40</td><td>測定範囲では崩壊せず</td></tr><tr><td>オッズ<br><code>/api/race/{id}/final-odds</code></td><td>84ms</td><td><b>80</b></td><td>265.6</td><td><b>約5,312人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>推奨馬券（パターン）<br><code>POST /api/v1/betting/optimize</code><br><span class="muted">『推奨馬券』タブ</span></td><td>197ms</td><td><b>5</b></td><td>18.0</td><td><b>約360人</b></td><td>20</td><td>測定範囲では崩壊せず</td></tr><tr><td>推奨度（R チップ）<br><code>/api/v1/betting/race-values</code><br><span class="muted">開催日ごと。前回値を先出し</span></td><td>7.1秒</td><td><b>40</b></td><td>176.0</td><td><b>約3,520人</b></td><td>40</td><td>測定範囲では崩壊せず</td></tr><tr><td>追走難度<br><code>/api/race/{id}/tracking-difficulty</code></td><td>42ms</td><td><b>40</b></td><td>144.4</td><td><b>約2,888人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>推奨馬券の成績<br><code>/api/prediction-results/bets-summary</code></td><td>38ms</td><td><b>80</b></td><td>203.8</td><td><b>約4,076人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr><tr><td>レース質（開催日）<br><code>/api/race-quality/day</code></td><td>8.9秒</td><td><b>—</b></td><td>—</td><td><b>—</b></td><td>—</td><td>5</td></tr><tr><td>レース結果<br><code>/api/race/{id}/result</code><br><span class="muted">結果タブ</span></td><td>28ms</td><td><b>80</b></td><td>414.9</td><td><b>約8,298人</b></td><td>80</td><td>測定範囲では崩壊せず</td></tr></tbody></table><h4>(3) 画面遷移を混ぜた同時利用者（API のみ。考える時間つきで、1 人あたり約 0.8 req/s）</h4><table><thead><tr><th>ゾーン</th><th></th><th colspan="2">実測</th><th colspan="2">目安</th><th>崩壊</th></tr></thead><tbody><tr><td>匿名（開催日一覧 → レース一覧 → 数レースの AI 予測と詳細）</td><td>—</td><td colspan="2">快適 <b>200</b> 人（許容 200 人。測定は 200 人まで）</td><td colspan="2"><b>約600人</b>（実際の閲覧は 1 人 0.25 req/s 前後で、測定の 3 分の 1 の負荷）</td><td>測定範囲では崩壊せず</td></tr><tr><td>会員（上に加えて推奨度・推奨馬券の API）</td><td>—</td><td colspan="2">快適 <b>50</b> 人（許容 200 人。測定は 200 人まで）</td><td colspan="2"><b>約150人</b>（実際の閲覧は 1 人 0.25 req/s 前後で、測定の 3 分の 1 の負荷）</td><td>測定範囲では崩壊せず</td></tr></tbody></table><div class="fa-box warn"><p><b>読み方の注意。</b>(a) 1 人が 1 秒に何回も押し続ける場合や、同じ回線（NAT）の大人数は、nginx の回数制限（画面 240 回/分・API 120 回/分）で 429 になる。(b) 新しい台が立ち上がる段（20〜100 並列付近）で一時的に遅く／429 になることがある（段ごとの凸凹）。(c) 測定に使えたレースは予測のある 6 件で、人気のレースを大勢が見る状況に近い（応答の再利用が効く）。まだ誰も開いていないレースの最初の 1 回は 1〜3 秒かかる。(d) 会員向けの重いもの（レース詳細の全項目・まとめ取得は約 30 req/s、推奨馬券は約 18 req/s、レース質は 1 秒未満に 1 回）が、会員ゾーンの上限を決めている。</p></div>
 
 <h3>4.1 Cloud Run API（prod と同じ作り。stg のタグ付きリビジョンで計測）</h3>
 <table>
@@ -222,6 +225,21 @@ th { background: var(--panel); color: var(--accent-2); white-space: nowrap; }
 <tr><td>Next.js を複数プロセスにする／Flask を本番用サーバーにする</td><td>VPS の画面・ホストの Flask の頭打ちが上がる</td><td>未実施（§8）</td></tr>
 </tbody></table>
 
+<h3>7.3 あるレースの AI予測を 1,000〜10,000 人が同時に見るときの方針（提案・未実装）</h3>
+<p>見積り：1 人が 20 秒に 1 回開くとして、<b>10,000 人 ＝ 約 500 req/s、1,000 人 ＝ 約 50 req/s</b>。いまの Cloud Run（最大 3 台）で匿名の AI予測が快適に捌ける量は約 280 req/s（§4.0）なので、1,000 人は今のままでも収まるが、10,000 人は届かない。台数を増やすより、<b>全員に同じ内容を返すものを、サーバーに来させない</b>のが効く。</p>
+<table>
+<thead><tr><th>順</th><th>手段</th><th>効果</th><th>注意</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><b>匿名向けの AI予測を CDN（Cloudflare）に載せる。</b>Cookie のない要求の応答だけ <code>Cache-Control: public, s-maxage=30〜60</code>（<code>stale-while-revalidate</code> つき）にし、会員（Cookie あり）は従来どおり <code>private</code>。Cloudflare のキャッシュルールで『ログイン Cookie があればキャッシュしない』とする</td><td>10,000 人でも API に届くのは『レース数 × エッジ拠点数 ÷ 30 秒』ほど（数 req/s）。API の負荷が人数にほぼ比例しなくなる</td><td>鮮度は最大 30〜60 秒遅れる（予測は前夜に確定するので問題になりにくい）。匿名の版は『全員同じ内容』であることが条件（オッズ・期待値を含めない現在の仕様どおり）。現在は Cloudflare Access の内側なので、一般公開（public モード）への切り替えと合わせて有効にする</td></tr>
+<tr><td>2</td><td><b>匿名の AI予測を『静的な JSON』にして置く。</b>予測が保存されたとき（イベント）に、匿名の版を GCS の公開用の置き場に書き、画面はそれを読む（API を通さない）</td><td>API・Cloud Run を介さない。人数にほぼ依存せず、費用も配信量だけ</td><td>置き場の更新を予測・出馬表の保存に結びつける必要がある（応答の再利用の仕組みを流用できる）。会員向けの全項目の版は従来の API</td></tr>
+<tr><td>3</td><td><b>画面の殻も CDN で配る。</b>JS・CSS（<code>_next/static</code>）を長期キャッシュ、HTML を短い <code>s-maxage</code></td><td>VPS の Next.js（約 400 req/s、1 プロセス）を飽和させない。VPS は前払い済みで増やせない</td><td>HTML に会員区分で変わる部分があるものはキャッシュしない（殻だけ）</td></tr>
+<tr><td>4</td><td>Cloud Run の最小インスタンスを 1〜2、最大を 10 前後に（人が集まる開催日・時間帯だけ上げる運用でもよい）</td><td>急増時の起動待ち（数十秒の待ちと 429）を避ける。同時に捌ける量が台数に比例</td><td>最小 1 で約 2,900 円/月増（予算 2,000 円を超えるのでユーザーの判断が必要）</td></tr>
+<tr><td>5</td><td>予測を前夜に作り終えておく（実施済みの前夜計算）、会員向けの重い API（レース詳細の全項目・まとめ取得・推奨馬券）は §4.0 の上限が低いので、画面を開いた直後に全部は呼ばず必要なタブを開いたときだけ呼ぶ</td><td>会員ゾーンの上限（約 20〜30 req/s）を、同時に呼ぶ人数に対して余裕のある範囲に保つ</td><td>会員が 1,000 人規模になるときは、会員の全項目の版も『会員は全員同じ内容』なので、同じ考え方（会員用のキャッシュ）で共有できる</td></tr>
+</tbody></table>
+<div class="fa-box ok">
+  <p><b>結論：</b>1 と 3（CDN）と 4 の組み合わせで、10,000 人が同じレースの AI予測を見ても、API には数 req/s しか届かない設計にできる。実装前に、Cloudflare を通した状態で分散した負荷（k6 など）を 10,000 同時相当まで当てて確かめる。</p>
+</div>
+
 <h2 id="pl-retest">8. 再測定の方法と、まだ残っていること</h2>
 <h3>8.1 再測定のコマンド</h3>
 <pre>python -m src.scripts.ops.latency_monkey pools --out /tmp/lm/pools.json
@@ -234,7 +252,7 @@ python -m src.scripts.ops.load_monkey browse --pools /tmp/lm/pools.json --steps 
 <table>
 <thead><tr><th>項目</th><th>状況</th></tr></thead>
 <tbody>
-<tr><td>公開経路（Cloudflare → VPS → Cloud Run）を通した負荷</td><td>未計測（Access の通行証が必要）。公開前に計る</td></tr>
+<tr><td>公開経路（Cloudflare → VPS → Cloud Run）を通した負荷、および 7.3 の CDN 化後の再測定</td><td>未計測（Access の通行証が必要）。公開前に計る</td></tr>
 <tr><td>Cloud Run で画面遷移を混ぜた負荷（会員向け API を含む）</td><td>未計測（鍵だけでは会員向けが 401 になるため）</td></tr>
 <tr><td>Flask（開発用サーバー）の本番用サーバー化と同時数の上限</td><td>未実施</td></tr>
 <tr><td><code>/api/health</code> が API の同時上限を共有する</td><td>未対応（負荷中に監視が誤検知しうる）</td></tr>
