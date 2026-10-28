@@ -108,7 +108,10 @@ case "$STEP" in
     ;;
   api-revision)
     # stg のリビジョンにだけ、テストユーザー(test/test。会員扱い)を有効にする。prod のリビジョンには付けない
-    run env TAG="$REV_TAG" IMAGE="$API_IMAGE" API_TEST_USER="$([ "$TARGET" = stg ] && echo 1 || echo 0)" bash scripts/gcp/deploy_cloud_run_api.sh deploy --apply
+    # CPU の割り当て: stg はリクエスト課金（アイドル中は課金されない。こちらで先に挙動を確かめる）。prod は PROD_CPU_ALLOC（既定 always）。
+    #   prod を切り替えるのは、stg で速度・データの鮮度を確かめてから（GitHub Variables の PROD_CPU_ALLOC=request。docs/operations/cost_recalc_20261028.md）
+    run env TAG="$REV_TAG" IMAGE="$API_IMAGE" API_TEST_USER="$([ "$TARGET" = stg ] && echo 1 || echo 0)" \
+      CPU_ALLOC="$([ "$TARGET" = stg ] && echo request || echo "${PROD_CPU_ALLOC:-always}")" bash scripts/gcp/deploy_cloud_run_api.sh deploy --apply
     if [ "$DRY" = 1 ]; then
       echo "+ （タグ付き URL を取得して GITHUB_OUTPUT の tag_url に書く: タグ r${REV_TAG}）"
     else

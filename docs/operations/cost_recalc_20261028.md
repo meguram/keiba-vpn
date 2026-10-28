@@ -43,3 +43,14 @@
 - GCS の実測（2026-10-28、`gcloud storage du`）: 合計 39GiB（chuou 28.8、ops 2.1、models 1.9、host_snapshot 1.2、state 0.6）。
 - Cloud Run の設定（読み取り専用の鍵で確認）: `keiba-api` は最大 3・1 vCPU・2GiB・`cpu-throttling=false`、`keiba-monitor` は最大 1・512Mi・リクエスト課金。Cloud SQL・GCE・Cloud NAT は API が無効で未使用（権限エラーの内容から）。
 - Scheduler は現在スモーク試験の 3 ジョブのみ。
+
+## 6. API をリクエスト課金に直す（K）— 実装と段階的な切替（2026-10-28 夜）
+
+**なぜ必要か（実測）**: ping（VPS のヘルスチェック・ホストの cron）を止めても、**画面を開いたブラウザのタブが 60 秒ごとに `/api/maintenance/status` を叩く**（`MaintenanceShell.tsx`）ため、インスタンス課金のままでは API が落ちない。1 時間あたりの課金秒がほぼ 7,200（= 2 台常時: 本番 1 + stg 1）で、月 約 1.6 万円のペースだった。公開後はほぼ常時起動になる。
+
+**何を変えたか**（データ取得・予測・表示に影響を出さないため）:
+- `scripts/gcp/deploy_cloud_run_api.sh` に `CPU_ALLOC=always|request`。`request` は `--cpu-throttling`（リクエスト課金）＋ `KEIBA_MIRROR_MODE=request`。既定は `always`（従来どおり）。
+- `src/api/cloudrun_entry.py` の `KEIBA_MIRROR_MODE=request`: 常駐スレッドの代わりに ①起動処理（CPU が必ず割り当てられる間）が GCS の取り込みを**全体まで**済ませてから受付を始める（上限 90 秒）②以降は、内容を返すリクエストをきっかけに、前回から 60 秒以上経っていれば直近 2 日分を取り込む（`gcs_mirror.RequestRefresher`）。長く（5 分以上）止まっていた後の最初のリクエストだけ、古い表示を避けるため最大 8 秒まで完了を待つ。`/api/health`・`/api/maintenance/status`・`/ops/*` は取り込みのきっかけにしない（タブの状態確認が毎分の取り込みを起こさない）。
+- 起動時ウォームアップは元から ASGI の lifespan（ポートを開く前）で動くので、リクエスト課金でも影響しない。先読みの作り直しスレッド（`prerender.py`）は『古い版を先に返して裏で作り直す』方式なので、合間に止まっても古い版を返し続けるだけ（次のリクエスト中に追いつく）。
+
+**切替の順**: ①stg のリビジョン（`rstg`）は `scripts/ci/deploy_gcp.sh` が `request` で作る（実装済み）→ ②stg で速度・データの鮮度・課金（`billable_instance_time` がアイドル中に増えないこと）を確かめる → ③GitHub Variables の `PROD_CPU_ALLOC=request` を設定して本番を切り替える。戻すときは `PROD_CPU_ALLOC=always` にして再デプロイ。
