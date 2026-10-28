@@ -22,12 +22,14 @@ ENV_FILE="${KEIBA_FETCH_ENV_FILE:-/etc/keiba-fetch/fetch.env}"
 UNIT=keiba-fetch-agent
 CURRENT="${KEIBA_FETCH_CURRENT:-/opt/keiba-fetch/current}"
 SA_FILE="${KEIBA_FETCH_SA_FILE:-/etc/keiba-fetch/sa.json}"
+PULL_ENV="${KEIBA_PULL_ENV_FILE:-/etc/keiba-pull/pull.env}"
 REQUIRED_KEYS=(GCS_BUCKET)
 
 die() { echo "fetch_agent_ctl: $*" >&2; exit 1; }
 [ "$(id -u)" = 0 ] || die "root で実行してください（sudo）"
 
 has_key() { grep -qE "^${1}=" "$ENV_FILE" 2>/dev/null; }
+has_value() { [ -n "$(key_value "$1")" ]; }
 key_value() { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"'"'"' '; }
 
 # 1 行だけ書き換える（無ければ足す）。持ち主・権限はそのまま
@@ -46,7 +48,7 @@ show_status() {
     echo "release: $(readlink "$CURRENT" 2>/dev/null || echo なし)"
     if [ -f "$ENV_FILE" ]; then
         for k in KEIBA_FETCH_AGENT_ENABLED KEIBA_FETCH_SHADOW_ENABLED; do echo "$k=$(key_value "$k" || true)"; done
-        for k in "${REQUIRED_KEYS[@]}"; do echo "$k: $(has_key "$k" && echo あり || echo なし)"; done
+        for k in "${REQUIRED_KEYS[@]}"; do echo "$k: $(has_value "$k" && echo あり || { has_key "$k" && echo "空（値が無い）" || echo なし; })"; done
         echo "netkeiba のログイン（netkeiba_id・netkeiba_pw）: $(grep -cE '^netkeiba_(id|pw)=.+' "$ENV_FILE" || true)/2 行"
         echo "KEIBA_FETCH_AGENT_TASKS: $(has_key KEIBA_FETCH_AGENT_TASKS && echo "あり（$(key_value KEIBA_FETCH_AGENT_TASKS)）" || echo なし)"
     else
@@ -75,13 +77,20 @@ case "$cmd" in
         ;;
     pull)
         # タイマー（keiba-release-pull@.service）と同じ環境で動かす。sudo は環境を引き継がないので、ここで読む
-        ( set -a; . "${KEIBA_PULL_ENV_FILE:-/etc/keiba-pull/pull.env}"; set +a
+        ( set -a; . "$PULL_ENV"; set +a
           KEIBA_ENV=prod KEIBA_RUN_LOCATION=vps PYTHONUNBUFFERED=1 /opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/pull_release.py --kind fetch --force )
         echo "release: $(readlink "$CURRENT" 2>/dev/null || echo なし)"
         ;;
     shadow-on)
         [ -f "$CURRENT/config/fetch_shadow.json" ] || die "取得のコードに fetch_shadow.json がありません（古い版）。先に pull"
-        for k in "${REQUIRED_KEYS[@]}"; do has_key "$k" || die "$ENV_FILE に $k がありません"; done
+        # バケット名は秘密ではない。空なら、毎晩の取り込みで使っている pull.env の値（同じバケット）を写す
+        if ! has_value GCS_BUCKET; then
+            b="$(grep -E '^GCS_BUCKET=' "$PULL_ENV" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"'"'"' ')"
+            [ -n "$b" ] || die "$ENV_FILE の GCS_BUCKET が空で、$PULL_ENV にもありません"
+            set_flag GCS_BUCKET "$b"
+            echo "GCS_BUCKET が空だったので、$PULL_ENV の値を写しました"
+        fi
+        for k in "${REQUIRED_KEYS[@]}"; do has_value "$k" || die "$ENV_FILE の $k が空です"; done
         [ -f "$SA_FILE" ] || die "$SA_FILE がありません"
         if has_key KEIBA_FETCH_AGENT_TASKS && [ -n "$(key_value KEIBA_FETCH_AGENT_TASKS)" ]; then
             die "KEIBA_FETCH_AGENT_TASKS が設定されています（影ではなく本番の取得を VPS が始めます）。人が確認して消してから"
