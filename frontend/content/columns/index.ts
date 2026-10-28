@@ -15,6 +15,7 @@ import first_crop_old_dam from "./first-crop-old-dam.json";
 import front_runner from "./front-runner.json";
 import first_dirt from "./first-dirt.json";
 import jockey_long_distance from "./jockey-long-distance.json";
+import jockey_change from "./jockey-change.json";
 
 const ALL = [
   upset_conditions,
@@ -28,6 +29,7 @@ const ALL = [
   front_runner,
   first_dirt,
   jockey_long_distance,
+  jockey_change,
 ] as Column[];
 
 export const COLUMNS: Column[] = ALL.filter((c) => SHOW_DEV_ONLY || !c.draft);
