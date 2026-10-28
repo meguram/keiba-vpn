@@ -12,7 +12,7 @@ const ts = createRequire(import.meta.url)("typescript");
 const src = ts.transpileModule(readFileSync(join(here, "raceAnalysis.ts"), "utf8"), { compilerOptions: { module: ts.ModuleKind.ES2020, target: ts.ScriptTarget.ES2020 } }).outputText;
 const out = join(mkdtempSync(join(tmpdir(), "ra-")), "raceAnalysis.mjs");
 writeFileSync(out, src);
-const { formatCell, sortValue, columnBlocks, isThin } = await import(pathToFileURL(out).href);
+const { formatCell, sortValue, columnBlocks, isThin, entriesUnavailable } = await import(pathToFileURL(out).href);
 
 test("formatCell: 成績・率・整数、値が無ければダッシュ", () => {
   assert.equal(formatCell([6, 11, 7, 38], "record"), "6-11-7-38");
@@ -50,4 +50,14 @@ test("isThin: 標本数が min_n 未満の群だけ薄くする", () => {
   assert.equal(isThin(groups[0], {}), false);
   assert.equal(isThin(groups[1], { b_n: 0 }), false);
   assert.equal(isThin(null, { a_n: 0 }), false);
+});
+
+test("entriesUnavailable: 未来日で出馬表の段階が無い／none のレースだけ選べない", () => {
+  assert.equal(entriesUnavailable({ entries_phase: null }, "20261031", "20261028"), true);
+  assert.equal(entriesUnavailable({}, "20261031", "20261028"), true);
+  assert.equal(entriesUnavailable({ entries_phase: "none" }, "20261031", "20261028"), true);
+  assert.equal(entriesUnavailable({ entries_phase: "registered" }, "20261031", "20261028"), false);   // 特別登録（暫定）は選べる
+  assert.equal(entriesUnavailable({ entries_phase: "final" }, "20261031", "20261028"), false);
+  assert.equal(entriesUnavailable({ entries_phase: null }, "20261028", "20261028"), false);           // 当日は選べる
+  assert.equal(entriesUnavailable({ entries_phase: null }, "20261025", "20261028"), false);           // 過去は選べる
 });

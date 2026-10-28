@@ -96,3 +96,13 @@ export function isThin(group: AnalysisGroup | null, cells: Record<string, unknow
   const n = cells?.[group.n_key];
   return typeof n === "number" ? n < group.min_n : false;
 }
+
+/**
+ * 未来の開催日で、出馬表がまだ取得できていないレースか（選べなくする）。
+ * 出馬表の段階（entries_phase）が無い／none のレースは、JRA の公示前で取得できていない。
+ * 当日以前のレースは、出馬表か結果があるので常に選べる。date / today は YYYYMMDD。
+ */
+export function entriesUnavailable(race: { entries_phase?: string | null }, date: string, today: string): boolean {
+  if (!date || date <= today) return false;
+  return !race.entries_phase || race.entries_phase === "none";
+}
