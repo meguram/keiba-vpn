@@ -23,6 +23,7 @@ from src.api.v1.services import (
 from src.api.v1.routes.analytics import bp as analytics_bp
 from src.api.v1.routes.billing import bp as billing_bp
 from src.api.v1.routes.data_analysis import bp as data_analysis_bp
+from src.api.v1.routes.race_analysis import bp as race_analysis_bp
 from pathlib import Path
 
 from src.db.session import get_session, init_engine
@@ -94,6 +95,7 @@ def create_app() -> Flask:
 
     app.register_blueprint(analytics_bp, url_prefix="/api/v1")
     app.register_blueprint(data_analysis_bp, url_prefix="/api/v1")
+    app.register_blueprint(race_analysis_bp, url_prefix="/api/v1")
     app.register_blueprint(billing_bp, url_prefix="/api/v1")
 
     # 会員限定のパスは匿名に 401（公開は勝率・複勝率まで。仕様: docs/operations/tiered_access.md）
