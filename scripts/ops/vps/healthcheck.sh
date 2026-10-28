@@ -10,7 +10,9 @@ for u in keiba-ui nginx cloudflared-prod; do
   if ! systemctl is-active --quiet "$u"; then issues+=("$u が停止"); systemctl restart "$u" 2>/dev/null; sleep 3; systemctl is-active --quiet "$u" && issues+=("$u を再起動して復旧"); fi
 done
 c="$(curl -s -o /dev/null -w '%{http_code}' -m 5 "http://127.0.0.1:$APP_PORT/version.json" || true)"; [ "$c" = 200 ] || issues+=("UI が応答しない($c)")
-c="$(curl -s -o /dev/null -w '%{http_code}' -m 10 "http://127.0.0.1:$PROXY_PORT/api/maintenance/status" || true)"; [ "$c" = 200 ] || issues+=("上流 API に届かない($c)")
+# nginx 経由でも /api/ は叩かない: /api/ は Cloud Run(keiba-api)に転送され、API は『CPU を常に割り当て』(インスタンス課金)なので、
+# 15 分以内の定期リクエストがあると落ちずに月 約 7,800 円になる（docs/operations/cost_recalc_20261028.md）。API の死活は監視ポータル側で、人が開いたときに見る。
+c="$(curl -s -o /dev/null -w '%{http_code}' -m 5 "http://127.0.0.1:$PROXY_PORT/version.json" || true)"; [ "$c" = 200 ] || issues+=("nginx 経由の画面が応答しない($c)")
 disk="$(df --output=pcent / | tail -1 | tr -dc 0-9)"; [ "${disk:-0}" -lt 85 ] || issues+=("ディスク ${disk}%")
 mem="$(awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo)"; [ "${mem:-999}" -gt 150 ] || issues+=("空きメモリ ${mem}MB")
 ok=true; [ ${#issues[@]} -eq 0 ] || ok=false

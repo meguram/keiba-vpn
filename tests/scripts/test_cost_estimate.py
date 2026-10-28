@@ -58,7 +58,7 @@ def test_override_changes_price():
     cfg = ce.apply_overrides(_cfg(), ["prices.gcs_tokyo_standard_gb_month.value=0.046"])
     base = ce.estimate(_cfg(), "A_budget_core", "high")["items_usd"]["gcs"]
     new = ce.estimate(cfg, "A_budget_core", "high")["items_usd"]["gcs"]
-    assert abs((new - base) - 100 * 0.023) < 1e-9
+    assert abs((new - base) - 60 * 0.023) < 1e-9  # 上限の保存量（実測 39GiB から成長を見込んだ 60GB）
 
 
 def test_r2_is_free_within_free_tier():
@@ -79,3 +79,38 @@ def test_unverified_list_and_render():
     assert not any(x.startswith("prices.r2_storage_gb_month") for x in ce.unverified_prices(cfg))
     text = ce.render_table(cfg, ce.estimate_all(cfg, ["A_budget_core"]), "md")
     assert "A_budget_core" in text and "円/月" in text
+
+
+# ── インスタンス課金（keiba-api は --no-cpu-throttling）と監視ポータルの増分 ──────────
+
+def test_alive_seconds_ping_within_idle_timeout_means_always_on():
+    cfg = _cfg()
+    month = cfg["seconds_per_month"]
+    assert ce._alive_seconds(cfg, {"alive_hours_per_day": 2}) == 2 * 3600 * 30
+    assert ce._alive_seconds(cfg, {"alive_hours_per_day": 2, "pinger_interval_min": 5}) == month   # 5 分おきの ping で落ちない
+    assert ce._alive_seconds(cfg, {"alive_hours_per_day": 2, "pinger_interval_min": 30}) == 2 * 3600 * 30  # 15 分より空けば落ちる
+    assert ce._alive_seconds(cfg, {"alive_hours_per_day": 99}) == month
+
+
+def test_heartbeat_to_instance_billed_api_blows_the_budget_but_monitor_ingest_does_not():
+    cfg = _cfg()
+    hb = ce.estimate(cfg, "H_heartbeat_on_instance_api", "low")
+    mon = ce.estimate(cfg, "I_ingest_on_monitor", "low")
+    assert not hb["within_budget"] and hb["items_usd"]["cloud_run_service"] * cfg["fx_jpy_per_usd"] > 5000
+    assert mon["within_budget"] and mon["items_usd"]["cloud_run_service"] == 0.0
+
+
+def test_monitor_features_add_little_over_the_base_plan():
+    cfg = _cfg()
+    for lv in ("low", "high"):
+        base, plus = ce.estimate(cfg, "A_budget_core", lv), ce.estimate(cfg, "M0_monitor_features", lv)
+        assert 0 < plus["total_jpy"] - base["total_jpy"] < 300
+
+
+def test_instance_free_tier_zero_costs_more():
+    cfg = _cfg()
+    a = ce.estimate(cfg, "G_api_as_deployed", "low")["total_usd"]
+    cfg2 = copy.deepcopy(cfg)
+    cfg2["free_tier"]["cloud_run_instance_vcpu_seconds"]["value"] = 0
+    cfg2["free_tier"]["cloud_run_instance_gib_seconds"]["value"] = 0
+    assert ce.estimate(cfg2, "G_api_as_deployed", "low")["total_usd"] > a

@@ -1,0 +1,16 @@
+[Unit]
+Description=keiba VPS access-log summary (to the monitor portal)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/keiba-ui/bin/traffic_client.py
+Nice=10
+MemoryMax=128M
+TimeoutStartSec=120
+# nginx のログを読むため root。読み取りだけ・書くのは /var/lib/keiba-ui/traffic のみ。秘密は /etc/keiba-ui/heartbeat.env（600 root）だけ
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/keiba-ui/traffic

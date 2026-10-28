@@ -91,17 +91,21 @@ def load_runs_with_sire() -> pd.DataFrame:
         st = SIRE_MAP_PATH.stat()
         sig = (st.st_mtime_ns, st.st_size)
     except OSError:
-        return runs.assign(sire_id=pd.NA)
+        return runs.assign(sire_id=pd.NA, sire_line_id=pd.NA)
     with _lock:
         if _cache["sire_sig"] == sig and _cache["sire_df"] is not None:
             return _cache["sire_df"]   # type: ignore[return-value]
     m = load_sire_map()
     if m is None:
-        return runs.assign(sire_id=pd.NA)
-    m = m[["horse_id", "sire_id"]].dropna().drop_duplicates("horse_id")
+        return runs.assign(sire_id=pd.NA, sire_line_id=pd.NA)
+    cols = ["horse_id", "sire_id"] + (["sire_line_id"] if "sire_line_id" in m.columns else [])
+    m = m[cols].dropna(subset=["sire_id"]).drop_duplicates("horse_id")
     m["horse_id"] = m["horse_id"].astype(str)
     out = runs.merge(m, on="horse_id", how="left")
-    out["sire_id"] = out["sire_id"].astype("category")
+    for c in cols[1:]:
+        out[c] = out[c].astype("category")
+    if "sire_line_id" not in out.columns:
+        out["sire_line_id"] = pd.NA
     with _lock:
         _cache["sire_sig"], _cache["sire_df"] = sig, out
     return out

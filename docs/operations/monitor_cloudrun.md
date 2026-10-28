@@ -9,7 +9,7 @@
   - 今日の異常通知（`ops/alerts/<日>/`）
   - 画面・取得役の配布（`ops/releases/<kind>/latest.json` と VPS が報告する `applied/vps.json`。版ずれが一目で分かる）
   - 成果物の一致（`ops/parity/<日>/`）と切替判定（`ops/cutover/status.json`）
-  - `/` が表（全体の信号つき）、`/api/overview` が同じ内容の JSON、`/api/health` が起動確認（鍵なし。※ `/healthz` は Cloud Run の前段(Google Frontend)が横取りして HTML の 404 を返すので使わない）。
+  - （2026-10-28 に画面を拡張。下の 5 章）`/ops` が従来の表（全体の信号つき）、`/api/overview` が同じ内容の JSON、`/api/health` が起動確認（鍵なし。※ `/healthz` は Cloud Run の前段(Google Frontend)が横取りして HTML の 404 を返すので使わない）。
 - 認証は API と同じ共有ヘッダ `X-Keiba-Proxy-Key`（`KEIBA_PROXY_KEY_REQUIRED=1`）。前段の Cloudflare Access / VPS の nginx が付ける。
 - 配備は `scripts/gcp/deploy_cloud_run_monitor.sh`（既定は表示のみ、`--apply` で実行）。**イメージは API と同じ**（起動コマンドだけ `uvicorn --factory src.monitor.cloud_app:asgi_app`）。メモリ 512Mi・最大 1 台・最小 0。
 
@@ -41,3 +41,29 @@
 
 ## 4. 未対応（ホストの監視ポータルにあって、ここには無いもの）
 ホストの systemd/プロセス・git の状態・ログの tail・スクレイピングのカバレッジ表は、ホスト（や VPS）のローカルを見るため移していない。必要なものは、収集側が GCS に JSON を出す形（ハートビートと同じ）にしてから足す。優先度の高い順: ①取得役（VPS）のタスクの完了/失敗（`ops/fetch_tasks/`）②予測成績（`ops/prediction_results/`）③データ健全性（`data_health`）④コスト（`gcp-daily-cost-report` の出力）。
+
+## 5. 画面の拡張とVPS からの受信（2026-10-28）
+**ホスト（研究用 PC）とは一切つながない**。材料は GCS と、VPS からの署名つき POST、Cloud Run への HTTP 確認だけ。
+
+| 画面 | 内容 | 材料 |
+|---|---|---|
+| `/`（ホーム） | stg / prod × VPS / GCP の 4 マス、直近の開催日パイプライン、アクセス、SEO、今日の異常 | ハートビート、`ops/job_runs`、API の `/api/health`（URL は環境変数 `KEIBA_API_URL_PROD` / `KEIBA_API_URL_STG`）、下の各画面 |
+| `/pipeline` | 直近の開催日ごとに 出馬表→オッズ→予測→速報→指数→確定→予測成績 が最後まで終わったか（レース別も） | GCS の `chuou/data/preprocessed/netkeiba/pc/…`・`state/data/local/inference/…`・`ops/prediction_results/` |
+| `/traffic` | 訪問者・ページビュー・推移 90 日・上位ページ 10・流入元・端末・時間帯・クローラー・404/5xx | VPS が送る `ops/traffic/bundle.json` |
+| `/seo` | SEO スコア・技術/コンテンツ/公開前の残り作業・ページ別の指摘 | CI が置く `ops/seo/audit.json` |
+| `/ops` | 従来の Jobs・配布・成果物の一致の表 | 従来どおり |
+
+**受け先を API ではなくここ（keiba-monitor）にした理由**: `keiba-api` は『CPU を常に割り当て』（インスタンス課金）で、15 分以内の定期リクエストがあると落ちずに月 約 7,800 円になる（`cost_recalc_20261028.md`）。monitor はリクエスト課金・最大 1 台。
+このため VPS のハートビートからも `/api/` の確認（`api_upstream_http`。nginx 経由で Cloud Run に届く）を外し、`nginx_http`（`/version.json`）に変えた。stg の画面（`/srv/keiba-ui-stg` がある場合）は `stg_ui_http` と `keiba-ui-stg` を追加で見る。
+ホームの API 確認は人が画面を開いたときだけ・10 分使い回し（`?probe=0` で省略）。
+
+受信（署名は `KEIBA_HEARTBEAT_SECRET`。共有ヘッダ鍵は不要）: `POST /ops/heartbeat`（5 分おき）、`POST /ops/traffic`（15 分おき）。`POST /ops/heartbeat/check`（Scheduler が 15 分おき。共有ヘッダ鍵が要る）で異常・復旧を Slack に通知。
+
+### ユーザーの作業（GCP / VPS / CI）
+1. **SA keiba-monitor の権限を足す**（今は `ops/` の読み取りだけ）: ①書き込み `ops/heartbeat/` と `ops/traffic/`（`roles/storage.objectUser` を `make_iam_condition.sh` で prefix 限定）。②読み取り・一覧 `chuou/data/preprocessed/netkeiba/pc/` と `state/data/local/inference/`（開催日パイプライン用）。
+2. 秘密 `KEIBA_HEARTBEAT_KEY` と `SLACK_WEBHOOK_URL` を SA に読ませる（`roles/secretmanager.secretAccessor`）。
+3. 配備し直す: `KEIBA_API_URL_PROD=… KEIBA_API_URL_STG=https://rstg---…run.app bash scripts/gcp/deploy_cloud_run_monitor.sh --apply`（リクエスト課金のまま。`--cpu-throttling` を明示）。
+4. Scheduler: `POST <monitor>/ops/heartbeat/check`（15 分おき、`X-Keiba-Proxy-Key` 付き）。API 側（`/ops/heartbeat/check`）に向けた同種のジョブを作っていれば**止める**（API が 15 分おきに起きて課金されるため）。
+5. VPS: `/etc/keiba-ui/heartbeat.env` の `HEARTBEAT_URL` を monitor の `…/ops/heartbeat` に変え、`sudo bash scripts/ops/vps/vps_07_traffic_timer.sh`（アクセス集計の送信タイマー。root で nginx のログを読む）。ハートビートの送信側（`heartbeat_client.py`）も取り込む。
+6. SEO: CI の昇格後に `python -m src.scripts.ops.seo_audit_publish` を実行する 1 ステップを足す（`promote.yml` / `deploy-stg.yml` の GCS 認証済みジョブ。`ops/seo/` への書き込み権限が要る）。それまでは SEO 画面は『まだ点検結果がありません』。
+7. 公開の道は 2 章 5 のとおり（`monitor.megu-keiba.com` の向き先をホストの :23900 から Cloud Run の monitor に）。切り替えるまでは今の URL にこの画面は出ない。

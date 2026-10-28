@@ -24,6 +24,7 @@ ENV_FILE = os.environ.get("HEARTBEAT_ENV_FILE", "/etc/keiba-ui/heartbeat.env")
 VARS_FILE = os.environ.get("KEIBA_VARS_FILE", "/etc/keiba-ui/vars.env")
 UNITS = ("nginx", "cloudflared-prod", "keiba-ui", "keiba-fetch-agent")
 SCHEMA_VERSION = 1
+STG_ROOT, STG_PROXY_PORT = "/srv/keiba-ui-stg", "8081"
 
 
 def read_env(path: str) -> dict[str, str]:
@@ -85,6 +86,14 @@ def collect(vars_env: dict[str, str]) -> dict:
         release = ""
     with open("/proc/uptime", encoding="utf-8") as f:
         uptime = float(f.read().split()[0])
+    # nginx 経由でも画面の静的ファイルまでしか見ない。/api/ は Cloud Run(keiba-api)に転送されるので、5 分おきに叩かない
+    # （API は『CPU を常に割り当て』のインスタンス課金で、15 分以内の定期リクエストは月 約 7,800 円になる。docs/operations/cost_recalc_20261028.md）
+    checks = {"nextjs_http": http_code(f"http://127.0.0.1:{app_port}/version.json"),
+              "nginx_http": http_code(f"http://127.0.0.1:{proxy_port}/version.json")}
+    units = list(UNITS)
+    if os.path.isdir(STG_ROOT):  # stg の画面（2 つ目のインスタンス）を入れているときだけ見る
+        units.append("keiba-ui-stg")
+        checks["stg_ui_http"] = http_code(f"http://127.0.0.1:{STG_PROXY_PORT}/version.json")
     return {
         "v": SCHEMA_VERSION, "host": "vps", "sent_at": int(time.time()), "release": release[:80],
         "mem": {"total_mb": round(total, 1), "available_mb": round(avail, 1), "used_mb": round(total - avail, 1)},
@@ -92,9 +101,8 @@ def collect(vars_env: dict[str, str]) -> dict:
         "disk": {"root_used_pct": disk_pct},
         "load": {"l1": round(load[0], 2), "l5": round(load[1], 2)},
         "uptime_s": round(uptime),
-        "units": {n: unit_state(n) for n in UNITS},
-        "checks": {"nextjs_http": http_code(f"http://127.0.0.1:{app_port}/version.json"),
-                   "api_upstream_http": http_code(f"http://127.0.0.1:{proxy_port}/api/health", 12.0)},
+        "units": {n: unit_state(n) for n in units},
+        "checks": checks,
     }
 
 

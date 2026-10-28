@@ -56,8 +56,8 @@ def test_app_pages_and_proxy_key(monkeypatch):
     monkeypatch.setenv("KEIBA_PROXY_KEY_REQUIRED", "1")
     monkeypatch.setenv("KEIBA_PROXY_KEY", "k1")
     assert c.get("/api/health").status_code == 200                       # ヘルスチェックは鍵なし
-    assert c.get("/").status_code == 401 and c.get("/api/overview", headers={"X-Keiba-Proxy-Key": "bad"}).status_code == 401
-    r = c.get("/", headers={"X-Keiba-Proxy-Key": "k1"})
+    assert c.get("/").status_code == 401 and c.get("/ops").status_code == 401 and c.get("/api/overview", headers={"X-Keiba-Proxy-Key": "bad"}).status_code == 401
+    r = c.get("/ops", headers={"X-Keiba-Proxy-Key": "k1"})
     assert r.status_code == 200 and "運用監視" in r.get_data(as_text=True) and "predict-race" in r.get_data(as_text=True)
     j = c.get("/api/overview", headers={"X-Keiba-Proxy-Key": "k1"}).get_json()
     assert j["overall"] == "red"

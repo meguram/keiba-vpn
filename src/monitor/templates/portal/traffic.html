@@ -1,0 +1,58 @@
+{% extends "portal/base.html" %}{% from "portal/_m.html" import pill %}
+{% block title %}アクセス{% endblock %}
+{% block body %}
+<h1>アクセス</h1>
+<p class="sub">訪問者 = 同じ日の (IP, UA) の組の数。ページビュー = bot・API・静的ファイル・先読み（_rsc）を除いた HTML の表示。nginx のログを VPS が日別に畳んで送ります（IP・UA は VPS の外に出ません）。</p>
+{% if t.status != 'ok' %}
+  <div class="card"><b class="{{ 'yellow' if t.status == 'unreadable' else 'muted' }}">{{ t.reason or t.hint }}</b>
+  <div class="hint">VPS で <code>sudo bash {{ t.setup }}</code>（root の systemd タイマーが 15 分おきに送ります）。送信先は監視ポータル（<code>/ops/traffic</code>）です。</div></div>
+{% else %}
+{% set k = t.kpi %}
+{% if t.stale %}<div class="hint" style="color:var(--yellow)">● 最後の受信が {{ (t.age_s // 60) }} 分前です（15 分おきの送信が止まっています）。</div>{% endif %}
+<div class="grid g4">
+  <div class="card kpi"><div class="big">{{ '{:,}'.format(k.today.visitors or 0) }}</div><div class="l">今日の訪問者</div><div class="small muted">昨日 {{ k.yesterday.visitors if k.yesterday.visitors is not none else '—' }}</div></div>
+  <div class="card kpi"><div class="big">{{ '{:,}'.format(k.today.page_views or 0) }}</div><div class="l">今日のページビュー</div><div class="small muted">昨日 {{ k.yesterday.page_views if k.yesterday.page_views is not none else '—' }}</div></div>
+  <div class="card kpi"><div class="big">{{ '{:,}'.format(k.d7.visitors or 0) }}</div><div class="l">7 日間の訪問者（重複なし）</div><div class="small muted">14 日 {{ k.d14.visitors if k.d14.visitors is not none else '—' }}</div></div>
+  <div class="card kpi"><div class="big">{{ '{:,}'.format(k.d7.page_views) }}</div><div class="l">7 日間のページビュー</div>
+    <div class="small {{ 'green' if (k.d7.pv_vs_prev_pct or 0) >= 0 else 'red' }}">{% if k.d7.pv_vs_prev_pct is not none %}前週比 {{ '%+.1f'|format(k.d7.pv_vs_prev_pct) }}%{% else %}<span class="muted">前週比 —</span>{% endif %}</div></div>
+</div>
+
+<h2>推移（直近 90 日）</h2>
+<div class="card"><div class="legend"><span><i style="background:var(--s1)"></i>ページビュー</span><span><i style="background:var(--s2)"></i>訪問者</span></div>
+  {{ chart_trend }}
+  <details><summary>数値の表</summary><table><thead><tr><th>日付</th><th class="n">ページビュー</th><th class="n">訪問者</th><th class="n">bot</th><th class="n">5xx</th></tr></thead><tbody>
+  {% for s in t.series|reverse if s.page_views is not none %}<tr><td>{{ s.date[:4] }}-{{ s.date[4:6] }}-{{ s.date[6:] }}</td><td class="n">{{ s.page_views }}</td><td class="n">{{ s.visitors }}</td><td class="n">{{ s.bots }}</td><td class="n">{{ s.errors }}</td></tr>{% endfor %}</tbody></table></details></div>
+
+<div class="grid g2">
+  <section><h2>よく見られたページ 上位 10（7 日）</h2><div class="card">{{ chart_top }}{% if not t.top_pages_7d %}<span class="muted">まだありません</span>{% endif %}
+    {% if t.top_patterns_7d %}<details><summary>ページの種類別（/race/:id など）</summary><table><tbody>{% for p, n in t.top_patterns_7d %}<tr><td>{{ p }}</td><td class="n">{{ n }}</td></tr>{% endfor %}</tbody></table></details>{% endif %}</div></section>
+  <section><h2>今日のページ 上位 10</h2><div class="card">{{ chart_today }}{% if not t.top_pages_today %}<span class="muted">まだありません</span>{% endif %}</div></section>
+</div>
+
+<div class="grid g3">
+  <section><h2>流入元（7 日）</h2><div class="card">
+    {% set rk = t.referrer_kind_7d %}{% set rt = rk.values()|sum %}
+    {% for name, label in [('search','検索'),('social','SNS'),('referral','他サイト'),('direct','直接・不明')] if rk.get(name) %}<div class="kv"><span>{{ label }}</span><span>{{ rk[name] }}（{{ (100 * rk[name] / rt)|round|int }}%）</span></div>{% endfor %}
+    {% if not rt %}<span class="muted">まだありません</span>{% endif %}
+    {% if t.referrers_7d %}<details open><summary>参照元の内訳</summary><table><tbody>{% for r, n in t.referrers_7d %}<tr><td>{{ r }}</td><td class="n">{{ n }}</td></tr>{% endfor %}</tbody></table></details>{% endif %}</div></section>
+  <section><h2>端末（7 日）</h2><div class="card">{% set dv = t.devices_7d %}{% set dt = dv.values()|sum %}
+    {% for name, n in dv.items() %}<div class="kv"><span>{{ {'mobile':'スマホ','desktop':'PC','tablet':'タブレット'}.get(name, name) }}</span><span>{{ n }}（{{ (100 * n / dt)|round|int }}%）</span></div>{% endfor %}
+    {% if not dt %}<span class="muted">まだありません</span>{% endif %}</div></section>
+  <section><h2>時間帯（今日）</h2><div class="card"><div class="legend"><span><i style="background:var(--s1)"></i>今日</span><span><i style="background:var(--s2)"></i>昨日</span></div>{{ chart_hours }}</div></section>
+</div>
+
+<h2>検索エンジン・クローラー（7 日）</h2>
+<div class="card">
+  <div class="grid g4" style="margin-bottom:8px">{% for name, label in [('search','検索エンジン'),('ai','AI'),('social','SNS・プレビュー'),('other','その他の bot')] %}<div class="kpi"><div class="big">{{ t.bot_kind_7d.get(name, 0) }}</div><div class="l">{{ label }}</div></div>{% endfor %}</div>
+  {% if t.crawlers %}<table><thead><tr><th>クローラー</th><th class="n">リクエスト</th><th>応答</th></tr></thead><tbody>
+  {% for c in t.crawlers %}<tr><td>{{ c.name }}</td><td class="n">{{ c.hits }}</td><td class="small">{% for cls, n in c.status.items() %}<span class="{{ 'ok' if cls == '2xx' else 'warn' if cls in ('3xx','4xx') else 'ng' }}">{{ cls }}: {{ n }}</span> {% endfor %}</td></tr>{% endfor %}</tbody></table>
+  {% else %}<span class="muted">クローラーのアクセスはまだありません。</span>{% endif %}
+  {% if t.seo_files_7d %}<p class="small" style="margin-bottom:0">SEO のファイル: {% for f, n in t.seo_files_7d.items() %}<span class="{{ 'ok' if '2xx' in f else 'ng' }}">{{ f }} ×{{ n }}</span> {% endfor %}</p>{% endif %}</div>
+
+<div class="grid g2">
+  <section><h2>見つからなかったページ（404 など・7 日）</h2><div class="card">{% if t.err_pages_7d %}<table><tbody>{% for p, n in t.err_pages_7d %}<tr><td>{{ p }}</td><td class="n">{{ n }}</td></tr>{% endfor %}</tbody></table>{% else %}<span class="ok">なし</span>{% endif %}</div></section>
+  <section><h2>サーバーエラー（5xx・7 日）</h2><div class="card">{% if t.err5xx_7d %}<table><tbody>{% for p, n in t.err5xx_7d %}<tr><td>{{ p }}</td><td class="n red">{{ n }}</td></tr>{% endfor %}</tbody></table>{% else %}<span class="ok">なし</span>{% endif %}</div></section>
+</div>
+<p class="small muted">最終受信 {{ t.collected_at }} ／ 保存済みの日数 {{ t.days_stored }}。ログは VPS で約 14 日で消えますが、集計は 90 日ぶん積みます。</p>
+{% endif %}
+{% endblock %}
