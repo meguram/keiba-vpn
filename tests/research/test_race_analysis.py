@@ -200,8 +200,8 @@ def test_sire_course_joins_sire_by_horse_id(tmp_path, monkeypatch):
     m = next(x for x in d["modules"] if x["id"] == "sire_course")
     assert m["status"] == "ok" and m["key_header"] == "父（種牡馬）"
     a = {e["horse_name"]: e["analysis"]["sire_course"] for e in d["entries"]}
-    assert a["今回A"]["_key"] == "父A" and a["今回A"]["course_rec"] == [1, 1, 0, 0]       # 父A の産駒: S1 で 1着、S2 で 2着
-    assert a["父不明"]["course_rec"] is None and a["父不明"].get("_key") is None
+    assert a["今回A"]["_key"] == "父A" and a["今回A"]["sire_rec"] == [1, 1, 0, 0]       # 父A の産駒: S1 で 1着、S2 で 2着
+    assert a["父不明"]["sire_rec"] is None and a["父不明"].get("_key") is None
     assert "父を特定できない" in " ".join(m["notes"])
 
 
@@ -225,29 +225,34 @@ def test_build_horse_sire_map_parses_ancestors_and_is_incremental(tmp_path):
     r1 = B.build(out, ped, {"2022100001", "2022100002", "2022100003"})            # 3 頭目は血統 JSON 無し
     assert r1["added"] == 1 and r1["no_pedigree"] == 2 and r1["total"] == 1
     m = pd.read_parquet(out)
-    assert m.iloc[0].to_dict() == {"horse_id": "2022100001", "sire_id": "S1", "sire_name": "父名", "dam_sire_id": "dsire", "dam_sire_name": "母父名", "sire_line_id": "other"}
+    assert m.iloc[0].to_dict() == {"horse_id": "2022100001", "sire_id": "S1", "sire_name": "父名", "dam_sire_id": "dsire", "dam_sire_name": "母父名", "sire_line_id": "S1", "sire_line_name": "父名系"}
     (ped / "2022" / "2022100003.json").write_text(json.dumps(doc("2022100003", "S2")), encoding="utf-8")
     r2 = B.build(out, ped, {"2022100001", "2022100002", "2022100003"})            # 既存の行は読み直さない。後から出来た血統を拾う
     assert r2["total"] == 2 and r2["read"] == 2
 
 
-def test_sire_line_id_walks_paternal_chain_to_nearest_head():
-    from src.research.race_analysis.sire_lines import OTHER, line_id_of
+def test_line_of_walks_paternal_chain_to_nearest_head_without_other_bucket():
+    from src.research.race_analysis.sire_lines import line_of
 
-    def chain(*ids):
-        return [{"generation": g, "position": 0, "horse_id": i} for g, i in enumerate(ids, start=1)]
+    def chain(*pairs):
+        return [{"generation": g, "position": 0, "horse_id": i, "name": n} for g, (i, n) in enumerate(pairs, start=1)]
 
-    # ディープインパクト(2002100816) → サンデーサイレンス → ... は最初に当たる祖でまとまる
-    assert line_id_of(chain("2002100816", "000a00033a", "000a0012bf")) == "000a00033a"
+    # 最初に当たる系統の祖でまとまる
+    assert line_of(chain(("2002100816", "ディープインパクト"), ("000a00033a", "サンデーサイレンスSunday Silence(米)"), ("000a0012bf", "Halo"))) == ("000a00033a", "サンデーサイレンス系")
     # 孫系統（ロードカナロア → キングカメハメハ → キングマンボ）は近い祖が優先
-    assert line_id_of(chain("2008103552", "2001103460", "000a001d7e", "000a001607")) == "2001103460"
-    assert line_id_of(chain("x1", "x2")) == OTHER
-    assert line_id_of([]) == OTHER
+    assert line_of(chain(("2008103552", "ロードカナロア"), ("2001103460", "キングカメハメハ"), ("000a001d7e", "Kingmambo(米)")))[1] == "キングカメハメハ系"
+    # 一覧に無い系統は『その他』にせず、わかる範囲でいちばん古い父系の祖の系統
+    assert line_of(chain(("x1", "父"), ("x2", "ハンプトンHampton"), ("x3", "Bay Ronald(英)"))) == ("x3", "Bay Ronald系")
+    assert line_of(chain(("x1", "父"), ("x2", "ハンプトンHampton")))[1] == "ハンプトン系"
+    assert line_of([]) is None
+    # 5代で決まらないときは、いちばん古い祖自身の血統をたどって系統の祖に当たる（途中で当たれば『その他』にしない）
+    deeper = {"x3": [{"generation": 1, "position": 0, "horse_id": "x4", "name": "A"}, {"generation": 2, "position": 0, "horse_id": "000a000e04", "name": "Northern Dancer"}]}
+    assert line_of(chain(("x1", "父"), ("x3", "Vice Regent")), lookup=deeper.get) == ("000a000e04", "ノーザンダンサー系")
     # 母側（position != 0）の祖は見ない
-    assert line_id_of([{"generation": 1, "position": 0, "horse_id": "x"}, {"generation": 2, "position": 1, "horse_id": "000a00033a"}]) == OTHER
+    assert line_of([{"generation": 1, "position": 0, "horse_id": "x", "name": "父"}, {"generation": 2, "position": 1, "horse_id": "000a00033a", "name": "母方"}]) == ("x", "父系")
 
 
-def test_sire_line_course_groups_sires_of_same_line(tmp_path, monkeypatch):
+def test_sire_tab_shows_line_next_to_sire(tmp_path, monkeypatch):
     rows = [
         _row("S1", "2026-01-05", "東京", "芝", 1600, 1, "J1", horse="a1"),
         _row("S1", "2026-01-05", "東京", "芝", 1600, 4, "J2", horse="a2"),
@@ -257,10 +262,10 @@ def test_sire_line_course_groups_sires_of_same_line(tmp_path, monkeypatch):
     d.mkdir()
     pd.DataFrame(rows).to_parquet(d / "race_result_flat.parquet")
     sire = pd.DataFrame([
-        {"horse_id": "a1", "sire_id": "SIRE_A", "sire_name": "父A", "dam_sire_id": "D1", "dam_sire_name": "m", "sire_line_id": "000a00033a"},
-        {"horse_id": "a2", "sire_id": "SIRE_B", "sire_name": "父B", "dam_sire_id": "D1", "dam_sire_name": "m", "sire_line_id": "000a0012bf"},
-        {"horse_id": "b1", "sire_id": "SIRE_C", "sire_name": "父C", "dam_sire_id": "D2", "dam_sire_name": "m", "sire_line_id": "000a00033a"},   # 父は違うが同じ系統
-        {"horse_id": "e1", "sire_id": "SIRE_D", "sire_name": "父D", "dam_sire_id": "D1", "dam_sire_name": "m", "sire_line_id": "000a00033a"},
+        {"horse_id": "a1", "sire_id": "SIRE_A", "sire_name": "父A", "dam_sire_id": "D1", "dam_sire_name": "m", "sire_line_id": "000a00033a", "sire_line_name": "サンデーサイレンス系"},
+        {"horse_id": "a2", "sire_id": "SIRE_B", "sire_name": "父B", "dam_sire_id": "D1", "dam_sire_name": "m", "sire_line_id": "000a0012bf", "sire_line_name": "ヘイロー系"},
+        {"horse_id": "b1", "sire_id": "SIRE_C", "sire_name": "父C", "dam_sire_id": "D2", "dam_sire_name": "m", "sire_line_id": "000a00033a", "sire_line_name": "サンデーサイレンス系"},   # 父は違うが同じ系統
+        {"horse_id": "e1", "sire_id": "SIRE_D", "sire_name": "父D", "dam_sire_id": "D1", "dam_sire_name": "m", "sire_line_id": "000a00033a", "sire_line_name": "サンデーサイレンス系"},
     ])
     sire_path = tmp_path / "horse_sire_map.parquet"
     sire.to_parquet(sire_path)
@@ -269,7 +274,8 @@ def test_sire_line_course_groups_sires_of_same_line(tmp_path, monkeypatch):
     runs_mod._cache.update(sig=None, df=None, sire_sig=None, sire_df=None)
     st = _storage([{"horse_number": 1, "bracket_number": 1, "horse_name": "今回D", "horse_id": "e1", "jockey_id": "J1"}])
     d = analyze_race(st, "202605040111")
-    m = next(x for x in d["modules"] if x["id"] == "sire_line_course")
-    assert m["status"] == "ok" and m["key_header"] == "父の系統"
-    a = d["entries"][0]["analysis"]["sire_line_course"]
-    assert a["_key"] == "サンデーサイレンス系" and a["course_rec"] == [1, 1, 0, 0]       # 父A・父C の産駒（父Bはヘイロー系なので入らない）
+    m = next(x for x in d["modules"] if x["id"] == "sire_course")
+    assert [g["key"] for g in m["groups"]] == ["sire", "line"]            # 種牡馬と系統を同じタブに並べる。同競馬場・同芝ダの群は無い
+    a = d["entries"][0]["analysis"]["sire_course"]
+    assert a["_key"] == "父D" and a["sire_rec"] == [0, 0, 0, 0] and a["sire_n"] == 0       # 父D 自身の産駒はまだ走っていない
+    assert a["line_name"] == "サンデーサイレンス系" and a["line_rec"] == [1, 1, 0, 0]       # 父A・父C の産駒（父Bはヘイロー系なので入らない）

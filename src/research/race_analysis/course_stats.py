@@ -16,7 +16,6 @@ from typing import Any, Callable
 import pandas as pd
 
 from src.research.race_analysis.base import Column, ColumnGroup, ModuleOutput, RaceContext
-from src.research.race_analysis.sire_lines import LABELS as LINE_LABELS
 from src.research.race_analysis.runs import SOURCE_DATASET, SOURCE_PROVIDER, load_runs, load_runs_with_sire, load_sire_map, sire_map_available
 
 SCOPES = ("course", "venue_surface")
@@ -67,8 +66,8 @@ def _line_key(e: dict[str, Any], aux: dict[str, Any]) -> str | None:
 
 
 def _line_text(e: dict[str, Any], aux: dict[str, Any]) -> str | None:
-    k = _line_key(e, aux)
-    return LINE_LABELS.get(k, k) if k else None
+    row = aux.get("sire", {}).get(str(e.get("horse_id") or ""))
+    return str(row[3]) if row and len(row) > 3 and row[3] else None
 
 
 JOCKEY = Dimension(
@@ -87,9 +86,9 @@ SIRE = Dimension(
     unknown_note="父を特定できない馬は表示されません。",
 )
 SIRE_LINE = Dimension(
-    id="sire_line_course", label="種牡馬系統×コース", min_n=30, run_col="sire_line_id", entry_key=_line_key, key_header="父の系統", key_text=_line_text,
+    id="sire_line_course", label="系統×コース", min_n=30, run_col="sire_line_id", entry_key=_line_key, key_header="父の系統", key_text=_line_text,
     needs_sire_map=True,
-    description="出走馬の父の系統（サンデーサイレンス系など）の産駒が、今回と同じコース・同じ競馬場・同じ芝/ダートでこれまで残してきた成績。産駒数の少ない種牡馬も、同じ系統でまとめて見られます。",
+    description="出走馬の父の系統（サンデーサイレンス系など）の産駒の成績。",
     unknown_note="父の系統を特定できない馬は表示されません。系統は父から父の父…（5代まで）をさかのぼって決めています。",
 )
 
@@ -134,32 +133,49 @@ def _scale(mid: float | None, key: str) -> dict[str, float] | None:
     return {"lo": mid * 0.25, "mid": mid, "hi": min(1.0, mid * _HEAT[key])}
 
 
+@dataclass(frozen=True)
+class Block:
+    """表の 1 群 = ある軸（Dimension）を、ある範囲（scope）で集計したもの。列のキーは『<key>_rec』のように key を前置する。"""
+    dim: Dimension
+    scope: str
+    key: str
+    label: str | None = None          # 群の見出し（省略すると範囲の名前: 同コース／同競馬場・同芝ダ）
+    extra_text: str | None = None     # 群の先頭に出す文字の列の見出し（例: 系統名）
+
+
+def default_blocks(dim: Dimension) -> tuple[Block, ...]:
+    return tuple(Block(dim, sc, sc) for sc in SCOPES)
+
+
 class CourseStatsModule:
-    def __init__(self, dim: Dimension) -> None:
+    def __init__(self, dim: Dimension, blocks: tuple[Block, ...] | None = None, *, label: str | None = None, description: str | None = None) -> None:
         self.dim = dim
+        self.blocks = blocks or default_blocks(dim)
         self.id = dim.id
-        self.label = dim.label
-        self.description = dim.description
+        self.label = label or dim.label
+        self.description = description or dim.description
 
     def applicable(self, ctx: RaceContext) -> bool:
-        if self.dim.needs_sire_map and not sire_map_available():
+        if any(b.dim.needs_sire_map for b in self.blocks) and not sire_map_available():
             return False
         return bool(ctx.venue and ctx.surface and ctx.distance)
 
     def _aux(self) -> dict[str, Any]:
-        if not self.dim.needs_sire_map:
+        if not any(b.dim.needs_sire_map for b in self.blocks):
             return {}
         m = load_sire_map()
         if m is None:
             return {"sire": {}}
-        if "sire_line_id" not in m.columns:
-            m = m.assign(sire_line_id=None)
-        return {"sire": {str(r.horse_id): (r.sire_id, r.sire_name, r.sire_line_id) for r in m[["horse_id", "sire_id", "sire_name", "sire_line_id"]].itertuples(index=False)}}
+        for c in ("sire_line_id", "sire_line_name"):
+            if c not in m.columns:
+                m = m.assign(**{c: None})
+        cols = ["horse_id", "sire_id", "sire_name", "sire_line_id", "sire_line_name"]
+        return {"sire": {str(r.horse_id): (r.sire_id, r.sire_name, r.sire_line_id, r.sire_line_name) for r in m[cols].itertuples(index=False)}}
 
     def compute(self, ctx: RaceContext) -> ModuleOutput:
         dim = self.dim
         labels = _scope_labels(ctx)
-        dated = load_runs_with_sire() if dim.needs_sire_map else load_runs()
+        dated = load_runs_with_sire() if any(b.dim.needs_sire_map for b in self.blocks) else load_runs()
         if ctx.date:
             dated = dated[dated["date"] < ctx.date]
         dated = dated[dated["race_id"] != ctx.race_id]
@@ -172,46 +188,52 @@ class CourseStatsModule:
             "races": int(dated["race_id"].nunique()),
             "rows": int(len(dated)),
         }
-        baselines = {sc: _baseline(dated[_mask(dated, ctx, sc)]) for sc in SCOPES}
-
-        columns: list[Column] = []
-        groups: list[ColumnGroup] = []
-        for sc in SCOPES:
-            name, sub = labels[sc]
-            groups.append(ColumnGroup(key=sc, label=name, sub=sub, n_key=f"{sc}_n", min_n=dim.min_n))
-            columns.append(Column(f"{sc}_rec", "成績", "record", sc, "1着-2着-3着-着外"))
-            for key, label, desc in (("win", "勝率", None), ("top2", "連対率", "2着以内の率"), ("top3", "複勝率", "3着以内の率")):
-                mid = (baselines[sc] or {}).get(key)
-                hint = f"{desc}。" if desc else ""
-                title = f"{hint}この条件の全馬の平均は {mid * 100:.1f}%（緑=平均より高い／赤=低い）" if mid else desc
-                columns.append(Column(f"{sc}_{key}", label, "pct", sc, title, _scale(mid, key)))
 
         aux = self._aux()
-        keys = {e["key"]: dim.entry_key(e, aux) for e in ctx.entries}
-        wanted = {k for k in keys.values() if k}
-        sub_all = dated[dated[dim.run_col].astype(str).isin(wanted)] if wanted else dated.iloc[0:0]
-        tallies = {sc: _tally(sub_all[_mask(sub_all, ctx, sc)], dim.run_col) for sc in SCOPES}
+        columns: list[Column] = []
+        groups: list[ColumnGroup] = []
+        cells: dict[str, dict[str, Any]] = {e["key"]: {} for e in ctx.entries}
+        unknown = False
+        for b in self.blocks:
+            bd, sc = b.dim, b.scope
+            name, sub = labels[sc]
+            base = _baseline(dated[_mask(dated, ctx, sc)])
+            groups.append(ColumnGroup(key=b.key, label=b.label or name, sub=sub, n_key=f"{b.key}_n", min_n=bd.min_n))
+            if b.extra_text:
+                columns.append(Column(f"{b.key}_name", b.extra_text, "text", b.key, None))
+            columns.append(Column(f"{b.key}_rec", "成績", "record", b.key, "1着-2着-3着-着外"))
+            for key, label, desc in (("win", "勝率", None), ("top2", "連対率", "2着以内の率"), ("top3", "複勝率", "3着以内の率")):
+                mid = (base or {}).get(key)
+                hint = f"{desc}。" if desc else ""
+                title = f"{hint}この条件の全馬の平均は {mid * 100:.1f}%（緑=平均より高い／赤=低い）" if mid else desc
+                columns.append(Column(f"{b.key}_{key}", label, "pct", b.key, title, _scale(mid, key)))
 
-        cells: dict[str, dict[str, Any]] = {}
-        for e in ctx.entries:
-            k = keys[e["key"]]
-            row: dict[str, Any] = {}
-            for sc in SCOPES:
-                n, w1, w2, w3 = tallies[sc].get(k, (0, 0, 0, 0)) if k else (0, 0, 0, 0)
-                row[f"{sc}_n"] = n
-                row[f"{sc}_rec"] = [w1, w2, w3, n - w1 - w2 - w3] if k else None
-                row[f"{sc}_win"] = w1 / n if n else None
-                row[f"{sc}_top2"] = (w1 + w2) / n if n else None
-                row[f"{sc}_top3"] = (w1 + w2 + w3) / n if n else None
-            if dim.key_text:
-                row["_key"] = dim.key_text(e, aux)
-            cells[e["key"]] = row
+            keys = {e["key"]: bd.entry_key(e, aux) for e in ctx.entries}
+            unknown = unknown or any(k is None for k in keys.values())
+            wanted = {k for k in keys.values() if k}
+            sub_all = dated[dated[bd.run_col].astype(str).isin(wanted)] if wanted else dated.iloc[0:0]
+            tally = _tally(sub_all[_mask(sub_all, ctx, sc)], bd.run_col)
+            for e in ctx.entries:
+                k = keys[e["key"]]
+                row = cells[e["key"]]
+                n, w1, w2, w3 = tally.get(k, (0, 0, 0, 0)) if k else (0, 0, 0, 0)
+                row[f"{b.key}_n"] = n
+                row[f"{b.key}_rec"] = [w1, w2, w3, n - w1 - w2 - w3] if k else None
+                row[f"{b.key}_win"] = w1 / n if n else None
+                row[f"{b.key}_top2"] = (w1 + w2) / n if n else None
+                row[f"{b.key}_top3"] = (w1 + w2 + w3) / n if n else None
+                if b.extra_text and bd.key_text:
+                    row[f"{b.key}_name"] = bd.key_text(e, aux)
+                if b is self.blocks[0] and bd.key_text:
+                    row["_key"] = bd.key_text(e, aux)
 
+        mins = " ・ ".join(f"{b.label or labels[b.scope][0]}は{b.dim.min_n}" for b in self.blocks) if len(self.blocks) > 1 and len({b.dim.min_n for b in self.blocks}) > 1 else None
         notes = [
             "このレースの開催日より前の JRA 全レースの結果から集計しています。",
-            f"出走数が{dim.min_n}未満の群は、参考値として薄く表示し、色は付けません。",
+            f"出走数が少ない群（{mins}未満）は、参考値として薄く表示し、色は付けません。" if mins else f"出走数が{self.blocks[0].dim.min_n}未満の群は、参考値として薄く表示し、色は付けません。",
             "セルの色: その条件の全馬の平均より高いほど緑、低いほど赤（濃いほど差が大きい）。",
         ]
-        if dim.unknown_note and any(k is None for k in keys.values()):
-            notes.append(dim.unknown_note)
+        for d in dict.fromkeys(b.dim for b in self.blocks):
+            if d.unknown_note and unknown:
+                notes.append(d.unknown_note)
         return ModuleOutput(columns=columns, groups=groups, cells=cells, notes=notes, data_until=until, source=source, key_header=dim.key_header)

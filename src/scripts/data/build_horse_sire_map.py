@@ -22,7 +22,7 @@ from typing import Any
 
 import pandas as pd
 
-from src.research.race_analysis.sire_lines import line_id_of
+from src.research.race_analysis.sire_lines import line_of
 
 logger = logging.getLogger("build_horse_sire_map")
 
@@ -30,10 +30,10 @@ ROOT = Path(__file__).resolve().parents[3]
 PED_DIR = ROOT / "data/local/horse_pedigree_5gen"
 FLAT_DIR = ROOT / "data/page_reference/tables"
 OUT = ROOT / "data/page_reference/pedigree_race_index/horse_sire_map.parquet"
-COLUMNS = ["horse_id", "sire_id", "sire_name", "dam_sire_id", "dam_sire_name", "sire_line_id"]
+COLUMNS = ["horse_id", "sire_id", "sire_name", "dam_sire_id", "dam_sire_name", "sire_line_id", "sire_line_name"]
 
 
-def parse_pedigree(doc: dict[str, Any]) -> dict[str, Any] | None:
+def parse_pedigree(doc: dict[str, Any], lookup: Any = None) -> dict[str, Any] | None:
     """血統 JSON から父・母父の ID と名前を取る。父の ID が取れなければ None。"""
     pick: dict[tuple[int, int], dict] = {}
     for a in doc.get("ancestors") or []:
@@ -42,6 +42,7 @@ def parse_pedigree(doc: dict[str, Any]) -> dict[str, Any] | None:
         except (KeyError, TypeError, ValueError):
             continue
     sire, dam_sire = pick.get((1, 0)), pick.get((2, 2))
+    line = line_of(doc.get("ancestors") or [], lookup)
     if not sire or not sire.get("horse_id"):
         return None
     return {
@@ -50,16 +51,32 @@ def parse_pedigree(doc: dict[str, Any]) -> dict[str, Any] | None:
         "sire_name": sire.get("name") or doc.get("sire"),
         "dam_sire_id": str(dam_sire["horse_id"]) if dam_sire and dam_sire.get("horse_id") else None,
         "dam_sire_name": (dam_sire.get("name") if dam_sire else None) or doc.get("dam_sire"),
-        "sire_line_id": line_id_of(doc.get("ancestors") or []),
+        "sire_line_id": line[0] if line else None,
+        "sire_line_name": line[1] if line else None,
     }
 
 
-def _read(horse_id: str, ped_dir: Path) -> dict[str, Any] | None:
+def _ancestors_lookup(ped_dir: Path) -> Any:
+    """祖先の馬 ID -> その馬自身の血統の ancestors（5代で系統が決まらないとき、さらにさかのぼるために使う）。"""
+    cache: dict[str, list[dict[str, Any]] | None] = {}
+
+    def lookup(horse_id: str) -> list[dict[str, Any]] | None:
+        if horse_id not in cache:
+            try:
+                cache[horse_id] = json.loads((ped_dir / horse_id[:4] / f"{horse_id}.json").read_text(encoding="utf-8")).get("ancestors")
+            except (OSError, ValueError):
+                cache[horse_id] = None
+        return cache[horse_id]
+
+    return lookup
+
+
+def _read(horse_id: str, ped_dir: Path, lookup: Any = None) -> dict[str, Any] | None:
     try:
         doc = json.loads((ped_dir / horse_id[:4] / f"{horse_id}.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    row = parse_pedigree(doc)
+    row = parse_pedigree(doc, lookup)
     if row:
         row["horse_id"] = horse_id
     return row
@@ -99,11 +116,12 @@ def build(out: Path = OUT, ped_dir: Path = PED_DIR, horse_ids: set[str] | None =
     old = pd.DataFrame(columns=COLUMNS)
     if out.exists() and not full:
         old = pd.read_parquet(out)
-        if "sire_line_id" not in old.columns:       # 系統の列が無い古い表は読み直す
+        if "sire_line_name" not in old.columns:       # 系統の列が無い古い表は読み直す
             old = pd.DataFrame(columns=COLUMNS)
     todo = sorted(ids - set(old["horse_id"].astype(str)))
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        rows = [r for r in ex.map(lambda h: _read(h, ped_dir), todo) if r]
+        lookup = _ancestors_lookup(ped_dir)
+        rows = [r for r in ex.map(lambda h: _read(h, ped_dir, lookup), todo) if r]
     new = pd.DataFrame(rows, columns=COLUMNS)
     merged = pd.concat([old, new], ignore_index=True).drop_duplicates("horse_id", keep="last").sort_values("horse_id").reset_index(drop=True)
     out.parent.mkdir(parents=True, exist_ok=True)
