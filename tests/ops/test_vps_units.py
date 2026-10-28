@@ -194,3 +194,45 @@ def test_vps_status_probe_does_not_request_api():
     body = (ROOT_DIR / "src/scripts/ops/vps_status_probe.py").read_text(encoding="utf-8")
     code = "\n".join(ln for ln in body.splitlines() if not ln.lstrip().startswith("#"))
     assert "/api/" not in code
+
+
+def _ctl(tmp_path, cmd, env_lines, *, shadow_cfg=True, owner_tasks=()):
+    import json
+
+    cur = tmp_path / "current" / "config"
+    cur.mkdir(parents=True)
+    (cur / "fetch_owner.json").write_text(json.dumps({"agent_tasks": list(owner_tasks)}), encoding="utf-8")
+    if shadow_cfg:
+        (cur / "fetch_shadow.json").write_text("{}", encoding="utf-8")
+    envf = tmp_path / "fetch.env"
+    envf.write_text("".join(f"{x}\n" for x in env_lines), encoding="utf-8")
+    sa = tmp_path / "sa.json"
+    sa.write_text("{}", encoding="utf-8")
+    env = {**os.environ, "KEIBA_FETCH_ENV_FILE": str(envf), "KEIBA_FETCH_CURRENT": str(tmp_path / "current"), "KEIBA_FETCH_SA_FILE": str(sa)}
+    r = subprocess.run(["bash", "scripts/ops/vps/fetch_agent_ctl.sh", cmd], env=env, capture_output=True, text=True)
+    return r, envf.read_text(encoding="utf-8")
+
+
+def test_fetch_ctl_never_prints_secret_values(tmp_path):
+    if os.geteuid() != 0:
+        return
+    r, _ = _ctl(tmp_path, "status", ["GCS_BUCKET=b", "NETKEIBA_PASSWORD=supersecret", "KEIBA_FETCH_SHADOW_ENABLED=1"])
+    assert "supersecret" not in r.stdout + r.stderr
+    assert "KEIBA_FETCH_SHADOW_ENABLED=1" in r.stdout and "NETKEIBA_*: 1 行" in r.stdout
+
+
+def test_fetch_ctl_shadow_on_refuses_when_production_tasks_are_set_or_code_is_old(tmp_path):
+    # 影モードのつもりで、本番の取得を VPS に始めさせない。fetch_shadow.json の無い古い版では、対象が空で黙って何もしないので断る
+    if os.geteuid() != 0:
+        return
+    r, env = _ctl(tmp_path / "a", "shadow-on", ["GCS_BUCKET=b", "KEIBA_FETCH_AGENT_TASKS=entries-sync"])
+    assert r.returncode != 0 and "KEIBA_FETCH_AGENT_TASKS" in r.stderr and "KEIBA_FETCH_SHADOW_ENABLED" not in env
+    r, env = _ctl(tmp_path / "b", "shadow-on", ["GCS_BUCKET=b"], shadow_cfg=False)
+    assert r.returncode != 0 and "fetch_shadow.json" in r.stderr and "KEIBA_FETCH_AGENT_ENABLED" not in env
+
+
+def test_fetch_ctl_sudoers_allows_only_the_ctl_script():
+    lines = [x for x in (T / "sudoers-keiba-fetch-ctl").read_text(encoding="utf-8").splitlines() if x.strip() and not x.startswith("#")]
+    assert lines == ["deploy ALL=(root) NOPASSWD: /opt/keiba-ui/bin/fetch_agent_ctl.sh, /opt/keiba-ui/bin/fetch_agent_ctl.sh *"]
+    for f in ("fetch_agent_ctl.sh", "vps_08_fetch_ctl.sh"):
+        assert subprocess.run(["bash", "-n", f"scripts/ops/vps/{f}"]).returncode == 0, f
