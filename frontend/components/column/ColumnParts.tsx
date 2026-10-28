@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ColumnChart } from "@/components/column/ColumnChart";
+import { ColumnChart, JockeyDistanceChart } from "@/components/column/ColumnChart";
 import {
   COLUMN_CATEGORIES, VERDICTS, categoryLabel, columnsIn, countIn,
   type Column, type ColumnBlock, type ColumnCategory,
@@ -126,6 +126,21 @@ export function ColumnBody({ blocks }: { blocks: ColumnBlock[] }) {
             );
           case "chart":
             return <ColumnChart key={i} block={b} />;
+          case "jockey_distance_chart":
+            return <JockeyDistanceChart key={i} block={b} />;
+          case "accordion":
+            return (
+              <details key={i} className="card" style={{ padding: 0, overflow: "hidden" }}>
+                <summary style={{ padding: "10px 14px", cursor: "pointer", fontWeight: 600, fontSize: 14,
+                  listStyle: "none", display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 11, color: "var(--text-dim)", userSelect: "none" }}>▶</span>
+                  {b.title}
+                </summary>
+                <div style={{ padding: "0 14px 12px", borderTop: "1px solid var(--border)" }}>
+                  <ColumnBody blocks={b.blocks} />
+                </div>
+              </details>
+            );
           case "link":
             return (
               <Link key={i} href={b.href} className="card block" style={{ textDecoration: "none", color: "inherit", borderColor: "var(--accent)" }}>
