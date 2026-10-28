@@ -74,7 +74,9 @@ case "$cmd" in
         sudo -u keibafetch env KEIBA_ENV=prod PYTHONPATH="$CURRENT" /opt/keiba-fetch/venv/bin/python -m src.ops.fetch_child selfcheck
         ;;
     pull)
-        /opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/pull_release.py --kind fetch --force
+        # タイマー（keiba-release-pull@.service）と同じ環境で動かす。sudo は環境を引き継がないので、ここで読む
+        ( set -a; . "${KEIBA_PULL_ENV_FILE:-/etc/keiba-pull/pull.env}"; set +a
+          KEIBA_ENV=prod KEIBA_RUN_LOCATION=vps PYTHONUNBUFFERED=1 /opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/pull_release.py --kind fetch --force )
         echo "release: $(readlink "$CURRENT" 2>/dev/null || echo なし)"
         ;;
     shadow-on)

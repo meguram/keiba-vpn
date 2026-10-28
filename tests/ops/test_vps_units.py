@@ -236,3 +236,13 @@ def test_fetch_ctl_sudoers_allows_only_the_ctl_script():
     assert lines == ["deploy ALL=(root) NOPASSWD: /opt/keiba-ui/bin/fetch_agent_ctl.sh, /opt/keiba-ui/bin/fetch_agent_ctl.sh *"]
     for f in ("fetch_agent_ctl.sh", "vps_08_fetch_ctl.sh"):
         assert subprocess.run(["bash", "-n", f"scripts/ops/vps/{f}"]).returncode == 0, f
+
+
+def test_fetch_ctl_pull_uses_the_same_environment_as_the_pull_timer():
+    # sudo は環境を引き継がないので、タイマーのユニットと同じ EnvironmentFile と Environment を読んでから取り込む
+    unit = load("keiba-release-pull@.service")["Service"]
+    s = Path("scripts/ops/vps/fetch_agent_ctl.sh").read_text(encoding="utf-8")
+    pull = s[s.index("    pull)"):s.index("    shadow-on)")]
+    assert unit["EnvironmentFile"] in pull
+    for kv in unit["Environment"].split():
+        assert kv in pull, kv
