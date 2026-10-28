@@ -53,4 +53,4 @@
 - `src/api/cloudrun_entry.py` の `KEIBA_MIRROR_MODE=request`: 常駐スレッドの代わりに ①起動処理（CPU が必ず割り当てられる間）が GCS の取り込みを**全体まで**済ませてから受付を始める（上限 90 秒）②以降は、内容を返すリクエストをきっかけに、前回から 60 秒以上経っていれば直近 2 日分を取り込む（`gcs_mirror.RequestRefresher`）。長く（5 分以上）止まっていた後の最初のリクエストだけ、古い表示を避けるため最大 8 秒まで完了を待つ。`/api/health`・`/api/maintenance/status`・`/ops/*` は取り込みのきっかけにしない（タブの状態確認が毎分の取り込みを起こさない）。
 - 起動時ウォームアップは元から ASGI の lifespan（ポートを開く前）で動くので、リクエスト課金でも影響しない。先読みの作り直しスレッド（`prerender.py`）は『古い版を先に返して裏で作り直す』方式なので、合間に止まっても古い版を返し続けるだけ（次のリクエスト中に追いつく）。
 
-**切替の順**: ①stg のリビジョン（`rstg`）は `scripts/ci/deploy_gcp.sh` が `request` で作る（実装済み）→ ②stg で速度・データの鮮度・課金（`billable_instance_time` がアイドル中に増えないこと）を確かめる → ③GitHub Variables の `PROD_CPU_ALLOC=request` を設定して本番を切り替える。戻すときは `PROD_CPU_ALLOC=always` にして再デプロイ。
+**切替の順**: ①stg のリビジョン（`rstg`）は `scripts/ci/deploy_gcp.sh` が `request` で作る（実装済み）→ ②stg で速度・データの鮮度・課金（`billable_instance_time` がアイドル中に増えないこと）を確かめる → ③（2026-10-28 実施）stg の実測（待機中のリビジョンは 5 分あたり 0〜4 秒の課金）を確かめ、既定を `request` に変更した。**本番に効くのは、このコミットを含む master の次回 promote から**（現在の本番リビジョンのイメージは取り込みのリクエスト駆動を持たないので、設定だけを手で切り替えてはいけない）。戻すときは GitHub Variables の `PROD_CPU_ALLOC=always` にして再デプロイ。
