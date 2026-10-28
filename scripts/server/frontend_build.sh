@@ -6,7 +6,7 @@
 # NEXT_PUBLIC_* と KEIBA_API_URL / KEIBA_FASTAPI_URL / KEIBA_ENV はビルド時に固定されるため、シグネチャに含める。
 
 # 入力として見るパス（frontend/ からの相対。存在するものだけ）
-FRONTEND_BUILD_INPUTS=(app components lib styles public hooks middleware.ts next.config.js package.json package-lock.json tsconfig.json postcss.config.js tailwind.config.js ../config/ports.env)
+FRONTEND_BUILD_INPUTS=(app components content lib styles public hooks middleware.ts next.config.js package.json package-lock.json tsconfig.json postcss.config.js tailwind.config.js ../config/ports.env)
 
 # ビルド時に固定される環境のシグネチャ（1 行の文字列）
 frontend_env_signature() {
