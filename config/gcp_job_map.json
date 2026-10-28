@@ -83,7 +83,8 @@
     "feature-accumulate",
     "parse-drift-daily",
     "serving-state-precompute",
-    "serving-state-profile"
+    "serving-state-profile",
+    "race-analysis-daily"
    ]
   },
   "g-0730-shadow": {
@@ -127,7 +128,8 @@
    "jobs": [
     "drift-monitor-weekly",
     "frozen-tracking-weekly",
-    "px-ridge-window"
+    "px-ridge-window",
+    "hem-megu-state"
    ]
   },
   "g-sun-2200": {
@@ -158,7 +160,9 @@
    "desc": "VPS 実行役の定期タスクを 6 時間先まで予約",
    "jobs": [
     "reserve-fetch-tasks",
-    "shared-login"
+    "shared-login",
+    "jma-weather",
+    "verify-past-values"
    ]
   },
   "g-5min": {
@@ -342,7 +346,10 @@
    "state_in": [
     {
      "path": "data/page_reference/tables",
-     "max_mb": 600
+     "max_mb": 60,
+     "include": [
+      "*/race_result_flat.parquet"
+     ]
     },
     {
      "path": "data/local/features/jockey_trainer_stats",
@@ -365,7 +372,7 @@
     "atol": 1e-09
    },
    "blockers": [
-    "state_in の実サイズが未確認（ホストで python -m src.ops.state_sync plan --job jockey-trainer-stats）"
+    "Jobs で 1 回手動実行して、出力がホストと一致すること（state_in は 2026-10-28 に race_result_flat だけ（約 22MB）に絞った。以前は tables 全部で 2.9GB）"
    ],
    "enabled": true,
    "ready": false
@@ -3886,6 +3893,212 @@
    "depends": [
     "export-tables-daily"
    ]
+  },
+  {
+   "id": "race-analysis-daily",
+   "desc": "めぐ分析の事前計算（過去 30 日〜先 14 日のレース。父の対応表も先に差分更新する）。棚卸し #32",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 2,
+   "origin": {
+    "tag": "KEIBA-VPN-ALL",
+    "cron_job_id": "export_tables_daily",
+    "cron_utc": "0 22 * * *",
+    "script": "scripts/cron/export_tables_daily.sh（最後の段）"
+   },
+   "group": "g-0700",
+   "when_jst": null,
+   "depends": [
+    "export-tables-daily"
+   ],
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.precompute_race_analysis"
+     ]
+    }
+   ],
+   "memory_mib": 2048,
+   "timeout_sec": 1800,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 60,
+     "include": [
+      "*/race_result_flat.parquet"
+     ]
+    }
+   ],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "Jobs で 1 回手動実行して、data/local/race_analysis/ がホストの結果と一致すること（ホストでは 2026-10-28 時点で未実行。export_tables_daily.sh の最後の段で初めて動く）",
+    "父の系統台帳 sire_line_map.json の正本を GCS に置くこと（棚卸し #24）"
+   ],
+   "enabled": true,
+   "ready": false,
+   "mirror_in": [
+    "data/page_reference/pedigree_race_index",
+    "data/local/race_analysis"
+   ],
+   "mirror_out": [
+    "data/local/race_analysis",
+    "data/page_reference/pedigree_race_index"
+   ]
+  },
+  {
+   "id": "hem-megu-state",
+   "desc": "めぐ指数の週次状態（hem_megu state）。棚卸し #37",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-HEM-STATE",
+    "cron_job_id": "hem-megu-state",
+    "cron_utc": "30 22 * * 0",
+    "script": "src/scripts/data/hem_megu.py state"
+   },
+   "group": "g-1000-mon",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.hem_megu",
+      "state"
+     ]
+    }
+   ],
+   "memory_mib": 2048,
+   "timeout_sec": 1800,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [
+    {
+     "path": "data/page_reference/tables",
+     "max_mb": 600
+    }
+   ],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "入力と出力（状態ファイルの置き場）を確認して state_in / state_out を埋める。ホストは月曜 07:30 JST、ここでは g-1000-mon（月曜 10:00）に置くので、使う側が 10:00 より前に読まないことを確認"
+   ],
+   "enabled": true,
+   "ready": false
+  },
+  {
+   "id": "jma-weather",
+   "desc": "気象庁の時別値（当日分と、2016 年からの未取得分）。棚卸し #16。気象庁は IP 遮断の危険が低いので VPS の枠を使わない",
+   "destination": "gcp",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-JMA-WEATHER",
+    "cron_job_id": "jma-weather",
+    "cron_utc": "40 * * * *",
+    "script": "scripts/cron/jma_weather_run.sh"
+   },
+   "group": "g-hourly",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scraper.jma_weather",
+      "daily"
+     ]
+    },
+    {
+     "argv": [
+      "-m",
+      "src.scraper.jma_weather",
+      "fetch",
+      "--from",
+      "20160101"
+     ]
+    }
+   ],
+   "memory_mib": 768,
+   "timeout_sec": 1800,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "GCP の送信元 IP から気象庁に届くかを 1 回試す",
+    "中断印 data/local/meta/jma_weather_halt.json（終了コード 3 で作る）をローカルでなく GCS に置く形にする（Jobs は毎回まっさらなので、中断が効かない）"
+   ],
+   "enabled": true,
+   "ready": false
+  },
+  {
+   "id": "verify-past-values",
+   "desc": "過去分補填（2016〜2019 年）の race_result の値の検査（読み取りのみ）。棚卸し #23。補填 backfill-past（#19）が終わったら一緒に廃止する",
+   "destination": "gcp",
+   "phase": 4,
+   "wave": 3,
+   "origin": {
+    "tag": "KEIBA-PAST-VALUE-CHECK",
+    "cron_job_id": "verify-past-values",
+    "cron_utc": "25 */2 * * *",
+    "script": "src/scripts/data/verify_past_values.py"
+   },
+   "group": "g-hourly",
+   "when_jst": "* */2 * * *",
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.scripts.data.verify_past_values"
+     ]
+    }
+   ],
+   "memory_mib": 1024,
+   "timeout_sec": 1800,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [
+    "検査済みのレースの記録（state）と結果 data/local/meta/past_value_check/latest.json の置き場を GCS にする",
+    "補填 backfill-past（#19）がホストに残る間は、ホストで続ける（2026-10-28: 2019 年は完了、2018 年は途中、2016・2017 年は 0 件）"
+   ],
+   "enabled": true,
+   "ready": false
   }
  ]
 }
