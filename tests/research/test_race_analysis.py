@@ -66,9 +66,21 @@ def test_counts_only_before_race_date_by_jockey_id(flat_dir):
     assert j1["course_rec"] == [1, 1, 0, 1] and j1["course_n"] == 3                  # A1 A2 A3（FUT・LATER は除外）
     assert j1["course_win"] == pytest.approx(1 / 3) and j1["course_top2"] == pytest.approx(2 / 3) and j1["course_top3"] == pytest.approx(2 / 3)
     assert j1["venue_surface_n"] == 4 and j1["venue_surface_rec"] == [1, 1, 1, 1]    # + A4
-    assert j1["surface_n"] == 5 and j1["surface_rec"] == [2, 1, 1, 1]                # + A5（ダートの A6 は入らない）
+    assert "surface_n" not in j1                                                     # 全場の群は出さない（別の競馬場の A5・ダートの A6 は数えない）
     assert a[2]["course_n"] == 1 and a[2]["course_win"] == 1.0                       # 別の騎手は混ざらない
     assert a[3]["course_n"] == 0 and a[3]["course_win"] is None                       # 実績が無い騎手は率を作り出さない
+
+
+def test_groups_and_heat_scales(flat_dir):
+    st = _storage([{"horse_number": 1, "horse_name": "イチ", "horse_id": "h1", "jockey_id": "J1"}])
+    m = analyze_race(st, "202605040111")["modules"][0]
+    assert [g["key"] for g in m["groups"]] == ["course", "venue_surface"]
+    by = {c["key"]: c for c in m["columns"]}
+    # 色の基準はその条件の全騎手の平均。同コース（東京 芝1600m）は本レース前に A1〜A3・A7 の 4 走で、1着は A1 と A7 の 2 回
+    sc = by["course_win"]["scale"]
+    assert sc["mid"] == pytest.approx(2 / 4) and sc["lo"] == pytest.approx(0.5 * 0.25) and sc["hi"] == 1.0
+    assert by["course_top3"]["scale"]["mid"] == pytest.approx(3 / 4)
+    assert by["course_rec"].get("scale") is None                                      # 成績（record）には色を付けない
 
 
 def test_missing_jockey_id_gives_empty_cells_not_a_crash(flat_dir):

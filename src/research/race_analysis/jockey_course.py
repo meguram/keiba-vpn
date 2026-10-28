@@ -1,8 +1,7 @@
-"""騎手 × コースの成績。各出走馬の騎手が、今回と同じ条件でこれまでどんな成績かを 3 つの広さで出す。
+"""騎手 × コースの成績。各出走馬の騎手が、今回と同じ条件でこれまでどんな成績かを 2 つの広さで出す。
 
   同コース           : 同じ競馬場・同じ芝/ダ・同じ距離
   同競馬場・同芝ダ   : 距離は問わない
-  同芝ダ（全場）     : 競馬場も距離も問わない（その騎手の基準）
 
 対象は、このレースの開催日より前の JRA 全レース（2020 年以降。当日以降の結果は入れない）。キーは jockey_id（名前では結合しない）。
 """
@@ -18,7 +17,7 @@ from src.research.race_analysis.runs import SOURCE_DATASET, SOURCE_PROVIDER, loa
 
 MIN_N = 10   # これ未満の出走数は参考値として薄く表示する
 
-SCOPES = ("course", "venue_surface", "surface")
+SCOPES = ("course", "venue_surface")
 
 
 def _scope_labels(ctx: RaceContext) -> dict[str, tuple[str, str]]:
@@ -26,14 +25,12 @@ def _scope_labels(ctx: RaceContext) -> dict[str, tuple[str, str]]:
     return {
         "course": ("同コース", f"{ctx.venue or ''} {s}{ctx.distance or ''}m"),
         "venue_surface": ("同競馬場・同芝ダ", f"{ctx.venue or ''} {s}（距離問わず）"),
-        "surface": ("同芝ダ（全場）", f"{s}（競馬場・距離問わず）"),
     }
 
 
 def _mask(runs: pd.DataFrame, ctx: RaceContext, scope: str) -> pd.Series:
     m = runs["surface"] == ctx.surface
-    if scope in ("course", "venue_surface"):
-        m &= runs["venue"] == ctx.venue
+    m &= runs["venue"] == ctx.venue
     if scope == "course":
         m &= runs["distance"] == ctx.distance
     return m
@@ -49,6 +46,25 @@ def _tally(sub: pd.DataFrame) -> dict[str, tuple[int, int, int, int]]:
     return {j: (int(r.n), int(r.w1), int(r.w2), int(r.w3)) for j, r in agg.iterrows()}
 
 
+# 平均に対する倍率で色の端を決める（lo=平均×0.25 で最も赤、hi=平均×倍率 で最も緑。hi は 100% が上限）
+_HEAT = {"win": 3.0, "top2": 2.4, "top3": 2.0}
+
+
+def _baseline(sub: pd.DataFrame) -> dict[str, float] | None:
+    """その条件の全騎手の平均（勝率・連対率・複勝率）。色の基準。"""
+    n = len(sub)
+    if n == 0:
+        return None
+    f = sub["finish_position"]
+    return {"win": float((f == 1).sum()) / n, "top2": float((f <= 2).sum()) / n, "top3": float((f <= 3).sum()) / n}
+
+
+def _scale(mid: float | None, key: str) -> dict[str, float] | None:
+    if not mid:
+        return None
+    return {"lo": mid * 0.25, "mid": mid, "hi": min(1.0, mid * _HEAT[key])}
+
+
 class JockeyCourseModule:
     id = "jockey_course"
     label = "騎手×コース"
@@ -59,33 +75,35 @@ class JockeyCourseModule:
 
     def compute(self, ctx: RaceContext) -> ModuleOutput:
         labels = _scope_labels(ctx)
+        dated = load_runs()
+        if ctx.date:
+            dated = dated[dated["date"] < ctx.date]
+        dated = dated[dated["race_id"] != ctx.race_id]
+        until = dated["date"].max() if len(dated) else None
+        source = {
+            "provider": SOURCE_PROVIDER,
+            "dataset": SOURCE_DATASET,
+            "period_from": dated["date"].min() if len(dated) else None,
+            "period_to": until,
+            "races": int(dated["race_id"].nunique()),
+            "rows": int(len(dated)),
+        }
+        baselines = {sc: _baseline(dated[_mask(dated, ctx, sc)]) for sc in SCOPES}
+
         columns: list[Column] = []
         groups: list[ColumnGroup] = []
         for sc in SCOPES:
             name, sub = labels[sc]
             groups.append(ColumnGroup(key=sc, label=name, sub=sub, n_key=f"{sc}_n", min_n=MIN_N))
-            columns += [
-                Column(f"{sc}_rec", "成績", "record", sc, "1着-2着-3着-着外"),
-                Column(f"{sc}_win", "勝率", "pct", sc),
-                Column(f"{sc}_top2", "連対率", "pct", sc, "2着以内の率"),
-                Column(f"{sc}_top3", "複勝率", "pct", sc, "3着以内の率"),
-            ]
-        runs = load_runs()
-        before = runs
-        if ctx.date:
-            before = runs[runs["date"] < ctx.date]
-        before = before[before["race_id"] != ctx.race_id]
-        until = before["date"].max() if len(before) else None
-        source = {
-            "provider": SOURCE_PROVIDER,
-            "dataset": SOURCE_DATASET,
-            "period_from": before["date"].min() if len(before) else None,
-            "period_to": until,
-            "races": int(before["race_id"].nunique()),
-            "rows": int(len(before)),
-        }
+            columns.append(Column(f"{sc}_rec", "成績", "record", sc, "1着-2着-3着-着外"))
+            for key, label, desc in (("win", "勝率", None), ("top2", "連対率", "2着以内の率"), ("top3", "複勝率", "3着以内の率")):
+                mid = (baselines[sc] or {}).get(key)
+                hint = f"{desc}。" if desc else ""
+                title = f"{hint}この条件の全騎手の平均は {mid * 100:.1f}%（緑=平均より高い／赤=低い）" if mid else desc
+                columns.append(Column(f"{sc}_{key}", label, "pct", sc, title, _scale(mid, key)))
+
         ids = {str(e["jockey_id"]) for e in ctx.entries if e.get("jockey_id")}
-        before = before[before["jockey_id"].isin(ids)]
+        before = dated[dated["jockey_id"].isin(ids)]
         tallies = {sc: _tally(before[_mask(before, ctx, sc)]) for sc in SCOPES}
 
         cells: dict[str, dict[str, Any]] = {}
@@ -103,6 +121,7 @@ class JockeyCourseModule:
 
         notes = [
             "このレースの開催日より前の JRA 全レースの結果から集計しています。",
-            f"出走数が{MIN_N}未満の群は、参考値として薄く表示しています。",
+            f"出走数が{MIN_N}未満の群は、参考値として薄く表示し、色は付けません。",
+            "セルの色: その条件の全騎手の平均より高いほど緑、低いほど赤（濃いほど差が大きい）。",
         ]
         return ModuleOutput(columns=columns, groups=groups, cells=cells, notes=notes, data_until=until, source=source)

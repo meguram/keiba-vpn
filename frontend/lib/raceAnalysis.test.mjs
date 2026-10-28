@@ -12,7 +12,7 @@ const ts = createRequire(import.meta.url)("typescript");
 const src = ts.transpileModule(readFileSync(join(here, "raceAnalysis.ts"), "utf8"), { compilerOptions: { module: ts.ModuleKind.ES2020, target: ts.ScriptTarget.ES2020 } }).outputText;
 const out = join(mkdtempSync(join(tmpdir(), "ra-")), "raceAnalysis.mjs");
 writeFileSync(out, src);
-const { formatCell, sortValue, columnBlocks, isThin, entriesUnavailable, formatSource } = await import(pathToFileURL(out).href);
+const { formatCell, sortValue, columnBlocks, isThin, entriesUnavailable, formatSource, heatColor } = await import(pathToFileURL(out).href);
 
 test("formatCell: 成績・率・整数、値が無ければダッシュ", () => {
   assert.equal(formatCell([6, 11, 7, 38], "record"), "6-11-7-38");
@@ -68,4 +68,18 @@ test("formatSource: 提供元・集計期間・件数を 1 文にする。期間
     "データの出典: netkeiba.com（レース結果） ／ 集計期間: 2020/01/05〜2026/10/25 ／ 対象: 2,880レース・39,639出走",
   );
   assert.equal(formatSource({ provider: "netkeiba.com", dataset: "レース結果", period_from: null, period_to: null, races: 0, rows: 0 }), "データの出典: netkeiba.com（レース結果）");
+});
+
+test("heatColor: 平均より高いほど緑、低いほど赤、平均付近・値なし・目盛りなしは色なし", () => {
+  const sc = { lo: 0.02, mid: 0.08, hi: 0.24 };
+  assert.equal(heatColor(0.24, sc), "rgba(34,197,94,0.50)");      // hi 以上 = 最も濃い緑
+  assert.equal(heatColor(0.5, sc), "rgba(34,197,94,0.50)");       // 上限で頭打ち
+  assert.equal(heatColor(0.02, sc), "rgba(248,81,73,0.50)");      // lo 以下 = 最も濃い赤
+  assert.equal(heatColor(0, sc), "rgba(248,81,73,0.50)");
+  assert.equal(heatColor(0.08, sc), undefined);                    // 平均ちょうど
+  assert.equal(heatColor(0.081, sc), undefined);                   // ほぼ平均
+  assert.equal(heatColor(null, sc), undefined);
+  assert.equal(heatColor(0.2, null), undefined);
+  const mid = heatColor(0.16, sc);                                 // hi と mid の中間 = 半分の濃さ
+  assert.equal(mid, "rgba(34,197,94,0.29)");
 });
