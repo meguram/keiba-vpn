@@ -52,6 +52,7 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
     id: "jockey", label: "騎手", desc: "騎手ごとの得意・不得意",
     children: [
       { id: "distance", label: "距離別の成績", desc: "騎手ごとに、距離で好走率がどう変わるか" },
+      { id: "change", label: "乗り替わり", desc: "騎手が替わると成績はどう変わるか" },
     ],
   },
 ];
