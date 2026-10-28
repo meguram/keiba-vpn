@@ -14,7 +14,7 @@
 #   jobs           【prod のみ・ENABLE_JOBS_DEPLOY=true のときだけ】キュー・Run Job・Scheduler を更新する。JOBS_PARALLEL=1（既定）は並走(影モード)
 #
 # 必須の環境変数: PROJECT_ID, GCS_BUCKET（--dry-run のときは省略可）。任意: REGION(asia-northeast1) SERVICE(keiba-api) AR_REPO(keiba-vpn)
-#   SMOKE_RACE_ID（smoke で使うレース ID） ENABLE_JOBS_DEPLOY JOBS_PARALLEL GITHUB_SHA GITHUB_OUTPUT
+#   SMOKE_RACE_ID（smoke で使うレース ID） ENABLE_JOBS_DEPLOY JOBS_PARALLEL FETCH_SHADOW（1 で取得の影モードの予約・集計） GITHUB_SHA GITHUB_OUTPUT
 # 鍵ファイルは使わない（認証は google-github-actions/auth の Workload Identity Federation が済ませてある前提）。
 # =============================================================================
 set -euo pipefail

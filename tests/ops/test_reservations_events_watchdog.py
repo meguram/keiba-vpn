@@ -206,3 +206,13 @@ def test_reservation_staleness():
     assert W.reservation_alerts(io, now)[0]["key"] == "reserve_stale"
     write_json(io, "ops/job_runs/reserve-fetch-tasks/latest.json", {"status": "ok", "finished_at": (now - timedelta(minutes=20)).isoformat()})
     assert W.reservation_alerts(io, now) == []
+
+
+def test_race_day_does_not_reserve_predicts_while_predict_race_is_not_ready():
+    # 積んでも Job が『準備未完了』で何もせず終わるだけ（開催日に約 36 回の無駄な起動）
+    q = FT.TaskQueue(FT.MemoryTaskStore())
+    called = []
+    res = R.reserve_race_day("20261024", object(), q, now=EVE, load_schedule=lambda s, d: SCHED,
+                             enqueue_predict=lambda spec: called.append(spec) or "created", env=ENV, owned=OWNED, predict_ready=False)
+    assert called == [] and res["predict"]["skipped"] == res["predict_tasks"] > 0
+    assert res["fetch"]["enqueued"] > 0                                         # 取得のタスクは今までどおり積む
