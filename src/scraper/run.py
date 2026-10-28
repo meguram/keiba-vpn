@@ -264,6 +264,16 @@ def _upsert_sires_background(html: str) -> None:
         logger.warning("sires UPSERT スキップ: %s", exc)
 
 
+def _record_sire_lines(html: str, horse_id: str) -> None:
+    """血統ページの父のセルにある『○○系』を台帳（data/local/pedigree_lines）に貯める。失敗しても取得は止めない。"""
+    try:
+        from src.scraper.sire_line_store import record_html
+
+        record_html(html, horse_id)
+    except Exception as exc:
+        logger.warning("sire_line 台帳への記録をスキップ: %s", exc)
+
+
 def _enqueue_pedigree_retry(horse_ids: list[str], base_dir=None) -> None:
     """Phase 2b/2c で失敗した馬の horse_pedigree_5gen を個別キュージョブとして再投入する。"""
     try:
@@ -1092,6 +1102,7 @@ class ScraperRunner:
         )
         _update_local_pedigree_10gen(horse_id, rec, self.storage._base_dir)
         _upsert_sires_background(html)
+        _record_sire_lines(html, horse_id)
         return rec
 
     # ── 母馬の種付け情報（own.netkeiba）→ 産駒の種付け日 ───────────
