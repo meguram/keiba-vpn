@@ -130,6 +130,37 @@ def holdout_main() -> None:
         print(k, v)
 
 
+def rule_trial_main() -> None:
+    """★の判定を、(a) 現行の較正（isotonic）、(b) 2 つの数のルール（モデル/市場の対数混合 β ＋ 控除の係数、前の年だけで当てはめ）で比べる。10〜30 倍、1 レース 1 頭。"""
+    from src.scripts import data as _  # noqa: F401
+    from src.scripts.data import odds_rule_correction as oc
+    from src.utils.ev_calibration import calibrated_ev
+
+    cfg = json.loads(Path(os.environ.get("PTRAIN_EVCFG", ROOT / "config/ev_calibration.json")).read_text(encoding="utf-8"))
+    S = oc.load_prob_sets()
+    rows = []
+    for ty in (2023, 2024, 2025, 2026):
+        tr = pd.concat([S[y] for y in S if y < ty]); tr = tr[tr["ok_win"]]
+        te = S[ty].copy()
+        beta = oc.fit_beta(tr)
+        scale = float(tr["ret_win"].mean() / (oc.blend_p(tr, beta) * tr["odds"]).mean())
+        te["ev_rule"] = oc.blend_p(te, beta) * te["odds"] * scale
+        te["ev_iso"] = [calibrated_ev(float(p * o), "win", cfg) for p, o in zip(te["p_win"], te["odds"])]
+        N = te["race_id"].nunique()
+        for nm in ("ev_iso", "ev_rule"):
+            for th in (0.9, 0.95, 1.0, 1.05):
+                b = te[(te["odds"] >= 10) & (te["odds"] < 30)]
+                s = b[b[nm] >= th].sort_values(nm, ascending=False).drop_duplicates("race_id")
+                sw, sp = s[s["ok_win"]], s[s["ok_place"]]
+                if len(sw) < 40:
+                    continue
+                w, p = boot(sw, "ret_win", 200), boot(sp, "ret_place", 200)
+                rows.append({"年": ty, "期待値": nm, "閾値": th, "★のレース割合": round(s["race_id"].nunique() / N, 3), "何レースに1回": round(N / s["race_id"].nunique(), 1), "単勝回収": round(w[0], 3), "区間": [round(w[1], 2), round(w[2], 2)], "複勝回収": round(p[0], 3), "β": beta, "控除係数": round(scale, 3)})
+    pd.DataFrame(rows).to_json(OUT / "star_rule_trial.json", orient="records", force_ascii=False, indent=1)
+    for r in rows:
+        print(r)
+
+
 if __name__ == "__main__":
     import sys
 
@@ -137,5 +168,7 @@ if __name__ == "__main__":
         calibrated_main()
     elif "--holdout" in sys.argv:
         holdout_main()
+    elif "--rule-trial" in sys.argv:
+        rule_trial_main()
     else:
         main()

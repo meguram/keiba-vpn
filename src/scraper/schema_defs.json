@@ -3630,6 +3630,7 @@
   }
  },
  "no_schema_reason": {
+  "jma_weather_hourly": {"status": "pending", "note": "気象庁の時別値。実データ蓄積後に `python -m src.scraper.schema_infer collect --source storage` → `apply` で追加する。取得側（jma_weather.parse_hourly）が値を検査し、読めなければ保存しない"},
   "finish_order_prediction": {
    "status": "pending",
    "note": "実データ未観測。stg／prod で `python -m src.scraper.schema_infer collect --source storage` → `apply` を実行すると advisory で追加される"

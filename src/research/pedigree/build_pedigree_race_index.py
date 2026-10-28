@@ -270,6 +270,10 @@ def build_index(years: list[str] | None = None) -> None:
             logger.warning("race_result_flat.parquet が存在しません: %s", p_result)
             continue
         df_r = pd.read_parquet(p_result, columns=RESULT_COLS)
+        if "horse_number" in df_r.columns:
+            from src.scraper.odds_fix import apply_pandas
+
+            df_r = apply_pandas(df_r)   # 2025 年は odds が指数列だった
         result_dfs.append(df_r)
 
         if p_shutuba.exists():

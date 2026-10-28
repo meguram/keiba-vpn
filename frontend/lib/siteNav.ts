@@ -28,8 +28,8 @@ export const SITE_NAV: SiteNavItem[] = [
     paths: ["/weekly-predictions", "/races", "/race", "/prediction-results"],
     feature: "predictions",
   },
-  // 今後の例（画面ができたら enabled を外す）:
-  { id: "megu-column", label: "めぐコラム", href: "/column", paths: ["/column"], enabled: false },
+  { id: "megu-analysis", label: "めぐ分析", href: "/analysis", paths: ["/analysis"], feature: "megu-analysis" },
+  { id: "megu-column", label: "めぐコラム", href: "/column", paths: ["/column"], feature: "megu-column" },
 ];
 
 function matches(pathname: string, p: string): boolean {

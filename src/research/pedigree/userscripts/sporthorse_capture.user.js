@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name         Dormello DOB capture (SporthorseData -> ローカル入力ツール)
 // @namespace    keiba-vpn
-// @version      1.2
-// @description  ご自身が開いた SporthorseData の馬ページから Date of Birth を読み取り、127.0.0.1 のローカル入力ツールへ送る（自動遷移・自動アクセスはしない）
+// @version      1.3
+// @description  ご自身が開いた SporthorseData の馬ページから Date of Birth を読み取り、127.0.0.1 のローカル入力ツールへ送る。Cloudflare 通過後のクッキーをローカルへ送り、CLI 取得用の疑似セッションにする
 // @match        https://sporthorse-data.com/pedigree/*
+// @match        https://sporthorse-data.com/*
 // @match        http://127.0.0.1:8765/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_openInTab
+// @grant        GM_cookie
 // @connect      127.0.0.1
 // ==/UserScript==
 (function () {
@@ -15,7 +17,7 @@
 
   // ── ローカル入力ツールの画面で動くとき: 「ページを開く」の依頼を受けて、馬のページを背景タブで開く（ポップアップブロックの対象外）
   if (location.origin === BASE) {
-    document.documentElement.dataset.dormelloUserscript = '1.2';
+    document.documentElement.dataset.dormelloUserscript = '1.3';
     let opened = [];
     window.addEventListener('message', (e) => {
       if (e.source !== window || e.origin !== location.origin) return;
@@ -30,6 +32,19 @@
     });
     return;
   }
+  function pushSession() {
+    if (/just a moment/i.test(document.title || '')) return;
+    GM_cookie.list({ domain: '.sporthorse-data.com' }, (cookies, err) => {
+      if (err || !cookies || !cookies.length) return;
+      const jar = {};
+      cookies.forEach((c) => { if (c.name) jar[c.name] = c.value; });
+      call('GET', '/api/token').then((t) =>
+        call('POST', '/api/sporthorse_session', { cookies: jar, user_agent: navigator.userAgent }, t.token)
+      ).catch(() => { /* ローカルツール未起動 */ });
+    });
+  }
+  pushSession();
+
   const text = document.body ? document.body.innerText : '';
   // 例: "Date of Birth: 30-Jan-1970" / "born 30-Jan-1970"。年のみのときは日付なし扱い
   const full = text.match(/(?:Date of Birth|born)[:\s]*([0-9]{1,2}-[A-Za-z]{3}-[0-9]{4})/i);

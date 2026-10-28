@@ -155,3 +155,13 @@ def test_tests_dir_schema_only_categories_have_no_hidden_requirement(dev_env):
     shutil.rmtree(make_dev_mock.dev_mock_root() / "race_paddock")
     r = check_dev_samples(make_dev_mock.dev_mock_root(), dev_env / "page_reference")
     assert r["status"] == "fail" and "race_paddock" in r["detail"]
+
+
+def test_dev_api_never_takes_scrape_queue_leader(dev_env, monkeypatch):
+    """dev の API は運用の取得キュー（data/queue は環境で分かれていない）の処理担当にならない。"""
+    from src.api import app as api_app
+
+    opened = []
+    monkeypatch.setattr("builtins.open", lambda *a, **k: opened.append(a) or (_ for _ in ()).throw(AssertionError("lock file opened")))
+    assert api_app._try_acquire_queue_runner_leader() is False
+    assert opened == []

@@ -2,7 +2,7 @@
 
 > **2026-10-21 更新**: ジョブの対応表・実行・切替は **`gcp_jobs_migration.md`**（正本 `config/gcp_job_map.json`、入口 `src/ops/job_dispatch.py`、生成 `scripts/gcp/deploy_cloud_run_jobs.sh`）に置き換わりました。
 > この文書の 15 ジョブのうち、ホストで定期実行していたもの（騎手・調教師統計、コスト報告など）は新しい対応表に取り込み済み。
-> 取得系（構造チェック・出馬表の自動取得・キュー）は VPS の実行役（`vps_agent.md`）の担当で、旧設計の `Dockerfile.gcp-jobs` は `Dockerfile.jobs` に置き換わっています。以下は経緯として残しています。
+> 取得系（構造チェック・出馬表の自動取得・キュー）は VPS の実行役（`vps_agent.md`）の担当で、旧設計の `deploy/docker/Dockerfile.gcp-jobs` は `deploy/docker/Dockerfile.jobs` に置き換わっています。以下は経緯として残しています。
 
 **対象領域**: GCP側（スクレイピング・ML・スケジュール実行専用）に移行する定期ジョブの実行コマンド・頻度・リソース目安
 **関連ドキュメント**: [deployment-vps-vs-gcp.md](./deployment-vps-vs-gcp.md)（役割分担の全体方針）・

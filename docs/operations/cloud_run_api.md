@@ -6,7 +6,7 @@
 
 | 区分 | ファイル | 役割 |
 |---|---|---|
-| イメージ | `Dockerfile.cloudrun` / `Dockerfile.cloudrun.dockerignore` / `Dockerfile.cloudrun.gcloudignore` / `requirements-cloudrun.txt` | 1 ワーカー・読み取り専用の API。API が使わないライブラリ（torch・mlflow・optuna・playwright・ノートブック等）を外した最小の依存。起動直後の RSS は約 90MB（遅延 import のため。テストが重いライブラリを読んでいないことを確認） |
+| イメージ | `deploy/docker/Dockerfile.cloudrun` / `deploy/docker/Dockerfile.cloudrun.dockerignore` / `deploy/docker/Dockerfile.cloudrun.gcloudignore` / `deploy/docker/requirements-cloudrun.txt` | 1 ワーカー・読み取り専用の API。API が使わないライブラリ（torch・mlflow・optuna・playwright・ノートブック等）を外した最小の依存。起動直後の RSS は約 90MB（遅延 import のため。テストが重いライブラリを読んでいないことを確認） |
 | エントリ | `src/api/cloudrun_entry.py` | 1 コンテナで FastAPI（`src/api/app.py`）+ Flask（`/api/v1/*`）+ `/ops/*` を振り分ける。**FastAPI の lifespan（取得キューのワーカー・各種スケジューラ）は動かさない**。`app.py` / `flask_app.py` は無変更 |
 | 認証 | `src/api/middleware/proxy_key.py` | 共有ヘッダ `X-Keiba-Proxy-Key`。既定オフ（`KEIBA_PROXY_KEY_REQUIRED=1` のときだけ）。新旧 2 本（`KEIBA_PROXY_KEY` / `KEIBA_PROXY_KEY_NEXT`）で無停止ローテーション。定数時間比較、鍵が 1 本も無いときは全拒否。鍵が通った要求だけ `X-Keiba-Client-IP` を接続元として採用（anti_scraping が実クライアント IP で働く） |
 | ハートビート | `src/ops/heartbeat_schema.py` / `heartbeat_store.py` / `heartbeat_api.py` | VPS が 5 分おきに送る JSON のスキーマ・HMAC 署名・保存（GCS `ops/heartbeat/latest.json`）・評価（architecture_target.md 3.2 の閾値）・Slack 通知（同じ異常は 6 時間に 1 回、復旧も通知） |

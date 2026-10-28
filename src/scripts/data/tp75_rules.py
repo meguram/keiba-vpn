@@ -495,6 +495,7 @@ def baseline_picks(d: pd.DataFrame, col: str, mask_year: np.ndarray, races: np.n
     return pick
 
 
+SHIFT_CAP = 0.3               # 確率の補正（ロジットのずれの合計）の上限。重なるクラスタが多い馬での過補正を避ける（第 2 ラウンドで追加。第 1 ラウンドの再計算も同じ上限）
 NARROW_MAX_COVER = 0.15       # 事後の感度分析: 発見期間の行の 15% 以下にしか当たらない（特定の）クラスタだけを使う
 
 
@@ -563,6 +564,7 @@ def evaluate_personas(d: pd.DataFrame, ctx: Ctx, clusters: dict[str, list[dict]]
             shift += cluster_delta(d, c, fb) * c["union"]
         for c in clusters[fk]:
             shift += cluster_delta(d, c, fk) * c["union"]
+        shift = np.clip(shift, -SHIFT_CAP, SHIFT_CAP)
         p1 = 1 / (1 + np.exp(-(np.log(p0 / (1 - p0)) + shift)))
         pr["overlay"] = {pn: logloss_delta(ctx, my, ycol, p0, p1) for pn, my in periods.items()}
         pr["overlay_shift_stats"] = {"share_shifted": float((shift != 0).mean()), "mean_abs_shift": float(np.abs(shift[shift != 0]).mean()) if (shift != 0).any() else 0.0}

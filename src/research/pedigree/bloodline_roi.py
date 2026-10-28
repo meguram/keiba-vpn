@@ -33,13 +33,16 @@ def _load_odds_from_tables(years: list[str] | None = None) -> pd.DataFrame:
         if not p.exists():
             continue
         try:
-            parts.append(pd.read_parquet(p, columns=["race_id", "horse_id", "odds"]))
+            parts.append(pd.read_parquet(p, columns=["race_id", "horse_id", "horse_number", "odds"]))
         except Exception as e:  # pragma: no cover
             logger.warning("odds 読込スキップ %s: %s", p, e)
     if not parts:
         return pd.DataFrame(columns=["race_id", "horse_id", "odds"])
     out = pd.concat(parts, ignore_index=True).drop_duplicates(["race_id", "horse_id"])
     out["race_id"] = out["race_id"].astype(str)
+    from src.scraper.odds_fix import apply_pandas
+
+    out = apply_pandas(out).drop(columns=["horse_number", "odds_raw", "popularity_raw"], errors="ignore")   # 2025 年は odds が指数列だった
     out["horse_id"] = out["horse_id"].astype(str)
     out["odds"] = pd.to_numeric(out["odds"], errors="coerce")
     out.loc[~((out["odds"] > 0) & (out["odds"] <= 999.9)), "odds"] = np.nan

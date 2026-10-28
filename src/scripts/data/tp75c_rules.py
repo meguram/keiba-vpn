@@ -339,9 +339,42 @@ def run_eval_c(out_dir: Path) -> dict:
     return res
 
 
+def eval_personas_c(out_dir: Path) -> dict:
+    """2c の最終採用のうち BH 頑健なもの + 第 2 ラウンドの BH 頑健 + 第 1 ラウンドで、クラスタとペルソナを再評価する（ledger_rc.json から）。"""
+    d = T1.load_table(extra=make_extra_c())
+    ctx = T1.Ctx(d)
+    ledger1 = json.loads((out_dir / "ledger.json").read_text(encoding="utf-8"))
+    ledger2 = json.loads((out_dir / "ledger_r2.json").read_text(encoding="utf-8"))
+    ledgerc = json.loads((out_dir / "ledger_rc.json").read_text(encoding="utf-8"))
+    fams = T1.FAMILIES
+    clusters = {}
+    for fam, (col, sign) in fams.items():
+        rows_f = []
+        for x in ledger1:
+            if x["adopt"].get(fam, {}).get("adopted"):
+                rows_f.append({"id": x["id"], "expr": x["expr"], "source": x["source"], "stats": T2._rebuild_stats(d, ctx, x), "adopt": {fam: x["adopt"][fam]}, "round": 1})
+        for tag, led in ((2, ledger2), ("2c", ledgerc)):
+            for x in led:
+                a = x[fam]
+                if a["final"] and a["robust_bh"]:
+                    st = T2._rebuild_stats(d, ctx, x)
+                    z = x["win_resid_z"] if col == "e_m1" else x["top3_resid_z"]
+                    rows_f.append({"id": x["id"], "expr": x["expr"], "source": "第 2 ラウンド" if tag == 2 else "2c（完全な母方 10 世代表）", "stats": st, "adopt": {fam: {**a, "z": sign * z, "effect": st["disc"][col]["mean"]}}, "round": tag})
+        clusters[fam] = T1.cluster_set(d, rows_f, fam)
+        for c in clusters[fam]:
+            c["cover"] = float(c["union"][ctx.periods["disc"]].mean())
+    res = {"clusters": {fam: [{"rep": c["rep"], "round": c["rep_row"]["round"], "n_members": len(c["members"]), "members": c["members"], "weight": T1.cluster_weight(c, fam), "cover": c["cover"],
+                               "expr": c["rep_row"]["expr"], "tier": c["rep_row"]["adopt"][fam]["tier"], "robust_bh": c["rep_row"]["adopt"][fam].get("robust_bh"),
+                               "effect_pt": 100 * c["rep_row"]["adopt"][fam]["effect"]} for c in clusters[fam]] for fam in fams}}
+    res["v3"] = T1.evaluate_personas(d, ctx, clusters)
+    res["dose_response"] = T2.dose_response(d, ctx, clusters)
+    (out_dir / "results_rcp.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+    return res
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["prereg", "eval", "reeval"])
+    ap.add_argument("cmd", choices=["prereg", "eval", "personas", "reeval"])
     ap.add_argument("frozen", nargs="?")
     ap.add_argument("--years", nargs="*", type=int, default=[2026])
     ap.add_argument("--out", default=str(OUT))
@@ -350,6 +383,9 @@ def main() -> None:
         print(json.dumps(prereg_c()["counts"], ensure_ascii=False, indent=1))
     elif a.cmd == "eval":
         print(json.dumps(run_eval_c(Path(a.out))["summary"], ensure_ascii=False, indent=1))
+    elif a.cmd == "personas":
+        r = eval_personas_c(Path(a.out))
+        print({f: len(c) for f, c in r["clusters"].items()})
     else:
         print(json.dumps(T1.reeval(Path(a.frozen), a.years, loader=lambda: T1.load_table(extra=make_extra_c())), ensure_ascii=False, indent=1))
 

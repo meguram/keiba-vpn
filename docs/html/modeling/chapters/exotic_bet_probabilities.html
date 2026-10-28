@@ -163,5 +163,51 @@ python3 -m src.scripts.data.validate_exotic_probabilities predictions --from 202
 <tr><td><code>config/exotic_alpha.json</code>（任意・<code>--write-config</code> で作成）</td><td>連対率・複勝率が無いときの既定 α2, α3。無ければ Harville（1.0, 1.0）</td></tr>
 <tr><td><code>tests/pipeline/test_exotic_probabilities.py</code></td><td>総和・Harville 一致・α 復元・シミュレーション優位・組み込み</td></tr>
 </table>
+<h2>10. 実着順での比較と採用手法（2026-10-24 追加）</h2>
+<p>勝率・連対率・複勝率（既存の OOF <code>z:RB@e</code>、2022〜2024 年の 10,316 レース。同着・欠測の 50 レースは除外、2026 年は使わない）から各券種の的中確率を作る方法を、実際の着順で比べた。複勝は 8 頭以上で 3 着以内、7 頭以下は 2 着以内。再現: <code>python -m src.scripts.data.exotic_method_eval run|calib MB60|thurstone</code>（結果は <code>data/local/modeling/exotic_eval/</code>）。</p>
+<h3>10.1 比べた方法</h3>
+<table>
+<tr><th>略称</th><th>内容</th><th>原文の確認</th></tr>
+<tr><td>H</td><td>Harville（勝率のみ。α=1）</td><td>未取得（書誌のみ）</td></tr>
+<tr><td>DG</td><td>割引 Harville・全レース共通 α（学習年の最尤。年を除いて決める）。Benter / Lo &amp; Bacon-Shone 系</td><td>Benter の式は Pearce (2026, arXiv:2608.23825) で確認。Lo &amp; Bacon-Shone は未取得</td></tr>
+<tr><td>D1</td><td>割引 Harville・レースごとに α を連対率・複勝率へ当てはめ（従来の実装）</td><td>自前</td></tr>
+<tr><td>M3</td><td>周辺確率一致の Plackett–Luce。2・3 着目の強さを<strong>馬ごとに</strong>連対率・複勝率へ合わせる（新）</td><td>自前（Bolton &amp; Chapman 型の段階別係数に近い考え）</td></tr>
+<tr><td>MB<i>xx</i></td><td>M3 と DG の強さの対数線形ブレンド（θ=<i>xx</i>/100。θ=1 で M3、0 で DG）（新）</td><td>自前</td></tr>
+<tr><td>T</td><td>Thurstone（正規）型。能力+正規ノイズの大小。Monte Carlo、700 レースの部分標本、勝率のみ使用。Henery (1981)・Stern (1990) 系の代表</td><td>原文未取得</td></tr>
+</table>
+<div class="note">原文を取得できなかった論文（Lo &amp; Bacon-Shone 1994 / 2008、Bacon-Shone・Lo・Busche 2008、Henery 1981 / 1984、Stern 1990、Harville 1973）は出版社のアクセス制限による。本章はそれらの数値を使わず、実データで比べて決めた。取得状況は <code>~/research/exotic_bet_probabilities/README.md</code>。</div>
+<h3>10.2 結果（排他的な結果の対数スコア −log P(実際の組合せ)。小さいほど良い。ワイドは 3 組の平均、複勝は的中馬の平均）</h3>
+<table>
+<tr><th>券種</th><th>H</th><th>DG</th><th>D1（従来）</th><th>M3</th><th>MB60（採用）</th><th>MB60 − D1 [95%区間]</th></tr>
+<tr><td>複勝</td><td>1.1448</td><td>1.1389</td><td>1.1402</td><td>1.1269</td><td>1.1273</td><td>−0.0129 [−0.0141, −0.0115]</td></tr>
+<tr><td>馬単</td><td>4.0298</td><td>4.0187</td><td>4.0252</td><td>4.0263</td><td>4.0093</td><td>−0.0159 [−0.0209, −0.0113]</td></tr>
+<tr><td>馬連</td><td>3.3601</td><td>3.3572</td><td>3.3616</td><td>3.3429</td><td>3.3404</td><td>−0.0212 [−0.0248, −0.0183]</td></tr>
+<tr><td>ワイド</td><td>2.5335</td><td>2.5180</td><td>2.5203</td><td>2.4927</td><td>2.4930</td><td>−0.0273 [−0.0297, −0.0242]</td></tr>
+<tr><td>3連複</td><td>4.4373</td><td>4.4047</td><td>4.4078</td><td>4.3654</td><td>4.3636</td><td>−0.0442 [−0.0484, −0.0396]</td></tr>
+<tr><td>3連単</td><td>6.1547</td><td>6.1022</td><td>6.1146</td><td>6.1295</td><td>6.0860</td><td>−0.0285 [−0.0375, −0.0191]</td></tr>
+</table>
+<ul>
+<li>MB60 は全券種で D1・H より良く、区間は 0 をまたがず、2022・2023・2024 年のどの年も同じ符号。</li>
+<li>M3（周辺一致）は複勝・馬連・ワイド・3連複で最良に近いが、<strong>順序のある馬単・3連単では D1 より悪化または同等</strong>（3連単 +0.015）。順序は共通 α の側が情報を持つため、θ=0.5〜0.7 のブレンドが全券種で良い。券種ごとの最良は、順序なし = θ=0.7、順序あり = θ=0.3〜0.5 だが、差は 0.001〜0.005 で小さい。単一の分布から全券種を出す一貫性を優先して θ=0.6 を既定にした（θ は 2022〜2024 年で選んだ 1 パラメータ。年別の符号は揃っている）。</li>
+<li>共通 α の最尤（年を除く）: α2≈0.83〜0.86、α3≈0.70〜0.72。従来の α=1（Harville）は α3 が過大で、3 着目が人気馬に寄りすぎる。</li>
+<li>勝率のみを使う比較（Thurstone 型 T 対 H、700 レース）: T が H より良い（馬単 −0.018、ワイド −0.015、3連複 −0.037、3連単 −0.055。馬連のみ区間が 0 をまたぐ）。連対率・複勝率を使う MB60 は T より、馬連 −0.015、ワイド −0.025、3連複 −0.040（馬単・3連単は同等）。連対率・複勝率が無いときの代替として T（または DG）が有力。T は Monte Carlo で重いため既定にはしていない。</li>
+</ul>
+<h3>10.3 較正（予測確率と実際の的中率のずれ）</h3>
+<ul>
+<li>MB60 の組合せ確率は、確率 3% 以上の帯で実測/予測が 0.97〜1.03 に収まっており、主要な帯の較正は良い。</li>
+<li>目立つずれは<strong>低確率側の過大評価</strong>で、年をまたいで一貫している: 複勝 p&lt;3% は実測/予測 0.4〜0.9（p&lt;1% ほぼ外れ）、ワイド p&lt;1% は 0.65〜0.89、馬連 p&lt;0.3% は 0.82〜0.87。高確率側（ワイド 70% 以上 0.76〜0.90、3連複 20% 以上 0.8〜0.9）も少数の観測で過大の傾向。</li>
+<li>年を除いた Platt 較正（ロジット線形）: 係数は恒等変換に近く（a≈0.0〜0.17、b≈1.00〜1.05）、二値対数損失の改善は 0 と区別できない（複勝 +0.0004、ワイド +0.0006、3連複 +0.0004 など。3連単のみ −0.0021 [−0.0045, −0.0002] だが 2024 年は悪化）。<strong>採用しない</strong>。</li>
+<li>年を除いた等張回帰: 複勝の対数損失だけ −0.0023 [−0.0047, −0.0001]（3 年とも改善）だが Brier は悪化、馬連・3連複・3連単は悪化。<strong>採用しない</strong>。</li>
+<li>勝率・連対率・複勝率そのものを先に Platt 較正してから使う案（M3c）も、M3 と差が無く（複勝 1.1272 対 1.1269）、不採用。</li>
+<li>低確率の複勝・ワイドの過大評価は、全体の損失への寄与は小さいが、<strong>穴馬の期待値を押し上げる</strong>。EV 段階の較正（<code>config/ev_calibration.json</code>）で扱う方が、実際のオッズ・払戻で補正できて筋が良い。</li>
+</ul>
+<h3>10.4 実装と残課題</h3>
+<ul>
+<li><code>exotic_probabilities.py</code> に <code>fit_marginal_distribution</code>（M3）と <code>fit_blend_distribution</code>（MB。θ 既定 0.6、<code>config/exotic_alpha.json</code> の <code>blend_theta</code> で変更可）を追加。<code>RankDistribution</code> は任意の <code>lam2</code> / <code>lam3</code>（2・3 着目の強さ）を受け取れるようにした（省略時は従来どおり w^α）。既存関数の挙動は変えていない。</li>
+<li><strong>本番の経路（<code>betting.py</code> の <code>prob_model="auto"</code>）にはまだ繋いでいない。</strong>確率が変わると、現行の EV 較正（<code>config/ev_calibration.json</code>。D1 の確率に対して当てはめたもの）の前提が変わるため、繋ぐ時は EV 較正の再当てはめとセットで行う。</li>
+<li>共通 α（DG）の値は <code>config/exotic_alpha.json</code> にまだ書いていない（未作成のため、連対率・複勝率が無いときは Harville のまま）。書けば連対率・複勝率なしのときの精度が上がる（H 比で複勝 −0.006、ワイド −0.016、3連複 −0.033）。</li>
+<li>検証は 2022〜2024 年のみ（OOF の範囲）。2025 年・2026 年は使っていない。θ の選択も同じ期間なので、2025 年の確定後に固定した θ で 1 回だけ確認するのが望ましい。</li>
+<li>枠連は対象外。7 頭以下のワイド・3連複は未検証（件数が少ない）。</li>
+</ul>
 </body>
 </html>

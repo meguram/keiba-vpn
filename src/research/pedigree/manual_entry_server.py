@@ -1,10 +1,13 @@
-"""誕生月日を 1 頭ずつ手入力するローカルツール（127.0.0.1 だけで待ち受け。外部サイトへは一切アクセスしない）。
+"""誕生月日を 1 頭ずつ手入力するローカルツール（127.0.0.1 だけで待ち受け。サーバ自身は SporthorseData へアクセスしない）。
 
     python -m src.research.pedigree.manual_entry_server --ancestors /tmp/ancestor_birthdays_for_subplan.csv \
         --zone data/meta/dormello/zone_review.csv --nk /tmp/nk_birth_results_local.jsonl --dir data/meta/dormello --port 8765
 
 ブラウザで http://127.0.0.1:8765/ を開く。「ページを開く」で調べ先を別タブに開き、日付を入力して「保存して次へ」を押すと、
 その場で birth_manual.csv と birth_search_log.csv に書き込まれる（取り消しも可能）。載っていないときは「記載なし」を押すと、再度は出てこない。
+
+ユーザースクリプト 1.3+ で SporthorseData を開いたとき、Cloudflare 通過後のクッキーが ``data/meta/dormello/sporthorse_session.json`` に保存される。
+別ターミナルから ``python -m src.research.pedigree.sporthorse_births fetch …`` でバッチ取得できる（``sporthorse_session probe`` で有効性確認）。
 """
 from __future__ import annotations
 
@@ -23,6 +26,7 @@ from pathlib import Path
 
 from src.research.pedigree import manual_checklist as mc
 from src.research.pedigree.birth_subplans import LOG_COLUMNS, MANUAL_COLUMNS, upsert_log
+from src.research.pedigree.sporthorse_session import import_session, load_session
 
 MON = {m: i for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split(), 1)}
 STAGING_COLUMNS = ["horse_id", "name", "birth_year", "birth_month", "birth_day", "source_url", "note", "netkeiba_year", "warning", "entered_at"]
@@ -76,6 +80,7 @@ class Store:
         self.undo_stack: list[dict] = []
         self.session_saved = self.session_none = 0
         self.us_seen: float | None = None          # ユーザースクリプトからの最後の接続時刻（導入の確認用）
+        self.session_p = d / "sporthorse_session.json"
         self.detected: dict[str, dict] = {}       # horse_id -> ユーザースクリプトが読み取った日付（保存はまだ）
         if not self.manual_p.exists():
             self._write_csv(self.manual_p, [MANUAL_COLUMNS])
@@ -171,6 +176,25 @@ class Store:
         self.url_overrides[horse_id] = url
         self._write_csv(self.urls_p, [["horse_id", "url"], *[[h, u] for h, u in self.url_overrides.items()]])
 
+    def sporthorse_session_status(self) -> dict:
+        p = self.session_p
+        if not p.exists():
+            return {"present": False}
+        try:
+            st = load_session(p)
+        except Exception:  # noqa: BLE001
+            return {"present": True, "valid": False}
+        return {"present": True, "valid": True, "saved_at": st.saved_at, "cookies": len(st.cookies)}
+
+    def save_sporthorse_session(self, cookies: dict, user_agent: str | None) -> dict:
+        if not cookies:
+            return {"ok": False, "error": "クッキーが空です"}
+        try:
+            import_session({"cookies": cookies, "user_agent": user_agent or ""}, path=self.session_p)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, **self.sporthorse_session_status()}
+
     def batch(self, n: int = 5) -> dict:
         """先頭 n 頭（まとめ表示用）。各頭の検出済みの日付つき。"""
         with self.lock:
@@ -180,6 +204,7 @@ class Store:
                     "remaining": len(p), "saved": self.session_saved, "none": self.session_none, "unsaved": len(self.pending_msgs),
                     "git": self.git_status, "auto_commit": self.commit_every,
                     "us_seen_ago": None if self.us_seen is None else round(time.time() - self.us_seen),
+                    "sporthorse_session": self.sporthorse_session_status(),
                     "approvals": self.approvals(),
                     "recent": [{"horse_id": u["horse_id"], "name": u["name"], "text": u["text"]} for u in self.undo_stack[-5:]][::-1]}
 
@@ -403,8 +428,9 @@ button.primary{background:#2d7ff9;color:#fff;border-color:#2d7ff9;font-size:1.05
 .steps{background:#f7f7ff;border:1px solid #ccd;border-radius:8px;padding:8px 12px}</style></head><body>
 <h2 style="margin:2px 0">誕生日 手入力（まとめ表示）</h2><div class="muted" id="stat"></div>
 <div id="us" class="steps" style="margin-bottom:6px"></div>
+<div id="sess" class="steps" style="margin-bottom:6px"></div>
 <div class="steps"><b>使い方</b> ① 「この頭数のページを開く」を押す（別タブが開き、次回からは同じタブを使い回します） → ② 各行の「検出」を確認 → ③ 「保存して次へ」
-<br><span class="muted">ユーザースクリプト（バージョン 1.2）を入れていれば、ポップアップに邪魔されず背景タブで開きます。サイトが埋め込みを禁止しているため、画面内には表示できません。</span></div>
+<br><span class="muted">ユーザースクリプト（バージョン 1.3）を入れていれば、ポップアップに邪魔されず背景タブで開きます。サイトが埋め込みを禁止しているため、画面内には表示できません。</span></div>
 <div style="margin:8px 0">1 回に扱う頭数 <select id="n" onchange="N=+this.value;poll(true)"><option>1</option><option>3</option><option selected>5</option><option>8</option><option>10</option></select>
 <button class="primary" onclick="openAll()">① この頭数のページを開く</button><button onclick="undo_()">直前を取り消す</button> <label><input type="checkbox" id="autoopen" checked> 保存後、次の頭数のページも自動で開く（ユーザースクリプト使用時）</label> <span id="popmsg" class="err"></span></div>
 <div id="rows"></div><div style="margin:10px 0"><button class="primary" onclick="saveBatch()">③ この頭数を保存して次へ</button></div>
@@ -435,6 +461,9 @@ function initBatch(){const L=$('rows');L.innerHTML='';
   L.appendChild(div)})}
 function renderUs(){const v=document.documentElement.dataset.dormelloUserscript;const el=$('us');
  if(v){el.style.background='#e8f5e9';el.innerHTML=`✅ ユーザースクリプト <b>有効</b>（版 ${esc(v)}）。「① ページを開く」は背景タブで開きます。`+(usSeenAgo==null?` <span class="muted">／ SporthorseData のページからの読み取りは、まだ受け取っていません</span>`:` <span class="muted">／ ページからの読み取り: ${usSeenAgo} 秒前に受信</span>`)}
+function renderSess(s){const el=$('sess');if(!el)return;if(!s||!s.present){el.innerHTML=`<b>ロボット取得用セッション</b>：未登録。<a href="https://sporthorse-data.com/pedigree/" target="_blank" rel="noopener">SporthorseData を開く</a>（Cloudflare を通過）→ ユーザースクリプト 1.3+ がクッキーを自動送信します。CLI: <code>python -m src.research.pedigree.sporthorse_births fetch …</code>`;return}
+ if(s.valid)el.innerHTML=`<b>ロボット取得用セッション</b>：登録済み（クッキー ${s.cookies} 件、${esc(s.saved_at||'日時不明')}）。<code>sporthorse_session probe</code> で有効性を確認できます。`;
+ else el.innerHTML='<b>ロボット取得用セッション</b>：ファイルはあるが読めません。再登録してください。'}
  else{el.style.background='#fff3cd';el.innerHTML=`⚠ <b>ユーザースクリプトがこの画面で動いていません</b>。次を確認してください。
   <ol style="margin:4px 0 4px 18px;padding:0"><li>Chrome/Edge の拡張機能 <b>Tampermonkey</b> が入っていて、有効になっている</li>
   <li>拡張機能の管理画面（chrome://extensions）で Tampermonkey の「詳細」を開き、<b>「ユーザースクリプトを許可する」</b>（または「デベロッパーモード」）をオンにする</li>
@@ -457,7 +486,7 @@ function updateDet(m){batch.forEach(it=>{const h=it.horse_id,d=m[h],st=rows[h];i
 async function poll(force){const d=await api('/api/batch?n='+N);
  $('stat').innerHTML=`残り ${d.remaining} 頭 ／ 保存 ${d.saved}・記載なし ${d.none} ／ `+(d.auto_commit?`コミットまで あと ${Math.max(d.auto_commit-d.unsaved,0)} 件 <button onclick="commitNow()">今すぐコミット</button> <span class="muted">${esc(d.git||'')}</span>`:'自動コミット: 無効');
  $('recent').innerHTML=d.recent.map(r=>`<li>${esc(r.name)}: ${esc(r.text)}</li>`).join('')||'<li class="muted">なし</li>';
- usSeenAgo=d.us_seen_ago;renderUs();renderAppr(d.approvals||[]);const s=d.items.map(i=>i.horse_id).join(',');batch=d.items;if(s!==sig||force){sig=s;initBatch()}updateDet(d.detected)}
+ usSeenAgo=d.us_seen_ago;renderUs();renderSess(d.sporthorse_session);renderAppr(d.approvals||[]);const s=d.items.map(i=>i.horse_id).join(',');batch=d.items;if(s!==sig||force){sig=s;initBatch()}updateDet(d.detected)}
 async function saveBatch(){const out=[];batch.forEach(it=>{const h=it.horse_id,text=$('in_'+h).value.trim(),none=$('nn_'+h).checked,j1=$('j1_'+h).checked;
   const u=$('ur_'+h).value.trim()||$('ur_'+h).dataset.det||'';
   if(none)out.push({horse_id:h,none:true});else if(text)out.push({horse_id:h,text,confirm_jan1:j1,url:u});else out.push({horse_id:h,skip:true})});
@@ -538,6 +567,13 @@ def make_handler(store: Store, token: str):
                 self._json(store.capture(body.get("url", ""), body.get("title", ""), body.get("text", "")))
             elif path == "/api/ext_none":
                 self._json(store.capture_none(body.get("url", ""), body.get("title", "")))
+            elif path == "/api/sporthorse_session":
+                cookies = body.get("cookies") or {}
+                if isinstance(cookies, list):
+                    from src.research.pedigree.sporthorse_session import normalize_cookie_import
+
+                    cookies = normalize_cookie_import(cookies)
+                self._json(store.save_sporthorse_session(cookies, body.get("user_agent")))
             else:
                 self._json({"ok": False, "error": "not found"}, 404)
 
