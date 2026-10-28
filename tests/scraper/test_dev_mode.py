@@ -165,3 +165,17 @@ def test_dev_api_never_takes_scrape_queue_leader(dev_env, monkeypatch):
     monkeypatch.setattr("builtins.open", lambda *a, **k: opened.append(a) or (_ for _ in ()).throw(AssertionError("lock file opened")))
     assert api_app._try_acquire_queue_runner_leader() is False
     assert opened == []
+
+
+def test_watchdog_keeps_ops_queue_worker_whatever_the_profile():
+    # この PC の画面・API を dev にしても、運用の取得キューの処理役は .env の KEIBA_ENV のまま 127.0.0.1 で常駐させる。
+    # 止めるときはプロセス番号のファイルだけを使う（名前で探すと dev の API まで止める）
+    from pathlib import Path
+
+    s = Path("scripts/server/server_watchdog.sh").read_text(encoding="utf-8")
+    body = s[s.index("check_ops_queue() {"):s.index("# MLflow Tracking サーバー")]
+    assert "check_ops_queue || true" in s
+    assert "kill_by_pattern" not in body and "kill_by_pid_file \"$OPS_QUEUE_PID_FILE\"" in body
+    start = s[s.index("start_ops_queue() {"):s.index("check_ops_queue() {")]
+    assert 'KEIBA_ENV="$OPS_QUEUE_ENV"' in start and "--host 127.0.0.1" in start
+    assert "grep -E '^KEIBA_ENV=' \"${PROJECT_DIR}/.env\"" in s          # 画面・API のプロファイル（dev は KEIBA_ENV=dev を export）に引きずられない
