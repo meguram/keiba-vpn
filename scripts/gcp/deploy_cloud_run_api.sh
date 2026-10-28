@@ -12,7 +12,7 @@
 #   bash scripts/gcp/deploy_cloud_run_api.sh all     [--dry-run|--apply]   # build → deploy(--no-traffic)。切替は promote
 #
 # 必須の環境変数: PROJECT_ID, GCS_BUCKET。任意: REGION(asia-northeast1) SERVICE(keiba-api) TAG(日時) AR_REPO(keiba-vpn)
-#   MEMORY(2Gi) CPU(1) MIN_INSTANCES(0) MAX_INSTANCES(3) CONCURRENCY(30) TIMEOUT(60) GCS_PREFIX WITH_NEXT_KEY(1 で KEIBA_PROXY_KEY_NEXT も載せる) CPU_ALLOC(always|request)
+#   MEMORY(2Gi) CPU(1) MIN_INSTANCES(0) MAX_INSTANCES(3) CONCURRENCY(30) TIMEOUT(60) GCS_PREFIX WITH_NEXT_KEY(1 で KEIBA_PROXY_KEY_NEXT も載せる) CPU_ALLOC(request|always。既定 request)
 # 事前に scripts/gcp/setup_cloud_run_api.sh で サービスアカウント・Secret Manager・Artifact Registry を用意する。
 # =============================================================================
 set -euo pipefail
@@ -38,7 +38,7 @@ MEMORY="${MEMORY:-2Gi}"; CPU="${CPU:-1}"
 #   request = リクエスト中だけ割り当て(--cpu-throttling。リクエスト課金)。常駐スレッドは合間に止まるので、取り込みは起動時に全体を済ませ、
 #             以降はリクエストをきっかけに行う（KEIBA_MIRROR_MODE=request。src/api/cloudrun_entry.py）。アイドル中は課金されない。
 # 起動時は --cpu-boost で速くする（どちらの方式でも起動中は CPU が割り当てられる）。
-CPU_ALLOC="${CPU_ALLOC:-always}"
+CPU_ALLOC="${CPU_ALLOC:-request}"      # 既定はリクエスト課金（2026-10-28）。戻すときは CPU_ALLOC=always
 case "$CPU_ALLOC" in
   always) THROTTLE_FLAG="--no-cpu-throttling" ;;
   request) THROTTLE_FLAG="--cpu-throttling" ;;
