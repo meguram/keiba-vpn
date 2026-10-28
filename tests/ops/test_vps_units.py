@@ -179,3 +179,11 @@ def test_traffic_installer_is_valid_bash_and_installs_both_scripts():
     body = sh.read_text(encoding="utf-8")
     for name in ("traffic_client.py", "vps_traffic_probe.py", "heartbeat_client.py", "keiba-traffic.timer"):
         assert name in body
+
+
+def test_periodic_vps_scripts_never_request_api_paths():
+    """タイマーで回る VPS のスクリプトが /api/ を叩くと、nginx 経由で Cloud Run(keiba-api)が起き続ける（インスタンス課金で月 約 7,800 円。2026-10-28 に実測）。"""
+    for name in ("healthcheck.sh", "heartbeat_client.py"):
+        body = (ROOT_DIR / "scripts/ops/vps" / name).read_text(encoding="utf-8")
+        code = "\n".join(ln for ln in body.splitlines() if not ln.lstrip().startswith("#") and "/api/ は" not in ln)
+        assert "/api/" not in code, name
