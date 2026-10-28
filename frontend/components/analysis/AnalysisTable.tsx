@@ -49,6 +49,8 @@ export function AnalysisTable({ entries, module }: { entries: AnalysisEntry[]; m
   const blocks = columnBlocks(columns, module.groups ?? []);
   const ordered = blocks.flatMap((b) => b.columns.map((c) => ({ c, g: b.group, first: c === b.columns[0] })));
   const cellsOf = (e: AnalysisEntry) => e.analysis?.[module.id];
+  const keyHeader = module.key_header ?? null;
+  const keyOf = (e: AnalysisEntry) => (cellsOf(e)?._key as string | null | undefined) ?? null;
 
   return (
     <div style={{ marginTop: 8 }}>
@@ -58,7 +60,7 @@ export function AnalysisTable({ entries, module }: { entries: AnalysisEntry[]; m
         <table className="ra-tbl">
           <thead>
             <tr className="ra-g">
-              <th colSpan={4} />
+              <th colSpan={keyHeader ? 5 : 4} />
               {blocks.map((b, i) => (
                 <th key={b.group?.key ?? `u${i}`} className="gh" colSpan={b.columns.length}>
                   {b.group ? <>{b.group.label}{b.group.sub && <small>{b.group.sub}</small>}</> : null}
@@ -66,7 +68,7 @@ export function AnalysisTable({ entries, module }: { entries: AnalysisEntry[]; m
               ))}
             </tr>
             <tr>
-              <th>馬番</th><th className="l">馬名</th><th>性齢</th><th className="l">騎手</th>
+              <th>馬番</th><th className="l">馬名</th><th>性齢</th><th className="l">騎手</th>{keyHeader && <th className="l">{keyHeader}</th>}
               {ordered.map(({ c, first }) => (
                 <th key={c.key} className={first ? "gs" : undefined} title={c.title ?? undefined}>{c.label}</th>
               ))}
@@ -81,14 +83,17 @@ export function AnalysisTable({ entries, module }: { entries: AnalysisEntry[]; m
                   <td className="l nm">{e.horse_name ?? "–"}</td>
                   <td className="dim">{e.sex_age ?? "–"}</td>
                   <td className="l"><Jockey e={e} /></td>
+                  {keyHeader && <td className="l">{keyOf(e) ?? <span className="dim">不明</span>}</td>}
                   {ordered.map(({ c, g, first }) => {
                     const v = cells?.[c.key];
                     const thin = isThin(g, cells);
+                    const bg = thin ? undefined : (heatColor(v, c.scale) ?? (c.palette && typeof v === "string" ? c.palette[v] : undefined));
+                    const left = c.fmt === "text" && !c.palette;
                     return (
                       <td
                         key={c.key}
-                        className={[first ? "gs" : "", thin ? "thin" : ""].filter(Boolean).join(" ") || undefined}
-                        style={{ background: thin ? undefined : heatColor(v, c.scale) }}
+                        className={[first ? "gs" : "", thin ? "thin" : "", left ? "l" : ""].filter(Boolean).join(" ") || undefined}
+                        style={{ background: bg, fontWeight: c.palette && bg ? 700 : undefined }}
                         data-sort={sortValue(v, c.fmt)}
                       >
                         {formatCell(v, c.fmt)}
@@ -108,14 +113,15 @@ export function AnalysisTable({ entries, module }: { entries: AnalysisEntry[]; m
           return (
             <div key={e.key} className="ra-card">
               <div className="r1"><NumChip e={e} /><span className="nm">{e.horse_name ?? "–"}</span></div>
-              <div className="r2">{[e.sex_age, e.jockey_name ?? "騎手未定", e.jockey_weight != null ? `${e.jockey_weight}kg` : null, e.trainer_name].filter(Boolean).join(" ・ ")}</div>
+              <div className="r2">{[e.sex_age, e.jockey_name ?? "騎手未定", e.jockey_weight != null ? `${e.jockey_weight}kg` : null, e.trainer_name, keyHeader ? `${keyHeader}: ${keyOf(e) ?? "不明"}` : null].filter(Boolean).join(" ・ ")}</div>
               {blocks.map((b, i) => (
                 <div key={b.group?.key ?? `u${i}`} className={`grp${isThin(b.group, cells) ? " thin" : ""}`}>
                   <div className="gl">{b.group ? <><b>{b.group.label}</b>{b.group.sub}</> : null}</div>
                   <div className="gv">
                     {b.columns.map((c) => {
-                      const bg = isThin(b.group, cells) ? undefined : heatColor(cells?.[c.key], c.scale);
-                      return <span key={c.key} className={bg ? "hm" : undefined} style={{ background: bg }}><i>{c.label}</i>{formatCell(cells?.[c.key], c.fmt)}</span>;
+                      const v = cells?.[c.key];
+                      const bg = isThin(b.group, cells) ? undefined : (heatColor(v, c.scale) ?? (c.palette && typeof v === "string" ? c.palette[v] : undefined));
+                      return <span key={c.key} className={bg ? "hm" : undefined} style={{ background: bg }}><i>{c.label}</i>{formatCell(v, c.fmt)}</span>;
                     })}
                   </div>
                 </div>

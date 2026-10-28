@@ -37,6 +37,7 @@ TREES = (
     "data/local/inference/snapshots",
     "data/local/inference/lap_forecast",
     "data/local/inference/tracking_v2",
+    "data/local/race_analysis",        # めぐ分析の事前計算の結果（レースごと。画面はこれを読むだけ）
     "data/local/meta/entries_state",
     *AUTH_TREES,
     # 画面が読む参照データ（取得で作る・更新が速い／ほぼ固定のもの。旧 serving_state の core 群）。"<フォルダ>::<glob>" はフォルダの中の一致するファイルだけ

@@ -1,9 +1,13 @@
-"""分析モジュールの登録。画面にはこの順で並ぶ。新しい分析は、モジュールを作ってここに足す。"""
+"""分析モジュールの登録。画面のタブはこの順で並ぶ。新しい分析は、モジュールを作ってここに足す。"""
 
 from __future__ import annotations
 
-from src.research.race_analysis.jockey_course import JockeyCourseModule
+from src.research.race_analysis.course_stats import GATE, JOCKEY, SIRE, CourseStatsModule
+from src.research.race_analysis.past_position import PastPositionModule
 
 MODULES = (
-    JockeyCourseModule(),
+    CourseStatsModule(JOCKEY),
+    CourseStatsModule(GATE),
+    CourseStatsModule(SIRE),
+    PastPositionModule(),
 )
