@@ -33,5 +33,7 @@ DRIFT=$?
 DOCS=$?
 [ "$DRIFT" -ne 0 ] && echo "PARSE_DRIFT_FAIL: flat テーブルの列で空・文字化けの急増があります（上の行を確認）" >>"$LOG"
 [ "$DOCS" -ne 0 ] && echo "PARSE_DRIFT_DOCS_FAIL: 最近保存した文書で空・文字化けの急増があります（上の行を確認）" >>"$LOG"
+# めぐ分析の事前計算（結果が更新されたので、過去30日〜先14日のレースの分析を作り直す。父の対応表も先に差分更新する）。失敗しても本体の終了コードには影響させない
+"$PYTHON" -m src.scripts.data.precompute_race_analysis >>"$LOG" 2>&1 || echo "RACE_ANALYSIS_FAIL: めぐ分析の事前計算に失敗しました（上の行を確認）" >>"$LOG"
 echo "===== $(date -Is) END exit=$EC audit=$AUD drift=$DRIFT docs=$DOCS =====" >>"$LOG"
 exit "$EC"

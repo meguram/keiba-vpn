@@ -18,8 +18,9 @@ class FakeStorage:
         return self.data.get((cat, key))
 
 
-def _row(rid, date, venue, surface, dist, fin, jid):
-    return {"race_id": rid, "date": date, "venue": venue, "surface": surface, "distance": dist, "finish_position": fin, "jockey_id": jid}
+def _row(rid, date, venue, surface, dist, fin, jid, bracket=1, horse="hx", passing="3-3", field=10):
+    return {"race_id": rid, "date": date, "venue": venue, "surface": surface, "distance": dist, "finish_position": fin, "jockey_id": jid,
+            "bracket_number": bracket, "horse_id": horse, "passing_order": passing, "field_size": field}
 
 
 @pytest.fixture()
@@ -39,7 +40,8 @@ def flat_dir(tmp_path, monkeypatch):
     d.mkdir()
     pd.DataFrame(rows).to_parquet(d / "race_result_flat.parquet")
     monkeypatch.setattr(runs_mod, "FLAT_DIR", tmp_path)
-    runs_mod._cache.update(sig=None, df=None)
+    monkeypatch.setattr(runs_mod, "SIRE_MAP_PATH", tmp_path / "no_such_sire_map.parquet")
+    runs_mod._cache.update(sig=None, df=None, sire_sig=None, sire_df=None)
     return tmp_path
 
 
@@ -118,14 +120,16 @@ def test_a_failing_module_does_not_break_the_others(flat_dir):
 
     st = _storage([{"horse_number": 1, "horse_name": "イチ", "horse_id": "h1", "jockey_id": "J1"}])
     d = analyze_race(st, "202605040111", modules=(Boom(), *MODULES))
-    assert [(m["id"], m["status"]) for m in d["modules"]] == [("boom", "error"), ("jockey_course", "ok")]
+    assert [(m["id"], m["status"]) for m in d["modules"]][:2] == [("boom", "error"), ("jockey_course", "ok")]
     assert "boom" not in d["entries"][0]["analysis"] and "jockey_course" in d["entries"][0]["analysis"]
 
 
 def test_module_not_applicable_when_course_unknown(flat_dir):
     st = _storage([{"horse_number": 1, "horse_name": "イチ", "horse_id": "h1", "jockey_id": "J1"}], surface=None, distance=None)
     d = analyze_race(st, "202605040111")
-    assert d["modules"][0]["status"] == "not_applicable"
+    st = {m["id"]: m["status"] for m in d["modules"]}
+    assert st["jockey_course"] == st["gate_course"] == st["sire_course"] == "not_applicable"      # コース条件が要る分析
+    assert st["past_position"] == "ok"                                                           # 過去の位置取りはコースに依らない
 
 
 def test_analysis_endpoint_is_member_only():
@@ -133,3 +137,95 @@ def test_analysis_endpoint_is_member_only():
 
     assert member_only_path("/api/v1/races/202605040111/analysis")
     assert not member_only_path("/api/v1/races/202605040111/analysis/extra")
+
+
+def test_gate_course_uses_bracket_and_averages_over_all_horses(tmp_path, monkeypatch):
+    rows = [
+        _row("G1", "2026-01-05", "東京", "芝", 1600, 1, "J1", bracket=1),
+        _row("G1", "2026-01-05", "東京", "芝", 1600, 2, "J2", bracket=2),
+        _row("G1", "2026-01-05", "東京", "芝", 1600, 3, "J3", bracket=8),
+        _row("G2", "2026-01-12", "東京", "芝", 1600, 1, "J1", bracket=1),
+        _row("G2", "2026-01-12", "東京", "芝", 1600, 5, "J2", bracket=8),
+        _row("G3", "2026-01-19", "東京", "芝", 2000, 4, "J1", bracket=1),     # 距離違い
+        _row("G4", "2026-10-31", "東京", "芝", 1600, 1, "J1", bracket=1),     # 当日 → 数えない
+    ]
+    d = tmp_path / "2026"
+    d.mkdir()
+    pd.DataFrame(rows).to_parquet(d / "race_result_flat.parquet")
+    monkeypatch.setattr(runs_mod, "FLAT_DIR", tmp_path)
+    monkeypatch.setattr(runs_mod, "SIRE_MAP_PATH", tmp_path / "none.parquet")
+    runs_mod._cache.update(sig=None, df=None, sire_sig=None, sire_df=None)
+    st = _storage([
+        {"horse_number": 1, "bracket_number": 1, "horse_name": "イチ", "horse_id": "h1", "jockey_id": "J1"},
+        {"horse_number": 2, "bracket_number": 8, "horse_name": "ハチ", "horse_id": "h2", "jockey_id": "J2"},
+        {"horse_number": 3, "bracket_number": 0, "horse_name": "未", "horse_id": "h3", "jockey_id": "J3"},
+    ])
+    d = analyze_race(st, "202605040111")
+    m = next(x for x in d["modules"] if x["id"] == "gate_course")
+    assert m["status"] == "ok" and "枠順がまだ確定していない" in " ".join(m["notes"])
+    a = {e["horse_name"]: e["analysis"]["gate_course"] for e in d["entries"]}
+    assert a["イチ"]["course_rec"] == [2, 0, 0, 0] and a["イチ"]["venue_surface_rec"] == [2, 0, 0, 1]   # 1枠: G1,G2 は1着、G3(2000m)は4着
+    assert a["ハチ"]["course_rec"] == [0, 0, 1, 1]                                                       # 8枠: 3着と5着
+    assert a["未"]["course_rec"] is None and a["未"]["course_win"] is None                               # 枠未確定は作り出さない
+    win = next(c for c in m["columns"] if c["key"] == "course_win")
+    assert win["scale"]["mid"] == pytest.approx(2 / 5)                                                    # 色の基準はこのコースの全馬の平均（5 走中 1着 2 回）
+
+
+def test_sire_course_joins_sire_by_horse_id(tmp_path, monkeypatch):
+    rows = [
+        _row("S1", "2026-01-05", "東京", "芝", 1600, 1, "J1", horse="a1"),
+        _row("S1", "2026-01-05", "東京", "芝", 1600, 4, "J2", horse="a2"),
+        _row("S2", "2026-01-12", "東京", "芝", 1600, 2, "J1", horse="b1"),
+        _row("S3", "2026-01-19", "東京", "芝", 1600, 9, "J1", horse="z9"),   # 父が分からない馬 → どの種牡馬にも数えない
+    ]
+    d = tmp_path / "2026"
+    d.mkdir()
+    pd.DataFrame(rows).to_parquet(d / "race_result_flat.parquet")
+    sire = pd.DataFrame([
+        {"horse_id": "a1", "sire_id": "SIRE_A", "sire_name": "父A", "dam_sire_id": "D1", "dam_sire_name": "母父1"},
+        {"horse_id": "a2", "sire_id": "SIRE_B", "sire_name": "父B", "dam_sire_id": "D1", "dam_sire_name": "母父1"},
+        {"horse_id": "b1", "sire_id": "SIRE_A", "sire_name": "父A", "dam_sire_id": "D2", "dam_sire_name": "母父2"},
+        {"horse_id": "e1", "sire_id": "SIRE_A", "sire_name": "父A", "dam_sire_id": "D1", "dam_sire_name": "母父1"},   # 今回の出走馬
+    ])
+    sire_path = tmp_path / "horse_sire_map.parquet"
+    sire.to_parquet(sire_path)
+    monkeypatch.setattr(runs_mod, "FLAT_DIR", tmp_path)
+    monkeypatch.setattr(runs_mod, "SIRE_MAP_PATH", sire_path)
+    runs_mod._cache.update(sig=None, df=None, sire_sig=None, sire_df=None)
+    st = _storage([
+        {"horse_number": 1, "bracket_number": 1, "horse_name": "今回A", "horse_id": "e1", "jockey_id": "J1"},
+        {"horse_number": 2, "bracket_number": 2, "horse_name": "父不明", "horse_id": "unknown", "jockey_id": "J2"},
+    ])
+    d = analyze_race(st, "202605040111")
+    m = next(x for x in d["modules"] if x["id"] == "sire_course")
+    assert m["status"] == "ok" and m["key_header"] == "父（種牡馬）"
+    a = {e["horse_name"]: e["analysis"]["sire_course"] for e in d["entries"]}
+    assert a["今回A"]["_key"] == "父A" and a["今回A"]["course_rec"] == [1, 1, 0, 0]       # 父A の産駒: S1 で 1着、S2 で 2着
+    assert a["父不明"]["course_rec"] is None and a["父不明"].get("_key") is None
+    assert "父を特定できない" in " ".join(m["notes"])
+
+
+def test_build_horse_sire_map_parses_ancestors_and_is_incremental(tmp_path):
+    import json
+
+    from src.scripts.data import build_horse_sire_map as B
+
+    ped = tmp_path / "ped"
+    (ped / "2022").mkdir(parents=True)
+
+    def doc(hid, sire_id):
+        return {"horse_id": hid, "sire": "x", "dam_sire": "y", "ancestors": [
+            {"generation": 1, "position": 0, "name": "父名", "horse_id": sire_id},
+            {"generation": 1, "position": 1, "name": "母名", "horse_id": "m"},
+            {"generation": 2, "position": 2, "name": "母父名", "horse_id": "dsire"}]}
+
+    (ped / "2022" / "2022100001.json").write_text(json.dumps(doc("2022100001", "S1")), encoding="utf-8")
+    (ped / "2022" / "2022100002.json").write_text(json.dumps({"horse_id": "2022100002", "ancestors": []}), encoding="utf-8")   # 父が取れない
+    out = tmp_path / "map.parquet"
+    r1 = B.build(out, ped, {"2022100001", "2022100002", "2022100003"})            # 3 頭目は血統 JSON 無し
+    assert r1["added"] == 1 and r1["no_pedigree"] == 2 and r1["total"] == 1
+    m = pd.read_parquet(out)
+    assert m.iloc[0].to_dict() == {"horse_id": "2022100001", "sire_id": "S1", "sire_name": "父名", "dam_sire_id": "dsire", "dam_sire_name": "母父名"}
+    (ped / "2022" / "2022100003.json").write_text(json.dumps(doc("2022100003", "S2")), encoding="utf-8")
+    r2 = B.build(out, ped, {"2022100001", "2022100002", "2022100003"})            # 既存の行は読み直さない。後から出来た血統を拾う
+    assert r2["total"] == 2 and r2["read"] == 2

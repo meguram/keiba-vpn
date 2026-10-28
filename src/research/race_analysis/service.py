@@ -50,6 +50,7 @@ def _int_or_none(v: Any) -> int | None:
 
 
 def analyze_race(storage: Any, race_id: str, modules: tuple[AnalysisModule, ...] = MODULES) -> dict[str, Any]:
+    """分析を計算する（重い）。事前計算（precompute.py）だけが呼ぶ。API は保存済みの結果を読むだけ。"""
     card, rows = _load_card(storage, race_id)
     entries, provisional = _normalize_entries(rows)
     race = {
@@ -90,6 +91,7 @@ def analyze_race(storage: Any, race_id: str, modules: tuple[AnalysisModule, ...]
             notes=out.notes,
             data_until=out.data_until,
             source=out.source,
+            key_header=out.key_header,
         )
         payload["modules"].append(meta)
         for e in entries:

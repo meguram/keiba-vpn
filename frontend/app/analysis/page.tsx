@@ -7,7 +7,7 @@ import { LoadingNotice } from "@/components/LoadingNotice";
 import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip } from "@/components/RaceStrip";
 import { AnalysisTable } from "@/components/analysis/AnalysisTable";
-import { entriesUnavailable, formatSource } from "@/lib/raceAnalysis";
+import { entriesUnavailable, formatComputedAt, formatSource } from "@/lib/raceAnalysis";
 import type { RaceAnalysis } from "@/lib/raceAnalysis";
 import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
 
@@ -225,7 +225,7 @@ export default function AnalysisPage() {
                     {race.venue ?? activeRace?.venue} {race.round ?? activeRace?.round}R {race.race_name ?? activeRace?.race_name}
                   </div>
                   <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>
-                    {[race.date, race.surface && race.distance ? `${race.surface}${race.distance}m` : null, race.grade, race.start_time ? `${race.start_time} 発走` : null, `${data.entries.length}頭`].filter(Boolean).join(" ・ ")}
+                    {[race.date, race.surface && race.distance ? `${race.surface}${race.distance}m` : null, race.grade, race.start_time ? `${race.start_time} 発走` : null, data.entries.length ? `${data.entries.length}頭` : null, formatComputedAt(data.computed_at) ? `分析の集計 ${formatComputedAt(data.computed_at)}` : null].filter(Boolean).join(" ・ ")}
                   </div>
                 </div>
 
@@ -233,6 +233,10 @@ export default function AnalysisPage() {
                   <div role="note" style={{ marginBottom: 10, padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(210,153,34,0.4)", background: "rgba(210,153,34,0.08)", color: "#d29922", fontSize: 12 }}>
                     暫定の出馬表です。馬番・枠順・騎手は確定前で、変わることがあります。
                   </div>
+                )}
+
+                {data.status === "pending" && (
+                  <div className="card" style={{ color: "var(--text-dim)", fontSize: 13 }}>{data.message ?? "このレースの分析はまだ用意できていません。"}</div>
                 )}
 
                 {data.status === "no_entries" && (
@@ -269,7 +273,7 @@ export default function AnalysisPage() {
                           <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{mod.description}</span>
                         </div>
                         {mod.status === "ok" && <AnalysisTable entries={data.entries} module={mod} />}
-                        {mod.status === "not_applicable" && <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>このレースでは表示できません（コース条件が未確定です）。</p>}
+                        {mod.status === "not_applicable" && <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>このレースでは表示できません（コース条件や元データが未確定です）。</p>}
                         {mod.status === "error" && <p style={{ fontSize: 13, color: "var(--err)", marginTop: 8 }}>この分析の計算に失敗しました。</p>}
                         {mod.status === "ok" && mod.source && (
                           <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--text)" }}>{formatSource(mod.source)}</p>

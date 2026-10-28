@@ -19,6 +19,8 @@ class Column:
     title: str | None = None       # ホバーで出す説明
     # セル背景の強調。値が mid なら無色、hi 以上で最も濃い緑、lo 以下で最も濃い赤（pct 列向け）。None なら色を付けない
     scale: dict[str, float] | None = None
+    # 値ごとの背景色（text 列向け。例: 脚質）。None なら色を付けない
+    palette: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -49,6 +51,7 @@ class ModuleOutput:
     cells: dict[str, dict[str, Any]]      # entry key -> {column key: 値}
     notes: list[str] = field(default_factory=list)
     data_until: str | None = None         # 使ったデータの最終日
+    key_header: str | None = None         # 分析の軸（父など）を表の列として出すときの見出し。値は cells の "_key"
     source: dict[str, Any] | None = None  # 出典: provider（提供元の機関）, dataset, period_from, period_to, races, rows
 
 

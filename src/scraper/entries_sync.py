@@ -227,6 +227,7 @@ def run_entries_sync(
                 if c["type"] in ("removed", "jockey_change"):
                     notable.append({"race_id": p["race_id"], **c})
         result.update(fetched=len(todo), phases=phases, notable_changes=notable[:30])
+        result["analysis"] = _refresh_analysis(storage, [p["race_id"] for p in todo])
         _mark_done(sync, cp, result)
         return result
 
@@ -268,6 +269,17 @@ def _refresh_race_lists(storage: Any, dates: list[str], cp: dict) -> list[str]:
         except Exception:  # noqa: BLE001
             pass
     return out
+
+
+def _refresh_analysis(storage: Any, race_ids: list[str]) -> dict[str, int] | dict[str, str]:
+    """出馬表を取り直したレースのめぐ分析を作り直す（事前計算。画面は保存済みの結果を読むだけ）。失敗しても出馬表の同期は成功扱い。"""
+    try:
+        from src.research.race_analysis.precompute import refresh_for_races
+
+        return refresh_for_races(storage, race_ids)
+    except Exception as exc:
+        logger.exception("めぐ分析の事前計算に失敗")
+        return {"error": str(exc)}
 
 
 def _mark_done(sync: dict, cp: dict, result: dict) -> None:

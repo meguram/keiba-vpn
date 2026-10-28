@@ -12,7 +12,7 @@ const ts = createRequire(import.meta.url)("typescript");
 const src = ts.transpileModule(readFileSync(join(here, "raceAnalysis.ts"), "utf8"), { compilerOptions: { module: ts.ModuleKind.ES2020, target: ts.ScriptTarget.ES2020 } }).outputText;
 const out = join(mkdtempSync(join(tmpdir(), "ra-")), "raceAnalysis.mjs");
 writeFileSync(out, src);
-const { formatCell, sortValue, columnBlocks, isThin, entriesUnavailable, formatSource, heatColor } = await import(pathToFileURL(out).href);
+const { formatCell, sortValue, columnBlocks, isThin, entriesUnavailable, formatSource, heatColor, formatComputedAt } = await import(pathToFileURL(out).href);
 
 test("formatCell: 成績・率・整数、値が無ければダッシュ", () => {
   assert.equal(formatCell([6, 11, 7, 38], "record"), "6-11-7-38");
@@ -82,4 +82,10 @@ test("heatColor: 平均より高いほど緑、低いほど赤、平均付近・
   assert.equal(heatColor(0.2, null), undefined);
   const mid = heatColor(0.16, sc);                                 // hi と mid の中間 = 半分の濃さ
   assert.equal(mid, "rgba(34,197,94,0.29)");
+});
+
+test("formatComputedAt: 事前計算の時刻を月/日 時:分 で。壊れた値は null", () => {
+  assert.equal(formatComputedAt("2026-10-28T17:30:05+0900"), "10/28 17:30 時点");
+  assert.equal(formatComputedAt(null), null);
+  assert.equal(formatComputedAt("x"), null);
 });

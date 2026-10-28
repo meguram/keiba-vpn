@@ -8,7 +8,7 @@ export type CellFormat = "record" | "pct" | "int" | "text";
 /** セル背景の強調の目盛り。mid で無色、hi 以上で最も濃い緑、lo 以下で最も濃い赤 */
 export type HeatScale = { lo: number; mid: number; hi: number };
 
-export type AnalysisColumn = { key: string; label: string; fmt: CellFormat; group?: string | null; title?: string | null; scale?: HeatScale | null };
+export type AnalysisColumn = { key: string; label: string; fmt: CellFormat; group?: string | null; title?: string | null; scale?: HeatScale | null; palette?: Record<string, string> | null };
 export type AnalysisGroup = { key: string; label: string; sub?: string | null; n_key?: string | null; min_n: number };
 
 /** 分析に使ったデータの出典（提供元の機関・集計した期間・件数） */
@@ -31,6 +31,8 @@ export type AnalysisModuleMeta = {
   notes?: string[];
   data_until?: string | null;
   source?: AnalysisSource | null;
+  /** 分析の軸（父など）を表の列として出すときの見出し。値は各馬の cells の _key */
+  key_header?: string | null;
 };
 
 export type AnalysisEntry = {
@@ -60,7 +62,9 @@ export type AnalysisRace = {
 };
 
 export type RaceAnalysis = {
-  status: "ok" | "no_entries";
+  status: "ok" | "no_entries" | "pending";
+  /** 分析を事前計算した時刻（ISO）。表示のたびには計算しない */
+  computed_at?: string | null;
   message?: string;
   race: AnalysisRace;
   entries: AnalysisEntry[];
@@ -139,4 +143,10 @@ export function heatColor(v: unknown, scale: HeatScale | null | undefined): stri
   if (Math.abs(t) < 0.04) return undefined;
   const alpha = (0.08 + 0.42 * Math.abs(t)).toFixed(2);
   return t > 0 ? `rgba(34,197,94,${alpha})` : `rgba(248,81,73,${alpha})`;
+}
+
+/** 事前計算の時刻の表示用（例: 10/28 17:30 時点）。壊れた値は null。 */
+export function formatComputedAt(iso: string | null | undefined): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso ?? "");
+  return m ? `${Number(m[2])}/${Number(m[3])} ${m[4]}:${m[5]} 時点` : null;
 }
