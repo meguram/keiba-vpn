@@ -17,6 +17,8 @@ class Column:
     fmt: str = "text"
     group: str | None = None
     title: str | None = None       # ホバーで出す説明
+    # セル背景の強調。値が mid なら無色、hi 以上で最も濃い緑、lo 以下で最も濃い赤（pct 列向け）。None なら色を付けない
+    scale: dict[str, float] | None = None
 
 
 @dataclass(frozen=True)

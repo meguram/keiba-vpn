@@ -1,7 +1,7 @@
 "use client";
 
 import { bracketChipStyle } from "@/lib/bracket";
-import { AnalysisEntry, AnalysisModuleMeta, columnBlocks, formatCell, isThin, sortValue } from "@/lib/raceAnalysis";
+import { AnalysisEntry, AnalysisModuleMeta, columnBlocks, formatCell, heatColor, isThin, sortValue } from "@/lib/raceAnalysis";
 
 const CSS = `
 .ra-wide{display:block}.ra-cards{display:none}
@@ -29,6 +29,7 @@ const CSS = `
 .ra-card .grp .gv{display:flex;flex-wrap:wrap;gap:2px 14px;font-variant-numeric:tabular-nums}
 .ra-card .grp .gv span i{font-style:normal;color:var(--text-dim);font-size:10px;margin-right:3px}
 .ra-card .thin{opacity:.45}
+.ra-card .hm{padding:1px 6px;border-radius:5px}
 `;
 
 function NumChip({ e }: { e: AnalysisEntry }) {
@@ -82,10 +83,12 @@ export function AnalysisTable({ entries, module }: { entries: AnalysisEntry[]; m
                   <td className="l"><Jockey e={e} /></td>
                   {ordered.map(({ c, g, first }) => {
                     const v = cells?.[c.key];
+                    const thin = isThin(g, cells);
                     return (
                       <td
                         key={c.key}
-                        className={[first ? "gs" : "", isThin(g, cells) ? "thin" : ""].filter(Boolean).join(" ") || undefined}
+                        className={[first ? "gs" : "", thin ? "thin" : ""].filter(Boolean).join(" ") || undefined}
+                        style={{ background: thin ? undefined : heatColor(v, c.scale) }}
                         data-sort={sortValue(v, c.fmt)}
                       >
                         {formatCell(v, c.fmt)}
@@ -110,7 +113,10 @@ export function AnalysisTable({ entries, module }: { entries: AnalysisEntry[]; m
                 <div key={b.group?.key ?? `u${i}`} className={`grp${isThin(b.group, cells) ? " thin" : ""}`}>
                   <div className="gl">{b.group ? <><b>{b.group.label}</b>{b.group.sub}</> : null}</div>
                   <div className="gv">
-                    {b.columns.map((c) => <span key={c.key}><i>{c.label}</i>{formatCell(cells?.[c.key], c.fmt)}</span>)}
+                    {b.columns.map((c) => {
+                      const bg = isThin(b.group, cells) ? undefined : heatColor(cells?.[c.key], c.scale);
+                      return <span key={c.key} className={bg ? "hm" : undefined} style={{ background: bg }}><i>{c.label}</i>{formatCell(cells?.[c.key], c.fmt)}</span>;
+                    })}
                   </div>
                 </div>
               ))}

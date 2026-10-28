@@ -5,7 +5,10 @@
 
 export type CellFormat = "record" | "pct" | "int" | "text";
 
-export type AnalysisColumn = { key: string; label: string; fmt: CellFormat; group?: string | null; title?: string | null };
+/** セル背景の強調の目盛り。mid で無色、hi 以上で最も濃い緑、lo 以下で最も濃い赤 */
+export type HeatScale = { lo: number; mid: number; hi: number };
+
+export type AnalysisColumn = { key: string; label: string; fmt: CellFormat; group?: string | null; title?: string | null; scale?: HeatScale | null };
 export type AnalysisGroup = { key: string; label: string; sub?: string | null; n_key?: string | null; min_n: number };
 
 /** 分析に使ったデータの出典（提供元の機関・集計した期間・件数） */
@@ -126,4 +129,14 @@ export function formatSource(src: AnalysisSource): string {
   if (src.period_from && src.period_to) parts.push(`集計期間: ${ymd(src.period_from)}〜${ymd(src.period_to)}`);
   if (src.races > 0) parts.push(`対象: ${src.races.toLocaleString("en-US")}レース・${src.rows.toLocaleString("en-US")}出走`);
   return parts.join(" ／ ");
+}
+
+/** 値に応じたセルの背景色（平均より高い=緑、低い=赤、差が大きいほど濃い）。目盛りが無い・値が無い・平均とほぼ同じなら色なし。 */
+export function heatColor(v: unknown, scale: HeatScale | null | undefined): string | undefined {
+  if (typeof v !== "number" || !Number.isFinite(v) || !scale) return undefined;
+  const { lo, mid, hi } = scale;
+  const t = v >= mid ? (hi > mid ? Math.min(1, (v - mid) / (hi - mid)) : 0) : (mid > lo ? -Math.min(1, (mid - v) / (mid - lo)) : 0);
+  if (Math.abs(t) < 0.04) return undefined;
+  const alpha = (0.08 + 0.42 * Math.abs(t)).toFixed(2);
+  return t > 0 ? `rgba(34,197,94,${alpha})` : `rgba(248,81,73,${alpha})`;
 }
