@@ -5,7 +5,6 @@
 import type { Column } from "@/lib/columns";
 import { SHOW_DEV_ONLY } from "@/lib/features";
 import upset_conditions from "./upset-conditions.json";
-import upset_short_local from "./upset-short-local.json";
 import summer_mare from "./summer-mare.json";
 import first_blinkers from "./first-blinkers.json";
 import gelding_return from "./gelding-return.json";
@@ -19,7 +18,6 @@ import jockey_change from "./jockey-change.json";
 
 const ALL = [
   upset_conditions,
-  upset_short_local,
   summer_mare,
   first_blinkers,
   gelding_return,
