@@ -1,0 +1,81 @@
+{
+  "slug": "early-maturing-bloodline",
+  "title": "エピファネイアは早熟？",
+  "claim": "早熟血統は年齢が上がると走らなくなる",
+  "verdict": "pending",
+  "summary": "早熟といわれる血統の、年齢別の好走距離・好走舞台を追います。めぐ分析とも連動します。",
+  "categories": [
+    "bloodline/maturity"
+  ],
+  "published": "2026-10-28",
+  "dataset": {
+    "period": "（集計準備中）",
+    "conditions": "（集計準備中）",
+    "sample": "（集計準備中）"
+  },
+  "draft": true,
+  "body": [
+    {
+      "type": "note",
+      "text": "このコラムは準備中です。集計が終わりしだい、結果とグラフをここに載せます。"
+    },
+    {
+      "type": "heading",
+      "text": "気になる疑問"
+    },
+    {
+      "type": "text",
+      "text": "・早熟血統（エピファネイアなど）は本当に早熟なのか\n・馬の年齢によって、好走距離や好走舞台は変わるのか"
+    },
+    {
+      "type": "heading",
+      "text": "これから調べること"
+    },
+    {
+      "type": "text",
+      "text": "・血統別・年齢別の成績\n・年齢による好走距離・コースの変化"
+    },
+    {
+      "type": "link",
+      "href": "/analysis",
+      "label": "めぐ分析で出走馬の血統を見る",
+      "desc": "種牡馬×コースなど、今週のレースの血統別成績を確認できます。"
+    },
+    {
+      "type": "heading",
+      "text": "結果"
+    },
+    {
+      "type": "stats",
+      "items": [
+        {
+          "label": "対象レース",
+          "value": "–",
+          "sub": "集計後に掲載"
+        },
+        {
+          "label": "対象馬",
+          "value": "–",
+          "sub": "集計後に掲載"
+        },
+        {
+          "label": "差（ポイント）",
+          "value": "–",
+          "sub": "集計後に掲載"
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "text": "（集計後に掲載）"
+    },
+    {
+      "type": "heading",
+      "text": "まとめ"
+    },
+    {
+      "type": "text",
+      "text": "（集計後に掲載）"
+    }
+  ]
+}

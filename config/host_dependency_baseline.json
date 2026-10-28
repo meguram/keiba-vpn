@@ -181,7 +181,7 @@
    "local_data": 1
   },
   "src/ops/gcs_mirror.py": {
-   "local_data": 10,
+   "local_data": 11,
    "page_reference": 12
   },
   "src/ops/heartbeat_store.py": {
@@ -200,6 +200,9 @@
    "local_data": 4,
    "page_reference": 1
   },
+  "src/ops/pipeline_health.py": {
+   "local_data": 2
+  },
   "src/ops/release_manifest.py": {
    "local_data": 1
   },
@@ -210,6 +213,9 @@
    "page_reference": 1
   },
   "src/pipeline/inference/growth_attach.py": {
+   "local_data": 1
+  },
+  "src/pipeline/inference/hem_megu_infer.py": {
    "local_data": 1
   },
   "src/pipeline/inference/horse_growth.py": {
@@ -343,7 +349,7 @@
    "local_data": 1
   },
   "src/scraper/run.py": {
-   "local_data": 7
+   "local_data": 8
   },
   "src/scraper/scheduler.py": {
    "local_data": 1
@@ -355,6 +361,9 @@
    "local_data": 5
   },
   "src/scraper/shutuba_audit.py": {
+   "local_data": 2
+  },
+  "src/scraper/sire_line_store.py": {
    "local_data": 2
   },
   "src/scraper/smartrc_client.py": {

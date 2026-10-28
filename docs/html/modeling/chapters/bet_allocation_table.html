@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>指数順位ごとの買い目と集計金額の表（案）</title>
+<style>:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --warn:#fbbf24; }
+* { box-sizing: border-box; } body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 15px; padding: 40px 56px 96px; max-width: 1100px; margin: 0 auto; }
+a { color: var(--accent-2); } h1 { font-size: 26px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; } h3 { font-size: 16px; margin: 22px 0 8px; }
+table { border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; background: var(--panel); } th, td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; vertical-align: top; } th { background: #1b2a4d; }
+td.num { text-align: right; font-family: monospace; } .muted { color: var(--muted); font-size: 13px; } .note { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }</style></head>
+<body><a href="../../index.html" class="muted">← ドキュメント一覧</a>
+<h1>指数順位ごとの買い目と集計金額の表（案）</h1>
+<p class="muted">券種ごとに『指数が何位の馬を、どの順位の馬と組み合わせるか』と、その組合せ群に最低いくら使うかを一覧にした表。馬券最適化の買い目配分の入口として提示された案で、2026-10-27 時点では検証も実装もしていない。数字は提示された表の転記で、解釈が決まっていない箇所は §3 に分けて書いた。</p>
+<div class="note"><b>要点.</b>
+ <ul>
+ <li><b>これは案.</b>バックテストも実装も未実施で、決定ログ（確定事項）にも入れていない。採否は検証後に決める。</li>
+ <li>表は 6 券種（単勝・馬単・3連単・ワイド・馬連・3連複）、計 24 行。各行は『指数の順位の組合せ』と『集計金額（最低額）』の対応。</li>
+ <li>集計金額の読み方（行全体の合計か 1 点あたりか）、『指数』が何の指数か、頭数による点数の変動が未確定（§3）。</li>
+ <li>全行の最低額を同時に満たすと 1 レースあたり約 104,500 円になる（馬単・馬連の『点数×500円』は 7 点＝3,500 円で計算）。予算の上限との整合は未確認。</li>
+ </ul></div>
+
+<h2>1. 表（転記）</h2>
+<p class="muted">『位』は、そのレースの出走馬を指数の高い順に並べた順位。『残り』は、同じ行の前の列で使った馬を除いた残り。</p>
+
+<h3>単勝</h3>
+<table><thead><tr><th>券種</th><th>1着指数</th><th>集計金額</th></tr></thead><tbody>
+<tr><td>単勝</td><td>1位</td><td>500円以上</td></tr>
+</tbody></table>
+
+<h3>馬単</h3>
+<table><thead><tr><th>券種</th><th>1着指数</th><th>2着指数</th><th>集計金額</th></tr></thead><tbody>
+<tr><td>馬単</td><td>1位</td><td>2〜8位</td><td>点数×500円以上</td></tr>
+<tr><td>馬単</td><td>2位</td><td>1, 3位</td><td>5000円以上</td></tr>
+</tbody></table>
+
+<h3>3連単</h3>
+<table><thead><tr><th>券種</th><th>1着指数</th><th>2着指数</th><th>3着指数</th><th>集計金額</th></tr></thead><tbody>
+<tr><td>3連単</td><td>1位</td><td>2〜8位</td><td>2〜8位の残り</td><td>10000円以上</td></tr>
+<tr><td>3連単</td><td>1位</td><td>2, 3位</td><td>9位以下</td><td rowspan="2">50000円以上（2 行まとめて）</td></tr>
+<tr><td>3連単</td><td>1位</td><td>9位以下</td><td>2, 3位</td></tr>
+<tr><td>3連単</td><td>2位</td><td>1位</td><td>3〜8位</td><td rowspan="5">10000円以上（5 行まとめて）</td></tr>
+<tr><td>3連単</td><td>2位</td><td>3位</td><td>1位, 4〜8位</td></tr>
+<tr><td>3連単</td><td>3位</td><td>1位, 2位</td><td>1, 2位の残り, 4〜8位</td></tr>
+<tr><td>3連単</td><td>4位</td><td>1位</td><td>2位, 3位, 5位, 6位</td></tr>
+<tr><td>3連単</td><td>5位</td><td>1位</td><td>2〜4位, 6位</td></tr>
+</tbody></table>
+
+<h3>ワイド</h3>
+<table><thead><tr><th>券種</th><th>1列目指数</th><th>2列目指数</th><th>集計金額</th></tr></thead><tbody>
+<tr><td>ワイド</td><td>1位</td><td>2〜5位</td><td>2000円以上</td></tr>
+</tbody></table>
+
+<h3>馬連</h3>
+<table><thead><tr><th>券種</th><th>1列目指数</th><th>2列目指数</th><th>集計金額</th></tr></thead><tbody>
+<tr><td>馬連</td><td>1位</td><td>2〜8位</td><td>点数×500円以上</td></tr>
+<tr><td>馬連</td><td>2位</td><td>3位</td><td>5000円以上</td></tr>
+</tbody></table>
+
+<h3>3連複</h3>
+<table><thead><tr><th>券種</th><th>1列目指数</th><th>2列目指数</th><th>3列目指数</th><th>集計金額</th></tr></thead><tbody>
+<tr><td>3連複</td><td>1位</td><td>2〜4位</td><td>3〜8位の残り</td><td>5000円以上</td></tr>
+<tr><td>3連複</td><td>1位</td><td>2, 3位</td><td>9位以下</td><td rowspan="3">10000円以上（3 行まとめて）</td></tr>
+<tr><td>3連複</td><td>1位</td><td>5〜7位</td><td>6〜8位残り</td></tr>
+<tr><td>3連複</td><td>2位</td><td>3位</td><td>4〜8位</td></tr>
+</tbody></table>
+
+<h2>2. 点数の目安（暫定の読み方）</h2>
+<p class="muted">各行の指数順位の指定から数えた買い目の点数。出走頭数を N とする（『9位以下』は N−8 頭）。『残り』は前の列で使った馬を除く、3連複は順不同、と読んだ場合の数。</p>
+<table><thead><tr><th>券種</th><th>行（まとめた単位）</th><th>点数</th><th>集計金額</th><th>1 点あたり（100 円未満切り捨て前）</th></tr></thead><tbody>
+<tr><td>単勝</td><td>1位</td><td class="num">1</td><td class="num">500</td><td class="num">500</td></tr>
+<tr><td>馬単</td><td>1位→2〜8位</td><td class="num">7</td><td class="num">3,500</td><td class="num">500</td></tr>
+<tr><td>馬単</td><td>2位→1, 3位</td><td class="num">2</td><td class="num">5,000</td><td class="num">2,500</td></tr>
+<tr><td>3連単</td><td>1位→2〜8位→残り</td><td class="num">42（7×6）</td><td class="num">10,000</td><td class="num">約238</td></tr>
+<tr><td>3連単</td><td>50000 円の 2 行</td><td class="num">4(N−8)</td><td class="num">50,000</td><td class="num">N=16 で約1,563、N=12 で約3,125</td></tr>
+<tr><td>3連単</td><td>10000 円の 5 行</td><td class="num">32（6+6+12+4+4）</td><td class="num">10,000</td><td class="num">約313</td></tr>
+<tr><td>ワイド</td><td>1位-2〜5位</td><td class="num">4</td><td class="num">2,000</td><td class="num">500</td></tr>
+<tr><td>馬連</td><td>1位-2〜8位</td><td class="num">7</td><td class="num">3,500</td><td class="num">500</td></tr>
+<tr><td>馬連</td><td>2位-3位</td><td class="num">1</td><td class="num">5,000</td><td class="num">5,000</td></tr>
+<tr><td>3連複</td><td>1位-2〜4位-3〜8位の残り</td><td class="num">15</td><td class="num">5,000</td><td class="num">約333</td></tr>
+<tr><td>3連複</td><td>10000 円の 3 行</td><td class="num">2(N−8)+6+5</td><td class="num">10,000</td><td class="num">N=16 で約526、N=12 で約667</td></tr>
+</tbody></table>
+<p class="muted">3連単・3連複の点数は、表の指定を機械的に数えたもの。集計金額を 1 点あたりに割ると 100 円単位に収まらない行が多く、丸め方（端数の切り上げ・切り捨て・オッズ比例の配分）は決まっていない。</p>
+
+<h2>3. 未確定の点（検証の前に決めること）</h2>
+<ul>
+ <li><b>『集計金額』の意味.</b>(a) その行の組合せ群の購入額の合計の下限、(b) 1 点あたりの下限、(c) 過去の払戻の集計額、のどれか。『点数×500円以上』は 1 点 500 円以上を指すので (a)(b) のどちらでも読めるが、他の行は (a) と読んだ点数が §2。</li>
+ <li><b>『指数』の定義.</b>モデルの勝率・連対率・複勝率のどれで並べた順位か、めぐ指数か。券種ごとに使う指数が違う可能性がある（1着指数 / 2着指数 / 3着指数の見出しは、着順ごとの確率の順位を指しているようにも読める）。</li>
+ <li><b>頭数の依存.</b>『9位以下』の行は頭数で点数が変わる。8 頭以下のレースでは該当なし。『2〜8位』も 8 頭未満では欠ける。</li>
+ <li><b>最低額か目標額か.</b>『以上』は下限か、オッズに応じて増やしてよい額か。500% 設計（1 つ当たれば払戻が目標に届く配分、<a href="bet_optimization.html">馬券最適化</a>の方針）やトリガミ回避との関係。</li>
+ <li><b>予算.</b>全行の最低額の合計は約 104,500 円/レース。ユーザー指定の購入上限（既定 2,000 円/R）とは桁が合わないので、レースごとに一部の行だけ選ぶのか、金額を比例で縮めるのか決める。</li>
+</ul>
+
+<h2>4. 検証の進め方（案）</h2>
+<ol>
+ <li>§3 の読み方を決める。決まらない間は、(a)(b) の両方を試す。</li>
+ <li>2022〜2025 年の各レースで、表の各行に当たる買い目を作り、確定オッズ・確定払戻で回収率を出す（行ごと・券種ごと・全体）。購入時点のオッズではないので、購入時点との差は別に見る。</li>
+ <li>行の選び方・金額の決め方は 2022〜2025 年だけで決め、2026 年（テストセット②）は凍結後に 1 回だけ評価する。</li>
+ <li>回収率は『その年より前だけで選んで翌年に使う』形で測り、レース単位の的中と払戻の揺れを区間で示す（既存の方針と同じ。<a href="betting_edge_search.html">tp-36</a>）。</li>
+ <li>結果が良くても、100% 超の根拠にするのは区間の下限が 100% を超えたときだけ。表の水準そのものは期待値を保証しない。</li>
+</ol>
+</body></html>

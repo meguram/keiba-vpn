@@ -1,0 +1,75 @@
+{
+  "slug": "first-dirt",
+  "title": "初ダートで狙える条件",
+  "claim": "芝からダートに替わると脚質・枠順に傾向が出る",
+  "verdict": "pending",
+  "summary": "芝からダートへ替わった馬が、どの脚質・どの枠で走るのかを調べます。",
+  "categories": [
+    "style/surface-switch"
+  ],
+  "published": "2026-10-28",
+  "dataset": {
+    "period": "（集計準備中）",
+    "conditions": "（集計準備中）",
+    "sample": "（集計準備中）"
+  },
+  "draft": true,
+  "body": [
+    {
+      "type": "note",
+      "text": "このコラムは準備中です。集計が終わりしだい、結果とグラフをここに載せます。"
+    },
+    {
+      "type": "heading",
+      "text": "気になる疑問"
+    },
+    {
+      "type": "text",
+      "text": "・初ダートやダート替わりのとき、脚質で傾向はあるか\n・枠順で傾向はあるか"
+    },
+    {
+      "type": "heading",
+      "text": "これから調べること"
+    },
+    {
+      "type": "text",
+      "text": "・初ダート・ダート替わりの馬の脚質別・枠順別成績\n・距離・コース別の違い"
+    },
+    {
+      "type": "heading",
+      "text": "結果"
+    },
+    {
+      "type": "stats",
+      "items": [
+        {
+          "label": "対象レース",
+          "value": "–",
+          "sub": "集計後に掲載"
+        },
+        {
+          "label": "対象馬",
+          "value": "–",
+          "sub": "集計後に掲載"
+        },
+        {
+          "label": "差（ポイント）",
+          "value": "–",
+          "sub": "集計後に掲載"
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "text": "（集計後に掲載）"
+    },
+    {
+      "type": "heading",
+      "text": "まとめ"
+    },
+    {
+      "type": "text",
+      "text": "（集計後に掲載）"
+    }
+  ]
+}

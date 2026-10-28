@@ -219,3 +219,20 @@ def test_vps_client_payload_matches_schema_and_signature(monkeypatch):
     body = m.encode(p)
     assert body == S.dumps(p)                        # 署名対象のバイト列が両方で同じ
     assert m.sign("k", 1234, body) == S.sign("k", 1234, body)
+
+
+def test_vps_client_never_requests_api_paths_and_adds_stg_only_when_installed(monkeypatch, tmp_path):
+    """/api/ は nginx が Cloud Run(keiba-api) に転送する。5 分おきに叩くと、インスタンス課金の API が 24 時間生きて月 約 7,800 円になる。"""
+    m = _load_client()
+    seen: list[str] = []
+    monkeypatch.setattr(m, "http_code", lambda url, timeout=8.0: seen.append(url) or 200)
+    monkeypatch.setattr(m, "unit_state", lambda name: {"active": "active", "restarts": 0, "mem_mb": 1.0})
+    monkeypatch.setattr(m, "STG_ROOT", str(tmp_path / "none"))
+    p = m.collect({"APP_ROOT": "/nonexistent"})
+    assert seen and not any("/api/" in u for u in seen) and "stg_ui_http" not in p["checks"] and "keiba-ui-stg" not in p["units"]
+    assert S.validate_payload(p)["checks"]["nginx_http"] == 200
+    (tmp_path / "stg").mkdir()
+    monkeypatch.setattr(m, "STG_ROOT", str(tmp_path / "stg"))
+    p = m.collect({"APP_ROOT": "/nonexistent"})
+    assert p["checks"]["stg_ui_http"] == 200 and "keiba-ui-stg" in p["units"]
+    assert not any("/api/" in u for u in seen)

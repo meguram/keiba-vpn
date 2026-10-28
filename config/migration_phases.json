@@ -10,8 +10,8 @@
     {"id": 1, "name": "UI を VPS へ", "expected_min_jpy": 0, "expected_max_jpy": 300},
     {"id": 2, "name": "API とデータの GCP 化", "expected_min_jpy": 0, "expected_max_jpy": 500},
     {"id": 3, "name": "予測生成・集計・通知の GCP 化", "expected_min_jpy": 0, "expected_max_jpy": 1400},
-    {"id": 4, "name": "取得の薄い実行役 + GCP 試験", "expected_min_jpy": 300, "expected_max_jpy": 2160},
-    {"id": 5, "name": "ホストはモデリングのみ", "expected_min_jpy": 300, "expected_max_jpy": 2160}
+    {"id": 4, "name": "取得の薄い実行役 + GCP 試験", "expected_min_jpy": 300, "expected_max_jpy": 2022},
+    {"id": 5, "name": "ホストはモデリングのみ", "expected_min_jpy": 300, "expected_max_jpy": 2022}
   ],
   "spike": {
     "ratio": 3.0,

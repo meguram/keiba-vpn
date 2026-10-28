@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 TABLES = ROOT / "data/page_reference/tables"
 PROGRESS = ROOT / "data/local/meta/trifecta_backfill_progress.json"
-OTHER_SCRAPERS = r"python[0-9.]* -m src\.(scripts\.maintenance\.repair_|scripts\.scraping\.(?!backfill_horse_race_remarks)|scraper\.(backfill|run|export_tables))"
+OTHER_SCRAPERS = r"python[0-9.]* -m src\.(scripts\.maintenance\.repair_|scripts\.scraping\.(?!backfill_horse_race_remarks)|scraper\.(run|export_tables)|scripts\.data\.backfill_sanrenpuku_odds)"  # scraper.backfill（馬ページ・長時間稼働）は待たない。取得はプロセス横断スロットで 1 本に直列化される
 MAX_LOAD = 18.0
 
 
@@ -32,6 +32,10 @@ def race_ids_for_year(year: int) -> list[str]:
     """確定結果のあるレース（race_result_flat）。新しい日付から。"""
     import polars as pl
 
+    if year < 2020:  # 2016〜2019 年は tables が無い/一部のみ。保存済みの確定結果（race_result）のキーから取る
+        from src.scraper.storage import HybridStorage
+
+        return sorted(HybridStorage().list_keys("race_result", str(year)), reverse=True)
     f = TABLES / str(year) / "race_result_flat.parquet"
     if not f.exists():
         return []

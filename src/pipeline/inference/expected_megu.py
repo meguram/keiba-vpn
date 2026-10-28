@@ -191,9 +191,12 @@ def _reasons(f: dict[str, float], today: dict, runs: list[Run], rest: int | None
     return out
 
 
-def expected_from_runs(runs: Iterable[Run], race_date: str | None, today: dict | None = None, model: dict | None = None) -> dict | None:
+def expected_from_runs(runs: Iterable[Run], race_date: str | None, today: dict | None = None, model: dict | None = None,
+                       hem: dict | None = None, hem_out: dict | None = None) -> dict | None:
     """runs: 走の記録（先頭 3 要素は (YYYYMMDD, 指数, 低信頼)、以降は面・距離・競馬場・クラス水準・斤量）。
-    race_date より前の直近 N_RUNS 走から想定を返す。使える走が 0 なら None。today / model があれば条件変化の補正とレンジの拡大を行う。"""
+    race_date より前の直近 N_RUNS 走から想定を返す。使える走が 0 なら None。today / model があれば条件変化の補正とレンジの拡大を行う。
+    hem_out（hem_megu_infer.predict_horses の馬ごとの結果）と hem（係数）があるときは、value・range・adjust を階層縮約モデル（HEM）のものに置き換える
+    （base_value・change・reasons は従来どおり。旧版へは KEIBA_EXPECTED_MEGU=legacy）。"""
     rd = _digits(race_date)
     usable = [_pad(r) for r in runs if r[0] and r[1] == r[1] and not (rd and r[0] >= rd)]
     usable.sort(key=lambda x: x[0], reverse=True)
@@ -250,6 +253,12 @@ def expected_from_runs(runs: Iterable[Run], race_date: str | None, today: dict |
     extra = ((model or {}).get("resid_sd") or {}).get(group)
     if extra is not None:
         rng = max(rng or 0.0, float(extra))                 # 過去走のばらつきだけでなく、実際の誤差（検証済みの標準偏差。条件変化が大きいほど大きい）まで広げる
+    if hem is not None and hem_out is not None:
+        from src.pipeline.inference import hem_megu_infer as hi
+
+        value = hem_out["pred"]
+        adjust = hi.adjust_items(hem_out, base, value)
+        rng = max(MIN_RANGE, hi.range_for(hem, hem_out["n"]))   # 検証年の残差の標準偏差（走数の区分ごと）。±1 標準偏差
     out = {
         "value": round(value, 1),
         "range": round(rng, 1) if rng is not None else None,
@@ -459,12 +468,30 @@ def attach_expected_megu(resp: dict, race_date: str | None, base: Path | None = 
     items: dict[Any, dict | None] = {}
     runs_by_i: dict[int, list] = {}
     through = ""
+    todays: dict[int, dict | None] = {}
+    jockeys: dict[int, str | None] = {}
     for i, p in enumerate(preds):
         hid = str(p.get("horse_id") or "")
         runs, t = runs_for_horse(hid, race_date, base) if hid else ([], "")
         runs_by_i[i] = runs
         through = max(through, t)
-        ex = expected_from_runs(runs, race_date, today_context(card, {**by_id.get(hid, {}), **{k: v for k, v in p.items() if v}}), model)
+        merged = {**by_id.get(hid, {}), **{k: v for k, v in p.items() if v}}
+        todays[i] = today_context(card, merged)
+        jockeys[i] = str(merged.get("jockey_id") or "") or None
+    hem = None
+    hem_outs: dict[int, dict | None] = {}
+    try:                                                                  # 階層縮約モデル（HEM）。係数が無い・KEIBA_EXPECTED_MEGU=legacy のときは従来の式
+        from src.pipeline.inference import hem_megu_infer as hi
+
+        hem = hi.load_hem()
+        if hem is not None:
+            hem_outs = hi.predict_horses(runs_by_i, race_date or "", todays, jockeys, hem)
+    except Exception:  # noqa: BLE001
+        hem, hem_outs = None, {}
+    for i, p in enumerate(preds):
+        hid = str(p.get("horse_id") or "")
+        runs = runs_by_i[i]
+        ex = expected_from_runs(runs, race_date, todays[i], model, hem if hem_outs.get(i) else None, hem_outs.get(i))
         if ex is not None and last_past.get(hid) and last_past[hid] > _digits(ex["latest_run_date"]):
             ex["latest_unreflected"] = True
             ex["latest_past_date"] = _fmt(last_past[hid])
@@ -489,10 +516,14 @@ def attach_expected_megu(resp: dict, race_date: str | None, base: Path | None = 
     n_known = sum(1 for v in items.values() if v)
     resp["expected_megu_meta"] = {
         "axis": "megu_v3a_abs", "name": "想定めぐ指数（過去のめぐ指数から。AI予測ではありません）",
-        "method": f"過去走の絶対指数（斤量55kg換算）の直近{N_RUNS}走を、直近ほど重い加重平均（1点＝{SEC_PER_POINT}秒）。"
-                  + ("条件の変化（面・距離・クラス・休み明け・競馬場・馬齢）は、2020〜2024年で学習した補正を足す" if model and model.get("coef") else "条件の変化の補正は未適用"),
+        "method": (f"過去走の絶対指数（斤量55kg換算、1点＝{SEC_PER_POINT}秒）を、馬→同じ面→近い距離→騎手の順に階層で縮約（走数が少ない馬ほど同条件の平均へ寄せる）。"
+                   "条件の変化（昇降級・面替わり・距離・休み明け・馬齢・斤量）は、2020〜2021年で当てはめた補正を足す。幅（±）は検証年の誤差の標準偏差"
+                   if hem is not None else
+                   f"過去走の絶対指数（斤量55kg換算）の直近{N_RUNS}走を、直近ほど重い加重平均（1点＝{SEC_PER_POINT}秒）。"
+                   + ("条件の変化（面・距離・クラス・休み明け・競馬場・馬齢）は、2020〜2024年で学習した補正を足す" if model and model.get("coef") else "条件の変化の補正は未適用")),
         "data_through": _fmt(through) if through else None, "n_horses": len(preds), "n_known": n_known,
-        "model": ({k: model.get(k) for k in ("version", "trained_on", "validated_on", "eval")} if model else None),
+        "model": ({k: hem.get(k) for k in ("version", "trained_on", "validated_on", "eval")} if hem is not None
+                  else ({k: model.get(k) for k in ("version", "trained_on", "validated_on", "eval")} if model else None)),
     }
     try:                                                                  # このクラスの基準（突破ライン）。表が無い・クラスが読めないレースは付けない
         from src.pipeline.inference.class_benchmark import lookup as _bench

@@ -60,7 +60,7 @@ const vpsBody = d => {
     <span class="k">現在の版</span><span>${esc(d.current_release || v.release || '—')}</span>
     <span class="k">環境 / commit</span><span>${esc(v.env || '—')} / ${esc((v.commit || '').slice(0, 10) || '—')}</span>
     <span class="k">source_digest</span><span>${esc((v.source_digest || '').slice(0, 16) || '—')}</span>
-    <span class="k">VPS → API 疎通</span><span>${api.code === 200 ? pill('200', 'ok') : pill('届かない ' + (api.code ?? ''), 'bad')} ${f(api.ms)}ms（api-internal 経由）</span>
+    <span class="k">VPS nginx 経由の応答</span><span>${api.code === 200 ? pill('200', 'ok') : pill('届かない ' + (api.code ?? ''), 'bad')} ${f(api.ms)}ms（API は叩かない）</span>
     <span class="k">稼働時間</span><span>${f((d.uptime_s || 0) / 86400, 1)} 日 / load ${(d.load || []).map(x => f(x, 2)).join(' ')}</span>
     <span class="k">ディスク</span><span>${f((d.disk || {}).used_pct)}% 使用（空き ${f((d.disk || {}).avail_mb)}MB）</span></div>
     <div style="margin-top:10px;font-size:12.5px">使用メモリ ${f(m.used_mb)}MB / ${f(m.total_mb)}MB（通常時の目標 600MB 以下）</div>

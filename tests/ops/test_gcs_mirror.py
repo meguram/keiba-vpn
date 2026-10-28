@@ -201,3 +201,69 @@ def test_jockey_trainer_lookups_are_mirrored_for_the_entry_card(tmp_path):
     _w(tmp_path, "data/local/features/jockey_trainer_stats/_merge_spec.json", b"x")
     got = {str(p.relative_to(tmp_path / "data/local/features")) for t in gm.PUSH_TREES for p in gm._files(tmp_path, t) if "features" in str(p)}
     assert got == set(names)
+
+
+# ── リクエスト課金（CPU はリクエスト中だけ）向け: 常駐スレッドの代わりに、リクエストをきっかけに取り込む ──
+class Clock:
+    def __init__(self): self.t = 1000.0
+    def __call__(self): return self.t
+
+
+def test_start_initial_pulls_recent_then_full_once_and_sets_events(tmp_path):
+    gm.initial_recent_pulled.clear(); gm.initial_full_pulled.clear()
+    g = Fake()
+    g.objs["ops/mirror/data/local/inference/snapshots/20261017/R0.json"] = (b"0", time.time() - 30 * 86400)
+    gm.start_initial(g, tmp_path, recent_days=1).join(5)
+    assert gm.initial_recent_pulled.is_set() and gm.initial_full_pulled.is_set()
+    assert (tmp_path / "data/local/inference/snapshots/20261017/R0.json").exists()          # 全体の取り込みまで済んでいる
+
+
+def test_start_initial_failure_still_releases_waiters(tmp_path):
+    gm.initial_recent_pulled.clear(); gm.initial_full_pulled.clear()
+    class Boom(Fake):
+        def list(self, prefix): raise RuntimeError("gcs down")
+    gm.start_initial(Boom(), tmp_path).join(5)
+    assert gm.initial_recent_pulled.is_set() and gm.initial_full_pulled.is_set()          # 起動を止めない
+
+
+def test_request_refresher_runs_only_when_due_and_not_concurrently(tmp_path):
+    clk, g = Clock(), Fake()
+    r = gm.RequestRefresher(g, tmp_path, interval=60, wait_gap=300, clock=clk)
+    assert r.start_if_due() is None                                    # 起動直後は間隔未満
+    clk.t += 61
+    g.objs["ops/mirror/data/local/meta/entries_state/R1.json"] = (b"1", time.time())
+    t = r.start_if_due(); assert t is not None
+    t.join(5); assert (tmp_path / "data/local/meta/entries_state/R1.json").exists()
+    assert r.start_if_due() is None                                    # 取り込んだ直後はまた間隔未満
+    clk.t += 61
+    assert r.start_if_due() is not None
+
+
+def test_request_refresher_does_not_start_second_pull_while_running(tmp_path):
+    import threading
+
+    gate, started = threading.Event(), threading.Event()
+    class Slow(Fake):
+        def list(self, prefix): started.set(); gate.wait(5); return super().list(prefix)
+    clk = Clock(); r = gm.RequestRefresher(Slow(), tmp_path, interval=10, clock=clk)
+    clk.t += 11
+    t = r.start_if_due(); started.wait(5)
+    clk.t += 11
+    assert r.start_if_due() is None                                    # 実行中は重ねない
+    gate.set(); t.join(5)
+
+
+def test_request_refresher_waits_only_after_a_long_gap_and_survives_failure(tmp_path):
+    clk = Clock(); r = gm.RequestRefresher(Fake(), tmp_path, interval=60, wait_gap=300, clock=clk)
+    assert not r.should_wait()
+    clk.t += 301
+    assert r.should_wait()                                             # 長く止まっていた後の最初のリクエストは、取り込みを待つ
+    r.start_if_due().join(5)
+    assert not r.should_wait()
+    class Boom(Fake):
+        def list(self, prefix): raise RuntimeError("down")
+    clk.t += 400
+    r2 = gm.RequestRefresher(Boom(), tmp_path, interval=60, clock=clk); clk.t += 61
+    r2.start_if_due().join(5)                                          # 失敗しても例外を出さず、次回に再試行できる
+    clk.t += 61
+    assert r2.start_if_due() is not None

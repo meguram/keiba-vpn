@@ -1,0 +1,126 @@
+{
+  "slug": "front-runner",
+  "title": "逃げ馬は本当に有利？",
+  "claim": "逃げ馬が有利",
+  "verdict": "pending",
+  "summary": "逃げ・先行の有利さを、芝とダート、距離帯に分けて確かめます。",
+  "categories": [
+    "style/front-runner"
+  ],
+  "published": "2026-10-28",
+  "dataset": {
+    "period": "（集計準備中）",
+    "conditions": "（集計準備中）",
+    "sample": "（集計準備中）"
+  },
+  "draft": true,
+  "body": [
+    {
+      "type": "note",
+      "text": "このコラムは準備中です。集計が終わりしだい、結果とグラフをここに載せます。"
+    },
+    {
+      "type": "heading",
+      "text": "気になる疑問"
+    },
+    {
+      "type": "text",
+      "text": "・逃げ馬が有利なのか\n・ダートと芝で差はあるのか\n・距離による差はあるのか"
+    },
+    {
+      "type": "heading",
+      "text": "これから調べること"
+    },
+    {
+      "type": "text",
+      "text": "・脚質別の勝率・複勝率（芝/ダート×距離帯）\n・逃げ馬の頭数が多いレースでの変化"
+    },
+    {
+      "type": "chart",
+      "title": "逃げ馬の複勝率（距離帯別）",
+      "xLabel": "距離",
+      "yLabel": "複勝率",
+      "xs": [
+        "〜1200m",
+        "1400m",
+        "1600m",
+        "1800m",
+        "2000m",
+        "2200m〜"
+      ],
+      "series": [
+        {
+          "name": "全馬の平均",
+          "values": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "baseline": true
+        },
+        {
+          "name": "芝",
+          "values": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "name": "ダート",
+          "values": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      ],
+      "caption": "集計後に表示します"
+    },
+    {
+      "type": "heading",
+      "text": "結果"
+    },
+    {
+      "type": "stats",
+      "items": [
+        {
+          "label": "対象レース",
+          "value": "–",
+          "sub": "集計後に掲載"
+        },
+        {
+          "label": "対象馬",
+          "value": "–",
+          "sub": "集計後に掲載"
+        },
+        {
+          "label": "差（ポイント）",
+          "value": "–",
+          "sub": "集計後に掲載"
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "text": "（集計後に掲載）"
+    },
+    {
+      "type": "heading",
+      "text": "まとめ"
+    },
+    {
+      "type": "text",
+      "text": "（集計後に掲載）"
+    }
+  ]
+}

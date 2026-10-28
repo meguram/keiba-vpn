@@ -349,6 +349,7 @@ def chapter(src: Path) -> None:
 <li><b>ルールだけで選ぶと弱い.</b> スコア最上位グループの 2025 年の3着内率は 期待値追求家 {pc(t_ev25['top3_rate'][0])}%・複勝率追求家 {pc(t_pl25['top3_rate'][0])}%（同じレースのモデル本命 {pc(m_ev25['top3_rate'][0])}%）、単勝の回収率は {pc(t_ev25['roi_win'][0], 0)}%・{pc(t_pl25['roi_win'][0], 0)}%。ルールは『モデルとのずれ』を測る道具で、能力の順位ではない。</li>
 <li><b>回収率は 100% を超えない.</b> 2025 年は、2 ペルソナ・3 定義・単勝と複勝のすべてで、区間の上限が {hi25 * 100:.0f}% 以下。2026 年（記述）は、{len(cr26)} 通りのうち {n_cross26} 通りで区間が 100% を跨ぐ（例: 期待値追求家の単勝 {pc(t_ev26['roi_win'][0], 0)}%、{pc(t_ev26['roi_win'][1], 0)}〜{pc(t_ev26['roi_win'][2], 0)}）が、点推定が 100% を超えるのは単勝の一部で、v4 の予測との差で選んだ群でもあり、確認にならない。</li>
 <li><b>確率への補正に使うと 2025 年は悪化.</b> 合致したクラスタのロジットのずれを足した LogLoss の差は、2025 年で 期待値追求家 {ov25_ev['delta'] * 1e4:+.1f}×10⁻⁴、複勝率追求家 {ov25_pl['delta'] * 1e4:+.1f}×10⁻⁴（正が悪化）。発見期間では改善（選択に使ったので当然）、標本外では改善しない。</li>
+<li><b>第 2 ラウンド（第 12・13 節）.</b> 原子条件の連言（2・3 条件）と、完全な母方 10 世代表での血統の系統の再測定。事前登録の基準だけで採用するとルールが数千個になるが標本外では偶然とほぼ同じで、BH 頑健なものだけが再現した。凍結ファイルは v3（BH 頑健な連言を追加）。順位付けの成績は第 1 ラウンドと同水準で、回収率は 100% を超えない。</li>
 <li><b>結論.</b> 『ルールの合致率で馬を選ぶ』だけでは期待値は取れない。使い道は(1) 消し・買いの傾向を表示や監視の根拠にする、(2) 凍結して月次で再評価し、失効を除いていく（第 8 節）、の2つ。買い条件の複勝率側には標本外でも残る弱い信号があるが、モデルの確率を補正して使うには足りない。</li>
 </ul></div>
 
@@ -444,6 +445,17 @@ def chapter(src: Path) -> None:
 </ul>
 </body></html>
 """
+    extra_html = ""
+    if (src / "results_r2.json").exists() and (src / "results_r2b.json").exists():
+        from src.scripts.data import tp75b_report as RB
+
+        R2, L2 = RB.load(src)
+        X = RB.load_extra(src)
+        RB.write_all(src)
+        extra_html += RB.section_r2(R, R2, L2, X)
+        if X["rc"] and X["rcp"] and X["lrc"]:
+            extra_html += RB.section_rc(R, R2, X)
+    html_doc = html_doc.replace("</body></html>", extra_html + "</body></html>")
     CH.write_text(html_doc, encoding="utf-8")
 
 

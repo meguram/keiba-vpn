@@ -140,6 +140,8 @@ class HybridStorage:
         "broodmare_mating": "horse",
         # クッション値・含水率（JRA PDF/ライブ集約）— GCS: chuou/data/others/jra_cushion/{年}.json
         "jra_cushion": "other",
+        # 気象庁の時別値（競馬場の最寄り観測所の風向・風速など。キーは {競馬場コード}_{年}）— GCS: chuou/data/others/jma_weather_hourly/{競馬場コード}_{年}.json
+        "jma_weather_hourly": "other",
         # パイプライン生成パフォーマンス指数 — GCS: chuou/data/preprocessed/netkeiba/pc/race_performance/{年}/{race_id}.json
         "race_performance": "race",
         # 要件書 scrape_process 表の1行ごとの正本参照（GCS others フラット）

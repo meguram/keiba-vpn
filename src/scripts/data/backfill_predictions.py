@@ -125,6 +125,9 @@ def main() -> None:
     ap.add_argument("--bundle", default="")
     ap.add_argument("--stage", default="")
     ap.add_argument("--check-shadow", default="", help="この日(YYYYMMDD)を、shadow が既にあっても算出し(保存先は predictions_backfill_check)、shadow と突き合わせる（リーク/一致の確認用）")
+    ap.add_argument("--model", default="", choices=["", "v6e"], help="v6e: バンドル・前段・追い切り基準表・RB 状態を v3_serving.v6_paths() から取る")
+    ap.add_argument("--all", action="store_true", help="GCS・shadow・他モデルのバックフィルに予測があるレースも算出する（モデルの入れ替え用）")
+    ap.add_argument("--out-root", default="", help="出力先の root（既定: <推論ディレクトリ>/predictions_backfill）。差し替え前の検証用に別の場所へ出せる")
     ap.add_argument("--allow-in-sample", action="store_true", help="学習期間(≦2025)の日付も対象にする（予測は学習済みデータに対するもの）")
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -136,9 +139,15 @@ def main() -> None:
     from src.pipeline.inference.v3_serving import V3Serving, default_bundle_dir, default_stage_dir
     from src.scraper.storage import HybridStorage
 
-    bundle = Path(a.bundle) if a.bundle else default_bundle_dir()
-    stage = Path(a.stage) if a.stage else default_stage_dir(bundle)
+    v6p = None
+    if a.model == "v6e":
+        from src.pipeline.inference.v3_serving import v6_paths
+
+        v6p = v6_paths()
+    bundle = Path(a.bundle) if a.bundle else (v6p["bundle"] if v6p else default_bundle_dir())
+    stage = Path(a.stage) if a.stage else (v6p["stage"] if v6p else default_stage_dir(bundle))
     label = model_label(bundle)
+    out_root = Path(a.out_root) if a.out_root else None
     years = sorted({int(a.since[:4]) + i for i in range(int(a.until[:4]) - int(a.since[:4]) + 1)})
     if not a.allow_in_sample:
         years = [y for y in years if y > TRAIN_LAST_YEAR]
@@ -148,6 +157,10 @@ def main() -> None:
 
     days = race_days(years, tables, a.since, a.until)
     have = existing_predictions(storage, inf, label, years)
+    if out_root is not None:
+        have["backfill"] = {p.stem for p in (out_root / label).glob("*/*.parquet")}
+    if a.all:
+        have = {"gcs": set(), "shadow": set(), "backfill": have["backfill"]}
     if a.check_shadow:
         d0 = a.check_shadow
         days = race_days([int(d0[:4])], tables, d0, d0)
@@ -169,7 +182,9 @@ def main() -> None:
     ctx.warm()
     assert ctx.raw_hist is not None, "KEIBA_INFERENCE_ENGINE=full で実行する"
     raw_full = ctx.raw_hist
-    v3 = V3Serving(bundle, stage)
+    v3 = V3Serving(bundle, stage, tl_reference=v6p["tl_reference"]) if v6p else V3Serving(bundle, stage)
+    if v6p:
+        v3.rb_state = v6p["rb_state"]
     v3.warm()
     hist_full = v3.history.copy()
     order = sorted(todo, reverse=not a.oldest_first)
@@ -196,7 +211,7 @@ def main() -> None:
             cut = datetime.date.fromisoformat(d) if raw_full.schema["date"] == pl.Date else d
             ctx.raw_hist = raw_full.filter(pl.col("date") < cut)
             F, _info = ctx.build(card)
-            out_dir = (inf / "predictions_backfill_check" / label / day) if a.check_shadow else (backfill_root(label) / day)
+            out_dir = (inf / "predictions_backfill_check" / label / day) if a.check_shadow else ((out_root / label / day) if out_root else (backfill_root(label) / day))
             out_dir.mkdir(parents=True, exist_ok=True)
             n_ok = 0
             for rid in sorted(ok_ids):

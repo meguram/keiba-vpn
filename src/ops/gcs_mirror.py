@@ -37,6 +37,7 @@ TREES = (
     "data/local/inference/snapshots",
     "data/local/inference/lap_forecast",
     "data/local/inference/tracking_v2",
+    "data/local/race_analysis",        # めぐ分析の事前計算の結果（レースごと。画面はこれを読むだけ）
     "data/local/meta/entries_state",
     *AUTH_TREES,
     # 画面が読む参照データ（取得で作る・更新が速い／ほぼ固定のもの。旧 serving_state の core 群）。"<フォルダ>::<glob>" はフォルダの中の一致するファイルだけ
@@ -204,22 +205,32 @@ def fetch_one(rel_path: str, root: Path = REPO_ROOT, backend: Backend | None = N
 
 
 initial_recent_pulled = threading.Event()      # 起動直後の「直近分」の取り込みが終わった（成否を問わず）。Cloud Run の起動時ウォームアップが待つ
+initial_full_pulled = threading.Event()        # 起動直後の「全体」の取り込みまで終わった（成否を問わず）。リクエスト課金では、起動の完了前に済ませる
+
+
+def _initial_pull(be: Backend, root: Path, recent_days: float) -> None:
+    """起動直後は直近分を先に（表示に要る分を数秒で）、続けて全体。失敗しても API は止めない。"""
+    try:
+        try:
+            logger.info("gcs_mirror pull(直近): %s", pull(be, root, recent_days=recent_days))
+        finally:
+            initial_recent_pulled.set()
+        logger.info("gcs_mirror pull(全体): %s", pull(be, root))
+    finally:
+        initial_full_pulled.set()
 
 
 def start_refresher(backend: Backend | None = None, root: Path = REPO_ROOT, *, interval: float = 60.0, recent_days: float = 2.0) -> threading.Thread:
-    """Cloud Run 用: 起動時に全部を取り込み、以降は interval 秒ごとに直近の更新分だけを取り込む常駐スレッド。失敗しても API は止めない。"""
+    """Cloud Run 用（CPU 常時割り当て）: 起動時に全部を取り込み、以降は interval 秒ごとに直近の更新分だけを取り込む常駐スレッド。失敗しても API は止めない。
+    リクエスト課金（CPU はリクエスト中だけ）では、リクエストの合間にスレッドが止まるので ``start_initial`` と ``RequestRefresher`` を使う。"""
     def run() -> None:
         be = backend
         first = True
         while True:
             try:
                 be = be or GcsBackend()
-                if first:     # 起動直後は直近分を先に（表示に要る分を数秒で）、続けて全体
-                    try:
-                        logger.info("gcs_mirror pull(直近): %s", pull(be, root, recent_days=recent_days))
-                    finally:
-                        initial_recent_pulled.set()
-                    logger.info("gcs_mirror pull(全体): %s", pull(be, root))
+                if first:
+                    _initial_pull(be, root, recent_days)
                     first = False
                 else:
                     r = pull(be, root, recent_days=recent_days)
@@ -232,6 +243,65 @@ def start_refresher(backend: Backend | None = None, root: Path = REPO_ROOT, *, i
     t = threading.Thread(target=run, name="gcs-mirror-pull", daemon=True)
     t.start()
     return t
+
+
+def start_initial(backend: Backend | None = None, root: Path = REPO_ROOT, *, recent_days: float = 2.0) -> threading.Thread:
+    """リクエスト課金（CPU はリクエスト中だけ）用: 起動時に直近分 → 全体を 1 回だけ取り込む。起動処理（CPU が常にある間）が ``initial_full_pulled`` を待つ。
+    以降の更新は ``RequestRefresher`` がリクエストをきっかけに取り込む。"""
+    def run() -> None:
+        try:
+            _initial_pull(backend or GcsBackend(), root, recent_days)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("gcs_mirror の起動時の取り込みに失敗: %s", exc)
+            initial_recent_pulled.set()
+            initial_full_pulled.set()
+
+    t = threading.Thread(target=run, name="gcs-mirror-initial", daemon=True)
+    t.start()
+    return t
+
+
+class RequestRefresher:
+    """リクエスト課金向けの更新: CPU はリクエスト中だけ割り当てられ、常駐スレッドは合間に止まる。そこで『前回から interval 秒以上経っていれば、
+    リクエストをきっかけに直近の更新分を取り込む』。最後の成功から ``wait_gap`` 秒以上空いていたら（長く止まっていた後の最初のリクエスト）は、
+    古い表示を避けるため最大 ``wait_s`` 秒だけ取り込みの完了を待つ。それ以外は待たずに始めるだけ（取り込みはほかのリクエストの間に進む）。"""
+
+    def __init__(self, backend: Backend | None = None, root: Path = REPO_ROOT, *, interval: float = 60.0, recent_days: float = 2.0,
+                 wait_gap: float = 300.0, wait_s: float = 8.0, clock=time.monotonic) -> None:
+        self.backend, self.root, self.interval, self.recent_days = backend, root, interval, recent_days
+        self.wait_gap, self.wait_s, self._clock = wait_gap, wait_s, clock
+        self._lock = threading.Lock()
+        self._running = False
+        self._last_start = clock()      # 起動時の取り込み直後から数える
+        self._last_ok = clock()
+
+    def should_wait(self) -> bool:
+        return self._clock() - self._last_ok >= self.wait_gap
+
+    def start_if_due(self) -> threading.Thread | None:
+        """取り込みが必要なら別スレッドで始めて、そのスレッドを返す（不要・実行中なら None）。"""
+        with self._lock:
+            now = self._clock()
+            if self._running or now - self._last_start < self.interval:
+                return None
+            self._running, self._last_start = True, now
+
+        def run() -> None:
+            try:
+                be = self.backend = self.backend or GcsBackend()
+                r = pull(be, self.root, recent_days=self.recent_days)
+                self._last_ok = self._clock()
+                if r["downloaded"]:
+                    logger.info("gcs_mirror pull: %s", r)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("gcs_mirror pull に失敗（次回に再試行）: %s", exc)
+            finally:
+                with self._lock:
+                    self._running = False
+
+        t = threading.Thread(target=run, name="gcs-mirror-request", daemon=True)
+        t.start()
+        return t
 
 
 def pull_trees(trees: list[str] | tuple[str, ...], *, recent_days: float | None = 14.0, backend: Backend | None = None, root: Path = REPO_ROOT) -> dict[str, int]:

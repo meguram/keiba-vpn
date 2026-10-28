@@ -63,6 +63,26 @@ def test_deploy_apply_calls_gcloud(fake_gcloud):
     assert r2.returncode == 2                                                # プレースホルダのままでは実行しない
 
 
+def test_deploy_cpu_alloc_switches_billing_mode_and_mirror_mode(fake_gcloud):
+    """always=CPU 常時割り当て(インスタンス課金) / request=リクエスト課金。request のときだけ取り込みをリクエスト駆動にする。不正値は拒否。"""
+    env, log = fake_gcloud
+    for mode, flag, mirror in (("always", "--no-cpu-throttling", False), ("request", "--cpu-throttling", True)):
+        log.unlink(missing_ok=True)
+        r = run(GCP / "deploy_cloud_run_api.sh", "deploy", "--apply", env={**env, "CPU_ALLOC": mode})
+        assert r.returncode == 0, r.stderr
+        calls = log.read_text()
+        assert (flag in calls) and (("--no-cpu-throttling" in calls) == (mode == "always")), mode
+        assert ("KEIBA_MIRROR_MODE=request" in calls) == mirror, mode
+    log.unlink(missing_ok=True)
+    assert run(GCP / "deploy_cloud_run_api.sh", "deploy", "--apply", env=env).returncode == 0 and "--no-cpu-throttling" not in log.read_text() and "--cpu-throttling" in log.read_text()   # 既定はリクエスト課金
+    assert run(GCP / "deploy_cloud_run_api.sh", "deploy", "--apply", env={**env, "CPU_ALLOC": "bogus"}).returncode == 2
+
+
+def test_ci_uses_request_billing_for_stg_and_keeps_prod_switchable():
+    body = (ROOT / "scripts/ci/deploy_gcp.sh").read_text(encoding="utf-8")
+    assert 'CPU_ALLOC="$([ "$TARGET" = stg ] && echo request || echo "${PROD_CPU_ALLOC:-request}")"' in body
+
+
 def test_deploy_apply_refused_in_dev(fake_gcloud):
     env, log = fake_gcloud
     r = run(GCP / "deploy_cloud_run_api.sh", "deploy", "--apply", env={**env, "KEIBA_ENV": "dev"})

@@ -111,6 +111,9 @@ class V3Serving:
         from src.pipeline.features.horse_history.common import load_runs, apply_repair
         from src.pipeline.features.horse_history.serving import EMPTY_RM
 
+        from src.pipeline.models.determinism import fix_inference_runtime
+
+        fix_inference_runtime()
         t0 = time.perf_counter()
         self.bundle = EnsembleBundle.load(self.bundle_dir)
         self.feature_cols = list(dict.fromkeys(c for m in self.bundle.members for c in m.feature_cols))
@@ -326,8 +329,12 @@ class V3Serving:
     # ------------------------------------------------------------------ 予測
     def predict(self, X: pd.DataFrame) -> pd.DataFrame:
         """戻り値: race_id・horse_id・p_win・p_top2・p_top3。"""
-        P = self.bundle.predict(X[self.feature_cols], X["race_id"].to_numpy()).reset_index(drop=True)
-        return pd.concat([X[KEYS].reset_index(drop=True), P], axis=1)
+        X = X.reset_index(drop=True)
+        order = np.lexsort((X["horse_id"].astype(str).to_numpy(), X["race_id"].astype(str).to_numpy()))     # 行の並びで合計の順序が変わらないよう (レース, 馬) に揃えて流す
+        Xs = X.iloc[order].reset_index(drop=True)
+        Ps = self.bundle.predict(Xs[self.feature_cols], Xs["race_id"].to_numpy()).reset_index(drop=True)
+        P = Ps.iloc[np.argsort(order)].reset_index(drop=True)
+        return pd.concat([X[KEYS], P], axis=1)
 
 
 def race_ids_of_day(card: pd.DataFrame, storage: Any) -> list[str]:

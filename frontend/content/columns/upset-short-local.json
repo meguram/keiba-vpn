@@ -1,0 +1,76 @@
+{
+  "slug": "upset-short-local",
+  "title": "短距離とローカルは荒れる？",
+  "claim": "短距離・ローカル開催は荒れやすい",
+  "verdict": "pending",
+  "summary": "「短距離は荒れる」「ローカルは荒れる」は本当か。荒れる仕組みまで追います。",
+  "categories": [
+    "upset/distance-course",
+    "upset/conditions"
+  ],
+  "published": "2026-10-28",
+  "dataset": {
+    "period": "（集計準備中）",
+    "conditions": "（集計準備中）",
+    "sample": "（集計準備中）"
+  },
+  "draft": true,
+  "body": [
+    {
+      "type": "note",
+      "text": "このコラムは準備中です。集計が終わりしだい、結果とグラフをここに載せます。"
+    },
+    {
+      "type": "heading",
+      "text": "気になる疑問"
+    },
+    {
+      "type": "text",
+      "text": "・短距離、ローカルは荒れやすいのか\n・荒れるとしたら、その理由は何か（頭数・枠・展開・格差）"
+    },
+    {
+      "type": "heading",
+      "text": "これから調べること"
+    },
+    {
+      "type": "text",
+      "text": "・距離帯×開催場の人気別成績\n・理由の仮説ごとの検証"
+    },
+    {
+      "type": "heading",
+      "text": "結果"
+    },
+    {
+      "type": "stats",
+      "items": [
+        {
+          "label": "対象レース",
+          "value": "–",
+          "sub": "集計後に掲載"
+        },
+        {
+          "label": "対象馬",
+          "value": "–",
+          "sub": "集計後に掲載"
+        },
+        {
+          "label": "差（ポイント）",
+          "value": "–",
+          "sub": "集計後に掲載"
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "text": "（集計後に掲載）"
+    },
+    {
+      "type": "heading",
+      "text": "まとめ"
+    },
+    {
+      "type": "text",
+      "text": "（集計後に掲載）"
+    }
+  ]
+}

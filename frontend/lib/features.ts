@@ -14,6 +14,8 @@ export type FeatureDef = {
   enabled: boolean;
   /** このページ群に属するパス（完全一致またはその配下） */
   paths: string[];
+  /** 開発中の画面。next dev と stg（NEXT_PUBLIC_ENV_LABEL=stg）のビルドだけ表示し、prod では NEXT_PUBLIC_ENABLE_FEATURES でも出さない */
+  devOnly?: boolean;
 };
 
 export const FEATURES = {
@@ -25,6 +27,8 @@ export const FEATURES = {
   auth: { label: "ログイン", enabled: true, paths: ["/login"] },
   "admin-users": { label: "ユーザー登録（管理者のみ）", enabled: true, paths: ["/admin/users"] },
   billing: { label: "有料プランの申込み・法的表記（データ利用許諾の確認後に有効化。手順: docs/operations/billing.md）", enabled: false, paths: ["/signup", "/legal"] },
+  "megu-analysis": { label: "めぐ分析（出馬表の統計データ・成長曲線・走法マップ。開発中）", enabled: true, devOnly: true, paths: ["/analysis"] },
+  "megu-column": { label: "めぐコラム（開発中）", enabled: true, devOnly: true, paths: ["/column"] },
 
   // ── 無効化中（コードは残置） ──
   "megu-index": { label: "めぐ指数", enabled: false, paths: ["/megu-index"] },
@@ -48,8 +52,16 @@ const OVERRIDE = (process.env.NEXT_PUBLIC_ENABLE_FEATURES ?? "").trim();
 const OVERRIDE_ALL = OVERRIDE === "all";
 const OVERRIDE_IDS = new Set(OVERRIDE.split(",").map((s) => s.trim()).filter(Boolean));
 
+const IS_PRODUCTION_BUILD = process.env.NODE_ENV === "production";
+const IS_STG_BUILD = (process.env.NEXT_PUBLIC_ENV_LABEL ?? "").trim().toLowerCase() === "stg";
+
+/** 開発中の画面・下書きを出してよいビルドか（next dev または stg。prod は出さない） */
+export const SHOW_DEV_ONLY = !IS_PRODUCTION_BUILD || IS_STG_BUILD;
+
 export function featureEnabled(id: FeatureId): boolean {
-  return FEATURES[id].enabled || OVERRIDE_ALL || OVERRIDE_IDS.has(id);
+  const f: FeatureDef = FEATURES[id];
+  if (f.devOnly && !SHOW_DEV_ONLY) return false;
+  return f.enabled || OVERRIDE_ALL || OVERRIDE_IDS.has(id);
 }
 
 function matches(pathname: string, p: string): boolean {

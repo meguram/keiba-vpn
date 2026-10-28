@@ -183,7 +183,7 @@ def _reduce_tabm(out, mask):
     p2, p3 = torch.sigmoid(out[..., 1]).mean(2).clamp(1e-6, 1 - 1e-6), torch.sigmoid(out[..., 2]).mean(2).clamp(1e-6, 1 - 1e-6)
     return torch.stack([torch.log(pw), torch.log(p2 / (1 - p2)), torch.log(p3 / (1 - p3))], dim=-1)
 
-def _nn_infer(net, prep, X, race, tabm_k, dev) -> dict:
+def _nn_infer(net, prep, X, race, tabm_k, dev, chunk: int = 512) -> dict:
     """学習済みの NN で X（race ごとにまとめる）のスコアを出す。学習時の検証予測と、保存したモデルの推論で共通。"""
     import torch
 
@@ -192,8 +192,8 @@ def _nn_infer(net, prep, X, race, tabm_k, dev) -> dict:
     sw, s2, s3 = (np.zeros(len(X)) for _ in range(3))
     net.eval()
     with torch.no_grad():
-        for s in range(0, len(idx), 512):
-            rows_ = idx[s:s + 512]
+        for s in range(0, len(idx), chunk):
+            rows_ = idx[s:s + chunk]
             valid = rows_ >= 0
             safe = np.where(valid, rows_, 0)
             z = torch.from_numpy(Z[safe]).to(dev)
@@ -209,13 +209,15 @@ def _nn_infer(net, prep, X, race, tabm_k, dev) -> dict:
 
 def nn_predict(model: dict, X: pd.DataFrame, race: np.ndarray, device: str | None = None) -> dict:
     """nn_fit_predict(model_out=...) で保存したモデルで予測する。"""
-    import torch
+    from src.pipeline.models.determinism import inference_device
 
-    dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    dev = inference_device(device)
     a = model["arch"]
     net = _build_net(a["d_z"], a["n_cat"], a["emb_dim"], tuple(a["hidden"]), a["dropout"], a["attn_layers"], a["attn_dim"], a["tabm_k"]).to(dev)
     net.load_state_dict(model["state"])
-    return _nn_infer(net, model["prep"], X, np.asarray(race), a["tabm_k"], dev)
+    from src.pipeline.models.determinism import RACE_CHUNK
+
+    return _nn_infer(net, model["prep"], X, np.asarray(race), a["tabm_k"], dev, chunk=RACE_CHUNK)
 
 
 def nn_fit_predict(X_tr: pd.DataFrame, y_tr: dict, race_tr: np.ndarray, X_va: pd.DataFrame, race_va: np.ndarray, seed: int = 0,

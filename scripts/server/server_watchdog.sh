@@ -98,7 +98,10 @@ case "$ACTIVE_PROFILE" in
         FLASK_DEBUG_MODE=1
         FRONTEND_PORT="${FRONTEND_PORT:-$KEIBA_PORT_DEV_FRONTEND}"
         FRONTEND_NPM_SCRIPT="dev"
-        FRONTEND_USE_MOCK="true"
+        # service_start の dev と同じ: 既定は dev ストアをバックエンド経由で表示（フロント内蔵モックは KEIBA_DEV_UI_MOCK=1）
+        if [ "${KEIBA_DEV_UI_MOCK:-0}" = "1" ]; then FRONTEND_USE_MOCK="true"; else FRONTEND_USE_MOCK="false"; fi
+        # .env が KEIBA_ENV=stg の PC でも、dev のサーバ（API・Flask・Next.js）は必ず dev（GCP 遮断・dev ストア）で動かす
+        export KEIBA_ENV=dev
         ;;
 esac
 

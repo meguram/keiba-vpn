@@ -78,6 +78,7 @@ OUTPUT_DIR = Path("data/page_reference/tables")
 CHUNK_SIZE = 200
 
 FLAT_MAX_JSON_BYTES = 1024
+FLAT_MAX_PAYOFF_BYTES = 8192
 
 
 def is_jra_race(race_id: str) -> bool:
@@ -207,7 +208,8 @@ def _data_to_flat_rows(
             continue
         if isinstance(v, (list, dict)):
             s = json.dumps(v, ensure_ascii=False) if v else None
-            if s and len(s) > FLAT_MAX_JSON_BYTES:
+            # 払戻は同着や多頭の券種で 1,024 バイトを超える（同着のレースは行数が増える）。上限で落とすと払戻が丸ごと欠けるので、払戻だけ上限を広げる
+            if s and len(s) > (FLAT_MAX_PAYOFF_BYTES if k == "payoff" else FLAT_MAX_JSON_BYTES):
                 continue
             top_extra[k] = s
         else:

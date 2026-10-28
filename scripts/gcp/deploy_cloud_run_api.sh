@@ -12,7 +12,7 @@
 #   bash scripts/gcp/deploy_cloud_run_api.sh all     [--dry-run|--apply]   # build → deploy(--no-traffic)。切替は promote
 #
 # 必須の環境変数: PROJECT_ID, GCS_BUCKET。任意: REGION(asia-northeast1) SERVICE(keiba-api) TAG(日時) AR_REPO(keiba-vpn)
-#   MEMORY(2Gi) CPU(1) MIN_INSTANCES(0) MAX_INSTANCES(3) CONCURRENCY(30) TIMEOUT(60) GCS_PREFIX WITH_NEXT_KEY(1 で KEIBA_PROXY_KEY_NEXT も載せる)
+#   MEMORY(2Gi) CPU(1) MIN_INSTANCES(0) MAX_INSTANCES(3) CONCURRENCY(30) TIMEOUT(60) GCS_PREFIX WITH_NEXT_KEY(1 で KEIBA_PROXY_KEY_NEXT も載せる) CPU_ALLOC(request|always。既定 request)
 # 事前に scripts/gcp/setup_cloud_run_api.sh で サービスアカウント・Secret Manager・Artifact Registry を用意する。
 # =============================================================================
 set -euo pipefail
@@ -31,8 +31,19 @@ TAG="${TAG:-$(date +%Y%m%d-%H%M%S)}"
 IMAGE="${IMAGE:-${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${SERVICE}:${TAG}}"
 RUN_SA="${RUN_SA:-keiba-api@${PROJECT_ID}.iam.gserviceaccount.com}"     # setup_project.sh が作る（gcp_setup_runbook.md 2 章）。旧 setup_cloud_run_api.sh の keiba-api-run は使わない
 MEMORY="${MEMORY:-2Gi}"; CPU="${CPU:-1}"
-# CPU は常時割り当て(--no-cpu-throttling)にする: GCS からの取り込み(src/ops/gcs_mirror.py の常駐スレッド)がリクエストの合間にも進むため。
-# 最小インスタンス 0 なので、課金はインスタンスが生きている間(最後のリクエストから約 15 分)だけ。起動時は --cpu-boost で速くする。
+# CPU の割り当て方式（CPU_ALLOC）:
+#   always  = 常時割り当て(--no-cpu-throttling。インスタンス課金)。GCS からの取り込みの常駐スレッドがリクエストの合間にも進む。
+#             課金はインスタンスが生きている間(最後のリクエストから約 15 分)で、画面を開いたタブの60秒ごとの状態確認や 15 分以内の ping で起き続ける
+#             （2026-10-28 に1〜2台が24時間起動。docs/operations/cost_recalc_20261028.md）。
+#   request = リクエスト中だけ割り当て(--cpu-throttling。リクエスト課金)。常駐スレッドは合間に止まるので、取り込みは起動時に全体を済ませ、
+#             以降はリクエストをきっかけに行う（KEIBA_MIRROR_MODE=request。src/api/cloudrun_entry.py）。アイドル中は課金されない。
+# 起動時は --cpu-boost で速くする（どちらの方式でも起動中は CPU が割り当てられる）。
+CPU_ALLOC="${CPU_ALLOC:-request}"      # 既定はリクエスト課金（2026-10-28）。戻すときは CPU_ALLOC=always
+case "$CPU_ALLOC" in
+  always) THROTTLE_FLAG="--no-cpu-throttling" ;;
+  request) THROTTLE_FLAG="--cpu-throttling" ;;
+  *) echo "CPU_ALLOC は always か request: $CPU_ALLOC" >&2; exit 2 ;;
+esac
 MIN_INSTANCES="${MIN_INSTANCES:-0}"; MAX_INSTANCES="${MAX_INSTANCES:-3}"
 CONCURRENCY="${CONCURRENCY:-30}"; TIMEOUT="${TIMEOUT:-60}"
 GCS_BUCKET="${GCS_BUCKET:-YOUR_GCS_BUCKET}"
@@ -59,6 +70,7 @@ ENV_VARS+=",KEIBA_MAINTENANCE_WINDOW=1"
 # 応答の使い回し(置き場のみ・120 秒)と、起動時ウォームアップ。1 インスタンス(1 vCPU)の予測は 1 回 0.8 秒で、同じレースへの一斉アクセスと、
 # 新インスタンスの最初の予測(30〜45 秒)が負荷試験(2026-10-27)で崩れた原因。docs/operations/capacity_and_latency_20261027.md
 ENV_VARS+=",KEIBA_PRERENDER=1,KEIBA_PRERENDER_MAX_AGE_SEC=120,KEIBA_WARMUP_ON_START=1"
+[ "$CPU_ALLOC" != request ] || ENV_VARS+=",KEIBA_MIRROR_MODE=request"
 [ -z "$GCS_PREFIX" ] || ENV_VARS+=",GCS_PREFIX=${GCS_PREFIX}"
 # API_TEST_USER=1 のときだけテストユーザー(config/members.json の test)を有効にする。stg のタグ付きリビジョン専用（deploy_gcp.sh が付ける）
 [ "${API_TEST_USER:-0}" != 1 ] || ENV_VARS+=",KEIBA_TEST_USER=1"
@@ -101,7 +113,7 @@ deploy() {
     --service-account "$RUN_SA" \
     --memory "$MEMORY" --cpu "$CPU" --min-instances "$MIN_INSTANCES" --max-instances "$MAX_INSTANCES" \
     --concurrency "$CONCURRENCY" --timeout "$TIMEOUT" \
-    --no-cpu-throttling --cpu-boost --execution-environment gen2 \
+    "$THROTTLE_FLAG" --cpu-boost --execution-environment gen2 \
     --port 8080 --ingress all --allow-unauthenticated \
     --set-env-vars "$ENV_VARS" --set-secrets "$SECRETS" \
     "${traffic[@]}"

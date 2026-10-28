@@ -189,6 +189,9 @@ def corr() -> None:
     odds["race_id"] = odds["race_id"].astype(str)
     odds["horse_number"] = pd.to_numeric(odds["horse_number"], errors="coerce")
     odds["odds"] = pd.to_numeric(odds["odds"], errors="coerce")
+    from src.scraper.odds_fix import apply_pandas as _fix_odds
+
+    odds = _fix_odds(odds)   # 2025 年は odds が指数列だった（scraper.odds_fix）
     m = df[["race_id", "horse_number", "year"]].astype({"race_id": str}).merge(odds.drop_duplicates(["race_id", "horse_number"]), on=["race_id", "horse_number"], how="left")
     lo = np.log(m["odds"].clip(lower=1.0))
     rows = {}

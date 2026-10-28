@@ -118,7 +118,9 @@ def main() -> None:
         "disk": {"used_pct": disk_pct, "avail_mb": disk_avail},
         "units": {u: unit(u) for u in UNITS},
         "ui": http(f"http://127.0.0.1:{APP_PORT}/version.json", want_body=True),
-        "upstream_api": http(f"http://127.0.0.1:{PROXY_PORT}/api/maintenance/status", timeout=12.0),
+        # キー名は互換のため upstream_api のまま。中身は nginx(PROXY_PORT)経由の画面の応答。/api/ は Cloud Run(keiba-api)に転送され、
+        # 3 分おきに叩くと API が落ちずに月 約 7,800 円になる（インスタンス課金。docs/operations/cost_recalc_20261028.md）
+        "upstream_api": http(f"http://127.0.0.1:{PROXY_PORT}/version.json", timeout=12.0),
         "current_release": os.path.basename(os.path.realpath(f"{root}/current")) if os.path.exists(f"{root}/current") else None,
         "releases": sorted(os.listdir(f"{root}/releases"))[-5:] if os.path.isdir(f"{root}/releases") else None,
         "health_timer_state": health,
