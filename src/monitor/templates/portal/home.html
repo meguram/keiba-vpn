@@ -41,6 +41,20 @@
     {% else %}<span class="muted">{{ seo.get('error') or 'まだ点検結果がありません（CI で seo_audit_publish を実行すると出ます）' }}</span>{% endif %}</div></section>
 </div>
 
+
+<h2>API の課金ガード {{ pill(cost.level, {'green':'正常','yellow':'注意','red':'要対応'}.get(cost.level, '確認できない')) }} <span class="small muted">keiba-api の課金される起動時間（インスタンス課金）</span></h2>
+<div class="card">
+{% if cost.status == 'ok' %}
+  <div class="grid g4">
+    <div class="kpi"><div class="big">{{ '%.1f'|format(cost.avg_instances_24h) }}<span class="small muted"> 台</span></div><div class="l">直近24時間の平均起動台数</div></div>
+    <div class="kpi"><div class="big {{ cost.level }}">{{ '{:,.0f}'.format(cost.projected_month_yen) }}<span class="small muted"> 円/月</span></div><div class="l">この調子での月額の見込み（目安 {{ cost.api_budget_yen }} 円）</div></div>
+    <div class="kpi"><div class="big">{{ cost.quiet_alive_hours }}<span class="small muted"> 時間</span></div><div class="l">夜間（JST 1〜4時台）に起動していた時間</div></div>
+    <div class="kpi"><div class="big muted">{{ '{:,.0f}'.format(cost.projected_month_yen_no_free) }}<span class="small muted"> 円/月</span></div><div class="l">無料枠なしの場合</div></div>
+  </div>
+  {% for a in cost.alerts %}<p class="small {{ 'red' if a.severity == 'critical' else 'yellow' }}" style="margin-bottom:0">● {{ a.title }}: {{ a.detail }}</p>{% endfor %}
+{% else %}<span class="muted">{{ cost.reason }}</span>{% endif %}
+</div>
+
 <h2>今日の異常通知 {{ pill(alerts.level, alerts.count ~ ' 件（重大 ' ~ alerts.critical ~ '）') }}</h2>
 {% if alerts['items'] %}<div class="card"><table><tbody>{% for a in alerts['items'][:6] %}<tr><td class="small muted">{{ (a.at or '')[11:16] }}</td><td class="{{ 'red' if a.severity == 'critical' else 'yellow' }}">{{ a.severity }}</td><td>{{ a.title }}<span class="muted small"> {{ a.lines|join(' / ') }}</span></td></tr>{% endfor %}</tbody></table></div>{% endif %}
 {% endblock %}

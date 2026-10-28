@@ -51,7 +51,9 @@ def client(monkeypatch, tmp_path):
     backend = store.FileBackend(tmp_path / "hb.json")
     env = {"KEIBA_API_URL_PROD": "https://api.example", "KEIBA_API_URL_STG": "https://rstg---api.example"}
     sent: list = []
+    from tests.ops.test_api_cost_guard import hours as cost_hours
     app = M.create_app(io, now_fn=lambda: NOW, job_ids=[("predict-race", True)], hb_backend=backend, http_get=fake_get, env=env,
+                       cost_fetch=lambda *a: cost_hours(lambda h: 3600),
                        notify=lambda title, lines, severity="warning": sent.append((title, severity)))
     c = app.test_client()
     c.calls, c.io, c.backend, c.sent = calls, io, backend, sent
@@ -80,6 +82,19 @@ def test_home_shows_four_environment_cells_and_probes_api_once(client):
     assert client.get("/api/home?probe=0", headers=KEY).get_json()["env"]["probed"] is False
 
 
+def test_home_and_check_include_api_cost_guard(client, monkeypatch):
+    monkeypatch.setenv("GCS_PROJECT_ID", "p")
+    j = client.get("/api/cost", headers=KEY).get_json()
+    assert j["status"] == "ok" and j["level"] == "red" and j["avg_instances_24h"] == pytest.approx(1.0)
+    html = client.get("/", headers=KEY).get_data(as_text=True)
+    assert "API の課金ガード" in html and "夜間" in html
+    assert client.get("/api/home", headers=KEY).get_json()["overall"] == "red"       # 課金の異常はホーム全体の信号に反映
+    r = client.post("/ops/heartbeat/check", headers=KEY).get_json()
+    assert r["cost"]["ok"] and "api_alive_overnight" in r["cost"]["sent"]
+    assert any("夜間" in t or "月額" in t for t, _ in client.sent)
+    assert json.loads(client.io.get_bytes("ops/cost_guard/latest.json"))["status"] == "ok"
+
+
 def test_home_pipeline_and_traffic_and_seo_summaries(client):
     j = client.get("/api/home", headers=KEY).get_json()
     assert j["pipe"]["status"] == "ok" and j["pipe"]["date"] == "20261025"
@@ -98,7 +113,7 @@ def test_pages_degrade_when_nothing_collected(monkeypatch):
     monkeypatch.setenv("KEIBA_PROXY_KEY_REQUIRED", "0")
     E._cache.clear()
     monkeypatch.setattr(pipeline_health, "GcsSources", lambda io: (_ for _ in ()).throw(RuntimeError("gcs down")))
-    app = M.create_app(MemoryIO(), now_fn=lambda: NOW, job_ids=[], env={}, http_get=lambda u, t: (0, 0))
+    app = M.create_app(MemoryIO(), now_fn=lambda: NOW, job_ids=[], env={}, http_get=lambda u, t: (0, 0), cost_fetch=lambda *a: [])
     c = app.test_client()
     for path in ("/", "/pipeline", "/traffic", "/seo"):
         assert c.get(path).status_code == 200, path
