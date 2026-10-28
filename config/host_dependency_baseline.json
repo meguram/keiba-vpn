@@ -181,7 +181,7 @@
    "local_data": 1
   },
   "src/ops/gcs_mirror.py": {
-   "local_data": 10,
+   "local_data": 11,
    "page_reference": 12
   },
   "src/ops/heartbeat_store.py": {
