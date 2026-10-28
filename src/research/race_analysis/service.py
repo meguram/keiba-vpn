@@ -89,6 +89,7 @@ def analyze_race(storage: Any, race_id: str, modules: tuple[AnalysisModule, ...]
             groups=[g.__dict__ for g in out.groups],
             notes=out.notes,
             data_until=out.data_until,
+            source=out.source,
         )
         payload["modules"].append(meta)
         for e in entries:

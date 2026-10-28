@@ -8,6 +8,16 @@ export type CellFormat = "record" | "pct" | "int" | "text";
 export type AnalysisColumn = { key: string; label: string; fmt: CellFormat; group?: string | null; title?: string | null };
 export type AnalysisGroup = { key: string; label: string; sub?: string | null; n_key?: string | null; min_n: number };
 
+/** 分析に使ったデータの出典（提供元の機関・集計した期間・件数） */
+export type AnalysisSource = {
+  provider: string;
+  dataset: string;
+  period_from?: string | null;
+  period_to?: string | null;
+  races: number;
+  rows: number;
+};
+
 export type AnalysisModuleMeta = {
   id: string;
   label: string;
@@ -17,6 +27,7 @@ export type AnalysisModuleMeta = {
   groups?: AnalysisGroup[];
   notes?: string[];
   data_until?: string | null;
+  source?: AnalysisSource | null;
 };
 
 export type AnalysisEntry = {
@@ -105,4 +116,14 @@ export function isThin(group: AnalysisGroup | null, cells: Record<string, unknow
 export function entriesUnavailable(race: { entries_phase?: string | null }, date: string, today: string): boolean {
   if (!date || date <= today) return false;
   return !race.entries_phase || race.entries_phase === "none";
+}
+
+const ymd = (d: string) => d.replace(/-/g, "/");
+
+/** 出典の表示用の文。例: データの出典: netkeiba.com（レース結果） ／ 集計期間: 2020/01/05〜2026/10/25 ／ 対象: 2,880レース・39,639出走 */
+export function formatSource(src: AnalysisSource): string {
+  const parts = [`データの出典: ${src.provider}（${src.dataset}）`];
+  if (src.period_from && src.period_to) parts.push(`集計期間: ${ymd(src.period_from)}〜${ymd(src.period_to)}`);
+  if (src.races > 0) parts.push(`対象: ${src.races.toLocaleString("en-US")}レース・${src.rows.toLocaleString("en-US")}出走`);
+  return parts.join(" ／ ");
 }
