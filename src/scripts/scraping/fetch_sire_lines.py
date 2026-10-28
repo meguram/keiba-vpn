@@ -52,8 +52,10 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("対象 %d 頭 / 取得済み %d 頭", len(todo), len(have))
     client = NetkeibaClient(interval=2.0, cache_dir=None, auto_login=False)
     done = errors = 0
+    stopped_early = False
     for sire_id, horse_id in todo:
         if args.limit and done >= args.limit:
+            stopped_early = True
             break
         while count_today() >= DAILY_STOP:
             logger.info("今日の総件数が %d に達しているので待機（10 分後に再確認）", DAILY_STOP)
@@ -73,6 +75,9 @@ def main(argv: list[str] | None = None) -> int:
                 logger.error("失敗が続くので止めます（アクセス制限の可能性）")
                 return 2
         time.sleep(PACE_SEC * random.uniform(0.9, 1.1))
+    if not stopped_early:
+        store.set_complete()      # 全部取り終えた印。これが付くまで、めぐ分析の『系統』は出さない
+        logger.info("全種牡馬を取り終えました（完了の印を付けた）")
     logger.info("終了: 今回 %d 頭", done)
     return 0
 

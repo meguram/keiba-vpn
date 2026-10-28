@@ -133,6 +133,13 @@ def _scale(mid: float | None, key: str) -> dict[str, float] | None:
     return {"lo": mid * 0.25, "mid": mid, "hi": min(1.0, mid * _HEAT[key])}
 
 
+def lines_ready() -> bool:
+    """系統の群を出してよいか = netkeiba の『○○系』を全種牡馬ぶん取り終えている。"""
+    from src.scraper import sire_line_store
+
+    return sire_line_store.is_complete()
+
+
 @dataclass(frozen=True)
 class Block:
     """表の 1 群 = ある軸（Dimension）を、ある範囲（scope）で集計したもの。列のキーは『<key>_rec』のように key を前置する。"""
@@ -141,6 +148,7 @@ class Block:
     key: str
     label: str | None = None          # 群の見出し（省略すると範囲の名前: 同コース／同競馬場・同芝ダ）
     extra_text: str | None = None     # 群の先頭に出す文字の列の見出し（例: 系統名）
+    needs_lines: bool = False         # netkeiba の系統の取得が完全に終わるまでは出さない群
 
 
 def default_blocks(dim: Dimension) -> tuple[Block, ...]:
@@ -150,10 +158,16 @@ def default_blocks(dim: Dimension) -> tuple[Block, ...]:
 class CourseStatsModule:
     def __init__(self, dim: Dimension, blocks: tuple[Block, ...] | None = None, *, label: str | None = None, description: str | None = None) -> None:
         self.dim = dim
-        self.blocks = blocks or default_blocks(dim)
+        self.all_blocks = blocks or default_blocks(dim)
         self.id = dim.id
         self.label = label or dim.label
         self.description = description or dim.description
+
+    @property
+    def blocks(self) -> tuple[Block, ...]:
+        if lines_ready():
+            return self.all_blocks
+        return tuple(b for b in self.all_blocks if not b.needs_lines)
 
     def applicable(self, ctx: RaceContext) -> bool:
         if any(b.dim.needs_sire_map for b in self.blocks) and not sire_map_available():
@@ -174,8 +188,9 @@ class CourseStatsModule:
 
     def compute(self, ctx: RaceContext) -> ModuleOutput:
         dim = self.dim
+        blocks = self.blocks
         labels = _scope_labels(ctx)
-        dated = load_runs_with_sire() if any(b.dim.needs_sire_map for b in self.blocks) else load_runs()
+        dated = load_runs_with_sire() if any(b.dim.needs_sire_map for b in blocks) else load_runs()
         if ctx.date:
             dated = dated[dated["date"] < ctx.date]
         dated = dated[dated["race_id"] != ctx.race_id]
@@ -194,7 +209,7 @@ class CourseStatsModule:
         groups: list[ColumnGroup] = []
         cells: dict[str, dict[str, Any]] = {e["key"]: {} for e in ctx.entries}
         unknown = False
-        for b in self.blocks:
+        for b in blocks:
             bd, sc = b.dim, b.scope
             name, sub = labels[sc]
             base = _baseline(dated[_mask(dated, ctx, sc)])
@@ -224,16 +239,16 @@ class CourseStatsModule:
                 row[f"{b.key}_top3"] = (w1 + w2 + w3) / n if n else None
                 if b.extra_text and bd.key_text:
                     row[f"{b.key}_name"] = bd.key_text(e, aux)
-                if b is self.blocks[0] and bd.key_text:
+                if b is blocks[0] and bd.key_text:
                     row["_key"] = bd.key_text(e, aux)
 
-        mins = " ・ ".join(f"{b.label or labels[b.scope][0]}は{b.dim.min_n}" for b in self.blocks) if len(self.blocks) > 1 and len({b.dim.min_n for b in self.blocks}) > 1 else None
+        mins = " ・ ".join(f"{b.label or labels[b.scope][0]}は{b.dim.min_n}" for b in blocks) if len(blocks) > 1 and len({b.dim.min_n for b in blocks}) > 1 else None
         notes = [
             "このレースの開催日より前の JRA 全レースの結果から集計しています。",
-            f"出走数が少ない群（{mins}未満）は、参考値として薄く表示し、色は付けません。" if mins else f"出走数が{self.blocks[0].dim.min_n}未満の群は、参考値として薄く表示し、色は付けません。",
+            f"出走数が少ない群（{mins}未満）は、参考値として薄く表示し、色は付けません。" if mins else f"出走数が{blocks[0].dim.min_n}未満の群は、参考値として薄く表示し、色は付けません。",
             "セルの色: その条件の全馬の平均より高いほど緑、低いほど赤（濃いほど差が大きい）。",
         ]
-        for d in dict.fromkeys(b.dim for b in self.blocks):
+        for d in dict.fromkeys(b.dim for b in blocks):
             if d.unknown_note and unknown:
                 notes.append(d.unknown_note)
         return ModuleOutput(columns=columns, groups=groups, cells=cells, notes=notes, data_until=until, source=source, key_header=dim.key_header)

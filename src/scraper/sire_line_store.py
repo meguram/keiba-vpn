@@ -23,12 +23,26 @@ def default_path() -> Path:
     return Path(os.environ.get("KEIBA_SIRE_LINE_MAP") or REPO / "data/local/pedigree_lines/sire_line_map.json")
 
 
-def load(path: Path | None = None) -> dict[str, dict[str, Any]]:
-    """種牡馬の馬 ID -> {name, line, from, at}。無ければ空。"""
+def _doc(path: Path) -> dict[str, Any]:
     try:
-        return json.loads((path or default_path()).read_text(encoding="utf-8")).get("lines") or {}
+        return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
+
+
+def load(path: Path | None = None) -> dict[str, dict[str, Any]]:
+    """種牡馬の馬 ID -> {name, line, from, at}。無ければ空。"""
+    return _doc(path or default_path()).get("lines") or {}
+
+
+def is_complete(path: Path | None = None) -> bool:
+    """対象の種牡馬を全部取り終えたか（fetch_sire_lines が最後に印を付ける）。印があるまで、画面の『系統』は出さない。"""
+    return bool(_doc(path or default_path()).get("complete_at"))
+
+
+def set_complete(path: Path | None = None) -> None:
+    path = path or default_path()
+    _save(load(path), path, complete_at=datetime.now(JST).isoformat(timespec="seconds"))
 
 
 def lines_from_html(html: str) -> dict[str, tuple[str, str]]:
@@ -42,11 +56,12 @@ def lines_from_html(html: str) -> dict[str, tuple[str, str]]:
     return out
 
 
-def _save(cur: dict[str, dict[str, Any]], path: Path) -> None:
+def _save(cur: dict[str, dict[str, Any]], path: Path, complete_at: str | None = None) -> None:
+    complete_at = complete_at or _doc(path).get("complete_at")       # 完了の印は、台帳を書き直しても残す
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
     with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump({"updated": datetime.now(JST).isoformat(timespec="seconds"), "lines": cur}, f, ensure_ascii=False, indent=1)
+        json.dump({"updated": datetime.now(JST).isoformat(timespec="seconds"), "complete_at": complete_at, "lines": cur}, f, ensure_ascii=False, indent=1)
     os.replace(tmp, path)
 
 
