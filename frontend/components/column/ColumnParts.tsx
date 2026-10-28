@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { ColumnChart } from "@/components/column/ColumnChart";
 import {
-  COLUMN_CATEGORIES, VERDICTS, categoryLabel, countIn,
+  COLUMN_CATEGORIES, VERDICTS, categoryLabel, columnsIn, countIn,
   type Column, type ColumnBlock, type ColumnCategory,
 } from "@/lib/columns";
 
@@ -91,7 +92,7 @@ export function CategoryTree({ columns, active }: { columns: Column[]; active?: 
 export function ColumnLayout({ columns, active, children }: { columns: Column[]; active?: string; children: React.ReactNode }) {
   return (
     <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
-      <aside><CategoryTree columns={columns} active={active} /></aside>
+      <aside className="hidden md:block"><div style={{ position: "sticky", top: 56 }}><CategoryTree columns={columns} active={active} /></div></aside>
       <div className="space-y-4" style={{ minWidth: 0 }}>{children}</div>
     </div>
   );
@@ -123,6 +124,15 @@ export function ColumnBody({ blocks }: { blocks: ColumnBlock[] }) {
                 ))}
               </div>
             );
+          case "chart":
+            return <ColumnChart key={i} block={b} />;
+          case "link":
+            return (
+              <Link key={i} href={b.href} className="card block" style={{ textDecoration: "none", color: "inherit", borderColor: "var(--accent)" }}>
+                <p className="font-bold" style={{ color: "var(--accent)" }}>{b.label} →</p>
+                {b.desc && <p className="text-sm" style={{ color: "var(--text-dim)" }}>{b.desc}</p>}
+              </Link>
+            );
           case "table":
             return (
               <div key={i} style={{ overflowX: "auto" }}>
@@ -146,6 +156,67 @@ export function ColumnBody({ blocks }: { blocks: ColumnBlock[] }) {
               </div>
             );
         }
+      })}
+    </div>
+  );
+}
+
+/** トップ: カテゴリをカードで並べ、配下の小カテゴリへ 1 タップで進めるようにする */
+export function CategoryGrid({ columns, nodes = COLUMN_CATEGORIES, prefix = "" }: { columns: Column[]; nodes?: ColumnCategory[]; prefix?: string }) {
+  return (
+    <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))" }}>
+      {nodes.map((c) => {
+        const path = prefix ? `${prefix}/${c.id}` : c.id;
+        const n = countIn(columns, path);
+        return (
+          <div key={path} className="card" style={{ padding: 0, overflow: "hidden" }}>
+            <Link href={`/column/category/${path}`} style={{ display: "block", padding: "12px 14px", textDecoration: "none", color: "inherit" }}>
+              <div className="flex items-baseline justify-between gap-2">
+                <h3 className="font-bold" style={{ fontSize: 16 }}>{c.label}</h3>
+                <span style={dim}>{n}本</span>
+              </div>
+              {c.desc && <p className="text-sm" style={{ color: "var(--text-dim)", marginTop: 2 }}>{c.desc}</p>}
+            </Link>
+            {c.children && (
+              <ul style={{ borderTop: "1px solid var(--border)" }}>
+                {c.children.map((ch) => {
+                  const cp = `${path}/${ch.id}`;
+                  return (
+                    <li key={cp}>
+                      <Link href={`/column/category/${cp}`} className="flex items-center justify-between gap-2"
+                        style={{ padding: "8px 14px", fontSize: 13, textDecoration: "none", color: "var(--text)", borderTop: "1px solid rgba(36,48,73,.4)" }}>
+                        <span>{ch.label}</span>
+                        <span style={dim}>{countIn(columns, cp)} ›</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** カテゴリページの上に出す小カテゴリのカード（子があるときだけ） */
+export function SubCategories({ columns, path, node }: { columns: Column[]; path: string; node: ColumnCategory }) {
+  if (!node.children?.length) return null;
+  return (
+    <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
+      {node.children.map((ch) => {
+        const cp = `${path}/${ch.id}`;
+        const items = columnsIn(columns, cp);
+        return (
+          <Link key={cp} href={`/column/category/${cp}`} className="card block" style={{ textDecoration: "none", color: "inherit", padding: "10px 12px" }}>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="font-bold" style={{ fontSize: 14 }}>{ch.label}</span>
+              <span style={dim}>{items.length}本</span>
+            </div>
+            {ch.desc && <p style={{ ...dim, marginTop: 2 }}>{ch.desc}</p>}
+          </Link>
+        );
       })}
     </div>
   );

@@ -1,0 +1,75 @@
+{
+  "slug": "first-blinkers",
+  "title": "初ブリンカーは魔法の杖？装着初戦の成績と、馬具別ベスト条件",
+  "claim": "初ブリンカーは効果がある",
+  "verdict": "pending",
+  "summary": "装着初戦の変化量と、ほかの馬具を使ったときのベスト条件を調べます。",
+  "categories": [
+    "horse/gear"
+  ],
+  "published": "2026-10-28",
+  "dataset": {
+    "period": "（集計準備中）",
+    "conditions": "（集計準備中）",
+    "sample": "（集計準備中）"
+  },
+  "draft": true,
+  "body": [
+    {
+      "type": "note",
+      "text": "このコラムは準備中です。集計が終わりしだい、結果とグラフをここに載せます。"
+    },
+    {
+      "type": "heading",
+      "text": "気になる疑問"
+    },
+    {
+      "type": "text",
+      "text": "・初ブリンカーって効果ある？\n・ほかの馬具を使ったときのベスト条件は？"
+    },
+    {
+      "type": "heading",
+      "text": "これから調べること"
+    },
+    {
+      "type": "text",
+      "text": "・装着初戦と前走の比較\n・馬具別の好走条件（距離・馬場・脚質）"
+    },
+    {
+      "type": "heading",
+      "text": "結果"
+    },
+    {
+      "type": "stats",
+      "items": [
+        {
+          "label": "対象レース",
+          "value": "–",
+          "sub": "集計後に掲載"
+        },
+        {
+          "label": "対象馬",
+          "value": "–",
+          "sub": "集計後に掲載"
+        },
+        {
+          "label": "差（ポイント）",
+          "value": "–",
+          "sub": "集計後に掲載"
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "text": "（集計後に掲載）"
+    },
+    {
+      "type": "heading",
+      "text": "まとめ"
+    },
+    {
+      "type": "text",
+      "text": "（集計後に掲載）"
+    }
+  ]
+}
