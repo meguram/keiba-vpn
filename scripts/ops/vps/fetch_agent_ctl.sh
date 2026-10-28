@@ -47,7 +47,7 @@ show_status() {
     if [ -f "$ENV_FILE" ]; then
         for k in KEIBA_FETCH_AGENT_ENABLED KEIBA_FETCH_SHADOW_ENABLED; do echo "$k=$(key_value "$k" || true)"; done
         for k in "${REQUIRED_KEYS[@]}"; do echo "$k: $(has_key "$k" && echo あり || echo なし)"; done
-        echo "NETKEIBA_*: $(grep -cE '^NETKEIBA_[A-Z_]+=' "$ENV_FILE" || true) 行"
+        echo "netkeiba のログイン（netkeiba_id・netkeiba_pw）: $(grep -cE '^netkeiba_(id|pw)=.+' "$ENV_FILE" || true)/2 行"
         echo "KEIBA_FETCH_AGENT_TASKS: $(has_key KEIBA_FETCH_AGENT_TASKS && echo "あり（$(key_value KEIBA_FETCH_AGENT_TASKS)）" || echo なし)"
     else
         echo "$ENV_FILE: なし"

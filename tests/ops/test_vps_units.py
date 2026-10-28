@@ -216,9 +216,9 @@ def _ctl(tmp_path, cmd, env_lines, *, shadow_cfg=True, owner_tasks=()):
 def test_fetch_ctl_never_prints_secret_values(tmp_path):
     if os.geteuid() != 0:
         return
-    r, _ = _ctl(tmp_path, "status", ["GCS_BUCKET=b", "NETKEIBA_PASSWORD=supersecret", "KEIBA_FETCH_SHADOW_ENABLED=1"])
-    assert "supersecret" not in r.stdout + r.stderr
-    assert "KEIBA_FETCH_SHADOW_ENABLED=1" in r.stdout and "NETKEIBA_*: 1 行" in r.stdout
+    r, _ = _ctl(tmp_path, "status", ["GCS_BUCKET=b", "netkeiba_id=me@example.com", "netkeiba_pw=supersecret", "KEIBA_FETCH_SHADOW_ENABLED=1"])
+    assert "supersecret" not in r.stdout + r.stderr and "me@example.com" not in r.stdout + r.stderr
+    assert "KEIBA_FETCH_SHADOW_ENABLED=1" in r.stdout and "netkeiba_pw）: 2/2 行" in r.stdout
 
 
 def test_fetch_ctl_shadow_on_refuses_when_production_tasks_are_set_or_code_is_old(tmp_path):
