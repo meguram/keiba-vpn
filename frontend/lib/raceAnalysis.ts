@@ -3,7 +3,10 @@
  * 分析はモジュール単位で、モジュールが列（columns）と群（groups）を自己記述する。画面は、その定義から表とカードを組み立てる。
  */
 
-export type CellFormat = "record" | "pct" | "int" | "text";
+export type CellFormat = "record" | "pct" | "int" | "text" | "runs";
+
+/** 過去の走 1 つ分: [初角の通過順位, 頭数, 外れ値として除いたか(1/0)] */
+export type PastRun = [number, number, number];
 
 /** セル背景の強調の目盛り。mid で無色、hi 以上で最も濃い緑、lo 以下で最も濃い赤 */
 export type HeatScale = { lo: number; mid: number; hi: number };
@@ -11,7 +14,7 @@ export type HeatScale = { lo: number; mid: number; hi: number };
 export type AnalysisColumn = { key: string; label: string; fmt: CellFormat; group?: string | null; title?: string | null; scale?: HeatScale | null; palette?: Record<string, string> | null };
 export type AnalysisGroup = { key: string; label: string; sub?: string | null; n_key?: string | null; min_n: number };
 
-/** 分析に使ったデータの出典（提供元の機関・集計した期間・件数） */
+/** 分析に使ったデータの期間・件数（provider/dataset は API が返すが画面には出さない） */
 export type AnalysisSource = {
   provider: string;
   dataset: string;
@@ -83,9 +86,17 @@ export function formatCell(v: unknown, fmt: CellFormat): string {
       return typeof v === "number" && Number.isFinite(v) ? `${(v * 100).toFixed(1)}%` : EMPTY;
     case "int":
       return typeof v === "number" && Number.isFinite(v) ? String(Math.round(v)) : EMPTY;
+    case "runs":
+      return Array.isArray(v) && v.length > 0 ? (v as PastRun[]).map(([p, x]) => `${p}/${x}`).join(" ") : EMPTY;
     default:
       return String(v) || EMPTY;
   }
+}
+
+/** 位置取りチップの背景色。前（逃げ・先行）ほど赤、後ろほど青。外れ値は色を付けない（null）。 */
+export function runColor(pos: number, field: number): string {
+  const r = field > 1 ? Math.min(1, Math.max(0, (pos - 1) / (field - 1))) : 0;
+  return `hsl(${Math.round(8 + r * 207)} 62% 34%)`;
 }
 
 /** 並べ替え用の値。成績（record）は 1 着の数で並べる。それ以外は表示文字から読まれる。 */
@@ -125,14 +136,18 @@ export function entriesUnavailable(race: { entries_phase?: string | null }, date
   return !race.entries_phase || race.entries_phase === "none";
 }
 
-const ymd = (d: string) => d.replace(/-/g, "/");
+/** "2019-12-22" -> "2019年12月22日"。形式が違えばそのまま返す */
+const jpDate = (d: string) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+  return m ? `${m[1]}年${Number(m[2])}月${Number(m[3])}日` : d;
+};
 
-/** 出典の表示用の文。例: データの出典: netkeiba.com（レース結果） ／ 集計期間: 2020/01/05〜2026/10/25 ／ 対象: 2,880レース・39,639出走 */
-export function formatSource(src: AnalysisSource): string {
-  const parts = [`データの出典: ${src.provider}（${src.dataset}）`];
-  if (src.period_from && src.period_to) parts.push(`集計期間: ${ymd(src.period_from)}〜${ymd(src.period_to)}`);
+/** 集計に使ったデータの期間・件数の表示用。例: 集計期間: 2019年12月22日〜2026年10月24日 ／ 対象: 23,640レース・323,461出走 */
+export function formatPeriod(src: AnalysisSource): string | null {
+  const parts: string[] = [];
+  if (src.period_from && src.period_to) parts.push(`集計期間: ${jpDate(src.period_from)}〜${jpDate(src.period_to)}`);
   if (src.races > 0) parts.push(`対象: ${src.races.toLocaleString("en-US")}レース・${src.rows.toLocaleString("en-US")}出走`);
-  return parts.join(" ／ ");
+  return parts.length ? parts.join(" ／ ") : null;
 }
 
 /** 値に応じたセルの背景色（平均より高い=緑、低い=赤、差が大きいほど濃い）。目盛りが無い・値が無い・平均とほぼ同じなら色なし。 */

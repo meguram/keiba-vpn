@@ -3,7 +3,7 @@
   同コース           : 同じ競馬場・同じ芝/ダ・同じ距離
   同競馬場・同芝ダ   : 距離は問わない
 
-○○（軸）は Dimension で差し替える: 騎手 / 枠 / 種牡馬。軸を足すときは Dimension を 1 つ作って registry.py に足す。
+○○（軸）は Dimension で差し替える: 騎手 / 枠 / 種牡馬 / 種牡馬の系統。軸を足すときは Dimension を 1 つ作って registry.py に足す。
 対象は、このレースの開催日より前の JRA 全レース（当日以降の結果は入れない）。キーは ID（名前では結合しない）。
 色の基準は、その条件の全馬の平均（勝率・連対率・複勝率）。
 """
@@ -16,6 +16,7 @@ from typing import Any, Callable
 import pandas as pd
 
 from src.research.race_analysis.base import Column, ColumnGroup, ModuleOutput, RaceContext
+from src.research.race_analysis.sire_lines import LABELS as LINE_LABELS
 from src.research.race_analysis.runs import SOURCE_DATASET, SOURCE_PROVIDER, load_runs, load_runs_with_sire, load_sire_map, sire_map_available
 
 SCOPES = ("course", "venue_surface")
@@ -60,6 +61,16 @@ def _sire_text(e: dict[str, Any], aux: dict[str, Any]) -> str | None:
     return row[1] if row else None
 
 
+def _line_key(e: dict[str, Any], aux: dict[str, Any]) -> str | None:
+    row = aux.get("sire", {}).get(str(e.get("horse_id") or ""))
+    return str(row[2]) if row and len(row) > 2 and row[2] else None
+
+
+def _line_text(e: dict[str, Any], aux: dict[str, Any]) -> str | None:
+    k = _line_key(e, aux)
+    return LINE_LABELS.get(k, k) if k else None
+
+
 JOCKEY = Dimension(
     id="jockey_course", label="騎手×コース", min_n=10, run_col="jockey_id", entry_key=_jockey_key,
     description="出走馬の騎手が、今回と同じコース・同じ競馬場・同じ芝/ダートでこれまで残してきた成績。",
@@ -74,6 +85,12 @@ SIRE = Dimension(
     needs_sire_map=True,
     description="出走馬の父（種牡馬）の産駒が、今回と同じコース・同じ競馬場・同じ芝/ダートでこれまで残してきた成績。",
     unknown_note="父を特定できない馬は表示されません。",
+)
+SIRE_LINE = Dimension(
+    id="sire_line_course", label="種牡馬系統×コース", min_n=30, run_col="sire_line_id", entry_key=_line_key, key_header="父の系統", key_text=_line_text,
+    needs_sire_map=True,
+    description="出走馬の父の系統（サンデーサイレンス系など）の産駒が、今回と同じコース・同じ競馬場・同じ芝/ダートでこれまで残してきた成績。産駒数の少ない種牡馬も、同じ系統でまとめて見られます。",
+    unknown_note="父の系統を特定できない馬は表示されません。系統は父から父の父…（5代まで）をさかのぼって決めています。",
 )
 
 
@@ -135,7 +152,9 @@ class CourseStatsModule:
         m = load_sire_map()
         if m is None:
             return {"sire": {}}
-        return {"sire": {str(r.horse_id): (r.sire_id, r.sire_name) for r in m[["horse_id", "sire_id", "sire_name"]].itertuples(index=False)}}
+        if "sire_line_id" not in m.columns:
+            m = m.assign(sire_line_id=None)
+        return {"sire": {str(r.horse_id): (r.sire_id, r.sire_name, r.sire_line_id) for r in m[["horse_id", "sire_id", "sire_name", "sire_line_id"]].itertuples(index=False)}}
 
     def compute(self, ctx: RaceContext) -> ModuleOutput:
         dim = self.dim

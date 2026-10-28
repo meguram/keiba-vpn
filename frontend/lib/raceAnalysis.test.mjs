@@ -12,7 +12,7 @@ const ts = createRequire(import.meta.url)("typescript");
 const src = ts.transpileModule(readFileSync(join(here, "raceAnalysis.ts"), "utf8"), { compilerOptions: { module: ts.ModuleKind.ES2020, target: ts.ScriptTarget.ES2020 } }).outputText;
 const out = join(mkdtempSync(join(tmpdir(), "ra-")), "raceAnalysis.mjs");
 writeFileSync(out, src);
-const { formatCell, sortValue, columnBlocks, isThin, entriesUnavailable, formatSource, heatColor, formatComputedAt } = await import(pathToFileURL(out).href);
+const { formatCell, sortValue, columnBlocks, isThin, entriesUnavailable, formatPeriod, heatColor, formatComputedAt, runColor } = await import(pathToFileURL(out).href);
 
 test("formatCell: 成績・率・整数、値が無ければダッシュ", () => {
   assert.equal(formatCell([6, 11, 7, 38], "record"), "6-11-7-38");
@@ -62,12 +62,12 @@ test("entriesUnavailable: 未来日で出馬表の段階が無い／none のレ�
   assert.equal(entriesUnavailable({ entries_phase: null }, "20261025", "20261028"), false);           // 過去は選べる
 });
 
-test("formatSource: 提供元・集計期間・件数を 1 文にする。期間や件数が無ければ省く", () => {
+test("formatPeriod: 集計期間を何年何月何日からで、件数とあわせて 1 文に。無ければ省く", () => {
   assert.equal(
-    formatSource({ provider: "netkeiba.com", dataset: "レース結果", period_from: "2020-01-05", period_to: "2026-10-25", races: 2880, rows: 39639 }),
-    "データの出典: netkeiba.com（レース結果） ／ 集計期間: 2020/01/05〜2026/10/25 ／ 対象: 2,880レース・39,639出走",
+    formatPeriod({ provider: "x", dataset: "y", period_from: "2019-12-22", period_to: "2026-10-24", races: 23640, rows: 323461 }),
+    "集計期間: 2019年12月22日〜2026年10月24日 ／ 対象: 23,640レース・323,461出走",
   );
-  assert.equal(formatSource({ provider: "netkeiba.com", dataset: "レース結果", period_from: null, period_to: null, races: 0, rows: 0 }), "データの出典: netkeiba.com（レース結果）");
+  assert.equal(formatPeriod({ provider: "x", dataset: "y", period_from: null, period_to: null, races: 0, rows: 0 }), null);
 });
 
 test("heatColor: 平均より高いほど緑、低いほど赤、平均付近・値なし・目盛りなしは色なし", () => {
@@ -88,4 +88,12 @@ test("formatComputedAt: 事前計算の時刻を月/日 時:分 で。壊れた�
   assert.equal(formatComputedAt("2026-10-28T17:30:05+0900"), "10/28 17:30 時点");
   assert.equal(formatComputedAt(null), null);
   assert.equal(formatComputedAt("x"), null);
+});
+
+test("runs: 位置取りの文字化と色（前ほど赤・後ろほど青）", () => {
+  assert.equal(formatCell([[3, 16, 0], [1, 8, 1]], "runs"), "3/16 1/8");
+  assert.equal(formatCell(null, "runs"), "–");
+  assert.equal(runColor(1, 16), "hsl(8 62% 34%)");
+  assert.equal(runColor(16, 16), "hsl(215 62% 34%)");
+  assert.equal(runColor(1, 1), "hsl(8 62% 34%)");
 });

@@ -1,4 +1,4 @@
-"""馬ID → 父・母父の対応表（horse_sire_map.parquet）を作る。めぐ分析の『種牡馬×コース』が読む。
+"""馬ID → 父・母父・父の系統の対応表（horse_sire_map.parquet）を作る。めぐ分析の『種牡馬×コース』『種牡馬系統×コース』が読む。
 
 python -m src.scripts.data.build_horse_sire_map            # ホストで実行。差分だけ読む（既存の行は読み直さない）
 python -m src.scripts.data.build_horse_sire_map --full     # 全頭を読み直す
@@ -22,13 +22,15 @@ from typing import Any
 
 import pandas as pd
 
+from src.research.race_analysis.sire_lines import line_id_of
+
 logger = logging.getLogger("build_horse_sire_map")
 
 ROOT = Path(__file__).resolve().parents[3]
 PED_DIR = ROOT / "data/local/horse_pedigree_5gen"
 FLAT_DIR = ROOT / "data/page_reference/tables"
 OUT = ROOT / "data/page_reference/pedigree_race_index/horse_sire_map.parquet"
-COLUMNS = ["horse_id", "sire_id", "sire_name", "dam_sire_id", "dam_sire_name"]
+COLUMNS = ["horse_id", "sire_id", "sire_name", "dam_sire_id", "dam_sire_name", "sire_line_id"]
 
 
 def parse_pedigree(doc: dict[str, Any]) -> dict[str, Any] | None:
@@ -48,6 +50,7 @@ def parse_pedigree(doc: dict[str, Any]) -> dict[str, Any] | None:
         "sire_name": sire.get("name") or doc.get("sire"),
         "dam_sire_id": str(dam_sire["horse_id"]) if dam_sire and dam_sire.get("horse_id") else None,
         "dam_sire_name": (dam_sire.get("name") if dam_sire else None) or doc.get("dam_sire"),
+        "sire_line_id": line_id_of(doc.get("ancestors") or []),
     }
 
 
@@ -96,6 +99,8 @@ def build(out: Path = OUT, ped_dir: Path = PED_DIR, horse_ids: set[str] | None =
     old = pd.DataFrame(columns=COLUMNS)
     if out.exists() and not full:
         old = pd.read_parquet(out)
+        if "sire_line_id" not in old.columns:       # 系統の列が無い古い表は読み直す
+            old = pd.DataFrame(columns=COLUMNS)
     todo = sorted(ids - set(old["horse_id"].astype(str)))
     with ThreadPoolExecutor(max_workers=workers) as ex:
         rows = [r for r in ex.map(lambda h: _read(h, ped_dir), todo) if r]
