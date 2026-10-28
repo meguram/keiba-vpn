@@ -14,6 +14,13 @@ const out = join(mkdtempSync(join(tmpdir(), "ra-")), "raceAnalysis.mjs");
 writeFileSync(out, src);
 const { formatCell, sortValue, columnBlocks, isThin, entriesUnavailable, formatPeriod, heatColor, formatComputedAt, runColor } = await import(pathToFileURL(out).href);
 
+// 表の並べ替え（TableSorter が使う比較）。sortValue の値が実際にどう並ぶかを確かめる
+async function loadTableSort() {
+  const f = join(mkdtempSync(join(tmpdir(), "ra-sort-")), "tableSort.mjs");
+  writeFileSync(f, ts.transpileModule(readFileSync(join(here, "tableSort.ts"), "utf8"), { compilerOptions: { module: ts.ModuleKind.ES2020, target: ts.ScriptTarget.ES2020 } }).outputText);
+  return import(pathToFileURL(f).href);
+}
+
 test("formatCell: 成績・率・整数、値が無ければダッシュ", () => {
   assert.equal(formatCell([6, 11, 7, 38], "record"), "6-11-7-38");
   assert.equal(formatCell(null, "record"), "–");
@@ -28,6 +35,18 @@ test("sortValue: 成績は 1 着の数で並べる", () => {
   assert.equal(sortValue([6, 11, 7, 38], "record"), "6");
   assert.equal(sortValue(null, "record"), undefined);
   assert.equal(sortValue(0.5, "pct"), undefined);
+});
+
+test("sortValue: 脚質は色分けの定義の順（ハナ → 先行(前) → 先行(後ろ) → 差し → 追込）、不明は最後", async () => {
+  const { parseCell, compareCells } = await loadTableSort();
+  const palette = { "ハナ": "a", "先行(前)": "b", "先行(後ろ)": "c", "差し": "d", "追込": "e" };
+  const vals = ["差し", "不明", "追込", "ハナ", "先行(後ろ)", "先行(前)"];
+  const cells = vals.map((v) => ({ v, c: parseCell(v, sortValue(v, "text", palette)) }));
+  const asc = [...cells].sort((a, b) => compareCells(a.c, b.c, true, 1)).map((x) => x.v);
+  const desc = [...cells].sort((a, b) => compareCells(a.c, b.c, true, -1)).map((x) => x.v);
+  assert.deepEqual(asc, ["ハナ", "先行(前)", "先行(後ろ)", "差し", "追込", "不明"]);
+  assert.deepEqual(desc, ["追込", "差し", "先行(後ろ)", "先行(前)", "ハナ", "不明"]);
+  assert.equal(sortValue("差し", "text"), undefined);       // 色分けの無い文字の列は従来どおり
 });
 
 const groups = [{ key: "a", label: "A", n_key: "a_n", min_n: 10 }, { key: "b", label: "B", min_n: 0 }];

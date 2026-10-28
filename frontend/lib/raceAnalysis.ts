@@ -99,9 +99,14 @@ export function runColor(pos: number, field: number): string {
   return `hsl(${Math.round(8 + r * 207)} 62% 34%)`;
 }
 
-/** 並べ替え用の値。成績（record）は 1 着の数で並べる。それ以外は表示文字から読まれる。 */
-export function sortValue(v: unknown, fmt: CellFormat): string | undefined {
+/** 並べ替え用の値。成績（record）は 1 着の数で並べる。色分けのある文字の列（脚質など）は、色分けの定義の順
+ *  （脚質ならハナ → 先行(前) → 先行(後ろ) → 差し → 追込）で並べ、定義に無い値（不明など）は向きによらず最後。それ以外は表示文字から読まれる。 */
+export function sortValue(v: unknown, fmt: CellFormat, palette?: Record<string, string> | null): string | undefined {
   if (fmt === "record" && Array.isArray(v) && v.length > 0) return String(v[0]);
+  if (palette && typeof v === "string") {
+    const i = Object.keys(palette).indexOf(v);
+    return i >= 0 ? String(i + 1) : "";
+  }
   return undefined;
 }
 
