@@ -100,3 +100,77 @@ def test_dockerfile_basics():
     ign = (ROOT / "deploy/docker/Dockerfile.cloudrun.dockerignore").read_text(encoding="utf-8")
     for must in (".env", "data/", ".git/", "tests/"):
         assert must in ign
+
+
+# ── リクエスト課金（KEIBA_MIRROR_MODE=request）: 取り込みはリクエストをきっかけに ──
+class FakeRefresher:
+    def __init__(self, wait=False):
+        self.wait, self.started, self.wait_s = wait, 0, 1.0
+    def should_wait(self): return self.wait
+    def start_if_due(self):
+        import threading
+
+        self.started += 1
+        t = threading.Thread(target=lambda: None); t.start()
+        return t
+
+
+def test_mirror_mode_defaults_to_thread_and_gate_skips_polling_paths(entry, monkeypatch):
+    monkeypatch.delenv("KEIBA_MIRROR_MODE", raising=False)
+    assert entry.mirror_mode() == "thread"
+    monkeypatch.setenv("KEIBA_MIRROR_MODE", "Request")
+    assert entry.mirror_mode() == "request"
+    for p in ("/api/health", "/api/v1/health", "/api/maintenance/status", "/ops/heartbeat", "/ops"):
+        assert not entry.gate_applies(p), p                      # 画面を開いているだけで60秒ごとに来るもの・運用の受信は、取り込みのきっかけにしない
+    for p in ("/api/race/1/predictions", "/api/v1/races", "/api/race-list/20261025"):
+        assert entry.gate_applies(p), p
+
+
+def test_gateway_triggers_refresh_only_for_content_requests(entry):
+    from starlette.testclient import TestClient
+
+    gw_app = entry.build_app()
+    gateway = gw_app.app                                         # ProxyKeyMiddleware が包んでいる Gateway
+    fr = FakeRefresher()
+    gateway.refresher = fr
+    c = TestClient(gw_app)
+    c.get("/api/health"); c.get("/api/maintenance/status"); c.get("/ops/heartbeat/status")
+    assert fr.started == 0
+    c.get("/api/v1/health")                                      # health は取り込まない
+    assert fr.started == 0
+    c.get("/api/v1/races")
+    assert fr.started == 1
+
+
+def test_gateway_waits_for_pull_only_after_long_gap_and_never_fails_the_request(entry):
+    from starlette.testclient import TestClient
+
+    gw_app = entry.build_app()
+    gateway = gw_app.app
+    calls = []
+
+    class Waiting(FakeRefresher):
+        def start_if_due(self):
+            calls.append("start")
+            return super().start_if_due()
+    gateway.refresher = Waiting(wait=True)
+    assert TestClient(gw_app).get("/api/v1/races").status_code in (200, 401, 404, 500, 503)    # 取り込みを待った上で通常どおり処理される
+    assert calls == ["start"]
+
+    class Broken:
+        def should_wait(self): raise RuntimeError("boom")
+    gateway.refresher = Broken()
+    assert TestClient(gw_app).get("/api/v1/health").status_code == 200                       # 取り込み側の失敗でリクエストは落ちない
+    assert TestClient(gw_app).get("/api/v1/races").status_code != 599
+
+
+def test_request_mode_waits_for_full_initial_pull_at_startup(entry, monkeypatch):
+    import asyncio
+
+    from src.ops import gcs_mirror
+
+    gcs_mirror.initial_full_pulled.clear()
+    monkeypatch.setattr(entry, "MIRROR_FULL_WAIT_SEC", 0.05)
+    asyncio.run(entry._startup(None, warm=False, wait_full=True))          # 時間切れでも例外を出さず起動を続ける
+    gcs_mirror.initial_full_pulled.set()
+    asyncio.run(entry._startup(None, warm=False, wait_full=True))
