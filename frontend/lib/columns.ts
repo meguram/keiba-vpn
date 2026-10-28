@@ -76,7 +76,9 @@ export type ColumnBlock =
   | { type: "table"; columns: string[]; rows: (string | number)[][]; caption?: string }
   | { type: "note"; text: string }
   | { type: "link"; href: string; label: string; desc?: string }
-  | ColumnChartBlock;
+  | ColumnChartBlock
+  | JockeyDistanceChartBlock
+  | { type: "accordion"; title: string; blocks: ColumnBlock[] };
 
 /** 折れ線グラフ。series が複数あるときは、見たい系列を切り替えて重ねて見られる（baseline は常に点線で出す） */
 export type ColumnChartBlock = {
@@ -104,6 +106,23 @@ export function chartMax(series: { values: (number | null)[] }[]): number {
 export function chartIsEmpty(series: { values: (number | null)[] }[]): boolean {
   return !series.some((s) => s.values.some((v) => typeof v === "number" && Number.isFinite(v)));
 }
+
+/** 騎手別・距離帯別勝率グラフ（プルダウン＋ソート切り替え付き） */
+export type JockeyDistEntry = {
+  name: string;
+  rank: number;
+  reading: string;
+  values: (number | null)[];
+};
+
+export type JockeyDistanceChartBlock = {
+  type: "jockey_distance_chart";
+  title: string;
+  xs: string[];
+  baseline: (number | null)[];
+  jockeys: JockeyDistEntry[];
+  caption?: string;
+};
 
 export type Column = {
   slug: string;
