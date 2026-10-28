@@ -326,9 +326,9 @@ def evaluate_overall(sections: dict) -> dict:
             add("red", f"UI が応答しません（{ui.get('code')}）")
         api = d.get("upstream_api") or {}
         if api.get("code") != 200:
-            add("red", f"VPS から API（api-internal 経由）に届きません（{api.get('code')}）")
+            add("red", f"VPS の nginx 経由の応答が 200 ではありません（{api.get('code')}）。API の死活は見ていません（課金のため叩かない）")
         elif (api.get("ms") or 0) > 3000:
-            add("yellow", f"API の応答が遅い（{api.get('ms')}ms）")
+            add("yellow", f"nginx 経由の応答が遅い（{api.get('ms')}ms）")
         tun = d.get("tunnel") or {}
         if tun.get("readable") and tun.get("recently_lost"):
             add("yellow", "トンネルの接続が直近で切れた記録があります")
