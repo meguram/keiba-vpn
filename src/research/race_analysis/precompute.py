@@ -14,11 +14,12 @@ from typing import Any
 
 from src.research.race_analysis import runs as runs_mod
 from src.research.race_analysis import store
+from src.research.race_analysis.course_stats import lines_ready
 from src.research.race_analysis.service import _load_card, _normalize_entries, analyze_race
 
 logger = logging.getLogger(__name__)
 
-ANALYSIS_VERSION = "6"      # 分析ロジック・列定義を変えたら上げる（保存済みの結果が作り直される）
+ANALYSIS_VERSION = "7"      # 分析ロジック・列定義を変えたら上げる（保存済みの結果が作り直される）
 
 
 def _asof_cache() -> dict[str, str | None]:
@@ -42,6 +43,7 @@ def fingerprint(card: dict, entries: list[dict[str, Any]], asof: dict[str, str |
         "entries": [[e.get("horse_id"), e.get("horse_number"), e.get("bracket_number"), e.get("jockey_id")] for e in entries],
         "data_until": asof[date],
         "sire_map": sire_sig,
+        "lines_ready": lines_ready(),
     }
     return hashlib.sha1(json.dumps(doc, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:16]
 

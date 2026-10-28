@@ -253,6 +253,11 @@ def test_line_of_walks_paternal_chain_to_nearest_head_without_other_bucket():
 
 
 def test_sire_tab_shows_line_next_to_sire(tmp_path, monkeypatch):
+    from src.scraper import sire_line_store as S
+
+    monkeypatch.setenv("KEIBA_SIRE_LINE_MAP", str(tmp_path / "sl.json"))
+    S.record_html("", "x")      # 台帳はまだ空・完了の印なし
+
     rows = [
         _row("S1", "2026-01-05", "東京", "芝", 1600, 1, "J1", horse="a1"),
         _row("S1", "2026-01-05", "東京", "芝", 1600, 4, "J2", horse="a2"),
@@ -273,6 +278,12 @@ def test_sire_tab_shows_line_next_to_sire(tmp_path, monkeypatch):
     monkeypatch.setattr(runs_mod, "SIRE_MAP_PATH", sire_path)
     runs_mod._cache.update(sig=None, df=None, sire_sig=None, sire_df=None)
     st = _storage([{"horse_number": 1, "bracket_number": 1, "horse_name": "今回D", "horse_id": "e1", "jockey_id": "J1"}])
+    d0 = analyze_race(st, "202605040111")
+    m0 = next(x for x in d0["modules"] if x["id"] == "sire_course")
+    assert [g["key"] for g in m0["groups"]] == ["sire"]                  # 系統の取得が完全に終わるまで、系統の群は出さない
+    assert "line_rec" not in d0["entries"][0]["analysis"]["sire_course"]
+    S.record_html('<table class="blood_table"><tr><td rowspan="16"><a href="/horse/z/">z</a></td></tr></table>', "x")
+    S.set_complete()
     d = analyze_race(st, "202605040111")
     m = next(x for x in d["modules"] if x["id"] == "sire_course")
     assert [g["key"] for g in m["groups"]] == ["sire", "line"]            # 種牡馬と系統を同じタブに並べる。同競馬場・同芝ダの群は無い
@@ -308,3 +319,15 @@ def test_fetch_sire_lines_picks_most_common_sires_first_and_skips_done():
     sm = pd.DataFrame({"horse_id": ["a", "b", "c", "d"], "sire_id": ["S1", "S1", "S2", "S3"]})
     assert pick_targets(sm, set()) == [("S1", "b"), ("S2", "c"), ("S3", "d")]
     assert pick_targets(sm, {"S1"}) == [("S2", "c"), ("S3", "d")]
+
+
+def test_store_complete_marker_survives_rewrites(tmp_path):
+    from src.scraper import sire_line_store as S
+
+    p = tmp_path / "sl.json"
+    assert S.is_complete(p) is False
+    S.mark_missing("A", "h", p)
+    S.set_complete(p)
+    assert S.is_complete(p) is True
+    S.mark_missing("B", "h", p)                                  # 書き直しても印は残る
+    assert S.is_complete(p) is True and set(S.load(p)) == {"A", "B"}
