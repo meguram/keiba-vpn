@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
 import { CategoryChip, ColumnBody, ColumnLayout, VerdictBadge } from "@/components/column/ColumnParts";
 import { COLUMNS, findColumn } from "@/content/columns";
+import { categoryTrail } from "@/lib/columns";
 
 export const dynamicParams = false;
 
@@ -17,7 +18,13 @@ export default async function ColumnArticlePage({ params }: { params: Promise<{ 
 
   return (
     <PageShell title={col.title} note={false}>
-      <p className="text-sm"><Link href="/column" style={{ color: "var(--accent)" }}>← めぐコラム一覧</Link></p>
+      <p className="text-sm" style={{ color: "var(--text-dim)" }}>
+        <Link href="/column" style={{ color: "var(--accent)" }}>めぐコラム</Link>
+        {(categoryTrail(col.categories[0]) ?? []).map((c, i) => {
+          const p = col.categories[0].split("/").slice(0, i + 1).join("/");
+          return <span key={p}>{" › "}<Link href={`/column/category/${p}`} style={{ color: "var(--accent)" }}>{c.label}</Link></span>;
+        })}
+      </p>
       <ColumnLayout columns={COLUMNS} active={col.categories[0]}>
         <article className="card space-y-4">
           <div className="flex flex-wrap items-center gap-3">

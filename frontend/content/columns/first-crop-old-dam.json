@@ -1,0 +1,75 @@
+{
+  "slug": "first-crop-old-dam",
+  "title": "初年度産駒と高齢出産は走らない？「生まれ」でパフォは変わるか",
+  "claim": "初年度産駒・高齢出産馬は成績が低い",
+  "verdict": "pending",
+  "summary": "種牡馬の初年度産駒と、母が高齢で産んだ馬の成績を比べます。",
+  "categories": [
+    "horse/birth"
+  ],
+  "published": "2026-10-28",
+  "dataset": {
+    "period": "（集計準備中）",
+    "conditions": "（集計準備中）",
+    "sample": "（集計準備中）"
+  },
+  "draft": true,
+  "body": [
+    {
+      "type": "note",
+      "text": "このコラムは準備中です。集計が終わりしだい、結果とグラフをここに載せます。"
+    },
+    {
+      "type": "heading",
+      "text": "気になる疑問"
+    },
+    {
+      "type": "text",
+      "text": "・初年度産駒はパフォーマンスが低い？\n・高齢出産馬はパフォーマンスが低い？"
+    },
+    {
+      "type": "heading",
+      "text": "これから調べること"
+    },
+    {
+      "type": "text",
+      "text": "・種牡馬の初年度産駒と2年目以降の比較\n・母の年齢別の成績"
+    },
+    {
+      "type": "heading",
+      "text": "結果"
+    },
+    {
+      "type": "stats",
+      "items": [
+        {
+          "label": "対象レース",
+          "value": "–",
+          "sub": "集計後に掲載"
+        },
+        {
+          "label": "対象馬",
+          "value": "–",
+          "sub": "集計後に掲載"
+        },
+        {
+          "label": "差（ポイント）",
+          "value": "–",
+          "sub": "集計後に掲載"
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "text": "（集計後に掲載）"
+    },
+    {
+      "type": "heading",
+      "text": "まとめ"
+    },
+    {
+      "type": "text",
+      "text": "（集計後に掲載）"
+    }
+  ]
+}

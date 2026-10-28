@@ -1,0 +1,75 @@
+{
+  "slug": "summer-mare",
+  "title": "夏は牝馬を買え、は本当か？真夏の牝馬データ",
+  "claim": "夏は牝馬が強い",
+  "verdict": "pending",
+  "summary": "夏競馬で牝馬が好走する傾向を、季節と条件を分けて確かめます。",
+  "categories": [
+    "horse/sex"
+  ],
+  "published": "2026-10-28",
+  "dataset": {
+    "period": "（集計準備中）",
+    "conditions": "（集計準備中）",
+    "sample": "（集計準備中）"
+  },
+  "draft": true,
+  "body": [
+    {
+      "type": "note",
+      "text": "このコラムは準備中です。集計が終わりしだい、結果とグラフをここに載せます。"
+    },
+    {
+      "type": "heading",
+      "text": "気になる疑問"
+    },
+    {
+      "type": "text",
+      "text": "・夏は牝馬が有利なのか"
+    },
+    {
+      "type": "heading",
+      "text": "これから調べること"
+    },
+    {
+      "type": "text",
+      "text": "・月別・性別の複勝率と回収率\n・牝馬限定戦と混合戦の違い"
+    },
+    {
+      "type": "heading",
+      "text": "結果"
+    },
+    {
+      "type": "stats",
+      "items": [
+        {
+          "label": "対象レース",
+          "value": "–",
+          "sub": "集計後に掲載"
+        },
+        {
+          "label": "対象馬",
+          "value": "–",
+          "sub": "集計後に掲載"
+        },
+        {
+          "label": "差（ポイント）",
+          "value": "–",
+          "sub": "集計後に掲載"
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "text": "（集計後に掲載）"
+    },
+    {
+      "type": "heading",
+      "text": "まとめ"
+    },
+    {
+      "type": "text",
+      "text": "（集計後に掲載）"
+    }
+  ]
+}
