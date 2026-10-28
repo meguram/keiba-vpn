@@ -161,3 +161,21 @@ def test_monitor_proxy_template_sends_the_shared_key_and_listens_locally():
     t = (T / "nginx-keiba-monitor.conf").read_text(encoding="utf-8")
     assert "listen 127.0.0.1:__MONITOR_PORT__" in t and "include /etc/nginx/keiba-proxykey.conf" in t
     assert "PASSWORD" not in t and "SECRET" not in t
+
+
+def test_traffic_units_are_sandboxed_and_hold_no_secret():
+    svc = load("keiba-traffic.service")["Service"]
+    assert svc["Type"] == "oneshot" and mb(svc["MemoryMax"]) <= 128
+    assert svc["ProtectSystem"] == "strict" and svc["ReadWritePaths"] == "/var/lib/keiba-ui/traffic" and svc["NoNewPrivileges"] == "true"
+    assert svc["ExecStart"].endswith("/opt/keiba-ui/bin/traffic_client.py")
+    text = (T / "keiba-traffic.service").read_text(encoding="utf-8") + (T / "keiba-traffic.timer").read_text(encoding="utf-8")
+    assert "SECRET" not in text and "http" not in text.replace("network-online", "")   # 秘密も送り先も /etc/keiba-ui/heartbeat.env にだけ置く
+    assert load("keiba-traffic.timer")["Timer"]["OnUnitActiveSec"] in ("15min", "900")
+
+
+def test_traffic_installer_is_valid_bash_and_installs_both_scripts():
+    sh = ROOT_DIR / "scripts/ops/vps/vps_07_traffic_timer.sh"
+    assert subprocess.run(["bash", "-n", str(sh)], capture_output=True).returncode == 0
+    body = sh.read_text(encoding="utf-8")
+    for name in ("traffic_client.py", "vps_traffic_probe.py", "heartbeat_client.py", "keiba-traffic.timer"):
+        assert name in body

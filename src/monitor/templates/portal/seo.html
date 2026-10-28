@@ -1,0 +1,24 @@
+{% extends "portal/base.html" %}{% from "portal/_m.html" import pill %}
+{% block title %}SEO{% endblock %}
+{% block body %}
+<h1>SEO 点検</h1>
+<p class="sub">公開側サイト（site_public）をビルドして、検索流入を取れる状態かを点検します。結果は CI が GCS に置いたもの（<code>ops/seo/audit.json</code>）を読みます。会員向けの画面（app）は検索に出さない方針で、全拒否が正しい状態です。</p>
+{% if s.status != 'ok' %}
+<div class="card"><b class="{{ 'red' if s.status == 'error' else 'muted' }}">{{ s.get('error') or 'まだ点検結果がありません' }}</b>
+<div class="hint">CI（または開発 PC）で <code>python -m src.scripts.ops.seo_audit_publish</code> を実行すると表示されます。</div></div>
+{% else %}
+<div class="grid g4">
+  <div class="card kpi"><div class="big">{{ s.score }}<span class="small muted"> / 100</span></div><div class="l">SEO スコア</div></div>
+  <div class="card kpi"><div class="big ok">{{ s.counts.ok }}</div><div class="l">OK</div></div>
+  <div class="card kpi"><div class="big warn">{{ s.counts.warn }}</div><div class="l">注意</div></div>
+  <div class="card kpi"><div class="big ng">{{ s.counts.ng }}</div><div class="l">要対応</div></div>
+</div>
+<p class="small muted">点検した時刻 {{ s.generated_at }}{% if s.site_url %} ／ 公開先 {{ s.site_url }}{% endif %}</p>
+{% for g in s.groups if g['items'] %}<h2>{{ g.title }}</h2><div class="card"><table><tbody>
+{% for i in g['items'] %}<tr><td style="width:64px" class="{{ i.level }}">{{ {'ok':'OK','warn':'注意','ng':'要対応','info':'情報'}.get(i.level, i.level) }}</td>
+<td>{{ i.label }}{% if i.detail %}<div class="small muted">{{ i.detail }}</div>{% endif %}{% if i.fix and i.level in ('ng','warn') %}<div class="small yellow">対処: {{ i.fix }}</div>{% endif %}</td></tr>{% endfor %}</tbody></table></div>{% endfor %}
+<h2>ページ一覧（{{ s.pages|length }}）</h2><div class="card"><table><thead><tr><th>URL</th><th>タイトル</th><th class="n">本文量</th><th>状態</th><th>指摘</th></tr></thead><tbody>
+{% for p in s.pages %}<tr><td>{{ p.url }}</td><td class="small">{{ p.title }}</td><td class="n">{{ p.chars }}</td><td class="small nw">{% if p.noindex %}<span class="muted">noindex</span>{% elif p.canonical %}<span class="ok">索引対象</span>{% else %}<span class="warn">canonical なし</span>{% endif %}</td>
+<td class="small yellow">{{ p.issues|join(' / ') }}</td></tr>{% endfor %}</tbody></table></div>
+{% endif %}
+{% endblock %}

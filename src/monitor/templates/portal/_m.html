@@ -1,0 +1,9 @@
+{% macro pill(level, text=None) %}<span class="pill {{ level }}">{{ text if text is not none else level }}</span>{% endmacro %}
+{% macro cell(title, c) %}
+<div class="card cell {{ c.level }}"><div class="env-title"><b>{{ title }}</b><span class="pill {{ c.level }}">{{ c.headline }}</span></div>
+{% for i in c['items'] %}<div class="kv"><span>{{ i.name }}</span><span class="{{ i.level }}">{{ i.value }}</span></div>{% endfor %}
+{% for a in c.get('alerts', []) %}<div class="small {{ 'red' if a.severity == 'critical' else 'yellow' }}">● {{ a.title }} {{ a.detail }}</div>{% endfor %}
+{% if c.hint %}<div class="small muted" style="margin-top:6px">{{ c.hint }}</div>{% endif %}</div>
+{% endmacro %}
+{% macro stage_label(k) %}{{ {'eve':'前日の出馬表','odds':'オッズ','predict':'予測','on_time':'速報結果','index':'レース指数','final':'確定結果','results':'予測成績'}[k] }}{% endmacro %}
+{% macro state_text(s) %}{{ {'ok':'完了','wait':'待ち','warn':'一部不足','ng':'要対応','na':'不明'}.get(s, s) }}{% endmacro %}

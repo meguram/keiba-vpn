@@ -1,0 +1,46 @@
+{% extends "portal/base.html" %}{% from "portal/_m.html" import pill, cell, stage_label, state_text %}
+{% block title %}ホーム{% endblock %}
+{% block body %}
+<h1>全体の状態 {{ pill(overall) }}</h1>
+<p class="sub">stg / prod × VPS / GCP を 1 枚で。API への応答確認は画面を開いたときだけ（{{ probe_min }} 分は使い回し）。</p>
+
+<div class="grid g2">
+  <section><h2 style="margin-top:0"><span class="dot {{ env.prod_level }}"></span>本番（prod）</h2>
+    <div class="grid g2">{{ cell('VPS（画面・取得役）', env.cells.prod.vps) }}{{ cell('GCP（API・Jobs）', env.cells.prod.gcp) }}</div></section>
+  <section><h2 style="margin-top:0"><span class="dot {{ env.stg_level }}"></span>ステージング（stg）</h2>
+    <div class="grid g2">{{ cell('VPS（stg の画面）', env.cells.stg.vps) }}{{ cell('GCP（stg タグの API）', env.cells.stg.gcp) }}</div></section>
+</div>
+
+<h2>直近の開催日パイプライン <a class="small" href="/pipeline">詳しく →</a></h2>
+<div class="card">
+{% if pipe.status != 'ok' %}<span class="muted">まだ読み取れていません。</span>
+{% else %}
+  <div class="env-title"><b>{{ pipe.date[4:6]|int }}/{{ pipe.date[6:]|int }}（{{ pipe.weekday }}） {{ pipe.races }} レース</b>{{ pill(pipe.level, pipe.headline) }}</div>
+  <div class="stage">{% for k, st in pipe.stages.items() %}<div><b>{{ stage_label(k) }}</b><span class="{{ st }}">{{ state_text(st) }}</span></div>{% endfor %}</div>
+  {% for n in pipe.notes %}<p class="small yellow">● {{ n }}</p>{% endfor %}
+  {% if pipe.next %}<p class="small muted">次の開催日 {{ pipe.next.date[4:6]|int }}/{{ pipe.next.date[6:]|int }}: 前日の出馬表 <span class="{{ pipe.next.eve }}">{{ state_text(pipe.next.eve) }}</span></p>{% endif %}
+{% endif %}
+{% for g in pipe.gaps %}<p class="small yellow">● {{ g.date[4:6]|int }}/{{ g.date[6:]|int }}（{{ g.weekday }}）: {{ g.message }}</p>{% endfor %}
+</div>
+
+<div class="grid g2">
+  <section><h2>アクセス <a class="small" href="/traffic">詳しく →</a></h2>
+    <div class="card">{% if traf.status == 'ok' %}
+      <div class="grid g3"><div class="kpi"><div class="big">{{ '{:,}'.format(traf.today_visitors or 0) }}</div><div class="l">今日の訪問者</div></div>
+      <div class="kpi"><div class="big">{{ '{:,}'.format(traf.today_pv or 0) }}</div><div class="l">今日のページビュー</div></div>
+      <div class="kpi"><div class="big">{{ '{:,}'.format(traf.d7_visitors or 0) }}</div><div class="l">7 日の訪問者</div></div></div>
+      {% if traf.top and traf.top[0] %}<p class="small muted" style="margin-bottom:0">7 日で一番見られたページ: {{ traf.top[0] }}（{{ traf.top[1] }}）</p>{% endif %}
+      {% if traf.stale %}<p class="small yellow" style="margin-bottom:0">● 集計の受信が止まっています（{{ ((traf.age_s or 0) // 60) }} 分前）</p>{% endif %}
+    {% else %}<span class="muted">{{ traf.reason or 'まだ届いていません' }}</span>{% if traf.setup %}<div class="hint">VPS で <code>sudo bash {{ traf.setup }}</code></div>{% endif %}{% endif %}</div></section>
+  <section><h2>SEO <a class="small" href="/seo">詳しく →</a></h2>
+    <div class="card">{% if seo.status == 'ok' %}
+      <div class="env-title"><span class="big">{{ seo.score }}<span class="small muted"> / 100</span></span>
+      <span class="small"><span class="ok">OK {{ seo.counts.ok }}</span> ・ <span class="warn">注意 {{ seo.counts.warn }}</span> ・ <span class="ng">要対応 {{ seo.counts.ng }}</span></span></div>
+      <div class="bar"><i style="width:{{ seo.score }}%;background:var(--green)"></i></div>
+      {% if seo.placeholders %}<p class="small yellow" style="margin-bottom:0">● 公開前に未入力の項目が {{ seo.placeholders }} 件</p>{% endif %}
+    {% else %}<span class="muted">{{ seo.get('error') or 'まだ点検結果がありません（CI で seo_audit_publish を実行すると出ます）' }}</span>{% endif %}</div></section>
+</div>
+
+<h2>今日の異常通知 {{ pill(alerts.level, alerts.count ~ ' 件（重大 ' ~ alerts.critical ~ '）') }}</h2>
+{% if alerts['items'] %}<div class="card"><table><tbody>{% for a in alerts['items'][:6] %}<tr><td class="small muted">{{ (a.at or '')[11:16] }}</td><td class="{{ 'red' if a.severity == 'critical' else 'yellow' }}">{{ a.severity }}</td><td>{{ a.title }}<span class="muted small"> {{ a.lines|join(' / ') }}</span></td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% endblock %}

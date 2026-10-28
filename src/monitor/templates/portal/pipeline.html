@@ -1,0 +1,27 @@
+{% extends "portal/base.html" %}{% from "portal/_m.html" import pill, stage_label, state_text %}
+{% block title %}開催日パイプライン{% endblock %}
+{% block body %}
+<h1>開催日パイプライン</h1>
+<p class="sub">直近の開催日ごとに、前日の出馬表 → オッズ → 予測 → 結果 → 予測成績が最後まで終わったかを、GCS 上の実物から判定します。期限前に未完了なら『待ち』（異常ではありません）、期限後なら『要対応』。1 開催日 1 場 12 レースを期待します。</p>
+{% if d.error %}<div class="hint" style="color:var(--red)">● GCS から読み取れませんでした: {{ d.error }}</div>{% endif %}
+{% for g in d.gaps %}<div class="hint" style="color:var(--yellow)">● {{ g.date[4:6]|int }}/{{ g.date[6:]|int }}（{{ g.weekday }}）: {{ g.message }}</div>{% endfor %}
+{% set all_days = ([d.next] if d.next else []) + d.days %}
+{% if not all_days %}<div class="card muted">GCS に直近の出馬表が見つかりません。</div>{% endif %}
+{% for day in all_days %}
+<section class="card" style="margin-top:14px">
+  <div class="env-title"><b style="font-size:16px">{{ day.date[:4] }}/{{ day.date[4:6]|int }}/{{ day.date[6:]|int }}（{{ day.weekday }}）{% if day.date > d.today %} <span class="muted small">次の開催日</span>{% elif day.date == d.today %} <span class="wait small">今日</span>{% endif %}</b>
+    <span>{{ pill(day.level, day.headline) }} <span class="muted small">{{ day.races }} レース</span></span></div>
+  <div class="stage">{% for k, st in day.stages.items() %}<div title="{{ st.detail }}"><b>{{ stage_label(k) }}</b><span class="{{ st.state }}">{{ state_text(st.state) }}</span>
+    {% if st.total %}<span class="muted"> {{ st.done }}/{{ st.total }}</span>{% endif %}
+    {% if st.total %}<div class="bar" style="margin-top:4px"><i style="width:{{ (100 * st.done / st.total)|round|int }}%;background:var(--{{ {'ok':'green','wait':'accent','warn':'yellow','ng':'red'}.get(st.state,'border') }})"></i></div>{% endif %}
+    {% if st.detail %}<span class="muted" style="display:block;margin-top:3px">{{ st.detail }}</span>{% endif %}</div>{% endfor %}</div>
+  {% for n in day.notes %}<p class="small yellow" style="margin:8px 0 0">● {{ n }}</p>{% endfor %}
+  {% if day.race_rows %}<details><summary>レース別（{{ day.race_rows|length }}）</summary>
+    <table class="race-grid"><thead><tr><th style="text-align:left">レース</th><th>出馬表</th><th>オッズ</th><th>予測</th><th>速報</th><th>指数</th><th>確定</th><th style="text-align:left">予測の実行</th></tr></thead><tbody>
+    {% for r in day.race_rows %}<tr><td style="text-align:left">{{ r.venue }}{{ r.round }}R <span class="muted">{{ r.race_id }}</span></td>
+      {% for k in ['eve','odds','predict','on_time','index','final'] %}<td class="{{ 'ok' if r[k] else 'muted' }}">{{ '●' if r[k] else '–' }}</td>{% endfor %}
+      <td style="text-align:left" class="muted">{% for e, s in r.pred_status.items() if s %}{{ e }}:<span class="{{ 'ok' if s == 'ok' else 'ng' }}">{{ s }}</span> {% endfor %}{% if r.pred_sec %}{{ r.pred_sec }}秒{% endif %}</td></tr>{% endfor %}
+    </tbody></table></details>{% endif %}
+</section>{% endfor %}
+<p class="small muted" style="margin-top:14px">判定の期限（開催日 D）: 出馬表 D-1 20:00 ／ オッズ・予測 D 18:00 ／ 速報 D 20:00 ／ 指数 D+1 12:00 ／ 確定結果・予測成績 D+3 0:00。確定結果の公開は開催の翌々日の夕方ごろです。</p>
+{% endblock %}

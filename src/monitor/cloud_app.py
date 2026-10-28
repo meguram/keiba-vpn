@@ -141,6 +141,7 @@ h1{font-size:18px}h2{font-size:15px;margin:22px 0 6px}table{border-collapse:coll
 th{color:#8b949e}.green{color:#3fb950}.yellow{color:#d29922}.red{color:#f85149}.unknown{color:#8b949e}.dim{color:#8b949e}
 .pill{display:inline-block;padding:1px 8px;border-radius:10px;border:1px solid currentColor;font-size:12px}
 </style></head><body>
+<p><a href="/" style="color:#58a6ff">← ホーム</a></p>
 <h1>運用監視（GCP） <span class="pill {{ d.overall }}">{{ d.overall }}</span> <span class="dim">{{ d.generated_at }}</span></h1>
 {% set s = d.sections %}
 <h2>VPS ハートビート <span class="pill {{ s.heartbeat.level }}">{{ s.heartbeat.level }}</span></h2>
@@ -178,10 +179,27 @@ def _proxy_key_ok(headers: Any, env: dict[str, str] | None = None) -> bool:
     return bool(keys and given and any(hmac.compare_digest(k.encode(), given.encode()) for k in keys))
 
 
-def create_app(io: Any | None = None, now_fn: Any = time.time, job_ids: list[tuple[str, bool]] | None = None):
-    from flask import Flask, jsonify, render_template_string, request
+# VPS からの定期送信は共有ヘッダ鍵ではなく HMAC 署名で認証する（VPS は Cloudflare Access を通らない）。ほかの経路は鍵が要る
+SIGNED_POSTS = {"/ops/heartbeat", "/ops/traffic"}
+_LEVEL_OF_PIPE = {"ok": "green", "wait": "green", "warn": "yellow", "ng": "red", "na": "unknown"}
+
+
+def _default_notify(title: str, lines: list[str], severity: str = "warning") -> None:
+    from src.utils.slack_notify import notify_event
+
+    notify_event(title, lines, severity=severity, channel="alert")
+
+
+def create_app(io: Any | None = None, now_fn: Any = time.time, job_ids: list[tuple[str, bool]] | None = None, *,
+               hb_backend: Any = None, notify: Any = None, http_get: Any = None, env: dict[str, str] | None = None):
+    from flask import Flask, jsonify, render_template, render_template_string, request
+
+    from src.monitor import charts, environments, traffic
+    from src.ops import ingest, pipeline_health, seo_audit
 
     app = Flask(__name__)
+    app.config["MAX_CONTENT_LENGTH"] = ingest.MAX_TRAFFIC_BYTES + 1024
+    cache: dict[str, tuple[float, Any]] = {}
 
     def _io() -> Any:
         if io is not None:
@@ -190,24 +208,144 @@ def create_app(io: Any | None = None, now_fn: Any = time.time, job_ids: list[tup
 
         return default_io()
 
+    def _backend() -> Any:
+        if hb_backend is not None:
+            return hb_backend
+        from src.ops import heartbeat_store
+
+        return heartbeat_store.default_backend()
+
+    def cached(key: str, ttl: float, fn: Any) -> Any:
+        now = now_fn()
+        hit = cache.get(key)
+        if hit and now - hit[0] < ttl:
+            return hit[1]
+        val = fn()
+        cache[key] = (now, val)
+        return val
+
+    def _now_dt() -> datetime:
+        return datetime.fromtimestamp(now_fn(), JST)
+
+    def pipeline_data() -> dict:
+        def _build() -> dict:
+            try:
+                return pipeline_health.build(pipeline_health.GcsSources(_io()), _now_dt())
+            except Exception as exc:  # noqa: BLE001  GCS の一時失敗で画面を落とさない
+                n = _now_dt()
+                return {"built_at": n.isoformat(timespec="seconds"), "days": [], "next": None, "today": n.strftime("%Y%m%d"), "gaps": [],
+                        "overall": "na", "latest_date": None, "error": f"{type(exc).__name__}: {exc}"[:200]}
+        return cached("pipeline", 120, _build)
+
+    def traffic_view() -> dict:
+        return cached("traffic", 60, lambda: traffic.view(traffic.read_bundle(_io()), _now_dt()))
+
+    def seo_data() -> dict:
+        return cached("seo", 300, lambda: seo_audit.read(_io()))
+
+    def home_data(probe: bool = True) -> dict:
+        ts = now_fn()
+        hb, jobs = heartbeat_section(_io(), ts), jobs_section(_io(), _now_dt(), job_ids if job_ids is not None else job_ids_from_map())
+        alerts = alerts_section(_io(), _now_dt())
+        envs = environments.build(hb, jobs, env=env, get=http_get or environments.http_get, now=ts, probe=probe)
+        pipe = pipeline_health.summary(pipeline_data())
+        pl = _LEVEL_OF_PIPE.get(pipe.get("level") or "na", "unknown") if pipe.get("status") == "ok" else "unknown"
+        overall = environments.worst(envs["prod_level"], alerts["level"], pl)
+        return {"overall": overall, "env": envs, "pipe": pipe, "alerts": alerts, "traf": traffic.summary(traffic_view()), "seo": seo_data(),
+                "probe_min": environments.PROBE_TTL_S // 60, "heartbeat": hb}
+
+    def page(name: str, active: str, **ctx: Any):
+        return render_template(f"portal/{name}.html", active=active, generated_at=_now_dt().strftime("%Y-%m-%d %H:%M JST"), **ctx)
+
     @app.before_request
     def _auth():
         if request.path == "/api/health":
             return None
+        if request.method == "POST" and request.path in SIGNED_POSTS:
+            return None  # 署名はハンドラ側で検証する
         if not _proxy_key_ok(request.headers):
             return jsonify({"error": "unauthorized", "reason": "proxy_key"}), 401
         return None
+
+    @app.after_request
+    def _no_store(resp):
+        resp.headers.setdefault("Cache-Control", "no-store")
+        return resp
 
     @app.get("/api/health")
     def api_health():
         return jsonify({"status": "ok"})
 
+    # ── VPS からの受信（HMAC 署名） ──
+    @app.post("/ops/heartbeat")
+    def ops_heartbeat():
+        code, res = ingest.receive_heartbeat(request.headers, request.get_data(), _backend(), now=now_fn())
+        return jsonify(res), code
+
+    @app.post("/ops/traffic")
+    def ops_traffic():
+        code, res = ingest.receive_traffic(request.headers, request.get_data(), _io(), now=now_fn())
+        if code == 200:
+            cache.pop("traffic", None)
+        return jsonify(res), code
+
+    @app.post("/ops/heartbeat/check")
+    def ops_heartbeat_check():
+        return jsonify(ingest.run_check(_backend(), notify or _default_notify, now=now_fn()))
+
+    # ── JSON ──
     @app.get("/api/overview")
     def api_overview():
         return jsonify(collect(_io(), now_fn(), job_ids))
 
+    @app.get("/api/home")
+    def api_home():
+        d = home_data(probe=request.args.get("probe", "1") != "0")
+        return jsonify({k: v for k, v in d.items() if k != "heartbeat"})
+
+    @app.get("/api/pipeline")
+    def api_pipeline():
+        return jsonify(pipeline_data())
+
+    @app.get("/api/traffic")
+    def api_traffic():
+        return jsonify(traffic_view())
+
+    @app.get("/api/seo")
+    def api_seo():
+        return jsonify(seo_data())
+
+    # ── 画面 ──
     @app.get("/")
     def index():
+        d = home_data(probe=request.args.get("probe", "1") != "0")
+        return page("home", "home", **d)
+
+    @app.get("/pipeline")
+    def pipeline_page():
+        return page("pipeline", "pipeline", d=pipeline_data())
+
+    @app.get("/traffic")
+    def traffic_page():
+        t = traffic_view()
+        ctx: dict[str, Any] = {"t": t, "chart_trend": "", "chart_top": "", "chart_today": "", "chart_hours": ""}
+        if t.get("status") == "ok":
+            ser = t["series"]
+            ctx["chart_trend"] = charts.combo([f"{x['date'][4:6]}/{x['date'][6:]}" for x in ser], [x["page_views"] for x in ser], [x["visitors"] for x in ser],
+                                              bar_name="ページビュー", line_name="訪問者", w=1100, h=210, tick_every=10)
+            ctx["chart_top"] = charts.hbars([(p, n) for p, n in t["top_pages_7d"]])
+            ctx["chart_today"] = charts.hbars([(p, n) for p, n in t["top_pages_today"]])
+            if t.get("hours_today"):
+                ctx["chart_hours"] = charts.combo([f"{h}" for h in range(24)], t["hours_today"], t.get("hours_yesterday"), bar_name="今日", line_name="昨日",
+                                                  w=360, h=150, tick_every=6)
+        return page("traffic", "traffic", **ctx)
+
+    @app.get("/seo")
+    def seo_page():
+        return page("seo", "seo", s=seo_data())
+
+    @app.get("/ops")
+    def ops_page():
         return render_template_string(_PAGE, d=collect(_io(), now_fn(), job_ids))
 
     return app
