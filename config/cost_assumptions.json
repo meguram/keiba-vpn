@@ -565,6 +565,152 @@
           }
         }
       }
+    },
+    "N_after_decoupling": {
+      "description": "取得・予測・集計・通知をホストから切り離した後（To-Be）。API=リクエスト課金（毎日100人）、取得は VPS 実行役（GCP の追加課金なし）、予測・集計・通知は Cloud Run Jobs、データの正本は GCS。low=少なめ・high=多め。",
+      "extends": "K_api_request_billing",
+      "usage_override": {
+        "low": {
+          "cloud_run_service": {
+            "requests": 85760,
+            "avg_seconds": 0.2,
+            "vcpu": 1,
+            "gib": 2,
+            "cold_starts": 300,
+            "cold_seconds": 50,
+            "min_instances": 0
+          },
+          "cloud_run_jobs": {
+            "vcpu_seconds": 100000,
+            "gib_seconds": 240000
+          },
+          "gcs": {
+            "stored_gb": 39,
+            "class_a_ops": 150000,
+            "class_b_ops": 4100000,
+            "egress_gb": 3
+          },
+          "scheduler": {
+            "jobs": 6
+          },
+          "secret_manager": {
+            "versions": 8
+          },
+          "artifact_registry": {
+            "gb": 1.5
+          },
+          "logging": {
+            "gib": 5
+          }
+        },
+        "high": {
+          "cloud_run_service": {
+            "requests": 85760,
+            "avg_seconds": 0.2,
+            "vcpu": 1,
+            "gib": 2,
+            "cold_starts": 1350,
+            "cold_seconds": 50,
+            "min_instances": 0
+          },
+          "cloud_run_jobs": {
+            "vcpu_seconds": 400000,
+            "gib_seconds": 960000
+          },
+          "gcs": {
+            "stored_gb": 60,
+            "class_a_ops": 600000,
+            "class_b_ops": 18200000,
+            "egress_gb": 10
+          },
+          "scheduler": {
+            "jobs": 35
+          },
+          "secret_manager": {
+            "versions": 12
+          },
+          "artifact_registry": {
+            "gb": 4
+          },
+          "logging": {
+            "gib": 20
+          }
+        }
+      },
+      "_notes": "前提は docs/operations/host_decoupling_inventory.md の10章。API=毎日100人（1人25リクエスト・0.2秒）、cold_starts=prod 1日8/20/40回×30日+stg 150、1回の起動 約50秒（実測 41〜61 秒）。class_b_ops は起動のたびに GCS から約13,200件（152MB）を読む分を含む（コールドスタート×13,243＋他）。Jobs は約35本（予測が1レース1回で最大）の実行時間の積み上げ（中央＝vCPU 約19.9万秒・GiB 約47.9万秒）。ドメイン代・ConoHa（前払い済み）はこの計算に含めない（doc の表で足す）。"
+    },
+    "N_after_decoupling_mid": {
+      "description": "N_after_decoupling の中央の値（low も high も中央で計算する。合計は low の値を見る）。",
+      "extends": "K_api_request_billing",
+      "usage_override": {
+        "low": {
+          "cloud_run_service": {
+            "requests": 85760,
+            "avg_seconds": 0.2,
+            "vcpu": 1,
+            "gib": 2,
+            "cold_starts": 750,
+            "cold_seconds": 50,
+            "min_instances": 0
+          },
+          "cloud_run_jobs": {
+            "vcpu_seconds": 199000,
+            "gib_seconds": 479000
+          },
+          "gcs": {
+            "stored_gb": 45,
+            "class_a_ops": 400000,
+            "class_b_ops": 10100000,
+            "egress_gb": 6
+          },
+          "scheduler": {
+            "jobs": 14
+          },
+          "secret_manager": {
+            "versions": 10
+          },
+          "artifact_registry": {
+            "gb": 3
+          },
+          "logging": {
+            "gib": 10
+          }
+        },
+        "high": {
+          "cloud_run_service": {
+            "requests": 85760,
+            "avg_seconds": 0.2,
+            "vcpu": 1,
+            "gib": 2,
+            "cold_starts": 750,
+            "cold_seconds": 50,
+            "min_instances": 0
+          },
+          "cloud_run_jobs": {
+            "vcpu_seconds": 199000,
+            "gib_seconds": 479000
+          },
+          "gcs": {
+            "stored_gb": 45,
+            "class_a_ops": 400000,
+            "class_b_ops": 10100000,
+            "egress_gb": 6
+          },
+          "scheduler": {
+            "jobs": 14
+          },
+          "secret_manager": {
+            "versions": 10
+          },
+          "artifact_registry": {
+            "gb": 3
+          },
+          "logging": {
+            "gib": 10
+          }
+        }
+      },
+      "_notes": "前提は docs/operations/host_decoupling_inventory.md の10章。API=毎日100人（1人25リクエスト・0.2秒）、cold_starts=prod 1日8/20/40回×30日+stg 150、1回の起動 約50秒（実測 41〜61 秒）。class_b_ops は起動のたびに GCS から約13,200件（152MB）を読む分を含む（コールドスタート×13,243＋他）。Jobs は約35本（予測が1レース1回で最大）の実行時間の積み上げ（中央＝vCPU 約19.9万秒・GiB 約47.9万秒）。ドメイン代・ConoHa（前払い済み）はこの計算に含めない（doc の表で足す）。"
     }
   }
 }

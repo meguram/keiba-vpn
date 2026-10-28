@@ -42,6 +42,37 @@ def test_push_only_changed_since(tmp_path):
     assert io.exists("state/data/out/new.json") and not io.exists("state/data/out/old.json")
 
 
+def test_push_skips_files_already_in_gcs_with_same_content(tmp_path):
+    io = MemoryIO()
+    _write(tmp_path / "data/out/a.json", b"1")
+    _write(tmp_path / "data/out/b.json", b"2")
+    assert SS.push(io, [{"path": "data/out", "max_mb": 1}], tmp_path)["uploaded"] == 2
+    _write(tmp_path / "data/out/b.json", b"3")                                 # 中身が変わったものだけ上げ直す
+    r = SS.push(io, [{"path": "data/out", "max_mb": 1}], tmp_path)
+    assert (r["uploaded"], r["skipped_same"]) == (1, 1) and io.get_bytes("state/data/out/b.json") == b"3"
+
+
+class _CountingIO(MemoryIO):
+    """キーごとのサイズ問い合わせ（GCS の操作 1 回ずつ）を数える。"""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.size_calls = 0
+
+    def size(self, key):
+        self.size_calls += 1
+        return super().size(key)
+
+
+def test_pull_reads_sizes_from_one_listing(tmp_path):
+    io = _CountingIO()
+    for i in range(5):
+        _write(tmp_path / f"src/data/in/{i}.bin", b"x" * i)
+    SS.push(io, [{"path": "data/in", "max_mb": 1}], tmp_path / "src")
+    assert SS.pull(io, [{"path": "data/in", "max_mb": 1}], tmp_path / "dst")["downloaded"] == 5
+    assert io.size_calls == 0
+
+
 def test_budget_exceeded_raises_without_downloading(tmp_path):
     io = MemoryIO()
     io.put_bytes("state/data/big/f.bin", b"x" * (2 * SS.MB))

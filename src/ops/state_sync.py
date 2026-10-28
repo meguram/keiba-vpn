@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from src.ops.gcs_io import BlobIO
+from src.ops.gcs_io import BlobIO, file_md5_b64, list_meta
 
 DEFAULT_PREFIX = "state"
 MB = 1024 * 1024
@@ -88,21 +88,23 @@ def plan(entries: list[dict[str, Any]], root: Path, params: dict[str, str] | Non
 
 def pull(io: BlobIO, entries: list[dict[str, Any]], root: Path, *, prefix: str = DEFAULT_PREFIX,
          params: dict[str, str] | None = None) -> dict[str, Any]:
-    """GCS → ローカル。上限超過は何も取らずに ``StateBudgetError``。既にある同サイズのファイルは取り直さない。"""
+    """GCS → ローカル。上限超過は何も取らずに ``StateBudgetError``。既にある同サイズのファイルは取り直さない。
+
+    サイズは一覧 1 回で取る（キーごとの問い合わせは、ファイル数 × 2 回の GCS 操作になり、起動のたびに費用がかかる）。
+    """
     plan_rows = []
     for (rel, max_mb), inc in zip(expand(entries, params), includes(entries, params)):
-        keys = io.list(f"{prefix}/{rel}")
-        keys = [k for k in keys if k == f"{prefix}/{rel}" or (k.startswith(f"{prefix}/{rel}/") and _match(k[len(prefix) + len(rel) + 2:], inc))]
-        total = sum(io.size(k) or 0 for k in keys)
+        meta = list_meta(io, f"{prefix}/{rel}")
+        keys = [k for k in meta if k == f"{prefix}/{rel}" or (k.startswith(f"{prefix}/{rel}/") and _match(k[len(prefix) + len(rel) + 2:], inc))]
+        total = sum(meta[k][0] for k in keys)
         if max_mb and total > max_mb * MB:
             raise StateBudgetError(f"state {rel}: {total / MB:.0f}MB が上限 {max_mb}MB を超える（メモリ上のディスクを使い切る）")
-        plan_rows.append((rel, keys, total))
+        plan_rows.append((rel, [(k, meta[k][0]) for k in keys], total))
     files = skipped = 0
     total_all = 0
     for rel, keys, total in plan_rows:
-        for k in keys:
+        for k, size in keys:
             dest = root / k[len(prefix) + 1:]
-            size = io.size(k) or 0
             if dest.is_file() and dest.stat().st_size == size:
                 skipped += 1
                 continue
@@ -114,22 +116,32 @@ def pull(io: BlobIO, entries: list[dict[str, Any]], root: Path, *, prefix: str =
 
 def push(io: BlobIO, entries: list[dict[str, Any]], root: Path, *, prefix: str = DEFAULT_PREFIX,
          since: float | None = None, params: dict[str, str] | None = None) -> dict[str, Any]:
-    """ローカル → GCS。``since``（epoch 秒）以降に更新されたファイルだけ上げる。上限超過は ``StateBudgetError``。"""
+    """ローカル → GCS。``since``（epoch 秒）以降に更新されたファイルだけ上げる。上限超過は ``StateBudgetError``。
+
+    GCS に同じ中身（サイズと md5 が一致）があるファイルは上げない（書き込みの回数と転送を減らす）。
+    """
     todo: list[tuple[Path, str]] = []
+    remote: dict[str, tuple[int, str]] = {}
     for (rel, max_mb), inc in zip(expand(entries, params), includes(entries, params)):
         files = _files(root, rel, inc)
         mb = sum(f.stat().st_size for f in files)
         if max_mb and mb > max_mb * MB:
             raise StateBudgetError(f"state {rel}: {mb / MB:.0f}MB が上限 {max_mb}MB を超える（上限を見直すか出力を絞る）")
-        for f in files:
-            if since is not None and f.stat().st_mtime < since:
-                continue
-            todo.append((f, f"{prefix}/{f.relative_to(root).as_posix()}"))
-    up = 0
+        files = [f for f in files if since is None or f.stat().st_mtime >= since]
+        if files:
+            remote.update(list_meta(io, f"{prefix}/{rel}"))
+        todo += [(f, f"{prefix}/{f.relative_to(root).as_posix()}") for f in files]
+    n = up = skipped = 0
     for f, key in todo:
+        size = f.stat().st_size
+        have = remote.get(key)
+        if have and have[0] == size and have[1] == file_md5_b64(f):
+            skipped += 1
+            continue
         io.upload_file(f, key)
-        up += f.stat().st_size
-    return {"uploaded": len(todo), "mb": round(up / MB, 1)}
+        n += 1
+        up += size
+    return {"uploaded": n, "skipped_same": skipped, "mb": round(up / MB, 1)}
 
 
 def snapshot(io: BlobIO, doc: dict[str, Any], root: Path, date: str) -> list[dict[str, Any]]:

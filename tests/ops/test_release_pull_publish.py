@@ -102,6 +102,17 @@ def test_build_fetch_bundle_excludes_secrets(tmp_path):
 
 # ── stg 環境の画面（kind=ui-stg）──
 
+def test_fetch_bundle_has_every_config_the_fetch_agent_reads():
+    # 同梱し忘れると、VPS では設定が読めずに既定値で黙って動く（影モードは対象が空になり、何もしない）
+    import re
+
+    mods = [*Path("src/ops").glob("fetch_*.py"), *Path("src/ops").glob("shadow_*.py"), Path("src/ops/access_hold.py")]
+    pat = re.compile(r'"config"\s*/\s*"([\w.]+)"|config/([\w.]+\.(?:json|yaml|env))')
+    refs = {a or b for m in mods for a, b in pat.findall(m.read_text(encoding="utf-8"))}
+    assert {"fetch_owner.json", "fetch_shadow.json"} <= refs
+    assert refs <= set(rp.FETCH_CONFIG), f"同梱されていない: {sorted(refs - set(rp.FETCH_CONFIG))}"
+
+
 def test_ui_stg_is_published_to_its_own_prefix_and_accepted_by_the_vps_side(tmp_path):
     tb = tmp_path / "keiba-ui-abc12345-202610250100.tar.gz"
     tb.write_bytes(b"payload")

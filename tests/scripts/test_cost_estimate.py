@@ -114,3 +114,13 @@ def test_instance_free_tier_zero_costs_more():
     cfg2["free_tier"]["cloud_run_instance_vcpu_seconds"]["value"] = 0
     cfg2["free_tier"]["cloud_run_instance_gib_seconds"]["value"] = 0
     assert ce.estimate(cfg2, "G_api_as_deployed", "low")["total_usd"] > a
+
+
+def test_after_decoupling_mid_sits_between_low_and_high_and_cold_start_reads_dominate_gcs():
+    cfg = _cfg()
+    lo, hi = ce.estimate(cfg, "N_after_decoupling", "low"), ce.estimate(cfg, "N_after_decoupling", "high")
+    mid = ce.estimate(cfg, "N_after_decoupling_mid", "low")
+    assert lo["total_jpy"] < mid["total_jpy"] < hi["total_jpy"]
+    cfg2 = copy.deepcopy(cfg)
+    cfg2["scenarios"]["N_after_decoupling_mid"]["usage_override"]["low"]["gcs"]["class_b_ops"] = 950000   # 起動時の読み取りを約1,000件に減らした場合
+    assert ce.estimate(cfg2, "N_after_decoupling_mid", "low")["total_jpy"] < mid["total_jpy"] - 400
