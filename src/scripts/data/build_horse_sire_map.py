@@ -51,7 +51,7 @@ def parse_pedigree(doc: dict[str, Any], lookup: Any = None) -> dict[str, Any] | 
         "sire_name": sire.get("name") or doc.get("sire"),
         "dam_sire_id": str(dam_sire["horse_id"]) if dam_sire and dam_sire.get("horse_id") else None,
         "dam_sire_name": (dam_sire.get("name") if dam_sire else None) or doc.get("dam_sire"),
-        "sire_line_id": line[0] if line else None,
+        "sire_line_id": line[1] if line else None,       # 系統の ID は表示名そのもの（netkeiba の表記と同じ文字で揃える）
         "sire_line_name": line[1] if line else None,
     }
 
@@ -111,7 +111,18 @@ def entry_horse_ids(storage: Any, today: date, lookahead_days: int) -> set[str]:
     return ids
 
 
-def build(out: Path = OUT, ped_dir: Path = PED_DIR, horse_ids: set[str] | None = None, *, full: bool = False, workers: int = 8) -> dict[str, int]:
+def apply_netkeiba_lines(m: pd.DataFrame, labels: dict[str, str] | None) -> pd.DataFrame:
+    """netkeiba の血統ページで取れた『○○系』がある種牡馬は、血統から推定した系統をその表記で置き換える。"""
+    if not labels or m.empty:
+        return m
+    lab = m["sire_id"].astype(str).map(labels)
+    m = m.copy()
+    m["sire_line_name"] = lab.where(lab.notna(), m["sire_line_name"])
+    m["sire_line_id"] = m["sire_line_name"]
+    return m
+
+
+def build(out: Path = OUT, ped_dir: Path = PED_DIR, horse_ids: set[str] | None = None, *, full: bool = False, workers: int = 8, netkeiba_lines: dict[str, str] | None = None) -> dict[str, int]:
     ids = horse_ids if horse_ids is not None else result_horse_ids()
     old = pd.DataFrame(columns=COLUMNS)
     if out.exists() and not full:
@@ -124,6 +135,7 @@ def build(out: Path = OUT, ped_dir: Path = PED_DIR, horse_ids: set[str] | None =
         rows = [r for r in ex.map(lambda h: _read(h, ped_dir, lookup), todo) if r]
     new = pd.DataFrame(rows, columns=COLUMNS)
     merged = pd.concat([old, new], ignore_index=True).drop_duplicates("horse_id", keep="last").sort_values("horse_id").reset_index(drop=True)
+    merged = apply_netkeiba_lines(merged, netkeiba_lines)
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".parquet.tmp")
     merged.to_parquet(tmp, index=False)
@@ -141,7 +153,9 @@ def main(argv: list[str] | None = None) -> int:
     from src.scraper.storage import HybridStorage
 
     ids = result_horse_ids() | entry_horse_ids(HybridStorage(), date.today(), args.lookahead_days)
-    res = build(args.out, horse_ids=ids, full=args.full)
+    from src.scraper import sire_line_store
+
+    res = build(args.out, horse_ids=ids, full=args.full, netkeiba_lines=sire_line_store.labels())
     logger.info("horse_sire_map: %s", res)
     return 0
 

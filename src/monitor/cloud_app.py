@@ -191,11 +191,12 @@ def _default_notify(title: str, lines: list[str], severity: str = "warning") -> 
 
 
 def create_app(io: Any | None = None, now_fn: Any = time.time, job_ids: list[tuple[str, bool]] | None = None, *,
-               hb_backend: Any = None, notify: Any = None, http_get: Any = None, env: dict[str, str] | None = None):
+               hb_backend: Any = None, notify: Any = None, http_get: Any = None, env: dict[str, str] | None = None,
+               cost_fetch: Any = None):
     from flask import Flask, jsonify, render_template, render_template_string, request
 
     from src.monitor import charts, environments, traffic
-    from src.ops import ingest, pipeline_health, seo_audit
+    from src.ops import api_cost_guard, ingest, pipeline_health, seo_audit
 
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = ingest.MAX_TRAFFIC_BYTES + 1024
@@ -243,6 +244,12 @@ def create_app(io: Any | None = None, now_fn: Any = time.time, job_ids: list[tup
     def seo_data() -> dict:
         return cached("seo", 300, lambda: seo_audit.read(_io()))
 
+    def cost_kw() -> dict:
+        return {"fetch": cost_fetch} if cost_fetch is not None else {}
+
+    def cost_data() -> dict:
+        return cached("cost", 600, lambda: api_cost_guard.evaluate(now_fn(), **cost_kw()))
+
     def home_data(probe: bool = True) -> dict:
         ts = now_fn()
         hb, jobs = heartbeat_section(_io(), ts), jobs_section(_io(), _now_dt(), job_ids if job_ids is not None else job_ids_from_map())
@@ -250,8 +257,9 @@ def create_app(io: Any | None = None, now_fn: Any = time.time, job_ids: list[tup
         envs = environments.build(hb, jobs, env=env, get=http_get or environments.http_get, now=ts, probe=probe)
         pipe = pipeline_health.summary(pipeline_data())
         pl = _LEVEL_OF_PIPE.get(pipe.get("level") or "na", "unknown") if pipe.get("status") == "ok" else "unknown"
-        overall = environments.worst(envs["prod_level"], alerts["level"], pl)
-        return {"overall": overall, "env": envs, "pipe": pipe, "alerts": alerts, "traf": traffic.summary(traffic_view()), "seo": seo_data(),
+        cost = cost_data()
+        overall = environments.worst(envs["prod_level"], alerts["level"], pl, cost.get("level", "unknown"))
+        return {"overall": overall, "cost": cost, "env": envs, "pipe": pipe, "alerts": alerts, "traf": traffic.summary(traffic_view()), "seo": seo_data(),
                 "probe_min": environments.PROBE_TTL_S // 60, "heartbeat": hb}
 
     def page(name: str, active: str, **ctx: Any):
@@ -291,7 +299,13 @@ def create_app(io: Any | None = None, now_fn: Any = time.time, job_ids: list[tup
 
     @app.post("/ops/heartbeat/check")
     def ops_heartbeat_check():
-        return jsonify(ingest.run_check(_backend(), notify or _default_notify, now=now_fn()))
+        res = ingest.run_check(_backend(), notify or _default_notify, now=now_fn())
+        try:  # 同じ Scheduler の 1 本で API の課金ガードも点検する（失敗してもハートビートの点検は返す）
+            res["cost"] = api_cost_guard.run_check(_io(), notify or _default_notify, now=now_fn(), **cost_kw())
+            cache.pop("cost", None)
+        except Exception as exc:  # noqa: BLE001
+            res["cost"] = {"ok": False, "error": type(exc).__name__}
+        return jsonify(res)
 
     # ── JSON ──
     @app.get("/api/overview")
@@ -302,6 +316,10 @@ def create_app(io: Any | None = None, now_fn: Any = time.time, job_ids: list[tup
     def api_home():
         d = home_data(probe=request.args.get("probe", "1") != "0")
         return jsonify({k: v for k, v in d.items() if k != "heartbeat"})
+
+    @app.get("/api/cost")
+    def api_cost():
+        return jsonify(cost_data())
 
     @app.get("/api/pipeline")
     def api_pipeline():

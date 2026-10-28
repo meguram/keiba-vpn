@@ -225,7 +225,7 @@ def test_build_horse_sire_map_parses_ancestors_and_is_incremental(tmp_path):
     r1 = B.build(out, ped, {"2022100001", "2022100002", "2022100003"})            # 3 頭目は血統 JSON 無し
     assert r1["added"] == 1 and r1["no_pedigree"] == 2 and r1["total"] == 1
     m = pd.read_parquet(out)
-    assert m.iloc[0].to_dict() == {"horse_id": "2022100001", "sire_id": "S1", "sire_name": "父名", "dam_sire_id": "dsire", "dam_sire_name": "母父名", "sire_line_id": "S1", "sire_line_name": "父名系"}
+    assert m.iloc[0].to_dict() == {"horse_id": "2022100001", "sire_id": "S1", "sire_name": "父名", "dam_sire_id": "dsire", "dam_sire_name": "母父名", "sire_line_id": "父名系", "sire_line_name": "父名系"}
     (ped / "2022" / "2022100003.json").write_text(json.dumps(doc("2022100003", "S2")), encoding="utf-8")
     r2 = B.build(out, ped, {"2022100001", "2022100002", "2022100003"})            # 既存の行は読み直さない。後から出来た血統を拾う
     assert r2["total"] == 2 and r2["read"] == 2
@@ -279,3 +279,32 @@ def test_sire_tab_shows_line_next_to_sire(tmp_path, monkeypatch):
     a = d["entries"][0]["analysis"]["sire_course"]
     assert a["_key"] == "父D" and a["sire_rec"] == [0, 0, 0, 0] and a["sire_n"] == 0       # 父D 自身の産駒はまだ走っていない
     assert a["line_name"] == "サンデーサイレンス系" and a["line_rec"] == [1, 1, 0, 0]       # 父A・父C の産駒（父Bはヘイロー系なので入らない）
+
+
+def test_sire_line_store_reads_label_and_overrides_derived_line(tmp_path, monkeypatch):
+    from src.scraper import sire_line_store as S
+    from src.scripts.data import build_horse_sire_map as B
+
+    html = """<table class="blood_table"><tr><td rowspan="16"><a href="/horse/2007103265/">トゥザグローリー</a><br>Mr. Prospector系</td>
+    <td rowspan="8"><a href="/horse/2001103460/">キングカメハメハ</a></td></tr></table>"""
+    assert S.lines_from_html(html) == {"2007103265": ("トゥザグローリー", "Mr. Prospector系")}
+    path = tmp_path / "sl.json"
+    assert S.record_html(html, "H1", path) == 1
+    S.mark_missing("S9", "H2", path)
+    assert S.labels(path) == {"2007103265": "Mr. Prospector系"}            # 表記なしで残したものはラベルに入らない
+    assert "S9" in S.load(path)                                          # ただし取得済みとして覚える
+
+    m = pd.DataFrame([
+        {"horse_id": "a", "sire_id": "2007103265", "sire_line_id": "キングカメハメハ系", "sire_line_name": "キングカメハメハ系"},
+        {"horse_id": "b", "sire_id": "other", "sire_line_id": "ロベルト系", "sire_line_name": "ロベルト系"},
+    ])
+    out = B.apply_netkeiba_lines(m, S.labels(path))
+    assert list(out["sire_line_name"]) == ["Mr. Prospector系", "ロベルト系"] and list(out["sire_line_id"]) == ["Mr. Prospector系", "ロベルト系"]
+
+
+def test_fetch_sire_lines_picks_most_common_sires_first_and_skips_done():
+    from src.scripts.scraping.fetch_sire_lines import pick_targets
+
+    sm = pd.DataFrame({"horse_id": ["a", "b", "c", "d"], "sire_id": ["S1", "S1", "S2", "S3"]})
+    assert pick_targets(sm, set()) == [("S1", "b"), ("S2", "c"), ("S3", "d")]
+    assert pick_targets(sm, {"S1"}) == [("S2", "c"), ("S3", "d")]

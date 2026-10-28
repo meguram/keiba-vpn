@@ -52,6 +52,7 @@
 | `/traffic` | 訪問者・ページビュー・推移 90 日・上位ページ 10・流入元・端末・時間帯・クローラー・404/5xx | VPS が送る `ops/traffic/bundle.json` |
 | `/seo` | SEO スコア・技術/コンテンツ/公開前の残り作業・ページ別の指摘 | CI が置く `ops/seo/audit.json` |
 | `/ops` | 従来の Jobs・配布・成果物の一致の表 | 従来どおり |
+| ホームの『API の課金ガード』/ `/api/cost` | keiba-api の課金される起動時間（直近24時間の平均台数・月額の見込み・夜間に起動していた時間）。異常は Slack に通知し、ホーム全体の信号にも反映 | Cloud Monitoring `run.googleapis.com/container/billable_instance_time`（`src/ops/api_cost_guard.py`） |
 
 **受け先を API ではなくここ（keiba-monitor）にした理由**: `keiba-api` は『CPU を常に割り当て』（インスタンス課金）で、15 分以内の定期リクエストがあると落ちずに月 約 7,800 円になる（`cost_recalc_20261028.md`）。monitor はリクエスト課金・最大 1 台。
 このため VPS のハートビートからも `/api/` の確認（`api_upstream_http`。nginx 経由で Cloud Run に届く）を外し、`nginx_http`（`/version.json`）に変えた。stg の画面（`/srv/keiba-ui-stg` がある場合）は `stg_ui_http` と `keiba-ui-stg` を追加で見る。
@@ -67,3 +68,6 @@
 5. VPS: `/etc/keiba-ui/heartbeat.env` の `HEARTBEAT_URL` を monitor の `…/ops/heartbeat` に変え、`sudo bash scripts/ops/vps/vps_07_traffic_timer.sh`（アクセス集計の送信タイマー。root で nginx のログを読む）。ハートビートの送信側（`heartbeat_client.py`）も取り込む。
 6. SEO: CI の昇格後に `python -m src.scripts.ops.seo_audit_publish` を実行する 1 ステップを足す（`promote.yml` / `deploy-stg.yml` の GCS 認証済みジョブ。`ops/seo/` への書き込み権限が要る）。それまでは SEO 画面は『まだ点検結果がありません』。
 7. 公開の道は 2 章 5 のとおり（`monitor.megu-keiba.com` の向き先をホストの :23900 から Cloud Run の monitor に）。切り替えるまでは今の URL にこの画面は出ない。
+8. **API の課金ガード**: monitor の SA に `roles/monitoring.viewer`（プロジェクト）を付ける。付けるまでホームは『確認できない（権限がありません）』と出るだけで、ほかは動く。点検は手順 4 の Scheduler（`/ops/heartbeat/check`）が一緒に行う（ジョブを増やさない）。
+   - 判定: 夜間（JST 1〜4 時台）に 30 分以上起動した時間が 2 時間分以上 → 警告（4 時間分以上で重大）／ 直近 24 時間から月額の見込みが 800 円（API 分の目安）以上 → 警告（1,600 円以上で重大）。無料枠の数値は未確認なので、画面に『無料枠なし』の値も並べる。
+   - 背景: ping の発信元を列挙しても漏れる（2026-10-28 は VPS のヘルスチェック、ホストの cron の 2 つで、1〜2 台が 24 時間起動していた）。原因ではなく結果（課金される起動時間）を見張る。

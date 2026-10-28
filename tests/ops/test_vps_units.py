@@ -187,3 +187,10 @@ def test_periodic_vps_scripts_never_request_api_paths():
         body = (ROOT_DIR / "scripts/ops/vps" / name).read_text(encoding="utf-8")
         code = "\n".join(ln for ln in body.splitlines() if not ln.lstrip().startswith("#") and "/api/ は" not in ln)
         assert "/api/" not in code, name
+
+
+def test_vps_status_probe_does_not_request_api():
+    """ホストの cron が 3 分おきに VPS へ入って走らせる。/api/ を叩くと keiba-api(インスタンス課金)が起き続ける。"""
+    body = (ROOT_DIR / "src/scripts/ops/vps_status_probe.py").read_text(encoding="utf-8")
+    code = "\n".join(ln for ln in body.splitlines() if not ln.lstrip().startswith("#"))
+    assert "/api/" not in code
