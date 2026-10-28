@@ -1,7 +1,7 @@
 {
   "_meta": {
     "purpose": "移行後の月額コスト見積もり(src/scripts/ops/cost_estimate.py)の前提。数値を変えて再計算できる。docs/operations/architecture_target.md が参照する。",
-    "updated": "2026-10-21",
+    "updated": "2026-10-28",
     "how_to_recalculate": "python -m src.scripts.ops.cost_estimate --scenario all  /  --fx 160  /  --set prices.gcs_tokyo_standard_gb_month=0.025  /  --format md",
     "verified_legend": "verified=true は公式の公開ページで 2026-10-21 に確認した値。false は作成者の知識ベース(要確認)。実績は GCP の課金エクスポートで置き換える(gcp_daily_cost_report.py)。"
   },
@@ -123,6 +123,16 @@
       "value": 0.36,
       "verified": true,
       "source": "同上"
+    },
+    "cloud_run_instance_vcpu_second": {
+      "value": 1.8e-05,
+      "verified": false,
+      "source": "Cloud Run 『CPU を常に割り当て』(インスタンス課金, Tier 1)。keiba-api は --no-cpu-throttling でデプロイ済み(scripts/gcp/deploy_cloud_run_api.sh)"
+    },
+    "cloud_run_instance_gib_second": {
+      "value": 2e-06,
+      "verified": false,
+      "source": "同上"
     }
   },
   "free_tier": {
@@ -200,6 +210,16 @@
       "value": 50,
       "verified": false,
       "source": "Cloudflare Zero Trust Free: 50 ユーザーまで(Access・Tunnel は 0 円)"
+    },
+    "cloud_run_instance_vcpu_seconds": {
+      "value": 240000,
+      "verified": false,
+      "source": "インスタンス課金の無料枠(月 24 万 vCPU 秒)の認識。要確認。0 にして上限側も見ること(--set free_tier.cloud_run_instance_vcpu_seconds.value=0)"
+    },
+    "cloud_run_instance_gib_seconds": {
+      "value": 450000,
+      "verified": false,
+      "source": "同上(月 45 万 GiB 秒)"
     }
   },
   "scenarios": {
@@ -231,7 +251,7 @@
             "gib_seconds": 130000
           },
           "gcs": {
-            "stored_gb": 20,
+            "stored_gb": 39,
             "class_a_ops": 150000,
             "class_b_ops": 845000,
             "egress_gb": 1.0
@@ -269,7 +289,7 @@
             "gib_seconds": 440000
           },
           "gcs": {
-            "stored_gb": 100,
+            "stored_gb": 60,
             "class_a_ops": 600000,
             "class_b_ops": 4045000,
             "egress_gb": 8.0
@@ -293,7 +313,7 @@
           }
         }
       },
-      "_notes": "requests にはハートビート(5 分おき 約 8,640 回)・アラート判定(15 分おき)を含む。class_b_ops には VPS の実行役が 60 秒おきに GCS のタスクを確認する分(約 4.3 万回)を含む。Scheduler は 6〜14 ジョブ(無料 3)。"
+      "_notes": "requests にはハートビート(5 分おき 約 8,640 回)・アラート判定(15 分おき)を含む。class_b_ops には VPS の実行役が 60 秒おきに GCS のタスクを確認する分(約 4.3 万回)を含む。Scheduler は 6〜14 ジョブ(無料 3)。 GCS の保存量は 2026-10-28 に実測（gcloud storage du: 39GiB。chuou 28.8・models 1.9・ops 2.1・host_snapshot 1.2・state 0.6）。以前の想定は 20〜100GB。上限は成長を見込んで 60GB。"
     },
     "B_scrape_on_cloud_run_jobs": {
       "description": "A に加えて、開催日ランナー・前日取得・夜間取得も GCP(Cloud Run Jobs)で実行する案。VPS の実行役を使わない。送信元 IP が固定でなく、GCP の IP からの到達は未検証(要試験)。",
@@ -403,6 +423,145 @@
           },
           "cloud_nat": {
             "enabled": 1
+          }
+        }
+      }
+    },
+    "M0_monitor_features": {
+      "description": "A に、新しい監視ポータル（ホーム・開催日パイプライン・アクセス/SEO）の増分を足した案（API の課金方式は A のまま＝リクエスト課金の想定）。監視は Cloud Run(keiba-monitor, 最小0・最大1・リクエスト課金) が GCS を読むだけ（ホストは使わない）。パイプラインの点検も monitor の中で計算し（結果は 10 分キャッシュ）、Scheduler が 30 分おきに呼んで異常を通知する。専用の Run Job は作らない。VPS のアクセス集計は 15 分おきに送る（受け先は別シナリオで比較）。",
+      "extends": "A_budget_core",
+      "usage_add": {
+        "low": {
+          "cloud_run_monitor": {
+            "requests": 11700,
+            "avg_seconds": 0.6,
+            "vcpu": 1,
+            "gib": 0.5,
+            "cold_starts": 30,
+            "cold_seconds": 6
+          },
+          "gcs": {
+            "class_a_ops": 35000,
+            "class_b_ops": 40000,
+            "stored_gb": 0.01
+          },
+          "scheduler": {
+            "jobs": 1
+          }
+        },
+        "high": {
+          "cloud_run_monitor": {
+            "requests": 44700,
+            "avg_seconds": 0.6,
+            "vcpu": 1,
+            "gib": 0.5,
+            "cold_starts": 300,
+            "cold_seconds": 8
+          },
+          "gcs": {
+            "class_a_ops": 59000,
+            "class_b_ops": 150000,
+            "stored_gb": 0.05
+          },
+          "scheduler": {
+            "jobs": 1
+          }
+        }
+      },
+      "_notes": "閲覧は低=1日20回・高=1日100回（GCS の読み取り約25回）。パイプライン点検の計算は 1 回約 3 秒（5 日分×カテゴリ 5 本の一覧＝Class A 約 20 回）。点検は Scheduler 30 分おき(月1,440回)＋閲覧時（10 分キャッシュ）。requests は『0.6秒換算』の等価件数で入れている。"
+    },
+    "G_api_as_deployed": {
+      "description": "【いまのデプロイそのまま】keiba-api は --no-cpu-throttling（インスタンス課金）。最小 0 でも『最後のリクエストから約 15 分』は課金される。ハートビート未導入（5 分おきの ping が無い）で、利用は本人の閲覧だけ（低=1日2時間・高=公開後に1日8時間生きている）。監視ポータル(M0)の増分込み。",
+      "extends": "M0_monitor_features",
+      "usage_override": {
+        "low": {
+          "cloud_run_service": {
+            "billing": "instance",
+            "vcpu": 1,
+            "gib": 2,
+            "alive_hours_per_day": 2
+          }
+        },
+        "high": {
+          "cloud_run_service": {
+            "billing": "instance",
+            "vcpu": 1,
+            "gib": 2,
+            "alive_hours_per_day": 8
+          }
+        }
+      }
+    },
+    "H_heartbeat_on_instance_api": {
+      "description": "G に、VPS のハートビート（5 分おき）と Scheduler のアラート判定（15 分おき）を keiba-api に送る案（現行設計 docs/operations/cloud_run_api.md）。15 分以内の間隔で ping が来るので、最小 0 でもインスタンスが落ちず 1 か月ずっと課金される。",
+      "extends": "M0_monitor_features",
+      "usage_override": {
+        "low": {
+          "cloud_run_service": {
+            "billing": "instance",
+            "vcpu": 1,
+            "gib": 2,
+            "alive_hours_per_day": 2,
+            "pinger_interval_min": 5
+          }
+        },
+        "high": {
+          "cloud_run_service": {
+            "billing": "instance",
+            "vcpu": 1,
+            "gib": 2,
+            "alive_hours_per_day": 8,
+            "pinger_interval_min": 5
+          }
+        }
+      }
+    },
+    "I_ingest_on_monitor": {
+      "description": "【推奨】G と同じ API（インスタンス課金・ping なし）で、ハートビート・アクセス集計の受信・アラート判定を keiba-monitor（リクエスト課金・最大1）に移す案。ping の分は『リクエストの処理時間だけ』の課金になり、API は本人が使うときだけ生きる。",
+      "extends": "M0_monitor_features",
+      "usage_override": {
+        "low": {
+          "cloud_run_service": {
+            "billing": "instance",
+            "vcpu": 1,
+            "gib": 2,
+            "alive_hours_per_day": 2
+          }
+        },
+        "high": {
+          "cloud_run_service": {
+            "billing": "instance",
+            "vcpu": 1,
+            "gib": 2,
+            "alive_hours_per_day": 8
+          }
+        }
+      },
+      "usage_add": {
+        "low": {
+          "cloud_run_monitor": {
+            "requests": 14400
+          }
+        },
+        "high": {
+          "cloud_run_monitor": {
+            "requests": 14400
+          }
+        }
+      }
+    },
+    "K_api_request_billing": {
+      "description": "API も『リクエスト課金』（--cpu-throttling。GCS 取り込みの常駐スレッドをリクエスト中だけ進める形に直す）にして、ハートビート等を API が受ける案。A の想定（リクエスト課金）に近い。",
+      "extends": "M0_monitor_features",
+      "usage_add": {
+        "low": {
+          "cloud_run_service": {
+            "requests": 5760
+          }
+        },
+        "high": {
+          "cloud_run_service": {
+            "requests": 5760
           }
         }
       }

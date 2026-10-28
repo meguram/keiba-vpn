@@ -6,6 +6,7 @@
   python -m src.scripts.ops.cost_estimate --scenario all --set prices.gcs_tokyo_standard_gb_month.value=0.025
 
 簡略化: Cloud Run の無料枠(vCPU 秒・GiB 秒)は『サービス→ジョブ』の順に共通枠として消費する。
+インスタンス課金（billing=instance。デプロイ済みの keiba-api は --no-cpu-throttling）は『生きている秒数』で課金し、ping が 15 分以内の間隔で来ると 24 時間分になる。
 GCP には接続しない(純粋な計算)。実績は gcp_daily_cost_report.py の課金エクスポートで置き換える。
 """
 
@@ -85,12 +86,36 @@ def resolve_scenario(cfg: dict, name: str) -> dict:
 
 # ───────────────────────── 各サービスの計算(USD/月) ─────────────────────────
 
-def _cloud_run(cfg: dict, svc: dict, jobs: dict) -> dict[str, float]:
-    """サービス(リクエスト課金 + 最小インスタンスのアイドル)とジョブを、共通の無料枠で計算する。"""
+def _alive_seconds(cfg: dict, svc: dict) -> float:
+    """インスタンス課金（--no-cpu-throttling）のサービスが『生きている』秒数。
+
+    課金されるのはリクエストの処理時間ではなく、インスタンスが起動している間（最後のリクエストから idle_timeout_min 分後まで）。
+    ping（ハートビート等）の間隔が idle_timeout_min 以下なら、最小インスタンス 0 でも落ちずに 1 か月ずっと生きる。
+    """
+    month = float(cfg["seconds_per_month"])
+    ping = float(svc.get("pinger_interval_min", 0))
+    if ping and ping <= float(svc.get("idle_timeout_min", 15)):
+        return month
+    return min(month, float(svc.get("alive_hours_per_day", 0)) * 3600 * 30)
+
+
+def _cloud_run(cfg: dict, svc: dict, jobs: dict, monitor: dict | None = None) -> dict[str, float]:
+    """サービス・監視用サービス（リクエスト課金 + 最小インスタンスのアイドル）とジョブを計算する。
+
+    svc.billing == "instance" のサービスは、インスタンスが生きている秒数で課金し、専用の無料枠を使う。
+    リクエスト課金の無料枠は『監視用サービス（billing=request）→ ジョブ』の順に共通枠として消費する。
+    """
     sec = float(cfg["seconds_per_month"])
-    req = float(svc.get("requests", 0))
-    vcpu, gib = float(svc.get("vcpu", 1)), float(svc.get("gib", 1))
-    active = req * float(svc.get("avg_seconds", 0)) + float(svc.get("cold_starts", 0)) * float(svc.get("cold_seconds", 0))
+    instance_mode = svc.get("billing") == "instance"
+    mon = monitor or {}
+    pool = mon if instance_mode else svc
+    req = float(pool.get("requests", 0))
+    vcpu, gib = float(pool.get("vcpu", 1)), float(pool.get("gib", 1))
+    active = req * float(pool.get("avg_seconds", 0)) + float(pool.get("cold_starts", 0)) * float(pool.get("cold_seconds", 0))
+    if not instance_mode and mon:  # リクエスト課金のサービスに監視用サービスを足す
+        mreq = float(mon.get("requests", 0))
+        active += mreq * float(mon.get("avg_seconds", 0)) + float(mon.get("cold_starts", 0)) * float(mon.get("cold_seconds", 0))
+        req += mreq
     svc_cpu, svc_mem = active * vcpu, active * gib
     free_cpu, free_mem = _f(cfg, "cloud_run_vcpu_seconds"), _f(cfg, "cloud_run_gib_seconds")
     svc_cpu_bill = max(0.0, svc_cpu - free_cpu)
@@ -99,13 +124,21 @@ def _cloud_run(cfg: dict, svc: dict, jobs: dict) -> dict[str, float]:
     job_cpu, job_mem = float(jobs.get("vcpu_seconds", 0)), float(jobs.get("gib_seconds", 0))
     job_cpu_bill, job_mem_bill = max(0.0, job_cpu - free_cpu_left), max(0.0, job_mem - free_mem_left)
     req_bill = max(0.0, req - _f(cfg, "cloud_run_requests")) / 1e6 * _p(cfg, "cloud_run_request_per_million")
-    minimum = float(svc.get("min_instances", 0))
     idle = 0.0
-    if minimum > 0:
-        idle_seconds = max(0.0, sec - active / max(minimum, 1))
-        idle = minimum * idle_seconds * (vcpu * _p(cfg, "cloud_run_idle_vcpu_second") + gib * _p(cfg, "cloud_run_idle_gib_second"))
+    service_cost = svc_cpu_bill * _p(cfg, "cloud_run_vcpu_second") + svc_mem_bill * _p(cfg, "cloud_run_gib_second") + req_bill
+    if instance_mode:
+        alive = _alive_seconds(cfg, svc)
+        s_v, s_g = float(svc.get("vcpu", 1)), float(svc.get("gib", 1))
+        api = (max(0.0, alive * s_v - _f(cfg, "cloud_run_instance_vcpu_seconds")) * _p(cfg, "cloud_run_instance_vcpu_second")
+               + max(0.0, alive * s_g - _f(cfg, "cloud_run_instance_gib_seconds")) * _p(cfg, "cloud_run_instance_gib_second"))
+        service_cost += api
+    else:
+        minimum = float(svc.get("min_instances", 0))
+        if minimum > 0:
+            idle_seconds = max(0.0, sec - active / max(minimum, 1))
+            idle = minimum * idle_seconds * (vcpu * _p(cfg, "cloud_run_idle_vcpu_second") + gib * _p(cfg, "cloud_run_idle_gib_second"))
     return {
-        "cloud_run_service": svc_cpu_bill * _p(cfg, "cloud_run_vcpu_second") + svc_mem_bill * _p(cfg, "cloud_run_gib_second") + req_bill + idle,
+        "cloud_run_service": service_cost + idle,
         "cloud_run_jobs": job_cpu_bill * _p(cfg, "cloud_run_job_vcpu_second") + job_mem_bill * _p(cfg, "cloud_run_job_gib_second"),
     }
 
@@ -136,7 +169,7 @@ def estimate(cfg: dict, name: str, level: str) -> dict[str, Any]:
     items: dict[str, float] = {}
     comps = sc["components"]
     if "cloud_run_service" in comps or "cloud_run_jobs" in comps:
-        items.update(_cloud_run(cfg, use.get("cloud_run_service", {}), use.get("cloud_run_jobs", {})))
+        items.update(_cloud_run(cfg, use.get("cloud_run_service", {}), use.get("cloud_run_jobs", {}), use.get("cloud_run_monitor", {})))
     if "gcs" in comps:
         items["gcs"] = _gcs(cfg, use.get("gcs", {}))
     if "scheduler" in comps:

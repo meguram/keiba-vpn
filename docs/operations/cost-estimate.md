@@ -1,5 +1,7 @@
 # 月額コスト試算（確定アーキテクチャ）
 
+> **古い試算（2026-10-02。Cloud SQL 前提）。最新は [cost_recalc_20261028.md](./cost_recalc_20261028.md) と `config/cost_assumptions.json`。** API が『インスタンス課金』でデプロイ済みなので、15 分以内の ping（ハートビート等）で月 約 7,800 円になる点に注意。
+
 **最終更新**: 2026-10-02（データ準備を学習PCに集約、GCP接続は学習PCのみ、を反映して訂正）
 **対象**: [vps-gcp-responsibilities.md](./vps-gcp-responsibilities.md)「確定アーキテクチャ」の構成
 **関連**: [deployment-vps-vs-gcp.md](./deployment-vps-vs-gcp.md) / [gcp-cloud-run-jobs.md](./gcp-cloud-run-jobs.md)
