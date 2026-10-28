@@ -116,9 +116,9 @@ def apply_spec(entry: dict, P: np.ndarray) -> np.ndarray:
     if m == "logit_mean":
         return sigmoid(Z.mean(axis=1))
     if m == "weighted_logit":
-        return sigmoid(Z @ np.asarray(entry["weights"]))
+        return sigmoid((Z * np.asarray(entry["weights"])).sum(axis=1))      # 行列積は行数でブロック分けが変わり末位がずれるので、行ごとの和にする
     if m == "greedy":
-        return P @ np.asarray(entry["weights"])
+        return (P * np.asarray(entry["weights"])).sum(axis=1)
     if m == "stack_lr":
-        return sigmoid(Z @ np.asarray(entry["coef"]) + entry["intercept"])
+        return sigmoid((Z * np.asarray(entry["coef"])).sum(axis=1) + entry["intercept"])
     raise ValueError(m)

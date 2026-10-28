@@ -146,8 +146,9 @@ def mtl_fit_predict(X_tr: pd.DataFrame, y_tr: dict, A_tr: np.ndarray | None, rac
 def mtl_predict(model: dict, X: pd.DataFrame, race: np.ndarray, device: str | None = None) -> dict:
     """mtl_fit_predict(want_model=True) で保存したモデルの出力。win_score・top2_logit・top3_logit・aux（標準化した単位）を返す。"""
     import torch
+    from src.pipeline.models.determinism import RACE_CHUNK, inference_device
 
-    dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    dev = inference_device(device)
     a = model["arch"]
     net = _build(a["d_z"], a["n_cat"], a["emb_dim"], tuple(a["hidden"]), a["dropout"], a["n_aux"], a["interact"]).to(dev)
     net.load_state_dict(model["state"])
@@ -157,8 +158,8 @@ def mtl_predict(model: dict, X: pd.DataFrame, race: np.ndarray, device: str | No
     n = len(X)
     res = {"win_score": np.zeros(n), "top2_logit": np.zeros(n), "top3_logit": np.zeros(n), "aux": np.zeros((n, a["n_aux"]), dtype="float32")}
     with torch.no_grad():
-        for s in range(0, len(idx), 512):
-            ir = idx[s:s + 512]
+        for s in range(0, len(idx), RACE_CHUNK):
+            ir = idx[s:s + RACE_CHUNK]
             valid = ir >= 0
             safe = np.where(valid, ir, 0)
             o, aux, _h = net(torch.from_numpy(Z[safe]).to(dev), torch.from_numpy(C[safe]).to(dev), torch.from_numpy(valid).to(dev))
@@ -174,8 +175,9 @@ def mtl_predict(model: dict, X: pd.DataFrame, race: np.ndarray, device: str | No
 def mtl_infer(model: dict, X: pd.DataFrame, race: np.ndarray, device: str | None = None) -> np.ndarray:
     """mtl_fit_predict(want_model=True) で保存したモデルの補助ヘッド予測（標準化した単位）を返す。形は (len(X), n_aux)。"""
     import torch
+    from src.pipeline.models.determinism import RACE_CHUNK, inference_device
 
-    dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    dev = inference_device(device)
     a = model["arch"]
     net = _build(a["d_z"], a["n_cat"], a["emb_dim"], tuple(a["hidden"]), a["dropout"], a["n_aux"], a["interact"]).to(dev)
     net.load_state_dict(model["state"])
@@ -184,8 +186,8 @@ def mtl_infer(model: dict, X: pd.DataFrame, race: np.ndarray, device: str | None
     idx = _pad_races(np.asarray(race))
     out = np.zeros((len(X), a["n_aux"]), dtype="float32")
     with torch.no_grad():
-        for s in range(0, len(idx), 512):
-            ir = idx[s:s + 512]
+        for s in range(0, len(idx), RACE_CHUNK):
+            ir = idx[s:s + RACE_CHUNK]
             valid = ir >= 0
             safe = np.where(valid, ir, 0)
             _o, aux, _h = net(torch.from_numpy(Z[safe]).to(dev), torch.from_numpy(C[safe]).to(dev), torch.from_numpy(valid).to(dev))
