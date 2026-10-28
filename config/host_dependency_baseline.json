@@ -349,7 +349,7 @@
    "local_data": 1
   },
   "src/scraper/run.py": {
-   "local_data": 7
+   "local_data": 8
   },
   "src/scraper/scheduler.py": {
    "local_data": 1
@@ -361,6 +361,9 @@
    "local_data": 5
   },
   "src/scraper/shutuba_audit.py": {
+   "local_data": 2
+  },
+  "src/scraper/sire_line_store.py": {
    "local_data": 2
   },
   "src/scraper/smartrc_client.py": {
