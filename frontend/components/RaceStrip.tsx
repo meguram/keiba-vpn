@@ -31,7 +31,7 @@ export function useNarrow(): boolean {
  * 開催場タブ（★ = 特に価値の高いレースの数）、R チップ（推奨の期待回収率で色分け）、前後の R ボタン。
  */
 export function RaceStrip({
-  races, venue, onVenue, values, valuesState, selectedRaceId, onSelectRace, onWarm, showValue = true,
+  races, venue, onVenue, values, valuesState, selectedRaceId, onSelectRace, onWarm, showValue = true, disabledIds, disabledHint = "まだ選べません",
 }: {
   races: StripRace[];
   venue: string;
@@ -43,6 +43,9 @@ export function RaceStrip({
   onSelectRace: (raceId: string) => void;
   /** マウスが乗った／触れ始めたレースを先読みするためのコールバック（任意。GET だけに使う） */
   onWarm?: (raceId: string) => void;
+  /** 選べないレース（出馬表が未取得など）。チップを無効にし、前後ボタンもそのレースには移動しない */
+  disabledIds?: Set<string>;
+  disabledHint?: string;
   /** false にすると、R チップの推奨度（下段の文字・凡例・★）を出さない（推奨度と無関係な画面で使うとき） */
   showValue?: boolean;
 }) {
@@ -66,6 +69,7 @@ export function RaceStrip({
   const roundOf = (r: StripRace) => Number(r.round ?? Number(r.race_id.slice(-2)));
   const hotIn = (v: string) => races.filter((r) => r.venue === v && values.get(r.race_id)?.level === "hot").length;
   const sel = idx >= 0 ? sameVenue[idx] : undefined;
+  const off = (r: StripRace | undefined) => !!r && !!disabledIds?.has(r.race_id);
 
   return (
     <nav
@@ -103,7 +107,7 @@ export function RaceStrip({
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: narrow ? "nowrap" : "wrap" }}>
-        {!narrow && (prev ? (
+        {!narrow && (prev && !off(prev) ? (
           <button onClick={() => onSelectRace(prev.race_id)} onMouseEnter={() => onWarm?.(prev.race_id)} style={BTN} title={prev.race_name}>← {roundOf(prev)}R</button>
         ) : <span style={{ ...BTN, opacity: 0.35, cursor: "default" }}>← 前のR</span>)}
 
@@ -118,23 +122,25 @@ export function RaceStrip({
             const v = values.get(r.race_id);
             const lv: ValueLevel = v?.level ?? "none";
             const st = LEVEL_STYLE[lv];
+            const disabled = off(r);
             return (
               <button
                 key={r.race_id}
+                disabled={disabled}
                 onClick={() => onSelectRace(r.race_id)}
                 onMouseEnter={() => onWarm?.(r.race_id)}
                 onTouchStart={() => onWarm?.(r.race_id)}
                 onFocus={() => onWarm?.(r.race_id)}
                 aria-current={on ? "true" : undefined}
-                title={showValue ? `${roundOf(r)}R ${r.race_name ?? ""}\n${chipHint(v, valuesState)}` : `${roundOf(r)}R ${r.race_name ?? ""}`}
+                title={disabled ? `${roundOf(r)}R ${r.race_name ?? ""}\n${disabledHint}` : showValue ? `${roundOf(r)}R ${r.race_name ?? ""}\n${chipHint(v, valuesState)}` : `${roundOf(r)}R ${r.race_name ?? ""}`}
                 data-level={lv}
                 style={{
                   minWidth: narrow ? 48 : 46, minHeight: narrow ? 46 : undefined, flex: "none", scrollSnapAlign: "center",
                   display: "inline-flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
-                  padding: "5px 6px", borderRadius: 8, lineHeight: 1.15, cursor: "pointer",
+                  padding: "5px 6px", borderRadius: 8, lineHeight: 1.15, cursor: disabled ? "not-allowed" : "pointer",
                   border: `1px solid ${st.border}`, background: st.bg, color: st.color,
                   boxShadow: [on ? "0 0 0 2px var(--bg), 0 0 0 4px #e6edf3" : "", st.glow ?? ""].filter(Boolean).join(", ") || undefined,
-                  opacity: lv === "pass" || lv === "none" ? (on ? 1 : 0.9) : 1,
+                  opacity: disabled ? 0.3 : lv === "pass" || lv === "none" ? (on ? 1 : 0.9) : 1,
                   transform: lv === "hot" ? "translateY(-1px)" : undefined,
                 }}
               >
@@ -149,7 +155,7 @@ export function RaceStrip({
           })}
         </div>
 
-        {!narrow && (next ? (
+        {!narrow && (next && !off(next) ? (
           <button onClick={() => onSelectRace(next.race_id)} onMouseEnter={() => onWarm?.(next.race_id)} style={BTN} title={next.race_name}>{roundOf(next)}R →</button>
         ) : <span style={{ ...BTN, opacity: 0.35, cursor: "default" }}>次のR →</span>)}
       </div>

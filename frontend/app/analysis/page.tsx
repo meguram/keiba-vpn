@@ -7,10 +7,11 @@ import { LoadingNotice } from "@/components/LoadingNotice";
 import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip } from "@/components/RaceStrip";
 import { AnalysisTable } from "@/components/analysis/AnalysisTable";
+import { entriesUnavailable } from "@/lib/raceAnalysis";
 import type { RaceAnalysis } from "@/lib/raceAnalysis";
 import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
 
-type RaceItem = { race_id: string; race_name?: string; venue?: string; round?: number | string; date?: string };
+type RaceItem = { race_id: string; race_name?: string; venue?: string; round?: number | string; date?: string; entries_phase?: string | null };
 
 const NO_VALUES = new Map();
 const analysisUrl = (raceId: string) => `/api/v1/races/${raceId}/analysis`;
@@ -46,7 +47,13 @@ export default function AnalysisPage() {
     () => races.filter((r) => !activeVenue || r.venue === activeVenue).sort((a, b) => Number(a.round ?? 0) - Number(b.round ?? 0)),
     [races, activeVenue],
   );
-  const activeRace = useMemo(() => visibleRaces.find((r) => r.race_id === selectedRaceId) ?? visibleRaces[0], [visibleRaces, selectedRaceId]);
+  /* 未来の開催日で出馬表がまだ取得できていないレースは選べない（JRA の公示前） */
+  const disabledIds = useMemo(
+    () => new Set(races.filter((r) => entriesUnavailable(r, selectedDate, today)).map((r) => r.race_id)),
+    [races, selectedDate, today],
+  );
+  const selectable = useMemo(() => visibleRaces.filter((r) => !disabledIds.has(r.race_id)), [visibleRaces, disabledIds]);
+  const activeRace = useMemo(() => selectable.find((r) => r.race_id === selectedRaceId) ?? selectable[0], [selectable, selectedRaceId]);
   const activeRaceId = activeRace?.race_id ?? "";
 
   useEffect(() => {
@@ -124,7 +131,7 @@ export default function AnalysisPage() {
     syncUrl({ date: d, race: null });
   }
   function chooseVenue(v: string) {
-    const first = races.filter((r) => r.venue === v).sort((a, b) => Number(a.round ?? 0) - Number(b.round ?? 0))[0];
+    const first = races.filter((r) => r.venue === v && !disabledIds.has(r.race_id)).sort((a, b) => Number(a.round ?? 0) - Number(b.round ?? 0))[0];
     setSelectedVenue(v);
     setSelectedRaceId(first?.race_id ?? "");
     syncUrl({ venue: v, race: first?.race_id ?? null });
@@ -189,7 +196,15 @@ export default function AnalysisPage() {
               onSelectRace={chooseRace}
               onWarm={warm}
               showValue={false}
+              disabledIds={disabledIds}
+              disabledHint="出馬表がまだ公示されていません（JRA の公示後に選べます）"
             />
+
+            {selectable.length === 0 && (
+              <div role="note" className="card" style={{ color: "var(--text-dim)", fontSize: 13 }}>
+                {activeVenue}のレースは、出馬表がまだ公示されていません。JRA の公示（特別登録・木曜の出走馬決定）の後に選べるようになります。
+              </div>
+            )}
 
             {load.state === "loading" && <LoadingNotice what="分析結果" size={32} padding="40px 0" />}
 
