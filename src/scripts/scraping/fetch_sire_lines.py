@@ -4,7 +4,7 @@ python -m src.scripts.scraping.fetch_sire_lines                  # 未取得の�
 python -m src.scripts.scraping.fetch_sire_lines --limit 5        # 5 ページだけ
 
 対象: horse_sire_map.parquet の父（sire_id）。各種牡馬の産駒の血統ページを 1 枚ずつ取る（父のセルに系統が付く）。
-守り: 同時 1 本・約 60 秒間隔。netkeiba への当日の総件数が上限に近いときは取らずに待つ。アクセス制限の疑い（HTTP 400/403 の連続）が出たら止める。
+守り: 同時 1 本・一定間隔（既定 60 秒。SIRE_LINE_PACE_SEC）。netkeiba への当日の総件数（共通カウンタ＋自分の分）が上限に近いときは取らずに待つ。アクセス制限の疑い（HTTP 400/403 の連続）が出たら止める。
 """
 
 from __future__ import annotations
@@ -25,6 +25,28 @@ PED_URL = "https://db.netkeiba.com/horse/ped/{horse_id}/"
 DAILY_STOP = int(os.environ.get("SIRE_LINE_DAILY_STOP", "2300"))     # その日の総件数がこれ以上なら取らずに待つ（上限 2,700 に余裕を残す）
 PACE_SEC = float(os.environ.get("SIRE_LINE_PACE_SEC", "60"))
 MAX_CONSECUTIVE_ERRORS = 5
+
+
+def _my_count_path():
+    """このスクリプト自身の当日の取得数（JST）。共通の日次カウンタは root の所有で追記できないので、自分の分は別に数える。"""
+    from datetime import datetime, timedelta, timezone
+
+    day = datetime.now(timezone(timedelta(hours=9))).strftime("%Y%m%d")
+    return store.default_path().parent / "requests" / f"{day}.count"
+
+
+def my_count_today() -> int:
+    try:
+        return _my_count_path().stat().st_size
+    except OSError:
+        return 0
+
+
+def _count_mine() -> None:
+    p = _my_count_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "ab") as f:
+        f.write(b".")
 
 
 def pick_targets(sire_map: pd.DataFrame, have: set[str]) -> list[tuple[str, str]]:
@@ -57,10 +79,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.limit and done >= args.limit:
             stopped_early = True
             break
-        while count_today() >= DAILY_STOP:
+        while count_today() + my_count_today() >= DAILY_STOP:
             logger.info("今日の総件数が %d に達しているので待機（10 分後に再確認）", DAILY_STOP)
             time.sleep(600)
         try:
+            _count_mine()
             html = client.fetch(PED_URL.format(horse_id=horse_id))
             store.record_html(html, horse_id)
             got = sire_id in store.labels()
