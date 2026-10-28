@@ -33,7 +33,7 @@ _SHA = re.compile(r"^[0-9a-f]{64}$")
 # 取得の実行役のバンドルに入れるもの（秘密・データ・ノートブック・学習物は入れない）
 # config は取得が読むものだけ（会員名簿 members.json・費用・モデルの重みは入れない。足すときはここに明示する）
 FETCH_CONFIG = ("ports.env", "settings.yaml", "entries_schedule.json", "fetch_owner.json", "anti_scraping.json",
-                "maintenance.json", "gcp_job_map.json", "behavior_flags.json")
+                "maintenance.json", "gcp_job_map.json", "behavior_flags.json", "fetch_shadow.json")
 FETCH_INCLUDE = ("src", *(f"config/{n}" for n in FETCH_CONFIG), "requirements-fetch.txt", "scripts/auto_scrape.sh")
 FETCH_EXCLUDE_PARTS = {"__pycache__", ".ipynb_checkpoints"}
 FETCH_EXCLUDE_NAMES = {"anti_scraping.local.json", ".env"}

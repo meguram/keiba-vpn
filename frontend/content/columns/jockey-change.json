@@ -1,12 +1,11 @@
 {
-  "slug": "upset-short-local",
-  "title": "短距離とローカルは荒れる？",
-  "claim": "短距離・ローカル開催は荒れやすい",
+  "slug": "jockey-change",
+  "title": "乗り替わり、どれだけ重要？",
+  "claim": "乗り替わりは成績に影響する",
   "verdict": "pending",
-  "summary": "「短距離は荒れる」「ローカルは荒れる」は本当か。荒れる仕組みまで追います。",
+  "summary": "同じ馬の乗り替わり前後で、成績がどれだけ変わるのかを調べます。",
   "categories": [
-    "upset/distance-course",
-    "upset/conditions"
+    "jockey/change"
   ],
   "published": "2026-10-28",
   "dataset": {
@@ -26,7 +25,7 @@
     },
     {
       "type": "text",
-      "text": "・短距離、ローカルは荒れやすいのか\n・荒れるとしたら、その理由は何か（頭数・枠・展開・格差）"
+      "text": "・乗り替わりは、どれだけ成績に影響するのか"
     },
     {
       "type": "heading",
@@ -34,7 +33,7 @@
     },
     {
       "type": "text",
-      "text": "・距離帯×開催場の人気別成績\n・理由の仮説ごとの検証"
+      "text": "・乗り替わりの前後での複勝率・回収率の変化\n・騎手の格（乗り替わり前→後）別の違い"
     },
     {
       "type": "heading",

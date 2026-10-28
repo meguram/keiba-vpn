@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import os
 import threading
@@ -22,6 +24,35 @@ class BlobIO(Protocol):
     def delete(self, key: str) -> bool: ...
     def download_file(self, key: str, path: Path) -> bool: ...
     def upload_file(self, path: Path, key: str) -> None: ...
+
+
+def md5_b64(data: bytes) -> str:
+    """GCS の ``md5_hash`` と同じ表記（MD5 の base64）。"""
+    return base64.b64encode(hashlib.md5(data).digest()).decode()
+
+
+def file_md5_b64(path: Path) -> str:
+    h = hashlib.md5()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return base64.b64encode(h.digest()).decode()
+
+
+def list_meta(io: BlobIO, prefix: str) -> dict[str, tuple[int, str]]:
+    """``prefix`` 以下の key → (サイズ, md5 の base64)。GCS は一覧 1 回で取れる（キーごとの問い合わせをしない）。
+
+    ``list_meta`` を持たない実装（テストの偽物など）は、キーごとに読んで求める。
+    """
+    fn = getattr(io, "list_meta", None)
+    if fn is not None:
+        return fn(prefix)
+    out: dict[str, tuple[int, str]] = {}
+    for k in io.list(prefix):
+        data = io.get_bytes(k)
+        if data is not None:
+            out[k] = (len(data), md5_b64(data))
+    return out
 
 
 class MemoryIO:
@@ -51,6 +82,10 @@ class MemoryIO:
         with self._lock:
             v = self._d.get(key)
             return None if v is None else len(v)
+
+    def list_meta(self, prefix: str) -> dict[str, tuple[int, str]]:
+        with self._lock:
+            return {k: (len(v), md5_b64(v)) for k, v in sorted(self._d.items()) if k.startswith(prefix)}
 
     def delete(self, key: str) -> bool:
         with self._lock:
@@ -98,6 +133,9 @@ class GcsIO:
     def size(self, key: str) -> int | None:
         blob = self._bucket.get_blob(key)
         return None if blob is None else int(blob.size or 0)
+
+    def list_meta(self, prefix: str) -> dict[str, tuple[int, str]]:
+        return {b.name: (int(b.size or 0), b.md5_hash or "") for b in self._bucket.list_blobs(prefix=prefix)}
 
     def delete(self, key: str) -> bool:
         from google.api_core.exceptions import NotFound
