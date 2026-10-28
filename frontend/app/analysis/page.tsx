@@ -7,7 +7,7 @@ import { LoadingNotice } from "@/components/LoadingNotice";
 import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip } from "@/components/RaceStrip";
 import { AnalysisTable } from "@/components/analysis/AnalysisTable";
-import { entriesUnavailable } from "@/lib/raceAnalysis";
+import { entriesUnavailable, formatSource } from "@/lib/raceAnalysis";
 import type { RaceAnalysis } from "@/lib/raceAnalysis";
 import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
 
@@ -271,10 +271,13 @@ export default function AnalysisPage() {
                         {mod.status === "ok" && <AnalysisTable entries={data.entries} module={mod} />}
                         {mod.status === "not_applicable" && <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>このレースでは表示できません（コース条件が未確定です）。</p>}
                         {mod.status === "error" && <p style={{ fontSize: 13, color: "var(--err)", marginTop: 8 }}>この分析の計算に失敗しました。</p>}
-                        {mod.status === "ok" && (mod.notes?.length || mod.data_until) ? (
-                          <ul style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 11, color: "var(--text-dim)" }}>
+                        {mod.status === "ok" && mod.source && (
+                          <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--text)" }}>{formatSource(mod.source)}</p>
+                        )}
+                        {mod.status === "ok" && (mod.notes?.length || (!mod.source && mod.data_until)) ? (
+                          <ul style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: 11, color: "var(--text-dim)" }}>
                             {mod.notes?.map((n) => <li key={n}>{n}</li>)}
-                            {mod.data_until && <li>集計に使ったデータは {mod.data_until} まで。</li>}
+                            {!mod.source && mod.data_until && <li>集計に使ったデータは {mod.data_until} まで。</li>}
                           </ul>
                         ) : null}
                       </div>

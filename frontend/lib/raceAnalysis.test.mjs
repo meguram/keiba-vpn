@@ -12,7 +12,7 @@ const ts = createRequire(import.meta.url)("typescript");
 const src = ts.transpileModule(readFileSync(join(here, "raceAnalysis.ts"), "utf8"), { compilerOptions: { module: ts.ModuleKind.ES2020, target: ts.ScriptTarget.ES2020 } }).outputText;
 const out = join(mkdtempSync(join(tmpdir(), "ra-")), "raceAnalysis.mjs");
 writeFileSync(out, src);
-const { formatCell, sortValue, columnBlocks, isThin, entriesUnavailable } = await import(pathToFileURL(out).href);
+const { formatCell, sortValue, columnBlocks, isThin, entriesUnavailable, formatSource } = await import(pathToFileURL(out).href);
 
 test("formatCell: 成績・率・整数、値が無ければダッシュ", () => {
   assert.equal(formatCell([6, 11, 7, 38], "record"), "6-11-7-38");
@@ -60,4 +60,12 @@ test("entriesUnavailable: 未来日で出馬表の段階が無い／none のレ�
   assert.equal(entriesUnavailable({ entries_phase: "final" }, "20261031", "20261028"), false);
   assert.equal(entriesUnavailable({ entries_phase: null }, "20261028", "20261028"), false);           // 当日は選べる
   assert.equal(entriesUnavailable({ entries_phase: null }, "20261025", "20261028"), false);           // 過去は選べる
+});
+
+test("formatSource: 提供元・集計期間・件数を 1 文にする。期間や件数が無ければ省く", () => {
+  assert.equal(
+    formatSource({ provider: "netkeiba.com", dataset: "レース結果", period_from: "2020-01-05", period_to: "2026-10-25", races: 2880, rows: 39639 }),
+    "データの出典: netkeiba.com（レース結果） ／ 集計期間: 2020/01/05〜2026/10/25 ／ 対象: 2,880レース・39,639出走",
+  );
+  assert.equal(formatSource({ provider: "netkeiba.com", dataset: "レース結果", period_from: null, period_to: null, races: 0, rows: 0 }), "データの出典: netkeiba.com（レース結果）");
 });

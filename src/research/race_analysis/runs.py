@@ -15,6 +15,9 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 FLAT_DIR = Path(__file__).resolve().parents[3] / "data/page_reference/tables"
+# 結果データの提供元（取得元は netkeiba のみ。2026-10-22 のユーザー確認）。画面の出典表示に使う
+SOURCE_PROVIDER = "netkeiba.com"
+SOURCE_DATASET = "レース結果"
 COLUMNS = ["race_id", "date", "venue", "surface", "distance", "finish_position", "jockey_id"]
 
 _lock = threading.Lock()

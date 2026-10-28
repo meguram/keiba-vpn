@@ -14,7 +14,7 @@ from typing import Any
 import pandas as pd
 
 from src.research.race_analysis.base import Column, ColumnGroup, ModuleOutput, RaceContext
-from src.research.race_analysis.runs import load_runs
+from src.research.race_analysis.runs import SOURCE_DATASET, SOURCE_PROVIDER, load_runs
 
 MIN_N = 10   # これ未満の出走数は参考値として薄く表示する
 
@@ -76,6 +76,14 @@ class JockeyCourseModule:
             before = runs[runs["date"] < ctx.date]
         before = before[before["race_id"] != ctx.race_id]
         until = before["date"].max() if len(before) else None
+        source = {
+            "provider": SOURCE_PROVIDER,
+            "dataset": SOURCE_DATASET,
+            "period_from": before["date"].min() if len(before) else None,
+            "period_to": until,
+            "races": int(before["race_id"].nunique()),
+            "rows": int(len(before)),
+        }
         ids = {str(e["jockey_id"]) for e in ctx.entries if e.get("jockey_id")}
         before = before[before["jockey_id"].isin(ids)]
         tallies = {sc: _tally(before[_mask(before, ctx, sc)]) for sc in SCOPES}
@@ -94,7 +102,7 @@ class JockeyCourseModule:
             cells[e["key"]] = row
 
         notes = [
-            "このレースの開催日より前の JRA 全レース（2020年以降）の結果から集計しています。",
+            "このレースの開催日より前の JRA 全レースの結果から集計しています。",
             f"出走数が{MIN_N}未満の群は、参考値として薄く表示しています。",
         ]
-        return ModuleOutput(columns=columns, groups=groups, cells=cells, notes=notes, data_until=until)
+        return ModuleOutput(columns=columns, groups=groups, cells=cells, notes=notes, data_until=until, source=source)

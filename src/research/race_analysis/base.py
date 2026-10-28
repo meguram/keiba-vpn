@@ -47,6 +47,7 @@ class ModuleOutput:
     cells: dict[str, dict[str, Any]]      # entry key -> {column key: 値}
     notes: list[str] = field(default_factory=list)
     data_until: str | None = None         # 使ったデータの最終日
+    source: dict[str, Any] | None = None  # 出典: provider（提供元の機関）, dataset, period_from, period_to, races, rows
 
 
 class AnalysisModule(Protocol):

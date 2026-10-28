@@ -59,6 +59,8 @@ def test_counts_only_before_race_date_by_jockey_id(flat_dir):
     assert d["status"] == "ok" and d["provisional_entries"] is False
     m = d["modules"][0]
     assert m["id"] == "jockey_course" and m["status"] == "ok" and m["data_until"] == "2026-03-01"
+    # 出典と期間は、実際に集計に使った範囲（本レース当日以降は含めない）
+    assert m["source"] == {"provider": "netkeiba.com", "dataset": "レース結果", "period_from": "2026-01-05", "period_to": "2026-03-01", "races": 7, "rows": 7}
     a = {e["horse_number"]: e["analysis"]["jockey_course"] for e in d["entries"]}
     j1 = a[1]
     assert j1["course_rec"] == [1, 1, 0, 1] and j1["course_n"] == 3                  # A1 A2 A3（FUT・LATER は除外）
