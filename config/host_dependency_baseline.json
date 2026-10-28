@@ -212,6 +212,9 @@
   "src/pipeline/inference/growth_attach.py": {
    "local_data": 1
   },
+  "src/pipeline/inference/hem_megu_infer.py": {
+   "local_data": 1
+  },
   "src/pipeline/inference/horse_growth.py": {
    "page_reference": 3
   },

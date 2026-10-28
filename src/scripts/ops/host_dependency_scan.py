@@ -52,6 +52,7 @@ EXCLUDE_GLOBS = (
     "**/node_modules/**",
     "src/scripts/ops/host_dependency_scan.py",  # このツール自身（パターンを文字列で持つ）
     "scripts/ops/backfill_target_bets.sh",  # 研究用ホストで一度だけ回す過去分の種まき（運用経路は読まない。移行後に削除）
+    "scripts/ops/swap_pred_v6e.sh",  # 研究用ホストで予測を差し替える一回限りの作業（運用経路は読まない。差し替え後に削除）
 )
 SUFFIXES = {".py", ".sh", ".ts", ".tsx", ".js", ".conf", ".service", ".timer", ".env", ".json", ".example"}
 

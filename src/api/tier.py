@@ -346,6 +346,7 @@ _MEMBER_ONLY_PATTERNS = [re.compile(p) for p in (
     r"^/api/v1/horse/[^/]+/(megu-index-history|growth-curve)",
     r"^/api/v1/(pedigree-race-stats|data-analysis)/",
     r"^/api/v1/(bloodline-cluster/horse-aptitude|pedigree/race-note-3d-v2)",
+    r"^/api/v1/races/[^/]+/analysis$",
 )]
 
 

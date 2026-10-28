@@ -31,7 +31,7 @@ export function useNarrow(): boolean {
  * 開催場タブ（★ = 特に価値の高いレースの数）、R チップ（推奨の期待回収率で色分け）、前後の R ボタン。
  */
 export function RaceStrip({
-  races, venue, onVenue, values, valuesState, selectedRaceId, onSelectRace, onWarm,
+  races, venue, onVenue, values, valuesState, selectedRaceId, onSelectRace, onWarm, showValue = true,
 }: {
   races: StripRace[];
   venue: string;
@@ -43,6 +43,8 @@ export function RaceStrip({
   onSelectRace: (raceId: string) => void;
   /** マウスが乗った／触れ始めたレースを先読みするためのコールバック（任意。GET だけに使う） */
   onWarm?: (raceId: string) => void;
+  /** false にすると、R チップの推奨度（下段の文字・凡例・★）を出さない（推奨度と無関係な画面で使うとき） */
+  showValue?: boolean;
 }) {
   const narrow = useNarrow();
   const chipsRef = useRef<HTMLDivElement | null>(null);
@@ -76,7 +78,7 @@ export function RaceStrip({
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: narrow ? "nowrap" : "wrap", overflowX: narrow ? "auto" : undefined }}>
         {venues.map((v) => {
           const on = v === venue;
-          const hot = hotIn(v);
+          const hot = showValue ? hotIn(v) : 0;
           return (
             <button
               key={v}
@@ -124,7 +126,7 @@ export function RaceStrip({
                 onTouchStart={() => onWarm?.(r.race_id)}
                 onFocus={() => onWarm?.(r.race_id)}
                 aria-current={on ? "true" : undefined}
-                title={`${roundOf(r)}R ${r.race_name ?? ""}\n${chipHint(v, valuesState)}`}
+                title={showValue ? `${roundOf(r)}R ${r.race_name ?? ""}\n${chipHint(v, valuesState)}` : `${roundOf(r)}R ${r.race_name ?? ""}`}
                 data-level={lv}
                 style={{
                   minWidth: narrow ? 48 : 46, minHeight: narrow ? 46 : undefined, flex: "none", scrollSnapAlign: "center",
@@ -137,9 +139,11 @@ export function RaceStrip({
                 }}
               >
                 <span style={{ fontSize: 14, fontWeight: on || lv === "hot" ? 800 : 600 }}>{lv === "hot" ? `★${roundOf(r)}` : roundOf(r)}</span>
-                <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.95 }}>
-                  {chipText(v, valuesState)}
-                </span>
+                {showValue && (
+                  <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.95 }}>
+                    {chipText(v, valuesState)}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -150,7 +154,7 @@ export function RaceStrip({
         ) : <span style={{ ...BTN, opacity: 0.35, cursor: "default" }}>次のR →</span>)}
       </div>
 
-      {values.size > 0 && !narrow && (
+      {showValue && values.size > 0 && !narrow && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", fontSize: 11, color: "var(--text-dim)" }}>
           <span>{hasTier(values) ? "買い目の推奨度:" : "推奨の期待回収率:"}</span>
           {hasTier(values)
