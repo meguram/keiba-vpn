@@ -185,7 +185,9 @@ def plan_race_day(rows: list[dict[str, Any]], date: str, now: datetime, *, late_
 def reserve_race_day(date: str, storage: Any, queue: FT.TaskQueue, *, now: datetime | None = None, dry_run: bool = False,
                      enqueue_predict: Callable[[dict[str, Any]], str] | None = None, load_schedule: Callable[[Any, str], list[dict[str, Any]]] | None = None,
                      env: dict[str, str] | None = None, build_events: Any = None, owned: set[str] | None = None,
-                     shadow_queue: FT.TaskQueue | None = None) -> dict[str, Any]:
+                     shadow_queue: FT.TaskQueue | None = None, predict_ready: bool = True) -> dict[str, Any]:
+    """``predict_ready=False``（job_map の predict-race が ready=false）なら予測のタスクは積まない。積んでも起動した Job が
+    『準備未完了』で何もせずに終わるだけで、開催日 1 日に約 36 回の起動が無駄になる。"""
     now = now or datetime.now(JST)
     e = env if env is not None else os.environ
     owned = owned_tasks(e) if owned is None else owned
@@ -205,7 +207,10 @@ def reserve_race_day(date: str, storage: Any, queue: FT.TaskQueue, *, now: datet
     out["fetch"] = enqueue_fetch(queue, plan["fetch"])
     if shadow_queue is not None and shadow_planned:
         out["shadow"] = enqueue_fetch(shadow_queue, shadow_planned)
-    pres = {"created": 0, "exists": 0, "error": 0}
+    pres: dict[str, Any] = {"created": 0, "exists": 0, "error": 0}
+    if not predict_ready:
+        out["predict"] = {**pres, "skipped": len(plan["predicts"]), "reason": "predict-race が ready=false"}
+        return out
     for p in plan["predicts"]:
         try:
             spec = predict_task_spec(p["race_id"], p["date"], p["run_at"], env=e)
@@ -264,7 +269,11 @@ def main(argv: list[str] | None = None) -> int:
     if ns.cmd == "race-day":
         from src.scraper.storage import HybridStorage
 
-        res = reserve_race_day(ns.date, HybridStorage("."), queue, dry_run=ns.dry_run, shadow_queue=shadow_queue)
+        from src.ops import job_map
+
+        pr = next((j for j in job_map.load()["jobs"] if j["id"] == "predict-race"), {})
+        res = reserve_race_day(ns.date, HybridStorage("."), queue, dry_run=ns.dry_run, shadow_queue=shadow_queue,
+                               predict_ready=bool(pr.get("ready")))
     else:
         res = reserve_recurring(queue, horizon_hours=ns.horizon_hours, dry_run=ns.dry_run, shadow_queue=shadow_queue)
     print(json.dumps(res, ensure_ascii=False, default=str))

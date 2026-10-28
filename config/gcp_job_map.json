@@ -998,11 +998,11 @@
    "parity": {
     "kind": "none"
    },
-   "blockers": [
-    "影モードを有効にしてから（KEIBA_FETCH_SHADOW_ENABLED=1。docs/operations/vps_agent.md の影モードの章）"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false
+   "ready": true,
+   "ready_note": "2026-10-28: VPS の実行役の影モード（fetch_agent_ctl.sh shadow-on）と、GCP の FETCH_SHADOW=1 で始める。それまでは日次レポートが『影の結果なし』になるだけ",
+   "ready_confirmed_at": "2026-10-28"
   },
   {
    "id": "parity-check",
@@ -1662,11 +1662,9 @@
    "parity": {
     "kind": "none"
    },
-   "blockers": [
-    "race_lists / 発走時刻表は ops/mirror（mirror_in）から読む。ホスト停止後は VPS の取得役(daily-race-lists)が ops/mirror へ上げる形にする（keiba-vpn-37 の担当）"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false,
+   "ready": true,
    "cutover": {
     "min_consecutive_success": 4,
     "window_days": 21,
@@ -1675,7 +1673,9 @@
    "mirror_in": [
     "data/page_reference/race_lists",
     "data/page_reference/race_day_schedule"
-   ]
+   ],
+   "ready_note": "2026-10-28: race_lists・発走時刻表は ops/mirror（ホストが 5 分おきに push）から読める。並走中は担当外の取得タスクは積まず（担当表が空）、影のタスクは FETCH_SHADOW=1 のときだけ。予測のタスクは predict-race が ready になるまで積まない",
+   "ready_confirmed_at": "2026-10-28"
   },
   {
    "id": "lap-forecast-eve",
