@@ -14,7 +14,7 @@ export type FeatureDef = {
   enabled: boolean;
   /** このページ群に属するパス（完全一致またはその配下） */
   paths: string[];
-  /** 開発中の画面。next dev のときだけ表示し、本番ビルド（stg/prod）では NEXT_PUBLIC_ENABLE_FEATURES でも出さない */
+  /** 開発中の画面。next dev と stg（NEXT_PUBLIC_ENV_LABEL=stg）のビルドだけ表示し、prod では NEXT_PUBLIC_ENABLE_FEATURES でも出さない */
   devOnly?: boolean;
 };
 
@@ -53,10 +53,14 @@ const OVERRIDE_ALL = OVERRIDE === "all";
 const OVERRIDE_IDS = new Set(OVERRIDE.split(",").map((s) => s.trim()).filter(Boolean));
 
 const IS_PRODUCTION_BUILD = process.env.NODE_ENV === "production";
+const IS_STG_BUILD = (process.env.NEXT_PUBLIC_ENV_LABEL ?? "").trim().toLowerCase() === "stg";
+
+/** 開発中の画面・下書きを出してよいビルドか（next dev または stg。prod は出さない） */
+export const SHOW_DEV_ONLY = !IS_PRODUCTION_BUILD || IS_STG_BUILD;
 
 export function featureEnabled(id: FeatureId): boolean {
   const f: FeatureDef = FEATURES[id];
-  if (f.devOnly && IS_PRODUCTION_BUILD) return false;
+  if (f.devOnly && !SHOW_DEV_ONLY) return false;
   return f.enabled || OVERRIDE_ALL || OVERRIDE_IDS.has(id);
 }
 

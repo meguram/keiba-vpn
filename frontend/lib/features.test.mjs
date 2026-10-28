@@ -33,12 +33,22 @@ test("開発中の画面は next dev では表示される", async () => {
   assert.equal(m.pathEnabled("/column/category/gate"), true);
 });
 
-test("本番ビルド（stg/prod）では、全機能を有効にする指定があっても開発中の画面は出さない", async () => {
-  const m = await load({ NODE_ENV: "production", NEXT_PUBLIC_ENABLE_FEATURES: "all" });
+test("prod ビルドでは、全機能を有効にする指定があっても開発中の画面は出さない", async () => {
+  const m = await load({ NODE_ENV: "production", NEXT_PUBLIC_ENV_LABEL: "", NEXT_PUBLIC_ENABLE_FEATURES: "all" });
+  assert.equal(m.SHOW_DEV_ONLY, false);
   assert.equal(m.featureEnabled("megu-analysis"), false);
   assert.equal(m.featureEnabled("megu-column"), false);
   assert.equal(m.pathEnabled("/analysis"), false);
   assert.equal(m.pathEnabled("/column/sample-gate-inner"), false);
   assert.equal(m.featureEnabled("predictions"), true);     // 公開中の機能は変わらない
   assert.equal(m.featureEnabled("megu-index"), true);      // all 指定は開発中でない機能には効く
+});
+
+test("stg ビルドでは開発中の画面を表示する（prod と違い STG ラベルで判定）", async () => {
+  const m = await load({ NODE_ENV: "production", NEXT_PUBLIC_ENV_LABEL: "STG", NEXT_PUBLIC_ENABLE_FEATURES: undefined });
+  assert.equal(m.SHOW_DEV_ONLY, true);
+  assert.equal(m.featureEnabled("megu-analysis"), true);
+  assert.equal(m.featureEnabled("megu-column"), true);
+  assert.equal(m.pathEnabled("/column/sample-gate-inner"), true);
+  assert.equal(m.featureEnabled("megu-index"), false);     // 他の無効機能は stg でも無効のまま
 });
