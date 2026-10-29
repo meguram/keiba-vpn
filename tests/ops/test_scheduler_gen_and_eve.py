@@ -54,6 +54,17 @@ def test_scheduler_targets_run_api_with_group_args_and_service_account():
     assert "--time-zone Asia/Tokyo" in text
 
 
+def test_scheduler_update_uses_update_headers_and_create_uses_headers():
+    # gcloud の update http は --headers を受け付けない（本番昇格で既存ジョブの更新が落ちた）
+    text = SG.render("scheduler", DOC, env=ENV, include_unready=True)
+    n = len(DOC["scheduler_groups"])
+    assert text.count("jobs update http") == n and text.count("--update-headers Content-Type=application/json") == n
+    assert text.count("jobs create http") == n and text.count(" --headers Content-Type=application/json") == n
+    for line in text.splitlines():
+        if "jobs update http" in line:
+            assert "--update-headers" in line and " --headers" not in line
+
+
 def test_unready_groups_are_not_created_by_default():
     text = SG.render("scheduler", DOC, env=ENV)
     for gid in DOC["scheduler_groups"]:
