@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { fetchRaceList, getJson, prefetchJson } from "@/lib/httpCache";
 import { LoadingNotice } from "@/components/LoadingNotice";
+import { useAutoRetry } from "@/lib/hooks/useAutoRetry";
 import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip } from "@/components/RaceStrip";
 import { AnalysisTable } from "@/components/analysis/AnalysisTable";
@@ -105,6 +106,8 @@ export default function AnalysisPage() {
     }
   }, []);
   useEffect(() => { if (selectedDate) void loadRaces(selectedDate); }, [selectedDate, loadRaces]);
+  useAutoRetry(!!error, () => { setLoadingDates(true); setReload((n) => n + 1); }, 8000);
+  useAutoRetry(load.state === "error" && load.status !== 401, () => setReload((n) => n + 1), 8000);
 
   /* 既定のレースが選ばれたときも URL に入れる（再読み込み・共有で同じレースが開く） */
   useEffect(() => {
@@ -170,9 +173,7 @@ export default function AnalysisPage() {
         {error && (
           <div role="alert" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, padding: "14px 18px", color: "var(--err)", fontSize: 13, marginBottom: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <span>⚠️ {error}</span>
-            <button type="button" onClick={() => { setLoadingDates(true); setReload((n) => n + 1); }} style={{ marginLeft: "auto", minHeight: 44, padding: "0 16px", borderRadius: 8, border: "1px solid var(--accent)", background: "rgba(59,130,246,0.15)", color: "var(--accent)", cursor: "pointer", fontSize: 13 }}>
-              再読み込み
-            </button>
+            <span style={{ marginLeft: "auto", color: "var(--text-dim)" }}>自動で取り直しています…</span>
           </div>
         )}
 
@@ -213,7 +214,7 @@ export default function AnalysisPage() {
                 {load.status === 401 ? (
                   <>めぐ分析は会員限定です。<Link href="/login" style={{ color: "var(--accent)" }}>ログイン</Link>してください。</>
                 ) : (
-                  <>分析結果を取得できませんでした（{load.message}）。<button type="button" onClick={() => setReload((n) => n + 1)} style={{ marginLeft: 8, color: "var(--accent)", cursor: "pointer", background: "none", border: "none" }}>再読み込み</button></>
+                  <>分析結果を取得できませんでした（{load.message}）。<span style={{ marginLeft: 8 }}>自動で取り直しています…</span></>
                 )}
               </div>
             )}

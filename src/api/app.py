@@ -881,6 +881,7 @@ _install_anti_scraping(app)
 app.add_middleware(KeibaDeploymentMiddleware)
 
 # API の GET 応答に、ブラウザごとの短い再利用の指示を付ける（許可リストは config/http_cache.json。private なので会員と匿名は混ざらない）
+from src.api import http_cache_headers as _hch_module
 from src.api.http_cache_headers import install_fastapi as _install_http_cache
 
 _install_http_cache(app)
@@ -4419,6 +4420,10 @@ def _resolve_date_for_race(storage, race_id: str) -> str:
     _ensure_race_date_index(storage)
     with _race_date_index_lock:
         return _race_date_index.get(race_id, "")
+
+
+# 確定済み判定用: 構築済みの索引だけを引く(重い構築はしない)。未構築なら空 → 年の規則に任せる
+_hch_module.set_race_date_peek(lambda rid: _race_date_index.get(rid, ""))
 
 
 def _run_scrape_job(job_id: str, race_id: str, category: str,

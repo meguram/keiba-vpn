@@ -9,6 +9,7 @@ import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { MemberLockNote, PublicModeNote } from "@/components/upgrade/MemberLock";
 import { LEVEL_STYLE, RaceValue, prefetchRaceValues, useRaceValuesState, valueTitle } from "@/lib/raceValue";
 import { LoadingNotice } from "@/components/LoadingNotice";
+import { useAutoRetry } from "@/lib/hooks/useAutoRetry";
 import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip, useNarrow } from "@/components/RaceStrip";
@@ -582,6 +583,7 @@ function RacePanel({
     heads ? `${heads}頭` : "",
   ].filter(Boolean);
   const failed = !loading && pred?.status === "error" && preds.length === 0;
+  useAutoRetry(failed, () => onReload(race.race_id));
   const { isMember, loading: authLoading } = useAuthStatus();
   const locked = !authLoading && !isMember;
   const [tab, setTab] = useState<"predict" | "bet" | "result">("predict");
@@ -667,14 +669,8 @@ function RacePanel({
         {(loading || (!pred && !failed)) && <LoadingNotice what="予測データ" onRetry={() => onReload(race.race_id)} />}
         {failed && (
           <div role="alert" style={{ margin: "14px 0", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, padding: "12px 16px", color: "var(--err)", fontSize: 13, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <span>⚠️ このレースの予測を取得できませんでした。</span>
-            <button
-              type="button"
-              onClick={() => onReload(race.race_id)}
-              style={{ marginLeft: "auto", minHeight: 44, padding: "0 16px", borderRadius: 8, border: "1px solid var(--accent)", background: "rgba(59,130,246,0.15)", color: "var(--accent)", cursor: "pointer", fontSize: 13 }}
-            >
-              再読み込み
-            </button>
+            <span>⚠️ このレースの予測をまだ取得できていません。</span>
+            <span style={{ marginLeft: "auto", color: "var(--text-dim)" }}>自動で取り直しています…</span>
           </div>
         )}
         {pred && !failed && (
@@ -887,6 +883,9 @@ export default function WeeklyPredictionsPage() {
     if (selectedDate) loadRaces(selectedDate);
   }, [selectedDate, loadRaces]);
 
+  /* 一覧の取得に失敗したら、利用者の操作を待たず裏で取り直す */
+  useAutoRetry(!!(datesError || racesError), () => { if (datesError) { setLoadingDates(true); setDatesReload((n) => n + 1); } else loadRaces(selectedDate); }, 8000);
+
   /* 個別レース予測取得 */
   const loadPred = useCallback(async (raceId: string, force = false) => {
     setLoadingPred((prev) => ({ ...prev, [raceId]: true }));
@@ -1019,13 +1018,7 @@ export default function WeeklyPredictionsPage() {
         {(datesError || racesError) && (
           <div role="alert" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, padding: "14px 18px", color: "var(--err)", fontSize: 13, marginBottom: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <span>⚠️ {datesError || `レース一覧を取得できませんでした（${racesError}）`}</span>
-            <button
-              type="button"
-              onClick={() => { if (datesError) { setLoadingDates(true); setDatesReload((n) => n + 1); } else loadRaces(selectedDate); }}
-              style={{ marginLeft: "auto", minHeight: 44, padding: "0 16px", borderRadius: 8, border: "1px solid var(--accent)", background: "rgba(59,130,246,0.15)", color: "var(--accent)", cursor: "pointer", fontSize: 13 }}
-            >
-              再読み込み
-            </button>
+            <span style={{ marginLeft: "auto", color: "var(--text-dim)" }}>自動で取り直しています…</span>
           </div>
         )}
 

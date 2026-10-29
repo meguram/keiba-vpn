@@ -2,6 +2,7 @@
   "version": 1,
   "_doc": "API の GET 応答に、ブラウザごとの短い再利用(Cache-Control: private, max-age)と Vary: Cookie を付ける許可リスト。共有キャッシュ(nginx/CDN)は private で使えない。会員区分(匿名/会員/開発者)で内容が変わっても、Cookie が違えば再取得になる。ルールに s_maxage があり、Cookie/Authorization の無い匿名リクエストの 200 だけは public, s-maxage にして CDN に置かせる(会員の応答は常に private)。ここに無いパス、GET 以外、200 以外、すでに Cache-Control があるものには付けない。無効化は enabled=false。",
   "enabled": true,
+  "settled": {"s_maxage": 604800, "grace_days": 3, "prefixes": ["/api/race-list/", "/api/race/", "/api/v1/races/"], "_doc": "開催から grace_days 日以上たった確定済みのレース(8桁の開催日 / 12桁の race_id)だけ、共有キャッシュ(nginx)の保持を s_maxage 秒(1週間)にする。日付が分からないものは短いまま。入れ替えは VPS の purge_api_cache.sh"},
   "rules": [
     {"prefix": "/api/race-calendar", "max_age": 300, "s_maxage": 120},
     {"prefix": "/api/scrape-dates", "max_age": 300, "s_maxage": 120},
