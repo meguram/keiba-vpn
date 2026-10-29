@@ -118,6 +118,33 @@ def test_install_isolates_hybridstorage_save_from_production(monkeypatch, tmp_pa
     assert real.deleted == []
 
 
+def test_install_parallel_root_isolates_gcp_job_writes(monkeypatch, tmp_path):
+    """GCP Jobs の並走（parallel_step）: 同じガードを root=parallel で入れると、書き込みは parallel/ だけ。"""
+    from google.cloud import storage as gcs_lib
+    from src.scraper.storage import HybridStorage
+
+    monkeypatch.setattr(ss, "_INSTALLED", False)
+    monkeypatch.setattr(ss, "_ROOT", ss._ROOT)
+    for name in ("bucket", "get_bucket", "lookup_bucket", "create_bucket"):
+        monkeypatch.setattr(gcs_lib.Client, name, getattr(gcs_lib.Client, name))
+    for name in ("_get_bucket", "exists", "exists_gcs"):
+        monkeypatch.setattr(HybridStorage, name, getattr(HybridStorage, name))
+    monkeypatch.setenv("KEIBA_SCHEMA_STRICT", "0")
+    monkeypatch.setattr("src.scraper.storage.gcp_forbidden", lambda: False)     # この PC の .env が dev でも、本番と同じ保存経路を通す
+
+    real = FakeBucket()
+    st = HybridStorage(base_dir=str(tmp_path), bucket_name="bkt")
+    path = st._gcs_blob_path("race_odds", "202605040101")
+    real.objects[path] = json.dumps({"entries": [], "phase": "t15"})
+    st._gcs_available, st._gcs_bucket, st._gcs_retry = True, real, None
+    ss.install(root=ss.PARALLEL_ROOT)
+    assert isinstance(st._get_bucket(), ss.ShadowBucket)
+    assert st.save("race_odds", "202605040101", {"race_id": "202605040101", "entries": [{"horse_number": 1, "win_odds": 3.0}], "phase": "t60"})
+    assert real.writes and all(w.startswith("parallel/") and w.endswith(path) for w in real.writes)
+    assert json.loads(real.objects[path]) == {"entries": [], "phase": "t15"}       # 本番のオブジェクトは変わらない
+    assert real.deleted == []
+
+
 def test_install_makes_skip_check_look_at_shadow_but_reads_stay_on_production(monkeypatch, tmp_path):
     """影に無ければ取る: exists は影だけを見る（本番にあっても False）。load は本番を読む。影に書けば True になる。"""
     from google.cloud import storage as gcs_lib
@@ -489,3 +516,32 @@ def test_fetch_child_refuses_tasks_outside_shadow_allowlist_and_installs_guard(m
     monkeypatch.delenv("KEIBA_FETCH_SHADOW")
     installed.clear()
     assert fc.main(["auto", "weekly-update"]) == 0 and installed == []               # 通常の取得には一切影響しない
+
+
+def test_parallel_root_prefix(monkeypatch):
+    monkeypatch.setattr(ss, "_ROOT", ss.PARALLEL_ROOT)
+    assert ss.shadow_prefix().startswith("parallel/")
+    assert ss.assert_shadow_name("parallel/20261031/chuou/x.json")
+    with pytest.raises(ss.ShadowViolation):
+        ss.assert_shadow_name("shadow/20261031/x.json")
+
+
+def test_generic_diff_ignores_volatile_fields_and_reports_mismatches():
+    io = MemoryIO()
+    base = "chuou/data/preprocessed/netkeiba/pc/race_result/2026/202605040101.json"
+    other = "chuou/data/preprocessed/netkeiba/pc/horse_result/2026/2019100001.json"
+    write_json(io, base, {"race_id": "1", "rows": [{"rank": 1}], "_meta": {"scraped_at": "a"}, "fetched_at": "x"})
+    write_json(io, "shadow/20261031/" + base, {"race_id": "1", "rows": [{"rank": 1}], "_meta": {"scraped_at": "b"}, "fetched_at": "y"})
+    write_json(io, other, {"rows": [{"rank": 2}]})
+    write_json(io, "shadow/20261031/" + other, {"rows": [{"rank": 3}]})
+    write_json(io, "shadow/20261031/chuou/data/preprocessed/netkeiba/pc/horse_result/2026/new.json", {"rows": []})
+    io.put_bytes("shadow/20261031/chuou/data/raw/html/race/x.html", b"<html>")          # 生 HTML は比べない
+    io.put_bytes("state/x.parquet", b"PAR1"); io.put_bytes("parallel/20261031/state/x.parquet", b"PAR1")
+    g = SR.diff_tree(io, "shadow/20261031/")
+    assert g["compared"] == 3 and g["matched"] == 1
+    hr = g["by_category"]["horse_result"]
+    assert hr["missing_prod"] == 1 and any("rows[0].rank" in s["detail"] for s in hr["samples"])
+    assert g["by_category"]["race_result"] == {"compared": 1, "matched": 1, "missing_prod": 0, "samples": []}
+    p = SR.diff_tree(io, "parallel/20261031/")
+    assert p["by_category"]["state"]["matched"] == 1
+    assert SR.diff_tree(io, "shadow/20261031/", skip={"horse_result"})["compared"] == 1

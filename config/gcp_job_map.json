@@ -934,6 +934,7 @@
   },
   {
    "id": "gcp-daily-cost-report",
+   "parallel_guard": false,
    "desc": "GCP 日次コスト報告（予算超過の早期警戒）",
    "destination": "gcp",
    "phase": 3,
@@ -981,6 +982,7 @@
   },
   {
    "id": "fetch-shadow-report",
+   "parallel_guard": false,
    "desc": "影モード（VPS の取得をホストと並走で検証）の日次集計。前日分の成功率・本番との一致率・合否を ops/fetch_shadow/daily/ に書く",
    "destination": "gcp",
    "phase": 4,
@@ -1032,6 +1034,7 @@
   },
   {
    "id": "parity-check",
+   "parallel_guard": false,
    "desc": "並走検証（ホストと GCP の成果物の一致判定。並走期間のみ）",
    "destination": "gcp",
    "phase": 3,
@@ -1642,6 +1645,7 @@
   },
   {
    "id": "reserve-race-day",
+   "parallel_guard": false,
    "desc": "翌開催日の全レースの T-60/T-15/T-10/T-5/T-2 取得タスクと予測タスクを前夜に予約",
    "destination": "gcp",
    "phase": 3,
@@ -1882,6 +1886,7 @@
   },
   {
    "id": "reserve-fetch-tasks",
+   "parallel_guard": false,
    "desc": "VPS 実行役の定期タスク（cron 相当）を取得タスク表に予約",
    "destination": "gcp",
    "phase": 4,
@@ -1928,6 +1933,7 @@
   },
   {
    "id": "vps-watchdog",
+   "parallel_guard": false,
    "desc": "VPS のハートビート監視（死活・メモリ・swap・ユニット・ディスク）",
    "destination": "gcp",
    "phase": 3,
@@ -2344,6 +2350,7 @@
   },
   {
    "id": "event-pump",
+   "parallel_guard": false,
    "desc": "VPS 実行役の馬体重検知イベント（ops/events/weights_announced/）を見つけて、予測タスクを Cloud Tasks に積む",
    "destination": "gcp",
    "phase": 3,

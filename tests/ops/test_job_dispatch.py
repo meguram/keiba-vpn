@@ -323,3 +323,53 @@ def test_race_day_guard_falls_back_to_ops_mirror(tmp_path, patch_doc):
     r = Rec()
     write_json(io, "ops/mirror/data/page_reference/race_lists/20261024.json", {"races": [{"race_id": "202605040101"}]})
     assert D.run_group("g1", ctx(io, r, tmp_path)) == 0 and len(r.calls) == 1    # ops/mirror にある → 実行
+
+
+def test_parallel_run_wraps_steps_and_reroutes_slack(tmp_path, patch_doc):
+    patch_doc([J("a"), J("b", parallel_guard=False)])
+    r = Rec()
+    c = ctx(MemoryIO(), r, tmp_path)
+    c.base_env.update({"KEIBA_PARALLEL_RUN": "1", "SLACK_WEBHOOK_URL": "https://main", "SLACK_WEBHOOK_URL_ALERT_PROD": "https://alert"})
+    D.run_group("g1", c)
+    (a_argv, a_env), (b_argv, b_env) = r.calls
+    assert a_argv[:3] == ["-m", "src.ops.parallel_step", "mod.a"]
+    assert a_env["SLACK_WEBHOOK_URL"] == "" and a_env["SLACK_WEBHOOK_URL_ALERT_PROD"] == "" and a_env["SLACK_WEBHOOK_URL_PROD"] == ""
+    assert b_argv[:2] == ["-m", "mod.a"] and b_env["SLACK_WEBHOOK_URL"] == "https://main"       # parallel_guard: false は従来どおり
+    c.base_env["SLACK_WEBHOOK_URL_PARALLEL"] = "https://par"
+    _, env = D.parallel_wrap(["-m", "x"], c.base_env)
+    assert env["SLACK_WEBHOOK_URL"] == env["SLACK_WEBHOOK_URL_ALERT_PROD"] == "https://par"
+
+
+def test_no_wrap_outside_parallel_run(tmp_path, patch_doc):
+    patch_doc([J("a")])
+    r = Rec()
+    D.run_group("g1", ctx(MemoryIO(), r, tmp_path))
+    assert r.calls[0][0][:2] == ["-m", "mod.a"]
+
+
+def test_parallel_step_redirects_gcs_writes(monkeypatch, tmp_path):
+    """parallel_step はガードを root=parallel で入れてからモジュールを実行する。"""
+    from src.ops import parallel_step, shadow_storage as ss
+
+    seen = {}
+    monkeypatch.setattr(ss, "install", lambda root=ss.SHADOW_ROOT: seen.setdefault("root", root))
+    (tmp_path / "pmod_probe.py").write_text("import sys\nRESULT = sys.argv[:]\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    import runpy
+    got = {}
+    monkeypatch.setattr(runpy, "run_module", lambda m, run_name, alter_sys: got.update(m=m, argv=list(__import__("sys").argv)))
+    parallel_step.main(["pmod_probe", "--d", "20261031"])
+    assert seen["root"] == "parallel" and got == {"m": "pmod_probe", "argv": ["pmod_probe", "--d", "20261031"]}
+
+
+def test_parallel_guard_reaches_grandchild_python(tmp_path):
+    """step が起こした子プロセスの python にも sitecustomize でガードが入る（root=parallel）。"""
+    import subprocess
+    import sys
+
+    from src.ops import parallel_step
+
+    env = parallel_step.child_env({"PATH": "/usr/bin:/bin"})
+    code = "from src.ops import shadow_storage as s; print(s._INSTALLED, s._ROOT)"
+    out = subprocess.run([sys.executable, "-c", code], env=env, cwd=tmp_path, capture_output=True, text=True, timeout=120)
+    assert out.stdout.strip() == "True parallel", out.stderr[-2000:]
