@@ -267,3 +267,80 @@ def test_request_refresher_waits_only_after_a_long_gap_and_survives_failure(tmp_
     r2.start_if_due().join(5)                                          # 失敗しても例外を出さず、次回に再試行できる
     clk.t += 61
     assert r2.start_if_due() is not None
+
+
+def _day(offset):
+    from datetime import date, timedelta
+
+    return (date.today() - timedelta(days=offset)).strftime("%Y%m%d")
+
+
+def test_pull_window_skips_old_days_in_windowed_dirs_only(tmp_path):
+    g = Fake()
+    src = tmp_path / "host"
+    new, old = _day(3), _day(40)
+    bf = "data/local/inference/predictions_backfill"
+    _w(src, f"{bf}/bundle_v6_2025/{new}/R1.parquet")
+    _w(src, f"{bf}/bundle_v6_2025/{old}/R0.parquet")
+    _w(src, f"{bf}/_shadow_models.json", b"{}")                                        # 日付の無いファイルは常に降ろす
+    _w(src, f"data/local/inference/lap_forecast/{old[:4]}-{old[4:6]}-{old[6:]}/R0.json")   # ハイフン区切りの日付
+    _w(src, f"data/local/inference/predictions_v3/{old}/R0.parquet")                 # 窓の対象外の木は古くても降ろす
+    trees = (bf, "data/local/inference/lap_forecast", "data/local/inference/predictions_v3")
+    gm.push(g, src, trees)
+    dst = tmp_path / "cloud"
+    gm.pull(g, dst, trees, window=14.0)
+    assert (dst / f"{bf}/bundle_v6_2025/{new}/R1.parquet").is_file()
+    assert (dst / f"{bf}/_shadow_models.json").is_file()
+    assert (dst / f"data/local/inference/predictions_v3/{old}/R0.parquet").is_file()
+    assert not (dst / f"{bf}/bundle_v6_2025/{old}/R0.parquet").exists()
+    assert not list((dst / "data/local/inference/lap_forecast").glob("*/*"))
+    gm.pull(g, dst, trees)                                                             # window なし（Jobs・CLI）は従来どおり全部
+    assert (dst / f"{bf}/bundle_v6_2025/{old}/R0.parquet").is_file()
+
+
+def test_lazy_fetch_pulls_only_outside_the_window(tmp_path, monkeypatch):
+    g = Fake()
+    rel_old = f"data/local/inference/predictions_backfill/bundle_v6_2025/{_day(40)}/R0.parquet"
+    rel_new = f"data/local/inference/predictions_backfill/bundle_v6_2025/{_day(2)}/R1.parquet"
+    for r in (rel_old, rel_new):
+        g.objs[f"{gm.PREFIX}/{r}"] = (b"p", time.time())
+    real = gm.fetch_one
+    monkeypatch.setattr(gm, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(gm, "fetch_one", lambda rel, **kw: real(rel, root=tmp_path, backend=g, **kw))
+    gm._MISS.clear()
+    assert gm.lazy_fetch(tmp_path / rel_old, _day(40)) is True and (tmp_path / rel_old).is_file()
+    assert gm.lazy_fetch(tmp_path / rel_new, _day(2)) is False                         # 窓の内側は起動時の取り込みの担当。ここでは取らない
+    assert not (tmp_path / rel_new).exists()
+    assert gm.lazy_fetch(tmp_path / rel_old, _day(40)) is True                         # 既にあれば取らずに True
+    assert gm.lazy_fetch(tmp_path.parent / "outside.json", _day(40)) is False          # リポジトリ外
+    assert gm.lazy_fetch(tmp_path / "data/none.json", "unreadable") is False            # 日付が読めない → 窓の内側扱い
+
+
+def test_lazy_fetch_is_noop_when_mirror_disabled(tmp_path, monkeypatch):
+    monkeypatch.delenv("KEIBA_MIRROR_PULL", raising=False)
+    monkeypatch.setattr(gm, "REPO_ROOT", tmp_path)
+    assert gm.lazy_fetch(tmp_path / f"data/local/inference/lap_forecast/2020-01-01/R.json", "2020-01-01") is False
+
+
+def test_old_day_readers_fall_back_to_lazy_fetch(tmp_path, monkeypatch):
+    from src.api import local_predictions as lp
+    from src.pipeline.inference import lap_forecast_service as lfs
+
+    calls = []
+    monkeypatch.setattr(lp, "lazy_fetch", lambda p, d: calls.append((p.parent.parent.name, d)) or p.is_file())
+    inf = tmp_path / "inf"
+    inf.mkdir()
+    monkeypatch.setenv("KEIBA_PRED_MODEL", "v6e")
+    assert lp.find_local_prediction("R9", "20200105", inf) is None
+    assert [c[0] for c in calls] == ["bundle_v6_2025", "bundle_v4_2025", "bundle_v5_2025"]
+    f = inf / "predictions_backfill/bundle_v6_2025/20200105/R9.parquet"
+    f.parent.mkdir(parents=True)
+    f.write_bytes(b"x")
+    assert lp.find_local_prediction("R9", "20200105", inf)[1:] == ("backfill", "bundle_v6_2025")
+
+    got = []
+    import src.ops.gcs_mirror as gmod
+
+    monkeypatch.setattr(gmod, "lazy_fetch", lambda p, d: got.append(d) or False)
+    monkeypatch.setattr(lfs, "path_for", lambda rid, d: tmp_path / "nope.json")
+    assert lfs.load_forecast("R9", "2020-01-05") is None and got == ["2020-01-05"]

@@ -51,8 +51,10 @@ def save_forecast(doc: dict) -> Path:
 
 
 def load_forecast(race_id: str, date: str) -> dict | None:
+    from src.ops.gcs_mirror import lazy_fetch
+
     p = path_for(race_id, date)
-    if not p.exists():
+    if not lazy_fetch(p, date):       # 窓より古い日は起動時に取り込まない → 読まれたときに GCS から 1 件
         return None
     try:
         return json.loads(p.read_text(encoding="utf-8"))

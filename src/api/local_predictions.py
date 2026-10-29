@@ -14,6 +14,8 @@ from typing import Any
 
 import numpy as np
 
+from src.ops.gcs_mirror import lazy_fetch
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 SOURCE_NOTE = {
@@ -49,6 +51,7 @@ def shadow_model_label(day: str, inf: Path | None = None) -> str:
 
 
 PRIMARY_LABEL = "bundle_v6_2025"
+_KNOWN_BACKFILL_LABELS = ("bundle_v4_2025", "bundle_v5_2025")
 
 
 def primary_model() -> str:
@@ -66,7 +69,7 @@ def find_primary_prediction(race_id: str, day: str, inf: Path | None = None) -> 
     if live.exists():
         return live, "shadow", PRIMARY_LABEL
     back = inf / "predictions_backfill" / PRIMARY_LABEL / day / f"{race_id}.parquet"
-    if back.exists():
+    if lazy_fetch(back, day):         # 窓より古い日は起動時に取り込まない → 読まれたときに GCS から 1 件
         return back, "backfill", PRIMARY_LABEL
     return None
 
@@ -82,6 +85,8 @@ def find_local_prediction(race_id: str, day: str, inf: Path | None = None) -> tu
     shadow = inf / "predictions_v3" / day / f"{race_id}.parquet"
     if shadow.exists():
         return shadow, "shadow", shadow_model_label(day, inf)
+    for label in _KNOWN_BACKFILL_LABELS:      # 古い日は一覧が空なので、既知のモデル名のファイルを 1 件ずつ GCS から取る
+        lazy_fetch(inf / "predictions_backfill" / label / day / f"{race_id}.parquet", day)
     cands = sorted((inf / "predictions_backfill").glob(f"*/{day}/{race_id}.parquet"), key=lambda p: p.stat().st_mtime, reverse=True)
     if cands:
         return cands[0], "backfill", cands[0].parent.parent.name
