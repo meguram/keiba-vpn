@@ -80,7 +80,11 @@ def _read(p: Path) -> dict | None:
 
 
 def load_saved(race_id: str, date: str, *, recomputed: bool = False) -> dict | None:
-    return _read(path_for(race_id, date, recomputed=recomputed))
+    from src.ops.gcs_mirror import lazy_fetch
+
+    p = path_for(race_id, date, recomputed=recomputed)
+    lazy_fetch(p, date)               # 窓より古い日は起動時に取り込まない → 読まれたときに GCS から 1 件
+    return _read(p)
 
 
 def _short_hash(p: Path) -> str | None:

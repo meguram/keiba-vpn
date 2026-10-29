@@ -17,6 +17,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from src.ops.gcs_mirror import lazy_fetch
+
 KEY = ["race_id", "horse_id"]
 SERIES = {"rb_mg": "megu_index_v3a", "rb_nk": "nk"}
 CLIP_YEARS = (2020, 2021)
@@ -164,7 +166,10 @@ def stage_forecast_columns(base: pd.DataFrame, names: list[str], inference_dir: 
     cache: dict[tuple[str, str], tuple[dict | None, dict | None]] = {}
     for idx, (rid, hid, d) in enumerate(zip(base["race_id"].astype(str), base["horse_id"].astype(str), date)):
         if (rid, d) not in cache:
-            cache[(rid, d)] = (_load_json(root / "tracking_v2" / d / f"{rid}.json"), _load_json(root / "lap_forecast" / d / f"{rid}.json"))
+            tp, lp = root / "tracking_v2" / d / f"{rid}.json", root / "lap_forecast" / d / f"{rid}.json"
+            lazy_fetch(tp, d)
+            lazy_fetch(lp, d)
+            cache[(rid, d)] = (_load_json(tp), _load_json(lp))
         tj, lj = cache[(rid, d)]
         row = {}
         if tj:

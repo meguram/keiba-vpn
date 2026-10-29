@@ -208,7 +208,10 @@ def _ctl(tmp_path, cmd, env_lines, *, shadow_cfg=True, owner_tasks=()):
     envf.write_text("".join(f"{x}\n" for x in env_lines), encoding="utf-8")
     sa = tmp_path / "sa.json"
     sa.write_text("{}", encoding="utf-8")
-    env = {**os.environ, "KEIBA_FETCH_ENV_FILE": str(envf), "KEIBA_FETCH_CURRENT": str(tmp_path / "current"), "KEIBA_FETCH_SA_FILE": str(sa)}
+    pull = tmp_path / "pull.env"
+    pull.write_text("GCS_BUCKET=bucket-from-pull\n", encoding="utf-8")
+    env = {**os.environ, "KEIBA_FETCH_ENV_FILE": str(envf), "KEIBA_FETCH_CURRENT": str(tmp_path / "current"), "KEIBA_FETCH_SA_FILE": str(sa),
+           "KEIBA_PULL_ENV_FILE": str(pull)}
     r = subprocess.run(["bash", "scripts/ops/vps/fetch_agent_ctl.sh", cmd], env=env, capture_output=True, text=True)
     return r, envf.read_text(encoding="utf-8")
 
@@ -243,6 +246,16 @@ def test_fetch_ctl_pull_uses_the_same_environment_as_the_pull_timer():
     unit = load("keiba-release-pull@.service")["Service"]
     s = Path("scripts/ops/vps/fetch_agent_ctl.sh").read_text(encoding="utf-8")
     pull = s[s.index("    pull)"):s.index("    shadow-on)")]
-    assert unit["EnvironmentFile"] in pull
+    assert f'PULL_ENV="${{KEIBA_PULL_ENV_FILE:-{unit["EnvironmentFile"]}}}"' in s and '. "$PULL_ENV"' in pull
     for kv in unit["Environment"].split():
         assert kv in pull, kv
+
+
+def test_fetch_ctl_reports_an_empty_bucket_and_shadow_on_fills_it_from_the_pull_env(tmp_path):
+    # 雛形の『GCS_BUCKET=』（値が空）を『あり』と見誤ると、実行役が起動直後に落ちる
+    if os.geteuid() != 0:
+        return
+    r, _ = _ctl(tmp_path / "a", "status", ["GCS_BUCKET="])
+    assert "GCS_BUCKET: 空" in r.stdout
+    r, env = _ctl(tmp_path / "b", "shadow-on", ["GCS_BUCKET="])             # systemctl の無い環境なので、その手前までを見る
+    assert "GCS_BUCKET=bucket-from-pull" in env and "KEIBA_FETCH_SHADOW_ENABLED=1" in env
