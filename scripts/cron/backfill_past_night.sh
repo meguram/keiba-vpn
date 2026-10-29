@@ -13,7 +13,13 @@ PY="${PYTHON:-/opt/conda/bin/python3}"
 exec 9>"/tmp/keiba_backfill_past.lock"
 if ! flock -n 9; then echo "[$(date -Is)] すでに実行中。スキップ" >>"$LOG"; exit 0; fi
 echo "===== $(date -Is) START =====" >>"$LOG"
-NETKEIBA_THROTTLE_MIN="${NETKEIBA_THROTTLE_MIN:-1.8}" NETKEIBA_THROTTLE_MAX="${NETKEIBA_THROTTLE_MAX:-2.2}" KEIBA_ENV="${KEIBA_ENV:-stg}" PYTHONPATH=. nice -n 10 "$PY" -m src.scraper.backfill --phase past "$@" >>"$LOG" 2>&1
-RC=$?
-echo "===== $(date -Is) END rc=${RC} =====" >>"$LOG"
+# 固まり検知（src/scraper/stall_watchdog.py）が強制終了した場合（rc=75）は、次の毎時起動を待たず 60 秒置いて最大 5 回まで再起動する。
+RC=0
+for attempt in 1 2 3 4 5; do
+  NETKEIBA_THROTTLE_MIN="${NETKEIBA_THROTTLE_MIN:-1.8}" NETKEIBA_THROTTLE_MAX="${NETKEIBA_THROTTLE_MAX:-2.2}" KEIBA_ENV="${KEIBA_ENV:-stg}" PYTHONPATH=. nice -n 10 "$PY" -m src.scraper.backfill --phase past "$@" >>"$LOG" 2>&1
+  RC=$?
+  echo "===== $(date -Is) END rc=${RC} (試行 ${attempt}) =====" >>"$LOG"
+  [ "$RC" -eq 75 ] || break
+  sleep 60
+done
 exit "$RC"
