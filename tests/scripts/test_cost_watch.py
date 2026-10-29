@@ -116,3 +116,16 @@ def test_main_watch_failure_keeps_base_report():
 def test_history_start_covers_month_start_and_8_days():
     assert job._history_start("2026-10-21") == "2026-10-01"
     assert job._history_start("2026-10-03") == "2026-09-25"
+
+
+def test_watch_headline_is_yen_for_the_target_day():
+    from src.scripts.cloud_jobs import gcp_daily_cost_report as job
+
+    rows = [
+        {"date": "2026-10-28", "service": "Cloud Run", "cost": 545.0, "currency": "JPY"},
+        {"date": "2026-10-28", "service": "Cloud Storage", "cost": 464.0, "currency": "JPY"},
+        {"date": "2026-10-27", "service": "Cloud Run", "cost": 100.0, "currency": "JPY"},
+    ]
+    _extra, _alert, headline = job.build_watch("2026-10-28", rows)
+    assert headline == "[GCP日次コストレポート] 2026-10-28: 合計 ¥1,009（Cloud Run: ¥545, Cloud Storage: ¥464）"
+    assert "$" not in headline

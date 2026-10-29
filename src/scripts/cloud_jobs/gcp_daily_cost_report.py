@@ -147,8 +147,8 @@ def fetch_cost_history(table: str, start: str, end: str) -> list[dict]:
     ]
 
 
-def build_watch(target_date: str, rows: list[dict]) -> tuple[str, str | None]:
-    """(日次通知に足す行, 警告メッセージまたは None)。rows は fetch_cost_history の結果。"""
+def build_watch(target_date: str, rows: list[dict]) -> tuple[str, str | None, str]:
+    """(日次通知に足す行, 警告メッセージまたは None, 円建ての先頭行)。rows は fetch_cost_history の結果。"""
     from src.utils import cost_watch as cw
 
     phases = cw.load_phases()
@@ -158,7 +158,7 @@ def build_watch(target_date: str, rows: list[dict]) -> tuple[str, str | None]:
     spikes = cw.detect_spikes(table, target_date, phases["spike"])
     over = cw.over_ceiling(table, target_date, cw.service_ceilings(phases))
     alert = cw.format_spike_alert(target_date, spikes, over) if (spikes or over) else None
-    return cw.format_summary_lines(summary), alert
+    return cw.format_summary_lines(summary), alert, format_cost_report_jpy(target_date, table.get(target_date, {}))
 
 
 def _fx_jpy_per_usd() -> float:
@@ -179,6 +179,15 @@ def format_cost_report(date: str, rows: list[dict], total: float) -> str:
 
     breakdown = ", ".join(f"{row['service']}: ${row['cost']:.2f}" for row in rows)
     return f"[GCP日次コストレポート] {date}: 合計 ${total:.2f}（{breakdown}）"
+
+
+def format_cost_report_jpy(date: str, day: dict[str, float]) -> str:
+    """JST の日付・クレジット差し引き後・円換算の先頭行（--watch の警告と同じ集計）。"""
+    total = sum(day.values())
+    if not day:
+        return f"[GCP日次コストレポート] {date}: 合計 ¥0（対象データなし）"
+    breakdown = ", ".join(f"{svc}: ¥{v:,.0f}" for svc, v in sorted(day.items(), key=lambda kv: -kv[1]))
+    return f"[GCP日次コストレポート] {date}: 合計 ¥{total:,.0f}（{breakdown}）"
 
 
 def _default_target_date() -> str:
@@ -232,8 +241,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.watch:
         try:
             rows = fetch_cost_history(table, _history_start(target_date), target_date)
-            extra, alert = build_watch(target_date, rows)
-            message = f"{message}\n{extra}"
+            extra, alert, headline = build_watch(target_date, rows)
+            message = f"{headline}\n{extra}"
         except Exception as e:  # noqa: BLE001 - 日次の基本通知は必ず出す
             message = f"{message}\n（想定との比較は取得失敗: {e}）"
 
