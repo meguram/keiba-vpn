@@ -60,7 +60,8 @@ pre { background:var(--code); border:1px solid var(--border); border-radius:8px;
 <table>
 <tr><th>層</th><th>状態</th><th>備考</th></tr>
 <tr><td>VPS のローカルデータ</td><td class="warn">無し</td><td>VPS は状態を持たない設計。画面の成果物だけが乗っている。</td></tr>
-<tr><td>nginx のキャッシュ</td><td class="warn">無し</td><td><code>proxy_cache</code> の設定が無い。<code>/api/</code> と <code>/data/image/</code> は、毎回ホスト（<code>api-internal</code>）へ中継する。</td></tr>
+<tr><td>nginx のキャッシュ（API）</td><td class="ok">2026-10-29 に本番・stg で有効</td><td>匿名・許可リストの応答だけを VPS のディスクに置く（§4-3）。<code>X-Cache-Status</code> で MISS/HIT/BYPASS を確認できる。確定済みレースの 1 週間保持は §4-4（API の反映待ち）。</td></tr>
+<tr><td>nginx のキャッシュ（画像）</td><td class="ok">2026-10-29 に本番・stg とも再配置</td><td>上流を Cloud Run に切り替えた際、<code>switch_api_upstream.sh</code> がサイト設定をテンプレートから作り直して include が消えていた。include をテンプレート側に入れ、<code>vps_04_image_cache.sh</code> が <code>/opt/keiba-ui/templates</code> も同期するようにした。404 の MISS→HIT は確認済み。200 の画像は Cloud Run に画像置き場が無いため未確認。</td></tr>
 <tr><td>API の応答ヘッダ</td><td class="warn">キャッシュの指示なし</td><td>予測などの API は <code>Cache-Control</code> も <code>ETag</code> も付けない。画像だけ <code>ETag</code> と <code>Last-Modified</code> がある。</td></tr>
 <tr><td>ブラウザ側（画面のコード）</td><td class="ok">あり（部分的）</td><td>出走馬カード（<code>entryCard.ts</code>。取得中の重複排除つき）、汎用（<code>httpCache.ts</code>）、レース価値（<code>raceValue.ts</code>。時刻つき）のメモリキャッシュ。ただし通常の API 取得は <code>cache: "no-store"</code>。</td></tr>
 <tr><td>ホスト側（API の内側）</td><td class="ok">あり</td><td>予測は LRU → ディスク → GCS のキャッシュ。レース価値は 30 秒のメモリキャッシュ。</td></tr>
@@ -70,7 +71,22 @@ pre { background:var(--code); border:1px solid var(--border); border-radius:8px;
 <ol>
 <li><b>画像（<code>/data/image/</code>）に nginx の <code>proxy_cache</code> を入れた（実施済み）。</b>7 日までキャッシュ。同じ画像を 3 回取得して、1 回目 MISS・2 回目以降 HIT を確認。導入と取り外しは <code>scripts/ops/vps/vps_04_image_cache.sh</code>（冪等・失敗時は自動で元に戻る）。</li>
 <li><b>API の GET に <code>Cache-Control: private, max-age=30〜300</code> と <code>Vary: Cookie</code> を付けた（実施済み）。</b>許可リストは <code>config/http_cache.json</code>。ブラウザごとの再利用だけなので、会員と匿名の応答が混ざらない。ETag は処理が増えるため見送り。</li>
-<li>nginx で API の応答を共有キャッシュにする案は<b>導入しない</b>。応答は会員区分（匿名・会員・開発者）で内容が違い、鍵にセッションの区分を入れないと、会員向けの内容が匿名に出る事故になる。</li>
+<li><b>nginx で API の匿名応答をキャッシュする（2026-10-29 に設計・検証。stg→本番の順に配置）。</b>当初は「会員向けの内容が匿名に出る」ことを恐れて見送ったが、次の三重の安全で構造的に防げるため改めた。
+<ul>
+<li>保存の可否は上流に任せる（<code>proxy_cache_valid</code> を書かない）。アプリが匿名かつ許可リストの応答にだけ付ける <code>Cache-Control: public, s-maxage</code> のものだけ保存される。private・no-store・Set-Cookie 付き・POST は保存されない。</li>
+<li>Cookie か Authorization を持つ要求は、キャッシュを読まず・保存しない（<code>proxy_cache_bypass</code> / <code>proxy_no_cache</code>）。上流が誤って会員に <code>public</code> を付けても匿名には出ない。</li>
+<li>キーは <code>$server_port$host$request_uri</code>。stg と本番は同じ nginx で上流が違うので、ポートで分ける。</li>
+</ul>
+TTL は <code>s-maxage</code>（race-list は 60 秒など）。2 回目以降の来訪は VPS のディスクから返り、上流（Cloud Run のインスタンス課金）への往復が減る。配置は <code>scripts/ops/vps/vps_09_api_cache.sh</code>（冪等・失敗時は自動復元・<code>--dry-run</code>／<code>--remove</code>）、空にするのは <code>purge_api_cache.sh</code>、検証は <code>verify_api_cache.py</code>（自前の nginx を高ポートに立てて 約 17 項目（1 週間保持と <code>--match</code> 消去を含む）、root 不要）。応答に <code>X-Cache-Status</code>（MISS/HIT/BYPASS）が付く。</li>
+<li><b>確定済みレースは 1 週間置く（段階2。API とキャッシュ領域の反映後に有効）。</b>
+<ul>
+<li>対象は <code>config/http_cache.json</code> の <code>settled</code>（<code>/api/race-list/</code>・<code>/api/race/</code>・<code>/api/v1/races/</code>）。日付が「今日（JST）−3 日」以前のレースだけ <code>s-maxage=604800</code>（7 日）を付ける。ブラウザ側の <code>max-age</code> は短いまま。</li>
+<li>日付は 8 桁の日付そのもの、または 12 桁の race_id を構築済みの索引で引いて得る。引けなければ前年以前の race_id だけ確定扱いとし、それ以外は短い TTL のまま（安全側）。</li>
+<li>キャッシュ領域は <code>max_size=200m inactive=8d</code>（<code>nginx-zones.conf</code>。既存環境へは <code>vps_09_api_cache.sh</code> の再実行で書き換わる）。</li>
+<li><b>データ更新・モデル切替のあとは手動で入れ替える。</b>Cloud Run 側の <code>cache_epoch</code> はプロセス内に閉じ、VPS へ通知する経路が無い（ハートビートから API は叩かない方針）。VPS で <code>sudo bash scripts/ops/vps/purge_api_cache.sh</code>（全消去）、<code>--match '/api/race/2026'</code>（キー＝ポート+ホスト+URL の正規表現）、<code>--match '^8081'</code>（stg だけ）。消したあとは最初の閲覧で自動的に入れ直される。<code>swap_pred_v6e.sh</code> と <code>clear_caches.py</code> は終了時にこの手順を表示する。</li>
+<li><b>トレードオフ：</b>確定済みレースを通常の取得で訂正しても、消去しない限り最長 7 日は古い内容が出る。短い TTL の項目（開催前後・当日）は自動で更新される。</li>
+</ul></li>
+<li>「stg と本番で同じキャッシュ先」は、別の nginx（別ディレクトリ）なので文字どおりには共有できない。同じ匿名の公開内容を同じ TTL 規則で持つ形で近づける。</li>
 <li>Next.js の systemd の上限（MemoryHigh 160M）は、高負荷時の最大 140MB に近い。余裕を持たせるなら 200M に上げる案がある（VPS の予算内。未実施）。</li>
 </ol>
 

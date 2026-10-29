@@ -1,6 +1,6 @@
 "use client";
 
-import { PRED_TTL_MS, getJson, invalidateJson } from "@/lib/httpCache";
+import { PRED_TTL_MS, getJson } from "@/lib/httpCache";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -22,6 +22,7 @@ import { raceExists } from "@/lib/raceExists";
 import { PositionForecast } from "@/components/PositionForecast";
 import { ResultCheckPanel, Verdict } from "@/components/ResultCheck";
 import { LoadingNotice } from "@/components/LoadingNotice";
+import { useAutoRetry } from "@/lib/hooks/useAutoRetry";
 import { firstCornerPos, positionVerdict, summarizePositions } from "@/lib/resultCheck";
 import type { ForecastHorse, GateBias, PaceForecast, PositionForecast as PosFc } from "@/lib/positionForecast";
 import { turnOf } from "@/lib/courseTurn";
@@ -285,7 +286,6 @@ export default function RaceDetailPage() {
   const [loadError, setLoadError] = useState("");
   const [notFound, setNotFound] = useState(false);
   const [navDate, setNavDate] = useState("");
-  const [predicting, setPredicting] = useState(false);
   const [meguById, setMeguById] = useState<Record<string, MeguHorseData>>({});
   const [meguByNumber, setMeguByNumber] = useState<Record<string, MeguHorseData>>({});
   const [meguSource, setMeguSource] = useState<"db" | "mock">("mock");
@@ -398,24 +398,7 @@ export default function RaceDetailPage() {
       .catch(() => { /* APIなければモックフォールバック */ });
   }, [raceId]);
 
-  async function runPrediction() {
-    if (!raceId || predicting) return;     // 連打しても予測実行は 1 回
-    setPredicting(true);
-    if (USE_MOCK) {
-      await new Promise((r) => setTimeout(r, 600));
-      setPredData(getMockPredictions(raceId) as PredData);
-      setPredicting(false);
-      return;
-    }
-    try {
-      const res = await fetch(`/api/race/${raceId}/predict`, { method: "POST" });
-      const data = await res.json();
-      invalidateJson(`/api/race/${raceId}/predictions`);
-      if (data.status === "success" || data.predictions?.length) setPredData(data);
-    } catch { /* ignore */ } finally {
-      setPredicting(false);
-    }
-  }
+  useAutoRetry(!!loadError, () => { void loadRace(); }, 8000);
 
   /* ── ローディング ── */
   if (loading) {
@@ -449,7 +432,7 @@ export default function RaceDetailPage() {
         <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
         <p style={{ color: "var(--err)", marginBottom: 14 }}>{loadError}</p>
         <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
-          <button type="button" onClick={() => loadRace()} style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid var(--accent)", background: "rgba(59,130,246,0.15)", color: "var(--accent)", cursor: "pointer", fontSize: 14 }}>再読み込み</button>
+          <span style={{ padding: "10px 0", color: "var(--text-dim)", fontSize: 14 }}>自動で取り直しています…</span>
           <Link href="/races" style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid var(--border)", color: "var(--text-dim)", textDecoration: "none", fontSize: 14 }}>レース一覧へ</Link>
         </div>
       </div>
@@ -729,14 +712,6 @@ export default function RaceDetailPage() {
   const PredPanel = (
     <div>
       {isAdmin && <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        <button
-          style={{ background: "#1e3a5f", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.3)", padding: "7px 14px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: predicting ? "not-allowed" : "pointer", opacity: predicting ? 0.6 : 1 }}
-          disabled={predicting || predData?.provisional_entries === true}
-          title={predData?.provisional_entries === true ? "出馬表が確定する前日以降に実行できます" : undefined}
-          onClick={runPrediction}
-        >
-          {predicting ? "⏳ 予測実行中…" : predData?.provisional_entries === true ? "🤖 確定後に予測" : hasPred ? "🔄 予測を再実行" : "🤖 AI予測を実行"}
-        </button>
         {predData?.model_description && (
           <span style={{ fontSize: 11, padding: "4px 10px", borderRadius: 4, background: "rgba(59,130,246,0.12)", color: "#60a5fa" }}>
             {hasPred ? "🧠" : "📊"} {predData.model_description}
@@ -756,7 +731,7 @@ export default function RaceDetailPage() {
         <div style={{ marginBottom: 12, fontSize: 13, color: "var(--text-dim)", padding: "10px 14px", borderRadius: 8, background: "rgba(36,48,73,0.4)" }}>
           {predData?.provisional_entries === true
             ? "出馬表は公示の途中です。AI 予測は、出走馬と枠順が確定した前日以降に表示します。"
-            : isAdmin ? "予測結果がありません。「AI予測を実行」で算出できます。" : "予測結果はまだありません。"}
+            : isAdmin ? "予測結果はまだ算出されていません。" : "予測結果はまだありません。"}
             </div>
           )}
 

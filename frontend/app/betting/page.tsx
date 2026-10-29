@@ -103,7 +103,7 @@ export default function BettingPage() {
           if (res.status === 404 && /予測結果がありません/.test(String(body?.error ?? ""))) {
             const exists = await fetch(`/api/race/${raceId}`).then((r) => (r.ok ? r.json() : null)).then(raceExists).catch(() => true);
             setError(exists
-              ? "このレースはまだ予測されていません（未推論）。レース詳細で「AI予測を実行」してからお試しください。"
+              ? "このレースの予測はまだ準備ができていません。しばらくしてからお試しください。"
               : `レースID「${raceId}」のレースは見つかりません。ID をご確認ください。`);
           } else {
             setError(body?.error ?? `最適化に失敗しました（HTTP ${res.status}）`);
