@@ -2930,6 +2930,57 @@
    "ready": false
   },
   {
+   "id": "shutuba-audit",
+   "desc": "開催後も確定しない出馬表の洗い出しと再取得（棚卸し #13）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-SHUTUBA-AUDIT",
+    "cron_job_id": "shutuba-audit",
+    "cron_utc": "40 21 * * *",
+    "script": "scripts/cron/run_auto_scrape_logged.sh"
+   },
+   "reason": "棚卸し #13。To-Be は VPS 実行役（取得タスク shutuba-audit）だが、取得タスクのコード（K6）が未了のため当面ホストに残す。run_audit(enqueue=True) は実行機のローカルキューに積むだけで、VPS にはそれを消化する処理が無い。VPS では積まずにその場で再取得する形にしてから vps へ移す。GCP の追加課金は 0",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "backfill-past",
+   "desc": "過去分補填（2016〜2019 年の取得、1 時間おき）（棚卸し #19）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-BACKFILL-PAST",
+    "cron_job_id": "backfill-past",
+    "cron_utc": "5 * * * *",
+    "script": "scripts/cron/backfill_past_night.sh"
+   },
+   "reason": "棚卸し #19。過去分の補填（2016〜2019 年）が終わるまでホストで続ける（2026-10-28: 2019 年は完了、2018 年は途中、2016・2017 年は 0 件）。HALT の印は人が解除する運用。終われば verify-past-values（#23）と一緒に廃止するので、VPS 移行はしない方針（K6 でも低優先度）",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "sire-line",
+   "desc": "5 世代血統の牡の祖先の系統（○○系）の過去分補完と追従（棚卸し #24）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-SIRE-LINE",
+    "cron_job_id": "sire-line",
+    "cron_utc": null,
+    "script": "src/scripts/scraping/fetch_sire_lines.py"
+   },
+   "reason": "棚卸し #24。個別の cron は持たない: 日々の取得は scrape_horse_pedigree_5gen（定期バッチ）に相伴して台帳に無い祖先の系統を取る。fetch_sire_lines は過去分の一括補完用で手動起動。To-Be は VPS 実行役（取得タスク sire-line、低優先度）で、K6 のコードと、系統台帳の正本を GCS に置く対応の後。GCP の追加課金は 0",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
    "id": "recent-retry-morning",
    "desc": "直近の未取得の取り直し（朝）",
    "destination": "vps",
