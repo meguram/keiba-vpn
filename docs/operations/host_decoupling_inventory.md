@@ -112,7 +112,7 @@
 ### 起動に必要な作業（ユーザー作業・root）
 - VPS: `/etc/keiba-fetch/fetch.env` に `KEIBA_FETCH_SHADOW_ENABLED=1` と `KEIBA_FETCH_AGENT_ENABLED=1`、`sudo systemctl enable --now keiba-fetch-agent`。
 - IAM: 影モードの実行役に `shadow/` と `ops/fetch_tasks_shadow/` 以下だけに書ける条件付き権限。
-- GCP: `reserve-race-day`（g-1910-eve）と `fetch-shadow-report`（g-0730-shadow）は 2026-10-29 に ready=true・Scheduler 登録済み。ただし両方とも Scheduler の初回実行はまだ（`reserve-race-day` は 10/29 19:10 JST、`fetch-shadow-report` は 10/30 07:30 JST が初回）。`ops/fetch_shadow/daily/` に日次レポートはまだ無い。
+- GCP: `reserve-race-day`（g-1910-eve）と `fetch-shadow-report`（g-0730-shadow）は 2026-10-29 に ready=true・Scheduler 登録済み。`reserve-race-day` は 10/29 19:10 JST に初回が動き、「tomorrow（20261030）は開催日ではない」でスキップして正常終了（keiba-dispatch-l-kq6zq、想定どおり）。`fetch-shadow-report` の初回は 10/30 07:30 JST。`ops/fetch_shadow/daily/` に日次レポートはまだ無い。
 
 ## 7. 未決・懸念
 
@@ -310,7 +310,7 @@
 | K1 master への昇格（Jobs のイメージ更新） | ユーザー | **済（2026-10-29）**。master `7e212619`、promote run 40848598294 が全ステップ成功（最初の昇格は `c7f8bd47`）。同日の 2 回目の昇格で master は `15d61bff`（promote run 40855336870、`deploy` まで成功。日次コスト報告・API の起動時読み取りの窓制限を含む）。1 回目は Scheduler 更新の `--headers` で落ち、`--update-headers` に直して再昇格した。A・C の手動実行はこれの後 |
 | K3 VPS の実行役の有効化と条件付き IAM | ユーザー | **済（2026-10-29）**。VPS の実行役は影モードで安定稼働（13:23 UTC から）。GCP 側は Run Job 4 本に `KEIBA_FETCH_SHADOW_ENABLED=1` が入った。実際の影タスク（`shadow_tasks` > 0）は未来のレース日（土曜 10/31）の `reserve-race-day` 後に確認 |
 | K5 秘密の登録・BigQuery の課金エクスポート | ユーザー | 秘密は共通の `SLACK_WEBHOOK_URL` だけ登録済み（2026-10-29 に確認。`SLACK_WEBHOOK_URL_PROD`/`_STG`/`R2_CREDENTIALS` は未登録で、いずれも任意）。課金エクスポートは **済（2026-10-29）**（`billing_export`、asia-northeast1、`keiba-jobs` に読み取り権限）。リポジトリ変数 `GCP_BILLING_BQ_TABLE` の設定も **済**。`gcp-daily-cost-report` は ready=true にした（手動実行は成功。stg・master とも反映済み。master は promote run 40855336870） |
-| K4 `reserve-race-day`・`fetch-shadow-report` | Claude | **ready=true・Scheduler 登録済み**（`reserve-race-day` は g-1910-eve、`fetch-shadow-report` は g-0730-shadow）。Scheduler の初回実行はまだ（§13）。影モードはホストの系統一括取得と並走中で、netkeiba へのリクエストが約 2 倍になる点に注意。2026-10-29 に `reservations race-day --date 20261031 --dry-run`（影モード有効）で `shadow_tasks`=106（18 レース）を確認。実際の積みは 10/30 前夜の reserve-race-day、初回の合否は 10/31 夜〜11/1 07:30 の fetch-shadow-report |
+| K4 `reserve-race-day`・`fetch-shadow-report` | Claude | **ready=true・Scheduler 登録済み**（`reserve-race-day` は g-1910-eve、`fetch-shadow-report` は g-0730-shadow）。`reserve-race-day` は 10/29 に初回（開催日でないためスキップ・正常）を確認済み、`fetch-shadow-report` の初回は 10/30 07:30 JST（§13）。影モードはホストの系統一括取得と並走中で、netkeiba へのリクエストが約 2 倍になる点に注意。2026-10-29 に `reservations race-day --date 20261031 --dry-run`（影モード有効）で `shadow_tasks`=106（18 レース）を確認。実際の積みは 10/30 前夜の reserve-race-day、初回の合否は 10/31 夜〜11/1 07:30 の fetch-shadow-report |
 | K6 新しい取得タスクのコード | Claude | `shutuba-audit`・`sire-line` はコード済み（§12.1）。`race-result-t15`（#4）もコード済み・未コミット・未有効（§12.3）。常駐ループの後処理は GCP の既存 Job へ移す実装を入れた（馬場速度は `export-tables-daily`、集計は `prediction-results-refresh`。§12.3）。残りは、影を「無ければ取る」読み方にする件。`backfill-past`（#19）は移行しない方針。差分はユーザー確認のため提示する |
 | 系統台帳の GCS への初回アップロード | Claude（ホスト経由） | ホストの一括取得（`complete_at` が付く）が終わった後に、`python -m src.scraper.sire_line_store` 経由の `sync_with_gcs` を 1 回走らせる。VPS の `sire-line` はその後 |
 
@@ -436,7 +436,7 @@
 |---|---|---|---|---|
 | `reserve-fetch-tasks` | 新設（影の取得タスクを積む） | 無し（新設） | － | ◎ g-hourly（登録済み、毎時 :05 JST）が 10-28 15:07 UTC〜10-29 09:05 UTC にすべて成功。`ops/job_runs/` に 20 件 |
 | `event-pump` | 新設（#2 の予測の起動） | 無し（新設） | － | ○ g-pump（登録済み、日・月・土 8〜16 時の毎分）、まだ実行なし。手動実行は 10-25 23:10 UTC に成功 |
-| `reserve-race-day` | 新設（開催前日の影タスク予約） | 無し（新設） | － | ○ g-1910-eve（登録済み）。初回は 10/29 19:10 JST |
+| `reserve-race-day` | 新設（開催前日の影タスク予約） | 無し（新設） | － | ○ g-1910-eve（登録済み）。初回 10/29 19:10 JST は開催日でないためスキップ（正常）。実予約の初回は 10/30 19:10 JST（10/31 開催分） |
 | `fetch-shadow-report` | 新設（影の日次集計） | 無し（新設） | － | ○ g-0730-shadow（登録済み）。初回は 10/30 07:30 JST。`ops/fetch_shadow/daily/` は空 |
 | `gcp-daily-cost-report` | #47 | 無し（新設） | － | ○ g-0730-shadow。初回は 10/30 07:30 JST。手動実行（`--allow-unready`）は 10-29 09:43 UTC に成功 |
 | `odds-drift-weekly` | #39 | `0 13 * * 0` | 10-25 13:00／2／0 ◎（週次） | ○ g-sun-2200（登録済み）。初回は 11/1 22:00 JST。切替判定は不合格（0/2、parity 0/2） |
@@ -502,6 +502,6 @@
 1. 異常（ホスト）：解消済み。`serving-state-profile` の失敗（exit=1）は 10/20〜25 だけで、いまは exit 0。`sporthorse-births-nightly` の失敗（exit=3、Cloudflare 403）も 10/20〜25 だけで、いまは SKIP の経路で exit 0。`maintenance-deploy`（10/22 に 1 回）と `raceday-weight-runner`（10/18 に 1 回、exit=143）は単発。`backfill-past` の exit=2 は、`fetch_sire_lines` の実行中に譲る設計どおりの動き。cron 行は外さない。
 2. job_map への登録漏れ：完了（2026-10-29。4 件を job_map と役割表に登録）。
 3. 専用 cron 行が見つからない処理：`predict-race` は馬体重ランナー内、`parse-drift-daily` と `race-analysis-daily` は `export_tables_daily.sh` 内で動くと確認済み。未確認は `day-prep` と `prediction-results-refresh`（ホストの crontab のどちらにも行がなく、呼び出し元のループが不明）。
-4. 初回の確認予定：10/29 19:10 JST `reserve-race-day`、10/30 07:30 JST `fetch-shadow-report` と `gcp-daily-cost-report`、10/31 の開催日に影の実タスク（`shadow_tasks>0`）、11/1 22:00 JST `odds-drift-weekly`、11/2 `backfill-2022-full` の初回記録。
+4. 初回の確認予定：10/30 19:10 JST `reserve-race-day` の実予約（10/31 開催分。10/29 の初回はスキップで確認済み）、10/30 07:30 JST `fetch-shadow-report` と `gcp-daily-cost-report`、10/31 の開催日に影の実タスク（`shadow_tasks>0`）、11/1 22:00 JST `odds-drift-weekly`、11/2 `backfill-2022-full` の初回記録。
 5. 本番切替の前提：`cron_cutover_status` が 合格 になること（現在 0）。影の日次集計（`ops/fetch_shadow/daily/`）が溜まり、連続日数が条件を満たすまで、取得はホストのまま。
 6. 監視ポータルのハートビート（`ops/heartbeat/latest.json`）は未設置。VPS／GCP 側の設定が終わってから、この表の「動作確認」を自動で更新できるようにする。
