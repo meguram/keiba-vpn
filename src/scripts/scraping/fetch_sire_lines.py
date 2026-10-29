@@ -5,6 +5,7 @@ python -m src.scripts.scraping.fetch_sire_lines --limit 5        # 5 ページ�
 
 対象: 2020 年以降の出走馬（horse_sire_map.parquet）の 5 世代血統表に載る牡の祖先すべて（父・母父を含む）。各祖先の子の血統ページを 1 枚ずつ取る（父のセルに系統が付く）。
       --fathers-only で、従来どおり horse_sire_map の父（sire_id）だけにする。
+通信エラーは間を置いて最大 3 回取り直し、それでも駄目なら台帳に残さず次回へ。ページは正常で系統の表記だけ無い種牡馬は、理由つき（reason）で『系統なし』として残す。
 守り: 同時 1 本・一定間隔（既定 60 秒。SIRE_LINE_PACE_SEC）。netkeiba への当日の総件数（共通カウンタ＋自分の分）が上限に近いときは取らずに待つ。アクセス制限の疑い（HTTP 400/403 の連続）が出たら止める。
 """
 
@@ -98,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
         todo += [t for t in pick_ancestor_targets(sm, have) if t[0] not in seen]
     logger.info("対象 %d 頭 / 取得済み %d 頭", len(todo), len(have))
     client = NetkeibaClient(interval=2.0, cache_dir=None, auto_login=False)
-    done = errors = 0
+    done = errors = failed = 0
     stopped_early = False
     for sire_id, horse_id in todo:
         if args.limit and done >= args.limit:
@@ -107,23 +108,26 @@ def main(argv: list[str] | None = None) -> int:
         while count_today() + my_count_today() >= DAILY_STOP:
             logger.info("今日の総件数が %d に達しているので待機（10 分後に再確認）", DAILY_STOP)
             time.sleep(600)
+        _count_mine()
         try:
-            _count_mine()
-            html = client.fetch(PED_URL.format(horse_id=horse_id))
-            store.record_html(html, horse_id)
-            got = sire_id in store.labels()
-            logger.info("%s (産駒 %s): 系統 %s", sire_id, horse_id, store.labels().get(sire_id, "表記なし"))
-            if not got:      # 表記が無い種牡馬は台帳に『空』で残して、何度も取りに行かない
-                store.mark_missing(sire_id, horse_id)
-            errors, done = 0, done + 1
-        except Exception as exc:  # noqa: BLE001
+            status = store.fetch_and_record(client.fetch, PED_URL.format(horse_id=horse_id), sire_id, horse_id)     # 通信エラーは中で最大 3 回取り直す
+        except Exception as exc:  # noqa: BLE001  アクセス制限の疑い（取り直さずに来る）
+            logger.error("アクセス制限の疑いで止めます: %s", exc)
+            return 2
+        if status == "failed":
+            failed += 1
             errors += 1
-            logger.warning("取得失敗 %s: %s (%d 連続)", horse_id, exc, errors)
+            logger.warning("取得失敗 %s: 3 回取り直しても駄目 (%d 連続)", horse_id, errors)
             if errors >= MAX_CONSECUTIVE_ERRORS:
                 logger.error("失敗が続くので止めます（アクセス制限の可能性）")
                 return 2
+        else:
+            logger.info("%s (産駒 %s): %s", sire_id, horse_id, store.labels().get(sire_id) or f"系統なし（{status}）")
+            errors, done = 0, done + 1
         time.sleep(PACE_SEC * random.uniform(0.9, 1.1))
-    if not stopped_early:
+    if failed:
+        logger.warning("取れなかった祖先が %d 頭あるので、完了の印は付けません（もう一度走らせると、台帳に無いものだけ取り直す）", failed)
+    elif not stopped_early:
         store.set_complete()      # 全部取り終えた印。これが付くまで、めぐ分析の『系統』は出さない
         logger.info("対象の種牡馬を取り終えました（完了の印を付けた）")
     logger.info("終了: 今回 %d 頭", done)

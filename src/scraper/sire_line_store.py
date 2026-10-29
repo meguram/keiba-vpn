@@ -13,13 +13,17 @@ from __future__ import annotations
 
 import fcntl
 import json
+import logging
 import os
+import random
 import tempfile
+import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+logger = logging.getLogger(__name__)
 REPO = Path(__file__).resolve().parents[2]
 JST = timezone(timedelta(hours=9))
 
@@ -102,13 +106,65 @@ def record_html(html: str, source_horse_id: str, path: Path | None = None) -> in
     return len(found)
 
 
-def mark_missing(sire_id: str, source_horse_id: str, path: Path | None = None) -> None:
-    """ページに『○○系』の表記が無かった種牡馬を、line=None で残す（何度も取りに行かないため）。"""
+def mark_missing(sire_id: str, source_horse_id: str, path: Path | None = None, reason: str = "no_line", name: str | None = None) -> None:
+    """ページを取れたが『○○系』が無かった種牡馬を、line=None と理由つきで残す（何度も取りに行かないため）。
+
+    reason: no_line=父のセルはあるが系統の表記が無い（『系統なし』） / no_father=子のページに父が載っていない / father_mismatch=父が別の馬だった。
+    通信の失敗はここに残さない（残すと二度と取り直さなくなる）。
+    """
     path = path or default_path()
     with _locked(path):
         cur = load(path)
-        cur.setdefault(sire_id, {"name": None, "line": None, "from": source_horse_id, "at": datetime.now(JST).strftime("%Y-%m-%d")})
+        cur.setdefault(sire_id, {"name": name, "line": None, "reason": reason, "from": source_horse_id, "at": datetime.now(JST).strftime("%Y-%m-%d")})
         _save(cur, path)
+
+
+def record_page(html: str, sire_id: str, child_id: str, path: Path | None = None) -> str:
+    """子（child_id）の血統ページから sire_id の系統を台帳に残し、結果を返す。
+
+    line=系統が取れた / no_line・no_father・father_mismatch=ページは正常でデータ側に無い（理由つきで台帳に残す） /
+    no_table=血統表が無い（メンテ画面など。台帳には残さず、呼び出し側が取り直す）。
+    """
+    from src.scraper.sire_line_extractor import extract_direct_sire, extract_sires_from_ped_html
+
+    if not extract_sires_from_ped_html(html):
+        return "no_table"
+    record_html(html, child_id, path)
+    if sire_id in labels(path):
+        return "line"
+    father = extract_direct_sire(html)
+    if not father:
+        status = "no_father"
+    elif str(father.get("horse_id") or "") != sire_id:
+        status = "father_mismatch"
+    else:
+        status = "no_line"
+    mark_missing(sire_id, child_id, path, reason=status, name=(father or {}).get("name"))
+    return status
+
+
+def fetch_and_record(fetch, url: str, sire_id: str, child_id: str, path: Path | None = None,
+                     tries: int = 3, waits: tuple[float, ...] = (3.0, 10.0), sleep=time.sleep) -> str:
+    """血統ページを取って record_page する。通信エラーや血統表の無い応答は、軽く間を置いて最大 tries 回まで取り直す。
+
+    アクセス制限の疑い（HTTP 400/403 の連続など）は取り直さずそのまま送出する（回数を増やすと悪化するため）。
+    tries 回とも駄目なら 'failed'（台帳には残さないので、後の取得で再挑戦される）。
+    """
+    from src.scraper.scrape_access_pause import is_block_suspect_http_400
+
+    for i in range(tries):
+        try:
+            status = record_page(fetch(url), sire_id, child_id, path)
+            if status != "no_table":
+                return status
+            logger.warning("血統表が無い応答 %s (%d/%d)", child_id, i + 1, tries)
+        except Exception as exc:  # noqa: BLE001
+            if is_block_suspect_http_400(exc):
+                raise
+            logger.warning("取得エラー %s: %s (%d/%d)", child_id, exc, i + 1, tries)
+        if i + 1 < tries:
+            sleep(waits[min(i, len(waits) - 1)] * random.uniform(0.8, 1.2))
+    return "failed"
 
 
 def _newer(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:

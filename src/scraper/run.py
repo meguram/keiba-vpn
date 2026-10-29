@@ -1120,10 +1120,10 @@ class ScraperRunner:
             have = set(store.load())
             todo = [(a, c) for a, c in store.ancestor_sire_children(rec).items() if a not in have]
             for aid, child in todo[: self.ANCESTOR_LINE_MAX_PER_HORSE]:
-                page = self.client.fetch(self.HORSE_PED_URL.format(horse_id=child))
-                store.record_html(page, child)
-                if aid not in store.labels():
-                    store.mark_missing(aid, child)
+                status = store.fetch_and_record(self.client.fetch, self.HORSE_PED_URL.format(horse_id=child), aid, child)
+                if status == "failed":      # 3 回取り直しても駄目。台帳に残さず（後の馬で再挑戦）、今回はここで止める
+                    logger.warning("祖先の系統取得を断念 %s（子 %s）。次に同じ祖先を持つ馬の取得時に再挑戦", aid, child)
+                    break
         except Exception as exc:
             logger.warning("祖先の系統取得をスキップ: %s", exc)
 

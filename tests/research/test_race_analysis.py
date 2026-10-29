@@ -383,3 +383,41 @@ def test_store_concurrent_writers_lose_nothing(tmp_path):
     [x.start() for x in ps]
     [x.join() for x in ps]
     assert len(S.load(p)) == 100
+
+
+def _ped(father_id, line):
+    cell = f'<a href="/horse/{father_id}/">父</a>' + (f"<br>{line}" if line else "")
+    return f'<table class="blood_table"><tr><td rowspan="32">{cell}</td></tr></table>'
+
+
+def test_fetch_and_record_distinguishes_no_data_from_errors(tmp_path):
+    from src.scraper import sire_line_store as S
+
+    p, waits = tmp_path / "sl.json", []
+    sleep = waits.append
+
+    def pages(*items):
+        it = iter(items)
+
+        def fetch(url):
+            x = next(it)
+            if isinstance(x, Exception):
+                raise x
+            return x
+        return fetch
+
+    # 系統あり
+    assert S.fetch_and_record(pages(_ped("1111111111", "ロベルト系")), "u", "1111111111", "c1", p, sleep=sleep) == "line"
+    # ページは正常で系統の表記だけ無い → 理由つきで残す（取り直さない）
+    assert S.fetch_and_record(pages(_ped("2222222222", "")), "u", "2222222222", "c2", p, sleep=sleep) == "no_line"
+    assert S.load(p)["2222222222"]["reason"] == "no_line" and S.load(p)["2222222222"]["line"] is None
+    # 父が別の馬 → 理由つきで残す
+    assert S.fetch_and_record(pages(_ped("9999999999", "")), "u", "3333333333", "c3", p, sleep=sleep) == "father_mismatch"
+    assert waits == []
+    # 通信エラーは 2 回目で成功すれば台帳に正しく残り、間を 1 回置く
+    assert S.fetch_and_record(pages(OSError("boom"), _ped("4444444444", "ノーザンダンサー系")), "u", "4444444444", "c4", p, sleep=sleep) == "line"
+    assert len(waits) == 1
+    # 血統表の無い応答（メンテ画面など）も取り直し、3 回とも駄目なら台帳に残さない
+    waits.clear()
+    assert S.fetch_and_record(pages("<html>maintenance</html>", OSError("x"), "<html></html>"), "u", "5555555555", "c5", p, sleep=sleep) == "failed"
+    assert len(waits) == 2 and "5555555555" not in S.load(p)
