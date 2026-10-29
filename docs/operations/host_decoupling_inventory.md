@@ -307,9 +307,9 @@
 
 | 鍵 | 担当 | 状態 |
 |---|---|---|
-| K1 master への昇格（Jobs のイメージ更新） | ユーザー | **済（2026-10-29）**。master `7e212619`、promote run 40848598294 が全ステップ成功（最初の昇格は `c7f8bd47`）。1 回目は Scheduler 更新の `--headers` で落ち、`--update-headers` に直して再昇格した。A・C の手動実行はこれの後 |
+| K1 master への昇格（Jobs のイメージ更新） | ユーザー | **済（2026-10-29）**。master `7e212619`、promote run 40848598294 が全ステップ成功（最初の昇格は `c7f8bd47`）。同日の 2 回目の昇格で master は `15d61bff`（promote run 40855336870、`deploy` まで成功。日次コスト報告・API の起動時読み取りの窓制限を含む）。1 回目は Scheduler 更新の `--headers` で落ち、`--update-headers` に直して再昇格した。A・C の手動実行はこれの後 |
 | K3 VPS の実行役の有効化と条件付き IAM | ユーザー | **済（2026-10-29）**。VPS の実行役は影モードで安定稼働（13:23 UTC から）。GCP 側は Run Job 4 本に `KEIBA_FETCH_SHADOW_ENABLED=1` が入った。実際の影タスク（`shadow_tasks` > 0）は未来のレース日（土曜 10/31）の `reserve-race-day` 後に確認 |
-| K5 秘密の登録・BigQuery の課金エクスポート | ユーザー | 秘密は 10/24 に登録済み（`SLACK_WEBHOOK_URL_PROD`/`_STG`/`R2_CREDENTIALS` は任意）。課金エクスポートは **済（2026-10-29）**（`billing_export`、asia-northeast1、`keiba-jobs` に読み取り権限）。リポジトリ変数 `GCP_BILLING_BQ_TABLE` の設定も **済**。`gcp-daily-cost-report` は ready=true にした（手動実行は成功。stg に反映済み、master への昇格は stg の CI 確認後） |
+| K5 秘密の登録・BigQuery の課金エクスポート | ユーザー | 秘密は共通の `SLACK_WEBHOOK_URL` だけ登録済み（2026-10-29 に確認。`SLACK_WEBHOOK_URL_PROD`/`_STG`/`R2_CREDENTIALS` は未登録で、いずれも任意）。課金エクスポートは **済（2026-10-29）**（`billing_export`、asia-northeast1、`keiba-jobs` に読み取り権限）。リポジトリ変数 `GCP_BILLING_BQ_TABLE` の設定も **済**。`gcp-daily-cost-report` は ready=true にした（手動実行は成功。stg・master とも反映済み。master は promote run 40855336870） |
 | K4 `reserve-race-day`・`fetch-shadow-report` | Claude | **ready=true・Scheduler 登録済み**（`reserve-race-day` は g-1910-eve、`fetch-shadow-report` は g-0730-shadow）。Scheduler の初回実行はまだ（§13）。影モードはホストの系統一括取得と並走中で、netkeiba へのリクエストが約 2 倍になる点に注意。2026-10-29 に `reservations race-day --date 20261031 --dry-run`（影モード有効）で `shadow_tasks`=106（18 レース）を確認。実際の積みは 10/30 前夜の reserve-race-day、初回の合否は 10/31 夜〜11/1 07:30 の fetch-shadow-report |
 | K6 新しい取得タスクのコード | Claude | `shutuba-audit`・`sire-line` はコード済み（§12.1）。`race-result-t15`（#4）もコード済み・未コミット・未有効（§12.3）。常駐ループの後処理は GCP の既存 Job へ移す実装を入れた（馬場速度は `export-tables-daily`、集計は `prediction-results-refresh`。§12.3）。残りは、影を「無ければ取る」読み方にする件。`backfill-past`（#19）は移行しない方針。差分はユーザー確認のため提示する |
 | 系統台帳の GCS への初回アップロード | Claude（ホスト経由） | ホストの一括取得（`complete_at` が付く）が終わった後に、`python -m src.scraper.sire_line_store` 経由の `sync_with_gcs` を 1 回走らせる。VPS の `sire-line` はその後 |
@@ -340,7 +340,7 @@
 
 調べた時刻は 2026-10-29 10:00〜10:30 UTC（19:00〜19:30 JST）。ホストの時計は UTC なので、表の時刻は UTC（+9 時間で JST）。根拠は次の 5 つ。
 
-1. `config/gcp_job_map.json`（84 件）
+1. `config/gcp_job_map.json`（88 件）
 2. ホストの root crontab（有効行 70）
 3. ホストの `data/local/meta/cron_runs/<job>.tsv`（`cron_run.sh` が書く実行記録）
 4. GCP の Scheduler と Cloud Run Jobs の実行履歴（`ssh keiba-remote` 経由の gcloud）
@@ -366,13 +366,13 @@
 - 注意 4：切替判定（`cron_cutover_status`）は 合格 0 ／ 不合格 15 ／ 未着手 36 ／ 無効 14 ／ N/A 14 ／ 対象外 2。不合格の多くは「連続日数・影の日数が足りない」ためで、動作の失敗ではない。
 - 注意 5：`ops/fetch_shadow/daily/`（影の日次集計）は空、`ops/heartbeat/latest.json`（監視ポータルのハートビート）は無い。`fetch-shadow-report` の初回が 10/30 07:30 JST。
 
-### 13.2 件数の内訳（job_map 84 件）
+### 13.2 件数の内訳（job_map 88 件）
 
 | 行き先 | 件数 | ready=true | 本番（自動）で動作確認済み | 備考 |
 |---|---|---|---|---|
 | GCP | 41（グループ付き 36 ＋ 付き無し 5） | 6 | 1（`reserve-fetch-tasks` のみ） | 他の ready=true 5 件は初回待ち。手動確認済みは 7 件（13.5） |
 | VPS | 16 | 10 | 0（影モードのみ） | `agent_tasks: []` のため本番はホスト cron |
-| ホスト（残す） | 17 | 17 | 17 のうち 13 は実行記録があり、cron が周期どおり | 実行記録の無いもの 4（`sire-line`＝手動の一括取得中、`ensure-monitor`・`keiba-remote-access`・`modeling`＝記録を取らない／手動） |
+| ホスト（残す） | 21 | 21 | 21 のうち 15 は実行記録があり、cron が周期どおり | 実行記録の無いもの 6（`sire-line`＝手動の一括取得中、`ensure-monitor`・`keiba-remote-access`・`modeling`・`gcs-mirror-push-auth`＝記録を取らない／手動、`backfill-2022-full`＝登録直後で初回が 11/2） |
 | 廃止予定 | 10 | － | － | cron が残っているもの 3（13.4） |
 
 ### 13.3 A．取得（VPS へ移す 16 件）
@@ -400,7 +400,7 @@
 
 まとめ：VPS 行き 16 件のうち、影モードで動いているのは 10 件（ready=true）。本番の取得を VPS に切り替えたものは 0 件。
 
-### 13.4 B．ホストに残す取得・保守（17 件）
+### 13.4 B．ホストに残す取得・保守（21 件）
 
 行き先が `host` のもの。ホストの cron で動き続ける。
 
@@ -423,6 +423,10 @@
 | `ensure-monitor` | #49 | `*/5` と `@reboot` | 記録なし（`cron_run.sh` を通さない） | △ cron のみ（動作は監視ポータルで確認） |
 | `keiba-remote-access` | #49 | `*/2` と `@reboot`（`start_remote_access.sh`） | 記録なし | △ cron のみ（この PC から `ssh keiba-remote` が通ることで確認済み） |
 | `modeling` | #48 | cron 無し（手動） | 記録なし | △ 手動運用（学習・評価） |
+| `backfill-2022-full` | #20 | `30 16 * * 1,2` | 記録なし（登録直後） | △ 初回は 11/2（月）16:30 UTC。2026-10-29 に job_map へ登録 |
+| `backfill-2023-full` | #20 | `30 16 * * 3,4` | 10-28 16:30／1／0 | ◎（週 2 回。記録 1 件） |
+| `host-snapshot` | #49 | `50 22` | 10-28 22:50／2／0 | ◎（記録 2 件） |
+| `gcs-mirror-push-auth` | #49 | `*/5`（root の cron。`gcs_mirror_push_auth.sh`） | 記録なし（`cron_run.sh` を通さない） | △ cron のみ。会員名簿を GCS に上げる。名簿の正本が VPS/GCP へ移るまでの橋渡し |
 
 ### 13.5 C．予測・集計・通知（GCP へ移す 41 件）
 
@@ -436,16 +440,16 @@
 | `fetch-shadow-report` | 新設（影の日次集計） | 無し（新設） | － | ○ g-0730-shadow（登録済み）。初回は 10/30 07:30 JST。`ops/fetch_shadow/daily/` は空 |
 | `gcp-daily-cost-report` | #47 | 無し（新設） | － | ○ g-0730-shadow。初回は 10/30 07:30 JST。手動実行（`--allow-unready`）は 10-29 09:43 UTC に成功 |
 | `odds-drift-weekly` | #39 | `0 13 * * 0` | 10-25 13:00／2／0 ◎（週次） | ○ g-sun-2200（登録済み）。初回は 11/1 22:00 JST。切替判定は不合格（0/2、parity 0/2） |
-| `predict-race` | #26 | 無し（馬体重ランナー内。専用 cron 行なし） | － | △ Cloud Tasks 経由の手動実行（l）：202605040911 が 10-27 に成功、202608040901 が 10-25〜26 に失敗 3 回の後に成功 |
-| `day-prep` | #27 | 無し（専用 cron 行なし。要確認：どのループ内で動くか） | － | △ 手動（xl、`--allow-unready`、today=20261025）：10-26 に 5 回中成功 4・失敗 1（03:22 UTC） |
+| `predict-race` | #26 | 無し（馬体重ランナー `raceday-weight-runner`（`0 23`）の中で動く。専用 cron 行なし） | － | △ Cloud Tasks 経由の手動実行（l）：202605040911 が 10-27 に成功、202608040901 が 10-25〜26 に失敗 3 回の後に成功 |
+| `day-prep` | #27 | 無し（ホストの crontab 2 本のどちらにも行なし。どのループ内で動くかは未確認） | － | △ 手動（xl、`--allow-unready`、today=20261025）：10-26 に 5 回中成功 4・失敗 1（03:22 UTC） |
 | `export-tables-daily` | #31 | `0 22` | 10-28 22:00／13／0 ◎ | △ 手動（l）：10-27 13:52 UTC に成功。Scheduler 未登録（g-0700） |
 | `feature-accumulate` | #34 | `40 22` | 10-28 22:40／13／0 ◎ | △ 手動（l）：10-27 13:53 UTC に成功。Scheduler 未登録（g-0700） |
 | `rb-state-daily` | #35 | `20 23` | 10-28 23:20／8／0 ◎ | △ 手動（m、`--allow-unready`）：10-27 13:49 UTC に成功。Scheduler 未登録（g-0800） |
 | `jockey-trainer-stats` | #33 | `15 22` | 10-28 22:15／13／0 ◎ | × g-0530 は未登録 |
 | `serving-state-precompute` | 低メモリ推論の下ごしらえ | `35 22` | 10-28 22:35／10／0 ◎ | － job_map では enabled=false（旧設計）。ホスト cron は残っている（要確認：不要なら外す） |
-| `serving-state-profile` | 同上の計測 | `10 23` | 10-28 23:10／10／**6/20** | ✗ job_map では enabled=false なのにホスト cron が残り、失敗が続いている。cron を外す候補 |
-| `parse-drift-daily` | #31 | 専用 cron 行なし（`export_tables_daily` 内か。要確認） | － | × g-0700 は未登録 |
-| `race-analysis-daily` | #32 | 専用 cron 行なし（要確認） | － | × g-0700 は未登録 |
+| `serving-state-profile` | 同上の計測 | `10 23` | 10-28 23:10／10／**6/20** | △ job_map では enabled=false だがホスト cron は残っている。失敗は 10/20〜25 だけで、いまは exit 0。外すかは別判断 |
+| `parse-drift-daily` | #31 | 無し（`scripts/cron/export_tables_daily.sh` 内で実行。親は `0 22`＝`export-tables-daily`） | － | × g-0700 は未登録 |
+| `race-analysis-daily` | #32 | 無し（`export_tables_daily.sh` 内の `precompute_race_analysis`。親は `0 22`） | － | × g-0700 は未登録 |
 | `lap-forecast-morning` | #28 | `30 22` | 10-28 22:30／9／0 ◎ | × g-0730 は未登録 |
 | `lap-forecast-eve` | #28 | `30 10` | 10-28 10:30／8／0 ◎ | × g-1910-eve に属するが ready=false |
 | `eve-precompute` | #25 | `0 9`（`raceday-eve`。前夜の取得 `raceday-eve-fetch` と同じ行） | 10-29 09:00／13／0 ◎ | × g-1910-eve に属するが ready=false |
@@ -454,7 +458,7 @@
 | `slack-scrape-coverage` | #42 | `0 23 * * 0` | 10-25 23:00／1／0（週次。記録 1 件） | × g-0800 は未登録 |
 | `slack-scrape-alerts` | #42 | `*/15` | 10-29 10:00／228／0 ◎ | × g-5min は未登録（15 分以内の間隔は §12.4 の費用規則にも触れるので要設計） |
 | `slack-results` | #43 | `*/20 6-11 * * 0,6` | 10-25 11:40／36／0 ◎（開催日のみ。次は 10/31） | × g-results は未登録 |
-| `prediction-results-refresh` | #30 | 専用 cron 行なし（要確認） | － | × g-results は未登録 |
+| `prediction-results-refresh` | #30 | 無し（ホストの crontab に行なし。呼び出し元は未確認） | － | × g-results は未登録 |
 | `page-quality-check` | #44 | `0 23` | 10-28 23:00／13／0 ◎ | × g-0800 は未登録 |
 | `parity-check` | #41 | 無し（切替用の新設） | － | × g-0800 は未登録 |
 | `tracking-v2-weekly` | #29 | `30 23 * * 0` | 10-25 23:30／1／0（週次。記録 1 件） | × g-0800（月曜）は未登録 |
@@ -474,13 +478,13 @@
 
 まとめ：GCP の Scheduler は `keiba-g-hourly`（毎時、成功が続いている）の 1 本だけが実際に自動で動いた。`keiba-g-pump`・`keiba-g-1910-eve`・`keiba-g-0730-shadow`・`keiba-g-sun-2200` の 4 本は登録済みで、初回を待っている。残り 9 グループ（g-0530・g-0700・g-0730・g-0730-dayprep・g-0800・g-1000-mon・g-2130・g-5min・g-results）は Scheduler 自体が未登録。ほかに古い試験用の `smoke-auto-*` が 3 本残っている。
 
-### 13.6 D．廃止予定（10 件）と job_map に無い cron 行（4 件）
+### 13.6 D．廃止予定（10 件）
 
 廃止予定（job_map の行き先が `retire`）：
 
 | job_map id | ホスト cron（UTC） | ホスト：最終実行／記録／失敗 | 状態 |
 |---|---|---|---|
-| `sporthorse-births-nightly` | `0 13`（残っている） | 10-28 13:00／9／**6/20** | ✗ 廃止予定（enabled=false）なのに cron が残り、失敗が続いている。**cron を外す** |
+| `sporthorse-births-nightly` | `0 13`（残っている） | 10-28 13:00／9／**6/20** | △ 廃止予定（enabled=false）だが cron は残っている。失敗は 10/20〜25 だけ（Cloudflare 403）で、いまは SKIP の経路で exit 0。外すかは別判断 |
 | `sync-pg-from-gcs` | `0 15` | 10-28 15:00／13／0 | － enabled=true の廃止予定。切替後に外す |
 | `ensure-postgres` | `@reboot` と `*/5` | 10-29 10:00／210／0 | － enabled=true の廃止予定。切替後に外す |
 | `horse-remarks-daily` | 無し | 最終 10-21 18:00／4／0 | － 廃止済み（cron 無し、記録は 10/21 で止まる） |
@@ -491,20 +495,13 @@
 | `backfill-2025-full` | 無し | 最終 10-21 23:00／6／0 | － 廃止済み |
 | `backfill-2024-full` | 無し | 最終 10-22 00:00／6／0 | － 廃止済み |
 
-job_map に id が無いが、ホストの cron にある行（job_map への登録漏れ）：
-
-| cron の名前 | ホスト cron（UTC） | ホスト：最終実行／記録／失敗 | 状態 |
-|---|---|---|---|
-| `backfill-2022-full` | `30 16 * * 1,2` | 記録なし | △ 登録直後で未実行。初回は 11/2（月）16:30 UTC |
-| `backfill-2023-full` | `30 16 * * 3,4` | 10-28 16:30／1／0 | ◎（週 2 回。記録 1 件） |
-| `host-snapshot` | `50 22` | 10-28 22:50／2／0 | ◎（記録 2 件） |
-| `gcs_mirror_push_auth.sh`（`KEIBA-GCS-MIRROR-AUTH`） | `*/5` | 記録なし（`cron_run.sh` を通さない） | △ cron のみ |
+以前は job_map に id が無かった 4 件（`backfill-2022-full`・`backfill-2023-full`・`host-snapshot`・`gcs-mirror-push-auth`）は、2026-10-29 に job_map（行き先 `host`）と役割表へ登録済み。13.4 の表に載せてある。
 
 ### 13.7 要対応のまとめ
 
-1. 異常（ホスト）：`serving-state-profile`（6/20）と `sporthorse-births-nightly`（6/20）は、どちらも job_map では無効・廃止予定なので、cron 行を外す。`backfill-past`（3/20）は原因を確かめる。`maintenance-deploy`（1/20）と `raceday-weight-runner`（1/20）は原因を確かめる。
-2. job_map への登録漏れ：`backfill-2022-full`・`backfill-2023-full`・`host-snapshot`・`gcs_mirror_push_auth` を job_map に登録する（行き先は `host`）。
-3. 専用 cron 行が見つからない処理（`day-prep`・`race-analysis-daily`・`parse-drift-daily`・`prediction-results-refresh`、`predict-race`）は、実際にどのループの中で動くかを確認して、この表に書き足す。
+1. 異常（ホスト）：解消済み。`serving-state-profile` の失敗（exit=1）は 10/20〜25 だけで、いまは exit 0。`sporthorse-births-nightly` の失敗（exit=3、Cloudflare 403）も 10/20〜25 だけで、いまは SKIP の経路で exit 0。`maintenance-deploy`（10/22 に 1 回）と `raceday-weight-runner`（10/18 に 1 回、exit=143）は単発。`backfill-past` の exit=2 は、`fetch_sire_lines` の実行中に譲る設計どおりの動き。cron 行は外さない。
+2. job_map への登録漏れ：完了（2026-10-29。4 件を job_map と役割表に登録）。
+3. 専用 cron 行が見つからない処理：`predict-race` は馬体重ランナー内、`parse-drift-daily` と `race-analysis-daily` は `export_tables_daily.sh` 内で動くと確認済み。未確認は `day-prep` と `prediction-results-refresh`（ホストの crontab のどちらにも行がなく、呼び出し元のループが不明）。
 4. 初回の確認予定：10/29 19:10 JST `reserve-race-day`、10/30 07:30 JST `fetch-shadow-report` と `gcp-daily-cost-report`、10/31 の開催日に影の実タスク（`shadow_tasks>0`）、11/1 22:00 JST `odds-drift-weekly`、11/2 `backfill-2022-full` の初回記録。
 5. 本番切替の前提：`cron_cutover_status` が 合格 になること（現在 0）。影の日次集計（`ops/fetch_shadow/daily/`）が溜まり、連続日数が条件を満たすまで、取得はホストのまま。
 6. 監視ポータルのハートビート（`ops/heartbeat/latest.json`）は未設置。VPS／GCP 側の設定が終わってから、この表の「動作確認」を自動で更新できるようにする。

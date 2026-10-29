@@ -3384,6 +3384,74 @@
    "ready": true
   },
   {
+   "id": "backfill-2022-full",
+   "desc": "過去データの取りこぼし補填（2022 年 full）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA_BACKFILL",
+    "cron_job_id": "backfill-2022-full",
+    "cron_utc": "30 16 * * 1,2",
+    "script": "src/scraper/backfill.py"
+   },
+   "reason": "長期バックフィルは自宅 IP のホストに残す",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "backfill-2023-full",
+   "desc": "過去データの取りこぼし補填（2023 年 full）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA_BACKFILL",
+    "cron_job_id": "backfill-2023-full",
+    "cron_utc": "30 16 * * 3,4",
+    "script": "src/scraper/backfill.py"
+   },
+   "reason": "長期バックフィルは自宅 IP のホストに残す",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "host-snapshot",
+   "desc": "ホストの運用状態のスナップショット（state_sync snapshot）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-HOST-SNAPSHOT",
+    "cron_job_id": "host-snapshot",
+    "cron_utc": "50 22 * * *",
+    "script": "src/ops/state_sync.py"
+   },
+   "reason": "ホストの状態を残す手段のためホストに残す（scripts/cron/install_host_snapshot_cron.sh で登録）",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "gcs-mirror-push-auth",
+   "desc": "会員名簿(root だけが読める)を GCS ミラーへ上げる（5 分おき）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-GCS-MIRROR-AUTH",
+    "cron_job_id": "gcs_mirror_push_auth",
+    "cron_utc": "*/5 * * * *",
+    "script": "scripts/cron/gcs_mirror_push_auth.sh"
+   },
+   "reason": "会員名簿は root だけが読める場所にあるため、root の cron で上げる（cron_run.sh を通さない）",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
    "id": "backfill-2020-fast",
    "desc": "過去データの取りこぼし補填（2020 年 fast）",
    "destination": "host",
