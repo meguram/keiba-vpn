@@ -160,6 +160,14 @@ class TestScrapeDates(unittest.TestCase):
         data = r.json()
         self.assertIsInstance(data.get("dates"), list)
 
+    def test_scrape_dates_cache_control_by_audience(self):
+        """匿名は共有キャッシュ可(s-maxage)、会員(Cookie)は no-store のまま。"""
+        anon = client.get("/api/scrape-dates").headers.get("cache-control", "")
+        self.assertIn("s-maxage=", anon)
+        self.assertNotIn("no-store", anon)
+        member = client.get("/api/scrape-dates", headers={"Cookie": "k=v"}).headers.get("cache-control", "")
+        self.assertIn("no-store", member)
+
 
 # ═══════════════════════════════════════════════════════
 # B. race_id の不正フォーマット

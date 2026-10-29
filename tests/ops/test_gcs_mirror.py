@@ -43,6 +43,31 @@ def test_push_uploads_only_new_or_changed_and_skips_tmp(tmp_path):
     assert gm.push(g, tmp_path, TREES, dry_run=True)["would_upload"] == 0
 
 
+def test_push_tells_the_cache_warmer_only_about_files_it_uploaded(tmp_path, monkeypatch):
+    from src.utils import cache_marker
+
+    got: list[list[str]] = []
+    monkeypatch.setattr(cache_marker, "mark_from_paths", lambda rels: got.append(list(rels)) or len(rels))
+    g = Fake()
+    _w(tmp_path, "data/local/inference/predictions_v3/20261024/R1.parquet", b"a")
+    gm.push(g, tmp_path, TREES)
+    assert got == [["data/local/inference/predictions_v3/20261024/R1.parquet"]]
+    gm.push(g, tmp_path, TREES)                                                   # 変化なし → 目印は出さない
+    gm.push(g, tmp_path, TREES, dry_run=True)
+    assert len(got) == 1
+
+
+def test_push_survives_marker_failure(tmp_path, monkeypatch):
+    from src.utils import cache_marker
+
+    def boom(rels):
+        raise RuntimeError("gcs down")
+
+    monkeypatch.setattr(cache_marker, "mark_from_paths", boom)
+    _w(tmp_path, "data/local/inference/predictions_v3/20261024/R1.parquet", b"a")
+    assert gm.push(Fake(), tmp_path, TREES)["uploaded"] == 1
+
+
 def test_push_recent_days_ignores_old_files(tmp_path):
     g = Fake()
     old = _w(tmp_path, "data/local/inference/predictions_v3/20260101/R0.parquet")

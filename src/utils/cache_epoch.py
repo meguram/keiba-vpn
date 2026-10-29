@@ -60,8 +60,19 @@ def bump(reason: str = "") -> None:
         _write(_FILE, reason)
         if not reason.startswith("save:"):      # 保存以外（配備・設定変更・手動クリア）は『全部作り直し』の世代も進める
             _write(_HARD_FILE, reason)
+            _mark_all_for_vps(reason)
     except OSError as exc:
         logger.warning("世代ファイルを書けません: %s", exc)
+
+
+def _mark_all_for_vps(reason: str) -> None:
+    """全体を取り直す理由の世代更新は、VPS の事前ロード係にも目印で伝える（最善努力。GCS_BUCKET が無ければ何もしない）。"""
+    try:
+        from src.utils import cache_marker
+
+        cache_marker.mark_all(reason)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _write(path: Path, reason: str) -> None:
