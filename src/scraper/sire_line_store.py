@@ -4,13 +4,18 @@
 ページの父のセル（その馬の父）に『○○系』が付くので、1 ページで 1 頭ぶんの種牡馬の系統が分かる。
 置き場: data/local/pedigree_lines/sire_line_map.json（環境変数 KEIBA_SIRE_LINE_MAP で変更可）。
 形式: {"updated": "...", "lines": {"<種牡馬の馬ID>": {"name": 種牡馬名, "line": "○○系", "from": 取得に使った馬ID, "at": 取得日}}}
+
+並走（ホストと VPS/GCP が同時に取る）の前提: 書き込みは『ロックして読み直し→足す→置き換え』なので、同じ台帳に複数のプロセスが書いても取りこぼさない。
+別の台帳（別の機械で取ったもの）は merge() で足し合わせられる（種牡馬 ID が鍵なので順序によらず同じ結果）。差は diff() で見る。
 """
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -42,7 +47,8 @@ def is_complete(path: Path | None = None) -> bool:
 
 def set_complete(path: Path | None = None) -> None:
     path = path or default_path()
-    _save(load(path), path, complete_at=datetime.now(JST).isoformat(timespec="seconds"))
+    with _locked(path):
+        _save(load(path), path, complete_at=datetime.now(JST).isoformat(timespec="seconds"))
 
 
 def lines_from_html(html: str) -> dict[str, tuple[str, str]]:
@@ -54,6 +60,22 @@ def lines_from_html(html: str) -> dict[str, tuple[str, str]]:
         if a.get("horse_id") and a.get("sire_line"):
             out[str(a["horse_id"])] = (str(a["name"]).replace("\xa0", " ").strip(), str(a["sire_line"]).strip())
     return out
+
+
+@contextmanager
+def _locked(path: Path):
+    """台帳の書き換えを 1 プロセスずつにする（ロックが取れない場所なら、ロックなしで進める）。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fh = open(str(path) + ".lock", "a")
+    except OSError:
+        yield
+        return
+    try:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        yield
+    finally:
+        fh.close()
 
 
 def _save(cur: dict[str, dict[str, Any]], path: Path, complete_at: str | None = None) -> None:
@@ -71,20 +93,53 @@ def record_html(html: str, source_horse_id: str, path: Path | None = None) -> in
     if not found:
         return 0
     path = path or default_path()
-    cur = load(path)
     today = datetime.now(JST).strftime("%Y-%m-%d")
-    for hid, (name, line) in found.items():
-        cur[hid] = {"name": name, "line": line, "from": source_horse_id, "at": today}
-    _save(cur, path)
+    with _locked(path):
+        cur = load(path)
+        for hid, (name, line) in found.items():
+            cur[hid] = {"name": name, "line": line, "from": source_horse_id, "at": today}
+        _save(cur, path)
     return len(found)
 
 
 def mark_missing(sire_id: str, source_horse_id: str, path: Path | None = None) -> None:
     """ページに『○○系』の表記が無かった種牡馬を、line=None で残す（何度も取りに行かないため）。"""
     path = path or default_path()
-    cur = load(path)
-    cur.setdefault(sire_id, {"name": None, "line": None, "from": source_horse_id, "at": datetime.now(JST).strftime("%Y-%m-%d")})
-    _save(cur, path)
+    with _locked(path):
+        cur = load(path)
+        cur.setdefault(sire_id, {"name": None, "line": None, "from": source_horse_id, "at": datetime.now(JST).strftime("%Y-%m-%d")})
+        _save(cur, path)
+
+
+def _newer(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
+    """同じ種牡馬の 2 つの記録のうち採る方。表記ありは『表記なし』に勝つ。どちらも表記ありなら取得日の新しい方（同日は a）。"""
+    if bool(a.get("line")) != bool(b.get("line")):
+        return a if a.get("line") else b
+    return b if str(b.get("at") or "") > str(a.get("at") or "") else a
+
+
+def merge(other: dict[str, dict[str, Any]], path: Path | None = None) -> int:
+    """別の台帳（別の機械で取ったもの）を足し合わせる。台帳が変わった種牡馬の数を返す。完了の印は触らない。"""
+    path = path or default_path()
+    with _locked(path):
+        cur = load(path)
+        changed = 0
+        for hid, rec in other.items():
+            new = _newer(cur[hid], rec) if hid in cur else rec
+            if cur.get(hid) != new:
+                cur[hid], changed = new, changed + 1
+        if changed:
+            _save(cur, path)
+    return changed
+
+
+def diff(a: dict[str, dict[str, Any]], b: dict[str, dict[str, Any]]) -> dict[str, list[str]]:
+    """2 つの台帳の差。only_a / only_b は片方にだけある種牡馬、line は両方にあるが系統が違うもの（表記なし同士は同じ）。"""
+    return {
+        "only_a": sorted(set(a) - set(b)),
+        "only_b": sorted(set(b) - set(a)),
+        "line": sorted(k for k in set(a) & set(b) if (a[k].get("line") or None) != (b[k].get("line") or None)),
+    }
 
 
 def ancestor_sire_children(rec: dict[str, Any], max_gen: int = 5) -> dict[str, str]:
@@ -114,3 +169,17 @@ def ancestor_sire_children(rec: dict[str, Any], max_gen: int = 5) -> dict[str, s
 def labels(path: Path | None = None) -> dict[str, str]:
     """種牡馬の馬 ID -> 『○○系』（表記があったものだけ）。"""
     return {k: v["line"] for k, v in load(path).items() if v.get("line")}
+
+
+if __name__ == "__main__":
+    import argparse
+
+    ap = argparse.ArgumentParser(description="別の機械の台帳との差を見る／足し合わせる")
+    ap.add_argument("other", type=Path, help="比べる（足す）台帳の JSON")
+    ap.add_argument("--merge", action="store_true", help="差を見るだけでなく、こちらの台帳に足す")
+    a = ap.parse_args()
+    theirs = load(a.other)
+    d = diff(load(), theirs)
+    print({k: len(v) for k, v in d.items()}, "手元:", len(load()), "相手:", len(theirs))
+    if a.merge:
+        print("足した:", merge(theirs))

@@ -348,3 +348,38 @@ def test_ancestor_sire_children_picks_child_of_each_male_ancestor():
         {"generation": 3, "position": 3, "horse_id": "G", "sex": ""},
     ]}
     assert ancestor_sire_children(rec) == {"A": "H", "C": "A", "D": "B", "E": "D", "F": "I"}
+
+
+def test_store_merge_and_diff_for_parallel_ledgers(tmp_path):
+    from src.scraper import sire_line_store as S
+
+    a, b = tmp_path / "a.json", tmp_path / "b.json"
+    S.mark_missing("2007103265", "h", a)                                           # 手元は『表記なし』
+    S.mark_missing("ONLY_A", "h", a)
+    S.record_html('<table class="blood_table"><tr><td rowspan="16"><a href="/horse/2007103265/">x</a><br>ロベルト系</td></tr></table>', "h2", b)
+    S.mark_missing("ONLY_B", "h", b)
+    assert S.diff(S.load(a), S.load(b)) == {"only_a": ["ONLY_A"], "only_b": ["ONLY_B"], "line": ["2007103265"]}
+    assert S.merge(S.load(b), a) == 2                                      # X は表記ありが勝ち、ONLY_B が増える
+    assert S.labels(a) == {"2007103265": "ロベルト系"} and set(S.load(a)) == {"2007103265", "ONLY_A", "ONLY_B"}
+    assert S.merge(S.load(b), a) == 0                                      # 2 回足しても同じ
+    S.merge({"2007103265": {"name": None, "line": None, "from": "z", "at": "2099-01-01"}}, a)
+    assert S.labels(a) == {"2007103265": "ロベルト系"}                              # 後から来た『表記なし』で消えない
+
+
+def _writer(path, prefix):
+    from src.scraper import sire_line_store as S
+
+    for i in range(25):
+        S.mark_missing(f"{prefix}{i}", "h", path)
+
+
+def test_store_concurrent_writers_lose_nothing(tmp_path):
+    import multiprocessing as mp
+
+    from src.scraper import sire_line_store as S
+
+    p = tmp_path / "sl.json"
+    ps = [mp.Process(target=_writer, args=(p, c)) for c in "ABCD"]
+    [x.start() for x in ps]
+    [x.join() for x in ps]
+    assert len(S.load(p)) == 100
