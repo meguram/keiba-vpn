@@ -32,7 +32,7 @@
 | 10 | `new-horse-pedigree`（新馬の 5 世代血統） | 21:00 | **VPS 実行役** | 軽い |
 | 11 | `recent-retry`（直近の未取得の取り直し） | 06:10・19:40 | **VPS 実行役** | 影の取得が「本番をスキップ」する点に注意（§5） |
 | 12 | `barometer-retry` | 毎日 08:30、金曜 19:30 | **VPS 実行役** | 要ログイン |
-| 13 | `shutuba-audit`（出馬表の再取得監査） | 06:40 | **VPS 実行役** | `job_map` に登録済み（2026-10-29。当面 `host`。K6 のコードは 2026-10-29 に入れた（その場で取り直す直接モード）ので、VPS の実行役が開いたら `vps` へ直す） |
+| 13 | `shutuba-audit`（出馬表の再取得監査） | 06:40 | **VPS 実行役** | `job_map` に `vps`（`ready=false`、`blockers` つき）で登録済み（2026-10-29。K6 のコードは入れた（その場で取り直す直接モード））。実行役が影モードを抜け、VPS の 250M での実測後に `DEFAULT_AGENT_TASKS` へ足して `ready` にする。それまではホストの cron（06:40）が担当 |
 | 14 | `weekly-update`（確定結果・指数・バロメーター） | 金曜 18:00 | **VPS 実行役**（取得）。指数の計算は GCP Jobs | 計算込みで 250M は未測定。分離を推奨 |
 | 15 | `horse-name-index`（馬名インデックス・成長曲線） | 金曜 18:30 | **GCP Jobs**（`job_map` どおり） | 取得ではなく集計 |
 | 16 | `jma-weather`（気象庁の時別値） | 毎時 | **GCP Jobs**（気象庁は IP 遮断のリスクが低い） | `job_map` に無い → 登録が必要。VPS の枠を使わない |
@@ -226,7 +226,7 @@
 | K3 | **VPS の取得の実行役と影モードを有効にする**（`fetch.env` の 2 変数、`systemctl enable --now keiba-fetch-agent`）と、影モード用の条件付き IAM | B の全工程（不合格 13 本の大半は「影モードの日次レポートが 0/5 日」） | **済（2026-10-29）**。担当はユーザー（VPS の root と IAM）。詳細は §12.2 |
 | K4 | `reserve-race-day` と `fetch-shadow-report` を ready にする | 影のタスクの予約と日次の合否 | Claude（K1 の後） |
 | K5 | 秘密の登録（共通ログイン・Slack Webhook を Secret Manager に）と、BigQuery への課金エクスポート | `shared-login`・通知系・`gcp-daily-cost-report` | ユーザー（Console） |
-| K6 | 新しい取得タスクのコード: `race-result-t15`（#4・実装済み、`DEFAULT_AGENT_TASKS` には未登録）、`shutuba-audit`（#13・実装済み）、`sire-line`（#24・実装済み、系統一括取得の完了後に切替）、`backfill-past`（#19・未着手）。影の取得の「影に無ければ取る」読み方（§6 の 4）は実装済み | B の残り（#4・#11・#13・#19・#24） | Claude（コード。取得の挙動に触れるので、差分は都度確認をもらう） |
+| K6 | 新しい取得タスクのコード: `race-result-t15`（#4・実装済み・コミット済み。レース別に `reserve-race-day` が予約するので `DEFAULT_AGENT_TASKS` の静的タスクではなく、実行役が影モードを抜けたら有効）、`shutuba-audit`（#13・実装済み）、`sire-line`（#24・実装済み、系統一括取得の完了後に切替）、`backfill-past`（#19・未着手）。影の取得の「影に無ければ取る」読み方（§6 の 4）は実装済み | B の残り（#4・#11・#13・#19・#24） | Claude（コード。取得の挙動に触れるので、差分は都度確認をもらう） |
 
 ### 11.3 線ごとの順番
 
@@ -300,7 +300,7 @@
 | K2 state の種まき | **済** | `state_sync push --which in` を実行。GCS の `state/` だけに書き、運用のパスには書いていない。中身は約 26MB で、GCS の保管・操作の費用は無視できる。上げ直しは、サイズと md5 が同じものを飛ばすので 0 件 |
 | job_map の不足分 | **済** | #13 `shutuba-audit`・#19 `backfill-past`・#24 `sire-line` を登録（`destination=host`、`reason` つき）。`tests/ops/test_gcp_job_map.py` は 17 件とも通る。これで棚卸しの全工程が `job_map` にある |
 | API 起動時の GCS 読み取り削減（§10.4 の 1） | **コード済み・develop** | `predictions_backfill`・`lap_forecast`・`tracking_v2` の日付つきキーのうち、既定で 14 日より古いもの（環境変数 `KEIBA_MIRROR_WINDOW_DAYS` で変更）は起動時・更新時に降ろさない。日付の無いファイル（`_shadow_models.json` など）は常に降ろす。古い日は読まれたときに `lazy_fetch` で 1 件だけ取る（窓の内側は従来どおり取り込み済みとみなし、無駄な GCS 問い合わせをしない）。読む側 5 箇所（`local_predictions.py` の 2 関数・`lap_forecast_service.load_forecast`・`tracking_v2_service.load_saved`・`serving_v6.stage_forecast_columns`）を `lazy_fetch` 経由にした。Jobs の `pull_trees`・CLI の pull/push は変更なし（全件を扱う）。テスト 4 件を追加、全体 3,714 件が通る。効果（約 13,200 → 約 1,000 件）はデプロイ後の起動ログで実測する |
-| K6（`shutuba-audit`・`sire-line`） | **コード済み・develop** | 上の §12.3 のとおり。`AUTO_SCRAPE_MODES` と `auto_scrape.TASKS` に登録、`DEFAULT_AGENT_TASKS` には未追加（費用・メモリ未実測）。テスト 8 件（直接モード 4 件＝キューを使わない・1 回の上限・試行回数・アクセス制限、台帳の GCS 同期 4 件）を追加し、`tests/ops`・`tests/scripts` を含め 354 件が通る。取得の挙動に触れるのは `shutuba_audit` の直接モードだけ（既定オフ、`fetch_child` 経由のみオン） |
+| K6（`shutuba-audit`・`sire-line`） | **コード済み・develop** | 上の §12.3 のとおり。`AUTO_SCRAPE_MODES` と `auto_scrape.TASKS` に登録、`DEFAULT_AGENT_TASKS` には未追加（費用・メモリ未実測）。`shutuba-audit` は `job_map` で `vps`/`ready=false`（blockers つき）に直した（2026-10-29）。テスト 8 件（直接モード 4 件＝キューを使わない・1 回の上限・試行回数・アクセス制限、台帳の GCS 同期 4 件）を追加し、`tests/ops`・`tests/scripts` を含め 354 件が通る。取得の挙動に触れるのは `shutuba_audit` の直接モードだけ（既定オフ、`fetch_child` 経由のみオン） |
 | #24 系統の取得 | 進行中 | 5 世代血統表の牡の祖先の系統（3,699 頭）を、ホストで 5 秒間隔で一括取得中（2026-10-29 開始、約 7〜8 時間）。日々の取得は定期バッチに相伴するので個別 cron は不要。台帳は並走（ホスト＋VPS/GCP）に耐える作り（ロック・merge・diff）。失敗は『系統なし（理由つき）』と『通信エラー（3 回取り直し）』を分けた |
 
 ### 12.2 まだのこと（担当つき）
@@ -311,7 +311,7 @@
 | K3 VPS の実行役の有効化と条件付き IAM | ユーザー | **済（2026-10-29）**。VPS の実行役は影モードで安定稼働（13:23 UTC から）。GCP 側は Run Job 4 本に `KEIBA_FETCH_SHADOW_ENABLED=1` が入った。実際の影タスク（`shadow_tasks` > 0）は未来のレース日（土曜 10/31）の `reserve-race-day` 後に確認 |
 | K5 秘密の登録・BigQuery の課金エクスポート | ユーザー | 秘密は共通の `SLACK_WEBHOOK_URL` だけ登録済み（2026-10-29 に確認。`SLACK_WEBHOOK_URL_PROD`/`_STG`/`R2_CREDENTIALS` は未登録で、いずれも任意）。課金エクスポートは **済（2026-10-29）**（`billing_export`、asia-northeast1、`keiba-jobs` に読み取り権限）。リポジトリ変数 `GCP_BILLING_BQ_TABLE` の設定も **済**。`gcp-daily-cost-report` は ready=true にした（手動実行は成功。stg・master とも反映済み。master は promote run 40855336870） |
 | K4 `reserve-race-day`・`fetch-shadow-report` | Claude | **ready=true・Scheduler 登録済み**（`reserve-race-day` は g-1910-eve、`fetch-shadow-report` は g-0730-shadow）。`reserve-race-day` は 10/29 に初回（開催日でないためスキップ・正常）を確認済み、`fetch-shadow-report` の初回は 10/30 07:30 JST（§13）。影モードはホストの系統一括取得と並走中で、netkeiba へのリクエストが約 2 倍になる点に注意。2026-10-29 に `reservations race-day --date 20261031 --dry-run`（影モード有効）で `shadow_tasks`=106（18 レース）を確認。実際の積みは 10/30 前夜の reserve-race-day、初回の合否は 10/31 夜〜11/1 07:30 の fetch-shadow-report |
-| K6 新しい取得タスクのコード | Claude | `shutuba-audit`・`sire-line` はコード済み（§12.1）。`race-result-t15`（#4）もコード済み・未コミット・未有効（§12.3）。常駐ループの後処理は GCP の既存 Job へ移す実装を入れた（馬場速度は `export-tables-daily`、集計は `prediction-results-refresh`。§12.3）。残りは、影を「無ければ取る」読み方にする件。`backfill-past`（#19）は移行しない方針。差分はユーザー確認のため提示する |
+| K6 新しい取得タスクのコード | Claude | `shutuba-audit`・`sire-line` はコード済み（§12.1）。`race-result-t15`（#4）もコード済み・コミット済み・未有効（実行役が影モード中。§12.3）。常駐ループの後処理は GCP の既存 Job へ移す実装を入れた（馬場速度は `export-tables-daily`、集計は `prediction-results-refresh`。§12.3）。残りは、影を「無ければ取る」読み方にする件。`backfill-past`（#19）は移行しない方針。差分はユーザー確認のため提示する |
 | 系統台帳の GCS への初回アップロード | Claude（ホスト経由） | **完了（2026-10-29）**。一括取得の終了後に `sync_with_gcs` を 1 回実行（ホストの木は触らず、新しい `sire_line_store.py` を一時の場所から読み込んだ）。結果は取り込み 0・アップロード 4,542 頭・`complete_at`=2026-10-29T20:18:47+09:00。GCS の `ops/sire_lines/sire_line_map.json`（508,585 バイト）を確認。実行前のホスト台帳は `/tmp/sire_line_map.before.json` に退避。VPS の `sire-line` への切替は、実行役が影モードを抜けて担当を持つ時 |
 
 ### 12.3 K6 の設計メモ（`shutuba-audit`・`sire-line` はコード済み）

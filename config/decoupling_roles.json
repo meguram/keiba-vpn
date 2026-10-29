@@ -12,7 +12,7 @@
     "gcs-mirror-push-auth": {"role": "ops_required", "target": "vps", "note": "会員名簿(root だけが読める)を GCS に上げ、Cloud Run のログイン照合に渡す。名簿の正本が VPS/GCP へ移るまでホストの root cron で上げ、移行後は不要"},
     "keiba-remote-access": {"role": "research_only", "note": "開発者がホストに入るための仕組み。運用経路に含めない"},
 
-    "raceday-result-runner": {"role": "ops_required", "target": "vps", "note": "各R 発走 T+15 の速報結果。結果は予測成績・結果通知・履歴特徴量の元。VPS 実行役のレース別タスク(race-result-per-race 相当)+ GCP Job(slack-results)へ"},
+    "raceday-result-runner": {"role": "ops_required", "target": "vps", "note": "各R 発走 T+15 の速報結果。結果は予測成績・結果通知・履歴特徴量の元。VPS 実行役のレース別タスク race-result-t15(コード済み。reserve-race-day が1レースずつ予約、fetch_owner.host_must_skip でホストの常駐を見送る)+ GCP Job(slack-results)へ。馬場速度は export-tables-daily、集計は prediction-results-refresh が担当。実行役が影モードを抜けてから切替"},
     "horse-remarks-daily": {"role": "retire", "note": "2026-10-22 cron監査: 採用ゼロ。1日 476〜929 件の取得に見合わないため廃止"},
     "backfill-2022-fast": {"role": "retire", "note": "2026-10-22 cron監査: 未処理 0 件で完了済み。毎回ログインと会員ページの確認だけをしていたため廃止"},
     "backfill-2023-fast": {"role": "retire", "note": "2026-10-22 cron監査: 未処理 0 件で完了済み。毎回ログインと会員ページの確認だけをしていたため廃止"},
@@ -32,7 +32,7 @@
     "sync-pg-from-gcs": {"role": "retire", "note": "PostgreSQL 廃止(DB 経由の経路は 503)"},
     "ensure-postgres": {"role": "retire", "note": "同上"},
     "gcs-mirror-push": {"role": "retire", "note": "2026-10-24 移行中の橋渡し。予測の生成・出馬表の収集が GCS に直接書くようになったら止める"},
-    "shutuba-audit": {"role": "ops_required", "target": "vps", "note": "棚卸し #13。開催後も確定しない出馬表の洗い出しと再取得。公開の出馬表の正しさに効くので VPS 実行役の取得タスクへ(K6 のコード後)"},
+    "shutuba-audit": {"role": "ops_required", "target": "vps", "note": "棚卸し #13。開催後も確定しない出馬表の洗い出しと再取得。公開の出馬表の正しさに効くので VPS 実行役の取得タスク shutuba-audit へ(コード済み。job_map では vps/ready=false。実行役が影モードを抜け、メモリ実測後に DEFAULT_AGENT_TASKS へ追加)"},
     "backfill-past": {"role": "retire", "note": "棚卸し #19。2016〜2019 年の過去分補填。終われば不要(完了したら廃止)。運用には載せない"},
     "sire-line": {"role": "ops_required", "target": "vps", "note": "棚卸し #24。5 世代血統の牡の祖先の系統。日々は定期バッチに相伴、過去分の一括補完は VPS 実行役の低優先度タスクへ(K6 のコードと台帳の GCS 化は 2026-10-29 に完了。切替は実行役が影モードを抜けた後)"}
   }
