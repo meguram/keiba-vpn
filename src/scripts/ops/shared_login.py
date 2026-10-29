@@ -5,6 +5,8 @@
 
 仕組み: 月ごとのパスワードは サーバの秘密（ペッパー）+ 年月 から決まる値（保存しない）。ID は .env の KEIBA_SHARED_LOGIN_ID（未設定なら何もしない）。
 更新するとパスワード変更扱いになり、それ以前のログイン（cookie）はすべて使えなくなる。Slack（SLACK_WEBHOOK_URL）が送れなかった場合は、次の実行で再送する。
+``KEIBA_SHARED_LOGIN_DRY=1``（GCP Jobs の並走期間）: 名簿と状態を読んで『何をするか』（created/rotated/notified/ok）を出すだけで、名簿・状態の書き込みと通知はしない。
+名簿の正本がホストにある間、Jobs のローカルの名簿を書き換えても公開側（Cloud Run）に届かないため。
 """
 
 from __future__ import annotations
@@ -63,8 +65,9 @@ def message(user_id: str, month: str, password: str) -> str:
             "有効: 月末まで（翌月1日に自動で更新され、これまでのログインは解除されます）\n※ このメッセージは配布後に削除してください")
 
 
-def ensure(user_id: str, now: datetime | None = None, notify: bool = True) -> str:
-    """戻り値: created / rotated / notified（通知だけ再送）/ ok（変更なし）/ disabled（無効にされているので触らない）。"""
+def ensure(user_id: str, now: datetime | None = None, notify: bool = True, dry: bool = False) -> str:
+    """戻り値: created / rotated / notified（通知だけ再送）/ ok（変更なし）/ disabled（無効にされているので触らない）。
+    dry=True は判定だけ（名簿・状態を書かず、通知しない）。戻り値は同じ語に ``would-`` を付ける（ok と disabled はそのまま）。"""
     from src.api import auth
     from src.scripts.ops import manage_users as mu
     from src.utils.notify import notify_slack
@@ -74,18 +77,24 @@ def ensure(user_id: str, now: datetime | None = None, notify: bool = True) -> st
     rec = auth.member_record(user_id)
     result = "ok"
     if rec is None:
-        mu.create_user(user_id, pw)
+        if not dry:
+            mu.create_user(user_id, pw)
         result = "created"
     elif rec.get("enabled", True) is False:
         return "disabled"
     elif not auth.verify_member_login(user_id, pw):
-        mu.set_password(user_id, pw)
+        if not dry:
+            mu.set_password(user_id, pw)
         result = "rotated"
     st = _state()
     if result in ("created", "rotated"):
         st = {"month": month, "notified": False, "changed_at": int(time.time())}
     elif st.get("month") != month:
         st = {"month": month, "notified": False, "changed_at": int(time.time())}      # 状態ファイルが無い・古い（初回）→ 今月分を通知
+    if dry:
+        if result == "ok" and not st.get("notified"):
+            result = "notified"
+        return result if result == "ok" else f"would-{result}"
     if notify and not st.get("notified"):
         if notify_slack(message(user_id, month, pw)):
             st["notified"] = True
@@ -115,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
     from src.scripts.ops import manage_users as mu
 
     try:
-        print(ensure(uid, notify=not a.no_notify))
+        print(ensure(uid, notify=not a.no_notify, dry=os.environ.get("KEIBA_SHARED_LOGIN_DRY", "").strip() == "1"))
     except mu.UserError as e:
         print(f"失敗: {e}", file=sys.stderr)
         return 2

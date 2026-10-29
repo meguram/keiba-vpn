@@ -10,6 +10,8 @@
 - 「取得済みならスキップ」の判定（``HybridStorage.exists`` / ``exists_gcs``）だけは**影の側**を見る（影に無ければ取る）。
   本番を見ると本番に既にあるものは全部スキップされ、影が空のまま検証にならないため。``load`` などの読みは本番のまま。
 - ``KEIBA_FETCH_SHADOW=1`` の子プロセスだけが ``install()`` する（``fetch_child``）。通常の取得には一切影響しない。
+- GCP Jobs の並走期間（``KEIBA_PARALLEL_RUN=1``）の各 step も、同じガードを ``install(root="parallel")`` で使う（``src.ops.parallel_step``）。
+  書き込みは ``parallel/<日付>/<同名>`` に付け替わり、ホスト（本番）の成果物と同じキーで突き合わせられる。
 """
 
 from __future__ import annotations
@@ -21,6 +23,8 @@ from zoneinfo import ZoneInfo
 
 JST = ZoneInfo("Asia/Tokyo")
 SHADOW_ROOT = "shadow"
+PARALLEL_ROOT = "parallel"
+_ROOT = SHADOW_ROOT          # install(root=…) で切り替える（プロセスに 1 つ）
 
 READ_BLOB_ATTRS = frozenset({
     "download_as_bytes", "download_as_text", "download_as_string", "download_to_filename", "download_to_file",
@@ -42,12 +46,13 @@ class ShadowViolation(RuntimeError):
     """影モードで許されない操作（本番への書き込み・削除など）を試みた。"""
 
 
-def shadow_prefix(now: datetime | None = None, root: str = SHADOW_ROOT) -> str:
-    """``shadow/YYYYMMDD/``（JST の日付）。"""
-    return f"{root}/{(now or datetime.now(JST)).astimezone(JST).strftime('%Y%m%d')}/"
+def shadow_prefix(now: datetime | None = None, root: str | None = None) -> str:
+    """``shadow/YYYYMMDD/``（JST の日付。install(root="parallel") の後は ``parallel/YYYYMMDD/``）。"""
+    return f"{root or _ROOT}/{(now or datetime.now(JST)).astimezone(JST).strftime('%Y%m%d')}/"
 
 
-def assert_shadow_name(name: str, root: str = SHADOW_ROOT) -> str:
+def assert_shadow_name(name: str, root: str | None = None) -> str:
+    root = root or _ROOT
     if not name.startswith(f"{root}/"):
         raise ShadowViolation(f"影モードは {root}/ 以外に書けません: {name!r}")
     return name
@@ -132,11 +137,12 @@ def wrap_bucket(bucket: Any) -> Any:
     return bucket if isinstance(bucket, ShadowBucket) else ShadowBucket(bucket)
 
 
-def install() -> None:
-    """影モードの子プロセスの先頭で 1 回呼ぶ。冪等。"""
-    global _INSTALLED
+def install(root: str = SHADOW_ROOT) -> None:
+    """影モード（root="shadow"）・GCP Jobs の並走（root="parallel"）の子プロセスの先頭で 1 回呼ぶ。冪等（2 回目以降の root は無視）。"""
+    global _INSTALLED, _ROOT
     if _INSTALLED:
         return
+    _ROOT = root
     from google.cloud import storage as gcs_lib
 
     from src.scraper.storage import HybridStorage

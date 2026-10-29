@@ -76,7 +76,10 @@ def test_unready_groups_are_not_created_by_default():
     for gid in DOC["scheduler_groups"]:
         ready = SG.group_is_ready(DOC, gid)
         assert (f"keiba-{gid} " in text) == ready, gid
-    assert "準備できたジョブが無いので作らない" in text
+    if not all(SG.group_is_ready(DOC, gid) for gid in DOC["scheduler_groups"]):
+        assert "準備できたジョブが無いので作らない" in text
+    doc = {**DOC, "jobs": [{**j, "ready": False} for j in DOC["jobs"]]}                   # 準備できたジョブが無ければ作らない
+    assert "keiba-g-" not in SG.render("scheduler", doc, env=ENV).replace("# g-", "") and "準備できたジョブが無いので作らない" in SG.render("scheduler", doc, env=ENV)
 
 
 def test_run_job_memory_matches_sizes_and_secrets_not_inlined():

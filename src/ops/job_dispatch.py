@@ -11,6 +11,9 @@
 - 実行ごとに ``ops/job_runs/<job_id>/<時刻>.json`` に記録（開始・終了・遅れ・結果・ピークメモリ）。切替判定（cron_cutover_status）がこれを読む。
 - 失敗は Slack（``src.utils.slack_notify.send_payload``）で通知し、終了コード 1 を返す（Cloud Run Jobs が失敗として扱う）。
 - 並走期間（``KEIBA_PARALLEL_RUN=1``）は、job_map の ``parallel_env``（例: 予測を影モードにして本番の予測を上書きしない）を適用する。
+  さらに各 step を ``src.ops.parallel_step`` で包み、GCS への書き込みを ``parallel/<日付>/`` に付け替える（ホストの本番の成果物を上書きしない）。
+  step の Slack は ``SLACK_WEBHOOK_URL_PARALLEL``（並走用のチャンネル）へ。未設定なら送らない（ホストの通知と二重にしない）。
+  ホストに相当の無い新設のジョブ（取得タスクの予約・影の集計など、本番の書き込みが役目のもの）は job_map で ``parallel_guard: false``。
 """
 
 from __future__ import annotations
@@ -117,6 +120,20 @@ def missing_outputs(job: dict[str, Any], root: Path, params: dict[str, str], sin
         if not any(p.is_file() and p.stat().st_mtime >= since_epoch for p in Path(root).glob(rendered)):
             miss.append(rendered)
     return miss
+
+
+SLACK_VARS = ("SLACK_WEBHOOK_URL", "SLACK_WEBHOOK_URL_RESULTS", "SLACK_WEBHOOK_URL_REPORT", "SLACK_WEBHOOK_URL_ALERT")
+
+
+def parallel_wrap(argv: list[str], env: dict[str, str]) -> tuple[list[str], dict[str, str]]:
+    """並走期間の step: ``-m <module>`` を ``-m src.ops.parallel_step <module>`` に包み（GCS の書き込みを parallel/ へ）、
+    Slack の送り先を並走用（``SLACK_WEBHOOK_URL_PARALLEL``）に差し替える。未設定なら送らない。"""
+    if len(argv) >= 2 and argv[0] == "-m" and argv[1] != "src.ops.parallel_step":
+        argv = ["-m", "src.ops.parallel_step", *argv[1:]]
+    alt = (env.get("SLACK_WEBHOOK_URL_PARALLEL") or "").strip()
+    names = {*SLACK_VARS, *(f"{v}_PROD" for v in SLACK_VARS), *(k for k in env if k.startswith("SLACK_WEBHOOK_URL"))} - {"SLACK_WEBHOOK_URL_PARALLEL"}
+    env = {**env, **{k: alt for k in names}}      # KEIBA_ENV=prod は *_PROD を先に探す（slack_notify.webhook_url）ので、それも同じにする
+    return argv, env
 
 
 def default_runner(argv: list[str], env: dict[str, str], timeout: float, cwd: str) -> tuple[int, list[str]]:
@@ -293,12 +310,15 @@ def run_job(job: dict[str, Any], ctx: Ctx, params: dict[str, str], *, tick: date
 
     started_epoch = time.time() - 1
     status = OK
+    guarded = env.get("KEIBA_PARALLEL_RUN") == "1" and job.get("parallel_guard", True)
     for i, st in enumerate(job["steps"]):
         try:
             argv = [render(a, params, models) for a in st["argv"]]
         except KeyError as exc:
             return finish(FAILED, f"step {i}: {exc}")
         senv = {**env, **{k: render(v, params, models) for k, v in (st.get("env") or {}).items()}}
+        if guarded:
+            argv, senv = parallel_wrap(argv, senv)
         left = deadline - time.monotonic()
         if left <= 0:
             rec["steps"].append({"argv": argv, "rc": 124, "sec": 0, "tail": ["[dispatch] 全体のタイムアウト"]})

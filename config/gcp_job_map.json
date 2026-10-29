@@ -113,7 +113,6 @@
    "timeout_sec": 1800,
    "desc": "ページ品質・並走検証。月曜は網羅状況と追走難度 v2 の突き合わせも",
    "jobs": [
-    "page-quality-check",
     "parity-check",
     "slack-scrape-coverage",
     "tracking-v2-weekly",
@@ -166,10 +165,10 @@
    ]
   },
   "g-5min": {
-   "cron_jst": "*/5 * * * *",
+   "cron_jst": "*/15 * * * *",
    "size": "m",
    "timeout_sec": 300,
-   "desc": "VPS ハートビート監視。15 分おきにスクレイピング異常の通知",
+   "desc": "VPS ハートビート監視。15 分おきにスクレイピング異常の通知（2026-10-29: 起動を 5 分→15 分おきに。動くジョブが 15 分おきだけのため）",
    "jobs": [
     "vps-watchdog",
     "slack-scrape-alerts"
@@ -371,11 +370,11 @@
     "rtol": 1e-09,
     "atol": 1e-09
    },
-   "blockers": [
-    "Jobs で 1 回手動実行して、出力がホストと一致すること（state_in は 2026-10-28 に race_result_flat だけ（約 22MB）に絞った。以前は tables 全部で 2.9GB）"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false
+   "ready": true,
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: Jobs で 1 回手動実行して、出力がホストと一致すること（state_in は 2026-10-28 に race_result_flat だけ（約 22MB）に絞った。以前は tables 全部で 2.9GB）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "export-tables-daily",
@@ -493,12 +492,11 @@
     "rtol": 0.0,
     "atol": 0.0
    },
-   "blockers": [
-    "Jobs で 1 回手動実行（当年のファイルを state から取り、GCS の生データから増分を追記）。ホストで同じ入力に対して実行し『すでにエクスポート済み』で出力が変わらないことは確認済み（2.3 秒・344MB）",
-    "馬場速度の日次計算（track_speed_daily）を同 Job に追加済み。初回実行後、ホストの data/page_reference/track_speed/races_{year}.parquet と行・値が一致することを確認する（基準表は静的）"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false
+   "ready": true,
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: Jobs で 1 回手動実行（当年のファイルを state から取り、GCS の生データから増分を追記）。ホストで同じ入力に対して実行し『すでにエクスポート済み』で出力が変わらないことは確認済み（2.3 秒・344MB） / 馬場速度の日次計算（track_speed_daily）を同 Job に追加済み。初回実行後、ホストの data/page_reference/track_speed/races_{year}.parquet と行・値が一致することを確認する（基準表は静的）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "serving-state-precompute",
@@ -642,18 +640,18 @@
     "rtol": 1e-09,
     "atol": 1e-09
    },
-   "blockers": [
-    "Jobs で 1 回手動実行（ホストでは 28 秒・ピーク RSS 3.6GB。出力 features_2026.parquet は host と全列一致を確認済み）。serving_bundle は state/ に出し、predict-race / day-prep / eve-precompute が state_in で読む"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false,
+   "ready": true,
    "models": [
     "layer_a"
    ],
    "require_out": [
     "data/local/modeling/feature_store/horse_history/features_{year}.parquet",
     "data/local/modeling/feature_store/serving_bundle/meta.json"
-   ]
+   ],
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: Jobs で 1 回手動実行（ホストでは 28 秒・ピーク RSS 3.6GB。出力 features_2026.parquet は host と全列一致を確認済み）。serving_bundle は state/ に出し、predict-race / day-prep / eve-precompute が state_in で読む",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "serving-state-profile",
@@ -807,11 +805,9 @@
     "rtol": 1e-06,
     "atol": 1e-06
    },
-   "blockers": [
-    "モデル lap_models は GCS に公開済み(2026-10-25)。Jobs で 1 回手動実行して、ラップ予想がホストと一致することを確認"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false,
+   "ready": true,
    "cutover": {
     "min_consecutive_success": 4,
     "window_days": 21,
@@ -825,7 +821,9 @@
    ],
    "mirror_in": [
     "data/page_reference/race_lists"
-   ]
+   ],
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: モデル lap_models は GCS に公開済み(2026-10-25)。Jobs で 1 回手動実行して、ラップ予想がホストと一致することを確認",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "slack-scrape-summary-morning",
@@ -850,7 +848,9 @@
       "summary",
       "--when",
       "nonraceday",
-      "--send"
+      "--send",
+      "--source",
+      "prod"
      ]
     }
    ],
@@ -866,28 +866,28 @@
     "SLACK_WEBHOOK_URL",
     "SLACK_WEBHOOK_URL_RESULTS",
     "SLACK_WEBHOOK_URL_REPORT",
-    "SLACK_WEBHOOK_URL_ALERT"
+    "SLACK_WEBHOOK_URL_ALERT",
+    "KEIBA_FETCH_SHADOW_ENABLED"
    ],
-   "state_in": [
-    {
-     "path": "data/local/meta",
-     "max_mb": 150
-    }
-   ],
+   "state_in": [],
    "state_out": [],
    "parity": {
     "kind": "none"
    },
-   "blockers": [
-    "スクレイピング状況の元データ（data/local/meta/scrape_*）が GCS 上のどこにあるか要確認（VPS 実行役の結果記録に置き換える）"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false
+   "ready": true,
+   "mirror_in": [
+    "data/page_reference/race_lists"
+   ],
+   "reason": "2026-10-29: --source prod で GCS の実行記録（GCP の ops/job_runs・VPS の ops/fetch_tasks。並走中は ops/fetch_tasks_shadow）から状態を作る形にした。キュー・スキーマ違反・data_health はホストのローカルにだけあるので prod では扱わない。",
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: ホストの結果との差分（日次の差分チェック）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "page-quality-check",
    "desc": "ページ品質チェック（表示の検査）",
-   "destination": "gcp",
+   "destination": "vps",
    "phase": 3,
    "wave": 1,
    "origin": {
@@ -896,44 +896,33 @@
     "cron_utc": "0 23 * * *",
     "script": "src/monitor/page_quality_check.py"
    },
-   "group": "g-0800",
-   "when_jst": null,
-   "steps": [
-    {
-     "argv": [
-      "-m",
-      "src.monitor.page_quality_check"
-     ]
-    }
-   ],
-   "memory_mib": 1024,
-   "timeout_sec": 600,
+   "schedule_jst": "0 8 * * *",
+   "fetch_task": {
+    "task": "page-quality-check",
+    "args": {}
+   },
+   "memory_mib": 250,
+   "timeout_sec": 900,
    "env": [
-    "KEIBA_ENV",
-    "KEIBA_RUN_LOCATION",
     "GCS_BUCKET",
-    "GCS_PROJECT_ID",
-    "TZ",
-    "KEIBA_PAGE_QUALITY_BASE_URL"
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION"
    ],
    "state_in": [],
-   "state_out": [
-    {
-     "path": "data/local/page_quality",
-     "max_mb": 20
-    }
-   ],
+   "state_out": [],
    "parity": {
     "kind": "none"
    },
-   "blockers": [
-    "検査対象の URL（prod の API / app）を環境変数で渡せるか要確認"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false
+   "ready": true,
+   "reason": "2026-10-29: netkeiba にログインして代表ページを取得する処理なので、GCP Jobs ではなく VPS の取得タスク page-quality-check に移した（netkeiba に触れるのは VPS 実行役だけ。GCP の IP からの到達は未検証）。要約は ops/page_quality/latest.json（ホストも同じ要約を上げる）",
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: ホストの結果との差分（日次の差分チェック）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "gcp-daily-cost-report",
+   "parallel_guard": false,
    "desc": "GCP 日次コスト報告（予算超過の早期警戒）",
    "destination": "gcp",
    "phase": 3,
@@ -981,6 +970,7 @@
   },
   {
    "id": "fetch-shadow-report",
+   "parallel_guard": false,
    "desc": "影モード（VPS の取得をホストと並走で検証）の日次集計。前日分の成功率・本番との一致率・合否を ops/fetch_shadow/daily/ に書く",
    "destination": "gcp",
    "phase": 4,
@@ -1032,6 +1022,7 @@
   },
   {
    "id": "parity-check",
+   "parallel_guard": false,
    "desc": "並走検証（ホストと GCP の成果物の一致判定。並走期間のみ）",
    "destination": "gcp",
    "phase": 3,
@@ -1076,11 +1067,11 @@
    "parity": {
     "kind": "none"
    },
-   "blockers": [
-    "ホスト側の成果物の GCS 公開（host_snapshot）を並走期間だけ有効にする（手順: docs/operations/gcp_jobs_migration.md）"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false
+   "ready": true,
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: ホスト側の成果物の GCS 公開（host_snapshot）を並走期間だけ有効にする（手順: docs/operations/gcp_jobs_migration.md）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "slack-scrape-coverage",
@@ -1103,7 +1094,9 @@
       "src.scripts.data.scrape_status_notify",
       "--mode",
       "coverage",
-      "--send"
+      "--send",
+      "--source",
+      "prod"
      ]
     }
    ],
@@ -1119,28 +1112,28 @@
     "SLACK_WEBHOOK_URL",
     "SLACK_WEBHOOK_URL_RESULTS",
     "SLACK_WEBHOOK_URL_REPORT",
-    "SLACK_WEBHOOK_URL_ALERT"
+    "SLACK_WEBHOOK_URL_ALERT",
+    "KEIBA_FETCH_SHADOW_ENABLED"
    ],
-   "state_in": [
-    {
-     "path": "data/local/meta",
-     "max_mb": 150
-    }
-   ],
+   "state_in": [],
    "state_out": [],
    "parity": {
     "kind": "none"
    },
-   "blockers": [
-    "scrape_status と同じ元データの置き場の確認"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false,
+   "ready": true,
    "cutover": {
     "min_consecutive_success": 2,
     "window_days": 35,
     "parity_min_days": 2
-   }
+   },
+   "mirror_in": [
+    "data/page_reference/race_lists"
+   ],
+   "reason": "2026-10-29: --source prod で GCS の実行記録（GCP の ops/job_runs・VPS の ops/fetch_tasks。並走中は ops/fetch_tasks_shadow）から状態を作る形にした。キュー・スキーマ違反・data_health はホストのローカルにだけあるので prod では扱わない。",
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: ホストの結果との差分（日次の差分チェック）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "tracking-v2-weekly",
@@ -1186,7 +1179,10 @@
     },
     {
      "path": "data/page_reference/tables",
-     "max_mb": 600
+     "max_mb": 60,
+     "include": [
+      "*/race_result_flat.parquet"
+     ]
     }
    ],
    "state_out": [
@@ -1204,16 +1200,16 @@
     "rtol": 1e-06,
     "atol": 1e-06
    },
-   "blockers": [
-    "tracking_v2 の前夜保存（eve-precompute）が GCP に移ってから切り替える"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false,
+   "ready": true,
    "cutover": {
     "min_consecutive_success": 2,
     "window_days": 35,
     "parity_min_days": 2
-   }
+   },
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: tracking_v2 の前夜保存（eve-precompute）が GCP に移ってから切り替える",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "drift-monitor-weekly",
@@ -1295,7 +1291,7 @@
     "atol": 1e-06
    },
    "blockers": [
-    "full エンジンは全履歴を読む（メモリ 4Gi に収まるか実測）。bundle エンジンへの切替を検討"
+    "state_in の tables（data/page_reference/tables 全体。ホストで 2.9GB）が上限 600MB を超えて必ず失敗する。drift_dump_features は V3Serving（full エンジン）を通すので、読む表を特定して include で絞るか、bundle エンジンに切り替える（メモリ 4Gi に収まるかも実測）。2026-10-29 の確認"
    ],
    "enabled": true,
    "ready": false,
@@ -1375,16 +1371,16 @@
     "rtol": 1e-06,
     "atol": 1e-06
    },
-   "blockers": [
-    "凍結ルール config/tp59_frozen_rule.json と予測ファイルが state_in で届くこと"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false,
+   "ready": true,
    "cutover": {
     "min_consecutive_success": 2,
     "window_days": 35,
     "parity_min_days": 2
-   }
+   },
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: 凍結ルール config/tp59_frozen_rule.json と予測ファイルが state_in で届くこと",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "odds-drift-weekly",
@@ -1492,7 +1488,9 @@
       "summary",
       "--when",
       "raceday",
-      "--send"
+      "--send",
+      "--source",
+      "prod"
      ]
     }
    ],
@@ -1508,23 +1506,23 @@
     "SLACK_WEBHOOK_URL",
     "SLACK_WEBHOOK_URL_RESULTS",
     "SLACK_WEBHOOK_URL_REPORT",
-    "SLACK_WEBHOOK_URL_ALERT"
+    "SLACK_WEBHOOK_URL_ALERT",
+    "KEIBA_FETCH_SHADOW_ENABLED"
    ],
-   "state_in": [
-    {
-     "path": "data/local/meta",
-     "max_mb": 150
-    }
-   ],
+   "state_in": [],
    "state_out": [],
    "parity": {
     "kind": "none"
    },
-   "blockers": [
-    "scrape_status と同じ元データの置き場の確認"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false
+   "ready": true,
+   "mirror_in": [
+    "data/page_reference/race_lists"
+   ],
+   "reason": "2026-10-29: --source prod で GCS の実行記録（GCP の ops/job_runs・VPS の ops/fetch_tasks。並走中は ops/fetch_tasks_shadow）から状態を作る形にした。キュー・スキーマ違反・data_health はホストのローカルにだけあるので prod では扱わない。",
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: ホストの結果との差分（日次の差分チェック）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "eve-precompute",
@@ -1619,11 +1617,9 @@
     "rtol": 1e-06,
     "atol": 1e-06
    },
-   "blockers": [
-    "final_odds は公開済み(2026-10-25)。取得の raceday-eve-fetch が VPS の担当になる（または GCS の出馬表が揃う）こと。揃ったら Jobs で 1 回手動実行して確認"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false,
+   "ready": true,
    "cutover": {
     "min_consecutive_success": 4,
     "window_days": 21,
@@ -1638,10 +1634,13 @@
    "mirror_in": [
     "data/page_reference/race_lists",
     "data/page_reference/race_day_schedule"
-   ]
+   ],
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: final_odds は公開済み(2026-10-25)。取得の raceday-eve-fetch が VPS の担当になる（または GCS の出馬表が揃う）こと。揃ったら Jobs で 1 回手動実行して確認",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "reserve-race-day",
+   "parallel_guard": false,
    "desc": "翌開催日の全レースの T-60/T-15/T-10/T-5/T-2 取得タスクと予測タスクを前夜に予約",
    "destination": "gcp",
    "phase": 3,
@@ -1795,11 +1794,9 @@
     "rtol": 1e-06,
     "atol": 1e-06
    },
-   "blockers": [
-    "モデル lap_models は GCS に公開済み(2026-10-25)。Jobs で 1 回手動実行して、ラップ予想がホストと一致することを確認"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false,
+   "ready": true,
    "cutover": {
     "min_consecutive_success": 4,
     "window_days": 21,
@@ -1813,7 +1810,9 @@
    ],
    "mirror_in": [
     "data/page_reference/race_lists"
-   ]
+   ],
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: モデル lap_models は GCS に公開済み(2026-10-25)。Jobs で 1 回手動実行して、ラップ予想がホストと一致することを確認",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "horse-name-index",
@@ -1851,37 +1850,46 @@
    "state_in": [
     {
      "path": "data/calculated_data",
-     "max_mb": 200
+     "max_mb": 450,
+     "include": [
+      "knowledge/**",
+      "growth_curve/**"
+     ]
     }
    ],
    "state_out": [
     {
      "path": "data/calculated_data",
-     "max_mb": 200
+     "max_mb": 450,
+     "include": [
+      "knowledge/**",
+      "growth_curve/**"
+     ]
     }
    ],
    "parity": {
     "kind": "json_tree",
     "paths": [
-     "data/calculated_data"
+     "data/calculated_data/knowledge"
     ],
     "keys": [],
     "rtol": 1e-09,
     "atol": 1e-09
    },
-   "blockers": [
-    "data/calculated_data の GCS 配置と容量の確認"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false,
+   "ready": true,
    "cutover": {
     "min_consecutive_success": 2,
     "window_days": 35,
     "parity_min_days": 2
-   }
+   },
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: data/calculated_data の GCS 配置と容量の確認",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "reserve-fetch-tasks",
+   "parallel_guard": false,
    "desc": "VPS 実行役の定期タスク（cron 相当）を取得タスク表に予約",
    "destination": "gcp",
    "phase": 4,
@@ -1928,6 +1936,7 @@
   },
   {
    "id": "vps-watchdog",
+   "parallel_guard": false,
    "desc": "VPS のハートビート監視（死活・メモリ・swap・ユニット・ディスク）",
    "destination": "gcp",
    "phase": 3,
@@ -1969,7 +1978,7 @@
     "kind": "none"
    },
    "blockers": [
-    "VPS からハートビートが届くこと（gcp-api の /ops/heartbeat とVPS の送信タイマー）"
+    "VPS のハートビート: keiba-monitor に秘密 KEIBA_HEARTBEAT_SECRET（=KEIBA_HEARTBEAT_KEY）を渡して再配備し（monitor の SA に読み取り権限）、VPS の /etc/keiba-ui/heartbeat.env に HEARTBEAT_URL（keiba-monitor の /ops/heartbeat）と鍵を入れて keiba-heartbeat.timer を有効にする（scripts/ops/vps/vps_03_cloudrun_heartbeat.sh。2026-10-29 時点で POST は 401・タイマー無し）"
    ],
    "enabled": true,
    "ready": false,
@@ -1998,7 +2007,9 @@
       "src.scripts.data.scrape_status_notify",
       "--mode",
       "alerts",
-      "--send"
+      "--send",
+      "--source",
+      "prod"
      ]
     }
    ],
@@ -2014,26 +2025,36 @@
     "SLACK_WEBHOOK_URL",
     "SLACK_WEBHOOK_URL_RESULTS",
     "SLACK_WEBHOOK_URL_REPORT",
-    "SLACK_WEBHOOK_URL_ALERT"
+    "SLACK_WEBHOOK_URL_ALERT",
+    "KEIBA_FETCH_SHADOW_ENABLED"
    ],
    "state_in": [
     {
-     "path": "data/local/meta",
-     "max_mb": 150
+     "path": "data/local/meta/slack_sent",
+     "max_mb": 1
     }
    ],
-   "state_out": [],
+   "state_out": [
+    {
+     "path": "data/local/meta/slack_sent",
+     "max_mb": 1
+    }
+   ],
    "parity": {
     "kind": "none"
    },
-   "blockers": [
-    "scrape_status と同じ元データの置き場の確認"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false,
+   "ready": true,
    "cutover": {
     "min_consecutive_success": 30
-   }
+   },
+   "mirror_in": [
+    "data/page_reference/race_lists"
+   ],
+   "reason": "2026-10-29: --source prod で GCS の実行記録（GCP の ops/job_runs・VPS の ops/fetch_tasks。並走中は ops/fetch_tasks_shadow）から状態を作る形にした。キュー・スキーマ違反・data_health はホストのローカルにだけあるので prod では扱わない。通知の抑制状態は data/local/meta/slack_sent を state で持ち回る。",
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: ホストの結果との差分（日次の差分チェック）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "prediction-results-refresh",
@@ -2112,17 +2133,16 @@
     "rtol": 1e-06,
     "atol": 1e-06
    },
-   "blockers": [
-    "過去分の予測（predictions_backfill・predictions_v3）と集計済みの日次記録を、ホストから GCS へ一度だけ種まきする（python -m src.ops.state_sync push --job prediction-results-refresh --which in、python -m src.scripts.data.prediction_results --sync-gcs）",
-    "predict-race（GCP）が出す predictions_v6 が state に届くこと（predict-race の blockers が先）"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false,
+   "ready": true,
    "cutover": {
     "min_consecutive_success": 4,
     "window_days": 21,
     "parity_min_days": 3
-   }
+   },
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: 過去分の予測（predictions_backfill・predictions_v3）と集計済みの日次記録を、ホストから GCS へ一度だけ種まきする（python -m src.ops.state_sync push --job prediction-results-refresh --which in、python -m src.scripts.data.prediction_results --sync-gcs） / predict-race（GCP）が出す predictions_v6 が state に届くこと（predict-race の blockers が先）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "slack-results",
@@ -2195,16 +2215,16 @@
     "rtol": 1e-06,
     "atol": 1e-06
    },
-   "blockers": [
-    "prediction-results-refresh（集計）が GCP で動き、予測成績が GCS に出ること"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false,
+   "ready": true,
    "cutover": {
     "min_consecutive_success": 4,
     "window_days": 21,
     "parity_min_days": 3
-   }
+   },
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: prediction-results-refresh（集計）が GCP で動き、予測成績が GCS に出ること",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "predict-race",
@@ -2319,12 +2339,9 @@
     "rtol": 1e-06,
     "atol": 1e-06
    },
-   "blockers": [
-    "Jobs で 1 レース手動実行して、predictions_v6 が出力され、ホストの同レースの予測と一致すること（2026-10-26 の初回は v6 の準備が失敗していたのに ok だった。fail-fast と require_out を追加）",
-    "state/ の種まき（ホストで state_sync push --job predict-race --which in）: data/local/inference/state（rb_v6・px_v5 を含む）・data/local/modeling/feature_store/horse_history・tables。これらを日次で更新する Jobs（export-tables-daily・feature-accumulate・serving-state-precompute・px-ridge-window・rb-state-daily）が ready になるまで、履歴は種まき時点で止まる"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false,
+   "ready": true,
    "cutover": {
     "min_consecutive_success": 4,
     "window_days": 21,
@@ -2340,10 +2357,13 @@
    "mirror_in": [
     "data/page_reference/race_lists",
     "data/page_reference/race_day_schedule"
-   ]
+   ],
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: Jobs で 1 レース手動実行して、predictions_v6 が出力され、ホストの同レースの予測と一致すること（2026-10-26 の初回は v6 の準備が失敗していたのに ok だった。fail-fast と require_out を追加） / state/ の種まき（ホストで state_sync push --job predict-race --which in）: data/local/inference/state（rb_v6・px_v5 を含む）・data/local/modeling/feature_store/horse_history・tables。これらを日次で更新する Jobs（export-tables-daily・feature-accumulate・serving-state-precompute・px-ridge-window・rb-state-daily）が ready になるまで、履歴は種まき時点で止まる",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "event-pump",
+   "parallel_guard": false,
    "desc": "VPS 実行役の馬体重検知イベント（ops/events/weights_announced/）を見つけて、予測タスクを Cloud Tasks に積む",
    "destination": "gcp",
    "phase": 3,
@@ -2805,15 +2825,15 @@
     "kind": "none"
    },
    "enabled": true,
-   "blockers": [
-    "VPS の 250M での実測後に fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS へ追加（実行役の段階移行。docs/operations/vps_agent.md）"
-   ],
-   "ready": false,
+   "blockers": [],
+   "ready": true,
    "cutover": {
     "min_consecutive_success": 4,
     "window_days": 21,
     "parity_min_days": 3
-   }
+   },
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: VPS の 250M での実測後に fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS へ追加（実行役の段階移行。docs/operations/vps_agent.md）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "raceday-eve-fetch",
@@ -2845,10 +2865,10 @@
     "kind": "none"
    },
    "enabled": true,
-   "blockers": [
-    "VPS の 250M での実測後に fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS へ追加（実行役の段階移行。docs/operations/vps_agent.md）"
-   ],
-   "ready": false
+   "blockers": [],
+   "ready": true,
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: VPS の 250M での実測後に fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS へ追加（実行役の段階移行。docs/operations/vps_agent.md）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "raceday-comment-morning",
@@ -2880,10 +2900,10 @@
     "kind": "none"
    },
    "enabled": true,
-   "blockers": [
-    "VPS の 250M での実測後に fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS へ追加（実行役の段階移行。docs/operations/vps_agent.md）"
-   ],
-   "ready": false
+   "blockers": [],
+   "ready": true,
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: VPS の 250M での実測後に fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS へ追加（実行役の段階移行。docs/operations/vps_agent.md）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "raceday-comment-evening",
@@ -2915,10 +2935,10 @@
     "kind": "none"
    },
    "enabled": true,
-   "blockers": [
-    "VPS の 250M での実測後に fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS へ追加（実行役の段階移行。docs/operations/vps_agent.md）"
-   ],
-   "ready": false
+   "blockers": [],
+   "ready": true,
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: VPS の 250M での実測後に fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS へ追加（実行役の段階移行。docs/operations/vps_agent.md）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "new-horse-pedigree",
@@ -2950,10 +2970,10 @@
     "kind": "none"
    },
    "enabled": true,
-   "blockers": [
-    "VPS の 250M での実測後に fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS へ追加（実行役の段階移行。docs/operations/vps_agent.md）"
-   ],
-   "ready": false
+   "blockers": [],
+   "ready": true,
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: VPS の 250M での実測後に fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS へ追加（実行役の段階移行。docs/operations/vps_agent.md）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "shutuba-audit",
@@ -2985,15 +3005,15 @@
     "kind": "none"
    },
    "enabled": true,
-   "blockers": [
-    "取得タスクのコードは済み（その場で取り直す直接モード。fetch_child が KEIBA_SHUTUBA_AUDIT_DIRECT=1 を既定にする）。残りは VPS の 250M での実測後に fetch_owner.json の agent_tasks / DEFAULT_AGENT_TASKS へ追加すること（実行役が影モードを抜けた後。docs/operations/vps_agent.md）。それまではホストの cron（06:40）が担当"
-   ],
-   "ready": false,
+   "blockers": [],
+   "ready": true,
    "cutover": {
     "min_consecutive_success": 4,
     "window_days": 21,
     "parity_min_days": 3
-   }
+   },
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: 取得タスクのコードは済み（その場で取り直す直接モード。fetch_child が KEIBA_SHUTUBA_AUDIT_DIRECT=1 を既定にする）。残りは VPS の 250M での実測後に fetch_owner.json の agent_tasks / DEFAULT_AGENT_TASKS へ追加すること（実行役が影モードを抜けた後。docs/operations/vps_agent.md）。それまではホストの cron（06:40）が担当",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "backfill-past",
@@ -3196,15 +3216,15 @@
     "kind": "none"
    },
    "enabled": true,
-   "blockers": [
-    "VPS の 250M での実測後に fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS へ追加（実行役の段階移行。docs/operations/vps_agent.md）"
-   ],
-   "ready": false,
+   "blockers": [],
+   "ready": true,
    "cutover": {
     "min_consecutive_success": 2,
     "window_days": 35,
     "parity_min_days": 2
-   }
+   },
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: VPS の 250M での実測後に fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS へ追加（実行役の段階移行。docs/operations/vps_agent.md）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "race-odds-per-race",
@@ -3749,25 +3769,37 @@
    ],
    "state_in": [
     {
-     "path": "config",
-     "max_mb": 5
+     "path": "data/local/auth",
+     "max_mb": 1,
+     "include": [
+      "shared_login_state.json"
+     ]
     }
    ],
    "state_out": [
     {
-     "path": "config",
-     "max_mb": 5
+     "path": "data/local/auth",
+     "max_mb": 1,
+     "include": [
+      "shared_login_state.json"
+     ]
     }
    ],
    "parity": {
     "kind": "none"
    },
-   "blockers": [
-    "秘密(DEV_SECRET_KEY=パスワードの元・KEIBA_SHARED_LOGIN_ID・SLACK_WEBHOOK_URL)を Secret Manager に登録して Jobs の env に渡す(ユーザー作業)。パスワードは年月と秘密から決まるので、ホストと同じ値なら切替前後で同じ",
-    "『送信済みの月』の状態ファイル(shared_login_state.json)がローカル。GCS に置く形にしないと、Jobs が毎回再送する/月初に送れない"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false
+   "ready": true,
+   "parallel_env": {
+    "KEIBA_SHARED_LOGIN_DRY": "1"
+   },
+   "mirror_in": [
+    "data/local/auth"
+   ],
+   "reason": "2026-10-29: 並走中は KEIBA_SHARED_LOGIN_DRY=1 で判定だけ（名簿・状態を書かず、通知しない）。名簿は ops/mirror の members.json を mirror_in で読む。状態ファイル shared_login_state.json は state で持ち回る（以前は config を丸ごと state にしていた）。切替時の残り: 名簿の正本をホストから移し、Jobs が書き換えた名簿を ops/mirror へ上げる（今は root の gcs-mirror-push-auth が上げている）",
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: 秘密 DEV_SECRET_KEY（パスワードの元。ホストと同じ値）と KEIBA_SHARED_LOGIN_ID を Secret Manager に登録し、Jobs に渡す（SECRETS_EXTRA。ユーザー作業）。未登録の間は『ID 未設定』で何もしない（exit 0）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "rb-state-daily",
@@ -3821,14 +3853,14 @@
    "parity": {
     "kind": "none"
    },
-   "blockers": [
-    "Jobs のイメージで 1 回手動実行して、state/rb_v6 が GCS に出ること（gcloud run jobs execute）"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false,
+   "ready": true,
    "require_out": [
     "data/local/inference/state/rb_v6/hist.parquet"
-   ]
+   ],
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: Jobs のイメージで 1 回手動実行して、state/rb_v6 が GCS に出ること（gcloud run jobs execute）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "px-ridge-window",
@@ -3887,14 +3919,14 @@
    "parity": {
     "kind": "none"
    },
-   "blockers": [
-    "次の半年の T0 の 30 日前（2026-12-02）以降の月曜に初めて実際にリッジを作る。それまで確認するには手動で --today 2026-12-10 を渡して実行（ホストでの実測は未了。祖先表・SVD は数 GB の見込み）"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false,
+   "ready": true,
    "models": [
     "v4_train_table"
-   ]
+   ],
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: 次の半年の T0 の 30 日前（2026-12-02）以降の月曜に初めて実際にリッジを作る。それまで確認するには手動で --today 2026-12-10 を渡して実行（ホストでの実測は未了。祖先表・SVD は数 GB の見込み）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "gcs-mirror-push",
@@ -3985,11 +4017,9 @@
      "max_mb": 200
     }
    ],
-   "blockers": [
-    "ホストの実測: ピーク RSS 約 12GB・約 85 秒（2026-10-26）。Jobs の 16GiB で 1 回手動実行して、state/<日>/ にキャッシュが出ること"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false,
+   "ready": true,
    "requires_race_day": "today",
    "state_out": [
     {
@@ -4010,7 +4040,9 @@
    "mirror_in": [
     "data/page_reference/race_lists",
     "data/page_reference/race_day_schedule"
-   ]
+   ],
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: ホストの実測: ピーク RSS 約 12GB・約 85 秒（2026-10-26）。Jobs の 16GiB で 1 回手動実行して、state/<日>/ にキャッシュが出ること",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "parse-drift-daily",
@@ -4053,14 +4085,14 @@
     }
    ],
    "state_out": [],
-   "blockers": [
-    "Jobs で 1 回手動実行して、全年の flat（約 260MB）の種まき（state_sync push --job parse-drift-daily --which in）と所要・メモリを確認"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false,
+   "ready": true,
    "depends": [
     "export-tables-daily"
-   ]
+   ],
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: Jobs で 1 回手動実行して、全年の flat（約 260MB）の種まき（state_sync push --job parse-drift-daily --which in）と所要・メモリを確認",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "race-analysis-daily",
@@ -4109,12 +4141,9 @@
    "parity": {
     "kind": "none"
    },
-   "blockers": [
-    "Jobs で 1 回手動実行して、data/local/race_analysis/ がホストの結果と一致すること（ホストでは 2026-10-28 時点で未実行。export_tables_daily.sh の最後の段で初めて動く）",
-    "父の系統台帳 sire_line_map.json の正本を GCS に置くこと（棚卸し #24）"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false,
+   "ready": true,
    "mirror_in": [
     "data/page_reference/pedigree_race_index",
     "data/local/race_analysis"
@@ -4122,7 +4151,9 @@
    "mirror_out": [
     "data/local/race_analysis",
     "data/page_reference/pedigree_race_index"
-   ]
+   ],
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: Jobs で 1 回手動実行して、data/local/race_analysis/ がホストの結果と一致すること（ホストでは 2026-10-28 時点で未実行。export_tables_daily.sh の最後の段で初めて動く） / 父の系統台帳 sire_line_map.json の正本を GCS に置くこと（棚卸し #24）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "hem-megu-state",
@@ -4159,18 +4190,46 @@
    "state_in": [
     {
      "path": "data/page_reference/tables",
-     "max_mb": 600
+     "max_mb": 120,
+     "include": [
+      "*/megu_index_flat.parquet",
+      "*/race_result_flat.parquet"
+     ]
+    },
+    {
+     "path": "data/local/modeling/hem",
+     "max_mb": 1,
+     "include": [
+      "hem_params.json"
+     ]
     }
    ],
-   "state_out": [],
-   "parity": {
-    "kind": "none"
-   },
-   "blockers": [
-    "入力と出力（状態ファイルの置き場）を確認して state_in / state_out を埋める。ホストは月曜 07:30 JST、ここでは g-1000-mon（月曜 10:00）に置くので、使う側が 10:00 より前に読まないことを確認"
+   "state_out": [
+    {
+     "path": "data/local/modeling/hem",
+     "max_mb": 5,
+     "include": [
+      "jockey_table.parquet"
+     ]
+    }
    ],
+   "parity": {
+    "kind": "parquet_frame",
+    "paths": [
+     "data/local/modeling/hem"
+    ],
+    "keys": [
+     "jockey_id"
+    ],
+    "rtol": 1e-09,
+    "atol": 1e-09
+   },
+   "blockers": [],
    "enabled": true,
-   "ready": false
+   "ready": true,
+   "reason": "2026-10-29: 入力は tables の megu_index_flat・race_result_flat（2020 年以降、計 約 65MB）と data/local/modeling/hem/hem_params.json、出力は data/local/modeling/hem/jockey_table.parquet（使う側は src/pipeline/inference/hem_megu_infer.py）。注意: megu_index_flat を GCP で更新する Job はまだ無い（ホストのめぐ指数のバッチが作る）ので、並走中は種まき時点の表で計算する",
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: hem_params.json（学習済みの超パラメータ。git に入らない）を state へ種まき（ホストで state_sync push --job hem-megu-state --which in）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "jma-weather",
@@ -4191,6 +4250,8 @@
      "argv": [
       "-m",
       "src.scraper.jma_weather",
+      "--halt-file",
+      "data/local/meta/jma_weather_halt.json",
       "daily"
      ]
     },
@@ -4198,6 +4259,8 @@
      "argv": [
       "-m",
       "src.scraper.jma_weather",
+      "--halt-file",
+      "data/local/meta/jma_weather_halt.json",
       "fetch",
       "--from",
       "20160101"
@@ -4213,17 +4276,33 @@
     "GCS_PROJECT_ID",
     "TZ"
    ],
-   "state_in": [],
-   "state_out": [],
+   "state_in": [
+    {
+     "path": "data/local/meta",
+     "max_mb": 1,
+     "include": [
+      "jma_weather_halt.json"
+     ]
+    }
+   ],
+   "state_out": [
+    {
+     "path": "data/local/meta",
+     "max_mb": 1,
+     "include": [
+      "jma_weather_halt.json"
+     ]
+    }
+   ],
    "parity": {
     "kind": "none"
    },
-   "blockers": [
-    "GCP の送信元 IP から気象庁に届くかを 1 回試す",
-    "中断印 data/local/meta/jma_weather_halt.json（終了コード 3 で作る）をローカルでなく GCS に置く形にする（Jobs は毎回まっさらなので、中断が効かない）"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false
+   "ready": true,
+   "reason": "2026-10-29: 中断印を --halt-file でジョブ自身が扱い、state で持ち回る（Jobs は毎回まっさらなので）。取得済みの判定は本番の保存（others/jma_weather_hourly）を読むので、並走中に取り直すのはホストより先に取った分だけ",
+   "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: GCP の送信元 IP から気象庁に届くか（初回の実行で確かめる。届かなければ HTTP エラーで中断印が state に残り、以降は始めない）",
+   "ready_confirmed_at": "2026-10-29"
   },
   {
    "id": "verify-past-values",

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_comment": "VPS の取得の『影モード』の設定。ホストが取得を続けたまま、VPS の実行役が同じ取得を shadow/<日付>/ 以下に保存して本番と比べる（docs/operations/vps_agent.md の影モードの章）。有効化は KEIBA_FETCH_SHADOW_ENABLED=1（既定オフ）。 2026-10-22: 取得元への負荷を最小にするため、対象を比較に必要な軽いタスクだけに絞り（entries-sync・race-odds-t60/t15・race-weight-check・daily-race-lists）、1日の上限を 2,500 から 800 に下げた。制限の疑いが出たら人が解除するまで再開しない（docs/operations/scraping_policy.md）。",
+  "_comment": "VPS の取得の『影モード』の設定。ホストが取得を続けたまま、VPS の実行役が同じ取得を shadow/<日付>/ 以下に保存して本番と比べる（docs/operations/vps_agent.md の影モードの章）。有効化は KEIBA_FETCH_SHADOW_ENABLED=1（既定オフ）。 2026-10-22: 取得元への負荷を最小にするため、対象を比較に必要な軽いタスクだけに絞り（entries-sync・race-odds-t60/t15・race-weight-check・daily-race-lists）、1日の上限を 2,500 から 800 に下げた。制限の疑いが出たら人が解除するまで再開しない（docs/operations/scraping_policy.md）。 2026-10-29: ホストの定期取得を全部 prod に並走で載せる方針（棚卸し §14）に合わせ、VPS 行きの全タスクを対象に戻し、1日の上限をホストの実績（data/local/meta/request_counts: 平日 1,000〜3,700、金曜 weekly-update で約 12,000）に合わせて 14,000 にした。VPS は別の IP なので、IP ごとの負荷はホスト単体と同じ。見積り（est_requests）は予約時に上限から差し引く量で、取得の無い日は早く終わる。比較の規則が無いタスク（compare=none）は shadow_report の全量突き合わせ（generic）で本番と比べる。",
   "tasks": {
     "entries-sync": {
       "est_requests": 25,
@@ -61,10 +61,146 @@
         60,
         300
       ]
+    },
+    "race-odds-t10": {
+      "est_requests": 2,
+      "compare": "odds",
+      "categories": [
+        "race_odds"
+      ],
+      "min_task_days": 1,
+      "jitter": [
+        0,
+        20
+      ]
+    },
+    "race-odds-t05": {
+      "est_requests": 2,
+      "compare": "odds",
+      "categories": [
+        "race_odds"
+      ],
+      "min_task_days": 1,
+      "jitter": [
+        0,
+        20
+      ]
+    },
+    "race-odds-t02": {
+      "est_requests": 2,
+      "compare": "odds",
+      "categories": [
+        "race_odds"
+      ],
+      "min_task_days": 1,
+      "jitter": [
+        0,
+        20
+      ]
+    },
+    "jra-baba-morning": {
+      "est_requests": 2,
+      "compare": "none",
+      "categories": [],
+      "min_task_days": 3,
+      "jitter": [
+        30,
+        120
+      ]
+    },
+    "recent-retry": {
+      "est_requests": 20,
+      "compare": "none",
+      "categories": [],
+      "min_task_days": 3,
+      "jitter": [
+        60,
+        300
+      ]
+    },
+    "barometer-retry": {
+      "est_requests": 10,
+      "compare": "none",
+      "categories": [],
+      "min_task_days": 3,
+      "jitter": [
+        60,
+        300
+      ]
+    },
+    "raceday-comment": {
+      "est_requests": 72,
+      "compare": "none",
+      "categories": [],
+      "min_task_days": 1,
+      "jitter": [
+        60,
+        300
+      ]
+    },
+    "raceday-evening": {
+      "est_requests": 150,
+      "compare": "none",
+      "categories": [],
+      "min_task_days": 1,
+      "jitter": [
+        60,
+        300
+      ]
+    },
+    "raceday-eve-fetch": {
+      "est_requests": 700,
+      "compare": "none",
+      "categories": [],
+      "min_task_days": 1,
+      "jitter": [
+        60,
+        300
+      ]
+    },
+    "new-horse-pedigree": {
+      "est_requests": 650,
+      "compare": "none",
+      "categories": [],
+      "min_task_days": 3,
+      "jitter": [
+        60,
+        300
+      ]
+    },
+    "weekly-update": {
+      "est_requests": 9000,
+      "compare": "none",
+      "categories": [],
+      "min_task_days": 1,
+      "jitter": [
+        60,
+        300
+      ]
+    },
+    "shutuba-audit": {
+      "est_requests": 12,
+      "compare": "none",
+      "categories": [],
+      "min_task_days": 3,
+      "jitter": [
+        60,
+        300
+      ]
+    },
+    "page-quality-check": {
+      "est_requests": 12,
+      "compare": "none",
+      "categories": [],
+      "min_task_days": 3,
+      "jitter": [
+        60,
+        300
+      ]
     }
   },
   "limits": {
-    "max_requests_per_day": 800,
+    "max_requests_per_day": 14000,
     "access_pause_seconds": 3600,
     "max_restrictions_per_day": 1
   },

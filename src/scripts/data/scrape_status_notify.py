@@ -8,6 +8,9 @@
 
 材料（読み取りのみ）: cron_status.build_status（crontab + cron_run.sh の実行記録）、/api/scrape-jobs、data/local/meta/{schema_violations,
 auto_scrape_status.json,data_health/<env>/latest.json,drift_monitor/latest.json}。DEC-023 のキュー待ちは異常にしない（yield するジョブは未開始でも異常にしない）。
+``--source prod``（GCP Jobs から）: ホストの crontab の代わりに ``config/gcp_job_map.json`` の GCP/VPS のジョブを、GCS の実行記録
+（GCP は ``ops/job_runs/<job>/``、VPS は ``ops/fetch_tasks/{done,failed}/``。並走中 ``KEIBA_FETCH_SHADOW_ENABLED=1`` は ``ops/fetch_tasks_shadow/``）で見る。
+キュー・スキーマ違反・data_health はホストのローカルにしか無いので prod では扱わない。通知の抑制状態はローカルのファイル（Jobs は state_in/state_out で持ち回る）。
 
   python -m src.scripts.data.scrape_status_notify --mode summary --dry-run     # 既定は dry-run（JSON と HTML プレビュー）
   python -m src.scripts.data.scrape_status_notify --mode alerts --send         # 実送信（KEIBA_SLACK_NOTIFY=1 と Webhook が必要）
@@ -151,6 +154,92 @@ def collect_cron(now: datetime, *, status_fn: Callable[..., dict] | None = None,
                 "cause": ((j.get("cause") or {}).get("label")), "cause_id": ((j.get("cause") or {}).get("pattern_id")),
             })
     return jobs
+
+
+def _jst(s: str | None) -> datetime | None:
+    try:
+        return datetime.fromisoformat(s).astimezone(JST) if s else None
+    except (TypeError, ValueError):
+        return None
+
+
+def collect_prod(now: datetime, io: Any, *, doc: dict | None = None, shadow: bool = False, raceday: Callable[[str], bool] | None = None,
+                 limit: int = 30) -> list[dict]:
+    """prod（GCP Jobs・VPS 実行役）のジョブの状態を、collect_cron と同じ形で返す。ready で有効なジョブだけ。"""
+    from src.ops import job_map as JM
+    from src.ops.gcs_io import read_json as gread
+
+    doc = doc or JM.load()
+    groups = doc.get("scheduler_groups") or {}
+    tasks_prefix = "ops/fetch_tasks_shadow" if shadow else "ops/fetch_tasks"
+    now = now.astimezone(JST)
+    out: list[dict] = []
+    for j in doc.get("jobs") or []:
+        dest = j.get("destination")
+        if dest not in ("gcp", "vps") or not j.get("enabled", True) or not j.get("ready"):
+            continue
+        runs: list[dict] = []          # 新しい順 {ok, started, ended, detail}
+        if dest == "gcp":
+            keys = sorted((k for k in io.list(f"ops/job_runs/{j['id']}/") if not k.endswith("latest.json")), reverse=True)[:limit]
+            for k in keys:
+                r = gread(io, k)
+                if isinstance(r, dict) and r.get("status") not in ("skipped", "waiting"):
+                    runs.append({"ok": r.get("status") in ("ok", "partial"), "started": r.get("started_at"), "ended": r.get("finished_at"),
+                                 "detail": r.get("reason"), "sec": r.get("duration_sec")})
+            cron = (groups.get(j.get("group") or "") or {}).get("cron_jst")
+        else:
+            if j.get("reserved_by"):
+                pres = [f"{t}-" for t in [j["fetch_task"]["task"], *(j.get("extra_tasks") or [])]]
+            else:
+                pres = [f"{j['id']}-"]
+            for state in ("done", "failed"):
+                for pre in pres:
+                    for k in sorted(io.list(f"{tasks_prefix}/{state}/{pre}"), reverse=True)[:limit]:
+                        t = gread(io, k)
+                        if not isinstance(t, dict):
+                            continue
+                        oc = t.get("outcome") or {}
+                        if (oc.get("result") or {}).get("skipped"):
+                            continue
+                        runs.append({"ok": state == "done", "started": t.get("claimed_at") or t.get("not_before"), "ended": t.get("finished_at"),
+                                     "detail": oc.get("reason") or (f"rc={oc.get('rc')}" if oc.get("rc") else None), "sec": oc.get("elapsed_sec"),
+                                     "restricted": bool(oc.get("access_restriction"))})
+            runs.sort(key=lambda r: r.get("started") or "", reverse=True)
+            runs = runs[:limit]
+            cron = j.get("schedule_jst")
+        cf = 0
+        for r in runs:
+            if r["ok"]:
+                break
+            cf += 1
+        last = runs[0] if runs else {}
+        overdue_min = None
+        exp = expectation_of(j["id"])
+        if cron:
+            pf = prev_fire(cron.strip(), now)
+            when = j.get("when_jst") if dest == "gcp" else None      # グループの起動のうち when_jst に合う回だけ動く
+            for _ in range(2000):
+                if pf is None or not when or prev_fire(when, pf) == pf:
+                    break
+                pf = prev_fire(cron.strip(), pf - timedelta(minutes=1))
+            if pf is not None:
+                day_ok = True
+                if raceday is not None and exp != "always":
+                    target = pf if exp == "raceday" else pf + timedelta(days=1)
+                    day_ok = raceday(target.strftime("%Y%m%d"))
+                ls = _jst(last.get("started"))
+                late = (now - pf).total_seconds() / 60
+                if day_ok and late > OVERDUE_GRACE_MIN and (ls is None or ls.timestamp() < pf.timestamp() - 60):
+                    overdue_min = round(late)
+        restricted = sum(1 for r in runs[:5] if r.get("restricted"))
+        out.append({
+            "id": j["id"], "name": j.get("desc") or j["id"], "group": "GCP Jobs" if dest == "gcp" else ("VPS（影）" if shadow else "VPS"),
+            "state": None, "result": None if not last else ("ok" if last["ok"] else "failed"), "started_at": last.get("started"),
+            "ended_at": last.get("ended"), "duration_sec": last.get("sec"), "exit_code": None if not last or last["ok"] else 1,
+            "next_run": None, "consecutive_failures": cf, "overdue_min": overdue_min, "running_hours": None, "yields": False,
+            "cause": last.get("detail") if last and not last["ok"] else None, "cause_id": "403" if restricted else None,
+        })
+    return out
 
 
 def fetch_queue(base_url: str, timeout: float = 5.0, get: Callable[..., Any] | None = None) -> dict | None:
@@ -471,7 +560,7 @@ def in_maintenance(now: datetime, env: dict[str, str] | None = None) -> bool:
 
 
 def run(mode: str, now: datetime, *, send: bool = False, state_path: Path | None = None, out_dir: Path | None = None,
-        inputs: dict | None = None, poster: Callable[..., Any] | None = None, env: dict[str, str] | None = None) -> dict:
+        inputs: dict | None = None, poster: Callable[..., Any] | None = None, env: dict[str, str] | None = None, source: str = "host") -> dict:
     """mode ごとにメッセージを作り、dry-run なら出力、send なら送る。inputs でテストから材料を差し込める。"""
     e = os.environ if env is None else env
     if send and str(e.get("KEIBA_SLACK_NOTIFY", "")).strip() != "1":
@@ -483,6 +572,12 @@ def run(mode: str, now: datetime, *, send: bool = False, state_path: Path | None
     meta = Path(inp.get("meta") or META)
     env_key = inp.get("env_key") or (e.get("KEIBA_ENV") or "stg")
     raceday_fn = inp.get("raceday") or _default_raceday
+    if source == "prod":
+        if "jobs" not in inp:
+            from src.ops.gcs_io import default_io
+
+            inp = {**inp, "jobs": collect_prod(now, default_io(), shadow=str(e.get("KEIBA_FETCH_SHADOW_ENABLED", "")).strip() == "1", raceday=raceday_fn)}
+        inp = {"queue": None, "schema": None, "misc": {}, **inp}      # キュー・スキーマ違反・data_health はホストのローカルにだけある
     jobs = inp["jobs"] if "jobs" in inp else collect_cron(now, raceday=raceday_fn)
     queue = inp["queue"] if "queue" in inp else fetch_queue(e.get("KEIBA_NOTIFY_API_BASE") or "http://127.0.0.1:23220")
     schema = inp["schema"] if "schema" in inp else collect_schema(REPO_ROOT, now)
@@ -545,6 +640,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--now", help="現在時刻の上書き（ISO。テスト/再現用）")
     ap.add_argument("--send", action="store_true")
     ap.add_argument("--out", default="data/local/meta/slack_preview")
+    ap.add_argument("--source", choices=["host", "prod"], default="host",
+                    help="prod: GCP Jobs・VPS 実行役の実行記録（GCS）を見る。host: このホストの crontab と cron_run の記録")
     a = ap.parse_args(argv)
     now = datetime.fromisoformat(a.now).astimezone(JST) if a.now else datetime.now(JST)
     if a.when != "any" and a.mode == "summary":
@@ -552,7 +649,7 @@ def main(argv: list[str] | None = None) -> int:
         if (a.when == "raceday") != is_rd:
             print(json.dumps({"code": 0, "mode": a.mode, "skipped": f"today raceday={is_rd}, when={a.when}"}, ensure_ascii=False))
             return 0
-    res = run(a.mode, now, send=a.send, out_dir=Path(a.out))
+    res = run(a.mode, now, send=a.send, out_dir=Path(a.out), source=a.source)
     print(json.dumps({k: v for k, v in res.items() if k != "payload"}, ensure_ascii=False, default=str))
     if res["code"] == 0 and not a.send:
         print(f"dry-run: {a.out} にプレビューを出力しました（送信していません）")

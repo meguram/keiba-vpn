@@ -12,6 +12,8 @@
 
 結果は data/local/page_quality/latest.json に保存し、
 過去30件は page_quality/history/ に YYYY-MM-DD.json として保持する。
+GCS（stg/prod）には要約（カテゴリごとの判定だけ。時刻・所要は除く）を ops/page_quality/latest.json に上げる（publish_summary）。
+netkeiba にログインして取得するので、prod では VPS の取得タスク page-quality-check として動く（GCP Jobs からは取得しない）。
 
 CLI:
     python -m src.monitor.page_quality_check            # 全カテゴリ実行
@@ -399,6 +401,31 @@ def save_result(result: dict[str, Any]) -> None:
     logger.info("結果保存: %s / %s", LATEST_PATH, history_path)
 
 
+SUMMARY_KEY = "ops/page_quality/latest.json"
+
+
+def summary_of(result: dict[str, Any]) -> dict[str, Any]:
+    """突き合わせ用の要約（判定だけ。時刻・所要・本文は除く）。"""
+    return {"summary_tag": result.get("summary_tag"),
+            "results": sorted(({"category": r.get("category"), "tag": r.get("tag"), "extra_keys": sorted(r.get("extra_keys") or []),
+                                "missing": sorted((r.get("validation_summary") or {}).get("top_missing") or [])}
+                               for r in result.get("results") or []), key=lambda r: str(r["category"]))}
+
+
+def publish_summary(result: dict[str, Any], io: Any | None = None) -> bool:
+    """要約を GCS に上げる（最善努力。GCS に繋がらない dev では何もしない）。"""
+    try:
+        if io is None:
+            from src.ops.gcs_io import default_io
+
+            io = default_io()
+        io.put_bytes(SUMMARY_KEY, json.dumps(summary_of(result), ensure_ascii=False, indent=1).encode("utf-8"), content_type="application/json")
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.info("要約を GCS に上げなかった: %s", exc)
+        return False
+
+
 # ── エントリポイント ──────────────────────────────────────────────────────
 
 def main() -> None:
@@ -422,6 +449,7 @@ def main() -> None:
     try:
         result = run_checks(categories=args.category, interval_sec=args.interval)
         save_result(result)
+        publish_summary(result)
 
         # 終了ステータスの要約をログに出力
         tag = result["summary_tag"]
