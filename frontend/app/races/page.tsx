@@ -12,6 +12,7 @@ import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { MemberUpgradeModal } from "@/components/upgrade/MemberUpgradeModal";
 import { formatMD, todayJst, weekdayOf, WEEKDAY_JA } from "@/lib/weekDates";
 import { LoadingNotice } from "@/components/LoadingNotice";
+import { useAutoRetry } from "@/lib/hooks/useAutoRetry";
 import { LEVEL_STYLE, useRaceValues, valueTitle, type RaceValue } from "@/lib/raceValue";
 import { roiText, useBetsSummary, yen, type BetsSummary, type RaceBet, type RatedCounts } from "@/lib/betsSummary";
 
@@ -158,6 +159,7 @@ export default function RacesPage() {
   const [futureNotice, setFutureNotice] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  useAutoRetry(!!error, () => { setError(""); setReloadKey((n) => n + 1); }, 8000);
   const { isMember, loading: authLoading } = useAuthStatus();
   const today = todayJst();
   const values = useRaceValues(date);          // 買い目の推奨度（有料会員のみ）
@@ -276,7 +278,7 @@ export default function RacesPage() {
             {error && (
               <div role="alert" style={{ color: "var(--err)", fontSize: 13, padding: "10px 0" }}>
                 ⚠️ {error}
-                <button onClick={() => { setError(""); setReloadKey((n) => n + 1); }} style={{ marginLeft: 10, minHeight: 36, padding: "0 12px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface2)", color: "var(--text)", cursor: "pointer" }}>再読み込み</button>
+                <span style={{ marginLeft: 10, color: "var(--text-dim)" }}>自動で取り直しています…</span>
               </div>
             )}
             {loadingRaces && <LoadingNotice what="レース一覧" padding="24px 0" onRetry={() => setReloadKey((n) => n + 1)} />}

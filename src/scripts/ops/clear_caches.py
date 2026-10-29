@@ -16,6 +16,7 @@ def main() -> None:
     args = ap.parse_args()
     cache_epoch.bump(args.reason)
     print(f"キャッシュの世代を進めました（{args.reason}）。API は次の要求で空にします。")
+    print("VPS の nginx は確定済みレースを最長1週間置くので、VPS 側でも入れ替える: sudo bash scripts/ops/vps/purge_api_cache.sh [--match 正規表現]")
 
 
 if __name__ == "__main__":
