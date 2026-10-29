@@ -104,6 +104,8 @@ def _signal_handler(signum, frame):
     global _shutdown_requested
     logger.info("シャットダウン要求受信 (signal=%d) — 現在のレース完了後に停止します", signum)
     _shutdown_requested = True
+    if _GUARD is not None and not _GUARD.stop_reason:   # 他の取得に譲って待っている間（NightGuard._pace）も抜けられるように
+        _GUARD.stop_reason = f"シャットダウン要求 (signal={signum})"
 
 
 def _install_signal_handlers() -> None:
@@ -949,6 +951,11 @@ def main():
         return
 
     if args.phase == "past":
+        from src.scraper import stall_watchdog
+        stall_watchdog.start(
+            http_sec=float(os.environ.get("BACKFILL_HTTP_DEADLINE_SEC", 240)),
+            idle_sec=float(os.environ.get("BACKFILL_IDLE_DEADLINE_SEC", 2400)),
+        )
         sys.exit(run_past(
             years=args.years, cap=args.cap, only_dates=args.only_dates, max_horses=args.max_horses,
             ignore_window=args.ignore_window, ignore_raceday=args.ignore_raceday, tiers=args.tiers, dry_run=args.dry_run,

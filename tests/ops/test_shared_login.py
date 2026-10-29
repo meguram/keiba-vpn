@@ -54,3 +54,15 @@ def test_failed_slack_is_retried_and_disabled_account_untouched(env, monkeypatch
     from src.scripts.ops import manage_users as mu
     mu.set_enabled(ID, False)
     assert sl.ensure(ID, datetime(2026, 12, 1, tzinfo=JST)) == "disabled"       # 管理者が止めたアカウントは触らない
+
+
+def test_dry_run_reports_without_writing_or_notifying(env):
+    oct_ = datetime(2026, 10, 31, 12, tzinfo=JST)
+    nov = datetime(2026, 11, 1, 0, 5, tzinfo=JST)
+    assert sl.ensure(ID, oct_, dry=True) == "would-created"
+    assert auth.member_record(ID) is None and sl._state() == {} and env == []          # 名簿・状態・通知に触れない
+    assert sl.ensure(ID, oct_) == "created" and len(env) == 1
+    assert sl.ensure(ID, oct_, dry=True) == "ok"
+    time.sleep(1.1)
+    assert sl.ensure(ID, nov, dry=True) == "would-rotated"
+    assert auth.verify_member_login(ID, sl.password_for("2026-10")) and len(env) == 1

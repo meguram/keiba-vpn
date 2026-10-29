@@ -86,7 +86,7 @@ def test_recurring_expands_cron_and_respects_ownership():
     assert not any(i.startswith("jra-baba") for i in ids)                                       # 担当でない
     skipped = {s["job"]: s["reason"] for s in res["skipped_jobs"]}
     assert "jra-baba-morning" in skipped and "担当ではない" in skipped["jra-baba-morning"]
-    assert "raceday-evening" in skipped and "250M" in skipped["raceday-evening"]               # 実測前の段階移行
+    assert "raceday-evening" in skipped and "担当ではない" in skipped["raceday-evening"]          # ready でも担当（agent_tasks）でなければ積まない
     assert R.reserve_recurring(q, now=datetime(2026, 10, 24, 10, 55, tzinfo=JST), horizon_hours=1, owned=owned)["fetch"]["enqueued"] == 0
     assert res2["tasks"] == 6
 

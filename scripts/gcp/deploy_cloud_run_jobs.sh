@@ -80,6 +80,14 @@ MSG
     ;;
   apply)
     need_real
+    # 有ると使う秘密（OPTIONAL_SECRETS）は、Secret Manager にあるときだけ渡す（無い秘密を指定すると Run Job の配備が失敗する）
+    for s in $(PYTHONPATH="$ROOT" "$PY" -c "from src.ops.scheduler_gen import OPTIONAL_SECRETS as O; print(' '.join(O))"); do
+      if gcloud secrets describe "$s" --project "$PROJECT_ID" >/dev/null 2>&1; then
+        SECRETS_EXTRA="${SECRETS_EXTRA:+$SECRETS_EXTRA,}$s"; export SECRETS_EXTRA
+      else
+        echo "（任意の秘密 $s は Secret Manager に無いので渡しません）"
+      fi
+    done
     OUT="$(mktemp)"; trap 'rm -f "$OUT"' EXIT
     gen >"$OUT"
     cat "$OUT"

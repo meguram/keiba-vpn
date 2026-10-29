@@ -22,7 +22,9 @@ from typing import Any
 
 from src.ops import job_map
 
-SECRETS = ["SLACK_WEBHOOK_URL"]      # 追加は SECRETS_EXTRA（例: SLACK_WEBHOOK_URL_ALERT）
+SECRETS = ["SLACK_WEBHOOK_URL", "DEV_SECRET_KEY", "KEIBA_SHARED_LOGIN_ID"]      # 追加は SECRETS_EXTRA（例: SLACK_WEBHOOK_URL_ALERT）
+# 有ると使う秘密（Secret Manager に無ければ渡さない。無い秘密を --set-secrets に書くと配備が失敗するため）。apply が存在を確かめて SECRETS_EXTRA に足す
+OPTIONAL_SECRETS = ["SLACK_WEBHOOK_URL_PARALLEL"]      # 並走期間の prod 側の Slack（job_dispatch.parallel_wrap）
 QUEUE = "keiba-predict"
 
 

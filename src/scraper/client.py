@@ -44,6 +44,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from src.scraper import stall_watchdog as _stall_watchdog
+
 logger = logging.getLogger("scraper.client")
 
 _ENCODING_MAP = {
@@ -639,7 +641,8 @@ class NetkeibaClient:
                     _BACKOFF_MAX_RETRIES + 1,
                 )
                 try:
-                    resp = self._session.get(url, timeout=self.timeout)
+                    with _stall_watchdog.track_http(url):
+                        resp = self._session.get(url, timeout=self.timeout)
                 except Exception as _exc:          # 接続エラー・タイムアウト等。オブザーバ（アクセス制限の検知）に知らせてから従来どおり送出
                     for _observer in tuple(_RESPONSE_OBSERVERS):
                         _on_error = getattr(_observer, "on_error", None)

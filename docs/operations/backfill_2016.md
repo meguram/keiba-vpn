@@ -190,3 +190,12 @@ cat data/local/meta/backfill_past_state.json         # 夜ごとの記録
 ### 9.6 上限なし・エラーで即中断（2026-10-23 ユーザー指示）
 
 件数の上限（1 回・日の総件数）は既定で無効（`BACKFILL_PAST_CAP_MAX` / `BACKFILL_PAST_TOTAL_DAILY_LIMIT` で復活。目安は 2,700 件/日）。間隔は取得クライアントの待ちを 1.8〜2.2 秒にして約 2 秒おき（`backfill_past_night.sh` が `NETKEIBA_THROTTLE_MIN/MAX` を設定。14 件ごとのバースト休止と日付間の待ちは従来どおり）。HTTP 400/403/429/5xx と通信エラーは **1 件で即中断**し、`data/local/meta/backfill_past_halt.json` を書く。この印がある間は cron が起動しても始めない（確認して印を削除すると再開）。403/429 は従来どおりアクセス保留も立つ。404 と、ページの解析失敗（記録して次へ）は中断しない。10/10〜10/11 に bot_blocked の HTTP 400 が出たのは 3,690 件/日の日で、上限なしの約 2 秒おき（約 1,300〜1,800 件/時）はそれを大きく超えうるため、最初の数時間は進捗報告で 400/403/429 の有無を見る。
+
+### 9.7 固まりの検知と自動再起動（2026-10-29）
+
+2026-10-29 09:19 起動の実行が、10:09 に `GET https://db.netkeiba.com/race/list/20170730/` を出したあと 8 時間 23 分ログが止まった（ユーザーの SIGTERM の 11 秒後にその GET が返った）。毎時 cron は flock で「実行中」と見て全部スキップしていた。requests の timeout は通信操作 1 回ごとのため、名前解決や少しずつ届く応答では全体が縛られず、SIGTERM は「現在のレース完了後に停止」のフラグだけで固まった呼び出しには効かない。原因の特定はできていない（固まり中にスタックを取れなかった）。
+
+対策（`src/scraper/stall_watchdog.py`、`--phase past` のみ）:
+- HTTP 1 回が 240 秒（`BACKFILL_HTTP_DEADLINE_SEC`）返らない、またはログが 2,400 秒（`BACKFILL_IDLE_DEADLINE_SEC`。他の取得待ちの最大 1,800 秒より長い）まったく出ない場合、全スレッドのスタックを `logs/backfill_past.log` に出して `os._exit(75)`。次回以降は固まった場所がログに残る。
+- `backfill_past_night.sh` は rc=75 のとき 60 秒置いて最大 5 回まで再起動（それ以外の終了は従来どおり、次の毎時起動を待つ）。
+- 固まっていると疑うときは `kill -USR1 <pid>` で、止めずにスタックをログへ出せる。
