@@ -113,7 +113,7 @@ export function AnalysisTable({ entries, module }: { entries: AnalysisEntry[]; m
                         key={c.key}
                         className={[first ? "gs" : "", thin ? "thin" : "", left ? "l" : ""].filter(Boolean).join(" ") || undefined}
                         style={{ background: bg, fontWeight: c.palette && bg ? 700 : undefined }}
-                        data-sort={sortValue(v, c.fmt)}
+                        data-sort={sortValue(v, c.fmt, c.palette)}
                       >
                         {c.fmt === "runs" ? <RunChips v={v} /> : formatCell(v, c.fmt)}
                       </td>

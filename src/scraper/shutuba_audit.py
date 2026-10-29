@@ -22,6 +22,7 @@ logger = logging.getLogger("scraper.shutuba_audit")
 ROOT = Path(__file__).resolve().parents[2]
 MAX_ATTEMPTS = 3
 AUDIT_JOB_PRIORITY = -100  # entries-sync と同じ: 開催日ランナーのジョブより後
+DIRECT_MAX_PER_RUN = 12    # 直接再取得の 1 回あたりの上限（VPS の 1 起動で長く掴まない。残りは次の回）
 
 
 def state_path() -> Path:
@@ -74,8 +75,36 @@ def find_stale(storage: Any, dates: list[str]) -> list[dict]:
     return rows
 
 
+def _direct_fetcher() -> Any:
+    """ScraperRunner で出馬表だけをその場で取り直す関数 (race_id, date_fmt) -> エラー文字列のリスト。"""
+    from src.scraper import auto_scrape_queue as _asq
+    from src.scraper.run import ScraperRunner
+
+    runner = ScraperRunner()
+    return lambda race_id, date_fmt: _asq._run_race_tasks_direct(runner, race_id, date_fmt, ["race_shutuba"])
+
+
+def _refetch_direct(todo: list[dict], attempts: dict[str, int], fetch: Any, cap: int) -> dict[str, Any]:
+    """古い出馬表を 1 レースずつ直接取り直す。試行は取る前に数えて保存する（途中で落ちても上限に効く）。アクセス制限の疑いで止める。"""
+    fetched: list[str] = []
+    errors: list[str] = []
+    for r in todo[:cap]:
+        attempts[r["race_id"]] = attempts.get(r["race_id"], 0) + 1
+        _save_state(attempts)
+        errs = fetch(r["race_id"], r["date"])
+        if errs:
+            errors.extend(errs)
+            if any("access_restriction" in e for e in errs):
+                break
+        else:
+            fetched.append(r["race_id"])
+    return {"fetched": fetched, "errors": errors, "deferred": max(0, len(todo) - cap)}
+
+
 def run_audit(*, days: int = 7, since: str | None = None, until: str | None = None, enqueue: bool = False,
-              storage: Any = None, queue: Any = None, now: datetime | None = None) -> dict[str, Any]:
+              storage: Any = None, queue: Any = None, now: datetime | None = None,
+              direct: bool = False, fetch: Any = None, direct_cap: int = DIRECT_MAX_PER_RUN) -> dict[str, Any]:
+    """direct=True は、ローカルのキューに積まず、その場で出馬表を取り直す（キューを消化する常駐が無い VPS 用）。"""
     now = now or datetime.now(EP.JST)
     if storage is None:
         from src.scraper import auto_scrape_queue as _asq
@@ -88,7 +117,9 @@ def run_audit(*, days: int = 7, since: str | None = None, until: str | None = No
     giveup = [r["race_id"] for r in stale if attempts.get(r["race_id"], 0) >= MAX_ATTEMPTS]
     result: dict[str, Any] = {"dates": dates, "stale": len(stale), "to_enqueue": len(todo), "gave_up": giveup,
                               "race_ids": [r["race_id"] for r in stale]}
-    if enqueue and todo:
+    if direct and todo:
+        result["direct"] = _refetch_direct(todo, attempts, fetch or _direct_fetcher(), direct_cap)
+    elif enqueue and todo:
         if queue is None:
             from src.scraper import auto_scrape_queue as _asq
 

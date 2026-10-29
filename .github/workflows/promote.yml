@@ -85,6 +85,7 @@ jobs:
       SMOKE_RACE_ID: ${{ vars.SMOKE_RACE_ID }}
       ENABLE_JOBS_DEPLOY: ${{ vars.ENABLE_JOBS_DEPLOY }}
       JOBS_PARALLEL: ${{ vars.JOBS_PARALLEL }}
+      FETCH_SHADOW: ${{ vars.FETCH_SHADOW }}
     steps:
       - uses: actions/checkout@v4   # PIN
       - uses: actions/download-artifact@v4   # PIN
@@ -154,7 +155,7 @@ jobs:
             echo "### 本番に反映しました"
             echo "- コミット: \`$GITHUB_SHA\`"
             echo "- API: 新リビジョンに通信を切り替え済み → ${{ steps.revision.outputs.tag_url }}"
-            echo "- Jobs: ENABLE_JOBS_DEPLOY=${ENABLE_JOBS_DEPLOY:-未設定}（true のときだけ更新）。並走(影モード): JOBS_PARALLEL=${JOBS_PARALLEL:-1}"
+            echo "- Jobs: ENABLE_JOBS_DEPLOY=${ENABLE_JOBS_DEPLOY:-未設定}（true のときだけ更新）。並走(影モード): JOBS_PARALLEL=${JOBS_PARALLEL:-1}。取得の影モード: FETCH_SHADOW=${FETCH_SHADOW:-0}"
             echo "- 画面: \`${{ needs.build-ui.outputs.release_id }}\`。VPS は次の窓（毎日 JST 03:10）に取得します"
             echo "- 取得役のコード: GCS の ops/releases/fetch/ に公開済み。VPS は毎日 JST 03:20 に取り込みます"
           } >> "$GITHUB_STEP_SUMMARY"

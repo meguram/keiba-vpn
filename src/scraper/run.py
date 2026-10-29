@@ -1070,6 +1070,7 @@ class ScraperRunner:
                     self._attach_mating_and_resave(horse_id, ex)
                 self._last_pedigree_5gen_skip = True
                 logger.info("スキップ (既存): horse_pedigree_5gen/%s", horse_id)
+                self._fetch_missing_ancestor_lines(ex)      # 台帳に無い祖先だけ取る（全部あれば通信なし）
                 return ex
 
         url = self.HORSE_PED_URL.format(horse_id=horse_id)
@@ -1103,7 +1104,28 @@ class ScraperRunner:
         _update_local_pedigree_10gen(horse_id, rec, self.storage._base_dir)
         _upsert_sires_background(html)
         _record_sire_lines(html, horse_id)
+        self._fetch_missing_ancestor_lines(rec)
         return rec
+
+    ANCESTOR_LINE_MAX_PER_HORSE = 12      # 一括取得で台帳が揃えば、新顔の祖先は数頭。超えた分は次の馬の取得時に回る
+
+    def _fetch_missing_ancestor_lines(self, rec: dict) -> None:
+        """5 世代血統表の牡の祖先のうち、系統が台帳に無いものを、その子の血統ページから取って台帳に足す。失敗しても本体の取得は止めない。
+
+        馬の血統ページを取る処理と同じ流れ・同じクライアント（同じ間隔・カウンタ）で走る。台帳にある祖先は通信しない。
+        """
+        try:
+            from src.scraper import sire_line_store as store
+
+            have = set(store.load())
+            todo = [(a, c) for a, c in store.ancestor_sire_children(rec).items() if a not in have]
+            for aid, child in todo[: self.ANCESTOR_LINE_MAX_PER_HORSE]:
+                status = store.fetch_and_record(self.client.fetch, self.HORSE_PED_URL.format(horse_id=child), aid, child)
+                if status == "failed":      # 3 回取り直しても駄目。台帳に残さず（後の馬で再挑戦）、今回はここで止める
+                    logger.warning("祖先の系統取得を断念 %s（子 %s）。次に同じ祖先を持つ馬の取得時に再挑戦", aid, child)
+                    break
+        except Exception as exc:
+            logger.warning("祖先の系統取得をスキップ: %s", exc)
 
     # ── 母馬の種付け情報（own.netkeiba）→ 産駒の種付け日 ───────────
 

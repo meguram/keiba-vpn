@@ -36,6 +36,13 @@ def test_env_marks_prod_gcp_for_distinguishable_notifications():
     assert SG.render("jobs", DOC, env=ENV, parallel=True).count("KEIBA_PARALLEL_RUN=1") == 4
 
 
+def test_fetch_shadow_is_off_unless_the_repo_variable_is_1():
+    # 影のタスクは VPS の実行役で影モードを始めてから積む（先に積んでも期限切れになるだけだが、日次集計が不合格を出し続ける）
+    assert "KEIBA_FETCH_SHADOW_ENABLED" not in SG.render("jobs", DOC, env=ENV, parallel=True)
+    assert "KEIBA_FETCH_SHADOW_ENABLED" not in SG.render("jobs", DOC, env={**ENV, "FETCH_SHADOW": "true"}, parallel=True)
+    assert SG.render("jobs", DOC, env={**ENV, "FETCH_SHADOW": "1"}, parallel=True).count("KEIBA_FETCH_SHADOW_ENABLED=1") == 4
+
+
 def test_scheduler_targets_run_api_with_group_args_and_service_account():
     text = SG.render("scheduler", DOC, env=ENV, include_unready=True)
     assert "https://run.googleapis.com/v2/projects/proj/locations/asia-northeast1/jobs/keiba-dispatch-l:run" in text

@@ -41,6 +41,8 @@ AUTO_SCRAPE_MODES: frozenset[str] = frozenset({
     "raceday-eve-fetch",     # raceday-eve の取得だけ（計算は GCP の eve-precompute）。KEIBA_EVE_FETCH_ONLY=1
     "raceday-comment",
     "new-horse-pedigree",
+    "shutuba-audit",         # 過去7日の出馬表の取りこぼしを、その場で取り直す（fetch_child が KEIBA_SHUTUBA_AUDIT_DIRECT=1 にする）
+    "sire-line",             # 系統台帳の GCS 同期（通信は GCS のみ）
 })
 
 # 2. 1 レースの取得（開催日）。引数: {"race_id": 12 桁, "date": "YYYYMMDD"}

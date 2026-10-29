@@ -115,6 +115,12 @@ API_PID_FILE="${PROJECT_DIR}/.server-${API_PORT}.pid"
 API_HEALTH_URL="http://127.0.0.1:${API_PORT}/api/health"
 
 MLFLOW_PORT="$(keiba_port "$PROFILE_KEY" mlflow)"
+# MLflow はこの PC に 1 つ（学習・評価の記録先。研究用で、運用とは関係ない）。.env の MLFLOW_TRACKING_URI が
+# この PC を指していればその番号を見る（プロファイルを切り替えても、動いている MLflow を止めて別の番号で立て直さない）
+_mlflow_uri="$(grep -E '^MLFLOW_TRACKING_URI=http://(127\.0\.0\.1|localhost):[0-9]+' "${PROJECT_DIR}/.env" 2>/dev/null | tail -n1)"
+if [ -n "$_mlflow_uri" ]; then
+    MLFLOW_PORT="${_mlflow_uri##*:}"; MLFLOW_PORT="${MLFLOW_PORT%%/*}"
+fi
 MLFLOW_PID_FILE="${PROJECT_DIR}/.mlflow.pid"
 MLFLOW_HEALTH_URL="http://127.0.0.1:${MLFLOW_PORT}/health"
 MLFLOW_BACKEND_STORE="${PROJECT_DIR}/mlflow/runs/mlflow.db"
@@ -313,6 +319,63 @@ check_api() {
         log "[API] 再起動成功"
     else
         log "[API] ERROR: 再起動後もヘルスチェック失敗"
+    fi
+    return 1
+}
+
+# ═══════════════════════════════════════════════════════
+# 取得キューの処理役（運用。画面・API の確認用ではない）
+# ═══════════════════════════════════════════════════════
+# 取得キュー（data/queue）のジョブは、FastAPI のプロセスの中の処理役（leader の flock を取った 1 プロセス）が実行する。
+# 運用の cron が動くこの PC（.env が KEIBA_ENV=stg/prod）では、画面・API をどのプロファイルで動かしていても、これだけは
+# 運用の設定（KEIBA_ENV は .env のまま）で常駐させる。外からはつながない（127.0.0.1）。取得が VPS の実行役に移ったら不要になる。
+# dev の API は担当を取らない（src/api/app.py の _try_acquire_queue_runner_leader）ので、ここと二重に処理することはない。
+OPS_QUEUE_ENV="$(grep -E '^KEIBA_ENV=' "${PROJECT_DIR}/.env" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"'"'"' ')"
+OPS_QUEUE_PORT="${KEIBA_OPS_QUEUE_PORT:-$(keiba_port stg fastapi)}"
+OPS_QUEUE_PID_FILE="${PROJECT_DIR}/.ops-queue.pid"
+OPS_QUEUE_HEALTH_URL="http://127.0.0.1:${OPS_QUEUE_PORT}/api/health"
+
+ops_queue_should_run() {
+    case "$OPS_QUEUE_ENV" in stg|prod) ;; *) return 1 ;; esac
+    [ "${KEIBA_OPS_QUEUE:-1}" != "0" ] || return 1
+    [ "$API_PORT" != "$OPS_QUEUE_PORT" ]             # プロファイル stg のときは check_api が同じプロセスを見ている
+}
+
+start_ops_queue() {
+    log "[取得キュー] 処理役を起動中 (port=${OPS_QUEUE_PORT}, KEIBA_ENV=${OPS_QUEUE_ENV})..."
+    cd "$PROJECT_DIR"
+    env KEIBA_ENV="$OPS_QUEUE_ENV" nohup "$PYTHON" main.py --host 127.0.0.1 --port "$OPS_QUEUE_PORT" --prod \
+        >> "${LOG_DIR}/ops_queue.log" 2>&1 &
+    local new_pid=$!
+    echo "$new_pid" > "$OPS_QUEUE_PID_FILE"
+    local secs
+    secs=$(wait_for_health "$OPS_QUEUE_HEALTH_URL" 30) || true
+    if [ "$secs" != "0" ]; then
+        log "[取得キュー] 起動完了 (PID=$new_pid, ${secs}秒)"
+        return 0
+    fi
+    log "[取得キュー] WARNING: 起動したが応答確認できず (PID=$new_pid)"
+    return 1
+}
+
+check_ops_queue() {
+    ops_queue_should_run || return 0
+    local code
+    code=$(http_check "$OPS_QUEUE_HEALTH_URL")
+    if [ "$code" = "200" ]; then
+        reset_counter "${LOG_DIR}/.ops_queue_fail_count"
+        return 0
+    fi
+    local fail_count
+    fail_count=$(increment_counter "${LOG_DIR}/.ops_queue_fail_count")
+    log "[取得キュー] ALERT: 応答なし (HTTP=${code}, 連続${fail_count}回)"
+    if [ "$fail_count" -lt 2 ]; then
+        return 1                                   # 一時的な詰まり（重いジョブの最中など）で処理中のジョブを切らないよう、2 回続いてから立て直す
+    fi
+    kill_by_pid_file "$OPS_QUEUE_PID_FILE"          # 名前では探さない（dev の API を巻き込まない）
+    if start_ops_queue; then
+        reset_counter "${LOG_DIR}/.ops_queue_fail_count"
+        return 0
     fi
     return 1
 }
@@ -997,6 +1060,7 @@ check_api      || api_ok=false
 check_flask    || flask_ok=false
 check_frontend || frontend_ok=false
 check_mlflow   || mlflow_ok=false
+check_ops_queue || true
 
 if $api_ok && $flask_ok && $frontend_ok && $mlflow_ok; then
     local_count=$(increment_counter "${LOG_DIR}/.check_count${PROFILE_SUFFIX}")

@@ -115,6 +115,8 @@ VPS ──5 分おき（HMAC 署名）──▶ GCP /ops/heartbeat（死活・�
 2. `config/fetch_shadow.json` の `tasks` と `limits` を確認（対象を減らす・上限を下げるのは安全側）。
 
 **開始**
+
+操作は `fetch_agent_ctl.sh` に集めてある（`status`・`logs`・`selfcheck`・`pull`・`shadow-on`・`shadow-off`）。管理ユーザーで `sudo bash scripts/ops/vps/vps_08_fetch_ctl.sh` を 1 回実行すると、deploy ユーザー（`ssh keiba-vps`）が `sudo -n /opt/keiba-ui/bin/fetch_agent_ctl.sh <操作>` だけをパスワードなしで実行できる（それ以外の root 権限は増えない）。`shadow-on` は、`KEIBA_FETCH_AGENT_TASKS` がある（本番の取得を始めてしまう）ときと、取得のコードに `fetch_shadow.json` が無い古い版のときは断る。下の 1 は `shadow-on` と同じ。
 1. VPS の `fetch.env` に `KEIBA_FETCH_SHADOW_ENABLED=1`（と、直前オッズを見るなら `KEIBA_ODDS_LATE_SNAPSHOTS=1`）。`sudo systemctl restart keiba-fetch-agent`。ホストの `fetch_owner.json` の `agent_tasks` は**空のまま**（ホストが取得を続ける）。
 2. GCP の `reserve-race-day` / `reserve-fetch-tasks` の環境に `KEIBA_FETCH_SHADOW_ENABLED=1`。`python -m src.ops.reservations race-day --date YYYYMMDD --dry-run` の出力の `shadow_tasks` が 0 でないことを確認。
 3. `job_map` の `fetch-shadow-report` の `ready` を true にして Scheduler に載せる（`python -m src.ops.job_map ready fetch-shadow-report --note …`）。

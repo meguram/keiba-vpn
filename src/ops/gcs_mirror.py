@@ -19,6 +19,7 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Protocol
 
@@ -64,6 +65,11 @@ LAZY_TREES = (
     "data/calculated_data/tracking_difficulty::20*.json",     # 追走難度・想定ラップの事前計算（/api/race/{id}/tracking-difficulty）。1 レース約 35KB・全体で約 1GB
 )
 PUSH_TREES = TREES + LAZY_TREES
+# レースごとのファイルが日付フォルダに積み上がる木。起動時と定期の取り込みでは、日付が直近 PULL_WINDOW_DAYS 日以内のフォルダだけ降ろす
+# （全体で 1 万件超 → 起動時の GCS 読み出しを約 1/10 に）。古い日は読まれたときに lazy_fetch で 1 件だけ取る。push は全体のまま。
+WINDOWED_DIRS = tuple(t for t in TREES if t.rsplit("/", 1)[-1] in ("predictions_backfill", "lap_forecast", "tracking_v2"))
+PULL_WINDOW_DAYS = 14.0
+_DATE_SEG = re.compile(r"^(\d{4})-?(\d{2})-?(\d{2})$")
 _SKIP = re.compile(r"(\.tmp|\.lock)$")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -149,16 +155,62 @@ def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH
     return {"seen": seen, "uploaded": uploaded, "would_upload": would}
 
 
+def window_days() -> float:
+    try:
+        return float(os.environ.get("KEIBA_MIRROR_WINDOW_DAYS") or PULL_WINDOW_DAYS)
+    except ValueError:
+        return PULL_WINDOW_DAYS
+
+
+def _date_in_path(parts: list[str]) -> date | None:
+    for seg in parts:
+        m = _DATE_SEG.match(seg)
+        if m:
+            try:
+                return date(int(m[1]), int(m[2]), int(m[3]))
+            except ValueError:
+                return None
+    return None
+
+
+def outside_window(day: str | date, window: float | None = None) -> bool:
+    """日付（YYYYMMDD / YYYY-MM-DD）が、取り込み窓（今日から window 日前まで。未来は窓内）より古いか。読めない日付は窓内扱い。"""
+    d = day if isinstance(day, date) else _date_in_path([str(day)[:10]])
+    if d is None:
+        return False
+    return d < date.today() - timedelta(days=window_days() if window is None else window)
+
+
+def lazy_fetch(path: Path, day: str | date) -> bool:
+    """窓より古い日のファイルがローカルに無いとき、GCS から 1 件だけ取る。ファイルがローカルにある状態になれば True。
+    窓の内側（定期の取り込みが降ろす）・ミラー無効・リポジトリ外のパスでは何もしない。"""
+    if path.is_file():
+        return True
+    try:
+        if not outside_window(day):
+            return False
+        return fetch_one(path.resolve().relative_to(REPO_ROOT).as_posix())
+    except Exception:  # noqa: BLE001  読み出し側を止めない（リポジトリ外のパス・通信失敗は『まだ無い』）
+        return False
+
+
 def pull(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = TREES, *, recent_days: float | None = None,
-         workers: int = 16) -> dict[str, int]:
-    """GCS のファイルのうち、ローカルに無い・内容が違うものをローカルへ取り込む。recent_days を付けると、GCS で直近に更新されたものだけを見る。"""
+         workers: int = 16, window: float | None = None) -> dict[str, int]:
+    """GCS のファイルのうち、ローカルに無い・内容が違うものをローカルへ取り込む。recent_days を付けると、GCS で直近に更新されたものだけを見る。
+    window を付けると、WINDOWED_DIRS の木は日付フォルダが今日から window 日より前のものを降ろさない（読まれたときに lazy_fetch）。"""
     cutoff = time.time() - recent_days * 86400 if recent_days is not None else 0.0
     todo: list[str] = []
     seen = 0
+    oldest = date.today() - timedelta(days=window) if window is not None else None
     for d in dict.fromkeys(split_tree(t)[0] for t in trees):      # tables のように 1 フォルダに複数の glob があっても、一覧は 1 回
+        windowed = oldest is not None and d in WINDOWED_DIRS
         for key, (md5, updated) in backend.list(f"{PREFIX}/{d}/").items():
             if updated < cutoff:
                 continue
+            if windowed:
+                kd = _date_in_path(key[len(PREFIX) + len(d) + 2:].split("/"))
+                if kd is not None and kd < oldest:
+                    continue
             seen += 1
             local = root / key[len(PREFIX) + 1:]
             if not local.is_file() or _md5(local.read_bytes()) != md5:
@@ -212,10 +264,10 @@ def _initial_pull(be: Backend, root: Path, recent_days: float) -> None:
     """起動直後は直近分を先に（表示に要る分を数秒で）、続けて全体。失敗しても API は止めない。"""
     try:
         try:
-            logger.info("gcs_mirror pull(直近): %s", pull(be, root, recent_days=recent_days))
+            logger.info("gcs_mirror pull(直近): %s", pull(be, root, recent_days=recent_days, window=window_days()))
         finally:
             initial_recent_pulled.set()
-        logger.info("gcs_mirror pull(全体): %s", pull(be, root))
+        logger.info("gcs_mirror pull(全体): %s", pull(be, root, window=window_days()))
     finally:
         initial_full_pulled.set()
 
@@ -233,7 +285,7 @@ def start_refresher(backend: Backend | None = None, root: Path = REPO_ROOT, *, i
                     _initial_pull(be, root, recent_days)
                     first = False
                 else:
-                    r = pull(be, root, recent_days=recent_days)
+                    r = pull(be, root, recent_days=recent_days, window=window_days())
                     if r["downloaded"]:
                         logger.info("gcs_mirror pull: %s", r)
             except Exception as exc:  # noqa: BLE001
@@ -289,7 +341,7 @@ class RequestRefresher:
         def run() -> None:
             try:
                 be = self.backend = self.backend or GcsBackend()
-                r = pull(be, self.root, recent_days=self.recent_days)
+                r = pull(be, self.root, recent_days=self.recent_days, window=window_days())
                 self._last_ok = self._clock()
                 if r["downloaded"]:
                     logger.info("gcs_mirror pull: %s", r)

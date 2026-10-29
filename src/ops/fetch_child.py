@@ -85,6 +85,8 @@ def run_auto(mode: str) -> int:
     started = datetime.now(timezone.utc)
     from src.scraper import auto_scrape as a
 
+    if mode == "shutuba-audit":
+        os.environ.setdefault("KEIBA_SHUTUBA_AUDIT_DIRECT", "1")      # 実行役にはキューを消化する常駐が無いので、その場で取り直す
     a.script_basic_config()
     try:
         a.TASKS[mode]()

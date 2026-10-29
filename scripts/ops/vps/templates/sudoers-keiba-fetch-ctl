@@ -1,0 +1,3 @@
+# deploy ユーザーが root 権限で実行できる、取得の実行役の操作（状態・ログ・確認・取り込み・影モードの開始と停止）。
+# スクリプトは root 所有で deploy は書き換えられない。設置: scripts/ops/vps/vps_08_fetch_ctl.sh
+deploy ALL=(root) NOPASSWD: /opt/keiba-ui/bin/fetch_agent_ctl.sh, /opt/keiba-ui/bin/fetch_agent_ctl.sh *

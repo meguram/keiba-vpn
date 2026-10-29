@@ -331,3 +331,93 @@ def test_store_complete_marker_survives_rewrites(tmp_path):
     assert S.is_complete(p) is True
     S.mark_missing("B", "h", p)                                  # 書き直しても印は残る
     assert S.is_complete(p) is True and set(S.load(p)) == {"A", "B"}
+
+
+def test_ancestor_sire_children_picks_child_of_each_male_ancestor():
+    from src.scraper.sire_line_store import ancestor_sire_children
+
+    rec = {"horse_id": "H", "ancestors": [
+        {"generation": 1, "position": 0, "horse_id": "A", "sex": "牡"},
+        {"generation": 1, "position": 1, "horse_id": "B", "sex": "牝"},
+        {"generation": 2, "position": 0, "horse_id": "C", "sex": "牡"},
+        {"generation": 2, "position": 2, "horse_id": "D", "sex": "牡"},
+        {"generation": 3, "position": 4, "horse_id": "E", "sex": "牡"},
+        {"generation": 6, "position": 0, "horse_id": "Z", "sex": "牡"},
+        {"generation": 2, "position": 1, "horse_id": "I", "sex": "牝"},
+        {"generation": 3, "position": 2, "horse_id": "F", "sex": ""},
+        {"generation": 3, "position": 3, "horse_id": "G", "sex": ""},
+    ]}
+    assert ancestor_sire_children(rec) == {"A": "H", "C": "A", "D": "B", "E": "D", "F": "I"}
+
+
+def test_store_merge_and_diff_for_parallel_ledgers(tmp_path):
+    from src.scraper import sire_line_store as S
+
+    a, b = tmp_path / "a.json", tmp_path / "b.json"
+    S.mark_missing("2007103265", "h", a)                                           # 手元は『表記なし』
+    S.mark_missing("ONLY_A", "h", a)
+    S.record_html('<table class="blood_table"><tr><td rowspan="16"><a href="/horse/2007103265/">x</a><br>ロベルト系</td></tr></table>', "h2", b)
+    S.mark_missing("ONLY_B", "h", b)
+    assert S.diff(S.load(a), S.load(b)) == {"only_a": ["ONLY_A"], "only_b": ["ONLY_B"], "line": ["2007103265"]}
+    assert S.merge(S.load(b), a) == 2                                      # X は表記ありが勝ち、ONLY_B が増える
+    assert S.labels(a) == {"2007103265": "ロベルト系"} and set(S.load(a)) == {"2007103265", "ONLY_A", "ONLY_B"}
+    assert S.merge(S.load(b), a) == 0                                      # 2 回足しても同じ
+    S.merge({"2007103265": {"name": None, "line": None, "from": "z", "at": "2099-01-01"}}, a)
+    assert S.labels(a) == {"2007103265": "ロベルト系"}                              # 後から来た『表記なし』で消えない
+
+
+def _writer(path, prefix):
+    from src.scraper import sire_line_store as S
+
+    for i in range(25):
+        S.mark_missing(f"{prefix}{i}", "h", path)
+
+
+def test_store_concurrent_writers_lose_nothing(tmp_path):
+    import multiprocessing as mp
+
+    from src.scraper import sire_line_store as S
+
+    p = tmp_path / "sl.json"
+    ps = [mp.Process(target=_writer, args=(p, c)) for c in "ABCD"]
+    [x.start() for x in ps]
+    [x.join() for x in ps]
+    assert len(S.load(p)) == 100
+
+
+def _ped(father_id, line):
+    cell = f'<a href="/horse/{father_id}/">父</a>' + (f"<br>{line}" if line else "")
+    return f'<table class="blood_table"><tr><td rowspan="32">{cell}</td></tr></table>'
+
+
+def test_fetch_and_record_distinguishes_no_data_from_errors(tmp_path):
+    from src.scraper import sire_line_store as S
+
+    p, waits = tmp_path / "sl.json", []
+    sleep = waits.append
+
+    def pages(*items):
+        it = iter(items)
+
+        def fetch(url):
+            x = next(it)
+            if isinstance(x, Exception):
+                raise x
+            return x
+        return fetch
+
+    # 系統あり
+    assert S.fetch_and_record(pages(_ped("1111111111", "ロベルト系")), "u", "1111111111", "c1", p, sleep=sleep) == "line"
+    # ページは正常で系統の表記だけ無い → 理由つきで残す（取り直さない）
+    assert S.fetch_and_record(pages(_ped("2222222222", "")), "u", "2222222222", "c2", p, sleep=sleep) == "no_line"
+    assert S.load(p)["2222222222"]["reason"] == "no_line" and S.load(p)["2222222222"]["line"] is None
+    # 父が別の馬 → 理由つきで残す
+    assert S.fetch_and_record(pages(_ped("9999999999", "")), "u", "3333333333", "c3", p, sleep=sleep) == "father_mismatch"
+    assert waits == []
+    # 通信エラーは 2 回目で成功すれば台帳に正しく残り、間を 1 回置く
+    assert S.fetch_and_record(pages(OSError("boom"), _ped("4444444444", "ノーザンダンサー系")), "u", "4444444444", "c4", p, sleep=sleep) == "line"
+    assert len(waits) == 1
+    # 血統表の無い応答（メンテ画面など）も取り直し、3 回とも駄目なら台帳に残さない
+    waits.clear()
+    assert S.fetch_and_record(pages("<html>maintenance</html>", OSError("x"), "<html></html>"), "u", "5555555555", "c5", p, sleep=sleep) == "failed"
+    assert len(waits) == 2 and "5555555555" not in S.load(p)

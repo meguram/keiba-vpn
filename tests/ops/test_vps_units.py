@@ -194,3 +194,68 @@ def test_vps_status_probe_does_not_request_api():
     body = (ROOT_DIR / "src/scripts/ops/vps_status_probe.py").read_text(encoding="utf-8")
     code = "\n".join(ln for ln in body.splitlines() if not ln.lstrip().startswith("#"))
     assert "/api/" not in code
+
+
+def _ctl(tmp_path, cmd, env_lines, *, shadow_cfg=True, owner_tasks=()):
+    import json
+
+    cur = tmp_path / "current" / "config"
+    cur.mkdir(parents=True)
+    (cur / "fetch_owner.json").write_text(json.dumps({"agent_tasks": list(owner_tasks)}), encoding="utf-8")
+    if shadow_cfg:
+        (cur / "fetch_shadow.json").write_text("{}", encoding="utf-8")
+    envf = tmp_path / "fetch.env"
+    envf.write_text("".join(f"{x}\n" for x in env_lines), encoding="utf-8")
+    sa = tmp_path / "sa.json"
+    sa.write_text("{}", encoding="utf-8")
+    pull = tmp_path / "pull.env"
+    pull.write_text("GCS_BUCKET=bucket-from-pull\n", encoding="utf-8")
+    env = {**os.environ, "KEIBA_FETCH_ENV_FILE": str(envf), "KEIBA_FETCH_CURRENT": str(tmp_path / "current"), "KEIBA_FETCH_SA_FILE": str(sa),
+           "KEIBA_PULL_ENV_FILE": str(pull)}
+    r = subprocess.run(["bash", "scripts/ops/vps/fetch_agent_ctl.sh", cmd], env=env, capture_output=True, text=True)
+    return r, envf.read_text(encoding="utf-8")
+
+
+def test_fetch_ctl_never_prints_secret_values(tmp_path):
+    if os.geteuid() != 0:
+        return
+    r, _ = _ctl(tmp_path, "status", ["GCS_BUCKET=b", "netkeiba_id=me@example.com", "netkeiba_pw=supersecret", "KEIBA_FETCH_SHADOW_ENABLED=1"])
+    assert "supersecret" not in r.stdout + r.stderr and "me@example.com" not in r.stdout + r.stderr
+    assert "KEIBA_FETCH_SHADOW_ENABLED=1" in r.stdout and "netkeiba_pw）: 2/2 行" in r.stdout
+
+
+def test_fetch_ctl_shadow_on_refuses_when_production_tasks_are_set_or_code_is_old(tmp_path):
+    # 影モードのつもりで、本番の取得を VPS に始めさせない。fetch_shadow.json の無い古い版では、対象が空で黙って何もしないので断る
+    if os.geteuid() != 0:
+        return
+    r, env = _ctl(tmp_path / "a", "shadow-on", ["GCS_BUCKET=b", "KEIBA_FETCH_AGENT_TASKS=entries-sync"])
+    assert r.returncode != 0 and "KEIBA_FETCH_AGENT_TASKS" in r.stderr and "KEIBA_FETCH_SHADOW_ENABLED" not in env
+    r, env = _ctl(tmp_path / "b", "shadow-on", ["GCS_BUCKET=b"], shadow_cfg=False)
+    assert r.returncode != 0 and "fetch_shadow.json" in r.stderr and "KEIBA_FETCH_AGENT_ENABLED" not in env
+
+
+def test_fetch_ctl_sudoers_allows_only_the_ctl_script():
+    lines = [x for x in (T / "sudoers-keiba-fetch-ctl").read_text(encoding="utf-8").splitlines() if x.strip() and not x.startswith("#")]
+    assert lines == ["deploy ALL=(root) NOPASSWD: /opt/keiba-ui/bin/fetch_agent_ctl.sh, /opt/keiba-ui/bin/fetch_agent_ctl.sh *"]
+    for f in ("fetch_agent_ctl.sh", "vps_08_fetch_ctl.sh"):
+        assert subprocess.run(["bash", "-n", f"scripts/ops/vps/{f}"]).returncode == 0, f
+
+
+def test_fetch_ctl_pull_uses_the_same_environment_as_the_pull_timer():
+    # sudo は環境を引き継がないので、タイマーのユニットと同じ EnvironmentFile と Environment を読んでから取り込む
+    unit = load("keiba-release-pull@.service")["Service"]
+    s = Path("scripts/ops/vps/fetch_agent_ctl.sh").read_text(encoding="utf-8")
+    pull = s[s.index("    pull)"):s.index("    shadow-on)")]
+    assert f'PULL_ENV="${{KEIBA_PULL_ENV_FILE:-{unit["EnvironmentFile"]}}}"' in s and '. "$PULL_ENV"' in pull
+    for kv in unit["Environment"].split():
+        assert kv in pull, kv
+
+
+def test_fetch_ctl_reports_an_empty_bucket_and_shadow_on_fills_it_from_the_pull_env(tmp_path):
+    # 雛形の『GCS_BUCKET=』（値が空）を『あり』と見誤ると、実行役が起動直後に落ちる
+    if os.geteuid() != 0:
+        return
+    r, _ = _ctl(tmp_path / "a", "status", ["GCS_BUCKET="])
+    assert "GCS_BUCKET: 空" in r.stdout
+    r, env = _ctl(tmp_path / "b", "shadow-on", ["GCS_BUCKET="])             # systemctl の無い環境なので、その手前までを見る
+    assert "GCS_BUCKET=bucket-from-pull" in env and "KEIBA_FETCH_SHADOW_ENABLED=1" in env

@@ -75,6 +75,46 @@ class TestShutubaAudit(unittest.TestCase):
         self.assertEqual(sorted(res["gave_up"]), ["202604010801", "202604010803", "202604010804"])
         self.assertTrue(all(s["tasks"] == ["race_shutuba"] and s["smart_skip"] is False for s in q.specs))
 
+    def _direct(self, fetch, cap=SA.DIRECT_MAX_PER_RUN):
+        return SA.run_audit(days=7, enqueue=True, storage=self.storage, queue=_Queue(), now=self.now,
+                            direct=True, fetch=fetch, direct_cap=cap)
+
+    def test_direct_fetches_in_place_without_queue(self) -> None:
+        q, calls = _Queue(), []
+        res = SA.run_audit(days=7, enqueue=True, storage=self.storage, queue=q, now=self.now,
+                           direct=True, fetch=lambda rid, d: calls.append((rid, d)) or [])
+        self.assertEqual(q.specs, [])
+        self.assertEqual(sorted(c[0] for c in calls), ["202604010801", "202604010803", "202604010804"])
+        self.assertEqual(res["direct"]["errors"], [])
+        self.assertEqual(len(res["direct"]["fetched"]), 3)
+
+    def test_direct_per_run_cap_defers_the_rest(self) -> None:
+        calls = []
+        res = self._direct(lambda rid, d: calls.append(rid) or [], cap=2)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(res["direct"]["deferred"], 1)
+
+    def test_direct_attempt_cap_gives_up(self) -> None:
+        for _ in range(SA.MAX_ATTEMPTS):
+            self._direct(lambda rid, d: ["boom"])
+        calls = []
+        res = self._direct(lambda rid, d: calls.append(rid) or [])
+        self.assertEqual(calls, [])
+        self.assertEqual(res["to_enqueue"], 0)
+        self.assertEqual(len(res["gave_up"]), 3)
+
+    def test_direct_stops_on_access_restriction_and_reports_errors(self) -> None:
+        calls = []
+
+        def fetch(rid, d):
+            calls.append(rid)
+            return ["race_shutuba: access_restriction"]
+
+        res = self._direct(fetch)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(res["direct"]["fetched"], [])
+        self.assertIn("access_restriction", res["direct"]["errors"][0])
+
     def test_only_past_dates_in_window(self) -> None:
         keys = ["20260510", "20260524", "20260527", "20260601"]
         out = SA.past_dates(keys, self.now.date(), 7)

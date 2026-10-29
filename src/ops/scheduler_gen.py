@@ -37,6 +37,8 @@ def settings(env: dict[str, str] | None = None) -> dict[str, str]:
         "sched_sa": e.get("SCHEDULER_SA_EMAIL", f"keiba-scheduler@{project}.iam.gserviceaccount.com"),
         "queue": e.get("CLOUD_TASKS_QUEUE", QUEUE),
         "secrets": ",".join(f"{n}={n}:latest" for n in SECRETS + [x for x in e.get("SECRETS_EXTRA", "").split(",") if x]),
+        # 影モード（VPS の取得の並走検証）。1 のとき予約ジョブが影のタスクも積み、日次集計が合否を出す。VPS の実行役で影モードを始めてから 1 にする
+        "fetch_shadow": "1" if e.get("FETCH_SHADOW", "").strip() == "1" else "0",
     }
 
 
@@ -47,6 +49,8 @@ def job_env(doc: dict[str, Any], st: dict[str, str], *, parallel: bool) -> dict[
                 "KEIBA_DISPATCH_RUN_JOB": doc["runtime"]["run_jobs"]["l"]["name"]})
     if parallel:
         env["KEIBA_PARALLEL_RUN"] = "1"
+    if st.get("fetch_shadow") == "1":
+        env["KEIBA_FETCH_SHADOW_ENABLED"] = "1"
     return env
 
 
