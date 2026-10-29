@@ -1629,6 +1629,7 @@ def show_status():
         "daily-race-lists":      "日次レース一覧 (今日〜カレンダー末尾)",
         "entries-sync":          "出馬表の段階収集 (特別登録→出走馬決定→前日確定。10分おき起動・checkpoint のみ取得)",
         "shutuba-audit":         "出馬表の取りこぼし検査 (過去7日で馬番が確定しないままのレースを再取得)",
+        "sire-line":             "種牡馬の系統台帳を GCS と同期 (ホストと VPS の台帳を足し合わせる。取得自体は血統の定期バッチに相伴)",
         "jra-baba-morning":      "JRA馬場情報 (朝ポーリング 05:00-09:00)",
     }
 
@@ -1743,9 +1744,22 @@ def task_shutuba_audit():
     """過去 7 日の開催日で、馬番が 1 頭にも入っていない出馬表（登録段階のまま）を再取得キューに入れる。entries-sync は未来のレースだけなので、その取りこぼしを拾う。"""
     from src.scraper.shutuba_audit import run_audit
 
-    result = run_audit(days=7, enqueue=True)
-    logger.info("shutuba-audit: %s", {k: result.get(k) for k in ("stale", "to_enqueue", "gave_up", "queue_bulk_add")})
+    direct = os.environ.get("KEIBA_SHUTUBA_AUDIT_DIRECT") == "1"      # VPS は消化するキューが無いので、その場で取り直す
+    result = run_audit(days=7, enqueue=True, direct=direct)
+    logger.info("shutuba-audit: %s", {k: result.get(k) for k in ("stale", "to_enqueue", "gave_up", "queue_bulk_add", "direct")})
+    if direct and (result.get("direct") or {}).get("errors"):
+        result["status"] = "error"
+        result["error"] = "; ".join(result["direct"]["errors"][:3])
     _save_status("shutuba-audit", result)
+
+
+def task_sire_line():
+    """系統台帳 (sire_line_map.json) を GCS の正本と足し合わせる。系統の取得は血統の定期バッチが祖先を追って行うので、ここは通信しない。"""
+    from src.scraper import sire_line_store as store
+
+    result = store.sync_with_gcs()
+    logger.info("sire-line: %s", result)
+    _save_status("sire-line", result)
 
 
 TASKS = {
@@ -1766,6 +1780,7 @@ TASKS = {
     "daily-race-lists":       task_daily_race_lists,
     "entries-sync":           task_entries_sync,
     "shutuba-audit":          task_shutuba_audit,
+    "sire-line":              task_sire_line,
     "jra-baba-morning":       task_jra_baba_morning,
 }
 

@@ -189,6 +189,37 @@ def merge(other: dict[str, dict[str, Any]], path: Path | None = None) -> int:
     return changed
 
 
+GCS_KEY = "ops/sire_lines/sire_line_map.json"
+
+
+def sync_with_gcs(backend: Any = None, key: str = GCS_KEY, path: Path | None = None) -> dict[str, Any]:
+    """GCS の台帳を取り込んで足し合わせ、足し合わせた結果を書き戻す（ホストと VPS が同じ台帳に収束する）。
+
+    完了の印は、どちらかに付いていれば両方に付ける。書き戻しは上書きだが、書く前に必ず取り込んでいるので、
+    取りこぼしは次の同期で union に戻る。返り値は {pulled: 取り込みで変わった数, pushed: 書き戻した件数}。
+    """
+    if backend is None:
+        from src.ops.gcs_mirror import GcsBackend
+
+        backend = GcsBackend()
+    path = path or default_path()
+    remote: dict[str, Any] = {}
+    if backend.list(key):
+        try:
+            remote = json.loads(backend.download(key).decode("utf-8"))
+        except ValueError:
+            logger.warning("GCS の台帳が壊れているので取り込まず上書きします: %s", key)
+    pulled = merge(remote.get("lines") or {}, path)
+    done = _doc(path).get("complete_at") or remote.get("complete_at")
+    if done and not _doc(path).get("complete_at"):
+        with _locked(path):
+            _save(load(path), path, complete_at=done)
+    doc = _doc(path)
+    doc["complete_at"] = done
+    backend.upload(key, json.dumps(doc, ensure_ascii=False).encode("utf-8"))
+    return {"pulled": pulled, "pushed": len(doc.get("lines") or {}), "complete_at": done}
+
+
 def diff(a: dict[str, dict[str, Any]], b: dict[str, dict[str, Any]]) -> dict[str, list[str]]:
     """2 つの台帳の差。only_a / only_b は片方にだけある種牡馬、line は両方にあるが系統が違うもの（表記なし同士は同じ）。"""
     return {
