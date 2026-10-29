@@ -118,7 +118,7 @@ def test_nginx_templates_render_without_placeholders():
     for conf in (cr, host):
         assert not re.search(r"__[A-Z_]+__", re.sub(r"#.*", "", conf))
         assert conf.count("{") == conf.count("}")
-        assert "location ~ ^/(api/|data/image/)" in conf and "proxy_pass http://127.0.0.1:3000;" in conf
+        assert "location ~ ^/api/" in conf and "location ~ ^/data/image/" in conf and "proxy_pass http://127.0.0.1:3000;" in conf
     assert "include /etc/nginx/keiba-proxykey.conf" in cr and "CF-Access" not in re.sub(r"#.*", "", cr)
     assert "include /etc/nginx/keiba-access.conf" in host and "proxykey" not in re.sub(r"#.*", "", host)
     assert "proxy_set_header X-Keiba-Client-IP $remote_addr;" in cr    # クライアントが送った値ではなく nginx が見た IP を渡す
