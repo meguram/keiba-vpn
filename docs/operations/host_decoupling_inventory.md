@@ -571,3 +571,34 @@
 1. **影の 1 日の上限**: ホストの実績（`data/local/meta/request_counts/`）は平日 1,000〜3,700 件/日、金曜（`weekly-update`）は約 12,000 件/日。全部並走すると VPS 側も同じだけ要る。上限を実績に合わせる（例 平日 4,000・金曜 13,000）か、重いもの（`weekly-update`・`new-horse-pedigree`・`raceday-eve-fetch`）は 1 回だけ並走して件数・欠損を比べるかを決める（ユーザー判断）。
 2. 重い取得（`weekly-update`・`raceday-evening`・`raceday-eve-fetch`）は中で計算もする。VPS の 250M に収まるかは並走で実測する（OOM なら取得と計算を分ける）。
 3. コードが要る GCP ジョブ（job_map の blockers）: `slack-scrape-*`（元データの置き場）、`shared-login`（秘密と送信済みの月の状態を GCS に）、`jma-weather`（中断印を GCS に・GCP の IP から気象庁に届くか）、`hem-megu-state`（state の入出力）、`page-quality-check`（検査 URL）、`vps-watchdog`（VPS のハートビート）。`verify-past-values` は `backfill-past` と一緒に差分期間の後。
+
+### 14.5 コードの手直しと ready の見直し（2026-10-29 深夜、ブランチ `par-guard` の 2 つ目のコミット）
+
+| ジョブ | 手直し |
+|---|---|
+| `slack-scrape-*`（4 本） | `scrape_status_notify --source prod`: ホストの crontab の代わりに job_map の GCP/VPS ジョブを、GCS の実行記録（`ops/job_runs/`・`ops/fetch_tasks{,_shadow}/`）で見る。予定時刻からの未開始は Scheduler グループの cron と `when_jst`、VPS は `schedule_jst` で判定。上限でスキップした影タスクは数えない。キュー・スキーマ違反・data_health はホストのローカルにだけあるので prod では扱わない。通知の抑制状態は `data/local/meta/slack_sent` を state で持ち回る（並走ガードは本番キーへの書き戻しを `parallel/` に逃がすので、GCS の本番キーには置けない） |
+| `shared-login` | 並走中は `KEIBA_SHARED_LOGIN_DRY=1` で判定だけ（名簿・状態を書かず、通知しない）。名簿は `ops/mirror` の members.json を `mirror_in` で読む。状態は `data/local/auth/shared_login_state.json` だけを state に（以前は `config` を丸ごと）。秘密 `DEV_SECRET_KEY`・`KEIBA_SHARED_LOGIN_ID`（登録済み・keiba-jobs が読める）を Run Job に渡す。**切替時の残り**: 名簿の正本をホストから移す |
+| `jma-weather` | 中断印を `--halt-file` でジョブ自身が扱い、state で持ち回る。GCP の IP から気象庁に届くかは初回で分かる（届かなければ中断印で止まる） |
+| `hem-megu-state` | 入力（tables の `megu_index_flat`・`race_result_flat`、`hem_params.json`）と出力（`jockey_table.parquet`）を埋めた。**注意**: `megu_index_flat` を GCP で更新する Job は無いので、並走中は種まき時点の表で計算する |
+| `page-quality-check` | netkeiba にログインして取得する処理なので、**GCP Jobs から VPS の取得タスクに移した**（`auto_scrape.task_page_quality_check`）。要約（判定だけ）を `ops/page_quality/latest.json` に上げる（ホストも次回から同じ要約を上げる） |
+| `horse-name-index` | state を `calculated_data` 全体（1.3GB、上限 200MB で必ず失敗）から `knowledge`・`growth_curve` に絞った |
+| `tracking-v2-weekly` | tables 全体（2.9GB、上限超過）を `*/race_result_flat.parquet`（約 22MB）に絞った |
+| g-5min | 起動を 5 分→15 分おきに（動くのは 15 分おきの `slack-scrape-alerts` だけ） |
+| 秘密 | `SLACK_WEBHOOK_URL_PARALLEL` は Secret Manager に有るときだけ渡す（`OPTIONAL_SECRETS`。無い秘密を指定すると配備が落ちる） |
+| 影の対象 | `config/fetch_shadow.json` に VPS 行きの全タスク（直前オッズ・`jra-baba-morning`・`recent-retry`・`barometer-retry`・`raceday-*`・`new-horse-pedigree`・`weekly-update`・`shutuba-audit`・`page-quality-check`）を足し、1 日の上限を 800 → 14,000 に。10/29 は 800 件でも `entries-sync` の 1/3 が上限切れでスキップしていた |
+
+**ready=true にしたもの**（並走ガードで本番に書かないので、確認は差分チェックで行う。元の blockers は各ジョブの `ready_note` に残した）: GCP 27 本（`drift-monitor-weekly`・`vps-watchdog`・`verify-past-values` 以外の全部）と VPS 8 本（`raceday-evening`・`raceday-eve-fetch`・`raceday-comment-*`・`new-horse-pedigree`・`weekly-update`・`shutuba-audit`・`page-quality-check`）。
+
+**ready に戻さなかったもの**:
+- `drift-monitor-weekly`: tables 全体（2.9GB）を読み、上限 600MB を超えて必ず失敗する。V3Serving の full エンジンが読む表を特定して絞るか、bundle エンジンに切り替える。
+- `vps-watchdog`: ハートビートの受け口（keiba-monitor の `POST /ops/heartbeat`）が署名鍵なしで 401、VPS の送信タイマーも未設置。インフラの作業（下の 14.6 の 3）が先。
+- `verify-past-values`: 方針どおり `backfill-past` と一緒に差分期間の後。
+
+### 14.6 反映の前に要る作業（ユーザー）
+
+1. **state の種まき**（GCS の `state/` だけに書く。自動許可の判定で止められたため）。worktree かリポジトリのルートで:
+   `for j in hem-megu-state prediction-results-refresh tracking-v2-weekly frozen-tracking-weekly parse-drift-daily horse-name-index; do KEIBA_ENV=prod python -m src.ops.state_sync push --job $j --which in; done`
+   （`horse-name-index` は約 39,000 ファイル・255MB で時間がかかる）
+2. **`SLACK_WEBHOOK_URL_PARALLEL`** を Secret Manager に作り、keiba-jobs に読み取り権限（無くても配備はできる。その間 prod 側の step の Slack は送らない）。
+3. （任意・`vps-watchdog` 用）keiba-monitor の SA に `KEIBA_HEARTBEAT_KEY` の読み取り権限 → `scripts/gcp/deploy_cloud_run_monitor.sh` で再配備 → VPS で `vps_03_cloudrun_heartbeat.sh` の手順（`HEARTBEAT_URL` と鍵）。
+4. develop → stg → master の昇格（Jobs のイメージ・Run Job・Scheduler は promote が `ENABLE_JOBS_DEPLOY=true`・`JOBS_PARALLEL=1` で更新する）。VPS の影の設定は 03:20 JST の取り込みで入る。

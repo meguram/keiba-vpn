@@ -93,3 +93,17 @@ def test_month_object_layout_and_observed_at():
     assert sorted(k for _, k in store.d) == ["01_202001", "01_202002"]                 # 月ごとに別オブジェクト
     day = store.d[("jma_weather_hourly", "01_202001")]["days"]["2020-01-31"]
     assert day["station"]["name"] == "札幌" and day["fetched_at"] and len(day["hours"]) == 24
+
+
+def test_halt_file_blocks_start_and_is_written_on_abort(tmp_path, monkeypatch):
+    from src.scraper import jma_weather as J
+
+    halt = tmp_path / "meta" / "jma_weather_halt.json"
+
+    def boom(*a, **k):
+        raise J.JmaError("HTTP 503")
+
+    monkeypatch.setattr(J, "fetch_range", boom)
+    assert J.main(["--halt-file", str(halt), "daily"]) == 3 and "HTTP 503" in halt.read_text(encoding="utf-8")
+    monkeypatch.setattr(J, "fetch_range", lambda *a, **k: (_ for _ in ()).throw(AssertionError("中断印があるのに取得した")))
+    assert J.main(["--halt-file", str(halt), "daily"]) == 0

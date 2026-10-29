@@ -5,6 +5,7 @@
   python -m src.scraper.jma_weather daily                        # 直近 3 日分（昨日まで）を補う。cron から毎日
   python -m src.scraper.jma_weather report [--years 2026]        # 競馬場×年の取得済み日数
   python -m src.scraper.jma_weather export [--out PATH]          # 分析用のフラット表（Parquet。1 行＝競馬場×観測時刻）
+  python -m src.scraper.jma_weather --halt-file PATH daily|fetch …   # 中断印つき（GCP Jobs。ホストの cron は scripts/cron/jma_weather_run.sh が同じことをする）
 
 保存: HybridStorage のカテゴリ jma_weather_hourly、キー <競馬場コード>_<YYYYMM>（stg/prod は GCS の others/jma_weather_hourly/、dev は dev_mock）。中身は 日付 → {station, fetched_at, hours[24]}。取得済みの日は取り直さない。
 方針: 間隔は約 1.5 秒、HTTP が 200 以外・表が読めない場合は 1 件で即中断（再開は同じコマンド）。出典: 気象庁ホームページ（過去の気象データ検索）。
@@ -304,8 +305,9 @@ def export_flat(out: Path, store=None, years: list[int] | None = None) -> int:
     return len(df)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--halt-file", help="中断印。あれば始めない（終了コード 0）。取得の中断（終了コード 3）で書く。確認して人が消すまで再開しない")
     sp = ap.add_subparsers(dest="cmd", required=True)
     sp.add_parser("stations")
     f = sp.add_parser("fetch")
@@ -320,9 +322,13 @@ def main() -> int:
     ex = sp.add_parser("export")
     ex.add_argument("--out", default=str(ROOT / "data" / "page_reference" / "tables" / "jma_weather_hourly_flat.parquet"))
     ex.add_argument("--years", type=int, nargs="*")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
     ymd = lambda s: datetime.strptime(s, "%Y%m%d").date()      # noqa: E731
     yesterday = date.today() - timedelta(days=1)
+    halt = Path(a.halt_file) if a.halt_file else None
+    if halt is not None and halt.exists():
+        print(f"中断印があるため始めません（確認して {halt} を削除）", file=sys.stderr)
+        return 0
     try:
         if a.cmd == "stations":
             sel = select_stations()
@@ -341,6 +347,10 @@ def main() -> int:
             print(json.dumps(report(years=a.years), ensure_ascii=False))
     except JmaError as e:
         print(f"中断: {e}", file=sys.stderr)
+        if halt is not None:
+            halt.parent.mkdir(parents=True, exist_ok=True)
+            halt.write_text(json.dumps({"at": datetime.now(timezone(timedelta(hours=9))).isoformat(timespec="seconds"), "rc": 3, "error": str(e)},
+                                       ensure_ascii=False) + "\n", encoding="utf-8")
         return 3
     return 0
 

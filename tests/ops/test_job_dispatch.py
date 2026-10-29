@@ -351,7 +351,13 @@ def test_parallel_step_redirects_gcs_writes(monkeypatch, tmp_path):
     """parallel_step はガードを root=parallel で入れてからモジュールを実行する。"""
     from src.ops import parallel_step, shadow_storage as ss
 
+    import os
+    import sys
+
     seen = {}
+    monkeypatch.setattr(sys, "argv", list(sys.argv))                     # main() が書き換える。テストの後に戻す
+    for k in ("KEIBA_PARALLEL_GUARD", "PYTHONPATH"):
+        monkeypatch.setenv(k, os.environ.get(k, ""))
     monkeypatch.setattr(ss, "install", lambda root=ss.SHADOW_ROOT: seen.setdefault("root", root))
     (tmp_path / "pmod_probe.py").write_text("import sys\nRESULT = sys.argv[:]\n")
     monkeypatch.syspath_prepend(str(tmp_path))

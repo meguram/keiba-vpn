@@ -1630,6 +1630,7 @@ def show_status():
         "entries-sync":          "出馬表の段階収集 (特別登録→出走馬決定→前日確定。10分おき起動・checkpoint のみ取得)",
         "shutuba-audit":         "出馬表の取りこぼし検査 (過去7日で馬番が確定しないままのレースを再取得)",
         "sire-line":             "種牡馬の系統台帳を GCS と同期 (ホストと VPS の台帳を足し合わせる。取得自体は血統の定期バッチに相伴)",
+        "page-quality-check":    "ページ品質チェック (代表ページを取得して期待スキーマと照合。要約を GCS の ops/page_quality/ へ)",
         "jra-baba-morning":      "JRA馬場情報 (朝ポーリング 05:00-09:00)",
     }
 
@@ -1762,6 +1763,21 @@ def task_sire_line():
     _save_status("sire-line", result)
 
 
+def task_page_quality_check():
+    """代表ページの取得とスキーマ照合（約 10 リクエスト）。結果はローカルに、要約は GCS に。"""
+    from src.monitor import page_quality_check as pq
+
+    result = pq.run_checks()
+    pq.save_result(result)
+    published = pq.publish_summary(result)
+    out = {"status": "ok" if result.get("summary_tag") != "out" else "error", "summary_tag": result.get("summary_tag"),
+           "safe": result.get("safe_count"), "caution": result.get("caution_count"), "out": result.get("out_count"), "published": published}
+    if out["status"] == "error":
+        out["error"] = "out: " + ", ".join(r["category"] for r in result.get("results") or [] if r.get("tag") == "out")
+    logger.info("page-quality-check: %s", out)
+    _save_status("page-quality-check", out)
+
+
 TASKS = {
     "raceday-eve":            task_raceday_eve,
     "raceday-eve-fetch":      task_raceday_eve_fetch,
@@ -1781,6 +1797,7 @@ TASKS = {
     "entries-sync":           task_entries_sync,
     "shutuba-audit":          task_shutuba_audit,
     "sire-line":              task_sire_line,
+    "page-quality-check":     task_page_quality_check,
     "jra-baba-morning":       task_jra_baba_morning,
 }
 

@@ -201,9 +201,9 @@ def test_shadow_off_by_default_plans_nothing():
 
 def test_shadow_plan_jitter_exclusion_and_allowlist():
     real = [ft.make_task("race-odds-t60", T0, args=RACE), ft.make_task("race-odds-t15", T0 + timedelta(minutes=45), args=RACE),
-            ft.make_task("weekly-update", T0), ft.make_task("daily-race-lists", T0)]
+            ft.make_task("catchup-missing", T0), ft.make_task("daily-race-lists", T0)]
     out = fs.shadow_tasks_from(real, _cfg(), exclude={"daily-race-lists"}, env=ON)
-    assert {t.task for t in out} == {"race-odds-t60", "race-odds-t15"}              # 重い weekly-update も、本番担当の daily-race-lists も影にしない
+    assert {t.task for t in out} == {"race-odds-t60", "race-odds-t15"}              # 対象外の catchup-missing も、本番担当の daily-race-lists も影にしない
     for t, r in zip(out, real):
         lo, hi = _cfg().jitter_range(t.task)
         shift = (ft.parse_ts(t.not_before) - ft.parse_ts(r.not_before)).total_seconds()
@@ -408,7 +408,7 @@ def test_shadow_days_passes_only_with_five_good_days_including_a_raceday():
 
 
 def test_not_shadowable_task_blocks_unless_explicitly_exempted():
-    doc = vps_doc(task="weekly-update")
+    doc = vps_doc(task="catchup-missing")
     j = doc["jobs"][0]
     c = shadow_eval.evaluate_job(j, doc, reports_for(), TODAY, _cfg())
     assert c["ok"] is False and "対象外" in c["detail"]
@@ -498,20 +498,22 @@ def test_default_job_map_requires_shadow_and_config_is_consistent():
     cfg = fs.load_config()
     assert cfg.task_names() == frozenset(cfg.tasks)                                          # 設定のタスクはすべて allowlist にある
     assert cfg.passing["required_days"] >= 5 and cfg.access_pause_seconds >= 1800
-    assert not (cfg.task_names() & {"weekly-update", "raceday-evening", "new-horse-pedigree", "catchup-missing"})   # 重い定期処理は対象外
+    assert "catchup-missing" not in cfg.task_names()                                         # 取りこぼしの一括取得は並走させない
+    vps_tasks = {j["fetch_task"]["task"] for j in doc["jobs"] if j["destination"] == "vps" and j.get("ready") and not j.get("reserved_by")}
+    assert vps_tasks <= cfg.task_names()                                                      # 2026-10-29: ready の VPS 定期ジョブは全部影で並走（棚卸し §14）
     assert next(j for j in doc["jobs"] if j["id"] == "fetch-shadow-report")["group"] in doc["scheduler_groups"]
 
 
 def test_fetch_child_refuses_tasks_outside_shadow_allowlist_and_installs_guard(monkeypatch, capsys):
     from src.ops import fetch_child as fc
 
+    monkeypatch.setattr(fc, "run_auto", lambda mode: 0)                              # 本物の取得は決して起動しない
     monkeypatch.setenv("KEIBA_FETCH_SHADOW", "1")
-    assert fc.main(["auto", "weekly-update"]) == 4                                   # 重い定期処理は影では実行しない
+    assert fc.main(["auto", "catchup-missing"]) == 4                                 # 影の対象外は影では実行しない
     out = capsys.readouterr().out
     assert "shadow_not_allowed" in out and '"shadow": true' in out
     installed = []
     monkeypatch.setattr(ss, "install", lambda: installed.append(1))
-    monkeypatch.setattr(fc, "run_auto", lambda mode: 0)
     assert fc.main(["auto", "entries-sync"]) == 0 and installed == [1]               # 対象のタスクは書き込みガードを入れてから実行
     monkeypatch.delenv("KEIBA_FETCH_SHADOW")
     installed.clear()

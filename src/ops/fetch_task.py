@@ -43,6 +43,7 @@ AUTO_SCRAPE_MODES: frozenset[str] = frozenset({
     "new-horse-pedigree",
     "shutuba-audit",         # 過去7日の出馬表の取りこぼしを、その場で取り直す（fetch_child が KEIBA_SHUTUBA_AUDIT_DIRECT=1 にする）
     "sire-line",             # 系統台帳の GCS 同期（通信は GCS のみ）
+    "page-quality-check",    # 代表ページの取得とスキーマ照合（約 10 リクエスト。要約を ops/page_quality/ へ）
 })
 
 # 2. 1 レースの取得（開催日）。引数: {"race_id": 12 桁, "date": "YYYYMMDD"}
@@ -61,10 +62,12 @@ RACE_ARG_TASKS: frozenset[str] = frozenset(RACE_ODDS_TASKS) | {RACE_WEIGHT_TASK,
 
 ALLOWED_TASKS: frozenset[str] = AUTO_SCRAPE_MODES | RACE_ARG_TASKS
 
-# 実行役が既定で受け持つタスク（KEIBA_FETCH_AGENT_TASKS で上書き）。それ以外は pending のまま残し、別の実行者（ホスト等）に任せる。
-# weekly-update 等の重いものは VPS の 250M で実測してから足す（段階移行）。
+# 実行役が受け持てるタスク（job_map の vps ジョブを ready=true にできる範囲。job_map.validate が見る）。
+# 実際の担当は config/fetch_owner.json の agent_tasks（KEIBA_FETCH_AGENT_TASKS で上書き）で、そこに無いタスクは pending のまま残し、ホスト等に任せる。
+# 2026-10-29: 全部を影モードで並走させる方針（棚卸し §14）で、重いもの（weekly-update など）も加えた。250M に収まるかは影の並走で実測する。
 DEFAULT_AGENT_TASKS: frozenset[str] = RACE_ARG_TASKS | {
     "entries-sync", "recent-retry", "barometer-retry", "daily-race-lists", "jra-baba-morning",
+    "raceday-evening", "raceday-eve-fetch", "raceday-comment", "new-horse-pedigree", "weekly-update", "shutuba-audit", "page-quality-check",
 }
 
 # 直前オッズは時刻が命。実行役は期限のこの秒数前から待機する（既定の lead_seconds）。
