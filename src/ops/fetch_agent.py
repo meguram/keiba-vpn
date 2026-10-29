@@ -39,7 +39,7 @@ TAIL_BYTES = 3000
 # タスクごとの実行時間の上限（秒）。超えたら子プロセスのグループごと終了して失敗にする。
 TIMEOUTS: dict[str, int] = {
     "race-odds-t60": 240, "race-odds-t15": 600, "race-odds-t10": 90, "race-odds-t05": 90, "race-odds-t02": 90,
-    "race-weight-check": 120, "entries-sync": 900,
+    "race-weight-check": 120, "race-result-t15": 180, "entries-sync": 900,
 }
 DEFAULT_TIMEOUT = 1800
 

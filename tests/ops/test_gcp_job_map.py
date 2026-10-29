@@ -157,3 +157,15 @@ def test_validate_detects_problems():
 
 def test_fetch_owner_default_is_compatible():
     assert fetch_owner.agent_tasks() == set()      # 既定は空（誰も奪わない）
+
+
+def test_export_tables_daily_runs_track_speed_inside_existing_job():
+    j = jm.job_by_id("export-tables-daily", DOC)
+    mods = [s["argv"][1] for s in j["steps"]]
+    assert mods.index("src.scraper.export_tables") < mods.index("src.scripts.data.track_speed_daily")   # flat 更新の後に計算
+    ts = next(s for s in j["steps"] if s["argv"][1] == "src.scripts.data.track_speed_daily")
+    assert ts.get("allow_fail")        # 馬場速度の失敗で flat の更新を落とさない
+    assert any(e["path"] == "data/page_reference/track_speed" for e in j["state_out"])
+    ins = {e["path"]: e for e in j["state_in"]}
+    assert "track_speed_baselines.parquet" in ins["data/page_reference/knowledge"]["include"]
+    assert "data/page_reference/track_speed" in ins

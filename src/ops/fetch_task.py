@@ -28,7 +28,7 @@ STATES = ("pending", "running", "done", "failed")
 # 1. auto_scrape のモード（``python -m src.scraper.auto_scrape --task <mode>``）。取得中心で『1 回で終わる』ものだけ。
 #    除外: raceday-eve（追走難度・想定オッズの前計算で ML を読む=VPS の 250M に収まらない。取得だけの raceday-eve-fetch を使う。計算は GCP Jobs）、
 #    feature-accumulate・horse-name-index（計算）、raceday-runner / raceday-weight-runner / raceday-result-runner
-#    （1 日居座る常駐ループ。1 本ずつ実行する実行役を塞ぐので、race-odds-* / race-weight-check の個別タスクに置き換える）。
+#    （1 日居座る常駐ループ。1 本ずつ実行する実行役を塞ぐので、race-odds-* / race-weight-check / race-result-t15 の個別タスクに置き換える）。
 AUTO_SCRAPE_MODES: frozenset[str] = frozenset({
     "entries-sync",
     "recent-retry",
@@ -46,7 +46,8 @@ AUTO_SCRAPE_MODES: frozenset[str] = frozenset({
 })
 
 # 2. 1 レースの取得（開催日）。引数: {"race_id": 12 桁, "date": "YYYYMMDD"}
-#    オッズ T-60 / T-15 / 直前 T-10 / T-5 / T-2 と、馬体重の検知（出馬表を取り直し、馬体重が入ったか判定）。
+#    オッズ T-60 / T-15 / 直前 T-10 / T-5 / T-2 と、馬体重の検知（出馬表を取り直し、馬体重が入ったか判定）、
+#    発走 15 分後の確定結果（race-result-t15。常駐の raceday-result-runner の 1 レース分）。
 RACE_ODDS_TASKS: dict[str, str] = {
     "race-odds-t60": "t60",
     "race-odds-t15": "t15",
@@ -55,7 +56,8 @@ RACE_ODDS_TASKS: dict[str, str] = {
     "race-odds-t02": "t02",
 }
 RACE_WEIGHT_TASK = "race-weight-check"
-RACE_ARG_TASKS: frozenset[str] = frozenset(RACE_ODDS_TASKS) | {RACE_WEIGHT_TASK}
+RACE_RESULT_TASK = "race-result-t15"
+RACE_ARG_TASKS: frozenset[str] = frozenset(RACE_ODDS_TASKS) | {RACE_WEIGHT_TASK, RACE_RESULT_TASK}
 
 ALLOWED_TASKS: frozenset[str] = AUTO_SCRAPE_MODES | RACE_ARG_TASKS
 

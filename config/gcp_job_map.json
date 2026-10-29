@@ -406,6 +406,17 @@
     {
      "argv": [
       "-m",
+      "src.scripts.data.track_speed_daily",
+      "--from",
+      "{days_ago_10}",
+      "--to",
+      "{today}"
+     ],
+     "allow_fail": true
+    },
+    {
+     "argv": [
+      "-m",
       "src.scraper.parse_audit",
       "--years",
       "{years}"
@@ -436,6 +447,18 @@
       "{prev_year}/race_shutuba_race.parquet",
       "{prev_year}/_export_report.json"
      ]
+    },
+    {
+     "path": "data/page_reference/knowledge",
+     "max_mb": 5,
+     "include": [
+      "track_speed_baselines.parquet",
+      "track_speed_pace_baselines.parquet"
+     ]
+    },
+    {
+     "path": "data/page_reference/track_speed",
+     "max_mb": 10
     }
    ],
    "state_out": [
@@ -452,6 +475,10 @@
       "{prev_year}/race_shutuba_race.parquet",
       "{prev_year}/_export_report.json"
      ]
+    },
+    {
+     "path": "data/page_reference/track_speed",
+     "max_mb": 10
     }
    ],
    "parity": {
@@ -467,7 +494,8 @@
     "atol": 0.0
    },
    "blockers": [
-    "Jobs で 1 回手動実行（当年のファイルを state から取り、GCS の生データから増分を追記）。ホストで同じ入力に対して実行し『すでにエクスポート済み』で出力が変わらないことは確認済み（2.3 秒・344MB）"
+    "Jobs で 1 回手動実行（当年のファイルを state から取り、GCS の生データから増分を追記）。ホストで同じ入力に対して実行し『すでにエクスポート済み』で出力が変わらないことは確認済み（2.3 秒・344MB）",
+    "馬場速度の日次計算（track_speed_daily）を同 Job に追加済み。初回実行後、ホストの data/page_reference/track_speed/races_{year}.parquet と行・値が一致することを確認する（基準表は静的）"
    ],
    "enabled": true,
    "ready": false
@@ -948,7 +976,7 @@
     "kind": "none"
    },
    "blockers": [
-    "BigQuery への課金エクスポートの有効化（ユーザーが Console で実施）と GCP_BILLING_BQ_TABLE の設定"
+    "課金エクスポートは有効化済み（2026-10-29、billing_export、keiba-jobs に読み取り権限付与済み）。リポジトリ変数 GCP_BILLING_BQ_TABLE を設定して昇格（Jobs 更新）すると、ready にできる"
    ],
    "enabled": true,
    "ready": false

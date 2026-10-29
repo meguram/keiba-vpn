@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import random
 import time
 from datetime import datetime, timedelta, timezone
@@ -130,6 +131,10 @@ def run(calendar: dict, now: datetime | None = None) -> dict[str, Any]:
             save_state(state)
         time.sleep(random.uniform(2.0, 5.0))
     save_state(state)
+    if (os.environ.get("KEIBA_RUN_LOCATION") or "").strip().lower() == "vps":
+        # VPS は取得だけ（250MB 枠・flat と馬場速度の正本は GCS）。馬場速度は GCP の export-tables-daily、予測成績は prediction-results-refresh が行う
+        return {"dates": dates, "targets": len(targets), "saved": saved, "pending": pending, "error_count": errors,
+                "track_speed_dates": [], "post_processing": "gcp"}
     # 馬場速度は確定結果（race_result）から計算する。当日夜は未取得なので、取れた日付の分をここで計算する
     for d in sorted(result_dates):
         try:

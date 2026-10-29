@@ -1,6 +1,6 @@
 """取得タスクの計画と投入（GCP の司令塔 = Cloud Scheduler / Cloud Run Job から、またはホストから実行）。
 
-  python -m src.ops.fetch_plan day --date YYYYMMDD [--late] [--weight-poll-sec 180] [--dry-run]   # 開催日のレース別タスクを積む（前日夜〜当日朝）
+  python -m src.ops.fetch_plan day --date YYYYMMDD [--late] [--no-result] [--weight-poll-sec 180] [--dry-run]   # 開催日のレース別タスクを積む（前日夜〜当日朝）
   python -m src.ops.fetch_plan recurring --task entries-sync [--dry-run]                          # 定期タスク（10 分おき等）を 1 件積む
   python -m src.ops.fetch_plan show [--state pending]                                             # 表の中身
 
@@ -24,7 +24,7 @@ LATE_LEADS = (10, 5, 2)
 
 
 def plan_day(schedule: list[dict[str, Any]], date_ymd: str, *, late: bool = False, weight: bool = True,
-             weight_poll_sec: int = 180, weight_start_min: float = 65.0, weight_deadline_min: float = 30.0,
+             result: bool = True, weight_poll_sec: int = 180, weight_start_min: float = 65.0, weight_deadline_min: float = 30.0,
              now: datetime | None = None, build_events=None) -> list[ft.FetchTask]:
     """1 開催日のレース別タスク。``schedule`` は ``[{"race_id", "post_time"(tz 付き datetime)}]``。"""
     if build_events is None:
@@ -48,6 +48,11 @@ def plan_day(schedule: list[dict[str, Any]], date_ymd: str, *, late: bool = Fals
                     tasks.append(ft.make_task(ft.RACE_WEIGHT_TASK, t, args={"race_id": str(r["race_id"]), "date": date_ymd},
                                               grace_seconds=int(weight_poll_sec)))
                 t += timedelta(seconds=weight_poll_sec)
+    if result:
+        for r in schedule:
+            t = r["post_time"] + timedelta(minutes=15)
+            if t >= now - timedelta(seconds=ft.DEFAULT_GRACE_SECONDS_ANY):
+                tasks.append(ft.make_task(ft.RACE_RESULT_TASK, t, args={"race_id": str(r["race_id"]), "date": date_ymd}))
     tasks.sort(key=lambda t: (t.not_before, t.task_id))
     return tasks
 
@@ -80,6 +85,7 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--date", required=True)
     d.add_argument("--late", action="store_true", help="直前 T-10/T-5/T-2 の単複オッズも積む（KEIBA_ODDS_LATE_SNAPSHOTS=1 のとき）")
     d.add_argument("--no-weight", action="store_true")
+    d.add_argument("--no-result", action="store_true")
     d.add_argument("--weight-poll-sec", type=int, default=180)
     d.add_argument("--dry-run", action="store_true")
     r = sub.add_parser("recurring")
@@ -97,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
         tasks = [recurring_task(a.task, interval_min=a.interval_min)]
     else:
         late = a.late or os.environ.get("KEIBA_ODDS_LATE_SNAPSHOTS", "").strip().lower() in ("1", "true", "yes")
-        tasks = plan_day(_load_schedule(a.date), a.date, late=late, weight=not a.no_weight, weight_poll_sec=a.weight_poll_sec)
+        tasks = plan_day(_load_schedule(a.date), a.date, late=late, weight=not a.no_weight, result=not a.no_result, weight_poll_sec=a.weight_poll_sec)
     if a.dry_run:
         for t in tasks[:20]:
             print(t.task_id, t.not_before)
