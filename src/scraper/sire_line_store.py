@@ -91,7 +91,7 @@ def ancestor_sire_children(rec: dict[str, Any], max_gen: int = 5) -> dict[str, s
     """5 世代血統レコードに載る牡の祖先（max_gen 世代まで）-> その子の馬 ID。
 
     祖先の『○○系』は、その子の血統ページ（父のセル）にしか付かない。子は 1 世代目の祖先ならレコードの馬自身、
-    それ以外は (世代-1, 位置>>1) の祖先。
+    それ以外は (世代-1, 位置>>1) の祖先。性別は、無ければ位置の偶奇（偶数=牡）で決める。
     """
     by_pos: dict[tuple[int, int], str] = {}
     for a in rec.get("ancestors") or []:
@@ -100,9 +100,11 @@ def ancestor_sire_children(rec: dict[str, Any], max_gen: int = 5) -> dict[str, s
     out: dict[str, str] = {}
     for a in rec.get("ancestors") or []:
         hid, g, p = a.get("horse_id"), a.get("generation"), a.get("position")
-        if not hid or g is None or p is None or a.get("sex") != "牡" or int(g) > max_gen:
+        if not hid or g is None or p is None or int(g) > max_gen:
             continue
         g, p = int(g), int(p)
+        if a.get("sex") == "牝" or (a.get("sex") != "牡" and p % 2):      # 性別が空の祖先が大半。位置が偶数なら牡（奇数は牝）
+            continue
         child = str(rec.get("horse_id") or "") if g == 1 else by_pos.get((g - 1, p >> 1), "")
         if child:
             out.setdefault(str(hid), child)

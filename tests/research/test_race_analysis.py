@@ -343,5 +343,8 @@ def test_ancestor_sire_children_picks_child_of_each_male_ancestor():
         {"generation": 2, "position": 2, "horse_id": "D", "sex": "牡"},
         {"generation": 3, "position": 4, "horse_id": "E", "sex": "牡"},
         {"generation": 6, "position": 0, "horse_id": "Z", "sex": "牡"},
+        {"generation": 2, "position": 1, "horse_id": "I", "sex": "牝"},
+        {"generation": 3, "position": 2, "horse_id": "F", "sex": ""},
+        {"generation": 3, "position": 3, "horse_id": "G", "sex": ""},
     ]}
-    assert ancestor_sire_children(rec) == {"A": "H", "C": "A", "D": "B", "E": "D"}
+    assert ancestor_sire_children(rec) == {"A": "H", "C": "A", "D": "B", "E": "D", "F": "I"}
