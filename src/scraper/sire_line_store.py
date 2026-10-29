@@ -87,6 +87,28 @@ def mark_missing(sire_id: str, source_horse_id: str, path: Path | None = None) -
     _save(cur, path)
 
 
+def ancestor_sire_children(rec: dict[str, Any], max_gen: int = 5) -> dict[str, str]:
+    """5 世代血統レコードに載る牡の祖先（max_gen 世代まで）-> その子の馬 ID。
+
+    祖先の『○○系』は、その子の血統ページ（父のセル）にしか付かない。子は 1 世代目の祖先ならレコードの馬自身、
+    それ以外は (世代-1, 位置>>1) の祖先。
+    """
+    by_pos: dict[tuple[int, int], str] = {}
+    for a in rec.get("ancestors") or []:
+        if a.get("horse_id") and a.get("generation") is not None and a.get("position") is not None:
+            by_pos[(int(a["generation"]), int(a["position"]))] = str(a["horse_id"])
+    out: dict[str, str] = {}
+    for a in rec.get("ancestors") or []:
+        hid, g, p = a.get("horse_id"), a.get("generation"), a.get("position")
+        if not hid or g is None or p is None or a.get("sex") != "牡" or int(g) > max_gen:
+            continue
+        g, p = int(g), int(p)
+        child = str(rec.get("horse_id") or "") if g == 1 else by_pos.get((g - 1, p >> 1), "")
+        if child:
+            out.setdefault(str(hid), child)
+    return out
+
+
 def labels(path: Path | None = None) -> dict[str, str]:
     """種牡馬の馬 ID -> 『○○系』（表記があったものだけ）。"""
     return {k: v["line"] for k, v in load(path).items() if v.get("line")}

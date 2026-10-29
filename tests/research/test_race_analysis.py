@@ -331,3 +331,17 @@ def test_store_complete_marker_survives_rewrites(tmp_path):
     assert S.is_complete(p) is True
     S.mark_missing("B", "h", p)                                  # 書き直しても印は残る
     assert S.is_complete(p) is True and set(S.load(p)) == {"A", "B"}
+
+
+def test_ancestor_sire_children_picks_child_of_each_male_ancestor():
+    from src.scraper.sire_line_store import ancestor_sire_children
+
+    rec = {"horse_id": "H", "ancestors": [
+        {"generation": 1, "position": 0, "horse_id": "A", "sex": "牡"},
+        {"generation": 1, "position": 1, "horse_id": "B", "sex": "牝"},
+        {"generation": 2, "position": 0, "horse_id": "C", "sex": "牡"},
+        {"generation": 2, "position": 2, "horse_id": "D", "sex": "牡"},
+        {"generation": 3, "position": 4, "horse_id": "E", "sex": "牡"},
+        {"generation": 6, "position": 0, "horse_id": "Z", "sex": "牡"},
+    ]}
+    assert ancestor_sire_children(rec) == {"A": "H", "C": "A", "D": "B", "E": "D"}

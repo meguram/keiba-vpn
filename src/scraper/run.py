@@ -1103,7 +1103,25 @@ class ScraperRunner:
         _update_local_pedigree_10gen(horse_id, rec, self.storage._base_dir)
         _upsert_sires_background(html)
         _record_sire_lines(html, horse_id)
+        self._fetch_missing_ancestor_lines(rec)
         return rec
+
+    ANCESTOR_LINE_MAX_PER_HORSE = 5
+
+    def _fetch_missing_ancestor_lines(self, rec: dict) -> None:
+        """5 世代血統表の牡の祖先のうち、系統が台帳に無いものを、その子の血統ページから取って台帳に足す。失敗しても本体の取得は止めない。"""
+        try:
+            from src.scraper import sire_line_store as store
+
+            have = set(store.load())
+            todo = [(a, c) for a, c in store.ancestor_sire_children(rec).items() if a not in have]
+            for aid, child in todo[: self.ANCESTOR_LINE_MAX_PER_HORSE]:
+                page = self.client.fetch(self.HORSE_PED_URL.format(horse_id=child))
+                store.record_html(page, child)
+                if aid not in store.labels():
+                    store.mark_missing(aid, child)
+        except Exception as exc:
+            logger.warning("祖先の系統取得をスキップ: %s", exc)
 
     # ── 母馬の種付け情報（own.netkeiba）→ 産駒の種付け日 ───────────
 

@@ -3,7 +3,8 @@
 python -m src.scripts.scraping.fetch_sire_lines                  # 未取得の種牡馬を、出走の多い順に 1 頭ずつ一定ペースで取る。途中で止めても再開できる
 python -m src.scripts.scraping.fetch_sire_lines --limit 5        # 5 ページだけ
 
-対象: horse_sire_map.parquet の父（sire_id）。各種牡馬の産駒の血統ページを 1 枚ずつ取る（父のセルに系統が付く）。
+対象: 2020 年以降の出走馬（horse_sire_map.parquet）の 5 世代血統表に載る牡の祖先すべて（父・母父を含む）。各祖先の子の血統ページを 1 枚ずつ取る（父のセルに系統が付く）。
+      --fathers-only で、従来どおり horse_sire_map の父（sire_id）だけにする。
 守り: 同時 1 本・一定間隔（既定 60 秒。SIRE_LINE_PACE_SEC）。netkeiba への当日の総件数（共通カウンタ＋自分の分）が上限に近いときは取らずに待つ。アクセス制限の疑い（HTTP 400/403 の連続）が出たら止める。
 """
 
@@ -56,8 +57,29 @@ def pick_targets(sire_map: pd.DataFrame, have: set[str]) -> list[tuple[str, str]
     return [(str(sid), str(r["max"])) for sid, r in cnt.iterrows() if str(sid) not in have]
 
 
+def pick_ancestor_targets(sire_map: pd.DataFrame, have: set[str]) -> list[tuple[str, str]]:
+    """[(祖先の馬ID, その子の馬ID)]。出走馬の 5 世代血統表の牡の祖先を、登場の多い順に。取得済みは除く。"""
+    import json
+
+    from src.config.data_paths import PED_DIR
+
+    cnt: dict[str, int] = {}
+    child: dict[str, str] = {}
+    for hid in sire_map["horse_id"].dropna().astype(str).unique():
+        f = PED_DIR / hid[:4] / f"{hid}.json"
+        try:
+            rec = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for aid, cid in store.ancestor_sire_children(rec).items():
+            cnt[aid] = cnt.get(aid, 0) + 1
+            child.setdefault(aid, cid)
+    return [(a, child[a]) for a in sorted(cnt, key=lambda x: -cnt[x]) if a not in have]
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--fathers-only", action="store_true", help="父（sire_id）だけを対象にする")
     ap.add_argument("--limit", type=int, default=0, help="この件数だけ取って終わる（0=全部）")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -71,6 +93,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     have = set(store.load())      # 表記なしで残したものも取得済みとして扱う
     todo = pick_targets(sm, have)
+    if not args.fathers_only:
+        seen = {sid for sid, _ in todo}
+        todo += [t for t in pick_ancestor_targets(sm, have) if t[0] not in seen]
     logger.info("対象 %d 頭 / 取得済み %d 頭", len(todo), len(have))
     client = NetkeibaClient(interval=2.0, cache_dir=None, auto_login=False)
     done = errors = 0
@@ -100,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
         time.sleep(PACE_SEC * random.uniform(0.9, 1.1))
     if not stopped_early:
         store.set_complete()      # 全部取り終えた印。これが付くまで、めぐ分析の『系統』は出さない
-        logger.info("全種牡馬を取り終えました（完了の印を付けた）")
+        logger.info("対象の種牡馬を取り終えました（完了の印を付けた）")
     logger.info("終了: 今回 %d 頭", done)
     return 0
 
