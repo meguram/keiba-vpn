@@ -30,7 +30,7 @@ die() { echo "fetch_agent_ctl: $*" >&2; exit 1; }
 
 has_key() { grep -qE "^${1}=" "$ENV_FILE" 2>/dev/null; }
 has_value() { [ -n "$(key_value "$1")" ]; }
-key_value() { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"'"'"' '; }
+key_value() { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d "\"' \t\r"; }
 
 # 1 行だけ書き換える（無ければ足す）。持ち主・権限はそのまま
 set_flag() {
@@ -85,7 +85,7 @@ case "$cmd" in
         [ -f "$CURRENT/config/fetch_shadow.json" ] || die "取得のコードに fetch_shadow.json がありません（古い版）。先に pull"
         # バケット名は秘密ではない。空なら、毎晩の取り込みで使っている pull.env の値（同じバケット）を写す
         if ! has_value GCS_BUCKET; then
-            b="$(grep -E '^GCS_BUCKET=' "$PULL_ENV" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d '"'"'"' ')"
+            b="$(grep -E '^GCS_BUCKET=' "$PULL_ENV" 2>/dev/null | tail -n1 | cut -d= -f2- | tr -d "\"' \t\r")"
             [ -n "$b" ] || die "$ENV_FILE の GCS_BUCKET が空で、$PULL_ENV にもありません"
             set_flag GCS_BUCKET "$b"
             echo "GCS_BUCKET が空だったので、$PULL_ENV の値を写しました"

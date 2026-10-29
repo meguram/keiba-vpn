@@ -96,12 +96,13 @@ def scheduler_commands(doc: dict[str, Any], st: dict[str, str], *, include_unrea
         uri = f"https://run.googleapis.com/v2/projects/{st['project']}/locations/{st['region']}/jobs/{rj}:run"
         body = json.dumps({"overrides": {"containerOverrides": [{"args": ["-m", "src.ops.job_dispatch", "group", gid]}]}}, separators=(",", ":"))
         common = (f"--project {st['project']} --location {st['region']} --schedule {shlex.quote(g['cron_jst'])} --time-zone Asia/Tokyo "
-                  f"--uri {shlex.quote(uri)} --http-method POST --headers Content-Type=application/json --message-body {shlex.quote(body)} "
+                  f"--uri {shlex.quote(uri)} --http-method POST --message-body {shlex.quote(body)} "
                   f"--oauth-service-account-email {st['sched_sa']} --oauth-token-scope https://www.googleapis.com/auth/cloud-platform "
                   f"--attempt-deadline 180s --description {shlex.quote(g['desc'][:200])}")
         out.append(f"# {gid}: {g['cron_jst']} JST → {rj} → {', '.join(g['jobs'])}")
         out.append(f"if gcloud scheduler jobs describe {name} --project {st['project']} --location {st['region']} >/dev/null 2>&1; then\n"
-                   f"  gcloud scheduler jobs update http {name} {common}\nelse\n  gcloud scheduler jobs create http {name} {common}\nfi")
+                   f"  gcloud scheduler jobs update http {name} --update-headers Content-Type=application/json {common}\n"
+                   f"else\n  gcloud scheduler jobs create http {name} --headers Content-Type=application/json {common}\nfi")
     return out
 
 
