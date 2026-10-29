@@ -590,15 +590,14 @@
 **ready=true にしたもの**（並走ガードで本番に書かないので、確認は差分チェックで行う。元の blockers は各ジョブの `ready_note` に残した）: GCP 27 本（`drift-monitor-weekly`・`vps-watchdog`・`verify-past-values` 以外の全部）と VPS 8 本（`raceday-evening`・`raceday-eve-fetch`・`raceday-comment-*`・`new-horse-pedigree`・`weekly-update`・`shutuba-audit`・`page-quality-check`）。
 
 **ready に戻さなかったもの**:
-- `drift-monitor-weekly`: tables 全体（2.9GB）を読み、上限 600MB を超えて必ず失敗する。V3Serving の full エンジンが読む表を特定して絞るか、bundle エンジンに切り替える。
+- `drift-monitor-weekly`: tables 全体（2.9GB）を読み、上限 600MB を超えて必ず失敗する。中の `drift_dump_features` は推論エンジン一式（`KEIBA_INFERENCE_ENGINE=full` の全履歴・v5 のモデル束・前段モデル・`tl_reference`）を読み込むので、表を絞るだけでは足りず、モデルの配置（model_publish）から設計し直す。今週の並走からは外し、ホストの cron（月曜 10:00 JST）で続ける。
 - `vps-watchdog`: ハートビートの受け口（keiba-monitor の `POST /ops/heartbeat`）が署名鍵なしで 401、VPS の送信タイマーも未設置。インフラの作業（下の 14.6 の 3）が先。
 - `verify-past-values`: 方針どおり `backfill-past` と一緒に差分期間の後。
 
 ### 14.6 反映の前に要る作業（ユーザー）
 
-1. **state の種まき**（GCS の `state/` だけに書く。自動許可の判定で止められたため）。worktree かリポジトリのルートで:
-   `for j in hem-megu-state prediction-results-refresh tracking-v2-weekly frozen-tracking-weekly parse-drift-daily horse-name-index; do KEIBA_ENV=prod python -m src.ops.state_sync push --job $j --which in; done`
-   （`horse-name-index` は約 39,000 ファイル・255MB で時間がかかる）
+1. **state の種まき**（GCS の `state/` だけに書く）: **済（2026-10-30 00:xx JST、ユーザーが実行）**。worktree から `KEIBA_DOTENV_PATH=<メインの .env> KEIBA_ENV=prod python -m src.ops.state_sync push --job <id> --root <メインのリポジトリ> --which in`。
+   結果: `hem-megu-state` 1 件（hem_params.json）、`prediction-results-refresh` 0 件（5,745 件は同じ中身）、`tracking-v2-weekly` 2,424 件、`frozen-tracking-weekly` 6 件、`parse-drift-daily` 0 件（91 件は同じ）、`horse-name-index`（約 39,000 件）。
 2. **`SLACK_WEBHOOK_URL_PARALLEL`** を Secret Manager に作り、keiba-jobs に読み取り権限（無くても配備はできる。その間 prod 側の step の Slack は送らない）。
 3. （任意・`vps-watchdog` 用）keiba-monitor の SA に `KEIBA_HEARTBEAT_KEY` の読み取り権限 → `scripts/gcp/deploy_cloud_run_monitor.sh` で再配備 → VPS で `vps_03_cloudrun_heartbeat.sh` の手順（`HEARTBEAT_URL` と鍵）。
 4. develop → stg → master の昇格（Jobs のイメージ・Run Job・Scheduler は promote が `ENABLE_JOBS_DEPLOY=true`・`JOBS_PARALLEL=1` で更新する）。VPS の影の設定は 03:20 JST の取り込みで入る。
