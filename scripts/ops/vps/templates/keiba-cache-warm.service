@@ -1,0 +1,20 @@
+[Unit]
+Description=keiba VPS API cache preload (refresh nginx cache when reference data changes)
+After=network-online.target nginx.service
+
+[Service]
+Type=oneshot
+# GCS の読みは「目印の一覧 1 回」だけ。キャッシュ本体は VPS ローカル(/var/cache/nginx/keiba_api)。GCS_BUCKET と読み取り専用 SA は pull.env と同じ
+EnvironmentFile=/etc/keiba-pull/pull.env
+Environment=KEIBA_ENV=prod KEIBA_RUN_LOCATION=vps PYTHONUNBUFFERED=1
+ExecStart=/opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/cache_warm.py
+SyslogIdentifier=keiba-cache-warm
+Nice=10
+MemoryMax=128M
+TimeoutStartSec=240
+# refresh.token(600 root)を読むため root。書くのは状態ディレクトリのみ（nginx へは 127.0.0.1 の HTTP）
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/keiba-ui/cache-warm

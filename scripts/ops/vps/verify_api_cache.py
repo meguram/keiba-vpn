@@ -4,6 +4,7 @@
 自前の nginx を一時ディレクトリで高ポートに立て、疑似の上流に対して次を確かめる:
   匿名の public 応答が MISS→HIT になる / s-maxage が TTL に効く / Cookie・Authorization 付きは読まず保存せず
   private・no-store・Set-Cookie 付き・POST は保存しない / 上流が誤って public を付けても会員の本文が匿名に出ない
+  合言葉つき(X-Keiba-Refresh)の要求だけ、読まずに取り直して保存し直す（合言葉なしは効かない・上流には渡さない）
 使い方: python3 scripts/ops/vps/verify_api_cache.py   （nginx が PATH に必要。VPS 上で実行する）
 """
 import os, shutil, socket, subprocess, sys, tempfile, threading, time, urllib.request
@@ -28,10 +29,12 @@ class Up(BaseHTTPRequestHandler):
 
     def do_GET(self):
         p = self.path.split("?")[0]
+        if self.headers.get("X-Keiba-Refresh") is not None: hits["leaked-refresh-header"] = hits.get("leaked-refresh-header", 0) + 1
         who = "member" if (self.headers.get("Cookie") or self.headers.get("Authorization")) else "anon"
         pub = {"Cache-Control": "public, max-age=300, s-maxage=60", "Vary": "Accept-Encoding, Cookie"}
         if p == "/api/pub": self._send(f"pub-{who}", pub)
         elif p == "/api/sm": self._send(f"sm-{who}", {**pub, "Cache-Control": "public, max-age=300, s-maxage=2"})
+        elif p == "/api/ver": self._send(f"ver-{hits.get('/api/ver', 0) + 1}", pub)         # 呼ぶたびに本文が変わる（上書きの確認用）
         elif p == "/api/long": self._send(f"long-{who}", {**pub, "Cache-Control": "public, max-age=60, s-maxage=604800"})
         elif p == "/api/leak": self._send(f"leak-{who}", pub)                      # 上流の取りこぼし想定: 会員にも public を付ける
         elif p == "/api/private": self._send(f"private-{who}", {"Cache-Control": "private, max-age=60", "Vary": "Cookie"})
@@ -67,6 +70,9 @@ def main() -> int:
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     zones = open(os.path.join(TPL, "nginx-zones.conf")).read().replace("/var/cache/nginx/keiba_api", f"{tmp}/cache")
     zones = "\n".join(l for l in zones.splitlines() if "keiba_img" not in l)
+    token = "tok-" + os.urandom(8).hex()
+    with open(f"{tmp}/refresh.conf", "w") as f: f.write(f'"{token}" 1;\n')
+    zones = zones.replace("/etc/nginx/keiba-refresh.conf", f"{tmp}/refresh.conf")
     conf = f"""pid {tmp}/nginx.pid;
 error_log {tmp}/error.log;
 worker_processes 1;
@@ -126,11 +132,25 @@ http {{
         check("s-maxage が TTL に効く(max-age=300 でなく 2 秒で失効)", s == "HIT" and s_after in ("EXPIRED", "MISS", "UPDATING"), f"{s},{s_after}")
         req(ng_port, "/api/pub?x=1"); _, sq = req(ng_port, "/api/pub?x=1"); _, sq2 = req(ng_port, "/api/pub?x=2")
         check("クエリ違いは別キー", sq == "HIT" and sq2 == "MISS", f"{sq},{sq2}")
-        # 確定済みレース用: 1週間の s-maxage は長く保持され、--match の消去は対象だけに効く
+        # 事前ロードの上書き取得
+        b, s_ = req(ng_port, "/api/ver"); b2, s2_ = req(ng_port, "/api/ver")
+        check("上書きの前: 同じ本文が HIT", b == b2 == "ver-1" and s2_ == "HIT", f"{b},{b2},{s2_}")
+        bw, sw = req(ng_port, "/api/ver", headers={"X-Keiba-Refresh": "wrong"})
+        check("合言葉が違えば通常どおり HIT（上流へ届かない）", sw == "HIT" and bw == "ver-1", f"{sw},{bw}")
+        br, sr = req(ng_port, "/api/ver", headers={"X-Keiba-Refresh": token})
+        check("合言葉つきは読まずに上流から取り直す", sr == "BYPASS" and br == "ver-2", f"{sr},{br}")
+        ba, sa_ = req(ng_port, "/api/ver")
+        check("取り直した本文が保存されて匿名にも HIT で出る", ba == "ver-2" and sa_ == "HIT", f"{ba},{sa_}")
+        n = hits.get("/api/ver", 0)
+        bm, sm_ = req(ng_port, "/api/ver", headers={"X-Keiba-Refresh": token, "Cookie": "keiba_dev_session=abc"})
+        ba2, _ = req(ng_port, "/api/ver")
+        check("合言葉があっても Cookie 付きは保存しない（匿名の保存分は ver-2 のまま）", bm == "ver-3" and ba2 == "ver-2" and hits.get("/api/ver") == n + 1, f"{bm},{ba2},{hits.get('/api/ver')}")
+        check("合言葉の見出しは上流へ渡さない", hits.get("leaked-refresh-header", 0) == 0, str(hits.get("leaked-refresh-header")))
+        # 確定済みレース用: 1か月の s-maxage は長く保持され、--match の消去は対象だけに効く
         req(ng_port, "/api/long?a=1"); req(ng_port, "/api/long?b=2")
         time.sleep(3)
         _, sl = req(ng_port, "/api/long?a=1")
-        check("s-maxage=1週間は数秒後も HIT（長く保持）", sl == "HIT", sl)
+        check("s-maxage=1か月は数秒後も HIT（長く保持）", sl == "HIT", sl)
         purge = os.path.join(HERE, "purge_api_cache.sh")
         shim = os.path.join(tmp, "bin"); os.makedirs(shim, exist_ok=True)
         with open(os.path.join(shim, "nginx"), "w") as f: f.write("#!/bin/sh\nexit 0\n")      # reload は本番に触れないよう無効化

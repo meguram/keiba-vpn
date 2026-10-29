@@ -31,8 +31,9 @@ restore() {
 }
 if [ "$MODE" = "--remove" ]; then
   for s in $TARGETS; do sed -i '\#keiba-api-cache#d' "$s"; done
-  sed -i -e '/^# API 応答のキャッシュ置き場/d' -e '/proxy_cache_path .*keiba_apicache/d' -e '/^map "\$http_cookie\$http_authorization"/,/^}/d' "$ZONES"
-  rm -f "$SNIP"
+  sed -i -e '/^# API 応答のキャッシュ置き場/d' -e '/proxy_cache_path .*keiba_apicache/d' -e '/^map "\$http_cookie\$http_authorization"/,/^}/d' \
+         -e '/^# 事前ロード（keiba-cache-warm）専用/,/^}/d' "$ZONES"
+  rm -f "$SNIP" "$NGX/keiba-refresh.conf"
   if nginx -t; then systemctl reload nginx; echo "API キャッシュを外しました（バックアップ: $BK）"; else restore; exit 1; fi
   exit 0
 fi
@@ -44,8 +45,17 @@ if [ -d /opt/keiba-ui/templates ]; then install -m 644 "$HERE/templates/nginx-ke
 if ! grep -q 'keiba_apicache' "$ZONES"; then
   sed -n '/^# API 応答のキャッシュ置き場/,$p' "$HERE/templates/nginx-zones.conf" | sed "s#/var/cache/nginx/keiba_api#$CACHE_DIR#" >> "$ZONES"
 fi
-# 既存のゾーンの保持設定（確定済みを 1 週間置くため max_size/inactive）を最新にする
-sed -i -E 's#(keys_zone=keiba_apicache:10m) max_size=[0-9]+[kmg] inactive=[0-9]+[smhd]#\1 max_size=200m inactive=8d#' "$ZONES"
+# 既存のゾーンの保持設定（確定済みを 1 か月置くため max_size/inactive）を最新にする
+sed -i -E 's#(keys_zone=keiba_apicache:10m) max_size=[0-9]+[kmg] inactive=[0-9]+[smhd]#\1 max_size=1g inactive=35d#' "$ZONES"
+# 事前ロード用の「上書き取得」の合言葉。無ければ作る（既存は変えない）。nginx 用(root 専用)と事前ロード用の 2 か所に同じ値を置く。
+REFRESH_NGX="$NGX/keiba-refresh.conf"; REFRESH_TOKEN="${REFRESH_TOKEN_FILE:-/etc/keiba-ui/refresh.token}"
+mkdir -p "$(dirname "$REFRESH_TOKEN")"
+if [ "$(tr -d ' \n' < "$REFRESH_TOKEN" 2>/dev/null | wc -c)" != 32 ]; then (umask 077; head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$REFRESH_TOKEN"); fi
+chmod 600 "$REFRESH_TOKEN"
+(umask 077; printf '"%s" 1;\n' "$(cat "$REFRESH_TOKEN")" > "$REFRESH_NGX")
+if ! grep -q 'keiba_refresh' "$ZONES"; then
+  sed -n '/^# 事前ロード（keiba-cache-warm）専用/,$p' "$HERE/templates/nginx-zones.conf" >> "$ZONES"
+fi
 for s in $TARGETS; do
   if ! grep -q 'keiba-api-cache' "$s"; then
     # /api/ の location の proxy_buffering の直後に入れる（上流の認証 include より後ろ・location の中）

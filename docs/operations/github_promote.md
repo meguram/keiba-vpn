@@ -129,7 +129,7 @@ develop ──マージ──▶ stg ──push──▶ deploy-stg.yml（変更
 
 **現状の事実**: 本番の画面を VPS に入れる pull 型の仕組み（`pull_release.py`・タイマー・取り込み用の資格情報）は、VPS に**まだ入っていない**。`master` の反映が `ops/releases/ui/` に公開した画面は、これを入れるまで VPS に届かない（それまでは `promote.sh` の SSH で入れていた）。`stg.megu-keiba.com` も今はホスト PC の画面を指している。以下で、どちらも VPS が GCS から自分で取り込む形にする。順番に、VPS は **root** で行う（VPS の SSH ユーザー `deploy` はリリースの導入しか `sudo` できない）。
 
-1. **取り込み用の資格情報**（Cloud Shell）。読み取り専用で、`ops/releases/` と `applied/vps.json` の書き込みだけ。
+1. **取り込み用の資格情報**（Cloud Shell）。読み取り専用で、`ops/releases/` と `applied/vps.json` の書き込みだけ（加えて API キャッシュ事前ロード用に `ops/cache_dirty/` の一覧・読み取りだけ。既に作成済みの場合も `--apply` を再実行すれば追加される）。
    ```bash
    cd ~/keiba-vpn && git pull
    GCS_BUCKET=<バケット名> bash scripts/gcp/setup_pull_sa.sh                        # 表示だけ

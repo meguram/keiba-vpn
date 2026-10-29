@@ -8,6 +8,7 @@
 #
 # 作るもの（最小権限）:
 #   keiba-pull SA … バケットの ops/releases/ の読み取り（objectViewer）と、ops/releases/<種別>/applied/vps.json の書き込みだけ（IAM Conditions）。
+#   加えて ops/cache_dirty/ の一覧と読み取りだけ（API キャッシュ事前ロードの目印。中身は空。書き込み不可）。
 #   他のオブジェクト（予測・データ・モデル・秘密）には一切触れない。VPS の画面が置き換えられるのは、ここで読めるリリースだけ。
 # 鍵は --make-key のときだけ作る。画面には出さず、VPS へ安全に渡す（docs/operations/github_promote.md の 8 章）。渡し終えたら Cloud Shell のファイルは消す。
 set -euo pipefail
@@ -42,6 +43,15 @@ echo "== 3/3 取り込み結果の報告（applied/vps.json）の書き込み。
 WRITE_EXPR="resource.name.startsWith(\"projects/_/buckets/$BUCKET/objects/$PREFIX\") && resource.name.endsWith(\"/applied/vps.json\")"
 run gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member="serviceAccount:$SA_EMAIL" --role="roles/storage.objectUser" \
   --condition="expression=$WRITE_EXPR,title=pull-write-applied,description=取り込み結果の報告 applied/vps.json だけ書ける"
+
+echo "== 追加: ops/cache_dirty/ の一覧と読み取り（API キャッシュ事前ロード用の目印。中身は空。一覧は 60 秒に 1 回）"
+DIRTY="ops/cache_dirty/"
+DIRTY_EXPR="resource.name.startsWith(\"projects/_/buckets/$BUCKET/objects/$DIRTY\") || (resource.type == \"storage.googleapis.com/Bucket\" && api.getAttribute(\"storage.googleapis.com/objectListPrefix\", \"\").startsWith(\"$DIRTY\"))"
+# 式の中に , があり --condition=key=value 形式では分割されるので、ファイルで渡す
+DIRTY_COND="$(mktemp)"; trap 'rm -f "$DIRTY_COND"' EXIT
+printf 'expression: %s\ntitle: pull-read-cache-dirty\ndescription: VPS の事前ロードは ops/cache_dirty/ の目印だけ一覧できる\n' "$DIRTY_EXPR" > "$DIRTY_COND"
+run gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member="serviceAccount:$SA_EMAIL" --role="roles/storage.objectViewer" \
+  --condition-from-file="$DIRTY_COND"
 
 if [ -n "$KEYFILE" ]; then
   echo "== 鍵（JSON）を作る: $KEYFILE（権限 600。VPS へ渡したら消す）"
