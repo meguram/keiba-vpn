@@ -1,6 +1,6 @@
 # ホスト切り離しの棚卸し: 定期実行の As-Is / To-Be（取得・予測・集計・通知）
 
-作成: 2026-10-28。ホスト PC（stg）の root crontab と `config/gcp_job_map.json` を突き合わせた全量（#1〜#50）。2026-10-29 に稼働状況を §13 へまとめた（ホストと prod 別の導入・動作確認の一覧）。
+作成: 2026-10-28。ホスト PC（stg）の root crontab と `config/gcp_job_map.json` を突き合わせた全量（#1〜#50）。2026-10-29 に稼働状況を §13 へまとめた（ホストと prod 別の導入・動作確認の一覧）。同日、K6 台帳化・系統取得の完了・stg/master への反映状況を §12 へ更新。
 **To-Be は提案であり未決定。** 決まった内容は `config/gcp_job_map.json` と `config/fetch_shadow.json` に反映する。
 関連: `docs/operations/architecture_target.md`（方針）、`docs/operations/vps_agent.md`（取得の実行役・影モード）、`docs/operations/cost_recalc_20261028.md`（費用）。
 
@@ -301,7 +301,8 @@
 | job_map の不足分 | **済** | #13 `shutuba-audit`・#19 `backfill-past`・#24 `sire-line` を登録（`destination=host`、`reason` つき）。`tests/ops/test_gcp_job_map.py` は 17 件とも通る。これで棚卸しの全工程が `job_map` にある |
 | API 起動時の GCS 読み取り削減（§10.4 の 1） | **コード済み・develop** | `predictions_backfill`・`lap_forecast`・`tracking_v2` の日付つきキーのうち、既定で 14 日より古いもの（環境変数 `KEIBA_MIRROR_WINDOW_DAYS` で変更）は起動時・更新時に降ろさない。日付の無いファイル（`_shadow_models.json` など）は常に降ろす。古い日は読まれたときに `lazy_fetch` で 1 件だけ取る（窓の内側は従来どおり取り込み済みとみなし、無駄な GCS 問い合わせをしない）。読む側 5 箇所（`local_predictions.py` の 2 関数・`lap_forecast_service.load_forecast`・`tracking_v2_service.load_saved`・`serving_v6.stage_forecast_columns`）を `lazy_fetch` 経由にした。Jobs の `pull_trees`・CLI の pull/push は変更なし（全件を扱う）。テスト 4 件を追加、全体 3,714 件が通る。効果（約 13,200 → 約 1,000 件）はデプロイ後の起動ログで実測する |
 | K6（`shutuba-audit`・`sire-line`） | **コード済み・develop** | 上の §12.3 のとおり。`AUTO_SCRAPE_MODES` と `auto_scrape.TASKS` に登録、`DEFAULT_AGENT_TASKS` には未追加（費用・メモリ未実測）。`shutuba-audit` は `job_map` で `vps`/`ready=false`（blockers つき）に直した（2026-10-29）。テスト 8 件（直接モード 4 件＝キューを使わない・1 回の上限・試行回数・アクセス制限、台帳の GCS 同期 4 件）を追加し、`tests/ops`・`tests/scripts` を含め 354 件が通る。取得の挙動に触れるのは `shutuba_audit` の直接モードだけ（既定オフ、`fetch_child` 経由のみオン） |
-| #24 系統の取得 | 進行中 | 5 世代血統表の牡の祖先の系統（3,699 頭）を、ホストで 5 秒間隔で一括取得中（2026-10-29 開始、約 7〜8 時間）。日々の取得は定期バッチに相伴するので個別 cron は不要。台帳は並走（ホスト＋VPS/GCP）に耐える作り（ロック・merge・diff）。失敗は『系統なし（理由つき）』と『通信エラー（3 回取り直し）』を分けた |
+| #24 系統の取得 | **済（2026-10-29）** | 5 世代血統表の牡の祖先の系統の一括取得が完了（今回 3,587 頭・台帳 4,542 頭）。日々の取得は定期バッチに相伴するので個別 cron は不要。台帳は並走（ホスト＋VPS/GCP）に耐える作り（ロック・merge・diff）。失敗は『系統なし（理由つき）』と『通信エラー（3 回取り直し）』を分けた。GCS への初回アップロードは §12.2 |
+| K6 台帳化と stg/master への反映 | **済（stg）・承認待ち（prod）** | K6 台帳化は `bece338b`（`shutuba-audit` を vps/ready=false、`raceday-result-runner` は `race-result-t15` で置換と明記、`cache_marker.py` の host_dependency ベースラインを更新）。stg は `718fe91a` で `deploy-stg.yml` が成功。master は `bf4fd5e8`（VPS キャッシュ事前ロード `de580bf7` を含む）を push 済みで、promote run 40873737024 が `production` 環境の承認待ち（承認はユーザーの作業）。最初の昇格（run 40872608204）は `cache_marker.py` のベースライン未更新で落ち、`bece338b` で直した |
 
 ### 12.2 まだのこと（担当つき）
 
@@ -502,6 +503,7 @@
 1. 異常（ホスト）：解消済み。`serving-state-profile` の失敗（exit=1）は 10/20〜25 だけで、いまは exit 0。`sporthorse-births-nightly` の失敗（exit=3、Cloudflare 403）も 10/20〜25 だけで、いまは SKIP の経路で exit 0。`maintenance-deploy`（10/22 に 1 回）と `raceday-weight-runner`（10/18 に 1 回、exit=143）は単発。`backfill-past` の exit=2 は、`fetch_sire_lines` の実行中に譲る設計どおりの動き。cron 行は外さない。
 2. job_map への登録漏れ：完了（2026-10-29。4 件を job_map と役割表に登録）。
 3. 専用 cron 行が見つからない処理：`predict-race` は馬体重ランナー内、`parse-drift-daily` と `race-analysis-daily` は `export_tables_daily.sh` 内で動くと確認済み。未確認は `day-prep` と `prediction-results-refresh`（ホストの crontab のどちらにも行がなく、呼び出し元のループが不明）。
+3b. 本番反映の待ち：master `bf4fd5e8` の promote run 40873737024 が `production` 環境の承認待ち（ユーザー作業）。承認後に run の結果、API の上流 `s-maxage=2592000` と目印（VPS キャッシュ事前ロード）を確認する。
 4. 初回の確認予定：10/30 19:10 JST `reserve-race-day` の実予約（10/31 開催分。10/29 の初回はスキップで確認済み）、10/30 07:30 JST `fetch-shadow-report` と `gcp-daily-cost-report`、10/31 の開催日に影の実タスク（`shadow_tasks>0`）、11/1 22:00 JST `odds-drift-weekly`、11/2 `backfill-2022-full` の初回記録。
 5. 本番切替の前提：`cron_cutover_status` が 合格 になること（現在 0）。影の日次集計（`ops/fetch_shadow/daily/`）が溜まり、連続日数が条件を満たすまで、取得はホストのまま。
 6. 監視ポータルのハートビート（`ops/heartbeat/latest.json`）は未設置。VPS／GCP 側の設定が終わってから、この表の「動作確認」を自動で更新できるようにする。
