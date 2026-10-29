@@ -975,11 +975,9 @@
    "parity": {
     "kind": "none"
    },
-   "blockers": [
-    "課金エクスポートは有効化済み（2026-10-29、billing_export、keiba-jobs に読み取り権限付与済み）。リポジトリ変数 GCP_BILLING_BQ_TABLE を設定して昇格（Jobs 更新）すると、ready にできる"
-   ],
+   "blockers": [],
    "enabled": true,
-   "ready": false
+   "ready": true
   },
   {
    "id": "fetch-shadow-report",
