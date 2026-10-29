@@ -60,7 +60,7 @@ pre { background:var(--code); border:1px solid var(--border); border-radius:8px;
 <table>
 <tr><th>層</th><th>状態</th><th>備考</th></tr>
 <tr><td>VPS のローカルデータ</td><td class="warn">無し</td><td>VPS は状態を持たない設計。画面の成果物だけが乗っている。</td></tr>
-<tr><td>nginx のキャッシュ（API）</td><td class="ok">2026-10-29 に本番・stg で有効</td><td>匿名・許可リストの応答だけを VPS のディスクに置く（§4-3）。<code>X-Cache-Status</code> で MISS/HIT/BYPASS を確認できる。確定済みレースの 1 週間保持は §4-4（API の反映待ち）。</td></tr>
+<tr><td>nginx のキャッシュ（API）</td><td class="ok">2026-10-29 に本番・stg で有効</td><td>匿名・許可リストの応答だけを VPS のディスクに置く（§4-3）。<code>X-Cache-Status</code> で MISS/HIT/BYPASS を確認できる。確定済みレースの 1 か月保持は §4-4、更新時の自動取り直し（事前ロード）も §4-4（API の反映待ち）。</td></tr>
 <tr><td>nginx のキャッシュ（画像）</td><td class="ok">2026-10-29 に本番・stg とも再配置</td><td>上流を Cloud Run に切り替えた際、<code>switch_api_upstream.sh</code> がサイト設定をテンプレートから作り直して include が消えていた。include をテンプレート側に入れ、<code>vps_04_image_cache.sh</code> が <code>/opt/keiba-ui/templates</code> も同期するようにした。404 の MISS→HIT は確認済み。200 の画像は Cloud Run に画像置き場が無いため未確認。</td></tr>
 <tr><td>API の応答ヘッダ</td><td class="warn">キャッシュの指示なし</td><td>予測などの API は <code>Cache-Control</code> も <code>ETag</code> も付けない。画像だけ <code>ETag</code> と <code>Last-Modified</code> がある。</td></tr>
 <tr><td>ブラウザ側（画面のコード）</td><td class="ok">あり（部分的）</td><td>出走馬カード（<code>entryCard.ts</code>。取得中の重複排除つき）、汎用（<code>httpCache.ts</code>）、レース価値（<code>raceValue.ts</code>。時刻つき）のメモリキャッシュ。ただし通常の API 取得は <code>cache: "no-store"</code>。</td></tr>
@@ -78,13 +78,21 @@ pre { background:var(--code); border:1px solid var(--border); border-radius:8px;
 <li>キーは <code>$server_port$host$request_uri</code>。stg と本番は同じ nginx で上流が違うので、ポートで分ける。</li>
 </ul>
 TTL は <code>s-maxage</code>（race-list は 60 秒など）。2 回目以降の来訪は VPS のディスクから返り、上流（Cloud Run のインスタンス課金）への往復が減る。配置は <code>scripts/ops/vps/vps_09_api_cache.sh</code>（冪等・失敗時は自動復元・<code>--dry-run</code>／<code>--remove</code>）、空にするのは <code>purge_api_cache.sh</code>、検証は <code>verify_api_cache.py</code>（自前の nginx を高ポートに立てて 約 17 項目（1 週間保持と <code>--match</code> 消去を含む）、root 不要）。応答に <code>X-Cache-Status</code>（MISS/HIT/BYPASS）が付く。</li>
-<li><b>確定済みレースは 1 週間置く（段階2。API とキャッシュ領域の反映後に有効）。</b>
+<li><b>確定済みレースは 1 か月（30 日）置く（段階2。API とキャッシュ領域の反映後に有効）。</b>
 <ul>
-<li>対象は <code>config/http_cache.json</code> の <code>settled</code>（<code>/api/race-list/</code>・<code>/api/race/</code>・<code>/api/v1/races/</code>）。日付が「今日（JST）−3 日」以前のレースだけ <code>s-maxage=604800</code>（7 日）を付ける。ブラウザ側の <code>max-age</code> は短いまま。</li>
+<li>対象は <code>config/http_cache.json</code> の <code>settled</code>（<code>/api/race-list/</code>・<code>/api/race/</code>・<code>/api/v1/races/</code>）。日付が「今日（JST）−3 日」以前のレースだけ <code>s-maxage=2592000</code>（30 日）を付ける。ブラウザ側の <code>max-age</code> は短いまま。</li>
 <li>日付は 8 桁の日付そのもの、または 12 桁の race_id を構築済みの索引で引いて得る。引けなければ前年以前の race_id だけ確定扱いとし、それ以外は短い TTL のまま（安全側）。</li>
-<li>キャッシュ領域は <code>max_size=200m inactive=8d</code>（<code>nginx-zones.conf</code>。既存環境へは <code>vps_09_api_cache.sh</code> の再実行で書き換わる）。</li>
+<li>キャッシュ領域は <code>max_size=1g inactive=35d</code>（<code>nginx-zones.conf</code>。既存環境へは <code>vps_09_api_cache.sh</code> の再実行で書き換わる）。</li>
 <li><b>データ更新・モデル切替のあとは手動で入れ替える。</b>Cloud Run 側の <code>cache_epoch</code> はプロセス内に閉じ、VPS へ通知する経路が無い（ハートビートから API は叩かない方針）。VPS で <code>sudo bash scripts/ops/vps/purge_api_cache.sh</code>（全消去）、<code>--match '/api/race/2026'</code>（キー＝ポート+ホスト+URL の正規表現）、<code>--match '^8081'</code>（stg だけ）。消したあとは最初の閲覧で自動的に入れ直される。<code>swap_pred_v6e.sh</code> と <code>clear_caches.py</code> は終了時にこの手順を表示する。</li>
-<li><b>トレードオフ：</b>確定済みレースを通常の取得で訂正しても、消去しない限り最長 7 日は古い内容が出る。短い TTL の項目（開催前後・当日）は自動で更新される。</li>
+<li><b>トレードオフ：</b>確定済みレースを通常の取得で訂正しても、消去しない限り最長 30 日は古い内容が出る（下の事前ロードが、更新のたびに自動で取り直すので通常は残らない）。短い TTL の項目（開催前後・当日）は自動で更新される。</li>
+</ul></li>
+<li><b>参照用データが作られた・更新されたら、VPS が自動でキャッシュを取り直す（事前ロード。2026-10-29 実装、VPS への導入は <code>vps_10_cache_warm.sh</code>）。</b>
+<ul>
+<li><b>書き手（ホスト・Jobs・API）：</b>画面に出る応答の元（<code>HybridStorage.save</code> の UI カテゴリ、<code>gcs_mirror.push</code> でアップロードした予測・ラップ分析・追走難度・出馬表の状態・開催日一覧、<code>cache_epoch.bump</code> の保存以外の世代更新）が変わると、GCS に小さな目印 <code>ops/cache_dirty/&lt;日付UTC&gt;/&lt;race_id|開催日|_ALL&gt;</code> を書く（同じキーは 60 秒に 1 回。失敗しても本処理は止めない。<code>KEIBA_CACHE_MARKER=0</code> で停止）。</li>
+<li><b>読み手（VPS）：</b>systemd タイマー <code>keiba-cache-warm</code> が 60 秒おきに <code>ops/cache_dirty/</code> を <b>list 1 回だけ</b>（個別 read なし。月 約 0.2 ドル）し、世代が変わった目印を拾う。対象レースの詳細・予測・オッズなど、その開催日の一覧とカレンダー、<code>_ALL</code> のときは前日〜2 日先の開催日の全レースを、ローカル nginx(127.0.0.1:8080) へ <code>X-Keiba-Refresh</code> 付きで取り直す。取り直しの結果は VPS のディスク(<code>/var/cache/nginx/keiba_api</code>)に入るので、閲覧のたびの GCS 読みは発生しない。</li>
+<li>1 回あたり 200 件・150 秒まで。残りは次回へ持ち越し、失敗は 3 回まで再試行。負荷は <code>Nice=10</code>・<code>MemoryMax=128M</code>。状態は <code>/var/lib/keiba-ui/cache-warm/state.json</code>。</li>
+<li><b>保持：</b>キャッシュの保持時間は API の <code>Cache-Control</code> 任せ。確定済み（3 日以上前）は 30 日、当日・直近・カレンダー・一覧は短い（数十〜120 秒）ので、これらは事前ロードしても短時間で期限が切れる。出馬表カードは <code>private</code> なので対象外。</li>
+<li>確認：<code>journalctl -u keiba-cache-warm -n 5</code>、<code>systemctl list-timers keiba-cache-warm.timer</code>。手動：<code>python cache_warm.py --path /api/race-list/YYYYMMDD</code>、<code>--dry-run</code>。外すのは <code>vps_10_cache_warm.sh --remove</code>。</li>
 </ul></li>
 <li>「stg と本番で同じキャッシュ先」は、別の nginx（別ディレクトリ）なので文字どおりには共有できない。同じ匿名の公開内容を同じ TTL 規則で持つ形で近づける。</li>
 <li>Next.js の systemd の上限（MemoryHigh 160M）は、高負荷時の最大 140MB に近い。余裕を持たせるなら 200M に上げる案がある（VPS の予算内。未実施）。</li>

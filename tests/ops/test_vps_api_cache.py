@@ -43,17 +43,28 @@ def test_image_snippet_has_only_cache_directives():
 
 def test_snippet_never_serves_member_requests_from_cache():
     text = (TPL / "nginx-api-cache.conf").read_text(encoding="utf-8")
-    assert "proxy_cache_bypass $keiba_api_nocache;" in text
+    assert "proxy_cache_bypass $keiba_api_nocache $keiba_refresh;" in text
+    assert 'proxy_set_header X-Keiba-Refresh ""' in text, "合言葉の見出しは上流へ渡さない"
     assert "proxy_no_cache $keiba_api_nocache;" in text
     directives = "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("#"))
     assert "proxy_cache_valid" not in directives, "上流が public を付けたものだけ保存する（既定の保存時間を足さない）"
     assert "$server_port" in directives, "stg と本番は同じ nginx で上流が違うのでキーにポートを含める"
     zones = (TPL / "nginx-zones.conf").read_text(encoding="utf-8")
     assert "keys_zone=keiba_apicache" in zones
-    m = re.search(r"keys_zone=keiba_apicache:\S+ max_size=(\d+)m inactive=(\d+)d", zones)
-    assert m and int(m.group(2)) >= 8, "確定済みレースを1週間置くので、未参照の失効(inactive)は8日以上"
-    assert "inactive=8d" in (VPS / "vps_09_api_cache.sh").read_text(encoding="utf-8"), "稼働中のゾーン行も同じ保持設定に直す"
+    m = re.search(r"keys_zone=keiba_apicache:\S+ max_size=(\d+)[mg] inactive=(\d+)d", zones)
+    assert m and int(m.group(2)) >= 32, "確定済みレースを1か月置くので、未参照の失効(inactive)は32日以上"
+    assert "inactive=35d" in (VPS / "vps_09_api_cache.sh").read_text(encoding="utf-8"), "稼働中のゾーン行も同じ保持設定に直す"
     assert re.search(r'map "\$http_cookie\$http_authorization" \$keiba_api_nocache \{\s*default 1;\s*""\s*0;', zones)
+
+
+def test_refresh_token_fits_the_map_hash_bucket():
+    """合言葉(48 文字)は既定のバケット 64 に収まらず nginx -t が落ち、バケットを足すと既存設定と重複して落ちた(2026-10-29)。
+    VPS の既存設定に依存しないよう、合言葉を 32 文字にして既定のまま収める。"""
+    zones = (TPL / "nginx-zones.conf").read_text(encoding="utf-8")
+    assert not re.search(r"^\s*map_hash_bucket_size", zones, re.M), "既存の nginx 設定と重複するので足さない"
+    sh = (VPS / "vps_09_api_cache.sh").read_text(encoding="utf-8")
+    assert "head -c 16" in sh and "head -c 24" not in sh
+    assert "!= 32" in sh, "長い（旧 48 文字）合言葉が残っていたら作り直す"
 
 
 @pytest.mark.skipif(shutil.which("nginx") is None, reason="nginx が無い環境では実機検証をしない")

@@ -4,8 +4,8 @@
 Cookie が変わる（ログイン・ログアウト）と別の応答として取り直される。
 例外: ルールに ``s_maxage`` があり、リクエストに Cookie / Authorization が無い（会員区分で応答が変わらない匿名）ときだけ
 ``public, max-age=N, s-maxage=S`` にして CDN に置かせる（閲覧者が増えてもオリジンに届くのは S 秒に 1 回）。
-さらに ``settled`` の対象（開催から grace_days 日以上たった確定済みのレース）は s-maxage を 1 週間にする。
-日付が分からないものは短いまま（置きすぎない）。データ更新・モデル切替のあとは VPS で purge_api_cache.sh を実行して入れ替える。
+さらに ``settled`` の対象（開催から grace_days 日以上たった確定済みのレース）は s-maxage を 30 日（1 か月）にする。
+日付が分からないものは短いまま（置きすぎない）。データ更新のあとは VPS の keiba-cache-warm が上書きし、モデル切替のあとは purge_api_cache.sh で入れ替える。
 """
 
 from __future__ import annotations

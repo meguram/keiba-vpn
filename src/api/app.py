@@ -2555,6 +2555,17 @@ _PICKER_SCRAPE_DATES_TTL = 60.0
 _NO_STORE_HEADERS = {"Cache-Control": "no-store, max-age=0", "Pragma": "no-cache"}
 
 
+def _no_store_unless_anonymous(request: Request) -> dict[str, str] | None:
+    """会員(Cookie/Authorization 付き)には no-store。匿名は自分では付けず、http_cache の許可リスト(s-maxage)に任せて nginx に置かせる。"""
+    from src.api.http_cache_headers import is_anonymous_request
+
+    anon = is_anonymous_request(
+        request.headers.get("cookie", ""), request.headers.get("authorization", ""),
+        getattr(request.client, "host", None), request.headers,
+    )
+    return None if anon else _NO_STORE_HEADERS
+
+
 def _invalidate_race_list_caches() -> None:
     """race_lists 関連の全インメモリキャッシュを即時無効化する。"""
     _RACE_LIST_STEMS_CACHE["stems"] = None
@@ -2590,7 +2601,7 @@ _RACE_CALENDAR_TTL = 120.0
 
 
 @app.get("/api/race-calendar", response_class=JSONResponse)
-async def get_race_calendar(month: str = Query(..., pattern=r"^\d{6}$", description="YYYYMM")):
+async def get_race_calendar(request: Request, month: str = Query(..., pattern=r"^\d{6}$", description="YYYYMM")):
     """過去の開催日カレンダー用。指定月の開催日（JRA）と、開催場・重賞を返す。今日（JST）より後の日は含めない。
     range は race_lists にある最古〜今日までの日付（年月ジャンプの範囲）。"""
     from datetime import datetime, timedelta, timezone
@@ -2602,7 +2613,7 @@ async def get_race_calendar(month: str = Query(..., pattern=r"^\d{6}$", descript
     now = _time.time()
     hit = _RACE_CALENDAR_CACHE.get(month)
     if hit and (now - hit[0]) < _RACE_CALENDAR_TTL and hit[1].get("today") == today:
-        return JSONResponse(hit[1], headers=_NO_STORE_HEADERS)
+        return JSONResponse(hit[1], headers=_no_store_unless_anonymous(request))
 
     def _build():
         storage = _get_storage()
@@ -2612,11 +2623,12 @@ async def get_race_calendar(month: str = Query(..., pattern=r"^\d{6}$", descript
 
     data = await asyncio.to_thread(_build)
     _RACE_CALENDAR_CACHE[month] = (now, data)
-    return JSONResponse(data, headers=_NO_STORE_HEADERS)
+    return JSONResponse(data, headers=_no_store_unless_anonymous(request))
 
 
 @app.get("/api/scrape-dates", response_class=JSONResponse)
 async def get_scraped_dates(
+    request: Request,
     meeting_only: str | None = Query(None),
     raw_keys: str | None = Query(None),
     filter_mode: str | None = Query(
@@ -2656,7 +2668,7 @@ async def get_scraped_dates(
             and pd.get("data") is not None
             and (now - float(pd.get("ts") or 0)) < _PICKER_SCRAPE_DATES_TTL
         ):
-            return JSONResponse(pd["data"], headers=_NO_STORE_HEADERS)
+            return JSONResponse(pd["data"], headers=_no_store_unless_anonymous(request))
 
         def _picker_dates_only():
             """直近 N 日を 1 日ずつ race_lists を読み、JRA レース≥1 の日のみ返す。"""
@@ -2692,7 +2704,7 @@ async def get_scraped_dates(
         pd["key"] = ck
         pd["data"] = result
         pd["ts"] = now
-        return JSONResponse(result, headers=_NO_STORE_HEADERS)
+        return JSONResponse(result, headers=_no_store_unless_anonymous(request))
 
     use_raw = str(raw_keys or "").strip().lower() in ("1", "true", "yes", "on")
     disable_filter = str(meeting_only or "").strip().lower() in ("0", "false", "no", "off")
@@ -2703,7 +2715,7 @@ async def get_scraped_dates(
             return JSONResponse(_SCRAPE_DATES_RAW_CACHE["data"])
     else:
         if _scrape_dates_cache["data"] and (now - _scrape_dates_cache["ts"]) < 60:
-            return JSONResponse(_scrape_dates_cache["data"], headers=_NO_STORE_HEADERS)
+            return JSONResponse(_scrape_dates_cache["data"], headers=_no_store_unless_anonymous(request))
 
     def _load():
         storage = _get_storage()
@@ -2752,7 +2764,7 @@ async def get_scraped_dates(
         return JSONResponse(result)
     _scrape_dates_cache["data"] = result
     _scrape_dates_cache["ts"] = now
-    return JSONResponse(result, headers=_NO_STORE_HEADERS)
+    return JSONResponse(result, headers=_no_store_unless_anonymous(request))
 
 
 def merge_db_and_list_races(db_races: list[dict], list_races: list[dict], date: str) -> list[dict]:
@@ -3059,7 +3071,7 @@ async def _warm_race_lists() -> None:
 
 
 @app.get("/api/megu-index-dates", response_class=JSONResponse)
-async def get_megu_index_dates(limit: int = Query(120, ge=1, le=365)):
+async def get_megu_index_dates(request: Request, limit: int = Query(120, ge=1, le=365)):
     """めぐ指数が計算済みの開催日一覧（UI デフォルト日付用）。"""
 
     def _load():
@@ -3088,7 +3100,7 @@ async def get_megu_index_dates(limit: int = Query(120, ge=1, le=365)):
             ).fetchall()
         return {"dates": [str(r.d) for r in rows if r.d]}
 
-    return JSONResponse(await asyncio.to_thread(_load), headers=_NO_STORE_HEADERS)
+    return JSONResponse(await asyncio.to_thread(_load), headers=_no_store_unless_anonymous(request))
 
 
 _scrape_summary_cache: dict = {"data": None, "ts": 0.0, "gen": 0}

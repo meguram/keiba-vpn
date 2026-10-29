@@ -32,5 +32,5 @@ if [ -n "${last:-}" ]; then
   nice -n 15 "$PY" -m src.scripts.data.prediction_results --from 20260101 --to "$last" || { echo "予測成績の再集計に失敗（記録は退避済み: ${PRB}_before_v6e_$TS）" >&2; exit 1; }
 fi
 "$PY" -c "from src.utils import cache_epoch; cache_epoch.bump('v6e backfill swap')" && echo "キャッシュ世代を更新"
-echo "VPS の API キャッシュ(確定済みは最長1週間)も入れ替える: VPS で sudo bash scripts/ops/vps/purge_api_cache.sh"
+echo "VPS の API キャッシュ(確定済みは最長1か月)も入れ替える: VPS で sudo bash scripts/ops/vps/purge_api_cache.sh"
 echo "完了。戻すには: mv $DST <捨てる場所> && mv ${OLD:-<退避したディレクトリ>} $DST（予測成績は ${PRB}_before_v6e_$TS から戻す）"

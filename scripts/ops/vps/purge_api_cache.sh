@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # VPS の API キャッシュ（nginx proxy_cache keiba_apicache）を空にする（root 権限）。
-# 確定済みのレースは 1 週間置くので、データ更新・モデル切替・デプロイのあとはここで入れ替える。
+# 確定済みのレースは 1 か月置くので、データ更新・モデル切替・デプロイのあとはここで入れ替える。
 #   sudo bash scripts/ops/vps/purge_api_cache.sh                         全部消す
 #   sudo bash scripts/ops/vps/purge_api_cache.sh --match '/api/race/2026' キー(ポート+ホスト+URL)が正規表現(ERE)に合うものだけ消す
 #   sudo bash scripts/ops/vps/purge_api_cache.sh --match '^8081'          stg だけ消す（本番は 8080）

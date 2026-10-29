@@ -30,3 +30,10 @@
 ## 画面の遅延呼び出し
 
 推奨馬券（`/api/v1/betting/optimize`）は「推奨馬券」タブを開いたときだけ呼ぶ（`frontend/app/weekly-predictions/page.tsx` の `tab === "bet"`）。レース質（開催日）は専用画面だけで呼ぶ。
+
+## VPS の nginx キャッシュと事前ロード（自動）
+
+- 匿名・許可リストの応答は VPS ローカルの nginx `proxy_cache`（`/var/cache/nginx/keiba_api`、`max_size=1g inactive=35d`）に置く。GCS は読まない。確定済み（3 日以上前）のレースは `s-maxage` 30 日、開催前後・一覧・カレンダーは数十〜120 秒（`config/http_cache.json`）。
+- 参照用データが作られた・更新されたとき、書き手（`HybridStorage.save` / `gcs_mirror.push` / `cache_epoch.bump`）が GCS に `ops/cache_dirty/<日付>/<race_id|開催日|_ALL>` の目印を書く（`src/utils/cache_marker.py`。`KEIBA_CACHE_MARKER=0` で停止）。
+- VPS の `keiba-cache-warm.timer`（60 秒おき、`scripts/ops/vps/cache_warm.py`）が目印を list 1 回だけで拾い（月 約 0.2 ドル）、対象のエンドポイントを `X-Keiba-Refresh` 付きでローカル nginx から取り直して入れ直す。出馬表カード（private）は対象外。
+- 導入・撤去: `sudo bash scripts/ops/vps/vps_10_cache_warm.sh [--dry-run|--remove]`（前提は `vps_09_api_cache.sh` と pull 用 venv）。確認: `journalctl -u keiba-cache-warm -n 5`。詳細は `docs/html/operations/vps_load_and_cache.html` §4-4。

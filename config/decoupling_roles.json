@@ -6,6 +6,10 @@
     "sporthorse-births-nightly": {"role": "retire", "note": "2026-10-22 cron監査: 研究専用で不採用の結論済み。必要なときは手動実行"},
     "backfill-2020-fast": {"role": "research_only", "note": "古い年の取りこぼし補填。学習データの完全性のため。公開の予測(出走馬の履歴)に使う年は 2022 以降で別扱い"},
     "backfill-2021-fast": {"role": "research_only", "note": "同上"},
+    "backfill-2022-full": {"role": "research_only", "note": "長期の取りこぼし補填(2022 年 full)。学習データの完全性のため。自宅 IP のホストに残す"},
+    "backfill-2023-full": {"role": "research_only", "note": "同上(2023 年 full)"},
+    "host-snapshot": {"role": "research_only", "note": "ホストの状態(cron・設定)を残すための手段。ホスト自身の記録なので運用経路に含めない"},
+    "gcs-mirror-push-auth": {"role": "ops_required", "target": "vps", "note": "会員名簿(root だけが読める)を GCS に上げ、Cloud Run のログイン照合に渡す。名簿の正本が VPS/GCP へ移るまでホストの root cron で上げ、移行後は不要"},
     "keiba-remote-access": {"role": "research_only", "note": "開発者がホストに入るための仕組み。運用経路に含めない"},
 
     "raceday-result-runner": {"role": "ops_required", "target": "vps", "note": "各R 発走 T+15 の速報結果。結果は予測成績・結果通知・履歴特徴量の元。VPS 実行役のレース別タスク(race-result-per-race 相当)+ GCP Job(slack-results)へ"},
@@ -30,6 +34,6 @@
     "gcs-mirror-push": {"role": "retire", "note": "2026-10-24 移行中の橋渡し。予測の生成・出馬表の収集が GCS に直接書くようになったら止める"},
     "shutuba-audit": {"role": "ops_required", "target": "vps", "note": "棚卸し #13。開催後も確定しない出馬表の洗い出しと再取得。公開の出馬表の正しさに効くので VPS 実行役の取得タスクへ(K6 のコード後)"},
     "backfill-past": {"role": "retire", "note": "棚卸し #19。2016〜2019 年の過去分補填。終われば不要(完了したら廃止)。運用には載せない"},
-    "sire-line": {"role": "ops_required", "target": "vps", "note": "棚卸し #24。5 世代血統の牡の祖先の系統。日々は定期バッチに相伴、過去分の一括補完は VPS 実行役の低優先度タスクへ(K6 のコードと台帳の GCS 化の後)"}
+    "sire-line": {"role": "ops_required", "target": "vps", "note": "棚卸し #24。5 世代血統の牡の祖先の系統。日々は定期バッチに相伴、過去分の一括補完は VPS 実行役の低優先度タスクへ(K6 のコードと台帳の GCS 化は 2026-10-29 に完了。切替は実行役が影モードを抜けた後)"}
   }
 }

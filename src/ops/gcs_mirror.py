@@ -127,6 +127,7 @@ def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH
     todo: list[tuple[str, bytes]] = []
     seen = uploaded = would = 0
     held = 0
+    sent: list[str] = []
 
     def flush() -> None:
         nonlocal todo, held, uploaded
@@ -134,6 +135,7 @@ def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH
             with ThreadPoolExecutor(max_workers=workers) as ex:
                 list(ex.map(lambda kv: backend.upload(*kv), todo))
             uploaded += len(todo)
+            sent.extend(k[len(PREFIX) + 1:] for k, _ in todo)
         todo, held = [], 0
 
     for tree in trees:
@@ -152,6 +154,13 @@ def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH
                 if held >= batch_bytes:
                     flush()
     flush()
+    if sent:
+        try:      # 画面に出る応答の元（予測・ラップ・分析など）が変わったことを、VPS の事前ロード係へ目印で伝える（最善努力）
+            from src.utils import cache_marker
+
+            cache_marker.mark_from_paths(sent)
+        except Exception:  # noqa: BLE001
+            pass
     return {"seen": seen, "uploaded": uploaded, "would_upload": would}
 
 

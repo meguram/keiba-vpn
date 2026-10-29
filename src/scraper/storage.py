@@ -537,6 +537,12 @@ class HybridStorage:
                 prerender.mark_from_save(category, key)
             except Exception:  # noqa: BLE001
                 pass
+            try:       # VPS の事前ロード係(keiba-cache-warm)への目印。GCS に置くだけで、失敗しても保存は成功扱い
+                from src.utils import cache_marker
+
+                cache_marker.mark_from_save(category, key)
+            except Exception:  # noqa: BLE001
+                pass
         return ok
 
     def _save_inner(self, category: str, key: str, data: dict[str, Any]) -> bool:

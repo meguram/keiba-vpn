@@ -135,3 +135,24 @@ def test_fastapi_settled_header(monkeypatch):
     assert c.get(f"/api/race/{y - 1}06050811").headers["cache-control"] == "public, max-age=30, s-maxage=604800"
     assert c.get(f"/api/race/{y - 1}06050811", headers={"Cookie": "k=v"}).headers["cache-control"] == "private, max-age=30"
     assert c.get(f"/api/race/{y}06050811").headers["cache-control"] == "public, max-age=30, s-maxage=30"
+
+
+def test_fastapi_date_list_anonymous_cacheable(monkeypatch):
+    """日付一覧(scrape-dates 等)は匿名なら自分では Cache-Control を付けず、許可リストの public, s-maxage に任せる。会員は no-store。"""
+    cfg = {"enabled": True, "rules": [{"prefix": "/api/scrape-dates", "max_age": 30, "s_maxage": 120}], "never": []}
+    monkeypatch.setattr(H, "config", lambda: cfg)
+    from fastapi import Request
+
+    from src.api.app import _NO_STORE_HEADERS, _no_store_unless_anonymous
+
+    app = FastAPI()
+
+    @app.get("/api/scrape-dates")
+    def dates(request: Request):
+        return JSONResponse({"dates": []}, headers=_no_store_unless_anonymous(request))
+
+    H.install_fastapi(app)
+    c = TestClient(app)
+    assert c.get("/api/scrape-dates").headers["cache-control"] == "public, max-age=30, s-maxage=120"
+    assert c.get("/api/scrape-dates", headers={"Cookie": "k=v"}).headers["cache-control"] == _NO_STORE_HEADERS["Cache-Control"]
+    assert c.get("/api/scrape-dates", headers={"Authorization": "Bearer x"}).headers["cache-control"] == _NO_STORE_HEADERS["Cache-Control"]
