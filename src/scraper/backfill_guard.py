@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import statistics
 import subprocess
@@ -19,6 +20,8 @@ from collections import deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 JST = timezone(timedelta(hours=9))
 STATE_PATH = Path(os.environ.get("KEIBA_BACKFILL_PAST_STATE") or Path(__file__).resolve().parents[2] / "data" / "local" / "meta" / "backfill_past_state.json")
@@ -33,8 +36,9 @@ CAP_MAX = int(os.environ.get("BACKFILL_PAST_CAP_MAX", "0"))   # 0＝1 回の件�
 CAP_FIRST = CAP_MAX // 2
 WINDOW = os.environ.get("BACKFILL_PAST_WINDOW", "00:00-24:00")          # JST。既定は終日（時間帯による調整はしない）。狭めればその外では始めない・途中でも終端で止める
 PACE_PER_HOUR = float(os.environ.get("BACKFILL_PAST_PACE_PER_HOUR", "0"))   # 追加の一定間隔（件/時）。既定 0＝無効（間隔は取得クライアントの待ち NETKEIBA_THROTTLE_MIN/MAX＝補填の起動スクリプトで 1.8〜2.2 秒）
+YIELD_TO_OTHERS = os.environ.get("BACKFILL_PAST_YIELD", "0") == "1"   # 1 で他の取得が動いている間は待つ（同時 1 本）。既定 0＝並走する（同時の取得はプロセス横断スロットで最大 NETKEIBA_GLOBAL_MAX_SLOTS 本）
 SKIP_RACEDAY = os.environ.get("BACKFILL_PAST_SKIP_RACEDAY", "0") == "1"   # 1 で土日（開催日）は始めない。既定は曜日で分けず、日の総件数の上限と他の取得への譲りで抑える
-OTHER_FETCH_PATTERN = r"src\.scraper\.(auto_scrape|backfill)|backfill_horse_training|run_priority_rescrape|src\.scripts\.scraping\.backfill_"
+OTHER_FETCH_PATTERN = os.environ.get("BACKFILL_PAST_OTHER_FETCH_PATTERN") or r"src\.scraper\.(auto_scrape|backfill)|backfill_horse_training|run_priority_rescrape|src\.scripts\.scraping\.(backfill_|fetch_sire_lines)"   # 待つ相手（ps の引数への正規表現）。一時的に並走させたいときは環境変数で上書きする
 
 # AIMD 型の速度調整: 応答が悪化したら待ちを倍に増やし（乗法的に遅く）、悪化なしが続けば少しずつ戻す（加法的に速く）。
 # 戻しても、既存のスロットルより速くはならない（実績の最短間隔を超えない）。
@@ -46,9 +50,10 @@ AIMD_MAX_DELAY = 60.0
 # 悪化の検知（その夜を中断）
 RECENT_REQUESTS = 100
 MAX_BAD_IN_RECENT = 1            # 直近 100 件の中の 400/403/429/5xx がこの件数に達したら中断（1＝エラー 1 件で即中断）
-MAX_TRANSPORT_ERRORS = 1         # 通信エラー（接続・タイムアウト）がこの件数に達したら中断（1＝即中断）
+MAX_TRANSPORT_ERRORS = int(os.environ.get("BACKFILL_PAST_MAX_TRANSPORT_ERRORS", "1"))   # 通信エラー（接続・タイムアウト）の許容件数。1＝即中断。--phase past のクロンでは 3 を推奨
 HALT_PATH = Path(os.environ.get("KEIBA_BACKFILL_PAST_HALT") or STATE_PATH.parent / "backfill_past_halt.json")   # エラーで止めた印。人が確認して削除するまで再開しない
 LATENCY_WINDOW = 30
+YIELD_LOG_EVERY_SEC = 600.0      # 他の取得に譲っている間のログの間隔（固まり検知の『ログなし』2400 秒より短く）
 LATENCY_FACTOR = 2.5             # 直近の応答時間の中央値が、その夜の最初の基準の何倍を超えたら中断
 LATENCY_ABS_SEC = 8.0            # 基準に関わらず、中央値がこの秒数を超えたら中断
 
@@ -131,7 +136,7 @@ def other_fetch_running() -> bool:
         pid_s, _, args = line.strip().partition(" ")
         if not pid_s.isdigit() or int(pid_s) == me:
             continue
-        if "backfill_guard" in args or "grep" in args:
+        if "backfill_guard" in args or "grep" in args or "--report" in args:   # 進捗の表示（watch_backfill.sh）は取得しない
             continue
         if re.search(OTHER_FETCH_PATTERN, args):
             return True
@@ -154,7 +159,7 @@ class NightGuard:
     HOSTS = ("netkeiba.com",)
 
     def __init__(self, cap: int, window: str = WINDOW, clock=_now, state_path: Path = STATE_PATH, sleep=time.sleep,
-                 pace_per_hour: float = PACE_PER_HOUR, yield_to_others: bool = True) -> None:
+                 pace_per_hour: float = PACE_PER_HOUR, yield_to_others: bool = YIELD_TO_OTHERS) -> None:
         self.cap = int(cap)
         self.window = window
         self.clock = clock
@@ -182,8 +187,14 @@ class NightGuard:
         while waited < self.pace_sec and not self.stop_reason:
             self.sleep(min(5.0, self.pace_sec - waited))
             waited += 5.0
+        # 譲っている間も一定間隔でログを出す（待ちを見えるようにし、固まり検知の『ログなし』で強制終了されないようにする）。
+        # 補填（--phase past）は最も後回しの取得なので、相手の側はこちらを待たないこと（待ち合いになる。2026-10-29 に調教の補填と待ち合った）
+        yielded = 0.0
         while self.yield_to_others and not self.stop_reason and self.busy():
+            if yielded % YIELD_LOG_EVERY_SEC == 0:
+                logger.info("他の取得が動いているので待機中（%.0f 分）", yielded / 60)
             self.sleep(15.0)
+            yielded += 15.0
 
     # NetkeibaClient の応答オブザーバ
     def __call__(self, url: str, resp: Any) -> None:

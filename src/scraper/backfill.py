@@ -714,7 +714,7 @@ def run_past(
     if not ignore_window and not bg.in_window(now):
         logger.info("時間窓 %s（JST）の外です", bg.WINDOW)
         return 2
-    if not bg.wait_for_quiet():
+    if bg.YIELD_TO_OTHERS and not bg.wait_for_quiet():
         logger.info("他の取得が終わらないため、この夜は始めません")
         return 2
 

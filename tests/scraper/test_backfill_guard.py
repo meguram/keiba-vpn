@@ -172,3 +172,60 @@ def test_all_day_window_and_total_limit(tmp_path, monkeypatch):
     g = bg.NightGuard(cap=1000, clock=lambda: _at(15), state_path=tmp_path / "s.json", sleep=lambda s: None, pace_per_hour=0, yield_to_others=False)
     monkeypatch.setattr("src.scraper.request_counter.count_today", lambda day=None: bg.TOTAL_DAILY_LIMIT)
     assert "日の総件数" in (g.should_stop() or "")
+
+
+def test_other_fetch_pattern_covers_netkeiba_fetchers():
+    import re
+
+    for args in ["python -m src.scripts.scraping.fetch_sire_lines", "python -m src.scripts.scraping.backfill_horse_training_recent --limit 5",
+                 "python -m src.scraper.auto_scrape"]:
+        assert re.search(bg.OTHER_FETCH_PATTERN, args), args
+    assert not re.search(bg.OTHER_FETCH_PATTERN, "python main.py --flask-api")
+
+
+def test_shutdown_signal_breaks_yield_wait(tmp_path, monkeypatch):
+    from src.scraper import backfill as bf
+
+    g = bg.NightGuard(cap=0, state_path=tmp_path / "s.json", sleep=lambda s: None, yield_to_others=True)
+    g.busy = lambda: True
+    monkeypatch.setattr(bf, "_GUARD", g)
+    monkeypatch.setattr(bf, "_shutdown_requested", False)
+    bf._signal_handler(15, None)
+    g._pace()   # 他の取得が動き続けていても、待ちを抜けて戻る
+    assert g.stop_reason and bf._should_stop()
+
+
+def test_yield_wait_logs_periodically(tmp_path, caplog):
+    import logging
+
+    n = int(bg.YIELD_LOG_EVERY_SEC // 15) * 2 + 1          # 2 回分の間隔より少し長く譲る
+    busy = iter([True] * n + [False])
+    g = bg.NightGuard(cap=0, state_path=tmp_path / "s.json", sleep=lambda s: None, pace_per_hour=0, yield_to_others=True)
+    g.busy = lambda: next(busy)
+    with caplog.at_level(logging.INFO, logger=bg.__name__):
+        g._pace()
+    assert sum("待機中" in r.getMessage() for r in caplog.records) == 3   # 0 分・10 分・20 分（固まり検知の 40 分より短い間隔で出る）
+
+
+def test_other_fetchers_do_not_wait_for_past_backfill():
+    """--phase past は他の取得に譲る。相手もこちらを待つと、お互いに待ち合って止まる（2026-10-29）。"""
+    import re
+
+    from src.scripts.scraping import backfill_horse_race_remarks as remarks
+    from src.scripts.scraping import backfill_horse_training_recent as training
+
+    past = "/opt/conda/bin/python3 -m src.scraper.backfill --phase past"
+    assert re.search(bg.OTHER_FETCH_PATTERN, "/opt/conda/bin/python3 -m src.scripts.scraping.backfill_horse_training_recent --from 2026-04-01")
+    for pattern in (training.OTHER_SCRAPERS, remarks.OTHER_SCRAPERS):
+        assert not re.search(pattern, past)
+        assert re.search(pattern, "/opt/conda/bin/python3 -m src.scraper.backfill --phase horse")   # 他の段階は従来どおり待つ
+
+
+def test_default_runs_alongside_other_fetchers(tmp_path):
+    """既定では他の取得に譲らず並走する（BACKFILL_PAST_YIELD=1 で譲る）。"""
+    assert bg.YIELD_TO_OTHERS is False
+    slept: list[float] = []
+    g = bg.NightGuard(cap=1000, state_path=tmp_path / "s.json", sleep=slept.append, pace_per_hour=0)
+    g.busy = lambda: True
+    g("https://db.netkeiba.com/race/1/", _Resp(200))
+    assert slept == []
