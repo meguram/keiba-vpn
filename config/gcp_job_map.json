@@ -2958,19 +2958,42 @@
   {
    "id": "shutuba-audit",
    "desc": "開催後も確定しない出馬表の洗い出しと再取得（棚卸し #13）",
-   "destination": "host",
-   "phase": null,
-   "wave": null,
+   "destination": "vps",
+   "phase": 4,
+   "wave": 3,
    "origin": {
     "tag": "KEIBA-SHUTUBA-AUDIT",
     "cron_job_id": "shutuba-audit",
     "cron_utc": "40 21 * * *",
     "script": "scripts/cron/run_auto_scrape_logged.sh"
    },
-   "reason": "棚卸し #13。To-Be は VPS 実行役（取得タスク shutuba-audit）だが、取得タスクのコード（K6）が未了のため当面ホストに残す。run_audit(enqueue=True) は実行機のローカルキューに積むだけで、VPS にはそれを消化する処理が無い。VPS では積まずにその場で再取得する形にしてから vps へ移す。GCP の追加課金は 0",
+   "schedule_jst": "40 6 * * *",
+   "fetch_task": {
+    "task": "shutuba-audit",
+    "args": {}
+   },
+   "memory_mib": 250,
+   "timeout_sec": 3600,
+   "env": [
+    "GCS_BUCKET",
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
    "enabled": true,
-   "blockers": [],
-   "ready": true
+   "blockers": [
+    "取得タスクのコードは済み（その場で取り直す直接モード。fetch_child が KEIBA_SHUTUBA_AUDIT_DIRECT=1 を既定にする）。残りは VPS の 250M での実測後に fetch_owner.json の agent_tasks / DEFAULT_AGENT_TASKS へ追加すること（実行役が影モードを抜けた後。docs/operations/vps_agent.md）。それまではホストの cron（06:40）が担当"
+   ],
+   "ready": false,
+   "cutover": {
+    "min_consecutive_success": 4,
+    "window_days": 21,
+    "parity_min_days": 3
+   }
   },
   {
    "id": "backfill-past",
@@ -3650,7 +3673,7 @@
     "cron_utc": "30 22 * * *",
     "script": "scripts/cron/run_auto_scrape_logged.sh"
    },
-   "reason": "常駐ループで VPS の許可リストに無い（個別タスク化は未了）。当面ホストに残す。個別タスク化したら vps に移して cutover の対象にする",
+   "reason": "個別タスク化は済み（race-result-t15。reserve-race-day が発走15分後に1レース1件ずつ予約し、fetch_child が race_result_on_time を直接取得する）。常駐ループ自体は静的な vps エントリにならないので、job_map ではホストのまま。実行役が race-result-t15 を持った時点で fetch_owner.host_must_skip によりホストの常駐は見送る。常駐ループの後処理は GCP へ移し済み（馬場速度=export-tables-daily が直近10日を毎朝計算、予測成績=prediction-results-refresh）。ホストの cron は実行役の影モード明けと cutover の確認後に止める",
    "enabled": true,
    "blockers": [],
    "ready": true

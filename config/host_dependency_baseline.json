@@ -426,6 +426,10 @@
   "src/utils/cache_epoch.py": {
    "local_data": 1
   },
+  "src/utils/cache_marker.py": {
+   "local_data": 2,
+   "page_reference": 1
+  },
   "src/utils/horse_name_index.py": {
    "local_data": 5,
    "page_reference": 1
