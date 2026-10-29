@@ -1,7 +1,7 @@
 """実行役（fetch_agent）が子プロセスとして呼ぶ取得の入口。最後に ``FETCH_RESULT {json}`` を 1 行出す。
 
   python -m src.ops.fetch_child auto <mode>                 # auto_scrape のモード
-  python -m src.ops.fetch_child race <task> <race_id> <YYYYMMDD>   # race-odds-t60|t15|t10|t05|t02 / race-weight-check
+  python -m src.ops.fetch_child race <task> <race_id> <YYYYMMDD>   # race-odds-t60|t15|t10|t05|t02 / race-weight-check / race-result-t15
   python -m src.ops.fetch_child selfcheck                   # 取得に必要なモジュールを import できるか（VPS の venv 確認用）
 
 auto_scrape.main() は例外を飲み込んで終了コード 0 を返すため、ここで状態ファイルを読んで error を終了コード 3 にする。
@@ -42,12 +42,14 @@ def shadow_guard(task: str) -> int | None:
 
 
 def race_task_list(task: str) -> list[str]:
-    from src.ops.fetch_task import RACE_ODDS_TASKS, RACE_WEIGHT_TASK
+    from src.ops.fetch_task import RACE_ODDS_TASKS, RACE_RESULT_TASK, RACE_WEIGHT_TASK
     from src.scraper import auto_scrape_queue as q
     from src.scraper.raceday_weight_watch import WEIGHT_WATCH_TASKS
 
     if task == RACE_WEIGHT_TASK:
         return list(WEIGHT_WATCH_TASKS)
+    if task == RACE_RESULT_TASK:
+        return ["race_result_on_time"]
     kind = RACE_ODDS_TASKS[task]
     if kind == "t60":
         return q.enabled_tasks(q.ODDS_T60_TASKS)

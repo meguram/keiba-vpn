@@ -23,7 +23,7 @@
 | 1 | `entries-sync`（出馬表の段階収集） | 08〜22 時、10 分おき | **VPS 実行役** | 影モードの対象。軽い |
 | 2 | `raceday-runner`（T-60/T-15 オッズ） | 07:30 起動の常駐ループ | **VPS 実行役**（`race-odds-per-race`） | 前夜に GCP が各 R のタスクを予約。厳守したい T-10/5/2 は期限の 60 秒前から待機 |
 | 3 | `raceday-weight-runner`（馬体重の検知） | 08:00 起動の常駐ループ | **VPS 実行役**（`race-weight-per-race`）。検知後は GCP の `event-pump` から予測へ | 常駐ループは個別タスクに置換 |
-| 4 | `raceday-result-runner`（T+15 の速報結果） | 07:30 起動の常駐ループ | **VPS 実行役**（新規タスク `race-result-t15` が必要） | `job_map` ではホストのまま（`host`）。移行先の設計が未了 |
+| 4 | `raceday-result-runner`（T+15 の速報結果） | 07:30 起動の常駐ループ | **VPS 実行役**（`race-result-t15`。コードは済み・未有効） | `job_map` ではホストのまま（`host`）。`DEFAULT_AGENT_TASKS` への追加まではホストの常駐が担当 |
 | 5 | `raceday-evening`（速報・確定オッズ） | 17:30 | **VPS 実行役**（取得）。確定オッズの集計は GCP | 計算部分は 250M に収まらない可能性。メモリ実測が必要 |
 | 6 | `raceday-comment`（厩舎コメント） | 07:40・20:00 | **VPS 実行役** | 軽い。`race_trainer_comment` は要ログイン |
 | 7 | `jra-baba-morning`（クッション値・含水率） | 05〜08 時、10 分おき | **VPS 実行役** | JRA の PDF・ライブ。軽い |
@@ -94,7 +94,7 @@
 ## 6. 並走検証（影モード）の現状と差分チェックの設計
 
 ### 現状（2026-10-28 確認）
-- 影モードの仕組みはある（`docs/operations/vps_agent.md` 5.5 章）。VPS の実行役が同じ取得を並走し、結果を `shadow/<日付>/<本番と同じパス>` に保存し、`shadow_report` が本番と比べる。**ただし有効化されていない**（`keiba-fetch-agent` は `disabled`/`inactive`）。
+- 影モードの仕組みはある（`docs/operations/vps_agent.md` 5.5 章）。VPS の実行役が同じ取得を並走し、結果を `shadow/<日付>/<本番と同じパス>` に保存し、`shadow_report` が本番と比べる。**VPS の `keiba-fetch-agent` は影モードで稼働中**（リリース `fetch-0063931f`。新しいコードは 03:20 JST の取り込みで入る）。`fetch_owner.json` の `agent_tasks` は空なので、本番の取得は引き続きホストの cron が行う。
 - `config/fetch_shadow.json`（2026-10-22 に負荷軽減で縮小）の対象は 5 タスクだけ: `entries-sync`（馬・枠・騎手の一致）、`race-odds-t60`・`race-odds-t15`（オッズ）、`race-weight-check`（馬体重）、`daily-race-lists`（比較なし）。`vps_agent.md` に書かれた `jra-baba-morning`・`recent-retry`・`barometer-retry`・直前オッズは**現在の設定では対象外**（ドキュメントが古い）。
 - 1 日の上限は 800 件（見積りリクエスト数）。VPS 向けの 16 ジョブのうち、実質カバーできているのは #1・#2・#3・#8 の分だけ。
 
@@ -102,7 +102,7 @@
 1. **全データの自動突き合わせ**: 影モードの書き込みは `shadow/<日付>/<同じパス>` に付け替えられる。この性質を使い、タスクごとの比較ルールをやめ、`shadow/<日付>/**` の全キーを本番の同じキーと比べて「本番のみ／影のみ／中身が違う」に分ける。取得時刻などの変動項目は除外し、残りの完全一致を見る。
 2. **カテゴリ別のルール**: 約 50 カテゴリ（`HybridStorage.CATEGORY_MAP`）に既定ルール（変動項目以外が完全一致）を適用。オッズ・馬体重だけ、取得時刻が最も近いスナップショット同士で比べる例外にする。
 3. **取りこぼしの検査**: ホストが取ったキーの一覧を基準に、影に無いものを数える。**取りこぼし 0 件**を合格条件にする。
-4. **「取得済みならスキップ」への対策**: 影の取得は本番を読むので、`recent-retry` のような「未取得だけ取り直す」工程は本番にあるものをスキップして影が空になる。影の取得では「影に無ければ取る」読み方にする（取得コードの挙動に触れる変更。要確認）。
+4. **「取得済みならスキップ」への対策**: 影の取得は本番を読むので、`recent-retry` のような「未取得だけ取り直す」工程は本番にあるものをスキップして影が空になる。影の取得では「影に無ければ取る」読み方にする。**実装済み**（`src/ops/shadow_storage.py` の `install()` が `HybridStorage.exists` / `exists_gcs` を影の側だけ見るように差し替える。`load` などの読みは本番のまま、他の操作は従来どおり拒否）。影の側に取りに行く分だけ、影モードのリクエスト数（1 日 800 件の上限）の消費は増える。
 5. **対象の広げ方**: 軽いもの（#7・#10・#11・#12・#13・#16）を先に影に戻す。重いもの（#5・#9・#14・#6・#10）は VPS で取得中のメモリを実測してから。バックフィル（#17〜#21）は常時比較せず、移行時に件数・欠損を 1 回突き合わせる。
 6. **メモリ**: 実行役の OOM 回数 0 と `measure_memory.sh` の実測を合格条件に足す。
 7. **予測への影響の確認（任意・第 2 段階）**: 推論は決定性を固定したので（同じ入力なら同じ値）、影のオッズ・馬柱から予測を作れば入力の差が予測値のずれとして定量化できる。
@@ -221,12 +221,12 @@
 
 | 鍵 | 内容 | 開くもの | 担当 |
 |---|---|---|---|
-| K1 | **Jobs のイメージを最新にする**（master への昇格で `ENABLE_JOBS_DEPLOY=true`）。今の `jobs:fefbef34` は sec77 より古く、想定オッズが出ない | A・C の全工程の手動実行（未着手 34 本の大半） | ユーザー（昇格の承認）。前提として、develop → stg のマージ方針の判断（保留中） |
+| K1 | **Jobs のイメージを最新にする**（master への昇格で `ENABLE_JOBS_DEPLOY=true`）。今の `jobs:fefbef34` は sec77 より古く、想定オッズが出ない | A・C の全工程の手動実行（未着手 34 本の大半） | **済（2026-10-29）**。担当はユーザー（昇格の承認）。詳細は §12.2 |
 | K2 | **state の種まき**（`state_sync push --which in`）: `tables`・`horse_history`・`serving_bundle`・`inference/state` | `predict-race`・`day-prep`・`eve-precompute` ほか、state を読む全工程 | Claude（ホストから GCS の `state/` だけに書く。運用のパスには書かない） |
-| K3 | **VPS の取得の実行役と影モードを有効にする**（`fetch.env` の 2 変数、`systemctl enable --now keiba-fetch-agent`）と、影モード用の条件付き IAM | B の全工程（不合格 13 本の大半は「影モードの日次レポートが 0/5 日」） | ユーザー（VPS の root と IAM） |
+| K3 | **VPS の取得の実行役と影モードを有効にする**（`fetch.env` の 2 変数、`systemctl enable --now keiba-fetch-agent`）と、影モード用の条件付き IAM | B の全工程（不合格 13 本の大半は「影モードの日次レポートが 0/5 日」） | **済（2026-10-29）**。担当はユーザー（VPS の root と IAM）。詳細は §12.2 |
 | K4 | `reserve-race-day` と `fetch-shadow-report` を ready にする | 影のタスクの予約と日次の合否 | Claude（K1 の後） |
 | K5 | 秘密の登録（共通ログイン・Slack Webhook を Secret Manager に）と、BigQuery への課金エクスポート | `shared-login`・通知系・`gcp-daily-cost-report` | ユーザー（Console） |
-| K6 | 新しい取得タスクのコード: `race-result-t15`（#4）、`shutuba-audit`（#13）、`sire-line`（#24）、`backfill-past`（#19）。あわせて、影の取得を「影に無ければ取る」読み方にする（§6 の 4） | B の残り（#4・#11・#13・#19・#24） | Claude（コード。取得の挙動に触れるので、差分は都度確認をもらう） |
+| K6 | 新しい取得タスクのコード: `race-result-t15`（#4・実装済み、`DEFAULT_AGENT_TASKS` には未登録）、`shutuba-audit`（#13・実装済み）、`sire-line`（#24・実装済み、系統一括取得の完了後に切替）、`backfill-past`（#19・未着手）。影の取得の「影に無ければ取る」読み方（§6 の 4）は実装済み | B の残り（#4・#11・#13・#19・#24） | Claude（コード。取得の挙動に触れるので、差分は都度確認をもらう） |
 
 ### 11.3 線ごとの順番
 
@@ -254,7 +254,7 @@
 
 | 期間 | A 計算 | B 取得 | 担当がユーザーの作業 |
 |---|---|---|---|
-| 10/28〜10/30 | K2 の種まき。A-1・A-2 の準備（job_map の不足分の登録） | K6 のコード着手 | **K1（昇格）・K3（VPS・IAM）** |
+| 10/28〜10/30 | K2 の種まき。A-1・A-2 の準備（job_map の不足分の登録） | K6 のコード着手 | K1・K3 は済（10/29）。残りは K5（Console） |
 | 10/31〜11/1（開催） | 並走 1〜2 日目（`predict-race` は手動で数レース） | 影 1〜2 日目（#1〜#3・#8） | — |
 | 11/2〜11/6 | A-1〜A-3 を 1 本ずつ手動実行して ready に | 影を #7・#10〜#12 に広げる。メモリの実測 | K5 |
 | 11/7〜11/8（開催） | 並走 3〜4 日目 → `predict-race` の合否が出る | 影 3〜4 日目 | — |
@@ -307,11 +307,11 @@
 
 | 鍵 | 担当 | 状態 |
 |---|---|---|
-| K1 master への昇格（Jobs のイメージ更新） | ユーザー | 未。A・C の手動実行はこれの後 |
-| K3 VPS の実行役の有効化と条件付き IAM | ユーザー | 未。影モードの時計はこれが開かないと動かない |
-| K5 秘密の登録・BigQuery の課金エクスポート | ユーザー | 未。`gcp-daily-cost-report` はこれが要る |
-| K4 `reserve-race-day`・`fetch-shadow-report` | Claude | K1 の後 |
-| K6 新しい取得タスクのコード | Claude | `shutuba-audit`・`sire-line` はコード済み（§12.1）。残りは `race-result-t15`（#4）と、影を「無ければ取る」読み方にする件。`backfill-past`（#19）は移行しない方針。差分はユーザー確認のため提示する |
+| K1 master への昇格（Jobs のイメージ更新） | ユーザー | **済（2026-10-29）**。master `c7f8bd47`、promote run 40820261726 が全ステップ成功。Run Job 4 本が `jobs:c7f8bd47`。1 回目は Scheduler 更新の `--headers` で落ち、`--update-headers` に直して再昇格した。A・C の手動実行はこれの後 |
+| K3 VPS の実行役の有効化と条件付き IAM | ユーザー | **済（2026-10-29）**。VPS の実行役は影モードで安定稼働（13:23 UTC から）。GCP 側は Run Job 4 本に `KEIBA_FETCH_SHADOW_ENABLED=1` が入った。実際の影タスク（`shadow_tasks` > 0）は未来のレース日（土曜 10/31）の `reserve-race-day` 後に確認 |
+| K5 秘密の登録・BigQuery の課金エクスポート | ユーザー | 秘密は 10/24 に登録済み（`SLACK_WEBHOOK_URL_PROD`/`_STG`/`R2_CREDENTIALS` は任意）。課金エクスポートは **済（2026-10-29）**（`billing_export`、asia-northeast1、`keiba-jobs` に読み取り権限）。残りは GitHub のリポジトリ変数 `GCP_BILLING_BQ_TABLE` の設定と昇格（`promote.yml` が Jobs の環境変数に渡す）。その後 `gcp-daily-cost-report` を ready にする |
+| K4 `reserve-race-day`・`fetch-shadow-report` | Claude | K1・K3 が済んだので着手可。`fetch-shadow-report` は ready で g-0730 に登録済み。影モードはホストの系統一括取得と並走中で、netkeiba へのリクエストが約 2 倍になる点に注意。2026-10-29 に `reservations race-day --date 20261031 --dry-run`（影モード有効）で `shadow_tasks`=106（18 レース）を確認。実際の積みは 10/30 前夜の reserve-race-day、初回の合否は 10/31 夜〜11/1 07:30 の fetch-shadow-report |
+| K6 新しい取得タスクのコード | Claude | `shutuba-audit`・`sire-line` はコード済み（§12.1）。`race-result-t15`（#4）もコード済み・未コミット・未有効（§12.3）。常駐ループの後処理は GCP の既存 Job へ移す実装を入れた（馬場速度は `export-tables-daily`、集計は `prediction-results-refresh`。§12.3）。残りは、影を「無ければ取る」読み方にする件。`backfill-past`（#19）は移行しない方針。差分はユーザー確認のため提示する |
 | 系統台帳の GCS への初回アップロード | Claude（ホスト経由） | ホストの一括取得（`complete_at` が付く）が終わった後に、`python -m src.scraper.sire_line_store` 経由の `sync_with_gcs` を 1 回走らせる。VPS の `sire-line` はその後 |
 
 ### 12.3 K6 の設計メモ（`shutuba-audit`・`sire-line` はコード済み）
@@ -319,7 +319,12 @@
 - `shutuba-audit`（#13）: 今の `run_audit(enqueue=True)` は実行機のローカルのキューに積むだけで、VPS にはそのキューを消化するものが無い。VPS では積まず、**古い出馬表のレースをその場で直接再取得**する形（`_run_race_tasks_direct(runner, race_id, date, ["race_shutuba"])`）にする。試行回数は今と同じ `shutuba_audit_state.json`（上限 3 回）で数える。**実装**: `run_audit(direct=True)` が、1 回あたり最大 12 レース（`DIRECT_MAX_PER_RUN`）を `_run_race_tasks_direct` で取り直す。試行回数は取る前に数えて保存する（途中で落ちても無限に取り直さない）。アクセス制限の応答が出たら残りは取らずに止める。残りは次の回に回す。`fetch_child` が `shutuba-audit` のとき `KEIBA_SHUTUBA_AUDIT_DIRECT=1` を既定にする（ホストの今の cron は従来のキュー積みのまま）。取得に失敗したらタスクの状態を `error` にして `FETCH_RESULT` の終了コード 3 で返す。
 - `sire-line`（#24）: `fetch_sire_lines` の中身（`fetch_and_record`）を取得タスクにする。**実装は同期だけ**: `sire_line_store.sync_with_gcs()` が `ops/sire_lines/sire_line_map.json` を読んで台帳に足し合わせ（表記ありが『表記なし』に勝つ）、足した結果を GCS へ戻す。`complete_at` はどちらかにあれば両方へ付く。GCS が壊れた JSON のときは取り込まずに上書きする。実際の系統取得は定期バッチの5世代血統の取得に相伴する（ユーザー確認済み）ので、一括取得スクリプトの `PED_DIR` に依存する掃引は VPS に持ち込まない。先にホストの台帳を GCS へ写してから VPS で走らせる（でないと取得済みの約 4,500 頭を取り直す）。
 - `backfill-past`（#19）: 補填が終わる（2018 年が途中、2016・2017 年が 0 件）までホストで続ける。終われば #23 と一緒に廃止するので、VPS 移行はしない方針。
-- `race-result-t15`（#4）: 常駐ループを個別タスクに置き換える。設計が未了。
+- `race-result-t15`（#4）: **コード済み（2026-10-29）**。`fetch_plan day` が発走 15 分後に 1 レース 1 件を積み（`--no-result` で外せる）、`fetch_child` が `race_result_on_time` を 1 レース分だけ直接取得する（タイムアウト 180 秒）。`fetch_owner` により、`agent_tasks` に入るとホストの `raceday-result-runner` は見送る。影モードの対象（`config/fetch_shadow.json`）には入れていない（負荷を増やさない）。
+  - **常駐ループの後処理の移し先（2026-10-29 実装）**: VPS のタスクは取得だけにする（250MB 枠で、flat と馬場速度の正本は GCS のため）。新しい Job・Scheduler は作らない（§12.4）。
+    - 馬場速度: 既存 Job `export-tables-daily`（07:00 JST、flat の更新の直後）に手順 `src.scripts.data.track_speed_daily --from {days_ago_10} --to {today}` を足した（`allow_fail`）。`races_{year}.parquet` へのアップサートなので、直近 10 日を毎朝計算し直せば、月曜夕方に出る確定結果も翌朝に拾える。基準表（`track_speed_baselines.parquet`・`track_speed_pace_baselines.parquet`、計 約31KB）は静的なので state_in に足しただけ。出力 `data/page_reference/track_speed`（約1.2MB）は state_out。
+    - `prediction_results` の集計: 既存 Job `prediction-results-refresh`（`g-results`）が担当済み。
+    - `recent-retry`: `recent_retry.run` は `KEIBA_RUN_LOCATION=vps` のとき後処理を呼ばず、`post_processing: "gcp"` を返す（ホストでは従来どおり後処理する）。
+    - `race-result-t15` を `DEFAULT_AGENT_TASKS` に入れる前の残り: ①`export-tables-daily` を Jobs で 1 回手動実行し、ホストと馬場速度が一致することの確認（`ready=false` のまま）、②`prediction-results-refresh` の前提（ホストの過去予測の GCS 反映・`predict-race` の `predictions_v6`）、③VPS のメモリ実測。
 - いずれも `AUTO_SCRAPE_MODES` に足して `auto_scrape.TASKS` に対応する関数を持たせる（`tests/ops/test_fetch_task.py` が両者の整合を見る）。`DEFAULT_AGENT_TASKS` への追加は、VPS でメモリを実測した後（`shutuba-audit`・`sire-line` もまだ入れていない）。
 
 ### 12.4 費用を上げないための決まり（この移行の間は必ず守る）

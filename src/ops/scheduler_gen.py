@@ -39,6 +39,8 @@ def settings(env: dict[str, str] | None = None) -> dict[str, str]:
         "secrets": ",".join(f"{n}={n}:latest" for n in SECRETS + [x for x in e.get("SECRETS_EXTRA", "").split(",") if x]),
         # 影モード（VPS の取得の並走検証）。1 のとき予約ジョブが影のタスクも積み、日次集計が合否を出す。VPS の実行役で影モードを始めてから 1 にする
         "fetch_shadow": "1" if e.get("FETCH_SHADOW", "").strip() == "1" else "0",
+        # 課金エクスポートのテーブル（project.dataset.table）。課金アカウント ID を含むので公開リポジトリには置かず、変数で渡す
+        "billing_table": e.get("GCP_BILLING_BQ_TABLE", "").strip(),
     }
 
 
@@ -51,6 +53,8 @@ def job_env(doc: dict[str, Any], st: dict[str, str], *, parallel: bool) -> dict[
         env["KEIBA_PARALLEL_RUN"] = "1"
     if st.get("fetch_shadow") == "1":
         env["KEIBA_FETCH_SHADOW_ENABLED"] = "1"
+    if st.get("billing_table"):
+        env["GCP_BILLING_BQ_TABLE"] = st["billing_table"]
     return env
 
 

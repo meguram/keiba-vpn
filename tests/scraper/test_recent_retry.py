@@ -70,5 +70,38 @@ def test_run_computes_track_speed_for_dates_whose_race_result_was_saved(monkeypa
     monkeypatch.setattr(asc, "_trigger_track_speed_for_date", lambda d: called.append(d))
     monkeypatch.setattr(rr, "STATE_PATH", tmp_path / "state.json")
     monkeypatch.setattr(rr.time, "sleep", lambda s: None)
+    monkeypatch.delenv("KEIBA_RUN_LOCATION", raising=False)
     res = rr.run(_cal("2026-10-12"), NOW)
     assert called == ["20261012"] and res["track_speed_dates"] == ["20261012"]
+
+
+def test_run_on_vps_only_fetches_and_leaves_post_processing_to_gcp(monkeypatch, tmp_path):
+    import src.pipeline.inference.prediction_results as pr
+    import src.scraper.auto_scrape as asc
+    import src.scraper.run as run_mod
+
+    class _St:
+        def load(self, cat, d):
+            return {"races": [{"race_id": "202605040601"}]} if (cat, d) == ("race_lists", "20261012") else {}
+
+        def exists(self, cat, rid):
+            return cat != "race_result"
+
+    class _Runner:
+        storage = _St()
+
+        def scrape_race_result(self, rid, skip_existing=False):
+            return True
+
+    def _boom(*a, **k):
+        raise AssertionError("VPS では後処理を走らせない")
+
+    monkeypatch.setattr(run_mod, "ScraperRunner", _Runner)
+    monkeypatch.setattr(asc, "_trigger_track_speed_for_date", _boom)
+    monkeypatch.setattr(pr, "refresh_for_dates", _boom)
+    monkeypatch.setattr(rr, "STATE_PATH", tmp_path / "state.json")
+    monkeypatch.setattr(rr.time, "sleep", lambda s: None)
+    monkeypatch.setenv("KEIBA_RUN_LOCATION", "vps")
+    res = rr.run(_cal("2026-10-12"), NOW)
+    assert res["post_processing"] == "gcp" and res["track_speed_dates"] == []
+    assert res["saved"]["race_result"] == 1 and res["error_count"] == 0

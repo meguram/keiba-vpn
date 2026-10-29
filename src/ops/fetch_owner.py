@@ -28,6 +28,7 @@ def agent_tasks(path: Path | None = None) -> set[str]:
 RUNNER_REPLACED_BY: dict[str, frozenset[str]] = {
     "raceday-runner": frozenset({"race-odds-t60", "race-odds-t15", "race-odds-t10", "race-odds-t05", "race-odds-t02"}),
     "raceday-weight-runner": frozenset({"race-weight-check"}),
+    "raceday-result-runner": frozenset({"race-result-t15"}),
 }
 
 

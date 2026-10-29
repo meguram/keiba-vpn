@@ -43,6 +43,12 @@ def test_fetch_shadow_is_off_unless_the_repo_variable_is_1():
     assert SG.render("jobs", DOC, env={**ENV, "FETCH_SHADOW": "1"}, parallel=True).count("KEIBA_FETCH_SHADOW_ENABLED=1") == 4
 
 
+def test_billing_table_is_passed_only_when_the_repo_variable_is_set():
+    assert "GCP_BILLING_BQ_TABLE" not in SG.render("jobs", DOC, env=ENV, parallel=True)
+    text = SG.render("jobs", DOC, env={**ENV, "GCP_BILLING_BQ_TABLE": "p.billing_export.gcp_billing_export_v1_X"}, parallel=True)
+    assert text.count("GCP_BILLING_BQ_TABLE=p.billing_export.gcp_billing_export_v1_X") == 4
+
+
 def test_scheduler_targets_run_api_with_group_args_and_service_account():
     text = SG.render("scheduler", DOC, env=ENV, include_unready=True)
     assert "https://run.googleapis.com/v2/projects/proj/locations/asia-northeast1/jobs/keiba-dispatch-l:run" in text

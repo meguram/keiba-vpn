@@ -35,11 +35,20 @@ def test_plan_day_late_adds_three_kinds_with_lead():
 
 def test_plan_skips_past_events_and_redundant_t60():
     # 10:50: 1R(10:30 発走)の予定は全て過去。2R(11:00)の T-60 は T-15(10:45) を過ぎているので積まず、T-15 だけを今すぐ実行できる形で積む
-    ts = fp.plan_day(sched(2), "20261024", now=D.replace(hour=10, minute=50), weight=False)
+    ts = fp.plan_day(sched(2), "20261024", now=D.replace(hour=10, minute=50), weight=False, result=False)
     assert [(t.task, t.args["race_id"]) for t in ts] == [("race-odds-t15", "202605040102")]
     # 10:20: 2R の T-60(10:00) は過去で積まない／T-15 は積む。1R の T-15(10:15) は猶予内なので積む
-    ts = fp.plan_day(sched(2), "20261024", now=D.replace(hour=10, minute=20), weight=False)
+    ts = fp.plan_day(sched(2), "20261024", now=D.replace(hour=10, minute=20), weight=False, result=False)
     assert [t.task for t in ts if t.args["race_id"] == "202605040102"] == ["race-odds-t15"]
+
+
+def test_plan_day_adds_result_task_15min_after_post():
+    ts = fp.plan_day(sched(2), "20261024", now=D.replace(hour=6), weight=False)
+    res = [t for t in ts if t.task == "race-result-t15"]
+    assert [t.args["race_id"] for t in res] == ["202605040101", "202605040102"]
+    assert sorted(ft.parse_ts(t.not_before) for t in res) == [s["post_time"] + timedelta(minutes=15) for s in sched(2)]
+    assert "race-result-t15" in ft.ALLOWED_TASKS
+    assert not [t for t in fp.plan_day(sched(2), "20261024", now=D.replace(hour=6), weight=False, result=False) if t.task == "race-result-t15"]
 
 
 def test_enqueue_is_idempotent():
