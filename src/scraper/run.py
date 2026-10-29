@@ -1070,6 +1070,7 @@ class ScraperRunner:
                     self._attach_mating_and_resave(horse_id, ex)
                 self._last_pedigree_5gen_skip = True
                 logger.info("スキップ (既存): horse_pedigree_5gen/%s", horse_id)
+                self._fetch_missing_ancestor_lines(ex)      # 台帳に無い祖先だけ取る（全部あれば通信なし）
                 return ex
 
         url = self.HORSE_PED_URL.format(horse_id=horse_id)
@@ -1106,10 +1107,13 @@ class ScraperRunner:
         self._fetch_missing_ancestor_lines(rec)
         return rec
 
-    ANCESTOR_LINE_MAX_PER_HORSE = 5
+    ANCESTOR_LINE_MAX_PER_HORSE = 12      # 一括取得で台帳が揃えば、新顔の祖先は数頭。超えた分は次の馬の取得時に回る
 
     def _fetch_missing_ancestor_lines(self, rec: dict) -> None:
-        """5 世代血統表の牡の祖先のうち、系統が台帳に無いものを、その子の血統ページから取って台帳に足す。失敗しても本体の取得は止めない。"""
+        """5 世代血統表の牡の祖先のうち、系統が台帳に無いものを、その子の血統ページから取って台帳に足す。失敗しても本体の取得は止めない。
+
+        馬の血統ページを取る処理と同じ流れ・同じクライアント（同じ間隔・カウンタ）で走る。台帳にある祖先は通信しない。
+        """
         try:
             from src.scraper import sire_line_store as store
 
