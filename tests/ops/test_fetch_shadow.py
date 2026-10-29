@@ -100,7 +100,8 @@ def test_install_isolates_hybridstorage_save_from_production(monkeypatch, tmp_pa
     monkeypatch.setattr(ss, "_INSTALLED", False)
     for name in ("bucket", "get_bucket", "lookup_bucket", "create_bucket"):
         monkeypatch.setattr(gcs_lib.Client, name, getattr(gcs_lib.Client, name))
-    monkeypatch.setattr(HybridStorage, "_get_bucket", HybridStorage._get_bucket)
+    for name in ("_get_bucket", "exists", "exists_gcs"):
+        monkeypatch.setattr(HybridStorage, name, getattr(HybridStorage, name))
     monkeypatch.setenv("KEIBA_SCHEMA_STRICT", "0")
     monkeypatch.setattr("src.scraper.storage.gcp_forbidden", lambda: False)     # この PC の .env が dev でも、本番と同じ保存経路を通す
 
@@ -115,6 +116,33 @@ def test_install_isolates_hybridstorage_save_from_production(monkeypatch, tmp_pa
     assert real.writes and all(w.startswith("shadow/") and w.endswith(path) for w in real.writes)
     assert json.loads(real.objects[path]) == {"entries": [], "phase": "t15"}       # 本番のオブジェクトは変わらない
     assert real.deleted == []
+
+
+def test_install_makes_skip_check_look_at_shadow_but_reads_stay_on_production(monkeypatch, tmp_path):
+    """影に無ければ取る: exists は影だけを見る（本番にあっても False）。load は本番を読む。影に書けば True になる。"""
+    from google.cloud import storage as gcs_lib
+    from src.scraper.storage import HybridStorage
+
+    monkeypatch.setattr(ss, "_INSTALLED", False)
+    for name in ("bucket", "get_bucket", "lookup_bucket", "create_bucket"):
+        monkeypatch.setattr(gcs_lib.Client, name, getattr(gcs_lib.Client, name))
+    for name in ("_get_bucket", "exists", "exists_gcs"):
+        monkeypatch.setattr(HybridStorage, name, getattr(HybridStorage, name))
+    monkeypatch.setenv("KEIBA_SCHEMA_STRICT", "0")
+    monkeypatch.setattr("src.scraper.storage.gcp_forbidden", lambda: False)
+
+    real = FakeBucket()
+    st = HybridStorage(base_dir=str(tmp_path), bucket_name="bkt")
+    path = st._gcs_blob_path("race_odds", "202605040101")
+    real.objects[path] = json.dumps({"race_id": "202605040101", "entries": [], "phase": "t15"})
+    st._gcs_available, st._gcs_bucket, st._gcs_retry = True, real, None
+    ss.install()
+    assert st.exists("race_odds", "202605040101") is False                    # 本番にあっても、影に無ければ取る
+    assert st._get_bucket().blob(path).exists() is True                       # スキップ判定の外では exists は本番のまま
+    assert json.loads(st._get_bucket().blob(path).download_as_text())["phase"] == "t15"     # 読みは本番
+    assert st.save("race_odds", "202605040101", {"race_id": "202605040101", "entries": [{"horse_number": 1, "win_odds": 3.0}], "phase": "t60"})
+    assert st.exists("race_odds", "202605040101") is True                     # 影に書いたので次からスキップ
+    assert real.deleted == [] and all(w.startswith("shadow/") for w in real.writes)
 
 
 # ───────────────────────── タスク表の名前空間 ─────────────────────────

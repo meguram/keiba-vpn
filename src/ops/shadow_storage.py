@@ -7,11 +7,14 @@
   どの経路で取ったバケットでも ``ShadowBucket`` になる。``ShadowBlob.upload_from_*`` だけが書け、名前は必ず ``shadow/`` で始まる。
 - これはコードの保証。**本物の保証は IAM**（影モードの実行役のサービスアカウントには ``shadow/`` 以下だけに書ける条件付きの権限を付ける。
   docs/operations/vps_agent.md の影モードの章）。両方で二重に守る。
+- 「取得済みならスキップ」の判定（``HybridStorage.exists`` / ``exists_gcs``）だけは**影の側**を見る（影に無ければ取る）。
+  本番を見ると本番に既にあるものは全部スキップされ、影が空のまま検証にならないため。``load`` などの読みは本番のまま。
 - ``KEIBA_FETCH_SHADOW=1`` の子プロセスだけが ``install()`` する（``fetch_child``）。通常の取得には一切影響しない。
 """
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime
 from typing import Any, Callable, Iterator
 from zoneinfo import ZoneInfo
@@ -26,6 +29,13 @@ READ_BLOB_ATTRS = frozenset({
 })
 WRITE_BLOB_METHODS = frozenset({"upload_from_string", "upload_from_file", "upload_from_filename"})
 READ_BUCKET_ATTRS = frozenset({"name", "exists", "path", "id", "location", "project_number"})
+
+
+_EXISTS_MODE = threading.local()
+
+
+def _shadow_exists_mode() -> bool:
+    return bool(getattr(_EXISTS_MODE, "on", False))
 
 
 class ShadowViolation(RuntimeError):
@@ -67,6 +77,12 @@ class ShadowBlob:
 
     def upload_from_filename(self, *a: Any, **k: Any) -> Any:
         return self._write_blob().upload_from_filename(*a, **k)
+
+    def exists(self, *a: Any, **k: Any) -> bool:
+        """通常は本番の有無。``exists_gcs`` 経由（スキップ判定）のときだけ影の有無を返す。"""
+        if _shadow_exists_mode():
+            return bool(self._write_blob().exists(*a, **k))
+        return bool(self._read_blob.exists(*a, **k))
 
     def __getattr__(self, attr: str) -> Any:
         if attr in READ_BLOB_ATTRS:
@@ -131,6 +147,24 @@ def install() -> None:
         return wrap_bucket(orig_get_bucket(self))
 
     HybridStorage._get_bucket = _get_bucket          # type: ignore[method-assign]
+
+    orig_exists, orig_exists_gcs = HybridStorage.exists, HybridStorage.exists_gcs
+
+    def _exists_gcs(self: Any, category: str, key: str) -> bool:
+        prev = _shadow_exists_mode()
+        _EXISTS_MODE.on = True
+        try:
+            return orig_exists_gcs(self, category, key)
+        finally:
+            _EXISTS_MODE.on = prev
+
+    def _exists(self: Any, category: str, key: str) -> bool:
+        if self._is_local_only(category) or self._dev_store is not None:
+            return orig_exists(self, category, key)
+        return self.exists_gcs(category, key)         # 本番由来の load / 一覧キャッシュは見ない
+
+    HybridStorage.exists_gcs = _exists_gcs            # type: ignore[method-assign]
+    HybridStorage.exists = _exists                    # type: ignore[method-assign]
 
     for name in ("bucket", "get_bucket", "lookup_bucket"):
         orig = getattr(gcs_lib.Client, name)

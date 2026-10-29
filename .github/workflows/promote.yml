@@ -86,6 +86,7 @@ jobs:
       ENABLE_JOBS_DEPLOY: ${{ vars.ENABLE_JOBS_DEPLOY }}
       JOBS_PARALLEL: ${{ vars.JOBS_PARALLEL }}
       FETCH_SHADOW: ${{ vars.FETCH_SHADOW }}
+      GCP_BILLING_BQ_TABLE: ${{ vars.GCP_BILLING_BQ_TABLE }}
     steps:
       - uses: actions/checkout@v4   # PIN
       - uses: actions/download-artifact@v4   # PIN
