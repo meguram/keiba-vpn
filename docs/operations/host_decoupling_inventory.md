@@ -312,7 +312,7 @@
 | K5 秘密の登録・BigQuery の課金エクスポート | ユーザー | 秘密は共通の `SLACK_WEBHOOK_URL` だけ登録済み（2026-10-29 に確認。`SLACK_WEBHOOK_URL_PROD`/`_STG`/`R2_CREDENTIALS` は未登録で、いずれも任意）。課金エクスポートは **済（2026-10-29）**（`billing_export`、asia-northeast1、`keiba-jobs` に読み取り権限）。リポジトリ変数 `GCP_BILLING_BQ_TABLE` の設定も **済**。`gcp-daily-cost-report` は ready=true にした（手動実行は成功。stg・master とも反映済み。master は promote run 40855336870） |
 | K4 `reserve-race-day`・`fetch-shadow-report` | Claude | **ready=true・Scheduler 登録済み**（`reserve-race-day` は g-1910-eve、`fetch-shadow-report` は g-0730-shadow）。`reserve-race-day` は 10/29 に初回（開催日でないためスキップ・正常）を確認済み、`fetch-shadow-report` の初回は 10/30 07:30 JST（§13）。影モードはホストの系統一括取得と並走中で、netkeiba へのリクエストが約 2 倍になる点に注意。2026-10-29 に `reservations race-day --date 20261031 --dry-run`（影モード有効）で `shadow_tasks`=106（18 レース）を確認。実際の積みは 10/30 前夜の reserve-race-day、初回の合否は 10/31 夜〜11/1 07:30 の fetch-shadow-report |
 | K6 新しい取得タスクのコード | Claude | `shutuba-audit`・`sire-line` はコード済み（§12.1）。`race-result-t15`（#4）もコード済み・未コミット・未有効（§12.3）。常駐ループの後処理は GCP の既存 Job へ移す実装を入れた（馬場速度は `export-tables-daily`、集計は `prediction-results-refresh`。§12.3）。残りは、影を「無ければ取る」読み方にする件。`backfill-past`（#19）は移行しない方針。差分はユーザー確認のため提示する |
-| 系統台帳の GCS への初回アップロード | Claude（ホスト経由） | ホストの一括取得（`complete_at` が付く）が終わった後に、`python -m src.scraper.sire_line_store` 経由の `sync_with_gcs` を 1 回走らせる。VPS の `sire-line` はその後 |
+| 系統台帳の GCS への初回アップロード | Claude（ホスト経由） | **完了（2026-10-29）**。一括取得の終了後に `sync_with_gcs` を 1 回実行（ホストの木は触らず、新しい `sire_line_store.py` を一時の場所から読み込んだ）。結果は取り込み 0・アップロード 4,542 頭・`complete_at`=2026-10-29T20:18:47+09:00。GCS の `ops/sire_lines/sire_line_map.json`（508,585 バイト）を確認。実行前のホスト台帳は `/tmp/sire_line_map.before.json` に退避。VPS の `sire-line` への切替は、実行役が影モードを抜けて担当を持つ時 |
 
 ### 12.3 K6 の設計メモ（`shutuba-audit`・`sire-line` はコード済み）
 
@@ -408,7 +408,7 @@
 |---|---|---|---|---|
 | `raceday-result-runner` | #4 | `30 22` | 10-28 22:30／13／0 | ◎ |
 | `shutuba-audit` | #13 | `40 21` | 10-28 21:40／4／0 | ◎ |
-| `sire-line` | #24 | 手動（cron 無し） | 記録なし。`fetch_sire_lines` を 5 秒間隔で実行中（3,699 頭、10/29 18:00 JST ごろ終了予定） | △ 手動運用。終了後に `sync_with_gcs` を 1 回実行してから VPS へ切替 |
+| `sire-line` | #24 | 手動（cron 無し） | 記録なし。`fetch_sire_lines` は 10/29 20:18 JST に完了（今回 3,587 頭・台帳 4,542 頭・`complete_at` 付き） | ○ 台帳は GCS へ同期済み（10/29）。手動運用のまま。VPS への切替は実行役が影モードを抜けた後 |
 | `backfill-past` | #19 | `5 *`（毎時） | 10-29 09:05／154／**3/20** | ✗ 失敗 3 件（原因未確認。ホスト側の失敗ログ `logs/backfill_past*.log` を確認する） |
 | `backfill-2026-fast` | #17 | `0 15 * * 0` | 10-25 15:00／7／0 | ◎（週次。次は 11/1） |
 | `backfill-2026-full` | #17 | `50 22 * * 0` | 10-25 22:50／7／0 | ◎（週次） |

@@ -3001,7 +3001,7 @@
     "cron_utc": null,
     "script": "src/scripts/scraping/fetch_sire_lines.py"
    },
-   "reason": "棚卸し #24。個別の cron は持たない: 日々の取得は scrape_horse_pedigree_5gen（定期バッチ）に相伴して台帳に無い祖先の系統を取る。fetch_sire_lines は過去分の一括補完用で手動起動。To-Be は VPS 実行役（取得タスク sire-line、低優先度）で、K6 のコードと、系統台帳の正本を GCS に置く対応の後。GCP の追加課金は 0",
+   "reason": "棚卸し #24。個別の cron は持たない: 日々の取得は scrape_horse_pedigree_5gen（定期バッチ）に相伴して台帳に無い祖先の系統を取る。fetch_sire_lines は過去分の一括補完用で手動起動。To-Be は VPS 実行役（取得タスク sire-line、低優先度）。2026-10-29: 一括取得は完了（complete_at 付き・4,542 頭）し、台帳を GCS（ops/sire_lines/sire_line_map.json）へ初回アップロード済み。取得タスクのコードもある。VPS へ切り替えるのは、実行役が影モードを抜けて担当を持つ時（それまで destination は host のまま）。GCP の追加課金は 0",
    "enabled": true,
    "blockers": [],
    "ready": true
