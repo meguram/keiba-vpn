@@ -19,7 +19,7 @@ _HORSE_KEYS = ("horse_id", "horse_number", "horse_name", "x", "y", "group", "per
 class RunningMapModule:
     id = "running_map"
     label = "走法マップ"
-    description = ("出走馬の走り方（末脚の速さと持続力・出脚・ギアチェンジ・Hペース耐性・先行力・コーナーと道中の押し上げ）を、似た馬が近くに来るように 2 次元に並べた図。"
+    description = ("出走馬の走り方（末脚の速さと持続力・出脚・ギアチェンジ・Hペース耐性・先行力・Cr性能（3〜4角の押し上げ）・まくり特性（道中の押し上げ））を、似た馬が近くに来るように 2 次元に並べた図。"
                    "背景の色は、このコースで好走しやすい走り方のゾーン（濃いほど好走しやすい）。")
 
     def applicable(self, ctx: RaceContext) -> bool:
