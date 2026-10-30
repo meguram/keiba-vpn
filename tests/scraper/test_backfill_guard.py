@@ -219,6 +219,7 @@ def test_other_fetchers_do_not_wait_for_past_backfill():
     for pattern in (training.OTHER_SCRAPERS, remarks.OTHER_SCRAPERS):
         assert not re.search(pattern, past)
         assert re.search(pattern, "/opt/conda/bin/python3 -m src.scraper.backfill --phase horse")   # 他の段階は従来どおり待つ
+        assert not re.search(pattern, "/opt/conda/bin/python3 -m src.scripts.scraping.fetch_status")   # 状況表示（読み取りのみ）は待つ対象にしない
 
 
 def test_default_runs_alongside_other_fetchers(tmp_path):

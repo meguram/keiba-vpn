@@ -27,7 +27,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 TABLES = ROOT / "data/page_reference/tables"
 PROGRESS = ROOT / "data/local/meta/sanrenpuku_backfill_progress.json"
-OTHER_SCRAPERS = r"python[0-9.]* -m src\.(scripts\.maintenance\.repair_|scripts\.scraping\.(?!backfill_horse_race_remarks)|scraper\.(run|export_tables)|scripts\.data\.backfill_trifecta_odds)"
+OTHER_SCRAPERS = r"python[0-9.]* -m src\.(scripts\.maintenance\.repair_|scripts\.scraping\.(?!backfill_horse_race_remarks|fetch_status)|scraper\.(run|export_tables)|scripts\.data\.backfill_trifecta_odds)"
 LONG_RUNNING = r"python[0-9.]* -m src\.scraper\.backfill"
 MAX_LOAD = 18.0
 

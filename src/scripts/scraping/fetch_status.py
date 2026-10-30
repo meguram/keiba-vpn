@@ -33,7 +33,7 @@ PAST_LOG = ROOT / "logs/backfill_past.log"
 TRAINING_LOG = ROOT / "logs/horse_training_backfill.log"
 
 JST = timezone(timedelta(hours=9))     # ログの時刻は JST（OS の時刻は UTC のことがある）
-ETA_WINDOWS_H = (3, 24)                # 見込みに使う速度の窓（時間）。譲り・中断・夜の切れ目も含めた実効の平均
+ETA_WINDOWS_H = (3,)                   # 見込みに使う速度の窓（時間）。譲り・中断・夜の切れ目も含めた実効の平均
 SHOW_WINDOWS_H = (1, 3, 24)            # 速度の表示に使う窓（時間）
 MIN_TOUCHED_HORSES = 30                # この頭数に満たない実行では、1 頭あたりの件数を全体の実績で求める
 REQ_PER_RACE = {"cards": 2.0}          # 実績が無い段階の 1 レースあたりの件数（§4）。ここに無い段階は 1

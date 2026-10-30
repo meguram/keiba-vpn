@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[3]
 TABLES = ROOT / "data/page_reference/tables"
 PROGRESS = ROOT / "data/local/meta/horse_training_backfill_progress.json"
 OTHER_SCRAPERS = (
-    r"python[0-9.]* -m src\.(scripts\.maintenance\.repair_|scripts\.scraping\.(?!backfill_horse_race_remarks|backfill_horse_training_recent)|"
+    r"python[0-9.]* -m src\.(scripts\.maintenance\.repair_|scripts\.scraping\.(?!backfill_horse_race_remarks|backfill_horse_training_recent|fetch_status)|"
     r"scripts\.data\.(backfill_trifecta_odds|acq_profile_pilot|acq_horse_lap_pilot)|scraper\.(backfill(?!.* --phase past)|run|export_tables|auto_scrape|raceday|queue))"
 )  # 2016〜2019 年の補填（--phase past）はこちらに譲るので待たない（待つと待ち合いになる）。同時取得はプロセス横断スロットで 1 本になる
 MAX_LOAD = 18.0
