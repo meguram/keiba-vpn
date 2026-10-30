@@ -484,7 +484,9 @@ def test_running_map_module_returns_a_figure_keyed_by_entry(monkeypatch):
                             "percentiles": {"ts": 80.0}, "n_runs": 5, "estimated": False, "own_weight": 0.6,
                             "last_run_date": "2026-10-01", "values": {"ts": 55.0}}],
                 "unmapped": [{"horse_id": "h2", "horse_name": "乙", "horse_number": 2, "reason": "過去の出走も父のデータもありません"}],
-                "fidelity": {"explained": 0.8}, "conditions": {"rq_source": "cond"}, "data_until": "2026-10-25"}
+                "fidelity": {"explained": 0.8}, "data_until": "2026-10-25",
+                "extent": {"n": 24, "x": [-2, 2], "y": [-3, 3]},
+                "aptitude": {"course": "東京 芝 1600m", "n_runs": 400, "n_races": 30, "lift": [1.0], "sig": "2"}}
     monkeypatch.setattr(rm, "build_running_map", fake)
     ctx = RaceContext(race_id="202605040811", date="2026/10/31", venue="東京", surface="芝", distance=1600, track_condition="稍",
                       entries=[{"key": "h1", "horse_id": "h1", "horse_number": 1}, {"key": "h2", "horse_id": "h2", "horse_number": 2},
@@ -494,3 +496,4 @@ def test_running_map_module_returns_a_figure_keyed_by_entry(monkeypatch):
     assert out.view == "map" and out.columns == [] and out.data_until == "2026-10-25"
     h = out.figure["horses"][0]
     assert h["key"] == "h1" and "values" not in h and out.figure["unmapped"][0]["key"] == "h2"
+    assert out.figure["extent"]["n"] == 24 and out.figure["aptitude"]["course"] == "東京 芝 1600m"

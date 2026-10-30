@@ -8,7 +8,9 @@ import type { AnalysisEntry, RunningMapAxis, RunningMapFigure, RunningMapHorse }
 const GROUP_COLORS = ["#58a6ff", "#f0883e", "#3fb950", "#d2a8ff", "#f778ba"];
 const groupColor = (g: string) => GROUP_COLORS[(g.charCodeAt(0) - 65) % GROUP_COLORS.length] ?? "#8b949e";
 
-const S = 360, PAD = 34;
+const W = 360, PAD = 30;
+/** コース適性の色（高いほど濃い）。グループの色と紛れないよう金色 */
+const APT_RGB = "227,179,65";
 // 広い画面では左に図、右に詳細とグループを並べる（横の余白を使い、スクロールなしで一面に収める）
 const CSS = `.rm-wrap{display:grid;gap:10px;margin-top:8px}
 @media (min-width:900px){.rm-wrap{grid-template-columns:minmax(0,520px) minmax(0,1fr);align-items:start}}`;
@@ -33,12 +35,27 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
   }
   const hs = figure.horses;
   const arr = arrows(figure.axes);
-  const ext = Math.max(0.5, ...hs.flatMap((h) => [Math.abs(h.x), Math.abs(h.y)]));
-  const scale = (S / 2 - PAD) / ext;
+  const ex = figure.extent;
+  const xs = [...(ex ? ex.x : [-2, 2]), ...hs.map((h) => h.x)], ys = [...(ex ? ex.y : [-3, 3]), ...hs.map((h) => h.y)];
+  const x0 = Math.min(...xs) - 0.25, x1 = Math.max(...xs) + 0.25, y0 = Math.min(...ys) - 0.25, y1 = Math.max(...ys) + 0.25;
+  const scale = (W - 2 * PAD) / (x1 - x0);
+  const H = (y1 - y0) * scale + 2 * PAD;
+  const px = (x: number) => PAD + (x - x0) * scale;
+  const py = (y: number) => H - PAD - (y - y0) * scale;
   const amax = Math.max(1e-9, ...arr.map((a) => Math.hypot(a.v[0], a.v[1])));
-  const aScale = (ext * 0.85) / amax;
-  const px = (x: number) => S / 2 + x * scale;
-  const py = (y: number) => S / 2 - y * scale;
+  const aScale = (Math.min(-x0, x1, -y0, y1) * 0.85) / amax;
+  const apt = figure.aptitude;
+  const cells = [] as { k: number; x: number; y: number; o: number }[];
+  if (apt && ex) {
+    const n = ex.n, dx = (ex.x[1] - ex.x[0]) / (n - 1), dy = (ex.y[1] - ex.y[0]) / (n - 1);
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      const k = i * n + j, sg = apt.sig[k], lf = apt.lift[k];
+      if (sg === "0" || !(lf > 1)) continue;
+      const o = Math.min(1, (lf - 1) / 0.5) * (sg === "2" ? 0.62 : 0.2);
+      cells.push({ k, x: ex.x[0] + i * dx, y: ex.y[0] + j * dy, o });
+    }
+  }
+  const cw = ex ? ((ex.x[1] - ex.x[0]) / (ex.n - 1)) * scale : 0, ch = ex ? ((ex.y[1] - ex.y[0]) / (ex.n - 1)) * scale : 0;
   const bracketOf = new Map(entries.map((e) => [e.key, e.bracket_number]));
   const picked = hs.find((h) => (h.key ?? h.horse_id) === sel) ?? null;
   const explained = figure.fidelity?.explained;
@@ -47,9 +64,13 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
     <div>
       <style>{CSS}</style>
       <div className="rm-wrap">
-      <svg viewBox={`0 0 ${S} ${S}`} width="100%" style={{ display: "block", maxWidth: 560, margin: "0 auto", touchAction: "manipulation" }} role="img" aria-label="走法マップ（近い馬ほど走り方が似ている）">
-        <line x1={PAD / 2} x2={S - PAD / 2} y1={S / 2} y2={S / 2} stroke="var(--border)" />
-        <line y1={PAD / 2} y2={S - PAD / 2} x1={S / 2} x2={S / 2} stroke="var(--border)" />
+      <div>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", maxWidth: 520, maxHeight: "82vh", margin: "0 auto", touchAction: "manipulation" }} role="img" aria-label="走法マップ（近い馬ほど走り方が似ている。背景の濃い色はこのコースで好走しやすいゾーン）">
+        {cells.map((c) => (
+          <rect key={c.k} x={px(c.x) - cw / 2} y={py(c.y) - ch / 2} width={cw + 0.5} height={ch + 0.5} fill={`rgb(${APT_RGB})`} fillOpacity={c.o} shapeRendering="crispEdges" />
+        ))}
+        <line x1={PAD / 2} x2={W - PAD / 2} y1={py(0)} y2={py(0)} stroke="var(--border)" />
+        <line y1={PAD / 2} y2={H - PAD / 2} x1={px(0)} x2={px(0)} stroke="var(--border)" />
         <defs>
           <marker id="rm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="#8b949e" />
@@ -63,11 +84,11 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
           const w = a.label.length * 10.5;
           let lx = tx + (anchor === "start" ? 4 : anchor === "end" ? -4 : 0);
           if (anchor === "end") lx = Math.max(lx, 2 + w);
-          else if (anchor === "start") lx = Math.min(lx, S - 2 - w);
-          else lx = Math.min(Math.max(lx, 2 + w / 2), S - 2 - w / 2);
+          else if (anchor === "start") lx = Math.min(lx, W - 2 - w);
+          else lx = Math.min(Math.max(lx, 2 + w / 2), W - 2 - w / 2);
           return (
             <g key={a.label} opacity={a.r2 >= 0.5 ? 0.9 : 0.4}>
-              <line x1={S / 2} y1={S / 2} x2={tx} y2={ty} stroke="#8b949e" strokeWidth={1.4} markerEnd="url(#rm-arrow)" />
+              <line x1={px(0)} y1={py(0)} x2={tx} y2={ty} stroke="#8b949e" strokeWidth={1.4} markerEnd="url(#rm-arrow)" />
               <text x={lx} y={ty + (dy > 0 ? -5 : 13)} textAnchor={anchor} fontSize={10.5} fill="var(--text-dim)">{a.label}</text>
             </g>
           );
@@ -86,6 +107,8 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
           );
         })}
       </svg>
+      {apt ? <AptLegend apt={apt} /> : <p style={{ fontSize: 11, color: "var(--text-dim)", margin: "4px 0 0" }}>このコースは出走数が少なく、好走しやすさの色は付けていません。</p>}
+      </div>
 
       <div>
       {picked ? <HorseDetail h={picked} axes={figure.axes} bracket={bracketOf.get(picked.key ?? "") ?? null} onClose={() => setSel(null)} />
@@ -121,9 +144,26 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
       )}
       <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 6 }}>
         点線の白抜きは、過去の出走が無く父の産駒の平均から推定した馬。
-        {typeof explained === "number" ? ` この図は、6 方面での馬どうしの違いの約 ${Math.round(explained * 100)}% を表しています。` : ""}
-        {figure.rq_source ? "" : " このコース条件のレース質の記録が無いため、「レース質との相性」は全馬同じ扱いです。"}
+        {typeof explained === "number" ? ` この図は、5 方面での馬どうしの違いの約 ${Math.round(explained * 100)}% を表しています。` : ""}
+        近い位置にいる馬ほど走り方が似ています。座標はどのレースでも共通です。
       </p>
+    </div>
+  );
+}
+
+function AptLegend({ apt }: { apt: NonNullable<RunningMapFigure["aptitude"]> }) {
+  return (
+    <div style={{ marginTop: 6, fontSize: 11, color: "var(--text-dim)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span>{apt.course}：好走しやすさ</span>
+        <span>低</span>
+        <span aria-hidden style={{ width: 90, height: 8, borderRadius: 4, background: `linear-gradient(90deg, rgba(${APT_RGB},0.05), rgba(${APT_RGB},0.65))`, border: "1px solid var(--border)" }} />
+        <span>高</span>
+      </div>
+      <div style={{ marginTop: 2 }}>
+        色が濃いほど、2020 年以降の同じコース（{apt.n_races.toLocaleString()} レース・{apt.n_runs.toLocaleString()} 頭）で、そのゾーンの走り方の馬が頭数から見込まれる以上に 3 着以内に入っています。
+        濃い色は偶然では説明しにくいゾーン（多重検定を補正）、薄い色は傾向のみ。色の無い所は平均以下か、データ不足です。測った期間のレースでは結果を含む値です。
+      </div>
     </div>
   );
 }

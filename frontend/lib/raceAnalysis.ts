@@ -69,7 +69,10 @@ export type RunningMapFigure = {
   groups: { id: string; label: string; traits: { axis: string; diff: number; text: string }[]; horse_numbers: (number | null)[] }[];
   unmapped: { key: string | null; horse_name: string | null; horse_number: number | null; reason: string }[];
   fidelity: { explained: number | null; distance_spearman: number | null } | null;
-  rq_source: string | null;
+  /** 好走しやすさの格子の範囲（全レース共通の座標。n×n、x が外側のループ） */
+  extent: { n: number; x: [number, number]; y: [number, number] } | null;
+  /** このコースの好走しやすさ。lift は期待に対する倍率、sig は 0=期待が小さく対象外 / 1=有意でない / 2=有意（FDR 5%）。添字は ix*n+iy */
+  aptitude: { course: string; n_runs: number; n_races: number; lift: number[]; sig: string } | null;
 };
 
 export type AnalysisEntry = {
