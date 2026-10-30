@@ -89,6 +89,28 @@ class GroupTest(unittest.TestCase):
         self.assertEqual({t["text"] for t in traits}, {"末脚が速い", "後ろから行く"})
 
 
+class SimilarTest(unittest.TestCase):
+    def test_nearest_in_the_full_space_in_order(self):
+        Z = np.array([[0.0] * 9, [0.1] * 9, [1.0] * 9, [3.0] * 9])
+        near = rm.similar(Z, k=2)
+        self.assertEqual([j for j, _ in near[0]], [1, 2])
+        self.assertAlmostEqual(near[0][0][1], 0.1)
+        self.assertEqual([j for j, _ in near[3]], [2, 1])
+
+    def test_imputed_axes_are_left_out_of_the_distance(self):
+        a = np.zeros(9)
+        b = np.zeros(9); b[0] = np.nan          # 欠けた方面（地図では中央値で補う）は距離に使わない
+        c = np.full(9, 0.5)
+        near = rm.similar(np.array([a, b, c]), k=2, min_common=6)
+        self.assertEqual(near[0][0], (1, 0.0))
+
+    def test_pairs_with_too_few_common_axes_are_skipped(self):
+        a = np.zeros(9)
+        b = np.full(9, np.nan); b[:5] = 0.0     # 共通の方面が 5 つしかない
+        near = rm.similar(np.array([a, b]), k=3, min_common=6)
+        self.assertEqual(near, [[], []])
+
+
 class TransformTest(unittest.TestCase):
     def test_percentile_ties_take_middle(self):
         q = np.quantile(np.r_[np.zeros(80), np.linspace(1, 2, 20)], np.linspace(0, 1, 1001))

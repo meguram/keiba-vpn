@@ -15,16 +15,6 @@ const APT_RGB = "227,179,65";
 const CSS = `.rm-wrap{display:grid;gap:10px;margin-top:8px}
 @media (min-width:900px){.rm-wrap{grid-template-columns:minmax(0,520px) minmax(0,1fr);align-items:start}}`;
 
-/** 矢印: 末脚の速さと持続力はほぼ同じ向きなので 1 本にまとめ、短い矢印（この図では見分けにくい特徴）は描かない */
-function arrows(axes: RunningMapAxis[]): { label: string; v: [number, number]; r2: number }[] {
-  const ts = axes.find((a) => a.key === "ts"), su = axes.find((a) => a.key === "sustain");
-  const out: { label: string; v: [number, number]; r2: number }[] = [];
-  if (ts?.arrow && su?.arrow) out.push({ label: "末脚の速さ・持続", v: [ts.arrow[0] + su.arrow[0], ts.arrow[1] + su.arrow[1]], r2: Math.max(ts.r2 ?? 0, su.r2 ?? 0) });
-  for (const a of axes) if (a.arrow && !(ts?.arrow && su?.arrow && (a.key === "ts" || a.key === "sustain"))) out.push({ label: a.label, v: a.arrow, r2: a.r2 ?? 0 });
-  const longest = Math.max(1e-9, ...out.map((a) => Math.hypot(a.v[0], a.v[1])));
-  return out.filter((a) => Math.hypot(a.v[0], a.v[1]) >= longest * 0.3);
-}
-
 function label(h: RunningMapHorse): string {
   return h.horse_number ? String(h.horse_number) : (h.horse_name ?? "?").slice(0, 2);
 }
@@ -35,7 +25,6 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
     return <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>走法データのある馬が少なく、図を作れません。</p>;
   }
   const hs = figure.horses;
-  const arr = arrows(figure.axes);
   const ex = figure.extent;
   const xs = [...(ex ? ex.x : [-2, 2]), ...hs.map((h) => h.x)], ys = [...(ex ? ex.y : [-3, 3]), ...hs.map((h) => h.y)];
   const x0 = Math.min(...xs) - 0.25, x1 = Math.max(...xs) + 0.25, y0 = Math.min(...ys) - 0.25, y1 = Math.max(...ys) + 0.25;
@@ -43,8 +32,6 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
   const H = (y1 - y0) * scale + 2 * PAD;
   const px = (x: number) => PAD + (x - x0) * scale;
   const py = (y: number) => H - PAD - (y - y0) * scale;
-  const amax = Math.max(1e-9, ...arr.map((a) => Math.hypot(a.v[0], a.v[1])));
-  const aScale = (Math.min(-x0, x1, -y0, y1) * 0.85) / amax;
   const apt = figure.aptitude;
   const cells = [] as { k: number; x: number; y: number; o: number }[];
   if (apt && ex) {
@@ -59,6 +46,9 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
   const cw = ex ? ((ex.x[1] - ex.x[0]) / (ex.n - 1)) * scale : 0, ch = ex ? ((ex.y[1] - ex.y[0]) / (ex.n - 1)) * scale : 0;
   const bracketOf = new Map(entries.map((e) => [e.key, e.bracket_number]));
   const picked = hs.find((h) => (h.key ?? h.horse_id) === sel) ?? null;
+  // 選んだ馬と、9 方面で本当に近い馬（地図の近さは 2 次元に落とした分だけずれるので、線で結んで補う）
+  const near = new Map((picked?.similar ?? []).map((s, i) => [s.horse_id, i]));
+  const byHorseId = new Map(hs.map((h) => [h.horse_id, h]));
   const explained = figure.fidelity?.explained;
 
   return (
@@ -72,34 +62,18 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
         ))}
         <line x1={PAD / 2} x2={W - PAD / 2} y1={py(0)} y2={py(0)} stroke="var(--border)" />
         <line y1={PAD / 2} y2={H - PAD / 2} x1={px(0)} x2={px(0)} stroke="var(--border)" />
-        <defs>
-          <marker id="rm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-            <path d="M0,0 L10,5 L0,10 z" fill="#8b949e" />
-          </marker>
-        </defs>
-        {arr.map((a) => {
-          const tx = px(a.v[0] * aScale), ty = py(a.v[1] * aScale);
-          const dx = a.v[0], dy = a.v[1];
-          const anchor = Math.abs(dx) < Math.abs(dy) * 0.4 ? "middle" : dx > 0 ? "start" : "end";
-          // 見出しが図の外にはみ出さないよう、文字幅の目安（1 文字 10.5）で内側へ寄せる
-          const w = a.label.length * 10.5;
-          let lx = tx + (anchor === "start" ? 4 : anchor === "end" ? -4 : 0);
-          if (anchor === "end") lx = Math.max(lx, 2 + w);
-          else if (anchor === "start") lx = Math.min(lx, W - 2 - w);
-          else lx = Math.min(Math.max(lx, 2 + w / 2), W - 2 - w / 2);
-          return (
-            <g key={a.label} opacity={a.r2 >= 0.5 ? 0.9 : 0.4}>
-              <line x1={px(0)} y1={py(0)} x2={tx} y2={ty} stroke="#8b949e" strokeWidth={1.4} markerEnd="url(#rm-arrow)" />
-              <text x={lx} y={ty + (dy > 0 ? -5 : 13)} textAnchor={anchor} fontSize={10.5} fill="var(--text-dim)">{a.label}</text>
-            </g>
-          );
+        {picked && (picked.similar ?? []).map((s, i) => {
+          const o = byHorseId.get(s.horse_id);
+          if (!o) return null;
+          return <line key={`sim-${s.horse_id}`} x1={px(picked.x)} y1={py(picked.y)} x2={px(o.x)} y2={py(o.y)} stroke="#fff" strokeOpacity={0.85 - i * 0.2} strokeWidth={2.2 - i * 0.5} strokeDasharray="5 3" />;
         })}
         {hs.map((h) => {
           const id = h.key ?? h.horse_id ?? "";
           const c = groupColor(h.group);
           const on = id === sel;
+          const dim = picked != null && !on && !near.has(h.horse_id);
           return (
-            <g key={id} onClick={() => setSel(on ? null : id)} style={{ cursor: "pointer" }}>
+            <g key={id} onClick={() => setSel(on ? null : id)} style={{ cursor: "pointer" }} opacity={dim ? 0.3 : 1}>
               <circle cx={px(h.x)} cy={py(h.y)} r={on ? 14 : 11.5} fill={h.estimated ? "var(--surface)" : c} stroke={on ? "#fff" : h.estimated ? c : "rgba(0,0,0,.35)"}
                 strokeWidth={on ? 2.5 : h.estimated ? 1.8 : 1} strokeDasharray={h.estimated ? "3 2" : undefined} />
               <text x={px(h.x)} y={py(h.y) + 4} textAnchor="middle" fontSize={h.horse_number ? 11.5 : 9} fontWeight={800} fill={h.estimated ? c : "#0d1117"} pointerEvents="none">{label(h)}</text>
@@ -112,7 +86,8 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
       </div>
 
       <div>
-      {picked ? <HorseDetail h={picked} axes={figure.axes} extraAxes={figure.extra_axes ?? []} bracket={bracketOf.get(picked.key ?? "") ?? null} onClose={() => setSel(null)} />
+      {picked ? <HorseDetail h={picked} axes={figure.axes} extraAxes={figure.extra_axes ?? []} bracket={bracketOf.get(picked.key ?? "") ?? null} onClose={() => setSel(null)}
+          onPick={(hid) => { const o = byHorseId.get(hid); if (o) setSel(o.key ?? o.horse_id ?? null); }} bracketOf={(hid) => bracketOf.get(byHorseId.get(hid)?.key ?? "") ?? null} />
         : <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "4px 0 0" }}>馬（図の点・グループの名前）を押すと、走り方の内訳が見られます</p>}
 
       <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
@@ -146,7 +121,7 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
       <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 6 }}>
         点線の白抜きは、実測ラップのある過去の出走が無く父の産駒の平均から推定した馬。
         {typeof explained === "number" ? ` この図は、9 方面での馬どうしの違いの約 ${Math.round(explained * 100)}% を表しています。` : ""}
-        近い位置にいる馬ほど走り方が似ています。座標はどのレースでも共通です。
+        近い位置にいる馬ほど走り方が似ています（2 次元に落とした分、近さはおおよそ）。馬を押すと、9 方面で本当に近い馬を線で結びます。座標はどのレースでも共通です。
       </p>
     </div>
   );
@@ -178,7 +153,10 @@ function extraText(e: RunningMapExtra | undefined, key: string): string {
   return key === "slope" ? `${v}（実測 ${e.runs ?? 0} 走）` : `${v}${e.low ? "（走数が少なく低信頼）" : ""}`;
 }
 
-function HorseDetail({ h, axes, extraAxes, bracket, onClose }: { h: RunningMapHorse; axes: RunningMapAxis[]; extraAxes: NonNullable<RunningMapFigure["extra_axes"]>; bracket: number | null; onClose: () => void }) {
+function HorseDetail({ h, axes, extraAxes, bracket, onClose, onPick, bracketOf }: {
+  h: RunningMapHorse; axes: RunningMapAxis[]; extraAxes: NonNullable<RunningMapFigure["extra_axes"]>; bracket: number | null; onClose: () => void;
+  onPick: (horseId: string | null) => void; bracketOf: (horseId: string | null) => number | null;
+}) {
   const c = groupColor(h.group);
   const fromPrior = new Set(h.from_prior ?? []);
   return (
@@ -192,6 +170,19 @@ function HorseDetail({ h, axes, extraAxes, bracket, onClose }: { h: RunningMapHo
       <div style={{ fontSize: 11, color: "var(--text-dim)", margin: "2px 0 6px" }}>
         {h.estimated ? "実測ラップのある過去の出走が無いため、父の産駒の平均から推定" : `平地 ${h.n_runs} 走のうち実測ラップ ${h.n_lap_runs ?? 0} 走（直近 10 走まで使用）・前走 ${h.last_run_date ?? "–"}${h.own_weight < 0.5 ? "・実測が少ないため父の産駒の平均に寄せています" : ""}`}
       </div>
+      {(h.similar ?? []).length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 6px", margin: "0 0 8px", fontSize: 12 }}>
+          <span style={{ color: "var(--text-dim)" }}>走法が近い馬</span>
+          {(h.similar ?? []).map((s) => (
+            <button key={s.horse_id ?? s.horse_name ?? ""} type="button" onClick={() => onPick(s.horse_id)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, minHeight: 30, padding: "0 8px 0 3px", borderRadius: 999, cursor: "pointer", fontSize: 12,
+                border: "1px solid var(--border)", background: "transparent", color: "var(--text)" }}>
+              {s.horse_number ? <span style={{ ...bracketChipStyle(bracketOf(s.horse_id), 20) }}>{s.horse_number}</span> : null}
+              {s.horse_name}
+            </button>
+          ))}
+        </div>
+      )}
       <div style={{ display: "grid", gap: 5 }}>
         {axes.map((a) => {
           const p = h.percentiles[a.key];

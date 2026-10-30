@@ -72,6 +72,8 @@ VENUE_JA = {"01": "札幌", "02": "函館", "03": "福島", "04": "新潟", "05"
 
 MIN_HORSES = 3
 MAX_IMPUTED = 3  # これより多くの方面が欠けた馬は地図に載せない（欠けた方面は全馬の中央値の位置に置く）
+SIMILAR_K = 3    # 馬ごとに出す「9 方面で本当に近い馬」の数（地図の近さは 2 次元に落とした分だけずれるので、それを補う）
+SIMILAR_MIN_COMMON = 6  # 距離を測るのに、2 頭とも実際に値がある方面がこれ以上必要（中央値で補った方面は距離に使わない）
 
 
 # ── データ ────────────────────────────────────────────────────────────────
@@ -288,6 +290,26 @@ def group(Z: np.ndarray, max_k: int = 5) -> np.ndarray:
     return best
 
 
+def similar(Zraw: np.ndarray, k: int = SIMILAR_K, min_common: int = SIMILAR_MIN_COMMON) -> list[list[tuple[int, float]]]:
+    """馬ごとに、9 方面の元の空間で近い馬（同じレースの中）を近い順に k 頭。距離は 2 頭とも値がある方面だけの二乗平均の平方根。
+
+    地図（共通の主成分）は 9 方面の違いの半分ほどしか表さないので、地図で近くても実際は違う・地図で離れていても実際は近い
+    ことがある（2026-10-30 の比較: 近い 3 頭のうち地図でも近いのは約 6 割）。画面では、選んだ馬のこの一覧を強調して補う。"""
+    n = len(Zraw)
+    out: list[list[tuple[int, float]]] = []
+    for i in range(n):
+        cands = []
+        for j in range(n):
+            if j == i:
+                continue
+            both = ~np.isnan(Zraw[i]) & ~np.isnan(Zraw[j])
+            if both.sum() < min_common:
+                continue
+            cands.append((j, float(np.sqrt(np.mean((Zraw[i, both] - Zraw[j, both]) ** 2)))))
+        out.append(sorted(cands, key=lambda t: t[1])[:k])
+    return out
+
+
 def describe_group(Zg: np.ndarray, Zall: np.ndarray, threshold: float = 0.3) -> list[dict[str, Any]]:
     """グループの平均が出走馬全体の平均とどれだけ違うか（全馬の標準偏差単位）。差の大きい順。"""
     diff = Zg.mean(0) - Zall.mean(0)
@@ -379,7 +401,7 @@ def build_running_map(entries: list[dict], race_id: str, conditions: dict[str, A
                         "own_weight": round(float(np.mean([row[f"own_{col}"] for _, col, *_ in AXES])), 3),
                         "extras": _extras(hid, row, extra_keys, going)}, row))
 
-    horses, Zs = [], []
+    horses, Zs, Zraw = [], [], []
     signs = SIGNS
     for base, row in picked:
         raw = np.array([row.get(col) for _, col, *_ in AXES], dtype=float)
@@ -393,6 +415,7 @@ def build_running_map(entries: list[dict], race_id: str, conditions: dict[str, A
         if len(missing) > MAX_IMPUTED:
             unmapped.append({**base, "reason": "走法データの欠けが多い（" + "・".join(a[3] for a in AXES if a[0] in missing) + "）"})
             continue
+        Zraw.append(z * WEIGHTS)
         z = np.nan_to_num(z)  # 欠けた方面は全馬の中央値
         horses.append({
             **base,
@@ -440,6 +463,10 @@ def build_running_map(entries: list[dict], race_id: str, conditions: dict[str, A
         "explained": None if pr["explained"] is None else round(pr["explained"], 3),
         "distance_spearman": None if pr["distance_spearman"] is None else round(pr["distance_spearman"], 3),
     }
+
+    for h, near in zip(horses, similar(np.array(Zraw))):
+        h["similar"] = [{"horse_id": horses[j]["horse_id"], "horse_number": horses[j]["horse_number"], "horse_name": horses[j]["horse_name"],
+                         "distance": round(d, 3)} for j, d in near]
 
     labels = group(Z)
     Zu = np.array(Zs)
