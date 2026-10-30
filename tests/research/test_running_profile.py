@@ -91,3 +91,47 @@ def test_metrics_are_computed_once_then_only_new_races_are_added(flat, monkeypat
     pd.concat([df, pd.DataFrame(_race("R5", "2025-05-05", [("A", 1, 33.5, "1-1"), ("B", 2, 34.0, "2-2")]))]).to_parquet(f)
     added = rp.load_metrics(path, flat)
     assert calls[-1] == ["R5"] and set(added["race_id"]) == {"R1", "R2", "R3", "R4", "R5"}
+
+
+def _axes_file(tmp_path, rows):
+    p = tmp_path / "run_axes.parquet"
+    base = {c[3:]: float("nan") for c in rp.AX_COLS}
+    pd.DataFrame([{**base, "abn": False, **r} for r in rows]).to_parquet(p)
+    return p
+
+
+def test_axes_are_attached_by_race_and_horse_and_abnormal_runs_become_nan(flat, tmp_path):
+    ax = _axes_file(tmp_path, [
+        {"race_id": "R1", "horse_id": "A", "ts": 60.0, "slope": 55.0},
+        {"race_id": "R2", "horse_id": "A", "ts": 99.0, "abn": True},       # 異常走 → 全軸 NaN
+    ])
+    m = rp.load_metrics(tmp_path / "store" / "run_metrics.parquet", flat, axes_path=ax)
+    a = m.set_index(["race_id", "horse_id"])
+    assert a.loc[("R1", "A"), "ax_ts"] == 60.0 and a.loc[("R1", "A"), "ax_slope"] == 55.0
+    assert pd.isna(a.loc[("R2", "A"), "ax_ts"])
+    assert pd.isna(a.loc[("R1", "B"), "ax_ts"])                           # 実測ラップが無い走は NaN（0 にしない）
+    assert len(m) == len(rp.load_metrics(tmp_path / "store" / "run_metrics.parquet", flat, axes_path=tmp_path / "none.parquet"))
+
+
+def test_missing_axes_file_gives_all_nan_columns(flat, tmp_path):
+    m = rp.load_metrics(tmp_path / "store" / "run_metrics.parquet", flat, axes_path=tmp_path / "none.parquet")
+    assert all(m[c].isna().all() for c in rp.AX_COLS)
+
+
+def test_axis_profile_counts_only_measured_runs_and_slope_has_no_prior(flat, sires, tmp_path, monkeypatch):
+    monkeypatch.setattr(rp, "MIN_SIRE_RUNS", 1)
+    ax = _axes_file(tmp_path, [
+        {"race_id": "R1", "horse_id": "A", "ts": 60.0, "slope": 70.0},
+        {"race_id": "R2", "horse_id": "A", "ts": 50.0},
+        {"race_id": "R1", "horse_id": "B", "ts": 40.0},
+    ])
+    m = rp.load_metrics(tmp_path / "store" / "run_metrics.parquet", flat, axes_path=ax)
+    cols = ["ax_ts", "ax_slope"]
+    p = rp.profiles_as_of(m, ["A", "NEW"], "2025-04-05", sires, cols=cols).set_index("horse_id")
+    assert p.at["A", "n_ax_ts"] == 2 and p.at["NEW", "n_ax_ts"] == 0
+    decay, c, _ = rp.PROFILE_PARAMS["ax_ts"]
+    prior = m.loc[m["date"] < "2025-04-05", "ax_ts"].mean()               # (60 + 50 + 40) / 3
+    assert p.at["A", "ax_ts"] == pytest.approx((50.0 + decay * 60.0 + c * prior) / (1 + decay + c))
+    assert p.at["NEW", "ax_ts"] == pytest.approx(prior) and p.at["NEW", "own_ax_ts"] == 0.0
+    assert p.at["A", "ax_slope"] == pytest.approx(70.0) and p.at["A", "prior_ax_slope"] is None   # 急坂適性は自分の走だけ
+    assert pd.isna(p.at["NEW", "ax_slope"])                                                         # 走が無ければ不明（父平均で埋めない）

@@ -32,6 +32,11 @@ tp-25 のノートブック（TS・TS持続力・GC）と scripts/run_tp26.py（
     先行度           0.109                   0.252
     押し上げ        -0.238                   0.041
     TS持続力        -0.369                   0.007    （1 走ごとのぶれが大きく、ほぼ当てられない）
+
+実測ラップの軸（ax_*。docs/ideas/running_map_axes_fixed.md、2026-10-30 確定）:
+  1 走ごとの値は run_axes.py が horse_lap（db.netkeiba.com の馬別 200m ラップ）から作り、run_axes.parquet に置く。
+  load_metrics が (race_id, horse_id) で ax_* 列として足す。異常走（abn）は全軸 NaN にして平均から外す。
+  実測ラップのある走だけが値を持ち、無い走は NaN（0 にしない）。プロファイルの重み・引き寄せは暫定で METRICS と同じ。
 """
 
 from __future__ import annotations
@@ -56,6 +61,10 @@ METRICS = ["ts_score", "ts_stamina_score", "gc_score", "ts_fastest_f", "gc_raw",
 LOOKBACK = 10         # さかのぼる走数（値のある走だけを数える）。10 走より増やしても当たりは 0.001 も変わらない
 MIN_SIRE_RUNS = 30    # 父の産駒の平均を使うのに要る走数
 # 方面ごとの (新しい走ほど重くする係数 decay, 平均へ引き寄せる強さ c, 引き寄せ先 "sire"=父の産駒 / "overall"=全馬)
+AXES_PATH = STORE_DIR / "run_axes.parquet"
+# 実測ラップの軸（1 走ごと）。slope は中山・阪神のみ値があり、父の平均へは寄せない（"none" = 引き寄せ先なし）
+AX_DENSE = ["ts", "sustain", "split", "debut", "gear", "endure", "front", "cr", "makuri"]
+AX_COLS = [f"ax_{k}" for k in AX_DENSE + ["slope"]]
 PROFILE_PARAMS: dict[str, tuple[float, float, str]] = {
     "ts_score": (0.7, 2.0, "sire"),
     "gc_score": (0.7, 2.0, "sire"),
@@ -65,6 +74,8 @@ PROFILE_PARAMS: dict[str, tuple[float, float, str]] = {
     "front_ratio": (0.7, 1.0, "sire"),
     "shift_ratio": (0.8, 5.0, "sire"),
     "ts_stamina_score": (0.7, 5.0, "overall"),
+    **{f"ax_{k}": (0.7, 2.0, "sire") for k in AX_DENSE},
+    "ax_slope": (0.7, 2.0, "none"),
 }
 _JUMP = r"障害|ジャンプ|JS\(|JG|J・G"
 
@@ -248,7 +259,29 @@ def _source_sig(base: Path) -> dict[str, list[int]]:
     return out
 
 
-def load_metrics(path: Path = METRICS_PATH, base: Path = FLAT_DIR) -> pd.DataFrame:
+def attach_axes(metrics: pd.DataFrame, axes_path: Optional[Path]) -> pd.DataFrame:
+    """1 走ごとの値に実測ラップの軸（ax_*）を足す。ファイルが無ければ全部 NaN。異常走（abn）は全軸 NaN。"""
+    out = metrics.drop(columns=[c for c in AX_COLS if c in metrics.columns])
+    if axes_path is None or not Path(axes_path).exists():
+        return out.assign(**{c: np.nan for c in AX_COLS})
+    ax = pd.read_parquet(axes_path, columns=["race_id", "horse_id", "abn"] + [c[3:] for c in AX_COLS])
+    ax["race_id"], ax["horse_id"] = ax["race_id"].astype(str), ax["horse_id"].astype(str)
+    ax = ax.drop_duplicates(["race_id", "horse_id"])
+    val = ax[[c[3:] for c in AX_COLS]].astype(float)
+    val.loc[ax["abn"].to_numpy(bool)] = np.nan
+    val.columns = AX_COLS
+    ax = pd.concat([ax[["race_id", "horse_id"]], val], axis=1)
+    return out.merge(ax, on=["race_id", "horse_id"], how="left")
+
+
+def load_metrics(path: Path = METRICS_PATH, base: Path = FLAT_DIR, axes_path: Optional[Path] = None) -> pd.DataFrame:
+    """1 走ごとの値（出走記録から作った METRICS ＋ 実測ラップの ax_*）。axes_path 省略時は、標準の保存先のときだけ AXES_PATH を使う。"""
+    if axes_path is None and Path(path) == METRICS_PATH:
+        axes_path = AXES_PATH
+    return attach_axes(_load_base_metrics(path, base), axes_path)
+
+
+def _load_base_metrics(path: Path = METRICS_PATH, base: Path = FLAT_DIR) -> pd.DataFrame:
     """保存した 1 走ごとの値を読む。出走記録のファイルが前回から変わっていなければ、保存分を読むだけ。
     変わっていれば、保存に無いレースだけ計算して足す。保存が無い・版が違うときだけ全部計算する。"""
     import json
@@ -290,29 +323,34 @@ def _sire_map() -> pd.DataFrame:
     return m
 
 
-def priors_as_of(metrics: pd.DataFrame, as_of: pd.Timestamp, sires: Optional[pd.DataFrame] = None) -> tuple[pd.DataFrame, pd.Series]:
+def priors_as_of(metrics: pd.DataFrame, as_of: pd.Timestamp, sires: Optional[pd.DataFrame] = None,
+                 cols: Optional[list[str]] = None) -> tuple[pd.DataFrame, pd.Series]:
     """対象日より前の走だけで、父ごとの平均（MIN_SIRE_RUNS 走以上の父のみ）と全馬の平均。"""
+    cols = METRICS if cols is None else cols
     past = metrics[metrics["date"] < as_of]
-    overall = past[METRICS].mean()
+    overall = past[cols].mean()
     sires = _sire_map() if sires is None else sires
-    p = past[["horse_id"] + METRICS].merge(sires, on="horse_id", how="inner")
-    g = p.groupby("sire_id")[METRICS]
+    p = past[["horse_id"] + cols].merge(sires, on="horse_id", how="inner")
+    g = p.groupby("sire_id")[cols]
     mean = g.mean().where(g.count() >= MIN_SIRE_RUNS)
     return mean, overall
 
 
 def profiles_as_of(metrics: pd.DataFrame, horse_ids: Iterable[str], as_of: str | pd.Timestamp,
-                   sires: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+                   sires: Optional[pd.DataFrame] = None, cols: Optional[list[str]] = None,
+                   priors: Optional[tuple[pd.DataFrame, pd.Series]] = None) -> pd.DataFrame:
     """対象日 as_of より前の走だけで、馬ごとの走法プロファイル。
 
     列: horse_id, sire_id, n_runs（対象日より前の平地の出走数）, last_run_date,
         方面ごとに <方面>（プロファイルの値）, n_<方面>（使った自分の走数）, own_<方面>（自分の走の重みの割合 0〜1）,
         prior_<方面>（引き寄せ先: "sire" / "overall" / None=引き寄せ先が無く自分の走だけ）。
+    cols は対象の方面（省略時は METRICS）。priors は priors_as_of の結果を使い回すとき（同じ日の複数レース用）。
     """
+    cols = METRICS if cols is None else cols
     as_of = pd.Timestamp(as_of)
     ids = [str(h) for h in horse_ids]
     sires = _sire_map() if sires is None else sires
-    sire_mean, overall = priors_as_of(metrics, as_of, sires)
+    sire_mean, overall = priors if priors is not None else priors_as_of(metrics, as_of, sires, cols)
     sire_of = dict(zip(sires["horse_id"], sires["sire_id"]))
     hist = metrics[(metrics["date"] < as_of) & metrics["horse_id"].isin(ids)]
     by_horse = {k: g.sort_values(["date", "race_id"]) for k, g in hist.groupby("horse_id")}
@@ -323,14 +361,14 @@ def profiles_as_of(metrics: pd.DataFrame, horse_ids: Iterable[str], as_of: str |
         sid = sire_of.get(hid)
         row: dict[str, object] = {"horse_id": hid, "sire_id": sid, "n_runs": 0 if h is None else len(h),
                                   "last_run_date": None if h is None else h["date"].iloc[-1].date().isoformat()}
-        for m in METRICS:
+        for m in cols:
             decay, c, prior_kind = PROFILE_PARAMS[m]
             own = h[m].dropna().to_numpy()[::-1][:LOOKBACK] if h is not None else np.array([])   # 新しい順
             w = decay ** np.arange(len(own))
             prior, src = math.nan, None
             if prior_kind == "sire" and sid is not None and sid in sire_mean.index and not math.isnan(sire_mean.at[sid, m]):
                 prior, src = float(sire_mean.at[sid, m]), "sire"
-            elif not math.isnan(overall[m]):
+            elif prior_kind != "none" and not math.isnan(overall[m]):
                 prior, src = float(overall[m]), "overall"
             if math.isnan(prior):
                 c, src = 0.0, None
@@ -343,22 +381,25 @@ def profiles_as_of(metrics: pd.DataFrame, horse_ids: Iterable[str], as_of: str |
     return pd.DataFrame(rows)
 
 
-def profile_table(metrics: pd.DataFrame, sires: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+def profile_table(metrics: pd.DataFrame, sires: Optional[pd.DataFrame] = None, cols: Optional[list[str]] = None) -> pd.DataFrame:
     """全出走について「その走の直前時点のプロファイル」（profiles_as_of と同じ式）をまとめて計算する。
 
     走法マップの順位の基準（全馬の分布）と、相性の標準化に使う。1 頭ずつの profiles_as_of と違い、
     引き寄せ先の父の平均は全期間の値（基準の分布を作るためだけの近似）。自分の走が 1 走も無い行は NaN。
     """
+    cols = METRICS if cols is None else cols
     sires = _sire_map() if sires is None else sires
     df = metrics.merge(sires, on="horse_id", how="left").sort_values(["horse_id", "date", "race_id"]).reset_index(drop=True)
     out = df[["race_id", "horse_id", "date"]].copy()
-    for m in METRICS:
+    for m in cols:
         decay, c, prior_kind = PROFILE_PARAMS[m]
         v = df[["horse_id", "sire_id", m]].dropna(subset=[m])
         overall = v[m].mean()
         g = v.groupby("sire_id")[m].agg(["mean", "size"])
         prior = v["sire_id"].map(g.loc[g["size"] >= MIN_SIRE_RUNS, "mean"]) if prior_kind == "sire" else pd.Series(np.nan, index=v.index)
         prior = prior.fillna(overall).to_numpy()
+        if prior_kind == "none":
+            prior, c = np.zeros(len(v)), 0.0
         gm = v.groupby("horse_id")[m]
         num = np.zeros(len(v))
         den = np.zeros(len(v))

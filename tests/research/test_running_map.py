@@ -15,7 +15,7 @@ from src.research.race import running_map_aptitude as apt
 def _runners(seed: int = 0, n: int = 14) -> np.ndarray:
     rng = np.random.default_rng(seed)
     Z = rng.normal(size=(n, len(rm.AXES)))
-    Z[:, 1] = Z[:, 0] + rng.normal(scale=0.05, size=n)  # TS と GC はほぼ同じ
+    Z[:, 1] = Z[:, 0] + rng.normal(scale=0.5, size=n)   # 末脚の速さと持続力は似ている
     return Z * rm.WEIGHTS
 
 
@@ -44,10 +44,10 @@ class ProjectTest(unittest.TestCase):
     def test_orientation_tskick_up_front_left(self):
         for seed in range(5):
             pr = rm.project(_runners(seed))
-            up = pr["loadings"][0] + pr["loadings"][1]
+            up = pr["loadings"][rm._UP_IDX].sum(0)
             self.assertAlmostEqual(float(up[0]), 0.0, places=9)    # 末脚の矢印は真上
             self.assertGreater(float(up[1]), 0.0)
-            self.assertLessEqual(float(pr["loadings"][3][0]), 0.0)  # 先行力の矢印は左
+            self.assertLessEqual(float(pr["loadings"][rm._FRONT_IDX][0]), 0.0)  # 先行力の矢印は左
 
     def test_same_runner_gets_same_position_in_any_race(self):
         Z = _runners(1, n=10)
@@ -80,13 +80,13 @@ class GroupTest(unittest.TestCase):
         self.assertEqual(set(rm.group(np.zeros((3, self.K)))), {0})
         self.assertEqual(set(rm.group(np.ones((8, self.K)))), {0})
 
-    def test_describe_group_merges_ts_and_gc(self):
+    def test_describe_group_names_each_axis(self):
         Zall = np.zeros((10, self.K))
-        Zall[:3, 0] = Zall[:3, 1] = 2.0  # 3 頭だけ末脚が速い
+        Zall[:3, rm.AXIS_KEYS.index("ts")] = 2.0      # 3 頭だけ末脚が速い
+        Zall[:3, rm.AXIS_KEYS.index("front")] = -2.0  # 同じ 3 頭は後ろから行く
         traits = rm.describe_group(Zall[:3], Zall)
-        self.assertEqual(traits[0]["axis"], "末脚")
-        self.assertEqual(traits[0]["text"], "高TS")
-        self.assertEqual(len(traits), 1)
+        self.assertEqual({t["axis"] for t in traits}, {"末脚の速さ", "先行力"})
+        self.assertEqual({t["text"] for t in traits}, {"末脚が速い", "後ろから行く"})
 
 
 class TransformTest(unittest.TestCase):

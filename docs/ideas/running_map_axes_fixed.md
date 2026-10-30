@@ -1,6 +1,6 @@
 # 走法マップ 軸の確定定義(実測ラップ版)
 
-2026-10-30 にユーザー確定。`running_profile.py` への統合は未実施(統合時に METRICS_VERSION を上げる)。
+2026-10-30 にユーザー確定。`run_axes.py`(1走ごとの軸)→ `running_profile.py`(as-of プロファイル)→ `running_map.py`(9方面の地図+急坂・道悪の補助軸)へ統合済み(ANALYSIS_VERSION 13、REFERENCE_VERSION 3)。
 入力は db.netkeiba.com の馬別 200m ラップ。実測のない走は `lap_predict.py` の予測ラップで補う。
 (ギアチェンジは 2026-10-30 に追加。検証は host の /home/jovyan/acq/ts_gear1.py, ts_gear2.py)
 
@@ -133,10 +133,12 @@ host の going_apt9.py(出力 going_apt9.out)。馬ごとに「パワー走の�
 1400m以下は600m通過、1600m以上は1000m通過のタイム。
 
 ## 未決
-- running_profile.py / running_map.py への統合(実測ラップ軸+道悪の2軸)。統合時に METRICS_VERSION・REFERENCE_VERSION を上げる。補填完了後に position を確認して再検証。
-- 「0」の意味の点検(2026-10-30、2026 horse_lap 22,571走): ギア・TS持続力などの 0 は「測って増分なし・持続なし」の実測値で、データ欠損は NaN になっており混在していない。位置系(先行力・Cr性能・まくり特性)は位置が無い/0以下なら NaN(2023 は全 NaN)。残る注意点:
+- 統合の構成(2026-10-30 実施): 実測ラップ軸は別ストア `data/local/running_profile/run_axes.parquet`(`python -m src.research.race.run_axes`)に持ち、`running_profile.load_metrics` が `ax_*` 列として結合する。run_metrics.parquet と METRICS_VERSION は変えていない(race_quality は従来の指標のまま)。異常走は全軸 NaN にして集計から外す。地図は 9 軸(ts・sustain・split・debut・gear・endure・front・cr・makuri)、急坂(中山・阪神のみ)と道悪の軸(芝=芝道悪適性・ダート=ダートタフ適正)は地図の位置に入れず詳細にだけ出す。
+- 基準(分位点・共通の主成分・コース適性)は現時点では 2026 の実測のみで作るため薄い。2020〜2025 の補填完了後に REFERENCE_VERSION を上げて作り直し、position を確認して再検証する。
+- 「0」の意味の点検(2026-10-30、2026 horse_lap 22,571走): ギア・TS持続力などの 0 は「測って増分なし・持続なし」の実測値で、データ欠損は NaN になっており混在していない。位置系(先行力・Cr性能・まくり特性)は位置が無い/0以下なら NaN(2023 は全 NaN)。消耗耐性も位置が共変量なので位置が無ければ NaN。残る注意点:
   1. TS持続力の床(TS<45 → 0)は「キレが弱く持続を評価できない」と「キレはあるが持続しない」を同じ 0 にする(0の内訳: 床26.6%・零ルール10.3%・正の値63.2%)。評価不能を NaN にするかは要判断。
-  2. 予測ラップ補完(`laps_imputed=True`)の走は、平滑な形のためギアの sum_pos==0 や TS持続力の零ルールが人工的な 0 になる可能性(未検証)。実測ラップの走だけを対象にし補完走は NaN にする案。
-  3. 新馬など履歴のない馬は父平均の事前値で埋まり、`own_<m>==0` / `prior_<m>=="sire"` でしか見分けられない。UI で「不明(父平均で補完)」と出す必要。
-  4. running_map.py の `np.nan_to_num(z)` は不明な軸を地図の中心に置く(MAX_IMPUTED=3 まで)。中心=平均と読めてしまうので、不明軸が多い馬は地図上に出さない運用を維持する。
+  2. 予測ラップ補完(`laps_imputed=True`)の走は、平滑な形のためギアの sum_pos==0 や TS持続力の零ルールが人工的な 0 になる可能性(未検証)。現在の run_axes は実測ラップの走だけが対象(補完走は入らない=その走は NaN)。
+  3. 新馬など履歴のない馬は父平均の事前値で埋まる。対応済み: 地図には `from_prior`(自分の実測が無い方面)・`axis_runs`(方面ごとの実測走数)を返し、UI は薄い色と「*」で示す。実測の走が1つも無い馬は `estimated`(点線の白抜き)。急坂は事前値なし(自分の実測が無ければ None=不明)。
+  4. `np.nan_to_num(z)` は不明な軸を地図の中心に置く(MAX_IMPUTED=3 まで)。不明軸が多い馬は地図に出さない運用を維持。
+  5. 日次の run_axes 更新(新しいレースのラップ取得→追記)と、stg/VPS での運用取得の設計は未決。
 (GC は廃止。ギアチェンジ軸が代替として確定済み。ユーザー 2026-10-30)
