@@ -177,3 +177,16 @@ def test_prune_removes_only_old_files(env):
     old = time.time() - 100 * 86400
     os.utime(p, (old, old))
     assert store.prune(90) == 1 and not p.exists()
+
+
+def test_prune_keeps_current_year_races(env):
+    import os
+    import time
+
+    storage, _ = env
+    precompute.precompute_race(storage, "202605040111")
+    p = store.path_of("202605040111")
+    old = time.time() - 100 * 86400
+    os.utime(p, (old, old))
+    assert store.prune(90, keep_year=2026) == 0 and p.exists()
+    assert store.prune(90, keep_year=2027) == 1 and not p.exists()

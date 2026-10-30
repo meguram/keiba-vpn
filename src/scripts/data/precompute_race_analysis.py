@@ -50,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     storage = HybridStorage()
     ids = [r for r in (args.races or "").split(",") if r] or race_ids_in_range(storage, date.today(), args.past_days, args.lookahead_days)
     res = refresh_for_races(storage, ids, force=args.force, extra_horse_ids=result_horse_ids())
-    pruned = store.prune(KEEP_DAYS)
+    pruned = store.prune(KEEP_DAYS, keep_year=date.today().year)
     logger.info("race_analysis: races=%d %s pruned=%d", len(ids), res, pruned)
     return 1 if res.get("error") else 0
 
