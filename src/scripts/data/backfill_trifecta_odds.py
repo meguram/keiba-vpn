@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 TABLES = ROOT / "data/page_reference/tables"
 PROGRESS = ROOT / "data/local/meta/trifecta_backfill_progress.json"
-OTHER_SCRAPERS = r"python[0-9.]* -m src\.(scripts\.maintenance\.repair_|scripts\.scraping\.(?!backfill_horse_race_remarks)|scraper\.(run|export_tables)|scripts\.data\.backfill_sanrenpuku_odds)"  # scraper.backfill（馬ページ・長時間稼働）は待たない。取得はプロセス横断スロットで 1 本に直列化される
+OTHER_SCRAPERS = r"python[0-9.]* -m src\.(scripts\.maintenance\.repair_|scripts\.scraping\.(?!backfill_horse_race_remarks|fetch_status)|scraper\.(run|export_tables)|scripts\.data\.backfill_sanrenpuku_odds)"  # scraper.backfill（馬ページ・長時間稼働）は待たない。取得はプロセス横断スロットで 1 本に直列化される
 MAX_LOAD = 18.0
 
 

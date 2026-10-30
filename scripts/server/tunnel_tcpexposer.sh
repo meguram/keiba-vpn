@@ -264,7 +264,7 @@ run_autostart_all() {
     log "autostart-all スキップ (KEIBA_AUTO_TCPEXPOSER=0)"
     return 0
   fi
-  "$0" dev autostart
+  # dev は公開しない（手動で dev background を実行したときだけ接続する）
   "$0" monitor autostart
 }
 

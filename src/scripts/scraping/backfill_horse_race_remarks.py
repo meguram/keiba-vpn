@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[3]
 TABLES = ROOT / "data/page_reference/tables"
 PROGRESS = ROOT / "data/local/meta/horse_race_remarks_progress.json"
 PROGRESS_DAILY = ROOT / "data/local/meta/horse_race_remarks_daily.json"
-OTHER_SCRAPERS = r"python[0-9.]* -m src\.(scripts\.maintenance\.repair_|scripts\.scraping\.(?!backfill_horse_race_remarks)|scraper\.(backfill(?!.* --phase past)|run|export_tables))"  # --phase past はこちらに譲るので待たない（待ち合いになる）
+OTHER_SCRAPERS = r"python[0-9.]* -m src\.(scripts\.maintenance\.repair_|scripts\.scraping\.(?!backfill_horse_race_remarks|fetch_status)|scraper\.(backfill(?!.* --phase past)|run|export_tables))"  # --phase past はこちらに譲るので待たない（待ち合いになる）
 
 
 def horse_ids(recent_years: int, include_older: bool) -> list[str]:

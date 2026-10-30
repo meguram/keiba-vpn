@@ -44,6 +44,9 @@ export type AnalysisModuleMeta = {
 /** 走法マップの方面（矢印）。arrow は 2 次元での向きと長さ、r2 はその方面がこの図でどれだけ表せているか（0〜1） */
 export type RunningMapAxis = { key: string; label: string; high: string; low: string; weight: number; arrow?: [number, number]; r2?: number | null };
 
+/** 地図の位置には入れない補助の軸（急坂適性・道悪の軸）。value は 50 が平均の偏差値で、判定できないときは null（不明） */
+export type RunningMapExtra = { value: number | null; runs?: number; n_power?: number; n_normal?: number; low?: boolean };
+
 export type RunningMapHorse = {
   key: string | null;
   horse_id: string | null;
@@ -55,21 +58,36 @@ export type RunningMapHorse = {
   /** 方面ごとに、全馬の中で「高い」側から見た位置（0〜100） */
   percentiles: Record<string, number | null>;
   n_runs: number;
-  /** 過去の出走が無く、父の産駒の平均から推定した */
+  /** 実測ラップのある過去の出走数（方面ごとの最大） */
+  n_lap_runs?: number;
+  /** 方面ごとの、実測ラップのある自分の走数 */
+  axis_runs?: Record<string, number>;
+  /** 自分の実測の走が無く、父の産駒の平均から推定した方面 */
+  from_prior?: string[];
+  /** 実測ラップのある過去の出走が無く、全方面を父の産駒の平均から推定した */
   estimated: boolean;
   /** 自分の走の重みの割合（0〜1。小さいほど父の平均に寄っている） */
   own_weight: number;
+  /** 補助の軸（キーは extra_axes のもの） */
+  extras?: Record<string, RunningMapExtra>;
+  /** 9 方面の元の空間で近い馬（同じレースの中、近い順）。地図は 2 次元に落とした分だけ近さがずれるので、選んだ馬ではこれを強調する */
+  similar?: { horse_id: string | null; horse_number: number | null; horse_name: string | null; distance: number }[];
   last_run_date: string | null;
 };
 
 export type RunningMapFigure = {
   status: "ok" | "insufficient";
   axes: RunningMapAxis[];
+  /** このレースで出す補助の軸（急坂適性は中山・阪神、道悪の軸は芝=芝道悪適性・ダート=ダートタフ適正） */
+  extra_axes?: { key: string; label: string; high: string; low: string }[];
   horses: RunningMapHorse[];
   groups: { id: string; label: string; traits: { axis: string; diff: number; text: string }[]; horse_numbers: (number | null)[] }[];
   unmapped: { key: string | null; horse_name: string | null; horse_number: number | null; reason: string }[];
   fidelity: { explained: number | null; distance_spearman: number | null } | null;
-  rq_source: string | null;
+  /** 好走しやすさの格子の範囲（全レース共通の座標。n×n、x が外側のループ） */
+  extent: { n: number; x: [number, number]; y: [number, number] } | null;
+  /** このコースの好走しやすさ。lift は期待に対する倍率、sig は 0=期待が小さく対象外 / 1=有意でない / 2=有意（FDR 5%）。添字は ix*n+iy */
+  aptitude: { course: string; n_runs: number; n_races: number; lift: number[]; sig: string } | null;
 };
 
 export type AnalysisEntry = {

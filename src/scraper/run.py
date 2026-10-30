@@ -966,7 +966,9 @@ class ScraperRunner:
         with_history: bool = True,
         *,
         skip_pedigree: bool = False,
+        save_pedigree_5gen: bool = False,
     ) -> dict | None:
+        """save_pedigree_5gen: 同じ血統ページから 5 世代表（horse_pedigree_5gen）も保存し、同じページの 2 度取りを防ぐ。"""
         if skip_existing and self.storage.exists("horse_result", horse_id):
             logger.info("スキップ (既存): horse_result/%s", horse_id)
             return self.storage.load("horse_result", horse_id)
@@ -1030,6 +1032,12 @@ class ScraperRunner:
                     )
                 except Exception as _e:
                     logger.debug("馬名インデックス同期スキップ [%s]: %s", horse_id, _e)
+                if save_pedigree_5gen and ped_html:
+                    try:
+                        if not self.storage.exists("horse_pedigree_5gen", horse_id):
+                            self._save_pedigree_5gen_from_html(horse_id, ped_html)
+                    except Exception as _e:  # noqa: BLE001
+                        logger.warning("horse_pedigree_5gen 保存失敗（血統ページ流用） [%s]: %s", horse_id, _e)
                 self.mark_horse_scraped(horse_id)
                 n_races = len(data.get("race_history", []))
                 logger.info("取得完了: %s - %s (%d戦) sire=%s",
@@ -1053,9 +1061,6 @@ class ScraperRunner:
         db.netkeiba 血統ページから 5 世代表をパースし horse_pedigree_5gen に保存する。
         キュータスク horse_pedigree_5gen から呼ばれる。
         """
-        from src.research.pedigree.pedigree_similarity import parse_blood_table_5gen
-        from src.scripts.scraping.scrape_pedigree_5gen import build_pedigree_record
-
         self._last_pedigree_5gen_skip = False
         if skip_existing:
             ex = self.storage.load("horse_pedigree_5gen", horse_id)
@@ -1084,6 +1089,13 @@ class ScraperRunner:
             logger.error("取得失敗 [horse_pedigree_5gen/%s]: %s", horse_id, e)
             return None
         self.archive.save("horse_ped", horse_id, html)
+        return self._save_pedigree_5gen_from_html(horse_id, html)
+
+    def _save_pedigree_5gen_from_html(self, horse_id: str, html: str) -> dict | None:
+        """取得済みの血統ページから 5 世代表を作って保存する（通信なし）。"""
+        from src.research.pedigree.pedigree_similarity import parse_blood_table_5gen
+        from src.scripts.scraping.scrape_pedigree_5gen import build_pedigree_record
+
         ancestors = parse_blood_table_5gen(html)
         if len(ancestors) < 5:
             logger.warning("5世代血統 祖先不足: %s (%d頭)", horse_id, len(ancestors))
