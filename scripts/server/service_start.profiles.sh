@@ -47,7 +47,7 @@ apply_service_profile() {
       : "${FLASK_PORT:=$KEIBA_PORT_DEV_FLASK}"
       FRONTEND_PORT="${FRONTEND_PORT:-$KEIBA_PORT_DEV_FRONTEND}"
       : "${NODE_ENV:=development}"
-      TCPEXPOSER_PROFILE=dev
+      # dev は公開しない（誰でも開けてしまうため）。ローカルのみ
       START_MLFLOW_LOCAL=false
       ;;
     prod)
