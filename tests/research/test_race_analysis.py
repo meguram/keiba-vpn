@@ -497,5 +497,5 @@ def test_running_map_module_returns_a_figure_keyed_by_entry(monkeypatch):
     assert out.view == "map" and out.columns == [] and out.data_until == "2026-10-25"
     h = out.figure["horses"][0]
     assert h["key"] == "h1" and "values" not in h and out.figure["unmapped"][0]["key"] == "h2"
-    assert h["similar"][0]["horse_id"] == "h3"   # 9 方面で本当に近い馬は画面まで渡す（選んだ馬から線で結ぶ）
+    assert h["similar"][0]["horse_id"] == "h3"   # 8 方面で本当に近い馬は画面まで渡す（選んだ馬から線で結ぶ）
     assert out.figure["extent"]["n"] == 24 and out.figure["aptitude"]["course"] == "東京 芝 1600m"

@@ -46,7 +46,7 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
   const cw = ex ? ((ex.x[1] - ex.x[0]) / (ex.n - 1)) * scale : 0, ch = ex ? ((ex.y[1] - ex.y[0]) / (ex.n - 1)) * scale : 0;
   const bracketOf = new Map(entries.map((e) => [e.key, e.bracket_number]));
   const picked = hs.find((h) => (h.key ?? h.horse_id) === sel) ?? null;
-  // 選んだ馬と、9 方面で本当に近い馬（地図の近さは 2 次元に落とした分だけずれるので、線で結んで補う）
+  // 選んだ馬と、8 方面で本当に近い馬（地図の近さは 2 次元に落とした分だけずれるので、線で結んで補う）
   const near = new Map((picked?.similar ?? []).map((s, i) => [s.horse_id, i]));
   const byHorseId = new Map(hs.map((h) => [h.horse_id, h]));
   const explained = figure.fidelity?.explained;
@@ -120,8 +120,8 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
       )}
       <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 6 }}>
         点線の白抜きは、実測ラップのある過去の出走が無く父の産駒の平均から推定した馬。
-        {typeof explained === "number" ? ` この図は、9 方面での馬どうしの違いの約 ${Math.round(explained * 100)}% を表しています。` : ""}
-        近い位置にいる馬ほど走り方が似ています（2 次元に落とした分、近さはおおよそ）。馬を押すと、9 方面で本当に近い馬を線で結びます。座標はどのレースでも共通です。
+        {typeof explained === "number" ? ` この図は、8 方面での馬どうしの違いの約 ${Math.round(explained * 100)}% を表しています。` : ""}
+        近い位置にいる馬ほど走り方が似ています（2 次元に落とした分、近さはおおよそ）。馬を押すと、8 方面で本当に近い馬を線で結びます。座標はどのレースでも共通です。
       </p>
     </div>
   );
