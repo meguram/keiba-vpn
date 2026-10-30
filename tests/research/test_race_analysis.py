@@ -482,7 +482,8 @@ def test_running_map_module_returns_a_figure_keyed_by_entry(monkeypatch):
         return {"status": "ok", "axes": [{"key": "ts"}], "groups": [{"id": "A", "label": "高TS", "horse_numbers": [1]}],
                 "horses": [{"horse_id": "h1", "horse_number": 1, "horse_name": "甲", "x": 0.1, "y": 0.2, "group": "A",
                             "percentiles": {"ts": 80.0}, "n_runs": 5, "estimated": False, "own_weight": 0.6,
-                            "last_run_date": "2026-10-01", "values": {"ts": 55.0}}],
+                            "last_run_date": "2026-10-01", "values": {"ts": 55.0},
+                            "similar": [{"horse_id": "h3", "horse_number": 3, "horse_name": "丙", "distance": 0.4}]}],
                 "unmapped": [{"horse_id": "h2", "horse_name": "乙", "horse_number": 2, "reason": "過去の出走も父のデータもありません"}],
                 "fidelity": {"explained": 0.8}, "data_until": "2026-10-25",
                 "extent": {"n": 24, "x": [-2, 2], "y": [-3, 3]},
@@ -496,4 +497,5 @@ def test_running_map_module_returns_a_figure_keyed_by_entry(monkeypatch):
     assert out.view == "map" and out.columns == [] and out.data_until == "2026-10-25"
     h = out.figure["horses"][0]
     assert h["key"] == "h1" and "values" not in h and out.figure["unmapped"][0]["key"] == "h2"
+    assert h["similar"][0]["horse_id"] == "h3"   # 9 方面で本当に近い馬は画面まで渡す（選んだ馬から線で結ぶ）
     assert out.figure["extent"]["n"] == 24 and out.figure["aptitude"]["course"] == "東京 芝 1600m"

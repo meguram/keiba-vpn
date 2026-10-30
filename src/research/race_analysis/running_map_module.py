@@ -13,7 +13,7 @@ from src.research.race import running_map as rm
 from src.research.race_analysis.base import ModuleOutput, RaceContext
 
 # 図に要る馬の項目（それ以外は保存しない）
-_HORSE_KEYS = ("horse_id", "horse_number", "horse_name", "x", "y", "group", "percentiles", "n_runs", "n_lap_runs", "axis_runs", "from_prior", "estimated", "own_weight", "extras", "last_run_date")
+_HORSE_KEYS = ("horse_id", "horse_number", "horse_name", "x", "y", "group", "percentiles", "n_runs", "n_lap_runs", "axis_runs", "from_prior", "estimated", "own_weight", "extras", "similar", "last_run_date")
 
 
 class RunningMapModule:
@@ -54,7 +54,7 @@ class RunningMapModule:
             "それが少ない馬は父の産駒の平均に寄せ、1 走も無い馬は父の産駒の平均（推定）です。方面ごとの実測の走数は馬の詳細に出ます。",
             "急坂適性（中山・阪神のみ）と道悪の軸（芝=芝道悪適性、ダート=ダートタフ適正）は地図の位置には入れず、馬の詳細にだけ出します。"
             "判定できない馬は「不明」で、0 や平均とは扱いません。",
-            "近くにいる馬ほど走り方が似ています。矢印は、その向きに行くほどその特徴が強いことを示します（矢印が短い特徴は、この図では見分けにくい）。",
+            "近くにいる馬ほど走り方が似ています。2 次元に落とした分、近さはおおよそなので、馬を押すと 9 方面で本当に近い馬（このレースの中で 3 頭）を線で結びます。",
             "このレースの開催日より前の走だけを使っています。",
             "座標は全レース共通で、同じ位置は同じ走り方です。背景の色は 2020 年以降の同じコースの全出走で測った好走しやすさ（3 着以内に入った割合を頭数から決まる期待と比べた倍率）で、"
             "測った期間の結果を含む値です。",
