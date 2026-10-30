@@ -110,6 +110,9 @@ _THROTTLE_CONFIG: dict[str, dict[str, float]] = {
     "smartrc": {"min_interval": 2.0, "max_interval": 4.0},
 }
 
+# 1 なら待ちを「前の GET の開始から」で数える（既定は従来どおり、応答の後にまるごと待つ）
+_THROTTLE_START_TO_START = _env_int("NETKEIBA_THROTTLE_START_TO_START", 0) == 1
+
 _SMARTRC_REQUEST_LIMIT = 200
 
 _BACKOFF_INITIAL = 5.0
@@ -548,6 +551,10 @@ class NetkeibaClient:
 
         jitter = random.gauss(0, sleep_time * 0.15)
         sleep_time = max(config["min_interval"], sleep_time + jitter)
+
+        if _THROTTLE_START_TO_START and self._last_request_time > 0:
+            # 応答待ち・解析・保存に使った時間を待ちに数え、GET の開始から開始までの間隔を保つ
+            sleep_time = max(0.0, sleep_time - (time.time() - self._last_request_time))
 
         logger.debug("スロットリング: %.2f 秒待機 (source=%s)", sleep_time, src)
         time.sleep(sleep_time)

@@ -583,48 +583,107 @@ def _collect_past_horses(runner, progress: BackfillProgress, dates: list[str]) -
     return n_new
 
 
+class _KeyIndex:
+    """カテゴリごとの既存キーを、年単位の一括リストで持つ（GCS への 1 件ずつの exists を避ける）。
+
+    リストにあれば存在とみなす（取得済みのデータは消えない）。リストに無いものだけ個別に exists で確かめるので、
+    リストが古い・取れないときも結果は変わらず、遅くなるだけ。
+    """
+
+    def __init__(self, storage) -> None:
+        self._storage = storage
+        self._sets: dict[tuple[str, str], set[str]] = {}
+
+    def _year_set(self, category: str, key: str) -> set[str]:
+        year = key[:4] if len(key) >= 4 else "unknown"
+        k = (category, year)
+        if k not in self._sets:
+            try:
+                self._sets[k] = set(self._storage.batch_list_blobs(category, year))
+            except Exception as e:  # noqa: BLE001
+                logger.warning("一括リスト失敗 [%s/%s]: %s（個別の確認に戻す）", category, year, e)
+                self._sets[k] = set()
+        return self._sets[k]
+
+    def listed(self, category: str, key: str) -> bool:
+        return key in self._year_set(category, key)
+
+    def exists(self, category: str, key: str) -> bool:
+        if self.listed(category, key):
+            return True
+        if self._storage.exists(category, key):
+            self._year_set(category, key).add(key)
+            return True
+        return False
+
+
+def _anchor_split(doc: dict) -> tuple[list[str], list[str]]:
+    """5 世代目の祖先を、母方（position の 16 の位が立つ）と父方に分ける。"""
+    mat, pat = [], []
+    for a in doc.get("ancestors") or []:
+        aid = (a.get("horse_id") or "").strip()
+        if a.get("generation") == 5 and aid:
+            (mat if (int(a.get("position", 0)) >> 4) & 1 else pat).append(aid)
+    return mat, pat
+
+
 def _run_phase_horse_past(runner, progress: BackfillProgress, max_horses: int | None = None) -> dict:
-    """過去分の出走馬の戦績・プロフィール・血統（5 世代）を、まだ無い馬だけ取る。"""
+    """過去分の出走馬の戦績・プロフィール・血統（5 世代）を、まだ無い馬だけ取る。
+
+    取得済みの馬の確認は年単位の一括リストで済ませ、血統表の読み込みは先読み（並列）にする。
+    新しい馬は、戦績・プロフィールと同時に取る血統ページから 5 世代表も作る（同じページを 2 度取らない）。
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
     stats = {"horses_processed": 0, "horses_skipped": 0, "errors": 0}
     done = set(progress._data.get("past_horses_done", []))
     pending = [h for h in progress._data.get("past_horse_ids", []) if h not in done]
     logger.info("Phase horse(past): %d 頭が未処理", len(pending))
+    idx = _KeyIndex(runner.storage)
+    prefetch_n = 48
     batch: list[str] = []
-    for hid in pending:
-        if _should_stop() or (max_horses is not None and stats["horses_processed"] >= max_horses):
-            break
-        try:
-            if not runner.storage.exists("horse_result", hid):
-                runner.scrape_horse(hid, skip_existing=False, with_history=True)
-                stats["horses_processed"] += 1
-            else:
-                stats["horses_skipped"] += 1
-            if not _should_stop() and not runner.storage.exists("horse_pedigree_5gen", hid):
-                runner.scrape_horse_pedigree_5gen(hid, skip_existing=True)
-            # 完全な 10 世代のための 5 世代目のアンカー。母方（path_fm が M で始まる 16 位置）を先に取り、父方は後回し（anchors_f 段階）
-            doc = runner.storage.load("horse_pedigree_5gen", hid) or {}
-            mat, pat = [], []
-            for a in doc.get("ancestors") or []:
-                aid = (a.get("horse_id") or "").strip()
-                if a.get("generation") == 5 and aid:
-                    (mat if (int(a.get("position", 0)) >> 4) & 1 else pat).append(aid)
-            for aid in mat:
-                if _should_stop():
-                    break
-                if not runner.storage.exists("horse_pedigree_5gen", aid):
-                    runner.scrape_horse_pedigree_5gen(aid, skip_existing=True)
-                    stats["anchors_m"] = stats.get("anchors_m", 0) + 1
-            pend = progress._data.setdefault("paternal_anchor_pending", [])
-            pend.extend(a for a in pat if a not in pend)
-            batch.append(hid)
-        except Exception as e:  # noqa: BLE001
-            logger.error("馬情報取得エラー [%s]: %s", hid, e)
-            stats["errors"] += 1
-        if len(batch) >= 25:
-            progress._data["past_horses_done"] = sorted(done | set(batch))
-            progress.save()
-            done |= set(batch)
-            batch = []
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures: dict[str, object] = {}
+
+        def _prefetch(start: int) -> None:
+            for h in pending[start:start + prefetch_n]:
+                if h not in futures and idx.listed("horse_result", h) and idx.listed("horse_pedigree_5gen", h):
+                    futures[h] = pool.submit(runner.storage.load, "horse_pedigree_5gen", h)
+
+        for i, hid in enumerate(pending):
+            if _should_stop() or (max_horses is not None and stats["horses_processed"] >= max_horses):
+                break
+            if i % prefetch_n == 0:
+                _prefetch(i)
+            try:
+                if not idx.exists("horse_result", hid):
+                    runner.scrape_horse(hid, skip_existing=False, with_history=True, save_pedigree_5gen=True)
+                    stats["horses_processed"] += 1
+                else:
+                    stats["horses_skipped"] += 1
+                if not _should_stop() and not idx.exists("horse_pedigree_5gen", hid):
+                    runner.scrape_horse_pedigree_5gen(hid, skip_existing=True)
+                # 完全な 10 世代のための 5 世代目のアンカー。母方（path_fm が M で始まる 16 位置）を先に取り、父方は後回し（anchors_f 段階）
+                fut = futures.pop(hid, None)
+                doc = (fut.result() if fut is not None else runner.storage.load("horse_pedigree_5gen", hid)) or {}
+                mat, pat = _anchor_split(doc)
+                for aid in mat:
+                    if _should_stop():
+                        break
+                    if not idx.exists("horse_pedigree_5gen", aid):
+                        runner.scrape_horse_pedigree_5gen(aid, skip_existing=True)
+                        stats["anchors_m"] = stats.get("anchors_m", 0) + 1
+                pend = progress._data.setdefault("paternal_anchor_pending", [])
+                pend.extend(a for a in pat if a not in pend)
+                batch.append(hid)
+            except Exception as e:  # noqa: BLE001
+                logger.error("馬情報取得エラー [%s]: %s", hid, e)
+                stats["errors"] += 1
+            if len(batch) >= 25:
+                progress._data["past_horses_done"] = sorted(done | set(batch))
+                progress.save()
+                done |= set(batch)
+                batch = []
     if batch:
         progress._data["past_horses_done"] = sorted(done | set(batch))
         progress.save()
