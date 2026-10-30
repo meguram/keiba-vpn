@@ -19,7 +19,7 @@ from src.research.race_analysis.service import _load_card, _normalize_entries, a
 
 logger = logging.getLogger(__name__)
 
-ANALYSIS_VERSION = "15"      # 分析ロジック・列定義を変えたら上げる（保存済みの結果が作り直される）
+ANALYSIS_VERSION = "16"      # 分析ロジック・列定義を変えたら上げる（保存済みの結果が作り直される）
 
 
 def _asof_cache() -> dict[str, str | None]:

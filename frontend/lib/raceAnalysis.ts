@@ -70,7 +70,7 @@ export type RunningMapHorse = {
   own_weight: number;
   /** 補助の軸（キーは extra_axes のもの） */
   extras?: Record<string, RunningMapExtra>;
-  /** 9 方面の元の空間で近い馬（同じレースの中、近い順）。地図は 2 次元に落とした分だけ近さがずれるので、選んだ馬ではこれを強調する */
+  /** 8 方面の元の空間で近い馬（同じレースの中、近い順）。地図は 2 次元に落とした分だけ近さがずれるので、選んだ馬ではこれを強調する */
   similar?: { horse_id: string | null; horse_number: number | null; horse_name: string | null; distance: number }[];
   last_run_date: string | null;
 };
