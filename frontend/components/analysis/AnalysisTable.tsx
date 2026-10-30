@@ -1,12 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { bracketChipStyle } from "@/lib/bracket";
 import { AnalysisEntry, AnalysisModuleMeta, ColumnBlock, columnBlocks, formatCell, heatColor, isThin, runColor, shortLabel, sortValue, PastRun } from "@/lib/raceAnalysis";
 
 const CSS = `
-.ra-wide{display:block}.ra-cards{display:none}
-@media (max-width:768px){.ra-wide{display:none}.ra-cards{display:block}}
 .ra-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .ra-tbl{width:100%;border-collapse:collapse;font-size:12px}
 .ra-tbl th,.ra-tbl td{padding:7px 4px;text-align:center;white-space:nowrap;vertical-align:middle}
@@ -130,10 +128,23 @@ function MobileTable({ entries, module, blocks, keyHeader }: { entries: Analysis
   );
 }
 
+/** 768px 以下ならスマホ表示。片方の DOM だけを作る（初回描画は PC 表示で、直後に合わせる） */
+function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width:768px)");
+    const update = () => setNarrow(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return narrow;
+}
+
 export function AnalysisTable({ entries, module }: { entries: AnalysisEntry[]; module: AnalysisModuleMeta }) {
-  const columns = module.columns ?? [];
-  const blocks = columnBlocks(columns, module.groups ?? []);
-  const ordered = blocks.flatMap((b) => b.columns.map((c) => ({ c, g: b.group, first: c === b.columns[0] })));
+  const narrow = useNarrow();
+  const blocks = useMemo(() => columnBlocks(module.columns ?? [], module.groups ?? []), [module.columns, module.groups]);
+  const ordered = useMemo(() => blocks.flatMap((b) => b.columns.map((c) => ({ c, g: b.group, first: c === b.columns[0] }))), [blocks]);
   const cellsOf = (e: AnalysisEntry) => e.analysis?.[module.id];
   const keyHeader = module.key_header ?? null;
   const keyOf = (e: AnalysisEntry) => (cellsOf(e)?._key as string | null | undefined) ?? null;
@@ -142,7 +153,7 @@ export function AnalysisTable({ entries, module }: { entries: AnalysisEntry[]; m
     <div style={{ marginTop: 8 }}>
       <style>{CSS}</style>
 
-      <div className="ra-wide ra-scroll">
+      {!narrow && <div className="ra-wide ra-scroll">
         <table className="ra-tbl">
           <thead>
             <tr className="ra-g">
@@ -189,11 +200,11 @@ export function AnalysisTable({ entries, module }: { entries: AnalysisEntry[]; m
             })}
           </tbody>
         </table>
-      </div>
+      </div>}
 
-      <div className="ra-cards">
+      {narrow && <div className="ra-cards">
         <MobileTable entries={entries} module={module} blocks={blocks} keyHeader={keyHeader} />
-      </div>
+      </div>}
     </div>
   );
 }

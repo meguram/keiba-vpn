@@ -2682,16 +2682,28 @@ async def get_scraped_dates(
             out: list[str] = []
             # 週間予測用: picker_future_days 指定時は今日(i=0)と未来(i<0)も含める。日付の降順（未来 → 過去）で返す
             first = -int(picker_future_days) if picker_future_days is not None else 1
-            for i in range(first, n + 1):
-                d = today - timedelta(days=i)
-                stem = d.strftime("%Y%m%d")
+            all_stems = [(today - timedelta(days=i)).strftime("%Y%m%d") for i in range(first, n + 1)]
+            # 開催のない日（平日の大半）まで GCS に問い合わせると、1 件ずつの 404 往復で初回が数十秒になる。
+            # キー一覧（2 分キャッシュ）にある日だけを、並列で読む。一覧が取れないときは全日を読む。
+            try:
+                listed = set(_cached_race_list_stems(storage))
+            except Exception:
+                listed = set()
+            cand = [s for s in all_stems if s in listed] if listed else all_stems
+
+            def _check(stem: str) -> bool:
                 rl = storage.load("race_lists", stem)
                 if not rl:
-                    continue
+                    return False
                 raw = rl.get("races") or []
                 meta = rl.get("_meta") if isinstance(rl, dict) else None
-                if date_has_at_least_one_jra_race(stem, raw, meta):
-                    out.append(stem)
+                return bool(date_has_at_least_one_jra_race(stem, raw, meta))
+
+            from concurrent.futures import ThreadPoolExecutor
+
+            with ThreadPoolExecutor(max_workers=16) as ex:
+                flags = list(ex.map(_check, cand))
+            out = [s for s, ok in zip(cand, flags) if ok]
             return {
                 "dates": out,
                 "gcs_enabled": storage.gcs_enabled,

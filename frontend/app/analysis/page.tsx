@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { fetchRaceList, getJson, prefetchJson } from "@/lib/httpCache";
+import { fetchRaceList, getJson, prefetchJson, readStored } from "@/lib/httpCache";
 import { LoadingNotice } from "@/components/LoadingNotice";
 import { useAutoRetry } from "@/lib/hooks/useAutoRetry";
 import { WeekPicker } from "@/components/WeekPicker";
@@ -68,28 +68,45 @@ export default function AnalysisPage() {
     if (q.get("m")) setSelectedModule(q.get("m")!);
   }, []);
 
-  /* 開催日一覧 */
+  /* 開催日一覧。URL に日付があればそれで先にレース一覧を取りに行き、一覧の応答を待たない。
+     日付の指定がないときは、直近だけの小さい一覧で既定の日を決め、全期間の一覧は後から差し替える */
   useEffect(() => {
     setError("");
+    let cancelled = false;
+    const fromUrl = new URLSearchParams(window.location.search).get("date") ?? "";
+    if (/^\d{8}$/.test(fromUrl)) setSelectedDate((cur) => cur || fromUrl);
+    const fetchDates = async (pastDays: number) => {
+      const d = await getJson<{ dates?: string[] } | string[]>(`/api/scrape-dates?picker_past_days=${pastDays}&picker_future_days=14`, { ttlMs: 60_000 });
+      return (Array.isArray(d) ? d : d.dates) ?? [];
+    };
+    const defaultOf = (list: string[]) => {
+      const next = pickTwoWeeks(list, today).find((w) => w.role === "next");
+      return next ? firstDateOf(next.week, today) : list[0];
+    };
     (async () => {
       try {
         const days = Number(process.env.NEXT_PUBLIC_PICKER_PAST_DAYS) || 30;
-        const res = await fetch(`/api/scrape-dates?picker_past_days=${days}&picker_future_days=14`, { cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const d = await res.json();
-        const list: string[] = d.dates ?? d ?? [];
+        if (!fromUrl && days > 21) {
+          fetchDates(21).then((list) => {
+            if (cancelled || !list.length) return;
+            setDates((cur) => (cur.length ? cur : list));
+            setSelectedDate((cur) => cur || defaultOf(list));
+            setLoadingDates(false);
+          }).catch(() => {});
+        }
+        const list = await fetchDates(days);
+        if (cancelled) return;
         setDates(list);
         if (list.length) {
-          const fromUrl = new URLSearchParams(window.location.search).get("date") ?? undefined;
-          const next = pickTwoWeeks(list, today).find((w) => w.role === "next");
-          setSelectedDate(fromUrl && list.includes(fromUrl) ? fromUrl : next ? firstDateOf(next.week, today) : list[0]);
+          setSelectedDate((cur) => (cur && (cur !== fromUrl || list.includes(fromUrl)) ? cur : defaultOf(list)));
         }
       } catch (e: unknown) {
-        setError(`開催日の一覧を取得できませんでした（${e instanceof Error ? e.message : String(e)}）`);
+        if (!cancelled) setError(`開催日の一覧を取得できませんでした（${e instanceof Error ? e.message : String(e)}）`);
       } finally {
-        setLoadingDates(false);
+        if (!cancelled) setLoadingDates(false);
       }
     })();
+    return () => { cancelled = true; };
   }, [reload, today]);
 
   /* レース一覧（日付変更時） */
@@ -125,10 +142,12 @@ export default function AnalysisPage() {
   useEffect(() => {
     if (!activeRaceId) { setLoad({ state: "idle" }); return; }
     let cancelled = false;
-    setLoad({ state: "loading" });
-    getJson<RaceAnalysis>(analysisUrl(activeRaceId), { ttlMs: 60_000, persist: true })
+    const url = analysisUrl(activeRaceId);
+    const stored = readStored<RaceAnalysis>(url);   // 前回見た結果を先に出し、裏で最新に差し替える
+    setLoad(stored ? { state: "ok", data: stored } : { state: "loading" });
+    getJson<RaceAnalysis>(url, { ttlMs: 60_000, persist: true })
       .then((data) => { if (!cancelled) setLoad({ state: "ok", data }); })
-      .catch((e: Error & { status?: number }) => { if (!cancelled) setLoad({ state: "error", status: e.status, message: e.message }); });
+      .catch((e: Error & { status?: number }) => { if (!cancelled && !stored) setLoad({ state: "error", status: e.status, message: e.message }); });
     return () => { cancelled = true; };
   }, [activeRaceId, reload]);
 
@@ -150,6 +169,14 @@ export default function AnalysisPage() {
     syncUrl({ race: raceId, ...(r?.venue ? { venue: r.venue } : {}) });
   }
   const warm = useCallback((id: string) => prefetchJson(analysisUrl(id), { ttlMs: 60_000, persist: true }), []);
+
+  /* 表示できたら、同じ開催場の次の 2 レースを先に取っておく（切り替えが即時になる） */
+  useEffect(() => {
+    if (load.state !== "ok") return;
+    const i = selectable.findIndex((r) => r.race_id === activeRaceId);
+    if (i < 0) return;
+    selectable.slice(i + 1, i + 3).forEach((r) => warm(r.race_id));
+  }, [load.state, activeRaceId, selectable, warm]);
 
   const data = load.state === "ok" ? load.data : undefined;
   const modules = data?.modules ?? [];

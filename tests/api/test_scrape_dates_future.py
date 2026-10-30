@@ -34,6 +34,7 @@ def _stem(offset: int) -> str:
 class TestPickerFutureDays(unittest.TestCase):
     def setUp(self):
         app_module._PICKER_SCRAPE_DATES_CACHE.clear()
+        app_module._RACE_LIST_STEMS_CACHE.update(stems=None, ts=0.0)
         self.stems = {_stem(-2), _stem(0), _stem(3), _stem(8)}
         self._patches = [
             unittest.mock.patch.object(app_module, "_get_storage", lambda: _FakeStorage(self.stems)),
@@ -46,6 +47,7 @@ class TestPickerFutureDays(unittest.TestCase):
         for p in self._patches:
             p.stop()
         app_module._PICKER_SCRAPE_DATES_CACHE.clear()
+        app_module._RACE_LIST_STEMS_CACHE.update(stems=None, ts=0.0)
 
     def test_without_future_days_today_and_future_are_not_included(self):
         d = client.get("/api/scrape-dates?picker_past_days=10").json()["dates"]
