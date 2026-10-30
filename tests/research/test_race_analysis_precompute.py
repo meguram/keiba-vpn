@@ -85,6 +85,9 @@ class FakeStorage:
 
 @pytest.fixture()
 def env(tmp_path, monkeypatch):
+    from src.research.race_analysis.running_map_module import RunningMapModule
+
+    monkeypatch.setattr(RunningMapModule, "applicable", lambda self, ctx: False)     # 全期間の出走記録を読むので対象外
     rows = [
         {"race_id": f"R{i}", "date": f"2026-0{1 + i // 3}-{10 + i % 3}", "venue": "東京", "surface": "芝", "distance": 1600, "finish_position": 1 + i % 5,
          "jockey_id": "J1", "bracket_number": 1, "horse_id": "h1", "passing_order": f"{1 + i % 4}-{1 + i % 4}", "field_size": 10}

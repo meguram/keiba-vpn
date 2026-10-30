@@ -19,7 +19,7 @@ from src.research.race_analysis.service import _load_card, _normalize_entries, a
 
 logger = logging.getLogger(__name__)
 
-ANALYSIS_VERSION = "7"      # 分析ロジック・列定義を変えたら上げる（保存済みの結果が作り直される）
+ANALYSIS_VERSION = "10"      # 分析ロジック・列定義を変えたら上げる（保存済みの結果が作り直される）
 
 
 def _asof_cache() -> dict[str, str | None]:
@@ -39,7 +39,7 @@ def fingerprint(card: dict, entries: list[dict[str, Any]], asof: dict[str, str |
         sire_sig = None
     doc = {
         "v": ANALYSIS_VERSION,
-        "race": [card.get(k) for k in ("venue", "surface", "distance", "date")],
+        "race": [card.get(k) for k in ("venue", "surface", "distance", "date", "track_condition")],
         "entries": [[e.get("horse_id"), e.get("horse_number"), e.get("bracket_number"), e.get("jockey_id")] for e in entries],
         "data_until": asof[date],
         "sire_map": sire_sig,

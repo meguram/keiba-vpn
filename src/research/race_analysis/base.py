@@ -42,6 +42,7 @@ class RaceContext:
     surface: str | None
     distance: int | None
     entries: list[dict[str, Any]] = field(default_factory=list)   # 出走馬。key は馬ごとの一意キー
+    track_condition: str | None = None                            # 馬場状態（発表前は None）
 
 
 @dataclass
@@ -53,6 +54,8 @@ class ModuleOutput:
     data_until: str | None = None         # 使ったデータの最終日
     key_header: str | None = None         # 分析の軸（父など）を表の列として出すときの見出し。値は cells の "_key"
     source: dict[str, Any] | None = None  # 出典: provider（提供元の機関）, dataset, period_from, period_to, races, rows
+    view: str = "table"                   # 画面での見せ方。"table" = columns/cells の表、"map" = figure の走法マップ
+    figure: dict[str, Any] | None = None  # view が表以外のときの図のデータ
 
 
 class AnalysisModule(Protocol):

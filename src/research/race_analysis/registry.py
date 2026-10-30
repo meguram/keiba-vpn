@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from src.research.race_analysis.course_stats import GATE, JOCKEY, SIRE, SIRE_LINE, Block, CourseStatsModule
 from src.research.race_analysis.past_position import PastPositionModule
+from src.research.race_analysis.running_map_module import RunningMapModule
 
 MODULES = (
     CourseStatsModule(JOCKEY),
@@ -14,4 +15,5 @@ MODULES = (
         description="出走馬の父（種牡馬）と、その父の系統（サンデーサイレンス系など）の産駒が、今回と同じコースでこれまで残してきた成績。系統の群は、netkeiba の『○○系』の取得がすべて終わってから表示されます。",
     ),
     PastPositionModule(),
+    RunningMapModule(),
 )

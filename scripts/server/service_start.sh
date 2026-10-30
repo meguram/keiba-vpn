@@ -482,6 +482,9 @@ start_frontend() {
     export KEIBA_API_URL="$KEIBA_API_URL"
     if [[ "$FRONTEND_NPM_SCRIPT" == "dev" ]]; then
       export NODE_ENV=development
+      # 作業ツリーが 9p（WSL の D:\ など）だとファイル変更の通知が届かず、保存しても画面に反映されないことがある。
+      # 変更を定期的に見に行く方式にする（無効化: WATCHPACK_POLLING=false）
+      export WATCHPACK_POLLING="${WATCHPACK_POLLING:-true}"
     fi
     run_with_profile_env nohup npm run "$FRONTEND_NPM_SCRIPT" -- -p "$FRONTEND_PORT" >>"$log_file" 2>&1 &
     echo $! >"$FRONTEND_PID_FILE"

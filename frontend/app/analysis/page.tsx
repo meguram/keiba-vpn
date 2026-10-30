@@ -8,9 +8,13 @@ import { useAutoRetry } from "@/lib/hooks/useAutoRetry";
 import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip } from "@/components/RaceStrip";
 import { AnalysisTable } from "@/components/analysis/AnalysisTable";
+import { RunningMap } from "@/components/analysis/RunningMap";
 import { entriesUnavailable, formatComputedAt, formatPeriod } from "@/lib/raceAnalysis";
 import type { RaceAnalysis } from "@/lib/raceAnalysis";
 import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
+
+// 分析の表は列が多いので、広い画面では横幅を使い切って横スクロールなしで一面に収める
+const PAGE_MAX = 1680;
 
 type RaceItem = { race_id: string; race_name?: string; venue?: string; round?: number | string; date?: string; entries_phase?: string | null };
 
@@ -153,9 +157,9 @@ export default function AnalysisPage() {
   const race = data?.race;
 
   return (
-    <div style={{ minHeight: "100dvh", background: "var(--bg)", color: "var(--text)" }}>
-      <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "18px 24px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 12 }}>
+    <div className="page-wide" style={{ minHeight: "100dvh", background: "var(--bg)", color: "var(--text)" }}>
+      <div className="an-pad" style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "18px 24px" }}>
+        <div style={{ maxWidth: PAGE_MAX, margin: "0 auto", display: "flex", alignItems: "center", gap: 12 }}>
           <h1 style={{ fontSize: 18, fontWeight: 700, color: "#f0f6fc", margin: 0 }}>🔎 めぐ分析</h1>
           <p className="hide-narrow" style={{ fontSize: 12, color: "var(--text-dim)", margin: 0 }}>
             開催日・競馬場・レースを選ぶと、出馬表の馬ごとに分析結果を表示します
@@ -163,13 +167,13 @@ export default function AnalysisPage() {
         </div>
       </div>
 
-      <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "14px 24px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+      <div className="an-pad" style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "14px 24px" }}>
+        <div style={{ maxWidth: PAGE_MAX, margin: "0 auto" }}>
           <WeekPicker dates={dates} today={today} selectedDate={selectedDate} loading={loadingDates} onSelectDate={chooseDate} />
         </div>
       </div>
 
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 24px" }}>
+      <div className="an-pad" style={{ maxWidth: PAGE_MAX, margin: "0 auto", padding: "20px 24px" }}>
         {error && (
           <div role="alert" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, padding: "14px 18px", color: "var(--err)", fontSize: 13, marginBottom: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <span>⚠️ {error}</span>
@@ -273,7 +277,9 @@ export default function AnalysisPage() {
                           <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{mod.label}</h2>
                           <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{mod.description}</span>
                         </div>
-                        {mod.status === "ok" && <AnalysisTable entries={data.entries} module={mod} />}
+                        {mod.status === "ok" && (mod.view === "map"
+                          ? (mod.figure ? <RunningMap figure={mod.figure} entries={data.entries} /> : null)
+                          : <AnalysisTable entries={data.entries} module={mod} />)}
                         {mod.status === "not_applicable" && <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>このレースでは表示できません（コース条件や元データが未確定です）。</p>}
                         {mod.status === "error" && <p style={{ fontSize: 13, color: "var(--err)", marginTop: 8 }}>この分析の計算に失敗しました。</p>}
                         {mod.status === "ok" && mod.source && formatPeriod(mod.source) && (
