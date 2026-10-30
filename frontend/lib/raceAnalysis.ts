@@ -36,6 +36,40 @@ export type AnalysisModuleMeta = {
   source?: AnalysisSource | null;
   /** 分析の軸（父など）を表の列として出すときの見出し。値は各馬の cells の _key */
   key_header?: string | null;
+  /** 見せ方。省略時は表。"map" は figure の走法マップ */
+  view?: "table" | "map";
+  figure?: RunningMapFigure | null;
+};
+
+/** 走法マップの方面（矢印）。arrow は 2 次元での向きと長さ、r2 はその方面がこの図でどれだけ表せているか（0〜1） */
+export type RunningMapAxis = { key: string; label: string; high: string; low: string; weight: number; arrow?: [number, number]; r2?: number | null };
+
+export type RunningMapHorse = {
+  key: string | null;
+  horse_id: string | null;
+  horse_number: number | null;
+  horse_name: string | null;
+  x: number;
+  y: number;
+  group: string;
+  /** 方面ごとに、全馬の中で「高い」側から見た位置（0〜100） */
+  percentiles: Record<string, number | null>;
+  n_runs: number;
+  /** 過去の出走が無く、父の産駒の平均から推定した */
+  estimated: boolean;
+  /** 自分の走の重みの割合（0〜1。小さいほど父の平均に寄っている） */
+  own_weight: number;
+  last_run_date: string | null;
+};
+
+export type RunningMapFigure = {
+  status: "ok" | "insufficient";
+  axes: RunningMapAxis[];
+  horses: RunningMapHorse[];
+  groups: { id: string; label: string; traits: { axis: string; diff: number; text: string }[]; horse_numbers: (number | null)[] }[];
+  unmapped: { key: string | null; horse_name: string | null; horse_number: number | null; reason: string }[];
+  fidelity: { explained: number | null; distance_spearman: number | null } | null;
+  rq_source: string | null;
 };
 
 export type AnalysisEntry = {
@@ -108,6 +142,11 @@ export function sortValue(v: unknown, fmt: CellFormat, palette?: Record<string, 
     return i >= 0 ? String(i + 1) : "";
   }
   return undefined;
+}
+
+/** 狭い画面の見出し用に短くした列名（『連対率』→『連対』。2 文字の『勝率』はそのまま） */
+export function shortLabel(label: string): string {
+  return label.length >= 3 && label.endsWith("率") ? label.slice(0, -1) : label;
 }
 
 export type ColumnBlock = { group: AnalysisGroup | null; columns: AnalysisColumn[] };

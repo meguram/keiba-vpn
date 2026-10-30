@@ -2,15 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { fetchRaceList, getJson, prefetchJson } from "@/lib/httpCache";
+import { fetchRaceList, getJson, prefetchJson, readStored } from "@/lib/httpCache";
 import { LoadingNotice } from "@/components/LoadingNotice";
 import { useAutoRetry } from "@/lib/hooks/useAutoRetry";
 import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip } from "@/components/RaceStrip";
 import { AnalysisTable } from "@/components/analysis/AnalysisTable";
+import { RunningMap } from "@/components/analysis/RunningMap";
 import { entriesUnavailable, formatComputedAt, formatPeriod } from "@/lib/raceAnalysis";
 import type { RaceAnalysis } from "@/lib/raceAnalysis";
 import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
+
+// 分析の表は列が多いので、広い画面では横幅を使い切って横スクロールなしで一面に収める
+const PAGE_MAX = 1680;
 
 type RaceItem = { race_id: string; race_name?: string; venue?: string; round?: number | string; date?: string; entries_phase?: string | null };
 
@@ -64,28 +68,45 @@ export default function AnalysisPage() {
     if (q.get("m")) setSelectedModule(q.get("m")!);
   }, []);
 
-  /* 開催日一覧 */
+  /* 開催日一覧。URL に日付があればそれで先にレース一覧を取りに行き、一覧の応答を待たない。
+     日付の指定がないときは、直近だけの小さい一覧で既定の日を決め、全期間の一覧は後から差し替える */
   useEffect(() => {
     setError("");
+    let cancelled = false;
+    const fromUrl = new URLSearchParams(window.location.search).get("date") ?? "";
+    if (/^\d{8}$/.test(fromUrl)) setSelectedDate((cur) => cur || fromUrl);
+    const fetchDates = async (pastDays: number) => {
+      const d = await getJson<{ dates?: string[] } | string[]>(`/api/scrape-dates?picker_past_days=${pastDays}&picker_future_days=14`, { ttlMs: 60_000 });
+      return (Array.isArray(d) ? d : d.dates) ?? [];
+    };
+    const defaultOf = (list: string[]) => {
+      const next = pickTwoWeeks(list, today).find((w) => w.role === "next");
+      return next ? firstDateOf(next.week, today) : list[0];
+    };
     (async () => {
       try {
         const days = Number(process.env.NEXT_PUBLIC_PICKER_PAST_DAYS) || 30;
-        const res = await fetch(`/api/scrape-dates?picker_past_days=${days}&picker_future_days=14`, { cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const d = await res.json();
-        const list: string[] = d.dates ?? d ?? [];
+        if (!fromUrl && days > 21) {
+          fetchDates(21).then((list) => {
+            if (cancelled || !list.length) return;
+            setDates((cur) => (cur.length ? cur : list));
+            setSelectedDate((cur) => cur || defaultOf(list));
+            setLoadingDates(false);
+          }).catch(() => {});
+        }
+        const list = await fetchDates(days);
+        if (cancelled) return;
         setDates(list);
         if (list.length) {
-          const fromUrl = new URLSearchParams(window.location.search).get("date") ?? undefined;
-          const next = pickTwoWeeks(list, today).find((w) => w.role === "next");
-          setSelectedDate(fromUrl && list.includes(fromUrl) ? fromUrl : next ? firstDateOf(next.week, today) : list[0]);
+          setSelectedDate((cur) => (cur && (cur !== fromUrl || list.includes(fromUrl)) ? cur : defaultOf(list)));
         }
       } catch (e: unknown) {
-        setError(`開催日の一覧を取得できませんでした（${e instanceof Error ? e.message : String(e)}）`);
+        if (!cancelled) setError(`開催日の一覧を取得できませんでした（${e instanceof Error ? e.message : String(e)}）`);
       } finally {
-        setLoadingDates(false);
+        if (!cancelled) setLoadingDates(false);
       }
     })();
+    return () => { cancelled = true; };
   }, [reload, today]);
 
   /* レース一覧（日付変更時） */
@@ -121,10 +142,12 @@ export default function AnalysisPage() {
   useEffect(() => {
     if (!activeRaceId) { setLoad({ state: "idle" }); return; }
     let cancelled = false;
-    setLoad({ state: "loading" });
-    getJson<RaceAnalysis>(analysisUrl(activeRaceId), { ttlMs: 60_000, persist: true })
+    const url = analysisUrl(activeRaceId);
+    const stored = readStored<RaceAnalysis>(url);   // 前回見た結果を先に出し、裏で最新に差し替える
+    setLoad(stored ? { state: "ok", data: stored } : { state: "loading" });
+    getJson<RaceAnalysis>(url, { ttlMs: 60_000, persist: true })
       .then((data) => { if (!cancelled) setLoad({ state: "ok", data }); })
-      .catch((e: Error & { status?: number }) => { if (!cancelled) setLoad({ state: "error", status: e.status, message: e.message }); });
+      .catch((e: Error & { status?: number }) => { if (!cancelled && !stored) setLoad({ state: "error", status: e.status, message: e.message }); });
     return () => { cancelled = true; };
   }, [activeRaceId, reload]);
 
@@ -147,15 +170,23 @@ export default function AnalysisPage() {
   }
   const warm = useCallback((id: string) => prefetchJson(analysisUrl(id), { ttlMs: 60_000, persist: true }), []);
 
+  /* 表示できたら、同じ開催場の次の 2 レースを先に取っておく（切り替えが即時になる） */
+  useEffect(() => {
+    if (load.state !== "ok") return;
+    const i = selectable.findIndex((r) => r.race_id === activeRaceId);
+    if (i < 0) return;
+    selectable.slice(i + 1, i + 3).forEach((r) => warm(r.race_id));
+  }, [load.state, activeRaceId, selectable, warm]);
+
   const data = load.state === "ok" ? load.data : undefined;
   const modules = data?.modules ?? [];
   const mod = modules.find((m) => m.id === selectedModule) ?? modules.find((m) => m.status === "ok") ?? modules[0];
   const race = data?.race;
 
   return (
-    <div style={{ minHeight: "100dvh", background: "var(--bg)", color: "var(--text)" }}>
-      <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "18px 24px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 12 }}>
+    <div className="page-wide" style={{ minHeight: "100dvh", background: "var(--bg)", color: "var(--text)" }}>
+      <div className="an-pad" style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "18px 24px" }}>
+        <div style={{ maxWidth: PAGE_MAX, margin: "0 auto", display: "flex", alignItems: "center", gap: 12 }}>
           <h1 style={{ fontSize: 18, fontWeight: 700, color: "#f0f6fc", margin: 0 }}>🔎 めぐ分析</h1>
           <p className="hide-narrow" style={{ fontSize: 12, color: "var(--text-dim)", margin: 0 }}>
             開催日・競馬場・レースを選ぶと、出馬表の馬ごとに分析結果を表示します
@@ -163,13 +194,13 @@ export default function AnalysisPage() {
         </div>
       </div>
 
-      <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "14px 24px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+      <div className="an-pad" style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", padding: "14px 24px" }}>
+        <div style={{ maxWidth: PAGE_MAX, margin: "0 auto" }}>
           <WeekPicker dates={dates} today={today} selectedDate={selectedDate} loading={loadingDates} onSelectDate={chooseDate} />
         </div>
       </div>
 
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 24px" }}>
+      <div className="an-pad" style={{ maxWidth: PAGE_MAX, margin: "0 auto", padding: "20px 24px" }}>
         {error && (
           <div role="alert" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, padding: "14px 18px", color: "var(--err)", fontSize: 13, marginBottom: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <span>⚠️ {error}</span>
@@ -273,7 +304,9 @@ export default function AnalysisPage() {
                           <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{mod.label}</h2>
                           <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{mod.description}</span>
                         </div>
-                        {mod.status === "ok" && <AnalysisTable entries={data.entries} module={mod} />}
+                        {mod.status === "ok" && (mod.view === "map"
+                          ? (mod.figure ? <RunningMap figure={mod.figure} entries={data.entries} /> : null)
+                          : <AnalysisTable entries={data.entries} module={mod} />)}
                         {mod.status === "not_applicable" && <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>このレースでは表示できません（コース条件や元データが未確定です）。</p>}
                         {mod.status === "error" && <p style={{ fontSize: 13, color: "var(--err)", marginTop: 8 }}>この分析の計算に失敗しました。</p>}
                         {mod.status === "ok" && mod.source && formatPeriod(mod.source) && (

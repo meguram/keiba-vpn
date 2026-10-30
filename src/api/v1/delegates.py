@@ -802,6 +802,18 @@ def get_race_note_3d_v2(race_id: str) -> tuple[dict, int]:
     return payload, 200
 
 
+def get_running_map(race_id: str) -> tuple[dict, int]:
+    """出走馬の走法マップ（めぐ分析）。事前計算で保存した結果（めぐ分析の running_map タブ）を読むだけで、ここでは計算しない。"""
+    from src.research.race_analysis import store
+
+    payload = store.read(race_id)
+    mod = next((m for m in (payload or {}).get("modules", []) if m.get("id") == "running_map"), None)
+    if not mod or mod.get("status") != "ok" or not mod.get("figure"):
+        return {"status": "pending", "race_id": race_id, "message": "このレースの走法マップはまだ用意できていません。出馬表の取得後に自動で計算されます。"}, 404
+    return {"status": "ok", "race_id": race_id, "computed_at": payload.get("computed_at"), "data_until": mod.get("data_until"),
+            "notes": mod.get("notes"), **mod["figure"]}, 200
+
+
 def query_pedigree_race_stats(params: dict[str, Any]) -> tuple[dict, int]:
     """血統×レース条件クエリ — 内部 FastAPI ブリッジまたは直接 SQLite。"""
     bridge = os.environ.get("KEIBA_LEGACY_API", "").strip()

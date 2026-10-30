@@ -7,7 +7,14 @@ import pytest
 
 from src.research.race_analysis import runs as runs_mod
 from src.research.race_analysis.base import ModuleOutput
+from src.research.race_analysis.running_map_module import RunningMapModule
 from src.research.race_analysis.service import analyze_race
+
+
+@pytest.fixture(autouse=True)
+def _no_running_map(monkeypatch):
+    """走法マップは全期間の出走記録を読むので、ここ（表の分析のテスト）では対象外にする。つなぎ込みは test_running_map_module で見る。"""
+    monkeypatch.setattr(RunningMapModule, "applicable", lambda self, ctx: False)
 
 
 class FakeStorage:
@@ -203,6 +210,47 @@ def test_sire_course_joins_sire_by_horse_id(tmp_path, monkeypatch):
     assert a["今回A"]["_key"] == "父A" and a["今回A"]["sire_rec"] == [1, 1, 0, 0]       # 父A の産駒: S1 で 1着、S2 で 2着
     assert a["父不明"]["sire_rec"] is None and a["父不明"].get("_key") is None
     assert "父を特定できない" in " ".join(m["notes"])
+
+
+def test_sire_course_excludes_the_horses_own_runs(tmp_path, monkeypatch):
+    rows = [
+        _row("S1", "2026-01-05", "東京", "芝", 1600, 1, "J1", horse="e1"),   # 今回の出走馬自身の過去走 → 自分の行では数えない
+        _row("S2", "2026-01-12", "東京", "芝", 1600, 3, "J1", horse="e1"),
+        _row("S3", "2026-01-19", "東京", "芝", 1600, 8, "J2", horse="a1"),   # 同じ父の別の馬
+    ]
+    d = tmp_path / "2026"
+    d.mkdir()
+    pd.DataFrame(rows).to_parquet(d / "race_result_flat.parquet")
+    sire = pd.DataFrame([
+        {"horse_id": h, "sire_id": "SIRE_A", "sire_name": "父A", "dam_sire_id": "D1", "dam_sire_name": "母父1"} for h in ("e1", "a1")
+    ])
+    sire_path = tmp_path / "horse_sire_map.parquet"
+    sire.to_parquet(sire_path)
+    monkeypatch.setattr(runs_mod, "FLAT_DIR", tmp_path)
+    monkeypatch.setattr(runs_mod, "SIRE_MAP_PATH", sire_path)
+    runs_mod._cache.update(sig=None, df=None, sire_sig=None, sire_df=None)
+    st = _storage([
+        {"horse_number": 1, "bracket_number": 1, "horse_name": "自身あり", "horse_id": "e1", "jockey_id": "J1"},
+        {"horse_number": 2, "bracket_number": 2, "horse_name": "兄弟", "horse_id": "a1", "jockey_id": "J2"},
+    ])
+    d = analyze_race(st, "202605040111")
+    a = {e["horse_name"]: e["analysis"]["sire_course"] for e in d["entries"]}
+    assert a["自身あり"]["sire_rec"] == [0, 0, 0, 1] and a["自身あり"]["sire_n"] == 1     # 自分の 2 走（1着・3着）を除き、a1 の 1 走だけ
+    assert a["兄弟"]["sire_rec"] == [1, 0, 1, 0] and a["兄弟"]["sire_top3"] == 1.0         # a1 の行は e1 の 2 走だけ
+    j = {e["horse_name"]: e["analysis"]["jockey_course"] for e in d["entries"]}
+    assert j["自身あり"]["course_n"] == 0                                                  # J1 の騎乗は e1 の分だけ → 除くと 0
+
+
+@pytest.mark.parametrize("raw, shown", [
+    ("マジェスティックウォリアーMajestic Warrior(米)", "マジェスティックウォリアー(米)"),
+    ("ノーザンダンサーNorthern Dancer", "ノーザンダンサー"),
+    ("Gun Runner (米)", "Gun Runner (米)"),
+    ("オメガパフューム", "オメガパフューム"),
+])
+def test_sire_name_drops_english_name_after_kana(raw, shown):
+    from src.research.race_analysis.course_stats import display_sire_name
+
+    assert display_sire_name(raw) == shown
 
 
 def test_build_horse_sire_map_parses_ancestors_and_is_incremental(tmp_path):
@@ -421,3 +469,28 @@ def test_fetch_and_record_distinguishes_no_data_from_errors(tmp_path):
     waits.clear()
     assert S.fetch_and_record(pages("<html>maintenance</html>", OSError("x"), "<html></html>"), "u", "5555555555", "c5", p, sleep=sleep) == "failed"
     assert len(waits) == 2 and "5555555555" not in S.load(p)
+
+
+def test_running_map_module_returns_a_figure_keyed_by_entry(monkeypatch):
+    from src.research.race import running_map as rm
+    from src.research.race_analysis.base import RaceContext
+
+    seen = {}
+
+    def fake(entries, race_id, conditions):
+        seen.update(conditions=conditions, n=len(entries))
+        return {"status": "ok", "axes": [{"key": "ts"}], "groups": [{"id": "A", "label": "末脚が速い", "horse_numbers": [1]}],
+                "horses": [{"horse_id": "h1", "horse_number": 1, "horse_name": "甲", "x": 0.1, "y": 0.2, "group": "A",
+                            "percentiles": {"ts": 80.0}, "n_runs": 5, "estimated": False, "own_weight": 0.6,
+                            "last_run_date": "2026-10-01", "values": {"ts": 55.0}}],
+                "unmapped": [{"horse_id": "h2", "horse_name": "乙", "horse_number": 2, "reason": "過去の出走も父のデータもありません"}],
+                "fidelity": {"explained": 0.8}, "conditions": {"rq_source": "cond"}, "data_until": "2026-10-25"}
+    monkeypatch.setattr(rm, "build_running_map", fake)
+    ctx = RaceContext(race_id="202605040811", date="2026/10/31", venue="東京", surface="芝", distance=1600, track_condition="稍",
+                      entries=[{"key": "h1", "horse_id": "h1", "horse_number": 1}, {"key": "h2", "horse_id": "h2", "horse_number": 2},
+                               {"key": "idx2", "horse_id": None, "horse_number": 3}])
+    out = RunningMapModule.__new__(RunningMapModule).compute(ctx)
+    assert seen == {"conditions": {"date": "2026-10-31", "venue": "東京", "surface": "芝", "distance": 1600, "track_condition": "稍重"}, "n": 2}
+    assert out.view == "map" and out.columns == [] and out.data_until == "2026-10-25"
+    h = out.figure["horses"][0]
+    assert h["key"] == "h1" and "values" not in h and out.figure["unmapped"][0]["key"] == "h2"

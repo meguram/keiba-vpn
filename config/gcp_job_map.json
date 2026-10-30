@@ -3580,23 +3580,6 @@
    "ready": true
   },
   {
-   "id": "maintenance-deploy",
-   "desc": "メンテナンス窓の自動反映（stg のホスト用）",
-   "destination": "host",
-   "phase": null,
-   "wave": null,
-   "origin": {
-    "tag": "KEIBA-MAINTENANCE-DEPLOY",
-    "cron_job_id": "maintenance-deploy",
-    "cron_utc": "5 18 * * *",
-    "script": "scripts/ops/maintenance_deploy.sh"
-   },
-   "reason": "stg を残す間は必要。prod は VPS の promote.sh / pull 型デプロイ",
-   "enabled": true,
-   "blockers": [],
-   "ready": true
-  },
-  {
    "id": "keiba-remote-access",
    "desc": "ホストへの遠隔アクセス",
    "destination": "host",

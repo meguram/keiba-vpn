@@ -9,6 +9,7 @@ from src.api.v1.delegates import (
     get_final_odds,
     get_horse_aptitude,
     get_race_note_3d_v2,
+    get_running_map,
     optimize_betting,
     query_pedigree_race_stats,
 )
@@ -23,6 +24,12 @@ bp = Blueprint("v1_analytics", __name__)
 def final_odds(race_id: str):
     refresh = request.args.get("refresh", "").lower() in ("1", "true", "yes")
     return jsonify(get_final_odds(race_id, refresh=refresh))
+
+
+@bp.get("/races/<race_id>/running-map")
+def running_map(race_id: str):
+    payload, code = get_running_map(race_id)
+    return jsonify(payload), code
 
 
 @bp.get("/pedigree-race-stats/query")

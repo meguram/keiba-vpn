@@ -95,6 +95,23 @@ def test_pull_recreates_the_tree_and_is_idempotent(tmp_path):
     assert not list(run.rglob("*.tmp"))
 
 
+def test_pull_calls_download_hooks_only_when_something_was_downloaded(tmp_path, monkeypatch):
+    monkeypatch.setattr(gm, "_DOWNLOAD_HOOKS", [])
+    seen: list[list[str]] = []
+    gm.on_download(seen.append)
+    gm.on_download(seen.append)                                   # 二重登録しない
+    gm.on_download(lambda keys: 1 / 0)                            # 失敗しても取り込みは止めない
+    g = Fake()
+    src = tmp_path / "host"
+    _w(src, "data/local/meta/entries_state/R1.json", b"s")
+    gm.push(g, src, TREES)
+    run = tmp_path / "cloudrun"
+    assert gm.pull(g, run, TREES)["downloaded"] == 1
+    assert seen == [[f"{gm.PREFIX}/data/local/meta/entries_state/R1.json"]]
+    assert gm.pull(g, run, TREES)["downloaded"] == 0
+    assert len(seen) == 1
+
+
 def test_pull_recent_days_skips_objects_not_updated_recently(tmp_path):
     g = Fake()
     g.objs["ops/mirror/data/local/meta/entries_state/OLD.json"] = (b"o", time.time() - 9 * 86400)

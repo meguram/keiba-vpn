@@ -393,7 +393,7 @@ footer.page-footer { margin-top: 70px; padding-top: 16px; border-top: 1px solid 
   
   <h3>8.1 環境</h3><table><thead><tr><th>環境</th><th>DB／キャッシュ</th><th>備考</th></tr></thead><tbody>
 <tr><td>dev</td><td>ローカル docker の PostgreSQL／Redis、GCS 無効</td><td>Next.js はモック（NEXT_PUBLIC_MOCK）で単独起動可</td></tr>
-<tr><td>stg</td><td>ネイティブ PostgreSQL 14、<TUNNEL_STG> トンネル</td><td>scripts/server/setup_stg.sh、stg_mock によるモック予測</td></tr>
+<tr><td>stg</td><td>ネイティブ PostgreSQL 14、<TUNNEL_STG> トンネル</td><td>stg_mock によるモック予測（旧 setup_stg.sh は 2026-10-30 に削除）</td></tr>
 <tr><td>prod（VPS）</td><td>docker-compose.serving.yml（API＋Redis）</td><td>イメージは CI が GHCR へ push。SSH でデプロイ（Secrets 未登録: T-052）</td></tr>
 </tbody></table><h3>8.2 VPS の諸元</h3><ul><li>ConoHa VPS メモリ2GB／3コア／SSD 100GB。36か月契約済み（〜2028/05/18）、自動バックアップは無効。</li><li>本番環境（VPS／GCP）からの netkeiba アクセスは未実施。IP が遮断されないかの試験が必要（T-007）。</li><li>systemd の MemoryMax 配分（推論 512MB、Web 384MB、Redis 128MB、合計 ≦1,500MB）は MASTER の設計値。</li></ul><h3>8.3 CI／CD</h3><ul><li>CI（<code>.github/workflows/ci.yml</code>）: Alembic の upgrade head、時系列分割の shuffle 静的検査、pytest（<code>tests/</code>、manual 除外）。カバレッジゲートなし（T-033）。</li><li>CD: <code>deploy-vps.yml</code>（deploy/docker/Dockerfile.serving → GHCR → SSH デプロイ）、<code>deploy-gcp.yml</code>。対象の stg／master ブランチは空の orphan で、GitHub Secrets も未登録（T-052）。</li></ul><h3>8.4 コスト（cost-estimate.md の試算・概算）</h3><table><thead><tr><th></th><th>低</th><th>中央（基準）</th><th>高</th></tr></thead><tbody>
 <tr><td>GCP 合計（USD）</td><td>約$14</td><td>約$18</td><td>約$27</td></tr>

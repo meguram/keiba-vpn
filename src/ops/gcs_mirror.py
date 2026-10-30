@@ -203,6 +203,15 @@ def lazy_fetch(path: Path, day: str | date) -> bool:
         return False
 
 
+_DOWNLOAD_HOOKS: list = []
+
+
+def on_download(fn) -> None:
+    """pull が 1 件以上降ろした後に fn(降ろしたキーの一覧) を呼ぶ。API 側のメモリキャッシュを、ファイルが入れ替わった時点で無効にするために使う。"""
+    if fn not in _DOWNLOAD_HOOKS:
+        _DOWNLOAD_HOOKS.append(fn)
+
+
 def pull(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = TREES, *, recent_days: float | None = None,
          workers: int = 16, window: float | None = None) -> dict[str, int]:
     """GCS のファイルのうち、ローカルに無い・内容が違うものをローカルへ取り込む。recent_days を付けると、GCS で直近に更新されたものだけを見る。
@@ -235,6 +244,11 @@ def pull(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = TREE
     if todo:
         with ThreadPoolExecutor(max_workers=workers) as ex:
             list(ex.map(_get, todo))
+        for hook in list(_DOWNLOAD_HOOKS):
+            try:
+                hook(todo)
+            except Exception:  # noqa: BLE001  フックの失敗で取り込みを止めない
+                logger.warning("gcs_mirror の取り込み後フックが失敗", exc_info=True)
     return {"seen": seen, "downloaded": len(todo)}
 
 

@@ -25,8 +25,8 @@ TABLES = ROOT / "data/page_reference/tables"
 PROGRESS = ROOT / "data/local/meta/horse_training_backfill_progress.json"
 OTHER_SCRAPERS = (
     r"python[0-9.]* -m src\.(scripts\.maintenance\.repair_|scripts\.scraping\.(?!backfill_horse_race_remarks|backfill_horse_training_recent)|"
-    r"scripts\.data\.(backfill_trifecta_odds|acq_profile_pilot|acq_horse_lap_pilot)|scraper\.(backfill|run|export_tables|auto_scrape|raceday|queue))"
-)
+    r"scripts\.data\.(backfill_trifecta_odds|acq_profile_pilot|acq_horse_lap_pilot)|scraper\.(backfill(?!.* --phase past)|run|export_tables|auto_scrape|raceday|queue))"
+)  # 2016〜2019 年の補填（--phase past）はこちらに譲るので待たない（待つと待ち合いになる）。同時取得はプロセス横断スロットで 1 本になる
 MAX_LOAD = 18.0
 # クライアント自身が 1 リクエストあたり約 4.5〜5 秒空ける（実測: 前日夕方の取り直しは 450 頭 41 分 = 5.5 秒/頭）。ここの上乗せは小さくてよい
 EXTRA_SLEEP = (float(os.environ.get("HORSE_TRAINING_BACKFILL_MIN_SEC", "0.5")), float(os.environ.get("HORSE_TRAINING_BACKFILL_MAX_SEC", "1.5")))

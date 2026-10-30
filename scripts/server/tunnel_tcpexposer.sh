@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
-# tcpexposer リバーストンネル（dev / stg）
+# tcpexposer リバーストンネル（dev / monitor）
 #
 # Usage:
-#   ./scripts/server/tunnel_tcpexposer.sh [dev|stg]              # 前景接続
-#   ./scripts/server/tunnel_tcpexposer.sh [dev|stg] autostart    # ワークスペース起動用
-#   ./scripts/server/tunnel_tcpexposer.sh [dev|stg] background    # バックグラウンド + 自動再接続
-#   ./scripts/server/tunnel_tcpexposer.sh [dev|stg] check        # 診断
-#   ./scripts/server/tunnel_tcpexposer.sh [dev|stg] stop         # 停止
-#   ./scripts/server/tunnel_tcpexposer.sh autostart-all          # dev + stg 両方
+#   ./scripts/server/tunnel_tcpexposer.sh [dev|monitor]              # 前景接続
+#   ./scripts/server/tunnel_tcpexposer.sh [dev|monitor] autostart    # ワークスペース起動用
+#   ./scripts/server/tunnel_tcpexposer.sh [dev|monitor] background    # バックグラウンド + 自動再接続
+#   ./scripts/server/tunnel_tcpexposer.sh [dev|monitor] check        # 診断
+#   ./scripts/server/tunnel_tcpexposer.sh [dev|monitor] stop         # 停止
+#   ./scripts/server/tunnel_tcpexposer.sh autostart-all          # dev + monitor 両方
 #   ./scripts/server/tunnel_tcpexposer.sh stop-all
 #
 # プロファイル（省略時 dev）:
 #   dev     meguai-dev.tcpexposer.com     → localhost:<dev フロントエンド>  （モック UI）
-#   stg     meguai-stg.tcpexposer.com     → localhost:<stg フロントエンド>  （本番相当 Next.js）
 #   monitor meguai-monitor.tcpexposer.com → localhost:<監視ポータル>  （ポートは config/ports.env）
 #
 # 環境変数（任意）:
@@ -39,7 +38,7 @@ ACTION=""
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      dev|stg|monitor|prod)
+      dev|monitor|prod)
         TCPEXPOSER_PROFILE="$1"
         shift
         ;;
@@ -108,7 +107,6 @@ check_local() {
   log "WARN ローカル :${LOCAL_PORT} 未応答 (HTTP ${code})"
   case "$TCPEXPOSER_PROFILE" in
     dev) log "  → ./service_start --env dev" ;;
-    stg) log "  → ./service_start --env stg" ;;
     monitor) log "  → python -m src.monitor.app（port は config/ports.env の KEIBA_PORT_MONITOR）" ;;
   esac
   return 1
@@ -267,13 +265,11 @@ run_autostart_all() {
     return 0
   fi
   "$0" dev autostart
-  "$0" stg autostart
   "$0" monitor autostart
 }
 
 run_stop_all() {
   "$0" dev stop
-  "$0" stg stop
   "$0" monitor stop
 }
 

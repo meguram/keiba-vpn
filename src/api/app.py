@@ -2546,11 +2546,13 @@ _SCRAPE_DATES_RAW_CACHE: dict[str, Any] = {"data": None, "ts": 0.0}
 
 # 開催日セレクタ用: list_keys の結果をプロセス内にキャッシュ（GCS 全件列挙のコストを下げる）
 _RACE_LIST_STEMS_CACHE: dict[str, Any] = {"stems": None, "ts": 0.0}
-_RACE_LIST_STEMS_TTL = 120.0  # 2分 (daily-race-lists バッチ後の反映を早める)
+_RACE_LIST_STEMS_TTL = 600.0  # 変更時は _invalidate_race_list_caches で即捨てる。TTL は取りこぼし用の保険
 
 # picker_past_days 応答の短時間キャッシュ
-_PICKER_SCRAPE_DATES_CACHE: dict[str, Any] = {"key": None, "data": None, "ts": 0.0}
-_PICKER_SCRAPE_DATES_TTL = 60.0
+# by_key: 条件(今日の日付+past+future)ごとに (ts, data)。21日→全期間の2段取得で互いに追い出し合わない。日付をキーに含めるので日替わりで自然に切り替わる。
+# 内容が変わる契機（cache_epoch 経由の Storage.save・daily-race-lists 後・ミラー取り込み後）は _invalidate_race_list_caches で即捨てるので、TTL は取りこぼし用の保険
+_PICKER_SCRAPE_DATES_CACHE: dict[str, Any] = {"by_key": {}}
+_PICKER_SCRAPE_DATES_TTL = 3600.0
 
 _NO_STORE_HEADERS = {"Cache-Control": "no-store, max-age=0", "Pragma": "no-cache"}
 
@@ -2574,8 +2576,8 @@ def _invalidate_race_list_caches() -> None:
     _scrape_dates_cache["ts"] = 0.0
     _SCRAPE_DATES_RAW_CACHE["data"] = None
     _SCRAPE_DATES_RAW_CACHE["ts"] = 0.0
-    _PICKER_SCRAPE_DATES_CACHE["data"] = None
-    _PICKER_SCRAPE_DATES_CACHE["ts"] = 0.0
+    _PICKER_SCRAPE_DATES_CACHE["by_key"] = {}
+    _PICKER_SCRAPE_DATES_CACHE["gen"] = _PICKER_SCRAPE_DATES_CACHE.get("gen", 0) + 1
     _RACE_CALENDAR_CACHE.clear()
     try:
         from src.scraper.monitor_backlog import invalidate_cache as _mb_invalidate
@@ -2661,14 +2663,11 @@ async def get_scraped_dates(
     now = _time.time()
 
     if picker_past_days is not None:
-        ck = f"{int(picker_past_days)}+{int(picker_future_days)}" if picker_future_days is not None else str(int(picker_past_days))
-        pd = _PICKER_SCRAPE_DATES_CACHE
-        if (
-            pd.get("key") == ck
-            and pd.get("data") is not None
-            and (now - float(pd.get("ts") or 0)) < _PICKER_SCRAPE_DATES_TTL
-        ):
-            return JSONResponse(pd["data"], headers=_no_store_unless_anonymous(request))
+        ck = f"{datetime.now().date().isoformat()}:{int(picker_past_days)}+{int(picker_future_days) if picker_future_days is not None else ''}"
+        by_key = _PICKER_SCRAPE_DATES_CACHE.setdefault("by_key", {})
+        hit = by_key.get(ck)
+        if hit and (now - hit[0]) < _PICKER_SCRAPE_DATES_TTL:
+            return JSONResponse(hit[1], headers=_no_store_unless_anonymous(request))
 
         def _picker_dates_only():
             """直近 N 日を 1 日ずつ race_lists を読み、JRA レース≥1 の日のみ返す。"""
@@ -2682,16 +2681,28 @@ async def get_scraped_dates(
             out: list[str] = []
             # 週間予測用: picker_future_days 指定時は今日(i=0)と未来(i<0)も含める。日付の降順（未来 → 過去）で返す
             first = -int(picker_future_days) if picker_future_days is not None else 1
-            for i in range(first, n + 1):
-                d = today - timedelta(days=i)
-                stem = d.strftime("%Y%m%d")
+            all_stems = [(today - timedelta(days=i)).strftime("%Y%m%d") for i in range(first, n + 1)]
+            # 開催のない日（平日の大半）まで GCS に問い合わせると、1 件ずつの 404 往復で初回が数十秒になる。
+            # キー一覧（2 分キャッシュ）にある日だけを、並列で読む。一覧が取れないときは全日を読む。
+            try:
+                listed = set(_cached_race_list_stems(storage))
+            except Exception:
+                listed = set()
+            cand = [s for s in all_stems if s in listed] if listed else all_stems
+
+            def _check(stem: str) -> bool:
                 rl = storage.load("race_lists", stem)
                 if not rl:
-                    continue
+                    return False
                 raw = rl.get("races") or []
                 meta = rl.get("_meta") if isinstance(rl, dict) else None
-                if date_has_at_least_one_jra_race(stem, raw, meta):
-                    out.append(stem)
+                return bool(date_has_at_least_one_jra_race(stem, raw, meta))
+
+            from concurrent.futures import ThreadPoolExecutor
+
+            with ThreadPoolExecutor(max_workers=16) as ex:
+                flags = list(ex.map(_check, cand))
+            out = [s for s, ok in zip(cand, flags) if ok]
             return {
                 "dates": out,
                 "gcs_enabled": storage.gcs_enabled,
@@ -2700,10 +2711,13 @@ async def get_scraped_dates(
                 "picker_source": "race_lists_jra_ge1",
             }
 
+        gen = _PICKER_SCRAPE_DATES_CACHE.get("gen", 0)
         result = await asyncio.to_thread(_picker_dates_only)
-        pd["key"] = ck
-        pd["data"] = result
-        pd["ts"] = now
+        if _PICKER_SCRAPE_DATES_CACHE.get("gen", 0) == gen:      # 計算中に無効化が入ったら古い結果は残さない
+            day = ck.split(":", 1)[0]
+            for k in [k for k in by_key if not k.startswith(day)]:
+                by_key.pop(k, None)
+            by_key[ck] = (now, result)
         return JSONResponse(result, headers=_no_store_unless_anonymous(request))
 
     use_raw = str(raw_keys or "").strip().lower() in ("1", "true", "yes", "on")
@@ -2787,6 +2801,17 @@ _cache_epoch.register("app.race_list_cache", _RACE_LIST_CACHE.clear)
 _cache_epoch.register("app.race_list_memos", lambda: _invalidate_race_list_caches())
 _cache_epoch.register("app.status_cache", lambda: _status_cache.clear())
 _cache_epoch.register("app.bundle_cache", lambda: _bundle_cache.clear())
+
+
+def _on_mirror_download(keys: list[str]) -> None:
+    """GCS ミラーから race_lists が降ろされたら、開催日一覧などのメモリキャッシュを捨てる（他マシンの書き込みを TTL 待ちにしない）。"""
+    if any("/race_lists/" in k for k in keys):
+        _invalidate_race_list_caches()
+
+
+from src.ops import gcs_mirror as _gcs_mirror  # noqa: E402
+
+_gcs_mirror.on_download(_on_mirror_download)
 _race_list_warm_task: Any = None
 
 

@@ -87,18 +87,79 @@ export type ColumnChartBlock = {
   xLabel: string;
   yLabel: string;
   xs: string[];
-  series: { name: string; values: (number | null)[]; baseline?: boolean }[];
+  series: ChartSeries[];
+  /**
+   * 「その条件」と「それ以外」の比較。a・b は series の name。2 系列を最初から並べて出し、
+   * p（横軸の点ごとの差の p 値）が 0.05 未満の点に印を付ける（src/research/columns/compare_series.py が書く）
+   */
+  compare?: { a: string; b: string; p: (number | null)[] };
+  /** 値の種類。pct（既定）は率で「12.3%」、num は人気などの数で「4.46」と出す */
+  format?: ChartFormat;
+  /**
+   * プルダウンで切り替える条件（例: 距離・芝ダート）。各 options の先頭は「全体」で、全部が先頭のときは series をそのまま出す。
+   * それ以外の組み合わせは variants[選んだ値を "|" でつないだキー] の系列に差し替える
+   */
+  filters?: { label: string; options: string[] }[];
+  variants?: Record<string, ChartVariant>;
+  /** 右の縦軸に描く系列（横軸が同じで単位の違う値。例: 左に複勝率、右に平均人気）。常に表示し、色を分ける */
+  y2?: { label: string; format?: ChartFormat; series: ChartSeries[] };
   /** 値が実データでなく画面確認用のダミー */
   dummy?: boolean;
   caption?: string;
 };
 
-/** グラフの縦軸の上限（値の最大を切りのよい数に丸める。値が無いときは 0.5） */
-export function chartMax(series: { values: (number | null)[] }[]): number {
-  const vs = series.flatMap((s) => s.values).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
-  if (!vs.length) return 0.5;
+/** プルダウンで選んだ条件での系列（compare・caption は省略すると元のものを使う） */
+export type ChartVariant = { series: ChartSeries[]; y2Series?: ChartSeries[]; compare?: ColumnChartBlock["compare"]; caption?: string };
+
+/** プルダウンの選択に応じたグラフ（全部が先頭の選択肢、または該当する組み合わせが無ければ元のまま） */
+export function chartVariant(block: ColumnChartBlock, picked: string[]): ColumnChartBlock {
+  const v = block.variants?.[picked.join("|")];
+  if (!v || picked.every((p, i) => p === block.filters?.[i]?.options[0])) return block;
+  const y2 = block.y2 && v.y2Series ? { ...block.y2, series: v.y2Series } : block.y2;
+  return { ...block, series: v.series, y2, compare: v.compare ?? block.compare, caption: v.caption ?? block.caption };
+}
+
+/** 右軸の上限。左軸の補助線（intervals 本の区切り）にそろうよう、区切りの幅を切りのよい数にする */
+export function axis2Max(series: { values: (number | null)[]; ci?: ([number, number] | null)[] }[], intervals: number, format: ChartFormat = "num"): number {
+  const vs = series.flatMap((s) => [...s.values, ...(s.ci ?? []).map((c) => (c ? c[1] : null))]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+  const m = vs.length ? Math.max(...vs) : 1;
+  const raw = m / Math.max(1, intervals);
+  const nice = (format === "pct" ? [0.01, 0.02, 0.025, 0.05, 0.1, 0.2, 0.25, 0.5] : [0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100]).find((st) => st >= raw - 1e-9) ?? raw;
+  return Math.round(nice * intervals * 1000) / 1000;
+}
+
+/** n: 点ごとの標本数、ci: 点ごとの 95% 信頼区間 [下限, 上限] */
+export type ChartSeries = { name: string; values: (number | null)[]; baseline?: boolean; n?: (number | null)[]; ci?: ([number, number] | null)[] };
+
+export type ChartFormat = "pct" | "num";
+
+/** グラフの値の表示（率は %、数は小数 2 桁） */
+export function formatValue(v: number | null | undefined, format: ChartFormat = "pct"): string {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "–";
+  return format === "num" ? v.toFixed(2) : `${(v * 100).toFixed(1)}%`;
+}
+
+/** 縦軸の目盛りの間隔 */
+export function chartStep(max: number, format: ChartFormat = "pct"): number {
+  if (format === "num") return max <= 10 ? 1 : 5;
+  return max <= 0.2 ? 0.05 : 0.1;
+}
+
+/** 有意とみなす p 値の境目 */
+export const SIGNIFICANT_P = 0.05;
+
+/** p 値の表示（小さい値は「<0.001」） */
+export function formatP(p: number | null | undefined): string {
+  if (p == null || !Number.isFinite(p)) return "–";
+  return p < 0.001 ? "<0.001" : p.toFixed(3);
+}
+
+/** グラフの縦軸の上限（値と信頼区間の最大を切りのよい数に丸める。値が無いときは 0.5） */
+export function chartMax(series: { values: (number | null)[]; ci?: ([number, number] | null)[] }[], format: ChartFormat = "pct"): number {
+  const vs = series.flatMap((s) => [...s.values, ...(s.ci ?? []).map((c) => (c ? c[1] : null))]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+  if (!vs.length) return format === "num" ? 5 : 0.5;
   const m = Math.max(...vs);
-  const step = m <= 0.2 ? 0.05 : 0.1;
+  const step = chartStep(m, format);
   return Math.round(Math.max(step, Math.ceil(m / step - 1e-9) * step) * 100) / 100;
 }
 
