@@ -85,7 +85,7 @@ class GroupTest(unittest.TestCase):
         Zall[:3, 0] = Zall[:3, 1] = 2.0  # 3 頭だけ末脚が速い
         traits = rm.describe_group(Zall[:3], Zall)
         self.assertEqual(traits[0]["axis"], "末脚")
-        self.assertEqual(traits[0]["text"], "末脚が速い")
+        self.assertEqual(traits[0]["text"], "高TS")
         self.assertEqual(len(traits), 1)
 
 

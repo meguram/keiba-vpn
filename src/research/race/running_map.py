@@ -47,8 +47,11 @@ AXIS_KEYS = [a[0] for a in AXES]
 WEIGHTS = np.array([1 / math.sqrt(2), 1 / math.sqrt(2), 1, 1, 1])
 SIGNS = np.array([a[2] for a in AXES])
 # グループの説明では TS と GC を 1 つの「末脚」として扱う
-_TRAIT_AXES = [("末脚", [0, 1], "末脚が速い", "末脚が遅い")] + [
-    (a[3], [i], a[4], a[5]) for i, a in enumerate(AXES) if a[0] not in ("ts", "gc")
+_TRAIT_AXES = [
+    ("末脚", [0, 1], "高TS", "低TS"),
+    ("前半型のペース", [2], "高前半比", "低前半比"),
+    ("先行力", [3], "高先行", "低先行"),
+    ("道中の押し上げ", [4], "高押し上げ", "低押し上げ"),
 ]
 
 VENUE_JA = {"01": "札幌", "02": "函館", "03": "福島", "04": "新潟", "05": "東京",

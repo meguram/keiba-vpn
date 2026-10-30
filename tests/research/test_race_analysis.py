@@ -479,7 +479,7 @@ def test_running_map_module_returns_a_figure_keyed_by_entry(monkeypatch):
 
     def fake(entries, race_id, conditions):
         seen.update(conditions=conditions, n=len(entries))
-        return {"status": "ok", "axes": [{"key": "ts"}], "groups": [{"id": "A", "label": "末脚が速い", "horse_numbers": [1]}],
+        return {"status": "ok", "axes": [{"key": "ts"}], "groups": [{"id": "A", "label": "高TS", "horse_numbers": [1]}],
                 "horses": [{"horse_id": "h1", "horse_number": 1, "horse_name": "甲", "x": 0.1, "y": 0.2, "group": "A",
                             "percentiles": {"ts": 80.0}, "n_runs": 5, "estimated": False, "own_weight": 0.6,
                             "last_run_date": "2026-10-01", "values": {"ts": 55.0}}],
