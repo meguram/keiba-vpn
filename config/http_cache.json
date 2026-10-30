@@ -5,7 +5,7 @@
   "settled": {"s_maxage": 2592000, "grace_days": 3, "prefixes": ["/api/race-list/", "/api/race/", "/api/v1/races/"], "_doc": "開催から grace_days 日以上たった確定済みのレース(8桁の開催日 / 12桁の race_id)だけ、共有キャッシュ(nginx)の保持を s_maxage 秒(30日=1か月)にする。日付が分からないものは短いまま。データ更新時は VPS の keiba-cache-warm が X-Keiba-Refresh 付きで取り直して上書きする。全消去は VPS の purge_api_cache.sh"},
   "rules": [
     {"prefix": "/api/race-calendar", "max_age": 30, "s_maxage": 120},
-    {"prefix": "/api/scrape-dates", "max_age": 30, "s_maxage": 120},
+    {"prefix": "/api/scrape-dates", "max_age": 30, "s_maxage": 600},
     {"prefix": "/api/megu-index-dates", "max_age": 30, "s_maxage": 120},
     {"prefix": "/api/race-quality/", "max_age": 300},
     {"prefix": "/api/race-list/", "max_age": 60, "s_maxage": 60},
