@@ -167,30 +167,3 @@ class TestFlask(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
-
-class TestHoldingServer(unittest.TestCase):
-    def test_static_page_is_served_as_503(self):
-        import importlib.util
-        import threading
-        import urllib.error
-        import urllib.request
-        from pathlib import Path
-
-        spec = importlib.util.spec_from_file_location("holding", Path(__file__).resolve().parents[2] / "scripts" / "ops" / "maintenance_holding_server.py")
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        srv = mod.serve(0, host="127.0.0.1", retry_after=42)
-        port = srv.server_address[1]
-        threading.Thread(target=srv.serve_forever, daemon=True).start()
-        try:
-            for path, needle in (("/weekly-predictions", "メンテナンス中"), ("/api/race/x", "maintenance")):
-                with self.assertRaises(urllib.error.HTTPError) as cm:
-                    urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=5)
-                e = cm.exception
-                self.assertEqual(e.code, 503)
-                self.assertEqual(e.headers["Retry-After"], "42")
-                self.assertIn("no-store", e.headers["Cache-Control"])
-                self.assertIn(needle, e.read().decode("utf-8"))
-        finally:
-            srv.shutdown()
-            srv.server_close()

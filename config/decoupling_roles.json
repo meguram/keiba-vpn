@@ -25,7 +25,6 @@
     "backfill-all-horse": {"role": "ops_required", "target": "vps", "note": "馬情報の一括補填。出走馬の分は new-horse-pedigree と recent-retry が毎日取るので、全馬の一括は低頻度の週次に落とす"},
     "horse-training-backfill": {"role": "ops_required", "target": "vps", "note": "当年の調教は公開の特徴量(調教被覆)に直結するので VPS/GCP へ。過去年の取り直しだけはホスト(研究)でよい。docs/operations/training_fetch.md"},
 
-    "maintenance-deploy": {"role": "retire", "note": "ホスト用の窓内自動反映。Cloud Run のリビジョン(タグ付き→切替)と VPS の pull 型配備(pull_release)に置き換える"},
     "server-watchdog": {"role": "retire", "note": "ホストの API/UI 常駐の死活。VPS は systemd、API は Cloud Run が持つ"},
     "rotate-logs": {"role": "retire", "note": "ホストのログ。VPS は journald 100MB、GCP は Cloud Logging"},
     "ensure-monitor": {"role": "retire", "note": "監視ポータルを Cloud Run へ移すとき一緒に廃止(それまでは残す)"},

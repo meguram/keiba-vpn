@@ -75,7 +75,7 @@ ENV_CONFIGS = {
         "mlflow_url": _local_url("mlflow", "stg"),
         "public_url": "https://meguai-stg.tcpexposer.com/",
         "color": "#3fb950",
-        # stg はネイティブ PostgreSQL :5432 / DB=keiba_db_stg（scripts/server/setup_stg.sh 参照）
+        # stg はネイティブ PostgreSQL :5432 / DB=keiba_db_stg
         "db_url": os.environ.get(
             "STG_DATABASE_URL",
             "postgresql+psycopg://keiba_user:keiba_pass@localhost:5432/keiba_db_stg",

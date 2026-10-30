@@ -5,8 +5,8 @@
 #   ./service_start                      # 既定: --env dev（Next.js モック UI。ポートは config/ports.env）
 #   ./service_start --env dev            # 上記と同じ（モックのみ）
 #   ./service_start --env dev --full     # ホットリロード開発（FastAPI + Flask + 実 API）
-#   ./service_start --env stg            # 本番相当 + KEIBA_ENV=stg + tcpexposer stg
 #   ./service_start --env prod           # 本番相当（FastAPI --prod / next build+start）
+#                                        # ※ホストで動かすのは dev のみ。stg/prod は VPS・GCP の運用
 #   ./service_start --minimal            # FastAPI + MLflow のみ（dev 時は reload）
 #   ./service_start --mock               # Next.js モック + Flask（ログイン用）
 #   ./service_start --mock --with-fastapi # 上記 + FastAPI（レガシー UI / モックデータ API）
@@ -16,7 +16,7 @@
 #   ./service_start --help
 #
 # 上書き: 環境変数 / scripts/server/service_start.local.env（任意）
-# ポート: config/ports.env が唯一の正（dev=231xx / stg=232xx / prod=233xx / monitor=23900）
+# ポート: config/ports.env が唯一の正（ホストで動かすのは dev と監視ポータルのみ。cron 用の FastAPI / MLflow は別管理）
 
 set -euo pipefail
 
@@ -546,7 +546,6 @@ mode_full() {
     start_tcpexposer_tunnel "$TCPEXPOSER_PROFILE"
     case "$TCPEXPOSER_PROFILE" in
       dev) echo "  tcpexposer  https://meguai-dev.tcpexposer.com/" ;;
-      stg) echo "  tcpexposer  https://meguai-stg.tcpexposer.com/" ;;
       monitor) echo "  tcpexposer  https://meguai-monitor.tcpexposer.com/" ;;
     esac
   fi
@@ -582,7 +581,6 @@ mode_mock() {
     start_tcpexposer_tunnel "$TCPEXPOSER_PROFILE"
     case "$TCPEXPOSER_PROFILE" in
       dev) echo "  公開 URL: https://meguai-dev.tcpexposer.com/" ;;
-      stg) echo "  公開 URL: https://meguai-stg.tcpexposer.com/" ;;
       monitor) echo "  公開 URL: https://meguai-monitor.tcpexposer.com/" ;;
     esac
   fi
@@ -594,8 +592,7 @@ print_help() {
   echo "プロファイル:"
   echo "  dev   モック UI (:${KEIBA_PORT_DEV_FRONTEND}) → meguai-dev.tcpexposer.com"
   echo "  dev --full  FastAPI reload / Flask debug / next dev（実 API 開発）"
-  echo "  stg   本番相当 (Next :${KEIBA_PORT_STG_FRONTEND} Flask :${KEIBA_PORT_STG_FLASK}) + KEIBA_ENV=stg → meguai-stg.tcpexposer.com"
-  echo "  prod  stg と同構成（VPS デプロイ想定）"
+  echo "  prod  本番ビルド構成（ホストでは通常使わない。stg/prod は VPS・GCP）"
 }
 
 MODE=""
@@ -608,7 +605,7 @@ DEV_FULL=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --env|--profile)
-      SERVICE_PROFILE="${2:?--env には dev|stg|prod を指定}"
+      SERVICE_PROFILE="${2:?--env には dev|prod を指定}"
       shift 2
       ;;
     --env=*|--profile=*)
@@ -617,10 +614,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dev)
       SERVICE_PROFILE=dev
-      shift
-      ;;
-    --stg)
-      SERVICE_PROFILE=stg
       shift
       ;;
     --prod)
@@ -683,7 +676,7 @@ if [[ -z "$MODE" ]]; then
         MODE=mock
       fi
       ;;
-    stg|prod)
+    prod)
       MODE=full
       ;;
     *)

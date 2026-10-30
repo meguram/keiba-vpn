@@ -24,12 +24,6 @@
   "scripts/ops/install_prod_status_cron.sh": {
    "local_data": 1
   },
-  "scripts/ops/maintenance_deploy.sh": {
-   "local_data": 3
-  },
-  "scripts/ops/maintenance_holding_server.py": {
-   "host_port_literal": 1
-  },
   "scripts/ops/purge_preflight.sh": {
    "host_alias": 2
   },
@@ -72,25 +66,12 @@
   "scripts/server/ensure_postgres.sh": {
    "postgres": 4
   },
-  "scripts/server/fetch_stg_health.sh": {
-   "host_alias": 2,
-   "host_path": 1,
-   "local_data": 1
-  },
   "scripts/server/frontend_npm_install.sh": {
    "host_path": 1
-  },
-  "scripts/server/setup_stg.sh": {
-   "postgres": 2
   },
   "scripts/server/tunnel_cloudflared.sh": {
    "host_port": 1,
    "host_port_literal": 1
-  },
-  "scripts/server/tunnel_stg_ui.sh": {
-   "host_port": 4,
-   "host_port_literal": 4,
-   "host_alias": 2
   },
   "src/api/app.py": {
    "page_reference": 6,
@@ -398,10 +379,6 @@
    "host_path": 2,
    "local_data": 1
   },
-  "src/scripts/ops/maintenance_deploy.py": {
-   "local_data": 4,
-   "host_port_literal": 2
-  },
   "src/scripts/ops/maintenance_notify.py": {
    "local_data": 2
   },
@@ -412,13 +389,6 @@
   },
   "src/scripts/ops/serving_state.py": {
    "local_data": 1
-  },
-  "src/scripts/ops/stage_deploy.py": {
-   "host_port": 3,
-   "host_port_literal": 3,
-   "host_alias": 1,
-   "host_path": 1,
-   "local_data": 3
   },
   "src/utils/anti_scraping.py": {
    "local_data": 2
