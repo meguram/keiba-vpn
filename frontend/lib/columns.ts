@@ -55,6 +55,12 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
       { id: "change", label: "乗り替わり", desc: "騎手が替わると成績はどう変わるか" },
     ],
   },
+  {
+    id: "weather", label: "天候", desc: "風・気温など、気象の影響",
+    children: [
+      { id: "wind", label: "風", desc: "直線の向かい風・追い風と、風の強さの影響" },
+    ],
+  },
 ];
 
 /** 調査結果の結論 */
