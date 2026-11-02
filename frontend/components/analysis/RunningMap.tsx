@@ -8,7 +8,6 @@ import type { AnalysisEntry, RunningMapAxis, RunningMapDayTrend, RunningMapExtra
 const GROUP_COLORS = ["#58a6ff", "#f0883e", "#3fb950", "#d2a8ff", "#f778ba"];
 const groupColor = (g: string) => GROUP_COLORS[(g.charCodeAt(0) - 65) % GROUP_COLORS.length] ?? "#8b949e";
 
-const W = 360, PAD = 30;
 /** コース適性の色（高いほど濃い）。グループの色と紛れないよう金色 */
 const APT_RGB = "227,179,65";
 /** その日の馬場傾向の色（コースの統計の金色と見分ける） */
@@ -26,7 +25,7 @@ function axisColor(p: number | null | undefined): string {
   const to = t < 0 ? AXIS_LOW : AXIS_HIGH, a = Math.abs(t);
   return `rgb(${AXIS_MID.map((m, i) => Math.round(m + (to[i] - m) * a)).join(",")})`;
 }
-/** ⇆ の線: これより短い（地図の位置でほとんど表せない）軸は見出しを付けず、地図の下に書く */
+/** ⇆ の線: これより短い（地図の位置でほとんど表せない）軸は図に出さない（丸の色で見る） */
 const GUIDE_MIN = 0.3;
 
 /** 補助の軸（偏差値 50±10）を、丸の色に使う 0〜100 の位置へ（正規分布の累積） */
@@ -37,34 +36,78 @@ function extraPct(v: number | null | undefined): number | null {
   return Math.round((z > 0 ? 1 - d : d) * 1000) / 10;
 }
 
-function label(h: RunningMapHorse): string {
-  return h.horse_number ? String(h.horse_number) : (h.horse_name ?? "?").slice(0, 2);
+/** 出走馬の中での順位（0〜100。同じ値は平均の順位）。全馬で似た値の軸でも色の差が出るように、丸の色はこれで塗る */
+function rankInField(vals: (number | null | undefined)[]): (number | null)[] {
+  const ok = vals.map((v, i) => [v, i] as const).filter((t): t is readonly [number, number] => typeof t[0] === "number").sort((a, b) => a[0] - b[0]);
+  const out: (number | null)[] = vals.map(() => null);
+  if (ok.length === 1) out[ok[0][1]] = 50;
+  for (let i = 0; i < ok.length && ok.length > 1;) {
+    let j = i;
+    while (j + 1 < ok.length && ok[j + 1][0] === ok[i][0]) j++;
+    const r = ((i + j) / 2 / (ok.length - 1)) * 100;
+    for (let k = i; k <= j; k++) out[ok[k][1]] = r;
+    i = j + 1;
+  }
+  return out;
+}
+
+/** 図の上の札（馬番＋馬名 4 文字）。全角は 1 文字 = 1em、数字は約 0.62em として幅を見積もる */
+const FS = 10.5, AXFS = 11, R_PX = 210, GAP = 2;
+const textWidth = (t: string, fs: number) => [...t].reduce((w, c) => w + (/[\x20-\x7e]/.test(c) ? 0.62 : 1) * fs, 0);
+const shortLabel = (h: RunningMapHorse) => `${h.horse_number ?? ""}${h.horse_number ? " " : ""}${[...(h.horse_name ?? "?")].slice(0, 4).join("")}`;
+const fullLabel = (h: RunningMapHorse) => `${h.horse_number ? `${h.horse_number}:` : ""}${h.horse_name ?? "?"}`;
+type Box = { x: number; y: number; w: number; h: number };
+const overlap = (a: Box, b: Box) => Math.min((a.w + b.w) / 2 + GAP - Math.abs(a.x - b.x), (a.h + b.h) / 2 + GAP - Math.abs(a.y - b.y));
+
+/** 札の重なりをほどく: 重なった 2 枚を浅い向きへ押し離し、少しずつ元の位置へ戻す（軸名の札は動かさない障害物）。決定的 */
+function relax(boxes: Box[], anchors: { x: number; y: number }[], fixed: Box[]): void {
+  for (let it = 0; it < 400; it++) {
+    let moved = false;
+    for (let i = 0; i < boxes.length; i++) {
+      const a = boxes[i];
+      for (let j = i + 1; j < boxes.length; j++) {
+        const b = boxes[j];
+        if (overlap(a, b) <= 0) continue;
+        const ox = (a.w + b.w) / 2 + GAP - Math.abs(a.x - b.x), oy = (a.h + b.h) / 2 + GAP - Math.abs(a.y - b.y);
+        if (oy <= ox) { const s = (a.y < b.y || (a.y === b.y && i < j)) ? -1 : 1; a.y += (s * oy) / 2; b.y -= (s * oy) / 2; }
+        else { const s = (a.x < b.x || (a.x === b.x && i < j)) ? -1 : 1; a.x += (s * ox) / 2; b.x -= (s * ox) / 2; }
+        moved = true;
+      }
+      for (const f of fixed) {
+        if (overlap(a, f) <= 0) continue;
+        const ox = (a.w + f.w) / 2 + GAP - Math.abs(a.x - f.x), oy = (a.h + f.h) / 2 + GAP - Math.abs(a.y - f.y);
+        if (oy <= ox) a.y += (a.y < f.y ? -1 : 1) * oy; else a.x += (a.x < f.x ? -1 : 1) * ox;
+        moved = true;
+      }
+      a.x += (anchors[i].x - a.x) * 0.03;
+      a.y += (anchors[i].y - a.y) * 0.03;
+    }
+    if (!moved && it > 20) break;
+  }
 }
 
 export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entries: AnalysisEntry[] }) {
   const [sel, setSel] = useState<string | null>(null);
-  // 丸の色: "group" か軸のキー。最初は、地図の位置で最も表せない軸（位置×色で全軸を見られるように）
-  // コース別の地図では、地図に入っていない方面のうち最も重要なもの
+  // 丸の色: "group" か軸のキー。コース別の地図では、地図に入っていない方面のうち最も重要なもの
   const [colorKey, setColorKey] = useState<string>(() => {
     const cm = figure.course_map;
     if (cm) return cm.importance.find((i) => !cm.axes.includes(i.key))?.key ?? "group";
     const worst = [...figure.axes].sort((a, b) => (a.r2 ?? 0) - (b.r2 ?? 0))[0];
     return worst?.key ?? "group";
   });
-  // 背景の色: "course" = コースの統計、"day" = その日の馬場傾向
+  // 背景の色: その日の馬場に傾向が出ていれば「今日の馬場」、無ければ「コースの統計」から始める
   const day = figure.day_trend ?? null;
-  const [bg, setBg] = useState<"course" | "day">("course");
+  const [bg, setBg] = useState<"course" | "day">(() => (day && day.status === "trend" && day.heat ? "day" : "course"));
   if (figure.status !== "ok") {
     return <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>走法データのある馬が少なく、図を作れません。</p>;
   }
   const hs = figure.horses;
   const ex = figure.extent;
-  const xs = [...(ex ? ex.x : [-2, 2]), ...hs.map((h) => h.x)], ys = [...(ex ? ex.y : [-3, 3]), ...hs.map((h) => h.y)];
-  const x0 = Math.min(...xs) - 0.25, x1 = Math.max(...xs) + 0.25, y0 = Math.min(...ys) - 0.25, y1 = Math.max(...ys) + 0.25;
-  const scale = (W - 2 * PAD) / (x1 - x0);
-  const H = (y1 - y0) * scale + 2 * PAD;
-  const px = (x: number) => PAD + (x - x0) * scale;
-  const py = (y: number) => H - PAD - (y - y0) * scale;
+  // 縮尺: 原点から最も遠い馬が半径 R_PX に来るように。軸の先端はその外側に置き、軸名が馬の札と重ならないようにする
+  const Rd = Math.max(0.5, ...hs.map((h) => Math.hypot(h.x, h.y))) * 1.08;
+  const s = R_PX / Rd;
+  const px = (x: number) => x * s;
+  const py = (y: number) => -y * s;
   const apt = figure.aptitude;
   const heat = bg === "day" ? day?.heat ?? null : apt;
   const heatRgb = bg === "day" ? DAY_RGB : APT_RGB;
@@ -78,137 +121,119 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
       cells.push({ k, x: ex.x[0] + i * dx, y: ex.y[0] + j * dy, o });
     }
   }
-  const cw = ex ? ((ex.x[1] - ex.x[0]) / (ex.n - 1)) * scale : 0, ch = ex ? ((ex.y[1] - ex.y[0]) / (ex.n - 1)) * scale : 0;
+  const cw = ex ? ((ex.x[1] - ex.x[0]) / (ex.n - 1)) * s : 0, ch = ex ? ((ex.y[1] - ex.y[0]) / (ex.n - 1)) * s : 0;
   const bracketOf = new Map(entries.map((e) => [e.key, e.bracket_number]));
   const picked = hs.find((h) => (h.key ?? h.horse_id) === sel) ?? null;
-  // 選んだ馬と、8 方面で本当に近い馬（地図の近さは 2 次元に落とした分だけずれるので、線で結んで補う）
-  const near = new Map((picked?.similar ?? []).map((s, i) => [s.horse_id, i]));
+  const near = new Map((picked?.similar ?? []).map((sm, i) => [sm.horse_id, i]));
   const byHorseId = new Map(hs.map((h) => [h.horse_id, h]));
-  const explained = figure.fidelity?.explained;
-  // 丸の色に使える軸: 地図の 8 方面＋補助の軸（急坂・道悪。偏差値を 0〜100 の位置へ直して塗る）
+  // 丸の色に使える軸: 地図の方面＋補助の軸（急坂・道悪）。色は出走馬の中での順位で塗る
   const colorAxes: RunningMapAxis[] = [...figure.axes, ...(figure.extra_axes ?? []).map((x) => ({ ...x, weight: 0 }))];
   const isExtra = (k: string) => (figure.extra_axes ?? []).some((x) => x.key === k);
   const pctOf = (h: RunningMapHorse, k: string) => (isExtra(k) ? extraPct(h.extras?.[k]?.value) : h.percentiles[k]);
   const colorAxis = colorAxes.find((a) => a.key === colorKey) ?? null;
-  const fillOf = (h: RunningMapHorse) => (colorAxis ? axisColor(pctOf(h, colorAxis.key)) : groupColor(h.group));
+  const ranks = colorAxis ? rankInField(hs.map((h) => pctOf(h, colorAxis.key))) : [];
+  const fillOf = (i: number) => (colorAxis ? axisColor(ranks[i]) : groupColor(hs[i].group));
 
-  // 8 本の ⇆: 中心を通る線。長さは「地図の位置でその軸をどれだけ表せるか」（r2 の平方根）に比例
-  const R = Math.min(-x0, x1, -y0, y1) * 0.9;
-  const guides = figure.axes.filter((a) => a.arrow).map((a) => {
+  // 軸: 原点を通る線を、馬のいる範囲の外（半径 Rd）まで引き、高い側の先端に軸名を置く
+  const guides = figure.axes.filter((a) => a.arrow && (figure.course_map || (a.r2 ?? 0) >= GUIDE_MIN * GUIDE_MIN)).map((a) => {
     const n = Math.hypot(a.arrow![0], a.arrow![1]) || 1;
-    const L = R * Math.sqrt(Math.max(0, a.r2 ?? 0));
-    return { a, ux: a.arrow![0] / n, uy: a.arrow![1] / n, L };
+    return { a, ux: a.arrow![0] / n, uy: a.arrow![1] / n };
   });
-  const hidden = guides.filter((g) => g.L < R * GUIDE_MIN);
-  // 見出しは図の外周に置く（馬の丸と重ならない）。向きがほぼ同じ軸は「末脚の速さ・持続力」のように 1 つにまとめる。
-  // 色分けしている軸だけは両端（高い＝橙・低い＝青）に言葉を出す。位置でほとんど表せない軸は図の上には出さない（下の注記と凡例）
-  const ringLabels = (() => {
-    const items: { ang: number; text: string; tone: "dim" | "high" | "low" }[] = [];
-    for (const g of guides) {
-      if (g.L < R * GUIDE_MIN) continue;
-      const ang = Math.atan2(g.uy, g.ux);
-      if (g.a.key === colorKey) {
-        items.push({ ang, text: g.a.high, tone: "high" }, { ang: ang + Math.PI, text: g.a.low, tone: "low" });
-      } else items.push({ ang, text: g.a.label, tone: "dim" });
-    }
-    const norm = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
-    items.sort((a, b) => norm(a.ang) - norm(b.ang));
-    const merged: typeof items = [];
-    for (const it of items) {
-      const last = merged[merged.length - 1];
-      if (last && last.tone === "dim" && it.tone === "dim" && Math.abs(norm(it.ang - last.ang)) < (16 * Math.PI) / 180) {
-        last.text = `${last.text}・${it.text.replace(/^末脚の/, "")}`;
-        last.ang = (last.ang + it.ang) / 2;
-      } else merged.push({ ...it });
-    }
-    return merged.map((m) => {
-      const cx = px(0), cy = py(0);
-      const rx = Math.min(cx, W - cx) - 6, ry = Math.min(cy, H - cy) - 8;   // 図の枠に内接する楕円の上
-      const x = cx + Math.cos(m.ang) * rx, y = cy - Math.sin(m.ang) * ry;
-      const anchor: "middle" | "end" | "start" = Math.abs(Math.cos(m.ang)) < 0.35 ? "middle" : Math.cos(m.ang) > 0 ? "end" : "start";
-      return { ...m, x, y: y + 3, anchor };
-    });
-  })();
-  // 重なった見出しは、色分けしている軸（橙・青）を動かさず、他を図の中心から離れる向きへ 12px ずつずらす
-  const textW = (t: string, fs: number) => t.length * fs;
-  const spanX = (l: (typeof ringLabels)[number], fs: number) => {
-    const w = textW(l.text, fs);
-    return l.anchor === "start" ? [l.x, l.x + w] : l.anchor === "end" ? [l.x - w, l.x] : [l.x - w / 2, l.x + w / 2];
-  };
-  for (const l of [...ringLabels].sort((a, b) => (a.tone === "dim" ? 1 : 0) - (b.tone === "dim" ? 1 : 0))) {
-    if (l.tone !== "dim") continue;
-    for (let k = 0; k < 4; k++) {
-      const [a0, a1] = spanX(l, 9.5);
-      const hit = ringLabels.some((o) => o !== l && Math.abs(o.y - l.y) < 12 && (() => { const [b0, b1] = spanX(o, o.tone === "dim" ? 9.5 : 10.5); return a0 < b1 && b0 < a1; })());
-      if (!hit) break;
-      const out = l.y + (l.y < py(0) ? -12 : 12);
-      l.y = out >= 10 && out <= H - 4 ? out : l.y + (l.y < py(0) ? 12 : -12);   // 図の端に当たったら内側へ
-    }
+  const axisLabels = guides.map((g) => {
+    const on = g.a.key === colorKey;
+    const fs = AXFS, w = textWidth(g.a.label, fs) + 4, h = fs + 4;
+    let r = R_PX + 8;
+    const place = () => {
+      const tx = g.ux * r, ty = -g.uy * r;
+      // 先端から外向きに札を置く（右向きなら札の左端が先端、上向きなら札の下端が先端）
+      return { x: tx + (g.ux * w) / 2, y: ty - (g.uy * h) / 2, w, h };
+    };
+    return { g, on, fs, get box() { return place(); }, push() { r += 12; } };
+  });
+  const axBoxes: Box[] = [];
+  for (const l of axisLabels) {
+    for (let k = 0; k < 6 && axBoxes.some((b) => overlap(b, l.box) > 0); k++) l.push();
+    axBoxes.push(l.box);
   }
+  // 馬の札: 本来の位置から始めて、重なりをほどく。動いた札は細い線で本来の位置（小さな点）とつなぐ
+  const anchors = hs.map((h) => ({ x: px(h.x), y: py(h.y) }));
+  const boxes: Box[] = hs.map((h, i) => ({ x: anchors[i].x, y: anchors[i].y, w: textWidth(shortLabel(h), FS) + 8, h: FS + 6 }));
+  relax(boxes, anchors, axBoxes);
+  // 表示範囲: 馬の札・軸名・軸の線をすべて含む最小の四角（＋余白）
+  const all = [...boxes, ...axBoxes, { x: 0, y: 0, w: 2 * R_PX * 0.2, h: 2 * R_PX * 0.2 }];
+  const minX = Math.min(...all.map((b) => b.x - b.w / 2)) - 6, maxX = Math.max(...all.map((b) => b.x + b.w / 2)) + 6;
+  const minY = Math.min(...all.map((b) => b.y - b.h / 2)) - 6, maxY = Math.max(...all.map((b) => b.y + b.h / 2)) + 6;
+  const order = hs.map((_, i) => i).sort((a, b) => (hs[a] === picked ? 1 : 0) - (hs[b] === picked ? 1 : 0) || (near.has(hs[a].horse_id) ? 1 : 0) - (near.has(hs[b].horse_id) ? 1 : 0));
 
   return (
     <div>
       <style>{CSS}</style>
       <div className="rm-wrap">
       <div>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", maxWidth: 520, maxHeight: "82vh", margin: "0 auto", touchAction: "manipulation" }} role="img" aria-label="走法マップ（近い馬ほど走り方が似ている。背景の濃い色はこのコースで好走しやすいゾーン）">
+      <svg viewBox={`${minX} ${minY} ${maxX - minX} ${maxY - minY}`} width="100%" style={{ display: "block", maxWidth: 560, maxHeight: "82vh", margin: "0 auto", touchAction: "manipulation" }} role="img" aria-label="走法マップ">
         {cells.map((c) => (
           <rect key={c.k} x={px(c.x) - cw / 2} y={py(c.y) - ch / 2} width={cw + 0.5} height={ch + 0.5} fill={`rgb(${heatRgb})`} fillOpacity={c.o} shapeRendering="crispEdges" />
         ))}
-        <line x1={PAD / 2} x2={W - PAD / 2} y1={py(0)} y2={py(0)} stroke="var(--border)" />
-        <line y1={PAD / 2} y2={H - PAD / 2} x1={px(0)} x2={px(0)} stroke="var(--border)" />
-        {guides.map((g) => {
-          const on = g.a.key === colorKey;
-          const hx = px(g.ux * g.L), hy = py(g.uy * g.L), lx_ = px(-g.ux * g.L), ly_ = py(-g.uy * g.L);
+        {axisLabels.map((l) => {
+          const b = l.box, r = Math.hypot(b.x, b.y);
+          const ex_ = l.g.ux * (R_PX + 4), ey_ = -l.g.uy * (R_PX + 4);
           return (
-            <g key={`ax-${g.a.key}`} onClick={() => setColorKey(on ? "group" : g.a.key)} style={{ cursor: "pointer" }}>
-              <title>{`${g.a.label}　低い: ${g.a.low} ⇆ 高い: ${g.a.high}（押すとこの軸で丸を色分け）`}</title>
-              <line x1={lx_} y1={ly_} x2={hx} y2={hy} stroke={on ? "#e6edf3" : "#8b949e"} strokeOpacity={on ? 0.9 : 0.45} strokeWidth={on ? 1.8 : 1} />
-              <line x1={lx_} y1={ly_} x2={hx} y2={hy} stroke="transparent" strokeWidth={12} />
+            <g key={`ax-${l.g.a.key}`} onClick={() => setColorKey(l.on ? "group" : l.g.a.key)} style={{ cursor: "pointer" }}>
+              <title>{`${l.g.a.label}　低い: ${l.g.a.low} ⇆ 高い: ${l.g.a.high}`}</title>
+              <line x1={-ex_} y1={-ey_} x2={ex_} y2={ey_} stroke={l.on ? "#e6edf3" : "#8b949e"} strokeOpacity={l.on ? 0.9 : 0.5} strokeWidth={l.on ? 1.8 : 1} />
+              <line x1={-ex_} y1={-ey_} x2={ex_} y2={ey_} stroke="transparent" strokeWidth={12} />
+              {r > R_PX + 14 && <line x1={ex_} y1={ey_} x2={b.x - (l.g.ux * b.w) / 2} y2={b.y + (l.g.uy * b.h) / 2} stroke="#8b949e" strokeOpacity={0.5} strokeDasharray="2 2" />}
+              <text x={b.x} y={b.y + l.fs * 0.36} textAnchor="middle" fontSize={l.fs} fontWeight={l.on ? 800 : 600} fill={l.on ? "#e6edf3" : "var(--text-dim)"}>{l.g.a.label}</text>
             </g>
           );
         })}
-        {ringLabels.map((l, i) => (
-          <text key={`rl-${i}`} x={l.x} y={l.y} textAnchor={l.anchor} fontSize={l.tone === "dim" ? 9.5 : 10.5} fontWeight={l.tone === "dim" ? 400 : 700}
-            fill={l.tone === "high" ? "rgb(240,136,62)" : l.tone === "low" ? "rgb(88,166,255)" : "var(--text-dim)"} pointerEvents="none">{l.text}</text>
-        ))}
-        {picked && (picked.similar ?? []).map((s, i) => {
-          const o = byHorseId.get(s.horse_id);
-          if (!o) return null;
-          return <line key={`sim-${s.horse_id}`} x1={px(picked.x)} y1={py(picked.y)} x2={px(o.x)} y2={py(o.y)} stroke="#fff" strokeOpacity={0.85 - i * 0.2} strokeWidth={2.2 - i * 0.5} strokeDasharray="5 3" />;
+        {picked && (picked.similar ?? []).map((sm, i) => {
+          const j = hs.findIndex((h) => h.horse_id === sm.horse_id), a = hs.indexOf(picked);
+          if (j < 0) return null;
+          return <line key={`sim-${sm.horse_id}`} x1={boxes[a].x} y1={boxes[a].y} x2={boxes[j].x} y2={boxes[j].y} stroke="#fff" strokeOpacity={0.85 - i * 0.2} strokeWidth={2.2 - i * 0.5} strokeDasharray="5 3" />;
         })}
-        {hs.map((h) => {
+        {/* 札を本来の位置から動かした馬は、本来の位置（小さな点）と細い線でつなぐ。札より先に描き、札の下に隠す */}
+        {hs.map((h, i) => {
+          const b = boxes[i], a = anchors[i];
+          if (Math.hypot(b.x - a.x, b.y - a.y) <= 6) return null;
+          const c = fillOf(i), dim = picked != null && h !== picked && !near.has(h.horse_id);
+          return (
+            <g key={`ld-${h.key ?? h.horse_id ?? i}`} opacity={dim ? 0.3 : 1} pointerEvents="none">
+              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={c} strokeOpacity={0.8} strokeWidth={1} />
+              <circle cx={a.x} cy={a.y} r={2.6} fill={c} />
+            </g>
+          );
+        })}
+        {order.map((i) => {
+          const h = hs[i];
           const id = h.key ?? h.horse_id ?? "";
-          const c = fillOf(h);
-          const on = id === sel;
+          const c = fillOf(i);
+          const on = h === picked;
           const dim = picked != null && !on && !near.has(h.horse_id);
+          const b = boxes[i];
+          const text = on ? fullLabel(h) : shortLabel(h);
+          const w = on ? textWidth(text, FS + 1) + 10 : b.w, hh = on ? b.h + 2 : b.h;
           return (
             <g key={id} onClick={() => setSel(on ? null : id)} style={{ cursor: "pointer" }} opacity={dim ? 0.3 : 1}>
-              <circle cx={px(h.x)} cy={py(h.y)} r={on ? 14 : 11.5} fill={h.estimated ? "var(--surface)" : c} stroke={on ? "#fff" : h.estimated ? c : "rgba(0,0,0,.35)"}
-                strokeWidth={on ? 2.5 : h.estimated ? 1.8 : 1} strokeDasharray={h.estimated ? "3 2" : undefined} />
-              <text x={px(h.x)} y={py(h.y) + 4} textAnchor="middle" fontSize={h.horse_number ? 11.5 : 9} fontWeight={800} fill={h.estimated ? c : "#0d1117"} pointerEvents="none">{label(h)}</text>
-              <title>{`${h.horse_name ?? ""}（グループ ${h.group}${colorAxis ? `・${colorAxis.label} ${typeof pctOf(h, colorAxis.key) === "number" ? Math.round(pctOf(h, colorAxis.key) as number) : "不明"}` : ""}）`}</title>
+              <rect x={b.x - w / 2} y={b.y - hh / 2} width={w} height={hh} rx={hh / 2} fill={h.estimated ? "var(--surface)" : c}
+                stroke={on ? "#fff" : h.estimated ? c : "rgba(0,0,0,.35)"} strokeWidth={on ? 2 : h.estimated ? 1.5 : 1} strokeDasharray={h.estimated ? "3 2" : undefined} />
+              <text x={b.x} y={b.y + (on ? FS + 1 : FS) * 0.36} textAnchor="middle" fontSize={on ? FS + 1 : FS} fontWeight={700} fill={h.estimated ? c : "#0d1117"}>{text}</text>
+              <title>{fullLabel(h)}</title>
             </g>
           );
         })}
       </svg>
       <ColorControl axes={colorAxes} colorKey={colorKey} onChange={setColorKey} />
-      {hidden.length > 0 && (
-        <p style={{ fontSize: 11, color: "var(--text-dim)", margin: "2px 0 0" }}>
-          地図の位置ではほとんど表せない軸: {hidden.map((g) => g.a.label).join("・")}（丸の色で見られます）
-        </p>
-      )}
       {day && <BgSwitch bg={bg} onChange={setBg} day={day} />}
-      {bg === "day" && day ? <DayLegend day={day} />
-        : apt ? <AptLegend apt={apt} /> : <p style={{ fontSize: 11, color: "var(--text-dim)", margin: "4px 0 0" }}>このコースは出走数が少なく、好走しやすさの色は付けていません。</p>}
+      {bg === "day" && day ? <HeatLegend rgb={DAY_RGB} text={`今日の${day.surface ?? ""}（前の ${day.n_races} レース）の好走しやすさ`} />
+        : apt ? <HeatLegend rgb={APT_RGB} text={`${apt.course}の好走しやすさ`} /> : null}
       </div>
 
       <div>
       {figure.course_map && <CourseAxes cm={figure.course_map} />}
       {day && <DayTrend day={day} colorKey={colorKey} onColor={(k) => setColorKey(colorKey === k ? "group" : k)} />}
-      {picked ? <HorseDetail h={picked} axes={figure.axes} extraAxes={figure.extra_axes ?? []} bracket={bracketOf.get(picked.key ?? "") ?? null} onClose={() => setSel(null)}
-          onPick={(hid) => { const o = byHorseId.get(hid); if (o) setSel(o.key ?? o.horse_id ?? null); }} bracketOf={(hid) => bracketOf.get(byHorseId.get(hid)?.key ?? "") ?? null} />
-        : <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "4px 0 0" }}>馬（図の点・グループの名前）を押すと、走り方の内訳が見られます</p>}
+      {picked && <HorseDetail h={picked} axes={figure.axes} extraAxes={figure.extra_axes ?? []} bracket={bracketOf.get(picked.key ?? "") ?? null} onClose={() => setSel(null)}
+          onPick={(hid) => { const o = byHorseId.get(hid); if (o) setSel(o.key ?? o.horse_id ?? null); }} bracketOf={(hid) => bracketOf.get(byHorseId.get(hid)?.key ?? "") ?? null} />}
 
       <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
         {figure.groups.map((g) => (
@@ -235,19 +260,20 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
 
       {figure.unmapped.length > 0 && (
         <p style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 8 }}>
-          図に載せていない馬: {figure.unmapped.map((u) => `${u.horse_name ?? "?"}（${u.reason}）`).join("、")}
+          図に無い馬: {figure.unmapped.map((u) => `${u.horse_number ? `${u.horse_number}:` : ""}${u.horse_name ?? "?"}`).join("、")}
         </p>
       )}
-      <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 6 }}>
-        点線の白抜きは、実測ラップのある過去の出走が無く父の産駒の平均から推定した馬。
-        {figure.course_map
-          ? <>{` この図は、このコースで好走に効く 3 方面（${figure.course_map.axes.map((k) => figure.axes.find((a) => a.key === k)?.label ?? k).join("・")}）だけで作っています${typeof explained === "number" ? `（3 方面での違いの約 ${Math.round(explained * 100)}% を表示）` : ""}。`}
-              近い位置にいる馬ほど、この 3 方面が似ています。馬を押すと、8 方面すべてで本当に近い馬を線で結びます。
-              灰色の線は 3 方面の向きで、押すとその軸で丸を色分けします。他の方面と補助の軸は「丸の色」で見られます。座標は同じコース（またはまとめた距離帯）のレースで共通です。</>
-          : <>{typeof explained === "number" ? ` この図は、8 方面での馬どうしの違いの約 ${Math.round(explained * 100)}% を表しています。` : ""}
-              近い位置にいる馬ほど走り方が似ています（2 次元に落とした分、近さはおおよそ）。馬を押すと、8 方面で本当に近い馬を線で結びます。
-              灰色の線は 8 方面それぞれの向き（長いほど地図の位置でよく表せる軸）で、押すとその軸で丸を色分けします。座標はどのレースでも共通です。</>}
-      </p>
+    </div>
+  );
+}
+
+function HeatLegend({ rgb, text }: { rgb: string; text: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, fontSize: 11, color: "var(--text-dim)" }}>
+      <span>{text}</span>
+      <span>低</span>
+      <span aria-hidden style={{ width: 90, height: 8, borderRadius: 4, background: `linear-gradient(90deg, rgba(${rgb},0.05), rgba(${rgb},0.65))`, border: "1px solid var(--border)" }} />
+      <span>高</span>
     </div>
   );
 }
@@ -262,12 +288,13 @@ function ColorControl({ axes, colorKey, onChange }: { axes: RunningMapAxis[]; co
           style={{ minHeight: 30, fontSize: 12, background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 6, padding: "0 6px" }}>
           <option value="group">グループ</option>
           {axes.map((x) => (
-            <option key={x.key} value={x.key}>{x.label}{typeof x.r2 === "number" ? `（位置で表せる ${Math.round(x.r2 * 100)}%）` : ""}</option>
+            <option key={x.key} value={x.key}>{x.label}</option>
           ))}
         </select>
       </label>
       {a && (
         <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--text-dim)" }}>
+          <span>出走馬の中で</span>
           <span style={{ color: "rgb(88,166,255)" }}>{a.low}</span>
           <span aria-hidden style={{ width: 70, height: 8, borderRadius: 4, border: "1px solid var(--border)",
             background: `linear-gradient(90deg, ${axisColor(0)}, ${axisColor(50)}, ${axisColor(100)})` }} />
@@ -283,7 +310,7 @@ function CourseAxes({ cm }: { cm: NonNullable<RunningMapFigure["course_map"]> })
   return (
     <div style={{ fontSize: 12, margin: "4px 0 8px" }}>
       <div style={{ color: "var(--text-dim)" }}>
-        {cm.label}で好走に効く方面{cm.level === "group" ? "（このコースは出走が少ないため、同じ芝ダ・距離帯でまとめて測定）" : ""}
+        {cm.label}で好走に効く方面{cm.level === "group" ? "（芝ダ・距離帯でまとめて測定）" : ""}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 10px", marginTop: 3 }}>
         {cm.importance.slice(0, 5).map((i, n) => (
@@ -291,9 +318,6 @@ function CourseAxes({ cm }: { cm: NonNullable<RunningMapFigure["course_map"]> })
             {n < 3 ? `${n + 1}. ` : ""}{i.label} {Math.round(i.share * 100)}%{i.sign < 0 ? "（低いほど好走）" : ""}
           </span>
         ))}
-      </div>
-      <div style={{ fontSize: 10.5, color: "var(--text-dim)", marginTop: 2 }}>
-        太字の 3 つで地図を作っています。% は好走の得点（1〜3 着=1、4〜7 着は段階的に、8 着以下=0）を 8 方面で説明したときの寄与の割合（{cm.since ? `${cm.since.slice(0, 4)} 年以降` : ""}の同じコースの全出走、各馬はそのレースより前の走から）。
       </div>
     </div>
   );
@@ -314,29 +338,8 @@ function BgSwitch({ bg, onChange, day }: { bg: "course" | "day"; onChange: (b: "
   );
 }
 
-function DayLegend({ day }: { day: RunningMapDayTrend }) {
-  const sig = day.heat ? day.heat.sig.includes("2") : false;
-  return (
-    <div style={{ marginTop: 6, fontSize: 11, color: "var(--text-dim)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span>今日の{day.surface}（前の {day.n_races} レース・{day.n_runs} 頭）：好走しやすさ</span>
-        <span>低</span>
-        <span aria-hidden style={{ width: 90, height: 8, borderRadius: 4, background: `linear-gradient(90deg, rgba(${DAY_RGB},0.05), rgba(${DAY_RGB},0.65))`, border: "1px solid var(--border)" }} />
-        <span>高</span>
-      </div>
-      <div style={{ marginTop: 2 }}>
-        {day.status === "few" ? "前のレースが少なく（3 レース・30 頭未満）、まだ判定できません。"
-          : !day.heat ? "この地図の 3 方面がそろう馬が少なく、色を付けられません。"
-          : `同じ日・同じ${day.surface}の前のレースで、そのゾーンの走り方の馬が頭数から見込まれる以上に好走しています（その日の結果のみ。各馬の走り方は前日までの走から）。`
-            + (sig ? "濃い色は偶然では説明しにくいゾーン。" : "偶然と区別できるゾーンは無く、薄い色は傾向のみです。") + "レース数が少ないので目安です。"}
-      </div>
-    </div>
-  );
-}
-
 function DayTrend({ day, colorKey, onColor }: { day: RunningMapDayTrend; colorKey: string; onColor: (k: string) => void }) {
   const head = `今日の${day.surface ?? ""}馬場（同じ日・このレースより前の ${day.n_races} レース・${day.n_runs} 頭${day.track_conditions.length ? `・${day.track_conditions.join("/")}` : ""}）`;
-  const unjudged = day.axes.filter((a) => a.t == null).map((a) => a.label);
   return (
     <div style={{ fontSize: 12, margin: "0 0 8px", padding: "6px 8px", borderRadius: 8, border: `1px solid rgba(${DAY_RGB},0.5)`, background: `rgba(${DAY_RGB},0.06)` }}>
       <div style={{ color: "var(--text-dim)" }}>{head}</div>
@@ -354,31 +357,6 @@ function DayTrend({ day, colorKey, onColor }: { day: RunningMapDayTrend; colorKe
             ))}
           </div>
         )}
-      {day.status !== "few" && (
-        <div style={{ fontSize: 10.5, color: "var(--text-dim)", marginTop: 3 }}>
-          地図の 8 方面と補助の軸（道悪・急坂）を 1 つずつ調べ、多重検定を補正しても残ったものだけを出しています。1 日のレース数は少ないので、強い証拠ではなく目安です。
-          {unjudged.length > 0 ? ` 判定できる馬が少ない軸: ${unjudged.join("・")}。` : ""}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AptLegend({ apt }: { apt: NonNullable<RunningMapFigure["aptitude"]> }) {
-  return (
-    <div style={{ marginTop: 6, fontSize: 11, color: "var(--text-dim)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span>{apt.course}：好走しやすさ</span>
-        <span>低</span>
-        <span aria-hidden style={{ width: 90, height: 8, borderRadius: 4, background: `linear-gradient(90deg, rgba(${APT_RGB},0.05), rgba(${APT_RGB},0.65))`, border: "1px solid var(--border)" }} />
-        <span>高</span>
-      </div>
-      <div style={{ marginTop: 2 }}>
-        {apt.score
-          ? <>色が濃いほど、2024 年以降の同じコース（{apt.n_races.toLocaleString()} レース・{apt.n_runs.toLocaleString()} 頭）で、そのゾーンの走り方の馬が頭数から見込まれる以上に好走しています（好走の得点: 1〜3 着=1、4〜7 着は段階的に、8 着以下=0）。</>
-          : <>色が濃いほど、2020 年以降の同じコース（{apt.n_races.toLocaleString()} レース・{apt.n_runs.toLocaleString()} 頭）で、そのゾーンの走り方の馬が頭数から見込まれる以上に 3 着以内に入っています。</>}
-        濃い色は偶然では説明しにくいゾーン（多重検定を補正）、薄い色は傾向のみ。色の無い所は平均以下か、データ不足です。測った期間のレースでは結果を含む値です。
-      </div>
     </div>
   );
 }
@@ -407,7 +385,7 @@ function HorseDetail({ h, axes, extraAxes, bracket, onClose, onPick, bracketOf }
         <button type="button" onClick={onClose} aria-label="閉じる" style={{ minWidth: 32, minHeight: 32, border: "none", background: "transparent", color: "var(--text-dim)", fontSize: 18, cursor: "pointer" }}>×</button>
       </div>
       <div style={{ fontSize: 11, color: "var(--text-dim)", margin: "2px 0 6px" }}>
-        {h.estimated ? "実測ラップのある過去の出走が無いため、父の産駒の平均から推定" : `平地 ${h.n_runs} 走のうち実測ラップ ${h.n_lap_runs ?? 0} 走（直近 10 走まで使用）・前走 ${h.last_run_date ?? "–"}${h.own_weight < 0.5 ? "・実測が少ないため父の産駒の平均に寄せています" : ""}`}
+        {h.estimated ? "推定（父の産駒の平均）" : `実測ラップ ${h.n_lap_runs ?? 0} 走・前走 ${h.last_run_date ?? "–"}`}
       </div>
       {(h.similar ?? []).length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 6px", margin: "0 0 8px", fontSize: 12 }}>
@@ -425,19 +403,20 @@ function HorseDetail({ h, axes, extraAxes, bracket, onClose, onPick, bracketOf }
       <div style={{ display: "grid", gap: 5 }}>
         {axes.map((a) => {
           const p = h.percentiles[a.key];
+          // 全馬の中での位置（0〜100）を 10 点満点・0.5 点刻みに
+          const sc = typeof p === "number" ? Math.round(p / 5) / 2 : null;
           return (
             <div key={a.key} style={{ display: "grid", gridTemplateColumns: "8.5em 1fr 3em", alignItems: "center", gap: 6, fontSize: 11.5 }}>
               <span style={{ color: "var(--text-dim)" }} title={`実測の走 ${h.axis_runs?.[a.key] ?? 0} 走`}>{a.label}</span>
               <span style={{ position: "relative", height: 8, borderRadius: 4, background: "var(--border)" }} title={`${a.low} ← → ${a.high}`}>
-                {typeof p === "number" && <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${p}%`, borderRadius: 4, background: c, opacity: fromPrior.has(a.key) ? 0.35 : 1 }} />}
+                {sc != null && <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${sc * 10}%`, borderRadius: 4, background: c, opacity: fromPrior.has(a.key) ? 0.35 : 1 }} />}
                 <span style={{ position: "absolute", left: "50%", top: -2, bottom: -2, width: 1, background: "var(--text-dim)", opacity: 0.6 }} />
               </span>
-              <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{typeof p === "number" ? Math.round(p) : "–"}{fromPrior.has(a.key) ? "*" : ""}</span>
+              <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{sc != null ? sc.toFixed(1) : "–"}{fromPrior.has(a.key) ? "*" : ""}</span>
             </div>
           );
         })}
       </div>
-      <div style={{ fontSize: 10.5, color: "var(--text-dim)", marginTop: 4 }}>数字は全馬の中での位置（100 に近いほど「末脚が速い」「前に行く」など、各方面の強い側）。真ん中の線が平均。* は実測ラップの走が無く、父の産駒の平均から推定（薄い色）。</div>
       {extraAxes.length > 0 && (
         <div style={{ display: "grid", gap: 3, marginTop: 8, paddingTop: 6, borderTop: "1px solid var(--border)", fontSize: 11.5 }}>
           {extraAxes.map((x) => (
@@ -446,7 +425,6 @@ function HorseDetail({ h, axes, extraAxes, bracket, onClose, onPick, bracketOf }
               <span>{extraText(h.extras?.[x.key], x.key)}</span>
             </div>
           ))}
-          <div style={{ fontSize: 10.5, color: "var(--text-dim)" }}>地図の位置には使わない補助の軸。50 が平均で、高いほど「{extraAxes.map((x) => x.high).join("」「")}」。不明は判定できる走が足りない場合です。</div>
         </div>
       )}
     </div>
