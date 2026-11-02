@@ -237,12 +237,7 @@ def pairs(df: pd.DataFrame) -> list[Pair]:
                     "ローカルは札幌・函館・福島・新潟・中京・小倉の 6 場。1番人気の複勝率が低いほど荒れやすい。＊は差が有意（p<0.05）な距離帯。",
                     after_title="クラス別 1番人気複勝率"))
 
-    # 輸送: 前走と地域が違う（遠征）vs 同じ地域
-    away = df["venue"].map(REGION) != df["prev_venue"].map(REGION)
-    out.append(Pair("transport-vs-stay", "地域またぎ（遠征）の有無 × 人気帯別 複勝率", POP_BANDS, "地域またぎ（遠征）", "同地域継続", "top3",
-                    by("pop_band", "top3", away), "人気帯", "複勝率",
-                    "前走と今走の競馬場の地域（関東/関西/北海道/中部/九州）が違う出走と、同じ出走の比較。",
-                    after_title="地域またぎ（遠征）の有無 × 複勝率・勝率"))
+    # 輸送（transport-vs-stay）は src/research/columns/transport_vs_stay.py が記事全体を書く
 
     # 種牡馬: 主要種牡馬の産駒 vs それ以外の種牡馬の産駒（勝率）
     sire_rows = _sire_pair(df)
