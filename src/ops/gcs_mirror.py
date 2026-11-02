@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import json
 import logging
 import os
 import re
@@ -119,11 +120,37 @@ def _files(root: Path, tree: str) -> list[Path]:
         return []
 
 
+def _load_manifest(path: Path | None) -> dict[str, str] | None:
+    if path is None or not path.is_file():
+        return None
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        return {str(k): str(v) for k, v in (doc.get("md5") or {}).items()}
+    except Exception:  # noqa: BLE001  壊れていたら一覧で作り直す
+        return None
+
+
+def _save_manifest(path: Path, known: dict[str, str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps({"version": 1, "md5": known}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH_TREES, *, recent_days: float | None = None,
-         dry_run: bool = False, workers: int = 8, batch_bytes: int = 64 * 1024 * 1024) -> dict[str, int]:
+         dry_run: bool = False, workers: int = 8, batch_bytes: int = 64 * 1024 * 1024,
+         manifest: Path | None = None, verify_remote: bool = False) -> dict[str, int]:
     """内容が違う（または GCS に無い）ローカルのファイルだけを上げる。recent_days を付けると、その日数以内に更新されたファイルだけを見る。
-    全体が大きくても、メモリに溜めるのは batch_bytes まで（溜まったら上げて空にする）。"""
+    全体が大きくても、メモリに溜めるのは batch_bytes まで（溜まったら上げて空にする）。
+
+    manifest（ホストの定期 push 用）: 上げた内容の MD5 をローカルに記録し、次回からは GCS を一覧せずに記録と比べる。
+    GCS の一覧は 1 回で約 4 万件・約 40MB の応答になり、GCP の外から 5 分おきに取ると転送料だけで月 6,000 円を超えるため
+    （CLAUDE.md の「費用の上限」）。記録が無い・壊れている・verify_remote のときだけ一覧し、その結果で記録を作り直す。"""
     cutoff = time.time() - recent_days * 86400 if recent_days is not None else 0.0
+    known = None if verify_remote else _load_manifest(manifest)
+    use_list = known is None
+    if known is None:
+        known = {}
     todo: list[tuple[str, bytes]] = []
     seen = uploaded = would = 0
     held = 0
@@ -136,17 +163,23 @@ def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH
                 list(ex.map(lambda kv: backend.upload(*kv), todo))
             uploaded += len(todo)
             sent.extend(k[len(PREFIX) + 1:] for k, _ in todo)
+            for k, data in todo:
+                known[k] = _md5(data)
         todo, held = [], 0
 
+    listed: set[str] = set()
     for tree in trees:
-        remote = backend.list(f"{PREFIX}/{split_tree(tree)[0]}/")
+        d = split_tree(tree)[0]
+        if use_list and d not in listed:              # 同じフォルダに複数の glob があっても一覧は 1 回
+            listed.add(d)
+            known.update({k: md5 for k, (md5, _) in backend.list(f"{PREFIX}/{d}/").items()})
         for p in _files(root, tree):
             if p.stat().st_mtime < cutoff:
                 continue
             seen += 1
             data = p.read_bytes()
             key = f"{PREFIX}/{p.relative_to(root).as_posix()}"
-            if remote.get(key, ("",))[0] != _md5(data):
+            if known.get(key, "") != _md5(data):
                 if dry_run:
                     would += 1
                     continue
@@ -154,6 +187,8 @@ def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH
                 if held >= batch_bytes:
                     flush()
     flush()
+    if manifest is not None and not dry_run:
+        _save_manifest(manifest, known)
     if sent:
         try:      # 画面に出る応答の元（予測・ラップ・分析など）が変わったことを、VPS の事前ロード係へ目印で伝える（最善努力）
             from src.utils import cache_marker
@@ -403,6 +438,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--recent-days", type=float, default=None, help="直近この日数に更新されたものだけ（省略=全部）")
     ap.add_argument("--dry-run", action="store_true", help="push のみ: 上げるファイルの数を表示して終わる")
     ap.add_argument("--only-auth", action="store_true", help="会員名簿(AUTH_TREES)だけを上げる（root の cron 用）")
+    ap.add_argument("--manifest", default=None,
+                    help="push のみ: 上げた内容の記録（既定 data/local/meta/gcs_mirror_push_manifest*.json）。'none' で記録を使わず毎回 GCS を一覧する")
+    ap.add_argument("--verify-remote", action="store_true", help="push のみ: 記録を使わず GCS を一覧して比べ、記録を作り直す")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     from src.utils.project_env import load_project_dotenv
@@ -410,7 +448,13 @@ def main(argv: list[str] | None = None) -> int:
     load_project_dotenv()
     be = GcsBackend()
     trees = AUTH_TREES if a.only_auth else PUSH_TREES
-    print(push(be, trees=trees, recent_days=a.recent_days, dry_run=a.dry_run) if a.action == "push" else pull(be, recent_days=a.recent_days))
+    if a.manifest == "none":
+        manifest = None
+    else:
+        manifest = Path(a.manifest) if a.manifest else REPO_ROOT / "data/local/meta" / (
+            "gcs_mirror_push_manifest_auth.json" if a.only_auth else "gcs_mirror_push_manifest.json")
+    print(push(be, trees=trees, recent_days=a.recent_days, dry_run=a.dry_run, manifest=manifest, verify_remote=a.verify_remote)
+          if a.action == "push" else pull(be, recent_days=a.recent_days))
     return 0
 
 

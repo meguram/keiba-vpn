@@ -87,7 +87,34 @@ export type RunningMapFigure = {
   /** 好走しやすさの格子の範囲（全レース共通の座標。n×n、x が外側のループ） */
   extent: { n: number; x: [number, number]; y: [number, number] } | null;
   /** このコースの好走しやすさ。lift は期待に対する倍率、sig は 0=期待が小さく対象外 / 1=有意でない / 2=有意（FDR 5%）。添字は ix*n+iy */
-  aptitude: { course: string; n_runs: number; n_races: number; lift: number[]; sig: string } | null;
+  aptitude: { course: string; n_runs: number; n_races: number; lift: number[]; sig: string; score?: boolean } | null;
+  /** コースで好走に効く上位 3 方面だけで作った地図（無ければ全レース共通の 8 方面の地図）。level=group は出走が少なく芝ダ×距離帯でまとめたもの */
+  course_map?: RunningMapCourse | null;
+  /** その日（同じ競馬場・同じ芝ダート、このレースより前）の馬場傾向。前のレースが無ければ null */
+  day_trend?: RunningMapDayTrend | null;
+};
+
+export type RunningMapCourse = {
+  axes: string[];
+  level: "course" | "group";
+  label: string;
+  /** 方面ごとの重要度（share は 0〜1 の割合、sign は高いほど好走なら 1・低いほど好走なら -1）。重要な順 */
+  importance: { key: string; label: string; share: number; sign: number }[];
+  since?: string | null;
+};
+
+export type RunningMapDayTrend = {
+  status: "trend" | "none" | "few";
+  surface: string | null;
+  n_races: number;
+  n_runs: number;
+  races: string[];
+  track_conditions: string[];
+  /** 軸ごとの傾き（得点−期待を軸の値へ回帰）と t・p。trend は多重検定の補正後に傾向ありと判定されたもの */
+  axes: { key: string; label: string; high: string; low: string; kind: "map" | "extra"; slope: number | null; t: number | null; p: number | null; n: number; trend: boolean }[];
+  trend: { key: string; label: string; text: string; t: number | null }[];
+  /** この地図の格子（extent と同じ並び）での、その日の好走しやすさ */
+  heat: { lift: number[]; sig: string } | null;
 };
 
 export type AnalysisEntry = {

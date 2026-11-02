@@ -24,3 +24,21 @@ def assert_gcp_allowed(what: str) -> None:
             f"dev 環境では GCP へのアクセスは禁止です（{what}）。"
             " ローカルのモックデータを使ってください: make dev-mock"
         )
+
+
+def on_gcp() -> bool:
+    """GCP の中（Cloud Run のサービス・Jobs）で動いているか。GCS と同じリージョンなので、GCS からの読み出しに転送料がかからない。
+
+    GCP の外（ホストPC・VPS）から GCS を読むと、読んだ量に応じて「Download APAC」（約 18 円/GiB）が課金される。
+    常駐ループ・周回処理のように読み出しが積み上がる処理は、``egress_billed()`` が True なら既定で止めること（CLAUDE.md の「費用の上限」）。
+    """
+    import os
+
+    return bool(os.environ.get("K_SERVICE") or os.environ.get("CLOUD_RUN_JOB"))
+
+
+def egress_billed() -> bool:
+    """この環境から GCS を読むと転送料が課金されるか（GCS を使う設定で、かつ GCP の外）。"""
+    import os
+
+    return bool((os.environ.get("GCS_BUCKET") or "").strip()) and not on_gcp() and not gcp_forbidden()

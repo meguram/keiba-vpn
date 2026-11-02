@@ -386,3 +386,61 @@ def test_old_day_readers_fall_back_to_lazy_fetch(tmp_path, monkeypatch):
     monkeypatch.setattr(gmod, "lazy_fetch", lambda p, d: got.append(d) or False)
     monkeypatch.setattr(lfs, "path_for", lambda rid, d: tmp_path / "nope.json")
     assert lfs.load_forecast("R9", "2020-01-05") is None and got == ["2020-01-05"]
+
+
+class CountingFake(Fake):
+    def __init__(self):
+        super().__init__()
+        self.lists = 0
+
+    def list(self, prefix):
+        self.lists += 1
+        return super().list(prefix)
+
+
+def test_push_with_manifest_lists_gcs_only_once_then_compares_locally(tmp_path):
+    """費用の上限: GCP の外から 5 分おきに GCS 全件を一覧すると転送料が月数千円になる。記録があれば一覧しない。"""
+    g = CountingFake()
+    man = tmp_path / "manifest.json"
+    _w(tmp_path, "data/local/meta/entries_state/R1.json", b"s")
+    assert gm.push(g, tmp_path, TREES, manifest=man)["uploaded"] == 1
+    first_lists = g.lists
+    assert first_lists == len(TREES) and man.is_file()
+    assert gm.push(g, tmp_path, TREES, manifest=man)["uploaded"] == 0          # 同じ内容は上げない
+    _w(tmp_path, "data/local/meta/entries_state/R1.json", b"s2")
+    _w(tmp_path, "data/local/meta/entries_state/R2.json", b"n")
+    assert gm.push(g, tmp_path, TREES, manifest=man)["uploaded"] == 2          # 変更・新規は上げる
+    assert g.lists == first_lists                                              # 2 回目以降は一覧しない
+    assert g.objs["ops/mirror/data/local/meta/entries_state/R1.json"][0] == b"s2"
+
+
+def test_push_manifest_is_seeded_from_gcs_so_existing_files_are_not_reuploaded(tmp_path):
+    g = CountingFake()
+    _w(tmp_path, "data/local/meta/entries_state/R1.json", b"s")
+    gm.push(g, tmp_path, TREES)                                                # 記録なしで上げた後に
+    uploads = g.uploads
+    man = tmp_path / "manifest.json"
+    assert gm.push(g, tmp_path, TREES, manifest=man)["uploaded"] == 0          # 初回は一覧から記録を作る
+    assert g.uploads == uploads
+
+
+def test_push_verify_remote_and_broken_manifest_fall_back_to_listing(tmp_path):
+    g = CountingFake()
+    man = tmp_path / "manifest.json"
+    _w(tmp_path, "data/local/meta/entries_state/R1.json", b"s")
+    gm.push(g, tmp_path, TREES, manifest=man)
+    del g.objs["ops/mirror/data/local/meta/entries_state/R1.json"]           # GCS 側で消えた
+    assert gm.push(g, tmp_path, TREES, manifest=man)["uploaded"] == 0          # 記録だけでは気づかない
+    assert gm.push(g, tmp_path, TREES, manifest=man, verify_remote=True)["uploaded"] == 1
+    man.write_text("{broken")
+    n = g.lists
+    gm.push(g, tmp_path, TREES, manifest=man)
+    assert g.lists == n + len(TREES)
+
+
+def test_push_dry_run_does_not_write_manifest(tmp_path):
+    g = CountingFake()
+    man = tmp_path / "manifest.json"
+    _w(tmp_path, "data/local/meta/entries_state/R1.json", b"s")
+    assert gm.push(g, tmp_path, TREES, manifest=man, dry_run=True)["would_upload"] == 1
+    assert not man.exists()

@@ -37,8 +37,22 @@ def enabled() -> bool:
 
 
 def warmer_enabled() -> bool:
-    """先に作る係（周回・変更への反応）を動かすか。``KEIBA_PRERENDER=1`` だけのときは動かさない。"""
-    return os.environ.get("KEIBA_PREWARM", "").strip() == "1"
+    """先に作る係（周回・変更への反応）を動かすか。``KEIBA_PRERENDER=1`` だけのときは動かさない。
+
+    費用の上限（CLAUDE.md）: 周回は毎分、窓内の全レースのデータを読む。GCP の外（ホストPC・VPS）で GCS を使う設定だと、
+    その読み出しが転送料（Download APAC）として課金され、2026-10 には 1 日 50GiB・約 1,000 円になった。
+    そのため GCP の外では ``KEIBA_PREWARM_ALLOW_EGRESS=1`` を明示しない限り動かさない（置き場への読み書きは従来どおり）。"""
+    if os.environ.get("KEIBA_PREWARM", "").strip() != "1":
+        return False
+    from src.config.gcp_guard import egress_billed
+
+    if egress_billed() and os.environ.get("KEIBA_PREWARM_ALLOW_EGRESS", "").strip() != "1":
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "事前生成の周回を止めました: GCP の外から GCS を読むと転送料が課金されるため（KEIBA_PREWARM_ALLOW_EGRESS=1 で許可）")
+        return False
+    return True
 
 
 def default_max_age() -> float:

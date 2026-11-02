@@ -361,3 +361,22 @@ def test_cached_response_applies_max_age_function(store):
     asyncio.run(prerender.cached_response("predictions", RID, compute, max_age=prerender.race_max_age))
     meta = json.loads(prerender._path("predictions", RID).read_bytes().split(b"\n", 1)[0])
     assert meta["max_age"] == prerender.PAST_RACE_MAX_AGE_SEC
+
+
+def test_warmer_stays_off_outside_gcp_when_gcs_reads_are_billed(monkeypatch):
+    """費用の上限: ホストPC・VPS（GCP の外）で GCS を使う設定なら、明示の許可なしに周回を動かさない。"""
+    monkeypatch.setenv("KEIBA_PREWARM", "1")
+    monkeypatch.setenv("KEIBA_ENV", "stg")
+    monkeypatch.setenv("GCS_BUCKET", "b")
+    monkeypatch.delenv("K_SERVICE", raising=False)
+    monkeypatch.delenv("CLOUD_RUN_JOB", raising=False)
+    monkeypatch.delenv("KEIBA_PREWARM_ALLOW_EGRESS", raising=False)
+    assert not prerender.warmer_enabled()
+    monkeypatch.setenv("KEIBA_PREWARM_ALLOW_EGRESS", "1")
+    assert prerender.warmer_enabled()
+    monkeypatch.delenv("KEIBA_PREWARM_ALLOW_EGRESS")
+    monkeypatch.setenv("K_SERVICE", "keiba-api")                               # Cloud Run（同じリージョン）なら転送料はかからない
+    assert prerender.warmer_enabled()
+    monkeypatch.delenv("K_SERVICE")
+    monkeypatch.delenv("GCS_BUCKET")                                            # GCS を使わない（ローカルだけ）なら動かしてよい
+    assert prerender.warmer_enabled()
