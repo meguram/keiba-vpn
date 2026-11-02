@@ -302,7 +302,7 @@ export default function AnalysisPage() {
                       <div className="card">
                         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
                           <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{mod.label}</h2>
-                          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{mod.description}</span>
+                          {mod.view !== "map" && <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{mod.description}</span>}
                         </div>
                         {mod.status === "ok" && (mod.view === "map"
                           ? (mod.figure ? <RunningMap figure={mod.figure} entries={data.entries} /> : null)
@@ -312,7 +312,8 @@ export default function AnalysisPage() {
                         {mod.status === "ok" && mod.source && formatPeriod(mod.source) && (
                           <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--text)" }}>{formatPeriod(mod.source)}</p>
                         )}
-                        {mod.status === "ok" && mod.notes?.length ? (
+                        {/* 走法マップは軸と馬だけを見せる（説明文・注記は出さない） */}
+                        {mod.status === "ok" && mod.view !== "map" && mod.notes?.length ? (
                           <ul style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: 11, color: "var(--text-dim)" }}>
                             {mod.notes?.map((n) => <li key={n}>{n}</li>)}
                           </ul>
