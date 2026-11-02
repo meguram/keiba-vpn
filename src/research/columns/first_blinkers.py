@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 
 from src.research.columns.compare_series import YEARS, _p, _r, _rci, _stat, load
+from src.research.columns.race_context import GATE_POS, PRE_STYLES, joint_p, ols_fit, with_context
 from src.research.columns.wind_venue import holm, mean_ci, ols, pct, pfmt
 
 REPO = Path(__file__).resolve().parents[3]
@@ -48,7 +49,7 @@ def frame() -> pd.DataFrame:
     c["bl_before"] = g.transform(lambda s: s.shift().fillna(0).cummax())     # それまでに一度でも着けたか
     c["bl_prev"] = g.shift()
     c["nprev"] = c.groupby("horse_id").cumcount()
-    d = load().merge(c[["race_id", "horse_id", "bl", "bl_before", "bl_prev", "nprev"]], on=["race_id", "horse_id"], how="left")
+    d = with_context(load()).merge(c[["race_id", "horse_id", "bl", "bl_before", "bl_prev", "nprev"]], on=["race_id", "horse_id"], how="left")
     d = d.sort_values(["horse_id", "date", "race_id"])
     g = d.groupby("horse_id")
     d["prev_fin"] = g["finish_position"].shift()
@@ -81,6 +82,47 @@ def compare_chart(x: pd.DataFrame, metric: str, title: str, ylabel: str, caption
             "series": list(ser.values()), "compare": {"a": "初装着", "b": "装着なし", "p": ps}, "caption": caption}
 
 
+SURF = {"全体": None, "芝": "芝", "ダート": "ダート"}
+
+
+def market_chart(z: pd.DataFrame, col: str, xs: list[str], title: str, x_label: str, caption: str) -> dict[str, Any]:
+    """初装着の馬の、実際の勝率とオッズから見込まれる勝率を、xs の区分ごとに並べる（芝・ダートで切り替え）。"""
+    def build(w: pd.DataFrame):
+        ser = [{"name": n, "values": [], "n": [], "ci": []} for n in ("初装着の実際の勝率", "オッズから見込まれる勝率")]
+        ps = []
+        for xv in xs:
+            v = w[(w["grp"] == "初装着") & (w[col].astype(str) == xv)]
+            st = []
+            for sr, m in zip(ser, ("win", "implied")):
+                mm, n, ci, var = _stat(v[m])
+                sr["values"].append(_r(mm)); sr["n"].append(n); sr["ci"].append(_rci(ci)); st.append((mm, var))
+            p = _p(st[0][1], st[1][1], st[0][0], st[1][0])
+            ps.append(None if p is None else float(f"{p:.3g}"))
+        return ser, {"a": ser[0]["name"], "b": ser[1]["name"], "p": ps}
+    ser, cmp = build(z)
+    variants = {}
+    for k, sf in SURF.items():
+        if sf:
+            s2, c2 = build(z[z["surface"] == sf])
+            variants[k] = {"series": s2, "compare": c2}
+    return {"type": "chart", "title": title, "xLabel": x_label, "yLabel": "勝率", "xs": xs, "series": ser, "compare": cmp,
+            "filters": [{"label": "芝・ダート", "options": list(SURF)}], "variants": variants, "caption": caption}
+
+
+def by_level(z: pd.DataFrame, col: str, levels: list[str]) -> list[dict[str, Any]]:
+    """区分ごとに、オッズ・コースをそろえた 初装着 − 装着なし の複勝率・勝率の差（複勝率は Holm 補正つき）。"""
+    rows = []
+    for lv in levels:
+        w = z[z[col].astype(str) == lv]
+        f3 = ols_fit("top3 ~ fb + lq + I(lq**2) + C(key)", w)
+        fw = ols_fit("win ~ fb + lq + I(lq**2) + C(key)", w)
+        rows.append({"lv": lv, "n": int(w["fb"].sum()), "e": float(f3.params["fb"]), "se": float(f3.bse["fb"]), "p": float(f3.pvalues["fb"]),
+                     "ew": float(fw.params["fb"]), "pw": float(fw.pvalues["fb"])})
+    for r, ph in zip(rows, holm([r["p"] for r in rows])):
+        r["p_holm"] = ph
+    return rows
+
+
 def analyze(x: pd.DataFrame) -> dict[str, Any]:
     a: dict[str, Any] = {}
     a["groups"] = {g: {"n": int((x["grp"] == g).sum()), "top3": x.loc[x["grp"] == g, "top3"].mean(), "win": x.loc[x["grp"] == g, "win"].mean(),
@@ -101,6 +143,20 @@ def analyze(x: pd.DataFrame) -> dict[str, Any]:
     for r, ph in zip(rows, holm([r["p"] for r in rows])):
         r["p_holm"] = ph
     a["cond"] = rows
+    # 芝・ダート、脚質（前走まで直近 3 走の初角の位置）、枠の位置で違うか
+    a["surf"] = by_level(z, "surface", ["芝", "ダート"])
+    t, dd = a["surf"]
+    a["surf_diff"] = (t["e"] - dd["e"], _p(t["se"] ** 2, dd["se"] ** 2, t["e"], dd["e"]))      # 芝とダートは別のレースなので、2 つの推定は独立
+    zs = z[z["style_pre"].notna()]
+    a["style"] = by_level(zs, "style_pre", PRE_STYLES)
+    # 同じレースに別の区分の馬がいるので、区分ごとの差の違いは 1 つのモデル（オッズの効き方も区分ごと）で検定する
+    a["style_int"] = joint_p(ols_fit("top3 ~ fb*C(style_pre) + (lq + I(lq**2))*C(style_pre) + C(key)", zs), "fb:")
+    a["gate"] = by_level(z, "gate_pos", GATE_POS)
+    a["gate_int"] = joint_p(ols_fit("top3 ~ fb*C(gate_pos) + (lq + I(lq**2))*C(gate_pos) + C(key)", z), "fb:")
+    a["c_style"] = market_chart(x, "style_pre", PRE_STYLES, "脚質（前走までの位置取り）別 初装着の勝率（実際とオッズの見込み）", "前走まで直近3走の初角の位置",
+                                "初装着の馬だけ。脚質は前走まで直近 3 走の最初のコーナーの位置の平均（今回の位置取りは使わない）。芝・ダートで切り替えられる。＊は実際と見込みの差が有意（p<0.05）。")
+    a["c_gate"] = market_chart(x, "gate_pos", GATE_POS, "枠の位置別 初装着の勝率（実際とオッズの見込み）", "馬番の位置（馬番÷頭数）",
+                               "初装着の馬だけ。馬番の位置 =（馬番−1）÷（登録頭数−1）で、内は前 1/3、外は後 1/3。芝・ダートで切り替えられる。＊は実際と見込みの差が有意（p<0.05）。")
     k = x[x["grp"].isin(["装着継続", "装着なし"])].assign(k=lambda w: (w["grp"] == "装着継続").astype(float))
     a["keep_win"] = ols("win ~ k + lq + I(lq**2) + C(key)", k, "k")
     a["c_improved"] = compare_chart(x, "improved", "前走着順別 前走より着順が上がった割合（初装着 vs 装着なし）", "着順が上がった割合",
@@ -132,6 +188,10 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
     imp_p = dict(zip(PREV_BANDS[1], a["c_improved"]["compare"]["p"]))
     n_best = a["c_improved"]["series"][0]["n"][0]
     neg_txt = "、".join(f"{r['surface']}の{r['db']}（{r['e'] * 100:+.1f}pt、補正後 {pfmt(r['p_holm'])}）" for r in neg)
+    ST = {r["lv"]: r for r in a["surf"]}
+    SY = {r["lv"]: r for r in a["style"]}
+    lvl_rows = [[r["lv"].replace("\n", ""), f"{r['n']:,}", f"{r['e'] * 100:+.2f}pt", f"±{1.96 * r['se'] * 100:.2f}pt", pval(r["p"]), pval(r["p_holm"]),
+                 f"{r['ew'] * 100:+.2f}pt（{pfmt(r['pw'])}）"] for r in a["surf"] + a["style"] + a["gate"]]
     body: list[dict[str, Any]] = [
         {"type": "stats", "items": [
             {"label": "前走より着順が上がった割合", "value": f"{pct(f['improved'])} 対 {pct(n['improved'])}", "sub": "初装着 対 装着なし。ただし平均への回帰"},
@@ -162,6 +222,31 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
             ("オッズをそろえて初装着がはっきりプラスになる条件はありません。" if not pos else
              "p<0.05 でプラスになる条件は " + "、".join(f"{r['surface']}の{r['db']}" for r in pos) + " ですが、多重比較を補正すると有意ではありません。")
             + (f"逆に {neg_txt} では、初装着の馬はオッズの見込みより走っていません。" if neg else ""))},
+        {"type": "heading", "text": "芝・ダート、脚質、枠で違うか"},
+        {"type": "text", "text": (
+            f"芝とダートで分けると、オッズ・コースをそろえた複勝率の差は 芝 {ST['芝']['e'] * 100:+.1f}pt（{pfmt(ST['芝']['p'])}）、"
+            f"ダート {ST['ダート']['e'] * 100:+.1f}pt（{pfmt(ST['ダート']['p'])}）です（両者の違いは {pfmt(a['surf_diff'][1])}）。"
+            + ("芝の初ブリンカーはオッズの見込みより 3 着以内に来ておらず、ダートではほぼ見込みどおりです。"
+               if ST["芝"]["e"] < 0 and ST["芝"]["p_holm"] < 0.05 and ST["ダート"]["p"] >= 0.05 and a["surf_diff"][1] < 0.05 else "芝とダートの違いははっきりしません。")
+            + f"勝率では 芝 {ST['芝']['ew'] * 100:+.1f}pt（{pfmt(ST['芝']['pw'])}）、ダート {ST['ダート']['ew'] * 100:+.1f}pt（{pfmt(ST['ダート']['pw'])}）で、どちらも見込みと有意な差はありません。\n\n"
+            "脚質（前走まで直近 3 走の最初のコーナーの位置）では、複勝率の差は "
+            + "、".join(f"{r['lv']} {r['e'] * 100:+.1f}pt" for r in a["style"])
+            + f"、脚質で差が変わるかの検定は {pfmt(a['style_int'])} です。"
+            + "".join(f"勝率では{r['lv']}の初装着が見込みを上回っていますが（{r['ew'] * 100:+.1f}pt、{pfmt(r['pw'])}）、9 区分を見た中の 1 つで、複勝率では差がありません。"
+                      for r in a["style"] if r["pw"] < 0.05 and r["ew"] > 0 and r["p"] >= 0.05)
+            + ("前に行く馬ほどマイナスが大きく見えますが、有意とまでは言えません。" if a["style_int"] >= 0.05 and min(SY['前寄り']['e'], SY['好位']['e']) < min(SY['中団']['e'], SY['後方']['e'])
+               else "脚質で差が変わる可能性があります。" if a["style_int"] < 0.05 else "脚質による違いは見られません。")
+            + "\n\n枠（馬番を頭数で割った内・中・外）では "
+            + "、".join(f"{r['lv'].replace(chr(10), '')} {r['e'] * 100:+.1f}pt" for r in a["gate"])
+            + f"で、枠で差が変わるかの検定は {pfmt(a['gate_int'])} です。"
+            + ("枠による違いは見られません。" if a["gate_int"] >= 0.05 else "枠で差が変わる可能性があります。")
+            + "\n\nまとめると、初ブリンカーが見込み以上に走る条件は、芝ダート・脚質・枠のどれで分けても見つかりませんでした。"
+            + ("芝では見込みを下回るので、芝の初ブリンカーを人気ほどには信用しない、というのがデータから言える範囲です。" if ST["芝"]["e"] < 0 and ST["芝"]["p_holm"] < 0.05 else ""))},
+        a["c_style"],
+        a["c_gate"],
+        {"type": "table", "columns": ["区分", "初装着の出走数", "複勝率の差（オッズ調整）", "95%区間の幅", "p 値", "補正後の p 値", "勝率の差（オッズ調整）"],
+         "rows": lvl_rows,
+         "caption": "初装着と装着なしの差を、オッズ（とその 2 乗）・コースをそろえて区分ごとに見たもの。補正後の p 値は、芝ダート（2）・脚質（4）・枠（3）のそれぞれの中で Holm 法で補正した。"},
         {"type": "accordion", "title": "データと方法・注意点", "blocks": [
             {"type": "text", "text": (
                 f"・対象: {min(YEARS)}〜{max(YEARS)}年の JRA 平地で、前走（JRA 平地）のある出走。取消・除外は除き、中止・失格は 3 着以内でない（着順は最下位）として数えています。\n\n"
@@ -176,7 +261,8 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
         "claim": "初ブリンカーは効果がある",
         "verdict": "not_supported",
         "summary": (f"初ブリンカーの馬は前走より着順を上げやすいものの、前走が悪い馬ほど着順が上がるのは装着なしでも同じです。"
-                    f"前走の着順・人気をそろえると差は {ep * 100:+.1f}pt で、オッズの見込みともほぼ一致します。"),
+                    f"前走の着順・人気をそろえると差は {ep * 100:+.1f}pt で、オッズの見込みともほぼ一致します。"
+                    + (f"芝では複勝率が見込みを下回り（{ST['芝']['e'] * 100:+.1f}pt）、脚質・枠で分けても、はっきりした上積みのある条件はありません。" if ST["芝"]["p_holm"] < 0.05 and ST["芝"]["e"] < 0 else "")),
         "categories": ["horse/gear"],
         "published": "2026-10-28",
         "updated": "2026-11-02",
