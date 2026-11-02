@@ -40,14 +40,22 @@ REGION = {"東京": "関東", "中山": "関東", "福島": "関東", "新潟": 
 
 def load() -> pd.DataFrame:
     cols = ["race_id", "date", "venue", "surface", "distance", "field_size", "finish_position", "horse_id",
-            "sex_age", "jockey_id", "jockey_name", "odds", "popularity"]
+            "sex_age", "jockey_id", "jockey_name", "odds", "popularity", "grade"]
     df = pd.concat([pd.read_parquet(FLAT_DIR / str(y) / "race_result_flat.parquet", columns=cols) for y in YEARS], ignore_index=True)
     df = df[df["surface"].isin(["芝", "ダート"])].copy()
+    # 出走していない馬（取消・除外。オッズも人気もない）は除く。中止・失格など走った馬は「3着以内でない」として残す
+    df = df[(df["odds"] > 0) & (df["popularity"] > 0)].copy()
+    df["starters"] = df.groupby("race_id")["race_id"].transform("size")      # 実際に走った頭数（field_size は取消・除外を含む）
     df["horse_id"] = df["horse_id"].astype(str)
     df["win"] = (df["finish_position"] == 1).astype(float)
     df["top3"] = df["finish_position"].between(1, 3).astype(float)
     df["ret"] = np.where(df["finish_position"] == 1, df["odds"].fillna(0), 0.0)      # 単勝 100 円あたりの払戻 / 100
     df["sex"] = df["sex_age"].str[0]
+    q = 1.0 / df["odds"]
+    df["implied"] = q / q.groupby(df["race_id"]).transform("sum")          # オッズから見込まれる勝率（控除率を除いて合計 1 に直す）
+    has_f = df["sex"].eq("牝").groupby(df["race_id"]).transform("any")
+    has_m = df["sex"].isin(["牡", "セ"]).groupby(df["race_id"]).transform("any")
+    df["mixed_sex"] = has_f & has_m                                          # 牝馬と牡馬（セン馬）が一緒に走ったレース（牝馬限定戦などを除く）
     df["age"] = pd.to_numeric(df["sex_age"].str[1:], errors="coerce")
     df["month"] = pd.to_datetime(df["date"]).dt.month
     df["pop_band"] = pd.cut(df["popularity"], [0, 3, 6, 99], labels=POP_BANDS)
@@ -169,13 +177,19 @@ def pairs(df: pd.DataFrame) -> list[Pair]:
                     "前走と同じ馬で、騎手が替わった出走と同じ騎手の出走の比較。",
                     replace_title="乗り替わりの有無 × 人気帯別 複勝率"))
 
-    # 夏の牝馬: 月ごとに 牝 vs 牡（セン馬は除く）
-    mf = df["sex"].isin(["牝", "牡"])
-    out.append(Pair("summer-mare", "月別 牡・牝馬 勝率の推移", [f"{m}月" for m in range(1, 13)], "牝", "牡", "win",
+    # 夏の牝馬: 月ごとに 牝 vs 牡（セン馬は除く）。牝馬限定戦では牡馬と比べられないので、牝馬と牡馬が一緒に走った混合戦だけで比べる
+    mf = df["sex"].isin(["牝", "牡"]) & df["mixed_sex"]
+    months = [f"{m}月" for m in range(1, 13)]
+    out.append(Pair("summer-mare", "月別 牡・牝馬 勝率の推移（混合戦）", months, "牝", "牡", "win",
                     lambda d, x: (d.loc[mf & (d["sex"] == "牝") & (d["month"] == int(x[:-1])), "win"],
                                   d.loc[mf & (d["sex"] == "牡") & (d["month"] == int(x[:-1])), "win"]),
-                    "月", "勝率", "2020〜2025年 JRA 平地。各月の牝馬と牡馬の勝率。",
+                    "月", "勝率", "2020〜2025年 JRA 平地。牝馬と牡馬が一緒に走ったレース（混合戦）だけで、各月の勝率を比べる。＊は差が有意（p<0.05）な月。",
                     replace_title="月別 牡・牝馬 勝率の推移"))
+    mare = mf & (df["sex"] == "牝")
+    out.append(Pair("summer-mare", "月別 牝馬の勝率（実際とオッズの見込み・混合戦）", months, "実際の勝率", "オッズから見込まれる勝率", "win",
+                    lambda d, x: (d.loc[mare & (d["month"] == int(x[:-1])), "win"], d.loc[mare & (d["month"] == int(x[:-1])), "implied"]),
+                    "月", "勝率", "混合戦の牝馬。オッズから見込まれる勝率は 1/単勝オッズ をレース内で合計 1 に直したもの。実際が見込みを上回る月は、牝馬が過小評価されている。",
+                    after_title="月別 牡・牝馬 勝率の推移（混合戦）"))
 
     # 去勢明け: 年齢別に セン馬 vs 牡馬
     ages = [f"{a}歳" for a in range(2, 9)]
@@ -220,7 +234,7 @@ def pairs(df: pd.DataFrame) -> list[Pair]:
                     lambda d, x: (d.loc[fav & local & (d["dist_band"].astype(str) == x), "top3"],
                                   d.loc[fav & ~local & (d["dist_band"].astype(str) == x), "top3"]),
                     "距離帯", "1番人気の複勝率",
-                    "1番人気の複勝率が低いほど荒れやすい。短距離・ローカルで下がるかを見る。",
+                    "ローカルは札幌・函館・福島・新潟・中京・小倉の 6 場。1番人気の複勝率が低いほど荒れやすい。＊は差が有意（p<0.05）な距離帯。",
                     after_title="クラス別 1番人気複勝率"))
 
     # 輸送: 前走と地域が違う（遠征）vs 同じ地域
@@ -437,6 +451,115 @@ def apply(pair: Pair | Placement, chart: dict[str, Any]) -> str:
     path.write_text(text, encoding="utf-8")
     return how
 
+# 記事『荒れるレースの共通点』。「荒れる」は 1 番人気の複勝率（レースごとに 1 頭）と、7 番人気以下が 3 着以内に来たレースの割合で測る。
+# 頭数は実際に走った頭数（starters）。頭数が多いほど 1 番人気の複勝率が下がるのは、オッズ（市場の見込み）も同じ向きなので、見込みとの差も出す。
+STARTER_BANDS = {"〜9頭": (1, 9), "10〜13頭": (10, 13), "14〜16頭": (14, 16), "17頭〜": (17, 99)}
+CLASSES = {"新馬": ["新馬"], "未勝利": ["未勝利"], "1勝": ["1勝"], "2勝": ["2勝"], "3勝": ["3勝"], "OP\n(L含む)": ["OP", "L"], "重賞": ["G1", "G2", "G3"]}
+
+
+def _one(v: pd.Series) -> tuple[float | None, int, list[float] | None]:
+    m, n, ci, _ = _stat(v)
+    return _r(m), n, _rci(ci)
+
+
+def _series(name: str, parts: list[pd.Series]) -> dict[str, Any]:
+    st = [_one(v) for v in parts]
+    return {"name": name, "values": [x[0] for x in st], "n": [x[1] for x in st], "ci": [x[2] for x in st]}
+
+
+def upset_charts(df: pd.DataFrame) -> list[tuple[Placement, dict[str, Any]]]:
+    d = df.copy()
+    q = 1.0 / d["odds"]
+    d["implied"] = q / q.groupby(d["race_id"]).transform("sum")          # オッズから見込まれる勝率（控除率を除いて合計 1 に直す）
+    fav = d[d["popularity"] == 1]
+    xs = list(STARTER_BANDS)
+    by_st = [fav[fav["starters"].between(*STARTER_BANDS[x])] for x in xs]
+    period = f"{min(YEARS)}〜{max(YEARS)}年 JRA 平地"
+    c1 = {"type": "chart", "title": "出走頭数別 1番人気複勝率", "xLabel": "出走頭数（取消・除外を除く）", "yLabel": "1番人気の複勝率", "xs": xs,
+          "series": [_series("1番人気の複勝率", [g["top3"] for g in by_st])],
+          "caption": f"{period}。頭数が多いほど、1 番人気でも 3 着以内に入る枠は相対的に狭くなる。縦線は 95% 信頼区間。"}
+    win = _series("実際の勝率", [g["win"] for g in by_st])
+    imp = _series("オッズから見込まれる勝率", [g["implied"] for g in by_st])
+    ps = []
+    for g in by_st:
+        ma, _, _, va = _stat(g["win"])
+        mb, _, _, vb = _stat(g["implied"])
+        p = _p(va, vb, ma, mb)
+        ps.append(None if p is None else float(f"{p:.3g}"))
+    c2 = {"type": "chart", "title": "出走頭数別 1番人気の勝率（実際とオッズの見込み）", "xLabel": "出走頭数（取消・除外を除く）", "yLabel": "勝率", "xs": xs,
+          "series": [win, imp], "compare": {"a": "実際の勝率", "b": "オッズから見込まれる勝率", "p": ps},
+          "caption": f"{period}。オッズから見込まれる勝率は 1/単勝オッズ をレース内で合計 1 に直したもの。頭数が増えると見込みも同じだけ下がり、実際の勝率はどの頭数でも見込みとほぼ同じ（差は有意でない）。"}
+    xs3 = list(CLASSES)
+    c3 = {"type": "chart", "title": "クラス別 1番人気複勝率", "xLabel": "クラス", "yLabel": "1番人気の複勝率", "xs": xs3,
+          "series": [_series("1番人気の複勝率", [fav.loc[fav["grade"].isin(CLASSES[x]), "top3"] for x in xs3])],
+          "caption": f"{period}。縦線は 95% 信頼区間。"}
+    # レース単位: 7 番人気以下が 1 頭でも 3 着以内に来たか（7 頭立て以下は 7 番人気以下がいない・少ないので、10 頭立て以上に限る）
+    races = d.groupby("race_id").agg(surface=("surface", "first"), dist_band=("dist_band", "first"), starters=("starters", "first"))
+    hole = d[(d["popularity"] >= 7) & (d["top3"] == 1)]["race_id"].unique()
+    races["hole"] = races.index.isin(hole).astype(float)
+    races = races[races["starters"] >= 10]
+    c4 = {"type": "chart", "title": "距離帯別 7番人気以下が3着以内に来たレースの割合", "xLabel": "距離帯", "yLabel": "レースの割合", "xs": DIST_BANDS,
+          "series": [_series(sf, [races.loc[(races["surface"] == sf) & (races["dist_band"].astype(str) == x), "hole"] for x in DIST_BANDS]) for sf in ("芝", "ダート")],
+          "caption": f"{period}。10 頭立て以上のレースで、7 番人気以下が 1 頭でも 3 着以内に来た割合。短距離ほど頭数が多いことに注意。頭数・クラス・ローカルをそろえた差は本文の回帰を参照。"}
+    return [(Placement("upset-conditions", replace_title="出走頭数別 1番人気複勝率"), c1),
+            (Placement("upset-conditions", after_title="出走頭数別 1番人気複勝率"), c2),
+            (Placement("upset-conditions", replace_title="クラス別 1番人気複勝率"), c3),
+            (Placement("upset-conditions", after_title="距離帯別 1番人気複勝率（ローカル vs 主要4場）"), c4)]
+
+
+def upset_regression(df: pd.DataFrame) -> None:
+    """記事の本文の「条件をそろえると」の数字（1 番人気の複勝率の線形回帰、HC1）。"""
+    import statsmodels.formula.api as smf
+
+    f = df[df["popularity"] == 1].copy()
+    f["cls"] = f["grade"].replace({"G1": "重賞", "G2": "重賞", "G3": "重賞", "L": "OP", "OP": "OP"})
+    f["local"] = (~f["venue"].isin(MAJOR_VENUES)).astype(float)
+    f["db"] = f["dist_band"].astype(str).str.split("\n").str[0]
+    f["lq"] = np.log(f["odds"])
+    for form in ["top3 ~ starters + C(cls, Treatment('1勝')) + C(db, Treatment('マイル')) + local + C(surface)",
+                 "top3 ~ starters + C(cls, Treatment('1勝')) + C(db, Treatment('マイル')) + local + C(surface) + lq"]:
+        m = smf.ols(form, f).fit(cov_type="HC1")
+        print("  " + form)
+        for k in m.params.index.drop("Intercept"):
+            print(f"    {k:<40} {m.params[k] * 100:+.2f}pt  p={m.pvalues[k]:.3g}")
+    # 7 番人気以下が 3 着以内に来たか（10 頭立て以上のレース単位）。芝・ダートそれぞれで、マイルと比べた距離帯の差
+    r = df.groupby("race_id").agg(surface=("surface", "first"), db=("dist_band", "first"), starters=("starters", "first"),
+                                  grade=("grade", "first"), venue=("venue", "first"))
+    r["hole"] = r.index.isin(df[(df["popularity"] >= 7) & (df["top3"] == 1)]["race_id"].unique()).astype(float)
+    r = r[r["starters"] >= 10]
+    r["db"] = r["db"].astype(str).str.split("\n").str[0]
+    r["cls"] = r["grade"].replace({"G1": "重賞", "G2": "重賞", "G3": "重賞", "L": "OP"})
+    r["local"] = (~r["venue"].isin(MAJOR_VENUES)).astype(float)
+    for sf in ("芝", "ダート"):
+        x = r[r["surface"] == sf]
+        m = smf.ols("hole ~ starters + C(db, Treatment('マイル')) + C(cls) + local", x).fit(cov_type="HC1")
+        print(f"  7番人気以下が3着以内（{sf}・{len(x)}レース）")
+        for k in [k for k in m.params.index if "db" in k]:
+            print(f"    {k:<40} {m.params[k] * 100:+.2f}pt  p={m.pvalues[k]:.3g}")
+
+
+def mare_regression(df: pd.DataFrame) -> None:
+    """記事『夏は牝馬』の本文の数字。混合戦の牡・牝で、勝ちを オッズ（log とその 2 乗）・年齢区分 でそろえ、牝 × 夏（6〜8月）の上積みを見る。"""
+    import statsmodels.formula.api as smf
+
+    x = df[df["sex"].isin(["牝", "牡"]) & df["mixed_sex"]].copy()
+    x["mare"] = (x["sex"] == "牝").astype(float)
+    x["summer"] = x["month"].isin([6, 7, 8]).astype(float)
+    x["lq"] = np.log(x["odds"])
+    x["ag"] = np.where(x["age"] == 2, "2歳", np.where(x["age"] == 3, "3歳", "4歳以上"))
+    x["year"] = pd.to_datetime(x["date"]).dt.year
+    print("  夏は牝馬（混合戦）: 季節 × 性別")
+    x["season"] = x["month"].map(lambda m: "春3-5月" if m in (3, 4, 5) else "夏6-8月" if m in (6, 7, 8) else "秋9-11月" if m in (9, 10, 11) else "冬12-2月")
+    g = x.groupby(["season", "sex"]).agg(n=("win", "size"), win=("win", "mean"), implied=("implied", "mean"), roi=("ret", "mean"))
+    print(g.round(4).to_string())
+    for name, m in [("全体", x["year"] > 0), ("2020〜2022年", x["year"] <= 2022), ("2023〜2025年", x["year"] >= 2023), ("3歳以上", x["age"] >= 3), ("4歳以上", x["age"] >= 4)]:
+        z = x[m]
+        r = smf.ols("win ~ mare*summer + lq + I(lq**2) + C(ag)", z).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(z["race_id"])[0]})
+        print(f"    {name:<12} 牝×夏 {r.params['mare:summer'] * 100:+.2f}pt (p={r.pvalues['mare:summer']:.3g})  夏以外の牝 {r.params['mare'] * 100:+.2f}pt (p={r.pvalues['mare']:.3g})")
+    lim = df[df["sex"].eq("牝") & ~df["mixed_sex"]]
+    print("  牝馬限定戦（対照）: 季節ごとの 実際 − 見込み")
+    print(lim.assign(s=lim["month"].isin([6, 7, 8])).groupby("s").agg(n=("win", "size"), win=("win", "mean"), implied=("implied", "mean"), roi=("ret", "mean")).round(4).to_string())
+
 
 def main() -> None:
     ap = argparse.ArgumentParser()
@@ -448,6 +571,13 @@ def main() -> None:
         print(f"[{how}] {place.slug}: {chart['title']}")
         for key, v in [("全体|全体", {"series": chart["series"], "y2Series": chart["y2"]["series"]})] + list(chart["variants"].items()):
             print(f"    {key:<18} " + " / ".join(f"{s['name']}=" + ",".join(str(x) for x in s["values"]) for s in v["series"] + v["y2Series"]))
+    for place, chart in upset_charts(df):
+        how = "dry-run" if args.dry_run else apply(place, chart)
+        print(f"[{how}] {place.slug}: {chart['title']}")
+        for s_ in chart["series"]:
+            print(f"    {s_['name']}: " + ", ".join(f"{v}(n={n})" for v, n in zip(s_["values"], s_["n"])))
+    upset_regression(df)
+    mare_regression(df)
     for pair in pairs(df):
         chart = pair.compute(df)
         how = "dry-run" if args.dry_run else apply(pair, chart)
