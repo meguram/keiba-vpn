@@ -297,3 +297,47 @@ def test_blend_small_field_returns_valid():
     w = np.array([0.6, 0.4])
     d, _ = fit_blend_distribution(w, [0.9, 0.9], [1.0, 1.0])
     assert d.n == 2 and abs(d.win.sum() - 1.0) < 1e-9
+
+
+def test_style_pairs_raise_pair_probabilities_within_the_marginal_cap():
+    """走法が近い 2 頭は一緒に来やすい（2026 年の検証で 馬連 1.16 倍・ワイド 1.13 倍）。その組の馬連・ワイドだけを控えめに上げる。"""
+    from src.pipeline.inference.betting import STYLE_PAIR_BOOST
+
+    preds, d = _preds()
+    cfg = BettingConfig(bet_types=["umaren", "wide"], min_ev=0.0, min_prob=0.0, max_candidates=10_000, top_n_for_pairs=9, max_total_bet=None)
+    out = BettingOptimizer(cfg).optimize(preds, _odds_for(), 10**9, style_pairs={frozenset((1, 2))})
+    by = {(c.bet_type, c.pair): c for c in out["candidates"]}
+    assert by[("umaren", (1, 2))].prob == pytest.approx(min(d.umaren(0, 1) * STYLE_PAIR_BOOST["umaren"], float(preds[1]["top3_prob"])), abs=3e-4)
+    assert by[("wide", (1, 2))].prob == pytest.approx(min(d.wide(0, 1) * STYLE_PAIR_BOOST["wide"], float(preds[1]["top3_prob"])), abs=3e-4)
+    assert by[("umaren", (1, 3))].prob == pytest.approx(d.umaren(0, 2), abs=2e-4)      # 近くない組は変えない
+    assert out["style_pairs"]["pairs"] == 1
+    for c in out["candidates"]:
+        assert c.prob <= min(float(preds[h - 1]["top3_prob"]) for h in c.pair) + 1e-9
+
+
+def test_style_pair_boost_can_be_turned_off_and_missing_analysis_changes_nothing(tmp_path, monkeypatch):
+    preds, d = _preds()
+    off = BettingConfig(bet_types=["umaren"], min_ev=0.0, min_prob=0.0, max_candidates=10_000, top_n_for_pairs=9, max_total_bet=None, style_pair_boost=False)
+    out = BettingOptimizer(off).optimize(preds, _odds_for(), 10**9, style_pairs={frozenset((1, 2))})
+    assert {(c.bet_type, c.pair): c for c in out["candidates"]}[("umaren", (1, 2))].prob == pytest.approx(d.umaren(0, 1), abs=2e-4)
+    assert out["style_pairs"] is None
+    from src.research.race_analysis import store
+    monkeypatch.setattr(store, "analysis_dir", lambda: tmp_path)
+    on = BettingConfig(bet_types=["umaren"], min_ev=0.0, min_prob=0.0, max_candidates=10_000, top_n_for_pairs=9, max_total_bet=None)
+    assert BettingOptimizer(on).optimize(preds, _odds_for(), 10**9, race_id="202605041109")["style_pairs"] is None
+
+
+def test_style_pairs_are_read_from_the_precomputed_running_map(tmp_path, monkeypatch):
+    import json
+
+    from src.pipeline.inference.betting import style_pairs_for
+    from src.research.race_analysis import store
+
+    monkeypatch.setattr(store, "analysis_dir", lambda: tmp_path)
+    doc = {"modules": [{"id": "running_map", "status": "ok", "figure": {"horses": [
+        {"horse_number": 1, "similar": [{"horse_number": 2}, {"horse_number": 5}]},
+        {"horse_number": 2, "similar": [{"horse_number": 1}]}]}}]}
+    store.path_of("202605041109").parent.mkdir(parents=True, exist_ok=True)
+    store.path_of("202605041109").write_text(json.dumps(doc), encoding="utf-8")
+    assert style_pairs_for("202605041109") == {frozenset((1, 2)), frozenset((1, 5))}
+    assert style_pairs_for(None) == set() and style_pairs_for("000000000000") == set()

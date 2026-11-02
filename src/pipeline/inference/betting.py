@@ -77,6 +77,38 @@ class BettingConfig:
     無ければ pred_score の softmax + Harville。softmax: 常に後者（従来動作）。"""
     max_total_bet: int | None = None
     """1 レースの購入合計の上限（円）。None は上限なし。100 円単位で、Kelly 比率に応じて配分する。"""
+    style_pair_boost: bool = True
+    """走法が近い 2 頭（走法マップの「近い馬」）の馬連・馬単・ワイドの確率を STYLE_PAIR_BOOST 倍にする。
+    着順分布（Harville）は馬どうしを独立とみなすが、同じ走り方の馬はレースの流れが向くと一緒に来る。"""
+
+
+# 走法が近い 2 頭の組の確率の倍率。2026 年 1〜10 月の 2,814 レース（本番モデル v6 の確率・学習外）で、同じ確率水準の他の組と比べた
+# 実際の的中の多さは 馬連 1.16 倍 [95%: 1.06〜1.27]・ワイド 1.13 倍 [1.06〜1.20]（芝・ダートとも同程度。2025 年のオッズ基準でも同じ傾向）。
+# 推定のぶれを見込み、区間の下限付近の控えめな値を使う。検証: docs/ideas/running_style_pairs.md
+STYLE_PAIR_BOOST = {"umaren": 1.10, "umatan": 1.10, "wide": 1.08}
+
+
+def style_pairs_for(race_id: str | None) -> set[frozenset[int]]:
+    """事前計算済みの走法マップ（race_analysis の保存先。Cloud Run には ops/mirror で届く）から、走法が近い 2 頭の馬番の組。
+    無い・読めない・別の版なら空（補正しない）。GCS は読まない（費用の上限: CLAUDE.md）。"""
+    if not race_id:
+        return set()
+    try:
+        from src.research.race_analysis import store
+
+        doc = store.read(str(race_id)) or {}
+        fig = next((m.get("figure") for m in doc.get("modules") or [] if m.get("id") == "running_map" and m.get("status") == "ok"), None) or {}
+        out: set[frozenset[int]] = set()
+        for h in fig.get("horses") or []:
+            a = h.get("horse_number")
+            for sm in h.get("similar") or []:
+                b = sm.get("horse_number")
+                if a and b and a != b:
+                    out.add(frozenset((int(a), int(b))))
+        return out
+    except Exception:  # noqa: BLE001  補正は補助。読めなければ従来どおり
+        logger.debug("走法が近い組を読めませんでした: %s", race_id, exc_info=True)
+        return set()
 
 
 class _RankContext:
@@ -158,9 +190,13 @@ class BettingOptimizer:
         pair_odds: dict[str, list[dict]],
         bankroll: int = 100000,
         single_odds: dict[str, list[dict]] | None = None,
+        race_id: str | None = None,
+        style_pairs: set[frozenset[int]] | None = None,
     ) -> dict[str, Any]:
         """
         予測結果とオッズから最適馬券ポートフォリオを構築する。
+        race_id を渡すと、走法が近い 2 頭の組（style_pairs。省略時は事前計算の走法マップから読む）の
+        馬連・馬単・ワイドの確率を STYLE_PAIR_BOOST 倍にする（config.style_pair_boost が False なら何もしない）。
 
         Args:
             predictions: 予測結果リスト (horse_number, pred_score, horse_name,
@@ -192,6 +228,12 @@ class BettingOptimizer:
 
         all_odds = self._build_odds_map(pair_odds, predictions, single_odds)
 
+        if not self.config.style_pair_boost:
+            style_pairs = set()
+        elif style_pairs is None:
+            style_pairs = style_pairs_for(race_id)
+        boosted = 0
+
         trio_pool = set(
             h for h, _ in sorted(probs.items(), key=lambda x: -x[1])[:max(3, self.config.top_n_for_pairs)]
         )
@@ -217,6 +259,11 @@ class BettingOptimizer:
                 else:
                     h1, h2 = key
                     prob = rank.prob(bet_type, key) if rank else self._pair_prob(probs, h1, h2, bet_type)
+                    if style_pairs and frozenset((h1, h2)) in style_pairs and bet_type in STYLE_PAIR_BOOST:
+                        # 2 頭とも 3 着以内（ワイド）・1〜2 着（馬連）の確率は、各馬の複勝率を超えない
+                        cap = min(float(rank.top3[rank.idx[h1]]), float(rank.top3[rank.idx[h2]])) if (rank and h1 in rank.idx and h2 in rank.idx) else 1.0
+                        prob = min(prob * STYLE_PAIR_BOOST[bet_type], cap)
+                        boosted += 1
                     names = (name_map.get(h1, "?"), name_map.get(h2, "?"))
 
                 if prob < self.config.min_prob:
@@ -260,6 +307,7 @@ class BettingOptimizer:
                 hn: round(p, 4) for hn, p in probs.items()
             },
             "probability_model": rank.describe() if rank else {"kind": "softmax_harville"},
+            "style_pairs": {"pairs": len(style_pairs), "boosted_evaluations": boosted, "boost": STYLE_PAIR_BOOST} if style_pairs else None,
         }
 
     # ── 確率推定 ──

@@ -53,6 +53,7 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
     children: [
       { id: "distance", label: "距離別の成績", desc: "騎手ごとに、距離で好走率がどう変わるか" },
       { id: "change", label: "乗り替わり", desc: "騎手が替わると成績はどう変わるか" },
+      { id: "class-venue", label: "クラス・競馬場・時期", desc: "騎手ごとの得意クラス・競馬場・季節" },
     ],
   },
   {
@@ -84,6 +85,7 @@ export type ColumnBlock =
   | { type: "link"; href: string; label: string; desc?: string }
   | ColumnChartBlock
   | JockeyDistanceChartBlock
+  | ColumnHeatmapBlock
   | { type: "accordion"; title: string; blocks: ColumnBlock[] };
 
 /** 折れ線グラフ。series が複数あるときは、見たい系列を切り替えて重ねて見られる（baseline は常に点線で出す） */
@@ -111,6 +113,8 @@ export type ColumnChartBlock = {
   y2?: { label: string; format?: ChartFormat; series: ChartSeries[] };
   /** 値が実データでなく画面確認用のダミー */
   dummy?: boolean;
+  /** 標本数 n がこれ未満の点と、その点につながる線を点線で描く（省略すると全部実線） */
+  minN?: number;
   caption?: string;
 };
 
@@ -137,12 +141,21 @@ export function axis2Max(series: { values: (number | null)[]; ci?: ([number, num
 /** n: 点ごとの標本数、ci: 点ごとの 95% 信頼区間 [下限, 上限] */
 export type ChartSeries = { name: string; values: (number | null)[]; baseline?: boolean; n?: (number | null)[]; ci?: ([number, number] | null)[] };
 
-export type ChartFormat = "pct" | "num";
+/** pct: 率（12.3%）、num: 数（4.46）、pt: 率の差（+1.2pt。実際 − 見込みなど、負になりうる値） */
+export type ChartFormat = "pct" | "num" | "pt";
 
-/** グラフの値の表示（率は %、数は小数 2 桁） */
+/** グラフの値の表示（率は %、数は小数 2 桁、率の差は符号付きの pt） */
 export function formatValue(v: number | null | undefined, format: ChartFormat = "pct"): string {
   if (typeof v !== "number" || !Number.isFinite(v)) return "–";
+  if (format === "pt") return `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}pt`;
   return format === "num" ? v.toFixed(2) : `${(v * 100).toFixed(1)}%`;
+}
+
+/** 縦軸の目盛りの文字（率は %、率の差は pt、数はそのまま） */
+export function formatTick(t: number, format: ChartFormat = "pct"): string {
+  if (format === "num") return `${+t.toFixed(2)}`;
+  const v = Math.round(t * 1000) / 10;
+  return format === "pt" ? `${v > 0 ? "+" : ""}${v}` : `${v}%`;
 }
 
 /** 縦軸の目盛りの間隔 */
@@ -169,6 +182,25 @@ export function chartMax(series: { values: (number | null)[]; ci?: ([number, num
   return Math.round(Math.max(step, Math.ceil(m / step - 1e-9) * step) * 100) / 100;
 }
 
+/**
+ * 縦軸の範囲と目盛りの間隔。値（と信頼区間）がすべて 0 以上なら、今までどおり 0 始まり（chartMax・chartStep）。
+ * 負の値があれば、下限も値から決める（0 を必ず含み、目盛りは 0 を通る）
+ */
+export function chartRange(series: { values: (number | null)[]; ci?: ([number, number] | null)[] }[], format: ChartFormat = "pct"): { min: number; max: number; step: number } {
+  const vs = series.flatMap((s) => [...s.values, ...(s.ci ?? []).flatMap((c) => (c ? [c[0], c[1]] : []))]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+  const lo = vs.length ? Math.min(...vs) : 0;
+  if (!(lo < 0)) {
+    const max = chartMax(series, format);
+    return { min: 0, max, step: chartStep(max, format) };
+  }
+  const hi = Math.max(0, ...vs);
+  const span = hi - lo;
+  const steps = format === "num" ? [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100] : [0.01, 0.02, 0.05, 0.1, 0.2, 0.5];
+  const step = steps.find((st) => span / st <= 6) ?? steps[steps.length - 1];
+  const r = (v: number) => Math.round(v * 1e6) / 1e6;
+  return { min: r(Math.floor(lo / step + 1e-9) * step), max: r(Math.max(0, Math.ceil(hi / step - 1e-9) * step)), step };
+}
+
 /** 実データのある系列が 1 つも無い */
 export function chartIsEmpty(series: { values: (number | null)[] }[]): boolean {
   return !series.some((s) => s.values.some((v) => typeof v === "number" && Number.isFinite(v)));
@@ -180,6 +212,10 @@ export type JockeyDistEntry = {
   rank: number;
   reading: string;
   values: (number | null)[];
+  /** 点ごとの騎乗数 */
+  n?: (number | null)[];
+  /** 点ごとの、騎乗馬の人気（単勝オッズ）から見込まれる勝率 */
+  expected?: (number | null)[];
 };
 
 export type JockeyDistanceChartBlock = {
@@ -188,6 +224,36 @@ export type JockeyDistanceChartBlock = {
   xs: string[];
   baseline: (number | null)[];
   jockeys: JockeyDistEntry[];
+  /** 騎乗数がこれ未満の点と、その点につながる線を点線で描く（省略すると全部実線） */
+  minN?: number;
+  /** 縦軸の名前（既定は「勝率」）、baseline と expected の凡例 */
+  yLabel?: string;
+  baselineLabel?: string;
+  expectedLabel?: string;
+  caption?: string;
+};
+
+/**
+ * ヒートマップ（行 × 列の表に、値の大きさで色を付ける）。色は center（既定 0）より上が青、下が橙の発散型。
+ * values[行][列]。n があれば各マスに標本数を出し、minN 未満のマスは色を薄くする
+ */
+export type ColumnHeatmapBlock = {
+  type: "heatmap";
+  title: string;
+  rowLabel: string;
+  colLabel: string;
+  rows: string[];
+  cols: string[];
+  values: (number | null)[][];
+  n?: (number | null)[][];
+  ci?: ([number, number] | null)[][];
+  format?: ChartFormat;
+  center?: number;
+  /** 色の濃さが最大になる |値 − center|（省略すると値の最大） */
+  scale?: number;
+  minN?: number;
+  /** 凡例の左右（例: ["見込みより下", "見込みより上"]） */
+  legend?: [string, string];
   caption?: string;
 };
 

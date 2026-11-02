@@ -45,16 +45,32 @@ def test_snippet_never_serves_member_requests_from_cache():
     text = (TPL / "nginx-api-cache.conf").read_text(encoding="utf-8")
     assert "proxy_cache_bypass $keiba_api_nocache $keiba_refresh;" in text
     assert 'proxy_set_header X-Keiba-Refresh ""' in text, "合言葉の見出しは上流へ渡さない"
-    assert "proxy_no_cache $keiba_api_nocache;" in text
+    assert "proxy_no_cache $keiba_api_nocache $keiba_cache_readonly;" in text, "会員の要求と stg の要求は保存しない"
+    assert "proxy_set_header X-Keiba-Fresh $keiba_refresh;" in text, "取り直しのときだけ API 内の使い回しも飛ばさせる"
     directives = "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("#"))
     assert "proxy_cache_valid" not in directives, "上流が public を付けたものだけ保存する（既定の保存時間を足さない）"
-    assert "$server_port" in directives, "stg と本番は同じ nginx で上流が違うのでキーにポートを含める"
+    assert "proxy_cache_key $request_uri;" in directives, "stg と本番で同じ保存物を使う（鍵にホスト・ポートを入れない）"
     zones = (TPL / "nginx-zones.conf").read_text(encoding="utf-8")
     assert "keys_zone=keiba_apicache" in zones
     m = re.search(r"keys_zone=keiba_apicache:\S+ max_size=(\d+)[mg] inactive=(\d+)d", zones)
     assert m and int(m.group(2)) >= 32, "確定済みレースを1か月置くので、未参照の失効(inactive)は32日以上"
     assert "inactive=35d" in (VPS / "vps_09_api_cache.sh").read_text(encoding="utf-8"), "稼働中のゾーン行も同じ保持設定に直す"
     assert re.search(r'map "\$http_cookie\$http_authorization" \$keiba_api_nocache \{\s*default 1;\s*""\s*0;', zones)
+
+
+def test_stg_is_read_only_and_installer_writes_its_port():
+    zones = (TPL / "nginx-zones.conf").read_text(encoding="utf-8")
+    assert re.search(r"map \$server_port \$keiba_cache_readonly \{\s*default 0;\s*include /etc/nginx/keiba-cache-readonly.conf;", zones)
+    sh = (VPS / "vps_09_api_cache.sh").read_text(encoding="utf-8")
+    assert "keiba-cache-readonly.conf" in sh and "sites-available/keiba-ui-stg" in sh
+    assert "restore; exit 1" in sh.split("keiba-cache-readonly.conf", 1)[1], "stg のポートが読めないときは中止する（stg が本番のキャッシュに書くのを防げないため）"
+    stg = (TPL / "nginx-keiba-ui-stg.conf").read_text(encoding="utf-8")
+    assert re.search(r"listen 127\.0\.0\.1:__PROXY_PORT__;", stg), "vps_09 は stg のサイトの listen からポートを読む"
+
+
+def test_installer_sizes_cache_from_free_disk():
+    sh = (VPS / "vps_09_api_cache.sh").read_text(encoding="utf-8")
+    assert "API_CACHE_MAX_MB" in sh and "df -Pm" in sh and "max_size=${MAX_MB}m inactive=35d" in sh
 
 
 def test_refresh_token_fits_the_map_hash_bucket():

@@ -69,39 +69,60 @@ def _first_token(path: str, prefix: str) -> str:
     return path[len(prefix):].split("/", 1)[0]
 
 
+def _token_date(token: str) -> "datetime | None":
+    """token（8桁の開催日 / 12桁の race_id）の開催日。分からなければ None。"""
+    if token.isdigit() and len(token) == 8:
+        try:
+            return datetime.strptime(token, "%Y%m%d")
+        except ValueError:
+            return None
+    if token.isdigit() and len(token) == 12 and _race_date_peek is not None:
+        try:
+            d = _race_date_peek(token) or ""
+        except Exception:  # noqa: BLE001  索引の覗き見は失敗しても日付不明に落とすだけ
+            d = ""
+        if len(d) == 8 and d.isdigit():
+            return _token_date(d)
+    return None
+
+
 def _is_settled(token: str, today: "datetime | None", grace_days: int) -> bool:
     """token が 8桁の開催日 / 12桁の race_id のとき、開催が grace_days 日より前（確定済み）なら True。分からなければ False。"""
     limit = (today or datetime.now(_JST)) - timedelta(days=grace_days)
-    if token.isdigit() and len(token) == 8:
-        try:
-            return datetime.strptime(token, "%Y%m%d").date() <= limit.date()
-        except ValueError:
-            return False
+    d = _token_date(token)
+    if d is not None:
+        return d.date() <= limit.date()
     if token.isdigit() and len(token) == 12:
-        d = ""
-        if _race_date_peek is not None:
-            try:
-                d = _race_date_peek(token) or ""
-            except Exception:  # noqa: BLE001  索引の覗き見は失敗しても短い TTL に落とすだけ
-                d = ""
-        if len(d) == 8 and d.isdigit():
-            return _is_settled(d, today, grace_days)
         return int(token[:4]) < limit.year      # 日付不明: 前の年のレースだけ確定扱い
     return False
 
 
 def settled_s_maxage_for(path: str, cfg: dict[str, Any] | None = None, today: "datetime | None" = None) -> int | None:
-    """確定済みのレースに対する長い s-maxage（秒）。対象外・日付不明なら None（呼び出し側は通常の s_maxage を使う）。"""
+    """共有キャッシュ(nginx)に長く置く秒数。対象外・日付不明なら None（呼び出し側は通常の s_maxage を使う）。
+
+    - ``settled.prefixes`` のレース・開催日: 確定済み（開催から grace_days 日以上）は ``settled.s_maxage``（30 日）。
+      開催日が分かる当日・未来・確定前は ``settled.upcoming_s_maxage``（6 時間。データ更新時は VPS の事前ロードが上書きするので、
+      これは上書きが漏れたときの上限）。
+    - ``long.prefixes``（馬のページなど）: ``long.s_maxage``（30 日。馬のデータの保存時に事前ロードが上書きする）。
+    """
     cfg = cfg if cfg is not None else config()
-    st = cfg.get("settled") or {}
-    s = int(st.get("s_maxage") or 0)
-    if not cfg.get("enabled") or s <= 0:
+    if not cfg.get("enabled"):
         return None
     if any(path == n or path.startswith(n.rstrip("/") + "/") or path.startswith(n) for n in cfg.get("never") or []):
         return None
+    st = cfg.get("settled") or {}
+    s = int(st.get("s_maxage") or 0)
     for pre in st.get("prefixes") or []:
         if path.startswith(pre):
-            return s if _is_settled(_first_token(path, pre), today, int(st.get("grace_days", 3))) else None
+            token = _first_token(path, pre)
+            if s > 0 and _is_settled(token, today, int(st.get("grace_days", 3))):
+                return s
+            up = int(st.get("upcoming_s_maxage") or 0)
+            return up if up > 0 and _token_date(token) is not None else None
+    lg = cfg.get("long") or {}
+    ls = int(lg.get("s_maxage") or 0)
+    if ls > 0 and any(path.startswith(pre) for pre in lg.get("prefixes") or []):
+        return ls
     return None
 
 

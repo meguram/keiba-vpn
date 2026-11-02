@@ -2,11 +2,41 @@
 
 import { useState, useMemo } from "react";
 import { useNarrow } from "@/components/RaceStrip";
-import { axis2Max, chartIsEmpty, chartMax, chartStep, chartVariant, formatP, formatValue, SIGNIFICANT_P, type ColumnChartBlock, type JockeyDistanceChartBlock } from "@/lib/columns";
+import { axis2Max, chartIsEmpty, chartRange, chartVariant, formatP, formatTick, formatValue, SIGNIFICANT_P, type ChartFormat, type ColumnChartBlock, type ColumnHeatmapBlock, type JockeyDistanceChartBlock } from "@/lib/columns";
 
 const COLORS = ["#58a6ff", "#f0883e", "#3fb950", "#d2a8ff"];
 /** 右の縦軸の系列の色（左の系列の色と重ならないもの） */
 const Y2_COLOR = "#f778ba";
+/** 騎手グラフの「人気から見込まれる勝率」の線の色 */
+const EXPECTED_COLOR = "#d2a8ff";
+
+/**
+ * 折れ線の d 属性を、実線の部分と点線の部分に分ける。標本数 n が minN 未満の点に触れる区間は点線。
+ * 前後に線のつながらない点（両隣が欠け）は線を引かない（点だけ描く）
+ */
+function splitPaths(vals: (number | null)[], ns: (number | null)[] | undefined, minN: number | undefined,
+  x: (k: number) => number, y: (v: number) => number): { solid: string; dashed: string } {
+  const small = (k: number) => minN != null && ns?.[k] != null && ns[k]! < minN;
+  let solid = "", dashed = "";
+  for (let k = 0; k + 1 < vals.length; k++) {
+    const a = vals[k], b = vals[k + 1];
+    if (typeof a !== "number" || typeof b !== "number") continue;
+    const seg = `M${x(k).toFixed(1)},${y(a).toFixed(1)} L${x(k + 1).toFixed(1)},${y(b).toFixed(1)} `;
+    if (small(k) || small(k + 1)) dashed += seg; else solid += seg;
+  }
+  return { solid: solid.trim(), dashed: dashed.trim() };
+}
+
+/** 標本数 n が minN 未満の点か */
+function isSmall(ns: (number | null)[] | undefined, minN: number | undefined, k: number): boolean {
+  return minN != null && ns?.[k] != null && ns[k]! < minN;
+}
+
+/** 縦軸の目盛りの文字。値がすべて 0 以上の率・数は今までどおり */
+function tickText(t: number, fmt: ChartFormat, min: number): string {
+  if (min < 0 || fmt === "pt") return formatTick(t, fmt);
+  return fmt === "num" ? `${Math.round(t)}` : `${Math.round(t * 100)}%`;
+}
 
 /** 騎手別・距離帯別勝率グラフ（プルダウン＋ソート切り替え） */
 export function JockeyDistanceChart({ block }: { block: JockeyDistanceChartBlock }) {
@@ -23,7 +53,7 @@ export function JockeyDistanceChart({ block }: { block: JockeyDistanceChartBlock
   );
 
   const jockey = block.jockeys.find((j) => j.name === selectedName) ?? block.jockeys[0];
-  const allVals = [...(jockey?.values ?? []), ...(block.baseline ?? [])].filter((v): v is number => typeof v === "number");
+  const allVals = [...(jockey?.values ?? []), ...(jockey?.expected ?? []), ...(block.baseline ?? [])].filter((v): v is number => typeof v === "number");
   const max = allVals.length ? Math.round(Math.max(0.1, Math.ceil(Math.max(...allVals) / 0.05 + 1e-9) * 0.05) * 100) / 100 : 0.4;
   const n = block.xs.length;
   const x = (k: number) => L + (n <= 1 ? 0 : (k * (W - L - R)) / (n - 1));
@@ -40,6 +70,9 @@ export function JockeyDistanceChart({ block }: { block: JockeyDistanceChartBlock
     });
     return d.trim();
   };
+  const yLabel = block.yLabel ?? "勝率";
+  const jp = jockey ? splitPaths(jockey.values, jockey.n, block.minN, x, y) : { solid: "", dashed: "" };
+  const hasSmall = !!jockey && jockey.values.some((v, k) => typeof v === "number" && isSmall(jockey.n, block.minN, k));
 
   return (
     <figure className="card" style={{ padding: "12px 12px 8px" }}>
@@ -81,30 +114,46 @@ export function JockeyDistanceChart({ block }: { block: JockeyDistanceChartBlock
             : <text key={k} x={x(k)} y={H - B + 16} textAnchor="middle" fontSize={11} fill="var(--text-dim)">{lab}</text>
         ))}
         <text x={(L + W - R) / 2} y={H - 4} textAnchor="middle" fontSize={11} fill="var(--text-dim)">距離</text>
-        <text x={12} y={(T + H - B) / 2} textAnchor="middle" fontSize={11} fill="var(--text-dim)" transform={`rotate(-90 12 ${(T + H - B) / 2})`}>勝率</text>
+        <text x={12} y={(T + H - B) / 2} textAnchor="middle" fontSize={11} fill="var(--text-dim)" transform={`rotate(-90 12 ${(T + H - B) / 2})`}>{yLabel}</text>
 
         {/* baseline */}
         {block.baseline && (
           <path d={linePath(block.baseline)} fill="none" stroke="#8b949e" strokeWidth={2} strokeDasharray="5 4" />
         )}
-        {/* selected jockey */}
+        {/* 騎乗馬の人気から見込まれる勝率 */}
+        {jockey?.expected && (
+          <g>
+            <path d={linePath(jockey.expected)} fill="none" stroke={EXPECTED_COLOR} strokeWidth={1.6} strokeDasharray="2 3" />
+            {jockey.expected.map((v, k) => typeof v === "number" && (
+              <rect key={k} x={x(k) - 2.5} y={y(v) - 2.5} width={5} height={5} fill={EXPECTED_COLOR}>
+                <title>{`${block.expectedLabel ?? "人気からの見込み"} ${block.xs[k]}: ${(v * 100).toFixed(1)}%`}</title>
+              </rect>
+            ))}
+          </g>
+        )}
+        {/* selected jockey（騎乗数が minN 未満の点に触れる線は点線、その点は白抜き） */}
         {jockey && (
           <g>
-            <path d={linePath(jockey.values)} fill="none" stroke="#58a6ff" strokeWidth={2.5} strokeLinejoin="round" />
-            {jockey.values.map((v, k) =>
-              typeof v === "number" && (
-                <circle key={k} cx={x(k)} cy={y(v)} r={3.5} fill="#58a6ff">
-                  <title>{`${jockey.name} ${block.xs[k]}: ${(v * 100).toFixed(1)}%`}</title>
+            {jp.solid && <path d={jp.solid} fill="none" stroke="#58a6ff" strokeWidth={2.5} strokeLinejoin="round" />}
+            {jp.dashed && <path d={jp.dashed} fill="none" stroke="#58a6ff" strokeWidth={2} strokeDasharray="5 4" />}
+            {jockey.values.map((v, k) => {
+              if (typeof v !== "number") return null;
+              const sm = isSmall(jockey.n, block.minN, k);
+              return (
+                <circle key={k} cx={x(k)} cy={y(v)} r={3.5} fill={sm ? "var(--surface)" : "#58a6ff"} stroke="#58a6ff" strokeWidth={sm ? 1.5 : 0}>
+                  <title>{`${jockey.name} ${block.xs[k]}: ${(v * 100).toFixed(1)}%${jockey.n?.[k] != null ? `（${jockey.n[k]}騎乗）` : ""}`}</title>
                 </circle>
-              )
-            )}
+              );
+            })}
           </g>
         )}
       </svg>
 
       <div className="flex flex-wrap gap-4" style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
-        <span><span style={{ display: "inline-block", width: 18, borderTop: "2px dashed #8b949e", verticalAlign: "middle", marginRight: 4 }} />全体平均</span>
+        <span><span style={{ display: "inline-block", width: 18, borderTop: "2px dashed #8b949e", verticalAlign: "middle", marginRight: 4 }} />{block.baselineLabel ?? "全体平均"}</span>
         <span><span style={{ display: "inline-block", width: 18, borderTop: "2.5px solid #58a6ff", verticalAlign: "middle", marginRight: 4 }} />{jockey?.name}</span>
+        {hasSmall && <span><span style={{ display: "inline-block", width: 18, borderTop: "2px dashed #58a6ff", verticalAlign: "middle", marginRight: 4 }} />{block.minN}騎乗未満（参考）</span>}
+        {jockey?.expected && <span><span style={{ display: "inline-block", width: 18, borderTop: `2px dotted ${EXPECTED_COLOR}`, verticalAlign: "middle", marginRight: 4 }} />{block.expectedLabel ?? "人気からの見込み"}</span>}
         {block.caption && <span>{block.caption}</span>}
       </div>
     </figure>
@@ -129,12 +178,12 @@ export function ColumnChart({ block: whole }: { block: ColumnChartBlock }) {
   const fmt = block.format ?? "pct";
   const pct = (v: number) => formatValue(v, fmt);
   const empty = chartIsEmpty(block.series);
-  const max = chartMax(block.series, fmt);
+  // 値がすべて 0 以上なら min = 0（今までどおり）。負の値があれば下限も値から決め、0 の線を引く
+  const { min, max, step } = chartRange(block.series, fmt);
   const n = block.xs.length;
   const x = (k: number) => L + (n <= 1 ? 0 : (k * (W - L - R)) / (n - 1));
-  const y = (v: number) => T + (1 - v / max) * (H - T - B);
-  const step = chartStep(max, fmt);
-  const ticks = Array.from({ length: Math.round(max / step) + 1 }, (_, k) => k * step);
+  const y = (v: number) => T + (1 - (v - min) / (max - min)) * (H - T - B);
+  const ticks = Array.from({ length: Math.round((max - min) / step) + 1 }, (_, k) => Math.round((min + k * step) * 1e6) / 1e6);
   const fmt2 = y2?.format ?? "num";
   const max2 = y2 ? axis2Max(y2.series, ticks.length - 1, fmt2) : 1;
   const yR = (v: number) => T + (1 - v / max2) * (H - T - B);
@@ -193,7 +242,7 @@ export function ColumnChart({ block: whole }: { block: ColumnChartBlock }) {
           {ticks.map((t, k) => (
             <g key={k}>
               <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} stroke="var(--border)" strokeWidth={1} />
-              <text x={L - 6} y={y(t) + 4} textAnchor="end" fontSize={11} fill="var(--text-dim)">{fmt === "num" ? Math.round(t) : `${Math.round(t * 100)}%`}</text>
+              <text x={L - 6} y={y(t) + 4} textAnchor="end" fontSize={11} fill="var(--text-dim)">{tickText(t, fmt, min)}</text>
               {y2 && <text x={W - R + 6} y={y(t) + 4} textAnchor="start" fontSize={11} fill={Y2_COLOR}>{fmt2 === "num" ? +(k * max2 / (ticks.length - 1)).toFixed(2) : `${Math.round(k * max2 / (ticks.length - 1) * 100)}%`}</text>}
             </g>
           ))}
@@ -206,23 +255,26 @@ export function ColumnChart({ block: whole }: { block: ColumnChartBlock }) {
           <text x={12} y={(T + H - B) / 2} textAnchor="middle" fontSize={11} fill="var(--text-dim)" transform={`rotate(-90 12 ${(T + H - B) / 2})`}>{block.yLabel}{y2 ? "（左）" : ""}</text>
           {y2 && <text x={W - 8} y={(T + H - B) / 2} textAnchor="middle" fontSize={11} fill={Y2_COLOR} transform={`rotate(90 ${W - 8} ${(T + H - B) / 2})`}>{y2.label}（右）</text>}
 
+          {min < 0 && <line x1={L} x2={W - R} y1={y(0)} y2={y(0)} stroke="var(--text-dim)" strokeWidth={1.2} />}
           {base.map((s, k) => <path key={`b${k}`} d={path(s.values)} fill="none" stroke="#8b949e" strokeWidth={2} strokeDasharray="5 4" />)}
           {picked.map((i, k) => {
             const s = block.series[i];
             const c = COLORS[k % COLORS.length];
             const dx = s.ci ? (k - (picked.length - 1) / 2) * 5 : 0;      // 信頼区間の縦線が重ならないよう少しずらす
+            const sp = block.minN != null ? splitPaths(s.values, s.n, block.minN, x, y) : { solid: path(s.values), dashed: "" };
             return (
               <g key={i}>
-                <path d={path(s.values)} fill="none" stroke={c} strokeWidth={2.5} strokeLinejoin="round" />
+                {sp.solid && <path d={sp.solid} fill="none" stroke={c} strokeWidth={2.5} strokeLinejoin="round" />}
+                {sp.dashed && <path d={sp.dashed} fill="none" stroke={c} strokeWidth={2} strokeDasharray="5 4" />}
                 {s.ci?.map((ci, j) => ci && (
                   <g key={`ci${j}`} stroke={c} strokeWidth={1.4} opacity={0.75}>
-                    <line x1={x(j) + dx} x2={x(j) + dx} y1={y(Math.min(ci[1], max))} y2={y(Math.max(0, ci[0]))} />
+                    <line x1={x(j) + dx} x2={x(j) + dx} y1={y(Math.min(ci[1], max))} y2={y(Math.max(min, ci[0]))} />
                     <line x1={x(j) + dx - 3} x2={x(j) + dx + 3} y1={y(Math.min(ci[1], max))} y2={y(Math.min(ci[1], max))} />
-                    <line x1={x(j) + dx - 3} x2={x(j) + dx + 3} y1={y(Math.max(0, ci[0]))} y2={y(Math.max(0, ci[0]))} />
+                    <line x1={x(j) + dx - 3} x2={x(j) + dx + 3} y1={y(Math.max(min, ci[0]))} y2={y(Math.max(min, ci[0]))} />
                   </g>
                 ))}
                 {s.values.map((v, j) => typeof v === "number" && (
-                  <circle key={j} cx={x(j)} cy={y(v)} r={3.5} fill={c}>
+                  <circle key={j} cx={x(j)} cy={y(v)} r={3.5} fill={isSmall(s.n, block.minN, j) ? "var(--surface)" : c} stroke={c} strokeWidth={isSmall(s.n, block.minN, j) ? 1.5 : 0}>
                     <title>{`${s.name} ${block.xs[j]}: ${pct(v)}${s.n?.[j] != null ? `（${s.n[j]}走）` : ""}${s.ci?.[j] ? ` 95%区間 ${pct(s.ci[j]![0])}〜${pct(s.ci[j]![1])}` : ""}`}</title>
                   </circle>
                 ))}
@@ -263,6 +315,7 @@ export function ColumnChart({ block: whole }: { block: ColumnChartBlock }) {
         {base.map((s, k) => <span key={k}><span style={{ display: "inline-block", width: 18, borderTop: "2px dashed #8b949e", verticalAlign: "middle", marginRight: 4 }} />{s.name}</span>)}
         {y2?.series.map((s, k) => <span key={`l2${k}`} style={{ color: Y2_COLOR }}><span style={{ display: "inline-block", width: 18, borderTop: `2.5px dashed ${Y2_COLOR}`, verticalAlign: "middle", marginRight: 4 }} />■ {s.name}（右軸）</span>)}
         {showSig && <span>縦線は95%信頼区間。＊は2つの差が統計的に有意（p&lt;0.05）</span>}
+        {block.minN != null && picked.some((i) => block.series[i]?.values.some((v, j) => typeof v === "number" && isSmall(block.series[i].n, block.minN, j))) && <span>点線・白抜きの点は{block.minN}走未満（参考）</span>}
         {block.caption && <span>{block.caption}</span>}
       </div>
 
@@ -346,5 +399,66 @@ function SeriesTable({ block }: { block: ColumnChartBlock }) {
         </tbody>
       </table>
     </details>
+  );
+}
+
+/** ヒートマップ（行 × 列）。center より上は青、下は橙で、離れるほど濃い。各マスに値と標本数を出す */
+export function ColumnHeatmap({ block }: { block: ColumnHeatmapBlock }) {
+  const fmt = block.format ?? "pt";
+  const center = block.center ?? 0;
+  const all = block.values.flat().filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+  const scale = block.scale ?? Math.max(1e-9, ...all.map((v) => Math.abs(v - center)));
+  const bg = (v: number | null, small: boolean) => {
+    if (typeof v !== "number") return "transparent";
+    const a = Math.min(1, Math.abs(v - center) / scale) * (small ? 0.25 : 0.6);
+    const rgb = v >= center ? "88,166,255" : "240,136,62";
+    return `rgba(${rgb},${a.toFixed(3)})`;
+  };
+  const TH = { padding: "6px 4px", fontSize: 12, color: "var(--text-dim)", fontWeight: 600, textAlign: "center" as const };
+  return (
+    <figure className="card" style={{ padding: "12px 12px 8px" }}>
+      <figcaption className="font-bold" style={{ fontSize: 15, marginBottom: 8 }}>{block.title}</figcaption>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ borderCollapse: "separate", borderSpacing: 3, width: "100%", minWidth: 300, tableLayout: "fixed" }}>
+          <thead>
+            <tr>
+              <th style={{ ...TH, textAlign: "left", width: 72, fontSize: 11 }}>{block.rowLabel} ＼ {block.colLabel}</th>
+              {block.cols.map((c) => <th key={c} style={TH}>{c}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {block.rows.map((r, i) => (
+              <tr key={r}>
+                <th style={{ ...TH, textAlign: "left" }}>{r}</th>
+                {block.cols.map((c, j) => {
+                  const v = block.values[i]?.[j] ?? null;
+                  const n = block.n?.[i]?.[j];
+                  const ci = block.ci?.[i]?.[j];
+                  const small = block.minN != null && n != null && n < block.minN;
+                  return (
+                    <td key={c} title={`${block.rowLabel} ${r} → ${block.colLabel} ${c}: ${formatValue(v, fmt)}${n != null ? `（${n.toLocaleString()}走）` : ""}${ci ? ` 95%区間 ${formatValue(ci[0], fmt)}〜${formatValue(ci[1], fmt)}` : ""}`}
+                      style={{ background: bg(v, small), borderRadius: 4, padding: "6px 2px", textAlign: "center", fontVariantNumeric: "tabular-nums",
+                        border: "1px solid var(--border)", color: small ? "var(--text-dim)" : "var(--text)" }}>
+                      <span style={{ display: "block", fontSize: 13, fontWeight: small ? 400 : 700 }}>{formatValue(v, fmt)}</span>
+                      {n != null && <span style={{ display: "block", fontSize: 10, color: "var(--text-dim)" }}>{n.toLocaleString()}走</span>}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-wrap items-center gap-3" style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 6 }}>
+        <span className="flex items-center gap-1">
+          {block.legend?.[0] ?? "低い"}
+          <span style={{ display: "inline-block", width: 90, height: 10, borderRadius: 3, border: "1px solid var(--border)",
+            background: "linear-gradient(90deg, rgba(240,136,62,0.6), rgba(240,136,62,0) 50%, rgba(88,166,255,0) 50%, rgba(88,166,255,0.6))" }} />
+          {block.legend?.[1] ?? "高い"}
+        </span>
+        {block.minN != null && <span>色の薄いマスは{block.minN.toLocaleString()}走未満（参考）</span>}
+        {block.caption && <span>{block.caption}</span>}
+      </div>
+    </figure>
   );
 }

@@ -200,7 +200,7 @@ def simulate_bets(predictions: list[dict], storage: Any, race_id: str, result: d
     if odds.get("source") is None:
         return {"status": "no_odds", "total_bet": 0, "total_return": 0.0, "by_type": {}, "candidates": [], "estimated": False}
     cfg = BettingConfig(max_total_bet=max_total_bet, bet_types=list(BET_TYPES))
-    portfolio = BettingOptimizer(cfg).optimize(predictions, odds["pair_odds"], 100000, single_odds=odds["single_odds"])
+    portfolio = BettingOptimizer(cfg).optimize(predictions, odds["pair_odds"], 100000, single_odds=odds["single_odds"], race_id=race_id)
     total_bet = 0
     total_ret = 0.0
     estimated = False

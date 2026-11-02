@@ -70,3 +70,20 @@ def test_client_ip_adopted_only_after_key_verified():
 def test_helpers():
     assert key_matches("a", [b"a", b"b"]) and not key_matches("c", [b"a"]) and not key_matches(None, [b"a"])
     assert configured_keys({"KEIBA_PROXY_KEY": " x ", "KEIBA_PROXY_KEY_NEXT": ""}) == [b"x"]
+
+
+def test_fresh_header_honored_only_after_key_verified():
+    from src.api import prerender
+
+    async def fresh(request: Request):
+        return JSONResponse({"fresh": prerender.fresh_requested()})
+
+    env = {"KEIBA_PROXY_KEY_REQUIRED": "1", "KEIBA_PROXY_KEY": "secret-A"}
+    c = TestClient(ProxyKeyMiddleware(Starlette(routes=[Route("/api/x", fresh)]), env=env))
+    assert c.get("/api/x", headers={"X-Keiba-Proxy-Key": "secret-A", "X-Keiba-Fresh": "1"}).json() == {"fresh": True}
+    assert c.get("/api/x", headers={"X-Keiba-Proxy-Key": "secret-A", "X-Keiba-Fresh": "0"}).json() == {"fresh": False}
+    assert c.get("/api/x", headers={"X-Keiba-Proxy-Key": "secret-A"}).json() == {"fresh": False}
+    assert c.get("/api/x", headers={"X-Keiba-Fresh": "1"}).status_code == 401           # 鍵が無ければ届かない
+    assert prerender.fresh_requested() is False                                          # 要求の外には残らない
+    off = TestClient(ProxyKeyMiddleware(Starlette(routes=[Route("/api/x", fresh)]), env={}))
+    assert off.get("/api/x", headers={"X-Keiba-Fresh": "1"}).json() == {"fresh": False}  # 鍵の確認が無効な運用では効かない
