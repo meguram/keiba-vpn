@@ -477,7 +477,7 @@ def test_running_map_module_returns_a_figure_keyed_by_entry(monkeypatch):
 
     seen = {}
 
-    def fake(entries, race_id, conditions):
+    def fake(entries, race_id, conditions, load_result=None):
         seen.update(conditions=conditions, n=len(entries))
         return {"status": "ok", "axes": [{"key": "ts"}], "groups": [{"id": "A", "label": "高TS", "horse_numbers": [1]}],
                 "horses": [{"horse_id": "h1", "horse_number": 1, "horse_name": "甲", "x": 0.1, "y": 0.2, "group": "A",
