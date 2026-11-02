@@ -19,7 +19,7 @@ class _FakeOptimizer:
     def __init__(self, config):
         pass
 
-    def optimize(self, predictions, pair_odds, bankroll, single_odds=None):
+    def optimize(self, predictions, pair_odds, bankroll, single_odds=None, race_id=None):
         return {
             "total_bet": 1000,
             "expected_return": 1050.0,

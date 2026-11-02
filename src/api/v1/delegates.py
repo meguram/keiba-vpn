@@ -199,6 +199,7 @@ def _optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool 
         pair_odds,
         body.get("bankroll", 100000),
         single_odds=single_odds,
+        race_id=race_id,
     )
 
     predicted = None

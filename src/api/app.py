@@ -9866,7 +9866,7 @@ async def api_betting_optimize(request: Request):
         )
         optimizer = BettingOptimizer(config)
         return optimizer.optimize(
-            predictions, pair_odds, bankroll, single_odds=single_odds,
+            predictions, pair_odds, bankroll, single_odds=single_odds, race_id=race_id,
         )
 
     portfolio = await asyncio.to_thread(_run)
