@@ -6,6 +6,8 @@
 - 比較は定数時間（hmac.compare_digest）。鍵の値はログ・応答に出さない。
 - 鍵が通った要求に限り、``X-Keiba-Client-IP``（VPS の nginx が付ける本当のクライアント IP）を接続元として採用する
   （Cloud Run では接続元が Google のフロントになるため。鍵を持つ相手しかこのヘッダを使えない）。
+- 鍵が通った要求に限り、``X-Keiba-Fresh: 1``（VPS の事前ロードの取り直しにだけ nginx が付ける）で、API 内の応答の使い回し
+  （src/api/prerender.py）を読まずに作り直させる。鍵を持たない相手は付けても届かない（401）。
 - ヘッダ無し・不一致は 401。必須なのに鍵が 1 つも設定されていないときは全拒否（開けっぱなしにしない）。
 - ヘルスチェック（Cloud Run の起動確認が鍵を持たない）などは ``exempt_paths`` で除外する。
 """
@@ -23,6 +25,7 @@ logger = logging.getLogger("api.proxy_key")
 HEADER = "x-keiba-proxy-key"
 DEFAULT_EXEMPT = ("/api/health", "/api/v1/health")
 CLIENT_IP_HEADER = b"x-keiba-client-ip"
+FRESH_HEADER = b"x-keiba-fresh"
 
 _DENY_BODY = b'{"error":"unauthorized","reason":"proxy_key"}'
 
@@ -55,6 +58,10 @@ def key_matches(presented: str | bytes | None, keys: Iterable[bytes]) -> bool:
 
 def is_exempt(path: str, exempt_paths: Iterable[str]) -> bool:
     return any(path == p or path.rstrip("/") == p for p in exempt_paths)
+
+
+def _wants_fresh(scope: dict[str, Any]) -> bool:
+    return any(k.lower() == FRESH_HEADER and v.strip() == b"1" for k, v in scope.get("headers") or [])
 
 
 def _client_ip(scope: dict[str, Any]) -> str | None:
@@ -94,6 +101,15 @@ class ProxyKeyMiddleware:
             ip = _client_ip(scope)
             if ip:
                 scope = {**scope, "client": (ip, 0)}
+            if _wants_fresh(scope):
+                from src.api import prerender
+
+                token = prerender.set_fresh(True)
+                try:
+                    await self.app(scope, receive, send)
+                finally:
+                    prerender.reset_fresh(token)
+                return
             await self.app(scope, receive, send)
             return
         if not keys:

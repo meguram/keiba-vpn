@@ -5,6 +5,7 @@
   匿名の public 応答が MISS→HIT になる / s-maxage が TTL に効く / Cookie・Authorization 付きは読まず保存せず
   private・no-store・Set-Cookie 付き・POST は保存しない / 上流が誤って public を付けても会員の本文が匿名に出ない
   合言葉つき(X-Keiba-Refresh)の要求だけ、読まずに取り直して保存し直す（合言葉なしは効かない・上流には渡さない）
+  取り直しのときだけ上流に X-Keiba-Fresh: 1 が付く / stg（別ポート）は本番が保存した分を読むが、自分の取得は保存しない
 使い方: python3 scripts/ops/vps/verify_api_cache.py   （nginx が PATH に必要。VPS 上で実行する）
 """
 import os, shutil, socket, subprocess, sys, tempfile, threading, time, urllib.request
@@ -13,6 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HERE = os.path.dirname(os.path.abspath(__file__))
 TPL = os.path.join(HERE, "templates")
 hits: dict[str, int] = {}
+fresh_seen: list[str] = []      # 上流に届いた X-Keiba-Fresh の値（届いた順）
 
 
 class Up(BaseHTTPRequestHandler):
@@ -30,6 +32,7 @@ class Up(BaseHTTPRequestHandler):
     def do_GET(self):
         p = self.path.split("?")[0]
         if self.headers.get("X-Keiba-Refresh") is not None: hits["leaked-refresh-header"] = hits.get("leaked-refresh-header", 0) + 1
+        fresh_seen.append(self.headers.get("X-Keiba-Fresh") or "")
         who = "member" if (self.headers.get("Cookie") or self.headers.get("Authorization")) else "anon"
         pub = {"Cache-Control": "public, max-age=300, s-maxage=60", "Vary": "Accept-Encoding, Cookie"}
         if p == "/api/pub": self._send(f"pub-{who}", pub)
@@ -41,6 +44,7 @@ class Up(BaseHTTPRequestHandler):
         elif p == "/api/nostore": self._send(f"nostore-{who}", {"Cache-Control": "no-store, max-age=0"})
         elif p == "/api/setcookie": self._send(f"setcookie-{who}", {**pub, "Set-Cookie": "a=b"})
         elif p == "/api/nohdr": self._send(f"nohdr-{who}", {})
+        elif p == "/api/stgonly": self._send(f"stgonly-{who}", pub)
         else: self._send("other", {})
 
     do_HEAD = do_GET
@@ -65,7 +69,7 @@ def main() -> int:
     if not os.path.exists(nginx):
         print("nginx が見つかりません"); return 2
     tmp = tempfile.mkdtemp(prefix="apicache_")
-    up_port, ng_port = free_port(), free_port()
+    up_port, ng_port, stg_port = free_port(), free_port(), free_port()
     srv = ThreadingHTTPServer(("127.0.0.1", up_port), Up)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     zones = open(os.path.join(TPL, "nginx-zones.conf")).read().replace("/var/cache/nginx/keiba_api", f"{tmp}/cache")
@@ -73,6 +77,14 @@ def main() -> int:
     token = "tok-" + os.urandom(8).hex()
     with open(f"{tmp}/refresh.conf", "w") as f: f.write(f'"{token}" 1;\n')
     zones = zones.replace("/etc/nginx/keiba-refresh.conf", f"{tmp}/refresh.conf")
+    with open(f"{tmp}/readonly.conf", "w") as f: f.write(f'"{stg_port}" 1;\n')      # stg のポートは読むだけ（vps_09 が書くのと同じ形）
+    zones = zones.replace("/etc/nginx/keiba-cache-readonly.conf", f"{tmp}/readonly.conf")
+    loc = f"""location /api/ {{{{
+            proxy_pass http://127.0.0.1:{up_port};
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            include {TPL}/nginx-api-cache.conf;
+        }}}}"""
     conf = f"""pid {tmp}/nginx.pid;
 error_log {tmp}/error.log;
 worker_processes 1;
@@ -83,12 +95,11 @@ http {{
 {zones}
     server {{
         listen 127.0.0.1:{ng_port};
-        location /api/ {{
-            proxy_pass http://127.0.0.1:{up_port};
-            proxy_http_version 1.1;
-            proxy_set_header Connection "";
-            include {TPL}/nginx-api-cache.conf;
-        }}
+        {loc.format()}
+    }}
+    server {{
+        listen 127.0.0.1:{stg_port};
+        {loc.format()}
     }}
 }}
 """
@@ -146,6 +157,18 @@ http {{
         ba2, _ = req(ng_port, "/api/ver")
         check("合言葉があっても Cookie 付きは保存しない（匿名の保存分は ver-2 のまま）", bm == "ver-3" and ba2 == "ver-2" and hits.get("/api/ver") == n + 1, f"{bm},{ba2},{hits.get('/api/ver')}")
         check("合言葉の見出しは上流へ渡さない", hits.get("leaked-refresh-header", 0) == 0, str(hits.get("leaked-refresh-header")))
+        # 取り直しのときだけ、API 内の使い回しも飛ばさせる見出し（X-Keiba-Fresh: 1）が上流に届く
+        k = len(fresh_seen)
+        req(ng_port, "/api/ver", headers={"X-Keiba-Refresh": token})
+        req(ng_port, "/api/nohdr")
+        check("X-Keiba-Fresh は取り直しのときだけ 1", fresh_seen[k:] == ["1", "0"], str(fresh_seen[k:]))
+        # stg と本番の共有: stg は本番が保存した分を読むが、自分の取得は保存しない
+        bs, ss = req(stg_port, "/api/pub")
+        check("stg は本番が保存した分を HIT で読む", ss == "HIT" and bs == "pub-anon", f"{ss},{bs}")
+        _, s1s = req(stg_port, "/api/stgonly"); _, s2s = req(stg_port, "/api/stgonly"); _, sps = req(ng_port, "/api/stgonly")
+        check("stg の取得は保存しない（stg も本番も MISS のまま）", (s1s, s2s, sps) == ("MISS", "MISS", "MISS"), f"{s1s},{s2s},{sps}")
+        _, sp2 = req(ng_port, "/api/stgonly"); _, sst = req(stg_port, "/api/stgonly")
+        check("本番が保存したあとは stg も HIT", sp2 == "HIT" and sst == "HIT", f"{sp2},{sst}")
         # 確定済みレース用: 1か月の s-maxage は長く保持され、--match の消去は対象だけに効く
         req(ng_port, "/api/long?a=1"); req(ng_port, "/api/long?b=2")
         time.sleep(3)

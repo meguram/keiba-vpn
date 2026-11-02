@@ -2822,7 +2822,12 @@ async def get_race_list_for_date(date: str, with_result_status: bool = True):
 
 
 async def race_list_payload(date: str, with_result_status: bool = True, refresh: bool = False, max_age: float | None = None):
-    """``refresh`` は事前生成(src.api.prewarm)用: 手元のキャッシュを使わず計算し直して、事前生成も更新する。"""
+    """``refresh`` は事前生成(src.api.prewarm)用: 手元のキャッシュを使わず計算し直して、事前生成も更新する。
+    VPS の事前ロードの取り直し（``prerender.fresh_requested()``）も同じ扱い（メモリ上の一覧も読まない）。"""
+    from src.api import prerender as _prerender
+
+    refresh = refresh or _prerender.fresh_requested()
+
     def _load():
         from src.utils.race_result_availability import batch_race_result_status
 
