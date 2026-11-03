@@ -36,6 +36,85 @@ export type AnalysisModuleMeta = {
   source?: AnalysisSource | null;
   /** 分析の軸（父など）を表の列として出すときの見出し。値は各馬の cells の _key */
   key_header?: string | null;
+  /** 見せ方。省略時は表。"map" は figure の走法マップ */
+  view?: "table" | "map";
+  figure?: RunningMapFigure | null;
+};
+
+/** 走法マップの方面（矢印）。arrow は 2 次元での向きと長さ、r2 はその方面がこの図でどれだけ表せているか（0〜1） */
+export type RunningMapAxis = { key: string; label: string; high: string; low: string; weight: number; arrow?: [number, number]; r2?: number | null };
+
+/** 地図の位置には入れない補助の軸（急坂適性・道悪の軸）。value は 50 が平均の偏差値で、判定できないときは null（不明） */
+export type RunningMapExtra = { value: number | null; runs?: number; n_power?: number; n_normal?: number; low?: boolean };
+
+export type RunningMapHorse = {
+  key: string | null;
+  horse_id: string | null;
+  horse_number: number | null;
+  horse_name: string | null;
+  x: number;
+  y: number;
+  group: string;
+  /** 方面ごとに、全馬の中で「高い」側から見た位置（0〜100） */
+  percentiles: Record<string, number | null>;
+  n_runs: number;
+  /** 実測ラップのある過去の出走数（方面ごとの最大） */
+  n_lap_runs?: number;
+  /** 方面ごとの、実測ラップのある自分の走数 */
+  axis_runs?: Record<string, number>;
+  /** 自分の実測の走が無く、父の産駒の平均から推定した方面 */
+  from_prior?: string[];
+  /** 実測ラップのある過去の出走が無く、全方面を父の産駒の平均から推定した */
+  estimated: boolean;
+  /** 自分の走の重みの割合（0〜1。小さいほど父の平均に寄っている） */
+  own_weight: number;
+  /** 補助の軸（キーは extra_axes のもの） */
+  extras?: Record<string, RunningMapExtra>;
+  /** 8 方面の元の空間で近い馬（同じレースの中、近い順）。地図は 2 次元に落とした分だけ近さがずれるので、選んだ馬ではこれを強調する */
+  similar?: { horse_id: string | null; horse_number: number | null; horse_name: string | null; distance: number }[];
+  last_run_date: string | null;
+};
+
+export type RunningMapFigure = {
+  status: "ok" | "insufficient";
+  axes: RunningMapAxis[];
+  /** このレースで出す補助の軸（急坂適性は中山・阪神、道悪の軸は芝=芝道悪適性・ダート=ダートタフ適正） */
+  extra_axes?: { key: string; label: string; high: string; low: string }[];
+  horses: RunningMapHorse[];
+  groups: { id: string; label: string; traits: { axis: string; diff: number; text: string }[]; horse_numbers: (number | null)[] }[];
+  unmapped: { key: string | null; horse_name: string | null; horse_number: number | null; reason: string }[];
+  fidelity: { explained: number | null; distance_spearman: number | null } | null;
+  /** 好走しやすさの格子の範囲（全レース共通の座標。n×n、x が外側のループ） */
+  extent: { n: number; x: [number, number]; y: [number, number] } | null;
+  /** このコースの好走しやすさ。lift は期待に対する倍率、sig は 0=期待が小さく対象外 / 1=有意でない / 2=有意（FDR 5%）。添字は ix*n+iy */
+  aptitude: { course: string; n_runs: number; n_races: number; lift: number[]; sig: string; score?: boolean } | null;
+  /** コースで好走に効く上位 3 方面だけで作った地図（無ければ全レース共通の 8 方面の地図）。level=group は出走が少なく芝ダ×距離帯でまとめたもの */
+  course_map?: RunningMapCourse | null;
+  /** その日（同じ競馬場・同じ芝ダート、このレースより前）の馬場傾向。前のレースが無ければ null */
+  day_trend?: RunningMapDayTrend | null;
+};
+
+export type RunningMapCourse = {
+  axes: string[];
+  level: "course" | "group";
+  label: string;
+  /** 方面ごとの重要度（share は 0〜1 の割合、sign は高いほど好走なら 1・低いほど好走なら -1）。重要な順 */
+  importance: { key: string; label: string; share: number; sign: number }[];
+  since?: string | null;
+};
+
+export type RunningMapDayTrend = {
+  status: "trend" | "none" | "few";
+  surface: string | null;
+  n_races: number;
+  n_runs: number;
+  races: string[];
+  track_conditions: string[];
+  /** 軸ごとの傾き（得点−期待を軸の値へ回帰）と t・p。trend は多重検定の補正後に傾向ありと判定されたもの */
+  axes: { key: string; label: string; high: string; low: string; kind: "map" | "extra"; slope: number | null; t: number | null; p: number | null; n: number; trend: boolean }[];
+  trend: { key: string; label: string; text: string; t: number | null }[];
+  /** この地図の格子（extent と同じ並び）での、その日の好走しやすさ */
+  heat: { lift: number[]; sig: string } | null;
 };
 
 export type AnalysisEntry = {
@@ -108,6 +187,11 @@ export function sortValue(v: unknown, fmt: CellFormat, palette?: Record<string, 
     return i >= 0 ? String(i + 1) : "";
   }
   return undefined;
+}
+
+/** 狭い画面の見出し用に短くした列名（『連対率』→『連対』。2 文字の『勝率』はそのまま） */
+export function shortLabel(label: string): string {
+  return label.length >= 3 && label.endsWith("率") ? label.slice(0, -1) : label;
 }
 
 export type ColumnBlock = { group: AnalysisGroup | null; columns: AnalysisColumn[] };

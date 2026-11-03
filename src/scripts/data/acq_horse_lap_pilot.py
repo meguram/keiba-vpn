@@ -37,6 +37,8 @@ def main() -> None:
     ap.add_argument("--years", type=int, nargs="+", default=[2020, 2022, 2024, 2025])
     ap.add_argument("--seed", type=int, default=5)
     ap.add_argument("--out", default="/home/jovyan/acq/horse_lap_pilot.jsonl")
+    ap.add_argument("--race-ids", nargs="+", default=[], help="指定すると無作為抽出の代わりにこのレースだけ取得")
+    ap.add_argument("--no-wait", action="store_true", help="他の取得や高負荷の待機をしない")
     a = ap.parse_args()
 
     from src.scripts.data.backfill_trifecta_odds import wait_ok
@@ -48,8 +50,9 @@ def main() -> None:
     runner = ScraperRunner()
     parser = DbHorseLaptimeTableParser()
     streak = 0
-    for n, rid in enumerate(pick_races(a.per_year, a.years, a.seed), 1):
-        wait_ok()
+    for n, rid in enumerate(a.race_ids or pick_races(a.per_year, a.years, a.seed), 1):
+        if not a.no_wait:
+            wait_ok()
         try:
             html = runner.client.fetch(parser.AJAX_URL.format(race_id=rid), use_cache=False, encoding="euc-jp")
             d = parser.parse(html, race_id=rid)

@@ -96,9 +96,11 @@ YAML
   if [ "$APPLY" = 1 ] && gcloud artifacts repositories describe "$AR_REPO" --location "$REGION" --project "$PROJECT_ID" >/dev/null 2>&1; then :; else
     run gcloud artifacts repositories create "$AR_REPO" --repository-format=docker --location "$REGION" --project "$PROJECT_ID"
   fi
-  # 古いイメージの自動掃除（パッケージごとに新しい 3 版は残し、それ以外で 7 日より古いものを削除。直前の版へ戻せる範囲は残る。Jobs のイメージは 1 版 数 GB なので溜めない）
+  # 古いイメージの自動掃除（費用の上限: CLAUDE.md）。使用中の版（live- で始まるタグ。配備のたびに scripts/ci/deploy_gcp.sh が付け替える）と
+  # パッケージごとに新しい 3 版は残し、それ以外で 2 日より古いものを削除。7 日だと配備が多い週に 60GB（月 900 円）たまり、
+  # 使用中の本番の版まで消して起動できなくなるおそれがあった（2026-11-02）
   run gcloud artifacts repositories set-cleanup-policies "$AR_REPO" --location "$REGION" --project "$PROJECT_ID" --no-dry-run \
-    --policy=<(printf '[{"name":"keep-recent","action":{"type":"Keep"},"mostRecentVersions":{"keepCount":3}},{"name":"delete-old","action":{"type":"Delete"},"condition":{"olderThan":"604800s"}}]')
+    --policy=<(printf '[{"name":"keep-live","action":{"type":"Keep"},"condition":{"tagState":"TAGGED","tagPrefixes":["live-"]}},{"name":"keep-recent","action":{"type":"Keep"},"mostRecentVersions":{"keepCount":3}},{"name":"delete-old","action":{"type":"Delete"},"condition":{"olderThan":"172800s"}}]')
   run gcloud builds submit --project "$PROJECT_ID" --region "$REGION" --config "$cfg" --ignore-file deploy/docker/Dockerfile.cloudrun.gcloudignore .
   rm -f "$cfg"
 }

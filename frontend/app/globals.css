@@ -114,6 +114,18 @@ body::before {
   .races-cal-open { display: inline-flex; align-items: center; width: 100%; justify-content: center; }
 }
 
+/* /analysis: 列の多い表を横スクロールなしで一面に収めるため、/races と同じくページの幅（max-w-6xl）より広げる */
+.page-wide { position: relative; width: min(1680px, calc(100vw - 32px)); left: 50%; margin-left: calc(min(1680px, calc(100vw - 32px)) / -2); }
+@media (max-width: 899px) {
+  .page-wide { width: auto; left: 0; margin-left: 0; }
+}
+/* スマホでは左右の余白を外枠（site-main）の分だけにして、表の幅を確保する */
+@media (max-width: 639px) {
+  .page-wide .an-pad { padding-left: 0 !important; padding-right: 0 !important; }
+  .page-wide .an-pad:first-child { padding-top: 10px !important; padding-bottom: 10px !important; }
+  .page-wide .card { padding: 10px 8px; }
+}
+
 /* ── 遷移中の進捗バーと、クリック直後の読み込み表示 ── */
 .nav-progress { position: fixed; top: 0; left: 0; height: 3px; z-index: 9999; background: var(--accent, #4f8bff); box-shadow: 0 0 8px var(--accent, #4f8bff); pointer-events: none; }
 .nav-progress-run { width: 0; animation: nav-progress-run 8s cubic-bezier(.1,.6,.2,1) forwards; }

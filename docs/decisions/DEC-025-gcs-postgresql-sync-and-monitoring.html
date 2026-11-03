@@ -226,7 +226,7 @@ python3 -m src.scripts.data.etl_stg_db --dry-run   # GCS 読み取りのみ確�
 </ul>
 <p><b>初回 STG 構築時</b></p>
 <ul>
-<li><code>scripts/server/setup_stg.sh</code> がバックグラウンドで <code>etl_stg_db --year 2026</code> を <b>1 回</b> 起動する（デプロイ時のブートストラップ。<b>毎日 cron ではない</b>）。</li>
+<li>（旧）<code>setup_stg.sh</code>（2026-10-30 に削除）がバックグラウンドで <code>etl_stg_db --year 2026</code> を <b>1 回</b> 起動する（デプロイ時のブートストラップ。<b>毎日 cron ではない</b>）。</li>
 </ul>
 
 <h2 id="3-2">3-2. 単体 ETL（設計上の Layer 1〜5 経路）— <code>etl_ingest_race.py</code></h2>

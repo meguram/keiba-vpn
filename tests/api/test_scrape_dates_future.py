@@ -34,6 +34,7 @@ def _stem(offset: int) -> str:
 class TestPickerFutureDays(unittest.TestCase):
     def setUp(self):
         app_module._PICKER_SCRAPE_DATES_CACHE.clear()
+        app_module._RACE_LIST_STEMS_CACHE.update(stems=None, ts=0.0)
         self.stems = {_stem(-2), _stem(0), _stem(3), _stem(8)}
         self._patches = [
             unittest.mock.patch.object(app_module, "_get_storage", lambda: _FakeStorage(self.stems)),
@@ -46,6 +47,7 @@ class TestPickerFutureDays(unittest.TestCase):
         for p in self._patches:
             p.stop()
         app_module._PICKER_SCRAPE_DATES_CACHE.clear()
+        app_module._RACE_LIST_STEMS_CACHE.update(stems=None, ts=0.0)
 
     def test_without_future_days_today_and_future_are_not_included(self):
         d = client.get("/api/scrape-dates?picker_past_days=10").json()["dates"]
@@ -63,6 +65,34 @@ class TestPickerFutureDays(unittest.TestCase):
         a = client.get("/api/scrape-dates?picker_past_days=10").json()["dates"]
         b = client.get("/api/scrape-dates?picker_past_days=10&picker_future_days=5").json()["dates"]
         self.assertNotEqual(a, b)
+
+    def test_each_condition_is_cached_separately_until_invalidated(self):
+        calls = {"n": 0}
+        orig = self._patches[0].new
+
+        def counting():
+            calls["n"] += 1
+            return orig()
+
+        with unittest.mock.patch.object(app_module, "_get_storage", counting):
+            for _ in range(2):
+                client.get("/api/scrape-dates?picker_past_days=21&picker_future_days=14")
+                client.get("/api/scrape-dates?picker_past_days=150&picker_future_days=14")
+            self.assertEqual(len(app_module._PICKER_SCRAPE_DATES_CACHE["by_key"]), 2)
+            n = calls["n"]
+            client.get("/api/scrape-dates?picker_past_days=21&picker_future_days=14")
+            self.assertEqual(calls["n"], n)                      # 2 回目以降は読まない
+            app_module._invalidate_race_list_caches()
+            self.assertEqual(app_module._PICKER_SCRAPE_DATES_CACHE["by_key"], {})
+            client.get("/api/scrape-dates?picker_past_days=21&picker_future_days=14")
+            self.assertGreater(calls["n"], n)
+
+    def test_mirror_download_of_race_lists_invalidates_but_others_do_not(self):
+        client.get("/api/scrape-dates?picker_past_days=21&picker_future_days=14")
+        app_module._on_mirror_download(["ops/mirror/data/local/meta/entries_state/R1.json"])
+        self.assertEqual(len(app_module._PICKER_SCRAPE_DATES_CACHE["by_key"]), 1)
+        app_module._on_mirror_download(["ops/mirror/data/page_reference/race_lists/20261101.json"])
+        self.assertEqual(app_module._PICKER_SCRAPE_DATES_CACHE["by_key"], {})
 
     def test_future_days_out_of_range_is_rejected(self):
         self.assertEqual(client.get("/api/scrape-dates?picker_past_days=10&picker_future_days=31").status_code, 422)

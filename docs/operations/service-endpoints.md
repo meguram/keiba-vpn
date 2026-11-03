@@ -69,7 +69,7 @@ PostgreSQL（5432）/ Redis（6379）、`docker-compose.serving.yml`・`mlflow/s
 
 PostgreSQL（`:5432`）と Redis（`:6379`）はスクリプト対象外です。未起動の場合は警告を出します。ログは `logs/` に出力されます。
 
-**tcpexposer トンネル**: ワークスペース起動時に `tunnel_tcpexposer.sh autostart-all` で **dev**（`<TUNNEL_DEV>` → `:23100`）と **stg**（`<TUNNEL_STG>` → `:23200`）を自動接続。無効化: `KEIBA_AUTO_TCPEXPOSER=0`。手動: `./scripts/server/tunnel_tcpexposer.sh stg check` / `dev stop` / `stg background`。
+**tcpexposer トンネル**: ワークスペース起動時に `tunnel_tcpexposer.sh autostart-all` で **monitor** を自動接続（**dev は公開しない**。ローカルの `:23100` だけで見る）。無効化: `KEIBA_AUTO_TCPEXPOSER=0`。手動: `./scripts/server/tunnel_tcpexposer.sh stg check` / `dev stop` / `stg background`。
 
 **環境の役割**: **dev** = モック UI のみ。**stg** = 本 PC 上の本番相当（実 API・GCS・DB）。**prod**（将来）= stg 構成を VPS へクローン。
 

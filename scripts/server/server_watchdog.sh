@@ -32,7 +32,7 @@ done
 export PATH
 
 # ── CLI 引数パース（--profile / --mode 等）──
-# --profile dev|stg|prod  → .service_start.profile を上書きして指定プロファイルを強制
+# --profile dev|prod  →.service_start.profile を上書きして指定プロファイルを強制
 PROFILE_OVERRIDE=""
 _PASSTHROUGH_ARGS=()
 _skip_next=false
@@ -75,21 +75,16 @@ fi
 
 # プロファイル別デフォルト（service_start.profiles.sh と対応）
 case "$ACTIVE_PROFILE" in
-    stg|prod)
+    prod)
         PROFILE_KEY="$ACTIVE_PROFILE"
         FLASK_PORT="${FLASK_PORT:-$(keiba_port "$PROFILE_KEY" flask)}"
         FLASK_DEBUG_MODE=0
         FRONTEND_PORT="${FRONTEND_PORT:-$(keiba_port "$PROFILE_KEY" frontend)}"
         FRONTEND_NPM_SCRIPT="dev"
         FRONTEND_USE_MOCK="false"
-        # stg/prod 用環境変数（.env.${ACTIVE_PROFILE} が存在すれば読み込む）
+        # prod 用環境変数（.env.prod が存在すれば読み込む）
         if [ -f "${PROJECT_DIR}/.env.${ACTIVE_PROFILE}" ]; then
             set -a; source "${PROJECT_DIR}/.env.${ACTIVE_PROFILE}"; set +a
-        fi
-        # stg は本番ビルド（next build + next start）が既定。従来の next dev に戻すときは KEIBA_STG_NEXT_MODE=dev
-        # （環境変数、または .env.stg に書いて watchdog を再起動）。prod プロファイルは従来どおり。
-        if [ "$ACTIVE_PROFILE" = "stg" ] && [ "${KEIBA_STG_NEXT_MODE:-prod}" != "dev" ]; then
-            FRONTEND_NPM_SCRIPT="start"
         fi
         ;;
     *)  # dev またはプロファイル不明（dev 扱い）
@@ -589,7 +584,7 @@ stop_frontend() {
     frontend_stop_all "$FRONTEND_PORT" "${PROJECT_DIR}/frontend" "$FRONTEND_PID_FILE"
 }
 
-# 本番ビルド運用（stg）。ビルドは別ディレクトリ（.next-stg-build）に作り、動いているサーバを止めない。
+# 本番ビルド運用（現在はどのプロファイルも使わない: ホストは dev のみ。stg/prod は VPS/GCP）。ビルドは別ディレクトリ（.next-stg-build）に作り、動いているサーバを止めない。
 # 切り替えは『next を止める → .next-stg を退避 → ビルドを .next-stg に入れ替え → next start』の数秒。
 # ロック・目印は、プロファイル指定の有無（PID ファイル名が変わる）に関係なく共有するため PROFILE_KEY で名前を付ける。
 FRONTEND_LOCK_FILE="${LOG_DIR}/.frontend-build-${PROFILE_KEY}.lock"
@@ -737,7 +732,7 @@ _start_frontend_inner() {
                 case "$rc" in
                     3) log "[Next.js] 使える本番ビルドが無く、高負荷でビルドも見送り — 負荷が下がるまで待機（次の周期で再試行）" ;;
                     4) log "[Next.js] 使える本番ビルドが無く、直近のビルド失敗から 10 分以内 — 待機（次の周期で再試行）" ;;
-                    *) log "[Next.js] ERROR: 使える本番ビルドが無く、ビルドもできない — 起動しません（next dev へは自動で戻しません。KEIBA_STG_NEXT_MODE=dev で戻せます）" ;;
+                    *) log "[Next.js] ERROR: 使える本番ビルドが無く、ビルドもできない — 起動しません（next dev へは自動で戻しません）" ;;
                 esac
                 touch "$FRONTEND_WANT_FILE"
                 return 1
@@ -816,7 +811,7 @@ start_frontend() {
 # 明示実行: 稼働中のサーバを止めずに別ディレクトリへビルド（frontend_build.sh から呼ぶ）
 build_frontend_cli() {
     if [ "$FRONTEND_NPM_SCRIPT" != "start" ]; then
-        echo "このプロファイルは next dev 運用です（KEIBA_STG_NEXT_MODE=dev または stg 以外）。本番ビルドは不要です"
+        echo "このプロファイルは next dev 運用です。本番ビルドは不要です"
         return 0
     fi
     exec 9>"$FRONTEND_LOCK_FILE"

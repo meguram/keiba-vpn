@@ -15,12 +15,14 @@ import front_runner from "./front-runner.json";
 import first_dirt from "./first-dirt.json";
 import jockey_long_distance from "./jockey-long-distance.json";
 import jockey_change from "./jockey-change.json";
+import jockey_class_venue_season from "./jockey-class-venue-season.json";
 import pace_advantage from "./pace-advantage.json";
 import weight_change from "./weight-change.json";
 import distance_jockey from "./distance-jockey.json";
 import jockey_roi from "./jockey-roi.json";
 import pace_scenario from "./pace-scenario.json";
 import sire_roi from "./sire-roi.json";
+import wind_venue from "./wind-venue.json";
 
 const ALL = [
   upset_conditions,
@@ -34,12 +36,14 @@ const ALL = [
   first_dirt,
   jockey_long_distance,
   jockey_change,
+  jockey_class_venue_season,
   pace_advantage,
   weight_change,
   distance_jockey,
   jockey_roi,
   pace_scenario,
   sire_roi,
+  wind_venue,
 ] as Column[];
 
 export const COLUMNS: Column[] = ALL.filter((c) => SHOW_DEV_ONLY || !c.draft);

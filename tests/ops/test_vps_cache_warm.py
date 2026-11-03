@@ -91,6 +91,34 @@ def test_drain_retries_then_gives_up_and_treats_404_as_done():
     assert r3["left"] == 0 and w.calls.count("/a") == cw.MAX_ATTEMPTS
 
 
+def test_paths_for_horse_and_date_extras():
+    horse = [p for p, _ in cw.paths_for_key("h2021101429", NOW)]
+    assert horse == ["/api/horse/2021101429/detail", "/api/v1/horse/2021101429/growth-curve", "/api/v1/horse/2021101429/megu-index-history"]
+    assert cw.parse_marker(_name("20261025", "h2021101429")) == ("20261025", "h2021101429")
+    assert cw.parse_marker(_name("20261025", "h20211014")) is None
+    date = [p for p, _ in cw.paths_for_key("20261025", NOW)]
+    for p in ("/api/prediction-results?scope=day&date=20261025", "/api/prediction-results/bets-summary?date=20261025",
+              "/api/race-quality/day?date=20261025", "/api/prediction-results/days"):
+        assert p in date
+
+
+def test_drain_second_pass_waits_then_runs_once():
+    st = {"seen": {}, "queue": [{"p": "/a", "n": 0}]}
+    w = FakeWarmer({})
+    cw.drain(st, w, max_requests=10, max_sec=60, pause=0, log=lambda *_: None, second_pass_sec=600, now=1000.0)
+    assert w.calls == ["/a"] and st["queue"] == [{"p": "/a", "n": 0, "t": 1600.0}]
+    cw.drain(st, w, max_requests=10, max_sec=60, pause=0, log=lambda *_: None, second_pass_sec=600, now=1300.0)
+    assert w.calls == ["/a"] and len(st["queue"]) == 1             # 時刻が来るまでは取り直さない
+    cw.drain(st, w, max_requests=10, max_sec=60, pause=0, log=lambda *_: None, second_pass_sec=600, now=1600.0)
+    assert w.calls == ["/a", "/a"] and st["queue"] == []           # 2 回目のあとは積まない
+
+
+def test_discover_queues_new_change_even_if_second_pass_is_waiting():
+    st = {"seen": {}, "queue": [{"p": f"/api/race/{RACE}", "n": 0, "t": 9e18}]}
+    added = cw.discover([(_name("20261025", RACE), 1)], st, NOW)
+    assert f"/api/race/{RACE}" in added                            # 2 回目待ちがあっても、新しい変更はすぐ取り直す
+
+
 def test_drain_respects_request_budget():
     st = {"seen": {}, "queue": [{"p": f"/p{i}", "n": 0} for i in range(10)]}
     res = _drain(st, FakeWarmer({}), max_requests=4)

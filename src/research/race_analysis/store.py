@@ -37,11 +37,13 @@ def write(race_id: str, payload: dict[str, Any]) -> None:
     os.replace(tmp, p)
 
 
-def prune(keep_days: int, now: float | None = None) -> int:
-    """古い分析結果を消す（更新時刻が keep_days より前のもの）。消した件数を返す。"""
+def prune(keep_days: int, now: float | None = None, keep_year: int | None = None) -> int:
+    """古い分析結果を消す（更新時刻が keep_days より前のもの）。keep_year の年のレース（race_id の先頭4桁）は古くても残す。消した件数を返す。"""
     cutoff = (now or time.time()) - keep_days * 86400
     n = 0
     for f in analysis_dir().glob("*.json"):
+        if keep_year is not None and f.stem.startswith(str(keep_year)):
+            continue
         try:
             if f.stat().st_mtime < cutoff:
                 f.unlink()

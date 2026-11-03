@@ -95,6 +95,23 @@ def test_pull_recreates_the_tree_and_is_idempotent(tmp_path):
     assert not list(run.rglob("*.tmp"))
 
 
+def test_pull_calls_download_hooks_only_when_something_was_downloaded(tmp_path, monkeypatch):
+    monkeypatch.setattr(gm, "_DOWNLOAD_HOOKS", [])
+    seen: list[list[str]] = []
+    gm.on_download(seen.append)
+    gm.on_download(seen.append)                                   # 二重登録しない
+    gm.on_download(lambda keys: 1 / 0)                            # 失敗しても取り込みは止めない
+    g = Fake()
+    src = tmp_path / "host"
+    _w(src, "data/local/meta/entries_state/R1.json", b"s")
+    gm.push(g, src, TREES)
+    run = tmp_path / "cloudrun"
+    assert gm.pull(g, run, TREES)["downloaded"] == 1
+    assert seen == [[f"{gm.PREFIX}/data/local/meta/entries_state/R1.json"]]
+    assert gm.pull(g, run, TREES)["downloaded"] == 0
+    assert len(seen) == 1
+
+
 def test_pull_recent_days_skips_objects_not_updated_recently(tmp_path):
     g = Fake()
     g.objs["ops/mirror/data/local/meta/entries_state/OLD.json"] = (b"o", time.time() - 9 * 86400)
@@ -369,3 +386,204 @@ def test_old_day_readers_fall_back_to_lazy_fetch(tmp_path, monkeypatch):
     monkeypatch.setattr(gmod, "lazy_fetch", lambda p, d: got.append(d) or False)
     monkeypatch.setattr(lfs, "path_for", lambda rid, d: tmp_path / "nope.json")
     assert lfs.load_forecast("R9", "2020-01-05") is None and got == ["2020-01-05"]
+
+
+class CountingFake(Fake):
+    def __init__(self):
+        super().__init__()
+        self.lists = 0
+
+    def list(self, prefix):
+        self.lists += 1
+        return super().list(prefix)
+
+
+def test_push_with_manifest_lists_gcs_only_once_then_compares_locally(tmp_path):
+    """費用の上限: GCP の外から 5 分おきに GCS 全件を一覧すると転送料が月数千円になる。記録があれば一覧しない。"""
+    g = CountingFake()
+    man = tmp_path / "manifest.json"
+    _w(tmp_path, "data/local/meta/entries_state/R1.json", b"s")
+    assert gm.push(g, tmp_path, TREES, manifest=man)["uploaded"] == 1
+    first_lists = g.lists
+    assert first_lists == len(TREES) and man.is_file()
+    assert gm.push(g, tmp_path, TREES, manifest=man)["uploaded"] == 0          # 同じ内容は上げない
+    _w(tmp_path, "data/local/meta/entries_state/R1.json", b"s2")
+    _w(tmp_path, "data/local/meta/entries_state/R2.json", b"n")
+    assert gm.push(g, tmp_path, TREES, manifest=man)["uploaded"] == 2          # 変更・新規は上げる
+    assert g.lists == first_lists                                              # 2 回目以降は一覧しない
+    assert g.objs["ops/mirror/data/local/meta/entries_state/R1.json"][0] == b"s2"
+
+
+def test_push_manifest_is_seeded_from_gcs_so_existing_files_are_not_reuploaded(tmp_path):
+    g = CountingFake()
+    _w(tmp_path, "data/local/meta/entries_state/R1.json", b"s")
+    gm.push(g, tmp_path, TREES)                                                # 記録なしで上げた後に
+    uploads = g.uploads
+    man = tmp_path / "manifest.json"
+    assert gm.push(g, tmp_path, TREES, manifest=man)["uploaded"] == 0          # 初回は一覧から記録を作る
+    assert g.uploads == uploads
+
+
+def test_push_verify_remote_and_broken_manifest_fall_back_to_listing(tmp_path):
+    g = CountingFake()
+    man = tmp_path / "manifest.json"
+    _w(tmp_path, "data/local/meta/entries_state/R1.json", b"s")
+    gm.push(g, tmp_path, TREES, manifest=man)
+    del g.objs["ops/mirror/data/local/meta/entries_state/R1.json"]           # GCS 側で消えた
+    assert gm.push(g, tmp_path, TREES, manifest=man)["uploaded"] == 0          # 記録だけでは気づかない
+    assert gm.push(g, tmp_path, TREES, manifest=man, verify_remote=True)["uploaded"] == 1
+    man.write_text("{broken")
+    n = g.lists
+    gm.push(g, tmp_path, TREES, manifest=man)
+    assert g.lists == n + len(TREES)
+
+
+def test_push_dry_run_does_not_write_manifest(tmp_path):
+    g = CountingFake()
+    man = tmp_path / "manifest.json"
+    _w(tmp_path, "data/local/meta/entries_state/R1.json", b"s")
+    assert gm.push(g, tmp_path, TREES, manifest=man, dry_run=True)["would_upload"] == 1
+    assert not man.exists()
+
+
+class GenFake(CountingFake):
+    """世代つきの読み書き（Jobs の目録の追記）も扱える偽の GCS。"""
+
+    def __init__(self):
+        super().__init__()
+        self.gen: dict[str, int] = {}
+        self.downloads = 0
+
+    def download(self, key):
+        self.downloads += 1
+        if key not in self.objs:
+            raise FileNotFoundError(key)
+        return super().download(key)
+
+    def upload(self, key, data):
+        super().upload(key, data)
+        self.gen[key] = self.gen.get(key, 0) + 1
+
+    def read_gen(self, key):
+        return (self.objs[key][0], self.gen[key]) if key in self.objs else (None, 0)
+
+    def upload_if(self, key, data, generation):
+        if self.gen.get(key, 0) != generation:
+            return False
+        self.upload(key, data)
+        return True
+
+
+def test_host_push_writes_the_index_and_api_refresh_reads_it_without_listing(tmp_path):
+    """費用の上限: API は毎分 24 か所を一覧せず、ホストの push が置く目録 1 つだけを読む。"""
+    g = GenFake()
+    host, api = tmp_path / "host", tmp_path / "api"
+    man = tmp_path / "manifest.json"
+    _w(host, "data/local/meta/entries_state/R1.json", b"s")
+    gm.push(g, host, TREES, manifest=man, index_writer="host")
+    assert gm.index_key("host") in g.objs
+    lists = g.lists
+    r = gm.pull_via_index(g, api, TREES, recent_days=2.0)
+    assert r["downloaded"] == 1 and (api / "data/local/meta/entries_state/R1.json").read_bytes() == b"s"
+    assert g.lists == lists                                                    # 一覧していない
+    _w(host, "data/local/meta/entries_state/R1.json", b"s2")
+    gm.push(g, host, TREES, manifest=man, index_writer="host")
+    assert gm.pull_via_index(g, api, TREES, recent_days=2.0)["downloaded"] == 1
+    assert (api / "data/local/meta/entries_state/R1.json").read_bytes() == b"s2"
+    assert gm.pull_via_index(g, api, TREES, recent_days=2.0)["downloaded"] == 0  # 同じ内容は取り直さない
+
+
+def test_index_is_unusable_when_missing_or_stale_so_refresh_falls_back_to_listing(tmp_path):
+    g = GenFake()
+    assert gm.pull_via_index(g, tmp_path, TREES) is None                       # 目録が無い
+    man = tmp_path / "m.json"
+    _w(tmp_path / "h", "data/local/meta/entries_state/R1.json", b"s")
+    gm.push(g, tmp_path / "h", TREES, manifest=man, index_writer="host")
+    assert gm.pull_via_index(g, tmp_path / "a", TREES, now=time.time() + gm.INDEX_STALE_SEC + 60) is None   # push が止まっている
+    t = [0.0]
+    ref = gm.Refresh(clock=lambda: t[0])
+    n = g.lists
+    assert ref(g, tmp_path / "a", recent_days=2.0, window=None)["via"] == "index" and g.lists == n
+    t[0] = gm.FULL_LIST_SEC + 1                                                # 一定間隔ごとには一覧で取りこぼしを拾う
+    assert ref(g, tmp_path / "a", recent_days=2.0, window=None)["via"] == "list" and g.lists > n
+
+
+def test_jobs_push_appends_to_its_index_without_losing_concurrent_entries(tmp_path):
+    g = GenFake()
+    _w(tmp_path / "j1", "data/local/meta/entries_state/R1.json", b"a")
+    _w(tmp_path / "j2", "data/local/meta/entries_state/R2.json", b"b")
+    gm.push(g, tmp_path / "j1", TREES, index_writer="jobs")
+    gm.push(g, tmp_path / "j2", TREES, index_writer="jobs")
+    import json as _json
+
+    entries = _json.loads(g.objs[gm.index_key("jobs")][0])["entries"]
+    assert set(entries) == {"ops/mirror/data/local/meta/entries_state/R1.json", "ops/mirror/data/local/meta/entries_state/R2.json"}
+
+
+def test_index_drops_entries_older_than_the_refresh_window():
+    now = time.time()
+    kept = gm._prune({"a": ["x", now - 10], "b": ["y", now - gm.INDEX_KEEP_SEC - 10]}, now)
+    assert set(kept) == {"a"}
+
+
+def test_bundle_round_trip_keeps_only_tree_files_and_rejects_old_or_broken(tmp_path):
+    """費用の上限: API の起動時の取り込みを、ファイル 1 つずつ（約 6,000 回）ではなく束 1 回の読み出しにする。"""
+    host, api = tmp_path / "host", tmp_path / "api"
+    _w(host, "data/local/meta/entries_state/R1.json", b"s")
+    _w(host, "data/local/inference/predictions_v3/20261024/R1.parquet", b"a")
+    data = gm.build_bundle(host, TREES, window=14)
+    got = gm.extract_bundle(data, api, TREES)
+    assert got["files"] == 2 and (api / "data/local/meta/entries_state/R1.json").read_bytes() == b"s"
+    assert set(got["trees"]) == set(TREES)
+    assert gm.extract_bundle(data, tmp_path / "x", TREES, now=time.time() + gm.BUNDLE_MAX_AGE_SEC + 60) is None   # 古い束は使わない
+    assert gm.extract_bundle(b"not a tar", tmp_path / "y", TREES) is None
+
+
+def test_bundle_extract_ignores_paths_outside_the_trees(tmp_path):
+    import io
+    import tarfile
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        for name, body in (("_bundle.json", b'{"built_at": %d, "trees": []}' % int(time.time())), ("../evil.txt", b"x"),
+                           ("/etc/evil", b"x"), ("data/other/x.json", b"x"), ("data/local/meta/entries_state/ok.json", b"ok")):
+            ti = tarfile.TarInfo(name); ti.size = len(body); tf.addfile(ti, io.BytesIO(body))
+    got = gm.extract_bundle(buf.getvalue(), tmp_path / "api", TREES)
+    assert got["files"] == 1 and (tmp_path / "api/data/local/meta/entries_state/ok.json").is_file()
+    assert not (tmp_path / "evil.txt").exists() and not (tmp_path / "api/data/other").exists()
+
+
+def test_host_push_uploads_the_bundle_once_a_day_and_api_starts_from_it(tmp_path, monkeypatch):
+    g = GenFake()
+    host, api = tmp_path / "host", tmp_path / "api"
+    man = tmp_path / "manifest.json"
+    _w(host, "data/local/meta/entries_state/R1.json", b"s")
+    monkeypatch.setattr(gm, "TREES", TREES)
+    gm.push(g, host, TREES, manifest=man, index_writer="host")
+    assert gm.BUNDLE_KEY in g.objs
+    ups = g.uploads
+    gm.push(g, host, TREES, manifest=man, index_writer="host")
+    assert g.uploads == ups + 1                                                # 2 回目は目録だけ（束は 1 日 1 回）
+    lists = g.lists
+    out = gm._initial_from_bundle(g, api, 2.0)
+    assert out["bundle_files"] == 1 and (api / "data/local/meta/entries_state/R1.json").read_bytes() == b"s"
+    assert g.lists == lists + 1                                                # 一覧するのは束に無い木（ホストにファイルが無い 1 か所）だけ
+
+
+def test_initial_pull_falls_back_to_listing_without_a_bundle(tmp_path, monkeypatch):
+    g = GenFake()
+    monkeypatch.setattr(gm, "TREES", TREES)
+    _w(tmp_path / "h", "data/local/meta/entries_state/R1.json", b"s")
+    gm.push(g, tmp_path / "h", TREES)                                         # 束も目録も無い
+    gm.initial_recent_pulled.clear(); gm.initial_full_pulled.clear()
+    gm._initial_pull(g, tmp_path / "a", 2.0)
+    assert (tmp_path / "a/data/local/meta/entries_state/R1.json").read_bytes() == b"s"
+    assert gm.initial_recent_pulled.is_set() and gm.initial_full_pulled.is_set()
+
+
+def test_bundle_never_contains_the_members_file(tmp_path):
+    _w(tmp_path, "data/local/auth/members.json", b'{"u": "hash"}')
+    _w(tmp_path, "data/local/meta/entries_state/R1.json", b"s")
+    got = gm.extract_bundle(gm.build_bundle(tmp_path, TREES + gm.AUTH_TREES, window=14), tmp_path / "api", TREES + gm.AUTH_TREES)
+    assert got["files"] == 1 and not (tmp_path / "api/data/local/auth/members.json").exists()
+    assert not any(t in gm.AUTH_TREES for t in got["trees"])

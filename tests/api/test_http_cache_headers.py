@@ -156,3 +156,18 @@ def test_fastapi_date_list_anonymous_cacheable(monkeypatch):
     assert c.get("/api/scrape-dates").headers["cache-control"] == "public, max-age=30, s-maxage=120"
     assert c.get("/api/scrape-dates", headers={"Cookie": "k=v"}).headers["cache-control"] == _NO_STORE_HEADERS["Cache-Control"]
     assert c.get("/api/scrape-dates", headers={"Authorization": "Bearer x"}).headers["cache-control"] == _NO_STORE_HEADERS["Cache-Control"]
+
+
+def test_upcoming_dated_races_get_six_hours_and_long_prefixes_thirty_days():
+    cfg = {**SCFG, "settled": {**SCFG["settled"], "upcoming_s_maxage": 21600},
+           "long": {"s_maxage": 2592000, "prefixes": ["/api/horse/"]}}
+    f = lambda p: H.settled_s_maxage_for(p, cfg, NOW)  # noqa: E731
+    assert f("/api/race-list/20261026") == 604800            # 確定済みは長く
+    assert f("/api/race-list/20261029") == 21600             # 当日は 6 時間（上書きが漏れたときの上限）
+    assert f("/api/race-list/20261101") == 21600             # 未来も 6 時間
+    assert f("/api/race-list/20261301") is None              # 日付が読めないものは短いまま
+    assert f("/api/race/202699999999") is None               # 日付不明の race_id（索引なし）も短いまま
+    assert f("/api/horse/2021101429/detail") == 2592000      # 馬のページは 30 日（馬の目印で上書き）
+    assert f("/api/admin/x") is None
+    assert H.cache_control_value(30, 30, True, f("/api/race-list/20261029")) == "public, max-age=30, s-maxage=21600"
+    assert H.cache_control_value(30, 30, False, f("/api/race-list/20261029")) == "private, max-age=30"   # 会員は共有しない

@@ -19,14 +19,31 @@ from src.research.race_analysis.service import _load_card, _normalize_entries, a
 
 logger = logging.getLogger(__name__)
 
-ANALYSIS_VERSION = "7"      # 分析ロジック・列定義を変えたら上げる（保存済みの結果が作り直される）
+ANALYSIS_VERSION = "18"      # 分析ロジック・列定義を変えたら上げる（保存済みの結果が作り直される）
 
 
 def _asof_cache() -> dict[str, str | None]:
     return {}
 
 
-def fingerprint(card: dict, entries: list[dict[str, Any]], asof: dict[str, str | None]) -> str:
+def day_results(storage: Any, race_id: str) -> int:
+    """同じ日・同じ場で、このレースより前に結果（確定または速報）が入ったレースの数。走法マップの「今日の馬場」は前のレースの結果で変わるので指紋に入れる。"""
+    from src.research.race.running_map_day import earlier_race_ids
+
+    n = 0
+    for rid in earlier_race_ids(race_id):
+        for cat in ("race_result", "race_result_on_time"):
+            try:
+                card = storage.load(cat, rid)
+            except Exception:
+                card = None
+            if card and card.get("entries"):
+                n += 1
+                break
+    return n
+
+
+def fingerprint(card: dict, entries: list[dict[str, Any]], asof: dict[str, str | None], day: int = 0) -> str:
     date = card.get("date")
     if date not in asof:
         runs = runs_mod.load_runs()
@@ -39,11 +56,12 @@ def fingerprint(card: dict, entries: list[dict[str, Any]], asof: dict[str, str |
         sire_sig = None
     doc = {
         "v": ANALYSIS_VERSION,
-        "race": [card.get(k) for k in ("venue", "surface", "distance", "date")],
+        "race": [card.get(k) for k in ("venue", "surface", "distance", "date", "track_condition")],
         "entries": [[e.get("horse_id"), e.get("horse_number"), e.get("bracket_number"), e.get("jockey_id")] for e in entries],
         "data_until": asof[date],
         "sire_map": sire_sig,
         "lines_ready": lines_ready(),
+        "day_results": day,
     }
     return hashlib.sha1(json.dumps(doc, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:16]
 
@@ -55,7 +73,7 @@ def precompute_race(storage: Any, race_id: str, *, force: bool = False, asof: di
     entries, _ = _normalize_entries(rows)
     if not entries:
         return "no_entries"
-    fp = fingerprint(card, entries, asof)
+    fp = fingerprint(card, entries, asof, day_results(storage, race_id))
     old = store.read(race_id)
     if old and old.get("fingerprint") == fp and not force:
         return "unchanged"

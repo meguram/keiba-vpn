@@ -217,8 +217,8 @@ frontend_verify_build() {
 }
 
 # 単体実行: 稼働中のサーバを止めずに別ディレクトリへ本番ビルドする（切替は --switch-frontend）
-#   bash scripts/server/frontend_build.sh [stg|prod]   強制: KEIBA_FORCE_BUILD=1
+#   bash scripts/server/frontend_build.sh [prod]   強制: KEIBA_FORCE_BUILD=1
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     _d="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    exec bash "${_d}/server_watchdog.sh" --profile "${1:-stg}" --build-frontend
+    exec bash "${_d}/server_watchdog.sh" --profile "${1:-prod}" --build-frontend
 fi

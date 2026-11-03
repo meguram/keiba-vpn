@@ -85,6 +85,9 @@ class FakeStorage:
 
 @pytest.fixture()
 def env(tmp_path, monkeypatch):
+    from src.research.race_analysis.running_map_module import RunningMapModule
+
+    monkeypatch.setattr(RunningMapModule, "applicable", lambda self, ctx: False)     # 全期間の出走記録を読むので対象外
     rows = [
         {"race_id": f"R{i}", "date": f"2026-0{1 + i // 3}-{10 + i % 3}", "venue": "東京", "surface": "芝", "distance": 1600, "finish_position": 1 + i % 5,
          "jockey_id": "J1", "bracket_number": 1, "horse_id": "h1", "passing_order": f"{1 + i % 4}-{1 + i % 4}", "field_size": 10}
@@ -174,3 +177,16 @@ def test_prune_removes_only_old_files(env):
     old = time.time() - 100 * 86400
     os.utime(p, (old, old))
     assert store.prune(90) == 1 and not p.exists()
+
+
+def test_prune_keeps_current_year_races(env):
+    import os
+    import time
+
+    storage, _ = env
+    precompute.precompute_race(storage, "202605040111")
+    p = store.path_of("202605040111")
+    old = time.time() - 100 * 86400
+    os.utime(p, (old, old))
+    assert store.prune(90, keep_year=2026) == 0 and p.exists()
+    assert store.prune(90, keep_year=2027) == 1 and not p.exists()

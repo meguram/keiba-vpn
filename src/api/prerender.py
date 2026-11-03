@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import hashlib
 import json
 import os
@@ -28,6 +29,24 @@ from typing import Any, Awaitable, Callable, Iterable
 from src.utils import cache_epoch
 
 DEFAULT_MAX_AGE_SEC = 300.0
+
+# VPS の事前ロード（keiba-cache-warm）の「取り直し」の要求だけ、ここの使い回しを読まずに作り直す。
+# 立てるのは共有鍵（X-Keiba-Proxy-Key）が通った要求の ``X-Keiba-Fresh: 1`` だけ（src/api/middleware/proxy_key.py）。
+# これが無いと、VPS が目印を見て取り直しても、ここで使い回している古い応答（当日 2 分・過去 6 時間）を nginx が長く保持してしまう。
+_FRESH: contextvars.ContextVar[bool] = contextvars.ContextVar("keiba_prerender_fresh", default=False)
+
+
+def set_fresh(value: bool) -> contextvars.Token:
+    return _FRESH.set(bool(value))
+
+
+def reset_fresh(token: contextvars.Token) -> None:
+    _FRESH.reset(token)
+
+
+def fresh_requested() -> bool:
+    """この要求が「使い回しを読まずに作り直す」取り直しか。"""
+    return _FRESH.get()
 _PRUNE_EVERY_SEC = 60.0
 _KEY_RE = re.compile(r"^(?:\d{12}|\d{8})$")      # race_id（12 桁）または開催日（8 桁）
 
@@ -37,8 +56,22 @@ def enabled() -> bool:
 
 
 def warmer_enabled() -> bool:
-    """先に作る係（周回・変更への反応）を動かすか。``KEIBA_PRERENDER=1`` だけのときは動かさない。"""
-    return os.environ.get("KEIBA_PREWARM", "").strip() == "1"
+    """先に作る係（周回・変更への反応）を動かすか。``KEIBA_PRERENDER=1`` だけのときは動かさない。
+
+    費用の上限（CLAUDE.md）: 周回は毎分、窓内の全レースのデータを読む。GCP の外（ホストPC・VPS）で GCS を使う設定だと、
+    その読み出しが転送料（Download APAC）として課金され、2026-10 には 1 日 50GiB・約 1,000 円になった。
+    そのため GCP の外では ``KEIBA_PREWARM_ALLOW_EGRESS=1`` を明示しない限り動かさない（置き場への読み書きは従来どおり）。"""
+    if os.environ.get("KEIBA_PREWARM", "").strip() != "1":
+        return False
+    from src.config.gcp_guard import egress_billed
+
+    if egress_billed() and os.environ.get("KEIBA_PREWARM_ALLOW_EGRESS", "").strip() != "1":
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "事前生成の周回を止めました: GCP の外から GCS を読むと転送料が課金されるため（KEIBA_PREWARM_ALLOW_EGRESS=1 で許可）")
+        return False
+    return True
 
 
 def default_max_age() -> float:
@@ -355,7 +388,7 @@ async def cached_response(kind: str, key: str, compute: Callable[[], Awaitable[A
                 max_age=_resolve_max_age(max_age, bytes(body)))
         return resp
 
-    if refresh:
+    if refresh or fresh_requested():
         return await run()
     body = get(kind, key)
     if body is not None:
@@ -430,6 +463,7 @@ def cached_json(
     （表示の鮮度より待ち時間を優先する画面向け。作り直しはキーごとに 1 本だけ）。"""
     if not enabled():
         return compute()
+    refresh = refresh or fresh_requested()
     if not refresh:
         body = get(kind, key)
         if body is None and stale_ok_sec > 0:

@@ -70,7 +70,8 @@ def analyze_race(storage: Any, race_id: str, modules: tuple[AnalysisModule, ...]
         payload["message"] = "このレースの出馬表はまだ取得できていません。"
         return payload
 
-    ctx = RaceContext(race_id=race_id, date=race["date"], venue=race["venue"], surface=race["surface"], distance=race["distance"], entries=entries)
+    ctx = RaceContext(race_id=race_id, date=race["date"], venue=race["venue"], surface=race["surface"], distance=race["distance"], entries=entries,
+                      track_condition=card.get("track_condition"))
     for m in modules:
         meta: dict[str, Any] = {"id": m.id, "label": m.label, "description": m.description}
         try:
@@ -93,6 +94,8 @@ def analyze_race(storage: Any, race_id: str, modules: tuple[AnalysisModule, ...]
             source=out.source,
             key_header=out.key_header,
         )
+        if out.view != "table":
+            meta.update(view=out.view, figure=out.figure)
         payload["modules"].append(meta)
         for e in entries:
             e.setdefault("analysis", {})[m.id] = out.cells.get(e["key"], {})

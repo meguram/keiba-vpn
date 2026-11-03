@@ -361,3 +361,57 @@ def test_cached_response_applies_max_age_function(store):
     asyncio.run(prerender.cached_response("predictions", RID, compute, max_age=prerender.race_max_age))
     meta = json.loads(prerender._path("predictions", RID).read_bytes().split(b"\n", 1)[0])
     assert meta["max_age"] == prerender.PAST_RACE_MAX_AGE_SEC
+
+
+def test_warmer_stays_off_outside_gcp_when_gcs_reads_are_billed(monkeypatch):
+    """費用の上限: ホストPC・VPS（GCP の外）で GCS を使う設定なら、明示の許可なしに周回を動かさない。"""
+    monkeypatch.setenv("KEIBA_PREWARM", "1")
+    monkeypatch.setenv("KEIBA_ENV", "stg")
+    monkeypatch.setenv("GCS_BUCKET", "b")
+    monkeypatch.delenv("K_SERVICE", raising=False)
+    monkeypatch.delenv("CLOUD_RUN_JOB", raising=False)
+    monkeypatch.delenv("KEIBA_PREWARM_ALLOW_EGRESS", raising=False)
+    assert not prerender.warmer_enabled()
+    monkeypatch.setenv("KEIBA_PREWARM_ALLOW_EGRESS", "1")
+    assert prerender.warmer_enabled()
+    monkeypatch.delenv("KEIBA_PREWARM_ALLOW_EGRESS")
+    monkeypatch.setenv("K_SERVICE", "keiba-api")                               # Cloud Run（同じリージョン）なら転送料はかからない
+    assert prerender.warmer_enabled()
+    monkeypatch.delenv("K_SERVICE")
+    monkeypatch.delenv("GCS_BUCKET")                                            # GCS を使わない（ローカルだけ）なら動かしてよい
+    assert prerender.warmer_enabled()
+
+
+def test_fresh_request_recomputes_and_overwrites_both_async_and_sync(store):
+    n = {"v": 0}
+
+    async def ok():
+        n["v"] += 1
+        return JSONResponse({"v": n["v"]})
+
+    async def run():
+        await prerender.cached_response("p", RID, ok)                  # v=1 を置く
+        same = await prerender.cached_response("p", RID, ok)           # 使い回し
+        tok = prerender.set_fresh(True)
+        try:
+            fresh = await prerender.cached_response("p", RID, ok)      # VPS の取り直し: 読まずに作り直す
+        finally:
+            prerender.reset_fresh(tok)
+        after = await prerender.cached_response("p", RID, ok)          # 作り直した版が置かれている
+        return same, fresh, after
+
+    same, fresh, after = asyncio.run(run())
+    assert json.loads(same.body) == {"v": 1} and json.loads(fresh.body) == {"v": 2} and json.loads(after.body) == {"v": 2}
+    m = {"v": 0}
+
+    def sync():
+        m["v"] += 1
+        return {"v": m["v"]}
+
+    assert prerender.cached_json("s", RID, sync) == {"v": 1}
+    tok = prerender.set_fresh(True)
+    try:
+        assert prerender.cached_json("s", RID, sync) == {"v": 2}
+    finally:
+        prerender.reset_fresh(tok)
+    assert prerender.cached_json("s", RID, sync) == {"v": 2}

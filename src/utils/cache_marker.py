@@ -1,6 +1,6 @@
 """参照用データを作った/更新したことを、VPS の事前ロード係(``keiba-cache-warm``)へ伝える目印を GCS に置く。
 
-- 置き場: ``ops/cache_dirty/<YYYYMMDD(UTC)>/<キー>``（キーは race_id 12桁 / 開催日8桁 / ``_ALL``=全体）。中身は空に近い JSON。
+- 置き場: ``ops/cache_dirty/<YYYYMMDD(UTC)>/<キー>``（キーは race_id 12桁 / 開催日8桁 / ``h``+馬ID10桁 / ``_ALL``=全体）。中身は空に近い JSON。
 - VPS 側は日付ごとの接頭辞を list するだけ（個別の読み出しはしない）ので GCP の read 課金はほぼ出ない。
 - 書くのは「最善努力」: 失敗しても保存や配備を止めない。影モード(``KEIBA_FETCH_SHADOW=1``)・``GCS_BUCKET`` 未設定・
   開発機(``KEIBA_CACHE_MARKER=0``)では何もしない。同じキーは 60 秒に 1 回まで。
@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 PREFIX = "ops/cache_dirty"
 ALL_KEY = "_ALL"
 _KEY_RE = re.compile(r"^(?:\d{12}|\d{8})$")
+_HORSE_KEY_RE = re.compile(r"^h\d{10}$")      # 馬のページ（/api/horse/{id}/detail など）の取り直し用
+# 馬のページの元になるカテゴリ（キーが馬 ID 10 桁の保存）
+HORSE_CATEGORIES = frozenset({"horse_result", "horse_profile", "horse_race_history", "horse_pedigree_5gen"})
 _DEDUPE_SEC = 60.0
 _MAX_RACE_MARKS = 300      # 1 回の取り込みで置く race_id の目印の上限（超えたら開催日の目印だけにする。過去分の一括アップロード対策）
 _last: dict[str, float] = {}
@@ -50,8 +53,8 @@ def marker_key(key: str, now: datetime | None = None) -> str:
 
 
 def _accept(key: str) -> bool:
-    if key == ALL_KEY:
-        return True
+    if key == ALL_KEY or _HORSE_KEY_RE.match(key or ""):
+        return True      # 馬 ID の先頭は生まれ年なので、年での間引きはしない
     if not _KEY_RE.match(key or ""):
         return False
     return int(key[:4]) >= datetime.now().year - 1      # 過去分の補填で目印が溢れないように
@@ -84,9 +87,11 @@ def mark(key: str, reason: str = "") -> bool:
 
 
 def mark_from_save(category: str, key: str) -> bool:
-    """``HybridStorage.save`` から呼ぶ。画面に関わるカテゴリの race_id / 開催日キーだけ目印にする。"""
+    """``HybridStorage.save`` から呼ぶ。画面に関わるカテゴリの race_id / 開催日キー、馬のカテゴリの馬 ID だけ目印にする。"""
     from src.utils.cache_epoch import UI_CATEGORIES
 
+    if category in HORSE_CATEGORIES and re.fullmatch(r"\d{10}", key or ""):
+        return mark("h" + key, f"save:{category}")
     if category not in UI_CATEGORIES:
         return False
     return mark(key, f"save:{category}")

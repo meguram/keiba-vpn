@@ -199,6 +199,7 @@ def _optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool 
         pair_odds,
         body.get("bankroll", 100000),
         single_odds=single_odds,
+        race_id=race_id,
     )
 
     predicted = None
@@ -800,6 +801,18 @@ def get_race_note_3d_v2(race_id: str) -> tuple[dict, int]:
     if payload.get("error"):
         return payload, 404
     return payload, 200
+
+
+def get_running_map(race_id: str) -> tuple[dict, int]:
+    """出走馬の走法マップ（めぐ分析）。事前計算で保存した結果（めぐ分析の running_map タブ）を読むだけで、ここでは計算しない。"""
+    from src.research.race_analysis import store
+
+    payload = store.read(race_id)
+    mod = next((m for m in (payload or {}).get("modules", []) if m.get("id") == "running_map"), None)
+    if not mod or mod.get("status") != "ok" or not mod.get("figure"):
+        return {"status": "pending", "race_id": race_id, "message": "このレースの走法マップはまだ用意できていません。出馬表の取得後に自動で計算されます。"}, 404
+    return {"status": "ok", "race_id": race_id, "computed_at": payload.get("computed_at"), "data_until": mod.get("data_until"),
+            "notes": mod.get("notes"), **mod["figure"]}, 200
 
 
 def query_pedigree_race_stats(params: dict[str, Any]) -> tuple[dict, int]:

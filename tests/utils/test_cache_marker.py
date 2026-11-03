@@ -93,3 +93,12 @@ def test_bump_marks_all_except_for_save_reasons(io, monkeypatch, tmp_path):
     assert io.puts == []
     cache_epoch.bump("deploy")
     assert [n.rsplit("/", 1)[1] for n, _ in io.puts] == ["_ALL"]
+
+
+def test_mark_from_save_marks_horse_pages_with_h_prefix_regardless_of_birth_year(io):
+    assert cm.mark_from_save("horse_result", "2018104963")            # 先頭 4 桁は生まれ年。古くても間引かない
+    assert cm.mark_from_save("horse_profile", "2023100001")
+    assert not cm.mark_from_save("horse_result", "20181049")          # 馬 ID の形でない
+    assert not cm.mark_from_save("some_internal_category", "2018104963")
+    names = [n for n, _ in io.puts]
+    assert len(names) == 2 and names[0].endswith("/h2018104963") and names[1].endswith("/h2023100001")

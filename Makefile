@@ -1,6 +1,5 @@
-.PHONY: setup-dev dev-mock dev-mock-clean dev-data dev-fixture-pack data-health data-health-dashboard setup-stg setup-prod \
+.PHONY: setup-dev dev-mock dev-mock-clean dev-data dev-fixture-pack data-health data-health-dashboard setup-prod \
 	db-up db-down db-migrate db-reset \
-	stg-migrate \
 	test test-frontend test-all \
 	help
 
@@ -19,10 +18,6 @@ help:
 	@echo "  db-down      Docker コンテナ停止"
 	@echo "  db-migrate   alembic upgrade head (dev)"
 	@echo "  db-reset     ボリューム削除 → 再作成 → マイグレーション"
-	@echo ""
-	@echo "  [stg] ネイティブ PostgreSQL 14 (:5432) 前提。scripts/server/setup_stg.sh 参照"
-	@echo "  setup-stg    ネイティブPostgreSQL起動確認 + DB作成 + マイグレーション + ETL"
-	@echo "  stg-migrate  alembic upgrade head (stg, DATABASE_URL は .env.stg 参照)"
 	@echo ""
 	@echo "  [prod (VPS)]"
 	@echo "  setup-prod   PostgreSQL/Redis確認 + DB作成 + マイグレーション + cron"
@@ -79,15 +74,6 @@ db-reset:
 	DATABASE_URL=postgresql+psycopg://keiba_user:keiba_pass@localhost:5432/keiba_db \
 		alembic upgrade head
 	@echo "DB reset complete."
-
-# ─── stg（ネイティブ PostgreSQL 14 :5432 前提。Docker は不要） ───────────────────
-
-setup-stg:
-	@bash scripts/server/setup_stg.sh
-
-stg-migrate:
-	DATABASE_URL=postgresql+psycopg://keiba_user:keiba_pass@localhost:5432/keiba_db_stg \
-		alembic upgrade head
 
 # ─── prod (VPS) ────────────────────────────────────────────────────────────────
 

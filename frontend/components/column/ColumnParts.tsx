@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ColumnChart, JockeyDistanceChart } from "@/components/column/ColumnChart";
+import { ColumnChart, ColumnHeatmap, JockeyDistanceChart } from "@/components/column/ColumnChart";
 import {
   COLUMN_CATEGORIES, VERDICTS, categoryLabel, columnsIn, countIn,
   type Column, type ColumnBlock, type ColumnCategory,
@@ -128,6 +128,8 @@ export function ColumnBody({ blocks }: { blocks: ColumnBlock[] }) {
             return <ColumnChart key={i} block={b} />;
           case "jockey_distance_chart":
             return <JockeyDistanceChart key={i} block={b} />;
+          case "heatmap":
+            return <ColumnHeatmap key={i} block={b} />;
           case "accordion":
             return (
               <details key={i} className="card" style={{ padding: 0, overflow: "hidden" }}>
