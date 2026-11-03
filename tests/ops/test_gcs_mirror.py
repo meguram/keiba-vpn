@@ -444,3 +444,83 @@ def test_push_dry_run_does_not_write_manifest(tmp_path):
     _w(tmp_path, "data/local/meta/entries_state/R1.json", b"s")
     assert gm.push(g, tmp_path, TREES, manifest=man, dry_run=True)["would_upload"] == 1
     assert not man.exists()
+
+
+class GenFake(CountingFake):
+    """世代つきの読み書き（Jobs の目録の追記）も扱える偽の GCS。"""
+
+    def __init__(self):
+        super().__init__()
+        self.gen: dict[str, int] = {}
+        self.downloads = 0
+
+    def download(self, key):
+        self.downloads += 1
+        if key not in self.objs:
+            raise FileNotFoundError(key)
+        return super().download(key)
+
+    def upload(self, key, data):
+        super().upload(key, data)
+        self.gen[key] = self.gen.get(key, 0) + 1
+
+    def read_gen(self, key):
+        return (self.objs[key][0], self.gen[key]) if key in self.objs else (None, 0)
+
+    def upload_if(self, key, data, generation):
+        if self.gen.get(key, 0) != generation:
+            return False
+        self.upload(key, data)
+        return True
+
+
+def test_host_push_writes_the_index_and_api_refresh_reads_it_without_listing(tmp_path):
+    """費用の上限: API は毎分 24 か所を一覧せず、ホストの push が置く目録 1 つだけを読む。"""
+    g = GenFake()
+    host, api = tmp_path / "host", tmp_path / "api"
+    man = tmp_path / "manifest.json"
+    _w(host, "data/local/meta/entries_state/R1.json", b"s")
+    gm.push(g, host, TREES, manifest=man, index_writer="host")
+    assert gm.index_key("host") in g.objs
+    lists = g.lists
+    r = gm.pull_via_index(g, api, TREES, recent_days=2.0)
+    assert r["downloaded"] == 1 and (api / "data/local/meta/entries_state/R1.json").read_bytes() == b"s"
+    assert g.lists == lists                                                    # 一覧していない
+    _w(host, "data/local/meta/entries_state/R1.json", b"s2")
+    gm.push(g, host, TREES, manifest=man, index_writer="host")
+    assert gm.pull_via_index(g, api, TREES, recent_days=2.0)["downloaded"] == 1
+    assert (api / "data/local/meta/entries_state/R1.json").read_bytes() == b"s2"
+    assert gm.pull_via_index(g, api, TREES, recent_days=2.0)["downloaded"] == 0  # 同じ内容は取り直さない
+
+
+def test_index_is_unusable_when_missing_or_stale_so_refresh_falls_back_to_listing(tmp_path):
+    g = GenFake()
+    assert gm.pull_via_index(g, tmp_path, TREES) is None                       # 目録が無い
+    man = tmp_path / "m.json"
+    _w(tmp_path / "h", "data/local/meta/entries_state/R1.json", b"s")
+    gm.push(g, tmp_path / "h", TREES, manifest=man, index_writer="host")
+    assert gm.pull_via_index(g, tmp_path / "a", TREES, now=time.time() + gm.INDEX_STALE_SEC + 60) is None   # push が止まっている
+    t = [0.0]
+    ref = gm.Refresh(clock=lambda: t[0])
+    n = g.lists
+    assert ref(g, tmp_path / "a", recent_days=2.0, window=None)["via"] == "index" and g.lists == n
+    t[0] = gm.FULL_LIST_SEC + 1                                                # 一定間隔ごとには一覧で取りこぼしを拾う
+    assert ref(g, tmp_path / "a", recent_days=2.0, window=None)["via"] == "list" and g.lists > n
+
+
+def test_jobs_push_appends_to_its_index_without_losing_concurrent_entries(tmp_path):
+    g = GenFake()
+    _w(tmp_path / "j1", "data/local/meta/entries_state/R1.json", b"a")
+    _w(tmp_path / "j2", "data/local/meta/entries_state/R2.json", b"b")
+    gm.push(g, tmp_path / "j1", TREES, index_writer="jobs")
+    gm.push(g, tmp_path / "j2", TREES, index_writer="jobs")
+    import json as _json
+
+    entries = _json.loads(g.objs[gm.index_key("jobs")][0])["entries"]
+    assert set(entries) == {"ops/mirror/data/local/meta/entries_state/R1.json", "ops/mirror/data/local/meta/entries_state/R2.json"}
+
+
+def test_index_drops_entries_older_than_the_refresh_window():
+    now = time.time()
+    kept = gm._prune({"a": ["x", now - 10], "b": ["y", now - gm.INDEX_KEEP_SEC - 10]}, now)
+    assert set(kept) == {"a"}
