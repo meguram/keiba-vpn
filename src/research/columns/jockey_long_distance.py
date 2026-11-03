@@ -147,7 +147,19 @@ def analyze(d: pd.DataFrame) -> dict[str, Any]:
     a["long_avg"] = float(d.loc[d["dist4"] == jc.DIST4[3], "win"].mean())
     cnt_long = tw[tw["level"] == jc.DIST4[3]].copy()
     a["long_rank"] = cnt_long.sort_values("rate", ascending=False)["jockey_id"].tolist()
+    h = jc.holdout_frame()
+    a["holdout"] = {m: jc.holdout_check(h, a["lemaire"], "dist4", jc.DIST4[3], m) for m in ("win", "top3")}
     return a
+
+
+def holdout_line(a: dict[str, Any], ll: pd.Series, lt3: pd.Series) -> str:
+    """ルメールJの長距離を、集計に使っていない年で確かめた一文。"""
+    hw, h3 = a["holdout"]["win"], a["holdout"]["top3"]
+    if "diff" not in h3:
+        return f"\n\n{jc.HOLDOUT_YEAR} 年のデータでは騎乗数が足りず、確かめられませんでした。"
+    return (f"\n\n集計に使っていない {jc.HOLDOUT_YEAR} 年（1〜10 月、{h3['n']}騎乗）で、ほかの距離帯と比べた 実際 − 見込み の差を見ると、"
+            f"複勝率 {jc.pt(h3['diff'])}（集計期間 {jc.pt(lt3['diff'] - lt3['other_diff'])}）、勝率 {jc.pt(hw['diff'])}（集計期間 {jc.pt(ll['diff'] - ll['other_diff'])}）でした。"
+            "騎乗数が少なく区間が広い（複勝率で " + jc.pt_ci(h3["ci"]) + "pt）ので、今のところ「長距離が得意」とは確かめられていません。")
 
 
 def row(t: pd.DataFrame, jid: str, level: str) -> pd.Series:
@@ -221,7 +233,8 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
             f"複勝率では 実際 − 見込み が {jc.pt(lt3['diff'])}（ほかの距離帯 {jc.pt(lt3['other_diff'])}）で、補正前は {pv('p', lt3['pb'])} と小さいものの、"
             f"{a['n_jockeys']} 人 × 4 距離帯の検定を繰り返したことを補正すると {pv('q', lt3['qb'])} で、"
             + ("(a)(b) の両方で上回り「得意」と判定されました。" if lt3["short"] == "得意" else
-               "「得意」とまでは言い切れません。長距離のルメールJは人気以上に走る傾向の『候補』として、今後のデータで確かめる価値があります。")},
+               "「得意」とまでは言い切れません。")
+            + holdout_line(a, ll, lt3)},
         {"type": "heading", "text": "距離で成績が変わる騎手は、データでは見つからない"},
         {"type": "text", "text":
             f"{TABLE_MIN_RIDES}騎乗以上の {a['n_jockeys']} 人 × 4 距離帯（騎乗 50 以上の {n_tests} 組）を 2 軸で判定すると、"
@@ -251,7 +264,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
                     "騎手間・騎手内の 2 つの物差しで判定すると、距離で「苦手」「得意」と言える騎手は、多重比較を補正すると見つかりませんでした。"),
         "categories": ["jockey/distance"],
         "published": "2026-10-28",
-        "updated": "2026-11-02",
+        "updated": "2026-11-03",
         "dataset": {"period": "2020〜2025年", "conditions": "JRA 平地（障害を除く）。取消・除外を除く",
                     "sample": f"{a['n_runs']:,}出走。グラフは{CHART_MIN_RIDES}騎乗以上、判定は{TABLE_MIN_RIDES}騎乗以上の騎手"},
         "body": body,
