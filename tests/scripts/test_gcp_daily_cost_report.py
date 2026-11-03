@@ -201,5 +201,26 @@ class ServiceDetailsTest(unittest.TestCase):
         assert len(lines) == 2                     # 1 円未満のサービスは省く
 
 
+
+class BlocksTest(unittest.TestCase):
+    def test_outlook_uses_month_to_date_plus_recent_average(self):
+        table = {"2026-11-01": {"a": 300.0}, "2026-11-02": {"a": 60.0}, "2026-11-03": {"a": 60.0}}
+        o = job.month_outlook(table, "2026-11-03", 2000.0)
+        assert o["mtd"] == 420.0 and o["avg"] == 140.0
+        assert o["projected"] == 420.0 + 140.0 * 27 and o["level"] == "over"
+
+    def test_blocks_have_header_outlook_and_service_table(self):
+        rows = [{"service": "Cloud Storage", "sku": "Download APAC", "cost": 853.5, "currency": "JPY"},
+                {"service": "Cloud Run", "sku": "Jobs CPU in asia-northeast1", "cost": 119.5, "currency": "JPY"}]
+        o = {"mtd": 1000.0, "avg": 50.0, "projected": 1500.0, "budget": 2000.0, "pct": 75.0, "level": "ok"}
+        text, blocks = job.build_report_blocks("2026-11-02", {"Cloud Storage": 853.5, "Cloud Run": 119.5}, rows, 150.0, o, ("2026-11-03", 12.0))
+        assert blocks[0]["type"] == "header" and "11/2（月）" in blocks[0]["text"]["text"] and "¥973" in blocks[0]["text"]["text"]
+        assert "🟢" in blocks[1]["fields"][1]["text"]
+        table = blocks[2]["text"]["text"]
+        assert "Cloud Storage" in table and "GCP の外への転送 ¥854" in table and table.index("Cloud Storage") < table.index("Cloud Run")
+        assert "速報 11/3（火）: ¥12" in blocks[3]["elements"][0]["text"]
+        assert "11/2（月）" in text
+
+
 if __name__ == "__main__":
     unittest.main()

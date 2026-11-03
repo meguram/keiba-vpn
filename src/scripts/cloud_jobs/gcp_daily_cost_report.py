@@ -214,6 +214,76 @@ def format_service_details(sku_rows: list[dict], fx: float, *, min_jpy: float = 
     return lines
 
 
+_WEEKDAY = "月火水木金土日"
+
+
+def _md(date: str) -> str:
+    d = datetime.strptime(date, "%Y-%m-%d")
+    return f"{d.month}/{d.day}（{_WEEKDAY[d.weekday()]}）"
+
+
+def month_outlook(table: dict[str, dict[str, float]], target: str, budget: float) -> dict:
+    """今月の確定分の累計と、月末見込み（累計 + 直近 3 日の平均 × 残りの日数）。月初でも 1〜2 日の値に振り回されず、対策の効果もすぐ表れる。"""
+    import calendar
+
+    t = datetime.strptime(target, "%Y-%m-%d").date()
+    prefix = target[:8]
+    mtd = sum(sum(v.values()) for d, v in table.items() if d.startswith(prefix) and d <= target)
+    recent = [sum(table.get((t - timedelta(days=i)).isoformat(), {}).values()) for i in range(3)]
+    recent = [x for x in recent if x > 0] or [0.0]
+    avg = sum(recent) / len(recent)
+    remain = calendar.monthrange(t.year, t.month)[1] - t.day
+    projected = mtd + avg * remain
+    pct = projected / budget * 100 if budget else 0.0
+    return {"mtd": mtd, "avg": avg, "projected": projected, "budget": budget, "pct": pct,
+            "level": "ok" if pct <= 80 else ("warn" if pct <= 100 else "over")}
+
+
+def build_report_blocks(target: str, day: dict[str, float], sku_rows: list[dict], fx: float, outlook: dict,
+                        flash: tuple[str, float] | None = None) -> tuple[str, list[dict]]:
+    """Slack 用の（代替文, Block Kit）。サービス別の表（金額と何にかかったか）・今月の見込みと予算・昨日の速報。"""
+    total = sum(day.values())
+    mark = {"ok": "🟢", "warn": "🟡", "over": "🔴"}[outlook["level"]]
+    rows = [r[1:] for r in (_service_rows(sku_rows, fx) or [("", svc, v, "") for svc, v in sorted(day.items(), key=lambda kv: -kv[1]) if v >= 1])]
+    width = max([len(r[0]) for r in rows] + [8])
+    table = "\n".join(f"{svc.ljust(width)}  {'¥' + format(v, ',.0f'):>7}  {detail}" for svc, v, detail in rows) or "（1 円以上の費用なし）"
+    blocks: list[dict] = [
+        {"type": "header", "text": {"type": "plain_text", "text": f"GCP コスト {_md(target)}  ¥{total:,.0f}"}},
+        {"type": "section", "fields": [
+            {"type": "mrkdwn", "text": f"*今月の累計*\n¥{outlook['mtd']:,.0f}"},
+            {"type": "mrkdwn", "text": f"*月末見込み*\n{mark} ¥{outlook['projected']:,.0f}（予算 ¥{outlook['budget']:,.0f} の {outlook['pct']:.0f}%）"},
+        ]},
+        {"type": "section", "text": {"type": "mrkdwn", "text": f"*サービス別*\n```{table}```"}},
+    ]
+    notes = []
+    if flash is not None:
+        notes.append(f"速報 {_md(flash[0])}: ¥{flash[1]:,.0f}（反映途中）")
+    notes.append(f"課金データは約 1 日遅れて反映されるため、一昨日分を詳しく出しています。見込み = 累計 + 直近 3 日の平均（¥{outlook['avg']:,.0f}/日）× 残りの日数")
+    blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": n} for n in notes]})
+    text = (f"GCP コスト {_md(target)}: ¥{total:,.0f}／今月 ¥{outlook['mtd']:,.0f}・月末見込み ¥{outlook['projected']:,.0f}"
+            f"（予算の {outlook['pct']:.0f}%）")
+    return text, blocks
+
+
+def _service_rows(sku_rows: list[dict], fx: float, *, min_jpy: float = 1.0, top: int = 3) -> list[tuple[str, str, float, str]]:
+    """(並べ替え用, サービス, 円, 『何にかかったか』の上位) を金額の大きい順に。1 円未満は省く。"""
+    from src.utils import cost_watch as cw
+
+    by: dict[str, dict[str, float]] = {}
+    for r in sku_rows:
+        lbl = sku_label(r["sku"])
+        by.setdefault(r["service"], {})
+        by[r["service"]][lbl] = by[r["service"]].get(lbl, 0.0) + cw.to_jpy(r["cost"], r.get("currency") or "JPY", fx)
+    out = []
+    for svc, skus in sorted(by.items(), key=lambda kv: -sum(kv[1].values())):
+        total = sum(skus.values())
+        if total < min_jpy:
+            continue
+        detail = "・".join(f"{k} ¥{v:,.0f}" for k, v in sorted(skus.items(), key=lambda kv: -kv[1])[:top] if v >= min_jpy)
+        out.append((svc, svc, total, detail))
+    return out
+
+
 def build_watch(target_date: str, rows: list[dict]) -> tuple[str, str | None, str]:
     """(日次通知に足す行, 警告メッセージまたは None, 円建ての先頭行)。rows は fetch_cost_history の結果。"""
     from src.utils import cost_watch as cw
@@ -307,29 +377,30 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     alert = None
+    blocks = None
     if args.watch:
         try:
             flash = (datetime.strptime(target_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
             yesterday = (datetime.now(_JST) - timedelta(days=1)).strftime("%Y-%m-%d")
             rows = fetch_cost_history(table, _history_start(target_date), max(target_date, min(flash, yesterday)))
-            extra, alert, headline = build_watch(target_date, [r for r in rows if r["date"] <= target_date])
-            lines = [headline.replace("[GCP日次コストレポート]", "[GCP日次コスト（一昨日・ほぼ確定）]")]
-            try:
-                lines += format_service_details(fetch_sku_breakdown(table, target_date), _fx_jpy_per_usd())
-            except Exception as e:  # noqa: BLE001 - 内訳が取れなくても合計は出す
-                lines.append(f"（品目別の内訳は取得失敗: {e}）")
-            if flash <= yesterday:
-                from src.utils import cost_watch as cw
+            _extra, alert, _headline = build_watch(target_date, [r for r in rows if r["date"] <= target_date])
+            from src.utils import cost_watch as cw
 
-                f_total = sum(cw.daily_table(rows, _fx_jpy_per_usd()).get(flash, {}).values())
-                lines.append(f"速報 {flash}: ¥{f_total:,.0f}（反映途中。確定は明日の通知で）")
-            lines.append(extra)
-            message = "\n".join(lines)
+            fx = _fx_jpy_per_usd()
+            daily = cw.daily_table(rows, fx)
+            try:
+                sku_rows = fetch_sku_breakdown(table, target_date)
+            except Exception:  # noqa: BLE001 - 内訳が取れなくてもサービス別の合計は出す
+                sku_rows = []
+            outlook = month_outlook({d: v for d, v in daily.items() if d <= target_date}, target_date, float(cw.load_phases().get("budget_jpy_per_month") or 2000))
+            message, blocks = build_report_blocks(
+                target_date, daily.get(target_date, {}), sku_rows, fx, outlook,
+                (flash, sum(daily.get(flash, {}).values())) if flash <= yesterday else None)
         except Exception as e:  # noqa: BLE001 - 日次の基本通知は必ず出す
             message = f"{message}\n（想定との比較は取得失敗: {e}）"
 
     print(message)
-    notify_slack(message)
+    notify_slack(message, blocks=blocks)
     if alert:
         print(alert)
         notify_slack(alert)
