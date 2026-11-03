@@ -2110,12 +2110,13 @@
      "path": "data/local/inference",
      "max_mb": 60,
      "include": [
-      "predictions_v3/*",
-      "predictions_v5/*",
-      "predictions_v6/*",
-      "predictions_backfill/*"
+      "predictions_v3/{recent_day}/*",
+      "predictions_v5/{recent_day}/*",
+      "predictions_v6/{recent_day}/*",
+      "predictions_backfill/*/{recent_day}/*",
+      "predictions_backfill/_shadow_models.json"
      ],
-     "desc": "集計が読む予測（v6e → shadow → バックフィルの順）だけ。state/ や lap_forecast_models は読まない"
+     "desc": "集計が読む予測（v6e → shadow → バックフィルの順）の、集計する直近 11 日分だけ。全期間（約 8,400 件）を毎回取ると 1 日 29 回で読み出し約 25 万回になった（費用の上限）"
     }
    ],
    "state_out": [
@@ -2197,7 +2198,15 @@
     },
     {
      "path": "data/local/inference",
-     "max_mb": 150
+     "max_mb": 150,
+     "include": [
+      "predictions_v3/{recent_day}/*",
+      "predictions_v5/{recent_day}/*",
+      "predictions_v6/{recent_day}/*",
+      "predictions_backfill/*/{recent_day}/*",
+      "predictions_backfill/_shadow_models.json"
+     ],
+     "desc": "当日の結果の集計が読む予測の直近 11 日分だけ（全体を取ると 1 回 約 8,400 件の読み出し）"
     }
    ],
    "state_out": [

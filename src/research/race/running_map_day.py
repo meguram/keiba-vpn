@@ -137,11 +137,12 @@ def compute(
                     for s in sorted([s for s in stats if s["trend"]], key=lambda s: -abs(s["t"]))]
 
     if course_map:
-        keys = course_map["axes"]
-        Zm = t[keys].to_numpy(dtype=float)
-        ok = ~np.isnan(Zm).any(axis=1)
+        keys = course_map.get("keys") or []
+        Zm = t[keys].to_numpy(dtype=float) if keys and all(k in t.columns for k in keys) else np.empty((len(t), 0))
+        top = [keys.index(k) for k in course_map["axes"]] if Zm.shape[1] else []
+        ok = ~np.isnan(Zm[:, top]).any(axis=1) if top else np.zeros(len(t), bool)      # 地図の上位の方面がすべてある走だけ
         if ok.sum() >= MIN_RUNS:
-            P = (Zm[ok] - np.array(course_map["mu"])) @ np.array(course_map["A"])
+            P = rmc.place(Zm[ok], course_map)
             out["heat"] = _heat(P, t["y"].to_numpy()[ok], t["e"].to_numpy()[ok], pd.factorize(races[ok])[0], course_map["extent"])
     out["status"] = "trend" if out["trend"] or (out["heat"] and "2" in out["heat"]["sig"]) else "none"
     return out

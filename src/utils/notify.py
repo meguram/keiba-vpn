@@ -16,8 +16,8 @@ import requests
 _log = logging.getLogger("utils.notify")
 
 
-def notify_slack(message: str, *, timeout: float = 5.0) -> bool:
-    """Slack Incoming Webhook にテキストを1件送信する。
+def notify_slack(message: str, *, timeout: float = 5.0, blocks: list[dict] | None = None) -> bool:
+    """Slack Incoming Webhook にテキストを1件送信する。``blocks``（Block Kit）を渡すと整形して表示し、``message`` は通知・検索用の代替文になる。
 
     Returns:
         送信を試みて成功したら True。``SLACK_WEBHOOK_URL`` 未設定や送信失敗時は False
@@ -27,7 +27,10 @@ def notify_slack(message: str, *, timeout: float = 5.0) -> bool:
     if not webhook_url:
         return False
     try:
-        resp = requests.post(webhook_url, json={"text": message}, timeout=timeout)
+        payload: dict = {"text": message}
+        if blocks:
+            payload["blocks"] = blocks
+        resp = requests.post(webhook_url, json=payload, timeout=timeout)
         resp.raise_for_status()
         return True
     except Exception as e:

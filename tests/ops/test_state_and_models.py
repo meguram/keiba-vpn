@@ -261,3 +261,19 @@ def test_state_include_accepts_params(tmp_path):
     rows = SS.plan(entries, root, {"year": "2026", "prev_year": "2025"})
     assert rows[0]["files"] == 2
     assert SS.plan(entries, root, {"year": "2026", "prev_year": "2024"})[0]["files"] == 1
+
+
+def test_recent_day_in_include_expands_to_each_recent_date():
+    """費用の上限: 日付フォルダの木（約 8,400 件）を丸ごと取らず、集計する直近の日だけを取る。"""
+    from datetime import datetime
+
+    from src.ops import job_dispatch, state_sync
+
+    params = job_dispatch.build_params(datetime(2026, 11, 3, 7, 30, tzinfo=job_dispatch.JST))
+    days = params["recent_days"].split(",")
+    assert days[0] == "20261024" and days[-1] == "20261103" and len(days) == 11
+    inc = state_sync.includes([{"path": "data/local/inference", "include": ["predictions_v6/{recent_day}/*", "predictions_backfill/_shadow_models.json"]}], params)[0]
+    assert "predictions_v6/20261103/*" in inc and "predictions_v6/20261024/*" in inc and "predictions_backfill/_shadow_models.json" in inc
+    assert len(inc) == 12
+    assert state_sync._match("predictions_v6/20261101/202605040101.parquet", inc)
+    assert not state_sync._match("predictions_v6/20261001/202605040101.parquet", inc)

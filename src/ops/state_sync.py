@@ -50,6 +50,10 @@ def includes(entries: list[dict[str, Any]], params: dict[str, str] | None = None
     for e in entries or []:
         inc = e.get("include")
         if inc and params:                                   # include の glob にも {year} などを使える（path と同じ置換）
+            # {recent_day} は直近の日付（params["recent_days"]。カンマ区切り）ごとに 1 つずつの glob に広げる。
+            # 日付フォルダの木を丸ごと取ると 1 回で数千件の読み出しになる（費用の上限: CLAUDE.md）ので、読む日だけを取る
+            days = [d for d in str(params.get("recent_days") or "").split(",") if d]
+            inc = [x for g in inc for x in ([str(g).replace("{recent_day}", d) for d in days] if "{recent_day}" in str(g) else [str(g)])]
             inc = [_fill(str(x), params) for x in inc]
         out.append([str(x) for x in inc] if inc else None)
     return out

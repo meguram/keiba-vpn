@@ -83,7 +83,7 @@ SIMILAR_MIN_COMMON = 6  # 距離を測るのに、2 頭とも実際に値があ�
 # 基準は作り直さない（データが増えても分布はほぼ変わらない）。作り方を変えたら REFERENCE_VERSION を上げる。
 
 REFERENCE_DIR = rp.STORE_DIR / "reference"
-REFERENCE_VERSION = "5"     # 5: 実測ラップ 2023〜2026 年で作り直し、コース別の 3 軸の地図（running_map_course）を追加（2026-11-02）
+REFERENCE_VERSION = "11"    # 11: 場のグループは 300 走以上・長距離が少ない場は 1800m 以上でまとめる。10: 標本の少ないコースは同じ競馬場の距離帯（2600m 以上は長距離）でまとめる。9: コース別の地図を「軸の無い、上位 N 方面（コースごとに 3〜6）で走法の近い馬ほど近い」重み付き主成分にした（2026-11-03）
 _APTITUDE_FILE = "aptitude.json"
 _COURSE_MAPS_FILE = "course_maps.json"
 
@@ -133,7 +133,7 @@ def _build_reference(metrics: pd.DataFrame, sires: pd.DataFrame) -> dict[str, An
 
 
 def _build_course_maps(metrics: pd.DataFrame, table: pd.DataFrame, q: dict[str, list[float]], sd: list[float]) -> dict[str, Any]:
-    """コースごとに重要な 3 方面で作る地図と、その座標での好走しやすさ（running_map_course）。"""
+    """コースごとに重要な上位の方面（3〜6）で作る地図と、その座標での好走しやすさ（running_map_course）。"""
     from src.research.race import running_map_course as rmc
 
     Z = np.column_stack([_to_normal(table[col].to_numpy(dtype=float), np.array(q[key])) for key, col, *_ in AXES]) / np.array(sd) * SIGNS
@@ -187,7 +187,7 @@ def clear_cache() -> None:
 
 
 def course_map_for(conditions: dict[str, Any]) -> Optional[dict[str, Any]]:
-    """このレースのコースの 3 方面の地図（無ければ同じ芝ダ・距離帯のグループの地図。どちらも無ければ None）。"""
+    """このレースのコースの地図（無ければ同じ競馬場・芝ダ・距離帯、それも無ければ全場の芝ダ・距離帯の地図。どれも無ければ None）。"""
     from src.research.race import running_map_course as rmc
 
     return rmc.lookup(_data()["ref"].get("_course_maps") or {}, conditions.get("venue"), conditions.get("surface"), conditions.get("distance"))
@@ -525,16 +525,16 @@ def build_running_map(entries: list[dict], race_id: str, conditions: dict[str, A
     cm = course_map_for(conditions)
     map_idx: Optional[list[int]] = None
     if cm:
-        # コースで重要な 3 方面だけの地図（running_map_course）。座標・背景の格子はこのコース（またはグループ）専用
-        map_idx = [AXIS_KEYS.index(k) for k in cm["axes"]]
-        Zm = Z[:, map_idx]
-        Y = (Zm - np.array(cm["mu"])) @ np.array(cm["A"])
+        # コースの地図（running_map_course）: 重要度の上位 N 方面（cm["axes"]。コースごとに 3〜6）を重要度で重み付けした距離で、走法の近い馬ほど近くに置く。
+        # 座標軸に意味は無い（上ほど好走しやすい向き）。背景の格子はこのコース（またはグループ）専用。上位 N 方面は色の切り替え・数値バーの強調にも使う
+        from src.research.race import running_map_course as rmc
+
+        Y = rmc.place(Z, cm)
         for h, (x, y) in zip(horses, Y):
             h["x"], h["y"] = round(float(x), 4), round(float(y), 4)
-        for j, (lx, ly), r2 in zip(map_idx, np.array(cm["A"]), cm["r2"]):
-            axes_out[j]["arrow"] = [round(float(lx), 4), round(float(ly), 4)]
+        for j, r2 in enumerate(cm["r2"]):
             axes_out[j]["r2"] = r2
-        out["fidelity"] = {"explained": cm["explained"], "distance_spearman": _dist_rho(Zm, Y)}
+        out["fidelity"] = {"explained": cm["explained"], "distance_spearman": _dist_rho(Z * np.array(cm["w"]), Y)}
         out["extent"] = cm["extent"]
         label = cm.get("label") or f"{conditions['venue']} {conditions['surface']} {int(conditions['distance'])}m"
         out["aptitude"] = {"course": label, "n_runs": cm["n_runs"], "n_races": cm["n_races"], "lift": cm["lift"], "sig": cm["sig"], "score": True}
@@ -544,8 +544,9 @@ def build_running_map(entries: list[dict], race_id: str, conditions: dict[str, A
             "importance": [{**i, "label": lbl[i["key"]]} for i in cm["importance"]],
             "since": _data()["ref"]["_course_maps"].get("since"),
         }
-        out["method"] = ("各馬の直近 10 走から作った 8 方面のうち、このコースで好走（1〜3 着=1、4〜7 着は段階的に下げ、8 着以下=0）に効く上位 3 方面だけで、"
-                         "コース専用の 2 次元に置く（2024 年以降の同じコースの全出走で作った共通の座標）。グループは 3 方面の Ward 法")
+        out["method"] = (f"各馬の直近 10 走から作った 8 方面のうち、このコースで好走（1〜3 着=1、4〜7 着は段階的に下げ、8 着以下=0）への寄与率が高い {len(cm['axes'])} 方面を、"
+                         "寄与率で重み付けして、走法の近い馬ほど近くなるように 2 次元に置く（縦・横の軸に意味は無い。上ほどこのコースで好走しやすい走法の向き）。"
+                         "2024 年以降の同じコースの全出走で作った共通の座標。グループは同じ重み付きの方面の Ward 法")
     else:
         pr = project(Z)
         for h, (x, y) in zip(horses, pr["coords"]):
@@ -570,7 +571,7 @@ def build_running_map(entries: list[dict], race_id: str, conditions: dict[str, A
 
             logging.getLogger(__name__).exception("その日の馬場傾向の計算に失敗: %s", race_id)
             out["day_trend"] = None
-    labels = group(Z if map_idx is None else Z[:, map_idx])
+    labels = group(Z if not cm else Z * np.array(cm["w"]))
     Zu = np.array(Zs)
     order = sorted(set(labels), key=lambda g: (-int((labels == g).sum()), g))
     for gi, g in enumerate(order):
