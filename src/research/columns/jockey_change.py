@@ -86,7 +86,27 @@ def analyze(d: pd.DataFrame) -> dict[str, Any]:
         "cuts": R.groupby("rank")["eb"].agg(["min", "max", "size"]).reindex(jc.RANKS),
         "avg_top3": float(d["top3"].mean()),
     }
+    a["robust"] = robustness(c)
     return a
+
+
+def robustness(c: pd.DataFrame, boot: int = 2000, seed: int = 0) -> dict[str, Any]:
+    """2 ランク以上の格下げの「実際 − 見込み」が、期間を分けても・同じ馬の騎乗をまとめても残るか。"""
+    import numpy as np
+
+    order = {k: i for i, k in enumerate(jc.RANKS)}
+    step = c["rank_prev"].map(order) - c["rank_now"].map(order)
+    down2 = c[step <= -2]
+    halves = {nm: float(down2.loc[m, "res_top3"].mean()) for nm, m in
+              (("2020〜2022年", down2["year"] <= 2022), ("2023〜2025年", down2["year"] >= 2023))}
+    h = down2.groupby("horse_id")["res_top3"].agg(["sum", "size"])
+    rng = np.random.default_rng(seed)
+    bs = []
+    for _ in range(boot):
+        s = h.iloc[rng.integers(0, len(h), len(h))]
+        bs.append(s["sum"].sum() / s["size"].sum())
+    return {"halves": halves, "horse_ci": [float(np.percentile(bs, 2.5)), float(np.percentile(bs, 97.5))], "horses": len(h),
+            "res_win": float(down2["res_win"].mean()), "roi": float(down2["ret"].mean()), "roi_other": float(c.loc[step > -2, "ret"].mean())}
 
 
 def compare_chart() -> dict[str, Any]:
@@ -176,10 +196,14 @@ def article(a: dict[str, Any], cmp_chart: dict[str, Any]) -> dict[str, Any]:
             f"• 参考: S ランクの騎手が続けて乗るときは 複勝率 {jc.pct(contS['rate'])}・見込みとの差 {jc.pt(contS['diff'])}。\n\n"
             "「誰に替わるか」で成績は大きく変わりますが、その差の大半は人気（オッズ）に反映されています。"
             f"例外は大きな格下げで、上位騎手から 2 つ以上下のランクの騎手へ替わった馬（{down2['n']:,}走、平均 {down2['pop']:.1f} 番人気）は、"
-            f"複勝率が見込みより約 {abs(down2['diff']) * 100:.0f}pt 低く出ています。市場は格下げの影響を少し甘く見ている可能性があります。"},
+            f"複勝率が見込みより約 {abs(down2['diff']) * 100:.0f}pt 低く出ています。市場は格下げの影響を少し甘く見ている可能性があります。\n\n"
+            f"この差は期間を分けても残り（{'、'.join(f'{k} {v * 100:+.1f}pt' for k, v in a['robust']['halves'].items())}）、"
+            f"同じ馬の騎乗をまとめて数えた 95% 区間（{a['robust']['horses']:,} 頭）でも {a['robust']['horse_ci'][0] * 100:+.1f}〜{a['robust']['horse_ci'][1] * 100:+.1f}pt です。"
+            f"勝率でも見込みより {a['robust']['res_win'] * 100:+.1f}pt、単勝回収率は {a['robust']['roi'] * 100:.1f}%（ほかの乗り替わりは {a['robust']['roi_other'] * 100:.1f}%）でした。"
+            "なぜ格下げの馬が人気ほど走らないのか（上位騎手がより良い馬を選んだ、など）は、このデータでは確かめていません。"},
         {"type": "note", "text":
             "人気からの見込みは、単勝オッズから求めた勝率を 50 段階に分け、頭数の帯ごとに実際の複勝率をあてはめたもの（jockey_common.calibrate）。"
-            "前走は同じ馬の JRA 平地の前走（障害・地方は含まない）。同じレースの出走は独立でないため、信頼区間はやや狭めに出ている可能性があります。"},
+            "前走は同じ馬の JRA 平地の前走（障害・地方は含まない）。表の信頼区間は出走を独立とみなしたもの。結論の「2 ランク以上 下へ」は、同じ馬の騎乗をまとめたブートストラップでも区間がほぼ変わらないことを確かめた。"},
     ]
     return {
         "slug": "jockey-change",
@@ -191,7 +215,7 @@ def article(a: dict[str, Any], cmp_chart: dict[str, Any]) -> dict[str, Any]:
                     f"例外は 2 つ以上下のランクへの乗り替わりで、見込みより {jc.pt(down2['diff'])}。"),
         "categories": ["jockey/change"],
         "published": "2026-10-28",
-        "updated": "2026-11-02",
+        "updated": "2026-11-03",
         "dataset": {"period": "2020〜2025年", "conditions": "JRA 平地（障害を除く）・同じ馬の前走との比較。取消・除外を除く",
                     "sample": f"{a['n_runs']:,}出走（前走のある {a['n_prev']:,} 走、うちランク付きの乗り替わり {a['n_heat']:,} 走）"},
         "body": body,
