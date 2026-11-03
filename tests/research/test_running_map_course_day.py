@@ -1,7 +1,8 @@
-"""走法マップのコース別の 3 軸の地図（running_map_course）と、その日の馬場傾向（running_map_day）。"""
+"""走法マップのコース別の地図（8 方面の重み付き・軸の無い 2 次元）（running_map_course）と、その日の馬場傾向（running_map_day）。"""
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from src.research.race import running_map_course as rmc
 from src.research.race import running_map_day as rmd
@@ -39,16 +40,30 @@ def test_build_picks_the_axes_that_drive_finishing_and_lookup_falls_back_to_the_
     tab, Z = _synthetic()
     maps = rmc.build(tab, Z, ~np.isnan(Z), KEYS)
     cm = maps["courses"]["東京|ダート|1600"]
-    assert cm["axes"] == ["endure", "debut", "gear"]
+    assert cm["axes"] == ["endure", "debut", "gear"]          # 効く方面が 3 つだけなら N=3（寄与率の合計が 80% に届く数、3〜6）
+    assert cm["top_k"] == 3 and cm["top_share"] >= rmc.CUM_SHARE
     assert cm["importance"][0]["sign"] == 1
     n = cm["extent"]["n"]
     assert len(cm["lift"]) == n * n and len(cm["sig"]) == n * n
-    assert np.array(cm["A"]).shape == (3, 2)
-    # 最も重要な方面の矢印が真上
-    a0 = np.array(cm["A"])[0]
-    assert abs(a0[0]) < 1e-6 and a0[1] > 0
+    # 地図は上位 3 方面だけの重み付き距離で作る（軸の無い 2 次元）。重みは寄与率の高い方面ほど大きく、ほかの方面は 0
+    assert np.array(cm["A"]).shape == (len(KEYS), 2) and cm["keys"] == KEYS
+    w = dict(zip(KEYS, cm["w"]))
+    assert w["endure"] > w["debut"] > w["gear"] > 0 and all(w[k] == 0 for k in KEYS if k not in cm["axes"])
+    assert np.mean(np.square([w[k] for k in cm["axes"]])) == pytest.approx(1.0, abs=1e-3)
+    # 好走に効く方面が高い馬ほど上（y が大きい）に来る
+    P = rmc.place(Z, cm)
+    good = Z @ np.array([2.0 if k == "endure" else 1.2 if k == "debut" else 0.7 if k == "gear" else 0.0 for k in KEYS])
+    assert np.corrcoef(P[:, 1], good)[0, 1] > 0.6
+    assert cm["distance_spearman"] > 0.5
     assert rmc.lookup(maps, "東京", "ダート", 1600) is cm
     assert rmc.lookup(maps, "中山", "ダート", 1600) is maps["groups"]["ダート|マイル"]
+    assert rmc.band_of(2600) == "長" and rmc.band_of(2500) == "中" and rmc.venue_group_key("札幌", "芝", 2600) == "札幌|芝|長"
+
+
+def test_lookup_prefers_the_same_venue_band_over_all_venues():
+    maps = {"courses": {}, "venue_groups": {"札幌|芝|長": {"id": "v"}}, "groups": {"芝|長": {"id": "g"}}}
+    assert rmc.lookup(maps, "札幌", "芝", 2600)["id"] == "v"
+    assert rmc.lookup(maps, "函館", "芝", 2600)["id"] == "g"
     assert rmc.lookup(maps, "中山", "芝", 2000) is None
 
 

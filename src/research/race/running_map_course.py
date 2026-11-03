@@ -2,6 +2,10 @@
 走法マップのコース別の地図（コースで重要な 3 軸だけで作る地図と、その座標での好走しやすさ）。
 
 ユーザー指示（2026-11-02）: コースごとに重要度の高い軸を 3 つに絞って地図にし、どのゾーンが好走しやすいかを事前に計算する。
+ユーザー指示（2026-11-03）: 地図は縦軸・横軸の無い「走法の近い馬ほど近くに置く」2 次元にする（任意の軸を座標にしない）。
+  近さは、そのコースで重要度の高い上位 N 方面の値だけで測る（全 8 方面ではない。好走ゾーンがはっきり分かれるように）。
+  N はコースごとに 3〜6（2026-11-03 ユーザー指示）: 重要度の割合を上から足して 90% に届く数。その方面がすべてある走が 200 未満なら減らす。
+  上位の方面は、丸の色の切り替えと、馬を選んだときの数値バーの強調にも使う。好走しやすいゾーンの背景は、この地図の上で塗る。
 
 好走の得点（ユーザー指定）: 1〜3 着 = 1、4 着 0.8、5 着 0.6、6 着 0.4、7 着 0.2、8 着以下 = 0。
 期待は「頭数 n のレースで着順がでたらめに決まったときの得点の平均」= Σ_{k=1..n} score(k) / n。
@@ -10,12 +14,15 @@
   1. 対象: 2024-01-01 以降の平地（頭数 5 以上）。各走の 8 方面は「その走より前の走」から作ったプロファイル（profile_table）を、
      全馬の分布で順位 → 標準正規にそろえた値（地図と同じ z）。8 方面のうち値があるのが 5 未満の走は使わない。欠けは 0（全馬の中央値）。
   2. 重要度: コースの走で、得点 − 期待 を 8 方面へ線形回帰し、方面ごとに「その方面を抜いたときの R² の落ち」を重要度とする
-     （他の方面と重なる分は数えないので、先行力と Hペース耐性のように似た方面が両方選ばれにくい）。上位 3 つを地図の軸にする。
-  3. 地図: その 3 方面（3 つとも実測由来の値がある走）の主成分で 2 次元に置く。向きは、最も重要な方面の矢印が真上、
-     先行力が入っていれば先行力が左（無ければ 2 番目の方面が右）。
+     （他の方面と重なる分は数えないので、先行力と Hペース耐性のように似た方面が両方選ばれにくい）。上位 N 個（3〜6）を地図に使う。
+  3. 地図: 上位 N 方面（その方面すべてに実測由来の値がある走）を、重要度で重み付けした距離（w_j = √(K·重要度_j / 上位の重要度の合計)。
+     ほかの方面の重みは 0）の主成分で 2 次元に置く。上位の方面で走法の近い馬ほど近い。座標軸に意味は持たせない。
+     向きは、好走の得点の回帰（8 方面）を地図に写した「好走しやすい向き」が真上。左右は上位 2 番目の方面が右に来るように決める。
   4. 好走しやすさ: 地図の 24×24 の格子で、ガウスカーネル（幅 0.5）で近くの走を平滑化し、観測した得点 / 期待 の倍率を出す。
      サンプルの少ないゾーンはコース全体の倍率へ寄せる（M=20）。有意性はレース単位でまとめたサンドウィッチ分散の z と BH 法（FDR 5%）。
-  コースの走が MIN_RUNS 未満なら、同じ芝ダ・距離帯（≤1400 / 〜1700 / 1800+）にまとめた「グループ」で作り、そのコースはグループの地図を使う。
+  コースの走が MIN_RUNS 未満なら、まず同じ競馬場・芝ダ・距離帯（≤1400 / 〜1700 / 1800〜2599 / 2600+ の長距離）にまとめた「場のグループ」
+  （MIN_VENUE_RUNS 以上）、長距離が足りない場は同じ場の 1800m 以上（中長距離）、それも足りなければ競馬場をまたいだ芝ダ・距離帯の「グループ」の地図を使う
+  （2026-11-03 ユーザー指示: 長距離など標本の少ない条件は、競馬場はそろえて距離をくくる）。
 
 注意: 重要度・倍率は 2024 年以降の全レースで測った値（標本内）。2024 年の走は位置の 4 方面（Hペース耐性・先行力・Cr性能・まくり特性）の
 実測が少なく（約 13%）、その分は前の走が無く欠け（0 = 中央値）になりやすい。
@@ -32,9 +39,13 @@ import pandas as pd
 from src.research.race import running_map_aptitude as apt
 
 SINCE = "2024-01-01"
-TOP_K = 3
+TOP_K = 3            # 地図に使う方面の数の下限
+MAX_K = 6            # 上限
+CUM_SHARE = 0.9      # 重要度の割合を上から足して、これに届くまでの数（TOP_K〜MAX_K）を使う
+MIN_MAP_RUNS = 200   # 地図に使う方面がすべてある走がこれ未満なら、方面を減らす
 MIN_AXES_PRESENT = 5
 MIN_RUNS = 600
+MIN_VENUE_RUNS = 300     # 場のグループ（同じ競馬場の距離帯）の地図を作る最低の走数。背景の倍率はコース全体へ寄せる（M=20）ので、少なめでも極端にはならない
 MIN_FIELD = 5
 
 
@@ -50,9 +61,21 @@ def expected_score(n: np.ndarray) -> np.ndarray:
     return np.array([table.get(int(v), table[40]) for v in n])
 
 
+BAND_LABEL = {"短": "1400m以下", "マイル": "1500〜1700m", "中": "1800〜2500m", "長": "2600m以上", "中長": "1800m以上"}
+
+
 def band_of(distance: Any) -> str:
     d = int(distance)
-    return "短" if d <= 1400 else ("マイル" if d < 1800 else "中長")
+    return "短" if d <= 1400 else ("マイル" if d < 1800 else ("中" if d < 2600 else "長"))
+
+
+def venue_group_key(venue: Any, surface: Any, distance: Any) -> str:
+    return f"{venue}|{surface}|{band_of(distance)}"
+
+
+def venue_wide_key(venue: Any, surface: Any, distance: Any) -> Optional[str]:
+    """1800m 以上なら、同じ場の 1800m 以上をまとめたキー（長距離が少ない場の受け皿）。それ以外は None。"""
+    return f"{venue}|{surface}|中長" if band_of(distance) in ("中", "長") else None
 
 
 def group_key(surface: Any, distance: Any) -> str:
@@ -75,19 +98,40 @@ def _importance(Z: np.ndarray, r: np.ndarray) -> tuple[np.ndarray, np.ndarray, f
     return np.maximum(drop, 0), beta[1:], full
 
 
-def _orient(Y: np.ndarray, V: np.ndarray, axis_keys: list[str]) -> tuple[np.ndarray, np.ndarray]:
-    """最も重要な方面（V の 0 行目）を真上に。先行力があれば左、無ければ 2 番目の方面を右へ。"""
-    up = V[0]
+def _orient(Y: np.ndarray, A: np.ndarray, up: np.ndarray, right_row: int) -> tuple[np.ndarray, np.ndarray]:
+    """地図の向きを決める。up（2 次元）が真上、A の right_row 行（その方面の向き）が右側になるように回転・反転する。"""
     if np.linalg.norm(up) > 1e-9:
         rot = math.pi / 2 - math.atan2(up[1], up[0])
         R = np.array([[math.cos(rot), -math.sin(rot)], [math.sin(rot), math.cos(rot)]])
-        Y, V = Y @ R.T, V @ R.T
-    if "front" in axis_keys[1:]:
-        if V[axis_keys.index("front")][0] > 0:
-            Y, V = Y * [-1, 1], V * [-1, 1]
-    elif V[1][0] < 0:
-        Y, V = Y * [-1, 1], V * [-1, 1]
-    return Y, V
+        Y, A = Y @ R.T, A @ R.T
+    if A[right_row][0] < 0:
+        Y, A = Y * [-1, 1], A * [-1, 1]
+    return Y, A
+
+
+def _dist_rho(X: np.ndarray, Y: np.ndarray, n: int = 400, seed: int = 0) -> float:
+    """重み付き 8 次元の距離と地図上の距離の順位相関（標本 n 頭の全組）。"""
+    from scipy.stats import spearmanr
+
+    idx = np.random.default_rng(seed).choice(len(X), min(n, len(X)), replace=False)
+    iu = np.triu_indices(len(idx), 1)
+    dx = np.linalg.norm(X[idx][:, None] - X[idx][None], axis=2)[iu]
+    dy = np.linalg.norm(Y[idx][:, None] - Y[idx][None], axis=2)[iu]
+    return float(spearmanr(dx, dy).statistic)
+
+
+def weights_of(share: np.ndarray, order: list[int]) -> np.ndarray:
+    """地図の距離の重み。上位の方面（order）だけ w_j = √(K·share_j / Σ上位の share)（上位の重みの 2 乗の平均が 1）、ほかは 0。"""
+    w = np.zeros(len(share))
+    top = share[order]
+    tot = top.sum()
+    w[order] = np.sqrt(len(order) * (top / tot if tot > 0 else np.full(len(order), 1.0 / len(order))))
+    return w
+
+
+def place(Z: np.ndarray, cm: dict[str, Any]) -> np.ndarray:
+    """8 方面の z（欠けは 0 = 全馬の中央値）を、コースの地図の座標へ。"""
+    return (np.nan_to_num(Z) * np.array(cm["w"]) - np.array(cm["mu"])) @ np.array(cm["A"])
 
 
 def _heat(P: np.ndarray, y: np.ndarray, e: np.ndarray, race_codes: np.ndarray, extent: dict[str, Any]) -> dict[str, Any]:
@@ -111,29 +155,44 @@ def _one(g: pd.DataFrame, Zall: np.ndarray, present: np.ndarray, axis_keys: list
     Z, pr = Zall[idx], present[idx]
     r = g["y"].to_numpy() - g["e"].to_numpy()
     drop, beta, full = _importance(Z, r)
-    order = list(np.argsort(-drop)[:TOP_K])
+    share = drop / drop.sum() if drop.sum() > 0 else np.full(len(drop), 1.0 / len(drop))
+    ranked = list(np.argsort(-drop))
+    k = int(np.clip(np.searchsorted(np.cumsum(share[ranked]), CUM_SHARE) + 1, TOP_K, MAX_K))
+    while k > TOP_K and pr[:, ranked[:k]].all(axis=1).sum() < MIN_MAP_RUNS:
+        k -= 1
+    order = ranked[:k]
     keys = [axis_keys[j] for j in order]
     ok = pr[:, order].all(axis=1)
-    if ok.sum() < 200:
+    if ok.sum() < MIN_MAP_RUNS:
         return None
-    Zs = Z[ok][:, order]
-    mu = Zs.mean(0)
-    Zc = Zs - mu
+    w = weights_of(share, order)
+    Zw = Z[ok] * w
+    mu = Zw.mean(0)
+    Zc = Zw - mu
     _, S, Vt = np.linalg.svd(Zc, full_matrices=False)
-    Y, A = _orient(Zc @ Vt[:2].T, Vt[:2].T, keys)
+    A0 = Vt[:2].T
+    # 好走の得点を上位の方面だけで回帰し直し、地図に写した向きを「上」にする（得点 ≈ b·z = (b/w)·zw）
+    _, b_top, _ = _importance(Z[ok][:, order], r[ok])
+    bw = np.zeros(len(w))
+    bw[order] = b_top / w[order]
+    Y, A = _orient(Zc @ A0, A0, A0.T @ bw, order[1])
     recon = Y @ A.T
     var = Zc.var(0)
     extent = apt.extent_from(Y)
     sub = g[ok]
     heat = _heat(Y, sub["y"].to_numpy(), sub["e"].to_numpy(), pd.factorize(sub["race_id"])[0], extent)
-    share = drop / drop.sum() if drop.sum() > 0 else drop
     return {
         "axes": keys,
+        "keys": list(axis_keys),
+        "w": [round(float(v), 4) for v in w],
+        "distance_spearman": round(_dist_rho(Zc, Y), 3),
         "importance": [{"key": axis_keys[j], "share": round(float(share[j]), 3), "r2_drop": round(float(drop[j]), 5),
                         "sign": int(np.sign(beta[j])) if beta[j] != 0 else 0} for j in np.argsort(-drop)],
         "r2_full": round(float(full), 4),
         "mu": mu.tolist(), "A": A.tolist(),
         "r2": [None if v < 1e-12 else round(float(1 - (Zc[:, j] - recon[:, j]).var() / v), 3) for j, v in enumerate(var)],
+        "top_k": len(order),
+        "top_share": round(float(share[order].sum()), 3),
         "explained": round(float((S[:2] ** 2).sum() / (S ** 2).sum()), 3),
         "extent": extent,
         "n_runs": int(len(sub)), "n_races": int(sub["race_id"].nunique()),
@@ -155,26 +214,43 @@ def build(tab: pd.DataFrame, Z: np.ndarray, present: np.ndarray, axis_keys: list
 
     courses: dict[str, Any] = {}
     groups: dict[str, Any] = {}
+    vgroups: dict[str, Any] = {}
     t["ckey"] = [apt.course_key(v, s, d) for v, s, d in zip(t["venue"], t["surface"], t["distance"])]
     t["gkey"] = [group_key(s, d) for s, d in zip(t["surface"], t["distance"])]
+    t["vkey"] = [venue_group_key(v, s, d) for v, s, d in zip(t["venue"], t["surface"], t["distance"])]
     for gk, g in t.groupby("gkey"):
         if len(g) >= MIN_RUNS:
             res = _one(g, Zk, pk, axis_keys)
             if res:
-                groups[gk] = {**res, "level": "group", "label": gk.replace("|", " ")}
+                s_, b_ = gk.split("|")
+                groups[gk] = {**res, "level": "group", "label": f"{s_} {BAND_LABEL[b_]}（全場）"}
     for ck, g in t.groupby("ckey"):
         if len(g) >= MIN_RUNS:
             res = _one(g, Zk, pk, axis_keys)
             if res:
                 courses[ck] = {**res, "level": "course"}
-    return {"since": SINCE, "score": "1〜3着=1, 4着0.8, 5着0.6, 6着0.4, 7着0.2, 8着以下=0", "courses": courses, "groups": groups}
+    # 場のグループ: 地図の無いコースがある集まりだけ（地図のあるコースだけなら使われない）
+    t["wkey"] = [venue_wide_key(v, s, d) for v, s, d in zip(t["venue"], t["surface"], t["distance"])]
+    for col in ("vkey", "wkey"):
+        for vk, g in t[t[col].notna()].groupby(col):
+            if len(g) < MIN_VENUE_RUNS or set(g["ckey"]) <= set(courses):
+                continue
+            res = _one(g, Zk, pk, axis_keys)
+            if res:
+                v_, s_, b_ = vk.split("|")
+                vgroups[vk] = {**res, "level": "venue_group", "label": f"{v_} {s_} {BAND_LABEL[b_]}"}
+    return {"since": SINCE, "score": "1〜3着=1, 4着0.8, 5着0.6, 6着0.4, 7着0.2, 8着以下=0", "courses": courses, "venue_groups": vgroups, "groups": groups}
 
 
 def lookup(maps: dict[str, Any], venue: Any, surface: Any, distance: Any) -> Optional[dict[str, Any]]:
-    """コースの地図。コースが無ければ同じ芝ダ・距離帯のグループの地図。どちらも無ければ None。"""
+    """コースの地図。無ければ同じ競馬場・芝ダ・距離帯の地図、それも無ければ芝ダ・距離帯（全場）の地図。どれも無ければ None。"""
     if not (maps and venue and surface and distance):
         return None
     hit = maps.get("courses", {}).get(apt.course_key(venue, surface, distance))
+    if hit:
+        return hit
+    vg = maps.get("venue_groups", {})
+    hit = vg.get(venue_group_key(venue, surface, distance)) or vg.get(venue_wide_key(venue, surface, distance) or "")
     if hit:
         return hit
     return maps.get("groups", {}).get(group_key(surface, distance))

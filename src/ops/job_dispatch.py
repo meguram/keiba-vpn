@@ -66,6 +66,7 @@ def build_params(now: datetime, extra: dict[str, str] | None = None) -> dict[str
         "years": f"{d.year - 1},{d.year}" if d.month == 1 else str(d.year),
         "days_ago_10": f(d - timedelta(days=10)), "days_ago_28": f(d - timedelta(days=28)),
         "last_weekend_days": ",".join(f(x) for x in sorted(weekend)),
+        "recent_days": ",".join(f(d - timedelta(days=b)) for b in range(10, -1, -1)),   # 10 日前〜今日（state_in の {recent_day}）
     }
     p.update(extra or {})
     return p

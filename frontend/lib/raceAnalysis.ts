@@ -96,7 +96,7 @@ export type RunningMapFigure = {
 
 export type RunningMapCourse = {
   axes: string[];
-  level: "course" | "group";
+  level: "course" | "venue_group" | "group";
   label: string;
   /** 方面ごとの重要度（share は 0〜1 の割合、sign は高いほど好走なら 1・低いほど好走なら -1）。重要な順 */
   importance: { key: string; label: string; share: number; sign: number }[];
