@@ -50,3 +50,15 @@ def test_merged_chart_removes_the_old_one(tmp_path, monkeypatch):
     assert how.startswith("replaced") and "removed" in how
     body = json.loads((tmp_path / "y.json").read_text(encoding="utf-8"))["body"]
     assert [b.get("title") or b.get("text") for b in body] == ["AB", "後"]
+
+
+def test_jump_races_are_detected_even_when_surface_is_turf_or_dirt():
+    r = pd.DataFrame({
+        "race_name": ["障害4歳以上未勝利", "第22回東京ジャンプS(JGIII)", "イルミネーションJS(OP)", "第22回阪神スプリングJ(JGII)",
+                      "中山新春ジャンプS(OP)", "名前なし", "第161回天皇賞(春)", "ヤングJSFR中山1(1勝)", "オールスターJ第1戦(2勝)", "菊花賞"],
+        "race_class": ["", "", "", "", "", "", "", "", "", ""],
+        "surface": ["芝", "芝", "芝", "芝", "ダート", "芝", "芝", "芝", "芝", "芝"],
+        "distance": [2750, 3110, 3570, 3900, 3200, 2880, 3200, 2000, 1200, 3000],
+    })
+    # 名前で分かるもの・平地に無い距離（2,880m）は障害。天皇賞(春)の 3,200m・菊花賞の 3,000m・「ヤングJS」「オールスターJ」は平地
+    assert cs.jump_mask(r).tolist() == [True, True, True, True, True, True, False, False, False, False]

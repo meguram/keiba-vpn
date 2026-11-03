@@ -15,7 +15,7 @@ from typing import Any, Callable
 import numpy as np
 import pandas as pd
 
-from src.research.columns.compare_series import FLAT_DIR, YEARS, _p, _r, _rci, _stat
+from src.research.columns.compare_series import FLAT_DIR, YEARS, _p, _r, _rci, _stat, jump_mask
 
 PRE_STYLES = ["前寄り", "好位", "中団", "後方"]
 PRE_CUTS = [-0.01, 0.15, 0.4, 0.7, 1.01]
@@ -27,10 +27,12 @@ WAKU = [f"{i}枠" for i in range(1, 9)]
 
 def context() -> pd.DataFrame:
     """race_id・horse_id ごとの 枠番・馬番の相対位置・事前の脚質・今走の位置。"""
-    cols = ["race_id", "date", "surface", "horse_id", "horse_number", "bracket_number", "field_size", "passing_order", "odds", "popularity"]
+    cols = ["race_id", "date", "surface", "horse_id", "horse_number", "bracket_number", "field_size", "passing_order", "odds", "popularity",
+            "race_name", "race_class", "distance"]
     years = [y for y in range(min(YEARS) - 1, max(YEARS) + 1) if (FLAT_DIR / str(y) / "race_result_flat.parquet").exists()]
     r = pd.concat([pd.read_parquet(FLAT_DIR / str(y) / "race_result_flat.parquet", columns=cols) for y in years], ignore_index=True)
-    r = r[r["surface"].isin(["芝", "ダート"]) & (r["odds"] > 0) & (r["popularity"] > 0)].copy()
+    # 平地だけ（障害は surface が芝・ダートのものも除く）。脚質は平地の前走までの位置取りから作る
+    r = r[r["surface"].isin(["芝", "ダート"]) & ~jump_mask(r) & (r["odds"] > 0) & (r["popularity"] > 0)].copy()
     r["horse_id"] = r["horse_id"].astype(str)
     r = positions(r)
     r["gate_rel"] = (r["horse_number"] - 1) / (r["field_size"] - 1).clip(lower=1)

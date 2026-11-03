@@ -120,6 +120,8 @@ case "$STEP" in
       echo "タグ付き URL: $url"
       [ -z "${GITHUB_OUTPUT:-}" ] || echo "tag_url=$url" >> "$GITHUB_OUTPUT"
     fi
+    # 使用中の版に印を付け、自動掃除で消されないようにする（タグは付け替わる。保持の決まりは deploy_cloud_run_api.sh）
+    if [ "$TARGET" = stg ]; then run gcloud artifacts docker tags add "$API_IMAGE" "${REG}/keiba-api:live-stg" --quiet; fi
     ;;
   smoke)
     [ -n "${SMOKE_BASE:-}" ] || { [ "$DRY" = 1 ] && SMOKE_BASE="https://TAG_URL" || { echo "SMOKE_BASE（タグ付き URL）が必要です" >&2; exit 2; }; }
@@ -136,6 +138,7 @@ case "$STEP" in
   promote)
     [ "$TARGET" = prod ] || { echo "promote は prod だけ（stg は通信を切り替えない）" >&2; exit 2; }
     run bash scripts/gcp/deploy_cloud_run_api.sh promote --apply
+    run gcloud artifacts docker tags add "$API_IMAGE" "${REG}/keiba-api:live-prod" --quiet   # 本番の版を自動掃除から守る
     ;;
   jobs)
     [ "$TARGET" = prod ] || { echo "jobs は prod だけ" >&2; exit 2; }
@@ -146,6 +149,7 @@ case "$STEP" in
     run env IMAGE="$JOBS_IMAGE" bash scripts/gcp/deploy_cloud_run_jobs.sh apply queue --yes
     run env IMAGE="$JOBS_IMAGE" bash scripts/gcp/deploy_cloud_run_jobs.sh apply jobs ${PAR[@]+"${PAR[@]}"} --yes
     run env IMAGE="$JOBS_IMAGE" bash scripts/gcp/deploy_cloud_run_jobs.sh apply scheduler ${PAR[@]+"${PAR[@]}"} --yes
+    run gcloud artifacts docker tags add "$JOBS_IMAGE" "${REG}/jobs:live-jobs" --quiet   # Jobs の版を自動掃除から守る
     ;;
   *) echo "不明なステップ: $STEP（build-images / build-api-image / check-jobs-image / api-revision / smoke / promote / jobs）" >&2; exit 2 ;;
 esac

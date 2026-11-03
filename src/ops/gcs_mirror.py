@@ -100,6 +100,70 @@ class GcsBackend:
     def upload(self, key: str, data: bytes) -> None:
         self._bucket.blob(key).upload_from_string(data, content_type="application/octet-stream")
 
+    def read_gen(self, key: str) -> tuple[bytes | None, int]:
+        """中身と世代（無ければ (None, 0)）。目録の読み書きを、他の書き手と競合しても失わないために使う。"""
+        from google.api_core.exceptions import NotFound
+
+        b = self._bucket.blob(key)
+        try:
+            data = b.download_as_bytes()
+        except NotFound:
+            return None, 0
+        return data, int(b.generation or 0)
+
+    def upload_if(self, key: str, data: bytes, generation: int) -> bool:
+        """世代が generation のときだけ上書きする（0 は「まだ無いときだけ」）。他が先に書いていたら False。"""
+        from google.api_core.exceptions import PreconditionFailed
+
+        try:
+            self._bucket.blob(key).upload_from_string(data, content_type="application/json", if_generation_match=generation)
+            return True
+        except PreconditionFailed:
+            return False
+
+
+# ── 更新の目録（_index/） ────────────────────────────────────────────────
+# 費用の上限（CLAUDE.md）: Cloud Run の API が毎分 24 か所を一覧すると、一覧（Class A）だけで 1 日 3〜7 万回・月 700〜1,600 円になる。
+# そこで書き手（ホストの push・会員名簿の push・Jobs）が「直近に上げたファイルの目録」を 1 つずつ置き、API は毎分それを読むだけにする
+# （1 回の読み出し。月 10 円未満）。目録が無い・古いとき、と FULL_LIST_SEC ごとには従来どおり一覧して取りこぼしを防ぐ。
+INDEX_PREFIX = f"{PREFIX}/_index"
+INDEX_WRITERS = ("host", "auth", "jobs")
+INDEX_KEEP_SEC = 2 * 86400            # 目録に残す期間（API の定期取り込みの直近 2 日と同じ）
+INDEX_STALE_SEC = 20 * 60             # ホストの目録がこれより古ければ（push が止まっている）一覧に戻す。push は 5 分おき
+FULL_LIST_SEC = 30 * 60               # 目録を使っていても、この間隔で一覧して取りこぼし（目録を書かない書き手など）を拾う
+
+
+def index_key(writer: str) -> str:
+    return f"{INDEX_PREFIX}/{writer}.recent.json"
+
+
+def _index_doc(writer: str, entries: dict[str, list]) -> bytes:
+    return json.dumps({"version": 1, "writer": writer, "written_at": time.time(), "entries": entries},
+                      ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+
+def _prune(entries: dict[str, list], now: float) -> dict[str, list]:
+    return {k: v for k, v in entries.items() if float(v[1]) >= now - INDEX_KEEP_SEC}
+
+
+def write_index_merge(backend: Backend, writer: str, new: dict[str, list], *, tries: int = 6) -> bool:
+    """他の書き手（同時に動く Jobs など）と競合しても失わないよう、世代を確かめて目録へ追記する。世代を扱えない backend は上書き。"""
+    now = time.time()
+    if not hasattr(backend, "read_gen"):
+        backend.upload(index_key(writer), _index_doc(writer, _prune(dict(new), now)))
+        return True
+    for _ in range(tries):
+        raw, gen = backend.read_gen(index_key(writer))
+        try:
+            cur = (json.loads(raw).get("entries") or {}) if raw else {}
+        except ValueError:
+            cur = {}
+        cur.update(new)
+        if backend.upload_if(index_key(writer), _index_doc(writer, _prune(cur, now)), gen):
+            return True
+        time.sleep(0.2)
+    return False
+
 
 def _md5(data: bytes) -> str:
     return base64.b64encode(hashlib.md5(data).digest()).decode()
@@ -121,33 +185,43 @@ def _files(root: Path, tree: str) -> list[Path]:
 
 
 def _load_manifest(path: Path | None) -> dict[str, str] | None:
+    doc = _read_manifest_doc(path)
+    return None if doc is None else {str(k): str(v) for k, v in (doc.get("md5") or {}).items()}
+
+
+def _read_manifest_doc(path: Path | None) -> dict | None:
     if path is None or not path.is_file():
         return None
     try:
-        doc = json.loads(path.read_text(encoding="utf-8"))
-        return {str(k): str(v) for k, v in (doc.get("md5") or {}).items()}
+        return json.loads(path.read_text(encoding="utf-8"))
     except Exception:  # noqa: BLE001  壊れていたら一覧で作り直す
         return None
 
 
-def _save_manifest(path: Path, known: dict[str, str]) -> None:
+def _save_manifest(path: Path, known: dict[str, str], recent: dict[str, list] | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps({"version": 1, "md5": known}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    tmp.write_text(json.dumps({"version": 1, "md5": known, "recent": recent or {}}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     os.replace(tmp, path)
 
 
 def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH_TREES, *, recent_days: float | None = None,
          dry_run: bool = False, workers: int = 8, batch_bytes: int = 64 * 1024 * 1024,
-         manifest: Path | None = None, verify_remote: bool = False) -> dict[str, int]:
+         manifest: Path | None = None, verify_remote: bool = False, index_writer: str | None = None) -> dict[str, int]:
     """内容が違う（または GCS に無い）ローカルのファイルだけを上げる。recent_days を付けると、その日数以内に更新されたファイルだけを見る。
     全体が大きくても、メモリに溜めるのは batch_bytes まで（溜まったら上げて空にする）。
 
     manifest（ホストの定期 push 用）: 上げた内容の MD5 をローカルに記録し、次回からは GCS を一覧せずに記録と比べる。
     GCS の一覧は 1 回で約 4 万件・約 40MB の応答になり、GCP の外から 5 分おきに取ると転送料だけで月 6,000 円を超えるため
-    （CLAUDE.md の「費用の上限」）。記録が無い・壊れている・verify_remote のときだけ一覧し、その結果で記録を作り直す。"""
-    cutoff = time.time() - recent_days * 86400 if recent_days is not None else 0.0
-    known = None if verify_remote else _load_manifest(manifest)
+    （CLAUDE.md の「費用の上限」）。記録が無い・壊れている・verify_remote のときだけ一覧し、その結果で記録を作り直す。
+
+    index_writer: 上げたファイルを更新の目録（_index/<writer>.recent.json）に載せる。API は毎分これを読むだけで更新を知る。
+    manifest があれば目録は手元の記録から丸ごと書き直し（毎回。書いた時刻が「push が生きている」印になる）、無ければ世代を確かめて追記する。"""
+    now = time.time()
+    cutoff = now - recent_days * 86400 if recent_days is not None else 0.0
+    mdoc = None if verify_remote else _read_manifest_doc(manifest)
+    known = None if mdoc is None else {str(k): str(v) for k, v in (mdoc.get("md5") or {}).items()}
+    recent: dict[str, list] = dict((mdoc or {}).get("recent") or {})
     use_list = known is None
     if known is None:
         known = {}
@@ -163,8 +237,10 @@ def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH
                 list(ex.map(lambda kv: backend.upload(*kv), todo))
             uploaded += len(todo)
             sent.extend(k[len(PREFIX) + 1:] for k, _ in todo)
+            t = time.time()
             for k, data in todo:
                 known[k] = _md5(data)
+                recent[k] = [known[k], t]
         todo, held = [], 0
 
     listed: set[str] = set()
@@ -172,7 +248,10 @@ def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH
         d = split_tree(tree)[0]
         if use_list and d not in listed:              # 同じフォルダに複数の glob があっても一覧は 1 回
             listed.add(d)
-            known.update({k: md5 for k, (md5, _) in backend.list(f"{PREFIX}/{d}/").items()})
+            for k, (md5, upd) in backend.list(f"{PREFIX}/{d}/").items():
+                known[k] = md5
+                if upd >= now - INDEX_KEEP_SEC:
+                    recent[k] = [md5, upd]
         for p in _files(root, tree):
             if p.stat().st_mtime < cutoff:
                 continue
@@ -187,8 +266,17 @@ def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH
                 if held >= batch_bytes:
                     flush()
     flush()
+    recent = _prune(recent, time.time())
     if manifest is not None and not dry_run:
-        _save_manifest(manifest, known)
+        _save_manifest(manifest, known, recent)
+    if index_writer and not dry_run:
+        try:
+            if manifest is not None:
+                backend.upload(index_key(index_writer), _index_doc(index_writer, recent))
+            elif sent:
+                write_index_merge(backend, index_writer, {f"{PREFIX}/{k}": recent[f"{PREFIX}/{k}"] for k in sent})
+        except Exception:  # noqa: BLE001  目録は補助（無ければ API は一覧に戻る）
+            logger.warning("更新の目録を書けませんでした: %s", index_writer, exc_info=True)
     if sent:
         try:      # 画面に出る応答の元（予測・ラップ・分析など）が変わったことを、VPS の事前ロード係へ目印で伝える（最善努力）
             from src.utils import cache_marker
@@ -269,6 +357,55 @@ def pull(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = TREE
             if not local.is_file() or _md5(local.read_bytes()) != md5:
                 todo.append(key)
 
+    _download_all(backend, root, todo, workers)
+    return {"seen": seen, "downloaded": len(todo)}
+
+
+def pull_via_index(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = TREES, *, recent_days: float = 2.0,
+                   window: float | None = None, workers: int = 16, now: float | None = None) -> dict[str, int] | None:
+    """更新の目録（書き手ごとに 1 つ）だけを読んで、直近 recent_days 日に上がったファイルのうちローカルと違うものを取り込む。
+    一覧（Class A）を使わない。ホストの目録が無い・読めない・古い（push が止まっている）ときは None（呼び出し側が一覧に戻る）。"""
+    now = time.time() if now is None else now
+    entries: dict[str, list] = {}
+    host_ok = False
+    for w in INDEX_WRITERS:
+        try:
+            raw = backend.download(index_key(w))
+            doc = json.loads(raw)
+        except Exception:  # noqa: BLE001  無い書き手は飛ばす
+            continue
+        if w == "host":
+            host_ok = now - float(doc.get("written_at") or 0) <= INDEX_STALE_SEC
+        for k, v in (doc.get("entries") or {}).items():
+            if k not in entries or float(v[1]) > float(entries[k][1]):
+                entries[k] = v
+    if not host_ok:
+        return None
+    dirs = list(dict.fromkeys(split_tree(t)[0] for t in trees))
+    cutoff = now - recent_days * 86400
+    oldest = date.today() - timedelta(days=window) if window is not None else None
+    todo: list[str] = []
+    seen = 0
+    for key, (md5, upd) in entries.items():
+        if float(upd) < cutoff:
+            continue
+        rel = key[len(PREFIX) + 1:]
+        d = next((x for x in dirs if rel.startswith(x + "/")), None)
+        if d is None:
+            continue
+        if oldest is not None and d in WINDOWED_DIRS:
+            kd = _date_in_path(rel[len(d) + 1:].split("/"))
+            if kd is not None and kd < oldest:
+                continue
+        seen += 1
+        local = root / rel
+        if not local.is_file() or _md5(local.read_bytes()) != md5:
+            todo.append(key)
+    _download_all(backend, root, todo, workers)
+    return {"seen": seen, "downloaded": len(todo), "via": "index"}
+
+
+def _download_all(backend: Backend, root: Path, todo: list[str], workers: int) -> None:
     def _get(key: str) -> None:
         local = root / key[len(PREFIX) + 1:]
         local.parent.mkdir(parents=True, exist_ok=True)
@@ -284,7 +421,22 @@ def pull(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = TREE
                 hook(todo)
             except Exception:  # noqa: BLE001  フックの失敗で取り込みを止めない
                 logger.warning("gcs_mirror の取り込み後フックが失敗", exc_info=True)
-    return {"seen": seen, "downloaded": len(todo)}
+
+
+class Refresh:
+    """定期の取り込み 1 回分: ふだんは目録だけを読み（pull_via_index）、目録が使えないときと FULL_LIST_SEC ごとに一覧（pull）。"""
+
+    def __init__(self, clock=time.monotonic) -> None:
+        self._clock = clock
+        self._last_full = clock()           # 起動時の取り込み（一覧）の直後から数える
+
+    def __call__(self, backend: Backend, root: Path, *, recent_days: float, window: float | None) -> dict[str, int]:
+        if self._clock() - self._last_full < FULL_LIST_SEC:
+            r = pull_via_index(backend, root, recent_days=recent_days, window=window)
+            if r is not None:
+                return r
+        self._last_full = self._clock()
+        return {**pull(backend, root, recent_days=recent_days, window=window), "via": "list"}
 
 
 _MISS: dict[str, float] = {}
@@ -333,6 +485,8 @@ def _initial_pull(be: Backend, root: Path, recent_days: float) -> None:
 def start_refresher(backend: Backend | None = None, root: Path = REPO_ROOT, *, interval: float = 60.0, recent_days: float = 2.0) -> threading.Thread:
     """Cloud Run 用（CPU 常時割り当て）: 起動時に全部を取り込み、以降は interval 秒ごとに直近の更新分だけを取り込む常駐スレッド。失敗しても API は止めない。
     リクエスト課金（CPU はリクエスト中だけ）では、リクエストの合間にスレッドが止まるので ``start_initial`` と ``RequestRefresher`` を使う。"""
+    refresh = Refresh()
+
     def run() -> None:
         be = backend
         first = True
@@ -343,7 +497,7 @@ def start_refresher(backend: Backend | None = None, root: Path = REPO_ROOT, *, i
                     _initial_pull(be, root, recent_days)
                     first = False
                 else:
-                    r = pull(be, root, recent_days=recent_days, window=window_days())
+                    r = refresh(be, root, recent_days=recent_days, window=window_days())
                     if r["downloaded"]:
                         logger.info("gcs_mirror pull: %s", r)
             except Exception as exc:  # noqa: BLE001
@@ -384,6 +538,7 @@ class RequestRefresher:
         self._running = False
         self._last_start = clock()      # 起動時の取り込み直後から数える
         self._last_ok = clock()
+        self._refresh = Refresh(clock)
 
     def should_wait(self) -> bool:
         return self._clock() - self._last_ok >= self.wait_gap
@@ -399,7 +554,7 @@ class RequestRefresher:
         def run() -> None:
             try:
                 be = self.backend = self.backend or GcsBackend()
-                r = pull(be, self.root, recent_days=self.recent_days, window=window_days())
+                r = self._refresh(be, self.root, recent_days=self.recent_days, window=window_days())
                 self._last_ok = self._clock()
                 if r["downloaded"]:
                     logger.info("gcs_mirror pull: %s", r)
@@ -429,7 +584,7 @@ def push_trees(trees: list[str] | tuple[str, ...], *, since_epoch: float | None 
     """Jobs が作った出力（予測・ラップ予想など）を ops/mirror へ上げる。since_epoch 以降に更新されたファイルだけ。"""
     be = backend or GcsBackend()
     recent = (time.time() - since_epoch) / 86400 if since_epoch else None
-    return push(be, root, tuple(trees), recent_days=recent)
+    return push(be, root, tuple(trees), recent_days=recent, index_writer="jobs")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -453,7 +608,9 @@ def main(argv: list[str] | None = None) -> int:
     else:
         manifest = Path(a.manifest) if a.manifest else REPO_ROOT / "data/local/meta" / (
             "gcs_mirror_push_manifest_auth.json" if a.only_auth else "gcs_mirror_push_manifest.json")
-    print(push(be, trees=trees, recent_days=a.recent_days, dry_run=a.dry_run, manifest=manifest, verify_remote=a.verify_remote)
+    writer = "auth" if a.only_auth else "host"
+    print(push(be, trees=trees, recent_days=a.recent_days, dry_run=a.dry_run, manifest=manifest, verify_remote=a.verify_remote,
+               index_writer=None if manifest is None else writer)
           if a.action == "push" else pull(be, recent_days=a.recent_days))
     return 0
 

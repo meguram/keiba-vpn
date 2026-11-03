@@ -300,6 +300,13 @@ def names(x: pd.DataFrame, col: str, qcol: str) -> str:
     return "、".join(f"{r['sire']}（{pt(r[col])}、{qeq(r[qcol])}）" for _, r in x.iterrows())
 
 
+def polite(s: str) -> str:
+    """「〜有意でない」「〜有意」で終わる短い文を、です・ます調にする（要約用）。"""
+    if s.endswith("有意でない"):
+        return s[: -len("有意でない")] + "有意ではありません"
+    return s + "です" if s.endswith("有意") else s
+
+
 def article(a: dict[str, Any]) -> dict[str, Any]:
     t: pd.DataFrame = a["t"]
     T = t.set_index("sire")
@@ -338,7 +345,21 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
                + f"（補正前 p={qfmt(E['p'])}、多重比較の補正後 {qeq(E['q'])}）。"
                f"2〜3 歳の成績をそろえると {pt(E['da'])}（{qeq(E['qa'])}）、オッズの見込みとの差では {pt(E['dr_vs'])}（{qeq(E['qr'])}）です。"
                + ("どの物差しでも補正後は有意でなく、「やや早く落ちる傾向はあるが、偶然と区別できるほどではない」というのがデータの答えです。" if not epi_sig
+                  else "そのままの変化では補正後も有意ですが、2〜3 歳の成績をそろえる・オッズの見込みと比べると差は縮んで有意でなくなります。"
+                  "若いころによく走った分の反動（平均への回帰・クラスの上昇）が大きく、市場もその落ち方をある程度織り込んでいる、というのがデータの答えです。"
+                  if epi_sig == [MEASURES[0][2]]
                   else f"{'・'.join(epi_sig)}で有意です。"))
+    # エピファネイアの短い言い方（要約・まとめ・タイトルで使う）
+    if not epi_sig:
+        epi_short = f"エピファネイアは全産駒より {abs(E['d_vs']) * 100:.1f}pt {'大きく' if E['d_vs'] < 0 else '小さく'}落ちるが、補正後は有意でない（{qeq(E['q'])}）"
+        epi_title = "同じ馬で比べると、はっきりした差はない"
+    elif epi_sig == [MEASURES[0][2]]:
+        epi_short = (f"エピファネイアは全産駒より {abs(E['d_vs']) * 100:.1f}pt {'大きく' if E['d_vs'] < 0 else '小さく'}落ちる（補正後 {qeq(E['q'])}）が、"
+                     f"2〜3 歳の成績をそろえると {pt(E['da'])}（{qeq(E['qa'])}）、見込みとの差では {pt(E['dr_vs'])}（{qeq(E['qr'])}）で有意でない")
+        epi_title = "落ち方は大きいが、若いころの好成績の反動を除くと有意差なし"
+    else:
+        epi_short = f"エピファネイアは全産駒より {abs(E['d_vs']) * 100:.1f}pt {'大きく' if E['d_vs'] < 0 else '小さく'}落ち、{'・'.join(epi_sig)}で補正後も有意"
+        epi_title = "同じ馬で比べても、全産駒より早く落ちる"
     robust_txt = ("3 つの物差しのうち 2 つ以上で同じ向きに有意なのは、"
                   + ("早熟寄り " + "、".join(early) if early else "")
                   + ("、" if early and late else "")
@@ -346,7 +367,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
                   + " だけです。" if robust else "3 つの物差しのうち 2 つ以上で同じ向きに有意な種牡馬はいません。")
     verdict = "partial" if robust or any(len(v) for v in nsig.values()) else "not_supported"
     head = early[0] if early else None
-    title = "エピファネイアは早熟？——同じ馬で比べると" + (f"、はっきり早く落ちるのは{head}" if head and head != HEADLINE else "")
+    title = "エピファネイアは早熟？——" + (f"同じ馬で比べると、はっきり早く落ちるのは{head}" if head and head != HEADLINE else epi_title)
 
     corr_txt = (f"種牡馬ごとの体重の伸び（同じ馬の 4 歳以上 − 2〜3 歳の平均体重。性別の平均を引いたもの）と、年齢での成績の落ち方の相関は、"
                 f"そのままの変化で r={pr_s:+.2f}（{pfmt(pp_s)}）、2〜3 歳の成績をそろえた変化で r={pr_a:+.2f}（{pfmt(pp_a)}）、見込みとの差で r={pr_r:+.2f}（{pfmt(pp_r)}）です"
@@ -408,7 +429,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
             "・年齢別の成績をそのまま比べると、生き残りの偏りとクラスの上昇が混ざる。同じ馬の 2〜3 歳と 4 歳以上で比べるのが妥当。\n"
             f"・同じ馬で比べると、全産駒でも 4 歳以上で複勝率は {pt(a['all_d'])} 変わる。血統によって変わり方が違うこと自体は有意だが、1 頭ずつの差ははっきりしない。\n"
             + (f"・物差しを変えても早く落ちるのは {'、'.join(early)}。" if early else "") + (f"4 歳以降も保つのは {'、'.join(late)}。" if late else "") + ("\n" if robust else "")
-            + f"・エピファネイアは全産駒より {abs(E['d_vs']) * 100:.1f}pt {'大きく' if E['d_vs'] < 0 else '小さく'}落ちるが、補正後は有意でない（{qeq(E['q'])}）。\n"
+            + f"・{epi_short}。\n"
             f"・体重が伸びない種牡馬・馬ほど早く落ちる、という関係は見られない（種牡馬 r={pr_s:+.2f}、馬 r={ch[0]:+.3f}）。")},
         {"type": "link", "href": "/analysis", "label": "めぐ分析で出走馬の血統を見る", "desc": "種牡馬×コースなど、今週のレースの血統別成績を確認できます。"},
         {"type": "accordion", "title": "データと方法・注意点", "blocks": [
@@ -431,14 +452,13 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
         "summary": (f"同じ馬の 2〜3 歳と 4 歳以上を比べると、全産駒でも複勝率は {pt(a['all_d'])} 変わります。"
                     f"主要 {len(t)} 種牡馬のうち、物差しを変えても全産駒と落ち方が違うのは {len(robust)} 頭"
                     + (f"（{'、'.join(robust)}）" if robust else "")
-                    + f"。エピファネイアは {pt(E['d_vs'])} で、多重比較の補正後は有意でありません。体重が伸びない血統ほど早熟、という関係も見られませんでした。"),
+                    + f"。{polite(epi_short)}。体重が伸びない血統ほど早熟、という関係も見られませんでした。"),
         "categories": ["bloodline/maturity"],
         "published": "2026-10-28",
         "updated": "2026-11-02",
         "dataset": {"period": f"{min(YEARS)}〜{max(YEARS)}年",
                     "conditions": f"JRA全競馬場・芝ダート（障害除く）。主要種牡馬は産駒の出走 {MIN_RUNS:,} 以上",
                     "sample": f"{a['n_runs']:,} 走（{a['n_horses_all']:,} 頭・{a['n_sires_all']:,} 種牡馬）。同じ馬の比較 {nh:,} 頭"},
-        "draft": True,          # 公開（prod に出す）かどうかは人が決める。stg・開発環境では表示される
         "body": body,
     }
 

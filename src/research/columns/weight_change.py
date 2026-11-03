@@ -222,6 +222,8 @@ def analyze(d: pd.DataFrame) -> dict[str, Any]:
     ps = [a["adj"][g]["top3"][2] for g in CLASSES]
     for g, ph in zip(CLASSES, holm(ps)):
         a["adj"][g]["top3_holm"] = ph
+    for g, ph in zip(CLASSES, holm([a["adj"][g]["win"][2] for g in CLASSES])):
+        a["adj"][g]["win_holm"] = ph
     # 区分の中身（年齢・休養）
     a["profile"] = {g: {"age": d.loc[d["cls"] == g, "age"].mean(), "rest": d.loc[d["cls"] == g, "rest"].median(),
                         "gain": d.loc[d["cls"] == g, "gain"].mean(), "young": (d.loc[d["cls"] == g, "age"] <= 3).mean(),
@@ -343,7 +345,8 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
             return "はっきりした差がなく"
         return ("わずかに" if abs(e) < 0.02 else "") + ("高く" if e > 0 else "低く")
 
-    robust_sign = {g: sorted({np.sign(round(r[g]["ex_top3"], 3)) for r in a["robust"]}) for g in (BACK, GROW, FAT)}
+    # 表示で ±0.0pt になる差（|差| < 0.05pt）は向きを持たないとみなす
+    robust_sign = {g: sorted({np.sign(round(r[g]["ex_top3"], 3)) for r in a["robust"]} - {0.0}) for g in (BACK, GROW, FAT)}
     stable = all(len(v) == 1 for v in robust_sign.values())
 
     body: list[dict[str, Any]] = [
@@ -361,10 +364,13 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
             f"『太め』（休み明けでも若駒でもないのに過去最高を超えた、またはベスト体重を 8kg 以上超えた）は {ft['n']:,} 走で、複勝率 {pct(ft['top3'])}・見込みとの差 {pt(ft['ex_top3'])}。"
             f"『ベスト体重へ戻り』（好走時の体重の ±4kg に戻った）は {bk['n']:,} 走で {pct(bk['top3'])}・{pt(bk['ex_top3'])}。"
             f"『成長』（休み明けか 2〜3 歳で過去最高を更新）は {gr['n']:,} 走で {pct(gr['top3'])}・{pt(gr['ex_top3'])} です。\n\n"
-            f"オッズとコースをそろえて「変わらず」と比べると、複勝率は太めが{sig_dir(FAT)}（{A[FAT]['top3'][0] * 100:+.1f}pt、補正後 {pfmt(A[FAT]['top3_holm'])}）、"
-            f"成長も{sig_dir(GROW)}（{A[GROW]['top3'][0] * 100:+.1f}pt、補正後 {pfmt(A[GROW]['top3_holm'])}）、"
+            f"オッズとコースをそろえて「変わらず」と比べると、複勝率は太めは{sig_dir(FAT)}（{A[FAT]['top3'][0] * 100:+.1f}pt、補正後 {pfmt(A[FAT]['top3_holm'])}）、"
+            f"成長は{sig_dir(GROW)}（{A[GROW]['top3'][0] * 100:+.1f}pt、補正後 {pfmt(A[GROW]['top3_holm'])}）、"
             f"ベスト体重へ戻りは{sig_dir(BACK)}（{A[BACK]['top3'][0] * 100:+.1f}pt、補正後 {pfmt(A[BACK]['top3_holm'])}）、という結果です。"
-            f"勝率で見ると、成長（{A[GROW]['win'][0] * 100:+.1f}pt、{pfmt(A[GROW]['win'][2])}）とベスト体重へ戻り（{A[BACK]['win'][0] * 100:+.1f}pt、{pfmt(A[BACK]['win'][2])}）はむしろ見込みをわずかに上回る傾向ですが、有意ではありません。"
+            f"勝率で見ると、成長（{A[GROW]['win'][0] * 100:+.1f}pt、{pfmt(A[GROW]['win'][2])}）とベスト体重へ戻り（{A[BACK]['win'][0] * 100:+.1f}pt、{pfmt(A[BACK]['win'][2])}）はむしろ見込みをわずかに上回る傾向ですが、"
+            + ("有意ではありません。" if min(A[GROW]["win"][2], A[BACK]["win"][2]) >= 0.05
+               else f"4 区分を同時に見ていることを補正すると有意ではありません（補正後 {pfmt(A[GROW]['win_holm'])}・{pfmt(A[BACK]['win_holm'])}）。"
+               if max(A[GROW]["win_holm"], A[BACK]["win_holm"]) >= 0.05 else "補正後も有意です。")
             + ("閾値を変えても、3 区分の見込みとの差の向きは変わりませんでした。" if stable else "ただし閾値を変えると向きが変わる区分があり、結論は閾値に左右されます（下の表）。")
             + "\n\nつまり「増えた理由」で成績の傾向は分かれますが、差は 1〜2pt 程度で、多くは人気（オッズ）にすでに表れています。"
             "『成長』でも見込みを上回るわけではなく、ベスト体重へ戻った馬だけが変わらずの馬と同じくらい走る、というのが実際のところです。")},
@@ -383,7 +389,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
         age_chart,
         age_table,
         {"type": "text", "text": (
-            f"太めは 3〜5 歳で見込みを下回り（3 歳 {pt(age[FAT]['3歳'])}・4 歳 {pt(age[FAT]['4歳'])}・5 歳 {pt(age[FAT]['5歳'])}）、6 歳以上では {pt(age[FAT]['6歳以上'])} と差がなくなります。"
+            f"太めは 3〜5 歳で見込みを下回り（3 歳 {pt(age[FAT]['3歳'])}・4 歳 {pt(age[FAT]['4歳'])}・5 歳 {pt(age[FAT]['5歳'])}）、6 歳以上では {pt(age[FAT]['6歳以上'])} と見込みを下回らなくなります。"
             f"成長は 2 歳で {pt(age[GROW]['2歳'])} と見込みを上回る一方、3 歳では {pt(age[GROW]['3歳'])} です。"
             f"ただ 2 歳は体重が変わらない馬も {pt(age[SAME]['2歳'])} と見込みを上回っており（2 歳戦は人気の見込みが粗い）、2 歳の大幅増に特別な上積みがあるとは言えません。"
             "3 歳以降の大幅増は、休み明けや若さで説明がつきそうに見えても、見込みを少し下回りがちです。"

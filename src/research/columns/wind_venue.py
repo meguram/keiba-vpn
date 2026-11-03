@@ -74,10 +74,11 @@ def home_headings() -> pd.DataFrame:
 
 def load() -> pd.DataFrame:
     cols = ["race_id", "date", "venue", "venue_code", "surface", "distance", "field_size", "finish_position", "horse_id", "horse_number",
-            "odds", "popularity", "grade", "track_condition", "start_time", "passing_order", "last_3f"]
+            "odds", "popularity", "grade", "track_condition", "start_time", "passing_order", "last_3f", "race_name", "race_class"]
     years = [y for y in range(FIRST_YEAR - 1, LAST_YEAR + 1) if (TABLES / str(y) / "race_result_flat.parquet").exists()]
     r = pd.concat([pd.read_parquet(TABLES / str(y) / "race_result_flat.parquet", columns=cols) for y in years], ignore_index=True)
-    r = r[r["surface"].isin(["芝", "ダート"])].copy()
+    from src.research.columns.compare_series import jump_mask      # 障害レース（surface が芝・ダートのものも）を除く
+    r = r[r["surface"].isin(["芝", "ダート"]) & ~jump_mask(r)].drop(columns=["race_name", "race_class"]).copy()
     r["venue_code"] = r["venue_code"].astype(str).str.zfill(2)
     r["date"] = pd.to_datetime(r["date"].astype(str).str[:10])
     r["fin"] = pd.to_numeric(r["finish_position"], errors="coerce")
