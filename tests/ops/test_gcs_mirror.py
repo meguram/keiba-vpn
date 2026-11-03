@@ -524,3 +524,66 @@ def test_index_drops_entries_older_than_the_refresh_window():
     now = time.time()
     kept = gm._prune({"a": ["x", now - 10], "b": ["y", now - gm.INDEX_KEEP_SEC - 10]}, now)
     assert set(kept) == {"a"}
+
+
+def test_bundle_round_trip_keeps_only_tree_files_and_rejects_old_or_broken(tmp_path):
+    """費用の上限: API の起動時の取り込みを、ファイル 1 つずつ（約 6,000 回）ではなく束 1 回の読み出しにする。"""
+    host, api = tmp_path / "host", tmp_path / "api"
+    _w(host, "data/local/meta/entries_state/R1.json", b"s")
+    _w(host, "data/local/inference/predictions_v3/20261024/R1.parquet", b"a")
+    data = gm.build_bundle(host, TREES, window=14)
+    got = gm.extract_bundle(data, api, TREES)
+    assert got["files"] == 2 and (api / "data/local/meta/entries_state/R1.json").read_bytes() == b"s"
+    assert set(got["trees"]) == set(TREES)
+    assert gm.extract_bundle(data, tmp_path / "x", TREES, now=time.time() + gm.BUNDLE_MAX_AGE_SEC + 60) is None   # 古い束は使わない
+    assert gm.extract_bundle(b"not a tar", tmp_path / "y", TREES) is None
+
+
+def test_bundle_extract_ignores_paths_outside_the_trees(tmp_path):
+    import io
+    import tarfile
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        for name, body in (("_bundle.json", b'{"built_at": %d, "trees": []}' % int(time.time())), ("../evil.txt", b"x"),
+                           ("/etc/evil", b"x"), ("data/other/x.json", b"x"), ("data/local/meta/entries_state/ok.json", b"ok")):
+            ti = tarfile.TarInfo(name); ti.size = len(body); tf.addfile(ti, io.BytesIO(body))
+    got = gm.extract_bundle(buf.getvalue(), tmp_path / "api", TREES)
+    assert got["files"] == 1 and (tmp_path / "api/data/local/meta/entries_state/ok.json").is_file()
+    assert not (tmp_path / "evil.txt").exists() and not (tmp_path / "api/data/other").exists()
+
+
+def test_host_push_uploads_the_bundle_once_a_day_and_api_starts_from_it(tmp_path, monkeypatch):
+    g = GenFake()
+    host, api = tmp_path / "host", tmp_path / "api"
+    man = tmp_path / "manifest.json"
+    _w(host, "data/local/meta/entries_state/R1.json", b"s")
+    monkeypatch.setattr(gm, "TREES", TREES)
+    gm.push(g, host, TREES, manifest=man, index_writer="host")
+    assert gm.BUNDLE_KEY in g.objs
+    ups = g.uploads
+    gm.push(g, host, TREES, manifest=man, index_writer="host")
+    assert g.uploads == ups + 1                                                # 2 回目は目録だけ（束は 1 日 1 回）
+    lists = g.lists
+    out = gm._initial_from_bundle(g, api, 2.0)
+    assert out["bundle_files"] == 1 and (api / "data/local/meta/entries_state/R1.json").read_bytes() == b"s"
+    assert g.lists == lists + 1                                                # 一覧するのは束に無い木（ホストにファイルが無い 1 か所）だけ
+
+
+def test_initial_pull_falls_back_to_listing_without_a_bundle(tmp_path, monkeypatch):
+    g = GenFake()
+    monkeypatch.setattr(gm, "TREES", TREES)
+    _w(tmp_path / "h", "data/local/meta/entries_state/R1.json", b"s")
+    gm.push(g, tmp_path / "h", TREES)                                         # 束も目録も無い
+    gm.initial_recent_pulled.clear(); gm.initial_full_pulled.clear()
+    gm._initial_pull(g, tmp_path / "a", 2.0)
+    assert (tmp_path / "a/data/local/meta/entries_state/R1.json").read_bytes() == b"s"
+    assert gm.initial_recent_pulled.is_set() and gm.initial_full_pulled.is_set()
+
+
+def test_bundle_never_contains_the_members_file(tmp_path):
+    _w(tmp_path, "data/local/auth/members.json", b'{"u": "hash"}')
+    _w(tmp_path, "data/local/meta/entries_state/R1.json", b"s")
+    got = gm.extract_bundle(gm.build_bundle(tmp_path, TREES + gm.AUTH_TREES, window=14), tmp_path / "api", TREES + gm.AUTH_TREES)
+    assert got["files"] == 1 and not (tmp_path / "api/data/local/auth/members.json").exists()
+    assert not any(t in gm.AUTH_TREES for t in got["trees"])

@@ -165,6 +165,86 @@ def write_index_merge(backend: Backend, writer: str, new: dict[str, list], *, tr
     return False
 
 
+# ── 起動時の取り込みの束（_bundle/） ─────────────────────────────────────
+# 費用の上限（CLAUDE.md）: API は起動のたびに参照データ約 6,000 ファイルを 1 つずつ読んでいた（1 回約 0.4 円）。アクセスが 15 分以上
+# あくたびに起動し直すので、最悪 1 日 90 回・月 1,100 円になりうる。ホストが 1 日 1 回、起動時に要る分を 1 つの束にして置き、
+# API は起動時にそれを 1 回読む（＋その後の更新は目録で）。束が無い・古い・壊れているときは従来どおり一覧で取り込む。
+BUNDLE_KEY = f"{PREFIX}/_bundle/base.tar.gz"
+BUNDLE_EVERY_SEC = 20 * 3600          # ホストが束を作り直す間隔
+BUNDLE_MAX_AGE_SEC = 36 * 3600        # これより古い束は使わない（目録は直近 2 日分なので、その内側に収める）
+
+
+BUNDLE_TREES = tuple(t for t in TREES if t not in AUTH_TREES)   # 会員名簿は束に入れない（従来どおり個別に取り込む）
+
+
+def build_bundle(root: Path = REPO_ROOT, trees: tuple[str, ...] = BUNDLE_TREES, *, window: float | None = None, now: float | None = None) -> bytes:
+    """起動時の取り込み（pull(window=...) と同じ範囲）のファイルを tar.gz に束ねる。先頭の _bundle.json に作った時刻と含む木。
+    会員名簿（AUTH_TREES）は渡されても入れない。"""
+    trees = tuple(t for t in trees if t not in AUTH_TREES)
+    import io
+    import tarfile
+
+    now = time.time() if now is None else now
+    window = window_days() if window is None else window
+    oldest = date.fromtimestamp(now) - timedelta(days=window)
+    buf = io.BytesIO()
+    included: list[str] = []
+    with tarfile.open(fileobj=buf, mode="w:gz", compresslevel=6) as tf:
+        files: list[tuple[str, Path]] = []
+        for tree in trees:
+            d = split_tree(tree)[0]
+            got = _files(root, tree)
+            if got:
+                included.append(tree)
+            for f in got:
+                rel = f.relative_to(root).as_posix()
+                if d in WINDOWED_DIRS:
+                    kd = _date_in_path(rel[len(d) + 1:].split("/"))
+                    if kd is not None and kd < oldest:
+                        continue
+                files.append((rel, f))
+        meta = json.dumps({"built_at": now, "trees": included, "files": len(files)}).encode()
+        ti = tarfile.TarInfo("_bundle.json"); ti.size = len(meta); ti.mtime = int(now)
+        tf.addfile(ti, io.BytesIO(meta))
+        for rel, f in files:
+            tf.add(str(f), arcname=rel, recursive=False)
+    return buf.getvalue()
+
+
+def extract_bundle(data: bytes, root: Path = REPO_ROOT, trees: tuple[str, ...] = TREES, *, now: float | None = None) -> dict | None:
+    """束を root に展開する。木の外のパス・絶対パス・.. を含むものは捨てる。古い・壊れている束は None（何も書かない）。"""
+    import io
+    import tarfile
+
+    now = time.time() if now is None else now
+    dirs = [split_tree(t)[0] for t in trees]
+    try:
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
+            mf = tf.extractfile("_bundle.json")
+            meta = json.loads(mf.read()) if mf else {}
+            if now - float(meta.get("built_at") or 0) > BUNDLE_MAX_AGE_SEC:
+                return None
+            n = 0
+            for m in tf.getmembers():
+                name = m.name
+                if not m.isfile() or name == "_bundle.json" or name.startswith("/") or ".." in name.split("/"):
+                    continue
+                if not any(name.startswith(d + "/") for d in dirs):
+                    continue
+                src = tf.extractfile(m)
+                if src is None:
+                    continue
+                local = root / name
+                local.parent.mkdir(parents=True, exist_ok=True)
+                tmp = local.with_name(local.name + ".tmp")
+                tmp.write_bytes(src.read())
+                os.replace(tmp, local)
+                n += 1
+    except (tarfile.TarError, OSError, ValueError, KeyError):
+        return None
+    return {"files": n, "built_at": meta.get("built_at"), "trees": meta.get("trees") or []}
+
+
 def _md5(data: bytes) -> str:
     return base64.b64encode(hashlib.md5(data).digest()).decode()
 
@@ -198,10 +278,11 @@ def _read_manifest_doc(path: Path | None) -> dict | None:
         return None
 
 
-def _save_manifest(path: Path, known: dict[str, str], recent: dict[str, list] | None = None) -> None:
+def _save_manifest(path: Path, known: dict[str, str], recent: dict[str, list] | None = None, bundle_at: float = 0.0) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps({"version": 1, "md5": known, "recent": recent or {}}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    tmp.write_text(json.dumps({"version": 1, "md5": known, "recent": recent or {}, "bundle_at": bundle_at},
+                              ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     os.replace(tmp, path)
 
 
@@ -267,8 +348,15 @@ def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH
                     flush()
     flush()
     recent = _prune(recent, time.time())
+    bundle_at = float((mdoc or {}).get("bundle_at") or 0.0)
+    if index_writer == "host" and manifest is not None and not dry_run and time.time() - bundle_at >= BUNDLE_EVERY_SEC:
+        try:      # 1 日 1 回、API の起動時の取り込みを 1 回の読み出しで済ませる束を置く
+            backend.upload(BUNDLE_KEY, build_bundle(root))
+            bundle_at = time.time()
+        except Exception:  # noqa: BLE001  束は補助（無ければ API は従来どおり一覧で取り込む）
+            logger.warning("起動時の取り込みの束を置けませんでした", exc_info=True)
     if manifest is not None and not dry_run:
-        _save_manifest(manifest, known, recent)
+        _save_manifest(manifest, known, recent, bundle_at)
     if index_writer and not dry_run:
         try:
             if manifest is not None:
@@ -470,9 +558,34 @@ initial_recent_pulled = threading.Event()      # 起動直後の「直近分」�
 initial_full_pulled = threading.Event()        # 起動直後の「全体」の取り込みまで終わった（成否を問わず）。リクエスト課金では、起動の完了前に済ませる
 
 
-def _initial_pull(be: Backend, root: Path, recent_days: float) -> None:
-    """起動直後は直近分を先に（表示に要る分を数秒で）、続けて全体。失敗しても API は止めない。"""
+def _initial_from_bundle(be: Backend, root: Path, recent_days: float) -> dict | None:
+    """束から起動時の取り込みを済ませる（読み出し 1 回＋目録）。束に無い木（会員名簿など）は一覧で取る。使えなければ None。"""
     try:
+        got = extract_bundle(be.download(BUNDLE_KEY), root)
+    except Exception:  # noqa: BLE001  束が無い・読めない
+        return None
+    if got is None:
+        return None
+    try:
+        after = pull_via_index(be, root, recent_days=recent_days, window=window_days())
+        if after is None:                 # ホストの目録が使えない → 直近分は一覧で
+            after = pull(be, root, recent_days=recent_days, window=window_days())
+        missing = tuple(t for t in TREES if t not in set(got["trees"]))
+        rest = pull(be, root, missing, window=window_days()) if missing else {"downloaded": 0}
+    except Exception:  # noqa: BLE001  束の後の追いつきに失敗 → 呼び出し側が従来の一覧で取り直す
+        logger.warning("束の後の取り込みに失敗。一覧で取り直します", exc_info=True)
+        return None
+    return {"bundle_files": got["files"], "recent": after, "not_in_bundle": rest}
+
+
+def _initial_pull(be: Backend, root: Path, recent_days: float) -> None:
+    """起動直後は束（あれば）、無ければ直近分を先に（表示に要る分を数秒で）続けて全体。失敗しても API は止めない。"""
+    try:
+        b = _initial_from_bundle(be, root, recent_days)
+        if b is not None:
+            initial_recent_pulled.set()
+            logger.info("gcs_mirror pull(束): %s", b)
+            return
         try:
             logger.info("gcs_mirror pull(直近): %s", pull(be, root, recent_days=recent_days, window=window_days()))
         finally:
