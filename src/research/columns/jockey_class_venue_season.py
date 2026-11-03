@@ -23,8 +23,10 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from scipy.stats import binom
 
 from src.research.columns import jockey_common as jc
+from src.research.columns.jockey_change import loyo_ranks
 
 REPO = Path(__file__).resolve().parents[3]
 OUT = REPO / "frontend/content/columns/jockey-class-venue-season.json"
@@ -73,13 +75,15 @@ def jockey_chart(d: pd.DataFrame, t: pd.DataFrame, col: str, ids: list[str], nam
     }
 
 
-def rank_class_chart(d: pd.DataFrame, R: pd.DataFrame) -> tuple[dict[str, Any], dict[str, Any], dict[str, list[dict[str, Any]]]]:
-    d = jc.level_adjusted(d, "cls", "top3").assign(rank=d["jockey_id"].map(R["rank"]))
+def rank_class_chart(d: pd.DataFrame, rank: pd.Series) -> tuple[dict[str, Any], dict[str, Any], dict[str, list[dict[str, Any]]]]:
+    """rank: 出走ごとの今走の騎手のランク（その年を除いた年から決めたもの）。"""
+    d = jc.level_adjusted(d, "cls", "top3").assign(rank=rank)
     cells = {k: [jc.cell(d[(d["rank"] == k) & (d["cls"] == c)], "top3") for c in jc.CLASSES] for k in jc.RANKS}
     diff = {"type": "chart", "title": "騎手ランク別 クラスごとの 複勝率の 実際 − 人気の見込み", "xLabel": "クラス", "yLabel": "実際 − 見込み（pt）",
             "xs": jc.CLASSES, "format": "pt", "minN": CHART_MIN_N,
             "series": [{"name": f"{k} ランク", **jc.chart_values(cells[k], "diff")} for k in jc.RANKS],
-            "caption": "ランクは jockey-change と同じ（2020〜2025年に 300 騎乗以上の騎手を、縮めた複勝率で S 上位 5%・A 〜25%・B 〜75%・C 〜95%・D 残り）。縦線は 95% 信頼区間。ボタンでランクを切り替え・重ねられる。"}
+            "caption": "ランクは jockey-change と同じ（300 騎乗以上の騎手を、縮めた複勝率で S 上位 5%・A 〜25%・B 〜75%・C 〜95%・D 残り。"
+                       "結果を見る年はその年を除いた年の騎乗からランクを決める＝1 年抜きの交差）。縦線は 95% 信頼区間。ボタンでランクを切り替え・重ねられる。"}
     share = {"type": "chart", "title": "騎手ランク別 クラスごとの 複勝率", "xLabel": "クラス", "yLabel": "複勝率", "xs": jc.CLASSES,
              "series": [{"name": f"{k} ランク", **jc.chart_values(cells[k], "rate")} for k in jc.RANKS],
              "caption": "生の複勝率（騎乗馬の強さを含む）。"}
@@ -104,9 +108,10 @@ def analyze(d: pd.DataFrame) -> dict[str, Any]:
     ids = jc.kana_order(cnt[cnt >= MIN_RIDES].index.tolist(), names)
     tables = {col: jc.two_axis(d, ids, col, levels, "top3") for col, (_, levels) in DIMS.items()}
     R = jc.ranks(d, RANK_MIN_RIDES)
-    diff_chart, rate_chart, rc = rank_class_chart(d, R)
+    # 結果を見る出走のランクは、その年を除いた年から決める（ランクの元の成績と結果が同じ出走で重ならないように）
+    rk = loyo_ranks(d)["rank_now"]
+    diff_chart, rate_chart, rc = rank_class_chart(d, rk)
     cls_all = {c: jc.cell(d[d["cls"] == c], "top3") for c in jc.CLASSES}
-    rk = d["jockey_id"].map(R["rank"])
     rank_all = {k: jc.cell(d[rk == k], "top3") for k in jc.RANKS}
     return {"rank_all": rank_all, "names": names, "ids": ids, "tables": tables, "R": R, "diff_chart": diff_chart, "rate_chart": rate_chart, "rc": rc,
             "cls_all": cls_all, "n_runs": len(d), "d": d}
@@ -130,6 +135,8 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
     i = {c: k for k, c in enumerate(jc.CLASSES)}
     sig = [(k, c, x) for k in jc.RANKS for c, x in zip(jc.CLASSES, rc[k])
            if x["diff_ci"] and x["n"] >= CHART_MIN_N and (x["diff_ci"][0] > 0 or x["diff_ci"][1] < 0)]
+    p_tail = float(binom.sf(len(sig) - 1, 35, 0.05))        # 差が無くても、35 点のうち len(sig) 点以上が 0 から外れる確率
+    n_low = sum(1 for k, c, x in sig if k in ("C", "D") and c in ("未勝利", "1勝") and x["diff"] < 0)
     sig_txt = "、".join(f"{k} ランクの{c}（{jc.pt(x['diff'])}、{jc.pt_ci(x['diff_ci'])}、{x['n']:,}走）" for k, c, x in sig) or "ありません"
     s_all = a["rank_all"]["S"]
     flag_rows = flagged(tables["cls"], names) + flagged(tables["venue"], names) + flagged(tables["season"], names)
@@ -167,11 +174,17 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
             f"人気からの見込みとの差で見ると、ランクの差はほぼ消えます（S ランク: {rk_line('S')}。B ランク: {rk_line('B')}）。"
             f"ランク × クラスの 35 点のうち、95% 区間が 0 をまたがないのは {sig_txt}。"
 
-            + ("35 点を同時に見れば 1〜2 点は偶然でも外れるので、クラスによって騎手の上積みが大きく変わる、という傾向ははっきりしません。"
-               if len(sig) <= 3 else
+            + ("35 点を同時に見れば 1〜2 点は偶然でも外れるので、クラスによって騎手の上積みが変わる、という傾向は見えません。"
+               if len(sig) <= 2 else
+               f"35 点を同時に見れば 1〜2 点は偶然でも外れ、{len(sig)} 点以上が偶然で出る確率も約 {p_tail * 100:.0f}% あるので、"
+               "クラスによって騎手の上積みが変わる、とまでは言えません。"
+               + ("C・D ランクの未勝利・1 勝クラスのマイナスは向きがそろっていますが、差は小さく、候補にとどまります。" if n_low >= 2 else "")
+               if p_tail >= 0.05 else
                f"35 点を同時に見れば 1〜2 点は偶然でも外れますが、{len(sig)} 点はそれより多く、"
-               "下位ランク（C・D）の騎手は下級条件（未勝利・1 勝）で人気ほど走らず、S ランクは 3 勝クラス・OP で人気ほど走らない、という形がうかがえます。"
-               "ただし差は 1 点あたり 1〜3pt と小さく、区間の端は 0 に近いものが多い点に注意してください。")
+               + (f"そのうち {n_low} 点は下位ランク（C・D）の未勝利・1 勝クラスのマイナスです。下位ランクの騎手は下級条件で人気ほど走らない、という形がうかがえます。"
+                  if n_low >= 2 else "ただ、ランクやクラスにそろった形は見えません。")
+               + f"ただし差は 1 点あたり {min(abs(x['diff']) for _, _, x in sig) * 100:.1f}〜{max(abs(x['diff']) for _, _, x in sig) * 100:.1f}pt と小さく、"
+               "区間の端は 0 に近いものが多い点に注意してください。")
             + "上位騎手の成績が良いのは、どのクラスでも人気馬に乗っているためで、その大半はオッズに織り込まれています。"},
         {"type": "heading", "text": "騎手ごとの 得意クラス・競馬場・季節"},
         {"type": "text", "text":

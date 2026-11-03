@@ -1,8 +1,7 @@
 """騎手コラム（jockey-long-distance・jockey-class-venue-season・jockey-change）で共通に使う集計。
 
-データ: compare_series.load()（2020〜2025 年の JRA 平地、取消・除外を除く）から、さらに障害レースを除く。
-  load() は surface が「芝」「ダート」で絞っているが、障害レースの一部は surface が芝・ダートで入っている
-  （レース名・クラスに「障害」を含む 2020〜2025 年で約 5,800 出走）。騎手の成績では障害の専門騎手が混ざるので、ここで除く。
+データ: compare_series.load()（2020〜2025 年の JRA 平地、取消・除外を除く）。
+  障害レースは surface が芝・ダートで入っているものも load() が除く（compare_series.jump_mask）。
 
 人気から見込まれる率（exp_win・exp_top3）:
   単勝オッズから求めた勝率の見込み implied（1/オッズ をレース内で合計 1 に直したもの）を 50 分位に分け、
@@ -32,7 +31,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from src.research.columns.compare_series import FLAT_DIR, YEARS, _r, _rci, _stat, load
+from src.research.columns.compare_series import FLAT_DIR, YEARS, _r, _rci, _stat, jump_mask, load
 from src.utils.person_reading import kana_sort_key, lookup
 
 CLASSES = ["新馬", "未勝利", "1勝", "2勝", "3勝", "OP・L", "重賞"]
@@ -53,10 +52,10 @@ RANK_CUTS = [0.05, 0.25, 0.75, 0.95]     # 上から 5%・25%・75%・95% の位
 
 
 def jump_race_ids() -> set[str]:
-    cols = ["race_id", "race_name", "race_class"]
+    """障害レースの race_id（load() は既に除いている。前走をたどるときなどの確認用）。"""
+    cols = ["race_id", "race_name", "race_class", "surface", "distance"]
     r = pd.concat([pd.read_parquet(FLAT_DIR / str(y) / "race_result_flat.parquet", columns=cols) for y in YEARS], ignore_index=True)
-    jump = r["race_name"].fillna("").str.contains("障害") | r["race_class"].fillna("").str.contains("障害")
-    return set(r.loc[jump, "race_id"].astype(str))
+    return set(r.loc[jump_mask(r), "race_id"].astype(str))
 
 
 def calibrate(df: pd.DataFrame, bins: int = 50) -> pd.DataFrame:
@@ -82,7 +81,7 @@ def frame() -> pd.DataFrame:
     df["dist9"] = pd.cut(df["distance"], DIST9_EDGES, labels=DIST9).astype(str)
     df["dist4"] = pd.cut(df["distance"], DIST4_EDGES, labels=DIST4).astype(str)
     df["year"] = pd.to_datetime(df["date"]).dt.year
-    # 前走の騎手は、障害を除いたあとの同じ馬の前走で付け直す（load() の prev_jockey は障害の前走も含む）
+    # 前走の騎手は、ここで絞ったあとの同じ馬の前走で付け直す
     df = df.sort_values(["horse_id", "date", "race_id"]).reset_index(drop=True)
     df["prev_jockey"] = df.groupby("horse_id")["jockey_id"].shift()
     return calibrate(df)

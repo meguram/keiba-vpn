@@ -38,11 +38,27 @@ REGION = {"東京": "関東", "中山": "関東", "福島": "関東", "新潟": 
           "中京": "中部", "札幌": "北海道", "函館": "北海道", "小倉": "九州"}
 
 
+# 障害レースの見分け方。race_result_flat の surface は障害レースの多くを「芝」「ダート」で持つ（2020〜2025 年で約 6,600 出走）ので、
+# surface だけでは除けない。レース名（「障害」・重賞やOPの「〜ジャンプS」「〜JS」「スプリングJ」「(JGI〜III)」）・クラスと、
+# 平地に無い距離（2,600m 超で 3,000/3,200/3,400/3,600m 以外）のどれかに当たれば障害とする。
+JUMP_NAME_RE = r"障害|ジャンプ|\(JG|JS\(|スプリングJ\("
+FLAT_LONG_DISTANCES = (3000, 3200, 3400, 3600)
+
+
+def jump_mask(r: pd.DataFrame) -> pd.Series:
+    """障害レースの行なら True（列 race_name・race_class・surface・distance を使う）。"""
+    name = r["race_name"].fillna("").astype(str).str.contains(JUMP_NAME_RE)
+    cls = r["race_class"].fillna("").astype(str).str.contains("障害")
+    dist = pd.to_numeric(r["distance"], errors="coerce")
+    odd_dist = (dist > 2600) & ~dist.isin(FLAT_LONG_DISTANCES)
+    return name | cls | r["surface"].eq("障") | odd_dist
+
+
 def load() -> pd.DataFrame:
     cols = ["race_id", "date", "venue", "surface", "distance", "field_size", "finish_position", "horse_id",
-            "sex_age", "jockey_id", "jockey_name", "odds", "popularity", "grade"]
+            "sex_age", "jockey_id", "jockey_name", "odds", "popularity", "grade", "race_name", "race_class"]
     df = pd.concat([pd.read_parquet(FLAT_DIR / str(y) / "race_result_flat.parquet", columns=cols) for y in YEARS], ignore_index=True)
-    df = df[df["surface"].isin(["芝", "ダート"])].copy()
+    df = df[df["surface"].isin(["芝", "ダート"]) & ~jump_mask(df)].drop(columns=["race_name", "race_class"]).copy()
     # 出走していない馬（取消・除外。オッズも人気もない）は除く。中止・失格など走った馬は「3着以内でない」として残す
     df = df[(df["odds"] > 0) & (df["popularity"] > 0)].copy()
     df["starters"] = df.groupby("race_id")["race_id"].transform("size")      # 実際に走った頭数（field_size は取消・除外を含む）
