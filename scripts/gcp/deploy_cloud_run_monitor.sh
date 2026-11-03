@@ -39,6 +39,7 @@ run gcloud run deploy "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --im
   --command python --args=-m,uvicorn,--factory,src.monitor.cloud_app:asgi_app,--host,0.0.0.0,--port,8080 \
   --set-env-vars "$ENV_VARS" --set-secrets "$SECRETS"
 # 使用中の版を Artifact Registry の自動掃除から守る（live- タグ。2026-11-02 に、監視ポータルの版が掃除で消えていた）
-run gcloud artifacts docker tags add "$IMAGE" "${IMAGE%%[:@]*}:live-monitor" --project "$PROJECT_ID" --quiet
+run gcloud artifacts docker tags add "$IMAGE" "${IMAGE%%[:@]*}:live-monitor" --project "$PROJECT_ID" --quiet \
+  || echo "警告: live-monitor タグを付けられませんでした（自動掃除で消えるおそれ。権限を確認）" >&2
 echo "# 確認: curl -s \$(gcloud run services describe $SERVICE --region $REGION --format='value(status.url)')/api/health   （鍵なしで 200）"
 echo "# 画面: ヘッダ X-Keiba-Proxy-Key 付きで / を開く（前段の VPS nginx / Cloudflare Access が付ける）"

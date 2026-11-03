@@ -42,6 +42,13 @@ API_IMAGE="${REG}/keiba-api:${SHORT}"; JOBS_IMAGE="${REG}/jobs:${SHORT}"
 if [ "$TARGET" = stg ]; then REV_TAG="stg"; else REV_TAG="c${SHORT}"; fi
 export PROJECT_ID GCS_BUCKET REGION SERVICE AR_REPO
 
+tag_live() {  # 使用中の版に live- タグを付け替える（自動掃除から守る）。権限不足などで失敗しても配備は止めず、警告にとどめる
+  # 付け替えには artifactregistry.tags.delete が要る（配備用 SA に repoAdmin。docs/operations/github_promote.md）
+  if [ "$DRY" = 1 ]; then printf '+ gcloud artifacts docker tags add %q %q --quiet\n' "$1" "$2"; return 0; fi
+  if ! gcloud artifacts docker tags add "$1" "$2" --quiet; then
+    echo "::warning title=live タグを付けられません::$2 を付けられませんでした。2 日後の自動掃除で使用中の版が消えるおそれがあります（配備用 SA の権限を確認）"
+  fi
+}
 run() {  # 表示して、--dry-run でなければ実行。失敗したら、出力の末尾を GitHub の注釈にも出す（ログの閲覧に管理者権限が要らないように）
   printf '+'; printf ' %q' "$@"; printf '\n'
   [ "$DRY" != 1 ] || return 0
@@ -121,7 +128,7 @@ case "$STEP" in
       [ -z "${GITHUB_OUTPUT:-}" ] || echo "tag_url=$url" >> "$GITHUB_OUTPUT"
     fi
     # 使用中の版に印を付け、自動掃除で消されないようにする（タグは付け替わる。保持の決まりは deploy_cloud_run_api.sh）
-    if [ "$TARGET" = stg ]; then run gcloud artifacts docker tags add "$API_IMAGE" "${REG}/keiba-api:live-stg" --quiet; fi
+    if [ "$TARGET" = stg ]; then tag_live "$API_IMAGE" "${REG}/keiba-api:live-stg"; fi
     ;;
   smoke)
     [ -n "${SMOKE_BASE:-}" ] || { [ "$DRY" = 1 ] && SMOKE_BASE="https://TAG_URL" || { echo "SMOKE_BASE（タグ付き URL）が必要です" >&2; exit 2; }; }
@@ -138,7 +145,7 @@ case "$STEP" in
   promote)
     [ "$TARGET" = prod ] || { echo "promote は prod だけ（stg は通信を切り替えない）" >&2; exit 2; }
     run bash scripts/gcp/deploy_cloud_run_api.sh promote --apply
-    run gcloud artifacts docker tags add "$API_IMAGE" "${REG}/keiba-api:live-prod" --quiet   # 本番の版を自動掃除から守る
+    tag_live "$API_IMAGE" "${REG}/keiba-api:live-prod"   # 本番の版を自動掃除から守る
     ;;
   jobs)
     [ "$TARGET" = prod ] || { echo "jobs は prod だけ" >&2; exit 2; }
@@ -149,7 +156,7 @@ case "$STEP" in
     run env IMAGE="$JOBS_IMAGE" bash scripts/gcp/deploy_cloud_run_jobs.sh apply queue --yes
     run env IMAGE="$JOBS_IMAGE" bash scripts/gcp/deploy_cloud_run_jobs.sh apply jobs ${PAR[@]+"${PAR[@]}"} --yes
     run env IMAGE="$JOBS_IMAGE" bash scripts/gcp/deploy_cloud_run_jobs.sh apply scheduler ${PAR[@]+"${PAR[@]}"} --yes
-    run gcloud artifacts docker tags add "$JOBS_IMAGE" "${REG}/jobs:live-jobs" --quiet   # Jobs の版を自動掃除から守る
+    tag_live "$JOBS_IMAGE" "${REG}/jobs:live-jobs"   # Jobs の版を自動掃除から守る
     ;;
   *) echo "不明なステップ: $STEP（build-images / build-api-image / check-jobs-image / api-revision / smoke / promote / jobs）" >&2; exit 2 ;;
 esac
