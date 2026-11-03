@@ -161,7 +161,8 @@ class TestMain(unittest.TestCase):
             "[GCP日次コストレポート] 2026-10-01: 合計 $2.00（Cloud Run: $2.00）"
         )
 
-    def test_default_date_is_yesterday_jst(self):
+    def test_default_date_is_two_days_ago_jst(self):
+        # 課金エクスポートの反映が約 1 日遅れるので、確定に近い一昨日を対象にする
         from datetime import datetime, timedelta
 
         with mock.patch.dict(
@@ -178,9 +179,26 @@ class TestMain(unittest.TestCase):
             ):
                 job.main([])
 
-        expected = (datetime.now(job._JST) - timedelta(days=1)).strftime("%Y-%m-%d")
+        expected = (datetime.now(job._JST) - timedelta(days=2)).strftime("%Y-%m-%d")
         called_date = mock_fetch.call_args[0][0]
         assert called_date == expected
+
+
+
+class ServiceDetailsTest(unittest.TestCase):
+    def test_groups_skus_by_service_with_japanese_labels_and_drops_tiny(self):
+        rows = [
+            {"service": "Cloud Storage", "sku": "Download APAC", "cost": 853.5, "currency": "JPY"},
+            {"service": "Cloud Storage", "sku": "Regional Standard Class A Operations", "cost": 59.1, "currency": "JPY"},
+            {"service": "Cloud Storage", "sku": "Regional Standard Class B Operations", "cost": 49.7, "currency": "JPY"},
+            {"service": "Cloud Storage", "sku": "Standard Storage Tokyo", "cost": 6.3, "currency": "JPY"},
+            {"service": "Cloud Run", "sku": "Jobs CPU in asia-northeast1", "cost": 119.5, "currency": "JPY"},
+            {"service": "Secret Manager", "sku": "Secret version replica storage", "cost": 0.2, "currency": "JPY"},
+        ]
+        lines = job.format_service_details(rows, 150.0)
+        assert lines[0] == "・Cloud Storage ¥969（GCP の外への転送 ¥854・一覧・書き込み ¥59・読み出し ¥50）"
+        assert lines[1] == "・Cloud Run ¥120（Jobs の CPU ¥120）"
+        assert len(lines) == 2                     # 1 円未満のサービスは省く
 
 
 if __name__ == "__main__":

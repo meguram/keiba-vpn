@@ -147,6 +147,73 @@ def fetch_cost_history(table: str, start: str, end: str) -> list[dict]:
     ]
 
 
+def fetch_sku_breakdown(table: str, date: str) -> list[dict]:
+    """課金エクスポートから、JST の日付 date のサービス × 品目（SKU）別の請求額（クレジット差し引き後）。各行 {service, sku, cost, currency}。"""
+    from src.config.gcp_guard import assert_gcp_allowed
+
+    assert_gcp_allowed("BigQuery")
+    from google.cloud import bigquery
+
+    query = f"""
+        SELECT service.description AS service_description, sku.description AS sku_description, currency AS currency,
+          SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)) AS cost
+        FROM `{table}`
+        WHERE usage_start_time >= TIMESTAMP_SUB(TIMESTAMP(@d), INTERVAL 1 DAY)
+          AND DATE(usage_start_time, "Asia/Tokyo") = @d
+        GROUP BY service_description, sku_description, currency
+        ORDER BY cost DESC
+    """
+    cfg = bigquery.QueryJobConfig(query_parameters=[bigquery.ScalarQueryParameter("d", "DATE", date)])
+    from src.config.gcp_credentials import build_gcp_credentials, gcp_project_id
+
+    client = bigquery.Client(credentials=build_gcp_credentials(), project=gcp_project_id() or None)
+    return [{"service": r["service_description"], "sku": r["sku_description"], "cost": float(r["cost"] or 0.0), "currency": r["currency"]}
+            for r in client.query(query, job_config=cfg).result()]
+
+
+# 品目（SKU）の名前を、何にお金がかかったか分かる短い日本語に（当てはまらなければ元の名前）
+_SKU_LABELS = (
+    ("Download", "GCP の外への転送"),
+    ("Class A Operations", "一覧・書き込み"),
+    ("Class B Operations", "読み出し"),
+    ("Standard Storage", "保管"),
+    ("Nearline Storage", "保管(Nearline)"),
+    ("Jobs CPU", "Jobs の CPU"),
+    ("Jobs Memory", "Jobs のメモリ"),
+    ("Services CPU", "API の CPU"),
+    ("Services Memory", "API のメモリ"),
+    ("Network Internet Data Transfer Out", "外への転送"),
+    ("Artifact Registry Storage", "イメージの保管"),
+)
+
+
+def sku_label(sku: str) -> str:
+    for key, label in _SKU_LABELS:
+        if key in (sku or ""):
+            return label
+    return sku or "?"
+
+
+def format_service_details(sku_rows: list[dict], fx: float, *, min_jpy: float = 1.0, top: int = 3) -> list[str]:
+    """サービスごとに 1 行: 『・Cloud Storage ¥1,000（GCP の外への転送 ¥854・一覧・書き込み ¥59）』。1 円未満のサービス・品目は省く。"""
+    from src.utils import cost_watch as cw
+
+    by: dict[str, dict[str, float]] = {}
+    for r in sku_rows:
+        jpy = cw.to_jpy(r["cost"], r.get("currency") or "JPY", fx)
+        lbl = sku_label(r["sku"])
+        by.setdefault(r["service"], {})
+        by[r["service"]][lbl] = by[r["service"]].get(lbl, 0.0) + jpy
+    lines = []
+    for svc, skus in sorted(by.items(), key=lambda kv: -sum(kv[1].values())):
+        total = sum(skus.values())
+        if total < min_jpy:
+            continue
+        parts = [f"{k} ¥{v:,.0f}" for k, v in sorted(skus.items(), key=lambda kv: -kv[1])[:top] if v >= min_jpy]
+        lines.append(f"・{svc} ¥{total:,.0f}" + (f"（{'・'.join(parts)}）" if parts else ""))
+    return lines
+
+
 def build_watch(target_date: str, rows: list[dict]) -> tuple[str, str | None, str]:
     """(日次通知に足す行, 警告メッセージまたは None, 円建ての先頭行)。rows は fetch_cost_history の結果。"""
     from src.utils import cost_watch as cw
@@ -191,7 +258,9 @@ def format_cost_report_jpy(date: str, day: dict[str, float]) -> str:
 
 
 def _default_target_date() -> str:
-    return (datetime.now(_JST) - timedelta(days=1)).strftime("%Y-%m-%d")
+    """一昨日（JST）。課金エクスポートの反映は最大 1 日ほど遅れ、翌朝の時点では前日分が途中までしか入っていない
+    （2026-11-02 分を 11-03 朝に集計すると ¥58 だった）。確定に近い一昨日を詳しく、前日は速報として合計だけ出す。"""
+    return (datetime.now(_JST) - timedelta(days=2)).strftime("%Y-%m-%d")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -199,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--date",
         default="",
-        help="対象日 YYYY-MM-DD（省略時は前日 JST）",
+        help="対象日 YYYY-MM-DD（省略時は一昨日 JST。課金データの反映が約 1 日遅れるため）",
     )
     parser.add_argument(
         "--watch",
@@ -240,9 +309,22 @@ def main(argv: list[str] | None = None) -> int:
     alert = None
     if args.watch:
         try:
-            rows = fetch_cost_history(table, _history_start(target_date), target_date)
-            extra, alert, headline = build_watch(target_date, rows)
-            message = f"{headline}\n{extra}"
+            flash = (datetime.strptime(target_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+            yesterday = (datetime.now(_JST) - timedelta(days=1)).strftime("%Y-%m-%d")
+            rows = fetch_cost_history(table, _history_start(target_date), max(target_date, min(flash, yesterday)))
+            extra, alert, headline = build_watch(target_date, [r for r in rows if r["date"] <= target_date])
+            lines = [headline.replace("[GCP日次コストレポート]", "[GCP日次コスト（一昨日・ほぼ確定）]")]
+            try:
+                lines += format_service_details(fetch_sku_breakdown(table, target_date), _fx_jpy_per_usd())
+            except Exception as e:  # noqa: BLE001 - 内訳が取れなくても合計は出す
+                lines.append(f"（品目別の内訳は取得失敗: {e}）")
+            if flash <= yesterday:
+                from src.utils import cost_watch as cw
+
+                f_total = sum(cw.daily_table(rows, _fx_jpy_per_usd()).get(flash, {}).values())
+                lines.append(f"速報 {flash}: ¥{f_total:,.0f}（反映途中。確定は明日の通知で）")
+            lines.append(extra)
+            message = "\n".join(lines)
         except Exception as e:  # noqa: BLE001 - 日次の基本通知は必ず出す
             message = f"{message}\n（想定との比較は取得失敗: {e}）"
 
