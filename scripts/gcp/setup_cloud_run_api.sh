@@ -17,7 +17,7 @@ echo "== 1. API の有効化"
 run gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com secretmanager.googleapis.com --project "$PROJECT_ID"
 echo "== 2. Artifact Registry（Docker）。無料枠 0.5GB を超えないよう、古いイメージは掃除する（下の cleanup）"
 run gcloud artifacts repositories create "$AR_REPO" --repository-format=docker --location "$REGION" --project "$PROJECT_ID"
-run gcloud artifacts repositories set-cleanup-policies "$AR_REPO" --location "$REGION" --project "$PROJECT_ID" --policy=<(printf '[{"name":"keep-recent","action":{"type":"Keep"},"mostRecentVersions":{"keepCount":3}},{"name":"delete-old","action":{"type":"Delete"},"condition":{"olderThan":"604800s"}}]') --no-dry-run
+run gcloud artifacts repositories set-cleanup-policies "$AR_REPO" --location "$REGION" --project "$PROJECT_ID" --policy=<(printf '[{"name":"keep-live","action":{"type":"Keep"},"condition":{"tagState":"TAGGED","tagPrefixes":["live-"]}},{"name":"keep-recent","action":{"type":"Keep"},"mostRecentVersions":{"keepCount":3}},{"name":"delete-old","action":{"type":"Delete"},"condition":{"olderThan":"172800s"}}]') --no-dry-run
 echo "== 3. 実行用サービスアカウント（最小権限）: GCS はバケット単位の objectAdmin（ハートビートと serving_state の読み書きのため）、Secret は使うものだけ"
 run gcloud iam service-accounts create "$RUN_SA_ID" --display-name "keiba-api (Cloud Run)" --project "$PROJECT_ID"
 run gcloud storage buckets add-iam-policy-binding "gs://${GCS_BUCKET}" --member "serviceAccount:${RUN_SA}" --role roles/storage.objectAdmin
