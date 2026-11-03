@@ -268,3 +268,54 @@ def pt(v: float | None, d: int = 1) -> str:
 
 def pt_ci(ci: list[float] | None, d: int = 1) -> str:
     return "–" if not ci else f"{ci[0] * 100:+.{d}f}〜{ci[1] * 100:+.{d}f}"
+
+
+# ── 集計に使っていない年で確かめる ─────────────────────
+
+
+HOLDOUT_YEAR = 2026
+
+
+def holdout_frame(year: int = HOLDOUT_YEAR) -> pd.DataFrame:
+    """集計期間（YEARS）の後の 1 年の出走（frame と同じ列）。人気からの見込みは、その年だけで較正し直す。"""
+    import src.research.columns.compare_series as cs
+
+    if not (FLAT_DIR / str(year) / "race_result_flat.parquet").exists():
+        return pd.DataFrame()
+    saved = cs.YEARS
+    try:
+        cs.YEARS = range(year, year + 1)
+        globals()["YEARS"] = cs.YEARS
+        return frame()
+    finally:
+        cs.YEARS = saved
+        globals()["YEARS"] = saved
+
+
+def holdout_check(h: pd.DataFrame, jid: str, col: str, level: str, metric: str) -> dict[str, Any]:
+    """集計に使っていない年で、(b) 騎手内の差（その条件の 実際 − 見込み − ほかの条件の 実際 − 見込み）。条件ごとの全騎手の平均はずらして除く。"""
+    if h.empty:
+        return {"n": 0}
+    r = "res_" + metric
+    hh = h.copy()
+    hh[r] = hh[r] - hh.groupby(col)[r].transform("mean")
+    x = hh[hh["jockey_id"] == jid]
+    a, o = x.loc[x[col] == level, r], x.loc[x[col] != level, r]
+    if len(a) < 2 or len(o) < 2:
+        return {"n": int(len(a))}
+    diff = float(a.mean() - o.mean())
+    se = math.sqrt(a.var(ddof=1) / len(a) + o.var(ddof=1) / len(o))
+    return {"n": int(len(a)), "diff": diff, "ci": [diff - 1.96 * se, diff + 1.96 * se], "p": norm_p(diff / se) if se > 0 else float("nan")}
+
+
+def holdout_text(rows: list[tuple[str, str, float, dict[str, Any]]], year: int = HOLDOUT_YEAR) -> str:
+    """rows: (騎手名, 条件, 集計期間の差, holdout_check の結果)。本文用の 1 段落。"""
+    usable = [r for r in rows if r[3].get("n", 0) >= 10 and "diff" in r[3]]
+    if not usable:
+        return f"{year} 年のデータでは、騎乗数が足りず確かめられませんでした。"
+    same = sum(1 for _, _, d0, h in usable if (d0 > 0) == (h["diff"] > 0))
+    sig = [r for r in usable if r[3]["p"] < 0.05 and (r[2] > 0) == (r[3]["diff"] > 0)]
+    parts = "、".join(f"{nm} {lv}（{pt(d0)} → {pt(h['diff'])}・{h['n']}騎乗）" for nm, lv, d0, h in usable)
+    return (f"集計に使っていない {year} 年（1〜10 月）で同じ差を見ると、{len(usable)} 組のうち同じ向きは {same} 組でした：{parts}。"
+            + (f"同じ向きで p<0.05 なのは {'・'.join(f'{r[0]} {r[1]}' for r in sig)} です。" if sig else "同じ向きで p<0.05 になった組はありません。")
+            + "騎乗数が少なく区間が広いので、向きがそろうかどうかは偶然でも半々で起こります。今のところ、これらの「得意・苦手」が続くとは確かめられていません。")

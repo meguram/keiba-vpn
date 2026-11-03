@@ -222,6 +222,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
                     f"生の成績の差の多くは乗る馬の強さで説明でき、多重比較を補正して残った得意・苦手は {n_flag} 組でした。"),
         "categories": ["jockey/class-venue"],
         "published": "2026-11-02",
+        "updated": "2026-11-03",
         "dataset": {"period": "2020〜2025年", "conditions": f"JRA 平地（障害を除く）。取消・除外を除く。{MIN_RIDES:,} 騎乗以上の騎手",
                     "sample": f"{a['n_runs']:,}出走"},
         "body": body,
@@ -234,6 +235,15 @@ def main() -> None:
     args = ap.parse_args()
     a = analyze(jc.frame())
     col = article(a)
+    # 補正後も残った組を、集計に使っていない年で確かめる
+    h = jc.holdout_frame()
+    rows = []
+    for c in DIMS:
+        t = a["tables"][c]
+        for _, r in t[~t["short"].isin(["–", "標本不足"])].iterrows():
+            rows.append((a["names"][r["jockey_id"]], flat(r["level"]), float(r["diff"] - r["other_diff"]), jc.holdout_check(h, r["jockey_id"], c, r["level"], "top3")))
+    i = max(k for k, b in enumerate(col["body"]) if b["type"] == "table" and "判定" in b.get("columns", []) and b["columns"][0] == "騎手")
+    col["body"][i + 1:i + 1] = [{"type": "text", "text": jc.holdout_text(rows)}]
     text = json.dumps(col, ensure_ascii=False, indent=2) + "\n"
     json.loads(text, parse_constant=lambda t: (_ for _ in ()).throw(ValueError(t)))
     if args.dry_run:
