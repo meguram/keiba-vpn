@@ -25,7 +25,9 @@ function axisColor(p: number | null | undefined): string {
   const to = t < 0 ? AXIS_LOW : AXIS_HIGH, a = Math.abs(t);
   return `rgb(${AXIS_MID.map((m, i) => Math.round(m + (to[i] - m) * a)).join(",")})`;
 }
-/** ⇆ の線: これより短い（地図の位置でほとんど表せない）軸は図に出さない（丸の色で見る） */
+/** 地図に使った寄与率の上位の軸（コースごとに 3〜6）の印（数値バー・色の選択で使う） */
+const TOP_RGB = "227,179,65";
+/** ⇆ の線: これより短い（地図の位置でほとんど表せない）軸は図に出さない（丸の色で見る）。コース別の地図には軸の線を引かない */
 const GUIDE_MIN = 0.3;
 
 /** 補助の軸（偏差値 50±10）を、丸の色に使う 0〜100 の位置へ（正規分布の累積） */
@@ -88,10 +90,10 @@ function relax(boxes: Box[], anchors: { x: number; y: number }[], fixed: Box[]):
 
 export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entries: AnalysisEntry[] }) {
   const [sel, setSel] = useState<string | null>(null);
-  // 丸の色: "group" か軸のキー。コース別の地図では、地図に入っていない方面のうち最も重要なもの
+  // 丸の色: "group" か軸のキー。コース別の地図では、寄与率がいちばん高い軸
   const [colorKey, setColorKey] = useState<string>(() => {
     const cm = figure.course_map;
-    if (cm) return cm.importance.find((i) => !cm.axes.includes(i.key))?.key ?? "group";
+    if (cm) return cm.axes[0] ?? "group";
     const worst = [...figure.axes].sort((a, b) => (a.r2 ?? 0) - (b.r2 ?? 0))[0];
     return worst?.key ?? "group";
   });
@@ -131,11 +133,16 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
   const isExtra = (k: string) => (figure.extra_axes ?? []).some((x) => x.key === k);
   const pctOf = (h: RunningMapHorse, k: string) => (isExtra(k) ? extraPct(h.extras?.[k]?.value) : h.percentiles[k]);
   const colorAxis = colorAxes.find((a) => a.key === colorKey) ?? null;
+  // 色の選択肢: コース別の地図では、地図に使った寄与率の上位の軸（コースごとに 3〜6。今日の馬場の傾向から選んだ軸は、そのとき足す）
+  const topKeys = figure.course_map?.axes ?? [];
+  const choices = figure.course_map
+    ? [...topKeys, ...(colorAxis && !topKeys.includes(colorAxis.key) ? [colorAxis.key] : [])].map((k) => colorAxes.find((a) => a.key === k)).filter((a): a is RunningMapAxis => !!a)
+    : colorAxes;
   const ranks = colorAxis ? rankInField(hs.map((h) => pctOf(h, colorAxis.key))) : [];
   const fillOf = (i: number) => (colorAxis ? axisColor(ranks[i]) : groupColor(hs[i].group));
 
   // 軸: 原点を通る線を、馬のいる範囲の外（半径 Rd）まで引き、高い側の先端に軸名を置く
-  const guides = figure.axes.filter((a) => a.arrow && (figure.course_map || (a.r2 ?? 0) >= GUIDE_MIN * GUIDE_MIN)).map((a) => {
+  const guides = figure.axes.filter((a) => a.arrow && !figure.course_map && (a.r2 ?? 0) >= GUIDE_MIN * GUIDE_MIN).map((a) => {
     const n = Math.hypot(a.arrow![0], a.arrow![1]) || 1;
     return { a, ux: a.arrow![0] / n, uy: a.arrow![1] / n };
   });
@@ -170,6 +177,12 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
       <style>{CSS}</style>
       <div className="rm-wrap">
       <div>
+      {figure.course_map && (
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 11, color: "var(--text-dim)", margin: "2px 4px 2px" }}>
+          <span>近い馬ほど走法が近い（縦・横の軸に意味はありません）</span>
+          <span style={{ color: `rgb(${APT_RGB})`, whiteSpace: "nowrap" }}>↑ このコースで好走しやすい走法</span>
+        </div>
+      )}
       <svg viewBox={`${minX} ${minY} ${maxX - minX} ${maxY - minY}`} width="100%" style={{ display: "block", maxWidth: 560, maxHeight: "82vh", margin: "0 auto", touchAction: "manipulation" }} role="img" aria-label="走法マップ">
         {cells.map((c) => (
           <rect key={c.k} x={px(c.x) - cw / 2} y={py(c.y) - ch / 2} width={cw + 0.5} height={ch + 0.5} fill={`rgb(${heatRgb})`} fillOpacity={c.o} shapeRendering="crispEdges" />
@@ -223,7 +236,7 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
           );
         })}
       </svg>
-      <ColorControl axes={colorAxes} colorKey={colorKey} onChange={setColorKey} />
+      <ColorControl axes={choices} colorKey={colorKey} onChange={setColorKey} topKeys={topKeys} />
       {day && <BgSwitch bg={bg} onChange={setBg} day={day} />}
       {bg === "day" && day ? <HeatLegend rgb={DAY_RGB} text={`今日の${day.surface ?? ""}（前の ${day.n_races} レース）の好走しやすさ`} />
         : apt ? <HeatLegend rgb={APT_RGB} text={`${apt.course}の好走しやすさ`} /> : null}
@@ -232,7 +245,7 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
       <div>
       {figure.course_map && <CourseAxes cm={figure.course_map} />}
       {day && <DayTrend day={day} colorKey={colorKey} onColor={(k) => setColorKey(colorKey === k ? "group" : k)} />}
-      {picked && <HorseDetail h={picked} axes={figure.axes} extraAxes={figure.extra_axes ?? []} bracket={bracketOf.get(picked.key ?? "") ?? null} onClose={() => setSel(null)}
+      {picked && <HorseDetail h={picked} axes={figure.axes} topKeys={topKeys} extraAxes={figure.extra_axes ?? []} bracket={bracketOf.get(picked.key ?? "") ?? null} onClose={() => setSel(null)}
           onPick={(hid) => { const o = byHorseId.get(hid); if (o) setSel(o.key ?? o.horse_id ?? null); }} bracketOf={(hid) => bracketOf.get(byHorseId.get(hid)?.key ?? "") ?? null} />}
 
       <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
@@ -278,7 +291,7 @@ function HeatLegend({ rgb, text }: { rgb: string; text: string }) {
   );
 }
 
-function ColorControl({ axes, colorKey, onChange }: { axes: RunningMapAxis[]; colorKey: string; onChange: (k: string) => void }) {
+function ColorControl({ axes, colorKey, onChange, topKeys }: { axes: RunningMapAxis[]; colorKey: string; onChange: (k: string) => void; topKeys: string[] }) {
   const a = axes.find((x) => x.key === colorKey) ?? null;
   return (
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 8px", marginTop: 6, fontSize: 11.5 }}>
@@ -287,9 +300,10 @@ function ColorControl({ axes, colorKey, onChange }: { axes: RunningMapAxis[]; co
         <select value={colorKey} onChange={(e) => onChange(e.target.value)}
           style={{ minHeight: 30, fontSize: 12, background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 6, padding: "0 6px" }}>
           <option value="group">グループ</option>
-          {axes.map((x) => (
-            <option key={x.key} value={x.key}>{x.label}</option>
-          ))}
+          {axes.map((x) => {
+            const r = topKeys.indexOf(x.key);
+            return <option key={x.key} value={x.key}>{r >= 0 ? `寄与率${r + 1}位: ` : ""}{x.label}</option>;
+          })}
         </select>
       </label>
       {a && (
@@ -310,12 +324,12 @@ function CourseAxes({ cm }: { cm: NonNullable<RunningMapFigure["course_map"]> })
   return (
     <div style={{ fontSize: 12, margin: "4px 0 8px" }}>
       <div style={{ color: "var(--text-dim)" }}>
-        {cm.label}で好走に効く方面{cm.level === "group" ? "（芝ダ・距離帯でまとめて測定）" : ""}
+        {cm.label}で好走への寄与率（太字の {cm.axes.length} 方面で地図を作成）{cm.level === "venue_group" ? "（このコースは出走が少ないため、同じ競馬場・芝ダートの距離帯でまとめて測定）" : cm.level === "group" ? "（出走が少ないため、全競馬場の芝ダ・距離帯でまとめて測定）" : ""}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 10px", marginTop: 3 }}>
-        {cm.importance.slice(0, 5).map((i, n) => (
-          <span key={i.key} style={{ fontWeight: n < 3 ? 700 : 400, color: n < 3 ? "var(--text)" : "var(--text-dim)" }}>
-            {n < 3 ? `${n + 1}. ` : ""}{i.label} {Math.round(i.share * 100)}%{i.sign < 0 ? "（低いほど好走）" : ""}
+        {cm.importance.slice(0, Math.max(5, cm.axes.length + 1)).map((i, n) => (
+          <span key={i.key} style={{ fontWeight: n < cm.axes.length ? 700 : 400, color: n < cm.axes.length ? "var(--text)" : "var(--text-dim)" }}>
+            {n < cm.axes.length ? `${n + 1}. ` : ""}{i.label} {Math.round(i.share * 100)}%{i.sign < 0 ? "（低いほど好走）" : ""}
           </span>
         ))}
       </div>
@@ -370,8 +384,8 @@ function extraText(e: RunningMapExtra | undefined, key: string): string {
   return key === "slope" ? `${v}（実測 ${e.runs ?? 0} 走）` : `${v}${e.low ? "（走数が少なく低信頼）" : ""}`;
 }
 
-function HorseDetail({ h, axes, extraAxes, bracket, onClose, onPick, bracketOf }: {
-  h: RunningMapHorse; axes: RunningMapAxis[]; extraAxes: NonNullable<RunningMapFigure["extra_axes"]>; bracket: number | null; onClose: () => void;
+function HorseDetail({ h, axes, topKeys, extraAxes, bracket, onClose, onPick, bracketOf }: {
+  h: RunningMapHorse; axes: RunningMapAxis[]; topKeys: string[]; extraAxes: NonNullable<RunningMapFigure["extra_axes"]>; bracket: number | null; onClose: () => void;
   onPick: (horseId: string | null) => void; bracketOf: (horseId: string | null) => number | null;
 }) {
   const c = groupColor(h.group);
@@ -401,18 +415,27 @@ function HorseDetail({ h, axes, extraAxes, bracket, onClose, onPick, bracketOf }
         </div>
       )}
       <div style={{ display: "grid", gap: 5 }}>
-        {axes.map((a) => {
+        {/* 地図に使った寄与率の上位の軸を先に並べ、金色の枠・順位の印で強調する */}
+        {[...axes].sort((x, y) => (topKeys.indexOf(x.key) + 1 || 99) - (topKeys.indexOf(y.key) + 1 || 99)).map((a) => {
           const p = h.percentiles[a.key];
           // 全馬の中での位置（0〜100）を 10 点満点・0.5 点刻みに
           const sc = typeof p === "number" ? Math.round(p / 5) / 2 : null;
+          const rk = topKeys.indexOf(a.key);
+          const top = rk >= 0;
           return (
-            <div key={a.key} style={{ display: "grid", gridTemplateColumns: "8.5em 1fr 3em", alignItems: "center", gap: 6, fontSize: 11.5 }}>
-              <span style={{ color: "var(--text-dim)" }} title={`実測の走 ${h.axis_runs?.[a.key] ?? 0} 走`}>{a.label}</span>
-              <span style={{ position: "relative", height: 8, borderRadius: 4, background: "var(--border)" }} title={`${a.low} ← → ${a.high}`}>
-                {sc != null && <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${sc * 10}%`, borderRadius: 4, background: c, opacity: fromPrior.has(a.key) ? 0.35 : 1 }} />}
+            <div key={a.key} style={{ display: "grid", gridTemplateColumns: "8.5em 1fr 3em", alignItems: "center", gap: 6, fontSize: 11.5,
+              ...(top ? { padding: "3px 6px", margin: "0 -6px", borderRadius: 6, background: `rgba(${TOP_RGB},0.10)`, border: `1px solid rgba(${TOP_RGB},0.55)` } : {}) }}>
+              <span style={{ color: top ? "var(--text)" : "var(--text-dim)", fontWeight: top ? 700 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                title={`${top ? `このコースの寄与率 ${rk + 1} 位・` : ""}実測の走 ${h.axis_runs?.[a.key] ?? 0} 走`}>
+                {top && <span style={{ display: "inline-block", minWidth: "1.3em", marginRight: 3, padding: "0 3px", borderRadius: 4, fontSize: 10, fontWeight: 800,
+                  color: "#0d1117", background: `rgb(${TOP_RGB})`, textAlign: "center" }}>{rk + 1}</span>}
+                {a.label}
+              </span>
+              <span style={{ position: "relative", height: top ? 10 : 8, borderRadius: 5, background: "var(--border)" }} title={`${a.low} ← → ${a.high}`}>
+                {sc != null && <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${sc * 10}%`, borderRadius: 5, background: top ? `rgb(${TOP_RGB})` : c, opacity: fromPrior.has(a.key) ? 0.35 : 1 }} />}
                 <span style={{ position: "absolute", left: "50%", top: -2, bottom: -2, width: 1, background: "var(--text-dim)", opacity: 0.6 }} />
               </span>
-              <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{sc != null ? sc.toFixed(1) : "–"}{fromPrior.has(a.key) ? "*" : ""}</span>
+              <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: top ? 700 : 400 }}>{sc != null ? sc.toFixed(1) : "–"}{fromPrior.has(a.key) ? "*" : ""}</span>
             </div>
           );
         })}
