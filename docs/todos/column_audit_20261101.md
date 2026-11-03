@@ -14,21 +14,21 @@
 |---|---|---|
 | 1 | upset-conditions（荒れるレースの共通点） | ✅ 完了（3 周チェック済み） |
 | 新規 | wind-venue（競馬場ごとの風の影響） | ✅ 追加（3 周チェック済み） |
-| 2 | summer-mare（夏は牝馬） | ⬜ 未着手（次） |
-| 3 | first-blinkers（初ブリンカー・下書き） | ⬜ 未着手 |
+| 2 | summer-mare（夏は牝馬） | ✅ 混合戦・オッズの見込み（別セッションが年齢別を追加。その部分の確認は残） |
+| 3 | first-blinkers（初ブリンカー） | ✅ 平均への回帰（別セッションが芝ダ・脚質・枠を追加。確認は残） |
 | 4 | gelding-return（セン馬） | ⬜ 未着手 |
 | 5 | transport-vs-stay（輸送と滞在） | ⬜ 未着手 |
 | 6 | early-maturing-bloodline（エピファネイア早熟・下書き） | ⬜ 未着手 |
 | 7 | first-crop-old-dam（初年度産駒と高齢出産・下書き） | ⬜ 未着手 |
-| 8 | front-runner（逃げ・先行） | ⬜ 未着手 |
+| 8 | front-runner（逃げ・先行） | ✅ 馬の位置取りで集計し直し・オッズの見込み |
 | 9 | first-dirt（初ダート） | ⬜ 未着手 |
 | 10 | jockey-long-distance（川田J 長距離） | ⬜ 未着手 |
 | 11 | jockey-change（乗り替わり） | ⬜ 未着手 |
-| 12 | pace-advantage（ハイペースと1番人気） | ⬜ 未着手 |
+| 12 | pace-advantage（ハイペースと1番人気） | ✅ 前寄りの頭数（レース前に分かる）・2026年で再現しない旨 |
 | 13 | weight-change（馬体重の大幅変化） | ⬜ 未着手 |
-| 14 | distance-jockey（マイルは騎手依存） | ⬜ 未着手 |
-| 15 | jockey-roi（勝率1位≠期待値1位） | ⬜ 未着手 |
-| 16 | pace-scenario（展開シナリオ） | ⬜ 未着手 |
+| 14 | distance-jockey（距離で騎手の差） | ✅ 偶然の分を除いた騎手差。距離で区別できず判断保留 |
+| 15 | jockey-roi（騎手の回収率） | ✅ 前半・後半で確認。穴騎手の高回収率は続かない |
+| 16 | pace-scenario（ペースは読めるか） | ✅ 2026年で検証。ペースは読めない（AUC 0.57） |
 | 17 | sire-roi（血統で狙う） | ⬜ 未着手 |
 
 ---
@@ -129,3 +129,11 @@
    - `src/scripts/data/ptrain_wind.py`（tp-77）の観測時刻を、四捨五入から「発走直前の正時」に直す
 5. コミット・stg への反映（ユーザーの確認後）
    - 確認: `python -m pytest -q tests/frontend/test_column_json_strict.py tests/research/test_column_compare.py`（22 passed）、`cd frontend && npx tsc --noEmit -p .`（OK）
+
+---
+
+## 7. 2026-11-03 の追記
+
+- 別セッション（docs/todos/column_requests_20261102.md）が first-dirt・gelding-return・weight-change・early-maturing-bloodline・first-crop-old-dam・transport-vs-stay・sire-roi・jockey-long-distance・jockey-change・jockey-class-venue-season を生成コードで書き直し、障害レースの除外（compare_series.jump_mask）も入れた。これらの確認が残り。
+- 新たに作った生成コード: front_runner.py・pace_advantage.py・pace_scenario.py・jockey_roi.py・distance_jockey.py（いずれも src/research/columns/）。
+- stg の API 反映が 11-03 に失敗（Artifact Registry の live-stg タグの付け替え権限）。費用対策のセッションが CI を修正中。コラムの画面の公開は成功している。
