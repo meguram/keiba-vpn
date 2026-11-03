@@ -145,6 +145,7 @@ case "$STEP" in
   promote)
     [ "$TARGET" = prod ] || { echo "promote は prod だけ（stg は通信を切り替えない）" >&2; exit 2; }
     run bash scripts/gcp/deploy_cloud_run_api.sh promote --apply
+    tag_live "${REG}/keiba-api:live-prod" "${REG}/keiba-api:live-rollback"   # 直前の本番の版も残す（切り戻し先が自動掃除で消えないように）
     tag_live "$API_IMAGE" "${REG}/keiba-api:live-prod"   # 本番の版を自動掃除から守る
     ;;
   jobs)
