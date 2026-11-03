@@ -410,6 +410,9 @@
   "src/utils/maintenance.py": {
    "local_data": 1
   },
+  "src/utils/person_reading.py": {
+   "page_reference": 2
+  },
   "src/utils/race_list_for_date.py": {
    "page_reference": 1
   },

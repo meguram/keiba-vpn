@@ -707,7 +707,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="push のみ: 上げるファイルの数を表示して終わる")
     ap.add_argument("--only-auth", action="store_true", help="会員名簿(AUTH_TREES)だけを上げる（root の cron 用）")
     ap.add_argument("--manifest", default=None,
-                    help="push のみ: 上げた内容の記録（既定 data/local/meta/gcs_mirror_push_manifest*.json）。'none' で記録を使わず毎回 GCS を一覧する")
+                    help="push のみ: 上げた内容の記録（既定 META_DIR/gcs_mirror_push_manifest*.json）。'none' で記録を使わず毎回 GCS を一覧する")
     ap.add_argument("--verify-remote", action="store_true", help="push のみ: 記録を使わず GCS を一覧して比べ、記録を作り直す")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -719,7 +719,9 @@ def main(argv: list[str] | None = None) -> int:
     if a.manifest == "none":
         manifest = None
     else:
-        manifest = Path(a.manifest) if a.manifest else REPO_ROOT / "data/local/meta" / (
+        from src.config.data_paths import META_DIR
+
+        manifest = Path(a.manifest) if a.manifest else META_DIR / (
             "gcs_mirror_push_manifest_auth.json" if a.only_auth else "gcs_mirror_push_manifest.json")
     writer = "auth" if a.only_auth else "host"
     print(push(be, trees=trees, recent_days=a.recent_days, dry_run=a.dry_run, manifest=manifest, verify_remote=a.verify_remote,
