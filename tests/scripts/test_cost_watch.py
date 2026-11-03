@@ -99,7 +99,9 @@ def test_main_watch_adds_summary_and_separate_alert():
         assert job.main(["--date", "2026-10-21", "--watch"]) == 0
     msgs = [c.args[0] for c in notify.call_args_list]
     assert len(msgs) == 2
-    assert "今月累計" in msgs[0] and "フェーズ" in msgs[0]
+    assert "今月" in msgs[0] and "月末見込み" in msgs[0] and "予算" in msgs[0]
+    blocks = notify.call_args_list[0].kwargs.get("blocks") or []
+    assert blocks and blocks[0]["type"] == "header"                    # Slack では表形式（Block Kit）で出す
     assert msgs[1].startswith("[GCPコスト警告]") and "Cloud Run" in msgs[1]
 
 
