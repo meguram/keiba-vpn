@@ -23,6 +23,7 @@ import jockey_roi from "./jockey-roi.json";
 import pace_scenario from "./pace-scenario.json";
 import sire_roi from "./sire-roi.json";
 import wind_venue from "./wind-venue.json";
+import sire_line_aptitude from "./sire-line-aptitude.json";
 
 const ALL = [
   upset_conditions,
@@ -44,6 +45,7 @@ const ALL = [
   pace_scenario,
   sire_roi,
   wind_venue,
+  sire_line_aptitude,
 ] as Column[];
 
 export const COLUMNS: Column[] = ALL.filter((c) => SHOW_DEV_ONLY || !c.draft);
