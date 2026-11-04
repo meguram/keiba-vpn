@@ -49,6 +49,16 @@ tag_live() {  # 使用中の版に live- タグを付け替える（自動掃除
     echo "::warning title=live タグを付けられません::$2 を付けられませんでした。2 日後の自動掃除で使用中の版が消えるおそれがあります（配備用 SA の権限を確認）"
   fi
 }
+serving_digest() {  # 本番（通信 100%）または stg（rstg タグ）のリビジョンが実際に使っているイメージ（digest 付き）。取れなければ空
+  local which="$1"
+  gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json 2>/dev/null | WHICH="$which" python3 -c '
+import json, os, subprocess, sys
+d = json.load(sys.stdin); w = os.environ["WHICH"]
+rev = next((t["revisionName"] for t in d["status"].get("traffic", []) if (w == "prod" and t.get("percent") == 100) or (w == "stg" and t.get("tag") == "rstg")), "")
+if rev:
+    print(subprocess.run(["gcloud", "run", "revisions", "describe", rev, "--region", os.environ.get("REGION", "asia-northeast1"), "--format=value(status.imageDigest)"], capture_output=True, text=True).stdout.strip())
+' || true
+}
 run() {  # 表示して、--dry-run でなければ実行。失敗したら、出力の末尾を GitHub の注釈にも出す（ログの閲覧に管理者権限が要らないように）
   printf '+'; printf ' %q' "$@"; printf '\n'
   [ "$DRY" != 1 ] || return 0
@@ -92,11 +102,11 @@ case "$STEP" in
     run gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
     run gcloud artifacts repositories describe "$AR_REPO" --location "$REGION" --project "$PROJECT_ID" --format="value(name)"
     fetch_fitted
-    run env DOCKER_BUILDKIT=1 docker build --progress=plain -f deploy/docker/Dockerfile.cloudrun -t "$API_IMAGE" .
+    run env DOCKER_BUILDKIT=1 docker build --progress=plain --provenance=false -f deploy/docker/Dockerfile.cloudrun -t "$API_IMAGE" .
     run docker push "$API_IMAGE"
     ;;
   check-jobs-image)  # stg 用: Jobs のイメージを作って全ジョブのモジュールを読み込めるかだけ確かめる（push しない。GCP に接続しない）
-    run env DOCKER_BUILDKIT=1 docker build --progress=plain -f deploy/docker/Dockerfile.jobs -t "$JOBS_IMAGE" .
+    run env DOCKER_BUILDKIT=1 docker build --progress=plain --provenance=false -f deploy/docker/Dockerfile.jobs -t "$JOBS_IMAGE" .
     run docker run --rm -e KEIBA_ENV=prod -e KEIBA_RUN_LOCATION=gcp "$JOBS_IMAGE" -c \
       "import importlib, json; jobs=json.load(open('config/gcp_job_map.json'))['jobs']; mods=sorted({s['argv'][1] for j in jobs if j['destination']=='gcp' for s in j.get('steps',[]) if s.get('argv',[''])[0]=='-m'}); [importlib.import_module(m) for m in mods]; print('imported', len(mods), 'modules')"
     ;;
@@ -105,9 +115,9 @@ case "$STEP" in
     # リポジトリは Cloud Shell での初回デプロイで作ってある（CI の SA には作成権限を付けない）
     run gcloud artifacts repositories describe "$AR_REPO" --location "$REGION" --project "$PROJECT_ID" --format="value(name)"
     fetch_fitted
-    run env DOCKER_BUILDKIT=1 docker build --progress=plain -f deploy/docker/Dockerfile.cloudrun -t "$API_IMAGE" .
+    run env DOCKER_BUILDKIT=1 docker build --progress=plain --provenance=false -f deploy/docker/Dockerfile.cloudrun -t "$API_IMAGE" .
     run docker push "$API_IMAGE"
-    run env DOCKER_BUILDKIT=1 docker build --progress=plain -f deploy/docker/Dockerfile.jobs -t "$JOBS_IMAGE" .
+    run env DOCKER_BUILDKIT=1 docker build --progress=plain --provenance=false -f deploy/docker/Dockerfile.jobs -t "$JOBS_IMAGE" .
     # イメージの中で、gcp 向けの全ジョブの実行モジュールを読み込めるか（足りないライブラリはここで落ちる）
     run docker run --rm -e KEIBA_ENV=prod -e KEIBA_RUN_LOCATION=gcp "$JOBS_IMAGE" -c \
       "import importlib, json; jobs=json.load(open('config/gcp_job_map.json'))['jobs']; mods=sorted({s['argv'][1] for j in jobs if j['destination']=='gcp' for s in j.get('steps',[]) if s.get('argv',[''])[0]=='-m'}); [importlib.import_module(m) for m in mods]; print('imported', len(mods), 'modules')"
@@ -128,7 +138,8 @@ case "$STEP" in
       [ -z "${GITHUB_OUTPUT:-}" ] || echo "tag_url=$url" >> "$GITHUB_OUTPUT"
     fi
     # 使用中の版に印を付け、自動掃除で消されないようにする（タグは付け替わる。保持の決まりは deploy_cloud_run_api.sh）
-    if [ "$TARGET" = stg ]; then tag_live "$API_IMAGE" "${REG}/keiba-api:live-stg"; fi
+    if [ "$TARGET" = stg ] && [ "$DRY" != 1 ]; then d="$(REGION="$REGION" serving_digest stg)"; tag_live "${d:-$API_IMAGE}" "${REG}/keiba-api:live-stg"
+    elif [ "$TARGET" = stg ]; then tag_live "$API_IMAGE" "${REG}/keiba-api:live-stg"; fi
     ;;
   smoke)
     [ -n "${SMOKE_BASE:-}" ] || { [ "$DRY" = 1 ] && SMOKE_BASE="https://TAG_URL" || { echo "SMOKE_BASE（タグ付き URL）が必要です" >&2; exit 2; }; }
@@ -146,7 +157,9 @@ case "$STEP" in
     [ "$TARGET" = prod ] || { echo "promote は prod だけ（stg は通信を切り替えない）" >&2; exit 2; }
     run bash scripts/gcp/deploy_cloud_run_api.sh promote --apply
     tag_live "${REG}/keiba-api:live-prod" "${REG}/keiba-api:live-rollback"   # 直前の本番の版も残す（切り戻し先が自動掃除で消えないように）
-    tag_live "$API_IMAGE" "${REG}/keiba-api:live-prod"   # 本番の版を自動掃除から守る
+    # 本番の版を自動掃除から守る。タグは Cloud Run が実際に使っている digest に付ける（目次の版にだけ付けると、本体が消えうる）
+    if [ "$DRY" = 1 ]; then tag_live "$API_IMAGE" "${REG}/keiba-api:live-prod"; else
+      d="$(REGION="$REGION" serving_digest prod)"; tag_live "${d:-$API_IMAGE}" "${REG}/keiba-api:live-prod"; fi
     ;;
   jobs)
     [ "$TARGET" = prod ] || { echo "jobs は prod だけ" >&2; exit 2; }
