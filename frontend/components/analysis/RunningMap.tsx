@@ -97,9 +97,10 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
     const worst = [...figure.axes].sort((a, b) => (a.r2 ?? 0) - (b.r2 ?? 0))[0];
     return worst?.key ?? "group";
   });
-  // 背景の色: その日の馬場に傾向が出ていれば「今日の馬場」、無ければ「コースの統計」から始める
+  // 背景: コースの統計（金色の塗り）と、馬場特注ゾーン（今日・前日の結果。緑）を重ねて出す。どちらも切り替えられる
   const day = figure.day_trend ?? null;
-  const [bg, setBg] = useState<"course" | "day">(() => (day && day.status === "trend" && day.heat ? "day" : "course"));
+  const [showCourse, setShowCourse] = useState(true);
+  const [showDay, setShowDay] = useState(true);
   if (figure.status !== "ok") {
     return <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>走法データのある馬が少なく、図を作れません。</p>;
   }
@@ -111,18 +112,21 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
   const px = (x: number) => x * s;
   const py = (y: number) => -y * s;
   const apt = figure.aptitude;
-  const heat = bg === "day" ? day?.heat ?? null : apt;
-  const heatRgb = bg === "day" ? DAY_RGB : APT_RGB;
-  const cells = [] as { k: number; x: number; y: number; o: number }[];
-  if (heat && ex) {
+  const zone = (heat: { lift: number[]; sig: string } | null | undefined, sigOnly: number, faint: number) => {
+    const out = [] as { k: number; x: number; y: number; o: number; sig: boolean }[];
+    if (!heat || !ex) return out;
     const n = ex.n, dx = (ex.x[1] - ex.x[0]) / (n - 1), dy = (ex.y[1] - ex.y[0]) / (n - 1);
     for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
       const k = i * n + j, sg = heat.sig[k], lf = heat.lift[k];
       if (sg === "0" || !(lf > 1)) continue;
-      const o = Math.min(1, (lf - 1) / 0.5) * (sg === "2" ? 0.62 : 0.2);
-      cells.push({ k, x: ex.x[0] + i * dx, y: ex.y[0] + j * dy, o });
+      const o = Math.min(1, (lf - 1) / 0.5) * (sg === "2" ? sigOnly : faint);
+      out.push({ k, x: ex.x[0] + i * dx, y: ex.y[0] + j * dy, o, sig: sg === "2" });
     }
-  }
+    return out;
+  };
+  const cells = showCourse ? zone(apt, 0.62, 0.2) : [];
+  // 馬場特注ゾーン: 偶然とは言いにくい（補正後に有意な）格子は濃い緑＋枠、好走寄りだが有意でない格子はごく薄く
+  const dayCells = showDay ? zone(day?.heat, 0.55, 0.12) : [];
   const cw = ex ? ((ex.x[1] - ex.x[0]) / (ex.n - 1)) * s : 0, ch = ex ? ((ex.y[1] - ex.y[0]) / (ex.n - 1)) * s : 0;
   const bracketOf = new Map(entries.map((e) => [e.key, e.bracket_number]));
   const picked = hs.find((h) => (h.key ?? h.horse_id) === sel) ?? null;
@@ -185,7 +189,11 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
       )}
       <svg viewBox={`${minX} ${minY} ${maxX - minX} ${maxY - minY}`} width="100%" style={{ display: "block", maxWidth: 560, maxHeight: "82vh", margin: "0 auto", touchAction: "manipulation" }} role="img" aria-label="走法マップ">
         {cells.map((c) => (
-          <rect key={c.k} x={px(c.x) - cw / 2} y={py(c.y) - ch / 2} width={cw + 0.5} height={ch + 0.5} fill={`rgb(${heatRgb})`} fillOpacity={c.o} shapeRendering="crispEdges" />
+          <rect key={c.k} x={px(c.x) - cw / 2} y={py(c.y) - ch / 2} width={cw + 0.5} height={ch + 0.5} fill={`rgb(${APT_RGB})`} fillOpacity={c.o} shapeRendering="crispEdges" />
+        ))}
+        {dayCells.map((c) => (
+          <rect key={`d${c.k}`} x={px(c.x) - cw / 2 + 0.5} y={py(c.y) - ch / 2 + 0.5} width={cw - 0.5} height={ch - 0.5} fill={`rgb(${DAY_RGB})`} fillOpacity={c.o}
+            stroke={c.sig ? `rgb(${DAY_RGB})` : "none"} strokeOpacity={0.9} strokeWidth={0.8} shapeRendering="crispEdges" />
         ))}
         {axisLabels.map((l) => {
           const b = l.box, r = Math.hypot(b.x, b.y);
@@ -237,9 +245,9 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
         })}
       </svg>
       <ColorControl axes={choices} colorKey={colorKey} onChange={setColorKey} topKeys={topKeys} />
-      {day && <BgSwitch bg={bg} onChange={setBg} day={day} />}
-      {bg === "day" && day ? <HeatLegend rgb={DAY_RGB} text={`今日の${day.surface ?? ""}（前の ${day.n_races} レース）の好走しやすさ`} />
-        : apt ? <HeatLegend rgb={APT_RGB} text={`${apt.course}の好走しやすさ`} /> : null}
+      <BgSwitch showCourse={showCourse} onCourse={setShowCourse} showDay={showDay} onDay={setShowDay} day={day} hasCourse={!!apt} />
+      {showCourse && apt && <HeatLegend rgb={APT_RGB} text={`${apt.course}の好走しやすさ`} />}
+      {showDay && day?.heat && <HeatLegend rgb={DAY_RGB} text={`馬場特注ゾーン（${day.surface ?? ""}・枠つきは偶然とは言いにくい）`} />}
       </div>
 
       <div>
@@ -337,23 +345,28 @@ function CourseAxes({ cm }: { cm: NonNullable<RunningMapFigure["course_map"]> })
   );
 }
 
-function BgSwitch({ bg, onChange, day }: { bg: "course" | "day"; onChange: (b: "course" | "day") => void; day: RunningMapDayTrend }) {
-  const btn = (k: "course" | "day", text: string, rgb: string) => (
-    <button type="button" onClick={() => onChange(k)} aria-pressed={bg === k}
-      style={{ minHeight: 30, padding: "0 10px", borderRadius: 999, cursor: "pointer", fontSize: 12, color: "var(--text)",
-        border: `1px solid ${bg === k ? `rgb(${rgb})` : "var(--border)"}`, background: bg === k ? `rgba(${rgb},0.18)` : "transparent" }}>{text}</button>
+function BgSwitch({ showCourse, onCourse, showDay, onDay, day, hasCourse }: {
+  showCourse: boolean; onCourse: (v: boolean) => void; showDay: boolean; onDay: (v: boolean) => void; day: RunningMapDayTrend | null; hasCourse: boolean;
+}) {
+  const btn = (on: boolean, set: (v: boolean) => void, text: string, rgb: string, disabled = false) => (
+    <button type="button" onClick={() => set(!on)} aria-pressed={on} disabled={disabled}
+      style={{ minHeight: 30, padding: "0 10px", borderRadius: 999, cursor: disabled ? "default" : "pointer", fontSize: 12, color: disabled ? "var(--text-dim)" : "var(--text)",
+        border: `1px solid ${on && !disabled ? `rgb(${rgb})` : "var(--border)"}`, background: on && !disabled ? `rgba(${rgb},0.18)` : "transparent" }}>{on && !disabled ? "✓ " : ""}{text}</button>
   );
+  const dayText = !day ? "馬場特注ゾーン（前のレースなし）"
+    : day.heat ? `馬場特注ゾーン${day.status === "trend" ? "（傾向あり）" : ""}` : "馬場特注ゾーン（まだ判定できません）";
   return (
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 6, fontSize: 11.5, color: "var(--text-dim)" }}>
-      背景の色
-      {btn("course", "コースの統計", APT_RGB)}
-      {btn("day", `今日の${day.surface ?? ""}馬場${day.status === "trend" ? "（傾向あり）" : ""}`, DAY_RGB)}
+      背景
+      {hasCourse && btn(showCourse, onCourse, "コースの統計", APT_RGB)}
+      {btn(showDay, onDay, dayText, DAY_RGB, !day?.heat)}
     </div>
   );
 }
 
 function DayTrend({ day, colorKey, onColor }: { day: RunningMapDayTrend; colorKey: string; onColor: (k: string) => void }) {
-  const head = `今日の${day.surface ?? ""}馬場（同じ日・このレースより前の ${day.n_races} レース・${day.n_runs} 頭${day.track_conditions.length ? `・${day.track_conditions.join("/")}` : ""}）`;
+  const span = day.n_races_prev != null ? `今日 ${day.n_races_today ?? 0} レース＋前日 ${day.n_races_prev} レース` : `前の ${day.n_races} レース`;
+  const head = `今日の${day.surface ?? ""}馬場（このレースより前の ${span}・${day.n_runs} 頭。直前のレースほど重く数える${day.track_today ? `・今日は${day.track_today}` : ""}）`;
   return (
     <div style={{ fontSize: 12, margin: "0 0 8px", padding: "6px 8px", borderRadius: 8, border: `1px solid rgba(${DAY_RGB},0.5)`, background: `rgba(${DAY_RGB},0.06)` }}>
       <div style={{ color: "var(--text-dim)" }}>{head}</div>

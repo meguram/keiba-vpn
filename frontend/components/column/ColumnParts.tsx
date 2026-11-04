@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ColumnChart, ColumnHeatmap, JockeyDistanceChart } from "@/components/column/ColumnChart";
+import { ColumnTreemap } from "@/components/column/ColumnTreemap";
 import {
   COLUMN_CATEGORIES, VERDICTS, categoryLabel, columnsIn, countIn,
   type Column, type ColumnBlock, type ColumnCategory,
@@ -130,6 +131,8 @@ export function ColumnBody({ blocks }: { blocks: ColumnBlock[] }) {
             return <JockeyDistanceChart key={i} block={b} />;
           case "heatmap":
             return <ColumnHeatmap key={i} block={b} />;
+          case "treemap":
+            return <ColumnTreemap key={i} block={b} />;
           case "accordion":
             return (
               <details key={i} className="card" style={{ padding: 0, overflow: "hidden" }}>

@@ -40,6 +40,7 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
     id: "bloodline", label: "血統", desc: "種牡馬・系統ごとの成長曲線と得意条件",
     children: [
       { id: "maturity", label: "早熟・晩成", desc: "年齢で好走距離や舞台が変わる血統" },
+      { id: "lineage", label: "系統", desc: "父系の系統で、産駒の適性はどれくらい決まるか" },
     ],
   },
   {
@@ -86,6 +87,7 @@ export type ColumnBlock =
   | ColumnChartBlock
   | JockeyDistanceChartBlock
   | ColumnHeatmapBlock
+  | ColumnTreemapBlock
   | { type: "accordion"; title: string; blocks: ColumnBlock[] };
 
 /** 折れ線グラフ。series が複数あるときは、見たい系列を切り替えて重ねて見られる（baseline は常に点線で出す） */
@@ -256,6 +258,99 @@ export type ColumnHeatmapBlock = {
   legend?: [string, string];
   caption?: string;
 };
+
+/**
+ * ツリーマップの節。value は面積（産駒の出走数など）。metrics[i] は block.metrics[i] の [値, 95%区間の下限, 上限, 標本数]（区間が無ければ null）。
+ * kind: line＝名前の付いた系統、branch＝父系の祖先の馬でまとめた群、pool＝少ない種牡馬をまとめた葉（sires 頭）。省略は種牡馬 1 頭の葉
+ */
+export type TreemapNode = {
+  id: string;
+  name: string;
+  value: number;
+  metrics: (number | null)[][];
+  kind?: "line" | "branch" | "pool";
+  sires?: number;
+  children?: TreemapNode[];
+};
+
+/** pct: 割合（51.5%）、m: 距離の差（+45m）、pos: 位置（0.47）、pt: 率の差（+1.2pt）、num: 数（+0.53） */
+export type TreemapFormat = "pct" | "m" | "pos" | "pt" | "num";
+
+/** 色を付ける指標。center から ±scale で色が最も濃くなる（発散型）。low・high は両端の意味 */
+export type TreemapMetric = {
+  key: string;
+  label: string;
+  kind?: string;
+  low: string;
+  high: string;
+  format: TreemapFormat;
+  center: number;
+  scale: number;
+  desc?: string;
+};
+
+/**
+ * 順序を保つツリーマップ。木（root）をブラウザでレイアウトし、節をタップするとその節へ潜る（パンくずで戻る）。
+ * 色はプルダウンで選んだ指標。start は最初に表示する節の id、maxDepth は枠と見出しを描く深さ
+ */
+export type ColumnTreemapBlock = {
+  type: "treemap";
+  title: string;
+  metrics: TreemapMetric[];
+  defaultMetric?: number;
+  start?: string;
+  maxDepth?: number;
+  root: TreemapNode;
+  caption?: string;
+};
+
+export function formatTreemapValue(v: number | null | undefined, format: TreemapFormat): string {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "–";
+  const sign = (x: number, s: string) => (Number(s) === 0 ? s.replace(/^-/, "") : `${x > 0 ? "+" : ""}${s}`);
+  switch (format) {
+    case "pct": return `${(v * 100).toFixed(1)}%`;
+    case "m": return `${sign(v, v.toFixed(0))}m`;
+    case "pos": return v.toFixed(2);
+    case "pt": return `${sign(v, (v * 100).toFixed(1))}pt`;
+    default: return sign(v, v.toFixed(2));
+  }
+}
+
+export type Rect = { x: number; y: number; w: number; h: number };
+
+/**
+ * 順序を保つツリーマップのレイアウト。値の列を、合計がほぼ半分になる位置で 2 つに分け、長い辺の向きに切ることを繰り返す
+ * （左→右・上→下の順が元の並びと一致する）。値が 0 以下の要素は面積 0 の矩形
+ */
+export function orderedLayout(values: number[], rect: Rect): Rect[] {
+  const out: Rect[] = values.map(() => ({ x: rect.x, y: rect.y, w: 0, h: 0 }));
+  const vs = values.map((v) => (v > 0 && Number.isFinite(v) ? v : 0));
+  const go = (lo: number, hi: number, r: Rect) => {
+    if (hi <= lo) return;
+    if (hi - lo === 1) { out[lo] = r; return; }
+    let total = 0;
+    for (let i = lo; i < hi; i++) total += vs[i];
+    if (total <= 0) { for (let i = lo; i < hi; i++) out[i] = { x: r.x, y: r.y, w: 0, h: 0 }; return; }
+    let acc = 0, k = lo + 1, best = Infinity;
+    for (let i = lo; i < hi - 1; i++) {
+      acc += vs[i];
+      const d = Math.abs(acc - total / 2);
+      if (d < best) { best = d; k = i + 1; }
+    }
+    let left = 0;
+    for (let i = lo; i < k; i++) left += vs[i];
+    const f = left / total;
+    if (r.w >= r.h) {
+      go(lo, k, { x: r.x, y: r.y, w: r.w * f, h: r.h });
+      go(k, hi, { x: r.x + r.w * f, y: r.y, w: r.w * (1 - f), h: r.h });
+    } else {
+      go(lo, k, { x: r.x, y: r.y, w: r.w, h: r.h * f });
+      go(k, hi, { x: r.x, y: r.y + r.h * f, w: r.w, h: r.h * (1 - f) });
+    }
+  };
+  go(0, vs.length, rect);
+  return out;
+}
 
 export type Column = {
   slug: string;
