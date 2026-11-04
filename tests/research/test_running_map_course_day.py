@@ -74,6 +74,19 @@ def test_build_ignores_runs_before_since_and_small_fields():
     assert maps["courses"] == {} and maps["groups"] == {}
 
 
+def test_window_adds_previous_day_of_the_same_meeting_with_gaps_and_skips_future_days():
+    w = rmd.window("202605041004")
+    assert w[:3] == [("202605041001", 2, False), ("202605041002", 1, False), ("202605041003", 0, False)]
+    prev = [x for x in w if x[2]]
+    assert prev[0] == ("202605040901", 11 + 3, True) and prev[-1] == ("202605040912", 0 + 3, True) and len(prev) == rmd.DAY_RACES
+    assert all(not p for _, _, p in rmd.window("202605040104"))                    # 開催の初日は前日（前週）を見ない
+    assert rmd.window("202605041004", "2026-11-08", today="2026-11-06") == []        # まだ前日も来ていない
+    assert all(p for _, _, p in rmd.window("202605041004", "2026-11-08", today="2026-11-07"))   # 前日だけ
+    # 直前ほど重い。前日は日をまたぐ分と、馬場状態が違えばさらに軽い
+    assert rmd.race_weight(0, False) == 1.0 and rmd.race_weight(6, False) == 0.5
+    assert rmd.race_weight(6, True) == 0.5 * rmd.PREV_DAY and rmd.race_weight(6, True, True) == 0.5 * rmd.PREV_DAY * rmd.COND_CHANGE
+
+
 def test_earlier_race_ids_are_same_day_same_venue_and_before():
     assert rmd.earlier_race_ids("202605041004") == ["202605041001", "202605041002", "202605041003"]
     assert rmd.earlier_race_ids("202605041001") == []

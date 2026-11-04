@@ -110,6 +110,10 @@ export type RunningMapDayTrend = {
   n_runs: number;
   races: string[];
   track_conditions: string[];
+  /** 今日のこのレースより前のレース数・同じ開催の前日のレース数（前日は軽く数える）・今日の馬場状態 */
+  n_races_today?: number;
+  n_races_prev?: number;
+  track_today?: string | null;
   /** 軸ごとの傾き（得点−期待を軸の値へ回帰）と t・p。trend は多重検定の補正後に傾向ありと判定されたもの */
   axes: { key: string; label: string; high: string; low: string; kind: "map" | "extra"; slope: number | null; t: number | null; p: number | null; n: number; trend: boolean }[];
   trend: { key: string; label: string; text: string; t: number | null }[];
