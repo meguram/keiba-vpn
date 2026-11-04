@@ -40,15 +40,25 @@ const CSS = `
 .ra-run small{font-size:9px;opacity:.8}
 .ra-run.x{background:transparent!important;border:1px dashed rgba(139,148,158,.7);color:var(--text-dim);opacity:.7}
 .ra-run.x b{text-decoration:line-through;font-weight:600}
+.ra-rw{display:inline-flex;flex-direction:column;align-items:center;gap:1px}
+.ra-rk{font-size:9px;line-height:1;color:var(--text-dim);white-space:nowrap}
+.ra-rw.p0 .ra-rk{color:var(--text);font-weight:800}
+.ra-rw.p0 .ra-run{box-shadow:0 0 0 1.5px var(--text)}
+.ra-m .ra-rk{font-size:8px}
 `;
 
+/** 直近の走のチップ。左が前走で、各チップの上に「前走・2走前…」を出す（前走は枠で強調） */
+const ago = (i: number) => (i === 0 ? "前走" : `${i + 1}走前`);
 function RunChips({ v }: { v: unknown }) {
   if (!Array.isArray(v) || v.length === 0) return <span className="dim">–</span>;
   return (
-    <span className="ra-runs">
+    <span className="ra-runs" aria-label="左が前走">
       {(v as PastRun[]).map(([p, x, ex], i) => (
-        <span key={i} className={`ra-run${ex ? " x" : ""}`} style={{ background: ex ? undefined : runColor(p, x) }} title={`${p}番手 / ${x}頭${ex ? "（外れ値として平均から除外）" : ""}`}>
-          <b>{p}</b><small>/{x}</small>
+        <span key={i} className={`ra-rw${i === 0 ? " p0" : ""}`}>
+          <span className="ra-rk">{ago(i)}</span>
+          <span className={`ra-run${ex ? " x" : ""}`} style={{ background: ex ? undefined : runColor(p, x) }} title={`${ago(i)}: ${p}番手 / ${x}頭${ex ? "（外れ値として平均から除外）" : ""}`}>
+            <b>{p}</b><small>/{x}</small>
+          </span>
         </span>
       ))}
     </span>
