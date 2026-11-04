@@ -134,6 +134,10 @@ def parallel_wrap(argv: list[str], env: dict[str, str]) -> tuple[list[str], dict
     alt = (env.get("SLACK_WEBHOOK_URL_PARALLEL") or "").strip()
     names = {*SLACK_VARS, *(f"{v}_PROD" for v in SLACK_VARS), *(k for k in env if k.startswith("SLACK_WEBHOOK_URL"))} - {"SLACK_WEBHOOK_URL_PARALLEL"}
     env = {**env, **{k: alt for k in names}}      # KEIBA_ENV=prod は *_PROD を先に探す（slack_notify.webhook_url）ので、それも同じにする
+    if not alt:
+        # 並走用の送り先が無い = 送らない。「送り先が無い」を送信失敗（scrape_status_notify は rc=14）にせず、
+        # 通知を無効にした扱い（rc=13）にする。失敗扱いだと dispatch が「ジョブが失敗」を 15 分ごとに本番の Slack へ送っていた（2026-11-04）
+        env["KEIBA_SLACK_NOTIFY"] = "0"
     return argv, env
 
 

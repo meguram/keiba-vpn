@@ -335,9 +335,20 @@ def test_parallel_run_wraps_steps_and_reroutes_slack(tmp_path, patch_doc):
     assert a_argv[:3] == ["-m", "src.ops.parallel_step", "mod.a"]
     assert a_env["SLACK_WEBHOOK_URL"] == "" and a_env["SLACK_WEBHOOK_URL_ALERT_PROD"] == "" and a_env["SLACK_WEBHOOK_URL_PROD"] == ""
     assert b_argv[:2] == ["-m", "mod.a"] and b_env["SLACK_WEBHOOK_URL"] == "https://main"       # parallel_guard: false は従来どおり
+    assert a_env["KEIBA_SLACK_NOTIFY"] == "0"            # 送り先が無い → 送らない（送信失敗にしない）
     c.base_env["SLACK_WEBHOOK_URL_PARALLEL"] = "https://par"
+    c.base_env["KEIBA_SLACK_NOTIFY"] = "1"
     _, env = D.parallel_wrap(["-m", "x"], c.base_env)
     assert env["SLACK_WEBHOOK_URL"] == env["SLACK_WEBHOOK_URL_ALERT_PROD"] == "https://par"
+    assert env["KEIBA_SLACK_NOTIFY"] == "1"                # 並走用の送り先があれば通知は生きたまま
+
+
+def test_scrape_notify_jobs_treat_disabled_notification_as_ok():
+    """並走中の通知無効（rc=13）を失敗にしない。失敗扱いだと『ジョブが失敗』が 15 分ごとに本番の Slack へ届いた（2026-11-04）。"""
+    from src.ops import job_map
+
+    jobs = [j for j in job_map.load()["jobs"] for st in j.get("steps") or [] if st["argv"][:2] == ["-m", "src.scripts.data.scrape_status_notify"]]
+    assert jobs and all(13 in st["ok_codes"] and 14 not in st["ok_codes"] for j in jobs for st in j["steps"])
 
 
 def test_no_wrap_outside_parallel_run(tmp_path, patch_doc):

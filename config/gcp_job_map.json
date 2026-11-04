@@ -66,12 +66,13 @@
  "scheduler_groups": {
   "g-0530": {
    "cron_jst": "30 5 * * *",
-   "size": "m",
+   "size": "l",
    "timeout_sec": 2400,
    "desc": "騎手・調教師統計",
    "jobs": [
     "jockey-trainer-stats"
-   ]
+   ],
+   "size_note": "2026-11-04: m(2GiB) では jockey-trainer-stats・parity-check がメモリ不足で強制終了(rc=-9)。1 日 1 回・数分なので l にしても月 50 円程度"
   },
   "g-0700": {
    "cron_jst": "0 7 * * *",
@@ -109,7 +110,7 @@
   },
   "g-0800": {
    "cron_jst": "0 8 * * *",
-   "size": "m",
+   "size": "l",
    "timeout_sec": 1800,
    "desc": "ページ品質・並走検証。月曜は網羅状況と追走難度 v2 の突き合わせも",
    "jobs": [
@@ -117,7 +118,8 @@
     "slack-scrape-coverage",
     "tracking-v2-weekly",
     "rb-state-daily"
-   ]
+   ],
+   "size_note": "2026-11-04: m(2GiB) では jockey-trainer-stats・parity-check がメモリ不足で強制終了(rc=-9)。1 日 1 回・数分なので l にしても月 50 円程度"
   },
   "g-1000-mon": {
    "cron_jst": "0 10 * * 1",
@@ -333,7 +335,7 @@
      ]
     }
    ],
-   "memory_mib": 2048,
+   "memory_mib": 6144,
    "timeout_sec": 1800,
    "env": [
     "KEIBA_ENV",
@@ -851,6 +853,10 @@
       "--send",
       "--source",
       "prod"
+     ],
+     "ok_codes": [
+      0,
+      13
      ]
     }
    ],
@@ -1048,7 +1054,7 @@
      ]
     }
    ],
-   "memory_mib": 1024,
+   "memory_mib": 4096,
    "timeout_sec": 900,
    "env": [
     "KEIBA_ENV",
@@ -1097,6 +1103,10 @@
       "--send",
       "--source",
       "prod"
+     ],
+     "ok_codes": [
+      0,
+      13
      ]
     }
    ],
@@ -1491,6 +1501,10 @@
       "--send",
       "--source",
       "prod"
+     ],
+     "ok_codes": [
+      0,
+      13
      ]
     }
    ],
@@ -2010,6 +2024,10 @@
       "--send",
       "--source",
       "prod"
+     ],
+     "ok_codes": [
+      0,
+      13
      ]
     }
    ],
