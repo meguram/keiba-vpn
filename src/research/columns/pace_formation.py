@@ -299,7 +299,7 @@ def lap_chart(d: pd.DataFrame, mats: dict[str, pd.DataFrame]) -> dict[str, Any]:
     first = next(iter(variants.values()))
     initial = [f"{LAP_AXES['逃げ馬の頭数'][2]}{b}" for b in NIGE_BINS[1]]
     return {"type": "chart", "title": "ハロンごとの平均ラップ（パターン別）", "xLabel": "スタート → ゴール（1F = 200m。最後の 3 つが上がり3F）", "yLabel": "平均ラップ（秒）",
-            "xs": first["xs"], "format": "num", "series": first["series"], "caption": first["caption"], "cascade": True, "fitAxis": True, "initial": initial,
+            "xs": first["xs"], "format": "num", "series": first["series"], "caption": first["caption"], "cascade": True, "fitAxis": True, "pivot": True, "initial": initial,
             "filters": [{"label": "会場", "options": venues}, {"label": "芝・ダート／距離", "options": sds}], "variants": variants}
 
 

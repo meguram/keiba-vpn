@@ -81,7 +81,7 @@ def test_lap_chart_cascade_keys():
     assert ch["filters"][0]["options"] == ["全場", "東京", "中山"]                      # 全場が先頭、そのあと JRA の並び
     assert ch["filters"][1]["options"] == ["芝1600", "芝2000", "ダート1200"]            # 芝 → ダート、距離の短い順
     assert "全場|芝1600" in ch["variants"] and "全場|芝2000" not in ch["variants"]   # 1 コースだけの距離は全場を作らない
-    assert ch["fitAxis"]
+    assert ch["fitAxis"] and ch["pivot"]
     v16, v20 = ch["variants"]["全場|芝1600"], ch["variants"]["東京|芝2000"]
     assert v16["xs"][0] == "1F スタート" and v16["xs"][-1] == "8F ゴール" and len(v16["xs"]) == 8       # 距離なりの長さ
     assert len(v20["xs"]) == 10 and all(len(x["values"]) == 10 for x in v20["series"])

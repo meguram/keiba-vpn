@@ -326,8 +326,47 @@ export function ColumnChart({ block: whole }: { block: ColumnChartBlock }) {
         {block.caption && <span>{block.caption}</span>}
       </div>
 
-      {pairIdx.length === 2 ? <CompareTable block={block} a={pairIdx[0]} b={pairIdx[1]} /> : (block.series.some((s) => s.n) || y2?.series.some((s) => s.n)) && <SeriesTable block={block} />}
+      {block.pivot && <PivotTable block={block} picked={picked} />}
+      {block.pivot ? null : pairIdx.length === 2 ? <CompareTable block={block} a={pairIdx[0]} b={pairIdx[1]} /> : (block.series.some((s) => s.n) || y2?.series.some((s) => s.n)) && <SeriesTable block={block} />}
     </figure>
+  );
+}
+
+/** 選んだ系列（と点線の基準）の値を、系列 × 横軸の表で出す。色はグラフの線と同じ */
+function PivotTable({ block, picked }: { block: ColumnChartBlock; picked: number[] }) {
+  const fmt = block.format ?? "pct";
+  const rows = [
+    ...block.series.filter((s) => s.baseline).map((s) => ({ s, color: "#8b949e" })),
+    ...picked.map((i, k) => ({ s: block.series[i], color: COLORS[k % COLORS.length] })).filter((r) => r.s),
+  ];
+  const TD = { padding: "5px 6px", borderTop: "1px solid var(--border)", textAlign: "right" as const, fontVariantNumeric: "tabular-nums" as const, whiteSpace: "nowrap" as const };
+  return (
+    <div style={{ marginTop: 8, fontSize: 12 }}>
+      <div style={{ color: "var(--text-dim)", marginBottom: 4 }}>{block.yLabel}（選んだパターン）</div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ color: "var(--text-dim)" }}>
+              <th style={{ ...TD, textAlign: "left", borderTop: "none" }}>パターン</th>
+              {block.xs.map((lab, j) => <th key={j} style={{ ...TD, borderTop: "none" }}>{lab}</th>)}
+              <th style={{ ...TD, borderTop: "none" }}>レース数</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ s, color }) => {
+              const n = s.n?.find((v) => typeof v === "number");
+              return (
+                <tr key={s.name}>
+                  <td style={{ ...TD, textAlign: "left", color, fontWeight: 600 }}>{s.name}</td>
+                  {block.xs.map((_, j) => <td key={j} style={TD}>{typeof s.values[j] === "number" ? formatValue(s.values[j], fmt) : "–"}</td>)}
+                  <td style={TD}>{n != null ? n.toLocaleString() : "–"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
