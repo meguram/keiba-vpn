@@ -8,6 +8,7 @@ from pathlib import Path
 from itertools import product
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from src.research.columns.compare_series import COLUMNS_DIR, FLAT_DIR, RACE_QUALITY_PATH, jump_mask
@@ -178,6 +179,121 @@ def course_table(d: pd.DataFrame, min_races: int = 150) -> tuple[list[list[str |
     return rows, same
 
 
+# ── ハロンごとのラップの推移 ─────────────────────────
+
+LAP_MIN_COURSE = 100          # コースのプルダウンに出す最小のレース数
+LAP_MIN_BIN = 20              # 1 本の線に出す最小のレース数
+LAP_AXES = {                  # 分け方 → (列, 区分, 線の名前の前置き)
+    "逃げ馬の頭数": ("nige_b", NIGE_BINS[1], "逃げ馬 "),
+    "前走3番手以内の頭数": ("prev_b", PREV_BINS[1], "前走3番手以内 "),
+    "上位3人気の差し・追込の頭数": ("rear_b", REAR_BINS[1], "上位3人気の差し・追込 "),
+}
+
+
+def parse_laps(raw: Any) -> list[float]:
+    """lap_times は '[12.3, 11.4, …]' の文字列。正の有限の数だけを残す（読めなければ空）。"""
+    try:
+        v = json.loads(raw) if isinstance(raw, str) else list(raw)
+        return [float(x) for x in v if isinstance(x, (int, float)) and np.isfinite(x) and x > 0]
+    except (TypeError, ValueError):
+        return []
+
+
+def load_laps(first_year: int, last_year: int) -> pd.Series:
+    """レースごとの 1 ハロンごとのラップ（秒、スタート→ゴール）。race_id をキーにした list の Series。"""
+    parts = [pd.read_parquet(FLAT_DIR / str(y) / "race_result_lap_race.parquet", columns=["race_id", "lap_times"])
+             for y in range(first_year, last_year + 1) if (FLAT_DIR / str(y) / "race_result_lap_race.parquet").exists()]
+    d = pd.concat(parts, ignore_index=True).drop_duplicates("race_id")
+    return pd.Series(d["lap_times"].map(parse_laps).to_numpy(), index=d["race_id"].to_numpy(), name="laps")
+
+
+def attach_laps(d: pd.DataFrame, laps: pd.Series) -> dict[str, np.ndarray]:
+    """d（レースの表）にラップを付け、コースごとの『レース × ハロン』の行列を返す。ハロン数がコースの最頻値と違うレースは除く。
+    d に前半3F・中盤・上がり3F の『コース平均とのラップ差の合計（秒）』（seg_first / seg_mid / seg_last）を足す（d を直接更新）。"""
+    w = d[["key"]].join(laps.rename("laps"), how="inner")
+    w["nl"] = w["laps"].map(len)
+    out: dict[str, np.ndarray] = {}
+    for col in ("seg_first", "seg_mid", "seg_last"):
+        d[col] = np.nan
+    for key, g in w.groupby("key"):
+        mode = g["nl"].mode().iloc[0]
+        g = g[g["nl"] == mode]
+        if mode < 7 or len(g) < LAP_MIN_COURSE:
+            continue
+        M = np.vstack(g["laps"].to_numpy())
+        dev = M - M.mean(axis=0)
+        out[key] = pd.DataFrame(M, index=g.index)
+        d.loc[g.index, "seg_first"] = dev[:, :3].sum(axis=1)
+        d.loc[g.index, "seg_mid"] = dev[:, 3:-3].sum(axis=1)
+        d.loc[g.index, "seg_last"] = dev[:, -3:].sum(axis=1)
+    return out
+
+
+def lap_series(name: str, dev: np.ndarray, width: int) -> dict[str, Any]:
+    """ハロンごとの平均（コース平均との差、秒）。n は線全体のレース数。区間は平均 ± 1.96 × 標準誤差。足りない分（短いコース）は空欄。"""
+    n = dev.shape[0]
+    pad = width - dev.shape[1]
+    if n < LAP_MIN_BIN:
+        return {"name": name, "values": [None] * width, "n": [n] * dev.shape[1] + [None] * pad, "ci": [None] * width}
+    m = dev.mean(axis=0)
+    se = dev.std(axis=0, ddof=1) / np.sqrt(n)
+    return {"name": name, "values": [round(float(v), 3) for v in m] + [None] * pad, "n": [n] * dev.shape[1] + [None] * pad,
+            "ci": [[round(float(a), 3), round(float(b), 3)] for a, b in zip(m - 1.96 * se, m + 1.96 * se)] + [None] * pad}
+
+
+def lap_units(mats: dict[str, pd.DataFrame]) -> dict[str, tuple[np.ndarray, pd.Index, np.ndarray]]:
+    """プルダウンの選択肢ごとに（コース平均とのラップ差の行列, レースの index, 平均ラップ）を作る。
+    先頭側は同じ面・距離を全場でまとめたもの（差はコースごとの平均から測ってから合わせる）、そのあとに個別のコース。"""
+    unit: dict[str, tuple[np.ndarray, pd.Index, np.ndarray]] = {}
+    groups: dict[str, list[str]] = {}
+    for key, m in mats.items():
+        M = m.to_numpy()
+        unit[key] = (M - M.mean(axis=0), m.index, M.mean(axis=0))
+        groups.setdefault(key[2:], []).append(key)
+    out: dict[str, tuple[np.ndarray, pd.Index, np.ndarray]] = {}
+    pooled = {}
+    for g, ks in groups.items():
+        if len(ks) < 2 or len({unit[k][0].shape[1] for k in ks}) != 1:
+            continue
+        dev = np.vstack([unit[k][0] for k in ks])
+        if len(dev) >= 2 * LAP_MIN_COURSE:
+            pooled[f"{g}（全場）"] = (dev, pd.Index(np.concatenate([unit[k][1].to_numpy() for k in ks])), np.vstack([unit[k][2] for k in ks]).mean(axis=0))
+    out.update(dict(sorted(pooled.items(), key=lambda kv: -len(kv[1][0]))))
+    out.update(dict(sorted(unit.items(), key=lambda kv: -len(kv[1][0]))))
+    return out
+
+
+def lap_chart(d: pd.DataFrame, mats: dict[str, pd.DataFrame]) -> dict[str, Any]:
+    """コース・分け方をプルダウンで選ぶ、ハロンごとのラップ推移のグラフ。縦軸は『そのコースの全レースの平均ラップとの差』（0 が平均、プラスは遅い）。"""
+    units = lap_units(mats)
+    keys = list(units)
+    width = max(u[0].shape[1] for u in units.values())
+    xs = [f"{i}F目" for i in range(1, width + 1)]
+    variants: dict[str, Any] = {}
+    for key, (dev, idx, mean) in units.items():
+        g = d.loc[idx]
+        mean_txt = " - ".join(f"{v:.1f}" for v in mean)
+        for an, (col, bins, pre) in LAP_AXES.items():
+            ser = [lap_series(pre + b, dev[(g[col] == b).to_numpy()], width) for b in bins]
+            variants[f"{key}|{an}"] = {"series": ser, "caption": (
+                f"{key}（{len(dev):,} レース）。平均ラップ（秒）: {mean_txt}。{LAP_MIN_BIN} レースに満たない線は出していない。縦線は 95% 信頼区間。")}
+    base = variants[f"{keys[0]}|{next(iter(LAP_AXES))}"]
+    return {"type": "chart", "title": "ハロンごとのラップ推移（コース平均との差）", "xLabel": "スタートからのハロン（200m）。最後の 3 つが上がり3F", "yLabel": "平均ラップとの差（秒。プラスは遅い）",
+            "xs": xs, "format": "num", "series": base["series"], "caption": base["caption"],
+            "filters": [{"label": "コース", "options": keys}, {"label": "分け方", "options": list(LAP_AXES)}], "variants": variants}
+
+
+def segment_rows(d: pd.DataFrame) -> list[list[str | int]]:
+    """分け方ごとの区分について、前半3F・中盤・上がり3F の『コース平均とのラップ差の合計（秒）』（コースをならした平均）。"""
+    rows: list[list[str | int]] = []
+    z = d[d["seg_first"].notna()]
+    for an, (col, bins, pre) in LAP_AXES.items():
+        for b in bins:
+            w = z[z[col] == b]
+            rows.append([pre + b, len(w), *(f"{w[c].mean():+.2f}" for c in ("seg_first", "seg_mid", "seg_last"))])
+    return rows
+
+
 def analyze() -> dict[str, Any]:
     runs = load_runs(TEST_YEAR)
     R = race_table(runs, MAIN_YEARS[0])
@@ -197,6 +313,11 @@ def analyze() -> dict[str, Any]:
     AR_T = T[T["rear_b"] != "不明"]
     a["AR"], a["AR_T"] = AR, AR_T
     a["n_course"] = A["key"].nunique()
+    laps = load_laps(MAIN_YEARS[0], MAIN_YEARS[1])
+    A = A.copy()
+    mats = attach_laps(A, laps)
+    a["A_lap"], a["lap_chart"], a["seg_rows"] = A, lap_chart(A, mats), segment_rows(A)
+    a["n_lap_courses"], a["n_lap_races"] = len(mats), int(A["seg_first"].notna().sum())
     return a
 
 
@@ -278,6 +399,18 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
             + ("はっきりした差があります。" if rear_sig else "向きはスロー寄りですが誤差の範囲で、ペースの目安にはなりません。") + "\n\n"
             f"頭数・クラス・コースをそろえても残る差です（{y0}〜{y1}年 {len(A):,} レースの回帰）。集計に使っていない {TEST_YEAR} 年（{len(T):,} レース）でも、逃げ馬 2頭以上は {sign_text(ft, n_)}、"
             f"前走3番手以内 6頭以上は {sign_text(ft, pv6)} と同じ向きでした。")},
+        {"type": "heading", "text": "ハロンごとのラップの推移（コース別）"},
+        {"type": "text", "text": (
+            "ハイ・ミドル・スローの 3 区分ではなく、ラップがスタートからゴールまでどう推移するかを見ます。"
+            "縦軸は、そのコースの全レースの平均ラップとの差（秒）で、0 が平均、プラスは遅い区間です。"
+            "コースと分け方（逃げ馬の頭数 / 前走3番手以内の頭数 / 上位3人気の差し・追込の頭数）はプルダウンで切り替えられます。"
+            "コースの選択肢の先頭にある「（全場）」は、同じ面・距離の全場を合わせたもので、レース数が多く線が安定します。"
+            "個別のコースは 1 本あたりのレース数が少なく、線がぶれやすいので、縦線（95% 信頼区間）が 0 をまたぐところは差と読まないでください。"
+            "下の表は全コースを合わせた、前半3F・中盤・上がり3F の差です。")},
+        a["lap_chart"],
+        {"type": "table", "columns": ["条件", "レース数", "前半3F（秒）", "中盤（秒）", "上がり3F（秒）"], "rows": a["seg_rows"],
+         "caption": (f"{y0}〜{y1}年、{a['n_lap_courses']} コースの {a['n_lap_races']:,} レース。各区間のラップを、そのコースの平均との差で足し合わせたもの（マイナスは速い）。"
+                     "中盤は前半3F と上がり3F を除いた区間。")},
         {"type": "heading", "text": "逃げ馬の頭数とペース"},
         {"type": "text", "text": "逃げ馬を「直近 3 走のうち 2 走以上で、最初のコーナーを 1 番手で通った馬」と決め、そのレースに何頭いるかで分けました。"},
         a["nige_chart"],

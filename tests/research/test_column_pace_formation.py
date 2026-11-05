@@ -48,3 +48,37 @@ def test_rate_series_blanks_small_cells():
     hi, lo = pf.rate_series(d, "x", ["a", "b"])
     assert hi["values"][0] == 0.5 and lo["values"][0] == 0.5
     assert hi["values"][1] is None and hi["ci"][1] is None                           # 5 レースの点は出さない
+
+
+def test_parse_laps():
+    assert pf.parse_laps("[12.3, 11.4, 0, -1, 12.0]") == [12.3, 11.4, 12.0]
+    assert pf.parse_laps("12.3-11.4") == []
+    assert pf.parse_laps(None) == []
+
+
+def test_lap_series_blank_and_pad():
+    dev = np.array([[0.1, -0.1, 0.0]] * 30) + np.arange(30)[:, None] * 0.001
+    s = pf.lap_series("x", dev, 5)
+    assert len(s["values"]) == 5 and s["values"][3:] == [None, None] and s["ci"][4] is None
+    assert s["n"][:3] == [30, 30, 30]
+    few = pf.lap_series("y", dev[:5], 5)
+    assert few["values"] == [None] * 5
+
+
+def test_lap_chart_pooled_and_variants():
+    rng = np.random.default_rng(0)
+    mats, rows = {}, []
+    for key in ("東京芝1600", "中山芝1600", "東京芝2000"):
+        n = 150
+        idx = [f"{key}{i}" for i in range(n)]
+        mats[key] = pd.DataFrame(12.0 + rng.normal(0, 0.2, (n, 8 if "1600" in key else 10)), index=idx)
+        rows += [{"race_id": i, "nige_b": ["0頭", "1頭", "2頭以上"][j % 3], "prev_b": "2〜3頭", "rear_b": "0〜1頭"} for j, i in enumerate(idx)]
+    d = pd.DataFrame(rows).set_index("race_id")
+    ch = pf.lap_chart(d, mats)
+    opts = ch["filters"][0]["options"]
+    assert opts[0] == "芝1600（全場）" and "芝2000（全場）" not in opts            # 1 コースだけの距離は全場を作らない
+    assert len(ch["xs"]) == 10
+    v = ch["variants"][f"{opts[0]}|逃げ馬の頭数"]
+    assert [s["name"] for s in v["series"]] == ["逃げ馬 0頭", "逃げ馬 1頭", "逃げ馬 2頭以上"]
+    assert v["series"][0]["n"][0] == 100 and v["series"][0]["values"][8] is None
+    assert len(ch["variants"]) == len(opts) * len(pf.LAP_AXES)
