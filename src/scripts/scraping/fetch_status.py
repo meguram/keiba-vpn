@@ -48,6 +48,9 @@ REQUIRED_FOR_TRAINING = ("fast", "horse", "cards", "lap")   # 学習に必須の
 _TS = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[\w+\] (.*)$")
 _RUN_START = re.compile(r"^===== (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\S* START")   # 起動スクリプトが書く実行の区切り（JST）
 _GET = re.compile(r"scraper\.client: GET https://([a-z.]*netkeiba\.com)/(\w+)")
+# オッズ・2連系・3連複・指数は JSON API で取り、client.get を通らないので GET の行が無い（新しい版は「GET … (api)」を書くが、
+# 1 レースで複数回の API を呼ぶ段階もある）。残り件数の単位（1 レース = 1 件）に合わせ、保存の行を 1 件として数える
+_API_SAVE = re.compile(r"scraper\.run: 保存: (race_odds|race_pair_odds|race_trifecta_odds|race_barometer)/")
 _HORSE_GET = re.compile(r"scraper\.client: GET https://db\.netkeiba\.com/horse/(?:(result|ped)/)?(\w{10})/")   # 祖先の ID は英数字（000a…）のこともある
 
 
@@ -83,12 +86,15 @@ def scan_log(path: Path, now: datetime, windows_h: tuple[int, ...] = SHOW_WINDOW
         out["first"] = out["first"] or ts
         out["last_ts"], out["last_msg"] = ts, m.group(2)
         g = _GET.search(line)
-        if not g:
+        if g and line.rstrip().endswith("(api)"):
+            continue                       # API の GET は保存の行で数える（二重に数えない）
+        a = None if g else _API_SAVE.search(line)
+        if not g and not a:
             continue
-        kind = f"{g.group(1).split('.')[0]}/{g.group(2)}"
+        kind = f"{g.group(1).split('.')[0]}/{g.group(2)}" if g else f"api/{a.group(1)}"
         out["kinds"][kind] = out["kinds"].get(kind, 0) + 1
         out["run_gets"] += 1
-        h = _HORSE_GET.search(line)
+        h = _HORSE_GET.search(line) if g else None
         if h:
             out["run_horse_gets"] += 1
             out["run_horse_ids"].add(h.group(2))

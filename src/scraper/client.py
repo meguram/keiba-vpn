@@ -48,6 +48,24 @@ from src.scraper import stall_watchdog as _stall_watchdog
 
 logger = logging.getLogger("scraper.client")
 
+# client.get の中で session.get を呼んでいる間は True。オッズ・指数の JSON API のように session を直接使う取得と区別する
+_IN_CLIENT_GET = threading.local()
+
+
+def _log_direct_get(orig):
+    """session.get を直接使う取得（オッズ・2連系・3連複・指数の JSON API）にも、client.get と同じ形の「GET <url>」の行を出す。
+    取得の状況（src/scripts/scraping/fetch_status.py）はこの行を数えて速度・終了見込みを出すので、無いとオッズの段階が 0 件/時になる
+    （2026-11-05）。client.get を通った GET は client.get が既に書くので書かない。間隔の制御・日次の回数には手を入れない。"""
+    import functools
+
+    @functools.wraps(orig)
+    def get(url, *a, **kw):
+        if "netkeiba.com" in str(url) and not getattr(_IN_CLIENT_GET, "on", False):
+            logger.info("GET %s (api)", url)
+        return orig(url, *a, **kw)
+
+    return get
+
 _ENCODING_MAP = {
     "db.netkeiba.com": "EUC-JP",
     "race.netkeiba.com": "EUC-JP",
@@ -502,6 +520,7 @@ class NetkeibaClient:
         from src.scraper.timing_stats import wrap_session_get
 
         session.get = wrap_session_get(session.get)  # 実測時間の蓄積（timing_stats）
+        session.get = _log_direct_get(session.get)   # session を直接使う API の取得も「GET」の行を残す
         return session
 
     def _refresh_session(self) -> None:
@@ -649,7 +668,11 @@ class NetkeibaClient:
                 )
                 try:
                     with _stall_watchdog.track_http(url):
-                        resp = self._session.get(url, timeout=self.timeout)
+                        _IN_CLIENT_GET.on = True
+                        try:
+                            resp = self._session.get(url, timeout=self.timeout)
+                        finally:
+                            _IN_CLIENT_GET.on = False
                 except Exception as _exc:          # 接続エラー・タイムアウト等。オブザーバ（アクセス制限の検知）に知らせてから従来どおり送出
                     for _observer in tuple(_RESPONSE_OBSERVERS):
                         _on_error = getattr(_observer, "on_error", None)
