@@ -7,10 +7,12 @@ import math
 import numpy as np
 
 from src.research.columns import sire_line_treemap as t
+from src.scripts.scraping.trace_sire_line_origins import compact_record
 
 
 def _rec(name, chain, lines):
-    return {"name": name, "chain": chain, "lines": lines}
+    """出力（大きな版）の 1 頭分を作り、記事が読む小さな版にする。"""
+    return compact_record({"name": name, "chain": chain, "lines": lines, "origin_line": lines[-1], "root": chain[-1][:2]})
 
 
 ORIGIN = {
@@ -36,7 +38,8 @@ def test_line_path_skips_repeated_names():
 
 
 def test_sire_path_branches_below_the_line_founder():
-    p = t.sire_path(ORIGIN["V"])
+    assert ORIGIN["V"]["chain"] == [["E", "エルコンドルパサー"], ["K", "Kingmambo (米)"], ["M", "Mr. Prospector (米)"]]
+    p = t.sire_path("V", ORIGIN["V"])
     assert [n for _, n, _ in p] == ["Raise a Native系", "Mr. Prospector系", "Kingmambo系", "エルコンドルパサー系", "ヴァーミリアン"]
     assert [k for _, _, k in p] == ["line", "line", "branch", "branch", "sire"]
     assert t.strip_country("Kingmambo (米)") == "Kingmambo"

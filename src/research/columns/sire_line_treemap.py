@@ -7,7 +7,8 @@ frontend/content/columns/sire-line-aptitude.json を書く。
   レース: compare_series.load()（2020〜2025 年の JRA 平地。障害・取消・除外を除く）。馬場状態は race_result_flat の track_condition、
           初角の位置は race_context.positions()（同じ流儀で 2019 年から読む）。
   父:     compare_series.SIRE_MAP_PATH（horse_sire_map.parquet）。
-  系統:   data/local/pedigree_lines/sire_line_origin.json（git の管理外。src/scripts/scraping/trace_sire_line_origins.py が作る）。
+  系統:   data/meta/pedigree_lines/sire_line_origin.json（git の管理下の小さな版。src/scripts/scraping/trace_sire_line_origins.py が、
+          管理外の data/local/pedigree_lines/sire_line_origin.json と一緒に作る）。
 
 適性の指標（種牡馬ごと、産駒の出走から。能力の差が入らないよう、分布か「オッズの見込みとの差」の差にする）:
   芝↔ダート   （分布）ダートを走った割合。
@@ -53,10 +54,11 @@ import pandas as pd
 from src.research.columns.compare_series import FLAT_DIR, SIRE_MAP_PATH, YEARS, jump_mask, load
 from src.research.columns.early_maturing_bloodline import expected_top3
 from src.research.columns.race_context import positions
+from src.scripts.scraping.trace_sire_line_origins import line_path  # noqa: F401（テストからも t.line_path で使う）
 
 REPO = Path(__file__).resolve().parents[3]
 OUT = REPO / "frontend/content/columns/sire-line-aptitude.json"
-ORIGIN_PATH = REPO / "data/local/pedigree_lines/sire_line_origin.json"
+ORIGIN_PATH = REPO / "data/meta/pedigree_lines/sire_line_origin.json"
 MIN_LEAF = 100        # 木に 1 頭で載せる種牡馬の産駒の出走数（未満は「ほか N 頭」）
 MIN_TEST = 300        # 系統の差の検定に入れる種牡馬の産駒の出走数
 MIN_GROUP = 3         # 検定で 1 つの系統として扱う最少の種牡馬数（未満は「その他」にまとめる）
@@ -192,26 +194,14 @@ def metric_raw(st: np.ndarray, metric: Metric) -> tuple[float, float, int]:
 # ── 系統の木 ──────────────────────────────────────────────
 
 
-def line_path(lines: list[str | None]) -> list[str]:
-    """lines（新しい→古い）を、根から下への経路にする。同じ系統名が 2 回目以降に出たら飛ばす。"""
-    out: list[str] = []
-    for ln in reversed(lines):
-        if ln and ln not in out:
-            out.append(ln)
-    return out
-
-
-def sire_path(rec: dict[str, Any]) -> list[tuple[str, str, str]]:
-    """根 → 葉の節の列 [(key, 名前, 種類)]。種類は line（名前の付いた系統）・branch（父系の祖先の馬）・sire（種牡馬の産駒）。"""
+def sire_path(sid: str, rec: dict[str, Any]) -> list[tuple[str, str, str]]:
+    """根 → 葉の節の列 [(key, 名前, 種類)]。種類は line（名前の付いた系統）・branch（父系の祖先の馬）・sire（種牡馬の産駒）。
+    rec は小さな版の 1 頭分（chain は父から、名前の付いた最も下の系統の祖まで）。"""
     path = line_path(rec["lines"])
     nodes = [("L:" + "/".join(path[: i + 1]), ln, "line") for i, ln in enumerate(path)]
-    chain = rec["chain"]
-    last = path[-1] if path else None
-    founder = max((j for j, c in enumerate(chain) if c[2] == last), default=0)
-    for j in range(founder - 1, 0, -1):         # 系統の祖の 1 つ下から、種牡馬の父まで
-        hid, hname = chain[j][0], strip_country(chain[j][1])
-        nodes.append(("H:" + hid, hname + "系", "branch"))
-    nodes.append(("S:" + chain[0][0], strip_country(rec["name"]), "sire"))
+    for hid, hname in reversed(rec["chain"][:-1]):     # 系統の祖の 1 つ下から、種牡馬の父まで
+        nodes.append(("H:" + hid, strip_country(hname) + "系", "branch"))
+    nodes.append(("S:" + sid, strip_country(rec["name"]), "sire"))
     return nodes
 
 
@@ -236,7 +226,7 @@ class Node:
             yield from c.walk()
 
 
-def build_tree(origin: dict[str, dict[str, Any]], sires: set[str]) -> Node:
+def build_tree(origin: dict[str, dict[str, Any]], sires: set[str] | list[str]) -> Node:
     """sires（データに出走のある種牡馬）の木。"""
     root = Node("ROOT", "全種牡馬", "root")
     index: dict[str, Node] = {"ROOT": root}
@@ -245,7 +235,7 @@ def build_tree(origin: dict[str, dict[str, Any]], sires: set[str]) -> Node:
         if rec is None:
             continue
         cur = root
-        for key, name, kind in sire_path(rec):
+        for key, name, kind in sire_path(sid, rec):
             nd = index.get(key)
             if nd is None or kind == "sire":
                 nd = Node(key, name, kind, sires=[sid] if kind == "sire" else [])
@@ -452,7 +442,7 @@ def holm(ps: list[float]) -> list[float]:
 
 def analyze(df: pd.DataFrame, origin: dict[str, dict[str, Any]]) -> dict[str, Any]:
     st = sire_stats(df)
-    sires = {s for s in st if s in origin}
+    sires = sorted(s for s in st if s in origin)       # 並べ替え検定・表の並びが実行ごとに変わらないよう、順を固定する
     names = {s: strip_country(origin[s]["name"]) for s in sires}
     full = build_tree(origin, sires)
     aggregate(full, st)
@@ -480,7 +470,7 @@ def analyze(df: pd.DataFrame, origin: dict[str, dict[str, Any]]) -> dict[str, An
     # 検定
     test_sires = [s for s in sires if st[s][0][0] >= MIN_TEST]
     line_of = {s: line_path(origin[s]["lines"])[-1] for s in test_sires}
-    father_of = {s: strip_country(origin[s]["chain"][1][1]) if len(origin[s]["chain"]) > 1 else "?" for s in test_sires}
+    father_of = {s: strip_country(origin[s]["chain"][0][1]) if origin[s]["chain"] else "?" for s in test_sires}
     tests = []
     raw_cache = {s: {m.key: metric_raw(st[s], m) for m in METRICS + ODDS_METRICS} for s in test_sires}
     for gname, gmap in [("系統", line_of), ("父", father_of)]:

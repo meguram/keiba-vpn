@@ -318,38 +318,113 @@ export function formatTreemapValue(v: number | null | undefined, format: Treemap
 
 export type Rect = { x: number; y: number; w: number; h: number };
 
+/** 値の列を、0 以下・非有限を 0 にして返す */
+function cleanValues(values: number[]): number[] {
+  return values.map((v) => (v > 0 && Number.isFinite(v) ? v : 0));
+}
+
+/** 矩形の縦横比（長い辺 / 短い辺、1 以上）。面積 0 は 1 とする */
+export function aspectRatio(r: Rect): number {
+  const a = Math.min(r.w, r.h), b = Math.max(r.w, r.h);
+  return a > 0 ? b / a : 1;
+}
+
 /**
- * 順序を保つツリーマップのレイアウト。値の列を、合計がほぼ半分になる位置で 2 つに分け、長い辺の向きに切ることを繰り返す
- * （左→右・上→下の順が元の並びと一致する）。値が 0 以下の要素は面積 0 の矩形
+ * 順序を保つツリーマップのレイアウト。値の列を 2 つに分けて縦か横に切ることを繰り返す（先の要素が左か上に来るので、
+ * 並び順が左→右・上→下に保たれ、似た適性が隣り合う）。分ける位置と向きは、子の矩形の (log 縦横比)² の和が最小になるものを探す
+ * （2 乗で、細い短冊を強く嫌う）。この悪さは矩形の縦横比だけで決まり大きさに依らないので、(lo, hi, 縦横比を丸めた値) で覚える。
+ * 値が 0 以下の要素は面積 0 の矩形
  */
 export function orderedLayout(values: number[], rect: Rect): Rect[] {
-  const out: Rect[] = values.map(() => ({ x: rect.x, y: rect.y, w: 0, h: 0 }));
-  const vs = values.map((v) => (v > 0 && Number.isFinite(v) ? v : 0));
-  const go = (lo: number, hi: number, r: Rect) => {
-    if (hi <= lo) return;
-    if (hi - lo === 1) { out[lo] = r; return; }
-    let total = 0;
-    for (let i = lo; i < hi; i++) total += vs[i];
-    if (total <= 0) { for (let i = lo; i < hi; i++) out[i] = { x: r.x, y: r.y, w: 0, h: 0 }; return; }
-    let acc = 0, k = lo + 1, best = Infinity;
-    for (let i = lo; i < hi - 1; i++) {
-      acc += vs[i];
-      const d = Math.abs(acc - total / 2);
-      if (d < best) { best = d; k = i + 1; }
+  const vs = cleanValues(values);
+  const n = vs.length;
+  const pre = [0];
+  for (const v of vs) pre.push(pre[pre.length - 1] + v);
+  const sum = (lo: number, hi: number) => pre[hi] - pre[lo];
+  const pos = vs.map((v) => (v > 0 ? 1 : 0));
+  const memo = new Map<string, { cost: number; k: number; vertical: boolean }>();
+  const STEP = 0.1;                                       // log(幅/高さ) を丸める刻み
+  const best = (lo: number, hi: number, logAR: number): { cost: number; k: number; vertical: boolean } => {
+    let cnt = 0;
+    for (let i = lo; i < hi; i++) cnt += pos[i];
+    if (cnt <= 1) return { cost: cnt ? logAR * logAR : 0, k: -1, vertical: true };
+    const q = Math.round(logAR / STEP);
+    const key = `${lo},${hi},${q}`;
+    const hit = memo.get(key);
+    if (hit) return hit;
+    const ar = Math.exp(q * STEP);                          // 幅 / 高さ（面積 1 とみなす）
+    const total = sum(lo, hi);
+    let out = { cost: Infinity, k: lo + 1, vertical: true };
+    for (let k = lo + 1; k < hi; k++) {
+      const f = sum(lo, k) / total;
+      if (f <= 0 || f >= 1) continue;
+      // 縦に切る（左右に並べる）: 幅が f と 1-f に分かれる
+      const cv = best(lo, k, Math.log(ar * f)).cost + best(k, hi, Math.log(ar * (1 - f))).cost;
+      if (cv < out.cost) out = { cost: cv, k, vertical: true };
+      // 横に切る（上下に並べる）: 高さが f と 1-f に分かれる
+      const ch = best(lo, k, Math.log(ar / f)).cost + best(k, hi, Math.log(ar / (1 - f))).cost;
+      if (ch < out.cost) out = { cost: ch, k, vertical: false };
     }
-    let left = 0;
-    for (let i = lo; i < k; i++) left += vs[i];
-    const f = left / total;
-    if (r.w >= r.h) {
-      go(lo, k, { x: r.x, y: r.y, w: r.w * f, h: r.h });
-      go(k, hi, { x: r.x + r.w * f, y: r.y, w: r.w * (1 - f), h: r.h });
+    memo.set(key, out);
+    return out;
+  };
+  const out: Rect[] = vs.map(() => ({ x: rect.x, y: rect.y, w: 0, h: 0 }));
+  const place = (lo: number, hi: number, r: Rect) => {
+    let cnt = 0, only = -1;
+    for (let i = lo; i < hi; i++) if (pos[i]) { cnt++; only = i; }
+    if (cnt === 0) return;
+    if (cnt === 1) { out[only] = r; return; }
+    if (r.w <= 0 || r.h <= 0) { for (let i = lo; i < hi; i++) out[i] = { x: r.x, y: r.y, w: 0, h: 0 }; return; }
+    const { k, vertical } = best(lo, hi, Math.log(r.w / r.h));
+    const f = sum(lo, k) / sum(lo, hi);
+    if (vertical) {
+      place(lo, k, { x: r.x, y: r.y, w: r.w * f, h: r.h });
+      place(k, hi, { x: r.x + r.w * f, y: r.y, w: r.w * (1 - f), h: r.h });
     } else {
-      go(lo, k, { x: r.x, y: r.y, w: r.w, h: r.h * f });
-      go(k, hi, { x: r.x, y: r.y + r.h * f, w: r.w, h: r.h * (1 - f) });
+      place(lo, k, { x: r.x, y: r.y, w: r.w, h: r.h * f });
+      place(k, hi, { x: r.x, y: r.y + r.h * f, w: r.w, h: r.h * (1 - f) });
     }
   };
-  go(0, vs.length, rect);
+  if (n) place(0, n, rect);
   return out;
+}
+
+/** 入れ子のツリーマップで、各段の枠の内側の余白と見出しの帯 */
+export const TREEMAP_HEADER = 16;
+/** 内側の短い辺がこれ未満の節は、子に分けず 1 つの塊として描く（細い帯の中に、さらに細い短冊を作らない） */
+export const TREEMAP_MIN_SPLIT = 10;
+/** collapsed: 子があるが、小さい・細いので分けずに塊として描く節 */
+export type TreemapItem = { node: TreemapNode; rect: Rect; depth: number; head: boolean; collapsed: boolean };
+
+/** 見出しの帯を付けるか（枠を描く深さで、帯を除いても子に十分な高さが残るとき） */
+export function treemapHasHeader(rect: Rect, depth: number, maxDepth: number): boolean {
+  return depth > 0 && depth <= maxDepth && rect.h >= TREEMAP_HEADER * 2.2 && rect.w >= 44;
+}
+
+/**
+ * 入れ子のツリーマップ全体のレイアウト（純粋な関数）。view を W×H に置き、子を orderedLayout で再帰的に詰める。
+ * 枠を描く深さ（maxDepth まで）は内側に余白（小さい矩形では 1px）と見出しの帯を取り、それより深い段は余白なしで詰める
+ * （段ごとに余白を取ると、深い入れ子ほど細く・小さくなるため）。内側の短い辺が TREEMAP_MIN_SPLIT 未満の節は子に分けない。
+ */
+export function treemapLayout(view: TreemapNode, W: number, H: number, maxDepth: number): TreemapItem[] {
+  const items: TreemapItem[] = [];
+  const rec = (node: TreemapNode, rect: Rect, depth: number) => {
+    const head = treemapHasHeader(rect, depth, maxDepth);
+    const kids = node.children ?? [];
+    let inner = rect;
+    if (depth > 0 && depth <= maxDepth) {
+      const pad = Math.min(rect.w, rect.h) >= 24 ? 2 : 1;
+      const top = head ? TREEMAP_HEADER : 0;
+      inner = { x: rect.x + pad, y: rect.y + top + pad, w: Math.max(0, rect.w - pad * 2), h: Math.max(0, rect.h - top - pad * 2) };
+    }
+    const collapsed = kids.length > 0 && depth > 0 && Math.min(inner.w, inner.h) < TREEMAP_MIN_SPLIT;
+    items.push({ node, rect, depth, head: head && !collapsed, collapsed });
+    if (!kids.length || collapsed) return;
+    const rs = orderedLayout(kids.map((k) => k.value), inner);
+    kids.forEach((k, i) => rec(k, rs[i], depth + 1));
+  };
+  rec(view, { x: 0, y: 0, w: W, h: H }, 0);
+  return items;
 }
 
 export type Column = {
