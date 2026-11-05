@@ -127,6 +127,27 @@ def test_precompute_when_new_results_arrive_for_a_future_race(env, tmp_path):
     assert precompute.precompute_race(storage, "202605040111") == "written"                     # 集計に使う最終日が変わった → 作り直す
 
 
+def test_own_result_changes_the_fingerprint_so_finish_marks_get_added(env):
+    storage, _ = env
+    assert precompute.precompute_race(storage, "202605040111") == "written"
+    assert precompute.precompute_race(storage, "202605040111") == "unchanged"
+    storage.data[("race_result_on_time", "202605040111")] = {"entries": [{"horse_id": "h1", "finish_position": 2}, {"horse_id": "hNew", "finish_position": "中止"}]}
+    assert precompute.own_finish(storage, "202605040111") == [["h1", 2]]
+    assert precompute.precompute_race(storage, "202605040111") == "written"                     # 速報の着順が入った → 作り直す
+    storage.data[("race_result", "202605040111")] = {"entries": [{"horse_id": "h1", "finish_position": 1}, {"horse_id": "hNew", "finish_position": 2}]}
+    assert precompute.precompute_race(storage, "202605040111") == "written"                     # 確定で着順が変わった → 作り直す
+    assert precompute.precompute_race(storage, "202605040111") == "unchanged"
+
+
+def test_finish_positions_skip_non_numeric_and_missing():
+    from src.research.race_analysis.running_map_module import finish_positions
+
+    card = {"entries": [{"horse_id": "a", "finish_position": 1}, {"horse_id": "b", "finish_position": 5.0}, {"horse_id": "c", "finish_position": None},
+                        {"horse_id": "d", "finish_position": "取消"}, {"horse_id": "e", "finish_position": 0}, {"finish_position": 2}]}
+    assert finish_positions(card) == {"a": 1, "b": 5}
+    assert finish_positions(None) == {}
+
+
 def test_no_entries_is_not_stored(env):
     storage, _ = env
     assert precompute.precompute_race(storage, "202605040199") == "no_entries"

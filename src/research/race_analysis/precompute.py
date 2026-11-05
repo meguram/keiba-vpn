@@ -19,7 +19,7 @@ from src.research.race_analysis.service import _load_card, _normalize_entries, a
 
 logger = logging.getLogger(__name__)
 
-ANALYSIS_VERSION = "22"      # 22: 走法マップの軸をギアチェンジ・末脚の速さ・末脚の持続力・Cr性能の4つに固定（2026-11-05）。21: 過去位置取りの表示を直近5走・前走の見出し。20: 今日の馬場を前日まで・直前ほど重く。19: 走法マップを上位 N 方面（3〜6）の軸の無い地図に（2026-11-03）。分析ロジック・列定義を変えたら上げる（保存済みの結果が作り直される）
+ANALYSIS_VERSION = "23"      # 23: 走法マップの各馬に着順を付ける（レース後に結果が入ったら作り直す。2026-11-05）。22: 走法マップの軸をギアチェンジ・末脚の速さ・末脚の持続力・Cr性能の4つに固定（2026-11-05）。21: 過去位置取りの表示を直近5走・前走の見出し。20: 今日の馬場を前日まで・直前ほど重く。19: 走法マップを上位 N 方面（3〜6）の軸の無い地図に（2026-11-03）。分析ロジック・列定義を変えたら上げる（保存済みの結果が作り直される）
 
 
 def _asof_cache() -> dict[str, str | None]:
@@ -44,7 +44,22 @@ def day_results(storage: Any, race_id: str, race_date: Any = None) -> int:
     return n
 
 
-def fingerprint(card: dict, entries: list[dict[str, Any]], asof: dict[str, str | None], day: int = 0) -> str:
+def own_finish(storage: Any, race_id: str) -> list[list[Any]]:
+    """このレース自身の結果（確定または速報）の着順。走法マップの着順マークに使うので指紋に入れる（結果が入る・確定で変わると作り直す）。"""
+    from src.research.race_analysis.running_map_module import finish_positions
+
+    for cat in ("race_result", "race_result_on_time"):
+        try:
+            card = storage.load(cat, race_id)
+        except Exception:
+            card = None
+        fin = finish_positions(card)
+        if fin:
+            return sorted([h, p] for h, p in fin.items())
+    return []
+
+
+def fingerprint(card: dict, entries: list[dict[str, Any]], asof: dict[str, str | None], day: int = 0, finish: Any = None) -> str:
     date = card.get("date")
     if date not in asof:
         runs = runs_mod.load_runs()
@@ -63,6 +78,7 @@ def fingerprint(card: dict, entries: list[dict[str, Any]], asof: dict[str, str |
         "sire_map": sire_sig,
         "lines_ready": lines_ready(),
         "day_results": day,
+        "finish": finish or [],
     }
     return hashlib.sha1(json.dumps(doc, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:16]
 
@@ -74,7 +90,7 @@ def precompute_race(storage: Any, race_id: str, *, force: bool = False, asof: di
     entries, _ = _normalize_entries(rows)
     if not entries:
         return "no_entries"
-    fp = fingerprint(card, entries, asof, day_results(storage, race_id, card.get("date")))
+    fp = fingerprint(card, entries, asof, day_results(storage, race_id, card.get("date")), own_finish(storage, race_id))
     old = store.read(race_id)
     if old and old.get("fingerprint") == fp and not force:
         return "unchanged"

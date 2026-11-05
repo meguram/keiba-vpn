@@ -13,7 +13,7 @@ from src.research.race import running_map as rm
 from src.research.race_analysis.base import ModuleOutput, RaceContext
 
 # 図に要る馬の項目（それ以外は保存しない）
-_HORSE_KEYS = ("horse_id", "horse_number", "horse_name", "x", "y", "group", "percentiles", "n_runs", "n_lap_runs", "axis_runs", "from_prior", "estimated", "own_weight", "extras", "similar", "last_run_date")
+_HORSE_KEYS = ("horse_id", "horse_number", "horse_name", "x", "y", "group", "percentiles", "n_runs", "n_lap_runs", "axis_runs", "from_prior", "estimated", "own_weight", "extras", "similar", "last_run_date", "finish_position")
 
 
 def _load_result(race_id: str) -> dict | None:
@@ -29,6 +29,16 @@ def _load_result(race_id: str) -> dict | None:
         if card and card.get("entries"):
             return card
     return None
+
+
+def finish_positions(card: dict | None) -> dict[str, int]:
+    """結果（確定または速報）から horse_id → 着順。着順が数字でない馬（中止・除外など）は入れない。"""
+    out: dict[str, int] = {}
+    for e in (card or {}).get("entries") or []:
+        v = e.get("finish_position")
+        if e.get("horse_id") and isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 1:
+            out[str(e["horse_id"])] = int(v)
+    return out
 
 
 class RunningMapModule:
@@ -51,7 +61,9 @@ class RunningMapModule:
         }
         out = rm.build_running_map([e for e in ctx.entries if e.get("horse_id")], ctx.race_id, conditions, load_result=_load_result)
         key_of = {str(e.get("horse_id")): e["key"] for e in ctx.entries if e.get("horse_id")}
-        horses = [{**{k: h.get(k) for k in _HORSE_KEYS}, "key": key_of.get(str(h.get("horse_id")))} for h in out["horses"]]
+        finish = finish_positions(_load_result(ctx.race_id))
+        horses = [{**{k: h.get(k) for k in _HORSE_KEYS if k != "finish_position"}, "key": key_of.get(str(h.get("horse_id"))),
+                   "finish_position": finish.get(str(h.get("horse_id")))} for h in out["horses"]]
         unmapped = [{"key": key_of.get(str(u.get("horse_id"))), "horse_name": u.get("horse_name"), "horse_number": u.get("horse_number"),
                      "reason": u.get("reason")} for u in out["unmapped"]]
         figure: dict[str, Any] = {
