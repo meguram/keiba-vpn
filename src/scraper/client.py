@@ -401,14 +401,14 @@ def _is_soft_400_url(url: str) -> bool:
     """
     if "race.netkeiba.com/race/speed.html" in url and f"race_id={_login_probe_race_id()}" in url:
         return True
-    if "race_list_get_date_list.html" in url:
-        import re
-        from datetime import datetime, timedelta, timezone
+    import re
+    from datetime import datetime, timedelta, timezone
 
-        m = re.search(r"kaisai_date=(\d{8})", url)
-        today = datetime.now(timezone(timedelta(hours=9))).strftime("%Y%m%d")
-        return bool(m) and m.group(1) > today
-    return False
+    m = re.search(r"race_list_get_date_list\.html\?.*kaisai_date=(\d{8})|db\.netkeiba\.com/race/list/(\d{8})", url)
+    if not m:
+        return False
+    today = datetime.now(timezone(timedelta(hours=9))).strftime("%Y%m%d")
+    return (m.group(1) or m.group(2)) > today
 
 
 def _source_from_url(url: str) -> str:
