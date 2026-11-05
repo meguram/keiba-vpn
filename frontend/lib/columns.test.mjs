@@ -12,7 +12,7 @@ const ts = createRequire(import.meta.url)("typescript");
 const src = ts.transpileModule(readFileSync(join(here, "columns.ts"), "utf8"), { compilerOptions: { module: ts.ModuleKind.ES2020, target: ts.ScriptTarget.ES2020 } }).outputText;
 const out = join(mkdtempSync(join(tmpdir(), "col-")), "columns.mjs");
 writeFileSync(out, src);
-const { categoryTrail, allCategoryPaths, chartMax, chartRange, chartIsEmpty, chartVariant, cascadeOptions, cascadePick, axis2Max, columnsIn, countIn } = await import(pathToFileURL(out).href);
+const { categoryTrail, allCategoryPaths, chartMax, chartRange, chartIsEmpty, chartVariant, cascadeOptions, cascadePick, axis2Max, columnsIn, countIn, radialLayout, treeSireCount, formatTreemapValue } = await import(pathToFileURL(out).href);
 
 const dir = join(here, "..", "content", "columns");
 const articles = readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => JSON.parse(readFileSync(join(dir, f), "utf8")));
@@ -109,4 +109,31 @@ test("グラフ: variant が xs を持てば横軸もその長さに替わる", 
     filters: [{ label: "距離", options: ["長", "短"] }], variants: { 短: { xs: ["a", "b"], series: [{ name: "s", values: [1, 2] }] } } };
   assert.deepEqual(chartVariant(block, ["短"]).xs, ["a", "b"]);
   assert.deepEqual(chartVariant(block, ["長"]).xs, ["a", "b", "c"]);
+});
+
+test("円形の系統樹: 外周の数が limit を超えず、子は親の角度の範囲に並び、全種牡馬が 1 回ずつ数えられる", () => {
+  const sire = (id) => ({ id, name: id, value: 20, metrics: [] });
+  const line = (id, kids) => ({ id, name: id, value: 0, metrics: [], kind: "line", children: kids });
+  const root = line("r", [line("a", [sire("a1"), sire("a2"), line("a3", [sire("a31"), sire("a32")])]), line("b", [sire("b1"), sire("b2"), sire("b3")]), sire("c")]);
+  assert.equal(treeSireCount(root), 8);
+  const small = radialLayout(root, 5, 100);
+  const outer = small.items.filter((it) => it.outer);
+  assert.ok(outer.length <= 5);
+  assert.equal(small.items.find((it) => it.node.id === "r").r, 0);
+  assert.ok(small.items.some((it) => it.folded));
+  const full = radialLayout(root, 100, 100);
+  assert.equal(full.items.filter((it) => it.outer).length, 8);
+  assert.equal(full.items.filter((it) => it.folded).length, 0);
+  const a = full.items.find((it) => it.node.id === "a"), kids = full.items.filter((it) => it.parentId === "a");
+  assert.ok(a.angle >= Math.min(...kids.map((k) => k.angle)) && a.angle <= Math.max(...kids.map((k) => k.angle)));
+  assert.ok(full.items.filter((it) => it.outer).every((it) => Math.abs(it.r - 100) < 1e-9));
+  assert.ok(full.items.filter((it) => !it.outer && it.depth > 0).every((it) => it.r > 0 && it.r < 100));
+  assert.equal(full.sectors.length, 3);
+});
+
+test("系統樹の値の表示: 距離・符号なしの小数・欠損", () => {
+  assert.equal(formatTreemapValue(1632.4, "dist"), "1,632m");
+  assert.equal(formatTreemapValue(49.87, "val1"), "49.9");
+  assert.equal(formatTreemapValue(-0.005, "val2"), "-0.01");
+  assert.equal(formatTreemapValue(null, "dist"), "–");
 });

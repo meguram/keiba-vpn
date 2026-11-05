@@ -115,6 +115,8 @@ export type ColumnChartBlock = {
   cascade?: boolean;
   /** true なら縦軸を 0 始まりにせず、値（と信頼区間）の範囲に合わせる（平均ラップ 12 秒前後の差を見るときなど） */
   fitAxis?: boolean;
+  /** true なら、グラフの下に「選んだ系列 × 横軸」の数値表を開いた状態で出す（スマホでも値が読める） */
+  pivot?: boolean;
   /** 最初に重ねて出す系列の name（省略すると先頭の 1 つ） */
   initial?: string[];
   /** 右の縦軸に描く系列（横軸が同じで単位の違う値。例: 左に複勝率、右に平均人気）。常に表示し、色を分ける */
@@ -310,8 +312,8 @@ export type TreemapNode = {
   children?: TreemapNode[];
 };
 
-/** pct: 割合（51.5%）、m: 距離の差（+45m）、pos: 位置（0.47）、pt: 率の差（+1.2pt）、num: 数（+0.53） */
-export type TreemapFormat = "pct" | "m" | "pos" | "pt" | "num";
+/** pct: 割合（51.5%）、m: 距離の差（+45m）、pos: 位置（0.47）、pt: 率の差（+1.2pt）、num: 数（+0.53）、dist: 距離（1,650m）、val1・val2: 符号なしの小数 1・2 桁 */
+export type TreemapFormat = "pct" | "m" | "pos" | "pt" | "num" | "dist" | "val1" | "val2";
 
 /** 色を付ける指標。center から ±scale で色が最も濃くなる（発散型）。low・high は両端の意味 */
 export type TreemapMetric = {
@@ -332,6 +334,9 @@ export type TreemapMetric = {
  */
 export type ColumnTreemapBlock = {
   type: "treemap";
+  /** "radial": 面積は使わず、円形の系統樹として描く（value は産駒の頭数など。単位は valueUnit） */
+  layout?: "radial";
+  valueUnit?: string;
   title: string;
   metrics: TreemapMetric[];
   defaultMetric?: number;
@@ -348,6 +353,9 @@ export function formatTreemapValue(v: number | null | undefined, format: Treemap
     case "pct": return `${(v * 100).toFixed(1)}%`;
     case "m": return `${sign(v, v.toFixed(0))}m`;
     case "pos": return v.toFixed(2);
+    case "dist": return `${Math.round(v).toLocaleString("en-US")}m`;
+    case "val1": return v.toFixed(1);
+    case "val2": return v.toFixed(2);
     case "pt": return `${sign(v, (v * 100).toFixed(1))}pt`;
     default: return sign(v, v.toFixed(2));
   }
@@ -462,6 +470,96 @@ export function treemapLayout(view: TreemapNode, W: number, H: number, maxDepth:
   };
   rec(view, { x: 0, y: 0, w: W, h: H }, 0);
   return items;
+}
+
+/** 節の配下の種牡馬の数（pool はまとめた頭数、葉は 1） */
+export function treeSireCount(n: TreemapNode): number {
+  if (!n.children?.length) return n.kind === "pool" ? n.sires ?? 1 : 1;
+  return n.children.reduce((a, c) => a + treeSireCount(c), 0);
+}
+
+export type RadialItem = {
+  node: TreemapNode;
+  parentId: string | null;
+  /** view からの深さ（view=0） */
+  depth: number;
+  /** ラジアン。0 が右、-π/2 が真上、時計回り */
+  angle: number;
+  r: number;
+  x: number;
+  y: number;
+  /** 子があるのに描かれていない（タップで潜る）節 */
+  folded: boolean;
+  /** 配下の種牡馬の数（folded のとき丸の中に出す） */
+  sires: number;
+  /** 葉として外周に置かれる（種牡馬・pool・folded） */
+  outer: boolean;
+};
+export type RadialSector = { node: TreemapNode; a0: number; a1: number };
+export type RadialResult = { items: RadialItem[]; sectors: RadialSector[]; rings: number[] };
+
+/**
+ * 円形の系統樹のレイアウト（純粋な関数、中心が原点）。view を中心に置き、浅い段から順に、外周の数が limit を超えない範囲で展開する
+ * （展開しない節は folded の 1 つの丸）。外周の丸には子の並び順のまま等間隔の角度を割り当て、内側の節は子の角度の中間に置く。
+ * 外周は半径 R、内側の節は深さに比例して R の 0.85 倍までに置く。sectors は view の直下の子ごとの扇形、rings は内側の節の半径
+ */
+export function radialLayout(view: TreemapNode, limit: number, R: number, maxLevel = 7): RadialResult {
+  const expanded = new Set<string>();
+  let outerCount = 1;
+  let level = [view];
+  for (let d = 0; d < maxLevel && level.length; d++) {
+    const next: TreemapNode[] = [];
+    for (const n of [...level].sort((a, b) => treeSireCount(b) - treeSireCount(a))) {
+      const k = n.children?.length ?? 0;
+      if (!k || outerCount + k - 1 > limit) continue;
+      expanded.add(n.id);
+      outerCount += k - 1;
+      next.push(...n.children!);
+    }
+    level = next;
+  }
+  if (!expanded.has(view.id) && view.children?.length) { expanded.add(view.id); outerCount = view.children.length; }
+
+  const leaves: TreemapNode[] = [];
+  const collect = (n: TreemapNode) => { if (expanded.has(n.id)) n.children!.forEach(collect); else leaves.push(n); };
+  collect(view);
+  const slot = (2 * Math.PI) / Math.max(1, leaves.length);
+  const angleOf = new Map<string, number>();
+  leaves.forEach((n, i) => angleOf.set(n.id, -Math.PI / 2 + slot * (i + 0.5)));
+  let maxD = 0;
+  const depthOf = new Map<string, number>();
+  const dfs = (n: TreemapNode, d: number): number => {
+    depthOf.set(n.id, d);
+    if (!expanded.has(n.id)) return angleOf.get(n.id)!;
+    maxD = Math.max(maxD, d);
+    const as = n.children!.map((c) => dfs(c, d + 1));
+    const ang = (as[0] + as[as.length - 1]) / 2;
+    angleOf.set(n.id, ang);
+    return ang;
+  };
+  dfs(view, 0);
+  const rOf = (n: TreemapNode) => (expanded.has(n.id) ? (R * 0.85 * depthOf.get(n.id)!) / (maxD + 1) : R);
+
+  const items: RadialItem[] = [];
+  const walk = (n: TreemapNode, parentId: string | null) => {
+    const angle = angleOf.get(n.id)!, r = n.id === view.id ? 0 : rOf(n), isExp = expanded.has(n.id);
+    items.push({ node: n, parentId, depth: depthOf.get(n.id)!, angle, r, x: r * Math.cos(angle), y: r * Math.sin(angle),
+      folded: !isExp && !!n.children?.length, sires: treeSireCount(n), outer: !isExp });
+    if (isExp) n.children!.forEach((c) => walk(c, n.id));
+  };
+  walk(view, null);
+
+  const sectors: RadialSector[] = [];
+  if (expanded.has(view.id)) {
+    const firstLast = (n: TreemapNode): [number, number] => {
+      if (!expanded.has(n.id)) return [angleOf.get(n.id)!, angleOf.get(n.id)!];
+      const cs = n.children!;
+      return [firstLast(cs[0])[0], firstLast(cs[cs.length - 1])[1]];
+    };
+    for (const c of view.children!) { const [f, l] = firstLast(c); sectors.push({ node: c, a0: f - slot / 2, a1: l + slot / 2 }); }
+  }
+  const rings = maxD > 0 ? Array.from({ length: maxD }, (_, i) => (R * 0.85 * (i + 1)) / (maxD + 1)) : [];
+  return { items, sectors, rings };
 }
 
 export type Column = {

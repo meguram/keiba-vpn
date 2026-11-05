@@ -67,12 +67,13 @@ def _st(n: float, mean: float) -> np.ndarray:
 def test_prune_pools_small_sires_and_collapses_single_children():
     root = t.build_tree(ORIGIN, {"V", "KK", "LC"})
     st = {"V": _st(30, 0.5), "KK": _st(5000, 0.4), "LC": _st(40, 0.3)}
-    t.aggregate(root, st)
+    hs = {"V": 5, "KK": 300, "LC": 12}
+    t.aggregate(root, st, hs)
     names = {k: v["name"] for k, v in ORIGIN.items()}
     pr = t.prune(root, names)
-    t.aggregate(pr, st)
+    t.aggregate(pr, st, hs)
     leaves = [n for n in pr.walk() if n.leaf]
-    # LC（40 走）は KK の branch の中で 1 頭だけ小さいので残る。V（30 走）の枝は MIN_LEAF 未満なので葉になる
+    # LC（12 頭）は MIN_HORSES 以上なので KK の branch の中に残る。V（5 頭）の枝は MIN_HORSES 未満なので葉になる
     assert sum(int(n.stats[0][0]) for n in leaves) == 5070
     assert all(len(n.children) != 1 for n in pr.walk() if n.kind != "root")
 
@@ -90,6 +91,26 @@ def test_metric_raw_mean_and_surface_weighted_difference():
     going = next(m for m in t.METRICS if m.key == "going")
     d, v, n = t.metric_raw(s, going)
     assert math.isclose(d, 0.1) and n == 100
+
+
+def test_extra_metric_needs_min_runs_else_no_value():
+    s = np.zeros((len(t.COMPONENTS), 6))
+    ts = next(m for m in t.EXTRA_METRICS if m.key == "ts")
+    i = t.COMPONENTS.index("ax_ts")
+    s[i] = [3, 150, 7500, 7500, 150, 3]                         # 1 走だけの馬が 3 頭 → 分散が小さく出るが、値なし扱い（親へ寄せる）
+    m, v, n = t.metric_raw(s, ts)
+    assert m == 50 and n == 3 and math.isinf(v)
+    s[i] = [30, 1500, 75000 + 30 * 4, 75000, 1500, 30]
+    assert math.isfinite(t.metric_raw(s, ts)[1])
+
+
+def test_win_quantile_interpolates_within_bands():
+    n = len(t.WIN_BINS)
+    one = np.zeros(n); one[0] = 1.0                             # 全部が最初の帯 → 帯の中を一様に
+    assert math.isclose(t.win_quantile(one, 0.5), (t.WIN_EDGES[0] + t.WIN_EDGES[1]) / 2)
+    flat = np.full(n, 1.0 / n)                                  # 全帯が同じ割合 → 幅は全帯の幅の 90%
+    w = t.win_quantile(flat, 0.95) - t.win_quantile(flat, 0.05)
+    assert math.isclose(w, 0.9 * (t.WIN_EDGES[-1] - t.WIN_EDGES[0]) , rel_tol=0.3) and w > one.sum() * 300
 
 
 def test_shrink_moves_toward_parent_by_precision():
