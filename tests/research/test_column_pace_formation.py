@@ -89,3 +89,13 @@ def test_lap_chart_cascade_keys():
     assert ch["initial"] == names[:3]
     assert ser[1]["n"][0] == 100 and ser[1]["values"][8] is None
     assert all(k.count("|") == 1 for k in ch["variants"])
+
+
+def test_attach_laps_good_going_only():
+    n = 120
+    idx = [f"r{i}" for i in range(n)]
+    d = pd.DataFrame({"key": ["東京芝1600"] * n, "going_group": ["良"] * 100 + ["道悪"] * 20}, index=idx)
+    laps = pd.Series([[12.0] * 8] * n, index=idx)
+    mats = pf.attach_laps(d, laps)
+    assert list(mats) == ["東京芝1600"] and len(mats["東京芝1600"]) == 100             # 道悪の 20 レースは入らない
+    assert d["seg_first"].notna().sum() == 100 and d.loc["r110", "seg_first"] != d.loc["r110", "seg_first"]

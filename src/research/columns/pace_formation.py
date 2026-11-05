@@ -208,9 +208,9 @@ def load_laps(first_year: int, last_year: int) -> pd.Series:
 
 
 def attach_laps(d: pd.DataFrame, laps: pd.Series) -> dict[str, np.ndarray]:
-    """d（レースの表）にラップを付け、コースごとの『レース × ハロン』の行列を返す。ハロン数がコースの最頻値と違うレースは除く。
+    """d（レースの表）にラップを付け、コースごとの『レース × ハロン』の行列を返す。良馬場のレースだけを使い、ハロン数がコースの最頻値と違うレースは除く。
     d に前半3F・中盤・上がり3F の『コース平均とのラップ差の合計（秒）』（seg_first / seg_mid / seg_last）を足す（d を直接更新）。"""
-    w = d[["key"]].join(laps.rename("laps"), how="inner")
+    w = d.loc[d["going_group"] == "良", ["key"]].join(laps.rename("laps"), how="inner")             # 稍重・重・不良はラップの水準が大きくぶれるので除く
     w["nl"] = w["laps"].map(len)
     out: dict[str, np.ndarray] = {}
     for col in ("seg_first", "seg_mid", "seg_last"):
@@ -289,7 +289,7 @@ def lap_chart(d: pd.DataFrame, mats: dict[str, pd.DataFrame]) -> dict[str, Any]:
             ser += [lap_series(pre + b, dev[(g[col] == b).to_numpy()], width, mean) for b in bins]
         mean_txt = " - ".join(f"{v:.1f}" for v in mean)
         variants[f"{venue}|{sd}"] = {"series": ser, "caption": (
-            f"{venue} {sd}（{len(dev):,} レース）。全レースの平均ラップ（秒）: {mean_txt}。{LAP_MIN_BIN} レースに満たないパターンは線を出していない。縦線は 95% 信頼区間。")}
+            f"{venue} {sd}（{len(dev):,} レース）。全レースの平均ラップ（秒）: {mean_txt}。{LAP_MIN_BIN} レースに満たないパターンは線を出していない。縦線は 95% 信頼区間。良馬場のレースだけ。")}
     first = next(iter(variants.values()))
     initial = [f"{LAP_AXES['逃げ馬の頭数'][2]}{b}" for b in NIGE_BINS[1]]
     return {"type": "chart", "title": "ハロンごとの平均ラップ（パターン別）", "xLabel": "スタートからのハロン（200m）。最後の 3 つが上がり3F", "yLabel": "平均ラップ（秒）",
@@ -421,6 +421,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
             "会場 → 芝・ダート／距離 の順にプルダウンで選びます。会場の「全場」は、同じ面・距離の全場を合わせたもので、レース数が多く線が安定します"
             "（会場ごとのラップの水準の違いは、コースごとの平均との差を合わせてから全場の平均に足して除いています）。"
             "個別のコースは 1 本あたりのレース数が少なく、線がぶれやすいので、縦線（95% 信頼区間）が重なるところは差と読まないでください。"
+            "稍重・重・不良の馬場ではラップの水準が大きくぶれるため、このグラフと下の表は良馬場のレースだけで集計しています。"
             "下の表は全コースを合わせた、前半3F・中盤・上がり3F の、コース平均との差です。")},
         a["lap_chart"],
         {"type": "table", "columns": ["条件", "レース数", "前半3F（秒）", "中盤（秒）", "上がり3F（秒）"], "rows": a["seg_rows"],
