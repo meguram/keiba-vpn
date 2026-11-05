@@ -181,7 +181,7 @@ def course_table(d: pd.DataFrame, min_races: int = 150) -> tuple[list[list[str |
 
 # ── ハロンごとのラップの推移 ─────────────────────────
 
-LAP_MIN_COURSE = 100          # コースのプルダウンに出す最小のレース数
+LAP_MIN_COURSE = 40           # コースのプルダウンに出す最小のレース数
 LAP_MIN_BIN = 20              # 1 本の線に出す最小のレース数
 LAP_AXES = {                  # 分け方 → (列, 区分, 線の名前の前置き)
     "逃げ馬の頭数": ("nige_b", NIGE_BINS[1], "逃げ馬 "),
