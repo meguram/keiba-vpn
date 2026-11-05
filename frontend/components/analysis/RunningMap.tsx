@@ -25,7 +25,7 @@ function axisColor(p: number | null | undefined): string {
   const to = t < 0 ? AXIS_LOW : AXIS_HIGH, a = Math.abs(t);
   return `rgb(${AXIS_MID.map((m, i) => Math.round(m + (to[i] - m) * a)).join(",")})`;
 }
-/** 地図に使った 5 つの軸の印（数値バー・色の選択で使う） */
+/** 地図に使った 6 つの軸の印（数値バー・色の選択で使う） */
 const TOP_RGB = "227,179,65";
 /** ⇆ の線: これより短い（地図の位置でほとんど表せない）軸は図に出さない（丸の色で見る）。コース別の地図には軸の線を引かない */
 const GUIDE_MIN = 0.3;
@@ -93,7 +93,7 @@ function relax(boxes: Box[], anchors: { x: number; y: number }[], fixed: Box[]):
   }
 }
 
-export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entries: AnalysisEntry[] }) {
+function RunningMapView({ figure, entries }: { figure: RunningMapFigure; entries: AnalysisEntry[] }) {
   const [sel, setSel] = useState<string | null>(null);
   // 丸の色: "group" か軸のキー。コース別の地図では、寄与率がいちばん高い軸
   const [colorKey, setColorKey] = useState<string>(() => {
@@ -142,7 +142,7 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
   const isExtra = (k: string) => (figure.extra_axes ?? []).some((x) => x.key === k);
   const pctOf = (h: RunningMapHorse, k: string) => (isExtra(k) ? extraPct(h.extras?.[k]?.value) : h.percentiles[k]);
   const colorAxis = colorAxes.find((a) => a.key === colorKey) ?? null;
-  // 色の選択肢: コース別の地図では、地図に使った 5 つの軸（今日の馬場の傾向から選んだ軸は、そのとき足す）
+  // 色の選択肢: コース別の地図では、地図に使った 6 つの軸（今日の馬場の傾向から選んだ軸は、そのとき足す）
   const topKeys = figure.course_map?.axes ?? [];
   const choices = figure.course_map
     ? [...topKeys, ...(colorAxis && !topKeys.includes(colorAxis.key) ? [colorAxis.key] : [])].map((k) => colorAxes.find((a) => a.key === k)).filter((a): a is RunningMapAxis => !!a)
@@ -490,6 +490,32 @@ function HorseDetail({ h, axes, topKeys, extraAxes, bracket, onClose, onPick, br
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** 良馬場の地図（既定）と、道悪（稍重以上）の地図を切り替える。道悪の地図は道悪適性を軸に含み、稍重以上のレースだけで好走ゾーンを測っている */
+export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entries: AnalysisEntry[] }) {
+  const wet = figure.wet ?? null;
+  const [mode, setMode] = useState<"good" | "wet">("good");
+  const shown = mode === "wet" && wet ? wet : figure;
+  return (
+    <div>
+      {wet && (
+        <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
+          {(["good", "wet"] as const).map((m) => (
+            <button key={m} type="button" onClick={() => setMode(m)} aria-pressed={mode === m}
+              style={{ fontSize: 12, padding: "3px 10px", borderRadius: 6, cursor: "pointer", border: "1px solid var(--border)",
+                background: mode === m ? "var(--accent, #58a6ff)" : "transparent", color: mode === m ? "#0d1117" : "var(--text)" }}>
+              {m === "good" ? "良馬場の地図" : "道悪の地図"}
+            </button>
+          ))}
+          <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+            {mode === "good" ? "良馬場のレースだけで測った地図（基礎スピードを軸に含む）" : "稍重以上のレースだけで測った地図（基礎スピードの代わりに道悪適性を軸に含む）"}
+          </span>
+        </div>
+      )}
+      <RunningMapView key={mode} figure={shown} entries={entries} />
     </div>
   );
 }
