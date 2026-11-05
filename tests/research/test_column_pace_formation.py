@@ -63,22 +63,29 @@ def test_lap_series_blank_and_pad():
     assert s["n"][:3] == [30, 30, 30]
     few = pf.lap_series("y", dev[:5], 5)
     assert few["values"] == [None] * 5
+    raw = pf.lap_series("z", np.zeros((30, 3)), 3, np.array([12.0, 11.0, 13.0]))                  # offset を足すと平均ラップそのもの
+    assert raw["values"] == [12.0, 11.0, 13.0]
 
 
-def test_lap_chart_pooled_and_variants():
+def test_lap_chart_cascade_keys():
     rng = np.random.default_rng(0)
     mats, rows = {}, []
-    for key in ("東京芝1600", "中山芝1600", "東京芝2000"):
+    for key in ("東京芝1600", "中山芝1600", "東京ダート1200", "東京芝2000"):
         n = 150
         idx = [f"{key}{i}" for i in range(n)]
         mats[key] = pd.DataFrame(12.0 + rng.normal(0, 0.2, (n, 8 if "1600" in key else 10)), index=idx)
         rows += [{"race_id": i, "nige_b": ["0頭", "1頭", "2頭以上"][j % 3], "prev_b": "2〜3頭", "rear_b": "0〜1頭"} for j, i in enumerate(idx)]
     d = pd.DataFrame(rows).set_index("race_id")
     ch = pf.lap_chart(d, mats)
-    opts = ch["filters"][0]["options"]
-    assert opts[0] == "芝1600（全場）" and "芝2000（全場）" not in opts            # 1 コースだけの距離は全場を作らない
-    assert len(ch["xs"]) == 10
-    v = ch["variants"][f"{opts[0]}|逃げ馬の頭数"]
-    assert [s["name"] for s in v["series"]] == ["逃げ馬 0頭", "逃げ馬 1頭", "逃げ馬 2頭以上"]
-    assert v["series"][0]["n"][0] == 100 and v["series"][0]["values"][8] is None
-    assert len(ch["variants"]) == len(opts) * len(pf.LAP_AXES)
+    assert ch["cascade"] and [f["label"] for f in ch["filters"]] == ["会場", "芝・ダート／距離"]
+    assert ch["filters"][0]["options"] == ["全場", "東京", "中山"]                      # 全場が先頭、そのあと JRA の並び
+    assert ch["filters"][1]["options"] == ["芝1600", "芝2000", "ダート1200"]            # 芝 → ダート、距離の短い順
+    assert "全場|芝1600" in ch["variants"] and "全場|芝2000" not in ch["variants"]   # 1 コースだけの距離は全場を作らない
+    assert len(ch["xs"]) == 10 and ch["fitAxis"]
+    ser = ch["variants"]["全場|芝1600"]["series"]
+    assert ser[0]["name"] == "全レース" and ser[0]["baseline"] and abs(ser[0]["values"][0] - 12.0) < 0.1       # 差ではなく平均ラップ
+    names = [x["name"] for x in ser[1:]]
+    assert names[:3] == ["逃げ馬 0頭", "逃げ馬 1頭", "逃げ馬 2頭以上"] and len(names) == 3 + 4 + 3
+    assert ch["initial"] == names[:3]
+    assert ser[1]["n"][0] == 100 and ser[1]["values"][8] is None
+    assert all(k.count("|") == 1 for k in ch["variants"])
