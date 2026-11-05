@@ -2,15 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { useNarrow } from "@/components/RaceStrip";
-import { formatTreemapValue, orderedLayout, type ColumnTreemapBlock, type Rect, type TreemapMetric, type TreemapNode } from "@/lib/columns";
+import { formatTreemapValue, treemapLayout, TREEMAP_HEADER as HEADER, type ColumnTreemapBlock, type TreemapMetric, type TreemapNode } from "@/lib/columns";
 
 /** 発散型の両端（中央は灰色）。暗い背景の上に半透明で重ねるので、文字は var(--text) のまま読める */
 const HIGH_RGB = "88,166,255";
 const LOW_RGB = "240,136,62";
 const NEUTRAL = "rgba(139,148,158,0.16)";
-const HEADER = 16;
-
-type Item = { node: TreemapNode; rect: Rect; depth: number };
 
 function tOf(v: number | null | undefined, m: TreemapMetric): number {
   if (typeof v !== "number" || !Number.isFinite(v) || !(m.scale > 0)) return 0;
@@ -29,26 +26,6 @@ function fit(text: string, w: number, size: number): string {
   const cs = [...text];
   while (cs.length > 1 && width(cs.join("") + "…") > w) cs.pop();
   return cs.length >= 3 ? cs.join("") + "…" : "";
-}
-
-function layout(view: TreemapNode, W: number, H: number, maxDepth: number): Item[] {
-  const items: Item[] = [];
-  const rec = (node: TreemapNode, rect: Rect, depth: number) => {
-    items.push({ node, rect, depth });
-    const kids = node.children ?? [];
-    if (!kids.length) return;
-    let inner = rect;
-    if (depth > 0) {
-      const framed = depth <= maxDepth;
-      const pad = framed ? 2 : 1;
-      const head = framed && rect.h >= HEADER * 2.2 && rect.w >= 44 ? HEADER : 0;
-      inner = { x: rect.x + pad, y: rect.y + head + pad, w: Math.max(0, rect.w - pad * 2), h: Math.max(0, rect.h - head - pad * 2) };
-    }
-    const rs = orderedLayout(kids.map((k) => k.value), inner);
-    kids.forEach((k, i) => rec(k, rs[i], depth + 1));
-  };
-  rec(view, { x: 0, y: 0, w: W, h: H }, 0);
-  return items;
 }
 
 export function ColumnTreemap({ block }: { block: ColumnTreemapBlock }) {
@@ -71,7 +48,7 @@ export function ColumnTreemap({ block }: { block: ColumnTreemapBlock }) {
   const [selId, setSelId] = useState<string | null>(null);
   const view = byId.get(viewId) ?? block.root;
   const metric = block.metrics[mi] ?? block.metrics[0];
-  const items = useMemo(() => layout(view, W, H, maxDepth), [view, W, H, maxDepth]);
+  const items = useMemo(() => treemapLayout(view, W, H, maxDepth), [view, W, H, maxDepth]);
 
   const ancestors = (id: string): TreemapNode[] => {
     const out: TreemapNode[] = [];
@@ -130,9 +107,10 @@ export function ColumnTreemap({ block }: { block: ColumnTreemapBlock }) {
 
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", maxWidth: W, touchAction: "manipulation" }}
         role="img" aria-label={`${block.title}（${view.name}）`}>
-        {items.map(({ node, rect, depth }) => {
+        {items.map(({ node, rect, depth, head, collapsed }) => {
           if (depth === 0 || rect.w < 0.5 || rect.h < 0.5) return null;
-          const leaf = !node.children?.length;
+          // 小さくて子に分けない節（collapsed）も、葉と同じく 1 つの塊として描く（タップで値と「この系統へ」を出す）
+          const leaf = !node.children?.length || collapsed;
           const t = tOf(mv(node, mi), metric);
           const tip = `${node.name}（${node.value.toLocaleString()}走）: ${metric.label} ${formatTreemapValue(mv(node, mi), metric.format)}`;
           if (leaf) {
@@ -157,7 +135,6 @@ export function ColumnTreemap({ block }: { block: ColumnTreemapBlock }) {
           if (depth > maxDepth) {
             return <rect key={node.id} x={rect.x} y={rect.y} width={rect.w} height={rect.h} fill="none" stroke="var(--border)" strokeWidth={0.6} style={{ pointerEvents: "none" }} />;
           }
-          const head = rect.h >= HEADER * 2.2 && rect.w >= 44;
           const size = depth === 1 ? 12 : 11;
           return (
             <g key={node.id}>
