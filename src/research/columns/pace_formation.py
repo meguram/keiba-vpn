@@ -273,27 +273,33 @@ def lap_units(mats: dict[str, pd.DataFrame]) -> dict[tuple[str, str], tuple[np.n
     return dict(sorted(unit.items(), key=lambda kv: (vrank.get(kv[0][0], 99), sd_sort_key(kv[0][1]))))
 
 
+def lap_xs(width: int) -> list[str]:
+    """横軸の目盛り。最初の 1F にスタート、最後の 1F にゴールを付ける。"""
+    xs = [f"{i}F" for i in range(1, width + 1)]
+    xs[0], xs[-1] = "1F スタート", f"{width}F ゴール"
+    return xs
+
+
 def lap_chart(d: pd.DataFrame, mats: dict[str, pd.DataFrame]) -> dict[str, Any]:
     """会場 → 芝・ダート+距離 の順にプルダウンで選び（cascade: 前の選択で存在する選択肢だけを出す）、全パターンの平均ラップ（秒）をボタンで選んで重ねて比べるグラフ。
     会場が『全場』のときは、コースごとの平均との差を合わせて全場の平均ラップに足したもの（会場の顔ぶれの違いを除く）。"""
     units = lap_units(mats)
-    width = max(u[0].shape[1] for u in units.values())
-    xs = [f"{i}F目" for i in range(1, width + 1)]
     venues = list(dict.fromkeys(v for v, _ in units))
     sds = sorted({sd for _, sd in units}, key=sd_sort_key)
     variants: dict[str, Any] = {}
     for (venue, sd), (dev, idx, mean) in units.items():
         g = d.loc[idx]
+        width = dev.shape[1]                                                    # コースの距離なりの長さ（余白は作らない）
         ser = [{**lap_series("全レース", dev, width, mean), "baseline": True}]
         for col, bins, pre in LAP_AXES.values():
             ser += [lap_series(pre + b, dev[(g[col] == b).to_numpy()], width, mean) for b in bins]
         mean_txt = " - ".join(f"{v:.1f}" for v in mean)
-        variants[f"{venue}|{sd}"] = {"series": ser, "caption": (
+        variants[f"{venue}|{sd}"] = {"xs": lap_xs(width), "series": ser, "caption": (
             f"{venue} {sd}（{len(dev):,} レース）。全レースの平均ラップ（秒）: {mean_txt}。{LAP_MIN_BIN} レースに満たないパターンは線を出していない。縦線は 95% 信頼区間。良馬場のレースだけ。")}
     first = next(iter(variants.values()))
     initial = [f"{LAP_AXES['逃げ馬の頭数'][2]}{b}" for b in NIGE_BINS[1]]
-    return {"type": "chart", "title": "ハロンごとの平均ラップ（パターン別）", "xLabel": "スタートからのハロン（200m）。最後の 3 つが上がり3F", "yLabel": "平均ラップ（秒）",
-            "xs": xs, "format": "num", "series": first["series"], "caption": first["caption"], "cascade": True, "fitAxis": True, "initial": initial,
+    return {"type": "chart", "title": "ハロンごとの平均ラップ（パターン別）", "xLabel": "スタート → ゴール（1F = 200m。最後の 3 つが上がり3F）", "yLabel": "平均ラップ（秒）",
+            "xs": first["xs"], "format": "num", "series": first["series"], "caption": first["caption"], "cascade": True, "fitAxis": True, "initial": initial,
             "filters": [{"label": "会場", "options": venues}, {"label": "芝・ダート／距離", "options": sds}], "variants": variants}
 
 
