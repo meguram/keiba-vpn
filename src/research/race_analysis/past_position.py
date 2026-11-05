@@ -25,6 +25,7 @@ from src.research.race_analysis.base import Column, ModuleOutput, RaceContext
 from src.research.race_analysis.runs import SOURCE_DATASET, SOURCE_PROVIDER, load_runs
 
 WINDOW = 8
+SHOW = 5                     # 表に出す直近の走の数（平均は WINDOW 走で計算する）
 DECAY = 0.85
 MIN_OUTLIER_RUNS = 5
 OUTLIER_K = 4.0
@@ -113,7 +114,7 @@ def classify(field_stats: dict[str, PositionStat]) -> dict[str, str]:
 def _runs_cell(stat: PositionStat, runs: list[tuple[int, int]]) -> list[list[int]]:
     """直近の位置取りを新しい順に [通過順位, 頭数, 外れ値として除いたか(1/0)] で。"""
     ex = {i for i, _ in stat.excluded}
-    return [[p, x, 1 if i in ex else 0] for i, (p, x) in enumerate(runs)]
+    return [[p, x, 1 if i in ex else 0] for i, (p, x) in enumerate(runs[:SHOW])]
 
 
 class PastPositionModule:
@@ -162,10 +163,12 @@ class PastPositionModule:
             Column("style", "脚質", "text", None, "メンバー全体での相対的な位置（ハナ／先行(前)／先行(後ろ)／差し／追込）", palette=PALETTE),
             Column("pos", "平均位置", "pct", None, "直近の位置取りの加重平均（前から何%。小さいほど前）"),
             Column("n", "走数", "int", None, f"使った直近の走数（最大{WINDOW}）。少ないほど信頼できません"),
-            Column("hist", "直近の初角通過順位", "runs", None, "左が最新。上が初角の通過順位、下が頭数。色は前（赤）〜後ろ（青）。点線の走は外れ値として平均から除いた走"),
+            Column("hist", f"直近{SHOW}走の初角通過順位（左が前走 → 右が{SHOW}走前）", "runs", None,
+                   f"左端が前走（枠つき）、右へ 2走前・3走前…{SHOW}走前。数字は初角の通過順位、/の後は頭数。色は前（赤）〜後ろ（青）。点線の走は外れ値として平均から除いた走"),
         ]
         notes = [
-            f"位置取り=初角（最初のコーナー）の通過順位÷頭数。直近{WINDOW}走を、新しい走ほどやや重く（1走前ごとに×{DECAY}）平均しています。",
+            f"位置取り=初角（最初のコーナー）の通過順位÷頭数。直近{WINDOW}走を、新しい走ほどやや重く（1走前ごとに×{DECAY}）平均しています。"
+            f"表に並べるのは直近{SHOW}走（左が前走）です。",
             f"履歴が{MIN_OUTLIER_RUNS}走以上ある馬は、偶然の出遅れ・一度だけの逃げなどの外れ値（点線の走）を除いて平均しています。",
             "脚質はこのレースのメンバーの中での相対評価です。ハナは原則1頭で、先頭2・3番手との差が誤差の範囲のときだけ最大3頭まで増えます。",
             "走数が少ない馬（初出走は分類なし）は、位置取りが安定していないため参考程度に見てください。",

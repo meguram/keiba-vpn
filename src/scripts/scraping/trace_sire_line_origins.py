@@ -2,6 +2,7 @@
 
 python -m src.scripts.scraping.trace_sire_line_origins            # 足りない分だけ取得して、結果を書く
 python -m src.scripts.scraping.trace_sire_line_origins --offline  # 取得せず、手元のデータだけで結果を書く
+python -m src.scripts.scraping.trace_sire_line_origins --compact-only  # 手元の出力から、git 管理の小さな版だけを書き直す
 
 1. 父系の鎖: ローカルの 5 世代血統（data/local/horse_pedigree_5gen）から 子 -> 父 を集め、2016 年以降の出走馬の父（種牡馬）から上へ辿る。
    古い馬（18 世紀）は、子孫の 5 世代表では位置がずれて『父』が誤って載ることがある。自分のページで父が無いと分かった馬
@@ -11,6 +12,9 @@ python -m src.scripts.scraping.trace_sire_line_origins --offline  # 取得せず
 3. 系統: 鎖の各馬の『○○系』は、その子の血統ページの父のセルにしか付かないので、台帳（sire_line_map.json）に無い馬は子のページを取る。
 4. 出力 data/local/pedigree_lines/sire_line_origin.json:
    {sire_id: {name, chain: [[id, name, line], ...（種牡馬から上へ）], lines: [系統の移り変わり], origin_line: 最も古い系統, root: [id, name]}}
+5. 小さな版 data/meta/pedigree_lines/sire_line_origin.json（git の管理下。めぐコラム sire_line_treemap が読む）:
+   {sire_id: {name, chain: [[id, name], ...（父から、名前の付いた最も下の系統の祖まで）], lines, origin_line, root}}
+   chain は line_path の最後の系統の祖で切る（それより上の祖先は系統名の経路 lines で足りる）。祖先の系統名は持たない。
 取得は同時 1 本・一定間隔（既定 3 秒）。アクセス制限の疑いが出たら止める。
 """
 
@@ -34,6 +38,7 @@ REPO = Path(__file__).resolve().parents[3]
 PED_URL = "https://db.netkeiba.com/horse/ped/{horse_id}/"
 DEEP_DIR = REPO / "data/local/pedigree_lines/deep_male_line"
 OUT = REPO / "data/local/pedigree_lines/sire_line_origin.json"
+COMPACT_OUT = REPO / "data/meta/pedigree_lines/sire_line_origin.json"
 MAX_CHAIN = 80
 
 
@@ -132,13 +137,45 @@ def build_output(sires: collections.Counter, sire_of: dict[str, str], name: dict
     return out
 
 
+def line_path(lines: list[str | None]) -> list[str]:
+    """lines（新しい→古い）を、根から下への経路にする。同じ系統名が 2 回目以降に出たら飛ばす。"""
+    out: list[str] = []
+    for ln in reversed(lines):
+        if ln and ln not in out:
+            out.append(ln)
+    return out
+
+
+def compact_record(rec: dict) -> dict:
+    """出力の 1 頭分を、小さな版にする。chain は父から、line_path の最後の系統が付いた最も上の馬（その系統の祖）まで。"""
+    path = line_path(rec["lines"])
+    last = path[-1] if path else None
+    chain = rec["chain"]
+    founder = max((j for j, c in enumerate(chain) if c[2] == last), default=0)
+    return {"name": rec["name"], "chain": [c[:2] for c in chain[1:max(founder, 1) + 1]], "lines": rec["lines"],
+            "origin_line": rec["origin_line"], "root": rec["root"]}
+
+
+def dumps_compact(out: dict) -> str:
+    """1 頭 1 行の JSON（差分が読みやすく、小さい）。"""
+    rows = [json.dumps(k) + ": " + json.dumps(compact_record(v), ensure_ascii=False, separators=(",", ":"))
+            for k, v in out.items()]
+    return "{\n" + ",\n".join(rows) + "\n}\n"
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--offline", action="store_true")
     ap.add_argument("--pace", type=float, default=3.0)
     ap.add_argument("--max-rounds", type=int, default=10)
+    ap.add_argument("--compact-only", action="store_true", help="取得も鎖の組み直しもせず、手元の出力から小さな版だけを書く")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+    if args.compact_only:
+        COMPACT_OUT.parent.mkdir(parents=True, exist_ok=True)
+        COMPACT_OUT.write_text(dumps_compact(json.loads(OUT.read_text(encoding="utf-8"))), encoding="utf-8")
+        logger.info("書き込み %s", COMPACT_OUT)
+        return 0
 
     client = None
     if not args.offline:
@@ -185,9 +222,11 @@ def main(argv: list[str] | None = None) -> int:
     sires = dataset_sires(sire_of)
     out = build_output(sires, sire_of, name)
     OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    COMPACT_OUT.parent.mkdir(parents=True, exist_ok=True)
+    COMPACT_OUT.write_text(dumps_compact(out), encoding="utf-8")
     c = collections.Counter(v["origin_line"] for v in out.values())
     r = collections.Counter(tuple(v["root"]) for v in out.values())
-    logger.info("書き込み %s: 種牡馬 %d / 最も古い系統 %s / 上端 %s", OUT, len(out), c.most_common(), r.most_common(5))
+    logger.info("書き込み %s・%s: 種牡馬 %d / 最も古い系統 %s / 上端 %s", OUT, COMPACT_OUT, len(out), c.most_common(), r.most_common(5))
     return 0
 
 

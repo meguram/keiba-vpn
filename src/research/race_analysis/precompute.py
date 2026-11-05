@@ -19,7 +19,7 @@ from src.research.race_analysis.service import _load_card, _normalize_entries, a
 
 logger = logging.getLogger(__name__)
 
-ANALYSIS_VERSION = "20"      # 20: 今日の馬場を前日まで・直前ほど重く。19: 走法マップを上位 N 方面（3〜6）の軸の無い地図に（2026-11-03）。分析ロジック・列定義を変えたら上げる（保存済みの結果が作り直される）
+ANALYSIS_VERSION = "21"      # 21: 過去位置取りの表示を直近5走・前走の見出し。20: 今日の馬場を前日まで・直前ほど重く。19: 走法マップを上位 N 方面（3〜6）の軸の無い地図に（2026-11-03）。分析ロジック・列定義を変えたら上げる（保存済みの結果が作り直される）
 
 
 def _asof_cache() -> dict[str, str | None]:

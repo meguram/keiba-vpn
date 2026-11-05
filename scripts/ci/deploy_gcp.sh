@@ -155,7 +155,7 @@ case "$STEP" in
     ;;
   promote)
     [ "$TARGET" = prod ] || { echo "promote は prod だけ（stg は通信を切り替えない）" >&2; exit 2; }
-    run bash scripts/gcp/deploy_cloud_run_api.sh promote --apply
+    run env PROMOTE_TAG="r${REV_TAG}" bash scripts/gcp/deploy_cloud_run_api.sh promote --apply   # 本番反映が作ったリビジョンを名指しで（途中の stg 配備を拾わない）
     tag_live "${REG}/keiba-api:live-prod" "${REG}/keiba-api:live-rollback"   # 直前の本番の版も残す（切り戻し先が自動掃除で消えないように）
     # 本番の版を自動掃除から守る。タグは Cloud Run が実際に使っている digest に付ける（目次の版にだけ付けると、本体が消えうる）
     if [ "$DRY" = 1 ]; then tag_live "$API_IMAGE" "${REG}/keiba-api:live-prod"; else
