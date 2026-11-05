@@ -10,7 +10,7 @@ const groupColor = (g: string) => GROUP_COLORS[(g.charCodeAt(0) - 65) % GROUP_CO
 
 /** コース適性の色（高いほど濃い）。グループの色と紛れないよう金色 */
 const APT_RGB = "227,179,65";
-/** その日の馬場傾向の色（コースの統計の金色と見分ける） */
+/** その日の馬場傾向の色（コース特注ゾーンの金色と見分ける） */
 const DAY_RGB = "63,185,80";
 // 広い画面では左に図、右に詳細とグループを並べる（横の余白を使い、スクロールなしで一面に収める）
 const CSS = `.rm-wrap{display:grid;gap:10px;margin-top:8px}
@@ -102,7 +102,7 @@ function RunningMapView({ figure, entries }: { figure: RunningMapFigure; entries
     const worst = [...figure.axes].sort((a, b) => (a.r2 ?? 0) - (b.r2 ?? 0))[0];
     return worst?.key ?? "group";
   });
-  // 背景: コースの統計（金色の塗り）と、馬場特注ゾーン（今日・前日の結果。緑）を重ねて出す。どちらも切り替えられる
+  // 背景: コース特注ゾーン（金色の塗り）と、馬場特注ゾーン（今日・前日の結果。緑）を重ねて出す。どちらも切り替えられる
   const day = figure.day_trend ?? null;
   const [showCourse, setShowCourse] = useState(true);
   const [showDay, setShowDay] = useState(true);
@@ -260,7 +260,7 @@ function RunningMapView({ figure, entries }: { figure: RunningMapFigure; entries
       {hs.some((h) => placeOf(h) != null) && <PlaceLegend />}
       <ColorControl axes={choices} colorKey={colorKey} onChange={setColorKey} topKeys={topKeys} />
       <BgSwitch showCourse={showCourse} onCourse={setShowCourse} showDay={showDay} onDay={setShowDay} day={day} hasCourse={!!apt} />
-      {showCourse && apt && <HeatLegend rgb={APT_RGB} text={`${apt.course}の好走しやすさ`} />}
+      {showCourse && apt && <HeatLegend rgb={APT_RGB} text={`コース特注ゾーン（${apt.course}の好走しやすさ）`} />}
       {showDay && day?.heat && <HeatLegend rgb={DAY_RGB} text={`馬場特注ゾーン（${day.surface ?? ""}・枠つきは偶然とは言いにくい）`} />}
       </div>
 
@@ -364,7 +364,7 @@ function BgSwitch({ showCourse, onCourse, showDay, onDay, day, hasCourse }: {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 6, fontSize: 11.5, color: "var(--text-dim)" }}>
       背景
-      {hasCourse && btn(showCourse, onCourse, "コースの統計", APT_RGB)}
+      {hasCourse && btn(showCourse, onCourse, "コース特注ゾーン", APT_RGB)}
       {btn(showDay, onDay, dayText, DAY_RGB, !day?.heat)}
     </div>
   );
