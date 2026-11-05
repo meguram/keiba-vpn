@@ -163,6 +163,10 @@ def _build_course_maps(metrics: pd.DataFrame, table: pd.DataFrame, q: dict[str, 
     m = metrics[keys + ["venue", "surface", "distance", "track_condition", "finish_position"]].drop_duplicates(keys)
     m = m.assign(n_field=m.groupby("race_id")["race_id"].transform("size"))
     tab = table[keys].merge(m, on=keys, how="left")
+    if rmc.POP_TABLE is not None:   # 人気込みの期待得点（確定の人気順）
+        from src.research.race import pop_expect
+        pf = pop_expect.popularity_frame(sorted(tab["date"].dt.year.unique()))[["race_id", "horse_id", "popularity"]]
+        tab = tab.merge(pf, on=["race_id", "horse_id"], how="left")
     present = ~np.isnan(Z)
     cond = tab["track_condition"].to_numpy()
     # 良馬場の地図は良馬場のレースだけ（既定）。道悪の地図は稍重・重・不良をまとめて測る（個別だと標本が足りない。不良は全体の 2%）

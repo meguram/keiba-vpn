@@ -46,6 +46,10 @@ MIN_MAP_RUNS = 200   # 地図に使う 6 軸がすべてある走がこれ未満
 MIN_RUNS = 600
 MIN_VENUE_RUNS = 300     # 場のグループ（同じ競馬場の距離帯）の地図を作る最低の走数。背景の倍率はコース全体へ寄せる（M=20）ので、少なめでも極端にはならない
 MIN_FIELD = 5
+# 人気を考えた期待得点の表（pop_expect.build_table）。None なら頭数だけの期待得点（従来）。
+# 人気馬の凡走・人気薄の好走を強く拾うため、設定すると地図・好走ゾーン・当日の傾向が「人気どおりを 1」の倍率になる
+POP_TABLE: Optional[dict] = None
+POP_IN_IMPORTANCE = True   # 方面の重要度（地図の重み）の回帰にも人気込みの差を使うか
 
 
 def score_of(pos: np.ndarray) -> np.ndarray:
@@ -58,6 +62,14 @@ def expected_score(n: np.ndarray) -> np.ndarray:
     """頭数 n で着順がでたらめなときの得点の平均。"""
     table = {k: float(score_of(np.arange(1, k + 1)).mean()) for k in range(1, 41)}
     return np.array([table.get(int(v), table[40]) for v in n])
+
+
+def expected_by_pop(n: np.ndarray, popularity: Optional[np.ndarray], e_n: np.ndarray) -> np.ndarray:
+    """期待得点。POP_TABLE があり人気が分かる走は「頭数と人気順が同じ馬の平均得点」、それ以外は頭数だけの期待得点。"""
+    if POP_TABLE is None or popularity is None:
+        return e_n
+    from src.research.race import pop_expect
+    return pop_expect.expect(POP_TABLE, n, popularity, e_n)
 
 
 BAND_LABEL = {"短": "1400m以下", "マイル": "1500〜1700m", "中": "1800〜2500m", "長": "2600m以上", "中長": "1800m以上"}
@@ -157,7 +169,7 @@ def _axes_for(axes: Any, surface: Any) -> tuple[str, ...]:
 def _one(g: pd.DataFrame, Zall: np.ndarray, present: np.ndarray, axis_keys: list[str], axes: Any = MAP_AXES) -> Optional[dict[str, Any]]:
     idx = g.index.to_numpy()
     Z, pr = Zall[idx], present[idx]
-    r = g["y"].to_numpy() - g["e"].to_numpy()
+    r = g["y"].to_numpy() - g["e" if POP_IN_IMPORTANCE else "e_n"].to_numpy()
     fixed = [axis_keys.index(k) for k in _axes_for(axes, g["surface"].iloc[0])]
     ok = pr[:, fixed].all(axis=1)
     if ok.sum() < MIN_MAP_RUNS:
@@ -215,7 +227,8 @@ def build(tab: pd.DataFrame, Z: np.ndarray, present: np.ndarray, axis_keys: list
         tab, Z, present = tab[mask], Z[mask], present[mask]
     t = tab.reset_index(drop=True).copy()
     t["y"] = score_of(t["finish_position"].to_numpy())
-    t["e"] = expected_score(t["n_field"].to_numpy())
+    t["e_n"] = expected_score(t["n_field"].to_numpy())
+    t["e"] = expected_by_pop(t["n_field"].to_numpy(), t["popularity"].to_numpy() if "popularity" in t else None, t["e_n"].to_numpy())
     keep = ((t["date"] >= pd.Timestamp(SINCE)) & (t["n_field"] >= MIN_FIELD) & t[["venue", "surface", "distance"]].notna().all(axis=1)
             & t["finish_position"].notna()).to_numpy()
     t = t[keep].reset_index(drop=True)

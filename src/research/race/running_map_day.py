@@ -136,7 +136,8 @@ def compute(
         n = len(ents)
         for e in ents:
             rows.append({"race_id": rid, "horse_id": str(e["horse_id"]), "finish_position": int(e["finish_position"]), "n_field": n,
-                         "track_condition": card.get("track_condition"), "gap": gap, "prev_day": prev})
+                         "track_condition": card.get("track_condition"), "gap": gap, "prev_day": prev,
+                         "popularity": pd.to_numeric(e.get("popularity"), errors="coerce")})
     if not rows:
         return None
     t = pd.DataFrame(rows)
@@ -145,7 +146,7 @@ def compute(
     cond_today = today.iloc[0] if len(today) else conditions.get("track_condition")
     t["w"] = [race_weight(g, p, bool(p and cond_today and c and c != cond_today)) for g, p, c in zip(t["gap"], t["prev_day"], t["track_condition"])]
     t["y"] = rmc.score_of(t["finish_position"].to_numpy())
-    t["e"] = rmc.expected_score(t["n_field"].to_numpy())
+    t["e"] = rmc.expected_by_pop(t["n_field"].to_numpy(), t["popularity"].to_numpy(), rmc.expected_score(t["n_field"].to_numpy()))
     vals = horse_axes(sorted(t["horse_id"].unique()))
     t = t.join(vals, on="horse_id")
     races = t["race_id"].to_numpy()

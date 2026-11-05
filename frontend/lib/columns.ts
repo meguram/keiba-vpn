@@ -83,12 +83,20 @@ export type ColumnBlock =
   | { type: "stats"; items: { label: string; value: string; sub?: string }[] }
   | { type: "table"; columns: string[]; rows: (string | number)[][]; caption?: string }
   | { type: "note"; text: string }
+  | ColumnGuideBlock
+  | ColumnGlossaryBlock
   | { type: "link"; href: string; label: string; desc?: string }
   | ColumnChartBlock
   | JockeyDistanceChartBlock
   | ColumnHeatmapBlock
   | ColumnTreemapBlock
   | { type: "accordion"; title: string; blocks: ColumnBlock[] };
+
+/** 表・グラフの前に置く「読み方」の囲み（統計に詳しくない人向けの言い換え）。記事 JSON ではなく guides/<slug>.json から差し込む */
+export type ColumnGuideBlock = { type: "guide"; title: string; text: string; example?: string };
+
+/** 用語のやさしい説明（折りたたみ） */
+export type ColumnGlossaryBlock = { type: "glossary"; title: string; items: { term: string; desc: string }[] };
 
 /** 折れ線グラフ。series が複数あるときは、見たい系列を切り替えて重ねて見られる（baseline は常に点線で出す） */
 export type ColumnChartBlock = {
@@ -625,4 +633,80 @@ export function sortByDate(columns: Column[]): Column[] {
 /** カテゴリパスを「血統 › 父（種牡馬）」の表示名にする */
 export function categoryLabel(path: string): string {
   return categoryTrail(path)?.map((c) => c.label).join(" › ") ?? path;
+}
+
+/**
+ * 記事ごとの読み方ガイド（content/columns/guides/<slug>.json）。記事の JSON は集計コードが毎回書き直すので、
+ * 読み方の文章はそちらに置き、表示のときに差し込む。
+ *   lead: 冒頭に出す「まず、ひとことで」の箇条書き
+ *   terms: 共通の用語集（guides/glossary.json）から出す語、glossary: この記事だけの語
+ *   guides: 差し込む読み方。match で記事のブロックを探して、その前（place: "after" なら後ろ）に置く
+ */
+export type ColumnGuideMatch =
+  | { stats: true }
+  | { treemap: true }
+  | { heatmap: true }
+  | { heading: string }
+  | { text: string }
+  | { chart: string }
+  | { table: string[] };
+
+export type ColumnGuideEntry = {
+  match: ColumnGuideMatch;
+  title?: string;
+  text: string;
+  example?: string;
+  place?: "before" | "after";
+  /** 同じ条件に当てはまるブロックが複数あるとき、何番目か（0 始まり）。"all" なら全部。省略は最初の 1 つ */
+  nth?: number | "all";
+};
+
+export type ColumnGuide = {
+  lead?: string[];
+  terms?: string[];
+  glossary?: { term: string; desc: string }[];
+  guides?: ColumnGuideEntry[];
+};
+
+/** match がブロックに当てはまるか。text は先頭一致、heading は完全一致、chart は題の先頭一致、table は列名の完全一致 */
+export function guideMatches(m: ColumnGuideMatch, b: ColumnBlock): boolean {
+  if ("stats" in m) return b.type === "stats";
+  if ("treemap" in m) return b.type === "treemap";
+  if ("heatmap" in m) return b.type === "heatmap";
+  if ("heading" in m) return b.type === "heading" && b.text === m.heading;
+  if ("text" in m) return (b.type === "text" || b.type === "note") && b.text.startsWith(m.text);
+  if ("chart" in m) return (b.type === "chart" || b.type === "jockey_distance_chart") && ((b as { title?: string }).title ?? "").startsWith(m.chart);
+  if ("table" in m) return b.type === "table" && b.columns.length === m.table.length && b.columns.every((c, i) => c === m.table[i]);
+  return false;
+}
+
+/** 記事の本文に、読み方ガイドを差し込む（アコーディオンの中も探す） */
+export function applyGuide(body: ColumnBlock[], guide: ColumnGuide | undefined, glossary: Record<string, string>): ColumnBlock[] {
+  if (!guide) return body;
+  const entries = guide.guides ?? [];
+  const seen = entries.map(() => 0);
+  const walk = (blocks: ColumnBlock[]): ColumnBlock[] => {
+    const out: ColumnBlock[] = [];
+    for (const b of blocks) {
+      const before: ColumnBlock[] = [];
+      const after: ColumnBlock[] = [];
+      entries.forEach((e, i) => {
+        if (!guideMatches(e.match, b)) return;
+        const k = seen[i]++;
+        if (e.nth !== "all" && k !== (e.nth ?? 0)) return;
+        const g: ColumnGuideBlock = { type: "guide", title: e.title ?? "読み方", text: e.text, example: e.example };
+        (e.place === "after" ? after : before).push(g);
+      });
+      out.push(...before, b.type === "accordion" ? { ...b, blocks: walk(b.blocks) } : b, ...after);
+    }
+    return out;
+  };
+  const head: ColumnBlock[] = [];
+  if (guide.lead?.length) head.push({ type: "guide", title: "まず、ひとことで", text: guide.lead.map((t) => `・${t}`).join("\n") });
+  const items = [
+    ...(guide.terms ?? []).filter((t) => glossary[t]).map((t) => ({ term: t, desc: glossary[t] })),
+    ...(guide.glossary ?? []),
+  ];
+  if (items.length) head.push({ type: "glossary", title: "出てくる言葉のやさしい説明", items });
+  return [...head, ...walk(body)];
 }
