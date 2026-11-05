@@ -181,8 +181,8 @@ def course_table(d: pd.DataFrame, min_races: int = 150) -> tuple[list[list[str |
 
 # ── ハロンごとのラップの推移 ─────────────────────────
 
-LAP_MIN_COURSE = 40           # コースのプルダウンに出す最小のレース数
-LAP_MIN_BIN = 20              # 1 本の線に出す最小のレース数
+LAP_MIN_COURSE = 10           # コースのプルダウンに出す最小のレース数
+LAP_MIN_BIN = 10              # 1 本の線に出す最小のレース数
 LAP_AXES = {                  # 分け方 → (列, 区分, 線の名前の前置き)
     "逃げ馬の頭数": ("nige_b", NIGE_BINS[1], "逃げ馬 "),
     "前走3番手以内の頭数": ("prev_b", PREV_BINS[1], "前走3番手以内 "),
@@ -240,8 +240,8 @@ def lap_series(name: str, dev: np.ndarray, width: int, offset: np.ndarray | None
         return {"name": name, "values": [None] * width, "n": [n] * dev.shape[1] + [None] * pad, "ci": [None] * width}
     m = dev.mean(axis=0) + base
     se = dev.std(axis=0, ddof=1) / np.sqrt(n)
-    return {"name": name, "values": [round(float(v), 3) for v in m] + [None] * pad, "n": [n] * dev.shape[1] + [None] * pad,
-            "ci": [[round(float(a), 3), round(float(b), 3)] for a, b in zip(m - 1.96 * se, m + 1.96 * se)] + [None] * pad}
+    return {"name": name, "values": [round(float(v), 2) for v in m] + [None] * pad, "n": [n] * dev.shape[1] + [None] * pad,
+            "ci": [[round(float(a), 2), round(float(b), 2)] for a, b in zip(m - 1.96 * se, m + 1.96 * se)] + [None] * pad}
 
 
 VENUE_ORDER = ["札幌", "函館", "福島", "新潟", "東京", "中山", "中京", "京都", "阪神", "小倉"]
