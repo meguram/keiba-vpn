@@ -25,7 +25,7 @@ function axisColor(p: number | null | undefined): string {
   const to = t < 0 ? AXIS_LOW : AXIS_HIGH, a = Math.abs(t);
   return `rgb(${AXIS_MID.map((m, i) => Math.round(m + (to[i] - m) * a)).join(",")})`;
 }
-/** 地図に使った寄与率の上位の軸（コースごとに 3〜6）の印（数値バー・色の選択で使う） */
+/** 地図に使った 5 つの軸の印（数値バー・色の選択で使う） */
 const TOP_RGB = "227,179,65";
 /** ⇆ の線: これより短い（地図の位置でほとんど表せない）軸は図に出さない（丸の色で見る）。コース別の地図には軸の線を引かない */
 const GUIDE_MIN = 0.3;
@@ -142,7 +142,7 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
   const isExtra = (k: string) => (figure.extra_axes ?? []).some((x) => x.key === k);
   const pctOf = (h: RunningMapHorse, k: string) => (isExtra(k) ? extraPct(h.extras?.[k]?.value) : h.percentiles[k]);
   const colorAxis = colorAxes.find((a) => a.key === colorKey) ?? null;
-  // 色の選択肢: コース別の地図では、地図に使った寄与率の上位の軸（コースごとに 3〜6。今日の馬場の傾向から選んだ軸は、そのとき足す）
+  // 色の選択肢: コース別の地図では、地図に使った 5 つの軸（今日の馬場の傾向から選んだ軸は、そのとき足す）
   const topKeys = figure.course_map?.axes ?? [];
   const choices = figure.course_map
     ? [...topKeys, ...(colorAxis && !topKeys.includes(colorAxis.key) ? [colorAxis.key] : [])].map((k) => colorAxes.find((a) => a.key === k)).filter((a): a is RunningMapAxis => !!a)

@@ -1,4 +1,4 @@
-"""走法マップのコース別の地図（ギアチェンジ・末脚の速さ・末脚の持続力・Cr性能の 4 軸の重み付き・軸の無い 2 次元）（running_map_course）と、その日の馬場傾向（running_map_day）。"""
+"""走法マップのコース別の地図（ギアチェンジ・末脚の速さ・末脚の持続力・Cr性能・Hペース耐性の 5 軸の重み付き・軸の無い 2 次元）（running_map_course）と、その日の馬場傾向（running_map_day）。"""
 
 import numpy as np
 import pandas as pd
@@ -36,19 +36,19 @@ def _synthetic(n_races=120, field=12, seed=0, good=("cr", "gear", "ts")):
     return pd.DataFrame(rows), np.vstack(Z)
 
 
-def test_build_always_uses_the_four_fixed_axes_and_lookup_falls_back_to_the_group():
+def test_build_always_uses_the_five_fixed_axes_and_lookup_falls_back_to_the_group():
     tab, Z = _synthetic()
     maps = rmc.build(tab, Z, ~np.isnan(Z), KEYS)
     cm = maps["courses"]["東京|ダート|1600"]
-    assert sorted(cm["axes"]) == sorted(rmc.MAP_AXES) and cm["axes"][:3] == ["cr", "gear", "ts"]   # 4 軸固定。効く順（残りの sustain は最後）
-    assert cm["top_k"] == 4 and [i["key"] for i in cm["importance"]] == cm["axes"]
+    assert sorted(cm["axes"]) == sorted(rmc.MAP_AXES) and cm["axes"][:3] == ["cr", "gear", "ts"]   # 5 軸固定。効く順（効かない sustain・endure は最後）
+    assert cm["top_k"] == 5 and [i["key"] for i in cm["importance"]] == cm["axes"]
     assert cm["importance"][0]["sign"] == 1
     n = cm["extent"]["n"]
     assert len(cm["lift"]) == n * n and len(cm["sig"]) == n * n
-    # 地図は 4 軸の重み付き距離で作る（軸の無い 2 次元）。重みは寄与率の高い軸ほど大きく（効かない軸も 0 にはならない）、ほかの方面は 0
+    # 地図は 5 軸の重み付き距離で作る（軸の無い 2 次元）。重みは寄与率の高い軸ほど大きく（効かない軸も 0 にはならない）、ほかの方面は 0
     assert np.array(cm["A"]).shape == (len(KEYS), 2) and cm["keys"] == KEYS
     w = dict(zip(KEYS, cm["w"]))
-    assert w["cr"] > w["gear"] > w["ts"] > w["sustain"] > 0 and all(w[k] == 0 for k in KEYS if k not in cm["axes"])
+    assert w["cr"] > w["gear"] > w["ts"] > min(w["sustain"], w["endure"]) > 0 and all(w[k] == 0 for k in KEYS if k not in cm["axes"])
     assert np.mean(np.square([w[k] for k in cm["axes"]])) == pytest.approx(1.0, abs=1e-3)
     # 好走に効く方面が高い馬ほど上（y が大きい）に来る
     P = rmc.place(Z, cm)
