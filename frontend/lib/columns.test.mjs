@@ -103,3 +103,10 @@ test("chartRange fit: 0 始まりにせず値の範囲に合わせる", () => {
   assert.ok(r.min > 11.5 && r.min <= 12.0 && r.max >= 12.5 && r.max < 13);
   assert.equal(chartRange([{ values: [0.1, 0.3] }], "num").min, 0);               // fit なしは今までどおり
 });
+
+test("グラフ: variant が xs を持てば横軸もその長さに替わる", () => {
+  const block = { type: "chart", title: "t", xLabel: "x", yLabel: "y", xs: ["a", "b", "c"], series: [{ name: "s", values: [1, 2, 3] }],
+    filters: [{ label: "距離", options: ["長", "短"] }], variants: { 短: { xs: ["a", "b"], series: [{ name: "s", values: [1, 2] }] } } };
+  assert.deepEqual(chartVariant(block, ["短"]).xs, ["a", "b"]);
+  assert.deepEqual(chartVariant(block, ["長"]).xs, ["a", "b", "c"]);
+});

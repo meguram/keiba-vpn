@@ -81,13 +81,16 @@ def test_lap_chart_cascade_keys():
     assert ch["filters"][0]["options"] == ["全場", "東京", "中山"]                      # 全場が先頭、そのあと JRA の並び
     assert ch["filters"][1]["options"] == ["芝1600", "芝2000", "ダート1200"]            # 芝 → ダート、距離の短い順
     assert "全場|芝1600" in ch["variants"] and "全場|芝2000" not in ch["variants"]   # 1 コースだけの距離は全場を作らない
-    assert len(ch["xs"]) == 10 and ch["fitAxis"]
+    assert ch["fitAxis"]
+    v16, v20 = ch["variants"]["全場|芝1600"], ch["variants"]["東京|芝2000"]
+    assert v16["xs"][0] == "1F スタート" and v16["xs"][-1] == "8F ゴール" and len(v16["xs"]) == 8       # 距離なりの長さ
+    assert len(v20["xs"]) == 10 and all(len(x["values"]) == 10 for x in v20["series"])
     ser = ch["variants"]["全場|芝1600"]["series"]
     assert ser[0]["name"] == "全レース" and ser[0]["baseline"] and abs(ser[0]["values"][0] - 12.0) < 0.1       # 差ではなく平均ラップ
     names = [x["name"] for x in ser[1:]]
     assert names[:3] == ["逃げ馬 0頭", "逃げ馬 1頭", "逃げ馬 2頭以上"] and len(names) == 3 + 4 + 3
     assert ch["initial"] == names[:3]
-    assert ser[1]["n"][0] == 100 and ser[1]["values"][8] is None
+    assert ser[1]["n"][0] == 100 and len(ser[1]["values"]) == 8
     assert all(k.count("|") == 1 for k in ch["variants"])
 
 

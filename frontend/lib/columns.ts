@@ -127,14 +127,14 @@ export type ColumnChartBlock = {
 };
 
 /** プルダウンで選んだ条件での系列（compare・caption は省略すると元のものを使う） */
-export type ChartVariant = { series: ChartSeries[]; y2Series?: ChartSeries[]; compare?: ColumnChartBlock["compare"]; caption?: string };
+export type ChartVariant = { series: ChartSeries[]; xs?: string[]; y2Series?: ChartSeries[]; compare?: ColumnChartBlock["compare"]; caption?: string };
 
 /** プルダウンの選択に応じたグラフ（全部が先頭の選択肢、または該当する組み合わせが無ければ元のまま） */
 export function chartVariant(block: ColumnChartBlock, picked: string[]): ColumnChartBlock {
   const v = block.variants?.[picked.join("|")];
   if (!v || (!block.cascade && picked.every((p, i) => p === block.filters?.[i]?.options[0]))) return block;
   const y2 = block.y2 && v.y2Series ? { ...block.y2, series: v.y2Series } : block.y2;
-  return { ...block, series: v.series, y2, compare: v.compare ?? block.compare, caption: v.caption ?? block.caption };
+  return { ...block, xs: v.xs ?? block.xs, series: v.series, y2, compare: v.compare ?? block.compare, caption: v.caption ?? block.caption };
 }
 
 /** cascade のとき、fi 番目のプルダウンに出す選択肢（それより前の選択 picked と組み合わせて variants にあるもの）。cascade でなければ全部 */
