@@ -94,6 +94,8 @@ export type RunningMapFigure = {
   course_map?: RunningMapCourse | null;
   /** その日（同じ競馬場・同じ芝ダート、このレースより前）の馬場傾向。前のレースが無ければ null */
   day_trend?: RunningMapDayTrend | null;
+  /** 道悪（稍重以上）切替の地図。同じ形（day_trend は無い）。道悪の標本が足りず作れなければ無い */
+  wet?: RunningMapFigure | null;
 };
 
 export type RunningMapCourse = {

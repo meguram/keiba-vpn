@@ -15,7 +15,7 @@ from src.research.race import running_map_aptitude as apt
 def _runners(seed: int = 0, n: int = 14) -> np.ndarray:
     rng = np.random.default_rng(seed)
     Z = rng.normal(size=(n, len(rm.AXES)))
-    Z[:, 1] = Z[:, 0] + rng.normal(scale=0.5, size=n)   # 末脚の速さと持続力は似ている
+    Z[:, 1] = Z[:, 0] + rng.normal(scale=0.5, size=n)   # TSとTS持続力は似ている
     return Z * rm.WEIGHTS
 
 
@@ -85,7 +85,7 @@ class GroupTest(unittest.TestCase):
         Zall[:3, rm.AXIS_KEYS.index("ts")] = 2.0      # 3 頭だけ末脚が速い
         Zall[:3, rm.AXIS_KEYS.index("front")] = -2.0  # 同じ 3 頭は後ろから行く
         traits = rm.describe_group(Zall[:3], Zall)
-        self.assertEqual({t["axis"] for t in traits}, {"末脚の速さ", "先行力"})
+        self.assertEqual({t["axis"] for t in traits}, {"TS", "先行力"})
         self.assertEqual({t["text"] for t in traits}, {"末脚が速い", "後ろから行く"})
 
 

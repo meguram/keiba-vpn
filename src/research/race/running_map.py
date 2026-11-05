@@ -1,7 +1,7 @@
 """
 出走馬の走法マップ（めぐ分析）。
 
-走法プロファイルの 8 方面（実測ラップ版: 末脚の速さ・末脚の持続力・出脚・ギアチェンジ・Hペース耐性・
+走法プロファイルの 9 方面（実測ラップ版: TS・TS持続力・出脚・ギアチェンジ・Hペース耐性・
 先行力・Cr性能・まくり特性。定義は docs/ideas/running_map_axes_fixed.md）を 2 次元へ写し、
 「この馬とあの馬は走り方が近い」を見えるようにする。さらに、コース（競馬場・芝ダ・距離）ごとに
 「地図のどのゾーンが好走しやすいか」を色で重ねる（running_map_aptitude.py）。
@@ -15,8 +15,8 @@
     出走馬の数や顔ぶれで地図の形が変わらない代わりに、そのレースの出走馬だけで作る主成分（古典的 MDS）より
     元の距離の再現度は少し落ちる（fidelity.distance_spearman で毎回示す）。
   - 向きは固定（末脚の矢印が真上、先行力の矢印が左）。
-  - グループは 2 次元ではなく元の 5 軸で Ward 法の階層クラスタリング。数はシルエット係数が最大の 2〜5。
-  - 地図・グループ・近い馬に使う軸は MAP_KEYS の 5 つ（ギアチェンジ・末脚の速さ・末脚の持続力・Cr性能・Hペース耐性。ユーザー指定 2026-11-05）。
+  - グループは 2 次元ではなく元の 6 軸で Ward 法の階層クラスタリング。数はシルエット係数が最大の 2〜5。
+  - 地図・グループ・近い馬に使う軸は MAP_KEYS の 6 つ（ギアチェンジ・TS・TS持続力・Cr性能・Hペース耐性・基礎スピード。ユーザー指定 2026-11-05）。
     ほかの方面は値の表示・色分けだけ（WEIGHTS が 0）。
 
 走法データは src/research/race/running_profile.py が作る（実測ラップは run_axes.py → run_axes.parquet）:
@@ -45,20 +45,36 @@ from src.research.race import running_profile as rp
 # 前後半比（前半型のペース）は 2026-10-30 に外した: ばらつきの半分がレースの展開（そのレースのペース）で、レースの平均との差に
 # 直すと Hペース耐性と相関 0.86（他の軸で 9 割説明できる）。1 走ごとの値（run_axes の split）は残している。
 AXES: list[tuple[str, str, int, str, str, str]] = [
-    ("ts", "ax_ts", 1, "末脚の速さ", "末脚が速い", "末脚が遅い"),
-    ("sustain", "ax_sustain", 1, "末脚の持続力", "速い末脚を長く続ける", "末脚が続かない"),
+    ("ts", "ax_ts", 1, "TS", "末脚が速い", "末脚が遅い"),
+    ("sustain", "ax_sustain", 1, "TS持続力", "速い末脚を長く続ける", "末脚が続かない"),
     ("debut", "ax_debut", 1, "出脚", "出脚が速い", "出脚が遅い"),
     ("gear", "ax_gear", 1, "ギアチェンジ", "終盤に加速する", "終盤に加速しない"),
     ("endure", "ax_endure", 1, "Hペース耐性", "Hペースでも落ちない", "Hペースで止まる"),   # 追走効率（追走で脚を使わず終いに落ちない）の意味も持つ
+    ("basic", "ax_basic", 1, "基礎スピード", "速い馬場でも自分の走りができる", "速い馬場だと崩れる（時計のかかる馬場向き）"),   # basic_speed.py。Hペース耐性は「基礎スピードを超える流れで終いに残るか」で別物
+    ("wett", "ax_wett", 1, "道悪適性", "道悪の芝が得意", "道悪の芝が苦手"),       # wet_going.py。道悪（稍重以上）の地図だけの軸（芝）。良馬場の地図には出さない
+    ("wetd", "ax_wetd", 1, "道悪適性", "道悪のダートが得意", "道悪のダートが苦手"),   # 同上（ダート）
     ("front", "ax_front", 1, "先行力", "前に行く", "後ろから行く"),
     ("cr", "ax_cr", 1, "Cr性能", "3〜4角で位置を上げる", "3〜4角で位置を下げる"),
     ("makuri", "ax_makuri", 1, "まくり特性", "道中〜3角で位置を上げる", "道中〜3角で位置を下げる"),
 ]
 AXIS_KEYS = [a[0] for a in AXES]
-# 地図・グループ・近い馬に使う走法軸（ユーザー指定 2026-11-05: ギアチェンジ・末脚の速さ・末脚の持続力・Cr性能・Hペース耐性）。ほかの方面は値の表示・色分けだけ
-MAP_KEYS = ["gear", "ts", "sustain", "cr", "endure"]
+# 地図・グループ・近い馬に使う走法軸（ユーザー指定 2026-11-05: ギアチェンジ・TS・TS持続力・Cr性能・Hペース耐性・基礎スピード）。ほかの方面は値の表示・色分けだけ
+MAP_KEYS = ["gear", "ts", "sustain", "cr", "endure", "basic"]
 MAP_IDX = [AXIS_KEYS.index(k) for k in MAP_KEYS]
 WEIGHTS = np.array([1.0 if k in MAP_KEYS else 0.0 for k in AXIS_KEYS])
+# 道悪（稍重以上）の地図（ユーザー指示 2026-11-05）: 基礎スピード（速い馬場の軸）の代わりに道悪適性を入れる。芝とダートで別の軸
+WET_AXIS = {"芝": "wett", "ダート": "wetd"}
+WET_MAP_KEYS = {sf: [k for k in MAP_KEYS if k != "basic"] + [wk] for sf, wk in WET_AXIS.items()}
+WET_CONDITIONS = ("稍重", "重", "不良")
+
+
+def mode_axes(wet: bool, surface: Any = None) -> tuple[list[str], list[int], np.ndarray, list[int]]:
+    """(地図の軸のキー, その添字, 重み, 表示する軸の添字)。良馬場の地図は MAP_KEYS、道悪の地図は基礎スピードを道悪適性（芝ダごと）に替える。
+    道悪適性の軸は、使う地図にだけ表示する。"""
+    keys = WET_MAP_KEYS[surface] if wet else MAP_KEYS
+    wet_keys = set(WET_AXIS.values())
+    return (keys, [AXIS_KEYS.index(k) for k in keys], np.array([1.0 if k in keys else 0.0 for k in AXIS_KEYS]),
+            [j for j, k in enumerate(AXIS_KEYS) if k not in wet_keys or k in keys])
 SIGNS = np.array([a[2] for a in AXES])
 # 地図の次元には入れない補助の軸（値は 50±10 の偏差値。判定できなければ None = 不明）
 EXTRA_LABELS = {
@@ -77,8 +93,8 @@ VENUE_JA = {"01": "札幌", "02": "函館", "03": "福島", "04": "新潟", "05"
             "06": "中山", "07": "中京", "08": "京都", "09": "阪神", "10": "小倉"}
 
 MIN_HORSES = 3
-MAX_IMPUTED = 1  # 地図の 5 軸のうち、これより多くが欠けた馬は地図に載せない（欠けた軸は全馬の中央値の位置に置く）
-SIMILAR_K = 3    # 馬ごとに出す「5 軸で本当に近い馬」の数（地図の近さは 2 次元に落とした分だけずれるので、それを補う）
+MAX_IMPUTED = 1  # 地図の 6 軸のうち、これより多くが欠けた馬は地図に載せない（欠けた軸は全馬の中央値の位置に置く）
+SIMILAR_K = 3    # 馬ごとに出す「6 軸で本当に近い馬」の数（地図の近さは 2 次元に落とした分だけずれるので、それを補う）
 SIMILAR_MIN_COMMON = 3  # 距離を測るのに、2 頭とも実際に値がある軸がこれ以上必要（中央値で補った軸は距離に使わない）
 
 
@@ -88,7 +104,7 @@ SIMILAR_MIN_COMMON = 3  # 距離を測るのに、2 頭とも実際に値があ�
 # 基準は作り直さない（データが増えても分布はほぼ変わらない）。作り方を変えたら REFERENCE_VERSION を上げる。
 
 REFERENCE_DIR = rp.STORE_DIR / "reference"
-REFERENCE_VERSION = "13"    # 13: 地図に使う軸に Hペース耐性を足して 5 軸に（2026-11-05）。12: 地図に使う軸をギアチェンジ・末脚の速さ・末脚の持続力・Cr性能の 4 つに固定（2026-11-05）。11: 場のグループは 300 走以上・長距離が少ない場は 1800m 以上でまとめる。10: 標本の少ないコースは同じ競馬場の距離帯（2600m 以上は長距離）でまとめる。9: コース別の地図を「軸の無い、上位 N 方面（コースごとに 3〜6）で走法の近い馬ほど近い」重み付き主成分にした（2026-11-03）
+REFERENCE_VERSION = "15"    # 15: コース別の地図を良馬場だけ・道悪（稍重以上）だけで別々に測り、道悪の地図は基礎スピードの代わりに道悪適性を軸にする（2026-11-05）。14: 地図に使う軸に基礎スピードを足して 6 軸に・TS/TS持続力へ改名（2026-11-05）。13: 地図に使う軸に Hペース耐性を足して 6 軸に（2026-11-05）。12: 地図に使う軸をギアチェンジ・TS・TS持続力・Cr性能の 4 つに固定（2026-11-05）。11: 場のグループは 300 走以上・長距離が少ない場は 1800m 以上でまとめる。10: 標本の少ないコースは同じ競馬場の距離帯（2600m 以上は長距離）でまとめる。9: コース別の地図を「軸の無い、上位 N 方面（コースごとに 3〜6）で走法の近い馬ほど近い」重み付き主成分にした（2026-11-03）
 _APTITUDE_FILE = "aptitude.json"
 _COURSE_MAPS_FILE = "course_maps.json"
 
@@ -144,10 +160,15 @@ def _build_course_maps(metrics: pd.DataFrame, table: pd.DataFrame, q: dict[str, 
 
     Z = np.column_stack([_to_normal(table[col].to_numpy(dtype=float), np.array(q[key])) for key, col, *_ in AXES]) / np.array(sd) * SIGNS
     keys = ["race_id", "horse_id", "date"]
-    m = metrics[keys + ["venue", "surface", "distance", "finish_position"]].drop_duplicates(keys)
+    m = metrics[keys + ["venue", "surface", "distance", "track_condition", "finish_position"]].drop_duplicates(keys)
     m = m.assign(n_field=m.groupby("race_id")["race_id"].transform("size"))
     tab = table[keys].merge(m, on=keys, how="left")
-    return rmc.build(tab, Z, ~np.isnan(Z), AXIS_KEYS)
+    present = ~np.isnan(Z)
+    cond = tab["track_condition"].to_numpy()
+    # 良馬場の地図は良馬場のレースだけ（既定）。道悪の地図は稍重・重・不良をまとめて測る（個別だと標本が足りない。不良は全体の 2%）
+    good = rmc.build(tab, Z, present, AXIS_KEYS, rmc.MAP_AXES, mask=(cond == "良"))
+    wet = rmc.build(tab, Z, present, AXIS_KEYS, rmc.WET_AXES, mask=np.isin(cond, WET_CONDITIONS))
+    return {**good, "wet": wet}
 
 
 def _load_reference(metrics: pd.DataFrame, sires: pd.DataFrame) -> dict[str, Any]:
@@ -192,11 +213,15 @@ def clear_cache() -> None:
         f.cache_clear()
 
 
-def course_map_for(conditions: dict[str, Any]) -> Optional[dict[str, Any]]:
-    """このレースのコースの地図（無ければ同じ競馬場・芝ダ・距離帯、それも無ければ全場の芝ダ・距離帯の地図。どれも無ければ None）。"""
+def course_map_for(conditions: dict[str, Any], wet: bool = False) -> Optional[dict[str, Any]]:
+    """このレースのコースの地図（無ければ同じ競馬場・芝ダ・距離帯、それも無ければ全場の芝ダ・距離帯の地図。どれも無ければ None）。
+    wet=True は道悪（稍重以上）の地図。"""
     from src.research.race import running_map_course as rmc
 
-    return rmc.lookup(_data()["ref"].get("_course_maps") or {}, conditions.get("venue"), conditions.get("surface"), conditions.get("distance"))
+    maps = _data()["ref"].get("_course_maps") or {}
+    if wet:
+        maps = maps.get("wet") or {}
+    return rmc.lookup(maps, conditions.get("venue"), conditions.get("surface"), conditions.get("distance"))
 
 
 def aptitude_for(conditions: dict[str, Any]) -> Optional[dict[str, Any]]:
@@ -332,9 +357,9 @@ def group(Z: np.ndarray, max_k: int = 5) -> np.ndarray:
 
 
 def similar(Zraw: np.ndarray, k: int = SIMILAR_K, min_common: int = SIMILAR_MIN_COMMON) -> list[list[tuple[int, float]]]:
-    """馬ごとに、地図の 5 軸の元の空間で近い馬（同じレースの中）を近い順に k 頭。距離は 2 頭とも値がある軸だけの二乗平均の平方根。
+    """馬ごとに、地図の 6 軸の元の空間で近い馬（同じレースの中）を近い順に k 頭。距離は 2 頭とも値がある軸だけの二乗平均の平方根。
 
-    地図（2 次元）は 5 軸の違いを全部は表さないので、地図で近くても実際は違う・地図で離れていても実際は近い
+    地図（2 次元）は 6 軸の違いを全部は表さないので、地図で近くても実際は違う・地図で離れていても実際は近い
     ことがある（2026-10-30 の比較: 近い 3 頭のうち地図でも近いのは約 6 割）。画面では、選んだ馬のこの一覧を強調して補う。"""
     n = len(Zraw)
     out: list[list[tuple[int, float]]] = []
@@ -420,7 +445,7 @@ def _extras(hid: str, row: pd.Series, keys: list[str], going: Optional[pd.DataFr
 # ── 本体 ──────────────────────────────────────────────────────────────────
 
 def _day_axes(horse_ids: list[str], as_of: str, conditions: dict[str, Any]) -> pd.DataFrame:
-    """その日の馬場傾向に使う、各馬の軸の値（地図の 8 方面は z、補助の軸は偏差値）。horse_id 索引。"""
+    """その日の馬場傾向に使う、各馬の軸の値（地図の 9 方面は z、補助の軸は偏差値）。horse_id 索引。"""
     d, qs = _data(), _quantiles()
     prof = rp.profiles_as_of(d["metrics"], horse_ids, as_of, d["sires"], cols=MAP_COLS, priors=_priors(as_of)).set_index("horse_id")
     out = pd.DataFrame(index=prof.index)
@@ -452,28 +477,48 @@ def day_trend_for(race_id: str, conditions: dict[str, Any], load_result, course_
 
 
 def build_running_map(entries: list[dict], race_id: str, conditions: dict[str, Any], load_result=None) -> dict[str, Any]:
-    """出走馬一覧とレース条件から走法マップを作る。load_result(race_id) を渡すと、その日の前のレースの結果から馬場傾向も付ける。"""
-    qs = _quantiles()
+    """出走馬一覧とレース条件から走法マップを作る。load_result(race_id) を渡すと、その日の前のレースの結果から馬場傾向も付ける。
+    返り値は良馬場の地図。道悪（稍重以上）の地図が作れれば "wet" に同じ形で付ける（ボタンで切り替える）。"""
     as_of = str(conditions.get("date") or pd.Timestamp.now(tz="Asia/Tokyo").date().isoformat())
     d = _data()
-
     ids = [str(e.get("horse_id") or "") for e in entries]
     prof = (rp.profiles_as_of(d["metrics"], [i for i in ids if i], as_of, d["sires"], cols=MAP_COLS, priors=_priors(as_of)).set_index("horse_id")
             if any(ids) else pd.DataFrame())
     extra_keys = _extra_keys(conditions)
     going = _going_all(as_of) if any(k.startswith("going_") for k in extra_keys) else None
+    out = _assemble(entries, ids, prof, race_id, conditions, extra_keys, going, load_result, wet=False)
+    surface = conditions.get("surface")
+    if surface in WET_AXIS and out.get("status") == "ok":
+        try:
+            wet = _assemble(entries, ids, prof, race_id, conditions, [k for k in extra_keys if not k.startswith("going_")], None, None, wet=True)
+        except Exception:   # 道悪の地図は補助。失敗しても良馬場の地図は出す
+            import logging
+
+            logging.getLogger(__name__).exception("道悪の地図の計算に失敗: %s", race_id)
+            wet = None
+        if wet and wet.get("status") == "ok":
+            out["wet"] = wet
+    return out
+
+
+def _assemble(entries: list[dict], ids: list[str], prof: pd.DataFrame, race_id: str, conditions: dict[str, Any], extra_keys: list[str],
+              going: Optional[pd.DataFrame], load_result, wet: bool) -> dict[str, Any]:
+    qs = _quantiles()
+    d = _data()
+    map_keys, map_idx, weights, shown = mode_axes(wet, conditions.get("surface"))
+    A = [(j, *AXES[j]) for j in shown]   # (添字, キー, 列, 向き, 表示名, 高い説明, 低い説明)
     picked, unmapped = [], []
     for e, hid in zip(entries, ids):
         base = {"horse_number": e.get("horse_number"), "bracket_number": e.get("bracket_number"),
                 "horse_name": e.get("horse_name"), "horse_id": hid or None}
         row = prof.loc[hid] if hid and hid in prof.index else None
-        axis_runs = None if row is None else {k: int(row[f"n_{col}"]) for k, col, *_ in AXES}
+        axis_runs = None if row is None else {k: int(row[f"n_{col}"]) for _, k, col, *_ in A}
         n_lap = 0 if axis_runs is None else max(axis_runs.values())
         if row is None or (n_lap == 0 and row["sire_id"] is None):
             unmapped.append({**base, "reason": "実測ラップのある過去の出走も父のデータもありません"})
             continue
         picked.append(({**base, "n_runs": int(row["n_runs"]), "n_lap_runs": n_lap, "axis_runs": axis_runs, "estimated": n_lap == 0,
-                        "own_weight": round(float(np.mean([row[f"own_{col}"] for _, col, *_ in AXES])), 3),
+                        "own_weight": round(float(np.mean([row[f"own_{col}"] for _, _, col, *_ in A])), 3),
                         "extras": _extras(hid, row, extra_keys, going)}, row))
 
     horses, Zs, Zraw = [], [], []
@@ -483,33 +528,31 @@ def build_running_map(entries: list[dict], race_id: str, conditions: dict[str, A
         pct = np.array([_to_pct(np.array([raw[j]]), qs[k])[0] for j, k in enumerate(AXIS_KEYS)])
         z = np.array([_to_normal(np.array([raw[j]]), qs[k])[0] for j, k in enumerate(AXIS_KEYS)]) / qs["_sd"]
         z = z * signs
-        missing = [AXIS_KEYS[j] for j in range(len(AXES)) if np.isnan(raw[j])]
-        missing_map = [k for k in missing if k in MAP_KEYS]
-        if len(missing_map) == len(MAP_KEYS):
+        missing = [AXIS_KEYS[j] for j in shown if np.isnan(raw[j])]
+        missing_map = [k for k in missing if k in map_keys]
+        if len(missing_map) == len(map_keys):
             unmapped.append({**base, "reason": "過去の走法データがありません"})
             continue
         if len(missing_map) > MAX_IMPUTED:
             unmapped.append({**base, "reason": "走法データの欠けが多い（" + "・".join(a[3] for a in AXES if a[0] in missing_map) + "）"})
             continue
         zr = np.full(len(AXES), np.nan)
-        zr[MAP_IDX] = z[MAP_IDX]
+        zr[map_idx] = z[map_idx]
         Zraw.append(zr)
         z = np.nan_to_num(z)  # 欠けた方面は全馬の中央値
         horses.append({
             **base,
-            "values": {k: (None if np.isnan(raw[j]) else round(float(raw[j]), 4)) for j, k in enumerate(AXIS_KEYS)},
+            "values": {AXIS_KEYS[j]: (None if np.isnan(raw[j]) else round(float(raw[j]), 4)) for j in shown},
             # 全馬の中で「高い」側から見た位置（0〜100。100 が最も高い側）
-            "percentiles": {k: (None if np.isnan(pct[j]) else round(float(pct[j] if signs[j] > 0 else 1 - pct[j]) * 100, 1))
-                            for j, k in enumerate(AXIS_KEYS)},
+            "percentiles": {AXIS_KEYS[j]: (None if np.isnan(pct[j]) else round(float(pct[j] if signs[j] > 0 else 1 - pct[j]) * 100, 1)) for j in shown},
             "imputed": missing,
             # 自分の実測の走が 1 つも無い（父や全体の平均だけで決まった）方面
-            "from_prior": [k for k, col, *_ in AXES if base["axis_runs"][k] == 0],
+            "from_prior": [k for _, k, _c, *_ in A if base["axis_runs"][k] == 0],
             "last_run_date": row["last_run_date"],
         })
         Zs.append(z)
 
-    axes_out = [{"key": k, "label": lbl, "high": hi, "low": lo, "weight": round(float(WEIGHTS[j]), 3)}
-                for j, (k, _, _, lbl, hi, lo) in enumerate(AXES)]
+    axes_out = [{"key": k, "label": lbl, "high": hi, "low": lo, "weight": round(float(weights[j]), 3)} for j, k, _, _, lbl, hi, lo in A]
     out: dict[str, Any] = {
         "race_id": race_id,
         "conditions": conditions,
@@ -520,60 +563,66 @@ def build_running_map(entries: list[dict], race_id: str, conditions: dict[str, A
         "unmapped": unmapped,
         "fidelity": None,
         "data_until": str(d["metrics"]["date"].max().date()),
-        "method": "各馬の直近 10 走（新しい走ほど重く、実測ラップのある走が少ないほど父の産駒の平均へ寄せる）から作った走法のうち、"
-                  "ギアチェンジ・末脚の速さ・末脚の持続力・Cr性能・Hペース耐性の 5 軸を、"
-                  "全馬の分布で順位→正規化し、基準を作った時点の全馬で作った共通の主成分で 2 次元に置く"
-                  "（どのレースでも同じ地図）。グループは 5 軸の Ward 法",
+        "method": "",
         "extent": _data()["ref"]["extent"],
-        "aptitude": aptitude_for(conditions),
+        "aptitude": None if wet else aptitude_for(conditions),
     }
     if len(horses) < MIN_HORSES:
         out["status"] = "insufficient"
         return out
 
-    Z = np.array(Zs) * WEIGHTS
-    cm = course_map_for(conditions)
+    Z = np.array(Zs) * weights
+    cm = course_map_for(conditions, wet=wet)
+    names = "・".join(AXES[j][3] for j in map_idx)
     if cm:
-        # コースの地図（running_map_course）: 重要度の上位 N 方面（cm["axes"]。コースごとに 3〜6）を重要度で重み付けした距離で、走法の近い馬ほど近くに置く。
-        # 座標軸に意味は無い（上ほど好走しやすい向き）。背景の格子はこのコース（またはグループ）専用。上位 N 方面は色の切り替え・数値バーの強調にも使う
+        # コースの地図（running_map_course）: 地図の軸（良馬場=6 軸、道悪=基礎スピードの代わりに道悪適性）を寄与率と均等を半々に混ぜた重みで、走法の近い馬ほど近くに置く。
+        # 座標軸に意味は無い（上ほど好走しやすい向き）。背景の格子はこのコース（またはグループ）専用
         from src.research.race import running_map_course as rmc
 
         Y = rmc.place(Z, cm)
         for h, (x, y) in zip(horses, Y):
             h["x"], h["y"] = round(float(x), 4), round(float(y), 4)
-        for j, r2 in enumerate(cm["r2"]):
-            axes_out[j]["r2"] = r2
+        r2s = dict(zip(AXIS_KEYS, cm["r2"]))
+        for a in axes_out:
+            a["r2"] = r2s.get(a["key"])
         out["fidelity"] = {"explained": cm["explained"], "distance_spearman": _dist_rho(Z * np.array(cm["w"]), Y)}
         out["extent"] = cm["extent"]
         label = cm.get("label") or f"{conditions['venue']} {conditions['surface']} {int(conditions['distance'])}m"
-        out["aptitude"] = {"course": label, "n_runs": cm["n_runs"], "n_races": cm["n_races"], "lift": cm["lift"], "sig": cm["sig"], "score": True}
+        out["aptitude"] = {"course": label + ("・道悪（稍重以上）" if wet else "・良馬場"), "n_runs": cm["n_runs"], "n_races": cm["n_races"], "lift": cm["lift"], "sig": cm["sig"], "score": True}
         lbl = {a[0]: a[3] for a in AXES}
         out["course_map"] = {
             "axes": cm["axes"], "level": cm["level"], "label": label,
             "importance": [{**i, "label": lbl[i["key"]]} for i in cm["importance"]],
             "since": _data()["ref"]["_course_maps"].get("since"),
         }
-        out["method"] = ("各馬の直近 10 走から作った走法のうち、ギアチェンジ・末脚の速さ・末脚の持続力・Cr性能・Hペース耐性の 5 軸を、"
+        out["method"] = (f"各馬の直近 10 走（道悪適性は同じ芝ダの直近 30 走）から作った走法のうち、{names} の 6 軸を、"
                          "このコースで好走（1〜3 着=1、4〜7 着は段階的に下げ、8 着以下=0）への寄与率と均等を半々に混ぜた重みで、走法の近い馬ほど近くなるように 2 次元に置く"
                          "（縦・横の軸に意味は無い。上ほどこのコースで好走しやすい走法の向き）。"
-                         "2024 年以降の同じコースの全出走で作った共通の座標。グループは同じ重みの 5 軸の Ward 法")
+                         + ("2024 年以降の稍重・重・不良のレースだけで測った座標。" if wet else "2024 年以降の良馬場のレースだけで測った座標。")
+                         + "グループは同じ重みの 6 軸の Ward 法")
     else:
+        if wet:    # 道悪の地図は、道悪のレースで測ったコース別の地図があるときだけ
+            out["status"] = "insufficient"
+            return out
         pr = project(Z)
         for h, (x, y) in zip(horses, pr["coords"]):
             h["x"], h["y"] = round(float(x), 4), round(float(y), 4)
-        for a, (lx, ly), r2 in zip(axes_out, pr["loadings"] * WEIGHTS[:, None], pr["r2"]):
+        for a, (lx, ly), r2 in zip(axes_out, pr["loadings"][shown] * weights[shown][:, None], [pr["r2"][j] for j in shown]):
             a["arrow"] = [round(float(lx), 4), round(float(ly), 4)]
             a["r2"] = None if r2 is None else round(r2, 3)
         out["fidelity"] = {
             "explained": None if pr["explained"] is None else round(pr["explained"], 3),
             "distance_spearman": None if pr["distance_spearman"] is None else round(pr["distance_spearman"], 3),
         }
+        out["method"] = ("各馬の直近 10 走（新しい走ほど重く、実測ラップのある走が少ないほど父の産駒の平均へ寄せる）から作った走法のうち、"
+                         f"{names} の 6 軸を、全馬の分布で順位→正規化し、基準を作った時点の全馬で作った共通の主成分で 2 次元に置く"
+                         "（どのレースでも同じ地図）。グループは 6 軸の Ward 法")
 
     for h, near in zip(horses, similar(np.array(Zraw))):
         h["similar"] = [{"horse_id": horses[j]["horse_id"], "horse_number": horses[j]["horse_number"], "horse_name": horses[j]["horse_name"],
-                         "distance": round(d, 3)} for j, d in near]
+                         "distance": round(dd, 3)} for j, dd in near]
 
-    if load_result is not None:
+    if load_result is not None and not wet:
         try:
             out["day_trend"] = day_trend_for(race_id, conditions, load_result, cm)
         except Exception:   # 馬場傾向は補助。失敗しても地図は出す
@@ -582,7 +631,6 @@ def build_running_map(entries: list[dict], race_id: str, conditions: dict[str, A
             logging.getLogger(__name__).exception("その日の馬場傾向の計算に失敗: %s", race_id)
             out["day_trend"] = None
     labels = group(Z if not cm else Z * np.array(cm["w"]))
-    map_idx = MAP_IDX
     Zu = np.array(Zs)
     order = sorted(set(labels), key=lambda g: (-int((labels == g).sum()), g))
     for gi, g in enumerate(order):

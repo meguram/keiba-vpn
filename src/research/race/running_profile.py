@@ -49,6 +49,8 @@ from typing import Iterable, Optional
 import numpy as np
 import pandas as pd
 
+from src.research.race.basic_speed import BASIC_SCALE
+
 REPO = Path(__file__).resolve().parents[3]
 FLAT_DIR = REPO / "data/page_reference/tables"
 SIRE_MAP_PATH = REPO / "data/page_reference/pedigree_race_index/horse_sire_map.parquet"
@@ -76,7 +78,25 @@ PROFILE_PARAMS: dict[str, tuple[float, float, str]] = {
     "ts_stamina_score": (0.7, 5.0, "overall"),
     **{f"ax_{k}": (0.7, 2.0, "sire") for k in AX_DENSE},
     "ax_slope": (0.7, 2.0, "none"),
+    "ax_wett": (1.0, 3.0, "zero"),    # 道悪適性（芝）。道悪の走は少ないので、さかのぼる走数を長く（WET_LOOKBACK）して 0 へ引き寄せる
+    "ax_wetd": (1.0, 3.0, "zero"),    # 道悪適性（ダート）
+    "ax_basic": (1.0, 2.0, "zero"),   # 共分散はぶれが大きく、直近 10 走を同じ重みで使うほど当たる（decay 0.7 だと交互作用の t 3.5、1.0 で 5.1）。引き寄せ先は 0（父の平均は能力と混ざって効かなくなる）
 }
+# 基礎スピード（basic_speed.py）: 1 走ごとの p（着順スコア）・s（その日の馬場の速さ）・積 ax_basic。
+# プロファイルの値は、直近の走での p と s の共分散（速い馬場で成績が上がるほど高い）を父の産駒の平均へ引き寄せ、中心 50 に置いたもの
+BASIC = "ax_basic"
+BASIC_CENTER = 50.0
+BASIC_PATH = STORE_DIR / "basic_speed.parquet"
+WET_PATH = STORE_DIR / "wet_going.parquet"
+WET_SCALE = 90.0          # 道悪適性の積 p×w の尺度
+WET_LOOKBACK = 30         # 道悪適性は同じ芝ダの直近この走数まで（道悪の走は全体の 2 割台なので長く取る）
+# 共分散で作る軸: 軸 → (p の列, s（馬場の条件）の列, 尺度, さかのぼる走数)
+COV_AXES: dict[str, tuple[str, str, float, int]] = {
+    "ax_basic": ("bs_p", "bs_s", BASIC_SCALE, LOOKBACK),
+    "ax_wett": ("wtT_p", "wtT_w", WET_SCALE, WET_LOOKBACK),
+    "ax_wetd": ("wtD_p", "wtD_w", WET_SCALE, WET_LOOKBACK),
+}
+COV_COLS = [c for ax, (pc, sc, *_) in COV_AXES.items() for c in (ax, pc, sc)]
 _JUMP = r"障害|ジャンプ|JS\(|JG|J・G"
 
 _COLS = ["race_id", "date", "venue", "surface", "distance", "track_condition", "race_name", "field_size",
@@ -259,8 +279,30 @@ def _source_sig(base: Path) -> dict[str, list[int]]:
     return out
 
 
-def attach_axes(metrics: pd.DataFrame, axes_path: Optional[Path]) -> pd.DataFrame:
-    """1 走ごとの値に実測ラップの軸（ax_*）を足す。ファイルが無ければ全部 NaN。異常走（abn）は全軸 NaN。"""
+def attach_cov(metrics: pd.DataFrame, *stores: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """1 走ごとの値に共分散の軸の材料（基礎スピード ax_basic, bs_p, bs_s ／ 道悪適性 ax_wett・ax_wetd と p, w）を足す。
+    stores は basic_speed.load / wet_going.load の結果（無い軸は全部 NaN）。ax = 尺度 × p × s。"""
+    out = metrics.drop(columns=[c for c in COV_COLS if c in metrics.columns])
+    have = pd.concat([st.set_index(["race_id", "horse_id"]) for st in stores if st is not None], axis=1) if any(st is not None for st in stores) else None
+    if have is None:
+        return out.assign(**{c: np.nan for c in COV_COLS})
+    have = have.reset_index()
+    have["race_id"], have["horse_id"] = have["race_id"].astype(str), have["horse_id"].astype(str)
+    have = have.drop_duplicates(["race_id", "horse_id"])
+    for ax, (pc, sc, scale, _) in COV_AXES.items():
+        have[ax] = scale * have[pc] * have[sc] if pc in have.columns and sc in have.columns else np.nan
+    for c in COV_COLS:
+        if c not in have.columns:
+            have[c] = np.nan
+    return out.merge(have[["race_id", "horse_id"] + COV_COLS], on=["race_id", "horse_id"], how="left")
+
+
+def attach_axes(metrics: pd.DataFrame, axes_path: Optional[Path], *stores: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """1 走ごとの値に実測ラップの軸（ax_*）と共分散の軸の材料を足す。ファイルが無ければ全部 NaN。異常走（abn）は全軸 NaN。"""
+    return attach_cov(_attach_lap_axes(metrics, axes_path), *stores)
+
+
+def _attach_lap_axes(metrics: pd.DataFrame, axes_path: Optional[Path]) -> pd.DataFrame:
     out = metrics.drop(columns=[c for c in AX_COLS if c in metrics.columns])
     if axes_path is None or not Path(axes_path).exists():
         return out.assign(**{c: np.nan for c in AX_COLS})
@@ -276,9 +318,14 @@ def attach_axes(metrics: pd.DataFrame, axes_path: Optional[Path]) -> pd.DataFram
 
 def load_metrics(path: Path = METRICS_PATH, base: Path = FLAT_DIR, axes_path: Optional[Path] = None) -> pd.DataFrame:
     """1 走ごとの値（出走記録から作った METRICS ＋ 実測ラップの ax_*）。axes_path 省略時は、標準の保存先のときだけ AXES_PATH を使う。"""
+    stores: list[Optional[pd.DataFrame]] = []
     if axes_path is None and Path(path) == METRICS_PATH:
         axes_path = AXES_PATH
-    return attach_axes(_load_base_metrics(path, base), axes_path)
+        from src.research.race import basic_speed, wet_going
+
+        sig = _source_sig(base)
+        stores = [basic_speed.load(_years(base), base, BASIC_PATH, sig), wet_going.load(_years(base), base, WET_PATH, sig)]
+    return attach_axes(_load_base_metrics(path, base), axes_path, *stores)
 
 
 def _load_base_metrics(path: Path = METRICS_PATH, base: Path = FLAT_DIR) -> pd.DataFrame:
@@ -363,17 +410,30 @@ def profiles_as_of(metrics: pd.DataFrame, horse_ids: Iterable[str], as_of: str |
                                   "last_run_date": None if h is None else h["date"].iloc[-1].date().isoformat()}
         for m in cols:
             decay, c, prior_kind = PROFILE_PARAMS[m]
-            own = h[m].dropna().to_numpy()[::-1][:LOOKBACK] if h is not None else np.array([])   # 新しい順
+            centre = 0.0
+            if m in COV_AXES and h is not None:
+                pc, sc, scale, lb = COV_AXES[m]
+                sub = h[[m, pc, sc]].dropna().to_numpy()[::-1][:lb]
+                own = sub[:, 0]
+                w = decay ** np.arange(len(own))
+                if len(own):
+                    centre = float((w * sub[:, 1]).sum() * (w * sub[:, 2]).sum() / w.sum() * scale)   # 共分散にする: 加重平均の積を引く
+            else:
+                own = h[m].dropna().to_numpy()[::-1][:LOOKBACK] if h is not None else np.array([])   # 新しい順
             w = decay ** np.arange(len(own))
             prior, src = math.nan, None
-            if prior_kind == "sire" and sid is not None and sid in sire_mean.index and not math.isnan(sire_mean.at[sid, m]):
+            if prior_kind == "zero":
+                prior = 0.0
+            elif prior_kind == "sire" and sid is not None and sid in sire_mean.index and not math.isnan(sire_mean.at[sid, m]):
                 prior, src = float(sire_mean.at[sid, m]), "sire"
             elif prior_kind != "none" and not math.isnan(overall[m]):
                 prior, src = float(overall[m]), "overall"
             if math.isnan(prior):
                 c, src = 0.0, None
-            num, den = float((w * own).sum()), float(w.sum())
+            num, den = float((w * own).sum()) - centre, float(w.sum())
             row[m] = (num + c * (0.0 if math.isnan(prior) else prior)) / (den + c) if den + c > 0 else math.nan
+            if m in COV_AXES and not math.isnan(row[m]):
+                row[m] += BASIC_CENTER
             row[f"n_{m}"] = len(own)
             row[f"own_{m}"] = round(den / (den + c), 3) if den + c > 0 else 0.0
             row[f"prior_{m}"] = src
@@ -393,22 +453,37 @@ def profile_table(metrics: pd.DataFrame, sires: Optional[pd.DataFrame] = None, c
     out = df[["race_id", "horse_id", "date"]].copy()
     for m in cols:
         decay, c, prior_kind = PROFILE_PARAMS[m]
-        v = df[["horse_id", "sire_id", m]].dropna(subset=[m])
+        basic = m in COV_AXES
+        pc, sc, scale, lb = COV_AXES[m] if basic else (None, None, 1.0, LOOKBACK)
+        v = df[["horse_id", "sire_id", m] + ([pc, sc] if basic else [])].dropna(subset=[m])
         overall = v[m].mean()
         g = v.groupby("sire_id")[m].agg(["mean", "size"])
         prior = v["sire_id"].map(g.loc[g["size"] >= MIN_SIRE_RUNS, "mean"]) if prior_kind == "sire" else pd.Series(np.nan, index=v.index)
         prior = prior.fillna(overall).to_numpy()
         if prior_kind == "none":
             prior, c = np.zeros(len(v)), 0.0
+        elif prior_kind == "zero":
+            prior = np.zeros(len(v))
         gm = v.groupby("horse_id")[m]
         num = np.zeros(len(v))
         den = np.zeros(len(v))
-        for i in range(1, LOOKBACK + 1):
+        if basic:
+            gp, gs = v.groupby("horse_id")[pc], v.groupby("horse_id")[sc]
+            sp, ss = np.zeros(len(v)), np.zeros(len(v))
+        for i in range(1, lb + 1):
             lag = gm.shift(i).to_numpy()
             ok = ~np.isnan(lag)
             num[ok] += decay ** (i - 1) * lag[ok]
             den[ok] += decay ** (i - 1)
+            if basic:
+                sp[ok] += decay ** (i - 1) * gp.shift(i).to_numpy()[ok]
+                ss[ok] += decay ** (i - 1) * gs.shift(i).to_numpy()[ok]
+        if basic:
+            num = num - sp * ss / np.where(den > 0, den, np.nan) * scale
+            num = np.nan_to_num(num)
         val = np.where(den > 0, (num + c * prior) / (den + c), np.nan)
+        if basic:
+            val = val + BASIC_CENTER
         out[m] = pd.Series(val, index=v.index).reindex(df.index).to_numpy()
     return out
 
