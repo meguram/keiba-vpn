@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useNarrow } from "@/components/RaceStrip";
-import { axis2Max, chartIsEmpty, chartRange, chartVariant, formatP, formatTick, formatValue, SIGNIFICANT_P, type ChartFormat, type ColumnChartBlock, type ColumnHeatmapBlock, type JockeyDistanceChartBlock } from "@/lib/columns";
+import { axis2Max, cascadeOptions, cascadePick, chartIsEmpty, chartRange, chartVariant, formatP, formatTick, formatValue, SIGNIFICANT_P, type ChartFormat, type ColumnChartBlock, type ColumnHeatmapBlock, type JockeyDistanceChartBlock } from "@/lib/columns";
 
 const COLORS = ["#58a6ff", "#f0883e", "#3fb950", "#d2a8ff"];
 /** 右の縦軸の系列の色（左の系列の色と重ならないもの） */
@@ -164,7 +164,10 @@ export function JockeyDistanceChart({ block }: { block: JockeyDistanceChartBlock
     compare があれば「その条件」と「それ以外」の 2 系列を最初から出し、95% 信頼区間の縦線と、差が有意な点の印（＊）を描く */
 export function ColumnChart({ block: whole }: { block: ColumnChartBlock }) {
   const narrow = useNarrow();
-  const [filterSel, setFilterSel] = useState<string[]>(() => (whole.filters ?? []).map((f) => f.options[0] ?? ""));
+  const [filterSel, setFilterSel] = useState<string[]>(() => {
+    const first = (whole.filters ?? []).map((f) => f.options[0] ?? "");
+    return whole.cascade && first.length ? cascadePick(whole, first, 0, first[0]) : first;
+  });
   const block = chartVariant(whole, filterSel);
   // 狭い画面では描画領域を小さく取り（文字が縮まない）、横軸の文字を斜めにする（斜めの先頭の文字が左で切れないよう左を広めに）
   const y2 = block.y2;
@@ -173,13 +176,17 @@ export function ColumnChart({ block: whole }: { block: ColumnChartBlock }) {
   const base = block.series.filter((s) => s.baseline);
   const cmp = block.compare;
   const pairIdx = cmp ? [cmp.a, cmp.b].map((nm) => block.series.findIndex((s) => s.name === nm)).filter((i) => i >= 0) : [];
-  const [picked, setPicked] = useState<number[]>(pairIdx.length === 2 ? pairIdx : choices.length ? [choices[0].i] : []);
+  const [picked, setPicked] = useState<number[]>(() => {
+    if (pairIdx.length === 2) return pairIdx;
+    const init = (whole.initial ?? []).map((nm) => choices.find((c) => c.s.name === nm)?.i).filter((i): i is number => i !== undefined).slice(0, COLORS.length);
+    return init.length ? init : choices.length ? [choices[0].i] : [];
+  });
   const showSig = pairIdx.length === 2 && pairIdx.every((i) => picked.includes(i));
   const fmt = block.format ?? "pct";
   const pct = (v: number) => formatValue(v, fmt);
   const empty = chartIsEmpty(block.series);
   // 値がすべて 0 以上なら min = 0（今までどおり）。負の値があれば下限も値から決め、0 の線を引く
-  const { min, max, step } = chartRange(block.series, fmt);
+  const { min, max, step } = chartRange(block.series, fmt, block.fitAxis);
   const n = block.xs.length;
   const x = (k: number) => L + (n <= 1 ? 0 : (k * (W - L - R)) / (n - 1));
   const y = (v: number) => T + (1 - (v - min) / (max - min)) * (H - T - B);
@@ -212,9 +219,9 @@ export function ColumnChart({ block: whole }: { block: ColumnChartBlock }) {
           {whole.filters.map((f, fi) => (
             <label key={f.label} className="flex items-center gap-1" style={{ fontSize: 12, color: "var(--text-dim)" }}>
               {f.label}
-              <select value={filterSel[fi]} onChange={(e) => setFilterSel((cur) => cur.map((v, i) => (i === fi ? e.target.value : v)))}
+              <select value={filterSel[fi]} onChange={(e) => setFilterSel((cur) => cascadePick(whole, cur, fi, e.target.value))}
                 style={{ fontSize: 14, minHeight: 34, padding: "0 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)" }}>
-                {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                {cascadeOptions(whole, filterSel, fi).map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             </label>
           ))}

@@ -111,6 +111,12 @@ export type ColumnChartBlock = {
    */
   filters?: { label: string; options: string[] }[];
   variants?: Record<string, ChartVariant>;
+  /** true なら、プルダウンは前の選択に合わせて variants に存在する選択肢だけを出す（会場 → 距離 のような階層）。先頭の選択肢を「全体」とみなさず、常に variants を引く */
+  cascade?: boolean;
+  /** true なら縦軸を 0 始まりにせず、値（と信頼区間）の範囲に合わせる（平均ラップ 12 秒前後の差を見るときなど） */
+  fitAxis?: boolean;
+  /** 最初に重ねて出す系列の name（省略すると先頭の 1 つ） */
+  initial?: string[];
   /** 右の縦軸に描く系列（横軸が同じで単位の違う値。例: 左に複勝率、右に平均人気）。常に表示し、色を分ける */
   y2?: { label: string; format?: ChartFormat; series: ChartSeries[] };
   /** 値が実データでなく画面確認用のダミー */
@@ -126,9 +132,31 @@ export type ChartVariant = { series: ChartSeries[]; y2Series?: ChartSeries[]; co
 /** プルダウンの選択に応じたグラフ（全部が先頭の選択肢、または該当する組み合わせが無ければ元のまま） */
 export function chartVariant(block: ColumnChartBlock, picked: string[]): ColumnChartBlock {
   const v = block.variants?.[picked.join("|")];
-  if (!v || picked.every((p, i) => p === block.filters?.[i]?.options[0])) return block;
+  if (!v || (!block.cascade && picked.every((p, i) => p === block.filters?.[i]?.options[0]))) return block;
   const y2 = block.y2 && v.y2Series ? { ...block.y2, series: v.y2Series } : block.y2;
   return { ...block, series: v.series, y2, compare: v.compare ?? block.compare, caption: v.caption ?? block.caption };
+}
+
+/** cascade のとき、fi 番目のプルダウンに出す選択肢（それより前の選択 picked と組み合わせて variants にあるもの）。cascade でなければ全部 */
+export function cascadeOptions(block: ColumnChartBlock, picked: string[], fi: number): string[] {
+  const f = block.filters?.[fi];
+  if (!f) return [];
+  if (!block.cascade || !block.variants) return f.options;
+  const head = picked.slice(0, fi);
+  const keys = Object.keys(block.variants).map((k) => k.split("|"));
+  return f.options.filter((o) => keys.some((k) => head.every((h, i) => k[i] === h) && k[fi] === o));
+}
+
+/** fi 番目の選択を value にしたときの選択全体。後ろの選択が成り立たなくなったら、その時点で選べる先頭に寄せる */
+export function cascadePick(block: ColumnChartBlock, picked: string[], fi: number, value: string): string[] {
+  const next = [...picked];
+  next[fi] = value;
+  if (!block.cascade) return next;
+  for (let i = fi + 1; i < next.length; i++) {
+    const opts = cascadeOptions(block, next, i);
+    if (!opts.includes(next[i])) next[i] = opts[0] ?? next[i];
+  }
+  return next;
 }
 
 /** 右軸の上限。左軸の補助線（intervals 本の区切り）にそろうよう、区切りの幅を切りのよい数にする */
@@ -188,9 +216,18 @@ export function chartMax(series: { values: (number | null)[]; ci?: ([number, num
  * 縦軸の範囲と目盛りの間隔。値（と信頼区間）がすべて 0 以上なら、今までどおり 0 始まり（chartMax・chartStep）。
  * 負の値があれば、下限も値から決める（0 を必ず含み、目盛りは 0 を通る）
  */
-export function chartRange(series: { values: (number | null)[]; ci?: ([number, number] | null)[] }[], format: ChartFormat = "pct"): { min: number; max: number; step: number } {
+export function chartRange(series: { values: (number | null)[]; ci?: ([number, number] | null)[] }[], format: ChartFormat = "pct", fit = false): { min: number; max: number; step: number } {
   const vs = series.flatMap((s) => [...s.values, ...(s.ci ?? []).flatMap((c) => (c ? [c[0], c[1]] : []))]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
   const lo = vs.length ? Math.min(...vs) : 0;
+  if (fit && vs.length) {
+    const hi = Math.max(...vs);
+    const steps = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100];
+    const step = steps.find((st) => (hi - lo) / st <= 8) ?? steps[steps.length - 1];
+    const r = (v: number) => Math.round(v * 1e6) / 1e6;
+    const mn = r(Math.floor(lo / step + 1e-9) * step);
+    const mx = r(Math.max(mn + step, Math.ceil(hi / step - 1e-9) * step));
+    return { min: mn, max: mx, step };
+  }
   if (!(lo < 0)) {
     const max = chartMax(series, format);
     return { min: 0, max, step: chartStep(max, format) };

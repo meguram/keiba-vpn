@@ -12,7 +12,7 @@ const ts = createRequire(import.meta.url)("typescript");
 const src = ts.transpileModule(readFileSync(join(here, "columns.ts"), "utf8"), { compilerOptions: { module: ts.ModuleKind.ES2020, target: ts.ScriptTarget.ES2020 } }).outputText;
 const out = join(mkdtempSync(join(tmpdir(), "col-")), "columns.mjs");
 writeFileSync(out, src);
-const { categoryTrail, allCategoryPaths, chartMax, chartIsEmpty, chartVariant, axis2Max, columnsIn, countIn } = await import(pathToFileURL(out).href);
+const { categoryTrail, allCategoryPaths, chartMax, chartRange, chartIsEmpty, chartVariant, cascadeOptions, cascadePick, axis2Max, columnsIn, countIn } = await import(pathToFileURL(out).href);
 
 const dir = join(here, "..", "content", "columns");
 const articles = readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => JSON.parse(readFileSync(join(dir, f), "utf8")));
@@ -62,6 +62,11 @@ test("プルダウンつきのグラフは、全部の組み合わせに系列�
   for (const a of articles) {
     const walk = (bs) => bs.flatMap((b) => (b.type === "accordion" ? walk(b.blocks) : [b]));
     for (const c of walk(a.body).filter((b) => b.type === "chart" && b.filters)) {
+      if (c.cascade) {                                                         // 階層のグラフ: 組み合わせは一部だけ。全部の key が選択肢でできていて、選べる先頭が必ず存在する
+        for (const k of Object.keys(c.variants ?? {})) k.split("|").forEach((o, i) => assert.ok(c.filters[i].options.includes(o), `${a.slug}: ${k}`));
+        assert.ok(Object.keys(c.variants).length > 0);
+        continue;
+      }
       const keys = c.filters.reduce((acc, f) => acc.flatMap((k) => f.options.map((o) => (k ? `${k}|${o}` : o))), [""]);
       for (const k of keys.slice(1)) assert.ok(c.variants?.[k], `${a.slug} ${c.title}: ${k} が無い`);
     }
@@ -78,4 +83,23 @@ test("グラフ: 右軸は左軸の補助線にそろう切りのよい上限で
   };
   assert.equal(chartVariant(block, ["芝"]).y2.series[0].values[0], 3);
   assert.equal(chartVariant(block, ["芝"]).y2.label, "人気");
+});
+
+test("cascade: 前の選択に合う選択肢だけを出し、後ろの選択が成り立たなくなれば先頭に寄せる", () => {
+  const ser = (v) => [{ name: "a", values: [v] }];
+  const block = {
+    type: "chart", title: "t", xLabel: "x", yLabel: "y", xs: ["1"], series: ser(0), cascade: true,
+    filters: [{ label: "会場", options: ["全場", "東京"] }, { label: "距離", options: ["芝1600", "芝2000", "ダ1200"] }],
+    variants: { "全場|芝1600": { series: ser(1) }, "東京|芝1600": { series: ser(2) }, "東京|ダ1200": { series: ser(3) } },
+  };
+  assert.deepEqual(cascadeOptions(block, ["全場", "芝1600"], 1), ["芝1600"]);
+  assert.deepEqual(cascadeOptions(block, ["東京", "芝1600"], 1), ["芝1600", "ダ1200"]);
+  assert.deepEqual(cascadePick(block, ["東京", "ダ1200"], 0, "全場"), ["全場", "芝1600"]);
+  assert.equal(chartVariant(block, ["全場", "芝1600"]).series[0].values[0], 1);        // cascade では先頭の組み合わせも variants を引く
+});
+
+test("chartRange fit: 0 始まりにせず値の範囲に合わせる", () => {
+  const r = chartRange([{ values: [12.1, 12.4, null], ci: [[12.0, 12.2], [12.3, 12.5], null] }], "num", true);
+  assert.ok(r.min > 11.5 && r.min <= 12.0 && r.max >= 12.5 && r.max < 13);
+  assert.equal(chartRange([{ values: [0.1, 0.3] }], "num").min, 0);               // fit なしは今までどおり
 });

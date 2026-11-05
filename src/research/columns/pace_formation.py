@@ -218,69 +218,83 @@ def attach_laps(d: pd.DataFrame, laps: pd.Series) -> dict[str, np.ndarray]:
     for key, g in w.groupby("key"):
         mode = g["nl"].mode().iloc[0]
         g = g[g["nl"] == mode]
-        if mode < 7 or len(g) < LAP_MIN_COURSE:
+        if mode < 6 or len(g) < LAP_MIN_COURSE:
             continue
         M = np.vstack(g["laps"].to_numpy())
         dev = M - M.mean(axis=0)
         out[key] = pd.DataFrame(M, index=g.index)
         d.loc[g.index, "seg_first"] = dev[:, :3].sum(axis=1)
-        d.loc[g.index, "seg_mid"] = dev[:, 3:-3].sum(axis=1)
+        if mode >= 7:                                   # 1200m（6 ハロン）は前半3F と上がり3F だけで中盤がない
+            d.loc[g.index, "seg_mid"] = dev[:, 3:-3].sum(axis=1)
         d.loc[g.index, "seg_last"] = dev[:, -3:].sum(axis=1)
     return out
 
 
-def lap_series(name: str, dev: np.ndarray, width: int) -> dict[str, Any]:
-    """ハロンごとの平均（コース平均との差、秒）。n は線全体のレース数。区間は平均 ± 1.96 × 標準誤差。足りない分（短いコース）は空欄。"""
+def lap_series(name: str, dev: np.ndarray, width: int, offset: np.ndarray | None = None) -> dict[str, Any]:
+    """ハロンごとの平均ラップ（秒）。dev はコース平均との差の行列で、offset（コースの平均ラップ）を足すと平均ラップそのものになる（省略は差のまま）。
+    n は線全体のレース数。区間は平均 ± 1.96 × 標準誤差。足りない分（短いコース）は空欄。"""
     n = dev.shape[0]
     pad = width - dev.shape[1]
+    base = np.zeros(dev.shape[1]) if offset is None else np.asarray(offset, dtype="float64")
     if n < LAP_MIN_BIN:
         return {"name": name, "values": [None] * width, "n": [n] * dev.shape[1] + [None] * pad, "ci": [None] * width}
-    m = dev.mean(axis=0)
+    m = dev.mean(axis=0) + base
     se = dev.std(axis=0, ddof=1) / np.sqrt(n)
     return {"name": name, "values": [round(float(v), 3) for v in m] + [None] * pad, "n": [n] * dev.shape[1] + [None] * pad,
             "ci": [[round(float(a), 3), round(float(b), 3)] for a, b in zip(m - 1.96 * se, m + 1.96 * se)] + [None] * pad}
 
 
-def lap_units(mats: dict[str, pd.DataFrame]) -> dict[str, tuple[np.ndarray, pd.Index, np.ndarray]]:
-    """プルダウンの選択肢ごとに（コース平均とのラップ差の行列, レースの index, 平均ラップ）を作る。
-    先頭側は同じ面・距離を全場でまとめたもの（差はコースごとの平均から測ってから合わせる）、そのあとに個別のコース。"""
-    unit: dict[str, tuple[np.ndarray, pd.Index, np.ndarray]] = {}
-    groups: dict[str, list[str]] = {}
+VENUE_ORDER = ["札幌", "函館", "福島", "新潟", "東京", "中山", "中京", "京都", "阪神", "小倉"]
+ALL_VENUES = "全場"
+
+
+def sd_sort_key(sd: str) -> tuple[int, int]:
+    """『芝1600』『ダート1200』を 芝→ダート、距離の短い順に並べるキー。"""
+    return (0 if sd.startswith("芝") else 1, int("".join(ch for ch in sd if ch.isdigit()) or 0))
+
+
+def lap_units(mats: dict[str, pd.DataFrame]) -> dict[tuple[str, str], tuple[np.ndarray, pd.Index, np.ndarray]]:
+    """プルダウンの選択肢ごとに（コース平均とのラップ差の行列, レースの index, 平均ラップ）を作る。キーは（会場, 芝/ダート+距離）。
+    会場が『全場』のものは、同じ面・距離の全場を合わせたもの（差はコースごとの平均から測ってから合わせる）。"""
+    unit: dict[tuple[str, str], tuple[np.ndarray, pd.Index, np.ndarray]] = {}
+    groups: dict[str, list[tuple[str, str]]] = {}
     for key, m in mats.items():
         M = m.to_numpy()
-        unit[key] = (M - M.mean(axis=0), m.index, M.mean(axis=0))
-        groups.setdefault(key[2:], []).append(key)
-    out: dict[str, tuple[np.ndarray, pd.Index, np.ndarray]] = {}
-    pooled = {}
-    for g, ks in groups.items():
+        k2 = (key[:2], key[2:])
+        unit[k2] = (M - M.mean(axis=0), m.index, M.mean(axis=0))
+        groups.setdefault(k2[1], []).append(k2)
+    for sd, ks in groups.items():
         if len(ks) < 2 or len({unit[k][0].shape[1] for k in ks}) != 1:
             continue
         dev = np.vstack([unit[k][0] for k in ks])
         if len(dev) >= 2 * LAP_MIN_COURSE:
-            pooled[f"{g}（全場）"] = (dev, pd.Index(np.concatenate([unit[k][1].to_numpy() for k in ks])), np.vstack([unit[k][2] for k in ks]).mean(axis=0))
-    out.update(dict(sorted(pooled.items(), key=lambda kv: -len(kv[1][0]))))
-    out.update(dict(sorted(unit.items(), key=lambda kv: -len(kv[1][0]))))
-    return out
+            unit[(ALL_VENUES, sd)] = (dev, pd.Index(np.concatenate([unit[k][1].to_numpy() for k in ks])), np.vstack([unit[k][2] for k in ks]).mean(axis=0))
+    vrank = {v: i for i, v in enumerate([ALL_VENUES] + VENUE_ORDER)}
+    return dict(sorted(unit.items(), key=lambda kv: (vrank.get(kv[0][0], 99), sd_sort_key(kv[0][1]))))
 
 
 def lap_chart(d: pd.DataFrame, mats: dict[str, pd.DataFrame]) -> dict[str, Any]:
-    """コース・分け方をプルダウンで選ぶ、ハロンごとのラップ推移のグラフ。縦軸は『そのコースの全レースの平均ラップとの差』（0 が平均、プラスは遅い）。"""
+    """会場 → 芝・ダート+距離 の順にプルダウンで選び（cascade: 前の選択で存在する選択肢だけを出す）、全パターンの平均ラップ（秒）をボタンで選んで重ねて比べるグラフ。
+    会場が『全場』のときは、コースごとの平均との差を合わせて全場の平均ラップに足したもの（会場の顔ぶれの違いを除く）。"""
     units = lap_units(mats)
-    keys = list(units)
     width = max(u[0].shape[1] for u in units.values())
     xs = [f"{i}F目" for i in range(1, width + 1)]
+    venues = list(dict.fromkeys(v for v, _ in units))
+    sds = sorted({sd for _, sd in units}, key=sd_sort_key)
     variants: dict[str, Any] = {}
-    for key, (dev, idx, mean) in units.items():
+    for (venue, sd), (dev, idx, mean) in units.items():
         g = d.loc[idx]
+        ser = [{**lap_series("全レース", dev, width, mean), "baseline": True}]
+        for col, bins, pre in LAP_AXES.values():
+            ser += [lap_series(pre + b, dev[(g[col] == b).to_numpy()], width, mean) for b in bins]
         mean_txt = " - ".join(f"{v:.1f}" for v in mean)
-        for an, (col, bins, pre) in LAP_AXES.items():
-            ser = [lap_series(pre + b, dev[(g[col] == b).to_numpy()], width) for b in bins]
-            variants[f"{key}|{an}"] = {"series": ser, "caption": (
-                f"{key}（{len(dev):,} レース）。平均ラップ（秒）: {mean_txt}。{LAP_MIN_BIN} レースに満たない線は出していない。縦線は 95% 信頼区間。")}
-    base = variants[f"{keys[0]}|{next(iter(LAP_AXES))}"]
-    return {"type": "chart", "title": "ハロンごとのラップ推移（コース平均との差）", "xLabel": "スタートからのハロン（200m）。最後の 3 つが上がり3F", "yLabel": "平均ラップとの差（秒。プラスは遅い）",
-            "xs": xs, "format": "num", "series": base["series"], "caption": base["caption"],
-            "filters": [{"label": "コース", "options": keys}, {"label": "分け方", "options": list(LAP_AXES)}], "variants": variants}
+        variants[f"{venue}|{sd}"] = {"series": ser, "caption": (
+            f"{venue} {sd}（{len(dev):,} レース）。全レースの平均ラップ（秒）: {mean_txt}。{LAP_MIN_BIN} レースに満たないパターンは線を出していない。縦線は 95% 信頼区間。")}
+    first = next(iter(variants.values()))
+    initial = [f"{LAP_AXES['逃げ馬の頭数'][2]}{b}" for b in NIGE_BINS[1]]
+    return {"type": "chart", "title": "ハロンごとの平均ラップ（パターン別）", "xLabel": "スタートからのハロン（200m）。最後の 3 つが上がり3F", "yLabel": "平均ラップ（秒）",
+            "xs": xs, "format": "num", "series": first["series"], "caption": first["caption"], "cascade": True, "fitAxis": True, "initial": initial,
+            "filters": [{"label": "会場", "options": venues}, {"label": "芝・ダート／距離", "options": sds}], "variants": variants}
 
 
 def segment_rows(d: pd.DataFrame) -> list[list[str | int]]:
@@ -402,11 +416,12 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
         {"type": "heading", "text": "ハロンごとのラップの推移（コース別）"},
         {"type": "text", "text": (
             "ハイ・ミドル・スローの 3 区分ではなく、ラップがスタートからゴールまでどう推移するかを見ます。"
-            "縦軸は、そのコースの全レースの平均ラップとの差（秒）で、0 が平均、プラスは遅い区間です。"
-            "コースと分け方（逃げ馬の頭数 / 前走3番手以内の頭数 / 上位3人気の差し・追込の頭数）はプルダウンで切り替えられます。"
-            "コースの選択肢の先頭にある「（全場）」は、同じ面・距離の全場を合わせたもので、レース数が多く線が安定します。"
-            "個別のコースは 1 本あたりのレース数が少なく、線がぶれやすいので、縦線（95% 信頼区間）が 0 をまたぐところは差と読まないでください。"
-            "下の表は全コースを合わせた、前半3F・中盤・上がり3F の差です。")},
+            "縦軸は平均ラップ（秒）そのものです。点線は全レースの平均で、ボタンで選んだパターン（最大 4 つ）をその上に重ねて比べられます。"
+            "最初は逃げ馬の頭数 0 / 1 / 2頭以上が出ています。逃げ馬の頭数と前走3番手以内の頭数など、別の分け方のパターンも同じグラフに重ねられます。"
+            "会場 → 芝・ダート／距離 の順にプルダウンで選びます。会場の「全場」は、同じ面・距離の全場を合わせたもので、レース数が多く線が安定します"
+            "（会場ごとのラップの水準の違いは、コースごとの平均との差を合わせてから全場の平均に足して除いています）。"
+            "個別のコースは 1 本あたりのレース数が少なく、線がぶれやすいので、縦線（95% 信頼区間）が重なるところは差と読まないでください。"
+            "下の表は全コースを合わせた、前半3F・中盤・上がり3F の、コース平均との差です。")},
         a["lap_chart"],
         {"type": "table", "columns": ["条件", "レース数", "前半3F（秒）", "中盤（秒）", "上がり3F（秒）"], "rows": a["seg_rows"],
          "caption": (f"{y0}〜{y1}年、{a['n_lap_courses']} コースの {a['n_lap_races']:,} レース。各区間のラップを、そのコースの平均との差で足し合わせたもの（マイナスは速い）。"
