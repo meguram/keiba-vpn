@@ -389,6 +389,28 @@ def _http_adapter_pool_maxsize() -> int:
     return max(8, min(64, qp + 4))
 
 
+def _login_probe_race_id() -> str:
+    return os.environ.get("KEIBA_LOGIN_PROBE_RACE_ID", "202509040410")
+
+
+def _is_soft_400_url(url: str) -> bool:
+    """400 が出ても「ブロックされた」とは見なさない URL。
+
+    ログイン確認用の指数ページ（失敗しても取得は続けられる）と、まだ公開されていない将来の開催日の一覧
+    （存在しないページが 400 を返す）。リトライ・回復処理・サーキットブレーカー・補填の悪化検知に数えない。
+    """
+    if "race.netkeiba.com/race/speed.html" in url and f"race_id={_login_probe_race_id()}" in url:
+        return True
+    if "race_list_get_date_list.html" in url:
+        import re
+        from datetime import datetime, timedelta, timezone
+
+        m = re.search(r"kaisai_date=(\d{8})", url)
+        today = datetime.now(timezone(timedelta(hours=9))).strftime("%Y%m%d")
+        return bool(m) and m.group(1) > today
+    return False
+
+
 def _source_from_url(url: str) -> str:
     """URLからソース名を判定する。"""
     if "smartrc.jp" in url:
@@ -680,6 +702,9 @@ class NetkeibaClient:
                             _on_error(url, _exc)
                     raise
             last_resp = resp
+            if resp.status_code == 400 and _is_soft_400_url(url):
+                logger.warning("HTTP 400（ブロックとは見なさない URL）— リトライせず諦めます: %s", url)
+                resp.raise_for_status()
             for _observer in tuple(_RESPONSE_OBSERVERS):
                 _observer(url, resp)
 
@@ -836,7 +861,7 @@ class NetkeibaClient:
         """
         from bs4 import BeautifulSoup
 
-        rid = os.environ.get("KEIBA_LOGIN_PROBE_RACE_ID", "202509040410")
+        rid = _login_probe_race_id()
         try:
             html = self.fetch(
                 f"https://race.netkeiba.com/race/speed.html?race_id={rid}", use_cache=False
