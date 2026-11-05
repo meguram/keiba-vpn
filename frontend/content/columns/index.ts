@@ -21,6 +21,7 @@ import weight_change from "./weight-change.json";
 import distance_jockey from "./distance-jockey.json";
 import jockey_roi from "./jockey-roi.json";
 import pace_scenario from "./pace-scenario.json";
+import pace_formation from "./pace-formation.json";
 import sire_roi from "./sire-roi.json";
 import wind_venue from "./wind-venue.json";
 import sire_line_aptitude from "./sire-line-aptitude.json";
@@ -43,6 +44,7 @@ const ALL = [
   distance_jockey,
   jockey_roi,
   pace_scenario,
+  pace_formation,
   sire_roi,
   wind_venue,
   sire_line_aptitude,
