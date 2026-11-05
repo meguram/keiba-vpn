@@ -113,6 +113,33 @@ export function ColumnBody({ blocks }: { blocks: ColumnBlock[] }) {
               <p key={i} className="text-sm" style={{ padding: "8px 12px", borderLeft: "3px solid #d29922",
                 background: "rgba(210,153,34,0.08)", borderRadius: 4 }}>{b.text}</p>
             );
+          case "guide":
+            return (
+              <div key={i} className="text-sm" style={{ padding: "8px 12px", borderLeft: "3px solid var(--accent)",
+                background: "rgba(88,166,255,0.08)", borderRadius: 4 }}>
+                <p className="font-bold" style={{ color: "var(--accent)", fontSize: 12 }}>{b.title}</p>
+                <p style={{ lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{b.text}</p>
+                {b.example && <p style={{ lineHeight: 1.8, whiteSpace: "pre-wrap", marginTop: 4, color: "var(--text-dim)" }}>例）{b.example}</p>}
+              </div>
+            );
+          case "glossary":
+            return (
+              <details key={i} className="card" style={{ padding: 0, overflow: "hidden" }}>
+                <summary style={{ padding: "10px 14px", cursor: "pointer", fontWeight: 600, fontSize: 14,
+                  listStyle: "none", display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 11, color: "var(--text-dim)", userSelect: "none" }}>▶</span>
+                  {b.title}
+                </summary>
+                <dl className="text-sm" style={{ padding: "8px 14px 12px", borderTop: "1px solid var(--border)" }}>
+                  {b.items.map((it) => (
+                    <div key={it.term} style={{ marginTop: 6 }}>
+                      <dt className="font-bold">{it.term}</dt>
+                      <dd style={{ lineHeight: 1.8, whiteSpace: "pre-wrap", color: "var(--text-dim)" }}>{it.desc}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
+            );
           case "stats":
             return (
               <div key={i} className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
