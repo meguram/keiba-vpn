@@ -124,14 +124,27 @@ deploy() {
 }
 
 promote() {
-  # テストユーザーが有効なリビジョン(stg 用)を本番の通信に載せない
+  # PROMOTE_TAG（例 rc1b30b715。本番反映が作った通信 0% のリビジョンのタグ）があれば、そのリビジョンを名指しで切り替える。
+  # 「最新のリビジョン」にすると、本番反映の途中で stg の配備が入ったとき stg のリビジョン（テストユーザー付き）を指してしまう（2026-11-05）
+  local rev=""
   if [ "$APPLY" = 1 ]; then
-    local rev; rev="$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format='value(status.latestCreatedRevisionName)')"
+    if [ -n "${PROMOTE_TAG:-}" ]; then
+      rev="$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json \
+        | python3 -c "import sys,json; d=json.load(sys.stdin); print(next((t['revisionName'] for t in d['status'].get('traffic',[]) if t.get('tag')=='${PROMOTE_TAG}'), ''))")"
+      [ -n "$rev" ] || { echo "タグ ${PROMOTE_TAG} のリビジョンが見つからないため、通信を切り替えません" >&2; exit 3; }
+    else
+      rev="$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format='value(status.latestCreatedRevisionName)')"
+    fi
+    # テストユーザーが有効なリビジョン(stg 用)を本番の通信に載せない
     if gcloud run revisions describe "$rev" --project "$PROJECT_ID" --region "$REGION" --format='value(spec.containers[0].env)' | grep -q KEIBA_TEST_USER; then
-      echo "最新のリビジョン $rev はテストユーザー有効(stg 用)のため、通信を切り替えません" >&2; exit 3
+      echo "リビジョン $rev はテストユーザー有効(stg 用)のため、通信を切り替えません" >&2; exit 3
     fi
   fi
-  run gcloud run services update-traffic "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --to-latest
+  if [ -n "$rev" ]; then
+    run gcloud run services update-traffic "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --to-revisions "${rev}=100"
+  else
+    run gcloud run services update-traffic "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --to-latest
+  fi
 }
 
 case "$ACTION" in
