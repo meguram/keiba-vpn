@@ -308,6 +308,8 @@ export type TreemapNode = {
   value: number;
   metrics: (number | null)[][];
   kind?: "line" | "branch" | "pool";
+  /** pool のとき、まとめた種牡馬の [名前, 産駒の頭数]（多い順） */
+  members?: [string, number][];
   sires?: number;
   children?: TreemapNode[];
 };

@@ -47,7 +47,7 @@ class ProjectTest(unittest.TestCase):
             up = pr["loadings"][rm._UP_IDX].sum(0)
             self.assertAlmostEqual(float(up[0]), 0.0, places=9)    # 末脚の矢印は真上
             self.assertGreater(float(up[1]), 0.0)
-            self.assertLessEqual(float(pr["loadings"][rm._FRONT_IDX][0]), 0.0)  # 先行力の矢印は左
+            self.assertLessEqual(float(pr["loadings"][rm._SIDE_IDX][0]), 0.0)  # Cr性能の矢印は左
 
     def test_same_runner_gets_same_position_in_any_race(self):
         Z = _runners(1, n=10)
