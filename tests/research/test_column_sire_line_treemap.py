@@ -104,6 +104,20 @@ def test_extra_metric_needs_min_runs_else_no_value():
     assert math.isfinite(t.metric_raw(s, ts)[1])
 
 
+def test_label_pools_names_members_instead_of_count():
+    root = t.Node("R", "全", "root", children=[
+        t.Node("a+pool", "ほか 2 頭", "pool", sires=["x", "y"]),
+        t.Node("b", "Foo系（3 頭）", "pool", sires=["p", "q", "r"])])
+    names = {"x": "甲", "y": "乙", "p": "A", "q": "B", "r": "C"}
+    t.label_pools(root, names, {"x": 3, "y": 7, "p": 1, "q": 1, "r": 2})
+    a, b = root.children
+    assert a.name == "乙・甲" and a.members == [("乙", 7), ("甲", 3)]
+    assert b.name == "Foo系（C・A・B）"
+    many = t.Node("c+pool", "ほか 5 頭", "pool", sires=list("abcde"))
+    t.label_pools(many, {k: k.upper() for k in "abcde"}, {k: 1 for k in "abcde"})
+    assert many.name == "A・B・C ほか2頭" and len(many.members) == 5
+
+
 def test_win_quantile_interpolates_within_bands():
     n = len(t.WIN_BINS)
     one = np.zeros(n); one[0] = 1.0                             # 全部が最初の帯 → 帯の中を一様に

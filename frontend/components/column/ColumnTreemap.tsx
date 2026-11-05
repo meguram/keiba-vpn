@@ -169,6 +169,12 @@ export function ColumnTreemap({ block }: { block: ColumnTreemapBlock }) {
           <span className="font-bold" style={{ fontSize: 14 }}>{sel.name}</span>
           <span style={{ color: "var(--text-dim)" }}>{kindText(sel)}・産駒 {sel.value.toLocaleString()} {unit}</span>
         </div>
+        {sel.members && sel.members.length > 0 && (
+          <p style={{ marginTop: 4 }}>
+            <span style={{ color: "var(--text-dim)" }}>含まれる種牡馬（産駒の頭数）: </span>
+            {sel.members.map(([name, n]) => `${name}（${n}）`).join("、")}
+          </p>
+        )}
         {selPath.length > 1 && radial && (
           <ol aria-label="系統の階層" style={{ listStyle: "none", margin: "4px 0 0", padding: 0, color: "var(--text-dim)" }}>
             {selPath.map((n, i) => (

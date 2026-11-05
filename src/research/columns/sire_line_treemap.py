@@ -21,7 +21,7 @@ frontend/content/columns/sire-line-aptitude.json を書く。
 系統の木:
   lines（新しい→古い）を逆にした経路。同じ系統名が飛び飛びに出るとき（Raise a Native系 → Mr. Prospector系 → Raise a Native系）は、
   2 回目以降を飛ばす（根に近い最初の位置を採る）。名前の付いた最も下の系統の下は、父系の祖先の馬（その系統の祖から種牡馬の父まで）で枝分かれさせる。
-  産駒（データに出走のある馬）が MIN_HORSES 頭未満の種牡馬は、同じ親の下で「ほか N 頭」にまとめる。子が 1 つだけの節は子と入れ替える。
+  産駒（データに出走のある馬）が MIN_HORSES 頭未満の種牡馬は、同じ親の下で 1 つの群にまとめる（群の名前は含まれる種牡馬の名前）。子が 1 つだけの節は子と入れ替える。
 
 縮小推定（経験ベイズ）:
   各節の生の値 x と、その標本分散 v（同じ馬の出走をまとめたクラスタの分散）を出し、根から順に
@@ -61,7 +61,7 @@ from src.scripts.scraping.trace_sire_line_origins import line_path  # noqa: F401
 REPO = Path(__file__).resolve().parents[3]
 OUT = REPO / "frontend/content/columns/sire-line-aptitude.json"
 ORIGIN_PATH = REPO / "data/meta/pedigree_lines/sire_line_origin.json"
-MIN_HORSES = 10       # 木に 1 頭で載せる種牡馬の産駒の頭数（未満は「ほか N 頭」）
+MIN_HORSES = 10       # 木に 1 頭で載せる種牡馬の産駒の頭数（未満は群にまとめ、含まれる種牡馬を名前に出す）
 MIN_TEST = 300        # 系統の差の検定に入れる種牡馬の産駒の出走数
 MIN_GROUP = 3         # 検定で 1 つの系統として扱う最少の種牡馬数（未満は「その他」にまとめる）
 # 勝利距離の分布: 1 着の出走を距離帯に分け、帯ごとの割合を成分（平均）にして縮小推定に乗せ、縮めた割合から四分位などを出す
@@ -268,6 +268,7 @@ class Node:
     est: dict[str, tuple[float, float, float, int]] = field(default_factory=dict)   # 指標 → (post, sd, raw, n)
     score: float = 0.0
     horses: int = 0                                    # 配下の産駒の頭数（出走のあった馬）
+    members: list[tuple[str, int]] = field(default_factory=list)   # pool のとき、まとめた種牡馬の (名前, 産駒の頭数)
 
     @property
     def leaf(self) -> bool:
@@ -320,12 +321,27 @@ def aggregate(nd: Node, st: dict[str, np.ndarray], horses: dict[str, int]) -> np
     return nd.stats
 
 
+def label_pools(root: Node, names: dict[str, str], horses: dict[str, int]) -> None:
+    """まとめた群（pool）に、含まれる種牡馬を持たせ、名前にも出す（「ほか N 頭」のような中身の見えない名前にしない）。"""
+    for nd in root.walk():
+        if nd.kind != "pool":
+            continue
+        order = sorted(nd.sires, key=lambda s: (-horses.get(s, 0), names.get(s, s)))
+        nd.members = [(names.get(s, s), horses.get(s, 0)) for s in order]
+        shown = [n for n, _ in nd.members[:3]]       # 名前に出すのは多い順に 3 頭まで（全員は members に持ち、選択時の一覧に出す）
+        joined = "・".join(shown) + (f" ほか{len(nd.members) - 3}頭" if len(nd.members) > 3 else "")
+        if nd.name.startswith("ほか"):
+            nd.name = joined
+        elif re.search(r"（\d+ 頭）$", nd.name):
+            nd.name = re.sub(r"（\d+ 頭）$", f"（{joined}）", nd.name)
+
+
 def runs(nd: Node) -> int:
     return int(nd.stats[0][0]) if nd.stats is not None else 0
 
 
 def prune(nd: Node, names: dict[str, str]) -> Node:
-    """産駒の少ない種牡馬を「ほか N 頭」にまとめ、子が 1 つの節を子と入れ替える。"""
+    """産駒の少ない種牡馬を 1 つの群にまとめ、子が 1 つの節を子と入れ替える。"""
     if nd.leaf:
         return nd
     if nd is not None and nd.kind != "root" and nd.horses < MIN_HORSES:
@@ -531,6 +547,7 @@ def analyze(df: pd.DataFrame, origin: dict[str, dict[str, Any]]) -> dict[str, An
                 sire_parent[c.sires[0]] = nd
     root = prune(full, names)
     aggregate(root, st, horses)
+    label_pools(root, names, horses)
     tau2 = fit_shrinkage(root, st, sire_parent)
     add_win_spread(root)
     tau2.update(fit_tau2(st, sire_parent, ODDS_METRICS))
@@ -624,6 +641,7 @@ def node_json(nd: Node, ids: dict[int, str], center: dict[str, float]) -> dict[s
         o["kind"] = nd.kind
     if nd.kind == "pool":
         o["sires"] = len(nd.sires)
+        o["members"] = [[n, h] for n, h in nd.members]
     if nd.children:
         o["children"] = [node_json(c, ids, center) for c in nd.children]
     return o
@@ -670,7 +688,7 @@ def treemap_block(a: dict[str, Any]) -> dict[str, Any]:
             "caption": (f"{min(YEARS)}〜{max(YEARS)}年 JRA 平地の産駒の出走。中心が表示中の系統で、外へ向かって父系が枝分かれする。"
                         "枝の先の丸が種牡馬（内側の丸は系統・父系の祖先の群）。丸の中に数字がある枝は、まだ配下に種牡馬がいるのでタップでその系統へ潜り、上のパンくずで戻れる。"
                         "各親の中では、似た適性の子が隣り合うよう総合（第 1 主成分）の順に時計回りに並べている。"
-                        f"色は縮小推定（産駒の少ない種牡馬は親の系統の値へ寄せる）の値。産駒が {MIN_HORSES} 頭未満の種牡馬は「ほか N 頭」にまとめた。"
+                        f"色は縮小推定（産駒の少ない種牡馬は親の系統の値へ寄せる）の値。産駒が {MIN_HORSES} 頭未満の種牡馬は群にまとめ、含まれる種牡馬の名前を群の名前と選択時の一覧に出した。"
                         "「色」のプルダウンでは、適性の指標のほかに、勝利距離平均とその幅（どの距離でも勝てるか）、走法の軸（実測ラップのある 2023 年以降の出走だけ）も選べる。これらは色で見るだけで、総合や検定には入れていない。")}
 
 
