@@ -57,7 +57,12 @@ function rankInField(vals: (number | null | undefined)[]): (number | null)[] {
 const FS = 10.5, AXFS = 11, R_PX = 210, GAP = 2;
 const textWidth = (t: string, fs: number) => [...t].reduce((w, c) => w + (/[\x20-\x7e]/.test(c) ? 0.62 : 1) * fs, 0);
 const shortLabel = (h: RunningMapHorse) => `${h.horse_number ?? ""}${h.horse_number ? " " : ""}${[...(h.horse_name ?? "?")].slice(0, 4).join("")}`;
-const fullLabel = (h: RunningMapHorse) => `${h.horse_number ? `${h.horse_number}:` : ""}${h.horse_name ?? "?"}`;
+const fullLabel = (h: RunningMapHorse) => `${h.horse_number ? `${h.horse_number}:` : ""}${h.horse_name ?? "?"}${placeOf(h) ? `（${h.finish_position}着）` : ""}`;
+/** 結果が出ているレースの 5 着以内の印（色は群・方面の塗りと別に、縁と角の丸札で出す）。1 着=金、2 着=銀、3 着=銅、4〜5 着=青 */
+const PLACE_STYLE: Record<number, { color: string; label: string }> = {
+  1: { color: "#f5c518", label: "1着" }, 2: { color: "#d0d7de", label: "2着" }, 3: { color: "#e0803a", label: "3着" }, 4: { color: "#3aa6e0", label: "4〜5着" },
+};
+const placeOf = (h: RunningMapHorse): number | null => (h.finish_position != null && h.finish_position >= 1 && h.finish_position <= 5 ? Math.min(h.finish_position, 4) : null);
 type Box = { x: number; y: number; w: number; h: number };
 const overlap = (a: Box, b: Box) => Math.min((a.w + b.w) / 2 + GAP - Math.abs(a.x - b.x), (a.h + b.h) / 2 + GAP - Math.abs(a.y - b.y));
 
@@ -234,16 +239,25 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
           const b = boxes[i];
           const text = on ? fullLabel(h) : shortLabel(h);
           const w = on ? textWidth(text, FS + 1) + 10 : b.w, hh = on ? b.h + 2 : b.h;
+          const pl = placeOf(h);
           return (
             <g key={id} onClick={() => setSel(on ? null : id)} style={{ cursor: "pointer" }} opacity={dim ? 0.3 : 1}>
+              {pl != null && <rect x={b.x - w / 2 - 3} y={b.y - hh / 2 - 3} width={w + 6} height={hh + 6} rx={(hh + 6) / 2} fill="none" stroke={PLACE_STYLE[pl].color} strokeWidth={3} />}
               <rect x={b.x - w / 2} y={b.y - hh / 2} width={w} height={hh} rx={hh / 2} fill={h.estimated ? "var(--surface)" : c}
                 stroke={on ? "#fff" : h.estimated ? c : "rgba(0,0,0,.35)"} strokeWidth={on ? 2 : h.estimated ? 1.5 : 1} strokeDasharray={h.estimated ? "3 2" : undefined} />
               <text x={b.x} y={b.y + (on ? FS + 1 : FS) * 0.36} textAnchor="middle" fontSize={on ? FS + 1 : FS} fontWeight={700} fill={h.estimated ? c : "#0d1117"}>{text}</text>
+              {pl != null && (
+                <g pointerEvents="none">
+                  <circle cx={b.x - w / 2 + 2} cy={b.y - hh / 2 - 1} r={7.5} fill={PLACE_STYLE[pl].color} stroke="#0d1117" strokeWidth={1} />
+                  <text x={b.x - w / 2 + 2} y={b.y - hh / 2 - 1 + 3.4} textAnchor="middle" fontSize={10} fontWeight={800} fill="#0d1117">{h.finish_position}</text>
+                </g>
+              )}
               <title>{fullLabel(h)}</title>
             </g>
           );
         })}
       </svg>
+      {hs.some((h) => placeOf(h) != null) && <PlaceLegend />}
       <ColorControl axes={choices} colorKey={colorKey} onChange={setColorKey} topKeys={topKeys} />
       <BgSwitch showCourse={showCourse} onCourse={setShowCourse} showDay={showDay} onDay={setShowDay} day={day} hasCourse={!!apt} />
       {showCourse && apt && <HeatLegend rgb={APT_RGB} text={`${apt.course}の好走しやすさ`} />}
@@ -284,6 +298,19 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
           図に無い馬: {figure.unmapped.map((u) => `${u.horse_number ? `${u.horse_number}:` : ""}${u.horse_name ?? "?"}`).join("、")}
         </p>
       )}
+    </div>
+  );
+}
+
+function PlaceLegend() {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, marginTop: 6, fontSize: 11, color: "var(--text-dim)" }}>
+      <span>結果（縁と丸札）</span>
+      {Object.values(PLACE_STYLE).map((p) => (
+        <span key={p.label} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <span aria-hidden style={{ width: 12, height: 12, borderRadius: 999, background: p.color, border: "1px solid var(--border)" }} />{p.label}
+        </span>
+      ))}
     </div>
   );
 }
