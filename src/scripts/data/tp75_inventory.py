@@ -98,6 +98,10 @@ for _n in ("adopted_features_v3", "advanced_modeling_techniques", "data_acquisit
            "tp05a_experiment_report", "track_bias_pedigree_pipeline", "train_valid_test_split_strategy"):
     _ch(_n, "none", "", "なし", "設計・仕様・実験メモの章で、条件別の統計表を持たない")
 _ch("jockey_distance_dependence", "none", "", "あり", "検証の事前登録のみで、結果が未確定（別の担当が実行中）。次の版で取り込む")
+_ch("bet_allocation_table", "none", "", "なし", "指数順位ごとの買い目配分の案で、検証も実装も未実施。条件別の統計表を持たない")
+_ch("feature_screening", "none", "", "なし", "学習前の特徴量の効き（LogLoss の増分）の測定で、馬の条件ごとの回収率・勝率の統計ではない")
+_ch("revival_feature_set", "none", "", "なし", "不採用だった特徴量の台帳と復活セットの定義で、条件別の統計表を持たない")
+_ch("final_layer_philosophies", "excluded_market", "", "あり", "人気薄・期待値を条件にした最終層の比較で、市場情報（オッズ・人気）に依存する。取り込まない")
 
 # ---- ホストの保存結果 --------------------------------------------------------------------------------------------
 for _o, _i, _r in (

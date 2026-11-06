@@ -1,4 +1,4 @@
-"""再学習の状態管理 CLI（src/scripts/ops/retrain_ctl.py）の振る舞い。"""
+"""再学習の状態管理 CLI（scripts/dev/retrain_ctl.py）の振る舞い。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-CTL = ROOT / "src" / "scripts" / "ops" / "retrain_ctl.py"
+CTL = ROOT / "scripts" / "dev" / "retrain_ctl.py"
 PLAN = ROOT / "config" / "retrain_plan.json"
 
 
