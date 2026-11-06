@@ -634,6 +634,16 @@ def _assemble(entries: list[dict], ids: list[str], prof: pd.DataFrame, race_id: 
 
             logging.getLogger(__name__).exception("その日の馬場傾向の計算に失敗: %s", race_id)
             out["day_trend"] = None
+    try:
+        from src.research.race.running_map_best5 import best5
+
+        dt_heat = (out.get("day_trend") or {}).get("heat") or {}
+        out["best5"] = best5(horses, out.get("extent"), ((out.get("aptitude") or {}).get("lift") if cm else None), dt_heat.get("lift"))
+    except Exception:   # Best5 は補助。失敗しても地図は出す
+        import logging
+
+        logging.getLogger(__name__).exception("Best5 の計算に失敗: %s", race_id)
+        out["best5"] = None
     labels = group(Z if not cm else Z * np.array(cm["w"]))
     Zu = np.array(Zs)
     order = sorted(set(labels), key=lambda g: (-int((labels == g).sum()), g))
