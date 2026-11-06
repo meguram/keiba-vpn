@@ -18,17 +18,19 @@ logger = logging.getLogger(__name__)
 
 # (キー, 表示名, 表示形式, 説明)。pct=割合（0〜1 を % に）, m=メートル, q=0〜1, n=数値
 TRAITS: list[tuple[str, str, str, str]] = [
-    ("dirt_share", "ダート比率", "pct", "高いほどダートを多く走る"),
-    ("dist_run", "走る距離", "m", "芝ダの平均との差。＋は長め"),
-    ("dist_good", "好走する距離", "m", "芝ダの平均との差。＋は長め"),
-    ("style_q", "脚質", "q", "0=先頭〜1=後方"),
-    ("ax_ts", "TS", "n", "末脚の速さ"),
-    ("ax_sustain", "TS持続力", "n", "ギアチェンジ・TS・Hペース耐性の血統予測から出した値"),
-    ("ax_debut", "出脚", "n", "出足の速さ"),
-    ("ax_gear", "ギアチェンジ", "n", "加速の切り替え"),
+    ("dirt_share", "ダート適性", "pct", "走る馬場のうちダートが占める割合の予想（残りが芝）。高いほどダート向き"),
+    ("dist_good", "適性距離", "m", "好走（3着以内）しやすい距離の予想"),
+    ("dist_run", "よく走る距離", "m", "実際に使われやすい距離の予想"),
     ("ax_endure", "Hペース耐性", "n", "速い流れで脚を使っても終いに落ちない"),
+    ("ax_sustain", "TS持続力", "n", "ギアチェンジ・TS・Hペース耐性の血統予測から出した値"),
+    ("ax_ts", "TS", "n", "末脚の速さ"),
+    ("ax_gear", "ギアチェンジ", "n", "加速の切り替え"),
+    ("ax_debut", "出脚", "n", "出足の速さ"),
     ("ax_front", "先行力", "n", "先行できる力"),
+    ("style_q", "前に行く度", "n", "高いほど前の位置を取る脚質"),
 ]
+SCORE_KEYS = ("ax_endure", "ax_sustain", "ax_ts", "ax_gear", "ax_debut", "ax_front", "style_q")   # 10 点満点で見せる観点
+INVERT = ("style_q",)   # 値が小さいほど前＝高得点
 
 
 @lru_cache(maxsize=1)
@@ -44,8 +46,27 @@ def _load() -> tuple[dict, dict] | None:
         return None
 
 
+@lru_cache(maxsize=1)
+def _reference() -> dict | None:
+    """点数の基準（血統予測値の分布）と芝ダの平均距離。tp85_ped_reference.py が作る。"""
+    try:
+        from src.pipeline.features.tp85_pedprior import MODEL_DIR
+
+        return json.loads((MODEL_DIR / "reference.json").read_text(encoding="utf-8"))
+    except Exception:
+        logger.info("血統の基準ファイルを読めないため、点数・距離は付けません", exc_info=True)
+        return None
+
+
 def clear_cache() -> None:
     _load.cache_clear()
+    _reference.cache_clear()
+
+
+def _score(x: float, quantiles: list[float], invert: bool) -> float:
+    """直近 2 年に走った馬の血統予測値の中での位置（0〜100）を 10 点満点・0.5 点刻みに。invert は小さいほど高得点。"""
+    p = float(np.interp(x, quantiles, np.linspace(0, 100, len(quantiles))))
+    return round((100 - p if invert else p) / 5) / 2
 
 
 def _read_ped(horse_ids: list[str]) -> tuple[dict[str, dict[int, str]], dict[str, dict[str, str | None]]]:
@@ -110,23 +131,31 @@ def pedigree_for(entries: list[dict]) -> dict[str, Any] | None:
         return None
     hs = pd.DataFrame({"horse_id": got, "sex": [sex[h] for h in got]})
     preds = {k: m.predict(ped, hs).set_index("horse_id") for k, m in models.items()}
+    ref = _reference() or {}
+    pop = ref.get("pop") or {}
     traits, keep = [], []
     for key, label, fmt, hint in TRAITS:
         if key not in models:
             continue
         base, half, r2 = _scale(key, man.get(key, {}), models)
-        traits.append({"key": key, "label": label, "fmt": fmt, "hint": hint,
-                       "base": None if base is None else round(base, 4), "ref": None if half is None else round(half, 4),
-                       "r2": None if r2 is None else round(float(r2), 3)})
+        t = {"key": key, "label": label, "fmt": fmt, "hint": hint,
+             "base": None if base is None else round(base, 4), "ref": None if half is None else round(half, 4),
+             "r2": None if r2 is None else round(float(r2), 3), "score": key in SCORE_KEYS and key in pop}
+        if fmt == "m" and ref.get("surface_mean"):
+            t["abs"] = {k: round(float(v)) for k, v in ref["surface_mean"].items()}
+        traits.append(t)
         keep.append(key)
     horses: dict[str, Any] = {}
     for h in got:
-        v = {}
+        v, sc = {}, {}
         for k in keep:
             r = preds[k].loc[h]
             lo, hi, mean = float(r["lo80"]), float(r["hi80"]), float(r["mean"])
             if k == "dirt_share":
                 lo, mean, hi = (min(1.0, max(0.0, x)) for x in (lo, mean, hi))
             v[k] = [round(mean, 4), round(lo, 4), round(hi, 4)]
-        horses[h] = {"sex": sex[h], "sire": names[h]["sire"], "damsire": names[h]["damsire"], "has_damsire": 2 in ped[h], "v": v}
+            if k in SCORE_KEYS and k in pop:
+                s3 = [_score(x, pop[k], k in INVERT) for x in (mean, lo, hi)]
+                sc[k] = [s3[0], min(s3[1], s3[2]), max(s3[1], s3[2])]
+        horses[h] = {"sex": sex[h], "sire": names[h]["sire"], "damsire": names[h]["damsire"], "has_damsire": 2 in ped[h], "v": v, "s": sc}
     return {"traits": traits, "horses": horses}

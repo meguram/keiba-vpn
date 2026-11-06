@@ -6,6 +6,8 @@ from tests.pipeline.test_tp85_pedprior import _fit
 
 def _setup(monkeypatch, with_models=True):
     pp, _, te, ped, _ = _fit()
+    ref = {"surface_mean": {"芝": 1700.0, "ダート": 1500.0}, "pop": {"dirt_share": [0.0, 1.0], "dist_good": [-100.0, 100.0]}}
+    monkeypatch.setattr(rmp, "_reference", lambda: ref)
     man = {"dirt_share": {"r2_obs_cal": 0.29, "top10": {"pred_diff": 0.4}, "bottom10": {"pred_diff": -0.3}}}
     monkeypatch.setattr(rmp, "_load", lambda: ({"dirt_share": pp}, man) if with_models else None)
     hs = list(te["horse_id"].head(3))
@@ -33,3 +35,9 @@ def test_pedigree_for_returns_none_without_models_or_pedigree(monkeypatch):
 
 def test_sex_of_defaults_to_male():
     assert rmp._sex_of({"sex_age": "セ5"}) == "セ" and rmp._sex_of({}) == "牡" and rmp._sex_of({"sex_age": "?"}) == "牡"
+
+
+def test_score_is_percentile_in_half_points_and_can_invert():
+    q = [float(x) for x in range(101)]
+    assert rmp._score(50.0, q, False) == 5.0 and rmp._score(100.0, q, False) == 10.0 and rmp._score(-5.0, q, False) == 0.0
+    assert rmp._score(90.0, q, True) == 1.0 and rmp._score(53.0, q, False) == 5.5
