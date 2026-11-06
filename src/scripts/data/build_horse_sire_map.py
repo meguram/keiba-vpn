@@ -124,8 +124,8 @@ def apply_netkeiba_lines(m: pd.DataFrame, labels: dict[str, str] | None) -> pd.D
 
 def line_labels(*, update: bool = True, fetch_max: int = 0) -> dict[str, str]:
     """種牡馬 ID → 系統名。smartrc の小系統（data/meta/sire_lines/sire_smartrc_lines.json）を優先し、無い種牡馬だけ netkeiba の『○○系』。
-    update=True なら、先に smartrc の台帳を手元のデータで作り直し（取得なし）、fetch_max > 0 なら台帳に無い種牡馬を smartrc から最大その数だけ補い、
-    残りを父系の祖先で埋める（2026-11-06 ユーザー指示: netkeiba の系統は粗いので smartrc の系統を使う）。"""
+    update=True なら、先に smartrc の台帳を手元のデータで作り直し（取得なし）、fetch_max > 0 なら台帳に無い種牡馬を smartrc から最大その数だけ補う。
+    smartrc で系統が空欄の種牡馬は netkeiba の『○○系』を使う（2026-11-06 ユーザー指示）。"""
     from src.scraper import sire_line_store, smartrc_sire_lines as ssl
 
     if update:
@@ -133,7 +133,6 @@ def line_labels(*, update: bool = True, fetch_max: int = 0) -> dict[str, str]:
             ssl.build()
             if fetch_max > 0 and ssl.load().get("missing"):
                 ssl.fetch(fetch_max)
-            ssl.fill_paternal()
         except Exception:
             logger.exception("smartrc の系統の台帳の更新に失敗（今ある台帳で続ける）")
     return {**sire_line_store.labels(), **ssl.labels()}

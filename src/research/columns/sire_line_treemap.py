@@ -1,14 +1,15 @@
 """めぐコラム『種牡馬系統による適性の違いはあるのか』（sire-line-aptitude）を実データから集計し、
 frontend/content/columns/sire-line-aptitude.json を書く。
 
-問い: 父系の系統（Halo 系・Mr. Prospector 系など）で、産駒の適性（芝ダ・距離・道悪・早熟/晩成・脚質）に違いはあるか。
+問い: 父系の系統（smartrc の小系統。ディープ系・キングマンボ系・ロベルト系など）で、産駒の適性（芝ダ・距離・道悪・早熟/晩成・脚質）に違いはあるか。
 
 データ:
   レース: compare_series.load()（2020〜2025 年の JRA 平地。障害・取消・除外を除く）。馬場状態は race_result_flat の track_condition、
           初角の位置は race_context.positions()（同じ流儀で 2019 年から読む）。
   父:     compare_series.SIRE_MAP_PATH（horse_sire_map.parquet）。
-  系統:   data/meta/pedigree_lines/sire_line_origin.json（git の管理下の小さな版。src/scripts/scraping/trace_sire_line_origins.py が、
-          管理外の data/local/pedigree_lines/sire_line_origin.json と一緒に作る）。
+  系統:   smartrc の 大系統 → 小系統（data/meta/sire_lines/sire_smartrc_lines.json。2026-11-06 ユーザー指示で netkeiba の系統から切り替え）。
+          smartrc で系統が空欄の種牡馬は netkeiba の系統（data/meta/pedigree_lines/sire_line_origin.json の最も下の系統）を使い、
+          「smartrc 未分類」の下に置く。父（同じ父の群の検定に使う）は sire_line_origin.json の chain の先頭。
 
 適性の指標（種牡馬ごと、産駒の出走から。能力の差が入らないよう、分布か「オッズの見込みとの差」の差にする）:
   芝↔ダート   （分布）ダートを走った割合。
@@ -139,11 +140,17 @@ def load_axes() -> pd.DataFrame:
     cols = [a[1][3:] for a in AXES]
     if not Path(AXES_PATH).exists():
         return pd.DataFrame({"race_id": pd.Series(dtype=str), "horse_id": pd.Series(dtype=str), **{c: pd.Series(dtype=float) for c in AX_COMPS}})
-    ax = pd.read_parquet(AXES_PATH, columns=["race_id", "horse_id", "abn"] + cols)
+    import pyarrow.parquet as pq
+
+    have = set(pq.read_schema(AXES_PATH).names)       # 走法マップに足された軸が、まだ run_axes に無いことがある（その軸は値なし）
+    ax = pd.read_parquet(AXES_PATH, columns=["race_id", "horse_id", "abn"] + [c for c in cols if c in have])
     ax["race_id"], ax["horse_id"] = ax["race_id"].astype(str), ax["horse_id"].astype(str)
     ax = ax.drop_duplicates(["race_id", "horse_id"])
     out = ax[["race_id", "horse_id"]].copy()
     for c in cols:
+        if c not in have:
+            out[f"ax_{c}"] = np.nan
+            continue
         v = ax[c].astype(float).where(~ax["abn"].to_numpy(bool))
         lo, hi = v.quantile(0.01), v.quantile(0.99)
         out[f"ax_{c}"] = v.clip(lo, hi)
@@ -802,7 +809,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
             "「キングカメハメハ系はダート」「サンデー系は芝の中距離」のように、血統は系統（父系）でまとめて語られることが多いです。"
             "では、系統でまとめると、産駒の適性の違いはどれくらい説明できるのでしょうか。\n\n"
             f"{min(YEARS)}〜{max(YEARS)}年の JRA 平地 {a['n_runs']:,} 走（{a['n_horses']:,} 頭・{a['n_sires']:,} 種牡馬）を、"
-            "父の父系の木（三大始祖から各種牡馬まで）に並べ、5 つの適性の指標で色を塗りました。")},
+            "smartrc の系統（大系統 → 小系統 → 各種牡馬）の木に並べ、5 つの適性の指標で色を塗りました。")},
         {"type": "stats", "items": [
             {"label": "種牡馬", "value": f"{a['n_sires']:,}", "sub": f"検定は産駒 {MIN_TEST} 走以上の {len(a['test_sires'])} 頭"},
             {"label": "主な系統（検定）", "value": f"{top['n_groups']}", "sub": f"{MIN_GROUP} 頭未満の系統は「その他」"},
@@ -827,7 +834,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
             f"産駒の出走 {MIN_TEST} 以上の {len(a['test_sires'])} 種牡馬について、指標ごとに「種牡馬の間の違いのうち、系統の違いで説明できる割合」を出しました。"
             "系統のラベルを種牡馬の間でランダムに入れ替えても、系統が多ければある程度の割合は偶然で出るので、その分を引いた値を載せ、"
             f"入れ替え（{N_PERM:,} 回）で p 値を出して、指標 × 2 つの分け方の {len(tests)} 個を Holm で補正しました。\n\n"
-            "分け方は 2 つです。「系統」は netkeiba の名前の付いた最も下の系統（Halo系・Mr. Prospector系・Storm Bird系など）、"
+            "分け方は 2 つです。「系統」は smartrc の小系統（ディープ系・Tサンデー系・キングマンボ系・ロベルト系など。smartrc で系統が空欄の種牡馬は netkeiba の系統）、"
             "「父」は種牡馬の父が同じ群（ディープインパクトの産駒の種牡馬など、細かい分け方）です。")},
         {"type": "table", "columns": ["指標", "種類", "系統で説明", "q（系統）", "父で説明", "q（父）"], "rows": test_rows,
          "caption": "説明の割合は、偶然の分（ラベルを入れ替えたときの平均）を引いたもの。q は Holm で補正した p 値。種牡馬の生の値を、標本の精度で重み付けしている。"},
@@ -857,13 +864,11 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
         {"type": "text", "text": conclusion_text(by_father, sig, weak, father_sig, a["flat"], qtxt)},
         {"type": "accordion", "title": "注記（系統の木の作り方・縮小推定・限界）", "blocks": [
             {"type": "text", "text": (
-                "・系統の木: netkeiba の血統ページの「○○系」を、種牡馬から父をたどって三大始祖まで並べたもの（新しい→古い）を逆にした経路です。"
-                "名前の付いた最も下の系統の下は、父系の祖先の馬（例: Halo系 → サンデーサイレンス系 → ディープインパクト系）で枝分かれさせています。"
-                "種牡馬がほかの種牡馬の父でもあるときは、自身の産駒を「（自身）」として、その馬の系の中に置いています。\n\n"
-                "・同じ系統名が飛び飛びに出る例（Raise a Native系 → Mr. Prospector系 → Raise a Native系、"
-                f"{sum(1 for v in a['origin'].values() if len(line_path(v['lines'])) < len([l for l in v['lines'] if l]))} 頭）は、"
-                "その種牡馬自身や父の表記の揺れによるものなので、2 回目以降を飛ばし、根に近い最初の位置を採りました（例: ヴァーミリアンは Mr. Prospector系 → Kingmambo系 の下）。\n\n"
-                f"・子が 1 つしかない節は、子と入れ替えて段を詰めています。最初は全体の {START_SHARE * 100:.0f}% 以上を占める系統（Phalaris系など）まで潜った位置から表示します。\n\n"
+                "・系統の木: smartrc の系統の分類（大系統 11・小系統 46）で、大系統（例: サンデー系）→ 小系統（例: ディープ系）→ 種牡馬 と並べています"
+                "（2026-11-06 に netkeiba の「○○系」から切り替え。smartrc の分類のほうが細かく、サンデー系をディープ系・Tサンデー系などに分ける）。"
+                f"smartrc で系統が空欄の種牡馬（比較的新しく輸入された海外の種牡馬など、{sum(1 for v in a['origin'].values() if v['lines'][-1] == UNCLASSIFIED)} 頭）は、"
+                "netkeiba の最も下の系統を使い、「smartrc 未分類」の下に置いています。\n\n"
+                f"・子が 1 つしかない節は、子と入れ替えて段を詰めています。最初は全体の {START_SHARE * 100:.0f}% 以上を占める系統まで潜った位置から表示します。\n\n"
                 f"・縮小推定: 指標ごとに、種牡馬の値が親の値からずれる真の SD（τ）を、ずれの 2 乗の平均から標本のぶれを引いて推定しました（{tau_txt}）。"
                 "標本のぶれは、同じ馬の出走をまとめたクラスタの分散で、同じ馬が何度も同じ条件を走る分を考えています。"
                 "道悪・早熟↔晩成の差の分散は、2 つの条件を独立とみなして足しているので、やや大きめ（保守的）です。\n\n"
@@ -884,8 +889,9 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
         "summary": summary,
         "categories": ["bloodline/lineage"],
         "published": "2026-11-04",
+        "updated": "2026-11-06",
         "dataset": {"period": f"{min(YEARS)}〜{max(YEARS)}年",
-                    "conditions": "JRA全競馬場・芝ダート（障害除く）。系統は父系を三大始祖まで辿ったもの",
+                    "conditions": "JRA全競馬場・芝ダート（障害除く）。系統は smartrc の大系統・小系統（空欄の種牡馬は netkeiba の系統）",
                     "sample": f"{a['n_runs']:,} 走（{a['n_horses']:,} 頭・{a['n_sires']:,} 種牡馬）。検定は産駒 {MIN_TEST} 走以上の {len(a['test_sires'])} 種牡馬"},
         "body": body,
     }
@@ -908,6 +914,16 @@ def conclusion_text(by_father, sig, weak, father_sig, flat, qtxt) -> str:
                      "系統でも父でも違いは偶然の範囲で、種牡馬ごとの値（系統樹のホバー・タップ）か、その種牡馬の産駒の成績を直接見るほうが確かです。"
                      + ("とくに道悪は、種牡馬の間の違い自体が確かめられませんでした。道悪の得意・苦手は、6 年分のデータでも、種牡馬の単位では偶然のぶれと区別できない大きさです。" if "going" in flat else ""))
     return "\n\n".join(parts)
+
+
+def _finite(v: Any) -> Any:
+    if isinstance(v, float):
+        return v if math.isfinite(v) else None
+    if isinstance(v, dict):
+        return {k: _finite(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_finite(x) for x in v]
+    return v
 
 
 def dumps_article(col: dict[str, Any]) -> str:
@@ -936,14 +952,36 @@ def report(a: dict[str, Any]) -> None:
         print(f"  {t['by']:3s} {t['label']:12s} eta2={t['eta2']:.3f} null={t['null']:.3f} adj={t['adj']:.3f} p={t['p']:.4f} q={t['q']:.4f} sires={t['n_sires']} groups={t['n_groups']}")
 
 
+UNCLASSIFIED = "smartrc 未分類"
+
+
+def smartrc_origin(origin: dict[str, dict[str, Any]], smartrc: dict[str, dict[str, Any]] | None = None) -> dict[str, dict[str, Any]]:
+    """系統の経路を smartrc の 大系統 → 小系統 に差し替えた origin（lines は新しい→古い）。父系の祖先の枝は使わず、父だけ残す。
+    smartrc で系統が空欄の種牡馬は、netkeiba の最も下の系統を「smartrc 未分類」の下に置く。"""
+    if smartrc is None:
+        from src.scraper import smartrc_sire_lines as ssl
+
+        smartrc = ssl.load().get("sires", {})
+    out = {}
+    for sid, rec in origin.items():
+        sm = smartrc.get(sid)
+        if sm and sm.get("small_name"):
+            lines = [sm["small_name"], sm.get("large_name")]
+        else:
+            nk = line_path(rec.get("lines") or [])
+            lines = [nk[-1] if nk else "系統不明", UNCLASSIFIED]
+        out[sid] = {**rec, "lines": lines, "chain": rec.get("chain", [])[:1], "origin_line": lines[-1]}
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
-    origin = json.loads(ORIGIN_PATH.read_text(encoding="utf-8"))
+    origin = smartrc_origin(json.loads(ORIGIN_PATH.read_text(encoding="utf-8")))
     a = analyze(frame(), origin)
     report(a)
-    col = article(a)
+    col = _finite(article(a))      # 値の無い軸（NaN）は null に（JSON に NaN を書かない）
     text = dumps_article(col)
     assert json.loads(text) == col
     compact = len(json.dumps(col, ensure_ascii=False, separators=(",", ":")).encode())

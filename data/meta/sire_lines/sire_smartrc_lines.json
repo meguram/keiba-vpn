@@ -1,12 +1,83 @@
 {
- "built": "2026-11-06T22:02:46+09:00",
- "complete_at": "2026-11-06T22:13:48+09:00",
+ "built": "2026-11-06T22:31:24+09:00",
+ "complete_at": "2026-11-06T22:31:24+09:00",
  "missing": [
   "000a00220d",
   "000a0104d9",
   "000a011072",
   "000a012713",
-  "000a01cd05"
+  "000a012ee8",
+  "000a0139ae",
+  "000a013d8b",
+  "000a01400d",
+  "000a014386",
+  "000a014576",
+  "000a014580",
+  "000a014592",
+  "000a0145ac",
+  "000a01462a",
+  "000a0149c7",
+  "000a014fff",
+  "000a015360",
+  "000a01538a",
+  "000a0155dd",
+  "000a016e9d",
+  "000a016ea1",
+  "000a0185b6",
+  "000a01906d",
+  "000a01a780",
+  "000a01a785",
+  "000a01a9d3",
+  "000a01b8e4",
+  "000a01b91e",
+  "000a01b95f",
+  "000a01b9d6",
+  "000a01ba53",
+  "000a01ba9c",
+  "000a01bb23",
+  "000a01bb7f",
+  "000a01bbb6",
+  "000a01bcfe",
+  "000a01be3f",
+  "000a01bf42",
+  "000a01bf6c",
+  "000a01bfcd",
+  "000a01c2a3",
+  "000a01c457",
+  "000a01cd05",
+  "000a01cd3a",
+  "000a01d135",
+  "000a01d4af",
+  "000a01db01",
+  "000a01e65b",
+  "000a01e6b1",
+  "000a01e731",
+  "000a01e747",
+  "000a01e75b",
+  "000a01eda8",
+  "000a01fe88",
+  "000a01ff43",
+  "000a0207d5",
+  "000a0209a0",
+  "000a02191f",
+  "000a021dcf",
+  "000a0265a6",
+  "000a0268ff",
+  "000a027164",
+  "000a02a00e",
+  "000a02c79b",
+  "2011101125",
+  "2013104055",
+  "2013105788",
+  "2013105995",
+  "2014104449",
+  "2014104469",
+  "2014105019",
+  "2014106474",
+  "2015100318",
+  "2016102165",
+  "2016102273",
+  "2016104376"
  ],
  "n_sires": 1034,
  "sires": {
@@ -3832,21 +3903,6 @@
    "type": "3000009",
    "type_name": "欧州型ミスプロ系"
   },
-  "000a012ee8": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Massaat()",
-   "small": "2000017",
-   "small_name": "サドラーズウェルズ系",
-   "type": "3000007",
-   "type_name": "欧州型ノーザンダンサー系",
-   "via": {
-    "name": "Teofilo",
-    "sire_id": "000a01139e"
-   }
-  },
   "000a012f1a": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -4354,21 +4410,6 @@
    "type": "3000005",
    "type_name": "米国型ミスプロ系"
   },
-  "000a0139ae": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Cloud Computing(米)",
-   "small": "2000040",
-   "small_name": "フォーティナイナー系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "Maclean's Music",
-    "sire_id": "000a0139af"
-   }
-  },
   "000a0139af": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -4642,21 +4683,6 @@
    "type": "3000007",
    "type_name": "欧州型ノーザンダンサー系"
   },
-  "000a013d8b": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Ghaiyyath(愛)",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000009",
-   "type_name": "欧州型ミスプロ系",
-   "via": {
-    "name": "Dubawi",
-    "sire_id": "000a0115e2"
-   }
-  },
   "000a013d93": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -4904,21 +4930,6 @@
    "type": "3000010",
    "type_name": "欧州型(その他)"
   },
-  "000a01400d": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Accelerate(米)",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "Smart Strike(加)",
-    "sire_id": "000a00211c"
-   }
-  },
   "000a01401e": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -5114,21 +5125,6 @@
    "type": "3000003",
    "type_name": "米国型ノーザンダンサー系"
   },
-  "000a014386": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Game Winner(米)",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "Candy Ride",
-    "sire_id": "000a01132a"
-   }
-  },
   "000a014387": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -5246,21 +5242,6 @@
    "type": "3000007",
    "type_name": "欧州型ノーザンダンサー系"
   },
-  "000a014576": {
-   "from": "paternal",
-   "large": "1000003",
-   "large_name": "ナスルーラ系",
-   "n": 0,
-   "name": "Tacitus (米)",
-   "small": "2000041",
-   "small_name": "エーピーインディ系",
-   "type": "3000004",
-   "type_name": "米国型ナスルーラ系",
-   "via": {
-    "name": "Tapit(米)",
-    "sire_id": "000a011248"
-   }
-  },
   "000a014577": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -5286,21 +5267,6 @@
    "smartrc_code": "1140007309",
    "type": "3000005",
    "type_name": "米国型ミスプロ系"
-  },
-  "000a014580": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Roadster (米)",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "Quality Road",
-    "sire_id": "000a011cff"
-   }
   },
   "000a014586": {
    "agree": 1.0,
@@ -5328,21 +5294,6 @@
    "type": "3000005",
    "type_name": "米国型ミスプロ系"
   },
-  "000a014592": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Daaher",
-   "small": "2000016",
-   "small_name": "ヴァイスリージェント系",
-   "type": "3000003",
-   "type_name": "米国型ノーザンダンサー系",
-   "via": {
-    "name": "Awesome Again(加)",
-    "sire_id": "000a0021cb"
-   }
-  },
   "000a014595": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -5368,21 +5319,6 @@
    "smartrc_code": "1140007364",
    "type": "3000003",
    "type_name": "米国型ノーザンダンサー系"
-  },
-  "000a0145ac": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Knicks Go(米)",
-   "small": "2000016",
-   "small_name": "ヴァイスリージェント系",
-   "type": "3000003",
-   "type_name": "米国型ノーザンダンサー系",
-   "via": {
-    "name": "Awesome Again(加)",
-    "sire_id": "000a0021cb"
-   }
   },
   "000a0145af": {
    "agree": 1.0,
@@ -5436,21 +5372,6 @@
    "type": "3000006",
    "type_name": "米国型(その他)"
   },
-  "000a01462a": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Global Campaign(米)",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "Curlin(米)",
-    "sire_id": "000a011734"
-   }
-  },
   "000a014680": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -5502,21 +5423,6 @@
    "smartrc_code": "1140007457",
    "type": "3000005",
    "type_name": "米国型ミスプロ系"
-  },
-  "000a0149c7": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Victor Ludorum(英)",
-   "small": "2000018",
-   "small_name": "ストームバード系",
-   "type": "3000007",
-   "type_name": "欧州型ノーザンダンサー系",
-   "via": {
-    "name": "Shamardal(米)",
-    "sire_id": "000a010c92"
-   }
   },
   "000a0149d6": {
    "agree": 1.0,
@@ -5635,66 +5541,6 @@
    "type": "3000007",
    "type_name": "欧州型ノーザンダンサー系"
   },
-  "000a014fff": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Toronado(愛)",
-   "small": "2000017",
-   "small_name": "サドラーズウェルズ系",
-   "type": "3000007",
-   "type_name": "欧州型ノーザンダンサー系",
-   "via": {
-    "name": "High Chaparral (愛)",
-    "sire_id": "000a010270"
-   }
-  },
-  "000a015360": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Wrote (愛)",
-   "small": "2000017",
-   "small_name": "サドラーズウェルズ系",
-   "type": "3000007",
-   "type_name": "欧州型ノーザンダンサー系",
-   "via": {
-    "name": "High Chaparral (愛)",
-    "sire_id": "000a010270"
-   }
-  },
-  "000a01538a": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Shancelot(米)",
-   "small": "2000018",
-   "small_name": "ストームバード系",
-   "type": "3000003",
-   "type_name": "米国型ノーザンダンサー系",
-   "via": {
-    "name": "シャンハイボビーShanghai Bobby(米)",
-    "sire_id": "000a0127e4"
-   }
-  },
-  "000a0155dd": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Kameko(米)",
-   "small": "2000017",
-   "small_name": "サドラーズウェルズ系",
-   "type": "3000003",
-   "type_name": "米国型ノーザンダンサー系",
-   "via": {
-    "name": "Kitten's Joy(米)",
-    "sire_id": "000a0119b3"
-   }
-  },
   "000a01566c": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -5760,36 +5606,6 @@
    "type": "3000010",
    "type_name": "欧州型(その他)"
   },
-  "000a016e9d": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Maxfield(米)",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "ストリートセンスStreet Sense(米)",
-    "sire_id": "000a0113a2"
-   }
-  },
-  "000a016ea1": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Thousand Words(米)",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "Pioneerof the Nile",
-    "sire_id": "000a0122f5"
-   }
-  },
   "000a017939": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -5816,21 +5632,6 @@
    "type": "3000004",
    "type_name": "米国型ナスルーラ系"
   },
-  "000a0185b6": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Charlatan(米)",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "Speightstown(米)",
-    "sire_id": "000a011200"
-   }
-  },
   "000a018f11": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -5843,21 +5644,6 @@
    "smartrc_code": "1140007193",
    "type": "3000009",
    "type_name": "欧州型ミスプロ系"
-  },
-  "000a01906d": {
-   "from": "paternal",
-   "large": "1000003",
-   "large_name": "ナスルーラ系",
-   "n": 0,
-   "name": "Honor A.P.(米)",
-   "small": "2000041",
-   "small_name": "エーピーインディ系",
-   "type": "3000004",
-   "type_name": "米国型ナスルーラ系",
-   "via": {
-    "name": "オナーコード",
-    "sire_id": "000a01372e"
-   }
   },
   "000a019850": {
    "agree": 1.0,
@@ -5923,36 +5709,6 @@
    "smartrc_code": "1140007436",
    "type": "3000007",
    "type_name": "欧州型ノーザンダンサー系"
-  },
-  "000a01a780": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Volatile",
-   "small": "2000017",
-   "small_name": "サドラーズウェルズ系",
-   "type": "3000003",
-   "type_name": "米国型ノーザンダンサー系",
-   "via": {
-    "name": "Violence",
-    "sire_id": "000a013951"
-   }
-  },
-  "000a01a785": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Space Blues (愛)",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000009",
-   "type_name": "欧州型ミスプロ系",
-   "via": {
-    "name": "Dubawi",
-    "sire_id": "000a0115e2"
-   }
   },
   "000a01a7a0": {
    "agree": 1.0,
@@ -6058,21 +5814,6 @@
    "type": "3000004",
    "type_name": "米国型ナスルーラ系"
   },
-  "000a01a9d3": {
-   "from": "paternal",
-   "large": "1000003",
-   "large_name": "ナスルーラ系",
-   "n": 0,
-   "name": "Yaupon(米)",
-   "small": "2000008",
-   "small_name": "グレイソヴリン系",
-   "type": "3000004",
-   "type_name": "米国型ナスルーラ系",
-   "via": {
-    "name": "Uncle Mo(米)",
-    "sire_id": "000a011ffb"
-   }
-  },
   "000a01aa3d": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -6125,36 +5866,6 @@
    "type": "3000003",
    "type_name": "米国型ノーザンダンサー系"
   },
-  "000a01b8e4": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Mystic Guide (米)",
-   "small": "2000016",
-   "small_name": "ヴァイスリージェント系",
-   "type": "3000003",
-   "type_name": "米国型ノーザンダンサー系",
-   "via": {
-    "name": "Ghostzapper",
-    "sire_id": "000a010525"
-   }
-  },
-  "000a01b91e": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Life Is Good (米)",
-   "small": "2000018",
-   "small_name": "ストームバード系",
-   "type": "3000003",
-   "type_name": "米国型ノーザンダンサー系",
-   "via": {
-    "name": "Into Mischief",
-    "sire_id": "000a0125a7"
-   }
-  },
   "000a01b93e": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -6168,21 +5879,6 @@
    "type": "3000005",
    "type_name": "米国型ミスプロ系"
   },
-  "000a01b95f": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Stay Inside",
-   "small": "2000019",
-   "small_name": "ダンチヒ系",
-   "type": "3000007",
-   "type_name": "欧州型ノーザンダンサー系",
-   "via": {
-    "name": "Redoute's Choice",
-    "sire_id": "000a00fe93"
-   }
-  },
   "000a01b998": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -6195,21 +5891,6 @@
    "smartrc_code": "1140007399",
    "type": "3000003",
    "type_name": "米国型ノーザンダンサー系"
-  },
-  "000a01b9d6": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Deep Field",
-   "small": "2000022",
-   "small_name": "ノーザンダンサー系",
-   "type": "3000007",
-   "type_name": "欧州型ノーザンダンサー系",
-   "via": {
-    "name": "Encosta de Lago",
-    "sire_id": "000a0112ca"
-   }
   },
   "000a01ba0e": {
    "agree": 1.0,
@@ -6263,36 +5944,6 @@
    "type": "3000003",
    "type_name": "米国型ノーザンダンサー系"
   },
-  "000a01ba53": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Known Agenda(米)",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "Curlin(米)",
-    "sire_id": "000a011734"
-   }
-  },
-  "000a01ba9c": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Highly Motivated (米)",
-   "small": "2000018",
-   "small_name": "ストームバード系",
-   "type": "3000003",
-   "type_name": "米国型ノーザンダンサー系",
-   "via": {
-    "name": "Into Mischief",
-    "sire_id": "000a0125a7"
-   }
-  },
   "000a01babf": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -6319,51 +5970,6 @@
    "type": "3000005",
    "type_name": "米国型ミスプロ系"
   },
-  "000a01bb23": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Silver State(米)",
-   "small": "2000019",
-   "small_name": "ダンチヒ系",
-   "type": "3000003",
-   "type_name": "米国型ノーザンダンサー系",
-   "via": {
-    "name": "Hard Spun(米)",
-    "sire_id": "000a0116a1"
-   }
-  },
-  "000a01bb7f": {
-   "from": "paternal",
-   "large": "1000003",
-   "large_name": "ナスルーラ系",
-   "n": 0,
-   "name": "Golden Pal (米)",
-   "small": "2000008",
-   "small_name": "グレイソヴリン系",
-   "type": "3000004",
-   "type_name": "米国型ナスルーラ系",
-   "via": {
-    "name": "Uncle Mo(米)",
-    "sire_id": "000a011ffb"
-   }
-  },
-  "000a01bbb6": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Baaeed (英)",
-   "small": "2000019",
-   "small_name": "ダンチヒ系",
-   "type": "3000007",
-   "type_name": "欧州型ノーザンダンサー系",
-   "via": {
-    "name": "Sea The StarsSea the Stars(愛)",
-    "sire_id": "000a011c78"
-   }
-  },
   "000a01bbdc": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -6389,21 +5995,6 @@
    "smartrc_code": "1140007319",
    "type": "3000003",
    "type_name": "米国型ノーザンダンサー系"
-  },
-  "000a01bcfe": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Corniche(米)",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "Quality Road",
-    "sire_id": "000a011cff"
-   }
   },
   "000a01bd91": {
    "agree": 1.0,
@@ -6457,66 +6048,6 @@
    "type": "3000003",
    "type_name": "米国型ノーザンダンサー系"
   },
-  "000a01be3f": {
-   "from": "paternal",
-   "large": "1000003",
-   "large_name": "ナスルーラ系",
-   "n": 0,
-   "name": "Flightline(米)",
-   "small": "2000041",
-   "small_name": "エーピーインディ系",
-   "type": "3000004",
-   "type_name": "米国型ナスルーラ系",
-   "via": {
-    "name": "Tapit(米)",
-    "sire_id": "000a011248"
-   }
-  },
-  "000a01bf42": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Epicenter (米)",
-   "small": "2000018",
-   "small_name": "ストームバード系",
-   "type": "3000003",
-   "type_name": "米国型ノーザンダンサー系",
-   "via": {
-    "name": "Not This Time",
-    "sire_id": "000a01be20"
-   }
-  },
-  "000a01bf6c": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Drain the Clock (米)",
-   "small": "2000040",
-   "small_name": "フォーティナイナー系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "Maclean's Music",
-    "sire_id": "000a0139af"
-   }
-  },
-  "000a01bfcd": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Cyberknife (米)",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "Gun Runner(米)",
-    "sire_id": "000a0138fb"
-   }
-  },
   "000a01c066": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -6556,66 +6087,6 @@
    "type": "3000003",
    "type_name": "米国型ノーザンダンサー系"
   },
-  "000a01c2a3": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "ストラクター",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "パレスマリス",
-    "sire_id": "000a014a1a"
-   }
-  },
-  "000a01c457": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Jackie's Warrior (米)",
-   "small": "2000040",
-   "small_name": "フォーティナイナー系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "Maclean's Music",
-    "sire_id": "000a0139af"
-   }
-  },
-  "000a01cd3a": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Speaker's Corner (米)",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "ストリートセンスStreet Sense(米)",
-    "sire_id": "000a0113a2"
-   }
-  },
-  "000a01d135": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Exceedance",
-   "small": "2000019",
-   "small_name": "ダンチヒ系",
-   "type": "3000007",
-   "type_name": "欧州型ノーザンダンサー系",
-   "via": {
-    "name": "Exceed And Excel",
-    "sire_id": "000a010a61"
-   }
-  },
   "000a01d37e": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -6654,21 +6125,6 @@
    "smartrc_code": "1140007402",
    "type": "3000007",
    "type_name": "欧州型ノーザンダンサー系"
-  },
-  "000a01d4af": {
-   "from": "paternal",
-   "large": "1000002",
-   "large_name": "ターントゥ系",
-   "n": 0,
-   "name": "Sweynesse",
-   "small": "2000004",
-   "small_name": "ターントゥ系",
-   "type": "3000010",
-   "type_name": "欧州型(その他)",
-   "via": {
-    "name": "Lonhro(豪)",
-    "sire_id": "000a011187"
-   }
   },
   "000a01d54d": {
    "agree": 1.0,
@@ -6735,66 +6191,6 @@
    "type": "3000003",
    "type_name": "米国型ノーザンダンサー系"
   },
-  "000a01db01": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Lucky Vega",
-   "small": "2000018",
-   "small_name": "ストームバード系",
-   "type": "3000007",
-   "type_name": "欧州型ノーザンダンサー系",
-   "via": {
-    "name": "Lope de Vega",
-    "sire_id": "000a012919"
-   }
-  },
-  "000a01e65b": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Maximus Mischief (米)",
-   "small": "2000018",
-   "small_name": "ストームバード系",
-   "type": "3000003",
-   "type_name": "米国型ノーザンダンサー系",
-   "via": {
-    "name": "Into Mischief",
-    "sire_id": "000a0125a7"
-   }
-  },
-  "000a01e6b1": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Complexity",
-   "small": "2000040",
-   "small_name": "フォーティナイナー系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "Maclean's Music",
-    "sire_id": "000a0139af"
-   }
-  },
-  "000a01e731": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Trapeze Artist(豪)",
-   "small": "2000019",
-   "small_name": "ダンチヒ系",
-   "type": "3000007",
-   "type_name": "欧州型ノーザンダンサー系",
-   "via": {
-    "name": "スニッツェルSnitzel(豪)",
-    "sire_id": "000a010eaa"
-   }
-  },
   "000a01e732": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -6807,36 +6203,6 @@
    "smartrc_code": "1140007491",
    "type": "3000007",
    "type_name": "欧州型ノーザンダンサー系"
-  },
-  "000a01e747": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Minzaal (愛)",
-   "small": "2000022",
-   "small_name": "ノーザンダンサー系",
-   "type": "3000007",
-   "type_name": "欧州型ノーザンダンサー系",
-   "via": {
-    "name": "Mehmas",
-    "sire_id": "000a01a76e"
-   }
-  },
-  "000a01e75b": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Jack Christopher (米)",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "Munnings",
-    "sire_id": "000a0123f6"
-   }
   },
   "000a01ebc4": {
    "agree": 1.0,
@@ -6851,21 +6217,6 @@
    "type": "3000004",
    "type_name": "米国型ナスルーラ系"
   },
-  "000a01eda8": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Olympiad (米)",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "Speightstown(米)",
-    "sire_id": "000a011200"
-   }
-  },
   "000a01edfc": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -6878,171 +6229,6 @@
    "smartrc_code": "1140007486",
    "type": "3000004",
    "type_name": "米国型ナスルーラ系"
-  },
-  "000a01fe88": {
-   "from": "paternal",
-   "large": "1000002",
-   "large_name": "ターントゥ系",
-   "n": 0,
-   "name": "Preservationist",
-   "small": "2000007",
-   "small_name": "ロベルト系",
-   "type": "3000010",
-   "type_name": "欧州型(その他)",
-   "via": {
-    "name": "Arch (米)",
-    "sire_id": "000a0021b7"
-   }
-  },
-  "000a01ff43": {
-   "from": "paternal",
-   "large": "1000003",
-   "large_name": "ナスルーラ系",
-   "n": 0,
-   "name": "Modernist",
-   "small": "2000008",
-   "small_name": "グレイソヴリン系",
-   "type": "3000004",
-   "type_name": "米国型ナスルーラ系",
-   "via": {
-    "name": "Uncle Mo(米)",
-    "sire_id": "000a011ffb"
-   }
-  },
-  "000a0207d5": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Pinehurst (米)",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "Twirling Candy",
-    "sire_id": "000a01316b"
-   }
-  },
-  "000a0209a0": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Farnan",
-   "small": "2000019",
-   "small_name": "ダンチヒ系",
-   "type": "3000007",
-   "type_name": "欧州型ノーザンダンサー系",
-   "via": {
-    "name": "Redoute's Choice",
-    "sire_id": "000a00fe93"
-   }
-  },
-  "000a02191f": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Home Affairs",
-   "small": "2000019",
-   "small_name": "ダンチヒ系",
-   "type": "3000007",
-   "type_name": "欧州型ノーザンダンサー系",
-   "via": {
-    "name": "I Am Invincible",
-    "sire_id": "000a0144f0"
-   }
-  },
-  "000a021dcf": {
-   "from": "paternal",
-   "large": "1000003",
-   "large_name": "ナスルーラ系",
-   "n": 0,
-   "name": "Mo Town",
-   "small": "2000008",
-   "small_name": "グレイソヴリン系",
-   "type": "3000004",
-   "type_name": "米国型ナスルーラ系",
-   "via": {
-    "name": "Uncle Mo(米)",
-    "sire_id": "000a011ffb"
-   }
-  },
-  "000a0265a6": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Flameaway (加)",
-   "small": "2000018",
-   "small_name": "ストームバード系",
-   "type": "3000003",
-   "type_name": "米国型ノーザンダンサー系",
-   "via": {
-    "name": "Scat Daddy(米)",
-    "sire_id": "000a0114fe"
-   }
-  },
-  "000a0268ff": {
-   "from": "paternal",
-   "large": "1000005",
-   "large_name": "ノーザンダンサー系",
-   "n": 0,
-   "name": "Peltzer",
-   "small": "2000017",
-   "small_name": "サドラーズウェルズ系",
-   "type": "3000007",
-   "type_name": "欧州型ノーザンダンサー系",
-   "via": {
-    "name": "So You Think(新)",
-    "sire_id": "000a011bda"
-   }
-  },
-  "000a027164": {
-   "from": "paternal",
-   "large": "1000003",
-   "large_name": "ナスルーラ系",
-   "n": 0,
-   "name": "Leinster",
-   "small": "2000041",
-   "small_name": "エーピーインディ系",
-   "type": "3000004",
-   "type_name": "米国型ナスルーラ系",
-   "via": {
-    "name": "マジェスティックウォリアーMajestic Warrior(米)",
-    "sire_id": "000a011e9c"
-   }
-  },
-  "000a02a00e": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Beau Liam",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "Liam's Map",
-    "sire_id": "000a01372b"
-   }
-  },
-  "000a02c79b": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "Nashville (米)",
-   "small": "2000015",
-   "small_name": "ミスプロ系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "Speightstown(米)",
-    "sire_id": "000a011200"
-   }
   },
   "1985103538": {
    "agree": 1.0,
@@ -11581,21 +10767,6 @@
    "type": "3000010",
    "type_name": "欧州型(その他)"
   },
-  "2011101125": {
-   "from": "paternal",
-   "large": "1000011",
-   "large_name": "サンデー系",
-   "n": 0,
-   "name": "オジュウチョウサン",
-   "small": "2000043",
-   "small_name": "Tサンデー系",
-   "type": "3000001",
-   "type_name": "日本型サンデー系",
-   "via": {
-    "name": "ステイゴールド",
-    "sire_id": "1994108729"
-   }
-  },
   "2011101273": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -12402,21 +11573,6 @@
    "type": "3000001",
    "type_name": "日本型サンデー系"
   },
-  "2013104055": {
-   "from": "paternal",
-   "large": "1000011",
-   "large_name": "サンデー系",
-   "n": 0,
-   "name": "ケイティブレイブ",
-   "small": "2000042",
-   "small_name": "Pサンデー系",
-   "type": "3000001",
-   "type_name": "日本型サンデー系",
-   "via": {
-    "name": "アドマイヤマックス",
-    "sire_id": "1999107004"
-   }
-  },
   "2013104230": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -12482,21 +11638,6 @@
    "type": "3000001",
    "type_name": "日本型サンデー系"
   },
-  "2013105788": {
-   "from": "paternal",
-   "large": "1000011",
-   "large_name": "サンデー系",
-   "n": 0,
-   "name": "マカヒキ",
-   "small": "2000046",
-   "small_name": "ディープ系",
-   "type": "3000001",
-   "type_name": "日本型サンデー系",
-   "via": {
-    "name": "ディープインパクト",
-    "sire_id": "2002100816"
-   }
-  },
   "2013105903": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -12522,21 +11663,6 @@
    "smartrc_code": "1120002395",
    "type": "3000009",
    "type_name": "欧州型ミスプロ系"
-  },
-  "2013105995": {
-   "from": "paternal",
-   "large": "1000011",
-   "large_name": "サンデー系",
-   "n": 0,
-   "name": "ロジクライ",
-   "small": "2000043",
-   "small_name": "Tサンデー系",
-   "type": "3000001",
-   "type_name": "日本型サンデー系",
-   "via": {
-    "name": "ハーツクライ",
-    "sire_id": "2001103038"
-   }
   },
   "2013106099": {
    "agree": 1.0,
@@ -12720,36 +11846,6 @@
    "type": "3000005",
    "type_name": "米国型ミスプロ系"
   },
-  "2014104449": {
-   "from": "paternal",
-   "large": "1000011",
-   "large_name": "サンデー系",
-   "n": 0,
-   "name": "カデナ",
-   "small": "2000046",
-   "small_name": "ディープ系",
-   "type": "3000001",
-   "type_name": "日本型サンデー系",
-   "via": {
-    "name": "ディープインパクト",
-    "sire_id": "2002100816"
-   }
-  },
-  "2014104469": {
-   "from": "paternal",
-   "large": "1000011",
-   "large_name": "サンデー系",
-   "n": 0,
-   "name": "スーパーステション",
-   "small": "2000045",
-   "small_name": "Dサンデー系",
-   "type": "3000001",
-   "type_name": "日本型サンデー系",
-   "via": {
-    "name": "カネヒキリ",
-    "sire_id": "2002100978"
-   }
-  },
   "2014104553": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -12762,21 +11858,6 @@
    "smartrc_code": "1120002600",
    "type": "3000003",
    "type_name": "米国型ノーザンダンサー系"
-  },
-  "2014105019": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "サブノジュニア",
-   "small": "2000040",
-   "small_name": "フォーティナイナー系",
-   "type": "3000005",
-   "type_name": "米国型ミスプロ系",
-   "via": {
-    "name": "サウスヴィグラス",
-    "sire_id": "1996110138"
-   }
   },
   "2014105108": {
    "agree": 1.0,
@@ -12921,21 +12002,6 @@
    "type": "3000009",
    "type_name": "欧州型ミスプロ系"
   },
-  "2014106474": {
-   "from": "paternal",
-   "large": "1000011",
-   "large_name": "サンデー系",
-   "n": 0,
-   "name": "サンライズノヴァ",
-   "small": "2000045",
-   "small_name": "Dサンデー系",
-   "type": "3000001",
-   "type_name": "日本型サンデー系",
-   "via": {
-    "name": "ゴールドアリュール",
-    "sire_id": "1999106689"
-   }
-  },
   "2014110031": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -12961,21 +12027,6 @@
    "smartrc_code": "1120002595",
    "type": "3000005",
    "type_name": "米国型ミスプロ系"
-  },
-  "2015100318": {
-   "from": "paternal",
-   "large": "1000011",
-   "large_name": "サンデー系",
-   "n": 0,
-   "name": "アルクトス",
-   "small": "2000042",
-   "small_name": "Pサンデー系",
-   "type": "3000001",
-   "type_name": "日本型サンデー系",
-   "via": {
-    "name": "アドマイヤオーラ",
-    "sire_id": "2004102987"
-   }
   },
   "2015100969": {
    "agree": 1.0,
@@ -13237,21 +12288,6 @@
    "type": "3000007",
    "type_name": "欧州型ノーザンダンサー系"
   },
-  "2016102165": {
-   "from": "paternal",
-   "large": "1000011",
-   "large_name": "サンデー系",
-   "n": 0,
-   "name": "マスターフェンサー",
-   "small": "2000042",
-   "small_name": "Pサンデー系",
-   "type": "3000001",
-   "type_name": "日本型サンデー系",
-   "via": {
-    "name": "ジャスタウェイ",
-    "sire_id": "2009106461"
-   }
-  },
   "2016102179": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -13265,21 +12301,6 @@
    "type": "3000001",
    "type_name": "日本型サンデー系"
   },
-  "2016102273": {
-   "from": "paternal",
-   "large": "1000011",
-   "large_name": "サンデー系",
-   "n": 0,
-   "name": "モンブランテソーロ",
-   "small": "2000046",
-   "small_name": "ディープ系",
-   "type": "3000001",
-   "type_name": "日本型サンデー系",
-   "via": {
-    "name": "ダノンバラード",
-    "sire_id": "2008103548"
-   }
-  },
   "2016102280": {
    "agree": 1.0,
    "from": "smartrc_tables",
@@ -13292,21 +12313,6 @@
    "smartrc_code": "1120002558",
    "type": "3000003",
    "type_name": "米国型ノーザンダンサー系"
-  },
-  "2016104376": {
-   "from": "paternal",
-   "large": "1000010",
-   "large_name": "ミスプロ系",
-   "n": 0,
-   "name": "キングオブコージ",
-   "small": "2000039",
-   "small_name": "キングマンボ系",
-   "type": "3000009",
-   "type_name": "欧州型ミスプロ系",
-   "via": {
-    "name": "ロードカナロア",
-    "sire_id": "2008103552"
-   }
   },
   "2016104391": {
    "agree": 1.0,
@@ -13535,9 +12541,77 @@
   "000a0104d9": "2026-11-06",
   "000a011072": "2026-11-06",
   "000a012713": "2026-11-06",
+  "000a012ee8": "2026-11-06",
+  "000a0139ae": "2026-11-06",
+  "000a013d8b": "2026-11-06",
+  "000a01400d": "2026-11-06",
+  "000a014386": "2026-11-06",
+  "000a014576": "2026-11-06",
+  "000a014580": "2026-11-06",
+  "000a014592": "2026-11-06",
+  "000a0145ac": "2026-11-06",
+  "000a01462a": "2026-11-06",
+  "000a0149c7": "2026-11-06",
   "000a014fff": "2026-11-06",
   "000a015360": "2026-11-06",
+  "000a01538a": "2026-11-06",
+  "000a0155dd": "2026-11-06",
+  "000a016e9d": "2026-11-06",
+  "000a016ea1": "2026-11-06",
+  "000a0185b6": "2026-11-06",
+  "000a01906d": "2026-11-06",
+  "000a01a780": "2026-11-06",
+  "000a01a785": "2026-11-06",
+  "000a01a9d3": "2026-11-06",
+  "000a01b8e4": "2026-11-06",
+  "000a01b91e": "2026-11-06",
+  "000a01b95f": "2026-11-06",
+  "000a01b9d6": "2026-11-06",
+  "000a01ba53": "2026-11-06",
+  "000a01ba9c": "2026-11-06",
+  "000a01bb23": "2026-11-06",
+  "000a01bb7f": "2026-11-06",
+  "000a01bbb6": "2026-11-06",
+  "000a01bcfe": "2026-11-06",
+  "000a01be3f": "2026-11-06",
+  "000a01bf42": "2026-11-06",
+  "000a01bf6c": "2026-11-06",
+  "000a01bfcd": "2026-11-06",
+  "000a01c2a3": "2026-11-06",
+  "000a01c457": "2026-11-06",
   "000a01cd05": "2026-11-06",
-  "000a01fe88": "2026-11-06"
+  "000a01cd3a": "2026-11-06",
+  "000a01d135": "2026-11-06",
+  "000a01d4af": "2026-11-06",
+  "000a01db01": "2026-11-06",
+  "000a01e65b": "2026-11-06",
+  "000a01e6b1": "2026-11-06",
+  "000a01e731": "2026-11-06",
+  "000a01e747": "2026-11-06",
+  "000a01e75b": "2026-11-06",
+  "000a01eda8": "2026-11-06",
+  "000a01fe88": "2026-11-06",
+  "000a01ff43": "2026-11-06",
+  "000a0207d5": "2026-11-06",
+  "000a0209a0": "2026-11-06",
+  "000a02191f": "2026-11-06",
+  "000a021dcf": "2026-11-06",
+  "000a0265a6": "2026-11-06",
+  "000a0268ff": "2026-11-06",
+  "000a027164": "2026-11-06",
+  "000a02a00e": "2026-11-06",
+  "000a02c79b": "2026-11-06",
+  "2011101125": "2026-11-06",
+  "2013104055": "2026-11-06",
+  "2013105788": "2026-11-06",
+  "2013105995": "2026-11-06",
+  "2014104449": "2026-11-06",
+  "2014104469": "2026-11-06",
+  "2014105019": "2026-11-06",
+  "2014106474": "2026-11-06",
+  "2015100318": "2026-11-06",
+  "2016102165": "2026-11-06",
+  "2016102273": "2026-11-06",
+  "2016104376": "2026-11-06"
  }
 }
