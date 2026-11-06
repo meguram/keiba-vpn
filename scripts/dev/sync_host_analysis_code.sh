@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 開発 PC の分析コード（走法マップ・Best5・血統・事前計算）をホストへ揃える。ホストは git 管理ではないので、版（ANALYSIS_VERSION）を上げる・分析コードを直したら必ずこれで送る。
-#   bash scripts/ops/sync_host_analysis_code.sh          # 差分を表示するだけ
-#   bash scripts/ops/sync_host_analysis_code.sh --apply  # 差分を送り、ホストで試し計算（Best5・血統が出るか）まで確かめる
+#   bash scripts/dev/sync_host_analysis_code.sh          # 差分を表示するだけ
+#   bash scripts/dev/sync_host_analysis_code.sh --apply  # 差分を送り、ホストで試し計算（Best5・血統が出るか）まで確かめる
 # 送る対象は git で追跡している分析関連のファイルだけ（他セッションの作業中ファイルには触れない）。費用: ホスト内の計算と ssh のみ（GCS・GCP は読まない）。
 set -euo pipefail
 cd "$(dirname "$0")/../.."
