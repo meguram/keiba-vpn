@@ -75,6 +75,23 @@ export type RunningMapHorse = {
   last_run_date: string | null;
   /** このレースの着順（結果が出ている馬だけ。未確定・中止は null） */
   finish_position?: number | null;
+  /** 血統から見た傾向（性別・父・母父だけから。モデルの無い環境では無い） */
+  ped?: RunningMapPed | null;
+};
+
+/** 観点ごとに [期待値, 80%区間の下, 上] */
+export type RunningMapPed = { sex: string; sire: string | null; damsire: string | null; has_damsire: boolean; v: Record<string, [number, number, number]> };
+
+export type RunningMapPedTrait = {
+  key: string; label: string; hint: string;
+  /** pct=割合 / m=メートル / q=0〜1 / n=数値 */
+  fmt: "pct" | "m" | "q" | "n";
+  /** 全体の平均 */
+  base: number | null;
+  /** 上位・下位 1 割の馬の平均が全体の平均から離れる幅（目盛り） */
+  ref: number | null;
+  /** 新しい馬での当てはまり（観測 R²。血統でどれだけ言えるか） */
+  r2: number | null;
 };
 
 export type RunningMapFigure = {
@@ -96,6 +113,8 @@ export type RunningMapFigure = {
   day_trend?: RunningMapDayTrend | null;
   /** 適性が合う 5 頭（コース特注ゾーン＋馬場特注ゾーンの色から。1 パターン） */
   best5?: RunningMapBest5 | null;
+  /** 血統から見た傾向の観点（各馬の ped.v のキー） */
+  ped_traits?: RunningMapPedTrait[] | null;
   /** 道悪（稍重以上）切替の地図。同じ形（day_trend は無い）。道悪の標本が足りず作れなければ無い */
   wet?: RunningMapFigure | null;
 };

@@ -13,7 +13,7 @@ from src.research.race import running_map as rm
 from src.research.race_analysis.base import ModuleOutput, RaceContext
 
 # 図に要る馬の項目（それ以外は保存しない）
-_HORSE_KEYS = ("horse_id", "horse_number", "horse_name", "x", "y", "group", "percentiles", "n_runs", "n_lap_runs", "axis_runs", "from_prior", "estimated", "own_weight", "extras", "similar", "last_run_date", "finish_position")
+_HORSE_KEYS = ("horse_id", "horse_number", "horse_name", "x", "y", "group", "percentiles", "n_runs", "n_lap_runs", "axis_runs", "from_prior", "estimated", "own_weight", "extras", "similar", "last_run_date", "finish_position")   # 血統の傾向は ped（下で付ける）
 
 
 def _load_result(race_id: str) -> dict | None:
@@ -62,10 +62,20 @@ class RunningMapModule:
         out = rm.build_running_map([e for e in ctx.entries if e.get("horse_id")], ctx.race_id, conditions, load_result=_load_result)
         key_of = {str(e.get("horse_id")): e["key"] for e in ctx.entries if e.get("horse_id")}
         finish = finish_positions(_load_result(ctx.race_id))
+        try:    # 血統から見た傾向（性別・父・母父だけから。モデルの無い環境・失敗時は付けない。補助なので地図は出す）
+            from src.research.race import running_map_ped as rmp
+
+            ped = rmp.pedigree_for(ctx.entries)
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception("血統の傾向の計算に失敗: %s", ctx.race_id)
+            ped = None
+        ped_by_horse = (ped or {}).get("horses") or {}
 
         def fig(o: dict[str, Any]) -> dict[str, Any]:
             horses = [{**{k: h.get(k) for k in _HORSE_KEYS if k != "finish_position"}, "key": key_of.get(str(h.get("horse_id"))),
-                       "finish_position": finish.get(str(h.get("horse_id")))} for h in o["horses"]]
+                       "finish_position": finish.get(str(h.get("horse_id"))), "ped": ped_by_horse.get(str(h.get("horse_id")))} for h in o["horses"]]
             unmapped = [{"key": key_of.get(str(u.get("horse_id"))), "horse_name": u.get("horse_name"), "horse_number": u.get("horse_number"),
                          "reason": u.get("reason")} for u in o["unmapped"]]
             return {
@@ -81,6 +91,7 @@ class RunningMapModule:
                 "course_map": o.get("course_map"),
                 "day_trend": o.get("day_trend"),
                 "best5": o.get("best5"),
+                "ped_traits": (ped or {}).get("traits"),
             }
 
         figure: dict[str, Any] = fig(out)
