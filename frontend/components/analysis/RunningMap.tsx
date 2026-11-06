@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { bracketChipStyle } from "@/lib/bracket";
-import type { AnalysisEntry, RunningMapAxis, RunningMapDayTrend, RunningMapExtra, RunningMapFigure, RunningMapHorse } from "@/lib/raceAnalysis";
+import type { AnalysisEntry, RunningMapAxis, RunningMapBest5, RunningMapBest5Mode, RunningMapDayTrend, RunningMapExtra, RunningMapFigure, RunningMapHorse } from "@/lib/raceAnalysis";
 
 /** グループの色（A〜E） */
 const GROUP_COLORS = ["#58a6ff", "#f0883e", "#3fb950", "#d2a8ff", "#f778ba"];
@@ -106,6 +106,7 @@ function RunningMapView({ figure, entries }: { figure: RunningMapFigure; entries
   const day = figure.day_trend ?? null;
   const [showCourse, setShowCourse] = useState(true);
   const [showDay, setShowDay] = useState(true);
+  const [b5mode, setB5mode] = useState<RunningMapBest5Mode | null>(null);
   if (figure.status !== "ok") {
     return <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>走法データのある馬が少なく、図を作れません。</p>;
   }
@@ -265,6 +266,7 @@ function RunningMapView({ figure, entries }: { figure: RunningMapFigure; entries
       </div>
 
       <div>
+      {figure.best5 && <Best5Panel b5={figure.best5} mode={b5mode ?? figure.best5.default} onMode={setB5mode} hs={hs} onPick={(h) => setSel(h.key ?? h.horse_id ?? null)} />}
       {figure.course_map && <CourseAxes cm={figure.course_map} />}
       {day && <DayTrend day={day} colorKey={colorKey} onColor={(k) => setColorKey(colorKey === k ? "group" : k)} />}
       {picked && <HorseDetail h={picked} axes={figure.axes} topKeys={topKeys} extraAxes={figure.extra_axes ?? []} bracket={bracketOf.get(picked.key ?? "") ?? null} onClose={() => setSel(null)}
@@ -330,6 +332,57 @@ function ColorControl({ axes, colorKey, onChange, topKeys }: { axes: RunningMapA
           <span><span aria-hidden style={{ display: "inline-block", width: 8, height: 8, borderRadius: 4, background: AXIS_NA, marginRight: 3 }} />不明</span>
         </span>
       )}
+    </div>
+  );
+}
+
+const B5_LABEL: Record<RunningMapBest5Mode, string> = { both: "両方", course: "コース", day: "馬場" };
+const B5_SRC: Record<string, string> = { course: "コース特注ゾーン", day: "馬場特注ゾーン" };
+
+/** Best5: 地図の上で、このコース・今日の馬場に走法が合う順の 5 頭。結果が出ていれば実際の着順を並べる */
+function Best5Panel({ b5, mode, onMode, hs, onPick }: { b5: RunningMapBest5; mode: RunningMapBest5Mode; onMode: (m: RunningMapBest5Mode) => void; hs: RunningMapHorse[]; onPick: (h: RunningMapHorse) => void }) {
+  const cur = b5.modes[mode] ?? b5.modes[b5.default];
+  if (!cur) return null;
+  const byNo = new Map(hs.map((h) => [h.horse_number, h]));
+  const rows = cur.picks.map((p) => ({ p, h: byNo.get(p.horse_number) ?? null }));
+  const done = hs.some((h) => h.finish_position != null);
+  const hit = rows.filter((r) => r.h?.finish_position != null && r.h.finish_position <= 3).length;
+  const top3 = hs.filter((h) => h.finish_position != null && h.finish_position <= 3).sort((a, b) => (a.finish_position ?? 0) - (b.finish_position ?? 0));
+  const inPicks = new Set(cur.picks.map((p) => p.horse_number));
+  const modes = (["both", "course", "day"] as RunningMapBest5Mode[]).filter((m) => b5.modes[m]);
+  return (
+    <div style={{ fontSize: 12, margin: "0 0 8px", padding: "6px 8px", borderRadius: 8, border: "1px solid var(--border)" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+        <b>走法が合う Best5</b>
+        {modes.map((m) => (
+          <button key={m} type="button" onClick={() => onMode(m)} aria-pressed={m === mode}
+            style={{ minHeight: 28, padding: "0 10px", borderRadius: 999, cursor: "pointer", fontSize: 12, color: "var(--text)",
+              border: `1px solid ${m === mode ? "var(--text)" : "var(--border)"}`, background: m === mode ? "rgba(139,148,158,0.2)" : "transparent" }}>{B5_LABEL[m]}</button>
+        ))}
+      </div>
+      {cur.fallback && <div style={{ color: "var(--text-dim)", marginTop: 2 }}>{mode === "day" ? "馬場特注ゾーンがまだ無いので" : "片方のゾーンしか無いので"}{B5_SRC[cur.fallback]}で選んでいます。</div>}
+      <ol style={{ listStyle: "none", margin: "4px 0 0", padding: 0 }}>
+        {rows.map(({ p, h }) => {
+          const fp = h?.finish_position ?? null;
+          return (
+            <li key={p.rank} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "2px 0", cursor: h ? "pointer" : "default" }} onClick={() => h && onPick(h)}>
+              <span style={{ width: 18, color: "var(--text-dim)" }}>{p.rank}</span>
+              <span style={{ flex: 1 }}>{p.horse_number ?? "?"} {h?.horse_name ?? ""}</span>
+              {done && <span style={{ fontWeight: fp != null && fp <= 3 ? 800 : 400, color: fp != null && fp <= 3 ? "#3fb950" : "var(--text-dim)" }}>{fp != null ? `${fp}着` : "着外・中止"}</span>}
+            </li>
+          );
+        })}
+      </ol>
+      {done && (
+        <div style={{ color: "var(--text-dim)", marginTop: 3 }}>
+          5 頭中 <b style={{ color: "var(--text)" }}>{hit}</b> 頭が 3 着以内。実際の 1〜3 着: {top3.map((h) => `${h.finish_position}着 ${h.horse_number ?? "?"}${h.horse_name ?? ""}${inPicks.has(h.horse_number) ? "（Best5）" : ""}`).join(" / ")}
+        </div>
+      )}
+      <div style={{ color: "var(--text-dim)", marginTop: 3 }}>
+        地図の背景の色（コース特注ゾーン・馬場特注ゾーン）が濃い所にいる馬の順です。人気は考えていません。
+        2025〜2026 年の約 1,500 レースで検証すると、5 頭中の 3 着以内は平均約 1.6 頭（でたらめな 5 頭は約 1.1 頭、人気上位 5 頭は約 2.2 頭）。
+        人気で説明できる分を除いた上乗せはごくわずかで、コース・馬場・両方の差は誤差の範囲です。予想の目安の 1 つとして見てください。
+      </div>
     </div>
   );
 }

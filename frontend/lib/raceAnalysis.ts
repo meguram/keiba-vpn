@@ -94,8 +94,16 @@ export type RunningMapFigure = {
   course_map?: RunningMapCourse | null;
   /** その日（同じ競馬場・同じ芝ダート、このレースより前）の馬場傾向。前のレースが無ければ null */
   day_trend?: RunningMapDayTrend | null;
+  /** 適性が合う 5 頭（コース特注ゾーン・馬場特注ゾーンの色から）。fallback は、そのゾーンが無くて別のもので選んだとき */
+  best5?: RunningMapBest5 | null;
   /** 道悪（稍重以上）切替の地図。同じ形（day_trend は無い）。道悪の標本が足りず作れなければ無い */
   wet?: RunningMapFigure | null;
+};
+
+export type RunningMapBest5Mode = "both" | "course" | "day";
+export type RunningMapBest5 = {
+  default: RunningMapBest5Mode;
+  modes: Partial<Record<RunningMapBest5Mode, { fallback: "course" | "day" | null; picks: { rank: number; horse_number: number | null; horse_id: string | null; score: number }[] }>>;
 };
 
 export type RunningMapCourse = {
