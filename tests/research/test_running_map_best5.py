@@ -1,6 +1,4 @@
-import numpy as np
-
-from src.research.race.running_map_best5 import best5
+from src.research.race.running_map_best5 import W_DAY, best5
 
 N = 10
 EXT = {"n": N, "x": [0.0, 9.0], "y": [0.0, 9.0]}
@@ -14,50 +12,36 @@ def _grid(f):
     return [f(i, j) for i in range(N) for j in range(N)]
 
 
+def _nums(r):
+    return [p["horse_number"] for p in r["picks"]]
+
+
 def test_none_without_grids():
     assert best5(_horses(8), EXT, None, None) is None
     assert best5([], EXT, [1.0] * 100, None) is None
-
-
-def test_course_ranks_by_lift_and_returns_five():
-    hs = _horses(8)
-    lift = _grid(lambda i, j: 0.5 + 0.1 * i)          # x が大きいほど倍率が高い
-    r = best5(hs, EXT, lift, None)
-    nums = [p["horse_number"] for p in r["modes"]["course"]["picks"]]
-    assert len(nums) == 5 and nums[0] == 8 and nums == sorted(nums, reverse=True)
-    assert r["default"] == "both" and r["modes"]["both"]["fallback"] == "course"
-    assert r["modes"]["day"]["fallback"] == "course"
-
-
-def test_day_mode_falls_back_to_course_without_day_grid_not_to_list_order():
-    hs = _horses(8)
-    lift = _grid(lambda i, j: 1.5 - 0.1 * i)          # x が小さいほど高い
-    r = best5(hs, EXT, lift, None)
-    assert [p["horse_number"] for p in r["modes"]["day"]["picks"]] == [p["horse_number"] for p in r["modes"]["course"]["picks"]]
-    assert r["modes"]["day"]["picks"][0]["horse_number"] == 1
-
-
-def test_flat_day_grid_ties_break_by_course_lift_then_horse_number():
-    hs = _horses(8)
-    flat = [1.0] * (N * N)
-    lift = _grid(lambda i, j: 0.5 + 0.1 * i)
-    r = best5(hs, EXT, lift, flat)
-    assert r["modes"]["day"]["fallback"] is None
-    assert [p["horse_number"] for p in r["modes"]["day"]["picks"]][0] == 8       # 並び順（馬番 1 から）にならない
-    r2 = best5(hs, EXT, flat, flat)
-    assert [p["horse_number"] for p in r2["modes"]["both"]["picks"]] == [1, 2, 3, 4, 5]   # 全部同点なら馬番
-
-
-def test_both_adds_day_and_deterministic():
-    hs = _horses(8)
-    course = _grid(lambda i, j: 1.0)
-    day = _grid(lambda i, j: 1.0 + 0.1 * (i == 3))
-    a = best5(hs, EXT, course, day)
-    b = best5(hs, EXT, course, day)
-    assert a == b
-    assert a["modes"]["both"]["picks"][0]["horse_number"] == 4
-    assert a["modes"]["both"]["fallback"] is None
-
-
-def test_wrong_size_grid_ignored():
     assert best5(_horses(8), EXT, [1.0] * 5, None) is None
+
+
+def test_course_only_ranks_by_lift():
+    r = best5(_horses(8), EXT, _grid(lambda i, j: 0.5 + 0.1 * i), None)
+    assert len(r["picks"]) == 5 and r["source"] == "course" and _nums(r) == [8, 7, 6, 5, 4]
+
+
+def test_flat_day_grid_ties_break_by_course_then_horse_number_not_list_order():
+    flat = [1.0] * (N * N)
+    r = best5(_horses(8), EXT, _grid(lambda i, j: 0.5 + 0.1 * i), flat)
+    assert r["source"] == "both" and _nums(r)[0] == 8
+    assert _nums(best5(_horses(8), EXT, flat, flat)) == [1, 2, 3, 4, 5]
+
+
+def test_day_zone_adds_with_weight_and_is_deterministic():
+    course = _grid(lambda i, j: 1.0)
+    day = _grid(lambda i, j: 1.0 + 0.5 * (i == 3))
+    a = best5(_horses(8), EXT, course, day)
+    assert a == best5(_horses(8), EXT, course, day)
+    assert _nums(a)[0] == 4 and a["w_day"] == W_DAY
+
+
+def test_day_only():
+    r = best5(_horses(8), EXT, None, _grid(lambda i, j: 1.0 + 0.1 * i))
+    assert r["source"] == "day" and _nums(r)[0] == 8

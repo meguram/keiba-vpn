@@ -1,9 +1,12 @@
-"""走法マップの Best5: 地図の位置（コース特注ゾーン・馬場特注ゾーンの色）から、適性が合う順に 5 頭を選ぶ。
+"""走法マップの Best5: 地図の位置（コース特注ゾーン・馬場特注ゾーンの色）から、適性が合う順に 5 頭を選ぶ（1 パターンだけ）。
 
-方式は 2025・2026 年の外挿（地図は過去のレースだけで作り、後のレースで評価。計約 1,500 レース）で比べて決めた。
-- コース / 馬場 / 両方は、人気を超えた好走でほぼ同じ（誤差の範囲）。3 着内の的中は「コース（平滑）」「両方（平滑）」が最良。
-- 格子は隣り合う格子と混ぜて（平滑）から読む。1 位が当たると 2〜3 位も当たりやすい、という偏りは見つからなかったので近さの加点はしない。
-- 馬場特注ゾーンが無いレースは、同点のまま並びの順で選ぶと人気馬に偏るので、コース→中立の順に決まった規則で選ぶ。
+得点 = log(コース特注ゾーンの倍率) + W_DAY * log(馬場特注ゾーンの倍率)。倍率は隣り合う格子と混ぜて（平滑）から読む。
+2025・2026 年の外挿（地図は過去のレースだけで作り、後のレースで評価。計 1,565 レース）で配分 W_DAY を調整した。
+- 定数の配分は W_DAY=0〜4 でほぼ平らで、人気を除いた上乗せは 0.5 が最大、3 着内の的中も 0〜1 が最良（2 以上は下がる）。
+- クラス・レース番号・当日のレース数・芝ダ・地図の水準で配分を変えても、年をまたいだ検証では定数より良くならなかった（採用しない）。
+  当日のデータ量は、馬場特注ゾーンの倍率が少ないほど 1（中立）に寄る作りで、すでに効いている。
+- 近さの加点・人気込みは効果が無かった。馬場特注ゾーンが無いレースは、コースだけで選ぶ。
+同点は「コースの倍率（平滑なし）→ 馬番」で決め、並びの順（≒人気順）には頼らない。
 """
 from __future__ import annotations
 
@@ -11,8 +14,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-MODES = ("both", "course", "day")
-DEFAULT_MODE = "both"
+W_DAY = 0.5          # 馬場特注ゾーンの配分（コースを 1 として）
 K = 5
 SIGMA = 1.5          # 格子の平滑（格子幅の何個分か）
 LIFT_CLIP = (0.2, 5.0)
@@ -41,10 +43,7 @@ def _log(v: np.ndarray) -> np.ndarray:
 
 
 def best5(horses: list[dict], extent: Optional[dict], course_lift: Optional[list], day_lift: Optional[list]) -> Optional[dict[str, Any]]:
-    """モードごとの Best5。作れないモードは入れない。どちらの格子も無ければ None。
-
-    返り値: {"default": "both", "modes": {mode: {"fallback": None|"course"|"neutral", "picks": [{"rank","horse_number","horse_id","score"}]}}}
-    同点は「コースの倍率（平滑なし）→ 馬番」の順で決める（並びの順や人気には頼らない）。"""
+    """{"w_day", "source": "both"|"course"|"day", "picks": [{"rank","horse_number","horse_id","score"}]}。どちらの格子も無ければ None。"""
     if not horses or not extent or (not course_lift and not day_lift):
         return None
     xy = np.array([[h["x"], h["y"]] for h in horses], float)
@@ -53,23 +52,11 @@ def best5(horses: list[dict], extent: Optional[dict], course_lift: Optional[list
     c_raw = _smooth_lookup(course_lift, extent, xy, 0)
     d_s = _smooth_lookup(day_lift, extent, xy)
     have_c, have_d = bool(np.isfinite(c_s).any()), bool(np.isfinite(d_s).any())
-    tie = np.nan_to_num(c_raw, nan=1.0)
-
-    def one(score: np.ndarray) -> list[dict[str, Any]]:
-        order = np.lexsort((nums, -tie, -np.round(score, 9)))[:K]
-        return [{"rank": r + 1, "horse_number": horses[i].get("horse_number"), "horse_id": horses[i].get("horse_id"), "score": round(float(score[i]), 4)}
-                for r, i in enumerate(order)]
-
+    if not (have_c or have_d):
+        return None
     zero = np.zeros(len(horses))
-    log_c = _log(np.where(np.isfinite(c_s), c_s, 1.0)) if have_c else zero
-    log_d = _log(np.where(np.isfinite(d_s), d_s, 1.0)) if have_d else zero
-    modes: dict[str, Any] = {}
-    if have_c or have_d:
-        modes["both"] = {"fallback": None if (have_c and have_d) else ("course" if have_c else "day"), "picks": one(log_c + log_d)}
-    if have_c:
-        modes["course"] = {"fallback": None, "picks": one(log_c)}
-    if have_d:
-        modes["day"] = {"fallback": None, "picks": one(log_d)}
-    elif have_c:
-        modes["day"] = {"fallback": "course", "picks": one(log_c)}
-    return {"default": DEFAULT_MODE, "modes": modes} if modes else None
+    score = (_log(np.where(np.isfinite(c_s), c_s, 1.0)) if have_c else zero) + (W_DAY * _log(np.where(np.isfinite(d_s), d_s, 1.0)) if have_d else zero)
+    order = np.lexsort((nums, -np.nan_to_num(c_raw, nan=1.0), -np.round(score, 9)))[:K]
+    picks = [{"rank": r + 1, "horse_number": horses[i].get("horse_number"), "horse_id": horses[i].get("horse_id"), "score": round(float(score[i]), 4)}
+             for r, i in enumerate(order)]
+    return {"w_day": W_DAY, "source": "both" if (have_c and have_d) else ("course" if have_c else "day"), "picks": picks}
