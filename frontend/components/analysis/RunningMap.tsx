@@ -531,8 +531,9 @@ function PedSection({ h, traits }: { h: RunningMapHorse; traits: RunningMapPedTr
   return (
     <div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px solid var(--border)" }}>
       <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>血統から見た予想</div>
-      <div style={{ fontSize: 11, color: "var(--text-dim)", margin: "1px 0 6px" }}>
-        {p.sex}・父 {p.sire ?? "不明"}・母父 {p.damsire ?? "不明"} だけから出した予想です（馬の走りの実測とは別）。{!p.has_damsire && "母父が不明なため幅が広めです。"}
+      <div style={{ fontSize: 11, color: "var(--text-dim)", margin: "1px 0 6px", lineHeight: 1.5 }}>
+        <div>父: {p.sire ?? "不明"}</div>
+        <div>母父: {p.damsire ?? "不明"}</div>
       </div>
       <div style={{ display: "grid", gap: 6 }}>
         {dirt && (() => {
