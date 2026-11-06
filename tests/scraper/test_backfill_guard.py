@@ -152,7 +152,41 @@ def test_aimd_slows_on_bad_and_recovers(tmp_path, monkeypatch):
     assert g.extra_delay == bg.AIMD_FIRST_DELAY and slept == [bg.AIMD_FIRST_DELAY]
     for _ in range(bg.AIMD_CLEAN_STEP):
         g("https://db.netkeiba.com/race/1/", _Resp(200, 0.3))
-    assert g.extra_delay == bg.AIMD_FIRST_DELAY - bg.AIMD_RECOVER_SEC   # 加法的に戻る
+    assert g.extra_delay == bg.AIMD_FIRST_DELAY / 2                  # 悪化なしが続けば半分に戻る
+
+
+def _timed_guard(tmp_path, now):
+    return bg.NightGuard(cap=10_000, window="00:00-23:59", clock=lambda: now[0], state_path=tmp_path / "s.json", sleep=lambda s: None,
+                         pace_per_hour=0, yield_to_others=False)
+
+
+def test_aimd_single_slow_response_does_not_slow_down(tmp_path):
+    now = [_at(3)]
+    g = _timed_guard(tmp_path, now)
+    for _ in range(bg.LATENCY_WINDOW):
+        g("https://db.netkeiba.com/race/1/", _Resp(200, 0.3))
+    g("https://db.netkeiba.com/race/1/", _Resp(200, 5.0))           # 単発の遅れ
+    assert g.extra_delay == 0
+    for _ in range(bg.AIMD_SLOW_HITS - 1):
+        g("https://db.netkeiba.com/race/1/", _Resp(200, 5.0))       # 直近の多数が遅い → 悪化
+    assert g.extra_delay == bg.AIMD_FIRST_DELAY
+
+
+def test_aimd_recovers_by_time_from_max(tmp_path):
+    """待ちが上限（60 秒）でも、1 時間あたりの件数が少なくても時間で戻り、張り付かない（2026-10-31 の 60 件/時の再発防止）。"""
+    from datetime import timedelta
+
+    now = [_at(3)]
+    g = _timed_guard(tmp_path, now)
+    for _ in range(bg.LATENCY_WINDOW):
+        g("https://db.netkeiba.com/race/1/", _Resp(200, 0.3))
+    g.extra_delay = bg.AIMD_MAX_DELAY
+    g._clean_since = now[0]
+    start = now[0]
+    while g.extra_delay > 0 and now[0] - start < timedelta(hours=1):
+        now[0] += timedelta(seconds=g.extra_delay + 1)              # 待ちのぶんだけ時間が進む（1 件/分 程度から）
+        g("https://db.netkeiba.com/race/1/", _Resp(200, 0.3))
+    assert g.extra_delay == 0 and now[0] - start <= timedelta(minutes=20)   # 旧方式では約 100 時間かかった
 
 
 def test_constant_pace_and_yield(tmp_path):
