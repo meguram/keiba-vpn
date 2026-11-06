@@ -83,8 +83,21 @@ def fingerprint(card: dict, entries: list[dict[str, Any]], asof: dict[str, str |
     return hashlib.sha1(json.dumps(doc, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:16]
 
 
+def degraded_reasons(payload: dict[str, Any]) -> list[str]:
+    """計算結果に欠けがあれば理由を返す（分析コードの古さ・モデルの欠け・モジュールの失敗）。補助の計算は例外を握りつぶして地図だけ出すので、ここで拾う。"""
+    out: list[str] = []
+    for m in payload.get("modules") or []:
+        if m.get("status") == "error":
+            out.append(f"module:{m.get('id')}")
+        out += [f"{m.get('id')}:{e}" for e in ((m.get("figure") or {}).get("build_errors") or [])]
+    return out
+
+
 def precompute_race(storage: Any, race_id: str, *, force: bool = False, asof: dict[str, str | None] | None = None) -> str:
-    """1 レースぶんを計算して保存する。'written' / 'unchanged' / 'no_entries' を返す。"""
+    """1 レースぶんを計算して保存する。'written' / 'unchanged' / 'no_entries' / 'degraded' を返す。
+
+    'degraded' = 補助の計算（Best5・血統など）が欠けた。保存済みの正常な結果があればそれを残し（欠けた結果で上書きしない）、
+    無ければ欠けた結果を指紋なしで保存して次の周回でやり直す。"""
     asof = asof if asof is not None else _asof_cache()
     card, rows = _load_card(storage, race_id)
     entries, _ = _normalize_entries(rows)
@@ -97,16 +110,24 @@ def precompute_race(storage: Any, race_id: str, *, force: bool = False, asof: di
     payload = analyze_race(storage, race_id)
     if payload.get("status") != "ok":
         return "no_entries"
-    payload["fingerprint"] = fp
+    bad = degraded_reasons(payload)
+    if bad:
+        logger.error("分析の事前計算が欠けた結果になりました（ホストの分析コード・モデルを確認）: %s %s", race_id, bad)
+        if old and not old.get("degraded"):
+            return "degraded"
+        payload["degraded"] = bad
+        payload["fingerprint"] = "degraded"
+    else:
+        payload["fingerprint"] = fp
     payload["version"] = ANALYSIS_VERSION
     payload["computed_at"] = datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%dT%H:%M:%S+09:00")   # ホストは UTC。画面は JST で見せる
     store.write(race_id, payload)
-    return "written"
+    return "degraded" if bad else "written"
 
 
 def precompute_races(storage: Any, race_ids: list[str], *, force: bool = False) -> dict[str, int]:
     asof = _asof_cache()
-    out = {"written": 0, "unchanged": 0, "no_entries": 0, "error": 0}
+    out = {"written": 0, "unchanged": 0, "no_entries": 0, "degraded": 0, "error": 0}
     for rid in race_ids:
         try:
             out[precompute_race(storage, rid, force=force, asof=asof)] += 1

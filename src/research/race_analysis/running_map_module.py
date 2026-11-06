@@ -61,6 +61,9 @@ class RunningMapModule:
         }
         out = rm.build_running_map([e for e in ctx.entries if e.get("horse_id")], ctx.race_id, conditions, load_result=_load_result)
         key_of = {str(e.get("horse_id")): e["key"] for e in ctx.entries if e.get("horse_id")}
+        build_errors: list[str] = list(out.get("build_errors") or [])
+        if out.get("status") == "ok" and "best5" not in out:    # Best5 の計算自体が走っていない（分析コードが古い）
+            build_errors.append("best5_missing")
         finish = finish_positions(_load_result(ctx.race_id))
         try:    # 血統から見た傾向（性別・父・母父だけから。モデルの無い環境・失敗時は付けない。補助なので地図は出す）
             from src.research.race import running_map_ped as rmp
@@ -71,6 +74,10 @@ class RunningMapModule:
 
             logging.getLogger(__name__).exception("血統の傾向の計算に失敗: %s", ctx.race_id)
             ped = None
+            build_errors.append("ped")
+        else:
+            if rmp.model_expected() and rmp._reference() is None:
+                build_errors.append("ped_reference")
         ped_by_horse = (ped or {}).get("horses") or {}
 
         def fig(o: dict[str, Any]) -> dict[str, Any]:
@@ -95,6 +102,7 @@ class RunningMapModule:
             }
 
         figure: dict[str, Any] = fig(out)
+        figure["build_errors"] = build_errors or None
         figure["wet"] = fig(out["wet"]) if out.get("wet") else None
         notes = [
             "各馬の直近 10 走（新しい走ほど重く数える）から走り方を数値にしています。実測ラップ（馬ごとの 200m ラップ）のある走だけが対象で、"

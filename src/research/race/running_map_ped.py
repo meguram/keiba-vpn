@@ -55,6 +55,16 @@ def _reference() -> dict | None:
         return None
 
 
+def model_expected() -> bool:
+    """この環境に血統モデルが置かれているか（置かれているのに欄が付かないのは異常。無い環境では付けないのが正常）。"""
+    try:
+        from src.pipeline.features.tp85_pedprior import MODEL_DIR
+
+        return (MODEL_DIR / "manifest.json").exists()
+    except Exception:
+        return False
+
+
 def clear_cache() -> None:
     _load.cache_clear()
     _reference.cache_clear()
