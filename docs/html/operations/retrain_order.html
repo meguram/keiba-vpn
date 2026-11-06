@@ -40,6 +40,7 @@ pre { background:var(--code); border:1px solid var(--border); border-radius:8px;
 <h2>2. 依存関係（上が先）— 親モデルに実際に入るものだけを区別</h2>
 <p class="sub">ホストの本番バンドル <code>final_v6e/bundle_v6_2025</code> の特徴量 1,231 列を、列名ごとに出どころの群へ割り当てて確認した（<code>serving_v4/v5/v6</code> の群の対応で突き合わせ）。「データとして持っている」ことと「親モデルの列になっている」ことは別なので、4 種類に分けて書く。</p>
 <h3>2.1 チャート（上流 → 下流）</h3>
+<!-- RETRAIN-STATUS:BEGIN --><div class="box"><b>再学習の状態</b>（2026-11-06 12:13 更新・9/19 段）: ▶ 学習中: <b>s9 [I] 親モデルのメンバー OOF とアンサンブルの重み</b>（2026-11-06 12:02 開始）<br/><span class="muted">チャートの箱の下に各段の状態（✔ 完了・▶ 学習中・・ 未着手・✘ 失敗・■ 判断待ち・－ 対象外）。状態は <code>retrain_ctl.py</code> が記録のたびに書き直す（<code>retrain_ctl.py html</code> で手動更新）。</span></div><!-- RETRAIN-STATUS:END -->
 <div class="legend">
 <span><i class="ln thick"></i>親モデルの列になる</span>
 <span><i class="ln thin"></i>前段 S3 の入力になるだけ</span>
@@ -99,6 +100,21 @@ flowchart TB
   linkStyle 1,2,3,4,6,7 stroke:#7aa9ff,stroke-width:1.5px;
   linkStyle 5,8,9,10,11 stroke:#4ade80,stroke-width:3px;
   linkStyle 12 stroke:#e6ecff,stroke-width:3px;
+
+  %% STATUS:BEGIN（scripts/dev/retrain_ctl.py が書く。手で直さない）
+  classDef st_running stroke:#fb923c,stroke-width:5px;
+  classDef st_bad stroke:#f87171,stroke-width:5px;
+  DATA["<b>入力データ</b><br/>出馬表・馬柱・結果<br/>血統・馬主・追い切り<br/><span style='color:#4ade80;font-weight:700'>✔ 完了</span>"]
+  POS["位置取り予想<br/><span style='color:#4ade80;font-weight:700'>✔ 完了</span>"]
+  EASE["追走難度 v2<br/><span style='color:#4ade80;font-weight:700'>✔ 完了</span>"]
+  LAP["ラップ予想<br/><span style='color:#4ade80;font-weight:700'>✔ 完了</span>"]
+  S3["<b>前段 S3（e）</b><br/>入力 275 列<br/>出力 3 列<br/><span style='color:#4ade80;font-weight:700'>✔ 完了</span>"]
+  MEGU["めぐ指数の履歴 RB<br/>16 列<br/><span style='color:#4ade80;font-weight:700'>✔ 完了</span>"]
+  PARENT["<b>親モデル</b><br/>7 メンバー × 5 seed<br/>1,231 列<br/><span style='color:#fb923c;font-weight:700'>▶ 学習中：s9 親モデルのメンバー OOF とア…</span>"]
+  class PARENT st_running;
+  POST["確率の較正 → 期待値の較正<br/>→ 印 → 買い目<br/><span style='color:#9aa7c7;font-weight:700'>・ 未着手</span>"]
+  DISP["<b>画面の表示だけ</b><br/>想定めぐ指数・成長指数<br/>展開タイプ・ペース予測<br/><span style='color:#9aa7c7;font-weight:700'>－ 対象外</span>"]
+  %% STATUS:END
 </div>
 
 <p class="sub">緑の太線 = 親モデルの列になる / 青の細線 = 前段 S3 や補助ヘッドへの入力（親モデルの列にはならない）。左の枠（位置取り予想・追走難度 v2・ラップ予想）は、親モデルに直接の列を持たず、前段 S3 の入力としてだけ使われる。補助ヘッドの入力は基本 175 列。めぐ指数・血統・位置取り予想・追走難度・ラップ予想の入力も同じ入力データだが、図では省いた。1,142 列 = 1,231 − 補助 27 − S3 3 − PX 43 − RB 16（内訳は §2.2）。</p>

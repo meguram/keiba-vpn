@@ -54,6 +54,114 @@ def load_plan() -> dict:
     return json.loads(plan_path().read_text(encoding="utf-8"))
 
 
+# ── retrain_order.html のチャートに状態の印を付ける ─────────────────────────
+# チャート（Mermaid）の箱 → その箱を作る段。印は箱の文字の末尾に足し、実行中は橙・失敗/止めは赤の枠にする。
+# 書き換えるのは目印（RETRAIN-STATUS / %% STATUS）で囲んだ範囲だけ。手で書いた部分には触らない。
+NODE_STEPS = {"DATA": ["s0"], "POS": ["s3"], "EASE": ["s3"], "LAP": ["s4"], "S3": ["s7"], "MEGU": ["s8"],
+              "PARENT": ["s9", "s10", "s11", "s12"], "POST": ["s13", "s14", "s15", "s16", "s17"], "DISP": ["s2", "s5", "s6"]}
+_BADGE = {"running": ("▶ 学習中", "#fb923c"), "failed": ("✘ 失敗", "#f87171"), "blocked": ("■ 判断待ち", "#f87171"),
+          "done": ("✔ 完了", "#4ade80"), "skipped": ("－ 対象外", "#9aa7c7"), "pending": ("・ 未着手", "#9aa7c7"), "partial": ("◐ 途中", "#fbbf24")}
+
+
+def order_html_path() -> Path:
+    env = os.environ.get("RETRAIN_ORDER_HTML")
+    if env:
+        return Path(env)
+    repo = Path(os.environ.get("KEIBA_REPO") or "/home/jovyan/work/keiba-vpn")
+    for c in (repo / "docs/html/operations/retrain_order.html", HERE.parents[1] / "docs/html/operations/retrain_order.html"):
+        if c.exists():
+            return c
+    return repo / "docs/html/operations/retrain_order.html"
+
+
+def node_status(steps: list[str], state: dict) -> tuple[str, list[str]]:
+    """箱の状態（running / failed / blocked / done / skipped / partial / pending）と、実行中・失敗の段。"""
+    sts = {sid: state["steps"].get(sid, {}).get("status", "pending") for sid in steps}
+    for k in ("running", "failed", "blocked"):
+        hit = [sid for sid, v in sts.items() if v == k]
+        if hit:
+            return k, hit
+    if all(v == "skipped" for v in sts.values()):
+        return "skipped", []
+    if all(v in DONE_LIKE for v in sts.values()):
+        return "done", []
+    if any(v in DONE_LIKE for v in sts.values()):
+        return "partial", [sid for sid, v in sts.items() if v not in DONE_LIKE]
+    return "pending", []
+
+
+def _short(title: str, n: int = 16) -> str:
+    """段の名前を図に収まる長さに（[I] などの記号と括弧の補足を外す）。"""
+    import re
+
+    t = re.sub(r"\[[A-Z]\]", "", title).split("（")[0].strip()
+    return t if len(t) <= n else t[:n] + "…"
+
+
+def render_status(plan: dict, state: dict, html: str) -> str:
+    import re
+
+    titles = {s["id"]: s["title"] for s in plan["steps"]}
+    m = re.search(r'<div class="mermaid">(.*?)</div>', html, re.S)
+    if not m:
+        return html
+    chart = re.sub(r"\n\s*%% STATUS:BEGIN.*?%% STATUS:END", "", m.group(1), flags=re.S)
+    lines = ["", "  %% STATUS:BEGIN（scripts/dev/retrain_ctl.py が書く。手で直さない）",
+             "  classDef st_running stroke:#fb923c,stroke-width:5px;", "  classDef st_bad stroke:#f87171,stroke-width:5px;"]
+    for node, steps in NODE_STEPS.items():
+        lab = re.search(rf'^\s*{node}\["(.*?)"\]', chart, re.M)
+        if not lab:
+            continue
+        k, which = node_status(steps, state)
+        text, color = _BADGE[k]
+        if which and k in ("running", "failed", "blocked"):
+            text += "：" + "・".join(f"{sid} {_short(titles.get(sid, ''))}" for sid in which)
+        elif which and k == "partial":
+            text += f"（残り {'・'.join(which)}）"
+        lines.append(f'  {node}["{lab.group(1)}<br/><span style=\'color:{color};font-weight:700\'>{text}</span>"]')
+        if k == "running":
+            lines.append(f"  class {node} st_running;")
+        elif k in ("failed", "blocked"):
+            lines.append(f"  class {node} st_bad;")
+    lines.append("  %% STATUS:END")
+    new_chart = chart.rstrip() + "\n" + "\n".join(lines) + "\n"
+    html = html[:m.start(1)] + new_chart + html[m.end(1):]
+    # チャートの上の 1 行（いま何をしているか・進み・更新時刻）
+    done = sum(1 for v in state["steps"].values() if v["status"] in DONE_LIKE)
+    run = [sid for sid, v in state["steps"].items() if v["status"] == "running"]
+    bad = [sid for sid, v in state["steps"].items() if v["status"] in ("failed", "blocked")]
+    nxt = next((s["id"] for s in plan["steps"] if state["steps"][s["id"]]["status"] == "pending"), None)
+    if run:
+        cur = "▶ 学習中: " + "・".join(f"<b>{sid} {titles.get(sid, '')}</b>（{state['steps'][sid].get('started', '')[:16].replace('T', ' ')} 開始）" for sid in run)
+    elif bad:
+        cur = "<span class='warn'>✘/■ 要対応: " + "・".join(f"{sid} {titles.get(sid, '')}" for sid in bad) + "</span>"
+    elif nxt:
+        cur = f"・ 次: <b>{nxt} {titles.get(nxt, '')}</b>"
+    else:
+        cur = "<span class='ok'>✔ すべて完了</span>"
+    banner = (f'<!-- RETRAIN-STATUS:BEGIN --><div class="box"><b>再学習の状態</b>（{time.strftime("%Y-%m-%d %H:%M")} 更新・{done}/{len(state["steps"])} 段）: {cur}'
+              f'<br/><span class="muted">チャートの箱の下に各段の状態（✔ 完了・▶ 学習中・・ 未着手・✘ 失敗・■ 判断待ち・－ 対象外）。'
+              f'状態は <code>retrain_ctl.py</code> が記録のたびに書き直す（<code>retrain_ctl.py html</code> で手動更新）。</span></div><!-- RETRAIN-STATUS:END -->')
+    html = re.sub(r"<!-- RETRAIN-STATUS:BEGIN -->.*?<!-- RETRAIN-STATUS:END -->\n?", "", html, flags=re.S)
+    h3 = html.find("<h3>2.1 チャート")
+    if h3 >= 0:
+        end = html.find("</h3>", h3) + len("</h3>")
+        html = html[:end] + "\n" + banner + html[end:]
+    return html
+
+
+def update_order_html(plan: dict, state: dict) -> None:
+    p = order_html_path()
+    if not p.exists():
+        return
+    old = p.read_text(encoding="utf-8")
+    new = render_status(plan, state, old)
+    if new != old:
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(new, encoding="utf-8")
+        os.replace(tmp, p)
+
+
 class Store:
     def __init__(self) -> None:
         self.dir = state_dir()
@@ -99,6 +207,10 @@ class Store:
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self.state, ensure_ascii=False, indent=1), encoding="utf-8")
         os.replace(tmp, self.path)
+        try:                                   # 読み物（retrain_order.html）のチャートに状態の印を付ける。失敗しても記録は止めない
+            update_order_html(self.plan, self.state)
+        except Exception as exc:  # noqa: BLE001
+            print(f"（retrain_order.html の状態の印を更新できませんでした: {exc}）", file=sys.stderr)
 
     def blockers(self, s: dict) -> list[str]:
         return [d for d in s["deps"] if self.state["steps"][d]["status"] not in DONE_LIKE]
@@ -242,10 +354,11 @@ def main() -> None:
     p = sub.add_parser("approve"); p.add_argument("step"); p.add_argument("--by", required=True); p.set_defaults(f=cmd_approve)
     p = sub.add_parser("decide"); p.add_argument("key"); p.add_argument("value"); p.add_argument("--confirm", action="store_true"); p.set_defaults(f=cmd_decide)
     p = sub.add_parser("log"); p.add_argument("text"); p.set_defaults(f=cmd_log)
+    sub.add_parser("html", help="retrain_order.html のチャートの状態の印だけを書き直す").set_defaults(f=lambda a, st: print(f"更新: {order_html_path()}"))
     a = ap.parse_args()
     st = Store()
     a.f(a, st)
-    if a.cmd in ("status", "next"):
+    if a.cmd in ("status", "next", "html"):
         st.save()
 
 
