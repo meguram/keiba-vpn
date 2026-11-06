@@ -265,7 +265,7 @@ function RunningMapView({ figure, entries }: { figure: RunningMapFigure; entries
       </div>
 
       <div>
-      {figure.best5 && <Best5Panel b5={figure.best5} hs={hs} onPick={(h) => setSel(h.key ?? h.horse_id ?? null)} />}
+      {figure.best5 && <Best5Panel b5={figure.best5} hs={hs} bracketOf={(h) => bracketOf.get(h.key ?? "") ?? null} onPick={(h) => setSel(h.key ?? h.horse_id ?? null)} />}
       {figure.course_map && <CourseAxes cm={figure.course_map} />}
       {day && <DayTrend day={day} colorKey={colorKey} onColor={(k) => setColorKey(colorKey === k ? "group" : k)} />}
       {!picked && figure.ped_traits && figure.ped_traits.length > 0 && (
@@ -341,11 +341,10 @@ function ColorControl({ axes, colorKey, onChange, topKeys }: { axes: RunningMapA
 const MEDAL = [{ icon: "🥇", c: "#e3b341" }, { icon: "🥈", c: "#c0c7d0" }, { icon: "🥉", c: "#d08a52" }];
 
 /** Best5: 地図の上で、このコース・今日の馬場に走法が合う順の 5 頭。結果が出ていれば実際の着順を並べる */
-function Best5Panel({ b5, hs, onPick }: { b5: RunningMapBest5; hs: RunningMapHorse[]; onPick: (h: RunningMapHorse) => void }) {
+function Best5Panel({ b5, hs, bracketOf, onPick }: { b5: RunningMapBest5; hs: RunningMapHorse[]; bracketOf: (h: RunningMapHorse) => number | null; onPick: (h: RunningMapHorse) => void }) {
   const byId = new Map(hs.map((h) => [h.horse_id, h]));
   const rows = b5.picks.map((p) => ({ p, h: byId.get(p.horse_id) ?? null }));
   const done = hs.some((h) => h.finish_position != null);
-  const label = (h: RunningMapHorse) => `${h.horse_number ?? ""} ${h.horse_name ?? ""}`.trim() || "?";
   return (
     <div style={{ fontSize: 12, margin: "0 0 8px", padding: "6px 8px", borderRadius: 8, border: "1px solid var(--border)" }}>
       <b>走法が合う Best5</b>
@@ -358,7 +357,10 @@ function Best5Panel({ b5, hs, onPick }: { b5: RunningMapBest5; hs: RunningMapHor
             <li key={p.rank} style={{ display: "flex", gap: 8, alignItems: "center", padding: "3px 6px", margin: "1px -6px", borderRadius: 6, cursor: h ? "pointer" : "default",
               ...(medal ? { background: `${medal.c}1f`, border: `1px solid ${medal.c}99` } : { border: "1px solid transparent" }) }} onClick={() => h && onPick(h)}>
               <span style={{ width: 18, color: "var(--text-dim)" }}>{p.rank}</span>
-              <span style={{ flex: 1, fontWeight: medal ? 700 : 400 }}>{h ? label(h) : (p.horse_number ?? "?")}</span>
+              <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, minWidth: 0, fontWeight: medal ? 700 : 400 }}>
+                {(h?.horse_number ?? p.horse_number) ? <span style={bracketChipStyle(h ? bracketOf(h) : null, 22)}>{h?.horse_number ?? p.horse_number}</span> : null}
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h?.horse_name ?? "?"}</span>
+              </span>
               {done && (medal
                 ? <span style={{ fontWeight: 800, color: medal.c, whiteSpace: "nowrap" }}><span style={{ fontSize: 16, marginRight: 3 }}>{medal.icon}</span>{fp}着</span>
                 : <span style={{ color: "var(--text-dim)" }}>{fp != null ? `${fp}着` : "着外・中止"}</span>)}
