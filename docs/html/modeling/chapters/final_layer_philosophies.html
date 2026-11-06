@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>最終層を予想の思想ごとに作って同じ土俵で比べる — keiba-vpn</title>
+<style>
+:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --code-bg:#0b1428; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; }
+* { box-sizing: border-box; }
+body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.85; font-size: 15px; padding: 40px 56px 96px; max-width: 980px; margin: 0 auto; }
+code, pre { font-family: "JetBrains Mono", ui-monospace, monospace; }
+pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; overflow-x: auto; font-size: 13px; line-height: 1.7; }
+code { background: var(--code-bg); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+pre code { background: none; padding: 0; }
+a { color: var(--accent-2); }
+h1 { font-size: 26px; margin: 0 0 8px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; } h3 { font-size: 16px; margin: 24px 0 8px; color: var(--accent-2); }
+.lead { color: var(--muted); margin-bottom: 28px; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0 18px; font-size: 13.5px; background: var(--panel); }
+th, td { border: 1px solid var(--border); padding: 7px 12px; text-align: left; vertical-align: top; }
+th { background: #1b2a4d; } td.num { text-align: right; font-family: "JetBrains Mono", monospace; }
+.note { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; margin: 14px 0; font-size: 14px; }
+.ok { border-left-color: var(--ok); } .bad { border-left-color: var(--bad); }
+.muted { color: var(--muted); font-size: 13px; }
+.pos { color: var(--ok); } .neg { color: var(--bad); }
+</style>
+</head>
+<body>
+<a href="../../index.html" class="muted">← ドキュメント一覧</a>
+<h1>最終層を予想の思想ごとに作って同じ土俵で比べる</h1>
+<p class="lead">「人気馬ばかり当たるモデルは回収率が期待できない」「全体の精度が低くても人気薄の的中率が上がれば回収率は安定して上振れるのでは」「選んだ馬がまとまって上位に来れば 3 連系で大きく取れる」。予想する人の思想に近いこれらの考え方ごとに最終層（親モデルの出力の上に載せる低容量の層）を作り、同じデータ・同じ対照・同じ区間で評価した結果。</p>
+
+<h2>1. 結論</h2>
+<ul>
+  <li><strong>回収率 100% 超は確認できなかった</strong>。全 167 試行に Reality Check を掛けると、「利益が 0 を超える」最大の t は 2.24、p = 0.47。点推定が 100% を超える方策はいくつもあるが、区間は 100% をまたぎ、試行数の補正で消える。</li>
+  <li><strong>人気だけで買うより良い（同じ点数・同じ予算の対照との差が正）という点は、2022–24 の 3 年すべてと、テスト 2025 の両方で再現した</strong>。ただし対照（最も人気の券）自体が回収率 70〜80% と低いので、これは「100% を超える」根拠にはならない。</li>
+  <li>最良は<strong>人気薄発掘（B）の Benter 型・期待値 1.0 以上の単勝 1 頭買い</strong>。2022–24 で 125.9%（対照 +0.460）、テスト 2025 で 116.8%（対照 +0.401 [+0.038, +0.815]）。ただし 2025 は上位 3 的中を除くと 93.8%、絶対値の区間は 80.7〜157.6% で 100% をまたぐ。</li>
+  <li><strong>最も崩れにくいのは「どれが当たっても予算の 5 倍」の 3 連複バスケット（D2）</strong>。2022–24 で 102.3%、テスト 2025 で 102.4%（区間 94.7〜110.5%、上位 3 的中を除いても 100.4%）、損益の振れ方も最小。ただし 1 レース約 40 点超の買い目で、100 円単位の最小購入を考えると予算が大きい（§7）。</li>
+  <li><strong>レース単位の一致（C）は人気順を上回れない</strong>。上位 5 頭に 3 着内 3 頭が全部入る率は、最良でも人気順より +0.4 ポイント（区間 −0.04〜+0.94）。</li>
+  <li>舞台別の合成（F）は、単独の最良（B3）に対して一貫した上乗せがない（2022–24 で −0.08〜+0.07、テスト 2025 で −0.12〜+0.10、区間は大きく重なる）。</li>
+  <li>期待値のしきい値を 1.2 に上げると点推定は 148〜177%（2022–24、3 年とも差が正）だが、2025 では 112%・143% と区間が極端に広がり（下限 52〜60%）、最大 3 的中を除くと 73%・58% に落ちる。しきい値を上げるほど少数の大穴に依存する。</li>
+  <li>最大の不確かさは<strong>確定オッズを購入時点（T-60）の代わりに使っていること</strong>。実スナップショットは 2026-10-17 以降しかなく、ここでは評価できない。</li>
+</ul>
+
+<h2>2. 設計</h2>
+<table>
+<tr><th>項目</th><th>内容</th></tr>
+<tr><td>親モデル</td><td>v6e。2022–24 は leave-one-year-out の予測、2025 は 2024 までで学習した予測。2026 は触らない。</td></tr>
+<tr><td>最終層の学習・選択</td><td>2022–24 の年抜き（2 年で学習し 1 年を評価）だけで行う。低容量モデルのみ（条件付きロジットの係数 1〜7 個、線形の荒れ度分類）。</td></tr>
+<tr><td>テスト 2025</td><td>全設定を凍結した後に 1 回だけ評価。再実行を拒むガードファイル（親の <code>TEST2025_EVALUATED.json</code> とは別）。</td></tr>
+<tr><td>使えた市場情報</td><td>確定の単勝オッズ・人気順を最終層の入力・選抜に使う。<strong>買う時点では確定していないので、購入時点のオッズで同じことができるかは別問題</strong>（§8）。</td></tr>
+<tr><td>対象レース</td><td>13,741 レース。払戻が曖昧、同着、頭数 5 未満、3 着内が一意でないレースを除外。2022–24 は 10,314、2025 は 3,427。障害 110 レースは平地と分けずに含めた。</td></tr>
+<tr><td>対照</td><td>同じレース・同じ点数・同じ予算で<strong>最も人気の券</strong>を買う。主な読みは「レース対で取った回収率差」とそのブートストラップ区間。市場中立の対照として「人気薄を一様に買う」も併用。</td></tr>
+<tr><td>区間</td><td>レース単位ブートストラップ 95%（1,000 回）。最大の的中 1 件・3 件を除いた回収率も併記。</td></tr>
+<tr><td>人気帯</td><td><strong>単勝オッズ帯</strong>（&lt;3 / 3–7 / 7–15 / 15–30 / 30+）で代用。組合せ券は組合せ内の最大の単勝オッズで帯を決める。</td></tr>
+<tr><td>払戻</td><td>確定払戻（100 円あたり）。複勝は 8 頭以上で 3 着内、7 頭以下で 2 着内。同着レースは除外。</td></tr>
+<tr><td>通過の見方</td><td>① 対照との差が正で区間が 0 を外れる ② 2022–24 の 3 年で同符号 ③ 最大の的中を除いても残る ④ テスト 2025 で再現。満たさなければ「有望ではない」と書く。</td></tr>
+</table>
+
+<h2>3. 試した方法（167 試行）</h2>
+<table>
+<tr><th>思想</th><th>方法</th><th>試行数</th></tr>
+<tr><td>A 精度派（基準）</td><td>親モデルの較正（A0）と Benter 混合（A1）の上位を、単勝・複勝・馬連・ワイド・3 連複の top-k / box / 流しで買う。</td><td class="num">26</td></tr>
+<tr><td>B 人気薄発掘</td><td>B0 人気で直交化した残差（log p_model − log p_market）／B1 勝ち馬の市場確率の逆数 γ=0,0.5,1 の重み／B2 人気との相関の罰則 λ=1,10／B3 Benter の offset を人気薄側だけに／B4 7 倍以上の馬だけで学習。人気薄（単勝 7 倍以上）の最上位 1 頭、全レースと上位 30% のレース、期待値 1.0 / 1.2 以上。</td><td class="num">38</td></tr>
+<tr><td>C レース単位一致</td><td>Plackett-Luce（1〜3 着）／BCE（3 着内）／マージン（3 着内の最下位と 3 着外の最上位の差）を、市場あり・なし、重み γ で学習。荒れるレースの分類（3 着内に 10 倍以上が入るか）で上位 30% / 50% のみ買う。3 連複 box5/6・軸流し、ワイド box。軸を B で決める併用。</td><td class="num">66</td></tr>
+<tr><td>D 期待値の直接最適化</td><td>微分可能な賭け金配分（期待対数成長、f=0.001 は期待回収そのもの＝方策勾配 1 段の厳密期待値、0.05 / 0.3、人気馬への罰則、単勝・複勝）。「どれが当たっても予算の 5 倍」（Σ1/オッズ ≤ 0.2）のバスケット（単勝・3 連複、期待値のしきい値 0 / 1.0 / 1.1）。</td><td class="num">25</td></tr>
+<tr><td>E データ派</td><td>会場 × 芝ダ × 距離帯 × オッズ帯の実勝ち数 ÷ 市場期待勝ち数（粗いセルへ縮約、擬似件数 30）で補正（E0）。補正比を特徴にした条件付きロジット（E1）。荒れる率を分類へ追加。</td><td class="num">12</td></tr>
+<tr><td>F 合成</td><td>8 方策を、会場・斉齢限定/その他・レース水準・芝ダの舞台ごとに、全体の重みへ縮約（擬似件数 300）して選ぶ。2 年で選び 1 年で評価。</td><td class="num">7</td></tr>
+</table>
+<p class="muted">B2（人気との相関の罰則）は、λ を掛けても人気薄の的中は増えず、勝率の損失だけ悪化した（係数が 0 に落ちる問題は 2 段階の当てはめで解消）。強化学習は「期待値そのものを最適化する 1 段の方策」までで、本格的な方策勾配は行っていない（§9）。</p>
+
+<h2>4. 結果（2022–24 年抜き）</h2>
+<h3>4.1 確率の質</h3>
+<table>
+<tr><th>モデル</th><th>勝者の対数損失（小さいほど良い）</th><th>10 倍以上の馬: 予測 Σp / 実勝ち 2,262</th></tr>
+<tr><td>市場</td><td class="num">1.8964</td><td class="num">2,312</td></tr>
+<tr><td>親モデル（v6e 生）</td><td class="num">1.9447</td><td class="num">2,886（人気薄を過大評価）</td></tr>
+<tr><td>A1 親＋市場（Benter 混合）</td><td class="num">1.8823</td><td class="num">2,205</td></tr>
+<tr><td>B3 offset 人気薄側のみ</td><td class="num">1.8885</td><td class="num">2,377</td></tr>
+<tr><td>B1 γ=1（逆確率の重み）</td><td class="num">2.4026</td><td class="num">6,449（過大）</td></tr>
+</table>
+<p>親モデル単体は市場より勝率の損失が悪く、人気薄を実際より多く見積もる。市場と混ぜると初めて市場を上回る。γ を上げて人気薄が勝つレースを重くすると、確率は大きく崩れる（回収率だけは点推定が上がることがあるが、くじ化する）。</p>
+
+<h3>4.2 方策別の回収率</h3>
+<table>
+<tr><th>方策</th><th>回収率 [95%区間]</th><th>対照</th><th>対照との差 [95%区間]</th><th>年別の差 22/23/24</th><th>最大除き 1/3 件</th></tr>
+<tr><td>A 3連複 軸流し5頭（A0）</td><td class="num">94.9% [89.9, 100.6]</td><td class="num">80.7%</td><td class="num">+0.143 [+0.086, +0.204]</td><td class="num">+.162 / +.120 / +.146</td><td class="num">—</td></tr>
+<tr><td>B0 残差・人気薄 1 頭 単勝</td><td class="num">119.1% [99.0, 142.3]</td><td class="num">80.6%</td><td class="num">+0.385 [+0.185, +0.621]</td><td class="num">+.352 / +.368 / +.435</td><td class="num">116.6 / 111.9</td></tr>
+<tr><td>B3 offset・EV≥1.0 単勝</td><td class="num">125.9% [103.5, 151.6]</td><td class="num">79.9%</td><td class="num">+0.460 [+0.232, +0.727]</td><td class="num">+.535 / +.349 / +.487</td><td class="num">123.0 / 117.3</td></tr>
+<tr><td>B3 offset・EV≥1.2 単勝</td><td class="num">147.8% [108.5, 191.2]</td><td class="num">81.6%</td><td class="num">+0.662 [+0.273, +1.098]</td><td class="num">+.871 / +.750 / +.239</td><td class="num">141.5 / 129.2</td></tr>
+<tr><td>E1 EV≥1.2 単勝（2022–24）</td><td class="num">176.6% [115.4, 249.5]</td><td class="num">79.2%</td><td class="num">+0.975 [+0.342, +1.716]</td><td class="num">+.988 / +.995 / +.915</td><td class="num">157.7 / 130.1</td></tr>
+<tr><td>C 軸 B0 ＋ 相手 A1 の 3連複 流し5</td><td class="num">100.3% [84.1, 120.6]</td><td class="num">80.7%</td><td class="num">+0.196 [+0.033, +0.399]</td><td class="num">+.231 / +.138 / +.220</td><td class="num">—</td></tr>
+<tr><td>D1 期待値配分（f→0, 単勝）</td><td class="num">105.5%</td><td class="num">79.9%</td><td class="num">+0.256 [+0.117, +0.409]</td><td class="num">+.264 / +.227 / +.276</td><td class="num">—</td></tr>
+<tr><td>D2 5 倍バスケット（3連複・A1）</td><td class="num">102.3% [96.3, 108.3]</td><td class="num">人気順 +0.233</td><td class="num">+0.233（対 ランダム順 +0.202、対 人気薄順 +0.339）</td><td class="num">3 年とも正</td><td class="num">101.0 / 99.9</td></tr>
+<tr><td>E1 補正比入り・EV≥1.0 単勝</td><td class="num">113.0% [88.9, 138.6]</td><td class="num">79.0%</td><td class="num">+0.340 [+0.095, +0.596]</td><td class="num">+.260 / +.476 / +.338</td><td class="num">108.1 / 99.2</td></tr>
+<tr><td>E1 上位 30% のレース・人気薄 1 頭</td><td class="num">94.5% [86.0, 103.8]</td><td class="num">78.8%</td><td class="num">+0.157 [+0.055, +0.274]</td><td class="num">+.133 / +.131 / +.218</td><td class="num">94.1 / 93.4</td></tr>
+</table>
+<p class="muted">差は、同じレース・同じ予算で最も人気の券を買った回収率との差。D2 の対照は人気順に詰めたバスケット。</p>
+
+<h3>4.3 人気薄の的中（市場の見込みとの比較）</h3>
+<table>
+<tr><th>モデル</th><th>2022–24: 選んだ人気薄の的中 / 市場が見込む的中</th><th>うち 10 倍以上</th><th>テスト 2025</th><th>テスト 2025 の 10 倍以上</th></tr>
+<tr><td>B0 残差</td><td class="num">342 / 264.2（+4.8σ）</td><td class="num">245 / 193.1</td><td class="num">112 / 93.5</td><td class="num">93 / 67.7</td></tr>
+<tr><td>B3 offset</td><td class="num">972 / 876.5</td><td class="num">279 / 232.5</td><td class="num">283 / 288.5</td><td class="num">78 / 78.7</td></tr>
+<tr><td>E1</td><td class="num">—</td><td class="num">—</td><td class="num">287 / 290.3</td><td class="num">77 / 77.7</td></tr>
+</table>
+<p><strong>B0 の「市場より当たる人気薄」は 2025 でも残った</strong>（1.2〜1.4 倍）。一方、B3 と E1 は 2025 では市場並みの的中数で、回収率の高さは 15 倍以上の払戻の当たり方による部分が大きい。</p>
+
+<h3>4.4 レース単位の一致（C）</h3>
+<table>
+<tr><th>モデル</th><th>上位 K 頭に 3 着内 3 頭が全部入る率</th><th>人気順</th><th>差 [95%区間]</th></tr>
+<tr><td>A1 K=3</td><td class="num">9.4%</td><td class="num">9.2%</td><td class="num">+0.0021 [−0.0014, +0.0055]</td></tr>
+<tr><td>A1 K=5</td><td class="num">38.6%</td><td class="num">38.2%</td><td class="num">+0.0044 [−0.0004, +0.0094]</td></tr>
+<tr><td>A1 K=6</td><td class="num">52.4%</td><td class="num">52.0%</td><td class="num">+0.0046 [−0.0002, +0.0097]</td></tr>
+<tr><td>PL3（市場あり）K=5</td><td class="num">38.5%</td><td class="num">38.2%</td><td class="num">+0.0029 [−0.0024, +0.0083]</td></tr>
+<tr><td>PL3（市場なし）K=5</td><td class="num">36.2%</td><td class="num">38.2%</td><td class="num">−0.0199 [−0.0286, −0.0125]</td></tr>
+</table>
+<p>荒れるレース（3 着内に単勝 10 倍以上が 1 頭以上入る）の分類は AUC 0.669（基準率 75.5%）。条件セルの荒れ率を足しても 0.669 のまま。上位 30% のレースだけ 3 連複 box6 を買うと対照との差が +0.105 まで上がるが、年で符号が変わる設定が混じる。γ=1 のモデルは的中 0.8% 程度のくじ型で、年別に符号が反転した。</p>
+
+<h3>4.5 D: 市場情報だけの同型との分離</h3>
+<p>人気薄寄りの偏りだけで稼げる分を切り分けるため、市場情報のみ（オッズ・人気順位）の同型モデルを作り、親モデルの入った版と差を取った。</p>
+<table>
+<tr><th>設定</th><th>市場のみ同型</th><th>親モデル入りとの差 [95%区間]</th></tr>
+<tr><td>f→0（期待回収そのもの）</td><td class="num">約 0.81</td><td class="num">+0.248 [+0.107, +0.401]</td></tr>
+<tr><td>f=0.05</td><td class="num">約 0.81</td><td class="num">+0.113 [+0.085, +0.143]</td></tr>
+</table>
+<p>市場情報だけでは対照（約 0.81）と変わらない。上の差は<strong>親モデルの情報によるもの</strong>で、「人気薄を買う」傾向だけではない。</p>
+
+<h3>4.6 E: データ派（条件セルの補正）</h3>
+<p>粗いセル（芝ダ × 距離帯）×オッズ帯の「実勝ち ÷ 市場期待」は 0.86〜1.03 の範囲に収まり、15 倍以上の帯でダートの短距離が 0.86 と低い程度だった。補正比を入れた条件付きロジットの係数は −0.02〜+0.04 で、ほぼ 0。E1 の効果は A1 に近い。E0（市場確率に補正比を掛けるだけ）は勝率の損失が悪化し、人気薄 1 頭買いも対照を上回れなかった（差 −0.022）。</p>
+
+<h3>4.7 F: 舞台別の合成</h3>
+<table>
+<tr><th>分け方</th><th>2022–24 合成 回収率 [95%区間]</th><th>対照との差</th><th>最良単独（学習年で選択）の差</th></tr>
+<tr><td>全体（＝B3 EV≥1.0）</td><td class="num">125.9% [103.5, 151.6]</td><td class="num">+0.460</td><td class="num">+0.460</td></tr>
+<tr><td>会場</td><td class="num">119.2% [97.0, 142.5]</td><td class="num">+0.383</td><td class="num">+0.460</td></tr>
+<tr><td>斉齢限定 / その他</td><td class="num">125.9%</td><td class="num">+0.460（常に B3 を選ぶ）</td><td class="num">+0.460</td></tr>
+<tr><td>レース水準</td><td class="num">127.0% [104.4, 151.2]</td><td class="num">+0.479</td><td class="num">+0.460</td></tr>
+<tr><td>芝ダ</td><td class="num">129.8% [105.3, 158.8]</td><td class="num">+0.507</td><td class="num">+0.460</td></tr>
+<tr><td>会場 × 芝ダ</td><td class="num">118.3% [98.4, 141.0]</td><td class="num">+0.384</td><td class="num">+0.460</td></tr>
+<tr><td>斉齢 × 水準</td><td class="num">132.0% [107.5, 159.5]</td><td class="num">+0.527</td><td class="num">+0.460</td></tr>
+</table>
+<p>舞台を細かくするほど選択がぶれ（会場で選ぶと京都・阪神が D2、中山・中京が E1…と分かれる）、会場系の合成は単独の最良に届かない。粗い分け（水準・芝ダ・斉齢×水準）は +0.02〜+0.07 の上乗せがあるが、区間は大きく重なり、「効いた」とは言えない。</p>
+
+<h2>5. 多重比較の補正と層別</h2>
+<table>
+<tr><th>検定（全 167 試行）</th><th>最大 t</th><th>Reality Check の p</th><th>最良</th></tr>
+<tr><td>対照との差が 0 を超える</td><td class="num">17.7</td><td class="num">0.000</td><td>D1 複勝配分（f=0.3）</td></tr>
+<tr><td><strong>利益が 0 を超える（回収率 &gt; 100%）</strong></td><td class="num">2.24</td><td class="num"><strong>0.47</strong></td><td>B3 EV≥1.2 単勝</td></tr>
+</table>
+<table>
+<tr><th>族</th><th>試行</th><th>対照との差の p</th><th>回収率&gt;100% の p</th></tr>
+<tr><td>A</td><td class="num">26</td><td class="num">0.000</td><td class="num">1.000</td></tr>
+<tr><td>B</td><td class="num">38</td><td class="num">0.001</td><td class="num">0.120</td></tr>
+<tr><td>C</td><td class="num">66</td><td class="num">0.000</td><td class="num">0.595</td></tr>
+<tr><td>D</td><td class="num">25</td><td class="num">0.000</td><td class="num">0.799</td></tr>
+<tr><td>E</td><td class="num">12</td><td class="num">0.066</td><td class="num">0.132</td></tr>
+</table>
+<p>対照との差が有意なのは、対照（最も人気の券）が弱いことと、親モデルの情報が入っていることの合成で、「100% を超える」ことの検定ではない。100% 超の検定は族ごとの最小でも B の p = 0.12 で、有意水準に届かない。</p>
+
+<h3>層別（差が正の層の数）</h3>
+<table>
+<tr><th>方策</th><th>2022–24 月</th><th>2022–24 会場</th><th>2025 月</th><th>2025 会場</th><th>2025 芝 / ダ</th></tr>
+<tr><td>A 3連複 流し5</td><td class="num">10/12</td><td class="num">9/10</td><td class="num">10/12</td><td class="num">9/10</td><td class="num">+0.20 / +0.13</td></tr>
+<tr><td>B0 人気薄 1 頭</td><td class="num">10/12</td><td class="num">10/10</td><td class="num">7/12</td><td class="num">7/10</td><td class="num">+0.50 / +0.13</td></tr>
+<tr><td>B3 EV≥1.0</td><td class="num">10/12</td><td class="num">10/10</td><td class="num">9/12</td><td class="num">7/10</td><td class="num">+0.67 / +0.16</td></tr>
+<tr><td>C 軸 B0 流し</td><td class="num">9/12</td><td class="num">9/10</td><td class="num">8/12</td><td class="num">5/10</td><td class="num">−0.08 / +0.31</td></tr>
+<tr><td>D1 配分</td><td class="num">10/12</td><td class="num">8/10</td><td class="num">8/12</td><td class="num">6/10</td><td class="num">+0.34 / +0.09</td></tr>
+<tr><td>D2 5 倍バスケット</td><td class="num">11/12</td><td class="num">9/10</td><td class="num">10/12</td><td class="num">9/10</td><td class="num">+0.25 / +0.30</td></tr>
+<tr><td>E1 EV≥1.0</td><td class="num">8/12</td><td class="num">8/10</td><td class="num">7/12</td><td class="num">6/10</td><td class="num">+0.67 / +0.01</td></tr>
+</table>
+<p class="muted">層は 30 レース以上（2025 は 20 レース以上）のものだけ。値は買ったレースでの回収倍率の対照との差（1 レース 1 単位に正規化）。D2 が月・会場とも最も揃っている。</p>
+
+<h2>6. テスト 2025（1 回のみ）</h2>
+<table>
+<tr><th>方策</th><th>回収率 [95%区間]</th><th>対照</th><th>対照との差 [95%区間]</th><th>最大除き 1/3 件</th><th>レース的中率</th></tr>
+<tr><td>A 3連複 流し5</td><td class="num">94.1% [85.2, 103.7]</td><td class="num">77.5%</td><td class="num">+0.166 [+0.069, +0.262]</td><td class="num">92.7 / 90.2</td><td class="num">29.0%</td></tr>
+<tr><td>B0 人気薄 1 頭</td><td class="num">109.5% [79.5, 141.9]</td><td class="num">78.1%</td><td class="num">+0.315 [+0.005, +0.643]</td><td class="num">102.4 / 91.4</td><td class="num">3.3%</td></tr>
+<tr><td>B3 EV≥1.0</td><td class="num">116.8% [80.7, 157.6]</td><td class="num">76.8%</td><td class="num">+0.401 [+0.038, +0.815]</td><td class="num">107.7 / 93.8</td><td class="num">2.6%</td></tr>
+<tr><td>B3 EV≥1.2</td><td class="num">112.3% [60.1, 182.1]</td><td class="num">77.9%</td><td class="num">+0.343 [−0.191, +1.070]</td><td class="num">90.9 / 73.1</td><td class="num">2.3%</td></tr>
+<tr><td>C 軸 B0 ＋ A1 流し5</td><td class="num">88.5% [71.8, 107.9]</td><td class="num">77.5%</td><td class="num">+0.110 [−0.073, +0.307]</td><td class="num">84.8 / 78.8</td><td class="num">8.6%</td></tr>
+<tr><td>D1 期待値配分</td><td class="num">100.5% [82.4, 122.4]</td><td class="num">79.4%</td><td class="num">+0.211 [+0.029, +0.430]</td><td class="num">95.4 / 88.4</td><td class="num">77.6%</td></tr>
+<tr><td><strong>D2 5 倍バスケット</strong></td><td class="num"><strong>102.4% [94.7, 110.5]</strong></td><td class="num">76.2%</td><td class="num">+0.262 [+0.124, +0.397]</td><td class="num">101.5 / 100.4</td><td class="num">19.1%</td></tr>
+<tr><td>E1 EV≥1.0</td><td class="num">103.8% [73.4, 139.1]</td><td class="num">71.1%</td><td class="num">+0.326 [−0.003, +0.696]</td><td class="num">96.8 / 84.3</td><td class="num">4.4%</td></tr>
+<tr><td>E1 EV≥1.2（230 点）</td><td class="num">142.7% [51.9, 259.9]</td><td class="num">68.0%</td><td class="num">+0.747 [−0.150, +1.942]</td><td class="num">108.3 / 57.7</td><td class="num">4.3%</td></tr>
+<tr><td>E1 上位 30% の人気薄 1 頭</td><td class="num">91.1% [74.5, 108.3]</td><td class="num">73.9%</td><td class="num">+0.172 [−0.024, +0.371]</td><td class="num">90.0 / 87.9</td><td class="num">11.8%</td></tr>
+</table>
+<table>
+<tr><th>市場中立の対照（人気薄を一様に買う、回収率 68.2%）</th><th>差 [95%区間]</th></tr>
+<tr><td>B0</td><td class="num">+0.413 [+0.118, +0.715]</td></tr>
+<tr><td>B3 EV≥1.0</td><td class="num">+0.486 [+0.142, +0.863]</td></tr>
+<tr><td>E1 EV≥1.0</td><td class="num">+0.356 [+0.045, +0.711]</td></tr>
+</table>
+<table>
+<tr><th>モデル（2025）</th><th>勝者の対数損失</th><th>10 倍以上: 予測 Σp / 実勝ち 783</th></tr>
+<tr><td>市場</td><td class="num">1.9193</td><td class="num">778</td></tr>
+<tr><td>親モデル</td><td class="num">1.9485</td><td class="num">936</td></tr>
+<tr><td>A1 / E1</td><td class="num">1.9038 / 1.9038</td><td class="num">733 / 733</td></tr>
+<tr><td>B3</td><td class="num">1.9108</td><td class="num">794</td></tr>
+</table>
+<p>舞台別合成（凍結）の 2025 の結果: 全体＝B3 は 116.8%（上の表と同じ）、会場 127.0%（差 +0.502）、レース水準 112.2%（+0.356 [−0.010, +0.788]）、芝ダ 115.4%（+0.428）、会場×芝ダ 105.4%（+0.281 [−0.003, +0.610]）、斉齢×水準 119.0%（+0.440 [+0.066, +0.870]）。単独の最良（+0.401）との差は区間に収まる。</p>
+
+<h3>通過の見方</h3>
+<table>
+<tr><th>方策</th><th>① 差の区間が 0 を外れる</th><th>② 3 年同符号</th><th>③ 最大の的中を除いても残る</th><th>④ 2025 で再現</th><th>回収率&gt;100% の区間</th></tr>
+<tr><td>A 3連複 流し5</td><td>○</td><td>○</td><td>○</td><td>○（差のみ）</td><td class="neg">94% 付近、届かない</td></tr>
+<tr><td>B0</td><td>○</td><td>○</td><td>1 件除き ○ / 3 件除き 91%</td><td>○（下限 +0.005）</td><td class="neg">2025 の区間 79〜142%</td></tr>
+<tr><td>B3 EV≥1.0</td><td>○</td><td>○</td><td>1 件除き ○ / 3 件除き 94%</td><td>○（下限 +0.038）</td><td class="neg">2025 の区間 81〜158%</td></tr>
+<tr><td>D2 バスケット</td><td>○</td><td>○</td><td>○（100.4%）</td><td>○</td><td class="neg">2025 の下限 94.7%</td></tr>
+<tr><td>D1 配分</td><td>○</td><td>○</td><td>—</td><td>○（下限 +0.029）</td><td class="neg">2025 で 100.5%</td></tr>
+<tr><td>C 軸 B0 流し</td><td>○</td><td>○</td><td>—</td><td class="neg">× 区間が 0 をまたぐ</td><td class="neg">88.5%</td></tr>
+<tr><td>E1 EV≥1.0</td><td>○</td><td>○</td><td>1 件除き ○ / 3 件除き 84%</td><td class="neg">下限 −0.003</td><td class="neg">区間 73〜139%</td></tr>
+</table>
+
+<h3>人気帯（単勝オッズ帯）別の回収率とリスク</h3>
+<table>
+<tr><th>方策（期間）</th><th>&lt;3</th><th>3–7</th><th>7–15</th><th>15–30</th><th>30+</th><th>連敗の最長（レース）</th><th>1 年相当で 30 単位 / 100 単位の損が出る確率</th></tr>
+<tr><td>A 3連複 流し5（22–24）</td><td class="num">—</td><td class="num">84%</td><td class="num">90%</td><td class="num">98%</td><td class="num">124%</td><td class="num">25</td><td class="num">97.5% / 86.1%</td></tr>
+<tr><td>B0（22–24）</td><td class="num">—</td><td class="num">—</td><td class="num">98%</td><td class="num">91%</td><td class="num">131%</td><td class="num">160</td><td class="num">87.6% / 62.9%</td></tr>
+<tr><td>B3 EV≥1.0（22–24）</td><td class="num">—</td><td class="num">—</td><td class="num">120%</td><td class="num">90%</td><td class="num">133%</td><td class="num">205</td><td class="num">85.0% / 57.6%</td></tr>
+<tr><td>B3 EV≥1.0（2025）</td><td class="num">—</td><td class="num">—</td><td class="num">77%</td><td class="num">133%</td><td class="num">117%</td><td class="num">245</td><td class="num">87.9% / 63.8%</td></tr>
+<tr><td>D1 配分（22–24）</td><td class="num">90%</td><td class="num">89%</td><td class="num">94%</td><td class="num">95%</td><td class="num">114%</td><td class="num">64</td><td class="num">90.4% / 70.5%</td></tr>
+<tr><td>D2 バスケット（22–24）</td><td class="num">—</td><td class="num">103%</td><td class="num">94%</td><td class="num">92%</td><td class="num">108%</td><td class="num">36</td><td class="num">76.9% / 39.3%</td></tr>
+<tr><td>D2 バスケット（2025）</td><td class="num">—</td><td class="num">150%</td><td class="num">88%</td><td class="num">84%</td><td class="num">110%</td><td class="num">52</td><td class="num">71.1% / 29.0%</td></tr>
+</table>
+<p class="muted">損失の確率は、1 レースの平均賭け金を 1 単位として、買ったレースの利益をブートストラップで並べ替えた 1 年分（約 1/3 の期間）の累積の最低値。予算が大きい方策ほど「単位」も大きい点に注意。どの方策も 30+ 帯（単勝 30 倍以上を含む券）の回収率が高く、全体の水準を支えている。これは大穴の払戻の当たり方に依存する。</p>
+
+<h2>7. 判断</h2>
+<div class="note bad">
+<strong>回収率 100% 超が見込めるとは言えない。</strong>最良の B3 は点推定で 2 つの期間とも 117〜126% だが、2025 では区間が 81〜158%、上位 3 的中を除くと 94%、Reality Check の補正後は p = 0.47。他の方策も 100% をまたぐ。
+</div>
+<div class="note ok">
+<strong>確かに言えること。</strong>(1) 親モデルは、人気薄を買う傾向だけでは説明できない上乗せ（市場のみの同型との差 +0.11〜+0.25）を持つ。(2) 人気薄を選ぶ最終層（B0・B3）は、人気で買うより、また一様に人気薄を買うより、2022–24 の 3 年と 2025 で回収率が高い。(3) B0 の人気薄の的中は市場の見込みの 1.2〜1.4 倍で、2025 でも残った。(4) 3 連複の 5 倍バスケット（D2）は、両期間で約 102%、損益の振れが最小で、最大の的中を除いても崩れない。
+</div>
+<div class="note">
+<strong>思想ごとの評価。</strong>A（精度）は人気順より良いが 100% に届かない。B（人気薄発掘）が最も強いが振れが大きい（連敗 200 レース超）。C（レース単位の一致）は人気順に勝てない。D2（5 倍制約）は安定するが予算が大きい。E（データ派）は A1 とほぼ同じで、上乗せなし。F（合成）は上乗せが確認できない。
+</div>
+<p>D2 は 1 レース平均 40 点超（2025 は 3,331 レースで約 129,000 点）で、100 円単位だと 1 レース約 4,000 円を超える。小さな予算で同じ買い方をすると、点数が足りず制約（Σ1/オッズ ≤ 0.2）を満たせないレースが増える。また選抜に使った 3 連複の想定オッズは「0.75 ÷ 市場ハーヴィル確率」で、実オッズではない（払戻は実際の確定払戻を使用）。</p>
+
+<h2>8. 未解決</h2>
+<ul>
+  <li><strong>購入時点のオッズでの再評価</strong>。選抜・期待値の計算は確定オッズで行った。購入時点の値は最終の値と違い、締切間際の資金の流入は予測側の情報を含むので、確定オッズで見た優位は過大の可能性がある。2026-10-17 以降の自前スナップショットがたまった後に、同じ設定（凍結済み）で当てはめる。</li>
+  <li>3 連複の実オッズ（購入時点）での D2 の再評価。想定オッズのずれで、選ぶ組合せと賭け金の比が変わる。</li>
+  <li>B3 の 15 倍以上の払戻に依存した回収率の安定性。2025 は的中数が市場並みで、払戻の当たり方で 117% になった。追加年（2026 の前向き）で見るまで確定できない。</li>
+  <li>障害 110 レースを平地と分けていない（影響は小さいが、層別では別に出るべき）。</li>
+  <li>F の入れ子では、年抜きの基礎スコアが学習に少し漏れる（2025 がきれいな確認）。</li>
+  <li>本格的な強化学習（逐次の方策勾配、状態に資金・連敗を含める）は未実施。1 レース 1 判断の期待値最適化までは実施し、固定ルールに対する明確な上乗せは見えなかった。</li>
+</ul>
+
+<h2>9. この実装で当初の想定と変えた点</h2>
+<ul>
+  <li>出力先は <code>data/local/modeling/</code> に書き込めなかったため、ホストの <code>/home/jovyan/work/fl_out/</code>（スクリプトは <code>src/scripts/data/fl_*.py</code>）。</li>
+  <li>3 連複の購入時点の実オッズが無いので、選抜用は想定オッズ（0.75 ÷ 市場ハーヴィル確率）、回収は確定払戻。</li>
+  <li>強化学習は「レース単位の報酬を期待値のまま直接最適化」する 1 段の方策（f→0 の配分）で代用した。</li>
+  <li>「人気帯」は単勝オッズ帯で代用。</li>
+  <li>10 倍以上の人気薄を「単勝 10 倍以上」で数え、人気薄発掘の選抜は「単勝 7 倍以上」から選んだ。</li>
+</ul>
+
+<h2>10. 再現</h2>
+<pre><code>cd /home/jovyan/work/fl_run
+python -m src.scripts.data.fl_dataset   # 13,741 レースの表（親の予測 + 確定オッズ + 払戻）
+python -m src.scripts.data.fl_a ... fl_e  # 各思想の学習と 2022–24 の評価
+python -m src.scripts.data.fl_f           # 舞台別合成
+python -m src.scripts.data.fl_g           # Reality Check と層別
+python -m src.scripts.data.fl_test        # テスト 2025（1 回のみ。TEST2025_FL_EVALUATED.json で再実行を拒否）</code></pre>
+<p class="muted">出力は <code>stage_*.json</code>・<code>trials_*.json</code>（全試行の記録）・<code>series_*.npz</code>（レース別の損益）。</p>
+</body>
+</html>

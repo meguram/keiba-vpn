@@ -1,0 +1,200 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>モデルの版と採用状況 — keiba-vpn docs</title>
+<style>
+:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --code:#0b1428; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1180px; margin:0 auto; padding:36px 28px 80px; }
+h1 { font-size:26px; margin:0 0 6px; } h2 { font-size:19px; margin:40px 0 4px; padding-top:16px; border-top:1px solid var(--border); }
+h3 { font-size:16px; margin:26px 0 4px; }
+a { color:var(--accent); }
+.muted { color:var(--muted); font-size:13px; } .sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+table { border-collapse:collapse; width:100%; margin:8px 0 14px; font-size:13px; }
+th,td { border:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+th { background:var(--panel); color:var(--muted); font-weight:600; white-space:nowrap; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 6px; border-radius:5px; font-size:12px; }
+pre { background:var(--code); border:1px solid var(--border); border-radius:8px; padding:10px 14px; overflow-x:auto; font-size:12.5px; line-height:1.55; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin:12px 0; }
+.ok { color:var(--ok); } .warn { color:var(--warn); } .cur td:first-child, .cur td:nth-child(2) { color:var(--ok); }
+tr.cur { background:rgba(74,222,128,.07); }
+</style>
+</head><body><main>
+
+<h1>モデルの版と採用状況</h1>
+<p class="muted">作成: 2026-11-06。<a href="retrain_order.html#">モデル再学習の順番と依存関係</a>（<code>retrain_order.html</code>）の §2.8 に載せた各モデルについて、<b>版の名前・更新日・どの版が採用されているか</b>を 1 か所で管理する。事実だけを書き、出典をつける。確認できなかったものは <span class="warn">要確認</span> と書く（推測で埋めない）。</p>
+
+<div class="box"><b>この文書の使い方</b>：①「1. 現在の採用一覧」で今どの版が動いているかを見る。②「2. 版の履歴」でモデルごとの経緯・主指標・根拠を見る。③モデルを更新・切替したら「3. 更新のしかた」に従って<b>採用一覧と履歴の両方</b>を書き換える。<br>
+日付は <code>YYYY-MM-DD</code>。日付の出どころは、設定ファイルの最終コミット日（<code>git log</code>）、ホストのバンドルの更新時刻（<code>ls -l</code>）、決定ログ・運用文書の記載のいずれか（各行の根拠欄に書く）。コミット日は<b>モデルを作った日ではなく、設定を置いた日</b>であることに注意。</div>
+
+<h2>1. 現在の採用一覧</h2>
+<p class="sub">状態: <b>本番</b> = 既定で動く／<b>shadow</b> = 同時に計算するが画面には出さない／<b>候補</b> = 評価済みで未配備／<b>画面のみ</b> = 親モデルに入らず表示にだけ使う。本番の切替は環境変数 <code>KEIBA_PRED_MODEL</code>（既定 <code>v6e</code>、<code>src/api/local_predictions.py:59</code>・<code>v3_serving.py:77</code>）。Cloud Run の機能フラグは <code>scripts/gcp/deploy_cloud_run_api.sh</code> の 66〜67 行目で設定する。実際の本番値（Cloud Run・VPS の環境変数）は今回読んでおらず <span class="warn">要確認</span>。</p>
+<table>
+<thead><tr><th>モデル</th><th>採用中の版</th><th>採用日（出典）</th><th>状態</th><th>場所（成果物・環境変数・設定）</th><th>戻し方</th></tr></thead>
+<tbody>
+<tr class="cur"><td>親モデル</td><td><b>v6e</b></td><td>2026-10-25 に過去分の差し替え手順（<code>swap_pred_v6e.sh</code>）、master 反映 2026-10-29（<code>bf4fd5e8</code>）。指示は決定ログ §81（2026-10-24）。本番切替の正確な時刻は <span class="warn">要確認</span></td><td class="ok">本番</td><td>ホスト <code>data/local/.../final_v6e/bundle_v6_2025</code>（1,231 列・7 メンバー × 5 seed）。<code>KEIBA_PRED_MODEL=v6e</code>（既定）、同日の v6 計算は <code>KEIBA_V6_SHADOW</code></td><td><code>KEIBA_PRED_MODEL=legacy|v4|v5|off</code>。手順 <code>docs/operations/pred_model_v6e.md</code></td></tr>
+<tr class="cur"><td>前段 S3</td><td><b>e</b></td><td>最終学習 2026-10-22（<code>final_stage/v6_e_2025</code> 02:42）</td><td class="ok">本番</td><td><code>final_stage/v6_e_2025</code>。<code>default_stage_dir</code> が e を指す（<code>serving_v6.py</code>）</td><td>親モデルごと戻す（S3 だけ戻すと入力列が合わない）</td></tr>
+<tr class="cur"><td>めぐ指数</td><td><b>v3a</b></td><td>2026-10-19（本番反映完了）。出典: <code>docs/operations/megu_v3a_rollout.md</code>。日付は記録からの転記で、本文での再確認は <span class="warn">要確認</span></td><td class="ok">本番</td><td>DB・parquet・GCS。日次計算の切替は <code>megu_v3a_rollout.md</code></td><td>同文書の「GCS 退避からの戻し」</td></tr>
+<tr class="cur"><td>追走難度</td><td><b>v2（tp54-1）</b></td><td>設定ファイルの最終コミット 2026-10-22（<code>5ace8206</code>）</td><td class="ok">本番（S3 の入力）</td><td><code>config/tracking_difficulty_v2/{model.txt,model_demand.txt,meta.json}</code>。<code>KEIBA_TRACKING_V2=1</code>（デプロイスクリプト）</td><td>環境変数を外す</td></tr>
+<tr class="cur"><td>ラップ予想</td><td><b>tp55-1</b></td><td>日付 <span class="warn">要確認</span>（設定の置き場を未確認）</td><td class="ok">本番（S3 の入力・展開タイプの入力）</td><td>モデル保存は <code>tp55_eval final2026</code> の出力。<code>KEIBA_LAP_FORECAST=1</code></td><td>環境変数を外す</td></tr>
+<tr class="cur"><td>展開タイプ</td><td><b>tp61-1</b></td><td>設定 2026-10-21（<code>dfd40fd0</code>）、モデル 2026-10-22（<code>833ab06b</code>）</td><td class="ok">画面のみ</td><td><code>config/pace_type.json</code>・<code>config/pace_type_models.json</code>。<code>KEIBA_PACE_TYPE=1</code>、<code>KEIBA_PACE_COHERENCE(_V2)=1</code></td><td>環境変数を外す</td></tr>
+<tr class="cur"><td>ペース予測 1F/3F</td><td>版名 <span class="warn">要確認</span></td><td><span class="warn">要確認</span></td><td class="ok">画面のみ</td><td><code>models/pace_predictor/model_{1f,3f}.txt</code>（<code>train_pace_model</code>）</td><td><span class="warn">要確認</span></td></tr>
+<tr class="cur"><td>成長指数</td><td><b>gi-2</b></td><td>2026-10-22（<code>5ace8206</code>）。当て込みの終了年 2025-12-31</td><td class="ok">画面のみ</td><td><code>config/growth_index/{params.json,model.txt,ped_profile.json}</code>。<code>KEIBA_GROWTH_INDEX=1</code></td><td>環境変数を外す</td></tr>
+<tr class="cur"><td>想定めぐ指数</td><td><b>v1</b>（2020〜2024 で学習・2025 で検証）</td><td>2026-10-22（<code>833ab06b</code>）</td><td class="ok">画面のみ</td><td><code>config/expected_megu/model.json</code>。HEM は <code>docs/operations/expected_megu_hem.md</code></td><td>—</td></tr>
+<tr class="cur"><td>血統 PX</td><td>版名なし（tp-38 の当て込み）</td><td><span class="warn">要確認</span></td><td class="ok">本番（親モデルの 43 列）</td><td>親モデルのバンドルに含まれる（<code>V5_GROUPS</code>）</td><td>親モデルごと</td></tr>
+<tr class="cur"><td>確率の較正</td><td><b>v1</b></td><td>2026-10-21（<code>f3e8cef3</code>）。当て込み: 2022〜2025 の V4 LOYO OOF</td><td class="ok">本番</td><td><code>config/prob_calibration.json</code>。<code>KEIBA_PROB_CALIBRATION=1</code></td><td>環境変数を外す</td></tr>
+<tr class="cur"><td>期待値の較正</td><td><b>ev v2</b>（未補正の確率用）／<b>ev_pc v3</b>（市場補正後の確率用）</td><td>v2: 2026-10-20（<code>2a3033a8</code>）／v3: 2026-10-21（<code>6180282d</code>）</td><td class="ok">本番</td><td><code>config/ev_calibration.json</code>・<code>config/ev_calibration_pc.json</code>（補正した確率のレースだけ v3 を使う）。当て込み直しは <code>src/scripts/data/calibrate_ev.py</code></td><td>環境変数 <code>KEIBA_PROB_CALIBRATION</code> を外すと v2</td></tr>
+<tr class="cur"><td>印の規則</td><td><b>mark_rule v2</b>（めぐAI印 v2）</td><td>2026-10-23（<code>63ea516c</code>）</td><td class="ok">本番</td><td><code>config/mark_rule.json</code>（<code>version: 2</code>）。<code>KEIBA_MARK_RULE=v1|v2</code> で上書き。ファイルの注記は「既定は v1」とあり、実際の既定がどちらかは <span class="warn">要確認</span></td><td><code>KEIBA_MARK_RULE=v1</code></td></tr>
+<tr class="cur"><td>想定オッズ（オッズ予測）</td><td>現行 <b>final_odds_prediction</b>（<code>final_odds_predictor.py</code>）。<b>sec77（V8 基準）</b>は <code>KEIBA_ODDS_SEC77=0</code> で無効にできる推論経路</td><td>sec77 の経路のコミット 2026-10-25（<code>2d993f5d</code> を含む履歴）。本番で sec77 が有効か、いつからかは <span class="warn">要確認</span></td><td>現行=本番／sec77=<span class="warn">要確認</span></td><td>現行: <code>final_odds_bundle</code>・<code>odds_pred</code>。sec77: <code>data/local/modeling/odds_pred/serving/</code>（<code>ODDS_SEC77_DIR</code>）、学習は <code>odds_sec77_fit fit</code></td><td><code>KEIBA_ODDS_SEC77=0</code> で現行に自動で戻る（<code>odds_sec77.py</code> の説明）</td></tr>
+<tr class="cur"><td>馬券組合せ確率</td><td><b>MB60</b>（割引 Harville）</td><td><span class="warn">要確認</span></td><td class="ok">本番（買い目の層）</td><td><code>src/pipeline/inference/exotic_probabilities.py</code>、評価 <code>exotic_eval/method_eval.json</code></td><td>—</td></tr>
+<tr class="cur"><td>走法マップ</td><td><code>ANALYSIS_VERSION</code> 31</td><td><span class="warn">要確認</span>（直近のコミットは Best5 の見た目の変更）</td><td class="ok">画面のみ</td><td><code>src/research/race/</code>（Best5 は <code>running_map_best5.py</code>、<code>W_DAY=0.5</code>）</td><td>—</td></tr>
+<tr><td>最終層（思想別 A〜F）</td><td>なし</td><td>—</td><td class="warn">評価完了・採用なし</td><td>ホスト <code>/home/jovyan/work/fl_out</code>、章 <code>final_layer_philosophies.html</code>、コード <code>src/scripts/data/fl_*.py</code>（未コミット）</td><td>—</td></tr>
+</tbody></table>
+<p class="sub">補助ヘッド（9 本）と、親モデルの 7 メンバーは、親モデルの版に含まれる（個別の版名なし。補助ヘッドの版名は <span class="warn">要確認</span>）。親モデルの列の内訳は <code>retrain_order.html</code> §2.2。</p>
+
+<h2>2. 版の履歴</h2>
+<p class="sub">新しい版を上に書く。主指標は「小さいほど良い」LogLoss など（相関・R² は大きいほど良い）。「採否」は <span class="ok">採用</span>／採用せず／<span class="warn">要確認</span>。根拠の「§N」は <code>training_pipeline_decisions.html</code>（<a href="../modeling/chapters/training_pipeline_decisions.html">決定ログ</a>）の節。</p>
+
+<h3>2.1 親モデル（勝率・連対率・複勝率）</h3>
+<p class="sub">主指標は test 2025（47,497 行・3,455 レース、1 回だけ評価）の勝率 LogLoss。一様 0.25880、市場 0.2040。ホストのバンドルは全版 283,714 行・5 seed（2020〜2025）で学習。</p>
+<table>
+<thead><tr><th>版</th><th>更新日</th><th>何が変わったか</th><th>主指標（test 2025 勝率 LogLoss ／ 連対 ／ 複勝）</th><th>採否</th><th>根拠・成果物</th></tr></thead>
+<tbody>
+<tr class="cur"><td><b>v6e</b></td><td>2026-10-22（バンドル 07:33）</td><td>1,231 列。v5 に RB（めぐ指数の履歴 16 列）を追加し、前段を e（本番の保存値で写せる入力だけ）に切替。群 CY・BEST・RB、アンサンブル v6</td><td>0.20678（v5 比の細部は v6_features）。連対・複勝の test 値は <span class="warn">要確認</span>（LOYO は 0.32719 / 0.41143）。e 版の test 2025 は 2 回目の評価（切替理由は valid と serving の都合）</td><td class="ok">採用（本番）</td><td><a href="../modeling/chapters/v6_features.html">v6_features</a> 7.2c、<code>final_v6e/bundle_v6_2025</code>、<code>retrain_order.html</code> §5.1、<code>pred_model_v6e.md</code></td></tr>
+<tr><td>v6（前段 b = S3B）</td><td>日付 <span class="warn">要確認</span></td><td>v5 に RB と前段 S3B（tl_ 再取得・CY・追走難度 v2・ラップ予想・位置取り予想を入力）を追加。入力 9 列が本番の保存値から再現できず配備不可</td><td>0.20685 ／ v5 比 −0.00029（上限 −0.00005）。連対 −0.00049、複勝 −0.00054（いずれも v5 比）</td><td>配備せず（e に切替）</td><td>v6_features 7.2b、<code>bundle_v6_2024</code></td></tr>
+<tr><td><b>v5</b></td><td>2026-10-20（バンドル 16:23）</td><td>1,215 列。群 CY（追い切りサイクル 37 列）・BEST（PX 43 列ほか）を追加</td><td>0.20714（<code>bundle_v5_2024</code>）</td><td>v6e の前の本番（<code>KEIBA_PRED_MODEL=v5</code> で戻せる）</td><td>v6_features 7.2b の比較表、<code>final_v5/bundle_v5_2025</code>、決定ログ（v5 の節。節番号は <span class="warn">要確認</span>）</td></tr>
+<tr><td><b>v4</b></td><td>2026-10-18（バンドル 01:33）</td><td>1,135 列。先読みの修正・血統キー・track_bias の修正・course_variant・S3 の再計算を済ませた学習表で作り直し。アンサンブル v4_e2（lgb_extras・lgb_softmax・linear・mtl_nn_extras_ped・mtl_nn_s ほか）</td><td>0.20740 ／ 0.32360 ／ 0.40640。v3 比 −0.00303（上限 −0.00216）、連対 −0.00459、複勝 −0.00661</td><td>採用（その後 v5 → v6e に置換）</td><td>決定ログ tp-06d（確定事項の節）、<code>final_eval_v4/TEST2025_EVALUATED.json</code>、<code>final_v4/bundle_v4_2025</code></td></tr>
+<tr><td><b>v3</b></td><td>2026-10-16（バンドル 16:41）</td><td>301 列（<code>adopted_features_v3.html</code>）</td><td>0.21039 ／ 0.32833 ／ 0.41297</td><td>採用（その後置換）。本番に出した日は <span class="warn">要確認</span></td><td>tp-06c、<code>final_v3/bundle_2025</code></td></tr>
+<tr><td>v2</td><td>日付 <span class="warn">要確認</span></td><td>tp-06b</td><td>0.21240</td><td>置換済み</td><td>tp-06b</td></tr>
+<tr><td>v1</td><td>日付 <span class="warn">要確認</span></td><td>tp-06</td><td>0.21349</td><td>置換済み</td><td>tp-06</td></tr>
+</tbody></table>
+<p class="sub">v1・v2 のバンドルの有無、v3 → v4 → v5 の本番切替日は、記録を読み切れていない（<span class="warn">要確認</span>）。切替の履歴は <code>git log -- src/api/local_predictions.py</code> と決定ログで追える。</p>
+
+<h3>2.2 前段 S3（時計・順位の前段予測）</h3>
+<p class="sub">出力は <code>s_time_pred</code>・<code>s_time_gap</code>・<code>s_rank_pred</code> の 3 列。<code>python -m src.scripts.data.v6_stage build {a..e}</code> で作る（<code>v6_stage.py</code> の <code>choices</code>）。</p>
+<table>
+<thead><tr><th>版</th><th>更新日</th><th>何が違うか</th><th>主指標</th><th>採否</th><th>根拠</th></tr></thead>
+<tbody>
+<tr class="cur"><td><b>e</b></td><td>2026-10-22（最終学習 02:42）</td><td>本番の保存値から写せる入力だけ（<code>serving_v6.UNMAPPED</code> の 9 列を外す。入力 275 列）</td><td>valid 2022〜24 で、RB 付きの z:RB@e が d 比で勝率 −0.00052（上限 −0.00030）、RB@b と同等</td><td class="ok">採用（本番）</td><td>v6_features 7.2b、<code>final_stage/v6_e_2025</code></td></tr>
+<tr><td>b（S3B）</td><td><span class="warn">要確認</span></td><td>tl_ 再取得 + CY + 追走難度 v2 + ラップ予想 + 位置取り予想を入力にした版。9 列が本番で再現できない</td><td>単独: 勝率 −0.00023（上限 −0.00003）、連対 −0.00042、複勝 +0.00043 悪化 → 単独は不採用。RB と組むと勝率 −0.00055（上限 −0.00031）</td><td>配備せず（e へ）</td><td>v6_features</td></tr>
+<tr><td>a／c／d</td><td><span class="warn">要確認</span></td><td>a は <span class="warn">要確認</span>。c はペースのシナリオ値を振った出力（<code>v6_stage.py</code>）。d は <code>s_adj_time</code>・<code>s_adj_l3f</code> を出す</td><td><span class="warn">要確認</span></td><td>採用せず（本番は e。<code>retrain_order.html</code> §2.4）</td><td><code>src/scripts/data/v6_stage.py</code></td></tr>
+<tr><td>旧 S3（v4 以前）</td><td>—</td><td>MAE 0.7248 / 0.2161 などの記録は <code>retrain_order.html</code> §2.8・§5.1 参照</td><td>—</td><td>置換済み</td><td>tp-04（決定ログ。節番号は <span class="warn">要確認</span>）</td></tr>
+</tbody></table>
+
+<h3>2.3 めぐ指数</h3>
+<table>
+<thead><tr><th>版</th><th>更新日</th><th>何が変わったか</th><th>主指標</th><th>採否</th><th>根拠</th></tr></thead>
+<tbody>
+<tr class="cur"><td><b>v3a</b></td><td>2026-10-19 本番反映</td><td>基準タイム等を当て込み直し、全走の指数を再計算（<code>src/pipeline/megu_index/v3a.py</code>・<code>recompute.py</code>）</td><td>指標は <a href="../modeling/chapters/megu_index_v3a.html">megu_index_v3a</a> を参照</td><td class="ok">採用（本番）</td><td><code>docs/operations/megu_v3a_rollout.md</code></td></tr>
+<tr><td>v3b</td><td>日付 <span class="warn">要確認</span></td><td>tp-65 の RB（めぐ指数 v3b／netkeiba 指数の履歴 16 列）。v6_features は「v3b」、<code>retrain_order.html</code> §2.2 は「v3a」と書いており、<b>RB の元が v3a か v3b か記述が食い違う</b></td><td>RB: 勝率 −0.00028（上限 −0.00012）。単独で採用基準を満たした最初の群</td><td>RB として親モデルに採用（v6e）。版名は <span class="warn">要確認</span></td><td>v6_features、<code>build_rb_state</code></td></tr>
+<tr><td>v1／v2</td><td>日付 <span class="warn">要確認</span></td><td>v3a 以前の指数</td><td><span class="warn">要確認</span></td><td>置換済み</td><td>—</td></tr>
+</tbody></table>
+
+<h3>2.4 追走難度</h3>
+<table>
+<thead><tr><th>版</th><th>更新日</th><th>何が変わったか</th><th>主指標</th><th>採否</th><th>根拠</th></tr></thead>
+<tbody>
+<tr class="cur"><td><b>v2（tp54-1）</b></td><td>2026-10-22（設定のコミット日）</td><td>想定位置取りで走ったときの終いの落ち（要求側と供給側の差）。26 特徴・学習 244,601 行・400 ラウンド</td><td><a href="../modeling/chapters/tracking_difficulty_v2.html">tracking_difficulty_v2</a> を参照（<code>retrain_order.html</code> §5.1 に基準線との比較）</td><td class="ok">採用（S3 の入力。親モデルの直接の列はなし）</td><td><code>config/tracking_difficulty_v2/meta.json</code></td></tr>
+<tr><td>v1</td><td><span class="warn">要確認</span></td><td>v2 の前の版</td><td><span class="warn">要確認</span></td><td>置換済み</td><td>tracking_difficulty_v2 の比較節</td></tr>
+</tbody></table>
+
+<h3>2.5 ラップ予想</h3>
+<table>
+<thead><tr><th>版</th><th>更新日</th><th>何が変わったか</th><th>主指標（2025 年 MAE 秒、前半 3F / 後半 3F）</th><th>採否</th><th>根拠</th></tr></thead>
+<tbody>
+<tr class="cur"><td><b>tp55-1</b></td><td><span class="warn">要確認</span></td><td>前半・後半 3F と展開（slow / mid / high）の確率</td><td>0.508 / 0.553（par 0.620 / 0.688、R² 0.33 / 0.30）</td><td class="ok">採用（S3・展開タイプの入力）</td><td><a href="../modeling/chapters/lap_forecast.html">lap_forecast</a>、<code>retrain_order.html</code> §5.1</td></tr>
+</tbody></table>
+
+<h3>2.6 展開タイプ・成長指数・想定めぐ指数（画面のみ）</h3>
+<table>
+<thead><tr><th>モデル</th><th>版</th><th>更新日</th><th>何が変わったか</th><th>主指標</th><th>採否</th><th>根拠</th></tr></thead>
+<tbody>
+<tr class="cur"><td>展開タイプ</td><td><b>tp61-1</b></td><td>2026-10-21〜22</td><td>ペース確率にラップ予想を混ぜる重みを選び、分類器を最終学習（48 特徴）</td><td><span class="warn">要確認</span></td><td class="ok">採用（画面）</td><td><code>config/pace_type*.json</code></td></tr>
+<tr class="cur"><td>成長指数</td><td><b>gi-2</b></td><td>2026-10-22</td><td>今走のめぐ指数（v3a）から直近水準と統制分を引いた残差を予測（47 特徴）</td><td><span class="warn">要確認</span></td><td class="ok">採用（画面）</td><td><code>config/growth_index/params.json</code></td></tr>
+<tr class="cur"><td>想定めぐ指数</td><td><b>v1</b></td><td>2026-10-22</td><td>芝ダ替わり・距離・クラス・年齢・斤量差などの補正係数（2020〜2024 学習・2025 検証）</td><td><span class="warn">要確認</span></td><td class="ok">採用（画面）</td><td><code>config/expected_megu/model.json</code></td></tr>
+</tbody></table>
+
+<h3>2.7 確率の較正・期待値の較正・印</h3>
+<table>
+<thead><tr><th>モデル</th><th>版</th><th>更新日</th><th>何が変わったか</th><th>主指標</th><th>採否</th><th>根拠</th></tr></thead>
+<tbody>
+<tr class="cur"><td>確率の較正</td><td><b>v1</b></td><td>2026-10-21</td><td>モデル確率と市場確率の対数線形ブレンド。2022〜2025 の V4 LOYO OOF に当て込み</td><td>段 13 で確認（数値は <span class="warn">要確認</span>）</td><td class="ok">採用（<code>KEIBA_PROB_CALIBRATION=1</code>）</td><td><code>config/prob_calibration.json</code>、tp-70 のコミット</td></tr>
+<tr class="cur"><td>期待値の較正</td><td><b>ev_pc v3</b></td><td>2026-10-21</td><td>市場補正後の確率から作った EV に当て込み直し。win は恒等、place は再当て込み（LOYO の ECE 0.027、未補正 0.035）。推奨ポートフォリオの cand_*・levels・range も作り直し</td><td>place の ECE 0.027</td><td class="ok">採用</td><td><code>config/ev_calibration_pc.json</code>（<code>note</code> 欄）</td></tr>
+<tr><td>期待値の較正</td><td>ev v2</td><td>2026-10-20</td><td>確定オッズ・確定払戻に合わせて表示 EV を較正</td><td><span class="warn">要確認</span></td><td>未補正の確率のレースで使用</td><td><code>config/ev_calibration.json</code>、<code>ev_calibration_adopt.html</code></td></tr>
+<tr class="cur"><td>印の規則</td><td><b>mark_rule v2</b></td><td>2026-10-23</td><td>めぐAI印 v2（ユーザー定義）。v1 は従来の印</td><td><a href="../modeling/chapters/megu_marking.html">megu_marking</a> 末尾の「v2 の評価」</td><td class="ok">採用（既定の扱いは <span class="warn">要確認</span>）</td><td><code>config/mark_rule.json</code>、<code>docs/operations/mark_rule_v2.md</code></td></tr>
+</tbody></table>
+
+<h3>2.8 想定オッズ（オッズ予測）</h3>
+<table>
+<thead><tr><th>版</th><th>更新日</th><th>何が変わったか</th><th>主指標</th><th>採否</th><th>根拠</th></tr></thead>
+<tbody>
+<tr class="cur"><td><b>final_odds_prediction（現行）</b></td><td><span class="warn">要確認</span></td><td>LightGBM による想定単勝・想定複勝（市場オッズは入力にしない）。キャッシュのカテゴリ名も <code>final_odds_prediction</code></td><td>log オッズの誤差（値は <code>retrain_order.html</code> §2.8、<a href="../modeling/chapters/final_odds_model.html">final_odds_model</a>）</td><td class="ok">採用（本番の既定）</td><td><code>src/pipeline/models/final_odds_predictor.py</code></td></tr>
+<tr><td><b>V8（決定ログ §77 のモデル、<code>sec77</code>）</b></td><td>推論コードのコミット 2026-10-25 頃</td><td>V3Serving v6 の特徴量 → LightGBM（対数シェア・対数複勝）→ 較正直線 → レース内で正規化。保存は現行と同じ形式で、entries の source を <code>sec77</code> にする</td><td><span class="warn">要確認</span>（§77 を参照）</td><td>本番で有効かは <span class="warn">要確認</span>。<code>KEIBA_ODDS_SEC77=0</code> で現行に戻る</td><td><code>src/pipeline/inference/odds_sec77.py</code>、<code>odds_sec77_fit</code>、<code>config/odds_pred/</code></td></tr>
+<tr><td>V9</td><td><span class="warn">要確認</span></td><td><span class="warn">要確認</span>（コード・設定から版の定義を確認できていない）</td><td><span class="warn">要確認</span></td><td><span class="warn">要確認</span></td><td>—</td></tr>
+</tbody></table>
+
+<h3>2.9 馬券組合せ確率・走法マップ</h3>
+<table>
+<thead><tr><th>モデル</th><th>版</th><th>更新日</th><th>何が変わったか</th><th>主指標</th><th>採否</th><th>根拠</th></tr></thead>
+<tbody>
+<tr class="cur"><td>馬券組合せ確率</td><td><b>MB60</b></td><td><span class="warn">要確認</span></td><td>割引 Harville（学習モデルではない）。ほかに Harville など</td><td>3 連複の対数スコア 4.364（Harville 4.437）</td><td class="ok">採用</td><td><code>exotic_eval/method_eval.json</code>、<code>retrain_order.html</code> §2.8。馬同士の位置取りの近さで説明できるかの検定: <code>src/scripts/data/exotic_pair_corr_test.py</code>（結果は <span class="warn">要確認</span>）</td></tr>
+<tr class="cur"><td>走法マップ</td><td><code>ANALYSIS_VERSION</code> 31</td><td><span class="warn">要確認</span></td><td>Best5 は <code>W_DAY=0.5</code> の 1 パターン（2025・2026 年の外挿 1,565 レースで調整）</td><td>—</td><td class="ok">採用（画面）</td><td><code>running_map_best5.py</code> の説明</td></tr>
+</tbody></table>
+
+<h3>2.10 最終層（思想別）— 評価完了・採用なし</h3>
+<p class="sub">2026-11-06 に実験を開始（fork「final-layer」）。評価は「同点数で人気上位を買った対照との差（レースで対）」を主に、人気薄の的中率、レース単位の的中率、上位的中を除いた回収率を見る。test 2025 は 1 回。<b>回収率 100% 超を保証する表現はしない</b>（これまで区間の下限が 100% を超える方策はない）。結果（2026-11-06 に完了）：試した設定 167 通りで「利益が 0 を超える」は Reality Check で p=0.47（有意でない）。人気順の対照より良い点は再現したが、100% 超の根拠にはならない。最大の不確かさは T-60 のオッズの代わりに確定オッズを使ったこと。章: <code>docs/html/modeling/chapters/final_layer_philosophies.html</code>。</p>
+<table>
+<thead><tr><th>パターン</th><th>思想</th><th>状態</th><th>主指標</th><th>採否</th><th>成果物</th></tr></thead>
+<tbody>
+<tr><td>A</td><td>精度派（基準）</td><td>完了</td><td>3連複 流し5 の回収率 94.1%（2025）、対照との差 +0.166 [+0.069, +0.262]</td><td>採用なし</td><td><code>src/scripts/data/fl_a.py</code>（未コミット）</td></tr>
+<tr><td>B</td><td>人気薄発掘</td><td>完了</td><td>B3 単勝 2025 で 116.8% [80.7, 157.6]（上位 3 的中を除くと 93.8%）</td><td>採用なし</td><td><code>fl_b.py</code></td></tr>
+<tr><td>C</td><td>レース単位マッチ（束）</td><td>完了</td><td>2025 で 88.5%、差 +0.110 [−0.073, +0.307]（再現せず）</td><td>採用なし</td><td><code>fl_c.py</code></td></tr>
+<tr><td>D</td><td>期待値直接最適化</td><td>完了</td><td>3連複 5 倍バスケット 2025 で 102.4% [94.7, 110.5]（小口には組めない）</td><td>採用なし</td><td><code>fl_d.py</code></td></tr>
+<tr><td>E</td><td>データ派</td><td>完了</td><td>単勝 2025 で 103.8%、差 +0.326 [−0.003, +0.696]</td><td>採用なし</td><td><code>fl_e.py</code></td></tr>
+<tr><td>F</td><td>舞台別合成</td><td>完了</td><td>B3 との差 2025 で −0.12〜+0.10（上乗せなし）</td><td>採用なし</td><td>対応するファイルは未確認（<code>fl_core.py</code>・<code>fl_dataset.py</code> は共通部）</td></tr>
+</tbody></table>
+
+<h2>3. 更新のしかた</h2>
+<div class="box">
+<b>モデルを更新・切替したら、次の 2 つを必ず両方書き換える。</b>
+<ol>
+<li>「1. 現在の採用一覧」: 採用中の版・採用日・状態・場所・戻し方を新しい内容にする。</li>
+<li>「2. 版の履歴」: そのモデルの表の<b>一番上</b>に新しい行を足す。前の行は「採用」を「置換済み（いつ・何に）」に直す。</li>
+</ol>
+</div>
+
+<h3>3.1 版の名前</h3>
+<ul>
+<li>既存の呼び名を引き継ぐ。親モデルは <code>v6e</code> のように<b>番号 + 英字</b>（番号は特徴量の世代、英字は前段などの派生）。前段 S3 は英字 1 文字（<code>a</code>〜<code>e</code>）。追走難度などは調査番号つき（<code>tp54-1</code>、<code>tp55-1</code>、<code>tp61-1</code>）。成長指数は <code>gi-2</code>、較正・規則は <code>v1</code>・<code>v2</code>・<code>ev_pc v3</code>。</li>
+<li>新しい版は、設定ファイルの <code>version</code> 欄と、成果物のディレクトリ名（<code>final_v6e/</code> など）に<b>同じ名前</b>を入れる。名前が違うと、この表から成果物を探せなくなる。</li>
+<li>モデルの種類が変わるときは新しい番号、同じ作りで入力だけ変えるときは英字の違い、と区別する。</li>
+</ul>
+
+<h3>3.2 書く項目</h3>
+<table>
+<thead><tr><th>項目</th><th>書き方</th></tr></thead>
+<tbody>
+<tr><td>版</td><td>上の命名に従う</td></tr>
+<tr><td>更新日</td><td><code>YYYY-MM-DD</code>。作った日（バンドルの更新時刻・最終学習の日）と、本番に出した日を<b>分けて</b>書く。分からないほうは <span class="warn">要確認</span></td></tr>
+<tr><td>何が変わったか</td><td>列数・入力・学習範囲・前の版との違いを 1〜2 文で</td></tr>
+<tr><td>主指標</td><td>値と評価の条件（test 2025 など）。差は<b>区間つき</b>（paired bootstrap の上限）で。test 2025 の評価回数（1 回／2 回目）も書く</td></tr>
+<tr><td>採否</td><td>採用（本番／shadow／画面のみ）／採用せず／要確認</td></tr>
+<tr><td>根拠</td><td>決定ログの節番号、運用文書、成果物のパス、コミットのハッシュ</td></tr>
+<tr><td>戻し方</td><td>環境変数・スクリプト・退避先。戻せないものは「戻せない」と書く</td></tr>
+</tbody></table>
+
+<h3>3.3 守ること</h3>
+<ul>
+<li>配備の手順・確認は <code>docs/operations/model_release_checklist.md</code> に従う。この文書は<b>結果の記録</b>であり、手順書ではない。配備後に、チェックリストで確認した日を採用日として書く。</li>
+<li>2026 年は学習にも選択にも使わない（テストセット②）。test 2025 は 1 回だけ。2 回目になったら理由を書く（v6e の例）。</li>
+<li>書けない項目を推測で埋めない。確認できるまで <span class="warn">要確認</span> のままにして、確認した人が直す。</li>
+<li>当て込んだ重み・係数は git に置かない（<code>config/fitted_artifacts.txt</code>、<code>docs/operations/fitted_artifacts.md</code>）。成果物の場所はホストのパスで書き、中身は書かない。</li>
+<li>ホストへの書き込み（ファイル配置・再起動）と GCP の操作は、これまでどおり <code>ssh keiba-remote</code> 経由で行う。</li>
+</ul>
+
+<h2>4. 関連する文書</h2>
+<ul>
+<li><a href="retrain_order.html">モデル再学習の順番と依存関係</a>（§2.8 サブモデル一覧、§3 手順、§4 やり直す位置、§5 合格基準）。</li>
+<li><code>docs/operations/model_release_checklist.md</code>（配備の確認）、<code>docs/operations/pred_model_v6e.md</code>（v6e の切替）、<code>docs/operations/megu_v3a_rollout.md</code>、<code>docs/operations/mark_rule_v2.md</code>、<code>docs/operations/model_distribution.md</code>、<code>docs/operations/fitted_artifacts.md</code>。</li>
+<li>本書の章: <a href="../modeling/chapters/training_pipeline_decisions.html">決定ログ</a>、<a href="../modeling/chapters/v6_features.html">v6_features</a>、<a href="../modeling/chapters/tracking_difficulty_v2.html">tracking_difficulty_v2</a>、<a href="../modeling/chapters/lap_forecast.html">lap_forecast</a>、<a href="../modeling/chapters/megu_index_v3a.html">megu_index_v3a</a>、<a href="../modeling/chapters/final_odds_model.html">final_odds_model</a>。</li>
+</ul>
+
+</main></body></html>
