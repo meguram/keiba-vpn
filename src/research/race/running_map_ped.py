@@ -20,16 +20,13 @@ logger = logging.getLogger(__name__)
 TRAITS: list[tuple[str, str, str, str]] = [
     ("dirt_share", "ダート適性", "pct", "走る馬場のうちダートが占める割合の予想（残りが芝）。高いほどダート向き"),
     ("dist_good", "適性距離", "m", "好走（3着以内）しやすい距離の予想"),
-    ("dist_run", "よく走る距離", "m", "実際に使われやすい距離の予想"),
     ("ax_endure", "Hペース耐性", "n", "速い流れで脚を使っても終いに落ちない"),
     ("ax_sustain", "TS持続力", "n", "ギアチェンジ・TS・Hペース耐性の血統予測から出した値"),
     ("ax_ts", "TS", "n", "末脚の速さ"),
     ("ax_gear", "ギアチェンジ", "n", "加速の切り替え"),
-    ("ax_debut", "出脚", "n", "出足の速さ"),
-    ("ax_front", "先行力", "n", "先行できる力"),
-    ("style_q", "前に行く度", "n", "高いほど前の位置を取る脚質"),
+    ("style_q", "前に行く度", "n", "出脚・先行力を合わせた見方。高いほど前の位置を取りやすい（血統で最も差が出る）"),
 ]
-SCORE_KEYS = ("ax_endure", "ax_sustain", "ax_ts", "ax_gear", "ax_debut", "ax_front", "style_q")   # 10 点満点で見せる観点
+SCORE_KEYS = ("ax_endure", "ax_sustain", "ax_ts", "ax_gear", "style_q")   # 10 点満点で見せる観点
 INVERT = ("style_q",)   # 値が小さいほど前＝高得点
 
 
