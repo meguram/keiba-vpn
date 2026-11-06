@@ -338,14 +338,13 @@ function ColorControl({ axes, colorKey, onChange, topKeys }: { axes: RunningMapA
   );
 }
 
+const MEDAL = [{ icon: "🥇", c: "#e3b341" }, { icon: "🥈", c: "#c0c7d0" }, { icon: "🥉", c: "#d08a52" }];
+
 /** Best5: 地図の上で、このコース・今日の馬場に走法が合う順の 5 頭。結果が出ていれば実際の着順を並べる */
 function Best5Panel({ b5, hs, onPick }: { b5: RunningMapBest5; hs: RunningMapHorse[]; onPick: (h: RunningMapHorse) => void }) {
   const byId = new Map(hs.map((h) => [h.horse_id, h]));
   const rows = b5.picks.map((p) => ({ p, h: byId.get(p.horse_id) ?? null }));
   const done = hs.some((h) => h.finish_position != null);
-  const hit = rows.filter((r) => r.h?.finish_position != null && r.h.finish_position <= 3).length;
-  const top3 = hs.filter((h) => h.finish_position != null && h.finish_position <= 3).sort((a, b) => (a.finish_position ?? 0) - (b.finish_position ?? 0));
-  const inPicks = new Set(b5.picks.map((p) => p.horse_id));
   const label = (h: RunningMapHorse) => `${h.horse_number ?? ""} ${h.horse_name ?? ""}`.trim() || "?";
   return (
     <div style={{ fontSize: 12, margin: "0 0 8px", padding: "6px 8px", borderRadius: 8, border: "1px solid var(--border)" }}>
@@ -354,20 +353,19 @@ function Best5Panel({ b5, hs, onPick }: { b5: RunningMapBest5; hs: RunningMapHor
       <ol style={{ listStyle: "none", margin: "4px 0 0", padding: 0 }}>
         {rows.map(({ p, h }) => {
           const fp = h?.finish_position ?? null;
+          const medal = fp != null && fp <= 3 ? MEDAL[fp - 1] : null;
           return (
-            <li key={p.rank} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "2px 0", cursor: h ? "pointer" : "default" }} onClick={() => h && onPick(h)}>
+            <li key={p.rank} style={{ display: "flex", gap: 8, alignItems: "center", padding: "3px 6px", margin: "1px -6px", borderRadius: 6, cursor: h ? "pointer" : "default",
+              ...(medal ? { background: `${medal.c}1f`, border: `1px solid ${medal.c}99` } : { border: "1px solid transparent" }) }} onClick={() => h && onPick(h)}>
               <span style={{ width: 18, color: "var(--text-dim)" }}>{p.rank}</span>
-              <span style={{ flex: 1 }}>{h ? label(h) : (p.horse_number ?? "?")}</span>
-              {done && <span style={{ fontWeight: fp != null && fp <= 3 ? 800 : 400, color: fp != null && fp <= 3 ? "#3fb950" : "var(--text-dim)" }}>{fp != null ? `${fp}着` : "着外・中止"}</span>}
+              <span style={{ flex: 1, fontWeight: medal ? 700 : 400 }}>{h ? label(h) : (p.horse_number ?? "?")}</span>
+              {done && (medal
+                ? <span style={{ fontWeight: 800, color: medal.c, whiteSpace: "nowrap" }}><span style={{ fontSize: 16, marginRight: 3 }}>{medal.icon}</span>{fp}着</span>
+                : <span style={{ color: "var(--text-dim)" }}>{fp != null ? `${fp}着` : "着外・中止"}</span>)}
             </li>
           );
         })}
       </ol>
-      {done && (
-        <div style={{ color: "var(--text-dim)", marginTop: 3 }}>
-          5 頭中 <b style={{ color: "var(--text)" }}>{hit}</b> 頭が 3 着以内。実際の 1〜3 着: {top3.map((h) => `${h.finish_position}着 ${label(h)}${inPicks.has(h.horse_id) ? "（Best5）" : ""}`).join(" / ")}
-        </div>
-      )}
     </div>
   );
 }
