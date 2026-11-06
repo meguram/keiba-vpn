@@ -530,7 +530,7 @@ function PedSection({ h, traits }: { h: RunningMapHorse; traits: RunningMapPedTr
   const tip = (t: RunningMapPedTrait) => `${t.hint}${t.r2 != null ? `（新しい馬での当てはまり R² ${(t.r2 * 100).toFixed(1)}%）` : ""}`;
   return (
     <div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px solid var(--border)" }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>血統から見た予想</div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>血統から読み取れる適性</div>
       <div style={{ fontSize: 11, color: "var(--text-dim)", margin: "1px 0 6px", lineHeight: 1.5 }}>
         <div>父: {p.sire ?? "不明"}</div>
         <div>母父: {p.damsire ?? "不明"}</div>
@@ -589,10 +589,6 @@ function PedSection({ h, traits }: { h: RunningMapHorse; traits: RunningMapPedTr
           </div>
         </>
       )}
-      <div style={{ fontSize: 10.5, color: "var(--text-dim)", marginTop: 5, lineHeight: 1.5 }}>
-        点数は、直近 2 年に走った馬を血統で同じように予想したときの中での位置（5 点が平均、10 点が上位）。括弧は 80% の確からしさの幅で、青い帯がその範囲です。
-        信頼が低い観点は幅が広く、血統だけでは差が出にくいので参考程度に。Cr性能・基礎スピード・まくり特性は血統からは言えないため出していません。
-      </div>
     </div>
   );
 }
