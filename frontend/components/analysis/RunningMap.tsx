@@ -512,53 +512,86 @@ function HorseDetail({ h, pedTraits, axes, topKeys, extraAxes, bracket, onClose,
   );
 }
 
-function pedFmt(fmt: RunningMapPedTrait["fmt"], v: number): string {
-  if (fmt === "pct") return `${Math.round(v * 100)}%`;
-  if (fmt === "m") return `${v >= 0 ? "+" : ""}${Math.round(v)}m`;
-  return v.toFixed(fmt === "q" ? 2 : 1);
-}
+const fmtM = (v: number) => `${(Math.round(v / 10) * 10).toLocaleString()}m`;
 
-/** 血統（性別・父・母父）だけから出した、観点ごとの期待値と 80% 区間。馬の実測とは別。線の位置は全体の平均が中央、端は上位・下位 1 割の馬の目安の 2 倍 */
+/** 血統（性別・父・母父）だけから出した予想。馬場・距離は実際の値、走りの特性は 10 点満点（直近 2 年に走った馬の中での位置）。馬の実測とは別 */
 function PedSection({ h, traits }: { h: RunningMapHorse; traits: RunningMapPedTrait[] }) {
   const p = h.ped;
   if (!p || traits.length === 0) return null;
-  const rel = (r2: number | null) => (r2 == null ? null : r2 >= 0.15 ? { t: "強", c: "#3fb950" } : r2 >= 0.03 ? { t: "中", c: "#d29922" } : { t: "弱", c: "var(--text-dim)" });
+  const rel = (r2: number | null) => (r2 == null ? null : r2 >= 0.15 ? { t: "信頼 高", c: "#3fb950" } : r2 >= 0.03 ? { t: "信頼 中", c: "#d29922" } : { t: "信頼 低", c: "var(--text-dim)" });
+  const row = { display: "grid", gridTemplateColumns: "7.5em 1fr", alignItems: "start", gap: 6, fontSize: 11.5 } as const;
+  const dirt = traits.find((t) => t.key === "dirt_share" && p.v[t.key]);
+  const dists = traits.filter((t) => t.fmt === "m" && t.abs && p.v[t.key]);
+  const scored = traits.filter((t) => t.score && p.s?.[t.key]);
+  const chip = (t: RunningMapPedTrait) => {
+    const r = rel(t.r2);
+    return r ? <span style={{ marginLeft: 4, fontSize: 10, color: r.c }}>{r.t}</span> : null;
+  };
+  const tip = (t: RunningMapPedTrait) => `${t.hint}${t.r2 != null ? `（新しい馬での当てはまり R² ${(t.r2 * 100).toFixed(1)}%）` : ""}`;
   return (
     <div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px solid var(--border)" }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>血統から見た傾向</div>
-      <div style={{ fontSize: 11, color: "var(--text-dim)", margin: "1px 0 5px" }}>
-        {p.sex}・父 {p.sire ?? "不明"}・母父 {p.damsire ?? "不明"}。馬の走りの実測とは別の、血統だけの期待値です。{!p.has_damsire && "（母父が不明なため幅が広め）"}
+      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>血統から見た予想</div>
+      <div style={{ fontSize: 11, color: "var(--text-dim)", margin: "1px 0 6px" }}>
+        {p.sex}・父 {p.sire ?? "不明"}・母父 {p.damsire ?? "不明"} だけから出した予想です（馬の走りの実測とは別）。{!p.has_damsire && "母父が不明なため幅が広めです。"}
       </div>
-      <div style={{ display: "grid", gap: 4 }}>
-        {traits.map((t) => {
-          const v = p.v[t.key];
-          if (!v) return null;
-          const [mean, lo, hi] = v;
-          const span = t.ref != null && t.ref > 0 ? 2 * t.ref : null;
-          const pos = (x: number) => (span != null && t.base != null ? Math.max(0, Math.min(100, 50 + ((x - t.base) / span) * 50)) : null);
-          const a = pos(lo), b = pos(hi), m = pos(mean), r = rel(t.r2);
+      <div style={{ display: "grid", gap: 6 }}>
+        {dirt && (() => {
+          const [m, lo, hi] = p.v[dirt.key];
+          const pc = (x: number) => `${Math.round(x * 100)}%`;
           return (
-            <div key={t.key} style={{ display: "grid", gridTemplateColumns: "7.5em 1fr 9.5em", alignItems: "center", gap: 6, fontSize: 11.5 }} title={`${t.hint}${t.r2 != null ? `（新しい馬での当てはまり R² ${(t.r2 * 100).toFixed(1)}%）` : ""}`}>
-              <span style={{ color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {t.label}{r && <span style={{ marginLeft: 4, fontSize: 10, color: r.c }}>{r.t}</span>}
-              </span>
-              <span style={{ position: "relative", height: 10, borderRadius: 5, background: "var(--border)" }}>
-                {a != null && b != null && m != null && (
-                  <>
-                    <span style={{ position: "absolute", left: `${a}%`, width: `${Math.max(b - a, 1)}%`, top: 3, bottom: 3, borderRadius: 3, background: "rgba(88,166,255,0.35)" }} />
-                    <span style={{ position: "absolute", left: `calc(${m}% - 3px)`, width: 6, top: 0, bottom: 0, borderRadius: 3, background: "#58a6ff" }} />
-                    <span style={{ position: "absolute", left: "50%", top: -2, bottom: -2, width: 1, background: "var(--text-dim)", opacity: 0.6 }} />
-                  </>
-                )}
-              </span>
-              <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-                <b>{pedFmt(t.fmt, mean)}</b> <span style={{ color: "var(--text-dim)", fontSize: 10.5 }}>({pedFmt(t.fmt, lo)}〜{pedFmt(t.fmt, hi)})</span>
+            <div style={row} title={tip(dirt)}>
+              <span style={{ color: "var(--text-dim)" }}>{dirt.label}{chip(dirt)}</span>
+              <span>
+                <span style={{ position: "relative", display: "block", height: 10, borderRadius: 5, background: "rgba(63,185,80,0.35)" }}>
+                  <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${m * 100}%`, borderRadius: 5, background: "#a8793a" }} />
+                </span>
+                <span style={{ fontSize: 11.5 }}><b>ダート {pc(m)}</b>・芝 {pc(1 - m)} <span style={{ color: "var(--text-dim)", fontSize: 10.5 }}>（ダート {pc(lo)}〜{pc(hi)}）</span></span>
               </span>
             </div>
           );
-        })}
+        })()}
+        {dists.map((t) => (
+          <div key={t.key} style={row} title={tip(t)}>
+            <span style={{ color: "var(--text-dim)" }}>{t.label}{chip(t)}</span>
+            <span style={{ display: "grid", gap: 1 }}>
+              {Object.entries(t.abs ?? {}).sort((x, y) => (x[0] === "芝" ? -1 : 1) - (y[0] === "芝" ? -1 : 1)).map(([surf, mean]) => {
+                const [m, lo, hi] = p.v[t.key];
+                return (
+                  <span key={surf}><span style={{ display: "inline-block", width: "3.2em", color: "var(--text-dim)" }}>{surf}</span><b>{fmtM(mean + m)}</b>{" "}
+                    <span style={{ color: "var(--text-dim)", fontSize: 10.5 }}>（{fmtM(mean + lo)}〜{fmtM(mean + hi)}）</span></span>
+                );
+              })}
+            </span>
+          </div>
+        ))}
       </div>
-      <div style={{ fontSize: 10.5, color: "var(--text-dim)", marginTop: 4 }}>線=平均、青い帯=80%区間、濃い印=期待値。強・中・弱は血統でどれだけ言える観点か（弱は帯がほぼ平均をまたぐ）。</div>
+      {scored.length > 0 && (
+        <>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text)", margin: "8px 0 3px" }}>走りの特性（10点満点）</div>
+          <div style={{ display: "grid", gap: 4 }}>
+            {scored.map((t) => {
+              const [sc, lo, hi] = (p.s ?? {})[t.key];
+              return (
+                <div key={t.key} style={{ display: "grid", gridTemplateColumns: "7.5em 1fr 8.5em", alignItems: "center", gap: 6, fontSize: 11.5 }} title={tip(t)}>
+                  <span style={{ color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.label}</span>
+                  <span style={{ position: "relative", height: 10, borderRadius: 5, background: "var(--border)" }}>
+                    <span style={{ position: "absolute", left: `${lo * 10}%`, width: `${Math.max((hi - lo) * 10, 1)}%`, top: 3, bottom: 3, borderRadius: 3, background: "rgba(88,166,255,0.30)" }} />
+                    <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${sc * 10}%`, borderRadius: 5, background: "#58a6ff", opacity: 0.85 }} />
+                    <span style={{ position: "absolute", left: "50%", top: -2, bottom: -2, width: 1, background: "var(--text-dim)", opacity: 0.6 }} />
+                  </span>
+                  <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                    <b>{sc.toFixed(1)}</b> <span style={{ color: "var(--text-dim)", fontSize: 10.5 }}>({lo.toFixed(1)}〜{hi.toFixed(1)})</span>{chip(t)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+      <div style={{ fontSize: 10.5, color: "var(--text-dim)", marginTop: 5, lineHeight: 1.5 }}>
+        点数は、直近 2 年に走った馬を血統で同じように予想したときの中での位置（5 点が平均、10 点が上位）。括弧は 80% の確からしさの幅で、青い帯がその範囲です。
+        信頼が低い観点は幅が広く、血統だけでは差が出にくいので参考程度に。Cr性能・基礎スピード・まくり特性は血統からは言えないため出していません。
+      </div>
     </div>
   );
 }

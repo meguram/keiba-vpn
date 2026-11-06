@@ -80,7 +80,9 @@ export type RunningMapHorse = {
 };
 
 /** 観点ごとに [期待値, 80%区間の下, 上] */
-export type RunningMapPed = { sex: string; sire: string | null; damsire: string | null; has_damsire: boolean; v: Record<string, [number, number, number]> };
+export type RunningMapPed = { sex: string; sire: string | null; damsire: string | null; has_damsire: boolean; v: Record<string, [number, number, number]>;
+  /** 10 点満点の観点の [点数, 80%区間の下, 上]（0.5 点刻み） */
+  s?: Record<string, [number, number, number]> };
 
 export type RunningMapPedTrait = {
   key: string; label: string; hint: string;
@@ -92,6 +94,10 @@ export type RunningMapPedTrait = {
   ref: number | null;
   /** 新しい馬での当てはまり（観測 R²。血統でどれだけ言えるか） */
   r2: number | null;
+  /** 10 点満点で見せる観点 */
+  score?: boolean;
+  /** 距離の観点: 芝・ダートそれぞれの平均距離（期待値は平均との差なので足して実際の距離にする） */
+  abs?: Record<string, number>;
 };
 
 export type RunningMapFigure = {
