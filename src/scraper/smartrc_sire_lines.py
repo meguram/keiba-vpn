@@ -9,15 +9,14 @@ smartrc の馬情報（horses/view）・全戦績（fullresults）には、馬�
   1. 手元の smartrc の全戦績の表（tp32 の career_eq / runners_eq。馬ごとの f_code・f_*code）から、馬 → 父の系統コード。
   2. 馬 → 父（netkeiba ID）の対応表（horse_sire_map.parquet）とつなぎ、種牡馬ごとに最も多いコードを取る（食い違いは数を残す）。
   3. 1 で 1 頭も分からない種牡馬は、その産駒 1 頭の馬情報を smartrc から取る（fetch。2.2〜4.0 秒間隔、制限を受けたら止める）。
-  4. smartrc にも系統の付いていない種牡馬（日本未登録の海外の種牡馬・産駒の少ない新種牡馬）は、産駒の 5 代血統（netkeiba）で
-     父の父…とさかのぼり、台帳にある最初の種牡馬の系統を使う（smartrc の小系統は父系で決まるため。from = "paternal"、via にさかのぼった祖先）。
+  smartrc で系統が空欄の種牡馬（比較的新しく輸入された海外の種牡馬など。smartrc の画面でも系統欄は空白）は台帳に入れず、
+  netkeiba の『○○系』を使う（2026-11-06 ユーザー指示。build_horse_sire_map.line_labels が netkeiba の台帳で補う）。
 出力: data/meta/sire_lines/sire_smartrc_lines.json
   {"built": 日時, "complete_at": 全種牡馬を試し終えた日時 or null, "sires": {"<種牡馬ID>": {name, small, small_name, large, large_name, type, type_name, n, from}}}
 
 使い方:
     python -m src.scraper.smartrc_sire_lines build              # 手元のデータから作る（取得なし）
     python -m src.scraper.smartrc_sire_lines fetch --max 100    # 分からない種牡馬を smartrc から補う
-    python -m src.scraper.smartrc_sire_lines paternal           # それでも分からない種牡馬を、父系の祖先の系統で埋める
     python -m src.scraper.smartrc_sire_lines master             # 系統名の対応表を smartrc の画面から取り直す（2 回の取得）
 """
 
@@ -120,7 +119,7 @@ def build(path: Path | None = None) -> dict[str, int]:
         g2 = g.dropna(subset=["f_slcode"])
         name = g["sire_name"].dropna().iloc[0] if g["sire_name"].notna().any() else None
         if g2.empty:
-            if sid in old and old[sid].get("from") in ("fetch", "paternal"):
+            if sid in old and old[sid].get("from") == "fetch":
                 sires[sid] = old[sid]
             continue
         key = g2[["f_llcode", "f_slcode", "f_clcode"]].astype(str).agg("|".join, axis=1)
@@ -131,49 +130,15 @@ def build(path: Path | None = None) -> dict[str, int]:
                       "agree": round(float(top.iloc[0] / top.sum()), 3), "from": "smartrc_tables",
                       "smartrc_code": str(g2["f_code"].mode().iloc[0]) if g2["f_code"].notna().any() else None}
     all_sires = set(sm["sire_id"])
-    doc = {"built": datetime.now(JST).isoformat(timespec="seconds"), "n_sires": len(all_sires), "sires": sires,
-           "missing": sorted(all_sires - set(sires)), "complete_at": load(path).get("complete_at") if not (all_sires - set(sires)) else None}
+    prev = load(path)
+    tried = prev.get("tried") or {}
+    missing = sorted(all_sires - set(sires))
+    # 完了 = 台帳に無い種牡馬を、すべて smartrc で確かめ終えた（空欄だったものは tried に残り、netkeiba の系統を使う）
+    done = not [s for s in missing if s not in tried]
+    doc = {"built": datetime.now(JST).isoformat(timespec="seconds"), "n_sires": len(all_sires), "sires": sires, "tried": tried,
+           "missing": missing, "complete_at": (prev.get("complete_at") or datetime.now(JST).isoformat(timespec="seconds")) if done else None}
     _save(doc, path)
     return {"sires": len(all_sires), "known": len(sires), "missing": len(doc["missing"]), "conflicts": conflicts}
-
-
-PED_DIR = REPO / "data/local/horse_pedigree_5gen"
-
-
-def _paternal_chain(horse_id: str) -> list[tuple[str, str]]:
-    """馬の 5 代血統から、父の父・その父…（馬 ID, 名前）を近い順に。"""
-    p = PED_DIR / str(horse_id)[:4] / f"{horse_id}.json"
-    try:
-        anc = json.loads(p.read_text(encoding="utf-8")).get("ancestors") or []
-    except (OSError, ValueError):
-        return []
-    by = {(int(a["generation"]), int(a["position"])): a for a in anc if a.get("generation") is not None and a.get("position") is not None}
-    return [(str(by[(g, 0)]["horse_id"]), by[(g, 0)].get("name") or "") for g in range(2, 6) if (g, 0) in by and by[(g, 0)].get("horse_id")]
-
-
-def fill_paternal(path: Path | None = None) -> dict[str, int]:
-    """台帳に無い種牡馬を、父系をさかのぼって台帳にある祖先の系統で埋める。"""
-    path = path or OUT
-    doc = load(path)
-    sires = doc.setdefault("sires", {})
-    sm = pd.read_parquet(SIRE_MAP, columns=["horse_id", "sire_id", "sire_name"]).dropna(subset=["sire_id"])
-    sm["horse_id"], sm["sire_id"] = sm["horse_id"].astype(str), sm["sire_id"].astype(str)
-    filled = 0
-    for sid in sorted(set(sm["sire_id"]) - set(sires)):
-        kids = sm[sm["sire_id"] == sid]
-        for hid in kids["horse_id"].head(3):
-            hit = next(((aid, nm) for aid, nm in _paternal_chain(hid) if aid in sires and sires[aid].get("from") != "paternal"), None)
-            if hit:
-                src = sires[hit[0]]
-                sires[sid] = {"name": kids["sire_name"].iloc[0], **{k: src.get(k) for k in ("small", "small_name", "large", "large_name", "type", "type_name")},
-                              "n": 0, "from": "paternal", "via": {"sire_id": hit[0], "name": src.get("name") or hit[1]}}
-                filled += 1
-                break
-    doc["missing"] = sorted(set(sm["sire_id"]) - set(sires))
-    if not doc["missing"]:
-        doc["complete_at"] = datetime.now(JST).isoformat(timespec="seconds")
-    _save(doc, path)
-    return {"filled": filled, "missing": len(doc["missing"]), "known": len(sires)}
 
 
 def fetch(max_n: int = 100, path: Path | None = None) -> dict[str, int]:
@@ -248,10 +213,9 @@ def main(argv: list[str] | None = None) -> int:
     f = sp.add_parser("fetch")
     f.add_argument("--max", type=int, default=100)
     sp.add_parser("master")
-    sp.add_parser("paternal")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-    res = (build() if a.cmd == "build" else fetch(a.max) if a.cmd == "fetch" else fill_paternal() if a.cmd == "paternal" else refresh_master())
+    res = build() if a.cmd == "build" else fetch(a.max) if a.cmd == "fetch" else refresh_master()
     print(json.dumps(res, ensure_ascii=False))
     return 0
 
