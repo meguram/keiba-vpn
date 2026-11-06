@@ -709,6 +709,14 @@ class ScraperRunner:
             return "final"
         return None
 
+    def _warn_odds_empty(self, label: str, race_id: str) -> None:
+        """オッズが空のとき、API が 200 以外を返していたら『取得できず』として HTTP コードを出す（中身が空のときは『データなし』）。"""
+        bad = [c for c in self.odds_parser.last_api_codes if c != 200]
+        if bad:
+            logger.warning("%s取得できず（API の HTTP コード %s / %d 回中）: %s", label, ",".join(str(c) for c in bad), len(self.odds_parser.last_api_codes), race_id)
+        else:
+            logger.warning("%sデータなし: %s", label, race_id)
+
     def scrape_odds(
         self, race_id: str, skip_existing: bool = True, phase: str | None = None,
     ) -> dict | None:
@@ -745,7 +753,7 @@ class ScraperRunner:
                 #   snapshot_type="WIN" / "PLACE" を entries[] の odds 値から生成する。
                 return data
             else:
-                logger.warning("オッズデータなし: %s", race_id)
+                self._warn_odds_empty("オッズ", race_id)
                 return None
         except Exception as e:
             logger.error("オッズ取得失敗 [%s]: %s", race_id, e)
@@ -780,7 +788,7 @@ class ScraperRunner:
                             f", phase={phase}" if phase else "")
                 return data
             else:
-                logger.warning("2連系オッズデータなし: %s", race_id)
+                self._warn_odds_empty("2連系オッズ", race_id)
                 return None
         except Exception as e:
             logger.error("2連系オッズ取得失敗 [%s]: %s", race_id, e)

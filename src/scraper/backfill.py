@@ -541,7 +541,9 @@ def _run_phase_cards_past(runner, progress: BackfillProgress, dates: list[str], 
                 if cat in _API_SESSION_CATS:
                     # API セッションの取得は NetkeibaClient のスロットルとオブザーバを通らない。間隔を空け、件数に足す
                     if _GUARD is not None:
-                        _GUARD.add_external(1)
+                        codes = runner.odds_parser.last_api_codes
+                        _GUARD.add_external(len(codes) or 1)
+                        _GUARD.add_api_codes(codes)
                     time.sleep(random.uniform(2.2, 4.0))
                 if data:
                     got += 1

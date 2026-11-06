@@ -573,7 +573,7 @@ function PedSection({ h, traits }: { h: RunningMapHorse; traits: RunningMapPedTr
             {scored.map((t) => {
               const [sc, lo, hi] = (p.s ?? {})[t.key];
               return (
-                <div key={t.key} style={{ display: "grid", gridTemplateColumns: "7.5em 1fr 8.5em", alignItems: "center", gap: 6, fontSize: 11.5 }} title={tip(t)}>
+                <div key={t.key} style={{ display: "grid", gridTemplateColumns: "7.5em 1fr 5.5em", alignItems: "center", gap: 6, fontSize: 11.5 }} title={tip(t)}>
                   <span style={{ color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.label}</span>
                   <span style={{ position: "relative", height: 10, borderRadius: 5, background: "var(--border)" }}>
                     <span style={{ position: "absolute", left: `${lo * 10}%`, width: `${Math.max((hi - lo) * 10, 1)}%`, top: 3, bottom: 3, borderRadius: 3, background: "rgba(88,166,255,0.30)" }} />
@@ -581,7 +581,7 @@ function PedSection({ h, traits }: { h: RunningMapHorse; traits: RunningMapPedTr
                     <span style={{ position: "absolute", left: "50%", top: -2, bottom: -2, width: 1, background: "var(--text-dim)", opacity: 0.6 }} />
                   </span>
                   <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-                    <b>{sc.toFixed(1)}</b> <span style={{ color: "var(--text-dim)", fontSize: 10.5 }}>({lo.toFixed(1)}〜{hi.toFixed(1)})</span>{chip(t)}
+                    <b>{sc.toFixed(1)}</b>{chip(t)}
                   </span>
                 </div>
               );

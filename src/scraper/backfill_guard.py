@@ -244,6 +244,19 @@ class NightGuard:
         except Exception:  # noqa: BLE001
             pass
 
+    def add_api_codes(self, codes) -> None:
+        """オブザーバを通らない API セッションの HTTP コード（0=例外）を、通常の応答と同じ基準で数える（400/403/429/5xx は異常）。"""
+        for code in codes:
+            if code == 0:
+                self.transport_errors += 1
+                continue
+            self.status_counts[code] = self.status_counts.get(code, 0) + 1
+            is_bad = code in (400, 403, 429) or 500 <= code < 600
+            self._recent_bad.append(1 if is_bad else 0)
+            if is_bad:
+                self.bad += 1
+        self._evaluate()
+
     def fail(self, reason: str) -> None:
         """呼び出し側が検知した異常（連続して取得できない等）で、その夜を止める。"""
         if not self.stop_reason:

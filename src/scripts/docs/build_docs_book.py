@@ -226,6 +226,12 @@ PARTS: list[Part] = [
     Part("学習パイプラインと実験結果", "tp-00〜tp-08 以降の確定事項、チューニング工程、実験結果。", [
         C("research_overview", "特徴量・モデリング・馬券の調査を、結果と状態つきで 1 か所にまとめた一覧。現在地、調査の一覧（採用・不採用・保留）、これからの調査、本書内の食い違い。調査の全体像はここから。", "結果",
           [("training_pipeline_decisions", "各調査の数値と根拠（§N）"), ("adopted_features_v3", "v3 の特徴量"), ("feature_investigation_catalog", "特徴量調査の総覧"), ("megu_index_v3a", "めぐ指数 v3a"), ("data_quality_issues", "データ品質の既知の問題")]),
+        C("retrain_order", "モデルを再学習するときの順番と依存関係。入力になる小さなモデル（めぐ指数・追走難度・ラップ予想）→ 前段 S3 → 親モデル（v6e）→ 確率・期待値・印・買い目の較正 → 配備。変えたものごとのやり直し位置、各段の合格基準、未確認事項。", "運用",
+          src="html/operations/retrain_order.html",
+          see=[("v6_features", "v6 の構成と最終学習"), ("tracking_difficulty_v2", "追走難度 v2"), ("lap_forecast", "ラップ予想"), ("megu_index_v3a", "めぐ指数 v3a"), ("prob_calibration_gap", "確率の較正")]),
+        C("model_versions", "各モデルの版名・更新日・どの版が採用中か・版ごとの履歴。親モデル（v6e）、前段 S3、めぐ指数、追走難度、ラップ予想、オッズ予測、較正・印、最終層まで。更新・切替のたびに書き換える台帳と、その更新のしかた。", "運用",
+          src="html/operations/model_versions.html",
+          see=[("retrain_order", "再学習の順番と依存関係"), ("v6_features", "v6 の構成と最終学習"), ("final_layer_philosophies", "最終層の思想別の評価")]),
         C("feature_investigation_catalog", "これまでの特徴量・前段モデル・モデル構造の調査を、概要・結果（勝率 LogLoss の差）・採否・根拠の節つきで網羅した総覧。現行 v4（1,135 列）の構成、枠順×コースの検証、データ・実装の問題、今後の調査対象の一覧。特徴量の採否はここから。", "結果",
           [("adopted_features_v3", "v3 の 301 列のグループ別一覧"), ("research_overview", "調査の全体像"), ("training_pipeline_decisions", "数値の正（§N）")]),
         C("model_accuracy_summary", "予測モデル（アンサンブル v1〜v4）の精度を、train（学習に使ったデータ）・valid（調整用）・test 2025（最後に一度だけ）で並べた総括。過学習の読み方に加え、予測確率の帯ごとの実際の発生率（較正表と較正プロット）と、単勝・複勝の回収率（参考値）。", "結果",
@@ -249,6 +255,8 @@ PARTS: list[Part] = [
     Part("オッズと馬券", "オッズの予測、複合馬券の確率、バックテストと馬券推奨の設計。", [
         C("final_odds_model", "最終オッズ予測モデル。発走前のデータから単勝・複勝オッズを推定する LightGBM 3 ヘッドモデルの設計・学習・推論フロー。", "設計"),
         C("exotic_bet_probabilities", "馬連・ワイド・馬単・3 連複の的中確率を、勝率・連対率・複勝率から一貫して計算するモデル（割引 Harville）。", "設計"),
+        C("final_layer_philosophies", "最終層（買う馬・買い目）を予想者の思想別（精度派・人気薄発掘・レース単位マッチ・期待値直接最適化・データ派・舞台別合成）に作って同じ土俵で評価。167 設定、人気順の対照との差、test 2025 を 1 回、多重比較の補正。採用する方策なし。", "結果",
+          [("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）"), ("retrain_order", "再学習の順番（最終層は §5.4）"), ("model_versions", "モデルの版と採用状況"), ("training_pipeline_decisions", "決定ログ")]),
         C("betting_edge_search", "馬券で回収率 100% を超える余地の探索（tp-36）。構造の全数調査、モデルと市場のずれ（Benter 混合）、組合せ券、強化学習（リーグ戦・批評役）、多重比較の補正、WIN5 のデータ有無、2026 年での最終評価。", "結果",
           [("exotic_bet_probabilities", "組合せ券の確率の作り方"), ("modeling_experiment_report", "強化学習（tp-08）の結果")]),
         C("race_type_marks", "レースの性質（堅い/荒れやすい）で印（◎○▲）の付け方と買い方を変える方式の評価（tp-43）。荒れ度の定義 6 種、印 10 通り、買い方 20 通り、設計年での選択と検証年・2026 年での確認、reality check、破産確率。切り替えの価値は見つからず、印の付け方（期待値＋複勝確率の閾値）は組合せ券で良い傾向だが 100% 超の確かな根拠は無い。", "結果",
