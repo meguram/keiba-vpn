@@ -29,7 +29,8 @@ def test_shapes_and_groups():
     assert set(g) == {"PF_A", "PF_B", "PF_ALL"}
     assert all(len(t) == len(d) for t in g.values())
     assert list(g["PF_ALL"].columns) == pf.KEY + [c for c in g["PF_A"].columns if c not in pf.KEY] + [c for c in g["PF_B"].columns if c not in pf.KEY]
-    assert np.allclose(g["PF_A"]["pp_RPCI"], d.merge(pace, on="race_id")["pp_RPCI"])
+    # 実装と同じく left で結合して行の順を保つ（inner の結合は pandas の版によってキーごとに並び替わる）
+    assert np.allclose(g["PF_A"]["pp_RPCI"], d.merge(pace, on="race_id", how="left")["pp_RPCI"])
 
 
 def test_no_lookahead_results_on_or_after_the_race_day_do_not_change_earlier_rows():

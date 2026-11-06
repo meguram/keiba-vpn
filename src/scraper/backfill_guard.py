@@ -40,12 +40,16 @@ YIELD_TO_OTHERS = os.environ.get("BACKFILL_PAST_YIELD", "0") == "1"   # 1 で他
 SKIP_RACEDAY = os.environ.get("BACKFILL_PAST_SKIP_RACEDAY", "0") == "1"   # 1 で土日（開催日）は始めない。既定は曜日で分けず、日の総件数の上限と他の取得への譲りで抑える
 OTHER_FETCH_PATTERN = os.environ.get("BACKFILL_PAST_OTHER_FETCH_PATTERN") or r"src\.scraper\.(auto_scrape|backfill)|backfill_horse_training|run_priority_rescrape|src\.scripts\.scraping\.(backfill_|fetch_sire_lines)"   # 待つ相手（ps の引数への正規表現）。一時的に並走させたいときは環境変数で上書きする
 
-# AIMD 型の速度調整: 応答が悪化したら待ちを倍に増やし（乗法的に遅く）、悪化なしが続けば少しずつ戻す（加法的に速く）。
+# AIMD 型の速度調整: 応答が悪化したら待ちを倍に増やし、悪化なしが続けば半分に戻す。
 # 戻しても、既存のスロットルより速くはならない（実績の最短間隔を超えない）。
-AIMD_CLEAN_STEP = 50              # 悪化なしが続いた件数ごとに
-AIMD_RECOVER_SEC = 0.5            # 追加の待ちをこの秒数だけ減らす
+# 2026-10-31: 戻りが「50 件ごとに 0.5 秒」だけだと、待ちが 60 秒に達したあと 1 時間に 0.5 秒しか戻らず、遅い応答 1 件でまた 60 秒に
+# 戻るため、一晩じゅう 60 件/時に張り付いた。戻りを件数または経過時間で半分ずつにし、遅さは単発ではなく直近の多数で判断する。
+AIMD_CLEAN_STEP = 50              # 悪化なしがこの件数続くか、
+AIMD_RECOVER_AFTER_SEC = 120.0    # この秒数続いたら、追加の待ちを半分にする（1 秒未満は 0）
 AIMD_FIRST_DELAY = 4.0            # 悪化の最初の反応で足す待ち
 AIMD_MAX_DELAY = 60.0
+AIMD_SLOW_RECENT = 5              # 遅い応答の判断に使う直近の件数
+AIMD_SLOW_HITS = 3                # そのうちこの件数以上が遅いときだけ「悪化」とみなす（単発の遅れでは待ちを増やさない）
 
 # 悪化の検知（その夜を中断）
 RECENT_REQUESTS = 100
@@ -176,6 +180,8 @@ class NightGuard:
         self.started_at = clock()
         self.extra_delay = 0.0              # AIMD: 次のリクエストの前に足す待ち（秒）
         self._clean_run = 0
+        self._clean_since = clock()         # 悪化なしが続いている起点（時間での戻りに使う）
+        self._recent_slow: deque[int] = deque(maxlen=AIMD_SLOW_RECENT)
         self.sleep = sleep
         self.pace_sec = 3600.0 / pace_per_hour if pace_per_hour and pace_per_hour > 0 else 0.0
         self.yield_to_others = yield_to_others
@@ -222,15 +228,25 @@ class NightGuard:
         self._pace()
 
     def _aimd(self, is_bad: bool, sec: float | None) -> None:
-        slow = sec is not None and self._baseline is not None and sec > max(2.0, self._baseline * 2.0)
+        self._recent_slow.append(1 if sec is not None and self._baseline is not None and sec > max(2.0, self._baseline * 2.0) else 0)
+        slow = sum(self._recent_slow) >= AIMD_SLOW_HITS
+        before = self.extra_delay
         if is_bad or slow:
             self._clean_run = 0
+            self._clean_since = self.clock()
+            self._recent_slow.clear()          # 同じ遅れの続きで何度も倍にしない（次の判断は新しい応答で）
             self.extra_delay = min(AIMD_MAX_DELAY, max(AIMD_FIRST_DELAY, self.extra_delay * 2))
-        else:
+        elif self.extra_delay > 0:
             self._clean_run += 1
-            if self._clean_run >= AIMD_CLEAN_STEP and self.extra_delay > 0:
+            clean_sec = (self.clock() - self._clean_since).total_seconds()
+            if self._clean_run >= AIMD_CLEAN_STEP or clean_sec >= AIMD_RECOVER_AFTER_SEC:
                 self._clean_run = 0
-                self.extra_delay = max(0.0, self.extra_delay - AIMD_RECOVER_SEC)
+                self._clean_since = self.clock()
+                half = self.extra_delay / 2
+                self.extra_delay = half if half >= 1.0 else 0.0
+        if self.extra_delay != before:
+            logger.info("速度調整: 追加の待ち %.1f 秒 → %.1f 秒（%s）", before, self.extra_delay,
+                        "応答の悪化" if self.extra_delay > before else "悪化なしが続いたため戻す")
         if self.extra_delay > 0 and not self.stop_reason:
             self.sleep(self.extra_delay)       # 応答の直後（次のリクエストの前）に待つ
 
