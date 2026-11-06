@@ -92,6 +92,8 @@ OK が出ていなければ、そこまでの結果を報告して待つ。
 
 ## 8. 状態の見方
 
+`docs/html/operations/retrain_order.html` の §2.1 のチャートにも、箱ごとに同じ記号の状態が付き、実行中の段の箱は橙の太枠になる（`retrain_ctl.py` が記録のたびに書き直す。手動で直すときは `retrain_ctl.py html`。ホストの `retrain_state/retrain_ctl.py` は `scripts/dev/retrain_ctl.py` の写しなので、直したら送り直す）。
+
 | 記号 | 意味 |
 |---|---|
 | ・ | 未着手 |

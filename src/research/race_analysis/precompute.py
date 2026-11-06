@@ -139,7 +139,6 @@ def precompute_races(storage: Any, race_ids: list[str], *, force: bool = False) 
 
 def refresh_for_races(storage: Any, race_ids: list[str], *, force: bool = False, extra_horse_ids: set[str] | None = None) -> dict[str, int]:
     """出馬表が更新されたレースの分析を作り直す。先に、その出走馬の父の対応表（差分のみ）を更新する。"""
-    from src.scraper import sire_line_store
     from src.scripts.data import build_horse_sire_map as sire
 
     ids: set[str] = set(extra_horse_ids or ())
@@ -151,7 +150,7 @@ def refresh_for_races(storage: Any, race_ids: list[str], *, force: bool = False,
         ids |= {str(r["horse_id"]) for r in rows if r.get("horse_id")}
     if ids:
         try:
-            sire.build(horse_ids=ids, netkeiba_lines=sire_line_store.labels())
+            sire.build(horse_ids=ids, netkeiba_lines=sire.line_labels(fetch_max=10))      # 系統は smartrc の小系統（新しい種牡馬は最大 10 頭まで取得）
         except Exception:
             logger.exception("父の対応表の更新に失敗（分析は対応表の現状で続ける）")
     return precompute_races(storage, race_ids, force=force)

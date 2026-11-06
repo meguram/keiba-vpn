@@ -54,6 +54,158 @@ def load_plan() -> dict:
     return json.loads(plan_path().read_text(encoding="utf-8"))
 
 
+# ── retrain_order.html のチャートに状態の印を付ける ─────────────────────────
+# チャート（Mermaid）の箱 → その箱を作る段。印は箱の文字の末尾に足し、実行中は橙・失敗/止めは赤の枠にする。
+# 書き換えるのは目印（RETRAIN-STATUS / %% STATUS）で囲んだ範囲だけ。手で書いた部分には触らない。
+NODE_STEPS = {"DATA": ["s0"], "POS": ["s3"], "EASE": ["s3"], "LAP": ["s4"], "S3": ["s7"], "MEGU": ["s8"],
+              "PARENT": ["s9", "s10", "s11", "s12"], "POST": ["s13", "s14", "s15", "s16", "s17"], "DISP": ["s2", "s5", "s6"]}
+# §2.6 のチャート（区分 A/B/C）の箱。箱ごとの記録（state["nodes"]、`node` 命令）があればそれを、無ければ対応する段の状態を使う
+NODE_STEPS_26 = {"RAW": ["s0"], "POS": ["s3"], "PACE": ["s4"], "EASE": ["s3"], "S3": ["s7"], "AS": ["s8"],
+                 "PARENT": ["s9", "s10", "s11", "s12"], "EXO": ["s16"], "POST": ["s13", "s14", "s15", "s16"], "FWD": ["s17"]}
+_BADGE = {"running": ("▶ 実行中", "#fb923c"), "failed": ("✘ 失敗", "#f87171"), "blocked": ("■ 判断待ち", "#f87171"),
+          "done": ("✔ 完了", "#4ade80"), "skipped": ("－ 対象外", "#9aa7c7"), "pending": ("・ 未着手", "#9aa7c7"), "partial": ("◐ 途中", "#fbbf24")}
+
+
+def order_html_path() -> Path:
+    env = os.environ.get("RETRAIN_ORDER_HTML")
+    if env:
+        return Path(env)
+    repo = Path(os.environ.get("KEIBA_REPO") or "/home/jovyan/work/keiba-vpn")
+    for c in (repo / "docs/html/operations/retrain_order.html", HERE.parents[1] / "docs/html/operations/retrain_order.html"):
+        if c.exists():
+            return c
+    return repo / "docs/html/operations/retrain_order.html"
+
+
+def node_status(steps: list[str], state: dict) -> tuple[str, list[str]]:
+    """箱の状態（running / failed / blocked / done / skipped / partial / pending）と、実行中・失敗の段。"""
+    sts = {sid: state["steps"].get(sid, {}).get("status", "pending") for sid in steps}
+    for k in ("running", "failed", "blocked"):
+        hit = [sid for sid, v in sts.items() if v == k]
+        if hit:
+            return k, hit
+    if all(v == "skipped" for v in sts.values()):
+        return "skipped", []
+    if all(v in DONE_LIKE for v in sts.values()):
+        return "done", []
+    if any(v in DONE_LIKE for v in sts.values()):
+        return "partial", [sid for sid, v in sts.items() if v not in DONE_LIKE]
+    return "pending", []
+
+
+def _short(title: str, n: int = 16) -> str:
+    """段の名前を図に収まる長さに（[I] などの記号と括弧の補足を外す）。"""
+    import re
+
+    t = re.sub(r"\[[A-Z]\]", "", title).split("（")[0].strip()
+    return t if len(t) <= n else t[:n] + "…"
+
+
+def _chart_block(chart: str, nodes: dict, status_of) -> str:
+    """Mermaid のチャートの末尾に、箱ごとの状態の印（箱の文字の末尾に足す）と枠の色の行を足す。前回の分は消して書き直す。"""
+    import re
+
+    chart = re.sub(r"\n\s*%% STATUS:BEGIN.*?%% STATUS:END", "", chart, flags=re.S)
+    lines = ["", "  %% STATUS:BEGIN（scripts/dev/retrain_ctl.py が書く。手で直さない）",
+             "  classDef st_running stroke:#fb923c,stroke-width:5px;", "  classDef st_bad stroke:#f87171,stroke-width:5px;"]
+    for node in nodes:
+        lab = re.search(rf'^\s*{node}\["(.*?)"\]', chart, re.M)
+        if not lab:
+            continue
+        k, text = status_of(node)
+        lines.append(f'  {node}["{lab.group(1)}<br/><span>{text}</span>"]')
+        if k == "running":
+            lines.append(f"  class {node} st_running;")
+        elif k in ("failed", "blocked"):
+            lines.append(f"  class {node} st_bad;")
+    lines.append("  %% STATUS:END")
+    return chart.rstrip() + "\n" + "\n".join(lines) + "\n"
+
+
+def _replace_chart_after(html: str, heading: str, fn) -> str:
+    """見出し heading の後ろで最初の <div class="mermaid"> の中身を fn(中身) に置き換える。"""
+    import re
+
+    h = html.find(heading)
+    if h < 0:
+        return html
+    m = re.compile(r'<div class="mermaid">(.*?)</div>', re.S).search(html, h)
+    if not m:
+        return html
+    return html[:m.start(1)] + fn(m.group(1)) + html[m.end(1):]
+
+
+def render_status(plan: dict, state: dict, html: str) -> str:
+    import re
+
+    titles = {s["id"]: s["title"] for s in plan["steps"]}
+
+    def from_steps(steps: list[str]) -> tuple[str, str]:
+        k, which = node_status(steps, state)
+        text = _BADGE[k][0]
+        if which and k in ("running", "failed", "blocked"):
+            text += "：" + "・".join(f"{sid} {_short(titles.get(sid, ''))}" for sid in which)
+        elif which and k == "partial":
+            text += f"（残り {'・'.join(which)}）"
+        return k, text
+
+    def status_21(node: str) -> tuple[str, str]:
+        return from_steps(NODE_STEPS[node])
+
+    def status_26(node: str) -> tuple[str, str]:
+        rec = (state.get("nodes") or {}).get(node)
+        if rec:
+            k = rec["status"]
+            text = _BADGE.get(k, ("?", ""))[0] + (f"：{_short(rec.get('note', ''), 22)}" if rec.get("note") else "")
+            return k, text
+        if node in NODE_STEPS_26:
+            return from_steps(NODE_STEPS_26[node])
+        return "pending", "（対象外の案・未採用）"
+
+    html = _replace_chart_after(html, "<h3>2.1 チャート", lambda c: _chart_block(c, NODE_STEPS, status_21))
+    all26 = ["RAW", "POS", "PACE", "BIAS", "ODDS", "EASE", "AS", "APT", "GRP", "GST", "STAT", "S3", "PARENT", "EXO", "POST", "FWD"]
+    html = _replace_chart_after(html, "2.6 作るものの区分", lambda c: _chart_block(c, all26, status_26))
+    # チャートの上の 1 行（いま何をしているか・進み・更新時刻）
+    done = sum(1 for v in state["steps"].values() if v["status"] in DONE_LIKE)
+    run = [sid for sid, v in state["steps"].items() if v["status"] == "running"]
+    runn = [f"{n}（{r.get('note', '')}）" for n, r in (state.get("nodes") or {}).items() if r.get("status") == "running"]
+    bad = [sid for sid, v in state["steps"].items() if v["status"] in ("failed", "blocked")]
+    nxt = next((s["id"] for s in plan["steps"] if state["steps"][s["id"]]["status"] == "pending"), None)
+    parts = []
+    if runn:
+        parts.append("▶ 作業中（§2.6 の箱）: <b>" + "・".join(runn) + "</b>")
+    if run:
+        parts.append("▶ 学習中: " + "・".join(f"<b>{sid} {titles.get(sid, '')}</b>（{state['steps'][sid].get('started', '')[:16].replace('T', ' ')} 開始）" for sid in run))
+    if bad:
+        parts.append("<span class='warn'>✘/■ 要対応: " + "・".join(f"{sid} {titles.get(sid, '')}" for sid in bad) + "</span>")
+    if not parts:
+        parts.append(f"・ 次: <b>{nxt} {titles.get(nxt, '')}</b>" if nxt else "<span class='ok'>✔ すべて完了</span>")
+    yrs = state["decisions"].get("train_years", {}).get("value", "")
+    banner = (f'<!-- RETRAIN-STATUS:BEGIN --><div class="box"><b>再学習の状態</b>（{time.strftime("%Y-%m-%d %H:%M")} 更新・学習年 {yrs}・段 {done}/{len(state["steps"])}）: '
+              + "<br/>".join(parts) +
+              f'<br/><span class="muted">§2.1 と §2.6 のチャートの箱の下に状態（✔ 完了・▶ 実行中・・ 未着手・✘ 失敗・■ 判断待ち・－ 対象外）。'
+              f'実行中の箱は橙の太枠。<code>retrain_ctl.py</code> が記録のたびに書き直す（手動は <code>retrain_ctl.py html</code>、§2.6 の箱は <code>retrain_ctl.py node 箱 状態 --note …</code>）。</span></div><!-- RETRAIN-STATUS:END -->')
+    html = re.sub(r"<!-- RETRAIN-STATUS:BEGIN -->.*?<!-- RETRAIN-STATUS:END -->\n?", "", html, flags=re.S)
+    for head in ("<h3>2.1 チャート", "2.6 作るものの区分"):
+        h3 = html.find(head)
+        if h3 >= 0:
+            end = html.find("</h3>", h3) + len("</h3>")
+            html = html[:end] + "\n" + banner + html[end:]
+    return html
+
+
+def update_order_html(plan: dict, state: dict) -> None:
+    p = order_html_path()
+    if not p.exists():
+        return
+    old = p.read_text(encoding="utf-8")
+    new = render_status(plan, state, old)
+    if new != old:
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(new, encoding="utf-8")
+        os.replace(tmp, p)
+
+
 class Store:
     def __init__(self) -> None:
         self.dir = state_dir()
@@ -99,6 +251,10 @@ class Store:
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self.state, ensure_ascii=False, indent=1), encoding="utf-8")
         os.replace(tmp, self.path)
+        try:                                   # 読み物（retrain_order.html）のチャートに状態の印を付ける。失敗しても記録は止めない
+            update_order_html(self.plan, self.state)
+        except Exception as exc:  # noqa: BLE001
+            print(f"（retrain_order.html の状態の印を更新できませんでした: {exc}）", file=sys.stderr)
 
     def blockers(self, s: dict) -> list[str]:
         return [d for d in s["deps"] if self.state["steps"][d]["status"] not in DONE_LIKE]
@@ -227,6 +383,14 @@ def cmd_log(a, st: Store) -> None:
     st.save()
 
 
+def cmd_node(a, st: Store) -> None:
+    nodes = st.state.setdefault("nodes", {})
+    nodes[a.node] = {"status": a.status, "note": a.note, "at": now()}
+    st.event(f"node:{a.node}", a.status, a.note)
+    st.save()
+    print(f"{a.node} → {a.status}{('（' + a.note + '）') if a.note else ''}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -242,10 +406,14 @@ def main() -> None:
     p = sub.add_parser("approve"); p.add_argument("step"); p.add_argument("--by", required=True); p.set_defaults(f=cmd_approve)
     p = sub.add_parser("decide"); p.add_argument("key"); p.add_argument("value"); p.add_argument("--confirm", action="store_true"); p.set_defaults(f=cmd_decide)
     p = sub.add_parser("log"); p.add_argument("text"); p.set_defaults(f=cmd_log)
+    p = sub.add_parser("node", help="§2.6 のチャートの箱の状態を記録する（例: node POS running --note '馬柱の代替を作成中'）")
+    p.add_argument("node"); p.add_argument("status", choices=["pending", "running", "done", "failed", "blocked", "skipped", "partial"]); p.add_argument("--note", default="")
+    p.set_defaults(f=cmd_node)
+    sub.add_parser("html", help="retrain_order.html のチャートの状態の印だけを書き直す").set_defaults(f=lambda a, st: print(f"更新: {order_html_path()}"))
     a = ap.parse_args()
     st = Store()
     a.f(a, st)
-    if a.cmd in ("status", "next"):
+    if a.cmd in ("status", "next", "html"):
         st.save()
 
 

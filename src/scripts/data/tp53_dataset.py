@@ -110,11 +110,43 @@ def load_td(race_ids) -> tuple[pd.DataFrame, pd.DataFrame]:
     return pd.DataFrame(hrows), pd.DataFrame(rrows)
 
 
+def _past_from_results(year: int) -> pd.DataFrame:
+    """馬柱（race_shutuba_past_flat）が無い年（2016〜2018）の代替。結果の表（2016 年以降）から、各馬のそのレースより前の走を
+    馬柱の 1 走と同じ形（date・raw に「頭数」と通過順）にして past_races に入れる。position_forecast はそのまま使う。
+
+    2020・2024 年で馬柱から作った値と比べ、pf_early の相関 0.987〜0.988・脚質の一致 97%（差は馬柱に載る地方競馬の走）。
+    初角位置の誤差は馬柱 0.2193 / 代替 0.2187 でほぼ同じ（2026-11-06）。"""
+    import bisect
+    from collections import defaultdict
+
+    cols = ["race_id", "date", "horse_id", "field_size", "passing_order"]
+    hist: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for y in range(2016, year + 1):
+        f = TABLES / str(y) / "race_result_flat.parquet"
+        if not f.exists():
+            continue
+        r = pd.read_parquet(f, columns=cols).dropna(subset=["horse_id", "passing_order"])
+        for hid, d, fs, po in zip(r["horse_id"].astype(str), r["date"].astype(str).str.replace("-", ""), r["field_size"], r["passing_order"]):
+            hist[hid].append((d, f"{d[:4]}.{d[4:6]}.{d[6:]} {int(fs) if pd.notna(fs) else 0}頭 {po}"))
+    for v in hist.values():
+        v.sort()
+    e = pd.read_parquet(TABLES / str(year) / "race_result_flat.parquet", columns=["race_id", "date", "venue", "surface", "distance", "horse_number", "horse_id"])
+    out = []
+    for rid, d, hid in zip(e["race_id"], e["date"].astype(str).str.replace("-", ""), e["horse_id"].astype(str)):
+        v = hist.get(hid, [])
+        i = bisect.bisect_left(v, (d, ""))
+        out.append(json.dumps([{"date": dd, "raw": raw} for dd, raw in v[max(0, i - 8):i]], ensure_ascii=False))
+    return e.assign(past_races=out)
+
+
 def load_pf(year: int) -> tuple[pd.DataFrame, pd.DataFrame]:
     from src.pipeline.inference.position_forecast import build_position_forecast
 
-    p = pd.read_parquet(TABLES / str(year) / "race_shutuba_past_flat.parquet",
-                        columns=["race_id", "date", "venue", "surface", "distance", "horse_number", "horse_id", "past_races"])
+    src = TABLES / str(year) / "race_shutuba_past_flat.parquet"
+    if src.exists():
+        p = pd.read_parquet(src, columns=["race_id", "date", "venue", "surface", "distance", "horse_number", "horse_id", "past_races"])
+    else:                                              # 2016〜2018 年は馬柱が無いので、結果の表の過去走から作る
+        p = _past_from_results(year)
     hrows, rrows = [], []
     for rid, g in p.groupby("race_id", sort=False):
         r0 = g.iloc[0]
