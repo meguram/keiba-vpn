@@ -1,459 +1,460 @@
 {
-  "version": 1,
-  "updated": "2026-11-06",
-  "source": "docs/html/operations/retrain_order.html §3（手順の正）。ここは実行用に機械で読める形へ写したもの。食い違ったら retrain_order.html とコードを正とし、この JSON を直す。",
-  "scopes": {
-    "models": "既定。入力データの点検 → 追走難度・ラップ予想 → 前段 S3 → RB → 親モデル → 較正・馬券 → 配備（めぐ指数 v3a は変えない）",
-    "full": "models に、めぐ指数 v3a の再計算（段 1〜2）を足す。めぐ指数の定義や基準を変えたときだけ",
-    "parent": "親モデルから（段 9 以降）。上流の保存値・OOF は今のものを使う。親モデルの構成・シードだけ変えたとき",
-    "calib": "較正・印・買い目だけ（段 13 以降）。親モデルは触らない"
+ "version": 1,
+ "updated": "2026-11-06",
+ "source": "docs/html/operations/retrain_order.html §3（手順の正）。ここは実行用に機械で読める形へ写したもの。食い違ったら retrain_order.html とコードを正とし、この JSON を直す。",
+ "scopes": {
+  "models": "既定。入力データの点検 → 追走難度・ラップ予想 → 前段 S3 → RB → 親モデル → 較正・馬券 → 配備（めぐ指数 v3a は変えない）",
+  "full": "models に、めぐ指数 v3a の再計算（段 1〜2）を足す。めぐ指数の定義や基準を変えたときだけ",
+  "parent": "親モデルから（段 9 以降）。上流の保存値・OOF は今のものを使う。親モデルの構成・シードだけ変えたとき",
+  "calib": "較正・印・買い目だけ（段 13 以降）。親モデルは触らない"
+ },
+ "decisions": {
+  "scope": {
+   "default": "models",
+   "choices": [
+    "models",
+    "full",
+    "parent",
+    "calib"
+   ],
+   "meaning": "どこから再学習するか（上の scopes）"
   },
-  "decisions": {
-    "scope": {
-      "default": "models",
-      "choices": [
-        "models",
-        "full",
-        "parent",
-        "calib"
-      ],
-      "meaning": "どこから再学習するか（上の scopes）"
-    },
-    "train_years": {
-      "default": "2020-2025",
-      "choices": [
-        "2020-2025",
-        "2016-2025"
-      ],
-      "meaning": "学習年。2016-2025 はコード固定の TRAINING_YEARS・YEARS・FIT_END の修正と、位置取り予想の代替（馬柱が 0 件）の一致確認が要るので、選ぶ前に止まってユーザーに確認する"
-    },
-    "with_optional": {
-      "default": "no",
-      "choices": [
-        "no",
-        "yes"
-      ],
-      "meaning": "任意の段（展開タイプ・ペース予測）も実行するか"
-    },
-    "feature14": {
-      "default": "no",
-      "choices": [
-        "no",
-        "yes"
-      ],
-      "meaning": "候補 14（過去走の風で補正した履歴）を今回の再学習に同梱するか。同梱すると v6e との比較が崩れるため既定は no（再学習の後に増分を評価）"
-    }
+  "train_years": {
+   "default": "2020-2025",
+   "choices": [
+    "2020-2025",
+    "2016-2025"
+   ],
+   "meaning": "学習年。2016-2025 はコード固定の TRAINING_YEARS・YEARS・FIT_END の修正と、位置取り予想の代替（馬柱が 0 件）の一致確認が要るので、選ぶ前に止まってユーザーに確認する"
   },
-  "steps": [
-    {
-      "id": "s0",
-      "no": 0,
-      "title": "入力データの点検",
-      "deps": [],
-      "scopes": [
-        "models",
-        "full",
-        "parent",
-        "calib"
-      ],
-      "commands": [
-        "（取得の状況表を見る。fast/horse/cards/lap が 100%、data_quality_issues を確認）"
-      ],
-      "done_check": "取得の状況表で fast/horse/cards/lap が 100%。2026 年を学習側に含めていない。feature14=yes のときは jma_weather_hourly_flat が評価年の末まで揃っている",
-      "heavy": false,
-      "gate": null
-    },
-    {
-      "id": "s1",
-      "no": 1,
-      "title": "[B] めぐ指数 v3a の再計算",
-      "deps": [
-        "s0"
-      ],
-      "scopes": [
-        "full"
-      ],
-      "commands": [
-        "src/pipeline/megu_index/v3a.py・recompute.py で全走の指数を再計算し、docs/operations/megu_v3a_rollout.md の順（DB → GCS 退避 → 日次 cron の切替）で反映"
-      ],
-      "done_check": "全走の指数が parquet・DB に反映され、日次 cron の切替が済んでいる（日次計算が GCS を上書きするので時刻に注意）",
-      "heavy": true,
-      "gate": "user_ok",
-      "notes": "変えない限り飛ばす。DB・GCS に書くので実行前にユーザーの OK を取る"
-    },
-    {
-      "id": "s2",
-      "no": 2,
-      "title": "[B] 想定めぐ指数・成長指数",
-      "deps": [
-        "s1"
-      ],
-      "scopes": [
-        "full"
-      ],
-      "commands": [
-        "python -m src.scripts.data.expected_megu_fit（→ config/expected_megu/model.json）",
-        "python -m src.research.pedigree.growth_index_fit（→ config/growth_index/）"
-      ],
-      "done_check": "config/expected_megu/model.json と config/growth_index/ が更新されている（画面の表示用。親モデルの入力ではない）",
-      "heavy": false,
-      "gate": null
-    },
-    {
-      "id": "s3",
-      "no": 3,
-      "title": "[C][D] 追走難度 v2（位置取り予想は馬柱の集計で、学習モデルではない）",
-      "deps": [
-        "s0"
-      ],
-      "scopes": [
-        "models",
-        "full"
-      ],
-      "commands": [
-        "python -m src.scripts.data.tp54_dataset",
-        "python -m src.scripts.data.tp54_model eval",
-        "python -m src.scripts.data.tp54_model oof",
-        "python -m src.scripts.data.tp54_model final"
-      ],
-      "done_check": "$TP54_OUT/groups/EASE2.parquet と config/tracking_difficulty_v2/{model.txt,model_demand.txt,meta.json} が更新されている",
-      "heavy": true,
-      "gate": null,
-      "notes": "引数・環境変数は各 CLI の冒頭の説明を読んで合わせる。実行は /tmp/heavy_run.sh 経由"
-    },
-    {
-      "id": "s4",
-      "no": 4,
-      "title": "[E] ラップ予想",
-      "deps": [
-        "s0"
-      ],
-      "scopes": [
-        "models",
-        "full"
-      ],
-      "commands": [
-        "python -m src.scripts.data.tp55_build",
-        "python -m src.scripts.data.tp55_eval main",
-        "python -m src.scripts.data.tp55_eval final2026",
-        "python -m src.scripts.data.tp55_win_eval make-group"
-      ],
-      "done_check": "tp55_out3/groups/LAP.parquet ができている。final2026 は 2026 を 1 回だけ見て API 用モデルを保存する段（再実行しない）",
-      "heavy": true,
-      "gate": null,
-      "once_note": "final2026 は 1 回だけ（テストセット②の保護）。済みかどうかを先に確認する"
-    },
-    {
-      "id": "s5",
-      "no": 5,
-      "title": "[F] 展開タイプ（任意）",
-      "deps": [
-        "s4"
-      ],
-      "scopes": [
-        "models",
-        "full"
-      ],
-      "optional": true,
-      "commands": [
-        "python -m src.scripts.data.tp61_final blend",
-        "python -m src.scripts.data.tp61_final export"
-      ],
-      "done_check": "config/pace_type*.json が更新されている（親モデルの入力ではない）",
-      "heavy": false,
-      "gate": null
-    },
-    {
-      "id": "s6",
-      "no": 6,
-      "title": "[G] ペース予測 1F/3F（任意）",
-      "deps": [
-        "s0"
-      ],
-      "scopes": [
-        "models",
-        "full"
-      ],
-      "optional": true,
-      "commands": [
-        "python -m src.scripts.data.train_pace_model"
-      ],
-      "done_check": "models/pace_predictor/model_{1f,3f}.txt が更新されている（親モデルの入力ではない）",
-      "heavy": true,
-      "gate": null
-    },
-    {
-      "id": "s7",
-      "no": 7,
-      "title": "[H] 前段 S3（本番は variant e）",
-      "deps": [
-        "s3",
-        "s4"
-      ],
-      "scopes": [
-        "models",
-        "full"
-      ],
-      "commands": [
-        "python -m src.scripts.data.v6_stage build e",
-        "python -m src.scripts.data.fit_final_stage_v6 --variant e --fit-end 2024",
-        "python -m src.scripts.data.fit_final_stage_v6 --variant e --fit-end 2025"
-      ],
-      "done_check": "final_stage/v6_e_2024 と final_stage/v6_e_2025 ができている（S3 の入力は 275 列、出力は s_time_pred / s_time_gap / s_rank_pred）",
-      "heavy": true,
-      "gate": null
-    },
-    {
-      "id": "s8",
-      "no": 8,
-      "title": "RB（めぐ指数の履歴）の状態",
-      "deps": [
-        "s1"
-      ],
-      "scopes": [
-        "models",
-        "full"
-      ],
-      "commands": [
-        "python -m src.scripts.data.tp65_prep",
-        "python -m src.scripts.data.build_rb_state build",
-        "python -m src.scripts.data.build_rb_state verify"
-      ],
-      "done_check": "verify の最大絶対差が 0.0",
-      "heavy": true,
-      "gate": null
-    },
-    {
-      "id": "s9",
-      "no": 9,
-      "title": "[I] 親モデルのメンバー OOF とアンサンブルの重み",
-      "deps": [
-        "s7",
-        "s8"
-      ],
-      "scopes": [
-        "models",
-        "full",
-        "parent"
-      ],
-      "commands": [
-        "V6_STAGE=e V6_TAG=e V5_GROUPS=CY,BEST,RB python -m src.scripts.data.v6_members member NAME（メンバーごと: lgb_extras_ped / xgb_extras_ped / lgb_extras / lgb_softmax / linear）",
-        "V6_STAGE=e V6_TAG=e V5_GROUPS=CY,BEST,RB python -m src.scripts.data.v6_members mtl nn_extras_ped（ほか NN）",
-        "V6_STAGE=e V6_TAG=e V5_GROUPS=CY,BEST,RB python -m src.scripts.data.v6_members ens --name v6 --members …"
-      ],
-      "done_check": "tp27_v6e/ に 7 メンバーの OOF とアンサンブルの重みができている",
-      "heavy": true,
-      "gate": null,
-      "notes": "ens の --members の実引数は、決定ログ §72 以降とホストの tp27_v6e/ens/ の既存の記録に合わせる（retrain_order.html §6）"
-    },
-    {
-      "id": "s10",
-      "no": 10,
-      "title": "[J] 親モデル本体（test 2025 は 1 回）",
-      "deps": [
-        "s9"
-      ],
-      "scopes": [
-        "models",
-        "full",
-        "parent"
-      ],
-      "commands": [
-        "V6_STAGE=e V6_TAG=e V5_GROUPS=CY,BEST,RB python -m src.scripts.data.fit_final_v6 --fit-end 2024",
-        "（test 2025 を 1 回評価し、v5・現行との差と初出走・新馬などの部分集合を見る）",
-        "V6_STAGE=e V6_TAG=e V5_GROUPS=CY,BEST,RB python -m src.scripts.data.fit_final_v6 --fit-end 2025"
-      ],
-      "done_check": "final_v6e/bundle_v6_2025 ができ、5 seed。test 2025 の評価が 1 回だけ記録されている（TEST2025_EVALUATED.json があれば再評価しない）",
-      "heavy": true,
-      "gate": null,
-      "once_note": "--fit-end 2024 の test 2025 評価は 1 回。選択には使わない"
-    },
-    {
-      "id": "s11",
-      "no": 11,
-      "title": "推論との一致確認",
-      "deps": [
-        "s10"
-      ],
-      "scopes": [
-        "models",
-        "full",
-        "parent"
-      ],
-      "commands": [
-        "python -m src.scripts.data.v6_parity",
-        "python -m src.scripts.data.readiness_v6_sample",
-        "python -m pytest tests/pipeline/test_serving_v6.py -q"
-      ],
-      "done_check": "学習側の行列と推論経路が同じ列・同じ値になる。2026 年の抜き取りで動く（判定には使わない）",
-      "heavy": false,
-      "gate": null
-    },
-    {
-      "id": "s12",
-      "no": 12,
-      "title": "[K] 過去分の予測の再生成と差し替え",
-      "deps": [
-        "s10",
-        "s11"
-      ],
-      "scopes": [
-        "models",
-        "full",
-        "parent"
-      ],
-      "commands": [
-        "python -m src.scripts.data.tracking_v2_backfill",
-        "python -m src.scripts.data.tp55_backfill",
-        "KEIBA_INFERENCE_ENGINE=full python -m src.scripts.data.backfill_predictions --model v6e …（別の場所へ出力）",
-        "sudo -n bash scripts/ops/swap_pred_v6e.sh（件数確認・退避・1 回の mv）"
-      ],
-      "done_check": "docs/operations/pred_model_v6e.md の手順どおりに、件数確認・退避のうえ差し替えが済んでいる",
-      "heavy": true,
-      "gate": "user_ok",
-      "notes": "差し替え（swap）の前にユーザーの OK を取る。過去日の保存値を作り直すかは retrain_order.html §6"
-    },
-    {
-      "id": "s13",
-      "no": 13,
-      "title": "[L] 確率の較正",
-      "deps": [
-        "s10",
-        "s12"
-      ],
-      "scopes": [
-        "models",
-        "full",
-        "parent",
-        "calib"
-      ],
-      "commands": [
-        "python -m src.scripts.data.tp70_fit compare",
-        "python -m src.scripts.data.tp70_fit export --method C3 --out config/prob_calibration.json"
-      ],
-      "done_check": "config/prob_calibration.json が更新されている（評価年は前年までで学習、書き出しは 2022〜2025）",
-      "heavy": false,
-      "gate": null
-    },
-    {
-      "id": "s14",
-      "no": 14,
-      "title": "[L] 期待値の較正",
-      "deps": [
-        "s13"
-      ],
-      "scopes": [
-        "models",
-        "full",
-        "parent",
-        "calib"
-      ],
-      "commands": [
-        "python -m src.scripts.data.calibrate_ev build_horse",
-        "python -m src.scripts.data.calibrate_ev build_portfolio",
-        "python -m src.scripts.data.calibrate_ev build_picks",
-        "python -m src.scripts.data.calibrate_ev fit"
-      ],
-      "done_check": "config/ev_calibration*.json が更新されている",
-      "heavy": false,
-      "gate": null
-    },
-    {
-      "id": "s15",
-      "no": 15,
-      "title": "[L] 印の規則",
-      "deps": [
-        "s13",
-        "s14"
-      ],
-      "scopes": [
-        "models",
-        "full",
-        "parent",
-        "calib"
-      ],
-      "commands": [
-        "python -m src.scripts.data.mark_v2_eval build",
-        "python -m src.scripts.data.mark_v2_eval design",
-        "python -m src.scripts.data.mark_v2_eval final"
-      ],
-      "done_check": "config/mark_rule.json が更新されている（閾値は 2022〜2023 で決め、2024〜2025 で確認）",
-      "heavy": false,
-      "gate": null
-    },
-    {
-      "id": "s16",
-      "no": 16,
-      "title": "馬券の再確認",
-      "deps": [
-        "s13",
-        "s14",
-        "s15"
-      ],
-      "scopes": [
-        "models",
-        "full",
-        "parent",
-        "calib"
-      ],
-      "commands": [
-        "python -m src.scripts.data.odds_pred_eval",
-        "python -m src.scripts.data.portfolio_target_eval grid",
-        "python -m src.scripts.data.portfolio_target_eval final",
-        "（手順書 docs/operations/retrain_betting_checklist.md に従う）"
-      ],
-      "done_check": "見送り率・的中率・トリガミ率・最大ドローダウンが前回から大きく変わっていない",
-      "heavy": true,
-      "gate": null
-    },
-    {
-      "id": "s17",
-      "no": 17,
-      "title": "[M] 凍結した馬券規則の追跡",
-      "deps": [
-        "s12"
-      ],
-      "scopes": [
-        "models",
-        "full",
-        "parent",
-        "calib"
-      ],
-      "commands": [
-        "python -m src.scripts.data.frozen_tracking"
-      ],
-      "done_check": "凍結規則（tp59/62/72/75）は差し替えず、新しい確率での成績を前向きに追跡している",
-      "heavy": false,
-      "gate": null
-    },
-    {
-      "id": "s18",
-      "no": 18,
-      "title": "配備（stg → 環境の一致確認 → 予測の再生成 → prod）",
-      "deps": [
-        "s10",
-        "s11",
-        "s12",
-        "s13",
-        "s14",
-        "s15",
-        "s16",
-        "s17"
-      ],
-      "scopes": [
-        "models",
-        "full",
-        "parent",
-        "calib"
-      ],
-      "commands": [
-        "docs/operations/model_release_checklist.md を上から順に行う（モデルのレジストリ公開 src/ops/model_publish.py → stg 反映と環境の一致確認 src/scripts/ops/env_parity_check.py → prod は scripts/ops/vps/promote.sh --commit <commit>）",
-        "手順書の stage_deploy は、このリポジトリに stage_deploy.py が見当たらない（2026-11-06 時点）。stg の反映手順（develop → stg の push で自動、docs の CI/CD 章）を確認してから使う"
-      ],
-      "done_check": "docs/operations/model_release_checklist.md の項目が済み、docs/html/operations/model_versions.html の採用一覧と履歴を更新した。戻すときは KEIBA_PRED_MODEL=legacy",
-      "heavy": false,
-      "gate": "user_ok",
-      "notes": "prod・費用・共有環境に触れる。stg までは進めてよいが、prod の反映は必ずユーザーの OK を取る。モデルの重みは git に入れない"
-    }
-  ]
+  "with_optional": {
+   "default": "no",
+   "choices": [
+    "no",
+    "yes"
+   ],
+   "meaning": "任意の段（展開タイプ・ペース予測）も実行するか"
+  },
+  "feature14": {
+   "default": "no",
+   "choices": [
+    "no",
+    "yes"
+   ],
+   "meaning": "候補 14（過去走の風で補正した履歴）を今回の再学習に同梱するか。同梱すると v6e との比較が崩れるため既定は no（再学習の後に増分を評価）"
+  }
+ },
+ "steps": [
+  {
+   "id": "s0",
+   "no": 0,
+   "title": "入力データの点検",
+   "deps": [],
+   "scopes": [
+    "models",
+    "full",
+    "parent",
+    "calib"
+   ],
+   "commands": [
+    "（取得の状況表を見る。fast/horse/cards/lap が 100%、data_quality_issues を確認）"
+   ],
+   "done_check": "取得の状況表で fast/horse/cards/lap が 100%。2026 年を学習側に含めていない。feature14=yes のときは jma_weather_hourly_flat が評価年の末まで揃っている",
+   "heavy": false,
+   "gate": null
+  },
+  {
+   "id": "s1",
+   "no": 1,
+   "title": "[B] めぐ指数 v3a の再計算",
+   "deps": [
+    "s0"
+   ],
+   "scopes": [
+    "full"
+   ],
+   "commands": [
+    "src/pipeline/megu_index/v3a.py・recompute.py で全走の指数を再計算し、docs/operations/megu_v3a_rollout.md の順（DB → GCS 退避 → 日次 cron の切替）で反映"
+   ],
+   "done_check": "全走の指数が parquet・DB に反映され、日次 cron の切替が済んでいる（日次計算が GCS を上書きするので時刻に注意）",
+   "heavy": true,
+   "gate": "user_ok",
+   "notes": "変えない限り飛ばす。DB・GCS に書くので実行前にユーザーの OK を取る"
+  },
+  {
+   "id": "s2",
+   "no": 2,
+   "title": "[B] 想定めぐ指数・成長指数",
+   "deps": [
+    "s1"
+   ],
+   "scopes": [
+    "full"
+   ],
+   "commands": [
+    "python -m src.scripts.data.expected_megu_fit（→ config/expected_megu/model.json）",
+    "python -m src.research.pedigree.growth_index_fit（→ config/growth_index/）"
+   ],
+   "done_check": "config/expected_megu/model.json と config/growth_index/ が更新されている（画面の表示用。親モデルの入力ではない）",
+   "heavy": false,
+   "gate": null
+  },
+  {
+   "id": "s3",
+   "no": 3,
+   "title": "[C][D] 追走難度 v2（位置取り予想は馬柱の集計で、学習モデルではない）",
+   "deps": [
+    "s0"
+   ],
+   "scopes": [
+    "models",
+    "full"
+   ],
+   "commands": [
+    "python -m src.scripts.data.tp53_dataset --years 2020..2025（出力先を差し替えて実行）",
+    "python -m src.scripts.data.tp54_dataset",
+    "python -m src.scripts.data.tp54_model eval",
+    "python -m src.scripts.data.tp54_model oof",
+    "python -m src.scripts.data.tp54_model final（TP54_CONFIG_DIR を retrain_out/tp54/config_v2 に）"
+   ],
+   "done_check": "retrain_out/tp54/groups/EASE2.parquet と retrain_out/tp54/config_v2/{model.txt,model_demand.txt,meta.json} ができ、旧版との比較（parity_s3.json）で相関が極端に低くない",
+   "heavy": true,
+   "gate": null,
+   "notes": "ドライバ retrain_upstream.py（ホスト /home/jovyan/work/retrain_state/）が s3→s4→s7 を直列に実行し、状態を retrain_ctl に記録する。出力は /home/jovyan/work/retrain_out（本番の tp54_out・tp55_out3・final_stage・config は上書きしない）"
+  },
+  {
+   "id": "s4",
+   "no": 4,
+   "title": "[E] ラップ予想",
+   "deps": [
+    "s0"
+   ],
+   "scopes": [
+    "models",
+    "full"
+   ],
+   "commands": [
+    "python -m src.scripts.data.tp55_build --out retrain_out/tp55",
+    "python -m src.scripts.data.tp55_win_eval make-group（TP55_OUT=retrain_out/tp55）"
+   ],
+   "done_check": "retrain_out/tp55/groups/LAP.parquet ができ、旧版との比較（parity_s4.json）で相関が極端に低くない",
+   "heavy": true,
+   "gate": null,
+   "once_note": "final2026（2026 を見て API 用モデルを保存する処理）は LAP 群に不要なので実行しない。テストセット②は触らない。tp55_eval main は評価だけなので省く",
+   "notes": "ドライバ retrain_upstream.py（ホスト /home/jovyan/work/retrain_state/）が s3→s4→s7 を直列に実行し、状態を retrain_ctl に記録する。出力は /home/jovyan/work/retrain_out（本番の tp54_out・tp55_out3・final_stage・config は上書きしない）"
+  },
+  {
+   "id": "s5",
+   "no": 5,
+   "title": "[F] 展開タイプ（任意）",
+   "deps": [
+    "s4"
+   ],
+   "scopes": [
+    "models",
+    "full"
+   ],
+   "optional": true,
+   "commands": [
+    "python -m src.scripts.data.tp61_final blend",
+    "python -m src.scripts.data.tp61_final export"
+   ],
+   "done_check": "config/pace_type*.json が更新されている（親モデルの入力ではない）",
+   "heavy": false,
+   "gate": null
+  },
+  {
+   "id": "s6",
+   "no": 6,
+   "title": "[G] ペース予測 1F/3F（任意）",
+   "deps": [
+    "s0"
+   ],
+   "scopes": [
+    "models",
+    "full"
+   ],
+   "optional": true,
+   "commands": [
+    "python -m src.scripts.data.train_pace_model"
+   ],
+   "done_check": "models/pace_predictor/model_{1f,3f}.txt が更新されている（親モデルの入力ではない）",
+   "heavy": true,
+   "gate": null
+  },
+  {
+   "id": "s7",
+   "no": 7,
+   "title": "[H] 前段 S3（本番は variant e）",
+   "deps": [
+    "s3",
+    "s4"
+   ],
+   "scopes": [
+    "models",
+    "full"
+   ],
+   "commands": [
+    "python -m src.scripts.data.v6_stage build e（V6_OUT・V6_EASE2・V6_HORSE_EASE・V6_LAP を retrain_out に向ける）",
+    "python -m src.scripts.data.fit_final_stage_v6 --variant e --fit-end 2024（保存先を retrain_out/training_pipeline に差し替え）",
+    "python -m src.scripts.data.fit_final_stage_v6 --variant e --fit-end 2025（同上）"
+   ],
+   "done_check": "retrain_out/training_pipeline/final_stage/v6_e_2024 と v6_e_2025 に parity_vs_oof_2025.json ができている（S3 の入力は 275 列、出力は s_time_pred / s_time_gap / s_rank_pred）。本番の final_stage は差し替えていない（差し替えは s12 以降で確認の上）",
+   "heavy": true,
+   "gate": null,
+   "notes": "ドライバ retrain_upstream.py（ホスト /home/jovyan/work/retrain_state/）が s3→s4→s7 を直列に実行し、状態を retrain_ctl に記録する。出力は /home/jovyan/work/retrain_out（本番の tp54_out・tp55_out3・final_stage・config は上書きしない）"
+  },
+  {
+   "id": "s8",
+   "no": 8,
+   "title": "RB（めぐ指数の履歴）の状態",
+   "deps": [
+    "s1"
+   ],
+   "scopes": [
+    "models",
+    "full"
+   ],
+   "commands": [
+    "python -m src.scripts.data.tp65_prep",
+    "python -m src.scripts.data.build_rb_state build",
+    "python -m src.scripts.data.build_rb_state verify"
+   ],
+   "done_check": "verify の最大絶対差が 0.0",
+   "heavy": true,
+   "gate": null
+  },
+  {
+   "id": "s9",
+   "no": 9,
+   "title": "[I] 親モデルのメンバー OOF とアンサンブルの重み",
+   "deps": [
+    "s7",
+    "s8"
+   ],
+   "scopes": [
+    "models",
+    "full",
+    "parent"
+   ],
+   "commands": [
+    "V6_STAGE=e V6_TAG=e V5_GROUPS=CY,BEST,RB python -m src.scripts.data.v6_members member NAME（メンバーごと: lgb_extras_ped / xgb_extras_ped / lgb_extras / lgb_softmax / linear）",
+    "V6_STAGE=e V6_TAG=e V5_GROUPS=CY,BEST,RB python -m src.scripts.data.v6_members mtl nn_extras_ped（ほか NN）",
+    "V6_STAGE=e V6_TAG=e V5_GROUPS=CY,BEST,RB python -m src.scripts.data.v6_members ens --name v6 --members …"
+   ],
+   "done_check": "tp27_v6e/ に 7 メンバーの OOF とアンサンブルの重みができている",
+   "heavy": true,
+   "gate": null,
+   "notes": "ens の --members の実引数は、決定ログ §72 以降とホストの tp27_v6e/ens/ の既存の記録に合わせる（retrain_order.html §6）"
+  },
+  {
+   "id": "s10",
+   "no": 10,
+   "title": "[J] 親モデル本体（test 2025 は 1 回）",
+   "deps": [
+    "s9"
+   ],
+   "scopes": [
+    "models",
+    "full",
+    "parent"
+   ],
+   "commands": [
+    "V6_STAGE=e V6_TAG=e V5_GROUPS=CY,BEST,RB python -m src.scripts.data.fit_final_v6 --fit-end 2024",
+    "（test 2025 を 1 回評価し、v5・現行との差と初出走・新馬などの部分集合を見る）",
+    "V6_STAGE=e V6_TAG=e V5_GROUPS=CY,BEST,RB python -m src.scripts.data.fit_final_v6 --fit-end 2025"
+   ],
+   "done_check": "final_v6e/bundle_v6_2025 ができ、5 seed。test 2025 の評価が 1 回だけ記録されている（TEST2025_EVALUATED.json があれば再評価しない）",
+   "heavy": true,
+   "gate": null,
+   "once_note": "--fit-end 2024 の test 2025 評価は 1 回。選択には使わない"
+  },
+  {
+   "id": "s11",
+   "no": 11,
+   "title": "推論との一致確認",
+   "deps": [
+    "s10"
+   ],
+   "scopes": [
+    "models",
+    "full",
+    "parent"
+   ],
+   "commands": [
+    "python -m src.scripts.data.v6_parity",
+    "python -m src.scripts.data.readiness_v6_sample",
+    "python -m pytest tests/pipeline/test_serving_v6.py -q"
+   ],
+   "done_check": "学習側の行列と推論経路が同じ列・同じ値になる。2026 年の抜き取りで動く（判定には使わない）",
+   "heavy": false,
+   "gate": null
+  },
+  {
+   "id": "s12",
+   "no": 12,
+   "title": "[K] 過去分の予測の再生成と差し替え",
+   "deps": [
+    "s10",
+    "s11"
+   ],
+   "scopes": [
+    "models",
+    "full",
+    "parent"
+   ],
+   "commands": [
+    "python -m src.scripts.data.tracking_v2_backfill",
+    "python -m src.scripts.data.tp55_backfill",
+    "KEIBA_INFERENCE_ENGINE=full python -m src.scripts.data.backfill_predictions --model v6e …（別の場所へ出力）",
+    "sudo -n bash scripts/ops/swap_pred_v6e.sh（件数確認・退避・1 回の mv）"
+   ],
+   "done_check": "docs/operations/pred_model_v6e.md の手順どおりに、件数確認・退避のうえ差し替えが済んでいる",
+   "heavy": true,
+   "gate": "user_ok",
+   "notes": "差し替え（swap）の前にユーザーの OK を取る。過去日の保存値を作り直すかは retrain_order.html §6"
+  },
+  {
+   "id": "s13",
+   "no": 13,
+   "title": "[L] 確率の較正",
+   "deps": [
+    "s10",
+    "s12"
+   ],
+   "scopes": [
+    "models",
+    "full",
+    "parent",
+    "calib"
+   ],
+   "commands": [
+    "python -m src.scripts.data.tp70_fit compare",
+    "python -m src.scripts.data.tp70_fit export --method C3 --out config/prob_calibration.json"
+   ],
+   "done_check": "config/prob_calibration.json が更新されている（評価年は前年までで学習、書き出しは 2022〜2025）",
+   "heavy": false,
+   "gate": null
+  },
+  {
+   "id": "s14",
+   "no": 14,
+   "title": "[L] 期待値の較正",
+   "deps": [
+    "s13"
+   ],
+   "scopes": [
+    "models",
+    "full",
+    "parent",
+    "calib"
+   ],
+   "commands": [
+    "python -m src.scripts.data.calibrate_ev build_horse",
+    "python -m src.scripts.data.calibrate_ev build_portfolio",
+    "python -m src.scripts.data.calibrate_ev build_picks",
+    "python -m src.scripts.data.calibrate_ev fit"
+   ],
+   "done_check": "config/ev_calibration*.json が更新されている",
+   "heavy": false,
+   "gate": null
+  },
+  {
+   "id": "s15",
+   "no": 15,
+   "title": "[L] 印の規則",
+   "deps": [
+    "s13",
+    "s14"
+   ],
+   "scopes": [
+    "models",
+    "full",
+    "parent",
+    "calib"
+   ],
+   "commands": [
+    "python -m src.scripts.data.mark_v2_eval build",
+    "python -m src.scripts.data.mark_v2_eval design",
+    "python -m src.scripts.data.mark_v2_eval final"
+   ],
+   "done_check": "config/mark_rule.json が更新されている（閾値は 2022〜2023 で決め、2024〜2025 で確認）",
+   "heavy": false,
+   "gate": null
+  },
+  {
+   "id": "s16",
+   "no": 16,
+   "title": "馬券の再確認",
+   "deps": [
+    "s13",
+    "s14",
+    "s15"
+   ],
+   "scopes": [
+    "models",
+    "full",
+    "parent",
+    "calib"
+   ],
+   "commands": [
+    "python -m src.scripts.data.odds_pred_eval",
+    "python -m src.scripts.data.portfolio_target_eval grid",
+    "python -m src.scripts.data.portfolio_target_eval final",
+    "（手順書 docs/operations/retrain_betting_checklist.md に従う）"
+   ],
+   "done_check": "見送り率・的中率・トリガミ率・最大ドローダウンが前回から大きく変わっていない",
+   "heavy": true,
+   "gate": null
+  },
+  {
+   "id": "s17",
+   "no": 17,
+   "title": "[M] 凍結した馬券規則の追跡",
+   "deps": [
+    "s12"
+   ],
+   "scopes": [
+    "models",
+    "full",
+    "parent",
+    "calib"
+   ],
+   "commands": [
+    "python -m src.scripts.data.frozen_tracking"
+   ],
+   "done_check": "凍結規則（tp59/62/72/75）は差し替えず、新しい確率での成績を前向きに追跡している",
+   "heavy": false,
+   "gate": null
+  },
+  {
+   "id": "s18",
+   "no": 18,
+   "title": "配備（stg → 環境の一致確認 → 予測の再生成 → prod）",
+   "deps": [
+    "s10",
+    "s11",
+    "s12",
+    "s13",
+    "s14",
+    "s15",
+    "s16",
+    "s17"
+   ],
+   "scopes": [
+    "models",
+    "full",
+    "parent",
+    "calib"
+   ],
+   "commands": [
+    "docs/operations/model_release_checklist.md を上から順に行う（モデルのレジストリ公開 src/ops/model_publish.py → stg 反映と環境の一致確認 src/scripts/ops/env_parity_check.py → prod は scripts/ops/vps/promote.sh --commit <commit>）",
+    "手順書の stage_deploy は、このリポジトリに stage_deploy.py が見当たらない（2026-11-06 時点）。stg の反映手順（develop → stg の push で自動、docs の CI/CD 章）を確認してから使う"
+   ],
+   "done_check": "docs/operations/model_release_checklist.md の項目が済み、docs/html/operations/model_versions.html の採用一覧と履歴を更新した。戻すときは KEIBA_PRED_MODEL=legacy",
+   "heavy": false,
+   "gate": "user_ok",
+   "notes": "prod・費用・共有環境に触れる。stg までは進めてよいが、prod の反映は必ずユーザーの OK を取る。モデルの重みは git に入れない"
+  }
+ ]
 }
