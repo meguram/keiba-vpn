@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { bracketChipStyle } from "@/lib/bracket";
-import type { AnalysisEntry, RunningMapAxis, RunningMapBest5, RunningMapDayTrend, RunningMapExtra, RunningMapFigure, RunningMapHorse } from "@/lib/raceAnalysis";
+import type { AnalysisEntry, RunningMapAxis, RunningMapBest5, RunningMapDayTrend, RunningMapExtra, RunningMapFigure, RunningMapHorse, RunningMapPedTrait } from "@/lib/raceAnalysis";
 
 /** グループの色（A〜E） */
 const GROUP_COLORS = ["#58a6ff", "#f0883e", "#3fb950", "#d2a8ff", "#f778ba"];
@@ -268,7 +268,10 @@ function RunningMapView({ figure, entries }: { figure: RunningMapFigure; entries
       {figure.best5 && <Best5Panel b5={figure.best5} hs={hs} onPick={(h) => setSel(h.key ?? h.horse_id ?? null)} />}
       {figure.course_map && <CourseAxes cm={figure.course_map} />}
       {day && <DayTrend day={day} colorKey={colorKey} onColor={(k) => setColorKey(colorKey === k ? "group" : k)} />}
-      {picked && <HorseDetail h={picked} axes={figure.axes} topKeys={topKeys} extraAxes={figure.extra_axes ?? []} bracket={bracketOf.get(picked.key ?? "") ?? null} onClose={() => setSel(null)}
+      {!picked && figure.ped_traits && figure.ped_traits.length > 0 && (
+        <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "8px 0" }}>馬の札を押すと、走法の詳細と、血統（性別・父・母父）から見た傾向が出ます。</p>
+      )}
+      {picked && <HorseDetail h={picked} pedTraits={figure.ped_traits ?? []} axes={figure.axes} topKeys={topKeys} extraAxes={figure.extra_axes ?? []} bracket={bracketOf.get(picked.key ?? "") ?? null} onClose={() => setSel(null)}
           onPick={(hid) => { const o = byHorseId.get(hid); if (o) setSel(o.key ?? o.horse_id ?? null); }} bracketOf={(hid) => bracketOf.get(byHorseId.get(hid)?.key ?? "") ?? null} />}
       </div>
       </div>
@@ -438,8 +441,8 @@ function extraText(e: RunningMapExtra | undefined, key: string): string {
   return key === "slope" ? `${v}（実測 ${e.runs ?? 0} 走）` : `${v}${e.low ? "（走数が少なく低信頼）" : ""}`;
 }
 
-function HorseDetail({ h, axes, topKeys, extraAxes, bracket, onClose, onPick, bracketOf }: {
-  h: RunningMapHorse; axes: RunningMapAxis[]; topKeys: string[]; extraAxes: NonNullable<RunningMapFigure["extra_axes"]>; bracket: number | null; onClose: () => void;
+function HorseDetail({ h, pedTraits, axes, topKeys, extraAxes, bracket, onClose, onPick, bracketOf }: {
+  h: RunningMapHorse; pedTraits: RunningMapPedTrait[]; axes: RunningMapAxis[]; topKeys: string[]; extraAxes: NonNullable<RunningMapFigure["extra_axes"]>; bracket: number | null; onClose: () => void;
   onPick: (horseId: string | null) => void; bracketOf: (horseId: string | null) => number | null;
 }) {
   const c = groupColor(h.group);
@@ -504,6 +507,58 @@ function HorseDetail({ h, axes, topKeys, extraAxes, bracket, onClose, onPick, br
           ))}
         </div>
       )}
+      <PedSection h={h} traits={pedTraits} />
+    </div>
+  );
+}
+
+function pedFmt(fmt: RunningMapPedTrait["fmt"], v: number): string {
+  if (fmt === "pct") return `${Math.round(v * 100)}%`;
+  if (fmt === "m") return `${v >= 0 ? "+" : ""}${Math.round(v)}m`;
+  return v.toFixed(fmt === "q" ? 2 : 1);
+}
+
+/** 血統（性別・父・母父）だけから出した、観点ごとの期待値と 80% 区間。馬の実測とは別。線の位置は全体の平均が中央、端は上位・下位 1 割の馬の目安の 2 倍 */
+function PedSection({ h, traits }: { h: RunningMapHorse; traits: RunningMapPedTrait[] }) {
+  const p = h.ped;
+  if (!p || traits.length === 0) return null;
+  const rel = (r2: number | null) => (r2 == null ? null : r2 >= 0.15 ? { t: "強", c: "#3fb950" } : r2 >= 0.03 ? { t: "中", c: "#d29922" } : { t: "弱", c: "var(--text-dim)" });
+  return (
+    <div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px solid var(--border)" }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>血統から見た傾向</div>
+      <div style={{ fontSize: 11, color: "var(--text-dim)", margin: "1px 0 5px" }}>
+        {p.sex}・父 {p.sire ?? "不明"}・母父 {p.damsire ?? "不明"}。馬の走りの実測とは別の、血統だけの期待値です。{!p.has_damsire && "（母父が不明なため幅が広め）"}
+      </div>
+      <div style={{ display: "grid", gap: 4 }}>
+        {traits.map((t) => {
+          const v = p.v[t.key];
+          if (!v) return null;
+          const [mean, lo, hi] = v;
+          const span = t.ref != null && t.ref > 0 ? 2 * t.ref : null;
+          const pos = (x: number) => (span != null && t.base != null ? Math.max(0, Math.min(100, 50 + ((x - t.base) / span) * 50)) : null);
+          const a = pos(lo), b = pos(hi), m = pos(mean), r = rel(t.r2);
+          return (
+            <div key={t.key} style={{ display: "grid", gridTemplateColumns: "7.5em 1fr 9.5em", alignItems: "center", gap: 6, fontSize: 11.5 }} title={`${t.hint}${t.r2 != null ? `（新しい馬での当てはまり R² ${(t.r2 * 100).toFixed(1)}%）` : ""}`}>
+              <span style={{ color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {t.label}{r && <span style={{ marginLeft: 4, fontSize: 10, color: r.c }}>{r.t}</span>}
+              </span>
+              <span style={{ position: "relative", height: 10, borderRadius: 5, background: "var(--border)" }}>
+                {a != null && b != null && m != null && (
+                  <>
+                    <span style={{ position: "absolute", left: `${a}%`, width: `${Math.max(b - a, 1)}%`, top: 3, bottom: 3, borderRadius: 3, background: "rgba(88,166,255,0.35)" }} />
+                    <span style={{ position: "absolute", left: `calc(${m}% - 3px)`, width: 6, top: 0, bottom: 0, borderRadius: 3, background: "#58a6ff" }} />
+                    <span style={{ position: "absolute", left: "50%", top: -2, bottom: -2, width: 1, background: "var(--text-dim)", opacity: 0.6 }} />
+                  </>
+                )}
+              </span>
+              <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                <b>{pedFmt(t.fmt, mean)}</b> <span style={{ color: "var(--text-dim)", fontSize: 10.5 }}>({pedFmt(t.fmt, lo)}〜{pedFmt(t.fmt, hi)})</span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 10.5, color: "var(--text-dim)", marginTop: 4 }}>線=平均、青い帯=80%区間、濃い印=期待値。強・中・弱は血統でどれだけ言える観点か（弱は帯がほぼ平均をまたぐ）。</div>
     </div>
   );
 }
