@@ -303,8 +303,11 @@ def test_line_of_walks_paternal_chain_to_nearest_head_without_other_bucket():
 def test_sire_tab_shows_line_next_to_sire(tmp_path, monkeypatch):
     from src.scraper import sire_line_store as S
 
+    from src.scraper import smartrc_sire_lines as SS
+
     monkeypatch.setenv("KEIBA_SIRE_LINE_MAP", str(tmp_path / "sl.json"))
-    S.record_html("", "x")      # 台帳はまだ空・完了の印なし
+    S.record_html("", "x")
+    monkeypatch.setattr(SS, "OUT", tmp_path / "smartrc_lines.json")      # smartrc の系統の台帳はまだ空・完了の印なし
 
     rows = [
         _row("S1", "2026-01-05", "東京", "芝", 1600, 1, "J1", horse="a1"),
@@ -330,8 +333,7 @@ def test_sire_tab_shows_line_next_to_sire(tmp_path, monkeypatch):
     m0 = next(x for x in d0["modules"] if x["id"] == "sire_course")
     assert [g["key"] for g in m0["groups"]] == ["sire"]                  # 系統の取得が完全に終わるまで、系統の群は出さない
     assert "line_rec" not in d0["entries"][0]["analysis"]["sire_course"]
-    S.record_html('<table class="blood_table"><tr><td rowspan="16"><a href="/horse/z/">z</a></td></tr></table>', "x")
-    S.set_complete()
+    SS._save({"sires": {}, "complete_at": "2026-11-06T00:00:00+09:00"})      # smartrc の系統の台帳を全種牡馬ぶん試し終えた
     d = analyze_race(st, "202605040111")
     m = next(x for x in d["modules"] if x["id"] == "sire_course")
     assert [g["key"] for g in m["groups"]] == ["sire", "line"]            # 種牡馬と系統を同じタブに並べる。同競馬場・同芝ダの群は無い

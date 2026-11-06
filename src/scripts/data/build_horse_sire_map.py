@@ -122,6 +122,23 @@ def apply_netkeiba_lines(m: pd.DataFrame, labels: dict[str, str] | None) -> pd.D
     return m
 
 
+def line_labels(*, update: bool = True, fetch_max: int = 0) -> dict[str, str]:
+    """種牡馬 ID → 系統名。smartrc の小系統（data/meta/sire_lines/sire_smartrc_lines.json）を優先し、無い種牡馬だけ netkeiba の『○○系』。
+    update=True なら、先に smartrc の台帳を手元のデータで作り直し（取得なし）、fetch_max > 0 なら台帳に無い種牡馬を smartrc から最大その数だけ補い、
+    残りを父系の祖先で埋める（2026-11-06 ユーザー指示: netkeiba の系統は粗いので smartrc の系統を使う）。"""
+    from src.scraper import sire_line_store, smartrc_sire_lines as ssl
+
+    if update:
+        try:
+            ssl.build()
+            if fetch_max > 0 and ssl.load().get("missing"):
+                ssl.fetch(fetch_max)
+            ssl.fill_paternal()
+        except Exception:
+            logger.exception("smartrc の系統の台帳の更新に失敗（今ある台帳で続ける）")
+    return {**sire_line_store.labels(), **ssl.labels()}
+
+
 def build(out: Path = OUT, ped_dir: Path = PED_DIR, horse_ids: set[str] | None = None, *, full: bool = False, workers: int = 8, netkeiba_lines: dict[str, str] | None = None) -> dict[str, int]:
     ids = horse_ids if horse_ids is not None else result_horse_ids()
     old = pd.DataFrame(columns=COLUMNS)
@@ -148,14 +165,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--full", action="store_true", help="既存の行も読み直す")
     ap.add_argument("--lookahead-days", type=int, default=14)
     ap.add_argument("--out", type=Path, default=OUT)
+    ap.add_argument("--fetch-max", type=int, default=20, help="台帳に無い種牡馬を smartrc から補う最大数（0 で取得しない）")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     from src.scraper.storage import HybridStorage
 
     ids = result_horse_ids() | entry_horse_ids(HybridStorage(), date.today(), args.lookahead_days)
-    from src.scraper import sire_line_store
-
-    res = build(args.out, horse_ids=ids, full=args.full, netkeiba_lines=sire_line_store.labels())
+    # 系統は smartrc の小系統を優先（smartrc で分からない種牡馬だけ netkeiba の表記、それも無ければ 5 代血統からの推定）
+    res = build(args.out, horse_ids=ids, full=args.full, netkeiba_lines=line_labels(fetch_max=args.fetch_max))
     logger.info("horse_sire_map: %s", res)
     return 0
 

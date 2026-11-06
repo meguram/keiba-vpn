@@ -111,7 +111,7 @@ SIRE_LINE = Dimension(
     id="sire_line_course", label="系統×コース", min_n=30, run_col="sire_line_id", entry_key=_line_key, key_header="父の系統", key_text=_line_text,
     needs_sire_map=True,
     description="出走馬の父の系統（サンデーサイレンス系など）の産駒の成績。",
-    unknown_note="父の系統を特定できない馬は表示されません。系統は父から父の父…（5代まで）をさかのぼって決めています。",
+    unknown_note="父の系統を特定できない馬は表示されません。系統は smartrc の小系統（例: ディープ系・Tサンデー系・ロベルト系）で、smartrc に無い種牡馬は父の父…とさかのぼって決めています。",
 )
 
 
@@ -167,10 +167,10 @@ def _scale(mid: float | None, key: str) -> dict[str, float] | None:
 
 
 def lines_ready() -> bool:
-    """系統の群を出してよいか = netkeiba の『○○系』を全種牡馬ぶん取り終えている。"""
-    from src.scraper import sire_line_store
+    """系統の群を出してよいか = smartrc の系統の台帳（data/meta/sire_lines/sire_smartrc_lines.json）を全種牡馬ぶん試し終えている。"""
+    from src.scraper import smartrc_sire_lines
 
-    return sire_line_store.is_complete()
+    return smartrc_sire_lines.is_complete()
 
 
 @dataclass(frozen=True)
