@@ -34,6 +34,14 @@ ssh keiba-remote 'python3 /home/jovyan/work/retrain_state/retrain_ctl.py next'
 5. 完了の確認（`done_check`）を実際に見て、満たしていれば `ctl done <段> --note "確認した内容と数値"`。満たさなければ `ctl fail <段> --note "原因"`。
 6. 次の段へ。
 
+## 2.5 上流（s3 → s4 → s7）は切り離しドライバで動いている
+
+2026-11-06 に起動済み。`src/scripts/ops/retrain_upstream.py`（ホストの `/home/jovyan/work/retrain_state/`）が s3 追走難度 → s4 ラップ予想 → s7 前段 S3 を直列に実行し、段の状態を `retrain_ctl` に自動で記録する。出力は `/home/jovyan/work/retrain_out/`（本番の tp54_out・tp55_out3・final_stage・config は上書きしない）、ログは `retrain_state/logs/{s3,s4,s7}.log` と `upstream.out`。
+
+- 動いているか: `ssh keiba-remote 'pgrep -af retrain_upstream.py'`。`status` が `▶` ならドライバが担当中なので、同じ段を手で始めない。
+- 失敗したら: ドライバは止まり、段は `✘`。原因を直して `ctl reset <段>` → 上と同じ起動コマンド（`cd /home/jovyan/work/keiba-vpn && setsid nohup /opt/conda/bin/python3 /home/jovyan/work/retrain_state/retrain_upstream.py > .../logs/upstream.out 2>&1 < /dev/null &`）で再開する（済みの段は飛ばす）。
+- 完了後: 旧版との比較が `retrain_out/parity_{s3,s4,s7}.json` にある。相関が低い列があれば、入力データの変化（2025 の passing_order など）が原因か確認してから s9 以降へ進む。s8（RB）以降はドライバの対象外で、この手順に沿って 1 段ずつ進める。
+
 ## 3. 最初に利用者へ伝える既定値（確認は 1 回だけ）
 
 最初のセッションで、次の既定のまま進めてよいかを一言で伝え、反対されなければ `ctl decide <項目> <値> --confirm` で確定する。止まって待たない（反対が来るまで既定で進める）。
