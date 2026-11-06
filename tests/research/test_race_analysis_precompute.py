@@ -166,6 +166,42 @@ def test_past_position_module_classifies_and_uses_first_corner(env):
     assert 0 < cells["イチ"]["pos"] < 0.5 and math.isclose(cells["イチ"]["pos"], cells["イチ"]["pos"])
 
 
+# ── 補助の計算（Best5・血統）が欠けた結果は、正常な保存済みの結果を上書きしない ──
+
+def test_degraded_reasons_picks_module_errors_and_build_errors():
+    assert precompute.degraded_reasons({"modules": [{"id": "a", "status": "ok"}]}) == []
+    got = precompute.degraded_reasons({"modules": [{"id": "running_map", "status": "ok", "figure": {"build_errors": ["best5", "ped"]}},
+                                                   {"id": "gate_course", "status": "error"}]})
+    assert got == ["running_map:best5", "running_map:ped", "module:gate_course"]
+
+
+def test_degraded_result_never_overwrites_a_good_one_and_is_retried(env, monkeypatch):
+    storage, _ = env
+    rid = "202605040111"
+    assert precompute.precompute_race(storage, rid) == "written"
+    good = store.read(rid)
+    real = precompute.analyze_race
+
+    def broken(st, r):
+        p = real(st, r)
+        p["modules"][0]["figure"] = {"build_errors": ["best5_missing"]}
+        return p
+
+    monkeypatch.setattr(precompute, "analyze_race", broken)
+    assert precompute.precompute_race(storage, rid, force=True) == "degraded"
+    assert store.read(rid) == good                                                       # 正常な結果を残す
+    # 保存済みが無い場合は、欠けた結果を指紋なしで保存し、直れば次の周回で作り直す
+    store.path_of(rid).unlink()
+    assert precompute.precompute_race(storage, rid) == "degraded"
+    saved = store.read(rid)
+    assert len(saved["degraded"]) == 1 and saved["degraded"][0].endswith(":best5_missing")
+    assert saved["fingerprint"] == "degraded"
+    monkeypatch.setattr(precompute, "analyze_race", real)
+    assert precompute.precompute_race(storage, rid) == "written"
+    assert "degraded" not in store.read(rid)
+    assert precompute.precompute_races(storage, [rid])["degraded"] == 0
+
+
 # ── API は保存済みの結果を読むだけ ──
 
 def test_api_reads_the_stored_result_and_never_computes(env, monkeypatch):

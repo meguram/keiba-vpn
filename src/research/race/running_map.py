@@ -644,6 +644,7 @@ def _assemble(entries: list[dict], ids: list[str], prof: pd.DataFrame, race_id: 
 
         logging.getLogger(__name__).exception("Best5 の計算に失敗: %s", race_id)
         out["best5"] = None
+        out["build_errors"] = [*(out.get("build_errors") or []), "best5"]
     labels = group(Z if not cm else Z * np.array(cm["w"]))
     Zu = np.array(Zs)
     order = sorted(set(labels), key=lambda g: (-int((labels == g).sum()), g))
