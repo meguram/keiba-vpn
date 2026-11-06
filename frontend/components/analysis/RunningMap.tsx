@@ -337,12 +337,13 @@ function ColorControl({ axes, colorKey, onChange, topKeys }: { axes: RunningMapA
 
 /** Best5: 地図の上で、このコース・今日の馬場に走法が合う順の 5 頭。結果が出ていれば実際の着順を並べる */
 function Best5Panel({ b5, hs, onPick }: { b5: RunningMapBest5; hs: RunningMapHorse[]; onPick: (h: RunningMapHorse) => void }) {
-  const byNo = new Map(hs.map((h) => [h.horse_number, h]));
-  const rows = b5.picks.map((p) => ({ p, h: byNo.get(p.horse_number) ?? null }));
+  const byId = new Map(hs.map((h) => [h.horse_id, h]));
+  const rows = b5.picks.map((p) => ({ p, h: byId.get(p.horse_id) ?? null }));
   const done = hs.some((h) => h.finish_position != null);
   const hit = rows.filter((r) => r.h?.finish_position != null && r.h.finish_position <= 3).length;
   const top3 = hs.filter((h) => h.finish_position != null && h.finish_position <= 3).sort((a, b) => (a.finish_position ?? 0) - (b.finish_position ?? 0));
-  const inPicks = new Set(b5.picks.map((p) => p.horse_number));
+  const inPicks = new Set(b5.picks.map((p) => p.horse_id));
+  const label = (h: RunningMapHorse) => `${h.horse_number ?? ""} ${h.horse_name ?? ""}`.trim() || "?";
   return (
     <div style={{ fontSize: 12, margin: "0 0 8px", padding: "6px 8px", borderRadius: 8, border: "1px solid var(--border)" }}>
       <b>走法が合う Best5</b>
@@ -353,7 +354,7 @@ function Best5Panel({ b5, hs, onPick }: { b5: RunningMapBest5; hs: RunningMapHor
           return (
             <li key={p.rank} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "2px 0", cursor: h ? "pointer" : "default" }} onClick={() => h && onPick(h)}>
               <span style={{ width: 18, color: "var(--text-dim)" }}>{p.rank}</span>
-              <span style={{ flex: 1 }}>{p.horse_number ?? "?"} {h?.horse_name ?? ""}</span>
+              <span style={{ flex: 1 }}>{h ? label(h) : (p.horse_number ?? "?")}</span>
               {done && <span style={{ fontWeight: fp != null && fp <= 3 ? 800 : 400, color: fp != null && fp <= 3 ? "#3fb950" : "var(--text-dim)" }}>{fp != null ? `${fp}着` : "着外・中止"}</span>}
             </li>
           );
@@ -361,14 +362,9 @@ function Best5Panel({ b5, hs, onPick }: { b5: RunningMapBest5; hs: RunningMapHor
       </ol>
       {done && (
         <div style={{ color: "var(--text-dim)", marginTop: 3 }}>
-          5 頭中 <b style={{ color: "var(--text)" }}>{hit}</b> 頭が 3 着以内。実際の 1〜3 着: {top3.map((h) => `${h.finish_position}着 ${h.horse_number ?? "?"}${h.horse_name ?? ""}${inPicks.has(h.horse_number) ? "（Best5）" : ""}`).join(" / ")}
+          5 頭中 <b style={{ color: "var(--text)" }}>{hit}</b> 頭が 3 着以内。実際の 1〜3 着: {top3.map((h) => `${h.finish_position}着 ${label(h)}${inPicks.has(h.horse_id) ? "（Best5）" : ""}`).join(" / ")}
         </div>
       )}
-      <div style={{ color: "var(--text-dim)", marginTop: 3 }}>
-        地図の背景の色（コース特注ゾーン＋{b5.w_day}×馬場特注ゾーン）が濃い所にいる馬の順です。人気は考えていません。
-        2025〜2026 年の約 1,500 レースで検証すると、5 頭中の 3 着以内は平均約 1.6 頭（でたらめな 5 頭は約 1.1 頭、人気上位 5 頭は約 2.2 頭）。
-        人気で説明できる分を除いた上乗せはごくわずかです。クラスやレース番号で配分を変えても良くならなかったので、全レース共通の配分です。予想の目安の 1 つとして見てください。
-      </div>
     </div>
   );
 }
