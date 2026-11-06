@@ -40,8 +40,10 @@ REPO = Path(__file__).resolve().parents[2]
 JST = timezone(timedelta(hours=9))
 MASTER = REPO / "data/meta/sire_lines/smartrc_line_master.json"
 OUT = Path(os.environ.get("KEIBA_SMARTRC_SIRE_LINES") or REPO / "data/meta/sire_lines/sire_smartrc_lines.json")
-TP32 = REPO / "data/local/modeling/training_pipeline_v4/tp32"
-SIRE_MAP = REPO / "data/page_reference/pedigree_race_index/horse_sire_map.parquet"
+from src.config.data_paths import MODELING_DIR, PAGE_REF  # noqa: E402
+
+TP32 = MODELING_DIR / "training_pipeline_v4/tp32"   # 学習の成果物（ホストの data/local。共通の定義から取る）
+SIRE_MAP = PAGE_REF / "pedigree_race_index/horse_sire_map.parquet"
 INTERVAL = (2.2, 4.0)
 
 
