@@ -347,7 +347,8 @@ def test_scrape_notify_jobs_treat_disabled_notification_as_ok():
     """並走中の通知無効（rc=13）を失敗にしない。失敗扱いだと『ジョブが失敗』が 15 分ごとに本番の Slack へ届いた（2026-11-04）。"""
     from src.ops import job_map
 
-    jobs = [j for j in job_map.load()["jobs"] for st in j.get("steps") or [] if st["argv"][:2] == ["-m", "src.scripts.data.scrape_status_notify"]]
+    jobs = [j for j in job_map.load()["jobs"] for st in j.get("steps") or [] if st["argv"][:2] in (["-m", "src.scripts.data.scrape_status_notify"], ["-m", "src.scripts.data.daily_results_notify"])]
+    assert any(j["id"] == "slack-results" for j in jobs)      # 予測成績の通知も同じ（2026-11-07 に 20 分ごとに届いた）
     assert jobs and all(13 in st["ok_codes"] and 14 not in st["ok_codes"] for j in jobs for st in j["steps"])
 
 
