@@ -40,7 +40,7 @@ pre { background:var(--code); border:1px solid var(--border); border-radius:8px;
 <h2>2. 依存関係（上が先）— 親モデルに実際に入るものだけを区別</h2>
 <p class="sub">ホストの本番バンドル <code>final_v6e/bundle_v6_2025</code> の特徴量 1,231 列を、列名ごとに出どころの群へ割り当てて確認した（<code>serving_v4/v5/v6</code> の群の対応で突き合わせ）。「データとして持っている」ことと「親モデルの列になっている」ことは別なので、4 種類に分けて書く。</p>
 <h3>2.1 チャート（上流 → 下流）</h3>
-<!-- RETRAIN-STATUS:BEGIN --><div class="box"><b>再学習の状態</b>（2026-11-07 16:25 更新・学習年 2016-2025・段 5/19）: ▶ 作業中（§2.6 の箱）: <b>S3（合格線 ≤0.6977/≤0.2079（現行 e 0.7116/0.2135）。試行1 実行中）</b><br/>▶ 学習中: <b>s3 [C][D] 追走難度 v2（位置取り予想は馬柱の集計で、学習モデルではない）</b>（2026-11-07 03:44 開始）<br/><span class='warn'>✘/■ 要対応: s4 [E] ラップ予想・s9 [I] 親モデルのメンバー OOF とアンサンブルの重み</span><br/><span class="muted">§2.1 と §2.6 のチャートの箱の下に状態（✔ 完了・▶ 実行中・・ 未着手・✘ 失敗・■ 判断待ち・－ 対象外）。実行中の箱は橙の太枠。<code>retrain_ctl.py</code> が記録のたびに書き直す（手動は <code>retrain_ctl.py html</code>、§2.6 の箱は <code>retrain_ctl.py node 箱 状態 --note …</code>）。</span></div><!-- RETRAIN-STATUS:END -->
+<!-- RETRAIN-STATUS:BEGIN --><div class="box"><b>再学習の状態</b>（2026-11-07 17:46 更新・学習年 2016-2025・段 5/19）: ▶ 学習中: <b>s3 [C][D] 追走難度 v2（位置取り予想は馬柱の集計で、学習モデルではない）</b>（2026-11-07 03:44 開始）<br/><span class='warn'>✘/■ 要対応: s4 [E] ラップ予想・s9 [I] 親モデルのメンバー OOF とアンサンブルの重み</span><br/><span class="muted">§2.1 と §2.6 のチャートの箱の下に状態（✔ 完了・▶ 実行中・・ 未着手・✘ 失敗・■ 判断待ち・－ 対象外）。実行中の箱は橙の太枠。<code>retrain_ctl.py</code> が記録のたびに書き直す（手動は <code>retrain_ctl.py html</code>、§2.6 の箱は <code>retrain_ctl.py node 箱 状態 --note …</code>）。</span></div><!-- RETRAIN-STATUS:END -->
 <div class="legend">
 <span><i class="ln thick"></i>親モデルの列になる</span>
 <span><i class="ln thin"></i>前段 S3 の入力になるだけ</span>
@@ -180,7 +180,7 @@ flowchart TB
 <p class="sub">勝率は weighted_logit、連対・複勝は greedy の重み（<code>bundle.json</code> の <code>spec</code>）。5 seed 平均、学習 283,714 行、2020〜2025 年。重みは LOYO の合成で決めたもの。入力列数は本番バンドル <code>bundle.json</code> の各メンバーの <code>feature_cols</code> を、§2.2 の群に割り当てて数えた。</p>
 
 <h3>2.6 作るものの区分：モデリング（A）／特徴量生成（B）／境界（C）</h3>
-<!-- RETRAIN-STATUS:BEGIN --><div class="box"><b>再学習の状態</b>（2026-11-07 16:25 更新・学習年 2016-2025・段 5/19）: ▶ 作業中（§2.6 の箱）: <b>S3（合格線 ≤0.6977/≤0.2079（現行 e 0.7116/0.2135）。試行1 実行中）</b><br/>▶ 学習中: <b>s3 [C][D] 追走難度 v2（位置取り予想は馬柱の集計で、学習モデルではない）</b>（2026-11-07 03:44 開始）<br/><span class='warn'>✘/■ 要対応: s4 [E] ラップ予想・s9 [I] 親モデルのメンバー OOF とアンサンブルの重み</span><br/><span class="muted">§2.1 と §2.6 のチャートの箱の下に状態（✔ 完了・▶ 実行中・・ 未着手・✘ 失敗・■ 判断待ち・－ 対象外）。実行中の箱は橙の太枠。<code>retrain_ctl.py</code> が記録のたびに書き直す（手動は <code>retrain_ctl.py html</code>、§2.6 の箱は <code>retrain_ctl.py node 箱 状態 --note …</code>）。</span></div><!-- RETRAIN-STATUS:END -->
+<!-- RETRAIN-STATUS:BEGIN --><div class="box"><b>再学習の状態</b>（2026-11-07 17:46 更新・学習年 2016-2025・段 5/19）: ▶ 学習中: <b>s3 [C][D] 追走難度 v2（位置取り予想は馬柱の集計で、学習モデルではない）</b>（2026-11-07 03:44 開始）<br/><span class='warn'>✘/■ 要対応: s4 [E] ラップ予想・s9 [I] 親モデルのメンバー OOF とアンサンブルの重み</span><br/><span class="muted">§2.1 と §2.6 のチャートの箱の下に状態（✔ 完了・▶ 実行中・・ 未着手・✘ 失敗・■ 判断待ち・－ 対象外）。実行中の箱は橙の太枠。<code>retrain_ctl.py</code> が記録のたびに書き直す（手動は <code>retrain_ctl.py html</code>、§2.6 の箱は <code>retrain_ctl.py node 箱 状態 --note …</code>）。</span></div><!-- RETRAIN-STATUS:END -->
 <p class="sub">2026-11-06 に追記。「予測値を出すために学習するもの」と「計算・集計・結合で列を作るもの」を分ける。区分で守ることが変わる。</p>
 <div class="legend">
 <span style="color:#4ade80">■ A. モデリング（学習して予測値を出す）</span>
@@ -269,8 +269,7 @@ flowchart TB
   GRP["<b>適性グルーピング</b><br/>出力: 似た適性の馬のグループ<br/><span>－ 対象外：未採用・要検討</span>"]
   GST["グループ内の成績・近さ<br/><span>－ 対象外：未採用・要検討</span>"]
   STAT["<b>その他</b><br/>出力: 統計量・ターゲットエンコーディング<br/>騎手・調教師・馬主・血統の成績・出走メンバー構成<br/>追い切り・血統 ridge/SVD(PX)<br/><span>・ 未着手：2016 年以降で作り直し</span>"]
-  S3["<b>前段 S3</b> (条件適用後の能力 APS に相当)<br/>出力: 予想走破時計 s_time_pred<br/>時計差 s_time_gap・予想順位 s_rank_pred<br/><span>▶ 実行中：合格線 ≤0.6977/≤0.2079</span>"]
-  class S3 st_running;
+  S3["<b>前段 S3</b> (条件適用後の能力 APS に相当)<br/>出力: 予想走破時計 s_time_pred<br/>時計差 s_time_gap・予想順位 s_rank_pred<br/><span>✔ 完了：合格</span>"]
   PARENT["<b>下流（親モデル）</b> 7 メンバー × 5 seed<br/>出力: 勝率・連対率・複勝率<br/><span>■ 判断待ち：s9 親モデルのメンバー OOF とア…</span>"]
   class PARENT st_bad;
   EXO["<b>馬券組合せ確率</b> 割引 Harville（実装済み）<br/>出力: 馬連・ワイド・馬単・3連複の的中確率<br/><span>・ 未着手</span>"]
