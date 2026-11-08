@@ -380,17 +380,28 @@ def assign_mece_marks_v2(entries: list[dict], params: dict | None = None) -> Non
     def free() -> list[dict]:
         return [e for e in entries if e.get("mark_type") == "none"]
 
-    # ◎ 勝率が基準を満たす馬（勝率上位 topk 頭のうち 均等確率×win_mult 以上）の中で、期待値（単勝）が最大の馬
+    # ◎ 勝率・EV の絶対閾値（win_prob_min / ev_win_min）が設定されているときはそれで絞る。
+    #    候補ゼロのとき: 閾値あり → ◎なし、閾値なし（レガシー）→ 勝率1位に付ける。
+    #    EV が 1 頭も無いレース（オッズ前）は勝率の閾値だけで絞り、勝率の最も高い馬に付ける。
     h = pr["honmei"]
+    win_prob_min = float(h.get("win_prob_min") or 0.0)
+    ev_win_min = float(h.get("ev_win_min") or 0.0)
+    use_abs = win_prob_min > 0 or ev_win_min > 0
     by_win = sorted(entries, key=lambda x: _f(x, "win_prob"), reverse=True)
-    cand = [e for e in by_win[: max(int(h["topk"]), 1)] if _f(e, "win_prob") >= base * float(h["win_mult"])]
-    if not cand:
-        cand = by_win[:1]
-    if any(e.get("ev_win") for e in cand):
-        honmei = max(cand, key=lambda x: (_f(x, "ev_win"), _f(x, "win_prob")))
+    if use_abs:
+        # オッズが出る前など、どの馬にも ev_win が無いときは EV の閾値を使わない（全馬 ◎なしにしない）
+        has_ev = any(e.get("ev_win") is not None for e in entries)
+        cand = [e for e in entries
+                if _f(e, "win_prob") >= win_prob_min
+                and (not has_ev or _f(e, "ev_win") >= ev_win_min)]
     else:
-        honmei = cand[0]
-    honmei["mark_type"] = "honmei"
+        topk = max(int(h.get("topk") or 1), 1)
+        cand = [e for e in by_win[:topk] if _f(e, "win_prob") >= base * float(h.get("win_mult") or 0.0)]
+        if not cand:
+            cand = by_win[:1]
+    if cand:
+        honmei = max(cand, key=lambda x: (_f(x, "ev_win"), _f(x, "win_prob")))
+        honmei["mark_type"] = "honmei"
 
     # ○ ◎を除いて、勝率が最も高い馬（rule=win）／連対率が最も高い馬（rule=top2）／勝率順と連対率順の順位の和が最小の馬（rule=blend）
     pa = pr["pair"]
