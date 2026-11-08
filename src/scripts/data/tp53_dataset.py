@@ -107,7 +107,10 @@ def load_td(race_ids) -> tuple[pd.DataFrame, pd.DataFrame]:
                 "td_l3f_ability": e3.get("ability_sec"), "td_l3f_n": e3.get("n_samples"), "td_n_races": prof.get("n_races"),
                 "td_typical": prof.get("typical_position"), "td_conf": f.get("confidence"),
             })
-    return pd.DataFrame(hrows), pd.DataFrame(rrows)
+    # 旧版の事前計算が無い年（2016〜2019 年）は、結合できるよう列だけの空の表を返す（その年の td_* は欠けたまま）
+    h = pd.DataFrame(hrows) if hrows else pd.DataFrame(columns=["race_id", "horse_number", "td_l3f"])
+    r = pd.DataFrame(rrows) if rrows else pd.DataFrame(columns=["race_id"])
+    return h, r
 
 
 def _past_from_results(year: int) -> pd.DataFrame:
@@ -175,12 +178,59 @@ def load_pf(year: int) -> tuple[pd.DataFrame, pd.DataFrame]:
     return pd.DataFrame(hrows), pd.DataFrame(rrows)
 
 
+def apply_learned_pos(year: int, pfh: pd.DataFrame, pfr: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """TP53_POS_PRED（pos_model の oof の parquet）があれば、位置取り予想を学習モデルの予測に差し替える（2026-11-07、§2.6 の区分 A）。
+    予測が無い馬は従来の集計の値のまま。元の値は pf_early_agg に残す。レース単位の量（逃げ・先行の頭数・圧力・判定）は、
+    position_forecast と同じ閾値（style_of）・同じ規則で数え直す。"""
+    import os
+
+    path = os.environ.get("TP53_POS_PRED")
+    if not path or pfh.empty:
+        return pfh, pfr
+    from src.pipeline.inference.position_forecast import style_of
+
+    pp = pd.read_parquet(path, columns=["race_id", "horse_number", "year", "pos_pred"])
+    pp = pp[pp["year"] == year].drop(columns="year")
+    pp["race_id"], pp["horse_number"] = pp["race_id"].astype(str), pp["horse_number"].astype(int)
+    h = pfh.copy()
+    h["race_id"] = h["race_id"].astype(str)
+    h = h.merge(pp, on=["race_id", "horse_number"], how="left")
+    h["pf_early_agg"] = h["pf_early"]
+    h["pf_early"] = h["pos_pred"].where(h["pos_pred"].notna(), h["pf_early"])
+    h["pf_rank"] = h.groupby("race_id")["pf_early"].rank(method="first")
+    h["pf_style"] = h["pf_early"].map(lambda v: style_of(v) if pd.notna(v) else None)
+    h["pf_style_raw"] = h["pf_style"]
+    g = h.groupby("race_id")
+    agg = pd.DataFrame({"front": g["pf_style"].apply(lambda x: (x == "front").sum()), "stalker": g["pf_style"].apply(lambda x: (x == "stalker").sum()),
+                        "known": g["pf_early"].count()}).reset_index()
+    r = pfr.copy()
+    r["race_id"] = r["race_id"].astype(str)
+    r = r.merge(agg, on="race_id", how="left")
+    fs = r["race_id"].map(h.groupby("race_id").size()).astype(float)
+    r["pf_front"], r["pf_stalker"], r["pf_known"] = r["front"].fillna(0).astype(int), r["stalker"].fillna(0).astype(int), r["known"].fillna(0).astype(int)
+    r["pf_pressure"] = ((r["pf_front"] + r["pf_stalker"]) / fs).round(3)
+
+    def level(row) -> str:
+        if row["pf_known"] < max(4, row["_fs"] * 0.5):
+            return "unknown"
+        if row["pf_front"] >= 3 or (row["pf_front"] >= 2 and row["pf_pressure"] >= 0.4):
+            return "high"
+        if row["pf_front"] == 0 or (row["pf_front"] == 1 and row["pf_pressure"] < 0.35):
+            return "slow"
+        return "mid"
+
+    r["_fs"] = fs
+    r["pf_level"] = r.apply(level, axis=1)
+    return h.drop(columns=["pos_pred"]), r.drop(columns=["front", "stalker", "known", "_fs"])
+
+
 def build(years: list[int]) -> tuple[pd.DataFrame, pd.DataFrame]:
     H, R = [], []
     for y in years:
         act, race = load_actual(y)
         tdh, tdr = load_td(race["race_id"].unique())
         pfh, pfr = load_pf(y)
+        pfh, pfr = apply_learned_pos(y, pfh, pfr)
         h = act.merge(tdh, on=["race_id", "horse_number"], how="left").merge(pfh, on=["race_id", "horse_number"], how="left")
         r = race.merge(tdr, on="race_id", how="left").merge(pfr, on="race_id", how="left")
         print(y, "horses", len(h), "races", len(r), "td", int(h["td_l3f"].notna().sum()), "pf", int(h["pf_early"].notna().sum()), flush=True)

@@ -49,6 +49,9 @@ def load_project_dotenv(
     - `dotenv_path` 省略時: 環境変数 `KEIBA_DOTENV_PATH` があればそれを使用、なければ `<ルート>/.env`
     - ファイルが無い場合は読み込まず `None` を返す
     """
+    if (os.environ.get("KEIBA_SKIP_DOTENV") or "").strip() == "1" and dotenv_path is None:
+        # テスト（tests/conftest.py）用: 開発PCの .env / .env.stg を読まない（CI と同じ条件にする）
+        return None
     if dotenv_path is not None:
         path = Path(dotenv_path).expanduser().resolve()
     else:

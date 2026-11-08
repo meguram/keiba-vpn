@@ -342,7 +342,7 @@ _MEMBER_ONLY_PATTERNS = [re.compile(p) for p in (
     r"^/api/race-quality/",
     r"^/api/v1/betting/",
     r"^/api/prediction-results/bets-(summary|by-level)",
-    r"^/api/v1/races/[^/]+/(final-odds|megu-index|megu-index-predicted|tracking-difficulty|predictions/laps)",
+    r"^/api/v1/races/[^/]+/(final-odds|megu-index|megu-index-predicted|tracking-difficulty|predictions/laps|running-map)",
     r"^/api/v1/horse/[^/]+/(megu-index-history|growth-curve)",
     r"^/api/v1/(pedigree-race-stats|data-analysis)/",
     r"^/api/v1/(bloodline-cluster/horse-aptitude|pedigree/race-note-3d-v2)",
