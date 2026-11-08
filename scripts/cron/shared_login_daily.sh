@@ -5,4 +5,4 @@ set -u
 PROJECT_DIR="${1:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)}"
 cd "$PROJECT_DIR" || exit 1
 mkdir -p logs
-KEIBA_ENV="${KEIBA_ENV:-stg}" PYTHONPATH=. "${PYTHON:-/opt/conda/bin/python3}" -m src.scripts.ops.shared_login ensure >>logs/shared_login.log 2>&1
+KEIBA_ENV="${KEIBA_ENV:-prod}" PYTHONPATH=. "${PYTHON:-/opt/conda/bin/python3}" -m src.scripts.ops.shared_login ensure >>logs/shared_login.log 2>&1
