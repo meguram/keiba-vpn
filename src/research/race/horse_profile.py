@@ -5,7 +5,7 @@ tp-25 (ts_score/gc_score) および tp-26 (split_ratio/front_ratio/shift_ratio) 
 データを参照し、指定した馬の「現時点の走法プロファイル」を辞書形式で返す。
 
 Usage:
-    from src.utils.horse_profile import get_horse_profile, compare_horses
+    from src.research.race.horse_profile import get_horse_profile, compare_horses
 
     # 馬1頭のプロファイル
     profile = get_horse_profile("2019105213")
