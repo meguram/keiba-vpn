@@ -837,6 +837,91 @@ def claims() -> dict:
     return out
 
 
+DIM_ORDER = ["全体", "コース", "競馬場×面", "面×距離帯", "面", "面×馬場", "クラス", "面×クラス", "頭数", "季節", "年齢", "性", "人気帯"]
+
+
+def _correct_section(w, tested, meta, cl, esc, tier_html, pt, pc, order) -> None:
+    """型ごとに、通説の向きで有意（S〜C）になった切り口を折り畳みで並べる。"""
+    ok_adj = (tested["adj_tier"] != "無") & tested["adj_agree"]
+    ok_raw = (tested["raw_tier"] != "無") & tested["raw_agree"]
+    ok = tested[ok_adj | ok_raw].copy()
+    ok["ok_adj"] = ok_adj[ok.index]
+    ok["oa"] = ok["adj_tier"].where(ok["ok_adj"], "無").map(order)
+    ok["or"] = ok["raw_tier"].where(ok_raw[ok.index], "無").map(order)
+    n_h_adj = ok[ok["ok_adj"]]["hid"].nunique()
+    n_h_raw = ok["hid"].nunique()
+    w(f"<h2 id='correct'>3. 型ごと: 通説が正しいと言える切り口（折り畳み）</h2>"
+      "<p class='muted'>型ごとに、<b>通説の向きで有意（S〜C）</b>になった切り口（コース・競馬場×面・距離帯・馬場・クラスなど）を並べた。"
+      "型を開くと切り口の種類ごとの折り畳みがあり、開くと値ごとの判定が出る。"
+      "<b>人気をそろえた差</b>で有意 = 人気以上に来る（または来ない）＝序列づけに使える。"
+      "<b>素の差だけ</b>で有意 = 通説は事実だが人気が織り込み済み（行を薄く表示）。"
+      f"人気をそろえた差で正しい切り口を持つ型 {n_h_adj}、素の差まで含めると {n_h_raw}。</p>")
+    w("<div class='ok-tools'><label><input type='checkbox' id=\"ok-raw\" checked/> 素の差だけで有意な切り口も表示</label>"
+      "<label>絞り込み <input type='search' id=\"ok-q\" placeholder='例: 東京芝1600・ダ・重・G1・D04'/></label>"
+      "<button type='button' id=\"ok-open\">すべて開く</button><button type='button' id=\"ok-close\">すべて閉じる</button>"
+      "<span class='muted' id=\"ok-cnt\"></span></div>")
+    cats: dict = {}
+    for hid in meta:
+        if hid in set(ok["hid"]):
+            cats.setdefault(hid[0], []).append(hid)
+    for c in ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "P", "X"]:
+        if c not in cats:
+            continue
+        w(f"<h3>{c}. {CAT_NAMES[c]}（{len(cats[c])} 型）</h3>")
+        for hid in cats[c]:
+            m = meta[hid]
+            x = ok[ok["hid"] == hid]
+            xa = x[x["ok_adj"]]
+            ca = xa["adj_tier"].value_counts()
+            cr = x[(x["raw_tier"] != "無") & x["raw_agree"]]["raw_tier"].value_counts()
+            chips = "".join(f"<span class='t{k}'>{k}</span>{int(ca[k])} " for k in "SABC" if ca.get(k, 0))
+            rchips = "・".join(f"{k}{int(cr[k])}" for k in "SABC" if cr.get(k, 0))
+            courses = xa[xa["dim"] == "コース"].sort_values(["oa", "adj_conf"], ascending=[True, False])
+            dirs = "買い" if m["dir"] > 0 else "消し"
+            claim = esc(cl.get(hid[:3], ""))
+            w(f"<details class='okh' data-hid='{hid}'><summary><span class='sid'>{hid}</span>{claim}"
+              f"<span class='chips'>{('人気そろえ ' + chips) if chips else '<span class=muted>人気そろえ なし</span> '}</span>"
+              f"<span class='muted'>／素の差 {rchips or 'なし'}（{dirs}）</span></summary>")
+            if len(courses):
+                cs = "、".join(f"<b>{esc(str(r['key']))}</b>{tier_html(r['adj_tier'], True)}" for _, r in courses.iterrows())
+                w(f"<div class='ok-courses'>人気をそろえても正しいコース: {cs}</div>")
+            for dim in DIM_ORDER:
+                y = x[x["dim"] == dim].sort_values(["oa", "adj_conf", "or", "raw_conf"], ascending=[True, False, True, False])
+                if not len(y):
+                    continue
+                na = int(y["ok_adj"].sum())
+                vals = "、".join(esc(str(k)) for k in y[y["ok_adj"]]["key"].head(6))
+                more = "…" if na > 6 else ""
+                w(f"<details class='okc'><summary>{esc(dim)}: 人気そろえ {na} ・素の差のみ {len(y) - na}"
+                  f"{('<span class=muted>（' + vals + more + '）</span>') if na else ''}</summary><div class='wrap'><table><thead><tr>"
+                  "<th>値</th><th>人気そろえ</th><th>Δ 発見/確認(pt)</th><th>素の差</th><th>Δ 発見/確認(pt)</th><th>3 着内率 / 市場 / 他</th><th>当てはまる走数（発見/確認）</th><th>単勝回収率 頭打ち</th></tr></thead><tbody>")
+                for _, r in y.iterrows():
+                    cls = "fam-adj" if r["ok_adj"] else "fam-raw"
+                    at = tier_html(r["adj_tier"], r["adj_agree"]) + (f" <span class='muted'>{r['adj_conf'] * 100:.1f}%</span>" if r["adj_tier"] != "無" else "")
+                    rt = tier_html(r["raw_tier"], r["raw_agree"]) + (f" <span class='muted'>{r['raw_conf'] * 100:.1f}%</span>" if r["raw_tier"] != "無" else "")
+                    cn = int(r["c_n1"]) if pd.notna(r["c_n1"]) else 0
+                    w(f"<tr class='{cls}'><td>{esc(str(r['key']))}</td><td>{at}</td><td class='num'>{pt(r['adj'])} / {pt(r['adj_c'])}</td><td>{rt}</td><td class='num'>{pt(r['raw'])} / {pt(r['raw_c'])}</td>"
+                      f"<td class='num'>{pc(r['y3_1'])} / {pc(r['p_mkt_1'])} / {pc(r['y3_0'])}%</td><td class='num'>{int(r['n1']):,} / {cn:,}</td><td class='num'>{r['roi_cap_1'] * 100:.0f}%</td></tr>")
+                w("</tbody></table></div></details>")
+            w("</details>")
+    w("""<script>(function(){
+var raw=document.getElementById('ok-raw'),q=document.getElementById('ok-q'),cnt=document.getElementById('ok-cnt');
+var hs=[].slice.call(document.querySelectorAll('details.okh'));
+function apply(){var s=(q.value||'').trim().toLowerCase(),showRaw=raw.checked,nh=0;
+hs.forEach(function(h){var idm=s&&h.dataset.hid.toLowerCase().indexOf(s)===0,anyH=false;
+[].slice.call(h.querySelectorAll('details.okc')).forEach(function(c){var any=false;
+[].slice.call(c.querySelectorAll('tbody tr')).forEach(function(tr){var vis=(showRaw||tr.classList.contains('fam-adj'))&&(!s||idm||tr.cells[0].textContent.toLowerCase().indexOf(s)>=0);tr.classList.toggle('hide',!vis);any=any||vis;});
+c.classList.toggle('hide',!any);if(s&&!idm)c.open=any;anyH=anyH||any;});
+var cm=h.querySelector('.ok-courses');if(cm)cm.classList.toggle('hide',!!s&&!idm);
+h.classList.toggle('hide',!anyH);if(s)h.open=anyH;if(anyH)nh++;});
+cnt.textContent=nh+' 型を表示';}
+raw.addEventListener('change',apply);q.addEventListener('input',apply);
+document.getElementById('ok-open').onclick=function(){hs.forEach(function(h){if(!h.classList.contains('hide'))h.open=true;});};
+document.getElementById('ok-close').onclick=function(){document.querySelectorAll('details.okh,details.okc').forEach(function(d){d.open=false;});};
+apply();})();</script>""")
+
+
+
 def report() -> None:
     import html as _h
     t = pd.read_parquet(OUT / "tests.parquet")
@@ -881,7 +966,13 @@ table{border-collapse:collapse;margin:12px 0 18px;font-size:12.5px;background:va
 td.num{text-align:right;font-family:monospace;white-space:nowrap}td.id{font-family:monospace;white-space:nowrap}.muted{color:var(--muted);font-size:13px}.note{background:var(--panel);border:1px solid var(--border);border-left:4px solid var(--warn);border-radius:8px;padding:12px 16px;margin:14px 0}
 .wrap{overflow-x:auto}.tS,.tA,.tB,.tC,.t0{display:inline-block;min-width:22px;text-align:center;border-radius:4px;font-weight:700;padding:0 4px}
 .tS{background:#dc2626;color:#fff}.tA{background:#ea580c;color:#fff}.tB{background:#ca8a04;color:#fff}.tC{background:#2563eb;color:#fff}.t0{color:var(--muted);font-weight:400}.rev{margin-left:3px;font-size:11px;color:#f87171;border:1px solid #f87171;border-radius:3px;padding:0 2px}
-details{margin:6px 0}summary{cursor:pointer;color:var(--accent-2)}"""
+details{margin:6px 0}summary{cursor:pointer;color:var(--accent-2)}
+.ok-tools{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin:10px 0}
+.ok-tools input[type=search]{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;min-width:220px}
+details.okh{border:1px solid var(--border);border-radius:8px;background:var(--panel);padding:4px 12px;margin:6px 0}details.okh>summary{color:var(--text);padding:4px 0}
+details.okh>summary .sid{font-family:monospace;color:var(--accent-2);margin-right:6px}details.okh>summary .chips{margin-left:6px}
+details.okc{margin:4px 0 4px 8px}details.okc>summary{font-size:13px}.ok-courses{font-size:12.5px;color:var(--muted);margin:2px 0 6px}
+.ok-courses b{color:var(--text);font-weight:600}tr.fam-raw td{opacity:.75}.hide{display:none!important}"""
     H = []
     w = H.append
     w(f"<!doctype html><html lang='ja'><head><meta charset='utf-8'/><meta name='viewport' content='width=device-width, initial-scale=1'/><title>通説の検証結果— keiba-vpn</title><style>{css}</style></head><body>")
@@ -899,8 +990,8 @@ details{margin:6px 0}summary{cursor:pointer;color:var(--accent-2)}"""
       f"<br>・<b>人気をそろえた差</b>（市場が見込む 3 着内率より上か下か。序列づけの本命の基準）: S {cnt_adj.get('S', 0):,}・A {cnt_adj.get('A', 0):,}・B {cnt_adj.get('B', 0):,}・C {cnt_adj.get('C', 0):,} 本。"
       f"通説の向きどおりに S か A の切り口を 1 つ以上持つ型は {adj_S}、通説と逆の向きで S・A になった型は {adj_rev}。"
       f"<br>・<b>素の差</b>（当てはまる馬の 3 着内率そのものが高いか。『通説は事実か』）: S {cnt_raw.get('S', 0):,}・A {cnt_raw.get('A', 0):,}・B {cnt_raw.get('B', 0):,}・C {cnt_raw.get('C', 0):,} 本。通説の向きで S・A を持つ型は {raw_S}。"
-      f"<br>・データが無く検証できない型は {n_na}（第 6 節に理由）。"
-      "<br>素の差では多くの通説が『事実』として残るが、その多くは人気（市場）が既に織り込んでおり、人気をそろえると消えるか小さくなる。序列づけに使うのは人気をそろえた差で S・A の型（第 2・4 節）。</div>")
+      f"<br>・データが無く検証できない型は {n_na}（第 7 節に理由）。"
+      "<br>素の差では多くの通説が『事実』として残るが、その多くは人気（市場）が既に織り込んでおり、人気をそろえると消えるか小さくなる。序列づけに使うのは人気をそろえた差で S・A の型（第 2・3・5 節）。</div>")
     # 方法
     w("<h2>1. 検定の作り</h2><ul>")
     w("<li><b>対象</b>: 2016〜2025 年の JRA 平地（5 頭立て以上、着順・確定単勝オッズのある出走）。約 46 万走。履歴の列は同じ馬のその走より前だけ、騎手・調教師・父の集計はその日より前だけ（as-of）。</li>")
@@ -942,8 +1033,10 @@ details{margin:6px 0}summary{cursor:pointer;color:var(--accent-2)}"""
         rr = f"{pc(z['y3_1'])}% / {pc(z['p_mkt_1'])}%" if z is not None else ""
         w(f"<tr><td class='id'>{r['hid']}</td><td>{esc(cl.get(base(r['hid']), ''))[:70]}</td><td class='num'>{int(r['n'])}（{int(r['nS'])}）</td><td>{agree}</td><td>{tot}</td><td class='num'>{dd}</td><td class='num'>{rr}</td><td>{esc(INTERP.get(r['hid'], ''))}</td></tr>")
     w("</tbody></table></div>")
+    # 型ごと: 通説が正しいと言える切り口（折り畳み）
+    _correct_section(w, tested, meta, cl, esc, tier_html, pt, pc, order)
     # 分類ごとの表
-    w("<h2>3. 型ごとの結果</h2><p class='muted'>『全体』は切り口を分けない判定。『上位の切り口』は人気をそろえた差の信頼度が高い順に 3 つ（全体を含む）。S/A/B/C の数は人気をそろえた差で通説の向きのもの（逆の向きは括弧）。Δ は発見期間の差、確認は確認期間の差。</p>")
+    w("<h2>4. 型ごとの結果</h2><p class='muted'>『全体』は切り口を分けない判定。『上位の切り口』は人気をそろえた差の信頼度が高い順に 3 つ（全体を含む）。S/A/B/C の数は人気をそろえた差で通説の向きのもの（逆の向きは括弧）。Δ は発見期間の差、確認は確認期間の差。</p>")
     cats = {}
     for r in rows:
         cats.setdefault(r[0][0], []).append(r)
@@ -977,7 +1070,7 @@ details{margin:6px 0}summary{cursor:pointer;color:var(--accent-2)}"""
     sa = tested[tested["adj_tier"].isin(["S", "A"])].copy()
     sa["o"] = sa["adj_tier"].map(order)
     sa = sa.sort_values(["o", "adj_conf", "hid"], ascending=[True, False, True])
-    w(f"<h2>4. 人気をそろえた差で S・A になった切り口（{len(sa):,} 本）</h2><p class='muted'>序列づけ（展望）に使う候補。通説と逆の向きのものも含む（『逆』）。同じ型の重なる切り口が並ぶので、型の単位で束ねて使う。</p>")
+    w(f"<h2>5. 人気をそろえた差で S・A になった切り口（{len(sa):,} 本）</h2><p class='muted'>序列づけ（展望）に使う候補。通説と逆の向きのものも含む（『逆』）。同じ型の重なる切り口が並ぶので、型の単位で束ねて使う。</p>")
     w("<div class='wrap'><table><thead><tr><th>判定</th><th>信頼度</th><th>ID</th><th>通説</th><th>切り口</th><th>値</th><th>Δ 発見(pt)</th><th>Δ 確認(pt)</th><th>素の差(pt)</th><th>当てはまる馬の 3 着内率</th><th>市場の見込み</th><th>当てはまる走数（発見/確認）</th><th>単勝回収率 頭打ち（発見/確認）</th></tr></thead><tbody>")
     for _, r in sa.iterrows():
         w(f"<tr><td>{tier_html(r['adj_tier'], r['adj_agree'])}</td><td class='num'>{r['adj_conf'] * 100:.2f}%</td><td class='id'>{r['hid']}</td><td>{esc(cl.get(base(r['hid']), ''))[:60]}</td><td>{esc(r['dim'])}</td><td>{esc(str(r['key']))}</td>"
@@ -987,13 +1080,13 @@ details{margin:6px 0}summary{cursor:pointer;color:var(--accent-2)}"""
     # B の切り口（素の差で S・A）
     rs = tested[tested["raw_tier"].isin(["S", "A"]) & (tested["dim"] == "全体")].copy()
     rs = rs.sort_values("raw_conf", ascending=False)
-    w(f"<h2>5. 素の差で S・A（全体）: 通説は事実だが人気が織り込んでいるか（{len(rs)} 型）</h2><div class='wrap'><table><thead><tr><th>ID</th><th>通説</th><th>素の差</th><th>Δ 素(pt)</th><th>人気そろえ</th><th>Δ 人気そろえ(pt)</th><th>当てはまる馬の 3 着内率</th><th>市場の見込み</th></tr></thead><tbody>")
+    w(f"<h2>6. 素の差で S・A（全体）: 通説は事実だが人気が織り込んでいるか（{len(rs)} 型）</h2><div class='wrap'><table><thead><tr><th>ID</th><th>通説</th><th>素の差</th><th>Δ 素(pt)</th><th>人気そろえ</th><th>Δ 人気そろえ(pt)</th><th>当てはまる馬の 3 着内率</th><th>市場の見込み</th></tr></thead><tbody>")
     for _, r in rs.iterrows():
         w(f"<tr><td class='id'>{r['hid']}</td><td>{esc(cl.get(base(r['hid']), ''))[:70]}</td><td>{tier_html(r['raw_tier'], r['raw_agree'])}</td><td class='num'>{pt(r['raw'])}</td><td>{tier_html(r['adj_tier'], r['adj_agree'])}</td><td class='num'>{pt(r['adj'])}</td>"
           f"<td class='num'>{pc(r['y3_1'])}%</td><td class='num'>{pc(r['p_mkt_1'])}%</td></tr>")
     w("</tbody></table></div>")
     # 検証できない
-    w("<h2>6. 検証できなかった型と注意</h2><ul>")
+    w("<h2>7. 検証できなかった型と注意</h2><ul>")
     for hid, m in meta.items():
         if m.get("na"):
             w(f"<li><b>{hid}</b> {esc(cl.get(base(hid), ''))[:50]} — {esc(m['na'])}</li>")
