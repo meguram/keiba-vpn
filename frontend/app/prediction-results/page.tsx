@@ -225,6 +225,14 @@ export default function PredictionResultsPage() {
             <Tile label="確率の精度" value={kpi.winner_logloss == null ? "—" : kpi.winner_logloss.toFixed(3)} sub={kpi.winner_logloss_model ? `勝ち馬の対数損失（小さいほど良い）。市場補正済みの${kpi.winner_logloss_model.n}レースは モデルのみ ${kpi.winner_logloss_model.model.toFixed(3)} → 補正後 ${kpi.winner_logloss_model.calibrated.toFixed(3)}` : "勝ち馬の対数損失（小さいほど良い）"} />
           </div>
 
+          {member && useRated && (
+            <div style={{ ...card, fontSize: 12.5, color: "var(--text-dim)" }}>
+              <b style={{ color: "var(--text)" }}>回収率の読み方:</b> 払戻率は券種により 72.5〜80%（単勝・複勝 80%、3連単 72.5%）で、均等に買えば平均は 100% を下回ります。
+              期間が短いと回収率は大きくぶれ、100% を超えた日や月があっても、買い方が確かに儲かるという意味にはなりません。
+              後から作った予測は、その期間のデータを含めて学習したモデルによる可能性があり、実際の運用より回収率が高めに出やすい点にも注意してください。
+            </div>
+          )}
+
           {member && useRated && scope !== "day" && (
             <section aria-label="日別の推移">
               <h2 style={h2}>日別の推移</h2>
