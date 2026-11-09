@@ -255,38 +255,8 @@ def pairs(df: pd.DataFrame) -> list[Pair]:
 
     # 輸送（transport-vs-stay）は src/research/columns/transport_vs_stay.py が記事全体を書く
 
-    # 種牡馬: 主要種牡馬の産駒 vs それ以外の種牡馬の産駒（勝率）
-    sire_rows = _sire_pair(df)
-    if sire_rows is not None:
-        out.append(sire_rows)
+    # 種牡馬（sire-roi）は src/research/columns/sire_roi.py が記事全体を書く（回収率のグラフ。勝率のグラフは 2026-11-09 に外した）
     return out
-
-
-def _sire_pair(df: pd.DataFrame) -> Pair | None:
-    if not SIRE_MAP_PATH.exists():
-        return None
-    m = pd.read_parquet(SIRE_MAP_PATH, columns=["horse_id", "sire_id", "sire_name"]).dropna(subset=["sire_id"]).drop_duplicates("horse_id")
-    m["horse_id"] = m["horse_id"].astype(str)
-    d = df.merge(m, on="horse_id", how="inner")
-    # 記事に載せている種牡馬（横軸の表記 -> 種牡馬名の先頭）。記事の本文と同じ顔ぶれで比べる
-    ids: dict[str, str] = {}
-    for label, prefix in SIRES.items():
-        hit = d.loc[d["sire_name"].astype(str).str.startswith(prefix), "sire_id"]
-        if hit.empty:
-            raise SystemExit(f"sire-roi: 種牡馬『{prefix}』が血統表にありません")
-        ids[label] = hit.mode().iloc[0]
-
-    def rows(_: pd.DataFrame, x: str):
-        k = d["sire_id"] == ids[x]
-        return d.loc[k, "win"], d.loc[~k, "win"]
-    return Pair("sire-roi", "主要種牡馬の産駒 vs それ以外の産駒 勝率", list(SIRES), "その種牡馬の産駒", "それ以外の種牡馬の産駒", "win",
-                rows, "種牡馬", "勝率", "2020〜2025年 JRA 平地。各種牡馬の産駒と、それ以外の全産駒の勝率の比較。",
-                replace_title="主要種牡馬 産駒勝率（産駒200走以上、2020〜2025年）")
-
-
-SIRES = {"Into\nMischief": "Into Mischief", "ナダル": "ナダル", "Am.\nPharoah": "American Pharoah", "Kgm\n(英)": "Kingman",
-         "アドマイヤ\nマーズ": "アドマイヤマーズ", "サートゥル": "サートゥルナーリア", "キタサン": "キタサンブラック", "キズナ": "キズナ",
-         "ディープ": "ディープインパクト", "リアルS": "リアルスティール"}
 
 
 # ── 記事への書き込み ───────────────────────────────────
