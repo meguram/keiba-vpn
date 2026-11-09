@@ -150,6 +150,7 @@ PARTS: list[Part] = [
         C("advanced_modeling_techniques", "レース直前確率モデルに使う実戦的な ML テクニック。カテゴリ変数のエンコーディング（target encoding など）を中心に。", "メモ", status="snapshot", note="2026-05 時点の調査メモ。"),
         C("reference_insights", "参考資料から取り込んだ設計メモ。ベースラインを先に固定する、確率の信頼性を ROI より先に評価する、など。", "メモ", status="snapshot", note="2026-05 時点の調査メモ。"),
         C("persona_goals", "2 つのペルソナ（機械的に買いたい人・自分で予想したい人）と情報提供の設計。10 ラウンドの検討で、『期待値 120% 以上を買えば回収率 100% を超える』という前提が手元の証拠では成り立たないことを先に示し、ゴールの書き換え・作る順番・費用の見積もりをまとめた。", "設計", src="html/design/persona_goals.html"),
+        C("persona_status", "2 つのペルソナの最新状況。回収率 100% を比較的安定して出す仕組みの探究について、試した戦略の台帳・現時点の結論・次の一手を約 30 分ごとに更新する。", "設計", src="html/design/persona_status.html"),
         C("ml_pipeline", "レース直前確率モデルの機械学習パイプライン全体図。Stage0〜7 の流れ、データ定義、テクニック、運用ルール。", "設計", src="html/design/ml_pipeline.html", status="legacy",
           note="Stage0〜7 の初期設計をもとにした全体図。分割・使うモデルなどは学習パイプラインで確定した内容に直してあるが、Stage の体系は初期のまま。",
           now=[("training_pipeline_decisions", "確定した事項"), ("train_valid_test_split_strategy", "分割")]),
