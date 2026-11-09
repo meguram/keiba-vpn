@@ -3,6 +3,7 @@
 
 python -m src.scripts.data.folklore_verify run      # <FOLKLORE_OUT>/tests.parquet・hyp.json
 python -m src.scripts.data.folklore_verify rank     # 通説の数で並べた成績 → <FOLKLORE_OUT>/rank.json（report の第 8 節）
+python -m src.scripts.data.folklore_base fit/eval  # v6 に頼らない walk-forward のベース → <FOLKLORE_OUT>/base.json（第 13 節）
 python -m src.scripts.data.folklore_verify score    # 格の重みの得点・閾値ごとの 1 位の成績・ROC → <FOLKLORE_OUT>/score.json（第 9 節）
 python -m src.scripts.data.folklore_verify report   # docs/html/modeling/chapters/folklore_verification.html
 
@@ -1461,7 +1462,7 @@ details.okc{margin:4px 0 4px 8px}details.okc>summary{font-size:13px}.ok-courses{
       f"通説の向きどおりに S か A の切り口を 1 つ以上持つ型は {adj_S}、通説と逆の向きで S・A になった型は {adj_rev}。"
       f"<br>・<b>素の差</b>（当てはまる馬の 3 着内率そのものが高いか。『通説は事実か』）: S {cnt_raw.get('S', 0):,}・A {cnt_raw.get('A', 0):,}・B {cnt_raw.get('B', 0):,}・C {cnt_raw.get('C', 0):,} 本。通説の向きで S・A を持つ型は {raw_S}。"
       f"<br>・データが無く検証できない型は {n_na}（第 7 節に理由）。"
-      "<br>素の差では多くの通説が『事実』として残るが、その多くは人気（市場）が既に織り込んでおり、人気をそろえると消えるか小さくなる。序列づけに使うのは人気をそろえた差で S・A の型（第 2・3・5 節）。<br>・すべての通説を当てはめ、当てはまる数で並べたときの着順・単複回収率は <a href='#rank'>第 8 節</a>、通説の格（S/A/B/C）で得点を付け閾値を超えたレースの 1 位を買う成績と ROC は <a href='#score'>第 9 節</a>、その課題を直したモデル（市場を土台に通説を束ね、期待値で買う）は <a href='#model'>第 10 節</a>、血統（父・系統・母父）× 条件替わり（延長・短縮・初ダート・道悪など）は <a href='#blood'>第 11 節</a>、参考記事の構成（実力のベース + 人気より走るエッジ + 期待値 1.2）の再現は <a href='#laps'>第 12 節</a>。</div>")
+      "<br>素の差では多くの通説が『事実』として残るが、その多くは人気（市場）が既に織り込んでおり、人気をそろえると消えるか小さくなる。序列づけに使うのは人気をそろえた差で S・A の型（第 2・3・5 節）。<br>・すべての通説を当てはめ、当てはまる数で並べたときの着順・単複回収率は <a href='#rank'>第 8 節</a>、通説の格（S/A/B/C）で得点を付け閾値を超えたレースの 1 位を買う成績と ROC は <a href='#score'>第 9 節</a>、その課題を直したモデル（市場を土台に通説を束ね、期待値で買う）は <a href='#model'>第 10 節</a>、血統（父・系統・母父）× 条件替わり（延長・短縮・初ダート・道悪など）は <a href='#blood'>第 11 節</a>、参考記事の構成（実力のベース + 人気より走るエッジ + 期待値 1.2）の再現は <a href='#laps'>第 12 節</a>、v6 に頼らず年ごとに抜く形で作り直した確認（v6 の OOF の先読みの指摘を含む）は <a href='#base'>第 13 節</a>。</div>")
     # 方法
     w("<h2>1. 検定の作り</h2><ul>")
     w("<li><b>対象</b>: 2016〜2025 年の JRA 平地（5 頭立て以上、着順・確定単勝オッズのある出走）。約 46 万走。履歴の列は同じ馬のその走より前だけ、騎手・調教師・父の集計はその日より前だけ（as-of）。</li>")
@@ -1574,6 +1575,9 @@ details.okc{margin:4px 0 4px 8px}details.okc>summary{font-size:13px}.ok-courses{
     from src.scripts.data.folklore_model import laps_section
 
     laps_section(w)
+    from src.scripts.data.folklore_base import base_section
+
+    base_section(w)
     w(f"<p class='muted'>生成: {pd.Timestamp.now(tz='Asia/Tokyo'):%Y-%m-%d %H:%M}（python -m src.scripts.data.folklore_verify report）。</p></body></html>")
     DOC.write_text("\n".join(H), encoding="utf-8")
     print("wrote", DOC, len("\n".join(H)))
