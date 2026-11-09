@@ -166,7 +166,9 @@ def parse_basic(d: pd.DataFrame) -> pd.DataFrame:
     g = d.groupby("race_id")
     d["tdiff"] = d["tsec"] - g["tsec"].transform("min")
     d["l3rank"] = g["l3f"].rank(method="min")
-    d["q"] = (1.0 / d["odds"]) / (1.0 / d["odds"]).groupby(d["race_id"]).transform("sum")
+    # 取消などでオッズが 0 の馬がいると 1/0 = inf でレース全体の q が 0 になるので、オッズが正の馬だけで正規化する
+    inv = 1.0 / d["odds"].where(d["odds"] > 0)
+    d["q"] = inv / inv.groupby(d["race_id"]).transform("sum")
     # ペース（前半 3F − 後半 3F）とラップの型
     def pdiff(s):
         try:
