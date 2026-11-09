@@ -179,6 +179,50 @@ def decision_odds_noise(d: pd.DataFrame, phase: str, rng: np.random.Generator, p
     return d
 
 
+def reality_check(series: dict[int, list[pd.DataFrame]], day_of: pd.Series, rng: np.random.Generator) -> dict | None:
+    """Reality Check: テスト年の全候補を『買い続けた』ときの標準化した平均超過収益（比の t 値）の最大値が、偶然で出るか。
+    開催日単位のブロックで引き（同じ日のレースは馬場・展開を共有して相関する）、各候補を自分の平均で中心化して帰無を作る。
+    series: 候補の番号 → テスト年ごとの race_profit（index = race_id, 列 pl・n）の一覧。day_of: race_id → 開催日。"""
+    mats = [pd.concat(series[k]) for k in sorted(series)]
+    if not mats:
+        return None
+    races = sorted(set().union(*[set(m.index) for m in mats]))
+    pos = {r: i for i, r in enumerate(races)}
+    PL = np.zeros((len(races), len(mats)))
+    NN = np.zeros_like(PL)
+    for j, m in enumerate(mats):
+        ii = [pos[r] for r in m.index]
+        PL[ii, j] = m["pl"].to_numpy()
+        NN[ii, j] = m["n"].to_numpy()
+    keep = NN.sum(axis=0) >= MIN_N
+    PL, NN = PL[:, keep], NN[:, keep]
+    days = pd.Series([day_of.get(r, r) for r in races]).astype("category").cat.codes.to_numpy()
+    nd = int(days.max()) + 1
+    PLd, NNd = np.zeros((nd, PL.shape[1])), np.zeros((nd, PL.shape[1]))
+    np.add.at(PLd, days, PL)
+    np.add.at(NNd, days, NN)
+    mean = PLd.sum(axis=0) / NNd.sum(axis=0)
+    resid = PLd - mean * NNd                                           # 日ごとの残差（比のデルタ法）
+
+    def tmax(num: np.ndarray, sq: np.ndarray) -> float:
+        """候補ごとの t 値（比のデルタ法）の最大。標本に買いが 1 件も入らない候補（分母 0）は t=0 とする（NaN にすると最大値の比較が常に偽になる）。"""
+        den = np.sqrt(sq)
+        t = np.divide(num, den, out=np.zeros_like(num, dtype=float), where=den > 0)
+        return float(t.max())
+
+    t_obs = tmax(PLd.sum(axis=0), (resid**2).sum(axis=0))
+    cnt = 0
+    for _ in range(BOOT):
+        idx = rng.integers(0, nd, nd)
+        rb = resid[idx]
+        if tmax(rb.sum(axis=0), (rb**2).sum(axis=0)) >= t_obs:
+            cnt += 1
+    if nd < 30:      # 開催日のブロックが少なすぎると、ブートストラップが退化して p が信用できない
+        return {"candidates_used": int(keep.sum()), "blocks": nd, "p": None, "note": "開催日が 30 日未満のため判定しない"}
+    else:
+        return {"candidates_used": int(keep.sum()), "blocks": nd, "best_mean_excess": round(float(mean.max()), 4), "t_max": round(t_obs, 3), "p": round((cnt + 1) / (BOOT + 1), 4)}
+
+
 def run(frame_path: Path, first_test: int, last_test: int, out: Path, noise_phase: str | None = None, noise_seed: int = 7) -> dict:
     d = pd.read_parquet(frame_path)
     d = d[(d["win_odds"] > 0) & d["ret_win"].notna() & d["ret_place"].notna()].copy()      # 複勝オッズが無い馬は残す（市場の確率の正規化を壊さない）
@@ -230,45 +274,8 @@ def run(frame_path: Path, first_test: int, last_test: int, out: Path, noise_phas
         result["oos"] = {"roi": round(roi, 4), "ci95": [round(lo, 4), round(hi, 4)], "bets": int(allp["n"].sum()), "races_bought": int((allp["n"] > 0).sum())}
     else:
         result["oos"] = {"roi": None, "note": "どの年も買わなかった"}
-    # Reality Check: テスト年の全候補を『買い続けた』ときの標準化した平均超過収益（比の t 値）の最大値が、偶然で出るか。
-    # 開催日単位のブロックで引き（同じ日のレースは馬場・展開を共有して相関する）、各候補を自分の平均で中心化して帰無を作る。
-    mats = [pd.concat(rc_series[k]) for k in range(len(cands)) if k in rc_series]
-    if mats:
-        day_of = d.drop_duplicates("race_id").set_index("race_id")["date"].astype(str)
-        races = sorted(set().union(*[set(m.index) for m in mats]))
-        pos = {r: i for i, r in enumerate(races)}
-        PL = np.zeros((len(races), len(mats)))
-        NN = np.zeros_like(PL)
-        for j, m in enumerate(mats):
-            ii = [pos[r] for r in m.index]
-            PL[ii, j] = m["pl"].to_numpy()
-            NN[ii, j] = m["n"].to_numpy()
-        keep = NN.sum(axis=0) >= MIN_N
-        PL, NN = PL[:, keep], NN[:, keep]
-        days = pd.Series([day_of.get(r, r) for r in races]).astype("category").cat.codes.to_numpy()
-        nd = int(days.max()) + 1
-        PLd, NNd = np.zeros((nd, PL.shape[1])), np.zeros((nd, PL.shape[1]))
-        np.add.at(PLd, days, PL)
-        np.add.at(NNd, days, NN)
-        mean = PLd.sum(axis=0) / NNd.sum(axis=0)
-        resid = PLd - mean * NNd                                           # 日ごとの残差（比のデルタ法）
-        def tmax(num: np.ndarray, sq: np.ndarray) -> float:
-            """候補ごとの t 値（比のデルタ法）の最大。標本に買いが 1 件も入らない候補（分母 0）は t=0 とする（NaN にすると最大値の比較が常に偽になる）。"""
-            den = np.sqrt(sq)
-            t = np.divide(num, den, out=np.zeros_like(num, dtype=float), where=den > 0)
-            return float(t.max())
-
-        t_obs = tmax(PLd.sum(axis=0), (resid**2).sum(axis=0))
-        cnt = 0
-        for _ in range(BOOT):
-            idx = rng.integers(0, nd, nd)
-            rb = resid[idx]
-            if tmax(rb.sum(axis=0), (rb**2).sum(axis=0)) >= t_obs:
-                cnt += 1
-        if nd < 30:      # 開催日のブロックが少なすぎると、ブートストラップが退化して p が信用できない
-            result["reality_check"] = {"candidates_used": int(keep.sum()), "blocks": nd, "p": None, "note": "開催日が 30 日未満のため判定しない"}
-        else:
-            result["reality_check"] = {"candidates_used": int(keep.sum()), "blocks": nd, "best_mean_excess": round(float(mean.max()), 4), "t_max": round(t_obs, 3), "p": round((cnt + 1) / (BOOT + 1), 4)}
+    day_of = d.drop_duplicates("race_id").set_index("race_id")["date"].astype(str)
+    result["reality_check"] = reality_check(rc_series, day_of, rng)
     result["caveat"] = "確定オッズで期待値・オッズ上限・市場の確率を作っているため、回収率は実際より楽観側（上限の値）。自分の賭けでオッズが動く分も入っていない。"
     out.mkdir(parents=True, exist_ok=True)
     (out / f"search_{first_test}_{last_test}_s{noise_seed}.json").write_text(json.dumps(result, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
