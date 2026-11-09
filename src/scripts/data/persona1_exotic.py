@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -40,6 +41,50 @@ PMIN = (0.0, 0.03, 0.08)
 MIN_ODDS = 1.0
 
 
+def _pair_odds_2026(years: set[int]) -> dict:
+    """odds_pair.parquet は 2020〜2025 年。それ以降の年は race_pair_odds_flat（確定オッズ）から読む。"""
+    out: dict = {}
+    for y in sorted(years):
+        f = ROOT / f"data/page_reference/tables/{y}/race_pair_odds_flat.parquet"
+        if y <= 2025 or not f.exists():
+            continue
+        o = pd.read_parquet(f, columns=["race_id", "odds_type", "pair", "odds", "odds_min"])
+        o = o[o["odds_type"].isin(BETS)].copy()
+        o["o"] = np.where(o["odds_type"] == "wide", o["odds_min"], o["odds"])
+        o = o[o["o"] > 0]
+        for (rid, bt), g in o.groupby(["race_id", "odds_type"], sort=False):
+            out.setdefault(str(rid), {})[bt] = {tuple(sorted(int(x) for x in re.findall(r"\d+", str(pr)))): float(v) for pr, v in zip(g["pair"], g["o"])}
+    return out
+
+
+def _pay_flat(years: set[int]) -> dict:
+    """payoff.parquet は 2020〜2025 年。それ以降の年は race_result_flat の payoff（JSON）から読む。"""
+    import json as _json
+
+    out: dict = {}
+    key = {"umaren": "馬連", "wide": "ワイド"}
+    for y in sorted(years):
+        f = ROOT / f"data/page_reference/tables/{y}/race_result_flat.parquet"
+        if y <= 2025 or not f.exists():
+            continue
+        r = pd.read_parquet(f, columns=["race_id", "payoff"]).drop_duplicates("race_id")
+        for rid, js in zip(r["race_id"], r["payoff"]):
+            try:
+                doc = _json.loads(js) if isinstance(js, str) else {}
+            except ValueError:
+                continue
+            for bt, jp in key.items():
+                v = doc.get(jp)
+                v = [v] if isinstance(v, dict) else (v or [])
+                for x in v:
+                    try:
+                        c = tuple(sorted(int(t) for t in str(x["numbers"]).replace(" ", "").split("-")))
+                        out.setdefault((str(rid), bt), {})[c] = float(str(x["payout"]).replace(",", "")) / 100.0
+                    except (KeyError, ValueError):
+                        pass
+    return out
+
+
 def load_pair_odds(years: set[int]) -> dict:
     """race_id → bet_type → {(a, b): odds}。ワイドは下限。"""
     o = pd.read_parquet(BET / "odds_pair.parquet", columns=["race_id", "bet_type", "combo", "odds", "odds_min"])
@@ -49,6 +94,7 @@ def load_pair_odds(years: set[int]) -> dict:
     out: dict = {}
     for (rid, bt), g in o.groupby(["race_id", "bet_type"], sort=False):
         out.setdefault(rid, {})[bt] = {t36.parse_combo(c): float(v) for c, v in zip(g["combo"], g["o"])}
+    out.update(_pair_odds_2026(years))
     return out
 
 
@@ -59,6 +105,7 @@ def load_pay(years: set[int]) -> dict:
     out: dict = {}
     for rid, bt, c, v in zip(p["race_id"], p["bet_type"], p["combo"], p["payout"]):
         out.setdefault((rid, bt), {})[tuple(sorted(t36.parse_combo(c)))] = float(v) / 100.0
+    out.update(_pay_flat(years))
     return out
 
 
