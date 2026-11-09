@@ -9,6 +9,9 @@
   傾向あり = 主の条件で p < 0.01 かつ通説の向きに 0.5pt 以上。逆向きに有意なら傾向なし（逆）。
   条件付き = 主の条件では言えないが、グラフの区分のどれかで Holm 補正後 p < 0.05（通説の向き・200 走以上）。
   当てはまる出走が 300 未満なら判断保留。
+  検証の章に無い通説は、さらに期間を 2020〜2022 年と 2023〜2025 年に分け、レース単位のクラスタ頑健な検定で両方に同じ向き（p<0.05）が
+  出るかを確かめる（apply_halves。2026-11-09 の監査: 出走を独立とみなす Welch の検定だけだと、片方の期間だけの差でも『傾向あり』になっていた）。
+  再現しない『傾向あり』は『条件付き』へ、根拠の区分が再現しない『条件付き』は『傾向なし』へ下げる。
 
 通説の定義（条件・区分・文）は folklore_specs.py。集計の土台は folklore_frame.py（先に作る）。
 
@@ -193,6 +196,69 @@ def apply_verify(spec: Spec, a: dict, v: dict | None) -> None:
             a["recent_only"] = True
 
 
+HALVES = (("2020〜2022年", lambda y: y <= 2022), ("2023〜2025年", lambda y: y >= 2023))
+
+
+def _half_fit(u: pd.DataFrame, g: pd.Series) -> list[dict[str, float]]:
+    """期間の前半・後半それぞれで、(3着内 − 見込み) を当てはまるか（0/1）へ回帰した差と p（レース単位のクラスタ頑健）。"""
+    from src.research.columns.race_context import ols_fit
+
+    d = u.assign(_res=u["top3"] - u["exp_top3"], _g=g.astype(float).to_numpy())
+    years = pd.to_datetime(d["date"]).dt.year
+    out = []
+    for name, fn in HALVES:
+        z = d[fn(years)]
+        if z["_g"].sum() < 100 or (1 - z["_g"]).sum() < 100:
+            out.append({"name": name, "d": None, "p": None, "n": int(z["_g"].sum())})
+            continue
+        r = ols_fit("_res ~ _g", z)
+        out.append({"name": name, "d": float(r.params["_g"]), "p": float(r.pvalues["_g"]), "n": int(z["_g"].sum())})
+    return out
+
+
+def _replicated(h: list[dict], s: int) -> bool:
+    return all(x["d"] is not None and x["p"] is not None and x["p"] < 0.05 and x["d"] * s > 0 for x in h)
+
+
+def _cands(spec: Spec, a: dict) -> list[dict]:
+    """条件付きの根拠になりうる区分（グラフの区分で Holm 補正後 p<0.05、または本命を絞った群で p<0.01。通説の向きに 0.5pt 以上）。"""
+    s = spec.direction
+    cand = [c for c in a.get("axis", []) if c.get("p_holm") is not None and c["p_holm"] < 0.05 and (c["d"] or 0) * s >= 0.005]
+    cand += [c for c in a["groups"][1:] if c.get("variant") and c["n"] >= 300 and c["p_ref"] is not None and c["p_ref"] < 0.01 and c["d"] * s >= 0.005]
+    return cand
+
+
+def apply_halves(spec: Spec, a: dict, f: pd.DataFrame) -> None:
+    """検証の章に無い通説の判定を、前半・後半の再現で確かめ直す。
+    傾向あり: 本命の条件が両方の期間で再現すればそのまま。しなければ『条件付き』（再現した区分があればそれを、無ければ『片方の期間だけ』と書く）。
+    条件付き: 両方の期間で再現した区分があればそのまま（その区分を根拠にする）、無ければ『傾向なし』。"""
+    if a.get("verify") or a["verdict"] not in ("supported", "partial"):
+        return
+    s = spec.direction
+    u = f[spec.universe(f).fillna(False).astype(bool)]
+    main = spec.groups[0][1](u).fillna(False).astype(bool)
+    a["halves"] = _half_fit(u, main)
+    rep_labels = []
+    for c in _cands(spec, a):
+        if any(c is x for x in a.get("axis", [])):
+            cat = spec.axis.fn(u)
+            k = cat == c["label"]
+            h = _half_fit(u[k], main[k])
+        else:
+            fn = next(fn for lab, fn in spec.groups if lab == c["label"])
+            h = _half_fit(u, fn(u).fillna(False).astype(bool))
+        c["halves"] = h
+        if _replicated(h, s):
+            rep_labels.append(c["label"])
+    a["rep_labels"] = rep_labels
+    if a["verdict"] == "supported":
+        if not _replicated(a["halves"], s):
+            a["verdict"], a["not_replicated"] = "partial", True
+        return
+    if not rep_labels:
+        a["verdict"] = "not_supported"
+
+
 def verdict(spec: Spec, a: dict) -> str:
     m = a["main"]
     if m["n"] < 300:
@@ -236,6 +302,8 @@ def headline(spec: Spec, a: dict) -> str:
         return "人気以上に走る" if s > 0 else "人気ほど走らない"
     if reversed_(spec, a):
         return "むしろ人気ほど走らない" if s > 0 else "むしろ人気以上に走る"
+    if v == "partial" and a.get("not_replicated") and not best_cell(spec, a):
+        return "片方の期間だけの差で、言い切れない"
     if v == "partial" and a.get("recent_only"):
         return "近年は人気以上だが、長い期間では言い切れない" if s > 0 else "近年は人気ほど走らないが、長い期間では言い切れない"
     if v == "partial":
@@ -248,8 +316,9 @@ def headline(spec: Spec, a: dict) -> str:
 
 def best_cell(spec: Spec, a: dict) -> dict | None:
     s = spec.direction
-    cand = [c for c in a.get("axis", []) if c.get("p_holm") is not None and c["p_holm"] < 0.05 and (c["d"] or 0) * s >= 0.005]
-    cand += [c for c in a["groups"][1:] if c.get("variant") and c["n"] >= 300 and c["p_ref"] is not None and c["p_ref"] < 0.01 and c["d"] * s >= 0.005]
+    cand = _cands(spec, a)
+    if "rep_labels" in a:                       # 前半・後半で確かめた通説は、両方で再現した区分だけを根拠にする
+        cand = [c for c in cand if c["label"] in a["rep_labels"]]
     if not cand:
         return None
     return max(cand, key=lambda c: c["d"] * s)
@@ -280,6 +349,9 @@ def tip(spec: Spec, a: dict) -> str:
                 else "通説とは逆に、人気より走っています。この理由で割り引くのは損になりやすいです。")
     if a.get("recent_only"):
         return "2020〜2025 年では差がありますが、2016 年からの検証では偶然と区別できません。印を動かすなら小さめに。"
+    if a.get("not_replicated"):
+        return ("使うなら、どちらの期間でも差が出た条件に絞ってください。"
+                if best_cell(spec, a) else "偶然の可能性があるので、印を動かすなら小さめに。")
     return spec.tips.get(v) or (DEFAULT_TIPS if spec.direction > 0 else DEFAULT_TIPS_NEG)[v]
 
 
@@ -289,8 +361,11 @@ def summary(spec: Spec, a: dict) -> str:
     s = (f"{main}の複勝率は {pct(m['a'])}（オッズから見込まれる {pct(m['e'])}）。"
          f"{spec.ref_label}と比べたオッズをそろえた差は {pt(m['d'])}（{pfmt(m['p_ref'])}）でした。")
     b = best_cell(spec, a)
+    if a.get("halves") and a.get("not_replicated"):
+        s += "期間を分けると " + "・".join(f"{h['name']} {pt(h['d'])}（{pfmt(h['p'])}）" for h in a["halves"] if h["d"] is not None) + "で、片方の期間でしか差が出ません。"
     if a["verdict"] == "partial" and b:
-        s += f"{b['label'].replace(chr(10), '')}に限ると、差は {pt(b['d'])} です。"
+        s += f"{b['label'].replace(chr(10), '')}に限ると、差は {pt(b['d'])} です"
+        s += "（2020〜2022 年・2023〜2025 年のどちらでも同じ向き）。" if "rep_labels" in a else "。"
     return s
 
 
@@ -423,6 +498,7 @@ def main() -> None:
             continue
         a = analyze(spec, f)
         apply_verify(spec, a, v)
+        apply_halves(spec, a, f)
         m = a["main"]
         print(f"{spec.slug:32s} {a['verdict']:14s} n={m['n']:>7,} 実際={pct(m['a'])} 見込={pct(m['e'])} 差={pt(m['d'])} {pfmt(m['p_ref'])}  | "
               + " ".join(f"{g['label'].replace(chr(10), '')}:{pt(g['d'])}({g['n']})" for g in a["groups"][1:])
