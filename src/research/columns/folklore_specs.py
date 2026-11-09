@@ -71,7 +71,7 @@ def overseas_region(d: pd.DataFrame) -> pd.Series:
 SPECS: list[Spec] = [
     # ── ローテーション: 距離 ──
     Spec(  # A01
-        slug="distance-extension", title="距離延長は走る？", claim="距離延長の馬は好走する",
+        slug="distance-extension", hid="A01", title="距離延長は走る？", claim="距離延長の馬は好走する",
         categories=["travel/distance"],
         universe=lambda d: has_prev(d) & (d["surface"] == d["p_surface"]),
         groups=[("距離延長\n（全体）", lambda d: d["dist_diff"] >= 100),
@@ -84,7 +84,7 @@ SPECS: list[Spec] = [
         conditions=ALL + "。前走と同じ面（芝→芝、ダ→ダ）の出走",
         definition="距離延長 = 前走より 100m 以上長い。比べる相手は、前走と同じ距離か短くなった馬です。"),
     Spec(  # A02
-        slug="distance-shortening", title="距離短縮は走る？", claim="距離短縮の馬は好走する（前走で先行して止まった馬は特に）",
+        slug="distance-shortening", hid="A02", title="距離短縮は走る？", claim="距離短縮の馬は好走する（前走で先行して止まった馬は特に）",
         categories=["travel/distance"],
         universe=lambda d: has_prev(d) & (d["surface"] == d["p_surface"]),
         groups=[("距離短縮\n（全体）", lambda d: d["dist_diff"] <= -100),
@@ -120,7 +120,7 @@ SPECS: list[Spec] = [
         conditions=ALL + "。前走 3 着以内の馬"),
     # ── ローテーション: 間隔・叩き ──
     Spec(  # A12
-        slug="second-start-after-layoff", title="叩き2戦目は上積みがある？", claim="休み明けを叩いた 2 戦目は上積みがある",
+        slug="second-start-after-layoff", hid="A12", title="叩き2戦目は上積みがある？", claim="休み明けを叩いた 2 戦目は上積みがある",
         categories=["travel/interval"],
         universe=lambda d: d["since_layoff"] >= 1,
         groups=[("叩き2戦目", lambda d: d["since_layoff"] == 2),
@@ -133,7 +133,7 @@ SPECS: list[Spec] = [
         question="休み明け（中 10 週以上）を 1 回使ったあとの 2 戦目は、人気以上に走るのか。",
         definition="休み明け = 前走から 70 日以上あいた出走。そこから数えて 2 走目が叩き 2 戦目です。"),
     Spec(  # A14
-        slug="quick-turnaround", title="連闘・中1週の馬は走る？", claim="連闘・中 1 週で使ってくる馬は勝負気配",
+        slug="quick-turnaround", hid="A14", title="連闘・中1週の馬は走る？", claim="連闘・中 1 週で使ってくる馬は勝負気配",
         categories=["travel/interval"],
         universe=has_prev,
         groups=[("連闘・中1週", lambda d: d["interval"] <= 14),
@@ -158,7 +158,7 @@ SPECS: list[Spec] = [
         question="前走から 10 週以上あいた馬は人気ほど走らないのか。休み明けに強い厩舎はあるか。"),
     # ── ローテーション: 海外帰り ──
     Spec(  # A34〜A36
-        slug="overseas-return", title="海外帰りの初戦は割引？", claim="海外遠征から帰った初戦は走らない",
+        slug="overseas-return", hid="A34", title="海外帰りの初戦は割引？", claim="海外遠征から帰った初戦は走らない",
         categories=["travel/overseas"], direction=-1,
         universe=has_prev,
         groups=[("海外帰りの初戦", lambda d: d["prev_overseas"].eq(True)),
@@ -172,7 +172,7 @@ SPECS: list[Spec] = [
         definition="海外帰り = 出馬表に載る直前の 1 走が海外（メイダン・シャティン・ロンシャンなど）。重賞級の馬が多いので件数は少なめです。"),
     # ── ローテーション: クラス ──
     Spec(  # A15
-        slug="class-up-first", title="昇級初戦は通用しない？", claim="昇級初戦は通用しない（勝ち方次第）",
+        slug="class-up-first", hid="A15", title="昇級初戦は通用しない？", claim="昇級初戦は通用しない（勝ち方次第）",
         categories=["travel/class"], direction=-1,
         universe=lambda d: has_prev(d) & d["cls"].between(1, 4) & d["p_cls"].notna(),
         groups=[("昇級初戦", lambda d: (d["p_finish_position"] == 1) & (d["cls_diff"] == 1)),
@@ -184,7 +184,7 @@ SPECS: list[Spec] = [
         definition="昇級初戦 = 前走 1 着で、今回が 1 つ上のクラス。"),
     # ── 前走の内容 ──
     Spec(  # A17
-        slug="close-loss-last-time", title="前走は僅差の負け。次は走る？", claim="前走で 0.5 秒以内に負けた馬は次走好走する",
+        slug="close-loss-last-time", hid="A17", title="前走は僅差の負け。次は走る？", claim="前走で 0.5 秒以内に負けた馬は次走好走する",
         categories=["prev/result"],
         universe=lambda d: has_prev(d) & (d["p_finish_position"] >= 2) & d["p_margin_sec"].notna(),
         groups=[("前走0.5秒以内の負け", lambda d: d["p_margin_sec"] <= 0.5),
@@ -197,7 +197,7 @@ SPECS: list[Spec] = [
         question="前走で勝ち馬から 0.5 秒以内に負けた馬は、人気以上に走るのか。",
         conditions=ALL + "。前走 2 着以下の馬"),
     Spec(  # A18
-        slug="fastest-closer-loser", title="前走上がり最速で負けた馬は次に来る？", claim="前走で上がり最速なのに負けた馬は次走来る",
+        slug="fastest-closer-loser", hid="A18", title="前走上がり最速で負けた馬は次に来る？", claim="前走で上がり最速なのに負けた馬は次走来る",
         categories=["prev/result"],
         universe=lambda d: has_prev(d) & (d["p_finish_position"] >= 4),
         groups=[("前走上がり最速で4着以下", lambda d: d["p_l3f_rank"] == 1),
@@ -207,7 +207,7 @@ SPECS: list[Spec] = [
         question="前走で上がり 3F が最も速かったのに 4 着以下だった馬は、次に人気以上に走るのか。",
         conditions=ALL + "。前走 4 着以下の馬"),
     Spec(  # A23
-        slug="big-loss-rebound", title="前走大敗からの巻き返しは『替わり』次第？", claim="前走大敗の馬は、条件が替われば巻き返す",
+        slug="big-loss-rebound", hid="A23", title="前走大敗からの巻き返しは『替わり』次第？", claim="前走大敗の馬は、条件が替われば巻き返す",
         categories=["prev/result"],
         universe=lambda d: has_prev(d) & (d["p_finish_position"] >= 10),
         groups=[("替わりあり（1つ以上）", lambda d: changes(d) >= 1),
@@ -229,7 +229,7 @@ SPECS: list[Spec] = [
         question="前走の重・不良馬場で負けた馬は、良馬場に替わって人気以上に走るのか。",
         conditions=ALL + "。今回が良馬場で、前走 4 着以下の馬"),
     Spec(  # A20
-        slug="high-pace-survivor", title="前走ハイペースを先行して粘った馬は強い？", claim="前走ハイペースを先行して好走した馬は次も走る",
+        slug="high-pace-survivor", hid="A20", title="前走ハイペースを先行して粘った馬は強い？", claim="前走ハイペースを先行して好走した馬は次も走る",
         categories=["prev/pace"],
         universe=lambda d: has_prev(d) & d["p_pace_rel"].notna() & (d["p_finish_position"].between(1, 5)),
         groups=[("ハイペースを先行して5着以内", lambda d: (d["p_pace_rel"] <= -1.0) & (d["p_q4"] <= 0.3)),
@@ -242,7 +242,7 @@ SPECS: list[Spec] = [
         conditions=ALL + "。前走 5 着以内の馬",
         definition="ハイペース = 前半 3F と後半 3F の差が、そのコースの平均より 1 秒以上前寄り（前半が速い）。スローはその逆。先行 = 前走の 4 角で前 3 割。"),
     Spec(  # A21
-        slug="slow-pace-closer", title="スローで差して届かずの馬は過大評価？", claim="前走スローで差して届かなかった馬は、次走で人気ほど走らない",
+        slug="slow-pace-closer", hid="A21", title="スローで差して届かずの馬は過大評価？", claim="前走スローで差して届かなかった馬は、次走で人気ほど走らない",
         categories=["prev/pace"], direction=-1,
         universe=lambda d: has_prev(d) & d["p_pace_rel"].notna() & (d["p_finish_position"] >= 2),
         groups=[("スローを後方から上がり3位以内で負け", lambda d: (d["p_pace_rel"] >= 1.0) & (d["p_q4"] >= 0.6) & (d["p_l3f_rank"] <= 3))],
@@ -252,7 +252,7 @@ SPECS: list[Spec] = [
         question="前走がスローで、後ろから速い上がりを使って届かなかった馬は、次走で人気ほど走らないのか。",
         conditions=ALL + "。前走 2 着以下の馬"),
     Spec(  # A19
-        slug="deep-closer-board", title="前走4角後方から掲示板の馬は次に勝ち負け？", claim="前走 4 角 10 番手以下から掲示板に来た馬は次走で勝ち負けになる",
+        slug="deep-closer-board", hid="A19", title="前走4角後方から掲示板の馬は次に勝ち負け？", claim="前走 4 角 10 番手以下から掲示板に来た馬は次走で勝ち負けになる",
         categories=["prev/pace"],
         universe=lambda d: has_prev(d) & (d["p_finish_position"].between(1, 5)),
         groups=[("前走4角10番手以下から5着以内", lambda d: (d["p_q4"] * (d["p_starters"] - 1) + 1) >= 10)],
@@ -262,7 +262,7 @@ SPECS: list[Spec] = [
         question="前走で 4 角 10 番手以下の後方から 5 着以内に来た馬は、人気以上に走るのか。",
         conditions=ALL + "。前走 5 着以内の馬"),
     Spec(  # G06
-        slug="lone-front-runner", title="逃げ馬が1頭だけのレースは残る？", claim="同型のいない逃げ馬は残る",
+        slug="lone-front-runner", hid="G06", title="逃げ馬が1頭だけのレースは残る？", claim="同型のいない逃げ馬は残る",
         categories=["style/front-runner"],
         universe=lambda d: has_prev(d) & (d["p_q1"] == 0),
         groups=[("同型なし（前走逃げが自分だけ）", lambda d: d.groupby("race_id")["p_q1"].transform(lambda s: (s == 0).sum()) == 1),
@@ -275,7 +275,7 @@ SPECS: list[Spec] = [
         definition="同型 = 同じレースで、前走の最初のコーナーを先頭で通過した馬。"),
     # ── 実績 ──
     Spec(  # A26
-        slug="course-specialist", title="コース巧者は人気以上に走る？", claim="同じコースで好走経験がある馬は人気以上に走る",
+        slug="course-specialist", hid="A25", title="コース巧者は人気以上に走る？", claim="同じコースで好走経験がある馬は人気以上に走る",
         categories=["ability/record"],
         universe=lambda d: has_prev(d) & (d["course_runs_before"] >= 1),
         groups=[("同コースで3着内あり", lambda d: d["course_top3_before"] >= 1),
@@ -296,7 +296,7 @@ SPECS: list[Spec] = [
         question="これまでのレースで上がり 3F 最速を何度も出している馬は、人気以上に走るのか。",
         conditions=ALL + "。JRA 平地で 5 戦以上している馬"),
     Spec(  # A27
-        slug="g1-step", title="前走G1組は格下の重賞で強い？", claim="前走 G1 を走った馬は G2・G3 で人気以上に走る",
+        slug="g1-step", hid="A27", title="前走G1組は格下の重賞で強い？", claim="前走 G1 を走った馬は G2・G3 で人気以上に走る",
         categories=["race/class"],
         universe=lambda d: has_prev(d) & d["grade"].isin(["G2", "G3"]),
         groups=[("前走G1組", lambda d: d["p_grade"] == "G1"),
@@ -307,7 +307,7 @@ SPECS: list[Spec] = [
         conditions="JRA の G2・G3（平地）"),
     # ── 調教 ──
     Spec(  # B01〜B03
-        slug="final-workout-jockey", title="最終追い切りに本番の騎手が乗ると勝負気配？", claim="最終追い切りに本番の騎手が乗っている馬は勝負気配",
+        slug="final-workout-jockey", hid="B01", title="最終追い切りに本番の騎手が乗ると勝負気配？", claim="最終追い切りに本番の騎手が乗っている馬は勝負気配",
         categories=["training/rider"],
         universe=lambda d: d["w_has"].eq(True),
         groups=[("最終追い切りに本番の騎手", lambda d: d["w_last_by_jockey"].eq(True)),
@@ -365,7 +365,7 @@ SPECS: list[Spec] = [
         question="休み明けの初戦で、直前 1 か月の追い切りの本数が多い馬は、人気以上に走るのか。",
         conditions=ALL + "。休み明け（中 10 週以上）の初戦"),
     Spec(  # B20
-        slug="workout-rank", title="追い切り評価Aの馬は走る？", claim="追い切りの評価が A の馬は好走する",
+        slug="workout-rank", hid="B20", title="追い切り評価Aの馬は走る？", claim="追い切りの評価が A の馬は好走する",
         categories=["training/workout"],
         universe=lambda d: d["w_rank"].isin(["A", "B", "C", "D"]),
         groups=[("評価A", lambda d: d["w_rank"] == "A"), ("評価B", lambda d: d["w_rank"] == "B"),
@@ -401,7 +401,7 @@ SPECS: list[Spec] = [
         question="その厩舎がほとんど乗せたことのない上位騎手（前年の勝利数で上位 10 人）を乗せたとき、人気以上に走るのか。",
         conditions=ALL + "。前年の勝利数が上位 10 人の騎手が乗った、出走 200 回以上の調教師の馬"),
     Spec(  # C03
-        slug="jockey-chose-other", title="主戦が他の馬を選んだら割引？", claim="前走の騎手が同じレースの別の馬に乗るなら、その馬は割引",
+        slug="jockey-chose-other", hid="C03", title="主戦が他の馬を選んだら割引？", claim="前走の騎手が同じレースの別の馬に乗るなら、その馬は割引",
         categories=["jockey/context"], direction=-1,
         universe=lambda d: has_prev(d) & (d["jockey_id"] != d["p_jockey_id"]),
         groups=[("前走の騎手が同じレースの別の馬に騎乗", lambda d: d["prev_jockey_elsewhere"].eq(True))],
@@ -410,7 +410,7 @@ SPECS: list[Spec] = [
         question="前走で乗った騎手が、今回は同じレースの別の馬に乗っている（騎手がほかの馬を選んだ）とき、残された馬は人気ほど走らないのか。",
         conditions=ALL + "。前走から騎手が替わった馬"),
     Spec(  # C05
-        slug="jockey-continuation", title="テン乗りより継続騎乗？", claim="テン乗りより継続騎乗のほうが走る",
+        slug="jockey-continuation", hid="C05", title="テン乗りより継続騎乗？", claim="テン乗りより継続騎乗のほうが走る",
         categories=["jockey/context"],
         universe=has_prev,
         groups=[("継続騎乗（2戦以上続けて）", lambda d: d["jockey_streak"] >= 1),
@@ -422,7 +422,7 @@ SPECS: list[Spec] = [
         ref_label="乗り替わり（テン乗り）の馬",
         question="前走と同じ騎手が続けて乗る馬は、乗り替わりの馬より人気以上に走るのか。"),
     Spec(  # C11
-        slug="jockey-hot-day", title="その日に勝っている騎手は後半も来る？", claim="その日すでに勝っている騎手は、後のレースでも来る",
+        slug="jockey-hot-day", hid="C11", title="その日に勝っている騎手は後半も来る？", claim="その日すでに勝っている騎手は、後のレースでも来る",
         categories=["jockey/context"],
         universe=lambda d: d["jday_rides"] >= 2,
         groups=[("その日すでに1勝以上", lambda d: d["jday_wins_before"] >= 1),
@@ -444,7 +444,7 @@ SPECS: list[Spec] = [
         question="その日に 1 鞍だけ乗る騎手（遠征してきた騎手など）の馬は、人気以上に走るのか。"),
     # ── 厩舎・陣営 ──
     Spec(  # D01
-        slug="northern-farm-layoff", title="ノーザンファーム生産の休み明けは仕上がっている？", claim="ノーザンファーム生産馬は休み明けでも走る（外厩仕上げ）",
+        slug="northern-farm-layoff", hid="D01", title="ノーザンファーム生産の休み明けは仕上がっている？", claim="ノーザンファーム生産馬は休み明けでも走る（外厩仕上げ）",
         categories=["stable/owner-breeder"],
         universe=lambda d: (d["since_layoff"] == 1) & d["producer"].notna(),
         groups=[("ノーザンファーム生産", lambda d: d["producer"].str.contains("ノーザンファーム", na=False)),
@@ -455,7 +455,7 @@ SPECS: list[Spec] = [
         question="休み明けの初戦で、ノーザンファーム生産の馬は人気以上に走るのか（外厩で仕上がっていると言われる）。",
         conditions=ALL + "。休み明け（中 10 週以上）の初戦"),
     Spec(  # D04
-        slug="stable-two-runners", variants=[], title="同じ厩舎の2頭出しは人気薄の方？", claim="同じ厩舎から 2 頭以上出ると、人気薄の方が来る",
+        slug="stable-two-runners", hid="D04", variants=[], title="同じ厩舎の2頭出しは人気薄の方？", claim="同じ厩舎から 2 頭以上出ると、人気薄の方が来る",
         categories=["stable/trainer"],
         universe=lambda d: d["stable_n"] >= 2,
         groups=[("人気薄の方", lambda d: d["stable_pop_rank"] >= 2),
@@ -487,7 +487,7 @@ SPECS: list[Spec] = [
         question="同じ日・同じ競馬場・同じ面の前のレース（3 レース以上）で、内枠や先行馬ばかり来ているとき、後のレースでも同じ傾向の馬が人気以上に走るのか。",
         definition="その日の偏り = そのレースより前に終わった同じ面のレースの 3 着以内の馬の、枠の位置（内 0〜外 1）と 4 角の位置の平均。内が来ている = 平均 0.38 以下。"),
     Spec(  # F01
-        slug="opening-week-inside", variants=[3], title="開幕週は内枠、最終週は外枠？", claim="開幕週は内枠が有利、開催の終わりは外枠が有利",
+        slug="opening-week-inside", hid="F01", variants=[3], title="開幕週は内枠、最終週は外枠？", claim="開幕週は内枠が有利、開催の終わりは外枠が有利",
         categories=["track/gate"],
         universe=lambda d: d["surface"] == "芝",
         groups=[("開幕週（1〜2日目）の内枠", lambda d: (d["kai_day"] <= 2) & (d["gate_rel"] < 1 / 3)),
@@ -499,7 +499,7 @@ SPECS: list[Spec] = [
         conditions="JRA全競馬場の芝（障害除く）",
         definition="開催日は、その開催（例: 5 回東京）の何日目か。内枠 = 馬番が内側 1/3、外枠 = 外側 1/3。"),
     Spec(  # G08
-        slug="full-gate-outside", title="フルゲートの大外は不利？", claim="フルゲートの大外枠は不利",
+        slug="full-gate-outside", hid="G08", title="フルゲートの大外は不利？", claim="フルゲートの大外枠は不利",
         categories=["track/gate"], direction=-1,
         universe=lambda d: d["starters"] >= 16,
         groups=[("大外（外から2頭）", lambda d: d["horse_number"] >= d["field_size"] - 1)],
@@ -508,7 +508,7 @@ SPECS: list[Spec] = [
         question="16 頭以上のレースで、外から 2 頭（大外）の馬は人気ほど走らないのか。",
         conditions=ALL + "。16 頭以上が走ったレース"),
     Spec(  # G13
-        slug="even-gate", title="偶数番（後入れ）は有利？", claim="偶数の馬番（ゲートの後入れ）は出遅れにくく有利",
+        slug="even-gate", hid="G13", title="偶数番（後入れ）は有利？", claim="偶数の馬番（ゲートの後入れ）は出遅れにくく有利",
         categories=["track/gate"],
         universe=lambda d: d["starters"] >= 8,
         groups=[("偶数の馬番", lambda d: d["horse_number"] % 2 == 0)],
@@ -527,7 +527,7 @@ SPECS: list[Spec] = [
         question="過去に重・不良馬場で 3 着以内に来たことのある馬は、今回の重・不良で人気以上に走るのか。",
         conditions=ALL + "。今回が重・不良で、過去に重・不良を走ったことのある馬"),
     Spec(  # H03
-        slug="big-horse-heavy-going", variants=[], title="大型馬は道悪・ダートで有利？", claim="大型馬（520kg 以上）は道悪で有利",
+        slug="big-horse-heavy-going", hid="H03", variants=[], title="大型馬は道悪・ダートで有利？", claim="大型馬（520kg 以上）は道悪で有利",
         categories=["track/going", "horse/body"],
         universe=lambda d: d["weight"].between(300, 700) & d["track_condition"].isin(["重", "不良"]),
         groups=[("520kg以上", lambda d: d["weight"] >= 520),
@@ -538,7 +538,7 @@ SPECS: list[Spec] = [
         conditions=ALL + "。重・不良馬場のレース"),
     # ── 馬体・個体 ──
     Spec(  # H02
-        slug="weight-drop-big", title="馬体重−10kg以上は割引？", claim="馬体重の大幅減（−10kg 以上）は割引",
+        slug="weight-drop-big", hid="H02", title="馬体重−10kg以上は割引？", claim="馬体重の大幅減（−10kg 以上）は割引",
         categories=["horse/body"], direction=-1,
         universe=lambda d: has_prev(d) & d["weight_change"].notna(),
         groups=[("−10kg以上の減少", lambda d: d["weight_change"] <= -10),
@@ -590,7 +590,7 @@ SPECS: list[Spec] = [
         conditions=ALL + "。4 歳以上の牝馬"),
     # ── レース ──
     Spec(  # I05
-        slug="last-race-favorite", variants=[], title="最終レースは荒れる？", claim="最終レースは荒れる（人気馬が飛ぶ）",
+        slug="last-race-favorite", hid="I05", variants=[], title="最終レースは荒れる？", claim="最終レースは荒れる（人気馬が飛ぶ）",
         categories=["upset/conditions"], direction=-1,
         universe=lambda d: d["popularity"] <= 3,
         groups=[("最終レース（12R）の1〜3番人気", lambda d: d["race_no"] == 12),
