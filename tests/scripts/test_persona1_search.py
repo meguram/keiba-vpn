@@ -31,7 +31,7 @@ def test_yen_units_are_normalised_to_multiples(tmp_path):
     d.to_parquet(p)
     r = P.run(p, 2023, 2025, tmp_path / "out")
     assert r["K"] == len(P.candidates())
-    grid = pd.read_csv(tmp_path / "out" / "grid_2023_2025.csv")
+    grid = pd.read_csv(tmp_path / "out" / "grid_2023_2025_s7.csv")
     assert grid["test_roi"].max() < 20        # 倍率なら高くても数倍。円のままなら数百になる
     assert "caveat" in r                       # 確定オッズを使った上限の値、という留保が結果に入る
 
@@ -76,3 +76,41 @@ def test_race_profit_counts_bets_and_profit():
     pr = P.race_profit(d, ("win", "model", 1.1, None))      # EV: 1.2, 2.0, 1.5 → 全部買う
     assert pr.loc["a", "n"] == 2 and abs(pr.loc["a", "pl"] - ((2.0 - 1) + (0.0 - 1))) < 1e-9
     assert pr.loc["b", "n"] == 1 and abs(pr.loc["b", "pl"] - (-1.0)) < 1e-9
+
+
+def test_decision_odds_noise_changes_only_decision_odds(tmp_path):
+    """判断用のオッズだけが動き、払戻は確定のまま。市場の確率はレース内で合計 1。"""
+    d = _frame(n_races=120, seed=9)
+    pre = d[["race_id", "horse_number"]].copy()
+    pre["phase"] = "t05"
+    pre["win_odds"] = d["win_odds"] * np.exp(np.random.default_rng(0).normal(-0.1, 0.2, len(d)))
+    pre["place_odds_min"] = d["place_odds_min"] * 0.95
+    fin = d[["race_id", "horse_number", "win_odds", "place_odds_min"]]
+    pre.to_parquet(tmp_path / "pre.parquet")
+    fin.to_parquet(tmp_path / "fin.parquet")
+    d["q_win"] = 0.0
+    out = P.decision_odds_noise(d, "t05", np.random.default_rng(1), tmp_path / "pre.parquet", tmp_path / "fin.parquet")
+    assert (out["ret_win"].to_numpy() == d["ret_win"].to_numpy()).all()
+    assert not np.allclose(out["win_odds"], d["win_odds"])
+    assert np.allclose(out.groupby("race_id")["q_win"].sum(), 1.0)
+
+
+def test_decision_odds_noise_keeps_takeout_per_race(tmp_path):
+    """レース内の 1/オッズ の合計（控除率）は、再現後も元の確定オッズの値に保たれる（馬ごとに独立に引くと崩れる）。"""
+    d = _frame(n_races=150, seed=11)
+    d["place_odds_max"] = d["place_odds_max"].where(d["horse_number"] > 1, 0)       # 複勝オッズの無い馬は 0 のまま
+    pre = d[["race_id", "horse_number", "win_odds", "place_odds_min", "place_odds_max"]].copy()
+    pre["phase"] = "t05"
+    rng = np.random.default_rng(2)
+    pre["win_odds"] = d["win_odds"] * np.exp(rng.normal(-0.1, 0.4, len(d)))
+    pre["place_odds_min"] = d["place_odds_min"] * np.exp(rng.normal(-0.05, 0.2, len(d)))
+    pre.to_parquet(tmp_path / "pre.parquet")
+    d[["race_id", "horse_number", "win_odds", "place_odds_min"]].to_parquet(tmp_path / "fin.parquet")
+    d["q_win"] = 0.0
+    out = P.decision_odds_noise(d, "t05", np.random.default_rng(3), tmp_path / "pre.parquet", tmp_path / "fin.parquet")
+    before = (1 / d["win_odds"]).groupby(d["race_id"]).sum()
+    after = (1 / out["win_odds"]).groupby(out["race_id"]).sum()
+    assert np.allclose(before, after, rtol=0.02)           # 下限 1.0 の丸めで少しだけずれる
+    assert (out.loc[d["place_odds_max"] == 0, "place_odds_max"] == 0).all()
+    has = out["place_odds_max"] > 0
+    assert (out.loc[has, "place_odds_max"] >= out.loc[has, "place_odds_min"]).all()

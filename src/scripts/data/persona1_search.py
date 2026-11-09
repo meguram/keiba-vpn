@@ -130,7 +130,56 @@ def boot_ci(pr: pd.DataFrame, rng: np.random.Generator, reps: int = BOOT) -> tup
     return 1 + pl.sum() / n.sum(), float(np.percentile(rois, 2.5)), float(np.percentile(rois, 97.5))
 
 
-def run(frame_path: Path, first_test: int, last_test: int, out: Path) -> dict:
+PRE_ODDS = ROOT / "data/local/research/persona1/pre_odds.parquet"
+BUCKETS = [0, 3, 6, 12, 25, 50, 1e9]
+
+
+def decision_odds_noise(d: pd.DataFrame, phase: str, rng: np.random.Generator, pre_path: Path = PRE_ODDS, final_path: Path | None = None) -> pd.DataFrame:
+    """購入時点（phase: t60/t15/t10/t05/t02）のオッズの不確かさを再現する。判断に使うオッズ（期待値・オッズ上限・市場の確率）だけを
+    『確定オッズ × exp(実測のずれ)』に置き換え、払戻（ret_win・ret_place）は確定のままにする（払戻は確定オッズで決まるため）。
+    ずれは pre_odds_table.py の実測 log(購入時点のオッズ / 確定オッズ) を、確定オッズの帯ごとに、単勝と複勝の組（同じ馬の実測）で復元抽出する。
+    レース内の 1/オッズ の合計（控除率）は元の確定オッズのレースの値に戻す（馬ごとに独立に引くと実際には起きない控除率になるため）。
+    留保: 再現したずれは結果と独立。実際のずれは終盤の資金（情報）と相関する。偏りの向きは一つに決まらない
+    （情報が残る分は楽観側、余分なずれで買い目が誤って増える分は悲観側）ので、『上限』とは読まず、実測が貯まったら実際の t02/t05 のオッズで置き換える。
+    実測は 2026-10-17 以降の少数のレース（t05 は約 130 レース）。標本が 30 未満の帯は、全帯をまとめた分布で代用する（その数を結果に出す）。"""
+    p = pd.read_parquet(pre_path)
+    p = p[(p["phase"] == phase) & (p["win_odds"] >= 1) & (p["place_odds_min"] > 0)]
+    fin = pd.read_parquet(final_path or ROOT / "data/page_reference/tables/2026/race_odds_flat.parquet",
+                          columns=["race_id", "horse_number", "win_odds", "place_odds_min"]).rename(columns={"win_odds": "final", "place_odds_min": "final_pl"})
+    fin["race_id"] = fin["race_id"].astype(str)
+    p = p.assign(race_id=p["race_id"].astype(str)).merge(fin, on=["race_id", "horse_number"])
+    p = p[(p["final"] >= 1) & (p["final_pl"] > 0)]
+    p["lr"] = np.log(p["win_odds"] / p["final"])
+    p["lrp"] = np.log(p["place_odds_min"] / p["final_pl"])
+    p["b"] = pd.cut(p["final"], BUCKETS, labels=False)
+    pools = {int(b): g[["lr", "lrp"]].to_numpy() for b, g in p.groupby("b") if len(g) >= 30}
+    allv = p[["lr", "lrp"]].to_numpy()
+    d = d.copy()
+    b = pd.cut(d["win_odds"], BUCKETS, labels=False).to_numpy()
+    lr = np.zeros(len(d))
+    lrp = np.zeros(len(d))
+    substituted = 0
+    for k in np.unique(b[~pd.isna(b)]):
+        m = b == k
+        pool = pools.get(int(k))
+        if pool is None:
+            pool, substituted = allv, substituted + int(m.sum())
+        draw = pool[rng.integers(0, len(pool), size=int(m.sum()))]
+        lr[m], lrp[m] = draw[:, 0], draw[:, 1]
+    inv_old = 1.0 / d["win_odds"]
+    inv_new = inv_old / np.exp(lr)
+    # レース内の 1/オッズ の合計を元の値に戻す（控除率を保つ）
+    inv_new = inv_new * (inv_old.groupby(d["race_id"]).transform("sum") / inv_new.groupby(d["race_id"]).transform("sum"))
+    d["win_odds"] = np.maximum(1.0 / inv_new, 1.0)
+    d["place_odds_min"] = np.where(d["place_odds_min"] > 0, np.maximum(d["place_odds_min"] * np.exp(lrp), 1.0), 0)
+    d["place_odds_max"] = np.where(d["place_odds_max"] > 0, np.maximum(np.maximum(d["place_odds_max"] * np.exp(lrp), d["place_odds_min"]), 1.0), 0)
+    q = 1.0 / d["win_odds"]
+    d["q_win"] = q / q.groupby(d["race_id"]).transform("sum")
+    d.attrs["noise_substituted_rows"] = substituted
+    return d
+
+
+def run(frame_path: Path, first_test: int, last_test: int, out: Path, noise_phase: str | None = None, noise_seed: int = 7) -> dict:
     d = pd.read_parquet(frame_path)
     d = d[(d["win_odds"] > 0) & d["ret_win"].notna() & d["ret_place"].notna()].copy()      # 複勝オッズが無い馬は残す（市場の確率の正規化を壊さない）
     d["place_odds_min"] = d["place_odds_min"].fillna(0)
@@ -147,8 +196,10 @@ def run(frame_path: Path, first_test: int, last_test: int, out: Path) -> dict:
         if len(pos) and pos.median() > 20:
             d[c] = d[c] / 100.0
     d["win"] = (d["ret_win"] > 0).astype(int)
-    cands = candidates()
     rng = np.random.default_rng(20261109)
+    if noise_phase:
+        d = decision_odds_noise(d, noise_phase, np.random.default_rng(noise_seed))
+    cands = candidates()
     picks, oos_parts, grid_rows = [], [], []
     rc_series: dict[int, list[pd.DataFrame]] = {}
     for Y in range(first_test, last_test + 1):
@@ -172,7 +223,7 @@ def run(frame_path: Path, first_test: int, last_test: int, out: Path) -> dict:
         oos_parts.append(tp)
         picks.append({"test_year": Y, "ab": ab, "pick": str(best), "train_roi": round(best_row[0], 4), "train_lb99": round(best_row[1], 4), "train_n": best_row[2],
                       "test_roi": round(float(1 + tp["pl"].sum() / max(tp["n"].sum(), 1)), 4), "test_n": int(tp["n"].sum())})
-    result: dict = {"frame": str(frame_path), "K": len(cands), "picks": picks}
+    result: dict = {"frame": str(frame_path), "K": len(cands), "decision_odds": noise_phase or "final（確定オッズ。先読みで楽観）", "noise_seed": noise_seed, "picks": picks}
     if oos_parts:
         allp = pd.concat(oos_parts)
         roi, lo, hi = boot_ci(allp, rng)
@@ -220,8 +271,8 @@ def run(frame_path: Path, first_test: int, last_test: int, out: Path) -> dict:
             result["reality_check"] = {"candidates_used": int(keep.sum()), "blocks": nd, "best_mean_excess": round(float(mean.max()), 4), "t_max": round(t_obs, 3), "p": round((cnt + 1) / (BOOT + 1), 4)}
     result["caveat"] = "確定オッズで期待値・オッズ上限・市場の確率を作っているため、回収率は実際より楽観側（上限の値）。自分の賭けでオッズが動く分も入っていない。"
     out.mkdir(parents=True, exist_ok=True)
-    (out / f"search_{first_test}_{last_test}.json").write_text(json.dumps(result, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
-    pd.DataFrame(grid_rows).to_csv(out / f"grid_{first_test}_{last_test}.csv", index=False)
+    (out / f"search_{first_test}_{last_test}_s{noise_seed}.json").write_text(json.dumps(result, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+    pd.DataFrame(grid_rows).to_csv(out / f"grid_{first_test}_{last_test}_s{noise_seed}.csv", index=False)
     return result
 
 
@@ -231,9 +282,16 @@ def main() -> None:
     ap.add_argument("--first-test", type=int, default=2023)
     ap.add_argument("--last-test", type=int, default=2025)
     ap.add_argument("--out", default=str(OUT))
+    ap.add_argument("--noise-seeds", type=int, default=5, help="--decision-odds のとき、乱数（ずれの抽出）を変えて繰り返す回数。選ばれる候補と回収率の幅を出す")
+    ap.add_argument("--decision-odds", choices=["t60", "t15", "t10", "t05", "t02"], default=None, help="判断に使うオッズを、購入時点のずれを再現したものにする（払戻は確定のまま）")
     a = ap.parse_args()
-    r = run(Path(a.frame), a.first_test, a.last_test, Path(a.out))
-    print(json.dumps(r, ensure_ascii=False, indent=1, default=str))
+    seeds = range(7, 7 + (a.noise_seeds if a.decision_odds else 1))
+    res = [run(Path(a.frame), a.first_test, a.last_test, Path(a.out), a.decision_odds, sd) for sd in seeds]
+    if len(res) == 1:
+        print(json.dumps(res[0], ensure_ascii=False, indent=1, default=str))
+        return
+    summ = [{"seed": r["noise_seed"], "oos": r["oos"], "rc_p": (r.get("reality_check") or {}).get("p"), "picks": [(x["test_year"], x.get("pick")) for x in r["picks"]]} for r in res]
+    print(json.dumps({"decision_odds": a.decision_odds, "runs": summ, "caveat": res[0]["caveat"]}, ensure_ascii=False, indent=1, default=str))
 
 
 if __name__ == "__main__":
