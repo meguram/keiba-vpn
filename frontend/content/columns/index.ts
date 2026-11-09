@@ -73,6 +73,41 @@ import old_horse from "./old-horse.json";
 import three_year_old_summer from "./three-year-old-summer.json";
 import older_mare from "./older-mare.json";
 import last_race_favorite from "./last-race-favorite.json";
+import course_repeat from "./course-repeat.json";
+import class_up_details from "./class-up-details.json";
+import prev_race_excuses from "./prev-race-excuses.json";
+import layoff_details from "./layoff-details.json";
+import lap_type from "./lap-type.json";
+import terrain_fit from "./terrain-fit.json";
+import workout_speed from "./workout-speed.json";
+import workout_pattern from "./workout-pattern.json";
+import workout_notes from "./workout-notes.json";
+import jockey_switch_quality from "./jockey-switch-quality.json";
+import jockey_specialty from "./jockey-specialty.json";
+import jockey_day from "./jockey-day.json";
+import jockey_claim from "./jockey-claim.json";
+import stable_form from "./stable-form.json";
+import breeder_owner from "./breeder-owner.json";
+import trip_region from "./trip-region.json";
+import sire_course_going from "./sire-course-going.json";
+import sire_timing from "./sire-timing.json";
+import sire_line_dirt from "./sire-line-dirt.json";
+import going_style from "./going-style.json";
+import day_bias_more from "./day-bias-more.json";
+import weather_wind_heat from "./weather-wind-heat.json";
+import gate_more from "./gate-more.json";
+import pace_setup from "./pace-setup.json";
+import style_by_venue from "./style-by-venue.json";
+import weight_impost_more from "./weight-impost-more.json";
+import sex_age_more from "./sex-age-more.json";
+import gear_gelding from "./gear-gelding.json";
+import trainer_comment from "./trainer-comment.json";
+import style_by_surface from "./style-by-surface.json";
+import race_program from "./race-program.json";
+import first_time from "./first-time.json";
+import two_strong from "./two-strong.json";
+import favorite_fade from "./favorite-fade.json";
+import index_claims from "./index-claims.json";
 
 const ALL = [
   upset_conditions,
@@ -143,6 +178,41 @@ const ALL = [
   three_year_old_summer,
   older_mare,
   last_race_favorite,
+  course_repeat,
+  class_up_details,
+  prev_race_excuses,
+  layoff_details,
+  lap_type,
+  terrain_fit,
+  workout_speed,
+  workout_pattern,
+  workout_notes,
+  jockey_switch_quality,
+  jockey_specialty,
+  jockey_day,
+  jockey_claim,
+  stable_form,
+  breeder_owner,
+  trip_region,
+  sire_course_going,
+  sire_timing,
+  sire_line_dirt,
+  going_style,
+  day_bias_more,
+  weather_wind_heat,
+  gate_more,
+  pace_setup,
+  style_by_venue,
+  weight_impost_more,
+  sex_age_more,
+  gear_gelding,
+  trainer_comment,
+  style_by_surface,
+  race_program,
+  first_time,
+  two_strong,
+  favorite_fade,
+  index_claims,
 ] as Column[];
 
 export const COLUMNS: Column[] = ALL.filter((c) => SHOW_DEV_ONLY || !c.draft)

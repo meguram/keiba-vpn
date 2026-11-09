@@ -73,6 +73,41 @@ import old_horse from "./old-horse.json";
 import three_year_old_summer from "./three-year-old-summer.json";
 import older_mare from "./older-mare.json";
 import last_race_favorite from "./last-race-favorite.json";
+import course_repeat from "./course-repeat.json";
+import class_up_details from "./class-up-details.json";
+import prev_race_excuses from "./prev-race-excuses.json";
+import layoff_details from "./layoff-details.json";
+import lap_type from "./lap-type.json";
+import terrain_fit from "./terrain-fit.json";
+import workout_speed from "./workout-speed.json";
+import workout_pattern from "./workout-pattern.json";
+import workout_notes from "./workout-notes.json";
+import jockey_switch_quality from "./jockey-switch-quality.json";
+import jockey_specialty from "./jockey-specialty.json";
+import jockey_day from "./jockey-day.json";
+import jockey_claim from "./jockey-claim.json";
+import stable_form from "./stable-form.json";
+import breeder_owner from "./breeder-owner.json";
+import trip_region from "./trip-region.json";
+import sire_course_going from "./sire-course-going.json";
+import sire_timing from "./sire-timing.json";
+import sire_line_dirt from "./sire-line-dirt.json";
+import going_style from "./going-style.json";
+import day_bias_more from "./day-bias-more.json";
+import weather_wind_heat from "./weather-wind-heat.json";
+import gate_more from "./gate-more.json";
+import pace_setup from "./pace-setup.json";
+import style_by_venue from "./style-by-venue.json";
+import weight_impost_more from "./weight-impost-more.json";
+import sex_age_more from "./sex-age-more.json";
+import gear_gelding from "./gear-gelding.json";
+import trainer_comment from "./trainer-comment.json";
+import style_by_surface from "./style-by-surface.json";
+import race_program from "./race-program.json";
+import first_time from "./first-time.json";
+import two_strong from "./two-strong.json";
+import favorite_fade from "./favorite-fade.json";
+import index_claims from "./index-claims.json";
 
 export const GLOSSARY = glossary as Record<string, string>;
 
@@ -145,4 +180,39 @@ export const GUIDES: Record<string, ColumnGuide> = {
   "three-year-old-summer": three_year_old_summer as ColumnGuide,
   "older-mare": older_mare as ColumnGuide,
   "last-race-favorite": last_race_favorite as ColumnGuide,
+  "course-repeat": course_repeat as ColumnGuide,
+  "class-up-details": class_up_details as ColumnGuide,
+  "prev-race-excuses": prev_race_excuses as ColumnGuide,
+  "layoff-details": layoff_details as ColumnGuide,
+  "lap-type": lap_type as ColumnGuide,
+  "terrain-fit": terrain_fit as ColumnGuide,
+  "workout-speed": workout_speed as ColumnGuide,
+  "workout-pattern": workout_pattern as ColumnGuide,
+  "workout-notes": workout_notes as ColumnGuide,
+  "jockey-switch-quality": jockey_switch_quality as ColumnGuide,
+  "jockey-specialty": jockey_specialty as ColumnGuide,
+  "jockey-day": jockey_day as ColumnGuide,
+  "jockey-claim": jockey_claim as ColumnGuide,
+  "stable-form": stable_form as ColumnGuide,
+  "breeder-owner": breeder_owner as ColumnGuide,
+  "trip-region": trip_region as ColumnGuide,
+  "sire-course-going": sire_course_going as ColumnGuide,
+  "sire-timing": sire_timing as ColumnGuide,
+  "sire-line-dirt": sire_line_dirt as ColumnGuide,
+  "going-style": going_style as ColumnGuide,
+  "day-bias-more": day_bias_more as ColumnGuide,
+  "weather-wind-heat": weather_wind_heat as ColumnGuide,
+  "gate-more": gate_more as ColumnGuide,
+  "pace-setup": pace_setup as ColumnGuide,
+  "style-by-venue": style_by_venue as ColumnGuide,
+  "weight-impost-more": weight_impost_more as ColumnGuide,
+  "sex-age-more": sex_age_more as ColumnGuide,
+  "gear-gelding": gear_gelding as ColumnGuide,
+  "trainer-comment": trainer_comment as ColumnGuide,
+  "style-by-surface": style_by_surface as ColumnGuide,
+  "race-program": race_program as ColumnGuide,
+  "first-time": first_time as ColumnGuide,
+  "two-strong": two_strong as ColumnGuide,
+  "favorite-fade": favorite_fade as ColumnGuide,
+  "index-claims": index_claims as ColumnGuide,
 };

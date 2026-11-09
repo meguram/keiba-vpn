@@ -26,7 +26,9 @@ def prepare() -> None:
     (BASE / "oof").mkdir(parents=True, exist_ok=True)
     src, dst = BASE / "v6/s3x_e.parquet", BASE / "oof/stage_features_expanding.parquet"
     if not dst.exists() or dst.stat().st_mtime < src.stat().st_mtime:
-        shutil.copy2(src, dst)
+        tmp = dst.with_suffix(".tmp")
+        shutil.copy2(src, tmp)
+        tmp.replace(dst)                    # 途中で止まっても壊れたファイルを残さない
     for name in ("hpo", "training_laps_b", "ablation_nospeed"):
         link = BASE / name
         if not link.exists() and not link.is_symlink():
@@ -50,6 +52,7 @@ def main() -> None:
     from src.scripts.data import v6_members as m
 
     m.OUT = t27.OUT = BASE / f"tp27_v6{TAG}"
+    os.environ["TP27_OUT"] = str(m.OUT)            # v6_members の import が本番の tp27_v6{TAG} を入れるので戻す
     v5_common.V = BASE
     m.main()
 

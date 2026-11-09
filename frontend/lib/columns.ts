@@ -19,6 +19,7 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
     children: [
       { id: "conditions", label: "荒れやすい条件", desc: "どんな条件のレースが荒れるのか" },
       { id: "distance-course", label: "距離・ローカル", desc: "短距離やローカル開催は本当に荒れるのか" },
+      { id: "favorites", label: "人気馬の信頼度", desc: "2強のレース・混戦・上位人気を消せる条件" },
     ],
   },
   {
@@ -26,6 +27,7 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
     children: [
       { id: "front-runner", label: "逃げ・先行", desc: "逃げ馬は有利？芝とダート、距離での違い" },
       { id: "surface-switch", label: "初ダート・替わり", desc: "芝からダートに替わったときの脚質・枠順" },
+      { id: "venue-style", label: "競馬場別の脚質", desc: "競馬場ごとに有利な脚質と、ダート・芝の先行・差し" },
     ],
   },
   {
@@ -43,6 +45,7 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
     children: [
       { id: "maturity", label: "早熟・晩成", desc: "年齢で好走距離や舞台が変わる血統" },
       { id: "lineage", label: "系統", desc: "父系の系統で、産駒の適性はどれくらい決まるか" },
+      { id: "condition", label: "条件別の得意", desc: "父のコース・馬場・時期ごとの得意" },
     ],
   },
   {
@@ -83,18 +86,22 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
       { id: "bias", label: "当日の馬場の偏り", desc: "前のレースの傾向は後のレースも続くか" },
       { id: "gate", label: "枠順・開催週", desc: "内枠・外枠、開幕週と最終週" },
       { id: "going", label: "道悪", desc: "重・不良で走る馬" },
+      { id: "terrain", label: "地形", desc: "直線・坂・回りの得意と不得意" },
     ],
   },
   {
     id: "ability", label: "実績", desc: "コース実績・上がりの実績",
     children: [
       { id: "record", label: "コース実績・上がり", desc: "コース巧者、上がり最速の多い馬" },
+      { id: "index", label: "指数・持ち時計", desc: "スピード指数・持ち時計・テンの速さの順位" },
     ],
   },
   {
     id: "race", label: "レースの性格", desc: "クラス・前走のステップ",
     children: [
       { id: "class", label: "クラス・ステップ", desc: "前走G1組など、前走のレースによる違い" },
+      { id: "program", label: "番組の性格", desc: "1R・最終R、ハンデ戦、別定戦などレースの種類" },
+      { id: "first-time", label: "初めての経験", desc: "初めての競馬場・距離・クラス・遠征" },
     ],
   },
   {
@@ -111,6 +118,7 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
     id: "weather", label: "天候", desc: "風・気温など、気象の影響",
     children: [
       { id: "wind", label: "風", desc: "直線の向かい風・追い風と、風の強さの影響" },
+      { id: "rain-temp", label: "雨・気温", desc: "雨の日・真夏の暑さの影響" },
     ],
   },
 ];
