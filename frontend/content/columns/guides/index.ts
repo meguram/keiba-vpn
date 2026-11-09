@@ -26,6 +26,53 @@ import transport_vs_stay from "./transport-vs-stay.json";
 import upset_conditions from "./upset-conditions.json";
 import weight_change from "./weight-change.json";
 import wind_venue from "./wind-venue.json";
+import distance_extension from "./distance-extension.json";
+import distance_shortening from "./distance-shortening.json";
+import direction_switch from "./direction-switch.json";
+import local_to_central from "./local-to-central.json";
+import second_start_after_layoff from "./second-start-after-layoff.json";
+import quick_turnaround from "./quick-turnaround.json";
+import layoff_first_start from "./layoff-first-start.json";
+import overseas_return from "./overseas-return.json";
+import class_up_first from "./class-up-first.json";
+import close_loss_last_time from "./close-loss-last-time.json";
+import fastest_closer_loser from "./fastest-closer-loser.json";
+import big_loss_rebound from "./big-loss-rebound.json";
+import bad_going_excuse from "./bad-going-excuse.json";
+import high_pace_survivor from "./high-pace-survivor.json";
+import slow_pace_closer from "./slow-pace-closer.json";
+import deep_closer_board from "./deep-closer-board.json";
+import lone_front_runner from "./lone-front-runner.json";
+import course_specialist from "./course-specialist.json";
+import fastest_closing_count from "./fastest-closing-count.json";
+import g1_step from "./g1-step.json";
+import final_workout_jockey from "./final-workout-jockey.json";
+import slope_acceleration from "./slope-acceleration.json";
+import slope_vs_wood from "./slope-vs-wood.json";
+import hard_workout_after_layoff from "./hard-workout-after-layoff.json";
+import workout_volume_layoff from "./workout-volume-layoff.json";
+import workout_rank from "./workout-rank.json";
+import trainer_jockey_combo from "./trainer-jockey-combo.json";
+import rare_top_jockey from "./rare-top-jockey.json";
+import jockey_chose_other from "./jockey-chose-other.json";
+import jockey_continuation from "./jockey-continuation.json";
+import jockey_hot_day from "./jockey-hot-day.json";
+import jockey_single_ride from "./jockey-single-ride.json";
+import northern_farm_layoff from "./northern-farm-layoff.json";
+import stable_two_runners from "./stable-two-runners.json";
+import trainer_change from "./trainer-change.json";
+import same_day_bias from "./same-day-bias.json";
+import opening_week_inside from "./opening-week-inside.json";
+import full_gate_outside from "./full-gate-outside.json";
+import even_gate from "./even-gate.json";
+import mudder from "./mudder.json";
+import big_horse_heavy_going from "./big-horse-heavy-going.json";
+import weight_drop_big from "./weight-drop-big.json";
+import heavy_impost from "./heavy-impost.json";
+import old_horse from "./old-horse.json";
+import three_year_old_summer from "./three-year-old-summer.json";
+import older_mare from "./older-mare.json";
+import last_race_favorite from "./last-race-favorite.json";
 
 export const GLOSSARY = glossary as Record<string, string>;
 
@@ -51,4 +98,51 @@ export const GUIDES: Record<string, ColumnGuide> = {
   "upset-conditions": upset_conditions as ColumnGuide,
   "weight-change": weight_change as ColumnGuide,
   "wind-venue": wind_venue as ColumnGuide,
+  "distance-extension": distance_extension as ColumnGuide,
+  "distance-shortening": distance_shortening as ColumnGuide,
+  "direction-switch": direction_switch as ColumnGuide,
+  "local-to-central": local_to_central as ColumnGuide,
+  "second-start-after-layoff": second_start_after_layoff as ColumnGuide,
+  "quick-turnaround": quick_turnaround as ColumnGuide,
+  "layoff-first-start": layoff_first_start as ColumnGuide,
+  "overseas-return": overseas_return as ColumnGuide,
+  "class-up-first": class_up_first as ColumnGuide,
+  "close-loss-last-time": close_loss_last_time as ColumnGuide,
+  "fastest-closer-loser": fastest_closer_loser as ColumnGuide,
+  "big-loss-rebound": big_loss_rebound as ColumnGuide,
+  "bad-going-excuse": bad_going_excuse as ColumnGuide,
+  "high-pace-survivor": high_pace_survivor as ColumnGuide,
+  "slow-pace-closer": slow_pace_closer as ColumnGuide,
+  "deep-closer-board": deep_closer_board as ColumnGuide,
+  "lone-front-runner": lone_front_runner as ColumnGuide,
+  "course-specialist": course_specialist as ColumnGuide,
+  "fastest-closing-count": fastest_closing_count as ColumnGuide,
+  "g1-step": g1_step as ColumnGuide,
+  "final-workout-jockey": final_workout_jockey as ColumnGuide,
+  "slope-acceleration": slope_acceleration as ColumnGuide,
+  "slope-vs-wood": slope_vs_wood as ColumnGuide,
+  "hard-workout-after-layoff": hard_workout_after_layoff as ColumnGuide,
+  "workout-volume-layoff": workout_volume_layoff as ColumnGuide,
+  "workout-rank": workout_rank as ColumnGuide,
+  "trainer-jockey-combo": trainer_jockey_combo as ColumnGuide,
+  "rare-top-jockey": rare_top_jockey as ColumnGuide,
+  "jockey-chose-other": jockey_chose_other as ColumnGuide,
+  "jockey-continuation": jockey_continuation as ColumnGuide,
+  "jockey-hot-day": jockey_hot_day as ColumnGuide,
+  "jockey-single-ride": jockey_single_ride as ColumnGuide,
+  "northern-farm-layoff": northern_farm_layoff as ColumnGuide,
+  "stable-two-runners": stable_two_runners as ColumnGuide,
+  "trainer-change": trainer_change as ColumnGuide,
+  "same-day-bias": same_day_bias as ColumnGuide,
+  "opening-week-inside": opening_week_inside as ColumnGuide,
+  "full-gate-outside": full_gate_outside as ColumnGuide,
+  "even-gate": even_gate as ColumnGuide,
+  "mudder": mudder as ColumnGuide,
+  "big-horse-heavy-going": big_horse_heavy_going as ColumnGuide,
+  "weight-drop-big": weight_drop_big as ColumnGuide,
+  "heavy-impost": heavy_impost as ColumnGuide,
+  "old-horse": old_horse as ColumnGuide,
+  "three-year-old-summer": three_year_old_summer as ColumnGuide,
+  "older-mare": older_mare as ColumnGuide,
+  "last-race-favorite": last_race_favorite as ColumnGuide,
 };
