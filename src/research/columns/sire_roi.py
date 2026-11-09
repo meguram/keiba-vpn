@@ -3,7 +3,7 @@
 問い: 特定の種牡馬の産駒は、馬券で高い回収率を維持しているか。どの条件で高いか。
 
 データ:
-  レース: compare_series.load()（2020〜2025 年の JRA 平地、取消・除外を除く）。払戻は同じ race_result_flat の payoff（単勝・複勝）。
+  レース: compare_series.load()（2016〜2025 年の JRA 平地、取消・除外を除く）。払戻は同じ race_result_flat の payoff（単勝・複勝）。
   父:     compare_series.SIRE_MAP_PATH（horse_sire_map.parquet）。対象の出走の 100% に父が付く。
 集計:
   種牡馬ごとの全条件の成績: 着別度数（1着-2着-3着-着外）・勝率・複勝率・単勝回収率・複勝回収率（払戻から。複勝の発売がないレースは複勝回収率から除く）。
@@ -16,8 +16,8 @@
 条件（各種牡馬の折り畳みの中）:
   芝ダ×距離帯・芝ダ×競馬場・クラス・芝ダ×馬場・年齢・性別。条件の出走が MIN_COND（200）以上のものだけ。
   単勝回収率の上位 5 件と、100% 超えの全件を載せる。
-  多数の条件から上位を選ぶと、偶然高かった条件が選ばれる（選択バイアス）。前半（2020〜2022 年）で 100% を超えた条件が、
-  後半（2023〜2025 年）でも 100% を超えるかを全体で確かめ、各条件にも前半・後半の回収率を併記する。
+  多数の条件から上位を選ぶと、偶然高かった条件が選ばれる（選択バイアス）。前半（2016〜2020 年）で 100% を超えた条件が、
+  後半（2021〜2025 年）でも 100% を超えるかを全体で確かめ、各条件にも前半・後半の回収率を併記する。
 
 使い方:
     python -m src.research.columns.sire_roi            # 集計して記事を書く
@@ -35,7 +35,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from src.research.columns.compare_series import FLAT_DIR, SIRE_MAP_PATH, YEARS, load
+from src.research.columns.compare_series import FLAT_DIR, HALF_SPLIT, SIRE_MAP_PATH, YEARS, load
 from src.research.columns.early_maturing_bloodline import dumps, short_name
 from src.research.columns.wind_venue import pct
 
@@ -46,7 +46,7 @@ MIN_REF = 300            # 参考の表に載せる下限
 MIN_COND = 200           # 条件の出走数の下限
 MIN_HALF = 100           # 前半・後半の検証で使う、各期間の出走数の下限
 LONGSHOT = 50            # 「単勝 50 倍以下」
-SPLIT_YEAR = 2022        # 前半 = 〜2022 年、後半 = 2023 年〜
+SPLIT_YEAR = HALF_SPLIT   # 前半 = 2016〜2020 年、後半 = 2021 年〜（5 年ずつ。compare_series.HALF_SPLIT と共通）
 B = 1000                 # ブートストラップの回数
 SEED = 20261102
 DIST = {"短距離": (0, 1400), "マイル": (1401, 1800), "中距離": (1801, 2200), "長距離": (2201, 9999)}
@@ -238,14 +238,14 @@ def roi_chart(m: pd.DataFrame, n_over_ci: int, k: int = 12) -> dict[str, Any]:
 
 
 def halves_chart(m: pd.DataFrame, k: int = 10) -> dict[str, Any]:
-    """前半（2020〜2022 年）で単勝回収率が高かった種牡馬 k 頭の、前半と後半の回収率。高さが続くかを見る。"""
+    """前半（2016〜2020 年）で単勝回収率が高かった種牡馬 k 頭の、前半と後半の回収率。高さが続くかを見る。"""
     top = m.sort_values("roi_a", ascending=False).head(k)
     return {"type": "chart", "title": "前半で回収率が高かった種牡馬の、後半の回収率", "xLabel": "種牡馬（前半の単勝回収率が高い順）", "yLabel": "単勝回収率",
             "xs": [r["sire"] for _, r in top.iterrows()],
-            "series": [{"name": f"前半（2020〜{SPLIT_YEAR}年）", "values": [_num(v) for v in top["roi_a"]]},
+            "series": [{"name": f"前半（2016〜{SPLIT_YEAR}年）", "values": [_num(v) for v in top["roi_a"]]},
                        {"name": f"後半（{SPLIT_YEAR + 1}〜2025年）", "values": [_num(v) for v in top["roi_b"]]},
                        {"name": "100%", "values": [1.0] * len(top), "baseline": True}],
-            "initial": [f"前半（2020〜{SPLIT_YEAR}年）", f"後半（{SPLIT_YEAR + 1}〜2025年）"],
+            "initial": [f"前半（2016〜{SPLIT_YEAR}年）", f"後半（{SPLIT_YEAR + 1}〜2025年）"],
             "caption": "前半に高かった種牡馬ほど、後半は下がる傾向があるかを見る図。後半の値がバラバラに散るほど、前半の高さは偶然に近い。"}
 
 
@@ -274,13 +274,13 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
             {"type": "table", "columns": ["条件", "出走", "着別度数", "勝率", "複勝率", "単勝回収率（95%区間）", f"単勝{LONGSHOT}倍以下", "複勝回収率", "単勝 前半 → 後半"],
              "rows": rows,
              "caption": (f"単勝回収率の上位 5 件と、100% 超えの全件（出走 {MIN_COND} 以上の {r['n_cond']} 条件から）。"
-                         f"100% 超えは {r['n_over']} 件、そのうち前半（2020〜2022）・後半（2023〜2025）の両方で 100% を超えたのは {n_keep} 件。"
+                         f"100% 超えは {r['n_over']} 件、そのうち前半（2016〜2020）・後半（2021〜2025）の両方で 100% を超えたのは {n_keep} 件。"
                          "95% 区間が 100% をまたぐ条件は、偶然の高さと区別できない。")},
         ]
         title = (f"{r['sire']}（{r['n']:,}走）単勝 {r0(r['roi'])}・{LONGSHOT}倍以下 {r0(r['roi50'])}・複勝 {r0(r['proi'])} ／ 100%超え {r['n_over']} 条件")
         accs.append({"type": "accordion", "title": title, "blocks": blocks})
 
-    val_txt = (f"前半（2020〜{SPLIT_YEAR}年）と後半（{SPLIT_YEAR + 1}〜2025年）の両方に {MIN_HALF} 走以上ある「種牡馬 × 条件」{V['cells']:,} 件で確かめると、"
+    val_txt = (f"前半（2016〜{SPLIT_YEAR}年）と後半（{SPLIT_YEAR + 1}〜2025年）の両方に {MIN_HALF} 走以上ある「種牡馬 × 条件」{V['cells']:,} 件で確かめると、"
                f"前半に単勝回収率が 100% を超えた {V['sel']:,} 件（前半の平均 {V['sel_a_mean'] * 100:.0f}%）は、後半には {V['sel_b'] * 100:.0f}% に下がり、"
                f"後半も 100% を超えたのは {V['sel_b_over'] * 100:.0f}% でした。前半 100% 以下だった条件の後半は {V['rest_b'] * 100:.0f}%（100% 超えは {V['rest_b_over'] * 100:.0f}%）で、"
                + ("前半に高かった条件は、後半も他の条件よりはやや高いものの、100% には届かず、ほとんどは全体並みに戻っています。" if V["sel_b"] > V["rest_b"] + 0.03 else "前半に高かった条件も、後半は他の条件とほとんど変わりません。")
@@ -308,7 +308,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
          "rows": main_rows,
          "caption": (f"{min(YEARS)}〜{max(YEARS)}年 JRA 平地。産駒の出走 {MIN_RUNS:,} 以上、出走の多い順。回収率は払戻の実績（100 円ずつ買ったときの払戻 ÷ 購入額）。"
                      f"95% 区間は出走を復元抽出するブートストラップ（{B:,} 回）。{LONGSHOT} 倍以下は、単勝オッズ {LONGSHOT} 倍以下の出走だけの単勝回収率（大穴の 1 発の影響を除く）。"
-                     f"前半 = 2020〜{SPLIT_YEAR}年、後半 = {SPLIT_YEAR + 1}〜2025年。")},
+                     f"前半 = 2016〜{SPLIT_YEAR}年、後半 = {SPLIT_YEAR + 1}〜2025年。")},
         {"type": "note", "text": (
             f"なぜ {MIN_RUNS:,} 走以上か: 単勝回収率は、ほとんどの出走が 0 で、たまに数十倍の払戻がある、ばらつきの大きい値です（1 走あたりの標準偏差は約 {a['sd_win'] * 100:.0f}%）。"
             f"95% 区間の幅はおよそ ±{half(300):.0f}pt（300 走）・±{half(1000):.0f}pt（1,000 走）・±{half(5000):.0f}pt（5,000 走）で、"
@@ -349,7 +349,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
         "claim": "特定の血統は高回収率を維持している",
         "verdict": "not_supported" if a["n_over_ci"] == 0 and V["sel_b"] < 1.0 else "partial",
         "summary": (f"産駒 {MIN_RUNS:,} 走以上の {len(m)} 種牡馬で、単勝回収率の 95% 区間が 100% を上回るのは {a['n_over_ci']} 頭。"
-                    f"条件で絞った 100% 超えも、前半（2020〜{SPLIT_YEAR}）で選んだ条件の後半の回収率は {V['sel_b'] * 100:.0f}% にとどまり、高い回収率は続きませんでした。"),
+                    f"条件で絞った 100% 超えも、前半（2016〜{SPLIT_YEAR}）で選んだ条件の後半の回収率は {V['sel_b'] * 100:.0f}% にとどまり、高い回収率は続きませんでした。"),
         "categories": ["bloodline/maturity"],
         "published": "2026-10-28",
         "updated": "2026-11-09",

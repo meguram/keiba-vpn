@@ -135,7 +135,7 @@ def article(a: dict[str, Any], keep: dict[str, Any] | None) -> dict[str, Any]:
             "「長距離だから上位騎手を重視」「短距離だから乗り替わりを気にしない」といった調整は不要です。")},
         {"type": "accordion", "title": "データと方法・以前の版からの変更", "blocks": [
             {"type": "text", "text": (
-                "・対象: 2020〜2025 年の JRA 平地（障害・取消・除外を除く）。距離帯は 〜1400m・1401〜1800m・1801〜2200m・2201m〜。\n\n"
+                "・対象: 2016〜2025 年の JRA 平地（障害・取消・除外を除く）。距離帯は 〜1400m・1401〜1800m・1801〜2200m・2201m〜。\n\n"
                 "・騎手間の差は、騎手ごとの率の（騎乗数で重み付けした）ばらつきから、騎乗数が有限なことによる偶然のばらつきを差し引いて求めました。"
                 "騎乗数が少ない長距離ほど、生のばらつきは偶然で大きく見えます。\n\n"
                 "・以前の版は生の標準偏差で比べていたため、偶然のばらつきが混ざっていました。"
@@ -152,7 +152,7 @@ def article(a: dict[str, Any], keep: dict[str, Any] | None) -> dict[str, Any]:
         "categories": ["jockey/distance"],
         "published": "2026-10-28",
         "updated": "2026-11-03",
-        "dataset": {"period": "2020〜2025年", "conditions": f"JRA 平地（障害を除く）。その距離帯で {MIN_N} 騎乗以上の騎手",
+        "dataset": {"period": "2016〜2025年", "conditions": f"JRA 平地（障害を除く）。その距離帯で {MIN_N} 騎乗以上の騎手",
                     "sample": f"{sum(a['n_runs'].values()):,} 出走"},
         "body": body,
     }

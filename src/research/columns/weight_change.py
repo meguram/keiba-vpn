@@ -38,7 +38,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from src.research.columns.compare_series import FLAT_DIR, YEARS, _p, _r, _rci, _stat, load
+from src.research.columns.compare_series import FLAT_DIR, SMARTRC_YEARS as YEARS, _p, _r, _rci, _stat, load
 from src.research.columns.wind_venue import holm, mean_ci, ols, pct, pfmt, wilson
 
 REPO = Path(__file__).resolve().parents[3]
@@ -139,7 +139,7 @@ def work_time(t: pd.DataFrame) -> pd.DataFrame:
 
 
 def frame() -> pd.DataFrame:
-    d = load()
+    d = load(YEARS)
     h = load_career()
     d = d.merge(h[["race_id", "horse_id", "weight", "prev_w", "prev_date", "max_prev", "best", "n_best"]], on=["race_id", "horse_id"], how="left")
     d = d.rename(columns={"weight": "w"})

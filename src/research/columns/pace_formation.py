@@ -1,4 +1,4 @@
-"""めぐコラム『逃げ馬の数と人気馬の位置取りで、ペースはどう変わるか』を実データから集計し、frontend/content/columns/pace-formation.json を書く。\n\n問い: 出走馬の顔ぶれ（逃げ馬の頭数・前走で前にいた馬の頭数・上位人気馬の脚質）で、そのレースのラップ（前半3F・上がり3F・ペースの区分）は変わるか。\n      変わるなら、クラスや芝・ダートで違うか。集計に使っていない 2026 年でも同じか。\n\n隊列の手がかり（すべて、そのレースより前の走だけから作る。レース前に分かる）:\n  初角の位置 … passing_order の最初の数字（最初のコーナーの順位）。\n  逃げ馬 … 直近 3 走のうち 2 走以上で初角が 1 番手の馬。\n  前走3番手以内 … 前走の初角が 3 番手以内の馬（逃げ馬を含む）。\n  差し・追込 … 直近 3 走のすべてで、初角の位置 (順位−1)/(頭数−1) が 0.35 を超えた馬（プロジェクトの脚質の境界。tp64_pace_benefit と同じ）。\n  直近 3 走が JRA 平地でそろわない馬（デビューから間もない馬など）は判定できない。判定できる馬が出走馬の 7 割に満たないレースは除く。\nラップ（data/local/modeling/shared_cache/race_quality/race_quality.parquet。コース = 場×芝ダ×距離×馬場の標準からのずれ、秒）:\n  t3f_dev … 前半3F のずれ（マイナス = 標準より速い）、race_l3f_dev … 上がり3F のずれ（プラス = 遅い）、\n  bal … 上がり3F のずれ − 前半3F のずれ（大きいほど前傾 = ハイペース）、pace_cls … bal の上位 25% = ハイ・下位 25% = スロー。\n集計期間は 2021〜2025 年（直近 3 走を引くため 2020 年から読む）。2026 年は集計に使わず、結論を確かめるためだけに使う。\n\n使い方:\n    python -m src.research.columns.pace_formation            # 集計して記事を書く\n    python -m src.research.columns.pace_formation --dry-run  # 書かずに記事の JSON を出す\n    python -m src.research.columns.pace_formation --out PATH # 別の場所に書く（リポジトリが読み取り専用のホストで使う）\n"""
+"""めぐコラム『逃げ馬の数と人気馬の位置取りで、ペースはどう変わるか』を実データから集計し、frontend/content/columns/pace-formation.json を書く。\n\n問い: 出走馬の顔ぶれ（逃げ馬の頭数・前走で前にいた馬の頭数・上位人気馬の脚質）で、そのレースのラップ（前半3F・上がり3F・ペースの区分）は変わるか。\n      変わるなら、クラスや芝・ダートで違うか。集計に使っていない 2026 年でも同じか。\n\n隊列の手がかり（すべて、そのレースより前の走だけから作る。レース前に分かる）:\n  初角の位置 … passing_order の最初の数字（最初のコーナーの順位）。\n  逃げ馬 … 直近 3 走のうち 2 走以上で初角が 1 番手の馬。\n  前走3番手以内 … 前走の初角が 3 番手以内の馬（逃げ馬を含む）。\n  差し・追込 … 直近 3 走のすべてで、初角の位置 (順位−1)/(頭数−1) が 0.35 を超えた馬（プロジェクトの脚質の境界。tp64_pace_benefit と同じ）。\n  直近 3 走が JRA 平地でそろわない馬（デビューから間もない馬など）は判定できない。判定できる馬が出走馬の 7 割に満たないレースは除く。\nラップ（data/local/modeling/shared_cache/race_quality/race_quality.parquet。コース = 場×芝ダ×距離×馬場の標準からのずれ、秒）:\n  t3f_dev … 前半3F のずれ（マイナス = 標準より速い）、race_l3f_dev … 上がり3F のずれ（プラス = 遅い）、\n  bal … 上がり3F のずれ − 前半3F のずれ（大きいほど前傾 = ハイペース）、pace_cls … bal の上位 25% = ハイ・下位 25% = スロー。\n集計期間は 2017〜2025 年（直近 3 走を引くため 2016 年から読む）。ペース区分は 2020 年以降は race_quality.parquet、2016〜2019 年は同じ閾値（2020〜2023 年で固定）で作った別の表（race_cls_2016_2019.parquet）をつなぐ。2026 年は集計に使わず、結論を確かめるためだけに使う。\n\n使い方:\n    python -m src.research.columns.pace_formation            # 集計して記事を書く\n    python -m src.research.columns.pace_formation --dry-run  # 書かずに記事の JSON を出す\n    python -m src.research.columns.pace_formation --out PATH # 別の場所に書く（リポジトリが読み取り専用のホストで使う）\n"""
 
 from __future__ import annotations
 
@@ -11,13 +11,13 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from src.research.columns.compare_series import COLUMNS_DIR, FLAT_DIR, RACE_QUALITY_PATH, jump_mask
+from src.research.columns.compare_series import COLUMNS_DIR, FLAT_DIR, jump_mask, read_race_quality
 from src.research.columns.race_context import joint_p, series
 from src.research.columns.wind_venue import pct, pfmt
 
 OUT = COLUMNS_DIR / "pace-formation.json"
-LOOKBACK_FROM = 2020          # 直近 3 走を引くため、集計の前年から読む
-MAIN_YEARS = (2021, 2025)     # 集計期間
+LOOKBACK_FROM = 2016          # 直近 3 走を引くため、集計の前年から読む
+MAIN_YEARS = (2017, 2025)     # 集計期間
 TEST_YEAR = 2026              # 確かめるためだけに使う年
 REAR_MIN = 0.35               # 差し・追込の境界（初角の位置がこれより後ろ）
 MIN_KNOWN = 0.7               # 判定できる馬が出走馬のこの割合以上のレースだけ使う
@@ -79,7 +79,7 @@ def race_table(runs: pd.DataFrame, first_year: int) -> pd.DataFrame:
     r["top_n"] = r["top_n"].fillna(0).astype(int)
     r["year"] = r["date"].astype(str).str[:4].astype(int)
     r["cls"] = r["grade"].map(GRADE_CLASS).fillna("オープン・重賞")
-    q = pd.read_parquet(RACE_QUALITY_PATH, columns=["race_id", "pace_cls", "t3f_dev", "race_l3f_dev", "bal", "going_group"]).drop_duplicates("race_id").set_index("race_id")
+    q = read_race_quality(["race_id", "pace_cls", "t3f_dev", "race_l3f_dev", "bal", "going_group"]).drop_duplicates("race_id").set_index("race_id")
     r = r.join(q)
     r = r[(r["known"] >= MIN_KNOWN) & (r["starters"] >= 8) & r["pace_cls"].notna()].copy()
     r["key"] = r["venue"] + r["surface"] + r["distance"].astype(int).astype(str)

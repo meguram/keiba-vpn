@@ -3,7 +3,7 @@
 問い: ブリンカーを初めて着けたレースで、馬は走るようになるか。予想（馬券）に使えるか。条件で違うか。
 
 データ:
-  レース: data/page_reference/tables/<年>/race_result_flat.parquet（compare_series.load と同じ。2020〜2025 年の JRA 平地、取消・除外を除く）
+  レース: data/page_reference/tables/<年>/race_result_flat.parquet（compare_series.load と同じ。2016〜2025 年の JRA 平地、取消・除外を除く）
   馬具:   data/local/modeling/training_pipeline_v4/tp32/career_eq.parquet（python -m src.scripts.data.tp32_extract_equipment。
           smartrc の馬ごとの全戦績。デビューからの各出走の blinker（0/1）。地方・障害の出走も含む）
 定義:
@@ -28,7 +28,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from src.research.columns.compare_series import YEARS, _p, _r, _rci, _stat, load
+from src.research.columns.compare_series import SMARTRC_YEARS as YEARS, _p, _r, _rci, _stat, load
 from src.research.columns.race_context import GATE_POS, PRE_STYLES, joint_p, ols_fit, with_context
 from src.research.columns.wind_venue import holm, mean_ci, ols, pct, pfmt
 
@@ -49,7 +49,7 @@ def frame() -> pd.DataFrame:
     c["bl_before"] = g.transform(lambda s: s.shift().fillna(0).cummax())     # それまでに一度でも着けたか
     c["bl_prev"] = g.shift()
     c["nprev"] = c.groupby("horse_id").cumcount()
-    d = with_context(load()).merge(c[["race_id", "horse_id", "bl", "bl_before", "bl_prev", "nprev"]], on=["race_id", "horse_id"], how="left")
+    d = with_context(load(YEARS)).merge(c[["race_id", "horse_id", "bl", "bl_before", "bl_prev", "nprev"]], on=["race_id", "horse_id"], how="left")
     d = d.sort_values(["horse_id", "date", "race_id"])
     g = d.groupby("horse_id")
     d["prev_fin"] = g["finish_position"].shift()
