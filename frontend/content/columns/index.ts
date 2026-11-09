@@ -82,6 +82,16 @@ import terrain_fit from "./terrain-fit.json";
 import workout_speed from "./workout-speed.json";
 import workout_pattern from "./workout-pattern.json";
 import workout_notes from "./workout-notes.json";
+import jockey_switch_quality from "./jockey-switch-quality.json";
+import jockey_specialty from "./jockey-specialty.json";
+import jockey_day from "./jockey-day.json";
+import jockey_claim from "./jockey-claim.json";
+import stable_form from "./stable-form.json";
+import breeder_owner from "./breeder-owner.json";
+import trip_region from "./trip-region.json";
+import sire_course_going from "./sire-course-going.json";
+import sire_timing from "./sire-timing.json";
+import sire_line_dirt from "./sire-line-dirt.json";
 
 const ALL = [
   upset_conditions,
@@ -161,6 +171,16 @@ const ALL = [
   workout_speed,
   workout_pattern,
   workout_notes,
+  jockey_switch_quality,
+  jockey_specialty,
+  jockey_day,
+  jockey_claim,
+  stable_form,
+  breeder_owner,
+  trip_region,
+  sire_course_going,
+  sire_timing,
+  sire_line_dirt,
 ] as Column[];
 
 export const COLUMNS: Column[] = ALL.filter((c) => SHOW_DEV_ONLY || !c.draft)

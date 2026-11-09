@@ -82,6 +82,16 @@ import terrain_fit from "./terrain-fit.json";
 import workout_speed from "./workout-speed.json";
 import workout_pattern from "./workout-pattern.json";
 import workout_notes from "./workout-notes.json";
+import jockey_switch_quality from "./jockey-switch-quality.json";
+import jockey_specialty from "./jockey-specialty.json";
+import jockey_day from "./jockey-day.json";
+import jockey_claim from "./jockey-claim.json";
+import stable_form from "./stable-form.json";
+import breeder_owner from "./breeder-owner.json";
+import trip_region from "./trip-region.json";
+import sire_course_going from "./sire-course-going.json";
+import sire_timing from "./sire-timing.json";
+import sire_line_dirt from "./sire-line-dirt.json";
 
 export const GLOSSARY = glossary as Record<string, string>;
 
@@ -163,4 +173,14 @@ export const GUIDES: Record<string, ColumnGuide> = {
   "workout-speed": workout_speed as ColumnGuide,
   "workout-pattern": workout_pattern as ColumnGuide,
   "workout-notes": workout_notes as ColumnGuide,
+  "jockey-switch-quality": jockey_switch_quality as ColumnGuide,
+  "jockey-specialty": jockey_specialty as ColumnGuide,
+  "jockey-day": jockey_day as ColumnGuide,
+  "jockey-claim": jockey_claim as ColumnGuide,
+  "stable-form": stable_form as ColumnGuide,
+  "breeder-owner": breeder_owner as ColumnGuide,
+  "trip-region": trip_region as ColumnGuide,
+  "sire-course-going": sire_course_going as ColumnGuide,
+  "sire-timing": sire_timing as ColumnGuide,
+  "sire-line-dirt": sire_line_dirt as ColumnGuide,
 };

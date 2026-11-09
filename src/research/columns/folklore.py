@@ -292,7 +292,11 @@ def pct(v: float | None) -> str:
 
 
 def pt(v: float | None) -> str:
-    return "–" if v is None else f"{v * 100:+.1f}pt"
+    """率の差を pt で。丸めて 0 になるときは符号を付けない（『-0.0pt』を出さない）。"""
+    if v is None:
+        return "–"
+    x = round(v * 100, 1)
+    return "0.0pt" if x == 0 else f"{x:+.1f}pt"
 
 
 def pfmt(p: float | None) -> str:

@@ -43,6 +43,7 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
     children: [
       { id: "maturity", label: "早熟・晩成", desc: "年齢で好走距離や舞台が変わる血統" },
       { id: "lineage", label: "系統", desc: "父系の系統で、産駒の適性はどれくらい決まるか" },
+      { id: "condition", label: "条件別の得意", desc: "父のコース・馬場・時期ごとの得意" },
     ],
   },
   {
