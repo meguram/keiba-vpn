@@ -35,7 +35,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from src.research.columns import compare_series as cs
 from src.research.columns.compare_series import FLAT_DIR, SIRE_MAP_PATH, YEARS, load
 from src.research.columns.early_maturing_bloodline import dumps, short_name
 from src.research.columns.wind_venue import pct
@@ -218,11 +217,36 @@ def analyze(df: pd.DataFrame) -> dict[str, Any]:
     a["n_over_point"] = int((m["roi"] > 1.0).sum())
     a["n_over_ci50"] = int(sum(1 for r in a["major"] if r["roi50_ci"] and r["roi50_ci"][0] > 1.0))
     a["n_over_pci"] = int(sum(1 for r in a["major"] if r["proi_ci"] and r["proi_ci"][0] > 1.0))
-    # 既存のグラフ（compare_series.py が同じタイトルで更新するので、同じ集計を残す）
-    base = load()
-    pair = cs._sire_pair(base)
-    a["sire_chart_block"] = pair.compute(base) if pair else None
     return a
+
+
+def _num(v: Any) -> float | None:
+    """NaN は null に（片方の期間に出走の無い種牡馬。JSON に NaN を書かない）。"""
+    return None if v is None or not math.isfinite(float(v)) else round(float(v), 4)
+
+
+def roi_chart(m: pd.DataFrame, n_over_ci: int, k: int = 12) -> dict[str, Any]:
+    """単勝回収率の高い種牡馬 k 頭の 95% 区間つきの回収率。100% の線（これを下回れば買い続けると損）を点線で添える。"""
+    top = m.sort_values("roi", ascending=False).head(k)
+    cis = [[round(max(0.0, r["roi_ci"][0]), 4), round(r["roi_ci"][1], 4)] if r["roi_ci"] else None for _, r in top.iterrows()]
+    return {"type": "chart", "title": "単勝回収率の高い種牡馬（95%区間つき）", "xLabel": "種牡馬（産駒の単勝回収率が高い順）", "yLabel": "単勝回収率",
+            "xs": [r["sire"] for _, r in top.iterrows()],
+            "series": [{"name": "単勝回収率", "values": [round(float(v), 4) for v in top["roi"]], "n": [int(v) for v in top["n"]], "ci": cis},
+                       {"name": "100%（買い続けて損得なし）", "values": [1.0] * len(top), "baseline": True}],
+            "caption": (f"産駒 {MIN_RUNS:,} 走以上の種牡馬のうち、単勝回収率が高い {k} 頭。縦線は 95% 区間。"
+                        + ("区間の下限が点線（100%）を超える種牡馬は見つかりません。" if n_over_ci == 0 else f"区間の下限が点線（100%）を超える種牡馬は {n_over_ci} 頭です。"))}
+
+
+def halves_chart(m: pd.DataFrame, k: int = 10) -> dict[str, Any]:
+    """前半（2020〜2022 年）で単勝回収率が高かった種牡馬 k 頭の、前半と後半の回収率。高さが続くかを見る。"""
+    top = m.sort_values("roi_a", ascending=False).head(k)
+    return {"type": "chart", "title": "前半で回収率が高かった種牡馬の、後半の回収率", "xLabel": "種牡馬（前半の単勝回収率が高い順）", "yLabel": "単勝回収率",
+            "xs": [r["sire"] for _, r in top.iterrows()],
+            "series": [{"name": f"前半（2020〜{SPLIT_YEAR}年）", "values": [_num(v) for v in top["roi_a"]]},
+                       {"name": f"後半（{SPLIT_YEAR + 1}〜2025年）", "values": [_num(v) for v in top["roi_b"]]},
+                       {"name": "100%", "values": [1.0] * len(top), "baseline": True}],
+            "initial": [f"前半（2020〜{SPLIT_YEAR}年）", f"後半（{SPLIT_YEAR + 1}〜2025年）"],
+            "caption": "前半に高かった種牡馬ほど、後半は下がる傾向があるかを見る図。後半の値がバラバラに散るほど、前半の高さは偶然に近い。"}
 
 
 def article(a: dict[str, Any]) -> dict[str, Any]:
@@ -276,6 +300,8 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
             "「父だけで買い続けて儲かる」と言える種牡馬は見つかりませんでした。\n\n"
             "種牡馬ごとの折り畳みには、芝ダ×距離・競馬場・クラス・馬場・年齢・性別の条件で、単勝回収率の上位 5 件と 100% 超えの条件を載せています。"
             "ただし、多数の条件の中から高いものを選ぶと、偶然高かった条件が必ず混ざります。" + val_txt)},
+        roi_chart(m, a["n_over_ci"]),
+        halves_chart(m),
         {"type": "heading", "text": "種牡馬別 全条件の成績"},
         {"type": "table",
          "columns": ["父", "出走", "着別度数（1-2-3-着外）", "勝率", "複勝率", "単勝回収率（95%区間）", f"単勝{LONGSHOT}倍以下の回収率（95%区間）", "複勝回収率（95%区間）", "単勝 前半 → 後半"],
@@ -307,7 +333,6 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
              "rows": ref_rows,
              "caption": "出走が少ないので 95% 区間が広い。点推定の回収率の順位は、ほぼ偶然で決まる。"},
         ]},
-        *([{"type": "accordion", "title": "参考: 勝率の高い種牡馬の産駒とそれ以外の勝率", "blocks": [a["sire_chart_block"]]}] if a["sire_chart_block"] else []),
         {"type": "accordion", "title": "データと方法・注意点", "blocks": [
             {"type": "text", "text": (
                 f"・対象: {min(YEARS)}〜{max(YEARS)}年の JRA 平地（障害を除く）。取消・除外は除き、中止・失格は着外として数えています。父は血統表から付け、対象の出走のすべてに付いています。\n\n"
@@ -327,7 +352,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
                     f"条件で絞った 100% 超えも、前半（2020〜{SPLIT_YEAR}）で選んだ条件の後半の回収率は {V['sel_b'] * 100:.0f}% にとどまり、高い回収率は続きませんでした。"),
         "categories": ["bloodline/maturity"],
         "published": "2026-10-28",
-        "updated": "2026-11-02",
+        "updated": "2026-11-09",
         "dataset": {"period": f"{min(YEARS)}〜{max(YEARS)}年",
                     "conditions": f"JRA全競馬場・芝ダート（障害除く）。本表は産駒の出走 {MIN_RUNS:,} 以上、参考は {MIN_REF} 以上",
                     "sample": f"{a['n_runs']:,} 走（{a['n_horses']:,} 頭・{a['n_sires']:,} 種牡馬）。本表 {len(m)} 種牡馬"},

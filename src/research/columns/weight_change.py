@@ -352,8 +352,8 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
     body: list[dict[str, Any]] = [
         {"type": "stats", "items": [
             {"label": "大幅増（+10kg以上）の複勝率", "value": pct(hi["top3"]), "sub": f"見込み {pct(hi['implied_top3'])}。変わらず {pct(same_b['top3'])}"},
-            {"label": "うち『太め』の見込みとの差", "value": pt(ft["ex_top3"]), "sub": f"{ft['n']:,} 走。複勝率 {pct(ft['top3'])}"},
-            {"label": "うち『成長』の見込みとの差", "value": pt(gr["ex_top3"]), "sub": f"{gr['n']:,} 走。複勝率 {pct(gr['top3'])}"},
+            {"label": "うち『太め』の、変わらずとの複勝率の差", "value": f"{A[FAT]['top3'][0] * 100:+.1f}pt", "sub": f"オッズ・コースをそろえた差（補正後 {pfmt(A[FAT]['top3_holm'])}）。{ft['n']:,} 走・複勝率 {pct(ft['top3'])}・見込みとの差 {pt(ft['ex_top3'])}"},
+            {"label": "うち『成長』の、変わらずとの複勝率の差", "value": f"{A[GROW]['top3'][0] * 100:+.1f}pt", "sub": f"オッズ・コースをそろえた差（補正後 {pfmt(A[GROW]['top3_holm'])}）。{gr['n']:,} 走・複勝率 {pct(gr['top3'])}・見込みとの差 {pt(gr['ex_top3'])}"},
         ]},
         {"type": "heading", "text": "結論"},
         {"type": "text", "text": (
@@ -446,7 +446,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
                     f"増えた理由で分けると、オッズをそろえた差は太め {A[FAT]['top3'][0] * 100:+.1f}pt・ベスト体重へ戻り {A[BACK]['top3'][0] * 100:+.1f}pt・成長 {A[GROW]['top3'][0] * 100:+.1f}pt でした。"),
         "categories": ["horse/sex"],
         "published": "2026-10-28",
-        "updated": "2026-11-02",
+        "updated": "2026-11-09",
         "dataset": {"period": f"{min(YEARS)}〜{max(YEARS)}年",
                     "conditions": "JRA全競馬場・芝ダート（障害除く）。前走の馬体重が分かる出走。馬体重の履歴はデビューからの全戦績",
                     "sample": f"{a['n_all']:,} 走（うち +10kg 以上 {a['n_big']:,} 走）"},
