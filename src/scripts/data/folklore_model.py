@@ -284,6 +284,15 @@ def fit() -> None:
     # 複勝の市場（確定の複勝オッズの下限・上限）。単勝の市場だけを土台にすると、複勝の売り場が嫌った馬を『期待値が高い』と拾ってしまう
     d["lpmin"] = np.log(d["place_odds_min"].where(d["place_odds_min"] > 0).fillna(d["odds"] / 3).clip(1.0))
     d["lpmax"] = np.log(d["place_odds_max"].where(d["place_odds_max"] > 0).fillna(d["odds"] / 3).clip(1.0))
+    # 土台の補正を曲線にする（直線だと複勝の売り場の情報を使い切れず、期待値の高い馬ほど見込み違いになった）
+    d["lq2"] = d["lq"] ** 2
+    d["lq3"] = d["lq"] ** 3
+    for c in ("lgt_mkt", "lpmin", "lpmax"):
+        d[c + "2"] = d[c] ** 2
+    d["lgt_x_pmin"] = d["lgt_mkt"] * d["lpmin"]
+    d["pgap"] = d["lpmin"] - d["lpmax"]
+    WB = ["lq", "lq2", "lq3"]
+    PB = ["lgt_mkt", "lpmin", "lpmax", "lgt_mkt2", "lpmin2", "lpmax2", "lgt_x_pmin", "pgap"]
     tr = d[d["year"].between(*TRAIN)]
     te = d[d["year"].between(*TEST)].copy()
     out: dict = {"n_flags": len(allf), "n_flags_nodds": len(nodds), "odds_hids": sorted(set(allf) - set(nodds)), "ev": {}, "ll": {}, "coef": {}, "lam": {}}
@@ -296,13 +305,13 @@ def fit() -> None:
     # 1) 確定オッズの市場を土台にする（補正の係数 α は罰則なしで推定 = 本命・大穴の偏りを取り込む）
     preds = {}
     for name, fl in (("M0", []), ("M1", allf), ("M2", nodds)):
-        pw, bw, lw = model_win(tr, te, fl, ["lq"], "zero")
-        p3, b3, l3 = model_top3(tr, te, fl, ["lgt_mkt", "lpmin", "lpmax"], "zero")
+        pw, bw, lw = model_win(tr, te, fl, WB, "zero")
+        p3, b3, l3 = model_top3(tr, te, fl, PB, "zero")
         preds[name] = (pw, p3)
         out["lam"][name] = [lw, l3]
         if fl:
-            out["coef"][name] = {"win": dict(zip(fl, map(float, bw[1:]))), "top3": dict(zip(fl, map(float, b3[3:-1])))}
-        out["coef"].setdefault("base", {})[name] = {"alpha_win": float(bw[0]), "top3_base": list(map(float, b3[:3])), "icpt_top3": float(b3[-1])}
+            out["coef"][name] = {"win": dict(zip(fl, map(float, bw[len(WB):]))), "top3": dict(zip(fl, map(float, b3[len(PB):-1])))}
+        out["coef"].setdefault("base", {})[name] = {"win_base": list(map(float, bw[:len(WB)])), "top3_base": list(map(float, b3[:len(PB)])), "icpt_top3": float(b3[-1])}
         _evaluate(name, te, pw, p3, win_odds, plc_odds, out)
         print(name, "lam", lw, l3, flush=True)
     q = te["q"].to_numpy(float)
@@ -385,14 +394,14 @@ def fit() -> None:
     out["own_n"] = {"train": int(vtr["race_id"].nunique()), "test": int(vte["race_id"].nunique())}
     # 通説の得点は 2016〜2021 の M2（オッズを使わない通説）の係数で作り、2022 で本番系モデルとの重みだけを当てはめる
     tr21 = d[d["year"].between(2016, 2021)]
-    _, bw21, _ = model_win(tr21, tr21.head(1000), nodds, ["lq"], "zero")
-    _, b321, _ = model_top3(tr21, tr21.head(1000), nodds, ["lgt_mkt", "lpmin", "lpmax"], "zero")
+    _, bw21, _ = model_win(tr21, tr21.head(1000), nodds, WB, "zero")
+    _, b321, _ = model_top3(tr21, tr21.head(1000), nodds, PB, "zero")
     for z in (vtr, vte):
-        z["fs_w"] = z[nodds].to_numpy(float) @ bw21[1:]
-        z["fs_3"] = z[nodds].to_numpy(float) @ b321[3:-1]
+        z["fs_w"] = z[nodds].to_numpy(float) @ bw21[len(WB):]
+        z["fs_3"] = z[nodds].to_numpy(float) @ b321[len(PB):-1]
     ep = {}
     for name, bw_cols, b3_cols in (("E0", ["lpw"], ["lp3"]), ("E1", ["lpw", "fs_w"], ["lp3", "fs_3"]),
-                                   ("E0m", ["lpw", "lq"], ["lp3", "lgt_mkt", "lpmin", "lpmax"]), ("E1m", ["lpw", "lq", "fs_w"], ["lp3", "lgt_mkt", "lpmin", "lpmax", "fs_3"])):
+                                   ("E0m", ["lpw"] + WB, ["lp3"] + PB), ("E1m", ["lpw"] + WB + ["fs_w"], ["lp3"] + PB + ["fs_3"])):
         pw, bw, _ = model_win(vtr, vte, [], bw_cols, "zero")
         p3, b3, _ = model_top3(vtr, vte, [], b3_cols, "zero")
         _evaluate(name, vte, pw, p3, vte["odds"].to_numpy(float), vte["place_odds_min"].fillna(0).to_numpy(float), out)
@@ -412,6 +421,122 @@ def fit() -> None:
         for kind, rows in v_.items():
             print(k, kind, [(r["th"], r["n"], round(r["roi"], 3), round(r["se"], 3)) for r in rows])
     print(json.dumps(out["ll"], ensure_ascii=False, indent=0)[:3000])
+
+
+# ---------------------------------------------------------------- 第 12 節: ベース（実力）+ エッジ（人気より走る条件）+ 期待値
+def _edges(meta_odds: set) -> dict:
+    """エッジ = 発見期間（2016〜2022）だけで『単独で人気より走る（走らない）』と確かめた条件。重みは人気をそろえた差を経験ベイズで縮めた値（pt）。
+    通説の型（オッズを使わないもの、全体の判定）と、血統 × 条件替わりの (a)（条件の中でその血統）。BH の q < 0.10。"""
+    from scipy.stats import norm as _n
+
+    from src.scripts.data.folklore_verify import bh as _bh
+
+    tr = pd.read_parquet(OUT / "tests_raw.parquet")
+    g = tr[(tr["period"] == "disc") & (tr["dim"] == "全体") & (tr["n1"] >= MIN_N1) & (tr["r1"] >= MIN_R1) & (tr["n0"] >= MIN_N0)
+           & ~tr["hid"].str.startswith("Z") & ~tr["hid"].isin(meta_odds)].copy()
+    g["q"] = _bh(np.asarray(2 * _n.sf(np.abs(g["adj"] / g["adj_se"])), float))
+    tau2 = max(float(g["adj"].var() - (g["adj_se"] ** 2).mean()), 1e-8)
+    g["w"] = g["adj"] * tau2 / (tau2 + g["adj_se"] ** 2)
+    meta = {m["hid"]: m for m in json.load(open(OUT / "meta.json"))}
+    g["agree"] = [np.sign(a) == meta[h]["dir"] for h, a in zip(g["hid"], g["adj"])]
+    hyp = g[g["q"] < 0.10][["hid", "w", "agree"]]
+    st = pd.read_parquet(OUT / "sire_tests_raw.parquet")
+    b = st[(st["period"] == "disc") & (st["level"] != "placebo") & (st["n1"] >= 200) & (st["r1"] >= 150) & (st["a_se"] > 0)].copy()
+    b["p"] = 2 * _n.sf(np.abs(b["a"] / b["a_se"]))
+    b["q"] = b.groupby("level")["p"].transform(lambda x: pd.Series(_bh(x.to_numpy()), index=x.index))
+    tau2b = max(float((b["a"] ** 2).mean() - (b["a_se"] ** 2).mean()), 1e-8)
+    b["w"] = b["a"] * tau2b / (tau2b + b["a_se"] ** 2)
+    blood = b[b["q"] < 0.10][["level", "cond", "key", "w"]]
+    return {"hyp": hyp, "blood": blood}
+
+
+def laps() -> None:
+    from src.scripts.data.folklore_sire import add_blood, conditions
+
+    d = pd.read_parquet(OUT / "flags.parquet")
+    meta = json.load(open(OUT / "flags_meta.json"))
+    odds_h = {m["hid"] for m in meta if m["odds"]}
+    ed = _edges(odds_h)
+    # 血統のエッジの当てはまり
+    prep = pd.read_pickle(OUT / "_prep.pkl")
+    prep = prep[prep["year"] >= 2022].copy()
+    pb = add_blood(prep)
+    cm = conditions(pb)
+    eb = np.zeros(len(pb))
+    for r in ed["blood"].itertuples():
+        e, f = cm[r.cond]
+        hit = np.asarray((f & e).fillna(False), bool) & (pb[r.level].astype(object) == r.key).to_numpy()
+        eb += r.w * hit
+    be = pd.DataFrame({"race_id": pb["race_id"].astype(str).to_numpy(), "horse_id": pb["horse_id"].astype(str).to_numpy(), "e_blood": eb})
+    wp = pd.read_parquet(WP, columns=["race_id", "horse_id", "p_win", "p_top3", "share_raw", "place_raw"])
+    wp["race_id"] = wp["race_id"].astype(str)
+    wp["horse_id"] = wp["horse_id"].astype(str)
+    v = d[d["year"].between(2022, 2024) & (d["odds"] > 0)].merge(wp, on=["race_id", "horse_id"], how="inner").merge(be, on=["race_id", "horse_id"], how="left")
+    v = v[v["p_win"].notna() & v["p_top3"].notna()].sort_values(["race_id", "horse_number"])
+    v = v[v.groupby("race_id")["p_win"].transform("size") == v.groupby("race_id")["field"].transform("first")].copy()
+    v["e_blood"] = v["e_blood"].fillna(0.0)
+    hw = ed["hyp"].set_index("hid")
+    hh = [h for h in hw.index if h in v.columns]
+    hh_ok = [h for h in hh if hw.loc[h, "agree"]]
+    v["e_hyp"] = v[hh].to_numpy(float) @ hw.loc[hh, "w"].to_numpy() if hh else 0.0
+    v["e_hyp_ok"] = v[hh_ok].to_numpy(float) @ hw.loc[hh_ok, "w"].to_numpy() if hh_ok else 0.0
+    v["E_all"] = v["e_hyp"] + v["e_blood"]
+    v["E_ok"] = v["e_hyp_ok"]
+    v["lpw"] = np.log(v["p_win"].clip(1e-4))
+    p3c = v["p_top3"].clip(1e-4, 1 - 1e-4)
+    v["lp3"] = np.log(p3c / (1 - p3c))
+    v["zero"] = 0.0
+    vtr, vte = v[v["year"] == 2022], v[v["year"].between(2023, 2024)].copy()
+    out = {"n_edge_hyp": len(hh), "n_edge_hyp_ok": len(hh_ok), "n_edge_blood": len(ed["blood"]), "edge_hyp": {h: [float(hw.loc[h, "w"]), bool(hw.loc[h, "agree"])] for h in hh},
+           "edge_blood": [[r.level, r.cond, r.key, float(r.w)] for r in ed["blood"].itertuples()], "races": int(vte["race_id"].nunique()), "strat": {}, "ev": {}}
+    race = vte["race_id"].to_numpy()
+    odds = vte["odds"].to_numpy(float)
+    po = vte["place_odds_min"].fillna(0).to_numpy(float)
+    rw, rp = vte["win"].to_numpy(), vte["plc"].to_numpy()
+    yw, y3 = (vte["fin"] == 1).to_numpy(), (vte["fin"] <= 3).to_numpy()
+    pop = vte["pop"].to_numpy(float)
+    # 前日判断用の想定オッズ（odds_pred の share_raw・place_raw）
+    cfg = json.load(open(ROOT / "data/local/modeling/odds_pred/odds_pred_config.json"))
+    sh = np.exp(vte["share_raw"].to_numpy(float))
+    sh = sh / pd.Series(sh).groupby(race).transform("sum").to_numpy()
+    win_hat = 0.8 / np.clip(sh, 1e-4, 1)
+    plc_hat = np.exp(cfg["place_mid"]["a"] + cfg["place_mid"]["b"] * vte["place_raw"].to_numpy(float))
+
+    def stat(m, ret, hit):
+        n = int(m.sum())
+        if n < 30:
+            return None
+        s_ = pd.DataFrame({"r": ret[m] / 100, "k": race[m]}).groupby("k")["r"].agg(["sum", "count"])
+        roi = s_["sum"].sum() / s_["count"].sum()
+        se = float(np.sqrt(((s_["sum"] - roi * s_["count"]) ** 2).sum()) / s_["count"].sum())
+        return {"n": n, "hit": float(hit[m].mean()), "roi": float(roi), "se": se, "pop": float(np.nanmean(pop[m]))}
+
+    for name, ecol in (("B", None), ("BE", "E_all"), ("BEok", "E_ok")):
+        pw, bw, _ = model_win(vtr, vte, [], ["lpw"] + ([ecol] if ecol else []), "zero")
+        p3, b3, _ = model_top3(vtr, vte, [], ["lp3"] + ([ecol] if ecol else []), "zero")
+        out[f"coef_{name}"] = {"win": list(map(float, bw)), "top3": list(map(float, b3))}
+        top = pd.Series(pw).groupby(race).transform("max").to_numpy() == pw
+        top3_ = pd.Series(p3).groupby(race).transform("max").to_numpy() == p3
+        ev_w, ev_p = pw * odds, p3 * po
+        st_ = {
+            "指数 1 位・全レース（単勝）": stat(top, rw, yw), "指数 1 位・全レース（複勝）": stat(top3_, rp, y3),
+            "期待値 1.2 以上（単勝・確定オッズ）": stat(ev_w >= 1.2, rw, yw), "期待値 1.2 以上（複勝・確定オッズ）": stat(ev_p >= 1.2, rp, y3),
+            "期待値 1.2 以上・1 倍台を除く（単勝）": stat((ev_w >= 1.2) & (odds >= 2.0), rw, yw),
+            "期待値 1.2 以上（単勝・前日の想定オッズで判断）": stat(pw * win_hat >= 1.2, rw, yw),
+            "期待値 1.2 以上（複勝・前日の想定オッズで判断）": stat(p3 * plc_hat >= 1.2, rp, y3),
+        }
+        out["strat"][name] = st_
+        out["ev"][name] = {"win": ev_curve(ev_w, rw, yw, race, pop), "plc": ev_curve(ev_p, rp, y3, race, pop)}
+        out[f"ll_{name}"] = {"win": float(-(yw * np.log(np.clip(pw, 1e-9, 1))).sum() / len(np.unique(race))), "top3": float(_ll_bin(p3, y3.astype(float)))}
+        if name == "B":
+            pB = (pw, p3)
+        else:
+            out[f"cmp_{name}"] = {"win": _cmp(pw, pB[0], yw.astype(float), race, "win"), "top3": _cmp(p3, pB[1], y3.astype(float), race, "top3")}
+        print(name, json.dumps(st_, ensure_ascii=False), flush=True)
+    m = json.load(open(OUT / "model.json"))
+    m["laps"] = out
+    json.dump(m, open(OUT / "model.json", "w"), ensure_ascii=False, indent=1)
+    print(out["n_edge_hyp"], out["n_edge_hyp_ok"], out["n_edge_blood"], out.get("cmp_BE"), out.get("cmp_BEok"))
 
 
 # ---------------------------------------------------------------- 章（第 10 節）
@@ -501,7 +626,7 @@ def model_section(w) -> None:
       f"(1) 通説は市場の確率を<b>統計的には確かに直す</b>（オッズを使わない通説を足すと、1 着の対数損失が z={z('M2-M0', 'win'):.1f}、3 着内が z={z('M2-M0', 'top3'):.1f}）。"
       "ただし改善はレースあたり 0.005 nat 程度で小さく、"
       f"期待値で買っても回収率は 100% を超えない（単勝 期待値 1.0 以上 {fmt(m2w)}、複勝 {fmt(m2p)}）。"
-      "(2) 複勝は期待値の閾値を上げるほど回収率が下がる。単勝・複勝のオッズを直線で補正するだけでは複勝の売り場の情報を使い切れず、期待値が高く見える馬ほど見込み違い（勝者の呪い）になる。"
+      "(2) 複勝は期待値の閾値を上げるほど回収率が下がる。単勝・複勝のオッズを曲線（2〜3 次と単複の食い違い）で補正しても複勝の売り場の情報を使い切れず、期待値が高く見える馬ほど見込み違い（勝者の呪い）になる。"
       f"(3) 前日の想定オッズで判断すると（P、払戻は確定オッズ）、通説を足しても回収率は約 80% のまま（単勝 {fmt(at('P2_pre', 'win', 0.9))}・複勝 {fmt(at('P2_pre', 'plc', 1.0))}）。"
       f"(4) 本番系モデルは、確定オッズで期待値 1.5 以上を買うと単勝 {fmt(e0w)}・複勝 {fmt(e0p)} で、人気以上の情報を持っている可能性がある（ただし 100% との差は誤差の範囲）。"
       f"通説を足すと 1 着の対数損失はわずかに良くなる（z={z('E1-E0', 'win'):.1f}）が、回収率は単勝 {fmt(e1w)}・複勝 {fmt(e1p)} でほぼ変わらない。"
@@ -548,6 +673,87 @@ def model_section(w) -> None:
       "コード: <code>python -m src.scripts.data.folklore_model flags</code> → <code>fit</code>（→ <code>folklore_verify report</code>）。</p>")
 
 
+LAPS_NAMES = {"B": "ベースだけ（本番系 v6）", "BE": "ベース + エッジ（全部）", "BEok": "ベース + エッジ（通説の向きと合うものだけ）"}
+LAPS_COL = {"B": "#3987e5", "BE": "#d95926", "BEok": "#199e70"}
+
+
+def laps_section(w) -> None:
+    f = OUT / "model.json"
+    if not f.exists():
+        return
+    o = json.load(open(f)).get("laps")
+    if not o:
+        return
+    from src.scripts.data import folklore_verify as V
+
+    for k in LAPS_NAMES:
+        V.SER_COL[k] = LAPS_COL[k]
+        V.SER_NAME[k] = LAPS_NAMES[k]
+    pc_ = lambda v: f"{v * 100:.0f}%"  # noqa: E731
+
+    def cell(r):
+        if not r:
+            return "<td class='num' colspan='4'>—</td>"
+        return (f"<td class='num'>{r['n']:,}</td><td class='num'>{r['hit'] * 100:.1f}%</td><td class='num'>{r['roi'] * 100:.1f}% ±{r['se'] * 100:.1f}</td>"
+                f"<td class='num'>{r['pop']:.1f}</td>")
+
+    def zc(key, kind):
+        c = o.get(key, {}).get(kind)
+        return "—" if not c else f"{c['d']:+.4f}（z={c['d'] / c['se']:+.1f}）"
+
+    w("<h2 id='laps'>12. 記事の構成（ベース + エッジ + 期待値 1.2）を手元のデータで再現</h2>")
+    w("<p>参考: ユリス【UMASTカルテ】『新生【LAPS】始動』（note、2026-11-06、<a href='https://note.com/mgtkeiba/n/n1512b01f6755'>リンク</a>）。"
+      "記事の構成は (1) <b>ベース</b> = オッズ・人気を使わず 3 着内で学習した実力、(2) <b>エッジ</b> = 『人気より走るか』を物差しに、条件ごとのノウハウを<b>1 つずつ単独で確かめてから</b>組み合わせる、"
+      "(3) <b>確率 × オッズ = 期待値が 1.2 以上</b>に絞って買う。記事では検証期間で単勝 100% 超・複勝 90% 超とあるが、期間・件数・エッジの中身は公開されていない。</p>")
+    w("<p>手元での対応:</p><ul>"
+      "<li><b>ベース</b>: 本番系モデル v6 の p_win・p_top3（土台の特徴量にオッズ・人気の列は無い）。OOF は 2022〜2024 年（年ごとに抜いて学習した OOF なので、学習に後の年が入る分だけ少し甘い）。</li>"
+      f"<li><b>エッジ</b>: 発見期間（2016〜2022 年）だけで、人気をそろえた差が単独で有意（BH の q &lt; 0.10）になった条件。通説の型（オッズを使わないもの）{o['n_edge_hyp']} 個と、血統 × 条件替わりの (a)（条件の中でその血統）{o['n_edge_blood']} 個。"
+      "重みは差を経験ベイズで縮めた値。記事の『腹に落ちるものだけ』の代わりに、通説の向きと合うものだけの版（"
+      f"{o['n_edge_hyp_ok']} 個）も作った。</li>"
+      "<li><b>組み合わせ</b>: 2022 年でベースとエッジの重みだけを当てはめ（単勝は 1 着の条件付きロジット、複勝は 3 着内のロジスティック）、2023〜2024 年で評価"
+      f"（{o['races']:,} レース）。</li>"
+      "<li><b>期待値 1.2</b>: 記事の閾値をそのまま事前に決めた買い方として使う（評価期間を見て選んでいない）。単勝 = 1 着の確率 × 確定単勝オッズ、複勝 = 3 着内の確率 × 確定複勝オッズの下限。"
+      "前日に買う場合として、想定オッズ（odds_pred）で期待値を判断し、払戻は確定オッズで計算した版も出した。</li></ul>")
+    w("<div class='wrap'><table><thead><tr><th rowspan='2'>買い方（2023〜2024 年）</th>" + "".join(f"<th colspan='4'>{LAPS_NAMES[k]}</th>" for k in LAPS_NAMES) + "</tr><tr>"
+      + "<th>点数</th><th>的中率</th><th>回収率 ±SE</th><th>平均人気</th>" * 3 + "</tr></thead><tbody>")
+    for sname in o["strat"]["B"]:
+        w(f"<tr><td>{sname}</td>" + "".join(cell(o["strat"][k].get(sname)) for k in LAPS_NAMES) + "</tr>")
+    w("</tbody></table></div>")
+    w(f"<p>対数損失の改善（ベースだけ → + エッジ、負なら改善）: 全部 1 着 {zc('cmp_BE', 'win')}／レース・3 着内 {zc('cmp_BE', 'top3')}／頭。"
+      f"通説の向きと合うものだけ 1 着 {zc('cmp_BEok', 'win')}・3 着内 {zc('cmp_BEok', 'top3')}。</p>")
+    def f_(r):
+        return "—" if not r else f"{r['roi'] * 100:.0f}%±{r['se'] * 100:.0f}（{r['n']:,} 点）"
+
+    zs = [((r["roi"] - 1) / r["se"], k, sn) for k in LAPS_NAMES for sn, r in o["strat"][k].items() if r and r["se"] > 0]
+    zmax = max(zs)
+    S1, S2, S3 = "期待値 1.2 以上（単勝・確定オッズ）", "期待値 1.2 以上（単勝・前日の想定オッズで判断）", "期待値 1.2 以上（複勝・確定オッズ）"
+    w("<div class='note'><b>結論.</b> "
+      f"(1) 指数 1 位を全レース買うと、平均 {o['strat']['B']['指数 1 位・全レース（単勝）']['pop']:.1f} 番人気で単勝 {f_(o['strat']['B']['指数 1 位・全レース（単勝）'])}（記事のベースだけの 82.6% と近い水準）。"
+      f"(2) 期待値 1.2 以上: 確定オッズの単勝は ベース {f_(o['strat']['B'][S1])}・+エッジ {f_(o['strat']['BE'][S1])}、複勝は ベース {f_(o['strat']['B'][S3])}・+エッジ {f_(o['strat']['BE'][S3])}。"
+      f"前日の想定オッズで判断した単勝は ベース {f_(o['strat']['B'][S2])}・+エッジ {f_(o['strat']['BE'][S2])}。"
+      f"(3) 100% との差が最も大きいのは『{LAPS_NAMES[zmax[1]]}・{zmax[2]}』で標準誤差の {zmax[0]:.1f} 倍。どの買い方も 2 倍に届かず、100% を超えるとは言えない（評価は 2 年・約 6,100 レース）。"
+      "(4) エッジは予測を統計的に良くする（上の対数損失）が、回収率の差は誤差の範囲。記事のエッジの中身（非公開）が手元の通説・血統・ラップより強い可能性はある。</div>")
+    w("<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,480px),1fr));gap:18px'>")
+    for kind, title in (("win", "単勝"), ("plc", "複勝")):
+        ss = []
+        for k in LAPS_NAMES:
+            rr = [r for r in o["ev"][k][kind] if r["th"] >= 0.8 and r["n"] >= 100]
+            ss.append((k, [(r["th"], r["roi"], f"期待値 {r['th']:.2f} 以上: {r['n']:,} 点・的中 {r['hit'] * 100:.1f}% → 回収率 {r['roi'] * 100:.0f}%±{r['se'] * 100:.0f}") for r in rr]))
+        w(f"<figure style='margin:0'><figcaption><b>{title}（確定オッズで期待値、2023〜2024）</b>: 期待値の閾値と回収率</figcaption>")
+        w(V._svg_lines(ss, (0.8, 2.0), (0.3, 1.4), "期待値の閾値（以上を買う）", "回収率", lambda v: f"{v:.1f}", pc_, refs=[(1.0, "100%")]) + "</figure>")
+    w("</div>")
+    w("<details><summary>使ったエッジ（通説の型）</summary><div class='wrap'><table><thead><tr><th>ID</th><th>重み（pt）</th><th>通説の向きと</th></tr></thead><tbody>")
+    for h, (wt, ag) in sorted(o["edge_hyp"].items(), key=lambda kv: -abs(kv[1][0])):
+        w(f"<tr><td class='id'>{h}</td><td class='num'>{wt * 100:+.2f}</td><td>{'合う' if ag else '逆'}</td></tr>")
+    w("</tbody></table></div></details>")
+    w("<details><summary>使ったエッジ（血統 × 条件替わり）</summary><div class='wrap'><table><thead><tr><th>粒度</th><th>条件</th><th>血統</th><th>重み（pt）</th></tr></thead><tbody>")
+    from src.scripts.data.folklore_sire import LEVELS as _LV
+    for lv, cond, key, wt in sorted(o["edge_blood"], key=lambda r: -abs(r[3])):
+        w(f"<tr><td>{_LV.get(lv, lv)}</td><td>{cond}</td><td>{key}</td><td class='num'>{wt * 100:+.2f}</td></tr>")
+    w("</tbody></table></div></details>")
+    w("<p class='muted'>コード: <code>python -m src.scripts.data.folklore_model laps</code>（folklore_sire run の後）。</p>")
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "fit"
-    {"flags": flags, "fit": fit}[cmd]()
+    {"flags": flags, "fit": fit, "laps": laps}[cmd]()
