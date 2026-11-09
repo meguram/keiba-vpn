@@ -72,6 +72,9 @@ def tercile_2020(d: pd.DataFrame, col: str, mask: pd.Series) -> tuple[float, flo
 
 
 def add_extra(d: pd.DataFrame) -> pd.DataFrame:
+    # 市場確率 q は、残った出走（オッズが正）の中で正規化し直す（古い master では取消馬の 0 倍でレース全体の q が 0 になっていた）
+    inv = 1.0 / d["odds"].where(d["odds"] > 0)
+    d["q"] = inv / inv.groupby(d["race_id"]).transform("sum")
     d = d.sort_values(["horse_id", "dt", "race_id"], kind="stable").reset_index(drop=True)
     g = d.groupby("horse_id", sort=False)
     d["p_race_id"] = g["race_id"].shift(1)
@@ -200,22 +203,27 @@ def add_extra(d: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_market(d: pd.DataFrame) -> pd.DataFrame:
-    """確定単勝オッズの市場確率 q から 3 着内の見込み p_mkt（頭数帯 × q の 40 分位の実績、2016〜2022 で当てはめ）。"""
+    """3 着内の市場の見込み p_mkt = 『人気順（14 番人気以上はまとめる）× 同じ人気の中の単勝オッズの 5 分位 × 頭数帯』の区分ごとの
+    3 着内率の実績（2016〜2022 年で当てはめ。区分が 200 走未満なら 人気 × 頭数帯 の平均）。
+
+    以前の『q の 40 分位 × 頭数帯』は人気順ごとに ±1.5pt ずれ（1 番人気は見込みが高すぎ、2・3 番人気は低すぎ）、
+    人気になりやすい条件の型が有利・不利に出た（2026-11-09、別セッションの指摘で検証して採用。research/columns/folklore_frame.expected_top3 と同じ区分）。
+    """
     d["fband"] = pd.cut(d["field"], [0, 8, 11, 14, 18], labels=["~8", "9-11", "12-14", "15-18"]).astype(str)
-    fit = d[d["year"] <= 2022]
-    edges = {}
-    tab = {}
-    for fb, x in fit.groupby("fband"):
-        e = np.unique(np.quantile(x["q"], np.linspace(0, 1, 41)))
-        edges[fb] = e
-        b = np.clip(np.searchsorted(e, x["q"], side="right") - 1, 0, len(e) - 2)
-        tab[fb] = pd.Series(x["y3"].to_numpy()).groupby(b).mean()
-    p = np.full(len(d), np.nan)
-    for fb, idx in d.groupby("fband").groups.items():
-        e = edges[fb]
-        b = np.clip(np.searchsorted(e, d.loc[idx, "q"], side="right") - 1, 0, len(e) - 2)
-        p[d.index.get_indexer(idx)] = tab[fb].reindex(b).to_numpy()
-    d["p_mkt"] = p
+    pop = d["pop"].clip(upper=14).fillna(14).astype(int)
+    fitm = (d["year"] <= 2022).to_numpy()
+    # 同じ人気の中の単勝オッズの 5 分位（境目は 2016〜2022 年で決める）
+    oq = np.zeros(len(d), dtype=int)
+    for k in np.unique(pop):
+        m = (pop == k).to_numpy()
+        e = np.unique(np.quantile(d.loc[m & fitm, "odds"], [0.2, 0.4, 0.6, 0.8])) if (m & fitm).any() else np.array([])
+        oq[m] = np.searchsorted(e, d.loc[m, "odds"].to_numpy(), side="right")
+    key3 = pop.astype(str) + "_" + pd.Series(oq, index=d.index).astype(str) + "_" + d["fband"]
+    key2 = pop.astype(str) + "_" + d["fband"]
+    m3 = d.loc[fitm].groupby(key3[fitm])["y3"].agg(["mean", "size"])
+    m2 = d.loc[fitm].groupby(key2[fitm])["y3"].mean()
+    p = key3.map(m3["mean"]).where(key3.map(m3["size"]) >= 200, key2.map(m2))
+    d["p_mkt"] = p.astype(float).to_numpy()
     d["r3"] = d["y3"] - d["p_mkt"]
     # 払戻を頭打ちにした単勝回収（50 倍超は 50 倍に）
     d["ret_cap"] = np.where(d["y1"] == 1, np.minimum(d["odds"], 50.0), 0.0)
@@ -693,6 +701,9 @@ def run() -> None:
     prep = OUT / "_prep.pkl"
     if prep.exists() and os.environ.get("FOLKLORE_RESUME", "1") == "1":
         d = pd.read_pickle(prep)
+        d = add_market(d)  # 市場の見込みは作り方を変えることがあるので、毎回作り直す（安い）
+        d = add_b37(d)
+        d.to_pickle(prep)
     else:
         d = d[d["year"].between(2016, 2025)].reset_index(drop=True)
         d = add_extra(d)
@@ -1030,28 +1041,18 @@ def _score_eval(d: pd.DataFrame, out: dict) -> None:
 
 # 玄人の読み（S・A を持つ型の解釈。数値は表から自動で入る）
 INTERP = {
-    "L03": "通説と逆。2 強のレースでは 2 頭とも市場の見込みより 3 着内に来る。『2 強は堅い』と読み替える",
-    "C23": "通説どおり。騎手がその日に乗る馬の中で最も人気の鞍は、人気以上に来る",
-    "J04": "コース別の持ち時計（指数）1 位は、人気以上に来る。市場が持ち時計を割り引きすぎている",
-    "A03": "同じコースの続戦は人気以上に来る（条件替わりの無い馬の安定）",
-    "E18e": "米国型血統のダート短距離は人気以上に来る（確認期間は弱まる）",
-    "A43": "勝ち切れない堅実馬は 3 着内で人気以上。単勝オッズの人気が複勝向きの安定を織り込めていない",
-    "A01": "通説と逆。延長は人気をそろえても 3 着内率が下がる（延長は割引）",
-    "A17": "前走 0.5 秒以内の負けは人気以上に来る",
-    "H16": "通説どおり。小柄な牝馬は多頭数・道悪で人気より来ない",
-    "C05": "通説どおり。継続騎乗は人気以上（小さいが全体で S）",
-    "A25": "コース巧者は素の差では強いが、人気でほぼ織り込み済み（一部の切り口だけ S）",
-    "G13": "偶数の馬番（後入れ）は人気以上に来る（小さいが全体で S）",
-    "C08": "通説と逆。上位騎手への乗り替わりは『過剰人気』ではなく、人気以上に来る（鞍上強化は買い）",
-    "X04": "1 番人気は市場の見込みよりやや来る（本命・大穴の偏り）",
-    "J01": "前走の指数 1 位は人気以上に来る",
-    "B08": "坂路の終い 1F が速い馬は人気以上に来る（2016〜2019 の追い切りの表）",
-    "D04": "通説と逆。同じ厩舎の 2 頭出しで人気の低い方は、人気よりさらに来ない",
-    "A15": "通説どおり。昇級初戦は人気より来ない",
-    "J02": "通説どおり。最高指数 1 位の馬の中で、近走が落ちている馬は近走も良い馬より人気比で劣る",
-    "L04": "通説と逆。オッズが割れた混戦の 1 番人気は人気より来ない",
-    "A41": "通説と逆。休み明け好走の次走（2 走ボケ）はむしろ人気以上に来る",
-    "A42": "通説と逆。連勝中の昇級初戦は人気より来ない（勢いは人気で過大評価）",
+    "L03": "通説と逆。2 強のレースでは 2 頭とも市場の見込みより 3 着内に来る（全体 S、確認期間でも +6pt）。『2 強は堅い』と読み替える",
+    "A15": "通説どおり。昇級初戦は人気より来ない（全体 S、−2pt）。特にダート",
+    "G13": "偶数の馬番（後入れ）は人気以上に来る（小さいが全体 S）",
+    "J04": "コース別の持ち時計（指数）1 位は人気以上に来る。市場が持ち時計を割り引きすぎている",
+    "L10": "通説と逆。ダートの先行馬は人気ほど来ない（先行の有利は人気に織り込まれ過ぎ）",
+    "A25": "通説と逆。同じコースで 3 着内の経験がある『コース巧者』は人気ほど来ない（巧者は過剰人気）",
+    "E18e": "米国型血統のダート短距離は人気以上に来る（未勝利・稍重のダートで強い。確認期間は弱まる）",
+    "D11": "社台グループ以外の生産馬のダートは人気以上に来る（4 歳以上で強い）",
+    "A03": "前走と同じコースの続戦は、未勝利戦（特にダート）で人気以上に来る",
+    "L01": "夏の牝馬は、芝の短距離（〜1300m）でだけ人気以上に来る",
+    "A01": "通説と逆。距離延長は未勝利戦で人気より来ない",
+    "A42": "通説と逆。連勝中の昇級初戦は人気より来ない（勢いは人気で過大評価。多頭数で強い）",
 }
 
 # ---------------------------------------------------------------- 章（HTML）
@@ -1189,7 +1190,8 @@ def _rank_section(w) -> None:
       f"通説の数の 1 位は、勝率 {o['net_all_rank']['1']['win'] * 100:.1f}%・複勝率 {o['net_all_rank']['1']['top3'] * 100:.1f}% で、全出走（勝率 {o['all_runs']['win'] * 100:.1f}%・複勝率 {o['all_runs']['top3'] * 100:.1f}%）より明らかに走り、順位が下がるほど成績も下がる（通説はまとまると能力の順位づけとして効く）。"
       f"ただし回収率は 1 位でも単勝 {o['net_all_rank']['1']['roi_win'] * 100:.1f}%・複勝 {o['net_all_rank']['1']['roi_plc'] * 100:.1f}% で、1 番人気（単勝 {o['pop1_all']['roi_win'] * 100:.1f}%・複勝 {o['pop1_all']['roi_plc'] * 100:.1f}%）と同程度。控除率（単勝・複勝 20%）を超えない。"
       "通説の多くは人気が既に織り込んでおり、数を足しても『人気どおりの馬』を選ぶことに近づくだけ。"
-      f"検定で残った通説だけ（下の 8.2）で並べると 1 位の勝率は {o['ver_all_rank']['1']['win'] * 100:.1f}% まで上がるが、平均人気 {o['ver_all_rank']['1']['pop']:.1f} の人気馬が中心になり、回収率は単勝 {o['ver_all_rank']['1']['roi_win'] * 100:.1f}%・複勝 {o['ver_all_rank']['1']['roi_plc'] * 100:.1f}%。</div>")
+      f"検定で残った通説だけを人気をそろえた差の向きで数えて並べると（下の 8.2）、1 位は平均 {o['ver_all_rank']['1']['pop']:.1f} 番人気と人気薄に寄り、2016〜2025 年の回収率は単勝 {o['ver_all_rank']['1']['roi_win'] * 100:.1f}%・複勝 {o['ver_all_rank']['1']['roi_plc'] * 100:.1f}%。"
+      f"ただし型の選択に使っていない 2023〜2025 年では単勝 {o['ver_conf_rank']['1']['roi_win'] * 100:.1f}%・複勝 {o['ver_conf_rank']['1']['roi_plc'] * 100:.1f}% に落ちる（2016〜2022 年の数字は選択の当たりを含む）。</div>")
     w("<h3>8.1 すべての通説（買い − 消し）の順位ごとの成績（2016〜2025 年）</h3>")
     rank_table("net_all_rank", "通説の数の順位")
     w(head.format("比べるもの") + row("1 番人気", o["pop1_all"]) + row("全出走", o["all_runs"]) + "</tbody></table></div>")
@@ -1212,7 +1214,6 @@ def _rank_section(w) -> None:
     w(f"<h3>8.2 検定で残った通説だけで並べた場合（{o['n_ver']} 型）</h3>"
       "<p class='muted'>発見期間（2016〜2022）の『全体・人気をそろえた差』で BH の q &lt; 0.05 になった型だけを使い、<b>向きはデータの向き</b>（通説と逆だった型は逆の向き）で ±1 を足した。"
       "型の選び方に 2023〜2025 年を使っていないので、2023〜2025 年の成績は選び方に対して手付かずの検証になる。"
-      "1 番人気（X04）など人気そのものの型も入るため、上位は人気馬に寄る。"
       f"使った型: {', '.join(o['ver_hids'])}</p>")
     rank_table("ver_all_rank", "検定済みの通説の順位")
     w("<details><summary>2023〜2025 年だけ（型の選択に使っていない期間）</summary>")
@@ -1284,7 +1285,6 @@ def _score_section(w) -> None:
     def pick(k, per="conf"):
         return [r for r in o["thr"][f"{k}_{per}"]]
 
-    best = {k: max((r for r in pick(k) if r["n"] >= 300), key=lambda r: r["roi_win"]) for k in keys}
     a100 = {k: pick(k)[0] for k in keys}
     a10 = {k: min(pick(k), key=lambda r: abs(r["cov"] - 0.10)) for k in keys}
     w("<h2 id='score'>9. 通説の格で得点を付け、閾値を超えたレースの 1 位だけを買ったときの成績</h2>")
@@ -1294,14 +1294,18 @@ def _score_section(w) -> None:
       "<li><b>通説の数</b>: 第 8 節と同じ、通説の向きどおりに ±1（格は見ない）。</li>"
       f"<li><b>格の重み（全体の判定）</b>: 型の『全体』の格だけを使う（格の付いた型 {o['n_all']}）。</li>"
       f"<li><b>格の重み（その馬の切り口の判定）</b>: 型ごとに、その馬が入る切り口（コース・競馬場×面・距離帯・馬場・クラス・頭数・季節・年齢・性・人気帯・全体）のうち最も格の高い判定の重みを使う（格の付いた型 {o['n_slice']}）。</li></ul>")
+    def bz(k, kind):
+        rows = [r for r in pick(k) if r["n"] >= 300]
+        return max(rows, key=lambda r: r[kind]), max((r[kind] - 1) / r[kind + "_se"] for r in rows)
+
+    bw_, zw = bz("all", "roi_win")
+    bp_, zp = bz("all", "roi_plc")
     w("<div class='note'><b>結論.</b> "
-      f"格で重みを付けると 1 位の的中は大きく上がる（全レースで買うと勝率 {a100['all']['win'] * 100:.1f}%・複勝率 {a100['all']['top3'] * 100:.1f}%、閾値を上げて上位 10% のレースだけなら勝率 {a10['all']['win'] * 100:.1f}%・複勝率 {a10['all']['top3'] * 100:.1f}%）。"
-      f"しかし 1 位は平均 {a100['all']['pop']:.1f} 番人気（上位 10% では {a10['all']['pop']:.1f}）の人気馬になり、回収率は単勝 {a100['all']['roi_win'] * 100:.0f}%→{a10['all']['roi_win'] * 100:.0f}%、複勝 {a100['all']['roi_plc'] * 100:.0f}%→{a10['all']['roi_plc'] * 100:.0f}% で、"
-      f"同じ期間の 1 番人気（単勝 {p1['roi_win'] * 100:.0f}%・複勝 {p1['roi_plc'] * 100:.0f}%）と同じ水準にとどまる。閾値をどこに置いても 100% は超えない。"
-      f"ROC の AUC（3 着内、2023〜2025 の全出走）は 格の重み（全体）{o['roc']['all']['auc']:.3f}・切り口 {o['roc']['slc']['auc']:.3f}・通説の数 {o['roc']['cnt']['auc']:.3f} に対し、市場（単勝オッズ）は {o['roc']['mkt']['auc']:.3f}。"
-      "通説を格で束ねても、オッズが持つ情報の一部（主に『強い馬』の情報）をなぞるだけで、オッズを上回る序列にはならない。"
-      f"『切り口ごとの格』は全体の格より悪い（切り口の数が多く、最も格の高い切り口を選ぶと偶然の当たりを拾う）。"
-      f"通説の数（格なし）は単勝回収率が閾値とともに上がるように見える（上位 {best['cnt']['cov'] * 100:.0f}% で {best['cnt']['roi_win'] * 100:.0f}%±{best['cnt']['roi_win_se'] * 100:.0f}）が、標準誤差が大きく 100% と区別できない。</div>")
+      f"格の重みは『人気をそろえた差』の向きで付けるので、得点は能力の順位ではなく『人気以上に来るか』の順位になる（3 着内の AUC: 格の重み（全体）{o['roc']['all']['auc']:.3f}・切り口 {o['roc']['slc']['auc']:.3f}・通説の数 {o['roc']['cnt']['auc']:.3f}、市場は {o['roc']['mkt']['auc']:.3f}）。"
+      f"全レースで 1 位を買うと平均 {a100['all']['pop']:.1f} 番人気・勝率 {a100['all']['win'] * 100:.1f}%・回収率 単勝 {a100['all']['roi_win'] * 100:.0f}%・複勝 {a100['all']['roi_plc'] * 100:.0f}%、"
+      f"上位 10% のレースだけなら 平均 {a10['all']['pop']:.1f} 番人気・勝率 {a10['all']['win'] * 100:.1f}%・単勝 {a10['all']['roi_win'] * 100:.0f}%・複勝 {a10['all']['roi_plc'] * 100:.0f}%。"
+      f"閾値を上げると回収率は上がる傾向があり、最も高いのは単勝 {bw_['roi_win'] * 100:.0f}%±{bw_['roi_win_se'] * 100:.0f}（{bw_['n']:,} レース）・複勝 {bp_['roi_plc'] * 100:.0f}%±{bp_['roi_plc_se'] * 100:.0f}（{bp_['n']:,} レース）だが、"
+      f"どの閾値でも 100% との差は標準誤差の {max(zw, zp):.1f} 倍以内で、100% を超えるとは言えない（同じ期間の 1 番人気は単勝 {p1['roi_win'] * 100:.0f}%・複勝 {p1['roi_plc'] * 100:.0f}%）。</div>")
     # 図
     def thr_series(metric, k, scale=1.0):
         return (k, [(r["cov"], r[metric] * scale, f"買うレース {r['cov'] * 100:.0f}%（閾値 {r['thr']:.0f}・{r['n']:,} レース）→ {r[metric] * 100:.1f}%"
@@ -1413,7 +1417,7 @@ details.okc{margin:4px 0 4px 8px}details.okc>summary{font-size:13px}.ok-courses{
       f"通説の向きどおりに S か A の切り口を 1 つ以上持つ型は {adj_S}、通説と逆の向きで S・A になった型は {adj_rev}。"
       f"<br>・<b>素の差</b>（当てはまる馬の 3 着内率そのものが高いか。『通説は事実か』）: S {cnt_raw.get('S', 0):,}・A {cnt_raw.get('A', 0):,}・B {cnt_raw.get('B', 0):,}・C {cnt_raw.get('C', 0):,} 本。通説の向きで S・A を持つ型は {raw_S}。"
       f"<br>・データが無く検証できない型は {n_na}（第 7 節に理由）。"
-      "<br>素の差では多くの通説が『事実』として残るが、その多くは人気（市場）が既に織り込んでおり、人気をそろえると消えるか小さくなる。序列づけに使うのは人気をそろえた差で S・A の型（第 2・3・5 節）。<br>・すべての通説を当てはめ、当てはまる数で並べたときの着順・単複回収率は <a href='#rank'>第 8 節</a>、通説の格（S/A/B/C）で得点を付け閾値を超えたレースの 1 位を買う成績と ROC は <a href='#score'>第 9 節</a>。</div>")
+      "<br>素の差では多くの通説が『事実』として残るが、その多くは人気（市場）が既に織り込んでおり、人気をそろえると消えるか小さくなる。序列づけに使うのは人気をそろえた差で S・A の型（第 2・3・5 節）。<br>・すべての通説を当てはめ、当てはまる数で並べたときの着順・単複回収率は <a href='#rank'>第 8 節</a>、通説の格（S/A/B/C）で得点を付け閾値を超えたレースの 1 位を買う成績と ROC は <a href='#score'>第 9 節</a>、その課題を直したモデル（市場を土台に通説を束ね、期待値で買う）は <a href='#model'>第 10 節</a>、血統（父・系統・母父）× 条件替わり（延長・短縮・初ダート・道悪など）は <a href='#blood'>第 11 節</a>。</div>")
     # 方法
     w("<h2>1. 検定の作り</h2><ul>")
     w("<li><b>対象</b>: 2016〜2025 年の JRA 平地（5 頭立て以上、着順・確定単勝オッズのある出走）。約 46 万走。履歴の列は同じ馬のその走より前だけ、騎手・調教師・父の集計はその日より前だけ（as-of）。</li>")
@@ -1517,6 +1521,12 @@ details.okc{margin:4px 0 4px 8px}details.okc>summary{font-size:13px}.ok-courses{
       "(5) 市場の見込みは確定オッズ（発走時点の情報）。序列を前日に作るなら、人気をそろえた差は前日オッズで測り直す必要がある。(6) 改修（京都）・斤量の改定（2023）は期間をまたぐ型の効果を薄める。</div>")
     _rank_section(w)
     _score_section(w)
+    from src.scripts.data.folklore_model import model_section
+
+    model_section(w)
+    from src.scripts.data.folklore_sire import sire_section
+
+    sire_section(w)
     w(f"<p class='muted'>生成: {pd.Timestamp.now(tz='Asia/Tokyo'):%Y-%m-%d %H:%M}（python -m src.scripts.data.folklore_verify report）。</p></body></html>")
     DOC.write_text("\n".join(H), encoding="utf-8")
     print("wrote", DOC, len("\n".join(H)))

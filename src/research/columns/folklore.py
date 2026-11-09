@@ -24,6 +24,7 @@ import argparse
 import datetime as dt
 import json
 import math
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -39,6 +40,7 @@ GUIDES = COLS / "guides"
 INDEX = COLS / "index.ts"
 GUIDE_INDEX = GUIDES / "index.ts"
 RESULTS = REPO / "data/local/research/folklore/results.json"
+VERIFY_TESTS = Path(os.environ.get("FOLKLORE_OUT", "/home/jovyan/work/folklore_out")) / "tests.parquet"
 TODAY = dt.date.today().isoformat()
 
 Mask = Callable[[pd.DataFrame], pd.Series]
@@ -67,6 +69,7 @@ class Spec:
     conditions: str = ""             # 対象条件（データの注記）
     definition: str = ""             # 条件の定義（1〜2 文。本文の注記）
     ref_label: str = "それ以外"
+    hid: str | None = None              # 通説の検証の章（folklore_verify）の同じ定義の型。あれば判定はその格に従う
     variants: list[int] | None = None   # 『条件付き』の根拠に数えるパターン（groups の番号）。省略時は主の条件の一部になっているもの
     tips: dict[str, str] = field(default_factory=dict)   # verdict → 使い方の文（省略時は既定の文）
     extra_terms: list[dict[str, str]] = field(default_factory=list)
@@ -152,7 +155,42 @@ def analyze(spec: Spec, f: pd.DataFrame) -> dict[str, Any]:
             c["p_holm"] = ph
         out["axis"] = cells
     out["verdict"] = verdict(spec, out)
+    out["reversed"] = out["verdict"] == "not_supported" and main_mask.any() and _engine_reversed(spec, out)
     return out
+
+
+def _engine_reversed(spec: Spec, a: dict) -> bool:
+    m = a["main"]
+    return m["p_ref"] is not None and m["p_ref"] < 0.01 and m["d"] * spec.direction < 0
+
+
+def load_verify() -> dict[str, dict] | None:
+    """通説の検証の章の結果（全体の行）。2016〜2025 年・クラスタ頑健・発見→確認の 2 段の BH で、コラムの集計より厳しい。"""
+    if not VERIFY_TESTS.exists():
+        return None
+    t = pd.read_parquet(VERIFY_TESTS)
+    t = t[t["dim"] == "全体"]
+    return {r.hid: {"adj": float(r.adj), "tier": str(r.adj_tier), "agree": bool(r.adj_agree)} for r in t.itertuples()}
+
+
+def apply_verify(spec: Spec, a: dict, v: dict | None) -> None:
+    """検証の章の格で判定を決め直す（より厳しい検定を正とする）。
+    S・A・B: 通説の向きなら傾向あり、逆なら傾向なし（逆）。C: 向きが合えば条件付き、逆なら傾向なし（逆）。
+    格なし: コラムの集計で傾向ありでも『条件付き』に下げる（2020〜2025 年だけの傾向）。それ以外はコラムの判定のまま。"""
+    if not spec.hid or not v or spec.hid not in v:
+        return
+    e = v[spec.hid]
+    a["verify"] = {"hid": spec.hid, **e}
+    tier, agree = e["tier"], e["agree"]
+    if tier in ("S", "A", "B"):
+        a["verdict"], a["reversed"] = ("supported", False) if agree else ("not_supported", True)
+    elif tier == "C":
+        a["verdict"], a["reversed"] = ("partial", False) if agree else ("not_supported", True)
+    else:
+        a["reversed"] = False
+        if a["verdict"] == "supported":
+            a["verdict"] = "partial"
+            a["recent_only"] = True
 
 
 def verdict(spec: Spec, a: dict) -> str:
@@ -196,8 +234,10 @@ def headline(spec: Spec, a: dict) -> str:
     m, v, s = a["main"], a["verdict"], spec.direction
     if v == "supported":
         return "人気以上に走る" if s > 0 else "人気ほど走らない"
-    if v == "not_supported" and m["p_ref"] is not None and m["p_ref"] < 0.01:
+    if reversed_(spec, a):
         return "むしろ人気ほど走らない" if s > 0 else "むしろ人気以上に走る"
+    if v == "partial" and a.get("recent_only"):
+        return "近年は人気以上だが、長い期間では言い切れない" if s > 0 else "近年は人気ほど走らないが、長い期間では言い切れない"
     if v == "partial":
         best = best_cell(spec, a)
         return f"{best['label'].replace(chr(10), '')}なら当てはまる" if best else "条件しだい"
@@ -230,8 +270,7 @@ DEFAULT_TIPS_NEG = {
 
 
 def reversed_(spec: Spec, a: dict) -> bool:
-    m = a["main"]
-    return a["verdict"] == "not_supported" and m["p_ref"] is not None and m["p_ref"] < 0.01 and m["d"] * spec.direction < 0
+    return bool(a.get("reversed"))
 
 
 def tip(spec: Spec, a: dict) -> str:
@@ -239,6 +278,8 @@ def tip(spec: Spec, a: dict) -> str:
     if reversed_(spec, a):
         return ("通説とは逆に、人気になりすぎています。人気で当てはまるなら、少し割り引くくらいがちょうどよさそうです。" if spec.direction > 0
                 else "通説とは逆に、人気より走っています。この理由で割り引くのは損になりやすいです。")
+    if a.get("recent_only"):
+        return "2020〜2025 年では差がありますが、2016 年からの検証では偶然と区別できません。印を動かすなら小さめに。"
     return spec.tips.get(v) or (DEFAULT_TIPS if spec.direction > 0 else DEFAULT_TIPS_NEG)[v]
 
 
@@ -286,8 +327,13 @@ def article(spec: Spec, a: dict, published: str) -> dict[str, Any]:
     if spec.axis and a.get("axis"):
         body.append(chart(spec.axis.title or f"{main}の馬を{spec.axis.label}で分けると", spec.axis.label, a["axis"],
                           "当てはまる馬だけを分けて、実際の複勝率と見込みを比べています。"))
-    if spec.definition:
-        body.append({"type": "note", "text": spec.definition})
+    notes = [spec.definition] if spec.definition else []
+    if a.get("verify"):
+        e = a["verify"]
+        grade = f"格 {e['tier']}" if e["tier"] != "無" else "格なし（偶然と区別できない）"
+        notes.append(f"2016〜2025 年の厳しい検定（2016〜2022 年で見つけ、2023〜2025 年で確かめる）では {grade}、人気をそろえた差 {pt(e['adj'])}。判定はこちらに合わせています。")
+    if notes:
+        body.append({"type": "note", "text": " ".join(notes)})
     return {
         "slug": spec.slug,
         "title": f"{spec.title}——{headline(spec, a)}",
@@ -367,6 +413,8 @@ def main() -> None:
     args = ap.parse_args()
     only = {s for s in args.only.split(",") if s}
     f = load_frame()
+    v = load_verify()
+    print("検証の章の結果:", "あり" if v else "なし（コラムの集計だけで判定）")
     results = {}
     if RESULTS.exists():
         results = json.loads(RESULTS.read_text(encoding="utf-8"))
@@ -374,6 +422,7 @@ def main() -> None:
         if only and spec.slug not in only:
             continue
         a = analyze(spec, f)
+        apply_verify(spec, a, v)
         m = a["main"]
         print(f"{spec.slug:32s} {a['verdict']:14s} n={m['n']:>7,} 実際={pct(m['a'])} 見込={pct(m['e'])} 差={pt(m['d'])} {pfmt(m['p_ref'])}  | "
               + " ".join(f"{g['label'].replace(chr(10), '')}:{pt(g['d'])}({g['n']})" for g in a["groups"][1:])
