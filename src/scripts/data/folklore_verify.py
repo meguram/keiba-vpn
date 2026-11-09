@@ -202,17 +202,8 @@ def add_extra(d: pd.DataFrame) -> pd.DataFrame:
     return d
 
 
-def add_market(d: pd.DataFrame) -> pd.DataFrame:
-    """3 着内の市場の見込み p_mkt = 『人気順（14 番人気以上はまとめる）× 同じ人気の中の単勝オッズの 5 分位 × 頭数帯』の区分ごとの
-    3 着内率の実績（2016〜2022 年で当てはめ。区分が 200 走未満なら 人気 × 頭数帯 の平均）。
-
-    以前の『q の 40 分位 × 頭数帯』は人気順ごとに ±1.5pt ずれ（1 番人気は見込みが高すぎ、2・3 番人気は低すぎ）、
-    人気になりやすい条件の型が有利・不利に出た（2026-11-09、別セッションの指摘で検証して採用。research/columns/folklore_frame.expected_top3 と同じ区分）。
-    """
-    d["fband"] = pd.cut(d["field"], [0, 8, 11, 14, 18], labels=["~8", "9-11", "12-14", "15-18"]).astype(str)
-    pop = d["pop"].clip(upper=14).fillna(14).astype(int)
-    fitm = (d["year"] <= 2022).to_numpy()
-    # 同じ人気の中の単勝オッズの 5 分位（境目は 2016〜2022 年で決める）
+def _pmkt_fit(d: pd.DataFrame, pop: pd.Series, fitm: np.ndarray, use: np.ndarray) -> np.ndarray:
+    """fitm の行で区分の実績を当てはめ、use の行に見込みを付ける。"""
     oq = np.zeros(len(d), dtype=int)
     for k in np.unique(pop):
         m = (pop == k).to_numpy()
@@ -223,7 +214,29 @@ def add_market(d: pd.DataFrame) -> pd.DataFrame:
     m3 = d.loc[fitm].groupby(key3[fitm])["y3"].agg(["mean", "size"])
     m2 = d.loc[fitm].groupby(key2[fitm])["y3"].mean()
     p = key3.map(m3["mean"]).where(key3.map(m3["size"]) >= 200, key2.map(m2))
-    d["p_mkt"] = p.astype(float).to_numpy()
+    return p.astype(float).to_numpy()[use]
+
+
+def add_market(d: pd.DataFrame) -> pd.DataFrame:
+    """3 着内の市場の見込み p_mkt = 『人気順（14 番人気以上はまとめる）× 同じ人気の中の単勝オッズの 5 分位 × 頭数帯』の区分ごとの
+    3 着内率の実績（区分が 200 走未満なら 人気 × 頭数帯 の平均）。
+
+    当てはめる期間: 2016〜2022 年の行は 2016〜2022 年の実績、2023 年以降の行は『その年より前の全ての年』の実績（as-of）。
+    2016〜2022 年だけで当てはめると、2023〜2025 年に 2・3 番人気が見込みより約 0.8pt 来ない時期のずれが残った。
+
+    以前の『q の 40 分位 × 頭数帯』は人気順ごとに ±1.5pt ずれ（1 番人気は見込みが高すぎ、2・3 番人気は低すぎ）、
+    人気になりやすい条件の型が有利・不利に出た（2026-11-09、別セッションの指摘で検証して採用。research/columns/folklore_frame.expected_top3 と同じ区分）。
+    """
+    d["fband"] = pd.cut(d["field"], [0, 8, 11, 14, 18], labels=["~8", "9-11", "12-14", "15-18"]).astype(str)
+    pop = d["pop"].clip(upper=14).fillna(14).astype(int)
+    yr = d["year"].to_numpy()
+    p = np.full(len(d), np.nan)
+    use = yr <= 2022
+    p[use] = _pmkt_fit(d, pop, use, use)
+    for y in sorted(set(yr[yr > 2022])):
+        use = yr == y
+        p[use] = _pmkt_fit(d, pop, yr < y, use)
+    d["p_mkt"] = p
     d["r3"] = d["y3"] - d["p_mkt"]
     # 払戻を頭打ちにした単勝回収（50 倍超は 50 倍に）
     d["ret_cap"] = np.where(d["y1"] == 1, np.minimum(d["odds"], 50.0), 0.0)
@@ -618,6 +631,10 @@ def hyps() -> list[H]:
                 u = np.random.RandomState(seed).rand(codes.max() + 1)[codes]
             return pd.Series(u < p, index=d.index)
         return f
+    # ---- R・T: ラップ・地形（folklore_lap、参考: UMASTカルテの note の無料部分）
+    from src.scripts.data.folklore_lap import lap_hyps
+
+    L.extend(lap_hyps(H))
     allr = lambda d: pd.Series(True, index=d.index)  # noqa: E731
     shadows = [("row", 0.05), ("row", 0.1), ("row", 0.3), ("row", 0.5), ("horse_id", 0.1), ("horse_id", 0.3), ("horse_id", 0.5),
                ("trainer_id", 0.2), ("jockey_id", 0.2), ("f_name", 0.2), ("day", 0.3), ("race_id", 0.3)]
@@ -701,6 +718,10 @@ def run() -> None:
     prep = OUT / "_prep.pkl"
     if prep.exists() and os.environ.get("FOLKLORE_RESUME", "1") == "1":
         d = pd.read_pickle(prep)
+        if "lp_type" not in d.columns:
+            from src.scripts.data.folklore_lap import add_laps
+
+            d = add_laps(d)
         d = add_market(d)  # 市場の見込みは作り方を変えることがあるので、毎回作り直す（安い）
         d = add_b37(d)
         d.to_pickle(prep)
@@ -709,6 +730,9 @@ def run() -> None:
         d = add_extra(d)
         d = add_market(d)
         d = add_b37(d)
+        from src.scripts.data.folklore_lap import add_laps
+
+        d = add_laps(d)
         d = d[d["p_mkt"].notna()].reset_index(drop=True)
         d.to_pickle(prep)
     print("prepared", d.shape, flush=True)
@@ -1058,7 +1082,8 @@ INTERP = {
 # ---------------------------------------------------------------- 章（HTML）
 CAT_NAMES = {"A": "ローテーション・条件替わり", "B": "調教（追い切り）", "C": "騎手", "D": "厩舎・馬主・生産者", "E": "血統", "F": "馬場・天候・バイアス",
              "G": "枠・展開・隊列", "H": "馬体・体調・個体", "I": "番組・レースの性格", "J": "能力指標", "K": "組み合わせ", "L": "格言", "M": "初物",
-             "N": "消し（危険な人気馬）", "P": "競馬場・コースの格言", "X": "市場（オッズ）"}
+             "N": "消し（危険な人気馬）", "P": "競馬場・コースの格言", "X": "市場（オッズ）",
+             "R": "ラップ（レースの質と展開）", "T": "地形（直線・坂・回り・コーナー）"}
 
 
 def claims() -> dict:
@@ -1068,7 +1093,26 @@ def claims() -> dict:
     out = {}
     for m in _re.finditer(r"<tr><td class='id'>([A-Z]\d\d)</td><td>(.*?)</td>", s):
         out[m.group(1)] = _h.unescape(_re.sub(r"<[^>]+>", "", m.group(2)))
+    out.update({k: v for k, v in LAP_CLAIMS.items() if k not in out})
     return out
+
+
+# ラップ・地形の型の通説（参考: ユリス【UMASTカルテ】の note の無料部分。仮説一覧には未掲載）
+LAP_CLAIMS = {
+    "R01": "馬の得意なラップを再現できるレースで買う（今回想定されるラップの型で好走経験がある馬）",
+    "R02": "得意なラップの型（瞬発・消耗・持続）が、今回のコースで出やすい型と一致する馬は走る",
+    "R03": "ハイペースの消耗戦で前に行って負けた馬は、展開の不利を受けただけ（次走で巻き返す）",
+    "R04": "スローの瞬発戦で後ろから届かず負けた馬は、展開の不利を受けただけ（次走で巻き返す）",
+    "R05": "スローの瞬発戦で前にいて好走した馬は、展開の恩恵（次走は過剰人気）",
+    "R06": "ハイペースの消耗戦で後ろから好走した馬は、展開の恩恵（次走は過剰人気）",
+    "R07": "前走で好走したラップの型が今回も出やすいコースなら、また走る",
+    "T01": "最後の直線の長さ（長い＝持続、短い＝一瞬のキレ）に得意・不得意がある",
+    "T02": "ゴール前の坂（上り坂のパワー / 平坦のスピード）に得意・不得意がある",
+    "T03": "回り（右・左）に得意・不得意がある",
+    "T04": "コーナーの大きさ（小回りをタイトに回れるか）に得意・不得意がある",
+    "T05": "地形の得意なファクターが多く重なる競馬場で買う",
+    "T06": "地形の苦手なファクターが重なる競馬場では消す",
+}
 
 
 DIM_ORDER = ["全体", "コース", "競馬場×面", "面×距離帯", "面", "面×馬場", "クラス", "面×クラス", "頭数", "季節", "年齢", "性", "人気帯"]
@@ -1098,7 +1142,7 @@ def _correct_section(w, tested, meta, cl, esc, tier_html, pt, pc, order) -> None
     for hid in meta:
         if hid in set(ok["hid"]):
             cats.setdefault(hid[0], []).append(hid)
-    for c in ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "P", "X"]:
+    for c in ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "P", "R", "T", "X"]:
         if c not in cats:
             continue
         w(f"<h3>{c}. {CAT_NAMES[c]}（{len(cats[c])} 型）</h3>")
@@ -1417,7 +1461,7 @@ details.okc{margin:4px 0 4px 8px}details.okc>summary{font-size:13px}.ok-courses{
       f"通説の向きどおりに S か A の切り口を 1 つ以上持つ型は {adj_S}、通説と逆の向きで S・A になった型は {adj_rev}。"
       f"<br>・<b>素の差</b>（当てはまる馬の 3 着内率そのものが高いか。『通説は事実か』）: S {cnt_raw.get('S', 0):,}・A {cnt_raw.get('A', 0):,}・B {cnt_raw.get('B', 0):,}・C {cnt_raw.get('C', 0):,} 本。通説の向きで S・A を持つ型は {raw_S}。"
       f"<br>・データが無く検証できない型は {n_na}（第 7 節に理由）。"
-      "<br>素の差では多くの通説が『事実』として残るが、その多くは人気（市場）が既に織り込んでおり、人気をそろえると消えるか小さくなる。序列づけに使うのは人気をそろえた差で S・A の型（第 2・3・5 節）。<br>・すべての通説を当てはめ、当てはまる数で並べたときの着順・単複回収率は <a href='#rank'>第 8 節</a>、通説の格（S/A/B/C）で得点を付け閾値を超えたレースの 1 位を買う成績と ROC は <a href='#score'>第 9 節</a>、その課題を直したモデル（市場を土台に通説を束ね、期待値で買う）は <a href='#model'>第 10 節</a>、血統（父・系統・母父）× 条件替わり（延長・短縮・初ダート・道悪など）は <a href='#blood'>第 11 節</a>。</div>")
+      "<br>素の差では多くの通説が『事実』として残るが、その多くは人気（市場）が既に織り込んでおり、人気をそろえると消えるか小さくなる。序列づけに使うのは人気をそろえた差で S・A の型（第 2・3・5 節）。<br>・すべての通説を当てはめ、当てはまる数で並べたときの着順・単複回収率は <a href='#rank'>第 8 節</a>、通説の格（S/A/B/C）で得点を付け閾値を超えたレースの 1 位を買う成績と ROC は <a href='#score'>第 9 節</a>、その課題を直したモデル（市場を土台に通説を束ね、期待値で買う）は <a href='#model'>第 10 節</a>、血統（父・系統・母父）× 条件替わり（延長・短縮・初ダート・道悪など）は <a href='#blood'>第 11 節</a>、参考記事の構成（実力のベース + 人気より走るエッジ + 期待値 1.2）の再現は <a href='#laps'>第 12 節</a>。</div>")
     # 方法
     w("<h2>1. 検定の作り</h2><ul>")
     w("<li><b>対象</b>: 2016〜2025 年の JRA 平地（5 頭立て以上、着順・確定単勝オッズのある出走）。約 46 万走。履歴の列は同じ馬のその走より前だけ、騎手・調教師・父の集計はその日より前だけ（as-of）。</li>")
@@ -1466,7 +1510,7 @@ details.okc{margin:4px 0 4px 8px}details.okc>summary{font-size:13px}.ok-courses{
     cats = {}
     for r in rows:
         cats.setdefault(r[0][0], []).append(r)
-    for c in ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "P", "X"]:
+    for c in ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "P", "R", "T", "X"]:
         if c not in cats:
             continue
         w(f"<h3 id='cat-{c}'>{c}. {CAT_NAMES[c]}</h3><div class='wrap'><table><thead><tr><th>ID</th><th>通説</th><th>向き</th><th>この検証での当てはめ</th><th>期間（発見/確認）</th>"
@@ -1527,6 +1571,9 @@ details.okc{margin:4px 0 4px 8px}details.okc>summary{font-size:13px}.ok-courses{
     from src.scripts.data.folklore_sire import sire_section
 
     sire_section(w)
+    from src.scripts.data.folklore_model import laps_section
+
+    laps_section(w)
     w(f"<p class='muted'>生成: {pd.Timestamp.now(tz='Asia/Tokyo'):%Y-%m-%d %H:%M}（python -m src.scripts.data.folklore_verify report）。</p></body></html>")
     DOC.write_text("\n".join(H), encoding="utf-8")
     print("wrote", DOC, len("\n".join(H)))
