@@ -92,6 +92,17 @@ import trip_region from "./trip-region.json";
 import sire_course_going from "./sire-course-going.json";
 import sire_timing from "./sire-timing.json";
 import sire_line_dirt from "./sire-line-dirt.json";
+import going_style from "./going-style.json";
+import day_bias_more from "./day-bias-more.json";
+import weather_wind_heat from "./weather-wind-heat.json";
+import gate_more from "./gate-more.json";
+import pace_setup from "./pace-setup.json";
+import style_by_venue from "./style-by-venue.json";
+import weight_impost_more from "./weight-impost-more.json";
+import sex_age_more from "./sex-age-more.json";
+import gear_gelding from "./gear-gelding.json";
+import trainer_comment from "./trainer-comment.json";
+import style_by_surface from "./style-by-surface.json";
 
 export const GLOSSARY = glossary as Record<string, string>;
 
@@ -183,4 +194,15 @@ export const GUIDES: Record<string, ColumnGuide> = {
   "sire-course-going": sire_course_going as ColumnGuide,
   "sire-timing": sire_timing as ColumnGuide,
   "sire-line-dirt": sire_line_dirt as ColumnGuide,
+  "going-style": going_style as ColumnGuide,
+  "day-bias-more": day_bias_more as ColumnGuide,
+  "weather-wind-heat": weather_wind_heat as ColumnGuide,
+  "gate-more": gate_more as ColumnGuide,
+  "pace-setup": pace_setup as ColumnGuide,
+  "style-by-venue": style_by_venue as ColumnGuide,
+  "weight-impost-more": weight_impost_more as ColumnGuide,
+  "sex-age-more": sex_age_more as ColumnGuide,
+  "gear-gelding": gear_gelding as ColumnGuide,
+  "trainer-comment": trainer_comment as ColumnGuide,
+  "style-by-surface": style_by_surface as ColumnGuide,
 };

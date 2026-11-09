@@ -26,6 +26,7 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
     children: [
       { id: "front-runner", label: "逃げ・先行", desc: "逃げ馬は有利？芝とダート、距離での違い" },
       { id: "surface-switch", label: "初ダート・替わり", desc: "芝からダートに替わったときの脚質・枠順" },
+      { id: "venue-style", label: "競馬場別の脚質", desc: "競馬場ごとに有利な脚質と、ダート・芝の先行・差し" },
     ],
   },
   {
@@ -113,6 +114,7 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
     id: "weather", label: "天候", desc: "風・気温など、気象の影響",
     children: [
       { id: "wind", label: "風", desc: "直線の向かい風・追い風と、風の強さの影響" },
+      { id: "rain-temp", label: "雨・気温", desc: "雨の日・真夏の暑さの影響" },
     ],
   },
 ];

@@ -168,12 +168,12 @@ def build(g: Group, tests: pd.DataFrame, meta: dict[str, dict], published: str) 
     if cells:
         dim, cs = cells
         ch = F.chart(f"{g.label}を{DIM_LABEL[dim]}で分けると", DIM_LABEL[dim], cs,
-                     f"当てはまる馬の実際の複勝率と、同じ人気の馬の見込み（発見期間 {_years(mm.get('disc'))}）。")
+                     f"当てはまる馬の実際の複勝率と、同じ人気の馬の見込み（発見期間 {_years(mm.get('disc'))}）。走数が {MIN_CELL} 未満の区分は省いています。")
         ch.pop("compare", None)
         body.append(ch)
     for slug, desc in g.links:
         body.append({"type": "link", "href": f"/column/{slug}", "label": "関連するコラム", "desc": desc})
-    body.append({"type": "note", "text": f"主の型の定義: {mm['how']}。2016〜2025 年の検定（発見で見つけ、確認で確かめる。全体の型でまとめて多重比較を補正）の格に判定を合わせています。"})
+    body.append({"type": "note", "text": f"主の型の定義: {mm['how']}。{_years(mm.get('years'))}の検定（{_years(mm.get('disc'))}で見つけ、{_years(mm.get('conf'))}で確かめる。全体の型でまとめて多重比較を補正）の格に判定を合わせています。"})
     doc = {
         "slug": g.slug,
         "title": f"{g.title}——{head}",

@@ -92,6 +92,17 @@ import trip_region from "./trip-region.json";
 import sire_course_going from "./sire-course-going.json";
 import sire_timing from "./sire-timing.json";
 import sire_line_dirt from "./sire-line-dirt.json";
+import going_style from "./going-style.json";
+import day_bias_more from "./day-bias-more.json";
+import weather_wind_heat from "./weather-wind-heat.json";
+import gate_more from "./gate-more.json";
+import pace_setup from "./pace-setup.json";
+import style_by_venue from "./style-by-venue.json";
+import weight_impost_more from "./weight-impost-more.json";
+import sex_age_more from "./sex-age-more.json";
+import gear_gelding from "./gear-gelding.json";
+import trainer_comment from "./trainer-comment.json";
+import style_by_surface from "./style-by-surface.json";
 
 const ALL = [
   upset_conditions,
@@ -181,6 +192,17 @@ const ALL = [
   sire_course_going,
   sire_timing,
   sire_line_dirt,
+  going_style,
+  day_bias_more,
+  weather_wind_heat,
+  gate_more,
+  pace_setup,
+  style_by_venue,
+  weight_impost_more,
+  sex_age_more,
+  gear_gelding,
+  trainer_comment,
+  style_by_surface,
 ] as Column[];
 
 export const COLUMNS: Column[] = ALL.filter((c) => SHOW_DEV_ONLY || !c.draft)
