@@ -131,7 +131,9 @@ function RunningMapView({ figure, entries }: { figure: RunningMapFigure; entries
   };
   const cells = showCourse ? zone(apt, 0.62, 0.2) : [];
   // 馬場特注ゾーン: 偶然とは言いにくい（補正後に有意な）格子は濃い緑＋枠、好走寄りだが有意でない格子はごく薄く
-  const dayCells = showDay ? zone(day?.heat, 0.55, 0.12) : [];
+  // 1 日分は走が少なく倍率が 1 に近いので、有意でない格子もコースの塗りより濃いめに出す（薄すぎて「何も出ない」に見えていた。2026-11-09）
+  const dayCells = showDay ? zone(day?.heat, 0.6, 0.3) : [];
+  const dayEmpty = !!day?.heat && zone(day.heat, 1, 1).length === 0;
   const cw = ex ? ((ex.x[1] - ex.x[0]) / (ex.n - 1)) * s : 0, ch = ex ? ((ex.y[1] - ex.y[0]) / (ex.n - 1)) * s : 0;
   const bracketOf = new Map(entries.map((e) => [e.key, e.bracket_number]));
   const picked = hs.find((h) => (h.key ?? h.horse_id) === sel) ?? null;
@@ -262,6 +264,7 @@ function RunningMapView({ figure, entries }: { figure: RunningMapFigure; entries
       <BgSwitch showCourse={showCourse} onCourse={setShowCourse} showDay={showDay} onDay={setShowDay} day={day} hasCourse={!!apt} />
       {showCourse && apt && <HeatLegend rgb={APT_RGB} text={`コース特注ゾーン（${apt.course}の好走しやすさ）`} />}
       {showDay && day?.heat && <HeatLegend rgb={DAY_RGB} text={`馬場特注ゾーン（${day.surface ?? ""}・枠つきは偶然とは言いにくい）`} />}
+      {showDay && dayEmpty && <div style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: 2 }}>馬場特注ゾーン: 前のレースの好走は、地図のどこかに偏っていません（塗る格子なし）。</div>}
       </div>
 
       <div>

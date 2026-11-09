@@ -37,8 +37,9 @@ COND_CHANGE = 0.5     # 前日と今日で馬場状態が違えば、前日の�
 DAY_RACES = 12        # 1 日のレース数（前日の race_id を作るとき）
 MIN_RUNS = 30
 FDR = 0.05
-SHRINK = 8.0
-BANDWIDTH = 0.6
+SHRINK = 4.0
+BANDWIDTH = 0.8
+MIN_CELL_EXPECTED = 0.6      # 格子の近くの走の期待の合計がこれ未満の格子は判定しない（描かない）
 
 
 def earlier_race_ids(race_id: str) -> list[str]:
@@ -206,7 +207,7 @@ def _heat(P: np.ndarray, y: np.ndarray, e: np.ndarray, codes: np.ndarray, extent
     base = float((w * y).sum() / max((w * e).sum(), 1e-9))
     o, x = W @ y, W @ (e * base)
     lift = (o + SHRINK) / (x + SHRINK)
-    valid = x > 1.5
+    valid = x > MIN_CELL_EXPECTED
     res = y - e * base
     nr = int(codes.max()) + 1
     tr = np.stack([np.bincount(codes, weights=W[j] * res, minlength=nr) for j in range(len(grid))])
