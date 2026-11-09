@@ -298,7 +298,8 @@ def cmd_rb() -> None:
     orig = P._read
 
     def _read(year: int, name: str, cols: list[str]):
-        if name == "megu_index_flat" and year < 2020 and (megu / str(year) / f"{name}.parquet").exists():
+        use_all = os.environ.get("REBUILD_MEGU_ALL") == "1"     # 全年を作り直しためぐ指数から読む（年ごとの as-of の版。megu_asof）
+        if name == "megu_index_flat" and (use_all or year < 2020) and (megu / str(year) / f"{name}.parquet").exists():
             d = pd.read_parquet(megu / str(year) / f"{name}.parquet")
             for c in cols:
                 if c not in d.columns:
@@ -309,7 +310,7 @@ def cmd_rb() -> None:
     P._read = _read
     out = BASE / "tp65"
     out.mkdir(parents=True, exist_ok=True)
-    runs, rep = P.build(list(range(2016, 2027)))
+    runs, rep = P.build(list(range(2016, 2027)))      # 本番（2020〜2026）と同じく 2026 年の走も履歴に入れる。学習の行とはキーで突き合わせるので 2026 年は学習に入らない
     runs.to_parquet(out / "runs.parquet", index=False)
     (out / "prep_report.json").write_text(json.dumps(rep, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     log(f"tp65 runs {len(runs)} めぐ被覆 {rep.get('megu_v3a_cover')} nk 被覆 {rep.get('nk_cover', rep.get('both_cover'))}")
@@ -381,6 +382,9 @@ def cmd_aux() -> None:
     t, info = align_cols(t, ROOT / "data/local/modeling/training_pipeline_v4/tp25e/aux_B.parquet")
     (BASE / "tp25e").mkdir(parents=True, exist_ok=True)
     t.to_parquet(BASE / "tp25e/aux_B.parquet", index=False)
+    # 最終アンサンブルの学習行の補助予測（本番の tp25e_eval.cmd_final_table に当たる）。2025 年は 2024 年までで学習した OOF なので aux_B と同じ
+    (BASE / "final_aux").mkdir(parents=True, exist_ok=True)
+    t.to_parquet(BASE / "final_aux/aux_train.parquet", index=False)
     log(f"aux_B {t.shape} 被覆 年別 {pd.Series(np.isfinite(oof[:, 0])).groupby(years).mean().round(3).to_dict()}")
 
 
@@ -472,6 +476,44 @@ def cmd_frame() -> None:
     log(f"本番と比べた行 {len(j)}、値が変わった列 {(d['changed'] > 0.001).sum()} / {len(d)}")
 
 
+def cmd_final_aux() -> None:
+    """推論用の補助ヘッドの最終モデル（fit_final_aux の (2) と同じ。2016〜2025 年の全行で学習、乱数 5 本）。
+    2025 年の行の補助予測（fit_final_aux の (1)）は cmd_aux の OOF（2024 年までで学習）を使うので作らない。出力: <BASE>/final_aux/model_s*.pkl・meta.pkl"""
+    import pickle
+
+    import torch
+
+    from src.pipeline.features import serving_aux as sa
+    from src.pipeline.models.tp25c_mtl import mtl_fit_predict
+    from src.scripts.data import tp25c_eval as c
+
+    patch_years()
+    c.FIX, c.TP, c.SX, c.OUT = BASE, BASE, BASE / "smartrc_ten1f", BASE / "tp25c"
+    out = BASE / "final_aux"
+    out.mkdir(parents=True, exist_ok=True)
+    torch.set_num_threads(int(os.environ.get("THREADS") or 4))
+    df, base, _sx = c.load_frame()
+    assert list(c.AUX_C) == sa.AUX_NAMES
+    X, A = df[base], df[c.AUX_C].to_numpy(dtype="float64")
+    race, fin, years = df["race_id"].to_numpy(), df["finish_position"].to_numpy(), df["year"].to_numpy()
+    Y = {"win": (fin == 1).astype(int), "top2": (fin <= 2).astype(int), "top3": (fin <= 3).astype(int)}
+    allr = np.flatnonzero(np.isfinite(fin.astype(float)) & (years <= 2025))
+    va = np.flatnonzero(years == 2025)[:1000]
+    seeds = [0, 1, 2, 3, 4]
+    for s in seeds:
+        p = out / f"model_s{s}.pkl"
+        if p.exists():
+            continue
+        o = mtl_fit_predict(X.iloc[allr], {q: x[allr] for q, x in Y.items()}, A[allr], race[allr], X.iloc[va], race[va], seed=s, aux_w=0.5, want_model=True)
+        tmp = p.with_suffix(".tmp")
+        tmp.write_bytes(pickle.dumps(o["model"]))
+        tmp.replace(p)                      # 途中で止まっても壊れた pkl を残さない
+        log(f"補助ヘッドの最終モデル seed{s}（{len(allr)} 行、{int(years[allr].min())}〜{int(years[allr].max())} 年）")
+    have = [s for s in seeds if (out / f"model_s{s}.pkl").exists()]
+    (out / "meta.pkl").write_bytes(pickle.dumps({"base_cols": base, "aux": sa.AUX_NAMES, "seeds": have, "train_rows": int(len(allr)),
+                                                 "trained_through": "2025-12-31", "trained_from": f"{int(years[allr].min())}-01-01"}))
+
+
 if __name__ == "__main__":
-    {"frame": cmd_frame, "aux": cmd_aux, "rb": cmd_rb, "labels": cmd_labels, "conn": cmd_conn, "self": cmd_self, "field": cmd_field, "ped": cmd_ped,
+    {"final_aux": cmd_final_aux, "frame": cmd_frame, "aux": cmd_aux, "rb": cmd_rb, "labels": cmd_labels, "conn": cmd_conn, "self": cmd_self, "field": cmd_field, "ped": cmd_ped,
      "tl": cmd_tl, "cy": cmd_cy, "best": cmd_best}[sys.argv[1]]()
