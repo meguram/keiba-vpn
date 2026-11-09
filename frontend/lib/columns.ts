@@ -34,6 +34,8 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
       { id: "sex", label: "性別・去勢", desc: "牝馬の季節性、去勢明け初戦など" },
       { id: "gear", label: "馬具", desc: "ブリンカーなど、装着の効果とベスト条件" },
       { id: "birth", label: "生まれ・母の年齢", desc: "初年度産駒、高齢出産馬" },
+      { id: "body", label: "馬体重・斤量", desc: "馬体重の増減、斤量の変化" },
+      { id: "age", label: "年齢", desc: "高齢馬、夏の3歳馬" },
     ],
   },
   {
@@ -47,6 +49,52 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
     id: "travel", label: "輸送・ローテーション", desc: "遠征・滞在・間隔による違い",
     children: [
       { id: "transport", label: "輸送と滞在", desc: "同じレベルの馬で、どれくらい差が出るか" },
+      { id: "distance", label: "距離の延長・短縮", desc: "前走から距離が替わる馬は走るか" },
+      { id: "course-change", label: "コース替わり", desc: "回り・競馬場が替わったときの成績" },
+      { id: "interval", label: "間隔・叩き", desc: "休み明け・叩き2戦目・連闘" },
+      { id: "class", label: "昇級・クラス", desc: "クラスが上がったときに通用するか" },
+      { id: "overseas", label: "海外帰り", desc: "海外遠征から帰った初戦" },
+    ],
+  },
+  {
+    id: "prev", label: "前走の内容", desc: "前走の着差・上がり・展開から次走を読む",
+    children: [
+      { id: "result", label: "着順・着差・上がり", desc: "僅差の負け、上がり最速、大敗からの巻き返し" },
+      { id: "pace", label: "展開と位置", desc: "前走のペースと位置取りは次走に生きるか" },
+    ],
+  },
+  {
+    id: "training", label: "調教", desc: "追い切りの乗り手・コース・強さ",
+    children: [
+      { id: "rider", label: "追い切りの乗り手", desc: "本番の騎手が追い切りに乗るか" },
+      { id: "workout", label: "追い切りの内容", desc: "坂路・ウッド、加速ラップ、本数、評価" },
+    ],
+  },
+  {
+    id: "stable", label: "厩舎・陣営", desc: "調教師・生産者による違い",
+    children: [
+      { id: "trainer", label: "調教師", desc: "2頭出し・転厩" },
+      { id: "owner-breeder", label: "生産者・馬主", desc: "生産牧場・クラブによる違い" },
+    ],
+  },
+  {
+    id: "track", label: "馬場・枠", desc: "その日の馬場の偏り・開催週・枠順・道悪",
+    children: [
+      { id: "bias", label: "当日の馬場の偏り", desc: "前のレースの傾向は後のレースも続くか" },
+      { id: "gate", label: "枠順・開催週", desc: "内枠・外枠、開幕週と最終週" },
+      { id: "going", label: "道悪", desc: "重・不良で走る馬" },
+    ],
+  },
+  {
+    id: "ability", label: "実績", desc: "コース実績・上がりの実績",
+    children: [
+      { id: "record", label: "コース実績・上がり", desc: "コース巧者、上がり最速の多い馬" },
+    ],
+  },
+  {
+    id: "race", label: "レースの性格", desc: "クラス・前走のステップ",
+    children: [
+      { id: "class", label: "クラス・ステップ", desc: "前走G1組など、前走のレースによる違い" },
     ],
   },
   {
@@ -55,6 +103,8 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
       { id: "distance", label: "距離別の成績", desc: "騎手ごとに、距離で好走率がどう変わるか" },
       { id: "change", label: "乗り替わり", desc: "騎手が替わると成績はどう変わるか" },
       { id: "class-venue", label: "クラス・競馬場・時期", desc: "騎手ごとの得意クラス・競馬場・季節" },
+      { id: "combo", label: "調教師とのコンビ", desc: "いつものコンビ、普段乗せない上位騎手" },
+      { id: "context", label: "騎乗の状況", desc: "継続騎乗、その日の調子、1鞍だけの遠征" },
     ],
   },
   {

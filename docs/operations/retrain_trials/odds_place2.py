@@ -20,6 +20,9 @@ sys.path.insert(0, "/home/jovyan/work/keiba-vpn")
 from src.scripts.data import odds_pred_eval as oe  # noqa: E402
 
 oe.OUT = DST
+TRAIN_FROM = int(os.environ.get("ODDS_TRAIN_FROM", "2020"))
+if os.environ.get("REBUILD_2016") == "1":
+    oe.BET = Path("/home/jovyan/work/retrain_out/base_2016/betting")
 DST.mkdir(parents=True, exist_ok=True)
 raw = pd.read_parquet(SRC / "wp_raw_oof.parquet")
 wp = oe.load_wp()
@@ -59,7 +62,7 @@ rid = rid_bak
 yA = np.log(allwp["place_mid"].to_numpy())
 yrA = allwp["year"].to_numpy()
 for Y in oe.YEARS:
-    tr = (yrA < Y) & (yrA >= 2020)
+    tr = (yrA < Y) & (yrA >= TRAIN_FROM)
     m = lgb.train(P, lgb.Dataset(FA[tr], yA[tr]), 800)
     te = yr == Y
     struct[te] = m.predict(Fp[te])

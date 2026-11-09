@@ -32,6 +32,12 @@ def log(m: str) -> None:
     print(f"[{time.strftime('%T')}] {m}", flush=True)
 
 
+if os.environ.get("REBUILD_2016") == "1":     # 2016〜2025 年の土台（rebuild_base_2016 / rebuild_groups_2016）で回す
+    from src.scripts.data import rebuild_groups_2016 as _rg
+
+    _rg.redirect()
+
+
 def setup():
     from src.pipeline.models import stage_models as sm
 

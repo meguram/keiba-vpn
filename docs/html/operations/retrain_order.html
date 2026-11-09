@@ -40,7 +40,7 @@ pre { background:var(--code); border:1px solid var(--border); border-radius:8px;
 <h2>2. 依存関係（上が先）— 親モデルに実際に入るものだけを区別</h2>
 <p class="sub">ホストの本番バンドル <code>final_v6e/bundle_v6_2025</code> の特徴量 1,231 列を、列名ごとに出どころの群へ割り当てて確認した（<code>serving_v4/v5/v6</code> の群の対応で突き合わせ）。「データとして持っている」ことと「親モデルの列になっている」ことは別なので、4 種類に分けて書く。</p>
 <h3>2.1 チャート（上流 → 下流）</h3>
-<!-- RETRAIN-STATUS:BEGIN --><div class="box"><b>再学習の状態</b>（2026-11-07 17:46 更新・学習年 2016-2025・段 5/19）: ▶ 学習中: <b>s3 [C][D] 追走難度 v2（位置取り予想は馬柱の集計で、学習モデルではない）</b>（2026-11-07 03:44 開始）<br/><span class='warn'>✘/■ 要対応: s4 [E] ラップ予想・s9 [I] 親モデルのメンバー OOF とアンサンブルの重み</span><br/><span class="muted">§2.1 と §2.6 のチャートの箱の下に状態（✔ 完了・▶ 実行中・・ 未着手・✘ 失敗・■ 判断待ち・－ 対象外）。実行中の箱は橙の太枠。<code>retrain_ctl.py</code> が記録のたびに書き直す（手動は <code>retrain_ctl.py html</code>、§2.6 の箱は <code>retrain_ctl.py node 箱 状態 --note …</code>）。</span></div><!-- RETRAIN-STATUS:END -->
+<!-- RETRAIN-STATUS:BEGIN --><div class="box"><b>再学習の状態</b>（2026-11-08 23:35 更新・学習年 2016-2025・段 10/19）: ▶ 作業中（§2.6 の箱）: <b>PARENT（メンバー＋アンサンブル完了（本番比 勝率 −0.0012）。本体の学習（test 2025）は判断待ち）</b><br/><span class="muted">§2.1 と §2.6 のチャートの箱の下に状態（✔ 完了・▶ 実行中・・ 未着手・✘ 失敗・■ 判断待ち・－ 対象外）。実行中の箱は橙の太枠。<code>retrain_ctl.py</code> が記録のたびに書き直す（手動は <code>retrain_ctl.py html</code>、§2.6 の箱は <code>retrain_ctl.py node 箱 状態 --note …</code>）。</span></div><!-- RETRAIN-STATUS:END -->
 <div class="legend">
 <span><i class="ln thick"></i>親モデルの列になる</span>
 <span><i class="ln thin"></i>前段 S3 の入力になるだけ</span>
@@ -105,16 +105,12 @@ flowchart TB
   classDef st_running stroke:#fb923c,stroke-width:5px;
   classDef st_bad stroke:#f87171,stroke-width:5px;
   DATA["<b>入力データ</b><br/>出馬表・馬柱・結果<br/>血統・馬主・追い切り<br/><span>✔ 完了</span>"]
-  POS["位置取り予想<br/><span>▶ 実行中：s3 追走難度 v2</span>"]
-  class POS st_running;
-  EASE["追走難度 v2<br/><span>▶ 実行中：s3 追走難度 v2</span>"]
-  class EASE st_running;
-  LAP["ラップ予想<br/><span>■ 判断待ち：s4 ラップ予想</span>"]
-  class LAP st_bad;
-  S3["<b>前段 S3（e）</b><br/>入力 275 列<br/>出力 3 列<br/><span>・ 未着手</span>"]
-  MEGU["めぐ指数の履歴 RB<br/>16 列<br/><span>・ 未着手</span>"]
-  PARENT["<b>親モデル</b><br/>7 メンバー × 5 seed<br/>1,231 列<br/><span>■ 判断待ち：s9 親モデルのメンバー OOF とア…</span>"]
-  class PARENT st_bad;
+  POS["位置取り予想<br/><span>✔ 完了</span>"]
+  EASE["追走難度 v2<br/><span>✔ 完了</span>"]
+  LAP["ラップ予想<br/><span>✔ 完了</span>"]
+  S3["<b>前段 S3（e）</b><br/>入力 275 列<br/>出力 3 列<br/><span>✔ 完了</span>"]
+  MEGU["めぐ指数の履歴 RB<br/>16 列<br/><span>✔ 完了</span>"]
+  PARENT["<b>親モデル</b><br/>7 メンバー × 5 seed<br/>1,231 列<br/><span>◐ 途中（残り s10・s11・s12）</span>"]
   POST["確率の較正 → 期待値の較正<br/>→ 印 → 買い目<br/><span>・ 未着手</span>"]
   DISP["<b>画面の表示だけ</b><br/>想定めぐ指数・成長指数<br/>展開タイプ・ペース予測<br/><span>－ 対象外</span>"]
   %% STATUS:END
@@ -180,7 +176,7 @@ flowchart TB
 <p class="sub">勝率は weighted_logit、連対・複勝は greedy の重み（<code>bundle.json</code> の <code>spec</code>）。5 seed 平均、学習 283,714 行、2020〜2025 年。重みは LOYO の合成で決めたもの。入力列数は本番バンドル <code>bundle.json</code> の各メンバーの <code>feature_cols</code> を、§2.2 の群に割り当てて数えた。</p>
 
 <h3>2.6 作るものの区分：モデリング（A）／特徴量生成（B）／境界（C）</h3>
-<!-- RETRAIN-STATUS:BEGIN --><div class="box"><b>再学習の状態</b>（2026-11-07 17:46 更新・学習年 2016-2025・段 5/19）: ▶ 学習中: <b>s3 [C][D] 追走難度 v2（位置取り予想は馬柱の集計で、学習モデルではない）</b>（2026-11-07 03:44 開始）<br/><span class='warn'>✘/■ 要対応: s4 [E] ラップ予想・s9 [I] 親モデルのメンバー OOF とアンサンブルの重み</span><br/><span class="muted">§2.1 と §2.6 のチャートの箱の下に状態（✔ 完了・▶ 実行中・・ 未着手・✘ 失敗・■ 判断待ち・－ 対象外）。実行中の箱は橙の太枠。<code>retrain_ctl.py</code> が記録のたびに書き直す（手動は <code>retrain_ctl.py html</code>、§2.6 の箱は <code>retrain_ctl.py node 箱 状態 --note …</code>）。</span></div><!-- RETRAIN-STATUS:END -->
+<!-- RETRAIN-STATUS:BEGIN --><div class="box"><b>再学習の状態</b>（2026-11-08 23:35 更新・学習年 2016-2025・段 10/19）: ▶ 作業中（§2.6 の箱）: <b>PARENT（メンバー＋アンサンブル完了（本番比 勝率 −0.0012）。本体の学習（test 2025）は判断待ち）</b><br/><span class="muted">§2.1 と §2.6 のチャートの箱の下に状態（✔ 完了・▶ 実行中・・ 未着手・✘ 失敗・■ 判断待ち・－ 対象外）。実行中の箱は橙の太枠。<code>retrain_ctl.py</code> が記録のたびに書き直す（手動は <code>retrain_ctl.py html</code>、§2.6 の箱は <code>retrain_ctl.py node 箱 状態 --note …</code>）。</span></div><!-- RETRAIN-STATUS:END -->
 <p class="sub">2026-11-06 に追記。「予測値を出すために学習するもの」と「計算・集計・結合で列を作るもの」を分ける。区分で守ることが変わる。</p>
 <div class="legend">
 <span style="color:#4ade80">■ A. モデリング（学習して予測値を出す）</span>
@@ -258,20 +254,20 @@ flowchart TB
   %% STATUS:BEGIN（scripts/dev/retrain_ctl.py が書く。手で直さない）
   classDef st_running stroke:#fb923c,stroke-width:5px;
   classDef st_bad stroke:#f87171,stroke-width:5px;
-  RAW["<b>入力データ</b><br/>結果・出馬表・馬柱・血統・追い切り・馬場<br/><span>✔ 完了：2016〜2025 の表がそろう</span>"]
+  RAW["<b>入力データ</b><br/>結果・出馬表・馬柱・血統・追い切り・馬場<br/><span>✔ 完了：2016〜2025 の表</span>"]
   POS["<b>位置取り予想</b> (今は馬柱の集計 = B)<br/>出力: 想定位置 pf_early・想定順位 pf_rank<br/>脚質・先行馬の数と圧力から想定ペース z_hat<br/><span>✔ 完了：学習モデル MAE0.20159 合格</span>"]
   PACE["<b>ペース・展開の確率</b><br/>出力: ペース型の確率 lp_p_slow/mid/high<br/>前半・上がりの偏差 lp_exp_*<br/>補助ヘッド: ペース差 mtl_r_pace_bal・RPCI mtl_r_rpci<br/>(5F・L3F基準は未整備)<br/><span>✔ 完了：10回で打ち切り。2025 前半3F 0.5…</span>"]
   BIAS["<b>馬場の当日予測</b> (案)<br/>出力: 当日の傾向・適用可否<br/><span>✔ 完了：合格</span>"]
   ODDS["<b>オッズ予測</b><br/>出力: 想定単勝・複勝オッズ<br/>(下限〜上限)<br/><span>✔ 完了：合格</span>"]
   EASE["<b>追走難度 v2</b><br/>想定位置取りを取るのがきついか楽かを得点化<br/>出力: 終いの落ち EASE2_drain(秒)<br/>得点 EASE2_pct (0〜100。高いほど楽、50が標準)<br/><span>✔ 完了：合格</span>"]
-  AS["<b>基礎能力 AS</b><br/>出力: めぐ指数の履歴 RB 16列<br/>馬自身の過去走の履歴 self8 199列<br/><span>・ 未着手</span>"]
+  AS["<b>基礎能力 AS</b><br/>出力: めぐ指数の履歴 RB 16列<br/>馬自身の過去走の履歴 self8 199列<br/><span>✔ 完了</span>"]
   APT["<b>適性マップの点数化 AAR</b><br/>出力: 条件ごとの適性の点<br/>(距離・コース・馬場・ペース・位置取り)<br/><span>－ 対象外：未採用・要検討</span>"]
   GRP["<b>適性グルーピング</b><br/>出力: 似た適性の馬のグループ<br/><span>－ 対象外：未採用・要検討</span>"]
   GST["グループ内の成績・近さ<br/><span>－ 対象外：未採用・要検討</span>"]
-  STAT["<b>その他</b><br/>出力: 統計量・ターゲットエンコーディング<br/>騎手・調教師・馬主・血統の成績・出走メンバー構成<br/>追い切り・血統 ridge/SVD(PX)<br/><span>・ 未着手：2016 年以降で作り直し</span>"]
+  STAT["<b>その他</b><br/>出力: 統計量・ターゲットエンコーディング<br/>騎手・調教師・馬主・血統の成績・出走メンバー構成<br/>追い切り・血統 ridge/SVD(PX)<br/><span>✔ 完了：土台の表と群を 2016〜2025 で作り直…</span>"]
   S3["<b>前段 S3</b> (条件適用後の能力 APS に相当)<br/>出力: 予想走破時計 s_time_pred<br/>時計差 s_time_gap・予想順位 s_rank_pred<br/><span>✔ 完了：合格</span>"]
-  PARENT["<b>下流（親モデル）</b> 7 メンバー × 5 seed<br/>出力: 勝率・連対率・複勝率<br/><span>■ 判断待ち：s9 親モデルのメンバー OOF とア…</span>"]
-  class PARENT st_bad;
+  PARENT["<b>下流（親モデル）</b> 7 メンバー × 5 seed<br/>出力: 勝率・連対率・複勝率<br/><span>▶ 実行中：メンバー＋アンサンブル完了</span>"]
+  class PARENT st_running;
   EXO["<b>馬券組合せ確率</b> 割引 Harville（実装済み）<br/>出力: 馬連・ワイド・馬単・3連複の的中確率<br/><span>・ 未着手</span>"]
   POST["<b>確率の較正 → 期待値 → 印 → 買い目</b><br/>期待値 = 確率 × オッズ<br/><span>・ 未着手</span>"]
   FWD["予測保存・結果照合<br/>前向き検証<br/><span>・ 未着手</span>"]

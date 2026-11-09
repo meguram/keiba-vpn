@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>競馬の通説の仮説一覧— keiba-vpn</title>
+<style>:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --warn:#fbbf24; }
+* { box-sizing: border-box; } body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 15px; padding: 40px 56px 96px; max-width: 1180px; margin: 0 auto; }
+@media (max-width: 700px) { body { padding: 24px 16px 64px; } }
+a { color: var(--accent-2); } h1 { font-size: 26px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; } h3 { font-size: 16px; margin: 22px 0 8px; }
+table { border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; background: var(--panel); width: 100%; } th, td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; vertical-align: top; } th { background: #1b2a4d; }
+td.num { text-align: right; font-family: monospace; } td.id { font-family: monospace; white-space: nowrap; } .muted { color: var(--muted); font-size: 13px; } .note { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+.wrap { overflow-x: auto; }</style></head>
+<body><a href="../../index.html" class="muted">← ドキュメント一覧</a>
+<h1>競馬の通説の仮説一覧（検証前の洗い出し）</h1>
+<p class="muted">ユーザーの依頼（2026-11-07）: 『別路線で、あらゆる通説を仮説検証したい。例えば、あるクラスのあるコースは距離延長が好走傾向にある、このレースではこの調教パターンの馬が好走しやすい、など。まずは考えられるパターンの洗い出しから』『調教師と騎手の組み合わせ、最終追い切りに騎乗予定のジョッキーが乗っているか、など多角的な視点で』『競馬歴数十年の人の視点で』。今後の展望: 『検証済みで優位と示されたパターンだけを使い、任意のレースで各馬がどれだけ当てはまるかで序列を付ける（テーブルデータの学習とは別の系統）』。<b>この版は洗い出しだけで、検証はまだしていない。</b></p>
+
+<div class="note"><b>検証の結果.</b> この一覧の全ての型を、全ての切り口（コース・馬場・クラス など）で検定した結果は <a href="folklore_verification.html">通説の検証結果</a>（信頼度 S/A/B/C、2026-11-08）。</div>
+<div class="note"><b>要点.</b> 通説を 16 分類・308 型に整理した（初版 11 分類・183 型に、玄人の目線の見直しを 20 回重ねて 124 型を加え、ユーザーの指定で B37（調教師ごとの得意調教パターンのランク）を足した。経緯は第 4 節）（下の表の 1 行 = 1 つの通説の型。各型は『条件の切り方』の列のとおりコース・クラスなどで細かく分かれるので、実際の検定の本数はこの数倍になる）。
+各型に、使うデータ（略号は第 1 節）と、似た内容を既に調べた章（ある場合）を付けた。既存の章の多くは『モデルの予測に対する残差』や『回収率』で判定しており、今回の『その条件の馬はそうでない馬より好走するか』という基準では未整理のものが多い。
+第 3 節に判定の進め方の案（比較の基準・期間・多重比較）を置いた。<b>レビューで決めてほしい点</b>は第 3 節の末尾（3.7）にまとめた。</div>
+
+<h2>1. 手元のデータ（仮説に使えるもの）</h2>
+<div class='wrap'><table><thead><tr><th>略号</th><th>データ</th><th>中身</th><th>期間</th><th>注意</th></tr></thead><tbody>
+<tr><td class='id'>R</td><td>成績</td><td>着順・着差・タイム・通過順・上がり3F・斤量・馬体重/増減・人気・単勝オッズ・騎手・調教師（race_result / 馬ごとの result_tbl）</td><td>2016〜2026（馬の過去走は更に前）</td><td></td></tr>
+<tr><td class='id'>L</td><td>レースラップ</td><td>ハロンごとのラップ・ペース（race_result.lap_times / pace）</td><td>2016〜2026</td><td></td></tr>
+<tr><td class='id'>HL</td><td>馬ごとの区間ラップ</td><td>各馬の区間タイム・区間の位置（horse_lap_sections）</td><td>2024〜2026（9,575 レース）</td><td>2023 以前はほぼ無い</td></tr>
+<tr><td class='id'>T</td><td>追い切り履歴</td><td>日付・曜日・コース（栗坂/美Ｗ など）・馬場・乗り手・時計/ラップ・位置・脚色（馬也/強め/一杯）・評価 A〜D・短評・記者コメント・併せ（先着/同入/遅れ・追走/先行）</td><td>2016〜2026</td><td>ローカルは約 1.4 万頭分の一部（全量は stg）。past_training は列がずれて保存されている（date に乗り手、course にラップと併せの文…）ので読み直しが要る</td></tr>
+<tr><td class='id'>OK</td><td>最終追い切り（出馬表）</td><td>最終追い切りの日・コース・乗り手・ラップ・脚色・評価・短評（race_oikiri）</td><td>要確認（ローカルは 2026）</td><td></td></tr>
+<tr><td class='id'>TC</td><td>厩舎コメント</td><td>調教師・助手の談話と話し手（race_trainer_comment）</td><td>2020〜2026</td><td>evaluation 列は空。本文の語で判定する</td></tr>
+<tr><td class='id'>S</td><td>SmartRC</td><td>ブリンカー、東西、馬主・生産者、父/母父の系統コード（大・小・細）、前走のバイアス（tb_io 内外・tb_diff）、前走の馬場、ローテの型と評価（rota_type/rota_eval）、テン/上がりの持ち時計の順位、コース経験（exp_cur_*）、距離短縮/延長の経験別成績（exp_rota_*）、前走騎手（jcode_before）</td><td>ローカルは 2026 のみ（過去分は要確認）</td><td>ローテ・経験の集計を SmartRC 側が先に持っている</td></tr>
+<tr><td class='id'>P</td><td>血統</td><td>5 代・10 代の祖先、クロス（インブリード）の量と位置、父系・母父系の系統、母の産駒（きょうだい）</td><td>全馬</td><td></td></tr>
+<tr><td class='id'>PD</td><td>パドック</td><td>パドックの評価・コメント</td><td>2021〜2025 の一部（2025 で約 1.4 万頭）</td><td>被覆が薄い。年により偏る</td></tr>
+<tr><td class='id'>B</td><td>バロメーター</td><td>総合・スタート・追走・決め手の指数</td><td>要確認</td><td></td></tr>
+<tr><td class='id'>SI</td><td>スピード指数</td><td>最高・平均・距離別・コース別・直近 3 走（idx_speed_*）</td><td>2020〜2025（出走の約半数）</td><td></td></tr>
+<tr><td class='id'>M</td><td>めぐ指数</td><td>自前の能力指数（v3a）</td><td>2020〜</td><td></td></tr>
+<tr><td class='id'>CU</td><td>クッション値・含水率</td><td>JRA 公表の芝のクッション値、芝・ダートの含水率</td><td>2018〜2026</td><td></td></tr>
+<tr><td class='id'>W</td><td>気象</td><td>気象庁の時間ごとの気温・降水・風（jma_weather_hourly_flat）</td><td>全期間</td><td></td></tr>
+<tr><td class='id'>CM</td><td>コース</td><td>コースの形（直線の長さ・坂・コーナー数・内/外回り・最初のコーナーまでの距離）、改修歴</td><td>全コース</td><td>course_profiles / course_layout_map / track_renovations</td></tr>
+<tr><td class='id'>TD</td><td>位置取り予想・追走難度</td><td>事前の位置取り予想、追走難度 v2、走法スコア（TS/GC）、走法マップ</td><td>2020〜</td><td>自前の派生。学習を含むので『通説』の検証には補助として使う</td></tr>
+<tr><td class='id'>G</td><td>遺伝子</td><td>ミオスタチン遺伝子型など（myostatin_genes / performance_genes）</td><td>一部の種牡馬・馬</td><td>被覆が薄い</td></tr>
+<tr><td class='id'>JT</td><td>騎手・調教師の成績</td><td>as-of の通算・直近・条件別の成績（jt_race_features）</td><td>2016〜2026</td><td></td></tr>
+<tr><td class='id'>O</td><td>オッズの時系列</td><td>T-60 / T-15 / 直前の単複・馬連など</td><td>2026 のみ</td><td>通説の多くは検証できる年数が足りない。市場の織り込み確認（比較の基準）としては確定オッズを使う</td></tr>
+</tbody></table></div>
+<p class="muted">追い切りの乗り手は名前（姓だけのことが多い）で、騎手 ID が無い。『最終追い切りに本番の騎手が乗っているか』は、本番騎手の名前（出馬表）との名寄せ表を先に作る必要がある（同姓の騎手・助手の区別、『Ｍデム』のような略記）。</p>
+<h3>1.1 通説の検証に要るが、手元に無い・要確認のデータ</h3>
+<div class='wrap'><table><thead><tr><th>データ</th><th>使う型</th><th>状態と代わりの手</th></tr></thead><tbody>
+<tr><td>ブリンカー以外の馬具（チークピーシーズ・シャドーロール・舌縛り・メンコ・ホライゾネット）、蹄鉄（エクイロックス・接着装蹄）</td><td>H17</td><td>手元はブリンカー（S）だけ。JRA の出馬表の馬具欄の取り込みが要る</td></tr>
+<tr><td>収得賞金・優先出走権・出走ボーダー</td><td>I12・I13</td><td>要確認。獲得賞金と着順から収得賞金をある程度は計算で戻せる</td></tr>
+<tr><td>出走登録・除外・抽選の記録</td><td>D14</td><td>要確認。特別登録の一覧が取れれば『登録したが出ていない』で代えられる</td></tr>
+<tr><td>外厩（放牧先）・在厩の期間</td><td>D01・D13</td><td>直接は無い。帰厩は『休養後の最初の追い切りの日』で代える</td></tr>
+<tr><td>返し馬・装鞍所・パドックの全頭の記録（二人引き・発汗・入れ込み）</td><td>H10・H20</td><td>PD は一部だけ。当日の気配の通説は、今は被覆のある年に限って見る</td></tr>
+<tr><td>騎乗停止・騎手の負傷の記録</td><td>C12・C21</td><td>空き日数で推定。JRA の裁決の記録の取り込みで正確になる</td></tr>
+<tr><td>騎手のエージェント</td><td>C26</td><td>公表の名簿が無い。今は検証できない型として残す</td></tr>
+<tr><td>父・母の現役の戦績</td><td>E16・E21</td><td>要確認。種牡馬・繁殖牝馬も馬 ID で成績を引ければ足りる</td></tr>
+<tr><td>芝の管理の暦（オーバーシード・張り替え・エアレーション）、ダートの砂の入れ替え</td><td>F19</td><td>JRA の馬場情報の文から取り込みが要る。今は季節と開催の何日目で代える</td></tr>
+<tr><td>追い切りの位置（内ラチから何分どころ）・併せの頭数</td><td>B28・B30</td><td>T の位置・短評にある。列のずれ（第 1 節の注意）を直してから使う</td></tr>
+</tbody></table></div>
+<h2>2. 通説・仮説の一覧（308 型）</h2>
+<div class='wrap'><table><thead><tr><th>分類</th><th>型の数</th><th>見方</th></tr></thead><tbody>
+<tr><td><a href='#cat-A'>A. ローテーション・条件替わり</a></td><td class='num'>47</td><td>前走から今回への『替わり』。予想で最も語られる軸。どの替わりも『クラス × 競馬場 × 面 × 距離（コース単位）』と『前走の内容』で切って、どこで効くかを探す。</td></tr>
+<tr><td><a href='#cat-B'>B. 調教（追い切り）</a></td><td class='num'>37</td><td>『最終追い切り』『1 週前』『中間の本数』『乗り手』『併せ』の組み合わせ。レース・コース・厩舎別に効き方が違う、という通説が多い。</td></tr>
+<tr><td><a href='#cat-C'>C. 騎手</a></td><td class='num'>26</td><td>騎手単独ではなく『誰と組むか』『どこで・どの距離で乗るか』『なぜ乗るのか』の文脈に通説が多い。</td></tr>
+<tr><td><a href='#cat-D'>D. 厩舎・馬主・生産者</a></td><td class='num'>19</td><td>『どの陣営か』の通説。外厩（ノーザンファーム天栄・しがらき）は直接のデータが無いので、生産者・間隔・帰厩後の本数で近づける。</td></tr>
+<tr><td><a href='#cat-E'>E. 血統</a></td><td class='num'>21</td><td>父・母父・系統・クロス・きょうだい。単独の父ではなく『父 × コース・馬場・距離替わり・季節』の形で語られる。</td></tr>
+<tr><td><a href='#cat-F'>F. 馬場・天候・バイアス</a></td><td class='num'>19</td><td>当日の馬場の偏り（内/外・前/後）を、その日の前のレースから読んで後のレースに使う、という予想家の基本。</td></tr>
+<tr><td><a href='#cat-G'>G. 枠・展開・隊列</a></td><td class='num'>21</td><td>『どこから出て、どの位置で、どのペースになるか』。コース × 枠 × 想定位置 × 想定ペースの組。</td></tr>
+<tr><td><a href='#cat-H'>H. 馬体・体調・個体</a></td><td class='num'>21</td><td>体重・斤量・性別・年齢・馬具・パドック。数字で確かめやすい通説が多い。</td></tr>
+<tr><td><a href='#cat-I'>I. 番組・レースの性格</a></td><td class='num'>20</td><td>『このレースは〇〇が強い』という重賞の傾向、条件戦の性格、新馬戦の通説。</td></tr>
+<tr><td><a href='#cat-J'>J. 能力指標の通説</a></td><td class='num'>12</td><td>『指数上位を買え』系。能力指標は強い（それ自体はモデルが既に使う）ので、通説としては『どの条件で指数が当てになる/ならないか』を見る。</td></tr>
+<tr><td><a href='#cat-K'>K. 組み合わせ（掛け算）の型</a></td><td class='num'>18</td><td>予想家が実際に使うのは単独の要素より『A かつ B』。上の分類同士の主な掛け合わせを型として先に決めておく（全組合せの走査は多重比較が膨らむので、通説として語られる組だけにする）。</td></tr>
+<tr><td><a href='#cat-L'>L. 格言（定番の言い回しをそのまま検証する）</a></td><td class='num'>10</td><td>玄人が実際に口にする格言。上の分類の型と中身が重なるものもあるが、言い回しどおりの条件で 1 回は確かめる（格言ごとの『当たる・外れる』の答えを残す）。格言どうしで向きが逆のものは 3.5 で対にする。</td></tr>
+<tr><td><a href='#cat-M'>M. 初物（初めての条件）</a></td><td class='num'>9</td><td>『初〇〇』は予想で必ず問われる不安要素。経験が無い馬は人気が落ちやすいので、市場が割り引き過ぎか、割り引きが足りないかを見る。</td></tr>
+<tr><td><a href='#cat-N'>N. 消し（危険な人気馬）</a></td><td class='num'>10</td><td>玄人の予想は『本命を選ぶ』と同じくらい『人気馬を消す』で差が付く。上位人気（例: 1〜3 番人気）に限った型として立て、序列づけでは減点に使う。</td></tr>
+<tr><td><a href='#cat-P'>P. 競馬場・コースの格言</a></td><td class='num'>10</td><td>競馬場ごとに語り継がれた格言。コースの形（CM）と実際の位置・上がりの成績で、格言どおりの偏りがあるかを見る。改修（京都 2020-11〜2023-04 の休止と改修後）の前後で分ける。</td></tr>
+<tr><td><a href='#cat-X'>X. 市場（オッズ）の通説</a></td><td class='num'>8</td><td>ここだけは市場の情報そのものの通説。序列づけ（市場に依存しない）には使わず、比較の基準・別枠として扱う。過去分のオッズの時系列が 2026 年しか無いので、多くは今は検証できない。</td></tr>
+</tbody></table></div>
+<h3 id='cat-A'>A. ローテーション・条件替わり（47 型）</h3><p class='muted'>前走から今回への『替わり』。予想で最も語られる軸。どの替わりも『クラス × 競馬場 × 面 × 距離（コース単位）』と『前走の内容』で切って、どこで効くかを探す。</p>
+<div class='wrap'><table><thead><tr><th>ID</th><th>通説・仮説</th><th>条件の切り方（検証の形）</th><th>データ</th><th>似た既存の調査</th></tr></thead><tbody>
+<tr><td class='id'>A01</td><td>距離延長は好走する（特にこのクラス・このコース）</td><td>延長幅（+100〜200 / +300〜400 / +500 以上）× コース × クラス。前走の位置取り（先行して止まった/差して届かず）で更に分ける</td><td>R, CM, S</td><td>equipment_and_change（延長・短縮の段階）</td></tr>
+<tr><td class='id'>A02</td><td>距離短縮は好走する（特に前走で先行して止まった馬・ダート短距離）</td><td>短縮幅 × コース × クラス × 前走の 4 角位置</td><td>R, CM</td><td>equipment_and_change</td></tr>
+<tr><td class='id'>A03</td><td>同距離の継続が一番安定する</td><td>同距離・同コース連続 × 前走着順帯</td><td>R</td><td></td></tr>
+<tr><td class='id'>A04</td><td>初ダートは父・母父がダート系なら走る</td><td>芝→ダート初 × 父系統（米国型/ダート実績の父）× 距離帯 × 前走芝の着順</td><td>R, P, S</td><td>equipment_and_change（芝↔ダート）</td></tr>
+<tr><td class='id'>A05</td><td>ダート→芝替わりは母父サンデー系・欧州型なら走る</td><td>ダ→芝 × 父・母父系統 × 芝の開催（高速/時計のかかる）</td><td>R, P, CU</td><td></td></tr>
+<tr><td class='id'>A06</td><td>芝→ダ替わりの 2 戦目で上積み</td><td>替わって 2 戦目 × 1 戦目の着順・着差</td><td>R</td><td></td></tr>
+<tr><td class='id'>A07</td><td>内回り→外回り（またはその逆）の替わり</td><td>同場の内↔外回り替わり × 脚質（前走の上がり順位）</td><td>R, CM</td><td></td></tr>
+<tr><td class='id'>A08</td><td>右回り→左回り（左回り巧者・右回り巧者）</td><td>回りの替わり × その馬の回り別の過去成績の差</td><td>R, CM</td><td></td></tr>
+<tr><td class='id'>A09</td><td>坂のあるコース→ないコース（小回り平坦巧者）</td><td>坂の有無の替わり × 馬体重・脚質</td><td>R, CM</td><td></td></tr>
+<tr><td class='id'>A10</td><td>直線の長さが変わる（東京・新潟外→中山・小回り）</td><td>直線長の差（前走−今回）× 前走の上がり順位</td><td>R, CM</td><td></td></tr>
+<tr><td class='id'>A11</td><td>新潟千直は外枠・千直経験馬</td><td>千直 × 枠 × 千直の経験の有無</td><td>R</td><td></td></tr>
+<tr><td class='id'>A12</td><td>叩き 2 戦目は上積み、3 戦目でピーク</td><td>休み明けからの戦数（1/2/3/4+）× 休養の長さ × 年齢</td><td>R</td><td>rest_and_interval</td></tr>
+<tr><td class='id'>A13</td><td>休み明けでも走る厩舎・走らない厩舎がある</td><td>休み明け初戦（中 10 週以上）× 調教師（as-of の休み明け成績）</td><td>R, JT</td><td>rest_and_interval</td></tr>
+<tr><td class='id'>A14</td><td>連闘・中 1 週は人気薄でも好走（使い詰めの厩舎の勝負）</td><td>間隔 7/14 日 × 前走着順 × 調教師</td><td>R, JT</td><td>rest_and_interval</td></tr>
+<tr><td class='id'>A15</td><td>昇級初戦は通用しない／勝ち方次第で通用する</td><td>昇級初戦 × 前走の着差・勝ちタイムのクラス基準比・上がり順位</td><td>R, L</td><td>equipment_and_change（昇級・降級）</td></tr>
+<tr><td class='id'>A16</td><td>格上挑戦（条件馬の重賞出走）は来ない</td><td>格上挑戦 × クラス差 × 前走着順</td><td>R</td><td></td></tr>
+<tr><td class='id'>A17</td><td>前走で着差 0.5 秒以内の負けは次走好走</td><td>前走の着差帯 × 前走の人気 × 今回のクラス替わりの有無</td><td>R</td><td></td></tr>
+<tr><td class='id'>A18</td><td>前走上がり最速で負けた馬は次走来る</td><td>前走上がり 1 位 かつ 4 着以下 × 前走 4 角位置</td><td>R</td><td></td></tr>
+<tr><td class='id'>A19</td><td>前走 4 角 10 番手以下から掲示板は、展開ひとつで勝ち負け</td><td>前走 4 角の位置の割合 × 前走着順 × 今回の想定ペース</td><td>R, L, TD</td><td>pace_benefit</td></tr>
+<tr><td class='id'>A20</td><td>前走ハイペースで先行して粘った馬（展開に逆らった好走）は強い</td><td>前走のペース（前後半差）× 前走 4 角位置 × 前走着順</td><td>R, L</td><td>pace_benefit</td></tr>
+<tr><td class='id'>A21</td><td>前走スローで差して届かずの馬は過大評価されがち</td><td>前走スロー × 後方 × 上がり上位で負け</td><td>R, L</td><td>pace_benefit</td></tr>
+<tr><td class='id'>A22</td><td>前走で道悪に泣いた馬の良馬場替わり</td><td>前走 重・不良 で凡走 × 今回 良 × その馬の良の成績</td><td>R</td><td></td></tr>
+<tr><td class='id'>A23</td><td>前走大敗（2 桁着順）からの巻き返しは条件替わりがある時だけ</td><td>前走 10 着以下 × 今回の替わり（距離・面・馬場・騎手）の有無と数</td><td>R</td><td></td></tr>
+<tr><td class='id'>A24</td><td>前走の不利（出遅れ・挟まれ）を受けた馬の次走</td><td>前走の出遅れ（通過 1 角が後方で普段と違う）× 次走</td><td>R, HL</td><td>slow_start_real_label</td></tr>
+<tr><td class='id'>A25</td><td>コース巧者（同コースで 3 着内の経験）は人気以上に来る</td><td>同コースの 3 着内の回数 × 今回の人気帯</td><td>R, S</td><td>course_specific_effects</td></tr>
+<tr><td class='id'>A26</td><td>リピーター（同じ重賞で好走した馬は翌年も）</td><td>同レース名の前年 3 着内 × 年齢</td><td>R</td><td></td></tr>
+<tr><td class='id'>A27</td><td>前走のレース（ステップ）で次走成績が変わる（例: 前走 G1 組は G2・G3 で強い）</td><td>前走のグレード・レース名 × 今回のレース（重賞）</td><td>R</td><td>handicapper_viewpoints（前走ステップ）</td></tr>
+<tr><td class='id'>A28</td><td>前走の勝ち上がりが『ハイレベル戦』なら昇級でも通用</td><td>前走の同走馬のその後の勝ち上がり率（as-of）× 昇級初戦</td><td>R</td><td>feature_screening（対戦関係）</td></tr>
+<tr><td class='id'>A29</td><td>前走で先着された相手との再戦は逆転しにくい</td><td>前走の同走馬との再戦 × 着差 × 斤量差の変化</td><td>R</td><td></td></tr>
+<tr><td class='id'>A30</td><td>3 歳夏の古馬との初対戦（3 歳馬の斤量恩恵）</td><td>6〜9 月の 3 上戦 × 3 歳 × クラス</td><td>R</td><td></td></tr>
+<tr><td class='id'>A31</td><td>2 歳戦の距離延長は早熟スプリンター血統では止まる</td><td>2 歳 × 延長 × 父のスプリント傾向</td><td>R, P</td><td></td></tr>
+<tr><td class='id'>A32</td><td>ローカル→中央場・中央→ローカルの替わり</td><td>前走の場の格 × 今回の場 × クラス</td><td>R</td><td></td></tr>
+<tr><td class='id'>A33</td><td>ハンデ戦の斤量減（前走比 −2kg 以上）は好走</td><td>斤量の前走比 × ハンデ戦か</td><td>R</td><td></td></tr>
+<tr><td class='id'>A34</td><td>海外帰りの初戦は走らない（遠征の疲れ・検疫・輸送）</td><td>前走が海外 × 帰国初戦 × 間隔（検疫を含む日数）× 年齢。海外の走歴は馬の成績（result_tbl）には無く、出馬表の過去 5 走（past_past_races の場名: メイダン・シャティン・パリロンシャン など）から判定する</td><td>R, past_past_races</td><td></td></tr>
+<tr><td class='id'>A35</td><td>海外帰りは遠征先で差が出る（香港帰りは堅実、欧州帰りは重い馬場の反動、中東帰りは春に崩れる）</td><td>遠征先の地域（香港・中東・欧州・北米・豪州）× 帰国初戦 × 今回の面・距離</td><td>R, past_past_races</td><td></td></tr>
+<tr><td class='id'>A36</td><td>海外で好走して帰った馬は国内でも通用、海外の大敗は度外視してよい</td><td>海外の前走の着順帯 × 帰国初戦の着順（前走の国内の着順・指数と比べる）</td><td>R, past_past_races, SI</td><td></td></tr>
+<tr><td class='id'>A37</td><td>海外帰りの 2 戦目（叩いて）で本来の状態に戻る</td><td>帰国後何戦目（1/2/3）× 帰国初戦の着順</td><td>R, past_past_races</td><td>rest_and_interval（叩き何戦目）</td></tr>
+<tr><td class='id'>A38</td><td>海外帰りでも厩舎によって仕上がりが違う（遠征慣れした厩舎）</td><td>帰国初戦 × 調教師の海外遠征の回数（as-of）</td><td>R, past_past_races, JT</td><td></td></tr>
+<tr><td class='id'>A39</td><td>海外帰りの初戦は帰国後の追い切りの本数が少ないと割引</td><td>帰国初戦 × 帰国後の追い切り本数・強度</td><td>R, past_past_races, T</td><td></td></tr>
+<tr><td class='id'>A40</td><td>鉄砲駆け（休み明け初戦が一番走る馬）がいる。休み明けの割引は馬ごとに違う</td><td>その馬の過去の休み明け初戦の成績 − 叩き 2〜3 戦目の成績（as-of、2 回以上の休み明けがある馬）× 今回の休み明け</td><td>R</td><td>rest_and_interval</td></tr>
+<tr><td class='id'>A41</td><td>2 走ボケ（休み明けで好走した次走は反動で凡走する）</td><td>休み明け初戦で 3 着内・着差 0.3 秒以内 × 次走の間隔（中 2〜4 週）× 年齢。A12（叩き 2 戦目の上積み）と向きが逆なので、前走の内容で分けて両方を見る</td><td>R</td><td>rest_and_interval</td></tr>
+<tr><td class='id'>A42</td><td>連勝中の馬（勢い）は昇級しても止まらない</td><td>直近の連勝数（2/3+）× 昇級初戦 × 連勝の着差</td><td>R</td><td></td></tr>
+<tr><td class='id'>A43</td><td>掲示板続きの堅実馬（2・3 着が多い『勝ち切れない馬』）は 3 着内の軸向きだが、単勝は買えない</td><td>直近 5 走の 3 着内率・勝率の差 × 目的変数を勝ち/3 着内で別に</td><td>R</td><td></td></tr>
+<tr><td class='id'>A44</td><td>ベスト距離への戻り（前走で適性外の距離を使った後）は巻き返す</td><td>前走の距離がその馬の好走距離帯の外 × 今回は好走距離帯に戻る × 前走着順</td><td>R</td><td></td></tr>
+<tr><td class='id'>A45</td><td>前走は『使っただけ』（本番前の叩き・適性外の条件）で、着順は度外視してよい</td><td>前走が適性外（面・距離・馬場）× 前走凡走 × 今回は適性内。A23 とは『前走の替わり』側で切る点が違う</td><td>R</td><td></td></tr>
+<tr><td class='id'>A46</td><td>距離帯の境目は別物（1400 は特殊、1800 と 2000 は別の適性）</td><td>距離の替わり（1200↔1400・1600↔1400・1800↔2000）× その馬の各距離の成績。延長/短縮の幅（A01・A02）ではなく『境目をまたぐか』で切る</td><td>R, CM</td><td></td></tr>
+<tr><td class='id'>A47</td><td>中央場の上級条件で負けた馬のローカル替わり（相手弱化）</td><td>前走が中央場の同クラス × 今回ローカル × 前走の着差・メンバーの格（出走馬の重賞好走数）</td><td>R</td><td></td></tr>
+</tbody></table></div>
+<h3 id='cat-B'>B. 調教（追い切り）（37 型）</h3><p class='muted'>『最終追い切り』『1 週前』『中間の本数』『乗り手』『併せ』の組み合わせ。レース・コース・厩舎別に効き方が違う、という通説が多い。</p>
+<div class='wrap'><table><thead><tr><th>ID</th><th>通説・仮説</th><th>条件の切り方（検証の形）</th><th>データ</th><th>似た既存の調査</th></tr></thead><tbody>
+<tr><td class='id'>B01</td><td>最終追い切りに本番の騎手が乗る馬は勝負気配</td><td>最終追い切りの乗り手 = 本番の騎手 × 騎手の格 × 乗り替わりの有無。乗り手は名前（『永島』など姓のみ）なので、本番騎手の名前と突き合わせる名寄せが要る</td><td>T/OK, R</td><td>workout_remaining_ideas（追い切り騎手。ただしレース騎手とは結合していない）</td></tr>
+<tr><td class='id'>B02</td><td>1 週前追い切りに本番の騎手が乗る（感触を確かめた）</td><td>1 週前（レース 7〜10 日前）の乗り手 = 本番騎手</td><td>T, R</td><td></td></tr>
+<tr><td class='id'>B03</td><td>騎手がわざわざトレセンへ追い切りに行く（関東騎手が栗東へ・遠征先へ）</td><td>本番騎手の所属と追い切りの場所の東西が違う × 乗り手 = 本番騎手</td><td>T, R, S</td><td></td></tr>
+<tr><td class='id'>B04</td><td>乗り替わりの新騎手が追い切りに乗っている（テン乗りの不安を消している）</td><td>乗り替わり × 新騎手が中間に騎乗</td><td>T, R</td><td>jockey_switch_ev</td></tr>
+<tr><td class='id'>B05</td><td>坂路で終い 1F が最速の加速ラップは好調</td><td>坂路 × 最後の 1F &lt; その前の 1F（加速）× 終い 1F の時計帯</td><td>T</td><td>workout_remaining_ideas（型 A1）</td></tr>
+<tr><td class='id'>B06</td><td>ウッドで長めから追われた馬は長距離で走る</td><td>最終がウッド（長め 6F 以上）× 今回の距離帯</td><td>T</td><td></td></tr>
+<tr><td class='id'>B07</td><td>この重賞は坂路組が強い／ウッド組が強い</td><td>レース名（重賞ごと）× 最終追い切りのコース種別</td><td>T, R</td><td></td></tr>
+<tr><td class='id'>B08</td><td>このコース（例: 中山ダ 1200）は坂路で速い時計を出した馬</td><td>コース × 最終追い切りの種別 × 時計の速さ（調教場・馬場で標準化）</td><td>T, R</td><td>workout_remaining_ideas（交互作用。V4 への上乗せは無し）</td></tr>
+<tr><td class='id'>B09</td><td>併せ馬で先着した馬は好調、遅れた馬は割引</td><td>最終追い切りの併せ（先着/同入/遅れ）× 相手の格（古馬オープン・同世代）</td><td>T</td><td>workout_remaining_ideas（記者コメントの先着）</td></tr>
+<tr><td class='id'>B10</td><td>追走して先着（後ろから追いかけて前に出た）は特に良い</td><td>追走/先行 × 先着/同入/遅れ</td><td>T</td><td></td></tr>
+<tr><td class='id'>B11</td><td>格上の相手に先着した</td><td>併せ相手の馬名から相手のクラスを引く × 先着</td><td>T, R</td><td></td></tr>
+<tr><td class='id'>B12</td><td>一杯に追われた休み明けは仕上がっている／馬なりは叩き台</td><td>休み明け × 最終の強度（馬也/強め/一杯）</td><td>T, R</td><td></td></tr>
+<tr><td class='id'>B13</td><td>中間の本数が多い（乗り込み量）休み明けは走る</td><td>休み明け × 帰厩後の追い切り本数 × 時計の出た本数</td><td>T, R</td><td>training_condition_growth</td></tr>
+<tr><td class='id'>B14</td><td>中間に自己ベスト（坂路・ウッド）を出した馬は上昇中</td><td>その馬の過去の同コースの時計に対する今回の最速</td><td>T</td><td>training_condition_growth</td></tr>
+<tr><td class='id'>B15</td><td>前走好走時と同じ調教パターン（コース・本数・強度）は再現</td><td>前走 3 着内 × 今回の追い切りパターンが前走時と一致</td><td>T, R</td><td></td></tr>
+<tr><td class='id'>B16</td><td>いつもと違う調教パターン（コース替え・強度を上げた）は勝負/不安</td><td>前走比でコース・強度・本数が変わったか × 前走着順</td><td>T, R</td><td>workout_remaining_ideas（前走比）</td></tr>
+<tr><td class='id'>B17</td><td>当週に時計を出さない（日曜・1 週前で仕上げ済み）</td><td>当週の追い切り有無・曜日 × 間隔</td><td>T</td><td></td></tr>
+<tr><td class='id'>B18</td><td>土日追い（日曜追い）の厩舎は仕上げがうまい</td><td>追い切りの曜日 × 調教師</td><td>T, JT</td><td></td></tr>
+<tr><td class='id'>B19</td><td>この厩舎は『坂路一杯』をやったら勝負</td><td>調教師 × 追い切りパターン（その調教師のいつもとの差）</td><td>T, JT</td><td>workout_remaining_ideas（調教師比の標準化）</td></tr>
+<tr><td class='id'>B20</td><td>調教評価 A・短評（『動き抜群』『気配絶好』）の馬は好走</td><td>評価 A〜D × 短評の語 × 人気帯</td><td>T/OK</td><td>workout_remaining_ideas（短評）</td></tr>
+<tr><td class='id'>B21</td><td>記者コメントが否定的なら割引</td><td>記者コメントの否定語の有無</td><td>T</td><td>workout_remaining_ideas（否定的コメント）</td></tr>
+<tr><td class='id'>B22</td><td>2 歳新馬は調教時計が速いほど走る、古馬に先着していれば確勝</td><td>新馬戦 × 最速時計の帯 × 古馬との併せ先着</td><td>T, R</td><td></td></tr>
+<tr><td class='id'>B23</td><td>調教で走らない馬（時計が出ないが実戦で走る）がいる</td><td>その馬の過去の『調教の速さと着順のずれ』の符号 × 今回</td><td>T, R</td><td></td></tr>
+<tr><td class='id'>B24</td><td>ポリトラック・芝・プール調整の馬は脚元の不安</td><td>最終・中間のコース種別（Ｐ・芝・プール）</td><td>T</td><td></td></tr>
+<tr><td class='id'>B25</td><td>輸送のない現地追い（函館・札幌・小倉滞在、栗東滞在）は有利</td><td>追い切りの場所 = 開催場 × 所属の東西</td><td>T, S</td><td>transport_and_stay</td></tr>
+<tr><td class='id'>B26</td><td>最終追い切りの馬場（重い馬場で時計が出た）は割り増し</td><td>追い切りの馬場状態 × 時計（馬場で標準化）</td><td>T</td><td></td></tr>
+<tr><td class='id'>B27</td><td>見習・助手ではなく調教師自身が乗る</td><td>乗り手の区分（騎手/助手/調教師/見習）</td><td>T</td><td>workout_remaining_ideas</td></tr>
+<tr><td class='id'>B28</td><td>ウッドで大外を回って好時計（内ラチ沿いで出した時計より価値が高い）</td><td>追い切りの位置（内/中/外・何分どころ）× 時計（調教場・馬場で標準化）</td><td>T</td><td>workout_remaining_ideas</td></tr>
+<tr><td class='id'>B29</td><td>調教場ごとの『合格の目安』を超えた馬（例: 栗東坂路 4F 52 秒台・終い 12 秒台、CW 6F 80 秒前半）</td><td>絶対値のしきい値で切る型と、調教場・日・馬場で標準化した順位で切る型を両方立てる（玄人は絶対値で語るが、日によって馬場差が 1 秒以上ある）</td><td>T</td><td>training_condition_growth</td></tr>
+<tr><td class='id'>B30</td><td>3 頭併せの真ん中・外から追い抜いた馬は負荷が高く好調</td><td>併せの頭数（単走/2 頭/3 頭）× 位置 × 先着/同入/遅れ。短評の文から頭数を読む</td><td>T</td><td></td></tr>
+<tr><td class='id'>B31</td><td>間隔が詰まった馬（中 2 週以内）は軽め（馬なり）で正解、強く追ったら疲れが残る</td><td>間隔 × 最終の強度 × 前走の着順</td><td>T, R</td><td></td></tr>
+<tr><td class='id'>B32</td><td>1 週前に強く追って当週は軽く整える形（いわゆる『1 週前追い切りで仕上げる』）は好調</td><td>1 週前の強度・時計 × 当週の強度。B17 は当週の有無、こちらは 1 週前との強弱の組</td><td>T</td><td></td></tr>
+<tr><td class='id'>B33</td><td>2 週続けて一杯（やり過ぎ・仕上げ過ぎ）は割引、特に牝馬・小柄な馬</td><td>直近 2 本の強度が一杯 × 性別 × 馬体重の減り</td><td>T, R</td><td></td></tr>
+<tr><td class='id'>B34</td><td>前走時より最終追い切りの時計が大きく遅い（状態が落ちた）</td><td>同じ調教場の最終の時計の前走時との差（標準化）× 前走の着順</td><td>T</td><td>workout_remaining_ideas（前走比）</td></tr>
+<tr><td class='id'>B35</td><td>冬・雨の後の坂路（時計のかかる日）で出した好時計は割り増し</td><td>追い切り日の同じ調教場の全馬の時計の平均（その日の馬場差）を引いた値 × 季節。B26 は記録された馬場状態、こちらは実測の馬場差</td><td>T, W</td><td></td></tr>
+<tr><td class='id'>B36</td><td>1 日に坂路を 2 本・坂路とプールを併用する負荷の強い厩舎の馬は休み明けから走る</td><td>同日の追い切りの本数 × 調教師 × 休み明け</td><td>T, JT</td><td></td></tr>
+<tr><td class='id'>B37</td><td>調教師ごとに得意な調教パターンがある（その厩舎の『勝負の調教』）。調教師×パターンを S＞A＞B＞C にランク分けして選別する</td><td>パターン = 最終追い切りの場所（坂路/W/ポリ/芝/プール）× 強さ（一杯/強め/馬なり）× 併せの有無 × 1 週前の内容 × 中間の本数（少数の組に丸める）。調教師 × パターンごとに <b>2 軸</b>で測る。(1) 好成績: as-of の 3 着内率（と勝率）の『人気（オッズ）から見込まれる値との差』。(2) 回収率: 単勝・複勝の回収率。<b>外れ値による底上げを除く</b>ため、払戻を上限で頭打ちにした回収率（例: 単勝 50 倍以下の出走に絞る／1 走の払戻を 3,000 円で打ち切る）を主に使い、生の回収率は参考に並べる。区間は払戻の大きい 1 走に左右されない方法（レース単位のブートストラップ、1 走を除いたときの変化）で出し、1 走を抜くと 100% を下回る組は高く評価しない。どちらの軸も、調教師全体・パターン全体へ縮めて推定（経験ベイズ）。ランクは軸ごとに事後の値の分位と区間の下限で決め（例: S=下限が基準超で上位 5%、A=上位 25%、B=中位、C=下位）、2 軸を並べて『好走するが人気で織り込み済み（好成績 S・回収率 B 以下）』と『人気以上に来る（両方 A 以上）』を分ける。調教師ごとの標本の下限を設け、前半の年で付けたランクが後半の年でも同じ向きか（時系列の外での再現）で確かめる。B19 は『その調教師のいつもとの差』、こちらは調教師ごとの得意パターンの序列</td><td>T/OK, R, JT</td><td>workout_remaining_ideas（調教師比の標準化）・B19</td></tr>
+</tbody></table></div>
+<h3 id='cat-C'>C. 騎手（26 型）</h3><p class='muted'>騎手単独ではなく『誰と組むか』『どこで・どの距離で乗るか』『なぜ乗るのか』の文脈に通説が多い。</p>
+<div class='wrap'><table><thead><tr><th>ID</th><th>通説・仮説</th><th>条件の切り方（検証の形）</th><th>データ</th><th>似た既存の調査</th></tr></thead><tbody>
+<tr><td class='id'>C01</td><td>調教師と騎手の組み合わせ（主戦・ゴールデンコンビ）は好走率が高い</td><td>調教師 × 騎手の as-of の騎乗数・3 着内率（各々単独の期待との差）</td><td>R, JT</td><td>jockey_trainer_roi（回収率は再現せず。好走率は未整理）</td></tr>
+<tr><td class='id'>C02</td><td>その厩舎が普段乗せない上位騎手を乗せたら勝負</td><td>調教師 × 騎手 の過去の騎乗頻度が低い × 騎手の格が高い</td><td>R, JT</td><td></td></tr>
+<tr><td class='id'>C03</td><td>主戦騎手からの乗り替わり（主戦が他の馬に乗る）は割引</td><td>前走騎手が同じレースの別の馬に騎乗</td><td>R</td><td>jockey_switch_ev</td></tr>
+<tr><td class='id'>C04</td><td>前走騎手が選んだ馬（騎手が 2 頭から選んだ側）は好走</td><td>前走で乗った馬が同じレースに 2 頭以上 → 騎手が選んだ方</td><td>R</td><td></td></tr>
+<tr><td class='id'>C05</td><td>テン乗りより継続騎乗のほうが良い</td><td>継続騎乗の回数（1/2/3+）× 騎手の格</td><td>R</td><td>equipment_and_change（乗り替わり）</td></tr>
+<tr><td class='id'>C06</td><td>短期免許の外国人騎手への乗り替わりは勝負</td><td>外国人騎手（短期免許）× 乗り替わり</td><td>R, JT</td><td>jockey_switch_ev</td></tr>
+<tr><td class='id'>C07</td><td>減量騎手（▲△☆）の起用はダート短距離で効く</td><td>減量の幅 × 面 × 距離帯 × 枠</td><td>R</td><td></td></tr>
+<tr><td class='id'>C08</td><td>リーディング上位への乗り替わりは過剰人気・下位への乗り替わりは過小評価</td><td>騎手の格の変化（上がる/下がる）× 好走率（人気帯を揃えて）</td><td>R, JT</td><td>jockey_switch_ev</td></tr>
+<tr><td class='id'>C09</td><td>騎手の得意コース（コース巧者の騎手）</td><td>騎手 × コースの as-of 成績の差</td><td>R, JT</td><td>jockey_distance_dependence</td></tr>
+<tr><td class='id'>C10</td><td>騎手の遠征（関東の騎手がローカル・関西で 1〜2 鞍だけ乗る）は勝負鞍</td><td>騎手のその日の騎乗数・所属地域と開催場の距離</td><td>R</td><td></td></tr>
+<tr><td class='id'>C11</td><td>その日乗れている騎手（当日既に勝っている）は後半も来る</td><td>当日の前のレースまでの勝ち数・3 着内数</td><td>R, JT</td><td></td></tr>
+<tr><td class='id'>C12</td><td>騎乗停止・落馬明けの騎手は消極的</td><td>騎手の前回騎乗からの空き日数</td><td>R</td><td></td></tr>
+<tr><td class='id'>C13</td><td>逃げる騎手（積極的な騎手）は人気薄でも残る</td><td>騎手の as-of の逃げ率 × 想定位置 × ペース</td><td>R, JT, TD</td><td>handicapper_viewpoints（騎手の積極性）</td></tr>
+<tr><td class='id'>C14</td><td>長距離は騎手、短距離は馬</td><td>距離帯ごとの騎手の効果の大きさ</td><td>R, JT</td><td>jockey_distance_dependence</td></tr>
+<tr><td class='id'>C15</td><td>馬主と騎手の組み合わせ（クラブ×特定騎手）</td><td>馬主 × 騎手</td><td>S, R</td><td></td></tr>
+<tr><td class='id'>C16</td><td>重賞・G1 で強い騎手（大舞台の騎手）</td><td>騎手 × グレード</td><td>R, JT</td><td></td></tr>
+<tr><td class='id'>C17</td><td>女性騎手の減量はダートの外枠で生きる</td><td>女性騎手 × 減量 × 枠 × 面</td><td>R</td><td></td></tr>
+<tr><td class='id'>C18</td><td>厩舎所属の騎手（主従関係）を外して外部の上位騎手を乗せたら勝負</td><td>前走まで所属騎手 × 今回は外部の上位騎手（騎手の所属は as-of の騎乗の多さで代える）</td><td>R, JT</td><td></td></tr>
+<tr><td class='id'>C19</td><td>減量が取れた直後の若手は騎乗依頼が減って人気が落ちるが、腕は同じなので過小評価</td><td>騎手の減量の段階が変わった後の数か月 × 人気をそろえた好走率</td><td>R, JT</td><td></td></tr>
+<tr><td class='id'>C20</td><td>リーディング争いの年末・勝利数の節目（100 勝・通算 1000 勝目前）の騎手は勝ちに行く</td><td>騎手の年間順位と 2 位との差 × 11〜12 月、通算勝利数が節目の直前</td><td>R, JT</td><td></td></tr>
+<tr><td class='id'>C21</td><td>騎乗停止など騎手の都合での乗り替わりは、陣営の意思ではないので割引され過ぎ</td><td>前走騎手の騎乗停止期間中の乗り替わり × 人気帯。停止は C12 の空き日数と当日の不在から推定（直接のデータは要確認）</td><td>R</td><td>jockey_switch_ev</td></tr>
+<tr><td class='id'>C22</td><td>騎手の得意な脚質と馬の脚質が合う（差しの上手い騎手 × 差し馬）と走る、合わないと崩れる</td><td>騎手の as-of の位置取りの傾向 × 馬の脚質 × 結果</td><td>R, JT, TD</td><td>handicapper_viewpoints</td></tr>
+<tr><td class='id'>C23</td><td>騎手がその日乗る馬の中で一番人気の鞍が勝負鞍、他は流す</td><td>騎手の当日の騎乗馬の中の人気の順位（1 位の鞍かどうか）× 人気をそろえた好走率</td><td>R</td><td></td></tr>
+<tr><td class='id'>C24</td><td>1 日に多く乗る騎手（10 鞍以上）は後半レースで疲れる／既に連続騎乗で馬場を掴んでいる</td><td>当日の何鞍目 × 当日の騎乗数 × 前の鞍の着順。C11 と向きの違う 2 つを立てる</td><td>R</td><td></td></tr>
+<tr><td class='id'>C25</td><td>若手騎手の重賞・G1 は割引（大舞台の位置取りの積極性が足りない）</td><td>騎手の経験年数・重賞騎乗数 × グレード × 人気帯</td><td>R, JT</td><td></td></tr>
+<tr><td class='id'>C26</td><td>同じエージェントの騎手どうしの乗り替わり（エージェント内のスライド）は陣営の評価が下がっていない</td><td>エージェントの名簿が要る（手元に無い）。今は検証できない型として残す</td><td>—</td><td></td></tr>
+</tbody></table></div>
+<h3 id='cat-D'>D. 厩舎・馬主・生産者（19 型）</h3><p class='muted'>『どの陣営か』の通説。外厩（ノーザンファーム天栄・しがらき）は直接のデータが無いので、生産者・間隔・帰厩後の本数で近づける。</p>
+<div class='wrap'><table><thead><tr><th>ID</th><th>通説・仮説</th><th>条件の切り方（検証の形）</th><th>データ</th><th>似た既存の調査</th></tr></thead><tbody>
+<tr><td class='id'>D01</td><td>ノーザンファーム生産・クラブ馬の休み明けは仕上がっている（外厩）</td><td>生産者（ノーザン/社台/その他）× 休み明け × 帰厩後の本数が少ない</td><td>S, T, R</td><td></td></tr>
+<tr><td class='id'>D02</td><td>厩舎の得意なコース・距離・面</td><td>調教師 × コース の as-of の成績の差</td><td>R, JT</td><td>jockey_trainer_roi</td></tr>
+<tr><td class='id'>D03</td><td>厩舎の勢い（直近 1 か月の成績）は続く</td><td>調教師の直近 30 日の 3 着内率の帯</td><td>JT</td><td></td></tr>
+<tr><td class='id'>D04</td><td>同じ厩舎の複数出走は人気薄の方が来る</td><td>同厩舎の 2 頭以上 × 人気の高い方/低い方</td><td>R</td><td></td></tr>
+<tr><td class='id'>D05</td><td>同じ馬主の複数出走</td><td>同馬主 2 頭以上 × 騎手の格の差</td><td>S, R</td><td></td></tr>
+<tr><td class='id'>D06</td><td>転厩初戦は変わり身がある</td><td>転厩後 1〜2 戦目 × 移った先の調教師の格</td><td>R</td><td>equipment_and_change（転厩）</td></tr>
+<tr><td class='id'>D07</td><td>定年の近い調教師（2 月の解散前）は勝負をかける</td><td>調教師の引退前の数か月</td><td>R, JT</td><td></td></tr>
+<tr><td class='id'>D08</td><td>開業したての調教師の馬は走らない／勢いがある</td><td>調教師の開業からの年数</td><td>JT</td><td></td></tr>
+<tr><td class='id'>D09</td><td>美浦の馬の関西遠征・栗東の馬の関東遠征（輸送）</td><td>所属の東西 × 開催場 × 距離</td><td>S, R</td><td>transport_and_stay</td></tr>
+<tr><td class='id'>D10</td><td>長距離輸送（北海道・九州）の牝馬は体重を減らす</td><td>輸送の距離 × 性別 × 馬体重の減り</td><td>S, R</td><td>transport_and_stay</td></tr>
+<tr><td class='id'>D11</td><td>生産牧場の得意な条件（小規模牧場のダート馬）</td><td>生産者 × 面・距離</td><td>S, R</td><td></td></tr>
+<tr><td class='id'>D12</td><td>馬主の勝負レース（クラブ馬の牝馬は 5 歳春で引退前）</td><td>クラブ馬 × 牝馬 × 5 歳 × 時期</td><td>S, R</td><td></td></tr>
+<tr><td class='id'>D13</td><td>10 日競馬（帰厩から 10〜14 日で出走＝外厩で仕上げ済み）は休み明けでも割引不要</td><td>帰厩後の最初の追い切りの日から出走までの日数（10〜14 日）× 生産者 × 休養の長さ</td><td>T, S, R</td><td>rest_and_interval</td></tr>
+<tr><td class='id'>D14</td><td>除外明け（前の週に除外・抽選漏れで仕上がっていた馬）は好走</td><td>前週・前々週に出走登録があったが出走していない（除外・抽選の記録は要確認）× 今回</td><td>R</td><td></td></tr>
+<tr><td class='id'>D15</td><td>リーディング上位厩舎の人気薄は狙い（下位厩舎の人気馬より信頼できる）</td><td>調教師の as-of の順位 × 人気帯の組</td><td>R, JT</td><td>jockey_trainer_roi</td></tr>
+<tr><td class='id'>D16</td><td>西高東低（栗東所属は美浦所属より強い）。ただし美浦の坂路の改修後は差が縮んだ</td><td>所属の東西 × 年 × 開催場の東西 × クラス</td><td>S, R</td><td>transport_and_stay</td></tr>
+<tr><td class='id'>D17</td><td>新馬から仕上げて勝たせる厩舎と、使って良くする厩舎がある</td><td>調教師の新馬戦の as-of の 3 着内率 − 2 戦目の 3 着内率 × 今回が新馬か 2 戦目か</td><td>R, JT</td><td></td></tr>
+<tr><td class='id'>D18</td><td>同じ馬主のペースメーカー（ラビット）がいる人気馬は展開が向く</td><td>同馬主の 2 頭出し × 片方が逃げ候補で人気薄 × もう片方の脚質</td><td>S, R, TD</td><td></td></tr>
+<tr><td class='id'>D19</td><td>社台グループ以外の生産者の馬が重賞で人気薄なら、実力以上に見落とされている</td><td>生産者の区分 × グレード × 人気帯</td><td>S, R</td><td></td></tr>
+</tbody></table></div>
+<h3 id='cat-E'>E. 血統（21 型）</h3><p class='muted'>父・母父・系統・クロス・きょうだい。単独の父ではなく『父 × コース・馬場・距離替わり・季節』の形で語られる。</p>
+<div class='wrap'><table><thead><tr><th>ID</th><th>通説・仮説</th><th>条件の切り方（検証の形）</th><th>データ</th><th>似た既存の調査</th></tr></thead><tbody>
+<tr><td class='id'>E01</td><td>この父はこのコースで走る（コース × 父）</td><td>父 × コース の as-of の 3 着内率（縮約）</td><td>P, R</td><td>course_bloodline・pedigree_roi</td></tr>
+<tr><td class='id'>E02</td><td>重・不良はこの父（道悪血統）</td><td>父・母父 × 馬場状態 × 面</td><td>P, R</td><td>going_aptitude</td></tr>
+<tr><td class='id'>E03</td><td>洋芝（札幌・函館）はこの血統</td><td>父系 × 北海道開催</td><td>P, R</td><td></td></tr>
+<tr><td class='id'>E04</td><td>時計のかかる芝（クッション値が低い）は欧州型、高速芝は米国型・サンデー系</td><td>父系の大分類 × クッション値の帯 × 含水率</td><td>P, CU, R</td><td>track_bias_pedigree_pipeline</td></tr>
+<tr><td class='id'>E05</td><td>距離延長で良さが出る血統（母父ステイヤー）</td><td>母父系統 × 距離延長</td><td>P, R</td><td></td></tr>
+<tr><td class='id'>E06</td><td>初ダートで走る父（芝実績しかない馬でも）</td><td>父 × 初ダート</td><td>P, R</td><td></td></tr>
+<tr><td class='id'>E07</td><td>叩き良化型の血統（使って良くなる）</td><td>父 × 叩き何戦目</td><td>P, R</td><td></td></tr>
+<tr><td class='id'>E08</td><td>夏に強い血統・冬に強い血統</td><td>父系 × 月（気温）</td><td>P, W, R</td><td>edge_factor_mining（夏の牝馬）</td></tr>
+<tr><td class='id'>E09</td><td>インブリード（ノーザンダンサー・サンデーのクロス）は瞬発力</td><td>クロスの有無・量・位置 × 上がり 3F の順位・ラップの型</td><td>P, R, L</td><td>pedigree_position_cross</td></tr>
+<tr><td class='id'>E10</td><td>全兄・半兄が走ったコース・距離でよく走る（きょうだいの実績）</td><td>母の他の産駒の同コース・同距離帯の成績</td><td>P, R</td><td></td></tr>
+<tr><td class='id'>E11</td><td>母の年齢が高い馬・初仔は走らない</td><td>母の出産時年齢 × 初仔</td><td>P, R</td><td>dam_age_firstfoal</td></tr>
+<tr><td class='id'>E12</td><td>ミオスタチン遺伝子型で短距離・長距離が決まる</td><td>遺伝子型（C/C・C/T・T/T）× 距離帯</td><td>G, R</td><td></td></tr>
+<tr><td class='id'>E13</td><td>2 歳の早い時期はスピード血統（早熟）</td><td>父 × 2 歳 6〜9 月 × 新馬</td><td>P, R</td><td></td></tr>
+<tr><td class='id'>E14</td><td>牝系（ファミリー）による底力</td><td>牝系の基礎 × 重賞での成績</td><td>P, R</td><td></td></tr>
+<tr><td class='id'>E15</td><td>父と母父の組み合わせ（ニックス）</td><td>父 × 母父 の as-of の成績（縮約）</td><td>P, R</td><td></td></tr>
+<tr><td class='id'>E16</td><td>父の現役時の得意な距離・コースが産駒にそのまま出る</td><td>父の現役の勝ち鞍の距離帯・面（手元の血統表から父の戦績を引く。要確認）× 産駒の今回の距離帯</td><td>P, R</td><td></td></tr>
+<tr><td class='id'>E17</td><td>距離の限界は母父が決める（母父がスプリンターなら延長で止まる）</td><td>母父の産駒（母父としての）平均勝ち距離 × 今回の距離 − その馬の好走距離。E05 は延長だけ、こちらは延長・短縮の両方</td><td>P, R</td><td></td></tr>
+<tr><td class='id'>E18</td><td>系統ごとのコースの格言（ロベルト系は小回り・荒れ馬場の持続戦、ディープ系は京都外回り・東京の瞬発戦、ステイゴールド系は中山・阪神内回りの消耗戦、キングマンボ系は中山・道悪、米国型ノーザンダンサー系はダート・短距離のスピード）</td><td>父系の小分類（S の系統コード）× コースの型（小回り/外回り・坂・直線長）× 馬場 × ラップ型。個々の格言を 1 行ずつ事前に向き付きで登録する</td><td>P, S, CM, L, R</td><td>course_bloodline・track_bias_pedigree_pipeline</td></tr>
+<tr><td class='id'>E19</td><td>新種牡馬の初年度産駒（ファーストクロップ）は 2 歳戦で過小評価</td><td>父の産駒の世代（初年度/2 年目/以降）× 2 歳戦 × 人気帯</td><td>P, R</td><td></td></tr>
+<tr><td class='id'>E20</td><td>晩成の血統（4 歳秋以降に良くなる父）と早熟の血統（3 歳春までがピーク）</td><td>父 × 年齢・月 × 産駒の同世代での成績の推移。E13 は 2 歳の早い時期だけ、こちらは古馬までの成長曲線</td><td>P, R</td><td>growth_curve_weight</td></tr>
+<tr><td class='id'>E21</td><td>母が現役で勝った距離・面で子もよく走る</td><td>母の現役成績（勝ち鞍の距離帯・面。要確認）× 今回の条件</td><td>P, R</td><td></td></tr>
+</tbody></table></div>
+<h3 id='cat-F'>F. 馬場・天候・バイアス（19 型）</h3><p class='muted'>当日の馬場の偏り（内/外・前/後）を、その日の前のレースから読んで後のレースに使う、という予想家の基本。</p>
+<div class='wrap'><table><thead><tr><th>ID</th><th>通説・仮説</th><th>条件の切り方（検証の形）</th><th>データ</th><th>似た既存の調査</th></tr></thead><tbody>
+<tr><td class='id'>F01</td><td>開幕週は内枠・先行有利、最終週は外差し</td><td>開催何日目 × 枠 × 想定位置 × コース</td><td>R, CM</td><td>position_pace_course</td></tr>
+<tr><td class='id'>F02</td><td>コース替わり（A→B）初週の内枠</td><td>仮柵の移動の初週 × 枠</td><td>R, CU</td><td></td></tr>
+<tr><td class='id'>F03</td><td>当日の前のレースで内・前が残っているなら後のレースも同じ</td><td>同日・同面の前のレースの勝ち馬の枠・4 角位置の偏り × 今回の枠・想定位置</td><td>R</td><td>handicapper_viewpoints（当日の馬場の偏り）・feature_screening（同日バイアス）</td></tr>
+<tr><td class='id'>F04</td><td>前日・前週の同場のバイアスは続く</td><td>前日・前週の偏り × 今日</td><td>R</td><td></td></tr>
+<tr><td class='id'>F05</td><td>ダートの稍重〜重（脚抜きの良い馬場）は前が止まらない・時計が速い</td><td>ダート × 含水率の帯 × 想定位置</td><td>CU, R</td><td>edge_factor_mining（含水率×脚質×枠）</td></tr>
+<tr><td class='id'>F06</td><td>芝の重馬場は内が荒れて外差し</td><td>芝の重 × 開催の後半 × 枠</td><td>R, CU</td><td></td></tr>
+<tr><td class='id'>F07</td><td>クッション値が高い（硬い）と先行・高速決着</td><td>クッション値の帯 × 想定位置</td><td>CU, R</td><td>edge_factor_mining</td></tr>
+<tr><td class='id'>F08</td><td>雨が降り出した当日（馬場の悪化途中）は道悪巧者</td><td>当日の降水量（発走前の時間帯）× その馬の道悪成績</td><td>W, R</td><td></td></tr>
+<tr><td class='id'>F09</td><td>強い向かい風では差しが決まりにくい／逃げがバテる</td><td>風速・風向 × コースの直線の向き × 想定位置</td><td>W, CM, R</td><td></td></tr>
+<tr><td class='id'>F10</td><td>真夏の暑さで牝馬・大型馬が崩れる</td><td>気温の帯 × 性別 × 馬体重</td><td>W, R</td><td>edge_factor_mining（夏の牝馬）</td></tr>
+<tr><td class='id'>F11</td><td>冬のダート（凍結防止剤）は時計がかかり、パワー型</td><td>冬期 × ダート × 馬体重・父系</td><td>R, P</td><td></td></tr>
+<tr><td class='id'>F12</td><td>改修後の馬場（例: 京都の改修後）は傾向が変わった</td><td>改修の前後 × 枠・位置の偏り</td><td>R, CM</td><td></td></tr>
+<tr><td class='id'>F13</td><td>重馬場巧者（過去の道悪成績が良い馬）</td><td>その馬の重・不良の成績 × 今回の馬場</td><td>R</td><td>going_aptitude</td></tr>
+<tr><td class='id'>F14</td><td>同じ場の連続開催の後半（同じ芝を何日使ったか）は内が荒れて外差し</td><td>その面の連続使用日数（開催の何日目の通算。コース替わりで区切る）× 枠 × 想定位置。F01 は開催の何日目、こちらは芝そのものの使用日数</td><td>R, CU</td><td>position_pace_course</td></tr>
+<tr><td class='id'>F15</td><td>時計の速い日（当日の前のレースが基準より速い）は先行・内が止まらない</td><td>同日・同面の前のレースの勝ちタイムのクラス基準比 × 今回の想定位置・枠</td><td>R, L</td><td>feature_screening（同日バイアス）</td></tr>
+<tr><td class='id'>F16</td><td>乾いた冬の良ダート（時計のかかる）は差し・パワー型、砂の重い日は大型馬</td><td>ダート × 良 × 含水率の低い帯 × 季節 × 想定位置・馬体重。F05 の逆側</td><td>CU, R</td><td>edge_factor_mining</td></tr>
+<tr><td class='id'>F17</td><td>雨の日は逃げ（馬場の悪化途中は前が止まらない）</td><td>当日の降水 × 今回の発表馬場 × 想定位置</td><td>W, R</td><td></td></tr>
+<tr><td class='id'>F18</td><td>発表は良でも前日の雨が残っている（発表と実態のずれ）</td><td>発表の馬場 × 含水率の帯（同じ発表の中で上位の含水率）× 道悪巧者</td><td>CU, R</td><td>going_aptitude</td></tr>
+<tr><td class='id'>F19</td><td>秋のオーバーシード（野芝＋洋芝）と夏の野芝で、合う血統・脚質が入れ替わる</td><td>芝の種類の期間（各場の芝の管理の暦。要確認）× 父系 × 上がり順位の実績</td><td>P, CU, R</td><td>track_bias_pedigree_pipeline</td></tr>
+</tbody></table></div>
+<h3 id='cat-G'>G. 枠・展開・隊列（21 型）</h3><p class='muted'>『どこから出て、どの位置で、どのペースになるか』。コース × 枠 × 想定位置 × 想定ペースの組。</p>
+<div class='wrap'><table><thead><tr><th>ID</th><th>通説・仮説</th><th>条件の切り方（検証の形）</th><th>データ</th><th>似た既存の調査</th></tr></thead><tbody>
+<tr><td class='id'>G01</td><td>このコースは内枠/外枠が有利（中山ダ 1200 の外、東京ダ 1600 の外 など）</td><td>コース × 枠（馬番の割合）× 頭数</td><td>R, CM</td><td>feature_investigation_catalog（枠順×コース）</td></tr>
+<tr><td class='id'>G02</td><td>芝スタートのダートは外枠有利</td><td>芝スタートのダートコース × 枠</td><td>R, CM</td><td></td></tr>
+<tr><td class='id'>G03</td><td>逃げ馬不在のレースは先行馬が残る</td><td>出走馬の過去の逃げ率から見た逃げ候補の数 × 先行馬</td><td>R, TD</td><td>pace_type</td></tr>
+<tr><td class='id'>G04</td><td>逃げ候補が多いとハイペースで差し有利</td><td>逃げ候補の数 × 差し・追込</td><td>R, TD</td><td>pace_type</td></tr>
+<tr><td class='id'>G05</td><td>隣の枠に逃げ馬がいる先行馬は位置を取れない</td><td>隣枠の馬の逃げ率 × 自分の想定位置</td><td>R, TD</td><td>edge_factor_mining（逃げはさみ）</td></tr>
+<tr><td class='id'>G06</td><td>前走で 1 角先頭（テンの速い馬）は次も逃げる、単騎なら残る</td><td>前走の 1 角位置 × 今回の同型の数</td><td>R</td><td></td></tr>
+<tr><td class='id'>G07</td><td>少頭数はスロー、瞬発力勝負</td><td>頭数の帯 × 上がりの順位の実績</td><td>R, L</td><td></td></tr>
+<tr><td class='id'>G08</td><td>フルゲートの大外は不利</td><td>フルゲート × 大外 2 枠 × コース</td><td>R</td><td></td></tr>
+<tr><td class='id'>G09</td><td>出遅れ癖の馬は人気でも危ない</td><td>その馬の過去の出遅れ率 × 人気帯</td><td>R, HL</td><td>slow_start_real_label</td></tr>
+<tr><td class='id'>G10</td><td>瞬発戦（上がり勝負）の実績馬と持続戦（ロンスパ）の実績馬</td><td>その馬の好走時のラップ型 × そのコース・レースで起きやすいラップ型</td><td>L, R, TD</td><td>pace_type・lap_forecast</td></tr>
+<tr><td class='id'>G11</td><td>上がり 3F の順位が安定している馬は崩れない</td><td>過去走の上がり順位の平均とばらつき</td><td>R</td><td></td></tr>
+<tr><td class='id'>G12</td><td>ペースが速くなるコース（下り坂スタート）の先行馬は割引</td><td>コースの最初の区間のラップ平均 × 想定位置</td><td>L, CM, R</td><td>position_pace_course</td></tr>
+<tr><td class='id'>G13</td><td>偶数番（後入れ）は出遅れにくい</td><td>偶数/奇数 × 出遅れ率 × 着順</td><td>R</td><td></td></tr>
+<tr><td class='id'>G14</td><td>内で包まれる差し馬は危険（多頭数の内枠の追込）</td><td>内枠 × 追込 × 頭数</td><td>R, TD</td><td>handicapper_viewpoints（包まれ）</td></tr>
+<tr><td class='id'>G15</td><td>外に同型（逃げ候補）がいる逃げ馬は苦しい、内に同型がいれば楽</td><td>逃げ候補どうしの枠の内外 × 自分の想定位置。G05 は隣の枠だけ、こちらは全体の並び</td><td>R, TD</td><td>pace_type</td></tr>
+<tr><td class='id'>G16</td><td>大外枠の逃げ馬は距離ロスでハナを取り切れない（特にコーナーまで短いコース）</td><td>逃げ候補 × 大外 2 枠 × 最初のコーナーまでの距離</td><td>R, CM, TD</td><td>position_pace_course</td></tr>
+<tr><td class='id'>G17</td><td>逃げた時だけ走る馬（逃げ専）は控えると凡走、逃げられる並びなら買い</td><td>その馬の過去の 1 角位置別の成績の差 × 今回の逃げ候補の数</td><td>R, TD</td><td></td></tr>
+<tr><td class='id'>G18</td><td>揉まれ弱い馬（外枠・少頭数の時だけ走る）</td><td>その馬の過去の枠・頭数別の成績の差 × 今回の枠・頭数</td><td>R</td><td></td></tr>
+<tr><td class='id'>G19</td><td>ダートで砂を被ると嫌がる馬（内枠・中団で凡走した過去）</td><td>ダート × その馬の過去の内枠×中団の成績 − 外枠・先行の成績 × 今回の枠</td><td>R, HL</td><td></td></tr>
+<tr><td class='id'>G20</td><td>4 角を大外から回す差し馬は小回りでは届かない</td><td>前走の 4 角の外を回した度合い（HL の位置）× 今回のコースの直線長・コーナー数</td><td>HL, CM, R</td><td></td></tr>
+<tr><td class='id'>G21</td><td>迷ったら内枠（同じ力なら内の馬を上に取る）</td><td>人気・指数が近い 2 頭の組（同じレース）で、内枠の方が先着する割合</td><td>R</td><td></td></tr>
+</tbody></table></div>
+<h3 id='cat-H'>H. 馬体・体調・個体（21 型）</h3><p class='muted'>体重・斤量・性別・年齢・馬具・パドック。数字で確かめやすい通説が多い。</p>
+<div class='wrap'><table><thead><tr><th>ID</th><th>通説・仮説</th><th>条件の切り方（検証の形）</th><th>データ</th><th>似た既存の調査</th></tr></thead><tbody>
+<tr><td class='id'>H01</td><td>馬体重 +10kg 以上の休み明けは成長分（3 歳）／太め残り（古馬）</td><td>体重増減の帯 × 年齢 × 休養の長さ</td><td>R</td><td>growth_curve_weight・weight_growth_performance</td></tr>
+<tr><td class='id'>H02</td><td>−10kg 以上の大幅減は割引（特に牝馬・輸送後）</td><td>体重増減の帯 × 性別 × 輸送</td><td>R</td><td></td></tr>
+<tr><td class='id'>H03</td><td>大型馬（520kg 以上）は重馬場・ダートで有利、小柄な馬は斤量増で苦しい</td><td>馬体重の帯 × 馬場 × 斤量</td><td>R</td><td></td></tr>
+<tr><td class='id'>H04</td><td>斤量 58kg 以上（トップハンデ）は割引、軽ハンデの穴</td><td>斤量 × ハンデ戦 × 馬体重比（斤量 ÷ 馬体重）</td><td>R</td><td></td></tr>
+<tr><td class='id'>H05</td><td>ブリンカー初装着で一変</td><td>ブリンカー初 × 脚質</td><td>S, R</td><td>equipment_and_change</td></tr>
+<tr><td class='id'>H06</td><td>去勢明けの 2〜3 戦目で良くなる</td><td>去勢明け何戦目</td><td>R</td><td>geld_after_races</td></tr>
+<tr><td class='id'>H07</td><td>4 歳秋以降の牝馬は下降</td><td>牝馬 × 年齢 × 月</td><td>R</td><td></td></tr>
+<tr><td class='id'>H08</td><td>高齢馬（7 歳以上）は重賞で来ない、ダートでは来る</td><td>年齢 × 面 × グレード</td><td>R</td><td></td></tr>
+<tr><td class='id'>H09</td><td>牝馬限定戦から混合戦への替わりは割引</td><td>前走牝馬限定 → 今回混合</td><td>R</td><td></td></tr>
+<tr><td class='id'>H10</td><td>パドックの評価が高い馬</td><td>パドック評価 × 人気帯</td><td>PD</td><td></td></tr>
+<tr><td class='id'>H11</td><td>厩舎コメントで『状態がいい』『力を出せる』と強気の馬</td><td>談話の強気/弱気の語 × 話し手（師/助手）</td><td>TC</td><td></td></tr>
+<tr><td class='id'>H12</td><td>厩舎コメントで『使いつつ』『先を見据えて』は叩き台</td><td>談話の語 × 休み明け</td><td>TC</td><td></td></tr>
+<tr><td class='id'>H13</td><td>3 歳春のクラシック路線の馬の成長曲線（夏を越して強くなる）</td><td>3 歳秋の初戦 × 夏の間の体重増</td><td>R</td><td>growth_curve_weight</td></tr>
+<tr><td class='id'>H14</td><td>好走した時の体重（ベスト体重）からの離れが大きいと凡走</td><td>その馬の 3 着内の時の体重の中央値との差の絶対値 × 年齢（3 歳は成長分を引く）</td><td>R</td><td>weight_growth_performance</td></tr>
+<tr><td class='id'>H15</td><td>使い詰めで体重が減り続ける馬（3 走連続の減少）は疲れ</td><td>直近 3 走の体重の推移 × 間隔 × 性別</td><td>R</td><td></td></tr>
+<tr><td class='id'>H16</td><td>小柄な牝馬（420kg 未満）は多頭数・重馬場・斤量増で苦しい</td><td>馬体重の帯 × 性別 × 頭数・馬場・斤量の前走比</td><td>R</td><td></td></tr>
+<tr><td class='id'>H17</td><td>チークピーシーズ・シャドーロール・舌縛り・メンコなど馬具の着脱で一変</td><td>馬具の種類 × 初装着/外し。手元はブリンカーだけ（S）。他の馬具はデータが要る</td><td>S</td><td>equipment_and_change</td></tr>
+<tr><td class='id'>H18</td><td>ブリンカーを外した馬（効き目が薄れた・集中力が付いた）</td><td>ブリンカーの外し × 外し後何戦目 × 着用時の成績</td><td>S, R</td><td>equipment_and_change</td></tr>
+<tr><td class='id'>H19</td><td>1 年以上の長期休養明け（骨折・屈腱炎明け）は初戦も 2 戦目も割引、復帰 3〜4 戦目で戻る</td><td>休養の長さ（半年/1 年/1 年半+）× 復帰何戦目 × 年齢</td><td>R</td><td>rest_and_interval</td></tr>
+<tr><td class='id'>H20</td><td>春先の牝馬（発情期・フケ）と冬毛の残る馬は割引</td><td>牝馬 × 3〜5 月 × 年齢。冬毛はデータが無いので季節の代理だけ</td><td>R, PD</td><td></td></tr>
+<tr><td class='id'>H21</td><td>セン馬は気性が落ち着いて堅実（好走率のばらつきが小さい）</td><td>性別 × 着順の割合のばらつき × 年齢</td><td>R</td><td>geld_after_races</td></tr>
+</tbody></table></div>
+<h3 id='cat-I'>I. 番組・レースの性格（20 型）</h3><p class='muted'>『このレースは〇〇が強い』という重賞の傾向、条件戦の性格、新馬戦の通説。</p>
+<div class='wrap'><table><thead><tr><th>ID</th><th>通説・仮説</th><th>条件の切り方（検証の形）</th><th>データ</th><th>似た既存の調査</th></tr></thead><tbody>
+<tr><td class='id'>I01</td><td>この重賞は前走〇〇組・〇〇歳・〇〇枠が強い（レースごとの傾向）</td><td>重賞名 × 前走ステップ・年齢・性別・枠・所属・前走着順（同じ重賞の過去 10 年）</td><td>R</td><td></td></tr>
+<tr><td class='id'>I02</td><td>この重賞は追い切りのパターン（坂路/ウッド・強度）で差が出る</td><td>重賞名 × 最終追い切りの型</td><td>R, T</td><td></td></tr>
+<tr><td class='id'>I03</td><td>ハンデ戦は荒れる（軽ハンデの差し）</td><td>ハンデ戦 × 斤量の帯 × 想定位置</td><td>R</td><td></td></tr>
+<tr><td class='id'>I04</td><td>牝馬限定戦の性格（瞬発力）</td><td>牝馬限定 × 上がりの順位の実績</td><td>R</td><td></td></tr>
+<tr><td class='id'>I05</td><td>最終レースは荒れる・1R は堅い</td><td>レース番号 × クラス</td><td>R</td><td></td></tr>
+<tr><td class='id'>I06</td><td>3 歳未勝利の夏（終わりが近い）は叩き上げ・ローカル替わり</td><td>3 歳未勝利 × 7〜9 月 × 出走回数</td><td>R</td><td></td></tr>
+<tr><td class='id'>I07</td><td>新馬戦: 母のきょうだいの成績・厩舎の新馬での勝率・調教時計</td><td>新馬 × 各要素</td><td>R, P, T, JT</td><td></td></tr>
+<tr><td class='id'>I08</td><td>2 歳戦の 2 戦目の上昇（初戦の経験）</td><td>2 戦目 × 初戦の着差・出遅れ</td><td>R</td><td></td></tr>
+<tr><td class='id'>I09</td><td>G1 前の前哨戦は本番を見据えた叩き（上位人気の取りこぼし）</td><td>トライアル・前哨戦 × 次走が G1 の馬</td><td>R</td><td></td></tr>
+<tr><td class='id'>I10</td><td>特別戦と平場で好走馬のタイプが違う</td><td>特別戦/平場 × 前走のクラス</td><td>R</td><td></td></tr>
+<tr><td class='id'>I11</td><td>障害帰り・地方帰り（非 JRA の過去走）</td><td>前走が障害・地方 × 今回の平地</td><td>R</td><td></td></tr>
+<tr><td class='id'>I12</td><td>賞金加算が必要な馬（収得賞金が足りず本番に出られない）は勝負、足りている馬は叩き</td><td>次の目標のレースの出走ボーダーとの差（収得賞金。データは要確認）× トライアル・前哨戦</td><td>R</td><td></td></tr>
+<tr><td class='id'>I13</td><td>トライアルの優先出走権狙い（権利取り）の馬は着順を取りに来る</td><td>優先出走権が付く着順の境（例: 3 着・5 着）× 収得賞金が足りない馬 × 人気帯</td><td>R</td><td></td></tr>
+<tr><td class='id'>I14</td><td>世代レベル（強い世代・弱い世代）がある。3 歳馬の古馬混合戦の成績で分かる</td><td>3 歳の夏〜秋の古馬混合戦の 3 着内率（その年の世代）× 翌年以降の世代どうしの対戦</td><td>R</td><td></td></tr>
+<tr><td class='id'>I15</td><td>メンバーレベルが低いレース（出走馬の重賞好走が少ない）は実績馬が順当</td><td>出走馬の as-of の重賞 3 着内の合計 × 1 番人気の成績 × 実績上位の成績</td><td>R</td><td></td></tr>
+<tr><td class='id'>I16</td><td>降級廃止（2019 年夏）以降、古馬条件戦は 4 歳が強い</td><td>2019-06 の前後 × 年齢 × 古馬条件戦のクラス</td><td>R</td><td></td></tr>
+<tr><td class='id'>I17</td><td>皐月賞は速い馬、ダービーは運のいい馬、菊花賞は強い馬が勝つ</td><td>3 冠それぞれの勝ち馬の前走の型（持ち時計・枠・スタミナの指標）。標本は年 1 回なので『同じ距離・コースの重賞』に広げて見る</td><td>R</td><td></td></tr>
+<tr><td class='id'>I18</td><td>夏の上がり馬（夏の条件戦を連勝）は秋の重賞でも通用</td><td>7〜9 月に 2 勝以上 × 秋の重賞初出走 × クラス差</td><td>R</td><td></td></tr>
+<tr><td class='id'>I19</td><td>別定戦（G2・G3）は実績馬の斤量増で荒れる、定量戦は実力どおり</td><td>負担重量の種類（別定/定量/ハンデ/馬齢）× 1 番人気・上位人気の成績 × 斤量差</td><td>R</td><td></td></tr>
+<tr><td class='id'>I20</td><td>開催の初日（新しい場の初週の土曜）と最終日は傾向が違う</td><td>開催の何日目（初日/最終日）× 枠 × 想定位置 × 乗り込みの東西</td><td>R</td><td></td></tr>
+</tbody></table></div>
+<h3 id='cat-J'>J. 能力指標の通説（12 型）</h3><p class='muted'>『指数上位を買え』系。能力指標は強い（それ自体はモデルが既に使う）ので、通説としては『どの条件で指数が当てになる/ならないか』を見る。</p>
+<div class='wrap'><table><thead><tr><th>ID</th><th>通説・仮説</th><th>条件の切り方（検証の形）</th><th>データ</th><th>似た既存の調査</th></tr></thead><tbody>
+<tr><td class='id'>J01</td><td>前走のスピード指数が最上位の馬は崩れない</td><td>前走指数のレース内順位 × クラス・面</td><td>SI, R</td><td></td></tr>
+<tr><td class='id'>J02</td><td>指数の最高値が抜けていても近走が落ちていたら危ない</td><td>最高値の順位 − 近 3 走平均の順位</td><td>SI, R</td><td>index_variance</td></tr>
+<tr><td class='id'>J03</td><td>上がり最速の回数が多い馬は差し決着で強い</td><td>上がり最速の回数 × 想定ペース</td><td>R, L</td><td></td></tr>
+<tr><td class='id'>J04</td><td>持ち時計（同距離の最速タイム）が上位</td><td>同コース・同距離の持ち時計の順位 × 馬場</td><td>R, S</td><td></td></tr>
+<tr><td class='id'>J05</td><td>テンの速さ（前半 3F・1F の持ち時計）の順位が 1 位の馬</td><td>ten1f_best_rank / 前半の位置</td><td>S, R</td><td></td></tr>
+<tr><td class='id'>J06</td><td>バロメーターのスタート・追走・決め手のどれが効くかはコース次第</td><td>指数の 3 要素 × コース</td><td>B, R</td><td></td></tr>
+<tr><td class='id'>J07</td><td>指数が安定している（ばらつきが小さい）馬は堅い</td><td>指数のばらつき × 人気帯</td><td>SI, M</td><td>index_variance</td></tr>
+<tr><td class='id'>J08</td><td>格より調子（重賞の実績より、近走の指数・着順を取る）</td><td>実績の指標（獲得賞金・重賞 3 着内）と近 3 走の指数のどちらがレース内の順位を当てるか × クラス</td><td>SI, R</td><td></td></tr>
+<tr><td class='id'>J09</td><td>2 歳戦で古馬の上のクラス並みの勝ちタイムを出した馬は本物</td><td>勝ちタイムの古馬のクラス別基準との比較（同コース・同馬場・同開催）× 次走</td><td>R, L</td><td></td></tr>
+<tr><td class='id'>J10</td><td>上がり 33 秒台を出せる馬は東京・新潟外回りで強い、時計のかかる小回りでは逆に危ない</td><td>その馬の上がり 3F の最速の絶対値 × 今回のコースの型</td><td>R, CM</td><td></td></tr>
+<tr><td class='id'>J11</td><td>最高指数の鮮度（最高値が 3 走以内なら信頼、1 年以上前なら割引）</td><td>最高指数を出したのが何走前・何日前 × 今回</td><td>SI, R</td><td>index_variance</td></tr>
+<tr><td class='id'>J12</td><td>指数が 3 走続けて上がっている上がり馬は人気以上に走る</td><td>直近 3 走の指数の傾き × 人気帯</td><td>SI, M, R</td><td></td></tr>
+</tbody></table></div>
+<h3 id='cat-K'>K. 組み合わせ（掛け算）の型（18 型）</h3><p class='muted'>予想家が実際に使うのは単独の要素より『A かつ B』。上の分類同士の主な掛け合わせを型として先に決めておく（全組合せの走査は多重比較が膨らむので、通説として語られる組だけにする）。</p>
+<div class='wrap'><table><thead><tr><th>ID</th><th>通説・仮説</th><th>条件の切り方（検証の形）</th><th>データ</th><th>似た既存の調査</th></tr></thead><tbody>
+<tr><td class='id'>K01</td><td>延長 × 前走先行して止まらず × 父ステイヤー</td><td>A × G × E</td><td>R, P</td><td></td></tr>
+<tr><td class='id'>K02</td><td>休み明け × ノーザン生産 × 本番騎手が 1 週前に騎乗</td><td>A × D × B</td><td>R, S, T</td><td></td></tr>
+<tr><td class='id'>K03</td><td>乗り替わり（上位騎手へ）× 最終追い切りに新騎手 × 調教師が普段乗せない騎手</td><td>C × B</td><td>R, T, JT</td><td></td></tr>
+<tr><td class='id'>K04</td><td>当日の内・前の偏り × 内枠 × 逃げ候補</td><td>F × G</td><td>R, TD</td><td></td></tr>
+<tr><td class='id'>K05</td><td>初ダート × 父ダート系 × 外枠（砂を被らない）</td><td>A × E × G</td><td>R, P</td><td></td></tr>
+<tr><td class='id'>K06</td><td>道悪 × 父の道悪実績 × 大型馬</td><td>F × E × H</td><td>R, P, CU</td><td></td></tr>
+<tr><td class='id'>K07</td><td>叩き 2 戦目 × 前走の追い切りより今回の方が強い × 体重減</td><td>A × B × H</td><td>R, T</td><td></td></tr>
+<tr><td class='id'>K08</td><td>この重賞の傾向（ステップ）× 追い切りの型 × 枠</td><td>I × B × G</td><td>R, T</td><td></td></tr>
+<tr><td class='id'>K09</td><td>昇級初戦 × 前走のレースレベルが高い × 継続騎乗</td><td>A × J × C</td><td>R</td><td></td></tr>
+<tr><td class='id'>K10</td><td>輸送なし（滞在）× 牝馬 × 夏</td><td>D × H × F</td><td>R, S, T, W</td><td></td></tr>
+<tr><td class='id'>K11</td><td>叩き 2 戦目 × 距離延長（格言『叩き 2 戦目の距離延長』）</td><td>A12 × A01</td><td>R</td><td></td></tr>
+<tr><td class='id'>K12</td><td>10 日競馬 × ノーザン生産 × 外国人・上位騎手</td><td>D13 × D01 × C08</td><td>T, S, R</td><td></td></tr>
+<tr><td class='id'>K13</td><td>前走の不利（出遅れ・挟まれ）× 継続騎乗 × 同コース</td><td>A24 × C05 × A25</td><td>R, HL</td><td></td></tr>
+<tr><td class='id'>K14</td><td>人気薄の逃げ馬 × 単騎（同型不在）× 開幕週・内枠</td><td>L05 × G03 × F01</td><td>R, TD</td><td></td></tr>
+<tr><td class='id'>K15</td><td>初ブリンカー × 距離短縮（集中力と追走の楽さ）</td><td>H05 × A02</td><td>S, R</td><td></td></tr>
+<tr><td class='id'>K16</td><td>減量騎手 × ダート 1200 × 外枠 × 先行馬</td><td>C07 × G01 × G03</td><td>R, TD</td><td></td></tr>
+<tr><td class='id'>K17</td><td>夏 × 牝馬 × 格上挑戦・昇級（『夏は牝馬』×『牝馬に昇級の壁なし』）</td><td>L01 × L02</td><td>R</td><td></td></tr>
+<tr><td class='id'>K18</td><td>鞍上強化 × 人気落ち（前走凡走で人気を落とした実力馬）</td><td>C08 × X06</td><td>R, JT</td><td></td></tr>
+</tbody></table></div>
+<h3 id='cat-L'>L. 格言（定番の言い回しをそのまま検証する）（10 型）</h3><p class='muted'>玄人が実際に口にする格言。上の分類の型と中身が重なるものもあるが、言い回しどおりの条件で 1 回は確かめる（格言ごとの『当たる・外れる』の答えを残す）。格言どうしで向きが逆のものは 3.5 で対にする。</p>
+<div class='wrap'><table><thead><tr><th>ID</th><th>通説・仮説</th><th>条件の切り方（検証の形）</th><th>データ</th><th>似た既存の調査</th></tr></thead><tbody>
+<tr><td class='id'>L01</td><td>夏は牝馬（6〜9 月の牝馬は牡馬相手でも走る）</td><td>6〜9 月 × 牝馬 × 牡馬混合戦 × 重賞/条件戦。F10（暑さで牝馬が崩れる）と向きが逆</td><td>R, W</td><td>edge_factor_mining（夏の牝馬）</td></tr>
+<tr><td class='id'>L02</td><td>牝馬に昇級の壁なし</td><td>昇級初戦 × 性別 × クラス</td><td>R</td><td>equipment_and_change（昇級・降級）</td></tr>
+<tr><td class='id'>L03</td><td>両雄並び立たず（人気が 2 頭に集中すると片方が飛ぶ）</td><td>1・2 番人気の市場確率の合計が高いレース × 2 頭とも 3 着内の割合（2 頭が独立だとした時の期待との比）</td><td>R</td><td></td></tr>
+<tr><td class='id'>L04</td><td>混戦は 1 番人気（オッズが割れた時ほど 1 番人気が来る）</td><td>1 番人気の単勝オッズの帯（3 倍以上）× 1 番人気の好走率と市場確率の差。X05（混戦は荒れる）と向きが逆</td><td>R</td><td></td></tr>
+<tr><td class='id'>L05</td><td>人気薄の逃げ馬は買い（特に単騎）</td><td>前走・過去の逃げ率が高い × 6 番人気以下 × 逃げ候補の数</td><td>R, TD</td><td>pace_type</td></tr>
+<tr><td class='id'>L06</td><td>長距離は騎手、短距離は枠</td><td>距離帯ごとに『騎手の格の効果』と『枠の効果』の大きさを比べる（C14 の対）</td><td>R, JT</td><td>jockey_distance_dependence</td></tr>
+<tr><td class='id'>L07</td><td>最終レースは荒れる（負けを取り返す客の馬券が人気をゆがめる）</td><td>最終レース × 人気帯ごとの好走率と市場確率の差（I05 は配当、こちらは市場のゆがみ）</td><td>R</td><td></td></tr>
+<tr><td class='id'>L08</td><td>穴は休み明けの 3 戦目・叩き 3 走目（陣営の照準）</td><td>休み明けから 3 戦目 × 人気帯（A12 の『3 戦目でピーク』を人気薄に限る）</td><td>R</td><td>rest_and_interval</td></tr>
+<tr><td class='id'>L09</td><td>前走の着順より着差を見よ（大敗でも着差が小さければ買い）</td><td>前走の着順と着差（タイム差）が食い違う馬 × 今回</td><td>R</td><td></td></tr>
+<tr><td class='id'>L10</td><td>ダートは前、芝は差し（迷ったらダートは先行馬）</td><td>面 × 想定位置 × 人気をそろえた好走率</td><td>R, TD</td><td>position_pace_course</td></tr>
+</tbody></table></div>
+<h3 id='cat-M'>M. 初物（初めての条件）（9 型）</h3><p class='muted'>『初〇〇』は予想で必ず問われる不安要素。経験が無い馬は人気が落ちやすいので、市場が割り引き過ぎか、割り引きが足りないかを見る。</p>
+<div class='wrap'><table><thead><tr><th>ID</th><th>通説・仮説</th><th>条件の切り方（検証の形）</th><th>データ</th><th>似た既存の調査</th></tr></thead><tbody>
+<tr><td class='id'>M01</td><td>初コース・初めての競馬場は割引</td><td>その馬の今回の競馬場・コースでの出走歴の有無 × 年齢 × 回りの替わり</td><td>R, CM</td><td>course_specific_effects</td></tr>
+<tr><td class='id'>M02</td><td>初距離（経験の無い距離帯）は割引、ただし 2 歳・3 歳春は伸びしろ</td><td>経験した距離帯の外 × 年齢 × 延長/短縮</td><td>R</td><td></td></tr>
+<tr><td class='id'>M03</td><td>初の重賞・初のオープンは壁がある</td><td>重賞・OP の初出走 × 前走のクラス × 前走の着差</td><td>R</td><td></td></tr>
+<tr><td class='id'>M04</td><td>初の古馬相手（3 歳の古馬混合の初戦）</td><td>3 歳 × 古馬混合の初出走 × 月 × クラス（A30 の斤量差と分けて）</td><td>R</td><td></td></tr>
+<tr><td class='id'>M05</td><td>初の長距離輸送・初の遠征（北海道・九州・東西の遠征が初めて）</td><td>その馬の遠征の出走歴の有無 × 所属の東西と開催場 × 性別</td><td>R, S</td><td>transport_and_stay</td></tr>
+<tr><td class='id'>M06</td><td>初の多頭数（フルゲート初）は揉まれて崩れる</td><td>その馬の最多の頭数 &lt; 今回の頭数 × 枠 × 脚質</td><td>R</td><td></td></tr>
+<tr><td class='id'>M07</td><td>初の重・不良は血統で判断する</td><td>道悪の出走歴なし × 今回の重・不良 × 父・母父の道悪成績</td><td>R, P</td><td>going_aptitude</td></tr>
+<tr><td class='id'>M08</td><td>初の洋芝（札幌・函館の初出走）</td><td>洋芝の出走歴なし × 北海道開催 × 父系</td><td>R, P</td><td></td></tr>
+<tr><td class='id'>M09</td><td>初の 1 番人気（人気を背負った経験が無い馬）は崩れる</td><td>その馬の過去の 1 番人気の回数 0 × 今回 1 番人気</td><td>R</td><td></td></tr>
+</tbody></table></div>
+<h3 id='cat-N'>N. 消し（危険な人気馬）（10 型）</h3><p class='muted'>玄人の予想は『本命を選ぶ』と同じくらい『人気馬を消す』で差が付く。上位人気（例: 1〜3 番人気）に限った型として立て、序列づけでは減点に使う。</p>
+<div class='wrap'><table><thead><tr><th>ID</th><th>通説・仮説</th><th>条件の切り方（検証の形）</th><th>データ</th><th>似た既存の調査</th></tr></thead><tbody>
+<tr><td class='id'>N01</td><td>前走で人気薄の激走（8 番人気以下で 3 着内）をした馬の次走は反動・過剰人気</td><td>前走の人気 8 以下 × 3 着内 × 今回の人気 × 間隔</td><td>R</td><td></td></tr>
+<tr><td class='id'>N02</td><td>前走で激戦・レコード（G1 の好走、上がりを使い切った競馬）の次走は反動</td><td>前走のグレード × 前走の時計のクラス基準比 × 間隔 × 今回の人気</td><td>R, L</td><td></td></tr>
+<tr><td class='id'>N03</td><td>前走で楽に逃げ切った馬（単騎スロー）の昇級は過大評価</td><td>前走の 1 角先頭 × 前走のペース（スロー）× 勝ち × 昇級初戦の人気</td><td>R, L</td><td>pace_benefit</td></tr>
+<tr><td class='id'>N04</td><td>大外枠の人気差し馬（距離ロス）</td><td>上位人気 × 大外 2 枠 × 差し・追込 × コースのコーナー数</td><td>R, CM, TD</td><td></td></tr>
+<tr><td class='id'>N05</td><td>休み明けで +12kg 以上の人気馬（太め残り）</td><td>上位人気 × 休み明け × 体重増 +12kg 以上 × 年齢（3 歳は除くか分ける）</td><td>R</td><td>growth_curve_weight</td></tr>
+<tr><td class='id'>N06</td><td>斤量が前走より 2kg 以上増えた人気馬</td><td>上位人気 × 斤量の前走比 × 馬体重</td><td>R</td><td></td></tr>
+<tr><td class='id'>N07</td><td>乗り替わりで鞍上が弱くなった人気馬</td><td>上位人気 × 騎手の格の低下（C08 の逆側を人気馬に限る）</td><td>R, JT</td><td>jockey_switch_ev</td></tr>
+<tr><td class='id'>N08</td><td>前走で展開に恵まれた人気馬（展開利が大きかった）</td><td>上位人気 × 前走の展開利の上位</td><td>R, L</td><td>pace_benefit</td></tr>
+<tr><td class='id'>N09</td><td>上がり最速しか武器が無い追込の人気馬（スロー想定で届かない）</td><td>上位人気 × 追込 × 想定ペースがスロー × 逃げ候補が少ない</td><td>R, TD</td><td>pace_type</td></tr>
+<tr><td class='id'>N10</td><td>人気の牝馬の連戦（中 2 週以内）</td><td>上位人気 × 牝馬 × 間隔 × 体重の減り</td><td>R</td><td></td></tr>
+</tbody></table></div>
+<h3 id='cat-P'>P. 競馬場・コースの格言（10 型）</h3><p class='muted'>競馬場ごとに語り継がれた格言。コースの形（CM）と実際の位置・上がりの成績で、格言どおりの偏りがあるかを見る。改修（京都 2020-11〜2023-04 の休止と改修後）の前後で分ける。</p>
+<div class='wrap'><table><thead><tr><th>ID</th><th>通説・仮説</th><th>条件の切り方（検証の形）</th><th>データ</th><th>似た既存の調査</th></tr></thead><tbody>
+<tr><td class='id'>P01</td><td>府中の千八は展開いらず（東京芝 1800 は力どおりに決まる）</td><td>東京芝 1800 × 脚質別の好走率の偏り（他コースより小さいか）× 1 番人気の信頼度</td><td>R, CM</td><td>position_pace_course</td></tr>
+<tr><td class='id'>P02</td><td>中山は急坂と短い直線で先行・パワー型、『中山巧者』は繰り返し来る</td><td>中山 × 想定位置 × 馬体重 × その馬の中山の成績</td><td>R, CM</td><td>course_specific_effects</td></tr>
+<tr><td class='id'>P03</td><td>京都外回りは 3〜4 角の下り坂で勢いを付けた差し（『ゆっくり上ってゆっくり下る』）</td><td>京都外回り × 3 角の位置から 4 角の位置への押し上げ × 上がり</td><td>R, HL, CM</td><td></td></tr>
+<tr><td class='id'>P04</td><td>阪神内回り（2000・2200）・京都内回りは先行と機動力</td><td>内回り × 4 角の位置 × 上がり順位</td><td>R, CM</td><td></td></tr>
+<tr><td class='id'>P05</td><td>小倉・福島の小回りは先行・内枠。ただし夏の開催の後半は外差しに替わる</td><td>小回りのローカル × 開催の何日目 × 枠 × 位置</td><td>R, CM</td><td></td></tr>
+<tr><td class='id'>P06</td><td>新潟外回りの芝は上がり 32〜33 秒台の瞬発力勝負</td><td>新潟外回り × 上がり 3F の最速の絶対値 × 好走</td><td>R, CM</td><td></td></tr>
+<tr><td class='id'>P07</td><td>中京芝は長い直線と坂で差し・持続力</td><td>中京芝 × 脚質 × ラップの型（持続/瞬発）</td><td>R, L, CM</td><td></td></tr>
+<tr><td class='id'>P08</td><td>札幌・函館の洋芝は時計がかかり、巧者が毎年来る</td><td>北海道 × 前年の同場の好走 × 父系</td><td>R, P</td><td></td></tr>
+<tr><td class='id'>P09</td><td>有馬記念（中山芝 2500）は内枠と中山巧者・リピーター</td><td>中山芝 2500 の重賞 × 枠 × 中山の成績 × 前年の同レース</td><td>R</td><td></td></tr>
+<tr><td class='id'>P10</td><td>東京芝 2400（ダービー・オークス・ジャパンカップ）は内枠</td><td>東京芝 2400 の重賞 × 枠 × 頭数</td><td>R</td><td></td></tr>
+</tbody></table></div>
+<h3 id='cat-X'>X. 市場（オッズ）の通説（8 型）</h3><p class='muted'>ここだけは市場の情報そのものの通説。序列づけ（市場に依存しない）には使わず、比較の基準・別枠として扱う。過去分のオッズの時系列が 2026 年しか無いので、多くは今は検証できない。</p>
+<div class='wrap'><table><thead><tr><th>ID</th><th>通説・仮説</th><th>条件の切り方（検証の形）</th><th>データ</th><th>似た既存の調査</th></tr></thead><tbody>
+<tr><td class='id'>X01</td><td>前日 1 番人気が当日に人気を落とすと危険</td><td>前日→当日の人気の変化（時系列が要る）</td><td>O</td><td></td></tr>
+<tr><td class='id'>X02</td><td>締め切り直前に単勝が売れる（オッズが下がる）馬は好走</td><td>T-15 → 確定のオッズの変化</td><td>O</td><td></td></tr>
+<tr><td class='id'>X03</td><td>単勝と複勝の人気のずれ（複勝だけ売れている）</td><td>単勝人気と複勝人気の差</td><td>O, S</td><td></td></tr>
+<tr><td class='id'>X04</td><td>1 番人気の信頼度はクラス・コースで違う</td><td>1 番人気 × クラス × コース（確定オッズ）</td><td>R</td><td></td></tr>
+<tr><td class='id'>X05</td><td>1〜3 番人気が抜けた混戦（オッズが割れる）は荒れる</td><td>上位人気のオッズの集中度 × 決着の配当</td><td>R</td><td></td></tr>
+<tr><td class='id'>X06</td><td>人気落ちは狙い（前走で人気を裏切って人気を落とした実力馬）</td><td>前走の人気 − 今回の人気 × 前走の着順 × 前走の敗因（替わりの有無）。確定オッズだけで検証できる</td><td>R</td><td></td></tr>
+<tr><td class='id'>X07</td><td>単勝 1 倍台でも飛ぶ条件がある（少頭数・逃げ馬不在・初コース）</td><td>単勝 1.9 倍以下 × 頭数 × 初物（M 分類）× 逃げ候補の数</td><td>R</td><td></td></tr>
+<tr><td class='id'>X08</td><td>前走 1 番人気で凡走した馬は今回も過剰に人気になる</td><td>前走 1 番人気で 4 着以下 × 今回の人気 × 好走率（市場確率との差）</td><td>R</td><td></td></tr>
+</tbody></table></div>
+
+<h2>3. 判定の進め方の案（レビュー用・まだ実行しない）</h2>
+<h3>3.1 何を『優位』とするか</h3>
+<ul>
+<li><b>目的変数</b>: 3 着内（主）、勝ち、着順の割合（着順 ÷ 頭数）。</li>
+<li><b>比較の基準</b>（同じ条件の『当てはまらない馬』と比べる）。候補は 3 つで、通説ごとに 3 つとも出す:
+  <ol>
+  <li><b>素の差</b>: 同じ母集団（例: 同じコース・クラス）で、当てはまる馬と当てはまらない馬の 3 着内率の差。最も素朴な通説の確かめ方。</li>
+  <li><b>人気をそろえた差</b>: 単勝人気の帯（または確定オッズの市場確率）ごとに比べた差。『強い馬だから来ているだけ』を除く。市場が既に織り込んでいるかが分かる。</li>
+  <li><b>回収率</b>: 単勝・複勝の回収率（参考。既存の調査ではほとんど 100% を超えていない）。</li>
+  </ol></li>
+<li>序列づけに使うなら、2 の『人気をそろえた差』が本命の基準と考える（1 だけだと、能力の高い馬ほど当てはまりやすい条件（例: 上位騎手）が全部『優位』に見える）。ただし序列を作るときの入力に市場の情報は使わない（tp-75 と同じ市場非依存）。</li>
+</ul>
+<h3>3.2 期間と再現</h3>
+<ul>
+<li>発見 2016〜2022、確認 2023〜2024、2025 は採用した型の 1 回の評価、2026 は記述のみ（案。データの揃い方で調整）。</li>
+<li>採用 = 発見期間で差の区間（レース単位のクラスタ頑健）が 0 を跨がない、かつ確認期間で同じ向き、かつ発見の各年の過半が同じ向き。</li>
+<li>多重比較は BH（FDR 10%）を併記。型を細かく切るほど偶然の当たりが増えるので、<b>条件の切り方はこの一覧で先に固定し、結果を見てから切り直さない</b>（事前登録）。</li>
+<li>最小の標本: 発見期間で該当 300 走・200 レース以上（tp-75 と同じ）。少ない型は上の階層（コース → 面 × 距離帯）にまとめて縮約。</li>
+<li>すべて as-of（レース当日より前の情報だけ）。当日の馬場の偏りは、同じ日の『そのレースより前に終わったレース』だけ。</li>
+</ul>
+<h3>3.3 序列づけ（展望）のための形</h3>
+<ul>
+<li>採用した型ごとに『人気をそろえた差』を縮約した効果（例: 対数オッズ比）を持ち、馬ごとに当てはまる型の効果を足し合わせて点数にする（買い条件は加点、消し条件は減点）。</li>
+<li>似た型（当てはまる馬が大きく重なる）は束ねて 1 回だけ数える（二重計上を防ぐ）。</li>
+<li>点数の評価は、レース内の点数順位と着順の順位相関、点数 1 位の 3 着内率、人気をそろえた残差で見る。</li>
+</ul>
+<div class="note"><b>既存の調査との違いと注意.</b> 似た発想の tp-75（ルールベースのペルソナ, rule_personas）は、1,070 型を『モデル（v6e）の予測に対する残差』で採用し、合致率で順位を付けた。結果は『合致率だけで選ぶと 3 着内率 33〜34%（モデル本命 64%）』で、ルールはモデルとのずれを測る道具にとどまった。今回の案はモデルを基準にしない点が違うが、<b>通説の当てはまりだけで序列を作ると能力の差（指数・近走）を取り込めず弱くなる</b>おそれが高い。能力の通説（J 分類）を序列の土台に入れるかは決めておきたい。tp-72（edge_factor_mining）・tp-59（jockey_trainer_roi）では回収率 100% 超の型は見つかっていない。</div>
+
+
+<h3>3.4 制度・施設の変更で期間を区切る（玄人なら知っている『昔と今で違う』点）</h3>
+<div class='wrap'><table><thead><tr><th>時期</th><th>変更</th><th>効く型</th></tr></thead><tbody>
+<tr><td>2019-06</td><td>降級制度の廃止（4 歳夏に賞金が半分になってクラスが下がる仕組みが無くなった）</td><td>A15・I16・古馬条件戦の年齢の型すべて</td></tr>
+<tr><td>2020-11〜2023-04</td><td>京都競馬場の改修による休止（その間は阪神・中京などで代替開催）。改修後は馬場・傾向が変わったとされる</td><td>F12・P03・P04・京都で語られる血統の格言（E18）・重賞の傾向（I01）</td></tr>
+<tr><td>2023</td><td>負担重量の基準が 1kg 引き上げ（古馬の定量 G1 は 58kg）。『58kg 以上は割引』の 58 の意味が変わった</td><td>H04・N06・I19。斤量は絶対値ではなく『同レース内の平均との差』『前走比』でも切る</td></tr>
+<tr><td>2020〜2021</td><td>無観客・入場制限（当日の馬券の売れ方・オッズの形が変わった）</td><td>L07・X 分類</td></tr>
+<tr><td>各年</td><td>トレセンの調教コースの改修・坂路の延長（美浦の坂路の改修など）。調教時計の基準が変わる</td><td>B05・B14・B29・D16（西高東低）</td></tr>
+<tr><td>各年</td><td>短期免許の外国人騎手の来日の基準・人数、JRA 所属の外国出身の騎手の増加</td><td>C06・C08</td></tr>
+</tbody></table></div>
+<p class="muted">日付は公表の時期の目安。検証の前に一次資料（JRA の発表）で確かめ、区切りを確定させてから事前登録する。</p>
+
+<h3>3.5 向きが逆の通説の対（両方を同じ条件で検定し、どちらが残るかを見る）</h3>
+<div class='wrap'><table><thead><tr><th>型</th><th>逆の向きの型</th><th>分け目になりそうな条件</th></tr></thead><tbody>
+<tr><td>L01 夏は牝馬</td><td>F10 暑さで牝馬が崩れる</td><td>気温の帯・北海道か本州か・馬体重</td></tr>
+<tr><td>L04 混戦は 1 番人気</td><td>X05 混戦は荒れる</td><td>目的変数（1 番人気の好走か、配当か）が違うだけの可能性</td></tr>
+<tr><td>A12 叩き 2 戦目の上積み</td><td>A41 2 走ボケ</td><td>休み明け初戦の内容（好走か凡走か）</td></tr>
+<tr><td>A40 鉄砲駆け</td><td>A13 休み明けは厩舎次第で割引</td><td>馬ごとか厩舎ごとか（どちらの単位の方が次を当てるか）</td></tr>
+<tr><td>B12 一杯に追われた休み明けは仕上がっている</td><td>B33 一杯の連続はやり過ぎ</td><td>本数・性別・体重の減り</td></tr>
+<tr><td>C11 乗れている騎手は続く</td><td>C24 騎乗数の多い日の後半は疲れる</td><td>当日の何鞍目・前の鞍の結果</td></tr>
+<tr><td>F05 脚抜きの良いダートは前</td><td>F16 乾いたダートは差し</td><td>含水率の帯（同じ型の両端）</td></tr>
+<tr><td>A42 連勝の勢い</td><td>N03 楽逃げの昇級は過大評価</td><td>勝った時の展開利</td></tr>
+</tbody></table></div>
+
+<h3>3.6 検証の落とし穴（経験上、ここで間違えやすい）</h3>
+<ul>
+<li><b>陣営の選択の偏り</b>: 休み明け・連闘・格上挑戦・遠征は、陣営が『いける』と見た馬だけが出てくる。当てはまる馬は最初から選ばれているので、素の差は通説を良く見せる。人気をそろえた差で見るのはこのため（市場も陣営の意図をある程度読む）。</li>
+<li><b>同じ馬の重複</b>: リピーター・コース巧者・鉄砲駆けは、少数の馬が何度も当てはまる。レース単位に加えて馬単位のクラスタでも区間を出し、上位数頭を抜いても残るかを見る。</li>
+<li><b>頭数で基準が変わる</b>: 3 着内の割合は 8 頭立てと 18 頭立てで期待が倍以上違う。『3 着内率の差』は、頭数（または人気からの市場確率）をそろえてから比べる。</li>
+<li><b>格言の『条件の後付け』</b>: 格言は当たった例で語り継がれる。条件の切り方（どのコース・どのクラス）は第 2 節で事前に固定し、型ごとに<b>向き（買い/消し）を先に書く</b>。結果を見てから向きを変えない。</li>
+<li><b>人気と通説の二重</b>: 有名な格言ほど市場が先に織り込む（例: 『夏は牝馬』が知られるほど夏の牝馬は人気になる）。人気をそろえた差がゼロでも『通説が外れ』ではなく『織り込み済み』。素の差と並べて解釈する。</li>
+<li><b>当日に分かる情報</b>: 馬体重・当日の馬場・前のレースの偏りは発走の直前まで決まらない。序列を何時点で作るか（前日/当日の朝/発走前）を決め、その時点で分かる型だけを使う。</li>
+</ul>
+
+<h3>3.7 レビューで決めてほしいこと</h3>
+<ol>
+<li>『優位』の基準: 素の差 / 人気をそろえた差 / 回収率 のどれで採用を決めるか（案: 人気をそろえた差）。</li>
+<li>能力の通説（J 分類: 指数・持ち時計）を序列の土台に入れるか、通説の当てはまりだけで序列を作るか。</li>
+<li>足りない通説・不要な通説の追加・削除（特に B 調教・C 騎手・I 重賞の傾向）。</li>
+<li>重賞ごとの傾向（I01・I02）はレース数が年 1 回なので標本が小さい（過去 10 年でも 10 レース）。重賞は『同じ距離・コースの重賞・OP』にまとめて見る形でよいか。</li>
+<li>追い切りの乗り手の名寄せ（B01〜B04）の作業を先に行うか。</li>
+<li>X（市場の通説）は 2026 年の時系列しかないので今回は対象外でよいか。ただし X04〜X08 は確定オッズ（R）だけで検証できるので対象に入れる案。</li>
+<li>N（消し）は上位人気に限った型にした。序列づけで減点として使うか、別の『危険な人気馬』の印として出すか。</li>
+<li>L（格言）・P（競馬場の格言）は他の分類と中身が重なる。重なる型は束ねて 1 回だけ数える（3.3）でよいか。</li>
+<li>第 1.1 節の手元に無いデータ（馬具・収得賞金・除外・裁決）の取り込みを、検証の前に行うか。</li>
+</ol>
+<h2>4. 補完の記録（玄人の目線での見直し 20 回）</h2>
+<p class='muted'>2026-11-08 の依頼『足りない部分を可能な限り補完して完成させる。全体を見直し、足りない部分を加える操作を 20 回繰り返す』に沿って、1 回ごとに 1 つの観点で全体を読み直し、欠けを加えた。ウェブで格言の一覧と斤量の改定を確かめた（出典は末尾）。</p>
+<div class='wrap'><table><thead><tr><th>回</th><th>見直しの観点</th><th>足りなかった点</th><th>加えたもの</th></tr></thead><tbody>
+<tr><td class='num'>1</td><td>格言そのもの</td><td>予想の現場で口にする定番の格言（夏は牝馬・両雄並び立たず・混戦は 1 番人気・人気薄の逃げ馬 など）が、型の中に言い回しどおりの形で無かった</td><td>新分類 L（L01〜L10）</td></tr>
+<tr><td class='num'>2</td><td>消しの視点</td><td>買い条件ばかりで、玄人の予想で差の付く『人気馬を消す』型がまとまっていなかった</td><td>新分類 N（N01〜N10）</td></tr>
+<tr><td class='num'>3</td><td>初物</td><td>『初コース・初距離・初重賞・初の古馬・初輸送・初の多頭数・初の道悪・初の洋芝・初の 1 番人気』がばらばらか欠けていた</td><td>新分類 M（M01〜M09）</td></tr>
+<tr><td class='num'>4</td><td>ローテの残り</td><td>鉄砲駆け・2 走ボケ・連勝の勢い・勝ち切れない堅実馬・ベスト距離への戻り・『使っただけ』・距離の境目・中央からローカルの相手弱化</td><td>A40〜A47</td></tr>
+<tr><td class='num'>5</td><td>調教の残り</td><td>ウッドのコース取り・調教場ごとの合格の目安・3 頭併せ・詰めたローテの軽め・1 週前と当週の強弱・やり過ぎ・前走時との時計の比較・日の馬場差・1 日 2 本</td><td>B28〜B36</td></tr>
+<tr><td class='num'>6</td><td>騎手の残り</td><td>所属騎手を外す・減量が取れた直後・年末のリーディング争い・騎乗停止の乗り替わり・騎手と脚質の相性・その日の勝負鞍・騎乗数の多い日・若手の大舞台・エージェント</td><td>C18〜C26</td></tr>
+<tr><td class='num'>7</td><td>厩舎・陣営の残り</td><td>10 日競馬（外厩仕上げ）・除外明け・上位厩舎の人気薄・西高東低・新馬で勝たせる厩舎・ペースメーカー・社台以外の生産者</td><td>D13〜D19</td></tr>
+<tr><td class='num'>8</td><td>血統の残り</td><td>父の現役の適性・母父が決める距離の限界・系統ごとのコースの格言（ロベルト・ディープ・ステイゴールド・キングマンボ・米国型）・初年度産駒・晩成・母の現役成績</td><td>E16〜E21</td></tr>
+<tr><td class='num'>9</td><td>馬場の残り</td><td>芝の連続使用日数・時計の速い日・乾いた冬のダート・雨の日は逃げ・発表と実態のずれ・オーバーシード</td><td>F14〜F19</td></tr>
+<tr><td class='num'>10</td><td>枠・展開の残り</td><td>同型の並び・大外の逃げ馬・逃げ専・揉まれ弱い・砂を被ると嫌がる・小回りの大外差し・迷ったら内枠</td><td>G15〜G21</td></tr>
+<tr><td class='num'>11</td><td>馬体・個体の残り</td><td>ベスト体重・使い詰めの体重減・小柄な牝馬・ブリンカー以外の馬具・ブリンカー外し・1 年以上の休養明け・春の牝馬・セン馬の堅実さ</td><td>H14〜H21</td></tr>
+<tr><td class='num'>12</td><td>番組の残り</td><td>賞金加算・権利取り・世代レベル・メンバーレベル・降級廃止の影響・3 冠の格言・夏の上がり馬・別定と定量・開催の初日と最終日</td><td>I12〜I20</td></tr>
+<tr><td class='num'>13</td><td>能力指標の残り</td><td>格より調子・2 歳の時計・上がりの絶対値とコースの相性・最高指数の鮮度・指数の上昇トレンド</td><td>J08〜J12</td></tr>
+<tr><td class='num'>14</td><td>競馬場の格言</td><td>府中の千八・中山巧者・京都の下り坂・内回り・小回りのローカル・新潟外回り・中京・洋芝・有馬記念・東京 2400 の内枠が無かった</td><td>新分類 P（P01〜P10）</td></tr>
+<tr><td class='num'>15</td><td>市場の通説で今すぐ検証できるもの</td><td>X は時系列が要るものばかりと見えていたが、確定オッズだけで見られる型（人気落ち・1 倍台の飛び・前走 1 番人気の凡走）がある</td><td>X06〜X08、3.7 の 6</td></tr>
+<tr><td class='num'>16</td><td>組み合わせの残り</td><td>玄人がよく使う掛け算（叩き 2 戦目の距離延長・10 日競馬×ノーザン×上位騎手・前走不利×継続騎乗・人気薄の単騎逃げ×開幕週・初ブリンカー×短縮 など）</td><td>K11〜K18</td></tr>
+<tr><td class='num'>17</td><td>データの欠け</td><td>型に要るのに手元に無いデータ（馬具・収得賞金・除外・外厩・裁決・エージェント・芝の管理）が書かれていなかった</td><td>1.1</td></tr>
+<tr><td class='num'>18</td><td>制度の変更</td><td>降級廃止・京都の改修・斤量の 1kg 引き上げ・無観客・調教コースの改修で『昔の通説』が今は違う可能性が考慮されていなかった</td><td>3.4</td></tr>
+<tr><td class='num'>19</td><td>逆の向きの通説・検証の落とし穴</td><td>向きが逆の格言の対（夏は牝馬 と 暑さで牝馬が崩れる など）と、陣営の選択の偏り・同じ馬の重複・頭数・後付け・織り込み済み・当日情報の時点</td><td>3.5・3.6</td></tr>
+<tr><td class='num'>20</td><td>全体の整合</td><td>件数・分類の一覧・要点・レビューで決めてほしい点を、加えた型に合わせて直した。K の新しい組は L・X など新しい ID を参照するので、事前登録の時に ID を固定する</td><td>要点・第 2 節の一覧・3.7</td></tr>
+</tbody></table></div>
+<p class='muted'>参考: 格言の一覧と検証の例（<a href='https://note.com/pakara_keiba/n/n8117f7b1ac84'>pakara の検証記事</a>・<a href='http://www.kei-bank.com/maxim/blind-spot'>競馬バンクの格言集</a>）、負担重量の改定（<a href='https://www.jra.go.jp/keiba/rules/weight.html'>JRA 負担重量</a>・<a href='https://jra-van.jp/fun/kyanalyze/20240329.html'>JRA-VAN の解説</a>）、調教の見方（<a href='https://jra-van.jp/fun/training/02/'>JRA-VAN 調教の見方</a>）。</p>
+<p class="muted">生成: 洗い出しのみ（2026-11-07）。補完（20 回の見直し、307 型）: 2026-11-08。B37 の追加（308 型）: 2026-11-08。検証のコードはまだ無い。</p>
+</body></html>

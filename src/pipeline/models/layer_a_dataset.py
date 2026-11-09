@@ -51,6 +51,16 @@ DEFAULT_OUTPUT_PARQUET = Path("data/local/modeling/layer_a_train.parquet")
 DEFAULT_META_JSON = Path("data/local/modeling/layer_a_train.meta.json")
 
 
+def _schema_any(store, source: str, years: list[str]) -> dict:
+    """指定年のうち、そのテーブルがある最初の年のスキーマ。先頭の年に無いテーブル（例: 2016〜2018 年の race_index）で
+    スキーマが空になると、列を絞らずに読み込んで名前が衝突し、venue_code が欠けて全行が JRA 以外として落ちていた。"""
+    for y in years:
+        sch = store.source_schema(source, y)
+        if sch:
+            return sch
+    return {}
+
+
 def _jra_mask(df: pd.DataFrame) -> pd.Series:
     """JRA 開催のみ（venue_code 01-10 = 中央10場）。データに無ければ全 True。"""
     if "venue_code" not in df.columns:
@@ -122,7 +132,7 @@ def build_layer_a_dataframe(
     drop_mkt = {"odds", "popularity"}
     sb = sb.drop(columns=[c for c in drop_mkt if c in sb.columns], errors="ignore")
 
-    ix_cols = [c for c in INDEX_FEATURE_COLS if c in store.source_schema("race_index", use_years[0])]
+    ix_cols = [c for c in INDEX_FEATURE_COLS if c in _schema_any(store, "race_index", use_years)]
     ix = store.load_source("race_index", years=use_years, columns=ix_cols)
     ix = ix.drop(columns=[c for c in drop_mkt if c in ix.columns], errors="ignore")
     ix = expand_speed_recent_in_dataframe(ix, "speed_recent", dest_prefix="speed_recent")
@@ -130,7 +140,7 @@ def build_layer_a_dataframe(
     past_cols = [
         c
         for c in PAST_FEATURE_COLS
-        if c in store.source_schema("race_shutuba_past", use_years[0])
+        if c in _schema_any(store, "race_shutuba_past", use_years)
     ]
     past = store.load_source("race_shutuba_past", years=use_years, columns=past_cols)
 
@@ -235,13 +245,13 @@ def build_layer_a_dataframe(
                 "track_condition",
                 "distance",
             )
-            if c in store.source_schema("race_result", use_years[0])
+            if c in _schema_any(store, "race_result", use_years)
         ]
         rr_tb = store.load_source("race_result", years=avail, columns=tb_cols)
         sb_cols = [
             c
             for c in ("race_id", "horse_number", "horse_id", "sire", "dam_sire")
-            if c in store.source_schema("race_shutuba", use_years[0])
+            if c in _schema_any(store, "race_shutuba", use_years)
         ]
         sb_tb = store.load_source("race_shutuba", years=avail, columns=sb_cols)
         if pedigree_keys is not None and not sb_tb.empty:

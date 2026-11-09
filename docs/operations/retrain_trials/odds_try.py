@@ -26,6 +26,12 @@ os.environ["ODDS_PRED_OUT"] = str(OUT)
 from src.scripts.data import odds_pred_eval as oe  # noqa: E402
 
 oe.OUT = OUT
+TRAIN_FROM = int(os.environ.get("ODDS_TRAIN_FROM", "2020"))
+if os.environ.get("REBUILD_2016") == "1":     # 2016〜2025 年の土台と、2016〜2019 年を足したオッズの表
+    from src.scripts.data import rebuild_groups_2016 as _rg
+
+    _rg.redirect()
+    oe.BET = _rg.BASE / "betting"
 REFIT = os.environ.get("ODDS_REFIT") == "1"
 OBJ = os.environ.get("ODDS_OBJ", "l2")
 SEEDS = int(os.environ.get("ODDS_SEEDS", "1"))
@@ -134,7 +140,7 @@ def main() -> int:
     info = {}
     for Y in oe.YEARS:
         te = yr == Y
-        tr_all = (yr < Y) & (yr >= 2020)
+        tr_all = (yr < Y) & (yr >= TRAIN_FROM)
         va = tr_all & (yr == Y - 1)
         tr = tr_all & (yr < Y - 1)
         for name, y in (("share", y_share), ("place", y_place)):
