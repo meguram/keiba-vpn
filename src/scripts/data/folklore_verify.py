@@ -3,6 +3,7 @@
 
 python -m src.scripts.data.folklore_verify run      # <FOLKLORE_OUT>/tests.parquet・hyp.json
 python -m src.scripts.data.folklore_verify rank     # 通説の数で並べた成績 → <FOLKLORE_OUT>/rank.json（report の第 8 節）
+python -m src.scripts.data.folklore_verify score    # 格の重みの得点・閾値ごとの 1 位の成績・ROC → <FOLKLORE_OUT>/score.json（第 9 節）
 python -m src.scripts.data.folklore_verify report   # docs/html/modeling/chapters/folklore_verification.html
 
 検定の作り（詳しくは章の本文）
@@ -899,6 +900,134 @@ def rank() -> None:
 
 
 
+# ---------------------------------------------------------------- 通説の格（S/A/B/C）で重みを付けた得点と、閾値ごとの 1 位の成績
+TIER_W = [(0.001, 4), (0.01, 3), (0.05, 2), (0.10, 1)]  # 発見期間の q → 重み（S=4・A=3・B=2・C=1）
+
+
+def _w_of_q(q: np.ndarray) -> np.ndarray:
+    w = np.zeros(len(q), dtype=np.int8)
+    for th, v in TIER_W[::-1]:
+        w[q < th] = v
+    return w
+
+
+def _roc(score: np.ndarray, y: np.ndarray, npts: int = 120) -> tuple[list, float]:
+    """同点を 1 つの閾値として扱う ROC と AUC。"""
+    df = pd.DataFrame({"s": score, "y": y}).groupby("s")["y"].agg(["sum", "count"]).sort_index(ascending=False)
+    tp = np.concatenate([[0], df["sum"].cumsum().to_numpy()])
+    fp = np.concatenate([[0], (df["count"] - df["sum"]).cumsum().to_numpy()])
+    tpr, fpr = tp / tp[-1], fp / fp[-1]
+    auc = float(np.sum((fpr[1:] - fpr[:-1]) * (tpr[1:] + tpr[:-1]) / 2))
+    idx = np.unique(np.searchsorted(fpr, np.linspace(0, 1, npts)).clip(0, len(fpr) - 1))
+    return [[round(float(fpr[i]), 4), round(float(tpr[i]), 4)] for i in idx], auc
+
+
+def score() -> None:
+    """通説の格（発見期間 2016〜2022 の検定の S/A/B/C）を重みにした得点で各レースの 1 位を選び、
+    1 位の得点の閾値を上げていったときの成績（2023〜2025 年、重みの決定に使っていない期間）を出す。"""
+    sp = OUT / "scores.parquet"
+    if sp.exists() and os.environ.get("FOLKLORE_RESUME", "1") == "1":
+        d = pd.read_parquet(sp)
+        out = json.load(open(OUT / "score_used.json"))
+    else:
+        d, out = _score_rows()
+        d.to_parquet(sp, index=False)
+        json.dump(out, open(OUT / "score_used.json", "w"))
+    _score_eval(d, out)
+
+
+def _score_rows() -> tuple[pd.DataFrame, dict]:
+    d = pd.read_pickle(OUT / "_prep.pkl")
+    tr = pd.read_parquet(OUT / "tests_raw.parquet")
+    disc = tr[(tr["period"] == "disc") & (tr["n1"] >= MIN_N1) & (tr["r1"] >= MIN_R1) & (tr["n0"] >= MIN_N0) & ~tr["hid"].str.startswith("Z")].copy()
+    disc["p"] = 2 * norm.sf(np.abs(disc["adj"] / disc["adj_se"]))
+    disc["q"] = bh(disc["p"].fillna(1).to_numpy())  # 全切り口の発見期間の検定を 1 つの族として補正（judge と同じ）
+    disc["w"] = _w_of_q(disc["q"].to_numpy()) * np.sign(disc["adj"]).astype(int)
+    disc = disc[disc["w"] != 0]
+    keys = {name: pd.Series(np.asarray(fn(d)), index=d.index).astype(str).to_numpy() for name, fn in DIMS}
+    n = len(d)
+    s_all = np.zeros(n, dtype=np.int16)  # 全体の格だけ
+    s_slc = np.zeros(n, dtype=np.int16)  # その馬の切り口（コース・馬場など）の中で最も格の高い判定
+    cnt = np.zeros(n, dtype=np.int16)  # 通説の向きで単純に数えた（第 8 節）
+    used = {"all": set(), "slice": set()}
+    for h in hyps():
+        if h.elig is None or h.hid.startswith("Z"):
+            continue
+        try:
+            e = np.asarray(pd.Series(h.elig(d), index=d.index).fillna(False).astype(bool))
+            f = np.asarray(pd.Series(h.flag(d), index=d.index).fillna(False).astype(bool)) & e
+        except Exception:  # noqa: BLE001
+            continue
+        cnt += (h.direction * f).astype(np.int16)
+        x = disc[disc["hid"] == h.hid]
+        if not len(x) or not f.any():
+            continue
+        best = np.zeros(n, dtype=np.int8)
+        for dim, g in x.groupby("dim"):
+            mp = dict(zip(g["key"].astype(str), g["w"].astype(int)))
+            v = pd.Series(keys[dim][f]).map(mp).fillna(0).astype(np.int8).to_numpy()
+            cur = best[f]
+            best[f] = np.where(np.abs(v) > np.abs(cur), v, cur)
+            if dim == "全体":
+                s_all[f] += v
+                used["all"].add(h.hid)
+        s_slc += best
+        if (best != 0).any():
+            used["slice"].add(h.hid)
+    d = d[["race_id", "year", "horse_number", "fin", "pop", "odds", "p_mkt", "y3"]].copy()
+    d["s_cnt"], d["s_all"], d["s_slc"] = cnt, s_all, s_slc
+    d["race_id"] = d["race_id"].astype(str)
+    d["horse_number"] = pd.to_numeric(d["horse_number"], errors="coerce")
+    d = d.merge(_payouts(sorted(d["year"].unique().tolist())), on=["race_id", "horse_number"], how="left")
+    d["win"], d["plc"] = d["win"].fillna(0.0), d["plc"].fillna(0.0)
+    d["tb"] = np.random.default_rng(0).random(len(d))
+    return d, {"n_all": len(used["all"]), "n_slice": len(used["slice"]), "tier_w": TIER_W}
+
+
+def _score_eval(d: pd.DataFrame, out: dict) -> None:
+    te = d[d["year"] >= 2023]
+    y = (te["fin"] <= 3).to_numpy()
+    yw = (te["fin"] == 1).to_numpy()
+    out["roc"] = {}
+    for k, col in (("cnt", "s_cnt"), ("all", "s_all"), ("slc", "s_slc"), ("mkt", "p_mkt")):
+        pts, auc = _roc(te[col].to_numpy(), y)
+        _, aucw = _roc(te[col].to_numpy(), yw, 2)
+        out["roc"][k] = {"pts": pts, "auc": auc, "auc_win": aucw}
+    covs = [1.0, 0.8, 0.6, 0.5, 0.4, 0.3, 0.2, 0.15, 0.1, 0.07, 0.05, 0.03, 0.02, 0.01]
+    out["thr"] = {}
+    for k, col in (("cnt", "s_cnt"), ("all", "s_all"), ("slc", "s_slc")):
+        for per, ys in (("conf", (2023, 2025)), ("disc", (2016, 2022))):
+            x = d[d["year"].between(*ys)].sort_values(["race_id", col, "tb"], ascending=[True, False, True])
+            top = x.groupby("race_id", sort=False).head(1)
+            nr = len(top)
+            top = top.sort_values([col, "tb"], ascending=[False, True]).reset_index(drop=True)
+            rows = []
+            grid = sorted(set([c for c in covs] + [i / 50 for i in range(1, 51)]), reverse=True)
+            for c in grid:
+                m = max(1, int(round(c * nr)))
+                th = top[col].iloc[m - 1]
+                g = top[top[col] >= th]  # 閾値以上（同点は全部含む）
+                rw, rp = g["win"] / 100, g["plc"] / 100
+                rows.append({"cov_target": c, "thr": float(th), "n": len(g), "cov": len(g) / nr, "win": float((g["fin"] == 1).mean()),
+                             "top2": float((g["fin"] <= 2).mean()), "top3": float((g["fin"] <= 3).mean()),
+                             "roi_win": float(rw.mean()), "roi_win_se": float(rw.std(ddof=1) / np.sqrt(len(g))) if len(g) > 1 else np.nan,
+                             "roi_plc": float(rp.mean()), "roi_plc_se": float(rp.std(ddof=1) / np.sqrt(len(g))) if len(g) > 1 else np.nan,
+                             "pop": float(g["pop"].mean()), "mkt_win": float((1 / g["odds"]).mean() * 0.8)})
+            out["thr"][f"{k}_{per}"] = rows
+    # 比べるもの: 1 番人気（2023〜2025）
+    pb = te[te["pop"] == 1]
+    out["pop1"] = {"n": len(pb), "win": float((pb["fin"] == 1).mean()), "top2": float((pb["fin"] <= 2).mean()), "top3": float((pb["fin"] <= 3).mean()),
+                   "roi_win": float(pb["win"].mean() / 100), "roi_plc": float(pb["plc"].mean() / 100)}
+    json.dump(out, open(OUT / "score.json", "w"), ensure_ascii=False, indent=1)
+    print("used", out["n_all"], out["n_slice"], {k: (round(v["auc"], 4), round(v["auc_win"], 4)) for k, v in out["roc"].items()})
+    for k in ("cnt", "all", "slc"):
+        print(k)
+        for r in out["thr"][f"{k}_conf"]:
+            if r["cov_target"] in covs:
+                print(f"  cov={r['cov']:.3f} thr={r['thr']:.0f} n={r['n']} win={r['win']:.3f} top3={r['top3']:.3f} roiW={r['roi_win']:.3f}±{r['roi_win_se']:.3f} roiP={r['roi_plc']:.3f}±{r['roi_plc_se']:.3f} pop={r['pop']:.1f}")
+
+
+
 # 玄人の読み（S・A を持つ型の解釈。数値は表から自動で入る）
 INTERP = {
     "L03": "通説と逆。2 強のレースでは 2 頭とも市場の見込みより 3 着内に来る。『2 強は堅い』と読み替える",
@@ -1102,6 +1231,119 @@ def _rank_section(w) -> None:
       "(3) 回収率は 1 頭 100 円の単純な単勝・複勝。1 位だけでも 3.4 万レースあるので、回収率の標準誤差はおよそ単勝 ±2〜3pt・複勝 ±1pt。</div>")
 
 
+SER_COL = {"cnt": "#3987e5", "all": "#d95926", "slc": "#199e70", "mkt": "#c98500"}
+SER_NAME = {"cnt": "通説の数（向きどおり ±1）", "all": "格の重み（全体の判定）", "slc": "格の重み（その馬の切り口の判定）", "mkt": "市場（単勝オッズ）"}
+
+
+def _svg_lines(series, xr, yr, xlab, ylab, xfmt, yfmt, refs=(), diag=False, w=560, h=330) -> str:
+    """折れ線の SVG（1 軸）。series = [(key, [(x, y, tip), ...])]。点に重ねた透明な円で値のツールチップ（title）を出す。"""
+    L, R, T, B = 58, 16, 14, 46
+    pw, ph = w - L - R, h - T - B
+
+    def X(v):
+        return L + (v - xr[0]) / (xr[1] - xr[0]) * pw
+
+    def Y(v):
+        return T + ph - (min(max(v, yr[0]), yr[1]) - yr[0]) / (yr[1] - yr[0]) * ph
+
+    o = [f"<svg viewBox='0 0 {w} {h}' role='img' style='width:100%;max-width:{w}px;height:auto;font-size:11px'>"]
+    for i in range(6):
+        yv = yr[0] + (yr[1] - yr[0]) * i / 5
+        o.append(f"<line x1='{L}' x2='{L + pw}' y1='{Y(yv):.1f}' y2='{Y(yv):.1f}' stroke='#243358' stroke-width='1'/>"
+                 f"<text x='{L - 6}' y='{Y(yv) + 4:.1f}' text-anchor='end' fill='#9aa7c7'>{yfmt(yv)}</text>")
+        xv = xr[0] + (xr[1] - xr[0]) * i / 5
+        o.append(f"<text x='{X(xv):.1f}' y='{T + ph + 16}' text-anchor='middle' fill='#9aa7c7'>{xfmt(xv)}</text>")
+    o.append(f"<text x='{L + pw / 2}' y='{h - 6}' text-anchor='middle' fill='#e6ecff'>{xlab}</text>"
+             f"<text x='12' y='{T + ph / 2}' text-anchor='middle' fill='#e6ecff' transform='rotate(-90 12 {T + ph / 2})'>{ylab}</text>")
+    if diag:
+        o.append(f"<line x1='{X(0)}' y1='{Y(0)}' x2='{X(1)}' y2='{Y(1)}' stroke='#9aa7c7' stroke-dasharray='4 4' stroke-width='1'/>")
+    for yv, lab in refs:
+        o.append(f"<line x1='{L}' x2='{L + pw}' y1='{Y(yv):.1f}' y2='{Y(yv):.1f}' stroke='#9aa7c7' stroke-dasharray='4 4' stroke-width='1'/>"
+                 f"<text x='{L + pw - 4}' y='{Y(yv) - 4:.1f}' text-anchor='end' fill='#9aa7c7'>{lab}</text>")
+    for key, pts in series:
+        path = " ".join(f"{'M' if i == 0 else 'L'}{X(x):.1f},{Y(y):.1f}" for i, (x, y, _) in enumerate(pts))
+        o.append(f"<path d='{path}' fill='none' stroke='{SER_COL[key]}' stroke-width='2' stroke-linejoin='round'/>")
+        for x, y, tip in pts:
+            if tip:
+                o.append(f"<circle cx='{X(x):.1f}' cy='{Y(y):.1f}' r='3' fill='{SER_COL[key]}' stroke='#15213c' stroke-width='1'/>"
+                         f"<circle cx='{X(x):.1f}' cy='{Y(y):.1f}' r='9' fill='transparent'><title>{SER_NAME[key]}: {tip}</title></circle>")
+    o.append("</svg>")
+    leg = "".join(f"<span style='margin-right:14px;white-space:nowrap'><span style='display:inline-block;width:14px;height:3px;background:{SER_COL[k]};vertical-align:middle;margin-right:5px;border-radius:2px'></span>{SER_NAME[k]}</span>" for k, _ in series)
+    return f"<div class='muted' style='margin:4px 0'>{leg}</div>" + "".join(o)
+
+
+def _score_section(w) -> None:
+    """第 9 節: 通説の格で重みを付けた得点と、1 位の得点の閾値ごとの成績・ROC。"""
+    f = OUT / "score.json"
+    if not f.exists():
+        return
+    o = json.load(open(f))
+    p1 = o["pop1"]
+    keys = ("cnt", "all", "slc")
+
+    def pick(k, per="conf"):
+        return [r for r in o["thr"][f"{k}_{per}"]]
+
+    best = {k: max((r for r in pick(k) if r["n"] >= 300), key=lambda r: r["roi_win"]) for k in keys}
+    a100 = {k: pick(k)[0] for k in keys}
+    a10 = {k: min(pick(k), key=lambda r: abs(r["cov"] - 0.10)) for k in keys}
+    w("<h2 id='score'>9. 通説の格で得点を付け、閾値を超えたレースの 1 位だけを買ったときの成績</h2>")
+    w("<p><b>得点</b> = 当てはまる通説ごとの <b>格の重み（S=4・A=3・B=2・C=1）× 向き</b>の合計。格と向きは<b>発見期間（2016〜2022）の検定だけ</b>で決めた"
+      "（人気をそろえた差、全切り口を 1 つの族として BH。向きはデータの向きなので、通説と逆だった型は逆に数える）。成績は<b>2023〜2025 年</b>（重みの決定に使っていない期間）で出した。"
+      "各レースで得点が最も高い馬を 1 位とし（同点は無作為）、<b>1 位の得点が閾値以上のレースだけ</b>買う。閾値を上げると買うレースが減る（横軸 = 買うレースの割合）。3 つの得点を比べた:</p><ul>"
+      "<li><b>通説の数</b>: 第 8 節と同じ、通説の向きどおりに ±1（格は見ない）。</li>"
+      f"<li><b>格の重み（全体の判定）</b>: 型の『全体』の格だけを使う（格の付いた型 {o['n_all']}）。</li>"
+      f"<li><b>格の重み（その馬の切り口の判定）</b>: 型ごとに、その馬が入る切り口（コース・競馬場×面・距離帯・馬場・クラス・頭数・季節・年齢・性・人気帯・全体）のうち最も格の高い判定の重みを使う（格の付いた型 {o['n_slice']}）。</li></ul>")
+    w("<div class='note'><b>結論.</b> "
+      f"格で重みを付けると 1 位の的中は大きく上がる（全レースで買うと勝率 {a100['all']['win'] * 100:.1f}%・複勝率 {a100['all']['top3'] * 100:.1f}%、閾値を上げて上位 10% のレースだけなら勝率 {a10['all']['win'] * 100:.1f}%・複勝率 {a10['all']['top3'] * 100:.1f}%）。"
+      f"しかし 1 位は平均 {a100['all']['pop']:.1f} 番人気（上位 10% では {a10['all']['pop']:.1f}）の人気馬になり、回収率は単勝 {a100['all']['roi_win'] * 100:.0f}%→{a10['all']['roi_win'] * 100:.0f}%、複勝 {a100['all']['roi_plc'] * 100:.0f}%→{a10['all']['roi_plc'] * 100:.0f}% で、"
+      f"同じ期間の 1 番人気（単勝 {p1['roi_win'] * 100:.0f}%・複勝 {p1['roi_plc'] * 100:.0f}%）と同じ水準にとどまる。閾値をどこに置いても 100% は超えない。"
+      f"ROC の AUC（3 着内、2023〜2025 の全出走）は 格の重み（全体）{o['roc']['all']['auc']:.3f}・切り口 {o['roc']['slc']['auc']:.3f}・通説の数 {o['roc']['cnt']['auc']:.3f} に対し、市場（単勝オッズ）は {o['roc']['mkt']['auc']:.3f}。"
+      "通説を格で束ねても、オッズが持つ情報の一部（主に『強い馬』の情報）をなぞるだけで、オッズを上回る序列にはならない。"
+      f"『切り口ごとの格』は全体の格より悪い（切り口の数が多く、最も格の高い切り口を選ぶと偶然の当たりを拾う）。"
+      f"通説の数（格なし）は単勝回収率が閾値とともに上がるように見える（上位 {best['cnt']['cov'] * 100:.0f}% で {best['cnt']['roi_win'] * 100:.0f}%±{best['cnt']['roi_win_se'] * 100:.0f}）が、標準誤差が大きく 100% と区別できない。</div>")
+    # 図
+    def thr_series(metric, k, scale=1.0):
+        return (k, [(r["cov"], r[metric] * scale, f"買うレース {r['cov'] * 100:.0f}%（閾値 {r['thr']:.0f}・{r['n']:,} レース）→ {r[metric] * 100:.1f}%"
+                     + (f"±{r[metric + '_se'] * 100:.1f}" if metric + "_se" in r else "")) for r in sorted(pick(k), key=lambda r: r["cov"])])
+
+    pc_ = lambda v: f"{v * 100:.0f}%"  # noqa: E731
+    w("<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,480px),1fr));gap:18px'>")
+    roc = [(k, [(x, y, f"偽陽性率 {x * 100:.0f}% → 真陽性率 {y * 100:.0f}%" if i % 6 == 0 else "") for i, (x, y) in enumerate(o["roc"][k]["pts"])]) for k in ("mkt", "all", "slc", "cnt")]
+    w("<figure style='margin:0'><figcaption><b>ROC（3 着内、2023〜2025 の全出走）</b> AUC: " + "・".join(f"{SER_NAME[k]} {o['roc'][k]['auc']:.3f}" for k in ("mkt", "all", "slc", "cnt")) + "</figcaption>")
+    w(_svg_lines(roc, (0, 1), (0, 1), "偽陽性率（3 着外を拾った割合）", "真陽性率", pc_, pc_, diag=True) + "</figure>")
+    w("<figure style='margin:0'><figcaption><b>1 位の勝率</b>（閾値を上げて買うレースを減らす）</figcaption>")
+    w(_svg_lines([thr_series("win", k) for k in keys], (0, 1), (0, 0.5), "買うレースの割合（右ほど閾値が低い）", "勝率", pc_, pc_, refs=[(p1["win"], f"1 番人気 {p1['win'] * 100:.0f}%")]) + "</figure>")
+    w("<figure style='margin:0'><figcaption><b>1 位の単勝回収率</b></figcaption>")
+    w(_svg_lines([thr_series("roi_win", k) for k in keys], (0, 1), (0.5, 1.5), "買うレースの割合", "単勝回収率", pc_, pc_, refs=[(1.0, "100%"), (p1["roi_win"], f"1 番人気 {p1['roi_win'] * 100:.0f}%")]) + "</figure>")
+    w("<figure style='margin:0'><figcaption><b>1 位の複勝回収率</b></figcaption>")
+    w(_svg_lines([thr_series("roi_plc", k) for k in keys], (0, 1), (0.6, 1.1), "買うレースの割合", "複勝回収率", pc_, pc_, refs=[(1.0, "100%"), (p1["roi_plc"], f"1 番人気 {p1['roi_plc'] * 100:.0f}%")]) + "</figure>")
+    w("</div><p class='muted'>点にカーソルを置くと値が出る。買うレースが少ない左端ほど標本が小さく、回収率の揺れが大きい（表の ± は標準誤差）。</p>")
+    covs = [1.0, 0.8, 0.6, 0.5, 0.4, 0.3, 0.2, 0.15, 0.1, 0.07, 0.05, 0.03, 0.02, 0.01]
+    head = ("<div class='wrap'><table><thead><tr><th>買うレース（目安）</th><th>閾値（1 位の得点 ≥）</th><th>レース数</th><th>実際の割合</th><th>勝率</th><th>連対率</th><th>複勝率</th>"
+            "<th>単勝回収率 ±SE</th><th>複勝回収率 ±SE</th><th>平均人気</th></tr></thead><tbody>")
+
+    def table(k, per):
+        w(head)
+        for r in o["thr"][f"{k}_{per}"]:
+            if r["cov_target"] not in covs:
+                continue
+            w(f"<tr><td>上位 {r['cov_target'] * 100:.0f}%</td><td class='num'>{r['thr']:.0f}</td><td class='num'>{r['n']:,}</td><td class='num'>{r['cov'] * 100:.1f}%</td>"
+              f"<td class='num'>{r['win'] * 100:.1f}%</td><td class='num'>{r['top2'] * 100:.1f}%</td><td class='num'>{r['top3'] * 100:.1f}%</td>"
+              f"<td class='num'>{r['roi_win'] * 100:.1f}% ±{r['roi_win_se'] * 100:.1f}</td><td class='num'>{r['roi_plc'] * 100:.1f}% ±{r['roi_plc_se'] * 100:.1f}</td><td class='num'>{r['pop']:.1f}</td></tr>")
+        w("</tbody></table></div>")
+
+    w(f"<p>比べるもの: 2023〜2025 年の 1 番人気 {p1['n']:,} 頭 = 勝率 {p1['win'] * 100:.1f}%・連対率 {p1['top2'] * 100:.1f}%・複勝率 {p1['top3'] * 100:.1f}%・単勝回収率 {p1['roi_win'] * 100:.1f}%・複勝回収率 {p1['roi_plc'] * 100:.1f}%。</p>")
+    for k in ("all", "slc", "cnt"):
+        w(f"<h3>9.{('all', 'slc', 'cnt').index(k) + 1} {SER_NAME[k]}: 閾値ごとの 1 位の成績（2023〜2025 年）</h3>")
+        table(k, "conf")
+        w("<details><summary>2016〜2022 年（重みを決めた期間。参考）</summary>")
+        table(k, "disc")
+        w("</details>")
+    w("<div class='note'><b>注意.</b> (1) 人気・オッズの型（1 番人気・混戦の 1 番人気・2 強など）も格が付けば得点に入る。これらは確定オッズで当てはめているので、前日に使うなら前日オッズで測り直しが要る。"
+      "(2) 型ごとに使えるデータの年が違い（追い切りの詳細 2016〜2019、指数・SmartRC 2020〜）、2023〜2025 年は追い切りの型が入らない。(3) 閾値は得点の順位から決めた（買うレースの割合で比べるため）。</div>")
+
+
 def report() -> None:
     import html as _h
     t = pd.read_parquet(OUT / "tests.parquet")
@@ -1171,7 +1413,7 @@ details.okc{margin:4px 0 4px 8px}details.okc>summary{font-size:13px}.ok-courses{
       f"通説の向きどおりに S か A の切り口を 1 つ以上持つ型は {adj_S}、通説と逆の向きで S・A になった型は {adj_rev}。"
       f"<br>・<b>素の差</b>（当てはまる馬の 3 着内率そのものが高いか。『通説は事実か』）: S {cnt_raw.get('S', 0):,}・A {cnt_raw.get('A', 0):,}・B {cnt_raw.get('B', 0):,}・C {cnt_raw.get('C', 0):,} 本。通説の向きで S・A を持つ型は {raw_S}。"
       f"<br>・データが無く検証できない型は {n_na}（第 7 節に理由）。"
-      "<br>素の差では多くの通説が『事実』として残るが、その多くは人気（市場）が既に織り込んでおり、人気をそろえると消えるか小さくなる。序列づけに使うのは人気をそろえた差で S・A の型（第 2・3・5 節）。<br>・すべての通説を当てはめ、当てはまる数で並べたときの着順・単複回収率は <a href='#rank'>第 8 節</a>。</div>")
+      "<br>素の差では多くの通説が『事実』として残るが、その多くは人気（市場）が既に織り込んでおり、人気をそろえると消えるか小さくなる。序列づけに使うのは人気をそろえた差で S・A の型（第 2・3・5 節）。<br>・すべての通説を当てはめ、当てはまる数で並べたときの着順・単複回収率は <a href='#rank'>第 8 節</a>、通説の格（S/A/B/C）で得点を付け閾値を超えたレースの 1 位を買う成績と ROC は <a href='#score'>第 9 節</a>。</div>")
     # 方法
     w("<h2>1. 検定の作り</h2><ul>")
     w("<li><b>対象</b>: 2016〜2025 年の JRA 平地（5 頭立て以上、着順・確定単勝オッズのある出走）。約 46 万走。履歴の列は同じ馬のその走より前だけ、騎手・調教師・父の集計はその日より前だけ（as-of）。</li>")
@@ -1274,6 +1516,7 @@ details.okc{margin:4px 0 4px 8px}details.okc>summary{font-size:13px}.ok-courses{
       "(2) 海外・地方の走歴は出馬表の過去 5 走（2020〜2025）から。(3) 外国人・短期免許・減量・女性騎手は名前・斤量からの推定。(4) 内回り/外回りは距離からの規則で、京都 1400/1600・新潟 2000 は不明扱い。"
       "(5) 市場の見込みは確定オッズ（発走時点の情報）。序列を前日に作るなら、人気をそろえた差は前日オッズで測り直す必要がある。(6) 改修（京都）・斤量の改定（2023）は期間をまたぐ型の効果を薄める。</div>")
     _rank_section(w)
+    _score_section(w)
     w(f"<p class='muted'>生成: {pd.Timestamp.now(tz='Asia/Tokyo'):%Y-%m-%d %H:%M}（python -m src.scripts.data.folklore_verify report）。</p></body></html>")
     DOC.write_text("\n".join(H), encoding="utf-8")
     print("wrote", DOC, len("\n".join(H)))
@@ -1289,3 +1532,5 @@ if __name__ == "__main__":
         report()
     elif cmd == "rank":
         rank()
+    elif cmd == "score":
+        score()
