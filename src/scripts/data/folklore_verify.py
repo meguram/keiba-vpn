@@ -72,6 +72,41 @@ def tercile_2020(d: pd.DataFrame, col: str, mask: pd.Series) -> tuple[float, flo
     return float(b.quantile(1 / 3)), float(b.quantile(2 / 3))
 
 
+def derive_training_cols(d: pd.DataFrame) -> pd.DataFrame:
+    """最終追い切り（ok_*）から作る列: B37 のパターン・調教師の『一杯』の頻度（as-of）・坂路の終い 1F の四分位。
+    ok_* を作り直したとき（folklore_training.add_training）にも同じ計算をやり直すため、関数に切り出してある。"""
+    d = d.drop(columns=[c for c in ("t_ippai_rate", "ok_l1_q25", "ok_l1_q50", "ok_l1_wq25", "ok_pat", "ok_pat2") if c in d.columns])
+    # 調教師 × 最終追い切りのパターン（場所 × 強さ）: B37
+    place = np.where(d["ok_slope"], "坂路", np.where(d["ok_course"].fillna("").str.endswith(("Ｐ", "P")), "ポリ",
+                     np.where(d["ok_course"].fillna("").str.endswith(("芝",)), "芝", np.where(d["ok_wood"], "W", None))))
+    d["ok_pat"] = pd.Series(place, index=d.index).where(d["ok_int"].notna()) + "・" + d["ok_int"].fillna("")
+    d["ok_pat"] = d["ok_pat"].where(pd.Series(place, index=d.index).notna() & d["ok_int"].notna())
+    if "w1_int" in d.columns:  # B37b: 最終のパターン + 1 週前の強度 + 直近 14 日の本数（3 本以上か）
+        w1 = np.where(d["w1_days"].isna(), "無", d["w1_int"].fillna("不明"))  # 1 週前の本が無い / 本はあるが強度が空
+        d["ok_pat2"] = d["ok_pat"] + "｜1週前" + pd.Series(w1, index=d.index) + "｜" + np.where(d["tl_n14"] >= 3, "多", "少")
+        d["ok_pat2"] = d["ok_pat2"].where(d["ok_pat"].notna() & d["tl_n14"].notna())
+    # 調教師の『一杯』の頻度（as-of）: B19
+    ip = (d["ok_int"] == "一杯").astype(float).where(d["ok_int"].notna())
+    tmp = d[["trainer_id", "dt"]].copy()
+    tmp["ip"] = ip
+    tmp = tmp.dropna(subset=["ip"]).groupby(["trainer_id", "dt"]).agg(n=("ip", "size"), k=("ip", "sum")).reset_index().sort_values(["trainer_id", "dt"])
+    cs = tmp.groupby("trainer_id")[["n", "k"]].cumsum() - tmp[["n", "k"]]
+    tmp["t_ippai_rate"] = (cs["k"] / cs["n"]).where(cs["n"] >= 20)
+    d = d.merge(tmp[["trainer_id", "dt", "t_ippai_rate"]], on=["trainer_id", "dt"], how="left")
+    # 坂路の終い 1F の速さ（調教場ごとの、前の年の四分位）
+    sl = d["ok_slope"] & d["ok_l1"].notna()
+    ctr = d["ok_course"].fillna("").str[0]
+    qq = d[sl].groupby([ctr[sl], d.loc[sl, "year"]])["ok_l1"].quantile([0.25, 0.5]).unstack()
+    key = list(zip(ctr, d["year"] - 1))  # 前の年の四分位（同じ年の後の追い切りを含めない）
+    d["ok_l1_q25"] = [qq.loc[k, 0.25] if k in qq.index else np.nan for k in key]
+    d["ok_l1_q50"] = [qq.loc[k, 0.5] if k in qq.index else np.nan for k in key]
+    # ウッドの終い 1F の速さ（前の年の下位 25%。同じ年の後の追い切りを含めない）: B28
+    wd = d["ok_wood"] & d["ok_l1"].notna()
+    wq = d[wd].groupby("year")["ok_l1"].quantile(0.25)
+    d["ok_l1_wq25"] = (d["year"] - 1).map(wq)
+    return d
+
+
 def add_extra(d: pd.DataFrame) -> pd.DataFrame:
     # 市場確率 q は、残った出走（オッズが正）の中で正規化し直す（古い master では取消馬の 0 倍でレース全体の q が 0 になっていた）
     inv = 1.0 / d["odds"].where(d["odds"] > 0)
@@ -114,26 +149,7 @@ def add_extra(d: pd.DataFrame) -> pd.DataFrame:
     asof_stats(d, ["f_name", "mf_name"], allm, "nick")
     asof_stats(d, ["owner", "jockey_id"], allm, "oj")
     asof_stats(d, ["trainer_id"], d["grade"] == "新馬", "tnew")
-    # 調教師 × 最終追い切りのパターン（場所 × 強さ）: B37
-    place = np.where(d["ok_slope"], "坂路", np.where(d["ok_course"].fillna("").str.endswith(("Ｐ",)), "ポリ",
-                     np.where(d["ok_course"].fillna("").str.endswith(("芝",)), "芝", np.where(d["ok_wood"], "W", None))))
-    d["ok_pat"] = pd.Series(place, index=d.index).where(d["ok_int"].notna()) + "・" + d["ok_int"].fillna("")
-    d["ok_pat"] = d["ok_pat"].where(pd.Series(place, index=d.index).notna() & d["ok_int"].notna())
-    # 調教師の『一杯』の頻度（as-of）: B19
-    ip = (d["ok_int"] == "一杯").astype(float).where(d["ok_int"].notna())
-    tmp = d[["trainer_id", "dt"]].copy()
-    tmp["ip"] = ip
-    tmp = tmp.dropna(subset=["ip"]).groupby(["trainer_id", "dt"]).agg(n=("ip", "size"), k=("ip", "sum")).reset_index().sort_values(["trainer_id", "dt"])
-    cs = tmp.groupby("trainer_id")[["n", "k"]].cumsum() - tmp[["n", "k"]]
-    tmp["t_ippai_rate"] = (cs["k"] / cs["n"]).where(cs["n"] >= 20)
-    d = d.merge(tmp[["trainer_id", "dt", "t_ippai_rate"]], on=["trainer_id", "dt"], how="left")
-    # 坂路の終い 1F の速さ（調教場・年ごとの四分位）
-    sl = d["ok_slope"] & d["ok_l1"].notna()
-    ctr = d["ok_course"].fillna("").str[0]
-    qq = d[sl].groupby([ctr[sl], d.loc[sl, "year"]])["ok_l1"].quantile([0.25, 0.5]).unstack()
-    key = list(zip(ctr, d["year"]))
-    d["ok_l1_q25"] = [qq.loc[k, 0.25] if k in qq.index else np.nan for k in key]
-    d["ok_l1_q50"] = [qq.loc[k, 0.5] if k in qq.index else np.nan for k in key]
+    d = derive_training_cols(d)
     # 騎手の年の勝ち数の順位（as-of、その日より前）
     jd = d.groupby(["jockey_id", "year", "dt"])["y1"].sum().reset_index().sort_values(["jockey_id", "year", "dt"])
     jd["ytd"] = jd.groupby(["jockey_id", "year"])["y1"].cumsum() - jd["y1"]
@@ -245,20 +261,22 @@ def add_market(d: pd.DataFrame) -> pd.DataFrame:
     return d
 
 
-def add_b37(d: pd.DataFrame) -> pd.DataFrame:
-    """調教師 × パターンの as-of の残差の合計と件数 → 縮約した上積み（k=50 走ぶん全体へ寄せる）。"""
-    m = d[d["ok_pat"].notna()]
-    agg = m.groupby(["trainer_id", "ok_pat", "dt"]).agg(n=("r3", "size"), s=("r3", "sum")).reset_index().sort_values("dt")
-    cs = agg.groupby(["trainer_id", "ok_pat"])[["n", "s"]].cumsum()
+def add_b37(d: pd.DataFrame, pat: str = "ok_pat", pre: str = "tp") -> pd.DataFrame:
+    """調教師 × パターン（pat 列）の as-of の残差の合計と件数 → 縮約した上積み（k=50 走ぶん全体へ寄せる）。列は {pre}_n・{pre}_shr。"""
+    if pat not in d.columns:
+        return d
+    m = d[d[pat].notna()]
+    agg = m.groupby(["trainer_id", pat, "dt"]).agg(n=("r3", "size"), s=("r3", "sum")).reset_index().sort_values("dt")
+    cs = agg.groupby(["trainer_id", pat])[["n", "s"]].cumsum()
     agg[["n", "s"]] = cs
-    left = d.loc[d["ok_pat"].notna(), ["trainer_id", "ok_pat", "dt"]].copy()
+    left = d.loc[d[pat].notna(), ["trainer_id", pat, "dt"]].copy()
     left["_i"] = left.index
     left = left.sort_values("dt")
-    mg = pd.merge_asof(left, agg.sort_values("dt"), on="dt", by=["trainer_id", "ok_pat"], allow_exact_matches=False)
-    d["tp_n"] = np.nan
-    d["tp_shr"] = np.nan
-    d.loc[mg["_i"], "tp_n"] = mg["n"].to_numpy()
-    d.loc[mg["_i"], "tp_shr"] = (mg["s"] / (mg["n"] + 50.0)).to_numpy()
+    mg = pd.merge_asof(left, agg.sort_values("dt"), on="dt", by=["trainer_id", pat], allow_exact_matches=False)
+    d[pre + "_n"] = np.nan
+    d[pre + "_shr"] = np.nan
+    d.loc[mg["_i"], pre + "_n"] = mg["n"].to_numpy()
+    d.loc[mg["_i"], pre + "_shr"] = (mg["s"] / (mg["n"] + 50.0)).to_numpy()
     return d
 
 
@@ -325,8 +343,9 @@ def hyps() -> list[H]:
     a(H("A33", 1, lambda d: (d["weight_rule"] == "ハンデ") & d["p_jw"].notna(), lambda d: d["jw"] - d["p_jw"] <= -2, "ハンデ戦で斤量が前走より 2kg 以上軽い"))
     a(H("A34", -1, lambda d: d["pp_last_region"].notna(), lambda d: d["pp_last_region"] == "海外", "出馬表の前走が海外（2020〜2025）"))
     for hid, why in (("A35", "遠征先の地域別に分けると 1 地域あたり数十走で、最小標本（300 走）に届かない"), ("A36", "出馬表の海外の走歴に着順が無い"),
-                     ("A37", "帰国後何戦目かを決める走歴の並びを表に入れていない（次の版）"), ("A38", "海外帰りが数百走で、調教師別に分けると標本が無い"), ("A39", "帰国後の追い切りの本数（追い切りの履歴）が手元に無い")):
+                     ("A37", "帰国後何戦目かを決める走歴の並びを表に入れていない（次の版）"), ("A38", "海外帰りが数百走で、調教師別に分けると標本が無い")):
         a(H(hid, 0, None, None, "", why))
+    a(H("A39", -1, lambda d: (d["pp_last_region"] == "海外") & d["tl_n14"].notna(), lambda d: d["tl_n14"] <= 2, "前走が海外の馬で、直近 14 日の追い切りが 2 本以下（training_laps、2020〜2025）"))
     a(H("A40", 1, lambda d: (d["since_rest"] == 1) & (d["fb_n_prev"] >= 1) & (d["k23_n_prev"] >= 1), lambda d: d["fb_top3_prev"] / d["fb_n_prev"] > d["k23_top3_prev"] / d["k23_n_prev"], "休み明け初戦で、過去の休み明け初戦の 3 着内率が叩き 2・3 戦目より高い馬"))
     a(H("A41", -1, lambda d: (d["since_rest"] == 2) & (d["rest_len"] >= 70) & (d["interval"] <= 35), lambda d: d["p_fin"] <= 3, "休み明け 2 戦目（中 4 週以内）で、休み明け初戦が 3 着内"))
     a(H("A42", 1, prom, lambda d: d["win_streak"] >= 2, "昇級初戦で 2 連勝以上"))
@@ -339,41 +358,44 @@ def hyps() -> list[H]:
     is_j = lambda d: pd.Series([isinstance(r, str) and isinstance(j, str) and len(r) >= 2 and j.startswith(r) for r, j in zip(d["ok_rider"], d["jockey_name"])], index=d.index)  # noqa: E731
     staff = lambda d: d["ok_rider"].isin(["助手", "見習", "攻手"])  # noqa: E731
     a(H("B01", 1, lambda d: d["ok_rider"].notna(), is_j, "最終追い切りの乗り手の名前が本番騎手の名前の先頭と一致"))
-    for hid, why in (("B02", "1 週前の追い切り（追い切りの履歴）が手元に無い"), ("B03", "騎手の所属の東西が無く、追い切りの場所も欠けが多い")):
-        a(H(hid, 0, None, None, "", why))
+    is_j1 = lambda d: pd.Series([isinstance(r, str) and isinstance(j, str) and len(r) >= 2 and j.startswith(r) for r, j in zip(d["w1_rider"], d["jockey_name"])], index=d.index)  # noqa: E731
+    a(H("B02", 1, lambda d: d["w1_rider"].notna(), is_j1, "1 週前（5〜10 日前で 7 日に最も近い 1 本）の乗り手の名前が本番騎手の名前の先頭と一致（training_laps）"))
+    a(H("B03", 0, None, None, "", "騎手の所属の東西が無く、追い切りの場所も欠けが多い"))
     a(H("B04", 1, lambda d: sw(d) & d["ok_rider"].notna(), is_j, "乗り替わりの馬で、新しい騎手が最終追い切りに騎乗"))
     a(H("B05", 1, lambda d: d["ok_slope"] & d["ok_acc"].notna(), lambda d: d["ok_acc"] == 1, "坂路の最終追い切りで終い 1F が加速ラップ"))
     a(H("B06", 1, lambda d: (d["ok_n_f"] >= 3) & (d["dist"] >= 2000), lambda d: (d["ok_n_f"] >= 5) & ~d["ok_slope"], "2000m 以上で、最終追い切りが 6F 以上の時計"))
     a(H("B07", 1, lambda d: d["grade"].isin(G) & (d["ok_slope"] | d["ok_wood"]), lambda d: d["ok_slope"], "重賞で、最終が坂路（ウッドと比べる）"))
-    a(H("B08", 1, lambda d: d["ok_slope"] & d["ok_l1"].notna() & d["ok_l1_q25"].notna(), lambda d: d["ok_l1"] <= d["ok_l1_q25"], "坂路の終い 1F が調教場・年の上位 25%"))
+    a(H("B08", 1, lambda d: d["ok_slope"] & d["ok_l1"].notna() & d["ok_l1_q25"].notna(), lambda d: d["ok_l1"] <= d["ok_l1_q25"], "坂路の終い 1F が調教場ごとの前の年の上位 25%"))
     for hid in ("B09", "B10", "B11"):
         a(H(hid, 0, None, None, "", "最終追い切りの表に併せ（先着/同入/遅れ・相手）の項目が無い"))
     a(H("B12", 1, lambda d: (d["since_rest"] == 1) & d["ok_int"].isin(list(up)), lambda d: d["ok_int"] == "一杯", "休み明け初戦で最終が一杯"))
-    for hid in ("B13", "B14"):
-        a(H(hid, 0, None, None, "", "中間の追い切りの本数・時計（追い切りの履歴）が手元に無い"))
     a(H("B15", 1, lambda d: (d["p_fin"] <= 3) & d["ok_int"].notna() & d["p_ok_int"].notna(), lambda d: (d["ok_int"] == d["p_ok_int"]) & (d["ok_slope"] == d["p_ok_slope"]), "前走 3 着内の馬で、最終の強度・場所が前走時と同じ"))
     a(H("B16", 1, lambda d: d["ok_int"].isin(list(up)) & d["p_ok_int"].isin(list(up)), lambda d: d["ok_int"].map(up) > d["p_ok_int"].map(up), "最終の強度が前走時より上がった"))
     a(H("B17", 1, lambda d: d["ok_days"].between(1, 14), lambda d: d["ok_days"] >= 7, "最終追い切りがレースの 7 日以上前（当週に追っていない）"))
     a(H("B18", 1, lambda d: d["ok_wd"].notna(), lambda d: d["ok_wd"].isin(["土", "日"]), "最終追い切りが土日"))
     a(H("B19", 1, lambda d: d["ok_slope"] & d["ok_int"].notna() & d["t_ippai_rate"].notna(), lambda d: (d["ok_int"] == "一杯") & (d["t_ippai_rate"] < 0.3), "坂路の最終で、普段は一杯が 3 割未満の調教師が一杯"))
-    a(H("B20", 1, lambda d: d["ok_eval"].notna(), lambda d: d["ok_eval"] == "A", "最終追い切りの評価 A（2016〜2025）"))
+    a(H("B20", 1, lambda d: d["ok_eval"].notna(), lambda d: d["ok_eval"] == "A", "最終追い切りの評価 A（2020〜2025）"))
     a(H("B21", -1, lambda d: d["ok_tanpyo"].notna(), lambda d: d["ok_tanpyo"].str.contains("不足|残し|太|重い|今一|一息|物足|平凡|疲|硬", regex=True, na=False), "短評に否定的な語"))
-    a(H("B22", 1, lambda d: (d["grade"] == "新馬") & d["ok_slope"] & d["ok_l1"].notna() & d["ok_l1_q25"].notna(), lambda d: d["ok_l1"] <= d["ok_l1_q25"], "新馬で坂路の終い 1F が上位 25%"))
+    a(H("B22", 1, lambda d: (d["grade"] == "新馬") & d["ok_slope"] & d["ok_l1"].notna() & d["ok_l1_q25"].notna(), lambda d: d["ok_l1"] <= d["ok_l1_q25"], "新馬で坂路の終い 1F が調教場ごとの前の年の上位 25%"))
     a(H("B23", 1, lambda d: d["ok_eval"].isin(["C", "D"]) & d["p_ok_eval"].notna(), lambda d: d["p_ok_eval"].isin(["C", "D"]) & (d["p_fin"] <= 3), "今回評価 C・D で、前走も C・D なのに 3 着内だった（調教駆けしない馬）"))
-    a(H("B24", -1, lambda d: d["ok_course"].fillna("") != "", lambda d: d["ok_course"].fillna("").str.endswith(("Ｐ", "芝", "プ")), "最終がポリ・芝・プール"))
+    a(H("B24", -1, lambda d: d["ok_course"].fillna("") != "", lambda d: d["ok_course"].fillna("").str.endswith(("Ｐ", "P", "芝", "プ")), "最終がポリ・芝・プール"))
     a(H("B25", 1, lambda d: d["local"] & (d["ok_course"].fillna("") != ""), lambda d: d["ok_course"].fillna("").str[0] == d["venue"].str[0], "ローカル開催で最終追い切りがその場（滞在）"))
-    a(H("B26", 1, lambda d: d["ok_slope"] & d["ok_cond"].notna() & d["ok_l1"].notna() & d["ok_l1_q50"].notna(), lambda d: d["ok_cond"].isin(["重", "不"]) & (d["ok_l1"] <= d["ok_l1_q50"]), "坂路の重い馬場で終い 1F が中央値以下"))
+    a(H("B26", 1, lambda d: d["ok_slope"] & d["ok_cond"].notna() & d["ok_l1"].notna() & d["ok_l1_q50"].notna(), lambda d: d["ok_cond"].isin(["重", "不"]) & (d["ok_l1"] <= d["ok_l1_q50"]), "坂路の重い馬場で終い 1F が調教場ごとの前の年の中央値以下"))
     a(H("B27", 1, lambda d: d["ok_rider"].notna(), lambda d: ~staff(d), "最終の乗り手が助手・見習でない"))
-    a(H("B28", 0, None, None, "", "追い切りのコース取り（内外の位置）が最終追い切りの表に無い"))
+    a(H("B28", 1, lambda d: d["ok_wood"] & d["ok_pos"].notna() & d["ok_l1"].notna() & d["ok_l1_wq25"].notna() & (d["ok_l1"] <= d["ok_l1_wq25"]), lambda d: d["ok_pos"] >= 8,
+        "ウッドの最終で終い 1F が前の年の上位 25% の時計以上の馬のうち、位置が 8 以上（大外寄り）。位置 = 調教ページの『位置』（1 = 内 … 9 = 外と読む。定義は未確認）"))
     a(H("B29", 1, lambda d: d["ok_slope"] & d["ok_l1"].notna(), lambda d: d["ok_l1"] <= 12.4, "坂路の終い 1F が 12.4 秒以下（絶対値の目安）"))
     a(H("B30", 0, None, None, "", "併せの頭数が無い"))
     a(H("B31", 1, lambda d: (d["interval"] <= 14) & d["ok_int"].isin(list(up)), lambda d: d["ok_int"] == "馬也", "間隔 14 日以内で最終が馬なり"))
-    for hid in ("B32", "B33"):
-        a(H(hid, 0, None, None, "", "1 週前・前週の追い切り（追い切りの履歴）が手元に無い"))
+    a(H("B32", 1, lambda d: d["w1_int"].notna() & d["ok_int"].notna(), lambda d: d["w1_int"].isin(["強め", "一杯"]) & (d["ok_int"] == "馬也"), "1 週前に強め・一杯、最終は馬なり（1 週前に仕上げて当週は整える形）"))
+    a(H("B33", -1, lambda d: d["w1_int"].notna() & d["ok_int"].notna(), lambda d: (d["w1_int"] == "一杯") & (d["ok_int"] == "一杯"), "1 週前も最終も一杯（2 週続けて一杯）"))
+    a(H("B13", 1, lambda d: (d["since_rest"] == 1) & d["tl_n"].notna(), lambda d: d["tl_n"] >= 6, "休み明け初戦で、そのレースに向けた追い切り（時計・強度の無い本も含む、60 日以内の全本数）が 6 本以上（乗り込み量が多い）"))
+    a(H("B14", 1, lambda d: (d["tl_n"] >= 2) & d["tl_slope_hist"], lambda d: d["tl_best_mid"], "坂路の前歴が 3 本以上ある馬で、中間（最終以外）に坂路の終い 1F の自己ベストを出した"))
+    a(H("B36", 1, lambda d: (d["since_rest"] == 1) & d["tl_n"].notna(), lambda d: d["tl_double"], "休み明け初戦で、同じ日に坂路 2 本か坂路とポリの併用がある"))
     a(H("B34", -1, lambda d: d["ok_slope"] & d["p_ok_slope"].astype(bool) & d["ok_l1"].notna() & d["p_ok_l1"].notna(), lambda d: d["ok_l1"] - d["p_ok_l1"] >= 0.5, "坂路の終い 1F が前走時より 0.5 秒以上遅い"))
-    a(H("B35", 1, lambda d: d["ok_slope"] & d["ok_l1"].notna() & d["ok_l1_q25"].notna() & d["month"].isin([12, 1, 2]), lambda d: d["ok_l1"] <= d["ok_l1_q25"], "冬（12〜2 月）の坂路で終い 1F が上位 25%"))
-    a(H("B36", 0, None, None, "", "1 日の追い切りの本数（追い切りの履歴）が手元に無い"))
-    a(H("B37", 1, lambda d: d["tp_n"] >= 20, lambda d: d["tp_shr"] >= 0.03, "調教師 × 最終のパターン（場所 × 強さ）の as-of の人気補正後の上積み（50 走ぶん縮約）が +3pt 以上。併せ・1 週前・本数は無し"))
+    a(H("B35", 1, lambda d: d["ok_slope"] & d["ok_l1"].notna() & d["ok_l1_q25"].notna() & d["month"].isin([12, 1, 2]), lambda d: d["ok_l1"] <= d["ok_l1_q25"], "冬（12〜2 月）の坂路で終い 1F が調教場ごとの前の年の上位 25%"))
+    a(H("B37", 1, lambda d: d["tp_n"] >= 20, lambda d: d["tp_shr"] >= 0.03, "調教師 × 最終のパターン（場所 × 強さ）の as-of の人気補正後の上積み（50 走ぶん縮約）が +3pt 以上。併せは無し"))
+    a(H("B37b", 1, lambda d: d["tp2_n"] >= 20, lambda d: d["tp2_shr"] >= 0.03, "調教師 × 最終のパターン + 1 週前の強度 + 直近 14 日の本数（3 本以上か）の as-of の人気補正後の上積み（50 走ぶん縮約）が +3pt 以上"))
     # ---- C
     a(H("C01", 1, lambda d: d["jt_n"].notna() & d["j_rate"].notna(), lambda d: (d["jt_n"] >= 20) & (d["jt_y3"] / d["jt_n"] - d["j_rate"] >= 0.05), "騎手 × 調教師の as-of の 3 着内率が騎手の普段より 5pt 以上高い（20 騎乗以上）"))
     a(H("C02", 1, lambda d: d["jt_n"].notna() & d["j_rate"].notna(), lambda d: (d["jt_n"] <= 2) & d["j_top"], "その厩舎での騎乗が 2 回以下の上位 20% 騎手"))
@@ -414,8 +436,8 @@ def hyps() -> list[H]:
     a(H("D10", -1, lambda d: (d["sex"] == "牝") & d["away"].notna(), lambda d: (d["away"] == 1) & d["vc"].isin(["01", "02", "10"]), "牝馬の北海道・小倉への遠征"))
     a(H("D11", 1, lambda d: d["producer"].notna() & (d["surf"] == "ダ"), lambda d: ~d["producer"].str.contains("|".join(SHADAI), na=False), "ダートで社台グループ以外の生産"))
     a(H("D12", 1, lambda d: (d["sex"] == "牝") & (d["age"] == 5) & d["owner"].notna(), lambda d: d["owner"].str.contains("|".join(CLUBS), na=False) & d["month"].between(1, 5), "5 歳牝馬で、クラブ馬の 1〜5 月"))
-    for hid, why in (("D13", "帰厩の日（休養後の最初の追い切り）が追い切りの履歴に無い"), ("D14", "出走登録・除外の記録が無い")):
-        a(H(hid, 0, None, None, "", why))
+    a(H("D13", 1, lambda d: (d["since_rest"] == 1) & d["tl_first_days"].notna(), lambda d: d["tl_first_days"].between(10, 14), "休み明け初戦で、60 日以内の最初の追い切りが 10〜14 日前（10 日競馬。帰厩の日の近似。60 日より前から乗り込んでいる馬は区別できない）"))
+    a(H("D14", 0, None, None, "", "出走登録・除外の記録が無い"))
     a(H("D15", 1, lambda d: (d["pop"] >= 6) & d["t_rate"].notna(), lambda d: d["t_top"], "6 番人気以下で、3 着内率が上位 15% の調教師"))
     a(H("D16", 1, lambda d: d["tozai"].notna(), lambda d: d["tozai"] == "栗東", "栗東所属"))
     a(H("D17", 1, lambda d: (d["grade"] == "新馬") & d["t_rate"].notna(), lambda d: (d["tnew_n"] >= 20) & (d["tnew_r"] - d["t_rate"] >= 0.05), "新馬で、調教師の新馬の as-of 3 着内率が普段より 5pt 以上高い"))
@@ -551,7 +573,7 @@ def hyps() -> list[H]:
     a(H("J12", 1, lambda d: d["mg_p3"].notna(), lambda d: (d["mg_p1"] > d["mg_p2"]) & (d["mg_p2"] > d["mg_p3"]), "指数が 3 走続けて上昇"))
     # ---- K
     a(H("K01", 1, lambda d: d["p_dist"].notna() & (d["p_surf"] == d["surf"]), lambda d: (d["dist"] - d["p_dist"] >= 100) & (d["p_pos4r"] <= 0.3) & (d["p_fin"] <= 5), "延長 × 前走 4 角前 3 割で掲示板（父ステイヤーは抜き）"))
-    a(H("K02", 0, None, None, "", "最終追い切りの乗り手（2016〜2019）と生産者（2020〜2025）の年が重ならない"))
+    a(H("K02", 1, lambda d: (d["since_rest"] == 1) & d["producer"].notna() & d["w1_rider"].notna(), lambda d: d["producer"].str.contains("ノーザン", na=False) & is_j1(d), "休み明け初戦で、ノーザンファーム生産・1 週前に本番騎手が騎乗"))
     a(H("K03", 1, lambda d: sw(d) & d["ok_rider"].notna() & d["j_rate"].notna() & d["pj_rate"].notna(), lambda d: (d["j_rate"] - d["pj_rate"] >= 0.08) & is_j(d), "上位騎手への乗り替わり × その騎手が最終追い切りに騎乗"))
     a(H("K04", 1, lambda d: (d["n_before"] >= 3) & (d["bias_pos"] <= 0.3), lambda d: d["inner"] & (d["nige_cand"] == 1), "当日前残り × 内枠 × 逃げ候補"))
     a(H("K05", 1, lambda d: (d["surf"] == "ダ") & (d["surf_n_prev"] == 0) & (d["starts_prev"] >= 1) & d["f_dirt"].notna(), lambda d: (d["f_dirt"] >= 6) & d["outer"], "初ダート × 父ダート × 外枠"))
@@ -723,18 +745,26 @@ def run() -> None:
             from src.scripts.data.folklore_lap import add_laps
 
             d = add_laps(d)
+        from src.scripts.data.folklore_training import TL_VERSION, add_training
+
+        if "tl_version" not in d.columns or int(d["tl_version"].iloc[0]) != TL_VERSION:  # 追い切りの列を training_laps から作り直す（版が違うとき。約 10 分）
+            d = add_training(d)
         d = add_market(d)  # 市場の見込みは作り方を変えることがあるので、毎回作り直す（安い）
         d = add_b37(d)
+        d = add_b37(d, "ok_pat2", "tp2")
         d.to_pickle(prep)
     else:
         d = d[d["year"].between(2016, 2025)].reset_index(drop=True)
         d = add_extra(d)
         d = add_market(d)
-        d = add_b37(d)
+        d = d[d["p_mkt"].notna()].reset_index(drop=True)  # 絞ってから追い切り・ラップの列を作る（キャッシュ経路と同じ行で前走の追い切りの shift・調教師の一杯の頻度を数える）
         from src.scripts.data.folklore_lap import add_laps
+        from src.scripts.data.folklore_training import add_training
 
         d = add_laps(d)
-        d = d[d["p_mkt"].notna()].reset_index(drop=True)
+        d = add_training(d)
+        d = add_b37(d)
+        d = add_b37(d, "ok_pat2", "tp2")
         d.to_pickle(prep)
     print("prepared", d.shape, flush=True)
     race = pd.factorize(d["race_id"])[0]
@@ -1450,7 +1480,7 @@ details.okc{margin:4px 0 4px 8px}details.okc>summary{font-size:13px}.ok-courses{
     w("<a href='../../index.html' class='muted'>← ドキュメント一覧</a>")
     w("<h1>通説の検証結果（全型 × 全切り口・信頼度 S/A/B/C）</h1>")
     w("<p class='muted'>ユーザーの依頼（2026-11-08）: 『すべてのパターンに関して、すべてのターゲット（コースや馬場など、あり得るすべてのターゲット）で仮説検証してください。X% の信頼度で、高いものから S&gt;A&gt;B&gt;C&gt;無 としてください。境目はあなたが決めて大丈夫です。有意差があるかどうかの検定は、データサイエンスの観点から適切に処理してください』。"
-      "対象は <a href='folklore_hypotheses.html'>通説の仮説一覧</a> の 308 型（B37 を含む）。コード: <code>src/scripts/data/folklore_build.py</code>（表）・<code>src/scripts/data/folklore_verify.py</code>（検定・この章）。入力はすべてローカルの表で、GCS は読んでいない（費用は 0 円）。</p>")
+      "対象は <a href='folklore_hypotheses.html'>通説の仮説一覧</a> の 308 型（B37 を含む）と、追い切りの派生の B37b、ラップ・地形の R01〜R07・T01〜T06。コード: <code>src/scripts/data/folklore_build.py</code>（表）・<code>src/scripts/data/folklore_verify.py</code>（検定・この章）。入力はすべてローカルの表で、GCS は読んでいない（費用は 0 円）。</p>")
     n_h = sum(1 for m in meta.values() if not m.get("na"))
     n_na = sum(1 for m in meta.values() if m.get("na"))
     adj_S = tested[(tested["adj_tier"].isin(["S", "A"])) & tested["adj_agree"]]["hid"].nunique()
@@ -1471,7 +1501,7 @@ details.okc{margin:4px 0 4px 8px}details.okc>summary{font-size:13px}.ok-courses{
     w("<li><b>標準誤差</b>: クラスタ頑健な分散（比の推定量の線形化）を、レース・馬・調教師・騎手・父の 5 つの単位でそれぞれ出し、<b>最も大きいもの</b>を使う（保守的）。"
       "同じレースの馬は結果が連動し（3 着内は 3 頭）、同じ馬・陣営・父は何度も出てきて実力の差が年をまたいで続くため、レース単位だけでは誤差を小さく見積もる。"
       "実際、レース単位だけで判定した初回は、調教師・騎手・父・馬の単位で無作為に選んだ偽の型が素の差で S 20・A 28 本になった（1.1）。</li>")
-    w("<li><b>期間</b>: 発見 = データのある年の前 7 割（全年あれば 2016〜2022）、確認 = 残り（2023〜2025）。最終追い切りの乗り手・強度・ラップ・短評は 2016〜2019 年しか無いので発見 2016〜2018・確認 2019、SmartRC・コメント・指数は 2020〜2025 年なので発見 2020〜2023・確認 2024〜2025、バロメーターは 2024 発見・2025 確認。2026 年は使っていない。</li>")
+    w("<li><b>期間</b>: 発見 = データのある年の前 7 割（全年あれば 2016〜2022）、確認 = 残り（2023〜2025）。追い切り（乗り手・強度・ラップ・1 週前・本数。training_laps、2020〜2025 年に 57〜97% の馬が載る。2016〜2019 年は 2020 年以降も走った馬だけが載る生き残りの偏りがあるので使わない）・SmartRC・コメント・指数は 2020〜2025 年なので発見 2020〜2023・確認 2024〜2025、バロメーターは 2024 発見・2025 確認。2026 年は使っていない。</li>")
     w(f"<li><b>標本の下限</b>: 発見期間で当てはまる馬 {MIN_N1} 走・{MIN_R1} レース以上、当てはまらない馬 {MIN_N0} 走以上。確認期間で当てはまる馬 {MIN_CONF_N1} 走以上（満たさない切り口は検定せず、多重比較の数にも入れない）。</li>")
     w("<li><b>多重比較</b>: 発見期間の全検定（型 × 切り口の値）に Benjamini–Hochberg（両側）。q &lt; 0.10 の検定だけを確認期間へ送り、確認は発見と同じ向きの片側検定にもう一度 BH。差の 2 種類（素・人気そろえ）はそれぞれ別の族として補正。</li>")
     w("<li><b>信頼度</b> = 1 − max(q<sub>発見</sub>, q<sub>確認</sub>)（発見と再現の両方を FDR で抑えた値）。<b>S ≥ 99.9%</b>・<b>A ≥ 99%</b>・<b>B ≥ 95%</b>・<b>C ≥ 90%</b>・それ未満は <b>無</b>。"
@@ -1561,7 +1591,7 @@ details.okc{margin:4px 0 4px 8px}details.okc>summary{font-size:13px}.ok-courses{
     for hid, m in meta.items():
         if m.get("na"):
             w(f"<li><b>{hid}</b> {esc(cl.get(base(hid), ''))[:50]} — {esc(m['na'])}</li>")
-    w("</ul><div class='note'><b>限界.</b> (1) 最終追い切りは出馬表の 1 本だけで、中間の本数・1 週前・併せは無い（B 分類の多くと B37 の『併せ・1 週前・本数』は代理か対象外）。B37 は『場所 × 強さ』のパターンで、調教師 × パターンの as-of の人気補正後の上積みを 50 走ぶん全体へ縮めた値で選んだ。"
+    w("</ul><div class='note'><b>限界.</b> (1) 追い切りは馬別の調教ページ由来の training_laps（最終・1 週前・直近の本数・坂路の自己ベスト）。2020〜2022 年は載る馬が 57〜83% と少なく（ログイン切れ等。年別は第 13.4 節）、評価の中心の 2024〜2025 年は 9 割以上。併せ馬の相手・頭数・先着/遅れは載っていないので B09〜B11・B30 は検証できない。『位置』（B28）は 1 = 内 … 9 = 外と読んだ仮定。1 日に坂路 2 本などの併用（B36）は調教ページ上でほぼ現れない。B37 は『場所 × 強さ』、B37b はそれに『1 週前の強度・直近 14 日の本数』を足したパターンで、調教師 × パターンの as-of の人気補正後の上積みを 50 走ぶん全体へ縮めた値で選んだ。"
       "(2) 海外・地方の走歴は出馬表の過去 5 走（2020〜2025）から。(3) 外国人・短期免許・減量・女性騎手は名前・斤量からの推定。(4) 内回り/外回りは距離からの規則で、京都 1400/1600・新潟 2000 は不明扱い。"
       "(5) 市場の見込みは確定オッズ（発走時点の情報）。序列を前日に作るなら、人気をそろえた差は前日オッズで測り直す必要がある。(6) 改修（京都）・斤量の改定（2023）は期間をまたぐ型の効果を薄める。</div>")
     _rank_section(w)
