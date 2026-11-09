@@ -73,6 +73,15 @@ import old_horse from "./old-horse.json";
 import three_year_old_summer from "./three-year-old-summer.json";
 import older_mare from "./older-mare.json";
 import last_race_favorite from "./last-race-favorite.json";
+import course_repeat from "./course-repeat.json";
+import class_up_details from "./class-up-details.json";
+import prev_race_excuses from "./prev-race-excuses.json";
+import layoff_details from "./layoff-details.json";
+import lap_type from "./lap-type.json";
+import terrain_fit from "./terrain-fit.json";
+import workout_speed from "./workout-speed.json";
+import workout_pattern from "./workout-pattern.json";
+import workout_notes from "./workout-notes.json";
 
 export const GLOSSARY = glossary as Record<string, string>;
 
@@ -145,4 +154,13 @@ export const GUIDES: Record<string, ColumnGuide> = {
   "three-year-old-summer": three_year_old_summer as ColumnGuide,
   "older-mare": older_mare as ColumnGuide,
   "last-race-favorite": last_race_favorite as ColumnGuide,
+  "course-repeat": course_repeat as ColumnGuide,
+  "class-up-details": class_up_details as ColumnGuide,
+  "prev-race-excuses": prev_race_excuses as ColumnGuide,
+  "layoff-details": layoff_details as ColumnGuide,
+  "lap-type": lap_type as ColumnGuide,
+  "terrain-fit": terrain_fit as ColumnGuide,
+  "workout-speed": workout_speed as ColumnGuide,
+  "workout-pattern": workout_pattern as ColumnGuide,
+  "workout-notes": workout_notes as ColumnGuide,
 };

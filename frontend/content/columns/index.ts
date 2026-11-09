@@ -73,6 +73,15 @@ import old_horse from "./old-horse.json";
 import three_year_old_summer from "./three-year-old-summer.json";
 import older_mare from "./older-mare.json";
 import last_race_favorite from "./last-race-favorite.json";
+import course_repeat from "./course-repeat.json";
+import class_up_details from "./class-up-details.json";
+import prev_race_excuses from "./prev-race-excuses.json";
+import layoff_details from "./layoff-details.json";
+import lap_type from "./lap-type.json";
+import terrain_fit from "./terrain-fit.json";
+import workout_speed from "./workout-speed.json";
+import workout_pattern from "./workout-pattern.json";
+import workout_notes from "./workout-notes.json";
 
 const ALL = [
   upset_conditions,
@@ -143,6 +152,15 @@ const ALL = [
   three_year_old_summer,
   older_mare,
   last_race_favorite,
+  course_repeat,
+  class_up_details,
+  prev_race_excuses,
+  layoff_details,
+  lap_type,
+  terrain_fit,
+  workout_speed,
+  workout_pattern,
+  workout_notes,
 ] as Column[];
 
 export const COLUMNS: Column[] = ALL.filter((c) => SHOW_DEV_ONLY || !c.draft)

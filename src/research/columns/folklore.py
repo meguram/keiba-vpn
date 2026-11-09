@@ -176,6 +176,16 @@ def load_verify() -> dict[str, dict] | None:
     return {r.hid: {"adj": float(r.adj), "tier": str(r.adj_tier), "agree": bool(r.adj_agree)} for r in t.itertuples()}
 
 
+def tier_verdict(tier: str, agree: bool) -> tuple[str, bool]:
+    """検証の章の格と向きから (判定, 逆向きか) を決める。S・A・B: 通説の向きなら傾向あり、逆なら傾向なし（逆）。
+    C: 向きが合えば条件付き、逆なら傾向なし（逆）。格なし: 傾向なし。"""
+    if tier in ("S", "A", "B"):
+        return ("supported", False) if agree else ("not_supported", True)
+    if tier == "C":
+        return ("partial", False) if agree else ("not_supported", True)
+    return "not_supported", False
+
+
 def apply_verify(spec: Spec, a: dict, v: dict | None) -> None:
     """検証の章の格で判定を決め直す（より厳しい検定を正とする）。
     S・A・B: 通説の向きなら傾向あり、逆なら傾向なし（逆）。C: 向きが合えば条件付き、逆なら傾向なし（逆）。
@@ -185,10 +195,8 @@ def apply_verify(spec: Spec, a: dict, v: dict | None) -> None:
     e = v[spec.hid]
     a["verify"] = {"hid": spec.hid, **e}
     tier, agree = e["tier"], e["agree"]
-    if tier in ("S", "A", "B"):
-        a["verdict"], a["reversed"] = ("supported", False) if agree else ("not_supported", True)
-    elif tier == "C":
-        a["verdict"], a["reversed"] = ("partial", False) if agree else ("not_supported", True)
+    if tier in ("S", "A", "B", "C"):
+        a["verdict"], a["reversed"] = tier_verdict(tier, agree)
     else:
         a["reversed"] = False
         if a["verdict"] == "supported":
@@ -447,14 +455,23 @@ def _clean(o: Any) -> Any:
     return o
 
 
-def write(spec: Spec, a: dict) -> None:
-    path = COLS / f"{spec.slug}.json"
-    published = TODAY
+def published_date(slug: str) -> str:
+    """記事の公開日: 既にあればその日付、無ければ今日。"""
+    path = COLS / f"{slug}.json"
     if path.exists():
-        published = json.loads(path.read_text(encoding="utf-8")).get("published", TODAY)
-    path.write_text(json.dumps(_clean(article(spec, a, published)), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    (GUIDES / f"{spec.slug}.json").write_text(json.dumps(guide(spec, a), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    register(spec.slug)
+        return json.loads(path.read_text(encoding="utf-8")).get("published", TODAY)
+    return TODAY
+
+
+def write_doc(slug: str, doc: dict[str, Any], guide_doc: dict[str, Any]) -> None:
+    """記事とガイドの JSON を書き、index.ts に登録する。"""
+    (COLS / f"{slug}.json").write_text(json.dumps(_clean(doc), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (GUIDES / f"{slug}.json").write_text(json.dumps(guide_doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    register(slug)
+
+
+def write(spec: Spec, a: dict) -> None:
+    write_doc(spec.slug, article(spec, a, published_date(spec.slug)), guide(spec, a))
 
 
 def _ident(slug: str) -> str:
@@ -506,8 +523,13 @@ def main() -> None:
         results[spec.slug] = _clean(a)
         if not args.dry_run:
             write(spec, a)
+    from src.research.columns.folklore_verified import build_all
+    res, errors = build_all(only, args.dry_run)
+    results.update(res)
     RESULTS.parent.mkdir(parents=True, exist_ok=True)
     RESULTS.write_text(json.dumps(results, ensure_ascii=False, indent=1), encoding="utf-8")
+    if errors:
+        raise SystemExit("検証の結果に無い型があるグループ:\n" + "\n".join(errors))
 
 
 if __name__ == "__main__":

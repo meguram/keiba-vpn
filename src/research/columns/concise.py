@@ -118,8 +118,8 @@ def concise_guide(g: dict[str, Any], body: list[dict[str, Any]]) -> dict[str, An
 
 
 def is_folklore(slug: str) -> bool:
-    from src.research.columns.folklore_specs import SPECS
-    return slug in {s.slug for s in SPECS}
+    from src.research.columns.folklore_verified import folklore_slugs
+    return slug in folklore_slugs()
 
 
 def main() -> None:

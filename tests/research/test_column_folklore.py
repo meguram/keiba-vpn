@@ -10,6 +10,7 @@ from src.research.columns import concise
 from src.research.columns.folklore import Spec, analyze
 from src.research.columns.folklore_frame import _rider_is_jockey
 from src.research.columns.folklore_specs import SPECS
+from src.research.columns.folklore_verified import folklore_slugs
 
 REPO = Path(__file__).resolve().parents[2]
 COLS = REPO / "frontend/content/columns"
@@ -75,7 +76,7 @@ def test_short_cuts_at_sentence_end():
 
 def test_existing_articles_are_short():
     for path in COLS.glob("*.json"):
-        if path.stem in {s.slug for s in SPECS}:
+        if path.stem in folklore_slugs():
             continue
         doc = json.loads(path.read_text(encoding="utf-8"))
         texts = [b for b in doc["body"] if b["type"] == "text"]

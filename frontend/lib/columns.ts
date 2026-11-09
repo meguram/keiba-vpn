@@ -83,6 +83,7 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
       { id: "bias", label: "当日の馬場の偏り", desc: "前のレースの傾向は後のレースも続くか" },
       { id: "gate", label: "枠順・開催週", desc: "内枠・外枠、開幕週と最終週" },
       { id: "going", label: "道悪", desc: "重・不良で走る馬" },
+      { id: "terrain", label: "地形", desc: "直線・坂・回りの得意と不得意" },
     ],
   },
   {
