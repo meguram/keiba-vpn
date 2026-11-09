@@ -19,6 +19,7 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
     children: [
       { id: "conditions", label: "荒れやすい条件", desc: "どんな条件のレースが荒れるのか" },
       { id: "distance-course", label: "距離・ローカル", desc: "短距離やローカル開催は本当に荒れるのか" },
+      { id: "favorites", label: "人気馬の信頼度", desc: "2強のレース・混戦・上位人気を消せる条件" },
     ],
   },
   {
@@ -92,12 +93,15 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
     id: "ability", label: "実績", desc: "コース実績・上がりの実績",
     children: [
       { id: "record", label: "コース実績・上がり", desc: "コース巧者、上がり最速の多い馬" },
+      { id: "index", label: "指数・持ち時計", desc: "スピード指数・持ち時計・テンの速さの順位" },
     ],
   },
   {
     id: "race", label: "レースの性格", desc: "クラス・前走のステップ",
     children: [
       { id: "class", label: "クラス・ステップ", desc: "前走G1組など、前走のレースによる違い" },
+      { id: "program", label: "番組の性格", desc: "1R・最終R、ハンデ戦、別定戦などレースの種類" },
+      { id: "first-time", label: "初めての経験", desc: "初めての競馬場・距離・クラス・遠征" },
     ],
   },
   {

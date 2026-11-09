@@ -127,3 +127,14 @@ def test_every_group_hid_has_a_result_row():
     for g in GROUPS:
         for h in g.all_hids():
             assert h in have and h in meta, f"{g.slug}: {h} が検証の結果に無い"
+
+
+@pytest.mark.skipif(not (V.VERIFY_DIR / "tests.parquet").exists(), reason="検証の結果（ローカル）が無い")
+def test_every_verified_type_is_in_some_article():
+    """検証済みで記事にできる型が、集計で作る記事か検証から作る記事のどれかに入っていること（検証側が型を足したら気づく）。"""
+    tests, meta = V.load_results()
+    have = set(tests.loc[tests["dim"] == "全体", "hid"])
+    spec_hids = {s.hid for s in SPECS if getattr(s, "hid", None)}
+    used = {h for g in GROUPS for h in g.all_hids()}
+    missing = [h for h in meta if h in have and not h.startswith(V.EXCLUDED) and h not in spec_hids and h not in used and not meta[h].get("na")]
+    assert not missing, f"どの記事にも入っていない型: {missing}"

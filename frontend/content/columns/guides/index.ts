@@ -103,6 +103,11 @@ import sex_age_more from "./sex-age-more.json";
 import gear_gelding from "./gear-gelding.json";
 import trainer_comment from "./trainer-comment.json";
 import style_by_surface from "./style-by-surface.json";
+import race_program from "./race-program.json";
+import first_time from "./first-time.json";
+import two_strong from "./two-strong.json";
+import favorite_fade from "./favorite-fade.json";
+import index_claims from "./index-claims.json";
 
 export const GLOSSARY = glossary as Record<string, string>;
 
@@ -205,4 +210,9 @@ export const GUIDES: Record<string, ColumnGuide> = {
   "gear-gelding": gear_gelding as ColumnGuide,
   "trainer-comment": trainer_comment as ColumnGuide,
   "style-by-surface": style_by_surface as ColumnGuide,
+  "race-program": race_program as ColumnGuide,
+  "first-time": first_time as ColumnGuide,
+  "two-strong": two_strong as ColumnGuide,
+  "favorite-fade": favorite_fade as ColumnGuide,
+  "index-claims": index_claims as ColumnGuide,
 };

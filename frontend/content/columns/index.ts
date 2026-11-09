@@ -103,6 +103,11 @@ import sex_age_more from "./sex-age-more.json";
 import gear_gelding from "./gear-gelding.json";
 import trainer_comment from "./trainer-comment.json";
 import style_by_surface from "./style-by-surface.json";
+import race_program from "./race-program.json";
+import first_time from "./first-time.json";
+import two_strong from "./two-strong.json";
+import favorite_fade from "./favorite-fade.json";
+import index_claims from "./index-claims.json";
 
 const ALL = [
   upset_conditions,
@@ -203,6 +208,11 @@ const ALL = [
   gear_gelding,
   trainer_comment,
   style_by_surface,
+  race_program,
+  first_time,
+  two_strong,
+  favorite_fade,
+  index_claims,
 ] as Column[];
 
 export const COLUMNS: Column[] = ALL.filter((c) => SHOW_DEV_ONLY || !c.draft)
