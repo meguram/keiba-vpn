@@ -394,8 +394,9 @@ STATUS = {"legacy": ("旧設計", "#fb923c"), "snapshot": ("時点の記録", "#
 
 
 def all_source_files() -> set[Path]:
-    """本に載せるべき HTML（docs/ 配下の全 HTML。本自身を除く）。"""
-    out = {p for p in DOCS_DIR.rglob("*.html") if p.name != BOOK_NAME and "node_modules" not in p.parts}
+    """本に載せるべき HTML（docs/ 配下の全 HTML。本自身と docs/ideas/inbox/ を除く）。"""
+    out = {p for p in DOCS_DIR.rglob("*.html") if p.name != BOOK_NAME and "node_modules" not in p.parts
+           and (DOCS_DIR / "ideas" / "inbox") not in p.parents}   # inbox は参考テキストの置き場で本には載せない
     return {p.resolve() for p in out}
 
 
