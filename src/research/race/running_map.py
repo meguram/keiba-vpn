@@ -104,7 +104,7 @@ SIMILAR_MIN_COMMON = 3  # 距離を測るのに、2 頭とも実際に値があ�
 # 基準は作り直さない（データが増えても分布はほぼ変わらない）。作り方を変えたら REFERENCE_VERSION を上げる。
 
 REFERENCE_DIR = rp.STORE_DIR / "reference"
-REFERENCE_VERSION = "15"    # 15: コース別の地図を良馬場だけ・道悪（稍重以上）だけで別々に測り、道悪の地図は基礎スピードの代わりに道悪適性を軸にする（2026-11-05）。14: 地図に使う軸に基礎スピードを足して 6 軸に・TS/TS持続力へ改名（2026-11-05）。13: 地図に使う軸に Hペース耐性を足して 6 軸に（2026-11-05）。12: 地図に使う軸をギアチェンジ・TS・TS持続力・Cr性能の 4 つに固定（2026-11-05）。11: 場のグループは 300 走以上・長距離が少ない場は 1800m 以上でまとめる。10: 標本の少ないコースは同じ競馬場の距離帯（2600m 以上は長距離）でまとめる。9: コース別の地図を「軸の無い、上位 N 方面（コースごとに 3〜6）で走法の近い馬ほど近い」重み付き主成分にした（2026-11-03）
+REFERENCE_VERSION = "16"    # 16: コース適性（寄与率・地図の重み・好走ゾーン）の期待得点を人気込みにして、実力の代理を除く。人気表は基準に同梱し、読み込み時に running_map_course.POP_TABLE へ設定（2026-11-10）。15: コース別の地図を良馬場だけ・道悪（稍重以上）だけで別々に測り、道悪の地図は基礎スピードの代わりに道悪適性を軸にする（2026-11-05）。14: 地図に使う軸に基礎スピードを足して 6 軸に・TS/TS持続力へ改名（2026-11-05）。13: 地図に使う軸に Hペース耐性を足して 6 軸に（2026-11-05）。12: 地図に使う軸をギアチェンジ・TS・TS持続力・Cr性能の 4 つに固定（2026-11-05）。11: 場のグループは 300 走以上・長距離が少ない場は 1800m 以上でまとめる。10: 標本の少ないコースは同じ競馬場の距離帯（2600m 以上は長距離）でまとめる。9: コース別の地図を「軸の無い、上位 N 方面（コースごとに 3〜6）で走法の近い馬ほど近い」重み付き主成分にした（2026-11-03）
 _APTITUDE_FILE = "aptitude.json"
 _COURSE_MAPS_FILE = "course_maps.json"
 
@@ -163,16 +163,23 @@ def _build_course_maps(metrics: pd.DataFrame, table: pd.DataFrame, q: dict[str, 
     m = metrics[keys + ["venue", "surface", "distance", "track_condition", "finish_position"]].drop_duplicates(keys)
     m = m.assign(n_field=m.groupby("race_id")["race_id"].transform("size"))
     tab = table[keys].merge(m, on=keys, how="left")
-    if rmc.POP_TABLE is not None:   # 人気込みの期待得点（確定の人気順）
-        from src.research.race import pop_expect
-        pf = pop_expect.popularity_frame(sorted(tab["date"].dt.year.unique()))[["race_id", "horse_id", "popularity"]]
-        tab = tab.merge(pf, on=["race_id", "horse_id"], how="left")
+    # 期待得点は人気込み（頭数と人気順が同じ馬の平均得点）。頭数だけだと、強い馬ほど得点が高い分（実力の代理）が軸の寄与に乗る（2026-11-10 ユーザー指示）
+    from src.research.race import pop_expect
+    pop_table = rmc.POP_TABLE if rmc.POP_TABLE is not None else pop_expect.default_table()
+    if not pop_table:
+        raise RuntimeError("人気表を作れない（出走記録の表が無い）。頭数だけの期待で基準を保存しないよう中止する")
+    pf = pop_expect.popularity_frame(sorted(tab["date"].dt.year.unique()))[["race_id", "horse_id", "popularity"]]
+    tab = tab.merge(pf, on=["race_id", "horse_id"], how="left")
     present = ~np.isnan(Z)
     cond = tab["track_condition"].to_numpy()
-    # 良馬場の地図は良馬場のレースだけ（既定）。道悪の地図は稍重・重・不良をまとめて測る（個別だと標本が足りない。不良は全体の 2%）
-    good = rmc.build(tab, Z, present, AXIS_KEYS, rmc.MAP_AXES, mask=(cond == "良"))
-    wet = rmc.build(tab, Z, present, AXIS_KEYS, rmc.WET_AXES, mask=np.isin(cond, WET_CONDITIONS))
-    return {**good, "wet": wet}
+    prev, rmc.POP_TABLE = rmc.POP_TABLE, pop_table
+    try:
+        # 良馬場の地図は良馬場のレースだけ（既定）。道悪の地図は稍重・重・不良をまとめて測る（個別だと標本が足りない。不良は全体の 2%）
+        good = rmc.build(tab, Z, present, AXIS_KEYS, rmc.MAP_AXES, mask=(cond == "良"))
+        wet = rmc.build(tab, Z, present, AXIS_KEYS, rmc.WET_AXES, mask=np.isin(cond, WET_CONDITIONS))
+    finally:
+        rmc.POP_TABLE = prev
+    return {**good, "wet": wet, "pop_table": pop_table}
 
 
 def _load_reference(metrics: pd.DataFrame, sires: pd.DataFrame) -> dict[str, Any]:
@@ -200,7 +207,12 @@ def _data() -> dict[str, Any]:
     """保存済みの 1 走ごとの値・父の対応・基準（無ければ最初の 1 回だけ作って保存）。"""
     metrics = rp.load_metrics()
     sires = rp._sire_map()
-    return {"metrics": metrics, "sires": sires, "ref": _load_reference(metrics, sires)}
+    ref = _load_reference(metrics, sires)
+    pop_table = (ref.get("_course_maps") or {}).get("pop_table")
+    if pop_table:   # 当日の馬場傾向も、地図と同じ人気込みの期待得点で測る
+        from src.research.race import running_map_course as rmc
+        rmc.POP_TABLE = pop_table
+    return {"metrics": metrics, "sires": sires, "ref": ref}
 
 
 @lru_cache(maxsize=1)

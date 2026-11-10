@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>ターゲットエンコーディングの棚卸し— keiba-vpn</title>
+<style>:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --warn:#fbbf24; --ok:#34d399; --bad:#f87171; }
+* { box-sizing: border-box; } body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 15px; padding: 40px 56px 96px; max-width: 1280px; margin: 0 auto; }
+a { color: var(--accent-2); } h1 { font-size: 26px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; } h3 { font-size: 16px; margin: 22px 0 8px; }
+table { border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; background: var(--panel); } th, td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; vertical-align: top; } th { background: #1b2a4d; cursor: pointer; white-space: nowrap; }
+td.num { text-align: right; font-family: monospace; } code { font-family: ui-monospace, Menlo, Consolas, monospace; background: #0b1428; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+.muted { color: var(--muted); font-size: 13px; } .note { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+.ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); } th.asc::after { content: " ▲"; } th.desc::after { content: " ▼"; }</style></head>
+<body><a href="../../index.html" class="muted">← ドキュメント一覧</a>
+<h1>ターゲットエンコーディングの棚卸し（親モデルに何が入っていて、どの観点が無いか）</h1>
+<p class="muted">2026-11-10、ユーザー依頼『現状、何がターゲットエンコーディングとして付与されているかも html にまとめてほしい』への回答。対象は親モデル（2016 年起点、1,231 列）と、その元になる特徴量の工場。「ターゲットエンコーディング相当」とは、<b>観点（キー）ごとに、その日より厳密に前の行だけから勝率・複勝率などの目的変数の平均を取り、全体や親のキーへ縮約した値</b>のこと。列名・列数は、ホストの親モデルの <code>bundle_v6_2025/bundle.json</code> の 1,231 列を正とし、定義の場所は現在のソースで確認した（path:line）。表の見出しをクリックすると並べ替えられる。</p>
+
+<div class="note"><b>要点.</b>
+<ul>
+<li><b>狭い意味のターゲットエンコーディング（観点別の as-of 縮約平均）は 373 列</b>（親の 1,231 列の約 30%）。馬主（<code>o_</code>・<code>ob_</code> 計 122 列）・血統×条件（<code>ped_</code>・<code>pd_</code>・<code>pxc_</code> 計 73 列）・馬自身の条件別経験と親和（<code>exp_</code>・<code>b_</code> 計 68 列）・枠×コース（<code>fdr_</code> 34 列）が大半。近い性質のもの（直近窓・類似馬・ペース指数など）が 56 列、出走馬全体の分布に集約したものが 325 列、それ以外（履歴の数値・調教・ラップ・レース条件）が 477 列。合計 1,231 列。</li>
+<li><b>観点の軸は「主語（馬主・血統・馬自身・コース）× 条件（場・面・距離帯・馬場・クラス・頭数など）」に偏っている</b>。騎手・調教師を主語にした条件別の勝率・複勝率は、工場では作ったが<b>親には入っていない</b>（『騎手・調教師系は上乗せなし』、決定ログ §33）。馬・騎手・調教師の単純な通算の勝率・複勝率（22 列）とその出走馬内の分布（<code>fc_*</code>）だけ。</li>
+<li><b>訂正: 斤量÷馬体重の比は『無い』ではない</b>。<code>sr_load_eq</code>（斤量×480÷馬体重）ほか <code>sr_load_*</code> 4 列と、<code>fd_jwratio_*</code>（斤量÷馬体重×1000 の出走馬内の分布と自分との差、11 列）が親に入っている。<b>無いのは、この比（や斤量・馬体重の帯）を観点にして as-of で勝率・複勝率を引く形だけ</b>（§4）。</li>
+<li><b>無い観点（§4）</b>: 斤量÷馬体重の比の帯、斤量帯・馬体重帯、年齢×舞台、性別×舞台、斤量帯×舞台、体重増減×斤量増減、斤量×距離。いずれも「試して不採用」ではなく<b>評価そのものがまだ</b>（近い評価はあるが統計量が違う）。騎手×調教師・騎手×コース・調教師×競馬場は tp-58 で評価して不採用。</li>
+<li>この表は『無い＝有望』ではない。採否は二段基準（LOYO 同符号＋点推定 −0.0002 以下 → 束で test 2025 を 1 回）で決める。</li>
+</ul></div>
+
+<h2>1. 親モデルに入っているターゲットエンコーディング（狭い意味・373 列）</h2>
+<p class="muted">統計量の略: win=勝率、top3=複勝率（t3 も同じ）、res=順位スコア（0.5−(着順−1)/(頭数−1)）、l3dev=上がり偏差、pos=位置取り、pe=連対率。縮約は『(合計＋k×事前平均)÷(件数＋k)』の経験ベイズで、事前平均は全体平均か親のキー。as-of は『行の日付より厳密に前（同日を含まない）』。工場の定数は <code>factory_conn.py:23</code>（K_ENT=20・K_COND=20）、<code>factory_field.py:70</code>（既定 k=30）。</p>
+<table class="sortable">
+<thead><tr><th>#</th><th>名称</th><th>代表列名</th><th>観点（キー）</th><th>統計量・縮約</th><th>as-of の切り方</th><th>親に入っているか</th><th>定義 path:line</th><th>列数</th></tr></thead>
+<tbody>
+<tr><td class="num">1</td><td>馬主×条件</td><td><code>o_win</code>, <code>o_venue_top3</code>, <code>o_sexage_res</code></td><td>馬主 ID ×（全体・場・面・面×距離帯・馬場・クラス・頭数・枠・場×面×距離帯・休み明け・出走番号・性齢の 11 条件）</td><td>win/top3/res/l3dev/pos と件数 n。k=20 で全体→馬主→条件の順に縮約</td><td>累積和を日単位でずらし、日付が厳密に前のみ（<code>_asof_sums</code>）</td><td class="ok">採用（G2 馬主系）</td><td><code>factory_conn.py:155,160,190</code>、<code>:107</code></td><td class="num">50</td></tr>
+<tr><td class="num">2</td><td>馬主の直近窓</td><td><code>o_w30_win</code> 等</td><td>馬主 ID × 直近 7/14/30/90/365 日</td><td>窓内の win/top3 など</td><td>窓＝『日付−窓日数 ＜ 日付 ＜ 当日』の差し引き</td><td class="ok">採用（G2）</td><td><code>factory_conn.py:211</code></td><td class="num">22</td></tr>
+<tr><td class="num">4</td><td>馬主×生産者</td><td><code>ob_win</code>, <code>ob_cls_top3</code></td><td>馬主 ID × 生産者 ID（＋ 1 と同じ条件）</td><td>1 と同じ</td><td>1 と同じ</td><td class="ok">採用（G2）</td><td><code>factory_conn.py:155</code>（ENTITIES の ob）</td><td class="num">50</td></tr>
+<tr><td class="num">5</td><td>枠・馬番×コース</td><td><code>fdr_br_win_mean</code>, <code>fdr_third_t3_delta</code></td><td>場×面×距離 ×（枠番・馬番・内中外 3 分割・馬場×3 分割・頭数×3 分割）</td><td>win/t3 の平均と件数、コース全体との差（delta）。k=30</td><td><code>asof_group_mean</code>（厳密に前）</td><td class="ok">採用（G3 course_draw）。脚質別（style）の派生は工場にあるが親には<span class="bad">無い</span></td><td><code>factory_field.py:297</code>、<code>:70</code></td><td class="num">34</td></tr>
+<tr><td class="num">6</td><td>血統×条件（広い）</td><td><code>pd_sire_sd_res</code>, <code>pd_dam_dam_sf_n</code></td><td>種牡馬・母父・父の父・母の母 ×（面×距離帯 sd・馬場 gd・場 vn・面 sf・全体 all）</td><td>res と win、件数</td><td>厳密に前</td><td class="ok">採用（血統文脈）</td><td><code>pedigree_context.py:17-29</code></td><td class="num">32</td></tr>
+<tr><td class="num">7</td><td>種牡馬 ID×条件</td><td><code>ped_sire_sd_win</code>, <code>ped_dam_sire_go_t3</code></td><td>種牡馬 ID・母父 ID ×（面×距離帯・馬場・場）</td><td>win/t3/pe/l3 と件数</td><td>厳密に前</td><td class="ok">採用（PED_sire_cond、G4 で唯一累積を通った）</td><td><code>factory_ped.py:101-122</code>、<code>serving_ped_extras.py:30-40</code></td><td class="num">24</td></tr>
+<tr><td class="num">8</td><td>血統の位置セル</td><td><code>pxc_sd_w</code>, <code>pxc_sd_r</code>, <code>pxc_sd_g1</code></td><td>祖先の世代・位置 ×（面×距離帯）のセル</td><td>w（勝率）・r（順位スコア）・pos と世代別、レース内相対</td><td>厳密に前</td><td class="ok">採用（BEST の一部、境界）</td><td><code>tp38_pedigree.py:142</code>、<code>serving_v5_px.py:226</code></td><td class="num">17</td></tr>
+<tr><td class="num">9</td><td>馬自身の条件別経験</td><td><code>exp_win_course</code>, <code>exp_first_going</code></td><td>馬 ID ×（場・面・距離・距離帯・コース・回り・馬場・場×面・面×距離・クラス・頭数・天候・月・時刻・開催回）</td><td>出走数 n・初経験フラグ・勝率</td><td>馬の過去走のみ（その走より前）</td><td class="ok">採用（G1 experience）</td><td><code>factory_self.py:386</code></td><td class="num">48</td></tr>
+<tr><td class="num">10</td><td>馬自身の条件別親和</td><td><code>b_aff_sd</code>, <code>b_aff_venue</code>, <code>b_n_course</code></td><td>馬 ID ×（面×距離帯・場・馬場・回り・コース・クラス）</td><td>条件内の順位成績の親和度と件数、距離の適合差</td><td>馬の過去走のみ</td><td class="ok">採用（履歴プロファイル B）</td><td><code>horse_history/profile.py:134-146</code></td><td class="num">20</td></tr>
+<tr><td class="num">11</td><td>馬×騎手・馬×調教師</td><td><code>pair_hj_win_rate</code>, <code>pair_ht_top3_rate</code></td><td>馬 ID × 騎手 ID、馬 ID × 調教師 ID、馬 ID × 騎手 ID × 場</td><td>勝率・複勝率と件数・初コンビ</td><td>馬の過去走のみ</td><td class="ok">採用（G1 pair）</td><td><code>factory_self.py:518-532</code></td><td class="num">16</td></tr>
+<tr><td class="num">12</td><td>馬・騎手・調教師の通算</td><td><code>horse_prior_win_rate</code>, <code>jockey_prior_top3_rate</code>, <code>trainer_prior_win_rate</code></td><td>馬 ID／騎手 ID／調教師 ID 単独（条件なし）</td><td>通算の勝数・複勝数・出走数・率</td><td>日付が前の累積</td><td class="ok">採用（基礎）</td><td><code>serving_layer_a.py:123-126</code></td><td class="num">22</td></tr>
+<tr><td class="num">13</td><td>種牡馬・母父の芝ダ率と馬場偏り</td><td><code>sire_prior_win_rate_surface</code>, <code>dam_sire_x_track_bias_diff</code></td><td>種牡馬 ID／母父 ID × 面、× 当日の馬場偏り</td><td>面別勝率、偏りとの積</td><td>厳密に前</td><td class="ok">採用</td><td><code>track_bias_pedigree.py:189</code></td><td class="num">6</td></tr>
+<tr><td class="num">14</td><td>生産地</td><td><code>attr_bp_win</code>, <code>attr_bp_fp</code></td><td>生産地</td><td>勝率・平均着順と件数</td><td>厳密に前</td><td class="ok">採用（G1 attrs）</td><td><code>factory_self.py:547-567</code></td><td class="num">3</td></tr>
+<tr><td class="num">15</td><td>同名レースの勝ち馬の属性</td><td><code>frn_win_age_mean</code>, <code>frn_own_vs_win_style</code></td><td>正規化したレース名</td><td>『勝ち馬の』年齢・脚質・強さ・馬体重・頭数の平均（目的変数が属性）、自分との差。k=1</td><td>厳密に前（前の開催）</td><td class="ok">採用（G3 race_type）</td><td><code>factory_field.py:444,476</code></td><td class="num">14</td></tr>
+<tr><td class="num">16</td><td>コース×クラスのペース基準</td><td><code>frp_course_pace_first_mean</code>, <code>frp_style_x_pace_first</code></td><td>場×面×距離、場×面×距離×クラス</td><td>前半ペース・後半ペース・RPCI・勝ち馬上がりの平均（目的変数がペース）。k=10</td><td>厳密に前（レース単位）</td><td class="ok">採用（G3 race_type）</td><td><code>factory_field.py:489-499</code></td><td class="num">15</td></tr>
+</tbody></table>
+<p class="muted">小計 373 列（#1・#2・#4〜#16 の列数の合計。馬主の連続・日数 3 列は性質が違うので次の表に置いた）。</p>
+
+<h2>2. 近い性質のもの・集約したもの（採用）</h2>
+<p class="muted">観点別の率そのものではないが、ターゲットエンコーディングの入力や出力に当たるもの。</p>
+<table class="sortable">
+<thead><tr><th>#</th><th>名称</th><th>代表列名</th><th>観点（キー）</th><th>統計量</th><th>親に入っているか</th><th>定義 path:line</th><th>列数</th></tr></thead>
+<tbody>
+<tr><td class="num">3</td><td>馬主の連続・日数</td><td><code>o_days_since_win</code>, <code>o_rides_since_win</code></td><td>馬主 ID</td><td>勝ってから／出走してからの日数・回数（目的変数の最近の位置）</td><td>厳密に前</td><td class="ok">採用（G2）。目的変数の最近の位置であり、観点別の率ではない</td><td><code>factory_conn.py:227</code></td><td class="num">3</td></tr>
+<tr><td class="num">17</td><td>類似馬の成績</td><td><code>f1_sim_res</code>, <code>f1_sim_z</code></td><td>過去走の条件が近い馬（類似度で重み付け）</td><td>類似馬の順位スコアの重み付き平均</td><td class="ok">採用</td><td><code>horse_history/match.py:125</code></td><td class="num">4</td></tr>
+<tr><td class="num">18</td><td>当日の隊列の圧力</td><td><code>f2_pressure</code>, <code>f2_early_rank</code></td><td>出走馬の先行力・脚質の分布</td><td>先行数・圧力（過去の位置取りの平均から）</td><td class="ok">採用</td><td><code>horse_history/match.py:65-69</code></td><td class="num">20</td></tr>
+<tr><td class="num">19</td><td>同条件の勝ち・親和</td><td><code>f5_cl</code>, <code>f5_aff</code>, <code>f5_win</code></td><td>今回と同じクラス・条件での過去</td><td>勝率・親和</td><td class="ok">採用</td><td><code>horse_history/match.py:164</code></td><td class="num">3</td></tr>
+<tr><td class="num">20</td><td>ペース指数の平滑</td><td><code>pc_pci_ewm2</code>, <code>pc_rpci_ewm3</code></td><td>馬自身の過去走</td><td>PCI・RPCI の指数移動平均</td><td class="ok">採用</td><td><code>horse_history/pace.py:56-57</code></td><td class="num">16</td></tr>
+<tr><td class="num">21</td><td>血統の埋め込み（z）</td><td><code>z_s0</code>, <code>zc_rel</code>, <code>zg</code></td><td>血統の ridge による祖先効果の合計</td><td>祖先ごとの効果（z）を合算した値</td><td class="ok">採用（BEST の一部）</td><td><code>tp38_ridge.py:114-130</code></td><td class="num">10</td></tr>
+<tr><td class="num">22</td><td>出走馬内の分布（TE 由来）</td><td><code>fm_f3_r_mean</code>, <code>fc_jk_own_pct</code></td><td>その日の出走馬</td><td>馬主・騎手・調教師・強さなどの率の平均・最大・最小・自分の順位</td><td class="ok">採用（G3 mem_strength など）</td><td><code>factory_field.py:76,125</code></td><td class="num">88（fm 44 ＋ fc 44）</td></tr>
+<tr><td class="num">23</td><td>出走馬内の分布（その他）</td><td><code>fd_jw_mean</code>, <code>fd_jwratio_own_z</code></td><td>その日の出走馬</td><td>年齢・斤量・馬体重・斤量÷馬体重などの数値の分布と自分の位置。<code>fd_jwratio_*</code> 11 列（斤量÷馬体重×1000）を含む</td><td class="ok">採用（G3 mem_demo）</td><td><code>factory_field.py:85,92</code></td><td class="num">237（fm 66 ＋ fc 29 ＋ fd 142）</td></tr>
+</tbody></table>
+<p class="muted">この表の列数: 近い性質 56 列（#3・#17〜#21。3+4+20+3+16+10）、出走馬内の分布 88 列と 237 列。区分と合計: ①狭い意味 373、②近い性質 56、③出走馬内の分布（TE 由来）88、④出走馬内の分布（その他）237、⑤ TE ではない 477。①〜⑤ の合計＝<b>1,231 列</b>。</p>
+
+<h3>⑤ ターゲットエンコーディングではない 477 列（接頭辞別）</h3>
+<table class="sortable">
+<thead><tr><th>接頭辞</th><th>内容</th><th>列数</th></tr></thead>
+<tbody>
+<tr><td><code>seq_</code></td><td>過去走の系列の統計（間隔・着順の並び）</td><td class="num">59</td></tr>
+<tr><td><code>tl_</code></td><td>追い切りラップ（TL_A、再取得版）</td><td class="num">50</td></tr>
+<tr><td><code>wc_</code></td><td>今回サイクル内の調教の推移（CY、tp-40）</td><td class="num">37</td></tr>
+<tr><td><code>fr_</code> / <code>fe_</code></td><td>レース条件・環境（頭数・回り・季節・荒れ度）</td><td class="num">32 / 31</td></tr>
+<tr><td><code>sr_</code></td><td>標準条件レーティング（<code>sr_load_*</code> 4 列を含む）</td><td class="num">28</td></tr>
+<tr><td><code>mtl_</code></td><td>追い切りの多段モデル出力</td><td class="num">27</td></tr>
+<tr><td><code>a_</code> / <code>c_</code></td><td>馬自身の上がり・脚質の指数移動平均 / クラス・条件の数値</td><td class="num">23 / 23</td></tr>
+<tr><td><code>chg_</code> / <code>rest_</code></td><td>前走からの替わり（距離・面・騎手など）/ 休養・間隔</td><td class="num">21 / 21</td></tr>
+<tr><td><code>pxe_</code> / <code>rb_</code></td><td>血統の埋め込み / 頑健レーティング（v6）</td><td class="num">16 / 16</td></tr>
+<tr><td><code>f3_</code> / <code>d_</code> / <code>track_</code> / <code>td_</code></td><td>強さの指標 / 馬体重・間隔の数値 / 馬場偏り / その他</td><td class="num">13 / 10 / 7 / 7</td></tr>
+<tr><td>その他（<code>lag1〜5_</code>・<code>margin_</code>・<code>e_</code>・<code>s_</code>・<code>oikiri_</code>・<code>comment_</code>・<code>weight_</code>・素の条件列ほか）</td><td>前走〜5 走前の着差、前段モデル 3 列、追い切り評価、コメント、レース条件の原データ</td><td class="num">85</td></tr>
+</tbody></table>
+
+<h2>3. 工場で作ったが、親モデルに入っていない（不採用・未評価）</h2>
+<p class="muted">採否は決定ログ §33・§35〜§41 など。増分は勝率 LogLoss の差（負が改善）。</p>
+<table class="sortable">
+<thead><tr><th>#</th><th>名称</th><th>観点（キー）</th><th>統計量</th><th>結果</th><th>親に入っているか</th><th>定義 path:line</th></tr></thead>
+<tbody>
+<tr><td class="num">24</td><td>騎手・調教師・生産者×条件</td><td>騎手 ID／調教師 ID／生産者 ID ×（11 条件）</td><td>win/top3/res/l3dev/pos と窓</td><td>上乗せなし（馬主系だけが採用）</td><td class="bad">不採用</td><td><code>factory_conn.py:155,160</code>（ENTITIES の j,t,b,bp）</td></tr>
+<tr><td class="num">25</td><td>組み合わせ（騎手×調教師 jt、馬×騎手 jh、調教師×馬主 to、調教師×生産者 tb、騎手×馬主 jo、騎手×生産者 jb）</td><td>2 者の ID の組 ×（11 条件）</td><td>同上</td><td>上乗せなし</td><td class="bad">不採用</td><td><code>factory_conn.py:155</code></td></tr>
+<tr><td class="num">26</td><td>期待外れ／期待以上のコース適性（tp-29）</td><td>コース 3 階層（場|面|距離|内外・場|面|距離帯・面|距離帯）× 属性トークン 16 種（種牡馬・母父・騎手・調教師・脚質・枠・年齢・性別・斤量・馬体重・増減・間隔・クラス替わり・距離適合・同コース経験）</td><td>勝率でなく<b>期待外れ（人気上位で大敗）と期待以上（人気薄で好走）の出現率の縮約対数オッズ比</b>。Fisher 検定＋BH-FDR。人気に依存</td><td>最良 −0.00019（tp-15/26/29/31 の合計）</td><td class="bad">不採用</td><td><code>tp29_course_aptitude.py:71-105,137</code></td></tr>
+<tr><td class="num">27</td><td>状況の as-of 親和（tp-32）</td><td>体重増減の帯 wtk、斤量増減の帯 jwk、年齢|季節 agk、面×距離の替わり、初経験ほか 13 群</td><td>馬自身のその状況での過去の複勝率＋全馬の as-of 複勝率（k=3）</td><td>FIRST −0.00021（境界）、他は不採用</td><td class="bad">不採用</td><td><code>tp32_equipment.py:50,247,277,289</code></td></tr>
+<tr><td class="num">28</td><td>手設計のカテゴリ交差 12 種（tp-58）</td><td>騎手×調教師、騎手×コース、騎手×場×面×距離帯、調教師×クラス、調教師×場、種牡馬×面×馬場、母父×面×距離帯、年齢×季節×性別、枠×コース、枠×場×面×距離帯×頭数帯、種牡馬×場×面×距離帯、騎手×種牡馬</td><td>as-of の階層縮約平均（子→親→全体、m=20／50）と親との差 dev</td><td>基準を満たすものなし。最も一貫したのは調教師×競馬場（z=2.5〜4、多重検定で有意でない）</td><td class="bad">不採用</td><td><code>tp58_cross.py:31</code>、<code>tp58_hand.py:30</code></td></tr>
+<tr><td class="num">29</td><td>血統の単独群（tp-38）</td><td>祖先×位置×条件のセル、存在割合、クロス、類似種牡馬</td><td>セル別 win/res</td><td>個別は再現せず（束の ALL_BEST 43 列だけ境界で採用 → #8・#21）</td><td class="warn">一部のみ</td><td><code>tp38_pedigree.py</code></td></tr>
+<tr><td class="num">30</td><td>血統ニックス・母きょうだい</td><td>父×母父の組など</td><td>組別の as-of 成績</td><td>PED_sire_cond のみ累積を通過</td><td class="bad">不採用</td><td><code>factory_ped.py:125,291</code></td></tr>
+<tr><td class="num">31</td><td>騎手・調教師の回収率（tp-59）</td><td>騎手 ID／調教師 ID／組み合わせ</td><td>単勝・複勝の回収率</td><td>勝率・複勝率は前年→翌年で再現するが回収率は再現せず</td><td class="bad">不採用（唯一の候補は凍結して追跡）</td><td><code>config/tp59_frozen_rule.json</code></td></tr>
+<tr><td class="num">32</td><td>血統グループ×レースの質（tp-60）</td><td>血統グループ × レースの質</td><td>好走率</td><td>効果は弱い</td><td class="bad">不採用</td><td>決定ログ参照</td></tr>
+<tr><td class="num">33</td><td>脚質×コースの枠別勝率</td><td>場×面×距離 × 脚質 4 分割（× 内中外）</td><td>win/t3、コース全体との差</td><td>工場の <code>fdr_style_*</code>・<code>fdr_style_third_*</code> は親の 34 列に含まれない</td><td class="bad">親に無い</td><td><code>factory_field.py:297-322</code></td></tr>
+</tbody></table>
+
+<h2>4. 無い観点（ギャップ）</h2>
+<p class="muted">『ある』＝親モデルの 1,231 列に入っている。『評価済み・不採用』＝工場か探索で作って評価したが親に入っていない。『無い』＝観点別の勝率・複勝率の as-of 縮約平均として、評価も実装もない。</p>
+<table class="sortable">
+<thead><tr><th>#</th><th>観点</th><th>判定</th><th>近いもの（何が既にあるか）</th><th>定義 path:line</th><th>備考</th></tr></thead>
+<tbody>
+<tr><td class="num">G1</td><td>斤量÷馬体重の比の帯 → 勝率・複勝率</td><td class="bad">無い（数値の比は<span class="ok">ある</span>）</td><td>数値: <code>sr_load_eq</code>（斤量×480÷馬体重）・<code>sr_load_dev</code>・<code>sr_load_pts</code>・<code>sr_load_chg</code> の 4 列、<code>fd_jwratio_*</code>（斤量÷馬体重×1000 の出走馬内の分布と自分の差）11 列</td><td><code>horse_history/rating.py:20,45,183-184</code>、<code>factory_field.py:92</code></td><td><b>以前『比は無い』とした回答は不正確。帯別の TE だけが無い</b>。tp-29 のトークンにも比の帯は無い（jw と bw が別々）。探索候補の第 1 号</td></tr>
+<tr><td class="num">G2</td><td>斤量の帯（絶対）→ 勝率・複勝率</td><td class="bad">無い</td><td><code>fd_jw_*</code>（出走馬内の分布）、tp-29 のトークン <code>jw</code>（5 帯、ただし統計量が対数オッズ比）、tp-32 の <code>jwk</code>（斤量『増減』の帯）</td><td><code>tp29_course_aptitude.py:96</code>、<code>tp32_equipment.py:247</code></td><td>tp-29・tp-32 とも不採用（#26・#27）</td></tr>
+<tr><td class="num">G3</td><td>馬体重の帯（絶対）→ 勝率・複勝率</td><td class="bad">無い</td><td>数値 <code>weight</code>・<code>d_wt_dev</code>、tp-29 のトークン <code>bw</code>（4 帯、対数オッズ比）</td><td><code>tp29_course_aptitude.py:97</code></td><td></td></tr>
+<tr><td class="num">G4</td><td>斤量×距離</td><td class="bad">無い（数値の積は工場のみ）</td><td>数値の積 <code>fx_jw_x_dist</code>（斤量×距離÷1000）・<code>fx_w_per_dist</code> は工場にあるが、親の 1,231 列に <code>fx_*</code> は無い</td><td><code>factory_field.py:504-530</code></td><td>観点別 TE としては未実装</td></tr>
+<tr><td class="num">G5</td><td>体重増減の帯 → 勝率・複勝率（単独）</td><td class="warn">評価済み・不採用</td><td>tp-32 の <code>wtk</code>（馬自身の過去の複勝率＋全馬の as-of 複勝率）。数値は <code>d_wt_chg_now</code>・<code>weight_change</code></td><td><code>tp32_equipment.py:247-257</code></td><td>tp-29 のトークン <code>wtchg</code> は対数オッズ比</td></tr>
+<tr><td class="num">G6</td><td>体重増減 × 斤量増減（2 軸の組）</td><td class="bad">無い</td><td>単独の帯（G5 の <code>wtk</code>・<code>jwk</code>）が別々にあるのみ。組み合わせ群 <code>g_combo</code> は休み明け・初経験・昇級・乗り替わり・馬具・面×距離の替わりで、体重・斤量の組は無い</td><td><code>tp32_equipment.py:247,289</code></td><td></td></tr>
+<tr><td class="num">G7</td><td>騎手 × 調教師</td><td class="warn">評価済み・不採用</td><td>tp-58 の <code>jk_tr</code>、工場の ENTITIES の <code>jt</code>。親には馬×騎手・馬×調教師（<code>pair_hj_*</code>・<code>pair_ht_*</code>）</td><td><code>tp58_hand.py:31</code>、<code>factory_conn.py:155</code></td><td>『組み合わせ jt/jh/to/tb/jo/jb は上乗せなし』（§33）</td></tr>
+<tr><td class="num">G8</td><td>騎手 × コース（場×面×距離、場×面×距離帯）</td><td class="warn">評価済み・不採用</td><td>tp-58 の <code>jk_course</code>・<code>jk_vsd</code>、工場の <code>j</code> × 条件 <code>vsd</code></td><td><code>tp58_hand.py:32-33</code></td><td></td></tr>
+<tr><td class="num">G9</td><td>調教師 × 競馬場／クラス</td><td class="warn">評価済み・不採用</td><td>tp-58 の <code>tr_venue</code>・<code>tr_class</code>。<code>tr_venue</code> は発見・確認とも z=2.5〜4 で最も一貫したが多重検定で有意でない</td><td><code>tp58_hand.py:34-35</code></td><td>再検討するなら全期間で 1 回だけ</td></tr>
+<tr><td class="num">G10</td><td>騎手 × 種牡馬</td><td class="warn">評価済み・不採用</td><td>tp-58 の <code>jk_sire</code></td><td><code>tp58_hand.py:42</code></td><td></td></tr>
+<tr><td class="num">G11</td><td>馬 × コース（同コース・同場・同距離帯）</td><td class="ok">ある</td><td><code>exp_win_course</code>・<code>exp_win_venue</code>・<code>exp_win_dist_band</code>（経験と勝率）、<code>b_aff_course</code>・<code>b_aff_venue</code>・<code>b_aff_sd</code>（親和）</td><td><code>factory_self.py:386</code>、<code>horse_history/profile.py:134-146</code></td><td>場×面×距離×内外の最も細かいキーは <code>exp_*course</code> と <code>b_*course</code></td></tr>
+<tr><td class="num">G12</td><td>枠・馬番 × コース</td><td class="ok">ある</td><td><code>fdr_*</code> 34 列。脚質別 <code>fdr_style_*</code> は親に無い（#33）</td><td><code>factory_field.py:297</code></td><td></td></tr>
+<tr><td class="num">G13</td><td>種牡馬・母父 × 舞台（面×距離帯・馬場・場）</td><td class="ok">ある</td><td><code>ped_*</code>・<code>pd_*</code>・<code>pxc_*</code></td><td>#6〜#8</td><td>クラス別・頭数別は無い</td></tr>
+<tr><td class="num">G14</td><td><b>年齢 × 舞台</b>（コース 3 階層・芝ダ・距離帯・場・馬場・クラス）→ 勝率・複勝率</td><td class="bad">無い</td><td>(a) tp-29 の <code>age</code> トークン × コース 3 階層は<b>対数オッズ比</b>（期待外れ／期待以上、人気に依存）で勝率・複勝率ではない・不採用 (b) tp-32 の <code>AGE</code>（<code>agk</code> 年齢|季節、年齢の節目のみ・舞台なし）不採用 (c) tp-58 の <code>age_season_sex</code>（年齢×季節×性別、舞台なし）不採用 (d) <code>sr_age_pts</code>（年齢×月の成長曲線による補正点）(e) 素の <code>age</code> 列</td><td><code>tp29_course_aptitude.py:94,105</code>、<code>tp32_equipment.py:277</code>、<code>tp58_hand.py:38</code>、<code>horse_history/rating.py:24-30,185</code></td><td>観点＝年齢帯（2/3/4/5/6+）×舞台。as-of の勝率・複勝率を引く形は未評価</td></tr>
+<tr><td class="num">G15</td><td><b>性別 × 舞台</b> → 勝率・複勝率</td><td class="bad">無い</td><td>(a) <code>o_sexage_*</code>（馬主×性齢、主語が馬主）(b) tp-29 の <code>sex</code> トークン（対数オッズ比）(c) <code>sr_sex_pts</code>（芝ダ別の性別固定効果＝補正点）(d) tp-58 <code>age_season_sex</code>（舞台なし）</td><td><code>factory_conn.py:160</code>、<code>horse_history/rating.py:118,185</code></td><td></td></tr>
+<tr><td class="num">G16</td><td><b>斤量帯 × 舞台</b> → 勝率・複勝率</td><td class="bad">無い</td><td>tp-29 の <code>jw</code> トークン × コース 3 階層（対数オッズ比）、tp-32 の <code>jwk</code>（増減の帯・舞台なし）、<code>fd_jw_*</code>（出走馬内の分布）</td><td><code>tp29_course_aptitude.py:96</code>、<code>tp32_equipment.py:247</code></td><td>G1 の比の帯と同時に評価すると効率が良い</td></tr>
+<tr><td class="num">G17</td><td>馬体重帯 × 舞台、斤量÷馬体重の帯 × 舞台</td><td class="bad">無い</td><td>G3・G1 と同じ</td><td></td><td></td></tr>
+<tr><td class="num">G18</td><td>クラス替わり・休養明け・距離替わり × 舞台（as-of の勝率）</td><td class="warn">評価済み・不採用（統計量が違う）</td><td>tp-29 のトークン <code>clsstep</code>・<code>rest</code>・<code>distgap</code> × コース 3 階層（対数オッズ比）、tp-32 の <code>situ</code> 群、数値 <code>chg_*</code>・<code>rest_*</code></td><td><code>tp29_course_aptitude.py:100-103</code>、<code>tp32_equipment.py:50</code></td><td></td></tr>
+</tbody></table>
+<div class="note"><b>読み方.</b> 『無い』の多くは、近い評価（tp-29・tp-32・tp-58）が<b>統計量違い</b>（対数オッズ比・馬自身の過去の複勝率）か<b>舞台なし</b>のもの。ユーザー方針の『任意の観点で勝率・複勝率がどう変わるか』をそのまま引く形（観点の帯を作り、as-of で縮約し、親のキーへ階層縮約）は、<code>tp58_cross.py:31</code> の <code>shrunk_cross</code> が既に使える。G1・G14〜G17 は、この関数で観点の列を追加するだけで評価できる（手元の探索コードの再利用。親モデルの再学習はせず、まず OOF へのスコア検定で絞る）。採否は二段基準で決め、この表に載ること自体は有望さを意味しない。</div>
+
+<h2>5. 出典</h2>
+<ul class="muted">
+<li>親モデルの列: ホスト <code>bundle_v6_2025/bundle.json</code> の 1,231 列（接頭辞別の数え上げは 2026-11-10）。復活台帳 <code>src/scripts/data/revival_ledger.py</code>（ADOPTED_EXACT・ADOPTED_PREFIX）。</li>
+<li>採否: <a href="training_pipeline_decisions.html">決定ログ</a>（§33 群の採否、§36 血統、§38 CY）、<a href="feature_gap_audit.html">特徴量のやり残しの棚卸し</a>、<a href="feature_cross_search.html">特徴量の掛け合わせ探索（tp-58）</a>。</li>
+<li>本ページは列の定義と所在の一覧であり、新たな評価結果は含まない。</li>
+</ul>
+
+<script>
+(function () {
+  function val(td) { var t = td.textContent.trim().replace(/,/g, ""); var m = t.match(/^-?\d+(\.\d+)?/); return m ? parseFloat(m[0]) : t; }
+  document.querySelectorAll("table.sortable").forEach(function (tb) {
+    var heads = tb.querySelectorAll("thead th");
+    heads.forEach(function (th, i) {
+      th.addEventListener("click", function () {
+        var asc = !th.classList.contains("asc");
+        heads.forEach(function (h) { h.classList.remove("asc", "desc"); });
+        th.classList.add(asc ? "asc" : "desc");
+        var body = tb.tBodies[0], rows = Array.prototype.slice.call(body.rows);
+        rows.sort(function (a, b) {
+          var x = val(a.cells[i]), y = val(b.cells[i]);
+          if (typeof x === "number" && typeof y === "number") return asc ? x - y : y - x;
+          return asc ? String(x).localeCompare(String(y), "ja") : String(y).localeCompare(String(x), "ja");
+        });
+        rows.forEach(function (r) { body.appendChild(r); });
+      });
+    });
+  });
+})();
+</script>
+</body></html>

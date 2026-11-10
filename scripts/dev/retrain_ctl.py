@@ -62,7 +62,7 @@ NODE_STEPS = {"DATA": ["s0"], "POS": ["s3"], "EASE": ["s3"], "LAP": ["s4"], "S3"
 # §2.6 のチャート（区分 A/B/C）の箱。箱ごとの記録（state["nodes"]、`node` 命令）があればそれを、無ければ対応する段の状態を使う
 NODE_STEPS_26 = {"RAW": ["s0"], "POS": ["s3"], "PACE": ["s4"], "EASE": ["s3"], "S3": ["s7"], "AS": ["s8"],
                  "PARENT": ["s9", "s10", "s11", "s12"], "EXO": ["s16"], "POST": ["s13", "s14", "s15", "s16"], "FWD": ["s17"]}
-PLANNED_26 = {"APT", "WIND", "AXES", "INTX"}  # 親モデルへの上乗せを評価する予定の箱
+PLANNED_26 = {"INTX"}  # 親モデルへの上乗せを評価する予定の箱
 _BADGE = {"running": ("▶ 実行中", "#fb923c"), "failed": ("✘ 失敗", "#f87171"), "blocked": ("■ 判断待ち", "#f87171"),
           "done": ("✔ 完了", "#4ade80"), "skipped": ("－ 対象外", "#9aa7c7"), "pending": ("・ 未着手", "#9aa7c7"), "partial": ("◐ 途中", "#fbbf24")}
 
@@ -166,7 +166,7 @@ def render_status(plan: dict, state: dict, html: str) -> str:
         return "pending", "（対象外の案・未採用）"
 
     html = _replace_chart_after(html, "<h3>2.1 チャート", lambda c: _chart_block(c, NODE_STEPS, status_21))
-    all26 = ["RAW", "POS", "PACE", "BIAS", "ODDS", "EASE", "AS", "APT", "WIND", "AXES", "INTX", "STAT", "S3", "PARENT", "EXO", "POST", "FWD"]
+    all26 = ["RAW", "POS", "PACE", "ODDS", "EASE", "AS", "INTX", "STAT", "S3", "PARENT", "EXO", "POST", "FWD"]
     html = _replace_chart_after(html, "2.6 作るものの区分", lambda c: _chart_block(c, all26, status_26))
     # チャートの上の 1 行（いま何をしているか・進み・更新時刻）
     done = sum(1 for v in state["steps"].values() if v["status"] in DONE_LIKE)

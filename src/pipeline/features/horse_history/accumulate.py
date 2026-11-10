@@ -23,6 +23,7 @@ import polars as pl
 from .builder import build_with_state, feature_columns, invalid_race_ids
 from .common import TABLES_DIR, build_repair_map, load_runs
 from .inference import load_tiers
+from src.pipeline.models.training_years import FIRST_YEAR
 
 logger = logging.getLogger("pipeline.features.horse_history.accumulate")
 
@@ -46,9 +47,9 @@ def _empty_repair_map() -> pl.DataFrame:
 
 
 def build_year(year: int, tables_dir: str | Path | None = None, layer_a: str | Path | None = None):
-    """``year`` 年の行の特徴量。履歴は 2020 年〜``year`` 年の確定結果。推論用の状態も一緒に返す。"""
+    """``year`` 年の行の特徴量。履歴は起点年（既定 2020、``KEIBA_FIRST_YEAR``）〜``year`` 年の確定結果。推論用の状態も一緒に返す。"""
     t0 = time.perf_counter()
-    runs = load_runs(tables_dir, years=list(range(2020, year + 1)))
+    runs = load_runs(tables_dir, years=list(range(FIRST_YEAR, year + 1)))
     # 推論用の履歴を止めないため、距離 0・時計が無限大のレース（取得データの不備）だけを除外して記録する。
     # 学習用の特徴量（build_horse_history）は従来どおり check_runs で厳密に止める。
     dropped = invalid_race_ids(runs)
@@ -138,7 +139,7 @@ def accumulate(year: int | None = None, tables_dir: str | Path | None = None, la
 
         Ffull, P, S, elo = state
         try:
-            graded = graded_race_names(tables_dir, list(range(2020, year + 1)))
+            graded = graded_race_names(tables_dir, list(range(FIRST_YEAR, year + 1)))
         except Exception as exc:  # 重賞名の表が作れなくても、バンドル自体は作る
             logger.warning("重賞名の表が作れなかった: %s", exc)
             graded = {}
