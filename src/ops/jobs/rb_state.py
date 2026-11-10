@@ -29,7 +29,9 @@ FILES = ("hist.parquet", "params.json")          # 差し替える順（履歴 �
 
 def years_default(now: datetime | None = None) -> list[int]:
     now = now or datetime.now(timezone(timedelta(hours=9)))
-    return list(range(2020, now.year + 1))
+    from src.pipeline.models.training_years import FIRST_YEAR
+
+    return list(range(FIRST_YEAR, now.year + 1))
 
 
 def check(old: Path, new: Path) -> tuple[bool, str]:

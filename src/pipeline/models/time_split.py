@@ -11,7 +11,7 @@ import pandas as pd
 from src.pipeline.models.dataset_split import race_calendar_year
 
 # 2026 年以降はデータが不完全なため学習に使わない（確実に揃っている年のみ）。
-from src.pipeline.models.training_years import TRAINING_YEARS  # noqa: E402,F401  学習対象年（定数は別モジュール）
+from src.pipeline.models.training_years import FIRST_YEAR, TRAINING_YEARS  # noqa: E402,F401  学習対象年（定数は別モジュール）
 
 
 def restrict_to_training_years(
@@ -39,7 +39,7 @@ def yearly_expanding_folds(
     df: pd.DataFrame,
     *,
     valid_years: Sequence[str] = ("2022", "2023", "2024"),
-    first_train_year: str = "2020",
+    first_train_year: str = str(FIRST_YEAR),
     purge_days: int = 7,
     embargo_days: int = 3,
     race_id_col: str = "race_id",

@@ -19,7 +19,7 @@ from statistics import median
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
-FIRST_YEAR = 2020
+from src.pipeline.models.training_years import FIRST_YEAR  # 起点年（既定 2020、KEIBA_FIRST_YEAR で切替）
 TREND_FLAT = 3.0          # 直近と、その前の平均の差がこの指数以内なら『横ばい』
 TREND_WINDOW = 3
 

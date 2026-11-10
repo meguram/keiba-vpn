@@ -148,7 +148,9 @@ class InferenceContext:
 
         from src.pipeline.features.horse_history.common import build_repair_map, read_runs_raw
 
-        years = self.years or list(range(2020, datetime.now(_JST).year + 1))
+        from src.pipeline.models.training_years import FIRST_YEAR
+
+        years = self.years or list(range(FIRST_YEAR, datetime.now(_JST).year + 1))
         self.raw_hist = read_runs_raw(self.tables_dir, years).filter(pl.col("finish_position") > 0)
         if self.layer_a.exists():
             self.repair_map = build_repair_map(self.layer_a)
