@@ -40,7 +40,7 @@ pre { background:var(--code); border:1px solid var(--border); border-radius:8px;
 <h2>2. 依存関係（上が先）— 親モデルに実際に入るものだけを区別</h2>
 <p class="sub">ホストの本番バンドル <code>final_v6e/bundle_v6_2025</code> の特徴量 1,231 列を、列名ごとに出どころの群へ割り当てて確認した（<code>serving_v4/v5/v6</code> の群の対応で突き合わせ）。「データとして持っている」ことと「親モデルの列になっている」ことは別なので、4 種類に分けて書く。</p>
 <h3>2.1 チャート（上流 → 下流）</h3>
-<!-- RETRAIN-STATUS:BEGIN --><div class="box"><b>再学習の状態</b>（2026-11-10 00:09 更新・学習年 2016-2025・段 10/19）: ▶ 作業中（§2.6 の箱）: <b>PARENT（test 2025 勝率 LL 0.20544（合格線 0.20674・到達率 97.4%、本番 v6e 比 −0.0014）。全行での学習中）</b><br/>▶ 学習中: <b>s10 [J] 親モデル本体（test 2025 は 1 回）</b>（2026-11-09 17:06 開始）<br/><span class="muted">§2.1 と §2.6 のチャートの箱の下に状態（✔ 完了・▶ 実行中・・ 未着手・✘ 失敗・■ 判断待ち・－ 対象外）。実行中の箱は橙の太枠。<code>retrain_ctl.py</code> が記録のたびに書き直す（手動は <code>retrain_ctl.py html</code>、§2.6 の箱は <code>retrain_ctl.py node 箱 状態 --note …</code>）。</span></div><!-- RETRAIN-STATUS:END -->
+<!-- RETRAIN-STATUS:BEGIN --><div class="box"><b>再学習の状態</b>（2026-11-10 01:15 更新・学習年 2016-2025・段 10/19）: ▶ 作業中（§2.6 の箱）: <b>PARENT（test 2025 勝率 LL 0.20544（合格線 0.20674・到達率 97.4%、本番 v6e 比 −0.0014）。全行での学習中）</b><br/>▶ 学習中: <b>s10 [J] 親モデル本体（test 2025 は 1 回）</b>（2026-11-09 17:06 開始）<br/><span class="muted">§2.1 と §2.6 のチャートの箱の下に状態（✔ 完了・▶ 実行中・・ 未着手・✘ 失敗・■ 判断待ち・－ 対象外）。実行中の箱は橙の太枠。<code>retrain_ctl.py</code> が記録のたびに書き直す（手動は <code>retrain_ctl.py html</code>、§2.6 の箱は <code>retrain_ctl.py node 箱 状態 --note …</code>）。</span></div><!-- RETRAIN-STATUS:END -->
 <div class="legend">
 <span><i class="ln thick"></i>親モデルの列になる</span>
 <span><i class="ln thin"></i>前段 S3 の入力になるだけ</span>
@@ -177,7 +177,7 @@ flowchart TB
 <p class="sub">勝率は weighted_logit、連対・複勝は greedy の重み（<code>bundle.json</code> の <code>spec</code>）。5 seed 平均、学習 283,714 行、2020〜2025 年。重みは LOYO の合成で決めたもの。入力列数は本番バンドル <code>bundle.json</code> の各メンバーの <code>feature_cols</code> を、§2.2 の群に割り当てて数えた。</p>
 
 <h3>2.6 作るものの区分：モデリング（A）／特徴量生成（B）／境界（C）</h3>
-<!-- RETRAIN-STATUS:BEGIN --><div class="box"><b>再学習の状態</b>（2026-11-10 00:09 更新・学習年 2016-2025・段 10/19）: ▶ 作業中（§2.6 の箱）: <b>PARENT（test 2025 勝率 LL 0.20544（合格線 0.20674・到達率 97.4%、本番 v6e 比 −0.0014）。全行での学習中）</b><br/>▶ 学習中: <b>s10 [J] 親モデル本体（test 2025 は 1 回）</b>（2026-11-09 17:06 開始）<br/><span class="muted">§2.1 と §2.6 のチャートの箱の下に状態（✔ 完了・▶ 実行中・・ 未着手・✘ 失敗・■ 判断待ち・－ 対象外）。実行中の箱は橙の太枠。<code>retrain_ctl.py</code> が記録のたびに書き直す（手動は <code>retrain_ctl.py html</code>、§2.6 の箱は <code>retrain_ctl.py node 箱 状態 --note …</code>）。</span></div><!-- RETRAIN-STATUS:END -->
+<!-- RETRAIN-STATUS:BEGIN --><div class="box"><b>再学習の状態</b>（2026-11-10 01:15 更新・学習年 2016-2025・段 10/19）: ▶ 作業中（§2.6 の箱）: <b>PARENT（test 2025 勝率 LL 0.20544（合格線 0.20674・到達率 97.4%、本番 v6e 比 −0.0014）。全行での学習中）</b><br/>▶ 学習中: <b>s10 [J] 親モデル本体（test 2025 は 1 回）</b>（2026-11-09 17:06 開始）<br/><span class="muted">§2.1 と §2.6 のチャートの箱の下に状態（✔ 完了・▶ 実行中・・ 未着手・✘ 失敗・■ 判断待ち・－ 対象外）。実行中の箱は橙の太枠。<code>retrain_ctl.py</code> が記録のたびに書き直す（手動は <code>retrain_ctl.py html</code>、§2.6 の箱は <code>retrain_ctl.py node 箱 状態 --note …</code>）。</span></div><!-- RETRAIN-STATUS:END -->
 <p class="sub">2026-11-06 に追記。「予測値を出すために学習するもの」と「計算・集計・結合で列を作るもの」を分ける。区分で守ることが変わる。</p>
 <div class="legend">
 <span style="color:#4ade80">■ A. モデリング（学習して予測値を出す）</span>
