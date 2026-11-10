@@ -103,7 +103,3 @@ data/dev_mock/
 
 # ensure_monitor.sh のロック
 .ensure_monitor.lock
-
-# 予想観念の受け皿（他者の文章を含みうるため中身は公開しない。README のみ管理）
-docs/ideas/inbox/*
-!docs/ideas/inbox/README.md
