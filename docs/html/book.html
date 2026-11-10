@@ -27175,7 +27175,7 @@ flowchart TB
 <tr><td>前段の他の版 a・b・c・d</td><td>a〜d（d は <code>s_adj_time / s_adj_l3f</code> を出す）</td><td>本番は e。<code>default_stage_dir</code> は <code>final_stage/v6_e_2025</code></td></tr>
 <tr><td>候補の群（<code>V5_GROUPS</code> に無い）</td><td>PT・GB・CB・OWNN・RS59・NJ・PB4・IMP・C1X・USR・TENKAI・TENKAI_NT・HEM・CUR・AUXH・AUXC・E2・E2R、LAP/LPX の独立列</td><td>評価で採用されなかった（独立列はすべて不採用。<code>v6_features</code> で RB と S3B のみ採用）</td></tr>
 <tr><td>表示専用</td><td>展開タイプ・ペース予測・想定めぐ指数・成長指数</td><td>画面用。1,231 列に含まれない</td></tr>
-<tr><td>めぐコラム・めぐ分析のデータ（未評価、2026-11-06 点検）</td><td>気象庁の時別値（過去走の風で上がり3F・時計偏差を補正）、走法軸 <code>run_axes</code>（10 軸、2024 年以降のみ）、走法マップの適性得点、種牡馬系統</td><td>どれも 1,231 列に無い。風は取得済みで再学習に同梱できる候補、走法軸・マップは被覆待ち（保留）。台帳は <a href="#ch-feature_gap_audit">特徴量のやり残しの棚卸し</a> の候補 14〜17</td></tr>
+<tr><td>めぐコラム・めぐ分析のデータ（未評価、2026-11-06 点検）</td><td>気象庁の時別値（過去走の風の補正は 2026-11-10 に評価して不採用）、走法軸 <code>run_axes</code>（10 軸、2024 年以降のみ）、走法マップの適性得点、種牡馬系統</td><td>どれも 1,231 列に無い。風は不採用（検定で残差に何も残っていない）、走法軸・マップは被覆待ち（保留）。台帳は <a href="#ch-feature_gap_audit">特徴量のやり残しの棚卸し</a> の候補 14〜17</td></tr>
 </table>
 
 <h3>2.5 親モデルの 7 メンバーと合成の重み</h3>
@@ -27218,7 +27218,6 @@ flowchart TB
     direction LR
     AS["<b>基礎能力 AS</b><br/>出力: めぐ指数の履歴 RB 16列<br/>馬自身の過去走の履歴 self8 199列"]
     APT["<b>適性マップの点数化 AAR</b><br/>出力: 条件ごとの適性の点<br/>(距離・コース・馬場・ペース・位置取り)"]
-    WIND["<b>過去走の風補正</b><br/>出力: 向かい風で補正した上がり3F・時計偏差の履歴"]
     AXES["<b>走法軸の履歴</b><br/>出力: 10軸の馬ごとの平均・直近・ばらつき（全年で作れる簡易版）"]
     INTX["<b>交互作用の探索</b><br/>出力: 単独で効かない軸 × 全列の組み合わせの検定"]
     STAT["<b>その他</b><br/>出力: 統計量・ターゲットエンコーディング<br/>騎手・調教師・馬主・血統の成績・出走メンバー構成<br/>追い切り・血統 ridge/SVD(PX)"]
@@ -27234,7 +27233,6 @@ flowchart TB
   RAW --> ODDS
   RAW --> AS
   RAW --> STAT
-  RAW --> WIND
   RAW --> AXES
   POS -->|"想定位置・z_hat を要求側の入力に"| EASE
   PACE -->|"想定ペース"| EASE
@@ -27249,7 +27247,6 @@ flowchart TB
   S3 ==>|"3 列を列に追加"| PARENT
   AS ==>|"履歴 215 列を列に追加"| PARENT
   APT -.->|"未評価（親モデルの入力として検証する）"| PARENT
-  WIND -.->|"評価予定（補助ヘッド・時計偏差の補正）"| PARENT
   AXES -.->|"評価予定（簡易版が本物と一致すれば）"| PARENT
   INTX -.->|"評価予定（単独で効かない軸 × 全列）"| PARENT
   STAT ==>|"約 990 列を列に追加（血統 PX 43 列を含む）"| PARENT
@@ -27264,7 +27261,7 @@ flowchart TB
   classDef plain fill:#15213c,stroke:#7a8ab8,color:#e6ecff;
   class PACE,ODDS,BIAS,EASE,S3,PARENT a;
   class POS,STAT,EXO,INTX b;
-  class AS,APT,WIND,AXES c;
+  class AS,APT,AXES c;
   class RAW,POST,FWD plain;
   style UP fill:#0f1f33,stroke:#3b5f99;
   style MID fill:#0f1f33,stroke:#3b5f99;
@@ -27281,7 +27278,6 @@ flowchart TB
   EASE["<b>追走難度 v2</b><br/>想定位置取りを取るのがきついか楽かを得点化<br/>出力: 終いの落ち EASE2_drain(秒)<br/>得点 EASE2_pct (0〜100。高いほど楽、50が標準)<br/><span>・ 未着手</span>"]
   AS["<b>基礎能力 AS</b><br/>出力: めぐ指数の履歴 RB 16列<br/>馬自身の過去走の履歴 self8 199列<br/><span>・ 未着手</span>"]
   APT["<b>適性マップの点数化 AAR</b><br/>出力: 条件ごとの適性の点<br/>(距離・コース・馬場・ペース・位置取り)<br/><span>（対象外の案・未採用）</span>"]
-  WIND["<b>過去走の風補正</b><br/>出力: 向かい風で補正した上がり3F・時計偏差の履歴<br/><span>・ 評価予定</span>"]
   AXES["<b>走法軸の履歴</b><br/>出力: 10軸の馬ごとの平均・直近・ばらつき（全年で作れる簡易版）<br/><span>・ 評価予定</span>"]
   INTX["<b>交互作用の探索</b><br/>出力: 単独で効かない軸 × 全列の組み合わせの検定<br/><span>・ 評価予定</span>"]
   STAT["<b>その他</b><br/>出力: 統計量・ターゲットエンコーディング<br/>騎手・調教師・馬主・血統の成績・出走メンバー構成<br/>追い切り・血統 ridge/SVD(PX)<br/><span>（対象外の案・未採用）</span>"]
