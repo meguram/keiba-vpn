@@ -27198,7 +27198,7 @@ flowchart TB
 <span style="color:#4ade80">■ A. モデリング（学習して予測値を出す）</span>
 <span style="color:#7aa9ff">■ B. 特徴量生成（計算・集計・結合）</span>
 <span style="color:#fbbf24">■ C. 境界（当てはめを伴う変換）</span>
-<span>破線 = 親モデルの入力にしない／未採用／未実施の案</span>
+<span>破線 = 親モデルの入力にしない／評価予定／未実施の案</span>
 </div>
 <div class="mermaid">
 %%{init: {"flowchart": {"nodeSpacing": 30, "rankSpacing": 70, "padding": 10}, "themeVariables": {"fontSize": "16px", "edgeLabelBackground": "#15213c"}}}%%
@@ -27218,6 +27218,9 @@ flowchart TB
     direction LR
     AS["<b>基礎能力 AS</b><br/>出力: めぐ指数の履歴 RB 16列<br/>馬自身の過去走の履歴 self8 199列"]
     APT["<b>適性マップの点数化 AAR</b><br/>出力: 条件ごとの適性の点<br/>(距離・コース・馬場・ペース・位置取り)"]
+    WIND["<b>過去走の風補正</b><br/>出力: 向かい風で補正した上がり3F・時計偏差の履歴"]
+    AXES["<b>走法軸の履歴</b><br/>出力: 10軸の馬ごとの平均・直近・ばらつき（全年で作れる簡易版）"]
+    INTX["<b>交互作用の探索</b><br/>出力: 単独で効かない軸 × 全列の組み合わせの検定"]
     STAT["<b>その他</b><br/>出力: 統計量・ターゲットエンコーディング<br/>騎手・調教師・馬主・血統の成績・出走メンバー構成<br/>追い切り・血統 ridge/SVD(PX)"]
   end
   S3["<b>前段 S3</b> (条件適用後の能力 APS に相当)<br/>出力: 予想走破時計 s_time_pred<br/>時計差 s_time_gap・予想順位 s_rank_pred"]
@@ -27231,6 +27234,8 @@ flowchart TB
   RAW --> ODDS
   RAW --> AS
   RAW --> STAT
+  RAW --> WIND
+  RAW --> AXES
   POS -->|"想定位置・z_hat を要求側の入力に"| EASE
   PACE -->|"想定ペース"| EASE
   POS --> APT
@@ -27244,6 +27249,9 @@ flowchart TB
   S3 ==>|"3 列を列に追加"| PARENT
   AS ==>|"履歴 215 列を列に追加"| PARENT
   APT -.->|"未評価（親モデルの入力として検証する）"| PARENT
+  WIND -.->|"評価予定（補助ヘッド・時計偏差の補正）"| PARENT
+  AXES -.->|"評価予定（簡易版が本物と一致すれば）"| PARENT
+  INTX -.->|"評価予定（単独で効かない軸 × 全列）"| PARENT
   STAT ==>|"約 990 列を列に追加（血統 PX 43 列を含む）"| PARENT
   PARENT ==>|"勝率・連対率・複勝率を入力に"| EXO
   PARENT ==>|"確率の較正に"| POST
@@ -27255,8 +27263,8 @@ flowchart TB
   classDef c fill:#4a3a10,stroke:#fbbf24,color:#e6ecff;
   classDef plain fill:#15213c,stroke:#7a8ab8,color:#e6ecff;
   class PACE,ODDS,BIAS,EASE,S3,PARENT a;
-  class POS,STAT,EXO b;
-  class AS,APT c;
+  class POS,STAT,EXO,INTX b;
+  class AS,APT,WIND,AXES c;
   class RAW,POST,FWD plain;
   style UP fill:#0f1f33,stroke:#3b5f99;
   style MID fill:#0f1f33,stroke:#3b5f99;
@@ -27273,6 +27281,9 @@ flowchart TB
   EASE["<b>追走難度 v2</b><br/>想定位置取りを取るのがきついか楽かを得点化<br/>出力: 終いの落ち EASE2_drain(秒)<br/>得点 EASE2_pct (0〜100。高いほど楽、50が標準)<br/><span>・ 未着手</span>"]
   AS["<b>基礎能力 AS</b><br/>出力: めぐ指数の履歴 RB 16列<br/>馬自身の過去走の履歴 self8 199列<br/><span>・ 未着手</span>"]
   APT["<b>適性マップの点数化 AAR</b><br/>出力: 条件ごとの適性の点<br/>(距離・コース・馬場・ペース・位置取り)<br/><span>（対象外の案・未採用）</span>"]
+  WIND["<b>過去走の風補正</b><br/>出力: 向かい風で補正した上がり3F・時計偏差の履歴<br/><span>・ 評価予定</span>"]
+  AXES["<b>走法軸の履歴</b><br/>出力: 10軸の馬ごとの平均・直近・ばらつき（全年で作れる簡易版）<br/><span>・ 評価予定</span>"]
+  INTX["<b>交互作用の探索</b><br/>出力: 単独で効かない軸 × 全列の組み合わせの検定<br/><span>・ 評価予定</span>"]
   STAT["<b>その他</b><br/>出力: 統計量・ターゲットエンコーディング<br/>騎手・調教師・馬主・血統の成績・出走メンバー構成<br/>追い切り・血統 ridge/SVD(PX)<br/><span>（対象外の案・未採用）</span>"]
   S3["<b>前段 S3</b> (条件適用後の能力 APS に相当)<br/>出力: 予想走破時計 s_time_pred<br/>時計差 s_time_gap・予想順位 s_rank_pred<br/><span>・ 未着手</span>"]
   PARENT["<b>下流（親モデル）</b> 7 メンバー × 5 seed<br/>出力: 勝率・連対率・複勝率<br/><span>・ 未着手</span>"]
@@ -27281,7 +27292,7 @@ flowchart TB
   FWD["予測保存・結果照合<br/>前向き検証<br/><span>・ 未着手</span>"]
   %% STATUS:END
 </div>
-<p class="sub">位置取り予想は、番手や初角順位を学習して予測する形に変えるなら A になる（判断待ち）。ペース予測の 5F と L3F 基準値、馬場の当日予測は未整備。追走難度の入力（位置取り予想・想定ペース）は B。S3 は図の「条件適用後の能力」にあたるが、独立した層にはしていない。太線 = 親モデルの列になる／馬券側に進む、破線 = 入らない・未採用・案。馬券組合せ確率は、親モデルの勝率・連対率・複勝率から<button type="button" class="gl-term" data-gl="harville" title="クリックで用語の説明を開く">割引 Harville</button> で計算する層（<code>exotic_probabilities.py</code>）が実装済みで。</p>
+<p class="sub">位置取り予想は、番手や初角順位を学習して予測する形に変えるなら A になる（判断待ち）。ペース予測の 5F と L3F 基準値は未整備（馬場の当日予測は合格済みだが、受け取る箱が適性マップの点数化だけで、親モデルへの上乗せは未評価）。追走難度の入力（位置取り予想・想定ペース）は B。S3 は図の「条件適用後の能力」にあたるが、独立した層にはしていない。太線 = 親モデルの列になる／馬券側に進む、破線 = 入らない・未採用・案。馬券組合せ確率は、親モデルの勝率・連対率・複勝率から<button type="button" class="gl-term" data-gl="harville" title="クリックで用語の説明を開く">割引 Harville</button> で計算する層（<code>exotic_probabilities.py</code>）が実装済みで。</p>
 <table>
 <tr><th>区分</th><th>意味</th><th>守ること</th></tr>
 <tr><td><b>A. モデリング</b></td><td>学習して予測値を出す</td><td>学習行は年ごとの LOYO の <b>OOF</b>、推論行は本番の保存値（§1）。上流を作り直したら下流もすべて作り直す</td></tr>
