@@ -163,7 +163,7 @@ def render_status(plan: dict, state: dict, html: str) -> str:
         return "pending", "（対象外の案・未採用）"
 
     html = _replace_chart_after(html, "<h3>2.1 チャート", lambda c: _chart_block(c, NODE_STEPS, status_21))
-    all26 = ["RAW", "POS", "PACE", "BIAS", "ODDS", "EASE", "AS", "APT", "GRP", "GST", "STAT", "S3", "PARENT", "EXO", "POST", "FWD"]
+    all26 = ["RAW", "POS", "PACE", "BIAS", "ODDS", "EASE", "AS", "APT", "STAT", "S3", "PARENT", "EXO", "POST", "FWD"]
     html = _replace_chart_after(html, "2.6 作るものの区分", lambda c: _chart_block(c, all26, status_26))
     # チャートの上の 1 行（いま何をしているか・進み・更新時刻）
     done = sum(1 for v in state["steps"].values() if v["status"] in DONE_LIKE)

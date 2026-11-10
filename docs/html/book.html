@@ -27218,8 +27218,6 @@ flowchart TB
     direction LR
     AS["<b>基礎能力 AS</b><br/>出力: めぐ指数の履歴 RB 16列<br/>馬自身の過去走の履歴 self8 199列"]
     APT["<b>適性マップの点数化 AAR</b><br/>出力: 条件ごとの適性の点<br/>(距離・コース・馬場・ペース・位置取り)"]
-    GRP["<b>適性グルーピング</b><br/>出力: 似た適性の馬のグループ"]
-    GST["グループ内の成績・近さ"]
     STAT["<b>その他</b><br/>出力: 統計量・ターゲットエンコーディング<br/>騎手・調教師・馬主・血統の成績・出走メンバー構成<br/>追い切り・血統 ridge/SVD(PX)"]
   end
   S3["<b>前段 S3</b> (条件適用後の能力 APS に相当)<br/>出力: 予想走破時計 s_time_pred<br/>時計差 s_time_gap・予想順位 s_rank_pred"]
@@ -27239,16 +27237,13 @@ flowchart TB
   PACE --> APT
   BIAS --> APT
   AS --> APT
-  APT --> GRP
-  GRP --> GST
   POS ==>|"pf_early・pf_rank・z_hat を入力に"| S3
   PACE ==>|"lp_p_*・lp_exp_* を入力に"| S3
   EASE ==>|"EASE2_drain/demand/capacity/pct を入力に"| S3
   PACE ==>|"補助ヘッド 9 本（ペース差・RPCI を含む）の 27 列を列に追加"| PARENT
   S3 ==>|"3 列を列に追加"| PARENT
   AS ==>|"履歴 215 列を列に追加"| PARENT
-  APT -.->|"要検討"| PARENT
-  GST -.->|"未採用(tp-60)"| PARENT
+  APT -.->|"未評価（親モデルの入力として検証する）"| PARENT
   STAT ==>|"約 990 列を列に追加（血統 PX 43 列を含む）"| PARENT
   PARENT ==>|"勝率・連対率・複勝率を入力に"| EXO
   PARENT ==>|"確率の較正に"| POST
@@ -27260,8 +27255,8 @@ flowchart TB
   classDef c fill:#4a3a10,stroke:#fbbf24,color:#e6ecff;
   classDef plain fill:#15213c,stroke:#7a8ab8,color:#e6ecff;
   class PACE,ODDS,BIAS,EASE,S3,PARENT a;
-  class POS,GST,STAT,EXO b;
-  class AS,APT,GRP c;
+  class POS,STAT,EXO b;
+  class AS,APT c;
   class RAW,POST,FWD plain;
   style UP fill:#0f1f33,stroke:#3b5f99;
   style MID fill:#0f1f33,stroke:#3b5f99;
@@ -27278,8 +27273,6 @@ flowchart TB
   EASE["<b>追走難度 v2</b><br/>想定位置取りを取るのがきついか楽かを得点化<br/>出力: 終いの落ち EASE2_drain(秒)<br/>得点 EASE2_pct (0〜100。高いほど楽、50が標準)<br/><span>・ 未着手</span>"]
   AS["<b>基礎能力 AS</b><br/>出力: めぐ指数の履歴 RB 16列<br/>馬自身の過去走の履歴 self8 199列<br/><span>・ 未着手</span>"]
   APT["<b>適性マップの点数化 AAR</b><br/>出力: 条件ごとの適性の点<br/>(距離・コース・馬場・ペース・位置取り)<br/><span>（対象外の案・未採用）</span>"]
-  GRP["<b>適性グルーピング</b><br/>出力: 似た適性の馬のグループ<br/><span>（対象外の案・未採用）</span>"]
-  GST["グループ内の成績・近さ<br/><span>（対象外の案・未採用）</span>"]
   STAT["<b>その他</b><br/>出力: 統計量・ターゲットエンコーディング<br/>騎手・調教師・馬主・血統の成績・出走メンバー構成<br/>追い切り・血統 ridge/SVD(PX)<br/><span>（対象外の案・未採用）</span>"]
   S3["<b>前段 S3</b> (条件適用後の能力 APS に相当)<br/>出力: 予想走破時計 s_time_pred<br/>時計差 s_time_gap・予想順位 s_rank_pred<br/><span>・ 未着手</span>"]
   PARENT["<b>下流（親モデル）</b> 7 メンバー × 5 seed<br/>出力: 勝率・連対率・複勝率<br/><span>・ 未着手</span>"]
@@ -27304,7 +27297,7 @@ flowchart TB
 <tr><td>追走難度 v2</td><td><b>A</b>（入力は B）</td><td><code>tp54</code>。入力は位置取り予想と想定ペース <code>z_hat</code>（先行勢の数・圧力から作る B）、馬柱から集計した過去 5 走の量。出力は、想定位置取りを取るときの「終いの落ち」（秒）の予測 <code>EASE2_drain</code> と、それを 0〜100 の得点にした <code>EASE2_pct</code>（高いほど楽、50 が標準、60 以上で楽、30 未満で大変）。前走比 <code>EASE2_vs_prev</code> は本番から再現できず S3 から外している</td><td>S3 の入力のみ（得点は画面にも出せる）</td></tr>
 <tr><td>前段 S3</td><td><b>A</b></td><td>入力 275 列、出力 3 列（§2.2）</td><td>3 列が直接入る</td></tr>
 <tr><td>適性マップの点数化</td><td><b>C</b></td><td>走法の座標と好走ゾーンは、過去レースの統計の当てはめ（走法マップ）。表示用の Best5 もこれから作る</td><td>親モデルの列には入っていない（要検討）</td></tr>
-<tr><td>適性グルーピング（似た馬を近い着順として扱う）</td><td><b>C</b></td><td>教師なしの分類。グループ内の成績・近さの集計は B</td><td>未採用（評価で効果が弱かった。tp-60）</td></tr>
+<tr><td>適性グルーピング（似た馬を近い着順として扱う）</td><td><b>C</b></td><td>教師なしの分類。グループ内の成績・近さの集計は B</td><td>不採用（評価で効果が弱かった。tp-60）。検証済みのためチャートから外した</td></tr>
 <tr><td>統計量、ターゲットエンコーディング、騎手・調教師・馬主・血統の成績</td><td><b>B</b></td><td>「その他」248 列、<code>v4:self8</code>・<code>field7</code>・<code>owner</code>・<code>ped</code>、<code>tl_</code>、<code>CY</code></td><td>直接入る</td></tr>
 <tr><td>血統の ridge/SVD（PX）</td><td><b>C</b></td><td>tp-38</td><td>43 列が直接入る</td></tr>
 <tr><td>めぐ指数 v3a の履歴（RB）</td><td><b>C</b></td><td>基準値を当て込んだ指数の履歴（段 1・8）</td><td>16 列が直接入る</td></tr>
