@@ -27208,7 +27208,6 @@ flowchart TB
     direction LR
     POS["<b>位置取り予想</b> (今は馬柱の集計 = B)<br/>出力: 想定位置 pf_early・想定順位 pf_rank<br/>脚質・先行馬の数と圧力から想定ペース z_hat"]
     PACE["<b>ペース・展開の確率</b><br/>出力: ペース型の確率 lp_p_slow/mid/high<br/>前半・上がりの偏差 lp_exp_*<br/>補助ヘッド: ペース差 mtl_r_pace_bal・RPCI mtl_r_rpci<br/>(5F・L3F基準は未整備)"]
-    BIAS["<b>馬場の当日予測</b> (案)<br/>出力: 当日の傾向・適用可否"]
     ODDS["<b>オッズ予測</b><br/>出力: 想定単勝・複勝オッズ<br/>(下限〜上限)"]
   end
   subgraph MID["中流"]
@@ -27217,7 +27216,6 @@ flowchart TB
   subgraph FEAT["特徴量生成・能力"]
     direction LR
     AS["<b>基礎能力 AS</b><br/>出力: めぐ指数の履歴 RB 16列<br/>馬自身の過去走の履歴 self8 199列"]
-    APT["<b>適性マップの点数化 AAR</b><br/>出力: 条件ごとの適性の点<br/>(距離・コース・馬場・ペース・位置取り)"]
     INTX["<b>交互作用の探索</b><br/>出力: 単独で効かない軸 × 全列の組み合わせの検定"]
     STAT["<b>その他</b><br/>出力: 統計量・ターゲットエンコーディング<br/>騎手・調教師・馬主・血統の成績・出走メンバー構成<br/>追い切り・血統 ridge/SVD(PX)"]
   end
@@ -27228,23 +27226,17 @@ flowchart TB
   FWD["予測保存・結果照合<br/>前向き検証"]
   RAW --> POS
   RAW --> PACE
-  RAW --> BIAS
   RAW --> ODDS
   RAW --> AS
   RAW --> STAT
   POS -->|"想定位置・z_hat を要求側の入力に"| EASE
   PACE -->|"想定ペース"| EASE
-  POS --> APT
-  PACE --> APT
-  BIAS --> APT
-  AS --> APT
   POS ==>|"pf_early・pf_rank・z_hat を入力に"| S3
   PACE ==>|"lp_p_*・lp_exp_* を入力に"| S3
   EASE ==>|"EASE2_drain/demand/capacity/pct を入力に"| S3
   PACE ==>|"補助ヘッド 9 本（ペース差・RPCI を含む）の 27 列を列に追加"| PARENT
   S3 ==>|"3 列を列に追加"| PARENT
   AS ==>|"履歴 215 列を列に追加"| PARENT
-  APT -.->|"未評価（親モデルの入力として検証する）"| PARENT
   INTX -.->|"評価予定（単独で効かない軸 × 全列）"| PARENT
   STAT ==>|"約 990 列を列に追加（血統 PX 43 列を含む）"| PARENT
   PARENT ==>|"勝率・連対率・複勝率を入力に"| EXO
@@ -27256,9 +27248,9 @@ flowchart TB
   classDef b fill:#1e3a5f,stroke:#7aa9ff,color:#e6ecff;
   classDef c fill:#4a3a10,stroke:#fbbf24,color:#e6ecff;
   classDef plain fill:#15213c,stroke:#7a8ab8,color:#e6ecff;
-  class PACE,ODDS,BIAS,EASE,S3,PARENT a;
+  class PACE,ODDS,EASE,S3,PARENT a;
   class POS,STAT,EXO,INTX b;
-  class AS,APT c;
+  class AS c;
   class RAW,POST,FWD plain;
   style UP fill:#0f1f33,stroke:#3b5f99;
   style MID fill:#0f1f33,stroke:#3b5f99;
@@ -27270,11 +27262,9 @@ flowchart TB
   RAW["<b>入力データ</b><br/>結果・出馬表・馬柱・血統・追い切り・馬場<br/><span>・ 未着手</span>"]
   POS["<b>位置取り予想</b> (今は馬柱の集計 = B)<br/>出力: 想定位置 pf_early・想定順位 pf_rank<br/>脚質・先行馬の数と圧力から想定ペース z_hat<br/><span>・ 未着手</span>"]
   PACE["<b>ペース・展開の確率</b><br/>出力: ペース型の確率 lp_p_slow/mid/high<br/>前半・上がりの偏差 lp_exp_*<br/>補助ヘッド: ペース差 mtl_r_pace_bal・RPCI mtl_r_rpci<br/>(5F・L3F基準は未整備)<br/><span>・ 未着手</span>"]
-  BIAS["<b>馬場の当日予測</b> (案)<br/>出力: 当日の傾向・適用可否<br/><span>（対象外の案・未採用）</span>"]
   ODDS["<b>オッズ予測</b><br/>出力: 想定単勝・複勝オッズ<br/>(下限〜上限)<br/><span>（対象外の案・未採用）</span>"]
   EASE["<b>追走難度 v2</b><br/>想定位置取りを取るのがきついか楽かを得点化<br/>出力: 終いの落ち EASE2_drain(秒)<br/>得点 EASE2_pct (0〜100。高いほど楽、50が標準)<br/><span>・ 未着手</span>"]
   AS["<b>基礎能力 AS</b><br/>出力: めぐ指数の履歴 RB 16列<br/>馬自身の過去走の履歴 self8 199列<br/><span>・ 未着手</span>"]
-  APT["<b>適性マップの点数化 AAR</b><br/>出力: 条件ごとの適性の点<br/>(距離・コース・馬場・ペース・位置取り)<br/><span>（対象外の案・未採用）</span>"]
   INTX["<b>交互作用の探索</b><br/>出力: 単独で効かない軸 × 全列の組み合わせの検定<br/><span>・ 評価予定</span>"]
   STAT["<b>その他</b><br/>出力: 統計量・ターゲットエンコーディング<br/>騎手・調教師・馬主・血統の成績・出走メンバー構成<br/>追い切り・血統 ridge/SVD(PX)<br/><span>（対象外の案・未採用）</span>"]
   S3["<b>前段 S3</b> (条件適用後の能力 APS に相当)<br/>出力: 予想走破時計 s_time_pred<br/>時計差 s_time_gap・予想順位 s_rank_pred<br/><span>・ 未着手</span>"]
@@ -27284,7 +27274,7 @@ flowchart TB
   FWD["予測保存・結果照合<br/>前向き検証<br/><span>・ 未着手</span>"]
   %% STATUS:END
 </div>
-<p class="sub">位置取り予想は、番手や初角順位を学習して予測する形に変えるなら A になる（判断待ち）。ペース予測の 5F と L3F 基準値は未整備（馬場の当日予測は合格済みだが、受け取る箱が適性マップの点数化だけで、親モデルへの上乗せは未評価）。追走難度の入力（位置取り予想・想定ペース）は B。S3 は図の「条件適用後の能力」にあたるが、独立した層にはしていない。太線 = 親モデルの列になる／馬券側に進む、破線 = 入らない・未採用・案。馬券組合せ確率は、親モデルの勝率・連対率・複勝率から<button type="button" class="gl-term" data-gl="harville" title="クリックで用語の説明を開く">割引 Harville</button> で計算する層（<code>exotic_probabilities.py</code>）が実装済みで。</p>
+<p class="sub">位置取り予想は、番手や初角順位を学習して予測する形に変えるなら A になる（判断待ち）。ペース予測の 5F と L3F 基準値は未整備（馬場の当日予測・適性マップの点数化・レース質は、親モデルの追加列として評価して不採用にした。2026-11-10）。追走難度の入力（位置取り予想・想定ペース）は B。S3 は図の「条件適用後の能力」にあたるが、独立した層にはしていない。太線 = 親モデルの列になる／馬券側に進む、破線 = 入らない・未採用・案。馬券組合せ確率は、親モデルの勝率・連対率・複勝率から<button type="button" class="gl-term" data-gl="harville" title="クリックで用語の説明を開く">割引 Harville</button> で計算する層（<code>exotic_probabilities.py</code>）が実装済みで。</p>
 <table>
 <tr><th>区分</th><th>意味</th><th>守ること</th></tr>
 <tr><td><b>A. モデリング</b></td><td>学習して予測値を出す</td><td>学習行は年ごとの LOYO の <b>OOF</b>、推論行は本番の保存値（§1）。上流を作り直したら下流もすべて作り直す</td></tr>
@@ -27299,7 +27289,7 @@ flowchart TB
 <tr><td>オッズ予測（単勝・複勝の下限〜上限）</td><td><b>A</b>（親モデルの入力にしない）</td><td><code>odds_pred</code>・<code>final_odds_bundle</code>。市場オッズは特徴量にしない方針（§1）なので、較正・期待値・買い目の層だけで使う</td><td>入れない</td></tr>
 <tr><td>追走難度 v2</td><td><b>A</b>（入力は B）</td><td><code>tp54</code>。入力は位置取り予想と想定ペース <code>z_hat</code>（先行勢の数・圧力から作る B）、馬柱から集計した過去 5 走の量。出力は、想定位置取りを取るときの「終いの落ち」（秒）の予測 <code>EASE2_drain</code> と、それを 0〜100 の得点にした <code>EASE2_pct</code>（高いほど楽、50 が標準、60 以上で楽、30 未満で大変）。前走比 <code>EASE2_vs_prev</code> は本番から再現できず S3 から外している</td><td>S3 の入力のみ（得点は画面にも出せる）</td></tr>
 <tr><td>前段 S3</td><td><b>A</b></td><td>入力 275 列、出力 3 列（§2.2）</td><td>3 列が直接入る</td></tr>
-<tr><td>適性マップの点数化</td><td><b>C</b></td><td>走法の座標と好走ゾーンは、過去レースの統計の当てはめ（走法マップ）。表示用の Best5 もこれから作る</td><td>親モデルの列には入っていない（要検討）</td></tr>
+<tr><td>適性マップの点数化</td><td><b>C</b></td><td>走法の座標と好走ゾーンは、過去レースの統計の当てはめ（走法マップ）。表示用の Best5 もこれから作る</td><td>不採用（親モデルの残差に何も残らなかった。2026-11-10）。検証済みのためチャートから外した</td></tr>
 <tr><td>適性グルーピング（似た馬を近い着順として扱う）</td><td><b>C</b></td><td>教師なしの分類。グループ内の成績・近さの集計は B</td><td>不採用（評価で効果が弱かった。tp-60）。検証済みのためチャートから外した</td></tr>
 <tr><td>統計量、ターゲットエンコーディング、騎手・調教師・馬主・血統の成績</td><td><b>B</b></td><td>「その他」248 列、<code>v4:self8</code>・<code>field7</code>・<code>owner</code>・<code>ped</code>、<code>tl_</code>、<code>CY</code></td><td>直接入る</td></tr>
 <tr><td>血統の ridge/SVD（PX）</td><td><b>C</b></td><td>tp-38</td><td>43 列が直接入る</td></tr>
@@ -27308,7 +27298,7 @@ flowchart TB
 <tr><td>レースシミュレーション</td><td><b>D</b>（見送り）</td><td>未実装。MB60 を予想位置取りで傾ける検定（<code>exotic_pair_corr_test.py</code>）で馬連・3連複とも改善 0.001 未満。Thurstone 型は比較済み（MB60 に劣る）</td><td>入れない</td></tr>
 <tr><td>下流（勝率・連対率・複勝率）</td><td><b>A</b></td><td>親モデル 7 メンバー（§2.5）</td><td>—</td></tr>
 </table>
-<p class="sub">追加の候補（案。未実施）：馬場の当日予測＝A／同型の競合・距離ロス＝B／乗り替わり・陣営の意図＝B／ラップ形状・走破時計＝A／状態の上げ下げ＝B／完走確率・成績のばらつき＝A／少走数馬の専用層＝A／血統の事前分布＝C（予測値にするなら A）。</p>
+<p class="sub">追加の候補（案。未実施）：同型の競合・距離ロス＝B／乗り替わり・陣営の意図＝B／ラップ形状・走破時計＝A／状態の上げ下げ＝B／完走確率・成績のばらつき＝A／少走数馬の専用層＝A／血統の事前分布＝C（予測値にするなら A）。</p>
 
 <h3>2.7 データの年範囲（2016〜2019 年を使うとき）</h3>
 <p class="sub">2026-11-06 に追記。補填（<code>backfill.py</code>）で取得した 2016〜2019 年を使うための確認結果。<code>TRAINING_YEARS</code>（2020〜2025）と <code>FIT_END</code> は現状のコードに固定されている。</p>
