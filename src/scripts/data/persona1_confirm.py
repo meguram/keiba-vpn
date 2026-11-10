@@ -87,7 +87,8 @@ def run_c2(test: pd.DataFrame, years: list[int], rng: np.random.Generator) -> di
 
 def prep(path: Path) -> pd.DataFrame:
     d = pd.read_parquet(path)
-    d = d[(d["win_odds"] > 0) & d["ret_win"].notna() & d["ret_place"].notna()].copy()
+    d = d[(d["win_odds"] > 0) & d["ret_win"].notna()].copy()
+    d["ret_place"] = d["ret_place"].fillna(0)      # 複勝は C1・C2 では使わない。2026 年の行は複勝の列が空なので、欠けても行を落とさない
     d["race_id"] = d["race_id"].astype(str)
     d["year"] = pd.to_datetime(d["date"]).dt.year
     for c in ("ret_win", "ret_place"):
