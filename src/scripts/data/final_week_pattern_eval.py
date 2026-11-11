@@ -31,7 +31,7 @@ HOLDOUT = 2025
 
 
 def load(laps: Path, table: Path) -> pd.DataFrame:
-    t = pd.read_parquet(table, columns=["race_id", "date", "surface", "field_size", "horse_id", "trainer_id", "trainer_name", "finish_position"])
+    t = pd.read_parquet(table, columns=["race_id", "date", "surface", "distance", "field_size", "horse_id", "trainer_id", "trainer_name", "finish_position"])
     t = t[t["surface"].astype(str).isin(["芝", "ダート"]) & (t["finish_position"] > 0) & (t["date"].astype(str) < "2026-01-01")].copy()
     t["race_id"], t["horse_id"], t["trainer_id"] = t["race_id"].astype(str), t["horse_id"].astype(str), t["trainer_id"].astype(str)
     t["trainer_name"] = t["trainer_name"].astype(str)
