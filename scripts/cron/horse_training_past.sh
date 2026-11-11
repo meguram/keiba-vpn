@@ -15,6 +15,9 @@ if ! flock -n 9; then echo "[$(date -Is)] すでに実行中。スキップ" >>"
 for try in 1 2 3 4; do
   echo "===== $(date -Is) START =====" >>"$LOG"
   # 同時に取得するのは自分を含めて 1 本（他のプロセスがスロットを持っている間は待つ）
+  # クライアントの間隔（2.2〜4 秒）はそのまま。それに重ねている追加の待ち（ページ間・1 頭ごと）だけ短くする
+  HORSE_TRAINING_INTER_PAGE_MIN_SEC="${HORSE_TRAINING_INTER_PAGE_MIN_SEC:-0.2}" HORSE_TRAINING_INTER_PAGE_MAX_SEC="${HORSE_TRAINING_INTER_PAGE_MAX_SEC:-0.6}" \
+  HORSE_TRAINING_BACKFILL_MIN_SEC="${HORSE_TRAINING_BACKFILL_MIN_SEC:-0.2}" HORSE_TRAINING_BACKFILL_MAX_SEC="${HORSE_TRAINING_BACKFILL_MAX_SEC:-0.6}" \
   NETKEIBA_GLOBAL_MAX_SLOTS="${NETKEIBA_GLOBAL_MAX_SLOTS:-1}" KEIBA_ENV="${KEIBA_ENV:-stg}" PYTHONPATH=. nice -n 10 "$PY" -m src.scripts.scraping.backfill_horse_training_past \
     --horses-file "${TRAINING_PAST_HORSES:-data/local/meta/horse_training_past_targets.parquet}" --limit "${TRAINING_PAST_LIMIT:-0}" >>"$LOG" 2>&1
   rc=$?

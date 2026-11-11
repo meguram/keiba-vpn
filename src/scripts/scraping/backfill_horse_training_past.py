@@ -25,6 +25,7 @@ from src.scripts.scraping.backfill_horse_training_recent import EXTRA_SLEEP, wai
 ROOT = Path(__file__).resolve().parents[3]
 PROGRESS = ROOT / "data/local/meta/horse_training_past_progress.json"
 STATUSES = ("saved", "empty", "error")
+CUTOFF = "2015-01-01"     # 最終追い切りの集計は 2016 年以降。ページ内の最古の調教がこれより前になったら、次のページは取らない（1 年の余白）
 MAX_EMPTY_STREAK = 20     # 調教なしの馬が続くのは異常（ログイン切れ・軟ブロックの疑い）
 MAX_WAIT_SEC = 6 * 3600   # 開催日ランナー等が長く動く日があるので、待つ上限は長めにとる
 
@@ -59,13 +60,18 @@ def pages_of(result: dict | None) -> int:
     return max(1, int((result or {}).get("pages_fetched") or 1))
 
 
+class StopPaging(RuntimeError):
+    """打ち切りの日付に届いたので、次のページは取らない（scrape_horse_training は 2 ページ目以降の例外で止まる）。"""
+
+
 class PartialFetch(RuntimeError):
     """2 ページ目以降が取れなかった・アクセス制限を検知した。途中までの記録で上書きしないための例外。"""
 
 
-def guard_persist(runner, guard) -> None:
-    """runner の取得と保存を包む。1 ページ以上取れたあとに取得が失敗した馬、制限を検知した馬は保存しない。"""
-    state = {"ok": 0, "failed": False}
+def guard_persist(runner, guard, cutoff: str = "") -> None:
+    """runner の取得と保存を包む。1 ページ以上取れたあとに取得が失敗した馬、制限を検知した馬は保存しない。
+    cutoff（YYYY-MM-DD）を渡すと、ページ内の最古の調教日がそれより前になった時点で、次のページを取らずに打ち切って保存する。"""
+    state = {"ok": 0, "failed": False, "cut": False, "stopped": False}
     fetch, persist = runner.client.fetch, runner._persist_horse_training
     storage = getattr(runner, "storage", None)
     if storage is not None:
@@ -79,7 +85,23 @@ def guard_persist(runner, guard) -> None:
 
         storage.save = save_
 
+    parser = getattr(runner, "training_parser", None)
+    if cutoff and parser is not None:
+        parse = parser.parse
+
+        def parse_(*a, **k):
+            data = parse(*a, **k)
+            dates = [str(e.get("date") or "")[:10] for e in (data or {}).get("entries", [])]
+            dates = [d for d in dates if len(d) == 10]
+            state["cut"] = state["cut"] or bool(dates and min(dates) < cutoff)
+            return data
+
+        parser.parse = parse_
+
     def fetch_(*a, **k):
+        if state["cut"] and state["ok"] > 0:
+            state["stopped"] = True
+            raise StopPaging("打ち切りの日付に届いた")
         try:
             r = fetch(*a, **k)
         except BaseException:
@@ -89,10 +111,14 @@ def guard_persist(runner, guard) -> None:
         return r
 
     def persist_(hid, result):
-        failed, ok, state["ok"], state["failed"] = state["failed"], state["ok"], 0, False
+        failed, ok, stopped = state["failed"], state["ok"], state["stopped"]
+        state.update(ok=0, failed=False, cut=False, stopped=False)
         if guard.tripped is not None:
             raise guard.tripped
-        if failed or (ok and int((result or {}).get("pages_fetched") or 1) > ok):   # 例外なしの空ページで打ち切った場合も含む
+        if stopped:   # 意図した打ち切り: 取れたページ数と打ち切りの日付を記録に残す
+            failed = False
+            result["pages_fetched"], result["truncated_before"] = ok, cutoff
+        elif failed or (ok and int((result or {}).get("pages_fetched") or 1) > ok):   # 例外なしの空ページで打ち切った場合も含む
             raise PartialFetch(f"{hid}: 2 ページ目以降が取れなかったので保存しない")
         persist(hid, result)
 
@@ -104,6 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--horses-file", required=True, help="対象の馬 ID（parquet の horse_id 列、または 1 行 1 頭のテキスト）")
     ap.add_argument("--limit", type=int, default=0, help="今回取得する馬数の上限（パイロット用。0 は残り全部）")
+    ap.add_argument("--cutoff", default=CUTOFF, help="この日付より前の調教しか無いページは取らない（空文字で全ページ取る）")
     ap.add_argument("--retry-failed", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="対象数と所要時間の見積もりだけ")
     a = ap.parse_args(argv)
@@ -125,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
     runner = ScraperRunner()
     guard = AccessGuard(statuses={400, 403, 429}, watch_transport_errors=False)
     guard.__enter__()
-    guard_persist(runner, guard)
+    guard_persist(runner, guard, a.cutoff)
     try:
         prog["total"] = len(horses)
         prog.pop("aborted", None)
@@ -154,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(prog["aborted"], flush=True)
                 return 3
             except Exception as e:  # noqa: BLE001
-                runner._guard_state.update(ok=0, failed=False)
+                runner._guard_state.update(ok=0, failed=False, cut=False, stopped=False)
                 print(f"失敗 {hid}: {e}", flush=True)
             done += 1
             prog["done"][hid] = status

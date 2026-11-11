@@ -198,3 +198,38 @@ def test_counts_are_recomputed_from_done_on_retry(monkeypatch, tmp_path):
     assert p["counts"]["error"] == 1
     rc, p = _run(monkeypatch, tmp_path, ids, _Runner(), ["--retry-failed"])
     assert p["counts"] == {"saved": 2, "empty": 0, "error": 0}
+
+
+def test_cutoff_stops_paging_and_records_truncation():
+    pages = [["2016-05-01", "2016-04-01"], ["2015-03-01", "2014-12-20"], ["2013-01-01"], ["2012-01-01"]]
+
+    class _P:
+        def __init__(self):
+            self.i = 0
+
+        def parse(self, html, **k):
+            self.i += 1
+            return {"entries": [{"date": d} for d in pages[self.i - 1]]}
+
+    r = _G()
+    r.training_parser = _P()
+    B.guard_persist(r, _Guard(), cutoff="2015-01-01")
+    got = 0
+    for _ in range(4):   # scrape_horse_training と同じ: 取得 → 解析、2 ページ目以降の例外で止まる
+        try:
+            r.client.fetch("u")
+        except B.StopPaging:
+            break
+        r.training_parser.parse("h")
+        got += 1
+    assert got == 2   # 2 ページ目に 2014-12-20 が入っていたので 3 ページ目は取らない
+    res = {"entries": [{}], "pages_fetched": 4}
+    r._persist_horse_training("h", res)
+    assert r.saved == ["h"] and res["pages_fetched"] == 2 and res["truncated_before"] == "2015-01-01"
+
+
+def test_cutoff_off_by_default():
+    r = _G()
+    B.guard_persist(r, _Guard())
+    r.client.fetch("u")
+    r.client.fetch("u")
