@@ -22,7 +22,11 @@ const SORTS = [
   { key: "rate-desc" as const, label: "好走率が高い順" },
   { key: "rate-asc" as const, label: "好走率が低い順" },
   { key: "n-desc" as const, label: "出た数が多い順" },
+  { key: "win-desc" as const, label: "単勝回収率が高い順" },
+  { key: "place-desc" as const, label: "複勝回収率が高い順" },
 ];
+type SortKey = (typeof SORTS)[number]["key"];
+const pct0 = (v: number) => `${Math.round(v * 100)}%`;
 const MODES = [{ key: "lift" as const, label: "そのままの倍率" }, { key: "adj" as const, label: "人気をそろえた倍率" }];
 
 export function ColumnWordcloud({ block }: { block: ColumnWordcloudBlock }) {
@@ -30,12 +34,12 @@ export function ColumnWordcloud({ block }: { block: ColumnWordcloudBlock }) {
   const [mode, setMode] = useState<"lift" | "adj">("lift");
   const [sel, setSel] = useState<WordcloudItem | null>(null);
   const [view, setView] = useState<"cloud" | "list">("cloud");
-  const [sort, setSort] = useState<"rate-desc" | "rate-asc" | "n-desc">("rate-desc");
+  const [sort, setSort] = useState<SortKey>("rate-desc");
   const d = narrow ? block.narrow : block.wide;
   const dim: React.CSSProperties = { color: "var(--text-dim)", fontSize: 12 };
   const pill = (on: boolean): React.CSSProperties => ({ padding: "4px 12px", borderRadius: 999, fontSize: 13, cursor: "pointer",
     border: "1px solid " + (on ? "var(--accent)" : "var(--border)"), background: on ? "var(--accent)" : "transparent", color: on ? "#fff" : "var(--text)" });
-  const rows = [...block.wide.items].sort((a, b) => (sort === "rate-desc" ? b.rate - a.rate : sort === "rate-asc" ? a.rate - b.rate : b.n - a.n));
+  const rows = [...block.wide.items].sort((a, b) => (sort === "rate-desc" ? b.rate - a.rate : sort === "rate-asc" ? a.rate - b.rate : sort === "win-desc" ? b.win - a.win : sort === "place-desc" ? b.place - a.place : b.n - a.n));
   const maxRate = Math.max(...rows.map((r) => r.rate), block.base);
   return (
     <figure className="card" style={{ padding: "12px 12px 10px" }}>
@@ -57,8 +61,16 @@ export function ColumnWordcloud({ block }: { block: ColumnWordcloudBlock }) {
             ))}
           </div>
           <div style={{ maxHeight: 460, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 8px" }}>
+            {(() => {
+              const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: narrow ? "18px minmax(64px, 1fr) 0.6fr 40px 34px 34px 38px" : "26px minmax(90px, 1.1fr) 3fr 52px 52px 52px 64px", gap: narrow ? 5 : 8, alignItems: "center", fontSize: narrow ? 12 : 13, padding: "2px 0" };
+              return (
+                <div style={{ ...grid, ...dim, fontSize: 11, position: "sticky", top: -6, background: "var(--bg)" }}>
+                  <span /><span>語・句</span><span /><span style={{ textAlign: "right" }}>3着内</span><span style={{ textAlign: "right" }}>単勝</span><span style={{ textAlign: "right" }}>複勝</span><span style={{ textAlign: "right" }}>数</span>
+                </div>
+              );
+            })()}
             {rows.map((r, i) => (
-              <div key={r.label} style={{ display: "grid", gridTemplateColumns: narrow ? "20px minmax(70px, 1fr) 1fr 44px 44px" : "26px minmax(90px, 1.1fr) 3fr 52px 64px", gap: 8, alignItems: "center", fontSize: 13, padding: "2px 0" }}>
+              <div key={r.label} style={{ display: "grid", gridTemplateColumns: narrow ? "18px minmax(64px, 1fr) 0.6fr 40px 34px 34px 38px" : "26px minmax(90px, 1.1fr) 3fr 52px 52px 52px 64px", gap: narrow ? 5 : 8, alignItems: "center", fontSize: narrow ? 12 : 13, padding: "2px 0" }}>
                 <span style={dim}>{i + 1}</span>
                 <span style={{ color: colorOf(r[mode]), fontWeight: 600 }}>{r.label}</span>
                 <span style={{ position: "relative", height: 10, background: "rgba(139,148,158,0.15)", borderRadius: 5 }}>
@@ -66,11 +78,13 @@ export function ColumnWordcloud({ block }: { block: ColumnWordcloudBlock }) {
                   <span style={{ position: "absolute", top: -3, bottom: -3, left: `${(block.base / maxRate) * 100}%`, borderLeft: "1px dashed var(--text-dim)" }} />
                 </span>
                 <span className="font-mono" style={{ textAlign: "right" }}>{(r.rate * 100).toFixed(1)}%</span>
+                <span className="font-mono" style={{ textAlign: "right", fontWeight: r.win >= 1 ? 700 : 400 }}>{pct0(r.win)}</span>
+                <span className="font-mono" style={{ textAlign: "right", fontWeight: r.place >= 1 ? 700 : 400 }}>{pct0(r.place)}</span>
                 <span className="font-mono" style={{ textAlign: "right", ...dim }}>{r.n.toLocaleString("en-US")}</span>
               </div>
             ))}
           </div>
-          <p style={{ ...dim, marginTop: 6 }}>棒 = その語を含む馬の3着以内率、点線 = 全体（{(block.base * 100).toFixed(1)}%）、色は上のボタンで選んだ倍率。右端は出た数。</p>
+          <p style={{ ...dim, marginTop: 6 }}>棒 = その語を含む馬の3着以内率、点線 = 全体（{(block.base * 100).toFixed(1)}%）、色は上のボタンで選んだ倍率。単勝・複勝 = その語の馬を毎回100円買い続けた回収率（太字 = 100%超。出た数が少ないとぶれる）、右端は出た数。</p>
         </>
       )}
       {view === "cloud" && (<>
@@ -81,14 +95,14 @@ export function ColumnWordcloud({ block }: { block: ColumnWordcloudBlock }) {
           <text key={it.label} x={it.x} y={it.y} fontSize={it.size} fill={colorOf(it[mode])} textAnchor="middle"
             dominantBaseline="central" fontWeight={it.size > 34 ? 700 : 500} style={{ cursor: "pointer" }}
             onClick={(e) => { e.stopPropagation(); setSel(it); }}>
-            <title>{`${it.label}\n出た数 ${it.n.toLocaleString("en-US")} / 3着以内 ${(it.rate * 100).toFixed(1)}%（全体 ${(block.base * 100).toFixed(1)}%）\n倍率 ${it.lift.toFixed(2)} / 人気をそろえた倍率 ${it.adj.toFixed(2)}`}</title>
+            <title>{`${it.label}\n出た数 ${it.n.toLocaleString("en-US")} / 3着以内 ${(it.rate * 100).toFixed(1)}%（全体 ${(block.base * 100).toFixed(1)}%）\n倍率 ${it.lift.toFixed(2)} / 人気をそろえた倍率 ${it.adj.toFixed(2)}\n単勝回収率 ${pct0(it.win)} / 複勝回収率 ${pct0(it.place)}`}</title>
             {it.label}
           </text>
         ))}
       </svg>
       <p className="text-sm" style={{ ...dim, minHeight: 22, marginTop: 6 }}>
         {sel
-          ? `「${sel.label}」 出た数 ${sel.n.toLocaleString("en-US")} ・ 3着以内 ${(sel.rate * 100).toFixed(1)}%（全体 ${(block.base * 100).toFixed(1)}%） ・ 倍率 ${sel.lift.toFixed(2)} ・ 人気をそろえた倍率 ${sel.adj.toFixed(2)}`
+          ? `「${sel.label}」 出た数 ${sel.n.toLocaleString("en-US")} ・ 3着以内 ${(sel.rate * 100).toFixed(1)}%（全体 ${(block.base * 100).toFixed(1)}%） ・ 倍率 ${sel.lift.toFixed(2)} ・ 人気をそろえた倍率 ${sel.adj.toFixed(2)} ・ 単勝回収率 ${pct0(sel.win)} ・ 複勝回収率 ${pct0(sel.place)}`
           : "語をタップすると数値が出ます。"}
       </p>
       </>)}
