@@ -179,7 +179,7 @@ if(r.classList.contains("p")){k.push([]);ps.push(k)}else ps[ps.length-1][2].push
 ps.sort(cmp(d));ps.forEach(function(p){b.appendChild(p[0]);p[2].sort(cmp(d)).forEach(function(q){b.appendChild(q[0])})});T.appendChild(b)})}});})();</script>"""
 
 
-LAP_DESC = {"A3": "11秒台以下で加速", "A2": "12秒台で加速", "A1": "終いのみ12秒台で加速", "B3": "11秒台以下で減速", "B2": "12秒台で減速", "B1": "手前のみ12秒台で減速", "X": "終い2Fとも13秒以上"}   # tp35_lap_groups.classify_lap の定義
+LAP_DESC = {"A3": "終いが11秒台以下で加速", "A2": "終い・手前とも12秒台で加速", "A1": "終い12秒台・手前13秒以上で加速", "B3": "手前が11秒台以下で減速", "B2": "終い・手前とも12秒台で減速", "B1": "手前12秒台・終い13秒以上で減速", "X": "終い・手前とも13秒以上"}   # tp35_lap_groups.classify_lap の定義
 DUP = 2.0   # 1 頭あたりの出走回数がこれ以上の行は、同じ馬が何度も数えられているとして橙で示す
 
 

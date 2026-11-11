@@ -225,5 +225,5 @@ def test_html_block_explains_slope_lap_patterns_only_on_slope_rows():
     def row(pat):
         return {"調教師ID": "t", "調教師": "x", "調教パターン": pat, "出走数": 5, "1着": 0, "2着": 0, "3着": 0, "4着以下": 5, "単勝回収率": 0.0, "複勝回収率": 0.0}
     h = T.html_block(pd.DataFrame([row("栗東坂路|A3"), row("栗東坂路|X"), row("栗東ウッド|A3")]))
-    assert "<td class=l>A3<span class=ds>（11秒台以下で加速）</span></td>" in h and "<td class=l>X<span class=ds>（終い2Fとも13秒以上）</span></td>" in h
-    assert h.count("11秒台以下で加速") == 1   # 坂路以外の行には付けない
+    assert "<td class=l>A3<span class=ds>（終いが11秒台以下で加速）</span></td>" in h and "<td class=l>X<span class=ds>（終い・手前とも13秒以上）</span></td>" in h
+    assert h.count("終いが11秒台以下で加速") == 1   # 坂路以外の行には付けない
