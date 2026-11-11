@@ -142,13 +142,16 @@ _CSS = """<style>
 #tpt tr td.gr{background:hsl(142 55% calc(var(--l)*1%))} #tpt tr td.bl{background:hsl(215 70% calc(var(--l)*1%))} #tpt tr td.lt{color:#06121f} #tpt td.hist{padding:2px 6px} #tpt tr td.dup{color:#fb923c;font-weight:bold} #tpt tr td.hot{font-weight:bold;box-shadow:inset 0 0 0 1px rgba(255,255,255,.6)}
 #tptp{position:fixed;z-index:50;display:none;pointer-events:none;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;line-height:1.5;box-shadow:0 4px 14px rgba(0,0,0,.5)} #tptp .h{font-weight:bold;margin-bottom:4px} #tptp .r{display:flex;align-items:center;gap:6px;white-space:nowrap} #tptp .r i{display:inline-block;height:10px;border-radius:2px} #tptp .r span:first-child{width:5.5em} #tptp .r span:last-child{color:var(--muted);margin-left:auto;padding-left:6px}
 #tpt tr.ac td.id,#tpt tr.ac td.l{background:#78350f;color:#fde68a} #tpt tr.ac td.id{border-left:5px solid #fbbf24} #tpt tr.ac td.l::before{content:"★ ";color:#fbbf24}
-#tpt tbody.c tr.p,#tpt tbody.c tr.q,#tpt tr.q.hid,#tpt tbody.f{display:none} .tptb button{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 10px;margin-right:6px;cursor:pointer}
+#tpt tbody.c tr.p,#tpt tbody.c tr.q,#tpt tr.q.hid,#tpt tbody.f,#tpt tbody.na,#tpt tr.na{display:none} .tptb button.on{background:#78350f;color:#fde68a;border-color:#fbbf24} .tptb button{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 10px;margin-right:6px;cursor:pointer}
 .tptb input{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 8px;margin-left:8px;width:160px}
 </style>"""
 
 _JS = """<script>(function(){var T=document.getElementById("tpt");if(!T)return;var B=function(){return Array.prototype.slice.call(T.tBodies)};
 function lv(n){B().forEach(function(b){b.classList.toggle("c",n===0);Array.prototype.forEach.call(b.querySelectorAll("tr.q"),function(r){r.classList.toggle("hid",n<2)})})}
 document.getElementById("tpt0").onclick=function(){lv(0)};document.getElementById("tpt1").onclick=function(){lv(1)};document.getElementById("tpt2").onclick=function(){lv(2)};
+var BA=document.getElementById("tpta");BA.onclick=function(){var on=!BA.classList.contains("on");BA.classList.toggle("on",on);BA.textContent=on?"★のみ表示中（解除）":"★の行だけ表示";if(on)lv(2);
+B().forEach(function(b){var any=false;Array.prototype.forEach.call(b.rows,function(r){if(r.classList.contains("q"))r.classList.toggle("na",on&&!r.classList.contains("ac"));if(r.classList.contains("ac"))any=true});
+Array.prototype.forEach.call(b.rows,function(r){if(!r.classList.contains("p"))return;var x=r.nextElementSibling,h=false;while(x&&x.classList.contains("q")){if(x.classList.contains("ac"))h=true;x=x.nextElementSibling}r.classList.toggle("na",on&&!h)});b.classList.toggle("na",on&&!any)})};
 T.addEventListener("click",function(e){var r=e.target.closest("tr");if(!r||r.parentNode.tagName!=="TBODY")return;
 if(r.classList.contains("t"))r.parentNode.classList.toggle("c");
 else if(r.classList.contains("p")){var x=r.nextElementSibling;while(x&&x.classList.contains("q")){x.classList.toggle("hid");x=x.nextElementSibling}}});
@@ -250,7 +253,7 @@ def html_block(S: pd.DataFrame) -> str:
         out.append("</tbody>")
     heads = ["調教師ID", "調教師 / 場所 / パターン", "出走数", "頭数", "出走/頭", "着順内訳", "勝率", "単勝回収率", "複勝率", "複勝回収率", "オッズ分布"]
     head = "".join("<th>" + h + "</th>" for h in heads)
-    ctl = ('<div class="tptb"><button id="tpt0">調教師のみ</button><button id="tpt1">場所まで</button><button id="tpt2">すべて開く</button>'
+    ctl = ('<div class="tptb"><button id="tpt0">調教師のみ</button><button id="tpt1">場所まで</button><button id="tpt2">すべて開く</button><button id="tpta">★の行だけ表示</button>'
            '調教師ID・名前で絞り込み<input id="tptf" placeholder="例: 清水 / 01075"></div>')
     return (f"{START}\n{_CSS}\n{ctl}\n"
             f'<div id="tptw"><table id="tpt"><thead><tr>{head}</tr></thead>\n' + "\n".join(out) + f"\n</table></div>\n{_JS}\n{END}")

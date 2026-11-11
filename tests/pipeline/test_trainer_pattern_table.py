@@ -214,3 +214,8 @@ def test_html_block_shows_distribution_and_no_split_columns():
     assert 'data-b="1,0,0,1,0,1"' in q and 'data-v="0.3333"' in q   # 20 倍以上は 1/3
     assert "<th>オッズ分布</th>" in h and "50倍" not in h.split("<table")[1].split("</thead>")[0]
     assert h.count('data-b="1,0,0,1,0,1"') == 3   # 調教師・場所・パターンの 3 行
+
+
+def test_html_block_has_accent_only_button_and_hides_non_accent_rows_by_class():
+    h = T.html_block(T.summary(_odds_frame(), 2021, 2021, max_odds=50.0))
+    assert 'id="tpta"' in h and "tr.na" in h and "tbody.na" in h
