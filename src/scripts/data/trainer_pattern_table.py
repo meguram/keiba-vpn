@@ -60,11 +60,16 @@ def summary(d: pd.DataFrame, y0: int, y1: int) -> pd.DataFrame:
     S = S.join(derive(S))
     names = d.sort_values("race_date").drop_duplicates("trainer_id", keep="last").set_index("trainer_id")["trainer_name"]
     S = S.reset_index()
+    ok = x[x["n"] > 0].assign(place=lambda v: v["pat"].str.split("|").str[0])   # 同じ馬が複数回出走しても 1 頭と数える（horse_id）
+    S["place"] = S["pat"].str.split("|").str[0]
+    S["頭数"] = S[KEY].merge(ok.groupby(KEY)["horse_id"].nunique().rename("u").reset_index(), on=KEY, how="left")["u"].to_numpy()
+    S["頭数_場所"] = S[["trainer_id", "place"]].merge(ok.groupby(["trainer_id", "place"])["horse_id"].nunique().rename("u").reset_index(), on=["trainer_id", "place"], how="left")["u"].to_numpy()
+    S["頭数_調教師"] = S[["trainer_id"]].merge(ok.groupby("trainer_id")["horse_id"].nunique().rename("u").reset_index(), on="trainer_id", how="left")["u"].to_numpy()
     S["trainer_name"] = S["trainer_id"].map(names)
     S["着順内訳"] = S["c1"].astype(str) + "-" + S["c2"].astype(str) + "-" + S["c3"].astype(str) + "-" + S["c4p"].astype(str)
     S = S.rename(columns={"trainer_id": "調教師ID", "trainer_name": "調教師", "pat": "調教パターン", "n": "出走数", "c1": "1着", "c2": "2着", "c3": "3着", "c4p": "4着以下",
                           "win_rate": "勝率", "win_roi": "単勝回収率", "top3_rate": "複勝率", "place_roi": "複勝回収率"})
-    cols = ["調教師ID", "調教師", "調教パターン", "出走数", "着順内訳", "1着", "2着", "3着", "4着以下", "勝率", "単勝回収率", "複勝率", "複勝回収率"]
+    cols = ["調教師ID", "調教師", "調教パターン", "出走数", "頭数", "頭数_場所", "頭数_調教師", "着順内訳", "1着", "2着", "3着", "4着以下", "勝率", "単勝回収率", "複勝率", "複勝回収率"]
     return S[cols].sort_values(["調教師ID", "出走数"], ascending=[True, False]).reset_index(drop=True)
 
 
@@ -91,7 +96,7 @@ _CSS = """<style>
 #tptw{max-height:720px;overflow:auto;border:1px solid var(--border)} #tpt{margin:0;width:100%} #tpt th{position:sticky;top:0;z-index:1;cursor:pointer;white-space:nowrap}
 #tpt tbody{border-top:2px solid var(--border)} #tpt tr.t td{background:#1b2a4d;font-weight:bold;cursor:pointer} #tpt tr.p td{background:#172544;cursor:pointer}
 #tpt tr.p td.l{padding-left:26px} #tpt tr.q td.l{padding-left:46px} #tpt td.id{color:var(--muted);font-family:monospace} #tpt tr.sm td{opacity:.5}
-#tpt tr td.gr{background:hsl(142 55% calc(var(--l)*1%))} #tpt tr td.bl{background:hsl(215 70% calc(var(--l)*1%))} #tpt tr td.lt{color:#06121f} #tpt tr td.hot{font-weight:bold;box-shadow:inset 0 0 0 1px rgba(255,255,255,.6)}
+#tpt tr td.gr{background:hsl(142 55% calc(var(--l)*1%))} #tpt tr td.bl{background:hsl(215 70% calc(var(--l)*1%))} #tpt tr td.lt{color:#06121f} #tpt tr td.dup{color:#fb923c;font-weight:bold} #tpt tr td.hot{font-weight:bold;box-shadow:inset 0 0 0 1px rgba(255,255,255,.6)}
 #tpt tr.ac td.id,#tpt tr.ac td.l{background:#78350f;color:#fde68a} #tpt tr.ac td.id{border-left:5px solid #fbbf24} #tpt tr.ac td.l::before{content:"★ ";color:#fbbf24}
 #tpt tbody.c tr.p,#tpt tbody.c tr.q,#tpt tr.q.hid,#tpt tbody.f{display:none} .tptb button{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 10px;margin-right:6px;cursor:pointer}
 .tptb input{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 8px;margin-left:8px;width:160px}
@@ -105,7 +110,7 @@ if(r.classList.contains("t"))r.parentNode.classList.toggle("c");
 else if(r.classList.contains("p")){var x=r.nextElementSibling;while(x&&x.classList.contains("q")){x.classList.toggle("hid");x=x.nextElementSibling}}});
 document.getElementById("tptf").oninput=function(){var v=this.value.trim();B().forEach(function(b){b.classList.toggle("f",v!==""&&b.getAttribute("data-s").indexOf(v)<0)})};
 var H=Array.prototype.slice.call(T.tHead.rows[0].cells);
-function key(c,i){var t=c.textContent;if(i===3){var a=t.split("-");return a[0]*1e6+a[1]*1e3+ +a[2]}return i<2?t:parseFloat(t)}
+function key(c,i){var t=c.textContent;if(i===5){var a=t.split("-");return a[0]*1e6+a[1]*1e3+ +a[2]}return i<2?t:parseFloat(t)}
 function cmp(d){return function(x,y){return(x[1]<y[1]?-1:x[1]>y[1]?1:0)*d}}
 H.forEach(function(th,i){th.title="クリックで並べ替え（調教師・場所・パターンの各段の中で並べ替える）";th.onclick=function(){
 var d=th._d===undefined?(i<2?1:-1):-th._d;H.forEach(function(h){h._d=undefined;h.textContent=h.textContent.replace(/ [▲▼]$/,"")});th._d=d;th.textContent+=d>0?" ▲":" ▼";
@@ -115,8 +120,11 @@ if(r.classList.contains("p")){k.push([]);ps.push(k)}else ps[ps.length-1][2].push
 ps.sort(cmp(d));ps.forEach(function(p){b.appendChild(p[0]);p[2].sort(cmp(d)).forEach(function(q){b.appendChild(q[0])})});T.appendChild(b)})}});})();</script>"""
 
 
-def _row(cls: str, idv: str, label: str, n, c, win_ret, place_ret, base: tuple[float, float]) -> str:
-    """表の 1 行。c = (1着, 2着, 3着, 4着以下)。回収率は払戻の合計 / 出走数。"""
+DUP = 2.0   # 1 頭あたりの出走回数がこれ以上の行は、同じ馬が何度も数えられているとして橙で示す
+
+
+def _row(cls: str, idv: str, label: str, n, c, win_ret, place_ret, base: tuple[float, float], u=None) -> str:
+    """表の 1 行。c = (1着, 2着, 3着, 4着以下)。回収率は払戻の合計 / 出走数。u = その行に該当するユニーク頭数（None なら不明）。"""
     n = int(n)
     rate = lambda v: v / n   # noqa: E731
     def shade(t: float) -> str:   # 0〜1 → 明るさ（%）。成績が良いほど明るい。明るい側は文字を暗くして読めるようにする
@@ -132,7 +140,8 @@ def _row(cls: str, idv: str, label: str, n, c, win_ret, place_ret, base: tuple[f
     def bl(k: int, p0: float) -> str:   # 勝率・複勝率: 全体の水準 p0 以下は色なし。水準を超えると青、標準誤差の 6 倍以上高いと最も明るい。Z_HI 倍以上は枠と太字（hot）も付ける
         z = zs(k, p0)
         return f' bl{" hot" if z >= Z_HI else ""}' + shade(z / 6) if n >= HI_N and z > 0 else ""
-    shown = [(n, str(n), ""), (None, "-".join(str(int(k)) for k in c), ""), (rate(c[0]), f"{rate(c[0]):.3f}", bl(c[0], base[0])),
+    uq = [(u, str(int(u)), ""), (n / u, f"{n / u:.2f}", " dup" if n / u >= DUP else "")] if u and u == u else [(None, "-", ""), (None, "-", "")]
+    shown = [(n, str(n), ""), *uq, (None, "-".join(str(int(k)) for k in c), ""), (rate(c[0]), f"{rate(c[0]):.3f}", bl(c[0], base[0])),
              (rate(win_ret), f"{rate(win_ret) * 100:.1f}%", gr(rate(win_ret))), (rate(c[0] + c[1] + c[2]), f"{rate(c[0] + c[1] + c[2]):.3f}", bl(c[0] + c[1] + c[2], base[1])),
              (rate(place_ret), f"{rate(place_ret) * 100:.1f}%", gr(rate(place_ret)))]
     cells = [f'<td class=id>{_html.escape(idv)}</td>', f'<td class=l>{_html.escape(label)}</td>']
@@ -142,6 +151,10 @@ def _row(cls: str, idv: str, label: str, n, c, win_ret, place_ret, base: tuple[f
     placed = cls == "q" and n >= HI_N and zs(k3, base[1]) >= Z_HI and rate(place_ret) > 1.0   # 複勝率が水準より高く、複勝回収率も 100% 超
     ac = (" ac", ' title="勝率と単勝回収率の両方が基準超え"' if won and not placed else ' title="複勝率と複勝回収率の両方が基準超え"' if placed and not won else ' title="勝率・単勝回収率と、複勝率・複勝回収率の両方が基準超え"') if won or placed else ("", "")
     return f'<tr class="{cls}{" sm" if n < MIN_N else ""}{ac[0]}"{ac[1]}>' + "".join(cells) + "</tr>"
+
+
+def _u(g: pd.DataFrame, col: str):
+    return g[col].iloc[0] if col in g.columns else None
 
 
 def html_block(S: pd.DataFrame) -> str:
@@ -157,13 +170,13 @@ def html_block(S: pd.DataFrame) -> str:
     for tid, t in sorted(S.groupby("調教師ID"), key=lambda kv: -kv[1]["出走数"].sum()):
         name = str(t["調教師"].iloc[0])
         out.append(f'<tbody data-s="{_html.escape(tid)} {_html.escape(name)}">')
-        out.append(_row("t", tid, name, t["出走数"].sum(), t[cols].sum().tolist(), t["_w"].sum(), t["_p"].sum(), base))
+        out.append(_row("t", tid, name, t["出走数"].sum(), t[cols].sum().tolist(), t["_w"].sum(), t["_p"].sum(), base, _u(t, "頭数_調教師")))
         for place, g in sorted(t.groupby("場所"), key=lambda kv: -kv[1]["出走数"].sum()):
-            out.append(_row("p", tid, place, g["出走数"].sum(), g[cols].sum().tolist(), g["_w"].sum(), g["_p"].sum(), base))
+            out.append(_row("p", tid, place, g["出走数"].sum(), g[cols].sum().tolist(), g["_w"].sum(), g["_p"].sum(), base, _u(g, "頭数_場所")))
             for _, r in g.sort_values("出走数", ascending=False).iterrows():
-                out.append(_row("q", tid, str(r["型"]), r["出走数"], [r[k] for k in cols], r["_w"], r["_p"], base))
+                out.append(_row("q", tid, str(r["型"]), r["出走数"], [r[k] for k in cols], r["_w"], r["_p"], base, r["頭数"] if "頭数" in r.index else None))
         out.append("</tbody>")
-    heads = ["調教師ID", "調教師 / 場所 / パターン", "出走数", "着順内訳", "勝率", "単勝回収率", "複勝率", "複勝回収率"]
+    heads = ["調教師ID", "調教師 / 場所 / パターン", "出走数", "頭数", "出走/頭", "着順内訳", "勝率", "単勝回収率", "複勝率", "複勝回収率"]
     head = "".join("<th>" + h + "</th>" for h in heads)
     ctl = ('<div class="tptb"><button id="tpt0">調教師のみ</button><button id="tpt1">場所まで</button><button id="tpt2">すべて開く</button>'
            '調教師ID・名前で絞り込み<input id="tptf" placeholder="例: 清水 / 01075"></div>')

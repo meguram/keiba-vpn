@@ -155,3 +155,25 @@ def test_html_block_accents_rows_where_rate_and_roi_both_stand_out():
     for lab in ("L", "ROI", "LOWROI", "SMALL"):   # 回収率だけ・率だけ・30 頭未満は対象外
         assert "ac" not in tr(lab).split('"')[1].split()
     assert not any("ac" in r.split(">")[0].split('"')[1].split() for r in h.split("<tr ")[1:] if r.startswith(('class="t', 'class="p')))   # 調教師・場所の行にはアクセントを付けない
+
+
+def test_summary_counts_unique_horses_at_pattern_place_and_trainer_level():
+    d = _frame()
+    d.loc[d["race_id"].isin(["r2", "r3"]), "horse_id"] = "hA"   # 同じ馬が 2 回、パターン A2 に出走
+    z = d[d["race_id"] == "r2"].copy()                            # 同じ馬 hA が同じ場所の別パターンにも出走
+    z["race_id"], z["pat"], z["race_date"] = "r10", "栗東坂路|B1", "2021-02-01"
+    S = T.summary(pd.concat([d, z], ignore_index=True), 2021, 2021).set_index(["調教師ID", "調教パターン"])
+    a, b = S.loc[("t1", "栗東坂路|A2")], S.loc[("t1", "栗東坂路|B1")]
+    assert a["出走数"] == 5 and a["頭数"] == 4 and b["頭数"] == 1
+    assert a["頭数_場所"] == 4 and a["頭数_調教師"] == 4   # 場所・調教師の段は、パターンをまたいで同じ馬を 1 頭と数える（4 + 1 ではない）
+
+
+def test_html_block_shows_unique_horses_and_flags_repeated_runners():
+    def row(pat, n, u):
+        return {"調教師ID": "t", "調教師": "x", "調教パターン": f"栗東坂路|{pat}", "出走数": n, "頭数": u, "頭数_場所": u, "頭数_調教師": u, "1着": 0, "2着": 0, "3着": 0, "4着以下": n, "単勝回収率": 0.0, "複勝回収率": 0.0}
+    h = T.html_block(pd.DataFrame([row("ONE", 10, 10), row("REP", 30, 10)]))
+    r = [r for r in h.split("<tr ") if "<td class=l>REP</td>" in r][0]
+    assert '<td class="num">10</td><td class="num dup">3.00</td>' in r
+    assert 'class="num dup"' not in [r for r in h.split("<tr ") if "<td class=l>ONE</td>" in r][0]
+    assert "<th>頭数</th>" in h and "<th>出走/頭</th>" in h
+    assert "-</td>" in T.html_block(pd.DataFrame([{k: v for k, v in row("Z", 5, 5).items() if not k.startswith("頭数")}]))   # 頭数の列が無い古い集計でも落ちない
