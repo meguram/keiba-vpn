@@ -57,3 +57,11 @@ test("levelsOf は調教師・場所・パターンの3段。調教なしは調�
   assert.equal(m.levelsOf(undefined, "x"), null);
   assert.deepEqual(m.splitPat("美浦ウッド(南)|W52.0-53.9"), { place: "美浦ウッド(南)", pat: "W52.0-53.9" });
 });
+
+test("patWord は記号（A1〜X・W時計帯）を言葉にして、記号を残さない", () => {
+  for (const c of ["A1", "A2", "A3", "B1", "B2", "B3", "X"]) assert.ok(!/^[AB]\d$|^X$/.test(m.patWord(c)) && m.patWord(c).length > 4, c);
+  assert.equal(m.patWord("W52.0-53.9"), "4Fが52.0〜53.9秒");
+  assert.equal(m.patWord("W~49.9"), "4Fが49.9秒以内");
+  assert.equal(m.patWord("W58.0~"), "4Fが58.0秒以上");
+  assert.equal(m.patWord(null), "");
+});
