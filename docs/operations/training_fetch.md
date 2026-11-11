@@ -53,6 +53,19 @@
   1 晩 2,200 頭（約 3.7 時間）なら、残り約 8,150 頭は **4 晩（10/26〜10/29）** で終わる。開催日の前夜（金・土）と開催日を避け、21:00 JST の new-horse-pedigree の後。登録は `scripts/cron/install_horse_training_backfill_cron.sh`
   （ホストで root。タグ `KEIBA-TRAINING-BACKFILL`。`--remove` で外す）。**登録はユーザーの判断**（取得量が多い）。対象が無くなれば 0 頭で終わるので、完了後は外す。
 
+## 3-2. 2016〜2019 年だけに走った馬の全ページ取り直し（2026-11-11）
+
+最終追い切りの被覆が 2016〜2019 年は 10〜66% と低い原因は、過去分補填（`--phase past`）に horse_training の段階が無く、この期間に最後に走った馬（19,119 頭）の調教が未取得だったこと。
+
+`bash scripts/cron/horse_training_past.sh`（ホストで root、`nohup`）→ `python -m src.scripts.scraping.backfill_horse_training_past --horses-file data/local/meta/horse_training_past_targets.parquet [--limit N] [--retry-failed] [--dry-run]`
+
+- 対象の一覧: `missing_ids.parquet`（追い切り表に調教が無い馬）をホストの `data/local/meta/horse_training_past_targets.parquet` に置く。
+- 1 頭 全ページ（`scrape_horse_training(force=True)`）。パイロット 40 頭の実測は 1 頭 平均 5.0 ページ・約 33 秒（1 ページ 約 6.5 秒。クライアントの間隔・60 リクエストごとの休止を含む）→ 19,119 頭で 約 9.6 万リクエスト・連続 約 7 日。パイロット 40 頭では 2016 年以降の調教は約 1 割（古い馬は 2016 年より前の調教が大半）。進捗: `bash scripts/dev/fetch_status.sh`（「調教の過去分の取り直し」）。
+- 規則: 他の取得が動いている間は待つ、同時取得は自分を含め 1 本（`NETKEIBA_GLOBAL_MAX_SLOTS=1`）、HTTP 400/403/429・制限ページの検知／アクセス保留の印／連続 8 件の失敗で中断（人が確認して再開）。
+  2 ページ目以降が取れなかった馬は、途中までの記録で上書きせず error にする（`--retry-failed` で取り直す）。
+- 費用（最悪の回数で）: GCS は書き込みのみ（読み出し・一覧なし）。19,119 頭 × 1 回 = Class A 約 1.9 万回 × 0.8 円/千回 ≒ **約 15 円**（保存は馬ごとに 1 回）、再試行を 3 倍に見ても 50 円未満。転送料なし。Cloud Run は使わない。
+- 取り直し後: `python -m src.scripts.data.build_training_laps_past --horses-file … --out …`（手元の記録から追い切り表を作る。ネット・GCS なし）→ 既存の追い切り表に足して被覆を再確認。
+
 ## 4. 保険（サービング側）
 
 - `KEIBA_TRAINING_COVERAGE=1` のとき、予測 API の応答に `training_coverage: {n, n_with_record, n_with_block, rate, level, note}` を付ける
