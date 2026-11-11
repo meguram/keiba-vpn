@@ -86,8 +86,8 @@ def test_html_block_groups_trainer_place_pattern_with_totals():
     assert h.startswith(T.START) and h.endswith(T.END) and "|" not in h.split("<table")[1].split("</table>")[0]
     assert h.count("<tbody") == 2 and h.count('<tr class="p') == 2 and h.count('<tr class="q') == 3   # t1(栗東坂路:A2,B1) と t2(美浦坂路:X)
     t1 = h.split("<tbody")[1] if "t1" in h.split("<tbody")[1].split(">")[0] else h.split("<tbody")[2]
-    assert '<td class=id>t1</td><td class=l>調教師1</td><td class=num data-v="6.000000">6</td>' in t1   # 5 + 1 頭の合計
-    assert f'data-v="{7.0 / 6:.6f}"' in t1 and f"<td class=num>{7.0 / 6:.3f}</td>" in t1   # 単勝回収率 (4+3)/6（調教師の行と栗東坂路の行の両方）
+    assert '<td class=id>t1</td><td class=l>調教師1</td><td class="num" data-v="6.000000">6</td>' in t1   # 5 + 1 頭の合計
+    assert f'data-v="{7.0 / 6:.6f}"' in t1 and f'<td class="num"' in t1 and f">{7.0 / 6:.3f}</td>" in t1 in t1   # 単勝回収率 (4+3)/6（調教師の行と栗東坂路の行の両方）
     assert t1.count(f"{(1.5 + 1.2 + 1.1 + 1.3 + 1.2) / 6:.3f}") >= 2   # 複勝回収率
     assert "<td class=l>A2</td>" in t1 and "<td class=l>B1</td>" in t1 and "<td class=l>栗東坂路</td>" in t1
 
@@ -104,3 +104,11 @@ def test_html_block_escapes_names():
     d["trainer_name"] = 'a<b>"&'
     h = T.html_block(T.summary(d, 2021, 2021))
     assert "<b>" not in h and 'a&lt;b&gt;&quot;&amp;' in h
+
+
+def test_html_block_marks_roi_over_100_only_with_enough_runs():
+    def row(n, w, p):
+        return {"調教師ID": "t", "調教師": "x", "調教パターン": f"栗東坂路|P{n}", "出走数": n, "1着": 1, "2着": 0, "3着": 0, "4着以下": n - 1, "単勝回収率": w, "複勝回収率": p}
+    h = T.html_block(pd.DataFrame([row(T.HI_N, 1.2, 0.9), row(T.HI_N - 1, 1.2, 1.5), row(T.HI_N, 1.0, 1.0)]))
+    assert h.count('class="num hi"') == 5   # 30 頭の P30 の単勝 1 + 合計（89 頭: 単勝 1.133・複勝 1.129）が調教師の行と場所の行で 2 × 2。29 頭の行と、ちょうど 1.0 は対象外
+    assert '<td class="num hi">1.200</td>' in h and '<td class="num hi">1.500</td>' not in h

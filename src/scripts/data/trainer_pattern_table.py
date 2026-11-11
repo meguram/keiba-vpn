@@ -83,12 +83,13 @@ def asof_table(d: pd.DataFrame) -> pd.DataFrame:
     return out
 
 START, END = "<!-- tpt:start -->", "<!-- tpt:end -->"
+HI_N = 30   # 回収率が 100% を超え、かつ出走数がこれ以上のセルに色を付ける
 MIN_N = 10   # 出走数がこれ未満の行は、表で薄く表示する（率・回収率が大きく振れるため）
 
 _CSS = """<style>
 #tptw{max-height:720px;overflow:auto;border:1px solid var(--border)} #tpt{margin:0;width:100%} #tpt th{position:sticky;top:0;z-index:1;cursor:pointer;white-space:nowrap}
 #tpt th.ns{cursor:default} #tpt tbody{border-top:2px solid var(--border)} #tpt tr.t td{background:#1b2a4d;font-weight:bold;cursor:pointer} #tpt tr.p td{background:#172544;cursor:pointer}
-#tpt tr.p td.l{padding-left:26px} #tpt tr.q td.l{padding-left:46px} #tpt td.id{color:var(--muted);font-family:monospace} #tpt tr.sm td{opacity:.5}
+#tpt tr.p td.l{padding-left:26px} #tpt tr.q td.l{padding-left:46px} #tpt td.id{color:var(--muted);font-family:monospace} #tpt tr.sm td{opacity:.5} #tpt tr td.hi{background:#14532d;color:#bbf7d0;font-weight:bold}
 #tpt tbody.c tr.p,#tpt tbody.c tr.q,#tpt tr.q.hid,#tpt tbody.f{display:none} .tptb button{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 10px;margin-right:6px;cursor:pointer}
 .tptb input{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 8px;margin-left:8px;width:160px}
 </style>"""
@@ -110,10 +111,12 @@ def _row(cls: str, idv: str, label: str, n, c, win_ret, place_ret) -> str:
     n = int(n)
     rate = lambda v: v / n   # noqa: E731
     dv = lambda v: f' data-v="{v:.6f}"' if cls == "t" else ""   # noqa: E731  並べ替えに使うのは調教師の行だけ
-    shown = [(n, str(n)), (None, "-".join(str(int(k)) for k in c)), (rate(c[0]), f"{rate(c[0]):.3f}"), (rate(win_ret), f"{rate(win_ret):.3f}"),
-             (rate(c[0] + c[1] + c[2]), f"{rate(c[0] + c[1] + c[2]):.3f}"), (rate(place_ret), f"{rate(place_ret):.3f}")]
+    hi = lambda v: " hi" if n >= HI_N and v > 1.0 else ""   # noqa: E731
+    shown = [(n, str(n), ""), (None, "-".join(str(int(k)) for k in c), ""), (rate(c[0]), f"{rate(c[0]):.3f}", ""),
+             (rate(win_ret), f"{rate(win_ret):.3f}", hi(rate(win_ret))), (rate(c[0] + c[1] + c[2]), f"{rate(c[0] + c[1] + c[2]):.3f}", ""),
+             (rate(place_ret), f"{rate(place_ret):.3f}", hi(rate(place_ret)))]
     cells = [f'<td class=id>{_html.escape(idv)}</td>', f'<td class=l>{_html.escape(label)}</td>']
-    cells += [f"<td class=num{dv(v) if v is not None else ''}>{txt}</td>" for v, txt in shown]
+    cells += [f'<td class="num{h}"{dv(v) if v is not None else ""}>{txt}</td>' for v, txt, h in shown]
     return f'<tr class="{cls}{" sm" if n < MIN_N else ""}">' + "".join(cells) + "</tr>"
 
 
