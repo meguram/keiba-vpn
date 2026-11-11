@@ -138,7 +138,7 @@ MIN_N = 10   # 出走数がこれ未満の行は、表で薄く表示する（�
 _CSS = """<style>
 #tptw{max-height:720px;overflow:auto;border:1px solid var(--border);width:calc(100vw - 60px);margin-left:calc(50% - 50vw + 30px)} #tpt{margin:0;width:100%;font-size:clamp(10px,.88vw,13px)} #tpt th,#tpt td{padding:3px .45em} #tpt td{white-space:nowrap} #tpt th{position:sticky;top:0;z-index:1;cursor:pointer;line-height:1.3}
 #tpt tbody{border-top:2px solid var(--border)} #tpt tr.t td{background:#1b2a4d;font-weight:bold;cursor:pointer} #tpt tr.p td{background:#172544;cursor:pointer}
-#tpt tr.p td.l{padding-left:1.4em} #tpt tr.q td.l{padding-left:2.6em} #tpt td.id{color:var(--muted);font-family:monospace} #tpt tr.sm td{opacity:.5}
+#tpt tr.p td.l{padding-left:1.4em} #tpt tr.q td.l{padding-left:2.6em} #tpt .ds{color:var(--muted);font-weight:normal;margin-left:.3em} #tpt td.id{color:var(--muted);font-family:monospace} #tpt tr.sm td{opacity:.5}
 #tpt tr td.gr{background:hsl(142 55% calc(var(--l)*1%))} #tpt tr td.bl{background:hsl(215 70% calc(var(--l)*1%))} #tpt tr td.lt{color:#06121f} #tpt td.hist{padding:2px 6px} #tpt tr td.dup{color:#fb923c;font-weight:bold} #tpt tr td.hot{font-weight:bold;box-shadow:inset 0 0 0 1px rgba(255,255,255,.6)}
 #tptp{position:fixed;z-index:50;display:none;pointer-events:none;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;line-height:1.5;box-shadow:0 4px 14px rgba(0,0,0,.5)} #tptp .h{font-weight:bold;margin-bottom:4px} #tptp .r{display:flex;align-items:center;gap:6px;white-space:nowrap} #tptp .r i{display:inline-block;height:10px;border-radius:2px} #tptp .r span:first-child{width:5.5em} #tptp .r span:last-child{color:var(--muted);margin-left:auto;padding-left:6px}
 #tpt tr.ac td.id,#tpt tr.ac td.l{background:#78350f;color:#fde68a} #tpt tr.ac td.id{border-left:5px solid #fbbf24} #tpt tr.ac td.l::before{content:"★ ";color:#fbbf24}
@@ -179,6 +179,7 @@ if(r.classList.contains("p")){k.push([]);ps.push(k)}else ps[ps.length-1][2].push
 ps.sort(cmp(d));ps.forEach(function(p){b.appendChild(p[0]);p[2].sort(cmp(d)).forEach(function(q){b.appendChild(q[0])})});T.appendChild(b)})}});})();</script>"""
 
 
+LAP_DESC = {"A3": "11秒台以下で加速", "A2": "12秒台で加速", "A1": "終いのみ12秒台で加速", "B3": "11秒台以下で減速", "B2": "12秒台で減速", "B1": "手前のみ12秒台で減速", "X": "終い2Fとも13秒以上"}   # tp35_lap_groups.classify_lap の定義
 DUP = 2.0   # 1 頭あたりの出走回数がこれ以上の行は、同じ馬が何度も数えられているとして橙で示す
 
 
@@ -196,7 +197,7 @@ def _ox(g: pd.DataFrame):
     return np.sum([[int(v) for v in s.split("-")] for s in g[XCOLS[0]]], axis=0) if XCOLS[0] in g.columns else None
 
 
-def _row(cls: str, idv: str, label: str, n, c, win_ret, place_ret, base: tuple[float, float], u=None, ox=None) -> str:
+def _row(cls: str, idv: str, label: str, n, c, win_ret, place_ret, base: tuple[float, float], u=None, ox=None, note: str = "") -> str:
     """表の 1 行。c = (1着, 2着, 3着, 4着以下)。回収率は払戻の合計 / 出走数。u = その行に該当するユニーク頭数（None なら不明）。"""
     n = int(n)
     rate = lambda v: v / n   # noqa: E731
@@ -217,7 +218,7 @@ def _row(cls: str, idv: str, label: str, n, c, win_ret, place_ret, base: tuple[f
     shown = [(n, str(n), ""), *uq, (None, "-".join(str(int(k)) for k in c), ""), (rate(c[0]), f"{rate(c[0]):.3f}", bl(c[0], base[0])),
              (rate(win_ret), f"{rate(win_ret) * 100:.1f}%", gr(rate(win_ret))), (rate(c[0] + c[1] + c[2]), f"{rate(c[0] + c[1] + c[2]):.3f}", bl(c[0] + c[1] + c[2], base[1])),
              (rate(place_ret), f"{rate(place_ret) * 100:.1f}%", gr(rate(place_ret)))]
-    cells = [f'<td class=id>{_html.escape(idv)}</td>', f'<td class=l>{_html.escape(label)}</td>']
+    cells = [f'<td class=id>{_html.escape(idv)}</td>', f'<td class=l>{_html.escape(label)}' + (f'<span class=ds>（{_html.escape(note)}）</span>' if note else '') + '</td>']
     cells += [f'<td class="num{h}">{txt}</td>' for _, txt, h in shown]
     cells.append(_odds_cell(ox))
     k3 = c[0] + c[1] + c[2]
@@ -249,7 +250,7 @@ def html_block(S: pd.DataFrame) -> str:
             out.append(_row("p", tid, place, g["出走数"].sum(), g[cols].sum().tolist(), g["_w"].sum(), g["_p"].sum(), base, _u(g, "頭数_場所"), _ox(g)))
             gs = g.sort_values("出走数", ascending=False)
             for i, r in gs.iterrows():
-                out.append(_row("q", tid, str(r["型"]), r["出走数"], [r[k] for k in cols], r["_w"], r["_p"], base, r["頭数"] if "頭数" in r.index else None, _ox(gs.loc[[i]])))
+                out.append(_row("q", tid, str(r["型"]), r["出走数"], [r[k] for k in cols], r["_w"], r["_p"], base, r["頭数"] if "頭数" in r.index else None, _ox(gs.loc[[i]]), LAP_DESC.get(str(r["型"]), "") if "坂路" in place else ""))
         out.append("</tbody>")
     heads = ["調教師ID", "調教師 / 場所 / パターン", "出走数", "頭数", "出走/頭", "着順内訳", "勝率", "単勝回収率", "複勝率", "複勝回収率", "オッズ分布"]
     head = "".join("<th>" + h + "</th>" for h in heads)

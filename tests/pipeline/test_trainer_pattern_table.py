@@ -91,7 +91,7 @@ def test_html_block_groups_trainer_place_pattern_with_totals():
     assert '<td class=id>t1</td><td class=l>調教師1</td><td class="num">6</td>' in t1   # 5 + 1 頭の合計
     assert f">{7.0 / 6 * 100:.1f}%</td>" in t1   # 単勝回収率 (4+3)/6 を % 表示（調教師の行と栗東坂路の行の両方）
     assert t1.count(f"{(1.5 + 1.2 + 1.1 + 1.3 + 1.2) / 6 * 100:.1f}%") >= 2   # 複勝回収率
-    assert "<td class=l>A2</td>" in t1 and "<td class=l>B1</td>" in t1 and "<td class=l>栗東坂路</td>" in t1
+    assert "<td class=l>A2<" in t1 and "<td class=l>B1<" in t1 and "<td class=l>栗東坂路</td>" in t1
 
 
 def test_inject_replaces_between_markers(tmp_path):
@@ -210,7 +210,7 @@ def test_summary_drops_a_group_whose_runs_are_all_50_or_more():
 
 def test_html_block_shows_distribution_and_no_split_columns():
     h = T.html_block(T.summary(_odds_frame(), 2021, 2021, max_odds=50.0))
-    q = [r for r in h.split("<tr ") if "<td class=l>A2</td>" in r][0]
+    q = [r for r in h.split("<tr ") if "<td class=l>A2<" in r][0]
     assert 'data-b="1,0,0,1,0,1"' in q and 'data-v="0.3333"' in q   # 20 倍以上は 1/3
     assert "<th>オッズ分布</th>" in h and "50倍" not in h.split("<table")[1].split("</thead>")[0]
     assert h.count('data-b="1,0,0,1,0,1"') == 3   # 調教師・場所・パターンの 3 行
@@ -219,3 +219,11 @@ def test_html_block_shows_distribution_and_no_split_columns():
 def test_html_block_has_accent_only_button_and_hides_non_accent_rows_by_class():
     h = T.html_block(T.summary(_odds_frame(), 2021, 2021, max_odds=50.0))
     assert 'id="tpta"' in h and "tr.na" in h and "tbody.na" in h
+
+
+def test_html_block_explains_slope_lap_patterns_only_on_slope_rows():
+    def row(pat):
+        return {"調教師ID": "t", "調教師": "x", "調教パターン": pat, "出走数": 5, "1着": 0, "2着": 0, "3着": 0, "4着以下": 5, "単勝回収率": 0.0, "複勝回収率": 0.0}
+    h = T.html_block(pd.DataFrame([row("栗東坂路|A3"), row("栗東坂路|X"), row("栗東ウッド|A3")]))
+    assert "<td class=l>A3<span class=ds>（11秒台以下で加速）</span></td>" in h and "<td class=l>X<span class=ds>（終い2Fとも13秒以上）</span></td>" in h
+    assert h.count("11秒台以下で加速") == 1   # 坂路以外の行には付けない
