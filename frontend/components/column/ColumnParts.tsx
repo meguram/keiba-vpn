@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ColumnChart, ColumnHeatmap, JockeyDistanceChart } from "@/components/column/ColumnChart";
 import { ColumnTreemap } from "@/components/column/ColumnTreemap";
+import { ColumnWordcloud } from "@/components/column/ColumnWordcloud";
 import { CategoryChip, ColumnCard, VerdictBadge } from "@/components/column/ColumnCard";
 import {
   COLUMN_CATEGORIES, categoryLabel, columnsIn, countIn,
@@ -120,6 +121,8 @@ export function ColumnBody({ blocks }: { blocks: ColumnBlock[] }) {
             return <ColumnHeatmap key={i} block={b} />;
           case "treemap":
             return <ColumnTreemap key={i} block={b} />;
+          case "wordcloud":
+            return <ColumnWordcloud key={i} block={b} />;
           case "accordion":
             return (
               <details key={i} className="card" style={{ padding: 0, overflow: "hidden" }}>

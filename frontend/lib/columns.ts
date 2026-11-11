@@ -148,6 +148,7 @@ export type ColumnBlock =
   | JockeyDistanceChartBlock
   | ColumnHeatmapBlock
   | ColumnTreemapBlock
+  | ColumnWordcloudBlock
   | { type: "accordion"; title: string; blocks: ColumnBlock[] };
 
 /** 表・グラフの前に置く「読み方」の囲み（統計に詳しくない人向けの言い換え）。記事 JSON ではなく guides/<slug>.json から差し込む */
@@ -411,6 +412,18 @@ export type ColumnTreemapBlock = {
   start?: string;
   maxDepth?: number;
   root: TreemapNode;
+  caption?: string;
+};
+
+/** ワードクラウド。座標は集計側（src/research/columns/trainer_comment_wordcloud.py）で配置済み。size は文字の大きさ、lift は全体の何倍か、adj は人気をそろえた倍率 */
+export type WordcloudItem = { label: string; x: number; y: number; size: number; n: number; rate: number; lift: number; adj: number };
+export type ColumnWordcloudBlock = {
+  type: "wordcloud";
+  title: string;
+  /** 全体の率 */
+  base: number;
+  wide: { w: number; h: number; items: WordcloudItem[] };
+  narrow: { w: number; h: number; items: WordcloudItem[] };
   caption?: string;
 };
 

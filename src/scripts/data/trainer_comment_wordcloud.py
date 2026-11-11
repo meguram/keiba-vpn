@@ -47,7 +47,7 @@ def text_width(s: str, size: float) -> float:
     return sum(size * (1.0 if ord(ch) > 0x2E80 else 0.58) for ch in s) + size * 0.2
 
 
-def layout(df: pd.DataFrame, smin=15.0, smax=84.0) -> list[dict]:
+def layout(df: pd.DataFrame, smin=15.0, smax=84.0, w_box: float = W, h_box: float = H) -> list[dict]:
     n = df["n"].to_numpy(dtype=float)
     lo, hi = math.sqrt(n.min()), math.sqrt(n.max())
     placed: list[tuple[float, float, float, float]] = []
@@ -58,11 +58,11 @@ def layout(df: pd.DataFrame, smin=15.0, smax=84.0) -> list[dict]:
             w, h = text_width(r.label, size), size * 1.12
             pos = None
             t = 0.0
-            while t < 140:
-                x = W / 2 + 6.5 * t * math.cos(t) * 1.0
-                y = H / 2 + 6.5 * t * math.sin(t) * 0.5
+            while t < 200:
+                x = w_box / 2 + 6.5 * (w_box / W) * t * math.cos(t)
+                y = h_box / 2 + 6.5 * 0.5 * (h_box / H) * t * math.sin(t)
                 rect = (x - w / 2, y - h / 2, x + w / 2, y + h / 2)
-                if rect[0] >= 4 and rect[2] <= W - 4 and rect[1] >= 4 and rect[3] <= H - 4 and all(
+                if rect[0] >= 4 and rect[2] <= w_box - 4 and rect[1] >= 4 and rect[3] <= h_box - 4 and all(
                     rect[2] + 2 < p[0] or rect[0] - 2 > p[2] or rect[3] + 1 < p[1] or rect[1] - 1 > p[3] for p in placed
                 ):
                     pos = (x, y, rect)
