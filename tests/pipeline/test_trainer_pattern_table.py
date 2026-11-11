@@ -139,3 +139,17 @@ def test_html_block_rates_brighter_the_further_above_the_overall_level():
 def test_html_block_sorts_every_level_in_place():
     h = T.html_block(pd.DataFrame([{"調教師ID": "t", "調教師": "x", "調教パターン": "栗東坂路|A", "出走数": 5, "1着": 0, "2着": 0, "3着": 0, "4着以下": 5, "単勝回収率": 0.0, "複勝回収率": 0.0}]))
     assert "data-v" not in h and "ns" not in h.split("<table")[1].split("</thead>")[0]   # 全列が並べ替え対象
+
+
+def test_html_block_accents_rows_where_rate_and_roi_both_stand_out():
+    def row(pat, n, c1, c3, w, p):
+        return {"調教師ID": "t", "調教師": "x", "調教パターン": f"栗東坂路|{pat}", "出走数": n, "1着": c1, "2着": c3 - c1, "3着": 0, "4着以下": n - c3, "単勝回収率": w, "複勝回収率": p}
+    S = pd.DataFrame([row("L", 3000, 150, 600, 0.5, 0.5), row("WIN", 100, 20, 30, 1.3, 0.8), row("PLC", 100, 8, 60, 0.8, 1.2), row("ROI", 100, 8, 30, 1.5, 1.5),
+                      row("LOWROI", 100, 20, 60, 0.9, 0.9), row("SMALL", 20, 10, 15, 2.0, 2.0)])
+    h = T.html_block(S)
+    def tr(label):
+        return [r for r in h.split("<tr ") if f"<td class=l>{label}</td>" in r][0].split(">")[0]
+    assert "ac" in tr("WIN").split('"')[1].split() and "勝率と単勝回収率" in tr("WIN")
+    assert "ac" in tr("PLC").split('"')[1].split() and "複勝率と複勝回収率" in tr("PLC")
+    for lab in ("L", "ROI", "LOWROI", "SMALL"):   # 回収率だけ・率だけ・30 頭未満は対象外
+        assert "ac" not in tr(lab).split('"')[1].split()

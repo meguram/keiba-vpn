@@ -92,6 +92,7 @@ _CSS = """<style>
 #tpt tbody{border-top:2px solid var(--border)} #tpt tr.t td{background:#1b2a4d;font-weight:bold;cursor:pointer} #tpt tr.p td{background:#172544;cursor:pointer}
 #tpt tr.p td.l{padding-left:26px} #tpt tr.q td.l{padding-left:46px} #tpt td.id{color:var(--muted);font-family:monospace} #tpt tr.sm td{opacity:.5}
 #tpt tr td.gr{background:hsl(142 55% calc(var(--l)*1%))} #tpt tr td.bl{background:hsl(215 70% calc(var(--l)*1%))} #tpt tr td.lt{color:#06121f} #tpt tr td.hot{font-weight:bold;box-shadow:inset 0 0 0 1px rgba(255,255,255,.6)}
+#tpt tr.ac td.id,#tpt tr.ac td.l{background:#78350f;color:#fde68a} #tpt tr.ac td.id{border-left:5px solid #fbbf24} #tpt tr.ac td.l::before{content:"★ ";color:#fbbf24}
 #tpt tbody.c tr.p,#tpt tbody.c tr.q,#tpt tr.q.hid,#tpt tbody.f{display:none} .tptb button{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 10px;margin-right:6px;cursor:pointer}
 .tptb input{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 8px;margin-left:8px;width:160px}
 </style>"""
@@ -125,15 +126,22 @@ def _row(cls: str, idv: str, label: str, n, c, win_ret, place_ret, base: tuple[f
     def gr(v: float) -> str:   # 回収率: 0.5 以下で最も暗い緑、1.8 以上で最も明るい緑。1.00 超は枠と太字（hot）も付ける
         return f' gr{" hot" if v > 1.0 else ""}' + shade((v - 0.5) / 1.3) if n >= HI_N else ""
 
+    def zs(k: int, p0: float) -> float:
+        return (k / n - p0) / (p0 * (1 - p0) / n) ** 0.5 if 0 < p0 < 1 else 0.0
+
     def bl(k: int, p0: float) -> str:   # 勝率・複勝率: 全体の水準 p0 以下で最も暗い青、標準誤差の 6 倍以上高いと最も明るい青。Z_HI 倍以上は枠と太字（hot）も付ける
-        z = (k / n - p0) / (p0 * (1 - p0) / n) ** 0.5 if 0 < p0 < 1 else 0.0
+        z = zs(k, p0)
         return f' bl{" hot" if z >= Z_HI else ""}' + shade(z / 6) if n >= HI_N else ""
     shown = [(n, str(n), ""), (None, "-".join(str(int(k)) for k in c), ""), (rate(c[0]), f"{rate(c[0]):.3f}", bl(c[0], base[0])),
              (rate(win_ret), f"{rate(win_ret):.3f}", gr(rate(win_ret))), (rate(c[0] + c[1] + c[2]), f"{rate(c[0] + c[1] + c[2]):.3f}", bl(c[0] + c[1] + c[2], base[1])),
              (rate(place_ret), f"{rate(place_ret):.3f}", gr(rate(place_ret)))]
     cells = [f'<td class=id>{_html.escape(idv)}</td>', f'<td class=l>{_html.escape(label)}</td>']
     cells += [f'<td class="num{h}">{txt}</td>' for _, txt, h in shown]
-    return f'<tr class="{cls}{" sm" if n < MIN_N else ""}">' + "".join(cells) + "</tr>"
+    k3 = c[0] + c[1] + c[2]
+    won = n >= HI_N and zs(c[0], base[0]) >= Z_HI and rate(win_ret) > 1.0     # 勝率が水準より高く、単勝回収率も 100% 超
+    placed = n >= HI_N and zs(k3, base[1]) >= Z_HI and rate(place_ret) > 1.0   # 複勝率が水準より高く、複勝回収率も 100% 超
+    ac = (" ac", ' title="勝率と単勝回収率の両方が基準超え"' if won and not placed else ' title="複勝率と複勝回収率の両方が基準超え"' if placed and not won else ' title="勝率・単勝回収率と、複勝率・複勝回収率の両方が基準超え"') if won or placed else ("", "")
+    return f'<tr class="{cls}{" sm" if n < MIN_N else ""}{ac[0]}"{ac[1]}>' + "".join(cells) + "</tr>"
 
 
 def html_block(S: pd.DataFrame) -> str:
