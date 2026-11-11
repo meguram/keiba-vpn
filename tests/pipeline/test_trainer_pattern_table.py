@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pandas as pd
 
@@ -111,4 +113,16 @@ def test_html_block_marks_roi_over_100_only_with_enough_runs():
         return {"調教師ID": "t", "調教師": "x", "調教パターン": f"栗東坂路|P{n}", "出走数": n, "1着": 1, "2着": 0, "3着": 0, "4着以下": n - 1, "単勝回収率": w, "複勝回収率": p}
     h = T.html_block(pd.DataFrame([row(T.HI_N, 1.2, 0.9), row(T.HI_N - 1, 1.2, 1.5), row(T.HI_N, 1.0, 1.0)]))
     assert h.count('class="num hi"') == 5   # 30 頭の P30 の単勝 1 + 合計（89 頭: 単勝 1.133・複勝 1.129）が調教師の行と場所の行で 2 × 2。29 頭の行と、ちょうど 1.0 は対象外
-    assert '<td class="num hi">1.200</td>' in h and '<td class="num hi">1.500</td>' not in h
+    assert 'class="num hi" style="--a:0.34">1.200</td>' in h and '>1.500</td>' in h and 'hi" style="--a:0.20">1.500' not in h and 'class="num hi" style="--a:0.34">1.500' not in h
+
+
+def test_html_block_marks_rates_well_above_the_overall_level_and_darker_when_higher():
+    def row(pat, n, c1, c3):
+        return {"調教師ID": "t", "調教師": "x", "調教パターン": f"栗東坂路|{pat}", "出走数": n, "1着": c1, "2着": c3 - c1, "3着": 0, "4着以下": n - c3, "単勝回収率": 0.5, "複勝回収率": 0.5}
+    S = pd.DataFrame([row("L", 3000, 150, 600), row("M", 100, 20, 40), row("H", 100, 40, 60), row("S", 20, 10, 15)])   # 全体の勝率は約 0.07 だが M・H は高い。S は 30 頭未満
+    h = T.html_block(S)
+    def alpha(label):
+        r = [x for x in h.split("<tr ") if f"<td class=l>{label}</td>" in x][0]
+        return [float(a) for a in re.findall(r'class="num hb" style="--a:([0-9.]+)"', r)]
+    assert alpha("L") == [] and alpha("S") == [] and len(alpha("M")) >= 1 and len(alpha("H")) >= 1
+    assert max(alpha("H")) > max(alpha("M"))   # 水準から離れるほど濃い

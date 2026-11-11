@@ -84,12 +84,13 @@ def asof_table(d: pd.DataFrame) -> pd.DataFrame:
 
 START, END = "<!-- tpt:start -->", "<!-- tpt:end -->"
 HI_N = 30   # 回収率が 100% を超え、かつ出走数がこれ以上のセルに色を付ける
+Z_HI = 2.5   # 勝率・複勝率が全体の水準より、二項分布の標準誤差の何倍以上高いか（出走 HI_N 頭以上のセルに青を付ける）
 MIN_N = 10   # 出走数がこれ未満の行は、表で薄く表示する（率・回収率が大きく振れるため）
 
 _CSS = """<style>
 #tptw{max-height:720px;overflow:auto;border:1px solid var(--border)} #tpt{margin:0;width:100%} #tpt th{position:sticky;top:0;z-index:1;cursor:pointer;white-space:nowrap}
 #tpt th.ns{cursor:default} #tpt tbody{border-top:2px solid var(--border)} #tpt tr.t td{background:#1b2a4d;font-weight:bold;cursor:pointer} #tpt tr.p td{background:#172544;cursor:pointer}
-#tpt tr.p td.l{padding-left:26px} #tpt tr.q td.l{padding-left:46px} #tpt td.id{color:var(--muted);font-family:monospace} #tpt tr.sm td{opacity:.5} #tpt tr td.hi{background:#14532d;color:#bbf7d0;font-weight:bold}
+#tpt tr.p td.l{padding-left:26px} #tpt tr.q td.l{padding-left:46px} #tpt td.id{color:var(--muted);font-family:monospace} #tpt tr.sm td{opacity:.5} #tpt tr td.hi{background:rgba(34,197,94,var(--a));color:#fff;font-weight:bold} #tpt tr td.hb{background:rgba(59,130,246,var(--a));color:#fff;font-weight:bold}
 #tpt tbody.c tr.p,#tpt tbody.c tr.q,#tpt tr.q.hid,#tpt tbody.f{display:none} .tptb button{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 10px;margin-right:6px;cursor:pointer}
 .tptb input{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 8px;margin-left:8px;width:160px}
 </style>"""
@@ -106,14 +107,19 @@ var bs=B().map(function(b){var c=b.rows[0].cells[i],v=c.getAttribute("data-v");r
 bs.sort(function(x,y){return(x[1]<y[1]?-1:x[1]>y[1]?1:0)*(asc?1:-1)});bs.forEach(function(x){T.appendChild(x[0])})}});})();</script>"""
 
 
-def _row(cls: str, idv: str, label: str, n, c, win_ret, place_ret) -> str:
+def _row(cls: str, idv: str, label: str, n, c, win_ret, place_ret, base: tuple[float, float]) -> str:
     """表の 1 行。c = (1着, 2着, 3着, 4着以下)。回収率は払戻の合計 / 出走数。"""
     n = int(n)
     rate = lambda v: v / n   # noqa: E731
     dv = lambda v: f' data-v="{v:.6f}"' if cls == "t" else ""   # noqa: E731  並べ替えに使うのは調教師の行だけ
-    hi = lambda v: " hi" if n >= HI_N and v > 1.0 else ""   # noqa: E731
-    shown = [(n, str(n), ""), (None, "-".join(str(int(k)) for k in c), ""), (rate(c[0]), f"{rate(c[0]):.3f}", ""),
-             (rate(win_ret), f"{rate(win_ret):.3f}", hi(rate(win_ret))), (rate(c[0] + c[1] + c[2]), f"{rate(c[0] + c[1] + c[2]):.3f}", ""),
+    def hi(v: float) -> str:   # 回収率が 100% 超: 緑。超えた幅が大きいほど濃い（1.8 以上で最大）
+        return f' hi" style="--a:{0.2 + 0.55 * min(1.0, (v - 1.0) / 0.8):.2f}' if n >= HI_N and v > 1.0 else ""
+
+    def hb(k: int, p0: float) -> str:   # 勝率・複勝率が全体の水準 p0 より Z_HI 標準誤差以上高い: 青。標準誤差の倍数が大きいほど濃い（Z_HI+3.5 で最大）
+        z = (k / n - p0) / (p0 * (1 - p0) / n) ** 0.5
+        return f' hb" style="--a:{0.2 + 0.55 * min(1.0, (z - Z_HI) / 3.5):.2f}' if n >= HI_N and z >= Z_HI else ""
+    shown = [(n, str(n), ""), (None, "-".join(str(int(k)) for k in c), ""), (rate(c[0]), f"{rate(c[0]):.3f}", hb(c[0], base[0])),
+             (rate(win_ret), f"{rate(win_ret):.3f}", hi(rate(win_ret))), (rate(c[0] + c[1] + c[2]), f"{rate(c[0] + c[1] + c[2]):.3f}", hb(c[0] + c[1] + c[2], base[1])),
              (rate(place_ret), f"{rate(place_ret):.3f}", hi(rate(place_ret)))]
     cells = [f'<td class=id>{_html.escape(idv)}</td>', f'<td class=l>{_html.escape(label)}</td>']
     cells += [f'<td class="num{h}"{dv(v) if v is not None else ""}>{txt}</td>' for v, txt, h in shown]
@@ -127,15 +133,17 @@ def html_block(S: pd.DataFrame) -> str:
     S["_w"], S["_p"] = S["単勝回収率"] * S["出走数"], S["複勝回収率"] * S["出走数"]
     S[["場所", "型"]] = S["調教パターン"].str.split("|", n=1, expand=True)
     cols = ["1着", "2着", "3着", "4着以下"]
+    tot = S[cols].sum()
+    base = (float(tot["1着"] / tot.sum()), float((tot["1着"] + tot["2着"] + tot["3着"]) / tot.sum()))   # 表の全組をまとめた勝率・複勝率
     out = []
     for tid, t in sorted(S.groupby("調教師ID"), key=lambda kv: -kv[1]["出走数"].sum()):
         name = str(t["調教師"].iloc[0])
         out.append(f'<tbody data-s="{_html.escape(tid)} {_html.escape(name)}">')
-        out.append(_row("t", tid, name, t["出走数"].sum(), t[cols].sum().tolist(), t["_w"].sum(), t["_p"].sum()))
+        out.append(_row("t", tid, name, t["出走数"].sum(), t[cols].sum().tolist(), t["_w"].sum(), t["_p"].sum(), base))
         for place, g in sorted(t.groupby("場所"), key=lambda kv: -kv[1]["出走数"].sum()):
-            out.append(_row("p", tid, place, g["出走数"].sum(), g[cols].sum().tolist(), g["_w"].sum(), g["_p"].sum()))
+            out.append(_row("p", tid, place, g["出走数"].sum(), g[cols].sum().tolist(), g["_w"].sum(), g["_p"].sum(), base))
             for _, r in g.sort_values("出走数", ascending=False).iterrows():
-                out.append(_row("q", tid, str(r["型"]), r["出走数"], [r[k] for k in cols], r["_w"], r["_p"]))
+                out.append(_row("q", tid, str(r["型"]), r["出走数"], [r[k] for k in cols], r["_w"], r["_p"], base))
         out.append("</tbody>")
     heads = ["調教師ID", "調教師 / 場所 / パターン", "出走数", "着順内訳", "勝率", "単勝回収率", "複勝率", "複勝回収率"]
     head = "".join('<th class="ns">' + h + "</th>" if h == "着順内訳" else "<th>" + h + "</th>" for h in heads)
