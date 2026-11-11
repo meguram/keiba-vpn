@@ -149,6 +149,7 @@ export type ColumnBlock =
   | ColumnHeatmapBlock
   | ColumnTreemapBlock
   | ColumnWordcloudBlock
+  | ColumnTrainerPatternBlock
   | { type: "accordion"; title: string; blocks: ColumnBlock[] };
 
 /** 表・グラフの前に置く「読み方」の囲み（統計に詳しくない人向けの言い換え）。記事 JSON ではなく guides/<slug>.json から差し込む */
@@ -426,6 +427,9 @@ export type ColumnWordcloudBlock = {
   narrow: { w: number; h: number; items: WordcloudItem[] };
   caption?: string;
 };
+
+/** 調教師 × 最終週の調教パターンの全件表。src の静的 JSON（public/data）を、開いたときに 1 回だけ取る（API・GCS は使わない） */
+export type ColumnTrainerPatternBlock = { type: "trainer_pattern_table"; title: string; src: string; caption?: string };
 
 export function formatTreemapValue(v: number | null | undefined, format: TreemapFormat): string {
   if (typeof v !== "number" || !Number.isFinite(v)) return "–";

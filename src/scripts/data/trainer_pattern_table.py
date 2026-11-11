@@ -288,6 +288,29 @@ def inject(chapter: Path, block: str) -> None:
     chapter.write_text(s[:a] + block + s[b:], encoding="utf-8")
 
 
+def export_compact(S: pd.DataFrame, y0: int = 2020, y1: int = 2025, max_odds: float = ODDS_CUT) -> dict:
+    """めぐ分析・めぐコラム用の凍結表。調教師ID → {n: 名前, p: {場所|パターン: [出走数, 頭数, 1着, 2着, 3着, 単勝払戻計, 複勝払戻計, 区間別 走/1着/3着内/単払/複払]}}。
+    払戻計は 100 円あたり/100 の合計（回収率 = 払戻計 / 出走数）。区間は EDGES のうち max_odds 未満のもの。"""
+    nb = len([e for e in EDGES if e < max_odds]) + 1
+    out: dict = {}
+    for _, r in S.iterrows():
+        ar = [[float(v) if i >= 3 else int(v) for v in str(r[c]).split("-")][:nb] for i, c in enumerate(XCOLS)]
+        n = int(r["出走数"])
+        row = [n, int(r["頭数"]), int(r["1着"]), int(r["2着"]), int(r["3着"]), round(float(r["単勝回収率"]) * n, 2), round(float(r["複勝回収率"]) * n, 2), *ar]
+        t = out.setdefault(str(r["調教師ID"]), {"n": str(r["調教師"]), "p": {}})
+        t["p"][str(r["調教パターン"])] = row
+    return {"v": 1, "y0": y0, "y1": y1, "max_odds": max_odds, "edges": [e for e in EDGES if e < max_odds], "trainers": out}
+
+
+def write_compact(S: pd.DataFrame, paths: list[Path], y0: int = 2020, y1: int = 2025, max_odds: float = ODDS_CUT) -> None:
+    import json
+
+    text = json.dumps(export_compact(S, y0, y1, max_odds), ensure_ascii=False, separators=(",", ":"))
+    for p in paths:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding="utf-8")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="/home/jovyan/work/retrain_out/base_2016/article_check/final_week/trainer_pattern")
@@ -295,6 +318,7 @@ def main() -> None:
     ap.add_argument("--y1", type=int, default=2025)
     ap.add_argument("--max-odds", type=float, default=ODDS_CUT, help="単勝オッズがこれ以上の出走を集計から除く（0 で除かない）")
     ap.add_argument("--chapter", default=None, help="指定すると、この章の HTML の表（tpt:start〜tpt:end）を作り直す")
+    ap.add_argument("--compact", nargs="*", default=None, help="指定したパスに、めぐ分析・コラム用の凍結表（JSON）を書く")
     ap.add_argument("--laps", default=str(P.LAPS))
     ap.add_argument("--table", default=str(P.TABLE))
     a = ap.parse_args()
@@ -306,6 +330,8 @@ def main() -> None:
     S.to_csv(out / f"trainer_pattern_summary_{a.y0}_{a.y1}.csv", index=False, encoding="utf-8-sig")
     if a.chapter:
         inject(Path(a.chapter), html_block(S))
+    if a.compact:
+        write_compact(S, [Path(p) for p in a.compact], a.y0, a.y1, a.max_odds or ODDS_CUT)
     A = asof_table(d)
     A.to_parquet(out / "trainer_pattern_asof.parquet", index=False)
 

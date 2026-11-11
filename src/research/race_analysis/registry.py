@@ -5,6 +5,7 @@ from __future__ import annotations
 from src.research.race_analysis.course_stats import GATE, JOCKEY, SIRE, SIRE_LINE, Block, CourseStatsModule
 from src.research.race_analysis.past_position import PastPositionModule
 from src.research.race_analysis.running_map_module import RunningMapModule
+from src.research.race_analysis.trainer_pattern import TrainerPatternModule
 
 MODULES = (
     CourseStatsModule(JOCKEY),
@@ -16,4 +17,5 @@ MODULES = (
     ),
     PastPositionModule(),
     RunningMapModule(),
+    TrainerPatternModule(),
 )
