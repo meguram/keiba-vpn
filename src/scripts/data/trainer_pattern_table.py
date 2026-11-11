@@ -132,7 +132,7 @@ def html_block(S: pd.DataFrame) -> str:
         for place, g in sorted(t.groupby("場所"), key=lambda kv: -kv[1]["出走数"].sum()):
             out.append(_row("p", tid, place, g["出走数"].sum(), g[cols].sum().tolist(), g["_w"].sum(), g["_p"].sum()))
             for _, r in g.sort_values("出走数", ascending=False).iterrows():
-                out.append(_row("q hid", tid, str(r["型"]), r["出走数"], [r[k] for k in cols], r["_w"], r["_p"]))
+                out.append(_row("q", tid, str(r["型"]), r["出走数"], [r[k] for k in cols], r["_w"], r["_p"]))
         out.append("</tbody>")
     heads = ["調教師ID", "調教師 / 場所 / パターン", "出走数", "着順内訳", "勝率", "単勝回収率", "複勝率", "複勝回収率"]
     head = "".join('<th class="ns">' + h + "</th>" if h == "着順内訳" else "<th>" + h + "</th>" for h in heads)
