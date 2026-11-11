@@ -261,3 +261,18 @@ def attach_tracking_v2_to_response(resp: dict, past_doc: dict | None = None, rac
     resp["tracking_v2_meta"] = {"version": model.get("version"), "pace_z": round(float(z_hat), 2),
                                 "definition": "想定位置取りを取るのに必要な通過ラップが、その馬にとって楽か大変か（終いの落ちの予測。50=標準、60以上=楽、30未満=大変）"}
     return resp
+
+
+def past_drop_inputs(h: pd.DataFrame, y: pd.Series, pe: pd.Series) -> pd.DataFrame:
+    """馬の過去の終いの落ち（y = 実測の上がり偏差 − ベースライン）の直近 1・3 走平均に、前にいる度合い・圧力・ペースを掛けたもの。
+    h は horse_id・date の順に並べ、これから走る行（y が欠損）を含んでよい。学習（fit_final_tracking_t6）と推論（tracking_t6）で共有する。"""
+    gy = y.groupby(h["horse_id"], sort=False)
+    fr = 1 - pe
+    hy3 = pd.concat([gy.shift(k) for k in (1, 2, 3)], axis=1).mean(axis=1)
+    return pd.DataFrame({"hy3_x_front": hy3 * fr, "hy1_x_front": gy.shift(1) * fr, "hy3_x_press": hy3 * h["pf_pressure"].astype(float),
+                         "hy3_x_zhat": hy3 * h["z_hat"].astype(float)}, index=h.index)
+
+
+def ld_cross(ld_f3: pd.Series, ld_q: pd.Series, pe: pd.Series) -> pd.DataFrame:
+    """ラップ予想の前後半（ld_f3・ld_q）× 位置取り。前にいるほど前半の速さが、後ろにいるほど後半の質が効く。"""
+    return pd.DataFrame({"ld_front_x_f3": (1 - pe) * ld_f3, "ld_rear_x_q": pe * ld_q})

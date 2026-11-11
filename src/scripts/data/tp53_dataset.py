@@ -38,6 +38,11 @@ def load_actual(year: int) -> tuple[pd.DataFrame, pd.DataFrame]:
     r = pd.read_parquet(TABLES / str(year) / "race_result_flat.parquet",
                         columns=["race_id", "date", "venue", "surface", "distance", "track_condition", "field_size", "grade",
                                  "horse_number", "horse_id", "finish_position", "passing_order", "last_3f", "pace", "odds"])
+    return actuals_from_results(r, year)
+
+
+def actuals_from_results(r: pd.DataFrame, year: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """race_result_flat の行（load_actual の columns）から、8 頭立て以上のレースの実測列（初角・終角の位置・上がり 3F・その偏差）を作る。推論側（tracking_t6）と共有。"""
     r = r[r["field_size"].fillna(0) >= 8].copy()
     ps = r["passing_order"].map(_passing)
     r["act_pass_first"] = ps.map(lambda x: x[0] if x else np.nan)

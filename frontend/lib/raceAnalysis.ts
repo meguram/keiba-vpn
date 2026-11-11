@@ -5,7 +5,10 @@
 
 import type { TPFigure } from "@/lib/trainerPattern";
 
-export type CellFormat = "record" | "pct" | "int" | "text" | "runs";
+export type CellFormat = "record" | "pct" | "int" | "text" | "runs" | "range";
+
+/** 位置取りの幅: lo〜hi は直近の走の最前〜最後方、mean は加重平均、pts は [位置(0〜1), 濃さ(0〜1。新しい走ほど大きい)] */
+export type RangeCell = { lo: number; hi: number; mean: number; pts: [number, number][] };
 
 /** 過去の走 1 つ分: [初角の通過順位, 頭数, 外れ値として除いたか(1/0)] */
 export type PastRun = [number, number, number];
@@ -209,6 +212,10 @@ export function formatCell(v: unknown, fmt: CellFormat): string {
       return typeof v === "number" && Number.isFinite(v) ? `${(v * 100).toFixed(1)}%` : EMPTY;
     case "int":
       return typeof v === "number" && Number.isFinite(v) ? String(Math.round(v)) : EMPTY;
+    case "range": {
+      const r = v as RangeCell;
+      return typeof r?.lo === "number" ? `${Math.round(r.lo * 100)}〜${Math.round(r.hi * 100)}%` : EMPTY;
+    }
     case "runs":
       return Array.isArray(v) && v.length > 0 ? (v as PastRun[]).map(([p, x]) => `${p}/${x}`).join(" ") : EMPTY;
     default:
@@ -226,6 +233,7 @@ export function runColor(pos: number, field: number): string {
  *  （脚質ならハナ → 先行(前) → 先行(後ろ) → 差し → 追込）で並べ、定義に無い値（不明など）は向きによらず最後。それ以外は表示文字から読まれる。 */
 export function sortValue(v: unknown, fmt: CellFormat, palette?: Record<string, string> | null): string | undefined {
   if (fmt === "record" && Array.isArray(v) && v.length > 0) return String(v[0]);
+  if (fmt === "range") return typeof (v as RangeCell | null)?.mean === "number" ? String((v as RangeCell).mean) : "";
   if (palette && typeof v === "string") {
     const i = Object.keys(palette).indexOf(v);
     return i >= 0 ? String(i + 1) : "";

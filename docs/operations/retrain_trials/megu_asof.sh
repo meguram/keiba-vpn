@@ -1,5 +1,5 @@
 #!/bin/bash
-# めぐ指数 v3a を年ごとの as-of で作る: Y=2022..2025 は 2016〜(Y-1) で当てはめた基準、2016〜2021 は 2016〜2021 の基準。
+# めぐ指数 v3a を年ごとの as-of で作る（年が替わったら frames に前年を足し、基準を 1 年延ばして当てはめ直す）: Y=2022..2025 は 2016〜(Y-1) で当てはめた基準、2016〜2021 は 2016〜2021 の基準。
 set -e
 R=/home/jovyan/work/retrain_out; cd /home/jovyan/work/keiba-vpn
 export KEIBA_ENV=stg PYTHONPATH=.
@@ -12,4 +12,5 @@ run 2016-2021 2022
 run 2016-2022 2023
 run 2016-2023 2024
 run 2016-2024 2025
+run 2016-2025 2026   # 2026 の運用・バックフィル用（基準=2016〜2025。本番へは配備時に config/megu_v3a へ置き換える。frames は 2025 まで要る）
 echo DONE

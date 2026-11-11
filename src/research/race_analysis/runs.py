@@ -11,7 +11,9 @@ import logging
 import threading
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +27,9 @@ FLAT_DIR = REPO / "data/page_reference/tables"
 SIRE_MAP_PATH = REPO / "data/page_reference/pedigree_race_index/horse_sire_map.parquet"
 
 _lock = threading.Lock()
-_cache: dict[str, object] = {"sig": None, "df": None, "sire_sig": None, "sire_df": None}
+_cache: dict[str, object] = {"sig": None, "df": None, "sire_sig": None, "sire_df": None, "roi_sig": None, "roi_df": None}
+RET_COLUMNS = ["race_id", "horse_id", "horse_number", "finish_position", "payoff", "odds"]
+ODDS_CUT = 50.0   # 回収率を出す表では、単勝オッズがこれ以上の出走（大穴の外れ値）を集計から除く
 
 
 def _signature(base: Path) -> tuple:
@@ -68,7 +72,57 @@ def load_runs(base: Path | None = None) -> pd.DataFrame:
             df[c] = df[c].astype("category")
         _cache["sig"], _cache["df"] = sig, df
         _cache["sire_sig"], _cache["sire_df"] = None, None     # 結果が変わったら、種牡馬を付けた表も作り直す
+        _cache["roi_sig"], _cache["roi_df"] = None, None
         return df
+
+
+def _returns(base: Path) -> pd.DataFrame:
+    """race_id・horse_id ごとの単勝オッズと、100 円あたりの単勝・複勝の払戻（/100。ハズレは 0、払戻が読めないレースは NaN）。列が無い年は NaN。"""
+    from src.pipeline.features.tp28_workout_stats import runner_returns
+
+    parts = []
+    for f in sorted(base.glob("*/race_result_flat.parquet")):
+        try:
+            have = set(pq.read_schema(f).names)
+            r = pd.read_parquet(f, columns=[c for c in RET_COLUMNS if c in have])
+        except Exception:
+            logger.exception("race_result_flat（払戻）の読み込みに失敗: %s", f)
+            continue
+        for c in RET_COLUMNS:
+            if c not in r.columns:
+                r[c] = np.nan if c != "payoff" else None
+        r["race_id"], r["horse_id"] = r["race_id"].astype(str), r["horse_id"].astype(str)
+        r["horse_number"] = pd.to_numeric(r["horse_number"], errors="coerce")
+        r["finish_position"] = pd.to_numeric(r["finish_position"], errors="coerce")
+        r["odds"] = pd.to_numeric(r["odds"], errors="coerce")
+        payoff = r.dropna(subset=["payoff"]).drop_duplicates("race_id").set_index("race_id")["payoff"].to_dict()
+        ok = r["horse_number"].notna()
+        rr = pd.DataFrame({"win_ret": np.nan, "place_ret": np.nan}, index=r.index)
+        if payoff and ok.any():
+            rr.loc[ok] = runner_returns(r.loc[ok], payoff).to_numpy()
+        parts.append(pd.concat([r[["race_id", "horse_id", "odds"]], rr], axis=1))
+    if not parts:
+        return pd.DataFrame({"race_id": [], "horse_id": [], "odds": [], "win_ret": [], "place_ret": []})
+    return pd.concat(parts, ignore_index=True).drop_duplicates(["race_id", "horse_id"])
+
+
+def load_runs_roi(base: Path | None = None) -> pd.DataFrame:
+    """load_runs に odds（単勝）・win_ret・place_ret（100 円あたりの払戻/100）を付けた表。結果が更新されたら作り直す。"""
+    base = base or FLAT_DIR
+    runs = load_runs(base)
+    sig = _cache["sig"]
+    with _lock:
+        if _cache["roi_sig"] == sig and _cache["roi_df"] is not None:
+            return _cache["roi_df"]   # type: ignore[return-value]
+    out = runs.merge(_returns(base), on=["race_id", "horse_id"], how="left")
+    with _lock:
+        _cache["roi_sig"], _cache["roi_df"] = sig, out
+    return out
+
+
+def drop_long_shots(df: pd.DataFrame, cut: float = ODDS_CUT) -> pd.DataFrame:
+    """単勝オッズが cut 以上の出走を除く（オッズが読めない出走は残す）。"""
+    return df[~(df["odds"] >= cut)]
 
 
 def load_sire_map(path: Path | None = None) -> pd.DataFrame | None:
@@ -84,12 +138,12 @@ def sire_map_available(path: Path | None = None) -> bool:
     return (path or SIRE_MAP_PATH).exists()
 
 
-def load_runs_with_sire() -> pd.DataFrame:
-    """load_runs に父（sire_id）を付けた表。対応表の更新時刻が変わったら作り直す。父が分からない出走は sire_id が NaN。"""
-    runs = load_runs()
+def load_runs_with_sire(roi: bool = False) -> pd.DataFrame:
+    """load_runs（roi=True なら load_runs_roi）に父（sire_id）を付けた表。対応表の更新時刻が変わったら作り直す。父が分からない出走は sire_id が NaN。"""
+    runs = load_runs_roi() if roi else load_runs()
     try:
         st = SIRE_MAP_PATH.stat()
-        sig = (st.st_mtime_ns, st.st_size)
+        sig = (st.st_mtime_ns, st.st_size, roi)
     except OSError:
         return runs.assign(sire_id=pd.NA, sire_line_id=pd.NA)
     with _lock:

@@ -8,7 +8,7 @@ cd "$(dirname "$0")/../.."
 HOST=${KEIBA_HOST:-keiba-remote}
 REMOTE=${KEIBA_HOST_REPO:-/home/jovyan/work/keiba-vpn}
 PY=${KEIBA_HOST_PY:-/opt/conda/bin/python3}
-EXTRA="src/pipeline/features/tp85_pedprior.py src/scripts/data/tp85_ped_reference.py src/scripts/data/precompute_race_analysis.py"
+EXTRA="src/pipeline/features/tp28_workout_stats.py src/pipeline/features/tp85_pedprior.py src/scripts/data/tp85_ped_reference.py src/scripts/data/precompute_race_analysis.py"
 
 mapfile -t FILES < <(git ls-files src/research/race src/research/race_analysis $EXTRA | grep '\.py$' | sort -u)
 FILES+=(data/meta/trainer_pattern/trainer_pattern_2020_2025.json)   # 調教師×パターンの凍結表（めぐ分析の trainer_pattern が読む）

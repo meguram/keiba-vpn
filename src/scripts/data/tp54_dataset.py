@@ -114,6 +114,44 @@ def position_effect(m: dict, early: pd.Series, z: pd.Series, distance: pd.Series
     return c["e"] * e + c["e_z"] * e * z.clip(-2, 2) + c["e_dist"] * e * (distance.astype(float) - 1600) / 1000 + c["e_turf"] * e * (surface == "芝").astype(float)
 
 
+def run_features(h: pd.DataFrame, cfg: dict, pe: dict | None = None) -> tuple[pd.DataFrame, dict]:
+    """馬ごとの as-of 集計（w_*・Y・prev_*・rest_days・gate_norm）。学習表と推論（tracking_t6）で同じ式を共有する。
+    h は horse_id・date・race_id で並べ替え済みで、実測列（act_*）が NaN の行（これから走る馬）を含んでよい。pe=None なら h 全体で当てはめる（学習時）。"""
+    # 馬柱（race_shutuba_past の raw）から推論時にも作れる量だけで、その馬の過去 5 走（対象より前）を集計する。
+    #   同条件の上がり中央値（場×面×距離×良/道悪、config/pace_coherence.json の cohort_l3f）からの偏差 c_dev を使う（推論でも同じ）。
+    combos = h[["venue", "surface", "distance", "track_condition"]].drop_duplicates()
+    med = {tuple(r): cohort_l3f_median(cfg, *r) for r in combos.itertuples(index=False, name=None)}
+    h["cohort_l3f"] = [med.get((v, s_, d, t)) for v, s_, d, t in zip(h["venue"], h["surface"], h["distance"], h["track_condition"])]
+    h["c_dev"] = h["act_l3f"] - pd.to_numeric(h["cohort_l3f"], errors="coerce")
+    if pe is None:
+        pe = position_effect_model_noz(h)
+    h["c_adj"] = h["c_dev"] - position_effect_noz(pe, h["act_early_norm"], h["distance"], h["surface"])      # 位置取りの効果を除いた上がりの力
+    front = h["act_early_norm"] < FRONT_E
+    rear = h["act_early_norm"] > REAR_E
+    h["w_adj"] = window_prior(h, h["c_adj"])
+    h["w_dev"] = window_prior(h, h["c_dev"])
+    h["w_dev_front"] = window_prior(h, h["c_dev"], front)
+    h["w_dev_rear"] = window_prior(h, h["c_dev"], rear)
+    h["w_early"] = window_prior(h, h["act_early_norm"])
+    h["w_n"] = window_prior(h, h["act_early_norm"].notna().astype(float), how="sum")
+    h["w_nfront"] = window_prior(h, front.astype(float), how="sum")
+    h["w_nrear"] = window_prior(h, rear.astype(float), how="sum")
+    h["dpos"] = h["act_late_norm"] - h["act_early_norm"]     # 負＝道中・終盤で押し上げた
+
+    # ラベル Y: 実測の上がり偏差（レース内の中央値との差）− その馬の『位置取りの効果を除いた過去の上がりの力』（過去 5 走、as-of）
+    # Y が大きい＝終いが落ちた（余裕が無かった）。位置取り・ペースの効果は Y に残る（要求が重いほど大きい）。
+    h["Y"] = h["act_l3f_dev"] - h["w_adj"]
+
+    # 前走（実測）
+    grp = h.groupby("horse_id", sort=False)
+    for c in ("act_early_norm", "c_dev", "distance", "field_size", "date", "finish_position"):
+        h[f"prev_{c}"] = grp[c].shift(1)
+    h["prev_surface"] = grp["surface"].shift(1)
+    h["rest_days"] = (h["date"] - h["prev_date"]).dt.days
+    h["gate_norm"] = h["horse_number"] / h["field_size"]
+    return h, pe
+
+
 def build() -> pd.DataFrame:
     OUT.mkdir(parents=True, exist_ok=True)
     h = pd.read_parquet(TP53 / "horse.parquet")
@@ -160,38 +198,8 @@ def build() -> pd.DataFrame:
     h["date"] = pd.to_datetime(h["date"].astype(str).str.replace(r"[./]", "-", regex=True), errors="coerce")
     h = h.sort_values(["horse_id", "date", "race_id"]).reset_index(drop=True)
 
-    # 馬柱（race_shutuba_past の raw）から推論時にも作れる量だけで、その馬の過去 5 走（対象より前）を集計する。
-    #   同条件の上がり中央値（場×面×距離×良/道悪、config/pace_coherence.json の cohort_l3f）からの偏差 c_dev を使う（推論でも同じ）。
     cfg = json.loads((ROOT / "config/pace_coherence.json").read_text(encoding="utf-8"))
-    combos = h[["venue", "surface", "distance", "track_condition"]].drop_duplicates()
-    med = {tuple(r): cohort_l3f_median(cfg, *r) for r in combos.itertuples(index=False, name=None)}
-    h["cohort_l3f"] = [med.get((v, s_, d, t)) for v, s_, d, t in zip(h["venue"], h["surface"], h["distance"], h["track_condition"])]
-    h["c_dev"] = h["act_l3f"] - pd.to_numeric(h["cohort_l3f"], errors="coerce")
-    pe = position_effect_model_noz(h)
-    h["c_adj"] = h["c_dev"] - position_effect_noz(pe, h["act_early_norm"], h["distance"], h["surface"])      # 位置取りの効果を除いた上がりの力
-    front = h["act_early_norm"] < FRONT_E
-    rear = h["act_early_norm"] > REAR_E
-    h["w_adj"] = window_prior(h, h["c_adj"])
-    h["w_dev"] = window_prior(h, h["c_dev"])
-    h["w_dev_front"] = window_prior(h, h["c_dev"], front)
-    h["w_dev_rear"] = window_prior(h, h["c_dev"], rear)
-    h["w_early"] = window_prior(h, h["act_early_norm"])
-    h["w_n"] = window_prior(h, h["act_early_norm"].notna().astype(float), how="sum")
-    h["w_nfront"] = window_prior(h, front.astype(float), how="sum")
-    h["w_nrear"] = window_prior(h, rear.astype(float), how="sum")
-    h["dpos"] = h["act_late_norm"] - h["act_early_norm"]     # 負＝道中・終盤で押し上げた
-
-    # ラベル Y: 実測の上がり偏差（レース内の中央値との差）− その馬の『位置取りの効果を除いた過去の上がりの力』（過去 5 走、as-of）
-    # Y が大きい＝終いが落ちた（余裕が無かった）。位置取り・ペースの効果は Y に残る（要求が重いほど大きい）。
-    h["Y"] = h["act_l3f_dev"] - h["w_adj"]
-
-    # 前走（実測）
-    grp = h.groupby("horse_id", sort=False)
-    for c in ("act_early_norm", "c_dev", "distance", "field_size", "date", "finish_position"):
-        h[f"prev_{c}"] = grp[c].shift(1)
-    h["prev_surface"] = grp["surface"].shift(1)
-    h["rest_days"] = (h["date"] - h["prev_date"]).dt.days
-    h["gate_norm"] = h["horse_number"] / h["field_size"]
+    h, pe = run_features(h, cfg)
     h.to_parquet(OUT / "horse_ease.parquet", index=False)
     (OUT / "position_effect.json").write_text(json.dumps(pe, ensure_ascii=False), encoding="utf-8")
     print({"rows": len(h), "Y_nonnull": int(h["Y"].notna().sum()), "years": sorted(map(int, h["year"].unique()))})

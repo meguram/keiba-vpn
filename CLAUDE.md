@@ -55,6 +55,11 @@
 ソースコードを変更したら、切りの良いタイミング（ひとまとまりの修正が終わり、関係するテストが通った時点）で commit し、git remote（origin）へ push する。変更を手元に溜めたままにしない。
 
 - 作業ブランチは develop。stg へ出すときは develop を stg にマージして push する（`Merge develop into stg (…)`）。master（本番）への昇格はユーザーの指示があるときだけ。
+- **push する前に、CI と同じテストをローカルで実行して通ることを確かめる**（`.github/workflows/ci.yml` の `lint-and-test` と `frontend`）。
+  Python は `python -m compileall -q src tests scripts main.py`、`python -m src.scripts.ci.check_no_shuffle`、`python -m pytest tests/ --ignore=tests/scraper/manual --ignore=tests/research/manual --tb=short -ra`。
+  フロントを変えたら `cd frontend && npm run lint && npx tsc --noEmit`（配備に関わる変更は `npm run build` も）。
+  全件が重いときも、変えた領域のテストに加え、記事・ガイドの対応など他ファイルとつながるテスト（例: `tests/research/test_column_*.py`・`tests/frontend/`）は必ず流す。
+  失敗が自分の変更以外（他セッションの未コミット変更など）によるときは、原因を切り分けて報告する。失敗したまま push しない（`&&` でつないで失敗を見逃さない）。
 - 自分が変えたファイルだけを、パスを指定して `git add` する。別のセッションの未コミットの変更（作業中のファイル）は含めない・消さない・戻さない。
 - push のあとは GitHub Actions（`gh run list` / `gh run watch`）で CI と配備が終わるまで見届け、失敗したら原因を調べて直し、もう一度 push する。緑になるまでを 1 つの作業とする。
   - 自分の変更が原因でない失敗（もともと落ちていたテスト、時間がたつと落ちるテスト、権限など）も、直せるものは直す。直せないもの（GCP の権限の付与など）は原因と必要な対応をユーザーに報告する。
