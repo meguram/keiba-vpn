@@ -107,7 +107,7 @@ def _passed_stage1() -> set[str]:
     boost = json.loads((OUT / "boost.json").read_text(encoding="utf-8"))
     score_pass = {r["name"] for r in json.loads((OUT / "score.json").read_text(encoding="utf-8")) if r["pass"]}
     ok = {g for g in SRCS if boost.get(g, {}).get("pass") or score_pass & set(SRCS[g])}
-    return ok | ({"ALL"} if ok else set())
+    return ok | ({"ALL", "PASSED"} if ok else set())
 
 
 def tier2(names: list[str]) -> None:
@@ -116,7 +116,7 @@ def tier2(names: list[str]) -> None:
         sys.exit(f"第 1 段を通っていない群は test 2025 に当てない: {bad}")
     tr = H.prepare(_load(OOF))
     te = H.prepare(_load(T25))
-    srcs = {**SRCS, "ALL": sum(SRCS.values(), [])}
+    srcs = {**SRCS, "ALL": sum(SRCS.values(), []), "PASSED": sum((SRCS[g] for g in SRCS if g in _passed_stage1()), [])}   # PASSED = 第 1 段を通った群の束（採否はこの行）
     res = H.tier2(tr, te, {n: srcs[n] for n in names})
     (OUT / "tier2_TEST2025_EVALUATED.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(res, ensure_ascii=False), flush=True)
