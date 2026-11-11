@@ -109,6 +109,7 @@ import two_strong from "./two-strong.json";
 import favorite_fade from "./favorite-fade.json";
 import index_claims from "./index-claims.json";
 import trainer_comment_wordcloud from "./trainer-comment-wordcloud.json";
+import trainer_pattern_table from "./trainer-pattern-table.json";
 
 const ALL = [
   upset_conditions,
@@ -215,6 +216,7 @@ const ALL = [
   favorite_fade,
   index_claims,
   trainer_comment_wordcloud,
+  trainer_pattern_table,
 ] as Column[];
 
 export const COLUMNS: Column[] = ALL.filter((c) => SHOW_DEV_ONLY || !c.draft)
