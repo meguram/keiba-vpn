@@ -139,20 +139,20 @@ def test_html_block_rates_brighter_the_further_above_the_overall_level():
 
 def test_html_block_sorts_every_level_in_place():
     h = T.html_block(pd.DataFrame([{"調教師ID": "t", "調教師": "x", "調教パターン": "栗東坂路|A", "出走数": 5, "1着": 0, "2着": 0, "3着": 0, "4着以下": 5, "単勝回収率": 0.0, "複勝回収率": 0.0}]))
-    assert "data-v" not in h and "ns" not in h.split("<table")[1].split("</thead>")[0]   # 全列が並べ替え対象
+    assert 'data-v="' not in h.split("</script>")[1] and "ns" not in h.split("<table")[1].split("</thead>")[0]   # 全列が並べ替え対象（ヒストグラムの列だけは 50 倍以上の割合で並べる）
 
 
 def test_html_block_accents_rows_where_rate_and_roi_both_stand_out():
     def row(pat, n, c1, c3, w, p):
         return {"調教師ID": "t", "調教師": "x", "調教パターン": f"栗東坂路|{pat}", "出走数": n, "1着": c1, "2着": c3 - c1, "3着": 0, "4着以下": n - c3, "単勝回収率": w, "複勝回収率": p}
-    S = pd.DataFrame([row("L", 3000, 150, 600, 0.5, 0.5), row("WIN", 100, 20, 30, 1.3, 0.8), row("PLC", 100, 8, 60, 0.8, 1.2), row("ROI", 100, 8, 30, 1.5, 1.5),
+    S = pd.DataFrame([row("L", 3000, 150, 600, 0.5, 0.5), row("WIN", 100, 20, 30, 1.3, 0.8), row("PLC", 100, 8, 60, 0.8, 1.2), row("ROI", 100, 3, 15, 1.5, 1.5),
                       row("LOWROI", 100, 20, 60, 0.9, 0.9), row("SMALL", 20, 10, 15, 2.0, 2.0)])
     h = T.html_block(S)
     def tr(label):
         return [r for r in h.split("<tr ") if f"<td class=l>{label}</td>" in r][0].split(">")[0]
     assert "ac" in tr("WIN").split('"')[1].split() and "勝率と単勝回収率" in tr("WIN")
     assert "ac" in tr("PLC").split('"')[1].split() and "複勝率と複勝回収率" in tr("PLC")
-    for lab in ("L", "ROI", "LOWROI", "SMALL"):   # 回収率だけ・率だけ・30 頭未満は対象外
+    for lab in ("L", "ROI", "LOWROI", "SMALL"):   # 回収率だけ（率が水準以下）・率だけ（回収率 100% 以下）・30 頭未満は対象外
         assert "ac" not in tr(lab).split('"')[1].split()
     assert not any("ac" in r.split(">")[0].split('"')[1].split() for r in h.split("<tr ")[1:] if r.startswith(('class="t', 'class="p')))   # 調教師・場所の行にはアクセントを付けない
 
@@ -177,3 +177,36 @@ def test_html_block_shows_unique_horses_and_flags_repeated_runners():
     assert 'class="num dup"' not in [r for r in h.split("<tr ") if "<td class=l>ONE</td>" in r][0]
     assert "<th>頭数</th>" in h and "<th>出走/頭</th>" in h
     assert "-</td>" in T.html_block(pd.DataFrame([{k: v for k, v in row("Z", 5, 5).items() if not k.startswith("頭数")}]))   # 頭数の列が無い古い集計でも落ちない
+
+
+def _odds_frame():
+    """t1 / 栗東坂路|A2 の 5 走: オッズ 1.5(1着 払戻1.5/複勝1.1), 8(2着, 0/1.5), 49.9(3着, 0/3.0), 50(1着 払戻50.0/複勝10.0), 120(5着)。オッズ不明の 1 走は含めない。"""
+    d = _frame().iloc[:5].copy()
+    d["odds"] = [1.5, 8.0, 49.9, 50.0, 120.0]
+    d["finish_position"], d["win_ret"], d["place_ret"] = [1, 2, 3, 1, 5], [1.5, 0.0, 0.0, 50.0, 0.0], [1.1, 1.5, 3.0, 10.0, 0.0]
+    return d
+
+
+def test_summary_splits_odds_50_and_above_and_bins_the_distribution():
+    r = T.summary(_odds_frame(), 2021, 2021).set_index(["調教師ID", "調教パターン"]).loc[("t1", "栗東坂路|A2")]
+    assert r["出走数"] == 5 and r["出走数_50未満"] == 3 and r["出走数_50以上"] == 2   # ちょうど 50 倍は大穴側
+    assert abs(r["単勝払戻_50未満"] - 1.5) < 1e-9 and abs(r["複勝払戻_50未満"] - (1.1 + 1.5 + 3.0)) < 1e-9
+    assert r["オッズ分布"] == "1-0-0-1-0-1-1-1"   # <2, 2-3, 3-5, 5-10, 10-20, 20-50, 50-100, 100+ の頭数（1.5 / 8 / 49.9 / 50 / 120）
+
+
+def test_summary_without_odds_has_no_odds_columns_and_unreadable_odds_are_excluded():
+    assert "オッズ分布" not in T.summary(_frame(), 2021, 2021).columns
+    d = _odds_frame()
+    d.loc[d.index[0], "odds"] = np.nan
+    r = T.summary(d, 2021, 2021).set_index(["調教師ID", "調教パターン"]).loc[("t1", "栗東坂路|A2")]
+    assert r["出走数"] == 5 and r["出走数_50未満"] + r["出走数_50以上"] == 4   # オッズが読めない走は分離側から除く
+
+
+def test_html_block_odds_columns_roi_without_outliers_and_histogram_data():
+    h = T.html_block(T.summary(_odds_frame(), 2021, 2021))
+    q = [r for r in h.split("<tr ") if "<td class=l>A2</td>" in r][0]
+    assert ">40.0%</td>" in q   # 50 倍以上の割合 2/5
+    assert f">{1.5 / 3 * 100:.1f}%</td>" in q and f">{5.6 / 3 * 100:.1f}%</td>" in q   # 50 倍未満の 3 走だけの単勝・複勝回収率
+    assert 'data-b="1,0,0,1,0,1,1,1"' in q and 'data-v="0.4000"' in q
+    assert "<th>オッズ分布</th>" in h and "<th>単勝回収率(50倍未満)</th>" in h
+    assert h.count('data-b="1,0,0,1,0,1,1,1"') == 3   # 調教師・場所・パターンの 3 行（合計は同じ分布）
