@@ -89,8 +89,9 @@ MIN_N = 10   # 出走数がこれ未満の行は、表で薄く表示する（�
 
 _CSS = """<style>
 #tptw{max-height:720px;overflow:auto;border:1px solid var(--border)} #tpt{margin:0;width:100%} #tpt th{position:sticky;top:0;z-index:1;cursor:pointer;white-space:nowrap}
-#tpt th.ns{cursor:default} #tpt tbody{border-top:2px solid var(--border)} #tpt tr.t td{background:#1b2a4d;font-weight:bold;cursor:pointer} #tpt tr.p td{background:#172544;cursor:pointer}
-#tpt tr.p td.l{padding-left:26px} #tpt tr.q td.l{padding-left:46px} #tpt td.id{color:var(--muted);font-family:monospace} #tpt tr.sm td{opacity:.5} #tpt tr td.hi{background:rgba(34,197,94,var(--a));color:#fff;font-weight:bold} #tpt tr td.hb{background:rgba(59,130,246,var(--a));color:#fff;font-weight:bold}
+#tpt tbody{border-top:2px solid var(--border)} #tpt tr.t td{background:#1b2a4d;font-weight:bold;cursor:pointer} #tpt tr.p td{background:#172544;cursor:pointer}
+#tpt tr.p td.l{padding-left:26px} #tpt tr.q td.l{padding-left:46px} #tpt td.id{color:var(--muted);font-family:monospace} #tpt tr.sm td{opacity:.5}
+#tpt tr td.gr{background:hsl(142 55% calc(var(--l)*1%))} #tpt tr td.bl{background:hsl(215 70% calc(var(--l)*1%))} #tpt tr td.lt{color:#06121f} #tpt tr td.hot{font-weight:bold;box-shadow:inset 0 0 0 1px rgba(255,255,255,.6)}
 #tpt tbody.c tr.p,#tpt tbody.c tr.q,#tpt tr.q.hid,#tpt tbody.f{display:none} .tptb button{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 10px;margin-right:6px;cursor:pointer}
 .tptb input{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 8px;margin-left:8px;width:160px}
 </style>"""
@@ -102,33 +103,42 @@ T.addEventListener("click",function(e){var r=e.target.closest("tr");if(!r||r.par
 if(r.classList.contains("t"))r.parentNode.classList.toggle("c");
 else if(r.classList.contains("p")){var x=r.nextElementSibling;while(x&&x.classList.contains("q")){x.classList.toggle("hid");x=x.nextElementSibling}}});
 document.getElementById("tptf").oninput=function(){var v=this.value.trim();B().forEach(function(b){b.classList.toggle("f",v!==""&&b.getAttribute("data-s").indexOf(v)<0)})};
-Array.prototype.forEach.call(T.tHead.rows[0].cells,function(th,i){if(th.classList.contains("ns"))return;var asc=false;th.onclick=function(){asc=!asc;
-var bs=B().map(function(b){var c=b.rows[0].cells[i],v=c.getAttribute("data-v");return[b,v===null?c.textContent:+v]});
-bs.sort(function(x,y){return(x[1]<y[1]?-1:x[1]>y[1]?1:0)*(asc?1:-1)});bs.forEach(function(x){T.appendChild(x[0])})}});})();</script>"""
+var H=Array.prototype.slice.call(T.tHead.rows[0].cells);
+function key(c,i){var t=c.textContent;if(i===3){var a=t.split("-");return a[0]*1e6+a[1]*1e3+ +a[2]}return i<2?t:+t}
+function cmp(d){return function(x,y){return(x[1]<y[1]?-1:x[1]>y[1]?1:0)*d}}
+H.forEach(function(th,i){th.title="クリックで並べ替え（調教師・場所・パターンの各段の中で並べ替える）";th.onclick=function(){
+var d=th._d===undefined?(i<2?1:-1):-th._d;H.forEach(function(h){h._d=undefined;h.textContent=h.textContent.replace(/ [▲▼]$/,"")});th._d=d;th.textContent+=d>0?" ▲":" ▼";
+var bs=B().map(function(b){return[b,key(b.rows[0].cells[i],i)]}).sort(cmp(d));
+bs.forEach(function(x){var b=x[0],ps=[];Array.prototype.slice.call(b.rows,1).forEach(function(r){var k=[r,key(r.cells[i],i)];
+if(r.classList.contains("p")){k.push([]);ps.push(k)}else ps[ps.length-1][2].push(k)});
+ps.sort(cmp(d));ps.forEach(function(p){b.appendChild(p[0]);p[2].sort(cmp(d)).forEach(function(q){b.appendChild(q[0])})});T.appendChild(b)})}});})();</script>"""
 
 
 def _row(cls: str, idv: str, label: str, n, c, win_ret, place_ret, base: tuple[float, float]) -> str:
     """表の 1 行。c = (1着, 2着, 3着, 4着以下)。回収率は払戻の合計 / 出走数。"""
     n = int(n)
     rate = lambda v: v / n   # noqa: E731
-    dv = lambda v: f' data-v="{v:.6f}"' if cls == "t" else ""   # noqa: E731  並べ替えに使うのは調教師の行だけ
-    def hi(v: float) -> str:   # 回収率が 100% 超: 緑。超えた幅が大きいほど濃い（1.8 以上で最大）
-        return f' hi" style="--a:{0.2 + 0.55 * min(1.0, (v - 1.0) / 0.8):.2f}' if n >= HI_N and v > 1.0 else ""
+    def shade(t: float) -> str:   # 0〜1 → 明るさ（%）。成績が良いほど明るい。明るい側は文字を暗くして読めるようにする
+        light = 16 + 46 * min(1.0, max(0.0, t))
+        return (f'" style="--l:{light:.0f}' if light < 46 else f' lt" style="--l:{light:.0f}')
 
-    def hb(k: int, p0: float) -> str:   # 勝率・複勝率が全体の水準 p0 より Z_HI 標準誤差以上高い: 青。標準誤差の倍数が大きいほど濃い（Z_HI+3.5 で最大）
-        z = (k / n - p0) / (p0 * (1 - p0) / n) ** 0.5
-        return f' hb" style="--a:{0.2 + 0.55 * min(1.0, (z - Z_HI) / 3.5):.2f}' if n >= HI_N and z >= Z_HI else ""
-    shown = [(n, str(n), ""), (None, "-".join(str(int(k)) for k in c), ""), (rate(c[0]), f"{rate(c[0]):.3f}", hb(c[0], base[0])),
-             (rate(win_ret), f"{rate(win_ret):.3f}", hi(rate(win_ret))), (rate(c[0] + c[1] + c[2]), f"{rate(c[0] + c[1] + c[2]):.3f}", hb(c[0] + c[1] + c[2], base[1])),
-             (rate(place_ret), f"{rate(place_ret):.3f}", hi(rate(place_ret)))]
+    def gr(v: float) -> str:   # 回収率: 0.5 以下で最も暗い緑、1.8 以上で最も明るい緑。1.00 超は枠と太字（hot）も付ける
+        return f' gr{" hot" if v > 1.0 else ""}' + shade((v - 0.5) / 1.3) if n >= HI_N else ""
+
+    def bl(k: int, p0: float) -> str:   # 勝率・複勝率: 全体の水準 p0 以下で最も暗い青、標準誤差の 6 倍以上高いと最も明るい青。Z_HI 倍以上は枠と太字（hot）も付ける
+        z = (k / n - p0) / (p0 * (1 - p0) / n) ** 0.5 if 0 < p0 < 1 else 0.0
+        return f' bl{" hot" if z >= Z_HI else ""}' + shade(z / 6) if n >= HI_N else ""
+    shown = [(n, str(n), ""), (None, "-".join(str(int(k)) for k in c), ""), (rate(c[0]), f"{rate(c[0]):.3f}", bl(c[0], base[0])),
+             (rate(win_ret), f"{rate(win_ret):.3f}", gr(rate(win_ret))), (rate(c[0] + c[1] + c[2]), f"{rate(c[0] + c[1] + c[2]):.3f}", bl(c[0] + c[1] + c[2], base[1])),
+             (rate(place_ret), f"{rate(place_ret):.3f}", gr(rate(place_ret)))]
     cells = [f'<td class=id>{_html.escape(idv)}</td>', f'<td class=l>{_html.escape(label)}</td>']
-    cells += [f'<td class="num{h}"{dv(v) if v is not None else ""}>{txt}</td>' for v, txt, h in shown]
+    cells += [f'<td class="num{h}">{txt}</td>' for _, txt, h in shown]
     return f'<tr class="{cls}{" sm" if n < MIN_N else ""}">' + "".join(cells) + "</tr>"
 
 
 def html_block(S: pd.DataFrame) -> str:
     """summary() の結果を、調教師 > 場所（坂路・ウッド・ポリ）> パターン の 3 段で畳める表（章に埋め込む HTML）にする。
-    調教師の行と場所の行は、下の行の合計。調教師は行をクリックで開閉、見出しのクリックで調教師の並べ替え。"""
+    調教師の行と場所の行は、下の行の合計。行のクリックで開閉、見出しのクリックで各段の中の並べ替え。"""
     S = S.copy()
     S["_w"], S["_p"] = S["単勝回収率"] * S["出走数"], S["複勝回収率"] * S["出走数"]
     S[["場所", "型"]] = S["調教パターン"].str.split("|", n=1, expand=True)
@@ -146,7 +156,7 @@ def html_block(S: pd.DataFrame) -> str:
                 out.append(_row("q", tid, str(r["型"]), r["出走数"], [r[k] for k in cols], r["_w"], r["_p"], base))
         out.append("</tbody>")
     heads = ["調教師ID", "調教師 / 場所 / パターン", "出走数", "着順内訳", "勝率", "単勝回収率", "複勝率", "複勝回収率"]
-    head = "".join('<th class="ns">' + h + "</th>" if h == "着順内訳" else "<th>" + h + "</th>" for h in heads)
+    head = "".join("<th>" + h + "</th>" for h in heads)
     ctl = ('<div class="tptb"><button id="tpt0">調教師のみ</button><button id="tpt1">場所まで</button><button id="tpt2">すべて開く</button>'
            '調教師ID・名前で絞り込み<input id="tptf" placeholder="例: 清水 / 01075"></div>')
     return (f"{START}\n{_CSS}\n{ctl}\n"

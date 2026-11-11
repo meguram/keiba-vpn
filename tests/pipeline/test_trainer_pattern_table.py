@@ -88,8 +88,8 @@ def test_html_block_groups_trainer_place_pattern_with_totals():
     assert h.startswith(T.START) and h.endswith(T.END) and "|" not in h.split("<table")[1].split("</table>")[0]
     assert h.count("<tbody") == 2 and h.count('<tr class="p') == 2 and h.count('<tr class="q') == 3   # t1(栗東坂路:A2,B1) と t2(美浦坂路:X)
     t1 = h.split("<tbody")[1] if "t1" in h.split("<tbody")[1].split(">")[0] else h.split("<tbody")[2]
-    assert '<td class=id>t1</td><td class=l>調教師1</td><td class="num" data-v="6.000000">6</td>' in t1   # 5 + 1 頭の合計
-    assert f'data-v="{7.0 / 6:.6f}"' in t1 and f'<td class="num"' in t1 and f">{7.0 / 6:.3f}</td>" in t1 in t1   # 単勝回収率 (4+3)/6（調教師の行と栗東坂路の行の両方）
+    assert '<td class=id>t1</td><td class=l>調教師1</td><td class="num">6</td>' in t1   # 5 + 1 頭の合計
+    assert f">{7.0 / 6:.3f}</td>" in t1 in t1   # 単勝回収率 (4+3)/6（調教師の行と栗東坂路の行の両方）
     assert t1.count(f"{(1.5 + 1.2 + 1.1 + 1.3 + 1.2) / 6:.3f}") >= 2   # 複勝回収率
     assert "<td class=l>A2</td>" in t1 and "<td class=l>B1</td>" in t1 and "<td class=l>栗東坂路</td>" in t1
 
@@ -108,21 +108,34 @@ def test_html_block_escapes_names():
     assert "<b>" not in h and 'a&lt;b&gt;&quot;&amp;' in h
 
 
-def test_html_block_marks_roi_over_100_only_with_enough_runs():
+def _light(h, label, cls):
+    r = [r for r in h.split("<tr ") if f"<td class=l>{label}</td>" in r][0]
+    return [int(v) for v in re.findall(rf'class="num {cls}[^"]*" style="--l:(\d+)"', r)], r
+
+
+def test_html_block_color_is_brighter_for_better_results_and_hot_marks_over_100():
     def row(n, w, p):
         return {"調教師ID": "t", "調教師": "x", "調教パターン": f"栗東坂路|P{n}", "出走数": n, "1着": 1, "2着": 0, "3着": 0, "4着以下": n - 1, "単勝回収率": w, "複勝回収率": p}
-    h = T.html_block(pd.DataFrame([row(T.HI_N, 1.2, 0.9), row(T.HI_N - 1, 1.2, 1.5), row(T.HI_N, 1.0, 1.0)]))
-    assert h.count('class="num hi"') == 5   # 30 頭の P30 の単勝 1 + 合計（89 頭: 単勝 1.133・複勝 1.129）が調教師の行と場所の行で 2 × 2。29 頭の行と、ちょうど 1.0 は対象外
-    assert 'class="num hi" style="--a:0.34">1.200</td>' in h and '>1.500</td>' in h and 'hi" style="--a:0.20">1.500' not in h and 'class="num hi" style="--a:0.34">1.500' not in h
+    h = T.html_block(pd.DataFrame([row(T.HI_N, 0.6, 0.5), row(T.HI_N + 1, 1.1, 1.3), row(T.HI_N + 2, 1.7, 0.5), row(T.HI_N - 1, 1.7, 1.7)]))
+    lo, _ = _light(h, f"P{T.HI_N}", "gr")
+    mid, rmid = _light(h, f"P{T.HI_N + 1}", "gr")
+    top, rtop = _light(h, f"P{T.HI_N + 2}", "gr")
+    assert lo[0] < mid[0] < top[0] and len(lo) == 2   # 単勝・複勝の2セル。回収率が高いほど明るい
+    assert "gr hot" not in _light(h, f"P{T.HI_N}", "gr")[1] and rmid.count("gr hot") == 2 and rtop.count("gr hot") == 1   # 100% 超だけ hot
+    assert 'class="num gr' not in _light(h, f"P{T.HI_N - 1}", "gr")[1]   # 30 頭未満は色なし
 
 
-def test_html_block_marks_rates_well_above_the_overall_level_and_darker_when_higher():
+def test_html_block_rates_brighter_the_further_above_the_overall_level():
     def row(pat, n, c1, c3):
         return {"調教師ID": "t", "調教師": "x", "調教パターン": f"栗東坂路|{pat}", "出走数": n, "1着": c1, "2着": c3 - c1, "3着": 0, "4着以下": n - c3, "単勝回収率": 0.5, "複勝回収率": 0.5}
-    S = pd.DataFrame([row("L", 3000, 150, 600), row("M", 100, 20, 40), row("H", 100, 40, 60), row("S", 20, 10, 15)])   # 全体の勝率は約 0.07 だが M・H は高い。S は 30 頭未満
-    h = T.html_block(S)
-    def alpha(label):
-        r = [x for x in h.split("<tr ") if f"<td class=l>{label}</td>" in x][0]
-        return [float(a) for a in re.findall(r'class="num hb" style="--a:([0-9.]+)"', r)]
-    assert alpha("L") == [] and alpha("S") == [] and len(alpha("M")) >= 1 and len(alpha("H")) >= 1
-    assert max(alpha("H")) > max(alpha("M"))   # 水準から離れるほど濃い
+    h = T.html_block(pd.DataFrame([row("L", 3000, 150, 600), row("M", 100, 20, 40), row("H", 100, 40, 60), row("S", 20, 10, 15)]))
+    L, _ = _light(h, "L", "bl")
+    M, rm = _light(h, "M", "bl")
+    H, rh = _light(h, "H", "bl")
+    assert max(L) < max(M) < max(H) and "bl hot" in rm and "bl hot" in rh
+    assert _light(h, "S", "bl")[0] == []
+
+
+def test_html_block_sorts_every_level_in_place():
+    h = T.html_block(pd.DataFrame([{"調教師ID": "t", "調教師": "x", "調教パターン": "栗東坂路|A", "出走数": 5, "1着": 0, "2着": 0, "3着": 0, "4着以下": 5, "単勝回収率": 0.0, "複勝回収率": 0.0}]))
+    assert "data-v" not in h and "ns" not in h.split("<table")[1].split("</thead>")[0]   # 全列が並べ替え対象
