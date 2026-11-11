@@ -76,28 +76,31 @@ def add_odds(d: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def odds_bins(x: pd.DataFrame) -> pd.Series:
-    """組（調教師 × パターン）ごとの、単勝オッズ区間別の出走数（"a-b-…" の 8 区間）。オッズが読めない出走は含めない。"""
+def odds_bins(x: pd.DataFrame, edges: list[float] = EDGES) -> pd.Series:
+    """組（調教師 × パターン）ごとの、単勝オッズ区間別の出走数（"a-b-…"。区間数は len(edges) + 1）。オッズが読めない出走は含めない。"""
     x = x[(x["n"] > 0) & (x["odds"] > 0)]
-    bins = pd.crosstab([x["trainer_id"], x["pat"]], np.digitize(x["odds"], EDGES)).reindex(columns=range(len(EDGES) + 1), fill_value=0)
+    if x.empty:
+        return pd.Series(dtype=str, name=XCOLS[0], index=pd.MultiIndex.from_arrays([[], []], names=KEY))
+    bins = pd.crosstab([x["trainer_id"], x["pat"]], np.digitize(x["odds"], edges)).reindex(columns=range(len(edges) + 1), fill_value=0)
     return bins.astype(str).agg("-".join, axis=1).rename(XCOLS[0])
 
 
 def summary(d: pd.DataFrame, y0: int, y1: int, max_odds: float | None = None) -> pd.DataFrame:
     """調教師 × パターンごとの期間集計。着順内訳は『1着-2着-3着-4着以下』の頭数。
-    max_odds を指定すると、単勝オッズがその値以上の出走は、出走数・頭数・着順内訳・率・回収率のすべてから除く（オッズ分布の列だけは、除く前の全出走）。"""
+    max_odds を指定すると、単勝オッズがその値以上の出走は、出走数・頭数・着順内訳・率・回収率のすべてから除く（オッズ分布も残った出走だけ。区間はオッズ max_odds 未満の分）。"""
     x = _indicators(d[d["year"].between(y0, y1)])
     has_odds = "odds" in x.columns
-    bins = odds_bins(x) if has_odds else None
     if max_odds is not None:
         assert has_odds, "オッズ（add_odds）が必要"
         x = x[~(x["odds"] >= max_odds)]
+    edges = EDGES if max_odds is None else [e for e in EDGES if e < max_odds]   # 除いた側の区間は作らない
+    bins = odds_bins(x, edges) if has_odds else None
     S = x.groupby(KEY)[SUMS].sum()
     S = S[S["n"] > 0]
     S = S.join(derive(S))
     if has_odds:
         S = S.join(bins)
-        S[XCOLS[0]] = S[XCOLS[0]].fillna("-".join(["0"] * (len(EDGES) + 1)))   # オッズが 1 頭も読めない組
+        S[XCOLS[0]] = S[XCOLS[0]].fillna("-".join(["0"] * (len(edges) + 1)))   # オッズが 1 頭も読めない組
     names = d.sort_values("race_date").drop_duplicates("trainer_id", keep="last").set_index("trainer_id")["trainer_name"]
     S = S.reset_index()
     ok = x[x["n"] > 0].assign(place=lambda v: v["pat"].str.split("|").str[0])   # 同じ馬が複数回出走しても 1 頭と数える（horse_id）
@@ -137,6 +140,7 @@ _CSS = """<style>
 #tpt tbody{border-top:2px solid var(--border)} #tpt tr.t td{background:#1b2a4d;font-weight:bold;cursor:pointer} #tpt tr.p td{background:#172544;cursor:pointer}
 #tpt tr.p td.l{padding-left:1.4em} #tpt tr.q td.l{padding-left:2.6em} #tpt td.id{color:var(--muted);font-family:monospace} #tpt tr.sm td{opacity:.5}
 #tpt tr td.gr{background:hsl(142 55% calc(var(--l)*1%))} #tpt tr td.bl{background:hsl(215 70% calc(var(--l)*1%))} #tpt tr td.lt{color:#06121f} #tpt td.hist{padding:2px 6px} #tpt tr td.dup{color:#fb923c;font-weight:bold} #tpt tr td.hot{font-weight:bold;box-shadow:inset 0 0 0 1px rgba(255,255,255,.6)}
+#tptp{position:fixed;z-index:50;display:none;pointer-events:none;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;line-height:1.5;box-shadow:0 4px 14px rgba(0,0,0,.5)} #tptp .h{font-weight:bold;margin-bottom:4px} #tptp .r{display:flex;align-items:center;gap:6px;white-space:nowrap} #tptp .r i{display:inline-block;height:10px;border-radius:2px} #tptp .r span:first-child{width:5.5em} #tptp .r span:last-child{color:var(--muted);margin-left:auto;padding-left:6px}
 #tpt tr.ac td.id,#tpt tr.ac td.l{background:#78350f;color:#fde68a} #tpt tr.ac td.id{border-left:5px solid #fbbf24} #tpt tr.ac td.l::before{content:"★ ";color:#fbbf24}
 #tpt tbody.c tr.p,#tpt tbody.c tr.q,#tpt tr.q.hid,#tpt tbody.f{display:none} .tptb button{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 10px;margin-right:6px;cursor:pointer}
 .tptb input{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 8px;margin-left:8px;width:160px}
@@ -152,7 +156,15 @@ document.getElementById("tptf").oninput=function(){var v=this.value.trim();B().f
 var HC=["#60a5fa","#60a5fa","#60a5fa","#60a5fa","#60a5fa","#60a5fa","#fb923c","#fb923c"],HL=["2倍未満","2-3倍","3-5倍","5-10倍","10-20倍","20-50倍","50-100倍","100倍以上"];
 Array.prototype.forEach.call(T.querySelectorAll("td.hist"),function(td){var b=td.getAttribute("data-b");if(!b)return;var v=b.split(",").map(Number),s=v.reduce(function(a,c){return a+c},0);if(!s)return;var h="",t=[];
 v.forEach(function(c,i){var f=c/s,H=Math.min(1,f/.4)*18;h+='<rect x="'+i*6+'" y="'+(20-H)+'" width="5" height="'+H+'" fill="'+HC[i]+'"/>';t.push(HL[i]+" "+(f*100).toFixed(1)+"% ("+c+")")});
-td.innerHTML='<svg width="48" height="20" viewBox="0 0 48 20"><title>'+t.join(" / ")+'</title>'+h+'</svg>'});
+td.innerHTML='<svg width="'+v.length*6+'" height="20" viewBox="0 0 '+v.length*6+' 20">'+h+'</svg>'});
+var PP=document.createElement("div");PP.id="tptp";document.body.appendChild(PP);
+function pop(td){var v=td.getAttribute("data-b").split(",").map(Number),s=v.reduce(function(a,c){return a+c},0),m=Math.max.apply(null,v),tr=td.parentNode,
+n=tr.parentNode.getAttribute("data-s")+" / "+(tr.classList.contains("t")?"全体":tr.cells[1].textContent),h='<div class="h">'+n.replace(/&/g,"&amp;").replace(/</g,"&lt;")+" のオッズ分布（"+s+" 走）</div>";
+v.forEach(function(c,i){var f=s?c/s:0;h+='<div class="r"><span>'+HL[i]+'</span><i style="width:'+(m?Math.round(c/m*140):0)+'px;background:'+HC[i]+'"></i><span>'+(f*100).toFixed(1)+"%（"+c+"）</span></div>"});PP.innerHTML=h}
+function mv(e){var w=PP.offsetWidth,hh=PP.offsetHeight,l=e.clientX+14,t=e.clientY+14;if(l+w>innerWidth-8)l=e.clientX-w-14;if(t+hh>innerHeight-8)t=e.clientY-hh-14;PP.style.left=Math.max(4,l)+"px";PP.style.top=Math.max(4,t)+"px"}
+T.addEventListener("mouseover",function(e){var td=e.target.closest("td.hist");if(!td||!td.getAttribute("data-b")||!td.firstChild)return;pop(td);PP.style.display="block";mv(e)});
+T.addEventListener("mousemove",function(e){if(PP.style.display==="block")mv(e)});
+T.addEventListener("mouseout",function(e){var td=e.target.closest("td.hist");if(td&&!td.contains(e.relatedTarget))PP.style.display="none"});
 var H=Array.prototype.slice.call(T.tHead.rows[0].cells);
 function key(c,i){var t=c.textContent;if(c.getAttribute("data-v")!==null)return +c.getAttribute("data-v");if(i===5){var a=t.split("-");return a[0]*1e6+a[1]*1e3+ +a[2]}if(i<2)return t;var f=parseFloat(t);return isNaN(f)?-1:f}
 function cmp(d){return function(x,y){return(x[1]<y[1]?-1:x[1]>y[1]?1:0)*d}}
@@ -168,11 +180,11 @@ DUP = 2.0   # 1 頭あたりの出走回数がこれ以上の行は、同じ馬�
 
 
 def _odds_cell(bins) -> str:
-    """単勝オッズ区間別の出走数（8 区間。ページ側の JS が小さな棒グラフにする）。並べ替えは 50 倍以上の割合。"""
+    """単勝オッズ区間別の出走数（ページ側の JS が小さな棒グラフにする）。並べ替えは 20 倍以上の割合。"""
     if bins is None:
         return '<td class="hist"></td>'
     tot = int(bins.sum())
-    share = float(bins[len(EDGES) - 1:].sum() / tot) if tot else 0.0
+    share = float(bins[EDGES.index(20) + 1:].sum() / tot) if tot else 0.0
     return f'<td class="hist" data-v="{share:.4f}" data-b="{",".join(str(int(v)) for v in bins)}"></td>'
 
 
