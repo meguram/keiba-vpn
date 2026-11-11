@@ -127,7 +127,8 @@ def load_state(dirpath: str | Path) -> tuple[pd.DataFrame, dict[str, Any]]:
 # ───────────────────────── 前段 S3B の追加入力（追走難度 v2 / ラップ予想 / 位置取り予想）を本番の保存値から作る
 STATE_ENV = "KEIBA_V6_RB_STATE"
 EASE2_MAP = {"EASE2_drain": "drain_sec", "EASE2_demand": "demand_sec", "EASE2_capacity": "capacity_sec", "EASE2_pct": "ease_pct"}
-PF_MAP = {"pf_early": "pf_early", "pf_rank": "pf_rank", "z_hat": "z_hat"}
+PF_MAP = {"pf_early": "pf_early", "pf_rank": "pf_rank", "z_hat": "z_hat", "pp_pos": "pp_pos", "pp_rank": "pp_rank", "pp_ahead": "pp_ahead", "pp_front_n": "pp_front_n",
+          "pp_gap_mean": "pp_gap_mean"}   # pp_*（位置取りの関係）は試行 7 の前段の入力。tracking_t6 の保存値の inputs に入っている（旧エンジンの保存には無く欠損）
 LAPD_RACE = ("ld_f3", "ld_l3", "ld_q")
 LAP_RACE = ("lp_p_slow", "lp_p_mid", "lp_p_high", "lp_exp_f3_dev", "lp_exp_l3_dev", "lp_exp_lap0_dev")
 # 学習側にあって、本番の保存値からはまだ写せない列（追走難度 v2 の内部量 EASE2_full / EASE2_vs_prev、馬の追走難度 td_*、
@@ -193,6 +194,11 @@ def stage_forecast_columns(base: pd.DataFrame, names: list[str], inference_dir: 
         for n in names:
             v = row.get(n)
             out.iat[idx, out.columns.get_loc(n)] = np.nan if v is None else v
+    want_pp = [n for n in names if n.startswith("pp_")]
+    if want_pp:
+        docs = [tj for tj, _ in cache.values() if tj]
+        if docs and not any((h.get("inputs") or {}).get("pp_rank") is not None for tj in docs for h in (tj.get("horses") or {}).values()):
+            raise KeyError("追走難度の保存値に pp_*（位置取りの関係）が一つも無い（旧エンジンで保存された日）。tracking_t6_backfill で作り直す")
     if want_lapd:
         docs = [lj for _, lj in cache.values() if lj]
         if docs and not any(lj.get("lapd") for lj in docs):

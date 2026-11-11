@@ -124,3 +124,38 @@ def test_prep_drops_duplicates_and_missing_numbers_and_fills_only_missing_field_
     out = t6._prep(e.drop(columns=["pos_pred", "pf_early", "pf_rank", "pf_front", "pf_stalker", "pf_pressure", "pf_known"]), pos)
     assert len(out) == 8 and out["horse_id"].is_unique
     assert (out["field_size"] == 8).sum() == 1 and (out["field_size"] == 9).sum() == 7
+
+
+def test_stage_ensemble_t7_inputs_exclude_relative_columns_and_pp_columns_are_mapped(tmp_path):
+    import json
+    from types import SimpleNamespace
+
+    from src.pipeline.features import serving_stage_rel as ssr
+    from src.pipeline.features import serving_v6 as sv6
+
+    members = [{"name": "a", "rel_src": ["x1", "pp_rank"]}, {"name": "b", "rel_src": ["x1", "x2"]}]
+    fc = ["x1", "x2", "pp_rank", "rk_x1", "dm_x1", "dn_pp_rank", "rk_x2", "cat"]
+    models = {"a": [SimpleNamespace(feature_cols=fc)], "b": [SimpleNamespace(feature_cols=fc)]}
+    assert ssr.StageEnsembleT7(members, models).feature_cols == ["x1", "x2", "pp_rank", "cat"]
+
+    d = tmp_path / "tracking_v2" / "2025-04-05"
+    d.mkdir(parents=True)
+    (d / "R1.json").write_text(json.dumps({"horses": {"1": {"horse_id": "h", "tracking_v2": {"drain_sec": 0.3}, "inputs": {"pp_rank": 2.0, "pp_pos": 0.4, "pf_early": 0.1}}}}))
+    base = pd.DataFrame({"race_id": ["R1"], "horse_id": ["h"], "date": ["2025-04-05"]})
+    out = sv6.stage_forecast_columns(base, ["EASE2_drain", "pp_rank", "pp_pos", "pp_ahead"], tmp_path)
+    assert np.isclose(out["pp_rank"].iloc[0], 2.0) and np.isclose(out["pp_pos"].iloc[0], 0.4) and np.isnan(out["pp_ahead"].iloc[0])
+
+
+def test_stage_forecast_columns_raises_when_no_doc_has_pp(tmp_path):
+    import json
+
+    import pytest
+
+    from src.pipeline.features import serving_v6 as sv6
+
+    d = tmp_path / "tracking_v2" / "2025-04-05"
+    d.mkdir(parents=True)
+    (d / "R1.json").write_text(json.dumps({"horses": {"1": {"horse_id": "h", "tracking_v2": {"drain_sec": 0.3}, "inputs": {"pf_early": 0.1}}}}))
+    base = pd.DataFrame({"race_id": ["R1"], "horse_id": ["h"], "date": ["2025-04-05"]})
+    with pytest.raises(KeyError):
+        sv6.stage_forecast_columns(base, ["EASE2_drain", "pp_rank"], tmp_path)

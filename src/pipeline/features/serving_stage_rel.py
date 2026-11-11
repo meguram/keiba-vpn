@@ -183,6 +183,9 @@ class StageEnsembleT7:
 
     def __init__(self, members: list[dict[str, Any]], models: dict[str, list[StageModels]]):
         self.members, self.models = members, models
+        made = {p + c for mem in members for c in mem["rel_src"] for p in ("rk_", "dm_", "dn_")}
+        cols = [c for mem in members for m in models[mem["name"]] for c in m.feature_cols if c not in made] + [c for mem in members for c in mem["rel_src"]]
+        self.feature_cols = list(dict.fromkeys(cols))     # 呼び出し側が用意する入力（相対値 rk_/dm_/dn_ は predict の中で作る）
 
     def predict(self, X: pd.DataFrame, race_id: Sequence[Any]) -> pd.DataFrame:
         rid = np.asarray(race_id).astype(str)
@@ -209,3 +212,9 @@ class StageEnsembleT7:
         d = Path(d)
         meta = json.loads((d / "ensemble_meta.json").read_text(encoding="utf-8"))
         return cls(meta["members"], {m["name"]: [StageModels.load(d / f"{m['name']}_s{i}") for i in range(m["seeds"])] for m in meta["members"]})
+
+
+def load_stage(d: str | Path) -> "StageModels | StageEnsembleT7":
+    """前段の読み込み。ensemble_meta.json があれば試行 7（2 構成の平均）、無ければ従来の 1 組。"""
+    f = Path(d) / "ensemble_meta.json"
+    return StageEnsembleT7.load(d) if f.exists() and json.loads(f.read_text(encoding="utf-8")).get("kind") == "s3t7" else StageModels.load(d)
