@@ -76,3 +76,36 @@ def test_course_counts_chance_level():
     stats = {f"c{i}": {"fit": {"b": list(rng.normal(0, 1, 6)), "se": [1.0] * 6}} for i in range(80)}
     c = car.course_counts(stats, "fit", list(range(6)))
     assert c["n"] == 480 and abs(c["sd"] - 1) < 0.15 and c["hits"] < 25
+
+
+def _zone_data(effect: float, seed: int = 0, n: int = 6000):
+    from src.scripts.data import course_axis_rationale as host
+    rng = np.random.default_rng(seed)
+    Z = rng.normal(size=(n, 6))
+    surf = np.ones(n, dtype=bool)
+    S = host.zone_scores(Z, {"芝": surf})
+    cls = np.array(["1勝"] * n)
+    course = np.arange(n) < n // 2
+    p = np.where(course, 0.2 * np.exp(effect * Z[:, 0]), 0.2 * np.exp(0.5 * Z[:, 0]))
+    good = (rng.random(n) < p / (1 + p)).astype(float)
+    race = rng.integers(0, n // 8, n).astype(str)
+    return host, S, good, surf, cls, course, race
+
+
+def test_zone_scores_are_deciles_1_to_10():
+    host, S, *_ = _zone_data(0.5)
+    assert S.min() == 1 and S.max() == 10
+    assert abs(np.bincount(S[:, 0])[1:].std()) < 5
+
+
+def test_delta_minus_reference_isolates_the_course_effect():
+    out = {}
+    for eff in (0.5, 1.5):
+        host, S, good, surf, cls, course, race = _zone_data(eff)
+        per = {"all": np.ones(len(good), dtype=bool)}
+        ref = {"g": host.delta_ref(S, good, cls, {"芝": surf}, per), "p": host.delta_ref(S, good * 3, cls, {"芝": surf}, per)}
+        h = host.hist_counts(S, good, good * 3, course, race, per, cls, "芝", ref)
+        k = host.KEYS[0]
+        d = h[k]["dg_all"]
+        out[eff] = (d["d"] - d["ref"]) / d["se"]
+    assert abs(out[0.5]) < 2.5 and out[1.5] > 3

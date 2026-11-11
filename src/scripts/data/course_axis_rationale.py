@@ -9,7 +9,7 @@
   各モードで、芝ダ×クラスの平均を引いたコース固有の差を 2024-25 年（fit）、2024 年、2025 年、2026 年（テストセット②・確認のみ）に分けて推定。
   res_pts: res の結果を、ポイント制（1〜3着=3点・4〜5着=1点・6着以下=0点。ユーザー指定）に替えた頑健性の確認。期待は 11/頭数（5頭立て以上）。
   対照として、レース内で得点を入れ替えた乱数ラベルでも res を 5 回測る。
-  また、コース×軸ごとに、軸の値の帯ごとの出走数・3着以内の数のヒストグラム用の度数を出す（raw と res の 2 通り）。
+  また、コース×軸ごとに、軸を芝ダ別の十分位で 1〜10 点にした得点帯ごとの出走数・3着以内の数・ポイントのヒストグラム用の度数と、全出走馬の得点分布と好走馬の得点分布の差（好走馬の平均得点 − 全出走馬の平均得点 = Δ）を出す（raw と res の 2 通り）。
 使い方（ホストで）: cd <repo> && nice -n 19 /opt/conda/bin/python -I <このファイル> OUT.json
 """
 from __future__ import annotations
@@ -32,7 +32,7 @@ KEYS = cad.KEYS
 SHRINK_K = 3.0
 MIN_YEAR = 120          # 年別に推定するコース×年の最低走数
 N_SHUFFLE = 5
-EDGES = [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5]   # 8 つの帯
+N_ZONE = 10   # 得点帯（芝ダ別の十分位。10 = 上位 1 割、1 = 下位 1 割）
 
 
 def prior_ability(metrics: pd.DataFrame) -> tuple[pd.DataFrame, float]:
@@ -110,15 +110,56 @@ def points_of(fp: np.ndarray) -> np.ndarray:
     return np.where(fp <= 3, 3.0, np.where(fp <= 5, 1.0, 0.0))
 
 
-def hist_counts(z: np.ndarray, good: np.ndarray, ex: np.ndarray, pts: np.ndarray, exp: np.ndarray, mc: np.ndarray) -> dict:
+def zone_scores(Z: np.ndarray, surfs: dict) -> np.ndarray:
+    """各軸を、芝ダ別の十分位で 1〜10 点にする（10 点 = その軸が上位 1 割）。"""
+    S = np.zeros(Z.shape, dtype=int)
+    q = np.linspace(0, 1, N_ZONE + 1)[1:-1]
+    for ms in surfs.values():
+        for j in range(Z.shape[1]):
+            S[ms, j] = np.digitize(Z[ms, j], np.quantile(Z[ms, j], q)) + 1
+    return S
+
+
+def delta_ref(S: np.ndarray, y: np.ndarray, cls: np.ndarray, surfs: dict, periods: dict) -> dict:
+    """基準: 同じ芝ダ × 同じクラスの全体での、好走馬(重み y)の平均得点と全出走馬の平均得点。キー (期間, 芝ダ, クラス) → (好走馬, 全体)、軸ごとの値。"""
     out = {}
+    for pn, my in periods.items():
+        for sn, ms in surfs.items():
+            for c in np.unique(cls[ms]):
+                m = ms & my & (cls == c)
+                if m.sum() < 30 or y[m].sum() <= 0:
+                    continue
+                out[(pn, sn, c)] = ((S[m] * y[m, None]).sum(0) / y[m].sum(), S[m].mean(0))
+    return out
+
+
+def hist_counts(S: np.ndarray, good: np.ndarray, pts: np.ndarray, mc: np.ndarray, race: np.ndarray, periods: dict, cls: np.ndarray, surf: str, ref: dict) -> dict:
+    """得点帯ごとの度数（全出走馬・好走馬・ポイント）と、好走馬の平均得点が全出走馬の平均得点よりどれだけ高いか（Δ。レース単位でまとめた標準誤差つき）。ref は、同じ芝ダ・同じクラス構成の全体で期待されるΔ（コース固有でない分）。"""
+    out = {}
+    codes = pd.factorize(race[mc])[0]
     for j, k in enumerate(KEYS):
-        b = np.digitize(z[mc, j], EDGES)
-        out[k] = {"all": np.bincount(b, minlength=8).tolist(),
-                  "good": np.bincount(b, weights=good[mc], minlength=8).astype(int).tolist(),
-                  "ex": [round(float(v), 1) for v in np.bincount(b, weights=ex[mc], minlength=8)],
-                  "pts": np.bincount(b, weights=pts[mc], minlength=8).astype(int).tolist(),
-                  "expts": [round(float(v), 1) for v in np.bincount(b, weights=exp[mc], minlength=8)]}
+        sc = S[mc, j]
+        z = sc - 1
+        h = {"all": np.bincount(z, minlength=N_ZONE).tolist(),
+             "good": np.bincount(z, weights=good[mc], minlength=N_ZONE).astype(int).tolist(),
+             "pts": np.bincount(z, weights=pts[mc], minlength=N_ZONE).astype(int).tolist()}
+        for kind, y in (("g", good[mc]), ("p", pts[mc])):
+            rf = ref[kind]
+            for pn, my in periods.items():
+                m = my[mc]
+                if m.sum() < MIN_YEAR or y[m].sum() <= 0:
+                    h[f"d{kind}_{pn}"] = None
+                    continue
+                s_, y_, c_ = sc[m], y[m], codes[m]
+                Y, N = float(y_.sum()), float(m.sum())
+                my_, ma_ = float((y_ * s_).sum() / Y), float(s_.mean())
+                u = np.bincount(c_, weights=y_ * (s_ - my_) / Y - (s_ - ma_) / N)
+                cc = cls[mc][m]
+                yc = y_
+                cs = [c for c in np.unique(cc) if (pn, surf, c) in rf]
+                rj = sum(float(yc[cc == c].sum() / Y) * float(rf[(pn, surf, c)][0][j]) - float((cc == c).mean()) * float(rf[(pn, surf, c)][1][j]) for c in cs)
+                h[f"d{kind}_{pn}"] = {"d": round(my_ - ma_, 4), "se": round(float(np.sqrt((u * u).sum())), 4), "base": round(ma_, 3), "ref": round(rj, 4)}
+        out[k] = h
     return out
 
 
@@ -139,7 +180,6 @@ def main() -> None:
     r_raw, r_pop = y - e_n, y - e_pop
     fpos = pd.to_numeric(t["finish_position"], errors="coerce").to_numpy()
     good = (fpos <= 3).astype(float)
-    ex = np.minimum(1.0, 3.0 / t["n_field"].to_numpy())
     pts = points_of(fpos)
     ex_pts = 11.0 / t["n_field"].to_numpy()
     r_pts = pts - ex_pts
@@ -197,9 +237,14 @@ def main() -> None:
         null.append(run_mode(Zres, rsr))
         print("null", k, flush=True)
 
-    hist = {ck: hist_counts(Zraw, good, ex, pts, ex_pts, mc) for ck, mc in masks.items()}
-    histr = {ck: hist_counts(Zres, good, ex, pts, ex_pts, mc) for ck, mc in masks.items()}
-    res = {"axes": KEYS, "modes": modes, "null": null, "hist": hist, "histr": histr, "edges": EDGES, "diag": diag,
+    pz = {"all": np.ones(len(t), dtype=bool), "fit": fit, "y26": yr >= 2026}
+    Sraw, Sres = zone_scores(Zraw, surfs), zone_scores(Zres, surfs)
+    ref_raw = {"g": delta_ref(Sraw, good, cls, surfs, pz), "p": delta_ref(Sraw, pts, cls, surfs, pz)}
+    ref_res = {"g": delta_ref(Sres, good, cls, surfs, pz), "p": delta_ref(Sres, pts, cls, surfs, pz)}
+    sf = lambda ck: ck.split("|")[1]
+    hist = {ck: hist_counts(Sraw, good, pts, mc, race, pz, cls, sf(ck), ref_raw) for ck, mc in masks.items()}
+    histr = {ck: hist_counts(Sres, good, pts, mc, race, pz, cls, sf(ck), ref_res) for ck, mc in masks.items()}
+    res = {"axes": KEYS, "modes": modes, "null": null, "hist": hist, "histr": histr, "diag": diag,
            "meta": {"since": rmc.SINCE, "n_runs": int(len(t)), "n_races": int(t["race_id"].nunique()), "n_fit": int(fit.sum()), "n_2026": int((yr >= 2026).sum()),
                     "shrink_k": SHRINK_K, "mean_score": round(mu, 4), "history_coverage": round(cover, 3), "n_courses": len(masks),
                     "min_cell": cad.MIN_CELL, "min_year": MIN_YEAR, "n_shuffle": N_SHUFFLE,
