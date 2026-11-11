@@ -474,6 +474,10 @@ def _drop_duplicate_entries(df: pd.DataFrame) -> pd.DataFrame:
             alt = pd.Series(range(len(df)), index=df.index).astype("string")
         key = hid.where(hid != "", alt)
         return df.loc[~pd.DataFrame({"r": df["race_id"].astype(str), "k": key}).duplicated(keep="last")]
+    if "odds_type" in df.columns and "pair" in df.columns:
+        # 組合せオッズ（race_pair_odds）は 1 レースに券種 × 組合せの行がある。race_id だけで潰すと 1 行になる
+        key = pd.DataFrame({"r": df["race_id"].astype(str), "t": df["odds_type"].astype(str), "p": df["pair"].astype(str)})
+        return df.loc[~key.duplicated(keep="last")]
     subset = ["race_id", "horse_number"] if "horse_number" in df.columns else ["race_id"]
     return df.drop_duplicates(subset=subset, keep="last")
 

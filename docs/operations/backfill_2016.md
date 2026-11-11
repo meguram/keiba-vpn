@@ -58,7 +58,7 @@
 | race_shutuba_past / race_result_on_time | 取れた | 各 1 | |
 | horse_result / horse_pedigree_5gen | 取れた | 馬あたり 4（プロフィール・戦績・血統・5 世代） | |
 | race_paddock / race_trainer_comment / race_barometer | **取れない（ページに内容が無い）** | － | 取らない。プローブ 1 レース分で空の文書が 3 件保存されている（`201906050801`）。データ健全性では『取得不能』として扱う案（§7） |
-| horse_training（調教履歴） | 未確認 | － | 2016〜2019 年分が取れるか、別途 1 頭で確認する |
+| horse_training（調教履歴） | 取れた（2016 年に最後に走った馬 3 頭で、2013〜2014 年の調教まで遡れた） | 馬あたり 約 3〜6 ページ（1 ページ 10 走分） | `--phase past` の段階には無い。`backfill_horse_training_past` で別に取る（`training_fetch.md` §3-2） |
 | クッション値・含水率（JRA）、SmartRC | 対象外 | － | 取得元は netkeiba のみ（ユーザー決定）。クッション値は 2020 年以降のみ |
 
 派生 11 カテゴリ（race_shutuba_meta / race_result_meta・payoff・track / race_result_corner・lap_times / race_result_on_time_payoff・lap・corner / horse_profile / horse_race_history）は取得時には作られない。`backfill_past_sync.sh` が `migrate_row_data_to_unique_paths --year-start 2016 --year-end 2019 --include-horses`（既存キーはスキップ）で作る。少量実行では 1 日分 24 レースについて、レース系の派生がすべて作られたことを確認した。

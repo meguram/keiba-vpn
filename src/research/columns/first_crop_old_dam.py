@@ -3,7 +3,7 @@
 問い: 母が何歳のときに産んだ馬か（母の出産時の年齢）で、勝率・複勝率は変わるか。種牡馬の初年度産駒は走らないのか。市場は織り込んでいるか。
 
 データ:
-  レース: compare_series.load()（2020〜2025 年の JRA 平地。取消・除外を除く）
+  レース: compare_series.load()（2016〜2025 年の JRA 平地。取消・除外を除く）
   父・母: data/local/horse_pedigree_5gen/<生年>/<horse_id>.json（1 代目の父・母の id）。読むのに数分かかるので、
           data/local/research/columns/horse_parents.parquet にまとめて置く（無ければ作る。--rebuild で作り直す）。
 定義:

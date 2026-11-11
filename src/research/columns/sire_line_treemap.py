@@ -4,8 +4,8 @@ frontend/content/columns/sire-line-aptitude.json を書く。
 問い: 父系の系統（smartrc の小系統。ディープ系・キングマンボ系・ロベルト系など）で、産駒の適性（芝ダ・距離・道悪・早熟/晩成・脚質）に違いはあるか。
 
 データ:
-  レース: compare_series.load()（2020〜2025 年の JRA 平地。障害・取消・除外を除く）。馬場状態は race_result_flat の track_condition、
-          初角の位置は race_context.positions()（同じ流儀で 2019 年から読む）。
+  レース: compare_series.load()（2016〜2025 年の JRA 平地。障害・取消・除外を除く）。馬場状態は race_result_flat の track_condition、
+          初角の位置は race_context.positions()（同じ流儀で集計の前年から読む）。
   父:     compare_series.SIRE_MAP_PATH（horse_sire_map.parquet）。
   系統:   smartrc の 大系統 → 小系統（data/meta/sire_lines/sire_smartrc_lines.json。2026-11-06 ユーザー指示で netkeiba の系統から切り替え）。
           smartrc で系統が空欄の種牡馬は netkeiba の系統（data/meta/pedigree_lines/sire_line_origin.json の最も下の系統）を使い、

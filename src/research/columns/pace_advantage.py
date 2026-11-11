@@ -23,7 +23,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from src.research.columns.compare_series import RACE_QUALITY_PATH, YEARS, _p, _stat, load, pace_charts
+from src.research.columns.compare_series import YEARS, _p, _stat, load, pace_charts, read_race_quality
 from src.research.columns.race_context import NOW_STYLES, ols_fit, series, with_context
 from src.research.columns.wind_venue import pct, pfmt
 
@@ -36,7 +36,7 @@ NF_BINS = ([-1, 0, 1, 2, 3, 99], ["0頭", "1頭", "2頭", "3頭", "4頭以上"])
 def frame() -> tuple[pd.DataFrame, pd.DataFrame]:
     base = load()
     d = with_context(base)
-    rq = pd.read_parquet(RACE_QUALITY_PATH, columns=["race_id", "pace_cls"]).dropna().drop_duplicates("race_id")
+    rq = read_race_quality(["race_id", "pace_cls"]).dropna().drop_duplicates("race_id")
     d = d.merge(rq, on="race_id", how="left")
     d["lq"] = np.log(d["odds"])
     d["key"] = d["venue"] + d["surface"] + d["distance"].astype(str)
@@ -141,7 +141,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
         {"type": "accordion", "title": "データと方法・注意点", "blocks": [
             {"type": "text", "text": (
                 f"・対象: {min(YEARS)}〜{max(YEARS)}年の JRA 平地（障害を除く）で、ペースの区分があるレース（{a['n_races']:,} レース）。取消・除外は除いています。\n\n"
-                "・前寄りの頭数は、前走（JRA 平地、2019 年から）のある馬だけで数えています。デビュー戦や前走が地方の馬は数に入りません。\n\n"
+                "・前寄りの頭数は、前走（JRA 平地、2016 年から）のある馬だけで数えています。デビュー戦や前走が地方の馬は数に入りません。\n\n"
                 "・ペースの区分は、前半・上がりのラップから決まるため、レースの展開そのものです。「ハイペースだから荒れた」と「荒れる展開（人気馬が早めに動くなど）だったからハイペースになった」は、"
                 "このデータでは区別できません。")},
         ]},

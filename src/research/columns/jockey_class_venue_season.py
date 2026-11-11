@@ -8,7 +8,7 @@
   (a) 騎手間: その条件で、騎手の複勝率が全騎手の平均より高い / 低い。
   (b) 騎手内: その条件の「実際 − 見込み」が、同じ騎手のほかの条件より高い / 低い。
   両方なら「得意」「苦手」。検定は Benjamini–Hochberg（q<0.10）で多重比較を補正する。
-対象: 2020〜2025 年に MIN_RIDES 騎乗以上の騎手（主要騎手）。
+対象: 2016〜2025 年に MIN_RIDES 騎乗以上の騎手（主要騎手）。
 
 使い方:
     python -m src.research.columns.jockey_class_venue_season            # 集計して記事を書く
@@ -152,7 +152,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
 
     body: list[dict[str, Any]] = [
         {"type": "stats", "items": [
-            {"label": "対象の騎手", "value": f"{len(ids)}人", "sub": f"2020〜2025年に {MIN_RIDES:,} 騎乗以上"},
+            {"label": "対象の騎手", "value": f"{len(ids)}人", "sub": f"2016〜2025年に {MIN_RIDES:,} 騎乗以上"},
             {"label": "S ランクの騎手 複勝率", "value": jc.pct(s_all["rate"]), "sub": f"人気の見込みとの差 {jc.pt(s_all['diff'])}（{s_all['n']:,}走）"},
             {"label": "補正後も残った 得意・苦手", "value": f"{n_flag}組", "sub": f"クラス・競馬場・季節 の計 {sum(c['tests'] for c in cs.values())} 組中"},
         ]},
@@ -223,7 +223,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
         "categories": ["jockey/class-venue"],
         "published": "2026-11-02",
         "updated": "2026-11-03",
-        "dataset": {"period": "2020〜2025年", "conditions": f"JRA 平地（障害を除く）。取消・除外を除く。{MIN_RIDES:,} 騎乗以上の騎手",
+        "dataset": {"period": "2016〜2025年", "conditions": f"JRA 平地（障害を除く）。取消・除外を除く。{MIN_RIDES:,} 騎乗以上の騎手",
                     "sample": f"{a['n_runs']:,}出走"},
         "body": body,
     }

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
-import { ColumnLayout, ColumnList, SubCategories } from "@/components/column/ColumnParts";
+import { ColumnLayout, SubCategories } from "@/components/column/ColumnParts";
+import { ColumnFilterList } from "@/components/column/ColumnFilterList";
+import { summarize } from "@/components/column/ColumnCard";
 import { COLUMNS } from "@/content/columns";
 import { allCategoryPaths, categoryTrail, columnsIn } from "@/lib/columns";
 
@@ -34,7 +36,7 @@ export default async function ColumnCategoryPage({ params }: { params: Promise<{
       </p>
       <ColumnLayout columns={COLUMNS} active={path}>
         <SubCategories columns={COLUMNS} path={path} node={here} />
-        <ColumnList columns={columnsIn(COLUMNS, path)} empty="このカテゴリのコラムはまだありません。" />
+        <ColumnFilterList columns={columnsIn(COLUMNS, path).map(summarize)} empty="このカテゴリのコラムはまだありません。" />
       </ColumnLayout>
     </PageShell>
   );

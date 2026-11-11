@@ -208,6 +208,9 @@
   "src/pipeline/inference/odds_sec77.py": {
    "local_data": 2
   },
+  "src/pipeline/inference/odds_t6.py": {
+   "local_data": 1
+  },
   "src/pipeline/inference/prediction_results.py": {
    "local_data": 2
   },

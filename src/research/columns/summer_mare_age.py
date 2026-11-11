@@ -2,7 +2,7 @@
 
 問い: 夏（6〜8月）に牝馬が牡馬と互角になる・オッズの見込みより勝つ、という傾向は、年齢（2歳・3歳・4歳・5歳以上）で違うか。
 
-データ: compare_series.load()（2020〜2025 年の JRA 平地。取消・除外を除く）。牝馬と牡馬が一緒に走った混合戦の、牡・牝の出走（セン馬は除く）。
+データ: compare_series.load()（2016〜2025 年の JRA 平地。取消・除外を除く）。牝馬と牡馬が一緒に走った混合戦の、牡・牝の出走（セン馬は除く）。
 比べ方:
   年齢ごとに、夏と夏以外で 牝・牡 の勝率と、牝馬の実際の勝率とオッズから見込まれる勝率を並べる。
   オッズ（log とその 2 乗）をそろえた線形確率モデルで、年齢ごとの「牝 × 夏」の上積み（Holm 補正）と、
@@ -158,7 +158,9 @@ def splice(text: str, new: list[dict[str, Any]]) -> str:
         if isinstance(o, dict) and o.get("type") == "heading":
             heads[o["text"]] = s
     if BEFORE not in heads:
-        raise SystemExit(f"summer-mare: 見出し『{BEFORE}』が見つかりません")
+        # 記事を短くした（concise）あとは、この節の置き場所が無い。止めずに飛ばす（この節は記事に入れない方針）
+        print(f"  [skip] summer-mare: 見出し『{BEFORE}』が無いので『{HEADING}』の節は書かない")
+        return text
     end = heads[BEFORE]
     start = heads.get(HEADING, end)
     ind = text[text.rfind("\n", 0, end) + 1:end]

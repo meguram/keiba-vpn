@@ -98,7 +98,7 @@ def robustness(c: pd.DataFrame, boot: int = 2000, seed: int = 0) -> dict[str, An
     step = c["rank_prev"].map(order) - c["rank_now"].map(order)
     down2 = c[step <= -2]
     halves = {nm: float(down2.loc[m, "res_top3"].mean()) for nm, m in
-              (("2020〜2022年", down2["year"] <= 2022), ("2023〜2025年", down2["year"] >= 2023))}
+              ((f"{cs.FIRST_YEAR}〜{cs.HALF_SPLIT}年", down2["year"] <= cs.HALF_SPLIT), (f"{cs.HALF_SPLIT + 1}〜2025年", down2["year"] > cs.HALF_SPLIT))}
     h = down2.groupby("horse_id")["res_top3"].agg(["sum", "size"])
     rng = np.random.default_rng(seed)
     bs = []
@@ -124,7 +124,7 @@ def rank_lists(a: dict[str, Any]) -> list[dict[str, Any]]:
         rows = [[names[j], int(R.at[j, "n"]), jc.pct(R.at[j, "raw"]), jc.pct(R.at[j, "eb"]), jc.pt(R.at[j, "res"])] for j in ids]
         blocks.append({"type": "accordion", "title": f"{k} ランク（{RANK_DESC[k]}・{len(ids)}人）", "blocks": [
             {"type": "table", "columns": ["騎手", "騎乗数", "複勝率", "複勝率（縮めた値）", "実際 − 人気の見込み"], "rows": rows,
-             "caption": "50 音順。2020〜2025年 JRA 平地。ランクは「複勝率（縮めた値）」で決めた。"}]})
+             "caption": "50 音順。2016〜2025年 JRA 平地。ランクは「複勝率（縮めた値）」で決めた。"}]})
     return blocks
 
 
@@ -157,7 +157,7 @@ def article(a: dict[str, Any], cmp_chart: dict[str, Any]) -> dict[str, Any]:
             "乗り替わりの「マイナス」の大半は、人気にすでに織り込まれています。"},
         {"type": "heading", "text": "騎手を S〜D の 5 ランクに分ける"},
         {"type": "text", "text":
-            f"2020〜2025年に {RANK_MIN_RIDES} 騎乗以上の {int(cuts['size'].sum())} 人を、複勝率で 5 つのランクに分けました。"
+            f"2016〜2025年に {RANK_MIN_RIDES} 騎乗以上の {int(cuts['size'].sum())} 人を、複勝率で 5 つのランクに分けました。"
             "騎乗の少ない騎手の複勝率は偶然でぶれるので、経験ベイズで全騎手の平均に向けて縮めた値で並べています（騎乗が多いほど縮みは小さい）。\n\n"
             "切り方は 上位 5% = S、5〜25% = A、真ん中の半分 = B、下位 5〜25% = C、下位 5% = D。"
             "左右対称にして、B が「平均的な騎手」、S と D が両端のごく一部になるようにしました。"
@@ -216,7 +216,7 @@ def article(a: dict[str, Any], cmp_chart: dict[str, Any]) -> dict[str, Any]:
         "categories": ["jockey/change"],
         "published": "2026-10-28",
         "updated": "2026-11-03",
-        "dataset": {"period": "2020〜2025年", "conditions": "JRA 平地（障害を除く）・同じ馬の前走との比較。取消・除外を除く",
+        "dataset": {"period": "2016〜2025年", "conditions": "JRA 平地（障害を除く）・同じ馬の前走との比較。取消・除外を除く",
                     "sample": f"{a['n_runs']:,}出走（前走のある {a['n_prev']:,} 走、うちランク付きの乗り替わり {a['n_heat']:,} 走）"},
         "body": body,
     }

@@ -160,7 +160,7 @@ SPECS: list[Spec] = [
     Spec(  # A34〜A36
         slug="overseas-return", hid="A34", title="海外帰りの初戦は割引？", claim="海外遠征から帰った初戦は走らない",
         categories=["travel/overseas"], direction=-1,
-        universe=has_prev,
+        universe=lambda d: has_prev(d) & d["prev_overseas"].notna(),      # 出馬表の過去 5 走は 2019 年からしか無い
         groups=[("海外帰りの初戦", lambda d: d["prev_overseas"].eq(True)),
                 ("香港帰り", lambda d: overseas_region(d) == "香港"),
                 ("中東帰り", lambda d: overseas_region(d) == "中東"),

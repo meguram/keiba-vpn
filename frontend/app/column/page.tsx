@@ -1,5 +1,7 @@
 import { PageShell } from "@/components/PageShell";
-import { CategoryGrid, ColumnLayout, ColumnList } from "@/components/column/ColumnParts";
+import { CategoryGrid, ColumnLayout } from "@/components/column/ColumnParts";
+import { ColumnFilterList } from "@/components/column/ColumnFilterList";
+import { summarize } from "@/components/column/ColumnCard";
 import { COLUMNS } from "@/content/columns";
 import { sortByDate } from "@/lib/columns";
 
@@ -13,7 +15,7 @@ export default function ColumnPage() {
         </section>
         <section className="space-y-2">
           <h2 className="font-bold" style={{ fontSize: 15 }}>新着のコラム</h2>
-          <ColumnList columns={sortByDate(COLUMNS)} empty="コラムは準備中です。公開までしばらくお待ちください。" />
+          <ColumnFilterList columns={sortByDate(COLUMNS).map(summarize)} empty="コラムは準備中です。公開までしばらくお待ちください。" />
         </section>
       </ColumnLayout>
     </PageShell>

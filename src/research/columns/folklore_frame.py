@@ -7,7 +7,8 @@ SmartRC の陣営情報（生産者・東西・ブリンカー）などを、出
 
 すべて as-of（その出走より前の情報だけ）。今走の結果（着順・オッズ）は目的変数と比較の基準にだけ使う。
 
-対象: 集計は 2020〜2025 年の JRA 平地（compare_series.load と同じ除外）。前走などの履歴は 2016 年から読む。
+対象: 集計は 2017〜2025 年の JRA 平地（compare_series.load と同じ除外）。前走などの履歴は 2016 年から読む（2016 年は履歴を作るための準備期間で、集計に含めない）。
+SmartRC（生産者・ブリンカーなど）は 2020 年から、出馬表の過去 5 走（海外帰り）は 2019 年からしか無く、無い年は NaN（その列を使う通説は NaN を除いて比べる）。
 
 使い方:
     python -m src.research.columns.folklore_frame          # 作って data/local/research/folklore/frame.parquet に保存
@@ -29,7 +30,7 @@ OUT_DIR = REPO / "data/local/research/folklore"
 FRAME = OUT_DIR / "frame.parquet"
 TRAINING = REPO / "data/local/modeling/training_pipeline_v4/tp35/training_laps_fresh.parquet"
 HIST_YEARS = range(2016, 2026)
-YEARS = range(2020, 2026)
+YEARS = range(2017, 2026)     # 集計は 2017 年から。2016 年は前走・出走数などの履歴を作るための準備期間（表が 2016 年からなので、2016 年の行は履歴が左で切れて誤分類する）
 
 CLASS_RANK = {"新馬": 0, "未勝利": 0, "1勝": 1, "2勝": 2, "3勝": 3, "OP": 4, "L": 4, "G3": 5, "G2": 6, "G1": 7}
 OVERSEAS_SKIP = set("札幌 函館 福島 新潟 東京 中山 中京 京都 阪神 小倉".split())
@@ -203,6 +204,7 @@ def add_training(r: pd.DataFrame) -> pd.DataFrame:
     t = pd.read_parquet(TRAINING, columns=["horse_id", "train_date", "race_date", "kind", "center", "rider", "leg_color",
                                            "rank", "evaluation", "l1", "accel", "t4", "days_before"])
     t = t[(t["days_before"] >= 1) & (t["days_before"] <= 60)].copy()
+    t = t[pd.to_datetime(t["race_date"]) >= "2020-01-01"]     # 2020 年より前は生き残った馬の分だけで偏る（追い切りの通説は 2020 年から）
     t["horse_id"] = t["horse_id"].astype(str)
     t["race_date"] = pd.to_datetime(t["race_date"])
     t = t.sort_values(["horse_id", "race_date", "days_before"])
@@ -224,7 +226,7 @@ def add_training(r: pd.DataFrame) -> pd.DataFrame:
 
 def add_smartrc(r: pd.DataFrame) -> pd.DataFrame:
     cols = ["race_id", "hcode", "blinker", "tozai", "producer", "owner", "f_name", "mf_name", "f_llcode", "mf_llcode", "f_country", "mf_country"]
-    s = pd.concat([pd.read_parquet(FLAT_DIR / str(y) / "smartrc_race_flat.parquet", columns=cols) for y in YEARS], ignore_index=True)
+    s = pd.concat([pd.read_parquet(FLAT_DIR / str(y) / "smartrc_race_flat.parquet", columns=cols) for y in YEARS if (FLAT_DIR / str(y) / "smartrc_race_flat.parquet").exists()], ignore_index=True)
     s = s.rename(columns={"hcode": "horse_id"}).drop_duplicates(["race_id", "horse_id"])
     s["horse_id"] = s["horse_id"].astype(str)
     return r.merge(s, on=["race_id", "horse_id"], how="left")
@@ -237,6 +239,8 @@ def add_overseas(r: pd.DataFrame) -> pd.DataFrame:
     """出馬表の過去 5 走（race_shutuba_past）から、直前の 1 走が海外か、と海外の場名。"""
     rows = []
     for y in YEARS:
+        if not (FLAT_DIR / str(y) / "race_shutuba_past_flat.parquet").exists():
+            continue
         p = pd.read_parquet(FLAT_DIR / str(y) / "race_shutuba_past_flat.parquet", columns=["race_id", "horse_id", "past_races"])
         for rid, hid, pr in zip(p["race_id"], p["horse_id"], p["past_races"]):
             try:
@@ -261,7 +265,7 @@ def add_overseas(r: pd.DataFrame) -> pd.DataFrame:
 
 def expected_top3(r: pd.DataFrame) -> pd.Series:
     """オッズ・人気・頭数から見込まれる 3 着内の確率: 人気順（14 番人気以上はまとめる）× 同じ人気の中での単勝オッズの 5 分位
-    × 頭数（〜8・9〜11・12〜14・15〜）の区分ごとの、2020〜2025 年の 3 着内率の実績。
+    × 頭数（〜8・9〜11・12〜14・15〜）の区分ごとの、2016〜2025 年の 3 着内率の実績。
 
     オッズの式（ロジスティック回帰）では人気順ごとに ±1.5pt ずれ、人気になりやすい条件が『人気以上に走る』ように見えた。
     区分の平均なら、人気・オッズ・頭数のどの向きにもずれが残らない。区分の出走が 200 未満なら人気 × 頭数の平均を使う。

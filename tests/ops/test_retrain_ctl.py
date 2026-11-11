@@ -14,7 +14,8 @@ PLAN = ROOT / "config" / "retrain_plan.json"
 
 
 def ctl(tmp_path, *args):
-    env = {**os.environ, "RETRAIN_STATE_DIR": str(tmp_path), "RETRAIN_PLAN": str(PLAN)}
+    # RETRAIN_ORDER_HTML を存在しない一時ファイルに向ける（既定のままだと、テスト用の状態で本物の retrain_order.html を書き換えてしまう）
+    env = {**os.environ, "RETRAIN_STATE_DIR": str(tmp_path), "RETRAIN_PLAN": str(PLAN), "RETRAIN_ORDER_HTML": str(tmp_path / "no_such_order.html")}
     return subprocess.run([sys.executable, str(CTL), *args], env=env, capture_output=True, text=True)
 
 

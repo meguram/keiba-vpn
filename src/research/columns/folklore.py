@@ -9,7 +9,7 @@
   傾向あり = 主の条件で p < 0.01 かつ通説の向きに 0.5pt 以上。逆向きに有意なら傾向なし（逆）。
   条件付き = 主の条件では言えないが、グラフの区分のどれかで Holm 補正後 p < 0.05（通説の向き・200 走以上）。
   当てはまる出走が 300 未満なら判断保留。
-  検証の章に無い通説は、さらに期間を 2020〜2022 年と 2023〜2025 年に分け、レース単位のクラスタ頑健な検定で両方に同じ向き（p<0.05）が
+  検証の章に無い通説は、さらに期間を前半・後半（使った年を半分ずつ）に分け、レース単位のクラスタ頑健な検定で両方に同じ向き（p<0.05）が
   出るかを確かめる（apply_halves。2026-11-09 の監査: 出走を独立とみなす Welch の検定だけだと、片方の期間だけの差でも『傾向あり』になっていた）。
   再現しない『傾向あり』は『条件付き』へ、根拠の区分が再現しない『条件付き』は『傾向なし』へ下げる。
 
@@ -124,9 +124,17 @@ def holm(ps: list[float | None]) -> list[float | None]:
     return out
 
 
+def _year_range(u: pd.DataFrame) -> tuple[int, int] | None:
+    """使った出走の年の範囲（記事の対象期間に出す）。date 列が無ければ None。"""
+    if "date" not in u.columns or not len(u):
+        return None
+    y = pd.to_datetime(u["date"]).dt.year
+    return int(y.min()), int(y.max())
+
+
 def analyze(spec: Spec, f: pd.DataFrame) -> dict[str, Any]:
     u = f[spec.universe(f).fillna(False).astype(bool)]
-    out: dict[str, Any] = {"slug": spec.slug, "universe_n": len(u), "groups": []}
+    out: dict[str, Any] = {"slug": spec.slug, "universe_n": len(u), "groups": [], "years": _year_range(u)}
     main_mask = spec.groups[0][1](u).fillna(False).astype(bool)
     ref = _cell(u[~main_mask])
     out["ref"] = ref
@@ -189,7 +197,7 @@ def tier_verdict(tier: str, agree: bool) -> tuple[str, bool]:
 def apply_verify(spec: Spec, a: dict, v: dict | None) -> None:
     """検証の章の格で判定を決め直す（より厳しい検定を正とする）。
     S・A・B: 通説の向きなら傾向あり、逆なら傾向なし（逆）。C: 向きが合えば条件付き、逆なら傾向なし（逆）。
-    格なし: コラムの集計で傾向ありでも『条件付き』に下げる（2020〜2025 年だけの傾向）。それ以外はコラムの判定のまま。"""
+    格なし: コラムの集計で傾向ありでも『条件付き』に下げる（コラムの集計だけの傾向）。それ以外はコラムの判定のまま。"""
     if not spec.hid or not v or spec.hid not in v:
         return
     e = v[spec.hid]
@@ -204,7 +212,14 @@ def apply_verify(spec: Spec, a: dict, v: dict | None) -> None:
             a["recent_only"] = True
 
 
-HALVES = (("2020〜2022年", lambda y: y <= 2022), ("2023〜2025年", lambda y: y >= 2023))
+def _halves(years: pd.Series) -> list[tuple[str, pd.Series]]:
+    """使った年を前半・後半に半分ずつ分ける（SmartRC・出馬表の過去走・追い切りなど、年によって無いデータに頼る通説は、実際にある年だけで分ける）。"""
+    ys = sorted(int(y) for y in years.dropna().unique())
+    if len(ys) < 2:
+        return []
+    k = (len(ys) + 1) // 2
+    a, b = ys[:k], ys[k:]
+    return [(f"{a[0]}〜{a[-1]}年", years.isin(a)), (f"{b[0]}〜{b[-1]}年", years.isin(b))]
 
 
 def _half_fit(u: pd.DataFrame, g: pd.Series) -> list[dict[str, float]]:
@@ -214,8 +229,8 @@ def _half_fit(u: pd.DataFrame, g: pd.Series) -> list[dict[str, float]]:
     d = u.assign(_res=u["top3"] - u["exp_top3"], _g=g.astype(float).to_numpy())
     years = pd.to_datetime(d["date"]).dt.year
     out = []
-    for name, fn in HALVES:
-        z = d[fn(years)]
+    for name, mask in _halves(years):
+        z = d[mask]
         if z["_g"].sum() < 100 or (1 - z["_g"]).sum() < 100:
             out.append({"name": name, "d": None, "p": None, "n": int(z["_g"].sum())})
             continue
@@ -360,7 +375,7 @@ def tip(spec: Spec, a: dict) -> str:
         return ("通説とは逆に、人気になりすぎています。人気で当てはまるなら、少し割り引くくらいがちょうどよさそうです。" if spec.direction > 0
                 else "通説とは逆に、人気より走っています。この理由で割り引くのは損になりやすいです。")
     if a.get("recent_only"):
-        return "2020〜2025 年では差がありますが、2016 年からの検証では偶然と区別できません。印を動かすなら小さめに。"
+        return "集計では差がありますが、多数の通説を同時に検定する厳しい検定では偶然と区別できません。印を動かすなら小さめに。"
     if a.get("not_replicated"):
         return ("使うなら、どちらの期間でも差が出た条件に絞ってください。"
                 if best_cell(spec, a) else "偶然の可能性があるので、印を動かすなら小さめに。")
@@ -377,7 +392,7 @@ def summary(spec: Spec, a: dict) -> str:
         s += "期間を分けると " + "・".join(f"{h['name']} {pt(h['d'])}（{pfmt(h['p'])}）" for h in a["halves"] if h["d"] is not None) + "で、片方の期間でしか差が出ません。"
     if a["verdict"] == "partial" and b:
         s += f"{b['label'].replace(chr(10), '')}に限ると、差は {pt(b['d'])} です"
-        s += "（2020〜2022 年・2023〜2025 年のどちらでも同じ向き）。" if "rep_labels" in a else "。"
+        s += "（前半・後半のどちらでも同じ向き）。" if "rep_labels" in a else "。"
     return s
 
 
@@ -430,7 +445,7 @@ def article(spec: Spec, a: dict, published: str) -> dict[str, Any]:
         "categories": spec.categories,
         "published": published,
         "updated": TODAY if published != TODAY else None,
-        "dataset": {"period": "2020〜2025年", "conditions": spec.conditions or "JRA全競馬場の平地（障害除く）",
+        "dataset": {"period": (f"{a['years'][0]}〜{a['years'][1]}年" if a.get("years") else "2017〜2025年"), "conditions": spec.conditions or "JRA全競馬場の平地（障害除く）",
                     "sample": f"{a['universe_n']:,} 走（うち{main} {m['n']:,} 走）"},
         "body": body,
     }

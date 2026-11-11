@@ -63,7 +63,7 @@ def chart_block(d: pd.DataFrame, names: dict[str, str]) -> dict[str, Any]:
         "minN": MIN_N,
         "baselineLabel": "全騎手の平均",
         "expectedLabel": "騎乗馬の人気からの見込み",
-        "caption": f"2020〜2025年 JRA 平地。期間に{CHART_MIN_RIDES}騎乗以上の{len(ids)}人。点線・白抜きの点は{MIN_N}騎乗未満（参考）、"
+        "caption": f"2016〜2025年 JRA 平地。期間に{CHART_MIN_RIDES}騎乗以上の{len(ids)}人。点線・白抜きの点は{MIN_N}騎乗未満（参考）、"
                    f"{SHOW_N}騎乗未満の距離帯は省略。紫の点線は、その騎手が乗った馬の単勝オッズから見込まれる勝率。",
     }
 
@@ -265,7 +265,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
         "categories": ["jockey/distance"],
         "published": "2026-10-28",
         "updated": "2026-11-03",
-        "dataset": {"period": "2020〜2025年", "conditions": "JRA 平地（障害を除く）。取消・除外を除く",
+        "dataset": {"period": "2016〜2025年", "conditions": "JRA 平地（障害を除く）。取消・除外を除く",
                     "sample": f"{a['n_runs']:,}出走。グラフは{CHART_MIN_RIDES}騎乗以上、判定は{TABLE_MIN_RIDES}騎乗以上の騎手"},
         "body": body,
     }

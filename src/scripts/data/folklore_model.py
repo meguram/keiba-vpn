@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -92,7 +93,8 @@ def flags() -> None:
         po[c] = pd.to_numeric(po[c], errors="coerce")
     out = out.merge(po.drop_duplicates(["race_id", "horse_number"]), on=["race_id", "horse_number"], how="left")
     out = out.sort_values(["race_id", "horse_number"]).reset_index(drop=True)
-    out.to_parquet(OUT / "flags.parquet", index=False)
+    out.to_parquet(OUT / "flags.parquet.tmp", index=False)
+    os.replace(OUT / "flags.parquet.tmp", OUT / "flags.parquet")  # 読む側が書き込み途中のファイルを見ないように入れ替える
     json.dump(meta, open(OUT / "flags_meta.json", "w"), ensure_ascii=False, indent=1)
     print("flags", out.shape, "odds-dependent", sum(m["odds"] for m in meta), "of", len(meta))
 

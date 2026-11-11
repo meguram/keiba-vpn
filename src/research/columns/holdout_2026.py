@@ -1,6 +1,6 @@
 """めぐコラムの主な結論を、集計に使っていない 2026 年（1〜10 月）のデータで確かめ、各記事に「2026年のデータで確かめる」の節を書き込む。
 
-記事の集計は 2020〜2025 年。同じデータで見つけた差は、偶然の上振れを含むことがある。そこで記事の中心の数字（オッズをそろえた差）を
+記事の集計は 2016〜2025 年。同じデータで見つけた差は、偶然の上振れを含むことがある。そこで記事の中心の数字（オッズをそろえた差）を
 2026 年だけで同じ式で推定し直し、向き・大きさ・95% 区間を並べる。前走をたどる記事は 2025 年から読み、結果は 2026 年の出走だけで見る。
 
 対象（記事 → 確かめる数字）:
@@ -31,6 +31,8 @@ REPO = Path(__file__).resolve().parents[3]
 COLS = REPO / "frontend/content/columns"
 YEAR = 2026
 HEADING = "2026年のデータで確かめる"
+SMARTRC_PERIOD = f"{min(cs.SMARTRC_YEARS)}〜{max(cs.SMARTRC_YEARS)}年"      # smartrc・追い切りに頼る記事（first-blinkers・transport-vs-stay）は 2020 年から
+SMARTRC_SLUGS = {"first-blinkers", "transport-vs-stay"}
 
 
 @contextmanager
@@ -63,8 +65,9 @@ def pfmt(p: float) -> str:
     return "p<0.001" if p < 0.001 else f"p={p:.3f}"
 
 
-def line(label: str, base: dict[str, float], new: dict[str, float]) -> str:
-    return (f"・{label}: 2020〜2025年 {pt(base['e'])}（{pfmt(base['p'])}）→ {YEAR}年 {pt(new['e'])}"
+def line(label: str, base: dict[str, float], new: dict[str, float], period: str | None = None) -> str:
+    period = period or cs.PERIOD
+    return (f"・{label}: {period} {pt(base['e'])}（{pfmt(base['p'])}）→ {YEAR}年 {pt(new['e'])}"
             f"（95% 区間 {pt(new['lo'])}〜{pt(new['hi'])}、{pfmt(new['p'])}）")
 
 
@@ -133,7 +136,7 @@ def first_blinkers() -> tuple[str, list[str]]:
     out = []
     for sf in ("芝", "ダート"):
         new = run(x, sf)
-        out += [line(f"{sf}の初ブリンカーの複勝率（装着なしとの差、オッズ・コースをそろえる）", base[sf], new), verdict(base[sf], new)]
+        out += [line(f"{sf}の初ブリンカーの複勝率（装着なしとの差、オッズ・コースをそろえる）", base[sf], new, SMARTRC_PERIOD), verdict(base[sf], new)]
     return "first-blinkers", out
 
 
@@ -149,10 +152,11 @@ def transport() -> tuple[str, list[str]]:
         x = tv.frame()
     x = x[pd.to_datetime(x["date"]).dt.year == YEAR]
     new = run(x)
-    return "transport-vs-stay", [line("関西 3 場（京都・阪神・中京）での 関東馬 − 関西馬 の複勝率（オッズ・コースをそろえる）", base, new), verdict(base, new)]
+    return "transport-vs-stay", [line("関西 3 場（京都・阪神・中京）での 関東馬 − 関西馬 の複勝率（オッズ・コースをそろえる）", base, new, SMARTRC_PERIOD), verdict(base, new)]
 
 
 CHECKS: list[Callable[[], tuple[str, list[str]]]] = [summer_mare, first_dirt, first_blinkers, transport]
+SLUG_OF = {"summer_mare": "summer-mare", "first_dirt": "first-dirt", "first_blinkers": "first-blinkers", "transport": "transport-vs-stay"}
 
 
 # ── 記事への書き込み ─────────────────────────────
@@ -165,11 +169,12 @@ def splice(col: dict[str, Any], lines: list[str]) -> dict[str, Any]:
     if i is not None:
         del body[i:i + 2]
     at = next((k for k, b in enumerate(body) if b.get("type") == "accordion"), len(body))
-    text = ("記事の数字は 2020〜2025 年で集計しています。同じデータで見つけた差は偶然の上振れを含むことがあるので、"
+    period = SMARTRC_PERIOD if col.get("slug") in SMARTRC_SLUGS else cs.PERIOD
+    text = (f"記事の数字は {period.replace('年', ' 年')} で集計しています。同じデータで見つけた差は偶然の上振れを含むことがあるので、"
             f"集計に使っていない {YEAR} 年（1〜10 月）だけで同じ式を当て直しました。\n\n" + "\n".join(lines)
             + f"\n\n{YEAR} 年は 10 か月分で標本が少なく、区間は広めです。")
     body[at:at] = [{"type": "heading", "text": HEADING}, {"type": "text", "text": text}]
-    return {**col, "body": body, "updated": "2026-11-03"}
+    return {**col, "body": body, "updated": "2026-11-09"}
 
 
 def main() -> None:
@@ -178,9 +183,9 @@ def main() -> None:
     ap.add_argument("--only", nargs="*", help="記事の slug（省略時は全部）")
     args = ap.parse_args()
     for check in CHECKS:
-        slug, lines = check()
-        if args.only and slug not in args.only:
+        if args.only and SLUG_OF[check.__name__] not in args.only:
             continue
+        slug, lines = check()
         print(f"[{slug}]\n  " + "\n  ".join(lines))
         if args.dry_run:
             continue

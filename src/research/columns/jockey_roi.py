@@ -3,10 +3,10 @@
 問い: 勝率の高い騎手（調教師）を買うと儲かるか。回収率の高い騎手・調教師は、次の期間も高いか（狙い目として使えるか）。
 
 落とし穴: 単勝回収率は高配当 1 回で大きく動く（100 倍の 1 勝で、500 騎乗の回収率が 20pt 上がる）。
-  同じ期間の回収率で上位を選ぶと、偶然の上振れを拾う（選択バイアス）。そこで期間を前半（2020〜2022）・後半（2023〜2025）に分け、
+  同じ期間の回収率で上位を選ぶと、偶然の上振れを拾う（選択バイアス）。そこで期間を前半（2016〜2020）・後半（2021〜2025）に分け、
   前半で選んだ騎手・調教師の後半の成績を見る。両期間とも 500 騎乗（調教師は 300 出走）以上の人だけ。
 
-データ: jockey_common.frame()（2020〜2025 年の JRA 平地、障害・取消・除外を除く。exp_win = 人気と頭数から見込まれる勝率）。
+データ: jockey_common.frame()（2016〜2025 年の JRA 平地、障害・取消・除外を除く。exp_win = 人気と頭数から見込まれる勝率）。
 比較グラフ「勝率上位8名 vs それ以外の騎手 × 人気帯別 単勝回収率」は compare_series が書くので、既存の JSON から引き継ぐ。
 
 使い方:
@@ -25,7 +25,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from src.research.columns.compare_series import FLAT_DIR, YEARS
+from src.research.columns.compare_series import FIRST_YEAR as cs_FIRST, FLAT_DIR, HALF_SPLIT as cs_SPLIT, YEARS
 from src.research.columns.jockey_common import frame, jockey_names
 from src.research.columns.race_context import series
 from src.research.columns.wind_venue import mean_ci, pct
@@ -34,7 +34,7 @@ REPO = Path(__file__).resolve().parents[3]
 OUT = REPO / "frontend/content/columns/jockey-roi.json"
 KEEP_CHART = "勝率上位8名 vs それ以外の騎手 × 人気帯別 単勝回収率"
 QS = ["下位\n20%", "20〜40%", "40〜60%", "60〜80%", "上位\n20%"]
-HALVES = {"A": "前半（2020〜2022年）", "B": "後半（2023〜2025年）"}
+HALVES = {"A": f"前半（{cs_FIRST}〜{cs_SPLIT}年）", "B": f"後半（{cs_SPLIT + 1}〜2025年）"}
 NAMED = ["川田将雅", "ルメール", "横山武史", "水沼元輝", "石田拓郎", "柴山雄一"]
 
 
@@ -64,7 +64,7 @@ def pchart(p: dict[str, Any], d: pd.DataFrame, key: str, who: str, title: str) -
 
 def analyze(d: pd.DataFrame) -> dict[str, Any]:
     d = d.copy()
-    d["half"] = np.where(d["year"] <= 2022, "A", "B")
+    d["half"] = np.where(d["year"] <= cs_SPLIT, "A", "B")
     tr = pd.concat([pd.read_parquet(FLAT_DIR / str(y) / "race_result_flat.parquet", columns=["race_id", "horse_id", "trainer_id"]) for y in YEARS])
     tr["horse_id"] = tr["horse_id"].astype(str)
     d = d.merge(tr.drop_duplicates(["race_id", "horse_id"]), on=["race_id", "horse_id"], how="left")
@@ -77,7 +77,7 @@ def analyze(d: pd.DataFrame) -> dict[str, Any]:
     parts = [d.loc[d["jockey_id"].isin(jq[jq == x].index), "ret"] for x in QS]
     s = series("単勝回収率", parts)
     s["ci"] = [mean_ci(v) for v in parts]
-    a["c_win_q"] = {"type": "chart", "title": "勝率で並べた騎手 5 群の単勝回収率", "xLabel": "騎手の勝率（2020〜2025年、500騎乗以上）", "yLabel": "単勝回収率",
+    a["c_win_q"] = {"type": "chart", "title": "勝率で並べた騎手 5 群の単勝回収率", "xLabel": "騎手の勝率（2016〜2025年、500騎乗以上）", "yLabel": "単勝回収率",
                     "xs": QS, "series": [s], "caption": f"{len(j)} 人を勝率で 5 等分し、群ごとに全騎乗の単勝回収率を出したもの。縦線は 95% 信頼区間。"}
     a["win_q"] = [float(v.mean()) for v in parts]
     a["win_q_range"] = [(float(j.loc[jq == x, "win"].min()), float(j.loc[jq == x, "win"].max())) for x in QS]
@@ -129,7 +129,7 @@ def article(a: dict[str, Any], keep: dict[str, Any] | None) -> dict[str, Any]:
             "人気薄の馬は実力以上に買われやすく（人気薄ほど回収率が低い）、勝率の低い騎手は人気薄に乗ることが多いためと考えられます。"
             "ただし、どの群でも 100% には届かず、勝率の高い騎手を買い続けて儲かるわけではありません。\n\n"
             "では「回収率の高い騎手（穴騎手）を狙えばよいか」というと、それも根拠がありません。"
-            f"2020〜2022 年の回収率で上位 10 人を選ぶと、その期間は {pct(pj['top10A'], 0)} ですが、2023〜2025 年には {pct(pj['top10B'], 0)} に下がります。"
+            f"2016〜2020 年の回収率で上位 10 人を選ぶと、その期間は {pct(pj['top10A'], 0)} ですが、2021〜2025 年には {pct(pj['top10B'], 0)} に下がります。"
             f"騎手 {pj['n']} 人の前半と後半の回収率の相関は {pj['corr']:.2f}（調教師 {ptr['n']} 人では {ptr['corr']:.2f}）で、ある期間の回収率は次の期間をほとんど予想しません。"
             "高い回収率の多くは、少数の高配当による偶然の上振れです。")},
         a["c_win_q"],
@@ -145,12 +145,12 @@ def article(a: dict[str, Any], keep: dict[str, Any] | None) -> dict[str, Any]:
         {"type": "heading", "text": "以前の版に載せていた騎手"},
         {"type": "table", "columns": ["騎手", "騎乗数", "勝率", "人気から見込まれる勝率", "単勝回収率（95%区間）", "最高配当の勝ち", "その 1 勝を除いた回収率", "前半", "後半"],
          "rows": trows,
-         "caption": "2020〜2025 年の JRA 平地（障害を除く）。前半 = 2020〜2022 年、後半 = 2023〜2025 年（騎乗の無い期間は –）。"},
+         "caption": "2016〜2025 年の JRA 平地（障害を除く）。前半 = 2016〜2020 年、後半 = 2021〜2025 年（騎乗の無い期間は –）。"},
         {"type": "text", "text": (
             (f"以前の版で「回収率 143%」としていた水沼騎手は、{mz['big']:.0f} 倍の 1 勝を除くと {pct(mz['wo'], 0)} で、95% 区間は {pct(mz['ci'][0], 0)}〜{pct(mz['ci'][1], 0)} と、"
              "100% を下回る可能性も十分にあります。" if mz else "")
             + "1 回の高配当で回収率は大きく変わるので、数百騎乗の回収率で騎手を「穴騎手」と呼ぶことはできません。"
-            "なお以前の版の上野翔騎手は、平地の騎乗が 2020〜2025 年に十数回しかなく（主に障害の騎手）、500 騎乗以上の表に載せたのは誤りでした。")},
+            "なお以前の版の上野翔騎手は、平地の騎乗が 2016〜2025 年に十数回しかなく（主に障害の騎手）、500 騎乗以上の表に載せたのは誤りでした。")},
     ]
     if keep:
         body += [{"type": "heading", "text": "人気帯で分けると"}, keep,
@@ -162,7 +162,7 @@ def article(a: dict[str, Any], keep: dict[str, Any] | None) -> dict[str, Any]:
             "騎手は「馬の力を出し切れるか」の材料として、人気（オッズ）と比べて評価してください。")},
         {"type": "accordion", "title": "データと方法・以前の版からの変更", "blocks": [
             {"type": "text", "text": (
-                f"・対象: 2020〜2025 年の JRA 平地 {a['n_runs']:,} 出走（障害・取消・除外を除く）。単勝回収率は、単勝を 100 円ずつ買ったときの払戻の割合です。\n\n"
+                f"・対象: 2016〜2025 年の JRA 平地 {a['n_runs']:,} 出走（障害・取消・除外を除く）。単勝回収率は、単勝を 100 円ずつ買ったときの払戻の割合です。\n\n"
                 "・人気から見込まれる勝率は、単勝オッズから求めた勝率を 50 段階に分け、頭数の帯ごとに実際の勝率をあてはめたもの（騎手コラム共通）。\n\n"
                 "・以前の版は、同じ期間の回収率で騎手・調教師の上位を選んで載せていました。これは偶然の上振れを選ぶことになるので、"
                 "期間を前後に分けて「前半で選び、後半で確かめる」形に直しました。調教師の表（200 出走で回収率 187% など）も同じ理由で外しました。")},
@@ -178,7 +178,7 @@ def article(a: dict[str, Any], keep: dict[str, Any] | None) -> dict[str, Any]:
         "categories": ["jockey/distance"],
         "published": "2026-10-28",
         "updated": "2026-11-03",
-        "dataset": {"period": "2020〜2025年（前半 2020〜2022・後半 2023〜2025 で確かめる）",
+        "dataset": {"period": "2016〜2025年（前半 2016〜2020・後半 2021〜2025 で確かめる）",
                     "conditions": "JRA 平地（障害を除く）。前後半の比較は両期間とも 500 騎乗以上の騎手・300 出走以上の調教師",
                     "sample": f"{a['n_runs']:,} 出走"},
         "body": body,

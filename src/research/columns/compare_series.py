@@ -4,7 +4,7 @@
 差が偶然の範囲を超えているかを確かめる必要がある。ここでは記事ごとに 2 系列（条件 / それ以外）を集計し、
 各点に標本数・95% 信頼区間、横軸の点ごとに 2 系列の差の p 値（Welch の z 検定。0/1 の率なら 2 標本の比率の検定と同じ）を付ける。
 
-対象: 2020〜2025 年の JRA 平地（障害を除く）。元データは data/page_reference/tables/<年>/race_result_flat.parquet。
+対象: 2016〜2025 年（FIRST_YEAR〜）の JRA 平地（障害を除く）。元データは data/page_reference/tables/<年>/race_result_flat.parquet。
 
 使い方:
     python -m src.research.columns.compare_series            # 集計して frontend/content/columns/*.json を書き換える
@@ -26,9 +26,14 @@ import pandas as pd
 REPO = Path(__file__).resolve().parents[3]
 FLAT_DIR = REPO / "data/page_reference/tables"
 SIRE_MAP_PATH = REPO / "data/page_reference/pedigree_race_index/horse_sire_map.parquet"
+RACE_QUALITY_OLD_PATH = REPO / "data/local/modeling/shared_cache/race_quality/race_cls_2016_2019.parquet"      # 2016〜2019 年分のペース区分（tp61_build で作り、2020〜2023 年で固定した閾値で分類。2020 年以降の既存値と完全一致することを確かめた）
 RACE_QUALITY_PATH = REPO / "data/local/modeling/shared_cache/race_quality/race_quality.parquet"      # レースごとのペース区分（pace_cls）
 COLUMNS_DIR = REPO / "frontend/content/columns"
-YEARS = range(2020, 2026)
+FIRST_YEAR = 2016        # 結果表（race_result・race_shutuba・race_odds）は 2016 年からそろっている。2020 年からのものは補助データ（smartrc・指数・ペース区分・気象）だけ
+YEARS = range(FIRST_YEAR, 2026)
+PERIOD = f"{FIRST_YEAR}〜2025年"
+SMARTRC_YEARS = range(2020, 2026)   # smartrc の全戦績・追い切り・指数・気象は 2020 年からしか無い（2016〜2019 年は生き残った馬の分だけで偏る）ので、それに頼る記事はこの期間に固定する
+HALF_SPLIT = 2020         # 前半（FIRST_YEAR〜HALF_SPLIT）・後半（HALF_SPLIT+1〜2025）で確かめる境
 
 POP_BANDS = ["1〜3番人気", "4〜6番人気", "7番人気以下"]
 DIST_BANDS = ["短距離\n〜1400m", "マイル\n1401〜1800m", "中距離\n1801〜2200m", "長距離\n2201m〜"]
@@ -45,6 +50,14 @@ JUMP_NAME_RE = r"障害|ジャンプ|\(JG|JS\(|スプリングJ\("
 FLAT_LONG_DISTANCES = (3000, 3200, 3400, 3600)
 
 
+def read_race_quality(columns: list[str]) -> pd.DataFrame:
+    """レースごとのペース区分など。2020 年以降は race_quality、2016〜2019 年は別の表（RACE_QUALITY_OLD_PATH。あれば）をつなぐ。"""
+    parts = [pd.read_parquet(RACE_QUALITY_PATH, columns=columns)]
+    if RACE_QUALITY_OLD_PATH.exists():
+        parts.append(pd.read_parquet(RACE_QUALITY_OLD_PATH, columns=columns))
+    return pd.concat(parts, ignore_index=True)
+
+
 def jump_mask(r: pd.DataFrame) -> pd.Series:
     """障害レースの行なら True（列 race_name・race_class・surface・distance を使う）。"""
     name = r["race_name"].fillna("").astype(str).str.contains(JUMP_NAME_RE)
@@ -54,10 +67,12 @@ def jump_mask(r: pd.DataFrame) -> pd.Series:
     return name | cls | r["surface"].eq("障") | odd_dist
 
 
-def load() -> pd.DataFrame:
+def load(years=None) -> pd.DataFrame:
+    """JRA 平地の出走。years を省くと YEARS（2016〜2025）。補助データが 2020 年からの記事は years=SMARTRC_YEARS を渡す。"""
+    years = YEARS if years is None else years
     cols = ["race_id", "date", "venue", "surface", "distance", "field_size", "finish_position", "horse_id",
             "sex_age", "jockey_id", "jockey_name", "odds", "popularity", "grade", "race_name", "race_class"]
-    df = pd.concat([pd.read_parquet(FLAT_DIR / str(y) / "race_result_flat.parquet", columns=cols) for y in YEARS], ignore_index=True)
+    df = pd.concat([pd.read_parquet(FLAT_DIR / str(y) / "race_result_flat.parquet", columns=cols) for y in years], ignore_index=True)
     df = df[df["surface"].isin(["芝", "ダート"]) & ~jump_mask(df)].drop(columns=["race_name", "race_class"]).copy()
     # 出走していない馬（取消・除外。オッズも人気もない）は除く。中止・失格など走った馬は「3着以内でない」として残す
     df = df[(df["odds"] > 0) & (df["popularity"] > 0)].copy()
@@ -199,7 +214,7 @@ def pairs(df: pd.DataFrame) -> list[Pair]:
     out.append(Pair("summer-mare", "月別 牡・牝馬 勝率の推移（混合戦）", months, "牝", "牡", "win",
                     lambda d, x: (d.loc[mf & (d["sex"] == "牝") & (d["month"] == int(x[:-1])), "win"],
                                   d.loc[mf & (d["sex"] == "牡") & (d["month"] == int(x[:-1])), "win"]),
-                    "月", "勝率", "2020〜2025年 JRA 平地。牝馬と牡馬が一緒に走ったレース（混合戦）だけで、各月の勝率を比べる。＊は差が有意（p<0.05）な月。",
+                    "月", "勝率", f"{PERIOD} JRA 平地。牝馬と牡馬が一緒に走ったレース（混合戦）だけで、各月の勝率を比べる。＊は差が有意（p<0.05）な月。",
                     replace_title="月別 牡・牝馬 勝率の推移"))
     mare = mf & (df["sex"] == "牝")
     out.append(Pair("summer-mare", "月別 牝馬の勝率（実際とオッズの見込み・混合戦）", months, "実際の勝率", "オッズから見込まれる勝率", "win",
@@ -212,7 +227,7 @@ def pairs(df: pd.DataFrame) -> list[Pair]:
     out.append(Pair("gelding-return", "セン馬の年齢別勝率", ages, "セン馬", "牡馬（セン馬以外）", "win",
                     lambda d, x: (d.loc[(d["sex"] == "セ") & (d["age"] == int(x[:-1])), "win"],
                                   d.loc[(d["sex"] == "牡") & (d["age"] == int(x[:-1])), "win"]),
-                    "年齢", "勝率", "2020〜2025年 JRA 平地。同じ年齢の牡馬と比べたセン馬の勝率。",
+                    "年齢", "勝率", f"{PERIOD} JRA 平地。同じ年齢の牡馬と比べたセン馬の勝率。",
                     replace_title="セン馬の年齢別勝率"))
     # 去勢明け初戦（前走は牡、今走はセ）vs それ以外の出走
     gelded_now = (df["sex"] == "セ") & (df["prev_sex"] == "牡")
@@ -347,7 +362,7 @@ def _pace_frames(df: pd.DataFrame) -> dict[str, pd.DataFrame] | None:
     """距離・芝ダの組み合わせごとの出走（ペース区分つき）。"""
     if not RACE_QUALITY_PATH.exists():
         return None
-    rq = pd.read_parquet(RACE_QUALITY_PATH, columns=["race_id", "pace_cls"]).dropna().drop_duplicates("race_id")
+    rq = read_race_quality(["race_id", "pace_cls"]).dropna().drop_duplicates("race_id")
     d = df[df["popularity"].notna()].merge(rq, on="race_id")
     out = {}
     for dk, dr in PACE_DIST.items():
@@ -393,7 +408,7 @@ def pace_charts(df: pd.DataFrame) -> list[tuple[Placement, dict[str, Any]]]:
         return []
     filters = [{"label": "距離", "options": list(PACE_DIST)}, {"label": "芝・ダート", "options": list(PACE_SURF)}]
     base_key = "全体|全体"
-    note = "2020〜2025年 JRA 平地。左軸は人気帯ごとの複勝率（4〜6番人気は点線）、右軸は 3 着以内に来た馬の平均人気（大きいほど人気薄が馬券に絡んでいる）。"
+    note = f"{PERIOD} JRA 平地。左軸は人気帯ごとの複勝率（4〜6番人気は点線）、右軸は 3 着以内に来た馬の平均人気（大きいほど人気薄が馬券に絡んでいる）。"
     pop_base, p_base = _pace_pop_series(frames[base_key])
     variants = {}
     for k, d in frames.items():
@@ -421,7 +436,9 @@ def apply(pair: Pair | Placement, chart: dict[str, Any]) -> str:
         ind = _indent_at(text, s)
         text, how = text[:e] + ",\n" + ind + _chart_text(chart, ind) + text[e:], "added"
     else:
-        raise SystemExit(f"{pair.slug}: 置き場所のグラフ『{pair.replace_title or pair.after_title}』が見つかりません")
+        # 記事を短くした（concise）あとは、置き場所のグラフが無い記事がある。止めずに飛ばす（そのグラフは記事に入れない方針）
+        print(f"  [skip] {pair.slug}: 置き場所のグラフ『{pair.replace_title or pair.after_title}』が無いので『{chart['title']}』は書かない")
+        return "skipped"
     for title in getattr(pair, "remove_titles", ()):
         if hit := _find_chart(text, title):
             s, e = hit
@@ -533,7 +550,7 @@ def mare_regression(df: pd.DataFrame) -> None:
     x["season"] = x["month"].map(lambda m: "春3-5月" if m in (3, 4, 5) else "夏6-8月" if m in (6, 7, 8) else "秋9-11月" if m in (9, 10, 11) else "冬12-2月")
     g = x.groupby(["season", "sex"]).agg(n=("win", "size"), win=("win", "mean"), implied=("implied", "mean"), roi=("ret", "mean"))
     print(g.round(4).to_string())
-    for name, m in [("全体", x["year"] > 0), ("2020〜2022年", x["year"] <= 2022), ("2023〜2025年", x["year"] >= 2023), ("3歳以上", x["age"] >= 3), ("4歳以上", x["age"] >= 4)]:
+    for name, m in [("全体", x["year"] > 0), (f"{FIRST_YEAR}〜{HALF_SPLIT}年", x["year"] <= HALF_SPLIT), (f"{HALF_SPLIT + 1}〜2025年", x["year"] > HALF_SPLIT), ("3歳以上", x["age"] >= 3), ("4歳以上", x["age"] >= 4)]:
         z = x[m]
         r = smf.ols("win ~ mare*summer + lq + I(lq**2) + C(ag)", z).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(z["race_id"])[0]})
         print(f"    {name:<12} 牝×夏 {r.params['mare:summer'] * 100:+.2f}pt (p={r.pvalues['mare:summer']:.3g})  夏以外の牝 {r.params['mare'] * 100:+.2f}pt (p={r.pvalues['mare']:.3g})")

@@ -31,6 +31,8 @@ PROGRESS = ROOT / "data/local/meta/backfill_progress.json"
 TRAINING_PROGRESS = ROOT / "data/local/meta/horse_training_backfill_progress.json"
 PAST_LOG = ROOT / "logs/backfill_past.log"
 TRAINING_LOG = ROOT / "logs/horse_training_backfill.log"
+TRAINING_PAST_PROGRESS = ROOT / "data/local/meta/horse_training_past_progress.json"
+TRAINING_PAST_LOG = ROOT / "logs/horse_training_past.log"
 
 JST = timezone(timedelta(hours=9))     # ログの時刻は JST（OS の時刻は UTC のことがある）
 ETA_WINDOWS_H = (3,)                   # 見込みに使う速度の窓（時間）。譲り・中断・夜の切れ目も含めた実効の平均
@@ -41,6 +43,7 @@ REQ_PER_HORSE_DEFAULT = 4.0            # 実績が無いときの 1 頭あたり
 RACES_PER_DAY_DEFAULT = 32.0
 NEW_HORSE_DECAY = 0.5                  # 未取得の開催日の新しい馬の数 ＝ 取得済みの開催日あたりの頭数 × この係数（概算）
 TRAINING_REQ_PER_HORSE = 1.0
+TRAINING_PAST_PAGES_PER_HORSE = 3.0   # 全ページ取り直し（10 走 1 ページ）の 1 頭あたりの件数の初期値（実績が 25 頭たまれば実績を使う）
 STAGE_LABEL = {"fast": "結果", "horse": "馬・血統", "cards": "出馬表・追い切り", "lap": "ラップ", "odds": "オッズ", "pair": "2連系オッズ",
                "index": "指数", "past": "馬柱", "on_time": "速報", "anchors_f": "父方アンカー"}
 REQUIRED_FOR_TRAINING = ("fast", "horse", "cards", "lap")   # 学習に必須の段階（§4）
@@ -220,13 +223,13 @@ def _procs() -> dict[str, list[str]]:
     import subprocess
 
     out = subprocess.run(["ps", "-eo", "pid,etime,args"], capture_output=True, text=True, timeout=5).stdout.splitlines()[1:]
-    found: dict[str, list[str]] = {"past": [], "training": [], "other": []}
+    found: dict[str, list[str]] = {"past": [], "training": [], "training_past": [], "other": []}
     for line in out:
         pid, etime, args = (line.strip().split(None, 2) + ["", ""])[:3]
         if "fetch_status" in args or "grep" in args or "--report" in args or "python" not in args:
             continue
         key = "past" if "--phase past" in args else "training" if "backfill_horse_training_recent" in args else \
-            "other" if re.search(bg.OTHER_FETCH_PATTERN, args) else None
+            "training_past" if "backfill_horse_training_past" in args else "other" if re.search(bg.OTHER_FETCH_PATTERN, args) else None
         if key:
             found[key].append(f"PID {pid} 経過 {etime}  {args.split(' -m ', 1)[-1][:90]}")
     return found
@@ -344,6 +347,33 @@ def render(now: datetime | None = None) -> str:
         L.append(f"   前回の中断理由: {tp['aborted']}")
     elif tp.get("finished_at"):
         L.append(f"   前回の終了: {tp['finished_at']}")
+
+    # 調教の過去分の取り直し（2016〜2019 年だけに走った馬。1 頭あたり複数ページ）
+    pp = _load_json(TRAINING_PAST_PROGRESS)
+    if pp or procs.get("training_past", []):
+        pl_ = scan_log(TRAINING_PAST_LOG, now, windows_h=(1, 3))
+        pc = pp.get("counts", {})
+        n_done, total = len(pp.get("done", {})), pp.get("total")
+        reqs = pp.get("requests", 0)
+        per_horse = reqs / n_done if n_done >= 25 else TRAINING_PAST_PAGES_PER_HORSE
+        rate = rate_per_hour(pl_, 3, now)
+        run_h = (now - pl_["run_start"]).total_seconds() / 3600 if pl_["run_start"] else 0.0
+        if rate <= 0 and run_h > 0:
+            rate = pl_["run_gets"] / run_h
+        left = max(total - n_done, 0) if total else None
+        p_state = "取得中" if procs.get("training_past", []) else "停止中（プロセスなし）"
+        L += ["", f"■ 調教の過去分の取り直し（2016〜2019 年の馬・全ページ）: {p_state}"]
+        for p in procs.get("training_past", []):
+            L.append(f"   {p}")
+        pct = f" {n_done / total * 100:.0f}%" if total else ""
+        L.append(f"   進捗 {n_done:,}/{total or '?'} 頭{pct} ・ 保存 {pc.get('saved', 0):,} ・ 調教なし {pc.get('empty', 0)} ・ 失敗 {pc.get('error', 0)}"
+                 f"  ／ 最後のログ: {_age(now, pl_['last_ts'])}")
+        eta = _fmt_eta(now, left * per_horse / rate if left and rate > 0 else None)
+        L.append(f"   1 頭あたり {per_horse:.1f} 件 ・ 速度 {rate:.0f} 件/時（直近 3 時間） → 残り {left if left is not None else '?'} 頭の終了: {eta if left else '完了'}")
+        if not procs.get("training_past", []) and pp.get("aborted"):
+            L.append(f"   前回の中断理由: {pp['aborted']}")
+        elif not procs.get("training_past", []) and pp.get("finished_at"):
+            L.append(f"   前回の終了: {pp['finished_at']}")
 
     if procs["other"]:
         L += ["", "■ その他の取得（補填はこれらに譲る）"] + [f"   {p}" for p in procs["other"]]
