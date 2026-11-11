@@ -63,6 +63,10 @@ def test_pf_columns_matches_apply_learned_pos(tmp_path, monkeypatch):
 def test_run_features_asof_is_unchanged_by_the_target_actuals():
     """予測する行の実測を NaN にしても（推論）、実測が入っていても（学習）、その行の過去走の集計は同じ（先読みが無い）。"""
     cfg = pcoh.load_config()
+    if not cfg:
+        import pytest
+
+        pytest.skip("当て込まれた係数（config/pace_coherence.json）が公開リポジトリに無い")
     keys = [k.split("|") for k in list(cfg["cohort_l3f"])]
     v, s, d, g = next(k for k in keys if k[1] == "芝" and k[3] == "良")
     r = _results(8, 10).assign(venue=v, surface=s, distance=int(d), track_condition=g)
