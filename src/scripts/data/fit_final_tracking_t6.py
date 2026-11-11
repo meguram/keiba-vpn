@@ -46,23 +46,13 @@ def build_inputs(h: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFr
     D = h[["race_id"]].merge(ld.drop_duplicates("race_id"), on="race_id", how="left").drop(columns=["race_id"])
     D.index = h.index
     pe = h["pf_early"].astype(float)
-    D["ld_front_x_f3"] = (1 - pe) * D["ld_f3"]
-    D["ld_rear_x_q"] = pe * D["ld_q"]
+    D = pd.concat([D, td2.ld_cross(D["ld_f3"], D["ld_q"], pe)], axis=1)
     po = pd.read_parquet(POS_OOF)
     po["race_id"], po["horse_id"] = po["race_id"].astype(str), po["horse_id"].astype(str)
     po = pd.concat([po, pp_columns(po)], axis=1)
     P = h[["race_id", "horse_id"]].merge(po[["race_id", "horse_id", *PP_COLS]].drop_duplicates(["race_id", "horse_id"]), on=["race_id", "horse_id"], how="left").drop(columns=["race_id", "horse_id"])
     P.index = h.index
     return L, D, P, pe
-
-
-def past_drop_inputs(h: pd.DataFrame, y: pd.Series, pe: pd.Series) -> pd.DataFrame:
-    """馬の過去の終いの落ち（y = 実測の上がり偏差 − ベースライン）の直近 1・3 走平均に、前にいる度合い・圧力・ペースを掛けたもの。"""
-    gy = y.groupby(h["horse_id"], sort=False)
-    fr = 1 - pe
-    hy3 = pd.concat([gy.shift(k) for k in (1, 2, 3)], axis=1).mean(axis=1)
-    return pd.DataFrame({"hy3_x_front": hy3 * fr, "hy1_x_front": gy.shift(1) * fr, "hy3_x_press": hy3 * h["pf_pressure"].astype(float),
-                         "hy3_x_zhat": hy3 * h["z_hat"].astype(float)}, index=h.index)
 
 
 def main() -> None:
@@ -78,7 +68,7 @@ def main() -> None:
     L, D, P, pe = build_inputs(h)
     coef = m.baseline_fit(h, ok)
     _, y = m.make_target(h, coef)
-    Hi = past_drop_inputs(h, y, pe)
+    Hi = td2.past_drop_inputs(h, y, pe)
     tr = ok & y.notna()
     XC = pd.concat([X[m.CORE], L, D, P, Hi], axis=1)
     XB = pd.concat([X, L, D, P, Hi], axis=1)
