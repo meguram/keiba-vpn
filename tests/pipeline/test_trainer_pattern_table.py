@@ -193,12 +193,14 @@ def test_summary_excludes_odds_50_and_above_from_every_number_including_distribu
     assert r["出走数"] == 3 and r["頭数"] == 3 and r["着順内訳"] == "1-1-1-0" and r["4着以下"] == 0
     assert abs(r["単勝回収率"] - 1.5 / 3) < 1e-9 and abs(r["複勝回収率"] - 5.6 / 3) < 1e-9 and abs(r["勝率"] - 1 / 3) < 1e-9
     assert r["オッズ分布"] == "1-0-0-1-0-1"   # 分布も残った 3 走だけ（1.5 / 8 / 49.9）。50 倍以上の区間は作らない
+    assert r["オッズ分布_1着"] == "1-0-0-0-0-0" and r["オッズ分布_3着内"] == "1-0-0-1-0-1"   # 1.5 倍が 1着。3着以内は 1.5(1着)・8(2着)・49.9(3着)
 
 
 def test_summary_without_max_odds_keeps_everything_and_without_odds_has_no_distribution():
     r = T.summary(_odds_frame(), 2021, 2021).set_index(["調教師ID", "調教パターン"]).loc[("t1", "栗東坂路|A2")]
     assert r["出走数"] == 5 and abs(r["単勝回収率"] - 51.5 / 5) < 1e-9
     assert r["オッズ分布"] == "1-0-0-1-0-1-1-1"   # 除かないときは 8 区間（1.5 / 8 / 49.9 / 50 / 120）
+    assert r["オッズ分布_1着"] == "1-0-0-0-0-0-1-0" and r["オッズ分布_3着内"] == "1-0-0-1-0-1-1-0"   # 50 倍のレースも 1着
     assert "オッズ分布" not in T.summary(_frame(), 2021, 2021).columns
 
 
@@ -214,6 +216,19 @@ def test_html_block_shows_distribution_and_no_split_columns():
     assert 'data-b="1,0,0,1,0,1"' in q and 'data-v="0.3333"' in q   # 20 倍以上は 1/3
     assert "<th>オッズ分布</th>" in h and "50倍" not in h.split("<table")[1].split("</thead>")[0]
     assert h.count('data-b="1,0,0,1,0,1"') == 3   # 調教師・場所・パターンの 3 行
+    assert 'data-w="1,0,0,0,0,0"' in q and 'data-t="1,0,0,1,0,1"' in q   # ポップアップの赤（1着）・黄（3着以内）の元
+    assert h.count('data-w="1,0,0,0,0,0"') == 3 and "#ef4444" in h and "#facc15" in h
+
+
+def test_html_block_totals_winner_and_top3_bins_across_patterns():
+    d = _odds_frame()
+    z = d[d["race_id"] == "r2"].copy()   # 同じ調教師・場所の別パターン（オッズ 8 倍で 2着）
+    z["race_id"], z["horse_id"], z["pat"], z["race_date"], z["finish_position"] = "r10", "hq", "栗東坂路|B1", "2021-01-20", 1
+    z["win_ret"] = 8.0
+    h = T.html_block(T.summary(pd.concat([d, z], ignore_index=True), 2021, 2021, max_odds=50.0))
+    t = h.split("<tbody")[1].split("</tr>")[0]
+    assert 'data-b="1,0,1,1,0,1"' not in t and 'data-b="1,0,0,2,0,1"' in t   # 8 倍の区間(5-10)は 2 走
+    assert 'data-w="1,0,0,1,0,0"' in t and 'data-t="1,0,0,2,0,1"' in t
 
 
 def test_html_block_has_accent_only_button_and_hides_non_accent_rows_by_class():

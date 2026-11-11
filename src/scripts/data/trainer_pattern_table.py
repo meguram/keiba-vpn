@@ -54,7 +54,7 @@ def derive(g: pd.DataFrame, pre: str = "") -> pd.DataFrame:
 
 ODDS_CUT = 50.0   # 既定の除外ライン: 単勝オッズがこれ以上の出走（大穴）を、表の集計の母数から除く
 EDGES = [2, 3, 5, 10, 20, 50, 100]   # ヒストグラムの境界（8 区間: 2倍未満, 2-3, 3-5, 5-10, 10-20, 20-50, 50-100, 100倍以上）
-XCOLS = ["オッズ分布"]
+XCOLS = ["オッズ分布", "オッズ分布_1着", "オッズ分布_3着内"]   # 区間別の出走数・1着の頭数・3着以内の頭数
 
 
 def add_odds(d: pd.DataFrame) -> pd.DataFrame:
@@ -76,13 +76,16 @@ def add_odds(d: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def odds_bins(x: pd.DataFrame, edges: list[float] = EDGES) -> pd.Series:
-    """組（調教師 × パターン）ごとの、単勝オッズ区間別の出走数（"a-b-…"。区間数は len(edges) + 1）。オッズが読めない出走は含めない。"""
+def odds_bins(x: pd.DataFrame, edges: list[float] = EDGES, what: str = "走") -> pd.Series:
+    """組（調教師 × パターン）ごとの、単勝オッズ区間別の数（"a-b-…"。区間数は len(edges) + 1）。what = 走（出走数）/ 1着 / 3着内。オッズが読めない出走は含めない。"""
+    name = XCOLS[{"走": 0, "1着": 1, "3着内": 2}[what]]
     x = x[(x["n"] > 0) & (x["odds"] > 0)]
     if x.empty:
-        return pd.Series(dtype=str, name=XCOLS[0], index=pd.MultiIndex.from_arrays([[], []], names=KEY))
-    bins = pd.crosstab([x["trainer_id"], x["pat"]], np.digitize(x["odds"], edges)).reindex(columns=range(len(edges) + 1), fill_value=0)
-    return bins.astype(str).agg("-".join, axis=1).rename(XCOLS[0])
+        return pd.Series(dtype=str, name=name, index=pd.MultiIndex.from_arrays([[], []], names=KEY))
+    w = {"走": x["n"] * 0 + 1, "1着": x["c1"], "3着内": x["c1"] + x["c2"] + x["c3"]}[what]
+    k = pd.Series(np.digitize(x["odds"], edges), index=x.index, name="k")
+    bins = w.groupby([x["trainer_id"], x["pat"], k]).sum().unstack(fill_value=0).reindex(columns=range(len(edges) + 1), fill_value=0)
+    return bins.astype(int).astype(str).agg("-".join, axis=1).rename(name)
 
 
 def summary(d: pd.DataFrame, y0: int, y1: int, max_odds: float | None = None) -> pd.DataFrame:
@@ -94,13 +97,14 @@ def summary(d: pd.DataFrame, y0: int, y1: int, max_odds: float | None = None) ->
         assert has_odds, "オッズ（add_odds）が必要"
         x = x[~(x["odds"] >= max_odds)]
     edges = EDGES if max_odds is None else [e for e in EDGES if e < max_odds]   # 除いた側の区間は作らない
-    bins = odds_bins(x, edges) if has_odds else None
+    bins = [odds_bins(x, edges, w) for w in ("走", "1着", "3着内")] if has_odds else None
     S = x.groupby(KEY)[SUMS].sum()
     S = S[S["n"] > 0]
     S = S.join(derive(S))
     if has_odds:
-        S = S.join(bins)
-        S[XCOLS[0]] = S[XCOLS[0]].fillna("-".join(["0"] * (len(edges) + 1)))   # オッズが 1 頭も読めない組
+        for b in bins:
+            S = S.join(b)
+            S[b.name] = S[b.name].fillna("-".join(["0"] * (len(edges) + 1)))   # オッズが 1 頭も読めない組
     names = d.sort_values("race_date").drop_duplicates("trainer_id", keep="last").set_index("trainer_id")["trainer_name"]
     S = S.reset_index()
     ok = x[x["n"] > 0].assign(place=lambda v: v["pat"].str.split("|").str[0])   # 同じ馬が複数回出走しても 1 頭と数える（horse_id）
@@ -140,7 +144,7 @@ _CSS = """<style>
 #tpt tbody{border-top:2px solid var(--border)} #tpt tr.t td{background:#1b2a4d;font-weight:bold;cursor:pointer} #tpt tr.p td{background:#172544;cursor:pointer}
 #tpt tr.p td.l{padding-left:1.4em} #tpt tr.q td.l{padding-left:2.6em} #tpt .ds{color:var(--muted);font-weight:normal;margin-left:.3em} #tpt td.id{color:var(--muted);font-family:monospace} #tpt tr.sm td{opacity:.5}
 #tpt tr td.gr{background:hsl(142 55% calc(var(--l)*1%))} #tpt tr td.bl{background:hsl(215 70% calc(var(--l)*1%))} #tpt tr td.lt{color:#06121f} #tpt td.hist{padding:2px 6px} #tpt tr td.dup{color:#fb923c;font-weight:bold} #tpt tr td.hot{font-weight:bold;box-shadow:inset 0 0 0 1px rgba(255,255,255,.6)}
-#tptp{position:fixed;z-index:50;display:none;pointer-events:none;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;line-height:1.5;box-shadow:0 4px 14px rgba(0,0,0,.5)} #tptp .h{font-weight:bold;margin-bottom:4px} #tptp .r{display:flex;align-items:center;gap:6px;white-space:nowrap} #tptp .r i{display:inline-block;height:10px;border-radius:2px} #tptp .r span:first-child{width:5.5em} #tptp .r span:last-child{color:var(--muted);margin-left:auto;padding-left:6px}
+#tptp{position:fixed;z-index:50;display:none;pointer-events:none;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;line-height:1.5;box-shadow:0 4px 14px rgba(0,0,0,.5)} #tptp .h{font-weight:bold;margin-bottom:4px} #tptp .r{display:flex;align-items:center;gap:6px;white-space:nowrap} #tptp .r i{display:block;height:5px;margin:1px 0;border-radius:2px} #tptp .r span:first-child{width:5.5em} #tptp .r .bs{width:134px;flex:none} #tptp .r span:last-child{color:var(--muted);margin-left:auto;padding-left:6px} #tptp u{text-decoration:none;margin-left:.5em;font-weight:bold} #tptp u.y{color:#facc15} #tptp u.r2{color:#ef4444} #tptp .lg{color:var(--muted);margin-bottom:3px} #tptp .lg i{display:inline-block;width:10px;height:8px;margin:0 3px 0 6px;border-radius:2px}
 #tpt tr.ac td.id,#tpt tr.ac td.l{background:#78350f;color:#fde68a} #tpt tr.ac td.id{border-left:5px solid #fbbf24} #tpt tr.ac td.l::before{content:"★ ";color:#fbbf24}
 #tpt tbody.c tr.p,#tpt tbody.c tr.q,#tpt tr.q.hid,#tpt tbody.f,#tpt tbody.na,#tpt tr.na{display:none} .tptb button.on{background:#78350f;color:#fde68a;border-color:#fbbf24} .tptb button{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 10px;margin-right:6px;cursor:pointer}
 .tptb input{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 8px;margin-left:8px;width:160px}
@@ -161,9 +165,13 @@ Array.prototype.forEach.call(T.querySelectorAll("td.hist"),function(td){var b=td
 v.forEach(function(c,i){var f=c/s,H=Math.min(1,f/.4)*18;h+='<rect x="'+i*6+'" y="'+(20-H)+'" width="5" height="'+H+'" fill="'+HC[i]+'"/>';t.push(HL[i]+" "+(f*100).toFixed(1)+"% ("+c+")")});
 td.innerHTML='<svg width="'+v.length*6+'" height="20" viewBox="0 0 '+v.length*6+' 20">'+h+'</svg>'});
 var PP=document.createElement("div");PP.id="tptp";document.body.appendChild(PP);
-function pop(td){var v=td.getAttribute("data-b").split(",").map(Number),s=v.reduce(function(a,c){return a+c},0),m=Math.max.apply(null,v),tr=td.parentNode,
-n=tr.parentNode.getAttribute("data-s")+" / "+(tr.classList.contains("t")?"全体":tr.cells[1].textContent),h='<div class="h">'+n.replace(/&/g,"&amp;").replace(/</g,"&lt;")+" のオッズ分布（"+s+" 走）</div>";
-v.forEach(function(c,i){var f=s?c/s:0;h+='<div class="r"><span>'+HL[i]+'</span><i style="width:'+(m?Math.round(c/m*140):0)+'px;background:'+HC[i]+'"></i><span>'+(f*100).toFixed(1)+"%（"+c+"）</span></div>"});PP.innerHTML=h}
+function pop(td){var A=function(k){var a=td.getAttribute(k);return a?a.split(",").map(Number):null},v=A("data-b"),w=A("data-w"),t3=A("data-t"),S=function(x){return x?x.reduce(function(a,c){return a+c},0):0},
+s=S(v),sw=S(w),st=S(t3),tr=td.parentNode,E=function(x){return x.replace(/&/g,"&amp;").replace(/</g,"&lt;")},
+n=tr.parentNode.getAttribute("data-s")+" / "+(tr.classList.contains("t")?"全体":tr.cells[1].firstChild.textContent),h='<div class="h">'+E(n)+" のオッズ分布（"+s+" 走"+(w?"・3着以内 "+st+"・1着 "+sw:"")+"）</div>",
+m=Math.max(v.reduce(function(a,c){return Math.max(a,s?c/s:0)},0),w&&sw?w.reduce(function(a,c){return Math.max(a,c/sw)},0):0,t3&&st?t3.reduce(function(a,c){return Math.max(a,c/st)},0):0)||1,
+bar=function(c,tot,col){return'<i style="width:'+(tot?Math.round(c/tot/m*130):0)+'px;background:'+col+'"></i>'};
+if(w)h+='<div class="lg"><i style="background:#60a5fa"></i>全出走 <i style="background:#facc15"></i>3着以内 <i style="background:#ef4444"></i>1着（各区間の割合。幅は合計に対する%）</div>';
+v.forEach(function(c,i){var f=s?c/s:0;h+='<div class="r"><span>'+HL[i]+'</span><span class="bs">'+bar(c,s,HC[i])+(w?bar(t3[i],st,"#facc15")+bar(w[i],sw,"#ef4444"):"")+'</span><span>'+(f*100).toFixed(1)+"%（"+c+"）"+(w?' <u class="y">'+(st?(t3[i]/st*100).toFixed(1):"0.0")+"%（"+t3[i]+'）</u> <u class="r2">'+(sw?(w[i]/sw*100).toFixed(1):"0.0")+"%（"+w[i]+"）</u>":"")+"</span></div>"});PP.innerHTML=h}
 function mv(e){var w=PP.offsetWidth,hh=PP.offsetHeight,l=e.clientX+14,t=e.clientY+14;if(l+w>innerWidth-8)l=e.clientX-w-14;if(t+hh>innerHeight-8)t=e.clientY-hh-14;PP.style.left=Math.max(4,l)+"px";PP.style.top=Math.max(4,t)+"px"}
 T.addEventListener("mouseover",function(e){var td=e.target.closest("td.hist");if(!td||!td.getAttribute("data-b")||!td.firstChild)return;pop(td);PP.style.display="block";mv(e)});
 T.addEventListener("mousemove",function(e){if(PP.style.display==="block")mv(e)});
@@ -183,18 +191,24 @@ LAP_DESC = {"A3": "終いが11秒台以下で加速", "A2": "終い・手前と�
 DUP = 2.0   # 1 頭あたりの出走回数がこれ以上の行は、同じ馬が何度も数えられているとして橙で示す
 
 
-def _odds_cell(bins) -> str:
-    """単勝オッズ区間別の出走数（ページ側の JS が小さな棒グラフにする）。並べ替えは 20 倍以上の割合。"""
+def _odds_cell(bins, wins=None, top3=None) -> str:
+    """単勝オッズ区間別の出走数（ページ側の JS が小さな棒グラフにする）。data-w = 区間別の1着の頭数、data-t = 3着以内の頭数（ポップアップの赤・黄）。並べ替えは 20 倍以上の割合。"""
     if bins is None:
         return '<td class="hist"></td>'
     tot = int(bins.sum())
     share = float(bins[EDGES.index(20) + 1:].sum() / tot) if tot else 0.0
-    return f'<td class="hist" data-v="{share:.4f}" data-b="{",".join(str(int(v)) for v in bins)}"></td>'
+    j = lambda v: ",".join(str(int(k)) for k in v)   # noqa: E731
+    extra = (f' data-w="{j(wins)}"' if wins is not None else "") + (f' data-t="{j(top3)}"' if top3 is not None else "")
+    return f'<td class="hist" data-v="{share:.4f}" data-b="{j(bins)}"{extra}></td>'
 
 
-def _ox(g: pd.DataFrame):
-    """表の行（または複数行の合計）のオッズ区間別の出走数。列が無い古い集計なら None。"""
-    return np.sum([[int(v) for v in s.split("-")] for s in g[XCOLS[0]]], axis=0) if XCOLS[0] in g.columns else None
+def _ox(g: pd.DataFrame, i: int = 0):
+    """表の行（または複数行の合計）のオッズ区間別の数（i = 0 出走 / 1 1着 / 2 3着以内）。列が無い古い集計なら None。"""
+    return np.sum([[int(v) for v in s.split("-")] for s in g[XCOLS[i]]], axis=0) if XCOLS[i] in g.columns else None
+
+
+def _ox3(g: pd.DataFrame):
+    return tuple(_ox(g, i) for i in range(3)) if XCOLS[0] in g.columns else None
 
 
 def _row(cls: str, idv: str, label: str, n, c, win_ret, place_ret, base: tuple[float, float], u=None, ox=None, note: str = "") -> str:
@@ -220,7 +234,7 @@ def _row(cls: str, idv: str, label: str, n, c, win_ret, place_ret, base: tuple[f
              (rate(place_ret), f"{rate(place_ret) * 100:.1f}%", gr(rate(place_ret)))]
     cells = [f'<td class=id>{_html.escape(idv)}</td>', f'<td class=l>{_html.escape(label)}' + (f'<span class=ds>（{_html.escape(note)}）</span>' if note else '') + '</td>']
     cells += [f'<td class="num{h}">{txt}</td>' for _, txt, h in shown]
-    cells.append(_odds_cell(ox))
+    cells.append(_odds_cell(*ox) if ox else _odds_cell(None))
     k3 = c[0] + c[1] + c[2]
     won = cls == "q" and bool(bl(c[0], base[0])) and bool(gr(rate(win_ret)))     # 行のアクセントはパターン行だけ。勝率・単勝回収率の両方に色が付く
     placed = cls == "q" and bool(bl(k3, base[1])) and bool(gr(rate(place_ret)))   # 複勝率・複勝回収率の両方に色が付く
@@ -245,12 +259,12 @@ def html_block(S: pd.DataFrame) -> str:
     for tid, t in sorted(S.groupby("調教師ID"), key=lambda kv: -kv[1]["出走数"].sum()):
         name = str(t["調教師"].iloc[0])
         out.append(f'<tbody data-s="{_html.escape(tid)} {_html.escape(name)}">')
-        out.append(_row("t", tid, name, t["出走数"].sum(), t[cols].sum().tolist(), t["_w"].sum(), t["_p"].sum(), base, _u(t, "頭数_調教師"), _ox(t)))
+        out.append(_row("t", tid, name, t["出走数"].sum(), t[cols].sum().tolist(), t["_w"].sum(), t["_p"].sum(), base, _u(t, "頭数_調教師"), _ox3(t)))
         for place, g in sorted(t.groupby("場所"), key=lambda kv: -kv[1]["出走数"].sum()):
-            out.append(_row("p", tid, place, g["出走数"].sum(), g[cols].sum().tolist(), g["_w"].sum(), g["_p"].sum(), base, _u(g, "頭数_場所"), _ox(g)))
+            out.append(_row("p", tid, place, g["出走数"].sum(), g[cols].sum().tolist(), g["_w"].sum(), g["_p"].sum(), base, _u(g, "頭数_場所"), _ox3(g)))
             gs = g.sort_values("出走数", ascending=False)
             for i, r in gs.iterrows():
-                out.append(_row("q", tid, str(r["型"]), r["出走数"], [r[k] for k in cols], r["_w"], r["_p"], base, r["頭数"] if "頭数" in r.index else None, _ox(gs.loc[[i]]), LAP_DESC.get(str(r["型"]), "") if "坂路" in place else ""))
+                out.append(_row("q", tid, str(r["型"]), r["出走数"], [r[k] for k in cols], r["_w"], r["_p"], base, r["頭数"] if "頭数" in r.index else None, _ox3(gs.loc[[i]]), LAP_DESC.get(str(r["型"]), "") if "坂路" in place else ""))
         out.append("</tbody>")
     heads = ["調教師ID", "調教師 / 場所 / パターン", "出走数", "頭数", "出走/頭", "着順内訳", "勝率", "単勝回収率", "複勝率", "複勝回収率", "オッズ分布"]
     head = "".join("<th>" + h + "</th>" for h in heads)
