@@ -89,8 +89,8 @@ def test_html_block_groups_trainer_place_pattern_with_totals():
     assert h.count("<tbody") == 2 and h.count('<tr class="p') == 2 and h.count('<tr class="q') == 3   # t1(栗東坂路:A2,B1) と t2(美浦坂路:X)
     t1 = h.split("<tbody")[1] if "t1" in h.split("<tbody")[1].split(">")[0] else h.split("<tbody")[2]
     assert '<td class=id>t1</td><td class=l>調教師1</td><td class="num">6</td>' in t1   # 5 + 1 頭の合計
-    assert f">{7.0 / 6:.3f}</td>" in t1 in t1   # 単勝回収率 (4+3)/6（調教師の行と栗東坂路の行の両方）
-    assert t1.count(f"{(1.5 + 1.2 + 1.1 + 1.3 + 1.2) / 6:.3f}") >= 2   # 複勝回収率
+    assert f">{7.0 / 6 * 100:.1f}%</td>" in t1   # 単勝回収率 (4+3)/6 を % 表示（調教師の行と栗東坂路の行の両方）
+    assert t1.count(f"{(1.5 + 1.2 + 1.1 + 1.3 + 1.2) / 6 * 100:.1f}%") >= 2   # 複勝回収率
     assert "<td class=l>A2</td>" in t1 and "<td class=l>B1</td>" in t1 and "<td class=l>栗東坂路</td>" in t1
 
 
@@ -113,16 +113,17 @@ def _light(h, label, cls):
     return [int(v) for v in re.findall(rf'class="num {cls}[^"]*" style="--l:(\d+)"', r)], r
 
 
-def test_html_block_color_is_brighter_for_better_results_and_hot_marks_over_100():
+def test_html_block_color_is_brighter_for_better_roi_and_absent_at_or_below_100():
     def row(n, w, p):
         return {"調教師ID": "t", "調教師": "x", "調教パターン": f"栗東坂路|P{n}", "出走数": n, "1着": 1, "2着": 0, "3着": 0, "4着以下": n - 1, "単勝回収率": w, "複勝回収率": p}
-    h = T.html_block(pd.DataFrame([row(T.HI_N, 0.6, 0.5), row(T.HI_N + 1, 1.1, 1.3), row(T.HI_N + 2, 1.7, 0.5), row(T.HI_N - 1, 1.7, 1.7)]))
-    lo, _ = _light(h, f"P{T.HI_N}", "gr")
-    mid, rmid = _light(h, f"P{T.HI_N + 1}", "gr")
+    h = T.html_block(pd.DataFrame([row(T.HI_N, 0.9, 1.0), row(T.HI_N + 1, 1.1, 1.3), row(T.HI_N + 2, 1.7, 0.5), row(T.HI_N - 1, 1.7, 1.7)]))
+    assert 'class="num gr' not in _light(h, f"P{T.HI_N}", "gr")[1]   # 1.00 以下（ちょうど 1.00 を含む）は色なし
+    mid, _ = _light(h, f"P{T.HI_N + 1}", "gr")
     top, rtop = _light(h, f"P{T.HI_N + 2}", "gr")
-    assert lo[0] < mid[0] < top[0] and len(lo) == 2   # 単勝・複勝の2セル。回収率が高いほど明るい
-    assert "gr hot" not in _light(h, f"P{T.HI_N}", "gr")[1] and rmid.count("gr hot") == 2 and rtop.count("gr hot") == 1   # 100% 超だけ hot
+    assert len(mid) == 2 and len(top) == 1 and mid[0] < top[0]   # 1.1 < 1.7 の順に明るい。1.7 の行の複勝 0.5 は色なし
     assert 'class="num gr' not in _light(h, f"P{T.HI_N - 1}", "gr")[1]   # 30 頭未満は色なし
+    h2 = T.html_block(pd.DataFrame([row(T.HI_N, 1.0004, 1.0004)]))
+    assert 'class="num gr' not in h2 and ">100.0%<" in h2   # 100.0% と表示されるものも色なし
 
 
 def test_html_block_rates_brighter_the_further_above_the_overall_level():
@@ -132,7 +133,7 @@ def test_html_block_rates_brighter_the_further_above_the_overall_level():
     L, _ = _light(h, "L", "bl")
     M, rm = _light(h, "M", "bl")
     H, rh = _light(h, "H", "bl")
-    assert max(L) < max(M) < max(H) and "bl hot" in rm and "bl hot" in rh
+    assert L == [] and 0 < max(M) < max(H) and "bl hot" in rm and "bl hot" in rh   # 水準以下の L は色なし
     assert _light(h, "S", "bl")[0] == []
 
 
@@ -153,3 +154,4 @@ def test_html_block_accents_rows_where_rate_and_roi_both_stand_out():
     assert "ac" in tr("PLC").split('"')[1].split() and "複勝率と複勝回収率" in tr("PLC")
     for lab in ("L", "ROI", "LOWROI", "SMALL"):   # 回収率だけ・率だけ・30 頭未満は対象外
         assert "ac" not in tr(lab).split('"')[1].split()
+    assert not any("ac" in r.split(">")[0].split('"')[1].split() for r in h.split("<tr ")[1:] if r.startswith(('class="t', 'class="p')))   # 調教師・場所の行にはアクセントを付けない

@@ -105,7 +105,7 @@ if(r.classList.contains("t"))r.parentNode.classList.toggle("c");
 else if(r.classList.contains("p")){var x=r.nextElementSibling;while(x&&x.classList.contains("q")){x.classList.toggle("hid");x=x.nextElementSibling}}});
 document.getElementById("tptf").oninput=function(){var v=this.value.trim();B().forEach(function(b){b.classList.toggle("f",v!==""&&b.getAttribute("data-s").indexOf(v)<0)})};
 var H=Array.prototype.slice.call(T.tHead.rows[0].cells);
-function key(c,i){var t=c.textContent;if(i===3){var a=t.split("-");return a[0]*1e6+a[1]*1e3+ +a[2]}return i<2?t:+t}
+function key(c,i){var t=c.textContent;if(i===3){var a=t.split("-");return a[0]*1e6+a[1]*1e3+ +a[2]}return i<2?t:parseFloat(t)}
 function cmp(d){return function(x,y){return(x[1]<y[1]?-1:x[1]>y[1]?1:0)*d}}
 H.forEach(function(th,i){th.title="クリックで並べ替え（調教師・場所・パターンの各段の中で並べ替える）";th.onclick=function(){
 var d=th._d===undefined?(i<2?1:-1):-th._d;H.forEach(function(h){h._d=undefined;h.textContent=h.textContent.replace(/ [▲▼]$/,"")});th._d=d;th.textContent+=d>0?" ▲":" ▼";
@@ -120,26 +120,26 @@ def _row(cls: str, idv: str, label: str, n, c, win_ret, place_ret, base: tuple[f
     n = int(n)
     rate = lambda v: v / n   # noqa: E731
     def shade(t: float) -> str:   # 0〜1 → 明るさ（%）。成績が良いほど明るい。明るい側は文字を暗くして読めるようにする
-        light = 16 + 46 * min(1.0, max(0.0, t))
+        light = 24 + 40 * min(1.0, max(0.0, t))
         return (f'" style="--l:{light:.0f}' if light < 46 else f' lt" style="--l:{light:.0f}')
 
-    def gr(v: float) -> str:   # 回収率: 0.5 以下で最も暗い緑、1.8 以上で最も明るい緑。1.00 超は枠と太字（hot）も付ける
-        return f' gr{" hot" if v > 1.0 else ""}' + shade((v - 0.5) / 1.3) if n >= HI_N else ""
+    def gr(v: float) -> str:   # 回収率: 1.00 以下は色なし。1.00 超で緑、1.8 以上で最も明るい
+        return " gr" + shade((v - 1.0) / 0.8) if n >= HI_N and round(v * 100, 1) > 100.0 else ""   # 表示（小数 1 位の %）が 100.0% 以下なら色なし
 
     def zs(k: int, p0: float) -> float:
         return (k / n - p0) / (p0 * (1 - p0) / n) ** 0.5 if 0 < p0 < 1 else 0.0
 
-    def bl(k: int, p0: float) -> str:   # 勝率・複勝率: 全体の水準 p0 以下で最も暗い青、標準誤差の 6 倍以上高いと最も明るい青。Z_HI 倍以上は枠と太字（hot）も付ける
+    def bl(k: int, p0: float) -> str:   # 勝率・複勝率: 全体の水準 p0 以下は色なし。水準を超えると青、標準誤差の 6 倍以上高いと最も明るい。Z_HI 倍以上は枠と太字（hot）も付ける
         z = zs(k, p0)
-        return f' bl{" hot" if z >= Z_HI else ""}' + shade(z / 6) if n >= HI_N else ""
+        return f' bl{" hot" if z >= Z_HI else ""}' + shade(z / 6) if n >= HI_N and z > 0 else ""
     shown = [(n, str(n), ""), (None, "-".join(str(int(k)) for k in c), ""), (rate(c[0]), f"{rate(c[0]):.3f}", bl(c[0], base[0])),
-             (rate(win_ret), f"{rate(win_ret):.3f}", gr(rate(win_ret))), (rate(c[0] + c[1] + c[2]), f"{rate(c[0] + c[1] + c[2]):.3f}", bl(c[0] + c[1] + c[2], base[1])),
-             (rate(place_ret), f"{rate(place_ret):.3f}", gr(rate(place_ret)))]
+             (rate(win_ret), f"{rate(win_ret) * 100:.1f}%", gr(rate(win_ret))), (rate(c[0] + c[1] + c[2]), f"{rate(c[0] + c[1] + c[2]):.3f}", bl(c[0] + c[1] + c[2], base[1])),
+             (rate(place_ret), f"{rate(place_ret) * 100:.1f}%", gr(rate(place_ret)))]
     cells = [f'<td class=id>{_html.escape(idv)}</td>', f'<td class=l>{_html.escape(label)}</td>']
     cells += [f'<td class="num{h}">{txt}</td>' for _, txt, h in shown]
     k3 = c[0] + c[1] + c[2]
-    won = n >= HI_N and zs(c[0], base[0]) >= Z_HI and rate(win_ret) > 1.0     # 勝率が水準より高く、単勝回収率も 100% 超
-    placed = n >= HI_N and zs(k3, base[1]) >= Z_HI and rate(place_ret) > 1.0   # 複勝率が水準より高く、複勝回収率も 100% 超
+    won = cls == "q" and n >= HI_N and zs(c[0], base[0]) >= Z_HI and rate(win_ret) > 1.0     # 行のアクセントはパターン行だけ。勝率が水準より高く、単勝回収率も 100% 超
+    placed = cls == "q" and n >= HI_N and zs(k3, base[1]) >= Z_HI and rate(place_ret) > 1.0   # 複勝率が水準より高く、複勝回収率も 100% 超
     ac = (" ac", ' title="勝率と単勝回収率の両方が基準超え"' if won and not placed else ' title="複勝率と複勝回収率の両方が基準超え"' if placed and not won else ' title="勝率・単勝回収率と、複勝率・複勝回収率の両方が基準超え"') if won or placed else ("", "")
     return f'<tr class="{cls}{" sm" if n < MIN_N else ""}{ac[0]}"{ac[1]}>' + "".join(cells) + "</tr>"
 
