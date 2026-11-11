@@ -206,6 +206,8 @@ PARTS: list[Part] = [
           [("rest_and_interval", "休養明け・レース間隔（tp-34）"), ("training_pipeline_decisions", "決定ログ")]),
         C("training_condition_growth", "調教の時計の出方から読む調子・成長（tp-40）。今回の追い切りサイクルの中の推移・自分の過去との比較・サイクル間の推移・休み明けの曲線・母集団曲線・馬ごとの傾きの 7 群、馬ごとの傾きの再現性（前半/後半）、V4 への増分、履歴の浅い馬（新馬・初出走）での効き、先読みの完全一致検査、推論側の設計メモ。", "結果",
           [("lap_groups_and_trainer_stats", "追い切りのラップ種別（tp-35）"), ("growth_curve_weight", "成長曲線（馬体重、tp-39）"), ("training_pipeline_decisions", "決定ログ")]),
+        C("final_week_training_pattern", "最終追い切りパターン（場所 × ラップ種別／4F 時計の帯）の結論。パターン全体の差は続くが、コース（芝/ダート × 距離帯）別に分けても予測は良くならない。向き B（3 着以内の構成）のコース固有の差は小さく残る。調教ページの取り直しの状況。", "結果",
+          [("lap_groups_and_trainer_stats", "追い切りのラップ種別（tp-35）"), ("training_condition_growth", "調教の時計の出方から読む調子・成長（tp-40）"), ("training_pipeline_decisions", "決定ログ")]),
         C("slow_start_real_label", "出遅れ率（実ラベル版）。戦績ページの備考『出遅』を実ラベルにした馬・騎手・調教師・枠・血統の出遅れ率と出遅れ確率（p_slow）。ラベルの被覆の偏り（ラベルの有無が将来の情報になる）とその対処、V4 全体への増分（第 2 段で再現せず不採用）、先読み検査。", "結果",
           [("lap_groups_and_trainer_stats", "追い切りのラップ種別（tp-35）"), ("training_pipeline_decisions", "決定ログ")]),
         C("pedigree_position_cross", "血統の位置・存在割合・クロス・類似種牡馬（tp-38）。祖先 × 位置の区分 × 条件の階層縮約、位置の重みを推定するリッジ回帰、近交係数、血統空間の座標と構成が近い種牡馬による縮約、位置ごとの寄与の割合、V4 への増分（第 1 段・第 2 段）と推論側の設計メモ。", "結果",
