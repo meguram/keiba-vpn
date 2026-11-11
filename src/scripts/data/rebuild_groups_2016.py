@@ -238,6 +238,16 @@ def cmd_tl() -> None:
     log(f"TL: {info['cols']} 列 被覆（has_training）年別 {M['has_training'].notna().groupby(yr).mean().round(3).to_dict() if 'has_training' in M else ''}")
 
 
+def cmd_tlref() -> None:
+    """推論（serving_v5 の TL_A）が読む追い切りの基準表（直近 12 か月の分布）を、2016 年版の追い切り表から作る。出力: <BASE>/tp35/tl_reference_v2.parquet"""
+    from src.pipeline.features import training_serving as ts
+
+    ref = ts.build_reference_table(laps())
+    (BASE / "tp35").mkdir(parents=True, exist_ok=True)
+    ref.to_parquet(BASE / "tp35/tl_reference_v2.parquet", index=False)
+    log(f"追い切りの基準表 {len(ref)} 行")
+
+
 def cmd_cy() -> None:
     from src.pipeline.features import tp40_condition as C
 
@@ -427,6 +437,19 @@ def redirect() -> None:
         pass
 
 
+def redirect_serving() -> None:
+    """推論側（serving_v4）が読む静的な表（馬主・産地のプロフィール、産地・誕生日、祖先の表）を、2016〜 の土台のものに向ける。
+    本番の表は 2020〜 の馬だけ（2016 年の土台の馬の約 66%）なので、そのままだと血統・馬主系の列が学習側とずれる。v6_parity --rebuild-2016 が呼ぶ。"""
+    from src.pipeline.features import factory_conn as fc
+    from src.pipeline.features import factory_ped as fp
+    from src.pipeline.features import serving_v4 as sv4
+
+    fc.PROFILE = BASE / "profile/horse_profile.parquet"
+    fp.CACHE = BASE / "factory/src"
+    sv4.ATTRS_PATH = BASE / "profile/horse_attrs.parquet"
+    sv4.FROZEN_PATH = BASE / "profile/attrs_frozen.json"
+
+
 def cmd_frame() -> None:
     """親モデル・オッズ予測の土台の表（tp31 の v4_frame）を新しい群から組み立てる。列は本番の v4_frame と同じ。"""
     redirect()
@@ -516,4 +539,4 @@ def cmd_final_aux() -> None:
 
 if __name__ == "__main__":
     {"final_aux": cmd_final_aux, "frame": cmd_frame, "aux": cmd_aux, "rb": cmd_rb, "labels": cmd_labels, "conn": cmd_conn, "self": cmd_self, "field": cmd_field, "ped": cmd_ped,
-     "tl": cmd_tl, "cy": cmd_cy, "best": cmd_best}[sys.argv[1]]()
+     "tl": cmd_tl, "tlref": cmd_tlref, "cy": cmd_cy, "best": cmd_best}[sys.argv[1]]()

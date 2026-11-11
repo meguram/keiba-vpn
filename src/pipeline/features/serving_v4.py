@@ -31,6 +31,8 @@ ROOT = Path(__file__).resolve().parents[3]
 TABLES = ROOT / "data/page_reference/tables"
 WORK = ROOT / "data/local/modeling/training_pipeline"
 FAC = WORK / "factory"
+ATTRS_PATH = FAC / "self/horse_attrs.parquet"        # 馬の産地・誕生日の表（2016〜 の土台に切り替えるときは rebuild_groups_2016.redirect_serving が差し替える）
+FROZEN_PATH = FAC / "self/attrs_frozen.json"
 STATE_DIR = Path(__import__("os").environ.get("KEIBA_INFERENCE_DIR") or ROOT / "data/local/inference") / "state"
 KEY = ["race_id", "horse_id"]
 
@@ -116,7 +118,7 @@ class V4History:
         self.conn_raw = fc.load_history(self.tables, self.years, profile=self.profile if len(self.profile) else None)
         self.conn_raw["date"] = pd.to_datetime(self.conn_raw["date"])
         self.self_runs = fs.load_runs(self.tables, self.years)
-        at_path = FAC / "self/horse_attrs.parquet"
+        at_path = ATTRS_PATH
         self.attrs = pd.read_parquet(at_path).set_index("horse_id") if at_path.exists() else pd.DataFrame(columns=["birthplace", "birthday"])
         self.frozen = self._frozen_constants()
         self.field_hist = self._field_history()
@@ -132,7 +134,7 @@ class V4History:
         return info
 
     def _frozen_constants(self) -> dict:
-        p = FAC / "self/attrs_frozen.json"
+        p = FROZEN_PATH
         if p.exists():
             return json.loads(p.read_text(encoding="utf-8"))
         r = self.self_runs[self.self_runs["date"].dt.year <= TRAIN_LAST_YEAR]
@@ -302,8 +304,9 @@ class V4Groups:
         return te.sit_features(hist, T, groups)
 
     # ------------------------------------------------------------------ 出走メンバー・コース環境 7 群
-    def field7(self, target: pd.DataFrame) -> pd.DataFrame:
-        """target: 当日の行（card の列 + V0 の列 + race_name など）。mem_* は当日の行だけ、course_draw / race_type / calendar_env は履歴も使う。"""
+    def field7(self, target: pd.DataFrame, day_card: pd.DataFrame | None = None) -> pd.DataFrame:
+        """target: 当日の行（card の列 + V0 の列 + race_name など）。mem_* は当日の行だけ、course_draw / race_type / calendar_env は履歴も使う。
+        day_card: その日の全レースの出馬表。calendar_env の「最終レースか」「1 レース目との馬場差」など同日・同場の集計は、全レースが要る（学習は全レースで集計している）。"""
         D = _to_dt(target["date"]).min()
         hist = self.h.field_hist
         hist = hist[hist["date"] < D]
@@ -322,11 +325,40 @@ class V4Groups:
         # 前日の馬場: 同じ場・面の過去の開催日（絞っても結果は同じ）
         vs = set(zip(tdf["venue_code"].astype(str), tdf["surface"].astype(str)))
         hv = pd.Series(list(zip(hist["venue_code"].astype(str), hist["surface"].astype(str))), index=hist.index)
-        out.append(self._with_history("calendar_env", hist[hv.isin(vs)], tdf))
+        out.append(self._with_history("calendar_env", hist[hv.isin(vs)], self._with_day_rows(tdf, day_card)))
         F = out[0]
         for o in out[1:]:
             F = F.merge(o, on=KEY, how="left")
         return F
+
+    @staticmethod
+    def _with_day_rows(tdf: pd.DataFrame, day_card: pd.DataFrame | None) -> pd.DataFrame:
+        """tdf に、同じ日の他のレースの行（日付・場・面・馬場・天候・発走時刻・R）を足す。他のレースの馬場・天候が出馬表に無いときは、同じ場・同じ面の今回の行の値で補う（無ければ空のまま）。"""
+        if day_card is None or not len(day_card):
+            return tdf
+        dc = day_card.copy()
+        dc["race_id"], dc["horse_id"] = dc["race_id"].astype(str), dc["horse_id"].astype(str)
+        dc = dc[~dc["race_id"].isin(set(tdf["race_id"]))]
+        cols = [c for c in tdf.columns if c in dc.columns]
+        if dc.empty or not {"race_id", "horse_id", "date", "venue_code"} <= set(cols):
+            return tdf
+        ex = dc[cols].copy()
+        ex["date"] = pd.to_datetime(ex["date"])
+        ex = ex[ex["date"] == tdf["date"].min()]
+        keys = [k for k in ("venue_code", "surface") if k in ex.columns and k in tdf.columns]
+
+        def kcol(d: pd.DataFrame) -> pd.Series:
+            return d[keys[0]].astype(str).str.cat([d[k].astype(str) for k in keys[1:]], sep="|")
+
+        for c in ("track_condition", "weather"):
+            if c not in ex.columns or c not in tdf.columns:
+                continue
+            t = tdf.dropna(subset=[c])
+            ref = t[c].astype(str).groupby(kcol(t)).agg(lambda v: v.mode().iloc[0])
+            blank = (ex[c].isna() | (ex[c].astype(str).str.strip() == "")).to_numpy()
+            if blank.any():
+                ex.loc[blank, c] = kcol(ex[blank]).map(ref).to_numpy()
+        return pd.concat([tdf, ex], ignore_index=True, sort=False)
 
     @staticmethod
     def _with_history(name: str, hist: pd.DataFrame, tdf: pd.DataFrame, cols_re: str | None = None, **kw) -> pd.DataFrame:
@@ -492,7 +524,7 @@ class V4Features:
         if need & {"field7"}:
             extra = [c for c in EXTRA_CARD_COLS if c in card.columns and c not in base.columns]
             T = base.merge(card[KEY + ([] if "date" in base.columns else ["date"]) + extra].drop_duplicates(KEY), on=KEY, how="left")
-            out = out.merge(self.groups.field7(T), on=KEY, how="left")
+            out = out.merge(self.groups.field7(T, card_all), on=KEY, how="left")
         if need & {"ped"}:
             out = out.merge(self.groups.ped_cond(card), on=KEY, how="left")
         logger.info("v4 の群: 要る群 %s %.1fs", sorted(need), time.perf_counter() - t0)

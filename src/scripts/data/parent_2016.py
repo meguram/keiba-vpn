@@ -25,7 +25,7 @@ TAG = os.environ.get("V6_TAG", "e")
 def prepare() -> None:
     (BASE / "oof").mkdir(parents=True, exist_ok=True)
     src, dst = BASE / "v6/s3x_e.parquet", BASE / "oof/stage_features_expanding.parquet"
-    if not dst.exists() or dst.stat().st_mtime < src.stat().st_mtime:
+    if not dst.exists() or dst.stat().st_size != src.stat().st_size or dst.stat().st_mtime < src.stat().st_mtime - 1:   # copy2 は時刻の小数部が落ちるので 1 秒の余裕を見る
         tmp = dst.with_suffix(".tmp")
         shutil.copy2(src, tmp)
         tmp.replace(dst)                    # 途中で止まっても壊れたファイルを残さない
