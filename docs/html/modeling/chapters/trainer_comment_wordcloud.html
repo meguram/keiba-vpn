@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>厩舎コメントのワードクラウド — keiba-vpn</title><style>:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --warn:#fbbf24; }
+* { box-sizing: border-box; } body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 15px; padding: 40px 56px 96px; max-width: 1100px; margin: 0 auto; }
+a { color: var(--accent-2); } h1 { font-size: 26px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; }
+table { border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; background: var(--panel); } th, td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; } th { background: #1b2a4d; }
+td.num { text-align: right; font-family: monospace; } .muted { color: var(--muted); font-size: 13px; } .note { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+.cols { display: flex; gap: 28px; flex-wrap: wrap; }
+</style></head><body>
+<h1>厩舎コメントのワードクラウド</h1>
+<p class="muted">2020〜2025 年の厩舎コメント 96,714 頭分。語の大きさ = その語が出たコメントの数（平方根で大きさに換算）、色 = その語を含む馬の 3 着以内率が全体（22.6%）の何倍か（lift、対数）。青 = 好走寄り、橙 = 凡走寄り、灰 = 全体並み。語にカーソルを載せると数値が出る。集計の作り方は <code>src/scripts/data/trainer_comment_words.py</code>。</p>
+<div style="margin:10px 0 24px;max-width:520px"><div style="display:flex;justify-content:space-between" class="muted"><span>凡走寄り（橙）</span><span>好走寄り（青）</span></div><div style="height:12px;border-radius:6px;background:linear-gradient(90deg,#fb923c,#f19448,#e69555,#dc9761,#d2996e,#c89a7a,#bd9c86,#b39e93,#a9a09f,#9ea1ac,#94a3b8,#8da1bf,#869ec6,#7f9ccd,#7899d4,#7297dc,#6b95e3,#6492ea,#5d90f1,#568df8,#4f8bff)"></div><div class="muted" style="position:relative;height:18px;font-size:11px"><span style="position:absolute;left:0.0%;transform:translateX(-50%)">×0.66</span><span style="position:absolute;left:25.0%;transform:translateX(-50%)">×0.81</span><span style="position:absolute;left:50.0%;transform:translateX(-50%)">×1.0</span><span style="position:absolute;left:75.0%;transform:translateX(-50%)">×1.23</span><span style="position:absolute;left:100.0%;transform:translateX(-50%)">×1.52</span></div></div>
+<h2>1. 生の lift で色を付けた図（1 語）</h2>
+<p>「楽しみ」「期待」「能力」「昇級」「勝負」などは青（好走寄り）、「叩く」「試す」「慣れ」「非力」「展開」などは橙（凡走寄り）。大きい語ほど件数が多く、色の信頼度も高い。</p>
+<svg viewBox="0 0 1040 560" xmlns="http://www.w3.org/2000/svg" role="img" style="width:100%;height:auto;background:#0b1224;border:1px solid #243358;border-radius:8px"><text x="520.0" y="280.0" font-size="84.0" fill="#8da0c0" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>前走
+登場 18,401 コメント / 3着以内 23.7%（全体 22.6%）
+生の lift 1.04（1.02〜1.07）  人気補正 lift 1.00</title>前走</text><text x="549.8" y="364.9" font-size="65.4" fill="#92a2ba" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>そう
+登場 12,212 コメント / 3着以内 23.0%（全体 22.6%）
+生の lift 1.01（0.98〜1.05）  人気補正 lift 1.02</title>そう</text><text x="680.8" y="268.4" font-size="59.7" fill="#e1965b" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>使う
+登場 10,587 コメント / 3着以内 16.6%（全体 22.6%）
+生の lift 0.73（0.70〜0.76）  人気補正 lift 0.95</title>使う</text><text x="360.1" y="322.1" font-size="54.8" fill="#869ec6" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>動き
+登場 9,272 コメント / 3着以内 24.6%（全体 22.6%）
+生の lift 1.09（1.05〜1.12）  人気補正 lift 1.02</title>動き</text><text x="339.1" y="260.2" font-size="52.1" fill="#a6a0a2" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>距離
+登場 8,584 コメント / 3着以内 21.1%（全体 22.6%）
+生の lift 0.93（0.89〜0.97）  人気補正 lift 0.98</title>距離</text><text x="503.0" y="204.3" font-size="49.0" fill="#9fa1ab" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>競馬
+登場 7,820 コメント / 3着以内 21.7%（全体 22.6%）
+生の lift 0.96（0.92〜1.00）  人気補正 lift 0.98</title>競馬</text><text x="620.7" y="195.1" font-size="48.8" fill="#7397da" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>期待
+登場 7,769 コメント / 3着以内 27.7%（全体 22.6%）
+生の lift 1.22（1.18〜1.27）  人気補正 lift 1.03</title>期待</text><text x="655.6" y="329.1" font-size="45.0" fill="#809ccc" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>力
+登場 6,897 コメント / 3着以内 25.5%（全体 22.6%）
+生の lift 1.13（1.08〜1.17）  人気補正 lift 1.01</title>力</text><text x="348.0" y="204.2" font-size="44.9" fill="#a0a1a9" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>出る
+登場 6,876 コメント / 3着以内 21.6%（全体 22.6%）
+生の lift 0.95（0.91〜1.00）  人気補正 lift 0.98</title>出る</text><text x="743.2" y="334.0" font-size="44.2" fill="#90a2bc" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>走る
+登場 6,724 コメント / 3着以内 23.2%（全体 22.6%）
+生の lift 1.03（0.98〜1.07）  人気補正 lift 0.99</title>走る</text><text x="449.1" y="382.3" font-size="43.5" fill="#a99f9e" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>脚
+登場 6,567 コメント / 3着以内 20.8%（全体 22.6%）
+生の lift 0.92（0.87〜0.96）  人気補正 lift 1.00</title>脚</text><text x="367.2" y="384.8" font-size="43.3" fill="#90a2bc" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>状態
+登場 6,527 コメント / 3着以内 23.1%（全体 22.6%）
+生の lift 1.02（0.98〜1.07）  人気補正 lift 1.01</title>状態</text><text x="708.8" y="205.3" font-size="42.9" fill="#8ea1be" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>馬
+登場 6,435 コメント / 3着以内 23.4%（全体 22.6%）
+生の lift 1.03（0.99〜1.08）  人気補正 lift 1.03</title>馬</text><text x="668.0" y="381.5" font-size="40.5" fill="#9ba2b0" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>面
+登場 5,920 コメント / 3着以内 22.0%（全体 22.6%）
+生の lift 0.97（0.93〜1.02）  人気補正 lift 1.04</title>面</text><text x="428.4" y="151.2" font-size="40.1" fill="#bc9c88" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>時計
+登場 5,837 コメント / 3着以内 19.3%（全体 22.6%）
+生の lift 0.85（0.81〜0.90）  人気補正 lift 0.94</title>時計</text><text x="522.3" y="142.1" font-size="39.8" fill="#a7a0a2" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>此の
+登場 5,770 コメント / 3着以内 21.0%（全体 22.6%）
+生の lift 0.93（0.88〜0.97）  人気補正 lift 0.99</title>此の</text><text x="796.7" y="247.3" font-size="39.2" fill="#da9764" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>展開
+登場 5,656 コメント / 3着以内 17.1%（全体 22.6%）
+生の lift 0.75（0.71〜0.80）  人気補正 lift 0.96</title>展開</text><text x="576.6" y="424.7" font-size="38.9" fill="#c79b7b" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>少し
+登場 5,605 コメント / 3着以内 18.4%（全体 22.6%）
+生の lift 0.81（0.77〜0.86）  人気補正 lift 1.01</title>少し</text><text x="254.6" y="353.2" font-size="38.4" fill="#cb9a75" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>未だ
+登場 5,496 コメント / 3着以内 18.1%（全体 22.6%）
+生の lift 0.80（0.75〜0.84）  人気補正 lift 0.94</title>未だ</text><text x="657.6" y="135.9" font-size="37.1" fill="#93a3b9" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>仕上がり
+登場 5,233 コメント / 3着以内 22.8%（全体 22.6%）
+生の lift 1.00（0.95〜1.06）  人気補正 lift 0.98</title>仕上がり</text><text x="256.5" y="293.3" font-size="36.9" fill="#de975f" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>芝
+登場 5,206 コメント / 3着以内 16.8%（全体 22.6%）
+生の lift 0.74（0.70〜0.79）  人気補正 lift 0.93</title>芝</text><text x="218.3" y="250.0" font-size="36.4" fill="#ad9f99" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>運ぶ
+登場 5,103 コメント / 3着以内 20.4%（全体 22.6%）
+生の lift 0.90（0.85〜0.95）  人気補正 lift 1.00</title>運ぶ</text><text x="255.2" y="199.5" font-size="35.8" fill="#8aa0c2" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>思う
+登場 4,984 コメント / 3着以内 24.0%（全体 22.6%）
+生の lift 1.06（1.01〜1.11）  人気補正 lift 1.01</title>思う</text><text x="325.0" y="158.1" font-size="35.4" fill="#91a2bb" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>動く
+登場 4,910 コメント / 3着以内 23.0%（全体 22.6%）
+生の lift 1.02（0.97〜1.07）  人気補正 lift 1.01</title>動く</text><text x="804.6" y="203.1" font-size="35.4" fill="#5f91ee" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>楽しみ
+登場 4,909 コメント / 3着以内 31.1%（全体 22.6%）
+生の lift 1.37（1.32〜1.43）  人気補正 lift 1.01</title>楽しみ</text><text x="774.5" y="386.0" font-size="35.2" fill="#7f9cce" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>レース
+登場 4,878 コメント / 3着以内 25.7%（全体 22.6%）
+生の lift 1.14（1.08〜1.19）  人気補正 lift 1.05</title>レース</text><text x="846.5" y="290.5" font-size="34.3" fill="#d69869" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>悪い
+登場 4,711 コメント / 3着以内 17.4%（全体 22.6%）
+生の lift 0.77（0.72〜0.81）  人気補正 lift 0.99</title>悪い</text><text x="426.1" y="197.0" font-size="33.8" fill="#b19e96" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>様
+登場 4,608 コメント / 3着以内 20.2%（全体 22.6%）
+生の lift 0.89（0.84〜0.94）  人気補正 lift 0.96</title>様</text><text x="438.3" y="444.3" font-size="33.7" fill="#a7a0a1" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>乗り込む
+登場 4,595 コメント / 3着以内 21.0%（全体 22.6%）
+生の lift 0.93（0.87〜0.98）  人気補正 lift 0.97</title>乗り込む</text><text x="667.2" y="429.9" font-size="33.5" fill="#8ea1bf" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>馬場
+登場 4,551 コメント / 3着以内 23.5%（全体 22.6%）
+生の lift 1.04（0.98〜1.09）  人気補正 lift 1.04</title>馬場</text><text x="273.7" y="398.7" font-size="32.9" fill="#9ea1ac" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>条件
+登場 4,454 コメント / 3着以内 21.7%（全体 22.6%）
+生の lift 0.96（0.91〜1.01）  人気補正 lift 0.95</title>条件</text><text x="177.0" y="303.7" font-size="32.8" fill="#7f9cce" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>確り
+登場 4,435 コメント / 3着以内 25.8%（全体 22.6%）
+生の lift 1.14（1.08〜1.19）  人気補正 lift 1.00</title>確り</text><text x="873.9" y="333.1" font-size="32.7" fill="#a7a0a1" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>タイプ
+登場 4,417 コメント / 3着以内 21.0%（全体 22.6%）
+生の lift 0.93（0.87〜0.98）  人気補正 lift 0.98</title>タイプ</text><text x="436.2" y="107.1" font-size="30.6" fill="#a9a09f" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>流れ
+登場 4,043 コメント / 3着以内 20.8%（全体 22.6%）
+生の lift 0.92（0.86〜0.97）  人気補正 lift 1.05</title>流れ</text><text x="510.0" y="101.5" font-size="30.6" fill="#b49e92" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>方
+登場 4,041 コメント / 3着以内 19.9%（全体 22.6%）
+生の lift 0.88（0.83〜0.93）  人気補正 lift 0.94</title>方</text><text x="783.2" y="155.3" font-size="30.5" fill="#6693e7" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>昇級
+登場 4,031 コメント / 3着以内 29.8%（全体 22.6%）
+生の lift 1.32（1.25〜1.38）  人気補正 lift 1.00</title>昇級</text><text x="879.1" y="243.9" font-size="30.1" fill="#96a3b5" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>事
+登場 3,960 コメント / 3着以内 22.4%（全体 22.6%）
+生の lift 0.99（0.93〜1.05）  人気補正 lift 0.97</title>事</text><text x="579.8" y="466.0" font-size="29.8" fill="#b39e92" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>ダート
+登場 3,911 コメント / 3着以内 20.0%（全体 22.6%）
+生の lift 0.88（0.83〜0.94）  人気補正 lift 1.01</title>ダート</text><text x="745.9" y="428.8" font-size="29.7" fill="#6292eb" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>初戦
+登場 3,886 コメント / 3着以内 30.6%（全体 22.6%）
+生の lift 1.35（1.29〜1.41）  人気補正 lift 1.04</title>初戦</text><text x="323.8" y="443.5" font-size="29.6" fill="#ac9f9c" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>旨い
+登場 3,880 コメント / 3着以内 20.6%（全体 22.6%）
+生の lift 0.91（0.85〜0.97）  人気補正 lift 1.02</title>旨い</text><text x="176.9" y="367.2" font-size="29.6" fill="#8da0c0" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>追う
+登場 3,875 コメント / 3着以内 23.7%（全体 22.6%）
+生の lift 1.05（0.99〜1.11）  人気補正 lift 0.99</title>追う</text><text x="133.0" y="262.6" font-size="29.6" fill="#889fc5" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>順調
+登場 3,873 コメント / 3着以内 24.4%（全体 22.6%）
+生の lift 1.08（1.02〜1.14）  人気補正 lift 1.01</title>順調</text><text x="156.0" y="209.5" font-size="29.3" fill="#8a9fc3" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>内容
+登場 3,828 コメント / 3着以内 24.1%（全体 22.6%）
+生の lift 1.06（1.00〜1.12）  人気補正 lift 0.97</title>内容</text><text x="207.7" y="161.4" font-size="29.0" fill="#95a3b6" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>乗る
+登場 3,773 コメント / 3着以内 22.5%（全体 22.6%）
+生の lift 0.99（0.94〜1.05）  人気補正 lift 1.03</title>乗る</text><text x="306.8" y="114.1" font-size="28.1" fill="#869ec7" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>早い
+登場 3,621 コメント / 3着以内 24.7%（全体 22.6%）
+生の lift 1.09（1.03〜1.15）  人気補正 lift 1.01</title>早い</text><text x="571.3" y="82.1" font-size="27.9" fill="#e49658" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>もう
+登場 3,593 コメント / 3着以内 16.4%（全体 22.6%）
+生の lift 0.73（0.67〜0.78）  人気補正 lift 0.99</title>もう</text><text x="653.1" y="91.2" font-size="27.6" fill="#ad9f9a" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>今回
+登場 3,554 コメント / 3着以内 20.5%（全体 22.6%）
+生の lift 0.90（0.85〜0.96）  人気補正 lift 0.98</title>今回</text><text x="380.2" y="94.8" font-size="27.4" fill="#b09e96" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>前
+登場 3,519 コメント / 3着以内 20.2%（全体 22.6%）
+生の lift 0.89（0.83〜0.95）  人気補正 lift 0.96</title>前</text><text x="853.4" y="165.5" font-size="27.4" fill="#859ec7" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>調整
+登場 3,511 コメント / 3着以内 24.8%（全体 22.6%）
+生の lift 1.09（1.03〜1.16）  人気補正 lift 1.01</title>調整</text><text x="764.5" y="292.4" font-size="26.4" fill="#96a3b5" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>体
+登場 3,363 コメント / 3着以内 22.5%（全体 22.6%）
+生の lift 0.99（0.93〜1.05）  人気補正 lift 0.99</title>体</text><text x="928.4" y="285.7" font-size="26.1" fill="#d1996e" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>生かす
+登場 3,313 コメント / 3着以内 17.7%（全体 22.6%）
+生の lift 0.78（0.72〜0.84）  人気補正 lift 1.01</title>生かす</text><text x="890.7" y="369.1" font-size="25.9" fill="#869ec7" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>改めて
+登場 3,282 コメント / 3着以内 24.7%（全体 22.6%）
+生の lift 1.09（1.03〜1.16）  人気補正 lift 1.04</title>改めて</text><text x="895.1" y="202.5" font-size="25.8" fill="#c79b7b" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>どう
+登場 3,272 コメント / 3着以内 18.4%（全体 22.6%）
+生の lift 0.81（0.76〜0.87）  人気補正 lift 0.95</title>どう</text><text x="690.6" y="469.6" font-size="25.8" fill="#7e9bcf" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>問題
+登場 3,267 コメント / 3着以内 25.9%（全体 22.6%）
+生の lift 1.14（1.08〜1.21）  人気補正 lift 1.05</title>問題</text><text x="491.8" y="489.1" font-size="25.8" fill="#839dc9" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>走り
+登場 3,260 コメント / 3着以内 25.1%（全体 22.6%）
+生の lift 1.11（1.04〜1.17）  人気補正 lift 1.07</title>走り</text><text x="404.9" y="482.2" font-size="25.2" fill="#8ea1be" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>ケイコ
+登場 3,172 コメント / 3着以内 23.5%（全体 22.6%）
+生の lift 1.04（0.97〜1.10）  人気補正 lift 1.00</title>ケイコ</text><text x="248.3" y="442.2" font-size="24.8" fill="#8ca0c0" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>ゲート
+登場 3,108 コメント / 3着以内 23.7%（全体 22.6%）
+生の lift 1.05（0.98〜1.11）  人気補正 lift 0.98</title>ゲート</text><text x="808.7" y="428.1" font-size="24.8" fill="#90a2bc" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>調教
+登場 3,107 コメント / 3着以内 23.2%（全体 22.6%）
+生の lift 1.03（0.96〜1.09）  人気補正 lift 0.99</title>調教</text><text x="185.5" y="410.7" font-size="24.1" fill="#91a2bb" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>気性
+登場 3,005 コメント / 3着以内 23.1%（全体 22.6%）
+生の lift 1.02（0.95〜1.09）  人気補正 lift 1.01</title>気性</text><text x="267.9" y="157.1" font-size="23.1" fill="#869ec7" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>週
+登場 2,859 コメント / 3着以内 24.7%（全体 22.6%）
+生の lift 1.09（1.02〜1.16）  人気補正 lift 1.00</title>週</text><text x="219.6" y="123.3" font-size="22.9" fill="#7d9bd0" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>スピード
+登場 2,835 コメント / 3着以内 26.1%（全体 22.6%）
+生の lift 1.15（1.08〜1.22）  人気補正 lift 1.01</title>スピード</text><text x="925.1" y="257.2" font-size="22.5" fill="#bb9d89" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>感じ
+登場 2,779 コメント / 3着以内 19.3%（全体 22.6%）
+生の lift 0.85（0.79〜0.92）  人気補正 lift 0.99</title>感じ</text><text x="776.0" y="124.6" font-size="22.5" fill="#93a3b9" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>伸びる
+登場 2,770 コメント / 3着以内 22.8%（全体 22.6%）
+生の lift 1.01（0.94〜1.07）  人気補正 lift 1.04</title>伸びる</text><text x="462.3" y="341.3" font-size="22.3" fill="#a5a0a3" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>形
+登場 2,753 コメント / 3着以内 21.1%（全体 22.6%）
+生の lift 0.93（0.87〜1.00）  人気補正 lift 1.01</title>形</text><text x="114.0" y="345.8" font-size="22.3" fill="#b69d8f" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>自分
+登場 2,748 コメント / 3着以内 19.7%（全体 22.6%）
+生の lift 0.87（0.81〜0.94）  人気補正 lift 0.95</title>自分</text><text x="431.2" y="65.7" font-size="22.3" fill="#899fc4" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>スムーズ
+登場 2,747 コメント / 3着以内 24.2%（全体 22.6%）
+生の lift 1.07（1.00〜1.14）  人気補正 lift 1.03</title>スムーズ</text><text x="98.7" y="316.9" font-size="22.1" fill="#ed944d" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>前進
+登場 2,713 コメント / 3着以内 15.8%（全体 22.6%）
+生の lift 0.70（0.64〜0.76）  人気補正 lift 0.98</title>前進</text><text x="730.4" y="85.5" font-size="22.0" fill="#8ca0c0" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>コース
+登場 2,704 コメント / 3着以内 23.7%（全体 22.6%）
+生の lift 1.05（0.98〜1.12）  人気補正 lift 0.95</title>コース</text><text x="146.3" y="171.4" font-size="21.6" fill="#bf9c85" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>久々
+登場 2,654 コメント / 3着以内 19.1%（全体 22.6%）
+生の lift 0.84（0.78〜0.91）  人気補正 lift 0.94</title>久々</text><text x="852.7" y="132.6" font-size="21.5" fill="#889fc5" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>相手
+登場 2,638 コメント / 3着以内 24.4%（全体 22.6%）
+生の lift 1.08（1.01〜1.15）  人気補正 lift 1.02</title>相手</text><text x="955.4" y="227.9" font-size="21.3" fill="#a0a1a9" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>長い
+登場 2,604 コメント / 3着以内 21.5%（全体 22.6%）
+生の lift 0.95（0.88〜1.02）  人気補正 lift 0.97</title>長い</text><text x="962.8" y="321.4" font-size="20.6" fill="#7397da" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>十分
+登場 2,512 コメント / 3着以内 27.7%（全体 22.6%）
+生の lift 1.22（1.15〜1.30）  人気補正 lift 1.01</title>十分</text><text x="412.7" y="229.1" font-size="20.2" fill="#b49e92" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>差
+登場 2,455 コメント / 3着以内 19.9%（全体 22.6%）
+生の lift 0.88（0.81〜0.95）  人気補正 lift 0.92</title>差</text><text x="913.9" y="229.3" font-size="19.8" fill="#9ca2ae" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>筈
+登場 2,411 コメント / 3着以内 21.9%（全体 22.6%）
+生の lift 0.97（0.89〜1.04）  人気補正 lift 0.98</title>筈</text><text x="349.2" y="472.6" font-size="19.7" fill="#9da2ad" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>今
+登場 2,393 コメント / 3着以内 21.9%（全体 22.6%）
+生の lift 0.96（0.89〜1.04）  人気補正 lift 0.99</title>今</text><text x="892.8" y="408.9" font-size="19.4" fill="#839dca" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>前向き
+登場 2,353 コメント / 3着以内 25.1%（全体 22.6%）
+生の lift 1.11（1.03〜1.19）  人気補正 lift 1.06</title>前向き</text><text x="195.7" y="338.7" font-size="19.3" fill="#869ec6" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>分
+登場 2,338 コメント / 3着以内 24.6%（全体 22.6%）
+生の lift 1.09（1.01〜1.16）  人気補正 lift 1.02</title>分</text><text x="908.1" y="170.2" font-size="19.2" fill="#98a2b3" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>出来
+登場 2,325 コメント / 3着以内 22.3%（全体 22.6%）
+生の lift 0.98（0.91〜1.06）  人気補正 lift 0.99</title>出来</text><text x="808.2" y="456.1" font-size="19.2" fill="#7096dd" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>強い
+登場 2,323 コメント / 3着以内 28.2%（全体 22.6%）
+生の lift 1.24（1.16〜1.32）  人気補正 lift 0.97</title>強い</text><text x="102.6" y="227.5" font-size="19.1" fill="#9ba2b0" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>鍵
+登場 2,318 コメント / 3着以内 22.0%（全体 22.6%）
+生の lift 0.97（0.90〜1.05）  人気補正 lift 0.98</title>鍵</text><text x="344.4" y="80.3" font-size="19.1" fill="#94a3b8" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>気
+登場 2,309 コメント / 3着以内 22.7%（全体 22.6%）
+生の lift 1.00（0.93〜1.08）  人気補正 lift 1.04</title>気</text><text x="491.8" y="61.1" font-size="18.9" fill="#8da0bf" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>所
+登場 2,286 コメント / 3着以内 23.7%（全体 22.6%）
+生の lift 1.04（0.97〜1.12）  人気補正 lift 1.03</title>所</text><text x="756.7" y="474.8" font-size="18.8" fill="#879fc5" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>放牧
+登場 2,276 コメント / 3着以内 24.4%（全体 22.6%）
+生の lift 1.08（1.00〜1.16）  人気補正 lift 1.04</title>放牧</text><text x="670.7" y="495.9" font-size="18.5" fill="#558df9" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>能力
+登場 2,237 コメント / 3着以内 33.2%（全体 22.6%）
+生の lift 1.46（1.38〜1.55）  人気補正 lift 1.09</title>能力</text><text x="609.2" y="504.7" font-size="18.5" fill="#a3a1a6" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>最後
+登場 2,237 コメント / 3着以内 21.3%（全体 22.6%）
+生の lift 0.94（0.87〜1.02）  人気補正 lift 1.01</title>最後</text><text x="296.5" y="482.6" font-size="18.2" fill="#9ba2af" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>ペース
+登場 2,201 コメント / 3着以内 22.0%（全体 22.6%）
+生の lift 0.97（0.89〜1.05）  人気補正 lift 1.03</title>ペース</text><text x="545.6" y="509.2" font-size="18.1" fill="#799ad4" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>成長
+登場 2,183 コメント / 3着以内 26.7%（全体 22.6%）
+生の lift 1.18（1.10〜1.26）  人気補正 lift 1.03</title>成長</text><text x="129.4" y="407.0" font-size="18.0" fill="#b99d8b" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>効果
+登場 2,171 コメント / 3着以内 19.5%（全体 22.6%）
+生の lift 0.86（0.79〜0.93）  人気補正 lift 1.01</title>効果</text><text x="97.0" y="378.7" font-size="17.8" fill="#5e90ef" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>勝負
+登場 2,149 コメント / 3着以内 31.3%（全体 22.6%）
+生の lift 1.38（1.29〜1.47）  人気補正 lift 1.05</title>勝負</text><text x="52.7" y="300.3" font-size="17.7" fill="#7a9ad3" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>目標
+登場 2,132 コメント / 3着以内 26.5%（全体 22.6%）
+生の lift 1.17（1.09〜1.25）  人気補正 lift 1.00</title>目標</text><text x="200.9" y="208.2" font-size="17.5" fill="#92a2ba" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>着
+登場 2,115 コメント / 3着以内 22.9%（全体 22.6%）
+生の lift 1.01（0.93〜1.09）  人気補正 lift 1.00</title>着</text><text x="50.7" y="267.5" font-size="17.5" fill="#b49e92" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>体調
+登場 2,107 コメント / 3着以内 19.9%（全体 22.6%）
+生の lift 0.88（0.80〜0.96）  人気補正 lift 0.99</title>体調</text><text x="57.9" y="234.8" font-size="17.4" fill="#869ec6" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>対応
+登場 2,099 コメント / 3着以内 24.6%（全体 22.6%）
+生の lift 1.09（1.01〜1.17）  人気補正 lift 1.02</title>対応</text><text x="74.1" y="202.8" font-size="17.3" fill="#bd9c87" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>次第
+登場 2,080 コメント / 3着以内 19.2%（全体 22.6%）
+生の lift 0.85（0.77〜0.92）  人気補正 lift 0.97</title>次第</text><text x="132.7" y="143.7" font-size="17.2" fill="#799ad4" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>感ずる
+登場 2,069 コメント / 3着以内 26.7%（全体 22.6%）
+生の lift 1.18（1.09〜1.26）  人気補正 lift 1.04</title>感ずる</text><text x="222.0" y="94.8" font-size="17.1" fill="#849dc8" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>スタート
+登場 2,058 コメント / 3着以内 24.9%（全体 22.6%）
+生の lift 1.10（1.02〜1.18）  人気補正 lift 1.03</title>スタート</text><text x="99.2" y="172.2" font-size="17.1" fill="#af9e97" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>良化
+登場 2,056 コメント / 3着以内 20.3%（全体 22.6%）
+生の lift 0.90（0.82〜0.97）  人気補正 lift 0.93</title>良化</text><text x="305.1" y="67.2" font-size="17.0" fill="#7d9bd0" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>通用
+登場 2,049 コメント / 3着以内 26.1%（全体 22.6%）
+生の lift 1.15（1.07〜1.23）  人気補正 lift 1.04</title>通用</text><text x="530.8" y="40.0" font-size="16.7" fill="#d3996d" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>ハンデ
+登場 2,013 コメント / 3着以内 17.6%（全体 22.6%）
+生の lift 0.78（0.70〜0.85）  人気補正 lift 1.00</title>ハンデ</text><text x="597.8" y="42.7" font-size="16.7" fill="#8ba0c2" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>馬体
+登場 2,008 コメント / 3着以内 24.0%（全体 22.6%）
+生の lift 1.06（0.98〜1.14）  人気補正 lift 1.00</title>馬体</text><text x="663.6" y="50.0" font-size="16.5" fill="#ad9f9a" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>直線
+登場 1,992 コメント / 3着以内 20.5%（全体 22.6%）
+生の lift 0.90（0.83〜0.98）  人気補正 lift 0.96</title>直線</text><text x="726.7" y="61.9" font-size="16.5" fill="#849dc9" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>水準
+登場 1,987 コメント / 3着以内 25.0%（全体 22.6%）
+生の lift 1.10（1.02〜1.19）  人気補正 lift 1.02</title>水準</text><text x="786.1" y="78.1" font-size="16.5" fill="#899fc3" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>舞台
+登場 1,983 コメント / 3着以内 24.2%（全体 22.6%）
+生の lift 1.07（0.98〜1.15）  人気補正 lift 0.96</title>舞台</text><text x="840.5" y="98.3" font-size="16.1" fill="#f39345" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>向く
+登場 1,940 コメント / 3着以内 15.4%（全体 22.6%）
+生の lift 0.68（0.61〜0.75）  人気補正 lift 0.91</title>向く</text><text x="910.3" y="135.2" font-size="15.9" fill="#7297db" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>勝つ
+登場 1,917 コメント / 3着以内 27.9%（全体 22.6%）
+生の lift 1.23（1.14〜1.32）  人気補正 lift 0.98</title>勝つ</text><text x="976.8" y="194.5" font-size="15.9" fill="#91a2bb" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>トウキョウ
+登場 1,916 コメント / 3着以内 23.1%（全体 22.6%）
+生の lift 1.02（0.94〜1.10）  人気補正 lift 0.97</title>トウキョウ</text><text x="1008.1" y="260.9" font-size="15.8" fill="#9aa2b0" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>クラス
+登場 1,902 コメント / 3着以内 22.1%（全体 22.6%）
+生の lift 0.97（0.89〜1.06）  人気補正 lift 0.99</title>クラス</text><text x="1009.6" y="295.1" font-size="15.7" fill="#91a2bb" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>中間
+登場 1,899 コメント / 3着以内 23.0%（全体 22.6%）
+生の lift 1.02（0.93〜1.10）  人気補正 lift 1.00</title>中間</text><text x="140.8" y="235.7" font-size="15.2" fill="#91a2bb" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>重賞
+登場 1,832 コメント / 3着以内 23.1%（全体 22.6%）
+生の lift 1.02（0.93〜1.10）  人気補正 lift 1.01</title>重賞</text><text x="947.7" y="163.7" font-size="15.0" fill="#7498d9" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>鞍上
+登場 1,812 コメント / 3着以内 27.5%（全体 22.6%）
+生の lift 1.21（1.12〜1.30）  人気補正 lift 1.05</title>鞍上</text></svg>
+<h2>2. 同じ配置で『人気補正の lift』に色を替えた図（1 語）</h2>
+<div class="note">人気補正 lift = 実際の 3 着以内数 ÷ （その馬の単勝人気順位から見込まれる 3 着以内数）。1 図と同じ位置のまま、人気の影響を除くと<b>ほとんどの語が灰色</b>になる。語そのものが人気以上の情報を持つとは言えない（有意な語は 0 個）。ただし人気は発走直前の値でコメントを読んだ後の市場の評価を含むため、この補正はやや厳しめ。</div>
+<svg viewBox="0 0 1040 560" xmlns="http://www.w3.org/2000/svg" role="img" style="width:100%;height:auto;background:#0b1224;border:1px solid #243358;border-radius:8px"><text x="520.0" y="280.0" font-size="84.0" fill="#94a3b8" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>前走
+登場 18,401 コメント / 3着以内 23.7%（全体 22.6%）
+生の lift 1.04（1.02〜1.07）  人気補正 lift 1.00</title>前走</text><text x="549.8" y="364.9" font-size="65.4" fill="#90a2bc" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>そう
+登場 12,212 コメント / 3着以内 23.0%（全体 22.6%）
+生の lift 1.01（0.98〜1.05）  人気補正 lift 1.02</title>そう</text><text x="680.8" y="268.4" font-size="59.7" fill="#a2a1a7" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>使う
+登場 10,587 コメント / 3着以内 16.6%（全体 22.6%）
+生の lift 0.73（0.70〜0.76）  人気補正 lift 0.95</title>使う</text><text x="360.1" y="322.1" font-size="54.8" fill="#90a2bc" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>動き
+登場 9,272 コメント / 3着以内 24.6%（全体 22.6%）
+生の lift 1.09（1.05〜1.12）  人気補正 lift 1.02</title>動き</text><text x="339.1" y="260.2" font-size="52.1" fill="#98a2b3" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>距離
+登場 8,584 コメント / 3着以内 21.1%（全体 22.6%）
+生の lift 0.93（0.89〜0.97）  人気補正 lift 0.98</title>距離</text><text x="503.0" y="204.3" font-size="49.0" fill="#99a2b1" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>競馬
+登場 7,820 コメント / 3着以内 21.7%（全体 22.6%）
+生の lift 0.96（0.92〜1.00）  人気補正 lift 0.98</title>競馬</text><text x="620.7" y="195.1" font-size="48.8" fill="#8fa1bd" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>期待
+登場 7,769 コメント / 3着以内 27.7%（全体 22.6%）
+生の lift 1.22（1.18〜1.27）  人気補正 lift 1.03</title>期待</text><text x="655.6" y="329.1" font-size="45.0" fill="#92a2ba" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>力
+登場 6,897 コメント / 3着以内 25.5%（全体 22.6%）
+生の lift 1.13（1.08〜1.17）  人気補正 lift 1.01</title>力</text><text x="348.0" y="204.2" font-size="44.9" fill="#98a2b3" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>出る
+登場 6,876 コメント / 3着以内 21.6%（全体 22.6%）
+生の lift 0.95（0.91〜1.00）  人気補正 lift 0.98</title>出る</text><text x="743.2" y="334.0" font-size="44.2" fill="#97a3b5" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>走る
+登場 6,724 コメント / 3着以内 23.2%（全体 22.6%）
+生の lift 1.03（0.98〜1.07）  人気補正 lift 0.99</title>走る</text><text x="449.1" y="382.3" font-size="43.5" fill="#94a3b8" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>脚
+登場 6,567 コメント / 3着以内 20.8%（全体 22.6%）
+生の lift 0.92（0.87〜0.96）  人気補正 lift 1.00</title>脚</text><text x="367.2" y="384.8" font-size="43.3" fill="#92a2ba" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>状態
+登場 6,527 コメント / 3着以内 23.1%（全体 22.6%）
+生の lift 1.02（0.98〜1.07）  人気補正 lift 1.01</title>状態</text><text x="708.8" y="205.3" font-size="42.9" fill="#8fa1bd" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>馬
+登場 6,435 コメント / 3着以内 23.4%（全体 22.6%）
+生の lift 1.03（0.99〜1.08）  人気補正 lift 1.03</title>馬</text><text x="668.0" y="381.5" font-size="40.5" fill="#8da1bf" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>面
+登場 5,920 コメント / 3着以内 22.0%（全体 22.6%）
+生の lift 0.97（0.93〜1.02）  人気補正 lift 1.04</title>面</text><text x="428.4" y="151.2" font-size="40.1" fill="#a4a0a5" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>時計
+登場 5,837 コメント / 3着以内 19.3%（全体 22.6%）
+生の lift 0.85（0.81〜0.90）  人気補正 lift 0.94</title>時計</text><text x="522.3" y="142.1" font-size="39.8" fill="#96a3b6" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>此の
+登場 5,770 コメント / 3着以内 21.0%（全体 22.6%）
+生の lift 0.93（0.88〜0.97）  人気補正 lift 0.99</title>此の</text><text x="796.7" y="247.3" font-size="39.2" fill="#9da1ad" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>展開
+登場 5,656 コメント / 3着以内 17.1%（全体 22.6%）
+生の lift 0.75（0.71〜0.80）  人気補正 lift 0.96</title>展開</text><text x="576.6" y="424.7" font-size="38.9" fill="#92a2ba" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>少し
+登場 5,605 コメント / 3着以内 18.4%（全体 22.6%）
+生の lift 0.81（0.77〜0.86）  人気補正 lift 1.01</title>少し</text><text x="254.6" y="353.2" font-size="38.4" fill="#a3a0a5" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>未だ
+登場 5,496 コメント / 3着以内 18.1%（全体 22.6%）
+生の lift 0.80（0.75〜0.84）  人気補正 lift 0.94</title>未だ</text><text x="657.6" y="135.9" font-size="37.1" fill="#9aa2b1" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>仕上がり
+登場 5,233 コメント / 3着以内 22.8%（全体 22.6%）
+生の lift 1.00（0.95〜1.06）  人気補正 lift 0.98</title>仕上がり</text><text x="256.5" y="293.3" font-size="36.9" fill="#a6a0a2" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>芝
+登場 5,206 コメント / 3着以内 16.8%（全体 22.6%）
+生の lift 0.74（0.70〜0.79）  人気補正 lift 0.93</title>芝</text><text x="218.3" y="250.0" font-size="36.4" fill="#94a3b8" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>運ぶ
+登場 5,103 コメント / 3着以内 20.4%（全体 22.6%）
+生の lift 0.90（0.85〜0.95）  人気補正 lift 1.00</title>運ぶ</text><text x="255.2" y="199.5" font-size="35.8" fill="#92a2ba" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>思う
+登場 4,984 コメント / 3着以内 24.0%（全体 22.6%）
+生の lift 1.06（1.01〜1.11）  人気補正 lift 1.01</title>思う</text><text x="325.0" y="158.1" font-size="35.4" fill="#93a3b9" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>動く
+登場 4,910 コメント / 3着以内 23.0%（全体 22.6%）
+生の lift 1.02（0.97〜1.07）  人気補正 lift 1.01</title>動く</text><text x="804.6" y="203.1" font-size="35.4" fill="#92a2ba" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>楽しみ
+登場 4,909 コメント / 3着以内 31.1%（全体 22.6%）
+生の lift 1.37（1.32〜1.43）  人気補正 lift 1.01</title>楽しみ</text><text x="774.5" y="386.0" font-size="35.2" fill="#8da0c0" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>レース
+登場 4,878 コメント / 3着以内 25.7%（全体 22.6%）
+生の lift 1.14（1.08〜1.19）  人気補正 lift 1.05</title>レース</text><text x="846.5" y="290.5" font-size="34.3" fill="#97a3b5" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>悪い
+登場 4,711 コメント / 3着以内 17.4%（全体 22.6%）
+生の lift 0.77（0.72〜0.81）  人気補正 lift 0.99</title>悪い</text><text x="426.1" y="197.0" font-size="33.8" fill="#9fa1ab" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>様
+登場 4,608 コメント / 3着以内 20.2%（全体 22.6%）
+生の lift 0.89（0.84〜0.94）  人気補正 lift 0.96</title>様</text><text x="438.3" y="444.3" font-size="33.7" fill="#9aa2b0" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>乗り込む
+登場 4,595 コメント / 3着以内 21.0%（全体 22.6%）
+生の lift 0.93（0.87〜0.98）  人気補正 lift 0.97</title>乗り込む</text><text x="667.2" y="429.9" font-size="33.5" fill="#8da1bf" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>馬場
+登場 4,551 コメント / 3着以内 23.5%（全体 22.6%）
+生の lift 1.04（0.98〜1.09）  人気補正 lift 1.04</title>馬場</text><text x="273.7" y="398.7" font-size="32.9" fill="#a0a1aa" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>条件
+登場 4,454 コメント / 3着以内 21.7%（全体 22.6%）
+生の lift 0.96（0.91〜1.01）  人気補正 lift 0.95</title>条件</text><text x="177.0" y="303.7" font-size="32.8" fill="#94a3b8" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>確り
+登場 4,435 コメント / 3着以内 25.8%（全体 22.6%）
+生の lift 1.14（1.08〜1.19）  人気補正 lift 1.00</title>確り</text><text x="873.9" y="333.1" font-size="32.7" fill="#9aa2b1" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>タイプ
+登場 4,417 コメント / 3着以内 21.0%（全体 22.6%）
+生の lift 0.93（0.87〜0.98）  人気補正 lift 0.98</title>タイプ</text><text x="436.2" y="107.1" font-size="30.6" fill="#8ba0c1" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>流れ
+登場 4,043 コメント / 3着以内 20.8%（全体 22.6%）
+生の lift 0.92（0.86〜0.97）  人気補正 lift 1.05</title>流れ</text><text x="510.0" y="101.5" font-size="30.6" fill="#a3a0a5" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>方
+登場 4,041 コメント / 3着以内 19.9%（全体 22.6%）
+生の lift 0.88（0.83〜0.93）  人気補正 lift 0.94</title>方</text><text x="783.2" y="155.3" font-size="30.5" fill="#93a3b9" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>昇級
+登場 4,031 コメント / 3着以内 29.8%（全体 22.6%）
+生の lift 1.32（1.25〜1.38）  人気補正 lift 1.00</title>昇級</text><text x="879.1" y="243.9" font-size="30.1" fill="#9ba2af" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>事
+登場 3,960 コメント / 3着以内 22.4%（全体 22.6%）
+生の lift 0.99（0.93〜1.05）  人気補正 lift 0.97</title>事</text><text x="579.8" y="466.0" font-size="29.8" fill="#93a3b9" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>ダート
+登場 3,911 コメント / 3着以内 20.0%（全体 22.6%）
+生の lift 0.88（0.83〜0.94）  人気補正 lift 1.01</title>ダート</text><text x="745.9" y="428.8" font-size="29.7" fill="#8da1bf" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>初戦
+登場 3,886 コメント / 3着以内 30.6%（全体 22.6%）
+生の lift 1.35（1.29〜1.41）  人気補正 lift 1.04</title>初戦</text><text x="323.8" y="443.5" font-size="29.6" fill="#90a2bc" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>旨い
+登場 3,880 コメント / 3着以内 20.6%（全体 22.6%）
+生の lift 0.91（0.85〜0.97）  人気補正 lift 1.02</title>旨い</text><text x="176.9" y="367.2" font-size="29.6" fill="#97a3b5" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>追う
+登場 3,875 コメント / 3着以内 23.7%（全体 22.6%）
+生の lift 1.05（0.99〜1.11）  人気補正 lift 0.99</title>追う</text><text x="133.0" y="262.6" font-size="29.6" fill="#92a2ba" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>順調
+登場 3,873 コメント / 3着以内 24.4%（全体 22.6%）
+生の lift 1.08（1.02〜1.14）  人気補正 lift 1.01</title>順調</text><text x="156.0" y="209.5" font-size="29.3" fill="#9ca2af" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>内容
+登場 3,828 コメント / 3着以内 24.1%（全体 22.6%）
+生の lift 1.06（1.00〜1.12）  人気補正 lift 0.97</title>内容</text><text x="207.7" y="161.4" font-size="29.0" fill="#8fa1bd" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>乗る
+登場 3,773 コメント / 3着以内 22.5%（全体 22.6%）
+生の lift 0.99（0.94〜1.05）  人気補正 lift 1.03</title>乗る</text><text x="306.8" y="114.1" font-size="28.1" fill="#92a2ba" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>早い
+登場 3,621 コメント / 3着以内 24.7%（全体 22.6%）
+生の lift 1.09（1.03〜1.15）  人気補正 lift 1.01</title>早い</text><text x="571.3" y="82.1" font-size="27.9" fill="#98a2b4" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>もう
+登場 3,593 コメント / 3着以内 16.4%（全体 22.6%）
+生の lift 0.73（0.67〜0.78）  人気補正 lift 0.99</title>もう</text><text x="653.1" y="91.2" font-size="27.6" fill="#99a2b2" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>今回
+登場 3,554 コメント / 3着以内 20.5%（全体 22.6%）
+生の lift 0.90（0.85〜0.96）  人気補正 lift 0.98</title>今回</text><text x="380.2" y="94.8" font-size="27.4" fill="#9da1ad" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>前
+登場 3,519 コメント / 3着以内 20.2%（全体 22.6%）
+生の lift 0.89（0.83〜0.95）  人気補正 lift 0.96</title>前</text><text x="853.4" y="165.5" font-size="27.4" fill="#92a2ba" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>調整
+登場 3,511 コメント / 3着以内 24.8%（全体 22.6%）
+生の lift 1.09（1.03〜1.16）  人気補正 lift 1.01</title>調整</text><text x="764.5" y="292.4" font-size="26.4" fill="#97a2b4" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>体
+登場 3,363 コメント / 3着以内 22.5%（全体 22.6%）
+生の lift 0.99（0.93〜1.05）  人気補正 lift 0.99</title>体</text><text x="928.4" y="285.7" font-size="26.1" fill="#92a2ba" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>生かす
+登場 3,313 コメント / 3着以内 17.7%（全体 22.6%）
+生の lift 0.78（0.72〜0.84）  人気補正 lift 1.01</title>生かす</text><text x="890.7" y="369.1" font-size="25.9" fill="#8da1bf" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>改めて
+登場 3,282 コメント / 3着以内 24.7%（全体 22.6%）
+生の lift 1.09（1.03〜1.16）  人気補正 lift 1.04</title>改めて</text><text x="895.1" y="202.5" font-size="25.8" fill="#a0a1aa" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>どう
+登場 3,272 コメント / 3着以内 18.4%（全体 22.6%）
+生の lift 0.81（0.76〜0.87）  人気補正 lift 0.95</title>どう</text><text x="690.6" y="469.6" font-size="25.8" fill="#8ca0c1" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>問題
+登場 3,267 コメント / 3着以内 25.9%（全体 22.6%）
+生の lift 1.14（1.08〜1.21）  人気補正 lift 1.05</title>問題</text><text x="491.8" y="489.1" font-size="25.8" fill="#889fc4" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>走り
+登場 3,260 コメント / 3着以内 25.1%（全体 22.6%）
+生の lift 1.11（1.04〜1.17）  人気補正 lift 1.07</title>走り</text><text x="404.9" y="482.2" font-size="25.2" fill="#94a3b8" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>ケイコ
+登場 3,172 コメント / 3着以内 23.5%（全体 22.6%）
+生の lift 1.04（0.97〜1.10）  人気補正 lift 1.00</title>ケイコ</text><text x="248.3" y="442.2" font-size="24.8" fill="#9aa2b1" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>ゲート
+登場 3,108 コメント / 3着以内 23.7%（全体 22.6%）
+生の lift 1.05（0.98〜1.11）  人気補正 lift 0.98</title>ゲート</text><text x="808.7" y="428.1" font-size="24.8" fill="#96a3b6" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>調教
+登場 3,107 コメント / 3着以内 23.2%（全体 22.6%）
+生の lift 1.03（0.96〜1.09）  人気補正 lift 0.99</title>調教</text><text x="185.5" y="410.7" font-size="24.1" fill="#92a2ba" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>気性
+登場 3,005 コメント / 3着以内 23.1%（全体 22.6%）
+生の lift 1.02（0.95〜1.09）  人気補正 lift 1.01</title>気性</text><text x="267.9" y="157.1" font-size="23.1" fill="#93a3b9" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>週
+登場 2,859 コメント / 3着以内 24.7%（全体 22.6%）
+生の lift 1.09（1.02〜1.16）  人気補正 lift 1.00</title>週</text><text x="219.6" y="123.3" font-size="22.9" fill="#92a2bb" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>スピード
+登場 2,835 コメント / 3着以内 26.1%（全体 22.6%）
+生の lift 1.15（1.08〜1.22）  人気補正 lift 1.01</title>スピード</text><text x="925.1" y="257.2" font-size="22.5" fill="#97a3b5" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>感じ
+登場 2,779 コメント / 3着以内 19.3%（全体 22.6%）
+生の lift 0.85（0.79〜0.92）  人気補正 lift 0.99</title>感じ</text><text x="776.0" y="124.6" font-size="22.5" fill="#8ea1be" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>伸びる
+登場 2,770 コメント / 3着以内 22.8%（全体 22.6%）
+生の lift 1.01（0.94〜1.07）  人気補正 lift 1.04</title>伸びる</text><text x="462.3" y="341.3" font-size="22.3" fill="#93a3b9" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>形
+登場 2,753 コメント / 3着以内 21.1%（全体 22.6%）
+生の lift 0.93（0.87〜1.00）  人気補正 lift 1.01</title>形</text><text x="114.0" y="345.8" font-size="22.3" fill="#a0a1aa" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>自分
+登場 2,748 コメント / 3着以内 19.7%（全体 22.6%）
+生の lift 0.87（0.81〜0.94）  人気補正 lift 0.95</title>自分</text><text x="431.2" y="65.7" font-size="22.3" fill="#8fa1bd" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>スムーズ
+登場 2,747 コメント / 3着以内 24.2%（全体 22.6%）
+生の lift 1.07（1.00〜1.14）  人気補正 lift 1.03</title>スムーズ</text><text x="98.7" y="316.9" font-size="22.1" fill="#99a2b2" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>前進
+登場 2,713 コメント / 3着以内 15.8%（全体 22.6%）
+生の lift 0.70（0.64〜0.76）  人気補正 lift 0.98</title>前進</text><text x="730.4" y="85.5" font-size="22.0" fill="#a1a1a9" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>コース
+登場 2,704 コメント / 3着以内 23.7%（全体 22.6%）
+生の lift 1.05（0.98〜1.12）  人気補正 lift 0.95</title>コース</text><text x="146.3" y="171.4" font-size="21.6" fill="#a3a1a6" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>久々
+登場 2,654 コメント / 3着以内 19.1%（全体 22.6%）
+生の lift 0.84（0.78〜0.91）  人気補正 lift 0.94</title>久々</text><text x="852.7" y="132.6" font-size="21.5" fill="#90a2bc" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>相手
+登場 2,638 コメント / 3着以内 24.4%（全体 22.6%）
+生の lift 1.08（1.01〜1.15）  人気補正 lift 1.02</title>相手</text><text x="955.4" y="227.9" font-size="21.3" fill="#9da2ae" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>長い
+登場 2,604 コメント / 3着以内 21.5%（全体 22.6%）
+生の lift 0.95（0.88〜1.02）  人気補正 lift 0.97</title>長い</text><text x="962.8" y="321.4" font-size="20.6" fill="#93a3b9" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>十分
+登場 2,512 コメント / 3着以内 27.7%（全体 22.6%）
+生の lift 1.22（1.15〜1.30）  人気補正 lift 1.01</title>十分</text><text x="412.7" y="229.1" font-size="20.2" fill="#a99f9e" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>差
+登場 2,455 コメント / 3着以内 19.9%（全体 22.6%）
+生の lift 0.88（0.81〜0.95）  人気補正 lift 0.92</title>差</text><text x="913.9" y="229.3" font-size="19.8" fill="#99a2b2" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>筈
+登場 2,411 コメント / 3着以内 21.9%（全体 22.6%）
+生の lift 0.97（0.89〜1.04）  人気補正 lift 0.98</title>筈</text><text x="349.2" y="472.6" font-size="19.7" fill="#96a3b6" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>今
+登場 2,393 コメント / 3着以内 21.9%（全体 22.6%）
+生の lift 0.96（0.89〜1.04）  人気補正 lift 0.99</title>今</text><text x="892.8" y="408.9" font-size="19.4" fill="#8aa0c2" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>前向き
+登場 2,353 コメント / 3着以内 25.1%（全体 22.6%）
+生の lift 1.11（1.03〜1.19）  人気補正 lift 1.06</title>前向き</text><text x="195.7" y="338.7" font-size="19.3" fill="#91a2bc" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>分
+登場 2,338 コメント / 3着以内 24.6%（全体 22.6%）
+生の lift 1.09（1.01〜1.16）  人気補正 lift 1.02</title>分</text><text x="908.1" y="170.2" font-size="19.2" fill="#96a3b5" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>出来
+登場 2,325 コメント / 3着以内 22.3%（全体 22.6%）
+生の lift 0.98（0.91〜1.06）  人気補正 lift 0.99</title>出来</text><text x="808.2" y="456.1" font-size="19.2" fill="#9ca2ae" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>強い
+登場 2,323 コメント / 3着以内 28.2%（全体 22.6%）
+生の lift 1.24（1.16〜1.32）  人気補正 lift 0.97</title>強い</text><text x="102.6" y="227.5" font-size="19.1" fill="#9aa2b1" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>鍵
+登場 2,318 コメント / 3着以内 22.0%（全体 22.6%）
+生の lift 0.97（0.90〜1.05）  人気補正 lift 0.98</title>鍵</text><text x="344.4" y="80.3" font-size="19.1" fill="#8da0bf" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>気
+登場 2,309 コメント / 3着以内 22.7%（全体 22.6%）
+生の lift 1.00（0.93〜1.08）  人気補正 lift 1.04</title>気</text><text x="491.8" y="61.1" font-size="18.9" fill="#8fa1be" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>所
+登場 2,286 コメント / 3着以内 23.7%（全体 22.6%）
+生の lift 1.04（0.97〜1.12）  人気補正 lift 1.03</title>所</text><text x="756.7" y="474.8" font-size="18.8" fill="#8ea1bf" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>放牧
+登場 2,276 コメント / 3着以内 24.4%（全体 22.6%）
+生の lift 1.08（1.00〜1.16）  人気補正 lift 1.04</title>放牧</text><text x="670.7" y="495.9" font-size="18.5" fill="#869ec7" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>能力
+登場 2,237 コメント / 3着以内 33.2%（全体 22.6%）
+生の lift 1.46（1.38〜1.55）  人気補正 lift 1.09</title>能力</text><text x="609.2" y="504.7" font-size="18.5" fill="#93a3b9" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>最後
+登場 2,237 コメント / 3着以内 21.3%（全体 22.6%）
+生の lift 0.94（0.87〜1.02）  人気補正 lift 1.01</title>最後</text><text x="296.5" y="482.6" font-size="18.2" fill="#8fa1bd" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>ペース
+登場 2,201 コメント / 3着以内 22.0%（全体 22.6%）
+生の lift 0.97（0.89〜1.05）  人気補正 lift 1.03</title>ペース</text><text x="545.6" y="509.2" font-size="18.1" fill="#90a2bc" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>成長
+登場 2,183 コメント / 3着以内 26.7%（全体 22.6%）
+生の lift 1.18（1.10〜1.26）  人気補正 lift 1.03</title>成長</text><text x="129.4" y="407.0" font-size="18.0" fill="#92a2ba" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>効果
+登場 2,171 コメント / 3着以内 19.5%（全体 22.6%）
+生の lift 0.86（0.79〜0.93）  人気補正 lift 1.01</title>効果</text><text x="97.0" y="378.7" font-size="17.8" fill="#8ca0c0" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>勝負
+登場 2,149 コメント / 3着以内 31.3%（全体 22.6%）
+生の lift 1.38（1.29〜1.47）  人気補正 lift 1.05</title>勝負</text><text x="52.7" y="300.3" font-size="17.7" fill="#95a3b7" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>目標
+登場 2,132 コメント / 3着以内 26.5%（全体 22.6%）
+生の lift 1.17（1.09〜1.25）  人気補正 lift 1.00</title>目標</text><text x="200.9" y="208.2" font-size="17.5" fill="#94a3b8" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>着
+登場 2,115 コメント / 3着以内 22.9%（全体 22.6%）
+生の lift 1.01（0.93〜1.09）  人気補正 lift 1.00</title>着</text><text x="50.7" y="267.5" font-size="17.5" fill="#96a3b6" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>体調
+登場 2,107 コメント / 3着以内 19.9%（全体 22.6%）
+生の lift 0.88（0.80〜0.96）  人気補正 lift 0.99</title>体調</text><text x="57.9" y="234.8" font-size="17.4" fill="#91a2bb" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>対応
+登場 2,099 コメント / 3着以内 24.6%（全体 22.6%）
+生の lift 1.09（1.01〜1.17）  人気補正 lift 1.02</title>対応</text><text x="74.1" y="202.8" font-size="17.3" fill="#9ca2ae" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>次第
+登場 2,080 コメント / 3着以内 19.2%（全体 22.6%）
+生の lift 0.85（0.77〜0.92）  人気補正 lift 0.97</title>次第</text><text x="132.7" y="143.7" font-size="17.2" fill="#8da0bf" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>感ずる
+登場 2,069 コメント / 3着以内 26.7%（全体 22.6%）
+生の lift 1.18（1.09〜1.26）  人気補正 lift 1.04</title>感ずる</text><text x="222.0" y="94.8" font-size="17.1" fill="#8fa1bd" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>スタート
+登場 2,058 コメント / 3着以内 24.9%（全体 22.6%）
+生の lift 1.10（1.02〜1.18）  人気補正 lift 1.03</title>スタート</text><text x="99.2" y="172.2" font-size="17.1" fill="#a5a0a3" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>良化
+登場 2,056 コメント / 3着以内 20.3%（全体 22.6%）
+生の lift 0.90（0.82〜0.97）  人気補正 lift 0.93</title>良化</text><text x="305.1" y="67.2" font-size="17.0" fill="#8da1bf" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>通用
+登場 2,049 コメント / 3着以内 26.1%（全体 22.6%）
+生の lift 1.15（1.07〜1.23）  人気補正 lift 1.04</title>通用</text><text x="530.8" y="40.0" font-size="16.7" fill="#93a3b9" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>ハンデ
+登場 2,013 コメント / 3着以内 17.6%（全体 22.6%）
+生の lift 0.78（0.70〜0.85）  人気補正 lift 1.00</title>ハンデ</text><text x="597.8" y="42.7" font-size="16.7" fill="#95a3b7" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>馬体
+登場 2,008 コメント / 3着以内 24.0%（全体 22.6%）
+生の lift 1.06（0.98〜1.14）  人気補正 lift 1.00</title>馬体</text><text x="663.6" y="50.0" font-size="16.5" fill="#9ea1ac" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>直線
+登場 1,992 コメント / 3着以内 20.5%（全体 22.6%）
+生の lift 0.90（0.83〜0.98）  人気補正 lift 0.96</title>直線</text><text x="726.7" y="61.9" font-size="16.5" fill="#91a2bb" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>水準
+登場 1,987 コメント / 3着以内 25.0%（全体 22.6%）
+生の lift 1.10（1.02〜1.19）  人気補正 lift 1.02</title>水準</text><text x="786.1" y="78.1" font-size="16.5" fill="#9da1ad" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>舞台
+登場 1,983 コメント / 3着以内 24.2%（全体 22.6%）
+生の lift 1.07（0.98〜1.15）  人気補正 lift 0.96</title>舞台</text><text x="840.5" y="98.3" font-size="16.1" fill="#ac9f9c" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>向く
+登場 1,940 コメント / 3着以内 15.4%（全体 22.6%）
+生の lift 0.68（0.61〜0.75）  人気補正 lift 0.91</title>向く</text><text x="910.3" y="135.2" font-size="15.9" fill="#99a2b2" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>勝つ
+登場 1,917 コメント / 3着以内 27.9%（全体 22.6%）
+生の lift 1.23（1.14〜1.32）  人気補正 lift 0.98</title>勝つ</text><text x="976.8" y="194.5" font-size="15.9" fill="#9ba2af" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>トウキョウ
+登場 1,916 コメント / 3着以内 23.1%（全体 22.6%）
+生の lift 1.02（0.94〜1.10）  人気補正 lift 0.97</title>トウキョウ</text><text x="1008.1" y="260.9" font-size="15.8" fill="#96a3b5" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>クラス
+登場 1,902 コメント / 3着以内 22.1%（全体 22.6%）
+生の lift 0.97（0.89〜1.06）  人気補正 lift 0.99</title>クラス</text><text x="1009.6" y="295.1" font-size="15.7" fill="#94a3b8" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>中間
+登場 1,899 コメント / 3着以内 23.0%（全体 22.6%）
+生の lift 1.02（0.93〜1.10）  人気補正 lift 1.00</title>中間</text><text x="140.8" y="235.7" font-size="15.2" fill="#93a3b9" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>重賞
+登場 1,832 コメント / 3着以内 23.1%（全体 22.6%）
+生の lift 1.02（0.93〜1.10）  人気補正 lift 1.01</title>重賞</text><text x="947.7" y="163.7" font-size="15.0" fill="#8ca0c0" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>鞍上
+登場 1,812 コメント / 3着以内 27.5%（全体 22.6%）
+生の lift 1.21（1.12〜1.30）  人気補正 lift 1.05</title>鞍上</text></svg>
+<h2>3. 隣り合う 2 語の組（生の lift）</h2>
+<p>件数の多い 70 組。「水準＋以上」「自己＋条件」「初戦＋楽しみ」などは青、「もう＋少し」「展開＋向く」「展開＋次第」などは橙。なお「勝負＋期待」「賞金＋加算」のように 2 倍前後の組は件数が少なく、この図には入らない（term_stats.csv を参照）。</p>
+<svg viewBox="0 0 1040 560" xmlns="http://www.w3.org/2000/svg" role="img" style="width:100%;height:auto;background:#0b1224;border:1px solid #243358;border-radius:8px"><text x="520.0" y="280.0" font-size="84.0" fill="#a6a0a2" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>脚+使う
+登場 3,153 コメント / 3着以内 21.1%（全体 22.6%）
+生の lift 0.93（0.87〜0.99）  人気補正 lift 0.99</title>脚＋使う</text><text x="561.5" y="363.5" font-size="61.2" fill="#a2a1a7" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>流れ+乗る
+登場 1,987 コメント / 3着以内 21.4%（全体 22.6%）
+生の lift 0.94（0.86〜1.02）  人気補正 lift 1.10</title>流れ＋乗る</text><text x="426.1" y="197.0" font-size="56.8" fill="#bd9c87" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>此の+条件
+登場 1,793 コメント / 3着以内 19.2%（全体 22.6%）
+生の lift 0.85（0.77〜0.93）  人気補正 lift 0.93</title>此の＋条件</text><text x="731.0" y="187.1" font-size="56.2" fill="#fb923c" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>もう+少し
+登場 1,767 コメント / 3着以内 14.7%（全体 22.6%）
+生の lift 0.65（0.58〜0.72）  人気補正 lift 1.01</title>もう＋少し</text><text x="535.7" y="427.7" font-size="50.4" fill="#839dca" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>改めて+期待
+登場 1,530 コメント / 3着以内 25.2%（全体 22.6%）
+生の lift 1.11（1.01〜1.21）  人気補正 lift 1.04</title>改めて＋期待</text><text x="278.4" y="370.7" font-size="41.9" fill="#859ec7" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>時計+出る
+登場 1,210 コメント / 3着以内 24.8%（全体 22.6%）
+生の lift 1.09（0.99〜1.20）  人気補正 lift 0.99</title>時計＋出る</text><text x="796.7" y="247.3" font-size="41.6" fill="#8da0c0" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>追う+事
+登場 1,199 コメント / 3着以内 23.7%（全体 22.6%）
+生の lift 1.05（0.94〜1.15）  人気補正 lift 0.95</title>追う＋事</text><text x="259.5" y="302.5" font-size="37.1" fill="#de975f" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>此の+馬
+登場 1,047 コメント / 3着以内 16.8%（全体 22.6%）
+生の lift 0.74（0.64〜0.84）  人気補正 lift 0.91</title>此の＋馬</text><text x="804.7" y="296.8" font-size="36.9" fill="#fb923c" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>展開+向く
+登場 1,039 コメント / 3着以内 13.8%（全体 22.6%）
+生の lift 0.61（0.52〜0.70）  人気補正 lift 0.90</title>展開＋向く</text><text x="379.5" y="139.9" font-size="36.2" fill="#8ba0c1" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>ケイコ+動き
+登場 1,016 コメント / 3着以内 23.9%（全体 22.6%）
+生の lift 1.06（0.94〜1.17）  人気補正 lift 1.01</title>ケイコ＋動き</text><text x="218.3" y="250.0" font-size="36.0" fill="#9fa1ab" text-anchor="middle" dominant-baseline="central" font-weight="700"><title>リズム+運ぶ
+登場 1,009 コメント / 3着以内 21.7%（全体 22.6%）
+生の lift 0.96（0.85〜1.07）  人気補正 lift 0.97</title>リズム＋運ぶ</text><text x="594.2" y="125.4" font-size="33.8" fill="#9ba2b0" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>距離+延長
+登場 940 コメント / 3着以内 22.0%（全体 22.6%）
+生の lift 0.97（0.86〜1.09）  人気補正 lift 1.07</title>距離＋延長</text><text x="821.5" y="346.3" font-size="33.3" fill="#8aa0c2" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>前走+内容
+登場 925 コメント / 3着以内 24.0%（全体 22.6%）
+生の lift 1.06（0.94〜1.18）  人気補正 lift 1.01</title>前走＋内容</text><text x="817.9" y="391.2" font-size="32.1" fill="#ed944c" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>展開+次第
+登場 887 コメント / 3着以内 15.8%（全体 22.6%）
+生の lift 0.70（0.59〜0.80）  人気補正 lift 0.97</title>展開＋次第</text><text x="279.5" y="428.5" font-size="31.7" fill="#99a2b2" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>距離+そう
+登場 877 コメント / 3着以内 22.2%（全体 22.6%）
+生の lift 0.98（0.86〜1.10）  人気補正 lift 0.98</title>距離＋そう</text><text x="156.0" y="209.5" font-size="31.7" fill="#8ea1bf" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>目処+立つ
+登場 875 コメント / 3着以内 23.5%（全体 22.6%）
+生の lift 1.04（0.92〜1.16）  人気補正 lift 0.94</title>目処＋立つ</text><text x="192.3" y="172.7" font-size="31.1" fill="#b59d90" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>前走+着
+登場 859 コメント / 3着以内 19.8%（全体 22.6%）
+生の lift 0.87（0.76〜0.99）  人気補正 lift 1.04</title>前走＋着</text><text x="354.8" y="100.4" font-size="29.6" fill="#d3996c" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>前進+期待
+登場 815 コメント / 3着以内 17.5%（全体 22.6%）
+生の lift 0.77（0.66〜0.89）  人気補正 lift 1.07</title>前進＋期待</text><text x="515.6" y="80.9" font-size="29.4" fill="#97a3b5" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>中一+週
+登場 808 コメント / 3着以内 22.4%（全体 22.6%）
+生の lift 0.99（0.86〜1.12）  人気補正 lift 0.93</title>中一＋週</text><text x="745.9" y="428.8" font-size="28.8" fill="#d5986a" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>走+前
+登場 792 コメント / 3着以内 17.4%（全体 22.6%）
+生の lift 0.77（0.65〜0.89）  人気補正 lift 0.91</title>走＋前</text><text x="776.0" y="124.6" font-size="28.7" fill="#6a94e3" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>放牧+挟む
+登場 789 コメント / 3着以内 29.2%（全体 22.6%）
+生の lift 1.29（1.15〜1.43）  人気補正 lift 1.11</title>放牧＋挟む</text><text x="663.8" y="475.4" font-size="28.5" fill="#a1a1a8" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>順調+乗り込む
+登場 783 コメント / 3着以内 21.5%（全体 22.6%）
+生の lift 0.95（0.82〜1.07）  人気補正 lift 0.97</title>順調＋乗り込む</text><text x="433.5" y="485.5" font-size="28.4" fill="#92a2ba" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>確り+乗り込む
+登場 781 コメント / 3着以内 22.9%（全体 22.6%）
+生の lift 1.01（0.88〜1.14）  人気補正 lift 0.97</title>確り＋乗り込む</text><text x="98.7" y="316.9" font-size="28.4" fill="#c29b81" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>距離+短縮
+登場 780 コメント / 3着以内 18.8%（全体 22.6%）
+生の lift 0.83（0.71〜0.95）  人気補正 lift 0.98</title>距離＋短縮</text><text x="673.7" y="73.1" font-size="28.0" fill="#b79d8e" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>此の+距離
+登場 768 コメント / 3着以内 19.7%（全体 22.6%）
+生の lift 0.87（0.74〜0.99）  人気補正 lift 0.97</title>此の＋距離</text><text x="198.8" y="134.4" font-size="27.0" fill="#7c9bd1" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>洋+芝
+登場 741 コメント / 3着以内 26.2%（全体 22.6%）
+生の lift 1.16（1.02〜1.30）  人気補正 lift 1.08</title>洋＋芝</text><text x="124.6" y="359.7" font-size="26.2" fill="#d1996e" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>末+脚
+登場 718 コメント / 3着以内 17.7%（全体 22.6%）
+生の lift 0.78（0.66〜0.90）  人気補正 lift 0.95</title>末＋脚</text><text x="935.8" y="198.2" font-size="25.7" fill="#9da2ae" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>開幕+週
+登場 704 コメント / 3着以内 21.9%（全体 22.6%）
+生の lift 0.97（0.83〜1.10）  人気補正 lift 0.96</title>開幕＋週</text><text x="241.6" y="465.4" font-size="25.6" fill="#a9a09f" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>自分+リズム
+登場 702 コメント / 3着以内 20.8%（全体 22.6%）
+生の lift 0.92（0.79〜1.05）  人気補正 lift 0.95</title>自分＋リズム</text><text x="955.4" y="227.9" font-size="24.5" fill="#c69b7c" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>動き+悪い
+登場 674 コメント / 3着以内 18.5%（全体 22.6%）
+生の lift 0.82（0.69〜0.95）  人気補正 lift 1.02</title>動き＋悪い</text><text x="966.6" y="258.7" font-size="24.3" fill="#b29e93" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>状態+面
+登場 669 コメント / 3着以内 20.0%（全体 22.6%）
+生の lift 0.88（0.75〜1.02）  人気補正 lift 0.96</title>状態＋面</text><text x="969.1" y="290.1" font-size="24.1" fill="#a4a0a5" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>集中+走る
+登場 663 コメント / 3着以内 21.3%（全体 22.6%）
+生の lift 0.94（0.80〜1.08）  人気補正 lift 1.00</title>集中＋走る</text><text x="305.1" y="67.2" font-size="23.8" fill="#a2a1a7" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>除外+伸びる
+登場 654 コメント / 3着以内 21.4%（全体 22.6%）
+生の lift 0.95（0.81〜1.08）  人気補正 lift 1.00</title>除外＋伸びる</text><text x="962.8" y="321.4" font-size="23.7" fill="#a5a0a3" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>人+追う
+登場 653 コメント / 3着以内 21.1%（全体 22.6%）
+生の lift 0.93（0.79〜1.07）  人気補正 lift 0.96</title>人＋追う</text><text x="91.6" y="287.2" font-size="22.7" fill="#d69869" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>動く+様
+登場 627 コメント / 3着以内 17.4%（全体 22.6%）
+生の lift 0.77（0.64〜0.90）  人気補正 lift 0.86</title>動く＋様</text><text x="853.8" y="433.9" font-size="22.5" fill="#4f8bff" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>水準+以上
+登場 621 コメント / 3着以内 37.0%（全体 22.6%）
+生の lift 1.64（1.47〜1.80）  人気補正 lift 1.07</title>水準＋以上</text><text x="463.9" y="42.1" font-size="22.3" fill="#6f96de" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>ゲート+早い
+登場 616 コメント / 3着以内 28.2%（全体 22.6%）
+生の lift 1.25（1.09〜1.40）  人気補正 lift 1.00</title>ゲート＋早い</text><text x="609.2" y="504.7" font-size="22.1" fill="#e49658" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>自分+競馬
+登場 610 コメント / 3着以内 16.4%（全体 22.6%）
+生の lift 0.72（0.59〜0.85）  人気補正 lift 0.88</title>自分＋競馬</text><text x="148.5" y="420.2" font-size="22.0" fill="#7197dc" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>長い+脚
+登場 609 コメント / 3着以内 27.9%（全体 22.6%）
+生の lift 1.23（1.08〜1.39）  人気補正 lift 1.02</title>長い＋脚</text><text x="197.1" y="105.8" font-size="21.5" fill="#92a2ba" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>未だ+緩い
+登場 597 コメント / 3着以内 22.9%（全体 22.6%）
+生の lift 1.01（0.86〜1.16）  人気補正 lift 0.99</title>未だ＋緩い</text><text x="597.8" y="42.7" font-size="21.5" fill="#a0a1aa" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>使う+そう
+登場 597 コメント / 3着以内 21.6%（全体 22.6%）
+生の lift 0.95（0.81〜1.10）  人気補正 lift 1.08</title>使う＋そう</text><text x="814.0" y="87.7" font-size="21.5" fill="#e89552" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>脚+溜める
+登場 596 コメント / 3着以内 16.1%（全体 22.6%）
+生の lift 0.71（0.58〜0.84）  人気補正 lift 0.91</title>脚＋溜める</text><text x="112.2" y="393.2" font-size="21.0" fill="#899fc3" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>態勢+整う
+登場 584 コメント / 3着以内 24.1%（全体 22.6%）
+生の lift 1.07（0.91〜1.22）  人気補正 lift 1.02</title>態勢＋整う</text><text x="910.3" y="135.2" font-size="20.9" fill="#b89d8d" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>時計+早い
+登場 581 コメント / 3着以内 19.6%（全体 22.6%）
+生の lift 0.87（0.72〜1.01）  人気補正 lift 0.98</title>時計＋早い</text><text x="853.7" y="463.1" font-size="20.8" fill="#97a3b5" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>仕上がり+良好
+登場 580 コメント / 3着以内 22.4%（全体 22.6%）
+生の lift 0.99（0.84〜1.14）  人気補正 lift 1.02</title>仕上がり＋良好</text><text x="947.7" y="163.7" font-size="20.8" fill="#8ba0c1" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>放牧+明け
+登場 578 コメント / 3着以内 23.9%（全体 22.6%）
+生の lift 1.05（0.90〜1.21）  人気補正 lift 1.03</title>放牧＋明け</text><text x="539.5" y="529.8" font-size="20.8" fill="#e99552" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>ブリンカー+着用
+登場 578 コメント / 3着以内 16.1%（全体 22.6%）
+生の lift 0.71（0.58〜0.84）  人気補正 lift 0.98</title>ブリンカー＋着用</text><text x="971.6" y="378.6" font-size="20.5" fill="#5a8ff4" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>レース+期待
+登場 572 コメント / 3着以内 32.2%（全体 22.6%）
+生の lift 1.42（1.25〜1.59）  人気補正 lift 1.03</title>レース＋期待</text><text x="366.3" y="519.1" font-size="20.3" fill="#c29b81" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>相手+強い
+登場 568 コメント / 3着以内 18.8%（全体 22.6%）
+生の lift 0.83（0.69〜0.97）  人気補正 lift 0.99</title>相手＋強い</text><text x="66.8" y="159.1" font-size="19.3" fill="#a7a0a1" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>条件+そう
+登場 543 コメント / 3着以内 21.0%（全体 22.6%）
+生の lift 0.93（0.78〜1.08）  人気補正 lift 0.93</title>条件＋そう</text><text x="53.1" y="251.1" font-size="18.7" fill="#d89866" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>直線+競馬
+登場 529 コメント / 3着以内 17.2%（全体 22.6%）
+生の lift 0.76（0.62〜0.90）  人気補正 lift 0.95</title>直線＋競馬</text><text x="740.3" y="502.9" font-size="18.6" fill="#869ec7" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>此の+舞台
+登場 527 コメント / 3着以内 24.7%（全体 22.6%）
+生の lift 1.09（0.93〜1.25）  人気補正 lift 1.10</title>此の＋舞台</text><text x="269.3" y="498.4" font-size="18.5" fill="#b09e96" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>芝+そう
+登場 525 コメント / 3着以内 20.2%（全体 22.6%）
+生の lift 0.89（0.74〜1.04）  人気補正 lift 0.96</title>芝＋そう</text><text x="327.5" y="39.4" font-size="18.3" fill="#7a9ad3" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>此の+クラス
+登場 520 コメント / 3着以内 26.5%（全体 22.6%）
+生の lift 1.17（1.00〜1.34）  人気補正 lift 1.07</title>此の＋クラス</text><text x="993.8" y="346.0" font-size="18.3" fill="#8aa0c2" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>力+そう
+登場 520 コメント / 3着以内 24.0%（全体 22.6%）
+生の lift 1.06（0.90〜1.22）  人気補正 lift 1.12</title>力＋そう</text><text x="718.6" y="38.0" font-size="17.8" fill="#4f8bff" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>自己+条件
+登場 508 コメント / 3着以内 40.0%（全体 22.6%）
+生の lift 1.76（1.58〜1.95）  人気補正 lift 1.12</title>自己＋条件</text><text x="816.0" y="63.4" font-size="17.7" fill="#809ccd" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>調整+順調
+登場 505 コメント / 3着以内 25.5%（全体 22.6%）
+生の lift 1.13（0.96〜1.30）  人気補正 lift 1.04</title>調整＋順調</text><text x="236.0" y="334.1" font-size="17.5" fill="#bb9d89" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>自分+形
+登場 501 コメント / 3着以内 19.4%（全体 22.6%）
+生の lift 0.85（0.70〜1.01）  人気補正 lift 0.92</title>自分＋形</text><text x="940.4" y="409.4" font-size="17.2" fill="#de975e" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>方+そう
+登場 495 コメント / 3着以内 16.8%（全体 22.6%）
+生の lift 0.74（0.60〜0.89）  人気補正 lift 0.90</title>方＋そう</text><text x="925.5" y="112.2" font-size="16.7" fill="#7799d5" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>ダート+そう
+登場 483 コメント / 3着以内 26.9%（全体 22.6%）
+生の lift 1.19（1.01〜1.36）  人気補正 lift 1.10</title>ダート＋そう</text><text x="104.2" y="128.4" font-size="16.5" fill="#cd9a73" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>緩い+残る
+登場 478 コメント / 3着以内 18.0%（全体 22.6%）
+生の lift 0.79（0.64〜0.95）  人気補正 lift 0.87</title>緩い＋残る</text><text x="845.9" y="493.3" font-size="16.5" fill="#ef944b" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>使う+タイプ
+登場 478 コメント / 3着以内 15.7%（全体 22.6%）
+生の lift 0.69（0.55〜0.84）  人気補正 lift 0.84</title>使う＋タイプ</text><text x="715.9" y="530.9" font-size="16.4" fill="#8da0c0" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>走る+そう
+登場 477 コメント / 3着以内 23.7%（全体 22.6%）
+生の lift 1.05（0.88〜1.21）  人気補正 lift 1.01</title>走る＋そう</text><text x="381.6" y="542.4" font-size="16.2" fill="#7e9bce" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>短期+放牧
+登場 473 コメント / 3着以内 25.8%（全体 22.6%）
+生の lift 1.14（0.96〜1.31）  人気補正 lift 1.04</title>短期＋放牧</text><text x="177.9" y="492.5" font-size="16.1" fill="#e0965c" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>脚+生かす
+登場 469 コメント / 3着以内 16.6%（全体 22.6%）
+生の lift 0.73（0.59〜0.88）  人気補正 lift 1.00</title>脚＋生かす</text><text x="127.1" y="82.9" font-size="16.0" fill="#b29e94" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>乗り込む+仕上がり
+登場 468 コメント / 3着以内 20.1%（全体 22.6%）
+生の lift 0.89（0.73〜1.05）  人気補正 lift 0.88</title>乗り込む＋仕上がり</text><text x="95.8" y="452.6" font-size="15.9" fill="#fb923c" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>格上+挑戦
+登場 466 コメント / 3着以内 14.8%（全体 22.6%）
+生の lift 0.65（0.51〜0.80）  人気補正 lift 0.92</title>格上＋挑戦</text><text x="42.5" y="367.1" font-size="15.9" fill="#4f8bff" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>力+上位
+登場 465 コメント / 3着以内 42.2%（全体 22.6%）
+生の lift 1.86（1.66〜2.06）  人気補正 lift 1.03</title>力＋上位</text><text x="540.5" y="19.7" font-size="15.6" fill="#4f8bff" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>初戦+楽しみ
+登場 460 コメント / 3着以内 36.5%（全体 22.6%）
+生の lift 1.61（1.42〜1.81）  人気補正 lift 0.97</title>初戦＋楽しみ</text><text x="330.1" y="336.6" font-size="15.0" fill="#4f8bff" text-anchor="middle" dominant-baseline="central" font-weight="500"><title>昇級+楽しみ
+登場 446 コメント / 3着以内 40.8%（全体 22.6%）
+生の lift 1.80（1.60〜2.00）  人気補正 lift 1.08</title>昇級＋楽しみ</text></svg>
+<h2>4. 件数 300 以上の語の上位・下位</h2>
+<div class="cols"><div><b>好走寄り（生の lift 上位）</b><table><tr><th>語</th><th>登場</th><th>3着以内率</th><th>lift</th><th>人気補正 lift</th></tr><tr><td>勝負+期待</td><td class='num'>332</td><td class='num'>47.9%</td><td class='num'>2.11</td><td class='num'>1.12</td></tr><tr><td>初戦+期待</td><td class='num'>381</td><td class='num'>43.3%</td><td class='num'>1.91</td><td class='num'>1.16</td></tr><tr><td>力+上位</td><td class='num'>465</td><td class='num'>42.2%</td><td class='num'>1.86</td><td class='num'>1.03</td></tr><tr><td>昇級+楽しみ</td><td class='num'>446</td><td class='num'>40.8%</td><td class='num'>1.80</td><td class='num'>1.08</td></tr><tr><td>能力+高い</td><td class='num'>403</td><td class='num'>40.4%</td><td class='num'>1.79</td><td class='num'>1.08</td></tr><tr><td>自己+条件</td><td class='num'>508</td><td class='num'>40.0%</td><td class='num'>1.76</td><td class='num'>1.12</td></tr><tr><td>自己</td><td class='num'>527</td><td class='num'>39.3%</td><td class='num'>1.73</td><td class='num'>1.12</td></tr><tr><td>水準+以上</td><td class='num'>621</td><td class='num'>37.0%</td><td class='num'>1.64</td><td class='num'>1.07</td></tr></table></div>
+<div><b>凡走寄り（生の lift 下位）</b><table><tr><th>語</th><th>登場</th><th>3着以内率</th><th>lift</th><th>人気補正 lift</th></tr><tr><td>時計+詰まる</td><td class='num'>410</td><td class='num'>4.9%</td><td class='num'>0.22</td><td class='num'>0.50</td></tr><tr><td>新味</td><td class='num'>363</td><td class='num'>7.4%</td><td class='num'>0.33</td><td class='num'>0.66</td></tr><tr><td>年齢</td><td class='num'>702</td><td class='num'>9.3%</td><td class='num'>0.41</td><td class='num'>0.87</td></tr><tr><td>目立つ(否)</td><td class='num'>449</td><td class='num'>9.6%</td><td class='num'>0.42</td><td class='num'>0.81</td></tr><tr><td>面+出る</td><td class='num'>304</td><td class='num'>9.9%</td><td class='num'>0.44</td><td class='num'>0.74</td></tr><tr><td>障害</td><td class='num'>426</td><td class='num'>10.3%</td><td class='num'>0.46</td><td class='num'>0.76</td></tr><tr><td>不足</td><td class='num'>370</td><td class='num'>10.5%</td><td class='num'>0.47</td><td class='num'>0.73</td></tr><tr><td>試す</td><td class='num'>663</td><td class='num'>10.6%</td><td class='num'>0.47</td><td class='num'>0.71</td></tr></table></div></div>
+<p class="muted">同じレースの馬は 3 着以内の数が 3 頭に固定されて互いに独立ではないため、p 値はやや甘め。形態素解析は fugashi + unidic-lite（名詞・動詞・形容詞・形状詞・副詞の見出し語、直後が「ない」「ず」なら『(否)』）。</p>
+</body></html>
