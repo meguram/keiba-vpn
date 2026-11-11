@@ -30,6 +30,7 @@ def _items(df: pd.DataFrame, w: int, h: int, smin: float, smax: float) -> list[d
             "label": it["row"].label, "x": round(it["x"], 1), "y": round(it["y"], 1), "size": round(it["size"], 1),
             "n": int(it["row"].n), "rate": round(float(it["row"].good_rate), 4),
             "lift": round(float(it["row"].lift), 3), "adj": round(float(it["row"].adj_lift), 3),
+            "win": round(float(it["row"].win_roi), 3), "place": round(float(it["row"].place_roi), 3),
         }
         for it in layout(df, smin, smax, w, h)
     ]
@@ -45,31 +46,39 @@ def article(T: pd.DataFrame, summ: dict) -> dict:
         "base": round(base, 4),
         "wide": {"w": W, "h": H, "items": _items(S, W, H, 15.0, 84.0)},
         "narrow": {"w": NARROW[0], "h": NARROW[1], "items": _items(S_narrow, NARROW[0], NARROW[1], 14.0, 52.0)},
-        "caption": "語・句にカーソルを載せる（スマホはタップ）と、出た数・3着以内率・倍率が出ます。『人気をそろえた倍率』に切り替えると、ほとんどが灰色になります。",
+        "caption": "語・句にカーソルを載せる（スマホはタップ）と、出た数・3着以内率・倍率・単勝／複勝回収率が出ます。『人気をそろえた倍率』に切り替えると、ほとんどが灰色になります。",
     }
     big = S[S["n"] >= 300]
 
     def rows(asc: bool) -> list[list[str]]:
         d = big.sort_values("lift", ascending=asc).head(TOP_N)
-        return [[r.label, f"{int(r.n):,}", f"{r.good_rate * 100:.1f}%", f"{r.lift:.2f}", f"{r.adj_lift:.2f}"] for r in d.itertuples()]
+        return [[r.label, f"{int(r.n):,}", f"{r.good_rate * 100:.1f}%", f"{r.lift:.2f}", f"{r.adj_lift:.2f}", f"{r.win_roi * 100:.0f}%", f"{r.place_roi * 100:.0f}%"] for r in d.itertuples()]
 
-    cols = ["語・句", "出た数", "3着以内率", "倍率", "人気をそろえた倍率"]
+    cols = ["語・句", "出た数", "3着以内率", "倍率", "人気をそろえた倍率", "単勝回収率", "複勝回収率"]
+    cand = T[T["drop"].isna() & (T["n"] >= 150)]
+    n_cand = len(cand)
+    n_win100 = int((cand["win_roi_lo"] > 1).sum())
+    n_place100 = int((cand["place_roi_lo"] > 1).sum())
+    win_all, place_all = float(summ["win_roi_all"]), float(summ["place_roi_all"])
     n_rows = int(summ["n_rows"])
     body = [
         {"type": "stats", "items": [
             {"label": "全体と有意に差がある語・句", "value": f"{summ['n_sig_raw']} 個", "sub": f"{summ['n_terms']:,} 個のうち（そのまま比べたとき）"},
             {"label": "人気をそろえても差が残る語・句", "value": f"{summ['n_sig_adj']} 個", "sub": "単勝人気の順位が同じ馬と比べたとき"},
             {"label": "前半の年に見つけた語が後半でも同じ向き", "value": f"{summ['disc_sig_same_dir_raw_in_val'] * 100:.0f}%", "sub": "人気をそろえると " + f"{summ['disc_sig_same_dir_adj_in_val'] * 100:.0f}%"},
+            {"label": "回収率が100%を超えると言い切れる語・句", "value": f"単勝 {n_win100} 個・複勝 {n_place100} 個", "sub": f"出た数 150 以上の {n_cand} 個のうち（95%区間の下限が100%超）"},
         ]},
-        {"type": "text", "text": "厩舎コメントの言葉と成績は、そのまま見ると関係があります。ただし人気（オッズ）をそろえると差は消えるので、人気の見立てにすでに入っている情報で、言葉だけで印を動かす根拠にはなりません。"},
+        {"type": "text", "text": (f"厩舎コメントの言葉と成績は、そのまま見ると関係があります。ただし人気（オッズ）をそろえると差は消えるので、人気の見立てにすでに入っている情報で、言葉だけで印を動かす根拠にはなりません。"
+                                f"回収率も全体は単勝 {win_all * 100:.0f}%・複勝 {place_all * 100:.0f}% で、語ごとに見ても高く見えるのは出た数が少ない偶然のぶれです。")},
         cloud,
-        {"type": "table", "columns": cols, "rows": rows(False), "caption": "好走寄りの語（出た数 300 以上、倍率が高い順）。倍率は、その語を含む馬の3着以内率 ÷ 全体の3着以内率。"},
+        {"type": "table", "columns": cols, "rows": rows(False), "caption": "好走寄りの語（出た数 300 以上、倍率が高い順）。倍率は、その語を含む馬の3着以内率 ÷ 全体の3着以内率。回収率は、その語を含む馬を毎回100円買い続けたときの払戻 ÷ 掛け金。"},
         {"type": "table", "columns": cols, "rows": rows(True), "caption": "凡走寄りの語（出た数 300 以上、倍率が低い順）。"},
         {"type": "note", "text": (
             "語の切り方は形態素解析（fugashi + unidic-lite）で、同じ文節で隣り合う 1〜3 語の組を数えています。"
             "単独で意味が取れない語は単独では出さず、長い句に含まれる語は長い句にまとめています。"
             "『人気をそろえた倍率』は、実際の3着以内数 ÷ その馬の単勝人気の順位から見込まれる3着以内数です。人気はコメントを読んだ後の市場の評価を含むため、この補正はやや厳しめです。"
             "同じレースの馬は3着以内の数が3頭に固定されて互いに独立ではないため、p 値はやや甘めです。"
+            "回収率は結果の払戻（100円あたり）から計算し、区間は正規近似です。高配当が1回出ただけで大きく動くため、出た数が少ない語ほど当てになりません。"
             "原文のコメントは載せず、短い語・句の集計値だけを出しています。")},
     ]
     return {

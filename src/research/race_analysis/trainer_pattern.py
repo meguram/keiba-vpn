@@ -138,5 +138,5 @@ class TrainerPatternModule:
                            "trainer_name": e.get("trainer_name"), "pat": pat, "levels": lv})
         figure = {"edges": table.get("edges"), "max_odds": table.get("max_odds"), "y0": table.get("y0"), "y1": table.get("y1"), "horses": horses}
         notes = ["回収率は 100 円ずつ買ったときの払戻の割合（100% が収支ゼロ）。単勝 50 倍以上の出走は集計から除いています。",
-                 "パターンは、レース週の月〜金の追い切りのうち 4F が最も速い 1 本（坂路はラップ種別 A1〜X、ウッド・ポリは 4F の時計帯）。調教の記録が無い馬・出走が少ない組み合わせは参考程度です。"]
+                 "パターンは、レース週の月〜金の追い切りのうち 4F が最も速い 1 本（坂路は終い 2F の速さと加速・減速、ウッド・ポリは 4F の時計帯）。調教の記録が無い馬・出走が少ない組み合わせは参考程度です。"]
         return ModuleOutput(columns=[], groups=[], cells={}, notes=notes, data_until=f"{table.get('y1')}-12-31", view="trainer_pattern", figure=figure)

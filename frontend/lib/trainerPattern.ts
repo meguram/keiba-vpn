@@ -46,6 +46,28 @@ export function splitPat(pat: string): { place: string; pat: string } {
   return i < 0 ? { place: pat, pat: "" } : { place: pat.slice(0, i), pat: pat.slice(i + 1) };
 }
 
+const SLOPE_WORD: Record<string, string> = {
+  A3: "終いの1Fが11秒台以下で加速",
+  B3: "手前の1Fが11秒台以下で、終いは減速",
+  A2: "終い2Fとも12秒台で加速",
+  B2: "終い2Fとも12秒台で減速",
+  A1: "終いの1Fだけ12秒台で加速（手前は13秒以上）",
+  B1: "手前の1Fだけ12秒台で減速（終いは13秒以上）",
+  X: "終い2Fとも13秒以上（軽め）",
+};
+
+/** パターン名（A1〜X / W52.0-53.9）を言葉にする。画面には記号を出さない */
+export function patWord(pat: string | null | undefined): string {
+  if (!pat) return "";
+  if (SLOPE_WORD[pat]) return SLOPE_WORD[pat];
+  const m = /^W(.*)$/.exec(pat);
+  if (!m) return pat;
+  const b = m[1];
+  if (b.startsWith("~")) return `4Fが${b.slice(1)}秒以内`;
+  if (b.endsWith("~")) return `4Fが${b.slice(0, -1)}秒以上`;
+  return `4Fが${b.replace("-", "〜")}秒`;
+}
+
 /** 行を足し合わせる（頭数は足せないので null）。調教師全体・場所の段を作る */
 export function sumRows(rows: TPRow[]): TPRow | null {
   if (!rows.length) return null;

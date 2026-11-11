@@ -128,6 +128,7 @@ def load_state(dirpath: str | Path) -> tuple[pd.DataFrame, dict[str, Any]]:
 STATE_ENV = "KEIBA_V6_RB_STATE"
 EASE2_MAP = {"EASE2_drain": "drain_sec", "EASE2_demand": "demand_sec", "EASE2_capacity": "capacity_sec", "EASE2_pct": "ease_pct"}
 PF_MAP = {"pf_early": "pf_early", "pf_rank": "pf_rank", "z_hat": "z_hat"}
+LAPD_RACE = ("ld_f3", "ld_l3", "ld_q")
 LAP_RACE = ("lp_p_slow", "lp_p_mid", "lp_p_high", "lp_exp_f3_dev", "lp_exp_l3_dev", "lp_exp_lap0_dev")
 # 学習側にあって、本番の保存値からはまだ写せない列（追走難度 v2 の内部量 EASE2_full / EASE2_vs_prev、馬の追走難度 td_*、
 # ラップ予想の馬別の交互作用 lp_*_x_*（馬の h_early_w が必要）。写しが実装されるまで shadow は起動時に止まる（黙って欠損にしない）。
@@ -139,6 +140,12 @@ def _load_json(path: Path) -> dict | None:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return None
+
+
+def lapd_race_columns(j: dict) -> dict[str, float]:
+    """ラップ予想の保存値の lapd（final_lap の直接予測）→ ld_* のレース単位の列。無ければ欠損。"""
+    ld = j.get("lapd") or {}
+    return {k: (np.nan if ld.get(k) is None else float(ld[k])) for k in LAPD_RACE}
 
 
 def lap_race_columns(j: dict) -> dict[str, float]:
@@ -164,6 +171,7 @@ def stage_forecast_columns(base: pd.DataFrame, names: list[str], inference_dir: 
     out = pd.DataFrame(index=base.index, columns=names, dtype="float64")
     date = pd.to_datetime(base["date"]).dt.strftime("%Y-%m-%d")
     cache: dict[tuple[str, str], tuple[dict | None, dict | None]] = {}
+    want_lapd = any(n in LAPD_RACE for n in names)
     for idx, (rid, hid, d) in enumerate(zip(base["race_id"].astype(str), base["horse_id"].astype(str), date)):
         if (rid, d) not in cache:
             tp, lp = root / "tracking_v2" / d / f"{rid}.json", root / "lap_forecast" / d / f"{rid}.json"
@@ -181,7 +189,12 @@ def stage_forecast_columns(base: pd.DataFrame, names: list[str], inference_dir: 
             row.update({k: inp.get(src) for k, src in PF_MAP.items()})
         if lj:
             row.update(lap_race_columns(lj))
+            row.update(lapd_race_columns(lj))
         for n in names:
             v = row.get(n)
             out.iat[idx, out.columns.get_loc(n)] = np.nan if v is None else v
+    if want_lapd:
+        docs = [lj for _, lj in cache.values() if lj]
+        if docs and not any(lj.get("lapd") for lj in docs):
+            raise KeyError("ラップ予想の保存値に lapd（ld_*）が一つも無い（旧モデルで保存された日）。tp55_backfill --lapd-dir で作り直す")
     return out.astype("float32")

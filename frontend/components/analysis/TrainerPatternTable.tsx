@@ -4,7 +4,7 @@ import { Fragment } from "react";
 import { OddsDist } from "@/components/OddsDistPopup";
 import { bracketChipStyle } from "@/lib/bracket";
 import type { AnalysisEntry } from "@/lib/raceAnalysis";
-import { pct, rowStats, splitPat, type TPFigure, type TPHorse, type TPRow } from "@/lib/trainerPattern";
+import { patWord, pct, rowStats, splitPat, type TPFigure, type TPHorse, type TPRow } from "@/lib/trainerPattern";
 
 const CSS = `
 .tp-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -69,11 +69,11 @@ export function TrainerPatternTable({ figure, entries }: { figure: TPFigure; ent
           const e = h.key ? byKey.get(h.key) : undefined;
           const lv = h.levels;
           const place = h.pat ? splitPat(h.pat).place : null;
-          const pat = h.pat ? splitPat(h.pat).pat : null;
+          const pat = h.pat ? patWord(splitPat(h.pat).pat) : null;
           const rows: { cls?: string; label: string; r: TPRow | null; title: string; miss: string }[] = lv ? [
             { label: "調教師全体", r: lv.trainer, title: `${h.trainer_name ?? ""} 全体`, miss: "" },
             { label: place ? `同じ場所（${place}）` : "同じ場所", r: lv.place, title: `${h.trainer_name ?? ""} ${place ?? ""}`, miss: h.pat ? "この場所の出走なし" : "調教の記録なし" },
-            { cls: "pt", label: pat ? `同じパターン（${pat}）` : "同じパターン", r: lv.pattern, title: `${h.trainer_name ?? ""} ${h.pat?.replace("|", " ") ?? ""}`, miss: h.pat ? "このパターンの出走なし" : "調教の記録なし" },
+            { cls: "pt", label: pat ? `同じパターン（${pat}）` : "同じパターン", r: lv.pattern, title: `${h.trainer_name ?? ""} ${place ?? ""} ${pat ?? ""}`, miss: h.pat ? "このパターンの出走なし" : "調教の記録なし" },
           ] : [];
           return (
             <tbody key={h.key ?? h.horse_number} className="hs">
@@ -82,7 +82,7 @@ export function TrainerPatternTable({ figure, entries }: { figure: TPFigure; ent
                   <td className="hn">
                     <span style={{ ...bracketChipStyle(e?.bracket_number, 22), marginRight: 6 }}>{h.horse_number ?? "–"}</span>
                     <b style={{ display: "inline" }}>{h.horse_name}</b>
-                    <small>{h.trainer_name ?? ""}{h.pat ? ` ／ ${h.pat.replace("|", " ")}` : ""}</small>
+                    <small>{h.trainer_name ?? ""}{pat ? ` ／ ${place}・${pat}` : ""}</small>
                   </td>
                   <td className="na" colSpan={9}>{reason(h)}</td>
                 </tr>
@@ -94,7 +94,7 @@ export function TrainerPatternTable({ figure, entries }: { figure: TPFigure; ent
                         <span style={{ ...bracketChipStyle(e?.bracket_number, 22), marginRight: 6 }}>{h.horse_number ?? "–"}</span>
                         <b style={{ display: "inline" }}>{h.horse_name}</b>
                         <small>{h.trainer_name ?? ""}</small>
-                        <small>{h.pat ? h.pat.replace("|", " ") : "調教の記録なし"}</small>
+                        <small>{pat ? `${place}・${pat}` : "調教の記録なし"}</small>
                       </td>
                     )}
                     <td className="lv">{x.label}</td>

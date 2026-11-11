@@ -11,11 +11,12 @@ PY=${KEIBA_HOST_PY:-/opt/conda/bin/python3}
 EXTRA="src/pipeline/features/tp85_pedprior.py src/scripts/data/tp85_ped_reference.py src/scripts/data/precompute_race_analysis.py"
 
 mapfile -t FILES < <(git ls-files src/research/race src/research/race_analysis $EXTRA | grep '\.py$' | sort -u)
+FILES+=(data/meta/trainer_pattern/trainer_pattern_2020_2025.json)   # 調教師×パターンの凍結表（めぐ分析の trainer_pattern が読む）
 dirty=$(git status --porcelain -- "${FILES[@]}" | grep -v '^??' || true)
 if [ -n "$dirty" ]; then echo "注意: 未コミットの変更を含むファイルを送ります:"; echo "$dirty"; fi
 
 # 手元の md5 をホストで照合し、違う・無いものを出す
-diff_list=$(md5sum "${FILES[@]}" | ssh "$HOST" "cd $REMOTE && sudo md5sum -c --quiet 2>&1 | sed -E 's/: (FAILED.*|No such file.*)//; /WARNING/d'" || true)
+diff_list=$(md5sum "${FILES[@]}" | ssh "$HOST" "cd $REMOTE && sudo md5sum -c --quiet 2>&1 | sed -E 's/^md5sum: //; s/: (FAILED.*|No such file.*)//; /WARNING/d' | sort -u" || true)
 if [ -z "$diff_list" ]; then echo "ホストの分析コードは手元と一致しています（${#FILES[@]} ファイル）。"; else echo "ホストと違うファイル:"; echo "$diff_list"; fi
 [ "${1:-}" = "--apply" ] || exit 0
 

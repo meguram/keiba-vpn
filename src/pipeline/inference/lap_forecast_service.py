@@ -17,6 +17,9 @@ import os
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+import pandas as pd
+
 ENV_FLAG = "KEIBA_LAP_FORECAST"
 ENV_DIR = "KEIBA_LAP_FORECAST_DIR"
 VERSION = "tp55-1"
@@ -72,7 +75,34 @@ def attach_lap_forecast(resp: dict, race_id: str, date: str) -> dict:
     return {**resp, "lap_forecast": doc}
 
 
-def make_doc(race_id: str, date: str, distance: int, summary: dict[str, Any], model: str, par: list[float | None]) -> dict:
+class LapdModel:
+    """final_lap（lapd_meta.json と lapd/）の直接予測（前半 3F・後半 3F・前後半の差の偏差）。学習側 LAPD 群（ld_*）と同じ入力・同じ乱数本数の平均。"""
+
+    def __init__(self, directory: str | Path):
+        import lightgbm as lgb
+
+        d = Path(directory)
+        self.meta = json.loads((d / "lapd_meta.json").read_text(encoding="utf-8"))
+        self.boosters = {t: [lgb.Booster(model_file=str(d / "lapd" / f"{t}_s{s}.txt")) for s in self.meta["seeds"]] for t in self.meta["targets"]}
+
+    def predict(self, df: pd.DataFrame) -> dict[str, np.ndarray]:
+        num, cats = self.meta["num"], self.meta["cats"]
+        X = pd.DataFrame(index=df.index)
+        for c in num:
+            X[c] = pd.to_numeric(df[c], errors="coerce") if c in df.columns else np.nan
+        for c in cats:
+            X[c] = pd.Categorical(df[c].astype(str).where(df[c].notna()), categories=self.meta["levels"][c])
+        return {t: np.mean([b.predict(X) for b in bs], axis=0) for t, bs in self.boosters.items()}
+
+
+def make_doc(race_id: str, date: str, distance: int, summary: dict[str, Any], model: str, par: list[float | None], lapd: dict[str, float] | None = None) -> dict:
+    doc = _make_doc(race_id, date, distance, summary, model, par)
+    if lapd:
+        doc["lapd"] = {k: None if v is None or np.isnan(v) else round(float(v), 4) for k, v in lapd.items()}
+    return doc
+
+
+def _make_doc(race_id: str, date: str, distance: int, summary: dict[str, Any], model: str, par: list[float | None]) -> dict:
     return {"version": VERSION, "race_id": race_id, "date": date, "distance": int(distance), "n_laps": summary["n_laps"],
             "lap_meters": lap_meters(distance), "model": model, "pace_label": summary["likely_scenario"], "pace_prob": summary["likely_prob"],
             "scenarios": summary["scenarios"], "expected_laps": summary["expected_laps"], "band80_lo": summary["band80_lo"],

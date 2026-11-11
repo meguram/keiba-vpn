@@ -3,7 +3,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { OddsDist } from "@/components/OddsDistPopup";
 import type { ColumnTrainerPatternBlock } from "@/lib/columns";
-import { levelsOf, pct, rowStats, splitPat, sumRows, type TPRow, type TPTable } from "@/lib/trainerPattern";
+import { patWord, pct, rowStats, splitPat, sumRows, type TPRow, type TPTable } from "@/lib/trainerPattern";
 
 type SortKey = "name" | "n" | "heads" | "win" | "place" | "winRoi" | "placeRoi";
 type Node = { id: string; name: string; sub?: string; row: TPRow; kids?: Node[] };
@@ -66,7 +66,8 @@ function build(t: TPTable): { tree: Node[]; flat: Flat[] } {
   for (const [tid, tr] of Object.entries(t.trainers)) {
     const byPlace = new Map<string, [string, TPRow][]>();
     for (const [k, r] of Object.entries(tr.p)) {
-      const { place, pat } = splitPat(k);
+      const { place, pat: code } = splitPat(k);
+      const pat = patWord(code);
       if (!byPlace.has(place)) byPlace.set(place, []);
       byPlace.get(place)!.push([pat, r]);
       flat.push({ id: `${tid}|${k}`, trainer: tr.n, place, pat, row: r });

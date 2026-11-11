@@ -11,6 +11,7 @@
   - 生の lift = その語を含むコメントの good 率 / 全体の good 率。検定は 2 群の比率の差（語あり vs 語なし）、BH で FDR 補正。
   - 人気補正の lift = 実際の good 数 / 期待 good 数。期待は『その馬の単勝人気順位ごとの全体の 3 着以内率』の合計（人気に織り込み済みかを見る）。
     人気は結果側の値で、説明のための補正にだけ使う（特徴量ではない）。
+  - 単勝・複勝回収率 = その語を含む馬を 100 円ずつ買い続けたときの払戻 ÷ 100 円 × 馬数（払戻は結果の payoff から。読めない行は除く）。95% 区間は正規近似（高配当 1 回で大きく動くので参考）。
   - 前後の確認: 前半の年で見つけた語が後半の年でも同じ向きか（符号一致率・lift の相関）。
 """
 
@@ -32,6 +33,29 @@ SKIP_POS2 = {"数詞", "代名詞", "非自立可能", "助数詞"}
 NEG_LEMMAS = {"ない", "ず", "ぬ"}
 
 
+def _payout_by_number(payoff, kind: str) -> dict[int, float]:
+    """payoff（JSON 文字列または辞書）から、kind（単勝・複勝）の 馬番 → 100 円あたり払戻 を返す。読めなければ空。"""
+    import json as _json
+
+    if isinstance(payoff, str):
+        try:
+            payoff = _json.loads(payoff)
+        except ValueError:
+            return {}
+    if not isinstance(payoff, dict):
+        return {}
+    v = payoff.get(kind)
+    rows = v if isinstance(v, list) else ([v] if isinstance(v, dict) else [])
+    out: dict[int, float] = {}
+    for r in rows:
+        try:
+            num = int(str(r.get("numbers", "")).strip())
+            out[num] = float(str(r.get("payout", "")).replace(",", "").strip())
+        except (ValueError, AttributeError):
+            continue
+    return out
+
+
 def load_pairs(years: list[int], tables: Path = TABLES) -> pd.DataFrame:
     import polars as pl
 
@@ -42,7 +66,7 @@ def load_pairs(years: list[int], tables: Path = TABLES) -> pd.DataFrame:
         if not (fc.exists() and fr.exists()):
             continue
         c = pl.read_parquet(fc, columns=["race_id", "horse_id", "comment"]).to_pandas()
-        r = pl.read_parquet(fr, columns=["race_id", "horse_id", "finish_position", "popularity", "field_size", "date", "surface"]).to_pandas()
+        r = pl.read_parquet(fr, columns=["race_id", "horse_id", "finish_position", "popularity", "field_size", "date", "surface", "horse_number", "payoff"]).to_pandas()
         c["year"] = y
         cs.append(c)
         rs.append(r)
@@ -60,6 +84,16 @@ def load_pairs(years: list[int], tables: Path = TABLES) -> pd.DataFrame:
     D["pos"] = pd.to_numeric(D["finish_position"], errors="coerce")
     D = D[D["pos"].notna()].copy()
     D["good"] = (D["pos"] <= 3).astype(int)
+    hn = pd.to_numeric(D["horse_number"], errors="coerce")
+    cache: dict[str, tuple[dict, dict]] = {}
+    for rid, po in D.drop_duplicates("race_id").set_index("race_id")["payoff"].items():
+        cache[rid] = (_payout_by_number(po, "単勝"), _payout_by_number(po, "複勝"))
+    D["win_ok"] = [bool(cache[r][0]) for r in D["race_id"]]
+    D["place_ok"] = [bool(cache[r][1]) for r in D["race_id"]]
+    D["win_ret"] = [cache[r][0].get(int(h), 0.0) / 100 if pd.notna(h) else float("nan") for r, h in zip(D["race_id"], hn)]
+    D["place_ret"] = [cache[r][1].get(int(h), 0.0) / 100 if pd.notna(h) else float("nan") for r, h in zip(D["race_id"], hn)]
+    D.loc[~D["win_ok"], "win_ret"] = float("nan")
+    D.loc[~D["place_ok"], "place_ret"] = float("nan")
     D["pop"] = pd.to_numeric(D["popularity"], errors="coerce")
     return D.reset_index(drop=True)
 
@@ -187,7 +221,21 @@ def mark_display(T: pd.DataFrame, X, terms: np.ndarray, min_n: int = 100, contai
     return T
 
 
-def term_table(X, terms: np.ndarray, good: np.ndarray, p_exp: np.ndarray) -> pd.DataFrame:
+def roi_cols(X, ret: np.ndarray, prefix: str) -> dict[str, np.ndarray]:
+    """語ごとの回収率（払戻が読めた馬だけ）。ret の欠損は除く。区間は 1 馬あたり払戻の標準誤差による正規近似。"""
+    ok = ~np.isnan(ret)
+    r = np.where(ok, ret, 0.0)
+    m = np.asarray(X.T @ ok.astype(float)).ravel()
+    s1 = np.asarray(X.T @ r).ravel()
+    s2 = np.asarray(X.T @ (r * r)).ravel()
+    with np.errstate(divide="ignore", invalid="ignore"):
+        mean = s1 / m
+        sd = np.sqrt(np.maximum(s2 / m - mean ** 2, 0) * m / np.maximum(m - 1, 1))
+        se = sd / np.sqrt(m)
+    return {f"{prefix}_roi": mean, f"{prefix}_roi_lo": mean - 1.96 * se, f"{prefix}_roi_hi": mean + 1.96 * se, f"{prefix}_roi_n": m}
+
+
+def term_table(X, terms: np.ndarray, good: np.ndarray, p_exp: np.ndarray, win_ret: np.ndarray | None = None, place_ret: np.ndarray | None = None) -> pd.DataFrame:
     from scipy import stats
     from statsmodels.stats.multitest import multipletests
 
@@ -214,6 +262,10 @@ def term_table(X, terms: np.ndarray, good: np.ndarray, p_exp: np.ndarray) -> pd.
         "lift_lo": (rate - 1.96 * se_t) / base, "lift_hi": (rate + 1.96 * se_t) / base,
         "z": z, "p": p, "exp_good": E, "adj_lift": g / E, "z_adj": zadj, "p_adj": padj,
     })
+    for ret, name in ((win_ret, "win"), (place_ret, "place")):
+        if ret is not None:
+            for k, v in roi_cols(X, ret, name).items():
+                df[k] = v
     df["q"] = multipletests(df["p"], method="fdr_bh")[1]
     df["q_adj"] = multipletests(df["p_adj"], method="fdr_bh")[1]
     return df
@@ -250,7 +302,8 @@ def main() -> None:
     del pairs
     good = D["good"].to_numpy().astype(float)
     p_exp = D["p_exp"].to_numpy()
-    T = term_table(X, terms, good, p_exp)
+    win_ret, place_ret = D["win_ret"].to_numpy(float), D["place_ret"].to_numpy(float)
+    T = term_table(X, terms, good, p_exp, win_ret, place_ret)
     T["label"] = T["term"].map(labels)
     T = mark_display(T, X, terms)
 
@@ -268,7 +321,9 @@ def main() -> None:
     T = T.reset_index().sort_values("z", ascending=False)
     T.to_csv(out / "term_stats.csv", index=False, encoding="utf-8-sig")
 
-    summ = {"n_rows": int(len(D)), "good_rate": float(D["good"].mean()), "n_terms": int(len(T)), "min_df": a.min_df, "split_year": a.split}
+    for c, nm in (("win_ret", "単勝"), ("place_ret", "複勝")):
+        print(f"全体の{nm}回収率 {D[c].mean():.4f}（払戻が読めた {int(D[c].notna().sum()):,} 頭）")
+    summ = {"win_roi_all": float(D["win_ret"].mean()), "place_roi_all": float(D["place_ret"].mean()), "n_rows": int(len(D)), "good_rate": float(D["good"].mean()), "n_terms": int(len(T)), "min_df": a.min_df, "split_year": a.split}
     sig = T[T["q"] < 0.05]
     summ["n_sig_raw"] = int(len(sig))
     summ["n_sig_adj"] = int((T["q_adj"] < 0.05).sum())
