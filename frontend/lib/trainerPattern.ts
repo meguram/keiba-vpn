@@ -46,26 +46,37 @@ export function splitPat(pat: string): { place: string; pat: string } {
   return i < 0 ? { place: pat, pat: "" } : { place: pat.slice(0, i), pat: pat.slice(i + 1) };
 }
 
-const SLOPE_WORD: Record<string, string> = {
-  A3: "終いの1Fが11秒台以下で加速",
-  B3: "手前の1Fが11秒台以下で、終いは減速",
-  A2: "終い2Fとも12秒台で加速",
-  B2: "終い2Fとも12秒台で減速",
-  A1: "終いの1Fだけ12秒台で加速（手前は13秒以上）",
-  B1: "手前の1Fだけ12秒台で減速（終いは13秒以上）",
-  X: "終い2Fとも13秒以上（軽め）",
+/** 坂路の型。name=表に出す短い名前、desc=ツールチップ・凡例に出す定義（終い2Fの12秒台・13秒以上などの時計と、加速・減速） */
+const SLOPE: Record<string, { name: string; desc: string }> = {
+  A3: { name: "鋭伸び", desc: "終いの1Fが11秒台以下で、前の1Fより速い（加速）" },
+  B3: { name: "前飛ばし", desc: "手前の1Fが11秒台以下で、終いは遅くなる（減速）" },
+  A2: { name: "伸び", desc: "終い2Fとも12秒台で、終いの方が速い（加速）" },
+  B2: { name: "垂れ", desc: "終い2Fとも12秒台で、終いの方が遅い（減速）" },
+  A1: { name: "終い一瞬", desc: "終いの1Fだけ12秒台で加速（手前は13秒以上）" },
+  B1: { name: "前だけ", desc: "手前の1Fだけ12秒台で減速（終いは13秒以上）" },
+  X: { name: "軽め", desc: "終い2Fとも13秒以上" },
 };
 
-/** パターン名（A1〜X / W52.0-53.9）を言葉にする。画面には記号を出さない */
+/** 凡例（坂路の型）。表の下に出す */
+export const SLOPE_LEGEND: { name: string; desc: string }[] = ["A3", "A2", "A1", "X", "B1", "B2", "B3"].map((k) => SLOPE[k]);
+
+/** パターンの短い名前。画面には A1 などの記号を出さない（ウッド・ポリは 4F の時計帯を「4F 52.0〜53.9」のように） */
 export function patWord(pat: string | null | undefined): string {
   if (!pat) return "";
-  if (SLOPE_WORD[pat]) return SLOPE_WORD[pat];
+  if (SLOPE[pat]) return SLOPE[pat].name;
   const m = /^W(.*)$/.exec(pat);
   if (!m) return pat;
   const b = m[1];
-  if (b.startsWith("~")) return `4Fが${b.slice(1)}秒以内`;
-  if (b.endsWith("~")) return `4Fが${b.slice(0, -1)}秒以上`;
-  return `4Fが${b.replace("-", "〜")}秒`;
+  if (b.startsWith("~")) return `4F ${b.slice(1)}以内`;
+  if (b.endsWith("~")) return `4F ${b.slice(0, -1)}以上`;
+  return `4F ${b.replace("-", "〜")}`;
+}
+
+/** 名前にカーソルを合わせたときの説明（坂路は定義、ウッド・ポリは意味） */
+export function patHint(pat: string | null | undefined): string {
+  if (!pat) return "";
+  if (SLOPE[pat]) return SLOPE[pat].desc;
+  return /^W/.test(pat) ? "ウッド・ポリの追い切りで、4F（800m）の時計がこの帯（秒）" : "";
 }
 
 /** 行を足し合わせる（頭数は足せないので null）。調教師全体・場所の段を作る */

@@ -3,14 +3,14 @@
 import { Fragment, useMemo, useState } from "react";
 import { OddsDist } from "@/components/OddsDistPopup";
 import type { ColumnTrainerPatternBlock } from "@/lib/columns";
-import { patWord, pct, rowStats, splitPat, sumRows, type TPRow, type TPTable } from "@/lib/trainerPattern";
+import { patHint, patWord, pct, rowStats, SLOPE_LEGEND, splitPat, sumRows, type TPRow, type TPTable } from "@/lib/trainerPattern";
 
 type SortKey = "name" | "n" | "heads" | "win" | "place" | "winRoi" | "placeRoi";
-type Node = { id: string; name: string; sub?: string; row: TPRow; kids?: Node[] };
-type Flat = { id: string; trainer: string; place: string; pat: string; row: TPRow };
+type Node = { id: string; name: string; hint?: string; row: TPRow; kids?: Node[] };
+type Flat = { id: string; trainer: string; place: string; pat: string; hint: string; row: TPRow };
 
-const COLS: { key: SortKey; label: string; left?: boolean }[] = [
-  { key: "n", label: "出走" }, { key: "heads", label: "頭数" }, { key: "win", label: "勝率" },
+const COLS: { key: SortKey; label: string; xm?: boolean }[] = [
+  { key: "n", label: "出走" }, { key: "heads", label: "頭数", xm: true }, { key: "win", label: "勝率" },
   { key: "place", label: "複勝率" }, { key: "winRoi", label: "単勝回収率" }, { key: "placeRoi", label: "複勝回収率" },
 ];
 const PAGE = 200;
@@ -18,7 +18,8 @@ const PAGE = 200;
 const CSS = `
 .tpc-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .tpc{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
-.tpc th,.tpc td{padding:5px 6px;text-align:right;white-space:nowrap;vertical-align:middle}
+.tpc th,.tpc td{padding:5px 5px;text-align:right;white-space:nowrap;vertical-align:middle}
+.tpc td.l{white-space:normal;min-width:6em}
 .tpc th{color:var(--text-dim);font-weight:600;font-size:11px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
 .tpc th.l,.tpc td.l{text-align:left}
 .tpc td{border-bottom:1px solid rgba(36,48,73,.35)}
@@ -28,6 +29,10 @@ const CSS = `
 .tpc tr.t3 td.l{padding-left:40px}
 .tpc .up{color:#4ade80;font-weight:700}
 .tpc .thin{opacity:.5}
+@media(max-width:1100px){.tpc .xm{display:none}}
+@media(max-width:720px){.tpc .xs{display:none}.tpc th,.tpc td{padding:5px 2px}.tpc th{white-space:normal;font-size:10px;line-height:1.25}.tpc td.l{min-width:0}.tpc tr.t2 td.l{padding-left:12px}.tpc tr.t3 td.l{padding-left:22px}.tpc td{font-size:11px}.tpc th{letter-spacing:-.3px}}
+.tpc-legend{margin:8px 0 0;font-size:11px;color:var(--text-dim);line-height:1.7}
+.tpc-legend b{color:var(--text);font-weight:600}
 .tpc-ctl{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:8px 0;font-size:12px;color:var(--text-dim)}
 .tpc-ctl select,.tpc-ctl input[type=search]{min-height:34px;padding:0 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px}
 .tpc-ctl input[type=search]{flex:1 1 9em;min-width:0}
@@ -51,8 +56,8 @@ function Cells({ r, t, edges, maxOdds }: { r: TPRow; t: string; edges: number[];
   const roi = (v: number | null) => <td className={v != null && v > 1 ? "up" : ""}>{pct(v)}</td>;
   return (
     <>
-      <td>{s.n}</td><td>{s.heads ?? "–"}</td>
-      <td>{s.c1}-{s.c2}-{s.c3}-{s.c4p}</td>
+      <td>{s.n}</td><td className="xm">{s.heads ?? "–"}</td>
+      <td className="xs">{s.c1}-{s.c2}-{s.c3}-{s.c4p}</td>
       <td>{pct(s.win)}</td><td>{pct(s.place)}</td>
       {roi(s.winRoi)}{roi(s.placeRoi)}
       <td style={{ textAlign: "center" }}><OddsDist row={r} edges={edges} maxOdds={maxOdds} title={t} /></td>
@@ -64,17 +69,18 @@ function build(t: TPTable): { tree: Node[]; flat: Flat[] } {
   const tree: Node[] = [];
   const flat: Flat[] = [];
   for (const [tid, tr] of Object.entries(t.trainers)) {
-    const byPlace = new Map<string, [string, TPRow][]>();
+    const byPlace = new Map<string, [string, string, TPRow][]>();
     for (const [k, r] of Object.entries(tr.p)) {
       const { place, pat: code } = splitPat(k);
       const pat = patWord(code);
+      const hint = patHint(code);
       if (!byPlace.has(place)) byPlace.set(place, []);
-      byPlace.get(place)!.push([pat, r]);
-      flat.push({ id: `${tid}|${k}`, trainer: tr.n, place, pat, row: r });
+      byPlace.get(place)!.push([pat, hint, r]);
+      flat.push({ id: `${tid}|${k}`, trainer: tr.n, place, pat, hint, row: r });
     }
     const places: Node[] = [...byPlace].map(([place, ps]) => ({
-      id: `${tid}|${place}`, name: place, row: sumRows(ps.map(([, r]) => r))!,
-      kids: ps.map(([pat, r]) => ({ id: `${tid}|${place}|${pat}`, name: pat, row: r })),
+      id: `${tid}|${place}`, name: place, row: sumRows(ps.map(([, , r]) => r))!,
+      kids: ps.map(([pat, hint, r]) => ({ id: `${tid}|${place}|${pat}`, name: pat, hint, row: r })),
     }));
     const all = sumRows(places.map((p) => p.row));
     if (all) tree.push({ id: tid, name: tr.n, row: all, kids: places });
@@ -108,8 +114,8 @@ export function ColumnTrainerPattern({ block }: { block: ColumnTrainerPatternBlo
     if (sort.key === "name") return an.localeCompare(bn, "ja") * sort.dir;
     return (stat(a, sort.key) - stat(b, sort.key)) * sort.dir || an.localeCompare(bn, "ja");
   };
-  const head = (key: SortKey, label: string, left?: boolean) => (
-    <th key={key} className={left ? "l" : ""} onClick={() => { setLimit(PAGE); setSort((s) => ({ key, dir: s.key === key ? (-s.dir as 1 | -1) : (key === "name" ? 1 : -1) })); }}
+  const head = (key: SortKey, label: string, left?: boolean, xm?: boolean) => (
+    <th key={key} className={`${left ? "l" : ""}${xm ? " xm" : ""}`} onClick={() => { setLimit(PAGE); setSort((s) => ({ key, dir: s.key === key ? (-s.dir as 1 | -1) : (key === "name" ? 1 : -1) })); }}
       aria-sort={sort.key === key ? (sort.dir > 0 ? "ascending" : "descending") : "none"}>
       {label}{sort.key === key ? (sort.dir > 0 ? " ▲" : " ▼") : ""}
     </th>
@@ -137,7 +143,7 @@ export function ColumnTrainerPattern({ block }: { block: ColumnTrainerPatternBlo
             <Fragment key={p.id}>
               <tr className="t2"><td className="l">{p.name}</td><Cells r={p.row} t={`${t.name} ${p.name}`} edges={edges} maxOdds={maxOdds} /></tr>
               {sub(p.kids ?? []).map((k) => (
-                <tr key={k.id} className="t3"><td className="l">{k.name}</td><Cells r={k.row} t={`${t.name} ${p.name} ${k.name}`} edges={edges} maxOdds={maxOdds} /></tr>
+                <tr key={k.id} className="t3"><td className="l" title={k.hint || undefined}>{k.name}</td><Cells r={k.row} t={`${t.name} ${p.name} ${k.name}`} edges={edges} maxOdds={maxOdds} /></tr>
               ))}
             </Fragment>
           ))}
@@ -149,7 +155,7 @@ export function ColumnTrainerPattern({ block }: { block: ColumnTrainerPatternBlo
       count = fs.length;
       body = fs.slice(0, limit).map((f) => (
         <tr key={f.id}>
-          <td className="l">{f.trainer}</td><td className="l">{f.place}</td><td className="l">{f.pat}</td>
+          <td className="l">{f.trainer}</td><td className="l">{f.place}</td><td className="l" title={f.hint || undefined}>{f.pat}</td>
           <Cells r={f.row} t={`${f.trainer} ${f.place} ${f.pat}`} edges={edges} maxOdds={maxOdds} />
         </tr>
       ));
@@ -187,9 +193,9 @@ export function ColumnTrainerPattern({ block }: { block: ColumnTrainerPatternBlo
                 <thead>
                   <tr>
                     {flat ? <>{head("name", "調教師", true)}<th className="l" style={{ cursor: "default" }}>場所</th><th className="l" style={{ cursor: "default" }}>パターン</th></> : head("name", "調教師 / 場所 / パターン", true)}
-                    {COLS.slice(0, 2).map((c) => head(c.key, c.label))}
-                    <th style={{ cursor: "default" }}>着順内訳</th>
-                    {COLS.slice(2).map((c) => head(c.key, c.label))}
+                    {COLS.slice(0, 2).map((c) => head(c.key, c.label, false, c.xm))}
+                    <th style={{ cursor: "default" }} className="xs">着順内訳</th>
+                    {COLS.slice(2).map((c) => head(c.key, c.label, false, c.xm))}
                     <th style={{ cursor: "default" }} title="オッズ区間別の出走数。カーソルを合わせる／タップで詳細">オッズ分布</th>
                   </tr>
                 </thead>
@@ -201,6 +207,9 @@ export function ColumnTrainerPattern({ block }: { block: ColumnTrainerPatternBlo
                 さらに {Math.min(PAGE, count - limit)} 件を表示
               </button>
             )}
+            <p className="tpc-legend">
+              坂路の型: {SLOPE_LEGEND.map((l, i) => <span key={l.name}>{i ? "　" : ""}<b>{l.name}</b>＝{l.desc}</span>)}。ウッド・ポリは 4F（800m）の時計帯。
+            </p>
             <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--text-dim)" }}>
               {block.caption ?? ""} 集計 {table.y0}〜{table.y1} 年、単勝 {table.max_odds} 倍以上は除く。見出しをクリックで並べ替え。
             </p>

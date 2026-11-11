@@ -159,7 +159,7 @@ def build(d: dict, mp: dict) -> str:
 <h1>走法マップ：良馬場のコース別 走法軸の寄与と根拠</h1>
 <p class="muted">作成: 2026-11-10。ユーザー指摘「どのコースでも Hペース耐性の寄与率が高い。東京は早い上がり（TS）、小回りのローカルは TS持続力・Cr性能、のようにコース形状と結びつくはず」を受け、
 良馬場・2024 年以降・頭数 5 以上の {meta['n_runs']:,} 走（{meta['n_races']:,} レース）で測り直した。計算は <code>src/scripts/data/course_axis_demand.py</code>（ホストで実行）、この表は
-<code>src/scripts/docs/build_course_axis_demand_html.py</code> が JSON から作る。表の見出しをクリックすると並べ替えできる。</p>
+<code>src/scripts/docs/build_course_axis_demand_html.py</code> が JSON から作る。表の見出しをクリックすると並べ替えできる。続きの検証（実力・人気を除いた優位の根拠づけ、好走数ヒストグラム）は <a href="running_map_course_axis_rationale.html">走法軸 × コースの適性：優位の根拠</a>。</p>
 
 <div class="box"><b>結論</b>
 <ol>

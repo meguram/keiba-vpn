@@ -73,7 +73,7 @@ def test_counts_only_before_race_date_by_jockey_id(flat_dir):
     a = {e["horse_number"]: e["analysis"]["jockey_course"] for e in d["entries"]}
     j1 = a[1]
     assert j1["course_rec"] == [1, 1, 0, 1] and j1["course_n"] == 3                  # A1 A2 A3（FUT・LATER は除外）
-    assert j1["course_win"] == pytest.approx(1 / 3) and j1["course_top2"] == pytest.approx(2 / 3) and j1["course_top3"] == pytest.approx(2 / 3)
+    assert j1["course_win"] == pytest.approx(1 / 3) and "course_top2" not in j1 and j1["course_top3"] == pytest.approx(2 / 3)
     assert "venue_surface_n" not in j1 and "surface_n" not in j1                      # 同競馬場・同芝ダや全場の群は出さない（距離違いの A4・別の競馬場の A5・ダートの A6 は数えない）
     assert a[2]["course_n"] == 1 and a[2]["course_win"] == 1.0                       # 別の騎手は混ざらない
     assert a[3]["course_n"] == 0 and a[3]["course_win"] is None                       # 実績が無い騎手は率を作り出さない
@@ -329,7 +329,7 @@ def test_roi_columns_and_long_shots_are_excluded(roi_dir):
     st = _storage([{"horse_number": 1, "horse_name": "イチ", "horse_id": "h1", "jockey_id": "J1"}, {"horse_number": 2, "horse_name": "ニ", "horse_id": "h2", "jockey_id": "J2"}])
     d = analyze_race(st, "202605040111")
     m = next(x for x in d["modules"] if x["id"] == "jockey_course")
-    assert [c["key"] for c in m["columns"]] == ["course_rec", "course_win", "course_top2", "course_top3", "course_win_roi", "course_place_roi"]
+    assert [c["key"] for c in m["columns"]] == ["course_rec", "course_win", "course_top3", "course_win_roi", "course_place_roi"]
     a = {e["horse_number"]: e["analysis"]["jockey_course"] for e in d["entries"]}
     j1 = a[1]
     assert j1["course_n"] == 2 and j1["course_rec"] == [1, 0, 0, 1]                  # R3 は単勝 60 倍なので出走数にも入らない
@@ -341,7 +341,7 @@ def test_roi_columns_and_long_shots_are_excluded(roi_dir):
     assert any("50倍以上" in n for n in m["notes"])
 
 
-def test_sire_tab_has_no_line_and_no_top2(tmp_path, roi_dir, monkeypatch):
+def test_sire_tab_has_no_line(tmp_path, roi_dir, monkeypatch):
     sire = pd.DataFrame([{"horse_id": "a1", "sire_id": "SIRE_A", "sire_name": "父A", "dam_sire_id": "D1", "dam_sire_name": "m", "sire_line_id": "x", "sire_line_name": "サンデーサイレンス系"},
                          {"horse_id": "e1", "sire_id": "SIRE_A", "sire_name": "父A", "dam_sire_id": "D1", "dam_sire_name": "m", "sire_line_id": "x", "sire_line_name": "サンデーサイレンス系"}])
     sp = roi_dir / "horse_sire_map.parquet"
