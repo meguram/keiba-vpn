@@ -53,11 +53,12 @@ def _last_corner(po: pd.Series) -> pd.Series:
     return pd.to_numeric(s.str.split("-").str[-1].where(ok), errors="coerce")
 
 
-def load_runs() -> pd.DataFrame:
+def load_runs(tables: Path | None = None, years: list[int] | None = None) -> pd.DataFrame:
+    tables, years = Path(tables) if tables else TABLES, years or YEARS
     cols = ["race_id", "date", "venue", "surface", "distance", "field_size", "horse_number", "horse_id", "sex_age",
             "jockey_weight", "jockey_id", "trainer_id", "weight", "weight_change", "passing_order", "race_class", "grade", "track_condition"]
-    df = pd.concat([pd.read_parquet(TABLES / str(y) / "race_result_flat.parquet", columns=cols) for y in YEARS], ignore_index=True)
-    ped = pd.concat([pd.read_parquet(TABLES / str(y) / "race_shutuba_flat.parquet", columns=["race_id", "horse_id", "sire", "dam_sire"]) for y in YEARS])
+    df = pd.concat([pd.read_parquet(tables / str(y) / "race_result_flat.parquet", columns=cols) for y in years], ignore_index=True)
+    ped = pd.concat([pd.read_parquet(tables / str(y) / "race_shutuba_flat.parquet", columns=["race_id", "horse_id", "sire", "dam_sire"]) for y in years])
     ped["race_id"], ped["horse_id"] = ped["race_id"].astype(str), ped["horse_id"].astype(str)
     df["race_id"], df["horse_id"] = df["race_id"].astype(str), df["horse_id"].astype(str)
     df = df.merge(ped.drop_duplicates(["race_id", "horse_id"]), on=["race_id", "horse_id"], how="left")
@@ -78,18 +79,23 @@ def load_runs() -> pd.DataFrame:
     return df.sort_values(["date", "race_id", "horse_number"]).reset_index(drop=True)
 
 
-def oikiri_features() -> pd.DataFrame:
-    """最終追い切りの時計（4F・3F・ラスト 1F）・坂路かどうか・評価（A〜D）・レースまでの日数。レース前に公開される情報。
-    表の列が一部ずれて入っている（コースが rider 列に入る行がある）ので、坂路の判定は course と rider の両方を見る。"""
-    num = re.compile(r"(\d+\.\d)(?=\()")
+def oikiri_features(tables: Path | None = None, years: list[int] | None = None) -> pd.DataFrame:
+    """最終追い切りの時計（4F・3F・ラスト 1F）・坂路かどうか・評価（A〜D）・レースまでの日数。レース前に公開される情報。"""
+    tables, years = Path(tables) if tables else TABLES, years or YEARS
     rows = []
-    for y in YEARS:
-        f = TABLES / str(y) / "race_oikiri_flat.parquet"
+    for y in years:
+        f = tables / str(y) / "race_oikiri_flat.parquet"
         if not f.exists():
             continue
-        o = pd.read_parquet(f, columns=["race_id", "horse_id", "date", "course", "rider", "lap_times", "evaluation", "training_date"])
-        rows.append(o)
-    o = pd.concat(rows, ignore_index=True).drop_duplicates(["race_id", "horse_id"])
+        rows.append(pd.read_parquet(f, columns=["race_id", "horse_id", "date", "course", "rider", "lap_times", "evaluation", "training_date"]))
+    return oikiri_from_frame(pd.concat(rows, ignore_index=True))
+
+
+def oikiri_from_frame(o: pd.DataFrame) -> pd.DataFrame:
+    """race_oikiri_flat と同じ列の表から追い切りの特徴量を作る（学習・推論共通）。
+    表の列が一部ずれて入っている（コースが rider 列に入る行がある）ので、坂路の判定は course と rider の両方を見る。"""
+    num = re.compile(r"(\d+\.\d)(?=\()")
+    o = o.drop_duplicates(["race_id", "horse_id"]).copy()
     o["race_id"], o["horse_id"] = o["race_id"].astype(str), o["horse_id"].astype(str)
     vals = o["lap_times"].fillna("").astype(str).map(lambda s: [float(x) for x in num.findall(s)])
     o["oi_1f"] = vals.map(lambda v: v[-1] if len(v) >= 1 else np.nan)
@@ -103,10 +109,11 @@ def oikiri_features() -> pd.DataFrame:
     return o[["race_id", "horse_id", "oi_1f", "oi_3f", "oi_4f", "oi_hill", "oi_eval", "oi_days"]]
 
 
-def race_front_pace(df: pd.DataFrame, k: float = 20.0) -> pd.Series:
+def race_front_pace(df: pd.DataFrame, k: float = 20.0, tables: Path | None = None, years: list[int] | None = None) -> pd.Series:
     """レースの前半 3 区間（200m×3）の合計と、同じコースのその日より前のレースの平均との差（秒。負 = 前半が速い）。
     そのレース自身の値は特徴量にしない（過去走の分だけを履歴として使う）。"""
-    r = pd.concat([pd.read_parquet(TABLES / str(y) / "race_result_race.parquet", columns=["race_id", "lap_times"]) for y in YEARS])
+    tables, years = Path(tables) if tables else TABLES, years or YEARS
+    r = pd.concat([pd.read_parquet(tables / str(y) / "race_result_race.parquet", columns=["race_id", "lap_times"]) for y in years])
     r["race_id"] = r["race_id"].astype(str)
 
     def f3(v):
@@ -158,9 +165,10 @@ def horse_history(df: pd.DataFrame) -> pd.DataFrame:
     return out.loc[df.index]
 
 
-def asof_mean(df: pd.DataFrame, key: str, value: str = "pos_first", k: float = 30.0) -> np.ndarray:
-    """key（騎手・調教師・父など）ごとの value の傾向。その日より前の走の平均を、全体の平均へ k 走ぶん縮める。同じ日は使わない。"""
-    m = df[value].mean()
+def asof_mean(df: pd.DataFrame, key: str, value: str = "pos_first", k: float = 30.0, m: float | None = None) -> np.ndarray:
+    """key（騎手・調教師・父など）ごとの value の傾向。その日より前の走の平均を、全体の平均へ k 走ぶん縮める。同じ日は使わない。
+    m（縮め先の全体平均）は省略すると df の平均（学習時）。推論は学習時の値を渡す。"""
+    m = df[value].mean() if m is None else m
     day = df.groupby([key, "date"])[value].agg(["sum", "count"]).reset_index().sort_values([key, "date"])
     gj = day.groupby(key)
     day["cs"] = gj["sum"].cumsum() - day["sum"]
@@ -171,6 +179,91 @@ def asof_mean(df: pd.DataFrame, key: str, value: str = "pos_first", k: float = 3
 
 def jockey_history(df: pd.DataFrame, k: float = 30.0) -> np.ndarray:
     return asof_mean(df, "jockey_id", k=k)
+
+
+def course_gate_keys(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    """コースのキーと、コース×枠（内・中・外）のキー。学習・推論共通。"""
+    ck = df["venue"].astype(str) + df["surface"] + df["distance"].astype(str)
+    gb = pd.cut((df["horse_number"].astype(float) - 1) / (df["field_size"].astype(float) - 1), [-0.01, 0.33, 0.67, 1.01], labels=["i", "m", "o"]).astype(str)
+    return ck, ck + "|" + gb
+
+
+PP_COLS = ["pp_rank", "pp_ahead", "pp_front_n", "pp_gap_mean"]
+
+
+def pp_columns(po: pd.DataFrame) -> pd.DataFrame:
+    """位置取り予想（pos_pred）からレース内の関係の 4 列（下流の追走難度・前段 S3 の入力）。po は race_id と pos_pred を持つ。学習・推論共通。"""
+    g = po.groupby("race_id")["pos_pred"]
+    out = pd.DataFrame(index=po.index)
+    out["pp_rank"], out["pp_ahead"] = g.rank(pct=True), g.rank(method="min") - 1
+    out["pp_front_n"], out["pp_gap_mean"] = g.transform(lambda x: (x < 0.15).sum()), po["pos_pred"] - g.transform("mean")
+    return out[PP_COLS]
+
+
+def row_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """行ごとに決まる列（馬体重・枠・性齢・コース・クラス・馬場）。学習・推論共通。"""
+    df["wt"] = pd.to_numeric(df["weight"], errors="coerce")
+    df["wt_chg"] = pd.to_numeric(df["weight_change"], errors="coerce")
+    n = df["field_size"].astype(float)
+    df["gate_rel"] = (df["horse_number"].astype(float) - 1) / (n - 1)
+    sa = df["sex_age"].astype(str)
+    df["sex"] = sa.str[0].map({"牡": 0, "牝": 1, "セ": 2})
+    df["age"] = pd.to_numeric(sa.str[1:], errors="coerce")
+    df["is_turf"] = (df["surface"] == "芝").astype(int)
+    df["course"] = (df["venue"].astype(str) + df["surface"] + df["distance"].astype(str)).astype("category")
+    df["venue_c"] = df["venue"].astype("category")
+    df["cls"] = df["grade"].astype(str).str.replace(r"\s", "", regex=True).astype("category")
+    df["going"] = df["track_condition"].astype("category")
+    return df
+
+
+def race_level_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """出走メンバーの中での相対（自分の過去の位置取りが前から何番目か・自分より前に行きそうな馬の数・先行勢の多さ）。学習・推論共通。"""
+    n = df["field_size"].astype(float)
+    base = df["h_pf_w5"].fillna(df["j_pf"])
+    df["r_rank"] = base.groupby(df["race_id"]).rank(pct=True)
+    df["r_ahead"] = df.groupby("race_id")["h_pf_w5"].transform(lambda x: x.lt(0.2).sum()) - base.lt(0.2).astype(int)
+    df["r_mean"] = df.groupby("race_id")["h_pf_w5"].transform("mean")
+    df["r_gap"] = base - df["r_mean"]
+    df["r_known"] = df.groupby("race_id")["h_pf_w5"].transform("count") / n
+    df["r_strong_front"] = df.groupby("race_id")["h_pf_min5"].transform(lambda x: x.lt(0.1).sum()) - df["h_pf_min5"].lt(0.1).astype(int)
+    df["r_rank_min"] = df["h_pf_min5"].fillna(df["j_pf"]).groupby(df["race_id"]).rank(pct=True)
+    prior = df["h_pf_w5"].fillna(0.5 * df["j_pf"] + 0.25 * df["s_pf"] + 0.25 * df["t_pf"])
+    df["r_rank_prior"] = prior.groupby(df["race_id"]).rank(pct=True)
+    return df
+
+
+def oikiri_z(df: pd.DataFrame, consts: dict | None = None) -> tuple[pd.DataFrame, dict]:
+    """追い切りの時計を、坂路かどうか×年で標準化し、出走メンバーの中で比べる（速いほど小さい）。
+    consts を渡すと、その値（外れ値の範囲と坂路×年ごとの平均・標準偏差）で標準化する（推論用。学習の表から作った値）。戻り値の consts は学習時に保存する。"""
+    out = {"q": {}, "ms": {}} if consts is None else consts
+    grp = df["oi_hill"].astype(str) + "|" + df["year"].astype(str)
+    for c in ("oi_1f", "oi_3f", "oi_4f"):
+        if consts is None:
+            lo, hi = df[c].quantile(0.001), df[c].quantile(0.999)
+            out["q"][c] = [float(lo), float(hi)]
+            v = df[c].where(df[c].between(lo, hi))
+            out["ms"][c] = {k: [float(m), float(sd)] for k, (m, sd) in v.groupby(grp).agg(["mean", "std"]).iterrows() if np.isfinite(m) and np.isfinite(sd)}
+            z = (v - v.groupby(grp).transform("mean")) / v.groupby(grp).transform("std")
+        else:
+            lo, hi = out["q"][c]
+            v = df[c].where(df[c].between(lo, hi))
+            ms = out["ms"][c]
+            yrs = sorted({int(k.split("|")[1]) for k in ms})
+            def key(h, y):
+                k = f"{h}|{y}"
+                if k in ms:
+                    return k
+                prev = [yy for yy in yrs if yy <= y and f"{h}|{yy}" in ms]
+                return f"{h}|{prev[-1] if prev else yrs[-1]}"
+            kk = [key(h, y) for h, y in zip(df["oi_hill"].astype(str), df["year"])]
+            m = np.array([ms.get(k, [np.nan, np.nan])[0] for k in kk])
+            sd = np.array([ms.get(k, [np.nan, np.nan])[1] for k in kk])
+            z = (v - m) / sd
+        df[f"{c}_z"] = z
+        df[f"r_{c}_rank"] = df[f"{c}_z"].groupby(df["race_id"]).rank(pct=True)
+    df["r_oi_eval_rank"] = df["oi_eval"].groupby(df["race_id"]).rank(pct=True, ascending=False)
+    return df, out
 
 
 def build() -> pd.DataFrame:
@@ -193,41 +286,12 @@ def build() -> pd.DataFrame:
     prev_j = pd.concat([gh["j_pf"].shift(k) for k in (1, 2, 3)], axis=1).mean(axis=1)
     df.loc[hs.index, "j_pf_diff"] = (hs["j_pf"] - prev_j).to_numpy()
     # コースごとの枠の有利不利（内・中・外の枠の馬がそのコースでそれまでに取った位置 − コース全体）
-    ck = df["venue"].astype(str) + df["surface"] + df["distance"].astype(str)
-    gb = pd.cut((df["horse_number"].astype(float) - 1) / (df["field_size"].astype(float) - 1), [-0.01, 0.33, 0.67, 1.01], labels=["i", "m", "o"]).astype(str)
-    df["_ck"], df["_ckg"] = ck, ck + "|" + gb
+    df["_ck"], df["_ckg"] = course_gate_keys(df)
     df["cg_pf"] = asof_mean(df, "_ckg", k=50.0) - asof_mean(df, "_ck", k=50.0)
     df = df.drop(columns=["_ck", "_ckg"])
-    df["wt"] = pd.to_numeric(df["weight"], errors="coerce")
-    df["wt_chg"] = pd.to_numeric(df["weight_change"], errors="coerce")
-    n = df["field_size"].astype(float)
-    df["gate_rel"] = (df["horse_number"].astype(float) - 1) / (n - 1)
-    sa = df["sex_age"].astype(str)
-    df["sex"] = sa.str[0].map({"牡": 0, "牝": 1, "セ": 2})
-    df["age"] = pd.to_numeric(sa.str[1:], errors="coerce")
-    df["is_turf"] = (df["surface"] == "芝").astype(int)
-    df["course"] = (df["venue"].astype(str) + df["surface"] + df["distance"].astype(str)).astype("category")
-    df["venue_c"] = df["venue"].astype("category")
-    df["cls"] = df["grade"].astype(str).str.replace(r"\s", "", regex=True).astype("category")
-    df["going"] = df["track_condition"].astype("category")
-    # 出走メンバーの中での相対（自分の過去の位置取りが前から何番目か・自分より前に行きそうな馬の数・先行勢の多さ）
-    base = df["h_pf_w5"].fillna(df["j_pf"])
-    df["r_rank"] = base.groupby(df["race_id"]).rank(pct=True)
-    df["r_ahead"] = df.groupby("race_id")["h_pf_w5"].transform(lambda x: x.lt(0.2).sum()) - base.lt(0.2).astype(int)
-    df["r_mean"] = df.groupby("race_id")["h_pf_w5"].transform("mean")
-    df["r_gap"] = base - df["r_mean"]
-    df["r_known"] = df.groupby("race_id")["h_pf_w5"].transform("count") / n
-    df["r_strong_front"] = df.groupby("race_id")["h_pf_min5"].transform(lambda x: x.lt(0.1).sum()) - df["h_pf_min5"].lt(0.1).astype(int)
-    df["r_rank_min"] = df["h_pf_min5"].fillna(df["j_pf"]).groupby(df["race_id"]).rank(pct=True)
-    prior = df["h_pf_w5"].fillna(0.5 * df["j_pf"] + 0.25 * df["s_pf"] + 0.25 * df["t_pf"])
-    df["r_rank_prior"] = prior.groupby(df["race_id"]).rank(pct=True)
-    # 追い切りの時計を、坂路かどうか×年で標準化し、出走メンバーの中で比べる（速いほど小さい）
-    for c in ("oi_1f", "oi_3f", "oi_4f"):
-        v = df[c].where(df[c].between(df[c].quantile(0.001), df[c].quantile(0.999)))
-        grp = df["oi_hill"].astype(str) + "|" + df["year"].astype(str)
-        df[f"{c}_z"] = (v - v.groupby(grp).transform("mean")) / v.groupby(grp).transform("std")
-        df[f"r_{c}_rank"] = df[f"{c}_z"].groupby(df["race_id"]).rank(pct=True)
-    df["r_oi_eval_rank"] = df["oi_eval"].groupby(df["race_id"]).rank(pct=True, ascending=False)
+    df = row_columns(df)
+    df = race_level_columns(df)
+    df, _ = oikiri_z(df)
     OUT.mkdir(parents=True, exist_ok=True)
     df.drop(columns=["passing_order", "sex_age", "weight", "weight_change", "f3_dev"]).to_parquet(OUT / "features.parquet", index=False)
     _log(f"特徴量 {OUT / 'features.parquet'}（{time.time() - t0:.0f} 秒）")

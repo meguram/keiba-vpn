@@ -21,6 +21,7 @@ import pandas as pd
 os.environ.setdefault("TP54_OUT", "/home/jovyan/work/retrain_out/tp54_2016")
 from src.pipeline.models import tracking_difficulty_v2 as td2
 from src.scripts.data import tp54_model as m
+from src.scripts.data.pos_model import PP_COLS, pp_columns
 
 SEEDS = (0, 1, 2)
 ROUNDS = 1500
@@ -28,7 +29,6 @@ LAP_GROUP = "/home/jovyan/work/retrain_out/tp55_2016/groups/LAP.parquet"
 LAPD_GROUP = "/home/jovyan/work/retrain_out/tp55_2016/groups/LAPD.parquet"
 POS_OOF = "/home/jovyan/work/keiba-vpn/data/local/modeling/pos_model/pos_oof.parquet"
 EASE2_OOF = "/home/jovyan/work/retrain_out/tp54_2016/groups/EASE2_t6.parquet"
-PP_COLS = ["pp_rank", "pp_ahead", "pp_front_n", "pp_gap_mean"]
 
 
 def log(msg: str) -> None:
@@ -50,9 +50,7 @@ def build_inputs(h: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFr
     D["ld_rear_x_q"] = pe * D["ld_q"]
     po = pd.read_parquet(POS_OOF)
     po["race_id"], po["horse_id"] = po["race_id"].astype(str), po["horse_id"].astype(str)
-    g = po.groupby("race_id")["pos_pred"]
-    po["pp_rank"], po["pp_ahead"] = g.rank(pct=True), g.rank(method="min") - 1
-    po["pp_front_n"], po["pp_gap_mean"] = g.transform(lambda x: (x < 0.15).sum()), po["pos_pred"] - g.transform("mean")
+    po = pd.concat([po, pp_columns(po)], axis=1)
     P = h[["race_id", "horse_id"]].merge(po[["race_id", "horse_id", *PP_COLS]].drop_duplicates(["race_id", "horse_id"]), on=["race_id", "horse_id"], how="left").drop(columns=["race_id", "horse_id"])
     P.index = h.index
     return L, D, P, pe
