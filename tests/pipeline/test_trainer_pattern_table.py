@@ -187,26 +187,29 @@ def _odds_frame():
     return d
 
 
-def test_summary_splits_odds_50_and_above_and_bins_the_distribution():
+def test_summary_excludes_odds_50_and_above_from_every_number_but_keeps_full_distribution():
+    r = T.summary(_odds_frame(), 2021, 2021, max_odds=50.0).set_index(["調教師ID", "調教パターン"]).loc[("t1", "栗東坂路|A2")]
+    # 残る 3 走: オッズ 1.5(1着 1.5/1.1), 8(2着 0/1.5), 49.9(3着 0/3.0)。ちょうど 50 倍は除く
+    assert r["出走数"] == 3 and r["頭数"] == 3 and r["着順内訳"] == "1-1-1-0" and r["4着以下"] == 0
+    assert abs(r["単勝回収率"] - 1.5 / 3) < 1e-9 and abs(r["複勝回収率"] - 5.6 / 3) < 1e-9 and abs(r["勝率"] - 1 / 3) < 1e-9
+    assert r["オッズ分布"] == "1-0-0-1-0-1-1-1"   # 分布だけは除く前の全出走（1.5 / 8 / 49.9 / 50 / 120）
+
+
+def test_summary_without_max_odds_keeps_everything_and_without_odds_has_no_distribution():
     r = T.summary(_odds_frame(), 2021, 2021).set_index(["調教師ID", "調教パターン"]).loc[("t1", "栗東坂路|A2")]
-    assert r["出走数"] == 5 and r["出走数_50未満"] == 3 and r["出走数_50以上"] == 2   # ちょうど 50 倍は大穴側
-    assert abs(r["単勝払戻_50未満"] - 1.5) < 1e-9 and abs(r["複勝払戻_50未満"] - (1.1 + 1.5 + 3.0)) < 1e-9
-    assert r["オッズ分布"] == "1-0-0-1-0-1-1-1"   # <2, 2-3, 3-5, 5-10, 10-20, 20-50, 50-100, 100+ の頭数（1.5 / 8 / 49.9 / 50 / 120）
-
-
-def test_summary_without_odds_has_no_odds_columns_and_unreadable_odds_are_excluded():
+    assert r["出走数"] == 5 and abs(r["単勝回収率"] - 51.5 / 5) < 1e-9
     assert "オッズ分布" not in T.summary(_frame(), 2021, 2021).columns
+
+
+def test_summary_drops_a_group_whose_runs_are_all_50_or_more():
     d = _odds_frame()
-    d.loc[d.index[0], "odds"] = np.nan
-    r = T.summary(d, 2021, 2021).set_index(["調教師ID", "調教パターン"]).loc[("t1", "栗東坂路|A2")]
-    assert r["出走数"] == 5 and r["出走数_50未満"] + r["出走数_50以上"] == 4   # オッズが読めない走は分離側から除く
+    d["odds"] = 80.0
+    assert T.summary(d, 2021, 2021, max_odds=50.0).empty
 
 
-def test_html_block_odds_columns_roi_without_outliers_and_histogram_data():
-    h = T.html_block(T.summary(_odds_frame(), 2021, 2021))
+def test_html_block_shows_distribution_and_no_split_columns():
+    h = T.html_block(T.summary(_odds_frame(), 2021, 2021, max_odds=50.0))
     q = [r for r in h.split("<tr ") if "<td class=l>A2</td>" in r][0]
-    assert ">40.0%</td>" in q   # 50 倍以上の割合 2/5
-    assert f">{1.5 / 3 * 100:.1f}%</td>" in q and f">{5.6 / 3 * 100:.1f}%</td>" in q   # 50 倍未満の 3 走だけの単勝・複勝回収率
-    assert 'data-b="1,0,0,1,0,1,1,1"' in q and 'data-v="0.4000"' in q
-    assert "<th>オッズ分布</th>" in h and "<th>単勝回収率(50倍未満)</th>" in h
-    assert h.count('data-b="1,0,0,1,0,1,1,1"') == 3   # 調教師・場所・パターンの 3 行（合計は同じ分布）
+    assert 'data-b="1,0,0,1,0,1,1,1"' in q and 'data-v="0.4000"' in q   # 50 倍以上は 2/5
+    assert "<th>オッズ分布</th>" in h and "50倍" not in h.split("<table")[1].split("</thead>")[0]
+    assert h.count('data-b="1,0,0,1,0,1,1,1"') == 3   # 調教師・場所・パターンの 3 行

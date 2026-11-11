@@ -1,13 +1,13 @@
 """調教師 × 最終追い切りパターンごとの成績表（着順内訳・勝率・単勝回収率・複勝率・複勝回収率）。ターゲットエンコーディングの元データ。
 
-python -m src.scripts.data.trainer_pattern_table [--out DIR] [--y0 2020] [--y1 2025]
+python -m src.scripts.data.trainer_pattern_table [--out DIR] [--y0 2020] [--y1 2025] [--max-odds 50]
 
 出力:
   trainer_pattern_summary_{y0}_{y1}.csv   期間まるごとの集計（見る・調べる用。特徴量には使わない: 未来の結果を含む）
   trainer_pattern_asof.parquet            レースごとに『その日より前の』調教師 × パターンの累計（特徴量用。同日のレースは含めない）
 
 集計の単位は馬（その調教師のそのパターンで出走した馬 1 頭 = 1 行）。回収率 = 払戻 / 賭け金（100 円ずつ買ったとき。1.00 = 100%）。
-払戻が結果表から読めない出走は、率・回収率の両方から除く（分母を揃える）。市場オッズ・人気は使わない。
+払戻が結果表から読めない出走は、率・回収率の両方から除く（分母を揃える）。--max-odds（既定 50）以上の単勝オッズの出走は、期間集計の母数から除く（特徴量用の asof は除かない）。市場オッズ・人気は使わない。
 """
 
 from __future__ import annotations
@@ -52,9 +52,9 @@ def derive(g: pd.DataFrame, pre: str = "") -> pd.DataFrame:
     return out
 
 
-ODDS_CUT = 50.0   # 単勝オッズがこれ以上の出走（大穴）の影響を分けて見る
+ODDS_CUT = 50.0   # 既定の除外ライン: 単勝オッズがこれ以上の出走（大穴）を、表の集計の母数から除く
 EDGES = [2, 3, 5, 10, 20, 50, 100]   # ヒストグラムの境界（8 区間: 2倍未満, 2-3, 3-5, 5-10, 10-20, 20-50, 50-100, 100倍以上）
-XCOLS = ["出走数_50未満", "単勝払戻_50未満", "複勝払戻_50未満", "出走数_50以上", "オッズ分布"]
+XCOLS = ["オッズ分布"]
 
 
 def add_odds(d: pd.DataFrame) -> pd.DataFrame:
@@ -76,28 +76,28 @@ def add_odds(d: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def odds_split(x: pd.DataFrame) -> pd.DataFrame:
-    """_indicators() の結果から、組（調教師 × パターン）ごとに、オッズ 50 倍未満／以上の出走数と払戻の合計、オッズ区間ごとの頭数（"a-b-…" の 8 区間）を求める。オッズが読めない出走は含めない。"""
+def odds_bins(x: pd.DataFrame) -> pd.Series:
+    """組（調教師 × パターン）ごとの、単勝オッズ区間別の出走数（"a-b-…" の 8 区間）。オッズが読めない出走は含めない。"""
     x = x[(x["n"] > 0) & (x["odds"] > 0)]
-    hi = x["odds"] >= ODDS_CUT
-    g = x.assign(lo=~hi, hi=hi, lw=np.where(hi, 0.0, x["win_ret_sum"]), lp=np.where(hi, 0.0, x["place_ret_sum"]), b=np.digitize(x["odds"], EDGES))
-    out = g.groupby(KEY).agg(**{XCOLS[0]: ("lo", "sum"), XCOLS[1]: ("lw", "sum"), XCOLS[2]: ("lp", "sum"), XCOLS[3]: ("hi", "sum")})
-    bins = pd.crosstab([g["trainer_id"], g["pat"]], g["b"]).reindex(columns=range(len(EDGES) + 1), fill_value=0)
-    out[XCOLS[4]] = bins.astype(str).agg("-".join, axis=1)
-    return out
+    bins = pd.crosstab([x["trainer_id"], x["pat"]], np.digitize(x["odds"], EDGES)).reindex(columns=range(len(EDGES) + 1), fill_value=0)
+    return bins.astype(str).agg("-".join, axis=1).rename(XCOLS[0])
 
 
-def summary(d: pd.DataFrame, y0: int, y1: int) -> pd.DataFrame:
-    """調教師 × パターンごとの期間集計。着順内訳は『1着-2着-3着-4着以下』の頭数。"""
+def summary(d: pd.DataFrame, y0: int, y1: int, max_odds: float | None = None) -> pd.DataFrame:
+    """調教師 × パターンごとの期間集計。着順内訳は『1着-2着-3着-4着以下』の頭数。
+    max_odds を指定すると、単勝オッズがその値以上の出走は、出走数・頭数・着順内訳・率・回収率のすべてから除く（オッズ分布の列だけは、除く前の全出走）。"""
     x = _indicators(d[d["year"].between(y0, y1)])
+    has_odds = "odds" in x.columns
+    bins = odds_bins(x) if has_odds else None
+    if max_odds is not None:
+        assert has_odds, "オッズ（add_odds）が必要"
+        x = x[~(x["odds"] >= max_odds)]
     S = x.groupby(KEY)[SUMS].sum()
     S = S[S["n"] > 0]
     S = S.join(derive(S))
-    has_odds = "odds" in x.columns
     if has_odds:
-        S = S.join(odds_split(x))
-        S[XCOLS[:4]] = S[XCOLS[:4]].fillna(0.0)
-        S[XCOLS[4]] = S[XCOLS[4]].fillna("-".join(["0"] * (len(EDGES) + 1)))   # オッズが 1 頭も読めない組
+        S = S.join(bins)
+        S[XCOLS[0]] = S[XCOLS[0]].fillna("-".join(["0"] * (len(EDGES) + 1)))   # オッズが 1 頭も読めない組
     names = d.sort_values("race_date").drop_duplicates("trainer_id", keep="last").set_index("trainer_id")["trainer_name"]
     S = S.reset_index()
     ok = x[x["n"] > 0].assign(place=lambda v: v["pat"].str.split("|").str[0])   # 同じ馬が複数回出走しても 1 頭と数える（horse_id）
@@ -167,22 +167,18 @@ ps.sort(cmp(d));ps.forEach(function(p){b.appendChild(p[0]);p[2].sort(cmp(d)).for
 DUP = 2.0   # 1 頭あたりの出走回数がこれ以上の行は、同じ馬が何度も数えられているとして橙で示す
 
 
-def _odds_cells(n: int, ox, gr) -> list[str]:
-    """オッズ 50 倍以上の割合、50 倍未満だけの単勝・複勝回収率、オッズ分布（8 区間の頭数。ページ側の JS が小さな棒グラフにする）の 4 セル。"""
-    if ox is None:
-        return ['<td class="num">-</td>'] * 3 + ['<td class="hist"></td>']
-    lo, hi = int(ox["n_lo"]), int(ox["n_hi"])
-    roi = lambda s: (f'<td class="num{gr(s / lo, lo)}">{s / lo * 100:.1f}%</td>' if lo else '<td class="num">-</td>')   # noqa: E731
-    share = hi / (lo + hi) if lo + hi else 0.0
-    return [f'<td class="num">{share * 100:.1f}%</td>', roi(ox["w_lo"]), roi(ox["p_lo"]), f'<td class="hist" data-v="{share:.4f}" data-b="{",".join(str(int(v)) for v in ox["bins"])}"></td>']
+def _odds_cell(bins) -> str:
+    """単勝オッズ区間別の出走数（8 区間。ページ側の JS が小さな棒グラフにする）。並べ替えは 50 倍以上の割合。"""
+    if bins is None:
+        return '<td class="hist"></td>'
+    tot = int(bins.sum())
+    share = float(bins[len(EDGES) - 1:].sum() / tot) if tot else 0.0
+    return f'<td class="hist" data-v="{share:.4f}" data-b="{",".join(str(int(v)) for v in bins)}"></td>'
 
 
 def _ox(g: pd.DataFrame):
-    """表の行（または複数行の合計）に対応する、50 倍未満／以上の集計。列が無い古い集計なら None。"""
-    if XCOLS[0] not in g.columns:
-        return None
-    bins = np.sum([[int(v) for v in s.split("-")] for s in g[XCOLS[4]]], axis=0)
-    return {"n_lo": g[XCOLS[0]].sum(), "w_lo": g[XCOLS[1]].sum(), "p_lo": g[XCOLS[2]].sum(), "n_hi": g[XCOLS[3]].sum(), "bins": bins}
+    """表の行（または複数行の合計）のオッズ区間別の出走数。列が無い古い集計なら None。"""
+    return np.sum([[int(v) for v in s.split("-")] for s in g[XCOLS[0]]], axis=0) if XCOLS[0] in g.columns else None
 
 
 def _row(cls: str, idv: str, label: str, n, c, win_ret, place_ret, base: tuple[float, float], u=None, ox=None) -> str:
@@ -208,7 +204,7 @@ def _row(cls: str, idv: str, label: str, n, c, win_ret, place_ret, base: tuple[f
              (rate(place_ret), f"{rate(place_ret) * 100:.1f}%", gr(rate(place_ret)))]
     cells = [f'<td class=id>{_html.escape(idv)}</td>', f'<td class=l>{_html.escape(label)}</td>']
     cells += [f'<td class="num{h}">{txt}</td>' for _, txt, h in shown]
-    cells += _odds_cells(n, ox, gr)
+    cells.append(_odds_cell(ox))
     k3 = c[0] + c[1] + c[2]
     won = cls == "q" and bool(bl(c[0], base[0])) and bool(gr(rate(win_ret)))     # 行のアクセントはパターン行だけ。勝率・単勝回収率の両方に色が付く
     placed = cls == "q" and bool(bl(k3, base[1])) and bool(gr(rate(place_ret)))   # 複勝率・複勝回収率の両方に色が付く
@@ -240,7 +236,7 @@ def html_block(S: pd.DataFrame) -> str:
             for i, r in gs.iterrows():
                 out.append(_row("q", tid, str(r["型"]), r["出走数"], [r[k] for k in cols], r["_w"], r["_p"], base, r["頭数"] if "頭数" in r.index else None, _ox(gs.loc[[i]])))
         out.append("</tbody>")
-    heads = ["調教師ID", "調教師 / 場所 / パターン", "出走数", "頭数", "出走/頭", "着順内訳", "勝率", "単勝回収率", "複勝率", "複勝回収率", "50倍以上の割合", "単勝回収率(50倍未満)", "複勝回収率(50倍未満)", "オッズ分布"]
+    heads = ["調教師ID", "調教師 / 場所 / パターン", "出走数", "頭数", "出走/頭", "着順内訳", "勝率", "単勝回収率", "複勝率", "複勝回収率", "オッズ分布"]
     head = "".join("<th>" + h + "</th>" for h in heads)
     ctl = ('<div class="tptb"><button id="tpt0">調教師のみ</button><button id="tpt1">場所まで</button><button id="tpt2">すべて開く</button>'
            '調教師ID・名前で絞り込み<input id="tptf" placeholder="例: 清水 / 01075"></div>')
@@ -261,6 +257,7 @@ def main() -> None:
     ap.add_argument("--out", default="/home/jovyan/work/retrain_out/base_2016/article_check/final_week/trainer_pattern")
     ap.add_argument("--y0", type=int, default=2020)
     ap.add_argument("--y1", type=int, default=2025)
+    ap.add_argument("--max-odds", type=float, default=ODDS_CUT, help="単勝オッズがこれ以上の出走を集計から除く（0 で除かない）")
     ap.add_argument("--chapter", default=None, help="指定すると、この章の HTML の表（tpt:start〜tpt:end）を作り直す")
     ap.add_argument("--laps", default=str(P.LAPS))
     ap.add_argument("--table", default=str(P.TABLE))
@@ -269,7 +266,7 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     d = add_odds(RO.add_returns(P.load(Path(a.laps), Path(a.table))))
 
-    S = summary(d, a.y0, a.y1)
+    S = summary(d, a.y0, a.y1, a.max_odds or None)
     S.to_csv(out / f"trainer_pattern_summary_{a.y0}_{a.y1}.csv", index=False, encoding="utf-8-sig")
     if a.chapter:
         inject(Path(a.chapter), html_block(S))
