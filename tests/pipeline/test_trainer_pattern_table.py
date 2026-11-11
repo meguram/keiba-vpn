@@ -194,6 +194,7 @@ def test_summary_excludes_odds_50_and_above_from_every_number_including_distribu
     assert abs(r["単勝回収率"] - 1.5 / 3) < 1e-9 and abs(r["複勝回収率"] - 5.6 / 3) < 1e-9 and abs(r["勝率"] - 1 / 3) < 1e-9
     assert r["オッズ分布"] == "1-0-0-1-0-1"   # 分布も残った 3 走だけ（1.5 / 8 / 49.9）。50 倍以上の区間は作らない
     assert r["オッズ分布_1着"] == "1-0-0-0-0-0" and r["オッズ分布_3着内"] == "1-0-0-1-0-1"   # 1.5 倍が 1着。3着以内は 1.5(1着)・8(2着)・49.9(3着)
+    assert r["オッズ分布_単勝払戻"] == "1.5-0.0-0.0-0.0-0.0-0.0" and r["オッズ分布_複勝払戻"] == "1.1-0.0-0.0-1.5-0.0-3.0"   # 区間別の払戻の合計（÷出走数が区間の回収率）
 
 
 def test_summary_without_max_odds_keeps_everything_and_without_odds_has_no_distribution():
@@ -218,6 +219,7 @@ def test_html_block_shows_distribution_and_no_split_columns():
     assert h.count('data-b="1,0,0,1,0,1"') == 3   # 調教師・場所・パターンの 3 行
     assert 'data-w="1,0,0,0,0,0"' in q and 'data-t="1,0,0,1,0,1"' in q   # ポップアップの赤（1着）・黄（3着以内）の元
     assert h.count('data-w="1,0,0,0,0,0"') == 3 and "#ef4444" in h and "#facc15" in h
+    assert 'data-wr="1.5,0.0,0.0,0.0,0.0,0.0"' in q and 'data-pr="1.1,0.0,0.0,1.5,0.0,3.0"' in q and "単勝回収率" in h.split("</script>")[0].split("function pop")[1]
 
 
 def test_html_block_totals_winner_and_top3_bins_across_patterns():
@@ -229,6 +231,7 @@ def test_html_block_totals_winner_and_top3_bins_across_patterns():
     t = h.split("<tbody")[1].split("</tr>")[0]
     assert 'data-b="1,0,1,1,0,1"' not in t and 'data-b="1,0,0,2,0,1"' in t   # 8 倍の区間(5-10)は 2 走
     assert 'data-w="1,0,0,1,0,0"' in t and 'data-t="1,0,0,2,0,1"' in t
+    assert 'data-wr="1.5,0.0,0.0,8.0,0.0,0.0"' in t   # 8 倍の区間の単勝払戻は 2 組の合計
 
 
 def test_html_block_has_accent_only_button_and_hides_non_accent_rows_by_class():
