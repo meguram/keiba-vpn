@@ -4,7 +4,7 @@
 対象は、このレースの開催日より前の JRA 全レース（当日以降の結果は入れない）。キーは ID（名前では結合しない）。
 単勝オッズが ODDS_CUT（50 倍）以上の出走は、大穴の外れ値として集計から除く（出走数・着順・率・回収率のすべて）。
 各馬の行からは、その馬自身の過去の出走を除く（父の産駒成績に自分の成績が混ざり、出走の少ない父で個体の成績がそのまま出てしまうのを避ける）。
-色の基準は、勝率・連対率・複勝率はその条件の全馬の平均、回収率は 100%（損益分岐）。
+色の基準は、勝率・複勝率はその条件の全馬の平均、回収率は 100%（損益分岐）。
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ GROUP = "course"
 _ROI_SCALE = {"lo": 0.5, "mid": 1.0, "hi": 1.5}   # 回収率の色: 100% で無色、150% 以上で最も緑、50% 以下で最も赤
 
 # 平均に対する倍率で色の端を決める（lo=平均×0.25 で最も赤、hi=平均×倍率 で最も緑。hi は 100% が上限）
-_HEAT = {"win": 3.0, "top2": 2.4, "top3": 2.0}
+_HEAT = {"win": 3.0, "top3": 2.0}
 
 
 @dataclass(frozen=True)
@@ -37,7 +37,6 @@ class Dimension:
     key_text: Callable[[dict[str, Any], dict[str, Any]], str | None] | None = None
     needs_sire_map: bool = False
     unknown_note: str | None = None                 # 軸が分からない馬がいるときの注記
-    top2: bool = True                               # 連対率の列を出すか
 
 
 def _jockey_key(e: dict[str, Any], _: dict[str, Any]) -> str | None:
@@ -93,7 +92,7 @@ GATE = Dimension(
 )
 SIRE = Dimension(
     id="sire_course", label="種牡馬×コース", min_n=10, run_col="sire_id", entry_key=_sire_key, key_header="父（種牡馬）", key_text=_sire_text,
-    needs_sire_map=True, top2=False,
+    needs_sire_map=True,
     description="出走馬の父（種牡馬）の産駒が、今回と同じコース（同じ競馬場・芝/ダート・距離）でこれまで残してきた勝率・複勝率と、単勝・複勝回収率。",
     unknown_note="父を特定できない馬は表示されません。",
 )
@@ -136,12 +135,12 @@ def _tally_own(sub: pd.DataFrame, col: str, horse_ids: set[str]) -> dict[tuple[s
 
 
 def _baseline(sub: pd.DataFrame) -> dict[str, float] | None:
-    """その条件の全馬の平均（勝率・連対率・複勝率・単勝回収率・複勝回収率）。色の基準と見出しの説明。"""
+    """その条件の全馬の平均（勝率・複勝率・単勝回収率・複勝回収率）。色の基準と見出しの説明。"""
     n = len(sub)
     if n == 0:
         return None
     f = sub["finish_position"]
-    out = {"win": float((f == 1).sum()) / n, "top2": float((f <= 2).sum()) / n, "top3": float((f <= 3).sum()) / n}
+    out = {"win": float((f == 1).sum()) / n, "top3": float((f <= 3).sum()) / n}
     ok = sub["win_ret"].notna() & sub["place_ret"].notna()
     if ok.any():
         out["win_roi"], out["place_roi"] = float(sub.loc[ok, "win_ret"].mean()), float(sub.loc[ok, "place_ret"].mean())
@@ -194,7 +193,7 @@ class CourseStatsModule:
         aux = self._aux()
         s = ctx.surface or ""
         base = _baseline(dated[_mask(dated, ctx)])
-        stats = [("win", "勝率", None)] + ([("top2", "連対率", "2着以内の率")] if dim.top2 else []) + [("top3", "複勝率", "3着以内の率")]
+        stats = [("win", "勝率", None), ("top3", "複勝率", "3着以内の率")]
         columns: list[Column] = [Column(f"{GROUP}_rec", "成績", "record", GROUP, "1着-2着-3着-着外")]
         for key, label, desc in stats:
             mid = (base or {}).get(key)
@@ -226,7 +225,6 @@ class CourseStatsModule:
             row[f"{GROUP}_n"] = n
             row[f"{GROUP}_rec"] = [w1, w2, w3, n - w1 - w2 - w3] if k else None
             row[f"{GROUP}_win"] = w1 / n if n else None
-            row[f"{GROUP}_top2"] = (w1 + w2) / n if n else None
             row[f"{GROUP}_top3"] = (w1 + w2 + w3) / n if n else None
             row[f"{GROUP}_win_roi"] = wr / rn if rn else None
             row[f"{GROUP}_place_roi"] = pr / rn if rn else None
@@ -237,7 +235,7 @@ class CourseStatsModule:
             "このレースの開催日より前の JRA 全レースの結果から集計しています。各馬の行は、その馬自身の過去の出走を除いた成績です。",
             f"単勝オッズが{ODDS_CUT:.0f}倍以上の出走は、外れ値として出走数・着順・率・回収率のすべてから除いています。",
             f"出走数が{dim.min_n}未満の群は、参考値として薄く表示し、色は付けません。",
-            "回収率は、その条件の出走に100円ずつ買い続けたときの払戻÷賭け金です（払戻が読めない出走は回収率の計算から除く）。色は、勝率・連対率・複勝率はその条件の全馬の平均、回収率は100%が基準です。",
+            "回収率は、その条件の出走に100円ずつ買い続けたときの払戻÷賭け金です（払戻が読めない出走は回収率の計算から除く）。色は、勝率・複勝率はその条件の全馬の平均、回収率は100%が基準です。",
         ]
         if dim.unknown_note and unknown:
             notes.append(dim.unknown_note)
