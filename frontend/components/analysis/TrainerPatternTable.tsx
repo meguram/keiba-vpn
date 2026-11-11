@@ -4,7 +4,7 @@ import { Fragment } from "react";
 import { OddsDist } from "@/components/OddsDistPopup";
 import { bracketChipStyle } from "@/lib/bracket";
 import type { AnalysisEntry } from "@/lib/raceAnalysis";
-import { patWord, pct, rowStats, splitPat, type TPFigure, type TPHorse, type TPRow } from "@/lib/trainerPattern";
+import { patHint, patWord, pct, rowStats, splitPat, type TPFigure, type TPHorse, type TPRow } from "@/lib/trainerPattern";
 
 const CSS = `
 .tp-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -69,7 +69,9 @@ export function TrainerPatternTable({ figure, entries }: { figure: TPFigure; ent
           const e = h.key ? byKey.get(h.key) : undefined;
           const lv = h.levels;
           const place = h.pat ? splitPat(h.pat).place : null;
-          const pat = h.pat ? patWord(splitPat(h.pat).pat) : null;
+          const code = h.pat ? splitPat(h.pat).pat : null;
+          const pat = code ? patWord(code) : null;
+          const hint = patHint(code) || undefined;
           const rows: { cls?: string; label: string; r: TPRow | null; title: string; miss: string }[] = lv ? [
             { label: "調教師全体", r: lv.trainer, title: `${h.trainer_name ?? ""} 全体`, miss: "" },
             { label: place ? `同じ場所（${place}）` : "同じ場所", r: lv.place, title: `${h.trainer_name ?? ""} ${place ?? ""}`, miss: h.pat ? "この場所の出走なし" : "調教の記録なし" },
@@ -82,7 +84,7 @@ export function TrainerPatternTable({ figure, entries }: { figure: TPFigure; ent
                   <td className="hn">
                     <span style={{ ...bracketChipStyle(e?.bracket_number, 22), marginRight: 6 }}>{h.horse_number ?? "–"}</span>
                     <b style={{ display: "inline" }}>{h.horse_name}</b>
-                    <small>{h.trainer_name ?? ""}{pat ? ` ／ ${place}・${pat}` : ""}</small>
+                    <small title={hint}>{h.trainer_name ?? ""}{pat ? ` ／ ${place}・${pat}` : ""}</small>
                   </td>
                   <td className="na" colSpan={9}>{reason(h)}</td>
                 </tr>
@@ -94,10 +96,10 @@ export function TrainerPatternTable({ figure, entries }: { figure: TPFigure; ent
                         <span style={{ ...bracketChipStyle(e?.bracket_number, 22), marginRight: 6 }}>{h.horse_number ?? "–"}</span>
                         <b style={{ display: "inline" }}>{h.horse_name}</b>
                         <small>{h.trainer_name ?? ""}</small>
-                        <small>{pat ? `${place}・${pat}` : "調教の記録なし"}</small>
+                        <small title={hint}>{pat ? `${place}・${pat}` : "調教の記録なし"}</small>
                       </td>
                     )}
-                    <td className="lv">{x.label}</td>
+                    <td className="lv" title={x.cls ? hint : undefined}>{x.label}</td>
                     {x.r
                       ? <Cells r={x.r} edges={edges} maxOdds={maxOdds} title={x.title} />
                       : <td className="na" colSpan={8}>{x.miss}</td>}
@@ -109,7 +111,7 @@ export function TrainerPatternTable({ figure, entries }: { figure: TPFigure; ent
         })}
       </table>
       <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--text-dim)" }}>
-        出走が {THIN} 走に満たない段は参考程度です。表の集計は {figure.y0}〜{figure.y1} 年（単勝 {figure.max_odds} 倍以上は除く）。
+        パターン名にカーソルを合わせる（タップ）と定義が出ます。出走が {THIN} 走に満たない段は参考程度です。表の集計は {figure.y0}〜{figure.y1} 年（単勝 {figure.max_odds} 倍以上は除く）。
       </p>
     </div>
   );
