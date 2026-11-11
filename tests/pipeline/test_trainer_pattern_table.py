@@ -75,3 +75,32 @@ def test_summary_trainer_name_is_the_latest_one():
     d = _frame()
     d.loc[d["race_id"] == "r1", "trainer_name"] = "旧名"
     assert T.summary(d, 2021, 2021).set_index("調教師ID").loc["t1", "調教師"] == "調教師1"
+
+
+def test_html_block_groups_trainer_place_pattern_with_totals():
+    d = _frame()
+    z = d[d["race_id"] == "r2"].copy()   # t1 の同じ場所の別パターン
+    z["race_id"], z["horse_id"], z["pat"], z["race_date"] = "r10", "hq", "栗東坂路|B1", "2021-01-20"
+    S = T.summary(pd.concat([d, z], ignore_index=True), 2021, 2021)
+    h = T.html_block(S)
+    assert h.startswith(T.START) and h.endswith(T.END) and "|" not in h.split("<table")[1].split("</table>")[0]
+    assert h.count("<tbody") == 2 and h.count('<tr class="p') == 2 and h.count('<tr class="q') == 3   # t1(栗東坂路:A2,B1) と t2(美浦坂路:X)
+    t1 = h.split("<tbody")[1] if "t1" in h.split("<tbody")[1].split(">")[0] else h.split("<tbody")[2]
+    assert '<td class=id>t1</td><td class=l>調教師1</td><td class=num data-v="6.000000">6</td>' in t1   # 5 + 1 頭の合計
+    assert f'data-v="{7.0 / 6:.6f}"' in t1 and f"<td class=num>{7.0 / 6:.3f}</td>" in t1   # 単勝回収率 (4+3)/6（調教師の行と栗東坂路の行の両方）
+    assert t1.count(f"{(1.5 + 1.2 + 1.1 + 1.3 + 1.2) / 6:.3f}") >= 2   # 複勝回収率
+    assert "<td class=l>A2</td>" in t1 and "<td class=l>B1</td>" in t1 and "<td class=l>栗東坂路</td>" in t1
+
+
+def test_inject_replaces_between_markers(tmp_path):
+    f = tmp_path / "c.html"
+    f.write_text(f"<h3>x</h3>{T.START}古い{T.END}<p>後</p>", encoding="utf-8")
+    T.inject(f, f"{T.START}新{T.END}")
+    assert f.read_text(encoding="utf-8") == f"<h3>x</h3>{T.START}新{T.END}<p>後</p>"
+
+
+def test_html_block_escapes_names():
+    d = _frame()
+    d["trainer_name"] = 'a<b>"&'
+    h = T.html_block(T.summary(d, 2021, 2021))
+    assert "<b>" not in h and 'a&lt;b&gt;&quot;&amp;' in h
