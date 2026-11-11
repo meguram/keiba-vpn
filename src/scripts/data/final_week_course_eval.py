@@ -165,6 +165,60 @@ def direction_b_by_course(c: pd.DataFrame, y0: int, y1: int, nmin_t3: int = 30) 
     return pd.concat(out, ignore_index=True)
 
 
+def share_table(c: pd.DataFrame, y0: int, y1: int) -> pd.DataFrame:
+    """(コース帯, パターン) ごとの、3 着以内の構成比 ÷ 全出走の構成比（比）。馬単位。
+    ratio_overall = 同じパターンのコースを分けない比。dev = log(比 / ratio_overall) = そのコースだけの上乗せ。
+    dev_z = (3 着以内の頭数 − 全体の比で期待される頭数) / sqrt(期待数)（ポアソン近似。順位づけの目安）。"""
+    sub = c[c["year"].between(y0, y1) & c["pat_only"].notna()]
+    g = sub.groupby(["course", "pat_only"]).agg(n=("t3", "size"), n3=("t3", "sum"))
+    tot = g.groupby(level=0).sum()
+    g["p_all"] = g["n"] / g.index.get_level_values(0).map(tot["n"]).to_numpy()
+    g["p_t3"] = g["n3"] / g.index.get_level_values(0).map(tot["n3"]).to_numpy()
+    g["ratio"] = g["p_t3"] / g["p_all"]
+    o = sub.groupby("pat_only").agg(n=("t3", "size"), n3=("t3", "sum"))
+    ro = (o["n3"] / o["n3"].sum()) / (o["n"] / o["n"].sum())
+    g["ratio_overall"] = g.index.get_level_values(1).map(ro).to_numpy()
+    raw = g["p_all"] * g["ratio_overall"]
+    g["exp3"] = g.index.get_level_values(0).map(tot["n3"]).to_numpy() * raw / raw.groupby(level=0).transform("sum")   # コース内で合計が 3 着以内の頭数に一致するよう揃える
+    g["dev_z"] = (g["n3"] - g["exp3"]) / np.sqrt(g["exp3"].clip(lower=1e-9))
+    g["dev"] = np.log(g["ratio"].where(g["ratio"] > 0) / g["ratio_overall"])
+    return g
+
+
+def share_persistence(c: pd.DataFrame, sel: tuple[int, int], test: tuple[int, int], nmin: int) -> pd.DataFrame:
+    """向き B の『コースごとのパターン構成』が、前の期間から後の期間へ続くか。重みは 2 期間の 3 着以内頭数の小さいほう。セルの足切りは出走頭数（結果では選ばない）。
+    全体の比の相関はパターン間の差（A2 が多い等）を含む。コース固有の差の相関・共分散が、コース特有の傾向が続くかの指標。"""
+    E, L = share_table(c, *sel), share_table(c, *test)
+    m = E.join(L, lsuffix="_E", rsuffix="_L", how="inner")
+    m = m[(m["n_E"] >= nmin) & (m["n_L"] >= nmin)].copy()
+    m = m[np.isfinite(m["dev_E"]) & np.isfinite(m["dev_L"])]
+    w = np.minimum(m["n3_E"], m["n3_L"]).to_numpy().astype(float)
+    le, ll = np.log(m["ratio_E"]).to_numpy(), np.log(m["ratio_L"]).to_numpy()
+    de, dl = m["dev_E"].to_numpy(), m["dev_L"].to_numpy()
+    cov = float(np.average((de - np.average(de, weights=w)) * (dl - np.average(dl, weights=w)), weights=w))
+    rows = [{"見方": "比（log）の相関 ＝ パターン間の差を含む", "セル数": int(len(m)), "値": round(wcorr(le, ll, w), 3)},
+            {"見方": "コース固有の差（log 比 − パターン全体）の相関", "セル数": int(len(m)), "値": round(wcorr(de, dl, w), 3)},
+            {"見方": "コース固有の差の共分散（≒ τ²）", "セル数": int(len(m)), "値": round(cov, 4)}]
+    order = m["dev_z_E"].rank(pct=True)
+    for lab, pick in (("前の期間でコース固有の差が大きい上位20%", order >= 0.8), ("同・下位20%", order <= 0.2)):
+        x, ww = m[pick], w[pick.to_numpy()]
+        rows.append({"見方": f"{lab}: 差（前 → 後）", "セル数": int(len(x)),
+                     "値": f"{np.average(x['dev_E'], weights=ww):+.3f} → {np.average(x['dev_L'], weights=ww):+.3f}"})
+    return pd.DataFrame(rows)
+
+
+def persistent_cells(c: pd.DataFrame, sel: tuple[int, int], test: tuple[int, int], nmin: int, top: int = 15) -> pd.DataFrame:
+    """前後どちらの期間でも同じ向きにコース固有の差が出たセルを、小さいほうの |dev_z| の順に。多数のセルから拾うので、偶然も混ざる（記述のみ）。"""
+    E, L = share_table(c, *sel), share_table(c, *test)
+    m = E.join(L, lsuffix="_E", rsuffix="_L", how="inner")
+    m = m[(m["n_E"] >= nmin) & (m["n_L"] >= nmin)].copy()
+    m = m[np.sign(m["dev_z_E"]) == np.sign(m["dev_z_L"])]
+    m["min_abs_z"] = np.minimum(m["dev_z_E"].abs(), m["dev_z_L"].abs())
+    m = m.sort_values("min_abs_z", ascending=False).head(top)
+    out = m[["n3_E", "n3_L", "ratio_overall_E", "ratio_E", "ratio_L", "dev_z_E", "dev_z_L"]].rename_axis(["course", "pat"]).reset_index()
+    return out.rename(columns={"n3_E": "3着以内(前)", "n3_L": "3着以内(後)", "ratio_overall_E": "全体の比", "ratio_E": "このコースの比(前)", "ratio_L": "このコースの比(後)", "dev_z_E": "差のz(前)", "dev_z_L": "差のz(後)"})
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="/home/jovyan/work/retrain_out/base_2016/article_check/final_week/course_eval")
@@ -225,6 +279,18 @@ def main() -> None:
         print(f"### {cb}\n")
         print(md(P.fmt(pd.concat([g.head(3), g.tail(3)])[s].drop_duplicates(), pct=("全出走の構成比", "3着以内の構成比"), nd=2)))
         print()
+
+    print("\n## 5. 向き B の傾向は、前後の期間で同じコースに続くか（馬単位。出走 100 頭以上のセル。結果で絞らない）\n")
+    for lab, sel, test in SPLITS:
+        print(f"### {lab}\n")
+        sp = share_persistence(c, sel, test, 100)
+        sp.to_csv(out / f"B_persistence_{sel[0]}_{sel[1]}_{test[0]}_{test[1]}.csv", index=False, encoding="utf-8-sig")
+        print(md(sp))
+        print()
+    print("### 前後どちらの期間でも同じ向きにコース固有の差が出たセル（2020〜22 → 2023〜25。記述のみ。多数から拾うので偶然も混ざる）\n")
+    pc = persistent_cells(c, (2020, 2022), (2023, 2025), 100)
+    pc.to_csv(out / "B_persistent_cells.csv", index=False, encoding="utf-8-sig")
+    print(md(P.fmt(pc, nd=2)))
 
 
 if __name__ == "__main__":

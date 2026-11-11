@@ -112,3 +112,33 @@ def test_predictive_and_reproduce_have_values():
     assert set(r["選び方"]) == {"セルの z", "パターン全体の z"} and set(r["前の期間での位置"]) == {"上位20%", "下位20%"}
     top, bot = r[(r["指標"] == "複勝率") & (r["選び方"] == "セルの z")].set_index("前の期間での位置").loc[["上位20%", "下位20%"], "後の期間のlift"]
     assert top > bot
+
+
+def test_share_table_ratio_and_overall():
+    c = C.with_course(_frame())
+    g = C.share_table(c, 2020, 2025)
+    r = g.loc[("芝1400-1600", "栗東坂路|A2")]
+    assert r["n3"] == 45 * 3 and abs(r["p_all"] - 0.5) < 1e-9 and abs(r["p_t3"] - 1.0) < 1e-9 and abs(r["ratio"] - 2.0) < 1e-9
+    assert abs(r["dev"]) < 1e-9   # 全コースで同じ構造なので上乗せなし
+
+
+def test_share_table_expected_sums_to_actual_per_course():
+    g = C.share_table(C.with_course(_signal_frame(True)), 2020, 2025)
+    s = g.groupby(level=0)[["n3", "exp3"]].sum()
+    assert np.allclose(s["n3"], s["exp3"])
+
+
+def test_share_table_signs_follow_injected_course_effect():
+    g = C.share_table(C.with_course(_signal_frame(True)), 2020, 2023)
+    # 芝1400-1600 だけパターンの強弱が 2.5 倍: 最強の P3 は全体より上、最弱の P0 は全体より下
+    assert g.loc[("芝1400-1600", "栗東坂路|P3"), "dev"] > 0 and g.loc[("芝1400-1600", "栗東坂路|P0"), "dev"] < 0
+    assert g.loc[("芝~1200", "栗東坂路|P3"), "dev"] < g.loc[("芝1400-1600", "栗東坂路|P3"), "dev"]
+
+
+def test_share_persistence_detects_course_specific_share():
+    on = C.share_persistence(C.with_course(_signal_frame(True)), (2020, 2021), (2023, 2023), 100).set_index("見方")["値"]
+    off = C.share_persistence(C.with_course(_signal_frame(False)), (2020, 2021), (2023, 2023), 100).set_index("見方")["値"]
+    k = "コース固有の差の共分散（≒ τ²）"
+    assert on[k] > 0 and on[k] > 3 * abs(off[k])
+    pc = C.persistent_cells(C.with_course(_signal_frame(True)), (2020, 2021), (2023, 2023), 100, top=4)
+    assert pc.iloc[0]["course"] == "芝1400-1600" and len(pc) == 4   # 他コースは相対的に逆向きの差が出るので先頭だけ確認
