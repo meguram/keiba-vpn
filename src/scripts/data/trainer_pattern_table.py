@@ -133,9 +133,9 @@ Z_HI = 2.5   # 勝率・複勝率が全体の水準より、二項分布の標�
 MIN_N = 10   # 出走数がこれ未満の行は、表で薄く表示する（率・回収率が大きく振れるため）
 
 _CSS = """<style>
-#tptw{max-height:720px;overflow:auto;border:1px solid var(--border)} #tpt{margin:0;width:100%} #tpt td{white-space:nowrap} #tpt th{position:sticky;top:0;z-index:1;cursor:pointer;white-space:nowrap}
+#tptw{max-height:720px;overflow:auto;border:1px solid var(--border);width:calc(100vw - 60px);margin-left:calc(50% - 50vw + 30px)} #tpt{margin:0;width:100%;font-size:clamp(10px,.88vw,13px)} #tpt th,#tpt td{padding:3px .45em} #tpt td{white-space:nowrap} #tpt th{position:sticky;top:0;z-index:1;cursor:pointer;line-height:1.3}
 #tpt tbody{border-top:2px solid var(--border)} #tpt tr.t td{background:#1b2a4d;font-weight:bold;cursor:pointer} #tpt tr.p td{background:#172544;cursor:pointer}
-#tpt tr.p td.l{padding-left:26px} #tpt tr.q td.l{padding-left:46px} #tpt td.id{color:var(--muted);font-family:monospace} #tpt tr.sm td{opacity:.5}
+#tpt tr.p td.l{padding-left:1.4em} #tpt tr.q td.l{padding-left:2.6em} #tpt td.id{color:var(--muted);font-family:monospace} #tpt tr.sm td{opacity:.5}
 #tpt tr td.gr{background:hsl(142 55% calc(var(--l)*1%))} #tpt tr td.bl{background:hsl(215 70% calc(var(--l)*1%))} #tpt tr td.lt{color:#06121f} #tpt td.hist{padding:2px 6px} #tpt tr td.dup{color:#fb923c;font-weight:bold} #tpt tr td.hot{font-weight:bold;box-shadow:inset 0 0 0 1px rgba(255,255,255,.6)}
 #tpt tr.ac td.id,#tpt tr.ac td.l{background:#78350f;color:#fde68a} #tpt tr.ac td.id{border-left:5px solid #fbbf24} #tpt tr.ac td.l::before{content:"★ ";color:#fbbf24}
 #tpt tbody.c tr.p,#tpt tbody.c tr.q,#tpt tr.q.hid,#tpt tbody.f{display:none} .tptb button{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 10px;margin-right:6px;cursor:pointer}
