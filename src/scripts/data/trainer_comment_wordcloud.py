@@ -24,6 +24,14 @@ GOOD = (79, 139, 255)
 BAD = (251, 146, 60)
 
 
+CSS = """:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --warn:#fbbf24; }
+* { box-sizing: border-box; } body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 15px; padding: 40px 56px 96px; max-width: 1100px; margin: 0 auto; }
+a { color: var(--accent-2); } h1 { font-size: 26px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; }
+table { border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; background: var(--panel); } th, td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; } th { background: #1b2a4d; }
+td.num { text-align: right; font-family: monospace; } .muted { color: var(--muted); font-size: 13px; } .note { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+.note ul { margin: 6px 0 0; padding-left: 20px; } .cols { display: flex; gap: 28px; flex-wrap: wrap; }"""
+
+
 def _mix(a, b, t):
     return tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
 
@@ -93,62 +101,82 @@ def legend(left: str, right: str, ticks: list[tuple[float, str]]) -> str:
             f'<div class="muted" style="position:relative;height:18px;font-size:11px">{tk}</div></div>')
 
 
+def select(T: pd.DataFrame, n_max: int, q: float, min_n: int, ratio: float = 1.25) -> pd.DataFrame:
+    """図に出す語。単独で意味が取れない語・より長い句に含まれる語は mark_display で除外済み。
+    ここでは (1) 有意（q）な語だけ、(2) 同じ表示の語は件数の多い方、(3) 長い句は、含まれる短い語と lift がほぼ同じ（比が ratio 以内）なら
+    追加の情報がないので落とす、の順で絞る。"""
+    K = T[T["drop"].isna() & (T["n"] >= min_n) & (T["q"] < q)].copy()
+    K = K[(K["label"].str.len() >= 2) | (K["label"] == "芝")]
+    K = K.sort_values("n", ascending=False).drop_duplicates("label")
+    toks = {r.term: r.term.split("+") for r in K.itertuples()}
+    lift = dict(zip(K["term"], K["lift"]))
+
+    def contains(big: list[str], small: list[str]) -> bool:
+        m = len(small)
+        return any(big[i:i + m] == small for i in range(len(big) - m + 1))
+
+    drop = set()
+    for b in K[K["ntok"] >= 2].itertuples():
+        for t, ta in toks.items():
+            if t != b.term and len(ta) < len(toks[b.term]) and contains(toks[b.term], ta) and max(lift[t] / b.lift, b.lift / lift[t]) < ratio:
+                drop.add(b.term)
+                break
+    K = K[~K["term"].isin(drop)]
+    return K.nlargest(n_max, "n")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("csv")
     ap.add_argument("--summary", default=None)
     ap.add_argument("--out", default=str(ROOT / "docs/html/modeling/chapters/trainer_comment_wordcloud.html"))
-    ap.add_argument("--n-uni", type=int, default=110)
-    ap.add_argument("--n-bi", type=int, default=70)
+    ap.add_argument("--n-max", type=int, default=110)
+    ap.add_argument("--q", type=float, default=0.01)
+    ap.add_argument("--min-n", type=int, default=150)
     a = ap.parse_args()
     T = pd.read_csv(a.csv)
     summ = json.loads(Path(a.summary).read_text()) if a.summary else {}
     base = float(summ.get("good_rate", T["good"].sum() / T["n"].sum()))
     n_rows = summ.get("n_rows", 0)
 
-    uni = T[(T.kind == "uni") & (T.n >= 150)].nlargest(a.n_uni, "n").copy()
-    uni["label"] = uni["term"]
-    bi = T[(T.kind == "bi") & (T.n >= 150)].nlargest(a.n_bi, "n").copy()
-    bi["label"] = bi["term"].str.replace("+", "＋", regex=False)
-    li, lb = layout(uni), layout(bi)
-
+    S = select(T, a.n_max, a.q, a.min_n)
+    items = layout(S)
     ticks = [(0.0, "×0.66"), (0.25, "×0.81"), (0.5, "×1.0"), (0.75, "×1.23"), (1.0, "×1.52")]
     leg = legend("凡走寄り（橙）", "好走寄り（青）", ticks)
 
-    def top(df, col, asc, k=8):
-        d = df.sort_values(col, ascending=asc).head(k)
-        return "".join(f"<tr><td>{html.escape(r.term)}</td><td class='num'>{int(r.n):,}</td><td class='num'>{r.good_rate*100:.1f}%</td><td class='num'>{r.lift:.2f}</td><td class='num'>{r.adj_lift:.2f}</td></tr>" for r in d.itertuples())
+    def top(df, asc, k=10):
+        d = df.sort_values("lift", ascending=asc).head(k)
+        return "".join(f"<tr><td>{html.escape(r.label)}</td><td class='num'>{int(r.n):,}</td><td class='num'>{r.good_rate*100:.1f}%</td><td class='num'>{r.lift:.2f}</td><td class='num'>{r.adj_lift:.2f}</td></tr>" for r in d.itertuples())
 
-    big = T[(T.n >= 300)]
-    tbl_head = "<tr><th>語</th><th>登場</th><th>3着以内率</th><th>lift</th><th>人気補正 lift</th></tr>"
+    big = S[S["n"] >= 300]
+    tbl_head = "<tr><th>語・句</th><th>登場</th><th>3着以内率</th><th>lift</th><th>人気補正 lift</th></tr>"
+    css = CSS
     html_out = f"""<!doctype html>
-<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>厩舎コメントのワードクラウド — keiba-vpn</title><style>:root {{ --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --warn:#fbbf24; }}
-* {{ box-sizing: border-box; }} body {{ font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 15px; padding: 40px 56px 96px; max-width: 1100px; margin: 0 auto; }}
-a {{ color: var(--accent-2); }} h1 {{ font-size: 26px; }} h2 {{ font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; }}
-table {{ border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; background: var(--panel); }} th, td {{ border: 1px solid var(--border); padding: 5px 10px; text-align: left; }} th {{ background: #1b2a4d; }}
-td.num {{ text-align: right; font-family: monospace; }} .muted {{ color: var(--muted); font-size: 13px; }} .note {{ background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }}
-.cols {{ display: flex; gap: 28px; flex-wrap: wrap; }}
-</style></head><body>
+<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>厩舎コメントのワードクラウド — keiba-vpn</title><style>{css}</style></head><body>
 <h1>厩舎コメントのワードクラウド</h1>
-<p class="muted">2020〜2025 年の厩舎コメント {n_rows:,} 頭分。語の大きさ = その語が出たコメントの数（平方根で大きさに換算）、色 = その語を含む馬の 3 着以内率が全体（{base*100:.1f}%）の何倍か（lift、対数）。青 = 好走寄り、橙 = 凡走寄り、灰 = 全体並み。語にカーソルを載せると数値が出る。集計の作り方は <code>src/scripts/data/trainer_comment_words.py</code>。</p>
+<p class="muted">2020〜2025 年の厩舎コメント {n_rows:,} 頭分。大きさ = その語・句が出たコメントの数（平方根で大きさに換算）、色 = それを含む馬の 3 着以内率が全体（{base*100:.1f}%）の何倍か（lift、対数）。青 = 好走寄り、橙 = 凡走寄り、灰 = 全体並み。カーソルを載せると数値が出る。集計は <code>src/scripts/data/trainer_comment_words.py</code>。</p>
 {leg}
-<h2>1. 生の lift で色を付けた図（1 語）</h2>
-<p>「楽しみ」「期待」「能力」「昇級」「勝負」などは青（好走寄り）、「叩く」「試す」「慣れ」「非力」「展開」などは橙（凡走寄り）。大きい語ほど件数が多く、色の信頼度も高い。</p>
-{svg(li, "lift", base)}
-<h2>2. 同じ配置で『人気補正の lift』に色を替えた図（1 語）</h2>
-<div class="note">人気補正 lift = 実際の 3 着以内数 ÷ （その馬の単勝人気順位から見込まれる 3 着以内数）。1 図と同じ位置のまま、人気の影響を除くと<b>ほとんどの語が灰色</b>になる。語そのものが人気以上の情報を持つとは言えない（有意な語は 0 個）。ただし人気は発走直前の値でコメントを読んだ後の市場の評価を含むため、この補正はやや厳しめ。</div>
-{svg(li, "adj_lift", base)}
-<h2>3. 隣り合う 2 語の組（生の lift）</h2>
-<p>件数の多い 70 組。「水準＋以上」「自己＋条件」「初戦＋楽しみ」などは青、「もう＋少し」「展開＋向く」「展開＋次第」などは橙。なお「勝負＋期待」「賞金＋加算」のように 2 倍前後の組は件数が少なく、この図には入らない（term_stats.csv を参照）。</p>
-{svg(lb, "lift", base)}
-<h2>4. 件数 300 以上の語の上位・下位</h2>
-<div class="cols"><div><b>好走寄り（生の lift 上位）</b><table>{tbl_head}{top(big, "lift", False)}</table></div>
-<div><b>凡走寄り（生の lift 下位）</b><table>{tbl_head}{top(big, "lift", True)}</table></div></div>
-<p class="muted">同じレースの馬は 3 着以内の数が 3 頭に固定されて互いに独立ではないため、p 値はやや甘め。形態素解析は fugashi + unidic-lite（名詞・動詞・形容詞・形状詞・副詞の見出し語、直後が「ない」「ず」なら『(否)』）。</p>
+<div class="note"><b>語の選び方（意味の分かる形・重複なし）</b>
+<ul>
+<li>形態素解析の見出し語を、同じ文節で隣り合う 1〜3 語の組として数え、<b>元の文の言い回し（助詞つき）で表示</b>する（例: 「脚＋使う」→「脚を使う」）。</li>
+<li>単独では意味が取れない語（「そう」「事」「様」「面」「此の」「使う」「出る」「前走」など約 90 語と、1 文字の語）は、<b>単独の語としては出さない</b>。句の一部としては残す。</li>
+<li>より長い句に 6 割以上含まれる語は、長い句に統合。長い句が、含まれる短い語と lift がほぼ同じ（比 1.25 以内）なら、追加の情報がないので短い語だけを残す。同じ表示の語は件数の多い方。</li>
+<li>全体と有意に差がある語・句（BH 補正 q&lt;{a.q}、件数 {a.min_n} 以上）だけを、件数の多い順に {len(S)} 個出す。差の無い語は載せていない（全語は <code>term_stats.csv</code>）。</li>
+<li>原文のコメントは載せない（出典サイトの利用規約に配慮し、短い語・句の集計値だけを出す）。</li>
+</ul></div>
+<h2>1. 生の lift で色を付けた図</h2>
+{svg(items, "lift", base)}
+<h2>2. 同じ配置で『人気補正の lift』に色を替えた図</h2>
+<div class="note">人気補正 lift = 実際の 3 着以内数 ÷ （その馬の単勝人気順位から見込まれる 3 着以内数）。1 の図と同じ位置のまま、人気の影響を除くと<b>ほとんどが灰色</b>になる。語そのものが人気以上の情報を持つとは言えない（人気補正後に有意な語は 0 個）。ただし人気は発走直前の値でコメントを読んだ後の市場の評価を含むため、この補正はやや厳しめ。</div>
+{svg(items, "adj_lift", base)}
+<h2>3. 件数 300 以上の語・句の上位・下位</h2>
+<div class="cols"><div><b>好走寄り（生の lift 上位）</b><table>{tbl_head}{top(big, False)}</table></div>
+<div><b>凡走寄り（生の lift 下位）</b><table>{tbl_head}{top(big, True)}</table></div></div>
+<p class="muted">同じレースの馬は 3 着以内の数が 3 頭に固定されて互いに独立ではないため、p 値はやや甘め。形態素解析は fugashi + unidic-lite。直後が「ない」「ず」の語は否定形（例: 「目立たない」）で数える。</p>
 </body></html>
 """
     Path(a.out).write_text(html_out, encoding="utf-8")
-    print(f"書き出し: {a.out}  uni {len(li)}/{len(uni)}  bi {len(lb)}/{len(bi)}")
+    print(f"書き出し: {a.out}  選んだ {len(S)} / 配置できた {len(items)}")
 
 
 if __name__ == "__main__":
