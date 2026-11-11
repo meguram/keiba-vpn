@@ -152,6 +152,15 @@ def classify(field_stats: dict[str, PositionStat]) -> dict[str, str]:
     return out
 
 
+def range_cell(stat: PositionStat, runs: list[tuple[int, int]]) -> dict[str, Any] | None:
+    """直近 SHOW 走の位置取り（前から何%）の幅。外れ値の走は除き、新しい走ほど濃く（weight=DECAY^何走前）描く。mean は WINDOW 走の加重平均。"""
+    ex = {i for i, _ in stat.excluded}
+    pts = [(p / x, DECAY ** i) for i, (p, x) in enumerate(runs[:SHOW]) if i not in ex]
+    if not pts or stat.value is None:
+        return None
+    return {"lo": min(r for r, _ in pts), "hi": max(r for r, _ in pts), "mean": stat.value, "pts": [[round(r, 4), round(w, 3)] for r, w in pts]}
+
+
 def _runs_cell(stat: PositionStat, runs: list[tuple[int, int]]) -> list[list[int]]:
     """直近の位置取りを新しい順に [通過順位, 頭数, 外れ値として除いたか(1/0)] で。"""
     ex = {i for i, _ in stat.excluded}
@@ -205,6 +214,7 @@ class PastPositionModule:
             c: dict[str, Any] = {
                 "style": labels[e["key"]],
                 "pos": st.value,
+                "range": range_cell(st, r) if r else None,
                 "n": len(r),
                 "hist": _runs_cell(st, r) if r else None,
                 "band": None, "band_n": None, "band_win": None, "band_top3": None, "band_win_roi": None, "band_place_roi": None,
@@ -216,7 +226,8 @@ class PastPositionModule:
             cells[e["key"]] = c
         columns = [
             Column("style", "脚質", "text", None, "メンバー全体での相対的な位置（ハナ／先行(前)／先行(後ろ)／差し／追込）", palette=PALETTE),
-            Column("pos", "平均位置", "pct", None, "直近の位置取りの加重平均（前から何%。小さいほど前）"),
+            Column("range", f"直近{SHOW}走の位置取りの幅（前から%）", "range", None,
+                   f"直近{SHOW}走の初角位置（通過順位÷頭数。0%=先頭、100%=最後方）の最前〜最後方の幅。点は各走で、新しい走ほど濃く表示。縦線は直近{WINDOW}走を新しい走ほど重くした平均。外れ値の走は除く"),
             Column("n", "走数", "int", None, f"使った直近の走数（最大{WINDOW}）。少ないほど信頼できません"),
             Column("hist", f"直近{SHOW}走の初角通過順位（左が前走 → 右が{SHOW}走前）", "runs", None,
                    f"左端が前走（枠つき）、右へ 2走前・3走前…{SHOW}走前。数字は初角の通過順位、/の後は頭数。色は前（赤）〜後ろ（青）。点線の走は外れ値として平均から除いた走"),
@@ -233,7 +244,7 @@ class PastPositionModule:
             ]
         notes = [
             f"位置取り=初角（最初のコーナー）の通過順位÷頭数。直近{WINDOW}走を、新しい走ほどやや重く（1走前ごとに×{DECAY}）平均しています。"
-            f"表に並べるのは直近{SHOW}走（左が前走）です。",
+            f"表に並べるのは直近{SHOW}走（左が前走）で、位置取りの幅の点は新しい走ほど濃く描きます。",
             f"履歴が{MIN_OUTLIER_RUNS}走以上ある馬は、偶然の出遅れ・一度だけの逃げなどの外れ値（点線の走）を除いて平均しています。",
             "脚質はこのレースのメンバーの中での相対評価です。ハナは原則1頭で、先頭2・3番手との差が誤差の範囲のときだけ最大3頭まで増えます。",
             "走数が少ない馬（初出走は分類なし）は、位置取りが安定していないため参考程度に見てください。",
