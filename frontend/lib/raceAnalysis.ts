@@ -369,6 +369,23 @@ export function effectiveMobileSort(options: { key: string }[], key: string): st
   return options.some((o) => o.key === key) ? key : MOBILE_SORT_NUM;
 }
 
+/** スマホの表の「並べ替え」の状態。key は選んだ値、picked は選択が今の並びを表しているか（見出しを押して並べ替えたら false）、
+ *  run は選択で並べ直した回数（同じ値を選び直したときも並べ直すため） */
+export type MobileSortState = { key: string; picked: boolean; run: number };
+export const MOBILE_SORT_INIT: MobileSortState = { key: MOBILE_SORT_NUM, picked: true, run: 0 };
+
+/** 並べ替えの状態の変化。select = 選択で値を選んだ、header = 見出しを押して並べ替えた（選択は「見出しの順」の表示に戻し、次に同じ値を選んでも並べ直せる） */
+export function mobileSortReducer(s: MobileSortState, a: { type: "select"; key: string } | { type: "header" }): MobileSortState {
+  if (a.type === "header") return s.picked ? { ...s, picked: false } : s;
+  return { key: a.key, picked: true, run: s.run + 1 };
+}
+
+/** 選択に見せる値と、馬名のセルの data-sort に使う値。見出しで並べ替えている間（picked=false）は、選択は「見出しの順」（""）で、
+ *  data-sort は付けない（隠れた基準で並ばないよう、馬名の見出しは馬名で並ぶ） */
+export function mobileSortShown(s: MobileSortState, curSort: string): { select: string; dataKey: string } {
+  return s.picked ? { select: curSort, dataKey: curSort } : { select: "", dataKey: MOBILE_SORT_NUM };
+}
+
 /** スマホの表の馬名のセルに付ける data-sort（TableSorter が読む）。PC の表の列と同じ sortValue を使う。値が無ければ空（並べ替えで最後）。
  *  馬番（並べ替えなし）のときは undefined（data-sort を付けず、馬名の見出しは今までどおり馬名で並ぶ） */
 export function mobileSortValue(e: AnalysisEntry, cells: Record<string, unknown> | undefined, key: string, columns: AnalysisColumn[]): string | undefined {

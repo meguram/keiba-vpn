@@ -221,6 +221,28 @@ test("mobileSortValue: TableSorter と同じ比較で、脚質は定義の順・
   assert.equal(mobileSortValue({ key: "x", horse_number: 1 }, {}, "nope", cols), "");
 });
 
+test("mobileSortReducer: 見出しで並べ替えたあとも、同じ値を選び直せば並べ直す", async () => {
+  const { mobileSortReducer, MOBILE_SORT_INIT } = await import(pathToFileURL(out).href);
+  let s = mobileSortReducer(MOBILE_SORT_INIT, { type: "select", key: "style" });
+  assert.deepEqual(s, { key: "style", picked: true, run: 1 });
+  s = mobileSortReducer(s, { type: "header" });                       // 見出しを押した → 選択は「見出しの順」の表示に
+  assert.deepEqual(s, { key: "style", picked: false, run: 1 });
+  assert.equal(mobileSortReducer(s, { type: "header" }), s);           // 何度押しても同じ（再描画しない）
+  s = mobileSortReducer(s, { type: "select", key: "style" });          // 同じ脚質を選び直す → 並べ直す（run が進む）
+  assert.deepEqual(s, { key: "style", picked: true, run: 2 });
+});
+
+test("mobileSortShown: 見出しの順の間は選択を空にし、data-sort は付けない（隠れた基準で並ばない）", async () => {
+  const { mobileSortShown, mobileSortValue } = await import(pathToFileURL(out).href);
+  const cols = [{ key: "style", label: "脚質", fmt: "text", palette: { "ハナ": "a" } }];
+  assert.deepEqual(mobileSortShown({ key: "style", picked: true, run: 1 }, "style"), { select: "style", dataKey: "style" });
+  const head = mobileSortShown({ key: "style", picked: false, run: 1 }, "style");
+  assert.deepEqual(head, { select: "", dataKey: "_num" });
+  assert.equal(mobileSortValue({ key: "x", horse_number: 1 }, { style: "ハナ" }, head.dataKey, cols), undefined);
+  // 群を切り替えて選択肢に無い値になったら、選択も馬番（effectiveMobileSort の結果）を見せる
+  assert.deepEqual(mobileSortShown({ key: "style", picked: true, run: 1 }, "_num"), { select: "_num", dataKey: "_num" });
+});
+
 test("effectiveMobileSort: 群・モジュールを切り替えて選択肢に無い値は馬番（並べ替えなし）に戻す", async () => {
   const { effectiveMobileSort, mobileSortOptions } = await import(pathToFileURL(out).href);
   const pp = mobileSortOptions([{ key: "style", label: "脚質", fmt: "text", palette: { "ハナ": "a" } }, { key: "range", label: "位置", fmt: "range" }]);
