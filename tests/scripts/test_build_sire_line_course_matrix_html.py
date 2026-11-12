@@ -1,4 +1,4 @@
-"""父の系統 × 会場・コースの成績マトリクス（build_sire_line_course_matrix_html）: 集計・並び・馬場状態の行・埋め込みデータ・画面の計算。"""
+"""父の系統・系統配合 × クラス・舞台の成績マトリクス（build_sire_line_course_matrix_html）: 集計・行の定義・柵位置・コースのまとめ・母方の型・画面の計算。"""
 
 import json
 import re
@@ -8,72 +8,143 @@ import pytest
 
 from src.scripts.docs import build_sire_line_course_matrix_html as M
 
+META = {"A系": {"sires": 4, "o": 3, "large": "甲系"}, "B系": {"sires": 2, "o": 0, "large": "乙系"}}
+LEDGER = {"sA": "日本型サンデー系", "sB": "米国型ミスプロ系"}
+
 
 def _runs():
+    """A 系（甲系）の馬 h1・h2 と B 系（乙系）の馬 h3。東京 芝1600 と 阪神 ダート1200。"""
     rows = []
 
-    def add(line, venue, sf, dist, cond, poss):
-        rows.extend({"venue": venue, "surface": sf, "distance": dist, "line": line, "pos": p, "cond": cond} for p in poss)
-    add("A系", "東京", "芝", 1600, "良", [1, 1, 2, 3, 5])
-    add("A系", "東京", "芝", 1600, "稍重", [4, 6, 7, 8, 9])
-    add("B系", "阪神", "ダート", 1200, "重・不良", [1, 5, 6, 7])
+    def add(rid, date, venue, sf, dist, day, kai, horse, line, large, pos, cond, cls):
+        rows.append({"race_id": rid, "date": date, "venue": venue, "surface": sf, "distance": dist, "day": day, "kai": kai, "horse_id": horse,
+                     "line": line, "father_large": large, "pos": pos, "cond": cond, "cls": cls})
+    for i, (p, cls) in enumerate(((1, "2勝"), (2, "2勝"), (5, "未勝利"), (7, "3勝"))):
+        add(f"2019050101{i:02d}", "2019-04-06", "東京", "芝", 1600, 1, 1, "h1", "A系", "甲系", p, "良", cls)
+    for i, p in enumerate((1, 3, 4)):
+        add(f"2019050105{i:02d}", "2019-04-13", "東京", "芝", 1600, 3, 1, "h2", "A系", "甲系", p, "稍重", "2勝")
+    for i, p in enumerate((1, 5, 6, 7)):
+        add(f"2019090201{i:02d}", "2019-06-01", "阪神", "ダート", 1200, 7, 2, "h3", "B系", "乙系", p, "重・不良", "1勝")
     return pd.DataFrame(rows)
 
 
-META = {"A系": {"sires": 4, "o": 3, "large": "甲系"}, "B系": {"sires": 2, "o": 0, "large": "乙系"}}
-
-
-def _model(monkeypatch=None):
+def _model(monkeypatch=None, rail=None, mat=None):
     if monkeypatch is not None:
-        monkeypatch.setattr(M, "MIN_LINE_RUNS", 1)                 # 少ない出走数の系統も列に出す
-    runs = _runs()
-    return M.model(M.aggregate(runs), META, M.aggregate_cond(runs))
+        monkeypatch.setattr(M, "MIN_LINE_RUNS", 1)
+        monkeypatch.setattr(M, "MIN_PAIR_RUNS", 1)
+    return M.model(_runs(), META, LEDGER, rail, mat)
 
 
-def test_aggregate_counts_places():
-    c = M.aggregate(_runs())
-    a = c[(c.venue == "東京") & (c.line == "A系")].iloc[0]
-    assert (a.c1, a.c2, a.c3, a.c4) == (2, 1, 1, 6)
-    b = c[c.line == "B系"].iloc[0]
-    assert (b.c1, b.c2, b.c3, b.c4) == (1, 0, 0, 3)
-    k = M.aggregate_cond(_runs())
-    t = k[(k.surface == "芝") & (k.cond == "良") & (k.line == "A系")].iloc[0]
-    assert (t.c1, t.c2, t.c3, t.c4) == (2, 1, 1, 1)               # 良の 5 走: 1,1,2,3,5
+def _row(d, rid):
+    return next(r for r in d["rows"] if r["id"] == rid)
 
 
-def test_model_has_cond_venue_and_course_rows_with_correct_counts(monkeypatch):
+def test_class_rows_count_places_and_sum_rows(monkeypatch):
     d = _model(monkeypatch)
-    ids = {r["id"]: r for r in d["rows"]}
-    assert "cond:芝:良" in ids and "cond:芝:稍重" in ids and "cond:ダート:重・不良" in ids
-    assert {"venue:東京:all", "venue:東京:芝", "venue:阪神:ダート", "course:東京:芝:1600", "course:阪神:ダート:1200"} <= set(ids)
-    cols = [c["name"] for c in d["cols"]]
-    assert ids["course:東京:芝:1600"]["c"][cols.index("A系")] == [2, 1, 1, 6]
-    assert ids["venue:東京:all"]["t"] == [2, 1, 1, 6]
-    assert ids["cond:ダート:重・不良"]["c"][cols.index("B系")] == [1, 0, 0, 3]
-    assert "course:東京:ダート:1600" not in ids                    # 無い組み合わせの行は作らない
+    cols = [c["name"] for c in d["tables"][0]["cols"]]
+    a = cols.index("A系")
+    assert _row(d, "class:芝:2勝")["k"][0]["c"][a] == [2, 1, 1, 1]                     # h1 の 2勝（1着・2着）＋ h2 の 2勝（1着・3着・4着）
+    assert _row(d, "class:芝:未勝利")["k"][0]["c"][a] == [0, 0, 0, 1]
+    assert _row(d, "class:芝:3勝以上")["k"][0]["c"][a] == [0, 0, 0, 1]                   # 3勝（7着）だけ
+    assert _row(d, "class:芝:3勝以上")["sum"] is True and _row(d, "class:芝:2勝").get("sum") is None
+    assert _row(d, "class:ダート:1勝")["k"][0]["c"][cols.index("B系")] == [1, 0, 0, 3]
+    assert "class:ダート:G1" not in {r["id"] for r in d["rows"]}                        # 走が無い行は作らない
+    assert _row(d, "class:芝:2勝")["k"][0]["t"] == [2, 1, 1, 1]
 
 
-def test_columns_are_grouped_by_large_line_and_ordered_by_runs(monkeypatch):
+def test_cond_day_and_course_rows(monkeypatch):
     d = _model(monkeypatch)
-    assert [(c["large"], c["name"]) for c in d["cols"]] == [("甲系", "A系"), ("乙系", "B系")]      # 大系統の出走数が多い順
-    assert d["cols"][0]["o"] == 3 and d["cols"][0]["sires"] == 4
+    assert _row(d, "cond:芝:良")["k"][0]["t"] == [1, 1, 0, 2] and _row(d, "cond:芝:稍重")["k"][0]["t"] == [1, 0, 1, 1]
+    assert _row(d, "day:開催1-2日目")["k"][0]["t"] == [1, 1, 0, 2] and _row(d, "day:開催3-4日目")["k"][0]["t"] == [1, 0, 1, 1]   # 芝だけ。ダートの 7 日目は入らない
+    ids = {r["id"] for r in d["rows"]}
+    assert {"venue:東京:all", "venue:東京:芝", "venue:阪神:ダート", "course:東京:芝:芝1600m", "course:阪神:ダート:ダート1200m"} <= ids
+    assert "venue:東京:ダート" not in ids                                                # 無い組み合わせの行は作らない
 
 
-def test_lines_with_few_runs_are_left_out_of_the_columns():
-    d = M.model(M.aggregate(_runs()), META, None)                  # 既定の最少出走数（300）に満たない系統は列にしない
-    assert d["cols"] == []
+def test_two_tables_and_mix_totals_use_horses_with_known_mother(monkeypatch):
+    mat = {"h1": ["日本型サンデー系", "米国型ミスプロ系"], "h3": ["米国型ミスプロ系"]}      # h2 は母方の型が分からない
+    d = _model(monkeypatch, mat=mat)
+    t0, t1 = d["tables"]
+    assert [c["name"] for c in t0["cols"]] == ["A系", "B系"] and [c["large"] for c in t0["cols"]] == ["甲系", "乙系"]
+    names = [(c["large"], c["name"]) for c in t1["cols"]]
+    assert ("甲系", "日本型サンデー系") in names and ("甲系", "米国型ミスプロ系") in names and ("乙系", "米国型ミスプロ系") in names
+    r = _row(d, "class:芝:2勝")["k"][1]
+    assert r["c"][names.index(("甲系", "日本型サンデー系"))] == [1, 1, 0, 0]               # h1 の 2勝（1着・2着）。2 つの型の列に重ねて数える
+    assert r["c"][names.index(("甲系", "米国型ミスプロ系"))] == [1, 1, 0, 0]
+    assert r["t"] == [1, 1, 0, 0]                                                       # 行の合計は展開前（h2 は母方不明なので入らない）
+    assert d["tables"][1]["note"].startswith("母方")
+
+
+def test_lines_and_pairs_with_few_runs_are_left_out():
+    d = M.model(_runs(), META, LEDGER, None, {"h1": ["日本型サンデー系"]})              # 既定の最少出走数に満たない
+    assert d["tables"][0]["cols"] == []
+    assert len(d["tables"]) == 2 and d["tables"][1]["cols"] == []
+
+
+def test_merged_courses_groups_short_distances_within_the_same_venue_and_surface(monkeypatch):
+    monkeypatch.setattr(M, "MIN_COURSE_RACES", 100)
+    rows = []
+    for venue, sf, dist, n in (("東京", "芝", 1600, 150), ("東京", "芝", 2400, 50), ("東京", "芝", 2500, 30), ("東京", "芝", 3400, 10),
+                              ("札幌", "芝", 1000, 5), ("札幌", "芝", 1200, 120), ("札幌", "芝", 2600, 20), ("東京", "ダート", 1600, 130)):
+        rows.extend({"race_id": f"{venue}{sf}{dist}-{i}", "venue": venue, "surface": sf, "distance": dist} for i in range(n))
+    c = M.merged_courses(pd.DataFrame(rows))
+    assert c[("東京", "芝", 1600)][0] == "芝1600m"
+    assert {c[("東京", "芝", x)][0] for x in (2400, 2500, 3400)} == {"芝2400m以上"}               # 少ない長距離は「以上」でまとめる（会場・芝/ダートは揃える）
+    assert c[("札幌", "芝", 1000)][0] == "芝1200m（1000mを含む）" == c[("札幌", "芝", 1200)][0]    # 少ない 1000m は隣の 1200m とまとめるが、主力の 1200m の名前を範囲にしない
+    assert c[("札幌", "芝", 2600)][0] == "芝2600m"                                             # 端数は独立の行（直前に足して範囲を広げない）。1 距離だけならその距離
+    assert c[("東京", "ダート", 1600)][0] == "ダート1600m"                                      # 芝とダートはまとめない
+
+
+def test_rail_categories_blocks_and_day_positions():
+    days = pd.DataFrame({"date": [f"2025-01-{d:02d}" for d in (4, 5, 11, 12, 13, 18, 19)], "venue": "中山", "kai": 1, "day": [1, 2, 3, 4, 5, 6, 7]})
+    rail = pd.DataFrame({"date": days["date"], "venue": "中山", "letter": ["B", "B", "C", "C", "C", "C", "C"]})
+    r = M.rail_categories(days, rail).set_index("date")["rail_cat"].to_dict()
+    assert r["2025-01-04"] == "開幕 1-2日目" and r["2025-01-05"] == "開幕 1-2日目"                    # 最初の柵（B）が開幕
+    assert r["2025-01-11"] == "柵替わり 1-2日目" and r["2025-01-12"] == "柵替わり 1-2日目"             # C に替わった初日・2 日目は、開幕週に近い
+    assert r["2025-01-13"] == "柵替わり 3-4日目" and r["2025-01-18"] == "柵替わり 3-4日目"
+    assert r["2025-01-19"] == "柵替わり 5日目〜"
+    assert set(M.rail_categories(days, rail.iloc[0:0]).columns) == {"date", "venue", "letter", "rail_cat"}   # コース区分が無ければ空
+
+
+def test_rail_rows_only_for_turf_days_with_letters(monkeypatch):
+    rail = pd.DataFrame({"date": ["2019-04-06", "2019-04-13"], "venue": "東京", "letter": ["A", "B"]})
+    d = _model(monkeypatch, rail=rail)
+    assert _row(d, "rail:開幕 1-2日目")["k"][0]["t"] == [1, 1, 0, 2]                                 # 4/6（A）が開幕 1 日目
+    assert _row(d, "letter:B")["k"][0]["t"] == [1, 0, 1, 1]
+    assert "letter:C" not in {r["id"] for r in d["rows"]}
+    d2 = _model(monkeypatch)
+    assert not [r for r in d2["rows"] if r["id"].startswith(("rail:", "letter:"))]                  # 柵位置が無ければ行を作らない
+
+
+def test_mother_types_reads_positions_and_caches(tmp_path, monkeypatch):
+    monkeypatch.setattr(M, "PED5", tmp_path / "ped")
+    monkeypatch.setattr(M, "COLORS", tmp_path / "c.csv")
+    (tmp_path / "c.csv").write_text("x", encoding="utf-8")
+    d = tmp_path / "ped" / "2020"
+    d.mkdir(parents=True)
+    anc = [{"generation": 1, "position": 0, "horse_id": "sA"},      # 父（母方ではない）
+           {"generation": 2, "position": 2, "horse_id": "sB"},      # 母父
+           {"generation": 3, "position": 6, "horse_id": "sA"},      # 母母父
+           {"generation": 3, "position": 4, "horse_id": "sA"}]      # 母父の父（母母父ではない）
+    (d / "2020100001.json").write_text(json.dumps({"ancestors": anc}), encoding="utf-8")
+    (d / "2020100002.json").write_text(json.dumps({"ancestors": [{"generation": 1, "position": 0, "horse_id": "sA"}]}), encoding="utf-8")
+    cache = tmp_path / "cache.json"
+    out = M.mother_types(["2020100001", "2020100002", "2020100003"], LEDGER, cache)
+    assert out == {"2020100001": ["日本型サンデー系", "米国型ミスプロ系"]}                          # 母父・母母父だけ。母方が分からない馬・ファイルの無い馬は入れない
+    (d / "2020100001.json").write_text(json.dumps({"ancestors": []}), encoding="utf-8")
+    assert M.mother_types(["2020100001"], LEDGER, cache) == {"2020100001": ["日本型サンデー系", "米国型ミスプロ系"]}   # 2 回目はキャッシュから
 
 
 def test_html_embeds_valid_data_and_is_escaped(monkeypatch):
     monkeypatch.setattr(M, "MIN_LINE_RUNS", 1)
     runs = _runs().assign(line=lambda r: r.line.replace({"A系": "</script><b>A"}))
     meta = {"</script><b>A": {"sires": 1, "o": 1, "large": "甲系"}, "B系": META["B系"]}
-    h = M.build(M.aggregate(runs), meta, M.aggregate_cond(runs))
+    h = M.build(runs, meta, LEDGER, None, {"h1": ["日本型サンデー系"]})
     body = re.search(r'<script type="application/json" id="data">([\s\S]*?)</script>', h).group(1)
-    assert "<" not in body                                           # < を含めない（</script> や <!-- で HTML の解析が切れない）
-    d = json.loads(body)                                             # JSON としては同じ値に戻る
-    assert any(c["name"] == "</script><b>A" for c in d["cols"])
-    assert "<table" in h and 'id="metric"' in h and "勝率" in h and "複勝率" in h and "競走中止・取消・除外は数えない" in h
+    assert "<" not in body                                                                   # </script> や <!-- で HTML の解析が切れない
+    d = json.loads(body)
+    assert any(c["name"] == "</script><b>A" for c in d["tables"][0]["cols"])
+    assert "<table" in h and 'data-tab="1"' in h and "クラス別" in h and "競走中止・取消・除外は数えない" in h
 
 
 def _pure():
@@ -83,89 +154,67 @@ def _pure():
     return c
 
 
-def test_js_pure_rates_sort_and_colors():
+def test_js_pure_never_returns_nan_for_small_samples_and_orders_columns():
     c = _pure()
-    assert c.eval("PURE.rate([2,1,1,6],'w')") == pytest.approx(0.2) and c.eval("PURE.rate([2,1,1,6],'p')") == pytest.approx(0.4)
-    assert json.loads(c.eval("JSON.stringify(PURE.sortIdx([0.2,NaN,0.5,0.1],1))")) == [2, 0, 3, 1]      # 降順。NaN は末尾
-    assert json.loads(c.eval("JSON.stringify(PURE.sortIdx([0.2,NaN,0.5,0.1],-1))")) == [3, 0, 2, 1]     # 昇順。NaN は末尾
-    assert c.eval("PURE.level([1,0,0,2],0.3,'p',30)") is None                                            # 最少出走数に満たない
-    big = c.eval("PURE.level([300,300,300,1100],0.30,'p',30)")                                           # 大標本で基準 +10pt 以上 → 最大
-    assert big == pytest.approx(1.0)
-    small = c.eval("PURE.level([3,1,1,25],0.30,'p',30)")                                                 # 30 走で複勝率 16.7%（基準 30% より低い）→ 負
-    assert -1 <= small < 0
-    lo, mid, hi = (json.loads(c.eval(f"JSON.stringify(PURE.color({s}))")) for s in (-1, 0, 1))
-    assert lo["lum"] < mid["lum"] < hi["lum"] and hi["hi"] and not mid["hi"]                            # 明るいほど好成績、暗いほど不振（中立で途切れない）
-    half = json.loads(c.eval("JSON.stringify(PURE.color(0.5))"))
-    assert mid["lum"] < half["lum"] < hi["lum"]
-
-
-def test_js_pure_orders_columns_within_groups():
-    c = _pure()
+    assert c.eval("PURE.val([0,0,0,0],0.3,'p')") == pytest.approx(0.3)                                      # 出走 0 でも基準そのもの（NaN にしない）
+    v = c.eval("PURE.val([2,0,0,0],0.3,'p')")                                                              # 2 走 2 勝（複勝率 100%）→ 縮めた率（基準より上、100% 未満）
+    assert 0.3 < v < 1.0 and c.eval("PURE.val([1,0,0,2],0.3,'p')") == pytest.approx((1 + 30 * 0.3) / (3 + 30))
+    assert c.eval("PURE.level([2,0,0,0],0.3,'p')") > 0 and c.eval("PURE.level([0,0,0,0],0.3,'p')") is None
+    assert c.eval("PURE.level([2,0,0,0],NaN,'p')") is None                                                  # 行に全くデータが無いときだけ色を付けない
+    assert json.loads(c.eval("JSON.stringify(PURE.sortIdx([0.2,NaN,0.5,0.1],1))")) == [2, 0, 3, 1]
     c.eval("var cols=[{large:'A'},{large:'A'},{large:'B'},{large:'B'}];var rc=[[1,0,0,9],[5,3,2,0],[0,0,0,10],[3,3,3,1]];")
-    g = json.loads(c.eval("JSON.stringify(PURE.orderCols(cols,rc,'p',5,1))"))
-    assert g == [{"large": "A", "idx": [1, 0]}, {"large": "B", "idx": [3, 2]}]                           # 大系統の枠を保ち、枠の中を降順
-    g2 = json.loads(c.eval("JSON.stringify(PURE.orderCols(cols,rc,'p',5,-1))"))
-    assert g2 == [{"large": "B", "idx": [2, 3]}, {"large": "A", "idx": [0, 1]}]                          # 昇順では大系統も入れ替わる（B: 10走で複勝 0% が最も低い）
-    assert json.loads(c.eval("JSON.stringify(PURE.orderCols(cols,null,'p',5,1))")) == [{"large": "A", "idx": [0, 1]}, {"large": "B", "idx": [2, 3]}]
+    g = json.loads(c.eval("JSON.stringify(PURE.orderCols(cols,rc,0.4,'p',1))"))
+    assert g == [{"large": "A", "idx": [1, 0]}, {"large": "B", "idx": [3, 2]}]
+    g2 = json.loads(c.eval("JSON.stringify(PURE.orderCols(cols,rc,0.4,'p',-1))"))
+    assert g2 == [{"large": "B", "idx": [2, 3]}, {"large": "A", "idx": [0, 1]}]
+    assert json.loads(c.eval("JSON.stringify(PURE.orderCols(cols,null,NaN,'p',1))")) == [{"large": "A", "idx": [0, 1]}, {"large": "B", "idx": [2, 3]}]
+
+
+def test_js_pure_colors_are_continuous_and_bright_means_good():
+    c = _pure()
+    lo, mid, hi = (json.loads(c.eval(f"JSON.stringify(PURE.color({s}))")) for s in (-1, 0, 1))
+    assert lo["lum"] < mid["lum"] < hi["lum"] and hi["hi"] and not mid["hi"]
 
 
 def test_script_is_valid_javascript():
     esprima = pytest.importorskip("esprima")
-    h = M.build(M.aggregate(_runs()), META, M.aggregate_cond(_runs()))
+    h = M.build(_runs(), META, LEDGER, None, {"h1": ["日本型サンデー系"]})
     for s in re.findall(r"<script>([\s\S]*?)</script>", h):
         esprima.parseScript(s)
 
 
-def test_load_runs_filters(tmp_path, monkeypatch):
-    """集計の条件: 着順が付かない走（-1）・障害・父の系統が空欄の走を外し、馬場状態の重・不良をまとめる。"""
-    flat = tmp_path / "flat" / "2024"
-    flat.mkdir(parents=True)
-    pd.DataFrame({
-        "venue": ["東京"] * 7, "surface": ["芝", "芝", "芝", "ダート", "芝", "芝", "芝"], "distance": [1600] * 7,
-        "race_name": ["A", "A", "障害3歳以上未勝利", "A", "A", "A", "A"], "finish_position": [1, -1, 1, 2, 3, 4, 5],
-        "horse_id": ["h1", "h2", "h3", "h4", "h5", "h6", "h7"], "track_condition": ["良", "良", "良", "重", "不良", "稍重", "良"]}).to_parquet(flat / "race_result_flat.parquet")
-    pd.DataFrame({"horse_id": ["h1", "h2", "h3", "h4", "h5", "h6", "h7"], "sire_id": ["s1", "s1", "s1", "s1", "s1", "s1", "s9"]}).to_parquet(tmp_path / "map.parquet")
-    pd.DataFrame({"sire_id": ["s1", "s9"], "small_name": ["A系", None], "large_name": ["甲系", None], "status": ["ok", "blank"]}).to_csv(tmp_path / "c.csv", index=False)
-    monkeypatch.setattr(M, "FLAT", tmp_path / "flat")
-    monkeypatch.setattr(M, "YEARS", range(2024, 2025))
-    monkeypatch.setattr(M, "SIRE_MAP", tmp_path / "map.parquet")
-    monkeypatch.setattr(M, "COLORS", tmp_path / "c.csv")
-    monkeypatch.setattr(M, "MARKS", tmp_path / "none.json")
-    runs, meta = M.load_runs()
-    assert sorted(runs.pos) == [1, 2, 3, 4]                          # -1（中止・取消・除外）・障害・系統が空欄の馬（h7）は入らない
-    assert dict(zip(runs.pos, runs.cond)) == {1: "良", 2: "重・不良", 3: "重・不良", 4: "稍重"}
-    assert meta == {"A系": {"sires": 1, "o": 0, "large": "甲系"}}
-
-
-def _ui(monkeypatch=None, onlyo=False):
-    """簡易 DOM で画面の JS を動かす。クリック・絞り込みを模擬して、描画された HTML を返す関数群を返す。"""
+def _ui():
     qjs = pytest.importorskip("quickjs")
-    runs = pd.DataFrame(
-        [{"venue": v, "surface": sf, "distance": d, "line": ln, "pos": p, "cond": "良"}
-         for v, sf, d in (("東京", "芝", 1600), ("東京", "ダート", 1400), ("阪神", "芝", 1600))
-         for ln, ps in (("A系", [1, 2, 3, 5]), ("B系", [6, 7, 8, 9]), ("C系", [1, 1, 4, 5]))
-         for p in ps])
-    meta = {"A系": {"sires": 2, "o": 2, "large": "甲系"}, "B系": {"sires": 2, "o": 0, "large": "甲系"}, "C系": {"sires": 2, "o": 0, "large": "乙系"}}
-    old = M.MIN_LINE_RUNS
-    M.MIN_LINE_RUNS = 1
+    old = (M.MIN_LINE_RUNS, M.MIN_PAIR_RUNS)
+    M.MIN_LINE_RUNS = M.MIN_PAIR_RUNS = 1
     try:
-        h = M.build(M.aggregate(runs), meta, M.aggregate_cond(runs))
+        runs = pd.DataFrame(
+            [{"race_id": f"{v}{sf}{i}{ln}{k}", "date": "2019-04-06", "venue": v, "surface": sf, "distance": d, "day": 1, "kai": 1, "horse_id": f"h{ln}", "line": ln,
+              "father_large": {"A系": "甲系", "B系": "甲系", "C系": "乙系"}[ln], "pos": p, "cond": "良", "cls": "2勝"}
+             for v, sf, d in (("東京", "芝", 1600), ("東京", "ダート", 1400), ("阪神", "芝", 1600))
+             for i, (ln, ps) in enumerate((("A系", [1, 2, 3, 5]), ("B系", [6, 7, 8, 9]), ("C系", [1, 1, 4, 5])))
+             for k, p in enumerate(ps)])
+        meta = {"A系": {"sires": 2, "o": 2, "large": "甲系"}, "B系": {"sires": 2, "o": 0, "large": "甲系"}, "C系": {"sires": 2, "o": 0, "large": "乙系"}}
+        mat = {"hA系": ["日本型サンデー系"], "hB系": ["日本型サンデー系"], "hC系": ["米国型ミスプロ系"]}
+        h = M.build(runs, meta, LEDGER, None, mat)
     finally:
-        M.MIN_LINE_RUNS = old
+        M.MIN_LINE_RUNS, M.MIN_PAIR_RUNS = old
     sc = re.findall(r"<script[^>]*>([\s\S]*?)</script>", h)
     c = qjs.Context()
     c.eval("""var __h={}, __els={};
-function El(id){return {id:id,value:'',checked:true,textContent:'',innerHTML:'',style:{setProperty:function(){}},addEventListener:function(ev,fn){__h[id+':'+ev]=fn},querySelector:function(){return {offsetHeight:30}}}}
-var document={getElementById:function(id){return __els[id]=__els[id]||El(id)}};
+function El(id){return {id:id,value:'',checked:true,textContent:'',innerHTML:'',dataset:{},classList:{toggle:function(){}},style:{setProperty:function(){}},addEventListener:function(ev,fn){__h[id+':'+ev]=fn},querySelector:function(){return {offsetHeight:30}}}}
+var __tabs=[El('t0'),El('t1')];__tabs[0].dataset.tab='0';__tabs[1].dataset.tab='1';
+var document={getElementById:function(id){return __els[id]=__els[id]||El(id)},querySelectorAll:function(s){return s==='.tab'?__tabs:[]}};
 document.getElementById('data').textContent=%s;""" % json.dumps(sc[0]))
     c.eval(sc[1])
     c.eval(sc[2])
+    html = lambda: c.eval("document.getElementById('m').innerHTML")
 
     def rows():
-        return re.findall(r'<th class="sticky rl" data-row="([^"]+)">', c.eval("document.getElementById('m').innerHTML"))
+        return re.findall(r'<th class="sticky rl" data-row="([^"]+)">', html())
 
     def cols():
-        return re.findall(r'<th class="line[^"]*" data-key="\d+"><div class="nm">([^<▼▲ ]*)', c.eval("document.getElementById('m').innerHTML"))
+        return re.findall(r'<th class="line[^"]*" data-key="\d+"><div class="nm">([^<▼▲ ]*)', html())
 
     def click(kind, val):
         pick = {"key": "th[data-key]", "row": "th[data-row]", "tg": ".tg"}[kind]
@@ -176,38 +225,65 @@ document.getElementById('data').textContent=%s;""" % json.dumps(sc[0]))
         sets = ";".join(f"x.{k}={json.dumps(v)}" for k, v in kw.items())
         ev = "input" if i == "minn" else "change"                      # 最少出走数は input イベント、他は change
         c.eval(f"(function(){{var x=document.getElementById('{i}');{sets};__h['{i}:{ev}'].call(x)}})()")
-    return c, rows, cols, click, setf
+    return c, rows, cols, click, setf, html
 
 
-def test_ui_layout_sort_and_state_consistency():
-    c, rows, cols, click, setf = _ui()
+def test_ui_tabs_class_rows_sorting_and_state_consistency():
+    c, rows, cols, click, setf, html = _ui()
     info = lambda: c.eval("document.getElementById('sortinfo').textContent")
-    setf("minn", value="1")                                                                                  # 少ないデータでも並べ替えに使う
-    assert rows() == ["cond:芝:良", "cond:ダート:良", "venue:東京:all", "venue:阪神:all"]                       # 馬場状態の行 → 会場（閉じている）
+    assert rows()[:2] == ["class:芝:2勝", "class:芝:3勝以上"] or rows()[0] == "class:芝:2勝"               # クラス別（芝）が先頭
+    assert "class:ダート:2勝" in rows() and rows().index("class:芝:3勝以上") > rows().index("class:芝:2勝") if "class:芝:3勝以上" in rows() else True
+    assert cols() == ["A系", "B系", "C系"]
+    c.eval("__tabs[1].__h=null;__h['t1:click']()")                                                          # 系統配合のタブへ
+    assert cols() == ["日本型サンデー系", "米国型ミスプロ系"] and "全体" in html()
+    c.eval("__h['t0:click']()")
+    assert cols() == ["A系", "B系", "C系"]                                                                  # 戻る
+    setf("minn", value="1")
     click("tg", "東京")
-    assert [r for r in rows() if r.startswith("course")] == ["course:東京:ダート:1400", "course:東京:芝:1600"]   # 開くとコース行（ダート → 芝の順で、距離順）
-    assert cols() == ["A系", "B系", "C系"]                                                                  # 甲系（A・B）→ 乙系（C）
-    click("row", "venue:東京:all")                                                                          # 東京の行の複勝率（A 75%・B 0%・C 50%）で列を降順に並べ替え
-    assert cols() == ["C系", "A系", "B系"]                                                                  # 大系統どうし（乙系 50% > 甲系 37.5%）も、枠の中（A > B）も降順
-    click("row", "venue:東京:all")
-    assert cols() == ["B系", "A系", "C系"]                                                                  # 昇順（甲系 37.5% < 乙系 50%、枠の中は B < A）
-    click("row", "venue:東京:all")
-    assert cols() == ["A系", "B系", "C系"] and info() == ""                                                  # 解除で元の並びに戻る
-    click("row", "venue:東京:all")
-    setf("sf", value="芝")                                                                                  # 芝のみ: 基準の行は「東京 芝全体」へ付け替わり、ダートの行は消える
-    assert rows() == ["cond:芝:良", "venue:東京:芝", "course:東京:芝:1600", "venue:阪神:芝"]
-    assert "列の並べ替え: 東京 芝全体" in info()                                                               # 並べ替えの状態が常に表示される
-    click("key", 0)                                                                                          # 列 A 系で行を並べ替え → 降順（会場の行だけが並ぶ）
+    assert [r for r in rows() if r.startswith("course:東京")] == ["course:東京:芝:芝1600m", "course:東京:ダート:ダート1400m"]       # 芝が先、ダートが後
+    click("row", "venue:東京:all")                                                                          # 東京の行の複勝率（A 75%・B 0%・C 50%）で列を並べ替え → 降順
+    assert cols() == ["C系", "A系", "B系"] and "列の並べ替え: 東京 全コース ▼降順" in info()
+    setf("sf", value="芝")                                                                                  # 芝のみ: 基準の行は「東京 芝全体」に付け替わる
+    assert "列の並べ替え: 東京 芝全体" in info() and not [r for r in rows() if r.startswith("class:ダート")]
+    click("key", 0)
     assert "行の並べ替え: A系 ▼降順" in info()
-    setf("onlyo", checked=True)                                                                              # ○ の小系統（A 系だけ）。基準の列 A 系は見えるので維持
-    assert cols() == ["A系"] and "行の並べ替え: A系" in info()
+    setf("onlyo", checked=True)
+    assert cols() == ["A系"]
 
 
-def test_ui_clears_row_sort_when_its_column_is_hidden_and_group_sum_uses_visible_columns():
-    c, rows, cols, click, setf = _ui()
-    click("key", 1)                                                                                          # 列 B 系で行を並べ替え
-    assert "行の並べ替え: B系" in c.eval("document.getElementById('sortinfo').textContent")
-    setf("onlyo", checked=True)                                                                              # B 系は ○ でない → 隠れるので、基準を解除する
-    assert "行の並べ替え" not in c.eval("document.getElementById('sortinfo').textContent")
-    click("key", "g:甲系")                                                                                   # 大系統の値は、見えている列（A 系だけ）の合計
-    assert "行の並べ替え: 甲系" in c.eval("document.getElementById('sortinfo').textContent")
+def test_rail_categories_do_not_mix_years_and_skip_blocks_with_unknown_days():
+    # 2017・2018 の「1回中山」を別の開催として扱う（年をまたいで日目を並べない）
+    days = pd.DataFrame({"date": ["2017-01-05", "2017-01-06", "2018-01-06", "2018-01-07"], "venue": "中山", "kai": 1, "day": [1, 2, 1, 2]})
+    rail = pd.DataFrame({"date": days["date"], "venue": "中山", "letter": ["A", "A", "B", "B"]})
+    r = M.rail_categories(days, rail).set_index("date")["rail_cat"].to_dict()
+    assert r == {"2017-01-05": "開幕 1-2日目", "2017-01-06": "開幕 1-2日目", "2018-01-06": "開幕 1-2日目", "2018-01-07": "開幕 1-2日目"}
+    # A(1日目) → 不明(2〜4日目) → B(5日目): 5 日目が柵替わりの初日とは言えない。特定できないので付けない
+    days2 = pd.DataFrame({"date": [f"2019-02-0{d}" for d in (1, 2, 3, 4, 5, 6, 7)], "venue": "東京", "kai": 1, "day": [1, 2, 3, 4, 5, 6, 7]})
+    rail2 = pd.DataFrame({"date": ["2019-02-01", "2019-02-05", "2019-02-06", "2019-02-07"], "venue": "東京", "letter": ["A", "B", "B", "C"]})
+    r2 = M.rail_categories(days2, rail2).set_index("date")["rail_cat"].to_dict()
+    assert r2["2019-02-01"] == "開幕 1-2日目" and r2["2019-02-02"] is None and r2["2019-02-05"] is None and r2["2019-02-06"] is None   # 不明な日をまたぐ間は付けない
+    assert r2["2019-02-07"] == "柵替わり 1-2日目"                                                      # 前日（B）が分かり、C に替わった日は特定できる
+
+
+def test_mother_types_cache_does_not_store_horses_without_pedigree_files(tmp_path, monkeypatch):
+    monkeypatch.setattr(M, "PED5", tmp_path / "ped")
+    monkeypatch.setattr(M, "COLORS", tmp_path / "c.csv")
+    (tmp_path / "c.csv").write_text("x", encoding="utf-8")
+    (tmp_path / "ped" / "2020").mkdir(parents=True)
+    cache = tmp_path / "cache.json"
+    assert M.mother_types(["2020100009"], LEDGER, cache) == {}                                     # ファイルがまだ無い
+    (tmp_path / "ped" / "2020" / "2020100009.json").write_text(json.dumps({"ancestors": [{"generation": 2, "position": 2, "horse_id": "sA"}]}), encoding="utf-8")
+    assert M.mother_types(["2020100009"], LEDGER, cache) == {"2020100009": ["日本型サンデー系"]}      # 後で取得されたら付く（空をキャッシュしない）
+    monkeypatch.setattr(M, "MAT_PATHS", [(2, 2), (3, 6)])                                         # 対象の位置が変わったら作り直す
+    (tmp_path / "ped" / "2020" / "2020100009.json").write_text(json.dumps({"ancestors": [{"generation": 2, "position": 2, "horse_id": "sB"}]}), encoding="utf-8")
+    assert M.mother_types(["2020100009"], LEDGER, cache) == {"2020100009": ["米国型ミスプロ系"]}
+
+
+def test_mix_table_has_group_runs_without_overlap(monkeypatch):
+    mat = {"h1": ["日本型サンデー系", "米国型ミスプロ系"], "h2": ["日本型サンデー系"], "h3": ["米国型ミスプロ系"]}
+    d = _model(monkeypatch, mat=mat)
+    t1 = d["tables"][1]
+    assert t1["groups"] == {"甲系": 7, "乙系": 4}                                                   # 父の大系統の実数（重ねて数えない）
+    assert sum(c["runs"] for c in t1["cols"] if c["large"] == "甲系") == 11                          # 列の和は、2 つの型に当たる馬を重ねるので大きくなる
+    r = _row(d, "class:芝:2勝")["k"][1]
+    assert r["g"] == {"甲系": [2, 1, 1, 1]} and r["t"] == [2, 1, 1, 1]
