@@ -49,7 +49,7 @@ const CSS = `
 .ra-rg{display:inline-flex;flex-direction:column;align-items:center;gap:2px}
 .ra-rg svg{display:block}
 .ra-rg span{font-size:11px;font-variant-numeric:tabular-nums}
-.ra-tbl th.rg{white-space:normal;min-width:64px;max-width:72px;line-height:1.25}
+.ra-tbl th.rg{white-space:normal;width:72px;min-width:72px;max-width:72px;line-height:1.25}
 .ra-tbl th.rn{white-space:normal;width:182px;min-width:182px;line-height:1.25}
 `;
 

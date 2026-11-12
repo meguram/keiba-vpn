@@ -116,8 +116,8 @@ def levels_for(table: dict, trainer_id: str, pat: str | None) -> dict[str, Any] 
 class TrainerPatternModule:
     id = "trainer_pattern"
     label = "調教師×調教"
-    description = ("各馬のレース週のベスト追い切り（4F）のパターンと、その馬の調教師が同じパターンで出した過去の成績（2020〜2025、単勝50倍未満）。"
-                   "調教師全体・同じ調教場所・同じパターンの 3 段で、着順内訳・勝率・複勝率・回収率と、オッズ帯別の分布（行にカーソルを合わせると詳細）を見られます。")
+    description = ("各馬の最終追い切り（レース週の平日で 4F が最も速い 1 本）のパターンと、その馬の調教師が同じ場所・同じパターンで出した過去の成績"
+                   "（2020〜2025、単勝50倍未満）。着順内訳・勝率・複勝率・回収率と、オッズ帯別の分布（行にカーソルを合わせると詳細）を見られます。")
 
     def applicable(self, ctx: RaceContext) -> bool:
         if not ctx.date or ctx.date < FIRST_DATE or not ctx.entries or load_table() is None:
