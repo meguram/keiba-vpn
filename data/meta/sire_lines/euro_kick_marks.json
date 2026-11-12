@@ -1175,6 +1175,11 @@
    "name": "Protectionist(独)",
    "mark": "o",
    "source": "user"
+  },
+  "2018105027": {
+   "name": "エフフォーリア",
+   "mark": "o",
+   "source": "user"
   }
  },
  "default_rule": "欧州型ノーザンダンサー系は初期値で○。source=default は初期値のまま触れていない○、user は利用者が付けた判定",
