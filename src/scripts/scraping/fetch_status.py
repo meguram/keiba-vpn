@@ -1,8 +1,12 @@
-"""取得の状況と、すべて終わる見込みを 1 画面に出す（読み取りだけ。netkeiba・GCS へはアクセスしない）。
+"""このPCで実行中・待機中のデータ取得と、終わる見込みを 1 画面に出す（読み取りだけ。netkeiba・GCS へはアクセスしない）。
 
-    watch -n 5 python -m src.scripts.scraping.fetch_status
+    watch -n 5 bash scripts/dev/fetch_status.sh
 
-対象:
+対象はこのPCのすべての取得（src/scraper/fetch_registry.py の判定。完了・停止中のものは出さない）:
+  - 取得の入口の python（fetch_registry.FETCH_MODULE_PATTERN）と、それを起動する sh（中身で判定）を ps から拾い、
+    起動元の sh ごとに 1 つのタスクにまとめる。sh だけが生きていて取得の子が無いときは「待機中」。
+  - 心拍ファイル（/tmp/keiba_fetch_tasks/<pid>.json）があれば、GET の件数・待機中かどうか・進捗（progress）を足す。
+以下の既知の取得は、動いているときに詳しい行を足す:
   - 2016〜2019 年の補填（``src.scraper.backfill --phase past``）: 段階ごとの残り件数を逆算し、実績の速度から段階ごとの終了見込みを出す。
     段階は PAST_TIERS の順に全年分を通して進むので、見込みは段階の累計で出す。
   - 調教の補填（``backfill_horse_training_recent``）: 今回の実行の残り頭数と終了見込み。
@@ -17,13 +21,16 @@ NEW_HORSE_DECAY を掛けた概算（年をさかのぼるほど既に集めた�
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
+import time
 import unicodedata
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from src.scraper import backfill_guard as bg
+from src.scraper import fetch_registry as fr
 from src.scraper.backfill import PAST_TIERS, PAST_YEARS
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -212,27 +219,23 @@ def _rjust(text: str, width: int) -> str:
     return " " * max(width - _w(text), 0) + text
 
 
+BAR_WIDTH = 30
+
+
+def _bar(done: float, total: float | None, width: int = BAR_WIDTH, pct: bool = True) -> str:
+    """進捗のバー。書式は既存の監視（scrape_progress_monitor.bar・scripts/dev/watch_backfill.sh）に合わせる: [████░░░░]  41.3%"""
+    if not total or total <= 0:
+        return "[" + "?" * width + "]"
+    p = max(0.0, min(done / total, 1.0))
+    fill = int(p * width)
+    return "[" + "█" * fill + "░" * (width - fill) + "]" + (f" {p * 100:5.1f}%" if pct else "")
+
+
 def _age(now: datetime, ts: datetime | None) -> str:
     if not ts:
         return "—"
     s = int((now - ts).total_seconds())
     return f"{s} 秒前" if s < 120 else f"{s // 60} 分前" if s < 7200 else f"{s // 3600} 時間前"
-
-
-def _procs() -> dict[str, list[str]]:
-    import subprocess
-
-    out = subprocess.run(["ps", "-eo", "pid,etime,args"], capture_output=True, text=True, timeout=5).stdout.splitlines()[1:]
-    found: dict[str, list[str]] = {"past": [], "training": [], "training_past": [], "other": []}
-    for line in out:
-        pid, etime, args = (line.strip().split(None, 2) + ["", ""])[:3]
-        if "fetch_status" in args or "grep" in args or "--report" in args or "python" not in args:
-            continue
-        key = "past" if "--phase past" in args else "training" if "backfill_horse_training_recent" in args else \
-            "training_past" if "backfill_horse_training_past" in args else "other" if re.search(bg.OTHER_FETCH_PATTERN, args) else None
-        if key:
-            found[key].append(f"PID {pid} 経過 {etime}  {args.split(' -m ', 1)[-1][:90]}")
-    return found
 
 
 PART_LABEL = (("profile", "馬のプロフィール"), ("result", "馬の戦績"), ("ped", "血統（本体・5世代表）"),
@@ -250,40 +253,168 @@ def _horse_parts_lines(row: dict, anchors_f: dict | None) -> list[str]:
     return lines
 
 
-def render(now: datetime | None = None) -> str:
-    now = now or datetime.now(JST).replace(tzinfo=None)
+
+
+# ---------------------------------------------------------------------------
+# このPCで動いている取得（実行中・待機中）を集める。完了・停止中のものは出さない
+# ---------------------------------------------------------------------------
+
+STALE_SEC = 600                      # 実行中なのに GET がこの秒数ないときは「止まっている?」を添える
+
+TASK_LABEL = {
+    "src.scraper.backfill": "過去分の補填（backfill）",
+    "src.scripts.scraping.backfill_horse_training_recent": "調教の補填",
+    "src.scripts.scraping.backfill_horse_training_past": "調教の過去分の取り直し（2016〜2019 年の馬・全ページ）",
+    "src.scripts.scraping.backfill_horse_race_remarks": "馬の備考の補填",
+    "src.scraper.auto_scrape": "定期取得（auto_scrape）",
+    "src.scraper.jma_weather": "気象庁の天気",
+    "src.scraper.course_position": "コースの位置取り",
+    "src.scripts.scraping.fetch_sire_lines": "父系の系統",
+    "src.research.pedigree.sporthorse_births": "海外の生年（sporthorse）",
+    "src.monitor.page_quality_check": "ページの品質確認",
+    "src.ops.fetch_agent": "取得エージェント",
+    "src.ops.fetch_child": "取得エージェントの子",
+}
+
+
+def _ps() -> list[dict]:
+    import subprocess
+
+    out = subprocess.run(["ps", "-eo", "pid,ppid,user,etime,args"], capture_output=True, text=True, timeout=5).stdout.splitlines()[1:]
+    rows = []
+    for line in out:
+        parts = line.strip().split(None, 4)
+        if len(parts) < 5 or not parts[0].isdigit():
+            continue
+        rows.append({"pid": int(parts[0]), "ppid": int(parts[1]), "user": parts[2], "etime": parts[3], "args": parts[4]})
+    return rows
+
+
+def _cwd(pid: int) -> str | None:
+    try:
+        return os.readlink(f"/proc/{pid}/cwd")
+    except OSError:
+        return None
+
+
+def _member_kind(row: dict, entry: dict | None, now_ts: float) -> str | None:
+    """fetch（取得の python）・launcher（取得を起動する sh）・registered（心拍だけで分かる取得）のどれか。どれでもなければ None。"""
+    args = row["args"]
+    if re.search(r"fetch_status|-m\s+src\.scraper\.fetch_registry\b", args):   # 表示そのもの・登録の CLI
+        return None
+    if fr.is_fetch_args(args):
+        return "fetch"
+    if fr.launcher_script(args, _cwd(row["pid"])):
+        return "launcher"
+    if entry:
+        # 入口のパターンに無い取得（研究用の python -c など）。登録したもの・待機中・直近に GET があるものだけを取得とみなす
+        # （API のサーバーなど常駐のプロセスが一度取っただけで、ずっと「実行中」に出ないように）
+        if (entry.get("marked") or entry.get("state") == "waiting" or entry.get("label") or entry.get("total") is not None
+                or now_ts - (entry.get("last_get_at") or 0) < STALE_SEC):
+            return "registered"
+    return None
+
+
+def collect_tasks(rows: list[dict] | None = None, entries: dict[int, dict] | None = None, now_ts: float | None = None) -> list[dict]:
+    """取得のプロセスを、起動元の sh ごとに 1 つのタスクにまとめる。state は running（実行中）か waiting（待機中）。"""
+    rows = _ps() if rows is None else rows
+    entries = fr.live_entries() if entries is None else entries
+    now_ts = now_ts or time.time()
+    me = os.getpid()
+    by_pid = {r["pid"]: r for r in rows}
+    kinds = {}
+    for r in rows:
+        if r["pid"] == me:
+            continue
+        k = _member_kind(r, entries.get(r["pid"]), now_ts)
+        if k:
+            kinds[r["pid"]] = k
+
+    def top_of(pid: int) -> tuple[int, int]:
+        top, depth, cur, seen = pid, 0, by_pid.get(pid), set()
+        while cur and cur["ppid"] in by_pid and cur["ppid"] not in seen:
+            seen.add(cur["ppid"])
+            cur = by_pid[cur["ppid"]]
+            if cur["pid"] in kinds:
+                top = cur["pid"]
+            depth += 1
+        return top, depth
+
+    groups: dict[int, list[tuple[int, int]]] = {}
+    for pid in kinds:
+        top, depth = top_of(pid)
+        groups.setdefault(top, []).append((depth, pid))
+
+    children: dict[int, list[dict]] = {}
+    for r in rows:
+        children.setdefault(r["ppid"], []).append(r)
+
+    tasks = []
+    for top, members in groups.items():
+        members.sort()
+        mem = [dict(by_pid[p], kind=kinds[p], entry=entries.get(p)) for _, p in members]
+        fetchers = [m for m in mem if m["kind"] in ("fetch", "registered") and not (m["entry"] or {}).get("marked")]
+        if not fetchers and not any((m["entry"] or {}).get("marked") for m in mem):
+            # sh だけが生きている: 子が sleep か無ければ待機中（再開・前の取得の終了を待っている）。
+            # 取得でない子（取得の後の push・集計など）が動いていれば、取得は終わっているので出さない
+            ids = {m["pid"] for m in mem}
+            others = [c for p in ids for c in children.get(p, []) if c["pid"] not in ids]
+            if any(not re.match(r"^(?:\S*/)?sleep\b", c["args"]) for c in others):
+                continue
+        # 待機中: 取得の python の心拍が waiting、または取得の python が無い。
+        # 登録（mark）した sh の waiting は、その sh が取得の子を起動した後は数えない（子に合わせて実行中にする）
+        waiting = [m for m in mem if (m["entry"] or {}).get("state") == "waiting" and (not fetchers or m in fetchers)]
+        main = fetchers[-1] if fetchers else mem[0]
+        marked_running = any((m["entry"] or {}).get("marked") and (m["entry"] or {}).get("state") == "running" for m in mem)
+        state = "waiting" if waiting or not (fetchers or marked_running) else "running"
+        waiting_for = next(((m["entry"] or {}).get("waiting_for") for m in waiting if (m["entry"] or {}).get("waiting_for")), None)
+        if state == "waiting" and not waiting_for and not fetchers:
+            waiting_for = "取得の起動待ち（前の取得の終了・再開の待ち）"
+        label = next(((m["entry"] or {}).get("label") for m in mem if (m["entry"] or {}).get("label")), None)
+        mod = fr.module_of(main["args"]) or (main["entry"] or {}).get("module")
+        if not label:
+            script = next((fr.launcher_script(m["args"], _cwd(m["pid"])) for m in mem if m["kind"] == "launcher"), None)
+            label = TASK_LABEL.get(mod or "", mod or (Path(script).name if script else main["args"][:60]))
+            if mod == "src.scraper.backfill" and "--phase past" in main["args"]:
+                label = "2016〜2019 年の補填（--phase past）"
+            t = re.search(r"--task\s+(\S+)", main["args"])
+            if t:
+                label += f": {t.group(1)}"
+        tasks.append({"top": top, "members": mem, "main": main, "module": mod, "state": state,
+                      "waiting_for": waiting_for, "label": label,
+                      "entry": next((m["entry"] for m in reversed(fetchers) if m["entry"]), None)})
+    tasks.sort(key=lambda t: (t["state"] != "running", t["top"]))
+    return tasks
+
+
+def _generic_lines(task: dict, now_ts: float, now: datetime) -> list[str]:
+    L = []
+    for m in task["members"]:
+        tag = {"launcher": "起動元", "fetch": "取得", "registered": "取得"}[m["kind"]]
+        L.append(f"   {tag} PID {m['pid']}（{m['user']}）経過 {m['etime']}  {m['args'].split(' -m ', 1)[-1][:90]}")
+    if task["state"] == "waiting" and task["waiting_for"]:
+        L.append(f"   待っている相手: {task['waiting_for']}")
+    e = task["entry"]
+    if e and e.get("gets"):
+        last = e.get("last_get_at")
+        age = _age(now, now - timedelta(seconds=now_ts - last)) if last else "—"
+        L.append(f"   GET: 直近 1 時間 {fr.gets_within(e, 3600, now_ts):,} 件 ・ 最後の GET {age}（この実行で計 {e['gets']:,} 件）")
+    if e and e.get("total"):
+        done, total = float(e.get("done") or 0), float(e["total"])
+        per = e.get("req_per_unit") or (e["gets"] / done if done and e.get("gets") else None)
+        rate = fr.gets_within(e, 3600, now_ts)
+        hours = (total - done) * per / rate if per and rate > 0 else None
+        L.append(f"   進捗 {_bar(done, total)}  {done:,.0f}/{total:,.0f} {e.get('unit', '件')} → 終了: {_fmt_eta(now, hours) if done < total else '完了'}")
+    return L
+
+
+def _past_detail(now: datetime) -> tuple[list[str], bool]:
+    """2016〜2019 年の補填の段階ごとの残りと終了見込み。2 つ目はログが「他の取得に譲って待機中」か。"""
     prog = _load_json(PROGRESS)
     past = scan_log(PAST_LOG, now)
-    procs = _procs()
-    L: list[str] = []
-    bar = "━" * 72
-    L += [bar, f" 取得の状況  {now:%Y-%m-%d %H:%M:%S}（読み取りのみ）", bar]
-
-    # 止める印
-    halt, pause = bg.halted(), None
-    try:
-        from src.scraper.scrape_access_pause import read_access_pause
-
-        pause = read_access_pause() or {}
-    except Exception:  # noqa: BLE001
-        pass
-    if halt:
-        L.append(f" 🚨 補填の中断印あり: {halt.get('reason') or halt.get('status_counts')}（確認後 {bg.HALT_PATH} を削除）")
-    if pause and pause.get("active"):
-        L.append(f" 🚨 アクセス保留が有効: {pause.get('reason')}（{pause.get('paused_at')}）")
-
-    # 補填（2016〜2019）
+    msg = past["last_msg"] or ""
+    L = [f"   最後のログ: {_age(now, past['last_ts'])}  {msg[:80]}"]
     rates_show = {w: rate_per_hour(past, w, now) for w in SHOW_WINDOWS_H}
-    state = "停止中（プロセスなし）"
-    if procs["past"]:
-        msg = past["last_msg"] or ""
-        state = "他の取得に譲って待機中" if "待機中" in msg else "取得中"
-        if past["last_ts"] and (now - past["last_ts"]).total_seconds() > 600 and "待機中" not in msg:
-            state = "ログが止まっている（他の取得を待っているか、固まっている）"
-    L += ["", f"■ 2016〜2019 年の補填（--phase past）: {state}"]
-    for p in procs["past"]:
-        L.append(f"   {p}")
-    L.append(f"   最後のログ: {_age(now, past['last_ts'])}  {(past['last_msg'] or '')[:80]}")
     L.append("   速度（他の取得への譲りを含む実効）: 直近 " + " ・ ".join(f"{w}時間 {r:.0f} 件/時" for w, r in rates_show.items()))
 
     targets = set(prog.get("past_horse_ids", []))
@@ -303,80 +434,139 @@ def render(now: datetime | None = None) -> str:
     rows = past_remaining(prog, gets_for_ratio, horse_touched=touched, horse_parts=parts, horse_unsaved=unsaved) if any(f"calendar_{y}" in prog for y in PAST_YEARS) else []
     if not rows:
         L.append(f"   開催日のカレンダーが進捗ファイルにありません（{PROGRESS}）。見込みは出せません")
-    else:
-        rates = {w: rate_per_hour(past, w, now) for w in ETA_WINDOWS_H}
-        heads = [f"終了見込み（{w}時間平均）" for w in ETA_WINDOWS_H]
-        L += ["", "   " + _ljust("段階", 26) + _rjust("進捗", 22) + _rjust("残り件数", 10) + "   " + "  ".join(_ljust(h, 34) for h in heads)]
-        cum = 0.0
-        milestone = None
-        for row in rows:
-            cum += row["left_req"]
-            etas = ["完了" if row["left_req"] <= 0 else _fmt_eta(now, cum / rates[w] if rates[w] > 0 else None) for w in ETA_WINDOWS_H]
-            pct = row["done"] / row["total"] * 100 if row["total"] else 0.0
-            mark = "≈" if row["approx"] else ""
-            prog_s = f"{row['done']:,}/{mark}{row['total']:,.0f}{row['unit']} {pct:3.0f}%" if row["tier"] != "anchors_f" else f"残り{mark}{row['total']:,.0f}頭"
-            label = f"{row['tier']}（{STAGE_LABEL.get(row['tier'], '')}）"
-            L.append("   " + _ljust(label, 26) + _rjust(prog_s, 22) + _rjust(f"{row['left_req']:,.0f}", 10) + "   " + "  ".join(_ljust(e, 34) for e in etas))
-            if row.get("parts"):
-                L += _horse_parts_lines(row, rows[-1] if rows[-1]["tier"] == "anchors_f" else None)
-            if row["tier"] == REQUIRED_FOR_TRAINING[-1]:
-                milestone = cum
-        L.append("   " + _ljust("合計", 26) + _rjust("", 22) + _rjust(f"{cum:,.0f}", 10))
-        for name, req in ((f"学習に必須の段階（{'・'.join(REQUIRED_FOR_TRAINING)}）", milestone or 0.0), ("すべての段階", cum)):
-            etas = [f"{w}時間平均 {_fmt_eta(now, req / rates[w] if rates[w] > 0 else None) if req else '完了'}" for w in ETA_WINDOWS_H]
-            L.append(f"   ▶ {name}: " + " ／ ".join(etas))
-        L.append("   ≈ は概算（出走馬の総数は fast の完了後に確定。父方アンカーは既存分を除く前の上限側）")
+        return L, "待機中" in msg
+    rates = {w: rate_per_hour(past, w, now) for w in ETA_WINDOWS_H}
+    heads = [f"終了見込み（{w}時間平均）" for w in ETA_WINDOWS_H]
+    L += ["", "   " + _ljust("段階", 26) + _ljust("", 15) + _rjust("進捗", 22) + _rjust("残り件数", 10) + "   " + "  ".join(_ljust(h, 34) for h in heads)]
+    cum = 0.0
+    milestone = None
+    for row in rows:
+        cum += row["left_req"]
+        etas = ["完了" if row["left_req"] <= 0 else _fmt_eta(now, cum / rates[w] if rates[w] > 0 else None) for w in ETA_WINDOWS_H]
+        pct = row["done"] / row["total"] * 100 if row["total"] else 0.0
+        mark = "≈" if row["approx"] else ""
+        prog_s = f"{row['done']:,}/{mark}{row['total']:,.0f}{row['unit']} {pct:3.0f}%" if row["tier"] != "anchors_f" else f"残り{mark}{row['total']:,.0f}頭"
+        label = f"{row['tier']}（{STAGE_LABEL.get(row['tier'], '')}）"
+        tier_bar = _bar(row["done"], row["total"], 12, pct=False) if row["tier"] != "anchors_f" else ""
+        L.append("   " + _ljust(label, 26) + _ljust(tier_bar, 15) + _rjust(prog_s, 22) + _rjust(f"{row['left_req']:,.0f}", 10) + "   " + "  ".join(_ljust(e, 34) for e in etas))
+        if row.get("parts"):
+            L += _horse_parts_lines(row, rows[-1] if rows[-1]["tier"] == "anchors_f" else None)
+        if row["tier"] == REQUIRED_FOR_TRAINING[-1]:
+            milestone = cum
+    L.append("   " + _ljust("合計", 26) + _ljust("", 15) + _rjust("", 22) + _rjust(f"{cum:,.0f}", 10))
+    for name, req in ((f"学習に必須の段階（{'・'.join(REQUIRED_FOR_TRAINING)}）", milestone or 0.0), ("すべての段階", cum)):
+        etas = [f"{w}時間平均 {_fmt_eta(now, req / rates[w] if rates[w] > 0 else None) if req else '完了'}" for w in ETA_WINDOWS_H]
+        L.append(f"   ▶ {name}: " + " ／ ".join(etas))
+    L.append("   ≈ は概算（出走馬の総数は fast の完了後に確定。父方アンカーは既存分を除く前の上限側）")
+    return L, "待機中" in msg
 
-    # 調教の補填
+
+def _training_detail(now: datetime) -> list[str]:
     tp = _load_json(TRAINING_PROGRESS)
     tr = scan_log(TRAINING_LOG, now, windows_h=(1,))
     run_h = (now - tr["run_start"]).total_seconds() / 3600 if tr["run_start"] else 0.0
     t1 = tr["run_gets"] / run_h if run_h > 0 else 0.0     # 今回の実行の開始から（起動直後の対象の集計の時間も含む）
     left = tp.get("remaining")
-    t_state = "取得中" if procs["training"] else "停止中（プロセスなし）"
-    L += ["", f"■ 調教の補填（backfill_horse_training_recent）: {t_state}"]
-    for p in procs["training"]:
-        L.append(f"   {p}")
     c = tp.get("counts", {})
-    L.append(f"   累計 保存 {c.get('saved', 0):,} ・ 読めない {c.get('unreadable', 0)} ・ 空 {c.get('empty', 0)} ・ 失敗 {c.get('error', 0)}"
-             f"  ／ 最後のログ: {_age(now, tr['last_ts'])}")
-    if procs["training"]:
-        L.append(f"   今回の残り {left if left is not None else '?'} 頭（25 頭ごとに更新）・ 今回の実行 {t1:.0f} 件/時"
-                 f" → 今回の終了: {_fmt_eta(now, left * TRAINING_REQ_PER_HORSE / t1 if left and t1 > 0 else None)}")
-    elif tp.get("aborted"):
-        L.append(f"   前回の中断理由: {tp['aborted']}")
-    elif tp.get("finished_at"):
-        L.append(f"   前回の終了: {tp['finished_at']}")
+    return [f"   累計 保存 {c.get('saved', 0):,} ・ 読めない {c.get('unreadable', 0)} ・ 空 {c.get('empty', 0)} ・ 失敗 {c.get('error', 0)}"
+            f"  ／ 最後のログ: {_age(now, tr['last_ts'])}",
+            f"   今回の残り {left if left is not None else '?'} 頭（25 頭ごとに更新）・ 今回の実行 {t1:.0f} 件/時"
+            f" → 今回の終了: {_fmt_eta(now, left * TRAINING_REQ_PER_HORSE / t1 if left and t1 > 0 else None)}"]
 
-    # 調教の過去分の取り直し（2016〜2019 年だけに走った馬。1 頭あたり複数ページ）
+
+_REDO_START = re.compile(r"打ち切った馬の取り直し: 対象 \d+ 頭 / 取り直し済み (\d+) / 残り (\d+) 頭")
+
+
+def _training_past_detail(now: datetime, redo: bool) -> list[str]:
+    """調教の過去分の取り直し。redo（--redo-truncated）のときは、打ち切った馬の全ページの取り直しの進捗を出す。"""
     pp = _load_json(TRAINING_PAST_PROGRESS)
-    if pp or procs.get("training_past", []):
-        pl_ = scan_log(TRAINING_PAST_LOG, now, windows_h=(1, 3))
-        pc = pp.get("counts", {})
-        n_done, total = len(pp.get("done", {})), pp.get("total")
-        reqs = pp.get("requests", 0)
-        per_horse = reqs / n_done if n_done >= 25 else TRAINING_PAST_PAGES_PER_HORSE
-        rate = rate_per_hour(pl_, 3, now)
-        run_h = (now - pl_["run_start"]).total_seconds() / 3600 if pl_["run_start"] else 0.0
-        if rate <= 0 and run_h > 0:
-            rate = pl_["run_gets"] / run_h
-        left = max(total - n_done, 0) if total else None
-        p_state = "取得中" if procs.get("training_past", []) else "停止中（プロセスなし）"
-        L += ["", f"■ 調教の過去分の取り直し（2016〜2019 年の馬・全ページ）: {p_state}"]
-        for p in procs.get("training_past", []):
-            L.append(f"   {p}")
-        pct = f" {n_done / total * 100:.0f}%" if total else ""
-        L.append(f"   進捗 {n_done:,}/{total or '?'} 頭{pct} ・ 保存 {pc.get('saved', 0):,} ・ 調教なし {pc.get('empty', 0)} ・ 失敗 {pc.get('error', 0)}"
-                 f"  ／ 最後のログ: {_age(now, pl_['last_ts'])}")
+    pl_ = scan_log(TRAINING_PAST_LOG, now, windows_h=(1, 3))
+    rate = rate_per_hour(pl_, 3, now)
+    run_h = (now - pl_["run_start"]).total_seconds() / 3600 if pl_["run_start"] else 0.0
+    if rate <= 0 and run_h > 0:
+        rate = pl_["run_gets"] / run_h
+    if redo:
+        before, left0 = 0, None
+        try:
+            for line in TRAINING_PAST_LOG.read_text(encoding="utf-8", errors="replace").splitlines():
+                m = _REDO_START.search(line)
+                if m:
+                    before, left0 = int(m.group(1)), int(m.group(2))
+        except OSError:
+            pass
+        rd = pp.get("redo", {})
+        n_done = len(rd)
+        total = before + left0 if left0 is not None else None
+        run_done = n_done - before
+        per_horse = pl_["run_gets"] / run_done if run_done >= 25 else 5.0   # 打ち切った馬は 4 ページ以上（起動時の見積もりと同じ 5）
+        left = max(total - n_done, 0) if total is not None else None
+        cnt = {s: sum(1 for v in rd.values() if v == s) for s in ("saved", "empty", "error")}
         eta = _fmt_eta(now, left * per_horse / rate if left and rate > 0 else None)
-        L.append(f"   1 頭あたり {per_horse:.1f} 件 ・ 速度 {rate:.0f} 件/時（直近 3 時間） → 残り {left if left is not None else '?'} 頭の終了: {eta if left else '完了'}")
-        if not procs.get("training_past", []) and pp.get("aborted"):
-            L.append(f"   前回の中断理由: {pp['aborted']}")
-        elif not procs.get("training_past", []) and pp.get("finished_at"):
-            L.append(f"   前回の終了: {pp['finished_at']}")
+        return [f"   打ち切った馬の取り直し（--redo-truncated）: {_bar(n_done, total)}  {n_done:,}/{f'{total:,}' if total is not None else '?'} 頭",
+                f"   保存 {cnt['saved']:,} ・ 調教なし {cnt['empty']} ・ 失敗 {cnt['error']}  ／ 最後のログ: {_age(now, pl_['last_ts'])}",
+                f"   1 頭あたり {per_horse:.1f} 件 ・ 速度 {rate:.0f} 件/時（直近 3 時間） → 残り {f'{left:,}' if left is not None else '?'} 頭の終了: {eta if left != 0 else '完了'}"]
+    pc = pp.get("counts", {})
+    n_done, total = len(pp.get("done", {})), pp.get("total")
+    reqs = pp.get("requests", 0)
+    per_horse = reqs / n_done if n_done >= 25 else TRAINING_PAST_PAGES_PER_HORSE
+    left = max(total - n_done, 0) if total else None
+    eta = _fmt_eta(now, left * per_horse / rate if left and rate > 0 else None)
+    return [f"   進捗 {_bar(n_done, total)}  {n_done:,}/{f'{total:,}' if total else '?'} 頭",
+            f"   保存 {pc.get('saved', 0):,} ・ 調教なし {pc.get('empty', 0)} ・ 失敗 {pc.get('error', 0)}"
+            f"  ／ 最後のログ: {_age(now, pl_['last_ts'])}",
+            f"   1 頭あたり {per_horse:.1f} 件 ・ 速度 {rate:.0f} 件/時（直近 3 時間） → 残り {f'{left:,}' if left is not None else '?'} 頭の終了: {'完了' if left == 0 else eta}"]
 
-    if procs["other"]:
-        L += ["", "■ その他の取得（補填はこれらに譲る）"] + [f"   {p}" for p in procs["other"]]
+
+def _detail(task: dict, now: datetime) -> tuple[list[str], bool]:
+    """既知の取得の詳しい行（実行中のときだけ）。2 つ目は「待機中」とみなすか。"""
+    if task["state"] != "running":
+        return [], False
+    args, mod = task["main"]["args"], task["module"]
+    if mod == "src.scraper.backfill" and "--phase past" in args:
+        return _past_detail(now)
+    if mod == "src.scripts.scraping.backfill_horse_training_recent":
+        return _training_detail(now), False
+    if mod == "src.scripts.scraping.backfill_horse_training_past":
+        return _training_past_detail(now, "--redo-truncated" in args), False
+    return [], False
+
+
+def render(now: datetime | None = None, tasks: list[dict] | None = None) -> str:
+    now = now or datetime.now(JST).replace(tzinfo=None)
+    now_ts = time.time()
+    tasks = collect_tasks() if tasks is None else tasks
+    blocks = []
+    for t in tasks:
+        detail, yielding = _detail(t, now)
+        if yielding:
+            t["state"], t["waiting_for"] = "waiting", t["waiting_for"] or "他の取得に譲って待機中（ログより）"
+        state = "実行中" if t["state"] == "running" else "待機中"
+        e = t["entry"]
+        if t["state"] == "running" and e and e.get("last_get_at") and now_ts - e["last_get_at"] > STALE_SEC:
+            state += f"（{int((now_ts - e['last_get_at']) // 60)} 分 GET なし。止まっている?）"
+        blocks.append((t, [f"■ [{state}] {t['label']}"] + _generic_lines(t, now_ts, now) + detail))
+    n_run = sum(1 for t, _ in blocks if t["state"] == "running")
+    L: list[str] = []
+    bar = "━" * 72
+    L += [bar, f" 取得の状況  {now:%Y-%m-%d %H:%M:%S}  実行中 {n_run} ・ 待機中 {len(blocks) - n_run}（終わったものは出さない・読み取りのみ）", bar]
+
+    # 止める印（完了ではなく「止められている」状態なので、取得が無くても出す）
+    halt, pause = bg.halted(), None
+    try:
+        from src.scraper.scrape_access_pause import read_access_pause
+
+        pause = read_access_pause() or {}
+    except Exception:  # noqa: BLE001
+        pass
+    if halt:
+        L.append(f" 🚨 補填の中断印あり: {halt.get('reason') or halt.get('status_counts')}（確認後 {bg.HALT_PATH} を削除）")
+    if pause and pause.get("active"):
+        L.append(f" 🚨 アクセス保留が有効: {pause.get('reason')}（{pause.get('paused_at')}）")
+
+    if not blocks:
+        L += ["", " 実行中・待機中の取得はありません"]
+    for _, lines in blocks:
+        L += [""] + lines
     L.append(bar)
     return "\n".join(L)
 

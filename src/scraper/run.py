@@ -1269,9 +1269,11 @@ class ScraperRunner:
         *,
         force: bool = False,
         smart_skip: bool = True,
+        persist: bool = True,
     ) -> dict | None:
         """
         馬の調教タイムを全ページ分スクレイピングし、結合して保存する。
+        ``persist=False`` は取得して結果を返すだけ（呼び出し側が既存の記録とまとめて 1 回で保存するとき）。
 
         ページネーションは ?page=N で遷移（10件/ページ）。
         全ページを取得し、entries を時系列で結合する。
@@ -1357,6 +1359,7 @@ class ScraperRunner:
         all_entries: list[dict] = []
         total_items = 0
         max_page = 1
+        later_page_failed = False   # 2 ページ目以降の取得が例外で止まった（incomplete の印を付ける）
 
         for page in range(1, max_pages + 1):
             url = self.HORSE_TRAINING_URL.format(horse_id=horse_id)
@@ -1377,12 +1380,14 @@ class ScraperRunner:
                         "pages_fetched": 0,
                         "entries": [],
                     }
-                    self._persist_horse_training(horse_id, empty_result)
+                    if persist:
+                        self._persist_horse_training(horse_id, empty_result)
                     logger.info("調教保存完了: %s — 0件 (404 によりページ無し)", horse_id)
                     return empty_result
                 logger.error("調教ページ取得失敗 [%s] page=%d: %s", horse_id, page, e)
                 if page == 1:
                     raise
+                later_page_failed = True
                 break
 
             self.archive.save("horse_training", f"{horse_id}_p{page}", html)
@@ -1402,7 +1407,8 @@ class ScraperRunner:
                         "pages_fetched": 0,
                         "entries": [],
                     }
-                    self._persist_horse_training(horse_id, empty_result)
+                    if persist:
+                        self._persist_horse_training(horse_id, empty_result)
                     logger.info("調教保存完了: %s — 0件 (調教行なし)", horse_id)
                     return empty_result
 
@@ -1444,6 +1450,12 @@ class ScraperRunner:
             "pages_fetched": min(max_page, max_pages),
             "entries": unique_entries,
         }
+        if later_page_failed:
+            # 2 ページ目以降の取得に失敗して止めた。取れた分は保存し、印を残して次の取り直しで全ページを取り直せるようにする
+            # （最後のページが例外なしで 0 件なのは正常の終わりとみなし、印は付けない）
+            result["incomplete"] = True
+        if not persist:
+            return result
         self._persist_horse_training(horse_id, result)
         logger.info("調教保存完了: %s — %d件 (%dページ)",
                     horse_id, len(unique_entries), result["pages_fetched"])

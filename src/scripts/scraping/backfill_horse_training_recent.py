@@ -83,12 +83,27 @@ def load1() -> float:
 
 def wait_ok(max_wait: int = 3600) -> bool:
     """他の取得が終わり、負荷が下がるまで待つ。待ちきれなければ False。"""
-    t0 = time.time()
+    t0, waiting = time.time(), False
     while busy() or load1() >= MAX_LOAD:
+        if not waiting:
+            _set_fetch_state("waiting", "他の取得の終了・負荷の低下待ち")
+            waiting = True
         if time.time() - t0 > max_wait:
-            return False
+            return False   # 呼び出し側はこのあと中断するので、実行中には戻さない
         time.sleep(30)
+    if waiting:
+        _set_fetch_state("running")
     return True
+
+
+def _set_fetch_state(state: str, waiting_for: str | None = None) -> None:
+    """取得の一覧（scripts/dev/fetch_status.sh）に、待機中か実行中かを出す。表示のためだけなので失敗しても続ける。"""
+    try:
+        from src.scraper import fetch_registry
+
+        fetch_registry.set_state(state, waiting_for)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def load_progress() -> dict:
