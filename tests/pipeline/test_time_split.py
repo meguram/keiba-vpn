@@ -3,6 +3,7 @@ import pytest
 
 from src.pipeline.models.time_split import (
     TRAINING_YEARS,
+    loyo_folds,
     restrict_to_training_years,
     yearly_expanding_folds,
 )
@@ -65,3 +66,36 @@ def test_missing_date_is_rejected():
     df.loc[0, "date"] = pd.NaT
     with pytest.raises(ValueError):
         list(yearly_expanding_folds(df))
+
+
+def test_loyo_folds_exclude_valid_year_and_gap_but_keep_both_sides():
+    df = _df()
+    df = df[df["race_id"].str[:4].between("2020", "2025")].reset_index(drop=True)
+    df.loc[len(df)] = {"race_id": "202101010901", "date": pd.Timestamp("2020-12-28")}     # 検証年の前 10 日以内
+    folds = list(loyo_folds(df, valid_years=["2021"]))
+    assert [f.valid_year for f in folds] == ["2021"]
+    f = folds[0]
+    train, valid = df.loc[f.train_index], df.loc[f.valid_index]
+    assert (valid["race_id"].str[:4] == "2021").all()
+    assert not (train["race_id"].str[:4] == "2021").any()
+    assert pd.Timestamp("2020-12-28") not in set(train["date"])
+    assert set(train["date"].dt.year) == {2020, 2022, 2023, 2024, 2025}
+
+
+def test_loyo_folds_rejects_empty_valid_year():
+    with pytest.raises(ValueError):
+        list(loyo_folds(_df(), valid_years=["2010"]))
+
+
+def test_tp05_folds_logs_loyo_years_only_when_set(monkeypatch, capsys):
+    from src.pipeline.models.tp05_data import _folds
+
+    df = _df()
+    df = df[df["race_id"].str[:4].between("2020", "2025")].reset_index(drop=True)
+    monkeypatch.delenv("OOF_LOYO_YEARS", raising=False)
+    _folds(df)
+    assert "OOF_LOYO_YEARS" not in capsys.readouterr().out
+    monkeypatch.setenv("OOF_LOYO_YEARS", "2021,2022")
+    folds = _folds(df)
+    assert [f.valid_year for f in folds] == ["2021", "2022"]
+    assert "OOF_LOYO_YEARS=2021,2022" in capsys.readouterr().out

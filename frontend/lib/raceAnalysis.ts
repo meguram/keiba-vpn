@@ -234,7 +234,7 @@ export function runColor(pos: number, field: number): string {
 }
 
 /** 並べ替え用の値。成績（record）は 1 着の数で並べる。色分けのある文字の列（脚質など）は、色分けの定義の順
- *  （脚質ならハナ → 先行(前) → 先行(後ろ) → 差し → 追込）で並べ、定義に無い値（不明など）は向きによらず最後。それ以外は表示文字から読まれる。 */
+ *  （脚質ならハナ → 先行(前) → 先行(後ろ) → 差し(前) → 差し(後ろ) → 追込）で並べ、定義に無い値（不明など）は向きによらず最後。それ以外は表示文字から読まれる。 */
 export function sortValue(v: unknown, fmt: CellFormat, palette?: Record<string, string> | null): string | undefined {
   if (fmt === "record" && Array.isArray(v) && v.length > 0) return String(v[0]);
   if (fmt === "range") return typeof (v as RangeCell | null)?.mean === "number" ? String((v as RangeCell).mean) : "";
@@ -309,4 +309,43 @@ export function heatColor(v: unknown, scale: HeatScale | null | undefined): stri
 export function formatComputedAt(iso: string | null | undefined): string | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso ?? "");
   return m ? `${Number(m[2])}/${Number(m[3])} ${m[4]}:${m[5]} 時点` : null;
+}
+
+/** 位置取りマトリックスに置く馬。mean は直近の加重平均の位置（0〜1。小さいほど前）、無い馬（初出走など）は null */
+export type MatrixInput = { key: string; num: number | null; mean: number | null | undefined };
+/** 置いた位置。c は中心（単位は 1 頭身。0 が先頭の前端）、lane は 0 がラチ沿いで外へ 1, 2, … */
+export type MatrixPlaced = { key: string; num: number | null; c: number; lane: number };
+export type MatrixLayout = { field: number; lanes: number; placed: MatrixPlaced[]; unknown: MatrixInput[] };
+
+/** 2 頭のアイコン（幅 = 1 頭身）が重なるか。中心の差が 1 頭身未満なら重なる（ちょうど 1 頭身は接するだけ） */
+export function matrixOverlap(a: number, b: number): boolean {
+  return Math.abs(a - b) < 1 - 1e-9;
+}
+
+/**
+ * 位置取りマトリックスの配置（機械的なルール）。
+ * 1. 横の位置: 頭数 N のとき中心 c = mean × N − 0.5 を 0.5〜N−0.5 に収める（いつも先頭の馬は 0〜1 頭身、いつも最後方の馬は N−1〜N 頭身）。
+ * 2. 馬番の小さい順（馬番の無い馬は最後、同じなら key 順）に 1 頭ずつ、ラチ沿い（lane 0）から外へ見て、
+ *    そのラインに置いた馬のどれとも重ならない最初のラインに置く。
+ *    → 誰とも重ならない馬はすべてラチ沿い。重なるときは内枠（馬番の小さい馬）がラチ側。同じラインでアイコンは重ならない。
+ * 3. 平均の位置が無い馬は置かずに unknown に分ける。
+ */
+export function layoutPositionMatrix(horses: MatrixInput[], fieldSize: number): MatrixLayout {
+  const field = Math.max(1, Math.floor(fieldSize) || 0, horses.length);
+  const known = horses.filter((h) => typeof h.mean === "number" && Number.isFinite(h.mean));
+  const unknown = horses.filter((h) => !known.includes(h));
+  const order = [...known].sort((a, b) => (a.num ?? Infinity) - (b.num ?? Infinity) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  const lanes: number[][] = [];
+  const placed: MatrixPlaced[] = [];
+  for (const h of order) {
+    const c = Math.min(field - 0.5, Math.max(0.5, (h.mean as number) * field - 0.5));
+    let lane = lanes.findIndex((cs) => cs.every((x) => !matrixOverlap(x, c)));
+    if (lane < 0) {
+      lane = lanes.length;
+      lanes.push([]);
+    }
+    lanes[lane].push(c);
+    placed.push({ key: h.key, num: h.num, c, lane });
+  }
+  return { field, lanes: lanes.length, placed, unknown };
 }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -10,11 +11,20 @@ import pandas as pd
 from src.pipeline.features.serving_stage_rel import race_relative
 from src.pipeline.models import ablation as ab
 from src.pipeline.models import win_models as wm
-from src.pipeline.models.time_split import yearly_expanding_folds
+from src.pipeline.models.time_split import loyo_folds, yearly_expanding_folds
 
 STAGE_COLS = ["s_time_pred", "s_time_gap", "s_rank_pred"]
 REL_BASE = ["f3_r", "sr_perf_ewm2", "sr_perf_ewm6", "sr_exp", "c_res_ewm2", "c_cls_ewm2", "a_l3fz_ewm2", "a_rk_ewm2", "a_style", "b_aff_all",
             "pc_adv", "f2_pace_match", "horse_prior_win_rate", "jockey_prior_win_rate"]
+
+
+def _folds(df: pd.DataFrame) -> list:
+    """既定は 2022〜24 の expanding。環境変数 OOF_LOYO_YEARS（例 2016,2017）があれば、その年を外す leave-one-year-out にする。"""
+    years = [y.strip() for y in os.environ.get("OOF_LOYO_YEARS", "").split(",") if y.strip()]
+    if not years:
+        return list(yearly_expanding_folds(df))
+    print(f"OOF_LOYO_YEARS={','.join(years)}（leave-one-year-out。検証年を外し前後 10 日も除く）", flush=True)
+    return list(loyo_folds(df, valid_years=years))
 
 
 def load_dataset(work: Path) -> dict:
@@ -42,7 +52,7 @@ def load_dataset(work: Path) -> dict:
     missing = [c for c in feats["base+S+C1+C2"] if c not in df.columns]
     assert not missing, missing
     meta = df[["race_id", "horse_id", "finish_position", "year", "date"]].copy()
-    return {"df": df, "BASE": base, "REL": list(rel.columns), "REL2": list(rel2.columns), "FEATS": feats, "folds": list(yearly_expanding_folds(df)), "meta": meta}
+    return {"df": df, "BASE": base, "REL": list(rel.columns), "REL2": list(rel2.columns), "FEATS": feats, "folds": _folds(df), "meta": meta}
 
 
 def load_extras_ped(df: pd.DataFrame, work: Path) -> tuple[pd.DataFrame, list[str], list[str]]:

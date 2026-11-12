@@ -47,12 +47,23 @@ def _field(values, se=0.05):
     return {f"h{i}": P.PositionStat(v, se) for i, v in enumerate(values)}
 
 
-def test_single_leader_by_default_and_ranks_split_into_thirds():
+def test_single_leader_by_default_and_others_by_band():
     vals = [0.07, 0.3, 0.1, 0.5, 0.6, 0.9, 0.7, 0.2, 0.4, 0.8, 0.15, 0.55, 0.65, 0.35]     # 14 頭、先頭 0.07 と 2 番手 0.10 は差が大きい
     lab = P.classify(_field(vals))
     by_val = [lab[f"h{i}"] for i in sorted(range(len(vals)), key=lambda i: vals[i])]
     assert by_val.count("ハナ") == 1 and by_val[0] == "ハナ"
-    assert by_val == ["ハナ", "先行(前)", "先行(前)", "先行(後ろ)", "先行(後ろ)", "差し", "差し", "差し", "差し", "追込", "追込", "追込", "追込", "追込"]
+    # 帯の上端を含む: 0.2 → 先行(前)、0.4 → 先行(後ろ)、0.6 → 差し(前)、0.8 → 差し(後ろ)
+    assert by_val == ["ハナ", "先行(前)", "先行(前)", "先行(前)", "先行(後ろ)", "先行(後ろ)", "先行(後ろ)",
+                      "差し(前)", "差し(前)", "差し(前)", "差し(後ろ)", "差し(後ろ)", "差し(後ろ)", "追込"]
+
+
+def test_style_and_band_are_one_to_one():
+    assert P.STYLES == ("ハナ", "先行(前)", "先行(後ろ)", "差し(前)", "差し(後ろ)", "追込")
+    assert list(P.PALETTE) == list(P.STYLES)                                    # 並べ替えの順も脚質の順
+    # 先頭の馬は位置がどこでもハナ（メンバーが全頭後ろでも）。ハナ以外は帯だけで決まる（メンバーに依らない）
+    lab = P.classify(_field([0.7, 0.85, 0.95]))
+    assert lab == {"h0": "ハナ", "h1": "追込", "h2": "追込"}
+    assert P.classify(_field([0.05, 0.5]))["h1"] == P.classify(_field([0.05, 0.3, 0.4, 0.5]))["h3"] == "差し(前)"
 
 
 def test_co_leaders_only_when_gap_is_within_error_and_at_most_three():
@@ -159,7 +170,9 @@ def test_past_position_module_classifies_and_uses_first_corner(env):
     precompute.precompute_race(storage, "202605040111")
     saved = store.read("202605040111")
     m = next(x for x in saved["modules"] if x["id"] == "past_position")
-    assert m["status"] == "ok" and [c["key"] for c in m["columns"]] == ["style", "range", "n", "hist", "band", "band_n", "band_win", "band_top3", "band_win_roi", "band_place_roi"]
+    assert m["status"] == "ok" and [c["key"] for c in m["columns"]] == ["style", "range", "n", "hist", "band_win", "band_top3", "band_win_roi", "band_place_roi"]
+    labels = [c["label"] for c in m["columns"]]
+    assert labels[4:] == ["勝率", "複勝率", "単勝回収率", "複勝回収率"] and not any("帯" in x for x in labels)
     cells = {e["horse_name"]: e["analysis"]["past_position"] for e in saved["entries"]}
     assert cells["イチ"]["n"] == 8 and cells["イチ"]["style"] == "ハナ"          # h1 は履歴あり。もう 1 頭は初出走なので分類しない → 1 頭だけ前
     assert cells["ニ"]["style"] == "不明" and cells["ニ"]["pos"] is None and cells["ニ"]["hist"] is None
@@ -250,15 +263,16 @@ def test_prune_keeps_current_year_races(env):
 
 
 def test_band_helpers_and_stats():
-    assert [P.band_of(r) for r in (0.05, 0.2, 0.21, 0.5, 0.79, 1.0)] == [0, 0, 1, 2, 3, 4]
-    assert P.band_label(0) == "最前（0〜20%）" and P.band_label(4) == "最後方（80〜100%）"
-    df = pd.DataFrame({"pos_first": [1, 2, 9, 10], "field_size": [10, 10, 10, 10], "finish_position": [1, 5, 3, 2],
-                       "win_ret": [4.0, 0.0, float("nan"), 0.0], "place_ret": [1.5, 0.0, float("nan"), 1.2]})
+    assert [P.band_of(r) for r in (0.05, 0.2, 0.21, 0.5, 0.79, 1.0)] == ["先行(前)", "先行(前)", "先行(後ろ)", "差し(前)", "差し(後ろ)", "追込"]
+    assert P.band_label("ハナ") == "ハナ（初角1番手）" and P.band_label("先行(前)") == "先行(前)（0〜20%）" and P.band_label("追込") == "追込（80〜100%）"
+    df = pd.DataFrame({"pos_first": [1, 2, 1, 9, 10], "field_size": [10, 10, 4, 10, 10], "finish_position": [1, 5, 4, 3, 2],
+                       "win_ret": [4.0, 0.0, 0.0, float("nan"), 0.0], "place_ret": [1.5, 0.0, 0.0, float("nan"), 1.2]})
     b = P.band_stats(df)
-    assert b[0]["n"] == 2 and b[0]["win"] == 0.5 and b[0]["top3"] == 0.5               # 1/10 と 2/10 は最前
-    assert b[0]["win_roi"] == pytest.approx(2.0) and b[0]["place_roi"] == pytest.approx(0.75)
-    assert b[4]["n"] == 2 and b[4]["win_roi"] == 0.0 and b[4]["place_roi"] == pytest.approx(1.2)   # 払戻が読めない走は回収率の分母から外す
-    assert b[2]["n"] == 0 and b[2]["win"] is None
+    assert list(b) == list(P.STYLES)
+    assert b["ハナ"]["n"] == 2 and b["ハナ"]["win"] == 0.5 and b["ハナ"]["win_roi"] == pytest.approx(2.0)   # 初角 1 番手は頭数に依らずハナ（1/4 も）
+    assert b["先行(前)"]["n"] == 1 and b["先行(前)"]["win"] == 0.0                                   # 2/10 はハナではなく 0〜20%
+    assert b["追込"]["n"] == 2 and b["追込"]["win_roi"] == 0.0 and b["追込"]["place_roi"] == pytest.approx(1.2)   # 払戻が読めない走は回収率の分母から外す
+    assert b["差し(前)"]["n"] == 0 and b["差し(前)"]["win"] is None
 
 
 def test_range_cell_spans_recent_runs_and_weights_recent_more():

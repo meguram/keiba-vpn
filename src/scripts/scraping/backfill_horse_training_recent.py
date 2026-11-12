@@ -4,7 +4,8 @@
   python -m src.scripts.scraping.backfill_horse_training_recent --from 2026-04-01 --limit 40         # パイロット
   python -m src.scripts.scraping.backfill_horse_training_recent --dates 2026-10-10 2026-10-11 --limit 700
 
-馬別の調教ページは最新 10 走分を 1 ページに載せる。2026 年 4 月以降に 10 走を超えた馬はほぼ無いので、1 頭 1 リクエストで足りる。
+馬別の調教ページは最新 10 走分を 1 ページに載せる。2026 年 4 月以降に 10 走を超えた馬はほぼ無いので、1 頭 1 リクエストで足りる
+（保存済みの記録が無く 2 ページ以上ある馬だけは、refresh_one が全ページを取って土台を作るので複数リクエストになる）。
 保存は ``horse_training_recent.refresh_one``（同じ日付の行だけ入れ替え、既存の古い行は残す。読めなかった・0 件のページは保存しない）。
 スクレイピング規則: 他の取得（開催日ランナー・定期取得・取得系の fork）が動いている間は待つ、1 頭ごとに約 5.5 秒（クライアントの間隔 + 上乗せ 0.5〜1.5 秒）、100 頭ごとに 30〜60 秒、
 連続 8 件の失敗で中断。再開できる（進捗: data/local/meta/horse_training_backfill_progress.json）。
