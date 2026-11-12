@@ -167,6 +167,9 @@ def build_infer(years: list[int], dates: list[str]) -> tuple[pd.DataFrame, dict]
     sh_full = pd.concat(sh_full, ignore_index=True)
     sh_full["date"] = pd.to_datetime(sh_full["date"])
     sh_full = sh_full[sh_full["date"].isin([pd.Timestamp(d) for d in dates]) & sh_full["surface"].isin(["芝", "ダート"])]
+    if sh_full.empty:
+        # 対象日の出馬表が flat に無い（開催なし・未保存）。ホストの lap_forecast_daily.sh と同じく何もしない
+        return pd.DataFrame(), {"mode": "infer", "dates": dates, "n_races_features": 0, "skipped": "no_shutuba_rows"}
     races = _race_base(sh_full)
     races["date"] = pd.to_datetime(races["date"])
     laps = res.drop_duplicates("race_id")[["race_id", "lap_times"]].copy()

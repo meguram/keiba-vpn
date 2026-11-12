@@ -50,7 +50,9 @@ export type AnalysisModuleMeta = {
 export type RunningMapAxis = { key: string; label: string; high: string; low: string; weight: number; arrow?: [number, number]; r2?: number | null };
 
 /** 地図の位置には入れない補助の軸（急坂適性・道悪の軸）。value は 50 が平均の偏差値で、判定できないときは null（不明） */
-export type RunningMapExtra = { value: number | null; runs?: number; n_power?: number; n_normal?: number; low?: boolean };
+export type RunningMapExtra = { value: number | null; runs?: number; n_power?: number; n_normal?: number; low?: boolean;
+  /** クラス基準の 10 点満点（偏差値から。無ければ未定義） */
+  score?: number | null };
 
 export type RunningMapHorse = {
   key: string | null;
@@ -62,6 +64,8 @@ export type RunningMapHorse = {
   group: string;
   /** 方面ごとに、全馬の中で「高い」側から見た位置（0〜100） */
   percentiles: Record<string, number | null>;
+  /** クラス基準の 10 点満点（0.5 点刻み。5=2勝で安定・4=1勝・3=未勝利・10=G1 好走馬の上位 5%。null=不明）。無い（古い保存結果）ときは null/未定義で、percentiles から従来の順位方式で出す */
+  scores?: Record<string, number | null> | null;
   n_runs: number;
   /** 実測ラップのある過去の出走数（方面ごとの最大） */
   n_lap_runs?: number;

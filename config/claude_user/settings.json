@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "defaultMode": "auto"
+  },
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Bash(gcloud storage restore:*)",
+      "Bash(gcloud scheduler:*)",
+      "Bash(gcloud tasks:*)",
+      "Bash(bash scripts/gcp/deploy_cloud_run_jobs.sh:*)"
+    ]
+  },
+  "model": "opus",
+  "effortLevel": "xhigh",
+  "advisorModel": "opus",
+  "autoCompactEnabled": true,
+  "workflowSizeGuideline": "large"
+}

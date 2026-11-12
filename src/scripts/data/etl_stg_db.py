@@ -185,6 +185,28 @@ def _upsert_entry(session, race_id: str, entry: dict):
     session.execute(stmt)
 
 
+def _card_is_drawn(card: dict) -> bool:
+    """枠順確定後の出馬表か（馬番が 1 頭でも入っている）。段階収集の登録段階・出走馬決定の版は全頭 0。"""
+    for e in card.get("entries") or []:
+        try:
+            if int(e.get("horse_number") or e.get("post_no") or 0) > 0:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
+def _prune_stale_entries(session, race_id: str, keep_horse_ids: list[str]) -> int:
+    """最終の出馬表にも結果にも無い馬の entries を消す（登録段階の出馬表で入った、出走しなかった登録馬）。消した件数。"""
+    from sqlalchemy import delete
+    from src.db.models import Entry
+
+    if not keep_horse_ids:
+        return 0
+    res = session.execute(delete(Entry).where(Entry.race_id == race_id, Entry.horse_id.notin_(keep_horse_ids)))
+    return int(res.rowcount or 0)
+
+
 def _upsert_race_result(session, race_id: str, horse_id: str, result: dict):
     from sqlalchemy.dialects.postgresql import insert
     from src.db.models import RaceResult
@@ -351,11 +373,17 @@ def process_race(session, race_id: str, dry_run: bool = False) -> dict:
                     _upsert_jockey(session, jockey_id, re.get("jockey_name") or jockey_id)
                 _upsert_race_result(session, race_id, horse_id, re)
 
+        pruned = 0
+        if horse_ids and _card_is_drawn(card):
+            pruned = _prune_stale_entries(session, race_id, horse_ids)
+            if pruned:
+                logger.info("race_id=%s 出走しなかった登録馬の entries を %d 件消した", race_id, pruned)
+
         if horse_ids and _should_gen_mock_predictions():
             _upsert_mock_predictions(session, race_id, horse_ids)
 
         session.flush()
-        return {"race_id": race_id, "status": "ok", "horses": len(horse_ids)}
+        return {"race_id": race_id, "status": "ok", "horses": len(horse_ids), "pruned_entries": pruned}
 
     except Exception as e:
         logger.error("race_id=%s 投入エラー: %s", race_id, e)
@@ -405,6 +433,7 @@ def query_pg_status_batch(engine, race_ids: list[str]) -> dict[str, dict[str, in
                 SELECT r.race_id,
                        1 AS has_race,
                        (SELECT COUNT(*) FROM entries e WHERE e.race_id = r.race_id) AS entry_cnt,
+                       (SELECT COUNT(*) FROM entries e WHERE e.race_id = r.race_id AND COALESCE(e.post_no, 0) = 0) AS undrawn_cnt,
                        (SELECT COUNT(*) FROM race_results rr
                         WHERE rr.race_id = r.race_id
                           AND rr.finish_pos > 0 AND rr.finish_time_sec > 0) AS finisher_cnt
@@ -419,6 +448,7 @@ def query_pg_status_batch(engine, race_ids: list[str]) -> dict[str, dict[str, in
         out[row.race_id] = {
             "has_race": bool(row.has_race),
             "entry_cnt": int(row.entry_cnt or 0),
+            "undrawn_cnt": int(getattr(row, "undrawn_cnt", 0) or 0),
             "finisher_cnt": int(row.finisher_cnt or 0),
         }
     return out
@@ -475,6 +505,11 @@ def filter_races_needing_sync(
             continue
 
         if has_gcs_result and finisher_cnt == 0:
+            to_sync.append(rid)
+            continue
+
+        if has_gcs_result and int(pg.get("undrawn_cnt") or 0) > 0:
+            # 結果が出たのに馬番の無い entries が残っている（登録段階の出馬表で入った登録馬）。最終の出馬表で入れ直して消す
             to_sync.append(rid)
             continue
 

@@ -40,6 +40,37 @@ def test_parquet_value_key_and_column_differences(tmp_path):
     assert any("列の差" in p for p in P.compare_dirs("parquet_frame", tmp_path / "l", tmp_path / "r2", keys=["k"])["problems"])
 
 
+def test_parquet_files_compared_one_by_one_with_keys_per_file(tmp_path):
+    """種類の違う表は 1 枚に繋がずファイルごとに比べる。キーはその表にある列だけ使い、一意でなければ全列で比べる
+    （horse_id の無い表を race_id,horse_id で比べて多対多の merge になり、メモリが爆発していた）。"""
+    flat = [{"race_id": "r1", "horse_id": f"h{i}", "x": float(i)} for i in range(3)]
+    pair = [{"race_id": "r1", "odds_type": "wide", "pair": f"{i}-{j}", "odds": 1.0 + i + j} for i in range(1, 30) for j in range(i + 1, 31)]
+    for side in ("l", "r"):
+        _pq(tmp_path / side / "2026/race_result_flat.parquet", flat)
+        _pq(tmp_path / side / "2026/race_pair_odds_flat.parquet", pair)
+    rep = P.compare_dirs("parquet_frame", tmp_path / "l", tmp_path / "r", keys=["race_id", "horse_id"], rtol=1e-6, atol=1e-6)
+    assert rep["ok"], rep["problems"]
+    assert rep["rows_left"] == len(flat) + len(pair)
+    bad = [dict(r) for r in pair]
+    bad[5]["odds"] += 1
+    _pq(tmp_path / "r/2026/race_pair_odds_flat.parquet", bad)
+    rep = P.compare_dirs("parquet_frame", tmp_path / "l", tmp_path / "r", keys=["race_id", "horse_id"], rtol=1e-6, atol=1e-6)
+    assert not rep["ok"]
+    assert rep["problems"][0] == "1 ファイルで差"
+    assert all(p.startswith("2026/race_pair_odds_flat.parquet: ") for p in rep["problems"][1:]), rep["problems"]
+    # keys の列がどのファイルにも無ければ問題として出す（書き間違い・キー列の消失に気づけるように）
+    rep = P.compare_dirs("parquet_frame", tmp_path / "l", tmp_path / "l", keys=["jockey_id"])
+    assert not rep["ok"] and "どのファイルにも無い" in rep["problems"][0]
+
+
+def test_file_keys_drops_missing_and_non_unique_keys():
+    a = pd.DataFrame({"race_id": ["r1", "r1"], "horse_id": ["h1", "h2"]})
+    assert P.file_keys(a, a, ["race_id", "horse_id"]) == ["race_id", "horse_id"]
+    assert P.file_keys(a, a, ["race_id"]) == []                     # race_id だけでは一意でない
+    b = pd.DataFrame({"race_id": ["r1"], "v": [1]})
+    assert P.file_keys(b, b, ["race_id", "horse_id"]) == ["race_id"]
+
+
 def test_json_tree_ignores_volatile_keys_and_float_noise(tmp_path):
     (tmp_path / "l").mkdir()
     (tmp_path / "r").mkdir()

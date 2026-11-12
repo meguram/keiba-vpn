@@ -1,0 +1,203 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>上流モデルの出力値の見方（サンプル付き）— keiba-vpn docs</title>
+<style>
+:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --code:#0b1428; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1150px; margin:0 auto; padding:36px 28px 80px; }
+h1 { font-size:26px; margin:0 0 6px; } h2 { font-size:19px; margin:40px 0 4px; padding-top:16px; border-top:1px solid var(--border); }
+h3 { font-size:16px; margin:22px 0 4px; }
+.muted { color:var(--muted); font-size:13px; } .sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+table { border-collapse:collapse; width:100%; margin:8px 0 14px; font-size:13px; }
+th,td { border:1px solid var(--border); padding:5px 9px; text-align:right; vertical-align:top; }
+th { background:var(--panel); color:var(--muted); font-weight:600; white-space:nowrap; text-align:center; }
+table.def td { text-align:left; } table.def td:first-child { white-space:nowrap; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 6px; border-radius:5px; font-size:12px; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin:12px 0; }
+.warn { color:var(--warn); } .na { color:var(--muted); }
+tr.hit td { background:#1b2c52; }
+.mermaid { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:10px; margin:8px 0; overflow-x:auto; text-align:center; }
+</style>
+<script src="../../assets/mermaid.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';s.onload=function(){mermaid.initialize({startOnLoad:false,theme:'dark'});mermaid.run({querySelector:'.mermaid'});};document.head.appendChild(s);"></script>
+<script>document.addEventListener("DOMContentLoaded",function(){ if (typeof mermaid!=="undefined") mermaid.initialize({startOnLoad:true,theme:"dark",themeVariables:{edgeLabelBackground:"#15213c"}}); });</script>
+</head><body><main>
+
+<h1>上流モデルの出力値の見方（サンプル付き）</h1>
+<p class="muted">作成: 2026-11-11。再学習（学習年 2016〜2025）で作った上流モデル 5 つ（位置取り・ラップ・追走難度・前段 S3 試行 7・想定オッズ試行 6）が、どんな数値を出すかをまとめた。
+定義はコード（<code>pos_model.py</code>・<code>lap_forecast.py</code>・<code>tracking_difficulty_v2.py</code>・<code>tp54_model.py</code>・<code>odds_t6.py</code> と各 <code>fit_final_*.py</code>）と各 <code>meta.json</code> で確認したもの。<span class="warn">（推）</span>は式や名前からの推測。</p>
+
+<div class="box"><b>サンプルのレース</b>：2025-12-28 のレース <code>202509050811</code>（16 頭。場コード 09 は阪神、タイムから芝 1400m 前後と見られる。<span class="warn">（推）</span>）。
+2025 年は<b>学習に使っていない年</b>で、数値は<b>学習から外した年の予測（OOF）</b>。着順や実際のタイムは答え合わせ用に並べた。
+想定オッズは、OOF の生の出力に最終モデルと同じ較正の直線（<code>meta.json</code> の win_line・place_line）と払戻率 0.797 を当てて計算した。</div>
+
+<h2>1. 全体の流れ</h2>
+<p class="sub">左のモデルの出力が、右のモデルの入力になる（最後に親モデルへ）。</p>
+<div class="mermaid">
+flowchart LR
+  POS["位置取り POS<br/>pos_pred"] --> PP["位置取りの関係<br/>pp_rank / pp_ahead<br/>pp_front_n / pp_gap_mean"]
+  LAP["ラップ LAP<br/>lp_*"]
+  LAPD["ラップ直接 LAPD<br/>ld_*"]
+  PP --> EASE["追走難度 EASE2<br/>drain / demand / full<br/>capacity / pct"]
+  LAP --> EASE
+  LAPD --> EASE
+  PP --> S3["前段 S3 試行 7<br/>s_time_pred / s_time_gap<br/>s_rank_pred"]
+  LAP --> S3
+  EASE --> S3
+  S3 --> PARENT["親モデル"]
+  ODDS["想定オッズ 試行 6<br/>win_odds / place_mid"]
+  classDef up fill:#15213c,stroke:#7aa9ff,color:#e6ecff;
+  classDef side fill:#15213c,stroke:#9aa7c7,stroke-dasharray:4 3,color:#e6ecff;
+  class POS,PP,LAP,LAPD,EASE,S3,PARENT up;
+  class ODDS side;
+</div>
+<p class="muted">実線の矢印＝出力が次のモデルの入力になる。想定オッズ（破線の箱）は別系統で、親モデルと同じ特徴量（市場のオッズ・人気は除く）から占有率と複勝を予測する。
+入力の向きは <code>fit_final_tracking_t6.py</code>（追走難度の入力に LAP・LAPD・pp_*）と <code>fit_final_stage_t7.py</code>（S3 の入力に pp_*・EASE2・lp_*）で確認。</p>
+
+<h2>2. 出力の一覧</h2>
+<table class="def"><thead><tr><th>モデル</th><th>列</th><th>単位・範囲</th><th>読み方</th></tr></thead><tbody>
+<tr><td>位置取り POS</td><td><code>pos_pred</code></td><td>0〜1</td><td>初角（最初のコーナー）の順位を (順位−1)/(頭数−1) にした値の予測。<b>小さいほど前</b>（0=先頭、1=最後方）。</td></tr>
+<tr><td>位置取りの関係</td><td><code>pp_rank</code>・<code>pp_ahead</code>・<code>pp_front_n</code>・<code>pp_gap_mean</code></td><td>0〜1／頭数／頭数／差</td><td>レース内での相対値。<code>pp_rank</code>=pos_pred の順位の割合（小さいほど前）、<code>pp_ahead</code>=自分より前に出る頭数、<code>pp_front_n</code>=pos_pred&lt;0.15 の頭数（レース共通）、<code>pp_gap_mean</code>=自分−レース平均。</td></tr>
+<tr><td>ラップ LAP</td><td><code>lp_p_slow/mid/high</code></td><td>確率（合計 1）</td><td>レースがスロー・ミドル・ハイになる確率（前半と後半の差の分位で 3 分類）。レース共通。</td></tr>
+<tr><td></td><td><code>lp_exp_f3_dev</code>・<code>lp_exp_l3_dev</code>・<code>lp_exp_lap0_dev</code></td><td>秒</td><td>前半 3F・後半 3F・最初の 1F が、コース別の基準ラップからずれる秒数の期待値。<b>負＝基準より速い</b>。レース共通。</td></tr>
+<tr><td></td><td><code>lp_front_x_high</code> ほか 4 列</td><td>—</td><td>馬ごとの組み合わせ。<code>lp_front_x_high</code>=(1−前に行く度合い)×lp_p_high（前に行く馬ほどハイペース確率の負荷が大きい）、<code>lp_pos_x_f3</code>=(1−前に行く度合い)×lp_exp_f3_dev（学習側 tp55_win_eval.py の式。サンプルの値は pos_pred から作ったもので、式の厳密な入力は<span class="warn">（推）</span>）。他の 2 列も同種（推）。</td></tr>
+<tr><td>ラップ直接 LAPD</td><td><code>ld_f3</code>・<code>ld_l3</code>・<code>ld_q</code></td><td>秒</td><td>前半 3F・後半 3F の基準ラップからのずれ、<code>ld_q</code>=後半 3F−前半 3F のずれ（正＝後半の方が遅い）を、それぞれ<b>別々の回帰</b>で直接予測。このため ld_l3−ld_f3 とは一致しない。レース共通。</td></tr>
+<tr><td>追走難度 EASE2</td><td><code>EASE2_drain</code></td><td>秒（±4 で打ち切り）</td><td>その位置を取ると<b>終いがどれだけ落ちるか</b>。大きいほど大変、小さい（負）ほど楽。</td></tr>
+<tr><td></td><td><code>EASE2_demand</code></td><td>秒</td><td>位置・距離・コースが要求する負荷だけで作った予測（馬の能力を含まない）。</td></tr>
+<tr><td></td><td><code>EASE2_full</code></td><td>秒</td><td>全特徴を使った予測。</td></tr>
+<tr><td></td><td><code>EASE2_capacity</code></td><td>秒</td><td>drain − demand。<b>馬が負荷より余計に落ちる分</b>（正＝その馬はコースの要求より落ちやすい）。</td></tr>
+<tr><td></td><td><code>EASE2_pct</code></td><td>0〜100</td><td>drain を学習期間の分布での位置に直した値。50 が標準、<b>60 以上は楽、30 未満は大変</b>。</td></tr>
+<tr><td></td><td><code>EASE2_vs_prev</code></td><td>秒</td><td>前走の位置取りだった場合との drain の差。今回のサンプルは全頭欠損。</td></tr>
+<tr><td>前段 S3 試行 7</td><td><code>s_time_pred</code></td><td>秒（偏差）</td><td>走破タイムの偏差の予測。<b>小さいほど速い</b>。</td></tr>
+<tr><td></td><td><code>s_time_gap</code></td><td>秒</td><td>s_time_pred −（そのレースの最小値）。レース内の最速予測が 0。</td></tr>
+<tr><td></td><td><code>s_rank_pred</code></td><td>0〜1</td><td>順位を 0〜1 にした予測。レース平均が 0.5 になるよう揃える。<b>小さいほど上位</b>。</td></tr>
+<tr><td>想定オッズ 試行 6</td><td><code>win_odds</code></td><td>倍</td><td>想定単勝。市場の占有率を予測 → レース内で合計 1 に → 0.797÷占有率（下限 1.0）。</td></tr>
+<tr><td></td><td><code>place_mid</code>・<code>place_min</code>・<code>place_max</code></td><td>倍</td><td>想定複勝の中央・下限・上限。直接予測と占有率の並びからの写像を半々で混ぜて較正。中央は下限 1.05。下限・上限は中央の ±約 23%（<code>place_half_range</code>）。</td></tr>
+</tbody></table>
+
+<h2>3. サンプルで見る</h2>
+
+<h3>3.1 位置取り（POS と pp_*）</h3>
+<p class="sub">pos_pred が小さい馬が前に行く予想。実際の初角位置と並べて見る。例：4 番は予測 0.139 に対し実際 0.0（先頭）、13 番は予測 0.050 に対し実際 0.133。後方予想の 14・16 番は実際も後方（0.8・1.0）。</p>
+<table><thead><tr><th>馬番</th><th>pos_pred（予測）</th><th>実際の初角位置</th><th>pp_rank</th><th>pp_ahead</th><th>pp_front_n</th><th>pp_gap_mean</th><th>着順</th></tr></thead><tbody>
+<tr><td>1</td><td>0.185</td><td>0.733</td><td>0.250</td><td>3</td><td>2</td><td>-0.269</td><td>14</td></tr>
+<tr><td>2</td><td>0.462</td><td>0.600</td><td>0.625</td><td>9</td><td>2</td><td>0.008</td><td>10</td></tr>
+<tr><td>3</td><td>0.703</td><td>0.667</td><td>0.812</td><td>12</td><td>2</td><td>0.249</td><td>1</td></tr>
+<tr><td>4</td><td>0.139</td><td>0.000</td><td>0.125</td><td>1</td><td>2</td><td>-0.315</td><td>11</td></tr>
+<tr><td>5</td><td>0.424</td><td>0.200</td><td>0.500</td><td>7</td><td>2</td><td>-0.030</td><td>4</td></tr>
+<tr><td>6</td><td>0.247</td><td>0.200</td><td>0.312</td><td>4</td><td>2</td><td>-0.207</td><td>3</td></tr>
+<tr><td>7</td><td>0.831</td><td>0.933</td><td>0.938</td><td>14</td><td>2</td><td>0.377</td><td>15</td></tr>
+<tr><td>8</td><td>0.159</td><td>0.533</td><td>0.188</td><td>2</td><td>2</td><td>-0.295</td><td>6</td></tr>
+<tr><td>9</td><td>0.445</td><td>0.400</td><td>0.562</td><td>8</td><td>2</td><td>-0.009</td><td>5</td></tr>
+<tr><td>10</td><td>0.283</td><td>0.067</td><td>0.375</td><td>5</td><td>2</td><td>-0.171</td><td>16</td></tr>
+<tr><td>11</td><td>0.416</td><td>0.400</td><td>0.438</td><td>6</td><td>2</td><td>-0.038</td><td>8</td></tr>
+<tr><td>12</td><td>0.643</td><td>0.800</td><td>0.750</td><td>11</td><td>2</td><td>0.189</td><td>9</td></tr>
+<tr><td>13</td><td>0.050</td><td>0.133</td><td>0.062</td><td>0</td><td>2</td><td>-0.404</td><td>12</td></tr>
+<tr><td>14</td><td>0.888</td><td>0.800</td><td>1.000</td><td>15</td><td>2</td><td>0.434</td><td>2</td></tr>
+<tr><td>15</td><td>0.573</td><td>0.333</td><td>0.688</td><td>10</td><td>2</td><td>0.119</td><td>13</td></tr>
+<tr><td>16</td><td>0.810</td><td>1.000</td><td>0.875</td><td>13</td><td>2</td><td>0.356</td><td>7</td></tr>
+</tbody></table>
+<p class="muted">pp_front_n = 2（pos_pred&lt;0.15 の馬が 13・4 の 2 頭）。</p>
+
+<h3>3.2 ラップ（LAP・LAPD）</h3>
+<p class="sub">レース共通の値（1 行）。このレースは「ミドル 54%・ハイ 27%・スロー 19%」。前半 3F は基準より約 0.6 秒速い見込み。</p>
+<table><thead><tr><th>lp_p_slow</th><th>lp_p_mid</th><th>lp_p_high</th><th>lp_exp_f3_dev</th><th>lp_exp_l3_dev</th><th>lp_exp_lap0_dev</th><th>ld_f3</th><th>ld_l3</th><th>ld_q</th></tr></thead>
+<tbody><tr><td>0.185</td><td>0.543</td><td>0.273</td><td>-0.602</td><td>-0.490</td><td>-0.131</td><td>−0.644</td><td>−0.531</td><td>0.195</td></tr></tbody></table>
+<p class="sub">馬ごとの組み合わせ列。前に行く馬（pos_pred が小さい）ほど lp_front_x_high が大きい。</p>
+<table><thead><tr><th>馬番</th><th>pos_pred</th><th>lp_front_x_high</th><th>lp_front_x_slow</th><th>lp_closer_x_slow</th><th>lp_pos_x_f3</th></tr></thead><tbody>
+<tr><td>1</td><td>0.185</td><td>0.214</td><td>0.144</td><td>0.040</td><td>-0.471</td></tr>
+<tr><td>2</td><td>0.462</td><td>0.123</td><td>0.083</td><td>0.101</td><td>-0.271</td></tr>
+<tr><td>3</td><td>0.703</td><td>0.101</td><td>0.069</td><td>0.116</td><td>-0.223</td></tr>
+<tr><td>4</td><td>0.139</td><td>0.175</td><td>0.118</td><td>0.066</td><td>-0.385</td></tr>
+<tr><td>5</td><td>0.424</td><td>0.160</td><td>0.109</td><td>0.076</td><td>-0.354</td></tr>
+<tr><td>6</td><td>0.247</td><td>0.203</td><td>0.137</td><td>0.047</td><td>-0.447</td></tr>
+<tr><td>7</td><td>0.831</td><td>0.045</td><td>0.031</td><td>0.154</td><td>-0.100</td></tr>
+<tr><td>8</td><td>0.159</td><td>0.192</td><td>0.130</td><td>0.055</td><td>-0.423</td></tr>
+<tr><td>9</td><td>0.445</td><td>0.159</td><td>0.108</td><td>0.077</td><td>-0.351</td></tr>
+<tr><td>10</td><td>0.283</td><td>0.201</td><td>0.136</td><td>0.049</td><td>-0.443</td></tr>
+<tr><td>11</td><td>0.416</td><td>0.185</td><td>0.125</td><td>0.060</td><td>-0.407</td></tr>
+<tr><td>12</td><td>0.643</td><td>0.236</td><td>0.160</td><td>0.025</td><td>-0.521</td></tr>
+<tr><td>13</td><td>0.050</td><td>0.264</td><td>0.179</td><td>0.006</td><td>-0.583</td></tr>
+<tr><td>14</td><td>0.888</td><td>0.039</td><td>0.026</td><td>0.158</td><td>-0.085</td></tr>
+<tr><td>15</td><td>0.573</td><td>0.152</td><td>0.102</td><td>0.082</td><td>-0.334</td></tr>
+<tr><td>16</td><td>0.810</td><td>0.059</td><td>0.040</td><td>0.145</td><td>-0.130</td></tr>
+</tbody></table>
+
+<h3>3.3 追走難度（EASE2）</h3>
+<p class="sub">drain が小さい（pct が高い）ほど楽。例：3 番は pct 95 で楽と判定され、実際に 1 着・上がり最速級（36.3）。4 番・8 番は pct 11〜12 で大変と判定され、4 番は上がり 39.2 と落ちた。<span class="na">—</span>は値なし（9〜16 番は算出されていない。履歴が足りないためと思われるが未確認）。</p>
+<table><thead><tr><th>馬番</th><th>EASE2_drain</th><th>EASE2_demand</th><th>EASE2_full</th><th>EASE2_capacity</th><th>EASE2_pct</th><th>着順</th><th>実際の上がり3F</th></tr></thead><tbody>
+<tr><td>1</td><td>0.061</td><td>-0.238</td><td>0.091</td><td>0.299</td><td>41.6</td><td>14</td><td>38.2</td></tr>
+<tr><td>2</td><td>0.236</td><td>-0.217</td><td>0.438</td><td>0.453</td><td>23.8</td><td>10</td><td>37.8</td></tr>
+<tr><td>3</td><td>-0.520</td><td>-0.072</td><td>-0.528</td><td>-0.447</td><td>95.0</td><td>1</td><td>36.3</td></tr>
+<tr><td>4</td><td>0.458</td><td>-0.358</td><td>0.492</td><td>0.816</td><td>11.9</td><td>11</td><td>39.2</td></tr>
+<tr><td>5</td><td>0.166</td><td>-0.209</td><td>0.108</td><td>0.375</td><td>29.7</td><td>4</td><td>37.3</td></tr>
+<tr><td>6</td><td>0.295</td><td>-0.268</td><td>0.595</td><td>0.563</td><td>19.8</td><td>3</td><td>37.3</td></tr>
+<tr><td>7</td><td>-0.238</td><td>-0.051</td><td>-0.198</td><td>-0.188</td><td>79.2</td><td>15</td><td>38.0</td></tr>
+<tr><td>8</td><td>0.474</td><td>-0.351</td><td>0.655</td><td>0.825</td><td>10.9</td><td>6</td><td>36.9</td></tr>
+<tr><td>9</td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td>5</td><td>37.1</td></tr>
+<tr><td>10</td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td>16</td><td>41.4</td></tr>
+<tr><td>11</td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td>8</td><td>37.2</td></tr>
+<tr><td>12</td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td>9</td><td>36.9</td></tr>
+<tr><td>13</td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td>12</td><td>38.9</td></tr>
+<tr><td>14</td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td>2</td><td>36.1</td></tr>
+<tr><td>15</td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td>13</td><td>38.5</td></tr>
+<tr><td>16</td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td><span class="na">—</span></td><td>7</td><td>36.4</td></tr>
+</tbody></table>
+
+<h3>3.4 前段 S3 試行 7</h3>
+<p class="sub">s_time_gap が 0 の 3 番が最速予想で、実際も 1 着。最も遅い予想は 12 番（gap 1.83）。</p>
+<table><thead><tr><th>馬番</th><th>s_time_pred</th><th>s_time_gap</th><th>s_rank_pred</th><th>着順</th><th>実際のタイム（秒）</th></tr></thead><tbody>
+<tr><td>1</td><td>-0.485</td><td>0.393</td><td>0.303</td><td>14</td><td>85.4</td></tr>
+<tr><td>2</td><td>-0.132</td><td>0.746</td><td>0.495</td><td>10</td><td>84.6</td></tr>
+<tr><td>3</td><td>-0.878</td><td>0.000</td><td>0.174</td><td>1</td><td>83.4</td></tr>
+<tr><td>4</td><td>0.068</td><td>0.947</td><td>0.637</td><td>11</td><td>85.0</td></tr>
+<tr><td>5</td><td>-0.613</td><td>0.266</td><td>0.238</td><td>4</td><td>83.6</td></tr>
+<tr><td>6</td><td>-0.259</td><td>0.619</td><td>0.458</td><td>3</td><td>83.6</td></tr>
+<tr><td>7</td><td>-0.285</td><td>0.593</td><td>0.470</td><td>15</td><td>85.5</td></tr>
+<tr><td>8</td><td>-0.192</td><td>0.686</td><td>0.466</td><td>6</td><td>83.8</td></tr>
+<tr><td>9</td><td>-0.535</td><td>0.344</td><td>0.280</td><td>5</td><td>83.7</td></tr>
+<tr><td>10</td><td>0.507</td><td>1.386</td><td>0.806</td><td>16</td><td>87.3</td></tr>
+<tr><td>11</td><td>-0.468</td><td>0.410</td><td>0.349</td><td>8</td><td>84.0</td></tr>
+<tr><td>12</td><td>0.953</td><td>1.831</td><td>0.854</td><td>9</td><td>84.2</td></tr>
+<tr><td>13</td><td>0.112</td><td>0.990</td><td>0.615</td><td>12</td><td>85.0</td></tr>
+<tr><td>14</td><td>-0.613</td><td>0.265</td><td>0.278</td><td>2</td><td>83.5</td></tr>
+<tr><td>15</td><td>0.340</td><td>1.218</td><td>0.744</td><td>13</td><td>85.1</td></tr>
+<tr><td>16</td><td>0.665</td><td>1.543</td><td>0.833</td><td>7</td><td>84.0</td></tr>
+</tbody></table>
+
+<h3>3.5 想定オッズ（試行 6）</h3>
+<p class="sub">市場の実際のオッズを入力にせず、馬の中身から市場が付けそうなオッズを推定する。想定が実際より低い馬は、市場より高く評価している（例：1 番 想定 10.2 倍／実際 17.2 倍、2 番 想定 35.4／実際 71.7）。想定が実際より高い馬は、市場より低く評価している（例：4 番 想定 27.7／実際 21.0）。</p>
+<table><thead><tr><th>馬番</th><th>想定単勝（win_odds）</th><th>想定複勝（place_mid）</th><th>実際の単勝</th><th>実際の複勝（中央）</th><th>実際の人気</th><th>着順</th></tr></thead><tbody>
+<tr><td>1</td><td>10.2</td><td>3.47</td><td>17.2</td><td>4.45</td><td>7</td><td>14</td></tr>
+<tr><td>2</td><td>35.4</td><td>9.73</td><td>71.7</td><td>17.50</td><td>12</td><td>10</td></tr>
+<tr><td>3</td><td>4.4</td><td>1.92</td><td>5.3</td><td>2.05</td><td>2</td><td>1</td></tr>
+<tr><td>4</td><td>27.7</td><td>8.84</td><td>21.0</td><td>7.15</td><td>8</td><td>11</td></tr>
+<tr><td>5</td><td>5.1</td><td>2.17</td><td>3.2</td><td>1.45</td><td>1</td><td>4</td></tr>
+<tr><td>6</td><td>25.7</td><td>6.56</td><td>56.0</td><td>11.65</td><td>11</td><td>3</td></tr>
+<tr><td>7</td><td>32.0</td><td>7.60</td><td>43.0</td><td>6.80</td><td>10</td><td>15</td></tr>
+<tr><td>8</td><td>14.6</td><td>4.53</td><td>26.2</td><td>6.80</td><td>9</td><td>6</td></tr>
+<tr><td>9</td><td>7.3</td><td>2.66</td><td>6.9</td><td>2.35</td><td>4</td><td>5</td></tr>
+<tr><td>10</td><td>53.2</td><td>14.14</td><td>97.2</td><td>19.25</td><td>13</td><td>16</td></tr>
+<tr><td>11</td><td>8.1</td><td>3.10</td><td>10.8</td><td>3.05</td><td>6</td><td>8</td></tr>
+<tr><td>12</td><td>199.6</td><td>43.62</td><td>191.1</td><td>44.55</td><td>15</td><td>9</td></tr>
+<tr><td>13</td><td>8.3</td><td>3.21</td><td>7.8</td><td>2.90</td><td>5</td><td>12</td></tr>
+<tr><td>14</td><td>8.9</td><td>3.09</td><td>5.9</td><td>2.20</td><td>3</td><td>2</td></tr>
+<tr><td>15</td><td>177.7</td><td>34.29</td><td>235.7</td><td>49.65</td><td>16</td><td>13</td></tr>
+<tr><td>16</td><td>166.7</td><td>33.16</td><td>166.9</td><td>28.95</td><td>14</td><td>7</td></tr>
+</tbody></table>
+
+<h4>想定単勝の精度（2025 年・実際のオッズ帯ごと、約 21,000 頭）</h4>
+<table><thead><tr><th>実際の単勝</th><th>頭数</th><th>差 1.0 以内</th><th>差 2.0 以内</th><th>差の中央値</th><th>相対差の中央値</th></tr></thead><tbody>
+<tr><td>〜3 倍</td><td>2,832</td><td>89%</td><td>97%</td><td>0.31</td><td>14%</td></tr>
+<tr><td>3〜5 倍</td><td>4,131</td><td>62%</td><td>85%</td><td>0.75</td><td>19%</td></tr>
+<tr><td>5〜10 倍</td><td>7,053</td><td>32%</td><td>57%</td><td>1.67</td><td>23%</td></tr>
+<tr><td>10〜20 倍</td><td>7,297</td><td>13%</td><td>26%</td><td>3.95</td><td>28%</td></tr>
+<tr><td>20 倍以内 全体</td><td>21,313</td><td>39%</td><td>57%</td><td>1.53</td><td>22%</td></tr>
+</tbody></table>
+<p class="sub">「差 1.0 以内」を 20 倍以内の全馬で満たすのは、市場オッズ・人気を入力にしない今の作りでは届かない。偏りの補正（対数線形・等調回帰）や旧予測（A・B・V8）との合成も試したが、現行より悪いか同等だった（現行が上限）。10〜20 倍の差 1.0 は相対 5〜10% で、市場の値付けの揺れに近い。<b>差 1.0 を満たしたい場合は、前日などの市場オッズを入力に加える（別の方針）か、買い目の計算に当日の実オッズを使う</b>。</p>
+
+<h2>4. 注意</h2>
+<ul>
+<li>数値は <b>OOF（その年を学習から外した予測）</b>。本番の推論は、前夜の出馬表（馬体重なし）から作るため、位置取りは前走の体重で補完している（欠損のままだと MAE が 4〜7% 悪化、補完で 8 割以上戻ることを確認）。</li>
+<li>追走難度は履歴が足りない馬で欠損になる。下流（前段 S3・親モデル）は欠損のまま受ける。</li>
+<li>想定オッズは市場の中身を予測した値で、回収率を保証しない。馬券の期待値計算では、実際のオッズと組み合わせて使う。</li>
+</ul>
+</main></body></html>

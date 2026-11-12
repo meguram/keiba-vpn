@@ -7,6 +7,8 @@
 
 比べ方（``config/gcp_job_map.json`` の各ジョブの ``parity``）:
 - ``parquet_frame``: 行を ``keys``（空なら浮動小数以外の全列）で突き合わせ、片方にしか無い行・列の差・数値の差（rtol/atol）を数える。
+  parquet は 1 ファイルずつ比べて合算する（全部を 1 枚に繋がない）。キーはそのファイルにある列だけ使い、両側で一意でなければ
+  全列で並べて比べる（重複キーの多対多 merge でメモリが爆発しないように）。keys の列がどのファイルにも無ければ問題として出す。
 - ``json_tree``: ファイル集合と、JSON の中身を再帰比較（浮動小数は許容誤差内なら一致。生成時刻などの揮発キーは無視）。
 - ``file_hash``: ファイル集合と sha256。
 
@@ -89,14 +91,46 @@ def sha256_file(p: Path) -> str:
     return h.hexdigest()
 
 
-def _read_frames(files: dict[str, Path]):
+def file_keys(left: Any, right: Any, keys: list[str]) -> list[str]:
+    """1 ファイルの比較に使うキー: keys のうち両方にある列。それが両方で一意でなければ空（全列を並べて比べる）。
+    重複したキーで outer merge すると多対多で行数が爆発する（2026-11: 種類の違う表を 1 枚に繋いで race_id,horse_id で比べ、
+    horse_id の無い表の NaN 同士が一致して約 4.9 億行になり、8GiB の Job が落ちていた）。"""
+    ks = [k for k in keys if k in left.columns and k in right.columns]
+    if ks and (left.duplicated(ks).any() or right.duplicated(ks).any()):
+        return []
+    return ks
+
+
+def compare_parquet_files(left_files: dict[str, Path], right_files: dict[str, Path], keys: list[str], rtol: float, atol: float) -> dict[str, Any]:
+    """parquet を 1 ファイルずつ比べて合算する（全部を 1 枚に繋がない。メモリはいちばん大きい 1 ファイル分）。"""
+    import gc
+
     import pandas as pd
 
-    frames = []
-    for rel, p in files.items():
-        if p.suffix == ".parquet":
-            frames.append(pd.read_parquet(p))
-    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    out: dict[str, Any] = {"rows_left": 0, "rows_right": 0, "problems": [], "max_abs_diff": 0.0}
+    problems: list[str] = []
+    bad_files = 0
+    keys_seen = False
+    for rel in sorted(set(left_files) & set(right_files)):
+        if left_files[rel].suffix != ".parquet":
+            continue
+        a, b = pd.read_parquet(left_files[rel]), pd.read_parquet(right_files[rel])
+        keys_seen = keys_seen or any(k in a.columns and k in b.columns for k in keys)
+        fr = compare_frames(a, b, file_keys(a, b, keys), rtol, atol)
+        del a, b
+        gc.collect()
+        out["rows_left"] += fr["rows_left"]
+        out["rows_right"] += fr["rows_right"]
+        out["max_abs_diff"] = max(out["max_abs_diff"], float(fr.get("max_abs_diff") or 0.0))
+        if fr["problems"]:
+            bad_files += 1
+            problems += [f"{rel}: {p}" for p in fr["problems"]]
+    if keys and not keys_seen and (out["rows_left"] or out["rows_right"]):
+        problems.insert(0, f"keys {keys} の列がどのファイルにも無い（設定の誤りか、成果物からキー列が消えた）")
+    if bad_files:
+        problems.insert(0, f"{bad_files} ファイルで差")
+    out["problems"] = problems[:CAP]
+    return out
 
 
 def compare_frames(left: Any, right: Any, keys: list[str], rtol: float, atol: float) -> dict[str, Any]:
@@ -178,7 +212,7 @@ def compare_dirs(kind: str, left: Path, right: Path, *, keys: list[str] | None =
         if diffs:
             rep["problems"].append(f"JSON の差 {len(diffs)} 件（例: {diffs[0]}）")
     elif kind == "parquet_frame":
-        fr = compare_frames(_read_frames({r: lf[r] for r in common}), _read_frames({r: rf[r] for r in common}), keys or [], rtol, atol)
+        fr = compare_parquet_files({r: lf[r] for r in common}, {r: rf[r] for r in common}, keys or [], rtol, atol)
         rep.update({k: v for k, v in fr.items() if k != "problems"})
         rep["problems"] += fr["problems"]
     else:

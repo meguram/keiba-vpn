@@ -67,6 +67,9 @@ def main() -> None:
     names = {k: v.scenario_names() for k, v in models.items()}
     dates = _dates(a)
     df, rep = tb.build_infer(a.years, dates)
+    if df.empty:
+        print(json.dumps({"dates": dates, "n_features": 0, "n_forecast": 0, "skipped": rep.get("skipped") or "no_rows"}, ensure_ascii=False))
+        return
     docs = forecast_frame(df, models, names, svc.LapdModel(a.lapd_dir) if a.lapd_dir else None)
     if not a.dry_run:
         for d in docs:

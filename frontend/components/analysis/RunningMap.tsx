@@ -441,7 +441,8 @@ function extraText(e: RunningMapExtra | undefined, key: string): string {
     return `不明（道悪の走 ${e?.n_power ?? 0} 走・通常の走 ${e?.n_normal ?? 0} 走。各 3 走以上で判定）`;
   }
   const v = Math.round(e.value);
-  return key === "slope" ? `${v}（実測 ${e.runs ?? 0} 走）` : `${v}${e.low ? "（走数が少なく低信頼）" : ""}`;
+  const pt = typeof e.score === "number" ? `${e.score.toFixed(1)}点（偏差値 ${v}）` : `${v}`;
+  return key === "slope" ? `${pt}（実測 ${e.runs ?? 0} 走）` : `${pt}${e.low ? "（走数が少なく低信頼）" : ""}`;
 }
 
 function HorseDetail({ h, pedTraits, axes, topKeys, extraAxes, bracket, onClose, onPick, bracketOf }: {
@@ -478,8 +479,8 @@ function HorseDetail({ h, pedTraits, axes, topKeys, extraAxes, bracket, onClose,
         {/* 地図に使った寄与率の上位の軸を先に並べ、金色の枠・順位の印で強調する */}
         {[...axes].sort((x, y) => (topKeys.indexOf(x.key) + 1 || 99) - (topKeys.indexOf(y.key) + 1 || 99)).map((a) => {
           const p = h.percentiles[a.key];
-          // 全馬の中での位置（0〜100）を 10 点満点・0.5 点刻みに
-          const sc = typeof p === "number" ? Math.round(p / 5) / 2 : null;
+          // クラス基準の 10 点（5=2勝で安定・4=1勝・3=未勝利・10=G1 好走馬の上位 5%）。古い保存結果には無いので、そのときは全馬の中での位置（0〜100）を 0.5 点刻みに
+          const sc = h.scores ? (h.scores[a.key] ?? null) : typeof p === "number" ? Math.round(p / 5) / 2 : null;
           const rk = topKeys.indexOf(a.key);
           const top = rk >= 0;
           return (

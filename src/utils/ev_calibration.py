@@ -16,13 +16,14 @@ config の enabled が false のときは何も変えない（従来の EV の�
 from __future__ import annotations
 
 import json
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
 
 import numpy as np
 
-CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "ev_calibration.json"
+CONFIG_PATH = Path(os.environ.get("KEIBA_EV_CALIBRATION_PATH") or Path(__file__).resolve().parents[2] / "config" / "ev_calibration.json")   # 環境変数は再学習時の評価用（本番は未設定）
 DEFAULT_BASE = {"win": 0.80, "top2": 0.775, "place": 0.80, "tansho": 0.80, "fukusho": 0.80, "umaren": 0.775, "wide": 0.775, "umatan": 0.75,
                 "sanrenpuku": 0.75, "trio": 0.75, "sanrentan": 0.725, "tierce": 0.725, "portfolio": 0.80}
 CAND_KINDS = {"tansho", "fukusho", "umaren", "wide"}

@@ -127,8 +127,8 @@ def summarize(df: pd.DataFrame, years: list[int], kinds: list[str]) -> list[dict
 
 def compare(a) -> None:
     df = pd.read_parquet(a.base).reset_index(drop=True)
-    years = [2023, 2024, 2025, 2026]
     train_end = {2023: 2022, 2024: 2023, 2025: 2024, 2026: 2025}
+    years = [y for y in train_end if y in set(df["year"])]      # 2026 の予測が無い表（新しい親モデルの 2022〜2025 だけの表）でも動く
     df = evaluate(df, years, METHODS, train_end)
     rows = summarize(df, years, METHODS)
     out = Path(a.out)

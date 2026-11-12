@@ -20,7 +20,7 @@ import numpy as np
 
 from src.utils.race_probabilities import harville_top2_prob, harville_top3_prob
 
-CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "prob_calibration.json"
+CONFIG_PATH = Path(os.environ.get("KEIBA_PROB_CALIBRATION_PATH") or Path(__file__).resolve().parents[2] / "config" / "prob_calibration.json")   # 環境変数は再学習時の評価用（本番は未設定）
 EPS = 1e-6
 MIN_FIELD = 8
 KSUM = {"win": 1.0, "top2": 2.0, "top3": 3.0}

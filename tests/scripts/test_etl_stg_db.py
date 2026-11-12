@@ -31,6 +31,22 @@ class TestFilterRacesNeedingSync(unittest.TestCase):
         self.assertEqual(to_sync, ["202607181102"])
         self.assertEqual(skipped["202607181101"], "pg_complete")
 
+    def test_resync_when_undrawn_entries_remain_after_result(self):
+        rid, rid2 = "202611081101", "202611081102"
+        pg = {rid: {"has_race": True, "entry_cnt": 33, "finisher_cnt": 16, "undrawn_cnt": 17},
+              rid2: {"has_race": True, "entry_cnt": 16, "finisher_cnt": 16, "undrawn_cnt": 0}}
+        to_sync, skipped = etl.filter_races_needing_sync([rid, rid2], pg, {rid, rid2}, {rid, rid2}, skip_if_complete=True)
+        self.assertEqual(to_sync, [rid])
+        self.assertEqual(skipped[rid2], "pg_complete")
+        # 結果が未公開の（これからの）レースは、登録段階でも読み直さない
+        to_sync, skipped = etl.filter_races_needing_sync([rid], pg, {rid}, set(), skip_if_complete=True)
+        self.assertEqual(to_sync, [])
+
+    def test_card_is_drawn(self):
+        self.assertFalse(etl._card_is_drawn({"entries": [{"horse_number": 0}, {"horse_number": None}]}))
+        self.assertTrue(etl._card_is_drawn({"entries": [{"horse_number": 0}, {"horse_number": 3}]}))
+        self.assertFalse(etl._card_is_drawn({}))
+
     def test_sync_missing_entries(self):
         rid = "202607191101"
         to_sync, skipped = etl.filter_races_needing_sync(

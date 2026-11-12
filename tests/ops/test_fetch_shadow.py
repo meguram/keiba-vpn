@@ -86,6 +86,32 @@ def test_shadow_bucket_denies_delete_copy_and_other_mutations():
     assert real.deleted == [] and real.objects == {"prod/a.json": "PROD"}
 
 
+def test_listing_keeps_size_and_updated_of_listed_blobs():
+    """一覧で取れた Blob の size・updated をそのまま読める（未読込の blob を作り直すと None になり、一覧が空になっていた）。"""
+    class Listed:
+        def __init__(self, name):
+            self.name, self.size, self.updated = name, 123, "2026-11-08"
+
+    class Real(FakeBucket):
+        def list_blobs(self, *a, **k):
+            return iter([Listed("prod/a.json")])
+
+        def get_blob(self, name, *a, **k):
+            return Listed(name)
+
+    b = ss.ShadowBucket(Real(), lambda: "shadow/20261108/")
+    got = list(b.list_blobs(prefix="prod/"))
+    assert [(x.name, x.size, x.updated) for x in got] == [("prod/a.json", 123, "2026-11-08")]
+    assert got[0].shadow_name == "shadow/20261108/prod/a.json"       # 書き先は渡した prefix_fn に従う
+    assert b.get_blob("prod/a.json").size == 123
+    with pytest.raises(ss.ShadowViolation):
+        got[0].delete()
+    with pytest.raises(ss.ShadowViolation):                             # 本物の Bucket・ページには届かない
+        got[0].bucket.delete_blob("prod/a.json")
+    with pytest.raises(ss.ShadowViolation):
+        b.list_blobs().pages
+
+
 def test_assert_shadow_name_rejects_non_shadow():
     with pytest.raises(ss.ShadowViolation):
         ss.assert_shadow_name("chuou/data/x.json")
@@ -547,3 +573,27 @@ def test_generic_diff_ignores_volatile_fields_and_reports_mismatches():
     p = SR.diff_tree(io, "parallel/20261031/")
     assert p["by_category"]["state"]["matched"] == 1
     assert SR.diff_tree(io, "shadow/20261031/", skip={"horse_result"})["compared"] == 1
+
+
+def test_production_exists_answers_from_production_inside_scope(monkeypatch):
+    """穴埋めのタスクの『取得済みか』は production_exists() の中だけ本番の有無で答える（外は従来どおり影の有無）。"""
+    from google.cloud import storage as gcs_lib
+    from src.scraper.storage import HybridStorage
+
+    monkeypatch.setattr(ss, "_INSTALLED", False)
+    for name in ("bucket", "get_bucket", "lookup_bucket", "create_bucket"):
+        monkeypatch.setattr(gcs_lib.Client, name, getattr(gcs_lib.Client, name))
+    for name in ("_get_bucket", "exists", "exists_gcs"):
+        monkeypatch.setattr(HybridStorage, name, getattr(HybridStorage, name))
+    seen = []
+    monkeypatch.setattr(HybridStorage, "exists_gcs", lambda self, c, k: seen.append(ss._shadow_exists_mode()) or True)
+    monkeypatch.setattr(HybridStorage, "exists", lambda self, c, k: seen.append("prod") or True)   # 本来の exists（本番の有無）
+    monkeypatch.setattr(HybridStorage, "_is_local_only", lambda self, c: False)
+    ss.install()
+    st = HybridStorage.__new__(HybridStorage)
+    st._dev_store = None
+    st.exists("race_result", "r1")
+    with ss.production_exists():
+        st.exists("race_result", "r1")
+        st.exists_gcs("race_result", "r1")
+    assert seen == [True, "prod", False]          # 外: 影の有無 / 中: 本来の exists・本番の exists_gcs

@@ -105,3 +105,73 @@ def test_run_on_vps_only_fetches_and_leaves_post_processing_to_gcp(monkeypatch, 
     res = rr.run(_cal("2026-10-12"), NOW)
     assert res["post_processing"] == "gcp" and res["track_speed_dates"] == []
     assert res["saved"]["race_result"] == 1 and res["error_count"] == 0
+
+
+def test_run_stops_at_time_budget_and_keeps_state(monkeypatch, tmp_path):
+    """時間の上限に達したら残りを次回に回して正常に終わる（実行役の打ち切りで殺されて記録が消えないように）。"""
+    import src.scraper.run as run_mod
+
+    class _St:
+        def load(self, cat, d):
+            return {"races": [{"race_id": f"20260504060{i}"} for i in range(1, 6)]} if (cat, d) == ("race_lists", "20261012") else {}
+
+        def exists(self, cat, rid):
+            return cat != "race_result"
+
+    calls = []
+
+    class _Runner:
+        storage = _St()
+
+        def scrape_race_result(self, rid, skip_existing=False):
+            calls.append(rid)
+            return False
+
+    import itertools
+
+    clock = itertools.chain([0.0, 0.0, 10.0], itertools.repeat(99999.0))
+    monkeypatch.setattr(run_mod, "ScraperRunner", _Runner)
+    monkeypatch.setattr(rr, "STATE_PATH", tmp_path / "state.json")
+    monkeypatch.setattr(rr.time, "sleep", lambda s: None)
+    monkeypatch.setattr(rr, "_monotonic", lambda: next(clock))
+    monkeypatch.setenv("KEIBA_RUN_LOCATION", "vps")
+    monkeypatch.setenv("KEIBA_RECENT_RETRY_BUDGET_SEC", "100")
+    res = rr.run(_cal("2026-10-12"), NOW)
+    assert res["stopped_by_budget"] is True
+    assert len(calls) == 2 and res["targets"] == 5
+    st = rr.load_state(tmp_path / "state.json")
+    assert set(st) == {f"race_result/{r}" for r in calls}                # 試した分の記録は残る
+
+
+def test_state_path_default_follows_monkeypatch(monkeypatch, tmp_path):
+    monkeypatch.setattr(rr, "STATE_PATH", tmp_path / "s.json")
+    rr.save_state({"k": {"attempts": 1}})
+    assert rr.load_state() == {"k": {"attempts": 1}} and (tmp_path / "s.json").exists()
+
+
+def test_run_in_shadow_keeps_state_even_when_saved(monkeypatch, tmp_path):
+    """影モードでは取れても記録を残す（保存は shadow/ で本番に入らず、消すと毎回取り直すため）。"""
+    import src.ops.shadow_storage as ss
+    import src.scraper.run as run_mod
+
+    class _St:
+        def load(self, cat, d):
+            return {"races": [{"race_id": "202605040601"}]} if (cat, d) == ("race_lists", "20261012") else {}
+
+        def exists(self, cat, rid):
+            return cat != "race_result"
+
+    class _Runner:
+        storage = _St()
+
+        def scrape_race_result(self, rid, skip_existing=False):
+            return True
+
+    monkeypatch.setattr(run_mod, "ScraperRunner", _Runner)
+    monkeypatch.setattr(ss, "_INSTALLED", True)
+    monkeypatch.setattr(rr, "STATE_PATH", tmp_path / "state.json")
+    monkeypatch.setattr(rr.time, "sleep", lambda s: None)
+    monkeypatch.setenv("KEIBA_RUN_LOCATION", "vps")
+    res = rr.run(_cal("2026-10-12"), NOW)
+    assert res["saved"]["race_result"] == 1
+    assert rr.load_state(tmp_path / "state.json")["race_result/202605040601"]["attempts"] == 1

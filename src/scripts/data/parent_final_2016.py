@@ -19,7 +19,8 @@ BASE = Path(os.environ.get("REBUILD_BASE") or "/home/jovyan/work/retrain_out/bas
 TAG = "e16"
 
 
-def main() -> None:
+def setup_env() -> None:
+    """2016〜2025 年の土台（BASE）を読む設定にする（学習の入口と、推論との一致確認 v6_parity の --rebuild-2016 が共有する）。"""
     from src.scripts.data import parent_2016 as p
 
     p.prepare()
@@ -45,6 +46,12 @@ def main() -> None:
     t27.OUT = BASE / "tp27_v6e"
     os.environ["TP27_OUT"] = str(t27.OUT)
     v5_common.V = BASE
+
+
+def main() -> None:
+    setup_env()
+    from src.scripts.data import fit_final_v6 as f6
+
     f6.EVAL.mkdir(parents=True, exist_ok=True)
     f6.main()
 
