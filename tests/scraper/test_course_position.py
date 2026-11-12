@@ -130,3 +130,20 @@ def test_race_dates_reads_days_with_races_and_ignores_broken_files(tmp_path):
     (tmp_path / "noname.json").write_text(json.dumps({"races": [{"race_id": "z"}]}), encoding="utf-8")
     assert cp.race_dates(2019, 2020, tmp_path) == ["20190309", "20200105"]
     assert cp.race_dates(2019, 2020, tmp_path, before="20200105") == ["20190309"]     # 今日より前の日だけ
+
+
+def test_result_dates_fills_days_missing_from_race_lists(tmp_path):
+    import pandas as pd
+
+    (tmp_path / "2022").mkdir()
+    pd.DataFrame({"date": ["2022-03-05", "2022-03-05", "2022-03-06", None]}).to_parquet(tmp_path / "2022" / "race_result_flat.parquet")
+    assert cp.result_dates(2022, 2023, tmp_path) == ["20220305", "20220306"]
+    assert cp.result_dates(2022, 2022, tmp_path, before="20220306") == ["20220305"]            # 今日より前の日だけ
+
+
+def test_result_dates_accepts_datetime_columns(tmp_path):
+    import pandas as pd
+
+    (tmp_path / "2023").mkdir()
+    pd.DataFrame({"date": pd.to_datetime(["2023-04-01", "2023-04-02"])}).to_parquet(tmp_path / "2023" / "race_result_flat.parquet")
+    assert cp.result_dates(2023, 2023, tmp_path) == ["20230401", "20230402"]                  # 日付型でも、補完が黙って 0 件にならない

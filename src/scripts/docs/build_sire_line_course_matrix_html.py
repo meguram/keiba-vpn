@@ -21,8 +21,7 @@
   data/local/horse_pedigree_5gen/<上位4桁>/<馬ID>.json （母方の祖先）
   data/meta/sire_lines/sire_smartrc_colors.csv （種牡馬 → smartrc の大系統・小系統・型。系統が空欄の種牡馬は集計から外す）
   data/meta/sire_lines/euro_kick_marks.json （○ の種牡馬）
-  data/page_reference/course_position/course_position_<年>.json （開催日ごとの芝のコース区分 A〜D。src/scraper/course_position.py が作る）と
-  data/page_reference/cushion/cushion_<年>.json （コース区分が無い日の補い）
+  data/page_reference/course_position/course_position_<年>.json （開催日ごとの芝のコース区分 A〜D。netkeiba のレース一覧から src/scraper/course_position.py が作る）
 出力: data/meta/sire_lines/sire_line_course_matrix.html（docs/ 配下ではないので本には載せない）
 """
 
@@ -45,7 +44,6 @@ COLORS = REPO / "data/meta/sire_lines/sire_smartrc_colors.csv"
 MARKS = REPO / "data/meta/sire_lines/euro_kick_marks.json"
 PED5 = REPO / "data/local/horse_pedigree_5gen"
 CPOS = REPO / "data/page_reference/course_position"
-CUSHION = REPO / "data/page_reference/cushion"
 OUT = REPO / "data/meta/sire_lines/sire_line_course_matrix.html"
 JST = timezone(timedelta(hours=9))
 YEARS = range(2016, 2027)
@@ -66,15 +64,9 @@ MAT_PATHS = [(2, 2), (3, 6), (4, 14)]      # 母父・母母父・母母母父�
 
 # ── 読み込み ────────────────────────────────────────────────────────────────
 def load_rail() -> pd.DataFrame:
-    """開催日ごとの芝のコース区分: (date, venue) → letter。course_position（netkeiba）を優先し、無い日は cushion の course_position で補う。"""
+    """開催日ごとの芝のコース区分: (date, venue) → letter。netkeiba のレース一覧（src/scraper/course_position.py。日ごとの値）だけを使う。
+    cushion の表の course_position は使わない: 開催の最後の柵の位置が全日に入っており、日ごとの値ではない（2026 京都 第 4 回は、netkeiba が A（1〜9 日目）→ B（10 日目〜）のところ、全日 B）。"""
     rows: dict[tuple[str, str], str] = {}
-    for f in sorted(glob.glob(str(CUSHION / "cushion_20*.json"))):
-        try:
-            for r in json.loads(Path(f).read_text(encoding="utf-8")):
-                if r.get("course_position") in LETTERS and r.get("is_race_day"):
-                    rows[(str(r["date"]), r["venue_name"])] = r["course_position"]
-        except (OSError, ValueError):
-            continue
     for f in sorted(glob.glob(str(CPOS / "course_position_*.json"))):
         try:
             d = json.loads(Path(f).read_text(encoding="utf-8"))["dates"]
@@ -385,9 +377,14 @@ var PURE=(function(){
     return {bg:'rgb('+c.join(',')+')',fg:lum>=120?'#0b1b12':'#e5e9f5',hi:s>=0.5,lum:lum};
   }
   // 列の並び: 大系統の枠を保つ。rowCounts = 基準の行の各列の [c1..c4]、base = その行の基準の率（無ければ元の並び）
-  function orderCols(cols,rowCounts,base,m,dir,groupCounts){
+  function orderCols(cols,rowCounts,base,m,dir,groupCounts,flat){
     var gs=[],gi={};cols.forEach(function(c,i){if(!(c.large in gi)){gi[c.large]=gs.length;gs.push({large:c.large,idx:[]});}gs[gi[c.large]].idx.push(i);});
     if(!rowCounts)return gs;
+    if(flat){                                                    // 大系統の枠をこえて、全ての列を 1 つの並びにする。1 階層目は、隣り合う同じ大系統ごとにまとめる
+      var all=cols.map(function(c,i){return i;}), v2=all.map(function(i){return val(rowCounts[i],base,m);}), ord=sortIdx(v2,dir).map(function(k){return all[k];});
+      var segs=[];ord.forEach(function(i){var L=cols[i].large;if(segs.length&&segs[segs.length-1].large===L)segs[segs.length-1].idx.push(i);else segs.push({large:L,idx:[i]});});
+      return segs;
+    }
     gs.forEach(function(g){var v=g.idx.map(function(i){return val(rowCounts[i],base,m);});var o=sortIdx(v,dir);g.idx=o.map(function(k){return g.idx[k];});});
     var gv=gs.map(function(g){return val(groupCounts?(groupCounts[g.large]||[0,0,0,0]):sum(g.idx.map(function(i){return rowCounts[i];})),base,m);});   // groupCounts があれば（配合）重ならない実数で大系統を並べる
     return sortIdx(gv,dir).map(function(k){return gs[k];});
@@ -399,18 +396,23 @@ var PURE=(function(){
 JS_UI = r"""
 (function(){
   var D=JSON.parse(document.getElementById('data').textContent), P=PURE;
-  var st={tab:0,m:'p',minN:30,sf:'',onlyO:false,open:{},rs:null,cs:null,showW:true,showP:true,showK:true};
+  var st={tab:0,m:'p',sm:'',flat:true,minN:30,sf:'',onlyO:false,open:{},rs:null,cs:null,showW:true,showP:true,showK:true};
   var tbl=document.getElementById('m'), VN=[]; D.rows.forEach(function(r){ if(r.vname&&VN.indexOf(r.vname)<0) VN.push(r.vname); });
   function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
   function T(){return D.tables[st.tab];}
+  function SM(){return st.sm||st.m;}                 // 並べ替えの率（勝率 'w'／複勝率 'p'）。色の基準とは別に選べる（空なら色の基準と同じ）
+  function SML(){return SM()==='p'?'複勝率':'勝率';}
   function isO(c){return c.sires>0&&c.o*2>=c.sires;}
   function visCols(){ var vis={}; T().cols.forEach(function(c,i){ if(!st.onlyO||st.tab>0||isO(c)) vis[i]=1; }); return vis; }
   function rowById(id){ for(var i=0;i<D.rows.length;i++) if(D.rows[i].id===id) return D.rows[i]; return null; }
   function K(r){return r.k[st.tab];}
   // 列で行を並べ替えるときの値（key: 列の添字 / 'g:大系統' / 'tot'）。データが少なくても、行の基準へ縮めた値で並べる
   function rowVal(r,key){
-    var m=st.m,k=K(r),b=P.rate(k.t,m),vis=visCols();
+    var m=SM(),k=K(r),b=P.rate(k.t,m),vis=visCols();
     if(key==='tot') return b;
+    if(typeof key==='string'&&key.indexOf('c:')===0){                       // 割れた見出し: 押した見出しの下の列だけの合計
+      var ids=key.slice(2).split(',').map(Number).filter(function(i){return vis[i];});
+      return P.val(P.sum(ids.map(function(i){return k.c[i];})),b,m); }
     if(typeof key==='string'&&key.indexOf('g:')===0){ var L=key.slice(2),cs=[];
       if(st.tab>0&&k.g) return P.val(k.g[L]||[0,0,0,0],b,m);              // 配合: 列は重なるので、父の大系統の実数（展開前）で並べる
       T().cols.forEach(function(c,i){ if(c.large===L&&vis[i]) cs.push(k.c[i]); }); return P.val(P.sum(cs),b,m); }
@@ -419,6 +421,7 @@ JS_UI = r"""
   function fixState(){
     var vis=visCols(), want=st.sf||'all';
     if(st.rs&&typeof st.rs.key==='number'&&!vis[st.rs.key]) st.rs=null;
+    if(st.rs&&typeof st.rs.key==='string'&&st.rs.key.indexOf('c:')===0&&!st.rs.key.slice(2).split(',').every(function(i){return vis[+i];})) st.rs=null;
     if(st.rs&&typeof st.rs.key==='string'&&st.rs.key.indexOf('g:')===0&&!T().cols.some(function(c,i){return vis[i]&&'g:'+c.large===st.rs.key;})) st.rs=null;
     if(st.rs&&typeof st.rs.key==='number'&&st.rs.key>=T().cols.length) st.rs=null;
     if(st.cs){
@@ -458,14 +461,15 @@ JS_UI = r"""
     fixState();
     var cols=T().cols, rowC=st.cs?rowById(st.cs.id):null, vis=visCols();
     var vi=cols.map(function(c,i){return i;}).filter(function(i){return vis[i];});
-    var gs=P.orderCols(vi.map(function(i){return cols[i];}),rowC?vi.map(function(i){return K(rowC).c[i];}):null,rowC?P.rate(K(rowC).t,st.m):NaN,st.m,st.cs?st.cs.dir:1,(rowC&&st.tab>0&&K(rowC).g)?K(rowC).g:null)
+    var gs=P.orderCols(vi.map(function(i){return cols[i];}),rowC?vi.map(function(i){return K(rowC).c[i];}):null,rowC?P.rate(K(rowC).t,SM()):NaN,SM(),st.cs?st.cs.dir:1,(rowC&&st.tab>0&&K(rowC).g)?K(rowC).g:null,st.flat)
       .map(function(g){return {large:g.large,idx:g.idx.map(function(k){return vi[k];})};});
     var h1='<tr><th class="sticky" rowspan="2">行<div class="hint">行名を押す＝列を並べ替え</div></th><th class="tot" rowspan="2" data-key="tot">全体'+arrow(st.rs&&st.rs.key==='tot',st.rs&&st.rs.dir)+'</th>';
     var h2='<tr>', order=[];
     gs.forEach(function(g){
       var ix=g.idx.filter(function(i){return vis[i];}); if(!ix.length) return;
-      var runs=(T().groups&&T().groups[g.large]!==undefined)?T().groups[g.large]:ix.reduce(function(a,i){return a+cols[i].runs;},0), gk='g:'+g.large;
-      h1+='<th class="grp" colspan="'+ix.length+'" data-key="'+esc(gk)+'">'+esc(g.large)+'<span class="sub"> 全体 '+runs.toLocaleString()+'走</span>'+arrow(st.rs&&st.rs.key===gk,st.rs&&st.rs.dir)+'</th>';
+      var whole=ix.length===cols.filter(function(c,i){return c.large===g.large&&vis[i];}).length;      // 見えている大系統の全列が並んでいるときだけ「全体」（割れた見出しは、その枠の列だけ）
+      var runs=(T().groups&&T().groups[g.large]!==undefined&&whole&&!st.onlyO)?T().groups[g.large]:ix.reduce(function(a,i){return a+cols[i].runs;},0), gk=whole?'g:'+g.large:'c:'+ix.join(',');
+      h1+='<th class="grp" colspan="'+ix.length+'" data-key="'+esc(gk)+'">'+esc(g.large)+'<span class="sub"> '+((st.tab>0&&!whole)?'':(whole?'全体 ':'この枠 ')+runs.toLocaleString()+'走')+'</span>'+arrow(st.rs&&st.rs.key===gk,st.rs&&st.rs.dir)+'</th>';
       ix.forEach(function(i){ var c=cols[i]; order.push(i);
         h2+='<th class="line'+(isO(c)?' o':'')+'" data-key="'+i+'"><div class="nm">'+esc(c.name)+arrow(st.rs&&st.rs.key===i,st.rs&&st.rs.dir)+'</div><div class="sub">'+(c.sires?'○ '+c.o+'／'+c.sires+'頭<br>':'')+'全体 '+c.runs.toLocaleString()+'走</div></th>'; });
     });
@@ -489,8 +493,8 @@ JS_UI = r"""
     });
     tbl.innerHTML='<thead>'+h1+h2+'</thead><tbody>'+b+'</tbody>';
     var th1=tbl.querySelector('thead tr'); tbl.style.setProperty('--h1', th1.offsetHeight+'px');
-    var info=[]; if(st.rs){ var kk=st.rs.key; info.push('行の並べ替え: '+(kk==='tot'?'全体':typeof kk==='number'?(st.tab>0?T().cols[kk].large+' × ':'')+T().cols[kk].name:String(kk).slice(2))+(st.rs.dir===1?' ▼降順':' ▲昇順')); }
-    if(st.cs){ var rr=rowById(st.cs.id); info.push('列の並べ替え: '+(rr?((rr.kind==='course'?rr.vname+' ':'')+rr.label):'')+(st.cs.dir===1?' ▼降順':' ▲昇順')); }
+    var info=[]; if(st.rs){ var kk=st.rs.key; info.push('行の並べ替え（'+SML()+'）: '+(kk==='tot'?'全体':(typeof kk==='string'&&kk.indexOf('c:')===0)?'見出しの枠の列（'+kk.slice(2).split(',').map(function(i){return T().cols[+i].name;}).join('・')+'）':typeof kk==='number'?(st.tab>0?T().cols[kk].large+' × ':'')+T().cols[kk].name:String(kk).slice(2))+(st.rs.dir===1?' ▼降順':' ▲昇順')); }
+    if(st.cs){ var rr=rowById(st.cs.id); info.push('列の並べ替え（'+SML()+(st.flat?'・大系統をまたぐ':'・大系統の枠の中')+'）: '+(rr?((rr.kind==='course'?rr.vname+' ':'')+rr.label):'')+(st.cs.dir===1?' ▼降順':' ▲昇順')); }
     document.getElementById('sortinfo').textContent=info.join(' ／ ');
     var note=T().note||''; document.getElementById('tabnote').textContent=note;
     [].slice.call(document.querySelectorAll('.tab')).forEach(function(t){ t.classList.toggle('on', +t.dataset.tab===st.tab); });
@@ -506,9 +510,9 @@ JS_UI = r"""
   });
   [].slice.call(document.querySelectorAll('.tab')).forEach(function(t){ t.addEventListener('click',function(){ st.tab=+t.dataset.tab; st.rs=null; st.cs=null; render(); }); });
   function bind(id,fn,ev){ document.getElementById(id).addEventListener(ev||'change',function(){fn(this);render();}); }
-  bind('metric',function(x){st.m=x.value;}); bind('minn',function(x){st.minN=Math.max(1,+x.value||1);},'input');
+  bind('metric',function(x){st.m=x.value;}); bind('sortmetric',function(x){st.sm=x.value;}); bind('minn',function(x){st.minN=Math.max(1,+x.value||1);},'input');
   bind('sw',function(x){st.showW=x.checked;}); bind('sp',function(x){st.showP=x.checked;}); bind('sk',function(x){st.showK=x.checked;});
-  bind('onlyo',function(x){st.onlyO=x.checked;}); bind('sf',function(x){st.sf=x.value;});
+  bind('onlyo',function(x){st.onlyO=x.checked;}); bind('flat',function(x){st.flat=x.checked;}); bind('sf',function(x){st.sf=x.value;});
   document.getElementById('open').addEventListener('click',function(){ VN.forEach(function(v){st.open[v]=true;}); render(); });
   document.getElementById('close').addEventListener('click',function(){ st.open={}; render(); });
   document.getElementById('reset').addEventListener('click',function(){ st.rs=null; st.cs=null; render(); });
@@ -552,15 +556,17 @@ TEMPLATE = """<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta n
 <p class="lead">作成: %NOW%。2016〜2026 年の平地 %NRUNS% 走（父の系統が空欄の馬は除外）。タブで「父の系統」（大系統→小系統）と「系統配合」（父の大系統→母方の型）を切り替える。
 行は<b>クラス別（芝・ダート。上位クラスの集計行つき）</b>→馬場状態→芝の開催状態（開催日数・柵位置を考慮した馬場の新しさ）→会場→コース。「上のクラスで戦えるレベルの馬を出せるか」は、クラス別の行（3勝以上・OP以上・重賞）で見る。
 セルは「勝率・複勝率」と「1着-2着-3着-4着以下（出走数）」。<b>色</b>は同じ行の全体の率との差で、<b>明るい緑ほど好成績、暗いほど不振</b>（複勝率は ±10pt、勝率は ±5pt で最大。出走数が少ないセルは率を行の基準に寄せて色を付け、<b>※</b>と点線で低信頼を示す）。水準を明確に上回るセル（目盛りの半分以上）は白い枠で強調。<br>
-<b>並べ替え</b>: 列の見出し（小系統・大系統・「全体」）を押すと、その列の率で<b>行</b>を並べ替え（降順 → 昇順 → 解除）。行名を押すと、その行の率で<b>列</b>を並べ替え（大系統の枠の中で、大系統どうしも）。基準は「率の基準」（複勝率／勝率）。データが少ないセルも、行の基準に寄せた値で並べる（NaN にしない）。<br>
+<b>並べ替え</b>: 列の見出し（小系統・大系統・「全体」）を押すと、その列の率で<b>行</b>を並べ替え（降順 → 昇順 → 解除）。行名を押すと、その行の率で<b>列</b>を並べ替え（既定は大系統をまたいで全ての列を 1 つの並びに。「大系統をまたいで列を並べ替える」を外すと、大系統の枠の中で並べ、大系統どうしも並べる）。並べ替えの率は「並べ替えの基準」（複勝率／勝率。色の基準とは別に選べる）。データが少ないセルも、行の基準に寄せた値で並べる（NaN にしない）。<br>
 <b>集計の範囲</b>: 競走中止・取消・除外は数えない（着順が付いた走だけ。全体の約 0.4%）。コースは「芝・ダートと距離」で、同じ会場の内回り・外回りは区別できず 1 行にまとめている。レース数が少ない距離は、同じ会場・同じ芝/ダートの隣の距離とまとめた（例: 芝 2500m 以上）。
-「全体」の列と色の基準は、列に出していない小系統（出走数 %MINRUNS% 走未満）を含み、父の系統が空欄の馬を含まない。柵位置（A〜D）は %RAILNOTE%。生成: <code>src/scripts/docs/build_sire_line_course_matrix_html.py</code>。</p>
+「全体」の列と色の基準は、列に出していない小系統（出走数 %MINRUNS% 走未満）を含み、父の系統が空欄の馬を含まない。柵位置（A〜D）は %RAILNOTE%。「開幕」は開催回の最初の柵（前の開催から同じ柵のまま続く場合も、開催回の最初を開幕とみなす）。開催の初日のコース区分が取れなかった回は、柵が替わった日が特定できるまで行に入らない。生成: <code>src/scripts/docs/build_sire_line_course_matrix_html.py</code>。</p>
 <div class="tabs">%TABS%</div><div id="tabnote"></div>
 <div class="bar">
-<label>率の基準（色・並べ替え） <select id="metric"><option value="p">複勝率</option><option value="w">勝率</option></select></label>
+<label>色の基準 <select id="metric"><option value="p">複勝率</option><option value="w">勝率</option></select></label>
+<label>並べ替えの基準 <select id="sortmetric"><option value="">色の基準と同じ</option><option value="p">複勝率</option><option value="w">勝率</option></select></label>
 <label>低信頼の目印を付ける出走数 <input id="minn" type="number" min="1" value="30" style="width:64px"></label>
 <label><input type="checkbox" id="sw" checked> 勝率</label><label><input type="checkbox" id="sp" checked> 複勝率</label><label><input type="checkbox" id="sk" checked> 着別カウント</label>
 <label><input type="checkbox" id="onlyo"> ○の小系統だけ（父の系統）</label>
+<label title="行名を押して列を並べ替えるとき、大系統の枠をこえて全ての列を 1 つの並びにする（1 階層目の見出しは、隣り合う同じ大系統ごと）"><input type="checkbox" id="flat" checked> 大系統をまたいで列を並べ替える</label>
 <label>芝・ダート <select id="sf"><option value="">芝・ダート</option><option value="芝">芝のみ</option><option value="ダート">ダートのみ</option></select></label>
 <button type="button" id="open">会場をすべて開く</button><button type="button" id="close">すべて閉じる</button><button type="button" id="reset">並べ替えを解除</button>
 <span class="legend">不振<i></i>好成績</span><span id="sortinfo" class="sortinfo"></span>
@@ -581,7 +587,7 @@ def build(runs: pd.DataFrame, meta: dict[str, dict], ledger_type: dict[str, str]
     n_rail = int(rail["date"].nunique()) if rail is not None and len(rail) else 0
     by_year = {} if not n_rail else {y: int(g["date"].nunique()) for y, g in rail.assign(y=rail["date"].str[:4]).groupby("y")}
     return (TEMPLATE.replace("%CSS%", CSS).replace("%NOW%", datetime.now(JST).strftime("%Y-%m-%d %H:%M")).replace("%NRUNS%", f"{len(runs):,}")
-            .replace("%MINRUNS%", str(MIN_LINE_RUNS)).replace("%RAILNOTE%", ("netkeiba のレース一覧（2016〜2024 年の取得済みの分）と JRA のクッション値の表（2025〜2026 年）から、コース区分が分かる開催日だけ使う（日数: " + "、".join(f"{y}年 {c}" for y, c in sorted(by_year.items())) + "）。柵位置の行は、年の構成が他の行と違い、コース区分が分かる日だけ入る") if n_rail else "未取得（柵位置の行は空）")
+            .replace("%MINRUNS%", str(MIN_LINE_RUNS)).replace("%RAILNOTE%", ("netkeiba のレース一覧から取った開催日ごとの値で、コース区分が分かる開催日だけ使う（日数: " + "、".join(f"{y}年 {c}" for y, c in sorted(by_year.items())) + "）。コース区分が取れなかった日の走は、柵位置の行に入らない") if n_rail else "未取得（柵位置の行は空）")
             .replace("%TABS%", tabs).replace("%PURE%", JS_PURE).replace("%UI%", JS_UI).replace("%DATA%", data))     # データは最後に差し込む（データ内の %…% を置換しない）
 
 

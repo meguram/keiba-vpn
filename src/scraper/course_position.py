@@ -152,6 +152,23 @@ def race_dates(year_from: int, year_to: int, root: Path = RACE_LISTS, before: st
     return sorted(set(out))
 
 
+def result_dates(year_from: int, year_to: int, root: Path | None = None, before: str | None = None) -> list[str]:
+    """レース結果の表（race_result_flat）にある開催日。race_lists に無い開催日を補う（YYYYMMDD の昇順）。"""
+    import pandas as pd
+
+    root = root or PAGE_REF / "tables"
+    out: set[str] = set()
+    for y in range(year_from, year_to + 1):
+        p = root / str(y) / "race_result_flat.parquet"
+        if not p.exists():
+            continue
+        dates = pd.to_datetime(pd.read_parquet(p, columns=["date"])["date"], errors="coerce").dropna().dt.strftime("%Y%m%d").unique()      # 文字列でも日付型でも読める
+        for d in dates:
+            if before is None or d < before:
+                out.add(d)
+    return sorted(out)
+
+
 def collect(client: Any, dates: Iterable[str], max_dates: int | None = None, check: Callable[[], str | None] | None = None) -> dict[str, Any]:
     """dates の各日を取得して保存する。取得済みの日は飛ばす。check は各日の前に呼び、理由（文字列）を返したらそこで止める。
     戻り値は件数の内訳（aborted に止めた理由）。保存できない日が MAX_BAD_STREAK 件続いたら止める。"""
@@ -226,10 +243,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--to", dest="y1", type=int, default=_date.today().year)
     ap.add_argument("--max", type=int, default=None, help="1 回の実行で取る日数の上限")
     ap.add_argument("--dry-run", action="store_true", help="対象数と所要時間の見積もりだけ")
+    ap.add_argument("--include-results", action="store_true", help="race_lists に無い開催日も、レース結果の表（race_result_flat）の日付から補う")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     today = _date.today().strftime("%Y%m%d")
     dates = race_dates(a.y0, a.y1, before=today)
+    if a.include_results:
+        dates = sorted(set(dates) | set(result_dates(a.y0, a.y1, before=today)))
     todo = [d for d in dates if f"{d[:4]}-{d[4:6]}-{d[6:8]}" not in load_store(int(d[:4]))["dates"]]
     n = len(todo) if a.max is None else min(len(todo), a.max)
     logger.info("対象 %d 日（%d〜%d、今日より前）／ 未取得 %d 日 ／ 今回 %d 日（見積もり %.1f 時間: 約 1.3 リクエスト/日 × 約 3 秒）", len(dates), a.y0, a.y1, len(todo), n, n * 1.3 * 3 / 3600)
