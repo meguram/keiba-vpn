@@ -6,7 +6,7 @@
      <p class="RaceList_DataTitle"><small>4回</small> 東京 <small>2日目</small></p> / <span class="Shiba">芝(A)：良</span> / <span class="Da">ダ：良</span>
 1 の応答には 4 日分の group が入るので、同じ group の日は 1 の取得を省く（1 日あたり約 1.3 リクエスト）。
 
-保存: data/page_reference/course_position/course_position_<年>.json（git 管理外のローカルデータ）
+保存: <PAGE_REF>/course_position/course_position_<年>.json（git 管理外のローカルデータ。PAGE_REF は src.config.data_paths の共通の定義）
   {"version": 1, "dates": {"2019-03-09": [{"venue": "中山", "kai": 1, "day": 1, "turf_course": "A", "turf_condition": "良", "dirt_condition": "良"}, ...]}}
   turf_course は A・B・C・D など（括弧の中の文字。無ければ None）。
 
@@ -40,9 +40,10 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger("scraper.course_position")
 
-REPO = Path(__file__).resolve().parents[2]
-STORE = Path(os.environ.get("KEIBA_COURSE_POSITION_DIR") or REPO / "data/page_reference/course_position")
-RACE_LISTS = REPO / "data/page_reference/race_lists"
+from src.config.data_paths import PAGE_REF  # noqa: E402
+
+STORE = Path(os.environ.get("KEIBA_COURSE_POSITION_DIR") or PAGE_REF / "course_position")
+RACE_LISTS = PAGE_REF / "race_lists"
 BASE = "https://race.netkeiba.com/top"
 JRA_VENUES = {"札幌": "01", "函館": "02", "福島": "03", "新潟": "04", "東京": "05", "中山": "06", "中京": "07", "京都": "08", "阪神": "09", "小倉": "10"}
 MAX_BAD_STREAK = 5            # 保存できない日（空・突き合わず・読み切れず・group なし）が続いたら止める
