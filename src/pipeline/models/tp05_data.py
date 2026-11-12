@@ -21,7 +21,10 @@ REL_BASE = ["f3_r", "sr_perf_ewm2", "sr_perf_ewm6", "sr_exp", "c_res_ewm2", "c_c
 def _folds(df: pd.DataFrame) -> list:
     """既定は 2022〜24 の expanding。環境変数 OOF_LOYO_YEARS（例 2016,2017）があれば、その年を外す leave-one-year-out にする。"""
     years = [y.strip() for y in os.environ.get("OOF_LOYO_YEARS", "").split(",") if y.strip()]
-    return list(loyo_folds(df, valid_years=years)) if years else list(yearly_expanding_folds(df))
+    if not years:
+        return list(yearly_expanding_folds(df))
+    print(f"OOF_LOYO_YEARS={','.join(years)}（leave-one-year-out。検証年を外し前後 10 日も除く）", flush=True)
+    return list(loyo_folds(df, valid_years=years))
 
 
 def load_dataset(work: Path) -> dict:

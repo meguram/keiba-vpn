@@ -9,6 +9,11 @@
 S3 を外す理由: 2016 年始まりの表では 2017〜19 年の S3 に未来の情報が混ざり（勝ち馬の相対順位 0.157〜0.246、通常 0.27）、LOYO の 2017 年の
 1 番手的中率が 50〜68% に跳ねた。S3 を外すと 2017 年で約 32% に戻る。2016 年は S3 が無く追い切り等の欠損も多いため「参考」、2017〜19 年は信頼度が低い。
 reliability 列: 参考（2016）／低（2017〜19）／中（2020〜21）／高（2022〜25）。
+
+【追記】S3 を外した後も 2017〜19 年に漏れが残る疑いがある（確定オッズの市場確率との LL 差が 2018・2019 年だけモデルが上、補助ヘッド
+mtl_t_l3f_dev・mtl_t_time_dev_gap や sire/dam_sire_prior_win_rate_surface の年別 AUC が異常）。原因は未特定。
+→ 2017〜19 年は「漏れ疑い、分析から除外を推奨」。舞台別の精度は `analyze --years 2020-2025`（stage_accuracy_2020-2025.csv）を使う。
+  2016〜2025 全年の表（stage_accuracy.csv）は残すが、各行の caveat 列に注記を付けてある。
 """
 
 from __future__ import annotations
@@ -105,15 +110,51 @@ def _bands(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+SUSPECT_YEARS = {2017, 2018, 2019}
+SUSPECT_NOTE = "2017〜19年を含む: 漏れ疑い、分析から除外を推奨"
+
+
+def parse_years(spec: str | None) -> list[int] | None:
+    """'2020-2025' や '2020,2022,2024-2025' を年のリストにする。None / 空なら None（全年）。"""
+    if not spec or not spec.strip():
+        return None
+    out: set[int] = set()
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        a, _, b = part.partition("-")
+        lo, hi = int(a), int(b or a)
+        if lo > hi:
+            raise ValueError(f"年の範囲が逆です: {part}")
+        out.update(range(lo, hi + 1))
+    return sorted(out) or None
+
+
+def _caveat(dim: str, value, years: list[int]) -> str:
+    """2017〜19 年を含む行に注記を付ける。year / era の次元は該当する値だけ。"""
+    if not (SUSPECT_YEARS & set(years)):
+        return ""
+    if dim == "year":
+        return SUSPECT_NOTE if int(value) in SUSPECT_YEARS else ""
+    if dim == "era":
+        return SUSPECT_NOTE if str(value).startswith("2017-19") else ""
+    return SUSPECT_NOTE
+
+
 DIMS = ["venue", "surface", "dist_band", "surface_dist", "venue_surface", "race_class", "grade", "field_band", "track_condition", "month", "era", "year"]
 
 
-def analyze(min_races: int = 150, boots: int = 400, include_2016: bool = False) -> None:
+def analyze(min_races: int = 150, boots: int = 400, include_2016: bool = False, years: list[int] | None = None) -> None:
     pred = pd.read_parquet(OUT / "honest_pred_2016_2025.parquet")
     attr = _read(BASE / "features/train_table.parquet")[KEY + ["venue", "surface", "distance", "grade", "race_class", "track_condition", "field_size"]].drop_duplicates(KEY)
     df = _bands(pred.merge(attr, on=KEY, how="left"))
     df = df.dropna(subset=["field_size"])
-    if not include_2016:
+    if years is not None:
+        df = df[df["year"].isin(years)]
+        if df.empty:
+            raise SystemExit(f"指定の年にレースがありません: {years}")
+    elif not include_2016:
         df = df[df["year"] != 2016]       # 2016 年は参考（S3 なし・欠損多）。舞台の強弱の順位づけには入れない
     df = df.reset_index(drop=True)
     fin = df["finish_position"].to_numpy()
@@ -163,8 +204,16 @@ def analyze(min_races: int = 150, boots: int = 400, include_2016: bool = False) 
             rec["small"] = r < min_races
             out.append(rec)
     res = pd.DataFrame(out)
+    used = sorted(int(y) for y in df["year"].unique())
+    res["caveat"] = [_caveat(d, v, used) for d, v in zip(res["dim"], res["value"])]
     OUT.mkdir(parents=True, exist_ok=True)
-    res.to_csv(OUT / ("stage_accuracy_incl2016.csv" if include_2016 else "stage_accuracy.csv"), index=False)
+    if years is not None:
+        name = f"stage_accuracy_{years[0]}-{years[-1]}.csv" if years == list(range(years[0], years[-1] + 1)) else "stage_accuracy_" + "_".join(map(str, years)) + ".csv"
+    else:
+        name = "stage_accuracy_incl2016.csv" if include_2016 else "stage_accuracy.csv"
+    res.to_csv(OUT / name, index=False)
+    (OUT / "NOTES.txt").write_text(__doc__ + "\n", encoding="utf-8")
+    print(f"対象年 {used[0]}〜{used[-1]}（{len(used)} 年）→ {OUT / name}")
     tot = race
     print(f"全体: races={len(tot)} 勝率 LL 基準比 {1 - ((tot['w'].sum()) / tot['wb'].sum()):.4f} / 複勝 LL 基準比 {1 - tot['t'].sum() / tot['tb'].sum():.4f} / 1番手的中 {tot['h'].mean():.4f} (基準 {tot['hb'].mean():.4f})")
     cols = ["dim", "value", "races", "gain_win_rel", "gain_win_rel_lo", "gain_win_rel_hi", "gain_top3_rel", "hit_lift"]
@@ -178,9 +227,10 @@ def analyze(min_races: int = 150, boots: int = 400, include_2016: bool = False) 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["combine", "analyze"])
-    ap.add_argument("--include-2016", action="store_true", help="analyze に 2016 年（参考）も含める")
+    ap.add_argument("--include-2016", action="store_true", help="analyze に 2016 年（参考）も含める（--years 指定時は無視）")
+    ap.add_argument("--years", default=None, help="analyze の対象年（例 2020-2025 / 2020,2022-2024）。別名の CSV に出す")
     a = ap.parse_args()
-    combine() if a.cmd == "combine" else analyze(include_2016=a.include_2016)
+    combine() if a.cmd == "combine" else analyze(include_2016=a.include_2016, years=parse_years(a.years))
 
 
 if __name__ == "__main__":

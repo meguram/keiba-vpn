@@ -85,3 +85,17 @@ def test_loyo_folds_exclude_valid_year_and_gap_but_keep_both_sides():
 def test_loyo_folds_rejects_empty_valid_year():
     with pytest.raises(ValueError):
         list(loyo_folds(_df(), valid_years=["2010"]))
+
+
+def test_tp05_folds_logs_loyo_years_only_when_set(monkeypatch, capsys):
+    from src.pipeline.models.tp05_data import _folds
+
+    df = _df()
+    df = df[df["race_id"].str[:4].between("2020", "2025")].reset_index(drop=True)
+    monkeypatch.delenv("OOF_LOYO_YEARS", raising=False)
+    _folds(df)
+    assert "OOF_LOYO_YEARS" not in capsys.readouterr().out
+    monkeypatch.setenv("OOF_LOYO_YEARS", "2021,2022")
+    folds = _folds(df)
+    assert [f.valid_year for f in folds] == ["2021", "2022"]
+    assert "OOF_LOYO_YEARS=2021,2022" in capsys.readouterr().out
