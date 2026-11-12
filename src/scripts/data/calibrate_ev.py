@@ -514,11 +514,12 @@ def cmd_config(a) -> None:
     推奨ポートフォリオの買い目・レースの期待回収率は、2026 年の評価で基準を満たさなかった（年によって実現回収率が 78〜105% と動く）ので、
     2022〜2026 年を合わせて当てはめ直し、『目安』として年別の範囲を併記する。"""
     f = json.loads((OUT / "final.json").read_text(encoding="utf-8"))
-    e = json.loads((OUT / "eval2026.json").read_text(encoding="utf-8"))
+    e26 = OUT / "eval2026.json"
+    e = json.loads(e26.read_text(encoding="utf-8")) if e26.exists() else {"horse": {}, "cand": {}, "horse_best": {}, "race": {}}   # 2026 の予測が無い間は 2022〜2025 だけの暫定版
     kinds: dict = {}
     for kind in ("win", "top2", "place"):
-        k26 = e["horse"][kind]["calibrated"]
-        ok26 = abs(k26["gap"]) <= CRITERIA["max_abs_gap_year"] and k26["ece"] <= CRITERIA["max_ece"]
+        k26 = e["horse"].get(kind, {}).get("calibrated") or {"gap": None, "ece": None}
+        ok26 = k26["gap"] is None or (abs(k26["gap"]) <= CRITERIA["max_abs_gap_year"] and k26["ece"] <= CRITERIA["max_ece"])
         kinds[kind] = {**{kk: vv for kk, vv in f["config_kinds"][kind].items() if kk not in ("validated", "n")}, "validated": bool(f["config_kinds"][kind]["validated"] and ok26),
                        "n": f["config_kinds"][kind].get("n"), "gap_2026": k26["gap"], "ece_2026": k26["ece"]}
     c = pd.concat([pd.read_parquet(p) for p in sorted(OUT.glob("cand_*.parquet"))], ignore_index=True)
@@ -549,13 +550,13 @@ def cmd_config(a) -> None:
         "label": "期待回収率（較正後）",
         "note": "表示する EV を、過去の実績（確定オッズ・確定払戻）に合わせて較正する。検証と手順: docs/html/modeling/chapters/ev_calibration_adopt.html。"
                 "モデルや推奨ロジックを更新したら src/scripts/data/calibrate_ev.py で当てはめ直すこと。",
-        "fit": {"horse": "2022-2025（V4 の leave-one-year-out / bundle_v4_2024）", "portfolio": "2022-2026（確定オッズ。max_total_bet=2000, min_ev=1.05, 15 点, 単勝・複勝・馬連・ワイド）"},
+        "fit": {"horse": "2022-2025（親モデル v6e16 の leave-one-year-out / 2016〜2024 学習の test 予測）", "portfolio": "2022-2026（確定オッズ。max_total_bet=2000, min_ev=1.05, 15 点, 単勝・複勝・馬連・ワイド）"},
         "criteria": f["criteria"], "kinds": kinds, "tiers": TIERS, "levels": LEVELS, "cap": CAPS,
         "range": {"lo": lo, "hi": hi, "basis": "2022〜2026 年の年別の実現回収率（購入額加重）", "yearly": yearly},
         "validation": {"horse_best_2022_2025": {k: v for k, v in f["horse_best_calibration"].items() if k != "bins"},
                        "horse_best_2026": {k: v for k, v in e["horse_best"].items() if k != "bins"},
                        "race_composed_2023_2025": {k: v for k, v in f["race_composed"]["pooled"].items() if k != "bins"},
-                       "race_2026": {k: v for k, v in e["race"]["calibrated"].items() if k != "bins"}},
+                       "race_2026": {k: v for k, v in e["race"].get("calibrated", {}).items() if k != "bins"}},
     }
     path = Path(a.out) if a.out else ROOT / "config/ev_calibration.json"
     path.write_text(json.dumps(cfg, ensure_ascii=False, indent=1), encoding="utf-8")

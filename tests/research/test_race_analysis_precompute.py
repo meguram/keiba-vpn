@@ -98,7 +98,7 @@ def env(tmp_path, monkeypatch):
     pd.DataFrame(rows).to_parquet(d / "race_result_flat.parquet")
     monkeypatch.setattr(runs_mod, "FLAT_DIR", tmp_path / "flat")
     monkeypatch.setattr(runs_mod, "SIRE_MAP_PATH", tmp_path / "none.parquet")
-    runs_mod._cache.update(sig=None, df=None, sire_sig=None, sire_df=None)
+    runs_mod._cache.update(sig=None, df=None, sire_sig=None, sire_df=None, roi_sig=None, roi_df=None)
     monkeypatch.setenv("KEIBA_RACE_ANALYSIS_DIR", str(tmp_path / "out"))
     card = {"race_name": "T", "date": "2026-10-31", "venue": "東京", "round": 11, "surface": "芝", "distance": 1600,
             "entries": [{"horse_number": 1, "bracket_number": 1, "horse_name": "イチ", "horse_id": "h1", "jockey_id": "J1"},
@@ -127,6 +127,27 @@ def test_precompute_when_new_results_arrive_for_a_future_race(env, tmp_path):
     assert precompute.precompute_race(storage, "202605040111") == "written"                     # 集計に使う最終日が変わった → 作り直す
 
 
+def test_own_result_changes_the_fingerprint_so_finish_marks_get_added(env):
+    storage, _ = env
+    assert precompute.precompute_race(storage, "202605040111") == "written"
+    assert precompute.precompute_race(storage, "202605040111") == "unchanged"
+    storage.data[("race_result_on_time", "202605040111")] = {"entries": [{"horse_id": "h1", "finish_position": 2}, {"horse_id": "hNew", "finish_position": "中止"}]}
+    assert precompute.own_finish(storage, "202605040111") == [["h1", 2]]
+    assert precompute.precompute_race(storage, "202605040111") == "written"                     # 速報の着順が入った → 作り直す
+    storage.data[("race_result", "202605040111")] = {"entries": [{"horse_id": "h1", "finish_position": 1}, {"horse_id": "hNew", "finish_position": 2}]}
+    assert precompute.precompute_race(storage, "202605040111") == "written"                     # 確定で着順が変わった → 作り直す
+    assert precompute.precompute_race(storage, "202605040111") == "unchanged"
+
+
+def test_finish_positions_skip_non_numeric_and_missing():
+    from src.research.race_analysis.running_map_module import finish_positions
+
+    card = {"entries": [{"horse_id": "a", "finish_position": 1}, {"horse_id": "b", "finish_position": 5.0}, {"horse_id": "c", "finish_position": None},
+                        {"horse_id": "d", "finish_position": "取消"}, {"horse_id": "e", "finish_position": 0}, {"finish_position": 2}]}
+    assert finish_positions(card) == {"a": 1, "b": 5}
+    assert finish_positions(None) == {}
+
+
 def test_no_entries_is_not_stored(env):
     storage, _ = env
     assert precompute.precompute_race(storage, "202605040199") == "no_entries"
@@ -138,11 +159,47 @@ def test_past_position_module_classifies_and_uses_first_corner(env):
     precompute.precompute_race(storage, "202605040111")
     saved = store.read("202605040111")
     m = next(x for x in saved["modules"] if x["id"] == "past_position")
-    assert m["status"] == "ok" and [c["key"] for c in m["columns"]] == ["style", "pos", "n", "hist"]
+    assert m["status"] == "ok" and [c["key"] for c in m["columns"]] == ["style", "range", "n", "hist", "band", "band_n", "band_win", "band_top3", "band_win_roi", "band_place_roi"]
     cells = {e["horse_name"]: e["analysis"]["past_position"] for e in saved["entries"]}
     assert cells["イチ"]["n"] == 8 and cells["イチ"]["style"] == "ハナ"          # h1 は履歴あり。もう 1 頭は初出走なので分類しない → 1 頭だけ前
     assert cells["ニ"]["style"] == "不明" and cells["ニ"]["pos"] is None and cells["ニ"]["hist"] is None
     assert 0 < cells["イチ"]["pos"] < 0.5 and math.isclose(cells["イチ"]["pos"], cells["イチ"]["pos"])
+
+
+# ── 補助の計算（Best5・血統）が欠けた結果は、正常な保存済みの結果を上書きしない ──
+
+def test_degraded_reasons_picks_module_errors_and_build_errors():
+    assert precompute.degraded_reasons({"modules": [{"id": "a", "status": "ok"}]}) == []
+    got = precompute.degraded_reasons({"modules": [{"id": "running_map", "status": "ok", "figure": {"build_errors": ["best5", "ped"]}},
+                                                   {"id": "gate_course", "status": "error"}]})
+    assert got == ["running_map:best5", "running_map:ped", "module:gate_course"]
+
+
+def test_degraded_result_never_overwrites_a_good_one_and_is_retried(env, monkeypatch):
+    storage, _ = env
+    rid = "202605040111"
+    assert precompute.precompute_race(storage, rid) == "written"
+    good = store.read(rid)
+    real = precompute.analyze_race
+
+    def broken(st, r):
+        p = real(st, r)
+        p["modules"][0]["figure"] = {"build_errors": ["best5_missing"]}
+        return p
+
+    monkeypatch.setattr(precompute, "analyze_race", broken)
+    assert precompute.precompute_race(storage, rid, force=True) == "degraded"
+    assert store.read(rid) == good                                                       # 正常な結果を残す
+    # 保存済みが無い場合は、欠けた結果を指紋なしで保存し、直れば次の周回で作り直す
+    store.path_of(rid).unlink()
+    assert precompute.precompute_race(storage, rid) == "degraded"
+    saved = store.read(rid)
+    assert len(saved["degraded"]) == 1 and saved["degraded"][0].endswith(":best5_missing")
+    assert saved["fingerprint"] == "degraded"
+    monkeypatch.setattr(precompute, "analyze_race", real)
+    assert precompute.precompute_race(storage, rid) == "written"
+    assert "degraded" not in store.read(rid)
+    assert precompute.precompute_races(storage, [rid])["degraded"] == 0
 
 
 # ── API は保存済みの結果を読むだけ ──
@@ -190,3 +247,25 @@ def test_prune_keeps_current_year_races(env):
     os.utime(p, (old, old))
     assert store.prune(90, keep_year=2026) == 0 and p.exists()
     assert store.prune(90, keep_year=2027) == 1 and not p.exists()
+
+
+def test_band_helpers_and_stats():
+    assert [P.band_of(r) for r in (0.05, 0.2, 0.21, 0.5, 0.79, 1.0)] == [0, 0, 1, 2, 3, 4]
+    assert P.band_label(0) == "最前（0〜20%）" and P.band_label(4) == "最後方（80〜100%）"
+    df = pd.DataFrame({"pos_first": [1, 2, 9, 10], "field_size": [10, 10, 10, 10], "finish_position": [1, 5, 3, 2],
+                       "win_ret": [4.0, 0.0, float("nan"), 0.0], "place_ret": [1.5, 0.0, float("nan"), 1.2]})
+    b = P.band_stats(df)
+    assert b[0]["n"] == 2 and b[0]["win"] == 0.5 and b[0]["top3"] == 0.5               # 1/10 と 2/10 は最前
+    assert b[0]["win_roi"] == pytest.approx(2.0) and b[0]["place_roi"] == pytest.approx(0.75)
+    assert b[4]["n"] == 2 and b[4]["win_roi"] == 0.0 and b[4]["place_roi"] == pytest.approx(1.2)   # 払戻が読めない走は回収率の分母から外す
+    assert b[2]["n"] == 0 and b[2]["win"] is None
+
+
+def test_range_cell_spans_recent_runs_and_weights_recent_more():
+    runs = [(2, 10), (5, 10), (9, 10), (3, 10), (4, 10), (1, 10)]               # 新しい順。6走前は表示範囲外
+    st = P.horse_position([p / x for p, x in runs])
+    c = P.range_cell(st, runs)
+    assert c["lo"] == pytest.approx(0.2) and c["hi"] == pytest.approx(0.9) and len(c["pts"]) == 5
+    assert c["pts"][0][1] == 1.0 and c["pts"][0][1] > c["pts"][4][1]             # 前走がいちばん濃い
+    assert c["mean"] == pytest.approx(st.value)
+    assert P.range_cell(P.horse_position([]), []) is None

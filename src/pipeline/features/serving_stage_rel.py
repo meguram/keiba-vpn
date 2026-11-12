@@ -168,3 +168,53 @@ def tl_columns_for_races(races: pd.DataFrame, records: dict[str, dict[str, Any] 
     out = pd.concat(parts, ignore_index=True) if parts else r[["race_id", "horse_id"]]
     rename = {c: TL_PREFIX + c for c in out.columns if c not in ("race_id", "horse_id")}
     return out.rename(columns=rename)
+
+
+# ───────────────────────── 前段 S3 試行 7（レース内の相対値・2 構成の平均・着順の中心化）
+def stage_rel_columns(F: pd.DataFrame, race_id: Sequence[Any]) -> pd.DataFrame:
+    """重要な列のレース内の相対値: 順位の割合（``rk_``）・平均との差（``dm_``）・最小との差（``dn_``）。学習（s3_try）と推論の共通実装。"""
+    F = F.astype("float32")
+    g = F.groupby(np.asarray(race_id).astype(str))
+    return pd.concat([g.rank(pct=True).add_prefix("rk_"), (F - g.transform("mean")).add_prefix("dm_"), (F - g.transform("min")).add_prefix("dn_")], axis=1)
+
+
+class StageEnsembleT7:
+    """試行 7 の前段。構成 a（相対値 40 列・乱数 3 本）と構成 b（相対値 80 列・乱数 1 本）の予測を平均し、着順の予測をレース内で平均 0.5 に中心化する。"""
+
+    def __init__(self, members: list[dict[str, Any]], models: dict[str, list[StageModels]]):
+        self.members, self.models = members, models
+        made = {p + c for mem in members for c in mem["rel_src"] for p in ("rk_", "dm_", "dn_")}
+        cols = [c for mem in members for m in models[mem["name"]] for c in m.feature_cols if c not in made] + [c for mem in members for c in mem["rel_src"]]
+        self.feature_cols = list(dict.fromkeys(cols))     # 呼び出し側が用意する入力（相対値 rk_/dm_/dn_ は predict の中で作る）
+
+    def predict(self, X: pd.DataFrame, race_id: Sequence[Any]) -> pd.DataFrame:
+        rid = np.asarray(race_id).astype(str)
+        per: list[pd.DataFrame] = []
+        for mem in self.members:
+            Xr = pd.concat([X, stage_rel_columns(X[mem["rel_src"]], rid)], axis=1)
+            ps = [m.predict(Xr, rid) for m in self.models[mem["name"]]]
+            per.append(pd.DataFrame({c: np.mean([p[c].to_numpy(dtype="float64") for p in ps], axis=0) for c in ("s_time_pred", "s_rank_pred")}, index=X.index))
+        out = pd.DataFrame({c: np.mean([p[c].to_numpy() for p in per], axis=0) for c in ("s_time_pred", "s_rank_pred")}, index=X.index)
+        out["s_rank_pred"] = out["s_rank_pred"] - out["s_rank_pred"].groupby(rid).transform("mean") + 0.5
+        out["s_time_gap"] = out["s_time_pred"] - out["s_time_pred"].groupby(rid).transform("min")
+        return out[STAGE_COLS].astype("float32")
+
+    def save(self, d: str | Path, extra: dict | None = None) -> None:
+        d = Path(d)
+        d.mkdir(parents=True, exist_ok=True)
+        for name, ms in self.models.items():
+            for i, m in enumerate(ms):
+                m.save(d / f"{name}_s{i}")
+        (d / "ensemble_meta.json").write_text(json.dumps({"kind": "s3t7", "members": self.members, **(extra or {})}, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    @classmethod
+    def load(cls, d: str | Path) -> "StageEnsembleT7":
+        d = Path(d)
+        meta = json.loads((d / "ensemble_meta.json").read_text(encoding="utf-8"))
+        return cls(meta["members"], {m["name"]: [StageModels.load(d / f"{m['name']}_s{i}") for i in range(m["seeds"])] for m in meta["members"]})
+
+
+def load_stage(d: str | Path) -> "StageModels | StageEnsembleT7":
+    """前段の読み込み。ensemble_meta.json があれば試行 7（2 構成の平均）、無ければ従来の 1 組。"""
+    f = Path(d) / "ensemble_meta.json"
+    return StageEnsembleT7.load(d) if f.exists() and json.loads(f.read_text(encoding="utf-8")).get("kind") == "s3t7" else StageModels.load(d)

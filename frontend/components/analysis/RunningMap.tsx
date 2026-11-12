@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { bracketChipStyle } from "@/lib/bracket";
-import type { AnalysisEntry, RunningMapAxis, RunningMapDayTrend, RunningMapExtra, RunningMapFigure, RunningMapHorse } from "@/lib/raceAnalysis";
+import type { AnalysisEntry, RunningMapAxis, RunningMapBest5, RunningMapDayTrend, RunningMapExtra, RunningMapFigure, RunningMapHorse, RunningMapPedTrait } from "@/lib/raceAnalysis";
 
 /** グループの色（A〜E） */
 const GROUP_COLORS = ["#58a6ff", "#f0883e", "#3fb950", "#d2a8ff", "#f778ba"];
@@ -10,7 +10,7 @@ const groupColor = (g: string) => GROUP_COLORS[(g.charCodeAt(0) - 65) % GROUP_CO
 
 /** コース適性の色（高いほど濃い）。グループの色と紛れないよう金色 */
 const APT_RGB = "227,179,65";
-/** その日の馬場傾向の色（コースの統計の金色と見分ける） */
+/** その日の馬場傾向の色（コース特注ゾーンの金色と見分ける） */
 const DAY_RGB = "63,185,80";
 // 広い画面では左に図、右に詳細とグループを並べる（横の余白を使い、スクロールなしで一面に収める）
 const CSS = `.rm-wrap{display:grid;gap:10px;margin-top:8px}
@@ -25,7 +25,7 @@ function axisColor(p: number | null | undefined): string {
   const to = t < 0 ? AXIS_LOW : AXIS_HIGH, a = Math.abs(t);
   return `rgb(${AXIS_MID.map((m, i) => Math.round(m + (to[i] - m) * a)).join(",")})`;
 }
-/** 地図に使った寄与率の上位の軸（コースごとに 3〜6）の印（数値バー・色の選択で使う） */
+/** 地図に使った 6 つの軸の印（数値バー・色の選択で使う） */
 const TOP_RGB = "227,179,65";
 /** ⇆ の線: これより短い（地図の位置でほとんど表せない）軸は図に出さない（丸の色で見る）。コース別の地図には軸の線を引かない */
 const GUIDE_MIN = 0.3;
@@ -57,7 +57,12 @@ function rankInField(vals: (number | null | undefined)[]): (number | null)[] {
 const FS = 10.5, AXFS = 11, R_PX = 210, GAP = 2;
 const textWidth = (t: string, fs: number) => [...t].reduce((w, c) => w + (/[\x20-\x7e]/.test(c) ? 0.62 : 1) * fs, 0);
 const shortLabel = (h: RunningMapHorse) => `${h.horse_number ?? ""}${h.horse_number ? " " : ""}${[...(h.horse_name ?? "?")].slice(0, 4).join("")}`;
-const fullLabel = (h: RunningMapHorse) => `${h.horse_number ? `${h.horse_number}:` : ""}${h.horse_name ?? "?"}`;
+const fullLabel = (h: RunningMapHorse) => `${h.horse_number ? `${h.horse_number}:` : ""}${h.horse_name ?? "?"}${placeOf(h) ? `（${h.finish_position}着）` : ""}`;
+/** 結果が出ているレースの 5 着以内の印（色は群・方面の塗りと別に、縁と角の丸札で出す）。1 着=金、2 着=銀、3 着=銅、4〜5 着=青 */
+const PLACE_STYLE: Record<number, { color: string; label: string }> = {
+  1: { color: "#f5c518", label: "1着" }, 2: { color: "#d0d7de", label: "2着" }, 3: { color: "#e0803a", label: "3着" }, 4: { color: "#3aa6e0", label: "4〜5着" },
+};
+const placeOf = (h: RunningMapHorse): number | null => (h.finish_position != null && h.finish_position >= 1 && h.finish_position <= 5 ? Math.min(h.finish_position, 4) : null);
 type Box = { x: number; y: number; w: number; h: number };
 const overlap = (a: Box, b: Box) => Math.min((a.w + b.w) / 2 + GAP - Math.abs(a.x - b.x), (a.h + b.h) / 2 + GAP - Math.abs(a.y - b.y));
 
@@ -88,7 +93,7 @@ function relax(boxes: Box[], anchors: { x: number; y: number }[], fixed: Box[]):
   }
 }
 
-export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entries: AnalysisEntry[] }) {
+function RunningMapView({ figure, entries }: { figure: RunningMapFigure; entries: AnalysisEntry[] }) {
   const [sel, setSel] = useState<string | null>(null);
   // 丸の色: "group" か軸のキー。コース別の地図では、寄与率がいちばん高い軸
   const [colorKey, setColorKey] = useState<string>(() => {
@@ -97,7 +102,7 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
     const worst = [...figure.axes].sort((a, b) => (a.r2 ?? 0) - (b.r2 ?? 0))[0];
     return worst?.key ?? "group";
   });
-  // 背景: コースの統計（金色の塗り）と、馬場特注ゾーン（今日・前日の結果。緑）を重ねて出す。どちらも切り替えられる
+  // 背景: コース特注ゾーン（金色の塗り）と、馬場特注ゾーン（今日・前日の結果。緑）を重ねて出す。どちらも切り替えられる
   const day = figure.day_trend ?? null;
   const [showCourse, setShowCourse] = useState(true);
   const [showDay, setShowDay] = useState(true);
@@ -126,7 +131,9 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
   };
   const cells = showCourse ? zone(apt, 0.62, 0.2) : [];
   // 馬場特注ゾーン: 偶然とは言いにくい（補正後に有意な）格子は濃い緑＋枠、好走寄りだが有意でない格子はごく薄く
-  const dayCells = showDay ? zone(day?.heat, 0.55, 0.12) : [];
+  // 1 日分は走が少なく倍率が 1 に近いので、有意でない格子もコースの塗りより濃いめに出す（薄すぎて「何も出ない」に見えていた。2026-11-09）
+  const dayCells = showDay ? zone(day?.heat, 0.6, 0.3) : [];
+  const dayEmpty = !!day?.heat && zone(day.heat, 1, 1).length === 0;
   const cw = ex ? ((ex.x[1] - ex.x[0]) / (ex.n - 1)) * s : 0, ch = ex ? ((ex.y[1] - ex.y[0]) / (ex.n - 1)) * s : 0;
   const bracketOf = new Map(entries.map((e) => [e.key, e.bracket_number]));
   const picked = hs.find((h) => (h.key ?? h.horse_id) === sel) ?? null;
@@ -137,7 +144,7 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
   const isExtra = (k: string) => (figure.extra_axes ?? []).some((x) => x.key === k);
   const pctOf = (h: RunningMapHorse, k: string) => (isExtra(k) ? extraPct(h.extras?.[k]?.value) : h.percentiles[k]);
   const colorAxis = colorAxes.find((a) => a.key === colorKey) ?? null;
-  // 色の選択肢: コース別の地図では、地図に使った寄与率の上位の軸（コースごとに 3〜6。今日の馬場の傾向から選んだ軸は、そのとき足す）
+  // 色の選択肢: コース別の地図では、地図に使った 6 つの軸（今日の馬場の傾向から選んだ軸は、そのとき足す）
   const topKeys = figure.course_map?.axes ?? [];
   const choices = figure.course_map
     ? [...topKeys, ...(colorAxis && !topKeys.includes(colorAxis.key) ? [colorAxis.key] : [])].map((k) => colorAxes.find((a) => a.key === k)).filter((a): a is RunningMapAxis => !!a)
@@ -234,48 +241,41 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
           const b = boxes[i];
           const text = on ? fullLabel(h) : shortLabel(h);
           const w = on ? textWidth(text, FS + 1) + 10 : b.w, hh = on ? b.h + 2 : b.h;
+          const pl = placeOf(h);
           return (
             <g key={id} onClick={() => setSel(on ? null : id)} style={{ cursor: "pointer" }} opacity={dim ? 0.3 : 1}>
+              {pl != null && <rect x={b.x - w / 2 - 3} y={b.y - hh / 2 - 3} width={w + 6} height={hh + 6} rx={(hh + 6) / 2} fill="none" stroke={PLACE_STYLE[pl].color} strokeWidth={3} />}
               <rect x={b.x - w / 2} y={b.y - hh / 2} width={w} height={hh} rx={hh / 2} fill={h.estimated ? "var(--surface)" : c}
                 stroke={on ? "#fff" : h.estimated ? c : "rgba(0,0,0,.35)"} strokeWidth={on ? 2 : h.estimated ? 1.5 : 1} strokeDasharray={h.estimated ? "3 2" : undefined} />
               <text x={b.x} y={b.y + (on ? FS + 1 : FS) * 0.36} textAnchor="middle" fontSize={on ? FS + 1 : FS} fontWeight={700} fill={h.estimated ? c : "#0d1117"}>{text}</text>
+              {pl != null && (
+                <g pointerEvents="none">
+                  <circle cx={b.x - w / 2 + 2} cy={b.y - hh / 2 - 1} r={7.5} fill={PLACE_STYLE[pl].color} stroke="#0d1117" strokeWidth={1} />
+                  <text x={b.x - w / 2 + 2} y={b.y - hh / 2 - 1 + 3.4} textAnchor="middle" fontSize={10} fontWeight={800} fill="#0d1117">{h.finish_position}</text>
+                </g>
+              )}
               <title>{fullLabel(h)}</title>
             </g>
           );
         })}
       </svg>
+      {hs.some((h) => placeOf(h) != null) && <PlaceLegend />}
       <ColorControl axes={choices} colorKey={colorKey} onChange={setColorKey} topKeys={topKeys} />
       <BgSwitch showCourse={showCourse} onCourse={setShowCourse} showDay={showDay} onDay={setShowDay} day={day} hasCourse={!!apt} />
-      {showCourse && apt && <HeatLegend rgb={APT_RGB} text={`${apt.course}の好走しやすさ`} />}
+      {showCourse && apt && <HeatLegend rgb={APT_RGB} text={`コース特注ゾーン（${apt.course}の好走しやすさ）`} />}
       {showDay && day?.heat && <HeatLegend rgb={DAY_RGB} text={`馬場特注ゾーン（${day.surface ?? ""}・枠つきは偶然とは言いにくい）`} />}
+      {showDay && dayEmpty && <div style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: 2 }}>馬場特注ゾーン: 前のレースの好走は、地図のどこかに偏っていません（塗る格子なし）。</div>}
       </div>
 
       <div>
+      {figure.best5 && <Best5Panel b5={figure.best5} hs={hs} bracketOf={(h) => bracketOf.get(h.key ?? "") ?? null} onPick={(h) => setSel(h.key ?? h.horse_id ?? null)} />}
       {figure.course_map && <CourseAxes cm={figure.course_map} />}
       {day && <DayTrend day={day} colorKey={colorKey} onColor={(k) => setColorKey(colorKey === k ? "group" : k)} />}
-      {picked && <HorseDetail h={picked} axes={figure.axes} topKeys={topKeys} extraAxes={figure.extra_axes ?? []} bracket={bracketOf.get(picked.key ?? "") ?? null} onClose={() => setSel(null)}
+      {!picked && figure.ped_traits && figure.ped_traits.length > 0 && (
+        <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "8px 0" }}>馬の札を押すと、走法の詳細と、血統（性別・父・母父）から見た傾向が出ます。</p>
+      )}
+      {picked && <HorseDetail h={picked} pedTraits={figure.ped_traits ?? []} axes={figure.axes} topKeys={topKeys} extraAxes={figure.extra_axes ?? []} bracket={bracketOf.get(picked.key ?? "") ?? null} onClose={() => setSel(null)}
           onPick={(hid) => { const o = byHorseId.get(hid); if (o) setSel(o.key ?? o.horse_id ?? null); }} bracketOf={(hid) => bracketOf.get(byHorseId.get(hid)?.key ?? "") ?? null} />}
-
-      <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
-        {figure.groups.map((g) => (
-          <div key={g.id} style={{ fontSize: 12, borderLeft: `4px solid ${groupColor(g.id)}`, paddingLeft: 8 }}>
-            <div style={{ fontWeight: 700, color: groupColor(g.id) }}>{g.id}：{g.label}</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 6px", marginTop: 3 }}>
-              {hs.filter((h) => h.group === g.id).map((h) => {
-                const id = h.key ?? h.horse_id ?? "";
-                return (
-                  <button key={id} type="button" onClick={() => setSel(sel === id ? null : id)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 4, minHeight: 30, padding: "0 8px 0 3px", borderRadius: 999, cursor: "pointer", fontSize: 12,
-                      border: `1px solid ${sel === id ? groupColor(g.id) : "var(--border)"}`, background: sel === id ? `${groupColor(g.id)}26` : "transparent", color: "var(--text)" }}>
-                    {h.horse_number ? <span style={{ ...bracketChipStyle(bracketOf.get(h.key ?? "") ?? null, 20) }}>{h.horse_number}</span> : null}
-                    {h.horse_name}{h.estimated ? <small style={{ color: "var(--text-dim)" }}>（推定）</small> : null}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
       </div>
       </div>
 
@@ -284,6 +284,19 @@ export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entr
           図に無い馬: {figure.unmapped.map((u) => `${u.horse_number ? `${u.horse_number}:` : ""}${u.horse_name ?? "?"}`).join("、")}
         </p>
       )}
+    </div>
+  );
+}
+
+function PlaceLegend() {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, marginTop: 6, fontSize: 11, color: "var(--text-dim)" }}>
+      <span>結果（縁と丸札）</span>
+      {Object.values(PLACE_STYLE).map((p) => (
+        <span key={p.label} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <span aria-hidden style={{ width: 12, height: 12, borderRadius: 999, background: p.color, border: "1px solid var(--border)" }} />{p.label}
+        </span>
+      ))}
     </div>
   );
 }
@@ -328,6 +341,40 @@ function ColorControl({ axes, colorKey, onChange, topKeys }: { axes: RunningMapA
   );
 }
 
+const MEDAL = [{ icon: "🥇", c: "#e3b341" }, { icon: "🥈", c: "#c0c7d0" }, { icon: "🥉", c: "#d08a52" }];
+
+/** Best5: 地図の上で、このコース・今日の馬場に走法が合う順の 5 頭。結果が出ていれば実際の着順を並べる */
+function Best5Panel({ b5, hs, bracketOf, onPick }: { b5: RunningMapBest5; hs: RunningMapHorse[]; bracketOf: (h: RunningMapHorse) => number | null; onPick: (h: RunningMapHorse) => void }) {
+  const byId = new Map(hs.map((h) => [h.horse_id, h]));
+  const rows = b5.picks.map((p) => ({ p, h: byId.get(p.horse_id) ?? null }));
+  const done = hs.some((h) => h.finish_position != null);
+  return (
+    <div style={{ fontSize: 12, margin: "0 0 8px", padding: "6px 8px", borderRadius: 8, border: "1px solid var(--border)" }}>
+      <b>走法が合う Best5</b>
+      {b5.source !== "both" && <div style={{ color: "var(--text-dim)", marginTop: 2 }}>{b5.source === "course" ? "馬場特注ゾーンがまだ無いので、コース特注ゾーンだけで選んでいます。" : "コース特注ゾーンが無いので、馬場特注ゾーンだけで選んでいます。"}</div>}
+      <ol style={{ listStyle: "none", margin: "4px 0 0", padding: 0 }}>
+        {rows.map(({ p, h }) => {
+          const fp = h?.finish_position ?? null;
+          const medal = fp != null && fp <= 3 ? MEDAL[fp - 1] : null;
+          return (
+            <li key={p.rank} style={{ display: "flex", gap: 8, alignItems: "center", padding: "3px 6px", margin: "1px -6px", borderRadius: 6, cursor: h ? "pointer" : "default",
+              ...(medal ? { background: `${medal.c}1f`, border: `1px solid ${medal.c}99` } : { border: "1px solid transparent" }) }} onClick={() => h && onPick(h)}>
+              <span style={{ width: 18, color: "var(--text-dim)" }}>{p.rank}</span>
+              <span style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, minWidth: 0, fontWeight: medal ? 700 : 400 }}>
+                {(h?.horse_number ?? p.horse_number) ? <span style={bracketChipStyle(h ? bracketOf(h) : null, 22)}>{h?.horse_number ?? p.horse_number}</span> : null}
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h?.horse_name ?? "?"}</span>
+              </span>
+              {done && (medal
+                ? <span style={{ fontWeight: 800, color: medal.c, whiteSpace: "nowrap" }}><span style={{ fontSize: 16, marginRight: 3 }}>{medal.icon}</span>{fp}着</span>
+                : <span style={{ color: "var(--text-dim)" }}>{fp != null ? `${fp}着` : "着外・中止"}</span>)}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
 function CourseAxes({ cm }: { cm: NonNullable<RunningMapFigure["course_map"]> }) {
   return (
     <div style={{ fontSize: 12, margin: "4px 0 8px" }}>
@@ -358,7 +405,7 @@ function BgSwitch({ showCourse, onCourse, showDay, onDay, day, hasCourse }: {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 6, fontSize: 11.5, color: "var(--text-dim)" }}>
       背景
-      {hasCourse && btn(showCourse, onCourse, "コースの統計", APT_RGB)}
+      {hasCourse && btn(showCourse, onCourse, "コース特注ゾーン", APT_RGB)}
       {btn(showDay, onDay, dayText, DAY_RGB, !day?.heat)}
     </div>
   );
@@ -394,11 +441,12 @@ function extraText(e: RunningMapExtra | undefined, key: string): string {
     return `不明（道悪の走 ${e?.n_power ?? 0} 走・通常の走 ${e?.n_normal ?? 0} 走。各 3 走以上で判定）`;
   }
   const v = Math.round(e.value);
-  return key === "slope" ? `${v}（実測 ${e.runs ?? 0} 走）` : `${v}${e.low ? "（走数が少なく低信頼）" : ""}`;
+  const pt = typeof e.score === "number" ? `${e.score.toFixed(1)}点（偏差値 ${v}）` : `${v}`;
+  return key === "slope" ? `${pt}（実測 ${e.runs ?? 0} 走）` : `${pt}${e.low ? "（走数が少なく低信頼）" : ""}`;
 }
 
-function HorseDetail({ h, axes, topKeys, extraAxes, bracket, onClose, onPick, bracketOf }: {
-  h: RunningMapHorse; axes: RunningMapAxis[]; topKeys: string[]; extraAxes: NonNullable<RunningMapFigure["extra_axes"]>; bracket: number | null; onClose: () => void;
+function HorseDetail({ h, pedTraits, axes, topKeys, extraAxes, bracket, onClose, onPick, bracketOf }: {
+  h: RunningMapHorse; pedTraits: RunningMapPedTrait[]; axes: RunningMapAxis[]; topKeys: string[]; extraAxes: NonNullable<RunningMapFigure["extra_axes"]>; bracket: number | null; onClose: () => void;
   onPick: (horseId: string | null) => void; bracketOf: (horseId: string | null) => number | null;
 }) {
   const c = groupColor(h.group);
@@ -431,8 +479,8 @@ function HorseDetail({ h, axes, topKeys, extraAxes, bracket, onClose, onPick, br
         {/* 地図に使った寄与率の上位の軸を先に並べ、金色の枠・順位の印で強調する */}
         {[...axes].sort((x, y) => (topKeys.indexOf(x.key) + 1 || 99) - (topKeys.indexOf(y.key) + 1 || 99)).map((a) => {
           const p = h.percentiles[a.key];
-          // 全馬の中での位置（0〜100）を 10 点満点・0.5 点刻みに
-          const sc = typeof p === "number" ? Math.round(p / 5) / 2 : null;
+          // クラス基準の 10 点（5=2勝で安定・4=1勝・3=未勝利・10=G1 好走馬の上位 5%）。古い保存結果には無いので、そのときは全馬の中での位置（0〜100）を 0.5 点刻みに
+          const sc = h.scores ? (h.scores[a.key] ?? null) : typeof p === "number" ? Math.round(p / 5) / 2 : null;
           const rk = topKeys.indexOf(a.key);
           const top = rk >= 0;
           return (
@@ -463,6 +511,114 @@ function HorseDetail({ h, axes, topKeys, extraAxes, bracket, onClose, onPick, br
           ))}
         </div>
       )}
+      <PedSection h={h} traits={pedTraits} />
+    </div>
+  );
+}
+
+const fmtM = (v: number) => `${(Math.round(v / 10) * 10).toLocaleString()}m`;
+
+/** 血統（性別・父・母父）だけから出した予想。馬場・距離は実際の値、走りの特性は 10 点満点（直近 2 年に走った馬の中での位置）。馬の実測とは別 */
+function PedSection({ h, traits }: { h: RunningMapHorse; traits: RunningMapPedTrait[] }) {
+  const p = h.ped;
+  if (!p || traits.length === 0) return null;
+  const rel = (r2: number | null) => (r2 == null ? null : r2 >= 0.15 ? { t: "信頼 高", c: "#3fb950" } : r2 >= 0.03 ? { t: "信頼 中", c: "#d29922" } : { t: "信頼 低", c: "var(--text-dim)" });
+  const row = { display: "grid", gridTemplateColumns: "7.5em 1fr", alignItems: "start", gap: 6, fontSize: 11.5 } as const;
+  const dirt = traits.find((t) => t.key === "dirt_share" && p.v[t.key]);
+  const dists = traits.filter((t) => t.fmt === "m" && t.abs && p.v[t.key]);
+  const scored = traits.filter((t) => t.score && p.s?.[t.key]);
+  const chip = (t: RunningMapPedTrait) => {
+    const r = rel(t.r2);
+    return r ? <span style={{ marginLeft: 4, fontSize: 10, color: r.c }}>{r.t}</span> : null;
+  };
+  const tip = (t: RunningMapPedTrait) => `${t.hint}${t.r2 != null ? `（新しい馬での当てはまり R² ${(t.r2 * 100).toFixed(1)}%）` : ""}`;
+  return (
+    <div style={{ marginTop: 8, paddingTop: 6, borderTop: "1px solid var(--border)" }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>血統から読み取れる適性</div>
+      <div style={{ fontSize: 11, color: "var(--text-dim)", margin: "1px 0 6px", lineHeight: 1.5 }}>
+        <div>父: {p.sire ?? "不明"}</div>
+        <div>母父: {p.damsire ?? "不明"}</div>
+      </div>
+      <div style={{ display: "grid", gap: 6 }}>
+        {dirt && (() => {
+          const [m, lo, hi] = p.v[dirt.key];
+          const pc = (x: number) => `${Math.round(x * 100)}%`;
+          return (
+            <div style={row} title={tip(dirt)}>
+              <span style={{ color: "var(--text-dim)" }}>{dirt.label}{chip(dirt)}</span>
+              <span>
+                <span style={{ position: "relative", display: "block", height: 10, borderRadius: 5, background: "rgba(63,185,80,0.35)" }}>
+                  <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${m * 100}%`, borderRadius: 5, background: "#a8793a" }} />
+                </span>
+                <span style={{ fontSize: 11.5 }}><b>ダート {pc(m)}</b>・芝 {pc(1 - m)} <span style={{ color: "var(--text-dim)", fontSize: 10.5 }}>（ダート {pc(lo)}〜{pc(hi)}）</span></span>
+              </span>
+            </div>
+          );
+        })()}
+        {dists.map((t) => (
+          <div key={t.key} style={row} title={tip(t)}>
+            <span style={{ color: "var(--text-dim)" }}>{t.label}{chip(t)}</span>
+            <span style={{ display: "grid", gap: 1 }}>
+              {Object.entries(t.abs ?? {}).sort((x, y) => (x[0] === "芝" ? -1 : 1) - (y[0] === "芝" ? -1 : 1)).map(([surf, mean]) => {
+                const [m, lo, hi] = p.v[t.key];
+                return (
+                  <span key={surf}><span style={{ display: "inline-block", width: "3.2em", color: "var(--text-dim)" }}>{surf}</span><b>{fmtM(mean + m)}</b>{" "}
+                    <span style={{ color: "var(--text-dim)", fontSize: 10.5 }}>（{fmtM(mean + lo)}〜{fmtM(mean + hi)}）</span></span>
+                );
+              })}
+            </span>
+          </div>
+        ))}
+      </div>
+      {scored.length > 0 && (
+        <>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text)", margin: "8px 0 3px" }}>走りの特性（10点満点）</div>
+          <div style={{ display: "grid", gap: 4 }}>
+            {scored.map((t) => {
+              const [sc, lo, hi] = (p.s ?? {})[t.key];
+              return (
+                <div key={t.key} style={{ display: "grid", gridTemplateColumns: "7.5em 1fr 5.5em", alignItems: "center", gap: 6, fontSize: 11.5 }} title={tip(t)}>
+                  <span style={{ color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.label}</span>
+                  <span style={{ position: "relative", height: 10, borderRadius: 5, background: "var(--border)" }}>
+                    <span style={{ position: "absolute", left: `${lo * 10}%`, width: `${Math.max((hi - lo) * 10, 1)}%`, top: 3, bottom: 3, borderRadius: 3, background: "rgba(88,166,255,0.30)" }} />
+                    <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${sc * 10}%`, borderRadius: 5, background: "#58a6ff", opacity: 0.85 }} />
+                    <span style={{ position: "absolute", left: "50%", top: -2, bottom: -2, width: 1, background: "var(--text-dim)", opacity: 0.6 }} />
+                  </span>
+                  <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                    <b>{sc.toFixed(1)}</b>{chip(t)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** 良馬場の地図（既定）と、道悪（稍重以上）の地図を切り替える。道悪の地図は道悪適性を軸に含み、稍重以上のレースだけで好走ゾーンを測っている */
+export function RunningMap({ figure, entries }: { figure: RunningMapFigure; entries: AnalysisEntry[] }) {
+  const wet = figure.wet ?? null;
+  const [mode, setMode] = useState<"good" | "wet">("good");
+  const shown = mode === "wet" && wet ? wet : figure;
+  return (
+    <div>
+      {wet && (
+        <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
+          {(["good", "wet"] as const).map((m) => (
+            <button key={m} type="button" onClick={() => setMode(m)} aria-pressed={mode === m}
+              style={{ fontSize: 12, padding: "3px 10px", borderRadius: 6, cursor: "pointer", border: "1px solid var(--border)",
+                background: mode === m ? "var(--accent, #58a6ff)" : "transparent", color: mode === m ? "#0d1117" : "var(--text)" }}>
+              {m === "good" ? "良馬場の地図" : "道悪の地図"}
+            </button>
+          ))}
+          <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+            {mode === "good" ? "良馬場のレースだけで測った地図（基礎スピードを軸に含む）" : "稍重以上のレースだけで測った地図（基礎スピードの代わりに道悪適性を軸に含む）"}
+          </span>
+        </div>
+      )}
+      <RunningMapView key={mode} figure={shown} entries={entries} />
     </div>
   );
 }

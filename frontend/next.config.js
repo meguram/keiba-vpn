@@ -66,6 +66,11 @@ const nextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
         ],
       },
+      // 調教師×パターンの凍結表（めぐコラム）。変わるのは作り直したときだけなので、ブラウザと CDN に持たせてサーバを通さない
+      {
+        source: "/data/trainer_pattern.json",
+        headers: [{ key: "Cache-Control", value: "public, max-age=3600, stale-while-revalidate=86400" }],
+      },
     ];
   },
   async rewrites() {

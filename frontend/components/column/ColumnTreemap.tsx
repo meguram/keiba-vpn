@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useNarrow } from "@/components/RaceStrip";
+import { ColumnRadial } from "@/components/column/ColumnRadial";
 import { formatTreemapValue, treemapLayout, TREEMAP_HEADER as HEADER, type ColumnTreemapBlock, type TreemapMetric, type TreemapNode } from "@/lib/columns";
 
 /** 発散型の両端（中央は灰色）。暗い背景の上に半透明で重ねるので、文字は var(--text) のまま読める */
@@ -48,7 +49,7 @@ export function ColumnTreemap({ block }: { block: ColumnTreemapBlock }) {
   const [selId, setSelId] = useState<string | null>(null);
   const view = byId.get(viewId) ?? block.root;
   const metric = block.metrics[mi] ?? block.metrics[0];
-  const items = useMemo(() => treemapLayout(view, W, H, maxDepth), [view, W, H, maxDepth]);
+  const items = useMemo(() => (block.layout === "radial" ? [] : treemapLayout(view, W, H, maxDepth)), [block.layout, view, W, H, maxDepth]);
 
   const ancestors = (id: string): TreemapNode[] => {
     const out: TreemapNode[] = [];
@@ -64,6 +65,9 @@ export function ColumnTreemap({ block }: { block: ColumnTreemapBlock }) {
   const drillTargets = vi >= 0 ? selPath.slice(vi + 1).filter((n) => n.children?.length) : [];
 
   const drill = (id: string) => { setViewId(id); setSelId(null); };
+  const radial = block.layout === "radial";
+  const unit = block.valueUnit ?? "走";
+  const pathIds = new Set(selPath.slice(Math.max(0, vi)).map((n) => n.id));
 
   const kindText = (n: TreemapNode) =>
     n.kind === "line" ? "系統" : n.kind === "branch" ? "父系の祖先でまとめた群" : n.kind === "pool" ? `${n.sires ?? ""}頭をまとめた群` : n.children?.length ? "群" : "種牡馬";
@@ -105,14 +109,18 @@ export function ColumnTreemap({ block }: { block: ColumnTreemapBlock }) {
         ))}
       </nav>
 
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", maxWidth: W, touchAction: "manipulation" }}
+      {radial && (
+        <ColumnRadial view={view} mi={mi} metric={metric} selId={selId} pathIds={pathIds} narrow={narrow} title={block.title}
+          tOf={(v) => tOf(v, metric)} onSelect={setSelId} onDrill={drill} />
+      )}
+      {!radial && <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", maxWidth: W, touchAction: "manipulation" }}
         role="img" aria-label={`${block.title}（${view.name}）`}>
         {items.map(({ node, rect, depth, head, collapsed }) => {
           if (depth === 0 || rect.w < 0.5 || rect.h < 0.5) return null;
           // 小さくて子に分けない節（collapsed）も、葉と同じく 1 つの塊として描く（タップで値と「この系統へ」を出す）
           const leaf = !node.children?.length || collapsed;
           const t = tOf(mv(node, mi), metric);
-          const tip = `${node.name}（${node.value.toLocaleString()}走）: ${metric.label} ${formatTreemapValue(mv(node, mi), metric.format)}`;
+          const tip = `${node.name}（${node.value.toLocaleString()}${unit}）: ${metric.label} ${formatTreemapValue(mv(node, mi), metric.format)}`;
           if (leaf) {
             const size = narrow ? 10 : 11;
             const label = rect.w >= 30 && rect.h >= 13 ? fit(node.name, rect.w - 6, size) : "";
@@ -153,15 +161,30 @@ export function ColumnTreemap({ block }: { block: ColumnTreemapBlock }) {
             </g>
           );
         })}
-      </svg>
+      </svg>}
 
       {/* 選んだ節の値（ホバー・タップ） */}
       <div style={{ marginTop: 8, padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} aria-live="polite">
         <div className="flex flex-wrap items-baseline gap-2">
           <span className="font-bold" style={{ fontSize: 14 }}>{sel.name}</span>
-          <span style={{ color: "var(--text-dim)" }}>{kindText(sel)}・産駒 {sel.value.toLocaleString()} 走</span>
+          <span style={{ color: "var(--text-dim)" }}>{kindText(sel)}・産駒 {sel.value.toLocaleString()} {unit}</span>
         </div>
-        {selPath.length > 1 && (
+        {sel.members && sel.members.length > 0 && (
+          <p style={{ marginTop: 4 }}>
+            <span style={{ color: "var(--text-dim)" }}>含まれる種牡馬（産駒の頭数）: </span>
+            {sel.members.map(([name, n]) => `${name}（${n}）`).join("、")}
+          </p>
+        )}
+        {selPath.length > 1 && radial && (
+          <ol aria-label="系統の階層" style={{ listStyle: "none", margin: "4px 0 0", padding: 0, color: "var(--text-dim)" }}>
+            {selPath.map((n, i) => (
+              <li key={n.id} style={{ paddingLeft: Math.min(i, 8) * 12, fontWeight: n.id === sel.id ? 700 : 400, color: n.id === sel.id ? "var(--text)" : undefined }}>
+                {i > 0 ? "└ " : ""}{n.name}<span style={{ marginLeft: 6, fontSize: 11 }}>{n.id === sel.id ? "" : kindText(n)}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+        {selPath.length > 1 && !radial && (
           <p style={{ color: "var(--text-dim)", marginTop: 2 }}>{selPath.slice(0, -1).map((n) => n.name).join(" › ")}</p>
         )}
         <table style={{ width: "100%", marginTop: 6, borderCollapse: "collapse", fontVariantNumeric: "tabular-nums" }}>

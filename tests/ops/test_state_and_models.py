@@ -33,6 +33,50 @@ def test_push_then_pull_roundtrip(tmp_path):
     assert SS.pull(io, [{"path": "data/out", "max_mb": 1}], dst)["skipped_same"] == 2          # 取り直さない
 
 
+def test_bundle_entry_roundtrip_uses_one_object(tmp_path):
+    """bundle を付けた項目は 1 つの束で読み書きする（数万ファイルの木を 1 回の読み・書きにする）。ほかの項目は従来どおり。"""
+    src, dst, io = tmp_path / "a", tmp_path / "b", MemoryIO()
+    for i in range(30):
+        _write(src / f"data/calc/growth_curve/{i:02d}/h{i}.json", f'{{"h":{i}}}'.encode())
+    _write(src / "data/calc/knowledge/idx.json", b"{}")
+    ents = [{"path": "data/calc", "max_mb": 1, "include": ["knowledge/**"]},
+            {"path": "data/calc", "max_mb": 1, "include": ["growth_curve/**"], "bundle": "growth_curve"}]
+    r = SS.push(io, ents, src)
+    keys = io.list("state/")
+    assert sorted(keys) == ["state/_bundle/data/calc/growth_curve.tar.gz", "state/data/calc/knowledge/idx.json"]
+    assert r["uploaded"] == 2
+    assert SS.push(io, ents, src)["uploaded"] == 0                                    # 同じ中身なら上げない（束も md5 で比べる）
+    r2 = SS.pull(io, ents, dst)
+    assert r2["from_bundles"] == 30 and (dst / "data/calc/growth_curve/07/h7.json").read_bytes() == b'{"h":7}'
+    assert (dst / "data/calc/knowledge/idx.json").exists()
+    assert SS.pull(io, [ents[1]], tmp_path / "empty_io_dst")["downloaded"] == 30
+    assert SS.pull(MemoryIO(), [ents[1]], tmp_path / "c")["downloaded"] == 0          # 束が無い（初回）は何もしない
+    big = tmp_path / "big"
+    _write(big / "data/calc/growth_curve/x.bin", os.urandom(2 * 1024 * 1024))
+    io2 = MemoryIO()
+    SS.push(io2, [{**ents[1], "max_mb": 10}], big)
+    with pytest.raises(SS.StateBudgetError):                                          # 展開後の大きさで上限を見る
+        SS.pull(io2, [{**ents[1], "max_mb": 1}], tmp_path / "d")
+
+
+def test_bundle_rejects_bad_names_and_paths(tmp_path):
+    import io as _io
+    import tarfile
+
+    with pytest.raises(ValueError):
+        SS.push(MemoryIO(), [{"path": "data/x", "bundle": "../x"}], tmp_path)
+    buf = _io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        ti = tarfile.TarInfo("../../evil.txt")
+        ti.size = 1
+        tf.addfile(ti, _io.BytesIO(b"x"))
+    m = MemoryIO()
+    m.put_bytes("state/_bundle/data/x/b.tar.gz", buf.getvalue())
+    with pytest.raises(ValueError):
+        SS.pull(m, [{"path": "data/x", "bundle": "b"}], tmp_path)
+    assert not (tmp_path / "evil.txt").exists()                     # data/x から ../../ = tmp_path
+
+
 def test_push_only_changed_since(tmp_path):
     io = MemoryIO()
     old = _write(tmp_path / "data/out/old.json", b"o")

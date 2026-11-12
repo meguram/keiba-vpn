@@ -1851,6 +1851,7 @@ class OddsParser:
 
     # 発売中は "middle"、確定後は "result"。action=init が無いと発売中は data が空で返る（2026-10-17 実測）
     LIVE_STATUSES = ("result", "middle")
+    last_api_codes: tuple = ()   # 直近の API 取得 1 回分の HTTP コード（例外は 0）。「データなし」と「取得できず」を見分けるため
 
     ODDS_API = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type={type}&action=init"
 
@@ -1868,24 +1869,23 @@ class OddsParser:
 
         win_data: dict[str, list] = {}
         place_data: dict[str, list] = {}
+        codes: list[int] = []
+        self.last_api_codes = ()
 
-        try:
-            resp = session.get(self.WIN_API.format(race_id=race_id), timeout=15)
-            if resp.status_code == 200:
-                d = resp.json()
-                if d.get("status") in self.LIVE_STATUSES:
-                    win_data = d.get("data", {}).get("odds", {}).get("1", {})
-        except Exception:
-            pass
-
-        try:
-            resp = session.get(self.PLACE_API.format(race_id=race_id), timeout=15)
-            if resp.status_code == 200:
-                d = resp.json()
-                if d.get("status") in self.LIVE_STATUSES:
-                    place_data = d.get("data", {}).get("odds", {}).get("2", {})
-        except Exception:
-            pass
+        for url_tpl, key, out in ((self.WIN_API, "1", win_data), (self.PLACE_API, "2", place_data)):
+            code = 0
+            try:
+                resp = session.get(url_tpl.format(race_id=race_id), timeout=15)
+                code = resp.status_code
+                if code == 200:
+                    d = resp.json()
+                    if d.get("status") in self.LIVE_STATUSES:
+                        out.update(d.get("data", {}).get("odds", {}).get(key, {}))
+            except Exception:
+                pass
+            finally:
+                codes.append(code)
+        self.last_api_codes = tuple(codes)
 
         all_numbers = sorted(set(list(win_data.keys()) + list(place_data.keys())))
 
@@ -2004,9 +2004,13 @@ class OddsParser:
             (self.SANRENPUKU_API, "7", "sanrenpuku"),
         ]
 
+        codes: list[int] = []
+        self.last_api_codes = ()
         for url_tpl, resp_key, out_key in API_MAP:
+            code = 0
             try:
                 resp = session.get(url_tpl.format(race_id=race_id), timeout=15)
+                code = resp.status_code
                 if resp.status_code != 200:
                     continue
                 d = resp.json()
@@ -2049,6 +2053,9 @@ class OddsParser:
                         })
             except Exception:
                 pass
+            finally:
+                codes.append(code)
+        self.last_api_codes = tuple(codes)
 
         for key in ("umaren", "wide", "umatan"):
             result[key].sort(key=lambda e: (e["pair"][0], e["pair"][1]))

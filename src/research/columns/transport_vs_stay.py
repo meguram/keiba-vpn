@@ -33,7 +33,7 @@ import numpy as np
 import pandas as pd
 
 from src.pipeline.features.tp33_transport import COORD, VENUES, prep_laps, trainer_home
-from src.research.columns.compare_series import FLAT_DIR, REGION, YEARS, _p, _stat, load
+from src.research.columns.compare_series import FLAT_DIR, REGION, SMARTRC_YEARS as YEARS, _p, _stat, load
 from src.research.columns.race_context import joint_p, ols_fit, pair_chart, series
 from src.research.columns.wind_venue import holm, pct, pfmt
 
@@ -81,7 +81,7 @@ def rotation_stay(d: pd.DataFrame) -> pd.Series:
 
 
 def frame() -> pd.DataFrame:
-    df = load()
+    df = load(YEARS)
     tr = pd.concat([pd.read_parquet(FLAT_DIR / str(y) / "race_result_flat.parquet", columns=["race_id", "horse_id", "trainer_id"]) for y in YEARS])
     tr["horse_id"], tr["trainer_id"] = tr["horse_id"].astype(str), tr["trainer_id"].astype(str)
     df = df.merge(tr.drop_duplicates(["race_id", "horse_id"]), on=["race_id", "horse_id"], how="left")

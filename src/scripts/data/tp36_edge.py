@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -26,9 +27,13 @@ def load_frame() -> pd.DataFrame:
     bad = set(pay.loc[pay["ambiguous"] | ~pay["parsed"], "race_id"])
     bad_odds = set(w.loc[~(w["win_odds"] >= 1.0), "race_id"])     # 取消（-3.0）や欠損の馬がいるレースは除く
     w = w[~w["race_id"].isin(bad | bad_odds)].copy()
-    e2 = pd.read_parquet(TP / "tp27/ens/v4_e2.parquet")[["race_id", "horse_id", "p_win", "p_top2", "p_top3"]]
-    t25 = pd.read_parquet(TP / "final_eval_v4/test2025_predictions.parquet")[["race_id", "horse_id", "p_win", "p_top2", "p_top3"]]
-    pred = pd.concat([e2, t25], ignore_index=True)
+    new_pred = os.environ.get("FINAL_LAYER_PRED")     # 再学習した親モデルの確率（final_layer_frame の出力）に差し替える
+    if new_pred:
+        pred = pd.read_parquet(new_pred)[["race_id", "horse_id", "p_win", "p_top2", "p_top3"]]
+    else:
+        e2 = pd.read_parquet(TP / "tp27/ens/v4_e2.parquet")[["race_id", "horse_id", "p_win", "p_top2", "p_top3"]]
+        t25 = pd.read_parquet(TP / "final_eval_v4/test2025_predictions.parquet")[["race_id", "horse_id", "p_win", "p_top2", "p_top3"]]
+        pred = pd.concat([e2, t25], ignore_index=True)
     pred["race_id"], pred["horse_id"] = pred["race_id"].astype(str), pred["horse_id"].astype(str)
     w["horse_id"] = w["horse_id"].astype(str)
     d = w.merge(pred, on=["race_id", "horse_id"], how="inner")

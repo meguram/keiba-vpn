@@ -61,7 +61,7 @@ function isScannerProbe(pathname: string): boolean {
 }
 
 // ── メンテナンス時間帯（毎日 JST 03:00–04:00）。判定の正は API（/api/maintenance/status）。15 秒だけメモリに持つ ──
-const MAINTENANCE_PASS_PREFIXES = ["/api/", "/_next/", "/data/image/", "/static/", "/favicon", "/login", "/logout", MAINTENANCE_PATH];
+const MAINTENANCE_PASS_PREFIXES = ["/api/", "/_next/", "/data/image/", "/data/trainer_pattern.json", "/static/", "/favicon", "/login", "/logout", MAINTENANCE_PATH];
 let maintCache: { at: number; ttl: number; active: boolean; retry: number } | null = null;
 
 async function maintenanceState(): Promise<{ active: boolean; retry: number }> {

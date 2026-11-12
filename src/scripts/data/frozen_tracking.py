@@ -28,6 +28,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 
 ROOT = Path(__file__).resolve().parents[3]
 CFG59 = Path(os.environ.get("FT_CFG59", str(ROOT / "config/tp59_frozen_rule.json")))
@@ -220,6 +221,14 @@ class Inputs:
         t = tables / str(year)
         self.shut = _read(t / "race_shutuba_flat.parquet", ["race_id", "date", "start_time", "horse_number", "horse_id", "jockey_id", "trainer_id"])
         self.shut["race_id"] = self.shut["race_id"].astype(str)
+        rp = t / "race_result_flat.parquet"
+        have = set(pq.read_schema(rp).names) if rp.exists() else set()
+        self.res = _read(rp, [c for c in ("race_id", "date", "start_time", "horse_number", "horse_id", "jockey_id", "trainer_id", "payoff") if c in have or not have])
+        self.res["race_id"] = self.res["race_id"].astype(str)
+        before = set(self.shut["race_id"][pd.to_numeric(self.shut["horse_number"], errors="coerce").fillna(0) == 0])
+        self.shut = self._fill_zero_numbers(self.shut, self.res)
+        self.filled = before & set(self.shut["race_id"][pd.to_numeric(self.shut["horse_number"], errors="coerce").fillna(0) > 0])   # 馬番・騎手を結果表で置き換えたレース（台帳に印を残す）
+        self.res = self.res[["race_id", "date", "payoff"]].drop_duplicates("race_id")
         self.odds = _read(t / "race_odds_flat.parquet", ["race_id", "horse_number", "win_odds"])
         self.odds["race_id"] = self.odds["race_id"].astype(str)
         pair = _read(t / "race_pair_odds_flat.parquet", ["race_id", "odds_type", "pair", "odds"])
@@ -233,10 +242,24 @@ class Inputs:
             alt["pair"] = [[int(x) for x in str(c).replace(" ", "").split("-")] for c in alt["combo"]]
             pair = pd.concat([alt.assign(odds_type="umaren")[["race_id", "odds_type", "pair", "odds"]], pair[~pair["race_id"].isin(set(alt["race_id"]))]], ignore_index=True)
         self.pair = pair
-        self.res = _read(t / "race_result_flat.parquet", ["race_id", "date", "payoff"]).drop_duplicates("race_id")
-        self.res["race_id"] = self.res["race_id"].astype(str)
         self.storage = storage
         self._by = {n: d.groupby("race_id") for n, d in (("shut", self.shut), ("odds", self.odds), ("pair", self.pair))}
+
+    @staticmethod
+    def _fill_zero_numbers(shut: pd.DataFrame, res: pd.DataFrame) -> pd.DataFrame:
+        """出馬表の flat は馬番 0（枠順確定前の保存）のままのレースがある（2026-10 以降、11 月は全レース）。
+        そのレースは結果表の馬番・騎手・調教師で置き換える（馬番が無いと確定オッズと突き合わせられず、追跡が 0 件になる）。"""
+        need = {"horse_number", "horse_id", "jockey_id", "trainer_id", "date", "start_time"}   # start_time が無いと pre の発走時刻が決まらない（発走後のスナップショットを採る）ので置き換えない
+        if shut.empty or res.empty or not need <= set(res.columns):
+            return shut
+        zero = shut.groupby("race_id")["horse_number"].apply(lambda x: bool((pd.to_numeric(x, errors="coerce").fillna(0) == 0).any()))
+        bad = set(zero[zero].index) & set(res["race_id"])
+        if not bad:
+            return shut
+        fix = res[res["race_id"].isin(bad)][shut.columns.intersection(res.columns)].copy()
+        for c in shut.columns.difference(fix.columns):
+            fix[c] = None
+        return pd.concat([shut[~shut["race_id"].isin(bad)], fix[shut.columns]], ignore_index=True)
 
     def get(self, name: str, rid: str) -> pd.DataFrame:
         try:
@@ -246,6 +269,8 @@ class Inputs:
 
     def final_win_odds(self, rid: str) -> dict[int, float]:
         o = self.get("odds", rid)
+        if "phase" in o.columns and (o["phase"] == "final").any():   # 発走前のスナップショットが固まっている行は確定オッズとして使わない
+            o = o[o["phase"] == "final"]
         return {int(h): float(x) for h, x in zip(o.get("horse_number", []), o.get("win_odds", [])) if pd.notna(x)}
 
     def final_pair_odds(self, rid: str) -> dict[tuple, float]:
@@ -409,14 +434,14 @@ def run_track(days: list[str], out_dir: Path, models=MODELS, variants=VARIANTS, 
                     if all(f"{ru}|{model}|{variant}|{rid}" in seen for ru in RULES):
                         continue
                     if variant == "final":
-                        wo, po, info = inp.final_win_odds(rid), inp.final_pair_odds(rid), {"odds_phase_win": "final", "odds_phase_pair": "final"}
+                        wo, po, info = inp.final_win_odds(rid), inp.final_pair_odds(rid), {"odds_phase_win": "final", "odds_phase_pair": "final", "shut_from_result": rid in inp.filled}
                     else:
                         pw, wo = inp.pre_win_odds(rid)
                         pp, po = inp.pre_pair_odds(rid)
                         if not wo:
                             skipped["pre オッズなし"] = skipped.get("pre オッズなし", 0) + 1
                             continue
-                        info = {"odds_phase_win": pw, "odds_phase_pair": pp}
+                        info = {"odds_phase_win": pw, "odds_phase_pair": pp, "shut_from_result": rid in inp.filled}
                     g, why = make_race_frame(pred, shut, wo, rules["ab"])
                     if g is None:
                         skipped[why] = skipped.get(why, 0) + 1

@@ -1,6 +1,6 @@
 """騎手コラム（jockey-long-distance・jockey-class-venue-season・jockey-change）で共通に使う集計。
 
-データ: compare_series.load()（2020〜2025 年の JRA 平地、取消・除外を除く）。
+データ: compare_series.load()（2016〜2025 年の JRA 平地、取消・除外を除く）。
   障害レースは surface が芝・ダートで入っているものも load() が除く（compare_series.jump_mask）。
 
 人気から見込まれる率（exp_win・exp_top3）:

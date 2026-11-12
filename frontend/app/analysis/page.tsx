@@ -9,6 +9,9 @@ import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip } from "@/components/RaceStrip";
 import { AnalysisTable } from "@/components/analysis/AnalysisTable";
 import { RunningMap } from "@/components/analysis/RunningMap";
+import { TrainerPatternTable } from "@/components/analysis/TrainerPatternTable";
+import type { TPFigure } from "@/lib/trainerPattern";
+import type { RunningMapFigure } from "@/lib/raceAnalysis";
 import { entriesUnavailable, formatComputedAt, formatPeriod } from "@/lib/raceAnalysis";
 import type { RaceAnalysis } from "@/lib/raceAnalysis";
 import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
@@ -305,8 +308,10 @@ export default function AnalysisPage() {
                           {mod.view !== "map" && <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{mod.description}</span>}
                         </div>
                         {mod.status === "ok" && (mod.view === "map"
-                          ? (mod.figure ? <RunningMap figure={mod.figure} entries={data.entries} /> : null)
-                          : <AnalysisTable entries={data.entries} module={mod} />)}
+                          ? (mod.figure ? <RunningMap figure={mod.figure as RunningMapFigure} entries={data.entries} /> : null)
+                          : mod.view === "trainer_pattern"
+                            ? (mod.figure ? <TrainerPatternTable figure={mod.figure as TPFigure} entries={data.entries} /> : null)
+                            : <AnalysisTable entries={data.entries} module={mod} />)}
                         {mod.status === "not_applicable" && <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>このレースでは表示できません（コース条件や元データが未確定です）。</p>}
                         {mod.status === "error" && <p style={{ fontSize: 13, color: "var(--err)", marginTop: 8 }}>この分析の計算に失敗しました。</p>}
                         {mod.status === "ok" && mod.source && formatPeriod(mod.source) && (

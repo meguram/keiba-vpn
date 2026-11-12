@@ -98,6 +98,7 @@ def test_redact_race_detail_drops_odds_and_side_info_keeps_facts():
     ("/api/v1/betting/race-values", True),
     ("/api/v1/races/1/final-odds", True),
     ("/api/v1/races/1/megu-index-predicted", True),
+    ("/api/v1/races/1/running-map", True),
     ("/api/race/202608020311/predictions", False),     # 中身を落として返す
     ("/api/race/202608020311", False),
     ("/api/growth-curve/2020100001", True),

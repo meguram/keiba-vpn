@@ -1,0 +1,492 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>モデル再学習の順番と依存関係 — keiba-vpn docs</title>
+<style>
+:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --code:#0b1428; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1100px; margin:0 auto; padding:36px 28px 80px; }
+h1 { font-size:26px; margin:0 0 6px; } h2 { font-size:19px; margin:40px 0 4px; padding-top:16px; border-top:1px solid var(--border); }
+h3 { font-size:16px; margin:22px 0 4px; }
+.muted { color:var(--muted); font-size:13px; } .sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+table { border-collapse:collapse; width:100%; margin:8px 0 14px; font-size:13.5px; }
+th,td { border:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+th { background:var(--panel); color:var(--muted); font-weight:600; white-space:nowrap; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 6px; border-radius:5px; font-size:12px; }
+pre { background:var(--code); border:1px solid var(--border); border-radius:8px; padding:10px 14px; overflow-x:auto; font-size:12.5px; line-height:1.55; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 18px; margin:12px 0; }
+.ok { color:var(--ok); } .warn { color:var(--warn); }
+.legend { display:flex; gap:22px; flex-wrap:wrap; font-size:13px; color:var(--muted); margin:6px 0 4px; }
+.legend .ln { display:inline-block; width:34px; height:0; margin-right:8px; vertical-align:middle; border-top:4px solid var(--ok); }
+.legend .ln.thin { border-top:2px solid var(--accent); } .legend .ln.dot { border-top:2px dotted var(--muted); }
+.mermaid { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:10px; margin:8px 0; overflow-x:auto; text-align:center; }
+</style>
+<script src="../assets/mermaid.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';s.onload=function(){mermaid.initialize({startOnLoad:false,theme:'dark'});mermaid.run({querySelector:'.mermaid'});};document.head.appendChild(s);"></script>
+<script>document.addEventListener("DOMContentLoaded",function(){ if (typeof mermaid!=="undefined") mermaid.initialize({startOnLoad:true,theme:"dark",themeVariables:{edgeLabelBackground:"#15213c"}}); });</script>
+</head><body><main>
+
+<h1>モデル再学習の順番と依存関係</h1>
+<p class="muted">作成: 2026-11-05。コード（<code>src/scripts/data/</code> の各 CLI の冒頭の説明、<code>serving_v6.py</code> など）と既存の運用文書を読んで整理した。<b>確認の度合い</b>は各表の「確認」列に書く（<b>コード</b> = 該当コードの説明・入出力で確認 / <b>推定</b> = 名前・入力の流れからの推定で、再学習の前に読み直す）。</p>
+
+<div class="box"><b>要点</b>：再学習は<b>「入力になる小さなモデル（特徴量の元）→ 親モデルの前段 → 親モデル本体 → 確率・期待値・印・買い目の較正 → 配備」</b>の順に進める。下流のものは、上流の出力（OOF 予測・保存値）を入力にしているため、<b>上流を作り直したら、その下流はすべて作り直す</b>。逆順にすると、古い入力で学習したモデルが残る。</div>
+
+<h2>1. 守ること（再学習のたびに）</h2>
+<ul>
+<li><b>2026 年は学習にも選択にも使わない</b>（テストセット②）。最終学習は 2020〜2025 年。確認は 2025 年の test を<b>1 回</b>（選択には使わない）。</li>
+<li><b>市場オッズ・人気は特徴量にしない</b>。較正（<code>prob_calibration</code>）と買い目・精算にだけ使う。</li>
+<li>入力になる予測は<b>年ごとの leave-one-year-out（LOYO）の OOF</b>を学習行に使い、推論行には本番の保存値を使う（学習行と推論行で分布が少し違うので、過去日で一致確認する）。</li>
+<li>ホストの重い処理は<b>直列・6 コアを空ける・load がコア数未満</b>（<code>/tmp/heavy_run.sh</code> 経由）。ホストへの書き込み（ファイル配置・プロセス再起動）は人が行う。</li>
+<li>精度（LogLoss）が良くなっても回収率が上がるとは限らない（これまで 100% 超は未確認）。UI の「期待値・回収率を保証しない」表示は外さない。</li>
+</ul>
+
+<h2>2. 依存関係（上が先）— 親モデルに実際に入るものだけを区別</h2>
+<p class="sub">ホストの本番バンドル <code>final_v6e/bundle_v6_2025</code> の特徴量 1,231 列を、列名ごとに出どころの群へ割り当てて確認した（<code>serving_v4/v5/v6</code> の群の対応で突き合わせ）。「データとして持っている」ことと「親モデルの列になっている」ことは別なので、4 種類に分けて書く。</p>
+<h3>2.1 チャート（上流 → 下流）</h3>
+<!-- RETRAIN-STATUS:BEGIN --><div class="box"><b>再学習の状態</b>（2026-11-11 00:52 更新・学習年 2016-2025・段 11/19）: ▶ 作業中（§2.6 の箱）: <b>PARENT（段10まで合格（test 2025 勝率 0.20544）。最終モデルは未確定: ENV の評価・s11〜s18（一致確認・較正・印・馬券・配備）が残り）</b><br/><span class="muted">§2.1 と §2.6 のチャートの箱の下に状態（✔ 完了・▶ 実行中・・ 未着手・✘ 失敗・■ 判断待ち・－ 対象外）。実行中の箱は橙の太枠。<code>retrain_ctl.py</code> が記録のたびに書き直す（手動は <code>retrain_ctl.py html</code>、§2.6 の箱は <code>retrain_ctl.py node 箱 状態 --note …</code>）。</span></div><!-- RETRAIN-STATUS:END -->
+<div class="legend">
+<span><i class="ln thick"></i>親モデルの列になる</span>
+<span><i class="ln thin"></i>前段 S3 の入力になるだけ</span>
+<span><i class="ln dot"></i>灰色の破線の箱 = 画面の表示だけ（親モデルに入らない）</span>
+</div>
+<div class="mermaid">
+%%{init: {"flowchart": {"nodeSpacing": 28, "rankSpacing": 46, "padding": 10}, "themeVariables": {"fontSize": "17px", "edgeLabelBackground": "#15213c"}}}%%
+flowchart TB
+  DATA["<b>入力データ</b><br/>出馬表・馬柱・結果<br/>血統・馬主・追い切り"]
+
+  subgraph VIAS3["前段 S3 経由のみ"]
+    direction TB
+    SP[" "]
+    SP ~~~ POS
+    POS["位置取り予想"]
+    EASE["追走難度 v2"]
+    LAP["ラップ予想"]
+    S3["<b>前段 S3（e）</b><br/>入力 275 列<br/>出力 3 列"]
+    POS --> EASE
+    POS --> S3
+    EASE --> S3
+    LAP --> S3
+  end
+
+  subgraph DIRECT["親モデルの列になる"]
+    direction TB
+    MEGU["めぐ指数の履歴 RB<br/>16 列"]
+    PX["血統 ridge/SVD PX<br/>43 列"]
+    AUX["補助ヘッド 9 本<br/>27 列（NN 以外）"]
+  end
+
+  PARENT["<b>親モデル</b><br/>7 メンバー × 5 seed<br/>1,231 列"]
+  POST["確率の較正 → 期待値の較正<br/>→ 印 → 買い目"]
+  DISP["<b>画面の表示だけ</b><br/>想定めぐ指数・成長指数<br/>展開タイプ・ペース予測"]
+
+  DATA ==>|"1,142 列"| PARENT
+  DATA --> AUX
+  DATA --> S3
+  MEGU ==> PARENT
+  PX ==> PARENT
+  AUX ==> PARENT
+  S3 ==>|"3 列"| PARENT
+  PARENT ==> POST
+  POST ~~~ DISP
+
+  classDef used fill:#14532d,stroke:#4ade80,color:#e6ecff;
+  classDef s3only fill:#1e3a5f,stroke:#7aa9ff,color:#e6ecff;
+  classDef disp fill:#3f3f46,stroke:#9aa7c7,color:#e6ecff,stroke-dasharray:4 3;
+  classDef plain fill:#15213c,stroke:#7a8ab8,color:#e6ecff;
+  class MEGU,PX,AUX,S3 used;
+  class POS,EASE,LAP s3only;
+  class DISP disp;
+  class DATA,PARENT,POST plain;
+  style SP fill:none,stroke:none,color:#0f1f33;
+  style DIRECT fill:#0f2a1c,stroke:#2f7a4d;
+  style VIAS3 fill:#0f1f33,stroke:#3b5f99;
+  linkStyle 1,2,3,4,6,7 stroke:#7aa9ff,stroke-width:1.5px;
+  linkStyle 5,8,9,10,11 stroke:#4ade80,stroke-width:3px;
+  linkStyle 12 stroke:#e6ecff,stroke-width:3px;
+
+  %% STATUS:BEGIN（scripts/dev/retrain_ctl.py が書く。手で直さない）
+  classDef st_running stroke:#fb923c,stroke-width:5px;
+  classDef st_bad stroke:#f87171,stroke-width:5px;
+  DATA["<b>入力データ</b><br/>出馬表・馬柱・結果<br/>血統・馬主・追い切り<br/><span>✔ 完了</span>"]
+  POS["位置取り予想<br/><span>✔ 完了</span>"]
+  EASE["追走難度 v2<br/><span>✔ 完了</span>"]
+  LAP["ラップ予想<br/><span>✔ 完了</span>"]
+  S3["<b>前段 S3（e）</b><br/>入力 275 列<br/>出力 3 列<br/><span>✔ 完了</span>"]
+  MEGU["めぐ指数の履歴 RB<br/>16 列<br/><span>✔ 完了</span>"]
+  PARENT["<b>親モデル</b><br/>7 メンバー × 5 seed<br/>1,231 列<br/><span>◐ 途中（残り s11・s12）</span>"]
+  POST["確率の較正 → 期待値の較正<br/>→ 印 → 買い目<br/><span>・ 未着手</span>"]
+  DISP["<b>画面の表示だけ</b><br/>想定めぐ指数・成長指数<br/>展開タイプ・ペース予測<br/><span>－ 対象外</span>"]
+  %% STATUS:END
+</div>
+
+<p class="sub">緑の太線 = 親モデルの列になる / 青の細線 = 前段 S3 や補助ヘッドへの入力（親モデルの列にはならない）。左の枠（位置取り予想・追走難度 v2・ラップ予想）は、親モデルに直接の列を持たず、前段 S3 の入力としてだけ使われる。補助ヘッドの入力は基本 175 列。めぐ指数・血統・位置取り予想・追走難度・ラップ予想の入力も同じ入力データだが、図では省いた。1,142 列 = 1,231 − 補助 27 − S3 3 − PX 43 − RB 16（内訳は §2.2）。</p>
+
+<h3>2.2 親モデル 1,231 列の内訳（本番バンドルの列名から数えた）</h3>
+<table>
+<tr><th>出どころ</th><th>列数</th><th>中身</th><th>上流のモデル</th></tr>
+<tr><td>その他（基本 175 列＋相対化など）</td><td>248</td><td>レース条件・騎手/調教師/馬の通算・血統の簡易・a_〜f5_・pc_・sr_・追い切り評価・馬体重 など。<code>*_rz / _rrank / _rgap</code> は出走馬内の相対化</td><td>なし（表そのもの）</td></tr>
+<tr><td>v4:self8</td><td>199</td><td>馬自身の過去走の履歴（時計偏差 <code>td_*</code> など）。<b>追走難度の <code>td_*</code> ではなく、時計偏差の履歴</b></td><td>なし</td></tr>
+<tr><td>v4:field7</td><td>451</td><td>出走メンバー構成（脚質分布・先行馬の頭数・相手関係 等）</td><td>なし</td></tr>
+<tr><td>v4:owner</td><td>125</td><td>馬主・生産者の成績</td><td>なし</td></tr>
+<tr><td>v4:ped</td><td>32</td><td>血統（父・母父の条件別成績）</td><td>なし</td></tr>
+<tr><td>tl_</td><td>50</td><td>追い切り（最終・1 週前・2 週前、14/28 日の集計）</td><td>なし（再取得版）</td></tr>
+<tr><td>aux:mtl</td><td>27</td><td>補助ヘッド 9 本の予測値（位置取り前/後・上がり偏差・時計偏差・順位・テン・初角・ペース差・RPCI）＋ 各 <code>_rk</code>・<code>_gap</code></td><td><b>補助ヘッド</b>（入力は base 175 列）</td></tr>
+<tr><td>stage:S3</td><td>3</td><td><code>s_time_pred / s_time_gap / s_rank_pred</code></td><td><b>前段 S3 e</b>（入力 275 列）</td></tr>
+<tr><td>v5:CY</td><td>37</td><td><code>wc_</code>（追い切りサイクル）</td><td>なし（追い切りから計算）</td></tr>
+<tr><td>v5:PX</td><td>43</td><td>血統の ridge/SVD 由来</td><td><b>tp-38 の PX</b></td></tr>
+<tr><td>v6:RB</td><td>16</td><td>めぐ指数 v3a・netkeiba 指数の履歴</td><td><b>めぐ指数 v3a</b></td></tr>
+<tr><td><b>合計</b></td><td><b>1,231</b></td><td colspan="2">248+199+451+125+32+50+27+3+37+43+16</td></tr>
+</table>
+
+<h3>2.3 サブモデルの採否（親モデルとの関係）</h3>
+<table>
+<tr><th>サブモデル</th><th>親モデルとの関係</th><th>確認</th></tr>
+<tr><td>前段 S3（e）</td><td class="ok"><b>直接の列 3 つ</b>が入る</td><td>コード・列名で確認</td></tr>
+<tr><td>補助ヘッド（9 本）</td><td class="ok"><b>27 列が入る</b>（木・線形の 5 メンバー）。NN の 2 メンバーの入力には入らず、NN は補助ヘッドの目標を<b>多目的学習の教師</b>として使うだけ</td><td>コード・列名で確認</td></tr>
+<tr><td>PX（血統 ridge/SVD）</td><td class="ok">43 列が入る（<code>V5_GROUPS</code> 経由。木・線形の 5 メンバーのみ。NN には入らない）</td><td>コード・列名で確認</td></tr>
+<tr><td>追い切りサイクル CY</td><td class="ok">37 列が入る（同上）</td><td>コード・列名で確認</td></tr>
+<tr><td>めぐ指数 v3a の履歴 RB</td><td class="ok">16 列が入る（同上）</td><td>コード・列名で確認</td></tr>
+<tr><td>追走難度 v2（EASE2）</td><td class="warn"><b>親モデルに直接の列は無い</b>。前段 S3 の入力（<code>EASE2_drain/demand/capacity/pct</code>）にだけなる</td><td>コード・列名で確認</td></tr>
+<tr><td>ラップ予想（lp_*）</td><td class="warn"><b>直接の列は無い</b>。S3 の入力（<code>lp_p_slow/mid/high</code>・<code>lp_exp_f3_dev/l3_dev/lap0_dev</code>）にだけなる</td><td>コード・列名で確認</td></tr>
+<tr><td>位置取り予想</td><td class="warn"><b>直接の列は無い</b>。S3 の入力（<code>pf_early・pf_rank・z_hat</code>）と、追走難度 v2 の要求側の入力</td><td>コード・列名で確認</td></tr>
+<tr><td>展開タイプ（tp-61）</td><td>親モデルに入らない（画面表示のみ）</td><td>列名に無いことを確認</td></tr>
+<tr><td>ペース予測 1F/3F</td><td>親モデルに入らない（画面表示のみ）</td><td>列名に無いことを確認</td></tr>
+<tr><td>想定めぐ指数・成長指数</td><td>親モデルに入らない（画面表示のみ）</td><td>列名に無いことを確認</td></tr>
+</table>
+<p class="sub">補足: 親モデルの内部に<b>すでにペースの予測値</b>がある（補助ヘッドの <code>mtl_r_pace_bal</code>・<code>mtl_r_rpci</code>、それぞれの <code>_rk</code>・<code>_gap</code>）。ペース予想を足す案（tp-84）は、この列との重なりを見る必要がある。</p>
+
+<h3>2.4 データ・コードはあるが、親モデルには入っていないもの</h3>
+<table>
+<tr><th>種類</th><th>中身</th><th>理由</th></tr>
+<tr><td>S3 から外した列（<code>serving_v6.UNMAPPED</code>）</td><td><code>EASE2_full・EASE2_vs_prev・td_ease・td_l3f_ability・td_stamina・lp_front_x_high・lp_front_x_slow・lp_closer_x_slow・lp_pos_x_f3</code></td><td>本番の保存値から学習時と同じ値を再現できないため、variant e では入力から外している</td></tr>
+<tr><td>前段の他の版 a・b・c・d</td><td>a〜d（d は <code>s_adj_time / s_adj_l3f</code> を出す）</td><td>本番は e。<code>default_stage_dir</code> は <code>final_stage/v6_e_2025</code></td></tr>
+<tr><td>候補の群（<code>V5_GROUPS</code> に無い）</td><td>PT・GB・CB・OWNN・RS59・NJ・PB4・IMP・C1X・USR・TENKAI・TENKAI_NT・HEM・CUR・AUXH・AUXC・E2・E2R、LAP/LPX の独立列</td><td>評価で採用されなかった（独立列はすべて不採用。<code>v6_features</code> で RB と S3B のみ採用）</td></tr>
+<tr><td>表示専用</td><td>展開タイプ・ペース予測・想定めぐ指数・成長指数</td><td>画面用。1,231 列に含まれない</td></tr>
+<tr><td>めぐコラム・めぐ分析のデータ（未評価、2026-11-06 点検）</td><td>気象庁の時別値（過去走の風の補正は 2026-11-10 に評価して不採用）、走法軸 <code>run_axes</code>（10 軸、2024 年以降のみ。全年の簡易版は 2026-11-10 に評価して不採用）、走法マップの適性得点、種牡馬系統</td><td>どれも 1,231 列に無い。風・走法軸は不採用（検定で残差に何も残っていない）、マップは被覆待ち（保留）。台帳は <a href="../modeling/chapters/feature_gap_audit.html">特徴量のやり残しの棚卸し</a> の候補 14〜17</td></tr>
+</table>
+
+<h3>2.5 親モデルの 7 メンバーと合成の重み</h3>
+<table>
+<tr><th>メンバー</th><th>種類</th><th>勝率の重み</th><th>連対の重み</th><th>複勝の重み</th><th>入力列数（実測）</th></tr>
+<tr><td>lgb_extras_ped</td><td>LightGBM</td><td>0.2422</td><td>0.0000</td><td>0.1250</td><td>1,231（全部）</td></tr>
+<tr><td>xgb_extras_ped</td><td>XGBoost</td><td>0.0561</td><td>0.2857</td><td>0.3750</td><td>1,231（全部）</td></tr>
+<tr><td>lgb_extras</td><td>LightGBM</td><td>0.0488</td><td>0.1429</td><td>0.0000</td><td>1,207（「その他」のうち血統の簡易 24 列を除く。他は全部）</td></tr>
+<tr><td>lgb_softmax</td><td>LightGBM（レース内 softmax）</td><td>0.2301</td><td>0.1429</td><td>0.1250</td><td>1,200（さらに 7 列少ない。連対・複勝は勝率から γ（0.8・0.7）で変換）</td></tr>
+<tr><td>linear</td><td>線形</td><td>0.2348</td><td>0.1429</td><td>0.1250</td><td>1,200（softmax と同じ）</td></tr>
+<tr><td>mtl_nn_extras_ped</td><td>NN（多目的）</td><td>0.1121</td><td>0.1429</td><td>0.1250</td><td>401（その他 248・tl_ 50・S3 3・field7 50・owner 27・self8 14・ped 9。<b>補助 27・CY・PX・RB は入らない</b>）</td></tr>
+<tr><td>mtl_nn_s</td><td>NN（多目的、上位 100 列）</td><td>0.0759</td><td>0.1429</td><td>0.1250</td><td>370（上の 401 から「その他」31 列を除いたもの）</td></tr>
+</table>
+<p class="sub">勝率は weighted_logit、連対・複勝は greedy の重み（<code>bundle.json</code> の <code>spec</code>）。5 seed 平均、学習 283,714 行、2020〜2025 年。重みは LOYO の合成で決めたもの。入力列数は本番バンドル <code>bundle.json</code> の各メンバーの <code>feature_cols</code> を、§2.2 の群に割り当てて数えた。</p>
+
+<h3>2.6 作るものの区分：モデリング（A）／特徴量生成（B）／境界（C）</h3>
+<!-- RETRAIN-STATUS:BEGIN --><div class="box"><b>再学習の状態</b>（2026-11-11 00:52 更新・学習年 2016-2025・段 11/19）: ▶ 作業中（§2.6 の箱）: <b>PARENT（段10まで合格（test 2025 勝率 0.20544）。最終モデルは未確定: ENV の評価・s11〜s18（一致確認・較正・印・馬券・配備）が残り）</b><br/><span class="muted">§2.1 と §2.6 のチャートの箱の下に状態（✔ 完了・▶ 実行中・・ 未着手・✘ 失敗・■ 判断待ち・－ 対象外）。実行中の箱は橙の太枠。<code>retrain_ctl.py</code> が記録のたびに書き直す（手動は <code>retrain_ctl.py html</code>、§2.6 の箱は <code>retrain_ctl.py node 箱 状態 --note …</code>）。</span></div><!-- RETRAIN-STATUS:END -->
+<p class="sub">2026-11-06 に追記。「予測値を出すために学習するもの」と「計算・集計・結合で列を作るもの」を分ける。区分で守ることが変わる。</p>
+<div class="legend">
+<span style="color:#4ade80">■ A. モデリング（学習して予測値を出す）</span>
+<span style="color:#7aa9ff">■ B. 特徴量生成（計算・集計・結合）</span>
+<span style="color:#fbbf24">■ C. 境界（当てはめを伴う変換）</span>
+<span>破線 = 親モデルの入力にしない／評価予定／未実施の案</span>
+</div>
+<div class="mermaid">
+%%{init: {"flowchart": {"nodeSpacing": 30, "rankSpacing": 70, "padding": 10}, "themeVariables": {"fontSize": "16px", "edgeLabelBackground": "#15213c"}}}%%
+flowchart TB
+  RAW["<b>入力データ</b><br/>結果・出馬表・馬柱・血統・追い切り・馬場"]
+  subgraph UP["上流（レース環境）"]
+    direction LR
+    POS["<b>位置取り予想</b> (今は馬柱の集計 = B)<br/>出力: 想定位置 pf_early・想定順位 pf_rank<br/>脚質・先行馬の数と圧力から想定ペース z_hat"]
+    PACE["<b>ペース・展開の確率</b><br/>出力: ペース型の確率 lp_p_slow/mid/high<br/>前半・上がりの偏差 lp_exp_*<br/>補助ヘッド: ペース差 mtl_r_pace_bal・RPCI mtl_r_rpci<br/>(5F・L3F基準は未整備)"]
+    ODDS["<b>オッズ予測</b><br/>出力: 想定単勝・複勝オッズ<br/>(下限〜上限)"]
+  end
+  subgraph MID["中流"]
+    EASE["<b>追走難度 v2</b><br/>想定位置取りを取るのがきついか楽かを得点化<br/>出力: 終いの落ち EASE2_drain(秒)<br/>得点 EASE2_pct (0〜100。高いほど楽、50が標準)"]
+  end
+  subgraph FEAT["特徴量生成・能力"]
+    direction LR
+    AS["<b>基礎能力 AS</b><br/>出力: めぐ指数の履歴 RB 16列<br/>馬自身の過去走の履歴 self8 199列"]
+    STAT["<b>その他</b><br/>出力: 統計量・ターゲットエンコーディング<br/>騎手・調教師・馬主・血統の成績・出走メンバー構成<br/>追い切り・血統 ridge/SVD(PX)"]
+  end
+  S3["<b>前段 S3</b> (条件適用後の能力 APS に相当)<br/>出力: 予想走破時計 s_time_pred<br/>時計差 s_time_gap・予想順位 s_rank_pred"]
+  PARENT["<b>下流（親モデル）</b> 7 メンバー × 5 seed<br/>出力: 勝率・連対率・複勝率"]
+  EXO["<b>馬券組合せ確率</b> 割引 Harville（実装済み）<br/>出力: 馬連・ワイド・馬単・3連複の的中確率"]
+  POST["<b>確率の較正 → 期待値 → 印 → 買い目</b><br/>期待値 = 確率 × オッズ"]
+  FWD["予測保存・結果照合<br/>前向き検証"]
+  RAW --> POS
+  RAW --> PACE
+  RAW --> ODDS
+  RAW --> AS
+  RAW --> STAT
+  POS -->|"想定位置・z_hat を要求側の入力に"| EASE
+  PACE -->|"想定ペース"| EASE
+  POS ==>|"pf_early・pf_rank・z_hat を入力に"| S3
+  PACE ==>|"lp_p_*・lp_exp_* を入力に"| S3
+  EASE ==>|"EASE2_drain/demand/capacity/pct を入力に"| S3
+  PACE ==>|"補助ヘッド 9 本（ペース差・RPCI を含む）の 27 列を列に追加"| PARENT
+  S3 ==>|"3 列を列に追加"| PARENT
+  AS ==>|"履歴 215 列を列に追加"| PARENT
+  STAT ==>|"約 990 列を列に追加（血統 PX 43 列を含む）"| PARENT
+  PARENT ==>|"勝率・連対率・複勝率を入力に"| EXO
+  PARENT ==>|"確率の較正に"| POST
+  EXO ==>|"組合せ確率 × オッズで期待値に"| POST
+  ODDS -.->|"特徴量にしない。較正・期待値・買い目だけ"| POST
+  POST ==> FWD
+  classDef a fill:#14532d,stroke:#4ade80,color:#e6ecff;
+  classDef b fill:#1e3a5f,stroke:#7aa9ff,color:#e6ecff;
+  classDef c fill:#4a3a10,stroke:#fbbf24,color:#e6ecff;
+  classDef plain fill:#15213c,stroke:#7a8ab8,color:#e6ecff;
+  class PACE,ODDS,EASE,S3,PARENT a;
+  class POS,STAT,EXO b;
+  class AS c;
+  class RAW,POST,FWD plain;
+  style UP fill:#0f1f33,stroke:#3b5f99;
+  style MID fill:#0f1f33,stroke:#3b5f99;
+  style FEAT fill:#0f1f33,stroke:#3b5f99;
+
+  %% STATUS:BEGIN（scripts/dev/retrain_ctl.py が書く。手で直さない）
+  classDef st_running stroke:#fb923c,stroke-width:5px;
+  classDef st_bad stroke:#f87171,stroke-width:5px;
+  RAW["<b>入力データ</b><br/>結果・出馬表・馬柱・血統・追い切り・馬場<br/><span>✔ 完了：2016〜2025 の表</span>"]
+  POS["<b>位置取り予想</b> (今は馬柱の集計 = B)<br/>出力: 想定位置 pf_early・想定順位 pf_rank<br/>脚質・先行馬の数と圧力から想定ペース z_hat<br/><span>✔ 完了：学習モデル合格</span>"]
+  PACE["<b>ペース・展開の確率</b><br/>出力: ペース型の確率 lp_p_slow/mid/high<br/>前半・上がりの偏差 lp_exp_*<br/>補助ヘッド: ペース差 mtl_r_pace_bal・RPCI mtl_r_rpci<br/>(5F・L3F基準は未整備)<br/><span>✔ 完了：10回で打ち切り。2025 前半3F 0.5…</span>"]
+  ODDS["<b>オッズ予測</b><br/>出力: 想定単勝・複勝オッズ<br/>(下限〜上限)<br/><span>✔ 完了：合格</span>"]
+  EASE["<b>追走難度 v2</b><br/>想定位置取りを取るのがきついか楽かを得点化<br/>出力: 終いの落ち EASE2_drain(秒)<br/>得点 EASE2_pct (0〜100。高いほど楽、50が標準)<br/><span>✔ 完了：合格</span>"]
+  AS["<b>基礎能力 AS</b><br/>出力: めぐ指数の履歴 RB 16列<br/>馬自身の過去走の履歴 self8 199列<br/><span>✔ 完了：めぐ指数 v3a を年ごとの as-of に…</span>"]
+  STAT["<b>その他</b><br/>出力: 統計量・ターゲットエンコーディング<br/>騎手・調教師・馬主・血統の成績・出走メンバー構成<br/>追い切り・血統 ridge/SVD(PX)<br/><span>✔ 完了：土台の表と群を 2016〜2025 で作り直…</span>"]
+  S3["<b>前段 S3</b> (条件適用後の能力 APS に相当)<br/>出力: 予想走破時計 s_time_pred<br/>時計差 s_time_gap・予想順位 s_rank_pred<br/><span>✔ 完了：合格</span>"]
+  PARENT["<b>下流（親モデル）</b> 7 メンバー × 5 seed<br/>出力: 勝率・連対率・複勝率<br/><span>▶ 実行中：段10まで合格</span>"]
+  class PARENT st_running;
+  EXO["<b>馬券組合せ確率</b> 割引 Harville（実装済み）<br/>出力: 馬連・ワイド・馬単・3連複の的中確率<br/><span>・ 未着手</span>"]
+  POST["<b>確率の較正 → 期待値 → 印 → 買い目</b><br/>期待値 = 確率 × オッズ<br/><span>・ 未着手</span>"]
+  FWD["予測保存・結果照合<br/>前向き検証<br/><span>・ 未着手</span>"]
+  %% STATUS:END
+</div>
+<p class="sub">位置取り予想は、番手や初角順位を学習して予測する形に変えるなら A になる（判断待ち）。ペース予測の 5F と L3F 基準値は未整備（馬場の当日予測・適性マップの点数化・レース質は、親モデルの追加列として評価して不採用にした。2026-11-10）。追走難度の入力（位置取り予想・想定ペース）は B。S3 は図の「条件適用後の能力」にあたるが、独立した層にはしていない。太線 = 親モデルの列になる／馬券側に進む、破線 = 入らない・未採用・案。馬券組合せ確率は、親モデルの勝率・連対率・複勝率から割引 Harville で計算する層（<code>exotic_probabilities.py</code>）が実装済みで。</p>
+<table>
+<tr><th>区分</th><th>意味</th><th>守ること</th></tr>
+<tr><td><b>A. モデリング</b></td><td>学習して予測値を出す</td><td>学習行は年ごとの LOYO の <b>OOF</b>、推論行は本番の保存値（§1）。上流を作り直したら下流もすべて作り直す</td></tr>
+<tr><td><b>B. 特徴量生成</b></td><td>学習なしの計算・集計・結合（統計量、履歴の集計、ID での結合）</td><td>そのレースより前の情報だけ使う（as-of）。ターゲットエンコーディングは OOF または as-of。結合は <code>horse_id</code>・<code>jockey_id</code>・<code>trainer_id</code> のキーで行い、名前では結合しない</td></tr>
+<tr><td><b>C. 境界</b></td><td>当てはめを伴う変換（教師なしの分類、統計の当てはめ、次元縮約）</td><td>当てはめに使う期間を、そのレースより前（<code>--fit-end</code>）に限る。出力は特徴量として扱うが、期間の管理は A と同じ</td></tr>
+<tr><td><b>D. シミュレーション</b></td><td>位置取り・消耗・競合の仕組みを組んで多数回抽選し、着順の分布を出す生成モデル</td><td><b>見送り</b>。予想位置取りで組合せ確率を傾ける検定で上積みがなかった（§6）。再開するのは、位置取りの予測精度が上がったときか、ペア単位の相関を示す別の根拠が出たとき。再開時のパラメータは過去年だけで当てはめ、評価は test 2025 を 1 回</td></tr>
+</table>
+<table>
+<tr><th>作るもの</th><th>区分</th><th>現状（コードで確認したもの）</th><th>親モデルへの入り方</th></tr>
+<tr><td>位置取り予想（番手・脚質）</td><td><b>B</b>（いまはモデルではない）</td><td><code>position_forecast.py</code> は、馬柱（<code>race_shutuba_past</code>）の過去走の通過順を、直近ほど重く集計して脚質を決める。枠順の補正係数は <code>config/gate_bias.json</code>。<b>番手・初角順位を学習して予測するなら A に変える</b>（判断待ち）</td><td>S3 の入力（<code>pf_early</code>・<code>pf_rank</code>・<code>z_hat</code>）と、追走難度の要求側の入力。直接の列は無い</td></tr>
+<tr><td>ペース予測（前半 3F・5F、L3F 基準、RPCI）</td><td><b>A</b></td><td>既存：<code>train_pace_model</code>（1F・3F。表示用）、ラップ予想（<code>tp55</code>、<code>lp_*</code>）、補助ヘッドの <code>mtl_r_pace_bal</code>・<code>mtl_r_rpci</code>。5F と L3F 基準値は未整備</td><td>ラップ予想は S3 の入力。補助ヘッドは 27 列として直接入る</td></tr>
+<tr><td>オッズ予測（単勝・複勝の下限〜上限）</td><td><b>A</b>（親モデルの入力にしない）</td><td><code>odds_pred</code>・<code>final_odds_bundle</code>。市場オッズは特徴量にしない方針（§1）なので、較正・期待値・買い目の層だけで使う</td><td>入れない</td></tr>
+<tr><td>追走難度 v2</td><td><b>A</b>（入力は B）</td><td><code>tp54</code>。入力は位置取り予想と想定ペース <code>z_hat</code>（先行勢の数・圧力から作る B）、馬柱から集計した過去 5 走の量。出力は、想定位置取りを取るときの「終いの落ち」（秒）の予測 <code>EASE2_drain</code> と、それを 0〜100 の得点にした <code>EASE2_pct</code>（高いほど楽、50 が標準、60 以上で楽、30 未満で大変）。前走比 <code>EASE2_vs_prev</code> は本番から再現できず S3 から外している</td><td>S3 の入力のみ（得点は画面にも出せる）</td></tr>
+<tr><td>前段 S3</td><td><b>A</b></td><td>入力 275 列、出力 3 列（§2.2）</td><td>3 列が直接入る</td></tr>
+<tr><td>適性マップの点数化</td><td><b>C</b></td><td>走法の座標と好走ゾーンは、過去レースの統計の当てはめ（走法マップ）。表示用の Best5 もこれから作る</td><td>不採用（親モデルの残差に何も残らなかった。2026-11-10）。検証済みのためチャートから外した</td></tr>
+<tr><td>適性グルーピング（似た馬を近い着順として扱う）</td><td><b>C</b></td><td>教師なしの分類。グループ内の成績・近さの集計は B</td><td>不採用（評価で効果が弱かった。tp-60）。検証済みのためチャートから外した</td></tr>
+<tr><td>統計量、ターゲットエンコーディング、騎手・調教師・馬主・血統の成績</td><td><b>B</b></td><td>「その他」248 列、<code>v4:self8</code>・<code>field7</code>・<code>owner</code>・<code>ped</code>、<code>tl_</code>、<code>CY</code></td><td>直接入る</td></tr>
+<tr><td>血統の ridge/SVD（PX）</td><td><b>C</b></td><td>tp-38</td><td>43 列が直接入る</td></tr>
+<tr><td>めぐ指数 v3a の履歴（RB）</td><td><b>C</b></td><td>基準値を当て込んだ指数の履歴（段 1・8）</td><td>16 列が直接入る</td></tr>
+<tr><td>馬券組合せ確率（馬連・ワイド・3連複）</td><td><b>B</b>（レースごとの当てはめあり）</td><td>実装済み：<code>exotic_probabilities.py</code>（割引 Harville、α を連対率・複勝率へ合わせる）。比較は <code>exotic_method_eval.py</code>（H・DG・D1・M3・Thurstone の Monte Carlo など）で済んでいる</td><td>入れない（買い目の層）</td></tr>
+<tr><td>レースシミュレーション</td><td><b>D</b>（見送り）</td><td>未実装。MB60 を予想位置取りで傾ける検定（<code>exotic_pair_corr_test.py</code>）で馬連・3連複とも改善 0.001 未満。Thurstone 型は比較済み（MB60 に劣る）</td><td>入れない</td></tr>
+<tr><td>下流（勝率・連対率・複勝率）</td><td><b>A</b></td><td>親モデル 7 メンバー（§2.5）</td><td>—</td></tr>
+</table>
+<p class="sub">追加の候補（案。未実施）：同型の競合・距離ロス＝B／乗り替わり・陣営の意図＝B／ラップ形状・走破時計＝A／状態の上げ下げ＝B／完走確率・成績のばらつき＝A／少走数馬の専用層＝A／血統の事前分布＝C（予測値にするなら A）。</p>
+
+<h3>2.7 データの年範囲（2016〜2019 年を使うとき）</h3>
+<p class="sub">2026-11-06 に追記。補填（<code>backfill.py</code>）で取得した 2016〜2019 年を使うための確認結果。<code>TRAINING_YEARS</code>（2020〜2025）と <code>FIT_END</code> は現状のコードに固定されている。</p>
+<table>
+<tr><th>データ</th><th>2016〜2019 年の状況</th><th>親モデルでの必要性</th></tr>
+<tr><td>結果（<code>race_result</code>）・出馬表・オッズ・追い切り・ラップ</td><td>取得は 100%。フラット表は生成中（2016 年は完成、残りは進行中）</td><td>必要</td></tr>
+<tr><td>指数（<code>race_index</code>）</td><td>0 件</td><td>親モデルの列に無い（めぐ指数 v3a は自前で計算）</td></tr>
+<tr><td>馬柱（<code>race_shutuba_past</code>）</td><td>0 件。取得の再開は 1 か月以上先</td><td><b>補正には不要</b>（下記）。<b>位置取り予想と追走難度の材料</b>になっている → <code>race_result_flat</code> の過去走から同じ集計を作る代替が要る（未検証）</td></tr>
+<tr><td>速報（<code>race_result_on_time</code>）</td><td>2019 年の 24 件のみ</td><td>不要（下記）</td></tr>
+<tr><td>2 連系オッズ（<code>race_pair_odds</code>）</td><td>0 件</td><td>親モデルの列に無い（買い目の層は別）</td></tr>
+</table>
+<ul>
+<li><b>速報・馬柱による補正（<code>apply_repair</code>）が要らないことの確認（2020〜2026 年、平地・完走馬）</b>：上がり 3F の不正値は年 0.1%（3 レース）。馬体重の不正値は 0.00%（2026 年のみ 0.19%）。速報で直せた上がり 3F は、2024〜25 年の不正 109 件中 0 件。通過順の不正は約 1% で、年 20〜27 レースが新潟直線 1000m（コーナーが無い）。2016〜2018 年は、表の生成後に同じ集計を行う（未実施）。</li>
+<li><b>2025 年の通過順の欠け</b>：札幌開催などの 153 レース・191 頭で、通過順が 1 個の値だけ保存されている（速報には全コーナーがある）。パーサー側の問題とみられ、再パースで直すのが筋（原因は未調査）。</li>
+<li><b>障害レース</b>：上がり 3F などが全頭で不正に見える（650 レース／2020〜2025）。平地と分ける前提なので別扱い。</li>
+<li><b>馬柱の代替の確認が先</b>：位置取り予想を <code>race_result_flat</code> の過去走（通過順・頭数）から作り、馬柱から作った値と 2020 年以降の一部で突き合わせる。一致すれば、2016 年以降の再学習でも馬柱は要らない。</li>
+<li><b>履歴の長さ</b>：<code>YEARS</code> が 2020 年始まりなので、2020〜2021 年の馬は履歴が短いまま特徴量が作られている。履歴だけ 2016 年以降に広げる案と、学習年も広げる案（A/B で比較し、test 2025 は 1 回）を分けて検討する。2026 年の扱いは未決（§1 のとおり学習に使わない）。</li>
+</ul>
+
+<p class="sub">各サブモデルの版・更新日・採用状況は <a href="model_versions.html">model_versions.html</a> に記録する。</p>
+<h3>2.8 サブモデルの概要（一覧）</h3>
+<p class="sub">2026-11-06 に追記。数値は §5.1 で拾った既存の結果（出典は §5.1・5.2）。「未測定」は精度の記録が無いもの。区分は §2.6（A=学習する／B=計算・集計／C=境界＝当て込み）。</p>
+<table>
+<tr><th>サブモデル</th><th>区分</th><th>何を出すか（役割）</th><th>主な入力</th><th>出力する列</th><th>作り方</th><th>使い先</th><th>現状の精度</th></tr>
+<tr><td>位置取り予想</td><td>B</td><td>各馬の初角位置・脚質（前に行く度）</td><td>馬柱の過去 5 走の通過順、枠順の補正（<code>gate_bias.json</code>）</td><td><code>pf_early</code>・<code>pf_rank</code>・<code>z_hat</code>・脚質</td><td>学習なし。直近ほど重い集計</td><td>追走難度・S3 の入力、画面</td><td>初角位置 MAE 0.2077（定数 0.2686）</td></tr>
+<tr><td>追走難度 v2</td><td>A</td><td>想定位置取りで走ったときの「終いの落ち」と、その楽さの得点（0〜100、高いほど楽）</td><td>位置取り予想、想定ペース <code>z_hat</code>、過去 5 走の量</td><td><code>EASE2_drain</code>（秒）・<code>EASE2_pct</code></td><td>木のモデル（要求側と供給側の差）。年別 walk-forward → LOYO OOF → 全期間</td><td>S3 の入力、画面</td><td>終いの落ちとの相関 +0.32（現行の追走指数は ほぼ 0）</td></tr>
+<tr><td>ラップ予想</td><td>A</td><td>レースのラップ（前半・後半 3F）と展開（slow / mid / high）の確率</td><td>レース条件、出走メンバーの構成</td><td><code>lp_p_slow/mid/high</code>・<code>lp_exp_f3_dev/l3_dev/lap0_dev</code></td><td>tp55。walk-forward → LOYO の LAP 群</td><td>S3 の入力、展開タイプ</td><td>前半/後半 3F の MAE 0.508 / 0.553（par 0.620 / 0.688）、分類 LogLoss 0.946</td></tr>
+<tr><td>ペース予測 1F / 3F</td><td>A</td><td>前半 1F・3F のラップ</td><td>レース条件</td><td>画面の表示のみ</td><td><code>train_pace_model</code></td><td>画面のみ（親モデルに入らない）</td><td>未測定</td></tr>
+<tr><td>前段 S3（e）</td><td>A</td><td>時計と順位の前段予測</td><td>275 列（追走難度・ラップ・位置取り予想を含む）</td><td><code>s_time_pred</code>・<code>s_time_gap</code>・<code>s_rank_pred</code></td><td>年ごとの expanding OOF → 全期間の最終モデル</td><td>親モデルの 3 列</td><td>旧版の MAE 0.7248 / 0.2161（e は未測定）</td></tr>
+<tr><td>補助ヘッド（9 本）</td><td>A</td><td>位置取り前/後・上がり偏差・時計偏差・順位・テン・初角・ペース差・RPCI の予測</td><td>基本 175 列</td><td>27 列（予測値と、レース内の順位・差）</td><td>木・線形。NN は教師として使う</td><td>親モデルの 27 列</td><td>未測定（想定オッズに混ぜると 2025 年で悪化した前例）</td></tr>
+<tr><td>血統 PX</td><td>C</td><td>血統の ridge/SVD 由来の得点</td><td>父・母父などの血統</td><td>43 列</td><td>tp-38 の当て込み</td><td>親モデルの 43 列</td><td>—</td></tr>
+<tr><td>めぐ指数 v3a の履歴（RB）</td><td>C</td><td>基準タイムを当て込んだ指数の履歴</td><td>全走の指数</td><td>16 列</td><td>基準値の当て込み</td><td>親モデルの 16 列</td><td>—</td></tr>
+<tr><td>親モデル</td><td>A</td><td>勝率・連対率・複勝率</td><td>1,231 列</td><td>確率 3 種</td><td>7 メンバー × 5 seed の合成（§2.5）</td><td>確率の較正以降すべて</td><td>test 2025 勝率 LogLoss 0.20678（一様 0.2588、市場 0.2040）</td></tr>
+<tr><td>オッズ予測</td><td>A</td><td>想定の単勝・複勝オッズ（買う前に分かる量で作る）</td><td>発走前の特徴量（市場オッズは使わない）</td><td>想定単勝・想定複勝</td><td><code>odds_pred</code>・<code>final_odds_bundle</code></td><td>期待値・買い目だけ（親モデルに入れない）</td><td>log オッズの RMSE 0.480 / 0.405（2025）</td></tr>
+<tr><td>確率の較正</td><td>C</td><td>モデル確率と市場確率を混ぜて実績に合わせる</td><td>親モデルの確率、市場の確率</td><td>較正後の確率</td><td>対数線形ブレンド（<code>prob_calibration.json</code>）</td><td>期待値・印・買い目</td><td>段 13 で確認</td></tr>
+<tr><td>馬券組合せ確率</td><td>B</td><td>馬連・ワイド・3連複などの組合せの確率</td><td>勝率・連対率・複勝率</td><td>組合せごとの確率</td><td>割引 Harville（MB60）。学習モデルではない</td><td>買い目の層</td><td>3連複の対数スコア 4.364（Harville 4.437）</td></tr>
+<tr><td>期待値の較正・印の規則</td><td>C</td><td>表示する期待値が実現回収率に合うように補正し、印の閾値を決める</td><td>較正後の確率、想定オッズ</td><td>期待値の係数、印</td><td>段 14・15</td><td>画面、買い目</td><td>段 14・15 で確認</td></tr>
+<tr><td>展開タイプ・想定めぐ指数・成長指数・走法マップ</td><td>A / B / C</td><td>画面の説明用の分類・指数・地図</td><td>各々</td><td>画面のみ</td><td>各々の当て込み</td><td>画面のみ（親モデルに入らない）</td><td>—</td></tr>
+<tr><td><b>最終層（思想別）</b></td><td>A</td><td>どの馬・どの買い目を選ぶか。思想ごとに複数（§5.4）</td><td>親モデルの確率、市場の確率・オッズ、舞台</td><td>購入する馬・額・券種</td><td>§5.4（評価完了）</td><td>買い目</td><td>未確定（2026-11-06 に A〜F を評価。採用なし）</td></tr>
+</table>
+
+<h2>3. 手順（この順に進める）</h2>
+<table>
+<tr><th>#</th><th>段</th><th>何をする</th><th>主なコマンド・出力</th><th>前提</th><th>確認</th></tr>
+<tr><td>0</td><td>入力データの点検</td><td>学習表の元になる取得が揃い、欠けが想定内かを見る。2026 年は含めない。</td><td>取得の状況表（fast/horse/cards/lap が 100%）、<code>data_quality_issues</code>。新しい特徴量の候補（過去走の風補正など）を評価するときは、この段で気象庁の時別値（<code>jma_weather_hourly_flat</code>）が評価年の末まで揃っているかも見る</td><td>—</td><td>コード</td></tr>
+<tr><td>1</td><td>[B] めぐ指数 v3a</td><td>基準タイム等を当て込み直し、全走の指数を再計算して parquet・DB・GCS に反映する。<b>変えない限りこの段は飛ばす</b>（変えたら 2〜3 の依存先をすべてやり直す）。</td><td><code>src/pipeline/megu_index/v3a.py</code>・<code>recompute.py</code>、反映は <code>docs/operations/megu_v3a_rollout.md</code>（DB → GCS 退避 → 日次 cron の切替の順。日次計算が GCS を上書きするので時刻に注意）</td><td>0</td><td>コード</td></tr>
+<tr><td>2</td><td>[B] 想定めぐ指数・成長指数</td><td>v3a の指数から補正係数を当て込み直す（親モデルの入力ではなく、画面の表示用）。</td><td><code>expected_megu_fit</code>（→ <code>config/expected_megu/model.json</code>）、<code>growth_index_fit</code>（→ <code>config/growth_index/</code>）</td><td>1</td><td>コード</td></tr>
+<tr><td>3</td><td>[C][D] 位置取り予想 → 追走難度 v2</td><td>追走難度の学習表を作り、年別 walk-forward で評価 → LOYO の OOF（EASE2）→ 全期間の最終モデル。</td><td><code>tp54_dataset</code> → <code>tp54_model eval / oof / final</code>。出力 <code>$TP54_OUT/groups/EASE2.parquet</code> と <code>config/tracking_difficulty_v2/{model.txt,model_demand.txt,meta.json}</code></td><td>0（位置取り予想の定義を変えたときは先に）</td><td>コード</td></tr>
+<tr><td>4</td><td>[E] ラップ予想</td><td>レース表を作り、walk-forward で評価 → 2026 を 1 回だけ見て API 用モデルを保存 → LOYO の LAP 群を作る。</td><td><code>tp55_build</code> → <code>tp55_eval main / final2026</code> → <code>tp55_win_eval make-group</code>（出力 <code>tp55_out3/groups/LAP.parquet</code>）</td><td>0</td><td>コード</td></tr>
+<tr><td>5</td><td>[F] 展開タイプ（任意）</td><td>ペース確率にラップ予想を混ぜる重みを選び、分類器を最終学習して設定を書く。<b>親モデルの入力ではない</b>ので、4 を変えたときだけ。</td><td><code>tp61_final blend</code> → <code>tp61_final export</code>（<code>config/pace_type*.json</code>）</td><td>4</td><td>コード（親の入力でない点は <code>V5_GROUPS=CY,BEST,RB</code> に含まれないことから）</td></tr>
+<tr><td>6</td><td>[G] ペース予測（任意）</td><td>前半 1F・3F のラップ予測。親モデルの入力ではない。</td><td><code>train_pace_model</code>（→ <code>models/pace_predictor/model_{1f,3f}.txt</code>）</td><td>0</td><td>コード（親モデルの列に無いことを列名で確認）</td></tr>
+<tr><td>7</td><td>[H] 前段 S3（本番は e）</td><td>追走難度 v2・ラップ予想・位置取り予想を入力に、時計・順位の前段を年ごとの expanding OOF で作り、そのあと全期間の最終モデルを学習。本番の保存値から写せない列（<code>serving_v6.UNMAPPED</code>）は外す（= e）。</td><td><code>python -m src.scripts.data.v6_stage build e</code> → <code>fit_final_stage_v6 --variant e --fit-end 2024</code> と <code>--fit-end 2025</code>（出力 <code>final_stage/v6_e_*</code>）</td><td>3, 4</td><td>コード（S3 の入力は 275 列）</td></tr>
+<tr><td>8</td><td>RB の履歴</td><td>走単位の表を作り、推論用の履歴状態を作って学習側と照合する。</td><td><code>tp65_prep</code>（<code>runs.parquet</code>）→ <code>build_rb_state build</code> → <code>build_rb_state verify</code>（最大絶対差 0.0 が基準）。日次は <code>scripts/cron/rb_state_daily.sh</code></td><td>1</td><td>コード</td></tr>
+<tr><td>9</td><td>[I] 親モデルのメンバー</td><td>メンバー 7 つ（lgb_extras_ped / xgb_extras_ped / lgb_extras / lgb_softmax / linear / nn_extras_ped（mtl）ほか）の OOF を作り、LOYO のアンサンブルの重みを決める。</td><td><code>V6_STAGE=e V6_TAG=e V5_GROUPS=CY,BEST,RB python -m src.scripts.data.v6_members member NAME</code>、<code>mtl nn_extras_ped</code>、<code>ens --name v6 --members …</code>（出力 <code>tp27_v6e/</code>）</td><td>7, 8</td><td>コード</td></tr>
+<tr><td>10</td><td>[J] 親モデル本体</td><td>まず <code>--fit-end 2024</code> で学習して test 2025 を<b>1 回</b>評価（v5 / 現行との差と、初出走・新馬などの部分集合）。問題がなければ <code>--fit-end 2025</code> で全期間学習（5 seed）。</td><td><code>V6_STAGE=e V6_TAG=e V5_GROUPS=CY,BEST,RB python -m src.scripts.data.fit_final_v6 --fit-end 2024</code> → <code>--fit-end 2025</code>（出力 <code>final_v6e/bundle_v6_2025</code>）</td><td>9</td><td>コード</td></tr>
+<tr><td>11</td><td>推論との一致確認</td><td>推論経路が学習側の行列と同じ列・同じ値を作ることを確かめる。2026 年の抜き取りで動くことも見る（判定には使わない）。</td><td><code>v6_parity</code>・<code>readiness_v6_sample</code>・<code>tests/pipeline/test_serving_v6.py</code></td><td>10</td><td>コード</td></tr>
+<tr><td>12</td><td>[K] 過去分の予測の再生成</td><td>2026 年の保存値の穴を埋め、新しいモデルで過去の予測を作り直して差し替える。</td><td><code>tracking_v2_backfill</code>・<code>tp55_backfill</code> → <code>KEIBA_INFERENCE_ENGINE=full python -m src.scripts.data.backfill_predictions --model v6e …</code>（別の場所へ）→ <code>sudo -n bash scripts/ops/swap_pred_v6e.sh</code>（件数確認・退避・1 回の mv）</td><td>10, 11</td><td>コード（<code>docs/operations/pred_model_v6e.md</code>）</td></tr>
+<tr><td>13</td><td>[L] 確率の較正</td><td>モデルの確率と市場の確率を対数線形にブレンドして実績に合わせる。評価年は前年までで学習し、書き出しは 2022〜2025。</td><td><code>tp70_fit compare</code> → <code>tp70_fit export --method C3 --out config/prob_calibration.json</code></td><td>10, 12</td><td>コード</td></tr>
+<tr><td>14</td><td>[L] 期待値の較正</td><td>表示する EV が、買い続けた実現回収率に収束するかを検証し、較正係数を書く。</td><td><code>calibrate_ev build_horse / build_portfolio / build_picks / fit</code>（→ <code>config/ev_calibration*.json</code>）</td><td>13</td><td>コード</td></tr>
+<tr><td>15</td><td>[L] 印の規則</td><td>印の定義の閾値を 2022〜2023 年で決め、2024〜2025 年で確認する。</td><td><code>mark_v2_eval build / design / final</code>（→ <code>config/mark_rule.json</code>）</td><td>13, 14</td><td>コード</td></tr>
+<tr><td>16</td><td>馬券の再確認</td><td>想定オッズの写像（確率の 2 次多項式）の当て直し、k・τ・M を 2022〜2024 で再評価 → 2025 で検証。見送り率・的中率・トリガミ率・最大ドローダウンが前回から大きく変わっていないこと。</td><td><code>odds_pred_eval</code>、<code>portfolio_target_eval grid / final</code>、手順書 <code>docs/operations/retrain_betting_checklist.md</code></td><td>13〜15</td><td>コード</td></tr>
+<tr><td>17</td><td>[M] 凍結した馬券規則の追跡</td><td>凍結規則（tp59/62/72/75）は<b>差し替えず</b>、新しい確率での成績を前向きに追跡する。</td><td><code>frozen_tracking</code>、<code>config/tp*_frozen_rule*.json</code></td><td>12</td><td>コード</td></tr>
+<tr><td>18</td><td>配備</td><td>モデルの重みは git に入れず、レジストリで配る。stg → 環境の一致確認 → 予測の再生成 → prod。</td><td><code>src.ops.model_publish</code> → <code>stage_deploy</code> → <code>env_parity_check</code> → <code>scripts/ops/vps/promote.sh --commit</code>。手順は <code>docs/operations/model_release_checklist.md</code>・<code>model_distribution.md</code>。戻すときは <code>KEIBA_PRED_MODEL=legacy</code></td><td>全部</td><td>コード</td></tr>
+</table>
+
+<h2>4. 何を変えたら、どこからやり直すか</h2>
+<table>
+<tr><th>変えたもの</th><th>やり直す段</th></tr>
+<tr><td>親モデルだけ（構成・ハイパーパラメータ・シード）</td><td>9 → 10 → 11 → 12 → 13〜18</td></tr>
+<tr><td>追走難度 v2 / ラップ予想 / 位置取り予想</td><td>該当の 3 or 4 → 7 → 9 → 10 → 11 → 12 → 13〜18（保存値の差し替えは <code>tracking_v2_backfill --overwrite</code> など）</td></tr>
+<tr><td>めぐ指数 v3a</td><td>1 → 2・8 → 9 → 10 → …（RB の入力が変わる。想定めぐ指数・成長指数は表示用なので 2 で足りる）</td></tr>
+<tr><td>学習表の列（新しい特徴量群）</td><td>7 → 9 → 10 → …（特徴量の採否は、別途の評価手順＝LOYO で同符号・点推定の差、束で test 2025 を 1 回）</td></tr>
+<tr><td>較正・印・買い目だけ</td><td>13 → 14 → 15 → 16 → 17 → 18（親モデルは触らない）</td></tr>
+<tr><td>表示用だけ（展開タイプ・ペース予測・想定めぐ指数・成長指数）</td><td>それぞれの 2 / 5 / 6 と 18（親モデルに影響しない）</td></tr>
+</table>
+
+<h2>5. 各段の合格基準（次の段に進む条件）</h2>
+<ul>
+<li>3・4：年別 walk-forward で現行より悪化していない。保存した OOF が全年そろっている（学習行の約 17% の欠損は従来どおり）。</li>
+<li>7：2024 年版の 2025 年の行の予測が expanding の OOF と一致（相関 1.0）。</li>
+<li>8：<code>build_rb_state verify</code> で全 16 列の最大絶対差 0.0、欠損位置も一致。</li>
+<li>10：test 2025（47,497 行・3,455 レース）で、勝率・連対・複勝の LogLoss が現行比で<b>悪化していない</b>こと。部分集合（初出走・履歴 0〜2 走・新馬・未勝利・条件戦・OP 以上）も見る。差は区間つきで読む。</li>
+<li>11：<code>v6_parity</code> で、保存値由来の列を除き不一致率がほぼ 0。</li>
+<li>12：staging の件数が、出馬表のあるレースの 98% 以上（<code>swap_pred_v6e.sh --min-ratio</code>）。</li>
+<li>13〜16：LogLoss・人気別のずれ・EV の信頼性が改善または維持。見送り率・的中率・トリガミ率・最大ドローダウンが前回と大きく変わらない。</li>
+</ul>
+
+<h3>5.1 モデリング（A）の精度の合格基準（サブモデルごと）</h3>
+<p>作成: 2026-11-06。値は既存の結果ファイル（<code>lap_forecast.html</code>・<code>tracking_difficulty_v2.html</code>・<code>model_accuracy_summary.html</code>・決定ログ・<code>exotic_eval/method_eval.json</code> など）から拾った。<b>「95%の精度」</b>は、確率・回帰の指標にはそのままは当てはまらない（勝率の LogLoss は 0.207 でも、ノイズの下限が高い）。そこで<b>到達率</b>で読み替える。</p>
+<p><b>到達率 = （基準線 − 値）÷（基準線 − 天井）</b>。基準線 = 何も学習しない素朴な予測（一様・定数・コース平均など）。天井 = 使える情報の上限の目安（市場の確率など。特徴量には使わず、ものさしにだけ使う）。</p>
+<ul>
+<li><b>一発合格</b>：到達率 95% 以上。これを満たしたら、それ以上の探索は打ち切ってよい（今できる最大の精度とみなす）。ただし天井が<b>実測できていて、達成しうる</b>指標にだけ適用する。</li>
+<li><b>合格</b>：一発合格に届かないとき、<b>基準線 → 現行値の改善幅を、さらに 1 割伸ばした値</b>を合格線にする（暫定。天井が測れていない指標は、これで置く）。現行の延長ではなく、もう一段の技術（別種のモデル・アンサンブル・特殊な特徴量・目的変数の変換）を重ねて初めて届く水準を狙う。</li>
+<li><b>不合格のまま打ち切るとき</b>：手段の系統を 3 つ続けて試して、どれも区間つきで改善が見えなければ打ち切り、そのときの最良値を「到達不能の記録」として新しい基準線に置く。</li>
+</ul>
+
+<table>
+<tr><th>サブモデル</th><th>指標（小さいほど良い、相関・R² は大きいほど良い）</th><th>基準線</th><th>現行</th><th>天井の目安</th><th>一発合格</th><th>合格線（暫定）</th></tr>
+<tr><td><b>親モデル</b>（勝率）</td><td>test 2025 の LogLoss</td><td>0.25880（一様）</td><td>v6e 0.20678 / v4 0.20740</td><td>0.2040（市場）</td><td><b>≤ 0.20674</b>（到達率 95%）</td><td>v6e は到達率 94.9%。一発合格の線に 0.00004 届かない（誤差の範囲）。<b>実質、打ち切りの水準</b>。これを上回れば採用、下回れば現行を維持</td></tr>
+<tr><td>親モデル（連対・複勝）</td><td>test 2025 の LogLoss</td><td>0.41042 / 0.51685</td><td>v4 0.32360 / 0.40640（v6e は LOYO 0.32719 / 0.41143）</td><td><b>未測定</b>（市場の連対・複勝確率を作って測る）</td><td>天井を測ってから確定</td><td>v6e を区間つきで悪化させない</td></tr>
+<tr><td>ラップ予想（前半 3F / 後半 3F）</td><td>誤差（秒）の MAE、2025 年</td><td>0.620 / 0.688（par）</td><td>0.508 / 0.553（R² 0.33 / 0.30）</td><td>0.357 / 0.375（正解シナリオが既知のとき。<b>達成できない上限</b>）</td><td>適用しない（天井が達成不能。到達率は現行で約 43%）</td><td><b>≤ 0.497 / ≤ 0.539</b></td></tr>
+<tr><td>ラップ予想（シナリオ分類）</td><td>LogLoss（2025 年）</td><td>1.043（事前）</td><td>0.946（正解率 0.54）</td><td>未測定</td><td>天井を測ってから</td><td><b>≤ 0.936</b></td></tr>
+<tr><td>追走難度 v2</td><td>終いの落ち Y との相関（2023 / 24 / 25 年）</td><td>現行の ease −0.03 / −0.04 / −0.06（ほぼ 0）</td><td>+0.323 / +0.317 / +0.317</td><td>未測定（Y 自体の再現性＝前後半の分割相関で測る）</td><td>天井を測ってから</td><td><b>3 年平均 ≥ 0.35、どの年も ≥ 0.30</b></td></tr>
+<tr><td>前段 S3（旧版の値）</td><td>MAE（走破タイム差 / 正規化着順）、2022〜24</td><td>0.8653 / 0.2693（定数）</td><td>0.7248 / 0.2161</td><td>未測定</td><td>天井を測ってから</td><td><b>≤ 0.711 / ≤ 0.2108</b>。<b>variant e の実測値がまだ無い</b>ので、e を測ってから基準線・現行を置き直す。親モデルに入れて勝率 LL が悪化しないことも条件</td></tr>
+<tr><td>オッズ予測（単勝）</td><td>log オッズの RMSE、2025</td><td>0.640（自前確率から変換）</td><td>0.480（順位相関 0.915）</td><td>未測定</td><td>天井を測ってから</td><td><b>≤ 0.464</b>、かつ年別の最大が全体の 1.1 倍以内</td></tr>
+<tr><td>オッズ予測（複勝）</td><td>同上</td><td>0.603（既存 V8）</td><td>0.405</td><td>未測定</td><td>天井を測ってから</td><td><b>≤ 0.385</b>、年別の条件は同上</td></tr>
+<tr><td>馬券組合せ確率（馬連 / ワイド / 3連複）</td><td>対数スコア（小さいほど良い）、2022〜24 の 10,316 レース</td><td>3.3601 / 2.5335 / 4.4373（Harville）</td><td>3.3404 / 2.4930 / 4.3636（MB60）</td><td>未測定</td><td>天井を測ってから</td><td><b>≤ 3.3384 / ≤ 2.4890 / ≤ 4.3562</b>。位置取りの傾きとシミュレーションでは 0.001 も動かなかったので、別系統（買い目の確率を直接学習するなど）が要る</td></tr>
+<tr><td>位置取り予想（初角位置。B 区分だが精度は測る）</td><td>MAE（正規化）、2022〜24</td><td>0.2686（定数）</td><td>0.2077（相関 0.57）</td><td>未測定</td><td>天井を測ってから</td><td><b>≤ 0.2016</b></td></tr>
+<tr><td>補助ヘッド（9 本）</td><td>目標ごとの R²（LOYO の OOF）</td><td colspan="4"><b>未測定</b>（保存した精度の記録が無い）。先に、目標ごとの R²・年別 R²・素朴基準（レース内平均）を測って基準線と現行を置く</td><td>測定後に、上と同じ規則（改善幅 + 1 割）。年別の最小が全体の 80% 以上（2025 年だけ分布がずれて想定オッズが RMSE 0.50 → 0.87 に悪化した前例）</td></tr>
+<tr><td>ペース予測 1F / 3F</td><td>MAE・R²</td><td colspan="4"><b>未測定</b>（画面表示のみ。精度の記録が無い）</td><td>測定後に同じ規則</td></tr>
+<tr><td>親モデルの各メンバー（7 つ）</td><td>LOYO の OOF の LogLoss</td><td colspan="4"><b>未測定</b>（OOF はあるが集計値が無い）</td><td>合成の重みが 0 のメンバーは外してよい。メンバーを足すときは、足したあとの合成の LogLoss が区間つきで改善すること</td></tr>
+</table>
+<p>読み方：太字が合格線（暫定）。<b>合格線は評価を見る前に決めて動かさない</b>（ここに書いた値を、結果を見てから緩めない）。「未測定」の行は、先に基準線と現行値を測る作業（段 3〜9 の評価の出力に精度の記録を残す）が要る。</p>
+
+<h3>5.2 評価指標の選び方（サブモデルごと）</h3>
+<p>作成: 2026-11-06。合否に使う<b>主指標</b>は 1 サブモデルにつき 1 つ（複数あると、良いものだけを選べてしまう）。<b>副指標</b>は診断用で、主指標が良くても副指標が大きく悪化していたら通さない（悪化の目安は、基準線より悪くならないこと）。確率を出すモデルは、<b>適切なスコア</b>（予測した確率を正直に出したときに最も良くなる指標＝LogLoss・Brier）を主にする。的中率・AUC は確率の良し悪しを測れないので、主指標にしない。</p>
+<table>
+<tr><th>サブモデル</th><th>主指標（合否）</th><th>副指標（診断・悪化させない）</th><th>選んだ理由</th><th>避けるもの・注意</th></tr>
+<tr><td>親モデル（勝率・連対・複勝）</td><td>LogLoss（行ごとの平均）</td><td>Brier、較正の傾き・切片（予測の対数オッズ vs 実現）、予測確率帯別の実現頻度、レース内の勝ち馬の −log p（レース単位）、部分集合別の LogLoss</td><td>確率を正直に出すほど良くなる。馬券の期待値の土台なので、確率そのものの正確さを見る。市場確率と同じ行で比べられる</td><td>的中率・AUC は主にしない。ECE は区切り方で値が変わるので、較正の傾き・切片と図で見る。連対・複勝は同じ馬から複数の 1 が立つので、レースでまとめた区間で読む</td></tr>
+<tr><td>ラップ予想（前半・後半 3F）</td><td>MAE（秒）</td><td>RMSE、R²、予測の偏り（平均誤差）をコース・距離・芝ダ別に、レース内でなく<b>レース間</b>の相関</td><td>ラップの誤差は外れ値（大きなスローや超ハイ）が混ざるので、外れ値に引きずられにくい MAE を主にする。R² は分散の小さい条件で大きく見えるので副にする</td><td>R² だけでの合否。距離が違うレースを混ぜた R² は距離の効果で水増しされる</td></tr>
+<tr><td>ラップ予想（シナリオ分類 slow / mid / high）</td><td>RPS（順序つきの確率スコア）</td><td>多値 LogLoss、正解率、較正（クラス別）</td><td>クラスに順序があり（slow &lt; mid &lt; high）、隣の取り違えは軽く、飛び越えは重く数えたい。多値 LogLoss は隣も遠いも同じ重さ</td><td>正解率を主にしない（クラス比の偏りで基準線が高い）。現行の記録は LogLoss なので、RPS で測り直して基準線と現行を置き直す</td></tr>
+<tr><td>追走難度 v2</td><td><b>レース内で平均を引いた</b>終いの落ち Y との Spearman 順位相関</td><td>全体の Pearson、10 分位ごとの Y の平均が単調か、年別の値、親モデルに入れたときの LogLoss の変化</td><td>使い道が「同じレースの中でどの馬に楽・きついか」の相対なので、レース間の違い（距離・馬場）を除いた相関で測る。順位相関は外れ値に強い</td><td>現行の記録は全体の Pearson（+0.32）。<b>主指標を変えるので、測り直して合格線を置き直す</b>（§5.1 の 0.35 は旧指標の値）</td></tr>
+<tr><td>前段 S3（時計・順位）</td><td>走破タイム差は MAE、順位は<b>レース内の Spearman</b></td><td>正規化着順の MAE、上位 3 頭の一致数、親モデルに入れたときの勝率 LogLoss の変化</td><td>親モデルは S3 の値そのものと、レース内の相対（_gap・順位）を使う。絶対誤差と、レース内の並びの両方が要る。最終の価値は親モデルで測る</td><td>全体の相関（レース間の差で水増し）。S3 は OOF の分布と本番の保存値が違うので、本番の保存値で再計算した値でも測る</td></tr>
+<tr><td>補助ヘッド（9 本）</td><td>目標ごとの<b>レース内の</b> R²（レース平均を引いたあと）</td><td>全体の R²、年別、親モデルに入れたときの LogLoss の変化</td><td>親モデルは _rk・_gap（レース内の相対）を使うので、レース内の説明力が本質。年別のずれ（2025 年の悪化の前例）も同時に見る</td><td>全体の R² だけ（コース・距離の差で高く出る）</td></tr>
+<tr><td>オッズ予測（単勝・複勝）</td><td>log オッズの MAE</td><td>RMSE、順位相関、<b>人気帯別の予測÷実際の中央値</b>（偏り）、年別、期待値の判定（買う・買わない）が実オッズのときと食い違う割合</td><td>買い目の判定は、オッズの誤差が倍率で効くので log で測る。MAE は外れ値に強い（現行は RMSE で記録している）。人気の薄い馬ほどオッズが跳ねるので、帯別の偏りと判定の食い違いが実用に近い</td><td>オッズ自体（円）の誤差。全体の RMSE だけ（低オッズに偏る）。現行の基準線・合格線は RMSE なので、MAE で測り直す（§5.1 は旧指標）</td></tr>
+<tr><td>馬券組合せ確率（馬連・ワイド・3連複）</td><td>対数スコア（実際の組合せの −log 確率、レース内の全組合せで規格化）</td><td>予測確率帯別の実現頻度（特に低確率帯の過大・過小）、確率上位 k 組の的中率、MB60 との差の区間</td><td>実際に起きた組合せへの確率を直接見る適切なスコア。買い目の価値は低確率の組合せで決まるので、低確率帯の較正が要る</td><td>回収率を主にしない（高配当 1 本に左右され、区間が 100% をまたぐ）。的中率だけ</td></tr>
+<tr><td>位置取り予想</td><td><b>レース内の</b>初角位置の Spearman</td><td>MAE（正規化）、逃げ馬（先頭で入る馬）を当てた割合、脚質 4 分類の LogLoss・混同行列</td><td>使い道は、同じレースの中での前後関係と、誰が逃げるか。MAE はレースの頭数や形で水増しされるので副にする</td><td>現行の記録は MAE と全体の相関。主指標を変えるので測り直す（§5.1 の 0.2016 は旧指標）</td></tr>
+<tr><td>ペース予測 1F / 3F</td><td>MAE（秒）</td><td>R²、コース・距離別の偏り</td><td>ラップ予想と同じ理由</td><td>未測定なので、基準線（コース別平均）と現行を先に測る</td></tr>
+<tr><td>親モデルの各メンバー</td><td>LOYO の OOF の LogLoss</td><td>合成に入れたときの合成の LogLoss の変化、他メンバーとの相関</td><td>メンバーの役割は単独の精度でなく、合成への上積み。相関が高いメンバーは足しても伸びない</td><td>単独で良いかどうかだけで残す</td></tr>
+</table>
+<ul>
+<li><b>区間の取り方</b>：レース（または開催日）をまとめてブートストラップ。同じレースの馬は独立でないので、馬を 1 行ずつ数えた区間は狭すぎる。</li>
+<li><b>到達率の計算</b>：主指標の単位で、基準線・天井を置く（LogLoss なら LogLoss 同士）。指標を変えたサブモデルは、基準線・現行・天井を同じ指標で測り直してから合格線を確定する（上の表で「測り直す」と書いたもの）。</li>
+<li><b>確率の出力に回収率を主指標にしない</b>：これまでの検証で、回収率は最良でも約 88% で区間が 100% をまたぐ。精度の合否と、馬券の合否（段 13〜16）は分けて扱う。</li>
+</ul>
+
+<h3>5.3 季節・開催場の偏りを評価に響かせない（層別と再重み付け）</h3>
+<p>作成: 2026-11-06。<b>現状</b>：評価（<code>tp27_eval.py</code>・<code>v6_members.py</code>・<code>fit_final_v6.py</code>）は年単位の LOYO で、季節（月）・開催場での層別や再重み付けは<b>入っていない</b>（確認できたのは test 2025 の部分集合＝初出走・新馬・クラス別のみ）。年単位の分割なので、1 年の中の季節は割れていない（漏れはない）が、<b>年ごとの構成の違い</b>（夏の福島・新潟・小倉・札幌・函館の割合、冬のダート、開催替わり、2020 年の無観客、2026 年が 1〜10 月だけ）と、場・季節に偏った改善は見えない。そこで次を合格の条件に加える。</p>
+<ul>
+<li><b>層の切り方</b>：開催月（または四半期）、競馬場（10 場）、芝／ダート（障害は別）、距離帯（短・マイル・中・長）。馬場状態は副の層。</li>
+<li><b>二通りで測る</b>：(a) 自然な重み（従来の全体の値）と、(b) <b>再重み付けした値</b>＝月×場×芝ダのレース数の割合を、評価に使う全年の平均の割合にそろえて集計した値。合格は<b>両方</b>で合格線を満たすこと（年ごとの構成の違いで有利・不利が出ても、(b) で打ち消す）。</li>
+<li><b>層ごとの下限</b>：どの月・どの場・芝／ダートでも、基準線より悪くならない。層ごとの区間は広いので、点推定が基準線より悪い層が出たら「区間が基準線をまたぐか」で判断し、またがず悪い層があれば不合格にする。</li>
+<li><b>改善の偏り</b>：改善（基準線との差）の半分以上が 1 つの季節か 1 つの場に集中していたら、合格にしない（その季節・場だけで効くモデルを、全体で効くと誤解しない）。</li>
+<li><b>層が薄いとき</b>：層の中のレース数が少なすぎる（目安：評価全体で 300 レース未満）層は、近い層にまとめて参考値にする。</li>
+<li><b>学習・選択の側</b>：学習の行の重みは自然な分布のまま（不均衡を補正して分布を歪めない）。一方、ハイパーパラメータ・アンサンブルの重み・閾値の<b>選択は (b) の再重み付けしたスコアで行う</b>。分割は年単位を保つ（行のランダム分割は同じレース・同じ開催日が学習と評価に分かれるので使わない）。</li>
+<li><b>月・開催場を特徴量にするとき</b>：季節の偏りを覚えて、年が変わると効かなくなる恐れがある。入れるなら、年を 1 つ抜いた評価で、層別の改善が年ごとに同じ向きかを見る。</li>
+<li><b>区間の取り方</b>：開催日でまとめたブートストラップ（同じ日の同じ場は馬場・天候を共有するので独立でない）。</li>
+<li><b>2026 年（テストセット②）</b>：1〜10 月だけなので、年の値を他の年と並べない。同じ月の範囲で、他の年と比べる。</li>
+</ul>
+<p>この層別・再重み付けの集計は<b>未実装</b>。共通の集計関数（<code>race_id</code> から月・場・芝ダ・距離帯を引き、OOF を層別に集計する）を 1 本作り、各段の評価の出力に付ける作業が要る。</p>
+
+<h4>5.1・5.2 に共通の決まり（過学習を避けるため）</h4>
+<ul>
+<li><b>使ってよい手段</b>：モデルの種類・アンサンブル（スタッキング含む）・目的変数の変換・特殊な特徴量・ハイパーパラメータ探索。<b>使えないもの</b>：市場オッズ・人気を特徴量にすること、2026 年（テストセット②）、結果から作る量（漏れ）。</li>
+<li><b>測り方</b>：学習は年ごとの LOYO か walk-forward。探索・選択はすべて学習年の中で行い、<b>test 2025 は 1 回だけ</b>（親モデル）。合格の判定は、レース（または開催日）でまとめた区間つき（ブートストラップ）で読み、点推定だけで通さない。</li>
+<li><b>試行の記録</b>：試した系統の数と各結果を残す。試行が多いほど「最良を選んだ」ことによる上振れが入るので、合格線の差が区間の幅より小さいものは通さない。</li>
+<li><b>年・部分集合</b>：どの年も基準線より悪くならない。親モデルは初出走・新馬・未勝利・条件戦・OP 以上でも悪化しない。平地と障害は分けて見る。</li>
+<li><b>下流への確認</b>：サブモデルの精度が上がっても、それを入れた親モデルの勝率 LogLoss が悪化したら採用しない（親モデルが最終の判定）。</li>
+<li><b>天井の測り方</b>：天井を市場の確率に置くものは、確定オッズから正規化した確率の LogLoss を同じ評価行で測る。市場は私たちの特徴量より情報が多い（直前の動き）ので、到達率 100% には届かなくてよい。</li>
+</ul>
+
+<h3>5.4 最終層（買う馬・買い目を決める層）：思想別のモデルと評価</h3>
+<p>作成: 2026-11-06。<b>状態：A〜F の評価を完了（2026-11-06）。採用する方策は無い（回収率 100% 超は確認できていない）。</b>詳細は章 <code>docs/html/modeling/chapters/final_layer_philosophies.html</code>。試した設定は 167 通りで、「利益が 0 を超える」かを Reality Check で見ると p=0.47（有意でない）。人気順の対照より良い点は 2022〜24 と test 2025 の両方で再現したが、対照自体が回収率 70〜80% と低く、100% 超の根拠にはならない。最大の不確かさは T-60 のオッズの代わりに確定オッズを使ったこと。</p>
+<p><b>なぜ思想別に作るか</b>：(1) 精度の高いモデルでも、人気馬ばかり当たると回収率が出ない（世のAIはその傾向で、競争に勝ちにくい）。(2) 全体の精度が低くても、人気薄の的中率が上がれば、回収率の上振れが安定しうる。(3) レース単位で「選んだ馬がまとまって上位に来る」ことを軸にすれば、3連系のオッズの跳ねを取りうる。予想者の思想ごとにモデルを作り、同じ土俵で比べる。</p>
+<table>
+<tr><th>パターン（思想）</th><th>狙い</th><th>試す手段</th><th>見る指標（その思想らしさ）</th><th>状態</th></tr>
+<tr><td><b>A 精度派</b>（基準）</td><td>較正した確率の高い馬を買う。世のAI相当</td><td>親モデルの較正後の確率の上位を買う</td><td>全体の LogLoss、的中率、回収率</td><td>完了：3連複 流し5 で回収率 94〜95%、対照との差は正（2025 は +0.166 [+0.069, +0.262]）。採用なし</td></tr>
+<tr><td><b>B 人気薄発掘派</b></td><td>市場より高く評価すべき人気薄を見つける</td><td>市場確率に対する残差、人気で直交化したスコア、損失の重み <code>(1/p_市場)^γ</code>（γ=0, 0.5, 1）、人気との相関へのペナルティ、市場の対数確率をオフセットにした混合、オッズ帯（7 倍以上など）に限った学習</td><td>人気薄（単勝 10 倍以上）の的中数÷市場の期待数（Σp_市場）、人気薄の LogLoss・較正、回収率</td><td>完了：期待値 1.0 以上の単勝 1 頭（B3）が 2022〜24 で 125.9%、2025 で 116.8% [80.7, 157.6]（上位 3 的中を除くと 93.8%）。人気薄の的中は市場の見込みの約 1.2〜1.3 倍。採用なし</td></tr>
+<tr><td><b>C レース単位マッチ派（束）</b></td><td>選んだ K 頭（3〜6）が一緒に 3 着以内に来るレースを当てる</td><td>集合の被覆確率（3 着内の 3 頭が全部入る）を直接最大化する listwise／Plackett-Luce、上位 K 頭と人気上位 K 頭の同点数比較、「荒れるレース」を分類して買うレースを選ぶ、3連複・ワイド・馬連のボックスと軸流し</td><td>集合が 3 着内 3 頭を全部含む割合・2 頭含む割合、平均配当、ボックスの回収率</td><td>完了：全部含む割合は A1 38.6%・人気順 38.2%（差は区間が 0 をまたぐ）。軸 B0＋相手 A1 の 3連複は 2025 で再現せず（88.5%）。採用なし</td></tr>
+<tr><td><b>D 期待値直接最適化派</b></td><td>購入額の配分を、実現払戻の期待に向けて直接学習する</td><td>スコア→購入額（softmax）を期待対数成長（縮約した Kelly）で微分可能に学習、「当たった券種のどれか 1 つでレース払戻 500%」の制約付き最適化（購入額 s_i ≥ 目標払戻÷オッズ_i、Σ1/オッズ_i ≤ 0.2）、強化学習（<code>ticket_env.py</code>・<code>policy.py</code>を再利用し、報酬をレース単位にして人気ペナルティを足す）</td><td>期待対数成長、回収率、最長連敗、破産確率</td><td>完了：3連複の 5 倍バスケットが 2022〜24 で 102.3%、2025 で 102.4% [94.7, 110.5]（最大的中を除いて 100.4%）。1 レース約 40 点で小口には組めない。強化学習は期待値の 1 段最適化で代用（本格的な方策勾配は未実施）。採用なし</td></tr>
+<tr><td><b>E データ派</b></td><td>似た舞台（条件）の統計的な好走率で補正する</td><td>似たレースの好走率・人気薄の好走率による補正（既存の類似度・クラス基準を再利用）</td><td>補正前後の LogLoss と、人気薄の的中数の比</td><td>完了：条件セルの補正は A1 とほぼ同じで上乗せなし（単勝 2025 で 103.8%、差の区間は 0 をまたぐ）。採用なし</td></tr>
+<tr><td><b>F 合成</b></td><td>舞台ごとに A〜E の得意・不得意を拾う</td><td>競馬場×コース、年齢限定／それ以外、低レベル／高レベル戦ごとの重み（全体の重みへ縮約）。A〜E の個別結果が出てから</td><td>A〜E の最良に対する上積み（区間つき）</td><td>完了：単独の最良（B3）との差は 2022〜24 で −0.08〜+0.07、2025 で −0.12〜+0.10。上乗せなし。採用なし</td></tr>
+</table>
+<p><b>評価の方法（結果を見る前に固定）</b></p>
+<ul>
+<li><b>データと分割</b>：親モデル v6e の OOF（2022〜2024 年、LOYO）の勝率・連対率・複勝率が入力。最終層の学習・選択は<b>2022〜24 年の中で 1 年抜く</b>（学習 2 年→評価 1 年）。test 2025 は設定を固定してから全パターン<b>1 回だけ</b>（再実行を拒否するガードを置く）。2026 年は触らない（テストセット②）。約 1 万レースと少ないので、低容量のモデル（ロジスティック・小さな GBM・小さな NN・縮約した重み）に限る。</li>
+<li><b>市場の扱い</b>：市場オッズ・人気は最終層（買い目の層）では使ってよい。親モデルの特徴量には使わない方針（§1）は変えない。回収率は確定オッズ・確定払戻での評価で、購入時点（T-60）のオッズとの差が最大の不確実性（実オッズの蓄積は 2026-10-17 以降の分だけ）。</li>
+<li><b>主に見る比較</b>：<b>同じ点数・同じ予算で人気上位を買った場合</b>を対照にし、<b>レースで対にした差</b>（回収率の差とその区間）を見る。控除率（20〜25%）を引いたあとの相対的な優位を測るため。絶対の回収率も併記する。</li>
+<li><b>併記する指標</b>：回収率の 95% 区間（レース単位のブートストラップ）、最大の的中を除いた回収率、上位 3 的中を除いた回収率、的中率、平均配当、人気帯別（〜3 倍／3〜7／7〜15／15〜30／30 倍〜）の的中率と回収率、最長連敗、固定予算での破産確率、レース単位のマッチ指標（集合が 3 着内 3 頭を全部含む割合・2 頭含む割合）。全体の LogLoss・Brier と、人気薄の部分集合の LogLoss・較正も並べる（「全体精度が低くても人気薄が当たる」かの確認）。</li>
+<li><b>偏りの確認</b>：開催月・競馬場・芝ダ別に成績を出す（§5.3）。</li>
+<li><b>多重比較</b>：試した設定の数をすべて記録し、最良を選んだことによる上振れを、Reality Check（White）などで補正して読む。選択は 2022〜24 年の年抜き評価だけで行い、3 年とも同じ符号であることを条件にする。</li>
+<li><b>有望の判定</b>：①対照（人気上位の同点数）との差が区間つきで正、②回収率の点推定が 3 年とも同符号、③最大の的中を除いても崩れない、④test 2025 で再現。どれかを欠けば「有望でない」と書く。回収率 100% 超を保証する表現はしない（これまでの検証で、区間の下限が 100% を超えた方策は無い）。</li>
+</ul>
+
+<h2>6. 確認できていないこと（再学習の前に読み直す）</h2>
+<ul>
+<li>（解消）ペース予測（段 6）・展開タイプ・想定めぐ指数・成長指数が親モデルに入らないことは、本番バンドルの 1,231 列の列名を出どころごとに数えて確認した（§2.2）。追走難度・ラップ予想・位置取り予想が親モデルに直接の列を持たず、S3 の 3 列を通すだけであることも同じ。</li>
+<li>メンバー 7 つの名前と重みは本番バンドルの <code>bundle.json</code> で確認済み（§2.5）。<code>ens</code> に渡した実際の <code>--members</code> の引数は、決定ログ §72 以降とホストの <code>tp27_v6e/ens/</code> で合わせる。</li>
+<li>想定オッズの写像（odds_pred）の学習元は、<code>odds_pred_eval</code> が <code>oof_z:RB@e</code> の確率を読むため<b>親モデルに依存する</b>。一方 <code>final_odds_bundle</code>（<code>train_final_odds_model</code>）は発走前の特徴量だけで、親モデルの出力は使わないように見える（特徴量定義の中に親モデルの出力を示す名前が無い）。</li>
+<li>位置取り予想・追走難度 v2 の最終モデルを作り直すと、<b>過去日の保存値</b>（<code>tracking_v2/&lt;日&gt;/</code>・<code>lap_forecast/&lt;日&gt;/</code>）も新しい版で作り直すかどうか（学習行は OOF、推論行は保存値）。作り直すなら段 12 の前に実施。</li>
+<li>ホストの実行時間・必要メモリは、段ごとには整理していない。各段の実行前にホストの空き（6 コア空け・load）を確認する。</li>
+<li>（2026-11-06 追記）<b>位置取り予想は学習モデルではなく、馬柱の集計</b>（<code>position_forecast.py</code>）。追走難度の学習表（<code>tp54_dataset.py</code>）も馬柱の過去 5 走を材料にする。2016〜2019 年は馬柱が 0 件なので、学習年を広げるなら <code>race_result_flat</code> の過去走から同じ量を作る代替が要る。<b>馬柱から作った値との一致は未検証</b>（2020 年以降の一部で突き合わせる）。</li>
+<li>（同上）<b>2016〜2019 年の使用可否は未決</b>。フラット表の生成が終わったら、2016〜2018 年の上がり 3F・馬体重・通過順の不正値の割合と、2020 年以降との列の形式（人気・上がり・馬体重の表記）を確かめる。<code>TRAINING_YEARS</code>・<code>YEARS</code>・<code>FIT_END</code>（2021-12-21）はコードに固定されており、広げるなら一緒に直す。<code>runs.py</code> の <code>load_runs</code> は年別の表を全部読むので、生成中の年が分析の入力に混ざらないよう、データの置き場を固定して使う。</li>
+<li>（同上）<b>2025 年の通過順が 1 個の値で保存された約 153 レースの原因は未調査</b>。パーサーの修正と再パースが要る（作業中の <code>parsers.py</code> の変更との関係を先に確認する）。</li>
+<li>（同上）<b>レースシミュレーション（D）を試す価値の見立て</b>：既存の比較（<code>exotic_method_eval.py</code>、2022〜2024 年の 10,316 レース、`data/local/modeling/exotic_eval/`）では、3連複の対数スコアが Harville 4.437 → 周辺一致の混合（MB70）4.362 で、構造を変えても差は 0.075 ほどしかない。Thurstone 型の抽選（700 レース）は Harville より良い（−0.037）が、周辺一致の MB60 には負ける（MB60 が 0.040 良い）。つまり「馬ごとの強さだけの生成モデル」を足しても上積みは小さい。シミュレーションが効くのは、位置取りや展開で馬同士の来やすさに相関が出る場合だけ。<b>まず、MB60 の予測と実際のずれが、脚質の近さ・予想位置の差で説明できるか</b>（ペア単位の残差の検定、LOYO）を見て、説明できなければシミュレーションは実装しない。<br/><b>検定の結果（2026-11-06、<code>exotic_pair_corr_test.py</code>）</b>：予想位置取り（馬柱の <code>pf_early</code>。取れた馬 87.8%）の「前の馬の数・前×前・後×後・位置の差」で MB60 の確率を傾けても、1 レースあたりの対数尤度の改善は、馬連 −0.00001（95% 区間 −0.0007〜+0.0008）、3連複 +0.0001（−0.0008〜+0.0009）で、年別は符号が揃わない。区間の幅から、0.001 を超える改善は 10,316 レースで除外できる（手法間の差 0.075 に対して）。<b>位置取りの相関による上積みは見えないので、シミュレーションは実装しない</b>（予想位置取りの精度が低いための見落としは残る。実際の位置取りは結果の漏れになるので試していない）。</li>
+<li>（2026-11-06 追記）<b>めぐコラム・めぐ分析の点検</b>：コラム 21 本の結論の大半（輸送・乗替・去勢・母年齢・夏牝馬・馬具初経験・体重・休養）は決定ログで評価済みで不採用。未検討の有用候補は 4 つ（過去走の風補正、走法軸の履歴、走法マップの適性得点、種牡馬系統）で、台帳 <a href="../modeling/chapters/feature_gap_audit.html">feature_gap_audit</a> の候補 14〜17、決定ログ §84。<b>走法軸は 2024 年以降しか無く、2020〜2023 年の学習行に値が無い</b>ので、LOYO に入れる前に被覆の確認が要る。<b>最終層で見つかったオッズ込みの補正のヒント</b>（ダート前寄り、関東馬の関西遠征、2 段以上下ランクへの乗替）が、tp-72 の 1,070 種に含まれるか（特に輸送・風）は未確認。</li>
+<li>（同上）<b>季節・開催場の層別評価（§5.3）は未実装</b>。月×場×芝ダ×距離帯で OOF を集計し、再重み付けした値と層別の下限を出す共通関数が要る。</li>
+<li>（同上）<b>馬単位の派生データ</b>（<code>SYNC_HORSES=1</code>、約 2.5 万頭）は、2016〜2019 年では未作成。親モデルが馬単位の履歴表を使うなら必要になる（重い）。</li>
+</ul>
+
+<h2>7. 関連する文書</h2>
+<ul>
+<li><code>docs/operations/pred_model_v6e.md</code>（v6e への切替・過去分の再生成）、<code>docs/operations/retrain_betting_checklist.md</code>、<code>docs/operations/model_release_checklist.md</code>、<code>docs/operations/model_distribution.md</code>、<code>docs/operations/fitted_artifacts.md</code>（当て込んだ重み・係数は git に置かない）。</li>
+<li>別セッションで進めるときの指示書と状態管理：<code>docs/operations/retrain_runbook.md</code>（「再学習を進めて」で始める）、<code>config/retrain_plan.json</code>、<code>scripts/dev/retrain_ctl.py</code>。</li>
+<li><a href="model_versions.html">モデルの版と採用状況</a>（<code>model_versions.html</code>）：各モデルの版名・更新日・どの版が採用中か・履歴。更新・切替のたびに書き換える。</li>
+<li>本書の章：v6 への追加候補の評価（<code>v6_features</code>）、追走難度 v2（<code>tracking_difficulty_v2</code>）、ラップ予想（<code>lap_forecast</code>）、めぐ指数 v3a（<code>megu_index_v3a</code>）、確率の較正（<code>prob_calibration_gap</code>）。</li>
+</ul>
+
+</main></body></html>

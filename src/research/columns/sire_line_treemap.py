@@ -1,14 +1,15 @@
 """めぐコラム『種牡馬系統による適性の違いはあるのか』（sire-line-aptitude）を実データから集計し、
 frontend/content/columns/sire-line-aptitude.json を書く。
 
-問い: 父系の系統（Halo 系・Mr. Prospector 系など）で、産駒の適性（芝ダ・距離・道悪・早熟/晩成・脚質）に違いはあるか。
+問い: 父系の系統（smartrc の小系統。ディープ系・キングマンボ系・ロベルト系など）で、産駒の適性（芝ダ・距離・道悪・早熟/晩成・脚質）に違いはあるか。
 
 データ:
-  レース: compare_series.load()（2020〜2025 年の JRA 平地。障害・取消・除外を除く）。馬場状態は race_result_flat の track_condition、
-          初角の位置は race_context.positions()（同じ流儀で 2019 年から読む）。
+  レース: compare_series.load()（2016〜2025 年の JRA 平地。障害・取消・除外を除く）。馬場状態は race_result_flat の track_condition、
+          初角の位置は race_context.positions()（同じ流儀で集計の前年から読む）。
   父:     compare_series.SIRE_MAP_PATH（horse_sire_map.parquet）。
-  系統:   data/meta/pedigree_lines/sire_line_origin.json（git の管理下の小さな版。src/scripts/scraping/trace_sire_line_origins.py が、
-          管理外の data/local/pedigree_lines/sire_line_origin.json と一緒に作る）。
+  系統:   smartrc の 大系統 → 小系統（data/meta/sire_lines/sire_smartrc_lines.json。2026-11-06 ユーザー指示で netkeiba の系統から切り替え）。
+          smartrc で系統が空欄の種牡馬は netkeiba の系統（data/meta/pedigree_lines/sire_line_origin.json の最も下の系統）を使い、
+          「smartrc 未分類」の下に置く。父（同じ父の群の検定に使う）は sire_line_origin.json の chain の先頭。
 
 適性の指標（種牡馬ごと、産駒の出走から。能力の差が入らないよう、分布か「オッズの見込みとの差」の差にする）:
   芝↔ダート   （分布）ダートを走った割合。
@@ -21,7 +22,7 @@ frontend/content/columns/sire-line-aptitude.json を書く。
 系統の木:
   lines（新しい→古い）を逆にした経路。同じ系統名が飛び飛びに出るとき（Raise a Native系 → Mr. Prospector系 → Raise a Native系）は、
   2 回目以降を飛ばす（根に近い最初の位置を採る）。名前の付いた最も下の系統の下は、父系の祖先の馬（その系統の祖から種牡馬の父まで）で枝分かれさせる。
-  産駒の出走が MIN_LEAF 未満の種牡馬は、同じ親の下で「ほか N 頭」にまとめる。子が 1 つだけの節は子と入れ替える。
+  産駒（データに出走のある馬）が MIN_HORSES 頭未満の種牡馬は、同じ親の下で 1 つの群にまとめる（群の名前は含まれる種牡馬の名前）。子が 1 つだけの節は子と入れ替える。
 
 縮小推定（経験ベイズ）:
   各節の生の値 x と、その標本分散 v（同じ馬の出走をまとめたクラスタの分散）を出し、根から順に
@@ -54,14 +55,20 @@ import pandas as pd
 from src.research.columns.compare_series import FLAT_DIR, SIRE_MAP_PATH, YEARS, jump_mask, load
 from src.research.columns.early_maturing_bloodline import expected_top3
 from src.research.columns.race_context import positions
+from src.research.race.running_map import AXES
+from src.research.race.running_profile import AXES_PATH
 from src.scripts.scraping.trace_sire_line_origins import line_path  # noqa: F401（テストからも t.line_path で使う）
 
 REPO = Path(__file__).resolve().parents[3]
 OUT = REPO / "frontend/content/columns/sire-line-aptitude.json"
 ORIGIN_PATH = REPO / "data/meta/pedigree_lines/sire_line_origin.json"
-MIN_LEAF = 100        # 木に 1 頭で載せる種牡馬の産駒の出走数（未満は「ほか N 頭」）
+MIN_HORSES = 10       # 木に 1 頭で載せる種牡馬の産駒の頭数（未満は群にまとめ、含まれる種牡馬を名前に出す）
 MIN_TEST = 300        # 系統の差の検定に入れる種牡馬の産駒の出走数
 MIN_GROUP = 3         # 検定で 1 つの系統として扱う最少の種牡馬数（未満は「その他」にまとめる）
+# 勝利距離の分布: 1 着の出走を距離帯に分け、帯ごとの割合を成分（平均）にして縮小推定に乗せ、縮めた割合から四分位などを出す
+WIN_EDGES = [1000, 1250, 1450, 1650, 1850, 2050, 2250, 2450, 2800, 3700]       # 帯の境（m）。1200・1300〜1400・1500〜1600… の 9 帯
+WIN_BINS = [f"wb{i}" for i in range(len(WIN_EDGES) - 1)]
+MIN_RUNS = {"windist": 10, **{b: 10 for b in WIN_BINS}, **{f"ax_{a[0]}": 20 for a in AXES}}      # 色だけの指標: 成分の出走がこれ未満なら値なし（馬が 1〜数頭だと分散が 0 に近く出て、縮められない）
 MIN_PART = 20         # 差の指標（道悪・早熟）で、片方の出走がこれ未満なら値なし
 N_PERM = 5000
 SEED = 20261104
@@ -70,7 +77,8 @@ START_SHARE = 0.95    # 最初の表示: 1 つの子が全体のこの割合以�
 # 成分（出走ごとの値の平均）。指標はこの平均か、2 つの平均の差
 # 道悪・早熟の成分は芝（_t）・ダート（_d）別に持ち、芝ダの割合の違いが差に混ざらないようにする。_o はオッズの見込みとの差の版
 SURF = {"_t": "芝", "_d": "ダート"}
-COMPONENTS = ["dirt", "dist", "style"] + [f"{c}{sf}{o}" for o in ("", "_o") for c in ("heavy", "good", "old", "young") for sf in SURF]
+AX_COMPS = [f"ax_{a[0]}" for a in AXES]       # 走法の軸（実測ラップのある出走だけ。running_map の 8 軸）
+COMPONENTS = ["dirt", "dist", "style"] + [f"{c}{sf}{o}" for o in ("", "_o") for c in ("heavy", "good", "old", "young") for sf in SURF] + ["windist"] + WIN_BINS + AX_COMPS
 
 
 @dataclass(frozen=True)
@@ -92,13 +100,31 @@ METRICS = [
     Metric("going", "道悪", "成績", "道悪が苦手", "道悪が得意", "pt", (("heavy_t", "good_t"), ("heavy_d", "good_d")), "重・不良と良の、複勝率 − 頭数からの期待（3/頭数）の差（芝・ダートそれぞれで出して平均）"),
     Metric("mature", "早熟↔晩成", "成績", "早熟（2〜3歳）", "晩成（4歳以上）", "pt", (("old_t", "young_t"), ("old_d", "young_d")), "4歳以上と2〜3歳の、複勝率 − 3/頭数 の差（芝・ダートそれぞれで出して平均）"),
 ]
+# 色で見るだけの指標（総合・検定には入れない。縮小推定は同じ）。勝利距離平均は 1 着の出走の距離（m）の平均、走法の軸は実測ラップから出した 1 走ごとの値の平均
+EXTRA_METRICS = [
+    Metric("windist", "勝利距離平均", "分布", "短い距離で勝つ", "長い距離で勝つ", "dist", (("windist",),),
+           "産駒が 1 着になったレースの距離の平均（m）。芝ダの違いも含む"),
+] + [
+    Metric(a[1][3:], f"走法: {a[3]}", "走法", a[5], a[4], "val2" if a[0] == "sustain" else "val1", ((f"ax_{a[0]}",),),
+           "産駒の出走ごとの値の平均（実測ラップのある 2023 年以降の出走だけ。外れ値は上下 1% で丸めた）")
+    for a in AXES
+]
+# 勝利距離の帯ごとの割合（縮小推定だけに使い、表示はしない）
+BIN_METRICS = [Metric(b, b, "分布", "", "", "pct", ((b,),), "") for b in WIN_BINS]
+# 縮めた帯の割合から出す、勝利距離の幅（どの距離でも勝てるか）。(key, ラベル, 下の割合, 上の割合, 説明)
+SPREAD_DEFS = [
+    ("win_iqr", "勝利距離の幅（中央50%）", 0.25, 0.75, "1 着になったレースの距離の、第1四分位〜第3四分位の幅（m）。大きいほど、いろいろな距離で勝つ"),
+    ("win_p90", "勝利距離の幅（中央90%）", 0.05, 0.95, "1 着になったレースの距離を短い順に並べ、下から5%〜95%の範囲の幅（m）。両端の5%ずつを除いた、ふだん勝つ距離の広さ"),
+]
+SPREAD_METRICS = [Metric(k, lab, "分布", "狭い距離で勝つ", "幅広い距離で勝つ", "dist", (), d) for k, lab, _, _, d in SPREAD_DEFS]
 # 検定だけに使う、オッズの見込みとの差の版（人気に織り込まれていない分の適性）
 ODDS_METRICS = [
     Metric("going_o", "道悪（人気との差）", "成績", "道悪が苦手", "道悪が得意", "pt", (("heavy_t_o", "good_t_o"), ("heavy_d_o", "good_d_o")), "重・不良と良の (複勝率 − オッズの見込み) の差"),
     Metric("mature_o", "早熟↔晩成（人気との差）", "成績", "早熟", "晩成", "pt", (("old_t_o", "young_t_o"), ("old_d_o", "young_d_o")), "4歳以上と2〜3歳の (複勝率 − オッズの見込み) の差"),
 ]
-ROUND = {"pct": 3, "m": 0, "pos": 3, "pt": 3, "num": 2}
-METRIC_BY_KEY = {m.key: m for m in METRICS + ODDS_METRICS}
+ROUND = {"pct": 3, "m": 0, "pos": 3, "pt": 3, "num": 2, "dist": 0, "val1": 2, "val2": 3}
+SHOWN_EXTRA = EXTRA_METRICS[:1] + SPREAD_METRICS + EXTRA_METRICS[1:]     # 色の選択肢に並べる順（勝利距離平均 → その幅 → 走法の軸）
+METRIC_BY_KEY = {m.key: m for m in METRICS + EXTRA_METRICS + ODDS_METRICS}
 
 
 # ── データ ──────────────────────────────────────────────
@@ -107,6 +133,28 @@ METRIC_BY_KEY = {m.key: m for m in METRICS + ODDS_METRICS}
 def strip_country(name: str) -> str:
     """「Kingmambo (米)」→「Kingmambo」。"""
     return re.sub(r"\s*\([^)]*\)\s*$", "", str(name)).strip()
+
+
+def load_axes() -> pd.DataFrame:
+    """実測ラップの走法の軸（1 走ごと）。異常走は除き、外れ値は上下 1% で丸める。ファイルが無ければ空（全部 NaN になる）。"""
+    cols = [a[1][3:] for a in AXES]
+    if not Path(AXES_PATH).exists():
+        return pd.DataFrame({"race_id": pd.Series(dtype=str), "horse_id": pd.Series(dtype=str), **{c: pd.Series(dtype=float) for c in AX_COMPS}})
+    import pyarrow.parquet as pq
+
+    have = set(pq.read_schema(AXES_PATH).names)       # 走法マップに足された軸が、まだ run_axes に無いことがある（その軸は値なし）
+    ax = pd.read_parquet(AXES_PATH, columns=["race_id", "horse_id", "abn"] + [c for c in cols if c in have])
+    ax["race_id"], ax["horse_id"] = ax["race_id"].astype(str), ax["horse_id"].astype(str)
+    ax = ax.drop_duplicates(["race_id", "horse_id"])
+    out = ax[["race_id", "horse_id"]].copy()
+    for c in cols:
+        if c not in have:
+            out[f"ax_{c}"] = np.nan
+            continue
+        v = ax[c].astype(float).where(~ax["abn"].to_numpy(bool))
+        lo, hi = v.quantile(0.01), v.quantile(0.99)
+        out[f"ax_{c}"] = v.clip(lo, hi)
+    return out
 
 
 def frame() -> pd.DataFrame:
@@ -128,6 +176,15 @@ def frame() -> pd.DataFrame:
     df["c_dirt"] = (df["surface"] == "ダート").astype(float)
     df["c_dist"] = df["distance"] - df.groupby("surface")["distance"].transform("mean")
     df["c_style"] = df["q_now"]
+    win = df["finish_position"] == 1
+    df["c_windist"] = df["distance"].where(win)
+    band = pd.cut(df["distance"], WIN_EDGES, labels=False, right=False)
+    for i, b in enumerate(WIN_BINS):
+        df[f"c_{b}"] = (band == i).astype(float).where(win)
+    ax = load_axes()
+    df = df.merge(ax, on=["race_id", "horse_id"], how="left")
+    for c in AX_COMPS:
+        df[f"c_{c}"] = df[c] if c in df else np.nan
     heavy, good = df["track_condition"].isin(["重", "不良"]), df["track_condition"] == "良"
     old, young = df["age"] >= 4, df["age"] <= 3
     for o, y in [("", base), ("_o", res)]:
@@ -176,6 +233,8 @@ def metric_raw(st: np.ndarray, metric: Metric) -> tuple[float, float, int]:
     if len(metric.parts) == 1 and len(metric.parts[0]) == 1:
         i = COMPONENTS.index(metric.parts[0][0])
         m, v = comp_mean_var(st[i])
+        if st[i][0] < MIN_RUNS.get(metric.parts[0][0], 0):
+            v = math.inf
         return m, v, int(st[i][0])
     ds, ws, n = [], [], 0
     for a, b in metric.parts:
@@ -215,6 +274,8 @@ class Node:
     stats: np.ndarray | None = None
     est: dict[str, tuple[float, float, float, int]] = field(default_factory=dict)   # 指標 → (post, sd, raw, n)
     score: float = 0.0
+    horses: int = 0                                    # 配下の産駒の頭数（出走のあった馬）
+    members: list[tuple[str, int]] = field(default_factory=list)   # pool のとき、まとめた種牡馬の (名前, 産駒の頭数)
 
     @property
     def leaf(self) -> bool:
@@ -257,12 +318,29 @@ def build_tree(origin: dict[str, dict[str, Any]], sires: set[str] | list[str]) -
     return root
 
 
-def aggregate(nd: Node, st: dict[str, np.ndarray]) -> np.ndarray:
+def aggregate(nd: Node, st: dict[str, np.ndarray], horses: dict[str, int]) -> np.ndarray:
     if nd.leaf:
         nd.stats = sum((st[s] for s in nd.sires), np.zeros((len(COMPONENTS), 6)))
+        nd.horses = sum(horses.get(s, 0) for s in nd.sires)
     else:
-        nd.stats = sum((aggregate(c, st) for c in nd.children), np.zeros((len(COMPONENTS), 6)))
+        nd.stats = sum((aggregate(c, st, horses) for c in nd.children), np.zeros((len(COMPONENTS), 6)))
+        nd.horses = sum(c.horses for c in nd.children)
     return nd.stats
+
+
+def label_pools(root: Node, names: dict[str, str], horses: dict[str, int]) -> None:
+    """まとめた群（pool）に、含まれる種牡馬を持たせ、名前にも出す（「ほか N 頭」のような中身の見えない名前にしない）。"""
+    for nd in root.walk():
+        if nd.kind != "pool":
+            continue
+        order = sorted(nd.sires, key=lambda s: (-horses.get(s, 0), names.get(s, s)))
+        nd.members = [(names.get(s, s), horses.get(s, 0)) for s in order]
+        shown = [n for n, _ in nd.members[:3]]       # 名前に出すのは多い順に 3 頭まで（全員は members に持ち、選択時の一覧に出す）
+        joined = "・".join(shown) + (f" ほか{len(nd.members) - 3}頭" if len(nd.members) > 3 else "")
+        if nd.name.startswith("ほか"):
+            nd.name = joined
+        elif re.search(r"（\d+ 頭）$", nd.name):
+            nd.name = re.sub(r"（\d+ 頭）$", f"（{joined}）", nd.name)
 
 
 def runs(nd: Node) -> int:
@@ -270,20 +348,20 @@ def runs(nd: Node) -> int:
 
 
 def prune(nd: Node, names: dict[str, str]) -> Node:
-    """出走の少ない種牡馬を「ほか N 頭」にまとめ、子が 1 つの節を子と入れ替える。"""
+    """産駒の少ない種牡馬を 1 つの群にまとめ、子が 1 つの節を子と入れ替える。"""
     if nd.leaf:
         return nd
-    if nd is not None and nd.kind != "root" and runs(nd) < MIN_LEAF:
+    if nd is not None and nd.kind != "root" and nd.horses < MIN_HORSES:
         sids = [s for c in nd.walk() if c.leaf for s in c.sires]
         return Node(nd.key, nd.name if len(sids) > 1 else names.get(sids[0], nd.name), "pool" if len(sids) > 1 else "sire",
-                    sires=sids, stats=nd.stats)
+                    sires=sids, stats=nd.stats, horses=nd.horses)
     kids = [prune(c, names) for c in nd.children]
-    small = [c for c in kids if c.leaf and runs(c) < MIN_LEAF]
+    small = [c for c in kids if c.leaf and c.horses < MIN_HORSES]
     if len(small) >= 2:
         sids = [s for c in small for s in c.sires]
         pool = Node(nd.key + "+pool", f"ほか {len(sids)} 頭", "pool", sires=sids,
-                    stats=sum((c.stats for c in small), np.zeros((len(COMPONENTS), 6))))
-        kids = [c for c in kids if not (c.leaf and runs(c) < MIN_LEAF)] + [pool]
+                    stats=sum((c.stats for c in small), np.zeros((len(COMPONENTS), 6))), horses=sum(c.horses for c in small))
+        kids = [c for c in kids if not (c.leaf and c.horses < MIN_HORSES)] + [pool]
     nd.children = kids
     if len(kids) == 1 and nd.kind != "root":
         k = kids[0]
@@ -332,12 +410,33 @@ def fit_tau2(sire_st: dict[str, np.ndarray], sire_parent: dict[str, Node], metri
     return tau2
 
 
+def win_quantile(shares: np.ndarray, q: float) -> float:
+    """帯ごとの割合（合計 1 に直す）から、勝利距離の q 分位（帯の中は一様とみなして補間、m）。"""
+    cum = 0.0
+    for i, w in enumerate(shares):
+        if cum + w >= q and w > 0:
+            return WIN_EDGES[i] + (q - cum) / w * (WIN_EDGES[i + 1] - WIN_EDGES[i])
+        cum += w
+    return float(WIN_EDGES[-1])
+
+
+def add_win_spread(root: Node) -> None:
+    """縮めた帯の割合から、勝利距離の幅（SPREAD_DEFS）を各節に足す。"""
+    for nd in root.walk():
+        sh = np.maximum(np.array([nd.est[b][0] for b in WIN_BINS], float), 0)
+        n = int(nd.stats[COMPONENTS.index("windist")][0])
+        for k, _, lo, hi, _ in SPREAD_DEFS:
+            w = win_quantile(sh / sh.sum(), hi) - win_quantile(sh / sh.sum(), lo) if sh.sum() > 0 else math.nan
+            nd.est[k] = (w, math.nan, w, n)
+
+
 def fit_shrinkage(root: Node, sire_st: dict[str, np.ndarray], sire_parent: dict[str, Node]) -> dict[str, float]:
     """指標ごとの τ² を推定し（fit_tau2）、木の全部の節を根から順に親へ縮める。"""
-    tau2 = fit_tau2(sire_st, sire_parent, METRICS)
+    fitted = METRICS + EXTRA_METRICS + BIN_METRICS
+    tau2 = fit_tau2(sire_st, sire_parent, fitted)
 
     def rec(nd: Node, prior: dict[str, tuple[float, float]]):
-        for m in METRICS:
+        for m in fitted:
             x, v, n = metric_raw(nd.stats, m)
             if nd.kind == "root":
                 post, var = x, v
@@ -442,10 +541,11 @@ def holm(ps: list[float]) -> list[float]:
 
 def analyze(df: pd.DataFrame, origin: dict[str, dict[str, Any]]) -> dict[str, Any]:
     st = sire_stats(df)
+    horses = {str(k): int(v) for k, v in df.groupby("sire_id")["horse_id"].nunique().items()}
     sires = sorted(s for s in st if s in origin)       # 並べ替え検定・表の並びが実行ごとに変わらないよう、順を固定する
     names = {s: strip_country(origin[s]["name"]) for s in sires}
     full = build_tree(origin, sires)
-    aggregate(full, st)
+    aggregate(full, st, horses)
     # 検定・τ² の推定用: 種牡馬ごとの、刈り込む前の木の親
     sire_parent: dict[str, Node] = {}
     for nd in full.walk():
@@ -453,14 +553,17 @@ def analyze(df: pd.DataFrame, origin: dict[str, dict[str, Any]]) -> dict[str, An
             if c.kind == "sire":
                 sire_parent[c.sires[0]] = nd
     root = prune(full, names)
-    aggregate(root, st)
+    aggregate(root, st, horses)
+    label_pools(root, names, horses)
     tau2 = fit_shrinkage(root, st, sire_parent)
+    add_win_spread(root)
     tau2.update(fit_tau2(st, sire_parent, ODDS_METRICS))
 
-    # 総合: 種牡馬（木の葉で 1 頭のもの、MIN_LEAF 以上）の縮めた値の第 1 主成分
-    leaves = [nd for nd in root.walk() if nd.kind == "sire" and runs(nd) >= MIN_LEAF]
+    # 総合: 種牡馬（木の葉で 1 頭のもの、MIN_HORSES 頭以上）の縮めた値の第 1 主成分
+    leaves = [nd for nd in root.walk() if nd.kind == "sire" and nd.horses >= MIN_HORSES]
     mat = np.array([[nd.est[m.key][0] for m in METRICS] for nd in leaves])
     flat = {m.key for m in METRICS if tau2[m.key] <= 1e-10}       # 種牡馬の間の違いが偶然の範囲（全部が親の値になる）
+    flat_x = {m.key for m in EXTRA_METRICS if tau2[m.key] <= 1e-10}
     load, mu, sd, share = pc1(mat, np.array([m.key not in flat for m in METRICS]))
     for nd in root.walk():
         z = (np.array([nd.est[m.key][0] for m in METRICS]) - mu) / sd
@@ -499,7 +602,7 @@ def analyze(df: pd.DataFrame, origin: dict[str, dict[str, Any]]) -> dict[str, An
     for t, qq in zip(tests, q):
         t["q"] = qq
 
-    return {"root": root, "start": start_node(root), "tau2": tau2, "flat": flat, "load": load, "mu": mu, "sd": sd, "share": share,
+    return {"root": root, "start": start_node(root), "tau2": tau2, "flat": flat, "flat_x": flat_x, "load": load, "mu": mu, "sd": sd, "share": share,
             "tests": tests, "test_sires": test_sires, "line_of": line_of, "father_of": father_of, "st": st, "names": names,
             "raw": raw_cache, "n_runs": len(df), "n_horses": df["horse_id"].nunique(), "n_sires": len(sires),
             "n_leaves": sum(1 for nd in root.walk() if nd.leaf), "origin": origin, "full": full}
@@ -517,6 +620,12 @@ def fmt_val(v: float, fmt: str) -> str:
         return "±0m" if round(v) == 0 else f"{v:+.0f}m"
     if fmt == "pos":
         return f"{v:.2f}"
+    if fmt == "dist":
+        return f"{v:,.0f}m"
+    if fmt == "val1":
+        return f"{v:.1f}"
+    if fmt == "val2":
+        return f"{v:.2f}"
     if fmt == "pt":
         return f"{v * 100:+.1f}pt"
     return f"{v:+.2f}"
@@ -529,11 +638,17 @@ def node_json(nd: Node, ids: dict[int, str], center: dict[str, float]) -> dict[s
         r = ROUND[m.fmt]
         ms.append([round(post, r), round(post - 1.96 * sd, r), round(post + 1.96 * sd, r), n])
     ms.append([round(nd.score, 2), None, None, runs(nd)])
-    o: dict[str, Any] = {"id": ids[id(nd)], "name": nd.name, "value": runs(nd), "metrics": ms}
+    for m in SHOWN_EXTRA:
+        post, sd, raw, n = nd.est[m.key]
+        r = ROUND[m.fmt]
+        ci = [None, None] if not math.isfinite(sd) else [round(post - 1.96 * sd, r), round(post + 1.96 * sd, r)]
+        ms.append([round(post, r), *ci, n])
+    o: dict[str, Any] = {"id": ids[id(nd)], "name": nd.name, "value": nd.horses, "metrics": ms}
     if nd.kind in ("pool", "branch", "line"):
         o["kind"] = nd.kind
     if nd.kind == "pool":
         o["sires"] = len(nd.sires)
+        o["members"] = [[n, h] for n, h in nd.members]
     if nd.children:
         o["children"] = [node_json(c, ids, center) for c in nd.children]
     return o
@@ -553,29 +668,35 @@ def pc1_label(load: np.ndarray, side: int) -> str:
 def treemap_block(a: dict[str, Any]) -> dict[str, Any]:
     root: Node = a["root"]
     ids = {id(nd): f"n{i}" for i, nd in enumerate(root.walk())}
-    center = {m.key: root.est[m.key][0] for m in METRICS}
+    center = {m.key: root.est[m.key][0] for m in METRICS + SHOWN_EXTRA}
     leaves = [nd for nd in root.walk() if nd.leaf]
-    metrics = []
-    for i, m in enumerate(METRICS):
+
+    def entry(m: Metric) -> dict[str, Any]:
         dev = np.array([abs(nd.est[m.key][0] - center[m.key]) for nd in leaves])
         scale = float(np.percentile(dev, 95))
         r = ROUND[m.fmt]
         desc = m.desc
-        if m.key in a["flat"]:
-            scale = 0.03
+        if m.key in a["flat"] or m.key in a["flat_x"]:
+            scale = 0.03 if m in METRICS else 10 ** -r
             desc += "。種牡馬の間の違いが偶然の範囲に収まり、縮めるとどの種牡馬も全体の値になる（色が付かない）"
-        metrics.append({"key": m.key, "label": m.label, "kind": m.kind, "low": m.low, "high": m.high, "format": m.fmt,
-                        "center": round(center[m.key], r), "scale": round(max(scale, 10 ** -r), r + 1), "desc": desc})
+        return {"key": m.key, "label": m.label, "kind": m.kind, "low": m.low, "high": m.high, "format": m.fmt,
+                "center": round(center[m.key], r), "scale": round(max(scale, 10 ** -r), r + 1), "desc": desc}
+
+    metrics = [entry(m) for m in METRICS]
     dev = np.array([abs(nd.score) for nd in leaves])
     metrics.append({"key": "pc1", "label": "総合（第1主成分）", "kind": "総合", "low": pc1_label(a["load"], -1), "high": pc1_label(a["load"], +1),
                     "format": "num", "center": 0, "scale": round(float(np.percentile(dev, 95)), 2),
                     "desc": f"{len(METRICS) - len(a['flat'])} つの指標をまとめた 1 軸（ばらつきの {a['share'] * 100:.0f}% を説明）"})
-    return {"type": "treemap", "title": "種牡馬系統のツリーマップ（面積＝産駒の出走数、色＝適性）",
+    metrics += [entry(m) for m in SHOWN_EXTRA]
+    return {"type": "treemap", "layout": "radial", "valueUnit": "頭",
+            "title": "種牡馬の系統樹（円形、色＝適性、似た適性の子が隣り合う）",
             "metrics": metrics, "defaultMetric": 0, "start": ids[id(a["start"])], "maxDepth": 3,
             "root": node_json(root, ids, center),
-            "caption": (f"{min(YEARS)}〜{max(YEARS)}年 JRA 平地の産駒の出走。系統をタップするとその系統へ潜り、上のパンくずで戻れる。"
-                        "各親の中では、似た適性の子が隣り合うよう総合（第 1 主成分）の順に左上から並べている。"
-                        f"色は縮小推定（出走の少ない種牡馬は親の系統の値へ寄せる）の値。産駒の出走 {MIN_LEAF} 未満の種牡馬は「ほか N 頭」にまとめた。")}
+            "caption": (f"{min(YEARS)}〜{max(YEARS)}年 JRA 平地の産駒の出走。中心が表示中の系統で、外へ向かって父系が枝分かれする。"
+                        "枝の先の丸が種牡馬（内側の丸は系統・父系の祖先の群）。丸の中に数字がある枝は、まだ配下に種牡馬がいるのでタップでその系統へ潜り、上のパンくずで戻れる。"
+                        "各親の中では、似た適性の子が隣り合うよう総合（第 1 主成分）の順に時計回りに並べている。"
+                        f"色は縮小推定（産駒の少ない種牡馬は親の系統の値へ寄せる）の値。産駒が {MIN_HORSES} 頭未満の種牡馬は群にまとめ、含まれる種牡馬の名前を群の名前と選択時の一覧に出した。"
+                        "「色」のプルダウンでは、適性の指標のほかに、勝利距離平均とその幅（どの距離でも勝てるか）、走法の軸（実測ラップのある 2023 年以降の出走だけ）も選べる。これらは色で見るだけで、総合や検定には入れていない。")}
 
 
 def article(a: dict[str, Any]) -> dict[str, Any]:
@@ -688,7 +809,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
             "「キングカメハメハ系はダート」「サンデー系は芝の中距離」のように、血統は系統（父系）でまとめて語られることが多いです。"
             "では、系統でまとめると、産駒の適性の違いはどれくらい説明できるのでしょうか。\n\n"
             f"{min(YEARS)}〜{max(YEARS)}年の JRA 平地 {a['n_runs']:,} 走（{a['n_horses']:,} 頭・{a['n_sires']:,} 種牡馬）を、"
-            "父の父系の木（三大始祖から各種牡馬まで）に並べ、5 つの適性の指標で色を塗りました。")},
+            "smartrc の系統（大系統 → 小系統 → 各種牡馬）の木に並べ、5 つの適性の指標で色を塗りました。")},
         {"type": "stats", "items": [
             {"label": "種牡馬", "value": f"{a['n_sires']:,}", "sub": f"検定は産駒 {MIN_TEST} 走以上の {len(a['test_sires'])} 頭"},
             {"label": "主な系統（検定）", "value": f"{top['n_groups']}", "sub": f"{MIN_GROUP} 頭未満の系統は「その他」"},
@@ -707,13 +828,13 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
          "caption": (f"脚質は今走の初角の位置で、予想に使う指標ではなく産駒の走り方の記述です。総合の両端は「{pcm['low']}」↔「{pcm['high']}」。")},
         {"type": "text", "text": (
             "産駒が少ない種牡馬の値はぶれるので、経験ベイズで親の系統の値へ縮めています（産駒が多いほど自身の値に近く、少ないほど親に近い）。"
-            "系統（木の内側の節）の値は、配下の産駒の出走をまとめて出しています。ツリーマップの色とホバー・タップで出る値・95% 区間は、この縮めた値です。")},
+            "系統（木の内側の節）の値は、配下の産駒の出走をまとめて出しています。系統樹の色とホバー・タップで出る値・95% 区間は、この縮めた値です。")},
         {"type": "heading", "text": "系統で適性に違いはあるか"},
         {"type": "text", "text": (
             f"産駒の出走 {MIN_TEST} 以上の {len(a['test_sires'])} 種牡馬について、指標ごとに「種牡馬の間の違いのうち、系統の違いで説明できる割合」を出しました。"
             "系統のラベルを種牡馬の間でランダムに入れ替えても、系統が多ければある程度の割合は偶然で出るので、その分を引いた値を載せ、"
             f"入れ替え（{N_PERM:,} 回）で p 値を出して、指標 × 2 つの分け方の {len(tests)} 個を Holm で補正しました。\n\n"
-            "分け方は 2 つです。「系統」は netkeiba の名前の付いた最も下の系統（Halo系・Mr. Prospector系・Storm Bird系など）、"
+            "分け方は 2 つです。「系統」は smartrc の小系統（ディープ系・Tサンデー系・キングマンボ系・ロベルト系など。smartrc で系統が空欄の種牡馬は netkeiba の系統）、"
             "「父」は種牡馬の父が同じ群（ディープインパクトの産駒の種牡馬など、細かい分け方）です。")},
         {"type": "table", "columns": ["指標", "種類", "系統で説明", "q（系統）", "父で説明", "q（父）"], "rows": test_rows,
          "caption": "説明の割合は、偶然の分（ラベルを入れ替えたときの平均）を引いたもの。q は Holm で補正した p 値。種牡馬の生の値を、標本の精度で重み付けしている。"},
@@ -725,7 +846,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
                + "、".join(f"{t['label']}は約 {t['adj'] * 100:.0f}%（q={qtxt(t['q'])}）" for t in father_sig)
                + "を説明します。大きな系統の中で、父ごとに分かれていると読めます。" if father_sig else "")
             + (f"\n\n{'・'.join(METRIC_BY_KEY[k].label for k in a['flat'])}は、系統以前に、種牡馬の間の違いそのものが偶然のぶれの範囲に収まりました"
-               "（縮小推定の τ が 0。ツリーマップでは色が付きません）。" if a["flat"] else "")
+               "（縮小推定の τ が 0。系統樹では色が付きません）。" if a["flat"] else "")
             + (f"\n\n人気との差の版（{'・'.join(t['label'] for t in odds_rows)}）も、どちらの分け方でも補正後に有意ではありませんでした。"
                "系統で道悪・成長力を狙っても、人気以上の上積みは見込みにくいということです。" if odds_rows and all(t["q"] >= 0.05 and by_father[t["key"]]["q"] >= 0.05 for t in odds_rows) else ""))},
         {"type": "table", "columns": ["系統", "種牡馬"] + [m.label for m in METRICS], "rows": line_rows,
@@ -743,13 +864,11 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
         {"type": "text", "text": conclusion_text(by_father, sig, weak, father_sig, a["flat"], qtxt)},
         {"type": "accordion", "title": "注記（系統の木の作り方・縮小推定・限界）", "blocks": [
             {"type": "text", "text": (
-                "・系統の木: netkeiba の血統ページの「○○系」を、種牡馬から父をたどって三大始祖まで並べたもの（新しい→古い）を逆にした経路です。"
-                "名前の付いた最も下の系統の下は、父系の祖先の馬（例: Halo系 → サンデーサイレンス系 → ディープインパクト系）で枝分かれさせています。"
-                "種牡馬がほかの種牡馬の父でもあるときは、自身の産駒を「（自身）」として、その馬の系の中に置いています。\n\n"
-                "・同じ系統名が飛び飛びに出る例（Raise a Native系 → Mr. Prospector系 → Raise a Native系、"
-                f"{sum(1 for v in a['origin'].values() if len(line_path(v['lines'])) < len([l for l in v['lines'] if l]))} 頭）は、"
-                "その種牡馬自身や父の表記の揺れによるものなので、2 回目以降を飛ばし、根に近い最初の位置を採りました（例: ヴァーミリアンは Mr. Prospector系 → Kingmambo系 の下）。\n\n"
-                f"・子が 1 つしかない節は、子と入れ替えて段を詰めています。最初は全体の {START_SHARE * 100:.0f}% 以上を占める系統（Phalaris系など）まで潜った位置から表示します。\n\n"
+                "・系統の木: smartrc の系統の分類（大系統 11・小系統 46）で、大系統（例: サンデー系）→ 小系統（例: ディープ系）→ 種牡馬 と並べています"
+                "（2026-11-06 に netkeiba の「○○系」から切り替え。smartrc の分類のほうが細かく、サンデー系をディープ系・Tサンデー系などに分ける）。"
+                f"smartrc で系統が空欄の種牡馬（比較的新しく輸入された海外の種牡馬など、{sum(1 for v in a['origin'].values() if v['lines'][-1] == UNCLASSIFIED)} 頭）は、"
+                "netkeiba の最も下の系統を使い、「smartrc 未分類」の下に置いています。\n\n"
+                f"・子が 1 つしかない節は、子と入れ替えて段を詰めています。最初は全体の {START_SHARE * 100:.0f}% 以上を占める系統まで潜った位置から表示します。\n\n"
                 f"・縮小推定: 指標ごとに、種牡馬の値が親の値からずれる真の SD（τ）を、ずれの 2 乗の平均から標本のぶれを引いて推定しました（{tau_txt}）。"
                 "標本のぶれは、同じ馬の出走をまとめたクラスタの分散で、同じ馬が何度も同じ条件を走る分を考えています。"
                 "道悪・早熟↔晩成の差の分散は、2 つの条件を独立とみなして足しているので、やや大きめ（保守的）です。\n\n"
@@ -770,8 +889,9 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
         "summary": summary,
         "categories": ["bloodline/lineage"],
         "published": "2026-11-04",
+        "updated": "2026-11-06",
         "dataset": {"period": f"{min(YEARS)}〜{max(YEARS)}年",
-                    "conditions": "JRA全競馬場・芝ダート（障害除く）。系統は父系を三大始祖まで辿ったもの",
+                    "conditions": "JRA全競馬場・芝ダート（障害除く）。系統は smartrc の大系統・小系統（空欄の種牡馬は netkeiba の系統）",
                     "sample": f"{a['n_runs']:,} 走（{a['n_horses']:,} 頭・{a['n_sires']:,} 種牡馬）。検定は産駒 {MIN_TEST} 走以上の {len(a['test_sires'])} 種牡馬"},
         "body": body,
     }
@@ -791,13 +911,23 @@ def conclusion_text(by_father, sig, weak, father_sig, flat, qtxt) -> str:
                      "「○○系」という大きなくくりでは平均すると消えますが、どの種牡馬の子かまで下りると似た傾向が出ます。")
     if indiv:
         parts.append("個々の種牡馬で見るべき指標: " + "、".join(f"{t['label']}（系統で約 {max(t['adj'], 0) * 100:.0f}%、q={qtxt(t['q'])}）" for t in indiv) + "。"
-                     "系統でも父でも違いは偶然の範囲で、種牡馬ごとの値（ツリーマップのホバー・タップ）か、その種牡馬の産駒の成績を直接見るほうが確かです。"
+                     "系統でも父でも違いは偶然の範囲で、種牡馬ごとの値（系統樹のホバー・タップ）か、その種牡馬の産駒の成績を直接見るほうが確かです。"
                      + ("とくに道悪は、種牡馬の間の違い自体が確かめられませんでした。道悪の得意・苦手は、6 年分のデータでも、種牡馬の単位では偶然のぶれと区別できない大きさです。" if "going" in flat else ""))
     return "\n\n".join(parts)
 
 
+def _finite(v: Any) -> Any:
+    if isinstance(v, float):
+        return v if math.isfinite(v) else None
+    if isinstance(v, dict):
+        return {k: _finite(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_finite(x) for x in v]
+    return v
+
+
 def dumps_article(col: dict[str, Any]) -> str:
-    """記事の JSON。ツリーマップの木は 1 行（空白なし）にまとめ、ほかは early_maturing_bloodline.dumps と同じ書き方。"""
+    """記事の JSON。系統樹の木は 1 行（空白なし）にまとめ、ほかは early_maturing_bloodline.dumps と同じ書き方。"""
     from src.research.columns.early_maturing_bloodline import dumps
     trees = {}
     for i, b in enumerate(col["body"]):
@@ -822,14 +952,36 @@ def report(a: dict[str, Any]) -> None:
         print(f"  {t['by']:3s} {t['label']:12s} eta2={t['eta2']:.3f} null={t['null']:.3f} adj={t['adj']:.3f} p={t['p']:.4f} q={t['q']:.4f} sires={t['n_sires']} groups={t['n_groups']}")
 
 
+UNCLASSIFIED = "smartrc 未分類"
+
+
+def smartrc_origin(origin: dict[str, dict[str, Any]], smartrc: dict[str, dict[str, Any]] | None = None) -> dict[str, dict[str, Any]]:
+    """系統の経路を smartrc の 大系統 → 小系統 に差し替えた origin（lines は新しい→古い）。父系の祖先の枝は使わず、父だけ残す。
+    smartrc で系統が空欄の種牡馬は、netkeiba の最も下の系統を「smartrc 未分類」の下に置く。"""
+    if smartrc is None:
+        from src.scraper import smartrc_sire_lines as ssl
+
+        smartrc = ssl.load().get("sires", {})
+    out = {}
+    for sid, rec in origin.items():
+        sm = smartrc.get(sid)
+        if sm and sm.get("small_name"):
+            lines = [sm["small_name"], sm.get("large_name")]
+        else:
+            nk = line_path(rec.get("lines") or [])
+            lines = [nk[-1] if nk else "系統不明", UNCLASSIFIED]
+        out[sid] = {**rec, "lines": lines, "chain": rec.get("chain", [])[:1], "origin_line": lines[-1]}
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
-    origin = json.loads(ORIGIN_PATH.read_text(encoding="utf-8"))
+    origin = smartrc_origin(json.loads(ORIGIN_PATH.read_text(encoding="utf-8")))
     a = analyze(frame(), origin)
     report(a)
-    col = article(a)
+    col = _finite(article(a))      # 値の無い軸（NaN）は null に（JSON に NaN を書かない）
     text = dumps_article(col)
     assert json.loads(text) == col
     compact = len(json.dumps(col, ensure_ascii=False, separators=(",", ":")).encode())

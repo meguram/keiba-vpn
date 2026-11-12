@@ -19,6 +19,7 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
     children: [
       { id: "conditions", label: "荒れやすい条件", desc: "どんな条件のレースが荒れるのか" },
       { id: "distance-course", label: "距離・ローカル", desc: "短距離やローカル開催は本当に荒れるのか" },
+      { id: "favorites", label: "人気馬の信頼度", desc: "2強のレース・混戦・上位人気を消せる条件" },
     ],
   },
   {
@@ -26,6 +27,7 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
     children: [
       { id: "front-runner", label: "逃げ・先行", desc: "逃げ馬は有利？芝とダート、距離での違い" },
       { id: "surface-switch", label: "初ダート・替わり", desc: "芝からダートに替わったときの脚質・枠順" },
+      { id: "venue-style", label: "競馬場別の脚質", desc: "競馬場ごとに有利な脚質と、ダート・芝の先行・差し" },
     ],
   },
   {
@@ -34,6 +36,8 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
       { id: "sex", label: "性別・去勢", desc: "牝馬の季節性、去勢明け初戦など" },
       { id: "gear", label: "馬具", desc: "ブリンカーなど、装着の効果とベスト条件" },
       { id: "birth", label: "生まれ・母の年齢", desc: "初年度産駒、高齢出産馬" },
+      { id: "body", label: "馬体重・斤量", desc: "馬体重の増減、斤量の変化" },
+      { id: "age", label: "年齢", desc: "高齢馬、夏の3歳馬" },
     ],
   },
   {
@@ -41,12 +45,63 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
     children: [
       { id: "maturity", label: "早熟・晩成", desc: "年齢で好走距離や舞台が変わる血統" },
       { id: "lineage", label: "系統", desc: "父系の系統で、産駒の適性はどれくらい決まるか" },
+      { id: "condition", label: "条件別の得意", desc: "父のコース・馬場・時期ごとの得意" },
     ],
   },
   {
     id: "travel", label: "輸送・ローテーション", desc: "遠征・滞在・間隔による違い",
     children: [
       { id: "transport", label: "輸送と滞在", desc: "同じレベルの馬で、どれくらい差が出るか" },
+      { id: "distance", label: "距離の延長・短縮", desc: "前走から距離が替わる馬は走るか" },
+      { id: "course-change", label: "コース替わり", desc: "回り・競馬場が替わったときの成績" },
+      { id: "interval", label: "間隔・叩き", desc: "休み明け・叩き2戦目・連闘" },
+      { id: "class", label: "昇級・クラス", desc: "クラスが上がったときに通用するか" },
+      { id: "overseas", label: "海外帰り", desc: "海外遠征から帰った初戦" },
+    ],
+  },
+  {
+    id: "prev", label: "前走の内容", desc: "前走の着差・上がり・展開から次走を読む",
+    children: [
+      { id: "result", label: "着順・着差・上がり", desc: "僅差の負け、上がり最速、大敗からの巻き返し" },
+      { id: "pace", label: "展開と位置", desc: "前走のペースと位置取りは次走に生きるか" },
+    ],
+  },
+  {
+    id: "training", label: "調教", desc: "追い切りの乗り手・コース・強さ",
+    children: [
+      { id: "rider", label: "追い切りの乗り手", desc: "本番の騎手が追い切りに乗るか" },
+      { id: "workout", label: "追い切りの内容", desc: "坂路・ウッド、加速ラップ、本数、評価" },
+    ],
+  },
+  {
+    id: "stable", label: "厩舎・陣営", desc: "調教師・生産者による違い",
+    children: [
+      { id: "trainer", label: "調教師", desc: "2頭出し・転厩" },
+      { id: "owner-breeder", label: "生産者・馬主", desc: "生産牧場・クラブによる違い" },
+    ],
+  },
+  {
+    id: "track", label: "馬場・枠", desc: "その日の馬場の偏り・開催週・枠順・道悪",
+    children: [
+      { id: "bias", label: "当日の馬場の偏り", desc: "前のレースの傾向は後のレースも続くか" },
+      { id: "gate", label: "枠順・開催週", desc: "内枠・外枠、開幕週と最終週" },
+      { id: "going", label: "道悪", desc: "重・不良で走る馬" },
+      { id: "terrain", label: "地形", desc: "直線・坂・回りの得意と不得意" },
+    ],
+  },
+  {
+    id: "ability", label: "実績", desc: "コース実績・上がりの実績",
+    children: [
+      { id: "record", label: "コース実績・上がり", desc: "コース巧者、上がり最速の多い馬" },
+      { id: "index", label: "指数・持ち時計", desc: "スピード指数・持ち時計・テンの速さの順位" },
+    ],
+  },
+  {
+    id: "race", label: "レースの性格", desc: "クラス・前走のステップ",
+    children: [
+      { id: "class", label: "クラス・ステップ", desc: "前走G1組など、前走のレースによる違い" },
+      { id: "program", label: "番組の性格", desc: "1R・最終R、ハンデ戦、別定戦などレースの種類" },
+      { id: "first-time", label: "初めての経験", desc: "初めての競馬場・距離・クラス・遠征" },
     ],
   },
   {
@@ -55,12 +110,15 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
       { id: "distance", label: "距離別の成績", desc: "騎手ごとに、距離で好走率がどう変わるか" },
       { id: "change", label: "乗り替わり", desc: "騎手が替わると成績はどう変わるか" },
       { id: "class-venue", label: "クラス・競馬場・時期", desc: "騎手ごとの得意クラス・競馬場・季節" },
+      { id: "combo", label: "調教師とのコンビ", desc: "いつものコンビ、普段乗せない上位騎手" },
+      { id: "context", label: "騎乗の状況", desc: "継続騎乗、その日の調子、1鞍だけの遠征" },
     ],
   },
   {
     id: "weather", label: "天候", desc: "風・気温など、気象の影響",
     children: [
       { id: "wind", label: "風", desc: "直線の向かい風・追い風と、風の強さの影響" },
+      { id: "rain-temp", label: "雨・気温", desc: "雨の日・真夏の暑さの影響" },
     ],
   },
 ];
@@ -83,12 +141,22 @@ export type ColumnBlock =
   | { type: "stats"; items: { label: string; value: string; sub?: string }[] }
   | { type: "table"; columns: string[]; rows: (string | number)[][]; caption?: string }
   | { type: "note"; text: string }
+  | ColumnGuideBlock
+  | ColumnGlossaryBlock
   | { type: "link"; href: string; label: string; desc?: string }
   | ColumnChartBlock
   | JockeyDistanceChartBlock
   | ColumnHeatmapBlock
   | ColumnTreemapBlock
+  | ColumnWordcloudBlock
+  | ColumnTrainerPatternBlock
   | { type: "accordion"; title: string; blocks: ColumnBlock[] };
+
+/** 表・グラフの前に置く「読み方」の囲み（統計に詳しくない人向けの言い換え）。記事 JSON ではなく guides/<slug>.json から差し込む */
+export type ColumnGuideBlock = { type: "guide"; title: string; text: string; example?: string };
+
+/** 用語のやさしい説明（折りたたみ） */
+export type ColumnGlossaryBlock = { type: "glossary"; title: string; items: { term: string; desc: string }[] };
 
 /** 折れ線グラフ。series が複数あるときは、見たい系列を切り替えて重ねて見られる（baseline は常に点線で出す） */
 export type ColumnChartBlock = {
@@ -111,6 +179,14 @@ export type ColumnChartBlock = {
    */
   filters?: { label: string; options: string[] }[];
   variants?: Record<string, ChartVariant>;
+  /** true なら、プルダウンは前の選択に合わせて variants に存在する選択肢だけを出す（会場 → 距離 のような階層）。先頭の選択肢を「全体」とみなさず、常に variants を引く */
+  cascade?: boolean;
+  /** true なら縦軸を 0 始まりにせず、値（と信頼区間）の範囲に合わせる（平均ラップ 12 秒前後の差を見るときなど） */
+  fitAxis?: boolean;
+  /** true なら、グラフの下に「選んだ系列 × 横軸」の数値表を開いた状態で出す（スマホでも値が読める） */
+  pivot?: boolean;
+  /** 最初に重ねて出す系列の name（省略すると先頭の 1 つ） */
+  initial?: string[];
   /** 右の縦軸に描く系列（横軸が同じで単位の違う値。例: 左に複勝率、右に平均人気）。常に表示し、色を分ける */
   y2?: { label: string; format?: ChartFormat; series: ChartSeries[] };
   /** 値が実データでなく画面確認用のダミー */
@@ -121,14 +197,36 @@ export type ColumnChartBlock = {
 };
 
 /** プルダウンで選んだ条件での系列（compare・caption は省略すると元のものを使う） */
-export type ChartVariant = { series: ChartSeries[]; y2Series?: ChartSeries[]; compare?: ColumnChartBlock["compare"]; caption?: string };
+export type ChartVariant = { series: ChartSeries[]; xs?: string[]; y2Series?: ChartSeries[]; compare?: ColumnChartBlock["compare"]; caption?: string };
 
 /** プルダウンの選択に応じたグラフ（全部が先頭の選択肢、または該当する組み合わせが無ければ元のまま） */
 export function chartVariant(block: ColumnChartBlock, picked: string[]): ColumnChartBlock {
   const v = block.variants?.[picked.join("|")];
-  if (!v || picked.every((p, i) => p === block.filters?.[i]?.options[0])) return block;
+  if (!v || (!block.cascade && picked.every((p, i) => p === block.filters?.[i]?.options[0]))) return block;
   const y2 = block.y2 && v.y2Series ? { ...block.y2, series: v.y2Series } : block.y2;
-  return { ...block, series: v.series, y2, compare: v.compare ?? block.compare, caption: v.caption ?? block.caption };
+  return { ...block, xs: v.xs ?? block.xs, series: v.series, y2, compare: v.compare ?? block.compare, caption: v.caption ?? block.caption };
+}
+
+/** cascade のとき、fi 番目のプルダウンに出す選択肢（それより前の選択 picked と組み合わせて variants にあるもの）。cascade でなければ全部 */
+export function cascadeOptions(block: ColumnChartBlock, picked: string[], fi: number): string[] {
+  const f = block.filters?.[fi];
+  if (!f) return [];
+  if (!block.cascade || !block.variants) return f.options;
+  const head = picked.slice(0, fi);
+  const keys = Object.keys(block.variants).map((k) => k.split("|"));
+  return f.options.filter((o) => keys.some((k) => head.every((h, i) => k[i] === h) && k[fi] === o));
+}
+
+/** fi 番目の選択を value にしたときの選択全体。後ろの選択が成り立たなくなったら、その時点で選べる先頭に寄せる */
+export function cascadePick(block: ColumnChartBlock, picked: string[], fi: number, value: string): string[] {
+  const next = [...picked];
+  next[fi] = value;
+  if (!block.cascade) return next;
+  for (let i = fi + 1; i < next.length; i++) {
+    const opts = cascadeOptions(block, next, i);
+    if (!opts.includes(next[i])) next[i] = opts[0] ?? next[i];
+  }
+  return next;
 }
 
 /** 右軸の上限。左軸の補助線（intervals 本の区切り）にそろうよう、区切りの幅を切りのよい数にする */
@@ -188,9 +286,18 @@ export function chartMax(series: { values: (number | null)[]; ci?: ([number, num
  * 縦軸の範囲と目盛りの間隔。値（と信頼区間）がすべて 0 以上なら、今までどおり 0 始まり（chartMax・chartStep）。
  * 負の値があれば、下限も値から決める（0 を必ず含み、目盛りは 0 を通る）
  */
-export function chartRange(series: { values: (number | null)[]; ci?: ([number, number] | null)[] }[], format: ChartFormat = "pct"): { min: number; max: number; step: number } {
+export function chartRange(series: { values: (number | null)[]; ci?: ([number, number] | null)[] }[], format: ChartFormat = "pct", fit = false): { min: number; max: number; step: number } {
   const vs = series.flatMap((s) => [...s.values, ...(s.ci ?? []).flatMap((c) => (c ? [c[0], c[1]] : []))]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
   const lo = vs.length ? Math.min(...vs) : 0;
+  if (fit && vs.length) {
+    const hi = Math.max(...vs);
+    const steps = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100];
+    const step = steps.find((st) => (hi - lo) / st <= 8) ?? steps[steps.length - 1];
+    const r = (v: number) => Math.round(v * 1e6) / 1e6;
+    const mn = r(Math.floor(lo / step + 1e-9) * step);
+    const mx = r(Math.max(mn + step, Math.ceil(hi / step - 1e-9) * step));
+    return { min: mn, max: mx, step };
+  }
   if (!(lo < 0)) {
     const max = chartMax(series, format);
     return { min: 0, max, step: chartStep(max, format) };
@@ -269,12 +376,14 @@ export type TreemapNode = {
   value: number;
   metrics: (number | null)[][];
   kind?: "line" | "branch" | "pool";
+  /** pool のとき、まとめた種牡馬の [名前, 産駒の頭数]（多い順） */
+  members?: [string, number][];
   sires?: number;
   children?: TreemapNode[];
 };
 
-/** pct: 割合（51.5%）、m: 距離の差（+45m）、pos: 位置（0.47）、pt: 率の差（+1.2pt）、num: 数（+0.53） */
-export type TreemapFormat = "pct" | "m" | "pos" | "pt" | "num";
+/** pct: 割合（51.5%）、m: 距離の差（+45m）、pos: 位置（0.47）、pt: 率の差（+1.2pt）、num: 数（+0.53）、dist: 距離（1,650m）、val1・val2: 符号なしの小数 1・2 桁 */
+export type TreemapFormat = "pct" | "m" | "pos" | "pt" | "num" | "dist" | "val1" | "val2";
 
 /** 色を付ける指標。center から ±scale で色が最も濃くなる（発散型）。low・high は両端の意味 */
 export type TreemapMetric = {
@@ -295,6 +404,9 @@ export type TreemapMetric = {
  */
 export type ColumnTreemapBlock = {
   type: "treemap";
+  /** "radial": 面積は使わず、円形の系統樹として描く（value は産駒の頭数など。単位は valueUnit） */
+  layout?: "radial";
+  valueUnit?: string;
   title: string;
   metrics: TreemapMetric[];
   defaultMetric?: number;
@@ -304,6 +416,22 @@ export type ColumnTreemapBlock = {
   caption?: string;
 };
 
+/** ワードクラウド。座標は集計側（src/research/columns/trainer_comment_wordcloud.py）で配置済み。size は文字の大きさ、lift は全体の何倍か、adj は人気をそろえた倍率 */
+export type WordcloudItem = { label: string; x: number; y: number; size: number; n: number; rate: number; lift: number; adj: number;
+  /** 単勝・複勝回収率（1 = 100%）。その語を含む馬を毎回 100 円買い続けた払戻 ÷ 掛け金 */ win: number; place: number };
+export type ColumnWordcloudBlock = {
+  type: "wordcloud";
+  title: string;
+  /** 全体の率 */
+  base: number;
+  wide: { w: number; h: number; items: WordcloudItem[] };
+  narrow: { w: number; h: number; items: WordcloudItem[] };
+  caption?: string;
+};
+
+/** 調教師 × 最終週の調教パターンの全件表。src の静的 JSON（public/data）を、開いたときに 1 回だけ取る（API・GCS は使わない） */
+export type ColumnTrainerPatternBlock = { type: "trainer_pattern_table"; title: string; src: string; caption?: string };
+
 export function formatTreemapValue(v: number | null | undefined, format: TreemapFormat): string {
   if (typeof v !== "number" || !Number.isFinite(v)) return "–";
   const sign = (x: number, s: string) => (Number(s) === 0 ? s.replace(/^-/, "") : `${x > 0 ? "+" : ""}${s}`);
@@ -311,6 +439,9 @@ export function formatTreemapValue(v: number | null | undefined, format: Treemap
     case "pct": return `${(v * 100).toFixed(1)}%`;
     case "m": return `${sign(v, v.toFixed(0))}m`;
     case "pos": return v.toFixed(2);
+    case "dist": return `${Math.round(v).toLocaleString("en-US")}m`;
+    case "val1": return v.toFixed(1);
+    case "val2": return v.toFixed(2);
     case "pt": return `${sign(v, (v * 100).toFixed(1))}pt`;
     default: return sign(v, v.toFixed(2));
   }
@@ -427,6 +558,96 @@ export function treemapLayout(view: TreemapNode, W: number, H: number, maxDepth:
   return items;
 }
 
+/** 節の配下の種牡馬の数（pool はまとめた頭数、葉は 1） */
+export function treeSireCount(n: TreemapNode): number {
+  if (!n.children?.length) return n.kind === "pool" ? n.sires ?? 1 : 1;
+  return n.children.reduce((a, c) => a + treeSireCount(c), 0);
+}
+
+export type RadialItem = {
+  node: TreemapNode;
+  parentId: string | null;
+  /** view からの深さ（view=0） */
+  depth: number;
+  /** ラジアン。0 が右、-π/2 が真上、時計回り */
+  angle: number;
+  r: number;
+  x: number;
+  y: number;
+  /** 子があるのに描かれていない（タップで潜る）節 */
+  folded: boolean;
+  /** 配下の種牡馬の数（folded のとき丸の中に出す） */
+  sires: number;
+  /** 葉として外周に置かれる（種牡馬・pool・folded） */
+  outer: boolean;
+};
+export type RadialSector = { node: TreemapNode; a0: number; a1: number };
+export type RadialResult = { items: RadialItem[]; sectors: RadialSector[]; rings: number[] };
+
+/**
+ * 円形の系統樹のレイアウト（純粋な関数、中心が原点）。view を中心に置き、浅い段から順に、外周の数が limit を超えない範囲で展開する
+ * （展開しない節は folded の 1 つの丸）。外周の丸には子の並び順のまま等間隔の角度を割り当て、内側の節は子の角度の中間に置く。
+ * 外周は半径 R、内側の節は深さに比例して R の 0.85 倍までに置く。sectors は view の直下の子ごとの扇形、rings は内側の節の半径
+ */
+export function radialLayout(view: TreemapNode, limit: number, R: number, maxLevel = 7): RadialResult {
+  const expanded = new Set<string>();
+  let outerCount = 1;
+  let level = [view];
+  for (let d = 0; d < maxLevel && level.length; d++) {
+    const next: TreemapNode[] = [];
+    for (const n of [...level].sort((a, b) => treeSireCount(b) - treeSireCount(a))) {
+      const k = n.children?.length ?? 0;
+      if (!k || outerCount + k - 1 > limit) continue;
+      expanded.add(n.id);
+      outerCount += k - 1;
+      next.push(...n.children!);
+    }
+    level = next;
+  }
+  if (!expanded.has(view.id) && view.children?.length) { expanded.add(view.id); outerCount = view.children.length; }
+
+  const leaves: TreemapNode[] = [];
+  const collect = (n: TreemapNode) => { if (expanded.has(n.id)) n.children!.forEach(collect); else leaves.push(n); };
+  collect(view);
+  const slot = (2 * Math.PI) / Math.max(1, leaves.length);
+  const angleOf = new Map<string, number>();
+  leaves.forEach((n, i) => angleOf.set(n.id, -Math.PI / 2 + slot * (i + 0.5)));
+  let maxD = 0;
+  const depthOf = new Map<string, number>();
+  const dfs = (n: TreemapNode, d: number): number => {
+    depthOf.set(n.id, d);
+    if (!expanded.has(n.id)) return angleOf.get(n.id)!;
+    maxD = Math.max(maxD, d);
+    const as = n.children!.map((c) => dfs(c, d + 1));
+    const ang = (as[0] + as[as.length - 1]) / 2;
+    angleOf.set(n.id, ang);
+    return ang;
+  };
+  dfs(view, 0);
+  const rOf = (n: TreemapNode) => (expanded.has(n.id) ? (R * 0.85 * depthOf.get(n.id)!) / (maxD + 1) : R);
+
+  const items: RadialItem[] = [];
+  const walk = (n: TreemapNode, parentId: string | null) => {
+    const angle = angleOf.get(n.id)!, r = n.id === view.id ? 0 : rOf(n), isExp = expanded.has(n.id);
+    items.push({ node: n, parentId, depth: depthOf.get(n.id)!, angle, r, x: r * Math.cos(angle), y: r * Math.sin(angle),
+      folded: !isExp && !!n.children?.length, sires: treeSireCount(n), outer: !isExp });
+    if (isExp) n.children!.forEach((c) => walk(c, n.id));
+  };
+  walk(view, null);
+
+  const sectors: RadialSector[] = [];
+  if (expanded.has(view.id)) {
+    const firstLast = (n: TreemapNode): [number, number] => {
+      if (!expanded.has(n.id)) return [angleOf.get(n.id)!, angleOf.get(n.id)!];
+      const cs = n.children!;
+      return [firstLast(cs[0])[0], firstLast(cs[cs.length - 1])[1]];
+    };
+    for (const c of view.children!) { const [f, l] = firstLast(c); sectors.push({ node: c, a0: f - slot / 2, a1: l + slot / 2 }); }
+  }
+  const rings = maxD > 0 ? Array.from({ length: maxD }, (_, i) => (R * 0.85 * (i + 1)) / (maxD + 1)) : [];
+  return { items, sectors, rings };
+}
+
 export type Column = {
   slug: string;
   title: string;
@@ -488,4 +709,80 @@ export function sortByDate(columns: Column[]): Column[] {
 /** カテゴリパスを「血統 › 父（種牡馬）」の表示名にする */
 export function categoryLabel(path: string): string {
   return categoryTrail(path)?.map((c) => c.label).join(" › ") ?? path;
+}
+
+/**
+ * 記事ごとの読み方ガイド（content/columns/guides/<slug>.json）。記事の JSON は集計コードが毎回書き直すので、
+ * 読み方の文章はそちらに置き、表示のときに差し込む。
+ *   lead: 冒頭に出す「まず、ひとことで」の箇条書き
+ *   terms: 共通の用語集（guides/glossary.json）から出す語、glossary: この記事だけの語
+ *   guides: 差し込む読み方。match で記事のブロックを探して、その前（place: "after" なら後ろ）に置く
+ */
+export type ColumnGuideMatch =
+  | { stats: true }
+  | { treemap: true }
+  | { heatmap: true }
+  | { heading: string }
+  | { text: string }
+  | { chart: string }
+  | { table: string[] };
+
+export type ColumnGuideEntry = {
+  match: ColumnGuideMatch;
+  title?: string;
+  text: string;
+  example?: string;
+  place?: "before" | "after";
+  /** 同じ条件に当てはまるブロックが複数あるとき、何番目か（0 始まり）。"all" なら全部。省略は最初の 1 つ */
+  nth?: number | "all";
+};
+
+export type ColumnGuide = {
+  lead?: string[];
+  terms?: string[];
+  glossary?: { term: string; desc: string }[];
+  guides?: ColumnGuideEntry[];
+};
+
+/** match がブロックに当てはまるか。text は先頭一致、heading は完全一致、chart は題の先頭一致、table は列名の完全一致 */
+export function guideMatches(m: ColumnGuideMatch, b: ColumnBlock): boolean {
+  if ("stats" in m) return b.type === "stats";
+  if ("treemap" in m) return b.type === "treemap";
+  if ("heatmap" in m) return b.type === "heatmap";
+  if ("heading" in m) return b.type === "heading" && b.text === m.heading;
+  if ("text" in m) return (b.type === "text" || b.type === "note") && b.text.startsWith(m.text);
+  if ("chart" in m) return (b.type === "chart" || b.type === "jockey_distance_chart") && ((b as { title?: string }).title ?? "").startsWith(m.chart);
+  if ("table" in m) return b.type === "table" && b.columns.length === m.table.length && b.columns.every((c, i) => c === m.table[i]);
+  return false;
+}
+
+/** 記事の本文に、読み方ガイドを差し込む（アコーディオンの中も探す） */
+export function applyGuide(body: ColumnBlock[], guide: ColumnGuide | undefined, glossary: Record<string, string>): ColumnBlock[] {
+  if (!guide) return body;
+  const entries = guide.guides ?? [];
+  const seen = entries.map(() => 0);
+  const walk = (blocks: ColumnBlock[]): ColumnBlock[] => {
+    const out: ColumnBlock[] = [];
+    for (const b of blocks) {
+      const before: ColumnBlock[] = [];
+      const after: ColumnBlock[] = [];
+      entries.forEach((e, i) => {
+        if (!guideMatches(e.match, b)) return;
+        const k = seen[i]++;
+        if (e.nth !== "all" && k !== (e.nth ?? 0)) return;
+        const g: ColumnGuideBlock = { type: "guide", title: e.title ?? "読み方", text: e.text, example: e.example };
+        (e.place === "after" ? after : before).push(g);
+      });
+      out.push(...before, b.type === "accordion" ? { ...b, blocks: walk(b.blocks) } : b, ...after);
+    }
+    return out;
+  };
+  const head: ColumnBlock[] = [];
+  if (guide.lead?.length) head.push({ type: "guide", title: "まず、ひとことで", text: guide.lead.map((t) => `・${t}`).join("\n") });
+  const items = [
+    ...(guide.terms ?? []).filter((t) => glossary[t]).map((t) => ({ term: t, desc: glossary[t] })),
+    ...(guide.glossary ?? []),
+  ];
+  if (items.length) head.push({ type: "glossary", title: "出てくる言葉のやさしい説明", items });
+  return [...head, ...walk(body)];
 }

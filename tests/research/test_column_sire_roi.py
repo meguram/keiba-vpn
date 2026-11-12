@@ -31,7 +31,12 @@ def test_bootstrap_interval_contains_mean_and_narrows_with_n():
     assert sr.boot_ci(np.array([1.0]), rng) is None
 
 
-def test_article_keeps_the_chart_compare_series_updates():
-    # compare_series.py は sire-roi の「主要種牡馬の産駒 vs それ以外の産駒 勝率」を同じタイトルで更新する。記事の中（折り畳みの中でもよい）に残っていること
-    text = (cs.COLUMNS_DIR / "sire-roi.json").read_text(encoding="utf-8")
-    assert cs._find_chart(text, "主要種牡馬の産駒 vs それ以外の産駒 勝率") is not None
+def test_article_shows_roi_charts_and_no_longer_depends_on_compare_series():
+    # 回収率の記事なので、グラフは回収率（95% 区間つき）と、前半・後半の回収率。勝率のグラフ（compare_series が更新していたもの）は外した
+    doc = json.loads((cs.COLUMNS_DIR / "sire-roi.json").read_text(encoding="utf-8"))
+    titles = [b["title"] for b in doc["body"] if b["type"] == "chart"]
+    assert titles == ["単勝回収率の高い種牡馬（95%区間つき）", "前半で回収率が高かった種牡馬の、後半の回収率"]
+    import inspect
+
+    assert "Pair(\"sire-roi\"" not in inspect.getsource(cs.pairs)          # 勝率のグラフを更新する Pair は無い（データを読まずに確かめる）
+    assert "initial" in next(b for b in doc["body"] if b["type"] == "chart" and b["title"].startswith("前半で"))      # 前半と後半を最初から重ねて出す

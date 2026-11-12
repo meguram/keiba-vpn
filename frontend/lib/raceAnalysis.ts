@@ -3,7 +3,12 @@
  * 分析はモジュール単位で、モジュールが列（columns）と群（groups）を自己記述する。画面は、その定義から表とカードを組み立てる。
  */
 
-export type CellFormat = "record" | "pct" | "int" | "text" | "runs";
+import type { TPFigure } from "@/lib/trainerPattern";
+
+export type CellFormat = "record" | "pct" | "int" | "text" | "runs" | "range";
+
+/** 位置取りの幅: lo〜hi は直近の走の最前〜最後方、mean は加重平均、pts は [位置(0〜1), 濃さ(0〜1。新しい走ほど大きい)] */
+export type RangeCell = { lo: number; hi: number; mean: number; pts: [number, number][] };
 
 /** 過去の走 1 つ分: [初角の通過順位, 頭数, 外れ値として除いたか(1/0)] */
 export type PastRun = [number, number, number];
@@ -37,15 +42,17 @@ export type AnalysisModuleMeta = {
   /** 分析の軸（父など）を表の列として出すときの見出し。値は各馬の cells の _key */
   key_header?: string | null;
   /** 見せ方。省略時は表。"map" は figure の走法マップ */
-  view?: "table" | "map";
-  figure?: RunningMapFigure | null;
+  view?: "table" | "map" | "trainer_pattern";
+  figure?: RunningMapFigure | TPFigure | null;
 };
 
 /** 走法マップの方面（矢印）。arrow は 2 次元での向きと長さ、r2 はその方面がこの図でどれだけ表せているか（0〜1） */
 export type RunningMapAxis = { key: string; label: string; high: string; low: string; weight: number; arrow?: [number, number]; r2?: number | null };
 
 /** 地図の位置には入れない補助の軸（急坂適性・道悪の軸）。value は 50 が平均の偏差値で、判定できないときは null（不明） */
-export type RunningMapExtra = { value: number | null; runs?: number; n_power?: number; n_normal?: number; low?: boolean };
+export type RunningMapExtra = { value: number | null; runs?: number; n_power?: number; n_normal?: number; low?: boolean;
+  /** クラス基準の 10 点満点（偏差値から。無ければ未定義） */
+  score?: number | null };
 
 export type RunningMapHorse = {
   key: string | null;
@@ -57,6 +64,8 @@ export type RunningMapHorse = {
   group: string;
   /** 方面ごとに、全馬の中で「高い」側から見た位置（0〜100） */
   percentiles: Record<string, number | null>;
+  /** クラス基準の 10 点満点（0.5 点刻み。5=2勝で安定・4=1勝・3=未勝利・10=G1 好走馬の上位 5%。null=不明）。無い（古い保存結果）ときは null/未定義で、percentiles から従来の順位方式で出す */
+  scores?: Record<string, number | null> | null;
   n_runs: number;
   /** 実測ラップのある過去の出走数（方面ごとの最大） */
   n_lap_runs?: number;
@@ -73,6 +82,31 @@ export type RunningMapHorse = {
   /** 8 方面の元の空間で近い馬（同じレースの中、近い順）。地図は 2 次元に落とした分だけ近さがずれるので、選んだ馬ではこれを強調する */
   similar?: { horse_id: string | null; horse_number: number | null; horse_name: string | null; distance: number }[];
   last_run_date: string | null;
+  /** このレースの着順（結果が出ている馬だけ。未確定・中止は null） */
+  finish_position?: number | null;
+  /** 血統から見た傾向（性別・父・母父だけから。モデルの無い環境では無い） */
+  ped?: RunningMapPed | null;
+};
+
+/** 観点ごとに [期待値, 80%区間の下, 上] */
+export type RunningMapPed = { sex: string; sire: string | null; damsire: string | null; has_damsire: boolean; v: Record<string, [number, number, number]>;
+  /** 10 点満点の観点の [点数, 80%区間の下, 上]（0.5 点刻み） */
+  s?: Record<string, [number, number, number]> };
+
+export type RunningMapPedTrait = {
+  key: string; label: string; hint: string;
+  /** pct=割合 / m=メートル / q=0〜1 / n=数値 */
+  fmt: "pct" | "m" | "q" | "n";
+  /** 全体の平均 */
+  base: number | null;
+  /** 上位・下位 1 割の馬の平均が全体の平均から離れる幅（目盛り） */
+  ref: number | null;
+  /** 新しい馬での当てはまり（観測 R²。血統でどれだけ言えるか） */
+  r2: number | null;
+  /** 10 点満点で見せる観点 */
+  score?: boolean;
+  /** 距離の観点: 芝・ダートそれぞれの平均距離（期待値は平均との差なので足して実際の距離にする） */
+  abs?: Record<string, number>;
 };
 
 export type RunningMapFigure = {
@@ -92,6 +126,19 @@ export type RunningMapFigure = {
   course_map?: RunningMapCourse | null;
   /** その日（同じ競馬場・同じ芝ダート、このレースより前）の馬場傾向。前のレースが無ければ null */
   day_trend?: RunningMapDayTrend | null;
+  /** 適性が合う 5 頭（コース特注ゾーン＋馬場特注ゾーンの色から。1 パターン） */
+  best5?: RunningMapBest5 | null;
+  /** 血統から見た傾向の観点（各馬の ped.v のキー） */
+  ped_traits?: RunningMapPedTrait[] | null;
+  /** 道悪（稍重以上）切替の地図。同じ形（day_trend は無い）。道悪の標本が足りず作れなければ無い */
+  wet?: RunningMapFigure | null;
+};
+
+export type RunningMapBest5 = {
+  w_day: number;
+  /** どのゾーンで選んだか（片方しか無いとき） */
+  source: "both" | "course" | "day";
+  picks: { rank: number; horse_number: number | null; horse_id: string | null; score: number }[];
 };
 
 export type RunningMapCourse = {
@@ -169,6 +216,10 @@ export function formatCell(v: unknown, fmt: CellFormat): string {
       return typeof v === "number" && Number.isFinite(v) ? `${(v * 100).toFixed(1)}%` : EMPTY;
     case "int":
       return typeof v === "number" && Number.isFinite(v) ? String(Math.round(v)) : EMPTY;
+    case "range": {
+      const r = v as RangeCell;
+      return typeof r?.lo === "number" ? `${Math.round(r.lo * 100)}〜${Math.round(r.hi * 100)}%` : EMPTY;
+    }
     case "runs":
       return Array.isArray(v) && v.length > 0 ? (v as PastRun[]).map(([p, x]) => `${p}/${x}`).join(" ") : EMPTY;
     default:
@@ -186,6 +237,7 @@ export function runColor(pos: number, field: number): string {
  *  （脚質ならハナ → 先行(前) → 先行(後ろ) → 差し → 追込）で並べ、定義に無い値（不明など）は向きによらず最後。それ以外は表示文字から読まれる。 */
 export function sortValue(v: unknown, fmt: CellFormat, palette?: Record<string, string> | null): string | undefined {
   if (fmt === "record" && Array.isArray(v) && v.length > 0) return String(v[0]);
+  if (fmt === "range") return typeof (v as RangeCell | null)?.mean === "number" ? String((v as RangeCell).mean) : "";
   if (palette && typeof v === "string") {
     const i = Object.keys(palette).indexOf(v);
     return i >= 0 ? String(i + 1) : "";

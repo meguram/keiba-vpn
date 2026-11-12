@@ -117,7 +117,7 @@ class V3Serving:
         t0 = time.perf_counter()
         self.bundle = EnsembleBundle.load(self.bundle_dir)
         self.feature_cols = list(dict.fromkeys(c for m in self.bundle.members for c in m.feature_cols))
-        self.stage = ssr.StageModels.load(self.stage_dir)
+        self.stage = ssr.load_stage(self.stage_dir)
         self.tl_ref = pd.read_parquet(self.tl_reference_path)
         if any(x.startswith("mtl_") for x in self.feature_cols):           # 補助タスクつき NN の補助ヘッド予測を使うバンドル（v4 候補）
             from src.pipeline.features.serving_aux import AuxModels
@@ -304,10 +304,10 @@ class V3Serving:
             return self._card_day[day]
         try:
             from src.pipeline.inference.race_day_workflow import load_day_schedule
-            from src.pipeline.inference.weight_triggered_predict import card_frame
+            from src.pipeline.inference.weight_triggered_predict import card_frame, fill_card_meta
 
-            ids = [r["race_id"] for r in load_day_schedule(storage, day.replace("-", ""))]
-            allc = card_frame(storage, ids).to_pandas()
+            races = load_day_schedule(storage, day.replace("-", ""))
+            allc = fill_card_meta(card_frame(storage, [r["race_id"] for r in races]), races).to_pandas()  # 発走時刻が出馬表に無いレースは日程表の値で補う（同日の集計に要る）
             if len(allc):
                 self._card_day[day] = allc
                 return allc

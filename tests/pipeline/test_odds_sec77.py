@@ -125,5 +125,51 @@ class Sec77Test(unittest.TestCase):
             sv.assert_called_once()
 
 
+
+
+class OddsT6SwitchTest(unittest.TestCase):
+    def test_t6_is_off_by_default_and_delegates_when_enabled(self):
+        from src.pipeline.inference import odds_t6
+
+        X = pd.DataFrame({"race_id": ["R"], "horse_id": ["h"]})
+        with mock.patch.object(odds_t6, "available", return_value=True), mock.patch.dict("os.environ", {}, clear=False):
+            os_env = __import__("os").environ
+            os_env.pop("KEIBA_ODDS_T6", None)
+            self.assertFalse(os77.t6_enabled())
+            os_env["KEIBA_ODDS_T6"] = "1"
+            try:
+                self.assertTrue(os77.t6_enabled() and os77.available())
+                with mock.patch.object(odds_t6, "predict_frame", return_value="T6") as pf:
+                    self.assertEqual(os77.predict_frame(X), "T6")
+                    pf.assert_called_once()
+                with mock.patch.object(odds_t6, "available", return_value=False):
+                    self.assertFalse(os77.t6_enabled())
+            finally:
+                os_env.pop("KEIBA_ODDS_T6", None)
+
+    def test_default_does_not_call_t6_and_sec77_off_disables_t6(self):
+        from src.pipeline.inference import odds_t6
+
+        with mock.patch.object(odds_t6, "available", return_value=True), mock.patch.dict("os.environ", {}, clear=False):
+            os_env = __import__("os").environ
+            os_env.pop("KEIBA_ODDS_T6", None)
+            self.assertFalse(os77.t6_enabled())
+            os_env["KEIBA_ODDS_T6"] = "1"
+            os_env["KEIBA_ODDS_SEC77"] = "0"
+            self.assertFalse(os77.t6_enabled())
+
+    def test_t6_missing_columns_falls_back_to_sec77_only_when_files_exist(self):
+        from src.pipeline.inference import odds_t6
+
+        X = pd.DataFrame({"race_id": ["R"], "horse_id": ["h"]})
+        with mock.patch.object(os77, "t6_enabled", return_value=True), mock.patch.object(odds_t6, "predict_frame", side_effect=KeyError("x")):
+            with mock.patch.object(os77, "_sec77_files", return_value=False):
+                with self.assertRaises(KeyError):
+                    os77.predict_frame(X)
+            with mock.patch.object(os77, "_sec77_files", return_value=True), mock.patch.object(os77, "_load", side_effect=RuntimeError("sec77 path")):
+                with self.assertRaises(RuntimeError):
+                    os77.predict_frame(X)
+
+
 if __name__ == "__main__":
     unittest.main()

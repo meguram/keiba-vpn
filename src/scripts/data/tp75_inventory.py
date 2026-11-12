@@ -43,6 +43,7 @@ _ch("pedigree_roi", "recomputed", "T72（F5, F21〜F23）", "一部", "血統×�
 _ch("pedigree_side_cohit", "none", "", "なし", "クラスタ対の同時好走で馬ごとの条件ではない（ペア単位）。補正後 0 本")
 _ch("pedigree_position_cross", "none", "", "なし", "特徴量群の評価で、条件ごとの回収率・残差の表ではない")
 _ch("position_pace_course", "recomputed", "B9（脚質×面、前走の上がり順位）", "一部", "事前に使える形の 519 セルは補正通過 0。脚質×面と前走の上がり順位で近い条件を定義した")
+_ch("final_week_training_pattern", "none", "", "一部", "最終追い切りのパターン（場所×時計の帯）別の勝率・回収率と調教師×パターンの表。回収率は全体の基準（約 72%）を超えず、前の期間の上位は後の期間で戻る。ルール化の根拠が薄く、調教師×パターンはターゲットエンコーディングの特徴量として別に使う")
 _ch("pace_benefit", "none", "", "一部", "展開利のラベルは共通の表に無い（tp64 の表が別）。残差との関連は弱く、ルール化の根拠が薄い。次の版で結合を検討")
 _ch("pace_type", "none", "", "一部", "展開タイプの確率は別の表。レース単位の性質でもある")
 _ch("pace_consistency", "none", "", "なし", "予想同士の連動の検査で、条件別の成績ではない")
@@ -98,6 +99,14 @@ for _n in ("adopted_features_v3", "advanced_modeling_techniques", "data_acquisit
            "tp05a_experiment_report", "track_bias_pedigree_pipeline", "train_valid_test_split_strategy"):
     _ch(_n, "none", "", "なし", "設計・仕様・実験メモの章で、条件別の統計表を持たない")
 _ch("jockey_distance_dependence", "none", "", "あり", "検証の事前登録のみで、結果が未確定（別の担当が実行中）。次の版で取り込む")
+_ch("bet_allocation_table", "none", "", "なし", "指数順位ごとの買い目配分の案で、検証も実装も未実施。条件別の統計表を持たない")
+_ch("feature_screening", "none", "", "なし", "学習前の特徴量の効き（LogLoss の増分）の測定で、馬の条件ごとの回収率・勝率の統計ではない")
+_ch("revival_feature_set", "none", "", "なし", "不採用だった特徴量の台帳と復活セットの定義で、条件別の統計表を持たない")
+_ch("final_layer_philosophies", "excluded_market", "", "あり", "人気薄・期待値を条件にした最終層の比較で、市場情報（オッズ・人気）に依存する。取り込まない")
+_ch("folklore_hypotheses", "none", "", "なし", "通説の仮説一覧（検証前の洗い出し）で、統計は無い。検定は folklore_verification 側で行う")
+_ch("folklore_verification", "none", "", "あり", "通説の検定は人気をそろえた差を中心に別の仕組み（folklore_verify）で完結しており、この台帳の共通の表では定義し直していない。取り込みは次の版で検討")
+_ch("target_encoding_inventory", "none", "", "なし", "親モデルの特徴量（観点別のターゲットエンコーディング）の棚卸しで、条件別の成績の表ではない")
+_ch("trainer_comment_wordcloud", "none", "", "なし", "厩舎コメントの語と成績の関連の可視化（人気をそろえた倍率）。語の列は共通の表に無く、ルール化の根拠が薄い")
 
 # ---- ホストの保存結果 --------------------------------------------------------------------------------------------
 for _o, _i, _r in (

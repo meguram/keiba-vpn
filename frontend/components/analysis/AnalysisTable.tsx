@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { bracketChipStyle } from "@/lib/bracket";
-import { AnalysisEntry, AnalysisModuleMeta, ColumnBlock, columnBlocks, formatCell, heatColor, isThin, runColor, shortLabel, sortValue, PastRun } from "@/lib/raceAnalysis";
+import { AnalysisEntry, AnalysisModuleMeta, ColumnBlock, columnBlocks, formatCell, heatColor, isThin, runColor, shortLabel, sortValue, PastRun, RangeCell } from "@/lib/raceAnalysis";
 
 const CSS = `
 .ra-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -45,7 +45,28 @@ const CSS = `
 .ra-rw.p0 .ra-rk{color:var(--text);font-weight:800}
 .ra-rw.p0 .ra-run{box-shadow:0 0 0 1.5px var(--text)}
 .ra-m .ra-rk{font-size:8px}
+.ra-rg{display:inline-flex;flex-direction:column;align-items:center;gap:2px}
+.ra-rg svg{display:block}
+.ra-rg span{font-size:11px;font-variant-numeric:tabular-nums}
 `;
+
+/** 直近の位置取りの幅。左が先頭・右が最後方。点は各走（新しい走ほど濃い）、縦線は加重平均 */
+function RangeBar({ v }: { v: unknown }) {
+  const r = v as RangeCell | null;
+  if (!r || typeof r.lo !== "number") return <span className="dim">–</span>;
+  const W = 96, H = 14, x = (f: number) => 4 + f * (W - 8);
+  return (
+    <span className="ra-rg" title={`前から ${Math.round(r.lo * 100)}〜${Math.round(r.hi * 100)}%（平均 ${Math.round(r.mean * 100)}%）。新しい走ほど濃い点`}>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="直近の位置取りの幅">
+        <rect x={0} y={H / 2 - 1} width={W} height={2} rx={1} fill="rgba(139,148,158,.25)" />
+        <rect x={x(r.lo)} y={H / 2 - 3} width={Math.max(2, x(r.hi) - x(r.lo))} height={6} rx={3} fill="rgba(96,165,250,.28)" />
+        {r.pts.map(([f, w], i) => <circle key={i} cx={x(f)} cy={H / 2} r={3.2} fill={runColor(f * 100 + 1, 101)} opacity={0.2 + 0.8 * w} />)}
+        <line x1={x(r.mean)} x2={x(r.mean)} y1={1} y2={H - 1} stroke="#fff" strokeWidth={1.5} />
+      </svg>
+      <span>{formatCell(v, "range")}</span>
+    </span>
+  );
+}
 
 /** 直近の走のチップ。左が前走で、各チップの上に「前走・2走前…」を出す（前走は枠で強調） */
 const ago = (i: number) => (i === 0 ? "前走" : `${i + 1}走前`);
@@ -201,7 +222,7 @@ export function AnalysisTable({ entries, module }: { entries: AnalysisEntry[]; m
                         style={{ background: bg, fontWeight: c.palette && bg ? 700 : undefined }}
                         data-sort={sortValue(v, c.fmt, c.palette)}
                       >
-                        {c.fmt === "runs" ? <RunChips v={v} /> : formatCell(v, c.fmt)}
+                        {c.fmt === "runs" ? <RunChips v={v} /> : c.fmt === "range" ? <RangeBar v={v} /> : formatCell(v, c.fmt)}
                       </td>
                     );
                   })}

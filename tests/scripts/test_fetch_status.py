@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 from src.scripts.scraping import fetch_status as fs
@@ -142,3 +143,15 @@ def test_horse_left_does_not_step_with_saves_and_ignores_in_flight():
     nxt = {r["tier"]: r for r in fs.past_remaining(_prog(), horse_gets=600, years=[2019], horse_touched=200, horse_unsaved=0)}["horse"]
     assert base["done"] == 210 and nxt["done"] == 200
     assert base["left_req"] == nxt["left_req"] - 10 * 3.0              # 保存前の 10 頭分だけ残りが減る（保存で段にならない）
+
+
+def test_render_shows_training_past_section(tmp_path, monkeypatch):
+    for name in ("PROGRESS", "TRAINING_PROGRESS", "PAST_LOG", "TRAINING_LOG", "TRAINING_PAST_PROGRESS", "TRAINING_PAST_LOG"):
+        monkeypatch.setattr(fs, name, tmp_path / name)
+    (tmp_path / "TRAINING_PAST_PROGRESS").write_text(json.dumps({
+        "done": {f"h{i}": "saved" for i in range(100)}, "counts": {"saved": 100, "empty": 0, "error": 0}, "requests": 300, "total": 1000}), encoding="utf-8")
+    g = "2026-10-29 21:%02d:00 [INFO] scraper.client: GET https://db.netkeiba.com/horse/training.html?id=2005105204 (attempt 1/4)"
+    (tmp_path / "TRAINING_PAST_LOG").write_text("===== 2026-10-29T20:50:00+09:00 START =====\n" + "\n".join(g % m for m in range(10, 50)), encoding="utf-8")
+    monkeypatch.setattr(fs, "_procs", lambda: {"past": [], "training": [], "training_past": ["PID 1 経過 01:00  x"], "other": []})
+    out = fs.render(datetime(2026, 10, 29, 22, 0, 0))
+    assert "調教の過去分の取り直し" in out and "100/1000 頭 10%" in out and "1 頭あたり 3.0 件" in out and "取得中" in out

@@ -411,9 +411,44 @@ BRIDGE_COL = "result_source"
 BRIDGE_VALUE = "on_time"
 
 
+# 出馬表は開催の数日前から段階収集（entries-sync: 特別登録→出走馬決定→前日確定）で保存される。枠順確定前の版は馬番が全頭 0 で、
+# 頭数は登録数・race_class などが空。差分追記は『flat に無いレース』しか取らないので、この版が入ると最終版に置き換わらない（2026-10-24〜）。
+PRE_DRAW_REFRESH_CATEGORIES = frozenset({"race_shutuba"})
+PRE_DRAW_LOOKBACK_DAYS = 21     # これより古いレースは取り直さない（中止などで最終版が出ないレースを毎日読み続けない）
+
+
+def _pre_draw_race_ids(path: Path, today: str | None = None, lookback_days: int | None = None) -> set[str]:
+    """flat のうち、枠順確定前（馬番が全頭 0 か空）のまま入っている直近・未来のレース ID。日付の無いレースは対象外。
+    lookback_days の既定は呼んだ時点の PRE_DRAW_LOOKBACK_DAYS（過去分をまとめて取り直すときに広げられるように）。"""
+    from datetime import datetime, timedelta, timezone
+
+    if lookback_days is None:
+        lookback_days = PRE_DRAW_LOOKBACK_DAYS
+
+    if not path.exists():
+        return set()
+    try:
+        names = pq.read_schema(path).names
+        if not {"race_id", "horse_number", "date"} <= set(names):
+            return set()
+        df = pq.read_table(path, columns=["race_id", "horse_number", "date"]).to_pandas()
+    except Exception:
+        return set()
+    if df.empty:
+        return set()
+    today = today or datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d")
+    floor = (datetime.strptime(today, "%Y-%m-%d") - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+    num = pd.to_numeric(df["horse_number"], errors="coerce").fillna(0)
+    g = pd.DataFrame({"race_id": df["race_id"].astype(str), "drawn": num > 0, "date": df["date"].astype("string").fillna("")})
+    agg = g.groupby("race_id").agg(drawn=("drawn", "any"), date=("date", "max"))
+    sel = agg[(~agg["drawn"]) & (agg["date"] >= floor)]
+    return set(sel.index)
+
+
 def _existing_race_ids(path: Path) -> set[str]:
     """flat に入っているレース ID。速報から橋渡しした行（result_source == on_time）は『確定結果ではない』ので数えない
-    （数えると、確定結果が公開されても『既にエクスポート済み』になって入れ替わらない）。"""
+    （数えると、確定結果が公開されても『既にエクスポート済み』になって入れ替わらない）。
+    出馬表（PRE_DRAW_REFRESH_CATEGORIES）は、枠順確定前の版のまま入っている直近のレースも数えない（同じ理由。_pre_draw_race_ids）。"""
     if not path.exists():
         return set()
     try:
@@ -421,9 +456,12 @@ def _existing_race_ids(path: Path) -> set[str]:
         df = pq.read_table(path, columns=cols).to_pandas()
         if BRIDGE_COL in df.columns:
             df = df[df[BRIDGE_COL].fillna("") != BRIDGE_VALUE]
-        return {str(x) for x in df["race_id"].tolist() if x}
+        ids = {str(x) for x in df["race_id"].tolist() if x}
     except Exception:
         return set()
+    if path.name.removesuffix("_flat.parquet") in PRE_DRAW_REFRESH_CATEGORIES:
+        ids -= _pre_draw_race_ids(path)
+    return ids
 
 
 def bridge_on_time_results(year: str) -> dict:
@@ -474,16 +512,23 @@ def _drop_duplicate_entries(df: pd.DataFrame) -> pd.DataFrame:
             alt = pd.Series(range(len(df)), index=df.index).astype("string")
         key = hid.where(hid != "", alt)
         return df.loc[~pd.DataFrame({"r": df["race_id"].astype(str), "k": key}).duplicated(keep="last")]
+    if "odds_type" in df.columns and "pair" in df.columns:
+        # 組合せオッズ（race_pair_odds）は 1 レースに券種 × 組合せの行がある。race_id だけで潰すと 1 行になる
+        key = pd.DataFrame({"r": df["race_id"].astype(str), "t": df["odds_type"].astype(str), "p": df["pair"].astype(str)})
+        return df.loc[~key.duplicated(keep="last")]
     subset = ["race_id", "horse_number"] if "horse_number" in df.columns else ["race_id"]
     return df.drop_duplicates(subset=subset, keep="last")
 
 
-def _append_parquet_rows(path: Path, new_rows: list[dict]) -> int:
-    """既存 flat Parquet に行を追記して書き戻す。"""
+def _append_parquet_rows(path: Path, new_rows: list[dict], replace_races: set[str] | None = None) -> int:
+    """既存 Parquet に行を追記して書き戻す（同じ (race_id, 馬) は後勝ち）。replace_races のレースは、既存の行をレースごと消してから足す
+    （枠順確定前の出馬表を取り直したとき、出走しなかった登録馬の行が残らないように）。"""
     if not new_rows:
         return 0
     if path.exists():
         old = pq.read_table(path).to_pandas()
+        if replace_races and "race_id" in old.columns:
+            old = old[~old["race_id"].astype(str).isin(replace_races)]
         merged = pd.concat([old, pd.DataFrame(new_rows)], ignore_index=True)
         if "race_id" in merged.columns:
             merged = _drop_duplicate_entries(merged)
@@ -558,6 +603,8 @@ def export_category_chunked(
             return stats
 
     existing_ids = _existing_race_ids(flat_path)
+    # 枠順確定前の版のまま入っている出馬表（_existing_race_ids が数えないので、下で取り直す）。追記のときレースごと入れ替える
+    pre_draw = _pre_draw_race_ids(flat_path) if category in PRE_DRAW_REFRESH_CATEGORIES else set()
     if existing_ids:
         missing_keys = [k for k in jra_keys if k not in existing_ids]
         if not missing_keys:
@@ -632,15 +679,24 @@ def export_category_chunked(
                     year, category, done, n_total,
                     total_flat_rows, total_race_rows)
 
+    incremental = bool(existing_ids)
     if race_chunks:
-        _merge_parquet_chunks(race_chunks, race_path)
+        if incremental and race_path.exists():
+            # 差分追記モード: race 表も既存に足す（チャンクだけで上書きすると、今回の差分のレースしか残らない）
+            incr_race: list[dict] = []
+            for p in race_chunks:
+                incr_race.extend(pq.read_table(p).to_pandas().to_dict("records"))
+            # 消すのは今回実際に取り直せたレースだけ（読めなかったレースの既存行は残す）
+            _append_parquet_rows(race_path, incr_race, replace_races=pre_draw & {str(r.get("race_id")) for r in incr_race})
+        else:
+            _merge_parquet_chunks(race_chunks, race_path)
     if flat_chunks:
-        if existing_ids and flat_path.exists():
+        if incremental and flat_path.exists():
             # 差分追記モード: チャンクを読み込んで既存にマージ
             incr_rows: list[dict] = []
             for p in flat_chunks:
                 incr_rows.extend(pq.read_table(p).to_pandas().to_dict("records"))
-            added = _append_parquet_rows(flat_path, incr_rows)
+            added = _append_parquet_rows(flat_path, incr_rows, replace_races=pre_draw & {str(r.get("race_id")) for r in incr_rows})
             total_flat_rows = added
             for p in flat_chunks:
                 p.unlink(missing_ok=True)

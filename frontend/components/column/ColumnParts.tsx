@@ -1,53 +1,15 @@
 import Link from "next/link";
 import { ColumnChart, ColumnHeatmap, JockeyDistanceChart } from "@/components/column/ColumnChart";
 import { ColumnTreemap } from "@/components/column/ColumnTreemap";
+import { ColumnWordcloud } from "@/components/column/ColumnWordcloud";
+import { ColumnTrainerPattern } from "@/components/column/ColumnTrainerPattern";
+import { CategoryChip, ColumnCard, VerdictBadge } from "@/components/column/ColumnCard";
 import {
-  COLUMN_CATEGORIES, VERDICTS, categoryLabel, columnsIn, countIn,
+  COLUMN_CATEGORIES, categoryLabel, columnsIn, countIn,
   type Column, type ColumnBlock, type ColumnCategory,
 } from "@/lib/columns";
 
 const dim: React.CSSProperties = { color: "var(--text-dim)", fontSize: 12 };
-
-export function VerdictBadge({ verdict }: { verdict: Column["verdict"] }) {
-  const v = VERDICTS[verdict];
-  return (
-    <span style={{ fontSize: 12, fontWeight: 700, padding: "2px 10px", borderRadius: 999, whiteSpace: "nowrap",
-      color: v.color, border: `1px solid ${v.color}80` }}>
-      {v.label}
-    </span>
-  );
-}
-
-export function CategoryChip({ path }: { path: string }) {
-  return (
-    <Link href={`/column/category/${path}`} style={{ fontSize: 11, color: "var(--text-dim)", textDecoration: "none",
-      padding: "1px 8px", borderRadius: 6, border: "1px solid var(--border)", whiteSpace: "nowrap" }}>
-      {categoryLabel(path)}
-    </Link>
-  );
-}
-
-export function ColumnCard({ column }: { column: Column }) {
-  return (
-    <Link href={`/column/${column.slug}`} className="card block" style={{ textDecoration: "none", color: "inherit" }}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1" style={{ minWidth: 0 }}>
-          <p style={dim}>通説：「{column.claim}」</p>
-          <h2 className="font-bold" style={{ fontSize: 16 }}>
-            {column.draft && <span style={{ color: "#d29922" }}>[下書き] </span>}
-            {column.title}
-          </h2>
-          <p className="text-sm" style={{ color: "var(--text-dim)" }}>{column.summary}</p>
-        </div>
-        <VerdictBadge verdict={column.verdict} />
-      </div>
-      <div className="flex flex-wrap items-center gap-2" style={{ marginTop: 8 }}>
-        {column.categories.map((p) => <span key={p} style={dim}>#{categoryLabel(p)}</span>)}
-        <span style={{ ...dim, marginLeft: "auto" }}>{column.updated ?? column.published}</span>
-      </div>
-    </Link>
-  );
-}
 
 export function ColumnList({ columns, empty }: { columns: Column[]; empty: string }) {
   if (!columns.length) return <div className="card text-sm" style={{ color: "var(--text-dim)" }}>{empty}</div>;
@@ -113,6 +75,33 @@ export function ColumnBody({ blocks }: { blocks: ColumnBlock[] }) {
               <p key={i} className="text-sm" style={{ padding: "8px 12px", borderLeft: "3px solid #d29922",
                 background: "rgba(210,153,34,0.08)", borderRadius: 4 }}>{b.text}</p>
             );
+          case "guide":
+            return (
+              <div key={i} className="text-sm" style={{ padding: "8px 12px", borderLeft: "3px solid var(--accent)",
+                background: "rgba(88,166,255,0.08)", borderRadius: 4 }}>
+                <p className="font-bold" style={{ color: "var(--accent)", fontSize: 12 }}>{b.title}</p>
+                <p style={{ lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{b.text}</p>
+                {b.example && <p style={{ lineHeight: 1.8, whiteSpace: "pre-wrap", marginTop: 4, color: "var(--text-dim)" }}>例）{b.example}</p>}
+              </div>
+            );
+          case "glossary":
+            return (
+              <details key={i} className="card" style={{ padding: 0, overflow: "hidden" }}>
+                <summary style={{ padding: "10px 14px", cursor: "pointer", fontWeight: 600, fontSize: 14,
+                  listStyle: "none", display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 11, color: "var(--text-dim)", userSelect: "none" }}>▶</span>
+                  {b.title}
+                </summary>
+                <dl className="text-sm" style={{ padding: "8px 14px 12px", borderTop: "1px solid var(--border)" }}>
+                  {b.items.map((it) => (
+                    <div key={it.term} style={{ marginTop: 6 }}>
+                      <dt className="font-bold">{it.term}</dt>
+                      <dd style={{ lineHeight: 1.8, whiteSpace: "pre-wrap", color: "var(--text-dim)" }}>{it.desc}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
+            );
           case "stats":
             return (
               <div key={i} className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}>
@@ -133,6 +122,10 @@ export function ColumnBody({ blocks }: { blocks: ColumnBlock[] }) {
             return <ColumnHeatmap key={i} block={b} />;
           case "treemap":
             return <ColumnTreemap key={i} block={b} />;
+          case "wordcloud":
+            return <ColumnWordcloud key={i} block={b} />;
+          case "trainer_pattern_table":
+            return <ColumnTrainerPattern key={i} block={b} />;
           case "accordion":
             return (
               <details key={i} className="card" style={{ padding: 0, overflow: "hidden" }}>
@@ -241,3 +234,5 @@ export function SubCategories({ columns, path, node }: { columns: Column[]; path
     </div>
   );
 }
+
+export { CategoryChip, ColumnCard, VerdictBadge };

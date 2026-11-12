@@ -22,7 +22,7 @@ import pandas as pd
 import os
 
 ROOT = Path(os.environ.get("MARKV2_DATA_ROOT") or Path(__file__).resolve().parents[3])
-FRAME = ROOT / "data/local/modeling/betting/tp36/frame_all.parquet"
+FRAME = Path(os.environ.get("MARKV2_FRAME") or ROOT / "data/local/modeling/betting/tp36/frame_all.parquet")
 RANKS = ROOT / "data/local/features/target/rank_tbl"
 MARKS = ("honmei", "pair", "show_val", "star", "anchor")
 SYM = {"honmei": "◎", "pair": "○", "show_val": "▲", "star": "★", "anchor": "△"}

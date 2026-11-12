@@ -15,7 +15,7 @@ from src.research.race import running_map_aptitude as apt
 def _runners(seed: int = 0, n: int = 14) -> np.ndarray:
     rng = np.random.default_rng(seed)
     Z = rng.normal(size=(n, len(rm.AXES)))
-    Z[:, 1] = Z[:, 0] + rng.normal(scale=0.5, size=n)   # 末脚の速さと持続力は似ている
+    Z[:, 1] = Z[:, 0] + rng.normal(scale=0.5, size=n)   # TSとTS持続力は似ている
     return Z * rm.WEIGHTS
 
 
@@ -47,7 +47,7 @@ class ProjectTest(unittest.TestCase):
             up = pr["loadings"][rm._UP_IDX].sum(0)
             self.assertAlmostEqual(float(up[0]), 0.0, places=9)    # 末脚の矢印は真上
             self.assertGreater(float(up[1]), 0.0)
-            self.assertLessEqual(float(pr["loadings"][rm._FRONT_IDX][0]), 0.0)  # 先行力の矢印は左
+            self.assertLessEqual(float(pr["loadings"][rm._SIDE_IDX][0]), 0.0)  # Cr性能の矢印は左
 
     def test_same_runner_gets_same_position_in_any_race(self):
         Z = _runners(1, n=10)
@@ -85,7 +85,7 @@ class GroupTest(unittest.TestCase):
         Zall[:3, rm.AXIS_KEYS.index("ts")] = 2.0      # 3 頭だけ末脚が速い
         Zall[:3, rm.AXIS_KEYS.index("front")] = -2.0  # 同じ 3 頭は後ろから行く
         traits = rm.describe_group(Zall[:3], Zall)
-        self.assertEqual({t["axis"] for t in traits}, {"末脚の速さ", "先行力"})
+        self.assertEqual({t["axis"] for t in traits}, {"TS", "先行力"})
         self.assertEqual({t["text"] for t in traits}, {"末脚が速い", "後ろから行く"})
 
 
@@ -218,6 +218,29 @@ class AptitudeBuildTest(unittest.TestCase):
         c = next(iter(out["courses"].values()))
         valid = sum(ch != "0" for ch in c["sig"])
         self.assertLess(c["sig"].count("2"), 0.15 * valid)
+
+
+class ExtrasScoreTest(unittest.TestCase):
+    """補助の軸（急坂・道悪）の 10 点。基準が無ければ None、あれば 1〜10 の 0.5 点刻み。"""
+
+    REF = {"k": 1.5, "ts": {"knots": [[50, 3.0], [60, 5.0]]},
+           "axes": {"slope": {"mu": 53.0, "sd": 6.0, "n": 100, "sign": 1}}}
+
+    def test_slope_score_with_and_without_reference(self):
+        import pandas as pd
+
+        row = pd.Series({"ax_slope": 59.0, "n_ax_slope": 4})
+        self.assertEqual(rm._extras("h", row, ["slope"], None, self.REF)["slope"]["score"], 6.5)   # 5 + 1.5 × (59-53)/6
+        self.assertIsNone(rm._extras("h", row, ["slope"], None, None)["slope"]["score"])
+        unknown = pd.Series({"ax_slope": float("nan"), "n_ax_slope": 0})
+        self.assertIsNone(rm._extras("h", unknown, ["slope"], None, self.REF)["slope"]["score"])
+
+    def test_going_without_data_is_unknown(self):
+        import pandas as pd
+
+        out = rm._extras("h", pd.Series(dtype=float), ["going_turf"], None, self.REF)["going_turf"]
+        self.assertIsNone(out["value"])
+        self.assertIsNone(out["score"])
 
 
 if __name__ == "__main__":

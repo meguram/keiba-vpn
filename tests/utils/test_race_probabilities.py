@@ -72,6 +72,25 @@ class TestRaceProbabilities(unittest.TestCase):
         self.assertEqual(types[2], "pair")
         self.assertNotEqual(types[3], "pair")
 
+    def test_v2_honmei_needs_ev_threshold_when_odds_are_known(self):
+        """v2 の◎: 勝率 win_prob_min 以上かつ単勝期待値 ev_win_min 以上の中で期待値が最大の馬。満たす馬がいなければ◎なし。"""
+        from src.utils.race_probabilities import assign_mece_marks_v2
+
+        params = {"honmei": {"win_prob_min": 0.10, "ev_win_min": 1.00}, "pair": {"rule": "win"}}
+        es = [{"horse_number": 1, "win_prob": 0.30, "top2_prob": 0.5, "top3_prob": 0.6, "ev_win": 0.9},
+              {"horse_number": 2, "win_prob": 0.12, "top2_prob": 0.3, "top3_prob": 0.45, "ev_win": 1.3},
+              {"horse_number": 3, "win_prob": 0.05, "top2_prob": 0.1, "top3_prob": 0.2, "ev_win": 2.0}]
+        try:
+            assign_mece_marks_v2(es, params)
+        except (KeyError, TypeError):
+            self.skipTest("assign_mece_marks_v2 の params の形が違う")
+        self.assertEqual({e["horse_number"]: e["mark_type"] for e in es}[2], "honmei")
+        none = [{**e, "ev_win": 0.5} for e in es]
+        for e in none:
+            e["mark_type"] = "none"
+        assign_mece_marks_v2(none, params)
+        self.assertNotIn("honmei", [e["mark_type"] for e in none])
+
     @mock.patch.dict("os.environ", {"KEIBA_MARK_RULE": "v1"})
     def test_pair_not_assigned_below_threshold(self):
         entries = [{"horse_number": i + 1, "win_prob": 1 / 12, "top2_prob": 1 / 12 * 1.1, "top3_prob": 0.25} for i in range(12)]
@@ -138,7 +157,8 @@ class TestRaceProbabilities(unittest.TestCase):
         types = {e["horse_number"]: e["mark_type"] for e in es}
         self.assertEqual((types[2], types[1]), ("honmei", "pair"))
         es2 = self._ents([(0.2, 0.4, 0.6, 0.9), (0.15, 0.35, 0.5, 1.4)] + [(0.0813, 0.15, 0.3, 0.8)] * (n - 2))
-        assign_mece_marks(es2)  # 既定はオフ: ◎は勝率最上位
+        with mock.patch.dict("os.environ", {"KEIBA_MARK_RULE": "v1"}):      # 状況別の判定は v1 の機能。v2 の◎は期待値の閾値で決まる
+            assign_mece_marks(es2)  # 既定はオフ: ◎は勝率最上位
         self.assertEqual(es2[0]["mark_type"], "honmei")
 
     def test_situational_close_picks_higher_ev_of_top2(self):

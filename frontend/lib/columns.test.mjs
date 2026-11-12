@@ -12,7 +12,7 @@ const ts = createRequire(import.meta.url)("typescript");
 const src = ts.transpileModule(readFileSync(join(here, "columns.ts"), "utf8"), { compilerOptions: { module: ts.ModuleKind.ES2020, target: ts.ScriptTarget.ES2020 } }).outputText;
 const out = join(mkdtempSync(join(tmpdir(), "col-")), "columns.mjs");
 writeFileSync(out, src);
-const { categoryTrail, allCategoryPaths, chartMax, chartIsEmpty, chartVariant, axis2Max, columnsIn, countIn } = await import(pathToFileURL(out).href);
+const { categoryTrail, allCategoryPaths, chartMax, chartRange, chartIsEmpty, chartVariant, cascadeOptions, cascadePick, axis2Max, columnsIn, countIn, radialLayout, treeSireCount, formatTreemapValue } = await import(pathToFileURL(out).href);
 
 const dir = join(here, "..", "content", "columns");
 const articles = readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => JSON.parse(readFileSync(join(dir, f), "utf8")));
@@ -62,6 +62,11 @@ test("プルダウンつきのグラフは、全部の組み合わせに系列�
   for (const a of articles) {
     const walk = (bs) => bs.flatMap((b) => (b.type === "accordion" ? walk(b.blocks) : [b]));
     for (const c of walk(a.body).filter((b) => b.type === "chart" && b.filters)) {
+      if (c.cascade) {                                                         // 階層のグラフ: 組み合わせは一部だけ。全部の key が選択肢でできていて、選べる先頭が必ず存在する
+        for (const k of Object.keys(c.variants ?? {})) k.split("|").forEach((o, i) => assert.ok(c.filters[i].options.includes(o), `${a.slug}: ${k}`));
+        assert.ok(Object.keys(c.variants).length > 0);
+        continue;
+      }
       const keys = c.filters.reduce((acc, f) => acc.flatMap((k) => f.options.map((o) => (k ? `${k}|${o}` : o))), [""]);
       for (const k of keys.slice(1)) assert.ok(c.variants?.[k], `${a.slug} ${c.title}: ${k} が無い`);
     }
@@ -78,4 +83,57 @@ test("グラフ: 右軸は左軸の補助線にそろう切りのよい上限で
   };
   assert.equal(chartVariant(block, ["芝"]).y2.series[0].values[0], 3);
   assert.equal(chartVariant(block, ["芝"]).y2.label, "人気");
+});
+
+test("cascade: 前の選択に合う選択肢だけを出し、後ろの選択が成り立たなくなれば先頭に寄せる", () => {
+  const ser = (v) => [{ name: "a", values: [v] }];
+  const block = {
+    type: "chart", title: "t", xLabel: "x", yLabel: "y", xs: ["1"], series: ser(0), cascade: true,
+    filters: [{ label: "会場", options: ["全場", "東京"] }, { label: "距離", options: ["芝1600", "芝2000", "ダ1200"] }],
+    variants: { "全場|芝1600": { series: ser(1) }, "東京|芝1600": { series: ser(2) }, "東京|ダ1200": { series: ser(3) } },
+  };
+  assert.deepEqual(cascadeOptions(block, ["全場", "芝1600"], 1), ["芝1600"]);
+  assert.deepEqual(cascadeOptions(block, ["東京", "芝1600"], 1), ["芝1600", "ダ1200"]);
+  assert.deepEqual(cascadePick(block, ["東京", "ダ1200"], 0, "全場"), ["全場", "芝1600"]);
+  assert.equal(chartVariant(block, ["全場", "芝1600"]).series[0].values[0], 1);        // cascade では先頭の組み合わせも variants を引く
+});
+
+test("chartRange fit: 0 始まりにせず値の範囲に合わせる", () => {
+  const r = chartRange([{ values: [12.1, 12.4, null], ci: [[12.0, 12.2], [12.3, 12.5], null] }], "num", true);
+  assert.ok(r.min > 11.5 && r.min <= 12.0 && r.max >= 12.5 && r.max < 13);
+  assert.equal(chartRange([{ values: [0.1, 0.3] }], "num").min, 0);               // fit なしは今までどおり
+});
+
+test("グラフ: variant が xs を持てば横軸もその長さに替わる", () => {
+  const block = { type: "chart", title: "t", xLabel: "x", yLabel: "y", xs: ["a", "b", "c"], series: [{ name: "s", values: [1, 2, 3] }],
+    filters: [{ label: "距離", options: ["長", "短"] }], variants: { 短: { xs: ["a", "b"], series: [{ name: "s", values: [1, 2] }] } } };
+  assert.deepEqual(chartVariant(block, ["短"]).xs, ["a", "b"]);
+  assert.deepEqual(chartVariant(block, ["長"]).xs, ["a", "b", "c"]);
+});
+
+test("円形の系統樹: 外周の数が limit を超えず、子は親の角度の範囲に並び、全種牡馬が 1 回ずつ数えられる", () => {
+  const sire = (id) => ({ id, name: id, value: 20, metrics: [] });
+  const line = (id, kids) => ({ id, name: id, value: 0, metrics: [], kind: "line", children: kids });
+  const root = line("r", [line("a", [sire("a1"), sire("a2"), line("a3", [sire("a31"), sire("a32")])]), line("b", [sire("b1"), sire("b2"), sire("b3")]), sire("c")]);
+  assert.equal(treeSireCount(root), 8);
+  const small = radialLayout(root, 5, 100);
+  const outer = small.items.filter((it) => it.outer);
+  assert.ok(outer.length <= 5);
+  assert.equal(small.items.find((it) => it.node.id === "r").r, 0);
+  assert.ok(small.items.some((it) => it.folded));
+  const full = radialLayout(root, 100, 100);
+  assert.equal(full.items.filter((it) => it.outer).length, 8);
+  assert.equal(full.items.filter((it) => it.folded).length, 0);
+  const a = full.items.find((it) => it.node.id === "a"), kids = full.items.filter((it) => it.parentId === "a");
+  assert.ok(a.angle >= Math.min(...kids.map((k) => k.angle)) && a.angle <= Math.max(...kids.map((k) => k.angle)));
+  assert.ok(full.items.filter((it) => it.outer).every((it) => Math.abs(it.r - 100) < 1e-9));
+  assert.ok(full.items.filter((it) => !it.outer && it.depth > 0).every((it) => it.r > 0 && it.r < 100));
+  assert.equal(full.sectors.length, 3);
+});
+
+test("系統樹の値の表示: 距離・符号なしの小数・欠損", () => {
+  assert.equal(formatTreemapValue(1632.4, "dist"), "1,632m");
+  assert.equal(formatTreemapValue(49.87, "val1"), "49.9");
+  assert.equal(formatTreemapValue(-0.005, "val2"), "-0.01");
+  assert.equal(formatTreemapValue(null, "dist"), "–");
 });

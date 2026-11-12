@@ -8,7 +8,13 @@ dev の挙動を検証するテストは
 ``monkeypatch.setenv("KEIBA_ENV", "dev")`` で明示的に切り替える。
 """
 
+import os
+
 import pytest
+
+# 開発PCの .env / .env.<KEIBA_ENV> を読まない（KEIBA_ENV=stg を指定したテストが .env.stg の挙動フラグ・会員設定に左右され、
+# ホストでだけ落ちていた。2026-11-08）。.env を読む挙動そのものは dotenv_path を渡して検証する
+os.environ["KEIBA_SKIP_DOTENV"] = "1"
 
 
 @pytest.fixture(autouse=True)

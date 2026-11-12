@@ -5,7 +5,7 @@
 set -u
 export TZ="${TZ:-Asia/Tokyo}"
 PROJECT_DIR="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
-CATS="${2:-race_result,race_shutuba,race_result_lap,race_result_on_time}"
+CATS="${2:-race_result,race_shutuba,race_result_lap,race_result_on_time,race_odds,race_pair_odds}"
 cd "$PROJECT_DIR" || exit 1
 mkdir -p logs
 LOG="logs/export_tables_daily.log"

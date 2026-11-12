@@ -1,31 +1,30 @@
 """
-走法マップのコース別の地図（コースで重要な 3 軸だけで作る地図と、その座標での好走しやすさ）。
+走法マップのコース別の地図（ギアチェンジ・TS・TS持続力・Cr性能・Hペース耐性・基礎スピードの 6 軸で作る地図と、その座標での好走しやすさ）。
 
-ユーザー指示（2026-11-02）: コースごとに重要度の高い軸を 3 つに絞って地図にし、どのゾーンが好走しやすいかを事前に計算する。
+ユーザー指示（2026-11-05）: 地図に使う走法軸は、ギアチェンジ・TS・TS持続力・Cr性能・Hペース耐性・基礎スピードの 6 つに固定する（最初は Cr性能までの 4 つ。同日に Hペース耐性、続けて基礎スピードを足した）（MAP_AXES。
+  それまでは、コースごとに重要度の高い 3〜6 方面を選んでいた）。この 6 軸で各馬を置き、好走ゾーンも同じ 6 軸の地図の上で算出する。
 ユーザー指示（2026-11-03）: 地図は縦軸・横軸の無い「走法の近い馬ほど近くに置く」2 次元にする（任意の軸を座標にしない）。
-  近さは、そのコースで重要度の高い上位 N 方面の値だけで測る（全 8 方面ではない。好走ゾーンがはっきり分かれるように）。
-  N はコースごとに 3〜6（2026-11-03 ユーザー指示）: 重要度の割合を上から足して 90% に届く数。その方面がすべてある走が 200 未満なら減らす。
-  上位の方面は、丸の色の切り替えと、馬を選んだときの数値バーの強調にも使う。好走しやすいゾーンの背景は、この地図の上で塗る。
+  6 軸は、丸の色の切り替えと、馬を選んだときの数値バーの強調にも使う。
 
 好走の得点（ユーザー指定）: 1〜3 着 = 1、4 着 0.8、5 着 0.6、6 着 0.4、7 着 0.2、8 着以下 = 0。
 期待は「頭数 n のレースで着順がでたらめに決まったときの得点の平均」= Σ_{k=1..n} score(k) / n。
 
 手順（基準を作るときに 1 回だけ。running_map._build_reference から呼ぶ）:
-  1. 対象: 2024-01-01 以降の平地（頭数 5 以上）。各走の 8 方面は「その走より前の走」から作ったプロファイル（profile_table）を、
-     全馬の分布で順位 → 標準正規にそろえた値（地図と同じ z）。8 方面のうち値があるのが 5 未満の走は使わない。欠けは 0（全馬の中央値）。
-  2. 重要度: コースの走で、得点 − 期待 を 8 方面へ線形回帰し、方面ごとに「その方面を抜いたときの R² の落ち」を重要度とする
-     （他の方面と重なる分は数えないので、先行力と Hペース耐性のように似た方面が両方選ばれにくい）。上位 N 個（3〜6）を地図に使う。
-  3. 地図: 上位 N 方面（その方面すべてに実測由来の値がある走）を、重要度で重み付けした距離（w_j = √(K·重要度_j / 上位の重要度の合計)。
-     ほかの方面の重みは 0）の主成分で 2 次元に置く。上位の方面で走法の近い馬ほど近い。座標軸に意味は持たせない。
-     向きは、好走の得点の回帰（8 方面）を地図に写した「好走しやすい向き」が真上。左右は上位 2 番目の方面が右に来るように決める。
+  1. 対象: 2024-01-01 以降の平地（頭数 5 以上）。各走の 9 方面は「その走より前の走」から作ったプロファイル（profile_table）を、
+     全馬の分布で順位 → 標準正規にそろえた値（地図と同じ z）。MAP_AXES の 6 軸がすべてある走だけを使う。
+  2. 重要度: コースの走で、得点 − 期待 を 6 軸へ線形回帰し、軸ごとに「その軸を抜いたときの R² の落ち」を重要度とする
+     （他の軸と重なる分は数えない）。
+  3. 地図: 6 軸を、重み w_j = √(6·s_j / Σs)（s_j = 0.5·寄与率 + 0.5·均等。重みの 2 乗の平均が 1）で付けた距離の主成分で 2 次元に置く。
+     寄与が小さい軸も配置に効かせるため、寄与率だけでなく均等を半分混ぜる。座標軸に意味は持たせない。
+     向きは、好走の得点の 6 軸回帰を地図に写した「好走しやすい向き」が真上。左右は寄与率 2 番目の軸が右に来るように決める。
   4. 好走しやすさ: 地図の 24×24 の格子で、ガウスカーネル（幅 0.5）で近くの走を平滑化し、観測した得点 / 期待 の倍率を出す。
      サンプルの少ないゾーンはコース全体の倍率へ寄せる（M=20）。有意性はレース単位でまとめたサンドウィッチ分散の z と BH 法（FDR 5%）。
   コースの走が MIN_RUNS 未満なら、まず同じ競馬場・芝ダ・距離帯（≤1400 / 〜1700 / 1800〜2599 / 2600+ の長距離）にまとめた「場のグループ」
   （MIN_VENUE_RUNS 以上）、長距離が足りない場は同じ場の 1800m 以上（中長距離）、それも足りなければ競馬場をまたいだ芝ダ・距離帯の「グループ」の地図を使う
   （2026-11-03 ユーザー指示: 長距離など標本の少ない条件は、競馬場はそろえて距離をくくる）。
 
-注意: 重要度・倍率は 2024 年以降の全レースで測った値（標本内）。2024 年の走は位置の 4 方面（Hペース耐性・先行力・Cr性能・まくり特性）の
-実測が少なく（約 13%）、その分は前の走が無く欠け（0 = 中央値）になりやすい。
+注意: 重要度・倍率は 2024 年以降の全レースで測った値（標本内）。2024 年の走は位置の方面（Cr性能など）の
+実測が少なく（約 13%）、6 軸がそろう走は 2025 年以降が中心になる。
 """
 
 from __future__ import annotations
@@ -39,14 +38,18 @@ import pandas as pd
 from src.research.race import running_map_aptitude as apt
 
 SINCE = "2024-01-01"
-TOP_K = 3            # 地図に使う方面の数の下限
-MAX_K = 6            # 上限
-CUM_SHARE = 0.9      # 重要度の割合を上から足して、これに届くまでの数（TOP_K〜MAX_K）を使う
-MIN_MAP_RUNS = 200   # 地図に使う方面がすべてある走がこれ未満なら、方面を減らす
-MIN_AXES_PRESENT = 5
+MAP_AXES = ("gear", "ts", "sustain", "cr", "endure", "basic")   # 地図に使う走法軸（ユーザー指定 2026-11-05: ギアチェンジ・TS・TS持続力・Cr性能・Hペース耐性・基礎スピード）
+# 道悪（稍重以上）の地図: 基礎スピード（速い馬場の軸）の代わりに道悪適性を入れる。芝とダートで別の軸
+WET_AXES = {"芝": ("gear", "ts", "sustain", "cr", "endure", "wett"), "ダート": ("gear", "ts", "sustain", "cr", "endure", "wetd")}
+WEIGHT_MIX = 0.5     # 地図の距離の重み = 寄与率 × この割合 + 均等 × (1 − この割合)
+MIN_MAP_RUNS = 200   # 地図に使う 6 軸がすべてある走がこれ未満のコース（グループ）は地図を作らない
 MIN_RUNS = 600
 MIN_VENUE_RUNS = 300     # 場のグループ（同じ競馬場の距離帯）の地図を作る最低の走数。背景の倍率はコース全体へ寄せる（M=20）ので、少なめでも極端にはならない
 MIN_FIELD = 5
+# 人気を考えた期待得点の表（pop_expect.build_table）。None なら頭数だけの期待得点（従来）。
+# 人気馬の凡走・人気薄の好走を強く拾うため、設定すると地図・好走ゾーン・当日の傾向が「人気どおりを 1」の倍率になる
+POP_TABLE: Optional[dict] = None
+POP_IN_IMPORTANCE = True   # 方面の重要度（地図の重み）の回帰にも人気込みの差を使うか
 
 
 def score_of(pos: np.ndarray) -> np.ndarray:
@@ -59,6 +62,14 @@ def expected_score(n: np.ndarray) -> np.ndarray:
     """頭数 n で着順がでたらめなときの得点の平均。"""
     table = {k: float(score_of(np.arange(1, k + 1)).mean()) for k in range(1, 41)}
     return np.array([table.get(int(v), table[40]) for v in n])
+
+
+def expected_by_pop(n: np.ndarray, popularity: Optional[np.ndarray], e_n: np.ndarray) -> np.ndarray:
+    """期待得点。POP_TABLE があり人気が分かる走は「頭数と人気順が同じ馬の平均得点」、それ以外は頭数だけの期待得点。"""
+    if POP_TABLE is None or popularity is None:
+        return e_n
+    from src.research.race import pop_expect
+    return pop_expect.expect(POP_TABLE, n, popularity, e_n)
 
 
 BAND_LABEL = {"短": "1400m以下", "マイル": "1500〜1700m", "中": "1800〜2500m", "長": "2600m以上", "中長": "1800m以上"}
@@ -110,7 +121,7 @@ def _orient(Y: np.ndarray, A: np.ndarray, up: np.ndarray, right_row: int) -> tup
 
 
 def _dist_rho(X: np.ndarray, Y: np.ndarray, n: int = 400, seed: int = 0) -> float:
-    """重み付き 8 次元の距離と地図上の距離の順位相関（標本 n 頭の全組）。"""
+    """重み付き 6 軸の距離と地図上の距離の順位相関（標本 n 頭の全組）。"""
     from scipy.stats import spearmanr
 
     idx = np.random.default_rng(seed).choice(len(X), min(n, len(X)), replace=False)
@@ -130,7 +141,7 @@ def weights_of(share: np.ndarray, order: list[int]) -> np.ndarray:
 
 
 def place(Z: np.ndarray, cm: dict[str, Any]) -> np.ndarray:
-    """8 方面の z（欠けは 0 = 全馬の中央値）を、コースの地図の座標へ。"""
+    """9 方面の z（欠けは 0 = 全馬の中央値）を、コースの地図の座標へ。"""
     return (np.nan_to_num(Z) * np.array(cm["w"]) - np.array(cm["mu"])) @ np.array(cm["A"])
 
 
@@ -150,31 +161,39 @@ def _heat(P: np.ndarray, y: np.ndarray, e: np.ndarray, race_codes: np.ndarray, e
     return {"lift": [round(float(v), 3) for v in lift], "sig": "".join(str(int(v)) for v in sig), "base": round(base, 3)}
 
 
-def _one(g: pd.DataFrame, Zall: np.ndarray, present: np.ndarray, axis_keys: list[str]) -> Optional[dict[str, Any]]:
+def _axes_for(axes: Any, surface: Any) -> tuple[str, ...]:
+    """地図に使う軸。dict なら芝ダごとに別（道悪の地図は芝=芝道悪適性・ダート=ダート道悪適性）。"""
+    return tuple(axes[surface]) if isinstance(axes, dict) else tuple(axes)
+
+
+def _one(g: pd.DataFrame, Zall: np.ndarray, present: np.ndarray, axis_keys: list[str], axes: Any = MAP_AXES) -> Optional[dict[str, Any]]:
     idx = g.index.to_numpy()
     Z, pr = Zall[idx], present[idx]
-    r = g["y"].to_numpy() - g["e"].to_numpy()
-    drop, beta, full = _importance(Z, r)
-    share = drop / drop.sum() if drop.sum() > 0 else np.full(len(drop), 1.0 / len(drop))
-    ranked = list(np.argsort(-drop))
-    k = int(np.clip(np.searchsorted(np.cumsum(share[ranked]), CUM_SHARE) + 1, TOP_K, MAX_K))
-    while k > TOP_K and pr[:, ranked[:k]].all(axis=1).sum() < MIN_MAP_RUNS:
-        k -= 1
-    order = ranked[:k]
-    keys = [axis_keys[j] for j in order]
-    ok = pr[:, order].all(axis=1)
+    r = g["y"].to_numpy() - g["e" if POP_IN_IMPORTANCE else "e_n"].to_numpy()
+    fixed = [axis_keys.index(k) for k in _axes_for(axes, g["surface"].iloc[0])]
+    ok = pr[:, fixed].all(axis=1)
     if ok.sum() < MIN_MAP_RUNS:
         return None
-    w = weights_of(share, order)
+    # 重要度は 6 軸だけの回帰で測る（他の軸は入れない）。大きい順に並べ、寄与の割合を重みにする
+    drop4, beta4, full = _importance(Z[ok][:, fixed], r[ok])
+    pos = np.argsort(-drop4)
+    order = [fixed[i] for i in pos]
+    keys = [axis_keys[j] for j in order]
+    drop, beta = np.zeros(len(axis_keys)), np.zeros(len(axis_keys))
+    drop[fixed], beta[fixed] = drop4, beta4
+    share = drop / drop.sum() if drop.sum() > 0 else np.zeros(len(drop))
+    if drop.sum() <= 0:
+        share[fixed] = 1.0 / len(fixed)
+    # 地図の距離の重みは、寄与率と均等の半々（寄与が小さい軸も配置に効かせる）
+    w = weights_of(WEIGHT_MIX * share + (1 - WEIGHT_MIX) * np.isin(np.arange(len(share)), fixed) / len(fixed), order)
     Zw = Z[ok] * w
     mu = Zw.mean(0)
     Zc = Zw - mu
     _, S, Vt = np.linalg.svd(Zc, full_matrices=False)
     A0 = Vt[:2].T
-    # 好走の得点を上位の方面だけで回帰し直し、地図に写した向きを「上」にする（得点 ≈ b·z = (b/w)·zw）
-    _, b_top, _ = _importance(Z[ok][:, order], r[ok])
+    # 好走の得点の 6 軸回帰を地図に写した向きを「上」にする（得点 ≈ b·z = (b/w)·zw）
     bw = np.zeros(len(w))
-    bw[order] = b_top / w[order]
+    bw[order] = beta4[pos] / w[order]
     Y, A = _orient(Zc @ A0, A0, A0.T @ bw, order[1])
     recon = Y @ A.T
     var = Zc.var(0)
@@ -187,12 +206,12 @@ def _one(g: pd.DataFrame, Zall: np.ndarray, present: np.ndarray, axis_keys: list
         "w": [round(float(v), 4) for v in w],
         "distance_spearman": round(_dist_rho(Zc, Y), 3),
         "importance": [{"key": axis_keys[j], "share": round(float(share[j]), 3), "r2_drop": round(float(drop[j]), 5),
-                        "sign": int(np.sign(beta[j])) if beta[j] != 0 else 0} for j in np.argsort(-drop)],
+                        "sign": int(np.sign(beta[j])) if beta[j] != 0 else 0} for j in order],
         "r2_full": round(float(full), 4),
         "mu": mu.tolist(), "A": A.tolist(),
         "r2": [None if v < 1e-12 else round(float(1 - (Zc[:, j] - recon[:, j]).var() / v), 3) for j, v in enumerate(var)],
         "top_k": len(order),
-        "top_share": round(float(share[order].sum()), 3),
+        "top_share": 1.0,
         "explained": round(float((S[:2] ** 2).sum() / (S ** 2).sum()), 3),
         "extent": extent,
         "n_runs": int(len(sub)), "n_races": int(sub["race_id"].nunique()),
@@ -200,14 +219,18 @@ def _one(g: pd.DataFrame, Zall: np.ndarray, present: np.ndarray, axis_keys: list
     }
 
 
-def build(tab: pd.DataFrame, Z: np.ndarray, present: np.ndarray, axis_keys: list[str]) -> dict[str, Any]:
+def build(tab: pd.DataFrame, Z: np.ndarray, present: np.ndarray, axis_keys: list[str], axes: Any = MAP_AXES, mask: Optional[np.ndarray] = None) -> dict[str, Any]:
     """tab: race_id, date, venue, surface, distance, finish_position, n_field（Z・present と同じ並び）。
-    Z: 8 方面の z（地図と同じ変換・符号。欠けは NaN）。present: 実測由来の値があるか。"""
+    Z: 9 方面の z（地図と同じ変換・符号。欠けは NaN）。present: 実測由来の値があるか。
+    axes: 地図に使う軸（dict なら芝ダごと）。mask: 地図に使う走（良馬場だけ・道悪だけ、など。省略時は全部）。"""
+    if mask is not None:
+        tab, Z, present = tab[mask], Z[mask], present[mask]
     t = tab.reset_index(drop=True).copy()
     t["y"] = score_of(t["finish_position"].to_numpy())
-    t["e"] = expected_score(t["n_field"].to_numpy())
+    t["e_n"] = expected_score(t["n_field"].to_numpy())
+    t["e"] = expected_by_pop(t["n_field"].to_numpy(), t["popularity"].to_numpy() if "popularity" in t else None, t["e_n"].to_numpy())
     keep = ((t["date"] >= pd.Timestamp(SINCE)) & (t["n_field"] >= MIN_FIELD) & t[["venue", "surface", "distance"]].notna().all(axis=1)
-            & (present.sum(axis=1) >= MIN_AXES_PRESENT) & t["finish_position"].notna()).to_numpy()
+            & t["finish_position"].notna()).to_numpy()
     t = t[keep].reset_index(drop=True)
     Zk = np.nan_to_num(Z[keep])
     pk = present[keep]
@@ -220,13 +243,13 @@ def build(tab: pd.DataFrame, Z: np.ndarray, present: np.ndarray, axis_keys: list
     t["vkey"] = [venue_group_key(v, s, d) for v, s, d in zip(t["venue"], t["surface"], t["distance"])]
     for gk, g in t.groupby("gkey"):
         if len(g) >= MIN_RUNS:
-            res = _one(g, Zk, pk, axis_keys)
+            res = _one(g, Zk, pk, axis_keys, axes)
             if res:
                 s_, b_ = gk.split("|")
                 groups[gk] = {**res, "level": "group", "label": f"{s_} {BAND_LABEL[b_]}（全場）"}
     for ck, g in t.groupby("ckey"):
         if len(g) >= MIN_RUNS:
-            res = _one(g, Zk, pk, axis_keys)
+            res = _one(g, Zk, pk, axis_keys, axes)
             if res:
                 courses[ck] = {**res, "level": "course"}
     # 場のグループ: 地図の無いコースがある集まりだけ（地図のあるコースだけなら使われない）
@@ -235,7 +258,7 @@ def build(tab: pd.DataFrame, Z: np.ndarray, present: np.ndarray, axis_keys: list
         for vk, g in t[t[col].notna()].groupby(col):
             if len(g) < MIN_VENUE_RUNS or set(g["ckey"]) <= set(courses):
                 continue
-            res = _one(g, Zk, pk, axis_keys)
+            res = _one(g, Zk, pk, axis_keys, axes)
             if res:
                 v_, s_, b_ = vk.split("|")
                 vgroups[vk] = {**res, "level": "venue_group", "label": f"{v_} {s_} {BAND_LABEL[b_]}"}

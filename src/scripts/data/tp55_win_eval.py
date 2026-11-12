@@ -25,6 +25,7 @@ OUT = Path(os.environ.get("TP55_OUT", "/home/jovyan/work/tp55_out3"))
 KEY = ["race_id", "horse_id"]
 THREADS = int(os.environ.get("TP55_THREADS", "3"))
 GROUP_PATH = OUT / "groups" / "LAP.parquet"
+GROUP_FROM = int(os.environ.get("TP55_GROUP_FROM", "2020"))     # LAP 群を作る最初の年（2016 年以降で学び直すときは 2016）
 
 
 def _log(msg: str) -> None:
@@ -36,7 +37,7 @@ def make_group() -> None:
     d["year"] = d["date"].str[:4].astype(int)
     d = d[d["year"] <= 2025].reset_index(drop=True)
     parts = []
-    for y in range(2020, 2026):
+    for y in range(GROUP_FROM, 2026):
         tr, te = d[d["year"] != y], d[d["year"] == y]
         m = lfm.LapForecast(scenario="A", threads=THREADS, n_oof=2).fit(tr)
         out = m.predict(te)
@@ -53,7 +54,7 @@ def make_group() -> None:
     # 馬単位: 脚質（過去走の最初のコーナーの正規化位置 h_early_w）×ペース。ここで使うのは as-of の馬特徴
     from src.scripts.data import tp55_build as tb
 
-    res, shu, smr = tb.load_inputs(list(range(2020, 2026)), None)
+    res, shu, smr = tb.load_inputs(list(range(GROUP_FROM, 2026)), None)
     ent = shu[["race_id", "horse_id", "horse_number"]].drop_duplicates(KEY).copy()
     ent = ent.merge(d[["race_id", "date"]], on="race_id", how="inner")
     ent["date"] = pd.to_datetime(ent["date"])

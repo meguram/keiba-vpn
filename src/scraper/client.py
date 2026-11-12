@@ -52,6 +52,24 @@ logger = logging.getLogger("scraper.client")
 _IN_CLIENT_GET = threading.local()
 
 
+_API_GAP_LOCK = threading.Lock()
+_API_LAST = [0.0]
+
+
+def _api_gap() -> None:
+    """session.get を直接使う JSON API（オッズ・2連系・3連複・指数）の連続を間引く。
+
+    これらは client.get の間隔制御を通らず、1 レースで 6〜7 本が同じ 1 秒に出ていた（2026-11-06 の HTTP 400 の自動停止の前にも出ていた）。
+    直前の API の取得から NETKEIBA_API_GAP_MIN〜MAX 秒（既定 1.0〜1.8）空ける。プロセス内のスレッドで共有する。"""
+    lo = float(os.environ.get("NETKEIBA_API_GAP_MIN", "1.0"))
+    hi = float(os.environ.get("NETKEIBA_API_GAP_MAX", "1.8"))
+    with _API_GAP_LOCK:
+        wait = _API_LAST[0] + random.uniform(lo, max(lo, hi)) - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        _API_LAST[0] = time.monotonic()
+
+
 def _log_direct_get(orig):
     """session.get を直接使う取得（オッズ・2連系・3連複・指数の JSON API）にも、client.get と同じ形の「GET <url>」の行を出す。
     取得の状況（src/scripts/scraping/fetch_status.py）はこの行を数えて速度・終了見込みを出すので、無いとオッズの段階が 0 件/時になる
@@ -61,6 +79,7 @@ def _log_direct_get(orig):
     @functools.wraps(orig)
     def get(url, *a, **kw):
         if "netkeiba.com" in str(url) and not getattr(_IN_CLIENT_GET, "on", False):
+            _api_gap()
             logger.info("GET %s (api)", url)
         return orig(url, *a, **kw)
 
@@ -389,6 +408,28 @@ def _http_adapter_pool_maxsize() -> int:
     return max(8, min(64, qp + 4))
 
 
+def _login_probe_race_id() -> str:
+    return os.environ.get("KEIBA_LOGIN_PROBE_RACE_ID", "202509040410")
+
+
+def _is_soft_400_url(url: str) -> bool:
+    """400 が出ても「ブロックされた」とは見なさない URL。
+
+    ログイン確認用の指数ページ（失敗しても取得は続けられる）と、まだ公開されていない将来の開催日の一覧
+    （存在しないページが 400 を返す）。リトライ・回復処理・サーキットブレーカー・補填の悪化検知に数えない。
+    """
+    if "race.netkeiba.com/race/speed.html" in url and f"race_id={_login_probe_race_id()}" in url:
+        return True
+    import re
+    from datetime import datetime, timedelta, timezone
+
+    m = re.search(r"race_list_get_date_list\.html\?.*kaisai_date=(\d{8})|db\.netkeiba\.com/race/list/(\d{8})", url)
+    if not m:
+        return False
+    today = datetime.now(timezone(timedelta(hours=9))).strftime("%Y%m%d")
+    return (m.group(1) or m.group(2)) > today
+
+
 def _source_from_url(url: str) -> str:
     """URLからソース名を判定する。"""
     if "smartrc.jp" in url:
@@ -680,6 +721,9 @@ class NetkeibaClient:
                             _on_error(url, _exc)
                     raise
             last_resp = resp
+            if resp.status_code == 400 and _is_soft_400_url(url):
+                logger.warning("HTTP 400（ブロックとは見なさない URL）— リトライせず諦めます: %s", url)
+                resp.raise_for_status()
             for _observer in tuple(_RESPONSE_OBSERVERS):
                 _observer(url, resp)
 
@@ -836,7 +880,7 @@ class NetkeibaClient:
         """
         from bs4 import BeautifulSoup
 
-        rid = os.environ.get("KEIBA_LOGIN_PROBE_RACE_ID", "202509040410")
+        rid = _login_probe_race_id()
         try:
             html = self.fetch(
                 f"https://race.netkeiba.com/race/speed.html?race_id={rid}", use_cache=False

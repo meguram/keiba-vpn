@@ -3,8 +3,8 @@
  "note": "印の付け方の版。1=従来（v1）、2=めぐAI印 v2（ユーザー定義）。環境変数 KEIBA_MARK_RULE=v1|v2 でも上書き。既定は v1。評価: docs/html/modeling/chapters/megu_marking.html 末尾の『v2 の評価』",
  "v2": {
   "honmei": {
-   "win_mult": 2.0,
-   "topk": 3
+   "win_prob_min": 0.10,
+   "ev_win_min": 1.00
   },
   "pair": {
    "rule": "win",

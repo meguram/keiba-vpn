@@ -58,7 +58,8 @@
     ],
     "owner_only_unless_b_facts": [
       "^/api/race-list/",
-      "^/api/race-quality/"
+      "^/api/race-quality/",
+      "^/api/v1/races/[^/]+/running-map"
     ]
   }
 }

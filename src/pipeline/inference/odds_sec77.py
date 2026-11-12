@@ -33,8 +33,19 @@ def enabled() -> bool:
     return (os.environ.get("KEIBA_ODDS_SEC77") or "1").strip().lower() not in ("0", "false", "no", "off")
 
 
+def t6_enabled() -> bool:
+    """再学習の想定オッズ（試行 6、odds_t6）で作る。KEIBA_ODDS_T6=1 かつモデルが揃っているときだけ（既定は従来の §77 のまま）。保存の形・source は sec77 のまま。"""
+    from src.pipeline.inference import odds_t6
+
+    return enabled() and (os.environ.get("KEIBA_ODDS_T6") or "").strip() == "1" and odds_t6.available()
+
+
+def _sec77_files() -> bool:
+    return (MODEL_DIR / "meta.json").exists() and (MODEL_DIR / "share_model.txt").exists() and (MODEL_DIR / "place_model.txt").exists()
+
+
 def available() -> bool:
-    return enabled() and (MODEL_DIR / "meta.json").exists() and (MODEL_DIR / "share_model.txt").exists() and (MODEL_DIR / "place_model.txt").exists()
+    return t6_enabled() or (enabled() and _sec77_files())
 
 
 def reload() -> None:
@@ -61,6 +72,15 @@ def feature_columns() -> list[str]:
 
 def predict_frame(X: pd.DataFrame) -> pd.DataFrame:
     """X: race_id・horse_id + 特徴量。戻り値: race_id・horse_id・win_odds・place_mid・place_min・place_max（odds_pred_eval の win_B / place_B と同じ変換）。"""
+    if t6_enabled():
+        from src.pipeline.inference import odds_t6
+
+        try:
+            return odds_t6.predict_frame(X)
+        except KeyError:
+            if not _sec77_files():
+                raise
+            logger.warning("試行 6 の特徴量が足りないため §77 で作る", exc_info=True)
     pack = _load()
     meta = pack["meta"]
     cols = meta["cols"]
