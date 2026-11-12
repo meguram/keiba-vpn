@@ -46,6 +46,26 @@ from urllib3.util.retry import Retry
 
 from src.scraper import stall_watchdog as _stall_watchdog
 
+
+class _LazyFetchRegistry:
+    """取得の一覧（fetch_status）の心拍 src.scraper.fetch_registry を、使うときに読み込む。
+    import の時点で読み込むと、``python -m src.scraper.fetch_registry`` の起動で二重読み込みの RuntimeWarning が出る。"""
+
+    _broken = False
+
+    def __getattr__(self, name):
+        if not _LazyFetchRegistry._broken:
+            try:
+                from src.scraper import fetch_registry
+
+                return getattr(fetch_registry, name)
+            except Exception:  # noqa: BLE001 — 心拍の不具合で取得を止めない。一度失敗したら読み込み直さない
+                _LazyFetchRegistry._broken = True
+        return lambda *a, **k: None
+
+
+_fetch_registry = _LazyFetchRegistry()
+
 logger = logging.getLogger("scraper.client")
 
 # client.get の中で session.get を呼んでいる間は True。オッズ・指数の JSON API のように session を直接使う取得と区別する
@@ -81,6 +101,7 @@ def _log_direct_get(orig):
         if "netkeiba.com" in str(url) and not getattr(_IN_CLIENT_GET, "on", False):
             _api_gap()
             logger.info("GET %s (api)", url)
+            _fetch_registry.note_get()   # 取得の一覧（fetch_status）の心拍。例外は出さない
         return orig(url, *a, **kw)
 
     return get
@@ -312,7 +333,9 @@ class _GlobalSlot:
             f"{os.getpid()}_{threading.get_ident()}_{time.monotonic_ns()}.slot"
         )
 
-        deadline = time.monotonic() + 120
+        t0 = time.monotonic()
+        deadline = t0 + 120
+        waiting = False
         while time.monotonic() < deadline:
             with _GLOBAL_SLOT_LOCK:
                 _cleanup_stale_global_slots()
@@ -320,9 +343,15 @@ class _GlobalSlot:
                     try:
                         slot_path.touch()
                         self._path = slot_path
-                        return self
                     except Exception:
                         pass
+            if self._path:
+                if waiting:
+                    _fetch_registry.set_state("running")   # ロックの外で書く（他のスレッドのスロット獲得を待たせない）
+                return self
+            if not waiting and time.monotonic() - t0 > 5:      # 取得の一覧（fetch_status）に「待機中」と出す
+                waiting = True
+                _fetch_registry.set_state("waiting", "取得スロット待ち（他の取得が使用中）")
             time.sleep(0.2 + random.random() * 0.3)
 
         # タイムアウト: スロット獲得できなくても続行（制限は best-effort）
@@ -695,6 +724,7 @@ class NetkeibaClient:
 
             referer = self._get_referer(url)
             self._session.headers["Referer"] = referer
+            _fetch_registry.note_get()   # 取得の一覧（fetch_status）の心拍。例外は出さない・数秒に 1 回だけ書く。スロットを持つ前に呼ぶ
 
             with _netkeiba_inflight_guard(url):
                 if "netkeiba.com" in url:

@@ -3,6 +3,16 @@ from datetime import datetime
 
 from src.scripts.scraping import fetch_status as fs
 
+PAST_ARGS = "/opt/conda/bin/python3 -m src.scraper.backfill --phase past --cap 0"
+
+
+def _row(pid, args, ppid=1, etime="01:00"):
+    return {"pid": pid, "ppid": ppid, "user": "root", "etime": etime, "args": args}
+
+
+def _tasks(*rows, entries=None, now_ts=None):
+    return fs.collect_tasks(rows=list(rows), entries=entries or {}, now_ts=now_ts or 1_000_000.0)
+
 
 def _prog():
     days = [f"201901{d:02d}" for d in range(1, 11)]          # 10 開催日
@@ -60,9 +70,10 @@ def test_scan_log_counts_windows_and_current_run(tmp_path):
 def test_render_runs_without_data(tmp_path, monkeypatch):
     for name in ("PROGRESS", "TRAINING_PROGRESS", "PAST_LOG", "TRAINING_LOG"):
         monkeypatch.setattr(fs, name, tmp_path / name)
-    monkeypatch.setattr(fs, "_procs", lambda: {"past": [], "training": [], "other": []})
-    out = fs.render(datetime(2026, 10, 29, 22, 0, 0))
-    assert "停止中" in out and "見込みは出せません" in out and "完了" not in out
+    out = fs.render(datetime(2026, 10, 29, 22, 0, 0), tasks=[])
+    assert "実行中・待機中の取得はありません" in out and "停止中" not in out and "補填" not in out   # 完了・停止中のものは出さない
+    out = fs.render(datetime(2026, 10, 29, 22, 0, 0), tasks=_tasks(_row(10, PAST_ARGS)))
+    assert "[実行中] 2016〜2019 年の補填" in out and "見込みは出せません" in out and "完了" not in out
 
 
 def test_scan_log_collects_horses_touched_in_last_run(tmp_path):
@@ -124,8 +135,7 @@ def test_render_keeps_horse_parts_right_after_restart(tmp_path, monkeypatch):
     monkeypatch.setattr(fs, "PAST_LOG", tmp_path / "past.log")
     monkeypatch.setattr(fs, "TRAINING_PROGRESS", tmp_path / "t.json")
     monkeypatch.setattr(fs, "TRAINING_LOG", tmp_path / "t.log")
-    monkeypatch.setattr(fs, "_procs", lambda: {"past": [], "training": [], "other": []})
-    out = fs.render(datetime(2026, 10, 29, 22, 0, 0))
+    out = fs.render(datetime(2026, 10, 29, 22, 0, 0), tasks=_tasks(_row(10, PAST_ARGS)))
     assert "馬のプロフィール" in out and "母方の祖先の血統" in out
 
 
@@ -152,6 +162,58 @@ def test_render_shows_training_past_section(tmp_path, monkeypatch):
         "done": {f"h{i}": "saved" for i in range(100)}, "counts": {"saved": 100, "empty": 0, "error": 0}, "requests": 300, "total": 1000}), encoding="utf-8")
     g = "2026-10-29 21:%02d:00 [INFO] scraper.client: GET https://db.netkeiba.com/horse/training.html?id=2005105204 (attempt 1/4)"
     (tmp_path / "TRAINING_PAST_LOG").write_text("===== 2026-10-29T20:50:00+09:00 START =====\n" + "\n".join(g % m for m in range(10, 50)), encoding="utf-8")
-    monkeypatch.setattr(fs, "_procs", lambda: {"past": [], "training": [], "training_past": ["PID 1 経過 01:00  x"], "other": []})
-    out = fs.render(datetime(2026, 10, 29, 22, 0, 0))
-    assert "調教の過去分の取り直し" in out and "100/1000 頭 10%" in out and "1 頭あたり 3.0 件" in out and "取得中" in out
+    args = "python3 -m src.scripts.scraping.backfill_horse_training_past --horses-file x.parquet --limit 0"
+    out = fs.render(datetime(2026, 10, 29, 22, 0, 0), tasks=_tasks(_row(10, args)))
+    assert "[実行中] 調教の過去分の取り直し" in out and "100/1,000 頭" in out and "[███░░░░░░░░░░░░░░░░░░░░░░░░░░░]  10.0%" in out and "1 頭あたり 3.0 件" in out
+
+
+def test_render_shows_redo_truncated_progress(tmp_path, monkeypatch):
+    monkeypatch.setattr(fs, "TRAINING_PAST_PROGRESS", tmp_path / "p.json")
+    monkeypatch.setattr(fs, "TRAINING_PAST_LOG", tmp_path / "p.log")
+    (tmp_path / "p.json").write_text(json.dumps({"done": {}, "redo": {f"h{i}": "saved" for i in range(130)}}), encoding="utf-8")
+    g = "2026-10-29 21:%02d:00 [INFO] scraper.client: GET https://db.netkeiba.com/horse/training.html?id=2005105204 (attempt 1/4)"
+    (tmp_path / "p.log").write_text("===== 2026-10-29T20:50:00+09:00 START =====\n"
+                                    "打ち切った馬の取り直し: 対象 19119 頭 / 取り直し済み 100 / 残り 2000 頭 / 今回 2000 頭（見積もり 1.0 時間）\n"
+                                    + "\n".join(g % m for m in range(10, 50)), encoding="utf-8")
+    args = "python3 -m src.scripts.scraping.backfill_horse_training_past --horses-file x.parquet --redo-truncated"
+    out = fs.render(datetime(2026, 10, 29, 22, 0, 0), tasks=_tasks(_row(10, args)))
+    assert "--redo-truncated" in out and "130/2,100 頭" in out and "残り 1,970 頭" in out
+    assert "1 頭あたり 1.3 件" in out                            # この実行で取り直した 30 頭に 40 件
+
+
+def test_launcher_and_child_are_one_task_and_launcher_alone_is_waiting(tmp_path):
+    sh = tmp_path / "run_fetch.sh"
+    sh.write_text("#!/bin/bash\n# 進捗: bash scripts/dev/fetch_status.sh\nsleep 300\npython -m src.scripts.scraping.backfill_horse_training_past --limit 0\n")
+    launcher = _row(20, f"bash {sh}")
+    child = _row(21, "/opt/conda/bin/python3 -m src.scripts.scraping.backfill_horse_training_past --limit 0", ppid=20)
+    ts = _tasks(launcher, child)
+    assert len(ts) == 1 and ts[0]["state"] == "running" and [m["pid"] for m in ts[0]["members"]] == [20, 21]
+    ts = _tasks(launcher)                                         # 子が無い（再開待ちの sleep・前の取得の終了待ち）
+    assert len(ts) == 1 and ts[0]["state"] == "waiting"
+    ts = _tasks(_row(30, f"bash {tmp_path / 'other.sh'}"), _row(31, "watch -n 1 bash scripts/dev/fetch_status.sh"),
+                _row(32, "python -m src.scripts.scraping.fetch_status"), _row(33, "python -m src.scraper.backfill --report"))
+    assert ts == []                                               # 取得でない sh・表示そのもの・状況の表示だけの起動は出さない
+
+
+def test_registry_waiting_and_progress_are_shown():
+    now_ts = 1_000_000.0
+    e = {"state": "waiting", "waiting_for": "取得スロット待ち", "gets": 0}
+    ts = _tasks(_row(40, "python3 -m src.scraper.course_position --from 2016"), entries={40: e}, now_ts=now_ts)
+    assert ts[0]["state"] == "waiting" and ts[0]["waiting_for"] == "取得スロット待ち"
+    bucket = str(int(now_ts // 60))
+    e = {"state": "running", "gets": 200, "last_get_at": now_ts - 5, "buckets": {bucket: 100}, "done": 50, "total": 150, "unit": "頭"}
+    ts = _tasks(_row(41, "python3 -c 'research'"), _row(42, "python3 main.py --prod"), entries={41: e, 42: {"state": "running", "gets": 3, "last_get_at": now_ts - 3600}},
+                now_ts=now_ts)
+    assert [t["top"] for t in ts] == [41]                         # 入口のパターンに無くても直近に GET があれば出す。常駐のサーバーは出さない
+    lines = fs._generic_lines(ts[0], now_ts, datetime(2026, 10, 29, 22, 0, 0))
+    assert any("直近 1 時間 100 件" in x for x in lines) and any("50/150 頭" in x and " 33.3%" in x and "あと 4.0 時間" in x for x in lines)   # 残り 100 頭 × 4 件 ÷ 100 件/時
+    marked = {"state": "waiting", "marked": True, "label": "打ち切った馬の取り直し", "waiting_for": "PID 8219 の終了"}
+    ts = _tasks(_row(43, "bash /tmp/x/redo_after.sh"), entries={43: marked}, now_ts=now_ts)
+    assert ts[0]["state"] == "waiting" and ts[0]["label"] == "打ち切った馬の取り直し" and ts[0]["waiting_for"] == "PID 8219 の終了"
+
+
+def test_bar_follows_existing_monitor_style():
+    assert fs._bar(1, 4, 8) == "[██░░░░░░]  25.0%"
+    assert fs._bar(5, 4, 4) == "[████] 100.0%"
+    assert fs._bar(0, None, 4) == "[????]"
+    assert fs._bar(1, 2, 4, pct=False) == "[██░░]"

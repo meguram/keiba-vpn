@@ -147,14 +147,38 @@ def other_fetch_running() -> bool:
     return False
 
 
+class _NoRegistry:
+    @staticmethod
+    def set_state(*a, **k) -> None:
+        return None
+
+
+def _fetch_registry():
+    """取得の一覧（fetch_status）の心拍。読み込めなくても補填は止めない（set_state も例外を出さない）。"""
+    try:
+        from src.scraper import fetch_registry
+
+        return fetch_registry
+    except Exception:  # noqa: BLE001
+        return _NoRegistry
+
+
 def wait_for_quiet(max_wait_sec: int = 1800, poll: float = 30.0, busy=other_fetch_running, sleep=time.sleep) -> bool:
     """他の取得が終わるまで待つ。待ちきれなければ False（その夜は始めない）。"""
     t0 = time.time()
-    while busy():
-        if time.time() - t0 > max_wait_sec:
-            return False
-        sleep(poll)
-    return True
+    waited = False
+    try:
+        while busy():
+            if not waited:
+                waited = True
+                _fetch_registry().set_state("waiting", "他の取得の終了待ち")   # 取得の一覧（fetch_status）に「待機中」と出す
+            if time.time() - t0 > max_wait_sec:
+                return False
+            sleep(poll)
+        return True
+    finally:
+        if waited:
+            _fetch_registry().set_state("running")
 
 
 class NightGuard:
@@ -199,8 +223,12 @@ class NightGuard:
         while self.yield_to_others and not self.stop_reason and self.busy():
             if yielded % YIELD_LOG_EVERY_SEC == 0:
                 logger.info("他の取得が動いているので待機中（%.0f 分）", yielded / 60)
+                if yielded == 0:
+                    _fetch_registry().set_state("waiting", "他の取得に譲って待機中")   # 取得の一覧（fetch_status）に「待機中」と出す
             self.sleep(15.0)
             yielded += 15.0
+        if yielded:
+            _fetch_registry().set_state("running")
 
     # NetkeibaClient の応答オブザーバ
     def __call__(self, url: str, resp: Any) -> None:
