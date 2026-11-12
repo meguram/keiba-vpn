@@ -22,8 +22,9 @@ const CSS = `
 .tp .na{color:var(--text-dim);text-align:left;white-space:normal}
 .tp td.hn{position:sticky;left:0;z-index:1;background:var(--surface)}
 .tp tr.pt td.hn{background:linear-gradient(rgba(59,130,246,.10),rgba(59,130,246,.10)),var(--surface)}
-.tp tr.thin td:not(.hn):not(.lv){opacity:.55}
-@media(max-width:640px){.tp td.hn{min-width:0;max-width:7em;font-size:11px}.tp td.hn b{font-size:12px}.tp .xs{display:none}}
+.tp tr.thin td:not(.hn):not(.lv),.tp tr.thin td.up{color:var(--text-dim);font-weight:400}
+.tp tr.thin td:not(.hn):not(.lv) > *{opacity:.55}
+@media(max-width:640px){.tp td.hn{min-width:8.5em;max-width:9em;font-size:11px}.tp td.hn b{font-size:12px}.tp td.lv{white-space:normal;min-width:6.5em}.tp .xs{display:none}}
 `;
 
 const THIN = 30;

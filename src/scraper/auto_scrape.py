@@ -301,6 +301,42 @@ def _update_dates_coverage_bg(dates: list[str]) -> None:
         logger.warning("coverage 一括更新スキップ: %s", e)
 
 
+MEGU_CATCHUP_MAX_DAYS = 60   # めぐ指数の欠けの補完でさかのぼる日数の上限
+
+
+def megu_missing_dates(today: date | None = None, *, tables_dir: Path | None = None,
+                       max_days: int = MEGU_CATCHUP_MAX_DAYS) -> list[str]:
+    """めぐ指数の欠けた開催日（YYYYMMDD）。直近 max_days 日（今日より前）のうち、ローカルの race_result_flat に結果があるのに
+    めぐ指数が 1 件も無い日を返す。
+    「最後に作れた日より後」に限らないのは、後ろの日が先に作られる（補完のバッチの一部の失敗・手動の再計算・raceday-evening の直接経路）と、
+    前の欠けが二度と拾われなくなるため。決まって作れない日は毎週やり直しになるが、読むのはローカルだけで費用はかからない。
+    日の単位で判定する（1 レースでもめぐ指数があれば済み。一部のレースだけ欠ける日は拾わない）。
+
+    週次がキュー待機の打ち切りなどでめぐ指数の計算まで届かなかった週の分を、次の週次で埋めるために使う
+    （2026-11-06 の週次がアクセス保留で打ち切られ、10/31・11/01 のめぐ指数が欠けたまま残った）。読むのはローカルの parquet だけ。"""
+    import pandas as pd
+
+    if tables_dir is None:
+        from src.pipeline.megu_index.compute import TABLES_DIR as tables_dir
+    today = today or _today_jst()
+    lo = today - timedelta(days=max_days)
+    has_result: set[str] = set()
+    has_megu: set[str] = set()
+    for y in sorted({lo.year, today.year}):
+        rp, mp = Path(tables_dir) / str(y) / "race_result_flat.parquet", Path(tables_dir) / str(y) / "megu_index_flat.parquet"
+        if not rp.exists():
+            continue
+        rr = pd.read_parquet(rp, columns=["date", "race_id"])
+        rr["d"] = pd.to_datetime(rr["date"], errors="coerce").dt.strftime("%Y%m%d")
+        rr = rr.dropna(subset=["d"])
+        has_result |= set(rr["d"])
+        if mp.exists():
+            megu_ids = set(pd.read_parquet(mp, columns=["race_id"])["race_id"].astype(str))
+            has_megu |= set(rr.loc[rr["race_id"].astype(str).isin(megu_ids), "d"])
+    lo_s, today_s = lo.strftime("%Y%m%d"), today.strftime("%Y%m%d")
+    return sorted(d for d in has_result - has_megu if lo_s < d < today_s)
+
+
 def _trigger_megu_batch_for_dates(dates: list[str], *, reason: str) -> dict:
     """weekly 完了後: 対象開催日のめぐ指数を計算し GCS 正本に保存。"""
     import os as _os
@@ -345,12 +381,23 @@ def finalize_weekly_update(target_dates: list[str], result: dict) -> dict:
     out["target_dates"] = target_dates
     out["lookback_days"] = WEEKLY_LOOKBACK_DAYS
 
-    _update_dates_coverage_bg(target_dates)
+    # 今回の開催日に加え、前の週次でめぐ指数まで届かなかった日（結果はあるのにめぐ指数が無い日）も計算する
+    megu_dates = sorted({d.replace("-", "") for d in target_dates if d})
+    try:
+        catchup = [d for d in megu_missing_dates() if d not in megu_dates]
+    except Exception as e:  # noqa: BLE001 — 補完の判定に失敗しても今回の分は計算する
+        logger.warning("めぐ指数の欠けの日の判定をスキップ: %s", e)
+        catchup = []
+    if catchup:
+        logger.info("めぐ指数の欠けの日も計算する（索引・PG 同期にも含める）: %s", ", ".join(catchup))
+        out["megu_catchup_dates"] = catchup
+    all_dates = sorted(set(megu_dates) | set(catchup))
+    _update_dates_coverage_bg(all_dates if catchup else target_dates)
 
-    megu = _trigger_megu_batch_for_dates(target_dates, reason="weekly-update")
+    megu = _trigger_megu_batch_for_dates(all_dates, reason="weekly-update")
     out["megu_batch"] = megu
 
-    pg_sync = _trigger_pg_sync_for_dates(target_dates, reason="weekly-update")
+    pg_sync = _trigger_pg_sync_for_dates(all_dates if catchup else target_dates, reason="weekly-update")
     out["pg_sync"] = pg_sync
 
     # 予測結果の集計を取り直す（確定結果・確定払戻が入った日を確定にする。KEIBA_PREDICTION_RESULTS=1 のときだけ）
@@ -1334,6 +1381,9 @@ def task_raceday_evening():
 #  タスク: 金曜週次更新
 # ═══════════════════════════════════════════════════════════════════
 
+WEEKLY_QUEUE_WAIT_FAILED_EXIT = 7   # 週次がキュー待機で打ち切られたときの終了コード（cron の記録に失敗として残す。3 は dev での中止などと重なるので使わない）
+
+
 def task_weekly_update():
     """毎週金曜 18:00 に実行 (cron)。db.netkeiba 確定結果（16–17 時反映）取得後。"""
     today = _today_jst()
@@ -1359,6 +1409,23 @@ def task_weekly_update():
 
     result = run_weekly_update_for_dates(target_dates)
     _save_status("weekly-update", result)
+    if result.get("queue_wait_failed"):
+        # キュー待機の打ち切り（アクセス保留・時間切れ）: めぐ指数などの後処理まで届いていない。黙って成功にしない
+        import socket
+
+        msg = (f":warning: weekly-update がキュー待機で打ち切られました（{result.get('reason')}・{socket.gethostname()}）。"
+               f"対象日 {', '.join(target_dates)} の確定結果（結果・指数・偏差値）の取り直しと、めぐ指数の計算は行っていません。"
+               f"めぐ指数は次の週次で補完しますが、取り直しは次の週次の対象（直近 {WEEKLY_LOOKBACK_DAYS} 日）から外れた日は"
+               "行われないので、必要なら手で週次を回してください。")
+        logger.error(msg)
+        try:
+            from src.utils.notify import notify_slack
+
+            notify_slack(msg)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Slack 通知に失敗: %s", e)
+        return WEEKLY_QUEUE_WAIT_FAILED_EXIT
+    return None
 
 
 def run_catchup_for_dates(target_dates: list[str]) -> dict:
@@ -1822,13 +1889,16 @@ def main():
     elif args.task:
         logger.info("=== auto_scrape: %s 開始 ===", args.task)
         start = time.time()
+        rc = None
         try:
-            TASKS[args.task]()
+            rc = TASKS[args.task]()
         except Exception as e:
             logger.error("タスク失敗: %s", e, exc_info=True)
             _save_status(args.task, {"status": "error", "error": str(e)})
         elapsed = time.time() - start
         logger.info("=== auto_scrape: %s 完了 (%.0f秒) ===", args.task, elapsed)
+        if isinstance(rc, int) and not isinstance(rc, bool) and rc:   # タスクが終了コードを返したら cron に渡す（今は weekly-update のキュー待機の打ち切りだけ）
+            sys.exit(rc)
     else:
         parser.print_help()
 

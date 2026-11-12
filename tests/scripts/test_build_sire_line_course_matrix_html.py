@@ -241,12 +241,13 @@ def test_ui_tabs_class_rows_sorting_and_state_consistency():
     setf("minn", value="1")
     click("tg", "東京")
     assert [r for r in rows() if r.startswith("course:東京")] == ["course:東京:芝:芝1600m", "course:東京:ダート:ダート1400m"]       # 芝が先、ダートが後
+    setf("flat", checked=False)                                                                             # 大系統の枠を保つ並べ方（既定は枠をこえる）で確かめる
     click("row", "venue:東京:all")                                                                          # 東京の行の複勝率（A 75%・B 0%・C 50%）で列を並べ替え → 降順
-    assert cols() == ["C系", "A系", "B系"] and "列の並べ替え: 東京 全コース ▼降順" in info()
+    assert cols() == ["C系", "A系", "B系"] and "列の並べ替え（複勝率・大系統の枠の中）: 東京 全コース ▼降順" in info()
     setf("sf", value="芝")                                                                                  # 芝のみ: 基準の行は「東京 芝全体」に付け替わる
-    assert "列の並べ替え: 東京 芝全体" in info() and not [r for r in rows() if r.startswith("class:ダート")]
+    assert "列の並べ替え（複勝率・大系統の枠の中）: 東京 芝全体" in info() and not [r for r in rows() if r.startswith("class:ダート")]
     click("key", 0)
-    assert "行の並べ替え: A系 ▼降順" in info()
+    assert "行の並べ替え（複勝率）: A系 ▼降順" in info()
     setf("onlyo", checked=True)
     assert cols() == ["A系"]
 
@@ -287,3 +288,67 @@ def test_mix_table_has_group_runs_without_overlap(monkeypatch):
     assert sum(c["runs"] for c in t1["cols"] if c["large"] == "甲系") == 11                          # 列の和は、2 つの型に当たる馬を重ねるので大きくなる
     r = _row(d, "class:芝:2勝")["k"][1]
     assert r["g"] == {"甲系": [2, 1, 1, 1]} and r["t"] == [2, 1, 1, 1]
+
+
+def test_ui_sort_metric_is_independent_from_color_metric():
+    c, rows, cols, click, setf, html = _ui()
+    info = lambda: c.eval("document.getElementById('sortinfo').textContent")
+    setf("minn", value="1")
+    click("key", 0)
+    assert "行の並べ替え（複勝率）" in info()                                    # 既定は色の基準（複勝率）と同じ
+    bgs = lambda: sorted(re.findall(r'style="background:(rgb\([^)]*\))', html()))           # セルの色（色の基準だけで決まる）
+    before = bgs()
+    setf("sortmetric", value="w")                                                # 並べ替えだけ勝率にする（色の基準は複勝率のまま）
+    assert "行の並べ替え（勝率）" in info() and bgs() == before and before
+    setf("metric", value="w")                                                    # 色の基準を勝率にしても、並べ替えの基準は選んだまま
+    setf("sortmetric", value="p")
+    assert "行の並べ替え（複勝率）" in info()
+    setf("sortmetric", value="")                                                 # 空＝色の基準と同じ（いまは勝率）
+    assert "行の並べ替え（勝率）" in info()
+
+
+def test_js_pure_flat_order_crosses_groups_and_merges_adjacent_runs():
+    c = _pure()
+    c.eval("var cols=[{large:'A'},{large:'A'},{large:'B'},{large:'B'}];var rc=[[1,0,0,9],[5,3,2,0],[0,0,0,10],[3,3,3,1]];")
+    f = json.loads(c.eval("JSON.stringify(PURE.orderCols(cols,rc,0.4,'p',1,null,true))"))
+    assert f == [{"large": "A", "idx": [1]}, {"large": "B", "idx": [3]}, {"large": "A", "idx": [0]}, {"large": "B", "idx": [2]}]   # A,B,A,B と交互に並ぶ（枠をこえる）。隣り合う同じ大系統だけまとめる
+    f2 = json.loads(c.eval("JSON.stringify(PURE.orderCols(cols,rc,0.4,'p',1,null,false))"))
+    assert f2 == [{"large": "A", "idx": [1, 0]}, {"large": "B", "idx": [3, 2]}]                                                   # 枠を保つ並べ方は従来どおり
+
+
+def test_ui_flat_column_sort_crosses_groups_by_default_and_can_keep_groups():
+    c, rows, cols, click, setf, html = _ui()
+    setf("minn", value="1")
+    click("row", "venue:東京:all")                                                                          # 東京の行の複勝率（A 75%・C 50%・B 0%）。既定は大系統をまたぐ
+    assert cols() == ["A系", "C系", "B系"]                                                                  # 甲系（A）→乙系（C）→甲系（B）と交互。枠に縛られない
+    assert html().count('class="grp"') == 3                                                                  # 1 階層目は、隣り合う同じ大系統ごと（甲・乙・甲）
+    setf("flat", checked=False)                                                                              # 枠を保つ
+    assert cols() == ["C系", "A系", "B系"] and html().count('class="grp"') == 2
+
+
+def test_load_rail_uses_only_netkeiba_daily_values(tmp_path, monkeypatch):
+    cpos = tmp_path / "course_position"
+    cpos.mkdir()
+    (cpos / "course_position_2026.json").write_text(json.dumps({"version": 1, "dates": {
+        "2026-10-03": [{"venue": "京都", "kai": 4, "day": 1, "turf_course": "A", "turf_condition": "良", "dirt_condition": "良"}],
+        "2026-10-31": [{"venue": "京都", "kai": 4, "day": 10, "turf_course": "B", "turf_condition": "良", "dirt_condition": "良"},
+                       {"venue": "東京", "kai": 5, "day": 1, "turf_course": None, "turf_condition": "良", "dirt_condition": "良"}]}}), encoding="utf-8")
+    monkeypatch.setattr(M, "CPOS", cpos)
+    r = M.load_rail()
+    assert {(x.date, x.venue): x.letter for x in r.itertuples()} == {("2026-10-03", "京都"): "A", ("2026-10-31", "京都"): "B"}   # 日ごとに替わる値。コース区分が無い会場は入れない
+    assert not hasattr(M, "CUSHION")                                                           # cushion の course_position（開催の最後の値が全日に入る）は使わない
+
+
+def test_ui_split_headers_sort_only_their_columns_and_say_what_they_cover():
+    c, rows, cols, click, setf, html = _ui()
+    info = lambda: c.eval("document.getElementById('sortinfo').textContent")
+    setf("minn", value="1")
+    click("row", "venue:東京:all")                                                                          # 大系統をまたぐ: 甲(A) → 乙(C) → 甲(B) と割れる
+    keys = re.findall(r'<th class="grp" colspan="\d+" data-key="([^"]+)">', html())
+    assert keys == ["c:0", "g:乙系", "c:1"]                                                                 # 割れた見出しは列ごとのキー。割れていない大系統は従来のキー
+    assert html().count("この枠") == 2 and "全体" in html()                                                   # 割れた見出しは「この枠」の走数
+    click("key", "c:1")                                                                                     # 見出し（B 系だけ）で行を並べ替え → 矢印はその見出しだけ
+    assert "見出しの枠の列（B系）" in info()
+    head = html().split("</thead>")[0]
+    assert head.count(" ▼") == 1 and 'data-key="c:1"><div' not in head or "▼" in head                    # 見出しの矢印は、押した見出し 1 つだけ（行名の矢印は表の本体）
+    assert "大系統をまたぐ" in info()
