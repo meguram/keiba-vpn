@@ -181,3 +181,54 @@ test("matrix: 乱数の並びでも、同じラインで重ならず・内のラ
     assert.equal(lay.placed.length + lay.unknown.length, n);
   }
 });
+
+// ── スマホの表の並べ替え（脚質・位置は列から外すので、選択で並べ替える） ──
+test("mobileSortOptions: 脚質（色分け）と位置（range）がある表だけ、馬番と並べて選べる", async () => {
+  const { mobileSortOptions } = await import(pathToFileURL(out).href);
+  const pp = [
+    { key: "style", label: "脚質", fmt: "text", palette: { "ハナ": "a", "追込": "b" } },
+    { key: "range", label: "直近5走の位置（前から%）", fmt: "range" },
+    { key: "n", label: "走数", fmt: "int" },
+    { key: "band_win", label: "勝率", fmt: "pct" },
+  ];
+  assert.deepEqual(mobileSortOptions(pp).map((o) => o.label), ["馬番", "脚質", "位置（前から）"]);
+  assert.deepEqual(mobileSortOptions([{ key: "sire", label: "父", fmt: "text" }, { key: "win", label: "勝率", fmt: "pct" }]), []);
+});
+
+test("mobileSortValue: TableSorter と同じ比較で、脚質は定義の順・位置は平均の順・馬番は番号順、値なしは最後", async () => {
+  const { mobileSortValue } = await import(pathToFileURL(out).href);
+  const { parseCell, compareCells, isNumericColumn } = await loadTableSort();
+  const palette = { "ハナ": "a", "先行(前)": "b", "先行(後ろ)": "c", "差し(前)": "d", "差し(後ろ)": "e", "追込": "f" };
+  const cols = [{ key: "style", label: "脚質", fmt: "text", palette }, { key: "range", label: "位置", fmt: "range" }];
+  const rc = (mean) => ({ lo: mean, hi: mean, mean, pts: [] });
+  const es = [
+    { e: { key: "a", horse_number: 3 }, c: { style: "差し(前)", range: rc(0.5) } },
+    { e: { key: "b", horse_number: 1 }, c: { style: "追込", range: rc(0.9) } },
+    { e: { key: "c", horse_number: 7 }, c: { style: "ハナ", range: rc(0.05) } },
+    { e: { key: "d", horse_number: 2 }, c: { style: "不明", range: null } },
+    { e: { key: "e", horse_number: 5 }, c: { style: "先行(前)", range: rc(0.15) } },
+  ];
+  const order = (key, dir) => {
+    const cells = es.map((x) => parseCell("", mobileSortValue(x.e, x.c, key, cols)));
+    const numeric = isNumericColumn(cells);
+    assert.ok(numeric);
+    return es.map((x, i) => [x, i]).sort((p, q) => compareCells(cells[p[1]], cells[q[1]], numeric, dir) || p[1] - q[1]).map(([x]) => x.e.key);
+  };
+  assert.deepEqual(order("style", 1), ["c", "e", "a", "b", "d"]);        // ハナ → 先行(前) → 差し(前) → 追込 → 不明
+  assert.deepEqual(order("style", -1), ["b", "a", "e", "c", "d"]);       // 降順でも不明は最後
+  assert.deepEqual(order("range", 1), ["c", "e", "a", "b", "d"]);        // 平均の前から。位置なしは最後
+  assert.equal(mobileSortValue({ key: "x", horse_number: 1 }, {}, "_num", cols), undefined);   // 馬番 = 並べ替えなし（data-sort を付けない）
+  assert.equal(mobileSortValue({ key: "x", horse_number: 1 }, {}, "nope", cols), "");
+});
+
+test("effectiveMobileSort: 群・モジュールを切り替えて選択肢に無い値は馬番（並べ替えなし）に戻す", async () => {
+  const { effectiveMobileSort, mobileSortOptions } = await import(pathToFileURL(out).href);
+  const pp = mobileSortOptions([{ key: "style", label: "脚質", fmt: "text", palette: { "ハナ": "a" } }, { key: "range", label: "位置", fmt: "range" }]);
+  assert.equal(effectiveMobileSort(pp, "style"), "style");
+  assert.equal(effectiveMobileSort(pp, "_num"), "_num");
+  assert.equal(effectiveMobileSort([], "style"), "_num");                       // 選択肢の無い表
+  assert.equal(effectiveMobileSort(mobileSortOptions([{ key: "range", label: "位置", fmt: "range" }]), "style"), "_num");
+  // range が 2 本あるときは列名で区別する
+  const two = mobileSortOptions([{ key: "r1", label: "位置A", fmt: "range" }, { key: "r2", label: "位置B", fmt: "range" }]);
+  assert.deepEqual(two.map((o) => o.label), ["馬番", "位置A", "位置B"]);
+});

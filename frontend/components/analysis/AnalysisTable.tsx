@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { bracketChipStyle } from "@/lib/bracket";
-import { AnalysisEntry, AnalysisModuleMeta, ColumnBlock, columnBlocks, formatCell, heatColor, isThin, runColor, shortLabel, sortValue, PastRun, RangeCell } from "@/lib/raceAnalysis";
+import { sortTable } from "@/components/TableSorter";
+import { AnalysisEntry, AnalysisModuleMeta, ColumnBlock, MOBILE_SORT_NUM, columnBlocks, effectiveMobileSort, formatCell, heatColor, isThin, mobileSortOptions, mobileSortValue, runColor, shortLabel, sortValue, PastRun, RangeCell } from "@/lib/raceAnalysis";
 
 /* th.rn: 通過順位の列はチップ 5 個分（.ra-run 1 個 = 最小 26px＋左右の余白 6px＋枠 2px = 34px、すき間 3px × 4）= 182px に固定し、見出しは折り返す */
 const CSS = `
@@ -100,10 +101,19 @@ function NumChip({ e, size = 24 }: { e: AnalysisEntry; size?: number }) {
 
 /** スマホ用の表。群は 1 つずつプルダウンで選び、数値の列だけを並べて見出しで並べ替えられるようにする（並べ替えは TableSorter）。
     成績（1着-2着-3着-着外）は走数に、文字の列（系統名・色分けのある脚質など）・直近の走・位置取りの幅は馬名の下に寄せて、横幅に収める（390px で横にはみ出さない）。
-    直近の走のチップは馬名の列の幅で折り返す。 */
+    直近の走のチップは馬名の列の幅で折り返す。列から外した脚質・位置は、表の上の「並べ替え」で選ぶ（馬名の列の data-sort に入れ、TableSorter で並べる）。 */
 function MobileTable({ entries, module, blocks, keyHeader }: { entries: AnalysisEntry[]; module: AnalysisModuleMeta; blocks: ColumnBlock[]; keyHeader: string | null }) {
   const [sel, setSel] = useState(0);
+  const [sortKey, setSortKey] = useState(MOBILE_SORT_NUM);
+  const tblRef = useRef<HTMLTableElement>(null);
   const b = blocks[Math.min(sel, blocks.length - 1)];
+  const sortOpts = useMemo(() => mobileSortOptions(b?.columns ?? []), [b]);
+  const curSort = effectiveMobileSort(sortOpts, sortKey);
+  // 選んだ値で馬名の列（左から 2 列目）を昇順に並べる。馬番なら元の順に戻す（見出しを押した並べ替えも解除）。
+  // 群・モジュールを切り替えたとき（選択肢が変わったとき）も、前の並べ替えを持ち越さないよう解除する。データの更新（entries）では呼ばない（TableSorter が並びを保つ）
+  useEffect(() => {
+    if (tblRef.current) sortTable(tblRef.current, 1, curSort === MOBILE_SORT_NUM ? null : "asc");
+  }, [curSort, sortOpts]);
   if (!b) return null;
   const sub = b.columns.filter((c) => c.fmt === "text" || c.fmt === "runs" || c.fmt === "range");
   const cols = b.columns.filter((c) => !sub.includes(c));
@@ -120,7 +130,15 @@ function MobileTable({ entries, module, blocks, keyHeader }: { entries: Analysis
           </select>
         </label>
       )}
-      <table className="ra-m">
+      {sortOpts.length > 0 && (
+        <label className="ra-mbar">
+          並べ替え
+          <select value={curSort} onChange={(ev) => setSortKey(ev.target.value)} aria-label="並べ替え">
+            {sortOpts.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+          </select>
+        </label>
+      )}
+      <table className="ra-m" ref={tblRef}>
         <thead>
           <tr>
             <th>番</th>
@@ -137,7 +155,7 @@ function MobileTable({ entries, module, blocks, keyHeader }: { entries: Analysis
             return (
               <tr key={e.key}>
                 <td><NumChip e={e} size={22} /></td>
-                <td className="mn">
+                <td className="mn" data-sort={mobileSortValue(e, cells, curSort, b.columns)}>
                   <b>{e.horse_name ?? "–"}</b>
                   {line && <small>{line}</small>}
                   {sub.filter((c) => c.fmt === "text" && c.palette).map((c) => {

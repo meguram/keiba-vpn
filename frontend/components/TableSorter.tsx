@@ -71,6 +71,15 @@ function mark(t: HTMLTableElement) {
   });
 }
 
+/** 画面側から並べ替えを指定する（スマホの表の「並べ替え」の選択など）。見出しを押したときと同じ並べ方・同じ印。dir が null なら元の順 */
+export function sortTable(t: HTMLTableElement, col: number, dir: "asc" | "desc" | null) {
+  if (!sortable(t)) return;
+  if (dir) { t.dataset.sortCol = String(col); t.dataset.sortDir = dir; }
+  else { delete t.dataset.sortCol; delete t.dataset.sortDir; }
+  apply(t);
+  mark(t);
+}
+
 export function TableSorter() {
   useEffect(() => {
     const onClick = (ev: MouseEvent) => {

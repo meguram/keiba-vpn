@@ -349,3 +349,30 @@ export function layoutPositionMatrix(horses: MatrixInput[], fieldSize: number): 
   }
   return { field, lanes: lanes.length, placed, unknown };
 }
+
+/** スマホの表の「並べ替え」の値の種類のうち、馬番を表す key */
+export const MOBILE_SORT_NUM = "_num";
+
+/**
+ * スマホの表の「並べ替え」の選択肢。スマホでは脚質（色分けのある文字の列）と位置（range）を列から外して馬名の下に寄せるので、
+ * その代わりに選べるようにする（馬番＋それらの列）。該当する列が無い表は空（選択を出さない）。
+ */
+export function mobileSortOptions(columns: AnalysisColumn[]): { key: string; label: string }[] {
+  const picked = columns.filter((c) => (c.fmt === "text" && c.palette) || c.fmt === "range");
+  const oneRange = picked.filter((c) => c.fmt === "range").length === 1;
+  const extra = picked.map((c) => ({ key: c.key, label: c.fmt === "range" && oneRange ? "位置（前から）" : c.label }));
+  return extra.length ? [{ key: MOBILE_SORT_NUM, label: "馬番" }, ...extra] : [];
+}
+
+/** 選択中の並べ替えのうち、今の表で有効なもの。群・モジュールを切り替えて選択肢に無くなったら馬番（並べ替えなし）に戻す */
+export function effectiveMobileSort(options: { key: string }[], key: string): string {
+  return options.some((o) => o.key === key) ? key : MOBILE_SORT_NUM;
+}
+
+/** スマホの表の馬名のセルに付ける data-sort（TableSorter が読む）。PC の表の列と同じ sortValue を使う。値が無ければ空（並べ替えで最後）。
+ *  馬番（並べ替えなし）のときは undefined（data-sort を付けず、馬名の見出しは今までどおり馬名で並ぶ） */
+export function mobileSortValue(e: AnalysisEntry, cells: Record<string, unknown> | undefined, key: string, columns: AnalysisColumn[]): string | undefined {
+  if (key === MOBILE_SORT_NUM) return undefined;
+  const c = columns.find((x) => x.key === key);
+  return c ? (sortValue(cells?.[key], c.fmt, c.palette) ?? "") : "";
+}
