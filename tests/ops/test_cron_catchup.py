@@ -128,3 +128,4 @@ def test_install_script_line_and_safety():
     body = (ROOT / "scripts/cron/install_cron_catchup.sh").read_text(encoding="utf-8")
     assert "cron_run.sh cron-catchup --" in body and "src.ops.cron_catchup run" in body and "*/15 * * * *" in body
     assert "crontab -l に失敗したので中止" in body                     # 読み取りに失敗したら crontab 全体を置き換えない
+    assert re.search(r"flock -n -E 0 \S+ bash \S+cron_run\.sh cron-catchup", body)   # 前の回の実行中は cron_run.sh に入らない

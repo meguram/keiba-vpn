@@ -26,7 +26,9 @@
 
 - **実行の順:** 複数のジョブは、予定時刻の順に 1 つずつ実行する。
 - **直前の見直し:** 各ジョブの実行の直前に、2〜4 を見直す。前のジョブの実行中に本来の cron・手動で始まった分は走らせない。
-- **重なり:** 前の追いつきが動いている間に次の 15 分が来ても、ロック（`data/local/meta/cron_catchup/.lock`）で何もしない。
+- **重なり:** 前の追いつきが動いている間に次の 15 分が来ても、何もしない。
+  - crontab の行の `flock -n` で、cron_run.sh にも入らない。入ると `cron-catchup.running` の印を上書きして消し、長い追いつきが監視から見えなくなるため。
+  - 中のロック（`data/local/meta/cron_catchup/.lock`）は、手で `run` したときの二重起動も防ぐ。
 - **環境:** ジョブに渡す環境は cron と同じ作りにする。既定の SHELL・PATH に、HOME・LOGNAME と、crontab のその行より前の環境変数の行を足す。
 - **依存の順の限界:** 依存の順が保たれるのは、追いつき同士の間だけ。
   - たとえば 07:10 JST に起動すると、07:15 の `update_jockey_trainer_stats` は本来の cron で走る。
@@ -67,3 +69,34 @@ sudo bash scripts/cron/install_cron_catchup.sh --remove          # 外すとき
 - `config/cron_catchup.json` の `jobs` に足す。
 - 毎日の定時（`分 時 * * *`）で、`raceday-` で始まらないことは、`tests/ops/test_cron_catchup.py` が確かめる。
 - ホストから GCS を読む・書く量の多いジョブを足すときは、上の費用の考え方（1 日 1 回を超えない）を、そのジョブについて確かめる。
+
+## weekly-update（金 18:00 JST）を許可リストに入れない理由（2026-11-12 の判断）
+「同じ JST の日付のうち 1 回だけ」なので、回数と netkeiba へのアクセスの総量は変わらない。それでも、次の理由で今は入れない。
+
+1. **並走の相手と時間帯が変わる。**
+   - 週次は、実績で 10〜324 分かかる（10/30 は 18:00〜23:24）。キュー待ちの上限は 48 時間ある。
+   - 追いつきは 23:59 JST まで始まりうるので、遅く始まると、本来の 18:00 の回なら重ならない処理と重なる。
+     - 00:00〜04:00 の `backfill-20xx-fast`（auto_scrape には譲らない）
+     - 00:00 の `sync_pg_from_gcs`
+     - 06:00 の `backfill-all-horse`、06:10 の `recent-retry`
+   - 補填（`--phase past`）は、既定で譲らずに並走する（`BACKFILL_PAST_YIELD=0`）。抑えているのは取得スロットだけ。
+   - 調教の取得の `wait_ok` は 1 時間で諦めるので、その夜の取得が打ち切られる回も増える。
+2. **週次に依存する金曜のジョブとの順序が崩れる。**
+   - `horse-name-index`（金 18:30。週次の開始後が前提。金曜以外は何もしない）は、週次の追いつきより先に走るか、PC が止まっていれば走らない。その週の成長曲線の更新が抜ける。
+   - `barometer-retry`（金 19:30）も、週次より前に走ると取り直しの意味が薄れる。
+3. **追いつきのロックを長く持つ。**
+   - 週次の間（最大 48 時間）、ほかのジョブの追いつきが止まる。
+   - その間に JST の日付が変わると、翌朝の毎日のジョブの追いつきは失われる。
+
+### 金曜に PC が止まっていたときの対応（当面の手順）
+- 週次を手で 1 回だけ回す（その夜のうち、早い時刻に）。
+  ```bash
+  cd /home/jovyan/work/keiba-vpn && TZ=Asia/Tokyo sudo bash scripts/cron/cron_run.sh weekly-update -- bash scripts/cron/yield_to_rescrape.sh weekly-update -- bash scripts/cron/run_auto_scrape_logged.sh /home/jovyan/work/keiba-vpn weekly-update logs/weekly_update.log
+  ```
+- 回せなかった週のめぐ指数は、次の週次の欠けの補完（`megu_missing_dates`、直近 60 日）で埋まる。
+- 確定結果の取り直しは、次の週次の対象（直近 10 日）から外れると行われない。
+
+### 入れるなら必要なこと
+- ジョブごとに、追いつきの締め切りの時刻を設定できるようにする（例: weekly-update は 21:00 JST まで）。
+- 依存するジョブ（`horse-name-index`・`barometer-retry`）も、週次の後に追いつく。
+- 長いジョブは追いつきのロックの外で動かす（ほかのジョブの追いつきを止めないように）。
