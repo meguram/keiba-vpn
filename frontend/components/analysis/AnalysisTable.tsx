@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { bracketChipStyle } from "@/lib/bracket";
 import { AnalysisEntry, AnalysisModuleMeta, ColumnBlock, columnBlocks, formatCell, heatColor, isThin, runColor, shortLabel, sortValue, PastRun, RangeCell } from "@/lib/raceAnalysis";
 
+/* th.rn: 通過順位の列はチップ 5 個分（.ra-run 1 個 = 最小 26px＋左右の余白 6px＋枠 2px = 34px、すき間 3px × 4）= 182px に固定し、見出しは折り返す */
 const CSS = `
 .ra-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .ra-tbl{width:100%;border-collapse:collapse;font-size:12px}
@@ -49,6 +50,7 @@ const CSS = `
 .ra-rg svg{display:block}
 .ra-rg span{font-size:11px;font-variant-numeric:tabular-nums}
 .ra-tbl th.rg{white-space:normal;min-width:64px;max-width:72px;line-height:1.25}
+.ra-tbl th.rn{white-space:normal;width:182px;min-width:182px;line-height:1.25}
 `;
 
 /** 直近の位置取りの幅。左が先頭・右が最後方。点は各走（新しい走ほど濃い）、縦線は加重平均 */
@@ -199,7 +201,7 @@ export function AnalysisTable({ entries, module }: { entries: AnalysisEntry[]; m
             <tr>
               <th>馬番</th><th className="l">馬名</th>{keyHeader && <th className="l">{keyHeader}</th>}
               {ordered.map(({ c, first }) => (
-                <th key={c.key} className={[first ? "gs" : "", c.fmt === "range" ? "rg" : ""].filter(Boolean).join(" ") || undefined} title={c.title ?? undefined}>{c.label}</th>
+                <th key={c.key} className={[first ? "gs" : "", c.fmt === "range" ? "rg" : "", c.fmt === "runs" ? "rn" : ""].filter(Boolean).join(" ") || undefined} title={c.title ?? undefined}>{c.label}</th>
               ))}
             </tr>
           </thead>
