@@ -207,3 +207,23 @@ def to_score10_deviation(value: Any, ref: Optional[dict[str, Any]], center: floa
     if not np.isfinite(v):
         return None
     return _round_pt(5.0 + ref["k"] * (v - center) / scale)
+
+
+def score_series(key: str, values: pd.Series, ref: Optional[dict[str, Any]]) -> pd.Series:
+    """to_score10 のベクトル版（pandas 用）。基準が無い・その軸の基準が作れなかったときは全て NaN。"""
+    nan = pd.Series(np.nan, index=values.index)
+    if ref is None:
+        return nan
+    v = pd.to_numeric(values, errors="coerce").astype(float)
+    if key == TS_KEY:
+        k = ref["ts"]["knots"]
+        xs, ys = np.array([a[0] for a in k]), np.array([a[1] for a in k])
+        slope = (ys[1] - ys[0]) / (xs[1] - xs[0])
+        p = np.where(v <= xs[0], ys[0] + slope * (v - xs[0]), np.interp(v, xs, ys))   # 下側は外挿、上側は 10 で止まる
+    else:
+        a = ref["axes"].get(key)
+        if a is None:
+            return nan
+        p = 5.0 + ref["k"] * a["sign"] * (v - a["mu"]) / a["sd"]
+    out = np.clip(np.round(np.asarray(p, float) * 2) / 2, 1.0, 10.0)
+    return pd.Series(np.where(v.notna(), out, np.nan), index=values.index)
