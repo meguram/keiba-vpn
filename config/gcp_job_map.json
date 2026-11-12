@@ -146,12 +146,11 @@
    "cron_jst": "10,40 19 * * *",
    "size": "l",
    "timeout_sec": 5400,
-   "desc": "前夜の計算・翌日のレース予約・ラップ予想（翌日）。2 回走らせて取得の遅れを吸収（冪等）。金曜は馬名インデックスも",
+   "desc": "前夜の計算・翌日のレース予約・ラップ予想（翌日）。2 回走らせて取得の遅れを吸収（冪等）。",
    "jobs": [
     "eve-precompute",
     "reserve-race-day",
-    "lap-forecast-eve",
-    "horse-name-index"
+    "lap-forecast-eve"
    ]
   },
   "g-hourly": {
@@ -198,10 +197,11 @@
   "g-2130": {
    "cron_jst": "30 21 * * *",
    "size": "m",
-   "timeout_sec": 600,
-   "desc": "夜のスクレイピング状況サマリー",
+   "timeout_sec": 4800,
+   "desc": "夜のスクレイピング状況サマリー。金曜は馬名インデックスと成長曲線の週次更新も（約 45 分。前夜のグループに置くと直列で 5400 秒を超えうるため、ここに置く）",
    "jobs": [
-    "slack-scrape-summary-eve"
+    "slack-scrape-summary-eve",
+    "horse-name-index"
    ]
   },
   "g-0730-dayprep": {
@@ -1840,8 +1840,8 @@
     "cron_utc": "30 9 * * 5",
     "script": "src/scraper/auto_scrape.py --task horse-name-index"
    },
-   "group": "g-1910-eve",
-   "when_jst": "* * * * 5",
+   "group": "g-2130",
+   "when_jst": "30 21 * * 5",
    "steps": [
     {
      "argv": [
@@ -1853,7 +1853,7 @@
     }
    ],
    "memory_mib": 2048,
-   "timeout_sec": 1800,
+   "timeout_sec": 4500,
    "env": [
     "KEIBA_ENV",
     "KEIBA_RUN_LOCATION",
@@ -1864,21 +1864,35 @@
    "state_in": [
     {
      "path": "data/calculated_data",
-     "max_mb": 450,
+     "max_mb": 50,
      "include": [
-      "knowledge/**",
-      "growth_curve/**"
+      "knowledge/**"
      ]
+    },
+    {
+     "path": "data/calculated_data",
+     "max_mb": 550,
+     "include": [
+      "growth_curve/**"
+     ],
+     "bundle": "growth_curve"
     }
    ],
    "state_out": [
     {
      "path": "data/calculated_data",
-     "max_mb": 450,
+     "max_mb": 50,
      "include": [
-      "knowledge/**",
-      "growth_curve/**"
+      "knowledge/**"
      ]
+    },
+    {
+     "path": "data/calculated_data",
+     "max_mb": 550,
+     "include": [
+      "growth_curve/**"
+     ],
+     "bundle": "growth_curve"
     }
    ],
    "parity": {
