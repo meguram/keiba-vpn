@@ -74,3 +74,36 @@ def yearly_expanding_folds(
             train_end=train_end,
             valid_start=valid_start,
         )
+
+
+def loyo_folds(
+    df: pd.DataFrame,
+    *,
+    valid_years: Sequence[str],
+    gap_days: int = 10,
+    race_id_col: str = "race_id",
+    date_col: str = "date",
+) -> Iterator[Fold]:
+    """
+    1 暦年を外して、残りの全年（前後どちらの年も）で学ぶ leave-one-year-out。検証年が学習の前にしか無い年（expanding では OOF が作れない
+    最初期の年）を、その年を学習に使わずに予測するために使う。検証年の前後 gap_days 日（purge + embargo と同じ幅）の行は学習から外す。
+    """
+    dates = pd.to_datetime(df[date_col], errors="coerce")
+    if dates.isna().any():
+        raise ValueError(f"{date_col} に欠損または変換不能な値が {int(dates.isna().sum())} 件あります")
+    years = df[race_id_col].map(race_calendar_year)
+    gap = pd.Timedelta(days=gap_days)
+    for vy in valid_years:
+        valid_mask = years == vy
+        if not valid_mask.any():
+            raise ValueError(f"fold {vy}: 検証の行が空です")
+        start, end = pd.Timestamp(f"{vy}-01-01") - gap, pd.Timestamp(f"{vy}-12-31") + gap
+        train_mask = (dates < start) | (dates > end)
+        yield Fold(
+            fold_id=f"loyo_{vy}",
+            valid_year=vy,
+            train_index=df.index[train_mask].to_numpy(),
+            valid_index=df.index[valid_mask].to_numpy(),
+            train_end=start,
+            valid_start=pd.Timestamp(f"{vy}-01-01"),
+        )

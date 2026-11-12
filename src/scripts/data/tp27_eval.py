@@ -419,6 +419,12 @@ def _extra_for_ensemble(df: pd.DataFrame, variant: str = "core", top: int | None
     return E
 
 
+def _drop_by_env(X: pd.DataFrame) -> pd.DataFrame:
+    """環境変数 OOF_DROP_PREFIX（カンマ区切り）で始まる列を入力から外す（例: s_ = 前段予測 S3 の 3 列。2016 年始まりの表では 2017〜19 年の S3 が漏れて見えるため）。"""
+    pre = tuple(x.strip() for x in os.environ.get("OOF_DROP_PREFIX", "").split(",") if x.strip())
+    return X.loc[:, ~X.columns.str.startswith(pre)] if pre else X
+
+
 def cmd_member(a) -> None:
     from src.pipeline.models import zoo_runner
     from src.scripts.data import tp25e_eval as e
@@ -432,7 +438,7 @@ def cmd_member(a) -> None:
     A = m[[c for c in m.columns if c not in KEY]]
     A.index = df.index
     E = _extra_for_ensemble(df, a.v4, NN_TOP if recipe == "nn" else None)
-    X = pd.concat([X, A, E], axis=1)
+    X = _drop_by_env(pd.concat([X, A, E], axis=1))
     name = f"{a.name}__v4{'' if a.v4 == 'core' else a.v4}"
     p = OUT / "oof" / f"{name}.parquet"
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -460,7 +466,7 @@ def cmd_mtl(a) -> None:
         return
     df, meta, folds, members, TLX = e.load_v3()
     _r, params, X = members[a.base]
-    X = pd.concat([X, TLX, _extra_for_ensemble(df, a.v4, NN_TOP)], axis=1)
+    X = _drop_by_env(pd.concat([X, TLX, _extra_for_ensemble(df, a.v4, NN_TOP)], axis=1))
     ex = pd.read_parquet(e.C_OUT / "frame_extra.parquet")
     A = df[KEY].merge(ex[KEY + e.AUX_NAMES], on=KEY, how="left")[e.AUX_NAMES].to_numpy(dtype="float64")
     race, fin = meta["race_id"].to_numpy(), meta["finish_position"].to_numpy()
