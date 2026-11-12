@@ -29,6 +29,7 @@ ENTRIES = REPO / "data/local/horse_lap/horse_lap_entries.parquet"
 OUT = REPO / "data/meta/sire_lines/euro_kick_marking.html"
 JST = timezone(timedelta(hours=9))
 COUNTRY = "欧州型"
+DEFAULT_O_TYPES = ("欧州型ノーザンダンサー系",)   # ユーザー指示 2026-11-12: 欧州ノーザンダンサー系は基本すべて○を初期値にする
 
 
 def load() -> tuple[pd.DataFrame, dict[str, list[str]]]:
@@ -60,7 +61,7 @@ def build(t: pd.DataFrame, prog: dict[str, list[str]]) -> str:
         name = html.escape(str(r["name"]))
         pg = html.escape("、".join(prog.get(str(r["sire_id"]), [])))
         rows.append(
-            f'<tr data-id="{sid}" data-name="{html.escape(str(r["name"]).lower(), quote=True)}" data-small="{html.escape(str(r["small_name"]), quote=True)}" data-n="{int(r["n"])}">'
+            f'<tr data-id="{sid}" data-name="{html.escape(str(r["name"]).lower(), quote=True)}" data-small="{html.escape(str(r["small_name"]), quote=True)}" data-n="{int(r["n"])}" data-def="{"o" if str(r["type_name"]) in DEFAULT_O_TYPES else ""}">'
             f'<td class="nm">{name}</td><td>{html.escape(str(r["small_name"]))}</td><td class="ty">{html.escape(str(r["type_name"]))}</td>'
             f'<td class="num">{int(r["n"])}</td><td class="pg">{pg}</td>'
             f'<td class="btns"><button type="button" class="b o" data-m="o" title="欧州瞬発力だと考えられる">○</button>'
@@ -90,7 +91,7 @@ tr.mo .b.o {{ background:var(--ok); color:#fff; border-color:var(--ok); }} tr.mx
 </style></head><body><main>
 <h1>欧州瞬発力 マーキング（欧州型の種牡馬）</h1>
 <p class="muted">作成: {now}。smartrc で欧州型に割り振られている種牡馬 {len(t)} 頭。各馬に、<b>欧州瞬発力だと考えられる（○）</b>／<b>考えられない（×）</b>を付けてください（付けない馬は未判定）。
-マークはこのブラウザに自動保存されます。終わったら「JSON を保存」でファイルにして、リポジトリの <code>data/meta/sire_lines/euro_kick_marks.json</code> に置いてください。
+<b>欧州型ノーザンダンサー系（{int(t["type_name"].isin(DEFAULT_O_TYPES).sum())} 頭）は、初めて開いたときに○を初期値にしています</b>（変更できます。付け直した後に自動で戻すことはしません）。マークはこのブラウザに自動保存されます。終わったら「JSON を保存」でファイルにして、リポジトリの <code>data/meta/sire_lines/euro_kick_marks.json</code> に置いてください。
 こちらの測定値（素点・順位）は、判定を偏らせないよう表示していません。系統・産駒数（手元の馬の頭数）・代表産駒（実測ラップのある産駒の走数順）が手がかりです。</p>
 <div class="bar">
 <input id="q" type="search" placeholder="種牡馬名で絞り込み" size="22">
@@ -99,7 +100,7 @@ tr.mo .b.o {{ background:var(--ok); color:#fff; border-color:var(--ok); }} tr.mx
 <select id="o"><option value="n">産駒数の多い順</option><option value="name">名前順</option><option value="small">小系統順</option></select>
 <span class="cnt">○ <b class="o" id="co">0</b> ／ × <b class="x" id="cx">0</b> ／ 未判定 <b id="cu">0</b></span>
 <button type="button" id="save">JSON を保存</button><button type="button" id="copy">JSON をコピー</button>
-<label class="muted">読み込み <input type="file" id="load" accept=".json,application/json"></label><button type="button" id="reset">全部クリア</button>
+<label class="muted">読み込み <input type="file" id="load" accept=".json,application/json"></label><button type="button" id="defo" title="欧州型ノーザンダンサー系の全頭を○にする">ND欧州型を○にする</button><button type="button" id="reset">全部クリア</button>
 </div>
 <div class="note warn hidden" id="warn" role="alert"></div>
 <div class="note" id="msg" aria-live="polite">操作: ボタンを押すとすぐ保存されます（このブラウザの中）。別の PC で続ける場合は「JSON を保存」→「読み込み」。</div>
@@ -118,13 +119,36 @@ tr.mo .b.o {{ background:var(--ok); color:#fff; border-color:var(--ok); }} tr.mx
   // 保存先(localStorage)が使えるか、起動時に書いて読んで確かめる。だめなら、閉じると消えることを常に見える場所に出す
   try {{ localStorage.setItem(KEY+'_probe','1'); storeOk=(localStorage.getItem(KEY+'_probe')==='1'); localStorage.removeItem(KEY+'_probe'); }} catch(e) {{ storeOk=false; }}
   if(!storeOk) {{ warn.textContent='このブラウザでは自動保存が使えません。マークはこのページを閉じると消えます。こまめに「JSON を保存」してください。'; warn.classList.remove('hidden'); }}
+  // 保存済みのマークを読む。壊れていて読めないときは、上書きしないよう、初期値の適用も自動保存もしない（利用者が操作するまで）
+  var IKEY='euro_kick_default_ids_v1', DKEY='euro_kick_defaults_v1', defIds=Object.create(null), loadFailed=false, hadMarks=false, applied=false, nDef=0;
   try {{
-    var saved=JSON.parse(localStorage.getItem(KEY)||'{{}}');
-    if(plain(saved)) Object.keys(saved).forEach(function(id){{ if(isMark(saved[id])) marks[id]=saved[id]; }});
-  }} catch(e) {{}}
+    var raw=localStorage.getItem(KEY);
+    if(raw!==null) {{
+      var saved=JSON.parse(raw);
+      if(!plain(saved)) throw new Error('形式が違います');
+      Object.keys(saved).forEach(function(id){{ if(isMark(saved[id])) marks[id]=saved[id]; }});
+      hadMarks=Object.keys(marks).length>0;
+      var di=JSON.parse(localStorage.getItem(IKEY)||'[]'); if(Array.isArray(di)) di.forEach(function(id){{ if(marks[id]==='o') defIds[id]=true; }});
+    }}
+  }} catch(e) {{ loadFailed=true; marks=Object.create(null); defIds=Object.create(null); }}
+  try {{ applied=localStorage.getItem(DKEY)==='1'; }} catch(e) {{ applied=false; }}
+  // 書き込み。成功したかを返す（失敗したら警告を出す）
   function persist(){{
     var o2={{}}; Object.keys(marks).forEach(function(id){{ o2[id]=marks[id]; }});
-    try {{ localStorage.setItem(KEY, JSON.stringify(o2)); }} catch(e) {{ storeOk=false; warn.textContent='自動保存に失敗しました。マークはこのページを閉じると消えます。「JSON を保存」で手元に残してください。'; warn.classList.remove('hidden'); }}
+    try {{ localStorage.setItem(KEY, JSON.stringify(o2)); localStorage.setItem(IKEY, JSON.stringify(Object.keys(defIds))); return true; }}
+    catch(e) {{ storeOk=false; warn.textContent='自動保存に失敗しました。マークはこのページを閉じると消えます。「JSON を保存」で手元に残してください。'; warn.classList.remove('hidden'); return false; }}
+  }}
+  var HOWTO=' 別の PC で続ける場合は「JSON を保存」→「読み込み」。';
+  if(loadFailed) {{
+    warn.textContent='保存済みのマークを読めませんでした（壊れている可能性）。このページでマークを付けると、保存済みのデータは上書きされます。先にブラウザの保存データを確認してください。'; warn.classList.remove('hidden');
+  }} else if(!applied) {{
+    // 初期値: 欧州型ノーザンダンサー系は、初めて開いたときに一度だけ○にする。すでにマークがあるブラウザ(作業済み)には適用しない。
+    // 保存に成功したときだけ「適用済み」にする（失敗したのにフラグだけ立つと、次に開いたとき○が消えるため）。
+    if(!hadMarks) {{ rows.forEach(function(r){{ if(r.dataset.def==='o') {{ marks[r.dataset.id]='o'; defIds[r.dataset.id]=true; nDef++; }} }}); }}
+    var saved2=persist();
+    if(saved2) {{ try {{ localStorage.setItem(DKEY,'1'); }} catch(e) {{}} }}
+    if(nDef) say('欧州型ノーザンダンサー系 '+nDef+' 頭を初期値で○にしました（変更できます）。'+HOWTO);
+    else if(hadMarks) say('すでにマークがあるため、欧州型ノーザンダンサー系の初期値（○）は適用していません。「ND欧州型を○にする」で付けられます。'+HOWTO);
   }}
   function paint(r){{ var m=marks[r.dataset.id]; r.classList.toggle('mo', m==='o'); r.classList.toggle('mx', m==='x'); }}
   function count(){{ var a=0,b=0; rows.forEach(function(r){{ var m=marks[r.dataset.id]; if(m==='o')a++; else if(m==='x')b++; }});
@@ -145,12 +169,13 @@ tr.mo .b.o {{ background:var(--ok); color:#fff; border-color:var(--ok); }} tr.mx
   document.getElementById('t').addEventListener('click', function(e){{
     var b=e.target.closest('button.b'); if(!b) return; var r=b.closest('tr'), id=r.dataset.id, m=b.dataset.m;
     if(isMark(m)) marks[id]=m; else delete marks[id];
+    delete defIds[id];                                  // 触ったマークは、初期値ではなく利用者の判断になる
     persist(); paint(r); count(); view();
   }});
   // 書き出し: 表にある種牡馬のマークに加えて、表から外れた種牡馬のマーク(表を作り直した場合など)も落とさない
   function out(){{
-    var mk={{}}; Object.keys(marks).forEach(function(id){{ mk[id]={{name:nameOf[id]||'(この表に無い種牡馬)', mark:marks[id]}}; }});
-    return JSON.stringify({{version:1, marks:mk, saved_at:new Date().toISOString()}}, null, 1);
+    var mk={{}}; Object.keys(marks).forEach(function(id){{ mk[id]={{name:nameOf[id]||'(この表に無い種牡馬)', mark:marks[id], source:defIds[id]?'default':'user'}}; }});
+    return JSON.stringify({{version:1, marks:mk, default_rule:'欧州型ノーザンダンサー系は初期値で○。source=default は初期値のまま触れていない○、user は利用者が付けた判定', saved_at:new Date().toISOString()}}, null, 1);
   }}
   document.getElementById('save').addEventListener('click', function(){{
     var blob=new Blob([out()],{{type:'application/json'}}), a=document.createElement('a'), u=URL.createObjectURL(blob);
@@ -168,23 +193,29 @@ tr.mo .b.o {{ background:var(--ok); color:#fff; border-color:var(--ok); }} tr.mx
       try {{
         var d=JSON.parse(rd.result);
         if(!plain(d)||d.version!==1||!plain(d.marks)) throw new Error('形式が違います');
-        var next=Object.create(null), ok=0, unknown=0, bad=0;
+        var next=Object.create(null), nextDef=Object.create(null), ok=0, unknown=0, bad=0;
         Object.keys(d.marks).forEach(function(id){{
           var v=d.marks[id], m=plain(v)?v.mark:null;
           if(!isMark(m)) {{ bad++; return; }}
           if(!known[id]) {{ unknown++; }}
-          next[id]=m; ok++;
+          next[id]=m; ok++; if(plain(v)&&v.source==='default'&&m==='o') nextDef[id]=true;
         }});
         var cur=Object.keys(marks).length;
         if(cur>0&&!confirm('いまのマーク '+cur+' 件を、ファイルの '+ok+' 件に置き換えます。よろしいですか？')) {{ say('読み込みを取りやめました。'); return; }}
-        marks=next; persist(); rows.forEach(paint); count(); view();
+        marks=next; defIds=nextDef; persist(); rows.forEach(paint); count(); view();
         say(ok+' 件を読み込みました'+(unknown?'（うち、この表に無い種牡馬 '+unknown+' 件は保持）':'')+(bad?'。無効な値 '+bad+' 件は無視しました':'')+'。');
       }} catch(err) {{ say('読み込めませんでした（'+err.message+'）。いまのマークは変わっていません。'); }}
     }};
     rd.onerror=function(){{ say('ファイルを読めませんでした。'); }};
     rd.readAsText(fl); inp.value='';                     // 同じファイルを選び直しても change が発火するように戻す
   }});
-  document.getElementById('reset').addEventListener('click', function(){{ if(confirm('全部のマークを消しますか？（先に「JSON を保存」しておくことをおすすめします）')){{ marks=Object.create(null); persist(); rows.forEach(paint); count(); view(); say('クリアしました。'); }} }});
+  document.getElementById('defo').addEventListener('click', function(){{
+    var n=0; rows.forEach(function(r){{ if(r.dataset.def==='o'&&marks[r.dataset.id]!=='o') n++; }});
+    if(!n) {{ say('欧州型ノーザンダンサー系は、すでに全頭が○です。'); return; }}
+    if(!confirm('欧州型ノーザンダンサー系のうち、○でない '+n+' 頭（×・未判定）を○にします。よろしいですか？')) return;
+    rows.forEach(function(r){{ if(r.dataset.def==='o'&&marks[r.dataset.id]!=='o') {{ marks[r.dataset.id]='o'; defIds[r.dataset.id]=true; }} }}); persist(); rows.forEach(paint); count(); view(); say(n+' 頭を○にしました。');
+  }});
+  document.getElementById('reset').addEventListener('click', function(){{ if(confirm('全部のマークを消しますか？（先に「JSON を保存」しておくことをおすすめします）')){{ marks=Object.create(null); defIds=Object.create(null); persist(); rows.forEach(paint); count(); view(); say('クリアしました。'); }} }});
   q.addEventListener('input', view); s.addEventListener('change', view); f.addEventListener('change', view); o.addEventListener('change', order);
   rows.forEach(paint); count(); order(); view();
 }})();
