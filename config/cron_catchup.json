@@ -1,0 +1,13 @@
+{
+  "_comment": "PC（cron）が止まっていて予定時刻を逃した日に、起動後に 1 回だけ追いつき実行する毎日のジョブ（src/ops/cron_catchup.py・docs/operations/cron_catchup.md）。毎日 1 回で、時刻に縛られないバッチだけを入れる。開催の時刻に合わせて動くランナー（raceday-*）や、ホストから GCS を読む量の多いジョブは入れない。 日付を見て動くジョブが翌日の分を二重に処理しないよう、追いつきは予定と同じ JST の日付の間だけ。",
+  "max_late_hours": 18,
+  "grace_min": 20,
+  "jobs": [
+    "daily-race-lists",
+    "export_tables_daily",
+    "update_jockey_trainer_stats",
+    "feature-accumulate",
+    "rb-state-daily"
+  ],
+  "settle_min": 5
+}
