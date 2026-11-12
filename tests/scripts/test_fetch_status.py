@@ -217,3 +217,52 @@ def test_bar_follows_existing_monitor_style():
     assert fs._bar(5, 4, 4) == "[████] 100.0%"
     assert fs._bar(0, None, 4) == "[????]"
     assert fs._bar(1, 2, 4, pct=False) == "[██░░]"
+
+
+def test_course_position_shows_bar_and_rate_from_samples(tmp_path, monkeypatch):
+    from src.scraper import course_position as cp
+
+    monkeypatch.setattr(fs, "CACHE_PATH", tmp_path / "c" / "cache.json")
+    (tmp_path / "race_lists").mkdir()
+    monkeypatch.setattr(cp, "RACE_LISTS", tmp_path / "race_lists")
+    calls = []
+    monkeypatch.setattr(cp, "race_dates", lambda y0, y1, before=None: calls.append(1) or ["20160105", "20160106", "20170105", "20170106"])
+    store = {2016: {"2016-01-05": []}, 2017: {}}
+    monkeypatch.setattr(cp, "load_store", lambda y: {"dates": store.get(y, {})})
+    t = {"main": {"pid": 9, "args": "python -m src.scraper.course_position --from 2016 --to 2017"}}
+    clock = [1_000_000.0]
+    monkeypatch.setattr(fs, "_now_ts", lambda: clock[0])
+    lines = fs._course_position_detail(t, datetime(2026, 11, 12, 18, 0))
+    assert "1/4 開催日" in lines[0] and " 25.0%" in lines[0] and "測り始め" in lines[1]
+    store[2016]["2016-01-06"] = []
+    clock[0] += 1800                                                        # 30 分で 1 日 → 2 日/時、残り 2 日で 1 時間
+    lines = fs._course_position_detail(t, datetime(2026, 11, 12, 18, 0))
+    assert "2/4 開催日" in lines[0] and "2 日/時" in lines[1] and "あと 1.0 時間" in lines[1]
+    assert len(calls) == 1                                                  # 総数（race_lists の全読み）は控えを使う
+
+
+def test_running_task_without_progress_says_why():
+    out = fs.render(datetime(2026, 10, 29, 22, 0, 0), tasks=_tasks(_row(10, "python -m src.scraper.jma_weather")))
+    assert "[実行中] 気象庁の天気" in out and "進捗 —（総数の分からない取得" in out
+
+
+def test_course_position_args_forms_and_stalled_and_broken_cache(tmp_path, monkeypatch):
+    from src.scraper import course_position as cp
+
+    monkeypatch.setattr(fs, "CACHE_PATH", tmp_path / "cache.json")
+    (tmp_path / "cache.json").write_text(json.dumps({"course_position": [], "samples": {"x": [[1]]}}))   # 形の崩れた控え
+    seen = []
+    monkeypatch.setattr(cp, "race_dates", lambda y0, y1, before=None: seen.append((y0, y1)) or ["20180105", "20180106"])
+    monkeypatch.setattr(cp, "result_dates", lambda y0, y1, before=None: ["20180107"], raising=False)
+    monkeypatch.setattr(cp, "load_store", lambda y: {"dates": {"2018-01-05": []}})
+    t = {"main": {"pid": 9, "args": "python -m src.scraper.course_position --from=2018 --to=2018 --include-results"}}
+    clock = [1_000_000.0]
+    monkeypatch.setattr(fs, "_now_ts", lambda: clock[0])
+    lines = fs._course_position_detail(t, datetime(2026, 11, 12, 18, 0))
+    assert seen == [(2018, 2018)] and "1/3 開催日" in lines[0]               # --from= の書き方・結果の表の日付も総数に入れる
+    clock[0] += 600
+    lines = fs._course_position_detail(t, datetime(2026, 11, 12, 18, 0))
+    assert "直近 10 分は増えていない" in lines[1]                            # 止まっているのに「測り始め」と出さない
+    clock[0] += 4 * 3600
+    fs._course_position_detail({"main": {"pid": 10, "args": t["main"]["args"]}}, datetime(2026, 11, 12, 18, 0))
+    assert list(json.loads((tmp_path / "cache.json").read_text())["samples"]) == ["cp:10"]   # 終わった取得の標本は捨てる

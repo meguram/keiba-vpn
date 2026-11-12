@@ -517,11 +517,106 @@ def _training_past_detail(now: datetime, redo: bool) -> list[str]:
             f"   1 頭あたり {per_horse:.1f} 件 ・ 速度 {rate:.0f} 件/時（直近 3 時間） → 残り {f'{left:,}' if left is not None else '?'} 頭の終了: {'完了' if left == 0 else eta}"]
 
 
+CACHE_PATH = Path.home() / ".cache" / "keiba_fetch_status.json"   # 表示のための控え（重い総数の数え直しを避ける・速度の標本）。ユーザーごと
+RATE_WINDOW_SEC = 3 * 3600
+
+
+def _now_ts() -> float:
+    return time.time()
+
+
+def _cache_load() -> dict:
+    """控えを読む。形が崩れていれば捨てる（崩れたまま毎回例外になるのを防ぐ）。"""
+    try:
+        d = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(d, dict):
+        return {}
+    if not isinstance(d.get("course_position", {}), dict):
+        d.pop("course_position")
+    smp = d.get("samples", {})
+    if not isinstance(smp, dict):
+        d.pop("samples")
+    else:
+        d["samples"] = {k: v for k, v in smp.items()
+                        if isinstance(v, list) and all(isinstance(s, list) and len(s) == 2 and all(isinstance(x, (int, float)) for x in s) for s in v)}
+    return d
+
+
+def _cache_save(d: dict, now_ts: float) -> None:
+    # 窓より古い標本しか無い鍵（終わった取得の分）は捨てる（控えが増え続けないように）
+    d["samples"] = {k: v for k, v in d.get("samples", {}).items() if v and now_ts - v[-1][0] <= RATE_WINDOW_SEC}
+    try:
+        CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = CACHE_PATH.with_name(CACHE_PATH.name + f".{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, CACHE_PATH)
+    except OSError:
+        pass
+
+
+def _rate_from_samples(cache: dict, key: str, done: float, now_ts: float) -> tuple[float | None, float]:
+    """表示のたびに (時刻, 済みの数) を控え、直近 3 時間の増え方から 1 時間あたりの速度を出す（心拍の無い取得の終了見込み用）。
+    戻り値は (速度、標本の長さ（秒）)。速度が None で長さが 120 秒以上なら「増えていない」。"""
+    samples = [s for s in cache.get("samples", {}).get(key, []) if now_ts - s[0] <= RATE_WINDOW_SEC and s[1] <= done]
+    if not samples or now_ts - samples[-1][0] >= 60:
+        samples.append([now_ts, done])
+    cache.setdefault("samples", {})[key] = samples[-200:]
+    t0, d0 = samples[0]
+    span = now_ts - t0
+    return ((done - d0) / (span / 3600) if span >= 120 and done > d0 else None), span
+
+
+def _course_position_detail(task: dict, now: datetime) -> list[str]:
+    """柵の位置（course_position）: 対象の開催日のうち、保存済みの日の数。
+    総数は取得の本体と同じ数え方（race_lists、--include-results ならレース結果の表の日付も）。全部読むと十数秒かかるので、
+    同じ引数・同じ日のうちは控えを使う（その日のうちに race_lists が増えても総数は翌日まで変わらない）。"""
+    from datetime import date as _date
+
+    from src.scraper import course_position as cp
+
+    args = task["main"]["args"]
+    m0, m1 = re.search(r"--from[=\s]+(\d{4})", args), re.search(r"--to[=\s]+(\d{4})", args)
+    today = _date.today().strftime("%Y%m%d")          # 本体（course_position.main）と同じく、この機械の日付
+    y0, y1 = int(m0.group(1)) if m0 else 2016, int(m1.group(1)) if m1 else int(today[:4])
+    incl = "--include-results" in args
+    cache = _cache_load()
+    key = f"cp:{y0}:{y1}:{today}:{int(incl)}"
+    dates = cache.get("course_position", {}).get(key)
+    if not isinstance(dates, list):
+        dates = cp.race_dates(y0, y1, before=today)
+        if incl and hasattr(cp, "result_dates"):
+            dates = sorted(set(dates) | set(cp.result_dates(y0, y1, before=today)))
+        cache["course_position"] = {key: dates}
+    stores = {y: cp.load_store(y)["dates"] for y in range(y0, y1 + 1)}
+    done = sum(1 for d in dates if f"{d[:4]}-{d[4:6]}-{d[6:8]}" in stores.get(int(d[:4]), {}))
+    total = len(dates)
+    now_ts = _now_ts()
+    rate, span = _rate_from_samples(cache, f"cp:{task['main']['pid']}", done, now_ts)
+    _cache_save(cache, now_ts)
+    if done >= total:
+        speed, eta = "—", "完了"
+    elif rate:
+        speed, eta = f"{rate:.0f} 日/時", _fmt_eta(now, (total - done) / rate)
+    elif span >= 120:
+        speed, eta = f"直近 {span / 60:.0f} 分は増えていない（他の取得を待っているか、止まっている）", "—"
+    else:
+        speed, eta = "—（測り始め。数分後に出る）", "—"
+    return [f"   進捗 {_bar(done, total)}  {done:,}/{total:,} 開催日（{y0}〜{y1}・20 日ごとに保存）",
+            f"   速度 {speed} → 終了: {eta}"]
+
+
 def _detail(task: dict, now: datetime) -> tuple[list[str], bool]:
     """既知の取得の詳しい行（実行中のときだけ）。2 つ目は「待機中」とみなすか。"""
     if task["state"] != "running":
         return [], False
     args, mod = task["main"]["args"], task["module"]
+    if mod == "src.scraper.course_position":
+        try:
+            return _course_position_detail(task, now), False
+        except Exception as e:  # noqa: BLE001 — 表示の失敗で一覧全体を止めない
+            return [f"   進捗 —（読めない: {e}）"], False
     if mod == "src.scraper.backfill" and "--phase past" in args:
         return _past_detail(now)
     if mod == "src.scripts.scraping.backfill_horse_training_recent":
@@ -538,6 +633,8 @@ def render(now: datetime | None = None, tasks: list[dict] | None = None) -> str:
     blocks = []
     for t in tasks:
         detail, yielding = _detail(t, now)
+        if t["state"] == "running" and not detail and not (t["entry"] or {}).get("total"):
+            detail = ["   進捗 —（総数の分からない取得。docs/operations/fetch_tasks.md）"]
         if yielding:
             t["state"], t["waiting_for"] = "waiting", t["waiting_for"] or "他の取得に譲って待機中（ログより）"
         state = "実行中" if t["state"] == "running" else "待機中"

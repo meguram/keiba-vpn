@@ -82,3 +82,13 @@ watch -n 5 bash scripts/dev/fetch_status.sh      # 見張る
 | `src.scraper.backfill --phase past` | 段階ごとの残りの件数・終了見込み（`docs/operations/backfill_2016.md`） |
 | `backfill_horse_training_recent` | 今回の実行の残りの頭数と終了見込み |
 | `backfill_horse_training_past` | 進捗と終了見込み。`--redo-truncated` のときは、打ち切った馬の取り直しの進捗。分母はログの「打ち切った馬の取り直し: 対象…」の行から取る |
+| `src.scraper.course_position` | 対象の開催日のうち保存済みの日数（進捗バー）。終了見込みは、表示のたびに控えた済みの数の増え方から出す |
+
+### 進捗バーが出ない取得
+- 「進捗 —（総数の分からない取得）」と出るのは、心拍に総数が無く、`_detail` に読み方も無い取得。
+- バーを出すには、次のどちらかを行う。
+  - 取得の側で `fetch_registry.progress(done, total)` を呼ぶ（おすすめ）。
+  - 進捗ファイルから数える読み方を `fetch_status._detail` に足す。
+- 総数を数えるのが重い取得や、心拍の無い取得の速度は、`~/.cache/keiba_fetch_status.json` に控える。
+  - 総数は、同じ引数・同じ日のうちは控えを使う。
+  - 速度の標本は、直近 3 時間の分だけ残す。
