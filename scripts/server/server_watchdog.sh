@@ -756,6 +756,12 @@ _start_frontend_inner() {
             unset NEXT_PUBLIC_MOCK 2>/dev/null || true
         fi
         export NODE_ENV="${NODE_ENV:-development}"
+        if [ "$FRONTEND_NPM_SCRIPT" = "dev" ]; then
+            # 作業ツリーが 9p（WSL の D:\ など）だとファイル変更の通知が届かず、保存・置き換え（sudo install）しても
+            # 再コンパイルされない。service_start.sh と同じく、変更を定期的に見に行く（既定 true = 約 5 秒間隔。
+            # 実測: 待機中の CPU は 1 コアの約 2%。1 秒間隔にするなら WATCHPACK_POLLING=1000 で約 4.5%。無効化は false）
+            export WATCHPACK_POLLING="${WATCHPACK_POLLING:-true}"
+        fi
         # 子プロセスにビルドロックの fd(9) を引き継がせない（next-server が動いている間ロックが残らないように）
         nohup npm run "$FRONTEND_NPM_SCRIPT" -- -p "$FRONTEND_PORT" >> "$log_file" 2>&1 9>&- &
         echo $! > "$FRONTEND_PID_FILE"
