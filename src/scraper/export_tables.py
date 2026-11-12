@@ -417,9 +417,13 @@ PRE_DRAW_REFRESH_CATEGORIES = frozenset({"race_shutuba"})
 PRE_DRAW_LOOKBACK_DAYS = 21     # これより古いレースは取り直さない（中止などで最終版が出ないレースを毎日読み続けない）
 
 
-def _pre_draw_race_ids(path: Path, today: str | None = None, lookback_days: int = PRE_DRAW_LOOKBACK_DAYS) -> set[str]:
-    """flat のうち、枠順確定前（馬番が全頭 0 か空）のまま入っている直近・未来のレース ID。日付の無いレースは対象外。"""
+def _pre_draw_race_ids(path: Path, today: str | None = None, lookback_days: int | None = None) -> set[str]:
+    """flat のうち、枠順確定前（馬番が全頭 0 か空）のまま入っている直近・未来のレース ID。日付の無いレースは対象外。
+    lookback_days の既定は呼んだ時点の PRE_DRAW_LOOKBACK_DAYS（過去分をまとめて取り直すときに広げられるように）。"""
     from datetime import datetime, timedelta, timezone
+
+    if lookback_days is None:
+        lookback_days = PRE_DRAW_LOOKBACK_DAYS
 
     if not path.exists():
         return set()
