@@ -39,9 +39,11 @@ except ImportError:  # ホストには MB60 版が別名で置かれている
 
 BET = ROOT / "data/local/modeling/betting"
 OP = ROOT / "data/local/modeling/odds_pred"
-FRAME = BET / "tp36/frame_all.parquet"
+FRAME = Path(os.environ.get("PORTFOLIO_FRAME", BET / "tp36/frame_all.parquet"))  # 再学習後は新しい親モデルの frame_all（final_layer_frame の出力）を指定する
 AUD = ROOT / "data/local/meta/odds_audit"
 OUT = Path(os.environ.get("PORTFOLIO_OUT", ROOT / "data/local/modeling/portfolio_target"))
+if os.environ.get("PORTFOLIO_FRAME") and not os.environ.get("PORTFOLIO_OUT"):
+    raise SystemExit("PORTFOLIO_FRAME を指定するときは PORTFOLIO_OUT も指定する（既定の出力先の旧モデルの結果を上書きしないため）")
 YEARS = [2022, 2023, 2024, 2025]
 SEL_YEARS = [2022, 2023, 2024]
 BT = ["tansho", "fukusho", "umaren", "wide", "umatan", "sanrenpuku"]
@@ -197,7 +199,7 @@ def cmd_build(a) -> None:
     years = [int(y) for y in a.years.split(",")] if a.years else YEARS
     with mp.get_context("fork").Pool(min(4, len(years))) as pool:
         res = pool.starmap(build_year, [(y, r_lo, excl, pay, amb) for y in years])
-    (OUT / "build_info.json").write_text(json.dumps({"r_lo": r_lo, "years": res}, ensure_ascii=False, indent=1), encoding="utf-8")
+    (OUT / "build_info.json").write_text(json.dumps({"r_lo": r_lo, "frame": str(FRAME), "years": res}, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
 # ───────────────────────── 評価 ─────────────────────────

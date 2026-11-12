@@ -10,7 +10,7 @@ python -m src.scripts.data.frozen_tracking backtest --from 20260104 --to 2026101
   tp62: 馬連。V4 の確率 + 単勝の Benter 混合 + 割引 Harville の確率 p_mix を凍結した折れ線で較正 → 較正後 EV ≥ 1.0 の買い目を EV 降順に最大 5 点。
         点数 k（1〜5）は『最小オッズ ≥ 5×k、的中確率の和 ≥ 20%』を満たすうち 1 点あたり EV が最大のもの。等額（1 点 100 円）。
 オッズ時点（odds_variant）: final=確定オッズ（race_*_flat）／pre=発走前の最後のスナップショット（race_odds / race_pair_odds の phase。ホストの保存で読める時だけ）。
-モデル（model）: v4=predictions_v3（凍結した規則の入力。評価の主）／v5=predictions_v5（参考。較正・条件表は V4 用なので凍結の評価には含めない）。
+モデル（model）: v4=predictions_v3（凍結した規則の入力。評価の主）／v5=predictions_v5・v6=新しい親モデルのバックフィル（参考。規則は差し替えず、新しい確率での成績を並べて見る。較正・条件表は V4 用なので凍結の評価には含めない）。
 履歴は追記のみ（同じキーは書かない＝冪等）。凍結ファイルの内容が変わっていたら（ハッシュが履歴の最初と違う）追記を拒否する。
 市場オッズは買いの判定にだけ使い、モデルの特徴量にはしない。2026 年以降の追跡データは学習・選択に使わない。
 """
@@ -37,7 +37,10 @@ CFG_FT = Path(os.environ.get("FT_CFG", str(ROOT / "config/frozen_tracking.json")
 OUT_DIR = Path(os.environ.get("FROZEN_TRACKING_DIR", str(ROOT / "data/local/meta/frozen_tracking")))
 TABLES = Path(os.environ.get("FT_TABLES", str(ROOT / "data/page_reference/tables")))
 PRED_DIRS = {"v4": Path(os.environ.get("FT_PRED_V4", str(ROOT / "data/local/inference/predictions_v3"))),
-             "v5": Path(os.environ.get("FT_PRED_V5", str(ROOT / "data/local/inference/predictions_v5")))}
+             "v5": Path(os.environ.get("FT_PRED_V5", str(ROOT / "data/local/inference/predictions_v5"))),
+             # v6 = 再学習した新しい親モデル（2016〜2025 学習、bundle_v6_2025）のバックフィル。結果が出た後に作った予測なので、本番の履歴（ledger）には混ぜず、
+             # --models v6 --out-dir <別の場所> で並べて見る参考用（予測の出どころは predictions_v3 の中身が v6 に変わっても検査されない点に注意）
+             "v6": Path(os.environ.get("FT_PRED_V6", str(ROOT / "data/local/inference/predictions_backfill/bundle_v6_2025")))}
 BENTER_SRC = Path(os.environ.get("FT_BENTER_SRC", str(ROOT / "data/local/modeling/betting/tp36/final2026.json")))
 TRACK_START = "20261022"
 STAKE = 100.0
@@ -46,10 +49,10 @@ K_EV, K_P = 40, 20                       # tp50_data と同じ（組合せ券: E
 SLOTS, TH62, H62, M62 = 5, 1.0, 0.20, 5.0
 PRE_WIN_PHASES = ("t02", "t05", "t10", "t15", "t60")
 PRE_PAIR_PHASES = ("t15", "t60")
-MODELS = ("v4", "v5")
+MODELS = ("v4", "v5")                    # 既定の追跡対象（本番の履歴）。v6 は明示指定（--models v6）の参考で、別の出力先に作る
 VARIANTS = ("final", "pre")
 RULES = ("tp59", "tp62")
-REFERENCE_MODEL = {"v4": "primary", "v5": "reference"}
+REFERENCE_MODEL = {"v4": "primary", "v5": "reference", "v6": "reference"}
 
 
 # ───────────────────────── 凍結ファイルとハッシュ ─────────────────────────
@@ -537,7 +540,7 @@ def render_html(card: dict) -> str:
                     f"<table border=1 cellpadding=4><tr><th>月</th><th>レース</th><th>購入</th><th>払戻</th><th>回収率%</th></tr>{mon}</table>"
                     f"<pre>{html.escape(json.dumps(c['expectation'], ensure_ascii=False, indent=1))}</pre>")
     return ("<!doctype html><meta charset=utf-8><title>凍結した馬券候補の前向き追跡</title><h1>凍結した馬券候補の前向き追跡</h1>"
-            "<p>主の評価は model=v4（凍結した規則の入力）。v5 は参考。確定オッズ(final)と発走前スナップショット(pre)を併記。2026 年以降の追跡データは学習・選択に使わない。</p>"
+            "<p>主の評価は model=v4（凍結した規則の入力）。v5・v6（新しい親モデル）は参考。確定オッズ(final)と発走前スナップショット(pre)を併記。2026 年以降の追跡データは学習・選択に使わない。</p>"
             + (("".join(rows)) or "<p>まだ確定したレースがありません。</p>") + f"<p style='color:#666'>生成 {card['generated_at']}</p>")
 
 
@@ -605,7 +608,7 @@ def cmd_track(a) -> None:
 def cmd_backtest(a) -> None:
     """過去の期間に同じ判定コードを流す（コードの正しさの確認。結果は凍結の評価には使わない）。"""
     out = Path(a.out)
-    pred_dirs = {"v4": Path(a.pred_dir), "v5": PRED_DIRS["v5"]}
+    pred_dirs = {"v4": Path(a.pred_dir), "v5": PRED_DIRS["v5"], "v6": PRED_DIRS["v6"]}
     days = sorted(f.stem for f in Path(a.pred_dir).glob("*.parquet")) or sorted(p.name for p in Path(a.pred_dir).iterdir() if p.is_dir())
     days = [d for d in days if getattr(a, "from") <= d <= a.to]
     rules = load_rules()

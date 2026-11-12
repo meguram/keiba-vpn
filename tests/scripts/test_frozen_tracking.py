@@ -127,6 +127,19 @@ def test_track_is_idempotent_and_settles(tmp_path, monkeypatch):
     assert c59["bets"] == 1 and c59["roi_pct"] == pytest.approx(600.0)
 
 
+def test_v6_reference_model_is_explicit_only(tmp_path, monkeypatch):
+    import shutil
+
+    pred_dirs = _setup(tmp_path, monkeypatch)
+    shutil.copytree(pred_dirs["v4"], tmp_path / "pred_v6")
+    pred_dirs["v6"] = tmp_path / "pred_v6"
+    assert "v6" not in ft.MODELS and ft.REFERENCE_MODEL["v6"] == "reference"   # 既定の追跡（本番の履歴）には入れない
+    out = tmp_path / "out"
+    s = ft.run_track(["20261024"], out, ("v6",), ("final",), None, ft.TABLES, pred_dirs, verbose=False)
+    rows = [json.loads(x) for x in (out / "ledger.jsonl").read_text().splitlines()]
+    assert s["added"] == 2 and {r["model"] for r in rows} == {"v6"}
+
+
 def test_unsettled_race_not_recorded(tmp_path, monkeypatch):
     pred_dirs = _setup(tmp_path, monkeypatch)
     res = tmp_path / "tables" / "2026" / "race_result_flat.parquet"
