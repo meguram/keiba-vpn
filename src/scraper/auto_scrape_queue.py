@@ -647,9 +647,12 @@ def run_weekly_update_for_dates(target_dates: list[str]) -> dict[str, Any]:
     st_add = queue.bulk_add_jobs(full)
     ok, msg, _ = _kick_and_wait(queue, timeout_sec=172800.0)
     if not ok:
+        # paused（アクセス保留）・timeout で打ち切った: めぐ指数の計算などの後処理には進まない。
+        # task_weekly_update が Slack に通知し、非 0 の終了コードを返す（欠けためぐ指数は次の週次で補完する）
         return {
             "status": "error",
             "reason": f"queue-wait:{msg}",
+            "queue_wait_failed": True,
             "dates": len(target_dates),
             "queue_bulk_add": st_add,
         }
@@ -664,6 +667,9 @@ def run_weekly_update_for_dates(target_dates: list[str]) -> dict[str, Any]:
         logger.warning(
             "週次: 馬IDが0件のため馬・血統ジョブをスキップします（race_result / race_shutuba の entries を確認）",
         )
+
+    # ここから先（馬・血統）の待機が paused/timeout になっても、warning だけで後処理（めぐ指数・PG 同期）に進む。
+    # めぐ指数に要るのはレース系の確定結果で、それは上の待機で取り終えているため（打ち切りで非 0 にするのはレース系の待機だけ）。
 
     # 馬プロフィール・成績 (horse_result): 週次は上書き再取得。
     # 血統 HTML（horse_ped）と 5gen JSON は ``horse_pedigree_5gen`` ジョブで取得（不変ならスキップ）。
