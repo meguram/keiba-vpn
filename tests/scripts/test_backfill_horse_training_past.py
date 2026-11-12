@@ -284,3 +284,50 @@ def test_is_truncated_reads_local_record(monkeypatch, tmp_path):
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_text(json.dumps(rec), encoding="utf-8")
     assert B.is_truncated("2012110059") and not B.is_truncated("2012110060") and not B.is_truncated("2012110061")
+
+
+def test_cutoff_stop_does_not_leave_incomplete_mark():
+    r = _G()
+    B.guard_persist(r, _Guard(), "2015-01-01")
+    r.client.fetch("u")
+    r._guard_state["cut"] = True
+    import pytest
+
+    with pytest.raises(B.StopPaging):
+        r.client.fetch("u")
+    res = {"entries": [{}], "pages_fetched": 3, "incomplete": True}
+    r._persist_horse_training("h", res)
+    assert r.saved == ["h"] and "incomplete" not in res and res["truncated_before"] == "2015-01-01" and res["pages_fetched"] == 1
+
+
+def test_wait_ok_shows_waiting_then_running(monkeypatch):
+    from src.scripts.scraping import backfill_horse_training_recent as R
+
+    states, busy = [], iter([True, True, False])
+    monkeypatch.setattr(R, "busy", lambda: next(busy))
+    monkeypatch.setattr(R, "load1", lambda: 0.0)
+    monkeypatch.setattr(R, "time", __import__("types").SimpleNamespace(time=lambda: 0.0, sleep=lambda *_: None))
+    monkeypatch.setattr(R, "_set_fetch_state", lambda s, w=None: states.append(s))
+    assert R.wait_ok(3600) is True and states == ["waiting", "running"]
+    states.clear()
+    monkeypatch.setattr(R, "busy", lambda: False)
+    assert R.wait_ok(3600) is True and states == []                       # 待たなければ状態は変えない
+    import types
+
+    monkeypatch.setattr(R, "busy", lambda: True)
+    now = {"t": 0.0}
+
+    def sleep(sec):
+        now["t"] += sec
+
+    monkeypatch.setattr(R, "time", types.SimpleNamespace(time=lambda: now["t"], sleep=sleep))   # このモジュールの時計だけ差し替える
+    assert R.wait_ok(60) is False and states == ["waiting"]                # 待ちきれず中断: 実行中には戻さない
+
+
+def test_set_fetch_state_swallows_import_errors(monkeypatch):
+    import sys
+
+    from src.scripts.scraping import backfill_horse_training_recent as R
+
+    monkeypatch.setitem(sys.modules, "src.scraper.fetch_registry", None)    # import が失敗する
+    R._set_fetch_state("waiting", "x")                                      # 例外を出さない

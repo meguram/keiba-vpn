@@ -137,6 +137,7 @@ def guard_persist(runner, guard, cutoff: str = "", reject_empty: bool = False) -
         if stopped:   # 意図した打ち切り: 取れたページ数と打ち切りの日付を記録に残す
             failed = False
             result["pages_fetched"], result["truncated_before"] = ok, cutoff
+            result.pop("incomplete", None)   # 打ち切りは取り損ねではない（印は truncated_before で残す）
         elif failed or (ok and int((result or {}).get("pages_fetched") or 1) > ok):   # 例外なしの空ページで打ち切った場合も含む
             raise PartialFetch(f"{hid}: 2 ページ目以降が取れなかったので保存しない")
         persist(hid, result)
