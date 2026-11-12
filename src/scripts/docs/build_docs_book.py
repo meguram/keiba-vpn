@@ -182,6 +182,7 @@ PARTS: list[Part] = [
           see=[("PEDIGREE_NOTE_APTITUDE", "血統適性ナレッジ"), ("horse_pedigree_10gen_merge_design", "10 世代への拡張")]),
         C("PEDIGREE_NOTE_APTITUDE", "血統適性ナレッジ（note まとめ → 特徴量 → モデル）。父・母父・牝系のブレンド比率（1.0 / 0.55 / 0.35）など。", "仕様", src="html/pedigree/PEDIGREE_NOTE_APTITUDE.html"),
         C("PERFORMANCE_GENES", "競走馬パフォーマンス遺伝子ナレッジベース。運動能力に関係する遺伝子マーカーと推論システム。", "仕様", src="html/pedigree/PERFORMANCE_GENES.html"),
+        C("sire_lines_all", "手元の全種牡馬を、smartrc の区分（国系統: 欧州型・米国型・日本型 → 大系統 → 小系統）で並べた一覧。名前で絞り込み・並べ替えができる。系統が空欄の種牡馬は「系統なし」。", "参照", src="html/pedigree/sire_lines_all.html", keep_scripts=True),
         C("course_geometry_atlas", "JRA 全 10 競馬場のコースの概形を、競馬場 → コース（芝・ダート、内外回り）→ 距離の順に切り替えて見られる図。", "参照",
           [("course_master_verification", "検証の記録（3 ラウンド）"), ("feature_strategy_tp03_tp04", "特徴量の定義")]),
         C("course_master_verification", "JRA コース形状マスタ（108 コース）の検証記録。3 つの独立収集の突き合わせ、一次資料での再確認と訂正。", "ログ",
