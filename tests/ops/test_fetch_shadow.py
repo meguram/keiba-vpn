@@ -86,6 +86,32 @@ def test_shadow_bucket_denies_delete_copy_and_other_mutations():
     assert real.deleted == [] and real.objects == {"prod/a.json": "PROD"}
 
 
+def test_listing_keeps_size_and_updated_of_listed_blobs():
+    """一覧で取れた Blob の size・updated をそのまま読める（未読込の blob を作り直すと None になり、一覧が空になっていた）。"""
+    class Listed:
+        def __init__(self, name):
+            self.name, self.size, self.updated = name, 123, "2026-11-08"
+
+    class Real(FakeBucket):
+        def list_blobs(self, *a, **k):
+            return iter([Listed("prod/a.json")])
+
+        def get_blob(self, name, *a, **k):
+            return Listed(name)
+
+    b = ss.ShadowBucket(Real(), lambda: "shadow/20261108/")
+    got = list(b.list_blobs(prefix="prod/"))
+    assert [(x.name, x.size, x.updated) for x in got] == [("prod/a.json", 123, "2026-11-08")]
+    assert got[0].shadow_name == "shadow/20261108/prod/a.json"       # 書き先は渡した prefix_fn に従う
+    assert b.get_blob("prod/a.json").size == 123
+    with pytest.raises(ss.ShadowViolation):
+        got[0].delete()
+    with pytest.raises(ss.ShadowViolation):                             # 本物の Bucket・ページには届かない
+        got[0].bucket.delete_blob("prod/a.json")
+    with pytest.raises(ss.ShadowViolation):
+        b.list_blobs().pages
+
+
 def test_assert_shadow_name_rejects_non_shadow():
     with pytest.raises(ss.ShadowViolation):
         ss.assert_shadow_name("chuou/data/x.json")

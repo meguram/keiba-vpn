@@ -61,11 +61,13 @@ def assert_shadow_name(name: str, root: str | None = None) -> str:
 class ShadowBlob:
     """読みは本番の同名オブジェクト、書きは ``shadow/<日付>/<同名>``。それ以外の操作は拒否する。"""
 
-    def __init__(self, real_bucket: Any, name: str, prefix_fn: Callable[[], str]) -> None:
+    def __init__(self, real_bucket: Any, name: str, prefix_fn: Callable[[], str], read_blob: Any = None) -> None:
+        """read_blob: 一覧（list_blobs）・get_blob で取れた本番の Blob。渡すとその属性（size・updated など）をそのまま読める。
+        渡さないと ``bucket.blob(name)``（未読込で size・updated が None）になり、一覧の『大きさ 0 は捨てる』で全件が消える。"""
         self._real_bucket = real_bucket
         self._orig_name = name
         self._prefix_fn = prefix_fn
-        self._read_blob = real_bucket.blob(name)
+        self._read_blob = read_blob if read_blob is not None else real_bucket.blob(name)
 
     @property
     def shadow_name(self) -> str:
@@ -90,23 +92,32 @@ class ShadowBlob:
         return bool(self._read_blob.exists(*a, **k))
 
     def __getattr__(self, attr: str) -> Any:
+        if attr == "bucket":
+            # 本物の Bucket をそのまま返すと delete_blob・copy_blob などでガードを通らずに本番へ届く。包んで返す
+            return ShadowBucket(self._real_bucket, self._prefix_fn)
         if attr in READ_BLOB_ATTRS:
             return getattr(self._read_blob, attr)
         raise ShadowViolation(f"影モードで許されない操作: Blob.{attr}（{self._orig_name}）")
 
 
 class _ShadowListing:
-    def __init__(self, real_bucket: Any, it: Any) -> None:
+    def __init__(self, real_bucket: Any, it: Any, prefix_fn: Callable[[], str] | None = None) -> None:
         self._real_bucket, self._it = real_bucket, it
+        self._prefix_fn = prefix_fn or (lambda: shadow_prefix())
 
     def __iter__(self) -> Iterator[Any]:
         for b in self._it:
-            yield ShadowBlob(self._real_bucket, b.name, lambda: shadow_prefix())
+            yield ShadowBlob(self._real_bucket, b.name, self._prefix_fn, read_blob=b)
 
-    def __getattr__(self, attr: str) -> Any:     # prefixes / pages / num_results など読み取りの属性
+    LISTING_ATTRS = frozenset({"prefixes", "num_results", "next_page_token", "max_results"})
+
+    def __getattr__(self, attr: str) -> Any:     # prefixes / num_results など読み取りの属性だけ
+        if attr in self.LISTING_ATTRS:
+            return getattr(self._it, attr)
         if attr.startswith("_"):
             raise AttributeError(attr)
-        return getattr(self._it, attr)
+        # pages などは包まれていない本番の Blob を返すので許さない（for b in listing で回す）
+        raise ShadowViolation(f"影モードで許されない操作: list_blobs().{attr}")
 
 
 class ShadowBucket:
@@ -119,10 +130,10 @@ class ShadowBucket:
 
     def get_blob(self, name: str, *a: Any, **k: Any) -> ShadowBlob | None:
         got = self._real.get_blob(name, *a, **k)
-        return None if got is None else ShadowBlob(self._real, name, self._prefix_fn)
+        return None if got is None else ShadowBlob(self._real, name, self._prefix_fn, read_blob=got)
 
     def list_blobs(self, *a: Any, **k: Any) -> _ShadowListing:
-        return _ShadowListing(self._real, self._real.list_blobs(*a, **k))
+        return _ShadowListing(self._real, self._real.list_blobs(*a, **k), self._prefix_fn)
 
     def __getattr__(self, attr: str) -> Any:
         if attr in READ_BUCKET_ATTRS:
