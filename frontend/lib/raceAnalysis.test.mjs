@@ -12,7 +12,7 @@ const ts = createRequire(import.meta.url)("typescript");
 const src = ts.transpileModule(readFileSync(join(here, "raceAnalysis.ts"), "utf8"), { compilerOptions: { module: ts.ModuleKind.ES2020, target: ts.ScriptTarget.ES2020 } }).outputText;
 const out = join(mkdtempSync(join(tmpdir(), "ra-")), "raceAnalysis.mjs");
 writeFileSync(out, src);
-const { formatCell, sortValue, columnBlocks, isThin, entriesUnavailable, formatPeriod, heatColor, formatComputedAt, runColor } = await import(pathToFileURL(out).href);
+const { formatCell, sortValue, columnBlocks, isThin, entriesUnavailable, formatPeriod, heatColor, formatComputedAt, runColor, layoutPositionMatrix, matrixOverlap } = await import(pathToFileURL(out).href);
 
 // 表の並べ替え（TableSorter が使う比較）。sortValue の値が実際にどう並ぶかを確かめる
 async function loadTableSort() {
@@ -115,4 +115,69 @@ test("runs: 位置取りの文字化と色（前ほど赤・後ろほど青）",
   assert.equal(runColor(1, 16), "hsl(8 62% 34%)");
   assert.equal(runColor(16, 16), "hsl(215 62% 34%)");
   assert.equal(runColor(1, 1), "hsl(8 62% 34%)");
+});
+
+// ── 位置取りマトリックス（1 頭身 = 1、lane 0 = ラチ沿い） ──
+// N = 10 頭なら mean 0.1 刻みが 1 頭身。中心 c = mean × 10 − 0.5
+const H = (num, mean) => ({ key: `k${num}`, num, mean });
+const laneOf = (lay) => Object.fromEntries(lay.placed.map((p) => [p.num, p.lane]));
+
+test("matrix: 誰とも重ならない馬はすべてラチ沿い（内から順に並ぶ）", () => {
+  const lay = layoutPositionMatrix([H(3, 0.1), H(1, 0.3), H(2, 0.5), H(4, 0.9)], 10);
+  assert.deepEqual(laneOf(lay), { 1: 0, 2: 0, 3: 0, 4: 0 });
+  assert.equal(lay.lanes, 1);
+});
+
+test("matrix: 重なる 2 頭は馬番の小さい馬がラチ側（馬番と前後が逆でも）", () => {
+  assert.deepEqual(laneOf(layoutPositionMatrix([H(8, 0.30), H(2, 0.33)], 10)), { 2: 0, 8: 1 });
+  assert.deepEqual(laneOf(layoutPositionMatrix([H(2, 0.30), H(8, 0.33)], 10)), { 2: 0, 8: 1 });
+  assert.deepEqual(laneOf(layoutPositionMatrix([H(5, 0.5), H(1, 0.5)], 10)), { 1: 0, 5: 1 });   // 完全に同じ位置
+});
+
+test("matrix: 互いに重なる 3 頭は馬番順に 0・1・2", () => {
+  assert.deepEqual(laneOf(layoutPositionMatrix([H(7, 0.42), H(3, 0.40), H(5, 0.45)], 10)), { 3: 0, 5: 1, 7: 2 });
+});
+
+test("matrix: 連鎖（1–2 と 2–3 は重なり、1–3 は重ならない）は 1 と 3 がラチ沿い", () => {
+  assert.deepEqual(laneOf(layoutPositionMatrix([H(1, 0.30), H(2, 0.37), H(3, 0.44)], 10)), { 1: 0, 2: 1, 3: 0 });
+  // 外のラインが空いても、内のラインで重ならなければ内に入る（2 段目にいる馬の後ろでもラチ沿い）
+  assert.deepEqual(laneOf(layoutPositionMatrix([H(1, 0.30), H(2, 0.35), H(3, 0.38), H(4, 0.41)], 10)), { 1: 0, 2: 1, 3: 2, 4: 0 });
+});
+
+test("matrix: ちょうど 1 頭身離れる馬は重ならない／少しでも近ければ重なる", () => {
+  assert.equal(matrixOverlap(2.5, 3.5), false);
+  assert.equal(matrixOverlap(2.5, 3.49), true);
+  assert.deepEqual(laneOf(layoutPositionMatrix([H(1, 0.3), H(2, 0.4)], 10)), { 1: 0, 2: 0 });
+});
+
+test("matrix: 位置は 0.5〜N−0.5 に収まり、平均の無い馬は置かない", () => {
+  const lay = layoutPositionMatrix([H(1, 0.01), H(2, 1.2), H(3, null), { key: "x", num: null, mean: undefined }], 10);
+  const c = Object.fromEntries(lay.placed.map((p) => [p.num, p.c]));
+  assert.equal(c[1], 0.5);
+  assert.equal(c[2], 9.5);
+  assert.deepEqual(lay.unknown.map((h) => h.key), ["k3", "x"]);
+});
+
+test("matrix: 馬番の無い馬は馬番のある馬の後（外）に置く", () => {
+  assert.deepEqual(layoutPositionMatrix([{ key: "z", num: null, mean: 0.3 }, H(9, 0.3)], 10).placed.map((p) => [p.key, p.lane]), [["k9", 0], ["z", 1]]);
+});
+
+test("matrix: 乱数の並びでも、同じラインで重ならず・内のラインに入れる馬は内に入っている", () => {
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  for (let t = 0; t < 300; t++) {
+    const n = 2 + Math.floor(rnd() * 17);
+    const horses = Array.from({ length: n }, (_, i) => H(i + 1, rnd() < 0.1 ? null : rnd()));
+    const lay = layoutPositionMatrix(horses, n);
+    const byNum = [...lay.placed].sort((a, b) => a.num - b.num);
+    for (const p of byNum) {
+      // 同じラインの馬とは重ならない
+      for (const q of lay.placed) if (q !== p && q.lane === p.lane) assert.equal(matrixOverlap(p.c, q.c), false);
+      // 内側のどのラインにも、自分より馬番の小さい重なる馬がいる（だから内に入れない）
+      for (let l = 0; l < p.lane; l++) {
+        assert.ok(lay.placed.some((q) => q.lane === l && q.num < p.num && matrixOverlap(p.c, q.c)), `馬番${p.num} は lane ${l} に入れたはず`);
+      }
+    }
+    assert.equal(lay.placed.length + lay.unknown.length, n);
+  }
 });

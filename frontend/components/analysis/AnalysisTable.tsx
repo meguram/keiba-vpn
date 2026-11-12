@@ -48,13 +48,14 @@ const CSS = `
 .ra-rg{display:inline-flex;flex-direction:column;align-items:center;gap:2px}
 .ra-rg svg{display:block}
 .ra-rg span{font-size:11px;font-variant-numeric:tabular-nums}
+.ra-tbl th.rg{white-space:normal;min-width:64px;max-width:72px;line-height:1.25}
 `;
 
 /** 直近の位置取りの幅。左が先頭・右が最後方。点は各走（新しい走ほど濃い）、縦線は加重平均 */
 function RangeBar({ v }: { v: unknown }) {
   const r = v as RangeCell | null;
   if (!r || typeof r.lo !== "number") return <span className="dim">–</span>;
-  const W = 96, H = 14, x = (f: number) => 4 + f * (W - 8);
+  const W = 64, H = 14, x = (f: number) => 4 + f * (W - 8);
   return (
     <span className="ra-rg" title={`前から ${Math.round(r.lo * 100)}〜${Math.round(r.hi * 100)}%（平均 ${Math.round(r.mean * 100)}%）。新しい走ほど濃い点`}>
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="直近の位置取りの幅">
@@ -198,7 +199,7 @@ export function AnalysisTable({ entries, module }: { entries: AnalysisEntry[]; m
             <tr>
               <th>馬番</th><th className="l">馬名</th>{keyHeader && <th className="l">{keyHeader}</th>}
               {ordered.map(({ c, first }) => (
-                <th key={c.key} className={first ? "gs" : undefined} title={c.title ?? undefined}>{c.label}</th>
+                <th key={c.key} className={[first ? "gs" : "", c.fmt === "range" ? "rg" : ""].filter(Boolean).join(" ") || undefined} title={c.title ?? undefined}>{c.label}</th>
               ))}
             </tr>
           </thead>

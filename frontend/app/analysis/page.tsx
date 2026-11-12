@@ -8,6 +8,7 @@ import { useAutoRetry } from "@/lib/hooks/useAutoRetry";
 import { WeekPicker } from "@/components/WeekPicker";
 import { RaceStrip } from "@/components/RaceStrip";
 import { AnalysisTable } from "@/components/analysis/AnalysisTable";
+import { PositionMatrix } from "@/components/analysis/PositionMatrix";
 import { RunningMap } from "@/components/analysis/RunningMap";
 import { TrainerPatternTable } from "@/components/analysis/TrainerPatternTable";
 import type { TPFigure } from "@/lib/trainerPattern";
@@ -311,7 +312,11 @@ export default function AnalysisPage() {
                           ? (mod.figure ? <RunningMap figure={mod.figure as RunningMapFigure} entries={data.entries} /> : null)
                           : mod.view === "trainer_pattern"
                             ? (mod.figure ? <TrainerPatternTable figure={mod.figure as TPFigure} entries={data.entries} /> : null)
-                            : <AnalysisTable entries={data.entries} module={mod} />)}
+                            : <>
+                              {/* 位置取りの幅（range）の列があるモジュールは、平均の位置から位置取りマトリックスを表の上に出す */}
+                              {mod.columns?.filter((c) => c.fmt === "range").slice(0, 1).map((c) => <PositionMatrix key={c.key} entries={data.entries} module={mod} rangeKey={c.key} />)}
+                              <AnalysisTable entries={data.entries} module={mod} />
+                            </>)}
                         {mod.status === "not_applicable" && <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>このレースでは表示できません（コース条件や元データが未確定です）。</p>}
                         {mod.status === "error" && <p style={{ fontSize: 13, color: "var(--err)", marginTop: 8 }}>この分析の計算に失敗しました。</p>}
                         {mod.status === "ok" && mod.source && formatPeriod(mod.source) && (
