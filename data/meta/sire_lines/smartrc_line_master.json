@@ -247,43 +247,63 @@
  "type": {
   "3000001": {
    "name": "日本型サンデー系",
-   "short": "サンデー"
+   "short": "サンデー",
+   "color": "#ddffdd",
+   "country": "日本型"
   },
   "3000002": {
    "name": "日本型(その他)",
-   "short": "その他"
+   "short": "その他",
+   "color": "#ddffdd",
+   "country": "日本型"
   },
   "3000003": {
    "name": "米国型ノーザンダンサー系",
-   "short": "米ノーザ"
+   "short": "米ノーザ",
+   "color": "#BA945B",
+   "country": "米国型"
   },
   "3000004": {
    "name": "米国型ナスルーラ系",
-   "short": "米ナスル"
+   "short": "米ナスル",
+   "color": "#BA945B",
+   "country": "米国型"
   },
   "3000005": {
    "name": "米国型ミスプロ系",
-   "short": "米ミスプ"
+   "short": "米ミスプ",
+   "color": "#BA945B",
+   "country": "米国型"
   },
   "3000006": {
    "name": "米国型(その他)",
-   "short": "米マイナ"
+   "short": "米マイナ",
+   "color": "#BA945B",
+   "country": "米国型"
   },
   "3000007": {
    "name": "欧州型ノーザンダンサー系",
-   "short": "欧ノーザ"
+   "short": "欧ノーザ",
+   "color": "#00CCFF",
+   "country": "欧州型"
   },
   "3000008": {
    "name": "欧州型ナスルーラ系",
-   "short": "欧ナスル"
+   "short": "欧ナスル",
+   "color": "#00CCFF",
+   "country": "欧州型"
   },
   "3000009": {
    "name": "欧州型ミスプロ系",
-   "short": "欧ミスプ"
+   "short": "欧ミスプ",
+   "color": "#00CCFF",
+   "country": "欧州型"
   },
   "3000010": {
    "name": "欧州型(その他)",
-   "short": "欧マイナ"
+   "short": "欧マイナ",
+   "color": "#00CCFF",
+   "country": "欧州型"
   }
  }
 }
