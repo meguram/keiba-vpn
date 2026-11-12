@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import threading
+from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Callable, Iterator
 from zoneinfo import ZoneInfo
@@ -36,10 +37,34 @@ READ_BUCKET_ATTRS = frozenset({"name", "exists", "path", "id", "location", "proj
 
 
 _EXISTS_MODE = threading.local()
+_PROD_EXISTS = threading.local()
 
 
 def _shadow_exists_mode() -> bool:
     return bool(getattr(_EXISTS_MODE, "on", False))
+
+
+def _prod_exists_mode() -> bool:
+    return bool(getattr(_PROD_EXISTS, "on", False))
+
+
+def active() -> bool:
+    """この子プロセスで影モード・並走のガードが有効か（install() 済みか）。"""
+    return _INSTALLED
+
+
+@contextmanager
+def production_exists() -> Iterator[None]:
+    """この中の『取得済みか』（HybridStorage.exists / exists_gcs）は本番の有無で答える。影モードでないときは何もしない。
+
+    穴埋めのタスク（recent-retry・barometer-retry）用。これらの役目は『本番に無いものを取る』ことなので、影の側（毎日空の
+    shadow/<日付>/）で判定すると直近の開催分を毎回ほぼ全部取り直し（1 回 400 件・約 40 分）、実行役の 30 分の打ち切りで殺されていた。"""
+    prev = _prod_exists_mode()
+    _PROD_EXISTS.on = True
+    try:
+        yield
+    finally:
+        _PROD_EXISTS.on = prev
 
 
 class ShadowViolation(RuntimeError):
@@ -168,6 +193,8 @@ def install(root: str = SHADOW_ROOT) -> None:
     orig_exists, orig_exists_gcs = HybridStorage.exists, HybridStorage.exists_gcs
 
     def _exists_gcs(self: Any, category: str, key: str) -> bool:
+        if _prod_exists_mode():
+            return orig_exists_gcs(self, category, key)   # production_exists() の中: 本番の有無
         prev = _shadow_exists_mode()
         _EXISTS_MODE.on = True
         try:
@@ -176,7 +203,7 @@ def install(root: str = SHADOW_ROOT) -> None:
             _EXISTS_MODE.on = prev
 
     def _exists(self: Any, category: str, key: str) -> bool:
-        if self._is_local_only(category) or self._dev_store is not None:
+        if _prod_exists_mode() or self._is_local_only(category) or self._dev_store is not None:
             return orig_exists(self, category, key)
         return self.exists_gcs(category, key)         # 本番由来の load / 一覧キャッシュは見ない
 

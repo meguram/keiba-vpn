@@ -1492,10 +1492,14 @@ def task_barometer_retry():
     runner = ScraperRunner()
     state = recent_retry.load_state(BAROMETER_STATE_PATH)
     now = datetime.now(timezone(timedelta(hours=9)))
-    targets = select_barometer_targets(
-        {d: [r["race_id"] for r in (runner.storage.load("race_lists", d) or {}).get("races", [])] for d in dates},
-        lambda rid: runner.storage.exists("race_barometer", rid), state, now,
-    )
+    from src.ops.shadow_storage import active as shadow_active, production_exists
+
+    shadow = shadow_active()
+    with production_exists():            # 影モードでも『本番に無いもの』だけを取る（recent_retry と同じ）
+        targets = select_barometer_targets(
+            {d: [r["race_id"] for r in (runner.storage.load("race_lists", d) or {}).get("races", [])] for d in dates},
+            lambda rid: runner.storage.exists("race_barometer", rid), state, now,
+        )
     saved, pending, errors = 0, 0, 0
     gave_up = sum(1 for k, v in state.items() if int(v.get("attempts", 0)) >= BAROMETER_MAX_ATTEMPTS)
     for rid in targets:
@@ -1506,7 +1510,8 @@ def task_barometer_retry():
         try:
             if runner.scrape_barometer(rid, skip_existing=False):
                 saved += 1
-                state.pop(key, None)
+                if not shadow:               # 影の保存は本番に入らないので記録を残す（recent_retry と同じ）
+                    state.pop(key, None)
                 time.sleep(random.uniform(2.0, 5.0))
             else:
                 pending += 1
@@ -1526,7 +1531,7 @@ def task_recent_retry():
     from src.scraper import recent_retry
 
     res = recent_retry.run(_load_race_calendar())
-    ok = res["error_count"] == 0
+    ok = res["error_count"] == 0 and not res.get("stopped_by_budget")      # 時間の上限で残りを次回に回したときも partial
     _save_status("recent-retry", {"status": "ok" if ok else "partial", "last_run": _now_jst_iso(), **res})
     logger.info("recent-retry: %s", res)
 

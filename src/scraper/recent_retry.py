@@ -27,6 +27,13 @@ LOOKBACK_DAYS = 21
 MIN_INTERVAL_H = 3.0
 MAX_ATTEMPTS = 30
 MAX_REQUESTS = 400
+# 1 回の起動で取りに行く時間の上限（秒）。VPS の実行役は 1800 秒で子プロセスを殺す（src/ops/fetch_agent.py の DEFAULT_TIMEOUT）。
+# 殺されると試行の記録が残らず、翌日も同じ 400 件を取りに行くので、その前に自分で止めて記録を残す。KEIBA_RECENT_RETRY_BUDGET_SEC で上書き。
+TIME_BUDGET_SEC = 1500
+
+
+def _monotonic() -> float:
+    return time.monotonic()      # テストで差し替える（time.monotonic を直接差し替えると他のライブラリまで変わる）
 STATE_PATH = Path("data/local/meta/recent_retry_state.json")
 
 # (カテゴリ, ScraperRunner のメソッド名)。確定結果を最初に取る。
@@ -79,14 +86,16 @@ def select_targets(
     return out
 
 
-def load_state(path: Path = STATE_PATH) -> dict[str, Any]:
+def load_state(path: Path | None = None) -> dict[str, Any]:
+    path = path or STATE_PATH            # 既定は呼んだ時点の STATE_PATH（テストで差し替えられるように）
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
 
-def save_state(state: dict[str, Any], path: Path = STATE_PATH) -> None:
+def save_state(state: dict[str, Any], path: Path | None = None) -> None:
+    path = path or STATE_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
@@ -96,6 +105,7 @@ def save_state(state: dict[str, Any], path: Path = STATE_PATH) -> None:
 def run(calendar: dict, now: datetime | None = None) -> dict[str, Any]:
     from src.scraper.run import ScraperRunner
 
+    t0 = _monotonic()                    # 時間の上限は起動から数える（対象選びの GCS 問い合わせも含める）
     now = now or datetime.now(JST)
     dates = due_dates(calendar, now)
     runner = ScraperRunner()
@@ -104,13 +114,26 @@ def run(calendar: dict, now: datetime | None = None) -> dict[str, Any]:
         rl = runner.storage.load("race_lists", d) or {}
         by_date[d] = [r["race_id"] for r in rl.get("races", [])]
     state = load_state()
-    targets = select_targets(by_date, runner.storage.exists, state, now)
+    from src.ops.shadow_storage import active as shadow_active, production_exists
+
+    shadow = shadow_active()
+    with production_exists():            # 影モードでも『本番に無いもの』だけを取る（影でないときは何もしない）
+        targets = select_targets(by_date, runner.storage.exists, state, now)
+    try:
+        budget = float(os.environ.get("KEIBA_RECENT_RETRY_BUDGET_SEC") or TIME_BUDGET_SEC)
+    except ValueError:
+        budget = float(TIME_BUDGET_SEC)
+    stopped_by_budget = False
     saved = {c: 0 for c, _ in CATEGORIES}
     pending = {c: 0 for c, _ in CATEGORIES}
     errors = 0
     date_of = {rid: d for d, rids in by_date.items() for rid in rids}
     result_dates: set[str] = set()
     for i, (cat, method, rid) in enumerate(targets):
+        if _monotonic() - t0 >= budget:
+            stopped_by_budget = True
+            logger.warning("recent-retry: 時間の上限 %.0f 秒に達したので止める（%d/%d 件。残りは次回）", budget, i, len(targets))
+            break
         key = f"{cat}/{rid}"
         s = state.setdefault(key, {"attempts": 0})
         s["attempts"] = int(s.get("attempts", 0)) + 1
@@ -125,7 +148,8 @@ def run(calendar: dict, now: datetime | None = None) -> dict[str, Any]:
         pending[cat] += int(not ok)
         if ok and cat == "race_result" and rid in date_of:
             result_dates.add(date_of[rid])
-        if ok:
+        if ok and not shadow:
+            # 影モードの保存は shadow/ 以下で本番には入らない。記録を消すと次回も『本番に無い』で取り直すので、残して間隔・上限を効かせる
             state.pop(key, None)
         if i % 20 == 19:
             save_state(state)
@@ -134,7 +158,7 @@ def run(calendar: dict, now: datetime | None = None) -> dict[str, Any]:
     if (os.environ.get("KEIBA_RUN_LOCATION") or "").strip().lower() == "vps":
         # VPS は取得だけ（250MB 枠・flat と馬場速度の正本は GCS）。馬場速度は GCP の export-tables-daily、予測成績は prediction-results-refresh が行う
         return {"dates": dates, "targets": len(targets), "saved": saved, "pending": pending, "error_count": errors,
-                "track_speed_dates": [], "post_processing": "gcp"}
+                "stopped_by_budget": stopped_by_budget, "track_speed_dates": [], "post_processing": "gcp"}
     # 馬場速度は確定結果（race_result）から計算する。当日夜は未取得なので、取れた日付の分をここで計算する
     for d in sorted(result_dates):
         try:
@@ -150,4 +174,4 @@ def run(calendar: dict, now: datetime | None = None) -> dict[str, Any]:
 
         refresh_for_dates(sorted(result_dates), reason="recent-retry")
     return {"dates": dates, "targets": len(targets), "saved": saved, "pending": pending, "error_count": errors,
-            "track_speed_dates": sorted(result_dates)}
+            "stopped_by_budget": stopped_by_budget, "track_speed_dates": sorted(result_dates)}

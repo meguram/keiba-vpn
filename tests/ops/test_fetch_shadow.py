@@ -573,3 +573,27 @@ def test_generic_diff_ignores_volatile_fields_and_reports_mismatches():
     p = SR.diff_tree(io, "parallel/20261031/")
     assert p["by_category"]["state"]["matched"] == 1
     assert SR.diff_tree(io, "shadow/20261031/", skip={"horse_result"})["compared"] == 1
+
+
+def test_production_exists_answers_from_production_inside_scope(monkeypatch):
+    """穴埋めのタスクの『取得済みか』は production_exists() の中だけ本番の有無で答える（外は従来どおり影の有無）。"""
+    from google.cloud import storage as gcs_lib
+    from src.scraper.storage import HybridStorage
+
+    monkeypatch.setattr(ss, "_INSTALLED", False)
+    for name in ("bucket", "get_bucket", "lookup_bucket", "create_bucket"):
+        monkeypatch.setattr(gcs_lib.Client, name, getattr(gcs_lib.Client, name))
+    for name in ("_get_bucket", "exists", "exists_gcs"):
+        monkeypatch.setattr(HybridStorage, name, getattr(HybridStorage, name))
+    seen = []
+    monkeypatch.setattr(HybridStorage, "exists_gcs", lambda self, c, k: seen.append(ss._shadow_exists_mode()) or True)
+    monkeypatch.setattr(HybridStorage, "exists", lambda self, c, k: seen.append("prod") or True)   # 本来の exists（本番の有無）
+    monkeypatch.setattr(HybridStorage, "_is_local_only", lambda self, c: False)
+    ss.install()
+    st = HybridStorage.__new__(HybridStorage)
+    st._dev_store = None
+    st.exists("race_result", "r1")
+    with ss.production_exists():
+        st.exists("race_result", "r1")
+        st.exists_gcs("race_result", "r1")
+    assert seen == [True, "prod", False]          # 外: 影の有無 / 中: 本来の exists・本番の exists_gcs
