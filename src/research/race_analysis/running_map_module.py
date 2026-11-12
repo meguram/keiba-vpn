@@ -13,7 +13,7 @@ from src.research.race import running_map as rm
 from src.research.race_analysis.base import ModuleOutput, RaceContext
 
 # 図に要る馬の項目（それ以外は保存しない）
-_HORSE_KEYS = ("horse_id", "horse_number", "horse_name", "x", "y", "group", "percentiles", "n_runs", "n_lap_runs", "axis_runs", "from_prior", "estimated", "own_weight", "extras", "similar", "last_run_date", "finish_position")   # 血統の傾向は ped（下で付ける）
+_HORSE_KEYS = ("horse_id", "horse_number", "horse_name", "x", "y", "group", "percentiles", "scores", "n_runs", "n_lap_runs", "axis_runs", "from_prior", "estimated", "own_weight", "extras", "similar", "last_run_date", "finish_position")   # 血統の傾向は ped（下で付ける）
 
 
 def _load_result(race_id: str) -> dict | None:

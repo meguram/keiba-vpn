@@ -39,6 +39,7 @@ from typing import Any, Optional
 import numpy as np
 import pandas as pd
 
+from src.research.race import axis_score10 as s10
 from src.research.race import running_profile as rp
 
 # (キー, 列, 向き, 表示名, 高いときの説明, 低いときの説明)。向き -1 は値が小さいほど「高い」側
@@ -104,7 +105,7 @@ SIMILAR_MIN_COMMON = 3  # 距離を測るのに、2 頭とも実際に値があ�
 # 基準は作り直さない（データが増えても分布はほぼ変わらない）。作り方を変えたら REFERENCE_VERSION を上げる。
 
 REFERENCE_DIR = rp.STORE_DIR / "reference"
-REFERENCE_VERSION = "16"    # 16: コース適性（寄与率・地図の重み・好走ゾーン）の期待得点を人気込みにして、実力の代理を除く。人気表は基準に同梱し、読み込み時に running_map_course.POP_TABLE へ設定（2026-11-10）。15: コース別の地図を良馬場だけ・道悪（稍重以上）だけで別々に測り、道悪の地図は基礎スピードの代わりに道悪適性を軸にする（2026-11-05）。14: 地図に使う軸に基礎スピードを足して 6 軸に・TS/TS持続力へ改名（2026-11-05）。13: 地図に使う軸に Hペース耐性を足して 6 軸に（2026-11-05）。12: 地図に使う軸をギアチェンジ・TS・TS持続力・Cr性能の 4 つに固定（2026-11-05）。11: 場のグループは 300 走以上・長距離が少ない場は 1800m 以上でまとめる。10: 標本の少ないコースは同じ競馬場の距離帯（2600m 以上は長距離）でまとめる。9: コース別の地図を「軸の無い、上位 N 方面（コースごとに 3〜6）で走法の近い馬ほど近い」重み付き主成分にした（2026-11-03）
+REFERENCE_VERSION = "17"    # 17: 10 点満点への換算の基準（クラス別 TS のアンカー・タイプ軸の平均/SD。axis_score10.py）を同梱（2026-11-11）。16: コース適性（寄与率・地図の重み・好走ゾーン）の期待得点を人気込みにして、実力の代理を除く。人気表は基準に同梱し、読み込み時に running_map_course.POP_TABLE へ設定（2026-11-10）。15: コース別の地図を良馬場だけ・道悪（稍重以上）だけで別々に測り、道悪の地図は基礎スピードの代わりに道悪適性を軸にする（2026-11-05）。14: 地図に使う軸に基礎スピードを足して 6 軸に・TS/TS持続力へ改名（2026-11-05）。13: 地図に使う軸に Hペース耐性を足して 6 軸に（2026-11-05）。12: 地図に使う軸をギアチェンジ・TS・TS持続力・Cr性能の 4 つに固定（2026-11-05）。11: 場のグループは 300 走以上・長距離が少ない場は 1800m 以上でまとめる。10: 標本の少ないコースは同じ競馬場の距離帯（2600m 以上は長距離）でまとめる。9: コース別の地図を「軸の無い、上位 N 方面（コースごとに 3〜6）で走法の近い馬ほど近い」重み付き主成分にした（2026-11-03）
 _APTITUDE_FILE = "aptitude.json"
 _COURSE_MAPS_FILE = "course_maps.json"
 
@@ -134,7 +135,7 @@ def _global_projection(table: pd.DataFrame, q: dict[str, list[float]], sd: list[
 def _build_reference(metrics: pd.DataFrame, sires: pd.DataFrame) -> dict[str, Any]:
     from src.research.race import running_map_aptitude as apt
 
-    table = rp.profile_table(metrics, sires, cols=[col for _, col, *_ in AXES])
+    table = rp.profile_table(metrics, sires, cols=[col for _, col, *_ in AXES] + ["ax_slope"])
     q = {key: np.quantile(table[col].dropna().to_numpy(dtype=float), np.linspace(0, 1, 1001)).tolist() for key, col, *_ in AXES}
     sample = table.sample(min(len(table), 50_000), random_state=0)
     sd = [float(np.nanstd(_to_normal(sample[col].to_numpy(dtype=float), np.array(q[key])))) for key, col, *_ in AXES]
@@ -149,9 +150,31 @@ def _build_reference(metrics: pd.DataFrame, sires: pd.DataFrame) -> dict[str, An
     return {
         "version": REFERENCE_VERSION, "metrics_version": rp.METRICS_VERSION,
         "built_from": str(metrics["date"].max().date()), "quantiles": q, "sd": sd, "extent": extent, **proj,
+        "score10": _build_score10(table, metrics),
         "_aptitude": aptitude,
         "_course_maps": _build_course_maps(metrics, table, q, sd),
     }
+
+
+def _build_score10(table: pd.DataFrame, metrics: pd.DataFrame) -> Optional[dict[str, Any]]:
+    """10 点満点への換算の基準（クラスの好走走での水準。axis_score10.py）。格付けが取れなければ None（画面は従来の順位方式）。"""
+    keys = ["race_id", "horse_id", "date"]
+    t = table.sort_values(["horse_id", "date", "race_id"]).reset_index(drop=True)
+    # 基準は「その走の直後」の値（次走の直前のプロファイル＝今の採点と同じ量）。その走の好走が入る。最後の走は次が無いので外す
+    ax_cols = [c for c in t.columns if c.startswith("ax_")]
+    # 軸が測れなかった走の行は NaN なので、次に値のある行まで後方へ埋める（次走の条件で標本が偏らないように）
+    t[ax_cols] = t.groupby("horse_id")[ax_cols].shift(-1).groupby(t["horse_id"]).bfill()
+    t = t.merge(metrics[keys + ["finish_position"]].drop_duplicates(keys), on=keys, how="left")
+    t = t.merge(s10.peak_ts_runs(metrics), on=keys, how="left")
+    t = t[t["peak_ts"].notna()]
+    grades = s10.load_grades(sorted(int(y) for y in t["date"].dt.year.unique()))
+    if grades.empty:
+        return None
+    cols = {k: c for k, c, *_ in AXES}
+    cols["ts"] = "peak_ts"            # TS だけは「最高速度」（直近 10 走の上位 2 走の平均）で測る
+    cols["slope"] = "ax_slope"
+    signs = {a[0]: a[2] for a in AXES}
+    return s10.build_score10(t, t["finish_position"].fillna(99), t["race_id"].astype(str).map(grades), cols, signs)
 
 
 def _build_course_maps(metrics: pd.DataFrame, table: pd.DataFrame, q: dict[str, list[float]], sd: list[float]) -> dict[str, Any]:
@@ -446,15 +469,20 @@ def _num(x: Any) -> Optional[float]:
     return None if x is None or (isinstance(x, float) and math.isnan(x)) else round(float(x), 1)
 
 
-def _extras(hid: str, row: pd.Series, keys: list[str], going: Optional[pd.DataFrame]) -> dict[str, Any]:
+def _extras(hid: str, row: pd.Series, keys: list[str], going: Optional[pd.DataFrame], s10ref: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for k in keys:
         if k == "slope":
-            out[k] = {"value": _num(row.get("ax_slope")), "runs": int(row.get("n_ax_slope", 0))}
+            v = _num(row.get("ax_slope"))
+            out[k] = {"value": v, "runs": int(row.get("n_ax_slope", 0)), "score": s10.to_score10("slope", v, s10ref)}
         else:
             g = going.loc[hid] if going is not None and hid in going.index else None
-            out[k] = ({"value": None, "n_power": 0, "n_normal": 0, "low": False} if g is None else
-                      {"value": _num(g[k]), "n_power": int(g[f"n_power_{k}"]), "n_normal": int(g[f"n_normal_{k}"]), "low": bool(g[f"low_{k}"])})
+            if g is None:
+                out[k] = {"value": None, "n_power": 0, "n_normal": 0, "low": False, "score": None}
+            else:
+                v = _num(g[k])   # 道悪適性は 50±10 の偏差値（判定できなければ None）。基準の分布を持たないので偏差値のまま同じ幅で換算する
+                out[k] = {"value": v, "n_power": int(g[f"n_power_{k}"]), "n_normal": int(g[f"n_normal_{k}"]), "low": bool(g[f"low_{k}"]),
+                          "score": s10.to_score10_deviation(v, s10ref)}
     return out
 
 
@@ -502,11 +530,13 @@ def build_running_map(entries: list[dict], race_id: str, conditions: dict[str, A
             if any(ids) else pd.DataFrame())
     extra_keys = _extra_keys(conditions)
     going = _going_all(as_of) if any(k.startswith("going_") for k in extra_keys) else None
-    out = _assemble(entries, ids, prof, race_id, conditions, extra_keys, going, load_result, wet=False)
+    s10ref = d["ref"].get("score10")
+    peaks = s10.peak_ts_as_of(d["metrics"], [i for i in ids if i], as_of) if s10ref else None
+    out = _assemble(entries, ids, prof, race_id, conditions, extra_keys, going, load_result, wet=False, peaks=peaks)
     surface = conditions.get("surface")
     if surface in WET_AXIS and out.get("status") == "ok":
         try:
-            wet = _assemble(entries, ids, prof, race_id, conditions, [k for k in extra_keys if not k.startswith("going_")], None, None, wet=True)
+            wet = _assemble(entries, ids, prof, race_id, conditions, [k for k in extra_keys if not k.startswith("going_")], None, None, wet=True, peaks=peaks)
         except Exception:   # 道悪の地図は補助。失敗しても良馬場の地図は出す
             import logging
 
@@ -518,10 +548,14 @@ def build_running_map(entries: list[dict], race_id: str, conditions: dict[str, A
 
 
 def _assemble(entries: list[dict], ids: list[str], prof: pd.DataFrame, race_id: str, conditions: dict[str, Any], extra_keys: list[str],
-              going: Optional[pd.DataFrame], load_result, wet: bool) -> dict[str, Any]:
+              going: Optional[pd.DataFrame], load_result, wet: bool, peaks: Optional[pd.Series] = None) -> dict[str, Any]:
     qs = _quantiles()
     d = _data()
     map_keys, map_idx, weights, shown = mode_axes(wet, conditions.get("surface"))
+    s10ref = d["ref"].get("score10")   # クラス基準の 10 点換算（基準が無ければ None → 画面は従来の順位方式）
+    if peaks is None and s10ref:   # TS の点は「最高速度」（ピーク）から。呼び出し側（良馬場と道悪の 2 回）で 1 回だけ計算して渡す
+        as_of = str(conditions.get("date") or pd.Timestamp.now(tz="Asia/Tokyo").date().isoformat())
+        peaks = s10.peak_ts_as_of(d["metrics"], [i for i in ids if i], as_of)
     A = [(j, *AXES[j]) for j in shown]   # (添字, キー, 列, 向き, 表示名, 高い説明, 低い説明)
     picked, unmapped = [], []
     for e, hid in zip(entries, ids):
@@ -535,7 +569,7 @@ def _assemble(entries: list[dict], ids: list[str], prof: pd.DataFrame, race_id: 
             continue
         picked.append(({**base, "n_runs": int(row["n_runs"]), "n_lap_runs": n_lap, "axis_runs": axis_runs, "estimated": n_lap == 0,
                         "own_weight": round(float(np.mean([row[f"own_{col}"] for _, _, col, *_ in A])), 3),
-                        "extras": _extras(hid, row, extra_keys, going)}, row))
+                        "extras": _extras(hid, row, extra_keys, going, s10ref)}, row))
 
     horses, Zs, Zraw = [], [], []
     signs = SIGNS
@@ -561,6 +595,9 @@ def _assemble(entries: list[dict], ids: list[str], prof: pd.DataFrame, race_id: 
             "values": {AXIS_KEYS[j]: (None if np.isnan(raw[j]) else round(float(raw[j]), 4)) for j in shown},
             # 全馬の中で「高い」側から見た位置（0〜100。100 が最も高い側）
             "percentiles": {AXIS_KEYS[j]: (None if np.isnan(pct[j]) else round(float(pct[j] if signs[j] > 0 else 1 - pct[j]) * 100, 1)) for j in shown},
+            # TS は馬の最高速度（ピーク）。自分の TS の走が無い馬（父の平均だけ）は不明（None）
+            "scores": ({AXIS_KEYS[j]: s10.to_score10(AXIS_KEYS[j], (peaks.get(base["horse_id"]) if base["horse_id"] else None) if AXIS_KEYS[j] == s10.TS_KEY else raw[j], s10ref)
+                        for j in shown} if s10ref else None),
             "imputed": missing,
             # 自分の実測の走が 1 つも無い（父や全体の平均だけで決まった）方面
             "from_prior": [k for _, k, _c, *_ in A if base["axis_runs"][k] == 0],

@@ -220,5 +220,28 @@ class AptitudeBuildTest(unittest.TestCase):
         self.assertLess(c["sig"].count("2"), 0.15 * valid)
 
 
+class ExtrasScoreTest(unittest.TestCase):
+    """補助の軸（急坂・道悪）の 10 点。基準が無ければ None、あれば 1〜10 の 0.5 点刻み。"""
+
+    REF = {"k": 1.5, "ts": {"knots": [[50, 3.0], [60, 5.0]]},
+           "axes": {"slope": {"mu": 53.0, "sd": 6.0, "n": 100, "sign": 1}}}
+
+    def test_slope_score_with_and_without_reference(self):
+        import pandas as pd
+
+        row = pd.Series({"ax_slope": 59.0, "n_ax_slope": 4})
+        self.assertEqual(rm._extras("h", row, ["slope"], None, self.REF)["slope"]["score"], 6.5)   # 5 + 1.5 × (59-53)/6
+        self.assertIsNone(rm._extras("h", row, ["slope"], None, None)["slope"]["score"])
+        unknown = pd.Series({"ax_slope": float("nan"), "n_ax_slope": 0})
+        self.assertIsNone(rm._extras("h", unknown, ["slope"], None, self.REF)["slope"]["score"])
+
+    def test_going_without_data_is_unknown(self):
+        import pandas as pd
+
+        out = rm._extras("h", pd.Series(dtype=float), ["going_turf"], None, self.REF)["going_turf"]
+        self.assertIsNone(out["value"])
+        self.assertIsNone(out["score"])
+
+
 if __name__ == "__main__":
     unittest.main()
