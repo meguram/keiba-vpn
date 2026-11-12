@@ -2,7 +2,8 @@
 
 3 種類（--mode）:
   alerts    異常の即時通知。期待した時刻に始まらない/止まった/連続失敗/スキーマ違反の急増/取得の停止（403/429 の連続など）/調教被覆の低下。
-            同じ異常は復旧するまで REPEAT_MIN 分おきに最大 MAX_REPEATS 回まで。復旧時に『復旧しました』を 1 回。
+            継続中の異常は全体で REPEAT_MIN 分に 1 通にまとめ、1 件につき最大 MAX_REPEATS 回まで再通知。復旧時に『復旧しました』を 1 回。
+            ホスト（cron）の停止中に予定が来て動かなかったジョブは『未開始』にせず、停止 1 回につき 1 件・1 通だけ（host_down_windows）。
   summary   日次のサマリー（信号: 緑/黄/赤、タスク別の表、取得/失敗/スキーマ違反/欠損、次回予定）。開催日は夜、非開催日は朝に cron から。
   coverage  週次のカバレッジ要約（data_health の欠損、調教などの運用必須データの被覆）。
 
@@ -44,6 +45,9 @@ STUCK_HOURS = 6          # 実行中がこの時間を超えたら停止の疑�
 SCHEMA_SPIKE_MIN = 20    # スキーマ違反の急増: 直近 24 時間の件数がこの値以上で、過去の中央値の 3 倍以上
 BLOCK_MIN = 5            # 403/429 の失敗がこの件数以上で取得停止の兆候
 COVERAGE_FLOOR = 0.90    # 調教の被覆の下限
+HEARTBEAT_JOB = "slack-scrape-alerts"   # 15 分おきに動くこの通知自身の実行記録を、ホストが動いていた証拠に使う
+HOST_GAP_MIN = 40        # 上の記録にこの分数を超える空白があれば、その間はホスト（cron）が止まっていたとみなす
+HOST_TAIL_MAX_H = 24     # 最後の記録から今までの空白は、この時間以内のときだけ停止とみなす（記録が止まっただけの誤認を防ぐ）
 
 # 期待する開催日条件: raceday（その日が開催日）/ eve（翌日が開催日）/ always
 EXPECT = (("raceday-eve", "eve"), ("raceday-runner", "raceday"), ("raceday-result-runner", "raceday"), ("raceday-evening", "raceday"),
@@ -110,14 +114,56 @@ def consecutive_failures(runs: list[tuple[float, float, int]]) -> int:
     return n
 
 
+def host_down_windows(runs_dir: Path, now: datetime, *, job_id: str = HEARTBEAT_JOB, gap_min: int = HOST_GAP_MIN,
+                      include_tail: bool = False) -> list[tuple[float, float]]:
+    """ホスト（cron）が止まっていた期間 [(開始epoch, 終了epoch)]。
+
+    定期で動く job_id の開始時刻の間隔が gap_min 分を超えたところを停止とみなす（終了は再起動後の最初の記録の開始。
+    再起動からその記録までの最大 15 分に予定のあったジョブも停止扱いになる）。now より後の記録は使わない（--now の再現用）。
+    include_tail: 最後の記録から now までの空白も停止に数える。今まさに動いている回は記録（完了時に書く）にまだ無いので、
+    再起動直後の最初の回はこれで判定する。job_id 自身として動いているとき（alerts）だけ使うこと。記録が止まっただけ
+    （crontab から外した・書き込めない）の空白を停止と誤認しないよう、HOST_TAIL_MAX_H 時間を超える空白は数えない。
+    記録が無ければ判定しない（空）。
+    """
+    t_now = now.timestamp()
+    starts = sorted(s for s, _e, _c in read_runs(job_id, runs_dir, limit=1000) if s <= t_now)
+    if not starts:
+        return []
+    out = [(a, b) for a, b in zip(starts, starts[1:]) if b - a > gap_min * 60]
+    if include_tail and gap_min * 60 < t_now - starts[-1] <= HOST_TAIL_MAX_H * 3600:
+        out.append((starts[-1], t_now))
+    return out
+
+
+def merge_down_windows(saved: list, found: list[tuple[float, float]], now: datetime, keep_days: int = 14) -> list[tuple[float, float]]:
+    """状態に残した停止期間と今回見つけた期間を合わせる（同じ開始は終了の遅い方）。keep_days より古いものは捨てる。
+
+    実行記録は直近 200 行ほど（約 2 日）に切り詰められるので、週 1 回のジョブの予定が停止中だった場合に備えて状態に残す。"""
+    by_start: dict[float, float] = {}
+    for w in [*(saved or []), *found]:
+        try:
+            a, b = float(w[0]), float(w[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        by_start[a] = max(b, by_start.get(a, b))
+    floor = now.timestamp() - keep_days * 86400
+    return sorted((a, b) for a, b in by_start.items() if b >= floor)
+
+
 def collect_cron(now: datetime, *, status_fn: Callable[..., dict] | None = None, runs_dir: Path | None = None,
-                 raceday: Callable[[str], bool] | None = None) -> list[dict]:
-    """全 cron ジョブの状態。各ジョブ: id/name/group/state/last/next/consecutive_failures/overdue_min/cause。"""
+                 raceday: Callable[[str], bool] | None = None, down: list[tuple[float, float]] | None = None) -> list[dict]:
+    """全 cron ジョブの状態。各ジョブ: id/name/group/state/last/next/consecutive_failures/overdue_min/missed_down/cause。
+
+    予定時刻がホストの停止中（host_down_windows）だった未開始は overdue_min にせず missed_down（停止期間）に入れる。
+    ジョブ自体の異常ではないので、detect_anomalies が 1 件にまとめて 1 回だけ知らせる。
+    """
     from src.monitor import cron_status as CSM
 
     runs_dir = runs_dir or CSM.RUNS_DIR
     st = status_fn() if status_fn else CSM.build_status(now=now)
     cnow = now.astimezone(CSM.cron_timezone())          # cron 式はサーバ（ホストは UTC）の時刻で評価する
+    if down is None:
+        down = host_down_windows(runs_dir, now)
     jobs: list[dict] = []
     for g in st.get("groups", []):
         for j in g.get("jobs", []):
@@ -125,6 +171,7 @@ def collect_cron(now: datetime, *, status_fn: Callable[..., dict] | None = None,
             last = j.get("last_run") or {}
             exp = expectation_of(j["id"])
             overdue_min = None
+            missed_down = None
             if j.get("state") != "running" and not j.get("yields") and j.get("cron_exprs"):
                 fires = [f for f in (prev_fire(e, cnow) for e in j["cron_exprs"]) if f]
                 if fires:
@@ -137,7 +184,9 @@ def collect_cron(now: datetime, *, status_fn: Callable[..., dict] | None = None,
                     last_start = datetime.fromisoformat(started).timestamp() if started else (runs[-1][0] if runs else 0.0)
                     late = (cnow - pf).total_seconds() / 60
                     if day_ok and late > OVERDUE_GRACE_MIN and last_start < pf.timestamp() - 60:
-                        overdue_min = round(late)
+                        missed_down = next(((a, b) for a, b in down if a < pf.timestamp() < b), None)
+                        if missed_down is None:
+                            overdue_min = round(late)
             running_since = j.get("running_since")
             running_h = None
             if j.get("state") == "running" and running_since:
@@ -150,7 +199,7 @@ def collect_cron(now: datetime, *, status_fn: Callable[..., dict] | None = None,
                 "state": j.get("state"), "result": last.get("result"), "started_at": last.get("started_at"),
                 "ended_at": last.get("ended_at"), "duration_sec": last.get("duration_sec"), "exit_code": last.get("exit_code"),
                 "next_run": j.get("next_run"), "consecutive_failures": consecutive_failures(runs),
-                "overdue_min": overdue_min, "running_hours": running_h, "yields": bool(j.get("yields")),
+                "overdue_min": overdue_min, "missed_down": missed_down, "running_hours": running_h, "yields": bool(j.get("yields")),
                 "cause": ((j.get("cause") or {}).get("label")), "cause_id": ((j.get("cause") or {}).get("pattern_id")),
             })
     return jobs
@@ -346,6 +395,18 @@ def detect_anomalies(jobs: list[dict], queue: dict | None, schema: dict | None, 
         if j.get("cause_id") and any(k in str(j["cause_id"]).lower() for k in ("dns", "network", "403", "429", "block")) and cf >= 1:
             out["net:cause"] = {"severity": "critical", "title": "取得の停止の兆候（ネットワーク/アクセス拒否）",
                                 "detail": f"{j['name']}: {j.get('cause')}"}
+    # ホストの停止中に予定時刻が来て動かなかったジョブ: ジョブごとの『未開始』にせず、停止 1 回につき 1 件・再通知なし
+    down: dict[tuple[float, float], list[str]] = {}
+    for j in jobs:
+        if j.get("missed_down"):
+            down.setdefault(tuple(j["missed_down"]), []).append(j["name"])
+    for (a, b), names in down.items():
+        fa, fb = (datetime.fromtimestamp(x, JST).strftime("%m/%d %H:%M") for x in (a, b))
+        key = "host:down:" + datetime.fromtimestamp(a, JST).strftime("%Y%m%d%H%M")
+        out[key] = {"severity": "warning", "repeat": False,
+                    "title": f"ホスト停止中（{fa}〜{fb} JST ごろ）の定時ジョブ {len(names)} 件が未実行",
+                    "detail": "、".join(names[:20]) + (f" ほか {len(names) - 20} 件" if len(names) > 20 else "")
+                              + "\n次の予定時刻に動きます。急ぐものは手動で実行してください。"}
     if queue:
         blk = sum(v for k, v in (queue.get("failed_reasons") or {}).items() if any(x in k for x in ("403", "429", "dns", "blocked")))
         if blk >= BLOCK_MIN:
@@ -371,31 +432,50 @@ def step_state(state: dict, current: dict[str, dict], now: datetime, *, repeat_m
                max_repeats: int = MAX_REPEATS) -> tuple[list[dict], list[dict], dict]:
     """通知の抑制。戻り値: (今送る異常, 復旧した異常, 新しい状態)。
 
-    - 新規: すぐ送る。継続: repeat_min 分たつごとに最大 max_repeats 回まで再通知（その後は黙る）。
+    - 新規: すぐ送る。継続: repeat_min 分たつごとに最大 max_repeats 回まで再通知（その後は黙る）。``repeat: False`` の異常は再通知しない。
+    - 再通知は異常ごとの時刻に合わせず、全体で repeat_min 分に 1 回、その時点で期限の来たものをまとめて送る
+      （異常ごとに時刻がずれて 15 分おきに別々の通知が続くのを防ぐ）。最後に再通知した時刻は状態の ``_meta`` に持つ。
+      このため 1 件ごとの再通知の間隔は repeat_min〜約 2×repeat_min 分になる。
+    - ``repeat: False`` の異常（ホスト停止のまとめ）は復旧も知らせない（発生の 1 通だけ）。
+    - 状態の ``_meta`` は異常のキーではない（旧版に戻すと『復旧 _meta』が 1 回出るだけで害はない）。
     - 重要度が上がったら（注意→緊急）すぐ送る。復旧（現在の異常に無い）: 『復旧』を 1 回送って状態から消す。
     """
+    meta = dict(state.get("_meta") or {})
     new_state: dict[str, dict] = {}
     notify, resolved = [], []
     ts = now.timestamp()
+    repeat_window = (ts - meta.get("last_repeat", 0)) >= repeat_min * 60
+    repeated = False
     for key, a in current.items():
         prev = state.get(key)
-        item = {**a, "key": key}
+        item = {k: v for k, v in a.items() if k != "repeat"} | {"key": key}
         if not prev:
             notify.append({**item, "kind": "new"})
-            new_state[key] = {"first": ts, "last_notified": ts, "repeats": 0, "severity": a["severity"]}
+            new_state[key] = {"first": ts, "last_notified": ts, "repeats": 0, "severity": a["severity"], "title": a.get("title", "")}
+            if a.get("repeat", True) is False:
+                new_state[key]["quiet"] = True
             continue
         s = dict(prev)
         escalated = SN.SEVERITIES.index(a["severity"]) > SN.SEVERITIES.index(prev.get("severity", "normal"))
-        due = (ts - prev.get("last_notified", 0)) >= repeat_min * 60 and prev.get("repeats", 0) < max_repeats
+        due = (repeat_window and a.get("repeat", True) and (ts - prev.get("last_notified", 0)) >= repeat_min * 60
+               and prev.get("repeats", 0) < max_repeats)
         if escalated or due:
             notify.append({**item, "kind": "escalated" if escalated else "repeat"})
             s["last_notified"] = ts
             s["repeats"] = prev.get("repeats", 0) + (0 if escalated else 1)
+            repeated = repeated or not escalated
         s["severity"] = a["severity"]
+        s["title"] = a.get("title", s.get("title", ""))
         new_state[key] = s
     for key, prev in state.items():
-        if key not in current:
-            resolved.append({"key": key, "since": prev.get("first")})
+        if key != "_meta" and key not in current and not prev.get("quiet"):
+            resolved.append({"key": key, "since": prev.get("first"), "title": prev.get("title") or key})
+    if repeated:
+        meta["last_repeat"] = ts
+    if not new_state:
+        meta.pop("last_repeat", None)              # 異常が無くなったら再通知の窓は持ち越さない（停止期間 down は残す）
+    if meta:
+        new_state["_meta"] = meta
     return notify, resolved, new_state
 
 
@@ -437,7 +517,7 @@ def build_summary(now: datetime, jobs: list[dict], queue: dict | None, schema: d
     sig = signal_of(jobs, anomalies, schema, queue)
     title = f"スクレイピング状況 {now.strftime('%m/%d')}（{SN.jp_weekday(now.strftime('%Y%m%d'))}）{'開催日' if race_day else '非開催日'}"
     ok = sum(1 for j in jobs if j.get("result") == "success")
-    bad = [j for j in jobs if j.get("result") == "failed" or j["consecutive_failures"] or j.get("overdue_min")]
+    bad = [j for j in jobs if j.get("result") == "failed" or j["consecutive_failures"] or j.get("overdue_min") or j.get("missed_down")]
     blocks = [SN.section(f"*{SN.esc(title)}*　［{SIGNAL_WORD[sig]}］")]
     kp = [("ジョブ", f"{len(jobs)} 件（成功 {ok} / 失敗・未開始 {len(bad)}）" if jobs else "取得不可（crontab を読めません。root で実行してください）")]
     if queue:
@@ -460,12 +540,12 @@ def build_summary(now: datetime, jobs: list[dict], queue: dict | None, schema: d
     rows = []
     for g, js in groups.items():
         gok = sum(1 for j in js if j.get("result") == "success")
-        gbad = sum(1 for j in js if j.get("result") == "failed" or j["consecutive_failures"] or j.get("overdue_min"))
+        gbad = sum(1 for j in js if j.get("result") == "failed" or j["consecutive_failures"] or j.get("overdue_min") or j.get("missed_down"))
         rows.append([g[:14], str(len(js)), str(gok), str(gbad)])
     blocks.append(SN.section("*タスク別*\n" + SN.code_table(["グループ", "件", "成功", "失敗/未開始"], rows)))
 
     if bad:
-        prow = [[j["name"][:22], "未開始" if j.get("overdue_min") else ("失敗×" + str(j["consecutive_failures"]) if j["consecutive_failures"] else "失敗"),
+        prow = [[j["name"][:22], "未開始" if j.get("overdue_min") else "停止で未実行" if j.get("missed_down") else ("失敗×" + str(j["consecutive_failures"]) if j["consecutive_failures"] else "失敗"),
                  _hm(j.get("started_at")), _dur(j.get("duration_sec"))] for j in bad[:10]]
         blocks.append(SN.section("*問題のあるジョブ*\n" + SN.code_table(["ジョブ", "状態", "最終開始", "所要"], prow, aligns="llll")))
     auto = misc.get("auto") or {}
@@ -506,8 +586,9 @@ def build_alert(items: list[dict], resolved: list[dict], now: datetime) -> dict 
             tag = {"new": "新規", "repeat": "継続", "escalated": "悪化"}.get(i["kind"], "")
             blocks.append(SN.section(f"*{SN.esc(i['title'])}*　［{SN.SEVERITY_LABEL[i['severity']]}・{tag}］\n{SN.esc(i.get('detail') or '')}".strip()))
     if resolved:
-        names = ", ".join(SN.esc(r["key"]) for r in resolved[:8])
-        blocks.append(SN.section(f"*復旧しました*　{names}"))
+        names = "\n".join("• " + SN.esc(r.get("title") or r["key"]) for r in resolved[:8])
+        more = f"\nほか {len(resolved) - 8} 件" if len(resolved) > 8 else ""
+        blocks.append(SN.section(f"*復旧しました（{len(resolved)} 件）*\n{names}{more}"))
     blocks.append(SN.context([now.strftime("%Y-%m-%d %H:%M JST")]))
     sev = top if items else "normal"
     fb = f"[{SN.SEVERITY_LABEL[sev]}] スクレイピングの異常 {len(items)} 件" if items else f"スクレイピングが復旧しました（{len(resolved)} 件）"
@@ -578,7 +659,22 @@ def run(mode: str, now: datetime, *, send: bool = False, state_path: Path | None
 
             inp = {**inp, "jobs": collect_prod(now, default_io(), shadow=str(e.get("KEIBA_FETCH_SHADOW_ENABLED", "")).strip() == "1", raceday=raceday_fn)}
         inp = {"queue": None, "schema": None, "misc": {}, **inp}      # キュー・スキーマ違反・data_health はホストのローカルにだけある
-    jobs = inp["jobs"] if "jobs" in inp else collect_cron(now, raceday=raceday_fn)
+    sp = state_path or meta / "slack_sent" / "scrape_status_state.json"
+    state = read_json(sp) or {}
+    down: list[tuple[float, float]] = []          # 判定に使う停止期間
+    keep_down: list[tuple[float, float]] | None = None   # 状態に残す停止期間（記録の中で閉じたものだけ）。None = 触らない
+    if "jobs" not in inp:
+        # ホストの停止期間: 実行記録から見つけたものと、状態に残したもの（記録の切り詰めで消えた分）を合わせる。
+        # 最後の記録から今までの空白（末尾）は、この通知（alerts）自身として動いているときだけ判定に使い、状態には残さない
+        # （記録が書けないまま alerts だけ動く場合に、本当の未開始を長く握りつぶさないため。次の回には閉じた期間として残る）。
+        from src.monitor import cron_status as CSM
+
+        rdir = Path(inp.get("runs_dir") or CSM.RUNS_DIR)
+        saved = (state.get("_meta") or {}).get("down") or []
+        keep_down = merge_down_windows(saved, host_down_windows(rdir, now), now)
+        down = merge_down_windows(keep_down, host_down_windows(rdir, now, include_tail=(mode == "alerts")), now)
+    jobs = inp["jobs"] if "jobs" in inp else collect_cron(now, raceday=raceday_fn, down=down, status_fn=inp.get("status_fn"),
+                                                          runs_dir=Path(inp["runs_dir"]) if inp.get("runs_dir") else None)
     queue = inp["queue"] if "queue" in inp else fetch_queue(e.get("KEIBA_NOTIFY_API_BASE") or "http://127.0.0.1:23220")
     schema = inp["schema"] if "schema" in inp else collect_schema(REPO_ROOT, now)
     misc = inp["misc"] if "misc" in inp else collect_misc(meta, env_key)
@@ -587,9 +683,17 @@ def run(mode: str, now: datetime, *, send: bool = False, state_path: Path | None
     payload = None
     new_state = None
     if mode == "alerts":
-        sp = state_path or meta / "slack_sent" / "scrape_status_state.json"
-        state = read_json(sp) or {}
         items, resolved, new_state = step_state(state, anomalies, now)
+        if keep_down is not None:
+            m = new_state.get("_meta") or {}
+            if keep_down:
+                m["down"] = [list(w) for w in keep_down]
+            else:
+                m.pop("down", None)
+            if m:
+                new_state["_meta"] = m
+            else:
+                new_state.pop("_meta", None)
         payload = build_alert(items, resolved, now)
         res.update(to_notify=[i["key"] for i in items], resolved=[r["key"] for r in resolved])
     elif mode == "summary":

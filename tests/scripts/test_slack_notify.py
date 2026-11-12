@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
+from unittest import mock
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -331,6 +333,108 @@ class ScrapeStatusTest(unittest.TestCase):
         self.assertEqual(st, {})
         n, r, st = SS.step_state(st, {}, t0 + timedelta(minutes=61 * 10))
         self.assertEqual((n, r), ([], []))
+
+    def test_host_down_windows(self):
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t)
+            self.assertEqual(SS.host_down_windows(t, self.NOW), [])                       # 記録が無ければ判定しない
+            base = self.NOW.timestamp() - 10 * 3600
+            starts = [base + i * 900 for i in range(4)] + [base + 8 * 3600 + i * 900 for i in range(8)]   # 0:45〜8:00 が空白
+            (t / f"{SS.HEARTBEAT_JOB}.tsv").write_text("".join(f"{s}\t{s + 5}\t0\t1\n" for s in starts), encoding="utf-8")
+            w = SS.host_down_windows(t, self.NOW)
+            self.assertEqual(w, [(base + 3 * 900, base + 8 * 3600)])
+            later = self.NOW + timedelta(hours=2)                                         # 最後の記録から今までの空白（再起動直後）
+            self.assertEqual(SS.host_down_windows(t, later), w)                           # alerts 以外は数えない
+            self.assertEqual(SS.host_down_windows(t, later, include_tail=True)[-1], (starts[-1], later.timestamp()))
+            much_later = self.NOW + timedelta(hours=SS.HOST_TAIL_MAX_H + 1)               # 記録が止まっただけの長い空白は数えない
+            self.assertEqual(SS.host_down_windows(t, much_later, include_tail=True), w)
+            past = datetime.fromtimestamp(base + 3 * 3600, JST)                           # --now で過去を再現: それより後の記録は使わない
+            self.assertEqual(SS.host_down_windows(t, past, include_tail=True), [(base + 3 * 900, past.timestamp())])
+
+    def test_merge_down_windows(self):
+        now = self.NOW.timestamp()
+        m = SS.merge_down_windows([[now - 3600, now - 1800], ["bad"], [now - 20 * 86400, now - 19 * 86400]],
+                                  [(now - 3600, now - 900), (now - 600, now - 60)], self.NOW)
+        self.assertEqual(m, [(now - 3600, now - 900), (now - 600, now - 60)])
+
+    @mock.patch.dict(os.environ, {"KEIBA_CRON_TZ": "UTC"})
+    def test_collect_cron_marks_missed_during_downtime(self):
+        now = datetime(2026, 11, 12, 0, 30, tzinfo=timezone.utc)                         # JST 9:30
+        st = {"groups": [{"name": "g", "jobs": [
+            {"id": "morning", "cron_exprs": ["0 22 * * *"], "state": "waiting", "last_run": {"started_at": "2026-11-10T22:00:00+00:00"}},
+            {"id": "after", "cron_exprs": ["0 0 * * *"], "state": "waiting", "last_run": {"started_at": "2026-11-10T00:00:00+00:00"}},
+        ]}]}
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t)
+            up = [datetime(2026, 11, 11, 17, m, tzinfo=timezone.utc).timestamp() for m in (0, 15)] \
+                + [datetime(2026, 11, 11, 23, 45, tzinfo=timezone.utc).timestamp(), datetime(2026, 11, 12, 0, 15, tzinfo=timezone.utc).timestamp()]
+            (t / f"{SS.HEARTBEAT_JOB}.tsv").write_text("".join(f"{s}\t{s + 5}\t0\t1\n" for s in up), encoding="utf-8")
+            jobs = {j["id"]: j for j in SS.collect_cron(now, status_fn=lambda: st, runs_dir=t)}
+        self.assertIsNone(jobs["morning"]["overdue_min"])                                # 22:00 UTC はホスト停止中
+        self.assertIsNotNone(jobs["morning"]["missed_down"])
+        self.assertEqual(jobs["after"]["overdue_min"], 30)                               # 再起動後の 0:00 UTC は通常どおり未開始
+        self.assertIsNone(jobs["after"]["missed_down"])
+        an = SS.detect_anomalies(list(jobs.values()), None, None, {})
+        self.assertNotIn("cron:morning:overdue", an)
+        down = [k for k in an if k.startswith("host:down:")]
+        self.assertEqual(len(down), 1)
+        self.assertIs(an[down[0]]["repeat"], False)
+        self.assertEqual(an[down[0]]["severity"], "warning")
+
+    @mock.patch.dict(os.environ, {"KEIBA_CRON_TZ": "UTC"})
+    def test_run_alerts_downtime_flow_and_saved_windows(self):
+        """alerts: 再起動直後は末尾の空白で判定（保存しない）→ 次の回は閉じた停止期間を状態に保存 → summary も状態から判定。"""
+        u = lambda d, h, m: datetime(2026, 11, d, h, m, tzinfo=timezone.utc)
+        st = {"groups": [{"name": "g", "jobs": [
+            {"id": "morning", "name": "朝のジョブ", "cron_exprs": ["0 22 * * *"], "state": "waiting",
+             "last_run": {"started_at": "2026-11-10T22:00:00+00:00"}}]}]}
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t)
+            hb = t / f"{SS.HEARTBEAT_JOB}.tsv"
+            hb.write_text("".join(f"{x}\t{x + 5}\t0\t1\n" for x in (u(11, 17, 0).timestamp(), u(11, 17, 15).timestamp())), encoding="utf-8")
+            env = {"SLACK_WEBHOOK_URL": SECRET, "KEIBA_SLACK_NOTIFY": "1"}
+            inp = {"runs_dir": str(t), "status_fn": lambda: st, "queue": None, "schema": None, "misc": {}, "meta": str(t),
+                   "raceday": lambda d: True, "maintenance": False}
+            sp = t / "state.json"
+            p = poster(200)
+            r = SS.run("alerts", u(12, 0, 0), send=True, state_path=sp, inputs=inp, poster=p, env=env)
+            self.assertEqual([k for k in r["to_notify"] if k.startswith("host:down:")], r["to_notify"])
+            self.assertEqual(len(r["to_notify"]), 1)
+            saved = json.loads(sp.read_text(encoding="utf-8"))
+            self.assertNotIn("down", saved.get("_meta") or {})                    # 末尾の空白は保存しない
+            with hb.open("a", encoding="utf-8") as f:                               # 再起動後の最初の回が記録された
+                f.write(f"{u(12, 0, 0).timestamp()}\t{u(12, 0, 0).timestamp() + 5}\t0\t1\n")
+            r = SS.run("alerts", u(12, 0, 15), send=True, state_path=sp, inputs=inp, poster=p, env=env)
+            self.assertEqual((r["to_notify"], r["resolved"]), ([], []))
+            self.assertEqual(len(p.calls), 1)                                       # 1 通だけ
+            saved = json.loads(sp.read_text(encoding="utf-8"))
+            self.assertEqual(saved["_meta"]["down"], [[u(11, 17, 15).timestamp(), u(12, 0, 0).timestamp()]])
+            hb.write_text(f"{u(12, 0, 0).timestamp()}\t{u(12, 0, 0).timestamp() + 5}\t0\t1\n", encoding="utf-8")   # 切り詰めで停止前が消えた
+            r = SS.run("summary", u(12, 0, 20), send=False, state_path=sp, inputs=inp, env=env)
+            self.assertEqual([k for k in r["anomalies"] if k.startswith("host:down:")], [k for k in saved if k.startswith("host:down:")])
+            self.assertNotIn("cron:morning:overdue", r["anomalies"])               # 状態に残した期間で判定できる
+
+    def test_step_state_no_repeat_for_downtime_and_batched_repeats(self):
+        t0 = self.NOW
+        cur = {"host:down:x": {"severity": "warning", "title": "停止", "repeat": False}, "a": {"severity": "warning", "title": "A"}}
+        n, _, st = SS.step_state({}, cur, t0)
+        self.assertEqual(sorted(x["key"] for x in n), ["a", "host:down:x"])
+        self.assertNotIn("repeat", n[0])
+        n, _, st = SS.step_state(st, cur, t0 + timedelta(minutes=61))
+        self.assertEqual([x["key"] for x in n], ["a"])                                  # repeat=False は再通知しない
+        # 30 分後に新しい異常 b。再通知は全体で 1 時間に 1 回なので、b の期限が来ても次の窓まで待って a とまとめる
+        cur2 = {**cur, "b": {"severity": "warning", "title": "B"}}
+        n, _, st = SS.step_state(st, cur2, t0 + timedelta(minutes=91))
+        self.assertEqual([x["kind"] for x in n], ["new"])
+        n, _, st = SS.step_state(st, cur2, t0 + timedelta(minutes=130))
+        self.assertEqual([x["key"] for x in n], ["a"])                                  # b はまだ 39 分
+        n, _, st = SS.step_state(st, cur2, t0 + timedelta(minutes=160))
+        self.assertEqual(n, [])                                                         # b は期限が来たが全体の窓は閉じている
+        n, _, st = SS.step_state(st, cur2, t0 + timedelta(minutes=191))
+        self.assertEqual(sorted(x["key"] for x in n), ["a", "b"])                        # 1 通にまとめて再通知
+        n, r, st = SS.step_state(st, {}, t0 + timedelta(minutes=200))
+        self.assertEqual(sorted(x["title"] for x in r), ["A", "B"])                      # 復旧は題名で出す。停止のまとめは復旧も黙る
+        self.assertEqual(st, {})
 
     def test_step_state_escalation_notifies_immediately(self):
         t0 = self.NOW

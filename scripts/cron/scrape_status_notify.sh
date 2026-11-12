@@ -2,7 +2,7 @@
 # スクレイピングの完了ステータスを Slack に通知する（alerts / summary / coverage）。有効化は KEIBA_SLACK_NOTIFY=1（.env）。
 # Usage: bash scripts/cron/scrape_status_notify.sh <alerts|summary-eve|summary-morning|coverage> [PROJECT_DIR]
 #   summary-eve     : 開催日の夜のサマリー（非開催日は何もしない）／ summary-morning : 非開催日の朝のサマリー（開催日は何もしない）
-#   alerts   : 15 分おき（異常の即時通知。同じ異常は復旧まで 60 分おきに最大 3 回、復旧時に 1 回）
+#   alerts   : 15 分おき（異常の即時通知。継続中の異常は全体で 60 分に 1 通にまとめ、1 件につき最大 3 回再通知。復旧時に 1 回。ホスト停止で動かなかった定時ジョブは停止 1 回につき 1 通だけ）
 #   summary  : 開催日は 21:30 JST、非開催日は 07:30 JST に 1 回（cron の時刻は UTC: 12:30 / 22:30 のように）
 #   coverage : 月曜 08:00 JST に 1 回
 set -u
