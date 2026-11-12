@@ -30,7 +30,8 @@ const CSS = `
 .ra-m td.mn{width:100%;max-width:0;text-align:left;padding-left:4px}
 .ra-m td.mn b{display:block;font-size:13px;color:#fff;overflow:hidden;text-overflow:ellipsis}
 .ra-m td.mn small{display:block;font-size:10.5px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;margin-top:1px}
-.ra-m td.mn .ra-runs{margin-top:3px}
+.ra-m td.mn .ra-runs{display:flex;flex-wrap:wrap;row-gap:2px;margin-top:3px}
+.ra-m td.mn small .ra-st{display:inline-block;padding:0 4px;margin-right:4px;border-radius:4px;color:#fff;font-weight:700}
 .ra-m .thin{opacity:.45}
 .ra-m .ra-run{min-width:21px;padding:1px 2px}
 .ra-m .ra-run b{font-size:12px}
@@ -98,12 +99,13 @@ function NumChip({ e, size = 24 }: { e: AnalysisEntry; size?: number }) {
 }
 
 /** スマホ用の表。群は 1 つずつプルダウンで選び、数値の列だけを並べて見出しで並べ替えられるようにする（並べ替えは TableSorter）。
-    成績（1着-2着-3着-着外）は走数に、文字の列（系統名など）と直近の走は馬名の下に寄せて、横幅に収める。 */
+    成績（1着-2着-3着-着外）は走数に、文字の列（系統名・色分けのある脚質など）・直近の走・位置取りの幅は馬名の下に寄せて、横幅に収める（390px で横にはみ出さない）。
+    直近の走のチップは馬名の列の幅で折り返す。 */
 function MobileTable({ entries, module, blocks, keyHeader }: { entries: AnalysisEntry[]; module: AnalysisModuleMeta; blocks: ColumnBlock[]; keyHeader: string | null }) {
   const [sel, setSel] = useState(0);
   const b = blocks[Math.min(sel, blocks.length - 1)];
   if (!b) return null;
-  const sub = b.columns.filter((c) => (c.fmt === "text" && !c.palette) || c.fmt === "runs");
+  const sub = b.columns.filter((c) => c.fmt === "text" || c.fmt === "runs" || c.fmt === "range");
   const cols = b.columns.filter((c) => !sub.includes(c));
   const nKey = b.group?.n_key ?? null;
   return (
@@ -122,7 +124,7 @@ function MobileTable({ entries, module, blocks, keyHeader }: { entries: Analysis
         <thead>
           <tr>
             <th>番</th>
-            <th className="l">馬名{keyHeader && !sub.some((c) => c.fmt === "text") ? ` / ${keyHeader}` : ""}</th>
+            <th className="l">馬名{keyHeader && !sub.some((c) => c.fmt === "text" && !c.palette) ? ` / ${keyHeader}` : ""}</th>
             {cols.map((c) => <th key={c.key} title={c.title ?? undefined}>{c.fmt === "record" && nKey ? "走数" : shortLabel(c.label)}</th>)}
           </tr>
         </thead>
@@ -130,7 +132,7 @@ function MobileTable({ entries, module, blocks, keyHeader }: { entries: Analysis
           {entries.map((e) => {
             const cells = e.analysis?.[module.id];
             const thin = isThin(b.group, cells);
-            const texts = sub.filter((c) => c.fmt === "text").map((c) => cells?.[c.key]).filter((v) => v != null && v !== "");
+            const texts = sub.filter((c) => c.fmt === "text" && !c.palette).map((c) => cells?.[c.key]).filter((v) => v != null && v !== "");
             const line = texts.length ? texts.join(" / ") : keyHeader ? ((cells?._key as string | null | undefined) ?? "不明") : null;
             return (
               <tr key={e.key}>
@@ -138,6 +140,11 @@ function MobileTable({ entries, module, blocks, keyHeader }: { entries: Analysis
                 <td className="mn">
                   <b>{e.horse_name ?? "–"}</b>
                   {line && <small>{line}</small>}
+                  {sub.filter((c) => c.fmt === "text" && c.palette).map((c) => {
+                    const v = cells?.[c.key];
+                    return typeof v === "string" && v ? <small key={c.key}><span className="ra-st" style={{ background: c.palette?.[v] ?? "rgba(139,148,158,.35)" }} title={c.label}>{v}</span></small> : null;
+                  })}
+                  {sub.filter((c) => c.fmt === "range" && typeof (cells?.[c.key] as RangeCell | null | undefined)?.lo === "number").map((c) => <small key={c.key} title={c.label}>前から{formatCell(cells?.[c.key], c.fmt)}</small>)}
                   {sub.filter((c) => c.fmt === "runs").map((c) => <RunChips key={c.key} v={cells?.[c.key]} />)}
                 </td>
                 {cols.map((c) => {
