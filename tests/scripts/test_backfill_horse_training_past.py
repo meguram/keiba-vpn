@@ -233,3 +233,54 @@ def test_cutoff_off_by_default():
     B.guard_persist(r, _Guard())
     r.client.fetch("u")
     r.client.fetch("u")
+
+
+def test_redo_truncated_refetches_only_truncated_saved_horses_without_cutoff(monkeypatch, tmp_path):
+    r = _Runner()
+    rc, p = _run(monkeypatch, tmp_path, ["a", "b", "e"], r)
+    assert rc == 0 and p["done"] == {"a": "saved", "b": "saved", "e": "empty"}
+    seen = {}
+    real_guard = B.guard_persist
+    monkeypatch.setattr(B, "guard_persist", lambda runner, guard, cutoff="", reject_empty=False: (seen.update(cutoff=cutoff, reject_empty=reject_empty), real_guard(runner, guard, cutoff, reject_empty)))
+    monkeypatch.setattr(B, "is_truncated", lambda h: h in {"b", "e"})   # e は調教なしなので対象外
+    r2 = _Runner(fail={"b"})
+    rc, p = _run(monkeypatch, tmp_path, ["a", "b", "e"], r2, ["--redo-truncated"])
+    assert rc == 0 and r2.calls == ["b"] and seen == {"cutoff": "", "reject_empty": True}
+    assert p["redo"] == {"b": "error"} and p["done"]["b"] == "saved"   # 失敗しても打ち切った記録のまま saved
+    r3 = _Runner()
+    rc, p = _run(monkeypatch, tmp_path, ["a", "b", "e"], r3, ["--redo-truncated"])
+    assert r3.calls == []   # 済み（error も）は再開で取らない
+    rc, p = _run(monkeypatch, tmp_path, ["a", "b", "e"], r3, ["--redo-truncated", "--retry-failed"])
+    assert r3.calls == ["b"] and p["redo"] == {"b": "saved"}
+    assert p["finished_at"] and p["redo_meta"]["finished_at"]   # 本取得の完了の記録は残し、取り直しの経過は別に残す
+
+
+def test_redo_truncated_refuses_before_main_run_finishes(monkeypatch, tmp_path):
+    r = _Runner()
+    rc, p = _run(monkeypatch, tmp_path, ["a", "b"], r, ["--limit", "1"])
+    monkeypatch.setattr(B, "is_truncated", lambda h: True)
+    r2 = _Runner()
+    rc, p = _run(monkeypatch, tmp_path, ["a", "b"], r2, ["--redo-truncated"])
+    assert rc == 5 and r2.calls == [] and "redo" not in p   # 未取得（b）が残っている間は始めない
+
+
+def test_guard_reject_empty_keeps_existing_record():
+    import pytest
+
+    r = _G()
+    B.guard_persist(r, _Guard(), "", reject_empty=True)
+    r.client.fetch("u")
+    with pytest.raises(B.PartialFetch):
+        r._persist_horse_training("h", {"entries": [], "pages_fetched": 0})   # ログイン切れ等の 0 件で、打ち切った記録を消さない
+    assert r.saved == []
+
+
+def test_is_truncated_reads_local_record(monkeypatch, tmp_path):
+    from src.scraper.horse_training_local import horse_training_json_path
+
+    monkeypatch.setattr(B, "ROOT", tmp_path)
+    for hid, rec in (("2012110059", {"entries": [], "truncated_before": "2015-01-01"}), ("2012110060", {"entries": []})):
+        f = horse_training_json_path(tmp_path, hid)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(rec), encoding="utf-8")
+    assert B.is_truncated("2012110059") and not B.is_truncated("2012110060") and not B.is_truncated("2012110061")
