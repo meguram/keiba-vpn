@@ -8,13 +8,13 @@
 
 1. 直前の予定時刻 pf（crontab の式。cron の時刻＝ホストは UTC で評価）から ``grace_min`` 分以上たち、``max_late_hours`` 以内で、
    いまと pf が JST で同じ日付（日をまたいだら翌日の予定に任せる。日付を見て動くジョブが翌日の分を二重に処理しないように）。
-2. pf 以降に、そのジョブが始まった記録（data/local/meta/cron_runs/<job>.tsv）が無く、いま動いてもいない
+2. pf 以降に、そのジョブが始まった記録（cron_status.RUNS_DIR の <job>.tsv）が無く、いま動いてもいない
    （.running の印は、PC の停止より前のものなら残骸とみなす。ps で cron_run.sh <job> の起動中も確かめる）。
 3. pf の時刻に cron が動いていなかった。判定は次のどちらか。
    - cron のデーモンの起動が pf より後（PC・コンテナの再起動）。起動から ``settle_min`` 分は待つ。
    - 15 分おきの通知の記録の閉じた空白（scrape_status_notify.host_down_windows。スリープなど）。
      空白が閉じる＝通知が再開した後なので、復帰時に cron 自身が飛んだ予定を実行する分と重ならない。
-4. この pf の分をまだ追いついていない（data/local/meta/cron_catchup/<job>.json の印）。
+4. この pf の分をまだ追いついていない（MARK_DIR の <job>.json の印）。
 
 各ジョブの実行の直前に 2〜4 を見直す（前のジョブを実行している間に本来の cron や手動で始まった分は走らせない）。
 印は実行の前に書くので、失敗しても同じ pf の分を二度は走らせない。追いつきが入るのは逃した予定の代わりだけなので、
@@ -36,7 +36,10 @@ from typing import Any, Callable
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = REPO_ROOT / "config" / "cron_catchup.json"
-MARK_DIR = Path(os.environ.get("KEIBA_CRON_CATCHUP_DIR") or REPO_ROOT / "data" / "local" / "meta" / "cron_catchup")
+from src.monitor.cron_status import RUNS_DIR as _RUNS_DIR  # noqa: E402  ホストのローカルの記録の置き場は cron_status の定義に合わせる
+
+META_DIR = _RUNS_DIR.parent
+MARK_DIR = Path(os.environ.get("KEIBA_CRON_CATCHUP_DIR") or META_DIR / "cron_catchup")
 JST = timezone(timedelta(hours=9))
 _ENV_LINE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
 # cron がジョブに渡す既定の環境（crontab の環境変数の行で上書きされる）
@@ -111,7 +114,7 @@ def down_windows(now: datetime) -> list[tuple[float, float]]:
         from src.scripts.data import scrape_status_notify as ssn
 
         found = ssn.host_down_windows(RUNS_DIR, now)
-        state_p = REPO_ROOT / "data" / "local" / "meta" / "slack_sent" / "scrape_status_state.json"
+        state_p = META_DIR / "slack_sent" / "scrape_status_state.json"
         try:
             saved = (json.loads(state_p.read_text(encoding="utf-8")).get("_meta") or {}).get("down") or []
         except (OSError, ValueError, AttributeError):
