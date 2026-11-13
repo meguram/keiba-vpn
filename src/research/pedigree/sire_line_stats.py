@@ -284,6 +284,14 @@ def pack(df: pd.DataFrame, names: dict | None = None) -> list:
     return rows
 
 
+def populations(r: pd.DataFrame) -> dict[str, pd.Series]:
+    """集計の対象 3 つの行の印。all = 全馬の全レース、top_h = 2 勝クラス以上を 1 回でも走った馬の全レース（下のクラスの走も含む）、
+    top_r = 2 勝クラス以上のレースの走だけ（2勝・3勝・OP・L・重賞。SD.TOP）"""
+    return {"all": pd.Series(True, index=r.index),
+            "top_h": r.horse_id.isin(set(r.loc[r.grade.isin(SD.TOP), "horse_id"])),
+            "top_r": r.grade.isin(SD.TOP)}
+
+
 def run(out: Path = OUT) -> dict:
     want = ["race_id", "date", "horse_id", "surface", "distance", "direction", "track_condition", "venue", "grade", "finish_position",
             "field_size", "passing_order", "last_3f", "sex_age", "odds", "popularity", "bracket_number", "horse_number", "weight",
@@ -300,9 +308,7 @@ def run(out: Path = OUT) -> dict:
     if SD.AXES.exists():
         r = r.merge(axis_runs(pd.read_parquet(SD.AXES), r), on=["race_id", "horse_id"], how="left")
     ped = SD.pedigree_lines(sorted(r.horse_id.unique()))
-    pops = {"all": pd.Series(True, index=r.index),
-            "top_h": r.horse_id.isin(set(r.loc[r.grade.isin(SD.TOP), "horse_id"])),
-            "top_r": r.grade.isin(SD.TOP)}
+    pops = populations(r)
     res = {"built": datetime.now(SD.JST).strftime("%Y-%m-%d %H:%M"), "pops": POPS, "grans": GRANS, "positions": list(SD.POS),
            "metrics": [{"key": m, "label": lab, "group": grp, "fmt": f} for m, lab, grp, f in METRICS], "groups": GROUPS,
            "min_horses": MIN_HORSES, "min_runs_sire": MIN_RUNS_SIRE, "data": {}, "overall": {}, "n": {}}

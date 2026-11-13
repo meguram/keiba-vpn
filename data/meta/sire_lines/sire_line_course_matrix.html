@@ -29,7 +29,7 @@ tr.venue th.sticky,tr.venue td { font-weight:600; } tr.course th.sticky { paddin
 .tg { width:22px; height:20px; padding:0; line-height:1; background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:5px; cursor:pointer; }
 </style></head><body><main>
 <h1>父の系統・系統配合 × クラス・舞台 成績マトリクス</h1>
-<p class="lead">作成: 2026-11-13 17:12。2016〜2026 年の平地 502,626 走（父の系統が空欄の馬は除外）。タブで「父の系統」（大系統→小系統）と「系統配合」（父の大系統→母方の型）を切り替える。
+<p class="lead">作成: 2026-11-13 20:53。2016〜2026 年の平地 502,626 走（父の系統が空欄の馬は除外）。タブで「父の系統」（大系統→小系統）と「系統配合」（父の大系統→母方の型）を切り替える。
 行は<b>クラス別（芝・ダート。上位クラスの集計行つき）</b>→馬場状態→芝の開催状態（開催日数・柵位置を考慮した馬場の新しさ）→会場→コース。「上のクラスで戦えるレベルの馬を出せるか」は、クラス別の行（3勝以上・OP以上・重賞）で見る。
 セルは「勝率・複勝率」と「1着-2着-3着-4着以下（出走数）」。<b>色と ★ は「その系統の中での得意・不得意」</b>: 系統ごとに、ふだん（同じ芝/ダートの全体。会場の全コースの行は全体）の成績と、その行の全系統の率から、その行での見込みの率を出し（対数オッズで足し引き）、見込みとの差で色を付ける（明るい緑ほど得意、暗いほど苦手。複勝率は ±6pt、勝率は ±3pt で最大）。
 どの条件でも強い系統（例: ディープ系）は見込みも高いので、強いだけでは緑・★にならない。<b>★</b>（黄色の枠と「★+差pt」）は、30 走以上で、見込みを複勝率 3pt（勝率 1.5pt）以上、確かに上回るセル（正確な二項の上側の確率 ≤ 0.00135。z≥3 相当）。<b>☆</b>（黄色の点線）は ≤ 0.023（z≥2 相当）の参考（セルが数千あるので、偶然のものも混じる）。「得意の印」で ★ だけにできる。
@@ -226,8 +226,8 @@ var PURE=(function(){
     });
     tbl.innerHTML='<thead>'+h1+h2+'</thead><tbody>'+b+'</tbody>';
     var th1=tbl.querySelector('thead tr'); tbl.style.setProperty('--h1', th1.offsetHeight+'px');
-    var info=[]; if(st.rs){ var kk=st.rs.key; info.push('行の並べ替え（'+SML()+'）: '+(kk==='tot'?'全体':(typeof kk==='string'&&kk.indexOf('c:')===0)?'見出しの枠の列（'+kk.slice(2).split(',').map(function(i){return T().cols[+i].name;}).join('・')+'）':typeof kk==='number'?(st.tab>0?T().cols[kk].large+' × ':'')+T().cols[kk].name:String(kk).slice(2))+(st.rs.dir===1?' ▼降順':' ★昇順')); }
-    if(st.cs){ var rr=rowById(st.cs.id); info.push('列の並べ替え（'+SML()+(st.flat?'・大系統をまたぐ':'・大系統の枠の中')+'）: '+(rr?((rr.kind==='course'?rr.vname+' ':'')+rr.label):'')+(st.cs.dir===1?' ▼降順':' ★昇順')); }
+    var info=[]; if(st.rs){ var kk=st.rs.key; info.push('行の並べ替え（'+SML()+'）: '+(kk==='tot'?'全体':(typeof kk==='string'&&kk.indexOf('c:')===0)?'見出しの枠の列（'+kk.slice(2).split(',').map(function(i){return T().cols[+i].name;}).join('・')+'）':typeof kk==='number'?(st.tab>0?T().cols[kk].large+' × ':'')+T().cols[kk].name:String(kk).slice(2))+(st.rs.dir===1?' ▼降順':' ▲昇順')); }
+    if(st.cs){ var rr=rowById(st.cs.id); info.push('列の並べ替え（'+SML()+(st.flat?'・大系統をまたぐ':'・大系統の枠の中')+'）: '+(rr?((rr.kind==='course'?rr.vname+' ':'')+rr.label):'')+(st.cs.dir===1?' ▼降順':' ▲昇順')); }
     document.getElementById('sortinfo').textContent=info.join(' ／ ');
     var note=T().note||''; document.getElementById('tabnote').textContent=note;
     [].slice.call(document.querySelectorAll('.tab')).forEach(function(t){ t.classList.toggle('on', +t.dataset.tab===st.tab); });

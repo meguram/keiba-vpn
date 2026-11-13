@@ -382,11 +382,12 @@ def _rel_ui(monkeypatch):
     rates = {"A系": {("芝", "良"): 0.6, ("芝", "重・不良"): 0.6, ("ダート", "良"): 0.6},
              "N系": {("芝", "良"): 0.3, ("芝", "重・不良"): 0.6, ("ダート", "良"): 0.1},
              "B系": {("芝", "良"): 0.15, ("芝", "重・不良"): 0.15, ("ダート", "良"): 0.3},
-             "Z系": {("芝", "良"): 0.3, ("芝", "重・不良"): 0.3, ("ダート", "良"): 0.3}}       # 馬場で変わらない多数派（行の基準を安定させる）
+             "Z系": {("芝", "良"): 0.3, ("芝", "重・不良"): 0.3, ("ダート", "良"): 0.3},       # 馬場で変わらない多数派（行の基準を安定させる）
+             "S系": {("芝", "良"): 0.3, ("芝", "重・不良"): 1.0}}                               # 重・不良は 20 走だけ（全部 3 着以内）→ 30 走未満なので印なし
     rows, k = [], 0
     for ln, rr in rates.items():
-        size = 4000 if ln == "Z系" else 400
         for (sf, cond), rate in rr.items():
+            size = 4000 if ln == "Z系" else 20 if (ln, cond) == ("S系", "重・不良") else 400
             n_pl = int(size * rate)
             for j in range(size):
                 k += 1
@@ -430,3 +431,36 @@ def test_ui_marks_only_conditions_where_a_line_beats_its_own_level(monkeypatch):
     assert m["venue:東京:芝"] == [] and m["cond:芝:重・不良"] == ["N系★"]        # 会場の芝全体は、その系統の芝全体と同じ → 印なし
     setf("cmode", value="row")                                                    # 絶対の色に戻すと、従来の白い枠が付く
     assert ' hi"' in c.eval("document.getElementById('m').innerHTML") or ' hi ' in c.eval("document.getElementById('m').innerHTML")
+
+
+def test_ui_ascending_arrow_is_not_the_good_mark():
+    """並べ替えの昇順の矢印は ▲（得意の印 ★・☆ と別の記号）"""
+    c, rows, cols, click, setf, html = _ui()
+    info = lambda: c.eval("document.getElementById('sortinfo').textContent")
+    click("key", 0)
+    click("key", 0)                                                              # 降順 → 昇順
+    assert info().endswith("▲昇順") and "★" not in info() and "☆" not in info()
+    assert re.search(r'<div class="nm">A系 ▲</div>', html())
+    click("row", "class:芝:2勝")
+    click("row", "class:芝:2勝")
+    assert "▲昇順" in info().split("／")[-1] and "★" not in info()
+
+
+def test_ui_mark_choice_win_mode_and_run_floor(monkeypatch):
+    c, marked, setf = _rel_ui(monkeypatch)
+    m2, _ = marked()
+    setf("zt", value="3")                                                        # ★ だけ
+    m3, _ = marked()
+    assert all(x.endswith("★") for v in m3.values() for x in v)
+    assert all(set(m3[k]) <= set(m2[k]) for k in m3)                            # 厳しくすると印は減るだけ
+    setf("zt", value="4")
+    m4, _ = marked()
+    assert all(set(m4[k]) <= set(m3[k]) for k in m4)
+    setf("zt", value="2")
+    c.eval("(function(){var x=document.getElementById('minn');x.value='1';__h['minn:input'].call(x)})()")         # 低信頼の目印を 1 走に下げる
+    m, html = marked()
+    assert not any(x.startswith("S系") for v in m.values() for x in v)          # 20 走のセルは、低信頼の設定を 1 に下げても印なし（30 走の下限）
+    assert "N系★" in m["cond:芝:重・不良"]
+    setf("metric", value="w")                                                    # 勝率の印（このデータは 3 着以内 = 1 着）
+    m, html = marked()
+    assert "N系★" in m["cond:芝:重・不良"] and "勝率: この系統の芝全体" in html

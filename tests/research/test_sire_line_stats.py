@@ -104,3 +104,11 @@ def test_prev_gap_skips_scratched_rows_without_status():
     g = T.prev_gap_days(raw)
     assert ("b", "h") not in g.index and ("c", "h") in g.index      # b は取消、c は中止
     assert g[("d", "h")] == 12 and g[("c", "h")] == 79
+
+
+def test_populations_all_top_horses_and_top_races():
+    r = pd.DataFrame({"horse_id": ["a", "a", "b", "c", "c"], "grade": ["未勝利", "2勝", "1勝", "G1", "L"]})
+    p = T.populations(r)
+    assert p["all"].tolist() == [True] * 5
+    assert p["top_h"].tolist() == [True, True, False, True, True]     # a は 2 勝クラスを走ったので未勝利の走も入る。b は入らない
+    assert p["top_r"].tolist() == [False, True, False, True, True]    # 2 勝クラス以上のレースの走だけ（L も入る）

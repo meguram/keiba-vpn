@@ -542,8 +542,8 @@ JS_UI = r"""
     });
     tbl.innerHTML='<thead>'+h1+h2+'</thead><tbody>'+b+'</tbody>';
     var th1=tbl.querySelector('thead tr'); tbl.style.setProperty('--h1', th1.offsetHeight+'px');
-    var info=[]; if(st.rs){ var kk=st.rs.key; info.push('行の並べ替え（'+SML()+'）: '+(kk==='tot'?'全体':(typeof kk==='string'&&kk.indexOf('c:')===0)?'見出しの枠の列（'+kk.slice(2).split(',').map(function(i){return T().cols[+i].name;}).join('・')+'）':typeof kk==='number'?(st.tab>0?T().cols[kk].large+' × ':'')+T().cols[kk].name:String(kk).slice(2))+(st.rs.dir===1?' ▼降順':' ★昇順')); }
-    if(st.cs){ var rr=rowById(st.cs.id); info.push('列の並べ替え（'+SML()+(st.flat?'・大系統をまたぐ':'・大系統の枠の中')+'）: '+(rr?((rr.kind==='course'?rr.vname+' ':'')+rr.label):'')+(st.cs.dir===1?' ▼降順':' ★昇順')); }
+    var info=[]; if(st.rs){ var kk=st.rs.key; info.push('行の並べ替え（'+SML()+'）: '+(kk==='tot'?'全体':(typeof kk==='string'&&kk.indexOf('c:')===0)?'見出しの枠の列（'+kk.slice(2).split(',').map(function(i){return T().cols[+i].name;}).join('・')+'）':typeof kk==='number'?(st.tab>0?T().cols[kk].large+' × ':'')+T().cols[kk].name:String(kk).slice(2))+(st.rs.dir===1?' ▼降順':' ▲昇順')); }
+    if(st.cs){ var rr=rowById(st.cs.id); info.push('列の並べ替え（'+SML()+(st.flat?'・大系統をまたぐ':'・大系統の枠の中')+'）: '+(rr?((rr.kind==='course'?rr.vname+' ':'')+rr.label):'')+(st.cs.dir===1?' ▼降順':' ▲昇順')); }
     document.getElementById('sortinfo').textContent=info.join(' ／ ');
     var note=T().note||''; document.getElementById('tabnote').textContent=note;
     [].slice.call(document.querySelectorAll('.tab')).forEach(function(t){ t.classList.toggle('on', +t.dataset.tab===st.tab); });

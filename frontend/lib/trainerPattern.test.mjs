@@ -59,9 +59,34 @@ test("levelsOf は調教師・場所・パターンの3段。調教なしは調�
 });
 
 test("patWord は記号（A1〜X・W時計帯）を言葉にして、記号を残さない", () => {
-  for (const c of ["A1", "A2", "A3", "B1", "B2", "B3", "X"]) assert.ok(!/^[AB]\d$|^X$/.test(m.patWord(c)) && m.patWord(c).length > 4, c);
-  assert.equal(m.patWord("W52.0-53.9"), "4Fが52.0〜53.9秒");
-  assert.equal(m.patWord("W~49.9"), "4Fが49.9秒以内");
-  assert.equal(m.patWord("W58.0~"), "4Fが58.0秒以上");
+  // 199f0f2a から短い独自名（例: 終い一瞬・軽め）と「4F 52.0〜53.9」の形（表の横スクロールをなくすため）
+  for (const c of ["A1", "A2", "A3", "B1", "B2", "B3", "X"]) assert.ok(!/[AB]\d|^X$/.test(m.patWord(c)) && m.patWord(c).length >= 2, c);
+  assert.equal(m.patWord("A1"), "終い一瞬");
+  assert.equal(m.patWord("W52.0-53.9"), "4F 52.0〜53.9");
+  assert.equal(m.patWord("W~49.9"), "4F 49.9以内");
+  assert.equal(m.patWord("W58.0~"), "4F 58.0以上");
   assert.equal(m.patWord(null), "");
+});
+
+test("workCell・workReason: 追い切りの状態 4 種類と、wk が無い古い保存結果", () => {
+  const out = { st: "out", last: { date: "2026-11-05", place: "美浦W", t4: 52.34 }, why: "weekend" };
+  assert.deepEqual(m.workCell(out), { text: "美浦W 11/5", tag: "集計の対象外" });
+  const r = m.workReason(out);
+  assert.match(r, /対象外です: レース週の追い切りが土日だけです/);
+  assert.match(r, /最後の追い切りは 11\/5・美浦W・4F 52\.3/);
+  assert.deepEqual(m.workCell({ st: "out", last: null, why: null }), { text: "場所不明", tag: "集計の対象外" });   // 場所も日付も無い
+  assert.match(m.workReason({ st: "out", last: null, why: "zzz" }), /集計の対象の種別ではありません。$/);              // 知らない理由
+  assert.match(m.workReason({ st: "out", last: null, why: "cls" }), /パターンに区分できませんでした/);
+  assert.deepEqual(m.workCell({ st: "none", last: null, why: null }), { text: "記録なし", tag: null });
+  assert.equal(m.workReason({ st: "none", last: null, why: null }), "このレースの前の追い切りの記録がありません。");
+  for (const st of ["unfetched", "nofile"]) assert.deepEqual(m.workCell({ st, last: null, why: null }), { text: "未取得", tag: null });
+  assert.match(m.workReason({ st: "unfetched", last: null, why: null }), /レースの週の調教をまだ取得していません/);
+  assert.match(m.workReason({ st: "nofile", last: null, why: null }), /この馬の調教をまだ取得していません/);
+  // 版 39 より前の保存結果（wk なし）・pattern は欄が「–」、理由なし
+  for (const w of [undefined, null, { st: "pattern", last: null, why: null }]) {
+    assert.deepEqual(m.workCell(w), { text: "–", tag: null });
+    assert.equal(m.workReason(w), null);
+  }
+  assert.equal(m.md("2026-01-09"), "1/9");
+  assert.equal(m.md(null), "");
 });

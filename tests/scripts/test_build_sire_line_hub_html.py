@@ -110,3 +110,13 @@ def test_flow_placement_from_config():
     assert H.placement(None, j, set(), {}) == ("host", "host")                                     # 研究用は学習PC に残す
     html_ = H.flow_section(jobs, {"agent_tasks": []}, {"current_phase": 1, "phases": [{"id": 1, "name": "UI を VPS へ"}]}, {"owners": {}})
     assert "移行の段階 1: UI を VPS へ" in html_ and "目標 VPS" in html_ and "いま 学習PC" in html_ and "目標 GCP" in html_
+
+
+def test_flow_lists_daily_jobs_for_laps_axes_and_smartrc():
+    """ラップ（バロメーターの取得）・run_axes（毎朝の書き出し）・smartrc の系統表（事前計算）は定期のジョブで更新される（研究用の手動ではない）"""
+    items = {label: ids for _, its in H.FLOW for label, ids, *_ in its}
+    assert "weekly-update" in items["ラップ（走法軸の元）"] and items["走法軸（run_axes）"] == ["export-tables-daily"]
+    assert "entries-sync" in items["smartrc の系統表"]
+    jm = json.loads((H.REPO / "config/gcp_job_map.json").read_text(encoding="utf-8"))
+    known = {j.get("id") for j in jm.get("jobs", [])}
+    assert all(i in known for _, its in H.FLOW for _, ids, *_ in its for i in ids)       # 載せたジョブ ID は gcp_job_map に実在する

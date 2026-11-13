@@ -44,13 +44,15 @@ FLOW = [
     ("取得", [
         ("レース結果・通過順・上がり・配当", ["raceday-evening", "weekly-update", "recent-retry-morning"], "netkeiba の結果ページ（開催日夕方の速報・週次の確定・取り直し）", None),
         ("5 代血統", ["new-horse-pedigree"], "新しく出てきた馬の血統", None),
-        ("ラップ（走法軸の元）", [], "馬ごとのラップの取得（研究用）", None),
-        ("smartrc の系統表", [], "種牡馬の系統の台帳（手動で更新）", None),
+        ("ラップ（走法軸の元）", ["weekly-update", "barometer-retry-daily", "barometer-retry-friday"],
+         "バロメーターを取るたびに（週次の更新・取り直し）、同じページから馬別の区間ラップも保存する（2026-11-13 の b867161c から。netkeiba への取得は増えない）", None),
+        ("smartrc の系統表", ["entries-sync", "race-analysis-daily"],
+         "めぐ分析の事前計算（出馬表の更新・日次）のたびに、手元のデータから自動で作り直す（新しい種牡馬は smartrc から最大 10 頭。中身が同じなら書かない）。系統名の対応表だけ手動", None),
     ]),
     ("表にする", [
         ("履歴テーブル（race_result_flat）", ["export-tables-daily"], "取得した結果を年ごとの表にまとめる", None),
         ("祖先の系統の補完", ["sire-line"], "5 代血統の牡の祖先の系統（定期の血統取得に相伴）", "vps"),
-        ("走法軸（run_axes）", [], "ラップから TS・ギアなどを計算（研究用）", None),
+        ("走法軸（run_axes）", ["export-tables-daily"], "毎朝の書き出しで、新しいレースのラップがそろえば TS・ギアなどを作り直す（update_run_axes。b867161c から）", None),
     ]),
     ("分析・このページ", [
         ("父と母の影響・小系統の距離配置", [], "python -m src.research.pedigree.sire_dam_influence", None),
