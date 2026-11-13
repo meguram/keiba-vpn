@@ -378,3 +378,18 @@ def test_set_fetch_state_swallows_import_errors(monkeypatch):
 
     monkeypatch.setitem(sys.modules, "src.scraper.fetch_registry", None)    # import が失敗する
     R._set_fetch_state("waiting", "x")                                      # 例外を出さない
+
+
+def test_recent_refetches_horses_fetched_before_their_latest_missing_race():
+    """穴埋めの済みの印は『取った日』つき。足りない出走より前に取った馬（その後のレースの調教がまだ無い）は取り直す。"""
+    from src.scripts.scraping import backfill_horse_training_recent as R
+
+    prog = {"done": {"a": "saved", "b": "saved", "c": "error", "d": "saved"}, "done_on": {"a": "2026-10-28", "b": "2026-11-08", "c": "2026-11-08"}}
+    assert R.needs_fetch(prog, "a", "2026-11-07")            # 11/07 のレースより前に取った
+    assert not R.needs_fetch(prog, "b", "2026-11-07")        # レースの後に取っても無い: 本当に無い
+    assert not R.needs_fetch(prog, "c", "2026-11-07") and R.needs_fetch(prog, "c", "2026-11-07", retry_failed=True)
+    assert R.needs_fetch(prog, "d", "2026-11-07")            # 日付を持つ前の古い進捗
+    assert R.needs_fetch(prog, "new", "2026-11-07")
+    assert R.missing_dates([("x", "2026-11-07"), ("x", "2026-10-11")], load_many=lambda hs: {}) == {"x": ["2026-11-07", "2026-10-11"]}
+    assert R._count({"a": "saved", "b": "saved", "c": "error"}) == {"saved": 2, "unreadable": 0, "empty": 0, "error": 1}
+    assert len(R._today_jst()) == 10

@@ -9,6 +9,11 @@
 保存は ``horse_training_recent.refresh_one``（同じ日付の行だけ入れ替え、既存の古い行は残す。読めなかった・0 件のページは保存しない）。
 スクレイピング規則: 他の取得（開催日ランナー・定期取得・取得系の fork）が動いている間は待つ、1 頭ごとに約 5.5 秒（クライアントの間隔 + 上乗せ 0.5〜1.5 秒）、100 頭ごとに 30〜60 秒、
 連続 8 件の失敗で中断。再開できる（進捗: data/local/meta/horse_training_backfill_progress.json）。
+済みの印は取った日（JST、done_on）つき。足りない出走の日より前に取った馬は、そのあとのレースの調教がまだ無いので取り直す（2026-11-13 から。
+それまでの印は馬単位で永久だったため、11/06 の前夜の取得が止まった週の穴が埋まらなかった）。
+対象の判定は手元の複製（data/local/horse_training）だけを読む（drift_coverage.default_loader。ホストで GCS を 1 頭ずつ読むと 1 回 約 0.6GB の転送料だった）。
+切り替えた最初の夜は、日付の無い古い印の馬と、手元の複製に無い・古い馬（GCS にだけある約 390 頭）を合わせた約 1,460 頭（2026-04 以降の出走）を
+1 回ずつ取り直す（約 2.4 時間・1 晩の上限 2,200 頭の内）。取り直すと手元にも書くので、手元と GCS の差もここで埋まる。
 """
 
 from __future__ import annotations
@@ -55,18 +60,48 @@ def starts_between(start: str, end: str, dates: list[str] | None = None):
     return rows
 
 
-def missing_counts(starts: list[tuple[str, str]], load_many=None) -> dict[str, int]:
-    """馬ごとに『その日の調教の行が保存記録に無い出走』の数。"""
+def missing_dates(starts: list[tuple[str, str]], load_many=None) -> dict[str, list[str]]:
+    """馬ごとに『その日の調教の行が保存記録に無い出走』の日付。"""
     from src.scripts.data import drift_coverage as C
 
     horses = sorted({h for h, _ in starts})
     recs = (load_many or C.default_loader())(horses)
     blocks = C.block_dates(recs)
-    out: dict[str, int] = {}
+    out: dict[str, list[str]] = {}
     for h, d in starts:
         if d not in blocks.get(h, set()):
-            out[h] = out.get(h, 0) + 1
+            out.setdefault(h, []).append(d)
     return out
+
+
+def missing_counts(starts: list[tuple[str, str]], load_many=None) -> dict[str, int]:
+    """馬ごとに『その日の調教の行が保存記録に無い出走』の数。"""
+    return {h: len(ds) for h, ds in missing_dates(starts, load_many).items()}
+
+
+def _today_jst() -> str:
+    """レース日（JST）と比べるので、取った日も JST の日付にする（ホストの TZ に依らない）。"""
+    from datetime import datetime, timedelta, timezone
+
+    return datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d")
+
+
+def _count(done: dict) -> dict:
+    out = {s: 0 for s in STATUSES}
+    for st in done.values():
+        out[st] = out.get(st, 0) + 1
+    return out
+
+
+def needs_fetch(prog: dict, hid: str, latest_missing: str, retry_failed: bool = False) -> bool:
+    """取り直すか。済みの印は『取った日』つきで見る: 足りない出走の日より前に取った馬は、そのあとのレースの調教がまだ無いので取り直す。
+    印の日が無い古い進捗（日付を持つ前の版）も取り直す。その日以降に取っても行が無い馬は、本当に無いので取り直さない。"""
+    if hid not in prog["done"]:
+        return True
+    if retry_failed and prog["done"][hid] != "saved":
+        return True
+    on = (prog.get("done_on") or {}).get(hid)
+    return not on or on < latest_missing
 
 
 def busy() -> bool:
@@ -154,7 +189,7 @@ def save_progress(p: dict) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--from", dest="start", default="2026-04-01")
-    ap.add_argument("--to", dest="end", default=time.strftime("%Y-%m-%d"))
+    ap.add_argument("--to", dest="end", default=_today_jst())
     ap.add_argument("--dates", nargs="*", default=None, help="この開催日の出走馬だけ（検証用）")
     ap.add_argument("--horses-file", default=None, help="この馬 ID（1 行 1 頭）だけを対象にする（検証用）")
     ap.add_argument("--limit", type=int, default=0, help="取得する馬数の上限（パイロット・1 晩の上限）")
@@ -166,13 +201,13 @@ def main(argv: list[str] | None = None) -> int:
     if a.horses_file:
         only = {x.strip() for x in Path(a.horses_file).read_text(encoding="utf-8").split() if x.strip()}
         starts = [(h, d) for h, d in starts if h in only]
-    miss = missing_counts(starts)
+    miss = missing_dates(starts)
     prog = load_progress()
-    todo = [h for h, _ in sorted(miss.items(), key=lambda kv: (-kv[1], kv[0]))
-            if (h not in prog["done"] or (a.retry_failed and prog["done"][h] != "saved"))]
+    todo = [h for h, ds in sorted(miss.items(), key=lambda kv: (-len(kv[1]), kv[0])) if needs_fetch(prog, h, max(ds), a.retry_failed)]
+    again = sum(1 for h in todo if h in prog["done"])
     n = len(todo) if not a.limit else min(len(todo), a.limit)
     est_h = n * 6.0 / 3600
-    print(f"出走 {len(starts)} 行 / 馬 {len({h for h, _ in starts})} 頭 / 調教の行が足りない馬 {len(miss)} 頭 / 未取得 {len(todo)} 頭 / 今回 {n} 頭（見積もり {est_h:.1f} 時間）", flush=True)
+    print(f"出走 {len(starts)} 行 / 馬 {len({h for h, _ in starts})} 頭 / 調教の行が足りない馬 {len(miss)} 頭 / 取得する {len(todo)} 頭（うち取り直し {again} 頭）/ 今回 {n} 頭（見積もり {est_h:.1f} 時間）", flush=True)
     if a.dry_run:
         return 0
 
@@ -202,7 +237,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"失敗 {hid}: {e}", flush=True)
         done += 1
         prog["done"][hid] = status
-        prog["counts"][status] = prog["counts"].get(status, 0) + 1
+        prog.setdefault("done_on", {})[hid] = _today_jst()
+        prog["counts"] = _count(prog["done"])   # 取り直した馬を延べで数えない（頭数と合わせる）
         streak = streak + 1 if status in ("unreadable", "error") else 0
         if streak >= 8:
             prog["aborted"] = f"連続 {streak} 件が読めない／失敗（アクセス制限またはページ構造の変化の疑い）: {hid}"
