@@ -156,8 +156,11 @@
   | VPS の `keiba-cache-warm.timer` が `ops/cache_dirty/` の昨日以降を毎回一覧 | VPS・60 秒おき（1,440 回/日） | 一覧 1,440 回（Class A 月 約 35 円）・目印 約 500 件 × 約 0.6KB × 1,440 ≒ **0.4GiB**（月 約 230 円の転送） | `scripts/ops/vps/cache_warm.py:254-261`（fields の指定なし）。目印は 11/02 の bbc45db6 から馬の保存ごとに増える（`src/utils/cache_marker.py:89-94` ← `src/scraper/storage.py:543`）。1 日 300〜550 件（11/13 実測） | 見ていない |
   | ホストの `verify_past_values` が 10 年分を一覧 | ホスト・2 時間おき（12 回/日） | 約 3.45 万件 × 12 回 ≒ 0.3〜0.4GiB | `src/scripts/data/verify_past_values.py:151,163` → `storage.py:1448-1459`（fields の指定なし） | 見ていない |
   | ホストの毎朝の書き出しの全件一覧 | ホスト・1 日 1 回 | 数十〜百数十回・数十 MB | `src/scraper/export_tables.py:579,771,795` | 見ていない |
-  | **VPS の `keiba-fetch@` サービスアカウント（取得の実行役 fetch_agent と思われる）** | **VPS（呼び元 IP 2400:8500:…:250:252）・60 秒ごとに一覧 6 回** | **一覧 8,640 回/日**（Class A 月 約 210 円）＋応答の転送 | 監査ログ（11/13 14:45〜14:49 JST の 4 分で 18 回、毎分 :52 に 6 回まとめて）。30097498 の見積もり（月 8.6 万回）の 3 倍。担当表は空でも一覧はしている | 見ていない |
-  | 残り（1 日 約 2,000 回の一覧、外への転送の残り） | **未特定**（監査ログを 24 時間ためてから集計） | — | Cloud Run の中の一覧なら転送 0 円。VPS の nginx の上流がホストの API なら、cache_warm の取り直しがホストの API で GCS を読む経路がある（`scripts/ops/vps/nginx-keiba-ui.conf:15`） | — |
+  | **VPS の `keiba-fetch@` サービスアカウント（取得の実行役 fetch_agent と思われる）** | **VPS（呼び元 IP 2400:8500:…:250:252）・60 秒ごとに一覧 6 回** | **一覧 8,640 回/日**（Class A 月 約 210 円）＋応答の転送 | 監査ログ（11/13 14:44〜15:00 JST で 90 回、毎分 :52 に 6 回まとめて）。30097498 の見積もり（月 8.6 万回）の 3 倍。担当表は空でも一覧はしていた。**11/13 15:00 JST に統括役が keiba-fetch-agent を止め、15:05 以降は 0 回** | 見ていない |
+  | Cloud Run の `keiba-api@`（IP 2600:1900:…、Google の中） | Cloud Run | 14:44〜15:00 で 37 回 → 1 日 約 3,300 回（Class A 月 約 80 円。転送は東京の中なので 0） | 監査ログ | — |
+  | VPS の `keiba-pull@`（cache_warm の一覧・release-pull の取得） | VPS | 一覧 毎分 1 回 → 1 日 1,440 回、取得（latest.json）1 日 約 1,200 回 | 監査ログ（15:05〜15:17 で一覧 11・取得 10） | 見ていない |
+  | **ホストの `megu-keiba@`（IP 175.177.45.24）が `horse_training/2016〜2018/` を一括で読む** | **ホスト・まとまって（15:05〜15:06 に 4,100 件、15:16〜15:17 に 7,300 件）** | **12 分で 1.15 万件 × 平均 約 65KB ≒ 0.7GB**（1 件 15〜115KB を 5 件測った）。続く頻度はまだ分からない | 監査ログ。UA は gcloud-python 3.10.1 / Python 3.11.6（ホスト）。呼び手のプロセスは未特定（調教の過去分の取り直し `backfill_horse_training_past` の周辺が有力） | 見ていない |
+  | 残り | 監査ログを 24 時間ためてから集計（11/14） | | | | — | Cloud Run の中の一覧なら転送 0 円。VPS の nginx の上流がホストの API なら、cache_warm の取り直しがホストの API で GCS を読む経路がある（`scripts/ops/vps/nginx-keiba-ui.conf:15`） | — |
   - `egress_billed()` を見て止めているのは `src/api/prerender.py:66-68` の 1 か所だけ。上の周期処理はどれも見ていない。
   - 監査ログ（14:44 JST から）の最初の 5 分: GCS の読み出し 25 件はすべて VPS から（keiba-fetch@ の一覧 18、keiba-pull@ の一覧 3・取得 4 ＝ release-pull と cache_warm）。
     集計の道具は監査役の scratchpad の logs.py（呼び手・IP・メソッド・接頭辞ごとの件数）。応答のバイト数は監査ログに無いので、件数 × 1 回の量で見積もる。
