@@ -888,8 +888,7 @@ def _run_race_tasks_direct(runner: Any, race_id: str, date_fmt: str, tasks: list
 # VPS が予定の時刻に取得して保存し終えるのを待つため、予定の時刻からこの秒数だけ遅らせて後処理をする。
 # 【注意】取得しないモードは、担当を VPS に渡す前に次がそろってから使う（docs/operations/vps_only_fetch.md）:
 #  (1) race_lists・race_day_schedule（local_only）を VPS から GCS 経由でホストに渡す（無いとホストは no-schedule で何もしない）
-#  (2) VPS の T-15 の保存を確かめてから予測する（今は予定 + 猶予の後に必ず予測する）
-#  (3) ホストのディスク L2 キャッシュの古いオッズを読まない
+#  (2)(3) は対応済み: 予測の前に VPS の race_odds の保存時刻（GCS の更新時刻だけ）を確かめ、オッズ類はこのプロセスだけ鮮度 5 分で読む
 def _no_fetch_grace_sec() -> int:
     try:
         return max(0, int(os.environ.get("KEIBA_HOST_NO_FETCH_GRACE_SEC", "180") or 180))
@@ -903,29 +902,61 @@ def _host_no_fetch(runner: str) -> bool:
     return runner_fetch_moved(runner)
 
 
+T15_SAVE_POLL_SEC = 30
+T15_SAVE_DEADLINE_BEFORE_POST_MIN = 5
+T15_SAVE_MAX_WAIT_MIN = 5          # 1 レースで待つのは T-15 から最大この分数（後のレースの予測をずらさない）
+T15_CLOCK_SLACK_MIN = 3            # ホストと GCS の時計のずれの余裕（WSL のスリープ明けなど）
+FRESH_ODDS = "race_odds,race_pair_odds,race_trifecta_odds"
+
+
+def _wait_saved_after(storage: Any, category: str, key: str, since: datetime, until: datetime) -> bool:
+    """category/key の GCS の更新時刻が since 以降になるまで T15_SAVE_POLL_SEC おきに待つ（中身は読まない。1 回 1 件の Class B）。
+    until までに来なければ False。"""
+    while True:
+        ts = storage.get_scraped_at_from_blob(category, key)
+        if ts and ts >= since.timestamp():
+            return True
+        if datetime.now(_JST) >= until:
+            return False
+        time.sleep(T15_SAVE_POLL_SEC)
+
+
 def _sleep_until(at: datetime) -> None:
     wait = (at - datetime.now(_JST)).total_seconds()
     if wait > 0:
         time.sleep(wait)
 
 
-def _raceday_runner_postprocess_only(schedule: list[dict], today_str: str, venues: Any) -> None:
+def _raceday_runner_postprocess_only(schedule: list[dict], today_str: str, venues: Any, storage: Any = None) -> None:
     """raceday-runner の取得が VPS に移ったとき: T-15（＋猶予）ごとに、JRA の馬場の取り直しとレース前の予測の起動だけをする。
     オッズ・出馬表の取得（T-60・直前・T-15 のバンドル）は VPS が行い GCS に保存している。"""
     from src.scraper import auto_scrape as _as
     from src.scraper.raceday_pre_race_pipeline import PreRaceBundleResult, refresh_jra_baba_live, trigger_pre_race_predict
 
     baba_on = os.environ.get("KEIBA_HOST_JRA_BABA_LIVE", "1").strip() != "0"   # JRA の馬場はまだホストで取る（VPS のローカルに残るため）
+    os.environ.setdefault("KEIBA_FRESH_EXTRA_CATEGORIES", FRESH_ODDS)       # VPS が保存したオッズを古いキャッシュから読まない（このプロセスだけ）
+    storage = storage if storage is not None else _storage()
     events = [e for e in build_odds_events(schedule, late_leads=()) if e["kind"] == "t15"]
-    stats = {"races": len(schedule), "predicted": 0, "errors": 0}
+    stats = {"races": len(schedule), "predicted": 0, "errors": 0, "t15_saved": 0, "t15_missing": 0}
     grace = _no_fetch_grace_sec()
-    logger.info("  開催日ランナー（取得なし・後処理だけ）: %s 全%dレース 猶予 %ss", today_str, len(schedule), grace)
+    logger.info("  開催日ランナー（取得なし・後処理だけ）: %s 全%dレース", today_str, len(schedule))
     done: set[str] = set()
     for ev in sorted(events, key=lambda e: e["at"]):
         rid = ev["race"]["race_id"]
         if rid in done or datetime.now(_JST) >= ev["race"]["post_time"]:
             continue
-        _sleep_until(ev["at"] + timedelta(seconds=grace))
+        # VPS の T-15 のバンドルを待つ: race_odds（バンドルの 2 番目に保存される）の保存時刻が T-15 以降になるのを見て、
+        # そこからバンドルの残り（組合せオッズ・馬柱・追い切りなど）が保存されるまで猶予（KEIBA_HOST_NO_FETCH_GRACE_SEC、既定 180 秒）を置く。
+        # 1 レースで待つのは T-15 + T15_SAVE_MAX_WAIT_MIN 分か発走 5 分前の早い方まで（後のレースの予測をずらさない）
+        until = min(ev["at"] + timedelta(minutes=T15_SAVE_MAX_WAIT_MIN),
+                    ev["race"]["post_time"] - timedelta(minutes=T15_SAVE_DEADLINE_BEFORE_POST_MIN))
+        _sleep_until(ev["at"])
+        saved = _wait_saved_after(storage, "race_odds", rid, ev["at"] - timedelta(minutes=T15_CLOCK_SLACK_MIN), until)
+        stats["t15_saved" if saved else "t15_missing"] += 1
+        if saved:
+            _sleep_until(min(datetime.now(_JST) + timedelta(seconds=grace), until + timedelta(seconds=grace)))
+        else:
+            logger.warning("VPS の T-15 の保存が見つからないまま予測する（直前のオッズが古い恐れ）: %s", rid)
         baba_ok = refresh_jra_baba_live() if baba_on else False
         try:
             trigger_pre_race_predict(ev["race"], bundle_result=PreRaceBundleResult(race_id=rid, jra_baba_refreshed=baba_ok, ok=True),
@@ -936,7 +967,8 @@ def _raceday_runner_postprocess_only(schedule: list[dict], today_str: str, venue
             stats["errors"] += 1
         done.add(rid)
     _as._save_status("raceday-runner", {"status": "ok", "date": today_str, "venues": venues, "mode": "postprocess-only",
-                                        "races": stats["races"], "predicted": stats["predicted"], "error_count": stats["errors"]})
+                                        "races": stats["races"], "predicted": stats["predicted"], "error_count": stats["errors"],
+                                        "t15_saved": stats["t15_saved"], "t15_missing": stats["t15_missing"]})
 
 
 def task_raceday_runner() -> None:
@@ -977,7 +1009,7 @@ def task_raceday_runner() -> None:
         _as._save_status("raceday-runner", {"status": "error", "reason": "no-schedule"})
         return
     if no_fetch:
-        _raceday_runner_postprocess_only(schedule, today_str, venues)
+        _raceday_runner_postprocess_only(schedule, today_str, venues, storage)
         return
 
     logger.info("  開催日ランナー (キュー経由): %s 全%dレース", today_str, len(schedule))

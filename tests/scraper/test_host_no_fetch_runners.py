@@ -19,12 +19,20 @@ def _no_queue(*a, **k):
 
 @pytest.fixture
 def host(monkeypatch):
+    monkeypatch.delenv("KEIBA_FRESH_EXTRA_CATEGORIES", raising=False)   # ランナーが setdefault するので、テストの後に戻るよう先に消す
+    monkeypatch.delenv("LOAD_CACHE_TTL_FRESH_SEC", raising=False)
     saved = {}
     monkeypatch.setattr(AS, "_load_race_calendar", lambda: {})
     monkeypatch.setattr(AS, "_is_race_day", lambda c, d: True)
     monkeypatch.setattr(AS, "_get_race_day_venues", lambda c, d: ["東京"])
     monkeypatch.setattr(AS, "_save_status", lambda k, v: saved.__setitem__(k, v))
-    monkeypatch.setattr(Q, "_storage", lambda: object())
+    class St:
+        saved_at = datetime.now(JST).timestamp() + 86400                     # VPS の T-15 の保存がある（どのレースの T-15 よりも後の時刻）
+
+        def get_scraped_at_from_blob(self, cat, key):
+            return self.saved_at
+
+    monkeypatch.setattr(Q, "_storage", lambda: St())
     monkeypatch.setattr(Q, "_queue", _no_queue)
     monkeypatch.setattr(Q, "_ensure_race_list_date", _no_queue)
     monkeypatch.setattr(Q, "_kick_and_wait", _no_queue)
@@ -101,3 +109,44 @@ def test_grace_env_is_parsed_safely(monkeypatch):
     assert Q._no_fetch_grace_sec() == 180
     monkeypatch.setenv("KEIBA_HOST_NO_FETCH_GRACE_SEC", "60")
     assert Q._no_fetch_grace_sec() == 60
+
+
+def test_raceday_runner_waits_for_vps_t15_save_and_records_missing(host, monkeypatch):
+    import src.scraper.raceday_pre_race_pipeline as P
+
+    class Never:
+        def get_scraped_at_from_blob(self, cat, key):
+            return 0.0
+
+    monkeypatch.setattr(Q, "_storage", lambda: Never())
+    monkeypatch.setattr(Q.time, "sleep", lambda s: None)
+    monkeypatch.setattr(Q, "_wait_saved_after", lambda st, c, k, since, until: st.get_scraped_at_from_blob(c, k) >= since.timestamp())
+    monkeypatch.setattr(P, "refresh_jra_baba_live", lambda **k: True)
+    monkeypatch.setattr(P, "trigger_pre_race_predict", lambda r, bundle_result=None, allow_scrape=True: None)
+    Q.task_raceday_runner()
+    assert host["raceday-runner"]["t15_missing"] == 2 and host["raceday-runner"]["t15_saved"] == 0
+
+
+def test_wait_saved_after_polls_until_saved_or_deadline(monkeypatch):
+    seq = iter([0.0, 0.0, 2e9])
+    monkeypatch.setattr(Q.time, "sleep", lambda s: None)
+
+    class St:
+        def get_scraped_at_from_blob(self, c, k):
+            return next(seq)
+
+    now = datetime.now(JST)
+    assert Q._wait_saved_after(St(), "race_odds", "r", now, now + timedelta(hours=1)) is True
+    assert Q._wait_saved_after(type("S", (), {"get_scraped_at_from_blob": lambda self, c, k: 0.0})(), "race_odds", "r", now,
+                               now - timedelta(seconds=1)) is False
+
+
+def test_fresh_extra_categories_only_in_this_process(monkeypatch):
+    from src.scraper.storage import HybridStorage
+
+    st = HybridStorage.__new__(HybridStorage)
+    monkeypatch.delenv("KEIBA_FRESH_EXTRA_CATEGORIES", raising=False)
+    monkeypatch.delenv("LOAD_CACHE_TTL_FRESH_SEC", raising=False)
+    assert st._fresh_cap("race_odds") is None and st._fresh_cap("race_shutuba") is not None
+    monkeypatch.setenv("KEIBA_FRESH_EXTRA_CATEGORIES", Q.FRESH_ODDS)
+    assert st._fresh_cap("race_odds") == 300.0 and st._fresh_cap("race_result") is None
