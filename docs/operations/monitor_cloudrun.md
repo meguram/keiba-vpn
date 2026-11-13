@@ -113,3 +113,7 @@
   入れる順: ① d6c72260 以降を含む取得の版を公開（`python -m src.ops.release_publish build-fetch` → publish、または stg/本番の流れ）→ ② VPS の取り込み（毎日 03:20 の keiba-release-pull@fetch、または手動）→
   ③ `sudo -n /opt/keiba-ui/bin/install_ops_files.sh install <版> keiba-sched-status.service` と `.timer` → `systemctl enable --now keiba-sched-status.timer`（IAM の 1 が済んでから。済む前は GCS に書けず、Slack の判定だけ動く）。
   **どれもユーザーの確認の後**（2026-11-13 統括役の訂正: VPS のユニットの設置を含む配備は、ユーザー本人の判断を待つ）。
+- **済み／未（2026-11-13 18:4x JST、統括役のセッションでユーザーの承認のもと実施）**:
+  - 済み: バケット IAM（keiba-fetch@ に roles/storage.objectUser、条件 vps-sched-status＝`ops/heartbeat/vps/`）。ホストの cron（root、KEIBA-VPS-ALIVE。前の crontab は data/local/meta/cron_backups/ に控え）。
+  - 未: keiba-monitor の Cloud Run への配備（Cloud Shell 前提）、プロジェクトの roles/run.viewer・roles/cloudscheduler.viewer（サービスアカウントにプロジェクトの IAM を変える権限が無い。ユーザーが付ける）、
+    master への昇格（ユーザーの直接の指示待ち）、VPS の見張りのユニット（取得の版が VPS に届いた後）。

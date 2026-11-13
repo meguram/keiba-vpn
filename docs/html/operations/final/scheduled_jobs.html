@@ -66,7 +66,8 @@ ul.jobs { padding-left:18px; margin:6px 0; } ul.jobs > li { margin:10px 0; }
 <div class="kpis">
   <div class="kpi"><b>1 件</b><span>GCP で動いている定期実行（<code>keiba-g-0730-shadow</code>）</span></div>
   <div class="kpi"><b>5 件</b><span>ConoHa VPS で動いている systemd タイマー（<code>keiba-cache-warm.timer</code>・<code>keiba-release-pull-ui.timer</code>・<code>keiba-release-pull-ui-stg.timer</code>・<code>keiba-release-pull-fetch.timer</code>・<code>keiba-ui-health.timer</code>）</span></div>
-  <div class="kpi"><b>23 件</b><span>今は動いていない・今後起動しうるもの（GCP 削除済み 13、GCP 停止中 1、ConoHa VPS 停止中 2、ConoHa VPS 今後 6、ホスト 今後 1）</span></div>
+  <div class="kpi"><b>1 件</b><span>ホストで動いている（この一覧に載せたもの: <code>KEIBA-VPS-ALIVE</code>）</span></div>
+  <div class="kpi"><b>22 件</b><span>今は動いていない・今後起動しうるもの（GCP 削除済み 13、GCP 停止中 1、ConoHa VPS 停止中 2、ConoHa VPS 今後 6）</span></div>
   <div class="kpi"><b>2 種</b><span>廃止（jma-weather（気象庁の時別値）・smoke-auto-thu-noon・-sat-morning・-sun-night）</span></div>
 </div>
 <div class="box"><p><b>この一覧について</b>: 定期実行ジョブの一覧の正（GCP・ConoHa VPS。ホストの cron は docs/html/operations/cron_schedule.html）。監視ポータル（/schedules）と docs/html/operations/final/scheduled_jobs.html（src/scripts/docs/build_scheduled_jobs_html.py）の両方がこれを読む。schedule の cron は JST。</p></div>
@@ -128,12 +129,6 @@ ul.jobs { padding-left:18px; margin:6px 0; } ul.jobs > li { margin:10px 0; }
 <tr><td><code>keiba-mirror-vps-push.timer</code><br>→ <code>keiba-mirror-vps-push.service</code><br><span class="b mu">今後</span><br><span class="ev">id: vps-mirror-vps-push</span></td><td class="when">5 分おき</td><td>VPS が取ったレース一覧・発走時刻表のうち変わったものだけを ops/mirror_vps/ に上げる（担当が無ければ何もしない）</td><td>MemoryMax 110M</td><td>段 6 で有効にする</td><td>約 7 円（書き込み）</td><td>ホストの VPS のミラーの取り込み（未登録）</td><td class="ev"><code>scripts/ops/vps/templates/keiba-mirror-vps-push.timer</code>、<code>docs/operations/vps_only_fetch.md:21-23</code></td></tr>
 <tr><td><code>keiba-heartbeat.timer</code><br>→ <code>keiba-heartbeat.service</code><br><span class="b warn">停止中</span><br><span class="ev">id: vps-heartbeat</span></td><td class="when">5 分おき</td><td>VPS の資源・ユニットの状態を監視ポータル（Cloud Run）へ送る</td><td>MemoryMax 48M</td><td>導入済み・disabled。5 分おきの要求は 15 分未満の ping の禁止に反するので有効にしない（代わりに vps-sched-status）</td><td>5 分おきの Cloud Run の起動（規約で禁止の間隔）</td><td>無い</td><td class="ev"><code>scripts/ops/vps/templates/keiba-heartbeat.timer</code>、<code>scripts/ops/vps/vps_03_units.sh:116</code></td></tr>
 <tr><td><code>keiba-traffic.timer</code><br>→ <code>keiba-traffic.service</code><br><span class="b mu">今後</span><br><span class="ev">id: vps-traffic</span></td><td class="when">15 分おき</td><td>nginx のアクセスの日別集計を監視ポータルへ送る</td><td>MemoryMax 128M</td><td>未導入（ハートビートの鍵が前提）</td><td>Cloud Run への 15 分おきの要求</td><td>無い</td><td class="ev"><code>scripts/ops/vps/templates/keiba-traffic.timer</code>、<code>scripts/ops/vps/traffic_client.py:1-7</code></td></tr>
-</table></div>
-<h3>ホスト: この一覧で見張る予定のもの</h3>
-<p class="sub">ホストの cron の全体は <a href="../cron_schedule.html">cron の一覧</a>（<code>docs/html/operations/cron_schedule.html</code>）。ここには、この一覧で見張るものだけを載せる。</p>
-<div class="scroll"><table>
-<tr><th>名前</th><th>スケジュール（JST）</th><th>中身</th><th>いつ有効になるか・メモ</th><th>費用の目安（月）</th><th>根拠</th></tr>
-<tr><td><code>KEIBA-VPS-ALIVE</code><br>job_id <code>vps-alive</code><br><span class="b mu">今後</span><br><span class="ev">id: host-vps-alive</span></td><td class="when">15 分おき</td><td>VPS 全体の停止の検知: 公開の画面の静的な /version.json を確かめ、2 回続けて失敗したら Slack、戻ったら Slack</td><td>入れた後に active にする</td><td>0 円（GCP・GCS に触れない）</td><td class="ev"><code>src/ops/vps_alive.py</code>、<code>scripts/cron/install_vps_alive_cron.sh</code></td></tr>
 </table></div>
 <h3>廃止したもの</h3>
 <div class="scroll"><table>
@@ -596,7 +591,7 @@ ul.jobs { padding-left:18px; margin:6px 0; } ul.jobs > li { margin:10px 0; }
 <div><b>メモ</b>: 未導入（ハートビートの鍵が前提）</div>
 </div></details>
 <h3>ホスト（cron）</h3>
-<details id="job-host-vps-alive"><summary><span class="b mu">今後</span> <b>KEIBA-VPS-ALIVE</b> <span class="mu">— 15 分おき</span><br><span class="sm">VPS 全体の停止の検知: 公開の画面の静的な /version.json を確かめ、2 回続けて失敗したら Slack、戻ったら Slack</span></summary>
+<details id="job-host-vps-alive"><summary><span class="b ok">稼働中</span> <b>KEIBA-VPS-ALIVE</b> <span class="mu">— 15 分おき</span><br><span class="sm">VPS 全体の停止の検知: 公開の画面の静的な /version.json を確かめ、2 回続けて失敗したら Slack、戻ったら Slack</span></summary>
 <div class="dbody">
 <div><b>id</b>: <code>host-vps-alive</code>（ホスト・ホストの cron・重さ 重い（止まると困る））</div>
 <div><b>名前</b>: cron_tag <code>KEIBA-VPS-ALIVE</code>・job_id <code>vps-alive</code></div>
@@ -609,7 +604,7 @@ ul.jobs { padding-left:18px; margin:6px 0; } ul.jobs > li { margin:10px 0; }
 <div><b>費用の目安（月）</b>: 0 円（GCP・GCS に触れない）</div>
 <div><b>ホストでも同じ処理？</b>: —</div>
 <div><b>根拠</b>: <span class="ev"><code>src/ops/vps_alive.py</code>、<code>scripts/cron/install_vps_alive_cron.sh</code></span></div>
-<div><b>メモ</b>: 入れた後に active にする</div>
+<div><b>メモ</b>: 2026-11-13 18:4x JST に root の crontab へ登録（KEIBA-VPS-ALIVE）</div>
 </div></details>
 
 <h2 id="audit">設計上の点検</h2>

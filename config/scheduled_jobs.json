@@ -926,7 +926,7 @@
    "id": "host-vps-alive",
    "where": "host",
    "kind": "cron",
-   "status": "planned",
+   "status": "active",
    "schedule": {
     "every_min": 15
    },
@@ -955,7 +955,7 @@
     "src/ops/vps_alive.py",
     "scripts/cron/install_vps_alive_cron.sh"
    ],
-   "note": "入れた後に active にする"
+   "note": "2026-11-13 18:4x JST に root の crontab へ登録（KEIBA-VPS-ALIVE）"
   }
  ],
  "retired": [
