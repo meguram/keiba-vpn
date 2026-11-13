@@ -4,6 +4,14 @@ flat テーブルにしていないカテゴリ（オッズ・追い切り・パ
 パース失敗（ページ表記の変更・文字コードの誤判定）を見つけるための検査。スキーマ検証は「項目があるか・型が合うか」しか見ないため、
 空文字や 0 のまま保存された値は通ってしまう。
   python -m src.scraper.parse_drift_docs [--categories race_odds,race_oikiri] [--sample 60]
+
+標本の選び方（2026-11-13 から。GCS の一覧は取らない＝CLAUDE.md の費用の決まり）:
+  - 直近の年: ローカルの表（そのカテゴリの _race.parquet、無ければ race_result_flat）の race_id を、レースの日付の新しい順に
+    sample*3 件取り、3 件おきに間引いて名前で読む。以前は GCS の一覧の「最後に保存した時刻」の新しい順だったので、
+    古いレースを保存し直した分（取り直しの品質）は標本に入らなくなった。
+  - 基準の年: 同じ表から無作為（種はカテゴリと年で固定）に sample*2 件を名前で読み、項目ごとの割合をローカルに保存して 30 日使い回す
+    （BASELINE_VERSION を上げるか 30 日たつと作り直す。過去年の文書の取り直し・数え方の変更を拾うため）。
+  - 毎日読むのは直近の sample 件 × カテゴリ数だけ（12 カテゴリ・40 件で 480 件、約 3MB）。
 """
 
 from __future__ import annotations
@@ -65,21 +73,75 @@ def compare(base: dict[str, tuple[float, float]], recent: dict[str, tuple[float,
     return out
 
 
-def sample_docs(storage: Any, category: str, year: str, n: int, newest: bool, rng: random.Random) -> list[dict]:
-    stamps = storage.batch_list_blobs(category, year)
-    if not stamps:
+def _tables_dir():
+    from src.scraper.export_tables import OUTPUT_DIR
+
+    return OUTPUT_DIR
+
+
+def local_sample_ids(category: str, year: str, n: int, newest: bool, rng: random.Random, tables_dir=None) -> list[str]:
+    """ローカルの表から標本の race_id を選ぶ（GCS の一覧は取らない）。"""
+    from src.scraper.export_tables import _flat_dates, _race_table_ids_or_empty
+
+    base = (tables_dir or _tables_dir()) / str(year)
+    dates = _flat_dates(base / "race_result_flat.parquet")
+    for c in ("race_shutuba", "race_result_on_time"):
+        for r, d in _flat_dates(base / f"{c}_flat.parquet").items():
+            dates.setdefault(r, d)
+    ids = _race_table_ids_or_empty(base / f"{category}_race.parquet") or set(dates)
+    if not ids:
         return []
-    # 直近は「最近保存された文書」（今の取得処理の品質を見る）。基準年は無作為
-    keys = sorted(stamps, key=lambda k: stamps[k]) if newest else sorted(stamps)
-    picked = keys[-n * 3:] if newest else rng.sample(keys, min(len(keys), n * 2))
     if newest:
-        picked = picked[::3][:n]   # 直近の開催日にまたがるよう間引く
+        keys = sorted(ids, key=lambda r: (dates.get(r, ""), r))
+        return keys[-n * 3:][::3][:n]   # 直近の開催日にまたがるよう間引く
+    return rng.sample(sorted(ids), min(len(ids), n * 2))
+
+
+def sample_docs(storage: Any, category: str, year: str, n: int, newest: bool, rng: random.Random, tables_dir=None) -> list[dict]:
     docs = []
-    for k in picked:
+    for k in local_sample_ids(category, year, n, newest, rng, tables_dir):
         d = storage.load(category, k, bypass_cache=True)
         if isinstance(d, dict):
             docs.append(d)
     return docs
+
+
+BASELINE_VERSION = 1           # field_rates の数え方を変えたら上げる（保存した基準を作り直す）
+BASELINE_MAX_AGE_DAYS = 30     # 過去年の文書の取り直し・パーサの変更を拾うため、保存した基準もこの日数で作り直す
+
+
+def _baseline_path(category: str, year: str, n: int):
+    from src.scraper.date_coverage import NOT_AVAILABLE_DIR
+
+    return NOT_AVAILABLE_DIR.parent / "parse_drift_docs_baseline" / f"{category}_{year}_{n}_v{BASELINE_VERSION}.json"
+
+
+def baseline_rates(storage: Any, category: str, year: str, n: int, rng: random.Random, tables_dir=None) -> tuple[dict[str, tuple[float, float]], int]:
+    """基準の年の項目ごとの割合。保存があれば読み直さない（基準の年の文書は変わらない）。(割合, 文書数) を返す。"""
+    import json
+    import os
+
+    import time
+
+    path = _baseline_path(category, year, n)
+    try:
+        if time.time() - path.stat().st_mtime > BASELINE_MAX_AGE_DAYS * 86400:
+            raise OSError("古い")
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        return {k: (float(v[0]), float(v[1])) for k, v in saved["rates"].items()}, int(saved["docs"])
+    except (OSError, ValueError, KeyError, TypeError, IndexError):
+        pass
+    docs = sample_docs(storage, category, year, n, False, rng, tables_dir)
+    rates = field_rates(docs) if docs else {}
+    if len(docs) >= n:          # 少なすぎる標本（取り損ね・GCS の不調）は保存しない
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps({"docs": len(docs), "rates": rates}, ensure_ascii=False), encoding="utf-8")
+            os.replace(tmp, path)
+        except OSError:
+            pass
+    return rates, len(docs)
 
 
 def main() -> int:
@@ -96,17 +158,17 @@ def main() -> int:
 
     load_project_dotenv()
     st = HybridStorage()
-    rng = random.Random(0)
     total = 0
     for cat in [c.strip() for c in args.categories.split(",") if c.strip()]:
-        base = sample_docs(st, cat, args.baseline_year, args.sample, False, rng)
+        rng = random.Random(f"{cat}:{args.baseline_year}")    # カテゴリごとに固定（前のカテゴリの保存の有無で標本が変わらない）
+        base, n_base = baseline_rates(st, cat, args.baseline_year, args.sample, rng)
         rec = sample_docs(st, cat, args.recent_year, args.sample, True, rng)
-        if not base or not rec:
-            print(f"[{cat}] データなし（基準 {len(base)} / 直近 {len(rec)}）")
+        if not n_base or not rec:
+            print(f"[{cat}] データなし（基準 {n_base} / 直近 {len(rec)}）")
             continue
-        f = compare(field_rates(base), field_rates(rec), args.threshold)
+        f = compare(base, field_rates(rec), args.threshold)
         total += len(f)
-        print(f"[{cat}] 基準 {len(base)} 件 / 直近 {len(rec)} 件 → " + ("異常なし" if not f else f"{len(f)} 項目"))
+        print(f"[{cat}] 基準 {n_base} 件 / 直近 {len(rec)} 件 → " + ("異常なし" if not f else f"{len(f)} 項目"))
         for x in f:
             print(f"    {x['field']:34s} {x['kind']}  基準 {x['baseline']:.3f} → 直近 {x['recent']:.3f}")
     return 1 if total else 0
