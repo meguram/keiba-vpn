@@ -98,7 +98,9 @@ class V4History:
 
     def __init__(self, tables_dir: str | Path | None = None, train_table: str | Path | None = None, years: list[int] | None = None):
         self.tables = Path(tables_dir) if tables_dir else TABLES
-        self.years = years or sorted(int(p.name) for p in self.tables.iterdir() if p.is_dir() and p.name.isdigit())
+        from src.pipeline.models.training_years import serving_years
+
+        self.years = years or serving_years(self.tables)          # 起点年（FIRST_YEAR）以降。学習の起点より前の年は読まない
         self.train_path = Path(train_table) if train_table else None
         self.conn_raw: pd.DataFrame | None = None
         self.self_runs: pd.DataFrame | None = None
