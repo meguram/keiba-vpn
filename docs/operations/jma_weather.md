@@ -1,5 +1,16 @@
 # 気象庁の時別値（風向・風速など）の取得
 
+> **2026-11-13: 定期取得を廃止した**（ユーザーの判断「今使うところが無いなら削除して良い」）。
+> - 理由: 本番の予測・推論の特徴量には使っていない。使うのは研究とコラムだけ（めぐコラム「競馬場ごとの風の影響」wind-venue は作成済みの静的ファイル、ptrain_wind・folklore_build・wind_adjust_2016、再学習の候補 14 は既定 no）。
+>   再開した 11-13 13:40 の回で、毎時 `fetch --from 20160101` が月ファイル 1,310 件（約 345MiB）を読み直していた（月 約 4,400 円相当）ことも分かった。
+> - 外したもの: ホストの root の crontab の `KEIBA-JMA-WEATHER` の行（`install_jma_weather_cron.sh --remove`。前の crontab は data/local/meta/cron_backups/ に退避）。GCP の jma-weather ジョブは `enabled=false`・`ready=false`（削除はしていない）。
+> - 残したもの: コード（`src/scraper/jma_weather.py`・`scripts/cron/jma_weather_run.sh`。1 日 1 回・前回からの範囲だけを読む作りに直してある）と、GCS の月ファイル・`jma_weather_hourly_flat.parquet`（2026-11-12 までの分）。
+> - 再開の手順（候補 14 を採用するときなど）:
+>   1. 空白を手で 1 回補う: `sudo env KEIBA_ENV=stg PYTHONPATH=. /opt/conda/bin/python3 -m src.scraper.jma_weather fetch --from <最後に取れた日>`（範囲の月ファイルだけを読む。2016 年からにすると約 345MiB ≒ 6 円）。
+>   2. 必要なら `export` で flat を作り直す。
+>   3. `sudo bash scripts/cron/install_jma_weather_cron.sh` で毎時の行を戻す（取得は 1 日 1 回だけ。月 約 1.5〜3 円）。費用の見積もりを示してから行う。
+
+
 目的: 競馬場ごとの風向・風速（レース当日の追い風・横風など）を、トラックバイアス・位置取り・ペースの分析と予測に使う。出典: 気象庁ホームページ（過去の気象データ検索）。
 
 | 項目 | 内容 |
