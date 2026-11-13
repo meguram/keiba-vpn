@@ -28,8 +28,12 @@
 - **JRA の馬場（cushion/）は受け渡さない（当面ホストで取る）**: cushion_values.json は手元のファイルに追記していく作りで、VPS のファイルには VPS が取った分しか無い。
   丸ごと取り込むとホストの 2018 年からの履歴を消す。開催カレンダー（race_calendar_YYYY.json）は多くのタスクがホストと VPS の両方で作り直す。
   書き込みが原子的でない。予測に届くのが遅れる。レコード単位で合わせる設計を別に作るまで、jra-baba-morning と当日の取り直しはホストに残す。
-- **配備の前に必要な IAM の作業（ユーザー）**: VPS の取得役のサービスアカウントは今 `ops/fetch_tasks/`・`ops/events/`・`shadow/` にしか書けない。
-  本番の担当を渡すには、本番のデータの置き場所と `ops/mirror_vps/` への書き込みを足す。
+- **IAM**: VPS の取得役のサービスアカウント（keiba-fetch@horse-racing-466415.iam.gserviceaccount.com）に、`ops/mirror_vps/` 以下だけの
+  `roles/storage.objectUser`（条件タイトル `fetch-mirror-vps`、`scripts/gcp/make_iam_condition.sh ops/mirror_vps/` と同じ式）を **2026-11-13 に付けた**
+  （ユーザー承認。バケットの IAM のバインディング 17 → 18 件、ほかは変わらず）。戻し方: 同じ条件ファイルで
+  `gcloud storage buckets remove-iam-policy-binding gs://<バケット> --member serviceAccount:keiba-fetch@… --role roles/storage.objectUser --condition-from-file …`。
+  本番のデータの置き場所（`chuou/data/preprocessed/netkeiba/pc/`・`chuou/data/others/`）への書き込み（案 B）は、段 6 で担当を渡す直前に、
+  VPS が実際に書くパスを確かめてから、あらためてユーザーに確認する。
 
 ### 段 4. 後処理をホストに残す（src/ops/host_postprocess.py、cron は scripts/cron/install_host_postprocess_cron.sh）
 - 対応する取得の担当が VPS に移ったジョブだけ動く（移っていなければ何もしない・GCS に触れない）: 前夜の計算（← raceday-eve-fetch。19:10・19:40）、
