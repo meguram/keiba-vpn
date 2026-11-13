@@ -127,6 +127,37 @@ def test_track_is_idempotent_and_settles(tmp_path, monkeypatch):
     assert c59["bets"] == 1 and c59["roi_pct"] == pytest.approx(600.0)
 
 
+def test_excluded_dates_are_noted_and_left_out_of_scorecard(tmp_path, monkeypatch):
+    pred_dirs = _setup(tmp_path, monkeypatch)
+    out = tmp_path / "out"
+    assert ft.check_hashes(out)[0]                                                                # 外す日を足す前のハッシュを記録する
+    (tmp_path / "ft.json").write_text(json.dumps({"blend": {"a_model": 0.3, "b_market": 0.7}, "excluded_dates": {"20261024": "推論の履歴の年のずれ"}}, ensure_ascii=False))
+    same, diff = ft.check_hashes(out, write=False)
+    assert same and diff == []                                                                    # 外す日の追記は凍結のハッシュを変えない（追記は止まらない）
+    ft.run_track(["20261024"], out, ("v4",), ("final",), None, ft.TABLES, pred_dirs, verbose=False)
+    rows = [json.loads(x) for x in (out / "ledger.jsonl").read_text().splitlines()]
+    assert len(rows) == 2 and all(r["excluded_reason"] == "推論の履歴の年のずれ" for r in rows)     # 8 桁で書いても台帳の 2026-10-24 に合う。行は残し、注記を付ける
+    card = ft.scorecard(ft.load_ledger(out / "ledger.jsonl"), ft.load_rules())
+    assert card["cards"] == [] and card["excluded_dates"]["2026-10-24"]["rows"] == 2              # 集計からは外す
+    assert "集計から外した日" in ft.render_html(card)
+
+
+def test_excluded_dates_drop_old_rows_without_note(tmp_path, monkeypatch):
+    pred_dirs = _setup(tmp_path, monkeypatch)
+    out = tmp_path / "out"
+    ft.run_track(["20261024"], out, ("v4",), ("final",), None, ft.TABLES, pred_dirs, verbose=False)   # 外す日を決める前に書いた行（注記なし）
+    (tmp_path / "ft.json").write_text(json.dumps({"blend": {"a_model": 0.3, "b_market": 0.7}, "excluded_dates": {"2026-10-24": "x"}}))
+    led = ft.load_ledger(out / "ledger.jsonl")
+    assert "excluded_reason" not in led.columns
+    card = ft.scorecard(led, ft.load_rules())
+    assert card["cards"] == [] and card["excluded_dates"]["2026-10-24"]["rows"] == 2              # 注記が無くても日付で外す
+
+
+def test_excluded_dates_bad_format_is_error():
+    with pytest.raises(ValueError):
+        ft.excluded_dates({"ft": {"excluded_dates": {"11/07": "x"}}})
+
+
 def test_v6_reference_model_is_explicit_only(tmp_path, monkeypatch):
     import shutil
 

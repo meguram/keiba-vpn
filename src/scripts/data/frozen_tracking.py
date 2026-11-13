@@ -387,6 +387,9 @@ def settle_race(rid: str, date: str, model: str, variant: str, g: pd.DataFrame, 
     """1 レース・1 モデル・1 オッズ時点の判定と精算。戻り値: 台帳の行（tp59・tp62 の 2 行）。"""
     rows = []
     base = {"race_id": rid, "date": date, "model": model, "odds_variant": variant, **odds_info}
+    why = excluded_dates(rules).get(str(date))
+    if why:
+        base["excluded_reason"] = why                  # 集計から外す日（config/frozen_tracking.json の excluded_dates）。行は残す
     # tp59
     bets = tp59_decide(g, rules["jpos"], rules["tpos"])
     b59 = [{"horse_number": int(r.horse_number), "odds": float(r.win_odds), "p_win": float(r.p_win), "ev": float(r.ev), "ret_yen": float(pay["win"].get(int(r.horse_number), 0.0))} for r in bets.itertuples()]
@@ -487,6 +490,19 @@ def needed_races(mu: float, sd: float, z: float = 1.645) -> float | None:
     return float((z * sd / (mu - 1.0)) ** 2)
 
 
+def excluded_dates(rules: dict) -> dict[str, str]:
+    """集計（scorecard）から外す日 → 理由（config/frozen_tracking.json の excluded_dates。例: 推論の履歴の年がずれていた 2026-11-07・08）。"""
+    out = {}
+    for k, v in ((rules.get("ft") or {}).get("excluded_dates") or {}).items():
+        d = str(k)
+        if len(d) == 8 and d.isdigit():                  # CLI と同じ 20261107 の形でも、台帳の 2026-11-07 に合わせる
+            d = f"{d[:4]}-{d[4:6]}-{d[6:]}"
+        if not (len(d) == 10 and d[4] == "-" and d[7] == "-" and (d[:4] + d[5:7] + d[8:]).isdigit()):
+            raise ValueError(f"excluded_dates の日付の形が違う（YYYY-MM-DD か YYYYMMDD）: {k}")
+        out[d] = str(v)
+    return out
+
+
 def load_ledger(path: Path) -> pd.DataFrame:
     rows = [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x.strip()] if path.exists() else []
     return pd.DataFrame(rows)
@@ -505,6 +521,11 @@ def scorecard(led: pd.DataFrame, rules: dict, ref_sd: dict | None = None) -> dic
     out = {"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "hashes": current_hashes(), "cards": []}
     if led.empty:
         return out
+    excl = excluded_dates(rules)
+    if excl:                                             # 外す日は、台帳に注記の列が無い古い行でも日付で外す
+        drop = led["date"].astype(str).isin(excl)
+        out["excluded_dates"] = {d: {"reason": excl[d], "rows": int((led["date"].astype(str) == d).sum())} for d in sorted(excl)}
+        led = led[~drop]
     led = led[led["settled"]]
     for (rule, model, variant), g in led.groupby(["rule", "model", "odds_variant"]):
         races = g["race_id"].nunique()
@@ -541,6 +562,7 @@ def render_html(card: dict) -> str:
                     f"<pre>{html.escape(json.dumps(c['expectation'], ensure_ascii=False, indent=1))}</pre>")
     return ("<!doctype html><meta charset=utf-8><title>凍結した馬券候補の前向き追跡</title><h1>凍結した馬券候補の前向き追跡</h1>"
             "<p>主の評価は model=v4（凍結した規則の入力）。v5・v6（新しい親モデル）は参考。確定オッズ(final)と発走前スナップショット(pre)を併記。2026 年以降の追跡データは学習・選択に使わない。</p>"
+            + "".join(f"<p style='color:#a40'>集計から外した日: {html.escape(d)}（{v['rows']} 行）— {html.escape(v['reason'])}</p>" for d, v in (card.get("excluded_dates") or {}).items())
             + (("".join(rows)) or "<p>まだ確定したレースがありません。</p>") + f"<p style='color:#666'>生成 {card['generated_at']}</p>")
 
 
