@@ -91,4 +91,18 @@
 - VPS への配備: 2026-11-13 16:30 JST ごろ、ユーザーが root で /opt/keiba-ui/bin/cache_warm.py を入れ替えた
   （sha256 467dac79… が develop の 05f35916 と一致。keiba-cache-warm.timer は active、16:30:59 の実行は終了コード 0）。
   1〜2 日後に、1 日の一覧が 300 回以下になったかを Monitoring で確かめる。戻すときは `git show 05f35916^:scripts/ops/vps/cache_warm.py` の版に入れ替える。
-- 今後の入れ替えを root に頼らずに行う方法（方法 A: 配布物から決まった操作で入れる install_ops_files.sh）は計画中。
+- 今後の入れ替えを root に頼らずに行う方法（方法 A）を作った。下の節を参照。
+
+## VPS の root 所有の ops ファイルを deploy から入れ替える（方法 A、2026-11-13）
+- 取得の配布物（kind=fetch）に ops ファイル（`src/ops/release_publish.py` の `OPS_FILES`: cache_warm.py と、温め役・定期実行の見張り・
+  VPS の取得のタイマーのユニット）と、その sha256 の目録 `ops_manifest.json` を入れる。VPS の root のタイマー（release-pull）が
+  latest.json の sha256 で確かめてから、root 所有の `/opt/keiba-fetch/releases/<版>/` に展開する。
+- deploy は `sudo -n /opt/keiba-ui/bin/install_ops_files.sh install <版> <名前>` だけで入れ替えられる（名前: cache-warm・cache-warm-units・
+  sched-status-units・fetch-timers）。スクリプトは版の形・許可リストの名前・版のディレクトリとその親が root 所有で書けないこと・目録の sha256 を毎回確かめ、
+  1 つでも違えば何もしない。今のファイルは `/var/lib/keiba-ops/backup/<名前>/<時刻>/` に退避し、`rollback <名前>` で戻せる。記録は `/var/log/keiba-ops-install.log`。
+  確認は `status [<名前>]`。fetch-timers は入れるだけで有効化しない（有効化は担当を渡すときに別途）。
+- 費用: GCS に触れない（取り込み済みの配布物だけを使う）。配布物が数十 KB 増えるだけで、月 1 円未満。
+- 最初の 1 回だけ root の作業が要る（ユーザー）: develop の 3 ファイル（`scripts/ops/vps/install_ops_files.sh`・`scripts/ops/vps/vps_12_ops_installer.sh`・
+  `scripts/ops/vps/templates/sudoers-keiba-ops-install`）を VPS の /tmp に置き、ConoHa のコンソールで root でログインするか `su -` で root になってから
+  `bash /tmp/vps_12_ops_installer.sh`（sudoers は visudo -cf で検査してから入る）。確認: `sudo -u deploy sudo -n /opt/keiba-ui/bin/install_ops_files.sh status`。
+  外すときは `bash /tmp/vps_12_ops_installer.sh --remove`。

@@ -1,0 +1,4 @@
+# deploy ユーザーが root 権限で実行できる、ops ファイル（温め役・systemd ユニット）の入れ替え（方法 A、2026-11-13）。
+# 引数はスクリプトが検査する（版の形・許可リストの名前・配布物の sha256・置き場所の所有者）。スクリプトは root 所有で deploy は書き換えられない。
+# 設置: scripts/ops/vps/vps_12_ops_installer.sh
+deploy ALL=(root) NOPASSWD: /opt/keiba-ui/bin/install_ops_files.sh *

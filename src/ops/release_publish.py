@@ -35,7 +35,19 @@ _SHA = re.compile(r"^[0-9a-f]{64}$")
 FETCH_CONFIG = ("ports.env", "settings.yaml", "entries_schedule.json", "fetch_owner.json", "anti_scraping.json",
                 "maintenance.json", "gcp_job_map.json", "behavior_flags.json", "fetch_shadow.json",
                 "scheduled_jobs.json")   # scheduled_jobs.json: 定期実行の見張り（src.ops.sched_status）が読む
-FETCH_INCLUDE = ("src", *(f"config/{n}" for n in FETCH_CONFIG), "requirements-fetch.txt", "scripts/auto_scrape.sh")
+# VPS の root 所有の ops ファイル（温め役・systemd ユニット）。配布物に入れ、ops_manifest.json に sha256 を書く。
+# VPS では deploy が `sudo -n /opt/keiba-ui/bin/install_ops_files.sh install <版> <名前>` で、確かめてから入れ替える（方法 A）。
+# 足すときは scripts/ops/vps/install_ops_files.sh の許可リストにも足す（tests/ops/test_install_ops_files.py が両方の一致を確かめる）。
+_VPS_T = "scripts/ops/vps/templates"
+OPS_FILES = ("scripts/ops/vps/cache_warm.py",
+             f"{_VPS_T}/keiba-cache-warm.service", f"{_VPS_T}/keiba-cache-warm.timer",
+             f"{_VPS_T}/keiba-sched-status.service", f"{_VPS_T}/keiba-sched-status.timer",
+             f"{_VPS_T}/keiba-fetch-reserve.service", f"{_VPS_T}/keiba-fetch-reserve.timer",
+             f"{_VPS_T}/keiba-fetch-raceday@.service",
+             f"{_VPS_T}/keiba-fetch-raceday-tomorrow.timer", f"{_VPS_T}/keiba-fetch-raceday-today.timer",
+             f"{_VPS_T}/keiba-mirror-vps-push.service", f"{_VPS_T}/keiba-mirror-vps-push.timer")
+OPS_MANIFEST = "ops_manifest.json"
+FETCH_INCLUDE = ("src", *(f"config/{n}" for n in FETCH_CONFIG), "requirements-fetch.txt", "scripts/auto_scrape.sh", *OPS_FILES)
 FETCH_EXCLUDE_PARTS = {"__pycache__", ".ipynb_checkpoints"}
 FETCH_EXCLUDE_NAMES = {"anti_scraping.local.json", ".env"}
 FETCH_EXCLUDE_SUFFIX = (".pyc", ".ipynb", ".parquet", ".pkl", ".joblib")
@@ -69,7 +81,13 @@ def _fetch_filter(ti: tarfile.TarInfo) -> tarfile.TarInfo | None:
         return None
     ti.uid = ti.gid = 0
     ti.uname = ti.gname = ""
+    ti.mode &= ~0o022           # group/other の書き込みを落とす（VPS の install_ops_files.sh は書けるファイルを拒否する）
     return ti
+
+
+def ops_manifest(root: Path = ROOT) -> dict[str, Any]:
+    """配布物に入れる ops ファイルの sha256（VPS の install_ops_files.sh が、入れ替える前にこれと突き合わせる）。無いファイルは載せない。"""
+    return {"schema": 1, "files": {rel: sha256_file(root / rel) for rel in OPS_FILES if (root / rel).is_file()}}
 
 
 def build_fetch_bundle(out_dir: Path, *, root: Path = ROOT, commit: str | None = None) -> Path:
@@ -88,6 +106,11 @@ def build_fetch_bundle(out_dir: Path, *, root: Path = ROOT, commit: str | None =
         ti = tarfile.TarInfo("RELEASE.json")
         ti.size = len(meta)
         tf.addfile(ti, io.BytesIO(meta))
+        man = json.dumps(ops_manifest(root), ensure_ascii=False, indent=1, sort_keys=True).encode()
+        ti = tarfile.TarInfo(OPS_MANIFEST)
+        ti.size = len(man)
+        ti.mode = 0o644
+        tf.addfile(ti, io.BytesIO(man))
     return path
 
 
