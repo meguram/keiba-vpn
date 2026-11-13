@@ -208,7 +208,7 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     (out / "summary.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
     head = ["| 候補 | 比べる相手 | 1番手勝率 | 1番手複勝率 | 上位3頭の3着内 | NDCG@5 | 単勝 | 複勝 | 馬連流し | ワイド流し |", "|---|---|---|---|---|---|---|---|---|---|"]
-    lines = [f"# rank_bakeoff 評価（{a.years}、共通 {len(common)} レース）", ""]
+    lines = [f"# rank_bakeoff 評価（{','.join(map(str, sorted(years)))}、共通 {len(common)} レース）", ""]
     for key, title in (("diff_vs_ref", "同じ seed 数の基準との差（候補は R0・B0、調整の変種は元の設定の候補。相手の列を参照）"), ("diff_vs_v6e", "v6e のアンサンブルとの差")):
         lines += [f"## {title}", ""] + head
         for name, r in sorted(res.items(), key=lambda kv: -kv[1]["all"]["ndcg5"]):
