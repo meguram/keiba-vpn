@@ -65,3 +65,25 @@
 - 3a86b5ff・42f48f22: 天気の取得の費用の超過の修正と、定期取得の廃止（crontab から削除済み）。
 - 2026 年の flat 7 種類を 1 回作った（馬柱・指数・バロメーター・SmartRC・追い切り・パドック・厩舎コメント）。
 - 追いつき実行の cron を登録した（KEIBA-CRON-CATCHUP）。
+
+## 進み具合（2026-11-13 夜・バックグラウンドのセッションが引き継いで実施）
+- ① 済み: 11/13 の週次は rc=0（18:47 終了）。めぐ指数の 10/31・11/01・11/07・11/08 は 4 日とも埋まった（race_result_flat に対する割合 1.0。バッチ status=ok・valid=1316）。
+- ② 済み: 3fcb2a2b（毎朝の書き出しの GCS 一覧を 0 に）。11/14 7:00 の書き出しから効く。
+  - git apply で export_tables_daily.sh の実行の印が落ちたので、755 に戻した（cron が直接起動するため）。
+- ③ 済み: 7c4a8adb（cron の登録スクリプトの修正と job_map・一覧の HTML）。
+- ④ **未実施（権限の確認で止められた）**: 2026-11-13 夜、`sudo bash scripts/cron/install_shared_login_cron.sh` を Claude Code の権限の確認（auto mode）が止めた（Destructive or Unwanted Actions）。回り込まずに止めた。ユーザーが次を実行する。
+  ```bash
+  cd /home/jovyan/work/keiba-vpn
+  sudo bash scripts/cron/install_shared_login_cron.sh            # 共通ログインを 5 15 * * *（JST 00:05）に
+  sudo bash scripts/cron/install_sporthorse_births_cron.sh --remove   # root の sporthorse の行を外す
+  KEIBA_CRON_BACKUP_DIR=$HOME/cron_backups bash scripts/cron/install_sporthorse_births_cron.sh --remove   # jovyan の行も外す（jovyan のまま。退避先は jovyan が書ける場所）
+  sudo bash scripts/cron/install_serving_state_cron.sh           # serving-state の 2 行をタグ付きで入れ直す
+  sudo crontab -l | grep -nE 'KEIBA-SHARED-LOGIN|KEIBA-SPORTHORSE|KEIBA-SERVING-STATE'   # 確認: 共通ログインは 5 15、sporthorse は無い、serving-state は 2 行
+  crontab -l | grep -c KEIBA-SPORTHORSE                          # 0
+  ```
+  - どのスクリプトも、変える前の crontab を `data/local/meta/cron_backups/` に退避し、行数の増減を確かめてから入れ替える（合わなければ中止）。
+  - 入れ直したら、monitor-cloudrun-handoff（config/scheduled_jobs.json の持ち主）に知らせる。
+  - 入れ直すまでの影響: 共通ログインは毎日 09:05 のまま（次の月替わりは 12/01 の 09:05）。sporthorse は毎日 SKIP で動くだけ。serving-state はタグが無いだけで動きは同じ。
+- ⑤ 済み: c03b86f7（毎晩の PG 同期で GCS の全件一覧を取らない。ローカルの flat で判定し、無いものだけ名前で確かめる。11/13 の実データでは名前の確認も 0 回）。
+- CI: 3fcb2a2b・7c4a8adb・c03b86f7 とも緑。
+- 11/14 7:00 の書き出し（②が入った最初の回）で確かめること: `logs/export_tables_daily.log` に「一覧なしの追記」の行が 13 カテゴリ分あること、`LOCAL_EXPORT_FAIL` が無いこと、`_export_local_report.json` の errors が 0、race_result に 11/14 以降のレースが入っていない（当日は翌日から）こと、parse_drift_docs の結果が出ていること。
