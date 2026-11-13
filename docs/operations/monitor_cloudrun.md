@@ -121,3 +121,4 @@
   2026-11-13 19:0x JST に `python -m src.ops.scheduler_gen scheduler` を表示だけで流すと、14 グループすべての create/update が出た（g-0730-shadow だけであるべき）。
   直す担当は cron-catchup-weekly-decision（job_map）。**この修正が develop・stg に入り、同じコマンドの出力が g-0730-shadow の update だけになったことを確かめてから昇格する**。
   未修正なら昇格しない（作り直されると 1 件 約 15 円/月＋Jobs の実行の費用。監視ポータルは「廃止なのに有効」と出す）。昇格はユーザーの直接の指示で。
+  → 2026-11-13 夜: 7e1cc81f（job_map で 13 件を retired）が develop に入り、`scheduler_gen scheduler` の出力が keiba-g-0730-shadow の create/update だけになったのを確認。残る前提は stg に入っていること。
