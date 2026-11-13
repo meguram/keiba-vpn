@@ -90,5 +90,54 @@ class TestGetTargetDates(unittest.TestCase):
         self.assertEqual(out, ["20260718", "20260719"])
 
 
+def _gcs_setup(tmp_path, monkeypatch):
+    import pandas as pd
+    from src.scripts.data import etl_stg_db as E
+
+    monkeypatch.setattr(E, "RACE_LISTS_DIR", tmp_path / "race_lists")
+    d = tmp_path / "tables" / "2026"
+    d.mkdir(parents=True)
+    pd.DataFrame({"race_id": ["202605010101"]}).to_parquet(d / "race_shutuba_flat.parquet")
+    pd.DataFrame({"race_id": ["202605010101", "202605010102"], "result_source": [None, "on_time"]}).to_parquet(d / "race_result_flat.parquet")
+    return E
+
+
+class _St:
+    def __init__(self, present=(), healthy=True):
+        self.asked, self.present, self._gcs_healthy = [], set(present), healthy
+
+    def batch_list_blobs(self, *a):
+        raise AssertionError("一覧を取ってはいけない")
+
+    def exists_gcs(self, cat, rid):
+        self.asked.append((cat, rid))
+        return rid in self.present
+
+
+def test_gcs_race_keys_use_local_flats_and_name_checks_without_listing(tmp_path, monkeypatch):
+    """毎晩の全件一覧をやめた（2026-11-13）。flat にあるものは GCS を見ず、無いものだけ名前で確かめる。今日・先のレースの結果は見ない。"""
+    E = _gcs_setup(tmp_path, monkeypatch)
+    old, bridged, prev, today, nxt = "202605010101", "202605010102", "202605020101", "202605030101", "202605040101"
+    st = _St(present={prev, today})
+    dates = {old: "20261108", bridged: "20261108", prev: "20261113", today: "20261114", nxt: "20261121"}
+    sh, rr = E.load_gcs_race_keys([old, bridged, prev, today, nxt], dates, today="20261114", storage=st)
+    assert sh == {old, prev, today}
+    assert rr == {old, prev}                                               # 橋渡しの行は確定結果とみなさない
+    assert ("race_result", bridged) in st.asked                            # 橋渡しのレースは名前で確かめる
+    assert ("race_result", today) not in st.asked and ("race_result", nxt) not in st.asked
+    assert not any(rid == old for _, rid in st.asked)                      # flat にあるものは GCS を見ない
+
+
+def test_gcs_race_keys_unknown_on_failure_and_missing_date(tmp_path, monkeypatch):
+    E = _gcs_setup(tmp_path, monkeypatch)
+    rid = "202605020101"
+    sh, rr = E.load_gcs_race_keys([rid], {}, today="20261114", storage=_St(healthy=False))
+    assert rid in sh and rid in rr                                         # 確かめられなければ候補に残す
+    st = _St(present={rid})
+    sh, rr = E.load_gcs_race_keys([rid], None, today="20261114", storage=st)
+    assert rid in rr                                                       # 日付が分からなければ確かめる
+
+
 if __name__ == "__main__":
     unittest.main()
+

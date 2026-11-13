@@ -3779,7 +3779,7 @@
     "cron_utc": "0 15 * * *",
     "script": "scripts/cron/sync_pg_from_gcs.sh"
    },
-   "reason": "PostgreSQL は廃止（architecture_target.md 3.3）。API が Cloud Run に移ってから止める 2026-11-13: ホストで続ける。Flask（/api/v1/races/<id>/results・めぐの予測・is_member・laps）と監視が PG を読むので残す。廃止は Flask から PG を外すときに sync-pg-from-gcs と ensure-postgres を 2 本同時に（ensure だけ外すと再起動のあと同期が接続拒否で失敗する。2026-10-14 の実例） 費用（最悪の回数）: 毎晩 race_shutuba・race_result の当年の全件一覧を 2 回（etl_stg_db.py の batch_list_blobs。各 約 3,000 件）→ Class A 約 8 回/日、一覧の転送 約 6MB/日 → 月 約 0.3〜3 円。全件一覧は CLAUDE.md の決まりに反するので、直近のレースだけを名前で読む作りへ直す（統括役の指示、別の commit）",
+   "reason": "PostgreSQL は廃止（architecture_target.md 3.3）。API が Cloud Run に移ってから止める 2026-11-13: ホストで続ける。Flask（/api/v1/races/<id>/results・めぐの予測・is_member・laps）と監視が PG を読むので残す。廃止は Flask から PG を外すときに sync-pg-from-gcs と ensure-postgres を 2 本同時に（ensure だけ外すと再起動のあと同期が接続拒否で失敗する。2026-10-14 の実例） 費用: 2026-11-13 から GCS の全件一覧は取らない（etl_stg_db.load_gcs_race_keys がローカルの flat で判定し、無いものだけ名前で存在を確かめる）。最悪 1 日 約 300 回の Class B → 月 約 0.5 円。それまでは毎晩 race_shutuba・race_result の当年の全件一覧を 2 回取っていた（月 約 0.3〜3 円）",
    "enabled": true,
    "blockers": [],
    "ready": true
