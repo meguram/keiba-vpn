@@ -117,3 +117,7 @@
   - 済み: バケット IAM（keiba-fetch@ に roles/storage.objectUser、条件 vps-sched-status＝`ops/heartbeat/vps/`）。ホストの cron（root、KEIBA-VPS-ALIVE。前の crontab は data/local/meta/cron_backups/ に控え）。
   - 未: keiba-monitor の Cloud Run への配備（Cloud Shell 前提）、プロジェクトの roles/run.viewer・roles/cloudscheduler.viewer（サービスアカウントにプロジェクトの IAM を変える権限が無い。ユーザーが付ける）、
     master への昇格（ユーザーの直接の指示待ち）、VPS の見張りのユニット（取得の版が VPS に届いた後）。
+- **master への昇格の前提（2026-11-13 夜、統括役の最終点検）**: 昇格（promote.yml:121 → deploy_gcp.sh jobs → scheduler_gen）が、今日削除した keiba-g-* 13 件を ENABLED で作り直す経路がある。
+  2026-11-13 19:0x JST に `python -m src.ops.scheduler_gen scheduler` を表示だけで流すと、14 グループすべての create/update が出た（g-0730-shadow だけであるべき）。
+  直す担当は cron-catchup-weekly-decision（job_map）。**この修正が develop・stg に入り、同じコマンドの出力が g-0730-shadow の update だけになったことを確かめてから昇格する**。
+  未修正なら昇格しない（作り直されると 1 件 約 15 円/月＋Jobs の実行の費用。監視ポータルは「廃止なのに有効」と出す）。
