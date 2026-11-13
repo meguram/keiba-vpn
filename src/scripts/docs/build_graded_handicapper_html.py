@@ -71,7 +71,7 @@ function renderRaces(){const R=D.races;const grades=[...new Set(R.map(r=>r.grade
   const ex=r.excluded.length?r.excluded.map(e=>`${e.year} 年（${e.course}）`).join('、'):'なし';
   const rows=r.patterns.filter(p=>!k||p.k===k).sort((a,b)=>b.x-a.x).map(p=>`<tr><td>${p.t} ${TN[p.t]}</td><td class="wrap">${p.lv}</td><td class="${kcls(p.k)}">${p.k}</td><td class="n" data-v="${p.m[0]+p.m[1]+p.m[2]+p.m[3]}">${rec(p.m)}</td><td class="n">${pct(p.mr[0])}</td><td class="n">${pct(p.mr[1])}</td><td class="n">${pct(p.mr[2])}</td><td class="n">${pct(p.ps)}</td><td class="n" data-v="${p.med[0]}">${p.med[0]}/${p.med[1]}</td><td class="n">${rec(p.s)}</td><td class="n">${pct(p.sr[2])}</td><td class="n">${p.x.toFixed(3)}</td><td>${p.ly}</td></tr>`);
   $('#rb').innerHTML=`<div class="panel">${r.rkey}（${r.grade}・${r.course}、最新の回 ${r.latest}）。主の集計: 2016〜2024 年の ${r.n_main_ed} 回・${r.n_main_runs} 走。副の集計（同じコースの OP 以上の別レース）: ${r.n_sub_runs} 走。<br>主から外した回（別のコース）: ${ex}</div>`+
-   table(['切り口','水準','種別','主 [1-2-3-着外]','勝率','連対率','複勝率','縮小後の複勝率','3着内の回/回','副 [1-2-3-着外]','副の複勝率','点 x','使った層'],rows)+'<p class="muted">点 x = log（縮小した 実際の3着内 ÷ 頭数から見た期待）。好成績 = 主の集計で上振れし、3着内が出た回が 3 回以上。凡走 = 主で下振れし、該当馬がいた回が 4 回以上で 3着内の回が 1 回以下。</p>';
+   table(['切り口','水準','種別','主 [1-2-3-着外]','勝率','連対率','複勝率','縮小後の複勝率','3着内の回/回','副 [1-2-3-着外]','副の複勝率','点 x','使った層'],rows)+`<p class="muted">${(!k||k==='参考')?`「参考」（好成績・凡走の条件に届かないもの）は |点| の大きい ${r.n_ref_shown??'—'} 件だけ載せた（全 ${r.n_ref_all??'—'} 件）。`:''}`+'点 x = log（縮小した 実際の3着内 ÷ 頭数から見た期待）。好成績 = 主の集計で上振れし、3着内が出た回が 3 回以上。凡走 = 主で下振れし、該当馬がいた回が 4 回以上で 3着内の回が 1 回以下。</p>';
   document.querySelectorAll('#rb table').forEach(sortable)};
  $('#rq').oninput=fill;$('#rg').onchange=fill;$('#rs').onchange=show;$('#rk').onchange=show;fill()}
 // 3) 検証のレース
@@ -79,7 +79,7 @@ function renderEvalRaces(){const R=D.eval_races;$('#t-er').innerHTML=`<div class
  const fill=()=>{const q=$('#eq').value.trim(),y=$('#ey').value,g=$('#eg').value;const L=R.filter(r=>(!y||r.date.startsWith(y))&&(!g||r.grade===g)&&(!q||(r.name+r.rkey).includes(q)));
   $('#es').innerHTML=L.map(r=>`<option value="${R.indexOf(r)}">${r.date} ${r.rkey}（${r.grade}）</option>`).join('');show()};
  const show=()=>{const r=R[+$('#es').value];if(!r){$('#eb').innerHTML='<p class="muted">該当なし</p>';return}
-  const rows=r.horses.map(h=>`<tr><td class="mk">${h.mk}</td><td class="n">${h.hn}</td><td class="n">${h.sc.toFixed(2)}</td><td class="n">${h.n_good}</td><td class="n">${h.n_bad}</td><td class="n">${h.fin??'—'}</td><td class="n">${h.v6??'—'}</td><td>${h.jk??''}</td><td class="wrap"><details><summary>${h.p.length} パターン</summary>${h.p.map(p=>`<div class="${kcls(p.k)}">${TN[p.t]}: ${p.lv} — ${p.ly} 主${rec(p.m)}（${p.med[0]}/${p.med[1]} 回）副${rec(p.s)} 全体${rec(p.g)} 点 ${p.x.toFixed(3)}</div>`).join('')}</details></td></tr>`);
+  const rows=r.horses.map(h=>`<tr><td class="mk">${h.mk}</td><td class="n">${h.hn}</td><td class="n">${h.sc.toFixed(2)}</td><td class="n">${h.n_good}</td><td class="n">${h.n_bad}</td><td class="n">${h.fin??'—'}</td><td class="n">${h.v6??'—'}</td><td>${h.jk??''}</td><td class="wrap"><details><summary>上位 ${h.p.length} パターン</summary>${h.p.map(p=>`<div class="${kcls(p.k)}">${TN[p.t]}: ${p.lv} — ${p.ly} 主${rec(p.m)}（${p.med[0]}/${p.med[1]} 回）副${rec(p.s)} 全体${rec(p.g)} 点 ${p.x.toFixed(3)}</div>`).join('')}</details></td></tr>`);
   $('#eb').innerHTML=`<div class="panel">${r.date} ${r.name}（${r.grade}・${r.course}）。◎の払戻: 単勝 ${r.pay.tansho} 円・複勝 ${r.pay.fukusho} 円${r.has_pay?'':'（払戻のデータなし。評価から除外）'}</div>`+
    table(['印','馬番','点','好成績','凡走','着順','v6e本番の順位','騎手','該当パターン（|点| の大きい順）'],rows);document.querySelectorAll('#eb table').forEach(sortable)};
  $('#eq').oninput=fill;$('#ey').onchange=fill;$('#eg').onchange=fill;$('#es').onchange=show;fill()}
@@ -95,8 +95,26 @@ document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>tab(b.dataset
 """
 
 
+MAX_REF_PER_RACE = 30     # 重賞ごとの表に載せる「参考」のパターンの数（|点| の大きい順。好成績・凡走はすべて載せる）
+MAX_PAT_PER_HORSE = 10    # 検証のレースで 1 頭あたりに載せるパターンの数（全件は data/local/graded/races/<race_id>.json）
+
+
+def slim(rep: dict) -> dict:
+    """HTML を 10MB 以下に収めるため、載せるパターンを絞る（元の JSON は全件のまま）。"""
+    for r in rep["races"]:
+        keep = [p for p in r["patterns"] if p["k"] != "参考"]
+        ref = sorted((p for p in r["patterns"] if p["k"] == "参考"), key=lambda p: -abs(p["x"]))
+        r["n_ref_all"] = len(ref)
+        r["n_ref_shown"] = min(len(ref), MAX_REF_PER_RACE)
+        r["patterns"] = keep + ref[:MAX_REF_PER_RACE]
+    for r in rep["eval_races"]:
+        for h in r["horses"]:
+            h["p"] = sorted(h["p"], key=lambda p: -abs(p["x"]))[:MAX_PAT_PER_HORSE]
+    return rep
+
+
 def build(src: Path = SRC, out: Path = OUT) -> Path:
-    rep = json.loads(src.read_text(encoding="utf-8"))
+    rep = slim(json.loads(src.read_text(encoding="utf-8")))
     data = json.dumps(rep, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     pre = rep["prereg"]
     html = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
