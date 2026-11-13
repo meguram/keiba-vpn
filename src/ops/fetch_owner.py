@@ -32,12 +32,37 @@ RUNNER_REPLACED_BY: dict[str, frozenset[str]] = {
 }
 
 
+# ランナーの取得をやめてよい条件: このタスクがすべて VPS の担当になったとき。一部だけ（例: 直前オッズだけ）では、
+# ホストがやめると残りの取得（T-60・T-15）を誰も取らなくなるので、やめない。
+RUNNER_CORE: dict[str, frozenset[str]] = {
+    "raceday-runner": frozenset({"race-odds-t60", "race-odds-t15"}),
+    "raceday-weight-runner": frozenset({"race-weight-check"}),
+    "raceday-result-runner": frozenset({"race-result-t15"}),
+}
+
+
+def runner_fetch_moved(task: str, *, env: dict[str, str] | None = None, path: Path | None = None) -> bool:
+    """ホストの常駐ランナー（raceday-runner など）の『取得』が VPS に移ったか。移っていればランナーは取得をせず、
+    保存済みのデータ（GCS）で後処理（予測の起動・馬場速度・成績の集計）だけをする。``KEIBA_HOST_NO_FETCH=1`` でも同じ扱い。"""
+    env = os.environ if env is None else env
+    if env.get("KEIBA_RUN_LOCATION", "").strip().lower() == "vps":
+        return False
+    if env.get("KEIBA_HOST_NO_FETCH", "").strip() == "1":
+        return True
+    core = RUNNER_CORE.get(task)
+    return bool(core) and core <= agent_tasks(path)
+
+
 def host_must_skip(task: str, *, env: dict[str, str] | None = None, path: Path | None = None) -> bool:
+    """このタスクをホストで実行しないか。常駐ランナーは取得が VPS に移っても見送らない（後処理と予測が中にあるため。
+    ランナー自身が runner_fetch_moved で取得だけを飛ばす）。"""
     env = os.environ if env is None else env
     if env.get("KEIBA_RUN_LOCATION", "").strip().lower() == "vps":
         return False
     owned = agent_tasks(path)
-    return task in owned or bool(RUNNER_REPLACED_BY.get(task, frozenset()) & owned)
+    if task in owned:                     # ランナー名そのものが担当表にあれば、従来どおり丸ごと見送る
+        return True
+    return False
 
 
 def main(argv: list[str] | None = None) -> int:
