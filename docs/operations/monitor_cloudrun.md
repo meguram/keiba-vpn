@@ -108,3 +108,8 @@
   - 11/07・08 の出走馬の調教の取り直し（`backfill_horse_training_recent --dates 2026-11-07 2026-11-08`、323 頭・30〜60 分。他の取得を待って 1 時間で区切られたら 5 分置いて最大 6 回まで再開）。ログ `logs/horse_training_backfill.cron.log`。
   - 調教の過去分の全ページ取得（`backfill_horse_training_past`、12,837 / 19,119 頭、あと約 2 日）。終わると打ち切った馬の全ページの取り直しが自動で続く。ログ `logs/horse_training_past.log`。
 - **明朝に確かめること**: 毎朝の事前計算（`export_tables_daily.sh` の中の `precompute_race_analysis`）が版 39 で作り直し、11/07 福島 1R の調教師×調教でパターンの無い馬に「集計の対象外／未取得／記録なし」が出ること。
+- **VPS の見張りを入れる前提（2026-11-13 夜に読むだけで確認）**: VPS の取得のコード `/opt/keiba-fetch/current` はまだ `fetch-b316ae59-202611120725`（11/12）で、
+  `src/ops/sched_status.py`・`config/scheduled_jobs.json`・`ops_manifest.json` は入っていない。決まった入れ替えの操作 `/opt/keiba-ui/bin/install_ops_files.sh`（deploy から sudo -n で実行できる）は入っている。
+  入れる順: ① d6c72260 以降を含む取得の版を公開（`python -m src.ops.release_publish build-fetch` → publish、または stg/本番の流れ）→ ② VPS の取り込み（毎日 03:20 の keiba-release-pull@fetch、または手動）→
+  ③ `sudo -n /opt/keiba-ui/bin/install_ops_files.sh install <版> keiba-sched-status.service` と `.timer` → `systemctl enable --now keiba-sched-status.timer`（IAM の 1 が済んでから。済む前は GCS に書けず、Slack の判定だけ動く）。
+  **どれもユーザーの確認の後**（2026-11-13 統括役の訂正: VPS のユニットの設置を含む配備は、ユーザー本人の判断を待つ）。
