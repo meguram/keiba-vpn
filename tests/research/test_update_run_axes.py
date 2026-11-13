@@ -84,8 +84,14 @@ def test_recompute_replaces_atomically(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ra, "compute", lambda paths, years=None: pd.DataFrame({"race_id": ["r"], "horse_id": ["h"]}))
     out = tmp_path / "rp" / "run_axes.parquet"
+    import os
+    (tmp_path / "horse_lap_2026.jsonl").write_text("")
+    os.utime(tmp_path / "horse_lap_2026.jsonl", (1000, 1000))
+    monkeypatch.setenv("KEIBA_HORSE_LAP_EXTRA", str(tmp_path / "none.jsonl"))
     assert u.recompute(tmp_path, out=out) == 1
     assert out.exists() and not out.with_name(out.name + ".tmp").exists()
+    assert out.stat().st_mtime == 1000          # 読み始める前の jsonl の時刻（計算中の追記を翌日に拾う）
+    assert not u.needs_recompute(0, out, tmp_path)
 
 
 def test_transient_gcs_failure_is_not_counted_per_read(tmp_path, monkeypatch):
@@ -111,3 +117,21 @@ def test_read_runs_dedupes_and_skips_broken_lines(tmp_path):
     empty = {"race_id": "r1", "entries": [], "empty_ok": True}
     f.write_text(json.dumps(row) + "\n" + "{broken\n" + json.dumps(row) + "\n" + json.dumps(empty) + "\n")
     assert len(ra.read_runs([f])) == 1          # 重複は 1 走、中身のある行は空の行で消さない
+
+
+def test_needs_recompute_when_jsonl_is_newer(tmp_path, monkeypatch):
+    import os
+    lap = tmp_path / "horse_lap"
+    lap.mkdir()
+    monkeypatch.setenv("KEIBA_HORSE_LAP_EXTRA", str(tmp_path / "none.jsonl"))
+    j = lap / "horse_lap_2026.jsonl"
+    j.write_text("")
+    axes = tmp_path / "run_axes.parquet"
+    assert u.needs_recompute(0, axes, lap)                     # run_axes が無い
+    axes.write_text("x")
+    os.utime(j, (1, 1))
+    assert not u.needs_recompute(0, axes, lap)                 # jsonl のほうが古い
+    assert u.needs_recompute(1, axes, lap)                     # 追記があった
+    os.utime(j, None)
+    os.utime(axes, (2, 2))
+    assert u.needs_recompute(0, axes, lap)                     # 手で回した取得が jsonl に足した

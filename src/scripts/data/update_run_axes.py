@@ -7,7 +7,8 @@ python -m src.scripts.data.update_run_axes [--dry-run]
    21 日の窓にあり、jsonl（horse_lap_<年>.jsonl）にまだ頭数のそろった行が無いもの。試行の間隔・上限は export_tables と同じ記録を使う。
 2. GCS の horse_lap（バロメーターの取得が同じページから保存する。run.py::_save_horse_lap_from_html）を名前で読み、
    結果表と頭数がそろったものだけ jsonl に追記する（backfill_horse_lap と同じ形）。netkeiba へは取りに行かない。
-3. 追記があったとき（または run_axes.parquet が無いとき）だけ、全件で run_axes を計算し直して置き換える
+3. 追記があったとき（run_axes.parquet が無いとき、手で回した backfill_horse_lap などで jsonl が run_axes より新しいときも）だけ、
+   全件で run_axes を計算し直して置き換える
    （各軸は全期間の統計に依存するので増分では計算しない。全件で約 16 秒・約 650MB）。
 
 jsonl の場所: KEIBA_HORSE_LAP_DIR（既定 /home/jovyan/acq/horse_lap）。2023 年の重賞の jsonl は KEIBA_HORSE_LAP_EXTRA（既定 <親>/horse_lap23/horse_lap_2023.jsonl）。
@@ -111,15 +112,28 @@ def _append_lines(path: Path, lines: list[str]) -> None:
             pass
 
 
+def needs_recompute(appended: int, axes_path: Path, lap_dir: Path = LAP_DIR) -> bool:
+    """追記があった／run_axes が無い／どれかの jsonl が run_axes より新しい（手で回した取得の追記）なら作り直す。"""
+    if appended or not axes_path.exists():
+        return True
+    t = axes_path.stat().st_mtime
+    return any(p.stat().st_mtime > t for p in lap_files(lap_dir))
+
+
 def recompute(lap_dir: Path = LAP_DIR, out: Path | None = None) -> int:
     from src.research.race import run_axes as ra
     from src.research.race import running_profile as rp
 
     out = out or rp.AXES_PATH
-    df = ra.compute(lap_files(lap_dir))
+    files = lap_files(lap_dir)
+    # 読み始める前の jsonl の最新の時刻を、run_axes の時刻にする（計算中に手で回す取得が追記しても、翌日の判定で作り直される）
+    t_in = max((p.stat().st_mtime for p in files), default=None)
+    df = ra.compute(files)
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_name(out.name + ".tmp")
     df.to_parquet(tmp, index=False)
+    if t_in is not None:
+        os.utime(tmp, (t_in, t_in))
     os.replace(tmp, out)
     return len(df)
 
@@ -141,7 +155,7 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps(st, ensure_ascii=False))
     if a.dry_run:
         return 0
-    if st["appended"] or not rp.AXES_PATH.exists():
+    if needs_recompute(st["appended"], rp.AXES_PATH):
         n = recompute()
         print(f"run_axes を作り直した: {n} 走 → {rp.AXES_PATH}")
     else:
