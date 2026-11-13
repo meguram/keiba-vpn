@@ -4,6 +4,52 @@
 取得の後の処理（予測・馬場速度・成績の集計など）はホストが行う。ホストの取得の cron は、VPS で問題なく取れることを確かめてから止める。
 計画の全体: VPS（取得）→ GCS → ホスト（後処理と予測）。
 
+## 引き継ぎ（2026-11-13 18:00 JST で今日の作業を締めた。明日ここから再開）
+### 済んだこと（すべて develop。master への昇格はまだ。6bdcfbeb の CI の赤は他セッションの vps_alive.py が原因で、de3d68ca で直った）
+- 第 1 段（30097498・f5f969ac ほか）: VPS のタスク表をローカルにする、予約を VPS の systemd timer で行う、ホストの常駐ランナーに「取得しない」モードを足す。
+- 第 2 段・段 1〜3（04cb7383・3ba60dcf・4211b34a・2e6c8066 ほか）: レース一覧・時刻表を VPS→GCS→ホストに渡す（push-vps / pull-vps）、
+  ホストの予測の前に VPS の T-15 の保存を確かめる、オッズのキャッシュを短くする。
+- 段 4 の前半（host_postprocess.py）: 前夜の計算・馬場速度・予測の成績を、ホストの後処理だけのジョブにする。cron は未登録。
+- 段 5: 毎日の馬の成績の一括（backfill-all-horse）は、ホストに残すと決めた（下の「そろえる必要があるもの」の 5）。
+- 費用の対策:
+  - GCP の並走の Jobs を止めた。費用の歯止め（cost_guard、cron 登録済み）を入れた。
+  - VPS の取得役を一時停止した（15:00 JST）。
+  - 温め役を合図方式にした（ユーザーが 16:30 JST に入れ替えた）。
+- 方法 A（6bdcfbeb）: root 所有の ops ファイルを、deploy から決まった操作で入れ替える仕組み。下の節を参照。
+
+### 残り（明日以降、上から順に）
+1. **費用の確認（11/14・11/15 の午前）**: 予約はセッションを閉じると消えるので、手で行う。
+   - 方法: `GCP_BILLING_BQ_TABLE=horse-racing-466415.billing_export.gcp_billing_export_v1_01B0D4_CDCC8C_CBA87A KEIBA_ENV=stg PYTHONPATH=. /opt/conda/bin/python3` で
+     `load_project_dotenv()` の後、`src.scripts.cloud_jobs.gcp_daily_cost_report` の fetch_cost_history / fetch_sku_breakdown を使う（読み取りのみ）。
+   - 11/14: 11/13 の日額を、11/08〜11/12 と比べる（Cloud Run の SKU、月末の見込み、月 2,000 円との関係）。
+     11/13 は horse-name-index（m サイズ、見込み 1 回約 13 円）が初めて新方式で動いた日。
+   - 11/15: 11/14 の日額を確かめる。温め役の一覧が 1 日 300 回以下かも確かめる。
+   - 費用の監査役のセッションも 11/14 に確かめる。
+2. **段 4 の後半（週次の後処理）**:
+   - 金曜の weekly-update が終わったことを確かめる（`cron_runs/weekly-update.tsv`・`logs/weekly_update.log`）。
+   - 着手前に daily-export-run-axes-weather のセッションに連絡する（weekly の部分が重なる）。
+   - VPS では finalize_weekly_update（めぐ指数・PG 同期・集計）を飛ばす。wait_until_queue_idle の終了コード 7 の順序は保つ。
+   - host_postprocess に weekly-finalize（土 01:00 JST）と cron の行、費用の見積もりを足す。
+3. **方法 A の最初の root 作業（ユーザー）**: 下の節の手順。実際に入れ替えに使えるのは、6bdcfbeb 以降の取得の配布物が VPS に取り込まれた後。
+4. **段 6（VPS に配備して段階的に渡す）**:
+   - 配備: 第 1 段・第 2 段のコードを master に昇格する（ユーザーの指示が要る）。release-pull が 03:00〜04:00 に取り込む。
+   - 準備: VPS の fetch.env に KEIBA_FETCH_TASK_STORE=file を入れ、fetch-timers（方法 A）と push-vps の timer を入れる。
+   - 影モード: `fetch_agent_ctl.sh shadow-on` で 2〜3 日動かし、250MB の枠・件数・エラーを確かめる。
+   - 担当を渡す: 軽いものから、`config/fetch_owner.json` の agent_tasks に足していく。
+   - ホストの cron: `install_vps_mirror_pull_cron.sh` と `install_host_postprocess_cron.sh` を root で登録する。
+   - 仕上げ: 開催週を 1 回通してから、ホストの取得の cron を止める。
+   - ssh keiba-vpn での作業は、その都度ユーザーに確かめる。
+5. **IAM の案 B**: VPS の取得役が本番のデータの置き場所に書く権限。段 6 で担当を渡す直前に、実際に書くパスを確かめてからユーザーに確認する。
+6. **調教の夜間の補填**: ホストの調教の過去分の取り直し（別セッション）が終わってから VPS に移す。
+
+### 再開の手順
+- `git log --oneline -20 -- src/ops src/scraper/auto_scrape_queue.py docs/operations/vps_only_fetch.md` で、この後に入った変更を見る。
+- 状態を確かめる:
+  - `config/fetch_owner.json` の agent_tasks が空 → まだ何も渡していない。
+  - `ssh keiba-vps systemctl is-active keiba-fetch-agent` が inactive → 一時停止のまま（実行の前にユーザーに確かめる）。
+  - `crontab -l`（root）で cost_guard の行がある。
+- 上の「残り」の 1 から進める。
+
 ## できたもの（2026-11-13）
 - VPS のタスク表をローカルに置く（`KEIBA_FETCH_TASK_STORE=file`、`/var/lib/keiba-fetch/tasks`。`src/ops/fetch_task.py` の FileTaskStore）。
 - 予約を VPS の systemd timer で行う（`keiba-fetch-reserve.timer` 毎時 50 分、`keiba-fetch-raceday-tomorrow.timer` 20:30、`-today.timer` 07:20。
