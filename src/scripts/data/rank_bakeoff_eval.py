@@ -11,7 +11,7 @@ python -m src.scripts.data.rank_bakeoff_eval [--years 2022,2023,2024] [--names A
 予測の順位は p_win の大きい順（同じ値は馬番の小さい順）。OOF は出走した馬だけなので取消の返還は起きない。
 
 並びの指標: 1 番手の勝率・1 番手の複勝率・上位 3 頭のうち 3 着以内の頭数・NDCG@5（関連度 6-着順、6 着以下 0、指数の利得）。
-区間はレース単位のブートストラップ（差の 95% 区間）。相手は 1 seed の基準 R0（matched_ref）と、v6e のアンサンブル。
+区間はレース単位のブートストラップ（差の 95% 区間）。相手は 1 seed の基準（matched_ref。LightGBM ほかは R0、XGBoost は B0）と、v6e のアンサンブル。
 出力: tp_rank/eval/summary.json と summary.md。
 """
 
@@ -128,6 +128,7 @@ def boot_diff(a: pd.DataFrame, b: pd.DataFrame, n_boot: int = 1000, seed: int = 
 # （v6e の単体メンバーは seed 0・1・2 の平均なので、そのまま比べると候補だけ不利になる）。
 # R0 自体は v6e の lgb_extras_ped と比べ、入力が一致しているかの確認にする（seed の数だけ違う）。
 STAGE1_REF = "R0_lgb_bin_win"
+STAGE1_REF_XGB = "B0_xgb_bin_win"
 
 
 def matched_ref(name: str) -> str | None:
@@ -135,6 +136,10 @@ def matched_ref(name: str) -> str | None:
         return "v6e_ens"
     if name == STAGE1_REF:
         return "v6e_lgb_extras_ped"
+    if name == STAGE1_REF_XGB:
+        return "v6e_xgb_extras_ped"
+    if name.startswith("B"):                         # XGBoost の候補は、同じ XGBoost の勝ちの二値 B0（1 seed）と比べる
+        return STAGE1_REF_XGB
     return STAGE1_REF
 
 
@@ -179,6 +184,9 @@ def main() -> None:
     for name, t in tables.items():
         r = {"all": summarize(t), "by_year": {int(y): summarize(g) for y, g in t.groupby("year")}}
         ref = matched_ref(name)
+        if ref == STAGE1_REF_XGB and ref not in tables and STAGE1_REF in tables:
+            print(f"警告: {name} の相手 {STAGE1_REF_XGB} の OOF が無いので {STAGE1_REF} と比べる")
+            ref = STAGE1_REF
         r["ref"] = ref if ref in tables else None
         if name != "v6e_ens":
             r["diff_vs_v6e"] = boot_diff(t, tables["v6e_ens"], a.boot)
@@ -190,7 +198,7 @@ def main() -> None:
     (out / "summary.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
     head = ["| 候補 | 比べる相手 | 1番手勝率 | 1番手複勝率 | 上位3頭の3着内 | NDCG@5 | 単勝 | 複勝 | 馬連流し | ワイド流し |", "|---|---|---|---|---|---|---|---|---|---|"]
     lines = [f"# rank_bakeoff 評価（{a.years}、共通 {len(common)} レース）", ""]
-    for key, title in (("diff_vs_ref", "1 seed の基準 R0 との差（1 段目の選び方）"), ("diff_vs_v6e", "v6e のアンサンブルとの差")):
+    for key, title in (("diff_vs_ref", "1 seed の基準との差（1 段目の選び方。LightGBM ほかは R0、XGBoost は B0）"), ("diff_vs_v6e", "v6e のアンサンブルとの差")):
         lines += [f"## {title}", ""] + head
         for name, r in sorted(res.items(), key=lambda kv: -kv[1]["all"]["ndcg5"]):
             s = r["all"]
@@ -202,7 +210,7 @@ def main() -> None:
             lines.append(f"| {name} | {ref if d else '－'} | " + " | ".join(cells) + " |")
         lines.append("")
     lines += ["括弧は差（候補 − 相手）の 95% 区間（レース単位のブートストラップ）。回収率は払戻 ÷ 購入額で、選ぶのには使わない（参考）。",
-              "1 段目の候補は 1 seed。相手は同じ 1 seed・同じ入力の勝ちの二値 R0（R0 の行は v6e の lgb_extras_ped（3 seed）との差で、入力の一致の確認）。"]
+              "1 段目の候補は 1 seed。相手は同じ 1 seed・同じ入力の勝ちの二値（LightGBM ほかは R0、XGBoost は B0）。R0・B0 の行は v6e の lgb_extras_ped・xgb_extras_ped（3 seed）との差で、入力の一致の確認。"]
     (out / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
 

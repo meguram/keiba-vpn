@@ -89,6 +89,13 @@ def _xgb(cfg: dict, X_tr, y_tr, race_tr, X_va, threads, seed, xp: dict) -> np.nd
     import xgboost as xgb
 
     k = int(cfg.get("k", 5))
+    if cfg.get("kind") == "binary":                  # k 着以内 = 1 の二値（GPU で回す。設定は xgb_binary と同じ）
+        c = xgb.XGBClassifier(n_estimators=xp.get("n_estimators", 400), learning_rate=xp.get("learning_rate", 0.05), max_depth=xp.get("max_depth", 6),
+                              subsample=xp.get("subsample", 0.8), colsample_bytree=xp.get("colsample_bytree", 0.7), reg_lambda=xp.get("reg_lambda", 5.0),
+                              min_child_weight=xp.get("min_child_weight", 20), tree_method="hist", device=xp.get("device", "cuda"),
+                              enable_categorical=True, random_state=seed, n_jobs=threads, verbosity=0)
+        c.fit(X_tr, topk_binary(y_tr["finish"], k))
+        return c.predict(X_va, output_margin=True)          # logit。大きいほど上位
     m = xgb.XGBRanker(objective=cfg["objective"], n_estimators=xp.get("n_estimators", 400), learning_rate=xp.get("learning_rate", 0.05),
                       max_depth=xp.get("max_depth", 6), subsample=xp.get("subsample", 0.8), colsample_bytree=xp.get("colsample_bytree", 0.7),
                       reg_lambda=xp.get("reg_lambda", 5.0), min_child_weight=xp.get("min_child_weight", 20), tree_method="hist",

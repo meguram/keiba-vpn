@@ -68,6 +68,8 @@ CONFIGS: dict[str, tuple[str, dict]] = {
     "A7_lgb_reg_cap6": ("lgb_extras_ped", {"model": "lgb", "kind": "regression", "cap": 6}),
     "B1_xgb_ndcg_top5": ("xgb_extras_ped", {"model": "xgb", "objective": "rank:ndcg", "k": 5}),
     "B2_xgb_pairwise_top5": ("xgb_extras_ped", {"model": "xgb", "objective": "rank:pairwise", "k": 5}),
+    "B3_xgb_bin_top3": ("xgb_extras_ped", {"model": "xgb", "kind": "binary", "k": 3}),               # A1 と同じラベルを XGBoost（GPU）で
+    "B0_xgb_bin_win": ("xgb_extras_ped", {"model": "xgb", "kind": "binary", "k": 1}),                # B 系の基準: 勝ちの二値（1 seed の xgb_extras_ped 相当）
     "C1_cat_yetirank_top5": ("lgb_extras_ped", {"model": "cat", "loss": "YetiRank", "k": 5}),
     "N1_nn_pl_top5": ("nn_s", {"model": "nn", "kind": "pl", "k": 5, "hidden": (128, 64), "epochs": 14}),
     "N2_nn_listnet_top5": ("nn_s", {"model": "nn", "kind": "listnet", "k": 5, "hidden": (128, 64), "epochs": 14}),
@@ -117,8 +119,8 @@ def cmd_member(a) -> None:
     from src.pipeline.models import rank_recipes, zoo_runner
 
     base, cfg = CONFIGS[a.name]
-    out_dir = OUT / ("smoke" if a.smoke else "oof")
-    p = out_dir / f"{a.name}.parquet"
+    out_dir = OUT / ("smoke" if a.smoke else ("oof_seeds" if a.seed is not None else "oof"))
+    p = out_dir / (f"{a.name}__seed{a.seed}.parquet" if a.seed is not None else f"{a.name}.parquet")
     if p.exists() and not a.force:
         _log(f"{a.name} 既存（--force で作り直す）")
         return
@@ -130,7 +132,7 @@ def cmd_member(a) -> None:
     if a.smoke:
         cfg, params = _smoke_params(cfg, params)
         folds = folds[:1]
-    seeds = list(range(a.seeds))
+    seeds = [a.seed] if a.seed is not None else list(range(a.seeds))
     t27._wait_for_load()
     t0 = time.time()
     res, oof = zoo_runner.run_oof(a.name, "rk", X, meta, folds, seeds, t27.THREADS, params={**params, "rk": cfg})
@@ -140,6 +142,21 @@ def cmd_member(a) -> None:
             "smoke": bool(a.smoke), "logloss_win": float(res["logloss_win"].mean())}
     (out_dir / f"{a.name}.json").write_text(json.dumps(info, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
     _log(f"{a.name}: {info['seconds']}s cols={info['cols']} 行={len(oof)}")
+
+
+def cmd_combine(a) -> None:
+    """seed ごとの OOF の確率を平均する（run_oof の seed 平均と同じく、レース内で正規化した確率の平均）。"""
+    paths = [OUT / "oof" / f"{a.name}.parquet"] + [OUT / "oof_seeds" / f"{a.name}__seed{s}.parquet" for s in a.seeds.split(",")]
+    frames = [pd.read_parquet(p).set_index(KEY + ["year"]) for p in paths]
+    idx = frames[0].index
+    for f in frames[1:]:
+        if not f.index.equals(idx):
+            raise SystemExit(f"行がそろわない: {a.name}")
+    out = sum(f[["p_win", "p_top2", "p_top3"]] for f in frames) / len(frames)
+    d = OUT / "oof_s3"
+    d.mkdir(parents=True, exist_ok=True)
+    out.reset_index().to_parquet(d / f"{a.name}.parquet", index=False)
+    _log(f"{a.name}: {len(frames)} seed を平均 → {d / (a.name + '.parquet')}")
 
 
 def cmd_keys(_a) -> None:
@@ -165,10 +182,16 @@ def main() -> None:
     m.add_argument("--seeds", type=int, default=1)
     m.add_argument("--force", action="store_true")
     m.add_argument("--smoke", action="store_true")
+    m.add_argument("--seed", type=int, default=None, help="この seed 1 つだけを回す（出力 oof_seeds/NAME__seedN。seed を並行で回して combine でまとめる）")
+    c = sp.add_parser("combine", help="oof/NAME（seed 0）と oof_seeds/NAME__seedN を平均して oof_s3/NAME にする")
+    c.add_argument("name", choices=sorted(CONFIGS))
+    c.add_argument("--seeds", default="1,2")
     a = ap.parse_args()
     if a.cmd == "list":
         for n, (b, c) in CONFIGS.items():
             print(n, b, c)
+    elif a.cmd == "combine":
+        cmd_combine(a)
     elif a.cmd == "keys":
         cmd_keys(a)
     else:
