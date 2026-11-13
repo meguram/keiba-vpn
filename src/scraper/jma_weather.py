@@ -210,7 +210,11 @@ def _default_store():
 
 
 def load_month(venue_code: str, ym: str, store=None) -> dict[str, Any]:
-    d = (store or _default_store()).load(CATEGORY, f"{venue_code}_{ym}", bypass_cache=True)
+    st = store or _default_store()
+    d = st.load(CATEGORY, f"{venue_code}_{ym}", bypass_cache=True)
+    if d is None and not getattr(st, "_gcs_healthy", True):
+        # 読み込みの一時的な失敗を「空の月」とみなすと、足した数日分だけで月ファイルを上書きして残りが消える。止めて次の回に任せる
+        raise RuntimeError(f"月ファイルの読み込みに失敗しました（GCS の不調）: {venue_code}_{ym}")
     return d if isinstance(d, dict) and "days" in d else {"venue_code": venue_code, "month": f"{ym[:4]}-{ym[4:]}", "source": SOURCE, "days": {}}
 
 
