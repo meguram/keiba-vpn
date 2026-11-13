@@ -10,7 +10,16 @@
 - 第 2 段・段 1〜3（04cb7383・3ba60dcf・4211b34a・2e6c8066 ほか）: レース一覧・時刻表を VPS→GCS→ホストに渡す（push-vps / pull-vps）、
   ホストの予測の前に VPS の T-15 の保存を確かめる、オッズのキャッシュを短くする。
 - 段 4 の前半（host_postprocess.py）: 前夜の計算・馬場速度・予測の成績を、ホストの後処理だけのジョブにする。cron は未登録。
-- 段 5: 毎日の馬の成績の一括（backfill-all-horse）は、ホストに残すと決めた（下の「そろえる必要があるもの」の 5）。
+- 段 4 の後半（2026-11-13 夜）: VPS の weekly-update は後処理（めぐ指数・PG 同期・予測の成績・追走難度・ドリフト）をせず、
+  GCS の `ops/mirror_vps/_weekly_finalize.json` に目印（書いた時刻・対象の開催日）を書く。ホストの `host_postprocess weekly-finalize`
+  （`src/ops/weekly_finalize.py`、土 00:07〜月 08:07 JST の毎時）が目印を名前指定で 1 件読み、未処理の回なら finalize_weekly_update を動かす。
+  キュー待機が打ち切られた回（終了コード 7）は目印が書かれないので、ホストも後処理をしない。失敗は 3 回まで取り直す。
+  済んだ回は `logs/weekly_finalize_done.json`（回の鍵は目印の written_at）。
+- 段 5（2026-11-13 夜）: backfill-all-horse は過去の馬を ID 順に回る補填（11/13 に取ったのは 2013 年生まれの 2 頭）。
+  新馬の父（sire）はプロフィールのページからも取れるので、VPS の前日夕の新馬の取得で足りる → **ホストに残す**（新しいタスクは作らない）。
+  あわせて、新馬の血統（new-horse-pedigree）の取りこぼしを直した: VPS には手元の ped_tbl が無く全馬が「血統なし」に見え、
+  上限 150 頭を GCS に 5 世代表がある馬で使い切っていた → 上限は実際に通信した頭数で数え（飛ばす経路の祖先・種付けの取得も数える）、
+  新しい ID（新馬）から確かめ、GCS の確認は 1 回 600 頭まで（馬 ID の名前指定で読む。一覧しない。最悪 月 約 5 円）。
 - 費用の対策:
   - GCP の並走の Jobs を止めた。費用の歯止め（cost_guard、cron 登録済み）を入れた。
   - VPS の取得役を一時停止した（15:00 JST）。
@@ -25,13 +34,9 @@
      11/13 は horse-name-index（m サイズ、見込み 1 回約 13 円）が初めて新方式で動いた日。
    - 11/15: 11/14 の日額を確かめる。温め役の一覧が 1 日 300 回以下かも確かめる。
    - 費用の監査役のセッションも 11/14 に確かめる。
-2. **段 4 の後半（週次の後処理）**:
-   - 金曜の weekly-update が終わったことを確かめる（`cron_runs/weekly-update.tsv`・`logs/weekly_update.log`）。
-   - 着手前に daily-export-run-axes-weather のセッションに連絡する（weekly の部分が重なる）。
-   - VPS では finalize_weekly_update（めぐ指数・PG 同期・集計）を飛ばす。wait_until_queue_idle の終了コード 7 の順序は保つ。
-   - host_postprocess に weekly-finalize（土 01:00 JST）と cron の行、費用の見積もりを足す。
+2. ~~段 4 の後半（週次の後処理）~~ 済み（上）。ホストの cron（`install_host_postprocess_cron.sh`）の登録は段 6 で担当を渡すとき。
 3. **方法 A の最初の root 作業（ユーザー）**: 下の節の手順。実際に入れ替えに使えるのは、6bdcfbeb 以降の取得の配布物が VPS に取り込まれた後。
-4. **段 6（VPS に配備して段階的に渡す）**:
+4. **段 6（VPS に配備して段階的に渡す）**（2026-11-13 18:3x にユーザー承認。master への昇格（11/14 朝、monitor-cloudrun-handoff が担当）の後に始める）:
    - 配備: 第 1 段・第 2 段のコードを master に昇格する（ユーザーの指示が要る）。release-pull が 03:00〜04:00 に取り込む。
    - 準備: VPS の fetch.env に KEIBA_FETCH_TASK_STORE=file を入れ、fetch-timers（方法 A）と push-vps の timer を入れる。
    - 影モード: `fetch_agent_ctl.sh shadow-on` で 2〜3 日動かし、250MB の枠・件数・エラーを確かめる。
@@ -39,7 +44,23 @@
    - ホストの cron: `install_vps_mirror_pull_cron.sh` と `install_host_postprocess_cron.sh` を root で登録する。
    - 仕上げ: 開催週を 1 回通してから、ホストの取得の cron を止める。
    - ssh keiba-vpn での作業は、その都度ユーザーに確かめる。
-5. **IAM の案 B**: VPS の取得役が本番のデータの置き場所に書く権限。段 6 で担当を渡す直前に、実際に書くパスを確かめてからユーザーに確認する。
+5. **IAM の案 B**（2026-11-13 18:3x にユーザー承認。付けるのは統括役。付ける直前に下の最小のバインディングを統括役に送る）:
+   VPS の取得役（KEIBA_RUN_LOCATION=vps・影モードなし・KEIBA_FETCH_TASK_STORE=file）が書く・消す場所をコードで洗い出した（2026-11-13）。
+   すべて `roles/storage.objectUser`＋`scripts/gcp/make_iam_condition.sh <接頭辞> <タイトル>` の条件（上書きに delete が要るため objectCreator では足りない）。
+   | 接頭辞 | 書くもの | 書けないと |
+   |---|---|---|
+   | `chuou/data/preprocessed/netkeiba/pc/` | 取得データの本体（HybridStorage.save。出馬表・オッズ・結果・馬・血統など） | 致命的（403 の後 60 秒は黙って捨てる） |
+   | `ops/sire_lines/` | 系統台帳 sire_line_map.json（sire-line のモード） | 致命的（タスクが失敗） |
+   | `ops/cache_dirty/` | 温め役の目印（画面に関わる保存のたび。同じキー 60 秒に 1 回） | 非致命的（温め役が取り直さない） |
+   | `ops/page_quality/` | latest.json（page-quality-check） | 非致命的 |
+   | `chuou/data/raw/html/` | HTML の見本（カテゴリごと 10 件、11 件目以降を**削除**） | 非致命的。削除させたくなければ付けない |
+   - 付いていて使うもの: `ops/mirror_vps/`（受け渡し・週次の目印）、`ops/heartbeat/vps/`（定期実行の見張り）、バケット全体の objectViewer（読み・一覧）。
+   - 付いていて、この構成では使わないもの: `ops/fetch_tasks/`・`ops/events/`（タスク表がファイルのため）、`shadow/`・`ops/fetch_tasks_shadow/`（影モードを外すため）。
+     影モードの間（段 6 の最初の 2〜3 日）は shadow/ を使う。影を終えたら外してよい。
+   - `chuou/data/others/` は VPS の取得の経路で誰も書かないので付けない（docs/operations/gcp_user_steps_20261026.md の想定と違う）。
+   - 費用（最悪・月）: VPS から GCS への書き込みは転送料 0。Class A は、取得データの保存（開催日 1 日 数千件）と ops/cache_dirty/ の目印（1 日 約 1,000 件）で
+     月 約 10 万件 → 約 80 円。ホストが今書いている分（同じ件数）が VPS に移るだけで、全体では増えない。
+   - 付ける前の確認: バケットのソフト削除が有効か（`gcloud storage buckets describe gs://$BUCKET --format='value(soft_delete_policy.retentionDurationSeconds)'`）。
 6. **調教の夜間の補填**: ホストの調教の過去分の取り直し（別セッション）が終わってから VPS に移す。
 
 ### 再開の手順
@@ -98,7 +119,9 @@
   予測の成績 1 回 = 11 日分 × 36 レース × 4 種 × 約 30KB ≒ 47MB × 月 13 回 ≒ 0.6GB → 約 11 円。
   前夜の計算 1 回 = 翌日 36 レース × 約 5 種 × 約 30KB ≒ 5MB × 2 回 × 30 日 ≒ 0.3GB → 約 6 円。
   馬場速度は手元の flat から計算（export_tables_daily が新しいレースを読む分は既存）→ 1 円未満。合計 約 20 円。
-- 週次の後処理（めぐ指数・PG 同期・tracking_v2_eval・ドリフト）は、VPS の weekly-update では飛ばし、ホストの後処理だけのジョブに移す（未着手。2026-11-13 の週次の取得の後に）。
+- 週次の後処理（めぐ指数・PG 同期・tracking_v2_eval・ドリフト）は、VPS の weekly-update では飛ばし、ホストの weekly-finalize に移した（2026-11-13 夜）。
+  費用（最悪・月）: 目印 1 件（数百バイト）の読みが週 約 56 回 → 1 円未満。後処理がホストで GCS から読む分は、対象の開催日（多くて 4 日 × 36 レース）の
+  確定結果・指数など 1 回 約 20MB × 月 4〜5 回 ≒ 100MB → 転送 約 2 円。
 
 ## 担当を VPS に渡す前に、そろえる必要があるもの（段 2 以降で対応）
 1. ~~**local_only のデータの受け渡し**~~（段 1 でレース一覧・時刻表に対応。JRA の馬場は未対応・ホストに残す）: `race_lists`・`race_day_schedule`（HybridStorage の local_only。その機械のディスクだけ）と、

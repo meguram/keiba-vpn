@@ -381,6 +381,21 @@ def finalize_weekly_update(target_dates: list[str], result: dict) -> dict:
     out["target_dates"] = target_dates
     out["lookback_days"] = WEEKLY_LOOKBACK_DAYS
 
+    if (os.environ.get("KEIBA_RUN_LOCATION") or "").strip().lower() == "vps":
+        # VPS は取得だけ（250MB 枠）。後処理はホストの weekly-finalize（src/ops/host_postprocess.py）が、この目印を見て行う
+        out["post_processing"] = "host"
+        try:
+            from src.ops.gcs_mirror import GcsBackend, publish_weekly_handoff
+
+            publish_weekly_handoff(GcsBackend(), _today_jst().strftime("%Y%m%d"), target_dates)   # 書いた日（ホストの回の鍵は written_at）
+            out["handoff"] = "ok"
+        except Exception as e:  # noqa: BLE001 — 書けなければホストが後処理をしない。黙って成功にしない
+            logger.error("週次の後処理の受け渡しの目印を書けませんでした（ホストの weekly-finalize が動きません）: %s", e)
+            out["handoff"] = f"error:{type(e).__name__}"
+            out["status"] = "error"          # fetch_child は error だけを失敗にする。目印が無いとホストの後処理が丸ごと抜けるので失敗として残す
+        out["last_run"] = _now_jst_iso()
+        return out
+
     # 今回の開催日に加え、前の週次でめぐ指数まで届かなかった日（結果はあるのにめぐ指数が無い日）も計算する
     megu_dates = sorted({d.replace("-", "") for d in target_dates if d})
     try:

@@ -8,6 +8,7 @@ VPS の取得は後処理をしない（KEIBA_RUN_LOCATION=vps・KEIBA_EVE_FETCH
   python -m src.ops.host_postprocess eve-precompute [--force]
   python -m src.ops.host_postprocess track-speed-daily
   python -m src.ops.host_postprocess prediction-results-refresh
+  python -m src.ops.host_postprocess weekly-finalize
 
 中身は GCP Jobs と同じ既存の入口（config/gcp_job_map.json の eve-precompute・export-tables-daily の 2 段目・prediction-results-refresh）。
 """
@@ -38,6 +39,14 @@ JOBS: dict[str, dict[str, Any]] = {
         "owners": {"raceday-evening", "recent-retry"},
         "steps": [["-m", "src.scripts.data.track_speed_daily", "--from", "{days_ago_10}", "--to", "{today}"]],
         "timeout": 1800,
+    },
+    "weekly-finalize": {
+        # 金曜の weekly-update（VPS）の後処理: めぐ指数・PG 同期・予測の成績・追走難度の突き合わせ・ドリフト。
+        # VPS が取得とキュー待機を終えたときだけ書く目印を見て動く（打ち切られた回は目印が無い＝何もしない）。src/ops/weekly_finalize.py
+        # cron は土 00 時〜月 08 時 JST の毎時（済んだ回は手元の記録で飛ばす。目印の読みは 1 件・数百バイト）
+        "owners": {"weekly-update"},
+        "steps": [["-m", "src.ops.weekly_finalize"]],
+        "timeout": 3600,
     },
     "prediction-results-refresh": {
         "owners": {"recent-retry"},
