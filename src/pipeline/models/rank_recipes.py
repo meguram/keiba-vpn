@@ -57,7 +57,8 @@ def _cats(X: pd.DataFrame) -> list[str]:
 def _lgb(cfg: dict, X_tr, y_tr, race_tr, X_va, threads, seed, lgb_params, n_rounds) -> np.ndarray:
     import lightgbm as lgb
 
-    p = dict(wm.BASE_PARAMS, **(lgb_params or {}), seed=seed, num_threads=threads)
+    p = {**wm.BASE_PARAMS, **(lgb_params or {}), **(cfg.get("lgb_over") or {}), "seed": seed, "num_threads": threads}   # lgb_over: 2 段目の木の設定の調整（後勝ち）
+    n_rounds = int(cfg.get("n_rounds", n_rounds))
     kind, k = cfg["kind"], int(cfg.get("k", 5))
     fin = y_tr["finish"]
     if kind in ("lambdarank", "xendcg"):
@@ -89,6 +90,7 @@ def _xgb(cfg: dict, X_tr, y_tr, race_tr, X_va, threads, seed, xp: dict) -> np.nd
     import xgboost as xgb
 
     k = int(cfg.get("k", 5))
+    xp = {**xp, **(cfg.get("xgb_over") or {})}       # xgb_over: 2 段目の木の設定の調整
     if cfg.get("kind") == "binary":                  # k 着以内 = 1 の二値（GPU で回す。設定は xgb_binary と同じ）
         c = xgb.XGBClassifier(n_estimators=xp.get("n_estimators", 400), learning_rate=xp.get("learning_rate", 0.05), max_depth=xp.get("max_depth", 6),
                               subsample=xp.get("subsample", 0.8), colsample_bytree=xp.get("colsample_bytree", 0.7), reg_lambda=xp.get("reg_lambda", 5.0),

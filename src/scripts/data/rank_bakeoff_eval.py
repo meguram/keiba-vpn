@@ -132,6 +132,11 @@ STAGE1_REF_XGB = "B0_xgb_bin_win"
 
 
 def matched_ref(name: str) -> str | None:
+    import re
+
+    tuned = re.match(r"^([A-Z]\d)t\d+_(.+)$", name)
+    if tuned:                                        # 2 段目の木の設定の調整（A6t1_… など）は、元の設定の同じ候補（同じ seed 0）と比べる
+        return f"{tuned.group(1)}_{tuned.group(2)}"
     if name.startswith("v6e_"):
         return "v6e_ens"
     if name == STAGE1_REF:
@@ -198,7 +203,7 @@ def main() -> None:
     (out / "summary.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
     head = ["| 候補 | 比べる相手 | 1番手勝率 | 1番手複勝率 | 上位3頭の3着内 | NDCG@5 | 単勝 | 複勝 | 馬連流し | ワイド流し |", "|---|---|---|---|---|---|---|---|---|---|"]
     lines = [f"# rank_bakeoff 評価（{a.years}、共通 {len(common)} レース）", ""]
-    for key, title in (("diff_vs_ref", "1 seed の基準との差（1 段目の選び方。LightGBM ほかは R0、XGBoost は B0）"), ("diff_vs_v6e", "v6e のアンサンブルとの差")):
+    for key, title in (("diff_vs_ref", "同じ seed 数の基準との差（候補は R0・B0、調整の変種は元の設定の候補。相手の列を参照）"), ("diff_vs_v6e", "v6e のアンサンブルとの差")):
         lines += [f"## {title}", ""] + head
         for name, r in sorted(res.items(), key=lambda kv: -kv[1]["all"]["ndcg5"]):
             s = r["all"]

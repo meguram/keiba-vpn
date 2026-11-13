@@ -70,6 +70,12 @@ CONFIGS: dict[str, tuple[str, dict]] = {
     "B2_xgb_pairwise_top5": ("xgb_extras_ped", {"model": "xgb", "objective": "rank:pairwise", "k": 5}),
     "B3_xgb_bin_top3": ("xgb_extras_ped", {"model": "xgb", "kind": "binary", "k": 3}),               # A1 と同じラベルを XGBoost（GPU）で
     "B0_xgb_bin_win": ("xgb_extras_ped", {"model": "xgb", "kind": "binary", "k": 1}),                # B 系の基準: 勝ちの二値（1 seed の xgb_extras_ped 相当）
+    # 2 段目の木の設定の調整（1 回だけ。valid の中で、同じ seed 0 の元の設定と比べる）。調整済みの値（hpo の best）は勝ちの二値向けで、
+    # lambda_l2≈100 はランキングの目的関数（勾配の大きさが違う）には正則化が強すぎる可能性がある
+    "A6t1_lgb_xendcg_top5": ("lgb_extras_ped", {"model": "lgb", "kind": "xendcg", "k": 5, "lgb_over": {"lambda_l2": 5.0, "num_leaves": 31}}),
+    "A6t2_lgb_xendcg_top5": ("lgb_extras_ped", {"model": "lgb", "kind": "xendcg", "k": 5, "lgb_over": {"lambda_l2": 5.0, "num_leaves": 31}, "n_rounds": 1200}),
+    "B3t1_xgb_bin_top3": ("xgb_extras_ped", {"model": "xgb", "kind": "binary", "k": 3, "xgb_over": {"reg_lambda": 5.0, "colsample_bytree": 0.5}}),
+    "B3t2_xgb_bin_top3": ("xgb_extras_ped", {"model": "xgb", "kind": "binary", "k": 3, "xgb_over": {"max_depth": 7, "n_estimators": 1200}}),
     "C1_cat_yetirank_top5": ("lgb_extras_ped", {"model": "cat", "loss": "YetiRank", "k": 5}),
     "N1_nn_pl_top5": ("nn_s", {"model": "nn", "kind": "pl", "k": 5, "hidden": (128, 64), "epochs": 14}),
     "N2_nn_listnet_top5": ("nn_s", {"model": "nn", "kind": "listnet", "k": 5, "hidden": (128, 64), "epochs": 14}),
@@ -106,8 +112,12 @@ def _smoke_params(cfg: dict, params: dict) -> tuple[dict, dict]:
     cfg, params = dict(cfg), dict(params)
     if cfg["model"] == "lgb":
         params["n_rounds"] = 20
+        if "n_rounds" in cfg:                        # 調整の変種の木の数の上書きも簡易実行では 20 にする
+            cfg["n_rounds"] = 20
     elif cfg["model"] == "xgb":
         params["n_estimators"] = 20
+        if "n_estimators" in (cfg.get("xgb_over") or {}):
+            cfg["xgb_over"] = {**cfg["xgb_over"], "n_estimators": 20}
     elif cfg["model"] == "cat":
         cfg["iterations"] = 20
     elif cfg["model"] == "nn":
@@ -159,6 +169,61 @@ def cmd_combine(a) -> None:
     _log(f"{a.name}: {len(frames)} seed を平均 → {d / (a.name + '.parquet')}")
 
 
+V6E_MEMBERS = ["lgb_extras_ped", "xgb_extras_ped", "lgb_extras", "lgb_softmax", "linear", "mtl_nn_extras_ped", "mtl_nn_s"]
+
+
+def cmd_ens(a) -> None:
+    """2 段目 (a): v6e の 7 メンバーに候補を 1 つ足したアンサンブル（tp27_eval.cmd_ens と同じ LOYO・同じ方法）を作り、
+    v6e のアンサンブル（同じ道具で作り直したもの）と勝率・連対・複勝の LogLoss を比べる（feature_bakeoff.compare_oof の判定）。
+    出力は tp_rank/ens/（基準の tp27_v6e/ens には書かない）。--add を省くと v6e の 7 メンバーだけ（作り直しの一致の確認用）。"""
+    import numpy as np
+
+    from src.pipeline.models import ensemble as en
+    from src.pipeline.models import feature_bakeoff as fb
+    from src.pipeline.models import tp05_data
+
+    D = tp05_data.load_dataset(Path(t27.WORK_V))
+    meta = D["meta"]
+    base = meta[KEY + ["finish_position", "year"]].copy()
+    base["race_id"], base["horse_id"] = base["race_id"].astype(str), base["horse_id"].astype(str)
+    srcs = [(f"{m}__v4", t27.OUT / "oof" / f"{m}__v4.parquet") for m in V6E_MEMBERS]
+    if a.add:
+        srcs.append((a.add, OUT / a.sub / f"{a.add}.parquet"))
+    names = []
+    for n, path in srcs:
+        o = pd.read_parquet(path)[KEY + ["p_win", "p_top2", "p_top3"]].copy()
+        o["race_id"], o["horse_id"] = o["race_id"].astype(str), o["horse_id"].astype(str)
+        before = len(base)
+        base = base.merge(o.rename(columns={f"p_{t}": f"{n}__{t}" for t in ("win", "top2", "top3")}), on=KEY, how="inner")
+        if names and len(base) != before:            # 候補の OOF に欠けがあると、重みと正規化が一部の行で決まり v6e と公平に比べられない
+            raise SystemExit(f"{n} を足すと行が {before} → {len(base)} に減る（OOF の欠け）")
+        names.append(n)
+    race, years, fin = base["race_id"].to_numpy(), base["year"].to_numpy(), base["finish_position"].to_numpy()
+    TOT = {"win": 1.0, "top2": 2.0, "top3": 3.0}
+    Y = {"win": (fin == 1).astype(float), "top2": (fin <= 2).astype(float), "top3": (fin <= 3).astype(float)}
+    METHOD = {"win": "weighted_logit", "top2": "greedy", "top3": "greedy"}
+    ENS = base[KEY + ["year"]].copy()
+    spec = {}
+    for t in TOT:
+        P = np.stack([base[f"{n}__{t}"].to_numpy() for n in names], axis=1)
+        llv, pred = en.loyo_eval(METHOD[t], P, years, race, Y[t], TOT[t])
+        ENS[f"p_{t}"] = pred
+        st = en.fit_method(METHOD[t], P, en.logit(P), Y[t])
+        spec[t] = {"method": METHOD[t], "loyo": float(llv), "weights": dict(zip(names, [round(float(x), 4) for x in st]))}
+        _log(f"{t} LOYO {llv:.5f} 重み {spec[t]['weights']}")
+    name = "v6" + (f"+{a.add}" if a.add else "_rebuilt")
+    d = OUT / "ens"
+    d.mkdir(parents=True, exist_ok=True)
+    ENS.to_parquet(d / f"{name}.parquet", index=False)
+    ref = pd.read_parquet(t27.OUT / "ens" / "v6.parquet")[KEY + ["p_win", "p_top2", "p_top3"]]
+    ref["race_id"], ref["horse_id"] = ref["race_id"].astype(str), ref["horse_id"].astype(str)
+    fin_map = base.set_index(KEY)["finish_position"]
+    cmp = fb.compare_oof(ref.merge(ENS[KEY], on=KEY), ENS[KEY + ["p_win", "p_top2", "p_top3"]], fin_map, name)
+    cmp = {k: (float(v) if isinstance(v, (float, np.floating)) else v) for k, v in cmp.items()}
+    (d / f"{name}.json").write_text(json.dumps({"spec": spec, "vs_v6e": cmp}, ensure_ascii=False, indent=1), encoding="utf-8")
+    _log(f"{name} vs v6e: " + str({k: (round(v, 5) if isinstance(v, float) else v) for k, v in cmp.items()}))
+
+
 def cmd_keys(_a) -> None:
     """評価用の鍵: race_id・horse_id・馬番・着順・年（全行）。"""
     from src.pipeline.models import tp05_data
@@ -183,6 +248,9 @@ def main() -> None:
     m.add_argument("--force", action="store_true")
     m.add_argument("--smoke", action="store_true")
     m.add_argument("--seed", type=int, default=None, help="この seed 1 つだけを回す（出力 oof_seeds/NAME__seedN。seed を並行で回して combine でまとめる）")
+    e = sp.add_parser("ens", help="2 段目 (a): v6e の 7 メンバー + 候補 1 つの LOYO アンサンブル（出力 tp_rank/ens/）")
+    e.add_argument("--add", default="", help="足す候補の名前（tp_rank/<sub>/<名前>.parquet）。省くと v6e の作り直しだけ")
+    e.add_argument("--sub", default="oof_s3", help="oof_s3（3 seed）。調整の変種（seed 0 だけ）は oof")
     c = sp.add_parser("combine", help="oof/NAME（seed 0）と oof_seeds/NAME__seedN を平均して oof_s3/NAME にする")
     c.add_argument("name", choices=sorted(CONFIGS))
     c.add_argument("--seeds", default="1,2")
@@ -190,6 +258,8 @@ def main() -> None:
     if a.cmd == "list":
         for n, (b, c) in CONFIGS.items():
             print(n, b, c)
+    elif a.cmd == "ens":
+        cmd_ens(a)
     elif a.cmd == "combine":
         cmd_combine(a)
     elif a.cmd == "keys":
