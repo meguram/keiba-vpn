@@ -131,7 +131,7 @@ def line_labels(*, update: bool = True, fetch_max: int = 0) -> dict[str, str]:
     if update:
         try:
             ssl.build()
-            if fetch_max > 0 and ssl.load().get("missing"):
+            if fetch_max > 0 and ssl.needs_fetch():      # 確かめていない種牡馬がいるときだけ（毎回 smartrc に繋がない）
                 ssl.fetch(fetch_max)
         except Exception:
             logger.exception("smartrc の系統の台帳の更新に失敗（今ある台帳で続ける）")
