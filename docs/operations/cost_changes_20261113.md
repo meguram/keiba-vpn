@@ -57,5 +57,12 @@ gcloud projects set-iam-policy horse-racing-466415 /tmp/p.json
 
 見込み: 1 日の配備回数 × 1 日分 ＋ 新しい 3 版 ＋ live- 付きが残る。月 約 −80 円（台帳の #3）。
 
+### 1 日にしたことで気をつけること（critic の指摘、2026-11-13）
+- **切り戻せる版**は `live-prod`・`live-rollback`（`live-` 付き）と、1 日以内か新しい 3 版だけ。`scripts/gcp/rollback_cloud_run_api.sh --to` で古いリビジョンを指定するときは、そのイメージが残っているか先に確かめる。
+- **Jobs のイメージ**は CI の `ENABLE_JOBS_DEPLOY=true` のときだけ `live-jobs` が付く（`scripts/ci/deploy_gcp.sh:166-173`）。手作業の配備（`scripts/gcp/deploy_cloud_run_jobs.sh`、既定は `jobs:latest`）では付かず、新しい 3 版でしか守られない。
+  11/13 時点で Jobs（keiba-dispatch-s/m/l/xl）は `jobs:b316ae59`（`live-jobs` 付き）なので守られている。手作業で Jobs を配備したら、`gcloud artifacts docker tags add … live-jobs` を必ず付ける。
+- **監視ポータルの手作業の配備**（`scripts/gcp/deploy_cloud_run_monitor.sh`）で `IMAGE` に 8 桁の版を指定すると、1 日を過ぎた版は消えていて配備に失敗しうる。`keiba-api:live-prod` などのタグで指定する。
+- CI の警告の文言（`scripts/ci/deploy_gcp.sh:49`）も 1 日に直した。
+
 ### 戻すとき
 `olderThan` を `172800s` に戻して、上の 3 つのスクリプトと同じコマンドを流す。
