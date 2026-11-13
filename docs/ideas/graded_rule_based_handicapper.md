@@ -284,3 +284,100 @@ tp-75 の `MARKET_TOKENS` の正規表現は使わない。`\bpop\b` が `p_pop`
 | G | 副の集計の広さ | 同じコースの OP 以上。足りなければ 3 勝クラス以上まで広げる |
 | H | 年の重み | 重みなし |
 | — | 成果物の HTML | `data/meta/graded/graded_handicapper.html`。本には要約の章だけを載せる |
+
+## 12. 進み具合（第 2 段）
+
+### 済んだこと（2026-11-13）
+
+- **folklore_build.py**: 最後の年を環境変数 `FOLKLORE_YEAR_END` で変えられるようにした（既定 2025 で、今までと同じ動き）。
+  - 2026 年込みの master は `FOLKLORE_OUT=/home/jovyan/work/graded_out/master` に作る（既存の `/home/jovyan/work/folklore_out` は上書きしない）。
+- **`src/research/graded/` を実装した**:
+
+  | ファイル | 中身 |
+  |---|---|
+  | `race_keys.py`・`race_aliases.json` | レース名の別名、コースの鍵、内外不明の扱い |
+  | `features.py` | as-of の列を足す |
+  | `catalog.py` | 切り口 118 型と比較用の M 2 型。使ってよい列のホワイトリスト |
+  | `tally.py` | 主・副・副（3 勝以上）・全体の as-of の件数と、2024 年末で止めた版 |
+  | `model.py` | 縮小・型の z・束ね・点・印 |
+  | `run.py` | frame → tally → select → evaluate の順に実行する |
+  | `export.py` | HTML の材料と、レースごとの JSON |
+
+  - `src/scripts/docs/build_graded_handicapper_html.py` で HTML を作る。
+  - テストは `tests/research/test_graded_*.py`。
+- **critic のレビューで直したこと**:
+  - parquet に保存すると真偽の列が文字列になり、B08・B09 が区別されなかった。
+  - 累計の率の帯の境目を固定値にした。
+  - 取消の馬を、期待の 3 着内と評価から除いた。
+  - 開催の何日目を meet_day だけで決めるようにした。
+  - 内外不明のコースを年によらずそろえた。
+  - 型ごとに、使う列だけで水準が作れることの検査を足した。
+  - frame と levels の行の対応を検査するようにした。
+  - 評価の後に選び直しできないようにした。
+- **計画から変えたこと**:
+  - folklore の `tdiff` は、取消・除外の馬（タイム 0）を含めて最小値を取っているレースがあった。そのレースでは走破タイムそのものになっている（1% ほどの行で 100 秒超）。着差（A02・A03）は、着順の付いた馬だけで計算し直した `p_margin` を使う。
+  - 束ねは、パターンの行の重なり（Jaccard）ではなく、型の点 x の相関（|r| ≥ 0.7）で行う。採否が型の単位なので、それに合わせた。
+  - 主の母集団の 70% 超が当てはまる水準を点に使わない規則は、主の層だけに当てる。ほぼ全員に当てはまる水準は、期待との比がほぼ 1 になり、点がほぼ 0 になるため。
+  - 2016〜2018 年で前走が海外・地方の馬は、判定の材料（出馬表の過去 5 走）が 2019 年からしか無いため、「不明」にできない。2019 年以降は「前走が海外・地方」の水準にする。
+  - **v6e16 の 2026 年の予測は作れなかった**。2026 年の学習側の表が無く、2 歳馬のプロフィールの取得に GCS が要るため。
+    - 2025 年は、v6e16 の test の予測と、本番 v6e の test の予測の両方と比べる。
+    - 2026 年は、本番 v6e を推論の経路で流した既存の予測（`/home/jovyan/work/tp71_out/pred2026_v6`、重賞 95 レース）と比べる。
+    - 抜き出したファイルは `/home/jovyan/work/graded_out/v6e_2026/pred_2026_graded_prod_v6e_serving.parquet`。
+    - 同じ手順で 2025 年の v6e16 を流し直すと、既存の予測と一致した（最大差 3e-7）。
+
+### 次にやること（第 2 段の残り）
+
+1. 2026 年込みの master を作り終える（実行中。nice 10 で遅い）。
+2. `run frame` → `run tally` を流す。
+3. `run select` で発見・確認を行い、prereg.json を凍結して **commit・push** する。
+4. `run evaluate` を 1 回だけ流す（`EVALUATED.json` ができた後は、選び直しも評価のやり直しもできない）。
+5. `run export` → `build_graded_handicapper_html` で `data/meta/graded/graded_handicapper.html` を作る。本の要約の章を `build_docs_book.py` の PARTS に載せる。
+6. 結果をこの文書に追記する。
+
+### 再開の手順
+
+```bash
+cd /home/jovyan/work/keiba-vpn
+export GRADED_OUT=/home/jovyan/work/graded_out OMP_NUM_THREADS=8
+# 1) master（無ければ。1 時間以上かかる）
+FOLKLORE_YEAR_END=2026 FOLKLORE_OUT=$GRADED_OUT/master FOLKLORE_RESUME=0 nice -n 10 /opt/conda/bin/python -m src.scripts.data.folklore_build
+# 2) 以降（各段は前の段の出力を読む）
+for c in frame tally select; do nice -n 10 /opt/conda/bin/python -m src.research.graded.run $c || break; done
+#    ↑ select の後、src/research/graded/prereg.json を commit・push してから評価に進む
+nice -n 10 /opt/conda/bin/python -m src.research.graded.run evaluate     # 1 回だけ
+nice -n 10 /opt/conda/bin/python -m src.research.graded.run export
+nice -n 10 /opt/conda/bin/python -m src.scripts.docs.build_graded_handicapper_html
+```
+
+## 13. 引き継ぎ（2026-11-13）
+
+ユーザーの指示で、tmux の新しい Claude セッションに引き継ぐ。前のセッションは、この節を push したところで止まった。
+
+- **済んだこと**:
+  - 計画と切り口の目録を確定した。
+  - `src/research/graded/` 一式・HTML の生成スクリプト・テスト 19 件を実装し、commit した（下のコミット）。
+  - critic の指摘は反映済み（第 12 節）。
+  - 手元のテスト（`tests/research/test_graded_*.py`）と compileall は通った。
+- **止めた計算**:
+  - 2026 年込みの master の作成（`folklore_build`、nice 10）は、`add_external` の途中で止めた。
+    - `/home/jovyan/work/graded_out/master/_stage_people.parquet`（段の途中の保存）だけがあり、`master.parquet` はまだ無い。
+    - 再開するときは `FOLKLORE_RESUME=1`（既定）で流すと、この途中の保存から続けられる。
+  - CI と同じ pytest の全件も途中で止めた。CI（GitHub Actions）の結果で確かめる。
+- **未コミットのファイル**: このセッションの分は無い。`git status` に出る他のファイルは、別のセッションの作業なので触らない。
+- **まだ作っていないもの**（計算の後に作る）:
+  - `src/research/graded/prereg.json`
+  - `data/meta/graded/graded_handicapper.html`
+  - 本の要約の章（`docs/html/modeling/chapters/graded_handicapper.html` と、`build_docs_book.py` の PARTS への登録）
+- **次の一手**: 第 12 節「再開の手順」のとおり進める。
+  1. master（`FOLKLORE_RESUME=1` で途中から）
+  2. `run frame`
+  3. `run tally`
+  4. `run select` → prereg.json を commit・push
+  5. `run evaluate`（1 回だけ）
+  6. `run export` → HTML
+- **注意点**:
+  - load が 30 を超えるときは待つ。ランキング比較の学習が 19:00 JST ごろまで動いている。
+  - `run frame` の血統の当て方（`pedigree_lines`）は、5 代血統の json を全部読むので、数分かかる。
+  - `run select` の後は、`EVALUATED.json` ができるまで prereg.json を選び直せる（`GRADED_RESELECT=1`）。評価の後は選び直せない。
+  - 2026 年の比較の相手は本番 v6e（95 レース）。v6e16 の 2026 年は作れない（第 12 節）。
+  - 作業ツリーは root の所有。編集は写しを `sudo install` で置き、commit は `sudo git -c user.name=… -c user.email=… commit -- <パス>` で行う。

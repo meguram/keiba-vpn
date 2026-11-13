@@ -22,7 +22,9 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[3]
 OUT = Path(os.environ.get("FOLKLORE_OUT", "/home/jovyan/work/folklore_out"))
 TABLES = ROOT / "data/page_reference/tables"
-YEARS = list(range(2016, 2026))
+# 最後の年（既定 2025）。FOLKLORE_YEAR_END=2026 で 2026 年の行も作る（重賞の予想家の検証用。出力先は FOLKLORE_OUT で分ける）
+YEAR_END = int(os.environ.get("FOLKLORE_YEAR_END", "2025"))
+YEARS = list(range(2016, YEAR_END + 1))
 LOCAL_VC = {"01", "02", "03", "04", "10"}
 CENTRAL_VC = {"05", "06", "08", "09"}
 CLS = {"新馬": 0, "未勝利": 1, "1勝": 2, "2勝": 3, "3勝": 4, "OP": 5, "L": 5, "G3": 6, "G2": 7, "G1": 8}
@@ -401,10 +403,10 @@ def add_people(d: pd.DataFrame) -> pd.DataFrame:
 
 def add_external(d: pd.DataFrame) -> pd.DataFrame:
     key = ["race_id", "horse_id"]
-    # SmartRC（2020〜2025）
+    # SmartRC（2020〜YEAR_END）
     sc = ["race_id", "hcode", "blinker", "tozai", "owner", "producer", "f_name", "ff_name", "fff_name", "mf_name", "cl_eval_cmb", "f_dirt_share",
           "f_1400_share", "ten1f_best_rank", "agari_has_rank", "ten_has_rank"]
-    s = pd.concat([pd.read_parquet(TABLES / str(y) / "smartrc_race_flat.parquet", columns=sc) for y in range(2020, 2026)])
+    s = pd.concat([pd.read_parquet(TABLES / str(y) / "smartrc_race_flat.parquet", columns=sc) for y in range(2020, YEAR_END + 1)])
     s["race_id"] = s["race_id"].astype(str)
     s["horse_id"] = s["hcode"].astype(str)
     s = s.drop(columns=["hcode"]).drop_duplicates(key)
@@ -484,8 +486,8 @@ def add_external(d: pd.DataFrame) -> pd.DataFrame:
     d = d.merge(o[key + ["ok_course", "ok_rider", "ok_eval", "ok_int", "ok_tanpyo", "ok_cond", "ok_td", "ok_wd", "ok_n_f", "ok_l1", "ok_acc", "ok_slope", "ok_wood"]],
                 on=key, how="left")
     d["ok_days"] = (d["dt"] - d["ok_td"]).dt.days
-    # 厩舎コメント（2020〜2025）
-    c = read_years("race_trainer_comment_flat", range(2020, 2026), ["race_id", "horse_id", "comment", "questioner"])
+    # 厩舎コメント（2020〜YEAR_END）
+    c = read_years("race_trainer_comment_flat", range(2020, YEAR_END + 1), ["race_id", "horse_id", "comment", "questioner"])
     c["race_id"] = c["race_id"].astype(str)
     c["horse_id"] = c["horse_id"].astype(str)
     c = c.drop_duplicates(key)
@@ -497,7 +499,7 @@ def add_external(d: pd.DataFrame) -> pd.DataFrame:
     c["tc_sp"] = c["questioner"].fillna("").astype(str)
     d = d.merge(c[key + ["tc_has", "tc_pos", "tc_neg", "tc_next", "tc_sp"]], on=key, how="left")
     # スピード指数（出走前の値）
-    ix = read_years("race_index_flat", range(2019, 2026), ["race_id", "horse_id", "speed_max", "speed_avg", "speed_recent", "speed_course", "speed_distance"])
+    ix = read_years("race_index_flat", range(2019, YEAR_END + 1), ["race_id", "horse_id", "speed_max", "speed_avg", "speed_recent", "speed_course", "speed_distance"])
     ix["race_id"] = ix["race_id"].astype(str)
     ix["horse_id"] = ix["horse_id"].astype(str)
     ix = ix.drop_duplicates(key)
@@ -505,7 +507,7 @@ def add_external(d: pd.DataFrame) -> pd.DataFrame:
         ix[cc] = _f(ix[cc])
     d = d.merge(ix, on=key, how="left")
     # めぐ指数（その走の成績の指数）→ 履歴
-    mg = read_years("megu_index_flat", range(2020, 2026), ["race_id", "horse_id", "megu_index_v3a"])
+    mg = read_years("megu_index_flat", range(2020, YEAR_END + 1), ["race_id", "horse_id", "megu_index_v3a"])
     mg["race_id"] = mg["race_id"].astype(str)
     mg["horse_id"] = mg["horse_id"].astype(str)
     d = d.merge(mg.drop_duplicates(key), on=key, how="left")
@@ -520,19 +522,19 @@ def add_external(d: pd.DataFrame) -> pd.DataFrame:
     d["mg_mean3"] = gshift_roll(d["megu"], d["horse_id"], 3, 2, "mean")
     d["mg_maxall"] = gshift_cum(d["megu"], d["horse_id"], "cummax")
     # パドック・バロメーター
-    pdk = read_years("race_paddock_flat", range(2020, 2026), ["race_id", "horse_id", "paddock_rank"])
+    pdk = read_years("race_paddock_flat", range(2020, YEAR_END + 1), ["race_id", "horse_id", "paddock_rank"])
     pdk["race_id"] = pdk["race_id"].astype(str)
     pdk["horse_id"] = pdk["horse_id"].astype(str)
     pdk["pd_rank"] = _f(pdk["paddock_rank"])
     d = d.merge(pdk.drop_duplicates(key)[key + ["pd_rank"]], on=key, how="left")
-    bm = read_years("race_barometer_flat", range(2023, 2026), ["race_id", "horse_id", "index_total", "index_start", "index_chase", "index_closing"])
+    bm = read_years("race_barometer_flat", range(2023, YEAR_END + 1), ["race_id", "horse_id", "index_total", "index_start", "index_chase", "index_closing"])
     bm["race_id"] = bm["race_id"].astype(str)
     bm["horse_id"] = bm["horse_id"].astype(str)
     for cc in ["index_total", "index_start", "index_chase", "index_closing"]:
         bm[cc] = _f(bm[cc])
     d = d.merge(bm.drop_duplicates(key), on=key, how="left")
     # 出馬表の過去 5 走（海外・地方の走歴）
-    pp = read_years("race_shutuba_past_flat", range(2020, 2026), ["race_id", "horse_id", "past_races"])
+    pp = read_years("race_shutuba_past_flat", range(2020, YEAR_END + 1), ["race_id", "horse_id", "past_races"])
     pp["race_id"] = pp["race_id"].astype(str)
     pp["horse_id"] = pp["horse_id"].astype(str)
     pp = pp.drop_duplicates(key)
@@ -553,7 +555,7 @@ def add_external(d: pd.DataFrame) -> pd.DataFrame:
     d = d.merge(pp[key + ["pp_last_region", "pp_n_overseas"]], on=key, how="left")
     # クッション値・含水率（場・日）
     cu = []
-    for y in range(2018, 2026):
+    for y in range(2018, YEAR_END + 1):
         f = ROOT / f"data/page_reference/cushion/cushion_{y}.json"
         if f.exists():
             cu += json.load(open(f, encoding="utf-8"))
