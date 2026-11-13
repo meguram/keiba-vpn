@@ -37,7 +37,9 @@ gcloud projects set-iam-policy horse-racing-466415 /tmp/p.json
 ```
 
 ### 実施の記録
-（下に追記する: 有効にした時刻・戻した時刻）
+- **未実施（2026-11-13）**。統括役がサービスアカウント（megu-keiba@）で試したが、`getIamPolicy` の権限が無く 403。
+  監査役の確認でも、このサービスアカウントからは Cloud Resource Manager API が使えなかった（そのプロジェクトで無効）。
+- **ユーザーのアカウント（gcloud の既定のアカウント）で行う必要がある**。上の「入れる設定」を `gcloud projects set-iam-policy` で入れ、有効にした時刻をここに書き、24 時間後に「戻すとき」の手順で戻す。
 
 ## 2. Artifact Registry の自動掃除の保持を 2 日 → 1 日にする
 
@@ -50,7 +52,7 @@ gcloud projects set-iam-policy horse-racing-466415 /tmp/p.json
 容量は 16GiB（API の版 13・Jobs の版 6。11/11〜12 の配備が 2 日の保持で残っていた）。費用は月 約 240 円。
 （もう 1 つのリポジトリ `keiba` は 0.04GiB で、掃除の設定は無い。変えない。）
 
-### 変えた後
+### 変えた後（実施済み: 2026-11-13 14:5x JST、統括役がサービスアカウントで。keep-live・keep-recent 3 は不変を確認）
 `delete-old` の `olderThan` だけを `86400s`（1 日）にする。`keep-live`（`live-` タグ付き）と `keep-recent`（パッケージごとに新しい 3 版）は変えない（CLAUDE.md の再発防止の決まり 4）。
 同じ設定を書いているスクリプトもそろえる（そろえないと、次の API の配備で 2 日に戻る）:
 `scripts/gcp/deploy_cloud_run_api.sh`、`scripts/gcp/setup_cloud_run_api.sh`、`scripts/gcp/setup_project.sh`。CLAUDE.md の記述も 1 日に直す。
