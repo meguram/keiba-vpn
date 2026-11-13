@@ -19,11 +19,8 @@ LINES="10,40 10 * * * ${W} host-eve-precompute -- ${E} eve-precompute ${L}
 50 12 * * 0,1,6 ${W} host-prediction-results -- ${E} prediction-results-refresh ${L}
 7 15-23 * * 5 ${W} host-weekly-finalize -- ${E} weekly-finalize ${L}
 7 * * * 6,0 ${W} host-weekly-finalize -- ${E} weekly-finalize ${L}"
-mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/data/local/meta/cron_backups"
-crontab -l 2>/dev/null > "${PROJECT_DIR}/data/local/meta/cron_backups/crontab_before_host_postprocess_$(date +%Y%m%d_%H%M%S).txt" || true
-TMP="$(mktemp)"
-crontab -l 2>/dev/null | grep -v "# ${TAG}" > "$TMP" || true
-printf '%s\n' "$LINES" >> "$TMP"
-crontab "$TMP"
-rm -f "$TMP"
+mkdir -p "${PROJECT_DIR}/logs"
+# 安全な入れ替え（root でなければ・crontab -l が失敗したら中止、退避、タグの行だけ、行数の確認）。2026-11-13
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib_crontab.sh"
+KEIBA_CRON_MIN_LINES="${KEIBA_CRON_MIN_LINES:-20}" crontab_replace_tag "$TAG" "$LINES"
 echo "登録しました（${TAG}）:"; printf '%s\n' "$LINES"

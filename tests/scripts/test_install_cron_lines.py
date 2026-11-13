@@ -20,6 +20,7 @@ def test_shared_login_runs_at_0005_jst_in_utc():
 
 
 def _fake_crontab(tmp_path: Path, content: str | None):
+    tmp_path.mkdir(parents=True, exist_ok=True)
     store = tmp_path / "crontab.txt"
     if content is not None:
         store.write_text(content)
@@ -28,6 +29,7 @@ def _fake_crontab(tmp_path: Path, content: str | None):
     fake = bin_dir / "crontab"
     fake.write_text(f"""#!/bin/sh
 if [ "$1" = "-l" ]; then
+  [ -z "$FAKE_CRONTAB_FAIL" ] || {{ echo "crontab: cannot open: Permission denied" >&2; exit 1; }}
   [ -f {store} ] || {{ echo "no crontab for test" >&2; exit 1; }}
   cat {store}; exit 0
 fi
@@ -82,3 +84,44 @@ def test_remove_flag_in_any_position_and_bad_args(tmp_path):
     assert "echo keep" in store.read_text() and "bash x" not in store.read_text()
     r2 = subprocess.run(["bash", str(CRON / "install_serving_state_cron.sh"), "--bogus"], env=env, capture_output=True, text=True, timeout=30)
     assert r2.returncode == 2
+
+
+# ── 共通の安全な入れ替え（scripts/cron/lib_crontab.sh。2026-11-13）を使う登録スクリプト ──
+SAFE = ["install_host_postprocess_cron.sh", "install_vps_alive_cron.sh", "install_vps_mirror_pull_cron.sh"]
+
+
+def test_safe_installers_never_wipe_crontab_when_listing_fails(tmp_path):
+    """crontab -l が失敗したら、crontab を変えずに止まる（以前は登録する数行だけで root の crontab 全体を置き換えうる作りだった）。"""
+    for name in SAFE:
+        d = tmp_path / name
+        store, env = _fake_crontab(d, FILLER)
+        env = {**env, "KEIBA_CRON_ALLOW_NONROOT": "1", "FAKE_CRONTAB_FAIL": "1"}
+        r = _run(name, env)
+        assert r.returncode != 0 and store.read_text() == FILLER, name
+
+
+def test_safe_installers_refuse_non_root(tmp_path):
+    for name in SAFE:
+        store, env = _fake_crontab(tmp_path / name, FILLER)
+        r = _run(name, env)          # KEIBA_CRON_ALLOW_NONROOT なし（テストは root でない）
+        if os.getuid() != 0:
+            assert r.returncode != 0 and store.read_text() == FILLER, name
+
+
+def test_safe_installers_replace_only_their_tag_and_are_idempotent(tmp_path):
+    for name in SAFE:
+        tag = {"install_host_postprocess_cron.sh": "KEIBA-HOST-POSTPROCESS", "install_vps_alive_cron.sh": "KEIBA-VPS-ALIVE",
+               "install_vps_mirror_pull_cron.sh": "KEIBA-VPS-MIRROR-PULL"}[name]
+        store, env = _fake_crontab(tmp_path / name, FILLER + f"# 0 0 * * * old # {tag}\n")     # コメントにした行は同じタグでも残す
+        env = {**env, "KEIBA_CRON_ALLOW_NONROOT": "1"}
+        r = _run(name, env)
+        assert r.returncode == 0, name + r.stdout + r.stderr
+        first = store.read_text()
+        assert first.count("# OTHER") == 25 and f"# 0 0 * * * old # {tag}" in first
+        assert _run(name, env).returncode == 0 and store.read_text() == first, name     # 2 回目も同じ
+
+
+def test_safe_installers_refuse_a_suspiciously_small_crontab(tmp_path):
+    store, env = _fake_crontab(tmp_path, "1 1 * * * echo only # OTHER\n")
+    r = _run("install_vps_alive_cron.sh", {**env, "KEIBA_CRON_ALLOW_NONROOT": "1"})
+    assert r.returncode != 0 and store.read_text() == "1 1 * * * echo only # OTHER\n"
