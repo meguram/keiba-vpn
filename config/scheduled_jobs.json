@@ -24,10 +24,11 @@
     "timer": "keiba-cache-warm.timer",
     "service": "keiba-cache-warm.service"
    },
-   "what": "API のキャッシュの取り直し: 更新のあったレース・馬の API を nginx 経由で取り直す（660 秒後にもう 1 回）",
+   "what": "API のキャッシュの取り直し: 合図（ops/cache_dirty/_beacon.json の世代）が変わったときなどだけ更新の目印を一覧し、更新のあったレース・馬の API を nginx 経由で取り直す（660 秒後にもう 1 回）",
    "sample_url": "https://megu-keiba.com/api/v1/races/202605050811",
    "inputs": [
-    "GCS ops/cache_dirty/（昨日以降を 1 回一覧）"
+    "GCS ops/cache_dirty/_beacon.json（メタデータだけ・毎周）",
+    "GCS ops/cache_dirty/（合図が変わったとき最短 5 分・合図なし 10 分・安全網 30 分だけ一覧）"
    ],
    "outputs": [
     "VPS の nginx の API キャッシュ（Cloud Run の API へ要求）",
@@ -35,14 +36,14 @@
    ],
    "command": "/opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/cache_warm.py",
    "memory": "MemoryMax 128M",
-   "cost": "一覧 1 日 1,440 回（Class A 月 約 35 円）＋転送 月 約 230 円",
+   "cost": "一覧 最悪 288 回/日・合図のメタデータ 1,440 回/日 ≒ 月 約 45 円（毎分の一覧だった 11/13 以前は 約 265 円）",
    "host_equivalent": "無い（ホストの事前生成の周回は egress_billed() で止めてある）",
    "basis": [
     "scripts/ops/vps/templates/keiba-cache-warm.timer",
-    "scripts/ops/vps/cache_warm.py:1-12",
-    "docs/operations/cost_ledger.md:155"
+    "scripts/ops/vps/cache_warm.py:1-15・:330-332",
+    "docs/operations/cost_ledger.md:198-205"
    ],
-   "note": "60 秒の細かさは要らない可能性が高い（点検 #2）"
+   "note": "2026-11-13 に合図方式へ入れ替え（05f35916）"
   },
   {
    "id": "vps-release-pull-ui",
@@ -956,6 +957,156 @@
     "scripts/cron/install_vps_alive_cron.sh"
    ],
    "note": "2026-11-13 18:4x JST に root の crontab へ登録（KEIBA-VPS-ALIVE）"
+  },
+  {
+   "id": "host-eve-precompute",
+   "where": "host",
+   "kind": "cron",
+   "status": "planned",
+   "schedule": {
+    "cron": "10,40 19 * * *"
+   },
+   "applies": "daily",
+   "grace_min": 60,
+   "max_runtime_min": 60,
+   "weight": "med",
+   "ref": {
+    "cron_tag": "KEIBA-HOST-POSTPROCESS",
+    "job_id": "eve-precompute"
+   },
+   "what": "前夜の計算（取得を VPS に渡した後の後処理）",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [],
+   "command": "bash scripts/cron/install_host_postprocess_cron.sh",
+   "memory": null,
+   "cost": "0 円（ホストの中。GCS は目録 1 件など最小）",
+   "host_equivalent": null,
+   "basis": [
+    "scripts/cron/install_host_postprocess_cron.sh",
+    "docs/operations/vps_only_fetch.md"
+   ],
+   "note": "段 6 で担当を VPS に渡すときに root で登録。担当が移っていなければ何もしない（crontab は UTC の 10,40 10 * * *）"
+  },
+  {
+   "id": "host-track-speed-daily",
+   "where": "host",
+   "kind": "cron",
+   "status": "planned",
+   "schedule": {
+    "cron": "20 7 * * *"
+   },
+   "applies": "daily",
+   "grace_min": 60,
+   "max_runtime_min": 60,
+   "weight": "med",
+   "ref": {
+    "cron_tag": "KEIBA-HOST-POSTPROCESS",
+    "job_id": "track-speed-daily"
+   },
+   "what": "馬場速度の日次（取得を VPS に渡した後の後処理）",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [],
+   "command": "bash scripts/cron/install_host_postprocess_cron.sh",
+   "memory": null,
+   "cost": "0 円（ホストの中。GCS は目録 1 件など最小）",
+   "host_equivalent": null,
+   "basis": [
+    "scripts/cron/install_host_postprocess_cron.sh",
+    "docs/operations/vps_only_fetch.md"
+   ],
+   "note": "段 6 で登録。crontab は UTC の 20 22 * * *（JST は翌朝 07:20）"
+  },
+  {
+   "id": "host-prediction-results-refresh",
+   "where": "host",
+   "kind": "cron",
+   "status": "planned",
+   "schedule": {
+    "cron": "50 21 * * 0,1,6"
+   },
+   "applies": "daily",
+   "grace_min": 60,
+   "max_runtime_min": 60,
+   "weight": "med",
+   "ref": {
+    "cron_tag": "KEIBA-HOST-POSTPROCESS",
+    "job_id": "prediction-results-refresh"
+   },
+   "what": "予測成績の集計（土日月。取得を VPS に渡した後の後処理）",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [],
+   "command": "bash scripts/cron/install_host_postprocess_cron.sh",
+   "memory": null,
+   "cost": "0 円（ホストの中。GCS は目録 1 件など最小）",
+   "host_equivalent": null,
+   "basis": [
+    "scripts/cron/install_host_postprocess_cron.sh",
+    "docs/operations/vps_only_fetch.md"
+   ],
+   "note": "段 6 で登録。crontab は UTC の 50 12 * * 0,1,6"
+  },
+  {
+   "id": "host-weekly-finalize",
+   "where": "host",
+   "kind": "cron",
+   "status": "planned",
+   "schedule": {
+    "cron": "7 * * * 6,0"
+   },
+   "applies": "daily",
+   "grace_min": 60,
+   "max_runtime_min": 120,
+   "weight": "med",
+   "ref": {
+    "cron_tag": "KEIBA-HOST-POSTPROCESS",
+    "job_id": "weekly-finalize"
+   },
+   "what": "週次の後処理（めぐ指数・PG 同期など。土 00:07〜月 08:07 の毎時）",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [],
+   "command": "bash scripts/cron/install_host_postprocess_cron.sh",
+   "memory": null,
+   "cost": "0 円（ホストの中。GCS は目録 1 件など最小）",
+   "host_equivalent": null,
+   "basis": [
+    "scripts/cron/install_host_postprocess_cron.sh",
+    "docs/operations/vps_only_fetch.md"
+   ],
+   "note": "段 6 で登録。crontab は UTC の 7 15-23 * * 5 と 7 * * * 6,0。一覧の予定は土日の毎時だけを書き、月曜 00:07〜08:07 の分は省いている（1 本の cron で書けないため）"
+  },
+  {
+   "id": "host-vps-mirror-pull-lists",
+   "where": "host",
+   "kind": "cron",
+   "status": "planned",
+   "schedule": {
+    "every_min": 5
+   },
+   "applies": "daily",
+   "grace_min": 20,
+   "max_runtime_min": 5,
+   "weight": "med",
+   "ref": {
+    "cron_tag": "KEIBA-VPS-MIRROR-PULL",
+    "job_id": "vps-mirror-pull-lists"
+   },
+   "what": "VPS が上げたレース一覧・発走時刻表の取り込み（目録 1 件を読み、変わったファイルだけ取る）",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [],
+   "command": "bash scripts/cron/install_vps_mirror_pull_cron.sh",
+   "memory": null,
+   "cost": "0 円（ホストの中。GCS は目録 1 件など最小）",
+   "host_equivalent": null,
+   "basis": [
+    "scripts/cron/install_vps_mirror_pull_cron.sh",
+    "docs/operations/vps_only_fetch.md"
+   ],
+   "note": "段 6（段 1 の受け取り側）で登録"
   }
  ],
  "retired": [
@@ -993,7 +1144,7 @@
    "basis": "config/gcp_job_map.json:1966、ssh の list-unit-files（heartbeat.timer disabled）、scripts/ops/vps/healthcheck.sh",
    "advice": "足す。費用 0 の案: ホストの cron から 15 分おきに VPS の静的な /version.json（Cloudflare 経由、Cloud Run を通らない）を確かめて Slack へ。ハートビートはこのままでは有効にしない。",
    "cost": "0 円（ホスト → VPS の静的ファイル。GCP を通らない）",
-   "status": "対応中: 監視の計画（ホストの cron で /version.json・VPS の sched_status・毎朝の点検）"
+   "status": "対応済み（一部）: ホストの cron で公開の /version.json を 15 分おきに確認（KEIBA-VPS-ALIVE、11/13 登録）。VPS の見張り keiba-sched-status・毎朝の点検は配備待ち"
   },
   {
    "no": "2",
@@ -1002,7 +1153,8 @@
    "finding": "VPS の keiba-cache-warm が 60 秒おきに GCS を一覧している（GCP の外から繰り返し読む。egress_billed() を見ていない）。目印は 1 日 300〜550 件で、60 秒の細かさは要らない可能性が高い。取り直しの要求は Cloud Run の API の起動にもなる。",
    "basis": "scripts/ops/vps/cache_warm.py:254-261、docs/operations/cost_ledger.md:155",
    "advice": "見直す（間隔を 10〜15 分に、一覧の fields を絞る、など）。台帳と突き合わせ。",
-   "cost": "今 月 約 265 円（一覧 35＋転送 230）。15 分おきなら 1/15 前後"
+   "cost": "今 月 約 265 円（一覧 35＋転送 230）。15 分おきなら 1/15 前後",
+   "status": "対応済み: 合図方式に入れ替え（05f35916、11/13 配備）。一覧は最悪 288 回/日・月 約 45 円"
   },
   {
    "no": "3",
@@ -1087,6 +1239,6 @@
   }
  ],
  "audit_note": "設計上の点検（2026-11-13）。「不要なもの」と「漏れているもの」。設定は変えていない（提案だけ）。費用に効くものは docs/operations/cost_ledger.md と突き合わせてから進める。",
- "audit_ok": "確認済みで問題なし: 天気の取得はホストの crontab から外れている（jma の行なし）。ホストの crontab に重複した行は無い。",
+ "audit_ok": "確認済みで問題なし: 天気の取得はホストの crontab から外れている（jma の行なし）。注意: root の crontab では、同じ見出しのコメント（「# 時刻はすべて UTC で記述」など 12 種）が 13 回ずつ、PATH= の行が 4 回重複している（2026-11-13 夜に読むだけで確認。整理の対象）。",
  "services": "常駐のサービス（定期実行ではない）: keiba-ui（本番の画面）・keiba-ui-stg・nginx・cloudflared-prod。keiba-api.service は disabled（API を Cloud Run に移す前の残り）。"
 }

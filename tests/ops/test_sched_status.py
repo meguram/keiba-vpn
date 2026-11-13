@@ -97,3 +97,10 @@ def test_systemctl_failure_is_written_as_an_error_not_hidden(env):
     out = S.run_once(now=ts("2026-11-13 09:00:00"), read=lambda jobs: S.read_systemd(jobs, run=lambda *a, **k: Res()),
                      write=lambda d: written.append(d), notify=lambda t: True)
     assert "systemctl show が失敗" in out["error"] and written[0]["error"] and written[0]["jobs"] == {}
+
+
+def test_missing_slack_destination_is_recorded(env, monkeypatch):
+    monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+    written = []
+    S.run_once(now=ts("2026-11-13 09:00:00"), read=_reader({}), write=lambda d: written.append(d), notify=lambda t: False)
+    assert written[0]["slack"] == "未設定"

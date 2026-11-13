@@ -12,6 +12,7 @@
 開いたときだけ読みます（5 分は使い回し・自動更新なし）。VPS は VPS の見張りが 15 分おきに書く <code>ops/heartbeat/vps/status.json</code>、GCP は Scheduler・Cloud Run の実行の一覧です。ホストの cron は判定しません。</p>
 {% if d.get('error') %}<div class="card"><b class="red">{{ d.error }}</b></div>{% endif %}
 {% for a in d.alerts %}<div class="card" style="margin-bottom:8px"><span class="{{ a.level }}">● {{ a.title }}</span></div>{% endfor %}
+{% for n in d.get('notes', []) %}<div class="card" style="margin-bottom:8px"><span class="yellow">● {{ n }}</span></div>{% endfor %}
 {% for where, title in [('gcp','GCP（Cloud Scheduler → Cloud Run Jobs）'),('vps','ConoHa VPS（systemd のタイマー・常駐）'),('host','ホスト（参考。判定しない）')] %}
 {% set rows = d.rows|selectattr('job.where', 'equalto', where)|list %}{% if rows %}
 <h2>{{ title }}</h2>

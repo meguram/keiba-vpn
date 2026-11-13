@@ -67,7 +67,7 @@ ul.jobs { padding-left:18px; margin:6px 0; } ul.jobs > li { margin:10px 0; }
   <div class="kpi"><b>1 件</b><span>GCP で動いている定期実行（<code>keiba-g-0730-shadow</code>）</span></div>
   <div class="kpi"><b>5 件</b><span>ConoHa VPS で動いている systemd タイマー（<code>keiba-cache-warm.timer</code>・<code>keiba-release-pull-ui.timer</code>・<code>keiba-release-pull-ui-stg.timer</code>・<code>keiba-release-pull-fetch.timer</code>・<code>keiba-ui-health.timer</code>）</span></div>
   <div class="kpi"><b>1 件</b><span>ホストで動いている（この一覧に載せたもの: <code>KEIBA-VPS-ALIVE</code>）</span></div>
-  <div class="kpi"><b>22 件</b><span>今は動いていない・今後起動しうるもの（GCP 削除済み 13、GCP 停止中 1、ConoHa VPS 停止中 2、ConoHa VPS 今後 6）</span></div>
+  <div class="kpi"><b>27 件</b><span>今は動いていない・今後起動しうるもの（GCP 削除済み 13、GCP 停止中 1、ConoHa VPS 停止中 2、ConoHa VPS 今後 6、ホスト 今後 5）</span></div>
   <div class="kpi"><b>2 種</b><span>廃止（jma-weather（気象庁の時別値）・smoke-auto-thu-noon・-sat-morning・-sun-night）</span></div>
 </div>
 <div class="box"><p><b>この一覧について</b>: 定期実行ジョブの一覧の正（GCP・ConoHa VPS。ホストの cron は docs/html/operations/cron_schedule.html）。監視ポータル（/schedules）と docs/html/operations/final/scheduled_jobs.html（src/scripts/docs/build_scheduled_jobs_html.py）の両方がこれを読む。schedule の cron は JST。</p></div>
@@ -92,7 +92,7 @@ ul.jobs { padding-left:18px; margin:6px 0; } ul.jobs > li { margin:10px 0; }
 <p class="sub">稼働中の systemd タイマーと、取得の実行役などの常駐（止めているものも状態を付けてここに載せる）。OS 標準のタイマー（apt-daily・logrotate など）は数えていない。タイマーの時刻は JST。</p>
 <div class="scroll"><table>
 <tr><th>タイマー（起動するもの）</th><th>スケジュール（JST）</th><th>中身</th><th>メモリの枠</th><th>費用の目安（月）</th><th>ホストでも同じ処理？</th><th>根拠</th></tr>
-<tr><td><code>keiba-cache-warm.timer</code><br>→ <code>keiba-cache-warm.service</code><br><span class="b ok">稼働中</span><br><span class="ev">id: vps-cache-warm</span></td><td class="when">60 秒おき</td><td>API のキャッシュの取り直し: 更新のあったレース・馬の API を nginx 経由で取り直す（660 秒後にもう 1 回）<br><span class="ev">60 秒の細かさは要らない可能性が高い（点検 #2）</span></td><td>MemoryMax 128M</td><td>一覧 1 日 1,440 回（Class A 月 約 35 円）＋転送 月 約 230 円</td><td>無い（ホストの事前生成の周回は egress_billed() で止めてある）</td><td class="ev"><code>scripts/ops/vps/templates/keiba-cache-warm.timer</code>、<code>scripts/ops/vps/cache_warm.py:1-12</code>、<code>docs/operations/cost_ledger.md:155</code></td></tr>
+<tr><td><code>keiba-cache-warm.timer</code><br>→ <code>keiba-cache-warm.service</code><br><span class="b ok">稼働中</span><br><span class="ev">id: vps-cache-warm</span></td><td class="when">60 秒おき</td><td>API のキャッシュの取り直し: 合図（ops/cache_dirty/_beacon.json の世代）が変わったときなどだけ更新の目印を一覧し、更新のあったレース・馬の API を nginx 経由で取り直す（660 秒後にもう 1 回）<br><span class="ev">2026-11-13 に合図方式へ入れ替え（05f35916）</span></td><td>MemoryMax 128M</td><td>一覧 最悪 288 回/日・合図のメタデータ 1,440 回/日 ≒ 月 約 45 円（毎分の一覧だった 11/13 以前は 約 265 円）</td><td>無い（ホストの事前生成の周回は egress_billed() で止めてある）</td><td class="ev"><code>scripts/ops/vps/templates/keiba-cache-warm.timer</code>、<code>scripts/ops/vps/cache_warm.py:1-15・:330-332</code>、<code>docs/operations/cost_ledger.md:198-205</code></td></tr>
 <tr><td><code>keiba-release-pull-ui.timer</code><br>→ <code>keiba-release-pull@ui.service</code><br><span class="b ok">稼働中</span><br><span class="ev">id: vps-release-pull-ui</span></td><td class="when">3 分おき</td><td>本番の画面の新しい版の取り込み（GCS の latest.json を読み、新しければ入れる）</td><td>MemoryMax 150M</td><td>読み 1 日 480 回（ほぼ 0 円）</td><td>無い</td><td class="ev"><code>scripts/ops/vps/templates/keiba-release-pull-ui.timer</code>、<code>scripts/ops/vps/vps_03_units.sh:59</code></td></tr>
 <tr><td><code>keiba-release-pull-ui-stg.timer</code><br>→ <code>keiba-release-pull@ui-stg.service</code><br><span class="b ok">稼働中</span><br><span class="ev">id: vps-release-pull-ui-stg</span></td><td class="when">5 分おき</td><td>stg の画面の新しい版の取り込み</td><td>MemoryMax 150M</td><td>ほぼ 0 円</td><td>無い</td><td class="ev"><code>scripts/ops/vps/templates/keiba-release-pull-ui-stg.timer</code>、<code>scripts/ops/vps/vps_05_stg_instance.sh:104</code></td></tr>
 <tr><td><code>keiba-release-pull-fetch.timer</code><br>→ <code>keiba-release-pull@fetch.service</code><br><span class="b ok">稼働中</span><br><span class="ev">id: vps-release-pull-fetch</span></td><td class="when">毎日 03:20<br><code>20 3 * * *</code></td><td>取得の実行役のコードの新しい版の取り込み（メンテナンス窓 03:00〜04:00）</td><td>MemoryMax 150M</td><td>ほぼ 0 円</td><td>無い</td><td class="ev"><code>scripts/ops/vps/templates/keiba-release-pull-fetch.timer</code>、<code>scripts/ops/vps/vps_03_units.sh:60</code></td></tr>
@@ -129,6 +129,16 @@ ul.jobs { padding-left:18px; margin:6px 0; } ul.jobs > li { margin:10px 0; }
 <tr><td><code>keiba-mirror-vps-push.timer</code><br>→ <code>keiba-mirror-vps-push.service</code><br><span class="b mu">今後</span><br><span class="ev">id: vps-mirror-vps-push</span></td><td class="when">5 分おき</td><td>VPS が取ったレース一覧・発走時刻表のうち変わったものだけを ops/mirror_vps/ に上げる（担当が無ければ何もしない）</td><td>MemoryMax 110M</td><td>段 6 で有効にする</td><td>約 7 円（書き込み）</td><td>ホストの VPS のミラーの取り込み（未登録）</td><td class="ev"><code>scripts/ops/vps/templates/keiba-mirror-vps-push.timer</code>、<code>docs/operations/vps_only_fetch.md:21-23</code></td></tr>
 <tr><td><code>keiba-heartbeat.timer</code><br>→ <code>keiba-heartbeat.service</code><br><span class="b warn">停止中</span><br><span class="ev">id: vps-heartbeat</span></td><td class="when">5 分おき</td><td>VPS の資源・ユニットの状態を監視ポータル（Cloud Run）へ送る</td><td>MemoryMax 48M</td><td>導入済み・disabled。5 分おきの要求は 15 分未満の ping の禁止に反するので有効にしない（代わりに vps-sched-status）</td><td>5 分おきの Cloud Run の起動（規約で禁止の間隔）</td><td>無い</td><td class="ev"><code>scripts/ops/vps/templates/keiba-heartbeat.timer</code>、<code>scripts/ops/vps/vps_03_units.sh:116</code></td></tr>
 <tr><td><code>keiba-traffic.timer</code><br>→ <code>keiba-traffic.service</code><br><span class="b mu">今後</span><br><span class="ev">id: vps-traffic</span></td><td class="when">15 分おき</td><td>nginx のアクセスの日別集計を監視ポータルへ送る</td><td>MemoryMax 128M</td><td>未導入（ハートビートの鍵が前提）</td><td>Cloud Run への 15 分おきの要求</td><td>無い</td><td class="ev"><code>scripts/ops/vps/templates/keiba-traffic.timer</code>、<code>scripts/ops/vps/traffic_client.py:1-7</code></td></tr>
+</table></div>
+<h3>ホスト: この一覧で見張る予定のもの</h3>
+<p class="sub">ホストの cron の全体は <a href="../cron_schedule.html">cron の一覧</a>（<code>docs/html/operations/cron_schedule.html</code>）。ここには、この一覧で見張るものだけを載せる。</p>
+<div class="scroll"><table>
+<tr><th>名前</th><th>スケジュール（JST）</th><th>中身</th><th>いつ有効になるか・メモ</th><th>費用の目安（月）</th><th>根拠</th></tr>
+<tr><td><code>KEIBA-HOST-POSTPROCESS</code><br>job_id <code>eve-precompute</code><br><span class="b mu">今後</span><br><span class="ev">id: host-eve-precompute</span></td><td class="when">毎日 19:10・19:40<br><code>10,40 19 * * *</code></td><td>前夜の計算（取得を VPS に渡した後の後処理）</td><td>段 6 で担当を VPS に渡すときに root で登録。担当が移っていなければ何もしない（crontab は UTC の 10,40 10 * * *）</td><td>0 円（ホストの中。GCS は目録 1 件など最小）</td><td class="ev"><code>scripts/cron/install_host_postprocess_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></td></tr>
+<tr><td><code>KEIBA-HOST-POSTPROCESS</code><br>job_id <code>track-speed-daily</code><br><span class="b mu">今後</span><br><span class="ev">id: host-track-speed-daily</span></td><td class="when">毎日 07:20<br><code>20 7 * * *</code></td><td>馬場速度の日次（取得を VPS に渡した後の後処理）</td><td>段 6 で登録。crontab は UTC の 20 22 * * *（JST は翌朝 07:20）</td><td>0 円（ホストの中。GCS は目録 1 件など最小）</td><td class="ev"><code>scripts/cron/install_host_postprocess_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></td></tr>
+<tr><td><code>KEIBA-HOST-POSTPROCESS</code><br>job_id <code>prediction-results-refresh</code><br><span class="b mu">今後</span><br><span class="ev">id: host-prediction-results-refresh</span></td><td class="when">土日月 21:50<br><code>50 21 * * 0,1,6</code></td><td>予測成績の集計（土日月。取得を VPS に渡した後の後処理）</td><td>段 6 で登録。crontab は UTC の 50 12 * * 0,1,6</td><td>0 円（ホストの中。GCS は目録 1 件など最小）</td><td class="ev"><code>scripts/cron/install_host_postprocess_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></td></tr>
+<tr><td><code>KEIBA-HOST-POSTPROCESS</code><br>job_id <code>weekly-finalize</code><br><span class="b mu">今後</span><br><span class="ev">id: host-weekly-finalize</span></td><td class="when">土日 毎時 07 分<br><code>7 * * * 6,0</code></td><td>週次の後処理（めぐ指数・PG 同期など。土 00:07〜月 08:07 の毎時）</td><td>段 6 で登録。crontab は UTC の 7 15-23 * * 5 と 7 * * * 6,0。一覧の予定は土日の毎時だけを書き、月曜 00:07〜08:07 の分は省いている（1 本の cron で書けないため）</td><td>0 円（ホストの中。GCS は目録 1 件など最小）</td><td class="ev"><code>scripts/cron/install_host_postprocess_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></td></tr>
+<tr><td><code>KEIBA-VPS-MIRROR-PULL</code><br>job_id <code>vps-mirror-pull-lists</code><br><span class="b mu">今後</span><br><span class="ev">id: host-vps-mirror-pull-lists</span></td><td class="when">5 分おき</td><td>VPS が上げたレース一覧・発走時刻表の取り込み（目録 1 件を読み、変わったファイルだけ取る）</td><td>段 6（段 1 の受け取り側）で登録</td><td>0 円（ホストの中。GCS は目録 1 件など最小）</td><td class="ev"><code>scripts/cron/install_vps_mirror_pull_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></td></tr>
 </table></div>
 <h3>廃止したもの</h3>
 <div class="scroll"><table>
@@ -395,20 +405,20 @@ ul.jobs { padding-left:18px; margin:6px 0; } ul.jobs > li { margin:10px 0; }
 <ul class="jobs"><li><b><code>day-prep</code></b>  — 開催日の朝: その日の全レースの日単位キャッシュ(state/&lt;日&gt;/v4_day.parquet・px_day.parquet)だけを作る。predict-race が state から読む（予測は作らない）<div class="kv">ステップ:<ol><li><code>python -m src.ops.jobs.day_prep --date {today}</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/inference/state</code>, <code>state/data/page_reference/tables</code>, <code>state/data/local/modeling/feature_store/horse_history</code>, <code>state/data/local/modeling/feature_store/serving_bundle</code>、ミラー <code>data/page_reference/race_lists</code>, <code>data/page_reference/race_day_schedule</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/inference/state</code></div><div class="ev">enabled=true・ready=true</div></div></li></ul>
 </div></details>
 <h3>ConoHa VPS（systemd のタイマー・常駐）</h3>
-<details id="job-vps-cache-warm"><summary><span class="b ok">稼働中</span> <b>keiba-cache-warm.timer</b> <span class="mu">— 60 秒おき・MemoryMax 128M</span><br><span class="sm">API のキャッシュの取り直し: 更新のあったレース・馬の API を nginx 経由で取り直す（660 秒後にもう 1 回）</span></summary>
+<details id="job-vps-cache-warm"><summary><span class="b ok">稼働中</span> <b>keiba-cache-warm.timer</b> <span class="mu">— 60 秒おき・MemoryMax 128M</span><br><span class="sm">API のキャッシュの取り直し: 合図（ops/cache_dirty/_beacon.json の世代）が変わったときなどだけ更新の目印を一覧し、更新のあったレース・馬の API を nginx 経由で取り直す（660 秒後にもう 1 回）</span></summary>
 <div class="dbody">
 <div><b>id</b>: <code>vps-cache-warm</code>（ConoHa VPS・systemd タイマー・重さ 軽い）</div>
 <div><b>名前</b>: timer <code>keiba-cache-warm.timer</code>・service <code>keiba-cache-warm.service</code></div>
 <div><b>スケジュール</b>: 60 秒おき</div>
 <div><b>入口</b>: <code>/opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/cache_warm.py</code></div>
 <div><b>取得先の URL の例</b>: <code>https://megu-keiba.com/api/v1/races/202605050811</code></div>
-<div><b>読む</b>: GCS ops/cache_dirty/（昨日以降を 1 回一覧）</div>
+<div><b>読む</b>: <ul><li>GCS ops/cache_dirty/_beacon.json（メタデータだけ・毎周）</li><li>GCS ops/cache_dirty/（合図が変わったとき最短 5 分・合図なし 10 分・安全網 30 分だけ一覧）</li></ul></div>
 <div><b>書く</b>: <ul><li>VPS の nginx の API キャッシュ（Cloud Run の API へ要求）</li><li>/var/lib/keiba-ui/cache-warm/state.json</li></ul></div>
 <div><b>メモリの枠</b>: MemoryMax 128M</div>
-<div><b>費用の目安（月）</b>: 一覧 1 日 1,440 回（Class A 月 約 35 円）＋転送 月 約 230 円</div>
+<div><b>費用の目安（月）</b>: 一覧 最悪 288 回/日・合図のメタデータ 1,440 回/日 ≒ 月 約 45 円（毎分の一覧だった 11/13 以前は 約 265 円）</div>
 <div><b>ホストでも同じ処理？</b>: 無い（ホストの事前生成の周回は egress_billed() で止めてある）</div>
-<div><b>根拠</b>: <span class="ev"><code>scripts/ops/vps/templates/keiba-cache-warm.timer</code>、<code>scripts/ops/vps/cache_warm.py:1-12</code>、<code>docs/operations/cost_ledger.md:155</code></span></div>
-<div><b>メモ</b>: 60 秒の細かさは要らない可能性が高い（点検 #2）</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/ops/vps/templates/keiba-cache-warm.timer</code>、<code>scripts/ops/vps/cache_warm.py:1-15・:330-332</code>、<code>docs/operations/cost_ledger.md:198-205</code></span></div>
+<div><b>メモ</b>: 2026-11-13 に合図方式へ入れ替え（05f35916）</div>
 </div></details>
 <details id="job-vps-release-pull-ui"><summary><span class="b ok">稼働中</span> <b>keiba-release-pull-ui.timer</b> <span class="mu">— 3 分おき・MemoryMax 150M</span><br><span class="sm">本番の画面の新しい版の取り込み（GCS の latest.json を読み、新しければ入れる）</span></summary>
 <div class="dbody">
@@ -606,13 +616,88 @@ ul.jobs { padding-left:18px; margin:6px 0; } ul.jobs > li { margin:10px 0; }
 <div><b>根拠</b>: <span class="ev"><code>src/ops/vps_alive.py</code>、<code>scripts/cron/install_vps_alive_cron.sh</code></span></div>
 <div><b>メモ</b>: 2026-11-13 18:4x JST に root の crontab へ登録（KEIBA-VPS-ALIVE）</div>
 </div></details>
+<details id="job-host-eve-precompute"><summary><span class="b mu">今後</span> <b>KEIBA-HOST-POSTPROCESS</b> <span class="mu">— 10,40 19 * * *（JST）</span><br><span class="sm">前夜の計算（取得を VPS に渡した後の後処理）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>host-eve-precompute</code>（ホスト・ホストの cron・重さ 中）</div>
+<div><b>名前</b>: cron_tag <code>KEIBA-HOST-POSTPROCESS</code>・job_id <code>eve-precompute</code></div>
+<div><b>スケジュール</b>: 毎日 19:10・19:40（<code>10,40 19 * * *</code>）</div>
+<div><b>入口</b>: <code>bash scripts/cron/install_host_postprocess_cron.sh</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: —</div>
+<div><b>費用の目安（月）</b>: 0 円（ホストの中。GCS は目録 1 件など最小）</div>
+<div><b>ホストでも同じ処理？</b>: —</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/cron/install_host_postprocess_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></span></div>
+<div><b>メモ</b>: 段 6 で担当を VPS に渡すときに root で登録。担当が移っていなければ何もしない（crontab は UTC の 10,40 10 * * *）</div>
+</div></details>
+<details id="job-host-track-speed-daily"><summary><span class="b mu">今後</span> <b>KEIBA-HOST-POSTPROCESS</b> <span class="mu">— 20 7 * * *（JST）</span><br><span class="sm">馬場速度の日次（取得を VPS に渡した後の後処理）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>host-track-speed-daily</code>（ホスト・ホストの cron・重さ 中）</div>
+<div><b>名前</b>: cron_tag <code>KEIBA-HOST-POSTPROCESS</code>・job_id <code>track-speed-daily</code></div>
+<div><b>スケジュール</b>: 毎日 07:20（<code>20 7 * * *</code>）</div>
+<div><b>入口</b>: <code>bash scripts/cron/install_host_postprocess_cron.sh</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: —</div>
+<div><b>費用の目安（月）</b>: 0 円（ホストの中。GCS は目録 1 件など最小）</div>
+<div><b>ホストでも同じ処理？</b>: —</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/cron/install_host_postprocess_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></span></div>
+<div><b>メモ</b>: 段 6 で登録。crontab は UTC の 20 22 * * *（JST は翌朝 07:20）</div>
+</div></details>
+<details id="job-host-prediction-results-refresh"><summary><span class="b mu">今後</span> <b>KEIBA-HOST-POSTPROCESS</b> <span class="mu">— 50 21 * * 0,1,6（JST）</span><br><span class="sm">予測成績の集計（土日月。取得を VPS に渡した後の後処理）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>host-prediction-results-refresh</code>（ホスト・ホストの cron・重さ 中）</div>
+<div><b>名前</b>: cron_tag <code>KEIBA-HOST-POSTPROCESS</code>・job_id <code>prediction-results-refresh</code></div>
+<div><b>スケジュール</b>: 土日月 21:50（<code>50 21 * * 0,1,6</code>）</div>
+<div><b>入口</b>: <code>bash scripts/cron/install_host_postprocess_cron.sh</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: —</div>
+<div><b>費用の目安（月）</b>: 0 円（ホストの中。GCS は目録 1 件など最小）</div>
+<div><b>ホストでも同じ処理？</b>: —</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/cron/install_host_postprocess_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></span></div>
+<div><b>メモ</b>: 段 6 で登録。crontab は UTC の 50 12 * * 0,1,6</div>
+</div></details>
+<details id="job-host-weekly-finalize"><summary><span class="b mu">今後</span> <b>KEIBA-HOST-POSTPROCESS</b> <span class="mu">— 7 * * * 6,0（JST）</span><br><span class="sm">週次の後処理（めぐ指数・PG 同期など。土 00:07〜月 08:07 の毎時）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>host-weekly-finalize</code>（ホスト・ホストの cron・重さ 中）</div>
+<div><b>名前</b>: cron_tag <code>KEIBA-HOST-POSTPROCESS</code>・job_id <code>weekly-finalize</code></div>
+<div><b>スケジュール</b>: 土日 毎時 07 分（<code>7 * * * 6,0</code>）</div>
+<div><b>入口</b>: <code>bash scripts/cron/install_host_postprocess_cron.sh</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: —</div>
+<div><b>費用の目安（月）</b>: 0 円（ホストの中。GCS は目録 1 件など最小）</div>
+<div><b>ホストでも同じ処理？</b>: —</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/cron/install_host_postprocess_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></span></div>
+<div><b>メモ</b>: 段 6 で登録。crontab は UTC の 7 15-23 * * 5 と 7 * * * 6,0。一覧の予定は土日の毎時だけを書き、月曜 00:07〜08:07 の分は省いている（1 本の cron で書けないため）</div>
+</div></details>
+<details id="job-host-vps-mirror-pull-lists"><summary><span class="b mu">今後</span> <b>KEIBA-VPS-MIRROR-PULL</b> <span class="mu">— 5 分おき</span><br><span class="sm">VPS が上げたレース一覧・発走時刻表の取り込み（目録 1 件を読み、変わったファイルだけ取る）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>host-vps-mirror-pull-lists</code>（ホスト・ホストの cron・重さ 中）</div>
+<div><b>名前</b>: cron_tag <code>KEIBA-VPS-MIRROR-PULL</code>・job_id <code>vps-mirror-pull-lists</code></div>
+<div><b>スケジュール</b>: 5 分おき</div>
+<div><b>入口</b>: <code>bash scripts/cron/install_vps_mirror_pull_cron.sh</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: —</div>
+<div><b>費用の目安（月）</b>: 0 円（ホストの中。GCS は目録 1 件など最小）</div>
+<div><b>ホストでも同じ処理？</b>: —</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/cron/install_vps_mirror_pull_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></span></div>
+<div><b>メモ</b>: 段 6（段 1 の受け取り側）で登録</div>
+</div></details>
 
 <h2 id="audit">設計上の点検</h2>
 <p class="sub">設計上の点検（2026-11-13）。「不要なもの」と「漏れているもの」。設定は変えていない（提案だけ）。費用に効くものは docs/operations/cost_ledger.md と突き合わせてから進める。重さは 高・中・低。</p>
 <div class="scroll"><table>
 <tr><th>#</th><th>重さ</th><th>種類</th><th>指摘</th><th>根拠</th><th>推奨</th><th>費用への影響</th><th>状態</th></tr>
-<tr><td>1</td><td class="bad">高</td><td>漏れ（監視）</td><td>VPS が丸ごと落ちても、外から気づく仕組みが無い。GCP の vps-watchdog（keiba-g-5min）は削除済みで、もとからハートビートが届かず blocked。VPS の keiba-heartbeat.timer は disabled。keiba-ui-health は VPS の中の自己診断なので、VPS 全体の停止・回線断は通知できない。<br>さらに、ハートビートを設計どおり有効にすると 5 分おきに Cloud Run（keiba-monitor）へ要求することになり、CLAUDE.md の「15 分未満の間隔で ping を足さない」に反する。</td><td class="ev">config/gcp_job_map.json:1966、ssh の list-unit-files（heartbeat.timer disabled）、scripts/ops/vps/healthcheck.sh</td><td>足す。費用 0 の案: ホストの cron から 15 分おきに VPS の静的な /version.json（Cloudflare 経由、Cloud Run を通らない）を確かめて Slack へ。ハートビートはこのままでは有効にしない。</td><td>0 円（ホスト → VPS の静的ファイル。GCP を通らない）</td><td>対応中: 監視の計画（ホストの cron で /version.json・VPS の sched_status・毎朝の点検）</td></tr>
-<tr><td>2</td><td class="bad">高</td><td>不要／見直し（費用）</td><td>VPS の keiba-cache-warm が 60 秒おきに GCS を一覧している（GCP の外から繰り返し読む。egress_billed() を見ていない）。目印は 1 日 300〜550 件で、60 秒の細かさは要らない可能性が高い。取り直しの要求は Cloud Run の API の起動にもなる。</td><td class="ev">scripts/ops/vps/cache_warm.py:254-261、docs/operations/cost_ledger.md:155</td><td>見直す（間隔を 10〜15 分に、一覧の fields を絞る、など）。台帳と突き合わせ。</td><td>今 月 約 265 円（一覧 35＋転送 230）。15 分おきなら 1/15 前後</td><td>—</td></tr>
+<tr><td>1</td><td class="bad">高</td><td>漏れ（監視）</td><td>VPS が丸ごと落ちても、外から気づく仕組みが無い。GCP の vps-watchdog（keiba-g-5min）は削除済みで、もとからハートビートが届かず blocked。VPS の keiba-heartbeat.timer は disabled。keiba-ui-health は VPS の中の自己診断なので、VPS 全体の停止・回線断は通知できない。<br>さらに、ハートビートを設計どおり有効にすると 5 分おきに Cloud Run（keiba-monitor）へ要求することになり、CLAUDE.md の「15 分未満の間隔で ping を足さない」に反する。</td><td class="ev">config/gcp_job_map.json:1966、ssh の list-unit-files（heartbeat.timer disabled）、scripts/ops/vps/healthcheck.sh</td><td>足す。費用 0 の案: ホストの cron から 15 分おきに VPS の静的な /version.json（Cloudflare 経由、Cloud Run を通らない）を確かめて Slack へ。ハートビートはこのままでは有効にしない。</td><td>0 円（ホスト → VPS の静的ファイル。GCP を通らない）</td><td>対応済み（一部）: ホストの cron で公開の /version.json を 15 分おきに確認（KEIBA-VPS-ALIVE、11/13 登録）。VPS の見張り keiba-sched-status・毎朝の点検は配備待ち</td></tr>
+<tr><td>2</td><td class="bad">高</td><td>不要／見直し（費用）</td><td>VPS の keiba-cache-warm が 60 秒おきに GCS を一覧している（GCP の外から繰り返し読む。egress_billed() を見ていない）。目印は 1 日 300〜550 件で、60 秒の細かさは要らない可能性が高い。取り直しの要求は Cloud Run の API の起動にもなる。</td><td class="ev">scripts/ops/vps/cache_warm.py:254-261、docs/operations/cost_ledger.md:155</td><td>見直す（間隔を 10〜15 分に、一覧の fields を絞る、など）。台帳と突き合わせ。</td><td>今 月 約 265 円（一覧 35＋転送 230）。15 分おきなら 1/15 前後</td><td>対応済み: 合図方式に入れ替え（05f35916、11/13 配備）。一覧は最悪 288 回/日・月 約 45 円</td></tr>
 <tr><td>3</td><td class="ok">対応済み</td><td>不要（費用）</td><td>取得の実行役 keiba-fetch-agent が担当なしで常駐し、影モードで GCS のタスク表を毎分 6 回一覧していた。11/13 15:00:58 に停止・無効にした（別のセッション、dda6af55）。</td><td class="ev">ssh（enabled）、config/fetch_owner.json（agent_tasks 空）、docs/operations/cost_ledger.md:177</td><td>止めたまま。段 6 で file にしてから再開する。台帳と突き合わせ（e2b534b4 で反映済み）。</td><td>月 約 −210 円＋転送</td><td>—</td></tr>
 <tr><td>4</td><td class="warn">中</td><td>見直し（費用の歯止め）</td><td>費用の歯止め cost_guard の「止める」対象が 0 件になった。止めるのは keiba-g- の Scheduler（KEEP 以外）だけで、13 件の削除後は通知だけの仕組み。今の大きな項目（GCS の外への転送 G4、cache_warm）は止められない。</td><td class="ev">src/ops/cost_guard.py:38-39・:140-142、ホストの cron（10:17・22:17）、docs/operations/cost_ledger.md:86（G4）</td><td>様子見（通知は残す）。止める対象を VPS の周期処理（cache_warm など）に広げるかは別に検討。台帳と突き合わせ。</td><td>直接は 0。超過に気づけないと大きい</td><td>—</td></tr>
 <tr><td>5</td><td class="warn">中</td><td>不要（ホストの残り）</td><td>job_map で廃止・無効にしたものがホストの cron に残っている: sync_pg_from_gcs（毎日 00:00）・ensure_postgres（5 分おき）・sporthorse-births-nightly（毎日 22:00）は retire。serving-state-precompute（07:35）・-profile（08:10）は「day-prep に置き換え」で無効。<br>ただし day-prep は GCP だけ（削除済み）なので、ホストの予測が serving-state を使っているなら残す必要がある（推測）。</td><td class="ev">config/gcp_job_map.json:3727・:3744・:3608・:504・:659、ホストの crontab</td><td>中身を確かめてから: PG・誕生日は消す候補、serving-state は使い道を確かめて job_map を直す。GCS を読む分は台帳と突き合わせ。</td><td>未測定（sync_pg_from_gcs はホストから GCS を読むので転送料になりうる）</td><td>—</td></tr>
@@ -623,6 +708,6 @@ ul.jobs { padding-left:18px; margin:6px 0; } ul.jobs > li { margin:10px 0; }
 <tr><td>10</td><td class="mu">低</td><td>漏れの確認</td><td>どこでも定期に動いていないもの: sire-line（job_map はホスト担当だが crontab に行が無い）、めぐコラムの作り直し（src/research/columns/。手動の運用とみられる）、バックアップの類（GCS が正本で、定期の退避は見当たらない）。<br>走法の軸（run_axes）とめぐ分析の事前計算は、ホストの毎朝の書き出しの中で動いている（漏れではない）。</td><td class="ev">config/gcp_job_map.json:3078、scripts/cron/export_tables_daily.sh:46・:48</td><td>要確認（定期にすべきかを決める）</td><td>—</td><td>—</td></tr>
 <tr><td>11</td><td class="warn">低〜中</td><td>食い違い（時刻）</td><td>共通ログインの更新の時刻が 9 時間ずれている可能性。ホストの crontab は 5 0 * * *（crontab は UTC なので JST 09:05 に起動）。一方、src/scripts/ops/shared_login.py の説明は「毎日 00:05 JST」、job_map の origin.cron_utc は 5 15 * * *。行頭の TZ=Asia/Tokyo はコマンドの環境にしか効かず、起動の時刻は変わらない。毎月 1 日のパスワードの更新が 09:05 になっているとみられる。</td><td class="ev">ホストの crontab、src/scripts/ops/shared_login.py:3、config/gcp_job_map.json:3761</td><td>様子見・要確認（00:05 にしたいなら crontab を 5 15 * * * に）</td><td>0</td><td>—</td></tr>
 </table></div>
-<p class="muted">確認済みで問題なし: 天気の取得はホストの crontab から外れている（jma の行なし）。ホストの crontab に重複した行は無い。</p>
+<p class="muted">確認済みで問題なし: 天気の取得はホストの crontab から外れている（jma の行なし）。注意: root の crontab では、同じ見出しのコメント（「# 時刻はすべて UTC で記述」など 12 種）が 13 回ずつ、PATH= の行が 4 回重複している（2026-11-13 夜に読むだけで確認。整理の対象）。</p>
 </main></body>
 </html>

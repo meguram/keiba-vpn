@@ -130,9 +130,11 @@ if [ "$ENABLE_AGENT" = 1 ]; then
 else say "  取得の実行役は有効化しません（--enable-fetch-agent で。既定はホスト cron のまま）"; fi
 # 定期実行の見張り（15 分おき・GCS の ops/heartbeat/vps/status.json に書くだけ。Cloud Run を起こさない）。
 # 取得の実行役のコード（current）・venv・GCS の設定がそろっていれば、実行役を止めていても有効にする（見張りは取得をしない）
-if [ -L /opt/keiba-fetch/current ] && [ -x /opt/keiba-fetch/venv/bin/python ] && filled /etc/keiba-fetch/fetch.env GCS_BUCKET; then
+# 今の版に見張りのコードと一覧が入っていることも条件（古い版で有効にすると毎回 import に失敗する）
+if [ -L /opt/keiba-fetch/current ] && [ -x /opt/keiba-fetch/venv/bin/python ] && filled /etc/keiba-fetch/fetch.env GCS_BUCKET \
+   && [ -f /opt/keiba-fetch/current/src/ops/sched_status.py ] && [ -f /opt/keiba-fetch/current/config/scheduled_jobs.json ]; then
   run install -d -m 755 -o keibafetch -g keibafetch /var/lib/keiba-fetch/sched_status
   run systemctl enable --now keiba-sched-status.timer
-else say "  定期実行の見張り: current・venv・fetch.env の GCS_BUCKET がそろっていないため有効化しません"; fi
+else say "  定期実行の見張り: current（sched_status.py・scheduled_jobs.json を含む版）・venv・fetch.env の GCS_BUCKET がそろっていないため有効化しません"; fi
 [ "$DRY" = 1 ] || { systemctl list-timers --no-pager 2>/dev/null | grep -E "keiba|NEXT" || true; }
 say "完了"

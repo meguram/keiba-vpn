@@ -68,3 +68,10 @@ def test_vps_record_carries_its_own_time_and_errors():
     io.put_bytes("ops/heartbeat/vps/status.json", json.dumps({"written_at": NOW - 1800, "jobs": {}, "error": "systemctl show が失敗"}).encode())
     s = S.gather(io, REG, MAP, api=Api({}), now=NOW)["sources"]["vps"]
     assert s["as_of"] == NOW - 1800 and "systemd を読めない" in s["error"]
+
+
+def test_missing_vps_slack_destination_is_shown():
+    io = MemoryIO()
+    io.put_bytes("ops/heartbeat/vps/status.json", json.dumps({"written_at": NOW - 60, "jobs": {}, "slack": "未設定"}).encode())
+    notes = S.gather(io, REG, MAP, api=Api({}), now=NOW)["notes"]
+    assert notes and "Slack の宛先が未設定" in notes[0]

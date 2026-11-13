@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 REGION = "asia-northeast1"
+JST = timezone(timedelta(hours=9))
 VPS_OBJECT = "ops/heartbeat/vps/status.json"
 
 
@@ -96,6 +97,7 @@ def gather(io: Any, reg: dict[str, Any], job_map: dict[str, Any], *, api: Any = 
     sources: dict[str, dict[str, Any]] = {}
     unregistered: list[dict[str, Any]] = []
     inner: dict[str, list[dict[str, Any]]] = {}
+    notes: list[str] = []
     jobs = reg["jobs"]
 
     # VPS
@@ -104,6 +106,10 @@ def gather(io: Any, reg: dict[str, Any], job_map: dict[str, Any], *, api: Any = 
         sources["vps"] = {"seen_at": vps.get("written_at"), "as_of": vps.get("written_at")}
         if vps.get("error"):
             sources["vps"]["error"] = f"VPS の見張りが systemd を読めない: {str(vps['error'])[:120]}"
+        fresh = vps.get("written_at") and now - float(vps["written_at"]) <= 45 * 60
+        if fresh and vps.get("slack") == "未設定":   # 古い記録の値は出さない（見張りが止まっていれば別に「途絶」が出る）
+            when = datetime.fromtimestamp(float(vps["written_at"]), JST).strftime("%m/%d %H:%M")
+            notes.append(f"VPS の見張りの Slack の宛先が未設定（{when} の記録。/etc/keiba-ui/slack.env が無い）。赤になっても VPS からの即時の通知は鳴りません")
         for jid, o in (vps.get("jobs") or {}).items():
             obs[jid] = o
     else:
@@ -166,7 +172,7 @@ def gather(io: Any, reg: dict[str, Any], job_map: dict[str, Any], *, api: Any = 
             bad = [r for r in rows if r["status"] in BAD and (_iso(r["started_at"]) or 0) >= last["start"] - 120 and (_iso(r["started_at"]) or 0) <= hi]
             if bad and last.get("end") is not None:
                 last["ok"] = False
-    return {"obs": obs, "sources": sources, "unregistered": unregistered, "inner": inner}
+    return {"obs": obs, "sources": sources, "unregistered": unregistered, "inner": inner, "notes": notes}
 
 
 def build_view(io: Any, *, now: float, api: Any = None, reg: dict[str, Any] | None = None, job_map: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -189,4 +195,5 @@ def build_view(io: Any, *, now: float, api: Any = None, reg: dict[str, Any] | No
     order = {"red": 0, "yellow": 1, "unknown": 2, "green": 3, "gray": 4}
     rows.sort(key=lambda x: ({"gcp": 0, "vps": 1, "host": 2}[x["job"]["where"]], order.get(x["level"], 9), x["job"]["id"]))
     return {"overall": res["overall"], "label": res["label"], "counts": res["counts"], "alerts": res["alerts"], "rows": rows, "sources": g["sources"],
+            "notes": g["notes"],
             "result": res}

@@ -28,6 +28,7 @@ def run(io: Any = None, *, now: float | None = None, api: Any = None, notify: An
     v = schedule_sources.build_view(io, now=now, api=api)
     reds = R.red_keys(v["result"])
     blind = [a["title"] for a in v["alerts"] if a["level"] == "unknown"]   # 読めない場所（権限なし・API の失敗）も黙って終えない
+    blind += list(v.get("notes") or [])   # VPS の見張りの Slack の宛先が未設定など、気づかないと困る設定の抜け
     out = {"overall": v["overall"], "counts": v["counts"], "red": list(reds.values()), "blind": blind, "sent": False}
     if (reds or blind) and not dry_run:
         if notify is None:

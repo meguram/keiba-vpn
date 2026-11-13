@@ -166,6 +166,7 @@ def run_once(*, now: float | None = None, read: Any = None, write: Any = write_g
     obs = observe(jobs, units, st.setdefault("runs", {}), now)
     res = R.evaluate(jobs, obs, now, sources={"vps": {"seen_at": now}})
     doc = {"v": 1, "written_at": now, "host": "vps", "jobs": obs,
+           "slack": "設定済み" if os.environ.get("SLACK_WEBHOOK_URL") else "未設定",   # 宛先が無いと即時の通知が鳴らない（画面に出す）
            "result": {"overall": res["overall"], "counts": res["counts"], "rows": [{k: r[k] for k in ("id", "level", "reasons")} for r in res["rows"]]}}
     out = {"overall": res["overall"], "counts": res["counts"], "gcs_error": None, "sent": [], "recovered": []}
     if dry_run:
