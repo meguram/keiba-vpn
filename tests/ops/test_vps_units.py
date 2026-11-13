@@ -149,7 +149,7 @@ def test_build_release_has_env_label_with_prod_default():
     assert '"env":"prod"' not in text and "--env prod" not in text           # 固定の prod は残さない
 
 
-def test_pull_sa_setup_is_least_privilege_and_creates_no_key_by_default():
+def test_pull_sa_setup_is_least_privilege_and_creates_no_key_by_default(tmp_path):
     env = {**os.environ, "PROJECT_ID": "p1", "GCS_BUCKET": "b1"}
     r = subprocess.run(["bash", str(ROOT_DIR / "scripts/gcp/setup_pull_sa.sh")], env=env, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
@@ -157,8 +157,9 @@ def test_pull_sa_setup_is_least_privilege_and_creates_no_key_by_default():
     assert "[dry]" in out and "keys create" not in out                                  # 既定は表示のみ。鍵は --make-key のときだけ
     assert "roles/storage.objectViewer" in out and "objects/ops/releases/" in out
     assert "endsWith" in out and "/applied/vps.json" in out                            # 書き込めるのは取り込み結果の報告だけ
-    k = subprocess.run(["bash", str(ROOT_DIR / "scripts/gcp/setup_pull_sa.sh"), "--make-key", "/tmp/x.json"], env=env, capture_output=True, text=True)
-    assert "keys create /tmp/x.json" in k.stdout.replace("\\", "") and not Path("/tmp/x.json").exists()      # --apply なしでは作らない
+    key = tmp_path / "x.json"                                       # 共有の /tmp の同名ファイルに左右されないよう、テストごとの場所にする
+    k = subprocess.run(["bash", str(ROOT_DIR / "scripts/gcp/setup_pull_sa.sh"), "--make-key", str(key)], env=env, capture_output=True, text=True)
+    assert f"keys create {key}" in k.stdout.replace("\\", "") and not key.exists()      # --apply なしでは作らない
 
 
 # ── 監視ポータルの VPS 側の入口 ──
