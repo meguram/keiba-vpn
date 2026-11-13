@@ -12,8 +12,11 @@ netkeiba のログイン情報など秘密は、タスクにもタスクの結�
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
+import uuid
+from pathlib import Path
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
@@ -257,6 +260,87 @@ class GcsTaskStore:
         return sorted(b.name for b in self._bucket.list_blobs(prefix=prefix))
 
 
+class FileTaskStore:
+    """VPS のローカルのディレクトリに置く実装（GCS を使わない。2026-11: 取得を VPS の中だけで完結させる方針）。
+
+    キーはそのまま ``root/<key>`` のパス。create は ``O_CREAT|O_EXCL`` の一時ファイルを書いてから ``os.link`` で置く
+    （既にあれば False。途中のファイルが見えない）。世代は mtime_ns（TaskQueue は create の排他だけに頼るので十分）。"""
+
+    def __init__(self, root: str | Path) -> None:
+        self.root = Path(root)
+        self.root.mkdir(parents=True, exist_ok=True)
+
+    def _path(self, key: str) -> Path:
+        if key.startswith("/") or ".." in Path(key).parts:
+            raise TaskError(f"不正なキー: {key}")
+        return self.root / key
+
+    def get(self, key: str) -> tuple[str, int] | None:
+        p = self._path(key)
+        try:
+            return p.read_text(encoding="utf-8"), p.stat().st_mtime_ns
+        except FileNotFoundError:
+            return None
+
+    def create(self, key: str, text: str) -> bool:
+        p = self._path(key)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.parent / f".{p.name}.{uuid.uuid4().hex}.tmp"          # 名前は毎回ちがう（クラッシュで残った .tmp とぶつからない）
+        fd = os.open(tmp, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o640)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(text)
+                f.flush()
+                os.fsync(f.fileno())                                      # 電源断で中身の無いファイルが link されないように
+            try:
+                os.link(tmp, p)
+                return True
+            except FileExistsError:
+                return False
+        finally:
+            tmp.unlink(missing_ok=True)
+
+    def delete(self, key: str) -> bool:
+        try:
+            self._path(key).unlink()
+            return True
+        except FileNotFoundError:
+            return False
+
+    def list(self, prefix: str) -> list[str]:
+        # prefix は「…/状態/」のようなディレクトリか、ファイル名の頭。どちらにも対応する（空なら root 全体）
+        if prefix.endswith("/"):
+            d = self._path(prefix)
+        elif "/" in prefix:
+            d = self._path(prefix).parent
+        else:
+            d = self.root
+        if not d.is_dir():
+            return []
+        out = []
+        for p in d.rglob("*"):
+            if p.is_file() and not p.name.startswith("."):
+                k = p.relative_to(self.root).as_posix()
+                if k.startswith(prefix):
+                    out.append(k)
+        return sorted(out)
+
+
+DEFAULT_TASK_DIR = "/var/lib/keiba-fetch/tasks"
+
+
+def task_store_from_env(env: dict[str, str] | None = None) -> TaskStore:
+    """``KEIBA_FETCH_TASK_STORE``: ``file``（VPS のローカル。置き場所は ``KEIBA_FETCH_TASK_DIR``、既定 /var/lib/keiba-fetch/tasks）
+    か ``gcs``（既定。GCS_BUCKET の ops/fetch_tasks/）。VPS の中だけで取得するときは file にする（GCP との連携を使わない）。"""
+    e = os.environ if env is None else env
+    kind = (e.get("KEIBA_FETCH_TASK_STORE") or "gcs").strip().lower()
+    if kind == "file":
+        return FileTaskStore(e.get("KEIBA_FETCH_TASK_DIR") or DEFAULT_TASK_DIR)
+    if kind != "gcs":
+        raise TaskError(f"KEIBA_FETCH_TASK_STORE が不正: {kind}（file か gcs）")
+    return GcsTaskStore((e.get("GCS_BUCKET") or "").strip())
+
+
 # --- キュー操作 --------------------------------------------------------------------------------
 def key_of(state: str, task_id: str) -> str:
     if state not in STATES:
@@ -287,7 +371,12 @@ class TaskQueue:
 
     def load(self, state: str, task_id: str) -> FetchTask | None:
         got = self.store.get(key_of(state, task_id))
-        return FetchTask.from_json(got[0]) if got else None
+        if not got:
+            return None
+        try:
+            return FetchTask.from_json(got[0])
+        except (ValueError, TypeError):
+            return None          # 壊れたファイル（途中で止まった書き込みなど）で実行役を止めない。中身は人が確かめる
 
     def list_ids(self, state: str) -> list[str]:
         return [_id_of(k) for k in self.store.list(f"{PREFIX}/{state}/")]

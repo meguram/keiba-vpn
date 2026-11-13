@@ -1,0 +1,29 @@
+[Unit]
+Description=keiba 開催日のレースごとの取得の予約（%i の開催日。オッズ・馬体重・速報。GCP を使わない）
+After=network-online.target
+Wants=network-online.target
+# %i は today か tomorrow（JST）。発走時刻表（race_day_schedule、無ければ race_lists と出馬表）を GCS から読み、
+# レースごとのタスクを VPS のローカルのタスク表に積む。予測の Cloud Tasks は積まない（--no-predict。予測はホストが出馬表から判断する）
+# 開催日でなければ時刻表が空なので何も積まない。task_id は決定的なので、2 回動いても二重にならない
+
+[Service]
+Type=oneshot
+Slice=keiba-fetch.slice
+User=keibafetch
+Group=keibafetch
+WorkingDirectory=/opt/keiba-fetch/current
+EnvironmentFile=/etc/keiba-fetch/fetch.env
+Environment=KEIBA_ENV=prod KEIBA_RUN_LOCATION=vps PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+# タスク表は必ずローカル（EnvironmentFile の値は Environment= より優先されるので、ExecStart で上書きして GCS のタスク表に書かない）
+ExecStart=/usr/bin/env KEIBA_FETCH_TASK_STORE=file KEIBA_FETCH_TASK_DIR=/var/lib/keiba-fetch/tasks /opt/keiba-fetch/venv/bin/python -m src.ops.reservations race-day --date %i --no-predict
+TimeoutStartSec=600
+# 実測のピーク（2026-11-13）: 定期の予約 27MB、開催日の予約 66MB。取得役と同じ slice（250M）で重なっても収まるように小さく取る
+OOMScoreAdjust=500
+MemoryHigh=100M
+MemoryMax=120M
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/keiba-fetch
+SyslogIdentifier=keiba-fetch-raceday

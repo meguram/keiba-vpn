@@ -1,0 +1,11 @@
+[Unit]
+Description=keiba 取得の予約（定期）— 毎時 50 分（先 6 時間分を冪等に積む）
+
+[Timer]
+OnCalendar=*-*-* *:50:00
+RandomizedDelaySec=60
+Persistent=true
+Unit=keiba-fetch-reserve.service
+
+[Install]
+WantedBy=timers.target

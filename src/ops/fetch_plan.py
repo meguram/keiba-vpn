@@ -68,7 +68,7 @@ def _queue() -> ft.TaskQueue:
     from dotenv import load_dotenv
 
     load_dotenv()
-    return ft.TaskQueue(ft.GcsTaskStore(os.environ.get("GCS_BUCKET", "")))
+    return ft.TaskQueue(ft.task_store_from_env())        # KEIBA_FETCH_TASK_STORE=file なら VPS のローカル（実行役と同じタスク表）
 
 
 def _load_schedule(date_ymd: str) -> list[dict[str, Any]]:
