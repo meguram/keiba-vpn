@@ -14,6 +14,15 @@
   ランナーは取得をせず保存済みのデータで後処理（レース前の予測・馬体重の判定と予測・馬場速度と成績の集計）だけをする。
   今は担当（`config/fetch_owner.json` の agent_tasks）が空なので、どれも動き方は変わらない。
 
+## 2026-11-13: VPS の取得役を一時停止
+- 理由: 担当（agent_tasks）が空なのに、影モードの実行役が GCS のタスク表（ops/fetch_tasks・ops/fetch_tasks_shadow の各状態）を毎分 6 回一覧していた
+  （1 日 8,640 回・月 約 210 円＋転送。GCS の監査ログで見つけた）。本番の取得はホストなので、止めても影響は無い。
+- 操作（ユーザー承認）: 15:00:58 JST に `sudo /opt/keiba-ui/bin/fetch_agent_ctl.sh shadow-off`（deploy ユーザー、パスワード不要の決められた操作）。
+  keiba-fetch-agent を stop・disable し、fetch.env の KEIBA_FETCH_SHADOW_ENABLED を 0 にした。ほかのユニット（画面・キャッシュの温め・配備の取り込み）は触っていない。
+  停止前: enabled/active、KEIBA_FETCH_AGENT_ENABLED=1・KEIBA_FETCH_SHADOW_ENABLED=1、版 fetch-b316ae59。
+- 再開: 段 6 で、VPS の fetch.env に KEIBA_FETCH_TASK_STORE=file を入れ（タスク表を VPS のローカルにする。GCS の一覧は 0 件になる。
+  tests/ops/test_fetch_local_store.py で確認）、第 1 段・第 2 段のコードを配備してから、`fetch_agent_ctl.sh shadow-on` か vps_03_units.sh で有効にする。
+
 ## 第 2 段（2026-11-13〜）
 計画: 段 1 受け渡し → 段 2 T-15 の保存の確認 → 段 3 ホストのキャッシュの鮮度 → 段 4 後処理の分離 → 段 5 馬の成績の毎日の取得 → 段 6 配備と段階的な受け渡し。
 
@@ -64,7 +73,7 @@
 6. GCP 側（停止中）の `requires_fetch_done`・`vps_watchdog` は GCS のタスク表を見ている。GCP Jobs を再開する場合は合わせて見直す。
 
 ## 費用の見積もり（CLAUDE.md の決まり。最悪の回数で）
-- 減る: VPS の 60 秒おきの GCS のタスク表の一覧（prod と影で月 約 8.6 万回）→ 0。月 約 −150 円。
+- 減る: VPS の GCS のタスク表の一覧 → 0。実測（2026-11-13、GCS の監査ログ）は、担当が空でも影モードで毎分 6 回（1 日 8,640 回・月 約 26 万回）、一覧だけで月 約 210 円＋応答の転送。最初の見積もり（月 約 8.6 万回・−150 円）の約 3 倍だった。
 - 予約（VPS）: 開催日の時刻表・出馬表を読む。1 日 数十件 × 約 6KB。月 1 円未満。
 - ホストの馬体重の判定（取得しないモード）: GCS の出馬表を 90 秒おきに読み直す。1 日最大 36 レース × 24 回 × 約 10KB
   ≒ 864 回・8.6MB。× 30 日（最悪）＝ 月 約 2.6 万回・260MB → Class B 約 1.6 円 + 転送 約 4.6 円 ≒ 月 6 円。

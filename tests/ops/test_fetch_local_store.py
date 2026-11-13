@@ -106,3 +106,20 @@ def test_vps_reserve_units_use_local_store_and_fit_in_slice():
     assert _unit("keiba-fetch-raceday-tomorrow.timer")["Timer"]["Persistent"] == "false"     # 0 時を過ぎた取り戻しで翌々日を予約しない
     assert _unit("keiba-fetch-raceday-today.timer")["Timer"]["Unit"] == "keiba-fetch-raceday@today.service"
     assert _unit("keiba-fetch-reserve.timer")["Timer"]["OnCalendar"] == "*-*-* *:50:00"
+
+
+def test_agent_with_file_store_never_touches_gcs_even_in_shadow_mode(tmp_path, monkeypatch, capsys):
+    """2026-11-13: 担当が空でも、影モードの実行役が GCS のタスク表を毎分 6 回一覧していた（月 約 210 円）。
+    タスク表をローカル（file）にすれば、影モードでも GCS のタスク表には一切触れない。"""
+    from src.ops import fetch_agent as FA
+
+    def no_gcs(*a, **k):
+        raise AssertionError("file モードで GCS のタスク表を作った")
+
+    monkeypatch.setattr(FT, "GcsTaskStore", no_gcs)
+    for k, v in {"KEIBA_FETCH_TASK_STORE": "file", "KEIBA_FETCH_TASK_DIR": str(tmp_path / "tasks"), "KEIBA_FETCH_AGENT_ENABLED": "1",
+                 "KEIBA_FETCH_AGENT_TASKS": "entries-sync", "KEIBA_FETCH_SHADOW_ENABLED": "1",
+                 "KEIBA_FETCH_SHADOW_STATE_DIR": str(tmp_path / "shadow")}.items():
+        monkeypatch.setenv(k, v)
+    assert FA.main(["--dry-run"]) == 0
+    assert (tmp_path / "tasks").is_dir()
