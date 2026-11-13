@@ -1147,10 +1147,19 @@ def _trigger_track_speed_for_date(date_str: str) -> None:
 
     logger.info("[馬場速度] flat parquet 増分更新開始 (%s / race_result)", year)
     try:
-        from src.scraper.export_tables import export_category_chunked
+        from datetime import date as _date
+
+        from src.scraper.export_tables import export_category_chunked, local_universe
         from src.scraper.storage import HybridStorage
         storage = HybridStorage()
-        result = export_category_chunked(year, "race_result", storage)
+        # その日のレースだけを名前で読む（GCS の全件一覧は取らない。2026-11-13 まで当年の race_result を毎回一覧していた）。
+        # 母集合はローカルの race_lists と出馬表・速報・確定結果の flat（欠けた回は 01〜12R を補う）
+        day = _date(int(date_fmt[:4]), int(date_fmt[4:6]), int(date_fmt[6:8]))
+        keys = sorted(r for r, d in local_universe(year, day, "all").items() if d == day.isoformat())
+        if not keys:
+            logger.info("[馬場速度] %s のレースがローカルの記録に無いので、flat の更新を飛ばす", date_fmt)
+        result = export_category_chunked(year, "race_result", storage, keys=keys) if keys else {"skipped": True, "reason": "その日のレースなし"}
+        result.pop("missing_keys", None)
         flat_rows = result.get("flat_rows", -1)
         skipped = result.get("skipped", False)
         if skipped:
