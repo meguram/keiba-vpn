@@ -86,7 +86,14 @@ def run_job_commands(doc: dict[str, Any], st: dict[str, str], *, parallel: bool)
     return out
 
 
+def group_is_retired(doc: dict[str, Any], gid: str) -> bool:
+    """費用などの理由で Scheduler を消したグループ（scheduler_groups[gid].retired に理由）。作り直さない。"""
+    return bool(doc["scheduler_groups"][gid].get("retired"))
+
+
 def group_is_ready(doc: dict[str, Any], gid: str) -> bool:
+    if group_is_retired(doc, gid):
+        return False
     ids = doc["scheduler_groups"][gid]["jobs"]
     return any((j := job_map.job_by_id(i, doc)) and j.get("ready") and j.get("enabled", True) for i in ids)
 
@@ -94,6 +101,12 @@ def group_is_ready(doc: dict[str, Any], gid: str) -> bool:
 def scheduler_commands(doc: dict[str, Any], st: dict[str, str], *, include_unready: bool = False) -> list[str]:
     out = []
     for gid, g in doc["scheduler_groups"].items():
+        if group_is_retired(doc, gid):
+            # 2026-11-13: master への昇格（promote.yml → deploy_gcp.sh jobs → deploy_cloud_run_jobs.sh apply scheduler）のたびに、
+            # 消した Scheduler を「無ければ create」で作り直していた。retired のグループは --include-unready でも出さない
+            reason = (str(g["retired"]).splitlines() or [""])[0][:80]      # コメントの行に収める（改行を入れない）
+            out.append(f"# {gid}: 廃止（retired）なので作らない: {reason}")
+            continue
         if not include_unready and not group_is_ready(doc, gid):
             out.append(f"# {gid}: 準備できたジョブが無いので作らない（{', '.join(g['jobs'])}）")
             continue

@@ -86,6 +86,32 @@ def mark(key: str, reason: str = "") -> bool:
         return False
 
 
+# VPS の温め役（scripts/ops/vps/cache_warm.py）は、毎分この合図のメタデータ（世代）だけを見て、変わったときだけ目印を一覧する
+# （GCP の外から毎分一覧すると月 約 265 円かかっていた。2026-11-13）。合図は push と配備のときだけ書く（保存ごとに書くと
+# 最悪 月 13 万回・約 100 円になる）。保存ごとの目印は、温め役の安全網（30 分おきの一覧）で拾う。
+BEACON_KEY = f"{PREFIX}/_beacon.json"
+
+
+def touch_beacon(reason: str = "") -> bool:
+    """合図を上書きする（1 プロセスで 60 秒に 1 回まで）。間引いた分は『書き残し』として覚え、次の呼び出しで書く
+    （同じプロセスで 60 秒以内に続いた push・配備の目印が、安全網の 30 分まで温まらないのを防ぐ）。失敗しても例外は出さない。"""
+    try:
+        if not enabled():
+            return False
+        now = time.monotonic()
+        with _lock:
+            if now - _last.get("\0beacon", -1e9) < _DEDUPE_SEC:
+                _last["\0beacon_pending"] = 1.0
+                return False
+            _last["\0beacon"] = now
+            _last.pop("\0beacon_pending", None)
+        _put(BEACON_KEY, json.dumps({"at": time.time(), "reason": reason[:80]}, ensure_ascii=False).encode("utf-8"))
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("キャッシュの合図を置けません（VPS の温めが最大 30 分遅れる）: %s", exc)
+        return False
+
+
 def mark_from_save(category: str, key: str) -> bool:
     """``HybridStorage.save`` から呼ぶ。画面に関わるカテゴリの race_id / 開催日キー、馬のカテゴリの馬 ID だけ目印にする。"""
     from src.utils.cache_epoch import UI_CATEGORIES
@@ -98,8 +124,11 @@ def mark_from_save(category: str, key: str) -> bool:
 
 
 def mark_all(reason: str = "") -> bool:
-    """配備・手動クリアなど『全体を取り直したい』ときの目印。"""
-    return mark(ALL_KEY, reason)
+    """配備・手動クリアなど『全体を取り直したい』ときの目印。置いたら合図も上書きする。"""
+    ok = mark(ALL_KEY, reason)
+    if ok:
+        touch_beacon(f"all:{reason}")
+    return ok
 
 
 def keys_from_paths(rels: list[str] | tuple[str, ...]) -> tuple[list[str], list[str]]:
@@ -134,4 +163,6 @@ def mark_from_paths(rels: list[str] | tuple[str, ...]) -> int:
     n = 0
     for k in races + dates:
         n += 1 if mark(k, "mirror") else 0
+    if n or _last.get("\0beacon_pending"):
+        touch_beacon("mirror")
     return n

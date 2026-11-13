@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>重賞のルールベース予想家 — keiba-vpn</title><style>:root { --bg:#0f172a; --panel:#15213c; --border:#243358; --text:#e6ecff; --muted:#9aa7c7; --accent:#4f8bff; --accent-2:#7aa9ff; --warn:#fbbf24; }
+* { box-sizing: border-box; } body { font-family: "Noto Sans JP", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.8; font-size: 15px; padding: 40px 56px 96px; max-width: 1100px; margin: 0 auto; }
+a { color: var(--accent-2); } h1 { font-size: 26px; } h2 { font-size: 20px; margin: 40px 0 12px; border-left: 4px solid var(--accent); padding-left: 12px; } h3 { font-size: 16px; margin: 22px 0 8px; }
+table { border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; background: var(--panel); } th, td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; vertical-align: top; } th { background: #1b2a4d; }
+td.num { text-align: right; font-family: monospace; } .muted { color: var(--muted); font-size: 13px; } .note { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }</style></head>
+<body><a href="../../index.html" class="muted">← ドキュメント一覧</a>
+<h1>重賞のルールベース予想家（研究）</h1>
+<p class="muted">2026-11-13。計画: <code>docs/ideas/graded_rule_based_handicapper.md</code>・切り口の目録: <code>docs/ideas/graded_handicapper_cuts.md</code>・コード: <code>src/research/graded/</code>・事前登録: <code>src/research/graded/prereg.json</code>。詳しい表（重賞ごとのパターン・検証の各レース・切り口の採否）は 1 枚の HTML <code>data/meta/graded/graded_handicapper.html</code> にある。本番の予測・画面には載せていない。</p>
+
+<h2>何をしたか</h2>
+<p>学習モデルを使わず、「好成績のデータパターンをどれだけ満たすか」で重賞（G1/G2/G3・平地）に ◎○▲△△ を付けた。オッズ・人気は条件に一切使わず、回収率の評価にだけ使った。</p>
+<ul>
+<li>切り口は 118 型（前走の成績・クラス、条件の変化、間隔、脚質、経歴、属性、騎手、厩舎、血統、追い切りの評価、決めておいた組み合わせ 15 組）。</li>
+<li>各パターンの [1-2-3-着外] を 3 つの層で as-of に数えた。主 = 同じレース名 × 同じコースの過去の回（改修などで別コースの年は外す）、副 = 同じコースの OP 以上の別レース（足りなければ 3 勝以上）、全体 = 全重賞。主 → 副 → 全体 → 頭数どおり、の順に経験ベイズで縮めた。</li>
+<li>型の採否は、発見 2018〜2021 年と確認 2022〜2024 年の両方で効いた型だけ（前日版 83 型・当日版 85 型。似た型を束ねた後に点に使うのは前日版 66 型・当日版 68 型）。縮める強さ・主の重み・点の足し方も 2024 年末で凍結し、commit してから 2025・2026 年を 1 回だけ評価した。</li>
+</ul>
+
+<h2>結果（2025・2026 年の重賞、前日版の ◎）</h2>
+<table>
+<tr><th>版</th><th>レース</th><th>◎勝率</th><th>◎複勝率</th><th>◎単勝の回収率</th><th>◎複勝の回収率</th><th>馬連の流し</th><th>ワイドの流し</th></tr>
+<tr><td>前日版（ルールベース）</td><td class="num">232</td><td class="num">20.3%</td><td class="num">49.6%</td><td class="num">72.8%</td><td class="num">81.6%</td><td class="num">83.5%</td><td class="num">85.8%</td></tr>
+<tr><td>単純な基準（前走のクラス×着順だけ）</td><td class="num">232</td><td class="num">15.5%</td><td class="num">41.4%</td><td class="num">84.5%</td><td class="num">87.7%</td><td class="num">114.9%</td><td class="num">97.6%</td></tr>
+<tr><td>前日版（v6e本番と同じレース）</td><td class="num">224</td><td class="num">19.6%</td><td class="num">49.1%</td><td class="num">71.3%</td><td class="num">80.5%</td><td class="num">83.3%</td><td class="num">86.0%</td></tr>
+<tr><td>v6e本番（同じレース）</td><td class="num">224</td><td class="num">22.8%</td><td class="num">52.7%</td><td class="num">68.1%</td><td class="num">81.7%</td><td class="num">78.4%</td><td class="num">80.7%</td></tr>
+<tr><td>v6e16（2025 年だけ）</td><td class="num">130</td><td class="num">25.4%</td><td class="num">55.4%</td><td class="num">86.8%</td><td class="num">85.7%</td><td class="num">136.9%</td><td class="num">93.0%</td></tr>
+</table>
+<ul>
+<li><b>v6e との差は決着しない</b>: 前日版 − v6e本番（224 レース）は、◎複勝率 −3.6pt [−10, +3]、◎勝率 −3.1pt [−9, +3]、回収率の差はどれも区間が 0 をまたぐ。v6e16（2025 年）とは ◎複勝率 −5.4pt [−14, +4]、馬連の流しは −49pt [−101, −1] で下回った。</li>
+<li><b>積み上げの効果はある</b>: 単純な基準より ◎複勝率が約 8pt 高い（49.6% 対 41.4%）。ただし回収率は単純な基準の方が高く出た（人気になりにくい馬を選ぶため。区間は広い）。</li>
+<li><b>回収率は 100% に届かない</b>: ◎の単勝 73%・複勝 82%。区間付きで、どの買い方も 100% 超を言える版は無い。</li>
+<li>内訳: G1 は ◎勝率 34%・複勝率 55%（38 レース）、G3 は 18%・44%。主の集計があるレース（207）は ◎複勝率 52%、新設・コース変更などで副・全体だけのレース（25）は 28% と弱い。</li>
+<li>当日版（馬体重・馬場などを使う）、件数を 2024 年末で止めた版、めぐ指数を足した版は、前日版とほぼ同じ（◎複勝率 50% 前後）。</li>
+</ul>
+
+<h2>使えたパターンの例（主の集計、2016〜2024 年）</h2>
+<ul>
+<li>東京優駿: 前走 皐月賞で 3 着以内 [3-7-2-11]（複勝率 52%、8 回中 7 回で 3 着内）。前走 10 着以下は [0-0-0-24]。</li>
+<li>有馬記念: 前走 G1 で 2〜3 着 [2-3-1-14]。前走 10 着以下は [0-0-0-23]。</li>
+<li>フェブラリーS: 前走 チャンピオンズC で 6 着以下 [3-1-1-11]（巻き返し）。前走 G3 で 6 着以下は [0-1-0-22]。</li>
+<li>多くの重賞で上位に来たのは、騎手の格（直近 1 年の複勝率が上位 10%）と、最終追い切りの評価 A。</li>
+</ul>
+
+<h2>残った課題</h2>
+<ul>
+<li>評価は 2 年・約 230 レースで、v6e との数 pt の差は区間の中に収まる。年を重ねて見直す必要がある。</li>
+<li>採用が 85 型と多く、多くは能力の代わり（前走の着順・クラス・騎手の格など）。これらは学習モデルがすでに持つ情報で、v6e を超える材料にはなりにくい。</li>
+<li>主の回が足りないレース（新設・移設）が弱い。副の集計の広げ方を見直す余地がある。</li>
+<li>v6e16 の 2026 年の予測は作れなかった（2026 年の学習側の表が無いため）。2026 年は本番 v6e（払戻のある 94 レース）とだけ比べた。</li>
+</ul>
+</body></html>

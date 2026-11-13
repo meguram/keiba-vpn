@@ -6,6 +6,12 @@
      上がり 3F・単勝オッズ/人気・馬体重・払戻（単勝の馬番が 1 着と一致）・ラップ（本数と合計が走破時間と合う）
   3. 見たことのない値: カテゴリ項目（面・天候・馬場・着順の状態・性齢の記号）が、基準年（既定 2023 年）の標本に無い値を出していないか
 結果は data/local/meta/past_value_check/latest.json。検査済みのレースは state に覚え、既定では未検査分だけを見る（--all で全件）。
+対象のレースは、ローカルの race_result_flat（data/page_reference/tables/<年>/）から決める。GCS の全件一覧は取らない（2026-11-13 まで、
+2 時間おきに基準年と対象年の 10 年分を一覧し、基準年の標本 600 件を毎回読んでいた。ログは毎回「検査 0」で、月 約 200 円）。
+基準年の値は state に保存して使い回す（年・標本数が同じで 30 日以内なら読み直さない。標本の 9 割以上を読めたときだけ保存）。
+過去分の補填（cron の backfill-past）が flat の作成より後に保存したレースは、flat を書き直す（scripts/cron/backfill_past_sync.sh）まで対象にならない。
+そのときは報告の flat_stale に印を付け、warning を出す。読めなかったレースは 3 回で諦める（state の load_failed）。
+GCS が転送課金になる場所（gcp_guard.egress_billed）では、1 回に読む件数を --max-reads（既定 500）で止め、残りは次の回に回す。
 使い方: python -m src.scripts.data.verify_past_values [--years 2019 2018 2017 2016] [--ref-year 2023 --ref-n 400] [--all] [--max-fail-rate 0.01]
 終了コード: 0=問題なし、1=いずれかの年で『失敗レース率』が --max-fail-rate を超えた（読み取りのみ。保存・削除はしない）
 """
@@ -28,6 +34,37 @@ OUT_DIR = Path(os.environ.get("KEIBA_PAST_VALUE_CHECK_DIR") or ROOT / "data" / "
 VENUES = {"札幌", "函館", "福島", "新潟", "東京", "中山", "中京", "京都", "阪神", "小倉"}
 CATEGORICAL = ("surface", "weather", "track_condition", "direction", "grade")
 ENTRY_CATEGORICAL = ("finish_status",)
+
+
+TABLES_DIR = ROOT / "data" / "page_reference" / "tables"
+REF_MAX_AGE_SEC = 30 * 86400
+
+
+def local_race_ids(year: int | str, tables_dir: Path | None = None) -> list[str]:
+    """ローカルの race_result_flat にあるレース（GCS の一覧の代わり。過去分の補填は書き出し（export_tables）で flat に入る）。"""
+    import pyarrow.parquet as pq
+
+    p = (tables_dir or TABLES_DIR) / str(year) / "race_result_flat.parquet"
+    try:
+        ids = pq.read_table(p, columns=["race_id"]).column("race_id").to_pylist()
+    except Exception:  # noqa: BLE001  無い・読めない年は 0 件
+        return []
+    return sorted({str(x) for x in ids if x})
+
+
+def _flat_older_than_backfill(year: int | str, tables_dir: Path | None = None) -> str | None:
+    """flat の作成が、過去分の補填（cron の backfill-past）の最後の終わりより 1 日以上古ければ、その説明を返す。"""
+    try:
+        from src.monitor.cron_status import RUNS_DIR
+
+        lines = (RUNS_DIR / "backfill-past.tsv").read_text(encoding="utf-8").strip().splitlines()
+        last_end = float(lines[-1].split("\t")[1]) if lines else 0.0
+        flat_mtime = ((tables_dir or TABLES_DIR) / str(year) / "race_result_flat.parquet").stat().st_mtime
+    except (OSError, ValueError, IndexError, ImportError):
+        return None
+    if last_end - flat_mtime > 86400:
+        return f"flat {time.strftime('%Y-%m-%d', time.localtime(flat_mtime))} < 補填 {time.strftime('%Y-%m-%d', time.localtime(last_end))}"
+    return None
 
 
 def _tsec(s: Any) -> float | None:
@@ -132,7 +169,14 @@ def main() -> int:
     ap.add_argument("--all", action="store_true", help="検査済みも含めて全件を見る")
     ap.add_argument("--max-fail-rate", type=float, default=0.01)
     ap.add_argument("--json-out")
+    ap.add_argument("--max-reads", type=int, default=None,
+                    help="1 回に GCS から読む対象年のレースの上限（既定: 転送課金になる場所では 500、GCP の中では無制限）。残りは次の回に回す。"
+                         "基準年の標本（30 日に 1 回、年×--ref-n 件）はこの数に含めない")
     args = ap.parse_args()
+    from src.config.gcp_guard import egress_billed
+
+    budget = args.max_reads if args.max_reads is not None else (500 if egress_billed() else 10 ** 9)
+    reads = 0
 
     from src.scraper import schemas
     from src.scraper.storage import HybridStorage
@@ -147,21 +191,37 @@ def main() -> int:
     checked: dict[str, list[str]] = state.get("checked", {})
 
     ref_vals: dict[str, set[str]] = defaultdict(set)
-    for ry in args.ref_years:
-        ref_keys = sorted(s.list_keys("race_result", str(ry)))
-        step = max(1, len(ref_keys) // max(1, args.ref_n))
-        for rid in ref_keys[::step][: args.ref_n]:
-            d = s.load("race_result", rid)
-            if d:
-                for k, v in _cat_values(d).items():
-                    ref_vals[k] |= v
+    ref_key = f"{sorted(args.ref_years)}:{args.ref_n}"
+    saved_ref = state.get("ref") or {}
+    if saved_ref.get("key") == ref_key and time.time() - float(saved_ref.get("at") or 0) < REF_MAX_AGE_SEC:
+        for k, v in (saved_ref.get("values") or {}).items():
+            ref_vals[k] = set(v)
+    else:
+        want = got = 0
+        for ry in args.ref_years:
+            ref_keys = local_race_ids(ry)
+            step = max(1, len(ref_keys) // max(1, args.ref_n))
+            for rid in ref_keys[::step][: args.ref_n]:
+                want += 1
+                d = s.load("race_result", rid)
+                if d:
+                    got += 1
+                    for k, v in _cat_values(d).items():
+                        ref_vals[k] |= v
+        if ref_vals and got >= 0.9 * want:          # 読めない分が多いときは保存しない（欠けた基準を 30 日使い回さない）
+            state["ref"] = {"key": ref_key, "at": time.time(), "values": {k: sorted(v) for k, v in ref_vals.items()}}
     ref_vals["finish_status"] -= {"None"}      # 旧形式（状態の項目なし）は基準にしない。新形式の値は『新しい値』として情報だけ出す
 
     report: dict[str, Any] = {"at": time.strftime("%Y-%m-%d %H:%M:%S"), "ref": {"years": args.ref_years, "values": {k: sorted(v) for k, v in ref_vals.items()}}, "years": {}}
     worst = 0.0
     for y in args.years:
-        keys = sorted(s.list_keys("race_result", str(y)))
-        todo = [k for k in keys if args.all or k not in checked]
+        keys = local_race_ids(y)
+        lf = state.setdefault("load_failed", {})
+        todo = [k for k in keys if args.all or (k not in checked and int(lf.get(k, 0)) < 3)]
+        deferred = max(0, len(todo) - max(0, budget - reads))
+        if deferred:
+            todo = todo[: len(todo) - deferred]          # 読む件数の上限。残りは次の回
+        reads += len(todo)
         fails: Counter[str] = Counter()
         samples: dict[str, list[str]] = defaultdict(list)
         unseen: dict[str, Counter[str]] = defaultdict(Counter)
@@ -169,6 +229,7 @@ def main() -> int:
         for rid in todo:
             d = s.load("race_result", rid)
             if not d:
+                lf[rid] = int(lf.get(rid, 0)) + 1          # 3 回で諦める（flat にあるのに文書が無いレースを毎回読まない）
                 fails["load_failed"] += 1
                 failed_races += 1
                 samples["load_failed"].append(rid)
@@ -193,7 +254,10 @@ def main() -> int:
                     samples[c].append(rid)
         rate = failed_races / len(todo) if todo else 0.0
         worst = max(worst, rate)
-        report["years"][str(y)] = {"races_in_store": len(keys), "checked_now": len(todo), "failed_races": failed_races, "fail_rate": round(rate, 4),
+        stale = _flat_older_than_backfill(y)
+        if stale:
+            print(f"warning: {y} 年の race_result_flat が過去分の補填より古い（{stale}）。scripts/cron/backfill_past_sync.sh で flat を書き直すまで、新しく補填したレースは検査されない", file=sys.stderr)
+        report["years"][str(y)] = {"races_in_store": len(keys), "checked_now": len(todo), "deferred": deferred, "flat_stale": stale, "failed_races": failed_races, "fail_rate": round(rate, 4),
                                    "failures": dict(fails.most_common()), "info_unseen_values": {k: dict(v) for k, v in unseen.items()}, "samples": dict(samples)}
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     state["checked"] = checked

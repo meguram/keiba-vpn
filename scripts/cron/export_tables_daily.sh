@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # 推論モードの履歴（race_result_flat など）を最新に保つため、当年（1 月は前年も）のテーブルを増分エクスポートする。
-# --refresh: 各カテゴリが自分の flat に無いレースを GCS から追記する（これが無いと race_result に新しいレースが入らない）。
+# --refresh --from-local-results: 各カテゴリが自分の flat に無いレースを追記する（これが無いと race_result に新しいレースが入らない）。
+#   足すレースはローカルの記録（race_lists・出馬表／速報／確定結果の flat）から決め、名前を指定して読む。GCS の一覧は取らない
+#   （2026-11-13 まで、毎朝 約 30 回の全件一覧で月 約 50 円だった。export_tables.export_year_local）。
 # Usage: bash scripts/cron/export_tables_daily.sh [PROJECT_DIR] [categories]
+#   categories を渡すときは export_tables.LOCAL_CATEGORIES の中から選ぶ（それ以外は --from-local-results が受け付けず、その年が止まる）。
 set -u
 export TZ="${TZ:-Asia/Tokyo}"
 PROJECT_DIR="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
@@ -19,17 +22,13 @@ if ! flock -n 9; then
   echo "[$(date -Is)] export_tables_daily already running, skip" >>"$LOG"
   exit 0
 fi
-echo "===== $(date -Is) START years=$YEARS categories=$CATS =====" >>"$LOG"
-"$PYTHON" -m src.scraper.export_tables --years "$YEARS" --categories "$CATS" --refresh >>"$LOG" 2>&1
-EC=$?
-# 付随カテゴリ（馬柱・指数・バロメーター・SmartRC・追い切り・パドック・厩舎コメント）は、GCS の一覧を取らずに足す。
-# 足すレースはローカルの race_result_flat から決め、名前で読む（直近 21 日・試行の間隔つき。export_tables.export_year_local）。
-# 失敗しても本体の終了コードは変えない
+# 付随カテゴリ（馬柱・指数・バロメーター・SmartRC・追い切り・パドック・厩舎コメント）も同じ呼び出しで足す（確定結果のあるレースだけ）
 LOCAL_CATS="${LOCAL_CATS:-race_shutuba_past,race_index,race_barometer,smartrc_race,race_oikiri,race_paddock,race_trainer_comment}"
-if [ -n "$LOCAL_CATS" ]; then
-  "$PYTHON" -m src.scraper.export_tables --years "$YEARS" --categories "$LOCAL_CATS" --refresh --from-local-results >>"$LOG" 2>&1 \
-    || echo "LOCAL_EXPORT_FAIL: 付随カテゴリの一覧なしの追記に失敗しました（上の行を確認）" >>"$LOG"
-fi
+ALL_CATS="$CATS${LOCAL_CATS:+,$LOCAL_CATS}"
+echo "===== $(date -Is) START years=$YEARS categories=$ALL_CATS =====" >>"$LOG"
+"$PYTHON" -m src.scraper.export_tables --years "$YEARS" --categories "$ALL_CATS" --refresh --from-local-results >>"$LOG" 2>&1
+EC=$?
+[ "$EC" -ne 0 ] && echo "LOCAL_EXPORT_FAIL: 一覧なしの追記で失敗したカテゴリがあります（上の行を確認）" >>"$LOG"
 # パース失敗の検査（必須項目の欠損）。ページ表記の変更でパーサが黙って空を返す事故を、取得の翌日までに見つける
 "$PYTHON" -m src.scraper.parse_audit --years "$YEARS" >>"$LOG" 2>&1
 AUD=$?

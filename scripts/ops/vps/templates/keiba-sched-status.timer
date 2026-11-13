@@ -1,0 +1,10 @@
+[Unit]
+Description=keiba 定期実行の見張り — 15 分おき（VPS のタイマーの状態を GCS に書く。途絶 45 分で監視ポータルが「VPS の記録の途絶」）
+
+[Timer]
+OnCalendar=*-*-* *:00/15:00
+Persistent=true
+Unit=keiba-sched-status.service
+
+[Install]
+WantedBy=timers.target

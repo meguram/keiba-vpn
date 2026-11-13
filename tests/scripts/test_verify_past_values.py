@@ -46,3 +46,61 @@ def test_detects_unmapped_grade_and_tolerates_old_format():
                          "sex_age": "牡2", "jockey_weight": 54.0, "odds": 0, "popularity": None})
     d["field_size"] = 3
     assert check_race(d, "201907030403") == []
+
+
+def _run_main(tmp_path, monkeypatch, *args, billed=False, missing=()):
+    import json
+    import sys
+
+    import pandas as pd
+
+    from src.config import gcp_guard
+    from src.scraper import storage as storage_mod
+    from src.scripts.data import verify_past_values as V
+
+    tables = tmp_path / "tables"
+    for y, ids in (("2019", ["201907030401", "201907030402", "201907030403"]), ("2023", ["202307030401", "202307030402"])):
+        (tables / y).mkdir(parents=True, exist_ok=True)
+        pd.DataFrame({"race_id": ids}).to_parquet(tables / y / "race_result_flat.parquet")
+    monkeypatch.setattr(V, "TABLES_DIR", tables)
+    monkeypatch.setattr(V, "OUT_DIR", tmp_path / "out")
+    monkeypatch.setattr(gcp_guard, "egress_billed", lambda: billed)
+    loaded = []
+
+    class S:
+        def list_keys(self, *a, **k):
+            raise AssertionError("GCS の一覧を取ってはいけない")
+
+        def load(self, cat, rid):
+            loaded.append(rid)
+            return None if rid in missing else _with(race_id=rid)
+
+    monkeypatch.setattr(storage_mod, "HybridStorage", S)
+    monkeypatch.setattr(sys, "argv", ["v", "--years", "2019", "--ref-years", "2023", "--ref-n", "2", *args])
+    rc = V.main()
+    return rc, loaded, json.loads((tmp_path / "out" / "latest.json").read_text())
+
+
+def test_targets_come_from_local_flat_and_reference_is_cached(tmp_path, monkeypatch):
+    """GCS の全件一覧をやめた（2026-11-13）。2 回目は基準も検査済みも読み直さない（毎回「検査 0」で 600 件を読んでいた）。"""
+    rc, loaded, rep = _run_main(tmp_path, monkeypatch)
+    assert len(loaded) == 2 + 3 and rep["years"]["2019"]["checked_now"] == 3
+    rc, loaded2, rep2 = _run_main(tmp_path, monkeypatch)
+    assert loaded2 == [] and rep2["years"]["2019"]["checked_now"] == 0
+
+
+def test_reads_are_capped_where_egress_is_billed(tmp_path, monkeypatch):
+    rc, loaded, rep = _run_main(tmp_path, monkeypatch, "--max-reads", "2")
+    assert len(loaded) == 2 + 2 and rep["years"]["2019"]["checked_now"] == 2 and rep["years"]["2019"]["deferred"] == 1   # 基準の 2 件は上限の外
+    rc, loaded2, rep2 = _run_main(tmp_path, monkeypatch, "--max-reads", "2")
+    assert rep2["years"]["2019"]["checked_now"] == 1 and rep2["years"]["2019"]["deferred"] == 0    # 残りは次の回
+
+
+def test_missing_documents_are_given_up_after_three_tries(tmp_path, monkeypatch):
+    """flat にあるのに GCS に文書が無いレースを、2 時間おきに読み直し続けない（3 回で諦める）。"""
+    gone = "201907030402"
+    tries = 0
+    for _ in range(5):
+        rc, loaded, rep = _run_main(tmp_path, monkeypatch, missing={gone})
+        tries += loaded.count(gone)
+    assert tries == 3

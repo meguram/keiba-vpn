@@ -44,7 +44,7 @@
 | rb-state-daily | 08:20 | v6 の日次状態 |
 
 入れていないもの:
-- **`serving-state-precompute`・`serving-state-profile`:** crontab にはあるが、登録する行がリポジトリに無く、由来を確かめられないため。
+- **`serving-state-precompute`・`serving-state-profile`:** 2026-11-13 から `scripts/cron/install_serving_state_cron.sh`（タグ `KEIBA-SERVING-STATE`）で登録する。追いつきに入れるかは別に判断する（precompute は開催日の朝 07:35。無くても最初のレースで作られるので、追いつかなくても壊れない）。
 - **開催の時刻に合わせて動くランナー（`raceday-*`）:** 遅れて起動すると、発走に合わせた取得の前提が崩れる。
 - **ホストから GCS を読む量の多い `sync_pg_from_gcs`:** 必要なら、上の表に足すかどうかを判断する。
 

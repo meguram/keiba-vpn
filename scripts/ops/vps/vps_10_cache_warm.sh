@@ -2,7 +2,7 @@
 # API キャッシュの事前ロード係（cache_warm.py + systemd タイマー 60 秒おき）を入れる/外す(冪等。root で実行。vps_09 と vps_03 --with-pull-venv の後)。
 #   sudo bash vps_10_cache_warm.sh [--dry-run]     # 入れる
 #   sudo bash vps_10_cache_warm.sh --remove        # 外す
-# 何をするか: GCS の ops/cache_dirty/ を 60 秒に 1 回 list し（read 課金は月 約 0.2 ドル）、参照用データが更新されたレース/開催日の API を
+# 何をするか: GCS の ops/cache_dirty/ の合図を 60 秒に 1 回見て、変わったとき（最短 5 分）と 30 分おきだけ list し（2026-11-13 に毎分の list をやめた）、参照用データが更新されたレース/開催日の API を
 #   ローカル nginx(127.0.0.1:8080)へ X-Keiba-Refresh 付きで取り直してキャッシュに入れる。キャッシュ本体は VPS ローカル。保持は API の Cache-Control(確定レース 30 日)。
 # 前提: /etc/keiba-ui/refresh.token（vps_09）、/etc/keiba-pull/pull.env と /opt/keiba-pull/venv（vps_03_units.sh --with-pull-venv）。
 #       読み取り専用 SA が ops/cache_dirty/ を list できること（bucket 全体の objectViewer なら足りる）。

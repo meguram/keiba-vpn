@@ -93,6 +93,9 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm install --ignore-scripts
       - run: npm run lint
+      # lib の表示の判定などの単体テスト（node:test。TypeScript は各テストが typescript で変換して読む）。2026-11-13 まで CI で流れておらず、古くなったテストに気づけなかった
+      - name: node のテスト（lib/*.test.mjs）
+        run: node --test lib/*.test.mjs
       - run: npm run build
         env:
           KEIBA_API_URL: http://127.0.0.1:5000

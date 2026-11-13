@@ -192,7 +192,7 @@ def _default_notify(title: str, lines: list[str], severity: str = "warning") -> 
 
 def create_app(io: Any | None = None, now_fn: Any = time.time, job_ids: list[tuple[str, bool]] | None = None, *,
                hb_backend: Any = None, notify: Any = None, http_get: Any = None, env: dict[str, str] | None = None,
-               cost_fetch: Any = None):
+               cost_fetch: Any = None, sched_api: Any = None):
     from flask import Flask, jsonify, render_template, render_template_string, request
 
     from src.monitor import charts, environments, traffic
@@ -200,6 +200,7 @@ def create_app(io: Any | None = None, now_fn: Any = time.time, job_ids: list[tup
 
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = ingest.MAX_TRAFFIC_BYTES + 1024
+    app.jinja_env.filters["jst"] = lambda t: datetime.fromtimestamp(float(t), JST).strftime("%m/%d %H:%M") if t else "—"
     cache: dict[str, tuple[float, Any]] = {}
 
     def _io() -> Any:
@@ -244,6 +245,18 @@ def create_app(io: Any | None = None, now_fn: Any = time.time, job_ids: list[tup
     def seo_data() -> dict:
         return cached("seo", 300, lambda: seo_audit.read(_io()))
 
+    def schedules_data() -> dict:
+        """定期実行ジョブ（GCP・VPS）の判定。開いたときだけ読む（GCS 3 回前後＋無料の API）。5 分は使い回す。"""
+        def _build() -> dict:
+            from src.monitor import schedule_sources
+
+            try:
+                return schedule_sources.build_view(_io(), now=now_fn(), api=sched_api)
+            except Exception as exc:  # noqa: BLE001  一覧の読み込み失敗などで画面を落とさない
+                return {"overall": "unknown", "label": "判定不能", "counts": {}, "alerts": [], "rows": [], "sources": {},
+                        "error": f"{type(exc).__name__}: {exc}"[:200]}
+        return cached("schedules", 300, _build)
+
     def cost_kw() -> dict:
         return {"fetch": cost_fetch} if cost_fetch is not None else {}
 
@@ -259,7 +272,9 @@ def create_app(io: Any | None = None, now_fn: Any = time.time, job_ids: list[tup
         pl = _LEVEL_OF_PIPE.get(pipe.get("level") or "na", "unknown") if pipe.get("status") == "ok" else "unknown"
         cost = cost_data()
         overall = environments.worst(envs["prod_level"], alerts["level"], pl, cost.get("level", "unknown"))
-        return {"overall": overall, "cost": cost, "env": envs, "pipe": pipe, "alerts": alerts, "traf": traffic.summary(traffic_view()), "seo": seo_data(),
+        sch = schedules_data()
+        overall = environments.worst(overall, sch.get("overall") if sch.get("overall") in ("green", "yellow", "red") else "unknown")
+        return {"overall": overall, "sched": sch, "cost": cost, "env": envs, "pipe": pipe, "alerts": alerts, "traf": traffic.summary(traffic_view()), "seo": seo_data(),
                 "probe_min": environments.PROBE_TTL_S // 60, "heartbeat": hb}
 
     def page(name: str, active: str, **ctx: Any):
@@ -333,6 +348,15 @@ def create_app(io: Any | None = None, now_fn: Any = time.time, job_ids: list[tup
     def api_seo():
         return jsonify(seo_data())
 
+    def _private5(resp: Any) -> Any:
+        resp.headers["Cache-Control"] = "private, max-age=300"   # ブラウザで 5 分使い回す（自動更新はしない）
+        return resp
+
+    @app.get("/api/schedules")
+    def api_schedules():
+        d = schedules_data()
+        return _private5(jsonify({k: v for k, v in d.items() if k != "result"}))
+
     # ── 画面 ──
     @app.get("/")
     def index():
@@ -361,6 +385,10 @@ def create_app(io: Any | None = None, now_fn: Any = time.time, job_ids: list[tup
     @app.get("/seo")
     def seo_page():
         return page("seo", "seo", s=seo_data())
+
+    @app.get("/schedules")
+    def schedules_page():
+        return _private5(app.make_response(page("schedules", "schedules", d=schedules_data())))
 
     @app.get("/ops")
     def ops_page():

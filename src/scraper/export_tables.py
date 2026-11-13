@@ -738,14 +738,39 @@ def export_category_chunked(
 
 
 # ── 一覧なしの日次の追記（export_year_local）──────────────────────────────────────────
-# ホストから GCS の全件一覧を毎日取らない（CLAUDE.md の費用の決まり）。足すレースはローカルの race_result_flat から決め、
-# 名前を指定して読む。対象は、取得の遅れ・無い文書がありうるレースの付随カテゴリだけ（race_result・出馬表・オッズは今の --refresh のまま）。
-LOCAL_CATEGORIES = (
+# ホストから GCS の全件一覧を毎日取らない（CLAUDE.md の費用の決まり。2026-11-13 まで毎朝 約 30 回の一覧で月 約 50 円だった）。
+# 足すレースはローカルの記録（race_lists・出馬表／速報／確定結果の flat）から決め、名前を指定して読む。
+MAIN_LOCAL_CATEGORIES = (
+    "race_result", "race_shutuba", "race_result_lap", "race_result_on_time", "race_odds", "race_pair_odds",
+)
+SIDE_LOCAL_CATEGORIES = (
     "race_shutuba_past", "race_index", "race_barometer", "smartrc_race",
     "race_oikiri", "race_paddock", "race_trainer_comment",
 )
-LOCAL_WINDOW_DAYS = 21          # レース日（barometer は公開日）からこの日数の間だけ探す。それより古い欠けは手で一括の書き出しを回す
-LOCAL_MAX_ATTEMPTS = 5          # 読めなかったレースを試す回数の上限（間隔は 1・2・4・8 日）
+LOCAL_CATEGORIES = MAIN_LOCAL_CATEGORIES + SIDE_LOCAL_CATEGORIES
+LOCAL_WINDOW_DAYS = 21          # 探し始めの日からこの日数の間だけ探す。それより古い欠けは手で一括の書き出し（一覧つきの --refresh）を回す
+LOCAL_MAX_ATTEMPTS = 5          # 読めなかったレースを試す回数の上限（間隔は 1・2・4・8 日）。"daily" のカテゴリは窓の間は毎日
+# カテゴリごとの (母集合, 探し始め＝レース日からの日数, 試行, 窓の日数)。
+#   母集合 "all" = race_lists ＋ 出馬表・速報・確定結果の flat（欠けた回は 01〜12R を補う）、"results" = 確定結果のあるレースだけ、
+#   "all_guess" = all ＋ 同じ開催の次の 2 日（日付は推定。race_lists が丸ごと無い日に備える。確定結果だけに使う。推定の日付は実際より早いことがあり、
+#   ほかのカテゴリに使うとレース前の版を読んでしまうため。確定結果に入ったレースは本当の日付で "all" の母集合に入る）
+#   （付随カテゴリはレース前の版を入れないため。入ると「ある」とみなされ、レース後の版を読まなくなる）。
+#   探し始めが 1 = 翌日から（当日の途中の版を入れない）。出馬表は 14 日前から（枠順確定前の版は _pre_draw_race_ids で取り直す）。
+#   確定結果は公開が 1〜7 日遅れるので、窓の間は毎日読む（間隔を空けると 2〜3 日遅れる）。
+#   出馬表の窓は 14 日前〜21 日後（枠順確定前のまま入ったレースの取り直しは PRE_DRAW_LOOKBACK_DAYS と同じ 21 日まで）。
+#   オッズ・速報・ラップは翌日から（毎朝 7 時の時点では当日のレースはまだ始まっていないので、以前の一覧方式とも中身は同じ）。
+LOCAL_POLICY: dict[str, tuple[str, int, str, int]] = {
+    "race_result": ("all_guess", 1, "daily", LOCAL_WINDOW_DAYS),
+    "race_shutuba": ("all", -14, "daily", 14 + PRE_DRAW_LOOKBACK_DAYS),
+    "race_result_lap": ("all", 1, "backoff", LOCAL_WINDOW_DAYS),
+    "race_result_on_time": ("all", 1, "backoff", LOCAL_WINDOW_DAYS),
+    "race_odds": ("all", 1, "backoff", LOCAL_WINDOW_DAYS),
+    "race_pair_odds": ("all", 1, "backoff", LOCAL_WINDOW_DAYS),
+    **{c: ("results", 1, "backoff", LOCAL_WINDOW_DAYS) for c in SIDE_LOCAL_CATEGORIES},
+}
+_DEFAULT_POLICY = ("results", 1, "backoff", LOCAL_WINDOW_DAYS)
+UNIVERSE_PAST_DAYS = LOCAL_WINDOW_DAYS + 14     # 母集合に入れる race_lists の範囲（出馬表の窓 35 日を含む）
+UNIVERSE_FUTURE_DAYS = 15
 
 
 def _attempts_path(category: str, year: str) -> Path:
@@ -770,11 +795,14 @@ def _save_attempts(category: str, year: str, attempts: dict[str, list]) -> None:
     os.replace(tmp, path)
 
 
-def _attempt_due(rec: list | None, today: date) -> bool:
-    """試行の記録 [回数, 最後の日 YYYY-MM-DD] から、今日試してよいか。間隔は 2^(回数-1) 日、上限 LOCAL_MAX_ATTEMPTS 回。"""
+def _attempt_due(rec: list | None, today: date, retry: str = "backoff") -> bool:
+    """試行の記録 [回数, 最後の日 YYYY-MM-DD] から、今日試してよいか。
+    backoff: 間隔は 2^(回数-1) 日、上限 LOCAL_MAX_ATTEMPTS 回。daily: 同じ日に 2 回は読まない（窓の間は毎日）。"""
     if not rec:
         return True
     n, last = int(rec[0]), str(rec[1])
+    if retry == "daily":
+        return last != today.isoformat()
     if n >= LOCAL_MAX_ATTEMPTS:
         return False
     try:
@@ -789,27 +817,94 @@ def _window_start(category: str, race_day: date) -> date | None:
         from src.scraper.run import ScraperRunner
 
         return ScraperRunner.barometer_publish_at(race_day).date() + timedelta(days=1)
-    return race_day + timedelta(days=1)
+    return race_day + timedelta(days=LOCAL_POLICY.get(category, _DEFAULT_POLICY)[1])
+
+
+def _iso(d: Any) -> str:
+    s = str(d or "")
+    return f"{s[:4]}-{s[4:6]}-{s[6:8]}" if len(s) == 8 and s.isdigit() else s[:10]
+
+
+def _flat_dates(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    try:
+        df = pq.read_table(path, columns=["race_id", "date"]).to_pandas().drop_duplicates("race_id")
+    except Exception:  # noqa: BLE001  date の無い・壊れた表は母集合に使わない
+        return {}
+    return {str(r): _iso(d) for r, d in zip(df["race_id"], df["date"]) if r}
+
+
+def _race_table_ids_or_empty(path: Path) -> set[str]:
+    if not path.exists():
+        return set()
+    try:
+        return {str(x) for x in pq.read_table(path, columns=["race_id"]).column("race_id").to_pylist() if x}
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+def local_universe(year: str, today: date, kind: str = "all") -> dict[str, str]:
+    """一覧を取らずに作る、その年のレースの母集合 {race_id: YYYY-MM-DD}（JRA だけ）。
+    results: ローカルの race_result_flat。all: それに出馬表・速報の flat と、直近の race_lists（今日の前後）を合わせ、
+    窓の中に出てきた開催日（race_id の先頭 10 桁 = 年・場・回・日）は 01〜12R を補う（race_lists が途中で切れた日に備える）。
+    all_guess は、さらに同じ開催（場・回）の次の 2 日（日 +1・+2）も 01〜12R を補う（race_lists が丸ごと無い・空の日に備える。日付は前の日 +k 日とみなす）。
+    存在しないレースは 404 になるだけで、試行の記録（窓・上限）で止まる。"""
+    out = _flat_dates(OUTPUT_DIR / year / "race_result_flat.parquet")
+    if kind in ("all", "all_guess"):
+        for cat in ("race_shutuba", "race_result_on_time"):
+            for r, d in _flat_dates(OUTPUT_DIR / year / f"{cat}_flat.parquet").items():
+                out.setdefault(r, d)
+        for i in range(-UNIVERSE_PAST_DAYS, UNIVERSE_FUTURE_DAYS + 1):
+            day = today + timedelta(days=i)
+            if str(day.year) != year:
+                continue
+            try:
+                doc = json.loads((OUTPUT_DIR.parent / "race_lists" / f"{day:%Y%m%d}.json").read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            for r in doc.get("races") or []:
+                rid = str((r or {}).get("race_id") or "")
+                if rid:
+                    out.setdefault(rid, day.isoformat())
+        lo, hi = (today - timedelta(days=UNIVERSE_PAST_DAYS)).isoformat(), (today + timedelta(days=UNIVERSE_FUTURE_DAYS)).isoformat()
+        days = {r[:10]: d for r, d in out.items() if len(r) == 12 and lo <= d <= hi and r[8:10].isdigit()}
+        fill = dict(days)
+        for pre, d in (days.items() if kind == "all_guess" else ()):
+            for k in (1, 2):
+                nxt = f"{pre[:8]}{int(pre[8:10]) + k:02d}"
+                if nxt not in days:
+                    try:
+                        fill.setdefault(nxt, (date.fromisoformat(d) + timedelta(days=k)).isoformat())
+                    except ValueError:
+                        pass
+        for pre, d in fill.items():
+            for n in range(1, 13):
+                out.setdefault(f"{pre}{n:02d}", d)
+    return {r: d for r, d in out.items() if is_jra_race(r) and r[:4] == year}
 
 
 def local_candidates(year: str, category: str, today: date | None = None, *,
-                     window_days: int = LOCAL_WINDOW_DAYS, attempts: dict[str, list] | None = None) -> list[str]:
+                     window_days: int = LOCAL_WINDOW_DAYS, attempts: dict[str, list] | None = None,
+                     universe: dict[str, str] | None = None) -> list[str]:
     """一覧を取らずに、今日読むレースを決める。
-    母集合はローカルの race_result_flat（確定結果があるレース）。窓（探し始めの日 〜 + window_days 日）の中で、
+    母集合（local_universe。カテゴリにより all / results）のうち、窓（探し始めの日 〜 + window_days 日）の中で、
     そのカテゴリの flat にも race 表にも無く（中身が空の文書も race 表には入るので、読めたものは再び選ばない）、
-    試行の間隔が来ているもの。barometer は障害など N/A の記録があるレースを除く。"""
+    試行の間隔が来ているもの。出馬表は枠順確定前の版（_pre_draw_race_ids）も選ぶ。barometer は障害など N/A の記録があるレースを除く。"""
     today = today or date.today()
-    rr = OUTPUT_DIR / year / "race_result_flat.parquet"
-    if not rr.exists():
-        return []
-    df = pq.read_table(rr, columns=["race_id", "date"]).to_pandas().drop_duplicates("race_id")
-    have = _existing_race_ids(OUTPUT_DIR / year / f"{category}_flat.parquet")
-    race_path = OUTPUT_DIR / year / f"{category}_race.parquet"
-    if race_path.exists():
-        try:
-            have |= {str(x) for x in pq.read_table(race_path, columns=["race_id"]).column("race_id").to_pylist() if x}
-        except Exception:  # noqa: BLE001  race 表が読めなければ flat だけで判定する
-            pass
+    kind, _, retry, win = LOCAL_POLICY.get(category, _DEFAULT_POLICY)
+    window_days = win if window_days == LOCAL_WINDOW_DAYS else window_days
+    uni = universe if universe is not None else local_universe(year, today, kind)
+    flat_path = OUTPUT_DIR / year / f"{category}_flat.parquet"
+    have = _existing_race_ids(flat_path)
+    if category not in MAIN_LOCAL_CATEGORIES:
+        # 付随カテゴリは、中身が空の文書（race 表にだけ入る）も「ある」とみなして読み直さない。
+        # 本体（確定結果・出馬表など）は従来どおり flat だけで判定する（空の出馬表・途中の速報は翌日以降に読み直す）
+        have |= _race_table_ids_or_empty(OUTPUT_DIR / year / f"{category}_race.parquet")
+    if category in PRE_DRAW_REFRESH_CATEGORIES:
+        have -= _pre_draw_race_ids(flat_path)
+    # race_result: 速報から橋渡しした行（確定結果ではない）は _existing_race_ids が数えず、race 表にも入らない（橋渡しは flat だけ）。
+    # そのため確定結果が読めるまで候補に残る
     skip: set[str] = set()
     if category == "race_barometer":
         from src.scraper.date_coverage import load_not_available
@@ -817,8 +912,8 @@ def local_candidates(year: str, category: str, today: date | None = None, *,
         skip = load_not_available(category, year)
     attempts = attempts if attempts is not None else _load_attempts(category, year)
     out: list[str] = []
-    for rid, d in zip(df["race_id"].astype(str), df["date"].astype(str)):
-        if not is_jra_race(rid) or rid in have or rid in skip:
+    for rid, d in uni.items():
+        if rid in have or rid in skip:
             continue
         try:
             start = _window_start(category, date.fromisoformat(d[:10]))
@@ -826,7 +921,7 @@ def local_candidates(year: str, category: str, today: date | None = None, *,
             continue
         if start is None or not (start <= today <= start + timedelta(days=window_days)):
             continue
-        if _attempt_due(attempts.get(rid), today):
+        if _attempt_due(attempts.get(rid), today, retry):
             out.append(rid)
     return sorted(out)
 
@@ -834,7 +929,9 @@ def local_candidates(year: str, category: str, today: date | None = None, *,
 def export_year_local(year: str, categories: list[str], storage: Any = None, today: date | None = None, *,
                       window_days: int = LOCAL_WINDOW_DAYS) -> dict:
     """一覧なしの日次の追記。カテゴリごとに local_candidates のレースだけを名前で読み、既存の flat・race 表に追記する。
-    flat がまだ無いカテゴリ（年が替わった最初の日など）は、その年の結果のあるレースを全部名前で読んで作る（窓の候補だけで作ると、その分しか入らない表になる）。
+    race_result を先に処理し（新しいレースのメタを出馬表から名前で補う）、追記したらメタを作り直して橋渡し（bridge_on_time_results）を行う。
+    flat がまだ無いカテゴリ（年が替わった最初の日など）は、母集合のうち今日より前のレース（出馬表は 14 日先まで）を全部名前で読んで作る
+    （窓の候補だけで作ると、その分しか入らない表になる）。
     読めなかったレースは試行の記録に数える。ただし GCS が不調のとき（load が一時的な失敗でも None を返す）は数えない。
     カテゴリごとの失敗は report["errors"] に数え、残りのカテゴリは続ける。"""
     bad = [c for c in categories if c not in LOCAL_CATEGORIES]
@@ -845,45 +942,59 @@ def export_year_local(year: str, categories: list[str], storage: Any = None, tod
 
         storage = HybridStorage()
     today = today or date.today()
+    cats = sorted(categories, key=lambda c: c != "race_result")       # race_result を先に
+    universes = {k: local_universe(year, today, k) for k in {LOCAL_POLICY[c][0] for c in cats}}
     meta_index = _build_meta_index_from_race_result_flat(year)
     all_stats: list[dict] = []
-    has_results = (OUTPUT_DIR / year / "race_result_flat.parquet").exists()
-    for cat in categories:
+    for cat in cats:
+        kind = LOCAL_POLICY[cat][0]
+        uni = universes[kind]
         try:
             if not (OUTPUT_DIR / year / f"{cat}_flat.parquet").exists():
-                if not has_results:
-                    all_stats.append({"category": cat, "skipped": True, "reason": "その年の race_result_flat がまだ無い"})
+                limit = (today + timedelta(days=14)).isoformat() if cat == "race_shutuba" else today.isoformat()
+                ids = sorted(r for r, d in uni.items() if d < limit or (cat == "race_shutuba" and d <= limit))
+                if not ids:
+                    all_stats.append({"category": cat, "skipped": True, "reason": "母集合が空（その年のレースがまだ無い）"})
                     continue
-                # 年が替わった最初の日など。その年の結果があるレース（今日より前）を全部名前で読んで flat を作る（一覧は取らない）。
-                # レース前の文書を入れない（入ると「ある」とみなされ、レース後の版を読まなくなる）ため、結果のあるレースに限る
-                rr = pq.read_table(OUTPUT_DIR / year / "race_result_flat.parquet", columns=["race_id", "date"]).to_pandas()
-                ids = sorted({str(r) for r, d in zip(rr["race_id"], rr["date"].astype(str)) if is_jra_race(str(r)) and d[:10] < today.isoformat()})
-                logger.info("[%s/%s] flat が無いので、結果のある %d レースから作る", year, cat, len(ids))
+                if cat == "race_result" or not meta_index:
+                    _add_shutuba_meta(storage, ids, meta_index)
+                logger.info("[%s/%s] flat が無いので、母集合の %d レースから作る", year, cat, len(ids))
                 st = export_category_chunked(year, cat, storage, meta_index, keys=ids)
                 st.pop("missing_keys", None)
                 st["initial"] = True
-                all_stats.append(st)
-                continue
-            attempts = _load_attempts(cat, year)
-            keys = local_candidates(year, cat, today, window_days=window_days, attempts=attempts)
-            if not keys:
-                st = {"category": cat, "races": 0, "skipped": True, "reason": "読む候補なし"}
             else:
-                st = export_category_chunked(year, cat, storage, meta_index, keys=keys)
-                st["candidates"] = len(keys)
-            # 読めなかったもの（GCS が不調だった読み込みは export_category_chunked が除いている）を試行に数える
-            missing = st.pop("missing_keys", [])
-            for rid in missing:
-                attempts[rid] = [int(attempts.get(rid, [0, ""])[0]) + 1, today.isoformat()]
-            # 窓の外になった記録・読めた記録は消す（ファイルを育てない）
-            live = set(local_candidates(year, cat, today, window_days=window_days, attempts={}))
-            _save_attempts(cat, year, {k: v for k, v in attempts.items() if k in live})
-            st["not_found"] = len(missing)
-            logger.info("[%s/%s] 一覧なしの追記: 候補 %d・読めた %d・無い %d", year, cat, len(keys), st.get("races", 0), len(missing))
+                attempts = _load_attempts(cat, year)
+                keys = local_candidates(year, cat, today, window_days=window_days, attempts=attempts, universe=uni)
+                if not keys:
+                    st = {"category": cat, "races": 0, "skipped": True, "reason": "読む候補なし"}
+                else:
+                    if cat == "race_result":
+                        # 新しいレースのメタ（日付・場・距離など）を出馬表から名前で補う（一覧は取らない）
+                        _add_shutuba_meta(storage, [k for k in keys if k not in meta_index], meta_index)
+                    st = export_category_chunked(year, cat, storage, meta_index, keys=keys)
+                    st["candidates"] = len(keys)
+                # 読めなかったもの（GCS が不調だった読み込みは export_category_chunked が除いている）を試行に数える
+                missing = st.pop("missing_keys", [])
+                for rid in missing:
+                    attempts[rid] = [int(attempts.get(rid, [0, ""])[0]) + 1, today.isoformat()]
+                # 窓の外になった記録・読めた記録は消す（ファイルを育てない）
+                live = set(local_candidates(year, cat, today, window_days=window_days, attempts={}, universe=uni))
+                _save_attempts(cat, year, {k: v for k, v in attempts.items() if k in live})
+                st["not_found"] = len(missing)
+                logger.info("[%s/%s] 一覧なしの追記: 候補 %d・読めた %d・無い %d", year, cat, len(keys), st.get("races", 0), len(missing))
+            if cat == "race_result" and st.get("races"):
+                meta_index = _build_meta_index_from_race_result_flat(year) or meta_index
+                universes = {k: local_universe(year, today, k) for k in universes}
         except Exception as exc:  # noqa: BLE001  1 カテゴリの失敗で残りを止めない（終了コードで知らせる）
             logger.exception("[%s/%s] 一覧なしの追記に失敗", year, cat)
             st = {"category": cat, "error": f"{type(exc).__name__}: {exc}"}
         all_stats.append(st)
+    if "race_result" in cats:
+        try:
+            _b = bridge_on_time_results(year)
+            all_stats.append({"category": "race_result_bridge_on_time", "races": _b.get("bridged_races", 0), **_b})
+        except Exception as exc:  # noqa: BLE001  橋渡しの失敗で日次の書き出し全体を止めない
+            logger.warning("[%s] 速報の橋渡しに失敗: %s", year, exc)
     report = {"year": year, "today": today.isoformat(), "categories": all_stats,
               "errors": sum(1 for s in all_stats if s.get("error"))}
     rp = OUTPUT_DIR / year / "_export_local_report.json"

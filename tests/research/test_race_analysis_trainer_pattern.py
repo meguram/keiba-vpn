@@ -115,3 +115,33 @@ def test_workouts_of_tells_why_a_horse_has_no_pattern(tmp_path, monkeypatch, ent
     if st in ("pattern", "out"):
         assert wk["h9"]["last"]["place"] == "栗東坂路" and wk["h9"]["last"]["date"] == entries[-1][0]
     json.dumps(wk)
+
+
+def _row(day, t4):
+    return {"train_date": day, "course": "栗坂", "t4": t4}
+
+
+def test_wk_status_cls_when_weekday_4f_exists_but_no_pattern():
+    """レース週の平日に 4F はあるが、パターンに区分できない（pat が None）"""
+    w = TP._wk_status({"_meta": {"scraped_at_jst": "2026-03-14 18:00:00"}}, [_row("2026-03-11", 52.0)], "2026-03-15", None)
+    assert w["st"] == "out" and w["why"] == "cls" and w["last"]["t4"] == 52.0
+
+
+@pytest.mark.parametrize("day,t4,why", [
+    ("2026-03-11", None, "no_4f"),                 # 月曜のレース（3/16）: レース週は前の週の月〜金（3/9〜3/13）
+    ("2026-03-14", 52.0, "weekend"),               # 前の土曜（3/14）はレース週の土日
+    ("2026-03-15", 52.0, "weekend"),
+    ("2026-03-06", 52.0, "no_week"),               # その前の週
+])
+def test_wk_status_monday_race_uses_previous_week(day, t4, why):
+    w = TP._wk_status({"_meta": {"scraped_at_jst": "2026-03-15 18:00:00"}}, [_row(day, t4)], "2026-03-16", None)
+    assert w["st"] == "out" and w["why"] == why
+
+
+def test_wk_status_uses_epoch_when_jst_time_is_missing():
+    from datetime import datetime, timedelta, timezone
+
+    ts = datetime(2026, 3, 14, 19, 0, tzinfo=timezone(timedelta(hours=9))).timestamp()
+    assert TP._wk_status({"_meta": {"scraped_at": ts}}, [], "2026-03-15", None)["st"] == "none"       # 前日 19:00 の取得 → 記録なし
+    assert TP._wk_status({"_meta": {"scraped_at": ts - 86400}}, [], "2026-03-15", None)["st"] == "unfetched"
+    assert TP._wk_status({}, [], "2026-03-15", None)["st"] == "unfetched"                            # 時刻が全く無い古い記録は「未取得」のまま

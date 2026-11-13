@@ -71,3 +71,54 @@
 8. **API の課金ガード**: monitor の SA に `roles/monitoring.viewer`（プロジェクト）を付ける。付けるまでホームは『確認できない（権限がありません）』と出るだけで、ほかは動く。点検は手順 4 の Scheduler（`/ops/heartbeat/check`）が一緒に行う（ジョブを増やさない）。
    - 判定: 夜間（JST 1〜4 時台）に 30 分以上起動した時間が 2 時間分以上 → 警告（4 時間分以上で重大）／ 直近 24 時間から月額の見込みが 800 円（API 分の目安）以上 → 警告（1,600 円以上で重大）。無料枠の数値は未確認なので、画面に『無料枠なし』の値も並べる。
    - 背景: ping の発信元を列挙しても漏れる（2026-10-28 は VPS のヘルスチェック、ホストの cron の 2 つで、1〜2 台が 24 時間起動していた）。原因ではなく結果（課金される起動時間）を見張る。
+
+## 定期実行ジョブの見張り（/schedules、2026-11-13）
+
+一覧の正は `config/scheduled_jobs.json`（docs のページ `docs/html/operations/final/scheduled_jobs.html` も `python -m src.scripts.docs.build_scheduled_jobs_html` でここから作る）。
+判定のルールは `src/ops/schedule_rules.py` の 1 か所で、次の 3 か所が同じ関数を使う。**Cloud Run を起こす定期の処理は足していない**。
+
+| 役 | どこで | 何を読む・書く |
+|---|---|---|
+| VPS の見張り `keiba-sched-status.timer`（15 分おき） | VPS（`python -m src.ops.sched_status`） | `systemctl show` を読み、GCS の `ops/heartbeat/vps/status.json` に 1 回書く。赤の発生・解消だけ Slack（`/etc/keiba-ui/slack.env`） |
+| ポータル `/schedules`・ホームのカード | Cloud Run keiba-monitor（開いたときだけ・5 分使い回し・`Cache-Control: private, max-age=300`） | `ops/heartbeat/vps/status.json`・`ops/job_runs/<job>/latest.json`・Scheduler と Run Admin の API（読み取り） |
+| 毎朝の点検 `schedule-check` | GCP の g-0730-shadow（07:30）の中 | 同上。赤があれば Slack。VPS の記録が 45 分途絶していれば「VPS の記録の途絶」 |
+| VPS 全体の停止の検知（主） | ホストの cron 15 分おき（`install_vps_alive_cron.sh`、タグ KEIBA-VPS-ALIVE） | `https://app.megu-keiba.com/version.json`（Cloudflare → VPS。`/api/` ではない）。2 回続けて届かなければ Slack・戻ったら Slack |
+
+### 月額の見積もり（最悪の回数。2026-11-13）
+- VPS → `ops/heartbeat/vps/status.json`: Class A 1 回 × 96 回/日 × 30 = 2,880 回 ≒ **2.3 円**（VPS → GCS の書き込みは転送料 0）
+- ポータルを開く: Class B 約 3 回＋無料の API 6 回 × 最悪 96 回/日 × 30 ≒ 0.5 円。keiba-monitor の起動し直し（512Mi・最小 0）は最悪 CPU 約 3 秒 × 2,880 回 ≒ 31 円（無料枠の中なら 0 円）
+- 毎朝の点検: 既存のジョブに 1 手順（GCS 数回・数秒）≒ 0 円。ホストの cron の確認: GCP・GCS に触れない 0 円
+- 合計 **ふだん 約 3 円、最悪 約 35 円/月**。新しい Scheduler・常駐・最小インスタンス・15 分未満の ping は無い
+
+### 入れる順と状態（2026-11-13 夜時点。正はこの節）
+**順番に意味がある**: 読み取りの権限（3）を配備（4）より先にする。先に配備すると、毎朝の点検が「一部を確かめられない」を毎日 Slack に送る。
+
+| # | 作業 | 誰が・どこで | 状態 |
+|---|---|---|---|
+| 1 | VPS の SA keiba-fetch に `ops/heartbeat/vps/` だけの書き込み（`roles/storage.objectUser`、条件 `vps-sched-status`。式は `BUCKET=$BUCKET bash scripts/gcp/make_iam_condition.sh ops/heartbeat/vps/ vps-sched-status`） | 統括役（SA） | **済み**（11/13 18:4x JST） |
+| 2 | ホストの cron（`sudo bash scripts/cron/install_vps_alive_cron.sh`、タグ KEIBA-VPS-ALIVE） | 統括役（root） | **済み**（11/13 18:4x JST。18:45 の回から正常） |
+| 3 | SA keiba-monitor と keiba-jobs に、プロジェクトの `roles/run.viewer`・`roles/cloudscheduler.viewer`（読み取り・無料） | ユーザー（Cloud Shell。SA にはプロジェクトの IAM を変える権限が無い） | 未 |
+| 4 | keiba-monitor の配備（`scripts/gcp/deploy_cloud_run_monitor.sh --apply`。live-monitor タグ付き）と Jobs の版の更新（`scripts/gcp/deploy_cloud_run_jobs.sh`、g-0730-shadow に schedule-check） | ユーザー（Cloud Shell、本番） | 未 |
+| 5 | VPS の Slack の宛先: `printf '%s' '<webhook の URL>' \| sudo bash scripts/ops/vps/set_secret.sh /etc/keiba-ui/slack.env SLACK_WEBHOOK_URL`（無いと見張りの即時の通知が鳴らない。画面に「Slack の宛先が未設定」と出る） | ユーザー（VPS の root） | 未（11/13 夜、VPS に slack.env が無いことを確認） |
+| 6 | d6c72260 以降を含む取得の版が VPS に届く（公開 → 毎日 03:20 の keiba-release-pull@fetch） | 昇格の流れ | 未（VPS は fetch-b316ae59＝11/12 のまま） |
+| 7 | VPS の見張りのユニット: `sudo -n /opt/keiba-ui/bin/install_ops_files.sh install <版> sched-status-units`（許可リストの名前。確かめてから入れ替え、タイマーの有効化までする） | deploy（決まった操作） | 未（6 の後・ユーザーの判断） |
+
+入れたら `config/scheduled_jobs.json` の `vps-sched-status` を `active` にし、`python -m src.scripts.docs.build_scheduled_jobs_html` で docs を作り直す（`--check` で一致を確認）。
+正は 7（版のユニットを確かめてから入れ替え、タイマーを有効にする）。`scripts/ops/vps/vps_03_units.sh` も見張りのタイマーを有効にできるが（今の版に `src/ops/sched_status.py`・`config/scheduled_jobs.json` があるときだけ）、
+実行した場所の手元のひな形を使い、pull のタイマーなどほかのユニットも入れ直す・有効にするので、7 とは副作用が違う。7 で入れる前に `/var/lib/keiba-fetch/sched_status` が無ければ見張りが作る（ReadWritePaths の中）。
+
+手で試すとき: ホストの VPS 停止の検知は root の cron が状態（`logs/vps_alive_state.json`）を書くので、手では `python -m src.ops.vps_alive --dry-run` だけを使う。
+
+### 引き継ぎ（2026-11-13）
+- **済み（develop・CI 緑）**: 一覧・ルール・VPS の見張り・ポータル /schedules・毎朝の点検・ホストの VPS 停止の検知（d6c72260、de3d68ca ほか）。
+  ほかに、めぐ分析の調教師×調教の表示（c17f488a、stg 1c728983 に反映済み）、調教の被覆の判定でホストが GCS を読まない修正（957858ad）。
+- **裏で動いているもの**:
+  - 11/07・08 の出走馬の調教の取り直し（`backfill_horse_training_recent --dates 2026-11-07 2026-11-08`。他の取得を待って 1 時間で区切られたら 5 分置いて最大 6 回まで再開）。ログ `logs/horse_training_backfill.cron.log`。
+  - 調教の過去分の全ページ取得（`backfill_horse_training_past`、あと約 2 日）。終わると打ち切った馬の全ページの取り直しが自動で続く。ログ `logs/horse_training_past.log`。
+- **明朝に確かめること**: 毎朝の事前計算（`export_tables_daily.sh` の中の `precompute_race_analysis`）が版 39 で作り直し、11/07 福島 1R の調教師×調教でパターンの無い馬に「集計の対象外／未取得／記録なし」が出ること。
+  その後、develop の CI が緑なのを確かめて stg へまとめてマージ（`Merge develop into stg (…)`）。
+- **master への昇格の前提（2026-11-13 夜、統括役の最終点検）**: 昇格（promote.yml:121 → deploy_gcp.sh jobs → scheduler_gen）が、今日削除した keiba-g-* 13 件を ENABLED で作り直す経路がある。
+  2026-11-13 19:0x JST に `python -m src.ops.scheduler_gen scheduler` を表示だけで流すと、14 グループすべての create/update が出た（g-0730-shadow だけであるべき）。
+  直す担当は cron-catchup-weekly-decision（job_map）。**この修正が develop・stg に入り、同じコマンドの出力が g-0730-shadow の update だけになったことを確かめてから昇格する**。
+  未修正なら昇格しない（作り直されると 1 件 約 15 円/月＋Jobs の実行の費用。監視ポータルは「廃止なのに有効」と出す）。昇格はユーザーの直接の指示で。
+  → 2026-11-13 夜: 7e1cc81f（job_map で 13 件を retired）が develop に入り、`scheduler_gen scheduler` の出力が keiba-g-0730-shadow の create/update だけになったのを確認。残る前提は stg に入っていること。

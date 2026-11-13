@@ -352,3 +352,115 @@ def test_ui_split_headers_sort_only_their_columns_and_say_what_they_cover():
     head = html().split("</thead>")[0]
     assert head.count(" ▼") == 1 and 'data-key="c:1"><div' not in head or "▼" in head                    # 見出しの矢印は、押した見出し 1 つだけ（行名の矢印は表の本体）
     assert "大系統をまたぐ" in info()
+
+
+def test_js_pure_relative_mark_ignores_lines_strong_everywhere():
+    c = _pure()
+    e_strong = c.eval("PURE.expect(0.3,0.6,0.3)")                 # ふだん 60%（全体 30%）の系統は、この行（全体 30%）でも 60% が見込み
+    assert e_strong == pytest.approx(0.6, abs=1e-6)
+    r = json.loads(c.eval("JSON.stringify(PURE.rel([20,20,20,40],%r,'p'))" % e_strong))
+    assert abs(r["raw"]) < 1e-9 and r["pv"] > 0.4                  # 60% 走っても見込みどおり → 印なし
+    r2 = json.loads(c.eval("JSON.stringify(PURE.rel([20,20,20,40],0.3,'p'))"))
+    assert r2["raw"] == pytest.approx(0.3) and r2["pv"] < 1e-6 and 0 < r2["lift"] < 0.3     # ふだん並みの系統が 60% → 上振れ
+    assert c.eval("PURE.rel([0,0,0,0],0.3,'p')") is None and c.eval("PURE.relLevel(null,'p')") is None
+    assert c.eval("PURE.expect(NaN,0.3,0.3)") != c.eval("PURE.expect(NaN,0.3,0.3)")          # 行にデータが無ければ NaN
+
+
+def test_js_pure_exact_binomial_tail():
+    """見込みの数が小さいセル（勝率 3%・30 走で 4 勝）は、正規近似（z≈3.3）なら ★ だが、正確な確率は約 0.013 で ☆ どまり"""
+    c = _pure()
+    assert c.eval("PURE.upper(4,30,0.03)") == pytest.approx(0.0119, abs=0.002)
+    assert c.eval("PURE.upper(0,10,0.5)") == 1 and c.eval("PURE.upper(11,10,0.5)") == 0
+    assert c.eval("PURE.upper(5,10,0.5)") == pytest.approx(0.623046875)
+    assert c.eval("PURE.upper(160,400,0.3)") == pytest.approx(1.6e-5, rel=0.5)
+
+
+def _rel_ui(monkeypatch):
+    """A 系はどこでも強い（芝 60%・ダ 60%）、N 系は芝の良で並・芝の重/不良で強い・ダートは弱い、B 系は弱い（各 400 走）。Z 系は並の多数派（4000 走）"""
+    qjs = pytest.importorskip("quickjs")
+    monkeypatch.setattr(M, "MIN_LINE_RUNS", 1)
+    rates = {"A系": {("芝", "良"): 0.6, ("芝", "重・不良"): 0.6, ("ダート", "良"): 0.6},
+             "N系": {("芝", "良"): 0.3, ("芝", "重・不良"): 0.6, ("ダート", "良"): 0.1},
+             "B系": {("芝", "良"): 0.15, ("芝", "重・不良"): 0.15, ("ダート", "良"): 0.3},
+             "Z系": {("芝", "良"): 0.3, ("芝", "重・不良"): 0.3, ("ダート", "良"): 0.3},       # 馬場で変わらない多数派（行の基準を安定させる）
+             "S系": {("芝", "良"): 0.3, ("芝", "重・不良"): 1.0}}                               # 重・不良は 20 走だけ（全部 3 着以内）→ 30 走未満なので印なし
+    rows, k = [], 0
+    for ln, rr in rates.items():
+        for (sf, cond), rate in rr.items():
+            size = 4000 if ln == "Z系" else 20 if (ln, cond) == ("S系", "重・不良") else 400
+            n_pl = int(size * rate)
+            for j in range(size):
+                k += 1
+                rows.append({"race_id": f"2019050101{k:06d}", "date": "2019-04-06", "venue": "東京", "surface": sf, "distance": 1600 if sf == "芝" else 1400,
+                             "day": 1, "kai": 1, "horse_id": f"h{ln}", "line": ln, "father_large": "甲系", "pos": 1 if j < n_pl else 5, "cond": cond, "cls": "2勝"})
+    meta = {s: {"sires": 1, "o": 0, "large": "甲系"} for s in rates}
+    h = M.build(pd.DataFrame(rows), meta, LEDGER, None, None)
+    sc = re.findall(r"<script[^>]*>([\s\S]*?)</script>", h)
+    c = qjs.Context()
+    c.eval("""var __h={}, __els={};
+function El(id){return {id:id,value:'',checked:true,textContent:'',innerHTML:'',dataset:{},classList:{toggle:function(){}},style:{setProperty:function(){}},addEventListener:function(ev,fn){__h[id+':'+ev]=fn},querySelector:function(){return {offsetHeight:30}}}}
+var document={getElementById:function(id){return __els[id]=__els[id]||El(id)},querySelectorAll:function(s){return []}};
+document.getElementById('data').textContent=%s;""" % json.dumps(sc[0]))
+    c.eval(sc[1])
+    c.eval(sc[2])
+
+    def marked():
+        html = c.eval("document.getElementById('m').innerHTML")
+        cols = re.findall(r'<th class="line[^"]*" data-key="\d+"><div class="nm">([^<▼▲ ]*)', html)
+        out = {}
+        for m in re.finditer(r'data-row="([^"]+)">(?:<button[^>]*>[^<]*</button> )?[^<]*</th>(.*?)</tr>', html):
+            tds = re.findall(r'<td class="([^"]*)"', m.group(2))[1:]
+            out[m.group(1)] = sorted(cols[i] + ("★" if " rel" in td and " rel2" not in td else "☆") for i, td in enumerate(tds) if " rel" in td)
+        return out, html
+
+    def setf(i, **kw):
+        sets = ";".join(f"x.{k}={json.dumps(v)}" for k, v in kw.items())
+        c.eval(f"(function(){{var x=document.getElementById('{i}');{sets};__h['{i}:change'].call(x)}})()")
+    return c, marked, setf
+
+
+def test_ui_marks_only_conditions_where_a_line_beats_its_own_level(monkeypatch):
+    c, marked, setf = _rel_ui(monkeypatch)
+    m, html = marked()
+    assert m["cond:芝:良"] == [] and m["cond:芝:重・不良"] == ["N系★"]          # どこでも強い A 系には付かない
+    assert "N系★" not in m["cond:ダート:良"]                                     # ダートの行は、その系統のダート全体が基準
+    assert m["venue:東京:all"] == []                                              # 会場の全コースの行は印なし
+    assert "見込む" in html and "★+" in html and "偶然でこれ以上になる確率" in html
+    setf("sf", value="芝")
+    m, _ = marked()
+    assert m["venue:東京:芝"] == [] and m["cond:芝:重・不良"] == ["N系★"]        # 会場の芝全体は、その系統の芝全体と同じ → 印なし
+    setf("cmode", value="row")                                                    # 絶対の色に戻すと、従来の白い枠が付く
+    assert ' hi"' in c.eval("document.getElementById('m').innerHTML") or ' hi ' in c.eval("document.getElementById('m').innerHTML")
+
+
+def test_ui_ascending_arrow_is_not_the_good_mark():
+    """並べ替えの昇順の矢印は ▲（得意の印 ★・☆ と別の記号）"""
+    c, rows, cols, click, setf, html = _ui()
+    info = lambda: c.eval("document.getElementById('sortinfo').textContent")
+    click("key", 0)
+    click("key", 0)                                                              # 降順 → 昇順
+    assert info().endswith("▲昇順") and "★" not in info() and "☆" not in info()
+    assert re.search(r'<div class="nm">A系 ▲</div>', html())
+    click("row", "class:芝:2勝")
+    click("row", "class:芝:2勝")
+    assert "▲昇順" in info().split("／")[-1] and "★" not in info()
+
+
+def test_ui_mark_choice_win_mode_and_run_floor(monkeypatch):
+    c, marked, setf = _rel_ui(monkeypatch)
+    m2, _ = marked()
+    setf("zt", value="3")                                                        # ★ だけ
+    m3, _ = marked()
+    assert all(x.endswith("★") for v in m3.values() for x in v)
+    assert all(set(m3[k]) <= set(m2[k]) for k in m3)                            # 厳しくすると印は減るだけ
+    setf("zt", value="4")
+    m4, _ = marked()
+    assert all(set(m4[k]) <= set(m3[k]) for k in m4)
+    setf("zt", value="2")
+    c.eval("(function(){var x=document.getElementById('minn');x.value='1';__h['minn:input'].call(x)})()")         # 低信頼の目印を 1 走に下げる
+    m, html = marked()
+    assert not any(x.startswith("S系") for v in m.values() for x in v)          # 20 走のセルは、低信頼の設定を 1 に下げても印なし（30 走の下限）
+    assert "N系★" in m["cond:芝:重・不良"]
+    setf("metric", value="w")                                                    # 勝率の印（このデータは 3 着以内 = 1 着）
+    m, html = marked()
+    assert "N系★" in m["cond:芝:重・不良"] and "勝率: この系統の芝全体" in html

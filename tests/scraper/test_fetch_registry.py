@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 # 新しい sh から新しいモジュールを起動するときは、取得なら fr.FETCH_MODULE_PATTERN に、取得でなければここに足す
 NON_FETCH_MODULES = {
     "src.api.flask_app", "src.db.batch.stats_snapshot", "src.monitor.app", "src.ops.fetch_owner", "src.ops.gcs_mirror",
-    "src.ops.cost_guard", "src.ops.cron_catchup", "src.ops.host_postprocess", "src.ops.job_owner", "src.ops.model_publish", "src.ops.release_manifest", "src.ops.release_publish", "src.ops.scheduler_gen",
+    "src.ops.cost_guard", "src.ops.cron_catchup", "src.ops.vps_alive", "src.ops.host_postprocess", "src.ops.job_owner", "src.ops.model_publish", "src.ops.release_manifest", "src.ops.release_publish", "src.ops.scheduler_gen",
     "src.ops.state_sync", "src.pipeline.betting.odds_drift", "src.pipeline.build_jockey_trainer_stats",
     "src.research.pedigree.build_ancestor_name_map", "src.research.pedigree.build_horse_pedigree_10gen",
     "src.research.pedigree.build_pedigree_10gen_3view_index", "src.research.pedigree.build_pedigree_10gen_index",
@@ -25,6 +25,8 @@ NON_FETCH_MODULES = {
     "src.scripts.data.build_rb_state", "src.scripts.data.daily_results_notify", "src.scripts.data.dev_fixture",
     "src.scripts.data.drift_dump_features", "src.scripts.data.drift_monitor", "src.scripts.data.etl_stg_db",
     "src.scripts.data.update_run_axes",   # GCS の horse_lap を名前で読むだけ（netkeiba へは取りに行かない）
+    "src.scripts.data.update_serving_state",   # 保存済みの出馬表・成績を読んで v4 の日次状態を作るだけ（netkeiba へは取りに行かない）
+    "src.scripts.data.verify_past_values",   # 保存済みの race_result を名前で読んで値を検査するだけ（netkeiba へは取りに行かない）
     "src.scripts.data.frozen_tracking", "src.scripts.data.make_dev_mock", "src.scripts.data.odds_sec77_backfill",
     "src.scripts.data.precompute_race_analysis", "src.scripts.data.prediction_results", "src.scripts.data.pre_odds_table",
     "src.scripts.data.scrape_status_notify", "src.scripts.data.sync_horse_result_cache", "src.scripts.data.tp55_backfill",

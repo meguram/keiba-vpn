@@ -68,6 +68,22 @@ def patterns_of(horse_ids: list[str], race_date: str) -> dict[str, str | None]:
     return workouts_of(horse_ids, race_date)[0]
 
 
+def _scraped_jst(rec: dict) -> str:
+    """取得の時刻（JST、"YYYY-MM-DD HH:MM"）。scraped_at_jst が無い記録は scraped_at（UNIX 秒）から作る。
+    どちらも無い古い記録は空（= 取得の時刻が分からない → 「未取得」のまま。取り直すと _meta が付き、正しく出る）。"""
+    from datetime import datetime, timedelta, timezone
+
+    meta = rec.get("_meta") or {}
+    jst = str(meta.get("scraped_at_jst") or "")[:16]
+    if jst:
+        return jst
+    try:
+        ts = float(meta.get("scraped_at") or 0)
+    except (TypeError, ValueError):
+        ts = 0.0
+    return datetime.fromtimestamp(ts, timezone(timedelta(hours=9))).strftime("%Y-%m-%d %H:%M") if ts > 0 else ""
+
+
 def _wk_status(rec: dict | None, rows: list[dict[str, Any]], race_date: str, pat: str | None) -> dict[str, Any]:
     """表示用の『この馬の調教の状況』。
 
@@ -92,7 +108,7 @@ def _wk_status(rec: dict | None, rows: list[dict[str, Any]], race_date: str, pat
     rd = date.fromisoformat(race_date)
     if not before:
         # 前日夕方（出走前の取得の通常の時刻）以降に取って無ければ、本当に記録が無い。それより前の取得なら、このレースの分はまだ取っていない
-        scraped = str(((rec.get("_meta") or {}).get("scraped_at_jst")) or "")[:16]
+        scraped = _scraped_jst(rec)
         fresh = bool(scraped) and scraped >= f"{(rd - timedelta(days=1)).isoformat()} 18:00"   # 前日の 18:00 より前の取得は、最終追い切りが載る前
         return {"st": "none" if fresh else "unfetched", "last": None, "why": None}
     mon = rd - timedelta(days=7 if rd.weekday() == 0 else rd.weekday())   # final_week_workout.race_week_monday と同じ週の区切り

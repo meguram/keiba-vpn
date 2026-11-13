@@ -3,7 +3,7 @@
 import { OddsDist } from "@/components/OddsDistPopup";
 import { bracketChipStyle } from "@/lib/bracket";
 import type { AnalysisEntry } from "@/lib/raceAnalysis";
-import { patHint, patWord, pct, rowStats, splitPat, type TPFigure, type TPHorse, type TPRow, type TPWork } from "@/lib/trainerPattern";
+import { patHint, patWord, pct, rowStats, splitPat, workCell, workReason, type TPFigure, type TPHorse, type TPRow } from "@/lib/trainerPattern";
 
 const CSS = `
 .tp-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -45,36 +45,6 @@ function Cells({ r, edges, maxOdds, title }: { r: TPRow; edges: number[]; maxOdd
       <td style={{ textAlign: "center" }}><OddsDist row={r} edges={edges} maxOdds={maxOdds} title={title} /></td>
     </>
   );
-}
-
-const md = (d: string | null | undefined) => (d && d.length >= 10 ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}` : "");
-
-/** パターンが無い馬の『最終追い切り』の欄。版 39 より前の保存結果（wk なし）は「–」。 */
-function workCell(w: TPWork | null | undefined): { text: string; tag: string | null } {
-  if (!w) return { text: "–", tag: null };
-  if (w.st === "out") return { text: [w.last?.place ?? "場所不明", md(w.last?.date)].filter(Boolean).join(" "), tag: "集計の対象外" };
-  if (w.st === "none") return { text: "記録なし", tag: null };
-  if (w.st === "unfetched" || w.st === "nofile") return { text: "未取得", tag: null };
-  return { text: "–", tag: null };
-}
-
-const WHY: Record<string, string> = {
-  no_4f: "レース週の平日の追い切りに 4F の時計がありません（終いだけ・計測なしなど）",
-  weekend: "レース週の追い切りが土日だけです（集計に使うのは月〜金の 1 本）",
-  no_week: "レース週の平日に追い切りがありません",
-  cls: "追い切りの時計を、集計のパターンに区分できませんでした",
-};
-
-function workReason(w: TPWork | null | undefined): string | null {
-  if (!w) return null;
-  if (w.st === "out") {
-    const last = w.last?.date ? `（最後の追い切りは ${md(w.last.date)}${w.last.place ? `・${w.last.place}` : ""}${w.last.t4 != null ? `・4F ${w.last.t4.toFixed(1)}` : ""}）` : "";
-    return `この追い切りは回収率の集計の対象外です: ${WHY[w.why ?? ""] ?? "集計の対象の種別ではありません"}${last}。`;
-  }
-  if (w.st === "none") return "このレースの前の追い切りの記録がありません。";
-  if (w.st === "unfetched") return "このレースの週の調教をまだ取得していません（取得すると表示されます）。";
-  if (w.st === "nofile") return "この馬の調教をまだ取得していません（取得すると表示されます）。";
-  return null;
 }
 
 function reason(h: TPHorse, code: string | null): string {

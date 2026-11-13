@@ -97,6 +97,29 @@ def drift_alert(recent: pd.DataFrame, base: pd.DataFrame, z_thresh: float = 3.0,
     return pd.DataFrame(rows)
 
 
+def race_ids_between(d_from: str, d_to: str, tables_dir: Path | None = None) -> list[str]:
+    """期間（YYYYMMDD）のレースを、ローカルの記録（確定結果・出馬表・速報の flat と race_lists）から決める。GCS の一覧は取らない。"""
+    from src.scraper import export_tables as et
+
+    base = tables_dir or et.OUTPUT_DIR
+    lo, hi = et._iso(d_from), et._iso(d_to)
+    out: set[str] = set()
+    for y in sorted({d_from[:4], d_to[:4]}):
+        for cat in ("race_result", "race_shutuba", "race_result_on_time"):
+            out |= {r for r, d in et._flat_dates(base / y / f"{cat}_flat.parquet").items() if lo <= d <= hi}
+    from datetime import date, timedelta
+
+    day, end = date.fromisoformat(lo), date.fromisoformat(hi)
+    while day <= end:
+        try:
+            doc = json.loads((base.parent / "race_lists" / f"{day:%Y%m%d}.json").read_text(encoding="utf-8"))
+            out |= {str(r.get("race_id")) for r in doc.get("races") or [] if r.get("race_id")}
+        except (OSError, ValueError):
+            pass
+        day += timedelta(days=1)
+    return sorted(r for r in out if et.is_jra_race(r))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--from", dest="d_from", required=True)
@@ -109,7 +132,14 @@ def main() -> int:
 
     load_project_dotenv()
     st = HybridStorage()
-    keys = [k for y in sorted({a.d_from[:4], a.d_to[:4]}) for k in st.batch_list_blobs("race_odds", y)]
+    # 期間のレースだけを名前で読む（2026-11-13 まで: race_odds の当年の全件一覧と、その全文書 約 3,000 件の読み出しを週 2 回していた）
+    # レースの日付の窓は前 3 日・後 1 日広げる（開催の後に取り直した確定オッズなど、snapshot_at だけが範囲に入る文書を落とさない）。
+    # 範囲の絞り込みは、従来どおり下の snapshot_at で行う
+    from datetime import datetime, timedelta
+
+    lo = (datetime.strptime(a.d_from, "%Y%m%d") - timedelta(days=3)).strftime("%Y%m%d")
+    hi = (datetime.strptime(a.d_to, "%Y%m%d") + timedelta(days=1)).strftime("%Y%m%d")
+    keys = race_ids_between(lo, hi)
     docs = [st.load("race_odds", k, bypass_cache=True) for k in keys]
     docs = [d for d in docs if isinstance(d, dict) and d.get("snapshots") and str(d.get("snapshot_at") or "")[:10].replace("-", "") >= a.d_from and str(d.get("snapshot_at") or "")[:10].replace("-", "") <= a.d_to]
     flat = flatten_docs(docs)

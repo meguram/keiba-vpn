@@ -22,7 +22,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 logger = logging.getLogger("ops.gcs_mirror")
 
@@ -747,6 +747,30 @@ def push_vps(backend: Backend, root: Path = REPO_ROOT, manifest: Path | None = N
         if manifest is not None:
             _save_manifest(manifest, known, recent)
     return {"seen": seen, "uploaded": 0 if dry_run else sent, "would_upload": sent if dry_run else 0}
+
+
+# 週次の後処理の受け渡し（段 4 後半）: VPS の weekly-update が取得とキュー待機を終えたら、後処理（めぐ指数・PG 同期・予測の成績など）を
+# ホストに任せる目印を 1 件だけ書く（決まった名前で上書き。一覧しない）。キュー待機が打ち切られた回は finalize に届かないので書かれない
+# ＝ホストも後処理をしない（終了コード 7 の順序を保つ）。ホストは src/ops/weekly_finalize.py が名前指定で 1 件読む。
+WEEKLY_HANDOFF_KEY = f"{VPS_PREFIX}/_weekly_finalize.json"
+
+
+def publish_weekly_handoff(backend: Backend, run_date: str, target_dates: list[str], *, now: float | None = None) -> dict[str, Any]:
+    """run_date は目印を書いた日（JST の YYYYMMDD。待機が日をまたぐと土・日になる）。ホストは written_at を回の鍵にする（同じ日の回し直しも別の回）。"""
+    doc = {"run_date": str(run_date), "target_dates": [str(d) for d in target_dates], "written_at": time.time() if now is None else now}
+    backend.upload(WEEKLY_HANDOFF_KEY, json.dumps(doc, separators=(",", ":")).encode())
+    return doc
+
+
+def read_weekly_handoff(backend: Backend) -> dict[str, Any] | None:
+    """目印（無ければ None）。認証・通信の失敗は上に投げる。"""
+    try:
+        doc = json.loads(backend.download(WEEKLY_HANDOFF_KEY))
+    except Exception as exc:  # noqa: BLE001
+        if type(exc).__name__ in ("NotFound", "KeyError", "FileNotFoundError"):
+            return None
+        raise
+    return doc if isinstance(doc, dict) else None
 
 
 def vps_owned_trees(owned: set[str] | None = None) -> list[str]:

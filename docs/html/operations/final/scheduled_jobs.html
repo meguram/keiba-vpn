@@ -22,6 +22,7 @@
 * { box-sizing:border-box; }
 body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
 main { max-width:1180px; margin:0 auto; padding:28px 16px 80px; }
+a { color:var(--accent); }
 h1 { font-size:24px; margin:0 0 6px; line-height:1.4; }
 h2 { font-size:19px; margin:40px 0 6px; padding-top:16px; border-top:1px solid var(--border); }
 h3 { font-size:16px; margin:22px 0 4px; }
@@ -46,286 +47,667 @@ pre code { padding:0; background:none; overflow-wrap:normal; }
 .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .mu { color:var(--muted); }
 .ev { color:var(--muted); font-size:12.5px; }
 details { background:var(--panel); border:1px solid var(--border); border-radius:10px; margin:8px 0; }
-summary { cursor:pointer; padding:8px 12px; line-height:1.5; }
+summary { cursor:pointer; padding:8px 12px; line-height:1.5; overflow-wrap:anywhere; }
 summary .sm { color:var(--muted); font-size:13px; }
 details[open] > summary { border-bottom:1px solid var(--border); }
 .dbody { padding:8px 14px 12px; font-size:13.5px; }
 .dbody > div, .kv > div { margin:4px 0; overflow-wrap:anywhere; }
 ul.jobs { padding-left:18px; margin:6px 0; } ul.jobs > li { margin:10px 0; }
 .kv { margin:4px 0 0; padding-left:10px; border-left:3px solid var(--border); }
-.kv ol, .dbody ol { margin:4px 0; padding-left:20px; }
+.kv ol, .dbody ol, .dbody ul { margin:4px 0; padding-left:20px; }
 .dbody .scroll table { min-width:720px; }
 </style>
 </head>
 <body><main>
 <h1>定期実行ジョブの一覧（GCP・ConoHa VPS）</h1>
-<p class="muted">作成: 2026-11-13（JST） / 最終更新: 2026-11-13 15:40 JST / 時刻はすべて <b>JST</b>（ホストの crontab は UTC で書かれているので JST に直した）。ホストの cron の一覧は <code>docs/html/operations/cron_schedule.html</code>。</p>
+<p class="muted">更新: 2026-11-13（一覧の <code>updated</code>） / 時刻はすべて <b>JST</b>（Asia/Tokyo） / このページは <code>config/scheduled_jobs.json</code>（＋<code>config/gcp_job_map.json</code>）から <code>python -m src.scripts.docs.build_scheduled_jobs_html</code> で作る（手で直さない）。ホストの cron の一覧は <a href="../cron_schedule.html">cron の一覧</a>（<code>docs/html/operations/cron_schedule.html</code>）。</p>
 
 <h2 id="summary">まとめ</h2>
 <div class="kpis">
-  <div class="kpi"><b>1 件</b><span>GCP で動いている定期実行（Cloud Scheduler <code>keiba-g-0730-shadow</code>。中で 2 つの処理）</span></div>
-  <div class="kpi"><b>5 件</b><span>ConoHa VPS で動いている systemd タイマー（取得の実行役は 11/13 15:00 に停止）</span></div>
-  <div class="kpi"><b>13＋7 件</b><span>今は動いていない・今後起動しうるもの（GCP 13 件は削除済み・再開の予定なし。VPS はタイマー 6 件＋取得の実行役）</span></div>
-  <div class="kpi"><b>2 種</b><span>廃止（天気 <code>jma-weather</code>、疎通確認 <code>smoke-auto-*</code> 3 件）</span></div>
+  <div class="kpi"><b>1 件</b><span>GCP で動いている定期実行（<code>keiba-g-0730-shadow</code>）</span></div>
+  <div class="kpi"><b>5 件</b><span>ConoHa VPS で動いている systemd タイマー（<code>keiba-cache-warm.timer</code>・<code>keiba-release-pull-ui.timer</code>・<code>keiba-release-pull-ui-stg.timer</code>・<code>keiba-release-pull-fetch.timer</code>・<code>keiba-ui-health.timer</code>）</span></div>
+  <div class="kpi"><b>1 件</b><span>ホストで動いている（この一覧に載せたもの: <code>KEIBA-VPS-ALIVE</code>）</span></div>
+  <div class="kpi"><b>27 件</b><span>今は動いていない・今後起動しうるもの（GCP 削除済み 13、GCP 停止中 1、ConoHa VPS 停止中 2、ConoHa VPS 今後 6、ホスト 今後 5）</span></div>
+  <div class="kpi"><b>2 種</b><span>廃止（jma-weather（気象庁の時別値）・smoke-auto-thu-noon・-sat-morning・-sun-night）</span></div>
 </div>
-<div class="box">
-<p><b>今の形（2026-11-13）</b>: データ取得・予測・後処理は、まだ<b>ホストの cron</b>が正（VPS の担当表 <code>config/fetch_owner.json</code> の <code>agent_tasks</code> は空）。
-GCP の並走 Jobs は 11/12 17:00 に止め、11/13 に Scheduler 13 件を削除した。GCP で定期に動くのは<b>費用の日報</b>だけ。
-VPS は画面の配信（Next.js・nginx・Cloudflare Tunnel）と、その周りのタイマー（キャッシュの取り直し・新しい版の取り込み・死活の自己診断）だけが動いている。
-取得を VPS に移す計画（VPS → GCS → ホスト）の新しいタイマーは、段 6（配備と段階的な受け渡し）で有効にする。</p>
-</div>
+<div class="box"><p><b>この一覧について</b>: 定期実行ジョブの一覧の正（GCP・ConoHa VPS。ホストの cron は docs/html/operations/cron_schedule.html）。監視ポータル（/schedules）と docs/html/operations/final/scheduled_jobs.html（src/scripts/docs/build_scheduled_jobs_html.py）の両方がこれを読む。schedule の cron は JST。</p></div>
 <p class="sub">ジョブごとの中身（ステップ・入口のコマンド・読む元と書き出し先・取得先の URL の例）は <a href="#detail">ジョブごとの中身</a> の節で、行を開くと出る。</p>
-<h3>データの出どころと確かめ方</h3>
-<ul>
-<li><b>GCP</b>: 統括役がサービスアカウント（<code>.env</code> の <code>GCS_*</code>）の認証で Cloud Scheduler・Cloud Run の API を読んだ結果（2026-11-13 14:5x JST）と、
-記録 <code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code>・<code>docs/operations/deleted_scheduler_smoke_auto_20261113.md</code>・費用の台帳 <code>docs/operations/cost_ledger.md</code>・<code>config/gcp_job_map.json</code>。
-確かめ方: <code>gcloud scheduler jobs list --location=asia-northeast1</code>、<code>gcloud run jobs list --region=asia-northeast1</code>（手元の gcloud の利用者認証は切れているので、サービスアカウントで読む）。</li>
-<li><b>ConoHa VPS</b>: 2026-11-13 14:40 JST に <code>ssh keiba-vps 'systemctl list-timers --all --no-pager; systemctl list-unit-files "keiba*" --no-pager'</code> を読むだけで 1 回実行した結果と、
-ひな形 <code>scripts/ops/vps/templates/</code>・導入スクリプト <code>scripts/ops/vps/vps_03_units.sh</code> ほか。VPS のタイマーの時刻は JST（list-timers の NEXT で確認）。</li>
-<li><b>ホスト（突き合わせだけに使用）</b>: <code>sudo crontab -l</code>（読むだけ、2026-11-13 14:4x JST）。</li>
-</ul>
+<h3>データの出どころ</h3>
+<ul><li>GCP: サービスアカウントで Cloud Scheduler・Cloud Run の API を読んだ結果（2026-11-13 14:5x JST）と config/gcp_job_map.json</li><li>ConoHa VPS: ssh で systemctl list-timers --all・list-unit-files を読んだ結果（2026-11-13 14:40 JST）とひな形 scripts/ops/vps/templates/</li></ul>
 
 <h2 id="gcp-live">表 1. GCP: 稼働中の定期実行</h2>
-<p class="sub">Cloud Scheduler は 1 件だけ（統括役の実物の確認、14:5x JST）。場所 asia-northeast1、プロジェクト horse-racing-466415。</p>
+<p class="sub">Cloud Scheduler → Cloud Run Jobs（<code>keiba-dispatch-*</code>）。場所 asia-northeast1。中身は <code>config/gcp_job_map.json</code> の <code>scheduler_groups</code> から。</p>
 <div class="scroll"><table>
 <tr><th>名前</th><th>スケジュール（JST）</th><th>対象</th><th>中身</th><th>費用の目安（月）</th><th>ホストでも同じ処理？</th><th>根拠</th></tr>
-<tr><td><code>keiba-g-0730-shadow</code><br><span class="b ok">ENABLED</span></td><td class="when">毎日 07:30<br><code>30 7 * * *</code></td>
-<td>Cloud Run Job <code>keiba-dispatch-s</code>（512Mi・1 vCPU、上限 600 秒）<br>グループ <code>g-0730-shadow</code></td>
-<td>① <code>gcp-daily-cost-report</code>: GCP の日次の費用の報告（想定と実績・急増の警告）。<br>② <code>fetch-shadow-report</code>: VPS の取得の影モードの日次集計（影が止まっていれば「影の結果なし」になるだけ）。<br>最後の実行 11/13 07:30。</td>
-<td>Jobs 約 0 円（無料枠の中、最悪 15 円）＋Scheduler 約 15 円</td>
-<td>①はホストに無い（ホストの <code>cost_guard</code> は別物: 1 日 2 回、課金を見て止める判定）。②は無い。</td>
-<td class="ev"><code>config/gcp_job_map.json:91</code>（グループ）・<code>:930</code>・<code>:978</code>（ジョブ）、<code>src/ops/cost_guard.py:39</code>（KEEP）、<code>docs/operations/cost_ledger.md:77</code>（J2）・<code>:58</code>（F3）</td></tr>
+<tr><td><code>keiba-g-0730-shadow</code><br><span class="b ok">稼働中</span><br><span class="ev">id: gcp-g-0730-shadow</span></td><td class="when">毎日 07:30<br><code>30 7 * * *</code></td><td>Cloud Run Job <code>keiba-dispatch-s</code>（512Mi・1 vCPU、上限 600 秒）<br>グループ <code>g-0730-shadow</code></td><td>影モード(VPS の取得の並走検証)の日次集計 + GCP 日次コスト報告（想定 vs 実績・急増警告。予算超過の早期警戒） + 定期実行の毎朝の点検（GCP・VPS。赤があれば Slack）<br>① <code>gcp-daily-cost-report</code>: GCP 日次コスト報告（予算超過の早期警戒）<br>② <code>fetch-shadow-report</code>: 影モード（VPS の取得をホストと並走で検証）の日次集計。前日分の成功率・本番との一致率・合否を ops/fetch_shadow/daily/ に書く<br>③ <code>schedule-check</code>: 定期実行ジョブ（GCP・VPS）の毎朝の点検。監視ポータルと同じルールで判定し、赤があれば Slack（VPS の記録の途絶 45 分も）</td><td>Jobs 約 0 円（無料枠の中、最悪 15 円）＋Scheduler 約 15 円</td><td>①費用の日報はホストに無い（ホストの cost_guard は別物: 1 日 2 回、課金を見て止める判定）。②影の集計は無い</td><td class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-0730-shadow）</code></td></tr>
 </table></div>
-
 <h3>定期ではなく、呼ばれたときだけ動くもの（GCP）</h3>
+<p class="sub">この一覧（<code>config/scheduled_jobs.json</code>）に載せたものだけ。Cloud Run のサービス（画面の API・監視ポータル）は定期実行ではないので載せていない。</p>
 <div class="scroll"><table>
-<tr><th>名前</th><th>種類</th><th>今の呼ばれ方</th><th>費用の目安</th><th>根拠</th></tr>
-<tr><td><code>keiba-api</code></td><td>Cloud Run サービス（最小 0・最大 3、リクエスト課金。本番・stg はタグで分ける）</td><td>VPS の nginx から（画面の API）。VPS の <code>keiba-cache-warm</code> の取り直しも、ここへの要求になる。</td><td>月 0〜60 円（最悪 約 700 円）＋送信 約 120 円</td><td class="ev"><code>docs/operations/cost_ledger.md:67</code>（R1）</td></tr>
-<tr><td><code>keiba-monitor</code></td><td>Cloud Run サービス（最小 0・最大 1）</td><td>人が監視ポータルを開いたときだけ（VPS のハートビートは無効のため来ない）</td><td>ほぼ 0</td><td class="ev"><code>docs/operations/cost_ledger.md:69</code>（R3）</td></tr>
-<tr><td><code>keiba-dispatch-m</code>・<code>-l</code>・<code>-xl</code></td><td>Cloud Run Jobs</td><td><b>呼び手なし</b>（Scheduler を削除）。最後の実行は xl 11/12 07:30、l 11/12 07:00、m 11/12 17:05。</td><td>動かなければ 0（イメージの保存は Artifact Registry に計上）</td><td class="ev">統括役の実物の確認（11/13 14:5x）</td></tr>
-<tr><td><code>predict-race</code>（<code>keiba-dispatch-*</code> の上で）</td><td>Cloud Tasks → Jobs</td><td>積み手の <code>event-pump</code>（<code>keiba-g-pump</code>）を削除したので呼ばれない。予測はホストの <code>raceday-weight-runner</code> が出している。</td><td>0</td><td class="ev"><code>config/gcp_job_map.json:2272</code>・<code>:2407</code></td></tr>
-<tr><td><code>netkeiba-smoke</code></td><td>Cloud Run Job</td><td>手動だけ（Scheduler なし）。最後の実行 10/25 23:50。</td><td>1 回 数円</td><td class="ev"><code>docs/operations/deleted_scheduler_smoke_auto_20261113.md:31</code></td></tr>
-<tr><td>Artifact Registry の自動掃除</td><td>保持の方針（GCP が自動で適用）</td><td>1 日保持＋新しい 3 版＋<code>live-</code> 付きを残す（11/13 に 2 日 → 1 日）</td><td>保存 月 約 240 円（掃除で減る見込み）</td><td class="ev">コミット 5d81383e、<code>docs/operations/cost_ledger.md:57</code>（F2）</td></tr>
+<tr><th>名前</th><th>種類</th><th>中身・今の呼ばれ方</th><th>費用の目安</th><th>根拠</th></tr>
+<tr><td><code>netkeiba-smoke</code><br><span class="b warn">停止中</span><br><span class="ev">id: gcp-netkeiba-smoke</span></td><td>Cloud Run Job（手動）</td><td>netkeiba への到達試験（GCP から取得できるかの確認）。手動だけ<br><span class="ev">Scheduler なし（smoke-auto-* 3 件は 11/13 削除）。最後の実行 10/25 23:50</span></td><td>1 回 数円</td><td class="ev"><code>deploy/gcp/netkeiba_smoke/run.sh</code>、<code>docs/operations/deleted_scheduler_smoke_auto_20261113.md:31</code></td></tr>
 </table></div>
 
 <h2 id="vps-live">表 2. ConoHa VPS: 稼働中の定期実行</h2>
-<p class="sub">ssh で実物を確認（11/13 14:40 JST）。その後 15:00:58 に、ユーザーの承認で取得の実行役 <code>keiba-fetch-agent</code> を停止・無効にした（別のセッション、コミット dda6af55。<code>fetch_agent_ctl.sh shadow-off</code>）。<code>keiba*</code> のタイマーで有効なのは 5 件。OS 標準のタイマー（apt-daily・logrotate・fstrim・man-db・motd-news など 15 件）は数えていない。</p>
+<p class="sub">稼働中の systemd タイマーと、取得の実行役などの常駐（止めているものも状態を付けてここに載せる）。OS 標準のタイマー（apt-daily・logrotate など）は数えていない。タイマーの時刻は JST。</p>
 <div class="scroll"><table>
-<tr><th>タイマー（起動するもの）</th><th>スケジュール（JST）</th><th>中身</th><th>メモリの枠</th><th>ホストでも同じ処理？</th><th>根拠</th></tr>
-<tr><td><code>keiba-cache-warm.timer</code><br>→ <code>keiba-cache-warm.service</code></td><td class="when">60 秒おき<br>（起動 2 分後から）</td>
-<td>GCS の <code>ops/cache_dirty/</code>（昨日以降）を 1 回一覧し、更新のあったレース・馬の API を nginx 経由で取り直す（Cloud Run の API に要求が行く）。660 秒後にもう 1 回取り直す。<br>費用: 一覧 1 日 1,440 回（Class A 月 約 35 円）＋転送 1 日 約 0.4GiB（月 約 230 円）。</td>
-<td>MemoryMax 128M</td><td>無い（ホストの事前生成の周回は <code>egress_billed()</code> で止めてある）</td>
-<td class="ev"><code>scripts/ops/vps/cache_warm.py:1-12</code>、<code>scripts/ops/vps/vps_10_cache_warm.sh:34</code>、<code>docs/operations/cost_ledger.md:155</code></td></tr>
-<tr><td><code>keiba-release-pull-ui.timer</code><br>→ <code>keiba-release-pull@ui</code></td><td class="when">3 分おき（±20 秒）</td>
-<td>本番の画面の新しい版。GCS の <code>latest.json</code> 1 件を読み、新しければ入れる。</td><td>MemoryMax 150M</td><td>無い</td>
-<td class="ev"><code>scripts/ops/vps/vps_03_units.sh:59</code>・<code>:118</code></td></tr>
-<tr><td><code>keiba-release-pull-ui-stg.timer</code><br>→ <code>keiba-release-pull@ui-stg</code></td><td class="when">5 分おき（±30 秒）</td>
-<td>stg の画面の新しい版（同上）。</td><td>MemoryMax 150M</td><td>無い</td>
-<td class="ev"><code>scripts/ops/vps/vps_05_stg_instance.sh:85</code>・<code>:104</code></td></tr>
-<tr><td><code>keiba-release-pull-fetch.timer</code><br>→ <code>keiba-release-pull@fetch</code></td><td class="when">毎日 03:20（±2 分）</td>
-<td>取得の実行役のコードの新しい版（メンテナンス窓 03:00〜04:00 の中）。</td><td>MemoryMax 150M</td><td>無い</td>
-<td class="ev"><code>scripts/ops/vps/vps_03_units.sh:60</code>・<code>:118</code></td></tr>
-<tr><td><code>keiba-ui-health.timer</code><br>→ <code>keiba-ui-health.service</code></td><td class="when">5 分おき</td>
-<td>VPS の中での自己診断: keiba-ui・nginx・cloudflared-prod が止まっていれば 1 回再起動、画面の <code>/version.json</code>・ディスク・空きメモリを見て Slack へ（同じ内容は 1 時間に 1 回）。API（Cloud Run）は叩かない。</td>
-<td>（指定なし）</td><td>ホストは自分のサーバーを <code>server_watchdog</code>（3 分おき）で見ている。対象は別。</td>
-<td class="ev"><code>scripts/ops/vps/healthcheck.sh</code>、<code>scripts/ops/vps/vps_02_install_stack.sh:82</code></td></tr>
-<tr><td><code>keiba-fetch-agent.service</code><br><span class="b mu">11/13 15:00 停止</span></td><td class="when">常駐（タスク表を毎分見る）</td>
-<td>取得の実行役。14:40 の読み取りでは enabled だったが、担当が空のまま影モードで GCS のタスク表を毎分 6 回一覧していた（1 日 8,640 回・月 約 210 円＋転送）ため、15:00:58 に停止・無効にした。<b>再開は段 6 で <code>KEIBA_FETCH_TASK_STORE=file</code> にしてから</b>（表 3 の「今後」の 4 件と同時）。</td>
-<td>slice <code>keiba-fetch.slice</code>: MemoryHigh 220M・MemoryMax 250M</td>
-<td>取得はすべてホストの cron が担当（正）。</td>
-<td class="ev"><code>scripts/ops/vps/templates/keiba-fetch-agent.service</code>、<code>config/fetch_owner.json</code>、コミット dda6af55・e2b534b4</td></tr>
+<tr><th>タイマー（起動するもの）</th><th>スケジュール（JST）</th><th>中身</th><th>メモリの枠</th><th>費用の目安（月）</th><th>ホストでも同じ処理？</th><th>根拠</th></tr>
+<tr><td><code>keiba-cache-warm.timer</code><br>→ <code>keiba-cache-warm.service</code><br><span class="b ok">稼働中</span><br><span class="ev">id: vps-cache-warm</span></td><td class="when">60 秒おき</td><td>API のキャッシュの取り直し: 合図（ops/cache_dirty/_beacon.json の世代）が変わったときなどだけ更新の目印を一覧し、更新のあったレース・馬の API を nginx 経由で取り直す（660 秒後にもう 1 回）<br><span class="ev">2026-11-13 に合図方式へ入れ替え（05f35916）</span></td><td>MemoryMax 128M</td><td>一覧 最悪 288 回/日・合図のメタデータ 1,440 回/日 ≒ 月 約 45 円（毎分の一覧だった 11/13 以前は 約 265 円）</td><td>無い（ホストの事前生成の周回は egress_billed() で止めてある）</td><td class="ev"><code>scripts/ops/vps/templates/keiba-cache-warm.timer</code>、<code>scripts/ops/vps/cache_warm.py:1-15・:330-332</code>、<code>docs/operations/cost_ledger.md:198-205</code></td></tr>
+<tr><td><code>keiba-release-pull-ui.timer</code><br>→ <code>keiba-release-pull@ui.service</code><br><span class="b ok">稼働中</span><br><span class="ev">id: vps-release-pull-ui</span></td><td class="when">3 分おき</td><td>本番の画面の新しい版の取り込み（GCS の latest.json を読み、新しければ入れる）</td><td>MemoryMax 150M</td><td>読み 1 日 480 回（ほぼ 0 円）</td><td>無い</td><td class="ev"><code>scripts/ops/vps/templates/keiba-release-pull-ui.timer</code>、<code>scripts/ops/vps/vps_03_units.sh:59</code></td></tr>
+<tr><td><code>keiba-release-pull-ui-stg.timer</code><br>→ <code>keiba-release-pull@ui-stg.service</code><br><span class="b ok">稼働中</span><br><span class="ev">id: vps-release-pull-ui-stg</span></td><td class="when">5 分おき</td><td>stg の画面の新しい版の取り込み</td><td>MemoryMax 150M</td><td>ほぼ 0 円</td><td>無い</td><td class="ev"><code>scripts/ops/vps/templates/keiba-release-pull-ui-stg.timer</code>、<code>scripts/ops/vps/vps_05_stg_instance.sh:104</code></td></tr>
+<tr><td><code>keiba-release-pull-fetch.timer</code><br>→ <code>keiba-release-pull@fetch.service</code><br><span class="b ok">稼働中</span><br><span class="ev">id: vps-release-pull-fetch</span></td><td class="when">毎日 03:20<br><code>20 3 * * *</code></td><td>取得の実行役のコードの新しい版の取り込み（メンテナンス窓 03:00〜04:00）</td><td>MemoryMax 150M</td><td>ほぼ 0 円</td><td>無い</td><td class="ev"><code>scripts/ops/vps/templates/keiba-release-pull-fetch.timer</code>、<code>scripts/ops/vps/vps_03_units.sh:60</code></td></tr>
+<tr><td><code>keiba-ui-health.timer</code><br>→ <code>keiba-ui-health.service</code><br><span class="b ok">稼働中</span><br><span class="ev">id: vps-ui-health</span></td><td class="when">5 分おき</td><td>VPS の中の自己診断: keiba-ui・nginx・cloudflared が止まっていれば 1 回再起動し、/version.json・ディスク・空きメモリを見て Slack へ</td><td>（指定なし）</td><td>0 円（API は叩かない）</td><td>ホストは server_watchdog（3 分おき）で自分のサーバーを見ている（対象は別）</td><td class="ev"><code>scripts/ops/vps/healthcheck.sh</code>、<code>scripts/ops/vps/vps_02_install_stack.sh:82</code></td></tr>
+<tr><td><code>keiba-fetch-agent.service</code><br><span class="b warn">停止中</span><br><span class="ev">id: vps-fetch-agent</span></td><td class="when">常駐</td><td>取得の実行役（常駐）: タスク表を毎分見て、netkeiba の取得を実行する<br><span class="ev">11/13 15:00 に停止・無効（担当なしで GCS のタスク表を毎分 6 回一覧していたため）。段 6 で file モードにしてから再開</span></td><td>keiba-fetch.slice: MemoryHigh 220M・MemoryMax 250M</td><td>停止中 0 円</td><td>取得はすべてホストの cron が担当（正）</td><td class="ev"><code>scripts/ops/vps/templates/keiba-fetch-agent.service</code>、<code>config/fetch_owner.json</code>、<code>コミット dda6af55</code></td></tr>
 </table></div>
-<p class="muted">常駐のサービス（定期実行ではない）: <code>keiba-ui</code>（本番の画面）・<code>keiba-ui-stg</code>・nginx・cloudflared-prod。<code>keiba-api.service</code> は disabled（API を Cloud Run に移す前の残り）。</p>
 
 <h2 id="future">表 3. 今は動いていない・今後起動する</h2>
-<h3>GCP: 削除した Scheduler 13 件（2026-11-13 削除、11/12 17:00 から停止していた）</h3>
-<p class="sub">再開するときは作り直す（設定と <code>gcloud scheduler jobs create</code> のコマンドは <code>docs/operations/deleted_scheduler_keiba_g_20261113.md:31-191</code>）。
-作り直すと 1 件 約 15 円/月と Jobs の実行の費用（並走時 1 日 60〜200 円）が戻る。方針（2026-11-12）は「VPS で取得 → GCS → ホストで後処理と予測」なので、<b>再開の予定は無い</b>。
-「ホストで代わりに動いているか」は 11/13 のホストの crontab で確かめた（UTC を JST に直した時刻）。</p>
+<h3>GCP: 動いていない Scheduler（13 件）</h3>
+<p class="sub">削除済みの Scheduler を作り直すと、1 件 約 15 円/月と Jobs の実行の費用が戻る。作り直しの設定とコマンドは根拠の docs。</p>
 <div class="scroll"><table>
-<tr><th>名前</th><th>スケジュール（JST）</th><th>対象</th><th>中身（グループの処理）</th><th>ホストで代わりに動いているか</th><th>根拠</th></tr>
-<tr><td><code>keiba-g-0530</code></td><td class="when">毎日 05:30</td><td>dispatch-l</td><td>騎手・調教師統計</td><td class="ok">動いている（07:15）</td><td class="ev"><code>config/gcp_job_map.json:67</code></td></tr>
-<tr><td><code>keiba-g-0700</code></td><td class="when">毎日 07:00</td><td>dispatch-l</td><td>履歴テーブル書き出し → 特徴量の蓄積 → parse drift → めぐ分析の事前計算</td><td class="ok">動いている（書き出し 07:00、特徴量 07:40。drift・走法の軸・めぐ分析は <code>scripts/cron/export_tables_daily.sh:46</code>・<code>:48</code> の中）</td><td class="ev"><code>config/gcp_job_map.json:77</code></td></tr>
-<tr><td><code>keiba-g-0730</code></td><td class="when">毎日 07:30</td><td>dispatch-m</td><td>ラップ予想（当日）・朝のサマリー</td><td class="ok">動いている（どちらも 07:30）</td><td class="ev"><code>config/gcp_job_map.json:101</code></td></tr>
-<tr><td><code>keiba-g-0730-dayprep</code></td><td class="when">毎日 07:30</td><td>dispatch-xl</td><td>その日の全レースの日単位キャッシュ（v4_day・px_day）。GCP の predict-race 用</td><td class="warn">無い（ホストは <code>serving-state-precompute</code> 07:35・<code>-profile</code> 08:10 の別の作りで予測している、と推測）</td><td class="ev"><code>config/gcp_job_map.json:207</code>・<code>:3974</code></td></tr>
-<tr><td><code>keiba-g-0800</code></td><td class="when">毎日 08:00</td><td>dispatch-l</td><td>並走の一致判定・網羅状況（月）・追走難度 v2（月）・RB の履歴状態</td><td class="ok">網羅 月 08:00、追走難度 v2 月 08:30、RB 08:20。並走の一致判定は不要（並走をやめた）</td><td class="ev"><code>config/gcp_job_map.json:111</code></td></tr>
-<tr><td><code>keiba-g-1000-mon</code></td><td class="when">月 10:00</td><td>dispatch-l</td><td>ドリフト監視・凍結追跡・PX リッジ・めぐ指数の状態</td><td class="ok">動いている（月 10:00・10:30・03:30・07:30）</td><td class="ev"><code>config/gcp_job_map.json:124</code></td></tr>
-<tr><td><code>keiba-g-1910-eve</code></td><td class="when">毎日 19:10・19:40</td><td>dispatch-l</td><td>前夜の計算・翌日のレース予約・ラップ予想（翌日）</td><td class="ok">動いている（raceday-eve 18:00 に前夜の計算、raceday-runner 07:30 の常駐、ラップ 19:30）</td><td class="ev"><code>config/gcp_job_map.json:145</code></td></tr>
-<tr><td><code>keiba-g-2130</code></td><td class="when">毎日 21:30</td><td>dispatch-m</td><td>夜のサマリー・馬名インデックス（金）</td><td class="ok">動いている（21:30、金 18:30）</td><td class="ev"><code>config/gcp_job_map.json:197</code></td></tr>
-<tr><td><code>keiba-g-5min</code></td><td class="when">15 分おき</td><td>dispatch-m</td><td>VPS のハートビート監視・取得の異常の通知</td><td class="warn">通知は動いている（15 分おき）。<b>VPS の監視は無い</b>（下の点検 #1）</td><td class="ev"><code>config/gcp_job_map.json:168</code>・<code>:1966</code></td></tr>
-<tr><td><code>keiba-g-hourly</code></td><td class="when">毎時 05 分</td><td>dispatch-m</td><td>VPS の取得タスクの予約・共通ログイン・天気（廃止）・過去値の検査</td><td class="ok">共通ログイン 09:05、過去値の検査 2 時間おき。予約は担当が空なので不要（今後は VPS の <code>keiba-fetch-reserve</code>）</td><td class="ev"><code>config/gcp_job_map.json:156</code></td></tr>
-<tr><td><code>keiba-g-pump</code></td><td class="when">土日月 08:00〜16:59 毎分</td><td>dispatch-s</td><td>馬体重の検知のイベントから予測タスクを積む</td><td class="ok">ホストの raceday-weight-runner（08:00 の常駐）が検知と予測をしている</td><td class="ev"><code>config/gcp_job_map.json:178</code></td></tr>
-<tr><td><code>keiba-g-results</code></td><td class="when">土日月火 12:00〜21:40 20 分おき</td><td>dispatch-m</td><td>予測成績の集計・通知</td><td class="ok">通知は土日 15:00〜20:40、集計は raceday-result-runner・recent-retry の中</td><td class="ev"><code>config/gcp_job_map.json:187</code></td></tr>
-<tr><td><code>keiba-g-sun-2200</code></td><td class="when">日 22:00</td><td>dispatch-m</td><td>オッズ乖離の週次集計</td><td class="ok">動いている（日 22:00）</td><td class="ev"><code>config/gcp_job_map.json:136</code></td></tr>
+<tr><th>名前</th><th>スケジュール（JST）</th><th>対象</th><th>中身（グループの処理）</th><th>ホストで代わりに動いているか</th><th>メモ</th><th>根拠</th></tr>
+<tr><td><code>keiba-g-0530</code><br><span class="b mu">削除済み</span><br><span class="ev">id: gcp-g-0530</span></td><td class="when">毎日 05:30<br><code>30 5 * * *</code></td><td><code>keiba-dispatch-l</code><br>グループ <code>g-0530</code></td><td>騎手・調教師統計<br>① <code>jockey-trainer-stats</code>: 騎手・調教師統計（成績の集計）</td><td>動いている（07:15）</td><td>2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</td><td class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-0530）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></td></tr>
+<tr><td><code>keiba-g-0700</code><br><span class="b mu">削除済み</span><br><span class="ev">id: gcp-g-0700</span></td><td class="when">毎日 07:00<br><code>0 7 * * *</code></td><td><code>keiba-dispatch-l</code><br>グループ <code>g-0700</code></td><td>履歴テーブル(当年) → 履歴特徴量とサービング用バンドル → テーブルの drift 検査（直列。serving-state-* は day-prep に置き換えて無効）<br>① <code>export-tables-daily</code>: 履歴テーブル（flat）の増分更新 + パース検査<br>② <code>feature-accumulate</code>: 履歴特徴量（127列）の蓄積とサービング用バンドルの公開<br>③ <code>parse-drift-daily</code>: flat テーブルの列ごとの空・文字化けの急増の検査（基準 2020〜前年 と 当年の直近）。export-tables-daily から分離（全年の flat 約 260MB を読むため）<br>④ <code>race-analysis-daily</code>: めぐ分析の事前計算（過去 30 日〜先 14 日のレース。父の対応表も先に差分更新する）。棚卸し #32</td><td>動いている（書き出し 07:00、特徴量 07:40。drift・走法の軸・めぐ分析は scripts/cron/export_tables_daily.sh:46・:48 の中）</td><td>2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</td><td class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-0700）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></td></tr>
+<tr><td><code>keiba-g-0730</code><br><span class="b mu">削除済み</span><br><span class="ev">id: gcp-g-0730</span></td><td class="when">毎日 07:30<br><code>30 7 * * *</code></td><td><code>keiba-dispatch-m</code><br>グループ <code>g-0730</code></td><td>ラップ予想（当日）+ 朝サマリー<br>① <code>lap-forecast-morning</code>: ハロンごとのラップ予想（当日分）<br>② <code>slack-scrape-summary-morning</code>: スクレイピング状況の朝サマリー（Slack）</td><td>動いている（どちらも 07:30）</td><td>2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</td><td class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-0730）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></td></tr>
+<tr><td><code>keiba-g-0800</code><br><span class="b mu">削除済み</span><br><span class="ev">id: gcp-g-0800</span></td><td class="when">毎日 08:00<br><code>0 8 * * *</code></td><td><code>keiba-dispatch-l</code><br>グループ <code>g-0800</code></td><td>ページ品質・並走検証。月曜は網羅状況と追走難度 v2 の突き合わせも<br>① <code>parity-check</code>: 並走検証（ホストと GCP の成果物の一致判定。並走期間のみ）<br>② <code>slack-scrape-coverage</code>: 取得の網羅状況（週次 Slack）<br>③ <code>tracking-v2-weekly</code>: 追走難度 v2 の前夜保存と実測の週次突き合わせ<br>④ <code>rb-state-daily</code>: v6 の RB（めぐ指数/netkeiba 指数の履歴16列）の推論用の履歴状態を前日までの確定走で作り直す（日次）</td><td>網羅 月 08:00、追走難度 v2 月 08:30、RB 08:20。並走の一致判定は不要（並走をやめた）</td><td>2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</td><td class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-0800）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></td></tr>
+<tr><td><code>keiba-g-1000-mon</code><br><span class="b mu">削除済み</span><br><span class="ev">id: gcp-g-1000-mon</span></td><td class="when">月 10:00<br><code>0 10 * * 1</code></td><td><code>keiba-dispatch-l</code><br>グループ <code>g-1000-mon</code></td><td>ドリフト監視・凍結追跡（月曜）<br>① <code>drift-monitor-weekly</code>: ドリフト週次監視（特徴量の抜き取り込み）<br>② <code>frozen-tracking-weekly</code>: 凍結候補の前向き追跡（週次）<br>③ <code>px-ridge-window</code>: v5/v6 の血統 ALL_BEST(PX)のリッジを、次の半年に入る前に作っておく（毎週。必要なときだけ実行）<br>④ <code>hem-megu-state</code>: めぐ指数の週次状態（hem_megu state）。棚卸し #37</td><td>動いている（月 10:00・10:30・03:30・07:30）</td><td>2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</td><td class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-1000-mon）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></td></tr>
+<tr><td><code>keiba-g-sun-2200</code><br><span class="b mu">削除済み</span><br><span class="ev">id: gcp-g-sun-2200</span></td><td class="when">日 22:00<br><code>0 22 * * 0</code></td><td><code>keiba-dispatch-m</code><br>グループ <code>g-sun-2200</code></td><td>オッズ乖離の週次集計（日曜）<br>① <code>odds-drift-weekly</code>: オッズ乖離（t15/t60）の週次集計</td><td>動いている（日 22:00）</td><td>2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</td><td class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-sun-2200）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></td></tr>
+<tr><td><code>keiba-g-1910-eve</code><br><span class="b mu">削除済み</span><br><span class="ev">id: gcp-g-1910-eve</span></td><td class="when">毎日 19:10・19:40<br><code>10,40 19 * * *</code></td><td><code>keiba-dispatch-l</code><br>グループ <code>g-1910-eve</code></td><td>前夜の計算・翌日のレース予約・ラップ予想（翌日）。2 回走らせて取得の遅れを吸収（冪等）。<br>① <code>eve-precompute</code>: 前夜の計算（追走難度・追走難度 v2・想定オッズ）。raceday-eve の取得後半を分離<br>② <code>reserve-race-day</code>: 翌開催日の全レースの T-60/T-15/T-10/T-5/T-2 取得タスクと予測タスクを前夜に予約<br>③ <code>lap-forecast-eve</code>: ハロンごとのラップ予想（翌日分）</td><td>動いている（raceday-eve 18:00 に前夜の計算、raceday-runner 07:30 の常駐、ラップ 19:30）</td><td>2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</td><td class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-1910-eve）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></td></tr>
+<tr><td><code>keiba-g-hourly</code><br><span class="b mu">削除済み</span><br><span class="ev">id: gcp-g-hourly</span></td><td class="when">毎時 05 分<br><code>5 * * * *</code></td><td><code>keiba-dispatch-m</code><br>グループ <code>g-hourly</code></td><td>VPS 実行役の定期タスクを 6 時間先まで予約<br>① <code>reserve-fetch-tasks</code>: VPS 実行役の定期タスク（cron 相当）を取得タスク表に予約<br>② <code>shared-login</code>: 共通ログインの毎月1日のパスワード更新と Slack 通知（毎日 00:05 に起動し、月が替わっていなければ何もしない）<br>③ <code>jma-weather</code>（無効）: 気象庁の時別値（直近 3 日の補い daily だけ。ホストの jma_weather_run.sh は 1 日 1 回・前回からの範囲で別の作り。2016 年からの未取得分の fetch は、取得済みの判定に月ファイル 1,310 件を毎回読むので定期では回さない。2026-11-13）。棚卸し #16。気象庁は IP 遮断の危険が低いので VPS の枠を使わない<br>④ <code>verify-past-values</code>: 過去分補填（2016〜2019 年）の race_result の値の検査（読み取りのみ）。棚卸し #23。補填 backfill-past（#19）が終わったら一緒に廃止する</td><td>共通ログイン 09:05、過去値の検査 2 時間おき。予約は担当が空なので不要（今後は VPS の keiba-fetch-reserve）</td><td>2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</td><td class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-hourly）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></td></tr>
+<tr><td><code>keiba-g-5min</code><br><span class="b mu">削除済み</span><br><span class="ev">id: gcp-g-5min</span></td><td class="when">15 分おき<br><code>*/15 * * * *</code></td><td><code>keiba-dispatch-m</code><br>グループ <code>g-5min</code></td><td>VPS ハートビート監視。15 分おきにスクレイピング異常の通知（2026-10-29: 起動を 5 分→15 分おきに。動くジョブが 15 分おきだけのため）<br>① <code>vps-watchdog</code>: VPS のハートビート監視（死活・メモリ・swap・ユニット・ディスク）<br>② <code>slack-scrape-alerts</code>: スクレイピング異常の通知（15 分おき）</td><td>通知は動いている（15 分おき）。VPS の監視は無い（下の点検 #1）</td><td>2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</td><td class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-5min）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></td></tr>
+<tr><td><code>keiba-g-pump</code><br><span class="b mu">削除済み</span><br><span class="ev">id: gcp-g-pump</span></td><td class="when">土日月 08:00〜16:59 毎分<br><code>* 8-16 * * 0,1,6</code></td><td><code>keiba-dispatch-s</code><br>グループ <code>g-pump</code></td><td>開催日（土日月）の日中、イベントを毎分処理して予測タスクを積む<br>① <code>event-pump</code>: VPS 実行役の馬体重検知イベント（ops/events/weights_announced/）を見つけて、予測タスクを Cloud Tasks に積む</td><td>ホストの raceday-weight-runner（08:00 の常駐）が検知と予測をしている</td><td>2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</td><td class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-pump）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></td></tr>
+<tr><td><code>keiba-g-results</code><br><span class="b mu">削除済み</span><br><span class="ev">id: gcp-g-results</span></td><td class="when">土日月火 12:00〜21:40 20 分おき<br><code>*/20 12-21 * * 0,1,2,6</code></td><td><code>keiba-dispatch-m</code><br>グループ <code>g-results</code></td><td>予測成績の集計（土日は暫定、月・火は確定）と通知<br>① <code>prediction-results-refresh</code>: 予測成績の日次集計（暫定→確定）と、推奨度つきの仮想購入(bets_t)の追記。ホストの raceday-result-runner / recent-retry 内の集計の置き換え。Slack 送信とは別（送らなくても集計は更新する）<br>② <code>slack-results</code>: 当日の予測成績の通知（土日 15:00〜20:59 の 20 分おき）</td><td>通知は土日 15:00〜20:40、集計は raceday-result-runner・recent-retry の中</td><td>2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</td><td class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-results）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></td></tr>
+<tr><td><code>keiba-g-2130</code><br><span class="b mu">削除済み</span><br><span class="ev">id: gcp-g-2130</span></td><td class="when">毎日 21:30<br><code>30 21 * * *</code></td><td><code>keiba-dispatch-m</code><br>グループ <code>g-2130</code></td><td>夜のスクレイピング状況サマリー。金曜は馬名インデックスと成長曲線の週次更新も（約 45 分。前夜のグループに置くと直列で 5400 秒を超えうるため、ここに置く）<br>① <code>slack-scrape-summary-eve</code>: スクレイピング状況の夜サマリー（Slack）<br>② <code>horse-name-index</code>: 馬名インデックスと成長曲線の週次更新</td><td>動いている（21:30、金 18:30）</td><td>2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</td><td class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-2130）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></td></tr>
+<tr><td><code>keiba-g-0730-dayprep</code><br><span class="b mu">削除済み</span><br><span class="ev">id: gcp-g-0730-dayprep</span></td><td class="when">毎日 07:30<br><code>30 7 * * *</code></td><td><code>keiba-dispatch-xl</code><br>グループ <code>g-0730-dayprep</code></td><td>開催日の朝に、その日の全レースの日単位キャッシュ(v4_day・px_day)だけを作る（予測は作らない）。ピーク約12GBなので 16GiB<br>① <code>day-prep</code>: 開催日の朝: その日の全レースの日単位キャッシュ(state/&lt;日&gt;/v4_day.parquet・px_day.parquet)だけを作る。predict-race が state から読む（予測は作らない）</td><td>無い（ホストは serving-state-precompute 07:35・-profile 08:10 の別の作りで予測している、と推測）</td><td>2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</td><td class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-0730-dayprep）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></td></tr>
 </table></div>
-
-<h3>ConoHa VPS: 今後起動するもの（ひな形はある。VPS には未導入か無効）</h3>
+<h3>ConoHa VPS: 今後起動するもの・止めているもの</h3>
 <div class="scroll"><table>
-<tr><th>タイマー</th><th>スケジュール（JST）</th><th>中身</th><th>メモリの枠</th><th>いつ有効になるか</th><th>費用の目安（月）</th><th>根拠</th></tr>
-<tr><td><code>keiba-fetch-reserve.timer</code></td><td class="when">毎時 50 分</td><td>定期の取得タスクを先 6 時間分、VPS のローカルのタスク表に積む（GCP を使わない）</td><td>MemoryMax 60M</td><td rowspan="4">段 6（配備と段階的な受け渡し）。<code>vps_03_units.sh --enable-fetch-agent</code> と、<code>fetch.env</code> の <code>KEIBA_FETCH_AGENT_ENABLED=1</code>・<code>KEIBA_FETCH_TASK_STORE=file</code> がそろったときだけ有効にする。<br>VPS には<b>未導入</b>（list-unit-files に無い）。</td><td>1 円未満</td><td class="ev"><code>scripts/ops/vps/vps_03_units.sh:62-65</code>・<code>:120-128</code></td></tr>
-<tr><td><code>keiba-fetch-raceday-tomorrow.timer</code></td><td class="when">毎日 20:30</td><td>翌日の開催日のレースごとの取得（オッズ・馬体重・速報）を予約</td><td>MemoryMax 120M</td><td>1 円未満</td><td class="ev"><code>docs/operations/vps_only_fetch.md:9-10</code>・<code>:64</code></td></tr>
-<tr><td><code>keiba-fetch-raceday-today.timer</code></td><td class="when">毎日 07:20</td><td>当日の予約の取り直し（前夜に積めなかったレースを足す）</td><td>MemoryMax 120M</td><td>1 円未満</td><td class="ev">同上</td></tr>
-<tr><td><code>keiba-mirror-vps-push.timer</code></td><td class="when">5 分おき（:30 秒）</td><td>VPS が取ったレース一覧・発走時刻表のうち変わったものだけを <code>ops/mirror_vps/</code> に上げる（段 1）。担当が無ければ何もしない</td><td>MemoryMax 110M</td><td>約 7 円（書き込み）</td><td class="ev"><code>docs/operations/vps_only_fetch.md:21-23</code>、計画 <code>~/.claude-jovyan/plans/snoopy-wondering-wilkes.md</code> の費用の表</td></tr>
-<tr><td><code>keiba-heartbeat.timer</code><br><span class="b mu">導入済み・disabled</span></td><td class="when">5 分おき</td><td>VPS の資源・ユニットの状態を監視ポータル（Cloud Run の keiba-monitor）へ送る</td><td>MemoryMax 48M</td><td>未定。送り先の鍵の設定（<code>/etc/keiba-ui/heartbeat.env</code>）が無く有効にしていない。<b>このままの 5 分おきでは有効にしない</b>（点検 #1）</td><td>Cloud Run への 5 分おきの要求（15 分未満の ping は規約で禁止）</td><td class="ev"><code>scripts/ops/vps/vps_03_units.sh:116</code>、<code>config/gcp_job_map.json:1966</code>（blockers）</td></tr>
-<tr><td><code>keiba-traffic.timer</code><br><span class="b mu">未導入</span></td><td class="when">15 分おき</td><td>nginx のアクセスの日別集計を監視ポータルへ送る</td><td>MemoryMax 128M</td><td>未定（<code>scripts/ops/vps/vps_07_traffic_timer.sh</code> で入れる。ハートビートの鍵が前提）</td><td>Cloud Run への 15 分おきの要求</td><td class="ev"><code>scripts/ops/vps/traffic_client.py:1-7</code></td></tr>
+<tr><th>タイマー</th><th>スケジュール（JST）</th><th>中身</th><th>メモリの枠</th><th>いつ有効になるか・メモ</th><th>費用の目安（月）</th><th>ホストでも同じ処理？</th><th>根拠</th></tr>
+<tr><td><code>keiba-sched-status.timer</code><br>→ <code>keiba-sched-status.service</code><br><span class="b mu">今後</span><br><span class="ev">id: vps-sched-status</span></td><td class="when">15 分おき</td><td>定期実行の見張り: VPS のタイマーの最後の起動・結果を GCS に書き、赤になった・赤が解消したときだけ Slack</td><td>MemoryMax 110M</td><td>配備（vps_03_units.sh）と IAM（ops/heartbeat/vps/status.json だけの書き込み）の後に active にする</td><td>書き込み 月 2,880 回（約 2.3 円）</td><td>無い</td><td class="ev"><code>scripts/ops/vps/templates/keiba-sched-status.timer</code>、<code>src/ops/sched_status.py</code></td></tr>
+<tr><td><code>keiba-fetch-reserve.timer</code><br>→ <code>keiba-fetch-reserve.service</code><br><span class="b mu">今後</span><br><span class="ev">id: vps-fetch-reserve</span></td><td class="when">毎時 50 分<br><code>50 * * * *</code></td><td>取得の予約（定期）: 先 6 時間分の取得タスクを VPS のローカルのタスク表に冪等に積む</td><td>MemoryMax 60M</td><td>段 6（配備と段階的な受け渡し）で有効にする</td><td>1 円未満</td><td>今はホストの cron が取得の正（担当表は空）</td><td class="ev"><code>scripts/ops/vps/templates/keiba-fetch-reserve.timer</code>、<code>scripts/ops/vps/vps_03_units.sh:62-65</code></td></tr>
+<tr><td><code>keiba-fetch-raceday-tomorrow.timer</code><br>→ <code>keiba-fetch-raceday@tomorrow.service</code><br><span class="b mu">今後</span><br><span class="ev">id: vps-fetch-raceday-tomorrow</span></td><td class="when">毎日 20:30<br><code>30 20 * * *</code></td><td>翌日の開催日の予約: レースごとの取得（オッズ・馬体重・速報）を予約</td><td>MemoryMax 120M</td><td>段 6 で有効にする</td><td>1 円未満</td><td>ホストの raceday-runner</td><td class="ev"><code>scripts/ops/vps/templates/keiba-fetch-raceday-tomorrow.timer</code>、<code>docs/operations/vps_only_fetch.md:9-10</code></td></tr>
+<tr><td><code>keiba-fetch-raceday-today.timer</code><br>→ <code>keiba-fetch-raceday@today.service</code><br><span class="b mu">今後</span><br><span class="ev">id: vps-fetch-raceday-today</span></td><td class="when">毎日 07:20<br><code>20 7 * * *</code></td><td>当日の予約の取り直し（前夜に積めなかったレースを足す）</td><td>MemoryMax 120M</td><td>段 6 で有効にする</td><td>1 円未満</td><td>ホストの raceday-runner</td><td class="ev"><code>scripts/ops/vps/templates/keiba-fetch-raceday-today.timer</code></td></tr>
+<tr><td><code>keiba-mirror-vps-push.timer</code><br>→ <code>keiba-mirror-vps-push.service</code><br><span class="b mu">今後</span><br><span class="ev">id: vps-mirror-vps-push</span></td><td class="when">5 分おき</td><td>VPS が取ったレース一覧・発走時刻表のうち変わったものだけを ops/mirror_vps/ に上げる（担当が無ければ何もしない）</td><td>MemoryMax 110M</td><td>段 6 で有効にする</td><td>約 7 円（書き込み）</td><td>ホストの VPS のミラーの取り込み（未登録）</td><td class="ev"><code>scripts/ops/vps/templates/keiba-mirror-vps-push.timer</code>、<code>docs/operations/vps_only_fetch.md:21-23</code></td></tr>
+<tr><td><code>keiba-heartbeat.timer</code><br>→ <code>keiba-heartbeat.service</code><br><span class="b warn">停止中</span><br><span class="ev">id: vps-heartbeat</span></td><td class="when">5 分おき</td><td>VPS の資源・ユニットの状態を監視ポータル（Cloud Run）へ送る</td><td>MemoryMax 48M</td><td>導入済み・disabled。5 分おきの要求は 15 分未満の ping の禁止に反するので有効にしない（代わりに vps-sched-status）</td><td>5 分おきの Cloud Run の起動（規約で禁止の間隔）</td><td>無い</td><td class="ev"><code>scripts/ops/vps/templates/keiba-heartbeat.timer</code>、<code>scripts/ops/vps/vps_03_units.sh:116</code></td></tr>
+<tr><td><code>keiba-traffic.timer</code><br>→ <code>keiba-traffic.service</code><br><span class="b mu">今後</span><br><span class="ev">id: vps-traffic</span></td><td class="when">15 分おき</td><td>nginx のアクセスの日別集計を監視ポータルへ送る</td><td>MemoryMax 128M</td><td>未導入（ハートビートの鍵が前提）</td><td>Cloud Run への 15 分おきの要求</td><td>無い</td><td class="ev"><code>scripts/ops/vps/templates/keiba-traffic.timer</code>、<code>scripts/ops/vps/traffic_client.py:1-7</code></td></tr>
 </table></div>
-<p class="muted">ホスト側で対になるもの（今回の範囲外。点検 #6）: 後処理だけの cron（<code>scripts/cron/install_host_postprocess_cron.sh</code>: 前夜の計算 19:10・19:40、馬場速度 07:20、予測成績 土日月 21:50）と、VPS のミラーの取り込み（<code>scripts/cron/install_vps_mirror_pull_cron.sh</code>）。どちらもホストの crontab には未登録。段 5 の「毎日の馬の成績」はタイマーではなく VPS のタスクとして足す予定。</p>
-
+<h3>ホスト: この一覧で見張る予定のもの</h3>
+<p class="sub">ホストの cron の全体は <a href="../cron_schedule.html">cron の一覧</a>（<code>docs/html/operations/cron_schedule.html</code>）。ここには、この一覧で見張るものだけを載せる。</p>
+<div class="scroll"><table>
+<tr><th>名前</th><th>スケジュール（JST）</th><th>中身</th><th>いつ有効になるか・メモ</th><th>費用の目安（月）</th><th>根拠</th></tr>
+<tr><td><code>KEIBA-HOST-POSTPROCESS</code><br>job_id <code>eve-precompute</code><br><span class="b mu">今後</span><br><span class="ev">id: host-eve-precompute</span></td><td class="when">毎日 19:10・19:40<br><code>10,40 19 * * *</code></td><td>前夜の計算（取得を VPS に渡した後の後処理）</td><td>段 6 で担当を VPS に渡すときに root で登録。担当が移っていなければ何もしない（crontab は UTC の 10,40 10 * * *）</td><td>0 円（ホストの中。GCS は目録 1 件など最小）</td><td class="ev"><code>scripts/cron/install_host_postprocess_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></td></tr>
+<tr><td><code>KEIBA-HOST-POSTPROCESS</code><br>job_id <code>track-speed-daily</code><br><span class="b mu">今後</span><br><span class="ev">id: host-track-speed-daily</span></td><td class="when">毎日 07:20<br><code>20 7 * * *</code></td><td>馬場速度の日次（取得を VPS に渡した後の後処理）</td><td>段 6 で登録。crontab は UTC の 20 22 * * *（JST は翌朝 07:20）</td><td>0 円（ホストの中。GCS は目録 1 件など最小）</td><td class="ev"><code>scripts/cron/install_host_postprocess_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></td></tr>
+<tr><td><code>KEIBA-HOST-POSTPROCESS</code><br>job_id <code>prediction-results-refresh</code><br><span class="b mu">今後</span><br><span class="ev">id: host-prediction-results-refresh</span></td><td class="when">土日月 21:50<br><code>50 21 * * 0,1,6</code></td><td>予測成績の集計（土日月。取得を VPS に渡した後の後処理）</td><td>段 6 で登録。crontab は UTC の 50 12 * * 0,1,6</td><td>0 円（ホストの中。GCS は目録 1 件など最小）</td><td class="ev"><code>scripts/cron/install_host_postprocess_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></td></tr>
+<tr><td><code>KEIBA-HOST-POSTPROCESS</code><br>job_id <code>weekly-finalize</code><br><span class="b mu">今後</span><br><span class="ev">id: host-weekly-finalize</span></td><td class="when">土日 毎時 07 分<br><code>7 * * * 6,0</code></td><td>週次の後処理（めぐ指数・PG 同期など。土 00:07〜月 08:07 の毎時）</td><td>段 6 で登録。crontab は UTC の 7 15-23 * * 5 と 7 * * * 6,0。一覧の予定は土日の毎時だけを書き、月曜 00:07〜08:07 の分は省いている（1 本の cron で書けないため）</td><td>0 円（ホストの中。GCS は目録 1 件など最小）</td><td class="ev"><code>scripts/cron/install_host_postprocess_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></td></tr>
+<tr><td><code>KEIBA-VPS-MIRROR-PULL</code><br>job_id <code>vps-mirror-pull-lists</code><br><span class="b mu">今後</span><br><span class="ev">id: host-vps-mirror-pull-lists</span></td><td class="when">5 分おき</td><td>VPS が上げたレース一覧・発走時刻表の取り込み（目録 1 件を読み、変わったファイルだけ取る）</td><td>段 6（段 1 の受け取り側）で登録</td><td>0 円（ホストの中。GCS は目録 1 件など最小）</td><td class="ev"><code>scripts/cron/install_vps_mirror_pull_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></td></tr>
+</table></div>
 <h3>廃止したもの</h3>
 <div class="scroll"><table>
 <tr><th>名前</th><th>場所</th><th>以前のスケジュール</th><th>廃止の日・理由</th><th>根拠</th></tr>
-<tr><td><code>jma-weather</code>（気象庁の時別値）</td><td>GCP の <code>keiba-g-hourly</code> の中（専用の Scheduler は無し）。ホストの cron も外した</td><td>毎時</td><td>2026-11-13。ユーザーの判断（本番の予測には使わず、研究・コラムだけ）。毎時 1,310 件・345MiB を読んでいた</td><td class="ev">コミット 42f48f22、<code>config/gcp_job_map.json:4260</code>（enabled=false）、<code>docs/operations/jma_weather.md</code></td></tr>
-<tr><td><code>smoke-auto-thu-noon</code>・<code>-sat-morning</code>・<code>-sun-night</code></td><td>GCP Scheduler → <code>netkeiba-smoke</code></td><td>2026-10 の日付指定の一度きり</td><td>2026-11-13 削除（実行済み・次は 2027-10 まで動かない。1 件 約 15 円/月）</td><td class="ev"><code>docs/operations/deleted_scheduler_smoke_auto_20261113.md</code></td></tr>
+<tr><td>jma-weather（気象庁の時別値）<br><span class="ev">id: retired-jma-weather</span></td><td>GCP</td><td>毎時（keiba-g-hourly の中）</td><td>2026-11-13。ユーザーの判断（本番の予測には使わず、研究・コラムだけ）。毎時 1,310 件・345MiB を読んでいた</td><td class="ev"><code>コミット 42f48f22</code>、<code>config/gcp_job_map.json（jma-weather enabled=false）</code>、<code>docs/operations/jma_weather.md</code></td></tr>
+<tr><td>smoke-auto-thu-noon・-sat-morning・-sun-night<br><span class="ev">id: retired-smoke-auto</span></td><td>GCP</td><td>2026-10 の日付指定の一度きり（Scheduler → netkeiba-smoke）</td><td>2026-11-13。実行済み・次は 2027-10 まで動かない。1 件 約 15 円/月</td><td class="ev"><code>docs/operations/deleted_scheduler_smoke_auto_20261113.md</code></td></tr>
 </table></div>
 
 <h2 id="detail">ジョブごとの中身（行を開くと詳細）</h2>
-<p class="sub">各行を開くと、中の処理（ステップ）・入口のコマンド・読む元と書き出し先・取得先の URL の例が出る。URL は、コードの URL テンプレートに例の値（レース <code>202605050811</code>＝2026 年 東京 5 回 8 日目 11R、開催日 <code>20261114</code>、馬 <code>2023105678</code>）を入れた<b>形の例</b>で、実際には叩いていない。</p>
-<p class="sub">GCP のグループの共通: Scheduler が <code>POST …/jobs/keiba-dispatch-&lt;大きさ&gt;:run</code> に <code>args=[-m, src.ops.job_dispatch, group, &lt;グループ&gt;]</code> を渡し、コンテナの中で <code>python -m src.ops.job_dispatch group &lt;グループ&gt;</code> がジョブを順に動かす（<code>src/ops/job_dispatch.py:392</code>・<code>:425</code>）。「読む・書く」の <code>state/…</code> は GCS の <code>state/</code> の下の写しで、実行のたびにコンテナへ取り込み・書き戻す（<code>src/ops/state_sync.py:176</code>・<code>:214</code>）。GCP のジョブは外部サイト（netkeiba など）から取得しない（取得は VPS かホスト）。</p>
+<p class="sub">各行を開くと、入口のコマンド・読む元と書き出し先・取得先の URL の例・費用・根拠が出る。URL は<b>形の例</b>（レース <code>202605050811</code> など）で、実際には叩いていない。</p>
+<p class="sub">GCP のグループの共通: Scheduler が <code>keiba-dispatch-&lt;大きさ&gt;</code> の Job を <code>args=[-m, src.ops.job_dispatch, group, &lt;グループ&gt;]</code> で起動し、コンテナの中で <code>python -m src.ops.job_dispatch group &lt;グループ&gt;</code> がジョブを順に動かす（<code>src/ops/job_dispatch.py</code>）。「読む・書く」の <code>state/…</code> は GCS の <code>state/</code> の下の写しで、実行のたびにコンテナへ取り込み・書き戻す（<code>src/ops/state_sync.py</code>）。</p>
 <h3>GCP（Cloud Scheduler → Cloud Run Jobs）</h3>
-<details open><summary><span class="b ok">稼働中</span> <b>keiba-g-0730-shadow</b> <span class="mu">— 30 7 * * *（JST）・keiba-dispatch-s（512Mi・1 vCPU、上限 600 秒）</span><br><span class="sm">影モード(VPS の取得の並走検証)の日次集計 + GCP 日次コスト報告（想定 vs 実績・急増警告。予算超過の早期警戒）</span></summary><div class="dbody"><div>入口: <code>python -m src.ops.job_dispatch group g-0730-shadow</code>（<code>config/gcp_job_map.json:91</code>）</div><ul class="jobs"><li><b><code>gcp-daily-cost-report</code></b>  — 費用の日報: 前日（JST）の GCP の費用をサービス別に集計し、想定との差・急増を Slack へ<div class="kv">ステップ:<ol><li><code>python -m src.scripts.cloud_jobs.gcp_daily_cost_report --watch</code></li></ol><div>読む（GCS → コンテナ）: —</div><div>書く（コンテナ → GCS）: —</div><div>読む: BigQuery の課金エクスポート（horse-racing-466415.billing_export）/ 送り先: Slack</div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:930</code></div></div></li><li><b><code>fetch-shadow-report</code></b>  — 影モード（VPS の取得をホストと並走）の前日分の成功率・本番との一致率・合否<div class="kv">ステップ:<ol><li><code>python -m src.scripts.ops.shadow_report --yesterday --write --slack</code></li></ol><div>読む（GCS → コンテナ）: —</div><div>書く（コンテナ → GCS）: —</div><div>読む: GCS の ops/fetch_tasks_shadow/、shadow/&lt;日付&gt;/ と本番の同じパス / 書く: ops/fetch_shadow/daily/&lt;日付&gt;.json / 送り先: Slack</div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:978</code></div></div></li></ul></div></details>
-<details><summary><span class="b mu">削除済み</span> <b>keiba-g-0530</b> <span class="mu">— 30 5 * * *（JST）・keiba-dispatch-l（8Gi・2 vCPU、上限 2400 秒）</span><br><span class="sm">騎手・調教師統計</span></summary><div class="dbody"><div>入口: <code>python -m src.ops.job_dispatch group g-0530</code>（<code>config/gcp_job_map.json:67</code>）</div><ul class="jobs"><li><b><code>jockey-trainer-stats</code></b>  — 騎手・調教師の成績の集計<div class="kv">ステップ:<ol><li><code>python -m src.pipeline.build_jockey_trainer_stats</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/page_reference/tables</code>, <code>state/data/local/features/jockey_trainer_stats</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/features/jockey_trainer_stats</code></div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:317</code></div></div></li></ul></div></details>
-<details><summary><span class="b mu">削除済み</span> <b>keiba-g-0700</b> <span class="mu">— 0 7 * * *（JST）・keiba-dispatch-l（8Gi・2 vCPU、上限 5400 秒）</span><br><span class="sm">履歴テーブル(当年) → 履歴特徴量とサービング用バンドル → テーブルの drift 検査（直列。serving-state-* は day-prep に置き換えて無効）</span></summary><div class="dbody"><div>入口: <code>python -m src.ops.job_dispatch group g-0700</code>（<code>config/gcp_job_map.json:77</code>）</div><ul class="jobs"><li><b><code>export-tables-daily</code></b>  — 当年分の履歴テーブル（flat parquet）の増分更新 → 馬場速度（10 日分）→ パース検査<div class="kv">ステップ:<ol><li><code>python -m src.scraper.export_tables --years {years} --categories race_result,race_shutuba,race_result_lap,race_result_on_time --refresh</code></li><li><code>python -m src.scripts.data.track_speed_daily --from {days_ago_10} --to {today}</code></li><li><code>python -m src.scraper.parse_audit --years {years}</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/page_reference/tables</code>, <code>state/data/page_reference/knowledge</code>, <code>state/data/page_reference/track_speed</code></div><div>書く（コンテナ → GCS）: <code>state/data/page_reference/tables</code>, <code>state/data/page_reference/track_speed</code></div><div>読む: 取得済みの JSON（例 chuou/data/preprocessed/netkeiba/pc/race_result/2026/202605050811.json）</div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:382</code></div></div></li><li><b><code>feature-accumulate</code></b>  — 履歴特徴量（127 列）の蓄積と、サービング用バンドルの公開<div class="kv">ステップ:<ol><li><code>python -m src.scraper.auto_scrape --task feature-accumulate</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/page_reference/tables</code>, <code>state/data/local/modeling/feature_store/horse_history</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/modeling/feature_store/horse_history</code>, <code>state/data/local/modeling/feature_store/serving_bundle</code></div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:572</code></div></div></li><li><b><code>parse-drift-daily</code></b>  — flat テーブルの列ごとの空・文字化けの急増の検査（基準 2020〜前年 と 当年の直近 3 か月）<div class="kv">ステップ:<ol><li><code>python -m src.scraper.parse_drift --baseline 2020-{prev_year} --recent {year} --months 3</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/page_reference/tables</code></div><div>書く（コンテナ → GCS）: —</div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:4073</code></div></div></li><li><b><code>serving-state-precompute</code></b> <span class="b mu">enabled=false</span> <span class="b warn">ready=false</span> — 【無効】サービング状態の事前計算（day-prep に置き換え）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.update_serving_state precompute --date {today}</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/inference/state</code>, <code>state/data/page_reference/tables</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/inference/state</code></div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:504</code></div></div></li><li><b><code>serving-state-profile</code></b> <span class="b mu">enabled=false</span> <span class="b warn">ready=false</span> — 【無効】サービング状態のプロファイル更新（day-prep に置き換え）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.update_serving_state profile</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/inference/state</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/inference/state</code></div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:659</code></div></div></li><li><b><code>race-analysis-daily</code></b>  — めぐ分析の事前計算（過去 30 日〜先 14 日のレース。父の対応表も差分更新）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.precompute_race_analysis</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/page_reference/tables</code>、<code>ops/mirror/</code>（レース一覧・発走時刻表など）</div><div>書く（コンテナ → GCS）: —、画面用に <code>ops/mirror/</code></div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:4123</code></div></div></li></ul></div></details>
-<details><summary><span class="b mu">削除済み</span> <b>keiba-g-0730</b> <span class="mu">— 30 7 * * *（JST）・keiba-dispatch-m（2Gi・1 vCPU、上限 1800 秒）</span><br><span class="sm">ラップ予想（当日）+ 朝サマリー</span></summary><div class="dbody"><div>入口: <code>python -m src.ops.job_dispatch group g-0730</code>（<code>config/gcp_job_map.json:101</code>）</div><ul class="jobs"><li><b><code>lap-forecast-morning</code></b>  — 出馬表の flat を更新してから、当日のハロンごとのラップ予想<div class="kv">ステップ:<ol><li><code>python -m src.scraper.export_tables --years {year} --categories race_shutuba --refresh</code></li><li><code>python -m src.scripts.data.tp55_backfill --dates {today_iso} --model-dir {model:lap_models} --model-full model_final2026_A_full.pkl --model-noten model_final2026_A_noten.pkl</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/page_reference/tables</code>、<code>ops/mirror/</code>（レース一覧・発走時刻表など）</div><div>書く（コンテナ → GCS）: <code>state/data/local/inference/lap_forecast</code>, <code>state/data/page_reference/tables</code>、画面用に <code>ops/mirror/</code></div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:721</code></div></div></li><li><b><code>slack-scrape-summary-morning</code></b>  — 取得状況の朝のサマリーを Slack へ<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.scrape_status_notify --mode summary --when nonraceday --send --source prod</code></li></ol><div>読む（GCS → コンテナ）: —、<code>ops/mirror/</code>（レース一覧・発走時刻表など）</div><div>書く（コンテナ → GCS）: —</div><div>送り先: Slack（Webhook）</div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:831</code></div></div></li></ul></div></details>
-<details><summary><span class="b mu">削除済み</span> <b>keiba-g-0730-dayprep</b> <span class="mu">— 30 7 * * *（JST）・keiba-dispatch-xl（16Gi・4 vCPU、上限 1800 秒）</span><br><span class="sm">開催日の朝に、その日の全レースの日単位キャッシュ(v4_day・px_day)だけを作る（予測は作らない）。ピーク約12GBなので 16GiB</span></summary><div class="dbody"><div>入口: <code>python -m src.ops.job_dispatch group g-0730-dayprep</code>（<code>config/gcp_job_map.json:207</code>）</div><ul class="jobs"><li><b><code>day-prep</code></b>  — 開催日の朝に、その日の全レースの日単位キャッシュ（v4_day・px_day）を作る（予測はしない）<div class="kv">ステップ:<ol><li><code>python -m src.ops.jobs.day_prep --date {today}</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/inference/state</code>, <code>state/data/page_reference/tables</code>, <code>state/data/local/modeling/feature_store/horse_history</code>, <code>state/data/local/modeling/feature_store/serving_bundle</code>、<code>ops/mirror/</code>（レース一覧・発走時刻表など）</div><div>書く（コンテナ → GCS）: <code>state/data/local/inference/state</code></div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:3974</code></div></div></li></ul></div></details>
-<details><summary><span class="b mu">削除済み</span> <b>keiba-g-0800</b> <span class="mu">— 0 8 * * *（JST）・keiba-dispatch-l（8Gi・2 vCPU、上限 1800 秒）</span><br><span class="sm">ページ品質・並走検証。月曜は網羅状況と追走難度 v2 の突き合わせも</span></summary><div class="dbody"><div>入口: <code>python -m src.ops.job_dispatch group g-0800</code>（<code>config/gcp_job_map.json:111</code>）</div><ul class="jobs"><li><b><code>parity-check</code></b>  — ホストと GCP の成果物の一致判定（並走期間だけ）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.ops.parity_check auto --date {today} --write --send</code></li></ol><div>読む（GCS → コンテナ）: —</div><div>書く（コンテナ → GCS）: —</div><div>読む: GCS の host_snapshot/&lt;日付&gt;/ と state/</div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:1030</code></div></div></li><li><b><code>slack-scrape-coverage</code></b>  — 取得の網羅状況（週次）を Slack へ<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.scrape_status_notify --mode coverage --send --source prod</code></li></ol><div>読む（GCS → コンテナ）: —、<code>ops/mirror/</code>（レース一覧・発走時刻表など）</div><div>書く（コンテナ → GCS）: —</div><div>送り先: Slack</div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:1083</code></div></div></li><li><b><code>tracking-v2-weekly</code></b>  — 追走難度 v2 の前夜の保存値と実測の週次の突き合わせ<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.tracking_v2_eval --from {days_ago_10} --to {today}</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/inference/tracking_v2</code>, <code>state/data/page_reference/tables</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/meta/tracking_v2_eval</code></div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:1149</code></div></div></li><li><b><code>rb-state-daily</code></b>  — v6 の RB（めぐ指数・netkeiba 指数の履歴 16 列）の推論用の状態を、前日までの確定走で作り直す<div class="kv">ステップ:<ol><li><code>python -m src.ops.jobs.rb_state</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/page_reference/tables</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/inference/state/rb_v6</code></div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:3830</code></div></div></li></ul></div></details>
-<details><summary><span class="b mu">削除済み</span> <b>keiba-g-1000-mon</b> <span class="mu">— 0 10 * * 1（JST）・keiba-dispatch-l（8Gi・2 vCPU、上限 4800 秒）</span><br><span class="sm">ドリフト監視・凍結追跡（月曜）</span></summary><div class="dbody"><div>入口: <code>python -m src.ops.job_dispatch group g-1000-mon</code>（<code>config/gcp_job_map.json:124</code>）</div><ul class="jobs"><li><b><code>drift-monitor-weekly</code></b> <span class="b warn">ready=false</span> — 特徴量のドリフトの週次監視（state_in が上限を超えて失敗するため blocked）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.drift_dump_features --days {last_weekend_days}</code></li><li><code>python -m src.scripts.data.drift_monitor --root .</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/meta/drift_monitor</code>, <code>state/data/local/prediction_results</code>, <code>state/data/page_reference/tables</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/meta/drift_monitor</code></div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:1225</code></div></div></li><li><b><code>frozen-tracking-weekly</code></b>  — 凍結候補（v4・v5）の予測の前向き追跡<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.frozen_tracking track --from 20261022 --models v4,v5 --variants final,pre</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/meta/frozen_tracking</code>, <code>state/data/local/inference/predictions_v4</code>, <code>state/data/local/inference/predictions_v5</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/meta/frozen_tracking</code></div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:1315</code></div></div></li><li><b><code>px-ridge-window</code></b>  — 血統 PX（v5/v6）のリッジを次の半年に入る前に作る<div class="kv">ステップ:<ol><li><code>python -m src.ops.jobs.px_ridge</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/inference/state/px_v5</code>, <code>state/data/page_reference/tables</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/inference/state/px_v5</code></div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:3891</code></div></div></li><li><b><code>hem-megu-state</code></b>  — めぐ指数の週次の状態（hem_megu state）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.hem_megu state</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/page_reference/tables</code>, <code>state/data/local/modeling/hem</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/modeling/hem</code></div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:4184</code></div></div></li></ul></div></details>
-<details><summary><span class="b mu">削除済み</span> <b>keiba-g-1910-eve</b> <span class="mu">— 10,40 19 * * *（JST）・keiba-dispatch-l（8Gi・2 vCPU、上限 5400 秒）</span><br><span class="sm">前夜の計算・翌日のレース予約・ラップ予想（翌日）。2 回走らせて取得の遅れを吸収（冪等）。</span></summary><div class="dbody"><div>入口: <code>python -m src.ops.job_dispatch group g-1910-eve</code>（<code>config/gcp_job_map.json:145</code>）</div><ul class="jobs"><li><b><code>eve-precompute</code></b>  — 翌開催日の前夜の計算（追走難度・追走難度 v2・想定オッズ）<div class="kv">ステップ:<ol><li><code>python -m src.ops.jobs.eve_precompute --date {tomorrow}</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/inference/state</code>, <code>state/data/page_reference/tables</code>, <code>state/data/local/modeling/feature_store/horse_history</code>, <code>state/data/local/modeling/feature_store/serving_bundle</code>、<code>ops/mirror/</code>（レース一覧・発走時刻表など）</div><div>書く（コンテナ → GCS）: <code>state/data/local/inference/tracking_v2</code>、画面用に <code>ops/mirror/</code></div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:1542</code></div></div></li><li><b><code>reserve-race-day</code></b>  — 翌開催日の全レースの取得タスク（T-60/T-15/T-10/T-5/T-2・馬体重・速報）と予測タスクの予約<div class="kv">ステップ:<ol><li><code>python -m src.ops.reservations race-day --date {tomorrow}</code></li></ol><div>読む（GCS → コンテナ）: —、<code>ops/mirror/</code>（レース一覧・発走時刻表など）</div><div>書く（コンテナ → GCS）: —</div><div>書く: GCS の ops/fetch_tasks/pending/&lt;task_id&gt;.json と Cloud Tasks（キュー keiba-predict）</div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:1656</code></div></div></li><li><b><code>lap-forecast-eve</code></b>  — 出馬表の flat を更新してから、翌日のラップ予想<div class="kv">ステップ:<ol><li><code>python -m src.scraper.export_tables --years {year} --categories race_shutuba --refresh</code></li><li><code>python -m src.scripts.data.tp55_backfill --dates {tomorrow_iso} --model-dir {model:lap_models} --model-full model_final2026_A_full.pkl --model-noten model_final2026_A_noten.pkl</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/page_reference/tables</code>、<code>ops/mirror/</code>（レース一覧・発走時刻表など）</div><div>書く（コンテナ → GCS）: <code>state/data/local/inference/lap_forecast</code>, <code>state/data/page_reference/tables</code>、画面用に <code>ops/mirror/</code></div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:1720</code></div></div></li></ul></div></details>
-<details><summary><span class="b mu">削除済み</span> <b>keiba-g-2130</b> <span class="mu">— 30 21 * * *（JST）・keiba-dispatch-m（2Gi・1 vCPU、上限 4800 秒）</span><br><span class="sm">夜のスクレイピング状況サマリー。金曜は馬名インデックスと成長曲線の週次更新も（約 45 分。前夜のグループに置くと直列で 5400 秒を超えうるため、ここに置く）</span></summary><div class="dbody"><div>入口: <code>python -m src.ops.job_dispatch group g-2130</code>（<code>config/gcp_job_map.json:197</code>）</div><ul class="jobs"><li><b><code>slack-scrape-summary-eve</code></b>  — 取得状況の夜のサマリーを Slack へ<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.scrape_status_notify --mode summary --when raceday --send --source prod</code></li></ol><div>読む（GCS → コンテナ）: —、<code>ops/mirror/</code>（レース一覧・発走時刻表など）</div><div>書く（コンテナ → GCS）: —</div><div>送り先: Slack</div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:1479</code></div></div></li><li><b><code>horse-name-index</code></b>  — 馬名インデックスと成長曲線の週次更新（金曜だけ）<div class="kv">ステップ:<ol><li><code>python -m src.scraper.auto_scrape --task horse-name-index</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/calculated_data</code>, <code>state/data/calculated_data</code></div><div>書く（コンテナ → GCS）: <code>state/data/calculated_data</code>, <code>state/data/calculated_data</code></div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:1832</code></div></div></li></ul></div></details>
-<details><summary><span class="b mu">削除済み</span> <b>keiba-g-5min</b> <span class="mu">— */15 * * * *（JST）・keiba-dispatch-m（2Gi・1 vCPU、上限 300 秒）</span><br><span class="sm">VPS ハートビート監視。15 分おきにスクレイピング異常の通知（2026-10-29: 起動を 5 分→15 分おきに。動くジョブが 15 分おきだけのため）</span></summary><div class="dbody"><div>入口: <code>python -m src.ops.job_dispatch group g-5min</code>（<code>config/gcp_job_map.json:168</code>）</div><ul class="jobs"><li><b><code>vps-watchdog</code></b> <span class="b warn">ready=false</span> — VPS のハートビート・取得タスクの滞留と失敗の監視（ハートビートが届かないため blocked）<div class="kv">ステップ:<ol><li><code>python -m src.ops.vps_watchdog --send</code></li></ol><div>読む（GCS → コンテナ）: —</div><div>書く（コンテナ → GCS）: —</div><div>読む: GCS の ops/heartbeat/latest.json、ops/fetch_tasks/pending/・failed/ / 送り先: Slack</div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:1966</code></div></div></li><li><b><code>slack-scrape-alerts</code></b>  — 取得の異常を Slack へ（15 分おき）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.scrape_status_notify --mode alerts --send --source prod</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/meta/slack_sent</code>、<code>ops/mirror/</code>（レース一覧・発走時刻表など）</div><div>書く（コンテナ → GCS）: <code>state/data/local/meta/slack_sent</code></div><div>送り先: Slack</div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:2018</code></div></div></li></ul></div></details>
-<details><summary><span class="b mu">削除済み</span> <b>keiba-g-hourly</b> <span class="mu">— 5 * * * *（JST）・keiba-dispatch-m（2Gi・1 vCPU、上限 600 秒）</span><br><span class="sm">VPS 実行役の定期タスクを 6 時間先まで予約</span></summary><div class="dbody"><div>入口: <code>python -m src.ops.job_dispatch group g-hourly</code>（<code>config/gcp_job_map.json:156</code>）</div><ul class="jobs"><li><b><code>reserve-fetch-tasks</code></b>  — VPS の実行役の定期の取得タスクを 6 時間先まで予約<div class="kv">ステップ:<ol><li><code>python -m src.ops.reservations recurring --horizon-hours 6</code></li></ol><div>読む（GCS → コンテナ）: —</div><div>書く（コンテナ → GCS）: —</div><div>書く: GCS の ops/fetch_tasks/pending/</div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:1919</code></div></div></li><li><b><code>shared-login</code></b>  — 共通ログイン（配布用の 1 つの ID）のパスワードを毎月 1 日に更新して Slack へ（月が替わっていなければ何もしない）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.ops.shared_login ensure</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/auth</code>、<code>ops/mirror/</code>（レース一覧・発走時刻表など）</div><div>書く（コンテナ → GCS）: <code>state/data/local/auth</code></div><div>送り先: Slack</div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:3761</code></div></div></li><li><b><code>jma-weather</code></b> <span class="b mu">enabled=false</span> <span class="b warn">ready=false</span> — 【廃止 2026-11-13】気象庁の時別値の直近 3 日の補い<div class="kv">ステップ:<ol><li><code>python -m src.scraper.jma_weather --halt-file data/local/meta/jma_weather_halt.json daily</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/meta</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/meta</code></div><div>外部サイトの取得: 気象庁（廃止）</div><div class="ev">根拠: <code>config/gcp_job_map.json:4260</code></div></div></li><li><b><code>verify-past-values</code></b> <span class="b warn">ready=false</span> — 2016〜2019 年の補填で取った race_result の値の検査（読むだけ）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.verify_past_values</code></li></ol><div>読む（GCS → コンテナ）: —</div><div>書く（コンテナ → GCS）: —</div><div>読む: 例 chuou/data/preprocessed/netkeiba/pc/race_result/2018/…json</div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:4325</code></div></div></li></ul></div></details>
-<details><summary><span class="b mu">削除済み</span> <b>keiba-g-pump</b> <span class="mu">— * 8-16 * * 0,1,6（JST）・keiba-dispatch-s（512Mi・1 vCPU、上限 120 秒）</span><br><span class="sm">開催日（土日月）の日中、イベントを毎分処理して予測タスクを積む</span></summary><div class="dbody"><div>入口: <code>python -m src.ops.job_dispatch group g-pump</code>（<code>config/gcp_job_map.json:178</code>）</div><ul class="jobs"><li><b><code>event-pump</code></b>  — 馬体重の検知のイベントを見つけて、予測タスクを Cloud Tasks に積む<div class="kv">ステップ:<ol><li><code>python -m src.ops.events pump</code></li></ol><div>読む（GCS → コンテナ）: —</div><div>書く（コンテナ → GCS）: —</div><div>読む: GCS の ops/events/weights_announced/20261114/202605050811.json / 書く: ops/events/predict_triggered/… と Cloud Tasks</div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:2407</code></div></div></li></ul></div></details>
-<details><summary><span class="b mu">削除済み</span> <b>keiba-g-results</b> <span class="mu">— */20 12-21 * * 0,1,2,6（JST）・keiba-dispatch-m（2Gi・1 vCPU、上限 900 秒）</span><br><span class="sm">予測成績の集計（土日は暫定、月・火は確定）と通知</span></summary><div class="dbody"><div>入口: <code>python -m src.ops.job_dispatch group g-results</code>（<code>config/gcp_job_map.json:187</code>）</div><ul class="jobs"><li><b><code>prediction-results-refresh</code></b>  — 予測成績の日次集計（暫定→確定）と推奨度つきの仮想購入の追記<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.prediction_results --from {days_ago_10} --to {today} --skip-final</code></li><li><code>python -m src.scripts.data.prediction_results --from {days_ago_10} --to {today} --add-target-bets</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/inference</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/prediction_results</code></div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:2092</code></div></div></li><li><b><code>slack-results</code></b>  — 当日の予測成績を Slack へ<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.daily_results_notify --date {today} --refresh --send</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/prediction_results</code>, <code>state/data/local/inference</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/prediction_results</code></div><div>送り先: Slack</div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:2181</code></div></div></li></ul></div></details>
-<details><summary><span class="b mu">削除済み</span> <b>keiba-g-sun-2200</b> <span class="mu">— 0 22 * * 0（JST）・keiba-dispatch-m（2Gi・1 vCPU、上限 3600 秒）</span><br><span class="sm">オッズ乖離の週次集計（日曜）</span></summary><div class="dbody"><div>入口: <code>python -m src.ops.job_dispatch group g-sun-2200</code>（<code>config/gcp_job_map.json:136</code>）</div><ul class="jobs"><li><b><code>odds-drift-weekly</code></b>  — オッズ乖離（T-15・T-60 と確定）の直近 28 日の集計<div class="kv">ステップ:<ol><li><code>python -m src.pipeline.betting.odds_drift --from {days_ago_28} --to {today} --early t15 --out data/local/meta/odds_drift/weekly/{today}_t15.json</code></li><li><code>python -m src.pipeline.betting.odds_drift --from {days_ago_28} --to {today} --early t60 --out data/local/meta/odds_drift/weekly/{today}_t60.json</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/meta/odds_drift</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/meta/odds_drift</code></div><div>外部サイトの取得: なし</div><div class="ev">根拠: <code>config/gcp_job_map.json:1396</code></div></div></li></ul></div></details>
+<details id="job-gcp-g-0730-shadow"><summary><span class="b ok">稼働中</span> <b>keiba-g-0730-shadow</b> <span class="mu">— 30 7 * * *（JST）・keiba-dispatch-s（512Mi・1 vCPU、上限 600 秒）</span><br><span class="sm">影モード(VPS の取得の並走検証)の日次集計 + GCP 日次コスト報告（想定 vs 実績・急増警告。予算超過の早期警戒） + 定期実行の毎朝の点検（GCP・VPS。赤があれば Slack）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>gcp-g-0730-shadow</code>（GCP・Cloud Scheduler → Cloud Run Jobs・重さ 中）</div>
+<div><b>名前</b>: scheduler <code>keiba-g-0730-shadow</code>・run_job <code>keiba-dispatch-s</code>・group <code>g-0730-shadow</code></div>
+<div><b>スケジュール</b>: 毎日 07:30（<code>30 7 * * *</code>）</div>
+<div><b>入口</b>: <code>python -m src.ops.job_dispatch group g-0730-shadow</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: <ul><li>Slack（費用の日報・影の集計・定期実行の点検で赤があるとき）</li><li>GCS ops/fetch_shadow/daily/</li></ul></div>
+<div><b>メモリの枠</b>: keiba-dispatch-s（512Mi・1 vCPU）</div>
+<div><b>費用の目安（月）</b>: Jobs 約 0 円（無料枠の中、最悪 15 円）＋Scheduler 約 15 円</div>
+<div><b>ホストでも同じ処理？</b>: ①費用の日報はホストに無い（ホストの cost_guard は別物: 1 日 2 回、課金を見て止める判定）。②影の集計は無い</div>
+<div><b>根拠</b>: <span class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-0730-shadow）</code></span></div>
+<div><b>メモ</b>: —</div>
+<div><b>グループの中のジョブ</b>（<code>config/gcp_job_map.json</code> の <code>scheduler_groups[g-0730-shadow].jobs</code>）:</div>
+<ul class="jobs"><li><b><code>gcp-daily-cost-report</code></b>  — GCP 日次コスト報告（予算超過の早期警戒）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.cloud_jobs.gcp_daily_cost_report --watch</code></li></ol><div>読む（GCS → コンテナ）: —</div><div>書く（コンテナ → GCS）: —</div><div class="ev">enabled=true・ready=true</div></div></li><li><b><code>fetch-shadow-report</code></b>  — 影モード（VPS の取得をホストと並走で検証）の日次集計。前日分の成功率・本番との一致率・合否を ops/fetch_shadow/daily/ に書く<div class="kv">ステップ:<ol><li><code>python -m src.scripts.ops.shadow_report --yesterday --write --slack</code></li></ol><div>読む（GCS → コンテナ）: —</div><div>書く（コンテナ → GCS）: —</div><div class="ev">enabled=true・ready=true</div></div></li><li><b><code>schedule-check</code></b>  — 定期実行ジョブ（GCP・VPS）の毎朝の点検。監視ポータルと同じルールで判定し、赤があれば Slack（VPS の記録の途絶 45 分も）<div class="kv">ステップ:<ol><li><code>python -m src.ops.jobs.schedule_check</code></li></ol><div>読む（GCS → コンテナ）: —</div><div>書く（コンテナ → GCS）: —</div><div class="ev">enabled=true・ready=true</div></div></li></ul>
+</div></details>
+<details id="job-gcp-netkeiba-smoke"><summary><span class="b warn">停止中</span> <b>netkeiba-smoke</b> <span class="mu">— 手動だけ（定期の起動なし）</span><br><span class="sm">netkeiba への到達試験（GCP から取得できるかの確認）。手動だけ</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>gcp-netkeiba-smoke</code>（GCP・Cloud Run Job（手動）・重さ 軽い）</div>
+<div><b>名前</b>: run_job <code>netkeiba-smoke</code></div>
+<div><b>スケジュール</b>: 手動だけ（定期の起動なし）</div>
+<div><b>入口</b>: <code>deploy/gcp/netkeiba_smoke/run.sh</code></div>
+<div><b>取得先の URL の例</b>: <code>https://db.netkeiba.com/</code></div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: Cloud Logging（結果の 1 行）</div>
+<div><b>メモリの枠</b>: —</div>
+<div><b>費用の目安（月）</b>: 1 回 数円</div>
+<div><b>ホストでも同じ処理？</b>: —</div>
+<div><b>根拠</b>: <span class="ev"><code>deploy/gcp/netkeiba_smoke/run.sh</code>、<code>docs/operations/deleted_scheduler_smoke_auto_20261113.md:31</code></span></div>
+<div><b>メモ</b>: Scheduler なし（smoke-auto-* 3 件は 11/13 削除）。最後の実行 10/25 23:50</div>
+</div></details>
+<details id="job-gcp-g-0530"><summary><span class="b mu">削除済み</span> <b>keiba-g-0530</b> <span class="mu">— 30 5 * * *（JST）・keiba-dispatch-l（8Gi・2 vCPU、上限 2400 秒）</span><br><span class="sm">騎手・調教師統計</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>gcp-g-0530</code>（GCP・Cloud Scheduler → Cloud Run Jobs・重さ 中）</div>
+<div><b>名前</b>: scheduler <code>keiba-g-0530</code>・run_job <code>keiba-dispatch-l</code>・group <code>g-0530</code></div>
+<div><b>スケジュール</b>: 毎日 05:30（<code>30 5 * * *</code>）</div>
+<div><b>入口</b>: <code>python -m src.ops.job_dispatch group g-0530</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: keiba-dispatch-l（8Gi・2 vCPU）</div>
+<div><b>費用の目安（月）</b>: 削除済み 0 円</div>
+<div><b>ホストでも同じ処理？</b>: 動いている（07:15）</div>
+<div><b>根拠</b>: <span class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-0530）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></span></div>
+<div><b>メモ</b>: 2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</div>
+<div><b>グループの中のジョブ</b>（<code>config/gcp_job_map.json</code> の <code>scheduler_groups[g-0530].jobs</code>）:</div>
+<ul class="jobs"><li><b><code>jockey-trainer-stats</code></b>  — 騎手・調教師統計（成績の集計）<div class="kv">ステップ:<ol><li><code>python -m src.pipeline.build_jockey_trainer_stats</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/page_reference/tables</code>, <code>state/data/local/features/jockey_trainer_stats</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/features/jockey_trainer_stats</code></div><div class="ev">enabled=true・ready=true</div></div></li></ul>
+</div></details>
+<details id="job-gcp-g-0700"><summary><span class="b mu">削除済み</span> <b>keiba-g-0700</b> <span class="mu">— 0 7 * * *（JST）・keiba-dispatch-l（8Gi・2 vCPU、上限 5400 秒）</span><br><span class="sm">履歴テーブル(当年) → 履歴特徴量とサービング用バンドル → テーブルの drift 検査（直列。serving-state-* は day-prep に置き換えて無効）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>gcp-g-0700</code>（GCP・Cloud Scheduler → Cloud Run Jobs・重さ 中）</div>
+<div><b>名前</b>: scheduler <code>keiba-g-0700</code>・run_job <code>keiba-dispatch-l</code>・group <code>g-0700</code></div>
+<div><b>スケジュール</b>: 毎日 07:00（<code>0 7 * * *</code>）</div>
+<div><b>入口</b>: <code>python -m src.ops.job_dispatch group g-0700</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: keiba-dispatch-l（8Gi・2 vCPU）</div>
+<div><b>費用の目安（月）</b>: 削除済み 0 円</div>
+<div><b>ホストでも同じ処理？</b>: 動いている（書き出し 07:00、特徴量 07:40。drift・走法の軸・めぐ分析は scripts/cron/export_tables_daily.sh:46・:48 の中）</div>
+<div><b>根拠</b>: <span class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-0700）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></span></div>
+<div><b>メモ</b>: 2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</div>
+<div><b>グループの中のジョブ</b>（<code>config/gcp_job_map.json</code> の <code>scheduler_groups[g-0700].jobs</code>）:</div>
+<ul class="jobs"><li><b><code>export-tables-daily</code></b>  — 履歴テーブル（flat）の増分更新 + パース検査<div class="kv">ステップ:<ol><li><code>python -m src.scraper.export_tables --years {years} --categories race_result,race_shutuba,race_result_lap,race_result_on_time --refresh</code></li><li><code>python -m src.scripts.data.track_speed_daily --from {days_ago_10} --to {today}</code>（失敗しても続ける）</li><li><code>python -m src.scraper.parse_audit --years {years}</code>（失敗しても続ける）</li></ol><div>読む（GCS → コンテナ）: <code>state/data/page_reference/tables</code>, <code>state/data/page_reference/knowledge</code>, <code>state/data/page_reference/track_speed</code></div><div>書く（コンテナ → GCS）: <code>state/data/page_reference/tables</code>, <code>state/data/page_reference/track_speed</code></div><div class="ev">enabled=true・ready=true</div></div></li><li><b><code>feature-accumulate</code></b>  — 履歴特徴量（127列）の蓄積とサービング用バンドルの公開<div class="kv">ステップ:<ol><li><code>python -m src.scraper.auto_scrape --task feature-accumulate</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/page_reference/tables</code>, <code>state/data/local/modeling/feature_store/horse_history</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/modeling/feature_store/horse_history</code>, <code>state/data/local/modeling/feature_store/serving_bundle</code></div><div class="ev">enabled=true・ready=true</div></div></li><li><b><code>parse-drift-daily</code></b>  — flat テーブルの列ごとの空・文字化けの急増の検査（基準 2020〜前年 と 当年の直近）。export-tables-daily から分離（全年の flat 約 260MB を読むため）<div class="kv">ステップ:<ol><li><code>python -m src.scraper.parse_drift --baseline 2020-{prev_year} --recent {year} --months 3</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/page_reference/tables</code></div><div>書く（コンテナ → GCS）: —</div><div class="ev">enabled=true・ready=true</div></div></li><li><b><code>race-analysis-daily</code></b>  — めぐ分析の事前計算（過去 30 日〜先 14 日のレース。父の対応表も先に差分更新する）。棚卸し #32<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.precompute_race_analysis</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/page_reference/tables</code>、ミラー <code>data/page_reference/pedigree_race_index</code>, <code>data/local/race_analysis</code></div><div>書く（コンテナ → GCS）: —、画面用のミラー <code>data/local/race_analysis</code>, <code>data/page_reference/pedigree_race_index</code></div><div class="ev">enabled=true・ready=true</div></div></li></ul>
+</div></details>
+<details id="job-gcp-g-0730"><summary><span class="b mu">削除済み</span> <b>keiba-g-0730</b> <span class="mu">— 30 7 * * *（JST）・keiba-dispatch-m（2Gi・1 vCPU、上限 1800 秒）</span><br><span class="sm">ラップ予想（当日）+ 朝サマリー</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>gcp-g-0730</code>（GCP・Cloud Scheduler → Cloud Run Jobs・重さ 中）</div>
+<div><b>名前</b>: scheduler <code>keiba-g-0730</code>・run_job <code>keiba-dispatch-m</code>・group <code>g-0730</code></div>
+<div><b>スケジュール</b>: 毎日 07:30（<code>30 7 * * *</code>）</div>
+<div><b>入口</b>: <code>python -m src.ops.job_dispatch group g-0730</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: keiba-dispatch-m（2Gi・1 vCPU）</div>
+<div><b>費用の目安（月）</b>: 削除済み 0 円</div>
+<div><b>ホストでも同じ処理？</b>: 動いている（どちらも 07:30）</div>
+<div><b>根拠</b>: <span class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-0730）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></span></div>
+<div><b>メモ</b>: 2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</div>
+<div><b>グループの中のジョブ</b>（<code>config/gcp_job_map.json</code> の <code>scheduler_groups[g-0730].jobs</code>）:</div>
+<ul class="jobs"><li><b><code>lap-forecast-morning</code></b>  — ハロンごとのラップ予想（当日分）<div class="kv">ステップ:<ol><li><code>python -m src.scraper.export_tables --years {year} --categories race_shutuba --refresh</code>（失敗しても続ける）</li><li><code>python -m src.scripts.data.tp55_backfill --dates {today_iso} --model-dir {model:lap_models} --model-full model_final2026_A_full.pkl --model-noten model_final2026_A_noten.pkl</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/page_reference/tables</code>、ミラー <code>data/page_reference/race_lists</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/inference/lap_forecast</code>, <code>state/data/page_reference/tables</code>、画面用のミラー <code>data/local/inference/lap_forecast</code></div><div class="ev">enabled=true・ready=true</div></div></li><li><b><code>slack-scrape-summary-morning</code></b>  — スクレイピング状況の朝サマリー（Slack）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.scrape_status_notify --mode summary --when nonraceday --send --source prod</code></li></ol><div>読む（GCS → コンテナ）: —、ミラー <code>data/page_reference/race_lists</code></div><div>書く（コンテナ → GCS）: —</div><div class="ev">enabled=true・ready=true</div></div></li></ul>
+</div></details>
+<details id="job-gcp-g-0800"><summary><span class="b mu">削除済み</span> <b>keiba-g-0800</b> <span class="mu">— 0 8 * * *（JST）・keiba-dispatch-l（8Gi・2 vCPU、上限 1800 秒）</span><br><span class="sm">ページ品質・並走検証。月曜は網羅状況と追走難度 v2 の突き合わせも</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>gcp-g-0800</code>（GCP・Cloud Scheduler → Cloud Run Jobs・重さ 中）</div>
+<div><b>名前</b>: scheduler <code>keiba-g-0800</code>・run_job <code>keiba-dispatch-l</code>・group <code>g-0800</code></div>
+<div><b>スケジュール</b>: 毎日 08:00（<code>0 8 * * *</code>）</div>
+<div><b>入口</b>: <code>python -m src.ops.job_dispatch group g-0800</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: keiba-dispatch-l（8Gi・2 vCPU）</div>
+<div><b>費用の目安（月）</b>: 削除済み 0 円</div>
+<div><b>ホストでも同じ処理？</b>: 網羅 月 08:00、追走難度 v2 月 08:30、RB 08:20。並走の一致判定は不要（並走をやめた）</div>
+<div><b>根拠</b>: <span class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-0800）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></span></div>
+<div><b>メモ</b>: 2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</div>
+<div><b>グループの中のジョブ</b>（<code>config/gcp_job_map.json</code> の <code>scheduler_groups[g-0800].jobs</code>）:</div>
+<ul class="jobs"><li><b><code>parity-check</code></b>  — 並走検証（ホストと GCP の成果物の一致判定。並走期間のみ）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.ops.parity_check auto --date {today} --write --send</code></li></ol><div>読む（GCS → コンテナ）: —</div><div>書く（コンテナ → GCS）: —</div><div class="ev">enabled=true・ready=true</div></div></li><li><b><code>slack-scrape-coverage</code></b>  — 取得の網羅状況（週次 Slack）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.scrape_status_notify --mode coverage --send --source prod</code></li></ol><div>読む（GCS → コンテナ）: —、ミラー <code>data/page_reference/race_lists</code></div><div>書く（コンテナ → GCS）: —</div><div class="ev">enabled=true・ready=true</div></div></li><li><b><code>tracking-v2-weekly</code></b>  — 追走難度 v2 の前夜保存と実測の週次突き合わせ<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.tracking_v2_eval --from {days_ago_10} --to {today}</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/inference/tracking_v2</code>, <code>state/data/page_reference/tables</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/meta/tracking_v2_eval</code></div><div class="ev">enabled=true・ready=true</div></div></li><li><b><code>rb-state-daily</code></b>  — v6 の RB（めぐ指数/netkeiba 指数の履歴16列）の推論用の履歴状態を前日までの確定走で作り直す（日次）<div class="kv">ステップ:<ol><li><code>python -m src.ops.jobs.rb_state</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/page_reference/tables</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/inference/state/rb_v6</code></div><div class="ev">enabled=true・ready=true</div></div></li></ul>
+</div></details>
+<details id="job-gcp-g-1000-mon"><summary><span class="b mu">削除済み</span> <b>keiba-g-1000-mon</b> <span class="mu">— 0 10 * * 1（JST）・keiba-dispatch-l（8Gi・2 vCPU、上限 4800 秒）</span><br><span class="sm">ドリフト監視・凍結追跡（月曜）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>gcp-g-1000-mon</code>（GCP・Cloud Scheduler → Cloud Run Jobs・重さ 中）</div>
+<div><b>名前</b>: scheduler <code>keiba-g-1000-mon</code>・run_job <code>keiba-dispatch-l</code>・group <code>g-1000-mon</code></div>
+<div><b>スケジュール</b>: 月 10:00（<code>0 10 * * 1</code>）</div>
+<div><b>入口</b>: <code>python -m src.ops.job_dispatch group g-1000-mon</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: keiba-dispatch-l（8Gi・2 vCPU）</div>
+<div><b>費用の目安（月）</b>: 削除済み 0 円</div>
+<div><b>ホストでも同じ処理？</b>: 動いている（月 10:00・10:30・03:30・07:30）</div>
+<div><b>根拠</b>: <span class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-1000-mon）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></span></div>
+<div><b>メモ</b>: 2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</div>
+<div><b>グループの中のジョブ</b>（<code>config/gcp_job_map.json</code> の <code>scheduler_groups[g-1000-mon].jobs</code>）:</div>
+<ul class="jobs"><li><b><code>drift-monitor-weekly</code></b> <span class="b warn">ready=false</span> — ドリフト週次監視（特徴量の抜き取り込み）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.drift_dump_features --days {last_weekend_days}</code>（失敗しても続ける）</li><li><code>python -m src.scripts.data.drift_monitor --root .</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/meta/drift_monitor</code>, <code>state/data/local/prediction_results</code>, <code>state/data/page_reference/tables</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/meta/drift_monitor</code></div><div class="ev">enabled=true・ready=false</div></div></li><li><b><code>frozen-tracking-weekly</code></b>  — 凍結候補の前向き追跡（週次）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.frozen_tracking track --from 20261022 --models v4,v5 --variants final,pre</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/meta/frozen_tracking</code>, <code>state/data/local/inference/predictions_v4</code>, <code>state/data/local/inference/predictions_v5</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/meta/frozen_tracking</code></div><div class="ev">enabled=true・ready=true</div></div></li><li><b><code>px-ridge-window</code></b>  — v5/v6 の血統 ALL_BEST(PX)のリッジを、次の半年に入る前に作っておく（毎週。必要なときだけ実行）<div class="kv">ステップ:<ol><li><code>python -m src.ops.jobs.px_ridge</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/inference/state/px_v5</code>, <code>state/data/page_reference/tables</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/inference/state/px_v5</code></div><div class="ev">enabled=true・ready=true</div></div></li><li><b><code>hem-megu-state</code></b>  — めぐ指数の週次状態（hem_megu state）。棚卸し #37<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.hem_megu state</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/page_reference/tables</code>, <code>state/data/local/modeling/hem</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/modeling/hem</code></div><div class="ev">enabled=true・ready=true</div></div></li></ul>
+</div></details>
+<details id="job-gcp-g-sun-2200"><summary><span class="b mu">削除済み</span> <b>keiba-g-sun-2200</b> <span class="mu">— 0 22 * * 0（JST）・keiba-dispatch-m（2Gi・1 vCPU、上限 3600 秒）</span><br><span class="sm">オッズ乖離の週次集計（日曜）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>gcp-g-sun-2200</code>（GCP・Cloud Scheduler → Cloud Run Jobs・重さ 中）</div>
+<div><b>名前</b>: scheduler <code>keiba-g-sun-2200</code>・run_job <code>keiba-dispatch-m</code>・group <code>g-sun-2200</code></div>
+<div><b>スケジュール</b>: 日 22:00（<code>0 22 * * 0</code>）</div>
+<div><b>入口</b>: <code>python -m src.ops.job_dispatch group g-sun-2200</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: keiba-dispatch-m（2Gi・1 vCPU）</div>
+<div><b>費用の目安（月）</b>: 削除済み 0 円</div>
+<div><b>ホストでも同じ処理？</b>: 動いている（日 22:00）</div>
+<div><b>根拠</b>: <span class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-sun-2200）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></span></div>
+<div><b>メモ</b>: 2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</div>
+<div><b>グループの中のジョブ</b>（<code>config/gcp_job_map.json</code> の <code>scheduler_groups[g-sun-2200].jobs</code>）:</div>
+<ul class="jobs"><li><b><code>odds-drift-weekly</code></b>  — オッズ乖離（t15/t60）の週次集計<div class="kv">ステップ:<ol><li><code>python -m src.pipeline.betting.odds_drift --from {days_ago_28} --to {today} --early t15 --out data/local/meta/odds_drift/weekly/{today}_t15.json</code></li><li><code>python -m src.pipeline.betting.odds_drift --from {days_ago_28} --to {today} --early t60 --out data/local/meta/odds_drift/weekly/{today}_t60.json</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/meta/odds_drift</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/meta/odds_drift</code></div><div class="ev">enabled=true・ready=true</div></div></li></ul>
+</div></details>
+<details id="job-gcp-g-1910-eve"><summary><span class="b mu">削除済み</span> <b>keiba-g-1910-eve</b> <span class="mu">— 10,40 19 * * *（JST）・keiba-dispatch-l（8Gi・2 vCPU、上限 5400 秒）</span><br><span class="sm">前夜の計算・翌日のレース予約・ラップ予想（翌日）。2 回走らせて取得の遅れを吸収（冪等）。</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>gcp-g-1910-eve</code>（GCP・Cloud Scheduler → Cloud Run Jobs・重さ 中）</div>
+<div><b>名前</b>: scheduler <code>keiba-g-1910-eve</code>・run_job <code>keiba-dispatch-l</code>・group <code>g-1910-eve</code></div>
+<div><b>スケジュール</b>: 毎日 19:10・19:40（<code>10,40 19 * * *</code>）</div>
+<div><b>入口</b>: <code>python -m src.ops.job_dispatch group g-1910-eve</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: keiba-dispatch-l（8Gi・2 vCPU）</div>
+<div><b>費用の目安（月）</b>: 削除済み 0 円</div>
+<div><b>ホストでも同じ処理？</b>: 動いている（raceday-eve 18:00 に前夜の計算、raceday-runner 07:30 の常駐、ラップ 19:30）</div>
+<div><b>根拠</b>: <span class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-1910-eve）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></span></div>
+<div><b>メモ</b>: 2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</div>
+<div><b>グループの中のジョブ</b>（<code>config/gcp_job_map.json</code> の <code>scheduler_groups[g-1910-eve].jobs</code>）:</div>
+<ul class="jobs"><li><b><code>eve-precompute</code></b>  — 前夜の計算（追走難度・追走難度 v2・想定オッズ）。raceday-eve の取得後半を分離<div class="kv">ステップ:<ol><li><code>python -m src.ops.jobs.eve_precompute --date {tomorrow}</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/inference/state</code>, <code>state/data/page_reference/tables</code>, <code>state/data/local/modeling/feature_store/horse_history</code>, <code>state/data/local/modeling/feature_store/serving_bundle</code>、ミラー <code>data/page_reference/race_lists</code>, <code>data/page_reference/race_day_schedule</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/inference/tracking_v2</code>、画面用のミラー <code>data/local/inference/tracking_v2</code></div><div class="ev">enabled=true・ready=true</div></div></li><li><b><code>reserve-race-day</code></b>  — 翌開催日の全レースの T-60/T-15/T-10/T-5/T-2 取得タスクと予測タスクを前夜に予約<div class="kv">ステップ:<ol><li><code>python -m src.ops.reservations race-day --date {tomorrow}</code></li></ol><div>読む（GCS → コンテナ）: —、ミラー <code>data/page_reference/race_lists</code>, <code>data/page_reference/race_day_schedule</code></div><div>書く（コンテナ → GCS）: —</div><div class="ev">enabled=true・ready=true</div></div></li><li><b><code>lap-forecast-eve</code></b>  — ハロンごとのラップ予想（翌日分）<div class="kv">ステップ:<ol><li><code>python -m src.scraper.export_tables --years {year} --categories race_shutuba --refresh</code>（失敗しても続ける）</li><li><code>python -m src.scripts.data.tp55_backfill --dates {tomorrow_iso} --model-dir {model:lap_models} --model-full model_final2026_A_full.pkl --model-noten model_final2026_A_noten.pkl</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/page_reference/tables</code>、ミラー <code>data/page_reference/race_lists</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/inference/lap_forecast</code>, <code>state/data/page_reference/tables</code>、画面用のミラー <code>data/local/inference/lap_forecast</code></div><div class="ev">enabled=true・ready=true</div></div></li></ul>
+</div></details>
+<details id="job-gcp-g-hourly"><summary><span class="b mu">削除済み</span> <b>keiba-g-hourly</b> <span class="mu">— 5 * * * *（JST）・keiba-dispatch-m（2Gi・1 vCPU、上限 600 秒）</span><br><span class="sm">VPS 実行役の定期タスクを 6 時間先まで予約</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>gcp-g-hourly</code>（GCP・Cloud Scheduler → Cloud Run Jobs・重さ 中）</div>
+<div><b>名前</b>: scheduler <code>keiba-g-hourly</code>・run_job <code>keiba-dispatch-m</code>・group <code>g-hourly</code></div>
+<div><b>スケジュール</b>: 毎時 05 分（<code>5 * * * *</code>）</div>
+<div><b>入口</b>: <code>python -m src.ops.job_dispatch group g-hourly</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: keiba-dispatch-m（2Gi・1 vCPU）</div>
+<div><b>費用の目安（月）</b>: 削除済み 0 円</div>
+<div><b>ホストでも同じ処理？</b>: 共通ログイン 09:05、過去値の検査 2 時間おき。予約は担当が空なので不要（今後は VPS の keiba-fetch-reserve）</div>
+<div><b>根拠</b>: <span class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-hourly）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></span></div>
+<div><b>メモ</b>: 2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</div>
+<div><b>グループの中のジョブ</b>（<code>config/gcp_job_map.json</code> の <code>scheduler_groups[g-hourly].jobs</code>）:</div>
+<ul class="jobs"><li><b><code>reserve-fetch-tasks</code></b>  — VPS 実行役の定期タスク（cron 相当）を取得タスク表に予約<div class="kv">ステップ:<ol><li><code>python -m src.ops.reservations recurring --horizon-hours 6</code></li></ol><div>読む（GCS → コンテナ）: —</div><div>書く（コンテナ → GCS）: —</div><div class="ev">enabled=true・ready=true</div></div></li><li><b><code>shared-login</code></b>  — 共通ログインの毎月1日のパスワード更新と Slack 通知（毎日 00:05 に起動し、月が替わっていなければ何もしない）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.ops.shared_login ensure</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/auth</code>、ミラー <code>data/local/auth</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/auth</code></div><div class="ev">enabled=true・ready=true</div></div></li><li><b><code>jma-weather</code></b> <span class="b mu">enabled=false</span> <span class="b warn">ready=false</span> — 気象庁の時別値（直近 3 日の補い daily だけ。ホストの jma_weather_run.sh は 1 日 1 回・前回からの範囲で別の作り。2016 年からの未取得分の fetch は、取得済みの判定に月ファイル 1,310 件を毎回読むので定期では回さない。2026-11-13）。棚卸し #16。気象庁は IP 遮断の危険が低いので VPS の枠を使わない<div class="kv">ステップ:<ol><li><code>python -m src.scraper.jma_weather --halt-file data/local/meta/jma_weather_halt.json daily</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/meta</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/meta</code></div><div class="ev">enabled=false・ready=false</div></div></li><li><b><code>verify-past-values</code></b> <span class="b warn">ready=false</span> — 過去分補填（2016〜2019 年）の race_result の値の検査（読み取りのみ）。棚卸し #23。補填 backfill-past（#19）が終わったら一緒に廃止する<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.verify_past_values</code></li></ol><div>読む（GCS → コンテナ）: —</div><div>書く（コンテナ → GCS）: —</div><div class="ev">enabled=true・ready=false</div></div></li></ul>
+</div></details>
+<details id="job-gcp-g-5min"><summary><span class="b mu">削除済み</span> <b>keiba-g-5min</b> <span class="mu">— */15 * * * *（JST）・keiba-dispatch-m（2Gi・1 vCPU、上限 300 秒）</span><br><span class="sm">VPS ハートビート監視。15 分おきにスクレイピング異常の通知（2026-10-29: 起動を 5 分→15 分おきに。動くジョブが 15 分おきだけのため）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>gcp-g-5min</code>（GCP・Cloud Scheduler → Cloud Run Jobs・重さ 中）</div>
+<div><b>名前</b>: scheduler <code>keiba-g-5min</code>・run_job <code>keiba-dispatch-m</code>・group <code>g-5min</code></div>
+<div><b>スケジュール</b>: 15 分おき（<code>*/15 * * * *</code>）</div>
+<div><b>入口</b>: <code>python -m src.ops.job_dispatch group g-5min</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: keiba-dispatch-m（2Gi・1 vCPU）</div>
+<div><b>費用の目安（月）</b>: 削除済み 0 円</div>
+<div><b>ホストでも同じ処理？</b>: 通知は動いている（15 分おき）。VPS の監視は無い（下の点検 #1）</div>
+<div><b>根拠</b>: <span class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-5min）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></span></div>
+<div><b>メモ</b>: 2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</div>
+<div><b>グループの中のジョブ</b>（<code>config/gcp_job_map.json</code> の <code>scheduler_groups[g-5min].jobs</code>）:</div>
+<ul class="jobs"><li><b><code>vps-watchdog</code></b> <span class="b warn">ready=false</span> — VPS のハートビート監視（死活・メモリ・swap・ユニット・ディスク）<div class="kv">ステップ:<ol><li><code>python -m src.ops.vps_watchdog --send</code></li></ol><div>読む（GCS → コンテナ）: —</div><div>書く（コンテナ → GCS）: —</div><div class="ev">enabled=true・ready=false</div></div></li><li><b><code>slack-scrape-alerts</code></b>  — スクレイピング異常の通知（15 分おき）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.scrape_status_notify --mode alerts --send --source prod</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/meta/slack_sent</code>、ミラー <code>data/page_reference/race_lists</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/meta/slack_sent</code></div><div class="ev">enabled=true・ready=true</div></div></li></ul>
+</div></details>
+<details id="job-gcp-g-pump"><summary><span class="b mu">削除済み</span> <b>keiba-g-pump</b> <span class="mu">— * 8-16 * * 0,1,6（JST）・keiba-dispatch-s（512Mi・1 vCPU、上限 120 秒）</span><br><span class="sm">開催日（土日月）の日中、イベントを毎分処理して予測タスクを積む</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>gcp-g-pump</code>（GCP・Cloud Scheduler → Cloud Run Jobs・重さ 中）</div>
+<div><b>名前</b>: scheduler <code>keiba-g-pump</code>・run_job <code>keiba-dispatch-s</code>・group <code>g-pump</code></div>
+<div><b>スケジュール</b>: 土日月 08:00〜16:59 毎分（<code>* 8-16 * * 0,1,6</code>）</div>
+<div><b>入口</b>: <code>python -m src.ops.job_dispatch group g-pump</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: keiba-dispatch-s（512Mi・1 vCPU）</div>
+<div><b>費用の目安（月）</b>: 削除済み 0 円</div>
+<div><b>ホストでも同じ処理？</b>: ホストの raceday-weight-runner（08:00 の常駐）が検知と予測をしている</div>
+<div><b>根拠</b>: <span class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-pump）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></span></div>
+<div><b>メモ</b>: 2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</div>
+<div><b>グループの中のジョブ</b>（<code>config/gcp_job_map.json</code> の <code>scheduler_groups[g-pump].jobs</code>）:</div>
+<ul class="jobs"><li><b><code>event-pump</code></b>  — VPS 実行役の馬体重検知イベント（ops/events/weights_announced/）を見つけて、予測タスクを Cloud Tasks に積む<div class="kv">ステップ:<ol><li><code>python -m src.ops.events pump</code></li></ol><div>読む（GCS → コンテナ）: —</div><div>書く（コンテナ → GCS）: —</div><div class="ev">enabled=true・ready=true</div></div></li></ul>
+</div></details>
+<details id="job-gcp-g-results"><summary><span class="b mu">削除済み</span> <b>keiba-g-results</b> <span class="mu">— */20 12-21 * * 0,1,2,6（JST）・keiba-dispatch-m（2Gi・1 vCPU、上限 900 秒）</span><br><span class="sm">予測成績の集計（土日は暫定、月・火は確定）と通知</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>gcp-g-results</code>（GCP・Cloud Scheduler → Cloud Run Jobs・重さ 中）</div>
+<div><b>名前</b>: scheduler <code>keiba-g-results</code>・run_job <code>keiba-dispatch-m</code>・group <code>g-results</code></div>
+<div><b>スケジュール</b>: 土日月火 12:00〜21:40 20 分おき（<code>*/20 12-21 * * 0,1,2,6</code>）</div>
+<div><b>入口</b>: <code>python -m src.ops.job_dispatch group g-results</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: keiba-dispatch-m（2Gi・1 vCPU）</div>
+<div><b>費用の目安（月）</b>: 削除済み 0 円</div>
+<div><b>ホストでも同じ処理？</b>: 通知は土日 15:00〜20:40、集計は raceday-result-runner・recent-retry の中</div>
+<div><b>根拠</b>: <span class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-results）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></span></div>
+<div><b>メモ</b>: 2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</div>
+<div><b>グループの中のジョブ</b>（<code>config/gcp_job_map.json</code> の <code>scheduler_groups[g-results].jobs</code>）:</div>
+<ul class="jobs"><li><b><code>prediction-results-refresh</code></b>  — 予測成績の日次集計（暫定→確定）と、推奨度つきの仮想購入(bets_t)の追記。ホストの raceday-result-runner / recent-retry 内の集計の置き換え。Slack 送信とは別（送らなくても集計は更新する）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.prediction_results --from {days_ago_10} --to {today} --skip-final</code></li><li><code>python -m src.scripts.data.prediction_results --from {days_ago_10} --to {today} --add-target-bets</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/inference</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/prediction_results</code></div><div class="ev">enabled=true・ready=true</div></div></li><li><b><code>slack-results</code></b>  — 当日の予測成績の通知（土日 15:00〜20:59 の 20 分おき）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.daily_results_notify --date {today} --refresh --send</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/prediction_results</code>, <code>state/data/local/inference</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/prediction_results</code></div><div class="ev">enabled=true・ready=true</div></div></li></ul>
+</div></details>
+<details id="job-gcp-g-2130"><summary><span class="b mu">削除済み</span> <b>keiba-g-2130</b> <span class="mu">— 30 21 * * *（JST）・keiba-dispatch-m（2Gi・1 vCPU、上限 4800 秒）</span><br><span class="sm">夜のスクレイピング状況サマリー。金曜は馬名インデックスと成長曲線の週次更新も（約 45 分。前夜のグループに置くと直列で 5400 秒を超えうるため、ここに置く）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>gcp-g-2130</code>（GCP・Cloud Scheduler → Cloud Run Jobs・重さ 中）</div>
+<div><b>名前</b>: scheduler <code>keiba-g-2130</code>・run_job <code>keiba-dispatch-m</code>・group <code>g-2130</code></div>
+<div><b>スケジュール</b>: 毎日 21:30（<code>30 21 * * *</code>）</div>
+<div><b>入口</b>: <code>python -m src.ops.job_dispatch group g-2130</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: keiba-dispatch-m（2Gi・1 vCPU）</div>
+<div><b>費用の目安（月）</b>: 削除済み 0 円</div>
+<div><b>ホストでも同じ処理？</b>: 動いている（21:30、金 18:30）</div>
+<div><b>根拠</b>: <span class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-2130）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></span></div>
+<div><b>メモ</b>: 2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</div>
+<div><b>グループの中のジョブ</b>（<code>config/gcp_job_map.json</code> の <code>scheduler_groups[g-2130].jobs</code>）:</div>
+<ul class="jobs"><li><b><code>slack-scrape-summary-eve</code></b>  — スクレイピング状況の夜サマリー（Slack）<div class="kv">ステップ:<ol><li><code>python -m src.scripts.data.scrape_status_notify --mode summary --when raceday --send --source prod</code></li></ol><div>読む（GCS → コンテナ）: —、ミラー <code>data/page_reference/race_lists</code></div><div>書く（コンテナ → GCS）: —</div><div class="ev">enabled=true・ready=true</div></div></li><li><b><code>horse-name-index</code></b>  — 馬名インデックスと成長曲線の週次更新<div class="kv">ステップ:<ol><li><code>python -m src.scraper.auto_scrape --task horse-name-index</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/calculated_data</code>, <code>state/data/calculated_data</code></div><div>書く（コンテナ → GCS）: <code>state/data/calculated_data</code>, <code>state/data/calculated_data</code></div><div class="ev">enabled=true・ready=true</div></div></li></ul>
+</div></details>
+<details id="job-gcp-g-0730-dayprep"><summary><span class="b mu">削除済み</span> <b>keiba-g-0730-dayprep</b> <span class="mu">— 30 7 * * *（JST）・keiba-dispatch-xl（16Gi・4 vCPU、上限 1800 秒）</span><br><span class="sm">開催日の朝に、その日の全レースの日単位キャッシュ(v4_day・px_day)だけを作る（予測は作らない）。ピーク約12GBなので 16GiB</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>gcp-g-0730-dayprep</code>（GCP・Cloud Scheduler → Cloud Run Jobs・重さ 中）</div>
+<div><b>名前</b>: scheduler <code>keiba-g-0730-dayprep</code>・run_job <code>keiba-dispatch-xl</code>・group <code>g-0730-dayprep</code></div>
+<div><b>スケジュール</b>: 毎日 07:30（<code>30 7 * * *</code>）</div>
+<div><b>入口</b>: <code>python -m src.ops.job_dispatch group g-0730-dayprep</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: keiba-dispatch-xl（16Gi・4 vCPU）</div>
+<div><b>費用の目安（月）</b>: 削除済み 0 円</div>
+<div><b>ホストでも同じ処理？</b>: 無い（ホストは serving-state-precompute 07:35・-profile 08:10 の別の作りで予測している、と推測）</div>
+<div><b>根拠</b>: <span class="ev"><code>config/gcp_job_map.json（scheduler_groups.g-0730-dayprep）</code>、<code>docs/operations/deleted_scheduler_keiba_g_20261113.md</code></span></div>
+<div><b>メモ</b>: 2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs</div>
+<div><b>グループの中のジョブ</b>（<code>config/gcp_job_map.json</code> の <code>scheduler_groups[g-0730-dayprep].jobs</code>）:</div>
+<ul class="jobs"><li><b><code>day-prep</code></b>  — 開催日の朝: その日の全レースの日単位キャッシュ(state/&lt;日&gt;/v4_day.parquet・px_day.parquet)だけを作る。predict-race が state から読む（予測は作らない）<div class="kv">ステップ:<ol><li><code>python -m src.ops.jobs.day_prep --date {today}</code></li></ol><div>読む（GCS → コンテナ）: <code>state/data/local/inference/state</code>, <code>state/data/page_reference/tables</code>, <code>state/data/local/modeling/feature_store/horse_history</code>, <code>state/data/local/modeling/feature_store/serving_bundle</code>、ミラー <code>data/page_reference/race_lists</code>, <code>data/page_reference/race_day_schedule</code></div><div>書く（コンテナ → GCS）: <code>state/data/local/inference/state</code></div><div class="ev">enabled=true・ready=true</div></div></li></ul>
+</div></details>
 <h3>ConoHa VPS（systemd のタイマー・常駐）</h3>
-<details><summary><span class="b ok">稼働中</span> <b>keiba-cache-warm.timer</b> <span class="mu">— 60 秒おき・MemoryMax 128M</span><br><span class="sm">更新のあったレース・馬・開催日の API の応答を、VPS の nginx のキャッシュに取り直す</span></summary>
+<details id="job-vps-cache-warm"><summary><span class="b ok">稼働中</span> <b>keiba-cache-warm.timer</b> <span class="mu">— 60 秒おき・MemoryMax 128M</span><br><span class="sm">API のキャッシュの取り直し: 合図（ops/cache_dirty/_beacon.json の世代）が変わったときなどだけ更新の目印を一覧し、更新のあったレース・馬の API を nginx 経由で取り直す（660 秒後にもう 1 回）</span></summary>
 <div class="dbody">
-<div>入口: <code>/opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/cache_warm.py</code>（元は <code>scripts/ops/vps/cache_warm.py</code>、<code>scripts/ops/vps/cache_warm.py:264</code>）</div>
-<ol>
-<li>GCS の <code>ops/cache_dirty/20261114/</code>（昨日以降の日付）を 1 回一覧する。目印のキーは レース 12 桁・開催日 8 桁・<code>h</code>＋馬 ID・<code>_ALL</code>（書き手は <code>src/utils/cache_marker.py</code>）。</li>
-<li>キーごとに、VPS の nginx（<code>127.0.0.1:8080</code>、Host は本番と同じ）へ <code>X-Keiba-Refresh</code> 付きで GET。例: <code>/api/race/202605050811</code>・<code>/api/race/202605050811/predictions</code>・<code>/api/v1/races/202605050811/analysis</code>・<code>/api/horse/2023105678/detail</code>。nginx はキャッシュを飛ばして Cloud Run の keiba-api から取り直す（<code>scripts/ops/vps/cache_warm.py:36-48</code>）。</li>
-<li>660 秒後にもう 1 回取り直す（API の中のメモリの使い回しを越えるため）。</li>
-</ol>
-<div>書く: <code>/var/lib/keiba-ui/cache-warm/state.json</code>、nginx のキャッシュ <code>/var/cache/nginx/keiba_api</code>。外部サイトの取得: なし。</div>
+<div><b>id</b>: <code>vps-cache-warm</code>（ConoHa VPS・systemd タイマー・重さ 軽い）</div>
+<div><b>名前</b>: timer <code>keiba-cache-warm.timer</code>・service <code>keiba-cache-warm.service</code></div>
+<div><b>スケジュール</b>: 60 秒おき</div>
+<div><b>入口</b>: <code>/opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/cache_warm.py</code></div>
+<div><b>取得先の URL の例</b>: <code>https://megu-keiba.com/api/v1/races/202605050811</code></div>
+<div><b>読む</b>: <ul><li>GCS ops/cache_dirty/_beacon.json（メタデータだけ・毎周）</li><li>GCS ops/cache_dirty/（合図が変わったとき最短 5 分・合図なし 10 分・安全網 30 分だけ一覧）</li></ul></div>
+<div><b>書く</b>: <ul><li>VPS の nginx の API キャッシュ（Cloud Run の API へ要求）</li><li>/var/lib/keiba-ui/cache-warm/state.json</li></ul></div>
+<div><b>メモリの枠</b>: MemoryMax 128M</div>
+<div><b>費用の目安（月）</b>: 一覧 最悪 288 回/日・合図のメタデータ 1,440 回/日 ≒ 月 約 45 円（毎分の一覧だった 11/13 以前は 約 265 円）</div>
+<div><b>ホストでも同じ処理？</b>: 無い（ホストの事前生成の周回は egress_billed() で止めてある）</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/ops/vps/templates/keiba-cache-warm.timer</code>、<code>scripts/ops/vps/cache_warm.py:1-15・:330-332</code>、<code>docs/operations/cost_ledger.md:198-205</code></span></div>
+<div><b>メモ</b>: 2026-11-13 に合図方式へ入れ替え（05f35916）</div>
+</div></details>
+<details id="job-vps-release-pull-ui"><summary><span class="b ok">稼働中</span> <b>keiba-release-pull-ui.timer</b> <span class="mu">— 3 分おき・MemoryMax 150M</span><br><span class="sm">本番の画面の新しい版の取り込み（GCS の latest.json を読み、新しければ入れる）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>vps-release-pull-ui</code>（ConoHa VPS・systemd タイマー・重さ 中）</div>
+<div><b>名前</b>: timer <code>keiba-release-pull-ui.timer</code>・service <code>keiba-release-pull@ui.service</code></div>
+<div><b>スケジュール</b>: 3 分おき</div>
+<div><b>入口</b>: <code>/opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/pull_release.py --kind ui</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: GCS ops/releases/ui/latest.json</div>
+<div><b>書く</b>: <ul><li>/srv/keiba-ui（本番の画面）</li><li>GCS ops/releases/ui/applied/vps.json</li></ul></div>
+<div><b>メモリの枠</b>: MemoryMax 150M</div>
+<div><b>費用の目安（月）</b>: 読み 1 日 480 回（ほぼ 0 円）</div>
+<div><b>ホストでも同じ処理？</b>: 無い</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/ops/vps/templates/keiba-release-pull-ui.timer</code>、<code>scripts/ops/vps/vps_03_units.sh:59</code></span></div>
+<div><b>メモ</b>: —</div>
+</div></details>
+<details id="job-vps-release-pull-ui-stg"><summary><span class="b ok">稼働中</span> <b>keiba-release-pull-ui-stg.timer</b> <span class="mu">— 5 分おき・MemoryMax 150M</span><br><span class="sm">stg の画面の新しい版の取り込み</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>vps-release-pull-ui-stg</code>（ConoHa VPS・systemd タイマー・重さ 軽い）</div>
+<div><b>名前</b>: timer <code>keiba-release-pull-ui-stg.timer</code>・service <code>keiba-release-pull@ui-stg.service</code></div>
+<div><b>スケジュール</b>: 5 分おき</div>
+<div><b>入口</b>: <code>/opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/pull_release.py --kind ui-stg</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: GCS ops/releases/ui-stg/latest.json</div>
+<div><b>書く</b>: stg の画面</div>
+<div><b>メモリの枠</b>: MemoryMax 150M</div>
+<div><b>費用の目安（月）</b>: ほぼ 0 円</div>
+<div><b>ホストでも同じ処理？</b>: 無い</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/ops/vps/templates/keiba-release-pull-ui-stg.timer</code>、<code>scripts/ops/vps/vps_05_stg_instance.sh:104</code></span></div>
+<div><b>メモ</b>: —</div>
+</div></details>
+<details id="job-vps-release-pull-fetch"><summary><span class="b ok">稼働中</span> <b>keiba-release-pull-fetch.timer</b> <span class="mu">— 20 3 * * *（JST）・MemoryMax 150M</span><br><span class="sm">取得の実行役のコードの新しい版の取り込み（メンテナンス窓 03:00〜04:00）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>vps-release-pull-fetch</code>（ConoHa VPS・systemd タイマー・重さ 軽い）</div>
+<div><b>名前</b>: timer <code>keiba-release-pull-fetch.timer</code>・service <code>keiba-release-pull@fetch.service</code></div>
+<div><b>スケジュール</b>: 毎日 03:20（<code>20 3 * * *</code>）</div>
+<div><b>入口</b>: <code>/opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/pull_release.py --kind fetch</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: GCS ops/releases/fetch/latest.json</div>
+<div><b>書く</b>: /opt/keiba-fetch（取得の実行役のコード）</div>
+<div><b>メモリの枠</b>: MemoryMax 150M</div>
+<div><b>費用の目安（月）</b>: ほぼ 0 円</div>
+<div><b>ホストでも同じ処理？</b>: 無い</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/ops/vps/templates/keiba-release-pull-fetch.timer</code>、<code>scripts/ops/vps/vps_03_units.sh:60</code></span></div>
+<div><b>メモ</b>: —</div>
+</div></details>
+<details id="job-vps-ui-health"><summary><span class="b ok">稼働中</span> <b>keiba-ui-health.timer</b> <span class="mu">— 5 分おき・（指定なし）</span><br><span class="sm">VPS の中の自己診断: keiba-ui・nginx・cloudflared が止まっていれば 1 回再起動し、/version.json・ディスク・空きメモリを見て Slack へ</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>vps-ui-health</code>（ConoHa VPS・systemd タイマー・重さ 重い（止まると困る））</div>
+<div><b>名前</b>: timer <code>keiba-ui-health.timer</code>・service <code>keiba-ui-health.service</code></div>
+<div><b>スケジュール</b>: 5 分おき</div>
+<div><b>入口</b>: <code>/opt/keiba-ui/bin/healthcheck.sh</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: <ul><li>http://127.0.0.1/version.json</li><li>systemctl の状態</li></ul></div>
+<div><b>書く</b>: <ul><li>/var/lib/keiba-ui/health.json</li><li>Slack（同じ内容は 1 時間に 1 回）</li></ul></div>
+<div><b>メモリの枠</b>: （指定なし）</div>
+<div><b>費用の目安（月）</b>: 0 円（API は叩かない）</div>
+<div><b>ホストでも同じ処理？</b>: ホストは server_watchdog（3 分おき）で自分のサーバーを見ている（対象は別）</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/ops/vps/healthcheck.sh</code>、<code>scripts/ops/vps/vps_02_install_stack.sh:82</code></span></div>
+<div><b>メモ</b>: —</div>
+</div></details>
+<details id="job-vps-heartbeat"><summary><span class="b warn">停止中</span> <b>keiba-heartbeat.timer</b> <span class="mu">— 5 分おき・MemoryMax 48M</span><br><span class="sm">VPS の資源・ユニットの状態を監視ポータル（Cloud Run）へ送る</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>vps-heartbeat</code>（ConoHa VPS・systemd タイマー・重さ 軽い）</div>
+<div><b>名前</b>: timer <code>keiba-heartbeat.timer</code>・service <code>keiba-heartbeat.service</code></div>
+<div><b>スケジュール</b>: 5 分おき</div>
+<div><b>入口</b>: <code>/usr/bin/python3 /opt/keiba-ui/bin/heartbeat_client.py</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: /proc/meminfo・systemctl</div>
+<div><b>書く</b>: Cloud Run keiba-monitor /ops/heartbeat</div>
+<div><b>メモリの枠</b>: MemoryMax 48M</div>
+<div><b>費用の目安（月）</b>: 5 分おきの Cloud Run の起動（規約で禁止の間隔）</div>
+<div><b>ホストでも同じ処理？</b>: 無い</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/ops/vps/templates/keiba-heartbeat.timer</code>、<code>scripts/ops/vps/vps_03_units.sh:116</code></span></div>
+<div><b>メモ</b>: 導入済み・disabled。5 分おきの要求は 15 分未満の ping の禁止に反するので有効にしない（代わりに vps-sched-status）</div>
+</div></details>
+<details id="job-vps-fetch-agent"><summary><span class="b warn">停止中</span> <b>keiba-fetch-agent.service</b> <span class="mu">— 常駐・keiba-fetch.slice: MemoryHigh 220M・MemoryMax 250M</span><br><span class="sm">取得の実行役（常駐）: タスク表を毎分見て、netkeiba の取得を実行する</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>vps-fetch-agent</code>（ConoHa VPS・常駐（systemd サービス）・重さ 重い（止まると困る））</div>
+<div><b>名前</b>: service <code>keiba-fetch-agent.service</code></div>
+<div><b>スケジュール</b>: 常駐</div>
+<div><b>入口</b>: <code>/opt/keiba-fetch/venv/bin/python -m src.ops.fetch_agent</code></div>
+<div><b>取得先の URL の例</b>: <code>https://db.netkeiba.com/race/202605050811/</code></div>
+<div><b>読む</b>: タスク表（file モード: /var/lib/keiba-fetch/tasks）</div>
+<div><b>書く</b>: <ul><li>/var/lib/keiba-fetch/data</li><li>GCS ops/mirror_vps/</li></ul></div>
+<div><b>メモリの枠</b>: keiba-fetch.slice: MemoryHigh 220M・MemoryMax 250M</div>
+<div><b>費用の目安（月）</b>: 停止中 0 円</div>
+<div><b>ホストでも同じ処理？</b>: 取得はすべてホストの cron が担当（正）</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/ops/vps/templates/keiba-fetch-agent.service</code>、<code>config/fetch_owner.json</code>、<code>コミット dda6af55</code></span></div>
+<div><b>メモ</b>: 11/13 15:00 に停止・無効（担当なしで GCS のタスク表を毎分 6 回一覧していたため）。段 6 で file モードにしてから再開</div>
+</div></details>
+<details id="job-vps-sched-status"><summary><span class="b mu">今後</span> <b>keiba-sched-status.timer</b> <span class="mu">— 15 分おき・MemoryMax 110M</span><br><span class="sm">定期実行の見張り: VPS のタイマーの最後の起動・結果を GCS に書き、赤になった・赤が解消したときだけ Slack</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>vps-sched-status</code>（ConoHa VPS・systemd タイマー・重さ 重い（止まると困る））</div>
+<div><b>名前</b>: timer <code>keiba-sched-status.timer</code>・service <code>keiba-sched-status.service</code></div>
+<div><b>スケジュール</b>: 15 分おき</div>
+<div><b>入口</b>: <code>/opt/keiba-fetch/venv/bin/python -m src.ops.sched_status（WorkingDirectory=/opt/keiba-fetch/current）</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: <ul><li>systemctl show（一覧にある VPS のタイマー）</li><li>/var/lib/keiba-fetch/sched_status/state.json</li></ul></div>
+<div><b>書く</b>: <ul><li>GCS ops/heartbeat/vps/status.json</li><li>Slack（状態が変わったときだけ）</li></ul></div>
+<div><b>メモリの枠</b>: MemoryMax 110M</div>
+<div><b>費用の目安（月）</b>: 書き込み 月 2,880 回（約 2.3 円）</div>
+<div><b>ホストでも同じ処理？</b>: 無い</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/ops/vps/templates/keiba-sched-status.timer</code>、<code>src/ops/sched_status.py</code></span></div>
+<div><b>メモ</b>: 配備（vps_03_units.sh）と IAM（ops/heartbeat/vps/status.json だけの書き込み）の後に active にする</div>
+</div></details>
+<details id="job-vps-fetch-reserve"><summary><span class="b mu">今後</span> <b>keiba-fetch-reserve.timer</b> <span class="mu">— 50 * * * *（JST）・MemoryMax 60M</span><br><span class="sm">取得の予約（定期）: 先 6 時間分の取得タスクを VPS のローカルのタスク表に冪等に積む</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>vps-fetch-reserve</code>（ConoHa VPS・systemd タイマー・重さ 重い（止まると困る））</div>
+<div><b>名前</b>: timer <code>keiba-fetch-reserve.timer</code>・service <code>keiba-fetch-reserve.service</code></div>
+<div><b>スケジュール</b>: 毎時 50 分（<code>50 * * * *</code>）</div>
+<div><b>入口</b>: <code>python -m src.ops.reservations recurring --horizon-hours 6</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: <ul><li>config/fetch_owner.json</li><li>race_lists・発走時刻表（ローカル）</li></ul></div>
+<div><b>書く</b>: /var/lib/keiba-fetch/tasks/ops/fetch_tasks/pending/</div>
+<div><b>メモリの枠</b>: MemoryMax 60M</div>
+<div><b>費用の目安（月）</b>: 1 円未満</div>
+<div><b>ホストでも同じ処理？</b>: 今はホストの cron が取得の正（担当表は空）</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/ops/vps/templates/keiba-fetch-reserve.timer</code>、<code>scripts/ops/vps/vps_03_units.sh:62-65</code></span></div>
+<div><b>メモ</b>: 段 6（配備と段階的な受け渡し）で有効にする</div>
+</div></details>
+<details id="job-vps-fetch-raceday-tomorrow"><summary><span class="b mu">今後</span> <b>keiba-fetch-raceday-tomorrow.timer</b> <span class="mu">— 30 20 * * *（JST）・MemoryMax 120M</span><br><span class="sm">翌日の開催日の予約: レースごとの取得（オッズ・馬体重・速報）を予約</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>vps-fetch-raceday-tomorrow</code>（ConoHa VPS・systemd タイマー・重さ 重い（止まると困る））</div>
+<div><b>名前</b>: timer <code>keiba-fetch-raceday-tomorrow.timer</code>・service <code>keiba-fetch-raceday@tomorrow.service</code></div>
+<div><b>スケジュール</b>: 毎日 20:30（<code>30 20 * * *</code>）</div>
+<div><b>入口</b>: <code>python -m src.ops.reservations race-day --date tomorrow --no-predict</code></div>
+<div><b>取得先の URL の例</b>: <code>https://race.netkeiba.com/odds/index.html?race_id=202605050811</code></div>
+<div><b>読む</b>: 出馬表・発走時刻表（ローカル）</div>
+<div><b>書く</b>: /var/lib/keiba-fetch/tasks/…/pending/</div>
+<div><b>メモリの枠</b>: MemoryMax 120M</div>
+<div><b>費用の目安（月）</b>: 1 円未満</div>
+<div><b>ホストでも同じ処理？</b>: ホストの raceday-runner</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/ops/vps/templates/keiba-fetch-raceday-tomorrow.timer</code>、<code>docs/operations/vps_only_fetch.md:9-10</code></span></div>
+<div><b>メモ</b>: 段 6 で有効にする</div>
+</div></details>
+<details id="job-vps-fetch-raceday-today"><summary><span class="b mu">今後</span> <b>keiba-fetch-raceday-today.timer</b> <span class="mu">— 20 7 * * *（JST）・MemoryMax 120M</span><br><span class="sm">当日の予約の取り直し（前夜に積めなかったレースを足す）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>vps-fetch-raceday-today</code>（ConoHa VPS・systemd タイマー・重さ 重い（止まると困る））</div>
+<div><b>名前</b>: timer <code>keiba-fetch-raceday-today.timer</code>・service <code>keiba-fetch-raceday@today.service</code></div>
+<div><b>スケジュール</b>: 毎日 07:20（<code>20 7 * * *</code>）</div>
+<div><b>入口</b>: <code>python -m src.ops.reservations race-day --date today --no-predict</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: 朝の発走時刻表（ローカル）</div>
+<div><b>書く</b>: /var/lib/keiba-fetch/tasks/…/pending/</div>
+<div><b>メモリの枠</b>: MemoryMax 120M</div>
+<div><b>費用の目安（月）</b>: 1 円未満</div>
+<div><b>ホストでも同じ処理？</b>: ホストの raceday-runner</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/ops/vps/templates/keiba-fetch-raceday-today.timer</code></span></div>
+<div><b>メモ</b>: 段 6 で有効にする</div>
+</div></details>
+<details id="job-vps-mirror-vps-push"><summary><span class="b mu">今後</span> <b>keiba-mirror-vps-push.timer</b> <span class="mu">— 5 分おき・MemoryMax 110M</span><br><span class="sm">VPS が取ったレース一覧・発走時刻表のうち変わったものだけを ops/mirror_vps/ に上げる（担当が無ければ何もしない）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>vps-mirror-vps-push</code>（ConoHa VPS・systemd タイマー・重さ 中）</div>
+<div><b>名前</b>: timer <code>keiba-mirror-vps-push.timer</code>・service <code>keiba-mirror-vps-push.service</code></div>
+<div><b>スケジュール</b>: 5 分おき</div>
+<div><b>入口</b>: <code>python -m src.ops.gcs_mirror push-vps</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: /var/lib/keiba-fetch/data</div>
+<div><b>書く</b>: GCS ops/mirror_vps/・ops/mirror_vps/_index.json</div>
+<div><b>メモリの枠</b>: MemoryMax 110M</div>
+<div><b>費用の目安（月）</b>: 約 7 円（書き込み）</div>
+<div><b>ホストでも同じ処理？</b>: ホストの VPS のミラーの取り込み（未登録）</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/ops/vps/templates/keiba-mirror-vps-push.timer</code>、<code>docs/operations/vps_only_fetch.md:21-23</code></span></div>
+<div><b>メモ</b>: 段 6 で有効にする</div>
+</div></details>
+<details id="job-vps-traffic"><summary><span class="b mu">今後</span> <b>keiba-traffic.timer</b> <span class="mu">— 15 分おき・MemoryMax 128M</span><br><span class="sm">nginx のアクセスの日別集計を監視ポータルへ送る</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>vps-traffic</code>（ConoHa VPS・systemd タイマー・重さ 軽い）</div>
+<div><b>名前</b>: timer <code>keiba-traffic.timer</code>・service <code>keiba-traffic.service</code></div>
+<div><b>スケジュール</b>: 15 分おき</div>
+<div><b>入口</b>: <code>/usr/bin/python3 /opt/keiba-ui/bin/traffic_client.py</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: nginx のアクセスログ</div>
+<div><b>書く</b>: Cloud Run keiba-monitor /ops/traffic</div>
+<div><b>メモリの枠</b>: MemoryMax 128M</div>
+<div><b>費用の目安（月）</b>: Cloud Run への 15 分おきの要求</div>
+<div><b>ホストでも同じ処理？</b>: 無い</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/ops/vps/templates/keiba-traffic.timer</code>、<code>scripts/ops/vps/traffic_client.py:1-7</code></span></div>
+<div><b>メモ</b>: 未導入（ハートビートの鍵が前提）</div>
+</div></details>
+<h3>ホスト（cron）</h3>
+<details id="job-host-vps-alive"><summary><span class="b ok">稼働中</span> <b>KEIBA-VPS-ALIVE</b> <span class="mu">— 15 分おき</span><br><span class="sm">VPS 全体の停止の検知: 公開の画面の静的な /version.json を確かめ、2 回続けて失敗したら Slack、戻ったら Slack</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>host-vps-alive</code>（ホスト・ホストの cron・重さ 重い（止まると困る））</div>
+<div><b>名前</b>: cron_tag <code>KEIBA-VPS-ALIVE</code>・job_id <code>vps-alive</code></div>
+<div><b>スケジュール</b>: 15 分おき</div>
+<div><b>入口</b>: <code>python -m src.ops.vps_alive（cron_run.sh vps-alive で包む）</code></div>
+<div><b>取得先の URL の例</b>: <code>https://app.megu-keiba.com/version.json</code></div>
+<div><b>読む</b>: https://app.megu-keiba.com/version.json（Cloudflare → VPS の Tunnel → nginx の静的ファイル。Cloud Run を通らない。キャッシュは DYNAMIC）</div>
+<div><b>書く</b>: <ul><li>Slack（状態が変わったときだけ）</li><li>logs/vps_alive_state.json</li></ul></div>
+<div><b>メモリの枠</b>: —</div>
+<div><b>費用の目安（月）</b>: 0 円（GCP・GCS に触れない）</div>
+<div><b>ホストでも同じ処理？</b>: —</div>
+<div><b>根拠</b>: <span class="ev"><code>src/ops/vps_alive.py</code>、<code>scripts/cron/install_vps_alive_cron.sh</code></span></div>
+<div><b>メモ</b>: 2026-11-13 18:4x JST に root の crontab へ登録（KEIBA-VPS-ALIVE）</div>
+</div></details>
+<details id="job-host-eve-precompute"><summary><span class="b mu">今後</span> <b>KEIBA-HOST-POSTPROCESS</b> <span class="mu">— 10,40 19 * * *（JST）</span><br><span class="sm">前夜の計算（取得を VPS に渡した後の後処理）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>host-eve-precompute</code>（ホスト・ホストの cron・重さ 中）</div>
+<div><b>名前</b>: cron_tag <code>KEIBA-HOST-POSTPROCESS</code>・job_id <code>eve-precompute</code></div>
+<div><b>スケジュール</b>: 毎日 19:10・19:40（<code>10,40 19 * * *</code>）</div>
+<div><b>入口</b>: <code>bash scripts/cron/install_host_postprocess_cron.sh</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: —</div>
+<div><b>費用の目安（月）</b>: 0 円（ホストの中。GCS は目録 1 件など最小）</div>
+<div><b>ホストでも同じ処理？</b>: —</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/cron/install_host_postprocess_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></span></div>
+<div><b>メモ</b>: 段 6 で担当を VPS に渡すときに root で登録。担当が移っていなければ何もしない（crontab は UTC の 10,40 10 * * *）</div>
+</div></details>
+<details id="job-host-track-speed-daily"><summary><span class="b mu">今後</span> <b>KEIBA-HOST-POSTPROCESS</b> <span class="mu">— 20 7 * * *（JST）</span><br><span class="sm">馬場速度の日次（取得を VPS に渡した後の後処理）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>host-track-speed-daily</code>（ホスト・ホストの cron・重さ 中）</div>
+<div><b>名前</b>: cron_tag <code>KEIBA-HOST-POSTPROCESS</code>・job_id <code>track-speed-daily</code></div>
+<div><b>スケジュール</b>: 毎日 07:20（<code>20 7 * * *</code>）</div>
+<div><b>入口</b>: <code>bash scripts/cron/install_host_postprocess_cron.sh</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: —</div>
+<div><b>費用の目安（月）</b>: 0 円（ホストの中。GCS は目録 1 件など最小）</div>
+<div><b>ホストでも同じ処理？</b>: —</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/cron/install_host_postprocess_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></span></div>
+<div><b>メモ</b>: 段 6 で登録。crontab は UTC の 20 22 * * *（JST は翌朝 07:20）</div>
+</div></details>
+<details id="job-host-prediction-results-refresh"><summary><span class="b mu">今後</span> <b>KEIBA-HOST-POSTPROCESS</b> <span class="mu">— 50 21 * * 0,1,6（JST）</span><br><span class="sm">予測成績の集計（土日月。取得を VPS に渡した後の後処理）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>host-prediction-results-refresh</code>（ホスト・ホストの cron・重さ 中）</div>
+<div><b>名前</b>: cron_tag <code>KEIBA-HOST-POSTPROCESS</code>・job_id <code>prediction-results-refresh</code></div>
+<div><b>スケジュール</b>: 土日月 21:50（<code>50 21 * * 0,1,6</code>）</div>
+<div><b>入口</b>: <code>bash scripts/cron/install_host_postprocess_cron.sh</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: —</div>
+<div><b>費用の目安（月）</b>: 0 円（ホストの中。GCS は目録 1 件など最小）</div>
+<div><b>ホストでも同じ処理？</b>: —</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/cron/install_host_postprocess_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></span></div>
+<div><b>メモ</b>: 段 6 で登録。crontab は UTC の 50 12 * * 0,1,6</div>
+</div></details>
+<details id="job-host-weekly-finalize"><summary><span class="b mu">今後</span> <b>KEIBA-HOST-POSTPROCESS</b> <span class="mu">— 7 * * * 6,0（JST）</span><br><span class="sm">週次の後処理（めぐ指数・PG 同期など。土 00:07〜月 08:07 の毎時）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>host-weekly-finalize</code>（ホスト・ホストの cron・重さ 中）</div>
+<div><b>名前</b>: cron_tag <code>KEIBA-HOST-POSTPROCESS</code>・job_id <code>weekly-finalize</code></div>
+<div><b>スケジュール</b>: 土日 毎時 07 分（<code>7 * * * 6,0</code>）</div>
+<div><b>入口</b>: <code>bash scripts/cron/install_host_postprocess_cron.sh</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: —</div>
+<div><b>費用の目安（月）</b>: 0 円（ホストの中。GCS は目録 1 件など最小）</div>
+<div><b>ホストでも同じ処理？</b>: —</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/cron/install_host_postprocess_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></span></div>
+<div><b>メモ</b>: 段 6 で登録。crontab は UTC の 7 15-23 * * 5 と 7 * * * 6,0。一覧の予定は土日の毎時だけを書き、月曜 00:07〜08:07 の分は省いている（1 本の cron で書けないため）</div>
+</div></details>
+<details id="job-host-vps-mirror-pull-lists"><summary><span class="b mu">今後</span> <b>KEIBA-VPS-MIRROR-PULL</b> <span class="mu">— 5 分おき</span><br><span class="sm">VPS が上げたレース一覧・発走時刻表の取り込み（目録 1 件を読み、変わったファイルだけ取る）</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>host-vps-mirror-pull-lists</code>（ホスト・ホストの cron・重さ 中）</div>
+<div><b>名前</b>: cron_tag <code>KEIBA-VPS-MIRROR-PULL</code>・job_id <code>vps-mirror-pull-lists</code></div>
+<div><b>スケジュール</b>: 5 分おき</div>
+<div><b>入口</b>: <code>bash scripts/cron/install_vps_mirror_pull_cron.sh</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: —</div>
+<div><b>書く</b>: —</div>
+<div><b>メモリの枠</b>: —</div>
+<div><b>費用の目安（月）</b>: 0 円（ホストの中。GCS は目録 1 件など最小）</div>
+<div><b>ホストでも同じ処理？</b>: —</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/cron/install_vps_mirror_pull_cron.sh</code>、<code>docs/operations/vps_only_fetch.md</code></span></div>
+<div><b>メモ</b>: 段 6（段 1 の受け取り側）で登録</div>
 </div></details>
 
-<details><summary><span class="b ok">稼働中</span> <b>keiba-release-pull-ui.timer / -ui-stg.timer / -fetch.timer</b> <span class="mu">— 3 分おき / 5 分おき / 毎日 03:20・MemoryMax 150M</span><br><span class="sm">新しい版（本番の画面・stg の画面・取得の実行役のコード）を GCS から取り込む</span></summary>
-<div class="dbody">
-<div>入口: <code>/opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/pull_release.py --kind ui</code>（<code>ui-stg</code>・<code>fetch</code> も同じ。元は <code>scripts/ops/vps/pull_release.py</code>）</div>
-<ol>
-<li>GCS の <code>ops/releases/ui/latest.json</code> を 1 件読む（<code>scripts/ops/vps/pull_release.py:237</code>）。</li>
-<li>新しい版なら <code>ops/releases/ui/&lt;版&gt;.tar.gz</code> を取り、展開 → 確認 → 切り替え（画面はすぐ、取得の実行役は 03:00〜04:00 の窓の中だけ）。失敗なら戻す。</li>
-<li>結果を <code>ops/releases/ui/applied/vps.json</code> に書く（<code>:258</code>）。</li>
-</ol>
-<div>書く（VPS）: 画面 <code>/srv/keiba-ui/current</code>・<code>/srv/keiba-ui-stg/current</code>、取得役 <code>/opt/keiba-fetch/releases/&lt;版&gt;</code>（<code>current</code> を切り替え）。外部サイトの取得: なし。新しい版を置くのはホストの <code>scripts/ops/vps/publish_release.sh</code>。</div>
-</div></details>
-
-<details><summary><span class="b ok">稼働中</span> <b>keiba-ui-health.timer</b> <span class="mu">— 5 分おき</span><br><span class="sm">VPS の中の自己診断（画面・nginx・トンネルの死活、ディスク、空きメモリ）</span></summary>
-<div class="dbody">
-<div>入口: <code>/opt/keiba-ui/bin/healthcheck.sh</code>（元は <code>scripts/ops/vps/healthcheck.sh</code>）</div>
-<ol>
-<li><code>keiba-ui</code>・<code>nginx</code>・<code>cloudflared-prod</code> が止まっていれば 1 回だけ再起動。</li>
-<li><code>http://127.0.0.1:3000/version.json</code>（Next.js）と <code>http://127.0.0.1:8080/version.json</code>（nginx 経由）を確かめる。<code>/api/</code> は叩かない（Cloud Run を起こさない）。</li>
-<li>ディスク 85% 以上・空きメモリ 150MB 以下なら異常。</li>
-</ol>
-<div>書く: <code>/var/lib/keiba-ui/health.json</code>。送り先: Slack（同じ内容は 1 時間に 1 回まで）。</div>
-</div></details>
-
-<details><summary><span class="b mu">停止中（段 6 で再開）</span> <b>keiba-fetch-agent.service</b> <span class="mu">— 常駐・タスク表を毎分見る・slice 250M</span><br><span class="sm">取得の実行役。タスク表から 1 本ずつ取り出して netkeiba・JRA から取得し、GCS に保存する（11/13 15:00 に停止。担当も空）</span></summary>
-<div class="dbody">
-<div>入口: <code>/opt/keiba-fetch/venv/bin/python -m src.ops.fetch_agent</code>（<code>src/ops/fetch_agent.py:282</code>）。タスク表は <code>KEIBA_FETCH_TASK_STORE</code> が <code>file</code> なら <code>/var/lib/keiba-fetch/tasks/ops/fetch_tasks/pending/</code>、<code>gcs</code> なら GCS の <code>ops/fetch_tasks/pending/</code>（<code>src/ops/fetch_task.py</code>）。</div>
-<div>担当（<code>config/fetch_owner.json</code> の <code>agent_tasks</code>）に載ったタスクだけを本番として取る。今は空なので本番の取得はしない。下は、担当を渡したあとに取るタスクと URL の形の例（テンプレートは <code>src/scraper/run.py:299-313</code>・<code>src/scraper/parsers.py:1856</code>）。保存先は <code>chuou/data/preprocessed/netkeiba/pc/&lt;カテゴリ&gt;/&lt;年&gt;/&lt;race_id&gt;.json</code>（<code>src/config/data_paths.py:51-59</code>）。</div>
+<h2 id="audit">設計上の点検</h2>
+<p class="sub">設計上の点検（2026-11-13）。「不要なもの」と「漏れているもの」。設定は変えていない（提案だけ）。費用に効くものは docs/operations/cost_ledger.md と突き合わせてから進める。重さは 高・中・低。</p>
 <div class="scroll"><table>
-<tr><th>タスク</th><th>何をするか</th><th>取得先の URL の例</th><th>書き出し先（カテゴリ）</th></tr>
-<tr><td><code>race-odds-t60</code>〜<code>-t02</code></td><td>各レースの T-60・T-15（バンドル）・T-10・T-5・T-2 のオッズ</td><td><code>https://race.netkeiba.com/api/api_get_jra_odds.html?race_id=202605050811&amp;type=1&amp;action=init</code></td><td><code>race_odds</code>（3 連単は <code>race_trifecta_odds</code>）</td></tr>
-<tr><td><code>race-weight-check</code></td><td>T-65〜T-30 に馬体重の発表を検知。出たら予測の合図を置く</td><td><code>https://race.netkeiba.com/race/shutuba.html?race_id=202605050811</code></td><td><code>race_shutuba</code>、合図 <code>ops/events/weights_announced/20261114/202605050811.json</code></td></tr>
-<tr><td><code>race-result-t15</code></td><td>発走 15 分後の速報結果</td><td><code>https://race.netkeiba.com/race/result.html?race_id=202605050811</code></td><td><code>race_result_on_time</code></td></tr>
-<tr><td><code>entries-sync</code></td><td>出馬表の段階収集（10 分おき）</td><td><code>https://race.netkeiba.com/race/shutuba.html?race_id=202605050811</code></td><td><code>race_shutuba</code></td></tr>
-<tr><td><code>daily-race-lists</code></td><td>レース一覧（朝・夕）</td><td><code>https://race.netkeiba.com/top/race_list.html?kaisai_date=20261114</code></td><td>ローカルだけ <code>data/page_reference/race_lists</code>（VPS → <code>ops/mirror_vps/</code> → ホスト）</td></tr>
-<tr><td><code>jra-baba-morning</code></td><td>JRA の馬場（クッション値・含水率）</td><td><code>https://www.jra.go.jp/keiba/baba/</code></td><td><code>chuou/data/others/jra_cushion/2026.json</code>（当面ホストに残す）</td></tr>
-<tr><td><code>raceday-eve-fetch</code></td><td>前日夕の出馬表・馬柱・追い切り・SmartRC</td><td><code>https://race.netkeiba.com/race/shutuba_past.html?race_id=202605050811</code>、<code>…/race/oikiri.html?race_id=202605050811</code></td><td><code>race_shutuba</code>・<code>race_shutuba_past</code>・<code>race_oikiri</code>・<code>smartrc_prerace</code></td></tr>
-<tr><td><code>raceday-comment-*</code></td><td>厩舎コメント（朝・夜）</td><td><code>https://race.netkeiba.com/race/comment.html?race_id=202605050811</code></td><td><code>race_trainer_comment</code></td></tr>
-<tr><td><code>raceday-evening</code></td><td>開催日夕方の速報結果・確定オッズ</td><td><code>https://race.netkeiba.com/race/result.html?race_id=202605050811</code></td><td><code>race_result_on_time</code>・<code>race_odds</code></td></tr>
-<tr><td><code>new-horse-pedigree</code></td><td>新馬の 5 世代血統</td><td><code>https://db.netkeiba.com/horse/ped/2023105678/</code></td><td><code>horse_pedigree_5gen</code>（キーは馬 ID の先頭 4 桁で分ける）</td></tr>
-<tr><td><code>recent-retry-*</code></td><td>直近の未取得の確定結果の取り直し</td><td><code>https://db.netkeiba.com/race/202605050811/</code></td><td><code>race_result</code></td></tr>
-<tr><td><code>barometer-retry-*</code></td><td>バロメーターの取り直し</td><td><code>https://db.netkeiba.com/race/barometer/202605050811/</code></td><td><code>race_barometer</code></td></tr>
-<tr><td><code>weekly-update</code></td><td>週次: 直近 10 日の確定結果・指数・バロメーター</td><td><code>https://race.netkeiba.com/race/speed.html?race_id=202605050811</code> ほか</td><td><code>race_result</code>・<code>race_index</code>（推測）・<code>race_barometer</code></td></tr>
-<tr><td><code>shutuba-audit</code></td><td>開催後も確定しない出馬表の洗い出しと取り直し</td><td><code>https://race.netkeiba.com/race/shutuba.html?race_id=202605050811</code></td><td><code>race_shutuba</code></td></tr>
+<tr><th>#</th><th>重さ</th><th>種類</th><th>指摘</th><th>根拠</th><th>推奨</th><th>費用への影響</th><th>状態</th></tr>
+<tr><td>1</td><td class="bad">高</td><td>漏れ（監視）</td><td>VPS が丸ごと落ちても、外から気づく仕組みが無い。GCP の vps-watchdog（keiba-g-5min）は削除済みで、もとからハートビートが届かず blocked。VPS の keiba-heartbeat.timer は disabled。keiba-ui-health は VPS の中の自己診断なので、VPS 全体の停止・回線断は通知できない。<br>さらに、ハートビートを設計どおり有効にすると 5 分おきに Cloud Run（keiba-monitor）へ要求することになり、CLAUDE.md の「15 分未満の間隔で ping を足さない」に反する。</td><td class="ev">config/gcp_job_map.json:1966、ssh の list-unit-files（heartbeat.timer disabled）、scripts/ops/vps/healthcheck.sh</td><td>足す。費用 0 の案: ホストの cron から 15 分おきに VPS の静的な /version.json（Cloudflare 経由、Cloud Run を通らない）を確かめて Slack へ。ハートビートはこのままでは有効にしない。</td><td>0 円（ホスト → VPS の静的ファイル。GCP を通らない）</td><td>対応済み（一部）: ホストの cron で公開の /version.json を 15 分おきに確認（KEIBA-VPS-ALIVE、11/13 登録）。VPS の見張り keiba-sched-status・毎朝の点検は配備待ち</td></tr>
+<tr><td>2</td><td class="bad">高</td><td>不要／見直し（費用）</td><td>VPS の keiba-cache-warm が 60 秒おきに GCS を一覧している（GCP の外から繰り返し読む。egress_billed() を見ていない）。目印は 1 日 300〜550 件で、60 秒の細かさは要らない可能性が高い。取り直しの要求は Cloud Run の API の起動にもなる。</td><td class="ev">scripts/ops/vps/cache_warm.py:254-261、docs/operations/cost_ledger.md:155</td><td>見直す（間隔を 10〜15 分に、一覧の fields を絞る、など）。台帳と突き合わせ。</td><td>今 月 約 265 円（一覧 35＋転送 230）。15 分おきなら 1/15 前後</td><td>対応済み: 合図方式に入れ替え（05f35916、11/13 配備）。一覧は最悪 288 回/日・月 約 45 円</td></tr>
+<tr><td>3</td><td class="ok">対応済み</td><td>不要（費用）</td><td>取得の実行役 keiba-fetch-agent が担当なしで常駐し、影モードで GCS のタスク表を毎分 6 回一覧していた。11/13 15:00:58 に停止・無効にした（別のセッション、dda6af55）。</td><td class="ev">ssh（enabled）、config/fetch_owner.json（agent_tasks 空）、docs/operations/cost_ledger.md:177</td><td>止めたまま。段 6 で file にしてから再開する。台帳と突き合わせ（e2b534b4 で反映済み）。</td><td>月 約 −210 円＋転送</td><td>—</td></tr>
+<tr><td>4</td><td class="warn">中</td><td>見直し（費用の歯止め）</td><td>費用の歯止め cost_guard の「止める」対象が 0 件になった。止めるのは keiba-g- の Scheduler（KEEP 以外）だけで、13 件の削除後は通知だけの仕組み。今の大きな項目（GCS の外への転送 G4、cache_warm）は止められない。</td><td class="ev">src/ops/cost_guard.py:38-39・:140-142、ホストの cron（10:17・22:17）、docs/operations/cost_ledger.md:86（G4）</td><td>様子見（通知は残す）。止める対象を VPS の周期処理（cache_warm など）に広げるかは別に検討。台帳と突き合わせ。</td><td>直接は 0。超過に気づけないと大きい</td><td>—</td></tr>
+<tr><td>5</td><td class="warn">中</td><td>不要（ホストの残り）</td><td>job_map で廃止・無効にしたものがホストの cron に残っている: sync_pg_from_gcs（毎日 00:00）・ensure_postgres（5 分おき）・sporthorse-births-nightly（毎日 22:00）は retire。serving-state-precompute（07:35）・-profile（08:10）は「day-prep に置き換え」で無効。<br>ただし day-prep は GCP だけ（削除済み）なので、ホストの予測が serving-state を使っているなら残す必要がある（推測）。</td><td class="ev">config/gcp_job_map.json:3727・:3744・:3608・:504・:659、ホストの crontab</td><td>中身を確かめてから: PG・誕生日は消す候補、serving-state は使い道を確かめて job_map を直す。GCS を読む分は台帳と突き合わせ。</td><td>未測定（sync_pg_from_gcs はホストから GCS を読むので転送料になりうる）</td><td>—</td></tr>
+<tr><td>6</td><td class="warn">中</td><td>漏れ（段 6 の前提）</td><td>VPS へ担当を渡したときにホストに残す後処理・取り込みの cron が未登録（後処理 3 件・VPS のミラーの取り込み）。計画の weekly-finalize（週次のめぐ指数・PG 同期などの後処理）の入口も未着手。担当が空の今は困らない。</td><td class="ev">scripts/cron/install_host_postprocess_cron.sh:16-18、scripts/cron/install_vps_mirror_pull_cron.sh、docs/operations/vps_only_fetch.md:42</td><td>足す（担当を渡す前に必ず。渡す順の手順に入れる）</td><td>計画の見積もりで 月 約 20 円＋約 51 円</td><td>—</td></tr>
+<tr><td>7</td><td class="mu">低</td><td>不要（保守だけ残る）</td><td>Jobs の版のタグ live-jobs・live-jobs-a/b（3.4GB）が、Jobs を使わない間も Artifact Registry に残る。keiba-dispatch-m/l/xl・-s の Job 定義は shadow のために s だけ要る。</td><td class="ev">docs/operations/cost_ledger.md:57（F2）・:165-166</td><td>使わない版のタグを外す（戻すときは配備し直す）。台帳と突き合わせ。</td><td>月 約 −35〜−50 円</td><td>—</td></tr>
+<tr><td>8</td><td class="mu">低</td><td>不要（呼び手なし）</td><td>job_map に呼び手の無いジョブが残る: 旧設計の 4 件（weekly-sire-agg・track-speed-rebuild-baselines・race-quality-day・myostatin-recalculate、enabled=false）、GCP だけの predict-race・event-pump・day-prep・prediction-results-refresh・parity-check（Scheduler 削除で呼ばれない）。</td><td class="ev">config/gcp_job_map.json:2456・:2500・:2544・:2588・:1030</td><td>様子見（GCP を再開しない方針が固まったら job_map を整理）</td><td>0</td><td>—</td></tr>
+<tr><td>9</td><td class="mu">低</td><td>不要の候補</td><td>fetch-shadow-report が毎朝動くが、VPS の影モードが止まっていれば「影の結果なし」を書くだけ（影モードの状態は未確認）。VPS の keiba-api.service（disabled）も古い残り。</td><td class="ev">config/gcp_job_map.json:978、scripts/ops/vps/vps_03_units.sh:79（影は既定オフ）</td><td>様子見（無料枠の中）。keiba-api.service は消してよい候補</td><td>ほぼ 0</td><td>—</td></tr>
+<tr><td>10</td><td class="mu">低</td><td>漏れの確認</td><td>どこでも定期に動いていないもの: sire-line（job_map はホスト担当だが crontab に行が無い）、めぐコラムの作り直し（src/research/columns/。手動の運用とみられる）、バックアップの類（GCS が正本で、定期の退避は見当たらない）。<br>走法の軸（run_axes）とめぐ分析の事前計算は、ホストの毎朝の書き出しの中で動いている（漏れではない）。</td><td class="ev">config/gcp_job_map.json:3078、scripts/cron/export_tables_daily.sh:46・:48</td><td>要確認（定期にすべきかを決める）</td><td>—</td><td>—</td></tr>
+<tr><td>11</td><td class="warn">低〜中</td><td>食い違い（時刻）</td><td>共通ログインの更新の時刻が 9 時間ずれている可能性。ホストの crontab は 5 0 * * *（crontab は UTC なので JST 09:05 に起動）。一方、src/scripts/ops/shared_login.py の説明は「毎日 00:05 JST」、job_map の origin.cron_utc は 5 15 * * *。行頭の TZ=Asia/Tokyo はコマンドの環境にしか効かず、起動の時刻は変わらない。毎月 1 日のパスワードの更新が 09:05 になっているとみられる。</td><td class="ev">ホストの crontab、src/scripts/ops/shared_login.py:3、config/gcp_job_map.json:3761</td><td>様子見・要確認（00:05 にしたいなら crontab を 5 15 * * * に）</td><td>0</td><td>—</td></tr>
 </table></div>
-<div class="ev">タスクの名前と時刻: <code>src/ops/fetch_task.py:56-63</code>、<code>src/ops/fetch_plan.py</code>（開催日のレース別）、<code>config/gcp_job_map.json:2632-3272</code>（destination が vps のジョブ）。どのカテゴリに入るかは取得の処理の中で決まるので、カテゴリの列は代表的なものだけ。</div>
-</div></details>
-
-<details><summary><span class="b mu">今後</span> <b>keiba-fetch-reserve.timer</b> <span class="mu">— 毎時 50 分・MemoryMax 60M（段 6）</span><br><span class="sm">定期の取得タスクを先 6 時間分、VPS のローカルのタスク表に積む（GCP の reserve-fetch-tasks の代わり）</span></summary>
-<div class="dbody">
-<div>入口: <code>env KEIBA_FETCH_TASK_STORE=file KEIBA_FETCH_TASK_DIR=/var/lib/keiba-fetch/tasks python -m src.ops.reservations recurring --horizon-hours 6</code>（<code>src/ops/reservations.py:225</code>）</div>
-<div>読む: <code>config/gcp_job_map.json</code> の destination が vps のジョブの時刻（cron 式）と担当表 <code>config/fetch_owner.json</code>。書く: <code>/var/lib/keiba-fetch/tasks/ops/fetch_tasks/pending/&lt;task_id&gt;.json</code>。外部サイトの取得: なし（取得は実行役）。</div>
-</div></details>
-
-<details><summary><span class="b mu">今後</span> <b>keiba-fetch-raceday-tomorrow.timer / -today.timer</b> <span class="mu">— 毎日 20:30 / 07:20・MemoryMax 120M（段 6）</span><br><span class="sm">開催日のレースごとの取得（T-60〜T-2 のオッズ・馬体重の検知・速報）を予約する</span></summary>
-<div class="dbody">
-<div>入口: <code>env KEIBA_FETCH_TASK_STORE=file … python -m src.ops.reservations race-day --date tomorrow --no-predict</code>（today も同じ。ユニットは <code>keiba-fetch-raceday@.service</code>）</div>
-<div>読む: その日の発走時刻表・レース一覧（VPS のローカル）。計画は <code>src/ops/fetch_plan.py</code> の <code>plan_day</code>。書く: <code>race-odds-t60</code>〜<code>race-odds-t02</code>・<code>race-weight-check</code>・<code>race-result-t15</code> のタスク（<code>/var/lib/keiba-fetch/tasks/…/pending/</code>）。予測は積まない（ホストが出す）。</div>
-</div></details>
-
-<details><summary><span class="b mu">今後</span> <b>keiba-mirror-vps-push.timer</b> <span class="mu">— 5 分おき（:30 秒）・MemoryMax 110M（段 1 の仕組み、有効化は段 6）</span><br><span class="sm">VPS が取ったレース一覧・発走時刻表のうち、変わったものだけを GCS に上げる（ホストが取り込む）</span></summary>
-<div class="dbody">
-<div>入口: <code>python -m src.ops.gcs_mirror push-vps</code>（<code>src/ops/gcs_mirror.py:710-714</code>）</div>
-<div>読む: VPS のローカルの <code>data/page_reference/race_lists</code>・<code>data/page_reference/race_day_schedule</code> と、手元の MD5 の記録（GCS は一覧しない）。書く: <code>ops/mirror_vps/…</code> と目録 <code>ops/mirror_vps/_index.json</code>（変わったときだけ）。担当が無ければ何もしない。</div>
-</div></details>
-
-<details><summary><span class="b mu">無効・未導入</span> <b>keiba-heartbeat.timer / keiba-traffic.timer</b> <span class="mu">— 5 分おき / 15 分おき</span><br><span class="sm">VPS の資源・ユニットの状態と、アクセスの日別集計を監視ポータルへ送る</span></summary>
-<div class="dbody">
-<div>入口: <code>/usr/bin/python3 /opt/keiba-ui/bin/heartbeat_client.py</code>・<code>/usr/bin/python3 /opt/keiba-ui/bin/traffic_client.py</code>（元は <code>scripts/ops/vps/heartbeat_client.py</code>・<code>scripts/ops/vps/traffic_client.py</code>）</div>
-<div>送り先: 監視ポータル（Cloud Run の keiba-monitor）の <code>/ops/heartbeat</code>・<code>/ops/traffic</code>（HMAC の署名つき）。設定は <code>/etc/keiba-ui/heartbeat.env</code>（今は無い）。読む: <code>/proc/meminfo</code>・systemd・nginx のアクセスログ。外部サイトの取得: なし。</div>
-</div></details>
-
-<h2 id="audit">設計上の点検（2026-11-13）</h2>
-<p class="sub">「不要なもの」と「漏れているもの」。設定は変えていない（提案だけ）。費用に効くものは<b>費用の監査役の台帳 <code>docs/operations/cost_ledger.md</code> と突き合わせ</b>てから進める。重さは 高・中・低。</p>
-<div class="scroll"><table>
-<tr><th>#</th><th>重さ</th><th>種類</th><th>指摘</th><th>根拠</th><th>推奨</th><th>費用への影響</th></tr>
-<tr><td>1</td><td class="bad">高</td><td>漏れ（監視）</td>
-<td><b>VPS が丸ごと落ちても、外から気づく仕組みが無い</b>。GCP の <code>vps-watchdog</code>（<code>keiba-g-5min</code>）は削除済みで、もとからハートビートが届かず blocked。VPS の <code>keiba-heartbeat.timer</code> は disabled。<code>keiba-ui-health</code> は VPS の中の自己診断なので、VPS 全体の停止・回線断は通知できない。
-さらに、ハートビートを設計どおり有効にすると 5 分おきに Cloud Run（keiba-monitor）へ要求することになり、CLAUDE.md の「15 分未満の間隔で ping を足さない」に反する。</td>
-<td class="ev"><code>config/gcp_job_map.json:1966</code>、ssh の list-unit-files（heartbeat.timer disabled）、<code>scripts/ops/vps/healthcheck.sh</code></td>
-<td><b>足す</b>。費用 0 の案: ホストの cron から 15 分おきに VPS の静的な <code>/version.json</code>（Cloudflare 経由、Cloud Run を通らない）を確かめて Slack へ。ハートビートはこのままでは有効にしない。</td><td>0 円（ホスト → VPS の静的ファイル。GCP を通らない）</td></tr>
-<tr><td>2</td><td class="bad">高</td><td>不要／見直し（費用）</td>
-<td><b>VPS の <code>keiba-cache-warm</code> が 60 秒おきに GCS を一覧している</b>（GCP の外から繰り返し読む。<code>egress_billed()</code> を見ていない）。目印は 1 日 300〜550 件で、60 秒の細かさは要らない可能性が高い。取り直しの要求は Cloud Run の API の起動にもなる。</td>
-<td class="ev"><code>scripts/ops/vps/cache_warm.py:254-261</code>、<code>docs/operations/cost_ledger.md:155</code></td>
-<td>見直す（間隔を 10〜15 分に、一覧の <code>fields</code> を絞る、など）。台帳と突き合わせ。</td><td>今 月 約 265 円（一覧 35＋転送 230）。15 分おきなら 1/15 前後</td></tr>
-<tr><td>3</td><td class="ok">対応済み</td><td>不要（費用）</td>
-<td><b>取得の実行役 <code>keiba-fetch-agent</code> が担当なしで常駐し、影モードで GCS のタスク表を毎分 6 回一覧していた</b>。11/13 15:00:58 に停止・無効にした（別のセッション、dda6af55）。</td>
-<td class="ev">ssh（enabled）、<code>config/fetch_owner.json</code>（agent_tasks 空）、<code>docs/operations/cost_ledger.md:177</code></td>
-<td>止めたまま。段 6 で <code>file</code> にしてから再開する。台帳と突き合わせ（e2b534b4 で反映済み）。</td><td>月 約 −210 円＋転送</td></tr>
-<tr><td>4</td><td class="warn">中</td><td>見直し（費用の歯止め）</td>
-<td><b>費用の歯止め <code>cost_guard</code> の「止める」対象が 0 件になった</b>。止めるのは <code>keiba-g-</code> の Scheduler（KEEP 以外）だけで、13 件の削除後は通知だけの仕組み。今の大きな項目（GCS の外への転送 G4、cache_warm）は止められない。</td>
-<td class="ev"><code>src/ops/cost_guard.py:38-39</code>・<code>:140-142</code>、ホストの cron（10:17・22:17）、<code>docs/operations/cost_ledger.md:86</code>（G4）</td>
-<td>様子見（通知は残す）。止める対象を VPS の周期処理（cache_warm など）に広げるかは別に検討。台帳と突き合わせ。</td><td>直接は 0。超過に気づけないと大きい</td></tr>
-<tr><td>5</td><td class="warn">中</td><td>不要（ホストの残り）</td>
-<td><b>job_map で廃止・無効にしたものがホストの cron に残っている</b>: <code>sync_pg_from_gcs</code>（毎日 00:00）・<code>ensure_postgres</code>（5 分おき）・<code>sporthorse-births-nightly</code>（毎日 22:00）は retire。<code>serving-state-precompute</code>（07:35）・<code>-profile</code>（08:10）は「day-prep に置き換え」で無効。
-ただし day-prep は GCP だけ（削除済み）なので、ホストの予測が serving-state を使っているなら残す必要がある（推測）。</td>
-<td class="ev"><code>config/gcp_job_map.json:3727</code>・<code>:3744</code>・<code>:3608</code>・<code>:504</code>・<code>:659</code>、ホストの crontab</td>
-<td>中身を確かめてから: PG・誕生日は消す候補、serving-state は使い道を確かめて job_map を直す。GCS を読む分は台帳と突き合わせ。</td><td>未測定（sync_pg_from_gcs はホストから GCS を読むので転送料になりうる）</td></tr>
-<tr><td>6</td><td class="warn">中</td><td>漏れ（段 6 の前提）</td>
-<td><b>VPS へ担当を渡したときにホストに残す後処理・取り込みの cron が未登録</b>（後処理 3 件・VPS のミラーの取り込み）。計画の <code>weekly-finalize</code>（週次のめぐ指数・PG 同期などの後処理）の入口も未着手。担当が空の今は困らない。</td>
-<td class="ev"><code>scripts/cron/install_host_postprocess_cron.sh:16-18</code>、<code>scripts/cron/install_vps_mirror_pull_cron.sh</code>、<code>docs/operations/vps_only_fetch.md:42</code></td>
-<td>足す（担当を渡す前に必ず。渡す順の手順に入れる）</td><td>計画の見積もりで 月 約 20 円＋約 51 円</td></tr>
-<tr><td>7</td><td class="mu">低</td><td>不要（保守だけ残る）</td>
-<td>Jobs の版のタグ <code>live-jobs</code>・<code>live-jobs-a/b</code>（3.4GB）が、Jobs を使わない間も Artifact Registry に残る。<code>keiba-dispatch-m/l/xl</code>・<code>-s</code> の Job 定義は shadow のために s だけ要る。</td>
-<td class="ev"><code>docs/operations/cost_ledger.md:57</code>（F2）・<code>:165-166</code></td><td>使わない版のタグを外す（戻すときは配備し直す）。台帳と突き合わせ。</td><td>月 約 −35〜−50 円</td></tr>
-<tr><td>8</td><td class="mu">低</td><td>不要（呼び手なし）</td>
-<td>job_map に呼び手の無いジョブが残る: 旧設計の 4 件（<code>weekly-sire-agg</code>・<code>track-speed-rebuild-baselines</code>・<code>race-quality-day</code>・<code>myostatin-recalculate</code>、enabled=false）、GCP だけの <code>predict-race</code>・<code>event-pump</code>・<code>day-prep</code>・<code>prediction-results-refresh</code>・<code>parity-check</code>（Scheduler 削除で呼ばれない）。</td>
-<td class="ev"><code>config/gcp_job_map.json:2456</code>・<code>:2500</code>・<code>:2544</code>・<code>:2588</code>・<code>:1030</code></td><td>様子見（GCP を再開しない方針が固まったら job_map を整理）</td><td>0</td></tr>
-<tr><td>9</td><td class="mu">低</td><td>不要の候補</td>
-<td><code>fetch-shadow-report</code> が毎朝動くが、VPS の影モードが止まっていれば「影の結果なし」を書くだけ（影モードの状態は未確認）。VPS の <code>keiba-api.service</code>（disabled）も古い残り。</td>
-<td class="ev"><code>config/gcp_job_map.json:978</code>、<code>scripts/ops/vps/vps_03_units.sh:79</code>（影は既定オフ）</td><td>様子見（無料枠の中）。keiba-api.service は消してよい候補</td><td>ほぼ 0</td></tr>
-<tr><td>10</td><td class="mu">低</td><td>漏れの確認</td>
-<td>どこでも定期に動いていないもの: <code>sire-line</code>（job_map はホスト担当だが crontab に行が無い）、めぐコラムの作り直し（<code>src/research/columns/</code>。手動の運用とみられる）、バックアップの類（GCS が正本で、定期の退避は見当たらない）。
-走法の軸（run_axes）とめぐ分析の事前計算は、ホストの毎朝の書き出しの中で動いている（漏れではない）。</td>
-<td class="ev"><code>config/gcp_job_map.json:3078</code>、<code>scripts/cron/export_tables_daily.sh:46</code>・<code>:48</code></td><td>要確認（定期にすべきかを決める）</td><td>—</td></tr>
-<tr><td>11</td><td class="mu">低〜中</td><td>食い違い（時刻）</td>
-<td><b>共通ログインの更新の時刻が 9 時間ずれている可能性</b>。ホストの crontab は <code>5 0 * * *</code>（crontab は UTC なので JST 09:05 に起動）。一方、<code>src/scripts/ops/shared_login.py</code> の説明は「毎日 00:05 JST」、job_map の <code>origin.cron_utc</code> は <code>5 15 * * *</code>。行頭の <code>TZ=Asia/Tokyo</code> はコマンドの環境にしか効かず、起動の時刻は変わらない。毎月 1 日のパスワードの更新が 09:05 になっているとみられる。</td>
-<td class="ev">ホストの crontab、<code>src/scripts/ops/shared_login.py:3</code>、<code>config/gcp_job_map.json:3761</code></td>
-<td>様子見・要確認（00:05 にしたいなら crontab を <code>5 15 * * *</code> に）</td><td>0</td></tr>
-</table></div>
-<p class="muted">確認済みで問題なし: 天気の取得はホストの crontab から外れている（<code>jma</code> の行なし）。ホストの crontab に重複した行は無い。</p>
+<p class="muted">確認済みで問題なし: 天気の取得はホストの crontab から外れている（jma の行なし）。注意: root の crontab では、同じ見出しのコメント（「# 時刻はすべて UTC で記述」など 12 種）が 13 回ずつ、PATH= の行が 4 回重複している（2026-11-13 夜に読むだけで確認。整理の対象）。</p>
 </main></body>
 </html>

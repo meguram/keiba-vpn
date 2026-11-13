@@ -190,3 +190,18 @@ gcloud scheduler jobs create http keiba-g-sun-2200 \
   --min-backoff 5s --max-backoff 3600s --max-doublings 5 --max-retry-duration 0s
 gcloud scheduler jobs pause keiba-g-sun-2200 --project horse-racing-466415 --location asia-northeast1   # 作ってすぐ動かしたくないとき
 ```
+
+## 昇格のたびに自動で作り直される経路と、止め方（2026-11-13 夜に追記）
+- 経路: リポジトリの変数 `ENABLE_JOBS_DEPLOY=true` のため、master への昇格のたびに次が動く。
+  1. `.github/workflows/promote.yml`（121 行付近）
+  2. `scripts/ci/deploy_gcp.sh jobs`（172 行付近）
+  3. `scripts/gcp/deploy_cloud_run_jobs.sh apply scheduler`
+  4. `src/ops/scheduler_gen.py` が、`config/gcp_job_map.json` で ready なグループの Scheduler を「あれば update、無ければ create」する。
+  - 消した 13 件は、job_map では ready のままだった。そのため、次の昇格で ENABLED で復活し、並走の Jobs が動き出すところだった（月 約 +1,700 円＋GCS の操作。開催日の keiba-g-pump は毎分）。
+- 止め方（実施済み）:
+  - `config/gcp_job_map.json` の `scheduler_groups` の 13 グループに `retired`（理由）を付けた。
+  - `scheduler_gen` は、retired のグループのコマンドを出さない（`--include-unready` でも出さない）。
+  - `tests/ops/test_scheduler_gen_retired.py` で、次の 2 点を確かめる。
+    - 実際の job_map で出る create/update が retired でないグループ（今は `keiba-g-0730-shadow` だけ）であること。
+    - `config/scheduled_jobs.json` で retired・paused の Scheduler が、job_map でも retired であること。
+- 再開するとき: そのグループの `retired` を消し、費用の台帳で見積もってから昇格する（この文書の「作り直すとき」）。

@@ -338,6 +338,9 @@ def task_store_from_env(env: dict[str, str] | None = None) -> TaskStore:
         return FileTaskStore(e.get("KEIBA_FETCH_TASK_DIR") or DEFAULT_TASK_DIR)
     if kind != "gcs":
         raise TaskError(f"KEIBA_FETCH_TASK_STORE が不正: {kind}（file か gcs）")
+    if (e.get("KEIBA_RUN_LOCATION") or "").strip().lower() == "vps":
+        # VPS では GCS のタスク表を使わない（2026-11-13: 担当が空でも毎分 6 回の一覧で月 約 210 円）。取得役・予約・計画のどの入口でも断る
+        raise TaskError("VPS（KEIBA_RUN_LOCATION=vps）で GCS のタスク表は使いません。KEIBA_FETCH_TASK_STORE=file にしてください")
     return GcsTaskStore((e.get("GCS_BUCKET") or "").strip())
 
 

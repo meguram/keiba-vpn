@@ -29,6 +29,25 @@ def hb_record(age=120, checks=None, units=None):
         "checks": checks or {"nextjs_http": 200, "nginx_http": 200}}}
 
 
+class FakeSched:
+    """Cloud Scheduler・Run Admin の代わり（外部に出ない）。"""
+
+    def __init__(self, jobs=None, ex=None, fail=None):
+        self.jobs = jobs if jobs is not None else [{"name": "keiba-g-0730-shadow", "schedule": "30 7 * * *", "state": "ENABLED"}]
+        self.ex = ex if ex is not None else {"keiba-dispatch-s": [{"start": NOW - 4.5 * 3600, "end": NOW - 4.4 * 3600, "ok": True, "code": None}]}
+        self.fail = fail
+        self.calls = 0
+
+    def scheduler_jobs(self):
+        self.calls += 1
+        if self.fail:
+            raise PermissionError(self.fail)
+        return self.jobs
+
+    def executions(self, run_job):
+        return self.ex.get(run_job, [])
+
+
 @pytest.fixture
 def client(monkeypatch, tmp_path):
     monkeypatch.setenv("KEIBA_PROXY_KEY_REQUIRED", "1")
@@ -54,7 +73,7 @@ def client(monkeypatch, tmp_path):
     from tests.ops.test_api_cost_guard import hours as cost_hours
     app = M.create_app(io, now_fn=lambda: NOW, job_ids=[("predict-race", True)], hb_backend=backend, http_get=fake_get, env=env,
                        cost_fetch=lambda *a: cost_hours(lambda h: 3600),
-                       notify=lambda title, lines, severity="warning": sent.append((title, severity)))
+                       notify=lambda title, lines, severity="warning": sent.append((title, severity)), sched_api=FakeSched())
     c = app.test_client()
     c.calls, c.io, c.backend, c.sent = calls, io, backend, sent
     return c
@@ -186,3 +205,50 @@ def test_probe_is_cached_and_unconfigured_is_unknown():
     assert len(n) == 1 and a["cells"]["stg"]["gcp"]["headline"] == "接続先が未設定"
     E.build(hb, {"rows": [], "level": "green"}, env=env, get=get, now=1000 + E.PROBE_TTL_S + 1)
     assert len(n) == 2
+
+
+def _sched_client(monkeypatch, tmp_path, api, vps_doc=None):
+    monkeypatch.setenv("KEIBA_PROXY_KEY_REQUIRED", "1")
+    monkeypatch.setenv("KEIBA_PROXY_KEY", "k1")
+    io = MemoryIO()
+    if vps_doc is not None:
+        io.put_bytes("ops/heartbeat/vps/status.json", json.dumps(vps_doc).encode())
+    io.put_bytes("ops/job_runs/gcp-daily-cost-report/latest.json", json.dumps({"status": "ok", "started_at": "2026-10-28T07:30:05+09:00"}).encode())
+    app = M.create_app(io, now_fn=lambda: NOW, job_ids=[], hb_backend=store.FileBackend(tmp_path / "hb.json"), http_get=lambda u, timeout: (200, 1),
+                       env={}, cost_fetch=lambda *a: [], sched_api=api)
+    return app.test_client()
+
+
+def test_schedules_page_needs_key_caches_privately_and_explains_jobs(monkeypatch, tmp_path):
+    vps = {"written_at": NOW - 300, "jobs": {"vps-ui-health": {"runs": [{"start": NOW - 200, "end": NOW - 198, "ok": True, "code": 0}], "active": "inactive"}}}
+    api = FakeSched()
+    c = _sched_client(monkeypatch, tmp_path, api, vps)
+    assert c.get("/schedules").status_code == 401 and c.get("/api/schedules").status_code == 401
+    r = c.get("/schedules", headers=KEY)
+    html = r.get_data(as_text=True)
+    assert r.status_code == 200 and r.headers["Cache-Control"] == "private, max-age=300"
+    assert "keiba-g-0730-shadow" in html and "vps-ui-health" in html and "取得先の例" in html and "gcp-daily-cost-report: " in html
+    j = c.get("/api/schedules", headers=KEY).get_json()
+    rows = {x["job"]["id"]: x for x in j["rows"]}
+    assert rows["gcp-g-0730-shadow"]["level"] == "green" and rows["vps-ui-health"]["level"] == "green"
+    assert rows["gcp-g-0530"]["level"] == "gray"
+    c.get("/api/schedules", headers=KEY)
+    assert api.calls == 1   # 5 分は使い回す（API を叩き直さない）
+
+
+def test_schedules_page_survives_missing_records_and_denied_api(monkeypatch, tmp_path):
+    c = _sched_client(monkeypatch, tmp_path, FakeSched(fail="権限がありません"), vps_doc=None)
+    r = c.get("/schedules", headers=KEY)
+    html = r.get_data(as_text=True)
+    assert r.status_code == 200 and "GCP の状態を読めない" in html
+    assert "VPS の記録の途絶" not in html   # VPS の見張り（vps-sched-status）を入れる前は、記録が無くても途絶にしない
+    assert c.get("/", headers=KEY).status_code == 200
+
+
+def test_schedules_flag_unregistered_scheduler(monkeypatch, tmp_path):
+    api = FakeSched(jobs=[{"name": "keiba-g-0730-shadow", "schedule": "30 7 * * *", "state": "ENABLED"},
+                          {"name": "keiba-g-0530", "schedule": "30 5 * * *", "state": "ENABLED"},
+                          {"name": "mystery", "schedule": "* * * * *", "state": "ENABLED"}])
+    c = _sched_client(monkeypatch, tmp_path, api, vps_doc={"written_at": NOW - 60, "jobs": {}})
+    titles = [a["title"] for a in c.get("/api/schedules", headers=KEY).get_json()["alerts"]]
+    assert any("mystery" in t for t in titles) and any("keiba-g-0530" in t and "廃止" in t for t in titles)

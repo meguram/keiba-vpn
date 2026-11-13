@@ -125,3 +125,37 @@ def test_load_payoff_normalizes_pairs(tmp_path):
     assert pay[("1", "umaren")] == {"2-10": 500}
     assert pay[("1", "wide")] == {"3-11": 200}
     assert ("1", "sanrentan") not in pay
+
+
+def test_boot_diff_identical_tables_is_zero():
+    keys = _keys("R1", [1, 2, 3], [1, 2, 3])
+    oof = pd.DataFrame({"race_id": "R1", "horse_id": ["h1", "h2", "h3"], "p_win": [0.5, 0.3, 0.2]})
+    pay = {("R1", "tansho"): {"1": 150}, ("R1", "fukusho"): {"1": 110}, ("R1", "umaren"): {"1-2": 300}, ("R1", "wide"): {"1-2": 120}}
+    t = ev.race_table(oof, keys, pay)
+    d = ev.boot_diff(t, t, n_boot=50)
+    assert d["n"] == 1 and all(d[m][0] == 0 for m in ev.METRICS)
+
+
+def test_matched_ref():
+    assert ev.matched_ref("A6_lgb_xendcg_top5") == "R0_lgb_bin_win"
+    assert ev.matched_ref("B3_xgb_bin_top3") == "B0_xgb_bin_win"
+    assert ev.matched_ref("A6t1_lgb_xendcg_top5") == "A6_lgb_xendcg_top5"       # 調整の変種は元の設定の候補と比べる
+    assert ev.matched_ref("R0_lgb_bin_win") == "v6e_lgb_extras_ped"
+    assert ev.matched_ref("B0_xgb_bin_win") == "v6e_xgb_extras_ped"
+    assert ev.matched_ref("v6e_linear") == "v6e_ens"
+
+
+def test_average_seed_oofs():
+    k = ["race_id", "horse_id", "year"]
+    a = pd.DataFrame({"race_id": ["R", "R"], "horse_id": ["a", "b"], "year": [2022, 2022], "p_win": [0.6, 0.4], "p_top2": [1.0, 1.0], "p_top3": [1.0, 1.0]})
+    b = a.assign(p_win=[0.2, 0.8])
+    out = ev.average_seed_oofs([a, b], k)
+    assert out["p_win"].tolist() == pytest.approx([0.4, 0.6])
+    with pytest.raises(ValueError):
+        ev.average_seed_oofs([a, b.iloc[:1]], k)                                 # 行がそろわなければ止める
+
+
+def test_test2025_only_finalists():
+    ev.check_test2025_name("B3_xgb_bin_top3")
+    with pytest.raises(SystemExit):
+        ev.check_test2025_name("B3t2_xgb_bin_top3")                              # 一覧に無い名前は予測しない

@@ -53,3 +53,19 @@ class OddsDriftTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_race_ids_between_uses_local_records_without_listing(tmp_path):
+    """週次の集計の対象は、ローカルの flat と race_lists から決める（GCS の一覧と全文書の読み出しをやめた。2026-11-13）。"""
+    import json
+
+    import pandas as pd
+
+    from src.pipeline.betting.odds_drift import race_ids_between
+
+    d = tmp_path / "tables" / "2026"
+    d.mkdir(parents=True)
+    pd.DataFrame({"race_id": ["202605010101", "202605010201"], "date": ["2026-10-10", "2026-10-20"]}).to_parquet(d / "race_result_flat.parquet")
+    (tmp_path / "race_lists").mkdir()
+    (tmp_path / "race_lists" / "20261025.json").write_text(json.dumps({"races": [{"race_id": "202605020101"}]}))
+    assert race_ids_between("20261011", "20261031", tmp_path / "tables") == ["202605010201", "202605020101"]

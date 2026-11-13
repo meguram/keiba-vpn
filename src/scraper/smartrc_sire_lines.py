@@ -82,12 +82,26 @@ def is_complete(path: Path | None = None) -> bool:
     return bool(load(path).get("complete_at"))
 
 
-def _save(doc: dict[str, Any], path: Path | None = None) -> None:
+def _save(doc: dict[str, Any], path: Path | None = None) -> bool:
+    """台帳を書く。作った時刻（built）以外が今のファイルと同じなら書かない（時刻だけの書き換えで git の差分を出さない。
+    entries-sync の事前計算が出馬表の取り直しのたびに build を呼ぶため。2026-11-13）。書いたら True"""
     path = path or OUT
+    prev = load(path) if path.exists() else None
+    if prev is not None and {k: v for k, v in prev.items() if k != "built"} == \
+            json.loads(json.dumps({k: v for k, v in doc.items() if k != "built"}, ensure_ascii=False)):
+        return False
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
     os.replace(tmp, path)
+    return True
+
+
+def needs_fetch(path: Path | None = None) -> bool:
+    """台帳に無く、まだ smartrc で確かめていない（tried に無い）種牡馬がいるか。missing には確かめ済みの種牡馬も残る"""
+    doc = load(path or OUT)
+    tried = doc.get("tried") or {}
+    return any(s not in tried for s in doc.get("missing") or [])
 
 
 def _horse_codes() -> pd.DataFrame:
@@ -169,7 +183,8 @@ def fetch(max_n: int = 100, path: Path | None = None) -> dict[str, int]:
                     rec = h
                     break
             if rec:
-                sires[sid] = {"name": kids["sire_name"].iloc[0], **names({"small": rec["f_slcode"], "large": rec.get("f_llcode"), "type": rec.get("f_clcode")}, m),
+                nm = kids["sire_name"].dropna()                # NaN は JSON で読み直すと別物になり、_save の比較が一致しなくなる
+                sires[sid] = {"name": str(nm.iloc[0]) if len(nm) else None, **names({"small": rec["f_slcode"], "large": rec.get("f_llcode"), "type": rec.get("f_clcode")}, m),
                               "n": 1, "agree": 1.0, "from": "fetch", "smartrc_code": rec.get("f_code")}
                 got += 1
             else:
@@ -181,8 +196,8 @@ def fetch(max_n: int = 100, path: Path | None = None) -> dict[str, int]:
         logger.warning("smartrc が制限中のため中断: %s", e)
     rest = [s for s in set(sm["sire_id"]) - set(sires) if s not in tried]
     doc["missing"] = sorted(set(sm["sire_id"]) - set(sires))
-    if not rest:
-        doc["complete_at"] = datetime.now(JST).isoformat(timespec="seconds")
+    # build と同じ規則: 試していない種牡馬が残れば未完了、完了済みなら時刻は書き換えない（時刻だけの差分を出さない）
+    doc["complete_at"] = None if rest else (doc.get("complete_at") or datetime.now(JST).isoformat(timespec="seconds"))
     _save(doc, path)
     return {"fetched": got, "not_found": miss, "left": len(rest), "known": len(sires)}
 

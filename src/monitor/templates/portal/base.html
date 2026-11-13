@@ -34,7 +34,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:12px;margin-top:8px}
 a{color:var(--accent)}.hint{background:#1f2430;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12.5px;color:var(--muted);margin:8px 0}
 </style>{% block head %}{% endblock %}</head><body>
 <header><span class="brand">めぐ競馬 運用監視</span>
-{% for key, href, label in [('home','/','ホーム'),('pipeline','/pipeline','開催日パイプライン'),('traffic','/traffic','アクセス'),('seo','/seo','SEO'),('ops','/ops','詳細（Jobs・配布）')] %}
+{% for key, href, label in [('home','/','ホーム'),('pipeline','/pipeline','開催日パイプライン'),('traffic','/traffic','アクセス'),('seo','/seo','SEO'),('schedules','/schedules','定期実行'),('ops','/ops','詳細（Jobs・配布）')] %}
 <a class="tab {{ 'on' if active == key }}" href="{{ href }}">{{ label }}</a>{% endfor %}
 <span class="right">{{ generated_at }}</span></header>
 <main>{% block body %}{% endblock %}</main></body></html>

@@ -123,3 +123,11 @@ def test_agent_with_file_store_never_touches_gcs_even_in_shadow_mode(tmp_path, m
         monkeypatch.setenv(k, v)
     assert FA.main(["--dry-run"]) == 0
     assert (tmp_path / "tasks").is_dir()
+
+
+def test_task_store_from_env_refuses_gcs_on_vps(monkeypatch):
+    """取得役・予約・計画のどの入口でも、VPS では GCS のタスク表を作らない（2026-11-13、月 約 210 円の一覧）。"""
+    monkeypatch.setattr(FT, "GcsTaskStore", lambda *a, **k: pytest.fail("GCS のタスク表を作った"))
+    for env in ({"KEIBA_RUN_LOCATION": "vps"}, {"KEIBA_RUN_LOCATION": "VPS", "KEIBA_FETCH_TASK_STORE": "gcs"}):
+        with pytest.raises(FT.TaskError):
+            FT.task_store_from_env(env)

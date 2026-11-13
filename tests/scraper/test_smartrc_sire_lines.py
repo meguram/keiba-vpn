@@ -71,3 +71,50 @@ def test_country_and_colors_table():
     assert t.loc["S1", "country"] == "欧州型" and t.loc["S1", "country_color"] == "#00CCFF" and t.loc["S1", "large_color"] == "Moccasin"
     assert t.loc["S1", "status"] == "ok" and t.loc["S_BLANK", "status"] == "blank" and t.loc["S_NEW", "status"] == "unchecked"   # 試して空欄／まだ試していない
     assert t.loc["S_BLANK", "name"] == "空欄の種牡馬" and t.loc["S_BLANK", "country"] is None
+
+
+def test_build_does_not_rewrite_when_only_time_changes(env):
+    ssl.build(env)
+    doc = ssl.load(env)
+    doc["tried"] = {"S_NEW": "2026-11-06"}
+    ssl._save(doc, env)
+    ssl.build(env)
+    old = json.loads(env.read_text(encoding="utf-8"))
+    old["built"] = old["complete_at"] = "2026-01-01T00:00:00+09:00"     # 時刻を過去にしておき、次の build で進まないことを見る
+    env.write_text(json.dumps(old, ensure_ascii=False), encoding="utf-8")
+    first = env.read_text(encoding="utf-8")
+    ssl.build(env)                                           # 中身は同じ → 書かない（built・complete_at の時刻も変わらない）
+    assert env.read_text(encoding="utf-8") == first
+    assert not ssl.needs_fetch(env)                          # 台帳に無いのは確かめ済みの S_NEW だけ → 取得しない
+
+
+def test_needs_fetch_only_for_untried_sires(env):
+    ssl.build(env)
+    assert ssl.needs_fetch(env)                              # S_NEW はまだ確かめていない
+
+
+def test_fetch_keeps_complete_at_and_line_labels_skips_fetch(env, monkeypatch):
+    import sys
+    import types
+
+    ssl.build(env)
+    doc = ssl.load(env)
+    doc["tried"] = {"S_NEW": "2026-11-06"}
+    ssl._save(doc, env)
+    ssl.build(env)
+    old = json.loads(env.read_text(encoding="utf-8"))
+    old["complete_at"] = "2026-01-01T00:00:00+09:00"
+    env.write_text(json.dumps(old, ensure_ascii=False), encoding="utf-8")
+    fake = types.ModuleType("src.scraper.smartrc_client")
+    fake.SmartRCClient = lambda **kw: types.SimpleNamespace(get_horse=lambda hid: None)
+    fake.SmartRCRestricted = RuntimeError
+    monkeypatch.setitem(sys.modules, "src.scraper.smartrc_client", fake)
+    res = ssl.fetch(10, env)                                 # 試す種牡馬は無い → 完了の時刻は書き換えない
+    assert res["fetched"] == 0 and ssl.load(env)["complete_at"] == "2026-01-01T00:00:00+09:00"
+
+    from src.scripts.data import build_horse_sire_map as B
+    monkeypatch.setattr(ssl, "OUT", env)
+    called = []
+    monkeypatch.setattr(ssl, "fetch", lambda *a, **k: called.append(1))
+    B.line_labels(fetch_max=10)
+    assert called == []                                      # 未確認の種牡馬がいなければ smartrc に繋がない

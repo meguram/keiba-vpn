@@ -1,4 +1,4 @@
 {
-  "_comment": "VPS の取得の実行役が担当するタスク。ここに載せたタスクはホストの cron（scripts/auto_scrape.sh）が実行しない。段階移行の手順: docs/operations/vps_agent.md",
+  "_comment": "VPS の取得の実行役が担当するタスク。ここに載せたタスクはホストの cron（scripts/auto_scrape.sh）が実行しない。段階移行の手順: docs/operations/vps_only_fetch.md の段 6（VPS のローカルのタスク表と systemd timer。旧方式の vps_agent.md 5 章の Scheduler・GCS のタスク表は使わない）",
   "agent_tasks": []
 }

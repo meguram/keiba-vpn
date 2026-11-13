@@ -69,6 +69,11 @@ VPS ──5 分おき（HMAC 署名）──▶ GCP /ops/heartbeat（死活・�
 
 ## 5. 取得を段階的に移す（タスクごとに切り替え）
 
+> **2026-11-13 以降はこの章の方式（GCP の Scheduler・GCS のタスク表 `ops/fetch_tasks/`）を使わない。** VPS のローカルのタスク表
+> （`KEIBA_FETCH_TASK_STORE=file`）と VPS の systemd timer で予約する方式に替えた。手順は `docs/operations/vps_only_fetch.md` の段 6 に従う。
+> VPS で GCS のタスク表を使うと、担当が空でも毎分の一覧で月 約 210 円かかる（取得役はこの設定では起動しない。`src/ops/fetch_agent.py` の store_allowed）。
+> 以下は旧方式の記録として残す。
+
 推奨の順（低リスク → 時間厳守）：`entries-sync` → `recent-retry` `barometer-retry` `daily-race-lists` `jra-baba-morning` → `race-odds-t60/t15`（1 開催週末）→ 直前オッズ → `race-weight-check`。
 
 **その前に 5.5 章の影モードで、ホストを止めずに VPS の取得を数日間見届ける（基準を満たすまでコードが担当の移譲を拒否する）。**

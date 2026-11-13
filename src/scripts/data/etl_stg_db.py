@@ -454,22 +454,79 @@ def query_pg_status_batch(engine, race_ids: list[str]) -> dict[str, dict[str, in
     return out
 
 
-def load_gcs_race_keys(years: set[str]) -> tuple[set[str], set[str]]:
-    """GCS list のみで race_shutuba / race_result の race_id 集合を取得。"""
-    from src.scraper.storage import HybridStorage
+def race_dates_for(target_dates: list[str]) -> dict[str, str]:
+    """race_lists から race_id → 開催日（YYYYMMDD）。"""
+    out: dict[str, str] = {}
+    for d in target_dates:
+        try:
+            data = json.loads((RACE_LISTS_DIR / f"{d}.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for r in data.get("races") or []:
+            if r.get("race_id"):
+                out[str(r["race_id"])] = d
+    return out
 
-    storage = HybridStorage()
+
+def _local_flat_ids(category: str, years: set[str]) -> set[str]:
+    """毎朝の書き出し（export_tables）の flat にあるレース。ここにあれば GCS にも文書がある。
+    race_result_flat の速報からの橋渡しの行（result_source == "on_time"。確定結果ではない）は数えない。"""
+    import pyarrow.parquet as pq
+
+    out: set[str] = set()
+    for y in years:
+        p = RACE_LISTS_DIR.parent / "tables" / y / f"{category}_flat.parquet"
+        try:
+            cols = ["race_id"] + (["result_source"] if "result_source" in pq.read_schema(p).names else [])
+            df = pq.read_table(p, columns=cols).to_pandas()
+        except Exception:  # noqa: BLE001  無い・読めない表は使わない（名前で確かめる側に回る）
+            continue
+        if "result_source" in df.columns:
+            df = df[df["result_source"].fillna("") != "on_time"]
+        out |= {str(x) for x in df["race_id"].tolist() if x}
+    return out
+
+
+def load_gcs_race_keys(race_ids: list[str], race_dates: dict[str, str] | None = None,
+                       today: str | None = None, storage=None) -> tuple[set[str], set[str]]:
+    """race_shutuba / race_result の文書があるレースの集合。GCS の全件一覧は取らない（CLAUDE.md の費用の決まり）。
+    ローカルの flat（毎朝の書き出し）にあれば「ある」とし、無いものだけ名前で存在を確かめる（exists_gcs。Class B 1 回）。
+    結果は、開催日が今日より前（または日付が分からない）レースだけ確かめる（今日・先のレースは結果がまだ無い）。
+    GCS の不調で確かめられなかったものは「ある」とみなして同期の候補に残す（取りこぼさない。無ければ同期が no_data になるだけ）。
+    2026-11-13 まで: 毎晩 race_shutuba・race_result の当年の全件一覧（各 約 3,000 件）を取っていた。"""
+    from datetime import date as _date
+
+    years = {rid[:4] for rid in race_ids}
+    local_sh = _local_flat_ids("race_shutuba", years)
+    local_rr = _local_flat_ids("race_result", years)
+    today = today or _date.today().strftime("%Y%m%d")
+    race_dates = race_dates or {}
+    st = storage
+    unknown = 0
+
+    def _exists(cat: str, rid: str) -> bool:
+        nonlocal st, unknown
+        if st is None:
+            from src.scraper.storage import HybridStorage
+
+            st = HybridStorage()
+        if st.exists_gcs(cat, rid):
+            return True
+        if not getattr(st, "_gcs_healthy", True):
+            unknown += 1          # 失敗（またはバックオフ中）で確かめられない。「ある」とみなす
+            return True
+        return False
+
     shutuba: set[str] = set()
     results: set[str] = set()
-    for year in sorted(years):
-        try:
-            shutuba |= set(storage.batch_list_blobs("race_shutuba", year).keys())
-        except Exception as e:
-            logger.warning("batch_list race_shutuba %s: %s", year, e)
-        try:
-            results |= set(storage.batch_list_blobs("race_result", year).keys())
-        except Exception as e:
-            logger.warning("batch_list race_result %s: %s", year, e)
+    for rid in race_ids:
+        if rid in local_sh or _exists("race_shutuba", rid):
+            shutuba.add(rid)
+        d = race_dates.get(rid, "")
+        if rid in local_rr or ((not d or d < today) and _exists("race_result", rid)):
+            results.add(rid)
+    if unknown:
+        logger.warning("GCS の不調で存在を確かめられなかった %d 件は、同期の候補に残す", unknown)
     return shutuba, results
 
 
@@ -575,8 +632,7 @@ def run_etl(
             pg_status = query_pg_status_batch(engine, race_ids)
         except Exception as e:
             logger.warning("PG 未接続のため skip 判定なし（全件候補）: %s", e)
-        years = {rid[:4] for rid in race_ids}
-        gcs_shutuba, gcs_results = load_gcs_race_keys(years)
+        gcs_shutuba, gcs_results = load_gcs_race_keys(race_ids, race_dates_for(target_dates))
         to_sync, skipped_map = filter_races_needing_sync(
             race_ids,
             pg_status,
@@ -600,8 +656,7 @@ def run_etl(
 
     engine = _get_engine()
     pg_status = query_pg_status_batch(engine, race_ids)
-    years = {rid[:4] for rid in race_ids}
-    gcs_shutuba, gcs_results = load_gcs_race_keys(years)
+    gcs_shutuba, gcs_results = load_gcs_race_keys(race_ids, race_dates_for(target_dates))
     to_sync, skipped_map = filter_races_needing_sync(
         race_ids,
         pg_status,

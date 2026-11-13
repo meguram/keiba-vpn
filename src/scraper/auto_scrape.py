@@ -381,6 +381,21 @@ def finalize_weekly_update(target_dates: list[str], result: dict) -> dict:
     out["target_dates"] = target_dates
     out["lookback_days"] = WEEKLY_LOOKBACK_DAYS
 
+    if (os.environ.get("KEIBA_RUN_LOCATION") or "").strip().lower() == "vps":
+        # VPS は取得だけ（250MB 枠）。後処理はホストの weekly-finalize（src/ops/host_postprocess.py）が、この目印を見て行う
+        out["post_processing"] = "host"
+        try:
+            from src.ops.gcs_mirror import GcsBackend, publish_weekly_handoff
+
+            publish_weekly_handoff(GcsBackend(), _today_jst().strftime("%Y%m%d"), target_dates)   # 書いた日（ホストの回の鍵は written_at）
+            out["handoff"] = "ok"
+        except Exception as e:  # noqa: BLE001 — 書けなければホストが後処理をしない。黙って成功にしない
+            logger.error("週次の後処理の受け渡しの目印を書けませんでした（ホストの weekly-finalize が動きません）: %s", e)
+            out["handoff"] = f"error:{type(e).__name__}"
+            out["status"] = "error"          # fetch_child は error だけを失敗にする。目印が無いとホストの後処理が丸ごと抜けるので失敗として残す
+        out["last_run"] = _now_jst_iso()
+        return out
+
     # 今回の開催日に加え、前の週次でめぐ指数まで届かなかった日（結果はあるのにめぐ指数が無い日）も計算する
     megu_dates = sorted({d.replace("-", "") for d in target_dates if d})
     try:
@@ -1132,10 +1147,19 @@ def _trigger_track_speed_for_date(date_str: str) -> None:
 
     logger.info("[馬場速度] flat parquet 増分更新開始 (%s / race_result)", year)
     try:
-        from src.scraper.export_tables import export_category_chunked
+        from datetime import date as _date
+
+        from src.scraper.export_tables import export_category_chunked, local_universe
         from src.scraper.storage import HybridStorage
         storage = HybridStorage()
-        result = export_category_chunked(year, "race_result", storage)
+        # その日のレースだけを名前で読む（GCS の全件一覧は取らない。2026-11-13 まで当年の race_result を毎回一覧していた）。
+        # 母集合はローカルの race_lists と出馬表・速報・確定結果の flat（欠けた回は 01〜12R を補う）
+        day = _date(int(date_fmt[:4]), int(date_fmt[4:6]), int(date_fmt[6:8]))
+        keys = sorted(r for r, d in local_universe(year, day, "all").items() if d == day.isoformat())
+        if not keys:
+            logger.info("[馬場速度] %s のレースがローカルの記録に無いので、flat の更新を飛ばす", date_fmt)
+        result = export_category_chunked(year, "race_result", storage, keys=keys) if keys else {"skipped": True, "reason": "その日のレースなし"}
+        result.pop("missing_keys", None)
         flat_rows = result.get("flat_rows", -1)
         skipped = result.get("skipped", False)
         if skipped:
