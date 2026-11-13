@@ -73,3 +73,31 @@ NN の比べる相手は補助損失つきの mtl_nn_s。NDCG は N2 0.6144・N1
   - (b) 順位だけ候補で決め、確率は v6e のまま
 - 目的関数向けの木の設定は、ここで 1 回だけ詰める。
 - 2025 年は最後に残った 1〜2 候補で 1 回だけ。本番に入れるかはユーザーが決める（入れるなら s9〜s18 の流し直し）。
+
+## 2026-11-13 18:00 JST 締めの時点の状態と、明日の再開の手順
+
+### どこまで済んだか
+
+- 1 段目は 2016 年起点・2020 年起点とも済んだ（上の表）。コードは develop に push 済み（8b7fe5ff。CI 緑）。
+- 2 段目の 3 seed 化の途中。seed 0 は 1 段目の OOF（`oof/`）を使い、seed 1・2 を `--seed N` で別々に回している（出力 `oof_seeds/NAME__seedN.parquet`）。
+  - 済み: B3_xgb_bin_top3・B0_xgb_bin_win の seed 1・2（GPU、各約 13 分）
+  - 実行中（CPU、各 5 スレッド、4 本同時、07:10 UTC 開始）: A6_lgb_xendcg_top5・A1_lgb_bin_top3 の seed 1・2（PID 3097444〜3097447）
+  - 待ち: R0_lgb_bin_win・A4_lgb_lrank_top5_exp の seed 1・2
+    - 上の 4 本が終わったら、`scratchpad/.../rank/stage2_rest.sh` が 4 本同時に流す（setsid nohup で切り離し済み、PID 3287545）。
+    - 08:12 UTC に、待ちの条件の誤りで一度すぐ始まってしまったので止め、直して起動し直した。
+- 出力の置き場: `/home/jovyan/work/retrain_out/base_2016/tp_rank/{oof,oof_seeds}/`。ログは scratchpad の `rank/logs/stage2.log` と、各 `NAME.sN.log`。
+- 終わる見込み: A6・A1 は 08:40 UTC ごろ、R0・A4 は 10:00 UTC（19:00 JST）ごろ。負荷によって前後する。
+
+### 明日の再開の手順
+
+1. 済んだかを確かめる: `ls /home/jovyan/work/retrain_out/base_2016/tp_rank/oof_seeds/`
+   - A6・A1・A4・R0・B3・B0 の `__seed1`・`__seed2` の 12 ファイルがあること。
+   - 無いものは `sudo env RANK_BASE=2016 TP27_THREADS=5 TP27_LOAD_LIMIT=1000 python -m src.scripts.data.rank_bakeoff member NAME --seed N` で作る。
+2. seed をまとめる（各数秒）: 6 つの名前それぞれに `sudo env RANK_BASE=2016 python -m src.scripts.data.rank_bakeoff combine NAME`（出力 `oof_s3/NAME.parquet`）。
+3. 3 seed で評価: `sudo env RANK_BASE=2016 python -m src.scripts.data.rank_bakeoff_eval --sub oof_s3 --boot 1000`。
+   - 相手は 3 seed の R0・B0 と、v6e のアンサンブル。
+4. 2 段目の残り:
+   - (a) v6e のアンサンブルに 1 メンバーとして足す（`tp27_eval cmd_ens` を base_2016 の向け替えで。確率の判定は compare_oof）
+   - (b) 順位だけ候補で決め、確率は v6e のまま（回収率 4 種と並びの指標を v6e と比べる）
+   - 目的関数向けの木の設定（学習率・木の数）を、valid の中で 1 回だけ詰める。
+5. 最後に残った 1〜2 候補で、2025 年（test）を 1 回だけ。結果をユーザーに出し、本番に入れるか（s9〜s18 の流し直し）を決めてもらう。
