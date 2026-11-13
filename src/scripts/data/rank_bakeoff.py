@@ -2,12 +2,15 @@
 
 python -m src.scripts.data.rank_bakeoff list
 python -m src.scripts.data.rank_bakeoff keys                       # 評価用の鍵（馬番・着順）を保存
-python -m src.scripts.data.rank_bakeoff member NAME [--seeds 1] [--force] [--smoke]
+python -m src.scripts.data.rank_bakeoff member NAME [--seeds 1 | --seed N] [--force] [--smoke]   # --seed N は 1 seed だけ（oof_seeds/）
+python -m src.scripts.data.rank_bakeoff combine NAME [--seeds 1,2]   # oof/（seed 0）と oof_seeds/ を平均 → oof_s3/
+python -m src.scripts.data.rank_bakeoff ens [--add NAME] [--sub oof_s3]   # v6e の 7 メンバー（+ 候補）の LOYO アンサンブル → ens/
+python -m src.scripts.data.rank_bakeoff test2025 NAME [--seeds 3]   # 2025 年を 1 回だけ予測（最終候補 TEST2025_FINALISTS のみ）→ test2025/
 
 - 入力は v6e のメンバーと同じ（V6_STAGE=e・V6_TAG=e・V5_GROUPS=CY,BEST,RB を既定にする。v6_members と同じ前処理）。
   RANK_BASE=2016 なら 2016〜2025 年の土台（retrain_out/base_2016、parent_2016 と同じ向け替え）で回し、出力は base_2016/tp_rank/。
   木のモデルは lgb_extras_ped と同じ列、NN は nn_s と同じ列（追加群は重要度上位 NN_TOP 列）。
-- fold は valid 2022〜2024（年の前進）。test 2025・2026 年は使わない。
+- fold は valid 2022〜2024（年の前進）。2026 年は使わない。2025 年は test2025 だけ（2024-12-22 より前で学習）。
 - 出力は data/local/modeling/training_pipeline_v4/tp_rank/oof/NAME.parquet（tp27_v6e/ には書かない）。
 - --smoke は最初の fold だけ・木の数を減らして、最後まで通るかを確かめる（出力は tp_rank/smoke/）。
 - 学習の中身は src/pipeline/models/rank_recipes.py。
@@ -156,17 +159,14 @@ def cmd_member(a) -> None:
 
 def cmd_combine(a) -> None:
     """seed ごとの OOF の確率を平均する（run_oof の seed 平均と同じく、レース内で正規化した確率の平均）。"""
+    from src.scripts.data.rank_bakeoff_eval import average_seed_oofs
+
     paths = [OUT / "oof" / f"{a.name}.parquet"] + [OUT / "oof_seeds" / f"{a.name}__seed{s}.parquet" for s in a.seeds.split(",")]
-    frames = [pd.read_parquet(p).set_index(KEY + ["year"]) for p in paths]
-    idx = frames[0].index
-    for f in frames[1:]:
-        if not f.index.equals(idx):
-            raise SystemExit(f"行がそろわない: {a.name}")
-    out = sum(f[["p_win", "p_top2", "p_top3"]] for f in frames) / len(frames)
+    out = average_seed_oofs([pd.read_parquet(p) for p in paths], KEY + ["year"])
     d = OUT / "oof_s3"
     d.mkdir(parents=True, exist_ok=True)
-    out.reset_index().to_parquet(d / f"{a.name}.parquet", index=False)
-    _log(f"{a.name}: {len(frames)} seed を平均 → {d / (a.name + '.parquet')}")
+    out.to_parquet(d / f"{a.name}.parquet", index=False)
+    _log(f"{a.name}: {len(paths)} seed を平均 → {d / (a.name + '.parquet')}")
 
 
 V6E_MEMBERS = ["lgb_extras_ped", "xgb_extras_ped", "lgb_extras", "lgb_softmax", "linear", "mtl_nn_extras_ped", "mtl_nn_s"]
@@ -232,8 +232,11 @@ def cmd_test2025(a) -> None:
     from src.pipeline.models import rank_recipes
     from src.pipeline.models import win_models as wm
 
+    from src.scripts.data.rank_bakeoff_eval import check_test2025_name
+
     if not BASE_2016:                                # 基準（final_eval_v6e16）は 2016 年起点の土台にしかない。1 回きりの出力を別の土台に書かない
         raise SystemExit("test2025 は RANK_BASE=2016 で回す")
+    check_test2025_name(a.name)                      # 先に commit した最終候補の一覧にある名前だけ
     out = OUT / "test2025" / f"{a.name}.parquet"
     if out.exists():
         raise SystemExit(f"{out} は作成済み（2025 年は 1 回きり。作り直さない）")

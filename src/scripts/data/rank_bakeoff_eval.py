@@ -1,6 +1,7 @@
 """rank_bakeoff の評価: 並びの指標と、予測 1 番手を買ったときの回収率（4 種類）を、基準（v6e のアンサンブル）と比べる。
 
-python -m src.scripts.data.rank_bakeoff_eval [--years 2022,2023,2024] [--names A1_... ...] [--boot 1000]   （RANK_BASE=2016 で 2016 年起点の土台）
+python -m src.scripts.data.rank_bakeoff_eval [--years 2022,2023,2024] [--names A1_... ...] [--boot 1000] [--sub oof|oof_s3|ens|test2025]
+（RANK_BASE=2016 で 2016 年起点の土台。--sub: oof=1 seed、oof_s3=3 seed、ens=v6e に足したアンサンブル、test2025=2025 年の 1 回きりの確認）
 
 回収率（ユーザー指定 2026-11-13）:
 - 単勝: 予測 1 番手を 100 円
@@ -11,8 +12,9 @@ python -m src.scripts.data.rank_bakeoff_eval [--years 2022,2023,2024] [--names A
 予測の順位は p_win の大きい順（同じ値は馬番の小さい順）。OOF は出走した馬だけなので取消の返還は起きない。
 
 並びの指標: 1 番手の勝率・1 番手の複勝率・上位 3 頭のうち 3 着以内の頭数・NDCG@5（関連度 6-着順、6 着以下 0、指数の利得）。
-区間はレース単位のブートストラップ（差の 95% 区間）。相手は 1 seed の基準（matched_ref。LightGBM ほかは R0、XGBoost は B0）と、v6e のアンサンブル。
-出力: tp_rank/eval/summary.json と summary.md。
+区間はレース単位のブートストラップ（差の 95% 区間）。相手は同じ seed 数の基準（matched_ref。LightGBM ほかは R0、XGBoost は B0、
+調整の変種は元の設定の候補）と、v6e のアンサンブル（test2025 では final_eval_v6e16 の 2025 年の予測）。
+出力: tp_rank/eval/<sub>/summary.json と summary.md。
 """
 
 from __future__ import annotations
@@ -148,11 +150,36 @@ def matched_ref(name: str) -> str | None:
     return STAGE1_REF
 
 
+# 2025 年（test）を予測・評価してよい最終候補（2025 年を見る前にコードに書いて commit する）。2026-11-13 の比較では B3・A6。
+# 予測を作ってしまった他の名前（B3t2 など）は、評価でも読まない。
+TEST2025_FINALISTS = ("B3_xgb_bin_top3", "A6_lgb_xendcg_top5")
+
+
+def check_test2025_name(name: str) -> None:
+    if name not in TEST2025_FINALISTS:
+        raise SystemExit(f"{name} は 2025 年の最終候補（TEST2025_FINALISTS）に無い。先に一覧に足して commit してから予測する")
+
+
+def average_seed_oofs(frames: list[pd.DataFrame], keys: list[str]) -> pd.DataFrame:
+    """seed ごとの OOF（keys・p_win・p_top2・p_top3）を平均する。行（keys）が全部そろっていなければ止める。"""
+    idx = frames[0].set_index(keys).index
+    for f in frames[1:]:
+        if not f.set_index(keys).index.equals(idx):
+            raise ValueError("seed ごとの OOF の行がそろわない")
+    cols = ["p_win", "p_top2", "p_top3"]
+    out = sum(f.set_index(keys)[cols] for f in frames) / len(frames)
+    return out.reset_index()
+
+
 def candidates(names: list[str] | None, sub: str = "oof") -> dict[str, Path]:
     if sub == "test2025":                            # 2025 年の 1 回きりの確認: 基準は v6e の test 2025 の予測（2024 年までで学習）。単体メンバーは無い
+        for n in names or []:
+            if n != "v6e_ens":
+                check_test2025_name(n)               # 一覧に無い名前は評価もしない
         c = {"v6e_ens": V / "final_eval_v6e16/test2025_predictions.parquet"}
         for p in sorted((RANK / sub).glob("*.parquet")):
-            c[p.stem] = p
+            if p.stem in TEST2025_FINALISTS:          # 最終候補の一覧にあるものだけ（誤って作った予測は読まない）
+                c[p.stem] = p
         keep = (set(names) | {"v6e_ens"} | {matched_ref(n) for n in names}) if names else None
         return {k: v for k, v in c.items() if keep is None or k in keep}
     c = dict(BASELINE)
