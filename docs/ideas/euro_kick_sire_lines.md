@@ -1,6 +1,8 @@
 # 欧州瞬発力 × 父の系統区分（smartrc）: TS・TS持続力に傾向はあるか
 
 2026-11-12 の調査。結論: **父の系統区分（国系統・大系統・小系統）では、欧州瞬発力の特徴（TS は高くないが持続する）は見つからなかった。**
+> 種牡馬系統の分析は `data/meta/sire_lines/sire_line_analysis.html` に 1 枚でまとめた（この文書・父と母の影響 `docs/ideas/sire_dam_influence.md`・小系統の距離配置・成績マトリクス・系統一覧・マーキング）。
+
 区分は `docs/html/pedigree/sire_lines_all.html`（smartrc の系統。`data/meta/sire_lines/sire_smartrc_colors.csv`）。
 
 ## 方法
