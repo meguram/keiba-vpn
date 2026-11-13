@@ -146,7 +146,15 @@
 ### #2 GCS の一覧（ListObjects）が Jobs 停止後も 1 日 約 1.2 万回・約 3.4GiB（Class A 月 約 290 円＋外に出る分の転送）
 - 1 回の応答が平均 約 280KB と大きく、大きな接頭辞（年ごとのカテゴリなど）を何度も一覧している形。決まり 2「GCS を全件一覧する処理を周期ごとに入れない」に反するものが残っている。
 - ホストの毎朝の書き出し（`scripts/cron/export_tables_daily.sh:23` → `src/scraper/export_tables.py:579`・`:771`・`:795` の `storage.batch_list_blobs`）は、カテゴリ 6 つ × 年の全件一覧を毎日行う（1 日 数十〜百数十回）。回数は小さいが、ホストからなので応答は転送料になる。
-- 出どころの調べ（下）で、1 日 1.2 万回の大半の呼び手を特定する。
+- 出どころの調べ（11/13、コードの調べ＋目印の件数の 1 回の数え）:
+  | 呼び手 | 動く場所・頻度 | 1 日の量（推定） | 根拠 | egress_billed |
+  |---|---|---|---|---|
+  | VPS の `keiba-cache-warm.timer` が `ops/cache_dirty/` の昨日以降を毎回一覧 | VPS・60 秒おき（1,440 回/日） | 一覧 1,440 回（Class A 月 約 35 円）・目印 約 500 件 × 約 0.6KB × 1,440 ≒ **0.4GiB**（月 約 230 円の転送） | `scripts/ops/vps/cache_warm.py:254-261`（fields の指定なし）。目印は 11/02 の bbc45db6 から馬の保存ごとに増える（`src/utils/cache_marker.py:89-94` ← `src/scraper/storage.py:543`）。1 日 300〜550 件（11/13 実測） | 見ていない |
+  | ホストの `verify_past_values` が 10 年分を一覧 | ホスト・2 時間おき（12 回/日） | 約 3.45 万件 × 12 回 ≒ 0.3〜0.4GiB | `src/scripts/data/verify_past_values.py:151,163` → `storage.py:1448-1459`（fields の指定なし） | 見ていない |
+  | ホストの毎朝の書き出しの全件一覧 | ホスト・1 日 1 回 | 数十〜百数十回・数十 MB | `src/scraper/export_tables.py:579,771,795` | 見ていない |
+  | 残り（1 日 約 1 万回の一覧、外への 3〜5GiB） | **未特定** | — | Cloud Run の中の一覧なら転送 0 円。VPS の nginx の上流がホストの API なら、cache_warm の取り直しがホストの API で GCS を読む経路がある（`scripts/ops/vps/nginx-keiba-ui.conf:15`） | — |
+  - `egress_billed()` を見て止めているのは `src/api/prerender.py:66-68` の 1 か所だけ。上の周期処理はどれも見ていない。
+  - 次の確かめ方（統括役へ）: VPS の `/etc/nginx/sites-enabled/keiba-ui` の上流を見る。GCS のデータアクセスの監査ログを 1 日だけ有効にして呼び手（IP・サービスアカウント）を数える（Cloud Logging の無料 50GiB の範囲）。
 
 ### #3 固定費だけで月 約 650 円（上限の 3 分の 1）。止めている Scheduler も課金されている
 - Cloud Scheduler: 課金の数量は 11/06〜11/12 ずっと 17 件（smoke-auto の一度きりの 3 件・停止中の keiba-g-* 13 件を含む）。停止中でも 1 件 約 15 円/月かかり、無料の 3 件も効いていないように見える。
