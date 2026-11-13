@@ -98,3 +98,13 @@
 3. 配備: monitor を配備し直す（`scripts/gcp/deploy_cloud_run_monitor.sh --apply`）。Jobs の版を更新（`scripts/gcp/deploy_cloud_run_jobs.sh`。g-0730-shadow に schedule-check が入る）。
    VPS は fetch の版（`scheduled_jobs.json` と `src/ops/sched_status.py` を含む）が入った後に `sudo bash scripts/ops/vps/vps_03_units.sh`（見張りのタイマーを有効化）。
    ホストは `sudo bash scripts/cron/install_vps_alive_cron.sh`。入れたら `config/scheduled_jobs.json` の `vps-sched-status`・`host-vps-alive` を `active` にする。
+
+### 引き継ぎ（2026-11-13 18:00 締め）
+- **済み（develop・CI 緑）**: 一覧・ルール・VPS の見張り・ポータル /schedules・毎朝の点検・ホストの VPS 停止の検知（d6c72260、de3d68ca）。
+  ほかに、めぐ分析の調教師×調教の表示（c17f488a、stg 1c728983 に反映済み）、調教の被覆の判定でホストが GCS を読まない修正（957858ad）。
+- **まだ配備していない**（明日。ユーザーの確認後）: stg への反映（d6c72260 以降）、IAM（上の 1・2）、monitor・Jobs の配備、VPS の `vps_03_units.sh`、ホストの `install_vps_alive_cron.sh`。
+  入れたら `config/scheduled_jobs.json` の `vps-sched-status`・`host-vps-alive` を `active` にし、`python -m src.scripts.docs.build_scheduled_jobs_html` で docs を作り直す。
+- **裏で動いているもの**:
+  - 11/07・08 の出走馬の調教の取り直し（`backfill_horse_training_recent --dates 2026-11-07 2026-11-08`、323 頭・30〜60 分。他の取得を待って 1 時間で区切られたら 5 分置いて最大 6 回まで再開）。ログ `logs/horse_training_backfill.cron.log`。
+  - 調教の過去分の全ページ取得（`backfill_horse_training_past`、12,837 / 19,119 頭、あと約 2 日）。終わると打ち切った馬の全ページの取り直しが自動で続く。ログ `logs/horse_training_past.log`。
+- **明朝に確かめること**: 毎朝の事前計算（`export_tables_daily.sh` の中の `precompute_race_analysis`）が版 39 で作り直し、11/07 福島 1R の調教師×調教でパターンの無い馬に「集計の対象外／未取得／記録なし」が出ること。
