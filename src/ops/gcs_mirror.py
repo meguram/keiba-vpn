@@ -707,10 +707,7 @@ def push_trees(trees: list[str] | tuple[str, ...], *, since_epoch: float | None 
 # 取り込んだファイルは、ホストの通常の push で ops/mirror/ に上がり、Cloud Run の API に今どおり届く。
 VPS_PREFIX = "ops/mirror_vps"
 VPS_INDEX_KEY = f"{VPS_PREFIX}/_index.json"
-VPS_TREES: dict[str, str] = {
-    "race_lists": "data/page_reference/race_lists",
-    "race_day_schedule": "data/page_reference/race_day_schedule",
-}
+VPS_TREES: dict[str, str] = {n: next(t for t in TREES if t.rsplit("/", 1)[-1] == n) for n in ("race_lists", "race_day_schedule")}   # 場所は TREES と同じ
 # JRA の馬場（cushion/）は入れない: cushion_values.json は手元のファイルに追記していく作りで、VPS のファイルには VPS が取った分しか無い。
 # 丸ごと取り込むとホストの 2018 年からの履歴を消す。開催カレンダーも両方が書く。レコード単位で合わせる設計ができるまでホストで取る。
 # この木を作る取得タスク。ホスト・VPS とも、このタスクの担当が VPS に移った木だけを受け渡す（移行中にホスト自身が取ったものを上書きしない）

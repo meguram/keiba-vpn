@@ -2,7 +2,7 @@
 Description=keiba VPS が取ったレース一覧・発走時刻表を ops/mirror_vps/ に上げる（担当が移った木の、変わったものだけ。ホストが取り込む）
 After=network-online.target
 Wants=network-online.target
-# docs/operations/vps_only_fetch.md の段 1。差分は手元の記録（data/local/meta/gcs_mirror_vps_manifest.json）で判定し、GCS は一覧しない
+# docs/operations/vps_only_fetch.md の段 1。差分は手元の記録（META_DIR の gcs_mirror_vps_manifest.json）で判定し、GCS は一覧しない
 
 [Service]
 Type=oneshot
