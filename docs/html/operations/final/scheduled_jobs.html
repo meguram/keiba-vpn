@@ -59,13 +59,13 @@ ul.jobs { padding-left:18px; margin:6px 0; } ul.jobs > li { margin:10px 0; }
 </head>
 <body><main>
 <h1>定期実行ジョブの一覧（GCP・ConoHa VPS）</h1>
-<p class="muted">作成: 2026-11-13（JST） / 最終更新: 2026-11-13 15:00 JST / 時刻はすべて <b>JST</b>（ホストの crontab は UTC で書かれているので JST に直した）。ホストの cron の一覧は <code>docs/html/operations/cron_schedule.html</code>。</p>
+<p class="muted">作成: 2026-11-13（JST） / 最終更新: 2026-11-13 15:40 JST / 時刻はすべて <b>JST</b>（ホストの crontab は UTC で書かれているので JST に直した）。ホストの cron の一覧は <code>docs/html/operations/cron_schedule.html</code>。</p>
 
 <h2 id="summary">まとめ</h2>
 <div class="kpis">
   <div class="kpi"><b>1 件</b><span>GCP で動いている定期実行（Cloud Scheduler <code>keiba-g-0730-shadow</code>。中で 2 つの処理）</span></div>
-  <div class="kpi"><b>5＋1 件</b><span>ConoHa VPS で動いている systemd タイマー 5 件＋周期で動く常駐 1 件（取得の実行役）</span></div>
-  <div class="kpi"><b>13＋6 件</b><span>今は動いていない・今後起動しうるもの（GCP 13 件は削除済み・再開の予定なし。VPS 6 件）</span></div>
+  <div class="kpi"><b>5 件</b><span>ConoHa VPS で動いている systemd タイマー（取得の実行役は 11/13 15:00 に停止）</span></div>
+  <div class="kpi"><b>13＋7 件</b><span>今は動いていない・今後起動しうるもの（GCP 13 件は削除済み・再開の予定なし。VPS はタイマー 6 件＋取得の実行役）</span></div>
   <div class="kpi"><b>2 種</b><span>廃止（天気 <code>jma-weather</code>、疎通確認 <code>smoke-auto-*</code> 3 件）</span></div>
 </div>
 <div class="box">
@@ -109,7 +109,7 @@ VPS は画面の配信（Next.js・nginx・Cloudflare Tunnel）と、その周�
 </table></div>
 
 <h2 id="vps-live">表 2. ConoHa VPS: 稼働中の定期実行</h2>
-<p class="sub">ssh で実物を確認（11/13 14:40 JST）。<code>keiba*</code> のタイマーで有効なのは 5 件。OS 標準のタイマー（apt-daily・logrotate・fstrim・man-db・motd-news など 15 件）は数えていない。</p>
+<p class="sub">ssh で実物を確認（11/13 14:40 JST）。その後 15:00:58 に、ユーザーの承認で取得の実行役 <code>keiba-fetch-agent</code> を停止・無効にした（別のセッション、コミット dda6af55。<code>fetch_agent_ctl.sh shadow-off</code>）。<code>keiba*</code> のタイマーで有効なのは 5 件。OS 標準のタイマー（apt-daily・logrotate・fstrim・man-db・motd-news など 15 件）は数えていない。</p>
 <div class="scroll"><table>
 <tr><th>タイマー（起動するもの）</th><th>スケジュール（JST）</th><th>中身</th><th>メモリの枠</th><th>ホストでも同じ処理？</th><th>根拠</th></tr>
 <tr><td><code>keiba-cache-warm.timer</code><br>→ <code>keiba-cache-warm.service</code></td><td class="when">60 秒おき<br>（起動 2 分後から）</td>
@@ -129,12 +129,11 @@ VPS は画面の配信（Next.js・nginx・Cloudflare Tunnel）と、その周�
 <td>VPS の中での自己診断: keiba-ui・nginx・cloudflared-prod が止まっていれば 1 回再起動、画面の <code>/version.json</code>・ディスク・空きメモリを見て Slack へ（同じ内容は 1 時間に 1 回）。API（Cloud Run）は叩かない。</td>
 <td>（指定なし）</td><td>ホストは自分のサーバーを <code>server_watchdog</code>（3 分おき）で見ている。対象は別。</td>
 <td class="ev"><code>scripts/ops/vps/healthcheck.sh</code>、<code>scripts/ops/vps/vps_02_install_stack.sh:82</code></td></tr>
-<tr><td><code>keiba-fetch-agent.service</code><br><span class="b warn">タイマーではない常駐</span></td><td class="when">常駐（60 秒おきにタスク表を見る）</td>
-<td>取得の実行役。ユニットは enabled（動いているか＝active かは今回の読み取りでは見ていない）。担当が空なので取得はしない。
-タスク表が GCS（旧方式）なら 60 秒おきに一覧している（月 約 35 円＋転送）。VPS の <code>/etc/keiba-fetch/fetch.env</code> は雛形が上書きしない作りなので、<code>file</code> か <code>gcs</code> かは<b>推測できない（要確認）</b>。</td>
+<tr><td><code>keiba-fetch-agent.service</code><br><span class="b mu">11/13 15:00 停止</span></td><td class="when">常駐（タスク表を毎分見る）</td>
+<td>取得の実行役。14:40 の読み取りでは enabled だったが、担当が空のまま影モードで GCS のタスク表を毎分 6 回一覧していた（1 日 8,640 回・月 約 210 円＋転送）ため、15:00:58 に停止・無効にした。<b>再開は段 6 で <code>KEIBA_FETCH_TASK_STORE=file</code> にしてから</b>（表 3 の「今後」の 4 件と同時）。</td>
 <td>slice <code>keiba-fetch.slice</code>: MemoryHigh 220M・MemoryMax 250M</td>
 <td>取得はすべてホストの cron が担当（正）。</td>
-<td class="ev"><code>scripts/ops/vps/templates/keiba-fetch-agent.service</code>、<code>config/fetch_owner.json</code>、<code>docs/operations/cost_ledger.md:177</code></td></tr>
+<td class="ev"><code>scripts/ops/vps/templates/keiba-fetch-agent.service</code>、<code>config/fetch_owner.json</code>、コミット dda6af55・e2b534b4</td></tr>
 </table></div>
 <p class="muted">常駐のサービス（定期実行ではない）: <code>keiba-ui</code>（本番の画面）・<code>keiba-ui-stg</code>・nginx・cloudflared-prod。<code>keiba-api.service</code> は disabled（API を Cloud Run に移す前の残り）。</p>
 
@@ -231,7 +230,7 @@ VPS は画面の配信（Next.js・nginx・Cloudflare Tunnel）と、その周�
 <div>書く: <code>/var/lib/keiba-ui/health.json</code>。送り先: Slack（同じ内容は 1 時間に 1 回まで）。</div>
 </div></details>
 
-<details><summary><span class="b warn">常駐</span> <b>keiba-fetch-agent.service</b> <span class="mu">— 60 秒おきにタスク表を見る・slice 250M</span><br><span class="sm">取得の実行役。タスク表から 1 本ずつ取り出して netkeiba・JRA から取得し、GCS に保存する（今は担当が空）</span></summary>
+<details><summary><span class="b mu">停止中（段 6 で再開）</span> <b>keiba-fetch-agent.service</b> <span class="mu">— 常駐・タスク表を毎分見る・slice 250M</span><br><span class="sm">取得の実行役。タスク表から 1 本ずつ取り出して netkeiba・JRA から取得し、GCS に保存する（11/13 15:00 に停止。担当も空）</span></summary>
 <div class="dbody">
 <div>入口: <code>/opt/keiba-fetch/venv/bin/python -m src.ops.fetch_agent</code>（<code>src/ops/fetch_agent.py:282</code>）。タスク表は <code>KEIBA_FETCH_TASK_STORE</code> が <code>file</code> なら <code>/var/lib/keiba-fetch/tasks/ops/fetch_tasks/pending/</code>、<code>gcs</code> なら GCS の <code>ops/fetch_tasks/pending/</code>（<code>src/ops/fetch_task.py</code>）。</div>
 <div>担当（<code>config/fetch_owner.json</code> の <code>agent_tasks</code>）に載ったタスクだけを本番として取る。今は空なので本番の取得はしない。下は、担当を渡したあとに取るタスクと URL の形の例（テンプレートは <code>src/scraper/run.py:299-313</code>・<code>src/scraper/parsers.py:1856</code>）。保存先は <code>chuou/data/preprocessed/netkeiba/pc/&lt;カテゴリ&gt;/&lt;年&gt;/&lt;race_id&gt;.json</code>（<code>src/config/data_paths.py:51-59</code>）。</div>
@@ -292,10 +291,10 @@ VPS は画面の配信（Next.js・nginx・Cloudflare Tunnel）と、その周�
 <td><b>VPS の <code>keiba-cache-warm</code> が 60 秒おきに GCS を一覧している</b>（GCP の外から繰り返し読む。<code>egress_billed()</code> を見ていない）。目印は 1 日 300〜550 件で、60 秒の細かさは要らない可能性が高い。取り直しの要求は Cloud Run の API の起動にもなる。</td>
 <td class="ev"><code>scripts/ops/vps/cache_warm.py:254-261</code>、<code>docs/operations/cost_ledger.md:155</code></td>
 <td>見直す（間隔を 10〜15 分に、一覧の <code>fields</code> を絞る、など）。台帳と突き合わせ。</td><td>今 月 約 265 円（一覧 35＋転送 230）。15 分おきなら 1/15 前後</td></tr>
-<tr><td>3</td><td class="warn">中</td><td>不要（費用）</td>
-<td><b>取得の実行役 <code>keiba-fetch-agent</code> が担当なしで常駐</b>。タスク表が GCS（旧方式）なら、誰も予約しない（GCP の予約は削除済み）表を 60 秒おきに一覧しているだけ。</td>
+<tr><td>3</td><td class="ok">対応済み</td><td>不要（費用）</td>
+<td><b>取得の実行役 <code>keiba-fetch-agent</code> が担当なしで常駐し、影モードで GCS のタスク表を毎分 6 回一覧していた</b>。11/13 15:00:58 に停止・無効にした（別のセッション、dda6af55）。</td>
 <td class="ev">ssh（enabled）、<code>config/fetch_owner.json</code>（agent_tasks 空）、<code>docs/operations/cost_ledger.md:177</code></td>
-<td>VPS の <code>fetch.env</code> を読んで確かめる。<code>gcs</code> なら段 6 まで止めるか <code>file</code> にする。台帳と突き合わせ。</td><td>月 約 35 円＋転送（gcs のとき）</td></tr>
+<td>止めたまま。段 6 で <code>file</code> にしてから再開する。台帳と突き合わせ（e2b534b4 で反映済み）。</td><td>月 約 −210 円＋転送</td></tr>
 <tr><td>4</td><td class="warn">中</td><td>見直し（費用の歯止め）</td>
 <td><b>費用の歯止め <code>cost_guard</code> の「止める」対象が 0 件になった</b>。止めるのは <code>keiba-g-</code> の Scheduler（KEEP 以外）だけで、13 件の削除後は通知だけの仕組み。今の大きな項目（GCS の外への転送 G4、cache_warm）は止められない。</td>
 <td class="ev"><code>src/ops/cost_guard.py:38-39</code>・<code>:140-142</code>、ホストの cron（10:17・22:17）、<code>docs/operations/cost_ledger.md:86</code>（G4）</td>
