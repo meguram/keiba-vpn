@@ -59,7 +59,8 @@ install_if_changed 644 "$T/keiba-release-pull@.service" /etc/systemd/system/keib
 install_if_changed 644 "$T/keiba-release-pull-ui.timer" /etc/systemd/system/keiba-release-pull-ui.timer
 install_if_changed 644 "$T/keiba-release-pull-fetch.timer" /etc/systemd/system/keiba-release-pull-fetch.timer
 # 取得の予約を VPS の中で行う（GCP の reserve-fetch-tasks / reserve-race-day の代わり。タスク表は /var/lib/keiba-fetch/tasks）
-for u in keiba-fetch-reserve.service keiba-fetch-reserve.timer keiba-fetch-raceday@.service keiba-fetch-raceday-tomorrow.timer keiba-fetch-raceday-today.timer; do
+for u in keiba-fetch-reserve.service keiba-fetch-reserve.timer keiba-fetch-raceday@.service keiba-fetch-raceday-tomorrow.timer keiba-fetch-raceday-today.timer \
+         keiba-mirror-vps-push.service keiba-mirror-vps-push.timer; do
   install_if_changed 644 "$T/$u" "/etc/systemd/system/$u"
 done
 # メモリ上限（MemoryHigh=ソフト、MemoryMax=ハード）。既存ユニットは書き換えず drop-in で上書きする
@@ -120,10 +121,10 @@ if [ "$ENABLE_AGENT" = 1 ]; then
   if grep -q '^KEIBA_FETCH_AGENT_ENABLED=1' /etc/keiba-fetch/fetch.env 2>/dev/null && [ -L /opt/keiba-fetch/current ] && [ -x /opt/keiba-fetch/venv/bin/python ]; then
     run systemctl enable --now keiba-fetch-agent.service
     if grep -q '^KEIBA_FETCH_TASK_STORE=file' /etc/keiba-fetch/fetch.env 2>/dev/null; then
-      run systemctl enable --now keiba-fetch-reserve.timer keiba-fetch-raceday-tomorrow.timer keiba-fetch-raceday-today.timer
+      run systemctl enable --now keiba-fetch-reserve.timer keiba-fetch-raceday-tomorrow.timer keiba-fetch-raceday-today.timer keiba-mirror-vps-push.timer
     else
       say "  予約のタイマー: fetch.env に KEIBA_FETCH_TASK_STORE=file が無いため有効化しません（GCS のタスク表のまま）"
-      run systemctl disable --now keiba-fetch-reserve.timer keiba-fetch-raceday-tomorrow.timer keiba-fetch-raceday-today.timer 2>/dev/null || true
+      run systemctl disable --now keiba-fetch-reserve.timer keiba-fetch-raceday-tomorrow.timer keiba-fetch-raceday-today.timer keiba-mirror-vps-push.timer 2>/dev/null || true
     fi
   else say "  取得の実行役: ENABLED=1・current(コードバンドル)・venv が揃っていないため有効化しません"; fi
 else say "  取得の実行役は有効化しません（--enable-fetch-agent で。既定はホスト cron のまま）"; fi

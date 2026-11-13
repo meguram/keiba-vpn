@@ -700,9 +700,105 @@ def push_trees(trees: list[str] | tuple[str, ...], *, since_epoch: float | None 
     return push(be, root, tuple(trees), recent_days=recent, index_writer="jobs")
 
 
+# ── VPS → ホストの受け渡し（2026-11。取得を VPS の中だけで行う。docs/operations/vps_only_fetch.md） ─────────────────
+# レース一覧・発走時刻表（HybridStorage の local_only）と JRA の馬場・開催カレンダー（cushion/）は、その機械のディスクにだけ保存される。
+# VPS が取るようになったら、VPS が ops/mirror_vps/ に上げ、ホストは目録 1 件を読んで変わったファイルだけ取る（GCS の一覧はしない）。
+# ホストの push（ops/mirror/）とは置き場所を分ける（移行中にホストと VPS が同じ木を取っても互いに上書きしない）。
+# 取り込んだファイルは、ホストの通常の push で ops/mirror/ に上がり、Cloud Run の API に今どおり届く。
+VPS_PREFIX = "ops/mirror_vps"
+VPS_INDEX_KEY = f"{VPS_PREFIX}/_index.json"
+VPS_TREES: dict[str, str] = {
+    "race_lists": "data/page_reference/race_lists",
+    "race_day_schedule": "data/page_reference/race_day_schedule",
+}
+# JRA の馬場（cushion/）は入れない: cushion_values.json は手元のファイルに追記していく作りで、VPS のファイルには VPS が取った分しか無い。
+# 丸ごと取り込むとホストの 2018 年からの履歴を消す。開催カレンダーも両方が書く。レコード単位で合わせる設計ができるまでホストで取る。
+# この木を作る取得タスク。ホスト・VPS とも、このタスクの担当が VPS に移った木だけを受け渡す（移行中にホスト自身が取ったものを上書きしない）
+VPS_TREE_OWNER: dict[str, str] = {"race_lists": "daily-race-lists", "race_day_schedule": "daily-race-lists"}
+PULL_STATE = "vps_mirror_pull_state.json"     # ホストの最後に取り込めた時刻（取りこぼしの検知用）
+
+
+def push_vps(backend: Backend, root: Path = REPO_ROOT, manifest: Path | None = None, *, now: float | None = None,
+             dry_run: bool = False, trees: list[str] | tuple[str, ...] | None = None) -> dict[str, int]:
+    """VPS 側: trees（既定: 担当が VPS に移った木）のうち中身が変わったファイルだけを ops/mirror_vps/ に上げ、目録を書き直す（変わったときだけ）。
+    差分は手元の記録（manifest の MD5）で判定し、GCS は一覧しない。担当が無ければ何もしない（影モードの取得分を上げない）。"""
+    now = time.time() if now is None else now
+    names = vps_owned_trees() if trees is None else [n for n in trees if n in VPS_TREES]
+    if not names:
+        return {"seen": 0, "uploaded": 0, "would_upload": 0, "skipped": 1}
+    doc = _read_manifest_doc(manifest) or {}
+    known = {str(k): str(v) for k, v in (doc.get("md5") or {}).items()}
+    recent: dict[str, list] = dict(doc.get("recent") or {})
+    seen = sent = 0
+    for tree in (VPS_TREES[n] for n in names):
+        for p in _files(root, tree):
+            seen += 1
+            data = p.read_bytes()
+            m = _md5(data)
+            key = f"{VPS_PREFIX}/{p.relative_to(root).as_posix()}"
+            if known.get(key) == m:
+                continue
+            sent += 1
+            if dry_run:
+                continue
+            backend.upload(key, data)
+            known[key] = m
+            recent[key] = [m, now]
+    recent = _prune(recent, now)
+    if sent and not dry_run:
+        backend.upload(VPS_INDEX_KEY, json.dumps({"written_at": now, "entries": recent}, separators=(",", ":")).encode())
+        if manifest is not None:
+            _save_manifest(manifest, known, recent)
+    return {"seen": seen, "uploaded": 0 if dry_run else sent, "would_upload": sent if dry_run else 0}
+
+
+def vps_owned_trees(owned: set[str] | None = None) -> list[str]:
+    """取り込む木（VPS_TREES の名前）: その木を作る取得タスクの担当が VPS に移ったものだけ。"""
+    if owned is None:
+        from src.ops.fetch_owner import agent_tasks
+
+        owned = agent_tasks()
+    return [n for n, task in VPS_TREE_OWNER.items() if task in owned]
+
+
+def pull_vps(backend: Backend, root: Path = REPO_ROOT, trees: list[str] | tuple[str, ...] = (), *, dry_run: bool = False) -> dict[str, int]:
+    """ホスト側: VPS の目録（1 件）だけを読み、trees（VPS_TREES の名前）のうちローカルと中身が違うファイルだけ取る。
+    trees が空なら GCS に一切触れない（担当がまだ移っていないとき。費用 0）。"""
+    dirs = [VPS_TREES[n] for n in trees if n in VPS_TREES]
+    if not dirs:
+        return {"index": 0, "seen": 0, "downloaded": 0}
+    try:
+        doc = json.loads(backend.download(VPS_INDEX_KEY))
+    except Exception as exc:  # noqa: BLE001
+        # 目録がまだ無い（VPS が一度も上げていない）ときだけ黙る。認証・通信の失敗は上に投げる（cron の記録で失敗にする）
+        if type(exc).__name__ in ("NotFound", "KeyError", "FileNotFoundError"):
+            return {"index": 0, "seen": 0, "downloaded": 0, "missing_index": 1}
+        raise
+    seen = got = 0
+    for key, v in (doc.get("entries") or {}).items():
+        rel = key[len(VPS_PREFIX) + 1:]
+        if not key.startswith(VPS_PREFIX + "/") or ".." in Path(rel).parts or not any(rel.startswith(d + "/") for d in dirs):
+            continue
+        seen += 1
+        local = root / rel
+        if local.is_file() and _md5(local.read_bytes()) == str(v[0]):
+            continue
+        got += 1
+        if dry_run:
+            continue
+        local.parent.mkdir(parents=True, exist_ok=True)
+        tmp = local.with_name(local.name + ".tmp")
+        tmp.write_bytes(backend.download(key))
+        os.replace(tmp, local)
+    return {"index": 1, "seen": seen, "downloaded": got}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("action", choices=["push", "pull"])
+    ap.add_argument("action", choices=["push", "pull", "push-vps", "pull-vps"])
+    ap.add_argument("--trees", default="", help="pull-vps のみ: 取り込む木（race_lists,race_day_schedule）。"
+                                               "省略時は全部。どちらも担当が VPS に移った木だけに絞る（config/fetch_owner.json）")
+    ap.add_argument("--force", action="store_true", help="pull-vps のみ: 担当で絞らない（手動の確認用）")
     ap.add_argument("--recent-days", type=float, default=None, help="直近この日数に更新されたものだけ（省略=全部）")
     ap.add_argument("--dry-run", action="store_true", help="push のみ: 上げるファイルの数を表示して終わる")
     ap.add_argument("--only-auth", action="store_true", help="会員名簿(AUTH_TREES)だけを上げる（root の cron 用）")
@@ -714,6 +810,37 @@ def main(argv: list[str] | None = None) -> int:
     from src.utils.project_env import load_project_dotenv
 
     load_project_dotenv()
+    if a.action == "pull-vps":
+        names = [t for t in a.trees.split(",") if t] if a.trees else list(VPS_TREES)
+        if not a.force:        # 担当が VPS に移った木だけ（移行中にホスト自身が取ったものを上書きしない）
+            owned = set(vps_owned_trees())
+            names = [n for n in names if n in owned]
+        if not names:          # 担当がまだ移っていない: GCS に触れずに終わる
+            print({"index": 0, "seen": 0, "downloaded": 0, "skipped": "VPS に移った木が無い"})
+            return 0
+        from src.config.data_paths import META_DIR
+
+        res = pull_vps(GcsBackend(), trees=names, dry_run=a.dry_run)
+        # 目録は直近 INDEX_KEEP_SEC（2 日）分だけ。最後に取り込めてからそれより長くあいたら、取りこぼしの恐れとして失敗にする
+        sp = META_DIR / PULL_STATE
+        try:
+            last = float(json.loads(sp.read_text(encoding="utf-8")).get("last_ok") or 0)
+        except (OSError, ValueError):
+            last = 0.0
+        if res.get("index") and not a.dry_run:
+            sp.parent.mkdir(parents=True, exist_ok=True)
+            sp.write_text(json.dumps({"last_ok": time.time()}), encoding="utf-8")
+        print(res)
+        if last and time.time() - last > INDEX_KEEP_SEC:
+            print(f"警告: 最後に取り込めてから {(time.time() - last) / 3600:.0f} 時間。目録（直近 2 日）から外れた分を取りこぼした恐れ。"
+                  "VPS で push-vps を全件で動かすか、手で確かめてください", file=sys.stderr)
+            return 2
+        return 0
+    if a.action == "push-vps":
+        from src.config.data_paths import META_DIR
+
+        print(push_vps(GcsBackend(), manifest=META_DIR / "gcs_mirror_vps_manifest.json", dry_run=a.dry_run))
+        return 0
     be = GcsBackend()
     trees = AUTH_TREES if a.only_auth else PUSH_TREES
     if a.manifest == "none":

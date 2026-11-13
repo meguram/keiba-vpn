@@ -1,0 +1,10 @@
+[Unit]
+Description=keiba VPS の受け渡し用のミラーの push — 5 分おき
+
+[Timer]
+OnCalendar=*-*-* *:00/5:30
+Persistent=false
+Unit=keiba-mirror-vps-push.service
+
+[Install]
+WantedBy=timers.target
