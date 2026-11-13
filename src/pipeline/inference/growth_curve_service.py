@@ -574,22 +574,112 @@ def precompute_growth_curves(
     return {"status": "ok", **meta}
 
 
+def _norm_date(s: Any) -> str:
+    return str(s or "").strip()[:10].replace("/", "-")
+
+
+def latest_finished_race_dates(tables_dir: Path | None = None) -> dict[str, str]:
+    """ローカルの race_result_flat（全年）から、馬ごとの最後の完走の日付（YYYY-MM-DD）。GCS は読まない。"""
+    import pandas as pd
+    import pyarrow.parquet as pq
+
+    from src.scraper.export_tables import OUTPUT_DIR
+
+    base = tables_dir or OUTPUT_DIR
+    out: dict[str, str] = {}
+    for ydir in sorted(p for p in Path(base).glob("[0-9][0-9][0-9][0-9]") if p.is_dir()):
+        f = ydir / "race_result_flat.parquet"
+        try:
+            df = pq.read_table(f, columns=["horse_id", "date", "finish_position"]).to_pandas()
+        except Exception:  # noqa: BLE001  無い・読めない年は飛ばす
+            continue
+        df = df[pd.to_numeric(df["finish_position"], errors="coerce") > 0]
+        for hid, d in zip(df["horse_id"].astype(str), df["date"].map(_norm_date)):
+            if hid and d > out.get(hid, ""):
+                out[hid] = d
+    return out
+
+
+def upcoming_starters(tables_dir: Path | None = None, today: str | None = None) -> set[str]:
+    """ローカルの出馬表の flat で、今日以降のレースに出る馬（毎朝の書き出しで 14 日先まで入る）。"""
+    import pyarrow.parquet as pq
+
+    from src.scraper.export_tables import OUTPUT_DIR
+
+    base = tables_dir or OUTPUT_DIR
+    today = today or datetime.now().strftime("%Y-%m-%d")
+    out: set[str] = set()
+    for y in {today[:4], str(int(today[:4]) + 1)}:
+        try:
+            tb = pq.read_table(Path(base) / y / "race_shutuba_flat.parquet", columns=["horse_id", "date"]).to_pydict()
+        except Exception:  # noqa: BLE001
+            continue
+        out |= {str(h) for h, d in zip(tb["horse_id"], tb["date"]) if h and _norm_date(d) >= today}
+    return out
+
+
+_FAILED_RETRY_DAYS = 28
+
+
+def _failed_path() -> Path:
+    from src.pipeline.inference.growth_curve_store import store_dir
+
+    return store_dir() / "_weekly_failed.json"
+
+
+def horses_needing_update(horse_ids: list[str], flat_last: dict[str, str], upcoming: set[str] | None = None,
+                          failed: dict[str, float] | None = None, now: float | None = None) -> list[str]:
+    """前回の計算からの差分で、作り直す馬を決める。
+    - 保存済みの成長曲線が無い馬
+    - ローカルの確定結果での最後の完走が、保存済みの曲線の最後のレースより新しい馬（週次の取得が数日遅れても、結果が flat に入った次の回に拾う）
+    - 今日以降の出馬表に載っている馬（地方・海外のレースは flat に無いので、中央に戻ってくる時点で作り直す）
+    ただし、作れなかった馬（horse_result が無い・レースが空）は _FAILED_RETRY_DAYS 日あけて試す（出馬表に載ったら待たない）。"""
+    upcoming = upcoming or set()
+    failed = failed or {}
+    now = now if now is not None else time.time()
+    out: list[str] = []
+    for hid in horse_ids:
+        if hid in failed and hid not in upcoming and now - float(failed[hid]) < _FAILED_RETRY_DAYS * 86400:
+            continue
+        if hid in upcoming:
+            out.append(hid)
+            continue
+        saved = load_local(hid)
+        if not saved:
+            out.append(hid)
+            continue
+        last = max((_norm_date(r.get("date")) for r in saved.get("races") or [] if isinstance(r, dict)), default="")
+        if flat_last.get(hid, "") > last:
+            out.append(hid)
+    return out
+
+
 def run_weekly_growth_curve_update(base_dir: str | os.PathLike) -> dict[str, Any]:
-    """金曜 18:00 用: horse_result がある馬のみ、7 日以内のキャッシュはスキップ。"""
+    """金曜の週次（task_horse_name_index の後半）: 前回からの差分の馬だけを作り直す。
+    2026-11-13 まで: 7 日以内のキャッシュを飛ばす作りだったが、週の周期がわずかに 7 日を超えるため毎回全頭（約 5.8 万件）を
+    GCS から読み直していた（月 約 6GiB）。horse_result の年ごとの一覧（filter_horse_ids_with_horse_result）も取らない。
+    作り直す馬は、ローカルの race_result_flat の最後の完走が、保存済みの曲線の最後のレースより新しい馬と、曲線が無い馬。"""
     from src.scraper.storage import HybridStorage
 
+    from src.scraper.export_tables import OUTPUT_DIR
+
     storage = HybridStorage(str(base_dir))
+    tables = OUTPUT_DIR if OUTPUT_DIR.is_absolute() else Path(base_dir) / OUTPUT_DIR
+    try:
+        failed = {str(k): float(v) for k, v in json.loads(_failed_path().read_text(encoding="utf-8")).items()}
+    except (OSError, ValueError, AttributeError):
+        failed = {}
     index_ids = iter_index_horse_ids(base_dir)
-    horse_ids = filter_horse_ids_with_horse_result(storage, index_ids)
+    horse_ids = horses_needing_update(index_ids, latest_finished_race_dates(tables), upcoming_starters(tables), failed)
     logger.info(
-        "成長曲線週次更新: インデックス %d 頭 → horse_result あり %d 頭",
+        "成長曲線週次更新: インデックス %d 頭 → 前回から変わった・未作成 %d 頭",
         len(index_ids),
         len(horse_ids),
     )
-    return precompute_growth_curves(
+    res = precompute_growth_curves(
         storage,
         horse_ids,
-        skip_existing=True,
+        skip_existing=False,
         force_refresh=False,
         max_age_days=7.0,
         fetch_speed_index=True,
@@ -597,3 +687,18 @@ def run_weekly_growth_curve_update(base_dir: str | os.PathLike) -> dict[str, Any
         enqueue_missing=False,
         workers=4,
     )
+    # 作れなかった馬（保存が無いまま）を覚え、_FAILED_RETRY_DAYS 日あけて試す（毎週 GCS を読み直さない）
+    now = time.time()
+    for hid in horse_ids:
+        if load_local(hid):
+            failed.pop(hid, None)
+        else:
+            failed.setdefault(hid, now)
+    try:
+        path = _failed_path()
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(failed, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError as exc:
+        logger.warning("成長曲線: 作れなかった馬の記録を書けない: %s", exc)
+    return res

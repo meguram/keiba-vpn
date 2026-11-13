@@ -336,6 +336,61 @@ def rebuild_horse_name_index_from_gcs_horse_result(base_dir: str | Path) -> int:
     return len(horses)
 
 
+def rebuild_horse_name_index_from_local_flat(base_dir: str | Path, tables_dir: str | Path | None = None) -> int:
+    """ローカルの flat（全年の race_shutuba_flat・race_result_flat の horse_id・horse_name）から馬名インデックスを作る。GCS は読まない。
+    今のインデックスの馬は残す（和集合）。馬の取得のたびの upsert で入った馬や、flat に無い古い年の馬が消えないように。
+    出馬表の flat には、毎朝の書き出しで 14 日先までの出馬表が入るので、週末に走る新馬も金曜の時点で入る。
+    2026-11-13 まで: 金曜に 2 回、race_shutuba の全年（約 3.5 万件）を GCS から 1 件ずつ読んでいた（月 約 1.7GiB）。
+    切り替えた日の照合: 2016〜2026 年の flat の馬は 58,701 頭で、それまでの GCS の出馬表から作ったインデックス（58,701 頭）と集合が一致した。"""
+    import pyarrow.parquet as pq
+
+    from src.scraper.export_tables import OUTPUT_DIR
+
+    base = Path(tables_dir) if tables_dir else (Path(base_dir) / OUTPUT_DIR if not OUTPUT_DIR.is_absolute() else OUTPUT_DIR)
+    merged: dict[str, dict[str, Any]] = {}
+    try:
+        for h in (load_horse_name_index(base_dir).get("horses") or []):
+            if isinstance(h, dict) and str(h.get("horse_id") or "").strip():
+                merged[str(h["horse_id"]).strip()] = dict(h)
+    except Exception:  # noqa: BLE001  読めなければ flat だけで作る
+        pass
+    before = len(merged)
+    added = 0
+    for ydir in sorted(p for p in base.glob("[0-9][0-9][0-9][0-9]") if p.is_dir()):
+        for cat in ("race_shutuba", "race_result"):
+            f = ydir / f"{cat}_flat.parquet"
+            try:
+                names = pq.read_schema(f).names
+                if "horse_id" not in names or "horse_name" not in names:
+                    continue
+                tb = pq.read_table(f, columns=["horse_id", "horse_name"]).to_pydict()
+            except Exception:  # noqa: BLE001
+                continue
+            for hid, hn in zip(tb["horse_id"], tb["horse_name"]):
+                hid, hn = str(hid or "").strip(), str(hn or "").strip()
+                if not hid or not hn:
+                    continue
+                cur = merged.get(hid)
+                if cur is None:
+                    merged[hid] = {"horse_id": hid, "horse_name": hn, "name_en": "", "year": hid[:4] if len(hid) >= 4 else ""}
+                    added += 1
+                elif not str(cur.get("horse_name") or "").strip():
+                    cur["horse_name"] = hn
+    if not merged:
+        return 0
+    horses = sorted(merged.values(), key=lambda h: h["horse_id"])
+    out: dict[str, Any] = {
+        "version": "1.0",
+        "total_horses": len(horses),
+        "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "source": "local_flat",
+        "horses": horses,
+    }
+    logger.info("馬名インデックス（ローカルの flat）: 既存 %d 頭 + 新しい %d 頭 = %d 頭", before, added, len(horses))
+    _write_horse_name_index_bundle(base_dir, out)
+    return len(horses)
+
+
 def rebuild_horse_name_index_from_gcs_race_shutuba(base_dir: str | Path) -> int:
     """GCS ``race_shutuba`` の出馬表から馬名を収集（horse_result より軽い補完用）。"""
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -404,10 +459,12 @@ def run_weekly_horse_name_index_update(base_dir: str | Path) -> dict[str, Any]:
     ``task_raceday_eve``（金曜 18:00）および cron から呼ぶ。
     """
     t0 = time.time()
-    # 金曜 18:00 cron 向け: 出馬表走査は horse_result 全件より高速（約3〜5分）
-    source = os.environ.get("HORSE_NAME_INDEX_SOURCE", "shutuba").strip().lower()
+    # 既定はローカルの flat（GCS を読まない）。shutuba（GCS の出馬表を全年）・horse_result（GCS の馬の成績を全件）は手で選ぶとき用
+    source = os.environ.get("HORSE_NAME_INDEX_SOURCE", "flat").strip().lower()
     try:
-        if source == "shutuba":
+        if source == "flat":
+            n = rebuild_horse_name_index_from_local_flat(base_dir)
+        elif source == "shutuba":
             n = rebuild_horse_name_index_from_gcs_race_shutuba(base_dir)
         else:
             n = rebuild_horse_name_index_from_gcs_horse_result(base_dir)
