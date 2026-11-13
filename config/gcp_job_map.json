@@ -83,8 +83,6 @@
     "export-tables-daily",
     "feature-accumulate",
     "parse-drift-daily",
-    "serving-state-precompute",
-    "serving-state-profile",
     "race-analysis-daily"
    ]
   },
@@ -323,7 +321,7 @@
    "origin": {
     "tag": "KEIBA_JT_STATS",
     "cron_job_id": "update_jockey_trainer_stats",
-    "cron_utc": "30 20 * * *",
+    "cron_utc": "15 22 * * *",
     "script": "scripts/cron/update_jockey_trainer_stats.sh"
    },
    "group": "g-0530",
@@ -377,7 +375,8 @@
    "enabled": true,
    "ready": true,
    "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: Jobs で 1 回手動実行して、出力がホストと一致すること（state_in は 2026-10-28 に race_result_flat だけ（約 22MB）に絞った。以前は tables 全部で 2.9GB）",
-   "ready_confirmed_at": "2026-10-29"
+   "ready_confirmed_at": "2026-10-29",
+   "reason": "2026-11-13: ホストの crontab の実際に合わせて origin.cron_utc を 15 22（JST 07:15。2026-10-27 に export_tables_daily の後へ移した）にした。GCP のグループ g-0530 は Scheduler 削除で動いていない（GCP で再開するときは書き出しの後のグループへ移す）"
   },
   {
    "id": "export-tables-daily",
@@ -503,17 +502,17 @@
   },
   {
    "id": "serving-state-precompute",
-   "desc": "サービング状態（約62MB）の事前計算【2026-10-26 day-prep に置き換え（v4_day と px_day を 1 回で作る）。無効化】",
-   "destination": "gcp",
+   "desc": "サービング状態（約62MB）の事前計算（開催日の朝に v4_day.parquet を作る。ホストの cron で続ける。2026-10-26 に day-prep へ置き換えたが、day-prep が止まったので 2026-11-13 にホストへ戻した）",
+   "destination": "host",
    "phase": 3,
    "wave": 2,
    "origin": {
-    "tag": "KEIBA-VPN-ALL",
+    "tag": "KEIBA-SERVING-STATE",
     "cron_job_id": "serving-state-precompute",
     "cron_utc": "35 22 * * *",
     "script": "src/scripts/data/update_serving_state.py"
    },
-   "group": "g-0700",
+   "group": null,
    "when_jst": null,
    "depends": [
     "export-tables-daily"
@@ -563,11 +562,10 @@
     "rtol": 0.0,
     "atol": 0.0
    },
-   "blockers": [
-    "day-prep に置き換えたため無効（profile_dyn は day-prep が不足分を GCS から補う）"
-   ],
-   "enabled": false,
-   "ready": false
+   "blockers": [],
+   "enabled": true,
+   "ready": true,
+   "reason": "2026-11-13: ホストで続ける（cron タグ KEIBA-SERVING-STATE、scripts/cron/install_serving_state_cron.sh）。ホストの馬体重ランナー（v6）が開催日の朝にこの v4_day.parquet を使い回す（GCP の day-prep が止まった分の肩代わり。無いと最初のレースで作るので 70〜90 秒遅れる）。GCS の読みは開催日の出馬表 約 36 件で月 0.1 円未満"
   },
   {
    "id": "feature-accumulate",
@@ -658,17 +656,17 @@
   },
   {
    "id": "serving-state-profile",
-   "desc": "サービング状態のプロファイル更新【2026-10-26 day-prep に置き換え（v4_day と px_day を 1 回で作る）。無効化】",
-   "destination": "gcp",
+   "desc": "サービング状態のプロファイル更新（profile_dyn.parquet。ホストの cron で続ける。要否を確認中。2026-10-26 に day-prep へ置き換えたが、day-prep が止まったので 2026-11-13 にホストへ戻した）",
+   "destination": "host",
    "phase": 3,
    "wave": 2,
    "origin": {
-    "tag": "KEIBA-VPN-ALL",
+    "tag": "KEIBA-SERVING-STATE",
     "cron_job_id": "serving-state-profile",
     "cron_utc": "10 23 * * *",
     "script": "src/scripts/data/update_serving_state.py"
    },
-   "group": "g-0700",
+   "group": null,
    "when_jst": null,
    "depends": [
     "serving-state-precompute"
@@ -712,11 +710,10 @@
     "rtol": 0.0,
     "atol": 0.0
    },
-   "blockers": [
-    "day-prep に置き換えたため無効（profile_dyn は day-prep が不足分を GCS から補う）"
-   ],
-   "enabled": false,
-   "ready": false
+   "blockers": [],
+   "enabled": true,
+   "ready": true,
+   "reason": "2026-11-13: ホストで続ける（cron タグ KEIBA-SERVING-STATE）。要否を確認中: precompute の day_groups が出走馬の不足分を補うので不要の見込み（推測）。11/14・15 のランナーのログで profile_dyn が使われたかを見て判断する。費用: 未登録の馬ごとに horse_result をローカルのキャッシュの後で GCS から読む。最近は未登録 0 頭（ほぼ 0 円）。最悪でも 1 日 50 頭 × 約 20KB × 30 ≒ 30MB → 月 約 0.5 円"
   },
   {
    "id": "lap-forecast-morning",
@@ -3133,7 +3130,7 @@
     "cron_utc": null,
     "script": "src/scripts/scraping/fetch_sire_lines.py"
    },
-   "reason": "棚卸し #24。個別の cron は持たない: 日々の取得は scrape_horse_pedigree_5gen（定期バッチ）に相伴して台帳に無い祖先の系統を取る。fetch_sire_lines は過去分の一括補完用で手動起動。To-Be は VPS 実行役（取得タスク sire-line、低優先度）。2026-10-29: 一括取得は完了（complete_at 付き・4,542 頭）し、台帳を GCS（ops/sire_lines/sire_line_map.json）へ初回アップロード済み。取得タスクのコードもある。VPS へ切り替えるのは、実行役が影モードを抜けて担当を持つ時（それまで destination は host のまま）。GCP の追加課金は 0",
+   "reason": "棚卸し #24。個別の cron は持たない: 日々の取得は scrape_horse_pedigree_5gen（定期バッチ）に相伴して台帳に無い祖先の系統を取る。fetch_sire_lines は過去分の一括補完用で手動起動。To-Be は VPS 実行役（取得タスク sire-line、低優先度）。2026-10-29: 一括取得は完了（complete_at 付き・4,542 頭）し、台帳を GCS（ops/sire_lines/sire_line_map.json）へ初回アップロード済み。取得タスクのコードもある。VPS へ切り替えるのは、実行役が影モードを抜けて担当を持つ時（それまで destination は host のまま）。GCP の追加課金は 0 2026-11-13: 定期では動かしていない（手動）。cron に足すかは別に判断する",
    "enabled": true,
    "blockers": [],
    "ready": true
@@ -3369,7 +3366,7 @@
    "phase": null,
    "wave": null,
    "origin": {
-    "tag": "KEIBA-VPN-ALL",
+    "tag": "KEIBA_BACKFILL",
     "cron_job_id": "backfill-2026-fast",
     "cron_utc": "0 15 * * 0",
     "script": "src/scraper/backfill.py"
@@ -3505,7 +3502,7 @@
    "phase": null,
    "wave": null,
    "origin": {
-    "tag": "KEIBA-VPN-ALL",
+    "tag": "KEIBA_BACKFILL",
     "cron_job_id": "backfill-2021-fast",
     "cron_utc": "0 17 * * 1,4",
     "script": "src/scraper/backfill.py"
@@ -3590,7 +3587,7 @@
    "phase": null,
    "wave": null,
    "origin": {
-    "tag": "KEIBA-VPN-ALL",
+    "tag": "KEIBA_BACKFILL",
     "cron_job_id": "backfill-2020-fast",
     "cron_utc": "0 18 * * 2,5",
     "script": "src/scraper/backfill.py"
@@ -3663,7 +3660,7 @@
     "cron_utc": "0 13 * * *",
     "script": "scripts/cron/sporthorse_births_nightly.sh"
    },
-   "reason": "廃止(2026-10-22 cron監査): 研究専用で、活性値の仮説は不採用の結論済み。外部サイトのセッション依存。必要なときは手動実行",
+   "reason": "廃止(2026-10-22 cron監査): 研究専用で、活性値の仮説は不採用の結論済み。外部サイトのセッション依存。必要なときは手動実行 2026-11-13: root と jovyan の crontab の行も外した（install_sporthorse_births_cron.sh --remove）",
    "enabled": false,
    "blockers": [],
    "ready": true
@@ -3773,7 +3770,7 @@
   {
    "id": "sync-pg-from-gcs",
    "desc": "GCS → PostgreSQL 同期",
-   "destination": "retire",
+   "destination": "host",
    "phase": 5,
    "wave": 3,
    "origin": {
@@ -3782,7 +3779,7 @@
     "cron_utc": "0 15 * * *",
     "script": "scripts/cron/sync_pg_from_gcs.sh"
    },
-   "reason": "PostgreSQL は廃止（architecture_target.md 3.3）。API が Cloud Run に移ってから止める",
+   "reason": "PostgreSQL は廃止（architecture_target.md 3.3）。API が Cloud Run に移ってから止める 2026-11-13: ホストで続ける。Flask（/api/v1/races/<id>/results・めぐの予測・is_member・laps）と監視が PG を読むので残す。廃止は Flask から PG を外すときに sync-pg-from-gcs と ensure-postgres を 2 本同時に（ensure だけ外すと再起動のあと同期が接続拒否で失敗する。2026-10-14 の実例） 費用（最悪の回数）: 毎晩 race_shutuba・race_result の当年の全件一覧を 2 回（etl_stg_db.py の batch_list_blobs。各 約 3,000 件）→ Class A 約 8 回/日、一覧の転送 約 6MB/日 → 月 約 0.3〜3 円。全件一覧は CLAUDE.md の決まりに反するので、直近のレースだけを名前で読む作りへ直す（統括役の指示、別の commit）",
    "enabled": true,
    "blockers": [],
    "ready": true
@@ -3790,7 +3787,7 @@
   {
    "id": "ensure-postgres",
    "desc": "PostgreSQL の死活",
-   "destination": "retire",
+   "destination": "host",
    "phase": 5,
    "wave": 3,
    "origin": {
@@ -3799,7 +3796,7 @@
     "cron_utc": "*/5 * * * *",
     "script": "scripts/server/ensure_postgres.sh"
    },
-   "reason": "PostgreSQL は廃止。sync-pg-from-gcs と同時に止める",
+   "reason": "PostgreSQL は廃止。sync-pg-from-gcs と同時に止める 2026-11-13: ホストで続ける。Flask（/api/v1/races/<id>/results・めぐの予測・is_member・laps）と監視が PG を読むので残す。廃止は Flask から PG を外すときに sync-pg-from-gcs と ensure-postgres を 2 本同時に（ensure だけ外すと再起動のあと同期が接続拒否で失敗する。2026-10-14 の実例）",
    "enabled": true,
    "blockers": [],
    "ready": true
@@ -4410,6 +4407,40 @@
    ],
    "enabled": true,
    "ready": false
+  },
+  {
+   "id": "cost-guard",
+   "desc": "GCP の課金の歯止め（課金の実績を見て、超えそうなら Cloud Run・Jobs を止める）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-COST-GUARD",
+    "cron_job_id": "cost-guard",
+    "cron_utc": "17 1,13 * * *",
+    "script": "src/ops/cost_guard.py"
+   },
+   "reason": "2026-11-13: ホストの crontab にあったが job_map に無かったので追記（1 日 2 回、JST 10:17・22:17）",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
+  },
+  {
+   "id": "cron-catchup",
+   "desc": "PC が止まっていて逃した毎日のジョブを、起動後に 1 回だけ追いつき実行する（config/cron_catchup.json の許可リスト）",
+   "destination": "host",
+   "phase": null,
+   "wave": null,
+   "origin": {
+    "tag": "KEIBA-CRON-CATCHUP",
+    "cron_job_id": "cron-catchup",
+    "cron_utc": "*/15 * * * *",
+    "script": "src/ops/cron_catchup.py"
+   },
+   "reason": "2026-11-13: ホストの crontab にあったが job_map に無かったので追記。読むのはローカルのファイルだけ（GCS 0 円）。docs/operations/cron_catchup.md",
+   "enabled": true,
+   "blockers": [],
+   "ready": true
   }
  ]
 }

@@ -7,6 +7,14 @@
 - 月ごとのパスワードは「サーバの秘密（ペッパー）+ 年月」から決まる値で、**ファイルには保存しない**。いつでも `python -m src.scripts.ops.shared_login show` で今月分を表示できる（ホストの root）。
 - ID は `.env` の `KEIBA_SHARED_LOGIN_ID`（リポジトリには書かない）。未設定なら何もしない。管理画面でそのユーザーを「無効」にすると、cron は触らない。
 
+## 2026-10-23〜11-13 の時刻のずれ
+- 登録スクリプト（`install_shared_login_cron.sh`）が、JST の `5 0 * * *` をそのまま UTC の crontab に書いていた。そのため、実際は毎日 **09:05 JST** に動いていた（`data/local/meta/cron_runs/shared-login.tsv` で確認）。
+- 影響:
+  - 毎月 1 日の 00:00〜09:05 は、前月のパスワードが通ったままだった。
+  - 09:05 の更新で、それまでのログインがすべて切れた。2026-11-01（日・開催日）は朝 09:05 に締め出しが起きた。
+  - 新しいパスワードの Slack 通知も 09:05 だった。
+- 2026-11-13 に `5 15 * * *`（UTC＝JST 00:05）に直し、入れ直した。毎日の実行は、月が替わっていなければ何もしない（冪等）。
+
 ## 設定
 1. ホストの `.env` に `KEIBA_SHARED_LOGIN_ID=<ID>` を追加（`SLACK_WEBHOOK_URL` は既存）。
 2. cron 登録: `sudo bash scripts/cron/install_shared_login_cron.sh`（冪等。外すのは `--remove`）。

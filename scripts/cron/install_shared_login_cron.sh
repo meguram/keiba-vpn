@@ -5,7 +5,9 @@
 set -eu
 PROJECT_DIR="${1:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)}"
 TAG="KEIBA-SHARED-LOGIN"
-LINE="5 0 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${PROJECT_DIR}/scripts/cron/cron_run.sh shared-login -- bash ${PROJECT_DIR}/scripts/cron/shared_login_daily.sh ${PROJECT_DIR} >> ${PROJECT_DIR}/logs/shared_login.cron.log 2>&1 # ${TAG}"
+# 毎日 00:05 JST = 15:05 UTC（ホストの cron は UTC。行頭の TZ=Asia/Tokyo はコマンドの環境にしか効かず、起動時刻は変わらない）。
+# 2026-10-23〜11-13 は `5 0`（UTC＝JST 09:05）と書いていて、毎月 1 日の更新が 09:05 になり、その時刻にそれまでのログインが切れていた
+LINE="5 15 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${PROJECT_DIR}/scripts/cron/cron_run.sh shared-login -- bash ${PROJECT_DIR}/scripts/cron/shared_login_daily.sh ${PROJECT_DIR} >> ${PROJECT_DIR}/logs/shared_login.cron.log 2>&1 # ${TAG}"
 BK="${PROJECT_DIR}/data/local/meta/cron_backups/crontab_before_shared_login_$(date +%Y%m%d_%H%M%S).txt"
 mkdir -p "$(dirname "$BK")"
 NOW="$(mktemp)"; NEW="$(mktemp)"
