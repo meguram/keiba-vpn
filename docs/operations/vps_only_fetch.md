@@ -31,6 +31,16 @@
 - **配備の前に必要な IAM の作業（ユーザー）**: VPS の取得役のサービスアカウントは今 `ops/fetch_tasks/`・`ops/events/`・`shadow/` にしか書けない。
   本番の担当を渡すには、本番のデータの置き場所と `ops/mirror_vps/` への書き込みを足す。
 
+### 段 4. 後処理をホストに残す（src/ops/host_postprocess.py、cron は scripts/cron/install_host_postprocess_cron.sh）
+- 対応する取得の担当が VPS に移ったジョブだけ動く（移っていなければ何もしない・GCS に触れない）: 前夜の計算（← raceday-eve-fetch。19:10・19:40）、
+  馬場速度（← raceday-evening か recent-retry。翌朝 07:20。開催日の夜の当日分は翌朝に出る）、予測の成績（← recent-retry。土日月の 21:50）。
+  ロックで重ならないようにし、GCP Jobs と同じ上限時間で止める。VPS の raceday-evening は馬場速度を計算しない（post_processing=host）。
+- 費用（最悪・月。ホストは GCP の外なので VPS が保存したデータを読む分が転送料）:
+  予測の成績 1 回 = 11 日分 × 36 レース × 4 種 × 約 30KB ≒ 47MB × 月 13 回 ≒ 0.6GB → 約 11 円。
+  前夜の計算 1 回 = 翌日 36 レース × 約 5 種 × 約 30KB ≒ 5MB × 2 回 × 30 日 ≒ 0.3GB → 約 6 円。
+  馬場速度は手元の flat から計算（export_tables_daily が新しいレースを読む分は既存）→ 1 円未満。合計 約 20 円。
+- 週次の後処理（めぐ指数・PG 同期・tracking_v2_eval・ドリフト）は、VPS の weekly-update では飛ばし、ホストの後処理だけのジョブに移す（未着手。2026-11-13 の週次の取得の後に）。
+
 ## 担当を VPS に渡す前に、そろえる必要があるもの（段 2 以降で対応）
 1. ~~**local_only のデータの受け渡し**~~（段 1 でレース一覧・時刻表に対応。JRA の馬場は未対応・ホストに残す）: `race_lists`・`race_day_schedule`（HybridStorage の local_only。その機械のディスクだけ）と、
    JRA の馬場（`data/page_reference/cushion/`）。VPS が取るようになったら、VPS → GCS（ミラーの束・目録の方式）→ ホストに渡す。
@@ -40,7 +50,13 @@
 3. **ホストのディスク L2 キャッシュ**: 以前はホストが自分で保存して更新していた。VPS が保存するだけだと、ホストの L2 に古いオッズなどが残る。
 4. **後処理だけのジョブの一覧**: raceday-eve（前夜の計算）・recent-retry の後処理（馬場速度・予測の成績）など、取得のジョブの中にある後処理を、
    取得と分けてホストに残す（VPS の recent-retry は後処理を GCP に任せる作りで、GCP Jobs は停止中）。
-5. **毎日の馬の成績の一括（backfill-all-horse）と調教の夜間の補填（horse-training-backfill）** を VPS のタスクにする（250MB の枠で測る）。
+5. **毎日の馬の成績の一括（backfill-all-horse）と調教の夜間の補填（horse-training-backfill）**:
+   - backfill-all-horse（毎日 06:00 JST）は、出馬表・確定成績の**全件を一覧して読む**ところから始まる（src/scraper/backfill.py の _run_phase_horse）。
+     ホストは手元のキャッシュから読むので軽いが、VPS で動かすと GCS の全件を読むことになり転送料が大きい。中身はほとんど「すでにある馬は飛ばす」
+     （2026-11-13 の実績: 500 頭中 498 頭を飛ばし、取ったのは 2 頭）。予測に要る出走馬の成績は、VPS の前日夕の新馬の取得
+     （KEIBA_EVE_HORSE_PROFILE=1）と週次の取得（金曜）で取れる。**過去分の補填としてホストに残し**、VPS に移すのは、直近のレース一覧から
+     対象の馬だけを選ぶ形を作ってから（全件の一覧をしない）。
+   - 調教の夜間の補填は、ホストの調教の過去分の取り直し（別セッション）が終わってから VPS に移す（二重のアクセスを避ける）。
 6. GCP 側（停止中）の `requires_fetch_done`・`vps_watchdog` は GCS のタスク表を見ている。GCP Jobs を再開する場合は合わせて見直す。
 
 ## 費用の見積もり（CLAUDE.md の決まり。最悪の回数で）

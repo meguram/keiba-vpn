@@ -563,7 +563,10 @@ def run_raceday_evening_for_date(date_str: str) -> dict[str, Any]:
     stats["date"] = iso_day
     stats["venues"] = venues
     stats["error_count"] = 0
-    if stats["result_on_time"] > 0:
+    if (os.environ.get("KEIBA_RUN_LOCATION") or "").strip().lower() == "vps":
+        # VPS は取得だけ（250MB 枠）。馬場速度はホストの後処理だけのジョブ（src/ops/host_postprocess.py の track-speed-daily）が計算する
+        stats["post_processing"] = "host"
+    elif stats["result_on_time"] > 0:
         _as._trigger_track_speed_for_date(iso_day)
     return stats
 

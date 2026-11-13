@@ -440,6 +440,13 @@ def main() -> None:
     parser.add_argument("--interval", type=float, default=2.0, help="リクエスト間隔（秒）")
     args = parser.parse_args()
 
+    # 取得の担当が VPS に移っていれば、ホストでは実行しない（ホストの crontab の行は担当の判定を通らないため、ここで見る）
+    from src.ops.fetch_owner import host_must_skip
+
+    if not args.dry_run and host_must_skip("page-quality-check"):
+        logger.info("page-quality-check は VPS の取得の実行役の担当（config/fetch_owner.json）。このマシンでは実行しません")
+        return
+
     if args.dry_run:
         print(f"{'category':<30} {'label':<25} {'url'}")
         for t in _CHECK_TARGETS:
