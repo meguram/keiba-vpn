@@ -71,3 +71,30 @@
 8. **API の課金ガード**: monitor の SA に `roles/monitoring.viewer`（プロジェクト）を付ける。付けるまでホームは『確認できない（権限がありません）』と出るだけで、ほかは動く。点検は手順 4 の Scheduler（`/ops/heartbeat/check`）が一緒に行う（ジョブを増やさない）。
    - 判定: 夜間（JST 1〜4 時台）に 30 分以上起動した時間が 2 時間分以上 → 警告（4 時間分以上で重大）／ 直近 24 時間から月額の見込みが 800 円（API 分の目安）以上 → 警告（1,600 円以上で重大）。無料枠の数値は未確認なので、画面に『無料枠なし』の値も並べる。
    - 背景: ping の発信元を列挙しても漏れる（2026-10-28 は VPS のヘルスチェック、ホストの cron の 2 つで、1〜2 台が 24 時間起動していた）。原因ではなく結果（課金される起動時間）を見張る。
+
+## 定期実行ジョブの見張り（/schedules、2026-11-13）
+
+一覧の正は `config/scheduled_jobs.json`（docs のページ `docs/html/operations/final/scheduled_jobs.html` も `python -m src.scripts.docs.build_scheduled_jobs_html` でここから作る）。
+判定のルールは `src/ops/schedule_rules.py` の 1 か所で、次の 3 か所が同じ関数を使う。**Cloud Run を起こす定期の処理は足していない**。
+
+| 役 | どこで | 何を読む・書く |
+|---|---|---|
+| VPS の見張り `keiba-sched-status.timer`（15 分おき） | VPS（`python -m src.ops.sched_status`） | `systemctl show` を読み、GCS の `ops/heartbeat/vps/status.json` に 1 回書く。赤の発生・解消だけ Slack（`/etc/keiba-ui/slack.env`） |
+| ポータル `/schedules`・ホームのカード | Cloud Run keiba-monitor（開いたときだけ・5 分使い回し・`Cache-Control: private, max-age=300`） | `ops/heartbeat/vps/status.json`・`ops/job_runs/<job>/latest.json`・Scheduler と Run Admin の API（読み取り） |
+| 毎朝の点検 `schedule-check` | GCP の g-0730-shadow（07:30）の中 | 同上。赤があれば Slack。VPS の記録が 45 分途絶していれば「VPS の記録の途絶」 |
+| VPS 全体の停止の検知（主） | ホストの cron 15 分おき（`install_vps_alive_cron.sh`、タグ KEIBA-VPS-ALIVE） | `https://app.megu-keiba.com/version.json`（Cloudflare → VPS。`/api/` ではない）。2 回続けて届かなければ Slack・戻ったら Slack |
+
+### 月額の見積もり（最悪の回数。2026-11-13）
+- VPS → `ops/heartbeat/vps/status.json`: Class A 1 回 × 96 回/日 × 30 = 2,880 回 ≒ **2.3 円**（VPS → GCS の書き込みは転送料 0）
+- ポータルを開く: Class B 約 3 回＋無料の API 6 回 × 最悪 96 回/日 × 30 ≒ 0.5 円。keiba-monitor の起動し直し（512Mi・最小 0）は最悪 CPU 約 3 秒 × 2,880 回 ≒ 31 円（無料枠の中なら 0 円）
+- 毎朝の点検: 既存のジョブに 1 手順（GCS 数回・数秒）≒ 0 円。ホストの cron の確認: GCP・GCS に触れない 0 円
+- 合計 **ふだん 約 3 円、最悪 約 35 円/月**。新しい Scheduler・常駐・最小インスタンス・15 分未満の ping は無い
+
+### ユーザーの作業（権限と配備。統括役経由で確認してから）
+1. **VPS の SA keiba-fetch に `ops/heartbeat/vps/` だけの書き込み（中身は status.json の 1 件）**:
+   `BUCKET=$BUCKET bash scripts/gcp/make_iam_condition.sh ops/heartbeat/vps/ vps-sched-status > /tmp/cond_vs.yaml && gcloud storage buckets add-iam-policy-binding gs://$BUCKET --member "serviceAccount:keiba-fetch@$PROJECT.iam.gserviceaccount.com" --role roles/storage.objectUser --condition-from-file /tmp/cond_vs.yaml`
+2. **読み取りの権限**（どれも無料の読み取り）: SA keiba-monitor と keiba-jobs に、プロジェクトの `roles/run.viewer` と `roles/cloudscheduler.viewer`。
+   付けるまでは GCP の欄が「GCP の状態を読めない（権限がありません）」の 1 件になるだけで、画面は落ちない。
+3. 配備: monitor を配備し直す（`scripts/gcp/deploy_cloud_run_monitor.sh --apply`）。Jobs の版を更新（`scripts/gcp/deploy_cloud_run_jobs.sh`。g-0730-shadow に schedule-check が入る）。
+   VPS は fetch の版（`scheduled_jobs.json` と `src/ops/sched_status.py` を含む）が入った後に `sudo bash scripts/ops/vps/vps_03_units.sh`（見張りのタイマーを有効化）。
+   ホストは `sudo bash scripts/cron/install_vps_alive_cron.sh`。入れたら `config/scheduled_jobs.json` の `vps-sched-status`・`host-vps-alive` を `active` にする。

@@ -92,10 +92,11 @@
    "cron_jst": "30 7 * * *",
    "size": "s",
    "timeout_sec": 600,
-   "desc": "影モード(VPS の取得の並走検証)の日次集計 + GCP 日次コスト報告（想定 vs 実績・急増警告。予算超過の早期警戒）",
+   "desc": "影モード(VPS の取得の並走検証)の日次集計 + GCP 日次コスト報告（想定 vs 実績・急増警告。予算超過の早期警戒） + 定期実行の毎朝の点検（GCP・VPS。赤があれば Slack）",
    "jobs": [
     "gcp-daily-cost-report",
-    "fetch-shadow-report"
+    "fetch-shadow-report",
+    "schedule-check"
    ]
   },
   "g-0730": {
@@ -1025,6 +1026,52 @@
    "ready": true,
    "ready_note": "2026-10-28: VPS の実行役の影モード（fetch_agent_ctl.sh shadow-on）と、GCP の FETCH_SHADOW=1 で始める。それまでは日次レポートが『影の結果なし』になるだけ",
    "ready_confirmed_at": "2026-10-28"
+  },
+  {
+   "id": "schedule-check",
+   "parallel_guard": false,
+   "desc": "定期実行ジョブ（GCP・VPS）の毎朝の点検。監視ポータルと同じルールで判定し、赤があれば Slack（VPS の記録の途絶 45 分も）",
+   "destination": "gcp",
+   "phase": 3,
+   "wave": 1,
+   "origin": {
+    "tag": null,
+    "cron_job_id": null,
+    "cron_utc": null,
+    "script": "src/ops/jobs/schedule_check.py（新規。ホストには無い）"
+   },
+   "group": "g-0730-shadow",
+   "when_jst": null,
+   "steps": [
+    {
+     "argv": [
+      "-m",
+      "src.ops.jobs.schedule_check"
+     ]
+    }
+   ],
+   "memory_mib": 512,
+   "timeout_sec": 180,
+   "env": [
+    "KEIBA_ENV",
+    "KEIBA_RUN_LOCATION",
+    "GCS_BUCKET",
+    "GCS_PROJECT_ID",
+    "TZ",
+    "KEIBA_SLACK_NOTIFY",
+    "SLACK_WEBHOOK_URL",
+    "SLACK_WEBHOOK_URL_RESULTS",
+    "SLACK_WEBHOOK_URL_REPORT",
+    "SLACK_WEBHOOK_URL_ALERT"
+   ],
+   "state_in": [],
+   "state_out": [],
+   "parity": {
+    "kind": "none"
+   },
+   "blockers": [],
+   "enabled": true,
+   "ready": true
   },
   {
    "id": "parity-check",

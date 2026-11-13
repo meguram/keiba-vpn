@@ -42,6 +42,14 @@
 </div>
 
 
+<h2>定期実行（GCP・VPS） {{ pill(sched.overall, sched.label) }} <a class="small" href="/schedules">詳しく →</a></h2>
+<div class="card">{% if sched.get('error') %}<span class="muted">{{ sched.error }}</span>{% else %}
+  <span class="small"><span class="red">異常 {{ sched.counts.get('red', 0) }}</span> ・ <span class="yellow">注意 {{ sched.counts.get('yellow', 0) }}</span> ・ <span class="green">正常 {{ sched.counts.get('green', 0) }}</span> ・ <span class="muted">判定不能 {{ sched.counts.get('unknown', 0) }} ・ 停止中 {{ sched.counts.get('gray', 0) }}</span></span>
+  {% for a in sched.alerts %}<p class="small {{ a.level }}" style="margin:4px 0 0">● {{ a.title }}</p>{% endfor %}
+  {% for r in sched.rows if r.level in ('red', 'yellow') %}<p class="small {{ r.level }}" style="margin:4px 0 0">● {{ r.job.id }}: {{ r.reasons|join(' / ') }}</p>{% endfor %}
+{% endif %}</div>
+
+
 <h2>API の課金ガード {{ pill(cost.level, {'green':'正常','yellow':'注意','red':'要対応'}.get(cost.level, '確認できない')) }} <span class="small muted">keiba-api の課金される起動時間（インスタンス課金）</span></h2>
 <div class="card">
 {% if cost.status == 'ok' %}

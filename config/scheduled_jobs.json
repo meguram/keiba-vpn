@@ -1,0 +1,1092 @@
+{
+ "version": 1,
+ "updated": "2026-11-13",
+ "tz": "Asia/Tokyo",
+ "about": "定期実行ジョブの一覧の正（GCP・ConoHa VPS。ホストの cron は docs/html/operations/cron_schedule.html）。監視ポータル（/schedules）と docs/html/operations/final/scheduled_jobs.html（src/scripts/docs/build_scheduled_jobs_html.py）の両方がこれを読む。schedule の cron は JST。",
+ "sources": [
+  "GCP: サービスアカウントで Cloud Scheduler・Cloud Run の API を読んだ結果（2026-11-13 14:5x JST）と config/gcp_job_map.json",
+  "ConoHa VPS: ssh で systemctl list-timers --all・list-unit-files を読んだ結果（2026-11-13 14:40 JST）とひな形 scripts/ops/vps/templates/"
+ ],
+ "jobs": [
+  {
+   "id": "vps-cache-warm",
+   "where": "vps",
+   "kind": "timer",
+   "status": "active",
+   "schedule": {
+    "every_min": 1
+   },
+   "applies": "daily",
+   "grace_min": 10,
+   "max_runtime_min": 12,
+   "weight": "low",
+   "ref": {
+    "timer": "keiba-cache-warm.timer",
+    "service": "keiba-cache-warm.service"
+   },
+   "what": "API のキャッシュの取り直し: 更新のあったレース・馬の API を nginx 経由で取り直す（660 秒後にもう 1 回）",
+   "sample_url": "https://megu-keiba.com/api/v1/races/202605050811",
+   "inputs": [
+    "GCS ops/cache_dirty/（昨日以降を 1 回一覧）"
+   ],
+   "outputs": [
+    "VPS の nginx の API キャッシュ（Cloud Run の API へ要求）",
+    "/var/lib/keiba-ui/cache-warm/state.json"
+   ],
+   "command": "/opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/cache_warm.py",
+   "memory": "MemoryMax 128M",
+   "cost": "一覧 1 日 1,440 回（Class A 月 約 35 円）＋転送 月 約 230 円",
+   "host_equivalent": "無い（ホストの事前生成の周回は egress_billed() で止めてある）",
+   "basis": [
+    "scripts/ops/vps/templates/keiba-cache-warm.timer",
+    "scripts/ops/vps/cache_warm.py:1-12",
+    "docs/operations/cost_ledger.md:155"
+   ],
+   "note": "60 秒の細かさは要らない可能性が高い（点検 #2）"
+  },
+  {
+   "id": "vps-release-pull-ui",
+   "where": "vps",
+   "kind": "timer",
+   "status": "active",
+   "schedule": {
+    "every_min": 3
+   },
+   "applies": "daily",
+   "grace_min": 10,
+   "max_runtime_min": 10,
+   "weight": "med",
+   "ref": {
+    "timer": "keiba-release-pull-ui.timer",
+    "service": "keiba-release-pull@ui.service"
+   },
+   "what": "本番の画面の新しい版の取り込み（GCS の latest.json を読み、新しければ入れる）",
+   "sample_url": null,
+   "inputs": [
+    "GCS ops/releases/ui/latest.json"
+   ],
+   "outputs": [
+    "/srv/keiba-ui（本番の画面）",
+    "GCS ops/releases/ui/applied/vps.json"
+   ],
+   "command": "/opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/pull_release.py --kind ui",
+   "memory": "MemoryMax 150M",
+   "cost": "読み 1 日 480 回（ほぼ 0 円）",
+   "host_equivalent": "無い",
+   "basis": [
+    "scripts/ops/vps/templates/keiba-release-pull-ui.timer",
+    "scripts/ops/vps/vps_03_units.sh:59"
+   ],
+   "note": null
+  },
+  {
+   "id": "vps-release-pull-ui-stg",
+   "where": "vps",
+   "kind": "timer",
+   "status": "active",
+   "schedule": {
+    "every_min": 5
+   },
+   "applies": "daily",
+   "grace_min": 15,
+   "max_runtime_min": 10,
+   "weight": "low",
+   "ref": {
+    "timer": "keiba-release-pull-ui-stg.timer",
+    "service": "keiba-release-pull@ui-stg.service"
+   },
+   "what": "stg の画面の新しい版の取り込み",
+   "sample_url": null,
+   "inputs": [
+    "GCS ops/releases/ui-stg/latest.json"
+   ],
+   "outputs": [
+    "stg の画面"
+   ],
+   "command": "/opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/pull_release.py --kind ui-stg",
+   "memory": "MemoryMax 150M",
+   "cost": "ほぼ 0 円",
+   "host_equivalent": "無い",
+   "basis": [
+    "scripts/ops/vps/templates/keiba-release-pull-ui-stg.timer",
+    "scripts/ops/vps/vps_05_stg_instance.sh:104"
+   ],
+   "note": null
+  },
+  {
+   "id": "vps-release-pull-fetch",
+   "where": "vps",
+   "kind": "timer",
+   "status": "active",
+   "schedule": {
+    "cron": "20 3 * * *"
+   },
+   "applies": "daily",
+   "grace_min": 30,
+   "max_runtime_min": 15,
+   "weight": "low",
+   "ref": {
+    "timer": "keiba-release-pull-fetch.timer",
+    "service": "keiba-release-pull@fetch.service"
+   },
+   "what": "取得の実行役のコードの新しい版の取り込み（メンテナンス窓 03:00〜04:00）",
+   "sample_url": null,
+   "inputs": [
+    "GCS ops/releases/fetch/latest.json"
+   ],
+   "outputs": [
+    "/opt/keiba-fetch（取得の実行役のコード）"
+   ],
+   "command": "/opt/keiba-pull/venv/bin/python /opt/keiba-ui/bin/pull_release.py --kind fetch",
+   "memory": "MemoryMax 150M",
+   "cost": "ほぼ 0 円",
+   "host_equivalent": "無い",
+   "basis": [
+    "scripts/ops/vps/templates/keiba-release-pull-fetch.timer",
+    "scripts/ops/vps/vps_03_units.sh:60"
+   ],
+   "note": null
+  },
+  {
+   "id": "vps-ui-health",
+   "where": "vps",
+   "kind": "timer",
+   "status": "active",
+   "schedule": {
+    "every_min": 5
+   },
+   "applies": "daily",
+   "grace_min": 15,
+   "max_runtime_min": 3,
+   "weight": "high",
+   "ref": {
+    "timer": "keiba-ui-health.timer",
+    "service": "keiba-ui-health.service"
+   },
+   "what": "VPS の中の自己診断: keiba-ui・nginx・cloudflared が止まっていれば 1 回再起動し、/version.json・ディスク・空きメモリを見て Slack へ",
+   "sample_url": null,
+   "inputs": [
+    "http://127.0.0.1/version.json",
+    "systemctl の状態"
+   ],
+   "outputs": [
+    "/var/lib/keiba-ui/health.json",
+    "Slack（同じ内容は 1 時間に 1 回）"
+   ],
+   "command": "/opt/keiba-ui/bin/healthcheck.sh",
+   "memory": "（指定なし）",
+   "cost": "0 円（API は叩かない）",
+   "host_equivalent": "ホストは server_watchdog（3 分おき）で自分のサーバーを見ている（対象は別）",
+   "basis": [
+    "scripts/ops/vps/healthcheck.sh",
+    "scripts/ops/vps/vps_02_install_stack.sh:82"
+   ],
+   "note": null
+  },
+  {
+   "id": "vps-sched-status",
+   "where": "vps",
+   "kind": "timer",
+   "status": "planned",
+   "schedule": {
+    "every_min": 15
+   },
+   "applies": "daily",
+   "grace_min": 20,
+   "max_runtime_min": 3,
+   "weight": "high",
+   "ref": {
+    "timer": "keiba-sched-status.timer",
+    "service": "keiba-sched-status.service"
+   },
+   "what": "定期実行の見張り: VPS のタイマーの最後の起動・結果を GCS に書き、赤になった・赤が解消したときだけ Slack",
+   "sample_url": null,
+   "inputs": [
+    "systemctl show（一覧にある VPS のタイマー）",
+    "/var/lib/keiba-fetch/sched_status/state.json"
+   ],
+   "outputs": [
+    "GCS ops/heartbeat/vps/status.json",
+    "Slack（状態が変わったときだけ）"
+   ],
+   "command": "/opt/keiba-fetch/venv/bin/python -m src.ops.sched_status（WorkingDirectory=/opt/keiba-fetch/current）",
+   "memory": "MemoryMax 110M",
+   "cost": "書き込み 月 2,880 回（約 2.3 円）",
+   "host_equivalent": "無い",
+   "basis": [
+    "scripts/ops/vps/templates/keiba-sched-status.timer",
+    "src/ops/sched_status.py"
+   ],
+   "note": "配備（vps_03_units.sh）と IAM（ops/heartbeat/vps/status.json だけの書き込み）の後に active にする",
+   "reporter": true
+  },
+  {
+   "id": "vps-fetch-reserve",
+   "where": "vps",
+   "kind": "timer",
+   "status": "planned",
+   "schedule": {
+    "cron": "50 * * * *"
+   },
+   "applies": "daily",
+   "grace_min": 30,
+   "max_runtime_min": 10,
+   "weight": "high",
+   "ref": {
+    "timer": "keiba-fetch-reserve.timer",
+    "service": "keiba-fetch-reserve.service"
+   },
+   "what": "取得の予約（定期）: 先 6 時間分の取得タスクを VPS のローカルのタスク表に冪等に積む",
+   "sample_url": null,
+   "inputs": [
+    "config/fetch_owner.json",
+    "race_lists・発走時刻表（ローカル）"
+   ],
+   "outputs": [
+    "/var/lib/keiba-fetch/tasks/ops/fetch_tasks/pending/"
+   ],
+   "command": "python -m src.ops.reservations recurring --horizon-hours 6",
+   "memory": "MemoryMax 60M",
+   "cost": "1 円未満",
+   "host_equivalent": "今はホストの cron が取得の正（担当表は空）",
+   "basis": [
+    "scripts/ops/vps/templates/keiba-fetch-reserve.timer",
+    "scripts/ops/vps/vps_03_units.sh:62-65"
+   ],
+   "note": "段 6（配備と段階的な受け渡し）で有効にする"
+  },
+  {
+   "id": "vps-fetch-raceday-tomorrow",
+   "where": "vps",
+   "kind": "timer",
+   "status": "planned",
+   "schedule": {
+    "cron": "30 20 * * *"
+   },
+   "applies": "daily",
+   "grace_min": 30,
+   "max_runtime_min": 10,
+   "weight": "high",
+   "ref": {
+    "timer": "keiba-fetch-raceday-tomorrow.timer",
+    "service": "keiba-fetch-raceday@tomorrow.service"
+   },
+   "what": "翌日の開催日の予約: レースごとの取得（オッズ・馬体重・速報）を予約",
+   "sample_url": "https://race.netkeiba.com/odds/index.html?race_id=202605050811",
+   "inputs": [
+    "出馬表・発走時刻表（ローカル）"
+   ],
+   "outputs": [
+    "/var/lib/keiba-fetch/tasks/…/pending/"
+   ],
+   "command": "python -m src.ops.reservations race-day --date tomorrow --no-predict",
+   "memory": "MemoryMax 120M",
+   "cost": "1 円未満",
+   "host_equivalent": "ホストの raceday-runner",
+   "basis": [
+    "scripts/ops/vps/templates/keiba-fetch-raceday-tomorrow.timer",
+    "docs/operations/vps_only_fetch.md:9-10"
+   ],
+   "note": "段 6 で有効にする"
+  },
+  {
+   "id": "vps-fetch-raceday-today",
+   "where": "vps",
+   "kind": "timer",
+   "status": "planned",
+   "schedule": {
+    "cron": "20 7 * * *"
+   },
+   "applies": "daily",
+   "grace_min": 30,
+   "max_runtime_min": 10,
+   "weight": "high",
+   "ref": {
+    "timer": "keiba-fetch-raceday-today.timer",
+    "service": "keiba-fetch-raceday@today.service"
+   },
+   "what": "当日の予約の取り直し（前夜に積めなかったレースを足す）",
+   "sample_url": null,
+   "inputs": [
+    "朝の発走時刻表（ローカル）"
+   ],
+   "outputs": [
+    "/var/lib/keiba-fetch/tasks/…/pending/"
+   ],
+   "command": "python -m src.ops.reservations race-day --date today --no-predict",
+   "memory": "MemoryMax 120M",
+   "cost": "1 円未満",
+   "host_equivalent": "ホストの raceday-runner",
+   "basis": [
+    "scripts/ops/vps/templates/keiba-fetch-raceday-today.timer"
+   ],
+   "note": "段 6 で有効にする"
+  },
+  {
+   "id": "vps-mirror-vps-push",
+   "where": "vps",
+   "kind": "timer",
+   "status": "planned",
+   "schedule": {
+    "every_min": 5
+   },
+   "applies": "daily",
+   "grace_min": 15,
+   "max_runtime_min": 10,
+   "weight": "med",
+   "ref": {
+    "timer": "keiba-mirror-vps-push.timer",
+    "service": "keiba-mirror-vps-push.service"
+   },
+   "what": "VPS が取ったレース一覧・発走時刻表のうち変わったものだけを ops/mirror_vps/ に上げる（担当が無ければ何もしない）",
+   "sample_url": null,
+   "inputs": [
+    "/var/lib/keiba-fetch/data"
+   ],
+   "outputs": [
+    "GCS ops/mirror_vps/・ops/mirror_vps/_index.json"
+   ],
+   "command": "python -m src.ops.gcs_mirror push-vps",
+   "memory": "MemoryMax 110M",
+   "cost": "約 7 円（書き込み）",
+   "host_equivalent": "ホストの VPS のミラーの取り込み（未登録）",
+   "basis": [
+    "scripts/ops/vps/templates/keiba-mirror-vps-push.timer",
+    "docs/operations/vps_only_fetch.md:21-23"
+   ],
+   "note": "段 6 で有効にする"
+  },
+  {
+   "id": "vps-heartbeat",
+   "where": "vps",
+   "kind": "timer",
+   "status": "paused",
+   "schedule": {
+    "every_min": 5
+   },
+   "applies": "daily",
+   "grace_min": 15,
+   "max_runtime_min": 10,
+   "weight": "low",
+   "ref": {
+    "timer": "keiba-heartbeat.timer",
+    "service": "keiba-heartbeat.service"
+   },
+   "what": "VPS の資源・ユニットの状態を監視ポータル（Cloud Run）へ送る",
+   "sample_url": null,
+   "inputs": [
+    "/proc/meminfo・systemctl"
+   ],
+   "outputs": [
+    "Cloud Run keiba-monitor /ops/heartbeat"
+   ],
+   "command": "/usr/bin/python3 /opt/keiba-ui/bin/heartbeat_client.py",
+   "memory": "MemoryMax 48M",
+   "cost": "5 分おきの Cloud Run の起動（規約で禁止の間隔）",
+   "host_equivalent": "無い",
+   "basis": [
+    "scripts/ops/vps/templates/keiba-heartbeat.timer",
+    "scripts/ops/vps/vps_03_units.sh:116"
+   ],
+   "note": "導入済み・disabled。5 分おきの要求は 15 分未満の ping の禁止に反するので有効にしない（代わりに vps-sched-status）"
+  },
+  {
+   "id": "vps-traffic",
+   "where": "vps",
+   "kind": "timer",
+   "status": "planned",
+   "schedule": {
+    "every_min": 15
+   },
+   "applies": "daily",
+   "grace_min": 45,
+   "max_runtime_min": 10,
+   "weight": "low",
+   "ref": {
+    "timer": "keiba-traffic.timer",
+    "service": "keiba-traffic.service"
+   },
+   "what": "nginx のアクセスの日別集計を監視ポータルへ送る",
+   "sample_url": null,
+   "inputs": [
+    "nginx のアクセスログ"
+   ],
+   "outputs": [
+    "Cloud Run keiba-monitor /ops/traffic"
+   ],
+   "command": "/usr/bin/python3 /opt/keiba-ui/bin/traffic_client.py",
+   "memory": "MemoryMax 128M",
+   "cost": "Cloud Run への 15 分おきの要求",
+   "host_equivalent": "無い",
+   "basis": [
+    "scripts/ops/vps/templates/keiba-traffic.timer",
+    "scripts/ops/vps/traffic_client.py:1-7"
+   ],
+   "note": "未導入（ハートビートの鍵が前提）"
+  },
+  {
+   "id": "vps-fetch-agent",
+   "where": "vps",
+   "kind": "daemon",
+   "status": "paused",
+   "schedule": null,
+   "applies": "daily",
+   "grace_min": null,
+   "max_runtime_min": null,
+   "weight": "high",
+   "ref": {
+    "service": "keiba-fetch-agent.service"
+   },
+   "what": "取得の実行役（常駐）: タスク表を毎分見て、netkeiba の取得を実行する",
+   "sample_url": "https://db.netkeiba.com/race/202605050811/",
+   "inputs": [
+    "タスク表（file モード: /var/lib/keiba-fetch/tasks）"
+   ],
+   "outputs": [
+    "/var/lib/keiba-fetch/data",
+    "GCS ops/mirror_vps/"
+   ],
+   "command": "/opt/keiba-fetch/venv/bin/python -m src.ops.fetch_agent",
+   "memory": "keiba-fetch.slice: MemoryHigh 220M・MemoryMax 250M",
+   "cost": "停止中 0 円",
+   "host_equivalent": "取得はすべてホストの cron が担当（正）",
+   "basis": [
+    "scripts/ops/vps/templates/keiba-fetch-agent.service",
+    "config/fetch_owner.json",
+    "コミット dda6af55"
+   ],
+   "note": "11/13 15:00 に停止・無効（担当なしで GCS のタスク表を毎分 6 回一覧していたため）。段 6 で file モードにしてから再開"
+  },
+  {
+   "id": "gcp-g-0530",
+   "where": "gcp",
+   "kind": "scheduler",
+   "status": "retired",
+   "schedule": {
+    "cron": "30 5 * * *"
+   },
+   "applies": "daily",
+   "grace_min": 30,
+   "max_runtime_min": 40,
+   "weight": "med",
+   "ref": {
+    "scheduler": "keiba-g-0530",
+    "run_job": "keiba-dispatch-l",
+    "group": "g-0530"
+   },
+   "what": "騎手・調教師統計",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [],
+   "command": "python -m src.ops.job_dispatch group g-0530",
+   "memory": "keiba-dispatch-l（8Gi・2 vCPU）",
+   "cost": "削除済み 0 円",
+   "host_equivalent": "動いている（07:15）",
+   "basis": [
+    "config/gcp_job_map.json（scheduler_groups.g-0530）",
+    "docs/operations/deleted_scheduler_keiba_g_20261113.md"
+   ],
+   "note": "2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs"
+  },
+  {
+   "id": "gcp-g-0700",
+   "where": "gcp",
+   "kind": "scheduler",
+   "status": "retired",
+   "schedule": {
+    "cron": "0 7 * * *"
+   },
+   "applies": "daily",
+   "grace_min": 30,
+   "max_runtime_min": 90,
+   "weight": "med",
+   "ref": {
+    "scheduler": "keiba-g-0700",
+    "run_job": "keiba-dispatch-l",
+    "group": "g-0700"
+   },
+   "what": "履歴テーブル(当年) → 履歴特徴量とサービング用バンドル → テーブルの drift 検査（直列。serving-state-* は day-prep に置き換えて無効）",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [],
+   "command": "python -m src.ops.job_dispatch group g-0700",
+   "memory": "keiba-dispatch-l（8Gi・2 vCPU）",
+   "cost": "削除済み 0 円",
+   "host_equivalent": "動いている（書き出し 07:00、特徴量 07:40。drift・走法の軸・めぐ分析は scripts/cron/export_tables_daily.sh:46・:48 の中）",
+   "basis": [
+    "config/gcp_job_map.json（scheduler_groups.g-0700）",
+    "docs/operations/deleted_scheduler_keiba_g_20261113.md"
+   ],
+   "note": "2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs"
+  },
+  {
+   "id": "gcp-g-0730-shadow",
+   "where": "gcp",
+   "kind": "scheduler",
+   "status": "active",
+   "schedule": {
+    "cron": "30 7 * * *"
+   },
+   "applies": "daily",
+   "grace_min": 30,
+   "max_runtime_min": 10,
+   "weight": "med",
+   "ref": {
+    "scheduler": "keiba-g-0730-shadow",
+    "run_job": "keiba-dispatch-s",
+    "group": "g-0730-shadow"
+   },
+   "what": "影モード(VPS の取得の並走検証)の日次集計 + GCP 日次コスト報告（想定 vs 実績・急増警告。予算超過の早期警戒） + 定期実行の毎朝の点検（GCP・VPS。赤があれば Slack）",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [
+    "Slack（費用の日報・影の集計・定期実行の点検で赤があるとき）",
+    "GCS ops/fetch_shadow/daily/"
+   ],
+   "command": "python -m src.ops.job_dispatch group g-0730-shadow",
+   "memory": "keiba-dispatch-s（512Mi・1 vCPU）",
+   "cost": "Jobs 約 0 円（無料枠の中、最悪 15 円）＋Scheduler 約 15 円",
+   "host_equivalent": "①費用の日報はホストに無い（ホストの cost_guard は別物: 1 日 2 回、課金を見て止める判定）。②影の集計は無い",
+   "basis": [
+    "config/gcp_job_map.json（scheduler_groups.g-0730-shadow）"
+   ],
+   "note": null
+  },
+  {
+   "id": "gcp-g-0730",
+   "where": "gcp",
+   "kind": "scheduler",
+   "status": "retired",
+   "schedule": {
+    "cron": "30 7 * * *"
+   },
+   "applies": "daily",
+   "grace_min": 30,
+   "max_runtime_min": 30,
+   "weight": "med",
+   "ref": {
+    "scheduler": "keiba-g-0730",
+    "run_job": "keiba-dispatch-m",
+    "group": "g-0730"
+   },
+   "what": "ラップ予想（当日）+ 朝サマリー",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [],
+   "command": "python -m src.ops.job_dispatch group g-0730",
+   "memory": "keiba-dispatch-m（2Gi・1 vCPU）",
+   "cost": "削除済み 0 円",
+   "host_equivalent": "動いている（どちらも 07:30）",
+   "basis": [
+    "config/gcp_job_map.json（scheduler_groups.g-0730）",
+    "docs/operations/deleted_scheduler_keiba_g_20261113.md"
+   ],
+   "note": "2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs"
+  },
+  {
+   "id": "gcp-g-0800",
+   "where": "gcp",
+   "kind": "scheduler",
+   "status": "retired",
+   "schedule": {
+    "cron": "0 8 * * *"
+   },
+   "applies": "daily",
+   "grace_min": 30,
+   "max_runtime_min": 30,
+   "weight": "med",
+   "ref": {
+    "scheduler": "keiba-g-0800",
+    "run_job": "keiba-dispatch-l",
+    "group": "g-0800"
+   },
+   "what": "ページ品質・並走検証。月曜は網羅状況と追走難度 v2 の突き合わせも",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [],
+   "command": "python -m src.ops.job_dispatch group g-0800",
+   "memory": "keiba-dispatch-l（8Gi・2 vCPU）",
+   "cost": "削除済み 0 円",
+   "host_equivalent": "網羅 月 08:00、追走難度 v2 月 08:30、RB 08:20。並走の一致判定は不要（並走をやめた）",
+   "basis": [
+    "config/gcp_job_map.json（scheduler_groups.g-0800）",
+    "docs/operations/deleted_scheduler_keiba_g_20261113.md"
+   ],
+   "note": "2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs"
+  },
+  {
+   "id": "gcp-g-1000-mon",
+   "where": "gcp",
+   "kind": "scheduler",
+   "status": "retired",
+   "schedule": {
+    "cron": "0 10 * * 1"
+   },
+   "applies": "daily",
+   "grace_min": 30,
+   "max_runtime_min": 80,
+   "weight": "med",
+   "ref": {
+    "scheduler": "keiba-g-1000-mon",
+    "run_job": "keiba-dispatch-l",
+    "group": "g-1000-mon"
+   },
+   "what": "ドリフト監視・凍結追跡（月曜）",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [],
+   "command": "python -m src.ops.job_dispatch group g-1000-mon",
+   "memory": "keiba-dispatch-l（8Gi・2 vCPU）",
+   "cost": "削除済み 0 円",
+   "host_equivalent": "動いている（月 10:00・10:30・03:30・07:30）",
+   "basis": [
+    "config/gcp_job_map.json（scheduler_groups.g-1000-mon）",
+    "docs/operations/deleted_scheduler_keiba_g_20261113.md"
+   ],
+   "note": "2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs"
+  },
+  {
+   "id": "gcp-g-sun-2200",
+   "where": "gcp",
+   "kind": "scheduler",
+   "status": "retired",
+   "schedule": {
+    "cron": "0 22 * * 0"
+   },
+   "applies": "daily",
+   "grace_min": 30,
+   "max_runtime_min": 60,
+   "weight": "med",
+   "ref": {
+    "scheduler": "keiba-g-sun-2200",
+    "run_job": "keiba-dispatch-m",
+    "group": "g-sun-2200"
+   },
+   "what": "オッズ乖離の週次集計（日曜）",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [],
+   "command": "python -m src.ops.job_dispatch group g-sun-2200",
+   "memory": "keiba-dispatch-m（2Gi・1 vCPU）",
+   "cost": "削除済み 0 円",
+   "host_equivalent": "動いている（日 22:00）",
+   "basis": [
+    "config/gcp_job_map.json（scheduler_groups.g-sun-2200）",
+    "docs/operations/deleted_scheduler_keiba_g_20261113.md"
+   ],
+   "note": "2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs"
+  },
+  {
+   "id": "gcp-g-1910-eve",
+   "where": "gcp",
+   "kind": "scheduler",
+   "status": "retired",
+   "schedule": {
+    "cron": "10,40 19 * * *"
+   },
+   "applies": "daily",
+   "grace_min": 30,
+   "max_runtime_min": 90,
+   "weight": "med",
+   "ref": {
+    "scheduler": "keiba-g-1910-eve",
+    "run_job": "keiba-dispatch-l",
+    "group": "g-1910-eve"
+   },
+   "what": "前夜の計算・翌日のレース予約・ラップ予想（翌日）。2 回走らせて取得の遅れを吸収（冪等）。",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [],
+   "command": "python -m src.ops.job_dispatch group g-1910-eve",
+   "memory": "keiba-dispatch-l（8Gi・2 vCPU）",
+   "cost": "削除済み 0 円",
+   "host_equivalent": "動いている（raceday-eve 18:00 に前夜の計算、raceday-runner 07:30 の常駐、ラップ 19:30）",
+   "basis": [
+    "config/gcp_job_map.json（scheduler_groups.g-1910-eve）",
+    "docs/operations/deleted_scheduler_keiba_g_20261113.md"
+   ],
+   "note": "2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs"
+  },
+  {
+   "id": "gcp-g-hourly",
+   "where": "gcp",
+   "kind": "scheduler",
+   "status": "retired",
+   "schedule": {
+    "cron": "5 * * * *"
+   },
+   "applies": "daily",
+   "grace_min": 30,
+   "max_runtime_min": 10,
+   "weight": "med",
+   "ref": {
+    "scheduler": "keiba-g-hourly",
+    "run_job": "keiba-dispatch-m",
+    "group": "g-hourly"
+   },
+   "what": "VPS 実行役の定期タスクを 6 時間先まで予約",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [],
+   "command": "python -m src.ops.job_dispatch group g-hourly",
+   "memory": "keiba-dispatch-m（2Gi・1 vCPU）",
+   "cost": "削除済み 0 円",
+   "host_equivalent": "共通ログイン 09:05、過去値の検査 2 時間おき。予約は担当が空なので不要（今後は VPS の keiba-fetch-reserve）",
+   "basis": [
+    "config/gcp_job_map.json（scheduler_groups.g-hourly）",
+    "docs/operations/deleted_scheduler_keiba_g_20261113.md"
+   ],
+   "note": "2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs"
+  },
+  {
+   "id": "gcp-g-5min",
+   "where": "gcp",
+   "kind": "scheduler",
+   "status": "retired",
+   "schedule": {
+    "cron": "*/15 * * * *"
+   },
+   "applies": "daily",
+   "grace_min": 30,
+   "max_runtime_min": 5,
+   "weight": "med",
+   "ref": {
+    "scheduler": "keiba-g-5min",
+    "run_job": "keiba-dispatch-m",
+    "group": "g-5min"
+   },
+   "what": "VPS ハートビート監視。15 分おきにスクレイピング異常の通知（2026-10-29: 起動を 5 分→15 分おきに。動くジョブが 15 分おきだけのため）",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [],
+   "command": "python -m src.ops.job_dispatch group g-5min",
+   "memory": "keiba-dispatch-m（2Gi・1 vCPU）",
+   "cost": "削除済み 0 円",
+   "host_equivalent": "通知は動いている（15 分おき）。VPS の監視は無い（下の点検 #1）",
+   "basis": [
+    "config/gcp_job_map.json（scheduler_groups.g-5min）",
+    "docs/operations/deleted_scheduler_keiba_g_20261113.md"
+   ],
+   "note": "2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs"
+  },
+  {
+   "id": "gcp-g-pump",
+   "where": "gcp",
+   "kind": "scheduler",
+   "status": "retired",
+   "schedule": {
+    "cron": "* 8-16 * * 0,1,6"
+   },
+   "applies": "daily",
+   "grace_min": 30,
+   "max_runtime_min": 2,
+   "weight": "med",
+   "ref": {
+    "scheduler": "keiba-g-pump",
+    "run_job": "keiba-dispatch-s",
+    "group": "g-pump"
+   },
+   "what": "開催日（土日月）の日中、イベントを毎分処理して予測タスクを積む",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [],
+   "command": "python -m src.ops.job_dispatch group g-pump",
+   "memory": "keiba-dispatch-s（512Mi・1 vCPU）",
+   "cost": "削除済み 0 円",
+   "host_equivalent": "ホストの raceday-weight-runner（08:00 の常駐）が検知と予測をしている",
+   "basis": [
+    "config/gcp_job_map.json（scheduler_groups.g-pump）",
+    "docs/operations/deleted_scheduler_keiba_g_20261113.md"
+   ],
+   "note": "2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs"
+  },
+  {
+   "id": "gcp-g-results",
+   "where": "gcp",
+   "kind": "scheduler",
+   "status": "retired",
+   "schedule": {
+    "cron": "*/20 12-21 * * 0,1,2,6"
+   },
+   "applies": "daily",
+   "grace_min": 30,
+   "max_runtime_min": 15,
+   "weight": "med",
+   "ref": {
+    "scheduler": "keiba-g-results",
+    "run_job": "keiba-dispatch-m",
+    "group": "g-results"
+   },
+   "what": "予測成績の集計（土日は暫定、月・火は確定）と通知",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [],
+   "command": "python -m src.ops.job_dispatch group g-results",
+   "memory": "keiba-dispatch-m（2Gi・1 vCPU）",
+   "cost": "削除済み 0 円",
+   "host_equivalent": "通知は土日 15:00〜20:40、集計は raceday-result-runner・recent-retry の中",
+   "basis": [
+    "config/gcp_job_map.json（scheduler_groups.g-results）",
+    "docs/operations/deleted_scheduler_keiba_g_20261113.md"
+   ],
+   "note": "2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs"
+  },
+  {
+   "id": "gcp-g-2130",
+   "where": "gcp",
+   "kind": "scheduler",
+   "status": "retired",
+   "schedule": {
+    "cron": "30 21 * * *"
+   },
+   "applies": "daily",
+   "grace_min": 30,
+   "max_runtime_min": 80,
+   "weight": "med",
+   "ref": {
+    "scheduler": "keiba-g-2130",
+    "run_job": "keiba-dispatch-m",
+    "group": "g-2130"
+   },
+   "what": "夜のスクレイピング状況サマリー。金曜は馬名インデックスと成長曲線の週次更新も（約 45 分。前夜のグループに置くと直列で 5400 秒を超えうるため、ここに置く）",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [],
+   "command": "python -m src.ops.job_dispatch group g-2130",
+   "memory": "keiba-dispatch-m（2Gi・1 vCPU）",
+   "cost": "削除済み 0 円",
+   "host_equivalent": "動いている（21:30、金 18:30）",
+   "basis": [
+    "config/gcp_job_map.json（scheduler_groups.g-2130）",
+    "docs/operations/deleted_scheduler_keiba_g_20261113.md"
+   ],
+   "note": "2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs"
+  },
+  {
+   "id": "gcp-g-0730-dayprep",
+   "where": "gcp",
+   "kind": "scheduler",
+   "status": "retired",
+   "schedule": {
+    "cron": "30 7 * * *"
+   },
+   "applies": "daily",
+   "grace_min": 30,
+   "max_runtime_min": 30,
+   "weight": "med",
+   "ref": {
+    "scheduler": "keiba-g-0730-dayprep",
+    "run_job": "keiba-dispatch-xl",
+    "group": "g-0730-dayprep"
+   },
+   "what": "開催日の朝に、その日の全レースの日単位キャッシュ(v4_day・px_day)だけを作る（予測は作らない）。ピーク約12GBなので 16GiB",
+   "sample_url": null,
+   "inputs": [],
+   "outputs": [],
+   "command": "python -m src.ops.job_dispatch group g-0730-dayprep",
+   "memory": "keiba-dispatch-xl（16Gi・4 vCPU）",
+   "cost": "削除済み 0 円",
+   "host_equivalent": "無い（ホストは serving-state-precompute 07:35・-profile 08:10 の別の作りで予測している、と推測）",
+   "basis": [
+    "config/gcp_job_map.json（scheduler_groups.g-0730-dayprep）",
+    "docs/operations/deleted_scheduler_keiba_g_20261113.md"
+   ],
+   "note": "2026-11-13 削除（11/12 17:00 から停止）。再開の予定なし。作り直しの手順は根拠の docs"
+  },
+  {
+   "id": "gcp-netkeiba-smoke",
+   "where": "gcp",
+   "kind": "run_job",
+   "status": "paused",
+   "schedule": null,
+   "applies": "daily",
+   "grace_min": null,
+   "max_runtime_min": 30,
+   "weight": "low",
+   "ref": {
+    "run_job": "netkeiba-smoke"
+   },
+   "what": "netkeiba への到達試験（GCP から取得できるかの確認）。手動だけ",
+   "sample_url": "https://db.netkeiba.com/",
+   "inputs": [],
+   "outputs": [
+    "Cloud Logging（結果の 1 行）"
+   ],
+   "command": "deploy/gcp/netkeiba_smoke/run.sh",
+   "memory": null,
+   "cost": "1 回 数円",
+   "host_equivalent": null,
+   "basis": [
+    "deploy/gcp/netkeiba_smoke/run.sh",
+    "docs/operations/deleted_scheduler_smoke_auto_20261113.md:31"
+   ],
+   "note": "Scheduler なし（smoke-auto-* 3 件は 11/13 削除）。最後の実行 10/25 23:50"
+  },
+  {
+   "id": "host-vps-alive",
+   "where": "host",
+   "kind": "cron",
+   "status": "planned",
+   "schedule": {
+    "every_min": 15
+   },
+   "applies": "daily",
+   "grace_min": 45,
+   "max_runtime_min": 1,
+   "weight": "high",
+   "ref": {
+    "cron_tag": "KEIBA-VPS-ALIVE",
+    "job_id": "vps-alive"
+   },
+   "what": "VPS 全体の停止の検知: 公開の画面の静的な /version.json を確かめ、2 回続けて失敗したら Slack、戻ったら Slack",
+   "sample_url": "https://app.megu-keiba.com/version.json",
+   "inputs": [
+    "https://app.megu-keiba.com/version.json（Cloudflare → VPS の Tunnel → nginx の静的ファイル。Cloud Run を通らない。キャッシュは DYNAMIC）"
+   ],
+   "outputs": [
+    "Slack（状態が変わったときだけ）",
+    "data/local/meta/vps_alive_state.json"
+   ],
+   "command": "python -m src.ops.vps_alive（cron_run.sh vps-alive で包む）",
+   "memory": null,
+   "cost": "0 円（GCP・GCS に触れない）",
+   "host_equivalent": null,
+   "basis": [
+    "src/ops/vps_alive.py",
+    "scripts/cron/install_vps_alive_cron.sh"
+   ],
+   "note": "入れた後に active にする"
+  }
+ ],
+ "retired": [
+  {
+   "id": "retired-jma-weather",
+   "name": "jma-weather（気象庁の時別値）",
+   "where": "gcp",
+   "was": "毎時（keiba-g-hourly の中）",
+   "retired_on": "2026-11-13",
+   "why": "ユーザーの判断（本番の予測には使わず、研究・コラムだけ）。毎時 1,310 件・345MiB を読んでいた",
+   "basis": [
+    "コミット 42f48f22",
+    "config/gcp_job_map.json（jma-weather enabled=false）",
+    "docs/operations/jma_weather.md"
+   ]
+  },
+  {
+   "id": "retired-smoke-auto",
+   "name": "smoke-auto-thu-noon・-sat-morning・-sun-night",
+   "where": "gcp",
+   "was": "2026-10 の日付指定の一度きり（Scheduler → netkeiba-smoke）",
+   "retired_on": "2026-11-13",
+   "why": "実行済み・次は 2027-10 まで動かない。1 件 約 15 円/月",
+   "basis": [
+    "docs/operations/deleted_scheduler_smoke_auto_20261113.md"
+   ]
+  }
+ ],
+ "audit": [
+  {
+   "no": "1",
+   "severity": "高",
+   "kind": "漏れ（監視）",
+   "finding": "VPS が丸ごと落ちても、外から気づく仕組みが無い。GCP の vps-watchdog（keiba-g-5min）は削除済みで、もとからハートビートが届かず blocked。VPS の keiba-heartbeat.timer は disabled。keiba-ui-health は VPS の中の自己診断なので、VPS 全体の停止・回線断は通知できない。\nさらに、ハートビートを設計どおり有効にすると 5 分おきに Cloud Run（keiba-monitor）へ要求することになり、CLAUDE.md の「15 分未満の間隔で ping を足さない」に反する。",
+   "basis": "config/gcp_job_map.json:1966、ssh の list-unit-files（heartbeat.timer disabled）、scripts/ops/vps/healthcheck.sh",
+   "advice": "足す。費用 0 の案: ホストの cron から 15 分おきに VPS の静的な /version.json（Cloudflare 経由、Cloud Run を通らない）を確かめて Slack へ。ハートビートはこのままでは有効にしない。",
+   "cost": "0 円（ホスト → VPS の静的ファイル。GCP を通らない）",
+   "status": "対応中: 監視の計画（ホストの cron で /version.json・VPS の sched_status・毎朝の点検）"
+  },
+  {
+   "no": "2",
+   "severity": "高",
+   "kind": "不要／見直し（費用）",
+   "finding": "VPS の keiba-cache-warm が 60 秒おきに GCS を一覧している（GCP の外から繰り返し読む。egress_billed() を見ていない）。目印は 1 日 300〜550 件で、60 秒の細かさは要らない可能性が高い。取り直しの要求は Cloud Run の API の起動にもなる。",
+   "basis": "scripts/ops/vps/cache_warm.py:254-261、docs/operations/cost_ledger.md:155",
+   "advice": "見直す（間隔を 10〜15 分に、一覧の fields を絞る、など）。台帳と突き合わせ。",
+   "cost": "今 月 約 265 円（一覧 35＋転送 230）。15 分おきなら 1/15 前後"
+  },
+  {
+   "no": "3",
+   "severity": "対応済み",
+   "kind": "不要（費用）",
+   "finding": "取得の実行役 keiba-fetch-agent が担当なしで常駐し、影モードで GCS のタスク表を毎分 6 回一覧していた。11/13 15:00:58 に停止・無効にした（別のセッション、dda6af55）。",
+   "basis": "ssh（enabled）、config/fetch_owner.json（agent_tasks 空）、docs/operations/cost_ledger.md:177",
+   "advice": "止めたまま。段 6 で file にしてから再開する。台帳と突き合わせ（e2b534b4 で反映済み）。",
+   "cost": "月 約 −210 円＋転送"
+  },
+  {
+   "no": "4",
+   "severity": "中",
+   "kind": "見直し（費用の歯止め）",
+   "finding": "費用の歯止め cost_guard の「止める」対象が 0 件になった。止めるのは keiba-g- の Scheduler（KEEP 以外）だけで、13 件の削除後は通知だけの仕組み。今の大きな項目（GCS の外への転送 G4、cache_warm）は止められない。",
+   "basis": "src/ops/cost_guard.py:38-39・:140-142、ホストの cron（10:17・22:17）、docs/operations/cost_ledger.md:86（G4）",
+   "advice": "様子見（通知は残す）。止める対象を VPS の周期処理（cache_warm など）に広げるかは別に検討。台帳と突き合わせ。",
+   "cost": "直接は 0。超過に気づけないと大きい"
+  },
+  {
+   "no": "5",
+   "severity": "中",
+   "kind": "不要（ホストの残り）",
+   "finding": "job_map で廃止・無効にしたものがホストの cron に残っている: sync_pg_from_gcs（毎日 00:00）・ensure_postgres（5 分おき）・sporthorse-births-nightly（毎日 22:00）は retire。serving-state-precompute（07:35）・-profile（08:10）は「day-prep に置き換え」で無効。\nただし day-prep は GCP だけ（削除済み）なので、ホストの予測が serving-state を使っているなら残す必要がある（推測）。",
+   "basis": "config/gcp_job_map.json:3727・:3744・:3608・:504・:659、ホストの crontab",
+   "advice": "中身を確かめてから: PG・誕生日は消す候補、serving-state は使い道を確かめて job_map を直す。GCS を読む分は台帳と突き合わせ。",
+   "cost": "未測定（sync_pg_from_gcs はホストから GCS を読むので転送料になりうる）"
+  },
+  {
+   "no": "6",
+   "severity": "中",
+   "kind": "漏れ（段 6 の前提）",
+   "finding": "VPS へ担当を渡したときにホストに残す後処理・取り込みの cron が未登録（後処理 3 件・VPS のミラーの取り込み）。計画の weekly-finalize（週次のめぐ指数・PG 同期などの後処理）の入口も未着手。担当が空の今は困らない。",
+   "basis": "scripts/cron/install_host_postprocess_cron.sh:16-18、scripts/cron/install_vps_mirror_pull_cron.sh、docs/operations/vps_only_fetch.md:42",
+   "advice": "足す（担当を渡す前に必ず。渡す順の手順に入れる）",
+   "cost": "計画の見積もりで 月 約 20 円＋約 51 円"
+  },
+  {
+   "no": "7",
+   "severity": "低",
+   "kind": "不要（保守だけ残る）",
+   "finding": "Jobs の版のタグ live-jobs・live-jobs-a/b（3.4GB）が、Jobs を使わない間も Artifact Registry に残る。keiba-dispatch-m/l/xl・-s の Job 定義は shadow のために s だけ要る。",
+   "basis": "docs/operations/cost_ledger.md:57（F2）・:165-166",
+   "advice": "使わない版のタグを外す（戻すときは配備し直す）。台帳と突き合わせ。",
+   "cost": "月 約 −35〜−50 円"
+  },
+  {
+   "no": "8",
+   "severity": "低",
+   "kind": "不要（呼び手なし）",
+   "finding": "job_map に呼び手の無いジョブが残る: 旧設計の 4 件（weekly-sire-agg・track-speed-rebuild-baselines・race-quality-day・myostatin-recalculate、enabled=false）、GCP だけの predict-race・event-pump・day-prep・prediction-results-refresh・parity-check（Scheduler 削除で呼ばれない）。",
+   "basis": "config/gcp_job_map.json:2456・:2500・:2544・:2588・:1030",
+   "advice": "様子見（GCP を再開しない方針が固まったら job_map を整理）",
+   "cost": "0"
+  },
+  {
+   "no": "9",
+   "severity": "低",
+   "kind": "不要の候補",
+   "finding": "fetch-shadow-report が毎朝動くが、VPS の影モードが止まっていれば「影の結果なし」を書くだけ（影モードの状態は未確認）。VPS の keiba-api.service（disabled）も古い残り。",
+   "basis": "config/gcp_job_map.json:978、scripts/ops/vps/vps_03_units.sh:79（影は既定オフ）",
+   "advice": "様子見（無料枠の中）。keiba-api.service は消してよい候補",
+   "cost": "ほぼ 0"
+  },
+  {
+   "no": "10",
+   "severity": "低",
+   "kind": "漏れの確認",
+   "finding": "どこでも定期に動いていないもの: sire-line（job_map はホスト担当だが crontab に行が無い）、めぐコラムの作り直し（src/research/columns/。手動の運用とみられる）、バックアップの類（GCS が正本で、定期の退避は見当たらない）。\n走法の軸（run_axes）とめぐ分析の事前計算は、ホストの毎朝の書き出しの中で動いている（漏れではない）。",
+   "basis": "config/gcp_job_map.json:3078、scripts/cron/export_tables_daily.sh:46・:48",
+   "advice": "要確認（定期にすべきかを決める）",
+   "cost": "—"
+  },
+  {
+   "no": "11",
+   "severity": "低〜中",
+   "kind": "食い違い（時刻）",
+   "finding": "共通ログインの更新の時刻が 9 時間ずれている可能性。ホストの crontab は 5 0 * * *（crontab は UTC なので JST 09:05 に起動）。一方、src/scripts/ops/shared_login.py の説明は「毎日 00:05 JST」、job_map の origin.cron_utc は 5 15 * * *。行頭の TZ=Asia/Tokyo はコマンドの環境にしか効かず、起動の時刻は変わらない。毎月 1 日のパスワードの更新が 09:05 になっているとみられる。",
+   "basis": "ホストの crontab、src/scripts/ops/shared_login.py:3、config/gcp_job_map.json:3761",
+   "advice": "様子見・要確認（00:05 にしたいなら crontab を 5 15 * * * に）",
+   "cost": "0"
+  }
+ ],
+ "audit_note": "設計上の点検（2026-11-13）。「不要なもの」と「漏れているもの」。設定は変えていない（提案だけ）。費用に効くものは docs/operations/cost_ledger.md と突き合わせてから進める。",
+ "audit_ok": "確認済みで問題なし: 天気の取得はホストの crontab から外れている（jma の行なし）。ホストの crontab に重複した行は無い。",
+ "services": "常駐のサービス（定期実行ではない）: keiba-ui（本番の画面）・keiba-ui-stg・nginx・cloudflared-prod。keiba-api.service は disabled（API を Cloud Run に移す前の残り）。"
+}

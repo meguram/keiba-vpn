@@ -60,7 +60,7 @@ install_if_changed 644 "$T/keiba-release-pull-ui.timer" /etc/systemd/system/keib
 install_if_changed 644 "$T/keiba-release-pull-fetch.timer" /etc/systemd/system/keiba-release-pull-fetch.timer
 # 取得の予約を VPS の中で行う（GCP の reserve-fetch-tasks / reserve-race-day の代わり。タスク表は /var/lib/keiba-fetch/tasks）
 for u in keiba-fetch-reserve.service keiba-fetch-reserve.timer keiba-fetch-raceday@.service keiba-fetch-raceday-tomorrow.timer keiba-fetch-raceday-today.timer \
-         keiba-mirror-vps-push.service keiba-mirror-vps-push.timer; do
+         keiba-mirror-vps-push.service keiba-mirror-vps-push.timer keiba-sched-status.service keiba-sched-status.timer; do
   install_if_changed 644 "$T/$u" "/etc/systemd/system/$u"
 done
 # メモリ上限（MemoryHigh=ソフト、MemoryMax=ハード）。既存ユニットは書き換えず drop-in で上書きする
@@ -128,5 +128,11 @@ if [ "$ENABLE_AGENT" = 1 ]; then
     fi
   else say "  取得の実行役: ENABLED=1・current(コードバンドル)・venv が揃っていないため有効化しません"; fi
 else say "  取得の実行役は有効化しません（--enable-fetch-agent で。既定はホスト cron のまま）"; fi
+# 定期実行の見張り（15 分おき・GCS の ops/heartbeat/vps/status.json に書くだけ。Cloud Run を起こさない）。
+# 取得の実行役のコード（current）・venv・GCS の設定がそろっていれば、実行役を止めていても有効にする（見張りは取得をしない）
+if [ -L /opt/keiba-fetch/current ] && [ -x /opt/keiba-fetch/venv/bin/python ] && filled /etc/keiba-fetch/fetch.env GCS_BUCKET; then
+  run install -d -m 755 -o keibafetch -g keibafetch /var/lib/keiba-fetch/sched_status
+  run systemctl enable --now keiba-sched-status.timer
+else say "  定期実行の見張り: current・venv・fetch.env の GCS_BUCKET がそろっていないため有効化しません"; fi
 [ "$DRY" = 1 ] || { systemctl list-timers --no-pager 2>/dev/null | grep -E "keiba|NEXT" || true; }
 say "完了"

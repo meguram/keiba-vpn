@@ -1,0 +1,43 @@
+{% extends "portal/base.html" %}{% from "portal/_m.html" import pill %}
+{% block title %}定期実行{% endblock %}
+{% block head %}<style>
+.gray{color:var(--muted)}tr.row td{vertical-align:top}.job details summary{margin:0;color:var(--text);font-size:13px}
+.job details[open]{padding-bottom:6px}.job dl{display:grid;grid-template-columns:7em 1fr;gap:2px 10px;margin:6px 0 0;font-size:12px}
+.job dt{color:var(--muted)}.job dd{margin:0;word-break:break-all}.scroll{overflow-x:auto}
+@media(max-width:560px){.job dl{grid-template-columns:1fr}.hide-sm{display:none}}
+</style>{% endblock %}
+{% block body %}
+<h1>定期実行（GCP・VPS） {{ pill(d.overall, d.label) }}</h1>
+<p class="sub">一覧の正は <code>config/scheduled_jobs.json</code>。予定（cron・間隔）と最後の実行を比べてルールで判定します（未実行・遅延・長時間実行・失敗・想定外の実行・実行時間の異常・記録の途絶）。
+開いたときだけ読みます（5 分は使い回し・自動更新なし）。VPS は VPS の見張りが 15 分おきに書く <code>ops/heartbeat/vps/status.json</code>、GCP は Scheduler・Cloud Run の実行の一覧です。ホストの cron は判定しません。</p>
+{% if d.get('error') %}<div class="card"><b class="red">{{ d.error }}</b></div>{% endif %}
+{% for a in d.alerts %}<div class="card" style="margin-bottom:8px"><span class="{{ a.level }}">● {{ a.title }}</span></div>{% endfor %}
+{% for where, title in [('gcp','GCP（Cloud Scheduler → Cloud Run Jobs）'),('vps','ConoHa VPS（systemd のタイマー・常駐）'),('host','ホスト（参考。判定しない）')] %}
+{% set rows = d.rows|selectattr('job.where', 'equalto', where)|list %}{% if rows %}
+<h2>{{ title }}</h2>
+<div class="card scroll"><table><thead><tr><th>状態</th><th>ジョブ（行を開くと中身）</th><th class="hide-sm">予定</th><th>最後の開始</th><th class="hide-sm">結果</th></tr></thead><tbody>
+{% for r in rows %}{% set j = r.job %}{% set last = r.last %}
+<tr class="row"><td class="nw">{{ pill(r.level, r.label) }}</td>
+<td class="job"><details><summary><b>{{ j.id }}</b> <span class="small muted">{{ {'active':'稼働中','paused':'停止中','planned':'今後','retired':'廃止'}[j.status] }}</span><br><span class="small">{{ j.what }}</span></summary>
+<dl>
+{% if j.ref.timer or j.ref.scheduler %}<dt>起動するもの</dt><dd>{{ j.ref.timer or j.ref.scheduler }}{% if j.ref.service %} → {{ j.ref.service }}{% endif %}{% if j.ref.run_job %} → {{ j.ref.run_job }}{% endif %}</dd>{% endif %}
+{% if j.command %}<dt>入口</dt><dd><code>{{ j.command }}</code></dd>{% endif %}
+{% if j.sample_url %}<dt>取得先の例</dt><dd><a href="{{ j.sample_url }}" rel="noopener noreferrer" target="_blank">{{ j.sample_url }}</a></dd>{% endif %}
+{% if j.inputs %}<dt>読む</dt><dd>{{ j.inputs|join('、') }}</dd>{% endif %}
+{% if j.outputs %}<dt>書く・送る</dt><dd>{{ j.outputs|join('、') }}</dd>{% endif %}
+{% if j.memory %}<dt>メモリ</dt><dd>{{ j.memory }}</dd>{% endif %}
+{% if j.cost %}<dt>費用の目安</dt><dd>{{ j.cost }}</dd>{% endif %}
+{% if j.host_equivalent %}<dt>ホストでは</dt><dd>{{ j.host_equivalent }}</dd>{% endif %}
+{% if j.note %}<dt>メモ</dt><dd>{{ j.note }}</dd>{% endif %}
+<dt>判定の目安</dt><dd>猶予 {{ j.grace_min or '—' }} 分・実行の目安 {{ j.max_runtime_min or '—' }} 分・重さ {{ {'high':'高','med':'中','low':'低'}[j.weight] }}{% if r.estimated %}（開催日は土日で推定）{% endif %}</dd>
+{% if r.inner %}<dt>中のジョブ</dt><dd>{% for i in r.inner %}{{ i.job }}: <span class="{{ 'green' if i.status in ('ok','skipped') else 'muted' if not i.status else 'red' }}">{{ i.status or '記録なし' }}</span>{% if i.started_at %}（{{ i.started_at[5:16]|replace('T',' ') }}）{% endif %}{% if not loop.last %}、{% endif %}{% endfor %}</dd>{% endif %}
+{% if r.runs %}<dt>直近の実行</dt><dd>{% for x in r.runs %}{{ x.start|jst }}{% if x.end %}（{{ ((x.end - x.start) // 60)|int }} 分）{% endif %} <span class="{{ 'green' if x.ok else 'red' if x.ok == false else 'muted' }}">{{ '成功' if x.ok else '失敗' if x.ok == false else '実行中／不明' }}</span>{% if not loop.last %}<br>{% endif %}{% endfor %}</dd>{% endif %}
+<dt>根拠</dt><dd>{{ j.basis|join('、') }}</dd>
+</dl></details>
+{% for why in r.reasons %}<div class="small {{ r.level }}">● {{ why }}</div>{% endfor %}</td>
+<td class="small nw hide-sm">{% if j.schedule and j.schedule.cron %}<code>{{ j.schedule.cron }}</code>{% elif j.schedule %}{{ j.schedule.every_min|int }} 分おき{% else %}常駐・手動{% endif %}</td>
+<td class="small nw">{{ last.start|jst if last else '—' }}</td>
+<td class="small nw hide-sm">{% if not last %}—{% elif last.ok %}<span class="green">成功</span>{% elif last.ok == false %}<span class="red">失敗{% if last.code is not none %}（{{ last.code }}）{% endif %}</span>{% else %}<span class="muted">実行中／不明</span>{% endif %}</td></tr>
+{% endfor %}</tbody></table></div>
+{% endif %}{% endfor %}
+{% endblock %}
