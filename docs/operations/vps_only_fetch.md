@@ -83,3 +83,12 @@
 
 ## 取得の網羅で気づいたこと
 - 2026-09-22（祝日開催、24 レース）が、oikiri・paddock・trainer_comment・barometer の 4 カテゴリで同時に GCS に無い（fetch-status-unified-display の調査、2026-11-13）。祝日開催の取りこぼしとみられる。
+
+## 関連: VPS の API キャッシュの温め役の費用（2026-11-13）
+- 温め役（keiba-cache-warm、scripts/ops/vps/cache_warm.py）が 60 秒おきに GCS の ops/cache_dirty/ を一覧していた（月 約 265 円）。
+  合図 ops/cache_dirty/_beacon.json（ホスト・Cloud Run Jobs の push と配備のときだけ書く）の世代を見て、変わったとき（最短 5 分）・
+  合図が無いとき（10 分）・安全網（30 分）だけ一覧する形にした（05f35916。見積もり 最悪 月 約 40 円）。
+- VPS への配備: 2026-11-13 16:30 JST ごろ、ユーザーが root で /opt/keiba-ui/bin/cache_warm.py を入れ替えた
+  （sha256 467dac79… が develop の 05f35916 と一致。keiba-cache-warm.timer は active、16:30:59 の実行は終了コード 0）。
+  1〜2 日後に、1 日の一覧が 300 回以下になったかを Monitoring で確かめる。戻すときは `git show 05f35916^:scripts/ops/vps/cache_warm.py` の版に入れ替える。
+- 今後の入れ替えを root に頼らずに行う方法（方法 A: 配布物から決まった操作で入れる install_ops_files.sh）は計画中。
