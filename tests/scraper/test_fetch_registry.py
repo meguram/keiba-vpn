@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 # 新しい sh から新しいモジュールを起動するときは、取得なら fr.FETCH_MODULE_PATTERN に、取得でなければここに足す
 NON_FETCH_MODULES = {
     "src.api.flask_app", "src.db.batch.stats_snapshot", "src.monitor.app", "src.ops.fetch_owner", "src.ops.gcs_mirror",
-    "src.ops.cost_guard", "src.ops.cron_catchup", "src.ops.job_owner", "src.ops.model_publish", "src.ops.release_manifest", "src.ops.release_publish", "src.ops.scheduler_gen",
+    "src.ops.cost_guard", "src.ops.cron_catchup", "src.ops.host_postprocess", "src.ops.job_owner", "src.ops.model_publish", "src.ops.release_manifest", "src.ops.release_publish", "src.ops.scheduler_gen",
     "src.ops.state_sync", "src.pipeline.betting.odds_drift", "src.pipeline.build_jockey_trainer_stats",
     "src.research.pedigree.build_ancestor_name_map", "src.research.pedigree.build_horse_pedigree_10gen",
     "src.research.pedigree.build_pedigree_10gen_3view_index", "src.research.pedigree.build_pedigree_10gen_index",
