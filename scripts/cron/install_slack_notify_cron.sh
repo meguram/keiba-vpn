@@ -17,10 +17,7 @@ LINES="*/20 6-11 * * 0,6 ${W} slack-results -- bash ${PROJECT_DIR}/scripts/cron/
 30 22 * * * ${W} slack-scrape-summary-morning -- bash ${PROJECT_DIR}/scripts/cron/scrape_status_notify.sh summary-morning ${PROJECT_DIR} ${L}
 0 23 * * 0 ${W} slack-scrape-coverage -- bash ${PROJECT_DIR}/scripts/cron/scrape_status_notify.sh coverage ${PROJECT_DIR} ${L}"
 mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/data/local/meta/cron_backups"
-crontab -l 2>/dev/null > "${PROJECT_DIR}/data/local/meta/cron_backups/crontab_before_slack_notify_$(date +%Y%m%d_%H%M%S).txt" || true
-TMP="$(mktemp)"
-crontab -l 2>/dev/null | grep -v "# ${TAG}" > "$TMP" || true
-printf '%s\n' "$LINES" >> "$TMP"
-crontab "$TMP"
-rm -f "$TMP"
+# 安全な入れ替え（root でなければ・crontab -l が失敗したら・少なすぎる crontab なら中止、退避、タグの行だけ、行数の確認）。2026-11-13
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib_crontab.sh"
+KEIBA_CRON_MIN_LINES="${KEIBA_CRON_MIN_LINES:-20}" crontab_replace_tag "$TAG" "$LINES"
 echo "登録しました（${TAG}）:"; printf '%s\n' "$LINES"

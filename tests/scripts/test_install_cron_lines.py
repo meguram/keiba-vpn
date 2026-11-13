@@ -162,3 +162,25 @@ def test_verify_past_values_cron_is_daily_and_wrapped():
     text = (CRON / "install_verify_past_values_cron.sh").read_text(encoding="utf-8")
     line = re.search(r'^LINES="([^\n]+)"$', text, re.M).group(1)
     assert line.startswith("25 19 * * * ") and "cron_run.sh" in line and "verify-past-values" in line
+
+
+def test_installers_on_the_safe_replace_keep_a_minimum_line_count():
+    """lib_crontab.sh に移った登録スクリプトは、ホストの root の crontab の取り違いに気付くよう下限 20 を付ける（2026-11-13）。"""
+    paths = sorted(CRON.glob("install_*.sh")) + sorted((CRON.parent / "ops").glob("install_*cron*.sh"))
+    using = [p for p in paths if "crontab_replace_tag" in p.read_text(encoding="utf-8")]
+    assert len(using) >= 14
+    for p in using:
+        text = p.read_text(encoding="utf-8")
+        assert 'KEIBA_CRON_MIN_LINES="${KEIBA_CRON_MIN_LINES:-20}"' in text, p.name
+        assert "crontab -l 2>/dev/null |" not in text, p.name          # 失敗を握りつぶす読み方が残っていない
+        assert subprocess.run(["bash", "-n", str(p)]).returncode == 0, p.name
+
+
+def test_converted_installers_never_wipe_crontab_when_listing_fails(tmp_path):
+    for name in ["install_odds_drift_cron.sh", "install_gcs_mirror_cron.sh", "install_cost_guard_cron.sh"]:
+        store, env = _fake_crontab(tmp_path / name, FILLER)
+        r = _run(name, {**env, "KEIBA_CRON_ALLOW_NONROOT": "1", "FAKE_CRONTAB_FAIL": "1"})
+        assert r.returncode != 0 and store.read_text() == FILLER, name
+        store2, env2 = _fake_crontab(tmp_path / (name + "_ok"), FILLER)
+        r2 = _run(name, {**env2, "KEIBA_CRON_ALLOW_NONROOT": "1"})
+        assert r2.returncode == 0 and store2.read_text().count("# OTHER") == 25, name + r2.stdout + r2.stderr

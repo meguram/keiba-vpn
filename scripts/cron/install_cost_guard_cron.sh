@@ -12,10 +12,7 @@ TAG="KEIBA-COST-GUARD"
 PY="${PY:-/opt/conda/bin/python3}"
 LINES="17 1,13 * * * cd \"${PROJECT_DIR}\" && TZ=Asia/Tokyo bash \"${PROJECT_DIR}/scripts/cron/cron_run.sh\" cost-guard -- env KEIBA_ENV=stg PYTHONPATH=. \"${PY}\" -m src.ops.cost_guard --apply >> \"${PROJECT_DIR}/logs/cost_guard.log\" 2>&1 # ${TAG}"
 mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/data/local/meta/cron_backups"
-crontab -l 2>/dev/null > "${PROJECT_DIR}/data/local/meta/cron_backups/crontab_before_cost_guard_$(date +%Y%m%d_%H%M%S).txt" || true
-TMP="$(mktemp)"
-crontab -l 2>/dev/null | grep -v "# ${TAG}" > "$TMP" || true
-printf '%s\n' "$LINES" >> "$TMP"
-crontab "$TMP"
-rm -f "$TMP"
+# 安全な入れ替え（root でなければ・crontab -l が失敗したら・少なすぎる crontab なら中止、退避、タグの行だけ、行数の確認）。2026-11-13
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib_crontab.sh"
+KEIBA_CRON_MIN_LINES="${KEIBA_CRON_MIN_LINES:-20}" crontab_replace_tag "$TAG" "$LINES"
 echo "登録しました（${TAG}）:"; printf '%s\n' "$LINES"

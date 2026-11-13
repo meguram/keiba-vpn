@@ -7,9 +7,7 @@ TAG="KEIBA-HORSE-REMARKS"
 # 毎日 03:00 JST = 18:00 UTC（cron はシステム時刻 = UTC）。夜間のエクスポート・recent-retry の後
 LINE="0 18 * * * cd ${PROJECT_DIR} && TZ=Asia/Tokyo bash ${PROJECT_DIR}/scripts/cron/cron_run.sh horse-remarks-daily -- bash ${PROJECT_DIR}/scripts/cron/horse_remarks_daily.sh ${PROJECT_DIR} >> ${PROJECT_DIR}/logs/horse_remarks_daily.log 2>&1 # ${TAG}"
 mkdir -p "${PROJECT_DIR}/logs"
-TMP="$(mktemp)"
-crontab -l 2>/dev/null | grep -v "# ${TAG}" > "$TMP" || true
-echo "$LINE" >> "$TMP"
-crontab "$TMP"
-rm -f "$TMP"
+# 安全な入れ替え（root でなければ・crontab -l が失敗したら・少なすぎる crontab なら中止、退避、タグの行だけ、行数の確認）。2026-11-13
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib_crontab.sh"
+KEIBA_CRON_MIN_LINES="${KEIBA_CRON_MIN_LINES:-20}" crontab_replace_tag "$TAG" "$LINE"
 echo "登録しました: ${LINE}"

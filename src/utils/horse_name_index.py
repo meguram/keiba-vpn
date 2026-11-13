@@ -453,9 +453,10 @@ def rebuild_horse_name_index_from_gcs_race_shutuba(base_dir: str | Path) -> int:
 
 def run_weekly_horse_name_index_update(base_dir: str | Path) -> dict[str, Any]:
     """
-    金曜夕方バッチ用: GCS から馬名リストを再構築する。
+    金曜夕方バッチ用: 馬名リストを再構築する。
 
-    既定は ``horse_result`` 全件。``HORSE_NAME_INDEX_SOURCE=shutuba`` で出馬表のみ。
+    既定（``HORSE_NAME_INDEX_SOURCE`` 未設定または ``flat``）はローカルの flat から作る（GCS を読まない。2026-11-13 から）。
+    ``shutuba`` は GCS の出馬表を全年、``horse_result`` は GCS の馬の成績を全件読む（手で選ぶとき用。読みが多い）。
     ``task_raceday_eve``（金曜 18:00）および cron から呼ぶ。
     """
     t0 = time.time()
