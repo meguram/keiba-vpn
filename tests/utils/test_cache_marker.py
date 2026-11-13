@@ -92,7 +92,7 @@ def test_bump_marks_all_except_for_save_reasons(io, monkeypatch, tmp_path):
     cache_epoch.bump("save:race_result")
     assert io.puts == []
     cache_epoch.bump("deploy")
-    assert [n.rsplit("/", 1)[1] for n, _ in io.puts] == ["_ALL"]
+    assert [n.rsplit("/", 1)[1] for n, _ in io.puts] == ["_ALL", "_beacon.json"]      # 配備では合図も書く（VPS の温め役が一覧する合図）
 
 
 def test_mark_from_save_marks_horse_pages_with_h_prefix_regardless_of_birth_year(io):
@@ -102,3 +102,25 @@ def test_mark_from_save_marks_horse_pages_with_h_prefix_regardless_of_birth_year
     assert not cm.mark_from_save("some_internal_category", "2018104963")
     names = [n for n, _ in io.puts]
     assert len(names) == 2 and names[0].endswith("/h2018104963") and names[1].endswith("/h2023100001")
+
+
+def test_beacon_is_written_on_push_and_deploy_but_not_on_each_save(io, monkeypatch):
+    """合図（ops/cache_dirty/_beacon.json）は push と配備のときだけ書く（保存ごとに書くと最悪 月 13 万回・約 100 円）。"""
+    from src.utils import cache_epoch as ce
+
+    monkeypatch.setattr(ce, "UI_CATEGORIES", frozenset({"race_odds"}), raising=False)
+    cm.mark_from_save("race_odds", "202611140101")
+    assert cm.BEACON_KEY not in [n for n, _ in io.puts]
+    cm.mark_from_paths(["data/local/inference/predictions_v6/20261114/202611140102.parquet"])
+    assert [n for n, _ in io.puts].count(cm.BEACON_KEY) == 1
+    monkeypatch.setattr(cm, "_last", {})
+    cm.mark_all("deploy")
+    assert [n for n, _ in io.puts].count(cm.BEACON_KEY) == 2
+
+
+def test_beacon_is_rate_limited_but_remembers_the_skipped_one(io, monkeypatch):
+    assert cm.touch_beacon("a") and not cm.touch_beacon("b")
+    assert cm._last.get("\0beacon_pending")                       # 書き残しを覚えている
+    cm._last["\0beacon"] = -1e9                                   # 60 秒たった
+    cm.mark_from_paths([])                                          # 目印が無くても、書き残しがあれば合図を書く
+    assert [n for n, _ in io.puts].count(cm.BEACON_KEY) == 2

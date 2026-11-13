@@ -2,12 +2,14 @@
 """VPS の API キャッシュ(nginx proxy_cache)を、参照用データの更新に合わせて自動で取り直す（事前ロード）。
 
 - 更新の知らせ: GCS の ``ops/cache_dirty/<YYYYMMDD UTC>/<キー>``（キー = race_id 12桁 / 開催日8桁 / ``h``+馬ID10桁 / ``_ALL``）。書き手は
-  ``src/utils/cache_marker.py``（取り込み・ミラー・配備）。ここでは 1 周に **一覧 1 回**（昨日以降の接頭辞）だけ読み、個別の読み出しはしない。
+  ``src/utils/cache_marker.py``（取り込み・ミラー・配備）。毎周は合図 ``ops/cache_dirty/_beacon.json`` の世代（メタデータだけ）を見て、
+  合図が変わったとき（最短 5 分）・合図が無いとき（10 分）・安全網（30 分）だけ一覧する（昨日以降の接頭辞。個別の読み出しはしない）。
+  GCP の外から毎分一覧すると月 約 265 円かかっていた（2026-11-13）。
 - 取り直し: ローカルの nginx(既定 127.0.0.1:8080, Host=app.megu-keiba.com = 本番の通り道と同じキー)へ ``X-Keiba-Refresh`` 付きで GET。
   nginx がキャッシュ読みを飛ばして API から取り直し、保存(上書き)する。結果の保持期間は API の Cache-Control(確定レースは 30 日)で決まる。
 - 取り直しの要求には nginx が ``X-Keiba-Fresh: 1`` を付け、API 内の応答の使い回し（prerender）も読まずに作り直させる。
   それ以外の API 内の短い使い回し（メモリ上。最大 10 分）を越えるため、取り直せたパスは ``WARM_SECOND_PASS_SEC``（既定 660 秒）後にもう 1 回取り直す。
-- GCP の読みは「一覧 1 回/周」だけ。キャッシュ本体は VPS のディスク(/var/cache/nginx/keiba_api)。
+- GCP の読みは「合図のメタデータ 1 回/周」と、上の条件のときの一覧だけ。キャッシュ本体は VPS のディスク(/var/cache/nginx/keiba_api)。
 - 状態: /var/lib/keiba-ui/cache-warm/state.json（処理済みの目印の世代と、未処理の取り直し待ち）。
 - 標準ライブラリ + google-cloud-storage(pull 用 venv)だけで動く。systemd タイマー(keiba-cache-warm.timer)が 60 秒おきに起動。
 """
@@ -251,14 +253,48 @@ def drain(state: dict, warmer: Warmer, *, max_requests: int, max_sec: float, pau
     return {"ok": done, "ng": failed, "left": len(state["queue"])}
 
 
-def list_markers(bucket_name: str, now: datetime | None = None) -> list[tuple[str, int]]:
-    """GCS を 1 回 list する（昨日(UTC)以降の接頭辞だけ）。"""
-    from google.cloud import storage  # pull 用 venv にある
+BEACON = f"{PREFIX}/_beacon.json"     # 書き手（ホストのミラーの push・配備）が目印を置くたびに上書きする合図（src/utils/cache_marker.py）
 
+
+def should_list(state: dict, beacon_gen: int | None, now: float, *, min_sec: float, safety_sec: float, missing_sec: float) -> bool:
+    """今回 GCS を一覧するか（純粋関数）。費用の上限: GCP の外（VPS）から毎分一覧すると月 約 265 円かかっていた（2026-11-13）。
+    - 合図が前回の一覧の時と変わっていて、前回の一覧から min_sec 以上たっていれば一覧する。
+    - 合図が無い・読めない（書き手が古い版など）なら missing_sec ごと。
+    - どちらでも、safety_sec ごとには一覧する（保存ごとの目印は合図を変えないので、その温め漏れを防ぐ安全網）。"""
+    elapsed = now - float(state.get("last_list") or 0)
+    if elapsed < 0 or elapsed >= safety_sec:              # 時計が戻ったときも一覧する（負のまま止まらないように）
+        return True
+    if beacon_gen is None:
+        return elapsed >= missing_sec
+    return beacon_gen != state.get("beacon_gen") and elapsed >= min_sec
+
+
+_CLIENT: list = []
+
+
+def _client():
+    if not _CLIENT:
+        from google.cloud import storage  # pull 用 venv にある
+
+        _CLIENT.append(storage.Client())     # 合図の確認と一覧で使い回す
+    return _CLIENT[0]
+
+
+def beacon_generation(bucket_name: str) -> int | None:
+    """合図の世代（メタデータだけ。中身は読まない）。無い・読めないときは None。"""
+    try:
+        b = _client().bucket(bucket_name).get_blob(BEACON)
+        return int(b.generation) if b is not None and b.generation else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def list_markers(bucket_name: str, now: datetime | None = None) -> list[tuple[str, int]]:
+    """GCS を 1 回 list する（昨日(UTC)以降の接頭辞だけ。応答は名前と世代だけに絞る）。合図そのものは除く。"""
     yday = ((now or datetime.now(timezone.utc)) - timedelta(days=1)).strftime("%Y%m%d")
-    client = storage.Client()
-    it = client.list_blobs(bucket_name, prefix=PREFIX + "/", start_offset=f"{PREFIX}/{yday}/")
-    return [(b.name, int(b.generation or 0)) for b in it]
+    it = _client().list_blobs(bucket_name, prefix=PREFIX + "/", start_offset=f"{PREFIX}/{yday}/",
+                           fields="items(name,generation),nextPageToken")
+    return [(b.name, int(b.generation or 0)) for b in it if b.name != BEACON]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -277,6 +313,9 @@ def main(argv: list[str] | None = None) -> int:
     pause = float(env("WARM_PAUSE_SEC", "0.05"))
     second_pass = 0.0 if args.path else float(env("WARM_SECOND_PASS_SEC", "660"))      # 手動の確認（--path）では 2 回目を積まない
 
+    if env("WARM_ENABLED", "1").strip().lower() in ("0", "false", "no"):
+        print("WARM_ENABLED がオフのため何もしません")
+        return 0
     state = load_state(state_file)
     if args.path:
         for p in args.path:
@@ -286,7 +325,18 @@ def main(argv: list[str] | None = None) -> int:
         if not bucket:
             print("GCS_BUCKET が未設定です", file=sys.stderr)
             return 2
-        added = discover(list_markers(bucket), state)
+        now = time.time()
+        gen = beacon_generation(bucket)
+        if args.dry_run or should_list(state, gen, now, min_sec=float(env("WARM_LIST_MIN_SEC", "300")),
+                                       safety_sec=float(env("WARM_LIST_SAFETY_SEC", "1800")),
+                                       missing_sec=float(env("WARM_LIST_MISSING_SEC", "600"))):
+            added = discover(list_markers(bucket), state)
+            if not args.dry_run:
+                state["last_list"] = now
+                if gen is not None:                   # 合図を読めなかった回は前回の世代を残す（次の周の余分な一覧を防ぐ）
+                    state["beacon_gen"] = gen
+        else:
+            added = []
         if added:
             print(f"目印から {len(added)} 件を取り直し待ちに追加（待ち合計 {len(state['queue'])}）")
     if args.dry_run:

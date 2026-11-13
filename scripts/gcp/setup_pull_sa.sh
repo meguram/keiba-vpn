@@ -44,7 +44,7 @@ WRITE_EXPR="resource.name.startsWith(\"projects/_/buckets/$BUCKET/objects/$PREFI
 run gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member="serviceAccount:$SA_EMAIL" --role="roles/storage.objectUser" \
   --condition="expression=$WRITE_EXPR,title=pull-write-applied,description=取り込み結果の報告 applied/vps.json だけ書ける"
 
-echo "== 追加: ops/cache_dirty/ の一覧と読み取り（API キャッシュ事前ロード用の目印。中身は空。一覧は 60 秒に 1 回）"
+echo "== 追加: ops/cache_dirty/ の一覧と読み取り（API キャッシュ事前ロード用の目印。中身は空。合図は 60 秒に 1 回、一覧は合図が変わったときと 30 分おき）"
 DIRTY="ops/cache_dirty/"
 DIRTY_EXPR="resource.name.startsWith(\"projects/_/buckets/$BUCKET/objects/$DIRTY\") || (resource.type == \"storage.googleapis.com/Bucket\" && api.getAttribute(\"storage.googleapis.com/objectListPrefix\", \"\").startsWith(\"$DIRTY\"))"
 # 式の中に , があり --condition=key=value 形式では分割されるので、ファイルで渡す

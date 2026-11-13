@@ -179,3 +179,21 @@ def test_pull_sa_script_grants_cache_dirty_list_read_only():
     block = sh[sh.index('DIRTY="ops/cache_dirty/"'):]
     block = block[:block.index("if [ -n")]
     assert "roles/storage.objectViewer" in block and "objectUser" not in block and "objectAdmin" not in block
+
+
+def test_should_list_only_when_beacon_changes_with_safety_net():
+    """費用の上限: 毎分の一覧（月 約 265 円）をやめ、合図が変わったとき・合図が無いとき（10 分）・安全網（30 分）だけ一覧する。"""
+    kw = dict(min_sec=300, safety_sec=1800, missing_sec=600)
+    st = {"last_list": 1000.0, "beacon_gen": 5}
+    assert not cw.should_list(st, 5, 1060, **kw)               # 合図が同じ
+    assert not cw.should_list(st, 6, 1200, **kw)               # 変わったが前回から 5 分たっていない
+    assert cw.should_list(st, 6, 1300, **kw)                   # 変わって 5 分以上
+    assert cw.should_list(st, 5, 2800, **kw)                   # 安全網（30 分）
+    assert not cw.should_list(st, None, 1500, **kw)            # 合図が無い: 10 分たつまでは一覧しない
+    assert cw.should_list(st, None, 1600, **kw)
+    assert cw.should_list({}, 5, 1060, **kw)                   # 一度も一覧していなければ一覧する
+    assert cw.should_list({"last_list": 9999.0, "beacon_gen": 5}, 5, 1060, **kw)      # 時計が戻ったときも一覧する
+
+
+def test_beacon_is_not_a_marker():
+    assert cw.parse_marker(cw.BEACON) is None
