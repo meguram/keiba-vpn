@@ -57,6 +57,10 @@ class JmaError(RuntimeError):
     pass
 
 
+class JmaTableMissing(JmaError):
+    """時別値の表が無い（その日の観測がまだ載っていない・ページの作りが変わった）。"""
+
+
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     p1, p2 = math.radians(lat1), math.radians(lat2)
     a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lon2 - lon1) / 2) ** 2
@@ -148,7 +152,7 @@ def parse_hourly(html: str) -> list[dict[str, Any]]:
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table", id="tablefix1")
     if table is None:
-        raise JmaError("時別値の表（tablefix1）が見つかりません")
+        raise JmaTableMissing("時別値の表（tablefix1）が見つかりません")
     rows = table.find_all("tr")
     head = [r for r in rows if r.find("th") and not r.find("td")][:2]
     if len(head) < 2:
@@ -244,7 +248,18 @@ def fetch_range(d_from: date, d_to: date, venues: list[str] | None = None, max_r
                     continue
                 if max_requests and done >= max_requests:
                     raise StopIteration
-                recs = parse_hourly(_get(hourly_url(info["station"], d), s))
+                url = hourly_url(info["station"], d)
+                try:
+                    recs = parse_hourly(_get(url, s))
+                except JmaTableMissing as e:
+                    if d >= date.today() - timedelta(days=1):
+                        # 日付が変わった直後（0:40 の回）は、昨日のページがまだ出ていないことがある。止めずに次の回に任せる
+                        # （2026-10-26 0:40 に 1 回これで止まり、印が残ったまま 18 日間取得が止まった）
+                        print(f"昨日以降の表がまだ無いので飛ばす: {vc} {d}", file=sys.stderr)
+                        continue
+                    raise JmaError(f"{e}（{vc} {d} {url}）") from e
+                except JmaError as e:
+                    raise JmaError(f"{e}（{vc} {d}）") from e
                 if d >= date.today() - timedelta(days=1) and len(recs) < 24:      # 昨日以降は観測が出そろうまで保存しない（翌日分の取りこぼしを防ぐ）
                     continue
                 data["days"][d.isoformat()] = {
@@ -328,7 +343,7 @@ def main(argv: list[str] | None = None) -> int:
     halt = Path(a.halt_file) if a.halt_file else None
     if halt is not None and halt.exists():
         print(f"中断印があるため始めません（確認して {halt} を削除）", file=sys.stderr)
-        return 0
+        return 5      # 0 だと正常に見えて止まり続けるのに気付かれない（jma_weather_run.sh も同じ 5）
     try:
         if a.cmd == "stations":
             sel = select_stations()

@@ -9,7 +9,8 @@ mkdir -p logs data/local/meta
 LOG="logs/jma_weather.log"; HALT="data/local/meta/jma_weather_halt.json"; PY="${PYTHON:-/opt/conda/bin/python3}"
 exec 9>"/tmp/keiba_jma_weather.lock"
 flock -n 9 || exit 0
-if [ -e "$HALT" ]; then echo "[$(date -Is)] 中断印があるため始めません（確認して ${HALT} を削除）" >>"$LOG"; exit 0; fi
+# 止めの印があるあいだは 5 で終わる（0 だと cron の記録で正常に見え、気付かれないまま止まり続ける。2026-10-26〜11-13 に 18 日間止まった）
+if [ -e "$HALT" ]; then echo "[$(date -Is)] 中断印があるため始めません（確認して ${HALT} を削除）" >>"$LOG"; exit 5; fi
 echo "===== $(date -Is) START =====" >>"$LOG"
 run() { KEIBA_ENV="${KEIBA_ENV:-stg}" PYTHONPATH=. nice -n 10 "$PY" -m src.scraper.jma_weather "$@" >>"$LOG" 2>&1; }
 run daily; RC=$?

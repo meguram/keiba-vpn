@@ -69,12 +69,21 @@ def fingerprint(card: dict, entries: list[dict[str, Any]], asof: dict[str, str |
         sire_sig = [st.st_mtime_ns, st.st_size]
     except OSError:
         sire_sig = None
+    # 走法の軸（run_axes）は日次の更新（update_run_axes）で全件が作り直される（全期間の統計に依存）。変わった日だけ窓の分析を作り直す
+    try:
+        from src.research.race.running_profile import AXES_PATH
+
+        st = AXES_PATH.stat()
+        axes_sig = [st.st_mtime_ns, st.st_size]
+    except (OSError, ImportError):
+        axes_sig = None
     doc = {
         "v": ANALYSIS_VERSION,
         "race": [card.get(k) for k in ("venue", "surface", "distance", "date", "track_condition")],
         "entries": [[e.get("horse_id"), e.get("horse_number"), e.get("bracket_number"), e.get("jockey_id")] for e in entries],
         "data_until": asof[date],
         "sire_map": sire_sig,
+        "run_axes": axes_sig,
         "day_results": day,
         "finish": finish or [],
         "train": trainer_pattern.training_sig(entries) if (date or "") >= trainer_pattern.FIRST_DATE else None,

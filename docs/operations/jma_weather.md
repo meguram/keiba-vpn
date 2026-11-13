@@ -8,7 +8,7 @@
 | 観測所 | `config/jma_stations.json`（競馬場ごとに、風を観測している現行の観測所のうち最寄り。距離つき）。競馬場の座標は住所からの概数 |
 | 保存 | `HybridStorage` のカテゴリ `jma_weather_hourly`、キー `<競馬場コード>_<年>`（stg/prod は **GCS** の `others/jma_weather_hourly/`、dev は `data/dev_mock`）。中身は `days` に 日付 → 24 時間分 |
 | 範囲 | 2016-01-01 以降。新しい日から取り、取得済みの日は取り直さない |
-| 間隔 | 約 1.5 秒。エラー（200 以外・表が読めない）は 1 件で即中断し `data/local/meta/jma_weather_halt.json` を書く。確認して削除するまで再開しない |
+| 間隔 | 約 1.5 秒。エラー（200 以外・表が読めない）は 1 件で即中断し `data/local/meta/jma_weather_halt.json` を書く。確認して削除するまで再開しない。エラーには競馬場コード・日付・URL が付く。ただし昨日以降の日の「表が無い」は、まだ載っていないだけのことがあるので止めずに飛ばす（2026-10-26 0:40 に 1 回これで止まり、11-13 まで 18 日間止まっていた）。止めの印があるあいだ `jma_weather_run.sh` は終了コード 5 で終わる（cron の記録で失敗に見え、連続失敗の通知に乗る） |
 | cron | 毎時 40 分に `scripts/cron/jma_weather_run.sh`（flock で重複なし。直近 3 日の補い → 2016 年以降）。登録は `install_jma_weather_cron.sh` |
 | 列 | `hour`（1〜24。その時刻の観測＝直前 10 分の平均風）、`wind_dir`（16 方位＋静穏）、`wind_dir_deg`（北=0 から時計回り。静穏は null）、`wind_speed_ms`、`temp_c`、`precip_mm`、`humidity_pct`、`pressure_hpa`（気象台等のみ）、`sunshine_h`、`flags`（`)`=準正常値、`]`=資料不足値） |
 

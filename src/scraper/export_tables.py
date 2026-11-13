@@ -21,6 +21,7 @@ import logging
 import os
 import sys
 import time
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -543,10 +544,13 @@ def export_category_chunked(
     year: str, category: str, storage: Any,
     meta_index: dict[str, dict] | None = None,
     expected_keys: set[str] | None = None,
+    keys: list[str] | None = None,
 ) -> dict:
     """1年1カテゴリをチャンク処理でエクスポートする。OOM防止。
     expected_keys が指定された場合、カテゴリのレース数が一致しなければスキップ。
     既にエクスポート済みでレース数が一致している場合はスキップ (増分チェック)。
+    keys を渡したときは GCS の一覧（batch_list_blobs）を取らず、その race_id だけを名前で読む（export_year_local）。
+    読めなかった key は stats["missing_keys"] に返す。
     """
     out_dir = OUTPUT_DIR / year
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -576,7 +580,7 @@ def export_category_chunked(
             logger.info("[%s/%s] SKIP: %s", year, category, stats["reason"])
             return stats
 
-    blobs = storage.batch_list_blobs(category, year)
+    blobs = keys if keys is not None else storage.batch_list_blobs(category, year)
     jra_keys = sorted(k for k in blobs if is_jra_race(k))
     n_total = len(jra_keys)
 
@@ -603,6 +607,9 @@ def export_category_chunked(
             return stats
 
     existing_ids = _existing_race_ids(flat_path)
+    if keys is not None and flat_path.exists() and not existing_ids:
+        # 候補だけで作り直すと、1 年分の flat・race 表がその数十レースで上書きされる。読めない・空の flat は手で調べる
+        raise RuntimeError(f"{flat_path} が読めないか空です。一覧なしの追記では上書きしません（一括の書き出しで作り直す）")
     # 枠順確定前の版のまま入っている出馬表（_existing_race_ids が数えないので、下で取り直す）。追記のときレースごと入れ替える
     pre_draw = _pre_draw_race_ids(flat_path) if category in PRE_DRAW_REFRESH_CATEGORIES else set()
     if existing_ids:
@@ -634,6 +641,7 @@ def export_category_chunked(
     total_flat_rows = 0
     total_race_rows = 0
     load_errors = 0
+    missing_keys_out: list[str] = []
     races_loaded = 0
     chunk_dir = out_dir / f"_chunks_{category}"
     chunk_dir.mkdir(parents=True, exist_ok=True)
@@ -647,6 +655,9 @@ def export_category_chunked(
             data = storage.load(category, key)
             if not data:
                 load_errors += 1
+                # 読めなかった直後に GCS が不調の印なら、一時的な失敗かもしれないので「無い」に数えない
+                if keys is not None and getattr(storage, "_gcs_healthy", True):
+                    missing_keys_out.append(key)
                 continue
             races_loaded += 1
 
@@ -709,6 +720,8 @@ def export_category_chunked(
 
     stats["races"] = races_loaded
     stats["load_errors"] = load_errors
+    if keys is not None:
+        stats["missing_keys"] = missing_keys_out
     stats["race_rows"] = total_race_rows
     stats["flat_rows"] = total_flat_rows
 
@@ -722,6 +735,161 @@ def export_category_chunked(
 
     _clear_storage_cache(storage)
     return stats
+
+
+# ── 一覧なしの日次の追記（export_year_local）──────────────────────────────────────────
+# ホストから GCS の全件一覧を毎日取らない（CLAUDE.md の費用の決まり）。足すレースはローカルの race_result_flat から決め、
+# 名前を指定して読む。対象は、取得の遅れ・無い文書がありうるレースの付随カテゴリだけ（race_result・出馬表・オッズは今の --refresh のまま）。
+LOCAL_CATEGORIES = (
+    "race_shutuba_past", "race_index", "race_barometer", "smartrc_race",
+    "race_oikiri", "race_paddock", "race_trainer_comment",
+)
+LOCAL_WINDOW_DAYS = 21          # レース日（barometer は公開日）からこの日数の間だけ探す。それより古い欠けは手で一括の書き出しを回す
+LOCAL_MAX_ATTEMPTS = 5          # 読めなかったレースを試す回数の上限（間隔は 1・2・4・8 日）
+
+
+def _attempts_path(category: str, year: str) -> Path:
+    from src.scraper.date_coverage import NOT_AVAILABLE_DIR
+
+    return NOT_AVAILABLE_DIR.parent / "export_local_attempts" / f"{category}_{year}.json"
+
+
+def _load_attempts(category: str, year: str) -> dict[str, list]:
+    try:
+        d = json.loads(_attempts_path(category, year).read_text(encoding="utf-8"))
+        return {str(k): list(v) for k, v in d.items() if isinstance(v, list) and len(v) == 2}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_attempts(category: str, year: str, attempts: dict[str, list]) -> None:
+    path = _attempts_path(category, year)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(attempts, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _attempt_due(rec: list | None, today: date) -> bool:
+    """試行の記録 [回数, 最後の日 YYYY-MM-DD] から、今日試してよいか。間隔は 2^(回数-1) 日、上限 LOCAL_MAX_ATTEMPTS 回。"""
+    if not rec:
+        return True
+    n, last = int(rec[0]), str(rec[1])
+    if n >= LOCAL_MAX_ATTEMPTS:
+        return False
+    try:
+        return (today - date.fromisoformat(last)).days >= 2 ** max(n - 1, 0)
+    except ValueError:
+        return True
+
+
+def _window_start(category: str, race_day: date) -> date | None:
+    """そのレースを探し始める日。barometer は公開（翌週の金曜 18 時）の翌日から。None は対象外。"""
+    if category == "race_barometer":
+        from src.scraper.run import ScraperRunner
+
+        return ScraperRunner.barometer_publish_at(race_day).date() + timedelta(days=1)
+    return race_day + timedelta(days=1)
+
+
+def local_candidates(year: str, category: str, today: date | None = None, *,
+                     window_days: int = LOCAL_WINDOW_DAYS, attempts: dict[str, list] | None = None) -> list[str]:
+    """一覧を取らずに、今日読むレースを決める。
+    母集合はローカルの race_result_flat（確定結果があるレース）。窓（探し始めの日 〜 + window_days 日）の中で、
+    そのカテゴリの flat にも race 表にも無く（中身が空の文書も race 表には入るので、読めたものは再び選ばない）、
+    試行の間隔が来ているもの。barometer は障害など N/A の記録があるレースを除く。"""
+    today = today or date.today()
+    rr = OUTPUT_DIR / year / "race_result_flat.parquet"
+    if not rr.exists():
+        return []
+    df = pq.read_table(rr, columns=["race_id", "date"]).to_pandas().drop_duplicates("race_id")
+    have = _existing_race_ids(OUTPUT_DIR / year / f"{category}_flat.parquet")
+    race_path = OUTPUT_DIR / year / f"{category}_race.parquet"
+    if race_path.exists():
+        try:
+            have |= {str(x) for x in pq.read_table(race_path, columns=["race_id"]).column("race_id").to_pylist() if x}
+        except Exception:  # noqa: BLE001  race 表が読めなければ flat だけで判定する
+            pass
+    skip: set[str] = set()
+    if category == "race_barometer":
+        from src.scraper.date_coverage import load_not_available
+
+        skip = load_not_available(category, year)
+    attempts = attempts if attempts is not None else _load_attempts(category, year)
+    out: list[str] = []
+    for rid, d in zip(df["race_id"].astype(str), df["date"].astype(str)):
+        if not is_jra_race(rid) or rid in have or rid in skip:
+            continue
+        try:
+            start = _window_start(category, date.fromisoformat(d[:10]))
+        except ValueError:
+            continue
+        if start is None or not (start <= today <= start + timedelta(days=window_days)):
+            continue
+        if _attempt_due(attempts.get(rid), today):
+            out.append(rid)
+    return sorted(out)
+
+
+def export_year_local(year: str, categories: list[str], storage: Any = None, today: date | None = None, *,
+                      window_days: int = LOCAL_WINDOW_DAYS) -> dict:
+    """一覧なしの日次の追記。カテゴリごとに local_candidates のレースだけを名前で読み、既存の flat・race 表に追記する。
+    flat がまだ無いカテゴリ（年が替わった最初の日など）は、その年の結果のあるレースを全部名前で読んで作る（窓の候補だけで作ると、その分しか入らない表になる）。
+    読めなかったレースは試行の記録に数える。ただし GCS が不調のとき（load が一時的な失敗でも None を返す）は数えない。
+    カテゴリごとの失敗は report["errors"] に数え、残りのカテゴリは続ける。"""
+    bad = [c for c in categories if c not in LOCAL_CATEGORIES]
+    if bad:
+        raise ValueError(f"--from-local-results の対象外のカテゴリ: {bad}（対象は {', '.join(LOCAL_CATEGORIES)}）")
+    if storage is None:
+        from src.scraper.storage import HybridStorage
+
+        storage = HybridStorage()
+    today = today or date.today()
+    meta_index = _build_meta_index_from_race_result_flat(year)
+    all_stats: list[dict] = []
+    has_results = (OUTPUT_DIR / year / "race_result_flat.parquet").exists()
+    for cat in categories:
+        try:
+            if not (OUTPUT_DIR / year / f"{cat}_flat.parquet").exists():
+                if not has_results:
+                    all_stats.append({"category": cat, "skipped": True, "reason": "その年の race_result_flat がまだ無い"})
+                    continue
+                # 年が替わった最初の日など。その年の結果があるレース（今日より前）を全部名前で読んで flat を作る（一覧は取らない）。
+                # レース前の文書を入れない（入ると「ある」とみなされ、レース後の版を読まなくなる）ため、結果のあるレースに限る
+                rr = pq.read_table(OUTPUT_DIR / year / "race_result_flat.parquet", columns=["race_id", "date"]).to_pandas()
+                ids = sorted({str(r) for r, d in zip(rr["race_id"], rr["date"].astype(str)) if is_jra_race(str(r)) and d[:10] < today.isoformat()})
+                logger.info("[%s/%s] flat が無いので、結果のある %d レースから作る", year, cat, len(ids))
+                st = export_category_chunked(year, cat, storage, meta_index, keys=ids)
+                st.pop("missing_keys", None)
+                st["initial"] = True
+                all_stats.append(st)
+                continue
+            attempts = _load_attempts(cat, year)
+            keys = local_candidates(year, cat, today, window_days=window_days, attempts=attempts)
+            if not keys:
+                st = {"category": cat, "races": 0, "skipped": True, "reason": "読む候補なし"}
+            else:
+                st = export_category_chunked(year, cat, storage, meta_index, keys=keys)
+                st["candidates"] = len(keys)
+            # 読めなかったもの（GCS が不調だった読み込みは export_category_chunked が除いている）を試行に数える
+            missing = st.pop("missing_keys", [])
+            for rid in missing:
+                attempts[rid] = [int(attempts.get(rid, [0, ""])[0]) + 1, today.isoformat()]
+            # 窓の外になった記録・読めた記録は消す（ファイルを育てない）
+            live = set(local_candidates(year, cat, today, window_days=window_days, attempts={}))
+            _save_attempts(cat, year, {k: v for k, v in attempts.items() if k in live})
+            st["not_found"] = len(missing)
+            logger.info("[%s/%s] 一覧なしの追記: 候補 %d・読めた %d・無い %d", year, cat, len(keys), st.get("races", 0), len(missing))
+        except Exception as exc:  # noqa: BLE001  1 カテゴリの失敗で残りを止めない（終了コードで知らせる）
+            logger.exception("[%s/%s] 一覧なしの追記に失敗", year, cat)
+            st = {"category": cat, "error": f"{type(exc).__name__}: {exc}"}
+        all_stats.append(st)
+    report = {"year": year, "today": today.isoformat(), "categories": all_stats,
+              "errors": sum(1 for s in all_stats if s.get("error"))}
+    rp = OUTPUT_DIR / year / "_export_local_report.json"
+    rp.parent.mkdir(parents=True, exist_ok=True)
+    rp.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
+    return report
 
 
 def export_year(
@@ -858,12 +1026,27 @@ def main() -> int:
     ap.add_argument("--workers", type=int, default=6, help="並列数 (default: 6)")
     ap.add_argument("--refresh", action="store_true",
                     help="日次の増分用: 各カテゴリが自分の flat に無いレースを GCS から追記する（基準レースの完全性チェックを外す）")
+    ap.add_argument("--from-local-results", action="store_true",
+                    help="--refresh と併用。GCS の一覧を取らず、ローカルの race_result_flat から足りないレースを決めて名前で読む"
+                         f"（直近 {LOCAL_WINDOW_DAYS} 日・試行の間隔つき。対象: {', '.join(LOCAL_CATEGORIES)}）")
     ap.add_argument("--force", action="store_true",
                     help="対象カテゴリの既存ファイルを消して GCS から作り直す（レース数が同じで中身だけ変わったとき）")
     args = ap.parse_args()
 
     years = [y.strip() for y in args.years.split(",")]
     cats = [c.strip() for c in args.categories.split(",")] if args.categories else None
+
+    if args.from_local_results:
+        if not args.refresh or args.force or not cats:
+            ap.error("--from-local-results は --refresh と --categories が必要で、--force とは併用できません")
+        errors = 0
+        for year in years:
+            rep = export_year_local(year, cats)
+            errors += rep["errors"]
+            for s in rep["categories"]:
+                print(f"  {year} {s['category']:25s}  候補={s.get('candidates', 0):>4d}  読めた={s.get('races', 0):>4d}"
+                      f"  無い={s.get('not_found', 0):>4d}  {s.get('reason', '')}{s.get('error', '')}")
+        return 1 if errors else 0
 
     from src.scraper.storage import HybridStorage
     storage = HybridStorage()

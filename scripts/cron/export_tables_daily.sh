@@ -22,6 +22,14 @@ fi
 echo "===== $(date -Is) START years=$YEARS categories=$CATS =====" >>"$LOG"
 "$PYTHON" -m src.scraper.export_tables --years "$YEARS" --categories "$CATS" --refresh >>"$LOG" 2>&1
 EC=$?
+# 付随カテゴリ（馬柱・指数・バロメーター・SmartRC・追い切り・パドック・厩舎コメント）は、GCS の一覧を取らずに足す。
+# 足すレースはローカルの race_result_flat から決め、名前で読む（直近 21 日・試行の間隔つき。export_tables.export_year_local）。
+# 失敗しても本体の終了コードは変えない
+LOCAL_CATS="${LOCAL_CATS:-race_shutuba_past,race_index,race_barometer,smartrc_race,race_oikiri,race_paddock,race_trainer_comment}"
+if [ -n "$LOCAL_CATS" ]; then
+  "$PYTHON" -m src.scraper.export_tables --years "$YEARS" --categories "$LOCAL_CATS" --refresh --from-local-results >>"$LOG" 2>&1 \
+    || echo "LOCAL_EXPORT_FAIL: 付随カテゴリの一覧なしの追記に失敗しました（上の行を確認）" >>"$LOG"
+fi
 # パース失敗の検査（必須項目の欠損）。ページ表記の変更でパーサが黙って空を返す事故を、取得の翌日までに見つける
 "$PYTHON" -m src.scraper.parse_audit --years "$YEARS" >>"$LOG" 2>&1
 AUD=$?
@@ -33,6 +41,9 @@ DRIFT=$?
 DOCS=$?
 [ "$DRIFT" -ne 0 ] && echo "PARSE_DRIFT_FAIL: flat テーブルの列で空・文字化けの急増があります（上の行を確認）" >>"$LOG"
 [ "$DOCS" -ne 0 ] && echo "PARSE_DRIFT_DOCS_FAIL: 最近保存した文書で空・文字化けの急増があります（上の行を確認）" >>"$LOG"
+# めぐ分析の走法の軸（run_axes）: GCS の horse_lap（バロメーターの取得が同じページから保存）を、足りないレースだけ名前で読んで追記し、
+# 追記があれば作り直す。事前計算の前に行う（指紋に run_axes が入っているので、変わった日は窓の分析が作り直される）。失敗しても本体には影響させない
+"$PYTHON" -m src.scripts.data.update_run_axes >>"$LOG" 2>&1 || echo "RUN_AXES_FAIL: 走法の軸の更新に失敗しました（上の行を確認）" >>"$LOG"
 # めぐ分析の事前計算（結果が更新されたので、過去30日〜先14日のレースの分析を作り直す。父の対応表も先に差分更新する）。失敗しても本体の終了コードには影響させない
 "$PYTHON" -m src.scripts.data.precompute_race_analysis >>"$LOG" 2>&1 || echo "RACE_ANALYSIS_FAIL: めぐ分析の事前計算に失敗しました（上の行を確認）" >>"$LOG"
 echo "===== $(date -Is) END exit=$EC audit=$AUD drift=$DRIFT docs=$DOCS =====" >>"$LOG"

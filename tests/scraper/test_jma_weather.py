@@ -106,4 +106,30 @@ def test_halt_file_blocks_start_and_is_written_on_abort(tmp_path, monkeypatch):
     monkeypatch.setattr(J, "fetch_range", boom)
     assert J.main(["--halt-file", str(halt), "daily"]) == 3 and "HTTP 503" in halt.read_text(encoding="utf-8")
     monkeypatch.setattr(J, "fetch_range", lambda *a, **k: (_ for _ in ()).throw(AssertionError("中断印があるのに取得した")))
-    assert J.main(["--halt-file", str(halt), "daily"]) == 0
+    assert J.main(["--halt-file", str(halt), "daily"]) == 5
+
+
+_ST = {"01": {"station": {"type": "s", "prec_no": 14, "block_no": "47412", "name": "札幌", "lat": 43.06, "lon": 141.33, "distance_km": 1.5}}}
+
+
+def test_missing_table_for_yesterday_is_skipped_not_halted(monkeypatch):
+    """日付が変わった直後は昨日のページがまだ出ていないことがある。止めずに飛ばす（2026-10-26 に 18 日間止まった原因）。"""
+    from datetime import timedelta
+    monkeypatch.setattr(jw, "_get", lambda url, session: "<html>no table</html>")
+    monkeypatch.setattr(jw, "load_stations", lambda: _ST)
+    y = date.today() - timedelta(days=1)
+    assert jw.fetch_range(y, y, store=_Store()) == {"fetched": 0, "skipped": 0}
+
+
+def test_missing_table_for_old_day_still_halts_with_context(monkeypatch):
+    monkeypatch.setattr(jw, "_get", lambda url, session: "<html>no table</html>")
+    monkeypatch.setattr(jw, "load_stations", lambda: _ST)
+    with pytest.raises(jw.JmaError) as e:
+        jw.fetch_range(date(2020, 1, 1), date(2020, 1, 1), store=_Store())
+    assert "01 2020-01-01" in str(e.value) and "tablefix1" in str(e.value)
+
+
+def test_run_script_exits_nonzero_while_halted():
+    sh = (Path(__file__).resolve().parents[2] / "scripts" / "cron" / "jma_weather_run.sh").read_text(encoding="utf-8")
+    line = next(x for x in sh.splitlines() if 'if [ -e "$HALT" ]' in x)
+    assert "exit 5" in line
