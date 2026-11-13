@@ -563,7 +563,10 @@ def run_raceday_evening_for_date(date_str: str) -> dict[str, Any]:
     stats["date"] = iso_day
     stats["venues"] = venues
     stats["error_count"] = 0
-    if stats["result_on_time"] > 0:
+    if (os.environ.get("KEIBA_RUN_LOCATION") or "").strip().lower() == "vps":
+        # VPS は取得だけ（250MB 枠）。馬場速度はホストの後処理だけのジョブ（src/ops/host_postprocess.py の track-speed-daily）が計算する
+        stats["post_processing"] = "host"
+    elif stats["result_on_time"] > 0:
         _as._trigger_track_speed_for_date(iso_day)
     return stats
 
@@ -884,6 +887,93 @@ def _run_race_tasks_direct(runner: Any, race_id: str, date_fmt: str, tasks: list
     return errors
 
 
+# 取得を VPS に移したあと（config/fetch_owner.json）、ホストの常駐ランナーは取得をせず、保存済みのデータ（GCS）で後処理だけをする。
+# VPS が予定の時刻に取得して保存し終えるのを待つため、予定の時刻からこの秒数だけ遅らせて後処理をする。
+# 【注意】取得しないモードは、担当を VPS に渡す前に次がそろってから使う（docs/operations/vps_only_fetch.md）:
+#  (1) race_lists・race_day_schedule（local_only）を VPS から GCS 経由でホストに渡す（無いとホストは no-schedule で何もしない）
+#  (2)(3) は対応済み: 予測の前に VPS の race_odds の保存時刻（GCS の更新時刻だけ）を確かめ、オッズ類はこのプロセスだけ鮮度 5 分で読む
+def _no_fetch_grace_sec() -> int:
+    try:
+        return max(0, int(os.environ.get("KEIBA_HOST_NO_FETCH_GRACE_SEC", "180") or 180))
+    except ValueError:
+        return 180
+
+
+def _host_no_fetch(runner: str) -> bool:
+    from src.ops.fetch_owner import runner_fetch_moved
+
+    return runner_fetch_moved(runner)
+
+
+T15_SAVE_POLL_SEC = 30
+T15_SAVE_DEADLINE_BEFORE_POST_MIN = 5
+T15_SAVE_MAX_WAIT_MIN = 5          # 1 レースで待つのは T-15 から最大この分数（後のレースの予測をずらさない）
+T15_CLOCK_SLACK_MIN = 3            # ホストと GCS の時計のずれの余裕（WSL のスリープ明けなど）
+FRESH_ODDS = "race_odds,race_pair_odds,race_trifecta_odds"
+
+
+def _wait_saved_after(storage: Any, category: str, key: str, since: datetime, until: datetime) -> bool:
+    """category/key の GCS の更新時刻が since 以降になるまで T15_SAVE_POLL_SEC おきに待つ（中身は読まない。1 回 1 件の Class B）。
+    until までに来なければ False。"""
+    while True:
+        ts = storage.get_scraped_at_from_blob(category, key)
+        if ts and ts >= since.timestamp():
+            return True
+        if datetime.now(_JST) >= until:
+            return False
+        time.sleep(T15_SAVE_POLL_SEC)
+
+
+def _sleep_until(at: datetime) -> None:
+    wait = (at - datetime.now(_JST)).total_seconds()
+    if wait > 0:
+        time.sleep(wait)
+
+
+def _raceday_runner_postprocess_only(schedule: list[dict], today_str: str, venues: Any, storage: Any = None) -> None:
+    """raceday-runner の取得が VPS に移ったとき: T-15（＋猶予）ごとに、JRA の馬場の取り直しとレース前の予測の起動だけをする。
+    オッズ・出馬表の取得（T-60・直前・T-15 のバンドル）は VPS が行い GCS に保存している。"""
+    from src.scraper import auto_scrape as _as
+    from src.scraper.raceday_pre_race_pipeline import PreRaceBundleResult, refresh_jra_baba_live, trigger_pre_race_predict
+
+    baba_on = os.environ.get("KEIBA_HOST_JRA_BABA_LIVE", "1").strip() != "0"   # JRA の馬場はまだホストで取る（VPS のローカルに残るため）
+    os.environ.setdefault("KEIBA_FRESH_EXTRA_CATEGORIES", FRESH_ODDS)       # VPS が保存したオッズを古いキャッシュから読まない（このプロセスだけ）
+    storage = storage if storage is not None else _storage()
+    events = [e for e in build_odds_events(schedule, late_leads=()) if e["kind"] == "t15"]
+    stats = {"races": len(schedule), "predicted": 0, "errors": 0, "t15_saved": 0, "t15_missing": 0}
+    grace = _no_fetch_grace_sec()
+    logger.info("  開催日ランナー（取得なし・後処理だけ）: %s 全%dレース", today_str, len(schedule))
+    done: set[str] = set()
+    for ev in sorted(events, key=lambda e: e["at"]):
+        rid = ev["race"]["race_id"]
+        if rid in done or datetime.now(_JST) >= ev["race"]["post_time"]:
+            continue
+        # VPS の T-15 のバンドルを待つ: race_odds（バンドルの 2 番目に保存される）の保存時刻が T-15 以降になるのを見て、
+        # そこからバンドルの残り（組合せオッズ・馬柱・追い切りなど）が保存されるまで猶予（KEIBA_HOST_NO_FETCH_GRACE_SEC、既定 180 秒）を置く。
+        # 1 レースで待つのは T-15 + T15_SAVE_MAX_WAIT_MIN 分か発走 5 分前の早い方まで（後のレースの予測をずらさない）
+        until = min(ev["at"] + timedelta(minutes=T15_SAVE_MAX_WAIT_MIN),
+                    ev["race"]["post_time"] - timedelta(minutes=T15_SAVE_DEADLINE_BEFORE_POST_MIN))
+        _sleep_until(ev["at"])
+        saved = _wait_saved_after(storage, "race_odds", rid, ev["at"] - timedelta(minutes=T15_CLOCK_SLACK_MIN), until)
+        stats["t15_saved" if saved else "t15_missing"] += 1
+        if saved:
+            _sleep_until(min(datetime.now(_JST) + timedelta(seconds=grace), until + timedelta(seconds=grace)))
+        else:
+            logger.warning("VPS の T-15 の保存が見つからないまま予測する（直前のオッズが古い恐れ）: %s", rid)
+        baba_ok = refresh_jra_baba_live() if baba_on else False
+        try:
+            trigger_pre_race_predict(ev["race"], bundle_result=PreRaceBundleResult(race_id=rid, jra_baba_refreshed=baba_ok, ok=True),
+                                     allow_scrape=False)
+            stats["predicted"] += 1
+        except Exception as exc:  # noqa: BLE001  1 レースの失敗で残りを止めない
+            logger.error("レース前の予測の起動に失敗 %s: %s", rid, exc)
+            stats["errors"] += 1
+        done.add(rid)
+    _as._save_status("raceday-runner", {"status": "ok", "date": today_str, "venues": venues, "mode": "postprocess-only",
+                                        "races": stats["races"], "predicted": stats["predicted"], "error_count": stats["errors"],
+                                        "t15_saved": stats["t15_saved"], "t15_missing": stats["t15_missing"]})
+
+
 def task_raceday_runner() -> None:
     """開催日常駐ランナー（キュー版）。各レース T-60 でオッズのみ、T-15 でバンドル（オッズ含む）を取得する。
 
@@ -908,9 +998,10 @@ def task_raceday_runner() -> None:
     venues = _as._get_race_day_venues(calendar, today_str)
     date_fmt = today_str.replace("-", "")
     storage = _storage()
-    queue = _queue()
+    no_fetch = _host_no_fetch("raceday-runner")
+    queue = None if no_fetch else _queue()
 
-    if not _ensure_race_list_date(storage, queue, date_fmt):
+    if not no_fetch and not _ensure_race_list_date(storage, queue, date_fmt):
         _as._save_status(
             "raceday-runner", {"status": "error", "reason": "no-race-list"}
         )
@@ -919,6 +1010,9 @@ def task_raceday_runner() -> None:
     schedule = _fetch_race_schedule_storage(storage, date_fmt)
     if not schedule:
         _as._save_status("raceday-runner", {"status": "error", "reason": "no-schedule"})
+        return
+    if no_fetch:
+        _raceday_runner_postprocess_only(schedule, today_str, venues, storage)
         return
 
     logger.info("  開催日ランナー (キュー経由): %s 全%dレース", today_str, len(schedule))
@@ -1094,9 +1188,10 @@ def task_raceday_result_runner() -> None:
     venues = _as._get_race_day_venues(calendar, today_str)
     date_fmt = today_str.replace("-", "")
     storage = _storage()
-    queue = _queue()
+    no_fetch = _host_no_fetch("raceday-result-runner")
+    queue = None if no_fetch else _queue()
 
-    if not _ensure_race_list_date(storage, queue, date_fmt):
+    if not no_fetch and not _ensure_race_list_date(storage, queue, date_fmt):
         _as._save_status(
             "raceday-result-runner",
             {"status": "error", "reason": "no-race-list"},
@@ -1108,6 +1203,18 @@ def task_raceday_result_runner() -> None:
         _as._save_status(
             "raceday-result-runner", {"status": "error", "reason": "no-schedule"}
         )
+        return
+    if no_fetch:
+        # 速報の取得は VPS（race-result-t15）。最後のレースの速報が保存されるのを待ってから、後処理（馬場速度・予測の成績の集計）を 1 回だけする
+        last = max(r["post_time"] for r in schedule)
+        # 保存が遅れたレースは、翌朝の recent-retry（確定結果）と export_tables_daily で補われる
+        _sleep_until(last + timedelta(minutes=RESULT_OFFSET_MINUTES, seconds=_no_fetch_grace_sec()))
+        _as._trigger_track_speed_for_date(today_str)
+        from src.pipeline.inference.prediction_results import refresh_for_dates
+
+        refresh_for_dates([today_str], reason="raceday-result-runner")
+        _as._save_status("raceday-result-runner", {"status": "ok", "date": today_str, "venues": venues, "mode": "postprocess-only",
+                                                   "races": len(schedule), "scraped": 0, "error_count": 0})
         return
 
     stats = {"races": len(schedule), "scraped": 0, "errors": []}
@@ -1202,8 +1309,10 @@ def task_raceday_weight_runner() -> None:
             return
 
     storage = _storage()
-    queue = _queue()
-    if not replay and not _ensure_race_list_date(storage, queue, date_fmt):
+    # 出馬表の取り直し（race-weight-check）が VPS に移ったら、取得はせず GCS の出馬表（VPS が保存した最新版）を読んで判定だけする
+    no_fetch = _host_no_fetch("raceday-weight-runner")
+    queue = None if no_fetch else _queue()
+    if not replay and not no_fetch and not _ensure_race_list_date(storage, queue, date_fmt):
         _as._save_status("raceday-weight-runner", {"status": "error", "reason": "no-race-list"})
         return
     schedule = _fetch_race_schedule_storage(storage, date_fmt)
@@ -1215,7 +1324,14 @@ def task_raceday_weight_runner() -> None:
     warm = ctx.warm()
     windows = ww.plan_windows(schedule)
     far_future = max(w.deadline for w in windows) + timedelta(days=1)
-    now_fn = (lambda: far_future) if replay else (lambda: datetime.now(_JST))
+    if replay:
+        now_fn = lambda: far_future  # noqa: E731
+    elif no_fetch:
+        # VPS の取り直し（180 秒おき）の保存を待つため、判定の時計を猶予の分だけ遅らせる（T-30 の期限も猶予の分だけ後ろにずれる）
+        _lag = timedelta(seconds=_no_fetch_grace_sec())
+        now_fn = lambda: datetime.now(_JST) - _lag  # noqa: E731
+    else:
+        now_fn = lambda: datetime.now(_JST)  # noqa: E731
     poll = ww.poll_sec()
     logger.info("  馬体重検知ランナー: %s 全%dレース mode=%s replay=%s poll=%ss 窓 T-%s〜T-%s",
                 today_str, len(schedule), wtp.trigger_mode(), replay, poll, ww.start_min(), ww.deadline_min())
@@ -1236,7 +1352,7 @@ def task_raceday_weight_runner() -> None:
         if not due:
             continue
 
-        if not replay:
+        if not replay and not no_fetch:
             queue.bulk_add_jobs([
                 {"job_kind": "race", "target_id": w.race_id, "date": date_fmt,
                  "tasks": list(ww.WEIGHT_WATCH_TASKS), "smart_skip": False}
@@ -1265,6 +1381,6 @@ def task_raceday_weight_runner() -> None:
                     stats["errors"] += 1
 
     _as._save_status("raceday-weight-runner", {
-        "status": "ok", "date": today_str, "races": len(schedule), "replay": replay,
+        "status": "ok", "date": today_str, "races": len(schedule), "replay": replay, "no_fetch": no_fetch,
         "mode": wtp.trigger_mode(), "history_last_date": warm.get("history_last_date"), **stats,
     })

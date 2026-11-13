@@ -292,10 +292,11 @@ def main(argv: list[str] | None = None) -> int:
     if not cfg.tasks and not shadow_on:
         logger.warning("担当タスクが空です（config/fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS）。何もしません")
         return 0
-    bucket = os.environ.get("GCS_BUCKET", "")
-    store = ft.GcsTaskStore(bucket)
+    store = ft.task_store_from_env()
     queue = ft.TaskQueue(store)
     agent = FetchAgent(queue, cfg, subprocess_runner(cfg.python))
+    # 馬体重のイベント（ops/events/weights_announced）はタスク表と同じストアに置く。ローカル（file）のときは GCP の event-pump は
+    # 読まないが、『発表済みのレースは取り直さない』（skip_announced）の判定に使うので置き続ける（費用はかからない）
     if shadow_on:
         agent.shadow = fs.build_shadow_agent(store, cfg, cfg.python, owned=set(cfg.tasks))
         logger.info("影モード: 対象=%s", sorted(agent.shadow.cfg.tasks))

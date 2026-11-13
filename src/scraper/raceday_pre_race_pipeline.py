@@ -99,8 +99,10 @@ def trigger_pre_race_predict(
     race: dict,
     *,
     bundle_result: PreRaceBundleResult | None = None,
+    allow_scrape: bool = True,
 ) -> None:
-    """T-15 バンドル完了後に AI 予測トリガを起動（デフォルトはモック）。"""
+    """T-15 バンドル完了後に AI 予測トリガを起動（デフォルトはモック）。
+    ``allow_scrape=False``: 予測の中で netkeiba から取り直さない（取得を VPS に移したホスト。保存済みのデータだけで予測する）。"""
     from src.pipeline.inference.pre_race_predict_trigger import (
         PreRacePredictTrigger,
         TriggerConfig,
@@ -113,6 +115,6 @@ def trigger_pre_race_predict(
     )
     cfg = TriggerConfig(
         mock=not enabled,
-        use_fresh_scrape=enabled,
+        use_fresh_scrape=enabled and allow_scrape,
     )
     PreRacePredictTrigger(cfg).on_pre_race_scrape_complete(race, bundle_result=bundle_result)

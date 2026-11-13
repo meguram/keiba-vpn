@@ -1,0 +1,11 @@
+[Unit]
+Description=keiba 当日の開催日の予約の取り直し — 毎日 07:20（朝の時刻表で、前夜に積めなかったレースを足す）
+
+[Timer]
+OnCalendar=*-*-* 07:20:00
+RandomizedDelaySec=60
+Persistent=true
+Unit=keiba-fetch-raceday@today.service
+
+[Install]
+WantedBy=timers.target

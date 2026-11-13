@@ -30,9 +30,9 @@ if ! gcloud artifacts repositories describe "$AR_REPO" --location "$REGION" --pr
   run gcloud artifacts repositories create "$AR_REPO" --repository-format=docker --location "$REGION" \
     --description="keiba containers" --project "$PROJECT"
 fi
-# 古いイメージの自動掃除。使用中の版（live- タグ）と新しい 3 版は残し、それ以外で 2 日より古いものを削除（費用の上限: CLAUDE.md）。Jobs のイメージは 1 版 数 GB（torch 入り）
+# 古いイメージの自動掃除。使用中の版（live- タグ）と新しい 3 版は残し、それ以外で 1 日より古いものを削除（費用の上限: CLAUDE.md。2026-11-13 に 2 日 → 1 日）。Jobs のイメージは 1 版 数 GB（torch 入り）
 run gcloud artifacts repositories set-cleanup-policies "$AR_REPO" --location "$REGION" --project "$PROJECT" --no-dry-run \
-  --policy=<(printf '[{"name":"keep-live","action":{"type":"Keep"},"condition":{"tagState":"TAGGED","tagPrefixes":["live-"]}},{"name":"keep-recent","action":{"type":"Keep"},"mostRecentVersions":{"keepCount":3}},{"name":"delete-old","action":{"type":"Delete"},"condition":{"olderThan":"172800s"}}]')
+  --policy=<(printf '[{"name":"keep-live","action":{"type":"Keep"},"condition":{"tagState":"TAGGED","tagPrefixes":["live-"]}},{"name":"keep-recent","action":{"type":"Keep"},"mostRecentVersions":{"keepCount":3}},{"name":"delete-old","action":{"type":"Delete"},"condition":{"olderThan":"86400s"}}]')
 
 echo "== 3. サービスアカウント"
 declare -A SA_DESC=(

@@ -64,6 +64,9 @@ sudo bash scripts/cron/install_cron_catchup.sh --remove          # 外すとき
 ```
 - 登録後の動きは `logs/cron_catchup.log` で確かめる。
 - 実行記録は `data/local/meta/cron_runs/cron-catchup.tsv` に残る。
+- **登録済み（2026-11-13 10:19 JST、ユーザーの承認後）**。root の crontab に `KEIBA-CRON-CATCHUP` の行が 1 行ある。
+  - 登録した時点で、11/13 の朝のジョブは定時に走っていた。11/12 の取りこぼしは日付が変わっていて対象外なので、追いつきで走ったものは無い。
+  - 最初の回（10:30 JST）は終了コード 0 で、何も実行しなかった（`cron-catchup.tsv` で確認）。
 
 ## 対象のジョブを足すとき
 - `config/cron_catchup.json` の `jobs` に足す。

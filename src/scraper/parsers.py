@@ -2257,8 +2257,9 @@ class BarometerParser:
 
     AJAX_URL = "https://db.netkeiba.com/race/ajax_race_result_horse_laptime.html?id={race_id}&credit=1"
 
-    def parse_from_api(self, session, race_id: str) -> dict[str, Any]:
-        """HTTP session を使って AJAX API からバロメーターデータを取得する。"""
+    def parse_from_api(self, session, race_id: str, html_out: list[str] | None = None) -> dict[str, Any]:
+        """HTTP session を使って AJAX API からバロメーターデータを取得する。
+        html_out にリストを渡すと、取れた HTML を足す（同じページの馬別ラップを、取り直さずに DbHorseLaptimeTableParser でも読むため）。"""
         result: dict[str, Any] = {"race_id": race_id, "entries": []}
 
         try:
@@ -2270,6 +2271,8 @@ class BarometerParser:
             resp.encoding = "euc-jp"
             if resp.status_code != 200 or len(resp.text) < 100:
                 return result
+            if html_out is not None:
+                html_out.append(resp.text)
             parsed = self.parse(resp.text, race_id=race_id)
             if not parsed["entries"] and self.NOT_PUBLISHED_MARKER in resp.text:
                 # 「レース翌週の金曜日18時頃に公開予定です。※障害レースを除く」— データが無いのではなく未公開（または障害で対象外）

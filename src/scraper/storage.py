@@ -470,7 +470,10 @@ class HybridStorage:
     _FRESH_CATEGORIES = frozenset({"race_shutuba"})
 
     def _fresh_cap(self, category: str) -> float | None:
-        if category not in self._FRESH_CATEGORIES:
+        # KEIBA_FRESH_EXTRA_CATEGORIES（カンマ区切り）で、そのプロセスだけ鮮度を短く保つカテゴリを足せる。取得を VPS に移したホストの
+        # ランナーが、VPS の保存したオッズを古いキャッシュから読まないように使う（ほかのプロセスの読み方・費用は変えない）
+        extra = os.environ.get("KEIBA_FRESH_EXTRA_CATEGORIES", "")
+        if category not in self._FRESH_CATEGORIES and category not in {c.strip() for c in extra.split(",") if c.strip()}:
             return None
         try:
             return float(os.environ.get("LOAD_CACHE_TTL_FRESH_SEC", "300"))

@@ -161,13 +161,25 @@ def test_child_task_lists(monkeypatch):
     assert fc.race_task_list("race-result-t15") == ["race_result_on_time"]
 
 
-def test_host_runner_is_skipped_when_replacement_tasks_move(tmp_path):
+def test_host_runner_keeps_running_but_stops_fetching_when_replacement_tasks_move(tmp_path):
+    """常駐ランナーは取得が VPS に移っても見送らない（予測・後処理が中にある）。ランナー自身が取得だけを飛ばす。"""
     p = tmp_path / "o.json"
-    p.write_text(json.dumps({"agent_tasks": ["race-odds-t15", "race-weight-check"]}))
+    p.write_text(json.dumps({"agent_tasks": ["race-odds-t60", "race-odds-t15", "race-weight-check", "entries-sync"]}))
+    for r in ("raceday-runner", "raceday-weight-runner", "raceday-result-runner"):
+        assert not fo.host_must_skip(r, env={}, path=p)
+    assert fo.host_must_skip("entries-sync", env={}, path=p)
+    assert fo.runner_fetch_moved("raceday-runner", env={}, path=p)
+    assert fo.runner_fetch_moved("raceday-weight-runner", env={}, path=p)
+    assert not fo.runner_fetch_moved("raceday-result-runner", env={}, path=p)
+    assert fo.runner_fetch_moved("raceday-result-runner", env={"KEIBA_HOST_NO_FETCH": "1"}, path=p)
+    assert not fo.runner_fetch_moved("raceday-runner", env={"KEIBA_RUN_LOCATION": "vps"}, path=p)
+    # 一部だけ（直前オッズだけ）では取得をやめない（T-60・T-15 を誰も取らなくなるのを防ぐ）
+    p.write_text(json.dumps({"agent_tasks": ["race-odds-t10", "race-odds-t05"]}))
+    assert not fo.runner_fetch_moved("raceday-runner", env={}, path=p)
+    # ランナー名そのものが担当表にあれば従来どおり丸ごと見送る
+    p.write_text(json.dumps({"agent_tasks": ["raceday-runner"]}))
     assert fo.host_must_skip("raceday-runner", env={}, path=p)
-    assert fo.host_must_skip("raceday-weight-runner", env={}, path=p)
-    assert not fo.host_must_skip("raceday-result-runner", env={}, path=p)
-    p.write_text(json.dumps({"agent_tasks": ["race-result-t15"]}))
-    assert fo.host_must_skip("raceday-result-runner", env={}, path=p)
-    p.write_text(json.dumps({"agent_tasks": ["entries-sync"]}))
-    assert not fo.host_must_skip("raceday-runner", env={}, path=p)
+    # 担当表が空なら今までどおり（取得する・見送らない）
+    p.write_text(json.dumps({"agent_tasks": []}))
+    assert not any(fo.runner_fetch_moved(r, env={}, path=p) or fo.host_must_skip(r, env={}, path=p)
+                   for r in ("raceday-runner", "raceday-weight-runner", "raceday-result-runner"))

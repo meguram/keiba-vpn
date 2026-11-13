@@ -45,36 +45,47 @@ _F, _D_LONG, _D_SHORT, _T_GEAR, _DEC_DV, _FLOOR = 40, 12, 9, 20, 10, 45
 # ── 読み込み ──────────────────────────────────────────────────────────────
 
 def read_runs(paths: Iterable[Path | str]) -> pd.DataFrame:
-    """horse_lap の JSONL から 1 走 1 行。完走（着順あり）・区間 6 本以上・全区間のタイムが正のものだけ。"""
-    rows = []
+    """horse_lap の JSONL から 1 走 1 行。完走（着順あり）・区間 6 本以上・全区間のタイムが正のものだけ。
+    同じ race_id の行が複数あれば後の行を使う（日次の追記と手で回す取得が重なったとき、二重に数えない）。ただし中身のある行を
+    中身の無い行（empty_ok）で置き換えない。壊れた行は飛ばす。"""
+    recs: dict[str, dict] = {}
     for p in paths:
         with open(p, encoding="utf-8") as f:
             for line in f:
-                r = json.loads(line)
-                ents = r.get("entries", [])
-                for e in ents:
-                    s = e.get("sections", [])
-                    if not e.get("finish_order") or len(s) < 6:
-                        continue
-                    lt = np.array([x.get("lap_time") or np.nan for x in s], float)
-                    if not np.isfinite(lt).all() or (lt <= 0).any():
-                        continue
-                    dist = np.array([x["distance_m"] for x in s], float)
-                    seg = np.diff(np.concatenate([[0.0], dist]))
-                    if (seg <= 0).any():
-                        continue
-                    corners = [x.get("corner") or "" for x in s]
-                    i3 = corners.index("3C") if "3C" in corners else -1
-                    i4 = corners.index("4C") if "4C" in corners else -1
-                    if not (0 <= i3 < i4):
-                        i3 = i4 = -1
-                    pos = np.array([x["position"] if x.get("position") is not None else np.nan for x in s], float)
-                    rows.append({
-                        "race_id": str(r["race_id"]), "horse_id": str(e["horse_id"]), "horse_name": e.get("horse_name", ""),
-                        "finish_order": int(e["finish_order"]), "nent": len(ents),
-                        "lt": lt, "dist": dist, "pc": lt / (seg / 200.0), "cum": np.cumsum(lt), "pos": pos,
-                        "len1": float(dist[0]), "i3": i3, "i4": i4,
-                    })
+                try:
+                    r = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(r, dict) and r.get("race_id"):
+                    rid = str(r["race_id"])
+                    if r.get("entries") or not (recs.get(rid) or {}).get("entries"):
+                        recs[rid] = r
+    rows = []
+    for r in recs.values():
+        ents = r.get("entries", [])
+        for e in ents:
+            s = e.get("sections", [])
+            if not e.get("finish_order") or len(s) < 6:
+                continue
+            lt = np.array([x.get("lap_time") or np.nan for x in s], float)
+            if not np.isfinite(lt).all() or (lt <= 0).any():
+                continue
+            dist = np.array([x["distance_m"] for x in s], float)
+            seg = np.diff(np.concatenate([[0.0], dist]))
+            if (seg <= 0).any():
+                continue
+            corners = [x.get("corner") or "" for x in s]
+            i3 = corners.index("3C") if "3C" in corners else -1
+            i4 = corners.index("4C") if "4C" in corners else -1
+            if not (0 <= i3 < i4):
+                i3 = i4 = -1
+            pos = np.array([x["position"] if x.get("position") is not None else np.nan for x in s], float)
+            rows.append({
+                "race_id": str(r["race_id"]), "horse_id": str(e["horse_id"]), "horse_name": e.get("horse_name", ""),
+                "finish_order": int(e["finish_order"]), "nent": len(ents),
+                "lt": lt, "dist": dist, "pc": lt / (seg / 200.0), "cum": np.cumsum(lt), "pos": pos,
+                "len1": float(dist[0]), "i3": i3, "i4": i4,
+            })
     return pd.DataFrame(rows)
 
 
@@ -282,8 +293,15 @@ def axes_from_frame(t: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def default_years() -> list[int]:
+    """TS のレース水準補正に使う結果の年。2020 年から今年まで（年が変わっても書き直さなくてよいように今年から決める）。"""
+    from datetime import date
+
+    return list(range(2020, date.today().year + 1))
+
+
 def compute(paths: Iterable[Path | str], years: list[int] | None = None) -> pd.DataFrame:
-    years = years or list(range(2020, 2027))
+    years = years or default_years()
     runs = read_runs(paths)
     return axes_from_frame(with_ts(runs, years))
 
@@ -291,7 +309,7 @@ def compute(paths: Iterable[Path | str], years: list[int] | None = None) -> pd.D
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--laps", nargs="+", required=True)
-    ap.add_argument("--years", type=int, nargs="+", default=list(range(2020, 2027)))
+    ap.add_argument("--years", type=int, nargs="+", default=None, help="既定は 2020 年から今年まで")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     df = compute(a.laps, a.years)

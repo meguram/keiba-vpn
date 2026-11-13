@@ -246,14 +246,25 @@ def reserve_recurring(queue: FT.TaskQueue, *, now: datetime | None = None, horiz
 
 
 def _queue() -> FT.TaskQueue:
-    return FT.TaskQueue(FT.GcsTaskStore(os.environ.get("GCS_BUCKET", "").strip()))
+    return FT.TaskQueue(FT.task_store_from_env())      # KEIBA_FETCH_TASK_STORE=file なら VPS のローカル（GCS を使わない）
+
+
+def resolve_date(s: str, now: datetime | None = None) -> str:
+    """today / tomorrow（JST）を YYYYMMDD に。それ以外はそのまま（VPS のタイマーから日付を計算せずに呼べるように）。"""
+    now = now or datetime.now(JST)
+    if s == "today":
+        return now.strftime("%Y%m%d")
+    if s == "tomorrow":
+        return (now + timedelta(days=1)).strftime("%Y%m%d")
+    return s
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("race-day")
-    r.add_argument("--date", required=True)
+    r.add_argument("--date", required=True, help="YYYYMMDD。today / tomorrow（JST）も使える")
+    r.add_argument("--no-predict", action="store_true", help="予測の Cloud Tasks を積まない（取得の予約だけ。VPS の中で動かすとき）")
     c = sub.add_parser("recurring")
     c.add_argument("--horizon-hours", type=float, default=6)
     for p in (r, c):
@@ -272,8 +283,8 @@ def main(argv: list[str] | None = None) -> int:
         from src.ops import job_map
 
         pr = next((j for j in job_map.load()["jobs"] if j["id"] == "predict-race"), {})
-        res = reserve_race_day(ns.date, HybridStorage("."), queue, dry_run=ns.dry_run, shadow_queue=shadow_queue,
-                               predict_ready=bool(pr.get("ready")))
+        res = reserve_race_day(resolve_date(ns.date), HybridStorage("."), queue, dry_run=ns.dry_run, shadow_queue=shadow_queue,
+                               predict_ready=bool(pr.get("ready")) and not ns.no_predict)
     else:
         res = reserve_recurring(queue, horizon_hours=ns.horizon_hours, dry_run=ns.dry_run, shadow_queue=shadow_queue)
     print(json.dumps(res, ensure_ascii=False, default=str))

@@ -591,3 +591,55 @@ def test_bundle_never_contains_the_members_file(tmp_path):
     got = gm.extract_bundle(gm.build_bundle(tmp_path, TREES + gm.AUTH_TREES, window=14), tmp_path / "api", TREES + gm.AUTH_TREES)
     assert got["files"] == 1 and not (tmp_path / "api/data/local/auth/members.json").exists()
     assert not any(t in gm.AUTH_TREES for t in got["trees"])
+
+
+# ── VPS → ホストの受け渡し（ops/mirror_vps/） ─────────────────────────
+
+OWNED = ["race_lists", "race_day_schedule"]
+
+
+def test_push_vps_uploads_only_changed_files_of_owned_trees_without_listing(tmp_path):
+    g, man = CountingFake(), tmp_path / "m.json"
+    _w(tmp_path, "data/page_reference/race_lists/20261114.json", b"L1")
+    _w(tmp_path, "data/page_reference/cushion/cushion_2026.json", b"C1")                # 馬場は受け渡さない
+    _w(tmp_path, "data/local/inference/predictions_v3/x.json", b"not vps")
+    assert gm.push_vps(g, tmp_path, man, now=1000.0, trees=[])["skipped"] == 1 and g.uploads == 0   # 担当が無ければ何もしない
+    r = gm.push_vps(g, tmp_path, man, now=1000.0, trees=OWNED)
+    assert r["uploaded"] == 1 and g.lists == 0
+    assert set(g.objs) == {"ops/mirror_vps/data/page_reference/race_lists/20261114.json", gm.VPS_INDEX_KEY}
+    n = g.uploads
+    assert gm.push_vps(g, tmp_path, man, now=1100.0, trees=OWNED)["uploaded"] == 0 and g.uploads == n   # 変わらなければ目録も書かない
+    _w(tmp_path, "data/page_reference/race_lists/20261114.json", b"L2")
+    assert gm.push_vps(g, tmp_path, man, now=1200.0, trees=OWNED)["uploaded"] == 1 and g.lists == 0
+
+
+def test_pull_vps_reads_only_the_index_and_owned_trees(tmp_path):
+    vps, host, g = tmp_path / "vps", tmp_path / "host", CountingFake()
+    _w(vps, "data/page_reference/race_lists/20261114.json", b"L1")
+    _w(vps, "data/page_reference/race_day_schedule/20261114.json", b"S1")
+    gm.push_vps(g, vps, vps / "m.json", now=time.time(), trees=OWNED)
+    assert gm.pull_vps(g, host, []) == {"index": 0, "seen": 0, "downloaded": 0}                # 担当が移っていなければ GCS に触れない
+    r = gm.pull_vps(g, host, ["race_lists"])
+    assert r["downloaded"] == 1 and (host / "data/page_reference/race_lists/20261114.json").read_bytes() == b"L1"
+    assert not (host / "data/page_reference/race_day_schedule/20261114.json").exists()
+    assert gm.pull_vps(g, host, ["race_lists"])["downloaded"] == 0                              # 同じ中身なら取らない
+    assert g.lists == 0
+
+
+def test_pull_vps_missing_index_vs_errors(tmp_path):
+    assert gm.pull_vps(Fake(), tmp_path, ["race_lists"])["missing_index"] == 1               # まだ無い: 黙る
+
+    class Broken(Fake):
+        def download(self, key):
+            raise PermissionError("403")
+
+    import pytest
+
+    with pytest.raises(PermissionError):                                                    # 認証・通信の失敗は上に投げる
+        gm.pull_vps(Broken(), tmp_path, ["race_lists"])
+
+
+def test_vps_owned_trees_follow_fetch_owner_and_exclude_cushion():
+    assert gm.vps_owned_trees(set()) == []
+    assert gm.vps_owned_trees({"daily-race-lists", "jra-baba-morning"}) == ["race_lists", "race_day_schedule"]
+    assert "cushion" not in gm.VPS_TREES                  # 馬場は追記型の履歴なので丸ごと受け渡さない

@@ -146,7 +146,10 @@ host の going_apt9.py(出力 going_apt9.out)。馬ごとに「パワー走の�
   2. 予測ラップ補完(`laps_imputed=True`)の走は、平滑な形のためギアの sum_pos==0 や TS持続力の零ルールが人工的な 0 になる可能性(未検証)。現在の run_axes は実測ラップの走だけが対象(補完走は入らない=その走は NaN)。
   3. 新馬など履歴のない馬は父平均の事前値で埋まる。対応済み: 地図には `from_prior`(自分の実測が無い方面)・`axis_runs`(方面ごとの実測走数)を返し、UI は薄い色と「*」で示す。実測の走が1つも無い馬は `estimated`(点線の白抜き)。急坂は事前値なし(自分の実測が無ければ None=不明)。
   4. `np.nan_to_num(z)` は不明な軸を地図の中心に置く(MAX_IMPUTED=3 まで)。不明軸が多い馬は地図に出さない運用を維持。
-  5. 日次の run_axes 更新(新しいレースのラップ取得→追記)と、stg/VPS での運用取得の設計は未決。
+  5. 日次の run_axes 更新(2026-11-13 決定・実装): 取得は増やさない。バロメーターの取得(`run.py::scrape_barometer`)が同じページ(`ajax_race_result_horse_laptime`)から馬別ラップも GCS の `horse_lap` に保存する(どの機械が取っても同じ。VPS でも動く)。
+     ホストは毎朝の `export_tables_daily.sh` で `python -m src.scripts.data.update_run_axes` を回す: ローカルの race_result_flat から、公開(翌週金曜 18 時)の翌日から 21 日の窓で jsonl に無いレースを決め、`horse_lap` を名前で読み(一覧なし・試行の間隔つき)、頭数がそろえば `horse_lap_<年>.jsonl`(`KEIBA_HORSE_LAP_DIR`、既定 /home/jovyan/acq/horse_lap)に追記し、追記があれば run_axes を全件で作り直す(約 16 秒・約 650MB)。
+     事前計算の指紋(`precompute.fingerprint`)に run_axes の更新を入れたので、作り直した日は窓(過去 30 日〜先 14 日)の分析が作り直される。10 点の基準(build_axis_scores10・reference.json)は凍結のまま。
+     この仕組みより前に barometer を保存済みのレース(2026-10-26〜11-08)は horse_lap が無いので、`backfill_horse_lap --years 2026` を 1 回だけ手で回して補う。
 (GC は廃止。ギアチェンジ軸が代替として確定済み。ユーザー 2026-10-30)
 
 ## 11. コース別の 3 軸の地図と、その日の馬場傾向（2026-11-02 ユーザー指示）

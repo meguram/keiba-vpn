@@ -40,8 +40,10 @@ def _runner(storage_docs, parser_result=None, now=None, monkeypatch=None):
             return True
 
     class P:
-        def parse_from_api(self, session, rid):
+        def parse_from_api(self, session, rid, html_out=None):
             calls["parse"] += 1
+            if html_out is not None:
+                html_out.append("<html>laps</html>")
             return parser_result or {"race_id": rid, "entries": []}
 
     r.storage, r.barometer_parser = S(), P()
@@ -77,7 +79,7 @@ def test_published_flat_race_is_saved():
     ok = {"race_id": "202609040212", "entries": [{"horse_number": 1}]}
     r, calls = _runner(FLAT, parser_result=ok)
     assert r.scrape_barometer("202609040212", skip_existing=False) == ok
-    assert calls["saved"] == [("race_barometer", "202609040212")] and calls["markers"] == []
+    assert calls["saved"][0] == ("race_barometer", "202609040212") and calls["markers"] == []
 
 
 def test_not_published_notice_is_neither_saved_nor_marked():
@@ -104,3 +106,63 @@ def test_parser_flags_the_not_published_page():
 
     out = BarometerParser().parse_from_api(Sess(), "202605040412")
     assert out["entries"] == [] and out.get("not_published") is True
+
+
+def _laps(monkeypatch, result=None, exc=None):
+    from src.scraper import parsers as P
+
+    def fake(self, html, race_id=""):
+        if exc:
+            raise exc
+        return result
+    monkeypatch.setattr(P.DbHorseLaptimeTableParser, "parse", fake)
+
+
+def test_horse_lap_is_saved_from_the_same_page(monkeypatch):
+    """馬別ラップ（走法の軸の元データ）は、バロメーターと同じ HTML から保存する。取得は増えない（parse_from_api は 1 回）。"""
+    _laps(monkeypatch, {"race_id": "202609040212", "entries": [
+        {"horse_id": "h1", "finish_order": 1, "sections": [{"lap_time": 12.3}]},
+        {"horse_id": "h2", "finish_order": 0, "sections": []}]})        # 中止の馬にラップが無いのは正常
+    ok = {"race_id": "202609040212", "entries": [{"horse_number": 1}, {"horse_number": 2}]}
+    r, calls = _runner(FLAT, parser_result=ok)
+    assert r.scrape_barometer("202609040212", skip_existing=False) == ok
+    assert calls["parse"] == 1
+    assert calls["saved"] == [("race_barometer", "202609040212"), ("horse_lap", "202609040212")]
+
+
+def test_horse_lap_without_laps_is_not_saved(monkeypatch):
+    _laps(monkeypatch, {"race_id": "202609040212", "entries": [{"horse_id": "h1", "finish_order": 1, "sections": [{"lap_time": None}]}]})
+    r, calls = _runner(FLAT, parser_result={"race_id": "202609040212", "entries": [{"horse_number": 1}]})
+    r.scrape_barometer("202609040212", skip_existing=False)
+    assert calls["saved"] == [("race_barometer", "202609040212")]
+
+
+def test_partial_horse_lap_is_not_saved(monkeypatch):
+    """会員状態が効いていない応答（先頭の数頭だけ）は保存しない。"""
+    _laps(monkeypatch, {"race_id": "202609040212", "entries": [{"horse_id": "h1", "finish_order": 1, "sections": [{"lap_time": 12.3}]}]})
+    r, calls = _runner(FLAT, parser_result={"race_id": "202609040212", "entries": [{"horse_number": 1}, {"horse_number": 2}]})
+    r.scrape_barometer("202609040212", skip_existing=False)
+    assert calls["saved"] == [("race_barometer", "202609040212")]
+
+
+def test_horse_lap_failure_does_not_stop_barometer(monkeypatch):
+    _laps(monkeypatch, exc=ValueError("broken"))
+    ok = {"race_id": "202609040212", "entries": [{"horse_number": 1}]}
+    r, calls = _runner(FLAT, parser_result=ok)
+    assert r.scrape_barometer("202609040212", skip_existing=False) == ok
+    assert calls["saved"] == [("race_barometer", "202609040212")]
+
+
+def test_parser_hands_back_the_html():
+    html = "<html>" + "x" * 200 + "</html>"
+
+    class Resp:
+        status_code, text = 200, html
+
+    class Sess:
+        def get(self, *a, **k):
+            return Resp()
+
+    box: list[str] = []
+    BarometerParser().parse_from_api(Sess(), "202605040412", html_out=box)
+    assert box == [html]

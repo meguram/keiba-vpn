@@ -41,7 +41,10 @@ id keibafetch >/dev/null 2>&1 || { say "  ユーザー keibafetch を作成（�
 for d in /opt/keiba-fetch /opt/keiba-fetch/releases /opt/keiba-fetch/incoming /opt/keiba-pull /var/lib/keiba-pull; do run install -d -m 755 "$d"; done
 run install -d -m 750 -o root -g keibafetch /etc/keiba-fetch
 run install -d -m 700 /etc/keiba-pull
-run install -d -m 755 -o keibafetch -g keibafetch /var/lib/keiba-fetch /var/lib/keiba-fetch/data /var/lib/keiba-fetch/logs
+run install -d -m 755 -o keibafetch -g keibafetch /var/lib/keiba-fetch /var/lib/keiba-fetch/data /var/lib/keiba-fetch/logs /var/lib/keiba-fetch/tasks
+# タスク表の状態ごとのディレクトリも keibafetch の持ち物で先に作る（root で手動実行して root 所有になり、実行役が書けなくなるのを防ぐ）
+for d in /var/lib/keiba-fetch/tasks/ops /var/lib/keiba-fetch/tasks/ops/fetch_tasks /var/lib/keiba-fetch/tasks/ops/events; do run install -d -m 755 -o keibafetch -g keibafetch "$d"; done
+for st in pending running done failed; do run install -d -m 755 -o keibafetch -g keibafetch "/var/lib/keiba-fetch/tasks/ops/fetch_tasks/$st"; done
 
 say "== 2/6 スクリプト（root 所有。deploy は書き換えられない）"
 install_if_changed 755 "$HERE/heartbeat_client.py" /opt/keiba-ui/bin/heartbeat_client.py
@@ -55,6 +58,11 @@ install_if_changed 644 "$T/keiba-heartbeat.timer" /etc/systemd/system/keiba-hear
 install_if_changed 644 "$T/keiba-release-pull@.service" /etc/systemd/system/keiba-release-pull@.service
 install_if_changed 644 "$T/keiba-release-pull-ui.timer" /etc/systemd/system/keiba-release-pull-ui.timer
 install_if_changed 644 "$T/keiba-release-pull-fetch.timer" /etc/systemd/system/keiba-release-pull-fetch.timer
+# 取得の予約を VPS の中で行う（GCP の reserve-fetch-tasks / reserve-race-day の代わり。タスク表は /var/lib/keiba-fetch/tasks）
+for u in keiba-fetch-reserve.service keiba-fetch-reserve.timer keiba-fetch-raceday@.service keiba-fetch-raceday-tomorrow.timer keiba-fetch-raceday-today.timer \
+         keiba-mirror-vps-push.service keiba-mirror-vps-push.timer; do
+  install_if_changed 644 "$T/$u" "/etc/systemd/system/$u"
+done
 # メモリ上限（MemoryHigh=ソフト、MemoryMax=ハード）。既存ユニットは書き換えず drop-in で上書きする
 install_if_changed 644 "$T/dropin-nginx-memory.conf" /etc/systemd/system/nginx.service.d/50-keiba-memory.conf
 install_if_changed 644 "$T/dropin-cloudflared-prod-memory.conf" /etc/systemd/system/cloudflared-prod.service.d/50-keiba-memory.conf
@@ -69,6 +77,15 @@ KEIBA_RUN_LOCATION=vps
 KEIBA_FETCH_AGENT_ENABLED=0
 # 影モード: ホストが取得を続けたまま、同じ取得を shadow/ 以下へ並走して本番と比べる（docs/operations/vps_agent.md の影モードの章）。既定オフ
 KEIBA_FETCH_SHADOW_ENABLED=0
+# タスク表の置き場所。file = VPS のローカル（/var/lib/keiba-fetch/tasks。予約も VPS のタイマーで行い、GCP を使わない）。gcs = 旧方式
+KEIBA_FETCH_TASK_STORE=file
+KEIBA_FETCH_TASK_DIR=/var/lib/keiba-fetch/tasks
+# 予測・めぐ分析に要る取得（ホストの .env と同じ。2026-11 の網羅性の調査で、VPS の既定では取らないと分かったもの）
+# 直前オッズ T-10/5/2・3 連単・前日夕の出走馬の調教（最新 1 ページ）・前日夕の新馬の基本情報（horse_result が無い馬）
+KEIBA_ODDS_LATE_SNAPSHOTS=1
+KEIBA_ODDS_TRIFECTA=1
+KEIBA_EVE_HORSE_TRAINING=1
+KEIBA_EVE_HORSE_PROFILE=1
 GCS_BUCKET=
 GOOGLE_APPLICATION_CREDENTIALS=/etc/keiba-fetch/sa.json
 # netkeiba のログイン等（.env.example の NETKEIBA_* と同じ名前）はここにだけ置く
@@ -103,6 +120,12 @@ else say "  pull 型デプロイ: pull.env / sa.json / venv が揃っていな�
 if [ "$ENABLE_AGENT" = 1 ]; then
   if grep -q '^KEIBA_FETCH_AGENT_ENABLED=1' /etc/keiba-fetch/fetch.env 2>/dev/null && [ -L /opt/keiba-fetch/current ] && [ -x /opt/keiba-fetch/venv/bin/python ]; then
     run systemctl enable --now keiba-fetch-agent.service
+    if grep -q '^KEIBA_FETCH_TASK_STORE=file' /etc/keiba-fetch/fetch.env 2>/dev/null; then
+      run systemctl enable --now keiba-fetch-reserve.timer keiba-fetch-raceday-tomorrow.timer keiba-fetch-raceday-today.timer keiba-mirror-vps-push.timer
+    else
+      say "  予約のタイマー: fetch.env に KEIBA_FETCH_TASK_STORE=file が無いため有効化しません（GCS のタスク表のまま）"
+      run systemctl disable --now keiba-fetch-reserve.timer keiba-fetch-raceday-tomorrow.timer keiba-fetch-raceday-today.timer keiba-mirror-vps-push.timer 2>/dev/null || true
+    fi
   else say "  取得の実行役: ENABLED=1・current(コードバンドル)・venv が揃っていないため有効化しません"; fi
 else say "  取得の実行役は有効化しません（--enable-fetch-agent で。既定はホスト cron のまま）"; fi
 [ "$DRY" = 1 ] || { systemctl list-timers --no-pager 2>/dev/null | grep -E "keiba|NEXT" || true; }

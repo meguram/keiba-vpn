@@ -4,7 +4,7 @@
 学習側(2020-2025)は全件取り直しで被覆がほぼ 100% なので、被覆の低下は『モデルの劣化』ではなく『入力データの不足』として現れる。週次監視で先に気づけるようにする。
 
   行(race_id, horse_id, date)ごとに、その馬の horse_training の保存記録に『そのレース日の調教の行』があるか(has_block)、記録そのものがあるか(has_rec)。
-読み取りのみ（storage.load）。GCS/DB へは書かない。
+読み取りのみ（手元の複製を先に読み、GCS は GCP の中でだけ）。GCS/DB へは書かない。
 """
 
 from __future__ import annotations
@@ -17,16 +17,42 @@ import numpy as np
 import pandas as pd
 
 
-def default_loader(workers: int = 8) -> Callable[[list[str]], dict[str, Any]]:
+def default_loader(workers: int = 8, root: str | None = None, *, allow_gcs: bool | None = None) -> Callable[[list[str]], dict[str, Any]]:
+    """horse_id → 調教の保存記録。**手元の複製（data/local/horse_training）を先に読む**。
+
+    手元に無い馬を storage（GCS）から読むのは、GCS を読んでも転送料がかからない GCP の中だけ（allow_gcs の既定は egress_billed() の逆）。
+    ホストで GCS を 1 頭ずつ読むと、夜間の補いの対象の判定（約 1 万頭）だけで 1 回 約 0.6GB の転送料になった（2026-11-13 の監査ログ）。
+    前提: 取得（_persist_horse_training）は手元にも書くので、ホストが取った分は手元だけで足りる。ホスト以外（VPS の前夜の取得など）が GCS にだけ
+    書いた記録は、手元に取り込まれるまで「無い」と数える（被覆が低く見える・穴埋めが取り直す）。手元の場所は取得と同じく作業ディレクトリ基準。"""
+    from pathlib import Path
+
     def load_many(horse_ids: list[str]) -> dict[str, Any]:
+        import json
+
+        from src.config.gcp_guard import egress_billed
+        from src.scraper.horse_training_local import horse_training_json_path
         from src.utils.project_env import load_project_dotenv
 
         load_project_dotenv()
-        from src.scraper.storage import HybridStorage
+        base = Path(root) if root else Path.cwd()   # 取得側（HybridStorage(base_dir=".")）と同じ求め方
+        use_gcs = (not egress_billed()) if allow_gcs is None else allow_gcs
+        st = None
+        if use_gcs:
+            from src.scraper.storage import HybridStorage
 
-        st = HybridStorage()
+            st = HybridStorage()
 
         def one(h: str):
+            try:
+                p = horse_training_json_path(base, h)
+                if p.is_file():
+                    return h, json.loads(p.read_text(encoding="utf-8"))
+            except Exception as exc:  # noqa: BLE001  壊れた 1 件は「無い」と同じに扱うが、黙らない
+                import logging
+
+                logging.getLogger(__name__).warning("手元の調教の記録を読めない %s: %s", h, exc)
+            if st is None:
+                return h, None
             try:
                 return h, st.load("horse_training", h)
             except Exception:

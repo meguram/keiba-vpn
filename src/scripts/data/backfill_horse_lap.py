@@ -139,7 +139,7 @@ def ensure_login(client, tries: int = 3) -> bool:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--years", type=int, nargs="+", default=[2026, 2025, 2024])
-    ap.add_argument("--out-dir", default="/home/jovyan/acq/horse_lap")
+    ap.add_argument("--out-dir", default=os.environ.get("KEIBA_HORSE_LAP_DIR") or "/home/jovyan/acq/horse_lap")
     ap.add_argument("--also-done", nargs="*", default=[], help="取得済みとみなす別の jsonl")
     ap.add_argument("--limit", type=int, default=0, help="この回に取る最大レース数（0=すべて）")
     a = ap.parse_args()

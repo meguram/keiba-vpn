@@ -106,4 +106,108 @@ def test_halt_file_blocks_start_and_is_written_on_abort(tmp_path, monkeypatch):
     monkeypatch.setattr(J, "fetch_range", boom)
     assert J.main(["--halt-file", str(halt), "daily"]) == 3 and "HTTP 503" in halt.read_text(encoding="utf-8")
     monkeypatch.setattr(J, "fetch_range", lambda *a, **k: (_ for _ in ()).throw(AssertionError("中断印があるのに取得した")))
-    assert J.main(["--halt-file", str(halt), "daily"]) == 0
+    assert J.main(["--halt-file", str(halt), "daily"]) == 5
+
+
+_ST = {"01": {"station": {"type": "s", "prec_no": 14, "block_no": "47412", "name": "札幌", "lat": 43.06, "lon": 141.33, "distance_km": 1.5}}}
+
+
+def test_missing_table_for_yesterday_is_skipped_not_halted(monkeypatch):
+    """日付が変わった直後は昨日のページがまだ出ていないことがある。止めずに飛ばす（2026-10-26 に 18 日間止まった原因）。"""
+    from datetime import timedelta
+    monkeypatch.setattr(jw, "_get", lambda url, session: "<html>no table</html>")
+    monkeypatch.setattr(jw, "load_stations", lambda: _ST)
+    y = date.today() - timedelta(days=1)
+    assert jw.fetch_range(y, y, store=_Store()) == {"fetched": 0, "skipped": 0}
+
+
+def test_missing_table_for_old_day_still_halts_with_context(monkeypatch):
+    monkeypatch.setattr(jw, "_get", lambda url, session: "<html>no table</html>")
+    monkeypatch.setattr(jw, "load_stations", lambda: _ST)
+    with pytest.raises(jw.JmaError) as e:
+        jw.fetch_range(date(2020, 1, 1), date(2020, 1, 1), store=_Store())
+    assert "01 2020-01-01" in str(e.value) and "tablefix1" in str(e.value)
+
+
+def test_run_script_exits_nonzero_while_halted():
+    sh = (Path(__file__).resolve().parents[2] / "scripts" / "cron" / "jma_weather_run.sh").read_text(encoding="utf-8")
+    line = next(x for x in sh.splitlines() if 'if [ -e "$HALT" ]' in x)
+    assert "exit 5" in line
+
+
+def _run_sh(tmp_path, hour: int, done: str | None = None, halt: bool = False, fail: str | None = None, rc: int = 0):
+    """jma_weather_run.sh を、python の代わりに呼び出しを記録するだけの偽物で動かす。"""
+    import os
+    import subprocess
+
+    proj = tmp_path / "proj"
+    (proj / "data/local/meta").mkdir(parents=True, exist_ok=True)
+    calls = tmp_path / "calls.txt"
+    fake = tmp_path / "fakepy.sh"
+    fake.write_text(f'#!/bin/sh\necho "$@" >> {calls}\nexit {rc}\n')
+    fake.chmod(0o755)
+    meta = proj / "data/local/meta"
+    if done:
+        (meta / "jma_weather_daily_done").write_text(done + "\n")
+    if fail:
+        (meta / "jma_weather_daily_fail").write_text(fail + "\n")
+    if halt:
+        (meta / "jma_weather_halt.json").write_text("{}")
+    sh = Path(__file__).resolve().parents[2] / "scripts" / "cron" / "jma_weather_run.sh"
+    env = {**os.environ, "PYTHON": str(fake), "JMA_LOCK": str(tmp_path / "lock"), "JMA_DAILY_FIRST_HOUR": str(hour)}
+    r = subprocess.run(["bash", str(sh), str(proj)], env=env, timeout=30).returncode
+    return r, (calls.read_text().splitlines() if calls.exists() else []), proj
+
+
+def _jst(days: int = 0, fmt: str = "%F") -> str:
+    from datetime import datetime, timedelta, timezone
+    return (datetime.now(timezone(timedelta(hours=9))) + timedelta(days=days)).strftime(fmt)
+
+
+def test_run_script_runs_once_a_day_and_never_the_full_fetch(tmp_path):
+    """毎時 `fetch --from 20160101` で月ファイル 1,310 件（約 345MiB）を読み直していた（2026-11-13）。1 日 1 回・前回からの範囲だけにする。"""
+    rc, calls, proj = _run_sh(tmp_path, hour=0)
+    assert rc == 0 and calls == [f"-m src.scraper.jma_weather fetch --from {_jst(-3, '%Y%m%d')}"]   # 記録が無ければ直近 3 日
+    assert (proj / "data/local/meta/jma_weather_daily_done").read_text().strip() == _jst()
+    rc2, calls2, _ = _run_sh(tmp_path, hour=0, done=_jst())          # 同じ日の 2 回目は何もしない
+    assert rc2 == 0 and calls2 == calls
+
+
+def test_run_script_resumes_from_last_done_day_capped(tmp_path):
+    """PC や印で止まっていた日も、次に済んだ回で埋める（前回済んだ日の 2 日前から。31 日より前には戻らない）。"""
+    _, calls, _ = _run_sh(tmp_path / "a", hour=0, done=_jst(-10))
+    assert calls == [f"-m src.scraper.jma_weather fetch --from {_jst(-12, '%Y%m%d')}"]
+    _, calls, _ = _run_sh(tmp_path / "b", hour=0, done=_jst(-90))
+    assert calls == [f"-m src.scraper.jma_weather fetch --from {_jst(-31, '%Y%m%d')}"]
+
+
+def test_run_script_caps_retries_per_day(tmp_path):
+    rc, calls, proj = _run_sh(tmp_path / "a", hour=0, rc=1)
+    assert rc == 1 and (proj / "data/local/meta/jma_weather_daily_fail").read_text().split() == [_jst(), "1"]
+    rc, calls, _ = _run_sh(tmp_path / "b", hour=0, fail=f"{_jst()} 3")
+    assert rc == 6 and calls == []                                    # 上限に達した日は読み直さない
+    rc, calls, _ = _run_sh(tmp_path / "c", hour=0, fail=f"{_jst(-1)} 3")
+    assert rc == 0 and len(calls) == 1                                # 前の日の失敗は数えない
+
+
+def test_run_script_waits_for_morning_and_halt_is_visible(tmp_path):
+    rc, calls, _ = _run_sh(tmp_path, hour=24)                        # まだその時刻でない
+    assert rc == 0 and calls == []
+    rc, calls, _ = _run_sh(tmp_path / "h", hour=0, halt=True)
+    assert rc == 5 and calls == []
+
+
+def test_load_failure_does_not_become_an_empty_month():
+    """GCS の一時的な失敗を空の月とみなすと、数日分だけで月ファイルを上書きしてしまう。"""
+    class S:
+        _gcs_healthy = False
+
+        def load(self, *a, **k):
+            return None
+
+    with pytest.raises(RuntimeError):
+        jw.load_month("01", "202611", store=S())
+
+    class Ok(S):
+        _gcs_healthy = True
+    assert jw.load_month("01", "202611", store=Ok())["days"] == {}     # 本当に無い月は空で始める

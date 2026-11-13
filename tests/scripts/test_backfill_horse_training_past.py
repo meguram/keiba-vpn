@@ -307,6 +307,7 @@ def test_wait_ok_shows_waiting_then_running(monkeypatch):
     monkeypatch.setattr(R, "busy", lambda: next(busy))
     monkeypatch.setattr(R, "load1", lambda: 0.0)
     monkeypatch.setattr(R, "time", __import__("types").SimpleNamespace(time=lambda: 0.0, sleep=lambda *_: None))
+    monkeypatch.setattr(R, "busy_names", lambda: ["src.scraper.export_tables"])
     monkeypatch.setattr(R, "_set_fetch_state", lambda s, w=None: states.append(s))
     assert R.wait_ok(3600) is True and states == ["waiting", "running"]
     states.clear()
@@ -324,6 +325,52 @@ def test_wait_ok_shows_waiting_then_running(monkeypatch):
     assert R.wait_ok(60) is False and states == ["waiting"]                # 待ちきれず中断: 実行中には戻さない
 
 
+def test_wait_ok_names_what_it_waits_for(monkeypatch):
+    """待っている相手の名前を出し、相手が変わったときだけ書き直す。待つかどうかの判定は変えない。"""
+    import types
+
+    from src.scripts.scraping import backfill_horse_training_recent as R
+
+    calls, busy = [], iter([True, True, True, False, False])
+    names = iter([["src.scraper.export_tables"], ["src.scraper.export_tables"], ["src.scraper.run"], []])
+    monkeypatch.setattr(R, "busy", lambda: next(busy))
+    monkeypatch.setattr(R, "busy_names", lambda: next(names))
+    loads = iter([20.0, 20.0, 0.0])   # busy が True の間は負荷を見ない
+    monkeypatch.setattr(R, "load1", lambda: next(loads))
+    monkeypatch.setattr(R, "time", types.SimpleNamespace(time=lambda: 0.0, sleep=lambda *_: None))
+    monkeypatch.setattr(R, "_set_fetch_state", lambda s, w=None: calls.append((s, w)))
+    assert R.wait_ok(3600) is True
+    assert calls[0] == ("waiting", "他の取得の終了待ち: src.scraper.export_tables")
+    assert calls[1] == ("waiting", "他の取得の終了待ち: src.scraper.run")
+    assert calls[2] == ("waiting", "負荷の低下待ち（1 分平均 18 未満で再開）")
+    assert calls[3] == ("running", None) and len(calls) == 4
+
+
+def test_busy_names_extracts_module_names(monkeypatch):
+    from src.scripts.scraping import backfill_horse_training_recent as R
+
+    ps = ("ARGS\n/opt/conda/bin/python3 -m src.scraper.export_tables --years 2026\n"
+          "python3 -m src.scraper.export_tables --x\n"
+          "/opt/conda/bin/python3 -m src.scripts.scraping.backfill_horse_training_past --horses-file a\n"
+          "python -m src.scraper.run horse-training 1\n"
+          "python3 -m src.scraper.raceday_runner --date 2026-11-14\n"
+          "python3 -m src.scripts.maintenance.repair_odds\n"
+          "python3 -m src.scripts.scraping.backfill_horse_race_info --x\n"
+          "grep -P python3 -m src.scraper.auto_scrape_queue\n")
+    monkeypatch.setattr(R.subprocess, "run", lambda *a, **k: __import__("types").SimpleNamespace(stdout=ps))
+    # 自分（過去分の取り直し）と grep の行は入れず、重複もまとめ、名前は途中で切らない
+    assert R.busy_names() == ["src.scraper.export_tables", "src.scraper.run", "src.scraper.raceday_runner",
+                              "src.scripts.maintenance.repair_odds", "src.scripts.scraping.backfill_horse_race_info"]
+
+
+def test_waiting_for_falls_back_when_nothing_is_seen(monkeypatch):
+    from src.scripts.scraping import backfill_horse_training_recent as R
+
+    monkeypatch.setattr(R, "busy_names", lambda: [])
+    monkeypatch.setattr(R, "load1", lambda: 1.0)
+    assert R._waiting_for() == "他の取得の終了・負荷の低下待ち"   # 判定の直後に相手が終わった: 負荷待ちとは書かない
+
+
 def test_set_fetch_state_swallows_import_errors(monkeypatch):
     import sys
 
@@ -331,3 +378,18 @@ def test_set_fetch_state_swallows_import_errors(monkeypatch):
 
     monkeypatch.setitem(sys.modules, "src.scraper.fetch_registry", None)    # import が失敗する
     R._set_fetch_state("waiting", "x")                                      # 例外を出さない
+
+
+def test_recent_refetches_horses_fetched_before_their_latest_missing_race():
+    """穴埋めの済みの印は『取った日』つき。足りない出走より前に取った馬（その後のレースの調教がまだ無い）は取り直す。"""
+    from src.scripts.scraping import backfill_horse_training_recent as R
+
+    prog = {"done": {"a": "saved", "b": "saved", "c": "error", "d": "saved"}, "done_on": {"a": "2026-10-28", "b": "2026-11-08", "c": "2026-11-08"}}
+    assert R.needs_fetch(prog, "a", "2026-11-07")            # 11/07 のレースより前に取った
+    assert not R.needs_fetch(prog, "b", "2026-11-07")        # レースの後に取っても無い: 本当に無い
+    assert not R.needs_fetch(prog, "c", "2026-11-07") and R.needs_fetch(prog, "c", "2026-11-07", retry_failed=True)
+    assert R.needs_fetch(prog, "d", "2026-11-07")            # 日付を持つ前の古い進捗
+    assert R.needs_fetch(prog, "new", "2026-11-07")
+    assert R.missing_dates([("x", "2026-11-07"), ("x", "2026-10-11")], load_many=lambda hs: {}) == {"x": ["2026-11-07", "2026-10-11"]}
+    assert R._count({"a": "saved", "b": "saved", "c": "error"}) == {"saved": 2, "unreadable": 0, "empty": 0, "error": 1}
+    assert len(R._today_jst()) == 10

@@ -65,6 +65,51 @@ def training_sig(entries: list[dict[str, Any]]) -> list[list[Any]]:
 
 def patterns_of(horse_ids: list[str], race_date: str) -> dict[str, str | None]:
     """horse_id → 『場所|パターン』（レース週の平日のベスト 4F。調教が無い馬は None）。レース日より前の調教だけ。"""
+    return workouts_of(horse_ids, race_date)[0]
+
+
+def _wk_status(rec: dict | None, rows: list[dict[str, Any]], race_date: str, pat: str | None) -> dict[str, Any]:
+    """表示用の『この馬の調教の状況』。
+
+    st: pattern（集計に使うパターンあり）/ out（このレースの追い切りはあるが、集計の対象の種別ではない）/
+        none（レースの後に取得したのに、このレースの追い切りの記録が無い）/ unfetched（このレースの分をまだ取得していない）/ nofile（調教ページを未取得）
+    last: このレースの前の最後の追い切り（日付・場所・4F）。why: out の理由（no_week / weekend / no_4f / cls）。"""
+    from datetime import date, timedelta
+
+    from src.pipeline.features.final_week_workout import PLACE
+
+    if rec is None:
+        return {"st": "nofile", "last": None, "why": None}
+    before = sorted((r for r in rows if str(r.get("train_date") or "") < race_date), key=lambda r: str(r.get("train_date")))
+    last = None
+    if before:
+        r = before[-1]
+        c = str(r.get("course") or "").replace("一番時計", "")
+        t4 = r.get("t4")
+        last = {"date": r.get("train_date"), "place": PLACE.get(c, c) or None, "t4": t4 if isinstance(t4, (int, float)) and t4 == t4 else None}
+    if pat:
+        return {"st": "pattern", "last": last, "why": None}
+    rd = date.fromisoformat(race_date)
+    if not before:
+        # 前日夕方（出走前の取得の通常の時刻）以降に取って無ければ、本当に記録が無い。それより前の取得なら、このレースの分はまだ取っていない
+        scraped = str(((rec.get("_meta") or {}).get("scraped_at_jst")) or "")[:16]
+        fresh = bool(scraped) and scraped >= f"{(rd - timedelta(days=1)).isoformat()} 18:00"   # 前日の 18:00 より前の取得は、最終追い切りが載る前
+        return {"st": "none" if fresh else "unfetched", "last": None, "why": None}
+    mon = rd - timedelta(days=7 if rd.weekday() == 0 else rd.weekday())   # final_week_workout.race_week_monday と同じ週の区切り
+    tds = [(date.fromisoformat(str(r["train_date"])), r) for r in before]
+    week = [r for d, r in tds if mon <= d <= mon + timedelta(days=4)]
+    near = [r for d, r in tds if mon + timedelta(days=4) < d < rd]   # レース週の金曜より後（土日）。前の週の土日は入れない
+    if not week:
+        why = "weekend" if near else "no_week"
+    elif not any(isinstance(r.get("t4"), (int, float)) and r.get("t4") == r.get("t4") for r in week):
+        why = "no_4f"
+    else:
+        why = "cls"
+    return {"st": "out", "last": last, "why": why}
+
+
+def workouts_of(horse_ids: list[str], race_date: str) -> tuple[dict[str, str | None], dict[str, dict[str, Any]]]:
+    """(horse_id → 『場所|パターン』, horse_id → 調教の状況 _wk_status)。レース日より前の調教だけ。"""
     import pandas as pd
 
     from src.pipeline.features import final_week_workout as W
@@ -72,22 +117,27 @@ def patterns_of(horse_ids: list[str], race_date: str) -> dict[str, str | None]:
     from src.pipeline.features import training_laps as tl
 
     rows: list[dict[str, Any]] = []
+    recs: dict[str, dict | None] = {}
+    by_horse: dict[str, list[dict[str, Any]]] = {}
     for hid in horse_ids:
         p = _training_path(hid)
         try:
             rec = json.loads(p.read_text(encoding="utf-8")) if p and p.is_file() else None
         except (OSError, ValueError):
             rec = None
+        recs[hid] = rec if isinstance(rec, dict) else None
         if isinstance(rec, dict):
-            rows += [r for r in tl.record_to_rows(dict(rec, horse_id=rec.get("horse_id") or hid)) if r["race_date"] == race_date]
+            mine = [r for r in tl.record_to_rows(dict(rec, horse_id=rec.get("horse_id") or hid)) if r["race_date"] == race_date]
+            by_horse[hid] = mine
+            rows += mine
     out: dict[str, str | None] = {h: None for h in horse_ids}
-    if not rows:
-        return out
-    laps = tl.add_lap_features(pd.DataFrame(rows))
-    bw = W.pick_best_weekday(L.prepare_laps(laps))
-    for r in bw.itertuples(index=False):
-        out[str(r.horse_id)] = f"{r.BW_place}|{r.BW_pat}"
-    return out
+    if rows:
+        laps = tl.add_lap_features(pd.DataFrame(rows))
+        bw = W.pick_best_weekday(L.prepare_laps(laps))
+        for r in bw.itertuples(index=False):
+            out[str(r.horse_id)] = f"{r.BW_place}|{r.BW_pat}"
+    wk = {h: _wk_status(recs.get(h), by_horse.get(h, []), race_date, out.get(h)) for h in horse_ids}
+    return out, wk
 
 
 def _sum_rows(rows: list[list[Any]]) -> list[Any]:
@@ -127,7 +177,7 @@ class TrainerPatternModule:
     def compute(self, ctx: RaceContext) -> ModuleOutput:
         table = load_table() or {}
         ids = [str(e["horse_id"]) for e in ctx.entries if e.get("horse_id")]
-        pats = patterns_of(ids, ctx.date or "")
+        pats, wks = workouts_of(ids, ctx.date or "")
         horses = []
         for e in ctx.entries:
             hid = str(e.get("horse_id") or "")
@@ -135,8 +185,9 @@ class TrainerPatternModule:
             tid = str(e.get("trainer_id") or "")
             lv = levels_for(table, tid, pat) if tid else None
             horses.append({"key": e["key"], "horse_number": e.get("horse_number"), "horse_name": e.get("horse_name"), "trainer_id": tid or None,
-                           "trainer_name": e.get("trainer_name"), "pat": pat, "levels": lv})
+                           "trainer_name": e.get("trainer_name"), "pat": pat, "levels": lv, "wk": wks.get(hid)})
         figure = {"edges": table.get("edges"), "max_odds": table.get("max_odds"), "y0": table.get("y0"), "y1": table.get("y1"), "horses": horses}
         notes = ["回収率は 100 円ずつ買ったときの払戻の割合（100% が収支ゼロ）。単勝 50 倍以上の出走は集計から除いています。",
-                 "パターンは、レース週の月〜金の追い切りのうち 4F が最も速い 1 本（坂路は終い 2F の速さと加速・減速、ウッド・ポリは 4F の時計帯）。調教の記録が無い馬・出走が少ない組み合わせは参考程度です。"]
+                 "パターンは、レース週の月〜金の追い切りのうち 4F が最も速い 1 本（坂路は終い 2F の速さと加速・減速、ウッド・ポリは 4F の時計帯）。出走が少ない組み合わせは参考程度です。",
+                 "追い切りがあっても、レース週の平日に 4F の時計が無い馬（土日だけ・終いだけの計測など）は集計の対象外です。その馬は最後の追い切りの場所と日付だけを出します。"]
         return ModuleOutput(columns=[], groups=[], cells={}, notes=notes, data_until=f"{table.get('y1')}-12-31", view="trainer_pattern", figure=figure)

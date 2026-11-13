@@ -46,7 +46,7 @@ tag_live() {  # 使用中の版に live- タグを付け替える（自動掃除
   # 付け替えには artifactregistry.tags.delete が要る（配備用 SA に repoAdmin。docs/operations/github_promote.md）
   if [ "$DRY" = 1 ]; then printf '+ gcloud artifacts docker tags add %q %q --quiet\n' "$1" "$2"; return 0; fi
   if ! gcloud artifacts docker tags add "$1" "$2" --quiet; then
-    echo "::warning title=live タグを付けられません::$2 を付けられませんでした。2 日後の自動掃除で使用中の版が消えるおそれがあります（配備用 SA の権限を確認）"
+    echo "::warning title=live タグを付けられません::$2 を付けられませんでした。1 日後の自動掃除で使用中の版が消えるおそれがあります（配備用 SA の権限を確認）"
   fi
 }
 serving_digest() {  # 本番（通信 100%）または stg（rstg タグ）のリビジョンが実際に使っているイメージ（digest 付き）。取れなければ空

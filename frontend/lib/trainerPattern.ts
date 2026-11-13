@@ -18,6 +18,18 @@ export type TPHorse = {
   /** 『場所|パターン』。調教の記録が無い馬は null */
   pat: string | null;
   levels: TPLevels | null;
+  /** 調教の状況（版 39 から。古い保存結果には無い） */
+  wk?: TPWork | null;
+};
+
+/**
+ * pattern: 集計に使うパターンあり / out: 追い切りはあるが集計の対象外 / none: 取得済みだがこのレースの前の追い切りの記録なし /
+ * unfetched: このレースの週の調教が未取得 / nofile: 調教ページが未取得
+ */
+export type TPWork = {
+  st: "pattern" | "out" | "none" | "unfetched" | "nofile";
+  last: { date: string | null; place: string | null; t4: number | null } | null;
+  why: "no_week" | "weekend" | "no_4f" | "cls" | null;
 };
 
 export type TPFigure = { edges: number[]; max_odds: number; y0: number; y1: number; horses: TPHorse[] };

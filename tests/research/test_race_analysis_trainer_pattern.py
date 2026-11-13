@@ -75,11 +75,43 @@ def test_applicable_only_after_the_table_period_and_with_training_files(host, mo
 
 def test_compute_attaches_levels_per_horse(host, monkeypatch):
     monkeypatch.setattr(TP, "load_table", lambda: TABLE)
-    monkeypatch.setattr(TP, "patterns_of", lambda ids, d: {"h1": "栗東坂路|A2", "h2": None})
+    wk = {"h1": {"st": "pattern", "last": None, "why": None}, "h2": {"st": "unfetched", "last": None, "why": None}}
+    monkeypatch.setattr(TP, "workouts_of", lambda ids, d: ({"h1": "栗東坂路|A2", "h2": None}, wk))
     ent = [{"horse_id": "h1", "key": "h1", "horse_number": 1, "horse_name": "A", "trainer_id": "t1", "trainer_name": "調教師1"},
            {"horse_id": "h2", "key": "h2", "horse_number": 2, "horse_name": "B", "trainer_id": "zz", "trainer_name": "不明"}]
     out = TP.TrainerPatternModule().compute(RaceContext("r", "2026-03-15", "阪神", "芝", 1600, ent))
     assert out.view == "trainer_pattern" and out.figure["edges"] == [2, 3, 5, 10, 20]
     h1, h2 = out.figure["horses"]
     assert h1["levels"]["pattern"][0] == 10 and h2["levels"] is None and h2["pat"] is None
+    assert h1["wk"]["st"] == "pattern" and h2["wk"]["st"] == "unfetched"
     json.dumps(out.figure)   # そのまま JSON にできる
+
+
+def _rec_with(entries, scraped="2026-03-10 00:00:00"):
+    def e(day, laps, course="栗坂", ri="2026/03/15  阪神1R 3歳未勝利"):
+        return {"race_info": ri, "date": day, "course": course, "track_condition": "良", "lap_times": laps, "position": "", "leg_color": "馬也", "evaluation": "", "rank": "B"}
+    return {"horse_id": "h9", "entries": [e(*x) for x in entries], "_meta": {"scraped_at_jst": scraped}}
+
+
+@pytest.mark.parametrize("entries,scraped,st,why", [
+    ([("2026-03-11", [53.1, 38.4, 24.9, 12.6])], "2026-03-14 18:00:00", "pattern", None),
+    ([("2026-03-11", [None, None, 24.9, 12.6])], "2026-03-14 18:00:00", "out", "no_4f"),        # 平日だが 4F の時計なし（終いだけ）
+    ([("2026-03-14", [53.1, 38.4, 24.9, 12.6])], "2026-03-14 18:00:00", "out", "weekend"),      # レース週の土曜だけ
+    ([("2026-03-04", [53.1, 38.4, 24.9, 12.6])], "2026-03-14 18:00:00", "out", "no_week"),      # 前の週だけ
+    ([("2026-03-08", [53.1, 38.4, 24.9, 12.6])], "2026-03-14 18:00:00", "out", "no_week"),      # 前の週の日曜だけ（レース週の土日ではない）
+    ([("2026-03-18", [50.0, 36.0, 23.0, 11.5], "栗坂", "2026/03/22  阪神1R 3歳未勝利")], "2026-03-10 00:00:00", "unfetched", None),   # このレースの分をまだ取っていない
+    ([("2026-03-18", [50.0, 36.0, 23.0, 11.5], "栗坂", "2026/03/22  阪神1R 3歳未勝利")], "2026-03-16 00:00:00", "none", None),   # レースの後に取っても無い
+    ([("2026-03-18", [50.0, 36.0, 23.0, 11.5], "栗坂", "2026/03/22  阪神1R 3歳未勝利")], "2026-03-14 18:00:00", "none", None),   # 前日夕方に取って無い
+    ([("2026-03-18", [50.0, 36.0, 23.0, 11.5], "栗坂", "2026/03/22  阪神1R 3歳未勝利")], "2026-03-13 18:00:00", "unfetched", None),   # 2 日前の取得
+    ([("2026-03-18", [50.0, 36.0, 23.0, 11.5], "栗坂", "2026/03/22  阪神1R 3歳未勝利")], "2026-03-14 09:00:00", "unfetched", None),   # 前日でも朝（最終追い切りが載る前）
+])
+def test_workouts_of_tells_why_a_horse_has_no_pattern(tmp_path, monkeypatch, entries, scraped, st, why):
+    monkeypatch.setattr(TP, "_training_path", lambda hid: tmp_path / f"{hid}.json")
+    (tmp_path / "h9.json").write_text(json.dumps(_rec_with(entries, scraped)), encoding="utf-8")
+    pats, wk = TP.workouts_of(["h9", "h0"], "2026-03-15")
+    assert wk["h9"]["st"] == st and wk["h9"]["why"] == why
+    assert (pats["h9"] is not None) == (st == "pattern")
+    assert wk["h0"] == {"st": "nofile", "last": None, "why": None}   # 調教ページが無い
+    if st in ("pattern", "out"):
+        assert wk["h9"]["last"]["place"] == "栗東坂路" and wk["h9"]["last"]["date"] == entries[-1][0]
+    json.dumps(wk)

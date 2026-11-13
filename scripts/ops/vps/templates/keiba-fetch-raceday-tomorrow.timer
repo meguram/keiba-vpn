@@ -1,0 +1,12 @@
+[Unit]
+Description=keiba 翌日の開催日の予約 — 毎日 20:30（前日 18:00 の出馬表の取得の後）
+
+[Timer]
+OnCalendar=*-*-* 20:30:00
+RandomizedDelaySec=120
+# 止まっていて 0 時を過ぎてから取り戻すと『翌々日』を予約してしまうので取り戻さない（当日分は 07:20 の timer が拾う）
+Persistent=false
+Unit=keiba-fetch-raceday@tomorrow.service
+
+[Install]
+WantedBy=timers.target

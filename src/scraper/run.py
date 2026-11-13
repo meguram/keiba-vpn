@@ -856,13 +856,15 @@ class ScraperRunner:
                 return None
 
         try:
+            html_box: list[str] = []
             data = self.barometer_parser.parse_from_api(
-                self.client._session, race_id
+                self.client._session, race_id, html_out=html_box
             )
             if data.get("entries"):
                 self.storage.save("race_barometer", race_id, data)
                 logger.info("保存: race_barometer/%s (%d件)", race_id,
                             len(data["entries"]))
+                self._save_horse_lap_from_html(race_id, html_box, n_expected=len(data["entries"]))
                 return data
             elif data.get("not_published"):
                 # 公開時刻の見込み違い（18時頃が前後した等）。N/A にはせず、次回の取得に任せる
@@ -876,6 +878,34 @@ class ScraperRunner:
         except Exception as e:
             logger.error("バロメーター取得失敗 [%s]: %s", race_id, e)
             return None
+
+    def _save_horse_lap_from_html(self, race_id: str, html_box: list[str], n_expected: int = 0) -> bool:
+        """バロメーターと同じページ（ajax_race_result_horse_laptime）から、馬別の 200m 区間ラップと位置も保存する（horse_lap）。
+        netkeiba への取得は増えない。めぐ分析の走法の軸（run_axes）の元データで、ホストは足りない race_id だけを名前で読む
+        （src/scripts/data/update_run_axes.py）。区間ラップの無い応答や、区間ラップのある馬がバロメーターの頭数（n_expected）より少ない応答
+        （会員状態が効いていないと先頭の数頭しか返らない）は保存しない（GCS に残ると、そのレースは取り直されず run_axes に入らない）。
+        失敗してもバロメーターの保存は止めない。"""
+        if not html_box:
+            return False
+        try:
+            from src.scraper.parsers import DbHorseLaptimeTableParser
+
+            d = DbHorseLaptimeTableParser().parse(html_box[0], race_id=race_id)
+            ents = d.get("entries") or []
+            fin = [e for e in ents if (e.get("finish_order") or 0) > 0]
+            n_lap = sum(1 for e in fin if any(s.get("lap_time") for s in (e.get("sections") or [])))
+            # 載っている馬がバロメーターより少ない（部分応答）か、着順のある馬にラップの欠けがあれば保存しない。
+            # 中止など着順の無い馬にラップが無いのは正常（2026 年の実データで 140 レース）
+            if not fin or n_lap < len(fin) or len(ents) < n_expected:
+                logger.info("馬別ラップが無いか足りない（ラップ %d/着順 %d 頭・載った %d/%d 頭。保存しない）: %s",
+                            n_lap, len(fin), len(ents), n_expected, race_id)
+                return False
+            self.storage.save("horse_lap", race_id, d)
+            logger.info("保存: horse_lap/%s (%d頭)", race_id, len(ents))
+            return True
+        except Exception as e:  # noqa: BLE001
+            logger.warning("馬別ラップの保存に失敗 [%s]: %s", race_id, e)
+            return False
 
     @staticmethod
     def barometer_publish_at(race_date):
@@ -2561,11 +2591,13 @@ class ScraperRunner:
     ) -> dict | None:
         """別セッションを使用してバロメーターを AJAX API から取得する。"""
         try:
-            data = self.barometer_parser.parse_from_api(session, race_id)
+            html_box: list[str] = []
+            data = self.barometer_parser.parse_from_api(session, race_id, html_out=html_box)
             if data.get("entries"):
                 self.storage.save("race_barometer", race_id, data)
                 logger.info("保存: race_barometer/%s (%d件)", race_id,
                             len(data["entries"]))
+                self._save_horse_lap_from_html(race_id, html_box, n_expected=len(data["entries"]))
                 return data
             else:
                 logger.warning("バロメーターデータなし: %s", race_id)
