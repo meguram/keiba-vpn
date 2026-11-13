@@ -72,7 +72,8 @@
    "jobs": [
     "jockey-trainer-stats"
    ],
-   "size_note": "2026-11-04: m(2GiB) では jockey-trainer-stats・parity-check がメモリ不足で強制終了(rc=-9)。1 日 1 回・数分なので l にしても月 50 円程度"
+   "size_note": "2026-11-04: m(2GiB) では jockey-trainer-stats・parity-check がメモリ不足で強制終了(rc=-9)。1 日 1 回・数分なので l にしても月 50 円程度",
+   "retired": "2026-11-13 に費用のため Cloud Scheduler（keiba-g-0530）を削除した。作り直さない（scheduler_gen は retired のグループのコマンドを出さない。--include-unready でも出さない）。再開するときはこの印を消し、費用の台帳で見積もってから。docs/operations/deleted_scheduler_keiba_g_20261113.md"
   },
   "g-0700": {
    "cron_jst": "0 7 * * *",
@@ -84,7 +85,8 @@
     "feature-accumulate",
     "parse-drift-daily",
     "race-analysis-daily"
-   ]
+   ],
+   "retired": "2026-11-13 に費用のため Cloud Scheduler（keiba-g-0700）を削除した。作り直さない（scheduler_gen は retired のグループのコマンドを出さない。--include-unready でも出さない）。再開するときはこの印を消し、費用の台帳で見積もってから。docs/operations/deleted_scheduler_keiba_g_20261113.md"
   },
   "g-0730-shadow": {
    "cron_jst": "30 7 * * *",
@@ -105,7 +107,8 @@
    "jobs": [
     "lap-forecast-morning",
     "slack-scrape-summary-morning"
-   ]
+   ],
+   "retired": "2026-11-13 に費用のため Cloud Scheduler（keiba-g-0730）を削除した。作り直さない（scheduler_gen は retired のグループのコマンドを出さない。--include-unready でも出さない）。再開するときはこの印を消し、費用の台帳で見積もってから。docs/operations/deleted_scheduler_keiba_g_20261113.md"
   },
   "g-0800": {
    "cron_jst": "0 8 * * *",
@@ -118,7 +121,8 @@
     "tracking-v2-weekly",
     "rb-state-daily"
    ],
-   "size_note": "2026-11-04: m(2GiB) では jockey-trainer-stats・parity-check がメモリ不足で強制終了(rc=-9)。1 日 1 回・数分なので l にしても月 50 円程度"
+   "size_note": "2026-11-04: m(2GiB) では jockey-trainer-stats・parity-check がメモリ不足で強制終了(rc=-9)。1 日 1 回・数分なので l にしても月 50 円程度",
+   "retired": "2026-11-13 に費用のため Cloud Scheduler（keiba-g-0800）を削除した。作り直さない（scheduler_gen は retired のグループのコマンドを出さない。--include-unready でも出さない）。再開するときはこの印を消し、費用の台帳で見積もってから。docs/operations/deleted_scheduler_keiba_g_20261113.md"
   },
   "g-1000-mon": {
    "cron_jst": "0 10 * * 1",
@@ -130,7 +134,8 @@
     "frozen-tracking-weekly",
     "px-ridge-window",
     "hem-megu-state"
-   ]
+   ],
+   "retired": "2026-11-13 に費用のため Cloud Scheduler（keiba-g-1000-mon）を削除した。作り直さない（scheduler_gen は retired のグループのコマンドを出さない。--include-unready でも出さない）。再開するときはこの印を消し、費用の台帳で見積もってから。docs/operations/deleted_scheduler_keiba_g_20261113.md"
   },
   "g-sun-2200": {
    "cron_jst": "0 22 * * 0",
@@ -139,7 +144,8 @@
    "desc": "オッズ乖離の週次集計（日曜）",
    "jobs": [
     "odds-drift-weekly"
-   ]
+   ],
+   "retired": "2026-11-13 に費用のため Cloud Scheduler（keiba-g-sun-2200）を削除した。作り直さない（scheduler_gen は retired のグループのコマンドを出さない。--include-unready でも出さない）。再開するときはこの印を消し、費用の台帳で見積もってから。docs/operations/deleted_scheduler_keiba_g_20261113.md"
   },
   "g-1910-eve": {
    "cron_jst": "10,40 19 * * *",
@@ -150,7 +156,8 @@
     "eve-precompute",
     "reserve-race-day",
     "lap-forecast-eve"
-   ]
+   ],
+   "retired": "2026-11-13 に費用のため Cloud Scheduler（keiba-g-1910-eve）を削除した。作り直さない（scheduler_gen は retired のグループのコマンドを出さない。--include-unready でも出さない）。再開するときはこの印を消し、費用の台帳で見積もってから。docs/operations/deleted_scheduler_keiba_g_20261113.md"
   },
   "g-hourly": {
    "cron_jst": "5 * * * *",
@@ -162,7 +169,8 @@
     "shared-login",
     "jma-weather",
     "verify-past-values"
-   ]
+   ],
+   "retired": "2026-11-13 に費用のため Cloud Scheduler（keiba-g-hourly）を削除した。作り直さない（scheduler_gen は retired のグループのコマンドを出さない。--include-unready でも出さない）。再開するときはこの印を消し、費用の台帳で見積もってから。docs/operations/deleted_scheduler_keiba_g_20261113.md"
   },
   "g-5min": {
    "cron_jst": "*/15 * * * *",
@@ -172,7 +180,8 @@
    "jobs": [
     "vps-watchdog",
     "slack-scrape-alerts"
-   ]
+   ],
+   "retired": "2026-11-13 に費用のため Cloud Scheduler（keiba-g-5min）を削除した。作り直さない（scheduler_gen は retired のグループのコマンドを出さない。--include-unready でも出さない）。再開するときはこの印を消し、費用の台帳で見積もってから。docs/operations/deleted_scheduler_keiba_g_20261113.md"
   },
   "g-pump": {
    "cron_jst": "* 8-16 * * 0,1,6",
@@ -181,7 +190,8 @@
    "desc": "開催日（土日月）の日中、イベントを毎分処理して予測タスクを積む",
    "jobs": [
     "event-pump"
-   ]
+   ],
+   "retired": "2026-11-13 に費用のため Cloud Scheduler（keiba-g-pump）を削除した。作り直さない（scheduler_gen は retired のグループのコマンドを出さない。--include-unready でも出さない）。再開するときはこの印を消し、費用の台帳で見積もってから。docs/operations/deleted_scheduler_keiba_g_20261113.md"
   },
   "g-results": {
    "cron_jst": "*/20 12-21 * * 0,1,2,6",
@@ -191,7 +201,8 @@
    "jobs": [
     "prediction-results-refresh",
     "slack-results"
-   ]
+   ],
+   "retired": "2026-11-13 に費用のため Cloud Scheduler（keiba-g-results）を削除した。作り直さない（scheduler_gen は retired のグループのコマンドを出さない。--include-unready でも出さない）。再開するときはこの印を消し、費用の台帳で見積もってから。docs/operations/deleted_scheduler_keiba_g_20261113.md"
   },
   "g-2130": {
    "cron_jst": "30 21 * * *",
@@ -201,7 +212,8 @@
    "jobs": [
     "slack-scrape-summary-eve",
     "horse-name-index"
-   ]
+   ],
+   "retired": "2026-11-13 に費用のため Cloud Scheduler（keiba-g-2130）を削除した。作り直さない（scheduler_gen は retired のグループのコマンドを出さない。--include-unready でも出さない）。再開するときはこの印を消し、費用の台帳で見積もってから。docs/operations/deleted_scheduler_keiba_g_20261113.md"
   },
   "g-0730-dayprep": {
    "cron_jst": "30 7 * * *",
@@ -210,7 +222,8 @@
    "desc": "開催日の朝に、その日の全レースの日単位キャッシュ(v4_day・px_day)だけを作る（予測は作らない）。ピーク約12GBなので 16GiB",
    "jobs": [
     "day-prep"
-   ]
+   ],
+   "retired": "2026-11-13 に費用のため Cloud Scheduler（keiba-g-0730-dayprep）を削除した。作り直さない（scheduler_gen は retired のグループのコマンドを出さない。--include-unready でも出さない）。再開するときはこの印を消し、費用の台帳で見積もってから。docs/operations/deleted_scheduler_keiba_g_20261113.md"
   }
  },
  "models": {

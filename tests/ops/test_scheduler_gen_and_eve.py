@@ -15,16 +15,18 @@ from src.ops.gcs_io import MemoryIO, read_json
 from src.ops.jobs import eve_precompute as EP, predict_race as PR
 
 DOC = job_map.load()
+# 生成の仕組みのテスト用: 費用のため消したグループ（retired。test_scheduler_gen_retired.py）の印を外した写し
+ACTIVE = {**DOC, "scheduler_groups": {g: {k: v for k, v in grp.items() if k != "retired"} for g, grp in DOC["scheduler_groups"].items()}}
 ENV = {"PROJECT_ID": "proj", "GCS_BUCKET": "bkt", "REGION": "asia-northeast1"}
 
 
-def test_generated_script_is_valid_bash_and_idempotent():
-    text = SG.render("all", DOC, env=ENV, include_unready=True)
-    p = Path("/tmp/_gen_test.sh")
+def test_generated_script_is_valid_bash_and_idempotent(tmp_path):
+    text = SG.render("all", ACTIVE, env=ENV, include_unready=True)
+    p = tmp_path / "_gen_test.sh"            # 共有の /tmp に固定の名前で書くと、ほかの利用者の残したファイルで権限エラーになる
     p.write_text(text)
     assert subprocess.run(["bash", "-n", str(p)]).returncode == 0
     assert text.count("gcloud run jobs deploy") == 4                      # s / m / l / xl の 4 つだけ（xl は day-prep 用の 16GiB）
-    assert text.count("gcloud scheduler jobs update http") == len(DOC["scheduler_groups"])
+    assert text.count("gcloud scheduler jobs update http") == len(ACTIVE["scheduler_groups"])
     assert "scheduler jobs describe" in text and "queues describe" in text
 
 
@@ -50,20 +52,20 @@ def test_billing_table_is_passed_only_when_the_repo_variable_is_set():
 
 
 def test_scheduler_targets_run_api_with_group_args_and_service_account():
-    text = SG.render("scheduler", DOC, env=ENV, include_unready=True)
+    text = SG.render("scheduler", ACTIVE, env=ENV, include_unready=True)
     assert "https://run.googleapis.com/v2/projects/proj/locations/asia-northeast1/jobs/keiba-dispatch-l:run" in text
     assert "--oauth-service-account-email keiba-scheduler@proj.iam.gserviceaccount.com" in text
     bodies = re.findall(r"--message-body (\S+)", text)
-    assert len(bodies) == 2 * len(DOC["scheduler_groups"])                # update と create の両方
+    assert len(bodies) == 2 * len(ACTIVE["scheduler_groups"])                # update と create の両方
     args = json.loads(shlex.split(bodies[0])[0])["overrides"]["containerOverrides"][0]["args"]
-    assert args[:3] == ["-m", "src.ops.job_dispatch", "group"] and args[3] in DOC["scheduler_groups"]
+    assert args[:3] == ["-m", "src.ops.job_dispatch", "group"] and args[3] in ACTIVE["scheduler_groups"]
     assert "--time-zone Asia/Tokyo" in text
 
 
 def test_scheduler_update_uses_update_headers_and_create_uses_headers():
     # gcloud の update http は --headers を受け付けない（本番昇格で既存ジョブの更新が落ちた）
-    text = SG.render("scheduler", DOC, env=ENV, include_unready=True)
-    n = len(DOC["scheduler_groups"])
+    text = SG.render("scheduler", ACTIVE, env=ENV, include_unready=True)
+    n = len(ACTIVE["scheduler_groups"])
     assert text.count("jobs update http") == n and text.count("--update-headers Content-Type=application/json") == n
     assert text.count("jobs create http") == n and text.count(" --headers Content-Type=application/json") == n
     for line in text.splitlines():
@@ -72,13 +74,13 @@ def test_scheduler_update_uses_update_headers_and_create_uses_headers():
 
 
 def test_unready_groups_are_not_created_by_default():
-    text = SG.render("scheduler", DOC, env=ENV)
-    for gid in DOC["scheduler_groups"]:
-        ready = SG.group_is_ready(DOC, gid)
+    text = SG.render("scheduler", ACTIVE, env=ENV)
+    for gid in ACTIVE["scheduler_groups"]:
+        ready = SG.group_is_ready(ACTIVE, gid)
         assert (f"keiba-{gid} " in text) == ready, gid
-    if not all(SG.group_is_ready(DOC, gid) for gid in DOC["scheduler_groups"]):
+    if not all(SG.group_is_ready(ACTIVE, gid) for gid in ACTIVE["scheduler_groups"]):
         assert "準備できたジョブが無いので作らない" in text
-    doc = {**DOC, "jobs": [{**j, "ready": False} for j in DOC["jobs"]]}                   # 準備できたジョブが無ければ作らない
+    doc = {**ACTIVE, "jobs": [{**j, "ready": False} for j in ACTIVE["jobs"]]}                   # 準備できたジョブが無ければ作らない
     assert "keiba-g-" not in SG.render("scheduler", doc, env=ENV).replace("# g-", "") and "準備できたジョブが無いので作らない" in SG.render("scheduler", doc, env=ENV)
 
 

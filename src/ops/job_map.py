@@ -200,6 +200,8 @@ def validate(doc: dict[str, Any], *, known_fetch_tasks: set[str] | None = None, 
             errs.append(f"job id が重複: {jid}")
         seen.add(jid)
     for gid, g in groups.items():
+        if "retired" in g and (not isinstance(g["retired"], str) or not g["retired"].strip() or "\n" in g["retired"]):
+            errs.append(f"{gid}: retired は理由の 1 行の文字列にする（scheduler_gen が作らない印。消した Scheduler を昇格で作り直さないため）")
         try:
             parse_cron(g["cron_jst"])
         except Exception as e:  # noqa: BLE001
