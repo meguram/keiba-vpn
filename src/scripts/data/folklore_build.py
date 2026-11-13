@@ -24,6 +24,9 @@ OUT = Path(os.environ.get("FOLKLORE_OUT", "/home/jovyan/work/folklore_out"))
 TABLES = ROOT / "data/page_reference/tables"
 # 最後の年（既定 2025）。FOLKLORE_YEAR_END=2026 で 2026 年の行も作る（重賞の予想家の検証用。出力先は FOLKLORE_OUT で分ける）
 YEAR_END = int(os.environ.get("FOLKLORE_YEAR_END", "2025"))
+# 発走して中止した馬（着順なし・オッズが正）の行も master に残す（既定 0 = 今までどおり着順の付いた馬だけ）。
+# 重賞の予想家で、中止の馬を「着外」として集計・評価に入れるため（docs/ideas/graded_rule_based_handicapper.md 第 16 節）
+KEEP_DNF = os.environ.get("FOLKLORE_KEEP_DNF", "0") == "1"
 YEARS = list(range(2016, YEAR_END + 1))
 LOCAL_VC = {"01", "02", "03", "04", "10"}
 CENTRAL_VC = {"05", "06", "08", "09"}
@@ -708,7 +711,12 @@ def main() -> None:
     print("external done")
     d = add_race_context(d)
     d = add_derived(d)
-    keep = d[(d["surf"].isin(["芝", "ダ"])) & d["fin"].notna() & (d["odds"] > 0) & (d["field"] >= 5)].copy()
+    ran = d["fin"].notna() | (KEEP_DNF & (d["odds"] > 0))
+    keep = d[(d["surf"].isin(["芝", "ダ"])) & ran & (d["odds"] > 0) & (d["field"] >= 5)].copy()
+    if KEEP_DNF:   # 中止の馬は着順の生の値が -1 のときに y3・y1 を作っているので、着外として作り直す
+        dnf = keep["fin"].isna()
+        keep.loc[dnf, "y3"] = 0.0
+        keep.loc[dnf, "y1"] = 0.0
     drop = [c for c in keep.columns if keep[c].dtype == object and c in ("pace", "lap_times", "passing_order")]
     keep = keep.drop(columns=drop)
     for c in keep.columns:

@@ -223,9 +223,9 @@ tp-75 の `MARKET_TOKENS` の正規表現は使わない。`\bpop\b` が `p_pop`
 | `src/research/graded/features.py` | folklore の master に足す as-of の列（着差・前走のレース名の組・系統など） |
 | `src/research/graded/catalog.py` | 切り口の目録（型・水準・使う列）と `ALLOWED_COLUMNS` |
 | `src/research/graded/tally.py` | 主・副・全体の [1-2-3-着外]・率・縮小・回単位の区間（as-of・年の前進） |
-| `src/research/graded/select.py` | 発見・確認での型の採否と束ね |
-| `src/research/graded/marks.py` | 点数・印・説明の文 |
-| `src/research/graded/evaluate.py` | 2025・2026 の評価と v6e との比較 |
+| `src/research/graded/model.py` | 縮小・型の z・束ね・点数・印（計画の select.py・marks.py の中身。実装では 1 つにまとめた） |
+| `src/research/graded/run.py` | frame → tally → select → smoke → evaluate の各段と、評価の指標・v6e との比較（計画の evaluate.py の中身） |
+| `src/research/graded/export.py` | HTML の材料（graded_report.json）とレースごとの JSON |
 | `src/research/graded/prereg.json` | 採否・印・評価の定義の事前登録 |
 | `tests/research/test_graded_*.py` | 禁止の列の検査、レース名の別名、as-of（未来の行を足しても過去の値が変わらない）、[1-2-3-着外] の合計が走数に一致 |
 
@@ -238,7 +238,7 @@ tp-75 の `MARKET_TOKENS` の正規表現は使わない。`\bpop\b` が `p_pop`
 
 - **置き場所（推奨）: `data/meta/graded/graded_handicapper.html`**。今日の `data/meta/sire_lines/sire_line_analysis.html` と同じ扱いで、データから作り直す 1 ファイルとし、git に入れる。
   - `docs/html/` の下に置くと、`src/scripts/docs/build_docs_book.py` の `PARTS` に載せる必要がある（載せ忘れは `tests/scripts/test_build_docs_book.py` が検出する）。149 の重賞の表を持つ大きなページは本に合わない。
-  - 本には、短い要約の章（`docs/html/research/graded_handicapper.html`、結果の数字と HTML へのリンクだけ）を `PARTS` に登録して載せる。
+  - 本には、短い要約の章（実装では `docs/html/modeling/chapters/graded_handicapper.html`。研究の章がこの場所に並ぶため、結果の数字と HTML へのリンクだけ）を `PARTS` に登録して載せる。
 - 作るスクリプト: `src/scripts/docs/build_graded_handicapper_html.py`（入力は 9.2 の JSON と成績表。計算はしない）。
 - 中身（タブ）:
   1. **全体の検証結果**: 2025・2026 の重賞での ◎ の勝率・複勝率・単複の回収率、馬連・ワイドの流しの回収率を、v6e と並べて区間付きで出す。G1/G2/G3 別、主あり／副だけ別の内訳も載せる。
@@ -315,6 +315,12 @@ tp-75 の `MARKET_TOKENS` の正規表現は使わない。`\bpop\b` が `p_pop`
   - frame と levels の行の対応を検査するようにした。
   - 評価の後に選び直しできないようにした。
 - **計画から変えたこと**:
+  - **点の足し方**: 計画（第 6.3・7 節）では「束の中で |x| が最大のものを取って足す」で、「束ごとの和」と「束の最大だけ」を確認期間で比べて決める予定だった。
+    実装では、束ごとに代表の型（発見期間の z が最も大きい型）を 1 つ決め、代表の型の x だけを足す（`run.py` の cmd_select、`model.py` の cluster_types・score）。和と最大の比較はしていない。
+    確認期間で比べたのは、主の重み λ（0.5・1・2）と、等しい重み／z の重み、前日版／当日版の組み合わせ（レース内の AUC）。
+  - **縮める強さ m と λ の決め方**: 計画（第 3.4 節）では「1 年を抜いて当てる交差検証」だった。実装では、m は発見期間（2018〜2021）の as-of の件数で、3 着内の対数損失が最小の組を格子（3・10・30・100 の 3 乗）から選び、λ は確認期間のレース内 AUC で選んだ。
+  - **該当率 5% 未満の水準を点に使わない規則（第 6.2 節）は実装していない**。70% 超の規則だけを主の層に当てた。該当の少ない水準は、縮小で全体・副の値へ寄るため。
+  - **主の回数の下限**: 計画（第 3.2 節）の「同じコースが 3 回未満なら副だけ」は、実装では「パターンごとに該当 15 走以上・4 回以上なら主を使う」（`model.py` の MIN_MAIN_N・MIN_MAIN_ED）。レース単位の 3 回の下限は置いていない（4 回の下限の方が厳しい）。
   - folklore の `tdiff` は、取消・除外の馬（タイム 0）を含めて最小値を取っているレースがあった。そのレースでは走破タイムそのものになっている（1% ほどの行で 100 秒超）。着差（A02・A03）は、着順の付いた馬だけで計算し直した `p_margin` を使う。
   - 束ねは、パターンの行の重なり（Jaccard）ではなく、型の点 x の相関（|r| ≥ 0.7）で行う。採否が型の単位なので、それに合わせた。
   - 主の母集団の 70% 超が当てはまる水準を点に使わない規則は、主の層だけに当てる。ほぼ全員に当てはまる水準は、期待との比がほぼ 1 になり、点がほぼ 0 になるため。
@@ -402,7 +408,7 @@ nice -n 10 /opt/conda/bin/python -m src.scripts.docs.build_graded_handicapper_ht
 凍結（コミット `62c6b7b8`、CI 緑）の後に、確認期間で試運転（`run smoke`、387 レース）して処理が通ることを確かめてから、`run evaluate` を 1 回だけ流した（`<GRADED_OUT>/EVALUATED.json`）。結果を見た後に、採否・規則は変えていない。
 
 - **成果物**: `data/meta/graded/graded_handicapper.html`（8.3MB。全体の検証・重賞ごと 137 の主・副の採用パターン・検証の 239 レースの各馬・切り口の採否）。本の要約の章は `docs/html/modeling/chapters/graded_handicapper.html`（`build_docs_book.py` の PARTS に登録）。レースごとの JSON は `data/local/graded/races/<race_id>.json`（commit しない）。
-  - HTML を 10MB 以下にするため、重賞ごとの表の「参考」（好成績・凡走の条件に届かないもの）はレースごとに |点| の大きい 30 件、検証のレースの各馬のパターンは 10 件に絞った。元の `graded_report.json`・レースごとの JSON は全件。
+  - HTML を 10MB 以下にするため、重賞ごとの表の「参考」（好成績・凡走の条件に届かないもの）はレースごとに |点| の大きい 30 件、検証のレースの各馬のパターンは 10 件に絞った。元の `graded_report.json` は全件。レースごとの JSON（`data/local/graded/races/`）は、1 頭あたり |点| の大きい 14 パターン（`export.py` の MAX_PATTERNS）。
 
 ### 15.1 前日版の ◎（2025・2026 年の重賞、払戻のある 232 レース。[ ] はレース単位のブートストラップ 95%）
 
@@ -442,3 +448,50 @@ nice -n 10 /opt/conda/bin/python -m src.scripts.docs.build_graded_handicapper_ht
 5. v6e16 の 2026 年の予測は作れなかった（2026 年の学習側の表が無い）。2026 年は本番 v6e（予測のある 95 レースのうち払戻のある 94 レース）とだけ比べた。
 6. 外部の予想家「うまうまー」の記事はまだ届いていない。届いたら切り口に足して、同じ手順（発見・確認 → 凍結 → 1 回だけ評価）で作り直す。
 7. 本（`docs/html/book.html`）は 2026-11-10 から作り直されておらず、他の章の分も含めて大きな差分になるため、今回は章の HTML と PARTS への登録だけにした。次に本を作り直すときに、この章も入る。
+
+
+## 16. 最終点検の指摘と、事後の確認（2026-11-13 夜。凍結した評価はやり直していない）
+
+統括役の最終点検で見つかった点。評価（第 15 節の数字）は凍結のまま変えず、直したのはコードと記録だけ。
+
+### 16.1 中止の馬が集計・評価から外れていた（事後の確認）
+
+- **何が起きていたか**: folklore の master は最後に「着順あり・オッズが正」の行だけを残す（`folklore_build.py` の保存の直前）。そのため、発走して中止した馬は master に入らず、次の 3 点が少しずれていた。
+  1. 中止の馬が、パターンの件数（着外）と評価から消えていた。
+  2. 期待の 3 着内（3/頭数）の頭数を、着順の付いた馬だけで数え直していた。
+  3. 頭数の切り口（H02・H06・X12）と斤量の順位（H04）を、着順の付いた馬だけで作っていた。どちらも、取消・除外・中止を除いた頭数・順位なので、レース後に決まる情報が少し入る。
+- **件数**（race_result_flat の重賞・平地）: 2016〜2024 年は出走 17,118 走のうち中止 39 頭（37 レース）、取消・除外 78 頭。2025・2026 年は中止 14 頭（印を付けた 239 レースのうち 14 レースに 1 頭ずつ）、取消・除外 14 頭。
+- **評価への影響の見込み**: 中止の馬はルールベースの印からも v6e の印からも同じように抜けていた（v6e の印は、評価の行と突き合わせてから付けている）ので、両者の比較の向きは変わらない。
+  - 中止の馬が ◎ だったはずのレースは、1 レースあたり約 1/16 の確率とみると、14 レースで 1 レース前後。◎の複勝率が下がるのは 0.5pt 前後と見込む（最悪の場合、14 レースすべてで ◎ が中止の馬だったとしても 6pt）。
+  - 頭数・斤量の順位のずれは、中止のある 14 レースと、取消・除外のあるレースだけで起きる。
+- **直したこと**（次に作り直すときから効く。今回の評価には使っていない）:
+  - `folklore_build.py` に `FOLKLORE_KEEP_DNF=1` を足した（既定 0 で今までと同じ）。中止の馬（着順なし・オッズが正）も master に残す。オッズは「発走したか」の判定にだけ使い、切り口には使わない。
+  - `features.py`: 取消・除外だけを落とし、中止の馬は着外（y3 = 0）として残す（`keep_runners`）。期待の 3 着内の頭数は、発走した全頭（中止を含む）で数える。頭数の切り口は出走表の頭数（`field_decl` = `field_size`、取消・除外を含む全頭）、斤量の順位はレース結果の表の全頭で作る（`add_entry_level`）。
+  - critic の指摘で足したこと: `FOLKLORE_KEEP_DNF=1` の master では、中止の馬の y3・y1 を着外（0）に作り直す（着順の生の値が -1 のときに作られていたため）。予想家の側でも、中止の馬を過去の成績（騎手・厩舎・父の産駒・重賞の実績）に着外の 1 走として数える（`ok` を発走に合わせる）。当日の結果で決まる列（`started`・`field`・`ok`）を、切り口に使ってはいけない列に加えた。
+- **流し直さなかった理由**: 直したコードで frame・tally を作り直し、凍結した規則のまま評価への影響を測ろうとしたが、権限の確認で止められた（評価を別の場所で流し直す操作が、評価を 1 回に限る決まりの回り込みに見えるため）。回り込まず、ここでは件数と影響の見込みだけを書いた。流し直すかはユーザーが決める。流し直すときの手順:
+
+```bash
+cd /home/jovyan/work/keiba-vpn
+F=/home/jovyan/work/graded_out_fix
+# master を中止の馬込みで作り直す（約 40 分）
+FOLKLORE_YEAR_END=2026 FOLKLORE_KEEP_DNF=1 FOLKLORE_OUT=$F/master FOLKLORE_RESUME=0 nice -n 10 /opt/conda/bin/python -m src.scripts.data.folklore_build
+# 凍結した prereg.json のまま、事後の確認として評価する（結果は第 15 節と分けて書く）
+for c in frame tally evaluate; do GRADED_OUT=$F nice -n 10 /opt/conda/bin/python -m src.research.graded.run $c || break; done
+```
+
+### 16.2 回収率の定義
+
+- 実装を、比較の親（`src/scripts/data/rank_bakeoff_eval.py`）と同じ「4 券種（単勝・複勝・馬連・ワイド）の払戻がそろったレースだけ」に合わせた（`run.py` の race_metrics）。
+- 第 15 節の評価は単勝の払戻のあるレースで数えていた。ただし評価した 232 レースはすべて 4 券種がそろっていたので、数字は変わらない。
+
+### 16.3 テストを足した
+
+- `tests/research/test_graded_features.py`:
+  - as-of の列（`add_horse_history`・`asof_counts`・`add_race_level`）が、未来の行を足しても変わらないこと、同じ日・その走自身の結果を含まないこと。
+  - `add_entry_level`・`keep_runners`（取消を外し、中止を着外で残す）。
+  - `run.diff_ci`・`load_payoff`・`race_metrics`（4 券種そろわないレースを除く）。
+  - `export` の補助の関数、HTML の `slim`・`build`（外部の JS を読まない）。
+
+### 16.4 成果物の HTML の扱い
+
+`data/meta/graded/graded_handicapper.html`（8.3MB）は、中身（採否・評価・パターンの表）が変わったときだけ作り直して commit する。見た目だけの修正で何度も commit しない（git の容量を増やさないため）。

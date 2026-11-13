@@ -46,6 +46,8 @@ FORBIDDEN_EXACT = {
     "fin", "y1", "y3", "pos1", "pos4", "pos1r", "pos4r", "l3f", "l3rank", "tdiff", "tsec", "pace_cat", "lap_cat", "pdiff", "pace2", "megu",
     "pd_rank", "bias_pos", "bias_hn", "race_fast", "day_fast", "p_race_fast", "finish_position", "time_sec", "margin", "last_3f",
     "passing_order", "payoff",
+    # 当日の結果で決まる列（発走したか・発走した頭数・その走が数えられるか）。頭数の切り口は出走表の頭数 field_decl を使う
+    "started", "field", "ok",
 }
 FORBIDDEN_PATTERN = r"odds|pop|ninki|tansho|fukusho|payoff|market|ret_"
 
@@ -361,10 +363,10 @@ def _types() -> list[CutType]:
         T("G09", "転厩明けの戦数", "G", ("since_transfer",), lambda d: cut(d["since_transfer"], [1, 3], ["転厩後1戦目", "転厩後2-3戦目", "転厩後4戦目以上"]).replace(UNKNOWN, "転厩なし"), start_year=2018),
         # H 今回の条件
         T("H01", "枠", "H", ("bracket_number",), lambda d: cut(d["bracket_number"], [2, 4, 6], ["1-2枠", "3-4枠", "5-6枠", "7-8枠"])),
-        T("H02", "馬番の位置", "H", ("hn", "field"), lambda d: cut(_num(d["hn"]) / _num(d["field"]), [1 / 3, 2 / 3], ["内（馬番 1/3まで）", "中", "外（馬番 2/3より外）"])),
+        T("H02", "馬番の位置", "H", ("hn", "field_decl"), lambda d: cut(_num(d["hn"]) / _num(d["field_decl"]), [1 / 3, 2 / 3], ["内（馬番 1/3まで）", "中", "外（馬番 2/3より外）"])),
         T("H03", "斤量", "H", ("jw",), lambda d: cut(d["jw"], [54.5, 56.5, 58.5], ["54kg以下", "55-56kg", "57-58kg", "59kg以上"])),
         T("H04", "斤量のレース内の順位", "H", ("jw_rank", "jw_max"), _jw_rank),
-        T("H06", "頭数", "H", ("field",), lambda d: cut(d["field"], [12, 15], ["12頭以下", "13-15頭", "16頭以上"])),
+        T("H06", "頭数", "H", ("field_decl",), lambda d: cut(d["field_decl"], [12, 15], ["12頭以下", "13-15頭", "16頭以上"])),
         T("H07", "馬場状態", "H", ("track",), lambda d: _track(d["track"]), day_of=True),
         T("H08", "開催の何日目", "H", ("meet_day",), _meet),
         T("H09", "季節", "H", ("month",), _season),
@@ -425,8 +427,8 @@ def _types() -> list[CutType]:
         T("X10", "芝ダの替わり × 父の大系統", "X", ("surf", "p_surf", "f_large"), lambda d: combo(_surf_chg(d), _fl(d)), **P),
         T("X11", "年齢 × 重賞の実績", "X", ("age", "g_n_prev", "g_top3_prev"), lambda d: combo(cut(d["age"], [3, 5], ["2-3歳", "4-5歳", "6歳以上"]),
           _cnt3(d["g_n_prev"], d["g_top3_prev"], ("重賞3着内あり", "重賞3着内なし", "重賞未経験"))), **H),
-        T("X12", "馬番の位置 × 頭数", "X", ("hn", "field"), lambda d: combo(cut(_num(d["hn"]) / _num(d["field"]), [1 / 3, 2 / 3], ["内", "中", "外"]),
-          cut(d["field"], [12, 15], ["12頭以下", "13-15頭", "16頭以上"]))),
+        T("X12", "馬番の位置 × 頭数", "X", ("hn", "field_decl"), lambda d: combo(cut(_num(d["hn"]) / _num(d["field_decl"]), [1 / 3, 2 / 3], ["内", "中", "外"]),
+          cut(d["field_decl"], [12, 15], ["12頭以下", "13-15頭", "16頭以上"]))),
         T("X13", "距離の変化 × 父の大系統", "X", ("dist", "p_dist", "f_large"), lambda d: combo(cut(_num(d["dist"]) - _num(d["p_dist"]), [-100, 99], ["短縮", "同距離", "延長"]), _fl(d)), **P),
         T("X14", "前走のクラス × 間隔", "X", ("p_cls", "interval"), lambda d: combo(_p_cls(d), cut(d["interval"], [35, 63], ["中4週以内", "中5-8週", "中9週以上"])), **P),
         T("X15", "前走の上がり順位 × 脚質", "X", ("p_l3rank", "p_pos1", "p_pos1r"), lambda d: combo(cut(d["p_l3rank"], [3], ["上がり3位以内", "上がり4位以下"]), _style2(d)), **P),

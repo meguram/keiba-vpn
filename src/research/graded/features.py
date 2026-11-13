@@ -51,7 +51,16 @@ def _num(s):
 def load_master(path: Path = MASTER) -> pd.DataFrame:
     import pyarrow.parquet as pq
     have = set(pq.ParquetFile(path).schema_arrow.names)
-    d = pd.read_parquet(path, columns=[c for c in MASTER_COLS if c in have])
+    d = pd.read_parquet(path, columns=[c for c in MASTER_COLS if c in have] + ["odds"])
+    # 発走したか（中止の馬も含む）。着順の無い馬のうち、オッズが正なら発走して中止（着外）、0 なら取消・除外。
+    # folklore の master はオッズが正の行だけを保存するので、今は全行 True（FOLKLORE_KEEP_DNF=1 の master では中止の馬の行が入る）。
+    # オッズはこの判定にだけ使い、すぐに捨てる（切り口・点には使わない。catalog.FORBIDDEN_EXACT で検査する）
+    d["started"] = (_num(d["fin"]) > 0) | (_num(d["odds"]) > 0)
+    d = d.drop(columns=["odds"])
+    # 中止の馬も「出走した走」として過去の成績（騎手・厩舎・父の産駒・重賞の実績）に着外で数える
+    dnf = d["started"] & _num(d["fin"]).isna() & (d["surf"].astype(str) != "障")
+    d["ok"] = d["ok"].astype(str).str.lower().isin(["true", "1", "1.0"]) | dnf
+    d.loc[dnf, ["y3", "y1"]] = 0.0
     for c in ("race_id", "horse_id", "jockey_id", "trainer_id"):
         d[c] = d[c].astype(str)
     d["dt"] = pd.to_datetime(d["dt"])
@@ -183,10 +192,42 @@ def asof_counts(d: pd.DataFrame, keys: list[str], mask: pd.Series, name: str) ->
     return d
 
 
+def entry_weights() -> pd.DataFrame:
+    """レース結果の表の全頭（取消・除外・中止も含む）の斤量。master は着順の付いた馬（と、FOLKLORE_KEEP_DNF=1 なら中止の馬）だけなので、
+    レース内の斤量の順位は、ここから出走表の時点の全頭で作る。"""
+    parts = []
+    for y in YEARS:
+        f = TABLES / str(y) / "race_result_flat.parquet"
+        if f.exists():
+            parts.append(pd.read_parquet(f, columns=["race_id", "horse_id", "jockey_weight"]))
+    e = pd.concat(parts, ignore_index=True)
+    e["race_id"], e["horse_id"] = e["race_id"].astype(str), e["horse_id"].astype(str)
+    return e.drop_duplicates(["race_id", "horse_id"]).rename(columns={"jockey_weight": "jw"})
+
+
+def add_entry_level(d: pd.DataFrame, entries: pd.DataFrame | None = None) -> pd.DataFrame:
+    """出走表の時点（前日）で決まる、レース内の列。取消・除外・中止の馬も含めた全頭で数える（レース後に決まる情報を入れない）。
+    - field_decl: 出走表の頭数（folklore の field = race_result_flat の field_size。取消・除外も含む全頭）
+    - jw_rank・jw_max: entries（race_id, horse_id, jw。既定はレース結果の表の全頭）の中での斤量の順位。entries に無いレースは d の行だけで作る"""
+    d = d.copy()
+    d["field_decl"] = _num(d["field"])
+    e = entries if entries is not None else entry_weights()
+    e = e[e["race_id"].isin(set(d["race_id"]))].drop_duplicates(["race_id", "horse_id"]).copy()
+    e["jw"] = _num(e["jw"])
+    have = set(e["race_id"])
+    own = d.loc[~d["race_id"].isin(have), ["race_id", "horse_id", "jw"]]
+    e = pd.concat([e[["race_id", "horse_id", "jw"]], own], ignore_index=True)
+    e["jw_rank"] = e.groupby("race_id")["jw"].rank(ascending=False, method="min", pct=True)
+    e["jw_max"] = e["jw"] == e.groupby("race_id")["jw"].transform("max")
+    d = d.drop(columns=[c for c in ("jw_rank", "jw_max") if c in d.columns])
+    return d.merge(e[["race_id", "horse_id", "jw_rank", "jw_max"]], on=["race_id", "horse_id"], how="left")
+
+
 def keep_runners(d: pd.DataFrame) -> pd.DataFrame:
-    """着順の付いた馬（出走した馬）だけにし、頭数をその数で数え直す（期待の 3 着内 = 3/頭数 に取消の馬を入れない）。
-    前走などの履歴の列は、この前に全行で作っておく。"""
-    d = d[_num(d["fin"]).notna() & (_num(d["fin"]) > 0)].copy()
+    """発走した馬（着順の付いた馬と、中止の馬）だけにし、頭数をその数で数え直す（期待の 3 着内 = 3/頭数）。
+    取消・除外の馬は、馬券も返還されるので評価から外す。中止の馬は着外（y3 = 0）として残す。
+    前走などの履歴の列と、出走表の時点の列（add_entry_level）は、この前に全行で作っておく。"""
+    d = d[d["started"].fillna(False).astype(bool)].copy()
     d["field"] = d.groupby("race_id")["horse_id"].transform("size")
     d["y3"] = (_num(d["fin"]) <= 3).astype(float)
     d["y1"] = (_num(d["fin"]) == 1).astype(float)
@@ -200,8 +241,6 @@ def add_people_sire(d: pd.DataFrame) -> pd.DataFrame:
     alls = pd.Series(True, index=d.index)
     d = asof_counts(d, ["f_name", "course"], alls, "sc")   # 父の産駒の同じコースの成績（全クラス）
     d = asof_counts(d, ["f_name", "surf", "dband"], alls, "sd")   # 父の産駒の同じ芝ダ・距離帯の成績
-    d["jw_rank"] = d.groupby("race_id")["jw"].rank(ascending=False, method="min", pct=True)
-    d["jw_max"] = d["jw"] == d.groupby("race_id")["jw"].transform("max")
     return d
 
 
@@ -222,6 +261,7 @@ def build(master: Path = MASTER, out: Path | None = None, pedigree: bool = True)
     d = add_prev_region(d)
     d = add_horse_history(d)
     d = add_race_level(d)
+    d = add_entry_level(d)
     d = keep_runners(d)
     d = add_people_sire(d)
     if pedigree:

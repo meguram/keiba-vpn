@@ -203,11 +203,11 @@ def load_payoff() -> dict:
 
 
 def race_metrics(mk: pd.DataFrame, pay: dict) -> pd.DataFrame:
-    """mk: race_id, hn, rank（1 = ◎）, y1, y3。レースごとの指標と購入額・払戻。払戻の無いレースは除く。"""
+    """mk: race_id, hn, rank（1 = ◎）, y1, y3。レースごとの指標と購入額・払戻。4 券種の払戻がそろわないレースは除く。"""
     rows = []
     for rid, g in mk.groupby("race_id"):
-        if (rid, "tansho") not in pay:
-            continue
+        if not all((rid, bt) in pay for bt in ("tansho", "fukusho", "umaren", "wide")):
+            continue   # 4 券種の払戻がそろったレースだけ（rank_bakeoff_eval と同じ定義）
         g = g.sort_values("rank")
         top = g.iloc[0]
         h1 = int(top["hn"])
