@@ -12,10 +12,11 @@
 | ⑤ 毎晩の PG 同期の GCS の全件一覧をやめた | c03b86f7 | 緑 |
 | 消した Cloud Scheduler 13 件を、master への昇格で作り直さない（job_map のグループに retired） | 7e1cc81f | 緑 |
 | verify_past_values の全件一覧をやめた（対象はローカルの flat、基準は保存、読む件数の上限） | 280a6ab0 | 緑 |
-| 開催日の後処理（馬場速度）の race_result の全件一覧をやめた | 4d424c7a | 見届け中 |
-| 週次の odds_drift の全件一覧と全文書の読み出しをやめた | 8fe68f44 | 見届け中 |
-| cron の登録スクリプトの安全な入れ替えを共通の関数に（scripts/cron/lib_crontab.sh。今日の 3 本） | f7edd68d | 見届け中 |
-| setup_all_cron.sh の remove_all の修正、見出しの重なりを消す・verify の cron を入れ直すスクリプト、job_map の細かい点、docs の状態 | この docs の commit と同じ | — |
+| 開催日の後処理（馬場速度）の race_result の全件一覧をやめた | 4d424c7a | 緑 |
+| 週次の odds_drift の全件一覧と全文書の読み出しをやめた | 8fe68f44 | 緑 |
+| cron の登録スクリプトの安全な入れ替えを共通の関数に（scripts/cron/lib_crontab.sh。今日の 3 本） | f7edd68d | 緑 |
+| setup_all_cron.sh の remove_all の修正、見出しの重なりを消す・verify の cron を入れ直すスクリプト、job_map の細かい点、docs の状態 | 1cd715e6 | 緑 |
+| 金曜の週次: 馬名インデックスをローカルの flat から、成長曲線は前回からの差分の馬だけ（月 約 7.3GiB → 約 0.32GiB。docs/operations/friday_gcs_reads_plan_20261113.md） | 3c35d7d3 | 緑 |
 
 ## ④ root の crontab の変更（未実施・ユーザーの作業）
 2026-11-13 夜に `sudo bash scripts/cron/install_shared_login_cron.sh` を、Claude Code の権限の確認（auto mode。Destructive or Unwanted Actions）が止めた。回り込まずに止めた。
