@@ -74,6 +74,36 @@ def busy() -> bool:
     return bool(out) and int(out) > 0
 
 
+def busy_names() -> list[str]:
+    """待たせている他の取得の名前（例: src.scraper.export_tables）。取得の一覧に「待っている相手」として出すためだけに使う。"""
+    import re
+
+    try:
+        out = subprocess.run(["ps", "-eo", "args"], capture_output=True, text=True).stdout
+    except Exception:  # noqa: BLE001
+        return []
+    pat, names = re.compile(OTHER_SCRAPERS), []
+    for line in out.splitlines():
+        m = pat.search(line)
+        if not m or os.path.basename(line.split(" ", 1)[0]) == "grep":   # busy() と同じく grep 自身の行は数えない
+            continue
+        mod = re.search(r"-m (\S+)", line[m.start():])   # 一致は前方だけなので、モジュール名は空白まで取る
+        name = mod.group(1) if mod else m.group(0)
+        if name not in names:
+            names.append(name)
+    return names
+
+
+def _waiting_for() -> str:
+    names = busy_names()
+    if names:
+        more = f" ほか {len(names) - 3} 件" if len(names) > 3 else ""
+        return f"他の取得の終了待ち: {'、'.join(names[:3])}{more}"
+    if load1() >= MAX_LOAD:
+        return f"負荷の低下待ち（1 分平均 {MAX_LOAD:.0f} 未満で再開）"   # 値は入れない（入れると 30 秒ごとに書き直しになる）
+    return "他の取得の終了・負荷の低下待ち"   # 判定の直後に相手が終わったときなど、取り直した ps と食い違うとき
+
+
 def load1() -> float:
     try:
         return os.getloadavg()[0]
@@ -83,11 +113,12 @@ def load1() -> float:
 
 def wait_ok(max_wait: int = 3600) -> bool:
     """他の取得が終わり、負荷が下がるまで待つ。待ちきれなければ False。"""
-    t0, waiting = time.time(), False
+    t0, waiting = time.time(), None
     while busy() or load1() >= MAX_LOAD:
-        if not waiting:
-            _set_fetch_state("waiting", "他の取得の終了・負荷の低下待ち")
-            waiting = True
+        label = _waiting_for()
+        if label != waiting:   # 待っている相手が変わったときだけ書き直す（30 秒ごとには書かない）
+            _set_fetch_state("waiting", label)
+            waiting = label
         if time.time() - t0 > max_wait:
             return False   # 呼び出し側はこのあと中断するので、実行中には戻さない
         time.sleep(30)
