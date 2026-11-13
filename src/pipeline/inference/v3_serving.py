@@ -86,6 +86,15 @@ def v6_paths() -> dict:
     return {"bundle": bundle, "stage": stage, "tl_reference": tl_ref, "rb_state": rb}
 
 
+def ped_history_years(tables_dir: str | Path | None = None) -> list[int]:
+    """血統の簡易 24 列（PedState）の履歴の年: 起点年（FIRST_YEAR）以降で結果の表がある年（2026 年を含む）。
+    load_runs は年を省くと学習年（FIRST_YEAR〜2025）だけを読み、2026 年の結果が数に入らない（学習は『その日より前を全部数える』）。"""
+    from src.pipeline.features.horse_history.common import TABLES_DIR
+    from src.pipeline.models.training_years import serving_years
+
+    return serving_years(tables_dir or TABLES_DIR, need="race_result_flat.parquet")
+
+
 class V3Serving:
     def __init__(self, bundle_dir: str | Path | None = None, stage_dir: str | Path | None = None, tables_dir: str | Path | None = None,
                  tl_reference: str | Path | None = None):
@@ -108,7 +117,7 @@ class V3Serving:
 
     def warm(self) -> dict:
         from src.pipeline.models.ensemble_bundle import EnsembleBundle
-        from src.pipeline.features.horse_history.common import load_runs, apply_repair
+        from src.pipeline.features.horse_history.common import apply_repair, load_runs
         from src.pipeline.features.horse_history.serving import EMPTY_RM
 
         from src.pipeline.models.determinism import fix_inference_runtime
@@ -136,7 +145,7 @@ class V3Serving:
         if self.rb_state is not None and any(x in sv6.COLUMNS for x in self.feature_cols):            # v6: めぐ指数/netkeiba 指数の履歴 RB（tp-65）
             self.rb_hist, self.rb_params = sv6.load_state(self.rb_state)
         self.history = sla.load_history(self.tables_dir)
-        runs = apply_repair(load_runs(self.tables_dir), EMPTY_RM)
+        runs = apply_repair(load_runs(self.tables_dir, years=ped_history_years(self.tables_dir)), EMPTY_RM)
         from src.pipeline.features import serving_parents as spar
 
         hist_ped = spe.history_from_runs(runs)

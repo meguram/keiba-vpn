@@ -53,11 +53,14 @@ _HISTORY_COLS = ["race_id", "horse_number", "horse_id", "jockey_id", "trainer_id
 
 
 def load_history(tables_dir: str | Path | None = None, years: list[int] | None = None) -> pd.DataFrame:
-    """race_result_flat（確定結果）を年ごとに読んで連結する。ランナーの起動時に 1 回だけ呼ぶ。"""
+    """race_result_flat（確定結果）を年ごとに読んで連結する。ランナーの起動時に 1 回だけ呼ぶ。
+    years 省略時は起点年（FIRST_YEAR）以降の年（training_years.serving_years）。"""
     import polars as pl
 
+    from src.pipeline.models.training_years import serving_years
+
     base = Path(tables_dir) if tables_dir else DEFAULT_TABLES
-    ys = years or sorted(int(p.name) for p in base.iterdir() if p.is_dir() and p.name.isdigit())
+    ys = years or serving_years(base)
     parts = []
     for y in ys:
         f = base / str(y) / "race_result_flat.parquet"
