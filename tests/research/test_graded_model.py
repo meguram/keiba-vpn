@@ -66,3 +66,35 @@ def test_type_z_positive_when_x_predicts():
     z = M.type_z(pd.DataFrame(rows))
     assert z.loc["A", "z"] > 5
     assert TL.STATS[0] == "n"
+
+
+def test_race_strata_main_flag():
+    from src.research.graded.run import race_strata
+    T = pd.DataFrame({"race_id": ["A", "A", "B", "D"], "all_main_ed": [5.0, 5.0, 2.0, 5.0], "all_main_n": [70.0, 70.0, 30.0, 10.0]})
+    rows = pd.DataFrame({"race_id": ["A", "A", "B", "C", "D"], "surf": ["芝", "芝", "ダ", "芝", "芝"]})
+    r = race_strata(T, rows)
+    assert r.loc["A", "main"] == "主あり" and r.loc["B", "main"] == "副・全体だけ" and r.loc["C", "main"] == "副・全体だけ"
+    assert r.loc["D", "main"] == "副・全体だけ"   # 回の数は足りても走数が足りない
+    assert r.loc["B", "surf"] == "ダ"
+
+
+def test_scored_simple_baseline_uses_only_given_types():
+    from src.research.graded.run import scored
+    base = {"level": "1着", "row": 0, "race_id": "R", "hn": 1, "y3": 1.0, "y1": 0.0, "year": 2025, "field": 10,
+            "all_main_n": 100, "all_sub_n": 1000}
+    for p in ("main", "sub", "sub4", "glob"):
+        base.update({f"{p}_{k}": 0.0 for k in TL.STATS})
+    rows = []
+    # B02 は 1 番が強く、A01 は 2 番がずっと強い（A01 を混ぜると順位が逆になる）
+    for t, (w_h1, w_h2) in (("B02", (300.0, 30.0)), ("A01", (1.0, 3000.0))):
+        for h in (1, 2):
+            r = dict(base, type=t, row=h, hn=h)
+            r["glob_n"], r["glob_e3"] = 1000.0, 300.0
+            r["glob_w1"] = w_h1 if h == 1 else w_h2
+            rows.append(r)
+    T = pd.DataFrame(rows)
+    pre = {"shrink": {"m_g": 10, "m_s": 10, "m_m": 10}, "score": {"lam": 1.0, "weight": "z"}, "types": {"A01": {"z_disc": 3.0}}, "sets": {}}
+    _, mk = scored(T, pre, None, ["B02"])
+    assert mk.sort_values("rank")["hn"].tolist() == [1, 2]
+    _, mk2 = scored(T, pre, None, ["B02", "A01"])
+    assert mk2.sort_values("rank")["hn"].tolist() == [2, 1]

@@ -1,0 +1,2164 @@
+{
+ "frozen_at": "2026-11-13T19:26:29+09:00",
+ "note": "2016〜2024 年の中だけで決めた。2025・2026 年の評価の前に凍結し、評価の後に変えない。",
+ "periods": {
+  "discovery": [
+   2018,
+   2021
+  ],
+  "confirm": [
+   2022,
+   2024
+  ],
+  "evaluate": [
+   2025,
+   2026
+  ]
+ },
+ "thresholds": {
+  "z_disc": 1.645,
+  "z_conf": 1.2816,
+  "min_main_n": 15,
+  "min_main_ed": 4,
+  "min_sub_n": 50,
+  "min_sub_races": 20,
+  "sub_fallback_n": 300,
+  "max_share": 0.7,
+  "good_edhit": 3,
+  "cluster_corr": 0.7
+ },
+ "shrink": {
+  "m_g": 3.0,
+  "m_s": 100.0,
+  "m_m": 30.0,
+  "grid_logloss": [
+   {
+    "m_g": 3,
+    "m_s": 100,
+    "m_m": 30,
+    "logloss": 0.49735278719710924
+   },
+   {
+    "m_g": 10,
+    "m_s": 100,
+    "m_m": 30,
+    "logloss": 0.49736079616325796
+   },
+   {
+    "m_g": 3,
+    "m_s": 100,
+    "m_m": 100,
+    "logloss": 0.4973642481166557
+   },
+   {
+    "m_g": 10,
+    "m_s": 100,
+    "m_m": 100,
+    "logloss": 0.4973719290757945
+   },
+   {
+    "m_g": 3,
+    "m_s": 100,
+    "m_m": 10,
+    "logloss": 0.49739442655966515
+   },
+   {
+    "m_g": 10,
+    "m_s": 100,
+    "m_m": 10,
+    "logloss": 0.4974029311378716
+   },
+   {
+    "m_g": 3,
+    "m_s": 30,
+    "m_m": 30,
+    "logloss": 0.4974070399201054
+   },
+   {
+    "m_g": 10,
+    "m_s": 30,
+    "m_m": 30,
+    "logloss": 0.4974159185031953
+   },
+   {
+    "m_g": 3,
+    "m_s": 30,
+    "m_m": 100,
+    "logloss": 0.49742217206805883
+   },
+   {
+    "m_g": 10,
+    "m_s": 30,
+    "m_m": 100,
+    "logloss": 0.4974307384237399
+   }
+  ]
+ },
+ "score": {
+  "lam": 0.5,
+  "weight": "z",
+  "variants": [
+   {
+    "set": "preday",
+    "lam": 0.5,
+    "weight": "equal",
+    "auc_conf": 0.7201189912107224
+   },
+   {
+    "set": "dayof",
+    "lam": 0.5,
+    "weight": "equal",
+    "auc_conf": 0.7203130119473788
+   },
+   {
+    "set": "preday",
+    "lam": 0.5,
+    "weight": "z",
+    "auc_conf": 0.7220841807728111
+   },
+   {
+    "set": "dayof",
+    "lam": 0.5,
+    "weight": "z",
+    "auc_conf": 0.7215980270566833
+   },
+   {
+    "set": "preday",
+    "lam": 1.0,
+    "weight": "equal",
+    "auc_conf": 0.7201929853092643
+   },
+   {
+    "set": "dayof",
+    "lam": 1.0,
+    "weight": "equal",
+    "auc_conf": 0.7194746910186186
+   },
+   {
+    "set": "preday",
+    "lam": 1.0,
+    "weight": "z",
+    "auc_conf": 0.7211025707472736
+   },
+   {
+    "set": "dayof",
+    "lam": 1.0,
+    "weight": "z",
+    "auc_conf": 0.7203953322493373
+   },
+   {
+    "set": "preday",
+    "lam": 2.0,
+    "weight": "equal",
+    "auc_conf": 0.718216272673637
+   },
+   {
+    "set": "dayof",
+    "lam": 2.0,
+    "weight": "equal",
+    "auc_conf": 0.7183718616535153
+   },
+   {
+    "set": "preday",
+    "lam": 2.0,
+    "weight": "z",
+    "auc_conf": 0.720849438388198
+   },
+   {
+    "set": "dayof",
+    "lam": 2.0,
+    "weight": "z",
+    "auc_conf": 0.7206007422092693
+   }
+  ],
+  "marks": [
+   "◎",
+   "○",
+   "▲",
+   "△",
+   "△"
+  ],
+  "tie_break": "主の好成績パターンの数が多い順、さらに馬番の小さい順"
+ },
+ "types": {
+  "A01": {
+   "name": "前走の着順",
+   "family": "A",
+   "day_of": false,
+   "z_disc": 15.235033968515921,
+   "z_conf": 11.864552885647388,
+   "races_disc": 512.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "B02",
+    "dayof": "B02"
+   }
+  },
+  "A02": {
+   "name": "前走の着差",
+   "family": "A",
+   "day_of": false,
+   "z_disc": 14.62163929607771,
+   "z_conf": 11.942648310501665,
+   "races_disc": 513.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "E06",
+    "dayof": "E06"
+   }
+  },
+  "A03": {
+   "name": "前走の着順 × 着差",
+   "family": "A",
+   "day_of": false,
+   "z_disc": 15.033613235466014,
+   "z_conf": 11.554461680647172,
+   "races_disc": 493.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "B02",
+    "dayof": "B02"
+   }
+  },
+  "A04": {
+   "name": "2走前の着順",
+   "family": "A",
+   "day_of": false,
+   "z_disc": 11.842137943552315,
+   "z_conf": 10.386764250634194,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "A04",
+    "dayof": "A04"
+   }
+  },
+  "A05": {
+   "name": "3走前の着順",
+   "family": "A",
+   "day_of": false,
+   "z_disc": 10.969319333300682,
+   "z_conf": 7.693477417053682,
+   "races_disc": 509.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "A05",
+    "dayof": "A05"
+   }
+  },
+  "A06": {
+   "name": "近3走の最高着順",
+   "family": "A",
+   "day_of": false,
+   "z_disc": 14.279814530153468,
+   "z_conf": 11.836726197219035,
+   "races_disc": 467.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "A06",
+    "dayof": "A06"
+   }
+  },
+  "A07": {
+   "name": "近5走の3着内の回数",
+   "family": "A",
+   "day_of": false,
+   "z_disc": 17.409794404377013,
+   "z_conf": 13.590233555267536,
+   "races_disc": 509.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "A07",
+    "dayof": "A07"
+   }
+  },
+  "A08": {
+   "name": "連勝中",
+   "family": "A",
+   "day_of": false,
+   "z_disc": 7.622971585068976,
+   "z_conf": 6.002264237654657,
+   "races_disc": 503.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "A08",
+    "dayof": "A08"
+   }
+  },
+  "A09": {
+   "name": "前走で着順を上げたか",
+   "family": "A",
+   "day_of": false,
+   "z_disc": 8.241564191815915,
+   "z_conf": 5.389274412882082,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "A09",
+    "dayof": "A09"
+   }
+  },
+  "A10": {
+   "name": "前走のレースレベル",
+   "family": "A",
+   "day_of": false,
+   "z_disc": 6.1595792365056905,
+   "z_conf": 3.23742283659915,
+   "races_disc": 503.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "A10",
+    "dayof": "A10"
+   }
+  },
+  "B01": {
+   "name": "前走のクラス",
+   "family": "B",
+   "day_of": false,
+   "z_disc": 9.148125527043426,
+   "z_conf": 7.094770762184552,
+   "races_disc": 509.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "X14",
+    "dayof": "X14"
+   }
+  },
+  "B02": {
+   "name": "前走のクラス × 着順",
+   "family": "B",
+   "day_of": false,
+   "z_disc": 19.923774382026064,
+   "z_conf": 17.84992494084345,
+   "races_disc": 513.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "B02",
+    "dayof": "B02"
+   }
+  },
+  "B03": {
+   "name": "格の上げ下げ",
+   "family": "B",
+   "day_of": false,
+   "z_disc": 7.698800188197944,
+   "z_conf": 5.9192838829085765,
+   "races_disc": 471.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "B03",
+    "dayof": "B03"
+   }
+  },
+  "B04": {
+   "name": "前走のレース名（ステップの組）",
+   "family": "B",
+   "day_of": false,
+   "z_disc": 6.7986504965685794,
+   "z_conf": 6.140134965125068,
+   "races_disc": 510.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "B04",
+    "dayof": "B04"
+   }
+  },
+  "B05": {
+   "name": "前走のレース名 × 着順",
+   "family": "B",
+   "day_of": false,
+   "z_disc": 16.104727160866386,
+   "z_conf": 16.356623041355245,
+   "races_disc": 512.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "B02",
+    "dayof": "B02"
+   }
+  },
+  "B06": {
+   "name": "前走が同じ重賞の前年の回",
+   "family": "B",
+   "day_of": false,
+   "z_disc": -0.33702679255133955,
+   "z_conf": -0.44961328279962676,
+   "races_disc": 101.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "B07": {
+   "name": "前走が海外・地方",
+   "family": "B",
+   "day_of": false,
+   "z_disc": -0.6402132201294458,
+   "z_conf": 1.5190823613327584,
+   "races_disc": 107.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "B08": {
+   "name": "前走が古馬との混合戦（3歳）",
+   "family": "B",
+   "day_of": false,
+   "z_disc": 2.012456714676413,
+   "z_conf": 2.486571643074089,
+   "races_disc": 151.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "B08",
+    "dayof": "B08"
+   }
+  },
+  "B09": {
+   "name": "前走が牝馬限定（牝馬）",
+   "family": "B",
+   "day_of": false,
+   "z_disc": 2.122845327159945,
+   "z_conf": 0.9207217734376774,
+   "races_disc": 334.0,
+   "bh10_disc": true,
+   "status": "発見だけで効いた（確認で消えた）",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "C01": {
+   "name": "距離の変化",
+   "family": "C",
+   "day_of": false,
+   "z_disc": 1.8055935723010699,
+   "z_conf": 4.400715667045503,
+   "races_disc": 503.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "C01",
+    "dayof": "C01"
+   }
+  },
+  "C02": {
+   "name": "芝ダの替わり",
+   "family": "C",
+   "day_of": false,
+   "z_disc": 6.663398606414742,
+   "z_conf": 4.605551468056837,
+   "races_disc": 203.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "C02",
+    "dayof": "C02"
+   }
+  },
+  "C03": {
+   "name": "会場の替わり",
+   "family": "C",
+   "day_of": false,
+   "z_disc": 0.4003007654417707,
+   "z_conf": 3.0629051853043414,
+   "races_disc": 512.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "C04": {
+   "name": "内外回りの替わり",
+   "family": "C",
+   "day_of": false,
+   "z_disc": 1.6645595205585944,
+   "z_conf": 3.1626463640848517,
+   "races_disc": 219.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "C04",
+    "dayof": "C04"
+   }
+  },
+  "C05": {
+   "name": "前走の馬場",
+   "family": "C",
+   "day_of": false,
+   "z_disc": 0.05274655049060784,
+   "z_conf": 0.33048977730670287,
+   "races_disc": 452.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "C06": {
+   "name": "斤量の変化",
+   "family": "C",
+   "day_of": false,
+   "z_disc": 3.9801419283462014,
+   "z_conf": 4.842225704282169,
+   "races_disc": 411.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "C06",
+    "dayof": "C06"
+   }
+  },
+  "C07": {
+   "name": "経験した距離との差",
+   "family": "C",
+   "day_of": false,
+   "z_disc": 2.375695813036073,
+   "z_conf": 3.2219641251791113,
+   "races_disc": 382.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "C07",
+    "dayof": "C07"
+   }
+  },
+  "C08": {
+   "name": "好走した距離の範囲",
+   "family": "C",
+   "day_of": false,
+   "z_disc": 12.716639527895243,
+   "z_conf": 10.28695587661121,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "E06",
+    "dayof": "E06"
+   }
+  },
+  "C09": {
+   "name": "前走のペース",
+   "family": "C",
+   "day_of": false,
+   "z_disc": 0.9605515534320013,
+   "z_conf": 2.8652852868045136,
+   "races_disc": 512.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "C10": {
+   "name": "前走の頭数",
+   "family": "C",
+   "day_of": false,
+   "z_disc": -0.4788058292143653,
+   "z_conf": -0.2266202570449035,
+   "races_disc": 499.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "D01": {
+   "name": "前走からの間隔",
+   "family": "D",
+   "day_of": false,
+   "z_disc": 10.325334494689725,
+   "z_conf": 6.002084875095329,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "D01",
+    "dayof": "D01"
+   }
+  },
+  "D02": {
+   "name": "休み明け何戦目",
+   "family": "D",
+   "day_of": false,
+   "z_disc": 7.940945764994811,
+   "z_conf": 4.878512911211285,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "D02",
+    "dayof": "D02"
+   }
+  },
+  "D03": {
+   "name": "休み明け初戦の過去の成績",
+   "family": "D",
+   "day_of": false,
+   "z_disc": 8.772477499795777,
+   "z_conf": 2.7864170180355052,
+   "races_disc": 476.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "D03",
+    "dayof": "D03"
+   }
+  },
+  "D04": {
+   "name": "叩き2戦目",
+   "family": "D",
+   "day_of": false,
+   "z_disc": -0.5723358571205122,
+   "z_conf": -0.8564196128249424,
+   "races_disc": 495.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "D05": {
+   "name": "年明け初戦",
+   "family": "D",
+   "day_of": false,
+   "z_disc": 4.709053286516954,
+   "z_conf": 1.982341015535713,
+   "races_disc": 265.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "D05",
+    "dayof": "D05"
+   }
+  },
+  "E01": {
+   "name": "前走の脚質",
+   "family": "E",
+   "day_of": false,
+   "z_disc": 5.99882237942254,
+   "z_conf": 3.964682687795746,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "E01",
+    "dayof": "E01"
+   }
+  },
+  "E02": {
+   "name": "前走の4角の位置",
+   "family": "E",
+   "day_of": false,
+   "z_disc": 6.489764145483862,
+   "z_conf": 5.506911148558046,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "E02",
+    "dayof": "E02"
+   }
+  },
+  "E03": {
+   "name": "前走の位置の上げ下げ",
+   "family": "E",
+   "day_of": false,
+   "z_disc": 1.7821985664130402,
+   "z_conf": 2.491589896778506,
+   "races_disc": 457.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "E03",
+    "dayof": "E03"
+   }
+  },
+  "E04": {
+   "name": "前走の上がり順位",
+   "family": "E",
+   "day_of": false,
+   "z_disc": 8.188713426194097,
+   "z_conf": 8.755738299422747,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "X15",
+    "dayof": "X15"
+   }
+  },
+  "E05": {
+   "name": "前走の上がり順位 × 着順",
+   "family": "E",
+   "day_of": false,
+   "z_disc": 12.611627532944665,
+   "z_conf": 10.9997939634707,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "E06",
+    "dayof": "E06"
+   }
+  },
+  "E06": {
+   "name": "前走の脚質 × 着順",
+   "family": "E",
+   "day_of": false,
+   "z_disc": 15.079921917421977,
+   "z_conf": 11.999492599656746,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "E06",
+    "dayof": "E06"
+   }
+  },
+  "E07": {
+   "name": "通算の逃げ率",
+   "family": "E",
+   "day_of": false,
+   "z_disc": 4.526085049897375,
+   "z_conf": 3.0135244914473485,
+   "races_disc": 505.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "E07",
+    "dayof": "E07"
+   }
+  },
+  "E08": {
+   "name": "通算の先行率",
+   "family": "E",
+   "day_of": false,
+   "z_disc": 0.09989405183220319,
+   "z_conf": 0.28288632468728975,
+   "races_disc": 514.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "E09": {
+   "name": "上がり最速の回数",
+   "family": "E",
+   "day_of": false,
+   "z_disc": 7.004030176679073,
+   "z_conf": 4.672055604201865,
+   "races_disc": 509.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "E09",
+    "dayof": "E09"
+   }
+  },
+  "E10": {
+   "name": "前走のペース × 位置 × 着順",
+   "family": "E",
+   "day_of": false,
+   "z_disc": 13.969485344892684,
+   "z_conf": 11.134340700072084,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "B02",
+    "dayof": "B02"
+   }
+  },
+  "E11": {
+   "name": "今回の逃げ候補",
+   "family": "E",
+   "day_of": false,
+   "z_disc": -0.5157826530999595,
+   "z_conf": -0.46206009577087387,
+   "races_disc": 396.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "F01": {
+   "name": "同じコースの実績",
+   "family": "F",
+   "day_of": false,
+   "z_disc": 6.135949493126409,
+   "z_conf": 5.979807944577553,
+   "races_disc": 488.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "F01",
+    "dayof": "F01"
+   }
+  },
+  "F02": {
+   "name": "同じ会場・芝ダの実績",
+   "family": "F",
+   "day_of": false,
+   "z_disc": 8.8476644646179,
+   "z_conf": 6.773898312269849,
+   "races_disc": 498.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "F02",
+    "dayof": "F02"
+   }
+  },
+  "F03": {
+   "name": "同じ距離帯・芝ダの実績",
+   "family": "F",
+   "day_of": false,
+   "z_disc": 6.557259291855523,
+   "z_conf": 5.9267723161215855,
+   "races_disc": 424.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "F03",
+    "dayof": "F03"
+   }
+  },
+  "F04": {
+   "name": "同じ回りの実績",
+   "family": "F",
+   "day_of": false,
+   "z_disc": 6.974351666745467,
+   "z_conf": 4.339580714720169,
+   "races_disc": 303.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "F04",
+    "dayof": "F04"
+   }
+  },
+  "F05": {
+   "name": "道悪の実績",
+   "family": "F",
+   "day_of": false,
+   "z_disc": 5.347523605286206,
+   "z_conf": 6.881814012609936,
+   "races_disc": 493.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "F05",
+    "dayof": "F05"
+   }
+  },
+  "F06": {
+   "name": "重賞の実績",
+   "family": "F",
+   "day_of": false,
+   "z_disc": 9.449285083342458,
+   "z_conf": 8.112365728915986,
+   "races_disc": 496.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "F06",
+    "dayof": "F06"
+   }
+  },
+  "F07": {
+   "name": "G1の実績",
+   "family": "F",
+   "day_of": false,
+   "z_disc": 11.234089892325908,
+   "z_conf": 6.771139955604674,
+   "races_disc": 440.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "F07",
+    "dayof": "F07"
+   }
+  },
+  "F08": {
+   "name": "同じ重賞の実績（リピーター）",
+   "family": "F",
+   "day_of": false,
+   "z_disc": 5.683471558032816,
+   "z_conf": 3.325270057440837,
+   "races_disc": 315.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "F08",
+    "dayof": "F08"
+   }
+  },
+  "F09": {
+   "name": "キャリア（出走数）",
+   "family": "F",
+   "day_of": false,
+   "z_disc": 9.908285031938455,
+   "z_conf": 9.325596037277887,
+   "races_disc": 447.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "F09",
+    "dayof": "F09"
+   }
+  },
+  "F10": {
+   "name": "通算の複勝率",
+   "family": "F",
+   "day_of": false,
+   "z_disc": 18.802405505406984,
+   "z_conf": 15.95670477324179,
+   "races_disc": 507.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "F10",
+    "dayof": "F10"
+   }
+  },
+  "F11": {
+   "name": "勝ち数",
+   "family": "F",
+   "day_of": false,
+   "z_disc": 8.866737133133007,
+   "z_conf": 6.07566319633334,
+   "races_disc": 482.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "F11",
+    "dayof": "F11"
+   }
+  },
+  "F12": {
+   "name": "古馬との対戦経験（3歳）",
+   "family": "F",
+   "day_of": false,
+   "z_disc": 1.8622272345666493,
+   "z_conf": 2.4484317414825036,
+   "races_disc": 140.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "F12",
+    "dayof": "F12"
+   }
+  },
+  "F13": {
+   "name": "経験した最多頭数",
+   "family": "F",
+   "day_of": false,
+   "z_disc": 2.873788099258712,
+   "z_conf": 2.870977468631597,
+   "races_disc": 232.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "F13",
+    "dayof": "F13"
+   }
+  },
+  "F14": {
+   "name": "同じ会場の経験",
+   "family": "F",
+   "day_of": false,
+   "z_disc": -0.6863114354928115,
+   "z_conf": -0.5744903120355028,
+   "races_disc": 446.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "F15": {
+   "name": "重賞・OPの経験数",
+   "family": "F",
+   "day_of": false,
+   "z_disc": 1.9559887826111937,
+   "z_conf": 3.0026655937449838,
+   "races_disc": 499.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "F15",
+    "dayof": "F15"
+   }
+  },
+  "G01": {
+   "name": "年齢",
+   "family": "G",
+   "day_of": false,
+   "z_disc": 12.514174701300583,
+   "z_conf": 7.215952338719015,
+   "races_disc": 330.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "X02",
+    "dayof": "X02"
+   }
+  },
+  "G02": {
+   "name": "性別",
+   "family": "G",
+   "day_of": false,
+   "z_disc": 0.45665134410372943,
+   "z_conf": 2.3407512064732576,
+   "races_disc": 335.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "G03": {
+   "name": "年齢 × 性別",
+   "family": "G",
+   "day_of": false,
+   "z_disc": 11.75917557527739,
+   "z_conf": 6.970874255532675,
+   "races_disc": 402.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "X02",
+    "dayof": "X02"
+   }
+  },
+  "G04": {
+   "name": "セン馬になってからの戦数",
+   "family": "G",
+   "day_of": false,
+   "z_disc": 0.07662615571908894,
+   "z_conf": 1.1189747673274286,
+   "races_disc": 127.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "G05": {
+   "name": "所属と遠征",
+   "family": "G",
+   "day_of": false,
+   "z_disc": 3.2282285966106987,
+   "z_conf": 1.506677279821351,
+   "races_disc": 448.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "G05",
+    "dayof": "G05"
+   }
+  },
+  "G06": {
+   "name": "馬体重",
+   "family": "G",
+   "day_of": true,
+   "z_disc": 3.8797453967312405,
+   "z_conf": 2.919670292506908,
+   "races_disc": 512.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": null,
+    "dayof": "G06"
+   }
+  },
+  "G07": {
+   "name": "馬体重の増減",
+   "family": "G",
+   "day_of": true,
+   "z_disc": 3.026154820994582,
+   "z_conf": 0.2696706009994738,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "発見だけで効いた（確認で消えた）",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "G08": {
+   "name": "ブリンカー",
+   "family": "G",
+   "day_of": false,
+   "z_disc": 3.6740198323497104,
+   "z_conf": 2.715685165274164,
+   "races_disc": 135.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "G08",
+    "dayof": "G08"
+   }
+  },
+  "G09": {
+   "name": "転厩明けの戦数",
+   "family": "G",
+   "day_of": false,
+   "z_disc": 2.1444523147586376,
+   "z_conf": 0.1947096724500249,
+   "races_disc": 305.0,
+   "bh10_disc": true,
+   "status": "発見だけで効いた（確認で消えた）",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "H01": {
+   "name": "枠",
+   "family": "H",
+   "day_of": false,
+   "z_disc": 0.9969054273293553,
+   "z_conf": 1.5878264979003076,
+   "races_disc": 514.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "H02": {
+   "name": "馬番の位置",
+   "family": "H",
+   "day_of": false,
+   "z_disc": 1.1227790203215482,
+   "z_conf": 2.0216152941170407,
+   "races_disc": 514.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "H03": {
+   "name": "斤量",
+   "family": "H",
+   "day_of": false,
+   "z_disc": 2.0324152729023854,
+   "z_conf": 2.932070053512456,
+   "races_disc": 370.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "H03",
+    "dayof": "H03"
+   }
+  },
+  "H04": {
+   "name": "斤量のレース内の順位",
+   "family": "H",
+   "day_of": false,
+   "z_disc": 4.082572160763719,
+   "z_conf": 0.19879556742788546,
+   "races_disc": 376.0,
+   "bh10_disc": true,
+   "status": "発見だけで効いた（確認で消えた）",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "H06": {
+   "name": "頭数",
+   "family": "H",
+   "day_of": false,
+   "z_disc": null,
+   "z_conf": null,
+   "races_disc": null,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "H07": {
+   "name": "馬場状態",
+   "family": "H",
+   "day_of": true,
+   "z_disc": null,
+   "z_conf": null,
+   "races_disc": null,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "H08": {
+   "name": "開催の何日目",
+   "family": "H",
+   "day_of": false,
+   "z_disc": null,
+   "z_conf": null,
+   "races_disc": null,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "H09": {
+   "name": "季節",
+   "family": "H",
+   "day_of": false,
+   "z_disc": null,
+   "z_conf": null,
+   "races_disc": null,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "H10": {
+   "name": "クッション値",
+   "family": "H",
+   "day_of": true,
+   "z_disc": null,
+   "z_conf": null,
+   "races_disc": null,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "I01": {
+   "name": "騎手の格（直近1年の複勝率）",
+   "family": "I",
+   "day_of": false,
+   "z_disc": 18.9508589034041,
+   "z_conf": 15.321812279719246,
+   "races_disc": 512.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "I01",
+    "dayof": "I01"
+   }
+  },
+  "I02": {
+   "name": "騎手（個人）",
+   "family": "I",
+   "day_of": false,
+   "z_disc": 17.304354371035277,
+   "z_conf": 14.621688134687554,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "I01",
+    "dayof": "I01"
+   }
+  },
+  "I03": {
+   "name": "継続騎乗・乗り替わり",
+   "family": "I",
+   "day_of": false,
+   "z_disc": 4.293780634062782,
+   "z_conf": 5.88001546655856,
+   "races_disc": 512.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "I04",
+    "dayof": "I04"
+   }
+  },
+  "I04": {
+   "name": "乗り替わりの格の上げ下げ",
+   "family": "I",
+   "day_of": false,
+   "z_disc": 5.749308744348853,
+   "z_conf": 8.6926684207452,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "I04",
+    "dayof": "I04"
+   }
+  },
+  "I05": {
+   "name": "外国人騎手・短期免許",
+   "family": "I",
+   "day_of": false,
+   "z_disc": 10.91768300667607,
+   "z_conf": 5.633207755540674,
+   "races_disc": 389.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "I05",
+    "dayof": "I05"
+   }
+  },
+  "I06": {
+   "name": "騎手のコース実績",
+   "family": "I",
+   "day_of": false,
+   "z_disc": 13.081440482427295,
+   "z_conf": 9.716012269890706,
+   "races_disc": 479.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "I06",
+    "dayof": "I06"
+   }
+  },
+  "I07": {
+   "name": "騎手の重賞実績",
+   "family": "I",
+   "day_of": false,
+   "z_disc": 15.542970785766034,
+   "z_conf": 13.572282047534598,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "I01",
+    "dayof": "I01"
+   }
+  },
+  "I08": {
+   "name": "騎手の逃げの多さ",
+   "family": "I",
+   "day_of": false,
+   "z_disc": -0.2757768045485554,
+   "z_conf": -1.0683384603244894,
+   "races_disc": 514.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "I09": {
+   "name": "騎手のその日の勝ち数",
+   "family": "I",
+   "day_of": true,
+   "z_disc": 10.37894906867033,
+   "z_conf": 6.01819460805132,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": null,
+    "dayof": "I09"
+   }
+  },
+  "J01": {
+   "name": "厩舎の格（直近1年の複勝率）",
+   "family": "J",
+   "day_of": false,
+   "z_disc": 11.80852559033276,
+   "z_conf": 8.553305648059247,
+   "races_disc": 512.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "J01",
+    "dayof": "J01"
+   }
+  },
+  "J02": {
+   "name": "厩舎の勢い（直近30日）",
+   "family": "J",
+   "day_of": false,
+   "z_disc": 8.514182019458808,
+   "z_conf": 6.200991463177751,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "J02",
+    "dayof": "J02"
+   }
+  },
+  "J03": {
+   "name": "厩舎のコース実績",
+   "family": "J",
+   "day_of": false,
+   "z_disc": 5.936241530457358,
+   "z_conf": 5.979351003527867,
+   "races_disc": 436.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "J03",
+    "dayof": "J03"
+   }
+  },
+  "J04": {
+   "name": "厩舎の重賞実績",
+   "family": "J",
+   "day_of": false,
+   "z_disc": 12.618356491995923,
+   "z_conf": 7.197279882755326,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "J04",
+    "dayof": "J04"
+   }
+  },
+  "J05": {
+   "name": "厩舎の休み明けの成績（休み明けの馬）",
+   "family": "J",
+   "day_of": false,
+   "z_disc": 9.20745864779716,
+   "z_conf": 5.889039452959622,
+   "races_disc": 495.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "J05",
+    "dayof": "J05"
+   }
+  },
+  "J06": {
+   "name": "騎手 × 調教師のコンビ",
+   "family": "J",
+   "day_of": false,
+   "z_disc": 14.240561306443277,
+   "z_conf": 11.159820584792646,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "J06",
+    "dayof": "J06"
+   }
+  },
+  "J07": {
+   "name": "同じ厩舎からの複数出し",
+   "family": "J",
+   "day_of": false,
+   "z_disc": -1.2963130937566767,
+   "z_conf": -0.30267188641265097,
+   "races_disc": 323.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "K01": {
+   "name": "父の大系統",
+   "family": "K",
+   "day_of": false,
+   "z_disc": 1.7446166896080615,
+   "z_conf": -0.3370971748516599,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "発見だけで効いた（確認で消えた）",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "K02": {
+   "name": "父の小系統",
+   "family": "K",
+   "day_of": false,
+   "z_disc": 7.32139393744135,
+   "z_conf": 1.2233846459115025,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "発見だけで効いた（確認で消えた）",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "K03": {
+   "name": "母父の大系統",
+   "family": "K",
+   "day_of": false,
+   "z_disc": 0.7133886035730781,
+   "z_conf": -0.5157203363146082,
+   "races_disc": 514.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "K04": {
+   "name": "母父の小系統",
+   "family": "K",
+   "day_of": false,
+   "z_disc": 4.105759580075231,
+   "z_conf": 0.9771119876370209,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "発見だけで効いた（確認で消えた）",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "K05": {
+   "name": "父 × 母父の大系統",
+   "family": "K",
+   "day_of": false,
+   "z_disc": 1.7668726648551418,
+   "z_conf": 0.9145529569919065,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "発見だけで効いた（確認で消えた）",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "K06": {
+   "name": "父（種牡馬）",
+   "family": "K",
+   "day_of": false,
+   "z_disc": 9.903047689822065,
+   "z_conf": 6.083708011687552,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "K06",
+    "dayof": "K06"
+   }
+  },
+  "K07": {
+   "name": "父の産駒の同じコースの成績",
+   "family": "K",
+   "day_of": false,
+   "z_disc": 5.288433114420455,
+   "z_conf": 3.8035757111416637,
+   "races_disc": 469.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "K07",
+    "dayof": "K07"
+   }
+  },
+  "K08": {
+   "name": "父の産駒の同じ芝ダ・距離帯の成績",
+   "family": "K",
+   "day_of": false,
+   "z_disc": 7.840543040011229,
+   "z_conf": 4.11427950350982,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "K08",
+    "dayof": "K08"
+   }
+  },
+  "L01": {
+   "name": "最終追い切りの評価",
+   "family": "L",
+   "day_of": false,
+   "z_disc": 19.697105747329797,
+   "z_conf": 13.468551688563647,
+   "races_disc": 456.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "L01",
+    "dayof": "L01"
+   }
+  },
+  "X01": {
+   "name": "前走の脚質 × 枠",
+   "family": "X",
+   "day_of": false,
+   "z_disc": 2.2008644612635972,
+   "z_conf": 2.3893226607249947,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "X01",
+    "dayof": "X01"
+   }
+  },
+  "X02": {
+   "name": "間隔 × 年齢",
+   "family": "X",
+   "day_of": false,
+   "z_disc": 15.041436385646595,
+   "z_conf": 7.83940912590207,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "X02",
+    "dayof": "X02"
+   }
+  },
+  "X03": {
+   "name": "父の大系統 × 馬場",
+   "family": "X",
+   "day_of": true,
+   "z_disc": 2.685531718706335,
+   "z_conf": -0.25435101434571294,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "発見だけで効いた（確認で消えた）",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "X04": {
+   "name": "距離の変化 × 前走の上がり順位",
+   "family": "X",
+   "day_of": false,
+   "z_disc": 8.209480710818196,
+   "z_conf": 9.07466986283716,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "X15",
+    "dayof": "X15"
+   }
+  },
+  "X05": {
+   "name": "前走の脚質 × 今回の逃げ候補の数",
+   "family": "X",
+   "day_of": false,
+   "z_disc": 1.075478065598661,
+   "z_conf": -0.4471397896486232,
+   "races_disc": 510.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "X06": {
+   "name": "性別 × 季節",
+   "family": "X",
+   "day_of": false,
+   "z_disc": -0.566945579565333,
+   "z_conf": 2.1916272577551954,
+   "races_disc": 335.0,
+   "bh10_disc": false,
+   "status": "発見で効かなかった",
+   "rep": {
+    "preday": null,
+    "dayof": null
+   }
+  },
+  "X07": {
+   "name": "年齢 × 前走のクラス",
+   "family": "X",
+   "day_of": false,
+   "z_disc": 13.890262263680059,
+   "z_conf": 9.162435137171316,
+   "races_disc": 510.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "X02",
+    "dayof": "X02"
+   }
+  },
+  "X08": {
+   "name": "乗り替わり × 騎手の格",
+   "family": "X",
+   "day_of": false,
+   "z_disc": 18.414646363291546,
+   "z_conf": 14.064828116725781,
+   "races_disc": 512.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "I01",
+    "dayof": "I01"
+   }
+  },
+  "X09": {
+   "name": "休み明け × 厩舎の休み明けの成績",
+   "family": "X",
+   "day_of": false,
+   "z_disc": 9.297256511041347,
+   "z_conf": 5.578250809387434,
+   "races_disc": 513.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "X09",
+    "dayof": "X09"
+   }
+  },
+  "X10": {
+   "name": "芝ダの替わり × 父の大系統",
+   "family": "X",
+   "day_of": false,
+   "z_disc": 4.5048738580888035,
+   "z_conf": 3.942505990767113,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "X10",
+    "dayof": "X10"
+   }
+  },
+  "X11": {
+   "name": "年齢 × 重賞の実績",
+   "family": "X",
+   "day_of": false,
+   "z_disc": 14.303092222535003,
+   "z_conf": 9.42712163271838,
+   "races_disc": 495.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "X11",
+    "dayof": "X11"
+   }
+  },
+  "X12": {
+   "name": "馬番の位置 × 頭数",
+   "family": "X",
+   "day_of": false,
+   "z_disc": 2.235992630037998,
+   "z_conf": 2.8327678144761057,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "X12",
+    "dayof": "X12"
+   }
+  },
+  "X13": {
+   "name": "距離の変化 × 父の大系統",
+   "family": "X",
+   "day_of": false,
+   "z_disc": 2.1647206138069626,
+   "z_conf": 2.064828356650086,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "X13",
+    "dayof": "X13"
+   }
+  },
+  "X14": {
+   "name": "前走のクラス × 間隔",
+   "family": "X",
+   "day_of": false,
+   "z_disc": 11.299203736070947,
+   "z_conf": 7.841050063049811,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "X14",
+    "dayof": "X14"
+   }
+  },
+  "X15": {
+   "name": "前走の上がり順位 × 脚質",
+   "family": "X",
+   "day_of": false,
+   "z_disc": 9.412146361877525,
+   "z_conf": 7.091535540648953,
+   "races_disc": 514.0,
+   "bh10_disc": true,
+   "status": "採用",
+   "rep": {
+    "preday": "X15",
+    "dayof": "X15"
+   }
+  }
+ },
+ "sets": {
+  "preday": {
+   "adopted": [
+    "A01",
+    "A02",
+    "A03",
+    "A04",
+    "A05",
+    "A06",
+    "A07",
+    "A08",
+    "A09",
+    "A10",
+    "B01",
+    "B02",
+    "B03",
+    "B04",
+    "B05",
+    "B08",
+    "C01",
+    "C02",
+    "C04",
+    "C06",
+    "C07",
+    "C08",
+    "D01",
+    "D02",
+    "D03",
+    "D05",
+    "E01",
+    "E02",
+    "E03",
+    "E04",
+    "E05",
+    "E06",
+    "E07",
+    "E09",
+    "E10",
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "F06",
+    "F07",
+    "F08",
+    "F09",
+    "F10",
+    "F11",
+    "F12",
+    "F13",
+    "F15",
+    "G01",
+    "G03",
+    "G05",
+    "G08",
+    "H03",
+    "I01",
+    "I02",
+    "I03",
+    "I04",
+    "I05",
+    "I06",
+    "I07",
+    "J01",
+    "J02",
+    "J03",
+    "J04",
+    "J05",
+    "J06",
+    "K06",
+    "K07",
+    "K08",
+    "L01",
+    "X01",
+    "X02",
+    "X04",
+    "X07",
+    "X08",
+    "X09",
+    "X10",
+    "X11",
+    "X12",
+    "X13",
+    "X14",
+    "X15"
+   ],
+   "used": [
+    "A04",
+    "A05",
+    "A06",
+    "A07",
+    "A08",
+    "A09",
+    "A10",
+    "B02",
+    "B03",
+    "B04",
+    "B08",
+    "C01",
+    "C02",
+    "C04",
+    "C06",
+    "C07",
+    "D01",
+    "D02",
+    "D03",
+    "D05",
+    "E01",
+    "E02",
+    "E03",
+    "E06",
+    "E07",
+    "E09",
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "F06",
+    "F07",
+    "F08",
+    "F09",
+    "F10",
+    "F11",
+    "F12",
+    "F13",
+    "F15",
+    "G05",
+    "G08",
+    "H03",
+    "I01",
+    "I04",
+    "I05",
+    "I06",
+    "J01",
+    "J02",
+    "J03",
+    "J04",
+    "J05",
+    "J06",
+    "K06",
+    "K07",
+    "K08",
+    "L01",
+    "X01",
+    "X02",
+    "X09",
+    "X10",
+    "X11",
+    "X12",
+    "X13",
+    "X14",
+    "X15"
+   ]
+  },
+  "dayof": {
+   "adopted": [
+    "A01",
+    "A02",
+    "A03",
+    "A04",
+    "A05",
+    "A06",
+    "A07",
+    "A08",
+    "A09",
+    "A10",
+    "B01",
+    "B02",
+    "B03",
+    "B04",
+    "B05",
+    "B08",
+    "C01",
+    "C02",
+    "C04",
+    "C06",
+    "C07",
+    "C08",
+    "D01",
+    "D02",
+    "D03",
+    "D05",
+    "E01",
+    "E02",
+    "E03",
+    "E04",
+    "E05",
+    "E06",
+    "E07",
+    "E09",
+    "E10",
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "F06",
+    "F07",
+    "F08",
+    "F09",
+    "F10",
+    "F11",
+    "F12",
+    "F13",
+    "F15",
+    "G01",
+    "G03",
+    "G05",
+    "G06",
+    "G08",
+    "H03",
+    "I01",
+    "I02",
+    "I03",
+    "I04",
+    "I05",
+    "I06",
+    "I07",
+    "I09",
+    "J01",
+    "J02",
+    "J03",
+    "J04",
+    "J05",
+    "J06",
+    "K06",
+    "K07",
+    "K08",
+    "L01",
+    "X01",
+    "X02",
+    "X04",
+    "X07",
+    "X08",
+    "X09",
+    "X10",
+    "X11",
+    "X12",
+    "X13",
+    "X14",
+    "X15"
+   ],
+   "used": [
+    "A04",
+    "A05",
+    "A06",
+    "A07",
+    "A08",
+    "A09",
+    "A10",
+    "B02",
+    "B03",
+    "B04",
+    "B08",
+    "C01",
+    "C02",
+    "C04",
+    "C06",
+    "C07",
+    "D01",
+    "D02",
+    "D03",
+    "D05",
+    "E01",
+    "E02",
+    "E03",
+    "E06",
+    "E07",
+    "E09",
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "F06",
+    "F07",
+    "F08",
+    "F09",
+    "F10",
+    "F11",
+    "F12",
+    "F13",
+    "F15",
+    "G05",
+    "G06",
+    "G08",
+    "H03",
+    "I01",
+    "I04",
+    "I05",
+    "I06",
+    "I09",
+    "J01",
+    "J02",
+    "J03",
+    "J04",
+    "J05",
+    "J06",
+    "K06",
+    "K07",
+    "K08",
+    "L01",
+    "X01",
+    "X02",
+    "X09",
+    "X10",
+    "X11",
+    "X12",
+    "X13",
+    "X14",
+    "X15"
+   ]
+  }
+ },
+ "comparison": {
+  "megu": "前日版の使う型に M01・M02（めぐ指数の順位）を足した版。採否の対象にしない、比較だけ",
+  "frozen_counts": "件数を 2024 年末で止めた版（採否・m・λ は同じ）"
+ },
+ "evaluation": {
+  "metrics": "◎の勝率・複勝率、◎○▲の3着内の頭数、◎の単勝・複勝の回収率（各100円）、◎→○▲の馬連・ワイドの流し（2点・200円）の回収率",
+  "bootstrap": "レース単位 2000 回、95% 区間",
+  "breakdown": "G1・G2・G3 別、芝・ダート別、主あり（同じレース名 × 同じコースの過去の回が 4 回以上）／副・全体だけ の別（各 5 レース以上）",
+  "simple_baseline": "単純な基準: 前走のクラス × 着順（B02）だけの点で並べた印（採否に関係なく、同じ m・λ で縮める）",
+  "baseline": "v6e の p_win の順。v6e16（2025 年、bundle_v6_2024 の test）と本番 v6e（2025 年は test、2026 年は bundle_v6_2025 を推論の経路で流した予測。重賞 95 レース）"
+ }
+}

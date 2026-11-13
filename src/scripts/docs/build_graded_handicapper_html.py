@@ -58,8 +58,8 @@ function renderEval(){const E=D.eval.versions;const BK=Object.keys(D.eval.baseli
  const dr=[];for(const bk of BK)for(const p of P){const e=E['前日版'][p];if(!e||!e['diff_vs_'+bk])continue;const x=e['diff_vs_'+bk];
   dr.push(`<tr><td>${bk}</td><td>${p}</td><td class="n">${x.races}</td>${['win','place'].map(k=>`<td class="n">${ci(x[k])}</td>`).join('')}<td class="n">${num(x.top3_in3)}</td>${['roi_tansho','roi_fukusho','roi_umaren','roi_wide'].map(k=>`<td class="n">${ci(x[k])}</td>`).join('')}</tr>`)}
  h+='<h2>前日版 − v6e（同じレースでの差、レース単位のブートストラップ 95%）</h2>'+table(['相手','期間','レース','◎勝率','◎複勝率','◎○▲の3着内','◎単勝','◎複勝','馬連流し','ワイド流し'],dr);
- const gr=[];for(const p of P){const e=E['前日版'][p];if(!e)continue;for(const g of ['G1','G2','G3'])if(e[g])gr.push(row(g,p,e[g]))}
- h+='<h2>前日版のグレード別</h2>'+table(head,gr);
+ const SL=k=>k.replace(/^surf:/,'').replace(/^main:/,'');const gr=[];for(const p of P){const e=E['前日版'][p];if(!e)continue;for(const k of Object.keys(e))if(/^(G[123]|surf:|main:)/.test(k))gr.push(row(SL(k),p,e[k]))}
+ h+='<h2>前日版の内訳（グレード・芝ダ・主の集計が使えたか）</h2>'+table(['区分',...head.slice(1)],gr)+'<p class="muted">主あり = 同じレース名 × 同じコースの過去の回が 4 回以上あったレース。副・全体だけ = それ未満（新設・コースの変更など）で、同じコースの別レースと全重賞の集計だけで点を付けた。5 レース未満の区分は載せない。</p>';
  const pr=D.prereg;h+=`<h2>凍結した規則（${pr.frozen_at}）</h2><div class="panel wrap">縮める強さ m（全体・副・主）= ${pr.shrink.m_g}・${pr.shrink.m_s}・${pr.shrink.m_m}、主の重み λ = ${pr.score.lam}、点の足し方 = ${pr.score.weight==='z'?'発見期間の z で重み付け':'等しい重み'}。前日版で使う型 ${pr.sets.preday.used.length}（採用 ${pr.sets.preday.adopted.length} を束ねたもの）、当日版 ${pr.sets.dayof.used.length}。<br>前日版で使う型: ${pr.sets.preday.used.map(t=>t+' '+TN[t]).join('、')}</div>`;
  $('#t-eval').innerHTML=h;document.querySelectorAll('#t-eval table').forEach(sortable)}
 // 2) 重賞ごと
