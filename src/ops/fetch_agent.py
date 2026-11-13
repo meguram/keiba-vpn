@@ -279,6 +279,9 @@ class FetchAgent:
                 self.sleep(self.cfg.poll_seconds)
 
 
+EXIT_CONFIG = 78          # 設定の誤り。systemd のユニットは RestartPreventExitStatus=78 で再起動しない
+
+
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     a = list(sys.argv[1:] if argv is None else argv)
@@ -292,7 +295,11 @@ def main(argv: list[str] | None = None) -> int:
     if not cfg.tasks and not shadow_on:
         logger.warning("担当タスクが空です（config/fetch_owner.json の agent_tasks / KEIBA_FETCH_AGENT_TASKS）。何もしません")
         return 0
-    store = ft.task_store_from_env()
+    try:
+        store = ft.task_store_from_env()       # VPS で gcs なら TaskError（毎分の一覧で費用がかかる。keiba-fetch-agent.service の ExecStart で file に固定）
+    except ft.TaskError as e:
+        logger.error("タスク表の設定の誤りのため起動しません: %s", e)
+        return EXIT_CONFIG
     queue = ft.TaskQueue(store)
     agent = FetchAgent(queue, cfg, subprocess_runner(cfg.python))
     # 馬体重のイベント（ops/events/weights_announced）はタスク表と同じストアに置く。ローカル（file）のときは GCP の event-pump は

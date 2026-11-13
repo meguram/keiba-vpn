@@ -1,6 +1,8 @@
 import json
 from datetime import datetime, timedelta
 
+import pytest
+
 from src.ops import fetch_agent as fa
 from src.ops import fetch_owner as fo
 from src.ops import fetch_task as ft
@@ -183,3 +185,18 @@ def test_host_runner_keeps_running_but_stops_fetching_when_replacement_tasks_mov
     p.write_text(json.dumps({"agent_tasks": []}))
     assert not any(fo.runner_fetch_moved(r, env={}, path=p) or fo.host_must_skip(r, env={}, path=p)
                    for r in ("raceday-runner", "raceday-weight-runner", "raceday-result-runner"))
+
+
+def test_vps_refuses_gcs_task_store(monkeypatch, tmp_path):
+    """VPS（KEIBA_RUN_LOCATION=vps）で GCS のタスク表は使わない（毎分の一覧で月 約 210 円。2026-11-13）。78 で止め、systemd も再起動しない。"""
+    from src.ops import fetch_agent as fa
+
+    monkeypatch.setenv("KEIBA_FETCH_AGENT_ENABLED", "1")
+    monkeypatch.setenv("KEIBA_FETCH_AGENT_TASKS", "entries-sync")
+    monkeypatch.setenv("KEIBA_RUN_LOCATION", "vps")
+    monkeypatch.delenv("KEIBA_FETCH_TASK_STORE", raising=False)
+    monkeypatch.setattr(ft, "GcsTaskStore", lambda *a, **k: pytest.fail("GCS のタスク表を作った"))
+    assert fa.main(["--once"]) == fa.EXIT_CONFIG == 78
+    monkeypatch.setenv("KEIBA_FETCH_TASK_STORE", "file")
+    monkeypatch.setenv("KEIBA_FETCH_TASK_DIR", str(tmp_path / "t"))
+    assert fa.main(["--dry-run"]) == 0

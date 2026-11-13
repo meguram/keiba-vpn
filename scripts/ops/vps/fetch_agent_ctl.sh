@@ -20,6 +20,7 @@ set -euo pipefail
 # 置き場はテストのときだけ差し替える（sudo は既定で環境変数を引き継がないので、deploy からは変えられない）
 ENV_FILE="${KEIBA_FETCH_ENV_FILE:-/etc/keiba-fetch/fetch.env}"
 UNIT=keiba-fetch-agent
+UNIT_FILE="${KEIBA_FETCH_UNIT_FILE:-/etc/systemd/system/keiba-fetch-agent.service}"
 CURRENT="${KEIBA_FETCH_CURRENT:-/opt/keiba-fetch/current}"
 SA_FILE="${KEIBA_FETCH_SA_FILE:-/etc/keiba-fetch/sa.json}"
 PULL_ENV="${KEIBA_PULL_ENV_FILE:-/etc/keiba-pull/pull.env}"
@@ -92,6 +93,10 @@ case "$cmd" in
         fi
         for k in "${REQUIRED_KEYS[@]}"; do has_value "$k" || die "$ENV_FILE の $k が空です"; done
         [ -f "$SA_FILE" ] || die "$SA_FILE がありません"
+        # VPS ではタスク表をローカル（file）にする。GCS のタスク表は毎分の一覧で月 約 210 円かかった（2026-11-13）。3 つともそろわなければ断る
+        [ "$(key_value KEIBA_FETCH_TASK_STORE)" = file ] || die "$ENV_FILE に KEIBA_FETCH_TASK_STORE=file がありません（GCS のタスク表になる）。docs/operations/vps_only_fetch.md の段 6"
+        grep -q "class FileTaskStore" "$CURRENT/src/ops/fetch_task.py" 2>/dev/null || die "取得のコードにローカルのタスク表（FileTaskStore）がありません（古い版）。先に pull"
+        grep -q "KEIBA_FETCH_TASK_STORE=file" "$UNIT_FILE" 2>/dev/null || die "$UNIT_FILE がタスク表を file に固定していません（古いユニット）。vps_03_units.sh で入れ直す"
         if has_key KEIBA_FETCH_AGENT_TASKS && [ -n "$(key_value KEIBA_FETCH_AGENT_TASKS)" ]; then
             die "KEIBA_FETCH_AGENT_TASKS が設定されています（影ではなく本番の取得を VPS が始めます）。人が確認して消してから"
         fi

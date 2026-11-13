@@ -1,8 +1,8 @@
 [Unit]
-Description=keiba 取得の実行役（GCS のタスク表を pull して 1 本ずつ取得）
+Description=keiba 取得の実行役（VPS のローカルのタスク表から 1 本ずつ取得）
 After=network-online.target
 Wants=network-online.target
-# 有効化の前提: /etc/keiba-fetch/fetch.env に KEIBA_FETCH_AGENT_ENABLED=1（既定オフ）と担当タスク。docs/operations/vps_agent.md
+# 有効化の前提: /etc/keiba-fetch/fetch.env に KEIBA_FETCH_AGENT_ENABLED=1（既定オフ）と担当タスク。docs/operations/vps_only_fetch.md の段 6
 
 [Service]
 Slice=keiba-fetch.slice
@@ -12,9 +12,12 @@ WorkingDirectory=/opt/keiba-fetch/current
 # 秘密（netkeiba のログイン、GCS の資格情報）はこのファイルだけ。権限 600 root:keibafetch=640。タスクにもログインにも出さない
 EnvironmentFile=/etc/keiba-fetch/fetch.env
 Environment=KEIBA_ENV=prod KEIBA_RUN_LOCATION=vps PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
-ExecStart=/opt/keiba-fetch/venv/bin/python -m src.ops.fetch_agent
-# 有効化フラグがオフなら終了コード 0 で止まる。落ちたときだけ再起動
+# タスク表は VPS のローカル（/var/lib/keiba-fetch/tasks。予約の keiba-fetch-reserve・raceday@ と同じ）に固定する。EnvironmentFile は Environment= より後に効くので、
+# fetch.env に gcs が残っていても上書きされるよう ExecStart で渡す（GCS のタスク表の毎分の一覧で月 約 210 円かかった。2026-11-13）
+ExecStart=/usr/bin/env KEIBA_FETCH_TASK_STORE=file KEIBA_FETCH_TASK_DIR=/var/lib/keiba-fetch/tasks /opt/keiba-fetch/venv/bin/python -m src.ops.fetch_agent
+# 有効化フラグがオフなら終了コード 0 で止まる。落ちたときだけ再起動。設定の誤り（VPS で GCS のタスク表）は 78 で止め、再起動しない
 Restart=on-failure
+RestartPreventExitStatus=78
 RestartSec=10
 # メモリ逼迫時は最初に殺される（UI・nginx・cloudflared より先）
 OOMScoreAdjust=500

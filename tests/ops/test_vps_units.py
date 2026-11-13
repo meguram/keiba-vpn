@@ -46,6 +46,24 @@ def test_agent_unit_is_hardened_and_off_by_default():
     assert s["NoNewPrivileges"] == "true" and s["ProtectSystem"] == "strict"
     text = (T / "keiba-fetch-agent.service").read_text(encoding="utf-8")
     assert "PASSWORD" not in text and "SECRET" not in text      # 秘密はユニットに書かない
+    # タスク表は VPS のローカルに固定（EnvironmentFile より後に効く ExecStart で渡す）。設定の誤り（78）では再起動しない
+    assert s["ExecStart"].startswith("/usr/bin/env KEIBA_FETCH_TASK_STORE=file KEIBA_FETCH_TASK_DIR=/var/lib/keiba-fetch/tasks ")
+    assert s["ExecStart"].endswith("-m src.ops.fetch_agent")
+    assert "KEIBA_FETCH_TASK_DIR=/var/lib/keiba-fetch/tasks" in load("keiba-fetch-reserve.service")["Service"]["ExecStart"]   # 予約と同じタスク表
+    assert s["RestartPreventExitStatus"] == "78"
+
+
+def test_fetch_ctl_and_units_refuse_gcs_task_store_on_vps():
+    """shadow-on と vps_03_units.sh は、タスク表が file でなければ取得役を有効にしない（GCS のタスク表の一覧で月 約 210 円。2026-11-13）。"""
+    ctl = Path("scripts/ops/vps/fetch_agent_ctl.sh").read_text(encoding="utf-8")
+    on = ctl[ctl.index("    shadow-on)"):ctl.index("    shadow-off)")]
+    assert on.index("KEIBA_FETCH_TASK_STORE)\" = file ] || die") < on.index("set_flag KEIBA_FETCH_AGENT_ENABLED 1")
+    assert "class FileTaskStore" in on and '"$UNIT_FILE"' in on
+    units = Path("scripts/ops/vps/vps_03_units.sh").read_text(encoding="utf-8")
+    blk = units[units.index('if [ "$ENABLE_AGENT" = 1 ]; then'):units.index("# 定期実行の見張り")]
+    assert blk.index('[ "$store" = file ]') < blk.index("run systemctl enable --now keiba-fetch-agent.service")
+    assert "try-restart keiba-fetch-agent.service" in blk                  # 動いている実行役を新しいユニットで起動し直す
+    assert "disable --now keiba-fetch-agent" not in blk                    # fetch.env が古いだけでは実行役を止めない
 
 
 def test_pull_timers_ui_is_periodic_and_fetch_sits_inside_maintenance_window():
@@ -208,10 +226,14 @@ def _ctl(tmp_path, cmd, env_lines, *, shadow_cfg=True, owner_tasks=()):
     envf.write_text("".join(f"{x}\n" for x in env_lines), encoding="utf-8")
     sa = tmp_path / "sa.json"
     sa.write_text("{}", encoding="utf-8")
+    (tmp_path / "current" / "src" / "ops").mkdir(parents=True)
+    (tmp_path / "current" / "src" / "ops" / "fetch_task.py").write_text("class FileTaskStore:\n    pass\n", encoding="utf-8")
+    unit = tmp_path / "keiba-fetch-agent.service"
+    unit.write_text((T / "keiba-fetch-agent.service").read_text(encoding="utf-8"), encoding="utf-8")
     pull = tmp_path / "pull.env"
     pull.write_text("GCS_BUCKET=bucket-from-pull\n", encoding="utf-8")
     env = {**os.environ, "KEIBA_FETCH_ENV_FILE": str(envf), "KEIBA_FETCH_CURRENT": str(tmp_path / "current"), "KEIBA_FETCH_SA_FILE": str(sa),
-           "KEIBA_PULL_ENV_FILE": str(pull)}
+           "KEIBA_PULL_ENV_FILE": str(pull), "KEIBA_FETCH_UNIT_FILE": str(unit)}
     r = subprocess.run(["bash", "scripts/ops/vps/fetch_agent_ctl.sh", cmd], env=env, capture_output=True, text=True)
     return r, envf.read_text(encoding="utf-8")
 
@@ -228,10 +250,12 @@ def test_fetch_ctl_shadow_on_refuses_when_production_tasks_are_set_or_code_is_ol
     # 影モードのつもりで、本番の取得を VPS に始めさせない。fetch_shadow.json の無い古い版では、対象が空で黙って何もしないので断る
     if os.geteuid() != 0:
         return
-    r, env = _ctl(tmp_path / "a", "shadow-on", ["GCS_BUCKET=b", "KEIBA_FETCH_AGENT_TASKS=entries-sync"])
+    r, env = _ctl(tmp_path / "a", "shadow-on", ["GCS_BUCKET=b", "KEIBA_FETCH_TASK_STORE=file", "KEIBA_FETCH_AGENT_TASKS=entries-sync"])
     assert r.returncode != 0 and "KEIBA_FETCH_AGENT_TASKS" in r.stderr and "KEIBA_FETCH_SHADOW_ENABLED" not in env
     r, env = _ctl(tmp_path / "b", "shadow-on", ["GCS_BUCKET=b"], shadow_cfg=False)
     assert r.returncode != 0 and "fetch_shadow.json" in r.stderr and "KEIBA_FETCH_AGENT_ENABLED" not in env
+    r, env = _ctl(tmp_path / "c", "shadow-on", ["GCS_BUCKET=b"])                   # タスク表が file でない（GCS の一覧に戻る）
+    assert r.returncode != 0 and "KEIBA_FETCH_TASK_STORE=file" in r.stderr and "KEIBA_FETCH_AGENT_ENABLED" not in env
 
 
 def test_fetch_ctl_sudoers_allows_only_the_ctl_script():
@@ -257,5 +281,5 @@ def test_fetch_ctl_reports_an_empty_bucket_and_shadow_on_fills_it_from_the_pull_
         return
     r, _ = _ctl(tmp_path / "a", "status", ["GCS_BUCKET="])
     assert "GCS_BUCKET: 空" in r.stdout
-    r, env = _ctl(tmp_path / "b", "shadow-on", ["GCS_BUCKET="])             # systemctl の無い環境なので、その手前までを見る
+    r, env = _ctl(tmp_path / "b", "shadow-on", ["GCS_BUCKET=", "KEIBA_FETCH_TASK_STORE=file"])   # systemctl の無い環境なので、その手前までを見る
     assert "GCS_BUCKET=bucket-from-pull" in env and "KEIBA_FETCH_SHADOW_ENABLED=1" in env

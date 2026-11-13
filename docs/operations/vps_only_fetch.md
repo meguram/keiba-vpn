@@ -35,10 +35,17 @@
    - 11/15: 11/14 の日額を確かめる。温め役の一覧が 1 日 300 回以下かも確かめる。
    - 費用の監査役のセッションも 11/14 に確かめる。
 2. ~~段 4 の後半（週次の後処理）~~ 済み（上）。ホストの cron（`install_host_postprocess_cron.sh`）の登録は段 6 で担当を渡すとき。
-3. **方法 A の最初の root 作業（ユーザー）**: 下の節の手順。実際に入れ替えに使えるのは、6bdcfbeb 以降の取得の配布物が VPS に取り込まれた後。
+3. ~~方法 A の最初の root 作業~~ 済み（2026-11-13 17:11 JST）。入れ替えに使えるのは、6bdcfbeb 以降の取得の配布物が VPS に取り込まれた後（master への昇格の後）。
 4. **段 6（VPS に配備して段階的に渡す）**（2026-11-13 18:3x にユーザー承認。master への昇格（11/14 朝、monitor-cloudrun-handoff が担当）の後に始める）:
    - 配備: 第 1 段・第 2 段のコードを master に昇格する（ユーザーの指示が要る）。release-pull が 03:00〜04:00 に取り込む。
    - 準備: VPS の fetch.env に KEIBA_FETCH_TASK_STORE=file を入れ、fetch-timers（方法 A）と push-vps の timer を入れる。
+     取得役のユニット（keiba-fetch-agent.service。タスク表を file に固定し、設定の誤りの 78 で再起動しない）と fetch_agent_ctl.sh は
+     方法 A の許可リストの外（root 所有）なので、root で入れ替える: `install -m 644 templates/keiba-fetch-agent.service /etc/systemd/system/`・
+     `systemctl daemon-reload`・`systemctl try-restart keiba-fetch-agent`（動いていれば新しいユニットで起動し直す。今は止めてある）・
+     `bash vps_08_fetch_ctl.sh`（fetch_agent_ctl.sh を入れ直す）。vps_03_units.sh --enable-fetch-agent でも同じことをする。
+     コードでも、KEIBA_RUN_LOCATION=vps で gcs のタスク表を作ろうとすると断る（取得役・予約・計画のどの入口でも。src/ops/fetch_task.py の task_store_from_env）。
+     ただし KEIBA_RUN_LOCATION を付けずに VPS で手で動かすと素通りするので、手で動かすときもユニットと同じ環境変数を付ける。shadow-on と vps_03_units.sh は、
+     fetch.env の KEIBA_FETCH_TASK_STORE=file・取得のコードの FileTaskStore・ユニットの file の固定の 3 つがそろわなければ断る（GCS のタスク表に戻さない）。
    - 影モード: `fetch_agent_ctl.sh shadow-on` で 2〜3 日動かし、250MB の枠・件数・エラーを確かめる。
    - 担当を渡す: 軽いものから、`config/fetch_owner.json` の agent_tasks に足していく。
    - ホストの cron: `install_vps_mirror_pull_cron.sh` と `install_host_postprocess_cron.sh` を root で登録する。
@@ -150,6 +157,10 @@
   1 日 36 レース ≒ 18MB × 30 ＝ 540MB → 転送 約 10 円 + 操作 約 1 円 ≒ 月 11 円。
 - 合計で月 約 −130 円（増えない）。どれも対象のレースのファイルだけを読み、全件の一覧はしない。
 
+## 記録だけ（費用は上限内・直していない）
+- 新馬の血統（new-horse-pedigree）は VPS で毎日、出走予定の馬を最大 600 頭、GCS の 5 世代表と血統 HTML の有無で確かめ直す
+  （手元に ped_tbl が無いため、取得済みの馬も毎日読み直す）。最悪 月 約 5 円。気になれば、確かめ済みの馬を VPS の手元に記録して翌日は飛ばす。
+
 ## 取得の網羅で気づいたこと
 - 2026-09-22（祝日開催、24 レース）が、oikiri・paddock・trainer_comment・barometer の 4 カテゴリで同時に GCS に無い（fetch-status-unified-display の調査、2026-11-13）。祝日開催の取りこぼしとみられる。
 
@@ -171,7 +182,7 @@
   1 つでも違えば何もしない。今のファイルは `/var/lib/keiba-ops/backup/<名前>/<時刻>/` に退避し、`rollback <名前>` で戻せる。記録は `/var/log/keiba-ops-install.log`。
   確認は `status [<名前>]`。fetch-timers は入れるだけで有効化しない（有効化は担当を渡すときに別途）。
 - 費用: GCS に触れない（取り込み済みの配布物だけを使う）。配布物が数十 KB 増えるだけで、月 1 円未満。
-- 最初の 1 回だけ root の作業が要る（ユーザー）: develop の 3 ファイル（`scripts/ops/vps/install_ops_files.sh`・`scripts/ops/vps/vps_12_ops_installer.sh`・
+- **最初の root 作業は済み**（2026-11-13 17:11 JST、install_ops_files.sh と sudoers を VPS に導入。sha256 は develop と一致）。手順の記録: develop の 3 ファイル（`scripts/ops/vps/install_ops_files.sh`・`scripts/ops/vps/vps_12_ops_installer.sh`・
   `scripts/ops/vps/templates/sudoers-keiba-ops-install`）を VPS の /tmp に置き、ConoHa のコンソールで root でログインするか `su -` で root になってから
   `bash /tmp/vps_12_ops_installer.sh`（sudoers は visudo -cf で検査してから入る）。確認: `sudo -u deploy sudo -n /opt/keiba-ui/bin/install_ops_files.sh status`。
   外すときは `bash /tmp/vps_12_ops_installer.sh --remove`。

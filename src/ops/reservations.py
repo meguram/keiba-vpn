@@ -185,7 +185,8 @@ def plan_race_day(rows: list[dict[str, Any]], date: str, now: datetime, *, late_
 def reserve_race_day(date: str, storage: Any, queue: FT.TaskQueue, *, now: datetime | None = None, dry_run: bool = False,
                      enqueue_predict: Callable[[dict[str, Any]], str] | None = None, load_schedule: Callable[[Any, str], list[dict[str, Any]]] | None = None,
                      env: dict[str, str] | None = None, build_events: Any = None, owned: set[str] | None = None,
-                     shadow_queue: FT.TaskQueue | None = None, predict_ready: bool = True) -> dict[str, Any]:
+                     shadow_queue: FT.TaskQueue | None = None, predict_ready: bool = True,
+                     predict_skip_reason: str = "predict-race が ready=false") -> dict[str, Any]:
     """``predict_ready=False``（job_map の predict-race が ready=false）なら予測のタスクは積まない。積んでも起動した Job が
     『準備未完了』で何もせずに終わるだけで、開催日 1 日に約 36 回の起動が無駄になる。"""
     now = now or datetime.now(JST)
@@ -209,7 +210,7 @@ def reserve_race_day(date: str, storage: Any, queue: FT.TaskQueue, *, now: datet
         out["shadow"] = enqueue_fetch(shadow_queue, shadow_planned)
     pres: dict[str, Any] = {"created": 0, "exists": 0, "error": 0}
     if not predict_ready:
-        out["predict"] = {**pres, "skipped": len(plan["predicts"]), "reason": "predict-race が ready=false"}
+        out["predict"] = {**pres, "skipped": len(plan["predicts"]), "reason": predict_skip_reason}
         return out
     for p in plan["predicts"]:
         try:
@@ -284,7 +285,9 @@ def main(argv: list[str] | None = None) -> int:
 
         pr = next((j for j in job_map.load()["jobs"] if j["id"] == "predict-race"), {})
         res = reserve_race_day(resolve_date(ns.date), HybridStorage("."), queue, dry_run=ns.dry_run, shadow_queue=shadow_queue,
-                               predict_ready=bool(pr.get("ready")) and not ns.no_predict)
+                               predict_ready=bool(pr.get("ready")) and not ns.no_predict,
+                               predict_skip_reason=("--no-predict（VPS の中で動かす。予測はホストの常駐ランナー）" if ns.no_predict
+                                                    else "predict-race が ready=false"))
     else:
         res = reserve_recurring(queue, horizon_hours=ns.horizon_hours, dry_run=ns.dry_run, shadow_queue=shadow_queue)
     print(json.dumps(res, ensure_ascii=False, default=str))
