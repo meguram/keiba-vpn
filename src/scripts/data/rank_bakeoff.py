@@ -5,6 +5,7 @@ python -m src.scripts.data.rank_bakeoff keys                       # 評価用�
 python -m src.scripts.data.rank_bakeoff member NAME [--seeds 1] [--force] [--smoke]
 
 - 入力は v6e のメンバーと同じ（V6_STAGE=e・V6_TAG=e・V5_GROUPS=CY,BEST,RB を既定にする。v6_members と同じ前処理）。
+  RANK_BASE=2016 なら 2016〜2025 年の土台（retrain_out/base_2016、parent_2016 と同じ向け替え）で回し、出力は base_2016/tp_rank/。
   木のモデルは lgb_extras_ped と同じ列、NN は nn_s と同じ列（追加群は重要度上位 NN_TOP 列）。
 - fold は valid 2022〜2024（年の前進）。test 2025・2026 年は使わない。
 - 出力は data/local/modeling/training_pipeline_v4/tp_rank/oof/NAME.parquet（tp27_v6e/ には書かない）。
@@ -20,16 +21,39 @@ import os
 import time
 from pathlib import Path
 
-os.environ.setdefault("V6_STAGE", "e")
+# RANK_BASE=2016: 2016〜2025 年の土台（retrain_out/base_2016。parent_2016 と同じ向け替え）で回す。出力は BASE/tp_rank。
+BASE_2016 = os.environ.get("RANK_BASE") == "2016"
 os.environ.setdefault("V6_TAG", "e")
 os.environ.setdefault("V5_GROUPS", "CY,BEST,RB")
+if BASE_2016:
+    from src.scripts.data import parent_2016 as _p16
+
+    _p16.prepare()
+    for _k, _v in {"TP_BASE_DIR": _p16.BASE, "TP_WORK": _p16.BASE, "TP25C_OUT": _p16.BASE / "tp25c", "TP25E_OUT": _p16.BASE / "tp25e",
+                   "TP27_FAC_FIELD": _p16.BASE / "factory/field", "V6_OUT": _p16.BASE / "v6", "V5_TP38_OUT": _p16.BASE / "tp38",
+                   "TP27_OUT": _p16.BASE / f"tp27_v6{os.environ['V6_TAG']}"}.items():
+        os.environ[_k] = str(_v)
+    os.environ.pop("V6_STAGE", None)                 # 前段は TP_WORK の oof から読む（parent_2016.main と同じ）
+    from src.scripts.data import rebuild_groups_2016 as _rg
+
+    _rg.redirect()                                   # 読み先の表・fold の学習の始まり（2016 年）を BASE に向ける
+else:
+    os.environ.setdefault("V6_STAGE", "e")
 
 import pandas as pd  # noqa: E402
 
 from src.scripts.data import v6_members  # noqa: E402  （環境変数の設定と作業ディレクトリの差し替え）
 from src.scripts.data import tp27_eval as t27  # noqa: E402
 
-OUT = v6_members.V / "tp_rank"
+if BASE_2016:
+    from src.scripts.data import v5_common as _v5c
+
+    v6_members.OUT = t27.OUT = _p16.BASE / f"tp27_v6{os.environ['V6_TAG']}"
+    os.environ["TP27_OUT"] = str(t27.OUT)            # v6_members の import が本番の tp27_v6e を入れるので戻す
+    _v5c.V = _p16.BASE
+    OUT = _p16.BASE / "tp_rank"
+else:
+    OUT = v6_members.V / "tp_rank"
 KEY = ["race_id", "horse_id"]
 
 # 名前 -> (土台のメンバー, rank_recipes の cfg)

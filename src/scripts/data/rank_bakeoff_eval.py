@@ -1,6 +1,6 @@
 """rank_bakeoff の評価: 並びの指標と、予測 1 番手を買ったときの回収率（4 種類）を、基準（v6e のアンサンブル）と比べる。
 
-python -m src.scripts.data.rank_bakeoff_eval [--years 2022,2023,2024] [--names A1_... ...] [--boot 1000]
+python -m src.scripts.data.rank_bakeoff_eval [--years 2022,2023,2024] [--names A1_... ...] [--boot 1000]   （RANK_BASE=2016 で 2016 年起点の土台）
 
 回収率（ユーザー指定 2026-11-13）:
 - 単勝: 予測 1 番手を 100 円
@@ -19,13 +19,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
-V = ROOT / "data/local/modeling/training_pipeline_v4"
+# RANK_BASE=2016 なら 2016〜2025 年の土台（retrain_out/base_2016）の OOF・基準（段 9 の v6e）を読む
+V = (Path(os.environ.get("REBUILD_BASE") or "/home/jovyan/work/retrain_out/base_2016") if os.environ.get("RANK_BASE") == "2016"
+     else ROOT / "data/local/modeling/training_pipeline_v4")
 RANK = V / "tp_rank"
 BASELINE = {"v6e_ens": V / "tp27_v6e/ens/v6.parquet"}
 V6E_MEMBERS = ["lgb_extras_ped", "xgb_extras_ped", "lgb_extras", "lgb_softmax", "linear", "mtl_nn_extras_ped", "mtl_nn_s"]
