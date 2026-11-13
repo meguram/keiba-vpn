@@ -3,6 +3,8 @@
 使い方: python src/scripts/docs/build_sire_line_hub_html.py [OUT.html]
 タブ:
   1. まとめ … docs/ideas/sire_dam_influence.md（父と母の影響の言語化・結論）
+  2'. 系統・種牡馬の成績表 … 父／母父／母母父／母母母父 × 小系統・大系統・種牡馬 の実データの集計（勝率・回収率・本賞金の概算・位置取り・
+     上がり 3F・距離・馬場・枠順・年齢・間隔・回り・馬体重・走法軸）。集計の対象 3 つを画面で切り替える（data/local/pedigree/sire_line_stats.json）
   2. 父と母の影響 … 形質ごとの寄与（父・母父・母母父・母母母父）、遺伝の割合との比、種牡馬そのもの・4 つとも分かる馬の版、
      LightGBM の重要度、因子分析とクラスタ、向き（上位・下位の小系統）
   3. 小系統の距離配置（走法軸） … MDS の散布図・Ward の樹形図・プロファイルのヒートマップ・近い系統（父として／母父として）
@@ -30,6 +32,32 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 RESULTS = REPO / "data/local/pedigree/sire_dam_influence.json"
+STATS = REPO / "data/local/pedigree/sire_line_stats.json"   # python -m src.research.pedigree.sire_line_stats
+JOB_MAP = REPO / "config/gcp_job_map.json"          # ジョブごとの移行先（destination: gcp / vps / host）と段階（phase）
+FETCH_OWNER = REPO / "config/fetch_owner.json"      # VPS の実行役が実際に担当している取得タスク名（agent_tasks。例: recent-retry）
+JOB_OWNER = REPO / "config/job_owner.json"          # ホストの cron から GCP / VPS に引き継いだジョブ（owners: cron_job_id → gcp | vps | retire）
+PHASES = REPO / "config/migration_phases.json"      # 移行の段階（current_phase。費用の見積もりの段階で、ジョブごとの切り替えの記録ではない）
+PLACE = {"vps": ("VPS", "#2da44e"), "gcp": ("GCP", "#2f6fdf"), "host": ("学習PC", "#8c959f")}
+# このページの材料と、それを作る処理（gcp_job_map のジョブ ID。空は研究用でジョブに載せない処理 = 学習PC に残す）。
+# 4 つ目は目標の上書き（gcp_job_map の destination が host のままでも、計画では移すもの。sire-line は reason に To-Be VPS と記載）
+FLOW = [
+    ("取得", [
+        ("レース結果・通過順・上がり・配当", ["raceday-evening", "weekly-update", "recent-retry-morning"], "netkeiba の結果ページ（開催日夕方の速報・週次の確定・取り直し）", None),
+        ("5 代血統", ["new-horse-pedigree"], "新しく出てきた馬の血統", None),
+        ("ラップ（走法軸の元）", [], "馬ごとのラップの取得（研究用）", None),
+        ("smartrc の系統表", [], "種牡馬の系統の台帳（手動で更新）", None),
+    ]),
+    ("表にする", [
+        ("履歴テーブル（race_result_flat）", ["export-tables-daily"], "取得した結果を年ごとの表にまとめる", None),
+        ("祖先の系統の補完", ["sire-line"], "5 代血統の牡の祖先の系統（定期の血統取得に相伴）", "vps"),
+        ("走法軸（run_axes）", [], "ラップから TS・ギアなどを計算（研究用）", None),
+    ]),
+    ("分析・このページ", [
+        ("父と母の影響・小系統の距離配置", [], "python -m src.research.pedigree.sire_dam_influence", None),
+        ("系統・種牡馬の成績表", [], "python -m src.research.pedigree.sire_line_stats", None),
+        ("このページ", [], "python src/scripts/docs/build_sire_line_hub_html.py", None),
+    ]),
+]
 MASTER = REPO / "data/meta/sire_lines/smartrc_line_master.json"
 EMBEDS = {
     "matrix": REPO / "data/meta/sire_lines/sire_line_course_matrix.html",
@@ -140,6 +168,7 @@ def influence_section(r: dict) -> str:
 y を並べ替えた帰無の平均を引いた正味の値）。棒の薄い帯は父単位のブートストラップの 90% 区間（上への偏りを打ち消す基本区間、0 で切る。点が区間の外に出ることがあり、目安）。
 「帰無内」は、点の値が帰無の 95% 点を超えないもの（帰無は 4 つの系統をまとめて並べ替えたもので、系統どうしの相関があると、効果の無い位置にも分け前が出うる。
 多重比較の補正もしていないので、目安として読む）。
+走法軸（TS・ギアなど）は、2023 年以降の 2 勝クラス以上の走だけで作った値（それより下のクラスの走は使わない）。先行性・上がりの速さ・同じ馬の中の差は、その馬の全レース。
 信頼性は折半法（同じ馬の走を半分に分けて作った形質どうしの一致。系統で説明できる割合の上限の目安）。
 遺伝子の期待の割合は 父 1/2・母父 1/4 なので、分散で見た 父:母父 の期待の比は {exp_ratio:.0f}:1。</p>
 <div class=legend>{"".join(f'<span><i style="background:{POS_COLOR[p]}"></i>{p}</span>' for p in POS)}</div>"""]
@@ -309,7 +338,18 @@ table.inf td.b{min-width:120px}.track{position:relative;display:block;height:12p
 figure{margin:0;overflow-x:auto}figcaption{font-size:12px;color:var(--mut)}svg{width:100%;min-width:560px;height:auto}svg text{font-size:11px;fill:var(--fg)}
 svg.dendro .lk path{fill:none;stroke:var(--mut);stroke-width:1.2}
 iframe.emb{width:100%;height:85vh;border:1px solid var(--line);border-radius:6px;background:#fff}
-textarea.src{display:none}code{background:var(--card);padding:0 3px;border-radius:3px}
+textarea.src{display:none}
+details.flow{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:8px 0;background:var(--card)}details.flow summary{cursor:pointer;font-weight:700}
+.lanes{display:flex;gap:6px;align-items:stretch;margin-top:6px}.lane{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 8px}
+.lane h4{margin:2px 0 4px}.lane ul{list-style:none;margin:0;padding:0}.lane li{padding:4px 0;border-top:1px dashed var(--line)}.lane li:first-child{border-top:0}
+.lane li b{display:block;font-size:13px}.lane li small{display:block}.arr{align-self:center;color:var(--mut);font-size:18px}
+.chips{display:inline-flex;gap:4px;flex-wrap:wrap;margin:2px 0}.chip{display:inline-block;border-radius:10px;padding:0 7px;font-size:11px;color:#fff;background:var(--c);white-space:nowrap}
+@media (max-width:800px){.lanes{flex-direction:column}.arr{transform:rotate(90deg);align-self:center}}
+.stbar{display:flex;flex-wrap:wrap;gap:6px 12px;margin:8px 0}.stbar select,.stbar input{font:inherit;padding:2px 4px;max-width:100%}.stbar input[type=number]{width:5em}
+.sttbl{max-height:75vh;overflow:auto}table.st th,table.st td{white-space:nowrap}table.st td{text-align:right}table.st td.low{color:var(--mut)}
+table.st thead th{position:sticky;top:0;background:var(--card);z-index:1;cursor:pointer}table.st tbody th{position:sticky;left:0;background:var(--bg);z-index:1;max-width:14em;overflow:hidden;text-overflow:ellipsis}
+table.st thead th:first-child{left:0;z-index:2}
+table.st tr.base th,table.st tr.base td{font-weight:700;background:var(--card)}code{background:var(--card);padding:0 3px;border-radius:3px}
 """
 
 JS = """
@@ -332,7 +372,7 @@ JS = """
 })();
 """
 
-TABS = [("summary", "まとめ"), ("influence", "父と母の影響"), ("linemap", "小系統の距離配置"), ("matrix", "成績マトリクス"),
+TABS = [("summary", "まとめ"), ("influence", "父と母の影響"), ("stats", "系統・種牡馬の成績表"), ("linemap", "小系統の距離配置"), ("matrix", "成績マトリクス"),
         ("lines", "系統一覧"), ("euro", "欧州瞬発力の検証"), ("marking", "マーキング")]
 
 
@@ -343,11 +383,137 @@ def embed(path: Path) -> str:
     return f'<p class=meta>元のページ: <code>{E(str(path.relative_to(REPO)))}</code></p><textarea class=src hidden aria-hidden=true>{E(path.read_text(encoding="utf-8"))}</textarea>'
 
 
-def build(results: dict | None, docs: dict[str, str], embeds: dict[str, Path], colors: dict[str, str]) -> str:
+def _load(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def placement(job_id: str | None, jobs: dict, agent_tasks: set, owners: dict, target: str | None = None) -> tuple[str, str]:
+    """(目標の置き場所, いま動いている場所)。研究用（job_id なし）は 学習PC に残す決まり（docs/operations/decoupling_plan.md）。
+    目標: gcp_job_map の destination（target で上書き可）。
+    いま: 切り替えの記録（job_owner.owners[cron_job_id] が gcp / vps）か、取得タスク名（fetch_task.task・extra_tasks）が
+    VPS の実行役の担当表（fetch_owner.agent_tasks）に載っていればそこ。それ以外はホストの cron（学習PC）"""
+    if not job_id:
+        return "host", "host"
+    j = jobs.get(job_id, {})
+    dest = target or j.get("destination") or "host"
+    dest = dest if dest in ("vps", "gcp") else "host"
+    own = owners.get((j.get("origin") or {}).get("cron_job_id") or "")
+    if own in ("gcp", "vps"):
+        return dest, own
+    tasks = {(j.get("fetch_task") or {}).get("task")} | set(j.get("extra_tasks") or [])
+    if tasks & agent_tasks:
+        return dest, "vps"
+    return dest, "host"
+
+
+def chip(kind: str, prefix: str = "") -> str:
+    name, color = PLACE.get(kind, (kind, "#8c959f"))
+    return f'<span class=chip style="--c:{color}">{E(prefix)}{E(name)}</span>'
+
+
+def flow_section(job_map: dict, fetch_owner: dict, phases: dict, job_owner: dict | None = None) -> str:
+    """データの流れ（取得 → 表にする → 分析）と、それぞれの担当の場所（目標といま）。設定ファイルから作る"""
+    jobs = {j.get("id"): j for j in job_map.get("jobs", [])}
+    agent = {str(t) for t in fetch_owner.get("agent_tasks") or []}   # src/ops/fetch_owner.agent_tasks と同じ読み方
+    owners = (job_owner or {}).get("owners") or {}
+    ph = int(phases.get("current_phase", 0) or 0)
+    ph_name = next((x.get("name") for x in phases.get("phases", []) if x.get("id") == ph), "")
+    cols = []
+    for stage, items in FLOW:
+        lis = []
+        for label, ids, note, target in items:
+            pl = [placement(i, jobs, agent, owners, target) for i in ids] or [placement(None, jobs, agent, owners)]
+            nows = list(dict.fromkeys(p[1] for p in pl))
+            tgts = list(dict.fromkeys(p[0] for p in pl))
+            chips_ = "".join(chip(n, "いま ") for n in nows) + "".join(chip(t, "目標 ") for t in tgts if t not in nows)
+            lis.append(f"<li><b>{E(label)}</b><span class=chips>{chips_}</span>"
+                       f"<small>{E(note)}{'（ジョブ ' + E(', '.join(ids)) + '）' if ids else ''}</small></li>")
+        cols.append(f"<div class=lane><h4>{E(stage)}</h4><ul>{''.join(lis)}</ul></div>")
+    arrows = '<div class=arr aria-hidden=true>→</div>'
+    return f"""<details class=flow open><summary>データの流れと担当の場所（移行の段階 {ph}: {E(ph_name)}）</summary>
+<div class=lanes>{arrows.join(cols)}</div>
+<p class=meta>{chip("vps")} 取得の実行役（固定 IP）　{chip("gcp")} 公開用の重い集計（Cloud Run Jobs）　{chip("host")} 研究と、移行前の処理（ホスト PC）。
+「いま」は今動いている場所（切り替えの記録 config/job_owner.json と、VPS の担当表 config/fetch_owner.json から）、「目標」は移行先（config/gcp_job_map.json。いまと違うときだけ）。
+研究用の分析とこのページは、設計上 学習PC に残す。</p></details>"""
+
+
+def stats_section(st: dict | None) -> str:
+    """成績表のタブ。データは JSON のまま埋め込み、表は画面の JS で作る（選択・並べ替え・絞り込み）"""
+    if not st:
+        return "<p>未計算です（<code>python -m src.research.pedigree.sire_line_stats</code> で作ってから、このページを作り直してください）。</p>"
+    data = json.dumps(st, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")   # </script> で切れないように
+    opt = lambda d: "".join(f'<option value="{E(k)}">{E(v)}</option>' for k, v in d.items())   # noqa: E731
+    n = st.get("n", {})
+    return f"""<p>実データ（2016〜2026 の平地、着順あり・5 頭以上）を、父・母方の系統または種牡馬ごとに集計した表（計算 {E(st.get('built', '—'))}）。
+集計の対象: 全馬の全レース（{n.get('all', {}).get('horses', 0):,} 頭・{n.get('all', {}).get('runs', 0):,} 走）／2勝クラス以上を走った馬の全レース（{n.get('top_h', {}).get('horses', 0):,} 頭）／
+2勝クラス以上のレースだけ（{n.get('top_r', {}).get('runs', 0):,} 走）。載せるのは、その対象で {st.get('min_horses', 30)} 頭以上の群（種牡馬はさらに {st.get('min_runs_sire', 100)} 走以上）。</p>
+<p class=note>読み方: 率は「その条件の走だけ」の値（例: 芝の複勝率 = 芝の走の複勝率）。色は全体の値（表の 1 行目）との差で、赤 = 高い・青 = 低い。
+その値に使った走数が 50 未満のセルは ※ を付けて薄くした（セルに指を置くと走数）。本賞金は、手元に賞金の列が無いため、クラス × 着順（1〜5 着）の概算表から推定した（重賞のレースごとの差は入らない）。
+走法軸は、どの対象でも 2023 年以降の 2 勝クラス以上の走だけで、芝ダ × 距離帯 × 会場 × クラスの中で標準化した値（0 = 平均）。
+1 頭あたりの累計本賞金と、2勝・OP・重賞への到達の割合は、2016〜2026 の期間の中だけで数える（2016 年より前から走る馬・2025 年以降にデビューした馬は経歴が途中で切れるので、
+古い種牡馬・新しい種牡馬ほど低く出る）。
+「2勝クラス以上を走った馬の全レース」は、後から 2 勝クラスに上がった馬を選んでいるので、勝率・回収率が高めに出る（後知恵の偏り）。回収率は「2勝クラス以上のレースだけ」か「全馬」で見ること。</p>
+<div class=stbar>
+<label>対象 <select data-k=pop>{opt(st['pops'])}</select></label>
+<label>位置 <select data-k=pos>{opt({p: p for p in st['positions']})}</select></label>
+<label>粒度 <select data-k=gran>{opt(st['grans'])}</select></label>
+<label>指標 <select data-k=grp>{opt({g: g for g in st['groups']})}</select></label>
+<label>名前 <input data-k=q type=search placeholder="例: ディープ"></label>
+<label>最少頭数 <input data-k=minh type=number min=0 step=10 value={st.get('min_horses', 30)}></label>
+</div>
+<p class=meta data-k=cnt></p>
+<div class="scroll sttbl"><table class="small st"><thead></thead><tbody></tbody></table></div>
+<script type="application/json" id="slh-stats">{data}</script>"""
+
+
+STATS_JS = """
+(function(){
+  var el=document.getElementById('slh-stats'); if(!el) return;
+  var S=JSON.parse(el.textContent), sec=el.closest('section'), st={pop:'all',pos:'父',gran:'小',grp:S.groups[0],q:'',minh:S.min_horses,sort:null,dir:-1};
+  var keys=S.metrics.map(function(m){return m.key;}), M={}; S.metrics.forEach(function(m,i){M[m.key]=m; m.i=i;});
+  function fmt(v,f){ if(v===null||v===undefined) return '—';
+    if(f==='pct') return (v*100).toFixed(1)+'%'; if(f==='man') return Math.round(v).toLocaleString()+'万';
+    if(f==='sec'||f==='z') return (v>0?'+':'')+v.toFixed(2); if(Math.abs(v)>=100) return Math.round(v).toLocaleString(); return v.toFixed(3); }
+  function esc(t){ return String(t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function render(){
+    var cols=S.metrics.filter(function(m){return m.group===st.grp;});
+    var all=S.overall[st.pop], rows=(((S.data[st.pop]||{})[st.pos]||{})[st.gran]||[]).filter(function(r){
+      return r[1]>=st.minh && (!st.q || r[0].toLowerCase().indexOf(st.q.toLowerCase())>=0); });
+    if(st.sort!==null){ rows=rows.slice().sort(function(a,b){
+      var x=st.sort<0?(st.sort===-1?a[1]:a[2]):a[3][st.sort], y=st.sort<0?(st.sort===-1?b[1]:b[2]):b[3][st.sort];
+      if(x===null&&y===null) return 0; if(x===null) return 1; if(y===null) return -1; return st.dir*(x-y); }); }
+    // 色の幅: 列ごとに、全体との差の最大（上位 95% 点相当で切る）
+    var span={}; cols.forEach(function(m){ var d=rows.map(function(r){return r[3][m.i]===null?0:Math.abs(r[3][m.i]-all[3][m.i]);}).sort(function(a,b){return a-b;});
+      span[m.key]=d.length?(d[Math.floor(d.length*0.95)]||d[d.length-1]||1e-9):1e-9; });
+    function cell(r,m,base){ var v=r[3][m.i], n=r[4][m.i], low=n<50, c='';
+      if(!base && v!==null){ var z=Math.max(-1,Math.min(1,(v-all[3][m.i])/span[m.key])); c=z>=0?'rgba(220,60,40,'+(z*0.5*(low?0.4:1)).toFixed(2)+')':'rgba(40,100,220,'+(-z*0.5*(low?0.4:1)).toFixed(2)+')'; }
+      return '<td title="'+esc(m.label)+'：'+n.toLocaleString()+(m.key.indexOf('h_')===0||m.key==='ax_TS上限'?' 頭':' 走')+'" style="background:'+c+'"'+(low?' class=low':'')+'>'+fmt(v,m.fmt)+(low&&!base?'※':'')+'</td>'; }
+    var arrow=function(k){ return st.sort===k?(st.dir<0?' ▼':' ▲'):''; };
+    sec.querySelector('table.st thead').innerHTML='<tr><th>名前</th><th data-s=-1>頭数'+arrow(-1)+'</th><th data-s=-2>走数'+arrow(-2)+'</th>'+
+      cols.map(function(m){return '<th data-s='+m.i+'>'+esc(m.label)+arrow(m.i)+'</th>';}).join('')+'</tr>';
+    sec.querySelector('table.st tbody').innerHTML='<tr class=base><th>全体</th><td>'+all[1].toLocaleString()+'</td><td>'+all[2].toLocaleString()+'</td>'+cols.map(function(m){return cell(all,m,true);}).join('')+'</tr>'+
+      rows.map(function(r){return '<tr><th title="'+esc(r[0])+'">'+esc(r[0])+'</th><td>'+r[1].toLocaleString()+'</td><td>'+r[2].toLocaleString()+'</td>'+cols.map(function(m){return cell(r,m,false);}).join('')+'</tr>';}).join('');
+    sec.querySelector('[data-k=cnt]').textContent=rows.length+' 群（'+S.pops[st.pop]+'・'+st.pos+'・'+S.grans[st.gran]+'）';
+  }
+  sec.querySelectorAll('.stbar [data-k]').forEach(function(x){ x.addEventListener(x.tagName==='INPUT'?'input':'change', function(){
+    var k=x.dataset.k; st[k]= k==='minh' ? (parseInt(x.value,10)||0) : x.value; if(k==='grp') st.sort=null; render(); }); });
+  sec.querySelector('table.st thead').addEventListener('click', function(ev){ var th=ev.target.closest('th[data-s]'); if(!th) return;
+    var k=parseInt(th.dataset.s,10); if(st.sort===k){ if(st.dir<0) st.dir=1; else { st.sort=null; st.dir=-1; } } else { st.sort=k; st.dir=-1; } render(); });
+  render();
+})();
+"""
+
+
+def build(results: dict | None, docs: dict[str, str], embeds: dict[str, Path], colors: dict[str, str], stats: dict | None = None,
+          flow: str = "") -> str:
     missing = "<p>未計算です（<code>python -m src.research.pedigree.sire_dam_influence</code> で作ってから、このページを作り直してください）。</p>"
     body = {
         "summary": md_to_html(docs.get("summary", "")) or "<p>まとめの文書がありません。</p>",
         "influence": influence_section(results) if results else missing,
+        "stats": stats_section(stats),
         "linemap": linemap_section(results, colors) if results else missing,
         "matrix": embed(embeds["matrix"]), "lines": embed(embeds["lines"]),
         "euro": md_to_html(docs.get("euro", "")) or "<p>文書がありません。</p>", "marking": embed(embeds["marking"]),
@@ -358,16 +524,18 @@ def build(results: dict | None, docs: dict[str, str], embeds: dict[str, Path], c
     return f"""<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>種牡馬系統の分析</title><style>{CSS}</style></head><body><main id=slh>
 <h1>種牡馬系統の分析</h1><p class=meta>作成 {datetime.now(JST).strftime("%Y-%m-%d %H:%M")}（分析の計算 {E(built)}）。父・母側の系統の影響、小系統の近さ、系統 × 舞台の成績、系統一覧、欧州瞬発力の検証を 1 枚にまとめたページ。</p>
-<nav class=tabs>{nav}</nav>{secs}</main><script>{JS}</script></body></html>
+{flow}<nav class=tabs>{nav}</nav>{secs}</main><script>{JS}{STATS_JS}</script></body></html>
 """
 
 
 def main() -> None:
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else OUT
     results = json.loads(RESULTS.read_text(encoding="utf-8")) if RESULTS.exists() else None
+    stats = json.loads(STATS.read_text(encoding="utf-8")) if STATS.exists() else None
     docs = {k: p.read_text(encoding="utf-8") for k, p in DOCS.items() if p.exists()}
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(build(results, docs, EMBEDS, large_colors()), encoding="utf-8")
+    flow = flow_section(_load(JOB_MAP), _load(FETCH_OWNER), _load(PHASES), _load(JOB_OWNER))
+    out.write_text(build(results, docs, EMBEDS, large_colors(), stats, flow), encoding="utf-8")
     print(json.dumps({"results": bool(results), "out": str(out), "bytes": out.stat().st_size}, ensure_ascii=False))
 
 

@@ -117,3 +117,18 @@ def test_line_map_nearest_and_dendrogram():
     assert e["near"]["L1"][0][0] == "L2" and e["near"]["L3"][0][0] == "L4"
     assert sorted(e["dendro_order"]) == sorted(e["lines"]) and len(e["linkage"]) == 3
     assert set(e["xy"]) == set(e["lines"])
+
+
+def test_axis_traits_uses_only_given_classes():
+    """走法軸は 2 勝クラス以上の走だけ。1 勝クラスの走は、値が極端でも馬の平均に入らない"""
+    runs = pd.DataFrame({"race_id": [f"r{i}" for i in range(8)], "horse_id": ["h"] * 4 + ["g"] * 4,
+                         "grade": ["2勝", "2勝", "2勝", "1勝", "2勝", "2勝", "2勝", "1勝"]})   # 1 勝の走は 2 つ（1 つだと標準化で NaN になる）
+    ax = pd.DataFrame({"race_id": runs.race_id, "horse_id": runs.horse_id, "surface": "芝", "distance": 1600, "venue": "東京",
+                       **{c: [1.0, 1.0, 1.0, 99.0, 0.0, 0.0, 0.0, 0.0] for c in S.AXIS_NAMES}})
+    f = S.axis_traits(ax, runs, min_runs=3)
+    assert f.loc["h", "TS"] > 0 and f.loc["g", "TS"] < 0
+    keep = runs.grade != "1勝"   # 1 勝の走を最初から除いた表で、クラスを絞らずに計算したものと一致する
+    f_ref = S.axis_traits(ax[keep.to_numpy()], runs[keep], min_runs=3, classes=None)
+    pd.testing.assert_frame_equal(f, f_ref)
+    f_all = S.axis_traits(ax, runs, min_runs=3, classes=None)
+    assert f_all.loc["h", "TS"] != pytest.approx(f.loc["h", "TS"])

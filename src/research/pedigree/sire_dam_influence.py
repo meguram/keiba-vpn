@@ -4,7 +4,8 @@
 形質（1 頭 1 行）:
   - 同じ馬の中の差（適性）: 芝ダ・芝/ダの距離の傾き・芝/ダの道悪・回り・急坂・成長。成績はクラス内の相対着順（adj）。経験ベイズで 0 に縮める。
   - 水準（脚質）: 先行性（初角の位置）・上がりの速さ（上がり 3F のレース内順位）。
-  - 走法軸（2023〜。run_axes.parquet）: 芝ダ × 距離帯 × 会場 × クラスの中で標準化した値の馬の平均と、TS上限（上位 2 走の平均）。
+  - 走法軸（2023〜。run_axes.parquet）: 2 勝クラス以上の走だけを使い、芝ダ × 距離帯 × 会場 × クラスの中で標準化した値の馬の平均と、
+    TS上限（上位 2 走の平均）。3 走以上の馬だけ。先行性・上がりの速さ・同じ馬の中の差は、その馬の全レースで計算する。
   - 出走の配分（参考）: 芝の出走割合・平均の距離（調教師の選択で決まる面がある）。
 血統: 5 代血統の (1,0)=父・(2,2)=母父・(3,6)=母母父・(4,14)=母母母父 を smartrc の小系統に。表に無い古い種牡馬は、父系をさかのぼって
 最初に表にある祖先の系統、それも無ければ息子（種牡馬）の系統の多数決（割れたら大系統の名前）で補う。
@@ -31,6 +32,7 @@ for _v in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "LOKY_M
 
 import argparse  # noqa: E402
 import json  # noqa: E402
+import re  # noqa: E402
 import sys  # noqa: E402
 import warnings  # noqa: E402
 from collections import Counter  # noqa: E402
@@ -142,14 +144,18 @@ def slope(runs: pd.DataFrame, mask, name: str, min_n: int = 4) -> pd.Series:
     return shrink(b, v).rename(name)
 
 
-def axis_traits(axes: pd.DataFrame, runs: pd.DataFrame, min_runs: int = 3) -> pd.DataFrame:
-    """走法軸を 芝ダ × 距離帯 × 会場 × クラス の中で標準化し、馬の平均と TS上限（上位 2 走）。min_runs 走未満の馬は NaN"""
+def axis_traits(axes: pd.DataFrame, runs: pd.DataFrame, min_runs: int = 3, classes=TOP) -> pd.DataFrame:
+    """走法軸を 芝ダ × 距離帯 × 会場 × クラス の中で標準化し、馬の平均と TS上限（上位 2 走）。min_runs 走未満の馬は NaN。
+    使う走は classes のクラスだけ（既定は 2 勝クラス以上。それより下のクラスの走はノイズが多い、2026-11-13 ユーザー指示）。
+    標準化もその走の中で行う"""
     ax = axes.copy()
     ax["horse_id"] = ax.horse_id.astype(str)
     ax["race_id"] = ax.race_id.astype(str)
     if "abn" in ax:
         ax = ax[ax.abn != True]  # noqa: E712
     ax = ax.merge(runs[["race_id", "horse_id", "grade"]], on=["race_id", "horse_id"], how="inner")
+    if classes is not None:
+        ax = ax[ax.grade.isin(set(classes))]
     ax["dband"] = pd.cut(ax.distance, [0, 1400, 1800, 2200, 4000], labels=False)
     key = [ax.surface, ax.dband, ax.venue, ax.grade]
     for c in AXIS_NAMES:
@@ -263,6 +269,7 @@ def pedigree_lines(horse_ids, peds_all: dict | None = None) -> pd.DataFrame:
             a = anc.get(gp) if anc else None
             v, how = classify(a.get("horse_id")) if a else (None, None)
             r[k + "_id"] = a.get("horse_id") if a else None
+            r[k + "_name"] = re.sub(r"[\s\xa0]+", " ", a.get("name") or "").strip() if a else None
             r[k + "_小"], r[k + "_大"], r[k + "_国"] = v if v else (None, None, None)
             r[k + "_how"] = how.split("（")[0] if how else None
             r[k + "_how_detail"] = how
@@ -543,6 +550,13 @@ def run(fast: bool = False, out: Path = OUT) -> dict:
         vc = Fi[c].value_counts()
         Fi.loc[Fi[c].isin(vc[vc < 20].index), c] = "その他"
     res["A_stallion"] = {t: influence(df[t], Fi, None, nperm, 0, rng) for t in TRAITS}
+    # 補完の影響の確認: 母父の系統が表（またはその父系）から分かる馬だけで、父・母父の 2 つの寄与
+    ok = df["母父_how"].isin(["表", "父系をさかのぼり"])
+    rb = {"n": int(ok.sum()), "traits": {}}
+    for t in ["上がりの速さ", "先行性", "出脚", "TS", "TS上限（上位2走）", "ギア", "Hペース耐性", "芝の出走割合", "平均の距離"]:
+        r_ = influence(df.loc[ok, t], F.loc[ok, ["父", "母父"]], None, nperm, 0, rng)
+        rb["traits"][t] = {"n": r_["n"], "net": r_["net"], "null95": r_["null95"], "shapley": r_["shapley"]}
+    res["robust_table_only"] = rb
     print("C LightGBM", file=sys.stderr)
     try:
         res["C_lgb"] = lgb_importance(df, F, rng)
