@@ -224,6 +224,47 @@ def cmd_ens(a) -> None:
     _log(f"{name} vs v6e: " + str({k: (round(v, 5) if isinstance(v, float) else v) for k, v in cmp.items()}))
 
 
+def cmd_test2025(a) -> None:
+    """2025 年（test）を 1 回だけ予測する。学習は 2024-12-22 より前（v6e の fit_final_v6 --fit-end 2024 と同じく 10 日空ける）、seed は 0〜(n-1) の平均。
+    出力 tp_rank/test2025/NAME.parquet。作り直さない（選択に使わない 1 回きりの確認）。基準は final_eval_v6e16/test2025_predictions.parquet。"""
+    import numpy as np
+
+    from src.pipeline.models import rank_recipes
+    from src.pipeline.models import win_models as wm
+
+    if not BASE_2016:                                # 基準（final_eval_v6e16）は 2016 年起点の土台にしかない。1 回きりの出力を別の土台に書かない
+        raise SystemExit("test2025 は RANK_BASE=2016 で回す")
+    out = OUT / "test2025" / f"{a.name}.parquet"
+    if out.exists():
+        raise SystemExit(f"{out} は作成済み（2025 年は 1 回きり。作り直さない）")
+    base, cfg = CONFIGS[a.name]
+    df, meta, folds, params, X = _inputs(base, cfg["model"] == "nn")
+    params = {} if cfg["model"] == "nn" else dict(params)
+    params.pop("rk", None)
+    dates = pd.to_datetime(meta["date"])
+    fin = meta["finish_position"].to_numpy()
+    tr = np.flatnonzero(dates < pd.Timestamp("2025-01-01") - pd.Timedelta(days=10))
+    va = np.flatnonzero((meta["year"].to_numpy() == 2025) & np.isfinite(fin.astype(float)))
+    race = meta["race_id"].to_numpy()
+    ytr = {"win": (fin[tr] == 1).astype(int), "top2": (fin[tr] <= 2).astype(int), "top3": (fin[tr] <= 3).astype(int), "finish": fin[tr]}
+    t27._wait_for_load()
+    t0 = time.time()
+    win = np.zeros(len(va))
+    for seed in range(a.seeds):
+        o = rank_recipes.fit_predict(cfg, X.iloc[tr], ytr, race[tr], X.iloc[va], race[va], t27.THREADS, seed=seed, params=params)
+        win += wm.normalize_to_total(race[va], o["win"], 1.0)
+        _log(f"{a.name} seed {seed} 済み（{time.time() - t0:.0f}s）")
+    P = meta.iloc[va][KEY + ["year"]].copy().reset_index(drop=True)
+    P["p_win"] = win / a.seeds
+    P["p_top2"] = np.nan                               # 順位の比較だけに使う（確率としては使わない）
+    P["p_top3"] = np.nan
+    out.parent.mkdir(parents=True, exist_ok=True)
+    P.to_parquet(out, index=False)
+    (out.with_suffix(".json")).write_text(json.dumps({"name": a.name, "cfg": cfg, "seeds": a.seeds, "train_rows": int(len(tr)), "test_rows": int(len(va)),
+                                                      "seconds": round(time.time() - t0)}, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+    _log(f"{a.name}: test 2025 {len(va)} 行（学習 {len(tr)} 行）→ {out}")
+
+
 def cmd_keys(_a) -> None:
     """評価用の鍵: race_id・horse_id・馬番・着順・年（全行）。"""
     from src.pipeline.models import tp05_data
@@ -251,6 +292,9 @@ def main() -> None:
     e = sp.add_parser("ens", help="2 段目 (a): v6e の 7 メンバー + 候補 1 つの LOYO アンサンブル（出力 tp_rank/ens/）")
     e.add_argument("--add", default="", help="足す候補の名前（tp_rank/<sub>/<名前>.parquet）。省くと v6e の作り直しだけ")
     e.add_argument("--sub", default="oof_s3", help="oof_s3（3 seed）。調整の変種（seed 0 だけ）は oof")
+    t = sp.add_parser("test2025", help="2025 年を 1 回だけ予測（2024-12-22 より前で学習、seed 平均）。出力 tp_rank/test2025/")
+    t.add_argument("name", choices=sorted(CONFIGS))
+    t.add_argument("--seeds", type=int, default=3)
     c = sp.add_parser("combine", help="oof/NAME（seed 0）と oof_seeds/NAME__seedN を平均して oof_s3/NAME にする")
     c.add_argument("name", choices=sorted(CONFIGS))
     c.add_argument("--seeds", default="1,2")
@@ -260,6 +304,8 @@ def main() -> None:
             print(n, b, c)
     elif a.cmd == "ens":
         cmd_ens(a)
+    elif a.cmd == "test2025":
+        cmd_test2025(a)
     elif a.cmd == "combine":
         cmd_combine(a)
     elif a.cmd == "keys":

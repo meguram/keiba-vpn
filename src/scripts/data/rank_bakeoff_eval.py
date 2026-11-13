@@ -149,6 +149,12 @@ def matched_ref(name: str) -> str | None:
 
 
 def candidates(names: list[str] | None, sub: str = "oof") -> dict[str, Path]:
+    if sub == "test2025":                            # 2025 年の 1 回きりの確認: 基準は v6e の test 2025 の予測（2024 年までで学習）。単体メンバーは無い
+        c = {"v6e_ens": V / "final_eval_v6e16/test2025_predictions.parquet"}
+        for p in sorted((RANK / sub).glob("*.parquet")):
+            c[p.stem] = p
+        keep = (set(names) | {"v6e_ens"} | {matched_ref(n) for n in names}) if names else None
+        return {k: v for k, v in c.items() if keep is None or k in keep}
     c = dict(BASELINE)
     for m in V6E_MEMBERS:
         p = V / "tp27_v6e/oof" / f"{m}__v4.parquet"
@@ -170,7 +176,7 @@ def main() -> None:
     ap.add_argument("--boot", type=int, default=1000)
     ap.add_argument("--sub", default="oof", help="tp_rank の下の oof / smoke")
     a = ap.parse_args()
-    years = {int(y) for y in a.years.split(",")}
+    years = {2025} if a.sub == "test2025" else {int(y) for y in a.years.split(",")}   # test2025 は 2025 年だけ
     keys = pd.read_parquet(RANK / "keys.parquet")
     keys = keys[keys["year"].isin(years)]
     pay = load_payoff()
