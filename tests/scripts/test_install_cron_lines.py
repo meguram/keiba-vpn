@@ -33,7 +33,7 @@ if [ "$1" = "-l" ]; then
   [ -f {store} ] || {{ echo "no crontab for test" >&2; exit 1; }}
   cat {store}; exit 0
 fi
-cp "$1" {store}
+if [ "$1" = "-" ]; then cat > {store}; else cp "$1" {store}; fi
 """)
     fake.chmod(0o755)
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "KEIBA_CRON_BACKUP_DIR": str(tmp_path / "bk")}
@@ -125,3 +125,40 @@ def test_safe_installers_refuse_a_suspiciously_small_crontab(tmp_path):
     store, env = _fake_crontab(tmp_path, "1 1 * * * echo only # OTHER\n")
     r = _run("install_vps_alive_cron.sh", {**env, "KEIBA_CRON_ALLOW_NONROOT": "1"})
     assert r.returncode != 0 and store.read_text() == "1 1 * * * echo only # OTHER\n"
+
+
+def test_setup_all_cron_stops_when_listing_fails_and_dedupes_headers(tmp_path):
+    """setup_all_cron.sh: crontab -l が失敗したら止まる。見出しのブロック（タグの無い行）が install のたびに重ならない（2026-11-13 に 6 回分重なっていた）。"""
+    header = ("# keiba-vpn 全自動スクレイピング cron (setup_all_cron.sh で管理)\n"
+              "PATH=/opt/conda/bin:/usr/local/bin:/usr/bin:/bin\n")
+    content = FILLER + header * 3
+    store, env = _fake_crontab(tmp_path / "fail", content)
+    r = subprocess.run(["bash", str(CRON / "setup_all_cron.sh"), "install"], env={**env, "FAKE_CRONTAB_FAIL": "1"},
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode != 0 and store.read_text() == content
+    store, env = _fake_crontab(tmp_path / "ok", content)
+    r = subprocess.run(["bash", str(CRON / "setup_all_cron.sh"), "install"], env=env, capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stdout + r.stderr
+    new = store.read_text()
+    assert new.count("# keiba-vpn 全自動スクレイピング cron") == 1
+    # PATH= は消さない（先頭の PATH= を消すと、その後の行のジョブが既定の PATH で動く）。重なりは dedupe_setup_all_headers.sh で
+    assert new.count("PATH=/opt/conda") == 3 + 1           # 既存の 3 行は残し、新しいブロックの 1 行が足される
+    assert new.count("# OTHER") == 25
+
+
+def test_dedupe_headers_keeps_every_job_and_one_header(tmp_path):
+    header = ("# keiba-vpn 全自動スクレイピング cron (setup_all_cron.sh で管理)\n"
+              "PATH=/opt/conda/bin:/usr/local/bin:/usr/bin:/bin\n")
+    content = header + FILLER + header + header
+    store, env = _fake_crontab(tmp_path, content)
+    env = {**env, "KEIBA_CRON_ALLOW_NONROOT": "1"}
+    r = subprocess.run(["bash", str(CRON / "dedupe_setup_all_headers.sh")], env=env, capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stdout + r.stderr
+    new = store.read_text()
+    assert new.count("# keiba-vpn 全自動スクレイピング cron") == 1 and new.count("PATH=/opt/conda") == 1 and new.count("# OTHER") == 25
+
+
+def test_verify_past_values_cron_is_daily_and_wrapped():
+    text = (CRON / "install_verify_past_values_cron.sh").read_text(encoding="utf-8")
+    line = re.search(r'^LINES="([^\n]+)"$', text, re.M).group(1)
+    assert line.startswith("25 19 * * * ") and "cron_run.sh" in line and "verify-past-values" in line

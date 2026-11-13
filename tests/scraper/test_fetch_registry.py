@@ -26,6 +26,7 @@ NON_FETCH_MODULES = {
     "src.scripts.data.drift_dump_features", "src.scripts.data.drift_monitor", "src.scripts.data.etl_stg_db",
     "src.scripts.data.update_run_axes",   # GCS の horse_lap を名前で読むだけ（netkeiba へは取りに行かない）
     "src.scripts.data.update_serving_state",   # 保存済みの出馬表・成績を読んで v4 の日次状態を作るだけ（netkeiba へは取りに行かない）
+    "src.scripts.data.verify_past_values",   # 保存済みの race_result を名前で読んで値を検査するだけ（netkeiba へは取りに行かない）
     "src.scripts.data.frozen_tracking", "src.scripts.data.make_dev_mock", "src.scripts.data.odds_sec77_backfill",
     "src.scripts.data.precompute_race_analysis", "src.scripts.data.prediction_results", "src.scripts.data.pre_odds_table",
     "src.scripts.data.scrape_status_notify", "src.scripts.data.sync_horse_result_cache", "src.scripts.data.tp55_backfill",

@@ -36,6 +36,7 @@
     "serving-state-precompute": {"role": "ops_required", "target": "gcp", "note": "2026-11-13: ホストの馬体重ランナー（v6）が開催日の朝に使う v4_day.parquet を作る。GCP の day-prep が止まっている間の肩代わり。予測が GCP/VPS へ移るときに day-prep へ戻す"},
     "serving-state-profile": {"role": "ops_required", "target": "gcp", "note": "2026-11-13: 要否を確認中（precompute が不足分を補うので不要の見込み）。11/14・15 のランナーのログで判断"},
     "cost-guard": {"role": "ops_required", "target": "gcp", "note": "2026-11-13 追記: GCP の課金の歯止め。ホストの cron で 1 日 2 回。ホストを研究専用にするときは GCP 側（Scheduler + Job）へ移す"},
+    "vps-alive": {"role": "ops_required", "target": "gcp", "note": "2026-11-13 追記: VPS 全体の停止の検知（ホストの cron、15 分おき、GCS 0 円）。ホストを研究専用にするときは、VPS の外の監視（GCP の Cloud Monitoring の稼働時間チェックなど）へ移す"},
     "cron-catchup": {"role": "research_only", "note": "2026-11-13 追記: ホスト自身の cron の取りこぼしを補う仕組み。ホストの cron に付随するので、運用経路には含めない"},
     "sire-line": {"role": "ops_required", "target": "vps", "note": "棚卸し #24。5 世代血統の牡の祖先の系統。日々は定期バッチに相伴、過去分の一括補完は VPS 実行役の低優先度タスクへ(K6 のコードと台帳の GCS 化は 2026-10-29 に完了。切替は実行役が影モードを抜けた後)"}
   }

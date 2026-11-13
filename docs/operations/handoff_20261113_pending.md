@@ -1,89 +1,77 @@
-# 2026-11-13 の持ち越し: 用意済みの変更と適用の手順（一覧 0・cron の修正・job_map）
+# 2026-11-13 の持ち越し（夜の作業の結果・残りの作業）
 
-ユーザーの指示で、今日の作業は 18:00 JST で締めた。週次（18:00〜）の後に予定していた commit と crontab の変更は、11/14 に行う。
+11/13 の夜に、バックグラウンドのセッションが引き継いで進めた（統括役の判断。ユーザーは不在で、推奨案で進めてよいと承認済み）。
+残りは **④ root の crontab の変更（ユーザーの作業）** と、下の「次にやること」。
 
-## 用意した変更の場所
-どちらも、2026-11-13 17:10 時点の develop（de3d68ca）に `git apply --check` で当たることを確かめてある。
-
-| 変更 | 置き場（ホスト。消えない） | 作業用の写し（/tmp。再起動で消えうる） |
+## 済んだこと（commit と CI）
+| 内容 | commit | CI |
 |---|---|---|
-| ① 毎朝の書き出しの GCS 全件一覧を 0 にする | `data/local/meta/pending_patches/20261113/nolist.patch` | scratchpad の `repo/`（`/tmp/claude-1000/-home-jovyan-work-keiba-vpn/0545e650-9e50-4b8a-a970-9ef25b037940/scratchpad/repo`） |
-| ② ホストの cron の修正（共通ログインの時刻・sporthorse を外す・serving-state のタグ） | `data/local/meta/pending_patches/20261113/cron.patch` | 同上 |
-| ③ job_map を crontab の実態に合わせる | `data/local/meta/pending_patches/20261113/apply_jobmap.py`（今の `config/gcp_job_map.json` に差分だけを当てるスクリプト。冪等） | `scratchpad/apply_jobmap.py` |
+| ① 11/13 の週次の結果: rc=0（18:47）。めぐ指数の 10/31・11/01・11/07・11/08 は 4 日とも埋まった（race_result_flat に対する割合 1.0） | — | — |
+| ② 毎朝の書き出しの GCS の全件一覧を 0 にした（本体 6 カテゴリ＋付随 7 カテゴリ、parse_drift_docs） | 3fcb2a2b | 緑 |
+| ③ cron の登録スクリプト（共通ログインの時刻・sporthorse の外し方・serving-state のタグ）、job_map・一覧の HTML | 7c4a8adb | 緑 |
+| ⑤ 毎晩の PG 同期の GCS の全件一覧をやめた | c03b86f7 | 緑 |
+| 消した Cloud Scheduler 13 件を、master への昇格で作り直さない（job_map のグループに retired） | 7e1cc81f | 緑 |
+| verify_past_values の全件一覧をやめた（対象はローカルの flat、基準は保存、読む件数の上限） | 280a6ab0 | 緑 |
+| 開催日の後処理（馬場速度）の race_result の全件一覧をやめた | 4d424c7a | 見届け中 |
+| 週次の odds_drift の全件一覧と全文書の読み出しをやめた | 8fe68f44 | 見届け中 |
+| cron の登録スクリプトの安全な入れ替えを共通の関数に（scripts/cron/lib_crontab.sh。今日の 3 本） | f7edd68d | 見届け中 |
+| setup_all_cron.sh の remove_all の修正、見出しの重なりを消す・verify の cron を入れ直すスクリプト、job_map の細かい点、docs の状態 | この docs の commit と同じ | — |
 
-- 計画は `/home/jovyan/.claude-jovyan/plans/polymorphic-frolicking-flame.md`（②③）。①の中身は `docs/operations/flat_gaps_20261112.md` §6（パッチに含まれる）に書いた。
-- critic の確認は済んでいる（①は 3 往復、②③は 1 往復で、指摘はすべて反映済み）。
+## ④ root の crontab の変更（未実施・ユーザーの作業）
+2026-11-13 夜に `sudo bash scripts/cron/install_shared_login_cron.sh` を、Claude Code の権限の確認（auto mode。Destructive or Unwanted Actions）が止めた。回り込まずに止めた。
+ユーザーが次を順に実行する。どのスクリプトも、変える前の crontab を `data/local/meta/cron_backups/` に退避し、次の場合は中止する（中止したら何も変わらない）。
+- root でない。
+- crontab -l が失敗した。
+- 有効な行が少なすぎる。
+- 行数が合わない。
 
-### ① の中身（nolist.patch）
-- `src/scraper/export_tables.py`: 本体の 6 カテゴリ（race_result・出馬表・ラップ・速報・オッズ 2 種）も `export_year_local` に載せる。
-  - 母集合は `local_universe`（race_lists ＋ 出馬表・速報・確定結果の flat。欠けた回は 01〜12R を補う。確定結果だけは同じ開催の次の 2 日も補う）。
-  - 窓と試行は `LOCAL_POLICY` で決める。
-- `scripts/cron/export_tables_daily.sh`: 13 カテゴリを `--refresh --from-local-results` の 1 回の呼び出しにまとめる。
-- `src/scraper/parse_drift_docs.py`: 標本をローカルの表から選ぶ。基準の年の割合は 30 日保存して使い回す。
-- テスト: `tests/scraper/test_export_local_candidates.py`・`tests/scraper/test_parse_drift_docs.py`。
-- 照合: 11/07・08 を消した表の写しで、11/09・10 の候補を作った。6 カテゴリとも取りこぼしは 0。
-- 費用: 月 約 50 円 → 最悪 約 10 円・見込み 約 4 円（一覧 0 回）。
+```bash
+cd /home/jovyan/work/keiba-vpn
+sudo bash scripts/cron/install_shared_login_cron.sh                 # 共通ログインを 5 15 * * *（JST 00:05）に（今は 09:05）
+sudo bash scripts/cron/install_sporthorse_births_cron.sh --remove    # root の sporthorse の行を外す（研究専用・毎日 SKIP）
+KEIBA_CRON_BACKUP_DIR=$HOME/cron_backups bash scripts/cron/install_sporthorse_births_cron.sh --remove   # jovyan の行も外す（jovyan のまま）
+sudo bash scripts/cron/install_serving_state_cron.sh                # serving-state の 2 行をタグ付きで入れ直す（時刻は同じ）
+sudo bash scripts/cron/install_verify_past_values_cron.sh           # 過去分の検査を 2 時間おき → 1 日 1 回（JST 04:25）・cron_run.sh で包む
+sudo bash scripts/cron/dedupe_setup_all_headers.sh --dry-run        # 見出しのブロックの重なり（6 回分）を確かめる
+sudo bash scripts/cron/dedupe_setup_all_headers.sh                  # 重なりを消す（ジョブの行は 1 行も変わらない。PATH= の重なりだけ有効な行が減る）
+sudo crontab -l | grep -nE 'KEIBA-SHARED-LOGIN|KEIBA-SPORTHORSE|KEIBA-SERVING-STATE|KEIBA-PAST-VALUE-CHECK'   # 確認
+crontab -l | grep -c KEIBA-SPORTHORSE                               # 0
+```
+- 確かめること:
+  - 共通ログインは `5 15`。
+  - sporthorse の行は無い。
+  - serving-state は 2 行。
+  - 過去分の検査は `25 19` で cron_run.sh 付き。
+- **`setup_all_cron.sh install` は使わない**。生成する行が、その後に手で整理した crontab より古く、廃止したジョブ（backfill-2024-full など）を戻すため。見出しの重なりは上の dedupe で消す。
+- 入れ直したら、monitor-cloudrun-handoff（config/scheduled_jobs.json の持ち主）に知らせる。scheduled_jobs.json の audit_ok の「重複した行は無い」は、今は誤り（6 回分重なっている）。
+- 入れ直すまでの影響:
+  - 共通ログインは毎日 09:05 のまま（次の月替わりは 12/01 の 09:05）。
+  - sporthorse は毎日 SKIP で動くだけ。serving-state は、タグが無いだけで動きは同じ。
+  - 過去分の検査は 2 時間おきのまま。ただし GCS の一覧は取らず、未検査 0 件なので読み出しも 0。
 
-### ② の中身（cron.patch）
-- `install_shared_login_cron.sh`: `5 0`（UTC＝JST 09:05）を `5 15`（JST 00:05）にする。
-- `install_sporthorse_births_cron.sh`: `--remove`（安全策つき）を足す。
-- 新規 `install_serving_state_cron.sh`（タグ KEIBA-SERVING-STATE）。
-- `config/decoupling_roles.json`: 4 つの役割を足す。
-- docs: `shared_login.md`・`cron_catchup.md`。
-- テスト: `tests/scripts/test_install_cron_lines.py`。
+## 次にやること（まだ手を付けていない）
+- **古い登録スクリプト（install_* 約 15 本）を lib_crontab.sh にそろえる**。今日の 4 本（host_postprocess・vps_alive・vps_mirror_pull・shared_login）と verify は済み。sporthorse・serving_state・cron_catchup・jma_weather は独自の守りがある。
+- **Cloud Run の API 側の GCS の全件一覧**（費用の監査役が回数と月額を見積もる。本番の API なので、直すのはユーザーが戻ってから計画を立てて）。どれも監視・運用の画面の**要求ごと**に呼ばれ、HybridStorage の一覧のキャッシュ（当年 60 秒・過去年 1 時間）が効く。
+  | 場所 | 関数 | 呼ばれ方 |
+  |---|---|---|
+  | src/api/app.py:2004 | `_build_row_data_coverage`（GET /api/scrape-status） | 要求ごと（race_shutuba の当年の一覧） |
+  | src/api/app.py:2141 | `get_date_race_matrix`（GET /api/date-race-matrix） | 要求ごと（カテゴリごとの一覧） |
+  | src/api/app.py:2448 | `scrape_missing`（POST /api/scrape-missing） | 要求ごと（手で押す取り直し） |
+  | src/api/app.py:3242 | `_build_scrape_summary_all`（GET /api/scrape-summary-all） | 要求ごと（全カテゴリ × 年の一覧） |
+  | src/api/monitor_coverage.py:114 | `_build_gcs_matrix`（監視の網羅の表。app.py:2200〜2255、quality_health.py:237 から） | 要求ごと |
+  | src/data_health/coverage.py:197 | `one(cat, year)`（データの健全性の網羅） | 呼び出し元の頻度による（要確認） |
+- `src/pipeline/betting/scan_odds_phase.py:49` も race_odds の一覧を取るが、手で流す研究用（cron・job_map に無い）なので直していない。定期にするときは、odds_drift と同じく名前で読む。
+- 監視（`src/scripts/data/scrape_status_notify.py` の collect_prod）は、job_map のグループの retired を見ていない。消したグループのジョブを「動いていない」と数え続ける可能性がある（費用には関係しない）。
 
-## 11/14 の適用の手順
-1. 11/13 の週次の結果を確かめる（`docs/operations/flat_gaps_20261112.md` §3 の手順。めぐ指数の 10/31・11/01・11/07・11/08 が埋まったか）。
-2. ①: `git apply data/local/meta/pending_patches/20261113/nolist.patch` → CI と同じテスト → commit・push → CI が緑になるまで見る。翌朝（11/15）7:00 の書き出しから効く。
-3. ②③:
-   1. `git apply .../cron.patch` と `python3 .../apply_jobmap.py config/gcp_job_map.json` を当てる。
-   2. `python -m src.ops.job_map validate` を通す。
-   3. `python -m src.scripts.docs.build_scheduled_jobs_html` で一覧の HTML を作り直す（`--check` で確かめる。持ち主は monitor-scheduled-jobs-portal）。
-   4. テスト（tests/ops・tests/scripts）→ commit・push → CI。
-4. root の crontab を変える（前の crontab は各スクリプトが `data/local/meta/cron_backups/` に退避する）。
-   - `sudo bash scripts/cron/install_shared_login_cron.sh`
-   - `sudo bash scripts/cron/install_sporthorse_births_cron.sh --remove`。jovyan の crontab からも外す: `bash scripts/cron/install_sporthorse_births_cron.sh --remove`
-   - `sudo bash scripts/cron/install_serving_state_cron.sh`
-   - 権限の確認で止められたら、回り込まずに統括役へ返す。
-   - 変えたら、monitor-scheduled-jobs-portal に内容を知らせる（config/scheduled_jobs.json への反映のため）。
-5. 統括役の追加の指示: `sync_pg_from_gcs`（`src/scripts/data/etl_stg_db.py` の毎晩の全件一覧 2 回）を、直近のレースだけを名前で読む作りに直す。短い計画を立て、見積もりをコミットメッセージに書く。
+## 11/14 朝 7:00 の書き出しで確かめること（②が入った最初の回）
+- `logs/export_tables_daily.log` の最後の回:
+  - 「一覧なしの追記」の行が 13 カテゴリ分あり、`LOCAL_EXPORT_FAIL`・`RUN_AXES_FAIL` が無い。
+  - `update_run_axes` の出力がある。
+  - parse_drift_docs の結果がある。基準の年は初回だけ読み、`data/local/meta/parse_drift_docs_baseline/` に保存される。
+- `data/page_reference/tables/2026/_export_local_report.json` の errors が 0。
+- race_result に 11/14 以降のレースが入っていない（当日は翌日から）。
+- 1〜2 日後に、課金エクスポートで GCS の転送・Class A が減ったことを確かめる。
 
-## 11/14 朝 7:00 の書き出しで確かめること（①はまだ入っていない。今の作り）
-- `logs/export_tables_daily.log` の最後の回について:
-  - `LOCAL_EXPORT_FAIL`・`RUN_AXES_FAIL` が無いこと。
-  - 付随 7 カテゴリの「一覧なしの追記: 候補 N・読めた M・無い K」の行（11/13 から入った作り）。今朝の予想は、パドック・バロメーターが 11/07・08 の 72 件ずつで、ほかは 0 件前後。
-  - `update_run_axes` の出力（`{"candidates": …}`）。11/14 からは 11/07・08 の 72 レースが馬別ラップの公開の窓に入る。ただし、GCS の horse_lap はバロメーターの取得が保存してから入るので、最初の日は not_found が多くてよい。
-  - parse_drift の比較の対象に、2026 年の馬柱・SmartRC（11/13 に作った flat）が加わり、時間が延びていないか。
-- `data/page_reference/tables/2026/_export_local_report.json` の errors が 0 であること。
-- 走法の軸の穴埋め（`backfill_horse_lap --years 2026`、ユーザーが 11/13 に起動。調教の過去分の取得が終わるまで待機中）が終わっていれば、翌朝の `update_run_axes` が run_axes を作り直していること（jsonl が run_axes より新しければ作り直す）。
-
-## 11/13 に済んだこと（参考）
-- b867161c・3d32e6bb:
-  - 付随 7 カテゴリを毎朝一覧なしで書き出す。
-  - 走法の軸の日次更新（バロメーターの取得から馬別ラップを保存し、update_run_axes で追記）。
-  - 天気の取得の止まりを見えるようにした。
-- 3a86b5ff・42f48f22: 天気の取得の費用の超過の修正と、定期取得の廃止（crontab から削除済み）。
-- 2026 年の flat 7 種類を 1 回作った（馬柱・指数・バロメーター・SmartRC・追い切り・パドック・厩舎コメント）。
-- 追いつき実行の cron を登録した（KEIBA-CRON-CATCHUP）。
-
-## 進み具合（2026-11-13 夜・バックグラウンドのセッションが引き継いで実施）
-- ① 済み: 11/13 の週次は rc=0（18:47 終了）。めぐ指数の 10/31・11/01・11/07・11/08 は 4 日とも埋まった（race_result_flat に対する割合 1.0。バッチ status=ok・valid=1316）。
-- ② 済み: 3fcb2a2b（毎朝の書き出しの GCS 一覧を 0 に）。11/14 7:00 の書き出しから効く。
-  - git apply で export_tables_daily.sh の実行の印が落ちたので、755 に戻した（cron が直接起動するため）。
-- ③ 済み: 7c4a8adb（cron の登録スクリプトの修正と job_map・一覧の HTML）。
-- ④ **未実施（権限の確認で止められた）**: 2026-11-13 夜、`sudo bash scripts/cron/install_shared_login_cron.sh` を Claude Code の権限の確認（auto mode）が止めた（Destructive or Unwanted Actions）。回り込まずに止めた。ユーザーが次を実行する。
-  ```bash
-  cd /home/jovyan/work/keiba-vpn
-  sudo bash scripts/cron/install_shared_login_cron.sh            # 共通ログインを 5 15 * * *（JST 00:05）に
-  sudo bash scripts/cron/install_sporthorse_births_cron.sh --remove   # root の sporthorse の行を外す
-  KEIBA_CRON_BACKUP_DIR=$HOME/cron_backups bash scripts/cron/install_sporthorse_births_cron.sh --remove   # jovyan の行も外す（jovyan のまま。退避先は jovyan が書ける場所）
-  sudo bash scripts/cron/install_serving_state_cron.sh           # serving-state の 2 行をタグ付きで入れ直す
-  sudo crontab -l | grep -nE 'KEIBA-SHARED-LOGIN|KEIBA-SPORTHORSE|KEIBA-SERVING-STATE'   # 確認: 共通ログインは 5 15、sporthorse は無い、serving-state は 2 行
-  crontab -l | grep -c KEIBA-SPORTHORSE                          # 0
-  ```
-  - どのスクリプトも、変える前の crontab を `data/local/meta/cron_backups/` に退避し、行数の増減を確かめてから入れ替える（合わなければ中止）。
-  - 入れ直したら、monitor-cloudrun-handoff（config/scheduled_jobs.json の持ち主）に知らせる。
-  - 入れ直すまでの影響: 共通ログインは毎日 09:05 のまま（次の月替わりは 12/01 の 09:05）。sporthorse は毎日 SKIP で動くだけ。serving-state はタグが無いだけで動きは同じ。
-- ⑤ 済み: c03b86f7（毎晩の PG 同期で GCS の全件一覧を取らない。ローカルの flat で判定し、無いものだけ名前で確かめる。11/13 の実データでは名前の確認も 0 回）。
-- CI: 3fcb2a2b・7c4a8adb・c03b86f7 とも緑。
-- 11/14 7:00 の書き出し（②が入った最初の回）で確かめること: `logs/export_tables_daily.log` に「一覧なしの追記」の行が 13 カテゴリ分あること、`LOCAL_EXPORT_FAIL` が無いこと、`_export_local_report.json` の errors が 0、race_result に 11/14 以降のレースが入っていない（当日は翌日から）こと、parse_drift_docs の結果が出ていること。
+## 置き場（参考）
+- 11/13 に用意したパッチ（適用済み）: `data/local/meta/pending_patches/20261113/`
+- 走法の軸の 10/26 以降の穴埋め（`backfill_horse_lap --years 2026`）は、ユーザーが 11/13 に起動した。調教の過去分の取得（keiba-vpn-b0）が終わるまで待機中。終わった翌朝の update_run_axes が run_axes を作り直す。

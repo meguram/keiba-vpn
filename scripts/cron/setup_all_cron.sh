@@ -68,9 +68,21 @@ ALL_TAGS=(
     "KEIBA-VPN-ALL"
 )
 
+# crontab -l を安全に読む。「crontab が無い」以外で失敗したら中止する（空の内容で crontab 全体を置き換えないため。2026-11-13）
+read_crontab_or_die() {
+    local out err rc
+    err="$(mktemp)"
+    out="$(crontab -l 2>"$err")" && rc=0 || rc=$?
+    if [ "$rc" -ne 0 ] && ! grep -qi "no crontab" "$err"; then
+        echo "crontab -l に失敗したので中止します: $(cat "$err")" >&2; rm -f "$err"; exit 1
+    fi
+    rm -f "$err"
+    printf '%s' "$out"
+}
+
 remove_all() {
     local current
-    current="$(crontab -l 2>/dev/null || true)"
+    current="$(read_crontab_or_die)"
     local cleaned="$current"
     for tag in "${ALL_TAGS[@]}"; do
         cleaned="$(echo "$cleaned" | grep -v "$tag" || true)"
@@ -80,6 +92,15 @@ remove_all() {
     # 旧 setup_raceday_eve_cron.sh が残したタグなし旧コメント行を除去
     cleaned="$(echo "$cleaned" | grep -v -E \
         '^# ={5,}|^#\s*(毎日|毎週金曜) [0-9]+:[0-9]+|^#\s*非開催日|^# ---' || true)"
+    # このスクリプトが作るブロックのうち、タグの無い見出しのコメント行と完全に一致する行も消す。
+    # 以前は残り、install のたびに見出しのブロックが重なっていた（2026-11-13 の root の crontab で 6 回分）。
+    # PATH= などの環境の行は消さない（cron の環境の行はその後の行にだけ効くので、先頭の PATH= を消すと、ほかの登録スクリプトのジョブが既定の PATH で動く）。
+    # PATH= の重なりは scripts/cron/dedupe_setup_all_headers.sh で、最初の 1 行を残して消す
+    local hdr
+    hdr="$(generate_cron | grep -E '^[[:space:]]*#' | grep -v '# KEIBA' | sort -u)"
+    if [ -n "$hdr" ]; then
+        cleaned="$(printf '%s\n' "$cleaned" | grep -vxF -f <(printf '%s\n' "$hdr") || true)"
+    fi
     # 連続空行を1行に圧縮してから登録
     echo "$cleaned" | cat -s | crontab -
     echo "既存の keiba-vpn cron エントリをすべて削除しました"
@@ -244,8 +265,10 @@ cmd_install() {
     # 新エントリを追加
     local new_entries
     new_entries="$(generate_cron)"
+    local after_remove
+    after_remove="$(read_crontab_or_die)"
     {
-        crontab -l 2>/dev/null || true
+        printf '%s\n' "$after_remove"
         echo ""
         echo "$new_entries"
     } | crontab -
