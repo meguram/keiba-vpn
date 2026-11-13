@@ -21,7 +21,8 @@ from pathlib import Path
 from typing import Any
 
 URL = os.environ.get("KEIBA_VPS_ALIVE_URL", "https://app.megu-keiba.com/version.json")
-STATE = Path(os.environ.get("KEIBA_VPS_ALIVE_STATE", str(Path(__file__).resolve().parents[2] / "data/local/meta/vps_alive_state.json")))
+# 状態はログの隣に置く（ホストの cron の確認なので、ホストのデータ置き場には依存させない）
+STATE = Path(os.environ.get("KEIBA_VPS_ALIVE_STATE", str(Path(__file__).resolve().parents[2] / "logs" / "vps_alive_state.json")))
 FAILS_TO_ALERT = 2
 
 

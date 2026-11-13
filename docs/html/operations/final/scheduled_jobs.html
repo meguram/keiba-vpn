@@ -604,7 +604,7 @@ ul.jobs { padding-left:18px; margin:6px 0; } ul.jobs > li { margin:10px 0; }
 <div><b>入口</b>: <code>python -m src.ops.vps_alive（cron_run.sh vps-alive で包む）</code></div>
 <div><b>取得先の URL の例</b>: <code>https://app.megu-keiba.com/version.json</code></div>
 <div><b>読む</b>: https://app.megu-keiba.com/version.json（Cloudflare → VPS の Tunnel → nginx の静的ファイル。Cloud Run を通らない。キャッシュは DYNAMIC）</div>
-<div><b>書く</b>: <ul><li>Slack（状態が変わったときだけ）</li><li>data/local/meta/vps_alive_state.json</li></ul></div>
+<div><b>書く</b>: <ul><li>Slack（状態が変わったときだけ）</li><li>logs/vps_alive_state.json</li></ul></div>
 <div><b>メモリの枠</b>: —</div>
 <div><b>費用の目安（月）</b>: 0 円（GCP・GCS に触れない）</div>
 <div><b>ホストでも同じ処理？</b>: —</div>

@@ -945,7 +945,7 @@
    ],
    "outputs": [
     "Slack（状態が変わったときだけ）",
-    "data/local/meta/vps_alive_state.json"
+    "logs/vps_alive_state.json"
    ],
    "command": "python -m src.ops.vps_alive（cron_run.sh vps-alive で包む）",
    "memory": null,
