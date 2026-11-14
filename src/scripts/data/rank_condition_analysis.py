@@ -99,7 +99,8 @@ def race_conditions(flat: pd.DataFrame) -> pd.DataFrame:
     r["age_cond"] = r["race_class"].map(age_condition)
     r["sex_cond"] = np.where(r["n_mare"] == r["n_run"], "牝馬限定", "混合")
     r["year"] = pd.to_datetime(r["date"]).dt.year
-    return r[["race_id", "year", "surface", "dist_band", "surf_dist", "venue", "class", "field", "going", "season", "age_cond", "sex_cond"]]
+    r["date"] = pd.to_datetime(r["date"]).dt.strftime("%Y-%m-%d")
+    return r[["race_id", "date", "year", "surface", "dist_band", "surf_dist", "venue", "class", "field", "going", "season", "age_cond", "sex_cond"]]
 
 
 RACE_DIMS = ["surface", "dist_band", "surf_dist", "venue", "class", "field", "going", "season", "age_cond", "sex_cond",
