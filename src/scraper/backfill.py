@@ -52,7 +52,7 @@ import random
 import signal
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -338,21 +338,181 @@ def _run_phase_fast(runner, progress: BackfillProgress,
     return stats
 
 
+_JST = timezone(timedelta(hours=9))
+_HORSE_ID_CATEGORIES = ("race_result", "race_shutuba")
+_OLDEST_RACE_YEAR = 2016   # 取得済みのレースの最古の年（logs/backfill_*.log の fast_oldest 20160105）
+# 当年のレースのうち GCS で最近更新されたものは、flat にあっても読み直す。export_tables_daily（--refresh --from-local-results）は
+# flat に無いレースを足すだけで既存の行を書き直さないので、出馬表の登録→確定の入れ替え・補欠の繰り上がりは flat に入らない。
+# 出馬表が動くのはレースの前の週（特別登録〜枠順確定）なので、8 日以内の更新を読み直せば足りる。
+_RECENT_UPDATE_SEC = 8 * 86400
+# GCS で補って見つけた（flat にまだ無い）馬 ID を、手元の進捗に残しておくキー。8 日を過ぎて読み直さなくなっても対象から落とさない
+_GCS_SEEN_KEY = "horse_ids_from_gcs"
+
+
+def _entry_horse_ids(data: dict | None) -> set[str]:
+    out: set[str] = set()
+    for entry in (data or {}).get("entries", []) or []:
+        hid = entry.get("horse_id", "") if isinstance(entry, dict) else ""
+        if hid:
+            out.add(str(hid))
+    return out
+
+
+def _flat_path(tables_dir: Path, year: str, category: str) -> Path:
+    return tables_dir / year / f"{category}_flat.parquet"
+
+
+def _flat_present(tables_dir: Path, year: str, category: str) -> bool:
+    """手元の flat があり race_id・horse_id の列を持つか（中身は読まない）。"""
+    import pyarrow.parquet as pq
+
+    p = _flat_path(tables_dir, year, category)
+    if not p.is_file():
+        return False
+    try:
+        names = pq.read_schema(p).names
+        return "race_id" in names and "horse_id" in names
+    except Exception as e:  # noqa: BLE001  壊れた flat は「無い」と同じに扱う
+        logger.warning("flat を読めない %s: %s", p, e)
+        return False
+
+
+def _local_flat_race_ids(tables_dir: Path, year: str, category: str) -> set[str] | None:
+    """手元の flat の race_id の集合。無い・読めないときは None。"""
+    import pyarrow.parquet as pq
+
+    from src.pipeline.features.id_value_policy import sanitize_netkeiba_string_id
+
+    if not _flat_present(tables_dir, year, category):
+        return None
+    p = _flat_path(tables_dir, year, category)
+    try:
+        rid = sanitize_netkeiba_string_id(pq.read_table(p, columns=["race_id"]).to_pandas()["race_id"])
+        return set(rid.dropna().astype(str).unique().tolist())
+    except Exception as e:  # noqa: BLE001
+        logger.warning("flat の race_id を読めない %s: %s", p, e)
+        return None
+
+
+def _collect_phase_horse_ids(
+    storage,
+    *,
+    tables_dir: Path | None = None,
+    now: datetime | None = None,
+    allow_gcs: bool | None = None,
+) -> tuple[set[str], dict[str, Any]]:
+    """Phase horse の対象（race_result・race_shutuba の出走馬の horse_id）を集める。**手元の flat を先に使う**。
+
+    以前は年を付けない ``list_keys`` で GCS を全件一覧し、2016 年からの全レースを 1 件ずつ ``load`` していた
+    （毎朝 約 8 万回・約 0.7GiB の GCP の外への転送。docs/operations/cost_ledger.md 3 章 #7）。いまは:
+
+    - 手元の flat（``data/page_reference/tables/<年>/{race_result,race_shutuba}_flat.parquet``）の全年から horse_id を集める
+      （``collect_horse_ids_from_tables``。以前と同じく年で絞らない）。
+    - GCS で補う年は、年つきの一覧（``batch_list_blobs``）を取り、flat に無いレースと（当年は）8 日以内に更新されたレースだけを
+      ``load`` する。補う年は、当年（JST。1 月は前年も）と、GCS を読んでも転送料がかからないとき（``allow_gcs``。
+      既定は ``not egress_billed()``）は全年。ホスト（GCP の外）では flat の無い過去年は警告を出して飛ばす。
+    - 手元に flat が 1 年も無く ``allow_gcs`` のときだけ、以前と同じ全件の読み方に戻す。**年を付けない全件の一覧は、ホストではしない。**
+
+    前提（ホスト）: 過去年に新しく取ったレース（backfill --year・--phase past）の馬は、その年の flat が追いつく
+    （backfill_past_sync・export_tables）まで対象に入らない（遅れるだけで、落ちはしない）。
+    戻り値の info["gcs_only_ids"] は GCS で補って見つけた、flat に無い馬 ID（呼び手が手元の進捗に残す）。
+    """
+    from src.pipeline.build_horse_entity_store import _iter_tables_years, collect_horse_ids_from_tables
+    from src.pipeline.features.feature_store import TABLES_DIR
+
+    if allow_gcs is None:
+        from src.config.gcp_guard import egress_billed
+
+        allow_gcs = not egress_billed()
+    tdir = Path(tables_dir) if tables_dir is not None else TABLES_DIR
+    now = now or datetime.now(_JST)
+    cur = int(now.year)
+    info: dict[str, Any] = {"source": "local_flat", "gcs_lists": [], "gcs_loads": 0, "skipped_years": [], "gcs_only_ids": set()}
+
+    local_years = _iter_tables_years(tdir)
+    if not local_years:
+        if allow_gcs:
+            logger.warning("手元の flat が無い（%s）— GCS を全件読んで馬 ID を集める（GCP の中だけ）", tdir)
+            info["source"] = "gcs_full"
+            horse_ids: set[str] = set()
+            for category in _HORSE_ID_CATEGORIES:
+                for key in storage.list_keys(category):
+                    info["gcs_loads"] += 1
+                    horse_ids |= _entry_horse_ids(storage.load(category, key))
+            info["flat_ids"] = set()   # 全件を読んだときは記録に残さない（毎回全部読むので要らない）
+            return horse_ids, info
+        logger.warning("手元の flat が無い（%s）— 転送料がかかる環境なので GCS の全件は読まない。当年だけ補う", tdir)
+
+    flat_ids = collect_horse_ids_from_tables(tdir, None) if local_years else set()
+
+    recent = {str(cur)} | ({str(cur - 1)} if now.month == 1 else set())
+    oldest = min([_OLDEST_RACE_YEAR] + [int(y) for y in local_years])
+    supplement: set[str] = set(recent)
+    if allow_gcs:
+        supplement |= {str(y) for y in range(oldest, cur)}
+        lister = getattr(storage, "list_years", None)
+        if callable(lister):
+            for category in _HORSE_ID_CATEGORIES:
+                try:
+                    supplement |= {y for y in (lister(category) or []) if str(y).isdigit()}
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("list_years 失敗 [%s]: %s", category, e)
+    elif local_years:
+        for y in range(oldest, cur):
+            ys = str(y)
+            if ys in supplement:
+                continue
+            missing = [c for c in _HORSE_ID_CATEGORIES if not _flat_present(tdir, ys, c)]
+            if missing:
+                info["skipped_years"].append(ys)
+                logger.warning("手元に %s 年の flat（%s）が無い — 転送料がかかる環境なので GCS では補わない（その年だけの馬は対象外）",
+                               ys, ",".join(missing))
+
+    recent_cut = now.timestamp() - _RECENT_UPDATE_SEC
+    for ys in sorted(supplement):
+        for category in _HORSE_ID_CATEGORIES:
+            local_ids = _local_flat_race_ids(tdir, ys, category) or set()
+            listed = storage.batch_list_blobs(category, ys) or {}
+            info["gcs_lists"].append(f"{category}/{ys}")
+            for key, updated in sorted(listed.items()):
+                if key in local_ids and not (ys in recent and float(updated or 0.0) >= recent_cut):
+                    continue
+                info["gcs_loads"] += 1
+                info["gcs_only_ids"] |= _entry_horse_ids(storage.load(category, key)) - flat_ids
+    info["flat_ids"] = flat_ids
+    return flat_ids | info["gcs_only_ids"], info
+
+
+def _local_horse_result(storage, hid: str) -> dict | None:
+    """手元の horse_result の写し（HybridStorage のディスクキャッシュ ``data/cache/horse_result/<先頭4桁>/``。期限切れも使う）。"""
+    reader = getattr(storage, "_read_local_cache", None)
+    if reader is None:
+        return None
+    try:
+        return reader("horse_result", hid, allow_stale=True)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _run_phase_horse(runner, progress: BackfillProgress,
                      max_horses: int = 500) -> dict:
     """Phase 2: 取得済みレースの出走馬情報を取得。"""
     stats = {"horses_processed": 0, "horses_skipped": 0, "errors": 0}
     start_time = time.time()
 
-    horse_ids: set[str] = set()
-    for category in ["race_result", "race_shutuba"]:
-        for key in runner.storage.list_keys(category):
-            data = runner.storage.load(category, key)
-            if data:
-                for entry in data.get("entries", []):
-                    hid = entry.get("horse_id", "")
-                    if hid:
-                        horse_ids.add(hid)
+    horse_ids, collect_info = _collect_phase_horse_ids(runner.storage)
+    # GCS で補って見つけた馬（flat にまだ無い）は手元の進捗に残し、次の日から読み直さなくなっても対象から落とさない
+    # flat が追いついた馬・処理済みの馬は外す（記録が増え続けないように）
+    prev = set(progress._data.get(_GCS_SEEN_KEY, []))
+    seen = ((prev | collect_info["gcs_only_ids"]) - collect_info.get("flat_ids", set())
+            - set(progress._data.get("done_horses", [])))
+    if seen != prev:
+        progress._data[_GCS_SEEN_KEY] = sorted(seen)
+        progress.save()
+    horse_ids |= seen
+    logger.info("Phase horse: 馬 ID の集め方 %s（GCS の一覧 %d 件・読み出し %d 件・GCS だけで見つけた馬 %d 頭・飛ばした年 %s）",
+                collect_info["source"], len(collect_info["gcs_lists"]), collect_info["gcs_loads"],
+                len(seen), collect_info["skipped_years"] or "なし")
 
     done_horses = set(progress._data.get("done_horses", []))
     pending = sorted(horse_ids - done_horses)
@@ -368,7 +528,11 @@ def _run_phase_horse(runner, progress: BackfillProgress,
             logger.info("最大実行時間超過 — Phase horse 中断")
             break
 
-        existing = runner.storage.load("horse_result", hid)
+        # 手元の写しを先に見る。無い・sire が無いときだけ GCS を 1 頭ずつ読む（1 回の実行で多くて max_horses 回。
+        # 手元に無いからといって取得に回すと netkeiba へ 1 頭 3 ページ余計に取りに行くので、GCS の確かめは残す）
+        existing = _local_horse_result(runner.storage, hid)
+        if not (existing and existing.get("sire")):
+            existing = runner.storage.load("horse_result", hid)
         if existing and existing.get("sire"):
             batch_done.append(hid)
             stats["horses_skipped"] += 1
