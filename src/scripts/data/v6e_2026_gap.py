@@ -252,11 +252,81 @@ def attr_band(x: float) -> str:
     return "産地の欠け 0%" if x == 0 else ("産地の欠け 1〜49%" if x < 0.5 else "産地の欠け 50% 以上")
 
 
+FIX_PAIRS = {   # 産地の欠けの修正の検証（docs/operations/retrain_trials/horse_attrs_fix_20261114.md の案 A）: (修正前, 修正後, 2025 年の対照)
+    "v6e_prod": ("v6e_prod_backfill2026", Path(os.environ.get("FIXCHECK_PROD_DIR", "/home/jovyan/work/retrain_out/attrs_fix_check/prod/pred/bundle_v6_2025")), "v6e_prod_test2025"),
+    "v6e_2016": ("v6e_2016_backfill2026", Path(os.environ.get("FIXCHECK_CAND_DIR", "/home/jovyan/work/retrain_out/attrs_fix_check/cand/pred/bundle_v6_2025")), "v6e_2016_test2025"),
+}
+
+
+def fixcheck(out: Path) -> dict:
+    """修正後に作り直した 12 日の予測を、同じレースの修正前の予測と対で比べ、新しい馬の割合で分けた差の差（2025 年が対照）を出す。"""
+    res = results([2025, 2026])
+    ns = newcomer_share()
+    am = attr_missing(res).rename(columns={"date": "state_date"})   # 修正前の産地の欠け（本番の推論の日ごとのキャッシュ data/local/inference/state。修正前の本番の予測が読んだもの）
+    report: dict = {}
+    rows = []
+    for key, (before_name, after_dir, ref25) in FIX_PAIRS.items():
+        after = race_frame(read_dir(after_dir), res)
+        if after.empty:
+            report[key] = {"races": 0}
+            continue
+        before = race_frame(load_source(before_name), res)
+        common = sorted(set(after["race_id"]) & set(before["race_id"]))
+        a, b = after[after["race_id"].isin(common)], before[before["race_id"].isin(common)]
+        ref = race_frame(load_source(ref25), res)
+        r = {"races": len(common), "paired_ll_after_minus_before": paired(a, b), "after": summary(a), "before": summary(b)}
+        for nm, d in (("after", a), ("before", b), ("ref2025", ref)):
+            d = d.merge(ns, on="race_id", how="inner")
+            for band, g in d.groupby(d["new_share"].map(new_band)):
+                rows.append({"model": key, "which": nm, "band": band, **summary(g)})
+            r[f"bands_{nm}"] = {"hi": race_ll(d[d["new_share"] >= 0.1]), "lo": race_ll(d[d["new_share"] < 0.1])}
+        for nm in ("after", "before"):
+            r[f"did_vs_2025_{nm}"] = did(r["bands_ref2025"]["hi"], r["bands_ref2025"]["lo"], r[f"bands_{nm}"]["hi"], r[f"bands_{nm}"]["lo"])
+        # 修正前の産地の欠けで分けた対の差（欠けが多いレースほど差が大きいか）と、「51% 以上 − 0%」の差の区間
+        pr = race_ll(a).merge(race_ll(b), on="race_id", suffixes=("_a", "_b")).merge(am[["race_id", "attr_na"]], on="race_id", how="left")
+        pr["d"] = pr["ll_m_a"] - pr["ll_m_b"]
+        bands = {"0%": pr["attr_na"] == 0, "1-25%": (pr["attr_na"] > 0) & (pr["attr_na"] <= 0.25),
+                 "26-50%": (pr["attr_na"] > 0.25) & (pr["attr_na"] <= 0.5), "51%+": pr["attr_na"] > 0.5}
+        rng = np.random.default_rng(0)
+        r["paired_by_attr_na"] = {}
+        for nm, msk in bands.items():
+            v = pr.loc[msk, "d"].to_numpy()
+            bs = v[rng.integers(0, len(v), size=(2000, len(v)))].mean(1) if len(v) else np.array([np.nan])
+            r["paired_by_attr_na"][nm] = {"races": int(len(v)), "diff": float(v.mean()) if len(v) else None, "lo": float(np.nanquantile(bs, 0.025)), "hi": float(np.nanquantile(bs, 0.975))}
+        v1, v0 = pr.loc[bands["51%+"], "d"].to_numpy(), pr.loc[bands["0%"], "d"].to_numpy()
+        if len(v1) and len(v0):
+            bs = v1[rng.integers(0, len(v1), size=(2000, len(v1)))].mean(1) - v0[rng.integers(0, len(v0), size=(2000, len(v0)))].mean(1)
+            r["attr_effect_51_minus_0"] = {"diff": float(v1.mean() - v0.mean()), "lo": float(np.quantile(bs, 0.025)), "hi": float(np.quantile(bs, 0.975))}
+        r["corr_attr_na_vs_diff"] = float(pr[["attr_na", "d"]].corr().iloc[0, 1])
+        r["predicted_races_after"] = int(after["race_id"].nunique())
+        hi_a = r["bands_after"]["hi"].merge(r["bands_before"]["hi"], on="race_id", suffixes=("_x", "_y"))
+        v = (hi_a["ll_m_x"] - hi_a["ll_m_y"]).to_numpy()
+        rng = np.random.default_rng(0)
+        bs = v[rng.integers(0, len(v), size=(2000, len(v)))].mean(1) if len(v) else np.array([np.nan])
+        r["paired_ll_newcomer_races"] = {"races": int(len(v)), "diff": float(v.mean()) if len(v) else None,
+                                         "lo": float(np.quantile(bs, 0.025)), "hi": float(np.quantile(bs, 0.975))}
+        for k in [k for k in r if k.startswith("bands_")]:
+            r.pop(k)
+        report[key] = r
+    out.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_csv(out / "fixcheck_bands.csv", index=False)
+    clean = json.loads(json.dumps(report, default=float).replace("NaN", "null"))           # 厳密な JSON（NaN は null）
+    (out / "fixcheck.json").write_text(json.dumps(clean, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(json.dumps(clean, ensure_ascii=False, indent=1))
+    if rows:
+        print(pd.DataFrame(rows)[["model", "which", "band", "races", "d_ll", "d_ll_lo", "d_ll_hi", "benter_a"]].round(4).to_string(index=False))
+    return report
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(B16 / "tp_rank/cond/v6e_2026_gap"))
+    ap.add_argument("--fixcheck", action="store_true", help="産地の欠けの修正の検証（作り直した 12 日と修正前の対の比較）だけを出す")
     a = ap.parse_args()
     out = Path(a.out)
+    if a.fixcheck:
+        fixcheck(out)
+        return
     out.mkdir(parents=True, exist_ok=True)
     res = results([2025, 2026])
     rows, frames = [], {}
