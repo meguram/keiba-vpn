@@ -25,4 +25,16 @@ echo "frozen tracking: rc=${rc} 終了 $(date '+%F %T')"
 # 購入時点のオッズ（t60〜t02）の実測表を更新する（ペルソナ 1 の検証用。失敗しても追跡の終了コードには影響させない）。
 # 読むのは結果が確定した新しいレースの race_odds 文書だけ（週 約 70 件・約 1 MB、スナップショット無しの再試行を含めても月 1 円未満。GCS の一覧は取らない）。
 nice -n 19 "$PY" -m src.scripts.data.pre_odds_table || echo "pre_odds_table: 失敗（次回に回す）"
+# 買い目の決まりの前向き追跡（docs/operations/rule_tracking.md）。上の pre_odds_table の手元の表を読むので、その後に回す。
+# 読むのは手元の予測・race_result_flat・pre_odds.parquet だけ（GCS・GCP は読まない。費用 0 円）。失敗しても追跡の終了コードには影響させない。
+# 止める: KEIBA_RULE_TRACKING=0
+if [ "${KEIBA_RULE_TRACKING:-1}" != "0" ]; then
+  nice -n 19 "$PY" -m src.scripts.data.rule_tracking track
+  rrc=$?
+  if [ "$rrc" = 3 ]; then
+    echo "rule_tracking: 停止（事前登録の決まり・閾値が変わっている。直すまで毎週止まる。docs/operations/rule_tracking.md）" >&2
+  elif [ "$rrc" != 0 ]; then
+    echo "rule_tracking: 失敗 rc=${rrc}（次回に回す）"
+  fi
+fi
 exit "$rc"

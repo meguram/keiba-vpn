@@ -23,6 +23,7 @@
 2. `scripts/cron/frozen_tracking_weekly.sh` が `python -m src.scripts.data.frozen_tracking track` を実行（nice 19、`load>14` の間は最大 30 分待つ、二重起動は `flock` で防止）。
 3. 直近 60 日のうち、予測があって結果（払戻）が確定したレースを判定して台帳に追記。**同じキー（規則|モデル|オッズ時点|レース）は書かない＝何度回しても同じ**。
 4. `report` で `latest.json` / `latest.html` と、時刻つきの `reports/<日時>/` を作る。
+5. 続けて `pre_odds_table`（発走前オッズの手元の表）と、`rule_tracking track`（買い目の決まりの前向き追跡。[rule_tracking.md](rule_tracking.md)）を回す。
 
 ## 出力（`data/local/meta/frozen_tracking/`）
 
