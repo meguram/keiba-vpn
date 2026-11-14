@@ -8,6 +8,8 @@
 
 各パターンの値: n（走数）・w1・w2・w3（1・2・3 着の数）・e3（期待の 3 着内 = Σ 3/頭数）・e1（期待の勝ち = Σ 1/頭数）・
 ed（そのパターンの馬がいたレースの数）・edhit（そのパターンの馬が 3 着内に来たレースの数）。
+回収率の物差し（評価にだけ使い、切り口・点には使わない）: np（払戻が解けたレースの走数）・rt・rf（単勝・複勝を 100 円ずつ買ったときの
+払戻の倍率の和）・rtc・rfc（単勝 50 倍・複勝 10 倍で打ち切った版）。回収率 = rt / np。払戻の列が無い表（テストなど）では 0。
 """
 
 from __future__ import annotations
@@ -17,7 +19,8 @@ import pandas as pd
 
 from src.research.graded.catalog import UNKNOWN
 
-STATS = ["n", "w1", "w2", "w3", "e3", "e1", "ed", "edhit"]
+STATS = ["n", "w1", "w2", "w3", "e3", "e1", "ed", "edhit", "np", "rt", "rf", "rtc", "rfc"]
+RET = ["np", "rt", "rf", "rtc", "rfc"]
 LAYERS = ("main", "sub", "sub4", "glob")
 GRADES = ("G1", "G2", "G3")
 FREEZE_END = pd.Timestamp("2024-12-31")
@@ -36,15 +39,24 @@ def base_frame(d: pd.DataFrame) -> pd.DataFrame:
         "e3": (3.0 / field).clip(upper=1).to_numpy(), "e1": (1.0 / field).to_numpy(),
     })
     b["top3"] = b["w1"] + b["w2"] + b["w3"]
+    if "ret_tan" in p.columns:
+        ok = p["pay_ok"].fillna(False).astype(bool).to_numpy()
+        b["np"] = ok.astype(float)
+        for c, src in (("rt", "ret_tan"), ("rf", "ret_fuku"), ("rtc", "ret_tan_c"), ("rfc", "ret_fuku_c")):
+            b[c] = np.where(ok, pd.to_numeric(p[src], errors="coerce").fillna(0.0).to_numpy(), 0.0)
+    else:
+        for c in RET:
+            b[c] = np.nan
     return b
 
 
 def _asof(b: pd.DataFrame, gid: np.ndarray, mask: np.ndarray, targets: pd.DataFrame, freeze: bool) -> pd.DataFrame:
     """gid（グループの番号）ごとに、各日より前の累計を作り、targets（row, gid, dt）に付ける。"""
-    x = b.loc[mask, ["race_id", "dt", "w1", "w2", "w3", "e3", "e1", "top3"]].copy()
+    x = b.loc[mask, ["race_id", "dt", "w1", "w2", "w3", "e3", "e1", "top3"] + RET].copy()
     x["gid"] = gid[mask]
     r = x.groupby(["gid", "race_id"], sort=False).agg(dt=("dt", "first"), n=("w1", "size"), w1=("w1", "sum"), w2=("w2", "sum"),
-                                                     w3=("w3", "sum"), e3=("e3", "sum"), e1=("e1", "sum"), hit=("top3", "max")).reset_index()
+                                                     w3=("w3", "sum"), e3=("e3", "sum"), e1=("e1", "sum"), hit=("top3", "max"),
+                                                     **{c: (c, "sum") for c in RET}).reset_index()
     r["ed"] = 1.0
     r = r.rename(columns={"hit": "edhit"})
     if freeze:

@@ -31,7 +31,8 @@ def attach_context(T: pd.DataFrame, rows: pd.DataFrame) -> pd.DataFrame:
     T = T.merge(rows[["row", "race_id", "year", "field", "y3", "y1", "hn"]], on="row", how="left")
     allr = T[T["type"] == "ALL"].set_index("row")
     T = T[T["type"] != "ALL"]
-    T = T.join(allr[["main_n", "main_ed", "sub_n", "sub4_n"]].rename(columns=lambda c: "all_" + c), on="row")
+    keep = ["main_n", "main_ed", "sub_n", "sub4_n"] + [f"glob_{c}" for c in ("np", "rt", "rf", "rtc", "rfc") if f"glob_{c}" in allr.columns]
+    T = T.join(allr[keep].rename(columns=lambda c: "all_" + c), on="row")
     return T
 
 

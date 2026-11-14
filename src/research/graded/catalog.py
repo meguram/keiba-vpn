@@ -48,6 +48,8 @@ FORBIDDEN_EXACT = {
     "passing_order", "payoff",
     # 当日の結果で決まる列（発走したか・発走した頭数・その走が数えられるか）。頭数の切り口は出走表の頭数 field_decl を使う
     "started", "field", "ok",
+    # 払戻（回収率の物差しにだけ使う。tally の np・rt・rf・rtc・rfc を作る材料）
+    "ret_tan", "ret_fuku", "ret_tan_c", "ret_fuku_c", "pay_ok",
 }
 FORBIDDEN_PATTERN = r"odds|pop|ninki|tansho|fukusho|payoff|market|ret_"
 

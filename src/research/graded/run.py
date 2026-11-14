@@ -7,6 +7,12 @@
   python -m src.research.graded.run evaluate   # 2025・2026 年の重賞で 1 回だけ評価する（EVALUATED.json があれば止まる）
   python -m src.research.graded.run export     # 重賞ごとのパターン表・レースごとの JSON・HTML の材料（graded_report.json）
 
+2 回目の評価（回収率で選ぶ版。ユーザーの依頼で、2025・2026 年を一度見た後に行う。計画書 第 17 節）:
+  GRADED_OUT=<新しい置き場> で frame・tally を作り直し（中止の馬を含む master）、
+  python -m src.research.graded.run select_roi  # 回収率で選ぶ版の一覧とパターンの採否を 2016〜2024 の中だけで決め、prereg_roi.json に凍結する
+  python -m src.research.graded.run smoke2      # 2 回目の評価と同じ処理を確認期間（2022〜2024）で流す試運転（確認期間は採否に使ったので参考）
+  python -m src.research.graded.run evaluate2   # 2025・2026 年で 1 回だけ評価する（第 1 版の規則のまま直したデータで流した成績版と、回収率で選ぶ全版）
+
 期間（計画書 第 5・6 節）: 発見 = 2018〜2021 年の重賞、確認 = 2022〜2024 年、検証 = 2025・2026 年（1 回だけ）。
 CPU は他の学習と分け合う: nice -n 10 で動かし、スレッドは 8 以下（下の環境変数）。
 """
@@ -35,6 +41,9 @@ from src.research.graded.features import GRADED_OUT, build  # noqa: E402
 REPO = Path(__file__).resolve().parents[3]
 # 事前登録の置き場（commit する）。作業ツリーに書けないときは GRADED_PREREG で別の場所に書き、写して commit する
 PREREG = Path(os.environ.get("GRADED_PREREG") or Path(__file__).with_name("prereg.json"))
+PREREG_ROI = Path(os.environ.get("GRADED_PREREG_ROI") or Path(__file__).with_name("prereg_roi.json"))
+ROUND2_NOTE = ("2 回目の評価（2025・2026 年の結果を一度見た後）。ユーザーの依頼（統括役経由、2026-11-14）: 各パターンに回収率を持たせ、"
+               "回収率まで裏付けのあるパターンだけで印を付ける。基準はいろいろな版を並べる。")
 DISC, CONF, EVAL = (2018, 2021), (2022, 2024), (2025, 2026)
 Z_DISC, Z_CONF = 1.645, 1.2816          # 発見は片側 95%、確認は片側 90%
 LAMS = (0.5, 1.0, 2.0)
@@ -48,7 +57,7 @@ BASELINES = {
 }
 JST = timezone(timedelta(hours=9))
 ROW_COLS = ["row", "race_id", "horse_id", "year", "dt", "field", "y3", "y1", "fin", "hn", "rkey", "course", "grade", "race_name", "venue",
-            "surf", "dist", "jockey_name"]
+            "surf", "dist", "jockey_name", "ret_tan", "ret_fuku", "ret_tan_c", "ret_fuku_c", "pay_ok"]
 
 
 def _graded_target(d: pd.DataFrame) -> pd.Series:
@@ -76,8 +85,16 @@ def _load():
     return d, L.drop(columns=["__race_id", "__horse_id"])
 
 
+def with_returns(d: pd.DataFrame) -> pd.DataFrame:
+    """d に馬ごとの単勝・複勝の払戻（回収率の物差し。payout.attach_returns）を付ける。"""
+    from src.research.graded import payout as PO
+    hits, ok = PO.load_win_place()
+    return PO.attach_returns(d, hits, ok)
+
+
 def cmd_tally() -> None:
     d, L = _load()
+    d = with_returns(d)
     tm = _graded_target(d)
     ids = [t.id for t in CAT.TYPES]
     TL.tally_all(d, L, tm, ids).to_parquet(GRADED_OUT / "tally.parquet", index=False)
@@ -181,6 +198,45 @@ def cmd_select() -> None:
     print("prereg written", PREREG)
 
 
+def cmd_select_roi() -> None:
+    """回収率で選ぶ版の一覧・パターンの採否・使う型を 2016〜2024 年の中だけで決め、PREREG_ROI に凍結する。"""
+    from src.research.graded import roi as R
+    if (GRADED_OUT / "EVALUATED.json").exists():
+        sys.exit("この置き場では評価が済んでいる。評価の後に採否・規則を作り直さない")
+    if PREREG_ROI.exists() and os.environ.get("GRADED_RESELECT") != "1":
+        sys.exit(f"{PREREG_ROI} は凍結済み。作り直すなら GRADED_RESELECT=1（評価の前に限る）")
+    pre = json.loads(PREREG.read_text(encoding="utf-8"))
+    d, _ = _load()
+    rows = _rows(with_returns(d))
+    T = _ctx(GRADED_OUT / "tally.parquet", rows)
+    T = T[(T["year"] >= DISC[0]) & (T["year"] <= CONF[1])]
+    sh, sc = pre["shrink"], pre["score"]
+    S = M.shrink(T, sh["m_g"], sh["m_s"], sh["m_m"], sc["lam"])
+    vers, U, rho = R.select_versions(S, rows, pre, DISC, CONF)
+    U.to_parquet(GRADED_OUT / "roi_units.parquet", index=False)
+    out = {
+        "frozen_at": datetime.now(JST).isoformat(timespec="seconds"),
+        "evaluation_round": 2,
+        "note": ROUND2_NOTE + " 版の一覧・パターンの採否は 2016〜2024 年の中だけで決め、評価の前に凍結した。評価の後に版を足したり選び直したりしない。",
+        "base_prereg": {"path": "src/research/graded/prereg.json", "frozen_at": pre["frozen_at"], "uses": "縮める強さ m・主の重み λ・型の採否（採用した型）"},
+        "periods": {"discovery": DISC, "confirm": CONF, "evaluate": EVAL},
+        "grid": R.GRID, "small_grid": R.SMALL_GRID, "crit_m": R.CRIT_M, "families": [R.FAMILY_BIG, R.FAMILY_SMALL], "primary": R.version_name(R.PRIMARY), "n_versions": len(vers),
+        "rules": {"alpha": R.ALPHA, "q": R.Q, "n_boot": R.N_BOOT, "bootstrap": "レース単位（レースごとにポアソン(1) の重み）",
+                  "cap": {"単勝": 50, "複勝": 10}, "unit": "型 × 水準 × 向き（好 = as-of の点 x が正、凡 = 負）。x を作った層が版の層に入る行だけ",
+                  "performance": "3 着内の数が期待（Σ 3/頭数）を上回る（好）／下回る（凡）ことも両方の期間で満たす",
+                  "score": "残ったパターンの x だけを等しい重みで足す（ほかは 0）。束ねは残った x の発見期間の |相関| ≥ 0.7",
+                  "payout_source": "race_result_race の payoff（2016〜2026 年。2020〜2024 年は payoff.parquet と全行一致。同着の単勝が 2 頭つながった表記など、単勝の馬番・払戻を分けられない 9 レースは外す）",
+                  "shrunk_point": "縮めた点 = (払戻の和 + m × 全体の回収率) / (走数 + m)。m = 0 が「点＋0.10」。どれも全体 ±0.10 と比べる",
+                  "tie": "同点は成績版の点: 点 → 第 1 版（成績版）の点 → 主の好成績パターンの数 → 馬番。同点は馬番: 点 → 主の好成績パターンの数 → 馬番"},
+        "overall_roi": rho,
+        "versions": vers,
+    }
+    PREREG_ROI.write_text(json.dumps(out, ensure_ascii=False, indent=1, default=_f), encoding="utf-8")
+    print(pd.DataFrame([{"name": v["name"], "good": v["n_good"], "bad": v["n_bad"], "used": len(v["used"])} for v in vers]).to_string())
+    print("rho", rho)
+    print("prereg_roi written", PREREG_ROI)
+
+
 def _f(v):
     try:
         return None if v is None or (isinstance(v, float) and np.isnan(v)) else float(v)
@@ -242,6 +298,8 @@ def summarize(rt: pd.DataFrame, n_boot: int = 2000, seed: int = 0) -> dict:
 def diff_ci(a: pd.DataFrame, b: pd.DataFrame, n_boot: int = 2000, seed: int = 1) -> dict:
     """同じレースでの差（a − b）の区間。"""
     m = a.merge(b, on="race_id", suffixes=("_a", "_b"))
+    if len(m) == 0:
+        return {"races": 0}
     rng = np.random.default_rng(seed)
     out = {}
     for k in ("win", "place", "top3_in3"):
@@ -301,88 +359,130 @@ def race_strata(T: pd.DataFrame, rows: pd.DataFrame) -> pd.DataFrame:
     return r
 
 
-def cmd_evaluate(smoke: bool = False) -> None:
+def _eval_version(rt: pd.DataFrame, span, gmap: pd.Series, strata: pd.DataFrame | None, rt_base: dict, ref: pd.DataFrame | None,
+                  ref_name: str | None, n_boot: int) -> dict:
+    """1 つの版の期間ごとの指標。strata が None のときは内訳・基準との比較を省く（回収率で選ぶ版のうち主に見る版以外）。"""
+    rt = rt.copy()
+    rt["year"] = rt["race_id"].str[:4].astype(int)
+    rt["grade"] = rt["race_id"].map(gmap)
+    ent = {}
+    periods = [(str(y), rt["year"] == y) for y in range(span[0], span[1] + 1)] + [(f"{span[0]}-{span[1]}", rt["year"] >= span[0])]
+    for lab, sel in periods:
+        r = rt[sel]
+        if len(r) == 0:
+            continue
+        e = {"all": summarize(r, n_boot=n_boot)}
+        if strata is not None:
+            for gr in TL.GRADES:
+                if (r["grade"] == gr).sum() >= 5:
+                    e[gr] = summarize(r[r["grade"] == gr], n_boot=n_boot)
+            for col in ("surf", "main"):
+                lab_s = r["race_id"].map(strata[col])
+                for v in sorted(lab_s.dropna().unique()):
+                    if (lab_s == v).sum() >= 5:
+                        e[f"{col}:{v}"] = summarize(r[lab_s == v], n_boot=n_boot)
+            for bk, rb in rt_base.items():
+                b = rb[rb["race_id"].isin(r["race_id"])]
+                if len(b):
+                    e[f"base_{bk}"] = summarize(b, n_boot=n_boot)
+                    e[f"self_same_races_{bk}"] = summarize(r[r["race_id"].isin(b["race_id"])], n_boot=n_boot)
+                    e[f"diff_vs_{bk}"] = diff_ci(r, b, n_boot=n_boot)
+        if ref is not None:
+            dd = diff_ci(r, ref[ref["race_id"].isin(r["race_id"])], n_boot=n_boot)
+            if dd["races"]:
+                e[f"diff_vs_{ref_name}"] = dd
+        ent[lab] = e
+    return ent
+
+
+def cmd_evaluate(smoke: bool = False, round2: bool = False) -> None:
     """2025・2026 年の評価（1 回だけ）。smoke=True は同じ処理を確認期間（2022〜2024）で流す試運転で、
-    2025・2026 年の行は読み込むが評価にも出力にも使わず、EVALUATED.json も作らない（出力は <GRADED_OUT>/smoke_conf/）。"""
+    2025・2026 年の行は読み込むが評価にも出力にも使わず、EVALUATED.json も作らない（出力は <GRADED_OUT>/smoke_conf/）。
+    round2=True は 2 回目の評価（PREREG_ROI の回収率で選ぶ全版を足す。第 1 版の評価とは別の置き場 GRADED_OUT で流す）。"""
+    from src.research.graded import roi as R
     flag = GRADED_OUT / "EVALUATED.json"
     span = CONF if smoke else EVAL
-    out_dir = GRADED_OUT / "smoke_conf" if smoke else GRADED_OUT
+    out_dir = GRADED_OUT / ("smoke_conf" if smoke else ".")
     if flag.exists() and not smoke:
         sys.exit(f"評価は済んでいる（{flag}）。やり直さない")
     out_dir.mkdir(parents=True, exist_ok=True)
     pre = json.loads(PREREG.read_text(encoding="utf-8"))
+    pre_roi = json.loads(PREREG_ROI.read_text(encoding="utf-8")) if round2 else None
     d, _ = _load()
-    rows = _rows(d)
+    rows = _rows(with_returns(d) if round2 else d)
     T = _yr(_ctx(GRADED_OUT / "tally.parquet", rows), span)
     pay = load_payoff()
-    # 版の名前 → (点に使った件数の表, 印)。内訳の「主あり」はその版の件数で決める
+    # 版の名前 → (点に使った件数の表, 印, 詳しく出すか)。内訳の「主あり」はその版の件数で決める
+    S_pre, mk_pre = scored(T, pre, "preday")
     versions = {
-        "前日版": (T, scored(T, pre, "preday")[1]),
-        "当日版": (T, scored(T, pre, "dayof")[1]),
+        "前日版": (T, mk_pre, True),
+        "当日版": (T, scored(T, pre, "dayof")[1], True),
     }
-    if not smoke:
+    if not smoke and not round2:
         Tf = _ctx(GRADED_OUT / "tally_frozen.parquet", rows)
-        versions["前日版（件数を2024年末で凍結）"] = (Tf, scored(Tf, pre, "preday")[1])
-    versions["前日版＋めぐ指数（比較）"] = (T, scored(T, pre, "preday", ["M01", "M02"])[1])
-    versions["単純な基準（前走のクラス×着順だけ）"] = (T, scored(T, pre, None, SIMPLE_TYPES)[1])
+        versions["前日版（件数を2024年末で凍結）"] = (Tf, scored(Tf, pre, "preday")[1], True)
+    if not round2:
+        versions["前日版＋めぐ指数（比較）"] = (T, scored(T, pre, "preday", ["M01", "M02"])[1], True)
+    versions["単純な基準（前走のクラス×着順だけ）"] = (T, scored(T, pre, None, SIMPLE_TYPES)[1], True)
+    empty = []
+    if round2:
+        for v in pre_roi["versions"]:
+            mk = R.marks_for(S_pre, v, mk_pre.set_index("row")["score"])
+            if mk is None:
+                empty.append(v["name"])
+                continue
+            versions[v["name"]] = (T, mk, bool(v["primary"]))
     ev_rows = rows[(rows["year"] >= span[0]) & (rows["year"] <= span[1])]
     ev_rows = ev_rows[ev_rows["race_id"].isin(set(rows.loc[rows["grade"].isin(TL.GRADES), "race_id"]))]
     base = {} if smoke else {k: v6e_marks(ev_rows, p) for k, p in BASELINES.items()}
     res: dict = {"evaluated_at": datetime.now(JST).isoformat(timespec="seconds"), "prereg_frozen_at": pre["frozen_at"], "versions": {},
                  "baselines": {k: {str(y): str(p) for y, p in v.items()} for k, v in BASELINES.items()}}
+    if round2:
+        res |= {"evaluation_round": 2, "note": ROUND2_NOTE, "prereg_roi_frozen_at": pre_roi["frozen_at"], "primary": pre_roi["primary"],
+                "n_roi_versions": len(pre_roi["versions"]), "empty_versions": empty, "ties": {}}
     gmap = rows.drop_duplicates("race_id").set_index("race_id")["grade"]
     rt_base = {k: race_metrics(v, pay) for k, v in base.items() if len(v)}
     if not smoke:
         # 結果を出す前に、評価済みの印を先に立てる（途中で落ちても、結果を見た後にやり直せる状態を残さない）
-        flag.write_text(json.dumps({"evaluated_at": res["evaluated_at"], "note": "2025・2026 年を評価済み（または評価の途中で止まった）。結果を見て採否・規則を変えない"},
+        flag.write_text(json.dumps({"evaluated_at": res["evaluated_at"], "evaluation_round": 2 if round2 else 1,
+                                    "note": "2025・2026 年を評価済み（または評価の途中で止まった）。結果を見て採否・規則を変えない"},
                                    ensure_ascii=False), encoding="utf-8")
-    for name, (Tv, mk) in versions.items():
-        strata = race_strata(Tv, rows)
+    rt_ref = race_metrics(mk_pre, pay)
+    for name, (Tv, mk, full) in versions.items():
         rt = race_metrics(mk, pay)
-        rt["year"] = rt["race_id"].str[:4].astype(int)
-        rt["grade"] = rt["race_id"].map(gmap)
-        ent = {}
-        periods = [(str(y), rt["year"] == y) for y in range(span[0], span[1] + 1)] + [(f"{span[0]}-{span[1]}", rt["year"] >= span[0])]
-        for lab, sel in periods:
-            r = rt[sel]
-            if len(r) == 0:
-                continue
-            e = {"all": summarize(r)}
-            for gr in TL.GRADES:
-                if (r["grade"] == gr).sum() >= 5:
-                    e[gr] = summarize(r[r["grade"] == gr])
-            for col in ("surf", "main"):
-                lab_s = r["race_id"].map(strata[col])
-                for v in sorted(lab_s.dropna().unique()):
-                    if (lab_s == v).sum() >= 5:
-                        e[f"{col}:{v}"] = summarize(r[lab_s == v])
-            for bk, rb in rt_base.items():
-                b = rb[rb["race_id"].isin(r["race_id"])]
-                if len(b):
-                    e[f"base_{bk}"] = summarize(b)
-                    e[f"self_same_races_{bk}"] = summarize(r[r["race_id"].isin(b["race_id"])])
-                    e[f"diff_vs_{bk}"] = diff_ci(r, b)
-            ent[lab] = e
-        res["versions"][name] = ent
-        mk.to_parquet(out_dir / f"marks_{name}.parquet", index=False)
+        strata = race_strata(Tv, rows) if full else None
+        ref = rt_ref if (round2 and name != "前日版") else None
+        res["versions"][name] = _eval_version(rt, span, gmap, strata, rt_base if full else {}, ref, "前日版", 2000 if full else 1000)
+        if round2:
+            res["ties"][name] = R.tie_share(mk[mk["race_id"].isin(set(rt["race_id"]))])
+        if full or not round2:
+            mk.to_parquet(out_dir / f"marks_{name}.parquet", index=False)
+        # 版ごとに書き足す（途中で止まっても、それまでの版の結果を残す。終えた版は completed に並ぶ）
+        res.setdefault("completed", []).append(name)
+        (out_dir / "eval.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+        print("evaluated", name, flush=True)
     for bk, v in base.items():
         if len(v):
             v.to_parquet(out_dir / f"marks_{bk}.parquet", index=False)
     (out_dir / "eval.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+    lab = f"{span[0]}-{span[1]}"
     if smoke:
-        print(json.dumps({k: v.get(f"{span[0]}-{span[1]}", {}).get("all") for k, v in res["versions"].items()}, ensure_ascii=False, indent=1)[:3000])
+        print(json.dumps({k: v.get(lab, {}).get("all") for k, v in list(res["versions"].items())[:6]}, ensure_ascii=False, indent=1)[:3000])
         return
-    flag.write_text(json.dumps({"evaluated_at": res["evaluated_at"], "finished": True, "note": "2025・2026 年を評価済み。結果を見て採否・規則を変えない"},
-                               ensure_ascii=False), encoding="utf-8")
-    print(json.dumps({k: v.get("2025-2026", {}).get("all") for k, v in res["versions"].items()}, ensure_ascii=False, indent=1)[:3000])
+    flag.write_text(json.dumps({"evaluated_at": res["evaluated_at"], "finished": True, "evaluation_round": 2 if round2 else 1,
+                                "note": "2025・2026 年を評価済み。結果を見て採否・規則を変えない"}, ensure_ascii=False), encoding="utf-8")
+    print(json.dumps({k: v.get(lab, {}).get("all") for k, v in list(res["versions"].items())[:6]}, ensure_ascii=False, indent=1)[:3000])
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["frame", "tally", "select", "evaluate", "smoke", "export"])
+    ap.add_argument("cmd", choices=["frame", "tally", "select", "evaluate", "smoke", "export", "select_roi", "smoke2", "evaluate2"])
     a = ap.parse_args()
-    if a.cmd == "smoke":
-        cmd_evaluate(smoke=True)
+    if a.cmd in ("smoke", "smoke2", "evaluate2"):
+        cmd_evaluate(smoke=a.cmd != "evaluate2", round2=a.cmd != "smoke")
+        return
+    if a.cmd == "select_roi":
+        cmd_select_roi()
         return
     if a.cmd == "export":
         from src.research.graded.export import cmd_export
