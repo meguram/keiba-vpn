@@ -93,6 +93,52 @@ class fast_asof:
         sm.asof_group_mean, ff.asof_group_mean = self._orig
 
 
+def parse_birthday(x) -> pd.Series:
+    """誕生日を日付にそろえる（保存の文書は『2024年2月2日』の文字列、表は日付）。読めないものは NaT。"""
+    v = pd.Series(x)
+    out = pd.to_datetime(v.where(~v.astype(str).str.contains("年")), errors="coerce")
+    ymd = v.astype(str).str.extract(r"(\d{4})年(\d{1,2})月(\d{1,2})日").astype(float)
+    ymd.columns = ["year", "month", "day"]
+    jp = pd.to_datetime(ymd, errors="coerce")
+    return out.where(out.notna(), jp)
+
+
+def fill_attrs_from_profile(attrs: pd.DataFrame, profile: pd.DataFrame | None, exclude: set[str] | None = None) -> pd.DataFrame:
+    """産地・誕生日の表（attrs、horse_id が索引）で産地が無い馬を、プロフィール（馬主・生産者の表や日次の補い）の産地・誕生日で埋める。
+    どちらも同じ馬の文書（horse_profile / horse_result）から作った値で、重なる馬では産地が 100% 一致する。
+    - 既にある馬の産地・誕生日・ほかの列は変えない。産地が欠けている（NaN・空文字）馬だけ、産地と（欠けていれば）誕生日を足す。
+    - exclude（学習の期間に走った馬など）は埋めない。産地ごとの累積（attr_bp_*）が学習のときとずれないようにする。
+    推論の補い（profile_for・update_serving_state profile）は『プロフィールに無い馬』だけを取りに行くので、プロフィールにだけ居る馬
+    （2026 年の新しい馬など）は、ここで埋めないと産地が欠けたままになる（docs/operations/retrain_trials/horse_attrs_fix_20261114.md）。"""
+    if profile is None or not len(profile) or "birthplace" not in profile.columns:
+        return attrs
+    p = profile.copy()
+    p["horse_id"] = p["horse_id"].astype(str)
+    p["birthplace"] = p["birthplace"].where(p["birthplace"].astype(str).str.strip() != "")
+    p = p.dropna(subset=["birthplace"]).drop_duplicates("horse_id", keep="last").set_index("horse_id")
+    out = attrs.copy()
+    if "birthplace" not in out.columns:
+        out["birthplace"] = pd.Series(dtype=object)
+    out["birthplace"] = out["birthplace"].astype(object)          # 全部 NaN の float 列に文字列を入れない（pandas 3 で例外）
+    if "birthday" not in out.columns:
+        out["birthday"] = pd.Series(dtype="datetime64[ns]")
+    bp = out["birthplace"]
+    have = set(out.index[bp.notna() & (bp.astype(str).str.strip() != "")])
+    need = [h for h in p.index if h not in have and not (exclude and h in exclude)]
+    if not need:
+        return out
+    add = p.loc[need]
+    bday = parse_birthday(add["birthday"]).to_numpy() if "birthday" in add.columns else np.full(len(add), np.datetime64("NaT"))
+    new = pd.DataFrame({"birthplace": add["birthplace"].to_numpy(), "birthday": bday}, index=add.index)
+    old = new.index[new.index.isin(out.index)]
+    if len(old):                                   # 既にある行（産地だけ欠け）は、産地と欠けている誕生日だけ足す（ほかの列は残す）
+        out.loc[old, "birthplace"] = new.loc[old, "birthplace"]
+        cur = pd.to_datetime(out.loc[old, "birthday"], errors="coerce")
+        out.loc[old, "birthday"] = cur.where(cur.notna(), new.loc[old, "birthday"])
+    fresh = new.loc[~new.index.isin(out.index)]
+    return pd.concat([out, fresh]) if len(fresh) else out
+
+
 class V4History:
     """履歴の読み込み（起動時に 1 回）と、状態表（プロフィール・a_style / f3_r）。"""
 
@@ -122,7 +168,11 @@ class V4History:
         self.self_runs = fs.load_runs(self.tables, self.years)
         at_path = ATTRS_PATH
         self.attrs = pd.read_parquet(at_path).set_index("horse_id") if at_path.exists() else pd.DataFrame(columns=["birthplace", "birthday"])
-        self.frozen = self._frozen_constants()
+        self.attrs.index = self.attrs.index.astype(str)
+        self.frozen = self._frozen_constants()                                # 学習で決める定数は、埋める前の表で決める（redirect の向き先に attrs_frozen.json が無いとき）
+        trained = set(self.self_runs.loc[self.self_runs["date"].dt.year <= TRAIN_LAST_YEAR, "horse_id"].astype(str))
+        self.trained_horses = trained
+        self.attrs = fill_attrs_from_profile(self.attrs, self.profile, exclude=trained)   # 学習の期間に走っていない馬（2026 年の新しい馬など）だけ埋める
         self.field_hist = self._field_history()
         self.pace = ff.load_pace_table(self.tables, self.years)
         from src.pipeline.features.horse_history.inference import graded_race_names
@@ -455,10 +505,7 @@ class V4Features:
         if dyn.exists():
             d = pd.read_parquet(dyn)
             self.hist.profile = pd.concat([self.hist.profile, d[~d["horse_id"].isin(self.hist.profile["horse_id"])]], ignore_index=True)
-            at = d.dropna(subset=["birthplace"]).drop_duplicates("horse_id").set_index("horse_id")[["birthplace"]]
-            if "birthday" in d.columns:
-                at["birthday"] = d.drop_duplicates("horse_id").set_index("horse_id")["birthday"]
-            self.hist.attrs = pd.concat([self.hist.attrs, at.loc[~at.index.isin(self.hist.attrs.index)]])
+            self.hist.attrs = fill_attrs_from_profile(self.hist.attrs, d)      # 日次で補った馬（今までどおり除外しない）
             info["profile_dyn"] = len(d)
         self.warmed = True
         return info
@@ -478,8 +525,7 @@ class V4Features:
                 rows.append({"horse_id": h, "owner": rec.get("owner"), "breeder": rec.get("breeder"), "birthplace": rec.get("birthplace"), "birthday": rec.get("birthday")})
             add = pd.DataFrame(rows)
             self.hist.profile = pd.concat([self.hist.profile, add[["horse_id", "owner", "breeder", "birthplace"]]], ignore_index=True)
-            at = add.dropna(subset=["birthplace"]).set_index("horse_id")[["birthplace", "birthday"]]
-            self.hist.attrs = pd.concat([self.hist.attrs, at.loc[~at.index.isin(self.hist.attrs.index)]])
+            self.hist.attrs = fill_attrs_from_profile(self.hist.attrs, add)
         return self.hist.profile
 
     # ------------------------------------------------------------------ 日単位（馬主・馬自身）

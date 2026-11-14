@@ -37,4 +37,6 @@ if [ "${KEIBA_RULE_TRACKING:-1}" != "0" ]; then
     echo "rule_tracking: 失敗 rc=${rrc}（次回に回す）"
   fi
 fi
+# 推論が使う馬の産地の埋まり具合（docs/operations/horse_attrs_coverage.md）。手元の表だけを読む（費用 0 円）。欠けが 5% を超えたら WARNING。
+nice -n 19 "$PY" -m src.scripts.data.horse_attrs_coverage || echo "horse_attrs_coverage: 失敗（次回に回す）"
 exit "$rc"

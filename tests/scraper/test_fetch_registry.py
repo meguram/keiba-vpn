@@ -29,6 +29,7 @@ NON_FETCH_MODULES = {
     "src.scripts.data.verify_past_values",   # 保存済みの race_result を名前で読んで値を検査するだけ（netkeiba へは取りに行かない）
     "src.scripts.data.frozen_tracking", "src.scripts.data.make_dev_mock", "src.scripts.data.odds_sec77_backfill",
     "src.scripts.data.precompute_race_analysis", "src.scripts.data.prediction_results", "src.scripts.data.pre_odds_table",
+    "src.scripts.data.horse_attrs_coverage",   # 手元の産地・プロフィールの表と flat を読むだけ（netkeiba・GCS へは取りに行かない）
     "src.scripts.data.rule_tracking",   # 手元の予測・race_result_flat・pre_odds.parquet を読むだけ（netkeiba・GCS へは取りに行かない）
     "src.scripts.data.scrape_status_notify", "src.scripts.data.sync_horse_result_cache", "src.scripts.data.tp55_backfill",
     "src.scripts.data.tp65_prep", "src.scripts.data.tracking_v2_eval", "src.scripts.data.verify_past_backfill",
