@@ -406,7 +406,7 @@ def _collect_phase_horse_ids(
     以前は年を付けない ``list_keys`` で GCS を全件一覧し、2016 年からの全レースを 1 件ずつ ``load`` していた
     （毎朝 約 8 万回・約 0.7GiB の GCP の外への転送。docs/operations/cost_ledger.md 3 章 #7）。いまは:
 
-    - 手元の flat（``data/page_reference/tables/<年>/{race_result,race_shutuba}_flat.parquet``）の全年から horse_id を集める
+    - 手元の flat（``TABLES_DIR/<年>/{race_result,race_shutuba}_flat.parquet``）の全年から horse_id を集める
       （``collect_horse_ids_from_tables``。以前と同じく年で絞らない）。
     - GCS で補う年は、年つきの一覧（``batch_list_blobs``）を取り、flat に無いレースと（当年は）8 日以内に更新されたレースだけを
       ``load`` する。補う年は、当年（JST。1 月は前年も）と、GCS を読んでも転送料がかからないとき（``allow_gcs``。
