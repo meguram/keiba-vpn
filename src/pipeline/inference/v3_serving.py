@@ -168,6 +168,14 @@ class V3Serving:
         if history is None:
             same_day = sla.same_day_results(storage, race_ids_of_day(c, storage)) if storage is not None else None
             history = self.history if same_day is None or len(same_day) == 0 else pd.concat([self.history, same_day], ignore_index=True)
+        done = None                                           # 属性に持たない（同じインスタンスを並行して使っても取り違えない）
+        card_times = c[[x for x in ("venue_code", "start_time") if x in c.columns]].copy()
+        try:                                                  # 補いに失敗しても、元の出馬表のまま予測は続ける
+            done = same_day_done(history, c)
+            c = fill_going_from_same_day(c, done)             # 発走前の出馬表に当日の馬場が無いので、先に確定した同じ場・同じ面のレースの馬場で埋める
+        except Exception:  # noqa: BLE001
+            logger.warning("当日の馬場の補いに失敗。出馬表のまま続ける", exc_info=True)
+            done = None
         A = sla.build_layer_a_features(c, history)
         Fp = F.to_pandas()
         Fp["race_id"], Fp["horse_id"] = Fp["race_id"].astype(str), Fp["horse_id"].astype(str)
@@ -207,7 +215,12 @@ class V3Serving:
         cur = pd.concat([base, stage] + ([self.aux.predict(base, base["race_id"])] if self.aux is not None else []), axis=1)
         v4cols = None
         if self.v4 is not None:
-            v4cols = self.v4.features(c, cur, self.feature_cols, storage, self._day_card(c, storage))
+            day_card = self._day_card(c, storage)
+            try:
+                day_card = fill_day_card_actual(day_card, done, card_times)   # 確定済みのレースには、そのレース自身の実際の馬場
+            except Exception:  # noqa: BLE001
+                logger.warning("日の出馬表への実際の馬場の補いに失敗。そのまま続ける", exc_info=True)
+            v4cols = self.v4.features(c, cur, self.feature_cols, storage, day_card)
             v4cols.index = pd.RangeIndex(len(v4cols))
             v4cols = base[KEYS].astype(str).merge(v4cols.drop_duplicates(KEYS), on=KEYS, how="left").drop(columns=KEYS)
             v4cols.index = base.index
@@ -344,6 +357,110 @@ class V3Serving:
         Ps = self.bundle.predict(Xs[self.feature_cols], Xs["race_id"].to_numpy()).reset_index(drop=True)
         P = Ps.iloc[np.argsort(order)].reset_index(drop=True)
         return pd.concat([X[KEYS], P], axis=1)
+
+
+GOING_TO_CARD = {"稍重": "稍", "不良": "不"}          # 結果表の表記 → 出馬表・学習表の表記（良・稍・重・不）
+
+
+def _minutes(v: pd.Series) -> pd.Series:
+    """発走時刻（'HH:MM'）を分に。読めないものは NaN。"""
+    t = v.astype("string").str.extract(r"(\d{1,2}):(\d{2})").astype(float)
+    return t[0] * 60 + t[1]
+
+
+def _going_blank(v: pd.Series) -> pd.Series:
+    from src.pipeline.features.serving_v4 import blank_going   # 空の判定は serving_v4 と同じものを使う
+
+    return blank_going(v)
+
+
+def _surface_key(v: pd.Series) -> pd.Series:
+    """面のキー。障害は芝にそろえる（結果表では障害の多くが芝・ダートで入っていて、学習側の履歴も障害を芝で持つ）。"""
+    return v.astype(str).replace({"障": "芝"})
+
+
+def same_day_done(history: pd.DataFrame | None, card: pd.DataFrame) -> pd.DataFrame | None:
+    """履歴のうち、出馬表と同じ日に確定したレース（race_id・venue_code・surface・distance・start_time・track_condition・_m=発走の分）。
+    当日の推論では、履歴は『起動時の履歴 + その時点で確定済みの同日の結果』。後から作る予測（backfill）では、呼び出し側が
+    そのレースより前に発走したレースに絞った履歴を渡す。どちらでも、使う側（fill_going_from_same_day）が場ごとの発走時刻でさらに絞る。
+    発走時刻の無い行・馬場の無い行は使わない。"""
+    if history is None or not len(history) or not len(card) or "track_condition" not in history.columns:
+        return None
+    if not {"venue_code", "surface", "start_time"} <= set(history.columns):
+        return None
+    day = str(pd.to_datetime(card["date"]).min().date())
+    hd = history["date"].astype(str).str[:10]                     # 全履歴に to_datetime をかけない（数十万行）
+    cols = [x for x in ("race_id", "venue_code", "surface", "distance", "start_time", "track_condition") if x in history.columns]
+    d = history.loc[hd == day, cols].drop_duplicates("race_id").copy()
+    if d.empty:
+        return None
+    d["_m"] = _minutes(d["start_time"])
+    d = d[d["_m"].notna() & ~_going_blank(d["track_condition"])]
+    return d if len(d) else None
+
+
+def _done_surface_key(d: pd.DataFrame) -> pd.Series:
+    """確定したレースの面のキー。結果表では障害が芝・ダートで入ることがあるので、ダートで 2750m 以上（平地のダートには無い）は障害＝芝とみなす。"""
+    sk = _surface_key(d["surface"])
+    if "distance" in d.columns:
+        dist = pd.to_numeric(d["distance"], errors="coerce")
+        sk = sk.where(~((sk == "ダート") & (dist >= 2750)), "芝")
+    return sk
+
+
+GOING_LAG_MIN = 60   # 本番の当日の予測は発走の約 60 分前に作る。後から作る予測（backfill・作り直し）でも、その時点で分かる馬場だけを使う
+
+
+def _cutoff_by_venue(card: pd.DataFrame) -> pd.Series:
+    """場ごとの締め切り（出馬表のその場の最も早い発走の分 − GOING_LAG_MIN）。これより前に発走したレースの馬場だけを使う。
+    本番の予測の時点（発走の約 60 分前）にそろえ、後から作る予測で直前 1 時間に確定したレースの馬場が入って楽観的にならないようにする。"""
+    m = _minutes(card["start_time"]) if "start_time" in card.columns else pd.Series(np.nan, index=card.index)
+    return m.groupby(card["venue_code"].astype(str).str.zfill(2)).min() - GOING_LAG_MIN
+
+
+def fill_going_from_same_day(card: pd.DataFrame, done: pd.DataFrame | None) -> pd.DataFrame:
+    """出馬表で馬場（track_condition）が空のレースに、同じ日・同じ場・同じ面（障害は芝）で、その場の出馬表の最も早い発走の 60 分前より前に
+    確定したレースのうち、発走がいちばん遅いものの馬場を、学習の表記（良・稍・重・不）にそろえて入れる。学習では各レースの実際の
+    馬場を使うので、推論では『その時点で分かる最新の馬場』で近づける（発走前の出馬表には当日の馬場が無く、2026-10-25 以降の
+    当日の予測で欠けていた）。確定したレースが無い組（朝の 1R など）は空のまま（今までと同じ）。既に入っている馬場は変えない。"""
+    if done is None or not len(done) or "track_condition" not in card.columns or not {"venue_code", "surface"} <= set(card.columns):
+        return card
+    d = done.copy()
+    d["_v"] = d["venue_code"].astype(str).str.zfill(2)
+    cut = _cutoff_by_venue(card)
+    d = d[d["_m"] < d["_v"].map(cut)]
+    if d.empty:
+        return card
+    d["_k"] = d["_v"] + "|" + _done_surface_key(d)
+    d["_g"] = d["track_condition"].astype(str).str.strip().replace(GOING_TO_CARD)
+    latest = d.sort_values(["_m", "race_id"], kind="stable").groupby("_k")["_g"].last().to_dict()
+    out = card.copy()
+    key = out["venue_code"].astype(str).str.zfill(2) + "|" + _surface_key(out["surface"])
+    need = _going_blank(out["track_condition"]) & key.isin(latest)
+    if need.any():
+        out["track_condition"] = out["track_condition"].astype(object)
+        out.loc[need, "track_condition"] = key[need].map(latest).to_numpy()
+    return out
+
+
+def fill_day_card_actual(day_card: pd.DataFrame | None, done: pd.DataFrame | None, card: pd.DataFrame) -> pd.DataFrame | None:
+    """その日の全レースの出馬表のうち、今回のレースより前に発走して確定したレースに、そのレース自身の実際の馬場（学習の表記）を入れる。
+    日の出馬表は field7 の『1R の馬場との差』などに使われ、学習では 1R の実際の馬場なので、それにそろえる。まだ走っていないレースは空のまま。"""
+    if day_card is None or not len(day_card) or done is None or not len(done) or "track_condition" not in day_card.columns:
+        return day_card
+    if not {"venue_code", "start_time"} <= set(card.columns):
+        return day_card
+    cut = _cutoff_by_venue(card)
+    d = done.assign(_v=done["venue_code"].astype(str).str.zfill(2))
+    d = d[d["_m"] < d["_v"].map(cut).fillna(_minutes(card["start_time"]).min() - GOING_LAG_MIN)]
+    act = d.set_index(d["race_id"].astype(str))["track_condition"].astype(str).str.strip().replace(GOING_TO_CARD)
+    out = day_card.copy()
+    rid = out["race_id"].astype(str)
+    need = _going_blank(out["track_condition"]) & rid.isin(act.index)
+    if need.any():
+        out["track_condition"] = out["track_condition"].astype(object)
+        out.loc[need, "track_condition"] = rid[need].map(act).to_numpy()
+    return out
 
 
 def race_ids_of_day(card: pd.DataFrame, storage: Any) -> list[str]:

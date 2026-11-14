@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -139,6 +140,18 @@ def fill_attrs_from_profile(attrs: pd.DataFrame, profile: pd.DataFrame | None, e
     return pd.concat([out, fresh]) if len(fresh) else out
 
 
+def blank_going(v: pd.Series) -> pd.Series:
+    t = v.astype("string").fillna("").str.strip()
+    return t.isin(["", "None", "nan", "<NA>"])
+
+
+OWNER_GOING_PREFIX = ("o_go_", "ob_go_")    # 馬主の群の馬場の列（条件 c_go = 面 + 良なら g・それ以外は h）
+GOING_VAR_SEP = "__going_"                  # キャッシュに持つ、馬場ごとの値の列の名前の区切り（o_go_win__going_g など）
+
+
+GOING_SELF_COLS = ("chg_going", "chg_going_num", "exp_n_going", "exp_first_going", "exp_win_going")   # 当日の馬場に依存する馬自身の列
+
+
 class V4History:
     """履歴の読み込み（起動時に 1 回）と、状態表（プロフィール・a_style / f3_r）。"""
 
@@ -172,7 +185,8 @@ class V4History:
         self.frozen = self._frozen_constants()                                # 学習で決める定数は、埋める前の表で決める（redirect の向き先に attrs_frozen.json が無いとき）
         trained = set(self.self_runs.loc[self.self_runs["date"].dt.year <= TRAIN_LAST_YEAR, "horse_id"].astype(str))
         self.trained_horses = trained
-        self.attrs = fill_attrs_from_profile(self.attrs, self.profile, exclude=trained)   # 学習の期間に走っていない馬（2026 年の新しい馬など）だけ埋める
+        if os.environ.get("KEIBA_ATTRS_FILL", "1") != "0":                     # 検証の対照用に、馬主・生産者の表からの補いだけを切れる（KEIBA_ATTRS_FILL=0。既定は埋める。日次の補いの分は切らない）
+            self.attrs = fill_attrs_from_profile(self.attrs, self.profile, exclude=trained)   # 学習の期間に走っていない馬（2026 年の新しい馬など）だけ埋める
         self.field_hist = self._field_history()
         self.pace = ff.load_pace_table(self.tables, self.years)
         from src.pipeline.features.horse_history.inference import graded_race_names
@@ -296,7 +310,8 @@ class V4Groups:
         return c
 
     # ------------------------------------------------------------------ 馬主系
-    def owner(self, card: pd.DataFrame, profile: pd.DataFrame | None = None) -> pd.DataFrame:
+    def _owner_prepared(self, card: pd.DataFrame, profile: pd.DataFrame | None = None) -> tuple[pd.DataFrame, pd.Timestamp]:
+        """馬主の群の元の表（履歴 + 当日の行を fc.prepare したもの）と当日の日付。owner と owner_going_variants で共通。"""
         card = self.as_result_surface(self.normalize(card))
         D = _to_dt(card["date"]).min()
         raw = self.h.conn_raw
@@ -309,7 +324,10 @@ class V4Groups:
                 if c in p.columns:
                     T[c] = fc._norm_name(p[c].reindex(T["horse_id"]).reset_index(drop=True)).to_numpy()
         h = pd.concat([hist, T], ignore_index=True)
-        hp = fc.prepare(h)
+        return fc.prepare(h), D
+
+    def owner(self, card: pd.DataFrame, profile: pd.DataFrame | None = None) -> pd.DataFrame:
+        hp, D = self._owner_prepared(card, profile)
         eng = fc.Engine(hp)
         out: dict[str, np.ndarray] = {}
         for ent in ("o", "ob"):
@@ -322,6 +340,49 @@ class V4Groups:
         return F
 
     # ------------------------------------------------------------------ 馬自身 8 群
+    def owner_going_variants(self, card: pd.DataFrame, profile: pd.DataFrame | None = None) -> pd.DataFrame:
+        """馬主の群の馬場の列（o_go_*・ob_go_*。条件 c_go は面 + 良なら g・それ以外は h）を、当日の行が「良」の場合と「良以外」の場合で作る
+        （o_go_win__going_g / __going_h など）。朝の事前計算（07:35 JST）の時点では当日の馬場が分からないので、両方をキャッシュに持っておき、
+        予測のときに当日の馬場で選ぶ（_override_going）。この群はその日より前（同じ日は含まない）の集計なので、行ごとの値は同じ日の他の行の
+        馬場に左右されない。準備（fc.prepare）と Engine は 1 回だけ作り、当日の行の条件だけを変えた 2 つの条件の列で、馬場の条件だけを集計する。"""
+        hp, D = self._owner_prepared(card, profile)
+        today = (hp["date"] >= D).to_numpy()
+        sf = hp["surface"].astype(str)
+        for v in ("g", "h"):
+            hp[f"c_go{v}"] = hp["c_go"].where(~today, sf + v)
+        eng = fc.Engine(hp)
+        out: dict[str, np.ndarray] = {}
+        for ent in ("o", "ob"):
+            f = fc.entity_features(eng, ent, ["gog", "goh"])
+            for v in ("g", "h"):
+                for k, a in f.items():
+                    if k.startswith(f"{ent}_go{v}_"):
+                        out[f"{ent}_go_{k[len(ent) + 5:]}{GOING_VAR_SEP}{v}"] = a
+        F = pd.DataFrame({c: np.asarray(a, dtype="float32")[today] for c, a in out.items()})
+        F[KEY[0]], F[KEY[1]] = hp.loc[today, "race_id"].to_numpy(), hp.loc[today, "horse_id"].to_numpy()
+        return F.drop_duplicates(KEY)
+
+    def going_self(self, card: pd.DataFrame) -> pd.DataFrame:
+        """当日の馬場に依存する馬自身の列（変化の群の chg_going・chg_going_num、経験の群の exp_n/first/win_going）を、
+        このレースの出走馬の履歴と当日の行だけで、学習と同じ関数（build_groups の change・experience）で計算する。
+        この 2 つの群は馬ごとの並びだけで決まるので、出走馬だけに絞っても日全体で作った値と同じになる。
+        日ごとのキャッシュ（v4_day）は朝の事前計算で馬場が分からないまま作られるので、当日の馬場が分かったレースはこの値で置き換える。"""
+        card = self.as_result_surface(self.normalize(card)).drop_duplicates(KEY)   # 同じ馬の行が重複すると、2 行目が 1 行目を前走とみなすので落とす
+        D = _to_dt(card["date"]).min()
+        horses = set(card["horse_id"].astype(str))
+        runs = self.h.self_runs
+        hist = runs[(runs["date"] < D) & runs["horse_id"].astype(str).isin(horses)]
+        T = _card_rows(card, fs.RUN_COLS)
+        T["distance"] = pd.to_numeric(T["distance"], errors="coerce").astype(float)
+        allr = pd.concat([hist, T], ignore_index=True).sort_values(["horse_id", "date", "race_id"], kind="stable").reset_index(drop=True)
+        groups = fs.build_groups(allr, birthday=None, attrs=None, only=["change", "experience"], frozen=self.h.frozen)
+        tk = pd.MultiIndex.from_frame(T[KEY])
+        parts = []
+        for g in groups.values():
+            g = g.set_index(KEY)
+            parts.append(g.loc[g.index.isin(tk), [c for c in g.columns if c in GOING_SELF_COLS]])
+        return pd.concat(parts, axis=1).reset_index() if parts else pd.DataFrame(columns=KEY)
+
     def self8(self, card: pd.DataFrame, attrs_extra: pd.DataFrame | None = None) -> pd.DataFrame:
         card = self.as_result_surface(self.normalize(card))
         D = _to_dt(card["date"]).min()
@@ -543,6 +604,11 @@ class V4Features:
         prof = self.profile_for(card_all["horse_id"].astype(str).tolist(), storage)
         t0 = time.perf_counter()
         own = self.groups.owner(card_all, prof)
+        own = own.drop_duplicates(KEY)
+        try:                                                                   # 補助の列なので、失敗しても 2 通りの列なしで続ける（予測では古いキャッシュと同じ扱い）
+            own = own.merge(self.groups.owner_going_variants(card_all, prof), on=KEY, how="left")
+        except Exception:  # noqa: BLE001
+            logger.warning("馬主の馬場の 2 通りの列を作れなかった。無しで続ける", exc_info=True)   # 馬場の列は「良」「良以外」の両方を持つ（当日の馬場で選ぶ）
         slf = self.groups.self8(card_all)
         F = own.merge(slf, on=KEY, how="outer")
         if sit_groups():
@@ -555,6 +621,47 @@ class V4Features:
         except OSError:
             logger.warning("v4 日単位の群を保存できなかった: %s", path)
         return F
+
+    def _override_going(self, out: pd.DataFrame, card: pd.DataFrame) -> pd.DataFrame:
+        """当日の馬場が分かっているレースについて、日ごとのキャッシュの馬場の列を置き換える。
+        - 馬自身の列（GOING_SELF_COLS）: そのレースだけで計算し直した値（going_self）。
+        - 馬主の列（o_go_*・ob_go_*）: キャッシュに持つ「良」「良以外」の値のうち、当日の馬場に合うほう。
+        馬場が分からないレースは、キャッシュの値のまま（今までと同じ）。馬場ごとの値の列は、どちらの場合も落とす（特徴量に混ぜない）。"""
+        var_cols = [c for c in out.columns if GOING_VAR_SEP in c]
+        day = str(card["date"].iloc[0])[:10] if "date" in card.columns and len(card) else ""
+        if not var_cols and any(c.startswith(OWNER_GOING_PREFIX) for c in out.columns) and day not in self.__dict__.setdefault("_stale_going_warned", set()):
+            self._stale_going_warned.add(day)                                  # 日に 1 回だけ（レースごと・モデルごとに出さない）
+            logger.warning("v4 日単位の群のキャッシュに馬主の馬場の 2 通りの列が無い（この仕組みより前に作ったもの）。o_go_*・ob_go_* は置き換えない。"
+                           "朝の事前計算（update_serving_state precompute）を流し直すと直る")
+        known = card[~blank_going(card["track_condition"])] if "track_condition" in card.columns else card.iloc[0:0]
+        if known.empty:
+            return out.drop(columns=var_cols)
+        res = out.copy()
+        res["race_id"], res["horse_id"] = res["race_id"].astype(str), res["horse_id"].astype(str)
+        # 馬主の列: 当日の馬場が良なら g、それ以外なら h の値
+        kg = known.assign(race_id=known["race_id"].astype(str)).drop_duplicates("race_id").set_index("race_id")["track_condition"].astype(str).str.strip()
+        is_good = res["race_id"].map(kg.isin(["良"]))
+        has = res["race_id"].isin(kg.index)
+        for c in {x.split(GOING_VAR_SEP)[0] for x in var_cols}:
+            g, h = f"{c}{GOING_VAR_SEP}g", f"{c}{GOING_VAR_SEP}h"
+            if c in res.columns and g in res.columns and h in res.columns:
+                res[c] = np.where(has & (is_good == True), res[g], np.where(has, res[h], res[c]))  # noqa: E712
+        res = res.drop(columns=var_cols)
+        # 馬自身の列: そのレースだけで計算し直す（キーの重複があっても落ちないよう、結合で置き換える）
+        try:                                                                   # 補助的な置き換えなので、失敗してもキャッシュの値で続ける
+            gs = self.groups.going_self(known)
+        except Exception:  # noqa: BLE001
+            logger.warning("当日の馬場での馬自身の列の計算し直しに失敗。キャッシュの値のまま続ける", exc_info=True)
+            return res
+        cols = [c for c in GOING_SELF_COLS if c in gs.columns and c in res.columns]
+        if not cols or gs.empty:
+            return res
+        gs = gs[KEY + cols].astype({"race_id": str, "horse_id": str}).drop_duplicates(KEY)
+        m = res.merge(gs.rename(columns={c: f"{c}__new" for c in cols}).assign(_hit=True), on=KEY, how="left")
+        hit = m["_hit"].fillna(False).astype(bool).to_numpy()
+        for c in cols:
+            m[c] = np.where(hit, m[f"{c}__new"], m[c])
+        return m.drop(columns=[f"{c}__new" for c in cols] + ["_hit"])
 
     # ------------------------------------------------------------------ 本体
     def features(self, card: pd.DataFrame, base: pd.DataFrame, feature_cols: list[str], storage: Any | None = None, card_all: pd.DataFrame | None = None) -> pd.DataFrame:
@@ -569,6 +676,11 @@ class V4Features:
         if need & {"owner", "self8", "sit"}:
             day = self.day_groups(card_all if card_all is not None else card, storage)
             out = out.merge(day, on=KEY, how="left")
+            try:                                                               # 補助の置き換えなので、失敗してもキャッシュの値で続ける
+                out = self._override_going(out, card)
+            except Exception:  # noqa: BLE001
+                logger.warning("当日の馬場での置き換えに失敗。キャッシュの値のまま続ける", exc_info=True)
+                out = out.drop(columns=[c for c in out.columns if GOING_VAR_SEP in c])
         if need & {"field7"}:
             extra = [c for c in EXTRA_CARD_COLS if c in card.columns and c not in base.columns]
             T = base.merge(card[KEY + ([] if "date" in base.columns else ["date"]) + extra].drop_duplicates(KEY), on=KEY, how="left")
