@@ -252,6 +252,23 @@ def cmd_export() -> None:
     pre = json.loads(PREREG.read_text(encoding="utf-8"))
     ev = json.loads((GRADED_OUT / "eval.json").read_text(encoding="utf-8"))
     round2 = ev.get("evaluation_round") == 2
+    ph = GRADED_OUT / "eval_posthoc_v6e.json"
+    if round2 and ph.exists():   # 評価の後に足した本番 v6e の 2026 年を含む比較（印・規則は凍結のまま）で、2025 年だけの比較を置き換える
+        P = json.loads(ph.read_text(encoding="utf-8"))
+        for name, per in P["versions"].items():
+            if name not in ev["versions"]:
+                continue
+            for lab, e in per.items():
+                ev["versions"][name].setdefault(lab, {}).update(e)
+        # 事後の比較を足していない版の、2026 年を含む期間の v6e本番 との比較は 2025 年だけの値なので消す（期間の範囲を版でそろえる）
+        for name, per in ev["versions"].items():
+            if name in P["versions"]:
+                continue
+            for lab in ("2026", "2025-2026"):
+                for k in ("base_v6e本番", "self_same_races_v6e本番", "diff_vs_v6e本番"):
+                    per.get(lab, {}).pop(k, None)
+        ev["baselines"]["v6e本番"] = P["paths"]
+        ev["posthoc_v6e_note"] = P["note"]
     pre_roi = json.loads(PREREG_ROI.read_text(encoding="utf-8")) if round2 else None
     d, L = _load()
     if round2:

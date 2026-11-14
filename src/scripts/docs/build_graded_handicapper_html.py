@@ -61,7 +61,7 @@ function renderEval(){const E=D.eval.versions;const BK=Object.keys(D.eval.baseli
  h+='<h2>全体（重賞・平地）</h2>'+table(head,rows);
  const dr=[];for(const vn of ['前日版',PRIM].filter(Boolean))for(const bk of BK)for(const p of P){const e=(E[vn]||{})[p];if(!e||!e['diff_vs_'+bk])continue;const x=e['diff_vs_'+bk];
   dr.push(`<tr><td>${vn===PRIM?'主に見る回収率版':'前日版'} − ${bk}</td><td>${p}</td><td class="n">${x.races}</td>${['win','place'].map(k=>`<td class="n">${ci(x[k])}</td>`).join('')}<td class="n">${num(x.top3_in3)}</td>${['roi_tansho','roi_fukusho','roi_umaren','roi_wide'].map(k=>`<td class="n">${ci(x[k])}</td>`).join('')}</tr>`)}
- h+='<h2>v6e との差（同じレースでの差、レース単位のブートストラップ 95%）</h2>'+table(['比べたもの','期間','レース','◎勝率','◎複勝率','◎○▲の3着内','◎単勝','◎複勝','馬連流し','ワイド流し'],dr);
+ h+='<h2>v6e との差（同じレースでの差、レース単位のブートストラップ 95%）</h2>'+(D.eval.posthoc_v6e_note?'<p class="muted">'+D.eval.posthoc_v6e_note+'。v6e本番 との比較（2026 年を含む）は評価の後に足した。</p>':'')+table(['比べたもの','期間','レース','◎勝率','◎複勝率','◎○▲の3着内','◎単勝','◎複勝','馬連流し','ワイド流し'],dr);
  const SL=k=>k.replace(/^surf:/,'').replace(/^main:/,'');const gr=[];for(const p of P){const e=E['前日版'][p];if(!e)continue;for(const k of Object.keys(e))if(/^(G[123]|surf:|main:)/.test(k))gr.push(row(SL(k),p,e[k]))}
  h+='<h2>前日版の内訳（グレード・芝ダ・主の集計が使えたか）</h2>'+table(['区分',...head.slice(1)],gr)+'<p class="muted">主あり = 同じレース名 × 同じコースの過去の回が 4 回以上あったレース。副・全体だけ = それ未満（新設・コースの変更など）で、同じコースの別レースと全重賞の集計だけで点を付けた。5 レース未満の区分は載せない。</p>';
  const pr=D.prereg;h+=`<h2>凍結した規則（${pr.frozen_at}）</h2><div class="panel wrap">縮める強さ m（全体・副・主）= ${pr.shrink.m_g}・${pr.shrink.m_s}・${pr.shrink.m_m}、主の重み λ = ${pr.score.lam}、点の足し方 = ${pr.score.weight==='z'?'発見期間の z で重み付け':'等しい重み'}。前日版で使う型 ${pr.sets.preday.used.length}（採用 ${pr.sets.preday.adopted.length} を束ねたもの）、当日版 ${pr.sets.dayof.used.length}。<br>前日版で使う型: ${pr.sets.preday.used.map(t=>t+' '+TN[t]).join('、')}</div>`;
@@ -112,12 +112,12 @@ document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>tab(b.dataset
 """
 
 
-MAX_REF_PER_RACE = 30     # 重賞ごとの表に載せる「参考」のパターンの数（|点| の大きい順。好成績・凡走はすべて載せる）
-MAX_PAT_PER_HORSE = 10    # 検証のレースで 1 頭あたりに載せるパターンの数（全件は data/local/graded/races/<race_id>.json）
+MAX_REF_PER_RACE = 15     # 重賞ごとの表に載せる「参考」のパターンの数（|点| の大きい順。好成績・凡走はすべて載せる）
+MAX_PAT_PER_HORSE = 6    # 検証のレースで 1 頭あたりに載せるパターンの数（全件は data/local/graded/races/<race_id>.json）
 
 
 def slim(rep: dict) -> dict:
-    """HTML を 10MB 以下に収めるため、載せるパターンを絞る（元の JSON は全件のまま）。"""
+    """HTML を 10MB 程度に収めるため、載せるパターンを絞る（元の JSON は全件のまま。2 回目の評価で回収率の列が増えたので 30→15・10→6 に減らした）。"""
     for r in rep["races"]:
         keep = [p for p in r["patterns"] if p["k"] != "参考" or p.get("rk") == "回収率で残った"]
         ref = sorted((p for p in r["patterns"] if p["k"] == "参考" and p.get("rk") != "回収率で残った"), key=lambda p: -abs(p["x"]))

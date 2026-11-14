@@ -50,10 +50,13 @@ LAMS = (0.5, 1.0, 2.0)
 PAYOFFS = [REPO / "data/local/modeling/betting/payoff.parquet", REPO / "data/local/modeling/betting_2026/payoff.parquet"]
 # 比べる基準（p_win の順で ◎○▲）。v6e16（2016 年からの表）の 2026 年の予測は、2026 年の学習側の表が無く GCS も要るため作れなかった
 # （2026-11-13 の調査）。2026 年は本番 v6e（2020 年からの表、bundle_v6_2025）を推論の経路で流した予測（重賞 95 レース）で比べる。
+# 2026 年の本番 v6e の予測は第 1 回の置き場で作った。2 回目の評価（別の置き場）でも同じファイルを読む
+# （2 回目の評価では GRADED_OUT の下を探して見つからず、2026 年の比較が抜けた。評価の後に eval_posthoc_v6e.json で足した）
+V6E_2026_DIR = Path(os.environ.get("GRADED_V6E_2026_DIR", "/home/jovyan/work/graded_out/v6e_2026"))
 BASELINES = {
     "v6e16": {2025: Path("/home/jovyan/work/retrain_out/base_2016/final_eval_v6e16/test2025_predictions.parquet")},
     "v6e本番": {2025: REPO / "data/local/modeling/training_pipeline/final_eval_v6e/test2025_predictions.parquet",
-               2026: GRADED_OUT / "v6e_2026/pred_2026_graded_prod_v6e_serving.parquet"},
+               2026: V6E_2026_DIR / "pred_2026_graded_prod_v6e_serving.parquet"},
 }
 JST = timezone(timedelta(hours=9))
 ROW_COLS = ["row", "race_id", "horse_id", "year", "dt", "field", "y3", "y1", "fin", "hn", "rkey", "course", "grade", "race_name", "venue",
