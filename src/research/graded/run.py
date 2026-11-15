@@ -5,6 +5,7 @@
   python -m src.research.graded.run select     # 縮める強さ・型の採否・束ね・点の足し方を 2016〜2024 の中だけで決め、prereg.json に凍結する
   python -m src.research.graded.run smoke      # evaluate と同じ処理を確認期間（2022〜2024）で流す試運転（2025・2026 年の行は読み込むが、評価にも出力にも使わない）
   python -m src.research.graded.run evaluate   # 2025・2026 年の重賞で 1 回だけ評価する（EVALUATED.json があれば止まる）
+  python -m src.research.graded.run cycles / freeze_cycles / track_cycles  # 分析サイクル（ゴール 30%・120%、消し 95%）→ 規則の凍結 → 前向きの記録
   python -m src.research.graded.run select_buy / smoke_buy / evaluate_buy  # 買いの組み合わせ（凍結 → 試運転 → 4 回目の評価）
   python -m src.research.graded.run select_kill / smoke_kill / evaluate_kill  # 消しの版（凍結 → 試運転 → 3 回目の評価）
   python -m src.research.graded.run export_rules  # 各重賞で点に効いているルールの全件の表の材料（graded_rules.json）
@@ -821,9 +822,166 @@ def cmd_evaluate_buy(smoke: bool = False) -> None:
     print(json.dumps({k: e[k]["buy"] | {"share": e[k]["buy_share"], "hon": e[k]["honmei_buy"]} for k in e}, ensure_ascii=False, default=_f)[:3000])
 
 
+# ------------------------------------------------------------------ 分析サイクル（ゴール: ◎ 勝率 30%・単回収 120%、サブゴール: 消しの 95%）
+CYCLE_NOTE = ("ユーザーの依頼（統括役経由、2026-11-15）: 2025・2026 年の重賞で ◎ の勝率 30% 以上・単勝の回収率 120% 以上になる組み合わせを、"
+              "すべての重賞で見つける。サブゴール: 消した馬の 95% 以上が 4 着以下（1 レース 3 頭以上を消す）。最大 20 サイクル。"
+              "A（当てはめ版）は 2025・2026 年に直接合わせた値で、評価ではない。B（正直な版）は 2018〜2024 年で選んで 2025・2026 年に当てはめた値。")
+
+
+def _cycle_table(year_max: int | None = None):
+    from src.research.graded import cycles as CY
+    pre = json.loads(PREREG.read_text(encoding="utf-8"))
+    d, _ = _load()
+    d = with_returns(d)
+    rows = _rows(d)
+    rows["fin"] = pd.to_numeric(rows["fin"], errors="coerce")
+    T = _ctx(GRADED_OUT / "tally.parquet", rows)
+    T = T[(T["year"] >= CY.DEV[0]) & (T["year"] <= (year_max or CY.EVAL[1]))]
+    S_pre, mk_pre = scored(T, pre, "preday")
+    _, mk_day = scored(T, pre, "dayof")
+    X = S_pre[~S_pre["type"].isin(["M01", "M02"])].pivot_table(index="row", columns="type", values="x", aggfunc="first").fillna(0.0)   # めぐ指数は比較だけの型なので使わない
+    X.columns = [f"x_{c}" for c in X.columns]
+    r = rows[rows["row"].isin(X.index) & rows["fin"].notna() & rows["grade"].isin(TL.GRADES)].copy()
+    r = r.merge(mk_pre[["row", "score", "rank"]].rename(columns={"score": "score_pre", "rank": "rank_pre"}), on="row", how="left")
+    r = r.merge(mk_day[["row", "score"]].rename(columns={"score": "score_day"}), on="row", how="left")
+    r[["score_pre", "score_day"]] = r[["score_pre", "score_day"]].fillna(0.0)
+    r["top3_pre"] = (r["rank_pre"] <= 3).astype(float)
+    r["top5_pre"] = (r["rank_pre"] <= 5).astype(float)
+    r["y3"] = (r["fin"] <= 3).astype(float)
+    r["y1"] = (r["fin"] == 1).astype(float)
+    r["pay_ok"] = r["pay_ok"].fillna(False).astype(bool)
+    # 消しの版（prereg_kill.json）で基準を通った版の、馬ごとの消しの当たりの数（as-of の件数。消しの決め方の特徴に使う）
+    from src.research.graded import kill as K
+    pk = json.loads(PREREG_KILL.read_text(encoding="utf-8"))
+    prim_roi = next(v for v in json.loads(PREREG_ROI.read_text(encoding="utf-8"))["versions"] if v["primary"])
+    S_kill, S_roi = S_pre[S_pre["type"].isin(pre["sets"]["preday"]["used"])], S_pre[S_pre["type"].isin(prim_roi["used"])]
+    kcols = []
+    for j, v in enumerate(x for x in pk["versions"] if x["passes"] and x["params"].get("honmei") == "そのまま"):
+        kr = K.killed_rows(S_kill, S_roi, v["params"], prim_roi)
+        r[f"khit_{j + 1}"] = r["row"].map(kr).fillna(0.0).to_numpy(float)
+        kcols.append(f"khit_{j + 1}")
+    names = list(CY.BASE) + kcols + list(X.columns)
+    F = np.column_stack([r[list(CY.BASE) + kcols].to_numpy(float), X.reindex(r["row"]).to_numpy(float)])
+    return CY.Table(r.reset_index(drop=True), F, names)
+
+
+def cmd_cycles() -> None:
+    """分析サイクルを最大 20 回まわし、サイクルごとの値を <GRADED_OUT>/cycles.json に書き足す。A の重賞ごと・全体で 1 つの両方で
+    ゴールとサブゴールを満たした時点で止める（cycles.goal_met）。"""
+    import time
+
+    from src.research.graded import cycles as CY
+    t = _cycle_table()
+    B = CY.Best(t)
+    rng = np.random.default_rng(20261115)
+    terms: dict[str, dict] = {}
+    path = GRADED_OUT / "cycles.json"
+    log = {"note": CYCLE_NOTE, "started_at": datetime.now(JST).isoformat(timespec="seconds"), "goal": {"win": CY.WIN_GOAL, "roi_t": CY.ROI_GOAL},
+           "sub_goal": {"precision": CY.KILL_GOAL, "killed_per_race": CY.KILL_MIN}, "periods": {"dev": CY.DEV, "eval": CY.EVAL},
+           "n_features": len(t.names), "rows": int(len(t.r)), "races": int(len(t.starts)), "cycles": []}
+    for c in range(1, 21):
+        t0 = time.time()
+        hyp, cand = CY.space(c, t, rng)
+        W, lab = CY.matrix(t, cand)
+        terms.update({n: d for d, n in cand})
+        B.update(W, lab)
+        rep = B.report()
+        met = CY.goal_met(rep)
+        log["cycles"].append({"cycle": c, "at": datetime.now(JST).isoformat(timespec="seconds"), "hypothesis": hyp, "n_new": len(cand),
+                              "seconds": round(time.time() - t0, 1), "met": met, "report": rep})
+        path.write_text(json.dumps(log, ensure_ascii=False, indent=1, default=_f), encoding="utf-8")
+        a, b = rep["A"], rep["B"]
+        print(f"cycle {c} {hyp[:30]} tried={rep['tried']} A達成 {a['honmei_by_rkey']['achieved']}/{rep['n_rkeys']} "
+              f"A全体 勝率 {a['honmei_by_rkey']['all']['win']:.3f} 単回収 {a['honmei_by_rkey']['all']['roi_t']:.2f} "
+              f"A一つ {a['honmei_global']['val']['win']:.3f}/{a['honmei_global']['val']['roi_t']:.2f} "
+              f"B重賞ごと {b['honmei_by_rkey']['all']['win']:.3f}/{b['honmei_by_rkey']['all']['roi_t']:.2f} "
+              f"B一つ {b['honmei_global']['val']['win']:.3f}/{b['honmei_global']['val']['roi_t']:.2f} "
+              f"消しA {a['kill_by_rkey']['all']['precision']:.3f}({a['kill_by_rkey']['all']['killed_per_race']:.1f}) "
+              f"消しB {b['kill_by_rkey']['all']['precision']:.3f} 消しB一つ {b['kill_global']['val']['precision']:.3f} {met}", flush=True)
+        if met["all"]:
+            log["stopped"] = {"cycle": c, "reason": "A の重賞ごと・全体で 1 つの両方で、ゴールとサブゴールを満たした"}
+            break
+    else:
+        log["stopped"] = {"cycle": 20, "reason": "20 サイクルに達した"}
+    log["finished_at"] = datetime.now(JST).isoformat(timespec="seconds")
+    path.write_text(json.dumps(log, ensure_ascii=False, indent=1, default=_f), encoding="utf-8")
+    # C: 最後のサイクルの A（と比べるための B）の規則を、重みごと凍結の材料にする（commit は別の手順）
+    rep = log["cycles"][-1]["report"]
+    rules = {}
+    for m in ("A", "B"):
+        rules[m] = {"honmei_by_rkey": {x["rkey"]: CY.rule_of(x["rule"], terms) for x in rep[m]["honmei_by_rkey"]["per_rkey"] if x["rule"]},
+                    "kill_by_rkey": {x["rkey"]: CY.rule_of(x["rule"], terms) for x in rep[m]["kill_by_rkey"]["per_rkey"] if x["rule"]},
+                    "honmei_global": CY.rule_of(rep[m]["honmei_global"]["sel"], terms), "kill_global": CY.rule_of(rep[m]["kill_global"]["sel"], terms)}
+    (GRADED_OUT / "cycles_rules.json").write_text(json.dumps({"from_cycles_finished_at": log["finished_at"], "stopped": log["stopped"],
+                                                               "features": t.names, "rules": rules}, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+PREREG_CYCLES = Path(os.environ.get("GRADED_PREREG_CYCLES") or Path(__file__).with_name("prereg_cycles.json"))
+CYCLES_LEDGER = Path(os.environ.get("GRADED_CYCLES_LEDGER") or (REPO / "data/meta/graded/cycles_forward_ledger.json"))
+
+
+def _cycles_hash(body: dict) -> str:
+    """凍結の検査に使うハッシュ（規則・記録を始める日・特徴の列を覆う）。"""
+    import hashlib
+    x = {k: body[k] for k in ("rules", "track_from", "features")}
+    return hashlib.sha256(json.dumps(x, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+
+
+def cmd_freeze_cycles() -> None:
+    """C: 分析サイクルの最後の規則（A を主、B を比べる相手）を prereg_cycles.json に凍結する。前向きの記録は track_from 以降の重賞だけ。"""
+    if PREREG_CYCLES.exists() and os.environ.get("GRADED_RESELECT") != "1":
+        sys.exit(f"{PREREG_CYCLES} は凍結済み")
+    if CYCLES_LEDGER.exists() and json.loads(CYCLES_LEDGER.read_text(encoding="utf-8")).get("races"):
+        sys.exit(f"台帳 {CYCLES_LEDGER} に記録がある。凍結し直さない")
+    src = json.loads((GRADED_OUT / "cycles_rules.json").read_text(encoding="utf-8"))
+    body = {"frozen_at": datetime.now(JST).isoformat(timespec="seconds"), "track_from": "2026-11-16",
+            "note": "分析サイクルの最後の A（2025・2026 年に当てはめた規則）を、前向きに記録するために凍結した。track_from 以降の重賞だけに当てはめ、"
+                    "規則は書き換えない（ハッシュで検査）。B は比べる相手。前向きの値が A の当てはめの値（評価ではない）にどれだけ近いかを見る",
+            "features": src["features"], "rules": src["rules"], "from": {"cycles_finished_at": src["from_cycles_finished_at"], "stopped": src["stopped"]}}
+    body["sha256_rules"] = _cycles_hash(body)
+    PREREG_CYCLES.write_text(json.dumps(body, ensure_ascii=False, indent=1), encoding="utf-8")
+    print("frozen", PREREG_CYCLES)
+
+
+def cmd_track_cycles() -> None:
+    """C: 凍結した規則を track_from 以降の重賞（集計 tally に入ったもの）に当てはめ、台帳に書き足す（同じレースは書き直さない）。
+    新しいレースを入れるには、先に frame・tally を作り直す（python -m src.research.graded.run frame / tally）。"""
+
+    from src.research.graded import cycles as CY
+    P = json.loads(PREREG_CYCLES.read_text(encoding="utf-8"))
+    if _cycles_hash(P) != P["sha256_rules"]:
+        sys.exit("prereg_cycles.json の規則が凍結のハッシュと違う。追記を拒否する")
+    if CYCLES_LEDGER.exists() and json.loads(CYCLES_LEDGER.read_text(encoding="utf-8")).get("prereg_frozen_at") != P["frozen_at"]:
+        sys.exit("台帳の凍結の日時が prereg_cycles.json と違う（別の規則の記録が混ざる）。追記を拒否する")
+    t = _cycle_table(year_max=9999)   # 前向きの記録は 2027 年以降も入れる
+    if t.names != P["features"]:
+        sys.exit("特徴の列が凍結と違う")
+    led = json.loads(CYCLES_LEDGER.read_text(encoding="utf-8")) if CYCLES_LEDGER.exists() else {"prereg_frozen_at": P["frozen_at"], "races": {}}
+    dt = t.r.groupby(t.race_of)["dt"].first().astype(str).str[:10].to_numpy() if "dt" in t.r.columns else None
+    if dt is None:
+        sys.exit("表に日付の列が無い")
+    new = (dt >= P["track_from"]) & ~t.race["race_id"].isin(list(led["races"])).to_numpy()
+    for i in np.flatnonzero(new):
+        rid, rk = t.race["race_id"].iloc[i], t.race["rkey"].iloc[i]
+        sel = np.zeros(len(t.starts), bool)
+        sel[i] = True
+        e = {"rkey": rk, "grade": t.race["grade"].iloc[i], "date": dt[i], "recorded_at": datetime.now(JST).isoformat(timespec="seconds")}
+        for m in ("A", "B"):
+            R = P["rules"][m]
+            for kind in ("honmei", "kill"):
+                r_rk = R[f"{kind}_by_rkey"].get(rk)
+                e[f"{m}_{kind}_by_rkey"] = CY.apply_rule(t, r_rk, sel)["races"][0] if r_rk else None
+                e[f"{m}_{kind}_global"] = CY.apply_rule(t, R[f"{kind}_global"], sel)["races"][0]
+        led["races"][rid] = e
+    led["updated_at"] = datetime.now(JST).isoformat(timespec="seconds")
+    CYCLES_LEDGER.parent.mkdir(parents=True, exist_ok=True)
+    CYCLES_LEDGER.write_text(json.dumps(led, ensure_ascii=False, indent=1), encoding="utf-8")
+    print("tracked", int(new.sum()), "new races, total", len(led["races"]), "->", CYCLES_LEDGER)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["frame", "tally", "select", "evaluate", "smoke", "export", "select_roi", "smoke2", "evaluate2", "export_rules", "select_kill", "smoke_kill", "evaluate_kill", "select_buy", "smoke_buy", "evaluate_buy"])
+    ap.add_argument("cmd", choices=["frame", "tally", "select", "evaluate", "smoke", "export", "select_roi", "smoke2", "evaluate2", "export_rules", "select_kill", "smoke_kill", "evaluate_kill", "select_buy", "smoke_buy", "evaluate_buy", "cycles", "freeze_cycles", "track_cycles"])
     a = ap.parse_args()
     if a.cmd in ("smoke", "smoke2", "evaluate2"):
         cmd_evaluate(smoke=a.cmd != "evaluate2", round2=a.cmd != "smoke")
@@ -834,6 +992,15 @@ def main() -> None:
     if a.cmd == "export":
         from src.research.graded.export import cmd_export
         cmd_export()
+        return
+    if a.cmd == "cycles":
+        cmd_cycles()
+        return
+    if a.cmd == "freeze_cycles":
+        cmd_freeze_cycles()
+        return
+    if a.cmd == "track_cycles":
+        cmd_track_cycles()
         return
     if a.cmd == "select_buy":
         cmd_select_buy()
