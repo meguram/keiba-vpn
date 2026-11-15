@@ -176,7 +176,15 @@ class V3Serving:
             done = same_day_done(history, c)
             if live:
                 done = _concat_done(done, on_time_done(storage, c, same_day))   # 当日は race_result が無いので、速報で馬場だけ補う
+            before = c["track_condition"].copy() if "track_condition" in c.columns else None
             c = fill_going_from_same_day(c, done)             # 発走前の出馬表に当日の馬場が無いので、先に確定した同じ場・同じ面のレースの馬場で埋める
+            if before is not None and live:                   # 反映後の確かめ用（どのレースを何で埋めたか。モデルごとに 1 行）
+                try:
+                    filled = c.loc[_going_blank(before) & ~_going_blank(c["track_condition"]), ["race_id", "track_condition"]].drop_duplicates("race_id")
+                    logger.info("当日の馬場の補い[%s]: %d/%d レース %s", self.bundle_dir.name, len(filled), c["race_id"].nunique(),
+                                dict(zip(filled["race_id"].astype(str), filled["track_condition"])))
+                except Exception:  # noqa: BLE001
+                    pass
         except Exception:  # noqa: BLE001
             logger.warning("当日の馬場の補いに失敗。出馬表のまま続ける", exc_info=True)
             done = None
