@@ -3,10 +3,18 @@
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from src.pipeline.features import factory_self as fs
 from src.pipeline.features import serving_v4 as sv4
 from src.pipeline.inference import v3_serving as v3
+
+
+@pytest.fixture(autouse=True)
+def _clear_on_time_cache():
+    v3._ON_TIME_CACHE.clear()                 # モジュールの使い回しを、テストの順序に依存させない
+    yield
+    v3._ON_TIME_CACHE.clear()
 
 
 def _card():
@@ -187,3 +195,74 @@ def test_owner_going_variants_match_owner_with_each_going():
         assert cols
         for c in cols:
             np.testing.assert_allclose(var[f"{c}{sv4.GOING_VAR_SEP}{v}"].loc[ref.index].to_numpy(), ref[c].to_numpy(), equal_nan=True, rtol=1e-6)
+
+
+class _Store:
+    def __init__(self, docs):
+        self.docs, self.calls = docs, []
+
+    def load(self, category, key, bypass_cache=False):
+        self.calls.append((category, key))
+        return self.docs.get((category, key))
+
+
+def _on_time_doc(rid, going, start, surface="芝"):
+    return {"race_id": rid, "date": "2026-11-15", "venue": "東京", "surface": surface, "distance": 1600, "start_time": start, "track_condition": going,
+            "entries": [{"finish_position": 1, "horse_number": 1, "horse_id": "h1"}]}
+
+
+def test_same_day_on_time_reads_flash_results_with_going_only():
+    st = _Store({("race_result_on_time", "202605050401"): _on_time_doc("202605050401", "稍", "09:40"),
+                 ("race_result_on_time", "202605050402"): _on_time_doc("202605050402", "", "10:10")})
+    d = v3.same_day_on_time(st, ["202605050401", "202605050402", "202605050403"])
+    assert d["race_id"].tolist() == ["202605050401"]                     # 馬場が空の速報・無いレースは使わない
+    assert d.iloc[0]["venue_code"] == "05" and d.iloc[0]["track_condition"] == "稍"
+    assert all(c == "race_result_on_time" for c, _ in st.calls)
+    assert v3.same_day_on_time(_Store({}), ["x"]) is None
+
+
+def test_flash_results_fill_card_and_race_result_wins():
+    st = _Store({("race_result_on_time", "202605050401"): _on_time_doc("202605050401", "重", "09:40")})
+    card = pd.DataFrame({"race_id": ["202605050405"], "horse_id": ["a"], "date": "2026-11-15", "venue_code": "05", "surface": "芝",
+                         "start_time": "12:00", "track_condition": None})
+    ot = v3.same_day_done(v3.same_day_on_time(st, ["202605050401"]), card)
+    assert v3.fill_going_from_same_day(card, ot)["track_condition"].iloc[0] == "重"
+    rr = ot.assign(track_condition="良")                                     # 確定結果（race_result）があるレースは、そちらを優先する
+    assert v3._concat_done(rr, ot)["track_condition"].tolist() == ["良"]
+    assert v3._concat_done(None, ot) is ot and v3._concat_done(rr, None) is rr
+
+
+def _live_card(rid="202605050405"):
+    return pd.DataFrame({"race_id": [rid], "horse_id": ["a"], "date": "2026-11-15", "venue_code": "05", "surface": "芝",
+                         "start_time": "12:00", "track_condition": None})
+
+
+def test_on_time_done_reads_only_earlier_races_without_race_result():
+    doc = _on_time_doc("202605050402", "重", "10:10")
+    doc["date"] = ""                                                        # 速報の日付が取れていなくても、同じ開催の日付で使う
+    st = _Store({("race_result_on_time", "202605050402"): doc})
+    rr = pd.DataFrame({"race_id": ["202605050401"], "track_condition": ["良"]})
+    d = v3.on_time_done(st, _live_card(), rr)
+    assert d["race_id"].tolist() == ["202605050402"]
+    read = [k for _, k in st.calls]
+    assert "202605050401" not in read                                       # 確定結果があるレースは読まない
+    assert read == ["202605050402", "202605050403", "202605050404"]          # 今回（5R）より後のレースは読まない
+    st.calls.clear()
+    v3.on_time_done(st, _live_card(), rr)
+    assert st.calls == []                                                   # 続けて呼んでも読み直さない（v3・v5・v6・sec77 で 1 回分）
+
+
+def test_on_time_done_failure_returns_none():
+    class _Broken:
+        def load(self, *a, **k):
+            raise RuntimeError("gcs down")
+
+    assert v3.on_time_done(_Broken(), _live_card(), None) is None          # 1 件ずつの失敗は読めなかった扱い（予測は続ける）
+    assert v3.on_time_done(None, _live_card(), None) is None
+
+
+def test_on_time_done_reads_flash_when_race_result_lacks_going():
+    st = _Store({("race_result_on_time", "202605050401"): _on_time_doc("202605050401", "稍", "09:40")})
+    rr = pd.DataFrame({"race_id": ["202605050401"], "track_condition": [""]})   # 確定結果はあるが馬場が空 → 速報を読む
+    d = v3.on_time_done(st, _live_card(), rr)
+    assert d is not None and d["track_condition"].tolist() == ["稍"]
