@@ -74,6 +74,7 @@ function renderEval(){const E=D.eval.versions;const BK=Object.keys(D.eval.baseli
    '<h2>件数が多い版（各期間 20 走・50 走以上）</h2>'+table(VH,vrB)+'<h2>件数が少なく過学習のおそれがある版（各期間 3・5・8 走以上）</h2><p class="muted">ユーザーの追記「件数が少ないやや過学習気味の抽出条件でも構わない」で足した版。件数が少ないので、点（縮めた点）が全体 ±0.10 を越えるかで判定した。偶然で残ったパターンが多く混じるおそれがある。縮めた点 = (払戻の和 + m × 全体の回収率) / (走数 + m)。</p>'+table(VH,vrS)+'<p class="muted">差は同じレースでの「回収率版 − 前日版（成績版）」。◎が同点 = ◎ と ○ の点が同じで、同点の並べ方（成績版の点、または 主の好成績パターンの数 → 馬番）で ◎ が決まったレースの割合。</p>'}
  if(D.eval_r1){const E1=D.eval_r1.versions;const r1=[];for(const [v,e] of Object.entries(E1))for(const p of P){if(e[p])r1.push(row(v,p,e[p].all))}
   h+='<h2>第 1 回の評価（中止の馬を直す前のデータ。'+(D.eval_r1.evaluated_at||'')+'）</h2>'+table(head,r1)}
+ if(D.kill)h+=renderKill();
  $('#t-eval').innerHTML=h;document.querySelectorAll('#t-eval table').forEach(sortable)}
 // 2) 重賞ごと
 function renderRaces(){const R=D.races;const grades=[...new Set(R.map(r=>r.grade))].sort();
@@ -107,6 +108,36 @@ function renderRoi(){const X=D.roi;if(!X){$('#t-roi').innerHTML='<p class="muted
  $('#t-roi').innerHTML=`<h2>主に見る版で残ったパターン（${X.primary}）</h2><p class="muted wrap">好 = そのレースの as-of の点が正のときに当てはまった馬、凡 = 負のとき。発見 2018〜2021・確認 2022〜2024 の重賞での実際の成績と回収率。[ ] はレース単位のブートストラップの、採否に使った片側の区間（発見は 5%〜95%、確認は 10%〜90% の点。好は下限、凡は上限が全体の回収率を越えたものが残る）。複勝率の（ ）は頭数から見た期待。</p>`+
   table(['切り口','水準','向き','発見 走/レース','発見 複勝率','発見 単勝の回収率','発見 複勝の回収率','確認 走/レース','確認 複勝率','確認 単勝の回収率','確認 複勝の回収率'],rows);document.querySelectorAll('#t-roi table').forEach(sortable)}
 const R={eval:renderEval,race:renderRaces,er:renderEvalRaces,ty:renderTypes,roi:renderRoi},done={};
+// 消しの版（3 回目の評価）
+function renderKill(){const K=D.kill;const E=x=>String(x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));const L=`${K.span[0]}-${K.span[1]}`;const B=K.base[L],Pe=K.primary_eval[L];if(!B||!Pe)return '';
+ const pc=o=>o&&o.est!=null?`${pct(o.est)} <span class="muted">[${pct(o.lo)}, ${pct(o.hi)}]</span>`:'—';
+ const dp=o=>o&&o.est!=null?`${o.est>=0?'+':''}${(100*o.est).toFixed(1)}pt <span class="muted">[${(100*o.lo).toFixed(1)}, ${(100*o.hi).toFixed(1)}]</span>`:'—';
+ const BL={win:'◎ 勝率',place:'◎ 複勝率',top3_in3:'◎○▲ の 3 着内（頭）',roi_tansho:'◎ 単勝',roi_fukusho:'◎ 複勝',roi_umaren:'◎→○▲ 馬連（2 点）',roi_wide:'◎→○▲ ワイド（2 点）',
+  roi_umaren_all:'◎→消しでない全頭 馬連',roi_wide_all:'◎→消しでない全頭 ワイド',roi_umaren_3:'◎→相手 3 頭 馬連',roi_wide_3:'◎→相手 3 頭 ワイド',roi_umaren_4:'◎→相手 4 頭 馬連',
+  roi_wide_4:'◎→相手 4 頭 ワイド',roi_umaren_5:'◎→相手 5 頭 馬連',roi_wide_5:'◎→相手 5 頭 ワイド'};
+ const num1=o=>o&&o.est!=null?`${o.est.toFixed(2)} <span class="muted">[${o.lo.toFixed(2)}, ${o.hi.toFixed(2)}]</span>`:'—';
+ const r1=Object.keys(BL).map(k=>{const isN=k==='top3_in3';const f=isN?num1:pc;const d=Pe.diff_vs_前日版[k];
+  const dd=isN?(d?`${d.est>=0?'+':''}${d.est.toFixed(2)} <span class="muted">[${d.lo.toFixed(2)}, ${d.hi.toFixed(2)}]</span>`:'—'):dp(d);
+  const c=x=>x.all[k]&&x.all[k].cost!=null?Math.round(x.all[k].cost/100).toLocaleString()+' 点':'';
+  return `<tr><td>${BL[k]}</td><td class="n">${f(B.all[k])}</td><td class="n">${f(Pe.all[k])}</td><td class="n">${dd}</td><td class="n">${c(B)}</td><td class="n">${c(Pe)}</td></tr>`});
+ const ks=o=>`<td class="n">${o.races}</td><td class="n">${o.killed_per_race.toFixed(1)}</td><td class="n">${o.left_per_race.toFixed(1)}</td><td class="n">${pct(o.killed_top3_rate)}</td><td class="n">${pct(o.killed_e3_rate)}</td><td class="n">${pct(o.killed_win_rate)}</td><td class="n">${pct(o.race_miss_rate)}</td><td class="n">${pct(o.honmei_killed_rate)}</td>`;
+ const r2=Object.keys(K.primary_eval).map(p=>`<tr><td>${E(p)}</td>${ks(K.primary_eval[p].kill)}</tr>`);
+ const r3=K.table.map(v=>{const q=v.params;const nm=q.only_roi?'回収率の避けるだけ':`${q.crit}・${q.nmin}走・${q.layer}・${q.hits}つ以上・避ける${q.roi7==='入れる'?'あり':'なし'}`;
+  const dv=(a)=>a&&a[0]!=null?`${pct(a[0])} <span class="muted">(${pct(a[1])})</span>`:'—';const k=v.kill;
+  const dd=x=>x?`<span class="${x[1]>0?'good':x[2]<0?'bad':''}">${x[0]>=0?'+':''}${(100*x[0]).toFixed(1)}</span>`:'—';
+  return `<tr><td class="wrap">${v.primary?'<b>'+E(nm)+'</b>（主に見る版）':E(nm)}</td><td>${E(q.honmei)}</td><td>${v.passes?'通過':''}</td><td class="n">${dv(v.dev.disc)}</td><td class="n">${dv(v.dev.conf)}</td>`+
+   `<td class="n">${k.killed_per_race.toFixed(1)}</td><td class="n">${pct(k.killed_top3_rate)} <span class="muted">(${pct(k.killed_e3_rate)})</span></td><td class="n">${pct(k.race_miss_rate)}</td><td class="n">${pct(v.all.place)}</td>`+
+   ['roi_wide','roi_umaren_all','roi_wide_all','roi_umaren_3','roi_wide_3'].map(c=>`<td class="n" data-v="${v.all[c]??''}">${pct(v.all[c])} ${dd(v.diff[c])}</td>`).join('')+'</tr>'});
+ return `<h2>消しの版（3 回目の評価: 2025・2026 年の結果を二度見た後。${K.n_versions} 版）</h2><div class="panel wrap">好成績の点（前日版）で ◎○ を選び、極端に成績の悪いルールに当てはまる馬を「消し」にして、相手を消去法で絞る（ユーザーの依頼、統括役経由）。
+ 版と主に見る版は 2016〜2024 年の中だけで、払戻を使わない消しの精度で決め、${E(K.frozen_at)} に凍結してから ${E(K.evaluated_at)} に 1 回だけ評価した。主に見る版: <b>${E(K.primary)}</b>。
+ 消しの条件: ${E(K.rules.stat)}。基準: ${Object.entries(K.rules.crit).map(([a,b])=>E(a+' = '+b)).join('／')}。並び: ${E(K.rules.marks)}。買い方: ${E(K.rules.bets)}。
+ 「そのまま」の版は ◎ が前日版と同じなので、◎ の単勝・複勝は前日版と同じ値（差が出るのは相手の券種だけ）。区間はレース単位のポアソン(1) の重みのブートストラップ 95%。
+ ${K.n_versions} 版 × 券種の数だけ比べているので、どれかの版が偶然よく見える。主に見る版以外の値は割り引いて読む。</div>
+ <h2>主に見る版と前日版（消しなし、同じ ${B.all.races} レース）</h2>`+table(['買い方','前日版（消しなし）','主に見る消しの版','差（消し − 前日版）','前日版の点数','消しの版の点数'],r1)+
+ '<h2>消しの誤り（主に見る版）</h2>'+table(['期間','レース','消した頭数','残った頭数','消した馬の 3 着内率','その期待（Σ3/頭数）','消した馬の 1 着率','消した馬が 3 着内に来たレース','◎ が消しに当たったレース'],r2)+
+ '<h2>全版の一覧（2025・2026 年）</h2>'+table(['版','◎○','開発の基準','発見 2018〜2021 の消した馬の 3着内率（期待）','確認 2022〜2024','消した頭数','消した馬の 3着内率（期待）','消した馬が 3着内のレース','◎ 複勝率','◎→○▲ ワイド（差pt）','消しでない全頭 馬連（差pt）','消しでない全頭 ワイド（差pt）','相手 3 頭 馬連（差pt）','相手 3 頭 ワイド（差pt）'],r3)+
+ '<p class="muted">差 pt の色: 緑 = 前日版との差の 95% 区間が 0 より上、赤 = 0 より下。差 pt は前日版（消しなし、同じレース）との差。区間が 0 より上の組は 2025・2026 年で 54 組あるが、偶然でも約 40 組は出る数で、しかも点数の多い「消しでない全頭の馬連」に偏るので、裏付けとしては弱い。</p>'}
+
 function tab(k){document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.k===k));document.querySelectorAll('section').forEach(s=>s.hidden=s.id!=='t-'+k);if(!done[k]){R[k]();done[k]=1}}
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.k));tab('eval');
 """

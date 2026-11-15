@@ -104,3 +104,32 @@ def test_constants_are_json_round_trip_stable():
     import json
     c = K.constants()
     assert json.loads(json.dumps(c)) == json.loads(json.dumps(K.constants())) and c["ed_min_check"] == [3, 3, 3, 5, 10, 20]
+
+
+def test_kill_summary_and_handicapper_html_section(tmp_path):
+    """export.kill_summary が主に見る版と全版の一覧を作り、graded_handicapper.html の検証のタブに消しの節の材料が載る。"""
+    import json
+
+    from src.research.graded.export import kill_summary
+    from src.scripts.docs import build_graded_handicapper_html as OLD
+
+    o = {"est": 0.8, "lo": 0.6, "hi": 1.0, "cost": 100.0}
+    allm = {k: dict(o) for k in ["win", "place", "top3_in3"] + [f"roi_{b}" for b in K.BETS]}
+    kill = {"races": 2, "killed_per_race": 1.0, "left_per_race": 5.0, "horses_per_race": 6.0, "killed": 2, "killed_top3_rate": 0.1,
+            "killed_e3_rate": 0.2, "killed_win_rate": 0.0, "race_miss_rate": 0.5, "honmei_killed_rate": 0.0}
+    per = {"2025-2026": {"all": allm, "kill": kill, "diff_vs_前日版": {k: {"est": 0.0, "lo": -0.1, "hi": 0.1} for k in allm}}}
+    p = K.all_versions()[0]
+    name = K.version_name(p)
+    ev = {"evaluated_at": "t", "note": "3 回目", "span": [2025, 2026], "primary": name, "versions": {"前日版（消しなし）": per, name: per}}
+    pk = {"frozen_at": "f", "n_versions": 1, "rules": {"stat": "x<0", "crit": {"a": "b"}, "marks": "m", "bets": "b"},
+          "versions": [{"name": name, "params": p, "primary": True, "passes": True,
+                        "precision": {"disc": {"top3_rate": 0.1, "e3_rate": 0.2, "killed_per_race": 1.0}, "conf": {"top3_rate": 0.1, "e3_rate": 0.2, "killed_per_race": 1.0}}}]}
+    ks = kill_summary(ev, pk)
+    assert ks["primary"] == name and len(ks["table"]) == 1 and ks["table"][0]["diff"]["roi_wide_all"] == [0.0, -0.1, 0.1]
+    src = tmp_path / "r.json"
+    src.write_text(json.dumps({"prereg": {"frozen_at": "x"}, "races": [], "eval_races": [], "kill": ks}, ensure_ascii=False), encoding="utf-8")
+    h = OLD.build(src, tmp_path / "h.html").read_text(encoding="utf-8")
+    import re
+    data = json.loads(re.search(r'<script type="application/json" id="data">(.*?)</script>', h, re.S).group(1).replace("<\\/", "</"))
+    assert data["kill"]["primary"] == name and data["kill"]["table"][0]["name"] == name   # slim を通っても消しの材料が残る
+    assert "function renderKill" in h and "if(D.kill)h+=renderKill()" in h

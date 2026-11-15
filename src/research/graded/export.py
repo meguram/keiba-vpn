@@ -20,7 +20,7 @@ from src.research.graded import catalog as CAT
 from src.research.graded import model as M
 from src.research.graded import tally as TL
 from src.research.graded.features import GRADED_OUT
-from src.research.graded.run import PREREG, PREREG_ROI, REPO, _ctx, _load, _rows, load_payoff, with_returns
+from src.research.graded.run import PREREG, PREREG_KILL, PREREG_ROI, REPO, _ctx, _load, _rows, load_payoff, with_returns
 
 RACES_DIR = REPO / "data/local/graded/races"
 TABLE_END = 2024
@@ -248,6 +248,25 @@ def roi_summary(pre_roi: dict) -> dict:
             "primary_patterns": pats}
 
 
+def kill_summary(ev: dict, pk: dict) -> dict:
+    """HTML 用: 消しの版（3 回目の評価）の主に見る版と前日版（消しなし）の期間ごとの値、全版の一覧（主な値だけ）。"""
+    lab = f"{ev['span'][0]}-{ev['span'][1]}"
+    base = ev["versions"]["前日版（消しなし）"]
+    P = ev["primary"]
+    keys = ["place", "top3_in3", "roi_fukusho", "roi_umaren", "roi_wide", "roi_umaren_all", "roi_wide_all", "roi_umaren_3", "roi_wide_3"]
+    table = []
+    for v in pk["versions"]:
+        e = ev["versions"].get(v["name"], {}).get(lab)
+        if e is None:
+            continue
+        table.append({"name": v["name"], "params": v["params"], "primary": v["primary"], "passes": v["passes"],
+                      "dev": {k: [x["top3_rate"], x["e3_rate"], x["killed_per_race"]] for k, x in v["precision"].items()},
+                      "kill": e["kill"], "all": {k: e["all"][k]["est"] for k in keys},
+                      "diff": {k: [e["diff_vs_前日版"][k][c] for c in ("est", "lo", "hi")] for k in keys if k in e["diff_vs_前日版"]}})
+    return {"evaluated_at": ev["evaluated_at"], "note": ev["note"], "frozen_at": pk["frozen_at"], "primary": P, "n_versions": pk["n_versions"],
+            "rules": pk["rules"], "span": ev["span"], "base": base, "primary_eval": ev["versions"][P], "table": table}
+
+
 def cmd_export() -> None:
     pre = json.loads(PREREG.read_text(encoding="utf-8"))
     ev = json.loads((GRADED_OUT / "eval.json").read_text(encoding="utf-8"))
@@ -294,6 +313,15 @@ def cmd_export() -> None:
         else:
             e1 = json.loads(r1.read_text(encoding="utf-8"))
             rep["eval_r1"] = {"evaluated_at": e1.get("evaluated_at"), "versions": {k: {p: {"all": x["all"]} for p, x in v.items()} for k, v in e1["versions"].items()}}
+    ek = GRADED_OUT / "eval_kill.json"
+    if ek.exists() and PREREG_KILL.exists():   # 消しの版（3 回目の評価）
+        ev_k = json.loads(ek.read_text(encoding="utf-8"))
+        pk = json.loads(PREREG_KILL.read_text(encoding="utf-8"))
+        names = {v["name"] for v in pk["versions"]}
+        if ev_k.get("smoke") or ev_k.get("prereg_kill_frozen_at") != pk["frozen_at"] or not names <= set(ev_k.get("completed", [])):
+            print(f"注意: {ek} は試運転・途中で止まった評価・別の凍結のどれかなので、HTML の消しの版の節を出さない", flush=True)
+        else:
+            rep["kill"] = kill_summary(ev_k, pk)
     (GRADED_OUT / "graded_report.json").write_text(json.dumps(rep, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     RACES_DIR.mkdir(parents=True, exist_ok=True)
     tn = {t.id: t.name for t in CAT.TYPES}
