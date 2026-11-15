@@ -190,7 +190,25 @@ def buy_block(cells: pd.DataFrame, pre_buy: dict, races: list[dict]) -> dict:
     return {"primary": pre_buy["primary"], "frozen_at": pre_buy["frozen_at"], "rules": pre_buy["rules"], "n_versions": pre_buy["n_versions"],
             "counts": prim["cells_2016_2024"], "dev": prim["dev"], "n_type_combos": pre_buy["n_type_combos_per_race"],
             "n_cells_by_race_layer": {f"{k[0]}|{k[1]}": int(v) for k, v in n_all.items()}, "max_per_race": MAX_BUY_PER_RACE,
-            "n_rows": int(len(c)), "cols": cols}
+            "n_rows": int(len(c)), "cols": cols, "eval": _buy_eval(pre_buy), "n_depth1": int((cells["depth"] == 1).sum()),
+            "depth1_main_n": [int(cells.loc[cells["depth"] == 1, "n"].min()), int(cells.loc[cells["depth"] == 1, "n"].max())] if (cells["depth"] == 1).any() else None}
+
+
+def _buy_eval(pre_buy: dict) -> dict | None:
+    """4 回目の評価（2025・2026 年）の主に見る版の値。試運転・別の凍結の結果は使わない。"""
+    p = GRADED_OUT / "eval_buy.json"
+    if not p.exists():
+        return None
+    e = json.loads(p.read_text(encoding="utf-8"))
+    if e.get("smoke") or e.get("prereg_buy_frozen_at") != pre_buy["frozen_at"]:
+        return None
+    v = e["versions"][e["primary"]]
+    keep = ("cells", "races_with_buy", "buy_share", "buy", "honmei_buy", "honmei_preday_same_races")
+    big = [x["real"]["buy"] for x in e["versions"].values() if x["real"]["buy"]["n"] >= 20]
+    n70 = sum(1 for x in e["versions"].values() if (x["real"]["buy"]["top3_rate"] or 0) >= 0.7)
+    return {"evaluated_at": e["evaluated_at"], "evaluation_round": e["evaluation_round"], "n_versions_70": n70,
+            "max_top3_20": max((x["top3_rate"] or 0 for x in big), default=None), "races": e["races"], "races_other_course": e["races_other_course"], "note": e["note"],
+            "real": {k: v["real"][k] for k in keep}, "perm": [{k: x[k] for k in keep} for n, x in v.items() if n != "real"], "ci": e["primary_ci"]}
 
 
 def cmd_export_rules() -> None:

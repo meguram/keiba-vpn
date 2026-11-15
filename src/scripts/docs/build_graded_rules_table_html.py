@@ -119,6 +119,19 @@ def buy_section(B: dict | None, R: dict) -> tuple[str, str]:
     def rec(e):
         b = e.get("buy", {})
         return f"{b.get('n', 0)} 頭 [{'-'.join(map(str, b.get('rec', [])))}]・3着内率 {100 * (b.get('top3_rate') or 0):.1f}%・単勝 {100 * (b.get('roi_t') or 0):.1f}%・複勝 {100 * (b.get('roi_f') or 0):.1f}%"
+    E = B.get("eval")
+    ev_li = ""
+    if E:
+        ci = E["ci"]
+        pc = lambda o: f"{100 * o['est']:.1f}%［{100 * o['lo']:.1f}, {100 * o['hi']:.1f}］"   # noqa: E731
+        dpt = lambda o: f"{100 * o['est']:+.1f}pt［{100 * o['lo']:+.1f}, {100 * o['hi']:+.1f}］"   # noqa: E731
+        hb, hp = E["real"]["honmei_buy"], E["real"]["honmei_preday_same_races"]
+        ev_li = (f"<li><b>{E['evaluation_round']} 回目の評価（2025・2026 年の結果を {E['evaluation_round'] - 1} 度見た後。{escape(E['evaluated_at'])} に 1 回だけ）</b>: 最新の回と同じコースの重賞 {E['races']} レース"
+                 f"（別のコースの {E['races_other_course']} レースは外した）。買いの馬 {escape(rec(E['real']))}（{E['real']['races_with_buy']} レース、出走馬の "
+                 f"{100 * E['real']['buy_share']:.1f}%）。レース単位の 95% 区間: 3着内率 {pc(ci['top3_rate'])}・単勝 {pc(ci['roi_t'])}・複勝 {pc(ci['roi_f'])}。"
+                 f"◎ を買いの馬に限ると 3着内率 {100 * (hb['top3_rate'] or 0):.1f}%・単勝 {100 * (hb['roi_t'] or 0):.1f}%、同じレースの前日版の ◎ は "
+                 f"{100 * (hp['top3_rate'] or 0):.1f}%・{100 * (hp['roi_t'] or 0):.1f}%（差 3着内率 {dpt(ci['honmei_place_diff'])}）。"
+                 f"偶然の組の買いの馬: {escape(' ／ '.join(rec(x) for x in E['perm']))}。全 {B['n_versions']} 版のうち 3 着内 7 割以上は {E['n_versions_70']} 版（買いの馬が 20 頭以上の版では最高 {100 * (E['max_top3_20'] or 0):.1f}%）。</li>")
     pager = '<div class="pager"><button class="bprev">前へ</button><span class="bpg"></span><button class="bnext">次へ</button></div>'
     sec = f"""<section class="tab" id="t-buy" hidden><div class="panel wrap"><p><b>買いの組み合わせ</b>（主に見る買いの版: {escape(B['primary'])}、{escape(B['frozen_at'])} に凍結、全 {B['n_versions']} 版）。
 ユーザーの依頼（統括役経由）: 「買い」は 3 着内が 7〜8 割を占め、単勝か複勝の回収率が 100% を超える抽出条件に限る（過学習は許す）。</p>
@@ -126,7 +139,7 @@ def buy_section(B: dict | None, R: dict) -> tuple[str, str]:
 <li>探した型の組み合わせの数（1 重賞あたり）: 主 {B['n_type_combos']['主']:,}・副 {B['n_type_combos']['副']:,}。{escape(B['rules']['prune'])}。</li>
 <li>2016〜2024 年で見つかった組（主に見る版の条件）: 本物 {cnt.get('real', 0):,} 組。結果を入れ替えた偶然のデータでも 平均 {ch:,.0f} 組 見つかる。{escape(B['rules']['chance'])}。</li>
 <li>開発の検証（2016〜2021 年で探して 2022〜2024 年の重賞に当てはめた買いの馬）: 本物の組 {escape(rec(dv))}。偶然の組 {escape(' ／ '.join(rec(e) for e in dp))}。</li>
-<li>{escape(B['rules']['roi_note'])}。{escape(B['rules']['dedupe'])}。</li>
+{ev_li}<li>{escape(B['rules']['roi_note'])}。{escape(B['rules']['dedupe'])}。</li>
 <li>表は重賞 × 層ごとに、二項の確率の小さい順に {B['max_per_race']} 組まで（載せた {B['n_rows']:,} 組）。</li></ul></div>
 <div class="ctl"><label>重賞名・コース<input id="bq" type="search" placeholder="例: 京都牝馬S"></label><label>層<select id="bly">{_opt([("", "すべて"), ("主", "主"), ("副", "副")])}</select></label>
 <label>切り口・水準<input id="bqt" type="search" placeholder="例: A04・1着"></label><label>件数の下限<input id="bmn" type="number" min="0" value="0" style="width:6em"></label></div>
@@ -160,6 +173,10 @@ def build(src: Path = SRC, out: Path = OUT) -> Path:
            f'<label>件数の下限<input id="mn" type="number" min="0" step="1" value="0" inputmode="numeric" style="width:6em"></label>'
            f'</div>')
     buy_sec, tabs = buy_section(R.get("buy"), R)
+    Bk = R.get("buy") or {}
+    n32 = sum(1 for f in R["cols"]["flags"] if f & 32)
+    buy_note = (f"今の凍結では、切り口 1 つで条件を満たす組は {Bk['n_depth1']} 組（走数 {Bk['depth1_main_n'][0]}〜{Bk['depth1_main_n'][1]}）で、"
+                f"重賞・層まで一致して「好（買い）」になった行は {n32} 行。" if Bk.get("depth1_main_n") else "")
     pager = '<div class="pager"><button class="prev">前へ</button><span class="pg"></span><button class="next">次へ</button></div>'
     html = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>重賞のルール一覧</title><style>{CSS}{EXTRA_CSS}</style></head><body><main>
@@ -173,7 +190,7 @@ def build(src: Path = SRC, out: Path = OUT) -> Path:
 件数・率・回収率は、その層の母集団の値（主の件数が無い水準も、副・全重賞で点が付けば載せた。全重賞の行は、同じ切り口・水準なら重賞が違っても同じ値になる）。参考に主の [1-2-3-着外] も載せた。</li>
 <li><b>回収率</b> = その母集団の馬を全頭 100 円ずつ買ったときの払戻 ÷ 購入額。分母は払戻の解けた走数（件数とは少し違う）。区間は載せていない。
 比べる相手の、全重賞の全頭の回収率: {base}。</li>
-<li><b>縮めた点 x</b> = log（縮めた 実際の3着内 ÷ 頭数から見た期待）。正なら好、負なら凡（避ける）。好のうち「好（買い）」は、「買いの組み合わせ」のタブの主に見る版の組の条件（3 着内 70% 以上・回収率 100% 超・走数の下限など）を満たす切り口 1 つの組と、重賞・層・切り口・水準が同じ行だけ。ほかは「好傾向（弱い）」（3 着内の割合が低く、着外が多い）。馬が買いになるのは、版の下限の数以上の組に当たったとき。縮めた比 = exp(x)。成績版の点は、馬ごとの x × 型の重み（発見の z）の和。回収率版は重みを付けない（回収率版だけで使う型の重みは —）。</li>
+<li><b>縮めた点 x</b> = log（縮めた 実際の3着内 ÷ 頭数から見た期待）。正なら好、負なら凡（避ける）。好のうち「好（買い）」は、「買いの組み合わせ」のタブの主に見る版の組の条件（3 着内 70% 以上・回収率 100% 超・走数の下限など）を満たす切り口 1 つの組と、重賞・層・切り口・水準が同じ行だけ。ほかは「好傾向（弱い）」（3 着内の割合が低く、着外が多い）。馬が買いになるのは、版の下限の数以上の組に当たったとき。{buy_note}縮めた比 = exp(x)。成績版の点は、馬ごとの x × 型の重み（発見の z）の和。回収率版は重みを付けない（回収率版だけで使う型の重みは —）。</li>
 <li><b>区分</b>: 好成績 = 主で上振れし、3着内が出た回が 3 回以上。凡走 = 主で下振れし、該当馬がいた回が 4 回以上で 3着内の回が 1 回以下。参考 = それ以外（点には効く）。</li>
 <li><b>採否</b>: 成績版（前日版・当日版）は、点に使う型（束ねの代表）の x≠0 の水準すべてで採用。前日版が評価の比較の基準。
 回収率版（主に見る版: {escape(R['primary'])}）は、発見 2018〜2021・確認 2022〜2024 の両方で回収率の基準を満たしたパターン（{pats}）が主・副の層で当たるときだけ点が付き、ほかの水準は点 0。</li>
