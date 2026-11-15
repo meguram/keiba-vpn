@@ -16,11 +16,12 @@ import numpy as np
 import pandas as pd
 
 from src.research.graded import catalog as CAT
+from src.research.graded import kill as K
 from src.research.graded import model as M
 from src.research.graded import tally as TL
 from src.research.graded.export import TABLE_END, _kind, roi_flag
 from src.research.graded.features import GRADED_OUT
-from src.research.graded.run import PREREG, PREREG_ROI, _load, with_returns
+from src.research.graded.run import PREREG, PREREG_KILL, PREREG_ROI, _load, with_returns
 
 SUMS = ["n", "w1", "w2", "w3", "e3", "np", "rt", "rf", "ed", "edhit"]
 LAYER_NAME = {"主": "主", "副": "副", "全体": "全重賞"}   # shrink の「全体」は全重賞（b.graded）の集計
@@ -42,11 +43,13 @@ def _sum_lv(g: pd.DataFrame | None) -> pd.DataFrame:
     return g.groupby(level="level")[SUMS].sum()
 
 
-def rule_rows(d: pd.DataFrame, L: pd.DataFrame, pre: dict, pre_roi: dict) -> tuple[list[dict], list[dict]]:
-    """(重賞の一覧, 行の一覧)。行は 重賞 × 型 × 水準 で x≠0 のもの。"""
+def rule_rows(d: pd.DataFrame, L: pd.DataFrame, pre: dict, pre_roi: dict, pre_kill: dict | None = None) -> tuple[list[dict], list[dict]]:
+    """(重賞の一覧, 行の一覧)。行は 重賞 × 型 × 水準 で x≠0 のもの。pre_kill（消しの版の凍結）があれば、主に見る消しの版の基準を
+    この凍結の件数に当てはめて、消しに当たる行に flags の 16 を立てる（評価では as-of の件数で判定する。2 つ以上で消す版でも、行の印は 1 つの当たり）。"""
     sh, lam = pre["shrink"], pre["score"]["lam"]
     prim = next(v for v in pre_roi["versions"] if v["primary"])
     pset = {tuple(p) for p in prim["patterns"]}
+    kp = next(v["params"] for v in pre_kill["versions"] if v["primary"]) if pre_kill else None
     used = {s: set(pre["sets"][s]["used"]) for s in ("preday", "dayof")}
     types = sorted(used["preday"] | used["dayof"] | set(prim["used"]))
     b = TL.base_frame(d)
@@ -87,6 +90,13 @@ def rule_rows(d: pd.DataFrame, L: pd.DataFrame, pre: dict, pre_roi: dict) -> tup
             a["all_main_n"], a["all_sub_n"] = r["all_main_n"], r["all_sub_n"]
             S = M.shrink(a, sh["m_g"], sh["m_s"], sh["m_m"], lam)
             S = S[S["x"] != 0]
+            if kp is not None:
+                kh = np.zeros(len(S), bool)
+                if not kp.get("only_roi") and t in used["preday"]:
+                    kh |= K.stat_hits(S, kp["crit"], kp["nmin"], kp["layer"])
+                if kp.get("only_roi") or kp.get("roi7") == "入れる":
+                    kh |= K.roi_hits(S, prim)
+                S = S.assign(kill=kh)
             for s in S.itertuples():
                 ly = LAYER_NAME[s.layer]
                 p = "main" if s.layer == "主" else "glob" if s.layer == "全体" else ("sub4" if s.sub_kind == "3勝以上" else "sub")
@@ -108,12 +118,12 @@ def rule_rows(d: pd.DataFrame, L: pd.DataFrame, pre: dict, pre_roi: dict) -> tup
                     "x": round(float(s.x), 4), "rm": round(float(s.r_m), 4),
                     "main": [int(round(getattr(s, f"main_{k}"))) for k in ("n", "w1", "w2", "w3")], "med": [int(s.main_edhit), int(s.main_ed)],
                     # 8 = パターンは回収率の基準を満たしたが、この行は層（全重賞）が回収率版の層に入らないので点に使わない
-                    "flags": flags | (8 if (t, s.level, dr) in pset and not flags & 4 else 0), "roi_kept": rk_ == "回収率で残った",
+                    "flags": flags | (8 if (t, s.level, dr) in pset and not flags & 4 else 0) | (16 if kp is not None and s.kill else 0), "roi_kept": rk_ == "回収率で残った",
                 })
     return races, rows
 
 
-def pack(races: list[dict], rows: list[dict], pre: dict, pre_roi: dict) -> dict:
+def pack(races: list[dict], rows: list[dict], pre: dict, pre_roi: dict, pre_kill: dict | None = None) -> dict:
     """行を列ごとの配列にし、繰り返す文字列（型・水準・区分・層）は辞書の番号にする。"""
     tn = {t.id: t for t in CAT.TYPES}
     used = sorted({r["t"] for r in rows})
@@ -137,7 +147,9 @@ def pack(races: list[dict], rows: list[dict], pre: dict, pre_roi: dict) -> dict:
     prim = next(v for v in pre_roi["versions"] if v["primary"])
     return {"frozen_at": pre["frozen_at"], "frozen_at_roi": pre_roi["frozen_at"], "primary": prim["name"],
             "primary_patterns": prim["patterns"], "years": [2016, TABLE_END], "overall_roi": pre_roi["overall_roi"],
-            "n_rows": len(rows), "races": races, "types": tinfo, "levels": lvs, "dict": dic, "cols": col}
+            "n_rows": len(rows), "races": races, "types": tinfo, "levels": lvs, "dict": dic, "cols": col,
+            "kill": ({"primary": pre_kill["primary"], "frozen_at": pre_kill["frozen_at"], "rules": pre_kill["rules"],
+                      "params": next(v["params"] for v in pre_kill["versions"] if v["primary"])} if pre_kill else None)}
 
 
 def cmd_export_rules() -> None:
@@ -145,7 +157,8 @@ def cmd_export_rules() -> None:
     pre_roi = json.loads(PREREG_ROI.read_text(encoding="utf-8"))
     d, L = _load()
     d = with_returns(d)
-    races, rows = rule_rows(d, L, pre, pre_roi)
+    pre_kill = json.loads(PREREG_KILL.read_text(encoding="utf-8")) if PREREG_KILL.exists() else None
+    races, rows = rule_rows(d, L, pre, pre_roi, pre_kill)
     out = GRADED_OUT / OUT_NAME
-    out.write_text(json.dumps(pack(races, rows, pre, pre_roi), ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    out.write_text(json.dumps(pack(races, rows, pre, pre_roi, pre_kill), ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print("rules", len(races), "races,", len(rows), "rows ->", out, f"{out.stat().st_size / 1e6:.1f} MB", flush=True)

@@ -5,6 +5,7 @@
   python -m src.research.graded.run select     # 縮める強さ・型の採否・束ね・点の足し方を 2016〜2024 の中だけで決め、prereg.json に凍結する
   python -m src.research.graded.run smoke      # evaluate と同じ処理を確認期間（2022〜2024）で流す試運転（2025・2026 年の行は読み込むが、評価にも出力にも使わない）
   python -m src.research.graded.run evaluate   # 2025・2026 年の重賞で 1 回だけ評価する（EVALUATED.json があれば止まる）
+  python -m src.research.graded.run select_kill / smoke_kill / evaluate_kill  # 消しの版（凍結 → 試運転 → 3 回目の評価）
   python -m src.research.graded.run export_rules  # 各重賞で点に効いているルールの全件の表の材料（graded_rules.json）
   python -m src.research.graded.run export     # 重賞ごとのパターン表・レースごとの JSON・HTML の材料（graded_report.json）
 
@@ -43,9 +44,13 @@ REPO = Path(__file__).resolve().parents[3]
 # 事前登録の置き場（commit する）。作業ツリーに書けないときは GRADED_PREREG で別の場所に書き、写して commit する
 PREREG = Path(os.environ.get("GRADED_PREREG") or Path(__file__).with_name("prereg.json"))
 PREREG_ROI = Path(os.environ.get("GRADED_PREREG_ROI") or Path(__file__).with_name("prereg_roi.json"))
+PREREG_KILL = Path(os.environ.get("GRADED_PREREG_KILL") or Path(__file__).with_name("prereg_kill.json"))
 ROUND2_NOTE = ("2 回目の評価（2025・2026 年の結果を一度見た後）。ユーザーの依頼（統括役経由、2026-11-14）: 各パターンに回収率を持たせ、"
                "回収率まで裏付けのあるパターンだけで印を付ける。基準はいろいろな版を並べる。")
 DISC, CONF, EVAL = (2018, 2021), (2022, 2024), (2025, 2026)
+ROUND3_NOTE = ("3 回目の評価（2025・2026 年の結果を二度見た後）。ユーザーの依頼（統括役経由、2026-11-15）: 好成績の点で ◎○ を選び、"
+               "極端に成績の悪いルール（[0-0-0-n] など）に当てはまる馬を消して、相手を消去法で絞る。版はまとめて prereg_kill.json に凍結した。")
+DEV_PAY = (2020, 2024)   # 払戻の表（payoff.parquet）は 2020 年から。開発期間の買い方の値はこの範囲だけ（版の選択には使わない）
 Z_DISC, Z_CONF = 1.645, 1.2816          # 発見は片側 95%、確認は片側 90%
 LAMS = (0.5, 1.0, 2.0)
 PAYOFFS = [REPO / "data/local/modeling/betting/payoff.parquet", REPO / "data/local/modeling/betting_2026/payoff.parquet"]
@@ -478,9 +483,151 @@ def cmd_evaluate(smoke: bool = False, round2: bool = False) -> None:
     print(json.dumps({k: v.get(lab, {}).get("all") for k, v in list(res["versions"].items())[:6]}, ensure_ascii=False, indent=1)[:3000])
 
 
+# ------------------------------------------------------------------ 消しの版（3 回目の評価）
+def _kill_inputs(span, rows: pd.DataFrame):
+    """as-of の件数 → (前日版の点の S, 前日版の印に頭数を付けたもの)。"""
+    pre = json.loads(PREREG.read_text(encoding="utf-8"))
+    T = _yr(_ctx(GRADED_OUT / "tally.parquet", rows), span)
+    S, mk = scored(T, pre, "preday")
+    mk = mk.merge(rows[["row", "field"]], on="row", how="left")
+    return pre, S, mk
+
+
+def cmd_select_kill() -> None:
+    """消しの版の一覧と主に見る版を 2016〜2024 年の中だけで決め（払戻を使わない消しの精度で選ぶ）、PREREG_KILL に凍結する。"""
+    from src.research.graded import kill as K
+    if (GRADED_OUT / "EVALUATED_KILL.json").exists():
+        sys.exit("消しの版は評価が済んでいる。評価の後に版を作り直さない")
+    if PREREG_KILL.exists() and os.environ.get("GRADED_RESELECT") != "1":
+        sys.exit(f"{PREREG_KILL} は凍結済み。作り直すなら GRADED_RESELECT=1（評価の前に限る）")
+    pre_roi = json.loads(PREREG_ROI.read_text(encoding="utf-8"))
+    prim_roi = next(v for v in pre_roi["versions"] if v["primary"])
+    d, _ = _load()
+    rows = _rows(d)
+    pre, S, mk = _kill_inputs((DISC[0], CONF[1]), rows)
+    S_kill = S[S["type"].isin(pre["sets"]["preday"]["used"])]
+    S_roi = S[S["type"].isin(prim_roi["used"])]
+    pay = load_payoff()
+    dev = mk[(mk["year"] >= DEV_PAY[0]) & (mk["year"] <= DEV_PAY[1])]
+    vers, cache = [], {}
+    for p in K.all_versions():
+        kk = K.kill_key(p)
+        if kk not in cache:
+            kr = K.killed_rows(S_kill, S_roi, p, prim_roi)
+            hits = 1 if p.get("only_roi") else p["hits"]
+            killed = kr[kr >= hits]
+            cache[kk] = (killed, K.precision_by_period(killed, mk, {"disc": DISC, "conf": CONF}))
+        killed, prec = cache[kk]
+        rt = K.race_metrics_kill(K.order_marks(dev, set(killed.index), p["honmei"]), pay)
+        sb = K.summarize_bets(rt, n_boot=200)
+        vers.append({"name": K.version_name(p), "params": p, "precision": prec, "passes": K.passes(prec),
+                     "dev_bets": {"years": list(DEV_PAY), "races": sb["races"], **{k: v["est"] if isinstance(v, dict) else v for k, v in sb.items() if k != "races"}},
+                     "dev_kill": K.kill_stat(rt)})
+        print(vers[-1]["name"], vers[-1]["passes"], {k: (v["killed"], round(v["top3_rate"] or 0, 3), round(v["e3_rate"] or 0, 3)) for k, v in prec.items()}, flush=True)
+    prim = K.choose_primary(vers)
+    for v in vers:
+        v["primary"] = v["name"] == prim
+    out = {
+        "frozen_at": datetime.now(JST).isoformat(timespec="seconds"),
+        "evaluation_round": 3,
+        "note": ROUND3_NOTE + " 版の一覧・主に見る版は 2016〜2024 年の中だけで、払戻を使わない消しの精度で決めた。評価の後に版を足したり選び直したりしない。",
+        "base_prereg": {"path": "src/research/graded/prereg.json", "frozen_at": pre["frozen_at"], "uses": "前日版の点・印（m・λ・型の重み・使う型）"},
+        "roi_prereg": {"path": "src/research/graded/prereg_roi.json", "frozen_at": pre_roi["frozen_at"], "uses": "主に見る回収率版の避けるパターン（軸 回収率の避ける）"},
+        "periods": {"discovery": DISC, "confirm": CONF, "evaluate": EVAL, "dev_bets": DEV_PAY},
+        "grid": {"crit": K.CRITS, "nmin": K.NMINS, "layer": list(K.LAYERS), "hits": K.HITS, "roi7": K.ROI7, "honmei": K.HONMEI},
+        "constants": K.constants(), "n_versions": len(vers), "primary": prim,
+        "rules": {
+            "kill_types": "前日版の点に使う型（束ねの代表）。軸 回収率の避ける を入れる版は、主に見る回収率版の 7 パターン（型 × 水準 × 凡）も足す",
+            "stat": "馬 × 型の as-of の件数で、点 x<0、かつ版の層のどれかで 走数 ≥ n の下限・異なるレースの数 ≥ 下限（主は 3 回。2016 年からの集計では主の過去の回が 2024 年でも 8 回までなので。副・全重賞は max(3, n の下限/2)）、かつ基準を満たす",
+            "crit": {"3着内0": "その層の 3 着内の数が 0", "上限が期待の半分以下": f"3 着内率の Jeffreys 上側 {K.UPPER_Q:.0%} ≤ {K.UPPER_RATIO} × 期待（Σ3/頭数 ÷ 走数）"},
+            "layer": {"主だけ": "主（同じレース名 × 同じコース。走数 15 未満でも使う）", "主＋副": "主か副（副は全体が 300 走未満なら 3 勝クラス以上）", "全部": "主・副・全重賞"},
+            "roi": "回収率の避けるパターンは、主・副の層で x<0 のとき 1 つの当たりとして数える（export.roi_flag と同じ条件）",
+            "hits": "消しに当たる型の数（重複なし）が下限以上の馬を消し",
+            "marks": "前日版の点の順（点 → 主の好成績パターンの数 → 馬番）。そのまま: ◎○ は点の上位 2 頭、残りは消しでない馬 → 消した馬（補い）の順。"
+                     "消しは◎○にしない: 消しでない馬 → 消した馬（補い）の順に並べて ◎○ から付ける",
+            "bets": "◎ の単勝・複勝（各 100 円）、◎→○▲ の馬連・ワイド（2 点）、◎→消しでない馬すべて（◎ 以外。0 点のレースは購入額 0）、"
+                    "◎→相手 3・4・5 頭（並びの 2 番目から。足りなければ消した馬で補った並びのまま）。購入額 = 点数 × 100 円",
+            "primary": f"払戻を使わない: 発見 {DISC}・確認 {CONF} の両方で 消した馬の 3 着内率 ≤ 期待 × {K.PRECISION_RATIO}、各期間で消した馬 {K.MIN_KILLED} 頭以上。"
+                       f"そのうち 2 期間を合わせた 1 レースあたりの消しの数が最大の版（◎○ は {K.PRIMARY_HONMEI}）。同数は n の下限が大きい → 層が狭い → 3着内0 → 当たる数の下限が大きい → 回収率の避けるを入れない の順",
+            "bootstrap": "レース単位のポアソン(1) の重み（2000 回、主に見る版以外は 1000 回）。1・2 回目の評価（run.summarize・diff_ci の復元抽出）とは方式が違うので、前日版の区間は過去の eval.json と少し違う",
+            "dnf": "完走しなかった馬（着順が無い）は 3 着外として数え、期待（Σ3/頭数）にも入る。重賞では 1 年に数頭",
+            "dev_bets": f"開発期間の買い方の値は {DEV_PAY} の重賞だけ（payoff.parquet が 2020 年から）。版の選択には使わない参考",
+        },
+        "versions": vers,
+    }
+    PREREG_KILL.write_text(json.dumps(out, ensure_ascii=False, indent=1, default=_f), encoding="utf-8")
+    print("primary", prim, "passes", sum(v["passes"] for v in vers), "/", len(vers))
+    print("prereg_kill written", PREREG_KILL)
+
+
+def cmd_evaluate_kill(smoke: bool = False) -> None:
+    """消しの版の評価（3 回目の評価、2025・2026 年で 1 回だけ）。smoke=True は確認期間（2022〜2024、版の選択に使った期間）で配管を確かめるだけ。"""
+    from src.research.graded import kill as K
+    flag = GRADED_OUT / "EVALUATED_KILL.json"
+    span = CONF if smoke else EVAL
+    out_dir = GRADED_OUT / ("smoke_kill" if smoke else ".")
+    if flag.exists() and not smoke:
+        sys.exit(f"消しの版は評価済み（{flag}）。やり直さない")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pk = json.loads(PREREG_KILL.read_text(encoding="utf-8"))
+    if pk.get("constants") != json.loads(json.dumps(K.constants())):
+        sys.exit("kill.py の定数が凍結（prereg_kill.json の constants）と違う。凍結した規則のまま評価する")
+    if [K.version_name(p) for p in K.all_versions()] != [v["name"] for v in pk["versions"]]:
+        sys.exit("kill.py の版の一覧が凍結と違う")
+    pre_roi = json.loads(PREREG_ROI.read_text(encoding="utf-8"))
+    prim_roi = next(v for v in pre_roi["versions"] if v["primary"])
+    d, _ = _load()
+    rows = _rows(d)
+    pre, S, mk = _kill_inputs(span, rows)
+    S_kill = S[S["type"].isin(pre["sets"]["preday"]["used"])]
+    S_roi = S[S["type"].isin(prim_roi["used"])]
+    pay = load_payoff()
+    res = {"evaluated_at": datetime.now(JST).isoformat(timespec="seconds"), "evaluation_round": 3, "note": ROUND3_NOTE, "smoke": smoke,
+           "prereg_kill_frozen_at": pk["frozen_at"], "primary": pk["primary"], "n_versions": pk["n_versions"], "span": span, "versions": {}}
+    if not smoke:
+        flag.write_text(json.dumps({"evaluated_at": res["evaluated_at"], "evaluation_round": 3,
+                                    "note": "消しの版を 2025・2026 年で評価済み（または途中で止まった）。結果を見て版を変えない"}, ensure_ascii=False), encoding="utf-8")
+    base = mk.assign(kill=False)
+    rt_base = K.race_metrics_kill(base, pay)
+    periods = [(str(y), (y, y)) for y in range(span[0], span[1] + 1)] + [(f"{span[0]}-{span[1]}", span)]
+
+    def per_period(rt, full):
+        yr = rt["race_id"].str[:4].astype(int)
+        e = {}
+        for lab, (y0, y1) in periods:
+            r = rt[(yr >= y0) & (yr <= y1)]
+            if len(r) == 0:
+                continue
+            e[lab] = {"all": K.summarize_bets(r, n_boot=2000 if full else 1000), "kill": K.kill_stat(r),
+                      "diff_vs_前日版": K.diff_bets(r, rt_base[rt_base["race_id"].isin(r["race_id"])], n_boot=2000 if full else 1000)}
+        return e
+    res["versions"]["前日版（消しなし）"] = per_period(rt_base, True)
+    cache = {}
+    for v in pk["versions"]:
+        p = v["params"]
+        kk = K.kill_key(p)
+        if kk not in cache:
+            kr = K.killed_rows(S_kill, S_roi, p, prim_roi)
+            cache[kk] = kr[kr >= (1 if p.get("only_roi") else p["hits"])]
+        mkv = K.order_marks(mk, set(cache[kk].index), p["honmei"])
+        rt = K.race_metrics_kill(mkv, pay)
+        res["versions"][v["name"]] = per_period(rt, v["primary"])
+        if v["primary"]:
+            mkv.to_parquet(out_dir / "marks_kill_primary.parquet", index=False)
+        res.setdefault("completed", []).append(v["name"])
+        (out_dir / "eval_kill.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_f), encoding="utf-8")
+    if not smoke:
+        flag.write_text(json.dumps({"evaluated_at": res["evaluated_at"], "finished": True, "evaluation_round": 3,
+                                    "note": "消しの版を 2025・2026 年で評価済み。結果を見て版を変えない"}, ensure_ascii=False), encoding="utf-8")
+    lab = f"{span[0]}-{span[1]}"
+    for name in ["前日版（消しなし）", pk["primary"]]:
+        e = res["versions"][name][lab]
+        print(name, {k: round(e["all"][k]["est"], 3) for k in ("win", "place")}, {k: round(e["all"][k]["est"], 3) for k in e["all"] if k.startswith("roi_") and e["all"][k]["est"] is not None}, e["kill"])
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["frame", "tally", "select", "evaluate", "smoke", "export", "select_roi", "smoke2", "evaluate2", "export_rules"])
+    ap.add_argument("cmd", choices=["frame", "tally", "select", "evaluate", "smoke", "export", "select_roi", "smoke2", "evaluate2", "export_rules", "select_kill", "smoke_kill", "evaluate_kill"])
     a = ap.parse_args()
     if a.cmd in ("smoke", "smoke2", "evaluate2"):
         cmd_evaluate(smoke=a.cmd != "evaluate2", round2=a.cmd != "smoke")
@@ -491,6 +638,12 @@ def main() -> None:
     if a.cmd == "export":
         from src.research.graded.export import cmd_export
         cmd_export()
+        return
+    if a.cmd == "select_kill":
+        cmd_select_kill()
+        return
+    if a.cmd in ("smoke_kill", "evaluate_kill"):
+        cmd_evaluate_kill(smoke=a.cmd == "smoke_kill")
         return
     if a.cmd == "export_rules":
         from src.research.graded.rules_table import cmd_export_rules

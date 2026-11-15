@@ -53,10 +53,10 @@ def test_build_html_is_self_contained_with_all_columns_and_filters(tmp_path):
     h = out.read_text(encoding="utf-8")
     assert not re.search(r"<script[^>]+src=", h) and "<link" not in h
     head = re.search(r'<tr id="th">(.*?)</tr>', h).group(1)
-    assert head.count("<th>") == len(B.HEAD) == 22
-    for k in ("重賞", "切り口", "好／凡", "集計の階層", "[1-2-3-着外]", "勝率", "連対率", "複勝率", "単勝の回収率", "複勝の回収率", "件数", "縮めた点 x", "採否", "回収率の判定"):
+    assert head.count("<th>") == len(B.HEAD) == 23
+    for k in ("重賞", "切り口", "好／凡", "集計の階層", "[1-2-3-着外]", "勝率", "連対率", "複勝率", "単勝の回収率", "複勝の回収率", "件数", "縮めた点 x", "採否", "回収率の判定", "消しに使う"):
         assert f"<th>{k}</th>" in h
-    for i in ("q", "g", "qt", "dir", "kd", "ly", "ad", "jd", "mn", "theme"):
+    for i in ("q", "g", "qt", "dir", "kd", "ly", "ad", "jd", "kl", "mn", "theme"):
         assert f'id="{i}"' in h
     assert "prefers-color-scheme:dark" in h and 'name="viewport"' in h
     assert "2016〜2024 年（凍結した値）" in h
@@ -143,3 +143,21 @@ def test_roi_only_type_has_no_weight_and_judgement_has_three_values():
     P = pack(RACES, rows, PRE, PRE_ROI)
     assert {t["id"]: t["w"] for t in P["types"]}["E10"] is None
     assert "全重賞の層なので回収率版では使わない" in B.JS and "(C.flags[i]&8)" in B.JS
+
+
+def test_rule_rows_mark_kill_rows_with_primary_kill_rule():
+    """主に見る消しの版の基準（ここでは 主だけ・10 走以上・3着内 0）に当たる行だけに 16 が立つ。"""
+    from src.research.graded.rules_table import rule_rows
+
+    d, L, pre, pre_roi = _synthetic()
+    # 消しに当たる水準を作る: 中山の重賞 R1 で、着外の馬だけが付く水準 "z"
+    m = (d["rkey"] == "R1") & (d["fin"] >= 8)
+    L.loc[m, "A04"] = "z"
+    pk = {"primary": "消し版[テスト]", "frozen_at": "x", "rules": {"stat": "テスト"},
+          "versions": [{"primary": True, "params": {"crit": "3着内0", "nmin": 10, "layer": "主だけ", "hits": 1, "roi7": "入れない", "honmei": "そのまま"}}]}
+    races, rows = rule_rows(d, L, pre, pre_roi, pk)
+    k = [r for r in rows if r["flags"] & 16]
+    assert k and all(r["main"][0] >= 10 and r["main"][1:] == [0, 0, 0] and r["x"] < 0 for r in k)
+    assert any(races[r["r"]]["rkey"] == "R1" and r["lv"] == "z" for r in k)
+    _, rows0 = rule_rows(d, L, pre, pre_roi)
+    assert not any(r["flags"] & 16 for r in rows0)
