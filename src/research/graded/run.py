@@ -5,6 +5,7 @@
   python -m src.research.graded.run select     # 縮める強さ・型の採否・束ね・点の足し方を 2016〜2024 の中だけで決め、prereg.json に凍結する
   python -m src.research.graded.run smoke      # evaluate と同じ処理を確認期間（2022〜2024）で流す試運転（2025・2026 年の行は読み込むが、評価にも出力にも使わない）
   python -m src.research.graded.run evaluate   # 2025・2026 年の重賞で 1 回だけ評価する（EVALUATED.json があれば止まる）
+  python -m src.research.graded.run select_buy / smoke_buy / evaluate_buy  # 買いの組み合わせ（凍結 → 試運転 → 4 回目の評価）
   python -m src.research.graded.run select_kill / smoke_kill / evaluate_kill  # 消しの版（凍結 → 試運転 → 3 回目の評価）
   python -m src.research.graded.run export_rules  # 各重賞で点に効いているルールの全件の表の材料（graded_rules.json）
   python -m src.research.graded.run export     # 重賞ごとのパターン表・レースごとの JSON・HTML の材料（graded_report.json）
@@ -45,11 +46,14 @@ REPO = Path(__file__).resolve().parents[3]
 PREREG = Path(os.environ.get("GRADED_PREREG") or Path(__file__).with_name("prereg.json"))
 PREREG_ROI = Path(os.environ.get("GRADED_PREREG_ROI") or Path(__file__).with_name("prereg_roi.json"))
 PREREG_KILL = Path(os.environ.get("GRADED_PREREG_KILL") or Path(__file__).with_name("prereg_kill.json"))
+PREREG_BUY = Path(os.environ.get("GRADED_PREREG_BUY") or Path(__file__).with_name("prereg_buy.json"))
 ROUND2_NOTE = ("2 回目の評価（2025・2026 年の結果を一度見た後）。ユーザーの依頼（統括役経由、2026-11-14）: 各パターンに回収率を持たせ、"
                "回収率まで裏付けのあるパターンだけで印を付ける。基準はいろいろな版を並べる。")
 DISC, CONF, EVAL = (2018, 2021), (2022, 2024), (2025, 2026)
 ROUND3_NOTE = ("3 回目の評価（2025・2026 年の結果を二度見た後）。ユーザーの依頼（統括役経由、2026-11-15）: 好成績の点で ◎○ を選び、"
                "極端に成績の悪いルール（[0-0-0-n] など）に当てはまる馬を消して、相手を消去法で絞る。版はまとめて prereg_kill.json に凍結した。")
+ROUND4_NOTE = ("4 回目の評価（2025・2026 年の結果を三度見た後）。ユーザーの依頼（統括役経由、2026-11-15）: 「買い」は 3 着内が 7〜8 割を占め、"
+               "単勝か複勝の回収率が 100% を超える抽出条件（切り口の AND）に限る。過学習は許す。版はまとめて prereg_buy.json に凍結した。")
 DEV_PAY = (2020, 2024)   # 払戻の表（payoff.parquet）は 2020 年から。開発期間の買い方の値はこの範囲だけ（版の選択には使わない）
 Z_DISC, Z_CONF = 1.645, 1.2816          # 発見は片側 95%、確認は片側 90%
 LAMS = (0.5, 1.0, 2.0)
@@ -625,9 +629,201 @@ def cmd_evaluate_kill(smoke: bool = False) -> None:
         print(name, {k: round(e["all"][k]["est"], 3) for k in ("win", "place")}, {k: round(e["all"][k]["est"], 3) for k in e["all"] if k.startswith("roi_") and e["all"][k]["est"] is not None}, e["kill"])
 
 
+# ------------------------------------------------------------------ 買いの組み合わせ（4 回目の評価）
+def _buy_inputs():
+    from src.research.graded import buy as BY
+    d, L = _load()
+    d = with_returns(d)
+    rows = _rows(d)
+    types = [c for c in L.columns if c not in ("M01", "M02")]
+    X_all, names = BY.encode(L, types)
+    pos = pd.Series(np.arange(len(L)), index=L.index)
+    b = TL.base_frame(d)
+    b["year"] = pd.to_datetime(b["dt"]).dt.year
+    b["horse_id"] = d.loc[b["row"], "horse_id"].astype(str).to_numpy()
+    b = b[pd.to_numeric(d.loc[b["row"], "fin"], errors="coerce").notna().to_numpy()]   # 着順の無い馬（取消・除外・中止）は外す
+    b = b.reset_index(drop=True)
+    Xb = X_all[pos.reindex(b["row"]).to_numpy()]
+    g = d[d["grade"].isin(TL.GRADES)].drop_duplicates("race_id")
+    rows = rows[rows["race_id"].isin(set(g["race_id"]))].reset_index(drop=True)
+    rows["fin"] = pd.to_numeric(rows["fin"], errors="coerce")
+    rows = rows[rows["fin"].notna()].reset_index(drop=True)
+    Xr = X_all[pos.reindex(rows["row"]).to_numpy()]
+    return d, rows, types, names, b, Xb, Xr, g
+
+
+def _buy_input_hashes(names: dict) -> dict:
+    """凍結の照合に使う入力の sha256（frame・levels と、水準の番号 → 名前の辞書）。"""
+    import hashlib
+    h = {k: hashlib.sha256((GRADED_OUT / k).read_bytes()).hexdigest() for k in ("frame.parquet", "levels.parquet")}
+    h["names"] = hashlib.sha256(json.dumps(names, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+    return h
+
+
+def _courses(g: pd.DataFrame, year_end: int) -> dict:
+    x = g[pd.to_datetime(g["dt"]).dt.year <= year_end].sort_values("dt").groupby("rkey").tail(1)
+    return dict(zip(x["rkey"].astype(str), x["course"].astype(str)))
+
+
+def _buy_search(b, Xb, g, year_end: int, seeds) -> pd.DataFrame:
+    from src.research.graded import buy as BY
+    m = (b["year"] <= year_end).to_numpy()
+    bb, XX = b[m].reset_index(drop=True), Xb[m]
+    cr = _courses(g, year_end)
+    parts = []
+    for s in [None, *seeds]:
+        src = bb if s is None else BY.permute_within_race(bb, s)
+        c = BY.search_period(src, XX, cr)
+        c["perm"] = -1 if s is None else s
+        parts.append(c)
+        print("searched", year_end, "perm" if s is not None else "real", s, len(c), flush=True)
+    return pd.concat(parts, ignore_index=True)
+
+
+def _buy_eval_versions(cells: pd.DataFrame, rows: pd.DataFrame, Xr: np.ndarray, ref: np.ndarray, versions: list[dict]) -> dict:
+    """版ごとに、本物の組と偶然の組（並べ替えのそれぞれ）で買いの馬を決め、指標を出す。"""
+    from src.research.graded import buy as BY
+    H = BY.hits_for(cells, rows, Xr)
+    out = {}
+    okm = {BY.version_name(v): BY.cells_ok(cells, v) for v in versions}
+    for v in versions:
+        name = BY.version_name(v)
+        ok = okm[name]
+        e = {}
+        for pm in sorted(cells["perm"].unique()):
+            sel = ok & (cells["perm"].to_numpy() == pm)
+            h = H[sel[H["cell"].to_numpy()]] if len(H) else H
+            cnt = np.bincount(h["i"].to_numpy(), minlength=len(rows)) if len(h) else np.zeros(len(rows), int)
+            met = BY.buy_metrics(rows, cnt >= v["hits"], ref)
+            met["cells"] = int(sel.sum())
+            e["real" if pm == -1 else f"perm{pm}"] = met
+        out[name] = e
+    return out
+
+
+def cmd_select_buy() -> None:
+    """買いの組を 2016〜2024 年の中だけで決めて凍結する。開発の検証: 2016〜2021 年で探して 2022〜2024 年の重賞に当てはめ、
+    本物の組と偶然の組（並べ替え）で比べ、主に見る版を選ぶ（選び方は buy.SELECT_MIN_BUY の説明）。そのあと 2016〜2024 年で探し直した組を凍結する。"""
+    import hashlib
+
+    from src.research.graded import buy as BY
+    if (GRADED_OUT / "EVALUATED_BUY.json").exists():
+        sys.exit("買いの版は評価が済んでいる。評価の後に作り直さない")
+    if PREREG_BUY.exists() and os.environ.get("GRADED_RESELECT") != "1":
+        sys.exit(f"{PREREG_BUY} は凍結済み。作り直すなら GRADED_RESELECT=1（評価の前に限る）")
+    pre = json.loads(PREREG.read_text(encoding="utf-8"))
+    d, rows, types, names, b, Xb, Xr, g = _buy_inputs()
+    seeds = list(range(1, BY.N_PERM + 1))
+    versions = BY.all_versions()
+    # 開発の検証（2016〜2021 → 2022〜2024）
+    cd = _buy_search(b, Xb, g, DISC[1], seeds)
+    cr = _courses(g, DISC[1])
+    sel = ((rows["year"] >= CONF[0]) & (rows["year"] <= CONF[1])).to_numpy()
+    rc = rows[sel].reset_index(drop=True)
+    keep = (rc["course"].astype(str).to_numpy() == rc["rkey"].astype(str).map(cr).to_numpy())
+    T = _yr(_ctx(GRADED_OUT / "tally.parquet", rows), CONF)
+    _, mk = scored(T, pre, "preday")
+    ref = rc["row"].map(mk.set_index("row")["score"]).fillna(-np.inf).to_numpy()
+    dev = _buy_eval_versions(cd, rc[keep].reset_index(drop=True), Xr[sel][keep], ref[keep], versions)
+    dev_info = {"search_years": [2016, DISC[1]], "test_years": list(CONF), "test_races": int(rc[keep]["race_id"].nunique()),
+                "test_races_other_course": int(rc[~keep]["race_id"].nunique())}
+    prim = BY.choose_primary(versions, dev)
+    # 2016〜2024 年で探し直して凍結
+    cf = _buy_search(b, Xb, g, CONF[1], seeds)
+    cf["types"] = cf["ts"].map(lambda ts: "|".join(types[t] for t in ts))
+    cf["levels"] = [" | ".join(names[types[t]][v] for t, v in zip(ts, cs)) for ts, cs in zip(cf["ts"], cf["cs"])]
+    path = GRADED_OUT / "buy_cells.parquet"
+    w = cf.assign(ts=cf["ts"].map(list), cs=cf["cs"].map(list))
+    w.to_parquet(path, index=False)
+    sha = hashlib.sha256(path.read_bytes()).hexdigest()
+    counts = {}
+    for v in versions:
+        ok = BY.cells_ok(cf, v)
+        counts[BY.version_name(v)] = {("real" if p == -1 else f"perm{p}"): int((ok & (cf["perm"].to_numpy() == p)).sum()) for p in sorted(cf["perm"].unique())}
+    out = {
+        "frozen_at": datetime.now(JST).isoformat(timespec="seconds"), "evaluation_round": 4,
+        "note": ROUND4_NOTE + " 組と版・主に見る版は 2016〜2024 年の中だけで決めた（主に見る版は 2016〜2021 年で探して 2022〜2024 年に当てはめた開発の検証で選んだ）。",
+        "constants": BY.constants(), "types": types, "n_type_combos_per_race": {"主": BY.n_combos(len(types), 3), "副": BY.n_combos(len(types), 2)},
+        "rules": BY.RULES, "versions": [{"name": BY.version_name(v), "params": v, "primary": BY.version_name(v) == prim,
+                                          "dev": dev[BY.version_name(v)], "cells_2016_2024": counts[BY.version_name(v)]} for v in versions],
+        "n_versions": len(versions), "primary": prim, "dev": dev_info,
+        "inputs": _buy_input_hashes(names),
+        "cells": {"path": str(path), "sha256": sha, "rows": int(len(cf)), "real": int((cf["perm"] == -1).sum()),
+                  "note": "組の一覧は大きいのでリポジトリに入れず、この sha256 で凍結を確かめる（評価の前に一致を確かめる）"},
+    }
+    PREREG_BUY.write_text(json.dumps(out, ensure_ascii=False, indent=1, default=_f), encoding="utf-8")
+    print("primary", prim, "cells", len(cf), "sha", sha[:12])
+
+
+def cmd_evaluate_buy(smoke: bool = False) -> None:
+    """買いの版の評価（4 回目の評価、2025・2026 年で 1 回だけ）。smoke=True は確認期間（2022〜2024。組を探した期間の中なので、
+    成績は必ず良く出る。配管の確認だけ）。"""
+    import hashlib
+
+    from src.research.graded import buy as BY
+    flag = GRADED_OUT / "EVALUATED_BUY.json"
+    span = CONF if smoke else EVAL
+    out_dir = GRADED_OUT / ("smoke_buy" if smoke else ".")
+    if flag.exists() and not smoke:
+        sys.exit(f"買いの版は評価済み（{flag}）。やり直さない")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pb = json.loads(PREREG_BUY.read_text(encoding="utf-8"))
+    if pb.get("constants") != json.loads(json.dumps(BY.constants())):
+        sys.exit("buy.py の定数が凍結と違う")
+    if [BY.version_name(v) for v in BY.all_versions()] != [v["name"] for v in pb["versions"]]:
+        sys.exit("buy.py の版の一覧が凍結と違う")
+    path = Path(pb["cells"]["path"])
+    if path.parent.resolve() != GRADED_OUT.resolve():
+        sys.exit(f"GRADED_OUT（{GRADED_OUT}）が凍結の置き場（{path.parent}）と違う")
+    if hashlib.sha256(path.read_bytes()).hexdigest() != pb["cells"]["sha256"]:
+        sys.exit(f"{path} が凍結（sha256）と違う")
+    pre = json.loads(PREREG.read_text(encoding="utf-8"))
+    d, rows, types, names, b, Xb, Xr, g = _buy_inputs()
+    if types != pb["types"]:
+        sys.exit("型の並びが凍結と違う")
+    if _buy_input_hashes(names) != pb["inputs"]:
+        sys.exit("frame・levels・水準の辞書が凍結と違う")
+    cells = pd.read_parquet(path)
+    cells["ts"], cells["cs"] = cells["ts"].map(tuple), cells["cs"].map(tuple)
+    lv = [" | ".join(names[types[t]][v] for t, v in zip(ts, cs)) for ts, cs in zip(cells["ts"], cells["cs"])]
+    if lv != cells["levels"].tolist():
+        sys.exit("組の水準の番号と名前が凍結と食い違う")
+    cr = _courses(g, CONF[1])
+    sel = ((rows["year"] >= span[0]) & (rows["year"] <= span[1])).to_numpy()
+    rc = rows[sel].reset_index(drop=True)
+    keep = rc["course"].astype(str).to_numpy() == rc["rkey"].astype(str).map(cr).to_numpy()
+    res = {"evaluated_at": datetime.now(JST).isoformat(timespec="seconds"), "evaluation_round": 4, "note": ROUND4_NOTE, "smoke": smoke,
+           "prereg_buy_frozen_at": pb["frozen_at"], "primary": pb["primary"], "n_versions": pb["n_versions"], "span": span,
+           "races": int(rc[keep]["race_id"].nunique()), "races_other_course": int(rc[~keep]["race_id"].nunique()),
+           "races_other_course_list": sorted(set(rc.loc[~keep, "rkey"].astype(str)))}
+    if not smoke:
+        flag.write_text(json.dumps({"evaluated_at": res["evaluated_at"], "evaluation_round": 4,
+                                    "note": "買いの版を 2025・2026 年で評価済み（または途中で止まった）。結果を見て版を変えない"}, ensure_ascii=False), encoding="utf-8")
+    T = _yr(_ctx(GRADED_OUT / "tally.parquet", rows), span)
+    _, mk = scored(T, pre, "preday")
+    ref = rc["row"].map(mk.set_index("row")["score"]).fillna(-np.inf).to_numpy()
+    rk, Xk, refk = rc[keep].reset_index(drop=True), Xr[sel][keep], ref[keep]
+    res["versions"] = _buy_eval_versions(cells, rk, Xk, refk, BY.all_versions())
+    # 主に見る版の買いの馬の一覧（HTML 用）とレース単位の区間
+    pv = next(v for v in BY.all_versions() if BY.version_name(v) == pb["primary"])
+    okc = BY.cells_ok(cells, pv) & (cells["perm"].to_numpy() == -1)
+    H = BY.hits_for(cells[okc].reset_index(drop=True), rk, Xk)
+    cnt = np.bincount(H["i"].to_numpy(), minlength=len(rk)) if len(H) else np.zeros(len(rk), int)
+    buy = cnt >= pv["hits"]
+    res["primary_ci"] = BY.race_ci(rk, buy, refk)
+    cols = ["race_id", "rkey", "horse_id", "hn", "fin", "ret_tan", "ret_fuku", "pay_ok"]
+    rk.assign(n_cells=cnt, buy=buy, ref_score=refk)[cols + ["n_cells", "buy", "ref_score"]].to_parquet(out_dir / "buy_primary_horses.parquet", index=False)
+    (out_dir / "eval_buy.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_f), encoding="utf-8")
+    if not smoke:
+        flag.write_text(json.dumps({"evaluated_at": res["evaluated_at"], "finished": True, "evaluation_round": 4,
+                                    "note": "買いの版を 2025・2026 年で評価済み。結果を見て版を変えない"}, ensure_ascii=False), encoding="utf-8")
+    e = res["versions"][pb["primary"]]
+    print(json.dumps({k: e[k]["buy"] | {"share": e[k]["buy_share"], "hon": e[k]["honmei_buy"]} for k in e}, ensure_ascii=False, default=_f)[:3000])
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["frame", "tally", "select", "evaluate", "smoke", "export", "select_roi", "smoke2", "evaluate2", "export_rules", "select_kill", "smoke_kill", "evaluate_kill"])
+    ap.add_argument("cmd", choices=["frame", "tally", "select", "evaluate", "smoke", "export", "select_roi", "smoke2", "evaluate2", "export_rules", "select_kill", "smoke_kill", "evaluate_kill", "select_buy", "smoke_buy", "evaluate_buy"])
     a = ap.parse_args()
     if a.cmd in ("smoke", "smoke2", "evaluate2"):
         cmd_evaluate(smoke=a.cmd != "evaluate2", round2=a.cmd != "smoke")
@@ -638,6 +834,12 @@ def main() -> None:
     if a.cmd == "export":
         from src.research.graded.export import cmd_export
         cmd_export()
+        return
+    if a.cmd == "select_buy":
+        cmd_select_buy()
+        return
+    if a.cmd in ("smoke_buy", "evaluate_buy"):
+        cmd_evaluate_buy(smoke=a.cmd == "smoke_buy")
         return
     if a.cmd == "select_kill":
         cmd_select_kill()

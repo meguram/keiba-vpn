@@ -11,6 +11,7 @@ src/scripts/docs/build_graded_rules_table_html.py が作る）。
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -21,7 +22,7 @@ from src.research.graded import model as M
 from src.research.graded import tally as TL
 from src.research.graded.export import TABLE_END, _kind, roi_flag
 from src.research.graded.features import GRADED_OUT
-from src.research.graded.run import PREREG, PREREG_KILL, PREREG_ROI, _load, with_returns
+from src.research.graded.run import PREREG, PREREG_BUY, PREREG_KILL, PREREG_ROI, _load, with_returns
 
 SUMS = ["n", "w1", "w2", "w3", "e3", "np", "rt", "rf", "ed", "edhit"]
 LAYER_NAME = {"主": "主", "副": "副", "全体": "全重賞"}   # shrink の「全体」は全重賞（b.graded）の集計
@@ -43,9 +44,12 @@ def _sum_lv(g: pd.DataFrame | None) -> pd.DataFrame:
     return g.groupby(level="level")[SUMS].sum()
 
 
-def rule_rows(d: pd.DataFrame, L: pd.DataFrame, pre: dict, pre_roi: dict, pre_kill: dict | None = None) -> tuple[list[dict], list[dict]]:
+def rule_rows(d: pd.DataFrame, L: pd.DataFrame, pre: dict, pre_roi: dict, pre_kill: dict | None = None,
+              buy1: set | None = None) -> tuple[list[dict], list[dict]]:
     """(重賞の一覧, 行の一覧)。行は 重賞 × 型 × 水準 で x≠0 のもの。pre_kill（消しの版の凍結）があれば、主に見る消しの版の基準を
-    この凍結の件数に当てはめて、消しに当たる行に flags の 16 を立てる（評価では as-of の件数で判定する。2 つ以上で消す版でも、行の印は 1 つの当たり）。"""
+    この凍結の件数に当てはめて、消しに当たる行に flags の 16 を立てる（評価では as-of の件数で判定する。2 つ以上で消す版でも、行の印は 1 つの当たり）。
+    buy1（主に見る買いの版の組の条件を満たす、切り口 1 つの組の (重賞, 層, 型, 水準)）に、行の層（x を作った層）まで一致する行には
+    flags の 32 を立てる（表示の「好（買い）」はこの行だけ。馬が買いになるのは、版の下限の数以上の組に当たったとき）。"""
     sh, lam = pre["shrink"], pre["score"]["lam"]
     prim = next(v for v in pre_roi["versions"] if v["primary"])
     pset = {tuple(p) for p in prim["patterns"]}
@@ -118,12 +122,12 @@ def rule_rows(d: pd.DataFrame, L: pd.DataFrame, pre: dict, pre_roi: dict, pre_ki
                     "x": round(float(s.x), 4), "rm": round(float(s.r_m), 4),
                     "main": [int(round(getattr(s, f"main_{k}"))) for k in ("n", "w1", "w2", "w3")], "med": [int(s.main_edhit), int(s.main_ed)],
                     # 8 = パターンは回収率の基準を満たしたが、この行は層（全重賞）が回収率版の層に入らないので点に使わない
-                    "flags": flags | (8 if (t, s.level, dr) in pset and not flags & 4 else 0) | (16 if kp is not None and s.kill else 0), "roi_kept": rk_ == "回収率で残った",
+                    "flags": flags | (8 if (t, s.level, dr) in pset and not flags & 4 else 0) | (16 if kp is not None and s.kill else 0) | (32 if buy1 and (rkey, ly, t, s.level) in buy1 else 0), "roi_kept": rk_ == "回収率で残った",
                 })
     return races, rows
 
 
-def pack(races: list[dict], rows: list[dict], pre: dict, pre_roi: dict, pre_kill: dict | None = None) -> dict:
+def pack(races: list[dict], rows: list[dict], pre: dict, pre_roi: dict, pre_kill: dict | None = None, buy: dict | None = None) -> dict:
     """行を列ごとの配列にし、繰り返す文字列（型・水準・区分・層）は辞書の番号にする。"""
     tn = {t.id: t for t in CAT.TYPES}
     used = sorted({r["t"] for r in rows})
@@ -149,7 +153,44 @@ def pack(races: list[dict], rows: list[dict], pre: dict, pre_roi: dict, pre_kill
             "primary_patterns": prim["patterns"], "years": [2016, TABLE_END], "overall_roi": pre_roi["overall_roi"],
             "n_rows": len(rows), "races": races, "types": tinfo, "levels": lvs, "dict": dic, "cols": col,
             "kill": ({"primary": pre_kill["primary"], "frozen_at": pre_kill["frozen_at"], "rules": pre_kill["rules"],
-                      "params": next(v["params"] for v in pre_kill["versions"] if v["primary"])} if pre_kill else None)}
+                      "params": next(v["params"] for v in pre_kill["versions"] if v["primary"])} if pre_kill else None),
+            "buy": buy}
+
+
+MAX_BUY_PER_RACE = 40    # HTML に載せる、重賞 × 層ごとの買いの組の数（二項の確率の小さい順。件数は全件を別に書く）
+
+
+def buy_cells(pre_buy: dict) -> pd.DataFrame:
+    """主に見る買いの版の、本物の組（2016〜2024 年で探した、凍結の一覧。sha256 で凍結と同じか確かめる）。"""
+    import hashlib
+
+    from src.research.graded import buy as BY
+    path = Path(pre_buy["cells"]["path"])
+    if hashlib.sha256(path.read_bytes()).hexdigest() != pre_buy["cells"]["sha256"]:
+        raise SystemExit(f"{path} が凍結（sha256）と違う")
+    c = pd.read_parquet(path)
+    pv = next(v["params"] for v in pre_buy["versions"] if v["primary"])
+    ok = BY.cells_ok(c, pv)
+    c = c[ok].copy()
+    return c[c["perm"] == -1].reset_index(drop=True)
+
+
+def buy_block(cells: pd.DataFrame, pre_buy: dict, races: list[dict]) -> dict:
+    """HTML 用: 主に見る買いの版の組（重賞 × 層ごとに二項の確率の小さい順に MAX_BUY_PER_RACE 件まで）と、版ごとの本物・偶然の組の数。"""
+    ri = {r["rkey"]: i for i, r in enumerate(races)}
+    c = cells[cells["rkey"].isin(ri)].copy()
+    n_all = c.groupby(["rkey", "layer"]).size()
+    c = c.sort_values(["rkey", "layer", "pbin", "n"], ascending=[True, True, True, False]).groupby(["rkey", "layer"]).head(MAX_BUY_PER_RACE)
+    prim = next(v for v in pre_buy["versions"] if v["primary"])
+    cols = {"r": [ri[x] for x in c["rkey"]], "layer": c["layer"].tolist(), "types": c["types"].tolist(), "levels": c["levels"].tolist(),
+            "rec": [list(map(int, x)) for x in c["rec"]], "np": c["np"].astype(int).tolist(),
+            "roi_t": [None if pd.isna(x) else round(float(x), 3) for x in c["roi_t"]], "roi_f": [None if pd.isna(x) else round(float(x), 3) for x in c["roi_f"]],
+            "ed": c["ed"].astype(int).tolist(), "nh": c["nh"].astype(int).tolist(), "p0": c["p0"].round(3).tolist(),
+            "pbin": [float(f"{x:.2e}") for x in c["pbin"]], "n_equiv": c["n_equiv"].astype(int).tolist()}
+    return {"primary": pre_buy["primary"], "frozen_at": pre_buy["frozen_at"], "rules": pre_buy["rules"], "n_versions": pre_buy["n_versions"],
+            "counts": prim["cells_2016_2024"], "dev": prim["dev"], "n_type_combos": pre_buy["n_type_combos_per_race"],
+            "n_cells_by_race_layer": {f"{k[0]}|{k[1]}": int(v) for k, v in n_all.items()}, "max_per_race": MAX_BUY_PER_RACE,
+            "n_rows": int(len(c)), "cols": cols}
 
 
 def cmd_export_rules() -> None:
@@ -158,7 +199,11 @@ def cmd_export_rules() -> None:
     d, L = _load()
     d = with_returns(d)
     pre_kill = json.loads(PREREG_KILL.read_text(encoding="utf-8")) if PREREG_KILL.exists() else None
-    races, rows = rule_rows(d, L, pre, pre_roi, pre_kill)
+    pre_buy = json.loads(PREREG_BUY.read_text(encoding="utf-8")) if PREREG_BUY.exists() else None
+    cells = buy_cells(pre_buy) if pre_buy else None
+    buy1 = None if cells is None else {(c.rkey, c.layer, c.types, c.levels) for c in cells.itertuples() if c.depth == 1}
+    races, rows = rule_rows(d, L, pre, pre_roi, pre_kill, buy1)
+    buy = buy_block(cells, pre_buy, races) if pre_buy else None
     out = GRADED_OUT / OUT_NAME
-    out.write_text(json.dumps(pack(races, rows, pre, pre_roi, pre_kill), ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    out.write_text(json.dumps(pack(races, rows, pre, pre_roi, pre_kill, buy), ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print("rules", len(races), "races,", len(rows), "rows ->", out, f"{out.stat().st_size / 1e6:.1f} MB", flush=True)
