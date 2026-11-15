@@ -5,6 +5,7 @@
   python -m src.research.graded.run select     # 縮める強さ・型の採否・束ね・点の足し方を 2016〜2024 の中だけで決め、prereg.json に凍結する
   python -m src.research.graded.run smoke      # evaluate と同じ処理を確認期間（2022〜2024）で流す試運転（2025・2026 年の行は読み込むが、評価にも出力にも使わない）
   python -m src.research.graded.run evaluate   # 2025・2026 年の重賞で 1 回だけ評価する（EVALUATED.json があれば止まる）
+  python -m src.research.graded.run export_rules  # 各重賞で点に効いているルールの全件の表の材料（graded_rules.json）
   python -m src.research.graded.run export     # 重賞ごとのパターン表・レースごとの JSON・HTML の材料（graded_report.json）
 
 2 回目の評価（回収率で選ぶ版。ユーザーの依頼で、2025・2026 年を一度見た後に行う。計画書 第 17 節）:
@@ -479,7 +480,7 @@ def cmd_evaluate(smoke: bool = False, round2: bool = False) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["frame", "tally", "select", "evaluate", "smoke", "export", "select_roi", "smoke2", "evaluate2"])
+    ap.add_argument("cmd", choices=["frame", "tally", "select", "evaluate", "smoke", "export", "select_roi", "smoke2", "evaluate2", "export_rules"])
     a = ap.parse_args()
     if a.cmd in ("smoke", "smoke2", "evaluate2"):
         cmd_evaluate(smoke=a.cmd != "evaluate2", round2=a.cmd != "smoke")
@@ -490,6 +491,10 @@ def main() -> None:
     if a.cmd == "export":
         from src.research.graded.export import cmd_export
         cmd_export()
+        return
+    if a.cmd == "export_rules":
+        from src.research.graded.rules_table import cmd_export_rules
+        cmd_export_rules()
         return
     {"frame": cmd_frame, "tally": cmd_tally, "select": cmd_select, "evaluate": cmd_evaluate}[a.cmd]()
 

@@ -139,7 +139,7 @@ def build(src: Path = SRC, out: Path = OUT) -> Path:
 <h1>重賞のルールベース予想家（研究）</h1>
 <p class="muted">好成績のパターン（前走・条件の変化・脚質・経歴・騎手・厩舎・血統・調教など約 120 型）を、主（同じレース名 × 同じコースの過去の回）・副（同じコースの OP 以上の別レース）・
 全重賞の 3 層で as-of に数え、縮めた上振れの和で ◎○▲△△ を付ける。オッズ・人気は条件に使わず、回収率の評価にだけ使う。規則は {pre['frozen_at']} に 2016〜2024 年の中だけで凍結し、
-2025・2026 年の重賞で 1 回だけ評価した。{'そのあとユーザーの依頼で、回収率まで裏付けのあるパターンだけで印を付ける版を足し、中止の馬の扱いを直したデータで 2 回目の評価（データを一度見た後）を行った（' + rep['roi']['frozen_at'] + ' に版の一覧を凍結）。' if rep.get('roi') else ''}計画: docs/ideas/graded_rule_based_handicapper.md・切り口の目録: docs/ideas/graded_handicapper_cuts.md・コード: src/research/graded/</p>
+2025・2026 年の重賞で 1 回だけ評価した。{'そのあとユーザーの依頼で、回収率まで裏付けのあるパターンだけで印を付ける版を足し、中止の馬の扱いを直したデータで 2 回目の評価（データを一度見た後）を行った（' + rep['roi']['frozen_at'] + ' に版の一覧を凍結）。' if rep.get('roi') else ''}各重賞で点に効いているルールの全件の表: <a href="graded_rules_table.html">重賞のルール一覧</a>・計画: docs/ideas/graded_rule_based_handicapper.md・切り口の目録: docs/ideas/graded_handicapper_cuts.md・コード: src/research/graded/</p>
 <div class="tabs"><button data-k="eval">検証の結果</button><button data-k="race">重賞ごと</button><button data-k="er">検証のレース</button><button data-k="ty">切り口の採否</button>{'<button data-k="roi">回収率で残ったパターン</button>' if rep.get('roi') else ''}</div>
 <section id="t-eval"></section><section id="t-race" hidden></section><section id="t-er" hidden></section><section id="t-ty" hidden></section><section id="t-roi" hidden></section>
 </main><script type="application/json" id="data">{data}</script><script>{JS}</script></body></html>"""

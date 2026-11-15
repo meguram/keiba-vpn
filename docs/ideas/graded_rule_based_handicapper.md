@@ -603,3 +603,19 @@ for c in frame tally evaluate; do GRADED_OUT=$F nice -n 10 /opt/conda/bin/python
 - 回収率は払戻（オッズ）に強く依存する。切り口・点には使っていないが、凡のパターンが「人気になりやすい馬」を拾っているだけかは、今回は確かめていない（オッズを条件に使わない決まりのため）。
 
 HTML: `data/meta/graded/graded_handicapper.html`（11.5MB。2 回目の評価・回収率の列・版の一覧・回収率で残ったパターンのタブ・第 1 回の評価を載せた。回収率の列が増えたので、1 レースの「参考」のパターンは 15 件、検証のレースの 1 頭あたりは 6 件に減らした）。本の要約の章（docs/html/modeling/chapters/graded_handicapper.html）にも 2 回目の評価の要点を足した。
+
+### 17.7 重賞のルール一覧（2026-11-15、ユーザーの依頼）
+
+各重賞で点に効いているルール（切り口 × 水準）を、1 行 = 重賞 × ルールで省略せずに並べた表を作った。評価はやり直していない（2016〜2024 年の凍結した値を表にしただけ）。
+
+- HTML: `data/meta/graded/graded_rules_table.html`。7.9MB、124,178 行、重賞 137。`graded_handicapper.html` からリンクしている。
+- 材料: `python -m src.research.graded.run export_rules` → `<GRADED_OUT>/graded_rules.json`（`src/research/graded/rules_table.py`）。HTML は `python -m src.scripts.docs.build_graded_rules_table_html`。
+- 載せる行:
+  - 対象の型は、前日版・当日版の点に使う型（束ねの代表）と、主に見る回収率版の型。
+  - 水準は、各重賞の最新の回のコースで点 x≠0 のものすべて。主に件数の無い水準も、副・全重賞の層で点が付けば載せた（83,686 行）。重賞ごとの表で「参考」を 15 件に絞っていた分も含む。
+- 件数・率・回収率は、x を作った層（主・副・全重賞）の母集団の値。回収率の分母は払戻の解けた走数。
+- 採否:
+  - 成績版は、型が used に入っていれば x≠0 の水準すべてで採用。
+  - 回収率版は、`export.roi_flag` で「回収率で残った」行だけ（460 行）。
+  - 回収率の基準は満たしたが全重賞の層で点が付くため、回収率版で点 0 になる行が 325 行ある。「成績だけ」と分けて表示した。
+- 照合: `export.race_tables`（graded_report.json）と重なる 40,448 行で、x・主の件数・主と副の回収率がすべて一致した。合成データでも同じことを確かめるテストがある（`tests/scripts/test_build_graded_rules_table_html.py`）。
