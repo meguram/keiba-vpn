@@ -155,8 +155,8 @@ def build(src: Path = SRC, out: Path = OUT) -> Path:
 <h2>サイクルごとの記録</h2>{tbl}
 <h2>最後のサイクルの値（2025・2026 年、全重賞と G1〜G3 別）</h2>{grade_tbl(last)}
 {gap}
-<h2>重賞ごと（最後のサイクル）</h2>{rkey_tbl(last)}
-<p class="muted">戻る: <a href="graded_handicapper.html">重賞のルールベース予想家</a>・<a href="graded_rules_table.html">重賞のルール一覧</a>。作り: src/research/graded/cycles.py → src/scripts/docs/build_graded_cycles_html.py</p>
+<h2>重賞ごと（最後のサイクル）</h2><p>重賞ごとの決め方を日本語の文と 2018〜2024 年の成績つきで読むには: <a href="graded_race_playbook.html">重賞の選び方の早見表</a></p>{rkey_tbl(last)}
+<p class="muted">戻る: <a href="graded_handicapper.html">重賞のルールベース予想家</a>・<a href="graded_rules_table.html">重賞のルール一覧</a>・重賞ごとのまとめ: <a href="graded_race_playbook.html">重賞の選び方の早見表</a>。作り: src/research/graded/cycles.py → src/scripts/docs/build_graded_cycles_html.py</p>
 </main></body></html>"""
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")

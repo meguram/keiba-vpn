@@ -828,7 +828,8 @@ CYCLE_NOTE = ("ユーザーの依頼（統括役経由、2026-11-15）: 2025・2
               "A（当てはめ版）は 2025・2026 年に直接合わせた値で、評価ではない。B（正直な版）は 2018〜2024 年で選んで 2025・2026 年に当てはめた値。")
 
 
-def _cycle_table(year_max: int | None = None):
+def _cycle_table(year_max: int | None = None, levels: bool = False):
+    """levels=True なら (表, {(row, 型): (水準, 層)}) を返す（早見表の例の馬の水準を書くため）。"""
     from src.research.graded import cycles as CY
     pre = json.loads(PREREG.read_text(encoding="utf-8"))
     d, _ = _load()
@@ -862,7 +863,11 @@ def _cycle_table(year_max: int | None = None):
         kcols.append(f"khit_{j + 1}")
     names = list(CY.BASE) + kcols + list(X.columns)
     F = np.column_stack([r[list(CY.BASE) + kcols].to_numpy(float), X.reindex(r["row"]).to_numpy(float)])
-    return CY.Table(r.reset_index(drop=True), F, names)
+    tab = CY.Table(r.reset_index(drop=True), F, names)
+    if not levels:
+        return tab
+    L = S_pre[S_pre["row"].isin(r.loc[r["year"] >= CY.EVAL[0], "row"])]   # 例に書くのは 2025・2026 年の馬だけ
+    return tab, {(int(a), b): (str(c), str(e)) for a, b, c, e in zip(L["row"], L["type"], L["level"], L["layer"])}
 
 
 def cmd_cycles() -> None:
@@ -914,6 +919,26 @@ def cmd_cycles() -> None:
                     "honmei_global": CY.rule_of(rep[m]["honmei_global"]["sel"], terms), "kill_global": CY.rule_of(rep[m]["kill_global"]["sel"], terms)}
     (GRADED_OUT / "cycles_rules.json").write_text(json.dumps({"from_cycles_finished_at": log["finished_at"], "stopped": log["stopped"],
                                                                "features": t.names, "rules": rules}, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def cmd_playbook() -> None:
+    """重賞ごとの早見表の値: 最後のサイクルの規則（cycles_rules.json）を当て直し、2025・2026 年と 2018〜2024 年の成績を
+    <GRADED_OUT>/playbook.json に書く。2025・2026 年の値がサイクルの記録と違えば止める（評価はやり直さない）。"""
+    from src.research.graded import playbook as PB
+    src = json.loads((GRADED_OUT / "cycles_rules.json").read_text(encoding="utf-8"))
+    log = json.loads((GRADED_OUT / "cycles.json").read_text(encoding="utf-8"))
+    if src["from_cycles_finished_at"] != log["finished_at"]:
+        sys.exit("cycles_rules.json と cycles.json のサイクルが違う")
+    t, lv = _cycle_table(levels=True)
+    if t.names != src["features"]:
+        sys.exit("特徴の列が cycles_rules.json と違う")
+    pk = json.loads(PREREG_KILL.read_text(encoding="utf-8"))
+    kn = [v["name"].removeprefix("消し版") for v in pk["versions"] if v["passes"] and v["params"].get("honmei") == "そのまま"]
+    res = PB.build_cards(t, src["rules"], log["cycles"][-1]["report"], kn, lv)
+    res |= {"made_at": datetime.now(JST).isoformat(timespec="seconds"), "from_cycles_finished_at": log["finished_at"], "tried": log["cycles"][-1]["report"]["tried"],
+            "periods": {"dev": list(PB.CY.DEV), "eval": list(PB.CY.EVAL)}, "criteria": {"roi_t_over": PB.ROI_OK, "kill_top3_at_most": PB.KILL_OK}}
+    (GRADED_OUT / "playbook.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_f), encoding="utf-8")
+    print(json.dumps(res["summary"], ensure_ascii=False))
 
 
 PREREG_CYCLES = Path(os.environ.get("GRADED_PREREG_CYCLES") or Path(__file__).with_name("prereg_cycles.json"))
@@ -1213,7 +1238,7 @@ def cmd_evaluate_longshot() -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["frame", "tally", "select", "evaluate", "smoke", "export", "select_roi", "smoke2", "evaluate2", "export_rules", "select_kill", "smoke_kill", "evaluate_kill", "select_buy", "smoke_buy", "evaluate_buy", "cycles", "freeze_cycles", "track_cycles", "select_longshot", "evaluate_longshot"])
+    ap.add_argument("cmd", choices=["frame", "tally", "select", "evaluate", "smoke", "export", "select_roi", "smoke2", "evaluate2", "export_rules", "select_kill", "smoke_kill", "evaluate_kill", "select_buy", "smoke_buy", "evaluate_buy", "cycles", "freeze_cycles", "track_cycles", "select_longshot", "evaluate_longshot", "playbook"])
     a = ap.parse_args()
     if a.cmd in ("smoke", "smoke2", "evaluate2"):
         cmd_evaluate(smoke=a.cmd != "evaluate2", round2=a.cmd != "smoke")
@@ -1230,6 +1255,9 @@ def main() -> None:
         return
     if a.cmd == "evaluate_longshot":
         cmd_evaluate_longshot()
+        return
+    if a.cmd == "playbook":
+        cmd_playbook()
         return
     if a.cmd == "cycles":
         cmd_cycles()
