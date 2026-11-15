@@ -979,9 +979,241 @@ def cmd_track_cycles() -> None:
     print("tracked", int(new.sum()), "new races, total", len(led["races"]), "->", CYCLES_LEDGER)
 
 
+# ------------------------------------------------------------------ うまうまー式の穴馬の分析
+PREREG_LONGSHOT = Path(os.environ.get("GRADED_PREREG_LONGSHOT") or Path(__file__).with_name("prereg_longshot.json"))
+LONGSHOT_NOTE = ("ユーザーの依頼（統括役経由、2026-11-15）: うまうまー式に、特定の重賞の 6 番人気以下の穴馬を分母にして、前走○○組かつ上がり○位以内のような"
+                 "組み合わせで集計する。主の層は、同じレース名 × 2016〜2024 年で一番多く行われたコース（代わりの会場の年は外す）。"
+                 "人気は分母を選ぶためだけに使い、条件には使わない。2016〜2024 年で決めて凍結し、2025・2026 年で 1 回だけ確かめる"
+                 "（この分析では初回。ただし 2025・2026 年の重賞は、ほかの分析で 4 度見ている）。")
+
+
+def _popularity() -> pd.Series:
+    """(race_id, horse_id) → 単勝人気（data/page_reference/tables/<年>/race_result_flat.parquet。分母を選ぶためだけに使う）。"""
+    from src.research.graded.features import TABLES, YEARS
+    parts = []
+    for y in YEARS:
+        p = TABLES / str(y) / "race_result_flat.parquet"
+        if p.exists():
+            parts.append(pd.read_parquet(p, columns=["race_id", "horse_id", "popularity"]))
+    m = pd.concat(parts)
+    m["race_id"], m["horse_id"] = m["race_id"].astype(str), m["horse_id"].astype(str)
+    return m.drop_duplicates(["race_id", "horse_id"]).set_index(["race_id", "horse_id"])["popularity"]
+
+
+def _modal_courses(g: pd.DataFrame, year_end: int) -> dict:
+    """重賞ごとに、year_end までで一番多く行われたコース（同数なら新しい方）。代わりの会場で開いた年（2024 年の宝塚記念の京都など）を外す
+    うまうまー式の作法に合わせる（最新の回のコースだと、代わりの会場の年が主の層になってしまう）。"""
+    x = g[pd.to_datetime(g["dt"]).dt.year <= year_end]
+    a = x.groupby(["rkey", "course"]).agg(n=("race_id", "nunique"), last=("dt", "max")).reset_index()
+    a = a.sort_values(["rkey", "n", "last"], ascending=[True, False, False]).groupby("rkey").head(1)
+    return dict(zip(a["rkey"].astype(str), a["course"].astype(str)))
+
+
+def _longshot_inputs():
+    from src.research.graded import buy as BY
+    d, L = _load()
+    d = with_returns(d)
+    rows = _rows(d)
+    g = d[d["grade"].isin(TL.GRADES)].drop_duplicates("race_id")
+    rows = rows[rows["race_id"].isin(set(g["race_id"]))].copy()
+    rows["fin"] = pd.to_numeric(rows["fin"], errors="coerce")
+    rows = rows[rows["fin"].notna()]
+    pop = _popularity()
+    rows["pop"] = pd.Series(list(zip(rows["race_id"].astype(str), rows["horse_id"].astype(str)))).map(pop).to_numpy()
+    rows = rows.reset_index(drop=True)
+    types = [c for c in L.columns if c not in ("M01", "M02")]
+    X_all, names = BY.encode(L, types)
+    pos = pd.Series(np.arange(len(L)), index=L.index)
+    X = X_all[pos.reindex(rows["row"]).to_numpy()]
+    rows["top3"] = (rows["fin"] <= 3).astype(float)
+    for k in (1, 2, 3):
+        rows[f"w{k}"] = (rows["fin"] == k).astype(float)
+    rows["pay_ok"] = rows["pay_ok"].fillna(False).astype(bool)
+    rows["np"] = rows["pay_ok"].astype(float)
+    rows["rt"] = np.where(rows["pay_ok"], rows["ret_tan"].fillna(0), 0.0)
+    rows["rf"] = np.where(rows["pay_ok"], rows["ret_fuku"].fillna(0), 0.0)
+    cr = _modal_courses(g, CONF[1])
+    rows["main"] = rows["course"].astype(str).to_numpy() == rows["rkey"].astype(str).map(cr).to_numpy()
+    raw = ["wt", "age", "interval", "p_fin", "p_tdiff", "p_grade", "p_vc", "p_pos4", "p_l3rank"]
+    rows = rows.join(d.loc[rows["row"], raw].reset_index(drop=True))
+    return rows, X, types, names
+
+
+def _ls_search(rows: pd.DataFrame, X: np.ndarray, sel: np.ndarray, by_rkey: bool):
+    """6 番人気以下の分母で、重賞ごと（by_rkey）または全重賞をまとめて、切り口 1〜2 個の組の件数を数える。"""
+    from src.research.graded import longshot as LS
+    out = []
+    groups = rows[sel].groupby("rkey").indices if by_rkey else {"全重賞": np.arange(sel.sum())}
+    idx_all = np.flatnonzero(sel)
+    for rk, ii in groups.items():
+        ii = idx_all[ii]
+        Y = np.column_stack([np.ones(len(ii)), rows["top3"].to_numpy()[ii]] + [rows[c].to_numpy()[ii] for c in ("w1", "w2", "w3", "np", "rt", "rf")])
+        C = LS.cells(X[ii], Y, rows["race_id"].to_numpy()[ii])
+        C = LS.score(C, len(ii), int(Y[:, 1].sum()))
+        C["rkey"] = rk
+        C["races"] = int(rows["race_id"].to_numpy()[ii].size and len(set(rows["race_id"].to_numpy()[ii])))
+        out.append(C)
+    return pd.concat(out, ignore_index=True)
+
+
+def cmd_select_longshot() -> None:
+    """2016〜2024 年の 6 番人気以下の分母で条件を探し、採る条件・偶然の数・BH の印を prereg_longshot.json に凍結する。"""
+    from src.research.graded import longshot as LS
+    if (GRADED_OUT / "EVALUATED_LONGSHOT.json").exists():
+        sys.exit("穴馬の分析は評価が済んでいる。作り直さない")
+    if PREREG_LONGSHOT.exists() and os.environ.get("GRADED_RESELECT") != "1":
+        sys.exit(f"{PREREG_LONGSHOT} は凍結済み")
+    rows, X, types, names = _longshot_inputs()
+    dev = ((rows["year"] <= CONF[1]) & (rows["pop"] >= LS.POP_MIN) & rows["main"]).to_numpy()
+    res = {}
+    for by in (True, False):
+        C = _ls_search(rows, X, dev, by)
+        m = len(C)
+        C["bh"] = LS.bh(C["pbin"].to_numpy(), m)
+        perm = []
+        for sd in range(1, LS.N_PERM + 1):
+            rp = rows.copy()
+            rp.loc[dev, ["w1", "w2", "w3", "top3", "np", "rt", "rf"]] = LS.permute(rows.loc[dev, ["w1", "w2", "w3", "top3", "np", "rt", "rf"]],
+                                                                                  rows.loc[dev, "race_id"].to_numpy(), sd).to_numpy()
+            Cp = _ls_search(rp, X, dev, by)
+            Cp["bh"] = LS.bh(Cp["pbin"].to_numpy(), len(Cp))
+            perm.append({"pass": int(Cp["pass"].sum()), "pass_bh": int((Cp["pass"] & Cp["bh"]).sum()), "bh": int(Cp["bh"].sum()),
+                         "pass_by_rkey": Cp[Cp["pass"]].groupby("rkey").size().to_dict()})
+        res[by] = (C, m, perm)
+        print("searched", "by_rkey" if by else "pooled", m, "pass", int(C["pass"].sum()), "perm", [p["pass"] for p in perm], flush=True)
+    C, m, perm = res[True]
+    keep = []
+    for rk, Cg in C[C["pass"]].groupby("rkey"):
+        ii = np.flatnonzero(dev & (rows["rkey"] == rk).to_numpy())
+        keep.append(LS.dedupe(Cg, X[ii], rows["row"].to_numpy()[ii]))
+    P = pd.concat(keep) if keep else C.iloc[:0]
+    def pack(D):
+        return [{"rkey": r.rkey, "types": [types[t] for t in r.ts], "ts": list(map(int, r.ts)), "cs": list(map(int, r.cs)),
+                 "levels": [names[types[t]][c] for t, c in zip(r.ts, r.cs)], "n": int(r.n), "k": int(r.k), "rec": [int(r.w1), int(r.w2), int(r.w3), int(r.n - r.w1 - r.w2 - r.w3)],
+                 "N": int(r.N), "K": int(r.K), "recall": float(r.recall), "coverage": float(r.coverage), "rate": float(r.rate), "lift": float(r.lift),
+                 "roi_t": float(r.rt / r.np) if r.np else None, "roi_f": float(r.rf / r.np) if r.np else None, "edk": int(r.edk), "pbin": float(r.pbin), "bh": bool(r.bh)}
+                for r in D.itertuples()]
+    Cg, mg, permg = res[False]
+    pooled = Cg[(Cg["k"] >= LS.POOLED_K_MIN) & Cg["bh"]].sort_values("pbin")
+    devi = np.flatnonzero(dev)
+    pooled = LS.dedupe(pooled.head(LS.POOLED_TOP * 3), X[devi], rows["row"].to_numpy()[devi]).sort_values("pbin").head(LS.POOLED_TOP)
+    base = {rk: {"N": int(g["N"].iloc[0]), "K": int(g["K"].iloc[0])} for rk, g in C.groupby("rkey")}
+    out = {"frozen_at": datetime.now(JST).isoformat(timespec="seconds"), "note": LONGSHOT_NOTE,
+           "constants": {"POP_MIN": LS.POP_MIN, "K_MIN": LS.K_MIN, "ED_MIN": LS.ED_MIN, "RECALL_MIN": LS.RECALL_MIN, "LIFT_MIN": LS.LIFT_MIN, "FDR": LS.FDR,
+                         "N_PERM": LS.N_PERM, "max_depth": 2, "years": [2016, CONF[1]], "POOLED_K_MIN": LS.POOLED_K_MIN,
+                         "POOLED_TOP": LS.POOLED_TOP, "EVAL_END": LS.EVAL_END},
+           "inputs": _buy_input_hashes(names),
+           "note_by_rkey": "重賞ごとの採る条件の数は、結果を入れ替えた偶然のデータとほぼ同じで、BH で残る条件は 0。評価の by_rkey の値は偶然の条件の当てはめとして読む",
+           "types": types, "n_cells_by_rkey": m, "n_cells_pooled": mg, "n_rkeys": len(base), "base": base,
+           "pass_real": int(C["pass"].sum()), "pass_real_bh": int((C["pass"] & C["bh"]).sum()), "pass_dedup": int(len(P)), "perm": perm,
+           "pooled": pack(pooled.assign(rkey="全重賞")), "pooled_perm": permg,
+           "pooled_real": {"cells": int(mg), "pass": int(Cg["pass"].sum()), "bh": int(Cg["bh"].sum()), "bh_k_min": int((Cg["bh"] & (Cg["k"] >= LS.POOLED_K_MIN)).sum())},
+           "pooled_base": {"N": int(Cg["N"].iloc[0]), "K": int(Cg["K"].iloc[0])},
+           "examples_dev": LS.example_stats(rows, (2016, CONF[1]))}
+    import hashlib
+    cp = GRADED_OUT / "longshot_cells.json"
+    cp.write_text(json.dumps(pack(P), ensure_ascii=False, separators=(",", ":"), default=_f), encoding="utf-8")
+    out["cells_file"] = {"path": str(cp), "sha256": hashlib.sha256(cp.read_bytes()).hexdigest(), "n": int(len(P)),
+                         "note": "重賞ごとの採る条件の一覧は大きいのでリポジトリに入れず、sha256 で凍結を確かめる"}
+    PREREG_LONGSHOT.write_text(json.dumps(out, ensure_ascii=False, indent=1, default=_f), encoding="utf-8")
+    print("prereg_longshot", PREREG_LONGSHOT, "cells", len(P), "perm", [p["pass"] for p in perm])
+
+
+def cmd_evaluate_longshot() -> None:
+    """穴馬の分析の評価（この分析では初回。2025・2026 年の重賞で 1 回だけ）。"""
+    import hashlib
+
+    from src.research.graded import cycles as CY
+    from src.research.graded import longshot as LS
+    flag = GRADED_OUT / "EVALUATED_LONGSHOT.json"
+    if flag.exists():
+        sys.exit(f"穴馬の分析は評価済み（{flag}）")
+    P = json.loads(PREREG_LONGSHOT.read_text(encoding="utf-8"))
+    cp = Path(P["cells_file"]["path"])
+    if hashlib.sha256(cp.read_bytes()).hexdigest() != P["cells_file"]["sha256"]:
+        sys.exit(f"{cp} が凍結と違う")
+    cells = json.loads(cp.read_text(encoding="utf-8"))
+    rows, X, types, names = _longshot_inputs()
+    if types != P["types"]:
+        sys.exit("型の並びが凍結と違う")
+    if _buy_input_hashes(names) != P["inputs"]:
+        sys.exit("frame・levels・水準の辞書が凍結と違う")
+    for c in cells + P["pooled"]:
+        if [names[types[t]][v] for t, v in zip(c["ts"], c["cs"])] != c["levels"]:
+            sys.exit("条件の水準の番号と名前が凍結と食い違う")
+    PC = json.loads(PREREG_CYCLES.read_text(encoding="utf-8"))
+    if _cycles_hash(PC) != PC["sha256_rules"]:
+        sys.exit("prereg_cycles.json の規則が凍結と違う")
+    res = {"evaluated_at": datetime.now(JST).isoformat(timespec="seconds"), "note": LONGSHOT_NOTE, "prereg_frozen_at": P["frozen_at"]}
+    flag.write_text(json.dumps({"evaluated_at": res["evaluated_at"], "note": "穴馬の分析を 2025・2026 年で評価済み（または途中で止まった）"}, ensure_ascii=False), encoding="utf-8")
+    ev = ((rows["year"] >= EVAL[0]) & (pd.to_datetime(rows["dt"]) <= pd.Timestamp(P["constants"]["EVAL_END"])) & rows["main"]).to_numpy()
+    res["eval_end"] = P["constants"]["EVAL_END"]
+    den = ev & (rows["pop"] >= LS.POP_MIN).to_numpy()
+    # 前日版の点（前日の想定で上位 5 頭を除く、の代わり）
+    pre = json.loads(PREREG.read_text(encoding="utf-8"))
+    T = _yr(_ctx(GRADED_OUT / "tally.parquet", _rows(_load()[0])), EVAL)   # 前日版の順位は cmd_evaluate と同じ全行の母集団で作る
+    _, mk = scored(T, pre, "preday")
+    rows["rank_pre"] = rows["row"].map(mk.set_index("row")["rank"]).to_numpy()
+    den_pre = ev & (rows["rank_pre"] > 5).to_numpy()
+    def summary(sel, mcount, ths=(1, 5, 20)):
+        D = rows[sel]
+        base = LS.rec(D)
+        K = int(D["top3"].sum())
+        out = {"races": int(D["race_id"].nunique()), "denominator": base, "K": K}
+        for h in ths:
+            m = mcount[sel] >= h
+            hit = LS.rec(D[m])
+            out[f"hit_{h}"] = hit | {"recall": int(D["top3"].to_numpy()[m].sum()) / K if K else None, "coverage": float(m.mean()) if len(m) else None,
+                                     "lift": (hit["rate"] / base["rate"]) if base["rate"] and hit["rate"] is not None else None}
+        return out
+    # 重賞ごとの条件: 馬ごとに当たる条件の数
+    cnt = np.zeros(len(rows), int)
+    by = rows.groupby("rkey").indices
+    for c in cells:
+        ii = by.get(c["rkey"])
+        if ii is None:
+            continue
+        ii = ii[ev[ii]]
+        cnt[ii[LS.matches(X[ii], c["ts"], c["cs"])]] += 1
+    res["by_rkey"] = {"pop6": summary(den, cnt), "preday_out_top5": summary(den_pre, cnt)}
+    # 全重賞をまとめた条件（BH で残ったもの）: 条件ごとと、どれかに当たる馬
+    pooled = [c for c in P["pooled"] if c["bh"]]
+    pc = np.zeros(len(rows), int)
+    per = []
+    D = rows[den]
+    base = LS.rec(D)
+    for c in pooled:
+        m = LS.matches(X, c["ts"], c["cs"])
+        pc += m
+        h = LS.rec(rows[den & m])
+        per.append({"types": c["types"], "levels": c["levels"], "dev": {k: c[k] for k in ("rec", "recall", "lift", "roi_t", "roi_f")},
+                    "eval": h | {"recall": int(rows["top3"].to_numpy()[den & m].sum()) / max(int(D["top3"].sum()), 1),
+                                 "lift": (h["rate"] / base["rate"]) if base["rate"] and h["rate"] is not None else None}})
+    res["pooled"] = {"cells": per, "pop6": summary(den, pc, (1, 3)), "preday_out_top5": summary(den_pre, pc, (1, 3))}
+    res["examples_eval"] = LS.example_stats(rows, EVAL)
+    # 20 サイクルの消しの規則（B・全体で 1 つ、前日版の点の下位 3 頭に近いもの）との重なり
+    t = _cycle_table()
+    if t.names != PC["features"]:
+        sys.exit("分析サイクルの特徴の列が凍結と違う")
+    kr = CY.apply_rule(t, PC["rules"]["B"]["kill_global"], (t.race["year"] >= EVAL[0]).to_numpy())["races"]
+    killed = {(x["race_id"], h) for x in kr for h in x["killed"]}
+    rows["killed"] = [(r, int(h)) in killed for r, h in zip(rows["race_id"].astype(str), rows["hn"])]
+    kk = rows["killed"].to_numpy()
+    res["kill_overlap"] = {"rule": PC["rules"]["B"]["kill_global"]["label"] + f"・下位 {PC['rules']['B']['kill_global']['k']} 頭",
+                           "pop6_killed_share": float(kk[den].mean()), "pop6_killed": LS.rec(rows[den & kk]), "pop6_not_killed": LS.rec(rows[den & ~kk]),
+                           "pooled_hit_killed_share": float(kk[den & (pc >= 1)].mean()) if (den & (pc >= 1)).any() else None,
+                           "pooled_hit_killed": LS.rec(rows[den & (pc >= 1) & kk]), "pooled_hit_not_killed": LS.rec(rows[den & (pc >= 1) & ~kk]),
+                           "rkey_hit5_killed": LS.rec(rows[den & (cnt >= 5) & kk]), "rkey_hit5_not_killed": LS.rec(rows[den & (cnt >= 5) & ~kk])}
+    (GRADED_OUT / "eval_longshot.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_f), encoding="utf-8")
+    flag.write_text(json.dumps({"evaluated_at": res["evaluated_at"], "finished": True, "note": "穴馬の分析を 2025・2026 年で評価済み"}, ensure_ascii=False), encoding="utf-8")
+    print(json.dumps({k: res[k] for k in ("by_rkey",)}, ensure_ascii=False, default=_f)[:2500])
+    print(json.dumps(res["pooled"]["pop6"], ensure_ascii=False, default=_f)[:1500])
+    print(json.dumps(res["kill_overlap"], ensure_ascii=False, default=_f)[:1500])
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["frame", "tally", "select", "evaluate", "smoke", "export", "select_roi", "smoke2", "evaluate2", "export_rules", "select_kill", "smoke_kill", "evaluate_kill", "select_buy", "smoke_buy", "evaluate_buy", "cycles", "freeze_cycles", "track_cycles"])
+    ap.add_argument("cmd", choices=["frame", "tally", "select", "evaluate", "smoke", "export", "select_roi", "smoke2", "evaluate2", "export_rules", "select_kill", "smoke_kill", "evaluate_kill", "select_buy", "smoke_buy", "evaluate_buy", "cycles", "freeze_cycles", "track_cycles", "select_longshot", "evaluate_longshot"])
     a = ap.parse_args()
     if a.cmd in ("smoke", "smoke2", "evaluate2"):
         cmd_evaluate(smoke=a.cmd != "evaluate2", round2=a.cmd != "smoke")
@@ -992,6 +1224,12 @@ def main() -> None:
     if a.cmd == "export":
         from src.research.graded.export import cmd_export
         cmd_export()
+        return
+    if a.cmd == "select_longshot":
+        cmd_select_longshot()
+        return
+    if a.cmd == "evaluate_longshot":
+        cmd_evaluate_longshot()
         return
     if a.cmd == "cycles":
         cmd_cycles()
