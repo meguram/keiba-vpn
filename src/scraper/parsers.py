@@ -91,6 +91,7 @@ def weather_track_from_racedata(tag: Any) -> tuple[str, str]:
     """race.netkeiba.com の RaceData01 の 2026-10 下旬からの書き方: 天候はアイコンの title / aria-label
     （``<span class="Icon_Weather02 Icon_W02" title="曇">``）、馬場は ``<span class="Item04"> 良</span>``。
     「天候:」「馬場:」の文字が無いので、文字の正規表現では取れない（10/31 以降の速報で馬場・天候が空になった）。
+    障害レース（芝・ダートの馬場が並ぶ場合）の書き方は実物で未確認。取れなければ空のまま（値を推し量らない）。
     値は許す範囲だけ入れ、馬場は略称（良・稍・重・不）にそろえる。馬場が 2 つ並ぶ（障害など）ときは先頭を採る（旧形式の正規表現と同じ）。"""
     if tag is None:
         return "", ""
@@ -100,10 +101,12 @@ def weather_track_from_racedata(tag: Any) -> tuple[str, str]:
         w = re.sub(r"\s+", "", str(icon.get("title") or icon.get("aria-label") or ""))
         weather = w if w in _RACEDATA_WEATHERS else ""
     track = ""
-    item = tag.select_one(".Item04")
-    if item is not None:
-        m = re.search(r"稍重|不良|良|稍|重|不", re.sub(r"\s+", "", item.get_text("", strip=True)))
-        track = _RACEDATA_TRACK[m.group(0)] if m else ""
+    # 馬場の span は芝が Item03、ダートが Item04（2026-11-15 に確かめた）。Item05 は直線の風。馬場の値を持つ最初の Item を採る
+    for item in tag.select("[class*=Item0]"):
+        m = re.fullmatch(r"[/／]?(稍重|不良|良|稍|重|不)", re.sub(r"\s+", "", item.get_text("", strip=True)))
+        if m:
+            track = _RACEDATA_TRACK[m.group(1)]
+            break
     return weather, track
 
 
