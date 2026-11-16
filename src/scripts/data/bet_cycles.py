@@ -86,6 +86,65 @@ def load_payoffs(race_ids: set[str] | None = None, paths=PAYOFF_PATHS) -> dict[s
     return out
 
 
+import re as _re
+
+_PAYOUT_RE = _re.compile(r"^\d{1,3}(,\d{3})*$|^\d+$")
+JP_BET = {"単勝": "tansho", "複勝": "fukusho", "馬連": "umaren", "ワイド": "wide", "馬単": "umatan", "3連複": "sanrenpuku", "3連単": "sanrentan"}
+ARITY = {"tansho": 1, "fukusho": 1, "umaren": 2, "wide": 2, "umatan": 2, "sanrenpuku": 3, "sanrentan": 3}
+
+
+def parse_flat_payoff(raw) -> dict[str, dict[str, int]] | None:
+    """race_result_flat.payoff（JSON の文字列）→ {bet_type: {組: 払戻}}。払戻の表（betting/payoff.parquet）に無い新しいレース用。
+    7 券種のどれかが読めない、または複勝・ワイドが 1 行に連結された保存（rule_tracking.parse_payoffs と同じ判定）なら None。"""
+    try:
+        js = json.loads(raw) if isinstance(raw, str) else dict(raw)
+    except (TypeError, ValueError):
+        return None
+    out: dict[str, dict[str, int]] = {}
+    for jp, bt in JP_BET.items():
+        v = js.get(jp, js.get(jp.replace("3連", "三連")))   # 実データは「三連複・三連単」、馬単・三連単は着順どおりに "-" でつなぐ
+        if v is None:
+            return None
+        if jp in ("複勝", "ワイド") and isinstance(v, dict) and "popularity" not in v:
+            return None
+        for e in (v if isinstance(v, list) else [v]):
+            if not isinstance(e, dict):
+                return None
+            try:
+                nums = [int(x) for x in str(e["numbers"]).replace("→", "-").replace(">", "-").replace(" ", "").split("-")]
+                ps = str(e["payout"]).strip()
+                if not _PAYOUT_RE.match(ps):                 # 金額の連結（例 "3,1903,470"）を弾く: カンマは 3 桁ごと
+                    return None
+                pay = int(ps.replace(",", ""))
+            except (KeyError, ValueError, TypeError):
+                return None
+            if len(nums) != ARITY[bt] or max(nums) > 18:
+                return None
+            k = combo_key(bt, nums)
+            out.setdefault(bt, {})[k] = pay          # 同じ組の重複保存は上書き（払戻の表の読みと同じ。同着は組が違うので別の行）
+    return out
+
+
+def fill_payoffs_from_flat(pay: dict, years) -> int:
+    """払戻の表に無いレースを、race_result_flat の払戻の列で補う（在れば上書きしない）。補った件数を返す。"""
+    from src.config.data_paths import TABLES_DIR
+
+    n = 0
+    for y in years:
+        f = Path(TABLES_DIR) / str(y) / "race_result_flat.parquet"
+        if not f.exists():
+            continue
+        t = pd.read_parquet(f, columns=["race_id", "payoff"]).drop_duplicates("race_id")
+        for rid, raw in zip(t["race_id"].astype(str), t["payoff"]):
+            if rid in pay and all(bt in pay[rid] for bt in BET_TYPES):
+                continue
+            x = parse_flat_payoff(raw)
+            if x:
+                pay[rid] = x
+                n += 1
+    return n
+
+
 # ── レースの読み込み ───────────────────────────────────────────────────────
 
 
@@ -836,12 +895,14 @@ def prepare_periods(inputs: dict, names=("train", "eval"), cuts: dict | None = N
         pred = pred[pred["race_id"].str[:4].astype(int).isin(years)]
         flat = load_runners(years)
         pay = load_payoffs(set(flat["race_id"]))
+        n_fill = fill_payoffs_from_flat(pay, years) if spec.get("fill_payoff_from_flat") else 0
         oo = None
         if spec.get("pre_odds"):
             oo = pre_odds_override(Path(spec["pre_odds"]) if str(spec["pre_odds"]).startswith("/") else ROOT / spec["pre_odds"],
                                    spec.get("pre_phase", ["t02", "t05", "t10", "t15", "t60"]))
         races, cond, drop = build_races(pred, flat, pay, years, odds_override=oo)
         drop["all_races_in_period"] = int(flat["race_id"].nunique())      # 期間の全レース（予測・払戻がそろわないものを含む）
+        drop["payoff_filled_from_flat"] = n_fill
         drop["computed_races"] = len(races)
         ft = feature_table(races, cond)
         per[nm] = (races, ft, drop)
@@ -1150,7 +1211,7 @@ def cmd_run(a) -> None:
     per, cuts = prepare_periods(inputs, ("train", "eval"), cuts)
     if not cuts_path.exists():
         cuts_path.write_text(json.dumps(cuts, indent=1))
-    strats = expand_variants(cyc)
+    strats = resolve_auto(expand_variants(cyc), out)
     baselines = json.loads((CFG_DIR / "baselines.json").read_text(encoding="utf-8"))["baselines"]
     print(f"cycle {n}: 買い方 {len(strats)} 本（基準 {len(baselines)} 本）、訓練 {len(per['train'].races)}R・評価 {len(per['eval'].races)}R", flush=True)
     allres = run_many(baselines + strats, per, threads=a.threads)
@@ -1267,6 +1328,29 @@ def _load_best_arrays(out: Path, pv: dict) -> dict | None:
         return None
     z = np.load(f)
     return {"cost": z["cost"], "ret": z["ret"]}
+
+
+def resolve_auto(strats: list[dict], out: Path) -> list[dict]:
+    """p2_min が "auto" の値だけを、その予測で bet_cycles fav1 が訓練で決めたしきい値（stage_fav1_exception.json）に置き換える（再帰）。"""
+    def has(x):
+        if isinstance(x, dict):
+            return x.get("p2_min") == "auto" or any(has(v) for v in x.values())
+        return isinstance(x, list) and any(has(v) for v in x)
+    if not has(strats):
+        return strats
+    st = out / "stage_fav1_exception.json"
+    if not st.exists():
+        raise SystemExit("p2_min=auto には、先に `bet_cycles fav1` で例外のしきい値を決める必要があります")
+    ch = json.loads(st.read_text(encoding="utf-8")).get("chosen")
+    val = float(ch["p2_min"]) if ch else 9.0          # しきい値が無ければ例外を作らない（9.0 は誰も満たさない）
+
+    def sub(x):
+        if isinstance(x, dict):
+            return {k: (val if (k == "p2_min" and v == "auto") else sub(v)) for k, v in x.items()}
+        if isinstance(x, list):
+            return [sub(v) for v in x]
+        return x
+    return sub(strats)
 
 
 def _cells_no_eval(cells: list[dict]) -> list[dict]:
@@ -1410,6 +1494,266 @@ def cmd_fav1(a) -> None:
             print(k, res[k])
 
 
+# ── 選び方そのものの交差検証（訓練の中の年: 2022 だけで格子の最良を選び 2023 で測る、その逆） ──────────
+
+
+def _fold_pick(C: np.ndarray, R: np.ndarray, fit: np.ndarray, base: tuple[np.ndarray, np.ndarray], min_hit: float, min_n: int) -> int:
+    """fit のレースだけで、cycle 8 以降と同じ考え方（的中率の下限・基準の上位 5 件除きより上）で最良の 1 本を選ぶ（-1 = なし）。
+    1 年分しかないので、順位は上位 5 件を除いた回収率（年ごとの最小は使えない）。"""
+    bc_, br_ = base[0][fit], base[1][fit]
+    b5 = (br_.sum() - np.sort(br_[bc_ > 0])[::-1][:5].sum()) / max(bc_.sum(), 1)
+    best, bj = -1.0, -1
+    for j in range(C.shape[0]):
+        c, r = C[j, fit], R[j, fit]
+        b = c > 0
+        if b.sum() < min_n or (r[b] > 0).mean() < min_hit:
+            continue
+        ex5 = (r.sum() - np.sort(r[b])[::-1][:5].sum()) / c.sum()
+        if ex5 >= b5 and ex5 > best:
+            best, bj = ex5, j
+    return bj
+
+
+def selection_cv(C: np.ndarray, R: np.ndarray, years: np.ndarray, base: tuple[np.ndarray, np.ndarray], min_hit: float, min_n: int = 150
+                 ) -> tuple[np.ndarray, np.ndarray, dict]:
+    cost, ret = np.zeros(C.shape[1]), np.zeros(C.shape[1])
+    picks = {}
+    for y in np.unique(years):
+        fit, hold = years != y, years == y
+        j = _fold_pick(C, R, fit, base, min_hit, min_n)
+        picks[str(y)] = j
+        if j >= 0:
+            cost[hold], ret[hold] = C[j, hold], R[j, hold]
+    return cost, ret, picks
+
+
+def cmd_selcv(a) -> None:
+    """過去のサイクルの格子（固定の買い方）を訓練で流し直し、全候補の cost・ret を保存し（多重比較の割り引き用）、
+    サイクルごとに『選び方そのもの』の交差検証の回収率を出す。方策のサイクルは方策の行（すでに交差検証の値）を並べる。"""
+    inputs = load_inputs(Path(a.inputs) if a.inputs else None)
+    out = OUT_DIR / inputs.get("tag", "v6e")
+    tr_spec = inputs["periods"]["train"]
+    cuts = json.loads((out / f"qcuts_train_{strategy_hash({'years': tr_spec['years'], 'pred': tr_spec['pred']})}.json").read_text())
+    per, _ = prepare_periods(inputs, ("train",), cuts)
+    tr = per["train"]
+    years = tr.feats["year"].to_numpy()
+    baselines = json.loads((CFG_DIR / "baselines.json").read_text(encoding="utf-8"))["baselines"]
+    b0 = run_strategy(tr.races, tr.frecs, baselines[0])
+    base = (b0["cost"], b0["ret"])
+    rows = []
+    for n in [int(x) for x in a.cycles.split(",")]:
+        cyc = json.loads((CFG_DIR / f"cycle_{n:02d}.json").read_text(encoding="utf-8"))
+        rec_p = out / f"cycle_{n:02d}.json"
+        rec = json.loads(rec_p.read_text(encoding="utf-8")) if rec_p.exists() else {}
+        strats = [s for s in resolve_auto(expand_variants(cyc), out) if not family(s).startswith("参考")]
+        key = strategy_hash({"pred": tr_spec["pred"], "years": tr_spec["years"], "cuts": cuts, "specs": [strategy_hash(x) for x in strats]})
+        npz = out / f"cands_c{n:02d}_{key}.npz"           # 予測・区切り・買い方が変われば作り直す
+        z = np.load(npz, allow_pickle=True) if npz.exists() else None
+        if z is not None and list(z["names"]) == [x["name"] for x in strats]:
+            C, R = z["cost"], z["ret"]
+        else:
+            res = run_many(strats, {"train": tr}, threads=a.threads)
+            C = np.stack([r["train"]["cost"] for _, r in res]).astype(np.float32)
+            R = np.stack([r["train"]["ret"] for _, r in res]).astype(np.float32)
+            np.savez_compressed(npz, cost=C, ret=R, names=np.array([s["name"] for s in strats]))
+        min_hit = float(cyc.get("min_hit", 0.08))
+        cc, cr, picks = selection_cv(C, R, years, base, min_hit)
+        m = metrics(cc, cr, tr.dates, tr.W)
+        fold = {str(y): (float(cr[years == y].sum() / cc[years == y].sum()) if cc[years == y].sum() > 0 else None) for y in np.unique(years)}
+        same = len(set(picks.values())) == 1 and -1 not in picks.values()
+        complete = -1 not in picks.values()                  # どちらかの年で候補が無ければ、交差検証は 1 年分だけ（順位から外す）
+        row = {"cycle": n, "kind": "固定の格子", "n_cands": int(C.shape[0]), "min_hit": min_hit, "cv": {k: m.get(k) for k in KEYS_CV}, "cv_folds": fold,
+               "picks": {y: (strats[j]["name"] if j >= 0 else "なし") for y, j in picks.items()}, "same_pick": bool(same), "cv_complete": bool(complete),
+               "score": robust_cv(m, fold) if complete else None}
+        rows.append(row)
+        pol = [x for x in rec.get("all", []) if x["name"].startswith("policy") and (x["train"].get("hit_rate") or 0) >= min_hit
+               and (x["train"].get("bet_races") or 0) >= MIN_BET_RACES]
+        if pol:                                               # 同じ物差しで並べる。方策どうしの選び直しの楽観は残る（記録に書く）
+            bestp = max(pol, key=lambda x: robust_cv(x["train"], x.get("train_folds") or {}))
+            rows.append({"cycle": n, "kind": f"方策（交差検証、{len(pol)} 本から選んだ）", "n_cands": len(pol), "min_hit": min_hit, "cv": bestp["train"],
+                         "cv_folds": bestp.get("train_folds"), "picks": {"": bestp["name"]}, "same_pick": None, "cv_complete": True,
+                         "score": robust_cv(bestp["train"], bestp.get("train_folds") or {})})
+        print(n, row["kind"], C.shape[0], {k: round(v, 3) if isinstance(v, float) else v for k, v in row["cv"].items()}, fold, row["picks"], same, flush=True)
+    res = {"title": "選び方そのものの交差検証（訓練の中の年）", "rows": rows,
+           "text": ["各サイクルの格子（固定の買い方）の中から、2022 年だけで最良を選んで 2023 年に当て、2023 年だけで選んで 2022 年に当てた回収率。"
+                    "選ぶ物差しは cycle 8 以降と同じ考え方（的中率の下限・基準の上位 5 件除きより上・上位 5 件を除いた回収率で順位、各年 150R 以上）。"
+                    "数百本の中から選んだ標本内の回収率（各サイクルの『選んだ』の訓練の値）より、選び方の楽観を除いた値になる。"
+                    "方策の行は、型ごとの選び方は交差検証の値だが、同じサイクルの方策どうし（型の作り方・件数の下限・見送りの下限）の選び直しの楽観は残る。"
+                    "どちらかの年で条件を満たす候補が無かった行は、1 年分だけの値なので順位から外した（印『1 年分』）。"]}
+    res["tables"] = [{"title": "サイクルごとの選び方の交差検証（訓練 2022〜23）",
+                      "head": ["回", "種類", "候補", "参戦", "的中率", "回収率", "95% 区間", "上位5件を除く", "2022（2023で選んだもの）", "2023（2022で選んだもの）", "両年で同じ形"],
+                      "rows": [[str(x["cycle"]), x["kind"], str(x["n_cands"]), f"{(x['cv'].get('bet_races') or 0):,}",
+                                f"{(x['cv'].get('hit_rate') or 0) * 100:.1f}%", f"{(x['cv'].get('roi') or 0) * 100:.1f}%",
+                                (f"{x['cv']['roi_lo'] * 100:.0f}〜{x['cv']['roi_hi'] * 100:.0f}%" if x["cv"].get("roi_lo") is not None else "－"),
+                                f"{(x['cv'].get('roi_ex_top5') or 0) * 100:.1f}%",
+                                *(f"{v * 100:.1f}%" if v is not None else "－" for v in list((x.get("cv_folds") or {}).values())[:2]),
+                                {True: "同じ", False: "違う", None: "－"}[x["same_pick"]] + ("" if x.get("cv_complete", True) else "（1 年分・順位外）")] for x in rows], "left": 2}]
+    (out / "stage_selcv.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_np), encoding="utf-8")
+
+
+def robust_cv(m: dict, folds: dict) -> float:
+    """最後の候補の物差し: min（上位 5 件を除いた回収率, 年ごとの回収率）。"""
+    vals = [m.get("roi_ex_top5")] + [v for v in (folds or {}).values()]
+    vals = [v for v in vals if v is not None]
+    return float(min(vals)) if vals else -1.0
+
+
+KEYS_CV = ("bet_races", "bet_rate", "hit_rate", "roi", "roi_lo", "roi_hi", "roi_ex_top5", "avg_return", "median_return")
+
+
+def cmd_check_periods(a) -> None:
+    """test・2026 の入口の確かめ（結果を見ない）。レース数と落とした数だけを出す。回収率は出さない。"""
+    inputs = load_inputs(Path(a.inputs) if a.inputs else None)
+    names = [x for x in a.periods.split(",")]
+    per, _ = prepare_periods(inputs, names, cuts={}, n_boot=2)
+    for nm, p in per.items():
+        n_fav = sum(1 for r in p.races if (r.pop == 1).sum() == 1)
+        print(nm, {"races": len(p.races), "drop": p.drop, "with_single_fav1": n_fav,
+                   "dates": (p.feats["date"].min(), p.feats["date"].max()) if len(p.races) else None, "p2_from_pred": bool(p.races and p.races[0].p2 is not None)})
+
+
+# ── 得意・不得意と推奨度の段（指示書 6）。判定は訓練だけ、評価は段の順の確かめだけ ─────────────────────
+
+TIER_AXES = {"c_venue": "会場", "c_surface": "芝・ダート", "c_dist_band": "距離帯", "c_class": "クラス", "fieldband": "頭数", "c_going": "馬場",
+             "c_season": "季節", "q_ev_max": "期待値の最大の5分位", "shape": "分布の型（手の区切り）"}
+TIER_MIN_N = 100          # 判定する水準の参戦の下限（訓練）
+TIER_PRIOR = 300          # 縮める強さ（参戦レース数の重み。件数の少ない水準ほど全体に寄せる）
+TIER_NAMES = ("★★★", "★★", "★")
+
+
+def level_stats(cost: np.ndarray, ret: np.ndarray, labels: np.ndarray, years: np.ndarray, dates: np.ndarray, W: np.ndarray, min_n: int = TIER_MIN_N) -> dict:
+    """水準ごとの参戦・的中率・回収率・区間・上位5件を除いた回収率・年ごとの回収率。"""
+    out = {}
+    for lv in np.unique(labels):
+        m = labels == lv
+        c, r = np.where(m, cost, 0), np.where(m, ret, 0)
+        if (c > 0).sum() < min_n:
+            continue
+        st = metrics(c, r, dates, W)
+        st["folds"] = {str(y): (float(r[years == y].sum() / c[years == y].sum()) if c[years == y].sum() > 0 else None) for y in np.unique(years)}
+        out[str(lv)] = st
+    return out
+
+
+def judge_level(st: dict, base_roi: float) -> str:
+    """得意 = 区間の下限が基準以上・年ごとがすべて 1 以上・上位 5 件を除いても 1 以上。不得意 = 区間の上限が基準（B0）未満。
+    年の交差検証の中では、年ごとは fit の 1 年分だけになる（記録に書く）。"""
+    folds = [v for v in st.get("folds", {}).values() if v is not None]
+    if st.get("roi_hi", 9) < base_roi:            # 区間の上限が基準（B0）を下回る（指示書 6 の定義）
+        return "不得意"
+    if st.get("roi_lo", 0) >= base_roi and folds and min(folds) >= 1.0 and st.get("roi_ex_top5", 0) >= 1.0:
+        return "得意"
+    return "判定できない"
+
+
+def shrunk(st: dict, overall: float, prior: int = TIER_PRIOR) -> float:
+    n = st.get("bet_races", 0)
+    return float((st.get("roi", overall) * n + overall * prior) / (n + prior))
+
+
+def fit_tiers(cost, ret, feats: pd.DataFrame, mask_fit: np.ndarray, base_roi: float, dates, W, years) -> dict:
+    """mask_fit のレースで、軸ごとの水準の判定と縮めた回収率、段の区切り（点の 3 分位）を決める。"""
+    model = {"axes": {}, "overall": float(ret[mask_fit].sum() / max(cost[mask_fit].sum(), 1))}
+    for ax in TIER_AXES:
+        lab = feats[ax].astype(str).to_numpy()
+        st = level_stats(np.where(mask_fit, cost, 0), np.where(mask_fit, ret, 0), lab, years, dates, W)
+        model["axes"][ax] = {lv: {"judge": judge_level(x, base_roi), "shrunk": shrunk(x, model["overall"]), "n": x["bet_races"]} for lv, x in st.items()}
+    sc = tier_scores(feats, model)
+    keep = mask_fit & (cost > 0) & ~skip_mask(feats, model)
+    model["cuts"] = [float(x) for x in np.quantile(sc[keep], [1 / 3, 2 / 3])] if keep.sum() > 10 else [float("inf"), float("inf")]
+    return model
+
+
+def skip_mask(feats: pd.DataFrame, model: dict) -> np.ndarray:
+    m = np.zeros(len(feats), bool)
+    for ax, lv in model["axes"].items():
+        bad = {k for k, v in lv.items() if v["judge"] == "不得意"}
+        if bad:
+            m |= feats[ax].astype(str).isin(bad).to_numpy()
+    return m
+
+
+def tier_scores(feats: pd.DataFrame, model: dict) -> np.ndarray:
+    """レースの点 = 軸ごとの、その水準の縮めた回収率の平均（判定に足りない水準は全体の回収率）。"""
+    tot = np.zeros(len(feats))
+    for ax, lv in model["axes"].items():
+        tot += feats[ax].astype(str).map({k: v["shrunk"] for k, v in lv.items()}).fillna(model["overall"]).to_numpy(float)
+    return tot / max(len(model["axes"]), 1)
+
+
+def assign_tiers(feats: pd.DataFrame, model: dict) -> np.ndarray:
+    """0 = 見送り（不得意）、1 = ★、2 = ★★、3 = ★★★。"""
+    sc = tier_scores(feats, model)
+    t = 1 + (sc > model["cuts"][0]).astype(int) + (sc > model["cuts"][1]).astype(int)   # 区切りと同じ点は下の段（上に寄せない）
+    return np.where(skip_mask(feats, model), 0, t)
+
+
+def cmd_tiers(a) -> None:
+    """凍結の候補の買い方（--spec の JSON）で、得意・不得意の地図と推奨度の段を作る。訓練の値は年の交差検証、評価は段の順の確かめだけ。"""
+    inputs = load_inputs(Path(a.inputs) if a.inputs else None)
+    out = OUT_DIR / inputs.get("tag", "v6e")
+    tr_spec = inputs["periods"]["train"]
+    cuts = json.loads((out / f"qcuts_train_{strategy_hash({'years': tr_spec['years'], 'pred': tr_spec['pred']})}.json").read_text())
+    per, _ = prepare_periods(inputs, ("train", "eval"), cuts)
+    spec = resolve_auto([json.loads(Path(a.spec).read_text(encoding="utf-8"))], out)[0]
+    base = json.loads((CFG_DIR / "baselines.json").read_text(encoding="utf-8"))["baselines"][0]
+    tr, ev = per["train"], per["eval"]
+    rt, re_ = run_strategy(tr.races, tr.frecs, spec), run_strategy(ev.races, ev.frecs, spec)
+    b0 = run_strategy(tr.races, tr.frecs, base)
+    base_roi = float(b0["ret"].sum() / b0["cost"].sum())
+    years = tr.feats["year"].to_numpy()
+    allm = np.ones(len(tr.races), bool)
+    full = fit_tiers(rt["cost"], rt["ret"], tr.feats, allm, base_roi, tr.dates, tr.W, years)
+    # 訓練の値は年の交差検証（ある年で判定・区切りを決め、もう一方の年に当てる）
+    tcv = np.zeros(len(tr.races), int)
+    for y in np.unique(years):
+        fm = years != y
+        base_fold = float(b0["ret"][fm].sum() / max(b0["cost"][fm].sum(), 1))      # 基準も fit の年だけで
+        mdl = fit_tiers(rt["cost"], rt["ret"], tr.feats, fm, base_fold, tr.dates, tr.W, years)
+        tcv[years == y] = assign_tiers(tr.feats[years == y].reset_index(drop=True), mdl)
+    tev = assign_tiers(ev.feats, full)
+    rows_map = []
+    for ax, lab in TIER_AXES.items():
+        st = level_stats(rt["cost"], rt["ret"], tr.feats[ax].astype(str).to_numpy(), years, tr.dates, tr.W)
+        for lv, x in sorted(st.items(), key=lambda kv: -kv[1]["roi"]):
+            rows_map.append([lab, lv, f"{x['bet_races']:,}", f"{x['hit_rate'] * 100:.1f}%", f"{x['roi'] * 100:.1f}%", f"{x['roi_lo'] * 100:.0f}〜{x['roi_hi'] * 100:.0f}%",
+                             f"{x['roi_ex_top5'] * 100:.1f}%", " / ".join(f"{k} {v * 100:.0f}%" for k, v in x["folds"].items() if v is not None),
+                             full["axes"][ax][lv]["judge"], f"{full['axes'][ax][lv]['shrunk'] * 100:.1f}%"])
+
+    def tier_rows(cost, ret, tiers, dates, W, label):
+        rows, res = [], {}
+        for t in (3, 2, 1, 0):
+            m = tiers == t
+            c, r = np.where(m & (cost > 0), cost, 0), np.where(m & (cost > 0), ret, 0)
+            st = metrics(c, r, dates, W)
+            res[str(t)] = {k: st.get(k) for k in KEYS_CV}
+            nm = TIER_NAMES[3 - t] if t > 0 else "見送り（不得意）"
+            rows.append([label, nm, f"{st.get('bet_races', 0):,}", f"{(st.get('hit_rate') or 0) * 100:.1f}%", f"{(st.get('roi') or 0) * 100:.1f}%",
+                         (f"{st['roi_lo'] * 100:.0f}〜{st['roi_hi'] * 100:.0f}%" if st.get("roi_lo") is not None else "－"),
+                         f"{(st.get('roi_ex_top5') or 0) * 100:.1f}%", f"{(st.get('avg_return') or 0):,.0f}", f"{(st.get('median_return') or 0):,.0f}"])
+        return rows, res
+    r1, s_tr = tier_rows(rt["cost"], rt["ret"], tcv, tr.dates, tr.W, "訓練（年の交差検証）")
+    r2, s_ev = tier_rows(re_["cost"], re_["ret"], tev, ev.dates, ev.W, "評価 2024（確かめ）")
+    order_ok = all((s_ev[str(t)].get("roi") or 0) >= (s_ev[str(t - 1)].get("roi") or 0) for t in (3, 2))
+    order_tr = all((s_tr[str(t)].get("roi") or 0) >= (s_tr[str(t - 1)].get("roi") or 0) for t in (3, 2))
+    res = {"title": "得意・不得意の地図と推奨度の段（指示書 6）", "spec": spec, "model": full, "base_roi_train": base_roi,
+           "tiers_train_cv": s_tr, "tiers_eval": s_ev, "order_train_cv": order_tr, "order_eval": order_ok,
+           "text": [f"買い方: {spec.get('name')}。判定と段の区切りは訓練 2022〜23 だけで決めた（評価 2024 は段の順に回収率が並ぶかを見るだけ）。",
+                    f"水準の判定（参戦 {TIER_MIN_N}R 以上の水準だけ）: 不得意 = 回収率の 95% 区間の上限が基準 B0 を下回る → 推奨しない（見送り）。"
+                    f"得意 = 区間の下限が基準 B0（{base_roi * 100:.1f}%）以上・2 年とも 100% 以上・上位 5 件を除いても 100% 以上。それ以外は判定できない。",
+                    f"推奨度の点 = 軸ごとの、そのレースの水準の回収率を件数で全体に縮めた値（重み {TIER_PRIOR}R）の平均。不得意に当たらないレースを、点の 3 分位で ★★★・★★・★ に分けた。",
+                    "注意: 段を付ける買い方そのものは訓練の 2 年で選んだもので、段の交差検証は買い方の選び直しまではしていない（買い方の選び方の楽観は残る）。"
+                    "交差検証の中の判定は、年ごとの条件が fit の 1 年分だけになる。9 軸の多くの水準を 95% 区間で判定するので、偶然の不得意・得意も含みうる。",
+                    f"訓練の段の値は年の交差検証（ある年で判定・区切りを決めて、もう一方の年に当てた）。段の順（★★★ ≥ ★★ ≥ ★）: 訓練 {'並んだ' if order_tr else '並ばなかった'}・評価 {'並んだ' if order_ok else '並ばなかった'}。",
+                    "画面との関係（案。この調査では画面は変えない）: 今の UI のレース選択は、推奨ポートフォリオの期待回収率で色を分けている（config/ev_calibration.json の levels、★オレンジ）。"
+                    "ここの段（★★★・★★・★・見送り）を、その levels の段に当てる形が考えられる。"],
+           "tables": [{"title": "推奨度の段", "head": ["期間", "段", "参戦", "的中率", "回収率", "95% 区間", "上位5件を除く", "平均回収額", "中央値回収額"], "rows": r1 + r2, "left": 2},
+                      {"title": "得意・不得意の地図（訓練 2022〜23、選んだ買い方の水準ごと）",
+                       "head": ["軸", "水準", "参戦", "的中率", "回収率", "95% 区間", "上位5件を除く", "年ごと", "判定", "縮めた回収率"], "rows": rows_map, "left": 2}]}
+    (out / f"stage_tiers{('_' + a.tag) if a.tag else ''}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_np), encoding="utf-8")
+    print(json.dumps({"train_cv": s_tr, "eval": s_ev, "order_train_cv": order_tr, "order_eval": order_ok}, ensure_ascii=False, indent=1, default=_np))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1421,6 +1765,20 @@ def main() -> None:
     f1 = sub.add_parser("fav1", help="1 番人気を ◎ にしてよい例外のしきい値を訓練で決める")
     f1.add_argument("--inputs", default=None)
     f1.set_defaults(func=cmd_fav1)
+    sc = sub.add_parser("selcv", help="選び方そのものの交差検証と、全候補の配列の保存")
+    sc.add_argument("--cycles", required=True)
+    sc.add_argument("--inputs", default=None)
+    sc.add_argument("--threads", type=int, default=3)
+    sc.set_defaults(func=cmd_selcv)
+    cp = sub.add_parser("check-periods", help="test・2026 の入口を、結果を見ずに確かめる（件数だけ）")
+    cp.add_argument("--periods", default="test,fwd2026,fwd2026_pre")
+    cp.add_argument("--inputs", default=None)
+    cp.set_defaults(func=cmd_check_periods)
+    ti = sub.add_parser("tiers", help="得意・不得意の地図と推奨度の段（凍結の候補の買い方で）")
+    ti.add_argument("--spec", required=True, help="買い方の JSON（cycle_XX.json の selected.spec を書き出したもの）")
+    ti.add_argument("--tag", default="")
+    ti.add_argument("--inputs", default=None)
+    ti.set_defaults(func=cmd_tiers)
     a = ap.parse_args()
     a.func(a)
 

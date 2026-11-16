@@ -303,3 +303,64 @@ def test_report_renders_and_escapes():
     assert "2番人気以下で" in rp.spec_text(log["cycles"][1]["selected"]["spec"])
     md = rp.render_md_tables(log)
     assert md.startswith(rp.MD_BEGIN) and md.endswith(rp.MD_END) and "x y" in md
+
+
+def test_parse_flat_payoff_seven_types():
+    raw = json.dumps({"単勝": {"numbers": "4", "payout": "3,110", "popularity": "8"},
+                      "複勝": [{"numbers": "4", "payout": "1,980", "popularity": "8"}, {"numbers": "2", "payout": "570", "popularity": "4"}],
+                      "馬連": {"numbers": "4-2", "payout": "16,720", "popularity": "40"},
+                      "ワイド": [{"numbers": "2-4", "payout": "3,370", "popularity": "30"}],
+                      "馬単": {"numbers": "4→2", "payout": "40,000", "popularity": "90"},
+                      "3連複": {"numbers": "8-4-2", "payout": "50,000", "popularity": "100"},
+                      "三連単": {"numbers": "4-2-8", "payout": "300,000", "popularity": "500"}}, ensure_ascii=False)
+    x = bc.parse_flat_payoff(raw)
+    assert x["umaren"] == {"2-4": 16720} and x["umatan"] == {"4>2": 40000} and x["sanrenpuku"] == {"2-4-8": 50000}
+    assert x["sanrentan"] == {"4>2>8": 300000} and x["fukusho"]["2"] == 570
+    bad = json.loads(raw)
+    bad["ワイド"] = {"numbers": "2-4", "payout": "3,370"}          # 連結された保存（popularity なし）は読めないとみなす
+    assert bc.parse_flat_payoff(json.dumps(bad, ensure_ascii=False)) is None
+
+
+def test_judge_level_rules():
+    good = {"roi": 1.3, "roi_lo": 1.05, "roi_hi": 1.6, "roi_ex_top5": 1.1, "folds": {"2022": 1.2, "2023": 1.4}, "bet_races": 500}
+    assert bc.judge_level(good, 0.9) == "得意"
+    bad = {"roi": 0.7, "roi_lo": 0.5, "roi_hi": 0.85, "roi_ex_top5": 0.6, "folds": {"2022": 0.8, "2023": 0.6}, "bet_races": 500}
+    assert bc.judge_level(bad, 0.9) == "不得意"
+    mid = {"roi": 1.1, "roi_lo": 0.8, "roi_hi": 1.4, "roi_ex_top5": 0.95, "folds": {"2022": 1.3, "2023": 0.9}, "bet_races": 500}
+    assert bc.judge_level(mid, 0.9) == "判定できない"
+    assert bc.shrunk({"roi": 2.0, "bet_races": 100}, 1.0, 300) == pytest.approx(1.25)
+
+
+def test_tiers_skip_bad_levels_and_order():
+    import pandas as pd
+
+    rng = np.random.default_rng(0)
+    n = 4000
+    feats = pd.DataFrame({ax: "x" for ax in bc.TIER_AXES}, index=range(n))
+    feats["c_venue"] = rng.choice(["良場", "悪場", "並場"], n)
+    cost = np.full(n, 100.0)
+    p_hit = np.where(feats["c_venue"] == "良場", 0.4, np.where(feats["c_venue"] == "悪場", 0.05, 0.25))   # 全体では勝っている（1.17 前後）
+    ret = np.where(rng.random(n) < p_hit, 500.0, 0.0)
+    years = np.where(np.arange(n) % 2 == 0, 2022, 2023)
+    dates = np.array([f"2022-01-{1 + i % 28:02d}" for i in range(n)])
+    W = bc.poisson_weights(n, 200)
+    mdl = bc.fit_tiers(cost, ret, feats, np.ones(n, bool), 0.9, dates, W, years)
+    assert mdl["axes"]["c_venue"]["悪場"]["judge"] == "不得意"
+    t = bc.assign_tiers(feats, mdl)
+    assert (t[feats["c_venue"] == "悪場"] == 0).all()                 # 不得意は見送り
+    assert t[feats["c_venue"] == "良場"].mean() > t[feats["c_venue"] == "並場"].mean()
+
+
+def test_resolve_auto_only_p2_min(tmp_path):
+    (tmp_path / "stage_fav1_exception.json").write_text(json.dumps({"chosen": {"p2_min": 0.85}}), encoding="utf-8")
+    s = [{"name": "auto", "honmei": {"rule": "fav1_exc", "p2_min": "auto", "base": {"rule": "ana_ev", "note": "auto"}}}]
+    out = bc.resolve_auto(s, tmp_path)
+    assert out[0]["honmei"]["p2_min"] == 0.85 and out[0]["name"] == "auto" and out[0]["honmei"]["base"]["note"] == "auto"
+    assert bc.resolve_auto([{"honmei": {"p2_min": 0.9}}], tmp_path / "none") == [{"honmei": {"p2_min": 0.9}}]
+
+
+def test_parse_flat_payoff_rejects_concatenated_amount():
+    raw = {"単勝": {"numbers": "4", "payout": "3,1903,470", "popularity": "8"}}
+    for k in ("複勝", "馬連", "ワイド", "馬単", "三連複", "三連単"):
+        raw[k] = [{"numbers": "4" if k == "複勝" else ("4-2" if k in ("馬連", "ワイド", "馬単") else "4-2-8"), "payout": "100", "popularity": "1"}]
+    assert bc.parse_flat_payoff(json.dumps(raw, ensure_ascii=False)) is None
