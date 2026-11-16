@@ -61,13 +61,15 @@ def test_cards_reproduce_cycle_report_and_count_dev():
     rep, rules = _cycle(t)
     res = PB.build_cards(t, rules, rep)
     assert [c["rkey"] for c in res["cards"]] == ["N", "R", "S <x>"]
-    assert set(res["global"]) == {"A", "B"}                                        # 全体で 1 つの版も照合を通る
+    assert set(res["global"]) == {"B"}                                             # 全体で 1 つの版も照合を通る（A は廃止）
+    assert all("A" not in c and all("A" not in x for x in c["races"]) and not any(k.startswith("A_") for k in c["flags"]) for c in res["cards"])
+    assert not any(k.startswith("A_") for k in res["summary"])
     n = res["cards"][0]
     assert n["dev_races"] == 0 and n["B"]["honmei"]["default"] and not n["flags"]["B_honmei"] and not n["flags"]["B_kill"]   # B の既定は数えない
     r = res["cards"][1]
     assert r["base"]["eval"]["pay_races"] == 1 and r["base"]["eval"]["races"] == 2   # 2026 年は払戻なし → 回収率の分母は 1 レース
     for c in res["cards"][1:]:
-        for m in ("A", "B"):
+        for m in ("B",):
             ph = next(x for x in rep[m]["honmei_by_rkey"]["per_rkey"] if x["rkey"] == c["rkey"])
             assert c[m]["honmei"]["eval"]["win"] == pytest.approx(ph["win"]) and c[m]["honmei"]["eval"]["roi_t"] == pytest.approx(ph["roi_t"])
             pk = next(x for x in rep[m]["kill_by_rkey"]["per_rkey"] if x["rkey"] == c["rkey"])
@@ -88,7 +90,7 @@ def test_races_recount_matches_card_stats():
     res = PB.build_cards(t, rules, rep)
     for c in res["cards"]:
         assert len(c["races"]) == c["eval_races"]
-        for who, kd, e in [("base", "honmei", c["base"]["eval"])] + [(m, kd, c[m][kd]["eval"]) for m in ("A", "B") for kd in ("honmei", "kill")]:
+        for who, kd, e in [("base", "honmei", c["base"]["eval"])] + [(m, kd, c[m][kd]["eval"]) for m in ("B",) for kd in ("honmei", "kill")]:
             g = PB.recount(c["races"], who, kd)
             assert g["rec"] == e["rec"]
             if kd == "honmei":
@@ -100,12 +102,12 @@ def test_races_recount_matches_card_stats():
             assert [w["hn"] for w in x["winners"]] == rr.loc[rr["fin"] == 1, "hn"].tolist()
             assert x["field"] == (len(rr) + 2 if x["date"][:4] == "2025" else len(rr))   # 2025 年は field_size の値、無ければ表の頭数
             # 各馬の値を、元の行（馬番で引く）と独立に突き合わせる
-            for h_ in [x["base"]] + [q for m in ("A", "B") for q in [x[m]["honmei"], *x[m]["kill"]]]:
+            for h_ in [x["base"]] + [q for m in ("B",) for q in [x[m]["honmei"], *x[m]["kill"]]]:
                 o = rr[rr["hn"] == h_["hn"]].iloc[0]
                 assert h_["fin"] == o["fin"] and (h_["name"] == o["horse_name"] if x["date"][:4] == "2025" else h_["name"] is None)
                 assert (h_["odds"] == o["odds_final"]) if x["date"][:4] == "2025" else h_["odds"] is None
                 assert h_["tan"] == (round(o["ret_tan"] * 100) if x["pay_ok"] else None)
-            for m in ("A", "B"):
+            for m in ("B",):
                 i = int(np.flatnonzero(t.race["race_id"].to_numpy() == x["race_id"])[0])
                 kr = rules[m]["kill_by_rkey"][c["rkey"]]
                 want = PB.killed_rows(t, CY._vec(t, kr["terms"]), kr["k"], i)
@@ -116,7 +118,7 @@ def test_races_recount_matches_card_stats():
 
 
 def test_recount_kill_with_no_horses():
-    assert PB.recount([{"pay_ok": True, "A": {"kill": []}}], "A", "kill") == {"killed": 0, "rec": [0, 0, 0, 0]}
+    assert PB.recount([{"pay_ok": True, "B": {"kill": []}}], "B", "kill") == {"killed": 0, "rec": [0, 0, 0, 0]}
 
 
 def test_check_races_stops_when_horses_do_not_match():
@@ -124,7 +126,7 @@ def test_check_races_stops_when_horses_do_not_match():
     rep, rules = _cycle(t)
     c = PB.build_cards(t, rules, rep)["cards"][1]
     bad = json.loads(json.dumps(c))
-    bad["races"][0]["A"]["kill"][0]["fin"] = 1.0 if bad["races"][0]["A"]["kill"][0]["fin"] != 1.0 else 9.0
+    bad["races"][0]["B"]["kill"][0]["fin"] = 1.0 if bad["races"][0]["B"]["kill"][0]["fin"] != 1.0 else 9.0
     with pytest.raises(ValueError):
         PB.check_races(bad)
     bad = json.loads(json.dumps(c))
@@ -161,7 +163,7 @@ def test_cards_stop_when_kill_rule_or_rkey_does_not_match():
     with pytest.raises(ValueError):
         PB.build_cards(t, bad, rep)
     rep2 = json.loads(json.dumps(rep))
-    rep2["A"]["honmei_by_rkey"]["per_rkey"] = rep2["A"]["honmei_by_rkey"]["per_rkey"][1:]
+    rep2["B"]["honmei_by_rkey"]["per_rkey"] = rep2["B"]["honmei_by_rkey"]["per_rkey"][1:]
     with pytest.raises(ValueError):
         PB.build_cards(t, rules, rep2)
 
@@ -170,10 +172,10 @@ def test_cards_stop_when_rules_do_not_match_cycle():
     t = _table()
     rep, rules = _cycle(t)
     bad = json.loads(json.dumps(rules))
-    k = next(iter(bad["A"]["honmei_by_rkey"]))
-    bad["A"]["honmei_by_rkey"][k] = {"label": "x", "terms": {"x_E05": -3.0, "x_A01": 2.0}, "k": None}
+    k = next(iter(bad["B"]["honmei_by_rkey"]))
+    bad["B"]["honmei_by_rkey"][k] = {"label": "x", "terms": {"x_E05": -3.0, "x_A01": 2.0}, "k": None}
     rep2 = json.loads(json.dumps(rep))
-    for x in rep2["A"]["honmei_by_rkey"]["per_rkey"]:
+    for x in rep2["B"]["honmei_by_rkey"]["per_rkey"]:
         x["win"], x["roi_t"] = 0.123, 0.456
     with pytest.raises(ValueError):
         PB.build_cards(t, bad, rep2)
@@ -194,9 +196,19 @@ def test_describe_direction_and_filter():
 def test_flags_exclude_B_default():
     h = {"eval": {"roi_t": 1.5}, "dev": {"roi_t": 0.5}, "default": True}
     k = {"eval": {"top3_rate": 0.0}, "default": False}
-    c = {"A": {"honmei": h | {"default": False}, "kill": k}, "B": {"honmei": h, "kill": k}, "base": {"eval": {"roi_t": 0.9}}}
+    c = {"B": {"honmei": h, "kill": k}, "base": {"eval": {"roi_t": 0.9}}}
     f = PB.flags(c)
-    assert f["A_honmei"] and not f["B_honmei"] and f["B_kill"] and not f["B_both"] and f["B_default"] and not f["A_dev_honmei"]
+    assert not f["B_honmei"] and f["B_kill"] and not f["B_both"] and f["B_default"] and not any(x.startswith("A_") for x in f)
+    c2 = {"B": {"honmei": h | {"default": False}, "kill": k}, "base": {"eval": {"roi_t": 0.9}}}
+    assert PB.flags(c2)["B_both"]
+
+
+def test_drop_a_removes_every_a_value():
+    P = {"cards": [{"A": {}, "B": {}, "races": [{"A": {}, "B": {}}], "flags": {"A_honmei": True, "B_honmei": False}}],
+         "summary": {"A_honmei": 1, "B_honmei": 0, "n": 1}, "global": {"A": {}, "B": {}}}
+    Q = PB.drop_a(P)
+    assert Q["cards"][0].keys() == {"B", "races", "flags"} and Q["cards"][0]["races"] == [{"B": {}}]
+    assert Q["cards"][0]["flags"] == {"B_honmei": False} and Q["summary"] == {"B_honmei": 0, "n": 1} and Q["global"] == {"B": {}}
 
 
 def test_playbook_html(tmp_path):
@@ -215,8 +227,9 @@ def test_playbook_html(tmp_path):
     assert 'href="graded_cycles.html"' in h and 'href="graded_handicapper.html"' in h and "全カード共通の注意" in h
     # 回ごとの実際の馬: 馬名のエスケープ、確定オッズの明記、3 着以内の消し馬を目立たせる
     assert "京&amp;都・" in h and "京&都・" not in h   # 回の見出しの会場
-    assert "確定の単勝オッズ" in h and "馬&lt;R0&gt;" in h and "馬<R0>" not in h and "（馬名なし）" in h
-    n_hit = sum(1 for c in res["cards"] for x in c["races"] if (ks := {h_["hn"]: h_ for m in ("A", "B") for h_ in x[m]["kill"]})
+    nm = next(x["B"]["honmei"]["name"] for c in res["cards"] for x in c["races"] if x["B"]["honmei"] and x["B"]["honmei"]["name"])
+    assert "確定の単勝オッズ" in h and nm.replace("<", "&lt;").replace(">", "&gt;") in h and nm not in h and "（馬名なし）" in h   # B の ◎ の馬名がエスケープされて出る
+    n_hit = sum(1 for c in res["cards"] for x in c["races"] if (ks := {h_["hn"]: h_ for m in ("B",) for h_ in x[m]["kill"]})
                 for h_ in ks.values() if h_["fin"] <= 3)
     assert h.count("<tr class='hit'>") == n_hit
 
@@ -233,3 +246,22 @@ def test_cycles_and_handicapper_link_to_playbook(tmp_path):
     src = tmp_path / "r.json"
     src.write_text(json.dumps({"prereg": {"frozen_at": "x"}, "races": [], "eval_races": []}), encoding="utf-8")
     assert 'href="graded_race_playbook.html"' in OLD.build(src, tmp_path / "h.html").read_text(encoding="utf-8")
+
+
+def test_playbook_html_drops_a_from_old_values(tmp_path):
+    """A（廃止した版）の入った古い playbook.json からも、A の値・印・絞り込みを出さない。"""
+    t = _table()
+    rep, rules = _cycle(t)
+    res = PB.build_cards(t, rules, rep)
+    for c in res["cards"]:   # 古い形: A のカード・回ごとの馬・印・要約を足す
+        c["A"] = json.loads(json.dumps(c["B"]))
+        for x in c["races"]:
+            x["A"] = json.loads(json.dumps(x["B"]))
+        c["flags"] |= {"A_honmei": True, "A_kill": True, "A_default": False, "A_dev_honmei": True}
+    res["summary"] |= {"A_honmei": 3, "A_kill": 3, "A_dev_honmei": 3, "A_dev_n": 3}
+    res["global"]["A"] = res["global"]["B"]
+    src = tmp_path / "old.json"
+    src.write_text(json.dumps(res | {"made_at": "x", "tried": 6}, ensure_ascii=False), encoding="utf-8")
+    h = H.build(src, tmp_path / "p.html").read_text(encoding="utf-8")
+    for bad in ("data-ahonmei", "data-akill", 'value="ahonmei"', "A の ◎", "<th>A</th>", "bd a", "A で達成", "◎ は A だけ"):
+        assert bad not in h, bad

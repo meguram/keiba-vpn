@@ -1143,7 +1143,7 @@ def cmd_track_cycles() -> None:
         sel = np.zeros(len(t.starts), bool)
         sel[i] = True
         e = {"rkey": rk, "grade": t.race["grade"].iloc[i], "date": dt[i], "recorded_at": datetime.now(JST).isoformat(timespec="seconds")}
-        for m in ("A", "B"):
+        for m in ("B",):   # A（2025・2026 年の結果を見て選んだ版）は廃止（2026-11-16）。凍結のファイルには残すが、記録しない
             R = P["rules"][m]
             for kind in ("honmei", "kill"):
                 r_rk = R[f"{kind}_by_rkey"].get(rk)
