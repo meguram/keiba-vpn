@@ -194,3 +194,14 @@ def _reload_folklore_after(monkeypatch):
     for k in ("FOLKLORE_ENTRIES", "FOLKLORE_CUTOFF"):
         os.environ.pop(k, None)
     importlib.reload(FB)
+
+
+def test_shutuba_short_names_resolve_to_graded_keys(tmp_path, monkeypatch):
+    """出馬表の略称（「マイルCS」など）でも、記録の別名の表で重賞の鍵に当たる。行のレース名は鍵にそろえる。"""
+    d, h = _history(tmp_path, monkeypatch, rkeys=("マイルチャンピオンS",))
+    h["aliases"] = {"マイルCS": "マイルチャンピオンS"}
+    (d / "history.json").write_text(json.dumps(h), encoding="utf-8")
+    assert GP.rkey_of("マイルCS", "2026-11-22") == "マイルチャンピオンS"
+    assert GP.rkey_of("ふつう", "2026-11-22") is None
+    rows = UP.rows_from_card(_card(name="マイルCS"), "G1", "マイルチャンピオンS")
+    assert {r["race_name"] for r in rows} == {"マイルチャンピオンS"}

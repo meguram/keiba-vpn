@@ -82,6 +82,7 @@ def rkey_of(race_name: str | None, date: str | None) -> str | None:
         k = canonical_key(race_name, int(str(date)[5:7]))
     except (TypeError, ValueError):
         return None
+    k = (h.get("aliases") or {}).get(k, k)   # 出馬表の略称（「マイルCS」など）→ 結果の名前の鍵
     return k if k in h["rkeys"] else None
 
 

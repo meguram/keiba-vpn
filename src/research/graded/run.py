@@ -956,6 +956,26 @@ def _attach_final_odds(t, years: tuple[int, int]) -> None:
             sys.exit(f"確定オッズ・人気・馬名の無い馬が多すぎる（{miss} / {int(ev.sum())} 頭）。race_id・horse_id の型を確かめる")
 
 
+def _shutuba_aliases(rkeys: set[str], y0: int, y1: int) -> dict[str, str]:
+    """出馬表のレース名（「マイルCS」「東スポ杯2歳S」などの略称）→ 記録の重賞の鍵（結果の表の名前から作った鍵）。同じ race_id の出馬表と
+    結果の名前を突き合わせて作る（研究の別名の表 race_aliases.json は凍結した集計に効くので触らない）。1 つの鍵に決まらない略称は入れない。"""
+    from src.research.graded import race_keys as RKY
+    from src.research.graded.features import TABLES
+    al: dict[str, set] = {}
+    for y in range(y0, y1 + 1):
+        fs, fr = TABLES / str(y) / "race_shutuba_flat.parquet", TABLES / str(y) / "race_result_flat.parquet"
+        if not (fs.exists() and fr.exists()):
+            continue
+        m = (pd.read_parquet(fs, columns=["race_id", "race_name"]).drop_duplicates("race_id")
+             .merge(pd.read_parquet(fr, columns=["race_id", "race_name", "date"]).drop_duplicates("race_id"), on="race_id", suffixes=("_s", "_r")))
+        for a, b, dt in zip(m["race_name_s"], m["race_name_r"], m["date"]):
+            mo = int(str(dt)[5:7])
+            ks, kr = RKY.canonical_key(a, mo), RKY.canonical_key(b, mo)
+            if ks != kr and kr in rkeys and ks not in rkeys:
+                al.setdefault(ks, set()).add(kr)
+    return {k: next(iter(v)) for k, v in sorted(al.items()) if len(v) == 1}
+
+
 GRADED_PICKS_DIR = Path(os.environ.get("GRADED_PICKS_DIR") or (REPO / "data/local/graded_picks"))
 
 
@@ -976,6 +996,7 @@ def cmd_picks_history() -> None:
     pk = json.loads(PREREG_KILL.read_text(encoding="utf-8"))
     kn = [v["name"].removeprefix("消し版") for v in pk["versions"] if v["passes"] and v["params"].get("honmei") == "そのまま"]
     res = PK.build_history(t, P, log["cycles"][-1]["report"], kn)
+    res["aliases"] = _shutuba_aliases(set(res["rkeys"]), PK.DEV[0], int(t.race["year"].max()))
     res["made_at"] = datetime.now(JST).isoformat(timespec="seconds")
     res["data_until"] = str(t.r["dt"].max())[:10]
     GRADED_PICKS_DIR.mkdir(parents=True, exist_ok=True)

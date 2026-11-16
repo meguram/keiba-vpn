@@ -67,8 +67,9 @@ def confirmed(card: dict) -> bool:
     return bool(hs) and all(n > 0 for n in nums) and len(set(nums)) == len(nums)
 
 
-def rows_from_card(card: dict, grade: str) -> list[dict]:
+def rows_from_card(card: dict, grade: str, race_name: str | None = None) -> list[dict]:
     """出馬表（race_shutuba）から、race_result_flat と同じ列の行を作る。格は記録の重賞の格（出馬表の grade は当てにならない）。
+    レース名は記録の重賞の鍵（結果の表の名前。出馬表の略称のままだと、主の層・規則の重賞が引けない）。
     オッズ・人気・馬体重・馬場など、結果や当日に決まる値は入れない。"""
     hs = [e for e in card.get("entries") or [] if isinstance(e, dict) and e.get("horse_id")]
     out = []
@@ -76,7 +77,7 @@ def rows_from_card(card: dict, grade: str) -> list[dict]:
         out.append({"race_id": str(card.get("race_id")), "date": str(card.get("date"))[:10], "venue": card.get("venue"),
                     "venue_code": str(card.get("race_id"))[4:6], "surface": card.get("surface"), "distance": card.get("distance"),
                     "direction": card.get("direction"), "grade": grade, "race_class": card.get("race_class"), "start_time": card.get("start_time"),
-                    "field_size": len(hs), "race_name": card.get("race_name"), "round": card.get("round"),
+                    "field_size": len(hs), "race_name": race_name or card.get("race_name"), "round": card.get("round"),
                     "bracket_number": e.get("bracket_number"), "horse_number": e.get("horse_number"), "horse_id": str(e.get("horse_id")),
                     "horse_name": e.get("horse_name"), "sex_age": e.get("sex_age"), "jockey_weight": e.get("jockey_weight"),
                     "jockey_name": e.get("jockey_name"), "jockey_id": e.get("jockey_id"), "trainer_id": e.get("trainer_id"),
@@ -111,7 +112,7 @@ def entries_frame(race_ids: list[str], sim: bool) -> Any:
             if not rk or not confirmed(card):
                 logger.warning("重賞でないか、出馬表が確定していない: %s", rid)
                 continue
-            rows += rows_from_card(card, h["rkeys"][rk]["grade"])
+            rows += rows_from_card(card, h["rkeys"][rk]["grade"], rk)
     e = pd.DataFrame(rows)
     if len(e):
         e = e[[c for c in FLAT_COLS if c in e.columns]]
