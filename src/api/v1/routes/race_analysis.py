@@ -22,4 +22,13 @@ def race_analysis(race_id: str):
     if payload is None:
         return jsonify({"status": "pending", "message": PENDING_MESSAGE, "race": {"race_id": race_id}, "entries": [], "provisional_entries": False, "modules": []})
     payload.pop("fingerprint", None)
+    from src.utils import public_policy as P
+
+    if P.is_public_mode() and not P.actual_odds_allowed():
+        from src.api.flask_auth import is_logged_in as is_developer_session
+
+        if not is_developer_session():   # 実オッズ・人気・確定払戻（データで予想の該当馬）は開発者だけ
+            from src.research.race_analysis.graded_picks import redact_actual_odds
+
+            payload = redact_actual_odds(payload)
     return jsonify(payload)

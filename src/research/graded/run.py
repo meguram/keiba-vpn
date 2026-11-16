@@ -921,17 +921,18 @@ def cmd_cycles() -> None:
                                                                "features": t.names, "rules": rules}, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
-def _final_odds() -> pd.DataFrame:
-    """2025・2026 年の (race_id, horse_id) → 馬名・確定の単勝オッズ・人気・頭数（race_result_flat）。早見表で結果を見せるためだけに使い、決め方には使わない。"""
+def _final_odds(years: tuple[int, int] | None = None) -> pd.DataFrame:
+    """(race_id, horse_id) → 馬名・確定の単勝オッズ・人気・頭数（race_result_flat。既定は 2025・2026 年）。結果を見せるためだけに使い、決め方には使わない。"""
     from src.research.graded import cycles as CY
     from src.research.graded.features import TABLES
+    y0, y1 = years or CY.EVAL
     parts = []
-    for y in range(CY.EVAL[0], CY.EVAL[1] + 1):
+    for y in range(y0, y1 + 1):
         p = TABLES / str(y) / "race_result_flat.parquet"
         if p.exists():
             parts.append(pd.read_parquet(p, columns=["race_id", "horse_id", "horse_name", "odds", "popularity", "field_size"]))
     if not parts:
-        sys.exit(f"{CY.EVAL[0]}〜{CY.EVAL[1]} 年の race_result_flat.parquet が無い")
+        sys.exit(f"{y0}〜{y1} 年の race_result_flat.parquet が無い")
     m = pd.concat(parts)
     m["race_id"], m["horse_id"] = m["race_id"].astype(str), m["horse_id"].astype(str)
     m["odds_final"] = pd.to_numeric(m["odds"], errors="coerce")
@@ -939,6 +940,49 @@ def _final_odds() -> pd.DataFrame:
     m["field_size"] = pd.to_numeric(m["field_size"], errors="coerce")
     m = m[["race_id", "horse_id", "horse_name", "odds_final", "pop_final", "field_size"]].drop_duplicates()   # 全く同じ行だけ落とす（値の違う重複は結合の validate で止める）
     return m
+
+
+def _attach_final_odds(t, years: tuple[int, int]) -> None:
+    """表 t の行に馬名・確定の単勝オッズ・人気・頭数を足す（結果を見せるためだけ。行の並び・特徴は変えない）。years の馬で大きく欠けたら止める。"""
+    m = t.r[["race_id", "horse_id"]].astype(str).merge(_final_odds(years), on=["race_id", "horse_id"], how="left", validate="many_to_one")
+    for c in ("horse_name", "odds_final", "pop_final", "field_size"):
+        t.r[c] = m[c].to_numpy()
+    ev = ((t.r["year"] >= years[0]) & (t.r["year"] <= years[1])).to_numpy()
+    miss = int(t.r.loc[ev, ["horse_name", "odds_final", "pop_final"]].isna().any(axis=1).sum())
+    if miss:   # 取り消し等で数頭欠けるのは表で「—」にする。キーの型ずれなどで大きく欠けたら止める
+        print("確定オッズ・人気・馬名の無い馬:", miss, "頭", flush=True)
+        if miss > 0.01 * ev.sum():
+            sys.exit(f"確定オッズ・人気・馬名の無い馬が多すぎる（{miss} / {int(ev.sum())} 頭）。race_id・horse_id の型を確かめる")
+
+
+GRADED_PICKS_DIR = Path(os.environ.get("GRADED_PICKS_DIR") or (REPO / "data/local/graded_picks"))
+
+
+def cmd_picks_history() -> None:
+    """めぐ分析の「データで予想」タブの元データ: 凍結した B の規則（prereg_cycles.json）と前日版の ◎ を、2018 年以降の重賞の各回に当てはめ、
+    <GRADED_PICKS_DIR>/history.json に書く。A は出さない。規則が凍結のハッシュと違えば止める。新しい回を入れるには、先に frame・tally を作り直す。"""
+    from src.research.graded import picks as PK
+    P = json.loads(PREREG_CYCLES.read_text(encoding="utf-8"))
+    if _cycles_hash(P) != P["sha256_rules"]:
+        sys.exit("prereg_cycles.json の規則が凍結のハッシュと違う")
+    log = json.loads((GRADED_OUT / "cycles.json").read_text(encoding="utf-8"))
+    if P["from"]["cycles_finished_at"] != log["finished_at"]:
+        sys.exit("prereg_cycles.json と cycles.json のサイクルが違う")
+    t = _cycle_table(year_max=9999)   # 凍結の後の回（前向きの記録）も入れる
+    if t.names != P["features"]:
+        sys.exit("特徴の列が凍結と違う")
+    _attach_final_odds(t, (PK.DEV[0], int(t.race["year"].max())))
+    pk = json.loads(PREREG_KILL.read_text(encoding="utf-8"))
+    kn = [v["name"].removeprefix("消し版") for v in pk["versions"] if v["passes"] and v["params"].get("honmei") == "そのまま"]
+    res = PK.build_history(t, P, log["cycles"][-1]["report"], kn)
+    res["made_at"] = datetime.now(JST).isoformat(timespec="seconds")
+    res["data_until"] = str(t.r["dt"].max())[:10]
+    GRADED_PICKS_DIR.mkdir(parents=True, exist_ok=True)
+    out = GRADED_PICKS_DIR / "history.json"
+    tmp = out.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":"), default=_f), encoding="utf-8")
+    os.replace(tmp, out)
+    print(out, f"{out.stat().st_size / 1e6:.2f} MB", len(res["rkeys"]), "重賞", sum(len(v["races"]) for v in res["rkeys"].values()), "回")
 
 
 def cmd_playbook() -> None:
@@ -952,15 +996,7 @@ def cmd_playbook() -> None:
     t, lv = _cycle_table(levels=True)
     if t.names != src["features"]:
         sys.exit("特徴の列が cycles_rules.json と違う")
-    m = t.r[["race_id", "horse_id"]].astype(str).merge(_final_odds(), on=["race_id", "horse_id"], how="left", validate="many_to_one")
-    for c in ("horse_name", "odds_final", "pop_final", "field_size"):   # 結果を見せるためだけ（行の並び・特徴は変えない）
-        t.r[c] = m[c].to_numpy()
-    ev = ((t.r["year"] >= PB.CY.EVAL[0]) & (t.r["year"] <= PB.CY.EVAL[1])).to_numpy()
-    miss = int(t.r.loc[ev, ["horse_name", "odds_final", "pop_final"]].isna().any(axis=1).sum())
-    if miss:   # 取り消し等で数頭欠けるのは表で「—」にする。キーの型ずれなどで大きく欠けたら止める
-        print("確定オッズ・人気・馬名の無い馬:", miss, "頭", flush=True)
-        if miss > 0.01 * ev.sum():
-            sys.exit(f"確定オッズ・人気・馬名の無い馬が多すぎる（{miss} / {int(ev.sum())} 頭）。race_id・horse_id の型を確かめる")
+    _attach_final_odds(t, PB.CY.EVAL)
     pk = json.loads(PREREG_KILL.read_text(encoding="utf-8"))
     kn = [v["name"].removeprefix("消し版") for v in pk["versions"] if v["passes"] and v["params"].get("honmei") == "そのまま"]
     res = PB.build_cards(t, src["rules"], log["cycles"][-1]["report"], kn, lv)
@@ -1270,7 +1306,7 @@ def cmd_evaluate_longshot() -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["frame", "tally", "select", "evaluate", "smoke", "export", "select_roi", "smoke2", "evaluate2", "export_rules", "select_kill", "smoke_kill", "evaluate_kill", "select_buy", "smoke_buy", "evaluate_buy", "cycles", "freeze_cycles", "track_cycles", "select_longshot", "evaluate_longshot", "playbook"])
+    ap.add_argument("cmd", choices=["frame", "tally", "select", "evaluate", "smoke", "export", "select_roi", "smoke2", "evaluate2", "export_rules", "select_kill", "smoke_kill", "evaluate_kill", "select_buy", "smoke_buy", "evaluate_buy", "cycles", "freeze_cycles", "track_cycles", "select_longshot", "evaluate_longshot", "playbook", "picks_history"])
     a = ap.parse_args()
     if a.cmd in ("smoke", "smoke2", "evaluate2"):
         cmd_evaluate(smoke=a.cmd != "evaluate2", round2=a.cmd != "smoke")
@@ -1290,6 +1326,9 @@ def main() -> None:
         return
     if a.cmd == "playbook":
         cmd_playbook()
+        return
+    if a.cmd == "picks_history":
+        cmd_picks_history()
         return
     if a.cmd == "cycles":
         cmd_cycles()

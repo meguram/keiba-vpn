@@ -4,6 +4,7 @@
  */
 
 import type { TPFigure } from "@/lib/trainerPattern";
+import type { GPFigure } from "@/lib/gradedPicks";
 
 export type CellFormat = "record" | "pct" | "int" | "text" | "runs" | "range";
 
@@ -42,8 +43,8 @@ export type AnalysisModuleMeta = {
   /** 分析の軸（父など）を表の列として出すときの見出し。値は各馬の cells の _key */
   key_header?: string | null;
   /** 見せ方。省略時は表。"map" は figure の走法マップ */
-  view?: "table" | "map" | "trainer_pattern";
-  figure?: RunningMapFigure | TPFigure | null;
+  view?: "table" | "map" | "trainer_pattern" | "graded_picks";
+  figure?: RunningMapFigure | TPFigure | GPFigure | null;
 };
 
 /** 走法マップの方面（矢印）。arrow は 2 次元での向きと長さ、r2 はその方面がこの図でどれだけ表せているか（0〜1） */

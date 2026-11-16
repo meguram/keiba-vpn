@@ -43,6 +43,7 @@ class RaceContext:
     distance: int | None
     entries: list[dict[str, Any]] = field(default_factory=list)   # 出走馬。key は馬ごとの一意キー
     track_condition: str | None = None                            # 馬場状態（発表前は None）
+    race_name: str | None = None                                  # レース名（重賞の判定に使う）
 
 
 @dataclass
