@@ -5,8 +5,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { LEVEL_STYLE, RaceValue, TIER_LEGEND, TARGET_TIER_HINT, ValueLevel, chipHint, chipText, hasTier, isTargetValues, mixedProbCalibration } from "@/lib/raceValue";
 import { venuesOf } from "@/lib/weekDates";
+import { ChipFoot, GradeBadge, chipAccent, chipTitle } from "@/components/RaceChipMarks";
 
-export type StripRace = { race_id: string; race_name?: string; venue?: string; round?: number | string };
+export type StripRace = {
+  race_id: string; race_name?: string; venue?: string; round?: number | string;
+  /** 発走時刻（"15:40"）・格（DB）・一覧の格のアイコン。あればチップに時刻と格の札を出す */
+  start_time?: string | null; grade?: string | null; list_grade_icon?: string | null;
+};
 
 const BTN: React.CSSProperties = {
   display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 6, fontSize: 12,
@@ -132,19 +137,21 @@ export function RaceStrip({
                 onTouchStart={() => onWarm?.(r.race_id)}
                 onFocus={() => onWarm?.(r.race_id)}
                 aria-current={on ? "true" : undefined}
-                title={disabled ? `${roundOf(r)}R ${r.race_name ?? ""}\n${disabledHint}` : showValue ? `${roundOf(r)}R ${r.race_name ?? ""}\n${chipHint(v, valuesState)}` : `${roundOf(r)}R ${r.race_name ?? ""}`}
+                title={`${chipTitle(roundOf(r), r)}${disabled ? `\n${disabledHint}` : showValue ? `\n${chipHint(v, valuesState)}` : ""}`}
                 data-level={lv}
                 style={{
                   minWidth: narrow ? 48 : 46, minHeight: narrow ? 46 : undefined, flex: "none", scrollSnapAlign: "center",
                   display: "inline-flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
                   padding: "5px 6px", borderRadius: 8, lineHeight: 1.15, cursor: disabled ? "not-allowed" : "pointer",
                   border: `1px solid ${st.border}`, background: st.bg, color: st.color,
-                  boxShadow: [on ? "0 0 0 2px var(--bg), 0 0 0 4px #e6edf3" : "", st.glow ?? ""].filter(Boolean).join(", ") || undefined,
+                  boxShadow: [on ? "0 0 0 2px var(--bg), 0 0 0 4px #e6edf3" : "", st.glow ?? "", chipAccent(r) ?? ""].filter(Boolean).join(", ") || undefined,
                   opacity: disabled ? 0.3 : lv === "pass" || lv === "none" ? (on ? 1 : 0.9) : 1,
                   transform: lv === "hot" ? "translateY(-1px)" : undefined,
                 }}
               >
+                <GradeBadge r={r} />
                 <span style={{ fontSize: 14, fontWeight: on || lv === "hot" ? 800 : 600 }}>{lv === "hot" ? `★${roundOf(r)}` : roundOf(r)}</span>
+                <ChipFoot r={r} narrow={narrow} />
                 {showValue && (
                   <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.95 }}>
                     {chipText(v, valuesState)}

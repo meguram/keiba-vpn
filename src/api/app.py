@@ -2891,6 +2891,7 @@ async def race_list_payload(date: str, with_result_status: bool = True, refresh:
         except Exception:
             pass
 
+        icons = {str(r.get("race_id")): r.get("list_grade_icon") for r in raw if r.get("list_grade_icon")}   # 一覧の格のアイコン（DB の行には無い）
         jra = merge_db_and_list_races(db_races, jra, date)
 
         if not jra:
@@ -3001,6 +3002,7 @@ async def race_list_payload(date: str, with_result_status: bool = True, refresh:
                 "track_condition": db.get("track_condition") or r.get("track_condition"),
                 "start_time": db.get("start_time") or r.get("start_time"),
                 "entries_count": r.get("entries_count"),
+                "list_grade_icon": r.get("list_grade_icon") or icons.get(rid),   # 一覧の格のアイコン（重賞・L・OP の印。画面の色分けに使う。DB の日も一覧から引く。新しい読み出しは無し）
             }
             row.update(entries_fields.get(rid, {}))
             if with_result_status:
