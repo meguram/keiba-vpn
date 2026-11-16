@@ -1,6 +1,6 @@
 "use client";
 
-import { SKIP_LABEL, fin, horseShort, odds, pct, rec, yen, type GPFigure, type GPHorse, type GPPicked, type GPRace, type GPRule } from "@/lib/gradedPicks";
+import { SKIP_LABEL, fin, horseShort, newVersion, odds, pct, rec, yen, type GPFigure, type GPHorse, type GPPicked, type GPRace, type GPRule } from "@/lib/gradedPicks";
 
 const CSS = `
 .gp-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -154,11 +154,16 @@ export function GradedPicks({ fig, notes }: { fig: GPFigure; notes?: string[] })
   const t = fig.this;
   const b = fig.brief;
   const base = t.race?.base ?? t.picked?.base ?? null;
+  const nv = newVersion(t.picked);
+  const rt = nv ? t.picked!.version!.rule_text : null;
   return (
     <div style={{ marginTop: 8 }}>
       <style>{CSS}</style>
-      <div className="gp-note">2024 年までのデータで決めた条件です（2025 年以降は、その条件で選んだ結果）。{fig.rkey}・{fig.grade}・{fig.course}
-        {t.race && t.period === "dev" && <span className="gp-tag">この回は条件を決めた期間の中</span>}</div>
+      <div className="gp-note">
+        {nv ? `${(t.picked!.version!.discovery.to ?? "").slice(0, 4)} 年までのこの重賞の回で決めた条件です（直近の回は検証に使用）。` : "2024 年までのデータで決めた条件です（2025 年以降は、その条件で選んだ結果）。"}
+        {fig.rkey}・{fig.grade}・{fig.course}
+        {t.race && t.period === "dev" && <span className="gp-tag">この回は条件を決めた期間の中</span>}
+        {t.picked?.version?.flag === "val_weak" && <span className="gp-tag" title="発見の期間で決めた条件が、検証の 2 回では ◎ の単勝の回収率 100% 未満でした">検証では振るわず</span>}</div>
       <div className="gp-sec">
         <Picks fig={fig} />
         {b && (b.honmei || b.kill) && (
@@ -178,11 +183,28 @@ export function GradedPicks({ fig, notes }: { fig: GPFigure; notes?: string[] })
         {base && !t.race && <div className="gp-note">前日版の点の ◎（参考）: {horseShort(base)}</div>}
         {t.race && <div className="gp-sec"><h3>このレースの結果</h3><RaceDetail x={t.race} /></div>}
         {t.picked && <div className="gp-note">使った結果は {t.picked.data_until} まで。当日の値とブリンカーは使っていません。計算 {t.picked.computed_at.slice(0, 16).replace("T", " ")}。</div>}
+        {t.picked?.version && (
+          <div className="gp-note">
+            条件の版: {t.picked.version.id}（発見 {t.picked.version.discovery.from ?? "—"}〜{t.picked.version.discovery.to ?? "—"}・検証 {t.picked.version.validation.from ?? "—"}〜{t.picked.version.validation.to ?? "—"}）
+            {t.picked.version.val_stats?.honmei?.races ? `。検証の ◎ ${rec(t.picked.version.val_stats.honmei.rec)}・単回収 ${pct(t.picked.version.val_stats.honmei.roi_t)}` : ""}
+          </div>
+        )}
+        {(t.picked?.warnings ?? []).map((w) => <div key={w} className="gp-warn">{w}</div>)}
         <div className="gp-sec">
-          <h3>条件の詳細（2018〜2024 年の中で決めて凍結）</h3>
-          <div className="gp-note"><b>◎</b></div>
-          <RuleText r={fig.rules.honmei} kind="honmei" />
-          {fig.rules.kill && (<><div className="gp-note"><b>消し</b></div><RuleText r={fig.rules.kill} kind="kill" /></>)}
+          {rt ? (
+            <>
+              <h3>条件の詳細（{t.picked!.version!.discovery.from}〜{t.picked!.version!.discovery.to} の回で決めた版）</h3>
+              {rt.honmei && (<><div className="gp-note"><b>◎</b></div><RuleText r={{ rule: rt.honmei, label: "", default: false, dayof: false }} kind="honmei" /></>)}
+              {rt.kill && (<><div className="gp-note"><b>消し</b></div><RuleText r={{ rule: rt.kill, label: "", default: false, dayof: false, k: rt.kill.k }} kind="kill" /></>)}
+            </>
+          ) : (
+            <>
+              <h3>条件の詳細（2018〜2024 年の中で決めて凍結）</h3>
+              <div className="gp-note"><b>◎</b></div>
+              <RuleText r={fig.rules.honmei} kind="honmei" />
+              {fig.rules.kill && (<><div className="gp-note"><b>消し</b></div><RuleText r={fig.rules.kill} kind="kill" /></>)}
+            </>
+          )}
         </div>
         {(notes ?? []).length > 0 && (
           <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 11.5, color: "var(--text-dim)" }}>

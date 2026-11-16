@@ -1031,7 +1031,12 @@ def cmd_picks_upcoming() -> None:
         sys.exit("特徴の列が凍結と違う")
     fr = pd.read_parquet(GRADED_OUT / "frame.parquet", columns=["dt", "is_entry"])
     done = pd.to_datetime(fr.loc[~fr["is_entry"].fillna(False).astype(bool), "dt"]).max()   # 結果の行（全クラス）の最終日
-    RB = P["rules"]["B"]
+    from src.research.graded import playbook as PB
+    from src.research.graded import versions as VS
+    ledger = VS.load_ledger()
+    sc = PB.scales(t)
+    t_dates = t.r.groupby(t.race_of)["dt"].first().astype(str).str[:10].to_numpy()
+    t_has = ~t.r.groupby(t.race_of)["fin"].apply(lambda s: s.isna().all()).to_numpy()
     out_dir.mkdir(parents=True, exist_ok=True)
     nm = dict(zip(zip(names["race_id"], names["horse_id"]), names["horse_name"]))
     for i in np.flatnonzero(t.r["is_entry"].iloc[t.starts].fillna(False).astype(bool).to_numpy()):
@@ -1049,13 +1054,30 @@ def cmd_picks_upcoming() -> None:
         def hs(hn):
             j = a + int(np.flatnonzero(t.r["hn"].to_numpy()[a:b] == hn)[0])
             return {"hn": int(hn), "name": nm.get((rid, str(t.r["horse_id"].iloc[j])))}
+        # 条件の版: 台帳の最新（無ければ 20 サイクルの B）。この回の前に新しい回の結果が入っていれば、先に作り直す（重賞ごとの窓）
+        ver = VS.current(rk, P, ledger, date)   # この回に使える版（この回より前の結果だけで選んだ版）
+        eds = sorted(set(t_dates[(t.race["rkey"].to_numpy() == rk) & t_has]))
+        if VS.is_stale(ver, eds, date):
+            import time as _time
+            t0 = _time.time()
+            nv = VS.build(t, [rk], date).get(rk)
+            print("version", rk, "rebuilt" if nv else "no-discovery", f"{_time.time() - t0:.0f}s", flush=True)
+            if nv:
+                try:
+                    ledger = VS.append_version(rk, nv)
+                except OSError as exc:   # 台帳に書けなくても、予想は書く
+                    print("version ledger not written:", exc, flush=True)
+                ver = nv
         base = CY.apply_rule(t, {"terms": {"score_pre": 1}, "k": None}, sel)["races"][0]
         res = {"race_id": rid, "rkey": rk, "date": date, "data_until": str(done)[:10], "computed_at": datetime.now(JST).isoformat(timespec="seconds"),
                "entries_sig": json.loads(os.environ.get("GRADED_ENTRIES_SIG") or "{}").get(rid),   # 計算に使った出馬表（upcoming.entries_sig）
                "frozen_at": P["frozen_at"], "sha256_rules": P["sha256_rules"], "field": int(b - a), "base": hs(base["hn"]), "B": {"honmei": None, "kill": None},
-               "skipped": {}}
+               "skipped": {}, "version": None if ver is None else {k: ver.get(k) for k in ("id", "made_at", "discovery", "validation", "val_stats", "flag", "sha")}
+               | {"rule_text": {kd: (PB.describe(ver[kd]["terms"], None, kd, sc) | ({"k": ver[kd]["k"]} if kd == "kill" else {})) if ver.get(kd) else None
+                                for kd in ("honmei", "kill")}},
+               "warnings": [w for w in (VS.material_warning(date),) if w]}
         for kind in ("honmei", "kill"):
-            r = RB[f"{kind}_by_rkey"].get(rk)
+            r = (ver or {}).get(kind)
             if r is None:
                 res["skipped"][kind] = "no_rule"
             elif PK.needs_dayof(r["terms"]):
