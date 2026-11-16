@@ -32,7 +32,8 @@ EXTRA_CSS = """
 .box h4{margin:0 0 4px;font-size:13.5px}.rule{margin:2px 0 6px;padding-left:18px}.rule li{margin:1px 0}.sm{font-size:12px}
 .note{font-size:12px;color:var(--bad);margin-top:6px}.sumgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:8px 0}
 .tile{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px}.tile b{font-size:20px;display:block}
-.hide{display:none}
+.hide{display:none}.rc{margin:6px 0 10px}.rc h5{margin:6px 0 3px;font-size:13px}tr.hit td{background:color-mix(in srgb,var(--bad) 16%,transparent)}
+tr.hit td.fin{color:var(--bad);font-weight:700}.mk{white-space:nowrap}
 """
 
 JS = r"""
@@ -117,6 +118,70 @@ def examples_html(ex: list[dict]) -> str:
     return f"<details><summary class='sm'>2025・2026 年の ◎（重みの大きい型で当たった水準）</summary><ul class='sm'>{''.join(li)}</ul></details>"
 
 
+def _odds(h: dict) -> str:
+    return "—" if h.get("odds") is None else f"{h['odds']:.1f}"
+
+
+def _pop(h: dict) -> str:
+    return "—" if h.get("pop") is None else f"{h['pop']}"
+
+
+def _fin(h: dict) -> str:
+    return f"{int(h['fin'])}" if h["fin"] == h["fin"] else "—"
+
+
+def _yen(v) -> str:
+    return "—" if v is None else f"{v:,}"
+
+
+def _name(h: dict) -> str:
+    return escape(h.get("name") or "（馬名なし）")
+
+
+def race_html(x: dict) -> str:
+    """1 回分: 見出し（日付・会場・頭数・勝ち馬）、◎ の表（前日版・A・B）、消しの表（A・B で消した馬の和。3 着以内は目立たせる）。"""
+    win = "・".join(f"{_name(w)}（{w['hn']} 番・単勝 {_odds(w)} 倍・{_pop(w)} 番人気）" for w in x["winners"]) or "—"
+    pay = "" if x["pay_ok"] else "<span class='bd w'>払戻のデータなし（この回は回収率の分母に入れていない）</span>"
+    rows = []
+    for lab, h in (("前日版の点の ◎（参考）", x["base"]), ("A の ◎", x["A"]["honmei"]), ("B の ◎", x["B"]["honmei"])):
+        if h is None:
+            rows.append(f"<tr><td class='mk'>{lab}</td><td colspan='7' class='muted'>規則なし</td></tr>")
+            continue
+        g = " good" if h["fin"] <= 3 else ""   # ◎ は 3 着以内を緑
+        rows.append(f"<tr><td class='mk'>{lab}</td><td class='n'>{h['hn']}</td><td>{_name(h)}</td><td class='n'>{_odds(h)}</td><td class='n'>{_pop(h)}</td>"
+                    f"<td class='n{g}'>{_fin(h)}</td><td class='n'>{_yen(h['tan'])}</td><td class='n'>{_yen(h['fuku'])}</td></tr>")
+    ht = ("<div class='scroll'><table><thead><tr><th>印</th><th>馬番</th><th>馬名</th><th>単勝オッズ</th><th>人気</th><th>着順</th><th>単勝の払戻</th><th>複勝の払戻</th></tr></thead>"
+          f"<tbody>{''.join(rows)}</tbody></table></div>")
+    ks: dict[int, dict] = {}
+    for m in ("A", "B"):
+        for h in x[m]["kill"] or []:
+            ks.setdefault(h["hn"], h | {"A": False, "B": False})[m] = True
+    if ks:
+        kr = []
+        for h in sorted(ks.values(), key=lambda q: q["hn"]):
+            hit = " class='hit'" if h["fin"] <= 3 else ""
+            kr.append(f"<tr{hit}><td class='n'>{h['hn']}</td><td>{_name(h)}</td><td class='n'>{_odds(h)}</td><td class='n'>{_pop(h)}</td><td class='n fin'>{_fin(h)}</td>"
+                      f"<td class='n'>{'消' if h['A'] else ''}</td><td class='n'>{'消' if h['B'] else ''}</td></tr>")
+        nA, nB = (len(x[m]["kill"] or []) for m in ("A", "B"))
+        badA, badB = (sum(h["fin"] <= 3 for h in x[m]["kill"] or []) for m in ("A", "B"))
+        kt = (f"<div class='sm'>消した馬（A {nA} 頭のうち 3 着以内 {badA}・B {nB} 頭のうち 3 着以内 {badB}。3 着以内に来た馬は赤）</div>"
+              "<div class='scroll'><table><thead><tr><th>馬番</th><th>馬名</th><th>単勝オッズ</th><th>人気</th><th>着順</th><th>A</th><th>B</th></tr></thead>"
+              f"<tbody>{''.join(kr)}</tbody></table></div>")
+    elif x["A"]["kill"] is None and x["B"]["kill"] is None:
+        kt = "<div class='muted sm'>消しの規則なし</div>"
+    else:
+        kt = "<div class='muted sm'>この回は消した馬なし（頭数が少なく 3 頭を残した）</div>"
+    return (f"<div class='rc'><h5>{escape(x['date'])} {escape(x['venue'])}・{x['field']} 頭立て・勝ち馬 {win} {pay}</h5>{ht}{kt}</div>")
+
+
+def races_html(c: dict) -> str:
+    if not c.get("races"):
+        return ""
+    return ("<details><summary><b>2025・2026 年に実際に選ばれた馬（◎・消しの馬名・確定の単勝オッズ・人気・着順）</b></summary>"
+            "<div class='muted sm'>単勝オッズ・人気は確定の値（結果として見せるためだけで、◎ や消しの決め方には使っていない）。払戻は 100 円あたりの円。</div>"
+            f"{''.join(race_html(x) for x in c['races'])}</details>")
+
+
 def side(card: dict, m: str, kind: str) -> str:
     x = card[m][kind]
     lab = "A（重賞ごとに 2025・2026 年へ合わせた）" if m == "A" else "B（2018〜2024 年で決めて当てはめた）"
@@ -173,6 +238,7 @@ def card_html(c: dict, tried: str = "多数の") -> str:
 <div class="two">{side(c, 'A', 'honmei')}{side(c, 'B', 'honmei')}</div>
 <h4 style="margin-top:10px">消しの選び方（消した馬の 3 着以内の率 5% 以下を達成とする）</h4>
 <div class="two">{side(c, 'A', 'kill')}{side(c, 'B', 'kill')}</div>
+{races_html(c)}
 <div class="note">注意: A は、2025・2026 年の {c['eval_races']} 回の結果を見て、{tried}通りの候補から合わせた決め方です。来年も通用する根拠は弱いです。B の 2025・2026 年の値の方がまだ目安になりますが、それも 1〜2 回の成績です。</div>
 </article>"""
 

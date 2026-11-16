@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 
 from src.research.graded import catalog as CAT
 from src.research.graded import cycles as CY
@@ -104,6 +105,63 @@ def kill_stats(t: CY.Table, w: np.ndarray, k: int, races: np.ndarray) -> dict:
     n = len(rows)
     return {"races": int(len(races)), "killed": int(n), "per_race": n / len(races), "rec": _rec(fin),
             "top3_rate": float((fin <= 3).mean()) if n else None, "precision": float((fin >= 4).mean()) if n else None}
+
+
+def _val(r, c):
+    v = r.get(c) if hasattr(r, "get") else None
+    return None if v is None or (isinstance(v, float) and v != v) or v is pd.NA else v
+
+
+def horse(t: CY.Table, h: int, pay_ok: bool) -> dict:
+    """1 頭の実際の値（結果を見せるためだけ。オッズ・人気は決め方に使わない）。odds・pop は確定の単勝オッズ・人気（t.r の odds_final・pop_final。
+    無ければ None）。tan・fuku は 100 円あたりの払戻（円）。払戻の解けないレースは None。"""
+    r = t.r.iloc[int(h)]
+    odds, pop, name = _val(r, "odds_final"), _val(r, "pop_final"), _val(r, "horse_name")
+    return {"hn": int(r["hn"]), "name": None if name is None else str(name), "odds": None if odds is None else float(odds),
+            "pop": None if pop is None else int(pop), "fin": float(r["fin"]),
+            "tan": round(float(t.rt[h]) * 100) if pay_ok else None, "fuku": round(float(t.rf[h]) * 100) if pay_ok else None}
+
+
+def recount(races: list[dict], who: str, kind: str) -> dict:
+    """回ごとの実際の馬（card["races"]）から成績を数え直す（who = "A"・"B"・"base"、kind = "honmei"・"kill"）。カードの成績と同じ定義:
+    ◎ の回収率は払戻の解けた回だけで割る。消しは消した全頭の着。"""
+    if kind == "honmei":
+        hs = [(x["base"] if who == "base" else x[who]["honmei"], x["pay_ok"]) for x in races]
+        hs = [(h, p) for h, p in hs if h is not None]
+        fin = [h["fin"] for h, _ in hs]
+        paid = [h for h, p in hs if p]
+        return {"races": len(hs), "rec": _rec(np.array(fin, float)) if hs else None,
+                "roi_t": sum(h["tan"] for h in paid) / 100 / len(paid) if paid else None,
+                "roi_f": sum(h["fuku"] for h in paid) / 100 / len(paid) if paid else None}
+    ks = [h for x in races if x[who]["kill"] is not None for h in x[who]["kill"]]
+    return {"killed": len(ks), "rec": _rec(np.array([h["fin"] for h in ks], float))}   # 0 頭でも kill_stats と同じ [0, 0, 0, 0]
+
+
+def check_races(card: dict) -> None:
+    """回ごとの実際の馬から数え直した成績が、カードの成績（2025・2026 年）と一致することを確かめる（ずれたら止める）。"""
+    pairs = [("base", "honmei", card["base"]["eval"])] + [(m, kd, card[m][kd]["eval"]) for m in ("A", "B") for kd in ("honmei", "kill") if card[m][kd]]
+    for who, kd, e in pairs:
+        g = recount(card["races"], who, kd)
+        if g["rec"] != e.get("rec"):
+            raise ValueError(f"{card['rkey']}・{who}・{kd}: 実際の馬の着 {g['rec']} とカードの成績 {e.get('rec')} が違う")
+        if kd == "kill":
+            if g["killed"] != e["killed"]:
+                raise ValueError(f"{card['rkey']}・{who}: 消した頭数が違う")
+            continue
+        for c in ("roi_t", "roi_f"):
+            if (g[c] is None) != (e.get(c) is None) or (g[c] is not None and abs(g[c] - e[c]) > 1e-3):
+                raise ValueError(f"{card['rkey']}・{who}・{c}: 実際の馬から数えた {g[c]} とカードの成績 {e.get(c)} が違う")
+
+
+def race_head(t: CY.Table, i: int, dt=None) -> dict:
+    """回の見出し: 日付・会場・頭数（t.r の field_size。無ければ表の頭数）・勝ち馬（同着は全頭）。"""
+    a = t.starts[i]
+    b = t.starts[i + 1] if i + 1 < len(t.starts) else len(t.r)
+    pay = bool(t.race["pay_ok"].iloc[i])
+    fs = _val(t.r.iloc[a], "field_size")
+    return {"race_id": str(t.race["race_id"].iloc[i]), "date": str(dt[i])[:10] if dt is not None else "", "venue": str(_val(t.r.iloc[a], "venue") or ""),
+            "field": int(fs) if fs is not None else int(b - a), "pay_ok": pay,
+            "winners": [horse(t, h, pay) for h in range(a, b) if t.r["fin"].iloc[h] == 1]}
 
 
 def level_of(levels: dict, row: int, tid: str) -> tuple[str, str] | None:
@@ -203,6 +261,22 @@ def build_cards(t: CY.Table, rules: dict, last_report: dict, khit_names: list[st
                 kc = {"rule": describe(kr["terms"], khit_names, "kill", sc), "label": kr["label"], "k": int(kr["k"]), "eval": e,
                       "dev": kill_stats(t, w, kr["k"], ri_d), "default": bool(pk.get("default", False))}
             card[m] = {"honmei": hc, "kill": kc}
+        races = []
+        for i in ri_e:
+            pay = bool(t.race["pay_ok"].iloc[i])
+
+            def hs(h, i=i, pay=pay):
+                if t.race_of[int(h)] != i:   # 選んだ行がこの回の馬であること
+                    raise ValueError(f"{key}: 回 {i} の馬ではない行 {h}")
+                return horse(t, h, pay)
+            x = race_head(t, i, dt) | {"base": hs(H[i, b])}
+            for m in ("A", "B"):
+                r, kr = rules[m]["honmei_by_rkey"].get(key), rules[m]["kill_by_rkey"].get(key)
+                x[m] = {"honmei": hs(H[i, idx[(m, key)]]) if r is not None else None,
+                        "kill": [hs(h) for h in killed_rows(t, CY._vec(t, kr["terms"]), kr["k"], i)] if kr is not None else None}
+            races.append(x)
+        card["races"] = races
+        check_races(card)
         card["flags"] = flags(card)
         cards.append(card)
     res = {"cards": cards, "summary": summary(cards)}

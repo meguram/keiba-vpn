@@ -27,7 +27,10 @@ def _table(seed=0):
                 rows.append({"row": n, "race_id": f"{rk}{yr}", "rkey": rk, "grade": grade, "year": yr, "dt": pd.Timestamp(f"{yr}-05-0{1 + (rk == 'R')}"),
                              "venue": "東京" if rk != "S <x>" else "京&都", "course": "東京芝1600" if rk != "S <x>" else '京都"芝', "hn": h + 1, "fin": float(fin[h]), "y1": float(fin[h] == 1), "y3": float(fin[h] <= 3),
                              "pay_ok": not (yr == 2021 or (yr == 2026 and rk == "R")), "ret_tan": float(rng.integers(2, 40)) if fin[h] == 1 else 0.0,
-                             "ret_fuku": float(rng.integers(1, 8)) if fin[h] <= 3 else 0.0, "score_pre": float(rng.normal())})
+                             "ret_fuku": float(rng.integers(1, 8)) if fin[h] <= 3 else 0.0, "score_pre": float(rng.normal()),
+                             # 結果を見せるための値（2026 年は無い扱い → 表で「—」）
+                             "horse_name": f"馬<{rk}{h}>" if yr == 2025 else None, "odds_final": 1.5 + h if yr == 2025 else np.nan,
+                             "pop_final": float(h + 1) if yr == 2025 else np.nan, "field_size": field + 2 if yr == 2025 else np.nan})
                 n += 1
     r = pd.DataFrame(rows)
     r["rank_pre"] = r.groupby("race_id")["score_pre"].rank(ascending=False)
@@ -76,6 +79,59 @@ def test_cards_reproduce_cycle_report_and_count_dev():
         assert c["base"]["dev"]["rec"][0] == int((top["fin"] == 1).sum()) and c["base"]["dev"]["races"] == 3
         paid = top[top["pay_ok"]]
         assert c["base"]["dev"]["roi_t"] == pytest.approx(paid["ret_tan"].sum() / len(paid))   # 払戻の解けたレースだけで割る
+
+
+def test_races_recount_matches_card_stats():
+    """回ごとの実際の馬から数え直した [1-2-3-着外]・回収率・消した馬の着が、カードの成績と一致する。"""
+    t = _table()
+    rep, rules = _cycle(t)
+    res = PB.build_cards(t, rules, rep)
+    for c in res["cards"]:
+        assert len(c["races"]) == c["eval_races"]
+        for who, kd, e in [("base", "honmei", c["base"]["eval"])] + [(m, kd, c[m][kd]["eval"]) for m in ("A", "B") for kd in ("honmei", "kill")]:
+            g = PB.recount(c["races"], who, kd)
+            assert g["rec"] == e["rec"]
+            if kd == "honmei":
+                assert g["roi_t"] == pytest.approx(e["roi_t"], abs=1e-3) and g["roi_f"] == pytest.approx(e["roi_f"], abs=1e-3)
+            else:
+                assert g["killed"] == e["killed"]
+        for x in c["races"]:
+            rr = t.r[t.r["race_id"] == x["race_id"]]
+            assert [w["hn"] for w in x["winners"]] == rr.loc[rr["fin"] == 1, "hn"].tolist()
+            assert x["field"] == (len(rr) + 2 if x["date"][:4] == "2025" else len(rr))   # 2025 年は field_size の値、無ければ表の頭数
+            # 各馬の値を、元の行（馬番で引く）と独立に突き合わせる
+            for h_ in [x["base"]] + [q for m in ("A", "B") for q in [x[m]["honmei"], *x[m]["kill"]]]:
+                o = rr[rr["hn"] == h_["hn"]].iloc[0]
+                assert h_["fin"] == o["fin"] and (h_["name"] == o["horse_name"] if x["date"][:4] == "2025" else h_["name"] is None)
+                assert (h_["odds"] == o["odds_final"]) if x["date"][:4] == "2025" else h_["odds"] is None
+                assert h_["tan"] == (round(o["ret_tan"] * 100) if x["pay_ok"] else None)
+            for m in ("A", "B"):
+                i = int(np.flatnonzero(t.race["race_id"].to_numpy() == x["race_id"])[0])
+                kr = rules[m]["kill_by_rkey"][c["rkey"]]
+                want = PB.killed_rows(t, CY._vec(t, kr["terms"]), kr["k"], i)
+                assert [h["hn"] for h in x[m]["kill"]] == t.r["hn"].to_numpy()[want].tolist()
+            y = x["date"][:4]
+            assert (x["base"]["odds"] is None) == (y == "2026") and (x["base"]["name"] is None) == (y == "2026")
+            assert (x["base"]["tan"] is None) == (not x["pay_ok"])
+
+
+def test_recount_kill_with_no_horses():
+    assert PB.recount([{"pay_ok": True, "A": {"kill": []}}], "A", "kill") == {"killed": 0, "rec": [0, 0, 0, 0]}
+
+
+def test_check_races_stops_when_horses_do_not_match():
+    t = _table()
+    rep, rules = _cycle(t)
+    c = PB.build_cards(t, rules, rep)["cards"][1]
+    bad = json.loads(json.dumps(c))
+    bad["races"][0]["A"]["kill"][0]["fin"] = 1.0 if bad["races"][0]["A"]["kill"][0]["fin"] != 1.0 else 9.0
+    with pytest.raises(ValueError):
+        PB.check_races(bad)
+    bad = json.loads(json.dumps(c))
+    x = next(x for x in bad["races"] if x["pay_ok"])
+    x["B"]["honmei"]["tan"] += 1000
+    with pytest.raises(ValueError):
+        PB.check_races(bad)
 
 
 def test_scales_are_within_race():
@@ -157,6 +213,12 @@ def test_playbook_html(tmp_path):
     assert "水準&lt;b&gt;" in h and "水準<b>" not in h and 'data-venue="京&amp;都"' in h and 'data-course="京都&quot;芝"' in h
     assert "全重賞に同じ決め方を使う版" in h and "払戻" in h
     assert 'href="graded_cycles.html"' in h and 'href="graded_handicapper.html"' in h and "全カード共通の注意" in h
+    # 回ごとの実際の馬: 馬名のエスケープ、確定オッズの明記、3 着以内の消し馬を目立たせる
+    assert "京&amp;都・" in h and "京&都・" not in h   # 回の見出しの会場
+    assert "確定の単勝オッズ" in h and "馬&lt;R0&gt;" in h and "馬<R0>" not in h and "（馬名なし）" in h
+    n_hit = sum(1 for c in res["cards"] for x in c["races"] if (ks := {h_["hn"]: h_ for m in ("A", "B") for h_ in x[m]["kill"]})
+                for h_ in ks.values() if h_["fin"] <= 3)
+    assert h.count("<tr class='hit'>") == n_hit
 
 
 def test_cycles_and_handicapper_link_to_playbook(tmp_path):

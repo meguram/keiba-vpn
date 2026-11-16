@@ -921,6 +921,26 @@ def cmd_cycles() -> None:
                                                                "features": t.names, "rules": rules}, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
+def _final_odds() -> pd.DataFrame:
+    """2025・2026 年の (race_id, horse_id) → 馬名・確定の単勝オッズ・人気・頭数（race_result_flat）。早見表で結果を見せるためだけに使い、決め方には使わない。"""
+    from src.research.graded import cycles as CY
+    from src.research.graded.features import TABLES
+    parts = []
+    for y in range(CY.EVAL[0], CY.EVAL[1] + 1):
+        p = TABLES / str(y) / "race_result_flat.parquet"
+        if p.exists():
+            parts.append(pd.read_parquet(p, columns=["race_id", "horse_id", "horse_name", "odds", "popularity", "field_size"]))
+    if not parts:
+        sys.exit(f"{CY.EVAL[0]}〜{CY.EVAL[1]} 年の race_result_flat.parquet が無い")
+    m = pd.concat(parts)
+    m["race_id"], m["horse_id"] = m["race_id"].astype(str), m["horse_id"].astype(str)
+    m["odds_final"] = pd.to_numeric(m["odds"], errors="coerce")
+    m["pop_final"] = pd.to_numeric(m["popularity"], errors="coerce")
+    m["field_size"] = pd.to_numeric(m["field_size"], errors="coerce")
+    m = m[["race_id", "horse_id", "horse_name", "odds_final", "pop_final", "field_size"]].drop_duplicates()   # 全く同じ行だけ落とす（値の違う重複は結合の validate で止める）
+    return m
+
+
 def cmd_playbook() -> None:
     """重賞ごとの早見表の値: 最後のサイクルの規則（cycles_rules.json）を当て直し、2025・2026 年と 2018〜2024 年の成績を
     <GRADED_OUT>/playbook.json に書く。2025・2026 年の値がサイクルの記録と違えば止める（評価はやり直さない）。"""
@@ -932,9 +952,21 @@ def cmd_playbook() -> None:
     t, lv = _cycle_table(levels=True)
     if t.names != src["features"]:
         sys.exit("特徴の列が cycles_rules.json と違う")
+    m = t.r[["race_id", "horse_id"]].astype(str).merge(_final_odds(), on=["race_id", "horse_id"], how="left", validate="many_to_one")
+    for c in ("horse_name", "odds_final", "pop_final", "field_size"):   # 結果を見せるためだけ（行の並び・特徴は変えない）
+        t.r[c] = m[c].to_numpy()
+    ev = ((t.r["year"] >= PB.CY.EVAL[0]) & (t.r["year"] <= PB.CY.EVAL[1])).to_numpy()
+    miss = int(t.r.loc[ev, ["horse_name", "odds_final", "pop_final"]].isna().any(axis=1).sum())
+    if miss:   # 取り消し等で数頭欠けるのは表で「—」にする。キーの型ずれなどで大きく欠けたら止める
+        print("確定オッズ・人気・馬名の無い馬:", miss, "頭", flush=True)
+        if miss > 0.01 * ev.sum():
+            sys.exit(f"確定オッズ・人気・馬名の無い馬が多すぎる（{miss} / {int(ev.sum())} 頭）。race_id・horse_id の型を確かめる")
     pk = json.loads(PREREG_KILL.read_text(encoding="utf-8"))
     kn = [v["name"].removeprefix("消し版") for v in pk["versions"] if v["passes"] and v["params"].get("honmei") == "そのまま"]
     res = PB.build_cards(t, src["rules"], log["cycles"][-1]["report"], kn, lv)
+    nw = [(c["rkey"], x["date"]) for c in res["cards"] for x in c["races"] if not x["winners"]]
+    if nw:   # 勝ち馬が表（型の点のある馬）に無い回
+        print("勝ち馬が表に無い回:", nw, flush=True)
     res |= {"made_at": datetime.now(JST).isoformat(timespec="seconds"), "from_cycles_finished_at": log["finished_at"], "tried": log["cycles"][-1]["report"]["tried"],
             "periods": {"dev": list(PB.CY.DEV), "eval": list(PB.CY.EVAL)}, "criteria": {"roi_t_over": PB.ROI_OK, "kill_top3_at_most": PB.KILL_OK}}
     (GRADED_OUT / "playbook.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_f), encoding="utf-8")
