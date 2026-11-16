@@ -1,5 +1,7 @@
 "use client";
 
+import { ChipFoot, GradeBadge, chipAccent, chipTitle } from "@/components/RaceChipMarks";
+import { sameRoundIn } from "@/lib/raceGrade";
 import { fetchRaceList } from "@/lib/httpCache";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -8,7 +10,7 @@ import { USE_MOCK, MOCK_WEEKLY_RACES } from "@/lib/mock";
 import { LEVEL_STYLE, TIER_LEGEND, TARGET_TIER_HINT, ValueLevel, chipHint, chipText, hasTier, isTargetValues, useRaceValuesState, mixedProbCalibration } from "@/lib/raceValue";
 import { useNarrow } from "@/components/RaceStrip";
 
-type RaceRow = { race_id: string; round: number; venue: string; race_name: string };
+type RaceRow = { race_id: string; round: number; venue: string; race_name: string; start_time?: string | null; grade?: string | null; list_grade_icon?: string | null };
 
 // 開催日ごとの一覧を共有（レース間を移動するたびに取り直さない）
 const listCache = new Map<string, RaceRow[]>();
@@ -26,6 +28,9 @@ async function loadList(date: string): Promise<RaceRow[]> {
       round: Number(r.round ?? Number(String(r.race_id).slice(-2))),
       venue: String(r.venue ?? ""),
       race_name: String(r.race_name ?? ""),
+      start_time: (r.start_time as string | null | undefined) ?? null,
+      grade: (r.grade as string | null | undefined) ?? null,
+      list_grade_icon: (r.list_grade_icon as string | null | undefined) ?? null,
     }));
   }
   listCache.set(date, rows);
@@ -72,10 +77,7 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
   const idx = sameVenue.findIndex((r) => r.race_id === raceId);
   const prev = sameVenue[idx - 1];
   const next = sameVenue[idx + 1];
-  const atVenue = (v: string) => {
-    const list = rows.filter((r) => r.venue === v);
-    return list.find((r) => r.round === cur.round) ?? [...list].sort((a, b) => a.round - b.round)[0];
-  };
+  const atVenue = (v: string) => sameRoundIn(rows, v, cur.round);   // 同じ番号、無ければ一番近い番号（めぐ分析・週の予想と同じ）
   const listHref = `/weekly-predictions?date=${date}&venue=${encodeURIComponent(cur.venue)}`;
 
   return (
@@ -128,18 +130,20 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
                 key={r.race_id}
                 href={`/race/${r.race_id}`}
                 aria-current={on ? "page" : undefined}
-                title={`${r.round}R ${r.race_name}\n${chipHint(v, valuesState)}`}
+                title={`${chipTitle(r.round, r)}\n${chipHint(v, valuesState)}`}
                 data-level={lv}
                 style={{
                   minWidth: narrow ? 46 : 46, minHeight: narrow ? 40 : undefined, flex: "none", scrollSnapAlign: "center", display: "inline-flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
                   padding: narrow ? "3px 5px" : "5px 6px", borderRadius: 8, textDecoration: "none", lineHeight: 1.15,
                   border: `1px solid ${st.border}`, background: st.bg, color: st.color,
-                  boxShadow: [on ? "0 0 0 2px var(--bg), 0 0 0 4px #e6edf3" : "", st.glow ?? ""].filter(Boolean).join(", ") || undefined,
+                  boxShadow: [on ? "0 0 0 2px var(--bg), 0 0 0 4px #e6edf3" : "", st.glow ?? "", chipAccent(r) ?? ""].filter(Boolean).join(", ") || undefined,
                   opacity: lv === "pass" || lv === "none" ? (on ? 1 : 0.9) : 1,
                   transform: lv === "hot" ? "translateY(-1px)" : undefined,
                 }}
               >
+                <GradeBadge r={r} />
                 <span style={{ fontSize: 14, fontWeight: on || lv === "hot" ? 800 : 600 }}>{lv === "hot" ? `★${r.round}` : r.round}</span>
+                <ChipFoot r={r} narrow={narrow} />
                 <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.95 }}>
                   {chipText(v, valuesState)}
                 </span>

@@ -18,11 +18,15 @@ import type { RunningMapFigure } from "@/lib/raceAnalysis";
 import { entriesUnavailable, formatComputedAt, formatPeriod } from "@/lib/raceAnalysis";
 import type { RaceAnalysis } from "@/lib/raceAnalysis";
 import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
+import { sameRoundIn } from "@/lib/raceGrade";
 
 // 分析の表は列が多いので、広い画面では横幅を使い切って横スクロールなしで一面に収める
 const PAGE_MAX = 1680;
 
-type RaceItem = { race_id: string; race_name?: string; venue?: string; round?: number | string; date?: string; entries_phase?: string | null };
+type RaceItem = {
+  race_id: string; race_name?: string; venue?: string; round?: number | string; date?: string; entries_phase?: string | null;
+  start_time?: string | null; grade?: string | null; list_grade_icon?: string | null;
+};
 
 const NO_VALUES = new Map();
 const analysisUrl = (raceId: string) => `/api/v1/races/${raceId}/analysis`;
@@ -163,10 +167,13 @@ export default function AnalysisPage() {
     syncUrl({ date: d, race: null });
   }
   function chooseVenue(v: string) {
-    const first = races.filter((r) => r.venue === v && !disabledIds.has(r.race_id)).sort((a, b) => Number(a.round ?? 0) - Number(b.round ?? 0))[0];
+    // 今と同じレース番号を選ぶ（無ければ一番近い番号）。1R に飛ばさない。開いていたタブ（m=）はそのまま
+    const cur = races.find((r) => r.race_id === activeRaceId);
+    const curRound = cur ? Number(cur.round ?? Number(cur.race_id.slice(-2))) : null;
+    const target = sameRoundIn(races, v, curRound, disabledIds);
     setSelectedVenue(v);
-    setSelectedRaceId(first?.race_id ?? "");
-    syncUrl({ venue: v, race: first?.race_id ?? null });
+    setSelectedRaceId(target?.race_id ?? "");
+    syncUrl({ venue: v, race: target?.race_id ?? null });
   }
   function chooseRace(raceId: string) {
     const r = races.find((x) => x.race_id === raceId);

@@ -12,6 +12,7 @@ import { LoadingNotice } from "@/components/LoadingNotice";
 import { useAutoRetry } from "@/lib/hooks/useAutoRetry";
 import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import { WeekPicker } from "@/components/WeekPicker";
+import { sameRoundIn } from "@/lib/raceGrade";
 import { RaceStrip, useNarrow } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
 import { MeguTable } from "@/components/MeguTable";
@@ -51,6 +52,7 @@ type RaceItem = {
   start_time?: string;
   track_condition?: string;
   entries_count?: number;
+  list_grade_icon?: string | null;
   /** 出馬表の公示の段階（収集側が判定）。無いレースは出馬表待ち */
   entries_phase?: string | null;
   entries_label?: string | null;
@@ -778,15 +780,13 @@ export default function WeeklyPredictionsPage() {
     }
   }, []);
 
-  function firstRaceOf(v: string): RaceItem | undefined {
-    return races.filter((r) => r.venue === v).sort((a, b) => Number(a.round ?? 0) - Number(b.round ?? 0))[0];
-  }
-
   function chooseVenue(v: string) {
-    const first = firstRaceOf(v);
+    // 今と同じレース番号を選ぶ（無ければ一番近い番号）。1R に飛ばさない
+    const cur = races.find((r) => r.race_id === activeRaceId);
+    const target = sameRoundIn(races, v, cur ? Number(cur.round ?? Number(cur.race_id.slice(-2))) : null);
     setSelectedVenue(v);
-    setSelectedRaceId(first?.race_id ?? "");
-    syncUrl({ venue: v, race: first?.race_id ?? null });
+    setSelectedRaceId(target?.race_id ?? "");
+    syncUrl({ venue: v, race: target?.race_id ?? null });
   }
 
   function chooseDate(d: string) {
