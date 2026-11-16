@@ -7,6 +7,7 @@
 - 入力の最後の段（tp27_eval._drop_by_env）で、model_cycles.apply_spec と同じ変更（落とす・書き換え・blank_before）を当てる。
   apply_spec に渡す年は、load_v3 の df の行の年（race_id の先頭 4 桁）。
 - 出力は REBUILD_BASE/tp27_v6e/oof/（重ね合わせの土台の中の自分の置き場。data-audit や旧 base_2016 の置き場には書かない）。
+  CYCLES_MEMBER_OUT=<名前> で REBUILD_BASE/<名前>/oof/ に分け、CYCLES_XGB_PARAMS='{...}' で xgb_extras_ped の設定を上書きする。
 """
 
 from __future__ import annotations
@@ -44,14 +45,31 @@ def main() -> None:
     from src.scripts.data import v5_common
     from src.scripts.data import v6_members as m
 
-    m.OUT = t27.OUT = p.BASE / "tp27_v6e"
+    out_dir = os.environ.get("CYCLES_MEMBER_OUT")            # 設定を変えた版の書き出し先（土台の中の名前。既定は土台の tp27_v6e）
+    if out_dir and ("/" in out_dir or out_dir.startswith(".")):
+        raise SystemExit("CYCLES_MEMBER_OUT は土台の中の名前だけ（例 tp27_v6e_lr3）")
+    if os.environ.get("CYCLES_XGB_PARAMS") and not out_dir:
+        raise SystemExit("CYCLES_XGB_PARAMS を付けるときは CYCLES_MEMBER_OUT も付ける（土台の版と混ざらないように）")
+    m.OUT = t27.OUT = p.BASE / (out_dir or "tp27_v6e")
     os.environ["TP27_OUT"] = str(m.OUT)
+    if out_dir:
+        import shutil
+
+        (m.OUT / "oof").mkdir(parents=True, exist_ok=True)
+        src = p.BASE / "tp27_v6e/importance_added.json"
+        if src.exists() and not (m.OUT / "importance_added.json").exists():
+            shutil.copy2(src, m.OUT / "importance_added.json")
+    xgb_over = json.loads(os.environ.get("CYCLES_XGB_PARAMS") or "{}")   # xgb_extras_ped の設定の上書き（例: 学習率を半分・木を倍）
     v5_common.V = p.BASE
     years: dict[str, np.ndarray] = {}
     orig_load, orig_drop = e.load_v3, t27._drop_by_env
 
     def load_v3():
         out = orig_load()
+        if xgb_over:
+            r_, prm, X_ = out[3]["xgb_extras_ped"]
+            out[3]["xgb_extras_ped"] = (r_, {**prm, **xgb_over}, X_)
+            print(f"[model_cycles_members] xgb_extras_ped の設定を上書き: {xgb_over}", flush=True)
         years["y"] = out[1]["year"].astype(int).to_numpy()          # meta の year（model_cycles の member と同じ出どころ）
         years["n"] = len(out[0])
         return out

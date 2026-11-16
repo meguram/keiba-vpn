@@ -251,7 +251,8 @@ def cmd_ens(a) -> None:
     d.mkdir(parents=True, exist_ok=True)
     tag = a.tag or a.name
     out.to_parquet(d / f"{tag}.parquet", index=False)
-    (d / f"{tag}.json").write_text(json.dumps({**info, "replace": {k: str(v) for k, v in replace.items()}, "add": a.add or []},
+    spec_check = {"spec": json.loads(os.environ.get("CYCLES_SPEC") or "{}"), "xgb_params": json.loads(os.environ.get("CYCLES_XGB_PARAMS") or "{}")}
+    (d / f"{tag}.json").write_text(json.dumps({**info, "replace": {k: str(v) for k, v in replace.items()}, "add": a.add or [], "spec_check": spec_check},
                                               ensure_ascii=False, indent=1), encoding="utf-8")
     log(f"ens {tag}: 行 {len(out)} 行単位 LL {info['loyo_row_ll']:.5f} 重み {info['weights']}")
 
@@ -289,7 +290,10 @@ def paired_ci(x: np.ndarray, n_boot: int = 2000, seed: int = 0) -> tuple[float, 
 
 
 def read_pred(name: str) -> pd.DataFrame:
-    p = {"prod_v6e": PROD_ENS, "cand_v6e16": CAND_ENS}.get(name)
+    p = {"prod_v6e": PROD_ENS, "cand_v6e16": CAND_ENS,                 # 2025 年 test（1 回きりの予測）の相手も同じ規則で読む
+         "prod_v6e_2025": ROOT / "data/local/modeling/training_pipeline/final_eval_v6e/test2025_predictions.parquet",
+         "cand_v6e16_2025": Path("/home/jovyan/work/retrain_out/base_2016/final_eval_v6e16/test2025_predictions.parquet"),
+         "final_2025": CYC / "final/test2025_predictions.parquet"}.get(name)
     if p is None:
         p = CYC / "ens" / f"{name}.parquet"
         if not p.exists():
