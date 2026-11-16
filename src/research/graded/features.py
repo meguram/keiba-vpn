@@ -25,7 +25,8 @@ TABLES = REPO / "data/page_reference/tables"
 GRADED_OUT = Path(os.environ.get("GRADED_OUT", "/home/jovyan/work/graded_out"))
 MASTER = GRADED_OUT / "master/master.parquet"
 GRADES = ("G1", "G2", "G3")
-YEARS = range(2016, 2027)
+# 読む表の年の上限（全レース版は 2024 にして、2025・2026 年の表を開かない。src/research/course/run.py）
+YEARS = range(2016, int(os.environ.get("GRADED_YEAR_END", "2026")) + 1)
 
 MASTER_COLS = [
     "race_id", "horse_id", "date", "dt", "year", "month", "venue", "vc", "surf", "dist", "dband", "direction", "grade", "cls", "race_class",

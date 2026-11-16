@@ -1,0 +1,137 @@
+"""全レース版（src/research/course/）のテスト。2025・2026 年の表を読まない作り・クラスの群・条件の探索と当てはめ。"""
+
+from __future__ import annotations
+
+import importlib
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from src.research.course import run as CR
+from src.research.course import search as SE
+
+
+@pytest.fixture()
+def year_end_2024(monkeypatch):
+    """GRADED_YEAR_END・FOLKLORE_YEAR_END=2024 で features・payout・folklore を読み直し、終わったら（失敗しても）元に戻す。"""
+    import src.research.graded.features as F
+    import src.research.graded.payout as PO
+    import src.scripts.data.folklore_build as FB
+    monkeypatch.setenv("GRADED_YEAR_END", "2024")
+    monkeypatch.setenv("FOLKLORE_YEAR_END", "2024")
+    mods = [importlib.reload(F), importlib.reload(PO), importlib.reload(FB)]
+    try:
+        yield mods
+    finally:
+        monkeypatch.delenv("GRADED_YEAR_END", raising=False)
+        monkeypatch.delenv("FOLKLORE_YEAR_END", raising=False)
+        for m in (F, PO, FB):
+            importlib.reload(m)
+
+
+def test_env_limits_years_and_drops_entry_rows(monkeypatch):
+    monkeypatch.setenv("FOLKLORE_ENTRIES", "/x.parquet")
+    monkeypatch.setenv("FOLKLORE_CUTOFF", "2026-11-22")
+    e = CR.env()
+    assert e["FOLKLORE_YEAR_END"] == "2024" and e["GRADED_YEAR_END"] == "2024"
+    assert "FOLKLORE_ENTRIES" not in e and "FOLKLORE_CUTOFF" not in e   # 出馬表の段階の行（2026 年）を足さない
+
+
+def test_features_and_payout_read_only_up_to_year_end(year_end_2024, monkeypatch, tmp_path):
+    """GRADED_YEAR_END=2024 のとき、frame・払戻が読む表の年は 2024 まで（2025・2026 年のファイルを開かない）。"""
+    F, PO, FB = year_end_2024
+    assert max(F.YEARS) == 2024 and max(PO.YEARS) == 2024 and max(FB.YEARS) == 2024
+    tb = tmp_path / "tables"
+    for y in range(2016, 2027):   # どの年にも表がある状態で、どれを開くかを見る
+        (tb / str(y)).mkdir(parents=True)
+        for n in ("race_result_flat.parquet", "race_result_race.parquet", "race_shutuba_past_flat.parquet"):
+            (tb / str(y) / n).write_bytes(b"")
+    monkeypatch.setattr(F, "TABLES", tb)
+    opened = []
+
+    def spy(path, columns=None, **k):   # 全部の年を開かせて、開いた年を数える（中身は空）
+        opened.append(str(path))
+        return pd.DataFrame({c: pd.Series(dtype=object) for c in (columns or ["race_id"])})
+    monkeypatch.setattr(pd, "read_parquet", spy)
+    for fn in (F.entry_weights, lambda: PO.load_win_place(tables=tb)):
+        try:
+            fn()
+        except Exception:  # noqa: BLE001  空の表で後段が落ちるのは構わない（開いた年だけを見る）
+            pass
+    assert {p.split("/")[-2] for p in opened} == {str(y) for y in range(2016, 2025)}, opened   # 2016〜2024 年を開き、2025・2026 年は開かない
+
+
+def test_groups():
+    assert CR.group_of(0) == "新馬・未勝利" and CR.group_of(1) == "新馬・未勝利"
+    assert CR.group_of(2) == "1勝・2勝" and CR.group_of(3) == "1勝・2勝"
+    assert CR.group_of(4) == "3勝・OP" and CR.group_of(5) == "3勝・OP"   # L（リステッド）は OP と同じ 5
+    assert CR.group_of(6) is None and CR.group_of(None) is None           # 重賞は単位から外す
+
+
+def test_load_units_rejects_rows_after_2024_and_misaligned_levels(tmp_path, monkeypatch):
+    monkeypatch.setattr(CR, "OUT", tmp_path)
+    d = pd.DataFrame({"year": [2024, 2025], "cls": [2, 2], "track": ["良", "良"], "course": ["東京芝1600"] * 2, "race_id": ["a", "b"], "horse_id": ["x", "y"]})
+    d.to_parquet(tmp_path / "frame.parquet")
+    pd.DataFrame({"A01": ["1着", "1着"], "__race_id": ["a", "b"], "__horse_id": ["x", "y"]}).to_parquet(tmp_path / "levels.parquet")
+    with pytest.raises(ValueError):
+        CR.load_units()                                   # 2025 年の行がある
+    d.assign(year=[2024, 2024]).to_parquet(tmp_path / "frame.parquet")
+    pd.DataFrame({"A01": ["1着", "1着"], "__race_id": ["b", "a"], "__horse_id": ["y", "x"]}).to_parquet(tmp_path / "levels.parquet")
+    with pytest.raises(ValueError):
+        CR.load_units()                                   # frame と levels の行がずれている
+
+
+def _toy(n_races=30, course="東京芝1600"):
+    rng = np.random.default_rng(0)
+    rows, levels = [], []
+    for r in range(n_races):
+        field = 10
+        fin = list(rng.permutation(range(2, field + 1)))   # 馬番 1 がいつも 1 着、ほかは 2〜10 着（勝ち馬は 1 頭）
+        for h in range(field):
+            f = 1 if h == 0 else int(fin[h - 1])
+            rows.append({"race_id": f"{course}{r}", "horse_id": f"h{r}_{h}", "year": 2018 + r % 7, "cls": 2, "track": "良", "course": course,
+                         "group": "1勝・2勝", "race_class": "1勝クラス", "hn": h + 1, "fin": float(f), "field": field, "pay_ok": True,
+                         "ret_tan": 5.0 if f == 1 else 0.0, "ret_fuku": 2.0 if f <= 3 else 0.0, "ret_tan_c": 5.0 if f == 1 else 0.0})
+            levels.append({"A01": "1着" if h == 0 else "2-3着", "C01": "同距離"})
+    return pd.DataFrame(rows), pd.DataFrame(levels)
+
+
+def test_run_config_finds_buy_cell_and_scores_in_sample():
+    d, L = _toy()
+    r = CR.run_config(d, L, SE.Params(depth=1, n_min=2, min_races=10, kill_n=10), keep_cells=True)
+    assert r["all"]["win"] == 1.0 and r["achieved_units"] == 1                          # 当てはめなので勝つ（過学習してよい）
+    cells = r["cells"]["東京芝1600|1勝・2勝"]
+    assert ["A01"] in [c["types"] for c in cells["buy"]] and all("n" in c and "roi_t" in c for c in cells["buy"])
+    assert r["conf_2022_2024"]["races"] < r["all"]["races"]                             # 参考の期間は 2022〜2024 年だけ
+
+
+def test_small_units_use_course_population_and_dedupe():
+    d, L = _toy(n_races=8)
+    r = CR.run_config(d, L, SE.Params(depth=2, n_min=2, min_races=20), keep_cells=True)
+    assert r["per_unit"][0]["layer"] == "副"                                          # 8 回しかない単位は同じコースの全群で探す
+    keys = [tuple(c["types"]) for c in r["cells"]["東京芝1600|1勝・2勝"]["buy"]]
+    assert ("A01",) in keys and ("A01", "C01") not in keys                             # A01=1着 と A01=1着 ∧ C01=同距離 は同じ走の集まり → 1 つ
+
+
+def test_achieved_needs_coverage():
+    d, L = _toy(n_races=30)
+    lv = L.assign(A01=np.where((d["hn"] == 1) & (d["race_id"] == "東京芝16000"), "1着", "2-3着"))   # 1 回だけ当たる条件
+    r = CR.run_config(d, lv, SE.Params(n_min=1, min_races=10))
+    assert r["per_unit"][0]["bet_races"] <= 1 and not r["per_unit"][0]["achieved"]   # 1 回だけ買って勝っても達成に数えない
+
+
+def test_kill_needs_three_horses_and_skips_honmei():
+    X = np.array([[0], [1], [1], [1], [1]])
+    cells = {"buy": [{"ts": (0,), "cs": (0,), "rate": 1.0}], "kill": [{"ts": (0,), "cs": (1,)}]}
+    race = np.array(["a"] * 5)
+    hm, kl = SE.apply_cells(X, race, np.arange(1, 6), cells, "count")
+    assert hm == {"a": 0} and kl.tolist() == [False, True, True, True, True]
+    hm, kl = SE.apply_cells(X[:3], race[:3], np.arange(1, 4), cells, "count")
+    assert not kl.any()                                                                # 2 頭だけなら消さない
+
+
+def test_honmei_tie_goes_to_smaller_number():
+    X = np.array([[0], [0], [1]])
+    hm, _ = SE.apply_cells(X, np.array(["a"] * 3), np.array([5, 2, 1]), {"buy": [{"ts": (0,), "cs": (0,), "rate": 1.0}], "kill": []}, "count")
+    assert hm == {"a": 1}                                                              # 同点は馬番の小さい方（2 番）

@@ -598,6 +598,7 @@ def add_external(d: pd.DataFrame) -> pd.DataFrame:
     w = w.loc[:, ~w.columns.duplicated()]
     w["vc"] = w["venue_code"].astype(str).str.zfill(2)
     w["date"] = w["date"].astype(str)
+    w = w[w["date"].str[:4] <= str(YEAR_END)]   # 全年が 1 ファイルなので、読んだ直後に YEAR_END の年までに絞る（全レース版は 2024 年まで）
     w["hour"] = _f(w["hour"])
     hh = d["stime"].dt.hour
     d["hour"] = hh
