@@ -200,6 +200,32 @@ def capacity_from_past(past_races: list[dict], race_date: str | None, cfg: dict,
     }
 
 
+def pf_rank_of(rows: pd.DataFrame) -> pd.Series:
+    """pf_rank（位置取り予想 pf_early のレース内の順位。1=最も前）。同値は馬番の若い順、pf_early が無い馬は欠損。
+
+    学習（tp53_dataset.load_pf）は position_forecast の early_pos_est をそのまま pf_rank にする（:181）。early_pos_est は
+    position_forecast.py:225 で (early_pos_norm, 馬番) の順に既知の馬だけで付けた順位なので、この関数と同じ値になる。
+    推論は early_pos_est を直接読み、無いときだけこの関数で補う（TP53_POS_PRED を使う学習の :205 も同じ定義）。
+    2026-10-20〜11 の推論は position_forecast の "rank"（存在しない鍵）を読んでいて、保存値の pf_rank がすべて欠損だった
+    （docs/operations/data_audit_20261116.md）。
+    """
+    if rows.empty:
+        return pd.Series(dtype="float64", index=rows.index)
+    order = rows.sort_values("horse_number", kind="stable") if "horse_number" in rows.columns else rows
+    return order["pf_early"].astype(float).rank(method="first").reindex(rows.index)
+
+
+def race_z_hat(v2: dict | None, pf: dict | None, field: int, surface: Any, distance: Any, going: Any) -> float | None:
+    """想定ペース z_hat（レース単位）。学習（tp54_dataset）は、位置取り予想の無いレース（新馬戦など。先行勢・既知の頭数 0）
+    にも全レースで付けるので、推論でもペースの判定が unknown のレースで計算できるようにする。材料が無ければ None。"""
+    if not v2 or pf is None:
+        return None
+    from src.pipeline.inference import pace_coherence as pcoh
+
+    return pcoh.predict_pace_z_v2(v2, pf.get("front_runner_count") or 0, pf.get("stalker_count") or 0, pf.get("early_pressure") or 0.0,
+                                  pf.get("known_horses") or 0, field, surface, distance, going)
+
+
 def attach_tracking_v2_to_response(resp: dict, past_doc: dict | None = None, race_date: str | None = None, course: dict | None = None, card: dict | None = None,
                                      capture: dict | None = None) -> dict:
     """予測 API の応答（position_forecast / pace_forecast が付いたもの）に、各馬の tracking_v2 を足す。無効・材料不足は何もしない。
@@ -225,7 +251,7 @@ def attach_tracking_v2_to_response(resp: dict, past_doc: dict | None = None, rac
               **{k: v for k, v in (course or {}).items() if v}}
     venue, surface, distance, going = course.get("venue"), course.get("surface"), course.get("distance"), course.get("track_condition") or course.get("going")
     field = int(pf.get("field_size") or len(preds))
-    z_hat = pcoh.predict_pace_z_v2(v2, pf.get("front_runner_count") or 0, pf.get("stalker_count") or 0, pf.get("early_pressure") or 0.0, pf.get("known_horses") or 0, field, surface, distance, going)
+    z_hat = race_z_hat(v2, pf, field, surface, distance, going)
     entries = {}
     for src in ((past_doc or {}).get("entries") or [], (card or {}).get("entries") or []):
         for e in src:
@@ -242,7 +268,7 @@ def attach_tracking_v2_to_response(resp: dict, past_doc: dict | None = None, rac
         m = __import__("re").search(r"(\d+)", str(e.get("sex_age") or ""))
         if m:
             age = float(m.group(1))
-        rows.append({"horse_number": int(p["horse_number"]), "pf_early": float(f["early_pos_norm"]), "pf_rank": f.get("rank") or float("nan"), "field_size": field, "z_hat": z_hat,
+        rows.append({"horse_number": int(p["horse_number"]), "pf_early": float(f["early_pos_norm"]), "pf_rank_est": f.get("early_pos_est"), "field_size": field, "z_hat": z_hat,
                      "pf_front": pf.get("front_runner_count") or 0, "pf_stalker": pf.get("stalker_count") or 0, "pf_pressure": pf.get("early_pressure") or 0.0,
                      "pf_known": pf.get("known_horses") or 0, "surface": surface, "distance": distance, "track_condition": going, "venue": venue,
                      "age": age if age is not None else float("nan"), "weight": float(e.get("weight") or float("nan")) if str(e.get("weight") or "").replace(".", "").isdigit() else float("nan"),
@@ -251,6 +277,8 @@ def attach_tracking_v2_to_response(resp: dict, past_doc: dict | None = None, rac
     if not rows:
         return resp
     df = pd.DataFrame(rows)
+    est = pd.to_numeric(df.pop("pf_rank_est"), errors="coerce")
+    df["pf_rank"] = est.where(est.notna(), pf_rank_of(df))
     out = attach_v2(df, model)
     for p, (_, r) in zip(idx, out.iterrows()):
         if capture is not None:     # 保存・突き合わせ用（応答には出さない）: 推論に使った入力のうち、実測との突き合わせに要るもの

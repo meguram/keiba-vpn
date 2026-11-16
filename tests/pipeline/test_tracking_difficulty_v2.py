@@ -221,3 +221,43 @@ def test_capacity_from_past_uses_only_runs_before_the_race_date():
     same_day = td2.capacity_from_past([{"raw": RAW}], "20250629", cfg, pe)           # 当日の走は使わない
     assert before["w_n"] == 1.0 and abs(before["w_early"] - (1 / 11)) < 1e-9 and before["rest_days"] > 0
     assert same_day["w_n"] == 0.0 and np.isnan(same_day["w_early"])
+
+
+# ───────────────────────── 監査 2026-11-16: pf_rank が推論の保存値で全件欠損だった件
+
+def test_pf_rank_of_matches_position_forecast_early_pos_est():
+    """position_forecast の early_pos_est（(early_pos_norm, 馬番) の順・既知の馬だけ）と同じ定義。pf_early が無い馬は欠損。"""
+    rows = pd.DataFrame({"horse_number": [3, 1, 2, 4], "pf_early": [0.5, 0.5, 0.1, np.nan]}, index=[10, 11, 12, 13])
+    r = td2.pf_rank_of(rows)
+    assert r.loc[12] == 1.0 and r.loc[11] == 2.0 and r.loc[10] == 3.0 and np.isnan(r.loc[13])
+    # position_forecast.py の付け方（既知の馬を (early_pos_norm, 馬番) で並べて 1 から）と一致
+    known = rows.dropna(subset=["pf_early"])
+    est = {hn: i + 1 for i, hn in enumerate(sorted(known["horse_number"], key=lambda h: (known.set_index("horse_number").loc[h, "pf_early"], h)))}
+    assert all(r.loc[i] == est[rows.loc[i, "horse_number"]] for i in known.index)
+
+
+def test_attach_tracking_v2_fills_pf_rank_without_rank_key(monkeypatch, tmp_path):
+    """position_forecast には "rank" の鍵が無い（順位は early_pos_est）。early_pos_est を読み、無い馬は pf_early の順位で補う。"""
+    from src.pipeline.inference import pace_coherence as pcoh
+
+    _tiny_model(tmp_path)
+    monkeypatch.setenv(td2.ENV_FLAG, "1")
+    monkeypatch.setattr(td2, "CONFIG_DIR", tmp_path)
+    # 当て込まれた係数（公開リポジトリに無い）に頼らない: ペースの式と馬柱の量は固定値にする
+    monkeypatch.setattr(pcoh, "load_config", lambda *a, **k: {"stub": 1})
+    monkeypatch.setattr(pcoh, "load_pace_v2", lambda *a, **k: {"intercept": -0.3, "coef": [], "features": []})
+    cap_keys = ("w_adj", "w_dev", "w_dev_front", "w_dev_rear", "w_early", "w_n", "w_nfront", "w_nrear", "prev_act_early_norm", "prev_c_dev",
+                "prev_distance", "rest_days")
+    monkeypatch.setattr(td2, "capacity_from_past", lambda *a, **k: {c: float("nan") for c in cap_keys})
+    td2.load_model.cache_clear()
+    r = _resp()
+    for p in r["predictions"]:   # 学習（tp53）は early_pos_est をそのまま pf_rank にする。馬番 0 だけ欠けた形（補いの経路）
+        hn = p["horse_number"]
+        p["position_forecast"] = {"early_pos_norm": p["position_forecast"]["early_pos_norm"], **({"early_pos_est": 10 + hn} if hn else {})}
+    past = {"entries": [{"horse_id": f"h{i}", "past_races": [{"raw": RAW}]} for i in range(6)]}
+    cap: dict = {}
+    out = td2.attach_tracking_v2_to_response(r, past, "20261024", capture=cap)
+    td2.load_model.cache_clear()
+    assert "tracking_v2_meta" in out
+    assert [cap[i]["pf_rank"] for i in range(6)] == [1.0, 11.0, 12.0, 13.0, 14.0, 15.0]
+    assert all(cap[i]["z_hat"] == -0.3 for i in range(6))
