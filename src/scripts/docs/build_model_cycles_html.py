@@ -21,7 +21,8 @@ OUT = REPO / "docs/html/operations/model_cycles.html"
 
 PHASES = {"before_fix": "データを直す前・参考（中断前の篩い。学習の表と fold を直す前の値）",
           "fix1": "直した表・参考（追い切りの生き残りの漏れを除く前。2016〜2019 年の wc_*・tl_* に漏れが残っていた）",
-          "main": "本番のサイクル（直した表・追い切りの漏れを除いた後）"}
+          "fix2": "直した表・漏れの除去あり・前段 S3 は旧（参考。前段を作り直す前の値）",
+          "main": "本番のサイクル（直した表・漏れの除去・前段 S3 も作り直した後）"}
 VERDICT_CLASS = {"採用": "good", "不採用": "bad", "保留": "hold", "基準": "base"}
 METRICS = [("ll", "勝ち馬の対数損失", 5, False), ("top1_win", "◎ の勝率", 1, True), ("top1_place", "◎ の複勝率", 1, True),
            ("roi_tansho", "単勝の回収率", 1, True), ("roi_fukusho", "複勝の回収率", 1, True),

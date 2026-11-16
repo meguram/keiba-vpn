@@ -19,8 +19,15 @@ REL_BASE = ["f3_r", "sr_perf_ewm2", "sr_perf_ewm6", "sr_exp", "c_res_ewm2", "c_c
 
 
 def _folds(df: pd.DataFrame) -> list:
-    """既定は 2022〜24 の expanding。環境変数 OOF_LOYO_YEARS（例 2016,2017）があれば、その年を外す leave-one-year-out にする。"""
+    """既定は 2022〜24 の expanding。環境変数 OOF_LOYO_YEARS（例 2016,2017）があれば、その年を外す leave-one-year-out にする。
+    OOF_EXPANDING_YEARS（例 2019,2020,2021）があれば、検証年を変えた expanding にする（両方は付けない）。"""
     years = [y.strip() for y in os.environ.get("OOF_LOYO_YEARS", "").split(",") if y.strip()]
+    exp_years = [y.strip() for y in os.environ.get("OOF_EXPANDING_YEARS", "").split(",") if y.strip()]
+    if exp_years and years:
+        raise SystemExit("OOF_LOYO_YEARS と OOF_EXPANDING_YEARS は片方だけ付ける")
+    if exp_years:                     # 例 2019,2020,2021: 検証年を変えた expanding（各年をその前の年までで学習。既定の 2022〜24 と同じ作り）
+        print(f"OOF_EXPANDING_YEARS={','.join(exp_years)}（年ごとに広げる。学習は検証の始まりの 10 日前まで）", flush=True)
+        return list(yearly_expanding_folds(df, valid_years=exp_years))
     if not years:
         return list(yearly_expanding_folds(df))
     print(f"OOF_LOYO_YEARS={','.join(years)}（leave-one-year-out。検証年を外し前後 10 日も除く）", flush=True)

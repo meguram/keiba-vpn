@@ -69,6 +69,13 @@ def main() -> None:
     threads = int(os.environ.get("V6_THREADS") or detect_compute(reserve_cores=6).threads)
     yr = df["year"].astype(int).to_numpy()
     assert yr.max() >= 2025 and yr.min() <= 2016, "2016〜2025 の土台の表ではない（REBUILD_2016=1 が必要）"
+    if os.environ.get("S3_BLANK_BEFORE"):          # 例 2020: その年より前の行の追い切りの列（wc_・tl_）を空にする（2016〜2019 年の生き残りの漏れの除去。model_cycles_stage と同じ）
+        cut = int(os.environ["S3_BLANK_BEFORE"])
+        blank = [c for c in X.columns if c.startswith(("wc_", "tl_"))]
+        if not blank:
+            raise SystemExit("S3_BLANK_BEFORE: 追い切りの列（wc_・tl_）が入力に無い")
+        X.loc[yr < cut, blank] = np.nan
+        log(f"{cut} 年より前の行の追い切りの列 {len(blank)} 列を空にした")
 
     import lightgbm as lgb
 
@@ -94,7 +101,9 @@ def main() -> None:
         del Xr
     ens = StageEnsembleT7(members, models)
     out = Path(a.out)
-    ens.save(out, extra={"train_rows": int(tr.sum()), "fit_years": "2016-2025", "params": PARAMS, "seconds": round(time.time() - t0)})
+    ens.save(out, extra={"train_rows": int(tr.sum()), "fit_years": "2016-2025", "params": PARAMS, "seconds": round(time.time() - t0),
+                         "blank_before": os.environ.get("S3_BLANK_BEFORE") or None,
+                         "inputs": {k: os.environ.get(k) for k in ("V6_EASE2", "V6_LAP", "V6_HORSE_EASE", "S3_EXTRA")}})
     log(f"保存: {out}")
 
     va = np.flatnonzero(yr == 2025)
