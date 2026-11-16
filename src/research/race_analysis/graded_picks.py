@@ -131,6 +131,9 @@ def load_picked(race_id: str, h: dict) -> dict | None:
 
 def _without_default(x: dict, v: dict) -> dict:
     """規則が既定（2018〜2024 年に回が無く、決められていない）なら、その B の ◎・消しは出さない（None）。"""
+    from src.research.graded.versions import V0_ID
+    if (x.get("version") or {}).get("id") not in (None, V0_ID):
+        return x     # 新しい版の前日の計算から足した回（足すだけの更新）は、最初の版の「既定」の印で消さない（load_picked と同じ）
     hd, kd = v["honmei"]["default"], bool(v["kill"] and v["kill"]["default"])
     if not (hd or kd):
         return x

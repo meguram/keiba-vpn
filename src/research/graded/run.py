@@ -985,6 +985,49 @@ def _shutuba_aliases(rkeys: set[str], y0: int, y1: int) -> dict[str, dict]:
 GRADED_PICKS_DIR = Path(os.environ.get("GRADED_PICKS_DIR") or (REPO / "data/local/graded_picks"))
 
 
+def _append_history(t, P: dict, log: dict, kn: list[str]) -> None:
+    """足すだけの更新（GRADED_PICKS_APPEND=1）: 既存の history.json の回は残し、新しい回だけを足す。データの監査で過去の表が入れ替わったので、
+    作り直すと 2025・2026 年の照合（サイクルの記録との一致）で止まるため。前の記録は history.json.<日時>.bak に写して残す。"""
+    import shutil
+
+    from src.research.graded import picks as PK
+    from src.research.graded import playbook as PB
+    out = GRADED_PICKS_DIR / "history.json"
+    old = json.loads(out.read_text(encoding="utf-8"))
+    new = PK.build_history(t, P, log["cycles"][-1]["report"], kn, check=False)
+    picked = {}
+    for f in (GRADED_PICKS_DIR / "races").glob("*.json"):
+        try:
+            picked[f.stem] = json.loads(f.read_text(encoding="utf-8"))
+        except ValueError:
+            continue
+    ri = {str(r): i for i, r in enumerate(t.race["race_id"].astype(str))}
+
+    def horse_of(race_id: str, hn: int) -> dict | None:
+        """今の表のその回の馬番の馬。取消・除外・中止で行が無ければ None（表は着のある馬だけ）。2 件以上は誤りなので止める。"""
+        i = ri[race_id]
+        a, b = t.starts[i], (t.starts[i + 1] if i + 1 < len(t.starts) else len(t.r))
+        rows = [h for h in range(a, b) if int(t.r["hn"].iloc[h]) == int(hn)]
+        if len(rows) > 1:
+            raise ValueError(f"{race_id}: 馬番 {hn} の行が {len(rows)} 件")
+        return PB.horse(t, rows[0], bool(t.race["pay_ok"].iloc[i])) if rows else None
+    from src.research.graded.upcoming import entries_sig
+    res, added = PK.append_history(old, new, picked, horse_of, entries_sig)
+    if not added:
+        print(out, "足す回なし")
+        return
+    now = datetime.now(JST).isoformat(timespec="seconds")
+    ent = t.r["is_entry"].fillna(False).astype(bool) if "is_entry" in t.r.columns else pd.Series(False, index=t.r.index)
+    res["data_until"] = str(t.r.loc[~ent.to_numpy(), "dt"].max())[:10]       # 結果の行の最終日（出馬表の段階の行は数えない）
+    res["aliases"] = _shutuba_aliases(set(res["rkeys"]), PK.DEV[0], int(t.race["year"].max()))
+    res["appended"] = list(old.get("appended", [])) + [{"at": now, "races": added}]
+    shutil.copy2(out, out.with_name(f"history.json.{now[:19].replace(':', '')}.bak"))
+    tmp = out.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":"), default=_f), encoding="utf-8")
+    os.replace(tmp, out)
+    print(out, "足した回", len(added), added)
+
+
 def cmd_picks_history() -> None:
     """めぐ分析の「データで予想」タブの元データ: 凍結した B の規則（prereg_cycles.json）と前日版の ◎ を、2018 年以降の重賞の各回に当てはめ、
     <GRADED_PICKS_DIR>/history.json に書く。A は出さない。規則が凍結のハッシュと違えば止める。新しい回を入れるには、先に frame・tally を作り直す。"""
@@ -1001,6 +1044,9 @@ def cmd_picks_history() -> None:
     _attach_final_odds(t, (PK.DEV[0], int(t.race["year"].max())))
     pk = json.loads(PREREG_KILL.read_text(encoding="utf-8"))
     kn = [v["name"].removeprefix("消し版") for v in pk["versions"] if v["passes"] and v["params"].get("honmei") == "そのまま"]
+    if os.environ.get("GRADED_PICKS_APPEND") == "1":
+        _append_history(t, P, log, kn)
+        return
     res = PK.build_history(t, P, log["cycles"][-1]["report"], kn)
     res["aliases"] = _shutuba_aliases(set(res["rkeys"]), PK.DEV[0], int(t.race["year"].max()))
     res["made_at"] = datetime.now(JST).isoformat(timespec="seconds")
