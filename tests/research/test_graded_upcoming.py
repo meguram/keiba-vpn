@@ -220,3 +220,16 @@ def test_shutuba_aliases_only_unique_graded_targets(tmp_path, monkeypatch):
     monkeypatch.setattr("src.research.graded.race_keys.canonical_key", lambda name, month=None: name)
     al = R._shutuba_aliases({"マイルチャンピオンS", "重賞S"}, 2024, 2025)    # 2024 年は表が無いので飛ばす
     assert al == {"マイルCS": {"to": "マイルチャンピオンS", "months": [11]}}   # 曖昧・重賞でない行き先・日付の欠けは入れない
+
+
+def test_load_picked_keeps_new_version_rules(tmp_path, monkeypatch):
+    """新しい版（重賞ごとの窓で選び直した規則）の ◎・消しは、最初の版の「既定」の印で消さない。"""
+    d, h = _history(tmp_path, monkeypatch)
+    h["rkeys"]["R"]["honmei"]["default"] = True
+    (d / "races").mkdir()
+    pk = {"race_id": "X1", "rkey": "R", "sha256_rules": "s", "frozen_at": "f", "base": {"hn": 1, "name": "a"},
+          "B": {"honmei": {"hn": 2, "name": "b"}, "kill": None}, "skipped": {}, "version": {"id": "2027-05-01-R"}}
+    (d / "races" / "X1.json").write_text(json.dumps(pk), encoding="utf-8")
+    assert GP.load_picked("X1", h)["B"]["honmei"]["hn"] == 2
+    (d / "races" / "X1.json").write_text(json.dumps(pk | {"version": {"id": "v0-cycles-2026-11-15"}}), encoding="utf-8")
+    assert GP.load_picked("X1", h)["B"]["honmei"] is None

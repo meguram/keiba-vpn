@@ -148,7 +148,7 @@ def run(race_ids: list[str], sim: bool = False, work: Path | None = None) -> dic
         po = wd / "picks" if sim else picks_dir() / "races"
         env = dict(os.environ, FOLKLORE_OUT=str(wd / "master"), FOLKLORE_YEAR_END=date[:4], FOLKLORE_KEEP_DNF="1", FOLKLORE_RESUME="0",
                    FOLKLORE_ENTRIES=str(ep), FOLKLORE_CUTOFF=date, GRADED_OUT=str(wd), GRADED_ENTRIES=str(ep), GRADED_PICKS_OUT=str(po),
-                   GRADED_ENTRIES_SIG=sig, PYTHONPATH=str(REPO), OMP_NUM_THREADS="8", OPENBLAS_NUM_THREADS="8", MKL_NUM_THREADS="8")
+                   GRADED_ENTRIES_SIG=sig, PYTHONPATH=str(REPO), **({"GRADED_RULES_VERSIONS": str(wd / "rules_versions.json")} if sim else {}), OMP_NUM_THREADS="4", OPENBLAS_NUM_THREADS="4", MKL_NUM_THREADS="4")   # レース日の取得・予測と CPU を取り合わない
         ids = sorted(g["race_id"].unique())
         try:
             with open(wd / "run.log", "ab") as log:

@@ -64,6 +64,15 @@ export type GPPicked = {
   base: GPPickHorse | null;
   B: { honmei: GPPickHorse | null; kill: GPPickHorse[] | null };
   skipped?: Partial<Record<"honmei" | "kill", "dayof" | "no_rule" | "default">>;
+  /** 使った条件の版（重賞ごとの窓: 直近 2 回が検証、それより前が発見）。val_stats は発見だけで決めた条件の検証の成績 */
+  version?: {
+    id: string; made_at: string; discovery: { from: string | null; to: string | null; n?: number }; validation: { from: string | null; to: string | null; n?: number };
+    val_stats?: { honmei: GPHonmeiStats | null; kill: GPKillStats | null } | null; flag?: string | null; sha?: string;
+    /** その版の規則の文（最初の版と違うとき、条件の詳細はこちらを出す） */
+    rule_text?: { honmei: GPRuleText | null; kill: (GPRuleText & { k?: number }) | null } | null;
+  } | null;
+  /** 計算は止めずに出す注意（材料が古いなど） */
+  warnings?: string[];
 };
 
 export const SKIP_LABEL: Record<string, string> = {
@@ -112,4 +121,11 @@ export function periodsOf(stats: GPFigure["stats"]): Period[] {
 export function horseShort(h: { hn: number; name: string | null; fin?: number | null }): string {
   const f = h.fin != null && Number.isFinite(h.fin) ? `（${Math.round(h.fin)}着）` : "";
   return `${h.hn} ${h.name ?? "（馬名なし）"}${f}`;
+}
+
+export const V0_ID = "v0-cycles-2026-11-15";
+
+/** 前日の計算が新しい版（重賞ごとの窓で選び直した規則）を使ったか */
+export function newVersion(p: GPPicked | null | undefined): boolean {
+  return !!p?.version && p.version.id !== V0_ID;
 }

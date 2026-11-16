@@ -114,6 +114,9 @@ def load_picked(race_id: str, h: dict) -> dict | None:
     if cur is not None and x.get("entries_sig") != cur:   # 取消・乗り替わりの後の古い計算は出さない（計算し直すまで「確定後に表示」）
         logger.info("前日の計算の該当馬が今の出馬表と違うので使いません: %s", race_id)
         return None
+    from src.research.graded.versions import V0_ID
+    if (x.get("version") or {}).get("id") not in (None, V0_ID):
+        return x   # 新しい版（重賞ごとの窓で選び直した規則）は、最初の版の「既定」の印で消さない
     v = h["rkeys"].get(x.get("rkey")) or {}
     hd, kd = (v.get("honmei") or {}).get("default"), (v.get("kill") or {}).get("default")
     if hd or kd:
@@ -177,6 +180,16 @@ def brief(rule: dict | None, kind: str, k: int | None = None, n: int = 2) -> str
     return f"{head}{'・'.join(parts)}を重く見て、最大 {kk} 頭を消す"
 
 
+def _brief_of(v: dict, picked: dict | None) -> dict:
+    """条件の要約。前日の計算が新しい版を使ったなら、その版の規則の文から作る（最初の版の規則と食い違わないように）。"""
+    rt = ((picked or {}).get("version") or {}).get("rule_text")
+    if rt:
+        return {"honmei": brief({"rule": rt["honmei"]}, "honmei") if rt.get("honmei") else None,
+                "kill": brief({"rule": rt["kill"], "k": rt["kill"].get("k")}, "kill", rt["kill"].get("k")) if rt.get("kill") else None}
+    return {"honmei": None if v["honmei"]["default"] else brief(v["honmei"], "honmei"),
+            "kill": None if not v["kill"] or v["kill"]["default"] else brief(v["kill"], "kill", v["kill"].get("k"))}
+
+
 def figure_for(h: dict, rkey: str, race_id: str, date: str) -> dict[str, Any]:
     """画面に渡す値。これまで = 開催日がこのレースより前の回（新しい順）。このレース = 記録にあれば結果つき。"""
     PK = _pk()
@@ -201,8 +214,7 @@ def figure_for(h: dict, rkey: str, race_id: str, date: str) -> dict[str, Any]:
     simple = {"recent": {"B_honmei": PK.stats(recent, "B", "honmei"), "B_kill": PK.stats(recent, "B", "kill")} if recent else None,
               "dev": {"B_honmei": PK.stats(old, "B", "honmei"), "B_kill": PK.stats(old, "B", "kill")} if old else None}
     return {"rkey": rkey, "grade": v["grade"], "course": v["course"], "rules": {"honmei": v["honmei"], "kill": v["kill"]},
-            "brief": {"honmei": None if v["honmei"]["default"] else brief(v["honmei"], "honmei"),
-                      "kill": None if not v["kill"] or v["kill"]["default"] else brief(v["kill"], "kill", v["kill"].get("k"))},
+            "brief": _brief_of(v, picked),
             "simple_stats": simple,
             "this": {"status": status, "race": this, "period": PK.period_of(date, tf), "picked": picked},
             "past": sorted(past, key=lambda x: x["date"], reverse=True), "stats": _stats_by_period(past, tf),

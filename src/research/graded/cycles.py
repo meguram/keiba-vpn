@@ -92,15 +92,17 @@ def agg_honmei(t: Table, H: np.ndarray, sel_races: np.ndarray) -> dict[str, np.n
 class Best:
     """A・B × 重賞ごと・全体で 1 つの、◎ と消しの一番良い決め方と、その 2025・2026 年の値。"""
 
-    def __init__(self, t: Table):
+    def __init__(self, t: Table, dv: np.ndarray | None = None, ev: np.ndarray | None = None, rkeys: list[str] | None = None):
+        """dv・ev = 開発（B を選ぶ）・評価（値を数える）のレースの真偽。既定は 2018〜2024 年・2025〜2026 年。
+        重賞ごとの窓（条件の更新のバッチ、versions.py）では、重賞ごとの発見の回を dv、検証の回を ev にして渡す。"""
         self.t = t
         rk = t.race["rkey"].to_numpy()
-        self.rkeys = sorted(set(rk[(t.race["year"] >= EVAL[0]).to_numpy()]))
+        yr = t.race["year"].to_numpy()
+        self.ev = ev.astype(bool) if ev is not None else (yr >= EVAL[0]) & (yr <= EVAL[1])
+        self.dv = dv.astype(bool) if dv is not None else (yr >= DEV[0]) & (yr <= DEV[1])
+        self.rkeys = sorted(rkeys) if rkeys is not None else sorted(set(rk[(t.race["year"] >= EVAL[0]).to_numpy()]))
         ri = {k: i for i, k in enumerate(self.rkeys)}
         self.rk_idx = np.array([ri.get(k, -1) for k in rk])
-        yr = t.race["year"].to_numpy()
-        self.ev = (yr >= EVAL[0]) & (yr <= EVAL[1])
-        self.dv = (yr >= DEV[0]) & (yr <= DEV[1])
         nk = len(self.rkeys)
         self.G = np.zeros((nk, len(rk)), np.float32)
         ok = self.rk_idx >= 0
