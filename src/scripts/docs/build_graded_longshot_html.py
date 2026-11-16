@@ -38,7 +38,10 @@ def table(head: list[str], rows: list[str]) -> str:
 
 
 def cond(c: dict) -> str:
-    return escape(" × ".join(f"{t} {lv}" for t, lv in zip(c["types"], c["levels"])))
+    """条件の日本語の文（主）と、切り口の ID・水準（小さく添える）。"""
+    from src.research.graded import level_text as LT
+    ids = " × ".join(f"{t} {lv}" for t, lv in zip(c["types"], c["levels"]))
+    return f'{escape(LT.describe_combo(list(c["types"]), list(c["levels"])))}<div class="muted" style="font-size:11px">{escape(ids)}</div>'
 
 
 def build(src: Path = SRC, out: Path = OUT) -> Path:

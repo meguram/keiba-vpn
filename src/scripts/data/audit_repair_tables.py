@@ -166,6 +166,7 @@ def main() -> int:
         ap.error("--out は --src（本番の表）と別の場所にする")
     report = {}
     years = set(range(lo, hi + 1))
+    out.mkdir(parents=True, exist_ok=True)
     for sd in sorted(p for p in src.iterdir() if p.is_dir() and p.name.isdigit() and int(p.name) not in years):
         _link(sd, out / sd.name)       # 範囲外の年は年のフォルダごと本番へのリンク（黙って空にしない）
     for y in range(lo, hi + 1):

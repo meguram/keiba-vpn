@@ -134,6 +134,49 @@ def _without_default(x: dict, v: dict) -> dict:
     return x | {"B": {"honmei": None if hd else x["B"]["honmei"], "kill": None if kd else x["B"]["kill"]}}
 
 
+def _term_short(t: dict, kind: str) -> str | None:
+    """規則の 1 項を短い句にする（「「年齢」で成績の低い区分」「前日版の点の高さ」など）。◎ は点の高い側、消しは点の低い側を選ぶ。"""
+    import re
+    k, w = t.get("key", ""), float(t.get("w", 0))
+    good = (w > 0) if kind == "honmei" else (w < 0)     # その項で「高い側」が選ばれるか
+    if k.startswith("x_"):
+        m = re.match(r"「(.+?)」", t.get("text", ""))
+        name = re.sub(r"（.*?）", "", m[1]) if m else k[2:]
+        return f"「{name}」で成績の{'良い' if good else '低い'}区分"
+    if k == "score_pre":
+        return f"前日版の点の{'高さ' if good else '低さ'}"
+    if k == "score_day":
+        return f"当日版の点の{'高さ' if good else '低さ'}"
+    if k.startswith("khit_"):
+        return f"消しの条件に当たる数の{'多さ' if good else '少なさ'}"
+    return None
+
+
+def _top_n(rule: dict) -> str | None:
+    f = (rule.get("rule") or {}).get("filter") or ""
+    m = __import__("re").search(r"上位 (\d+) 頭", f)
+    return m[1] if m else None
+
+
+def brief(rule: dict | None, kind: str, k: int | None = None, n: int = 2) -> str | None:
+    """選び方の要約（1 行）。効きの大きい項から n 個（ほぼ効かない項は外す）。点の合計で選ぶので「〜を重く見て」と書く（AND ではない）。"""
+    if not rule:
+        return None
+    r = rule.get("rule") or {}
+    parts = [x for x in (_term_short(t, kind) for t in r.get("terms", []) if not t.get("small")) if x][:n]
+    top = _top_n(rule)
+    if kind == "honmei":
+        head = f"前日版の上位 {top} 頭から、" if top else ""
+        if not parts:
+            return f"前日版の上位 {top} 頭から ◎ を選ぶ" if top else None
+        return f"{head}{'・'.join(parts)}を重く見て ◎ を選ぶ"
+    kk = k or rule.get("k") or ""
+    head = f"前日版の上位 {top} 頭より外から、" if top else ""
+    if not parts:
+        return f"前日版の上位 {top} 頭より外から、最大 {kk} 頭を消す" if top else None
+    return f"{head}{'・'.join(parts)}を重く見て、最大 {kk} 頭を消す"
+
+
 def figure_for(h: dict, rkey: str, race_id: str, date: str) -> dict[str, Any]:
     """画面に渡す値。これまで = 開催日がこのレースより前の回（新しい順）。このレース = 記録にあれば結果つき。"""
     PK = _pk()
@@ -153,7 +196,14 @@ def figure_for(h: dict, rkey: str, race_id: str, date: str) -> dict[str, Any]:
         status = "dayof"     # 当日の値（馬体重・馬場など）を使う規則は、前日には該当馬を出さない
     else:
         status = "pending"   # 出馬表の確定前（確定後に前日の計算で出す）
+    recent = [x for x in past if x["date"][:4] >= str(PK.EVAL[0])]
+    old = [x for x in past if x["date"][:4] < str(PK.EVAL[0])]
+    simple = {"recent": {"B_honmei": PK.stats(recent, "B", "honmei"), "B_kill": PK.stats(recent, "B", "kill")} if recent else None,
+              "dev": {"B_honmei": PK.stats(old, "B", "honmei"), "B_kill": PK.stats(old, "B", "kill")} if old else None}
     return {"rkey": rkey, "grade": v["grade"], "course": v["course"], "rules": {"honmei": v["honmei"], "kill": v["kill"]},
+            "brief": {"honmei": None if v["honmei"]["default"] else brief(v["honmei"], "honmei"),
+                      "kill": None if not v["kill"] or v["kill"]["default"] else brief(v["kill"], "kill", v["kill"].get("k"))},
+            "simple_stats": simple,
             "this": {"status": status, "race": this, "period": PK.period_of(date, tf), "picked": picked},
             "past": sorted(past, key=lambda x: x["date"], reverse=True), "stats": _stats_by_period(past, tf),
             "periods": h.get("periods"), "track_from": tf, "frozen_at": h.get("frozen_at"), "data_until": h.get("data_until")}
@@ -161,9 +211,8 @@ def figure_for(h: dict, rkey: str, race_id: str, date: str) -> dict[str, Any]:
 
 class GradedPicksModule:
     id = "graded_picks"
-    label = "データで予想"
-    description = ("重賞だけ。2018〜2024 年のデータだけで決めて凍結した ◎ と消しの選び方（B）と、比べる基準の前日版の ◎ で選んだ馬の、"
-                   "これまでの回の該当馬・成績・回収率と、このレースの該当馬。")
+    label = "好走データ予想"
+    description = "重賞だけ。2018〜2024 年のデータで決めた条件で選んだ ◎ と消し馬。"
 
     def applicable(self, ctx: RaceContext) -> bool:
         try:
@@ -180,7 +229,7 @@ class GradedPicksModule:
         except Exception:   # 失敗しても status=error（欠けた結果）にしない。ほかのタブの保存を止めないため
             logger.exception("データで予想の計算に失敗: %s", ctx.race_id)
             h, fig = {}, None
-        notes = list(h.get("notes") or []) if fig else ["このレースの該当馬の記録を読めませんでした。"]
+        notes = list(_pk().NOTES) if fig else ["このレースの該当馬の記録を読めませんでした。"]   # 注意書きはコードの文（記録の作り直しを待たない）
         return ModuleOutput(columns=[], groups=[], cells={}, notes=notes, data_until=h.get("data_until"), view="graded_picks", figure=fig)
 
 

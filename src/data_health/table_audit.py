@@ -13,6 +13,7 @@
 - ``compare_entries``: 結果の表と出馬表の馬の一致。
 - ``check_horse_birth``: 馬の ID（先頭 4 桁＝生年）と馬齢の整合。
 - ``compare_missing``: 学習と推論の各列の欠けの割合を並べ、差の大きい列を挙げる。
+- ``presence_leak``: 値の有無だけでの勝ちの AUC を年ごとに出す（記録が後の年も走った馬にだけある＝生き残りの漏れの検出）。
 
 GCS は読まない（費用 0 円）。CLI は ``python -m src.data_health.table_audit``（docs/operations/data_audit_20261116.md）。
 """
@@ -554,6 +555,59 @@ def compare_missing(train: pd.DataFrame | pd.Series, serve: pd.DataFrame | pd.Se
     return out.reindex(out["delta"].abs().sort_values(ascending=False).index).reset_index(drop=True)
 
 
+# ── 値の有無による漏れ（生き残りの漏れ） ─────────────────────────────────
+
+def _auc(y: np.ndarray, x: np.ndarray) -> float:
+    """順位で計算する AUC（sklearn に頼らない）。同値は平均の順位。"""
+    y = np.asarray(y, dtype=bool)
+    n1, n0 = int(y.sum()), int((~y).sum())
+    if n1 == 0 or n0 == 0:
+        return math.nan
+    r = pd.Series(np.asarray(x, dtype=float)).rank(method="average").to_numpy()
+    return float((r[y].sum() - n1 * (n1 + 1) / 2) / (n1 * n0))
+
+
+def presence_leak(df: pd.DataFrame, *, target: pd.Series, year: pd.Series, columns: Iterable[str] | None = None,
+                  min_dev: float = 0.05, share: tuple[float, float] = (0.03, 0.97),
+                  extra_missing: Iterable[Any] = ("__UNKNOWN__",)) -> pd.DataFrame:
+    """列の「値がある」だけで目的（勝ちなど）をどれだけ当てられるかを年ごとの AUC で出し、0.5 から ``min_dev`` 以上離れた列・年を返す。
+
+    記録が「後の年も走った馬」についてだけ取られていると、値の有無が馬の未来の情報になる（2026-11-16 の監査で、s18 の 2016〜2019 年の
+    父・母父と追い切りが AUC 0.56〜0.66。docs/operations/data_audit_20261116.md）。値がある割合が ``share`` の外の年は判定しない。
+    target・year が欠損の行は除く。``extra_missing`` の埋め値（__UNKNOWN__ など）も欠けとみなす。
+
+    正当な欠け方（前走の列は新馬戦で欠け、新馬は勝ちにくい）も毎年 AUC が外れるので、同じ列の他の年の中央値（``auc_other_years``）と
+    その差（``vs_other_years``）を添える。漏れらしいのは、特定の年だけ外れる列（差が大きい）。
+    戻り値: column, year, has_share, auc, auc_other_years, vs_other_years（差の絶対値の大きい順）。
+    """
+    y = np.asarray(target, dtype=float)
+    yr = pd.Series(np.asarray(year, dtype=object)).astype("string")
+    ok = ~np.isnan(y) & yr.notna().to_numpy(dtype=bool)
+    masks = {str(v): ((yr == v).fillna(False).to_numpy(dtype=bool) & ok) for v in sorted(yr.dropna().unique())}
+    extra = {str(v) for v in extra_missing}
+    rows = []
+    for c in [c for c in _cols(columns, df) if c in df.columns]:
+        miss = missing_mask(df[c])
+        if extra:
+            miss = miss | df[c].astype("string").isin(extra).fillna(False)
+        has = (~miss).to_numpy(dtype=bool)
+        per = {}
+        for yv, m in masks.items():
+            h = has[m]
+            if len(h) and share[0] < h.mean() < share[1]:
+                per[yv] = (float(h.mean()), _auc(y[m] > 0, h.astype(float)))
+        for yv, (sh, a) in per.items():
+            others = [v[1] for k, v in per.items() if k != yv and not math.isnan(v[1])]
+            med = float(np.median(others)) if others else math.nan
+            if not math.isnan(a) and abs(a - 0.5) >= min_dev:
+                rows.append((c, yv, round(sh, 3), round(a, 3), None if math.isnan(med) else round(med, 3),
+                             None if math.isnan(med) else round(a - med, 3)))
+    out = pd.DataFrame(rows, columns=["column", "year", "has_share", "auc", "auc_other_years", "vs_other_years"])
+    if len(out):
+        out = out.reindex(out["vs_other_years"].astype(float).abs().fillna(out["auc"].astype(float).sub(0.5).abs()).sort_values(ascending=False).index).reset_index(drop=True)
+    return out
+
+
 # ── CLI ──────────────────────────────────────────────────────────────────
 
 DEFAULT_TABLES = ("race_result_flat", "race_shutuba_flat", "race_odds_flat")
@@ -659,7 +713,23 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--train", default="", help="学習の表（parquet）。--serve と一緒に渡すと、列ごとの欠けの差を出す（flat の表の監査はしない）")
     ap.add_argument("--serve", default="", help="推論の入力（parquet の glob。例: data/local/inference/drift_features/2026/*.parquet）")
     ap.add_argument("--threshold", type=float, default=10.0, help="学習と推論の欠けの差（ポイント）がこれ以上の列を出す")
+    ap.add_argument("--leak", default="", help="学習の表（parquet。date と finish_position が要る）。値の有無だけでの勝ちの AUC を年ごとに出す"
+                                                  "（flat の表の監査はしない。--train / --serve とは一緒に使えない）")
     a = ap.parse_args(argv)
+    if a.leak and (a.train or a.serve):
+        ap.error("--leak は --train / --serve と一緒には使えない")
+    if a.leak:
+        t = pd.read_parquet(a.leak)
+        fp = pd.to_numeric(t["finish_position"], errors="coerce")
+        win = (fp == 1).astype(float).where(fp > 0)
+        yr = month_key(t["date"]).str[:4]
+        cols = [c for c in t.columns if c not in ("race_id", "horse_id", "date", "finish_position")]
+        leak = presence_leak(t, target=win, year=yr, columns=cols)
+        print(leak.to_string(index=False) if len(leak) else "値の有無による漏れは見つからない")
+        if a.out:
+            Path(a.out).mkdir(parents=True, exist_ok=True)
+            leak.to_csv(Path(a.out) / "presence_leak.csv", index=False)
+        return 0
     if bool(a.train) != bool(a.serve):
         ap.error("--train と --serve は両方を渡す")
     if a.train:

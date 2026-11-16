@@ -294,3 +294,68 @@ def test_parse_years_ignores_trailing_comma():
 def test_young_jockeys_series_is_not_treated_as_obstacle():
     df = _race(race_name="ヤングJSFR中山1(1勝)", surface="芝")
     assert _issue(ta.check_result_races(df), "race_const", "障害の surface").n_total == 0
+
+
+# ── 値の有無による漏れ（生き残りの漏れ） ─────────────────────────────────
+
+def test_presence_leak_flags_columns_whose_presence_predicts_the_target():
+    rng = np.random.default_rng(0)
+    n = 4000
+    year = np.where(np.arange(n) < n // 2, "2018", "2022")
+    win = (rng.random(n) < 0.08).astype(float)
+    # 2018: 勝った馬ほど記録がある（後の年も走った馬にだけ記録）。2022: 有無は勝ちと無関係
+    p_has = np.where(year == "2018", np.where(win > 0, 0.8, 0.3), 0.9)
+    leaky = np.where(rng.random(n) < p_has, 1.0, np.nan)
+    fair = np.where(rng.random(n) < 0.5, 1.0, np.nan)
+    df = pd.DataFrame({"leaky": leaky, "fair": fair})
+    out = ta.presence_leak(df, target=pd.Series(win), year=pd.Series(year))
+    assert set(out["column"]) == {"leaky"} and out["year"].tolist() == ["2018"] and out["auc"].iloc[0] > 0.6
+
+
+def test_auc_matches_simple_cases():
+    assert ta._auc(np.array([1, 0, 1, 0]), np.array([1.0, 0.0, 1.0, 0.0])) == 1.0
+    assert ta._auc(np.array([1, 0, 1, 0]), np.array([1.0, 1.0, 1.0, 1.0])) == 0.5
+
+
+def test_cli_leak_writes_csv(tmp_path):
+    rng = np.random.default_rng(1)
+    n = 3000
+    fp = rng.integers(1, 12, n)
+    t = pd.DataFrame({"race_id": np.arange(n).astype(str), "horse_id": "h", "date": "2018-05-01", "finish_position": fp,
+                      "sire": np.where((fp == 1) | (rng.random(n) < 0.3), "s1", "")})
+    t.to_parquet(tmp_path / "t.parquet")
+    assert ta.main(["--leak", str(tmp_path / "t.parquet"), "--out", str(tmp_path / "o")]) == 0
+    d = pd.read_csv(tmp_path / "o" / "presence_leak.csv")
+    assert d["column"].tolist() == ["sire"] and d["auc"].iloc[0] > 0.6
+
+
+def test_presence_leak_handles_nan_target_and_year_low_auc_share_and_placeholders():
+    rng = np.random.default_rng(2)
+    n = 3000
+    win = (rng.random(n) < 0.1).astype(float)
+    win[:50] = np.nan                                   # 取消など
+    year = np.array(["2017"] * n, dtype=object)
+    year[50:80] = None
+    # 値がある方が勝てない（AUC < 0.5）向きも拾う。__UNKNOWN__ は欠けとみなす
+    col = np.where((win == 1) | (rng.random(n) < 0.3), "__UNKNOWN__", "S")
+    always = np.ones(n)                                 # 値がある割合が範囲外 → 判定しない
+    out = ta.presence_leak(pd.DataFrame({"sire": col, "always": always}), target=pd.Series(win), year=pd.Series(year))
+    assert out["column"].tolist() == ["sire"] and out["auc"].iloc[0] < 0.4
+    assert np.isnan(ta._auc(np.array([1, 1]), np.array([0.0, 1.0])))
+
+
+def test_presence_leak_reports_other_years_for_context():
+    rng = np.random.default_rng(3)
+    n = 6000
+    year = np.repeat(["2018", "2021", "2022"], n // 3)
+    win = (rng.random(n) < 0.1).astype(float)
+    p = np.where(year == "2018", np.where(win > 0, 0.85, 0.3), np.where(win > 0, 0.55, 0.5))
+    col = np.where(rng.random(n) < p, 1.0, np.nan)
+    out = ta.presence_leak(pd.DataFrame({"c": col}), target=pd.Series(win), year=pd.Series(year))
+    r = out.set_index("year").loc["2018"]
+    assert r["vs_other_years"] > 0.1 and out["year"].iloc[0] == "2018"
+
+
+def test_cli_leak_cannot_be_combined_with_train_serve(tmp_path):
+    with pytest.raises(SystemExit):
+        ta.main(["--leak", str(tmp_path / "t.parquet"), "--train", "a", "--serve", "b"])

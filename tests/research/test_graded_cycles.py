@@ -80,7 +80,7 @@ def test_cycles_html(tmp_path):
     src.write_text(json.dumps(L, ensure_ascii=False), encoding="utf-8")
     h = B.build(src, tmp_path / "c.html").read_text(encoding="utf-8")
     assert "<svg" in h and not re.search(r"<script[^>]+src=", h) and "prefers-color-scheme:dark" in h
-    assert "基準 &lt;x&gt;" in h and "A と B の差" in h and 'href="graded_handicapper.html"' in h
+    assert "基準 &lt;x&gt;" in h and "A と B の差" not in h and "B・重賞ごと" in h and "A・重賞ごと" not in h and "A（当てはめ版）" not in h and 'href="graded_handicapper.html"' in h
 
 
 def test_B_never_uses_eval_to_break_ties():

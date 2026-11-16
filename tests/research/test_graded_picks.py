@@ -262,3 +262,34 @@ def test_api_hides_actual_odds_from_non_developers_in_public_mode(tmp_path, monk
     assert "odds" not in win() and "tan" not in win() and win()["fin"] == 1
     monkeypatch.setattr("src.api.flask_auth.is_logged_in", lambda: True)
     assert win()["odds"] == 3.8                                     # 開発者には出す
+
+
+def test_brief_and_simple_stats(tmp_path, monkeypatch):
+    """最初に見せる要約（条件の 1 行）と、過去該当馬の簡潔な成績（2025〜 と 〜2024 の 2 行）。"""
+    h, *_ = _history()
+    _write_history(tmp_path, monkeypatch, h)
+    v = h["rkeys"]["R"]
+    last = max(v["races"], key=lambda x: x["date"])
+    f = GP.figure_for(GP.load_history(), "R", last["race_id"], last["date"])
+    assert f["brief"]["honmei"].endswith("◎ を選ぶ") and "頭を消す" in f["brief"]["kill"]
+    past = [x for x in v["races"] if x["date"] < last["date"]]
+    rec = [x for x in past if x["date"][:4] >= "2025"]
+    assert f["simple_stats"]["recent"]["B_honmei"] == PK.stats(rec, "B", "honmei")
+    assert f["simple_stats"]["dev"]["B_kill"] == PK.stats([x for x in past if x["date"][:4] < "2025"], "B", "kill")
+    assert GP.figure_for(GP.load_history(), "N", "N2027", "2027-05-01")["brief"]["honmei"] is None     # 既定の規則は要約を出さない
+    assert GP.GradedPicksModule.label == "好走データ予想" and GP.GradedPicksModule.id == "graded_picks"   # URL の m= は変えない
+
+
+def test_term_short_phrases():
+    assert GP._term_short({"key": "x_J01", "w": -1.0, "text": "「厩舎の格（直近1年の複勝率）」の点（J01）が低いほど上"}, "honmei") == "「厩舎の格」で成績の低い区分"
+    assert GP._term_short({"key": "x_F03", "w": 1.0, "text": "「同じ距離帯・芝ダの実績」の点（F03）が低いほど消す"}, "kill") == "「同じ距離帯・芝ダの実績」で成績の低い区分"
+    assert GP._term_short({"key": "score_pre", "w": 1.0}, "kill") == "前日版の点の低さ"
+    # 消しの条件に当たる数: ◎ で w>0 は「多いほど上」、消しで w>0 は「少ないほど消す」（playbook.describe と同じ向き）
+    assert GP._term_short({"key": "khit_1", "w": 1.0}, "honmei") == "消しの条件に当たる数の多さ"
+    assert GP._term_short({"key": "khit_1", "w": 1.0}, "kill") == "消しの条件に当たる数の少なさ"
+    assert GP.brief({"rule": {"filter": "前日版の点の上位 3 頭の中から選ぶ", "terms": [{"key": "score_pre", "w": 1.0, "small": False}]}}, "honmei") == \
+        "前日版の上位 3 頭から、前日版の点の高さを重く見て ◎ を選ぶ"
+    assert GP.brief({"rule": {"filter": "前日版の点の上位 5 頭より外の馬から先に消す", "terms": [{"key": "top5_pre", "w": 100, "small": False}]}, "k": 6}, "kill") == \
+        "前日版の上位 5 頭より外から、最大 6 頭を消す"
+    assert GP.brief({"rule": {"filter": "前日版の点の上位 3 頭の中から選ぶ", "terms": [{"key": "x_A01", "w": 1.0, "small": True, "text": "「前走の着順」"}]}}, "honmei") == \
+        "前日版の上位 3 頭から ◎ を選ぶ"

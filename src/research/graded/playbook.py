@@ -20,6 +20,8 @@ ROI_OK = 1.0        # ◎ の単勝の回収率がこれを超えたら達成
 KILL_OK = 0.05      # 消した馬の 3 着以内の率がこれ以下なら達成
 SMALL_W = 0.05      # 効き（|重み| × 点のばらつき）が、一番効く項のこの割合未満なら「ほぼ効かない」と添える
 TOL = 1e-5          # サイクルの記録との照合の許容
+# 出す版。A（2025・2026 年の結果を見て選んだ版）は、評価の答えを見て選んだ版なので廃止した（2026-11-16、ユーザーの指示）。B だけを出す
+MODES = ("B",)
 
 
 def scales(t: CY.Table) -> dict[str, float]:
@@ -123,7 +125,7 @@ def horse(t: CY.Table, h: int, pay_ok: bool) -> dict:
 
 
 def recount(races: list[dict], who: str, kind: str) -> dict:
-    """回ごとの実際の馬（card["races"]）から成績を数え直す（who = "A"・"B"・"base"、kind = "honmei"・"kill"）。カードの成績と同じ定義:
+    """回ごとの実際の馬（card["races"]）から成績を数え直す（who = "B"・"base"、kind = "honmei"・"kill"）。カードの成績と同じ定義:
     ◎ の回収率は払戻の解けた回だけで割る。消しは消した全頭の着。"""
     if kind == "honmei":
         hs = [(x["base"] if who == "base" else x[who]["honmei"], x["pay_ok"]) for x in races]
@@ -139,7 +141,7 @@ def recount(races: list[dict], who: str, kind: str) -> dict:
 
 def check_races(card: dict) -> None:
     """回ごとの実際の馬から数え直した成績が、カードの成績（2025・2026 年）と一致することを確かめる（ずれたら止める）。"""
-    pairs = [("base", "honmei", card["base"]["eval"])] + [(m, kd, card[m][kd]["eval"]) for m in ("A", "B") for kd in ("honmei", "kill") if card[m][kd]]
+    pairs = [("base", "honmei", card["base"]["eval"])] + [(m, kd, card[m][kd]["eval"]) for m in MODES for kd in ("honmei", "kill") if card[m][kd]]
     for who, kd, e in pairs:
         g = recount(card["races"], who, kd)
         if g["rec"] != e.get("rec"):
@@ -178,10 +180,10 @@ def _check(what: str, got, want) -> None:
 
 
 def global_stats(t: CY.Table, rules: dict, last_report: dict, khit_names: list[str] | None = None, sc: dict | None = None) -> dict:
-    """全重賞に同じ決め方を使う版（A・B）の、2025・2026 年の値（サイクルの記録と照合する）と決め方の文。"""
+    """全重賞に同じ決め方を使う版（B）の、2025・2026 年の値（サイクルの記録と照合する）と決め方の文。"""
     ev = np.flatnonzero(((t.race["year"] >= CY.EVAL[0]) & (t.race["year"] <= CY.EVAL[1])).to_numpy())
     out = {}
-    for m in ("A", "B"):
+    for m in MODES:
         rh, rkl = rules[m]["honmei_global"], rules[m]["kill_global"]
         H = CY.honmei(t, CY._vec(t, rh["terms"])[:, None])[:, 0]
         h = honmei_stats(t, H, ev)
@@ -207,9 +209,9 @@ def build_cards(t: CY.Table, rules: dict, last_report: dict, khit_names: list[st
     dv = (yr >= CY.DEV[0]) & (yr <= CY.DEV[1])
     rk = t.race["rkey"].to_numpy()
     rkeys = sorted(set(rk[ev]))
-    # ◎: A・B の重賞ごとの規則と基準（前日版の点）を列にして 1 回で当てる
+    # ◎: B の重賞ごとの規則と基準（前日版の点）を列にして 1 回で当てる
     cols, idx = [], {}
-    for m in ("A", "B"):
+    for m in MODES:
         for key, r in rules[m]["honmei_by_rkey"].items():
             idx[(m, key)] = len(cols)
             cols.append(CY._vec(t, r["terms"]))
@@ -217,7 +219,7 @@ def build_cards(t: CY.Table, rules: dict, last_report: dict, khit_names: list[st
     cols.append(CY._vec(t, {"score_pre": 1}))
     H = CY.honmei(t, np.stack(cols, axis=1))
     per = {m: {"h": {x["rkey"]: x for x in last_report[m]["honmei_by_rkey"]["per_rkey"]},
-               "k": {x["rkey"]: x for x in last_report[m]["kill_by_rkey"]["per_rkey"]}} for m in ("A", "B")}
+               "k": {x["rkey"]: x for x in last_report[m]["kill_by_rkey"]["per_rkey"]}} for m in MODES}
     dt = t.r.groupby(t.race_of)["dt"].first().to_numpy() if "dt" in t.r.columns else None
     cards = []
     for key in rkeys:
@@ -228,7 +230,7 @@ def build_cards(t: CY.Table, rules: dict, last_report: dict, khit_names: list[st
                 "eval_dates": [str(dt[i])[:10] for i in ri_e] if dt is not None else [], "eval_races": int(len(ri_e)), "dev_races": int(len(ri_d))}
         b = idx[("base", None)]
         card["base"] = {"eval": honmei_stats(t, H[:, b], ri_e), "dev": honmei_stats(t, H[:, b], ri_d), "label": base_label}
-        for m in ("A", "B"):
+        for m in MODES:
             r = rules[m]["honmei_by_rkey"].get(key)
             if key not in per[m]["h"] or key not in per[m]["k"]:
                 raise ValueError(f"{m}・{key}: サイクルの記録に無い重賞")
@@ -246,7 +248,9 @@ def build_cards(t: CY.Table, rules: dict, last_report: dict, khit_names: list[st
                     h = int(H[i, j])
                     lv = [{"type": q[2:], "name": CAT.BY_ID[q[2:]].name if q[2:] in CAT.BY_ID else q[2:], "level": v[0], "layer": v[1]}
                           for q in tops if (v := level_of(levels, t.r["row"].iloc[h], q[2:]))]
-                    ex.append({"date": str(dt[i])[:10] if dt is not None else "", "hn": int(t.r["hn"].iloc[h]), "fin": float(t.r["fin"].iloc[h]),
+                    nm = _val(t.r.iloc[h], "horse_name")
+                    ex.append({"date": str(dt[i])[:10] if dt is not None else "", "hn": int(t.r["hn"].iloc[h]), "name": None if nm is None else str(nm),
+                               "fin": float(t.r["fin"].iloc[h]),
                                "tan": float(t.rt[h]) * 100 if t.rt[h] > 0 else None, "pay_ok": bool(t.race["pay_ok"].iloc[i]), "levels": lv})
                 same = int((H[ri_e, j] == H[ri_e, b]).sum())   # 前日版の点の ◎ と同じ馬だった回
                 hc = {"rule": describe(r["terms"], khit_names, "honmei", sc), "label": r["label"], "eval": e | {"same_as_base": same}, "dev": honmei_stats(t, H[:, j], ri_d),
@@ -270,7 +274,7 @@ def build_cards(t: CY.Table, rules: dict, last_report: dict, khit_names: list[st
                     raise ValueError(f"{key}: 回 {i} の馬ではない行 {h}")
                 return horse(t, h, pay)
             x = race_head(t, i, dt) | {"base": hs(H[i, b])}
-            for m in ("A", "B"):
+            for m in MODES:
                 r, kr = rules[m]["honmei_by_rkey"].get(key), rules[m]["kill_by_rkey"].get(key)
                 x[m] = {"honmei": hs(H[i, idx[(m, key)]]) if r is not None else None,
                         "kill": [hs(h) for h in killed_rows(t, CY._vec(t, kr["terms"]), kr["k"], i)] if kr is not None else None}
@@ -280,7 +284,7 @@ def build_cards(t: CY.Table, rules: dict, last_report: dict, khit_names: list[st
         card["flags"] = flags(card)
         cards.append(card)
     res = {"cards": cards, "summary": summary(cards)}
-    if all(k in rules[m] for m in ("A", "B") for k in ("honmei_global", "kill_global")):
+    if all(k in rules[m] for m in MODES for k in ("honmei_global", "kill_global")):
         res["global"] = global_stats(t, rules, last_report, khit_names, sc)
     return res
 
@@ -295,25 +299,32 @@ def _kill_ok(k: dict | None) -> bool:
 
 def flags(card: dict) -> dict:
     """達成の印。B の既定（2018〜2024 年に回が無く、最初の候補が残っただけ）は B の達成に数えない。"""
-    f = {}
-    for m in ("A", "B"):
-        h, k = card[m]["honmei"], card[m]["kill"]
-        f[f"{m}_honmei"] = _roi_ok(h) and not (m == "B" and h["default"])
-        f[f"{m}_kill"] = _kill_ok(k) and not (m == "B" and k["default"])
-        f[f"{m}_default"] = bool((h and h["default"]) or (k and k["default"]))
+    h, k = card["B"]["honmei"], card["B"]["kill"]
+    f = {"B_honmei": _roi_ok(h) and not h["default"], "B_kill": _kill_ok(k) and not k["default"],
+         "B_default": bool((h and h["default"]) or (k and k["default"]))}
     f["B_both"] = f["B_honmei"] and f["B_kill"]
     f["base_honmei"] = _roi_ok(card["base"])
-    h = card["A"]["honmei"]   # A の決め方の 2018〜2024 年（A は同点を 2018〜2024 年の成績で決めるので、これも当てはめ）
-    f["A_dev_honmei"] = bool(h and h["dev"].get("roi_t") is not None and h["dev"]["roi_t"] > ROI_OK)
     return f
 
 
 def summary(cards: list[dict]) -> dict:
     s = {"n": len(cards)}
-    for k in ("A_honmei", "B_honmei", "A_kill", "B_kill", "B_both", "base_honmei", "A_dev_honmei"):
+    for k in ("B_honmei", "B_kill", "B_both", "base_honmei"):
         s[k] = sum(c["flags"][k] for c in cards)
     s["B_both_rkeys"] = [c["rkey"] for c in cards if c["flags"]["B_both"]]
     s["eval_races_1"] = sum(c["eval_races"] == 1 for c in cards)
     s["B_honmei_same_as_base"] = sum(c["flags"]["B_honmei"] and c["B"]["honmei"]["eval"]["same_as_base"] == c["eval_races"] for c in cards)
-    s["A_dev_n"] = sum(bool(c["A"]["honmei"] and c["A"]["honmei"]["dev"].get("races")) for c in cards)
     return s
+
+
+def drop_a(P: dict) -> dict:
+    """作り済みの早見表の値（playbook.json）から A（廃止した版）の値をすべて外す（カード・回ごとの馬・印・要約・全体で 1 つの版）。"""
+    for c in P.get("cards", []):
+        c.pop("A", None)
+        for x in c.get("races", []):
+            x.pop("A", None)
+        c["flags"] = {k: v for k, v in c.get("flags", {}).items() if not k.startswith("A_")}
+    P["summary"] = {k: v for k, v in P.get("summary", {}).items() if not k.startswith("A_")}
+    if isinstance(P.get("global"), dict):
+        P["global"].pop("A", None)
+    return P

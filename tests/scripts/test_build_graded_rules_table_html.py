@@ -54,15 +54,19 @@ def test_build_html_is_self_contained_with_all_columns_and_filters(tmp_path):
     assert not re.search(r"<script[^>]+src=", h) and "<link" not in h
     head = re.search(r'<tr id="th">(.*?)</tr>', h).group(1)
     assert head.count("<th>") == len(B.HEAD) == 23
-    for k in ("重賞", "切り口", "好／凡", "集計の階層", "[1-2-3-着外]", "勝率", "連対率", "複勝率", "単勝の回収率", "複勝の回収率", "件数", "縮めた点 x", "採否", "回収率の判定", "消しに使う"):
+    for k in ("重賞", "条件（切り口 × 水準）", "好／凡", "集計の階層", "[1-2-3-着外]", "勝率", "連対率", "複勝率", "単勝の回収率", "複勝の回収率", "件数", "縮めた点 x", "採否", "回収率の判定", "消しに使う"):
         assert f"<th>{k}</th>" in h
-    for i in ("q", "g", "qt", "dir", "kd", "ly", "ad", "jd", "kl", "mn", "theme"):
+    for i in ("cv", "cc", "q", "g", "qt", "dir", "kd", "ly", "ad", "jd", "kl", "mn", "theme"):
         assert f'id="{i}"' in h
+    assert "function setupCourse" in h and "行の色" in h and "tr.ad-roi" in h and "tr.ad-kill" in h and "ad-perf" not in h   # コースのプルダウン・行の色の凡例
     assert "prefers-color-scheme:dark" in h and 'name="viewport"' in h
     assert "2016〜2024 年（凍結した値）" in h
     # 埋め込んだ JSON が読み戻せる（</ を逃がしている）
     data = re.search(r'<script type="application/json" id="data">(.*?)</script>', h, re.S).group(1)
-    assert json.loads(data.replace("<\\/", "</"))["n_rows"] == 3
+    P = json.loads(data.replace("<\\/", "</"))
+    assert P["n_rows"] == 3
+    assert P["lvtext"] and all(not v.startswith(("A04が", "B08が")) for v in P["lvtext"].values())   # 切り口 × 水準の文（雛形で読めた）
+    assert P["course_opts"] and all({"v", "c", "n"} <= set(o) for o in P["course_opts"])
     # 見出しの数と、行の描画（cell）のセルの数・並べ替えのキーの数がそろう
     js = B.JS
     cell = js[js.index("function cell"):js.index("function apply")]

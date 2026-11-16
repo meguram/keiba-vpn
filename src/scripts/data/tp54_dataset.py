@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(os.environ.get("KEIBA_ROOT") or Path(__file__).resolve().parents[3])
-TP53 = ROOT / "data/local/modeling/tp53"
+TP53 = Path(os.environ.get("TP53_OUT") or ROOT / "data/local/modeling/tp53")   # tp53_dataset の出力（TP53_OUT で変えたときも同じ場所を読む）
 TABLES = ROOT / "data/page_reference/tables"
 OUT = Path(os.environ.get("TP54_OUT") or ROOT / "data/local/modeling/tp54")
 KEY = ["venue", "surface", "distance", "going_group"]

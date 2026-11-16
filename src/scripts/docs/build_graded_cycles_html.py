@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import re
 import os
 import sys
 from html import escape
@@ -20,10 +21,9 @@ REPO = Path(__file__).resolve().parents[3]
 SRC = Path(os.environ.get("GRADED_OUT", "/home/jovyan/work/graded_out_v2")) / "cycles.json"
 OUT = REPO / "data/meta/graded/graded_cycles.html"
 
-SERIES = [("A・重賞ごと", "A", "honmei_by_rkey", "#2f6fde"), ("A・全体で 1 つ", "A", "honmei_global", "#7aa7ff"),
-          ("B・重賞ごと", "B", "honmei_by_rkey", "#b3261e"), ("B・全体で 1 つ", "B", "honmei_global", "#e08a2c")]
-KSERIES = [("A・重賞ごと", "A", "kill_by_rkey", "#2f6fde"), ("A・全体で 1 つ", "A", "kill_global", "#7aa7ff"),
-           ("B・重賞ごと", "B", "kill_by_rkey", "#b3261e"), ("B・全体で 1 つ", "B", "kill_global", "#e08a2c")]
+# A（2025・2026 年の結果を見て選んだ版）は廃止（2026-11-16、ユーザーの指示）。B（2018〜2024 年で選んで当てはめた版）だけを出す
+SERIES = [("B・重賞ごと", "B", "honmei_by_rkey", "#2f6fde"), ("B・全体で 1 つ", "B", "honmei_global", "#e08a2c")]
+KSERIES = [("B・重賞ごと", "B", "kill_by_rkey", "#2f6fde"), ("B・全体で 1 つ", "B", "kill_global", "#e08a2c")]
 
 
 def _h(rep: dict, m: str, kind: str) -> dict:
@@ -70,6 +70,12 @@ def svg_lines(series: list[tuple[str, list[float], str]], goal: float, ylab: str
     return "".join(out) + f'<div class="muted">{leg}</div>'
 
 
+def _note_b_only(note: str) -> str:
+    """記録（cycles.json）の説明から、廃止した A の文を外す（記録そのものは履歴として残す）。"""
+    parts = [x for x in re.split(r"(?<=。)", note) if x and not x.startswith("A（")]
+    return "".join(parts).replace("B（正直な版）は", "B は")
+
+
 def pct(v) -> str:
     return "—" if v is None else f"{100 * v:.1f}%"
 
@@ -82,7 +88,7 @@ def build(src: Path = SRC, out: Path = OUT) -> Path:
     last = C[-1]["report"]
     # 推移の表
     head = ["サイクル", "時刻", "仮説（足した決め方）", "試した数（累計）"] + [f"{nm} ◎勝率／単回収" for nm, *_ in SERIES] + \
-           ["A 達成した重賞", "B 達成した重賞"] + [f"{nm} 消しの的中率（頭/レース）" for nm, *_ in KSERIES] + ["前のサイクルからの改善（A・重賞ごとの近さ）"]
+           ["B 達成した重賞"] + [f"{nm} 消しの的中率（頭/レース）" for nm, *_ in KSERIES] + ["前のサイクルからの変化（B・重賞ごとの近さ）"]
     rows = []
     prev = None
     for c in C:
@@ -92,13 +98,12 @@ def build(src: Path = SRC, out: Path = OUT) -> Path:
             v = _h(r, m, kind)
             ok = v["win"] >= goal["win"] and v["roi_t"] >= goal["roi_t"]
             cells.append(f'<span class="{"good" if ok else ""}">{pct(v["win"])}／{pct(v["roi_t"])}</span>')
-        for m in ("A", "B"):
-            cells.append(f"{r[m]['honmei_by_rkey']['achieved']}/{r['n_rkeys']}")
+        cells.append(f"{r['B']['honmei_by_rkey']['achieved']}/{r['n_rkeys']}")
         for _, m, kind, _c in KSERIES:
             v = _k(r, m, kind)
             ok = v["precision"] >= sg["precision"] and v["killed_per_race"] >= sg["killed_per_race"]
             cells.append(f'<span class="{"good" if ok else ""}">{pct(v["precision"])}（{v["killed_per_race"]:.1f}）</span>')
-        d = _dist(_h(r, "A", "honmei_by_rkey"), goal)
+        d = _dist(_h(r, "B", "honmei_by_rkey"), goal)
         cells.append("—" if prev is None else f"{d - prev:+.3f}")
         prev = d
         rows.append("<tr>" + "".join(f'<td class="n">{x}</td>' if i not in (2,) else f"<td>{x}</td>" for i, x in enumerate(cells)) + "</tr>")
@@ -111,12 +116,12 @@ def build(src: Path = SRC, out: Path = OUT) -> Path:
     def grade_tbl(rep):
         hh = ["版", "全重賞 ◎勝率", "単回収", "複勝率", "複回収", "G1 ◎勝率／単回収", "G2", "G3", "達成した重賞", "消しの的中率", "消した頭数/レース"]
         rr = []
-        for m, nm in (("A", "A（当てはめ版）・重賞ごと"), ("B", "B（正直な版）・重賞ごと")):
+        for m, nm in (("B", "B・重賞ごと"),):
             h, k = rep[m]["honmei_by_rkey"], rep[m]["kill_by_rkey"]
             rr.append(f"<tr><td>{nm}</td><td class='n'>{pct(h['all']['win'])}</td><td class='n'>{pct(h['all']['roi_t'])}</td><td class='n'>{pct(h['all']['place'])}</td>"
                       f"<td class='n'>{pct(h['all']['roi_f'])}</td>" + "".join(f"<td class='n'>{pct(h[g]['win'])}／{pct(h[g]['roi_t'])}（{h[g]['achieved']}/{h[g]['rkeys']}）</td>" for g in ("G1", "G2", "G3"))
                       + f"<td class='n'>{h['achieved']}/{rep['n_rkeys']}</td><td class='n'>{pct(k['all']['precision'])}</td><td class='n'>{k['all']['killed_per_race']:.1f}</td></tr>")
-        for m, nm in (("A", "A・全体で 1 つの決め方"), ("B", "B・全体で 1 つの決め方")):
+        for m, nm in (("B", "B・全体で 1 つの決め方"),):
             v, kv = rep[m]["honmei_global"]["val"], rep[m]["kill_global"]["val"]
             rr.append(f"<tr><td>{nm}<div class='muted wrap'>◎: {escape(rep[m]['honmei_global']['sel'])}<br>消し: {escape(rep[m]['kill_global']['sel'])}</div></td>"
                       f"<td class='n'>{pct(v['win'])}</td><td class='n'>{pct(v['roi_t'])}</td><td class='n'>{pct(v['place'])}</td><td class='n'>{pct(v['roi_f'])}</td>"
@@ -124,37 +129,27 @@ def build(src: Path = SRC, out: Path = OUT) -> Path:
                       f"<td class='n'>{pct(kv['precision'])}</td><td class='n'>{kv['killed_per_race']:.1f}</td></tr>")
         return f'<div class="scroll"><table><thead><tr>{"".join(f"<th>{escape(h)}</th>" for h in hh)}</tr></thead><tbody>{"".join(rr)}</tbody></table></div>'
     def rkey_tbl(rep):
-        hh = ["重賞", "格", "評価のレース", "A 達成", "A ◎勝率／単回収", "A の決め方", "B 達成", "B ◎勝率／単回収", "B の決め方", "消し A 的中率", "消し B 的中率"]
-        A, Bv = rep["A"]["honmei_by_rkey"]["per_rkey"], rep["B"]["honmei_by_rkey"]["per_rkey"]
-        KA, KB = rep["A"]["kill_by_rkey"]["per_rkey"], rep["B"]["kill_by_rkey"]["per_rkey"]
+        hh = ["重賞", "格", "評価のレース", "達成", "◎勝率／単回収", "決め方", "消しの的中率"]
         rr = []
-        for a, b, ka, kb in zip(A, Bv, KA, KB):
-            rr.append(f"<tr><td>{escape(a['rkey'])}</td><td>{escape(a['grade'])}</td><td class='n'>{a['races']}</td><td class='{'good' if a['achieved'] else 'bad'}'>{'達成' if a['achieved'] else '未達'}</td>"
-                      f"<td class='n'>{pct(a['win'])}／{pct(a['roi_t'])}</td><td class='wrap muted'>{escape(a['rule'] or '')}</td>"
+        for b, kb in zip(rep["B"]["honmei_by_rkey"]["per_rkey"], rep["B"]["kill_by_rkey"]["per_rkey"]):
+            rr.append(f"<tr><td>{escape(b['rkey'])}</td><td>{escape(b['grade'])}</td><td class='n'>{b['races']}</td>"
                       f"<td class='{'good' if b['achieved'] else 'bad'}'>{'達成' if b['achieved'] else '未達'}</td><td class='n'>{pct(b['win'])}／{pct(b['roi_t'])}</td>"
-                      f"<td class='wrap muted'>{'既定（開発のレースが無い）: ' if b.get('default') else ''}{escape(b['rule'] or '')}</td><td class='n'>{pct(ka['precision'])}</td><td class='n'>{pct(kb['precision'])}</td></tr>")
+                      f"<td class='wrap muted'>{'既定（開発のレースが無い）: ' if b.get('default') else ''}{escape(b['rule'] or '')}</td><td class='n'>{pct(kb['precision'])}</td></tr>")
         return f'<div class="scroll"><table><thead><tr>{"".join(f"<th>{escape(h)}</th>" for h in hh)}</tr></thead><tbody>{"".join(rr)}</tbody></table></div>'
-    a, b = last["A"]["honmei_by_rkey"]["all"], last["B"]["honmei_by_rkey"]["all"]
-    ka, kb = last["A"]["kill_by_rkey"]["all"], last["B"]["kill_by_rkey"]["all"]
-    gap = (f"<p><b>A と B の差（合わせすぎの大きさ）</b>: 重賞ごとに選んだ ◎ の勝率は A {pct(a['win'])}・B {pct(b['win'])}（差 {100 * (a['win'] - b['win']):+.1f}pt）、"
-           f"単勝の回収率は A {pct(a['roi_t'])}・B {pct(b['roi_t'])}（差 {100 * (a['roi_t'] - b['roi_t']):+.1f}pt）。"
-           f"消しの的中率は A {pct(ka['precision'])}・B {pct(kb['precision'])}。"
-           f"A は 2025・2026 年の結果を見て、{last['tried']:,} 通りの決め方から重賞ごとに選んだ値で、評価ではない（1 重賞あたり評価のレースは 1〜2 回）。"
-           "B は 2018〜2024 年だけで選んだ決め方を 2025・2026 年に当てはめた値で、実力の目安はこちら。</p>")
     stop = L.get("stopped", {})
     html = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>重賞の分析サイクル</title><style>{CSS}</style></head><body><main>
 <h1>重賞の分析サイクル（ゴール: ◎ 勝率 {pct(goal['win'])}・単回収 {pct(goal['roi_t'])}、サブゴール: 消しの的中 {pct(sg['precision'])}）</h1>
-<div class="panel wrap"><p>{escape(L['note'])}</p>
+<div class="panel wrap"><p>{escape(_note_b_only(L['note']))}</p>
 <ul class="muted"><li>表: 2018〜2026 年の重賞 {L['races']:,} レース・{L['rows']:,} 頭。特徴 {L['n_features']} 列（as-of の型ごとの点 x・前日版と当日版の点・前日版の上位の印）。オッズ・人気は使わない。</li>
 <li>◎ の決め方 = 特徴の重み付きの和の最大の馬（同点は前日版の点 → 馬番）。消しの決め方 = 同じ点の下位 k 頭（k = 3〜6。頭数 − 3 頭まで）。消しの的中率 = 消した馬のうち 4 着以下の割合。</li>
-<li>A（当てはめ版）: 2025・2026 年で一番良い決め方を選んだ値（重賞ごと、または全体で 1 つ）。B（正直な版）: 2018〜2024 年で一番良い決め方を選んで 2025・2026 年に当てはめた値。</li>
+<li>B: 2018〜2024 年で一番良い決め方を選んで、2025・2026 年に当てはめた値。2025・2026 年の結果を見て選んだ版（A）は、評価の答えを見て選んだ版なので廃止した（2026-11-16、ユーザーの指示）。
+ただし、サイクルごとの仮説（候補の作り方）は A の値も見ながら決めたので、B の 2025・2026 年の値もまっさらな評価ではない。</li>
 <li>ゴールまでの近さ = min(◎勝率 ÷ 30%, 単回収 ÷ 120%)。1 以上で達成。止めた理由: {escape(stop.get('reason', '途中'))}（サイクル {stop.get('cycle', len(C))}）。</li></ul></div>
 <h2>ゴールまでの近さの推移（全重賞の ◎）</h2>{g1}
 <h2>消しの的中率の推移</h2>{g2}
 <h2>サイクルごとの記録</h2>{tbl}
 <h2>最後のサイクルの値（2025・2026 年、全重賞と G1〜G3 別）</h2>{grade_tbl(last)}
-{gap}
 <h2>重賞ごと（最後のサイクル）</h2><p>重賞ごとの決め方を日本語の文と 2018〜2024 年の成績つきで読むには: <a href="graded_race_playbook.html">重賞の選び方の早見表</a></p>{rkey_tbl(last)}
 <p class="muted">戻る: <a href="graded_handicapper.html">重賞のルールベース予想家</a>・<a href="graded_rules_table.html">重賞のルール一覧</a>・重賞ごとのまとめ: <a href="graded_race_playbook.html">重賞の選び方の早見表</a>。作り: src/research/graded/cycles.py → src/scripts/docs/build_graded_cycles_html.py</p>
 </main></body></html>"""
