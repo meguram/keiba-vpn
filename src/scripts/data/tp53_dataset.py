@@ -1,7 +1,7 @@
 """tp-53: 想定位置取り（position_forecast）・追走難度/想定上がり（tracking_difficulty）と実際の結果を 1 表にまとめる。
 
 python -m src.scripts.data.tp53_dataset --years 2020 2021 2022 2023 2024 2025   # ホストで実行
-出力: data/local/modeling/tp53/horse.parquet（1 行 = 1 頭）, race.parquet（1 行 = 1 レース）
+出力: data/local/modeling/tp53/horse.parquet（1 行 = 1 頭）, race.parquet（1 行 = 1 レース）。TP53_OUT で変えられる
 
 - 実測: race_result_flat の通過順位・上がり 3F、レースの前半 3F / 後半 3F（pace JSON）
 - 追走難度側の予測: data/calculated_data/tracking_difficulty/{race_id}.json（事前計算。pre_race_only=True、対象日より前の走だけ）
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 from pathlib import Path
 
@@ -21,7 +22,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[3]
 TABLES = ROOT / "data/page_reference/tables"
 TD_DIR = ROOT / "data/calculated_data/tracking_difficulty"
-OUT = ROOT / "data/local/modeling/tp53"
+OUT = Path(os.environ.get("TP53_OUT") or ROOT / "data/local/modeling/tp53")
 
 _INT = re.compile(r"\d+")
 
@@ -147,14 +148,46 @@ def _past_from_results(year: int) -> pd.DataFrame:
     return e.assign(past_races=out)
 
 
+PAST_COLS = ["race_id", "date", "venue", "surface", "distance", "horse_number", "horse_id", "past_races"]
+
+
+PAST_MIN_SHARE = 0.5   # 馬柱の表に載っているレースがこれ未満の年は、年全体を結果の表の過去走で作る（作り方を年の中でそろえる）
+
+
+def past_frame(year: int) -> pd.DataFrame:
+    """位置取り予想の材料（レース × 馬の過去走）。馬柱（race_shutuba_past_flat）を使い、馬柱の表が無い年や、載っているレースが
+    半分に満たない年（取得途中の一部だけの年）は、年全体を結果の表の過去走から作る（_past_from_results）。それ以外の年で
+    馬柱の表に行が無いレースは、そのレースだけ結果の表から補う（新馬戦の空の馬柱は「載っている」ので補わない。補っても空のまま）。
+
+    2026-11-16 の監査: 2019 年は取得途中の一部だけの馬柱の表（24 レース）があったため代わりの処理に回らず、位置取り予想が
+    ほぼ空になり、追走難度（EASE2）も 2019 年だけ空だった（docs/operations/data_audit_20261116.md）。
+    tp53 の出力（TP53_OUT）を読むのは tp54_dataset だけが環境変数に従う。tp53_analysis・tp54_pace・tp61_pre・tp80_eval は既定の場所を読む。"""
+    src = TABLES / str(year) / "race_shutuba_past_flat.parquet"
+    if not src.exists():                               # 2016〜2018 年は馬柱が無いので、結果の表の過去走から作る
+        return _past_from_results(year)
+    p = pd.read_parquet(src, columns=PAST_COLS)
+    p["race_id"] = p["race_id"].astype(str)
+    res = TABLES / str(year) / "race_result_flat.parquet"
+    if not res.exists():
+        return p
+    races = set(pd.read_parquet(res, columns=["race_id"])["race_id"].astype(str))
+    have = set(p["race_id"]) & races
+    if races and len(have) / len(races) < PAST_MIN_SHARE:
+        print(f"{year}: 馬柱の表に載るレースが {len(have)}/{len(races)} しか無いので、年全体を結果の表の過去走で作る", flush=True)
+        return _past_from_results(year)
+    missing = races - have
+    if not missing:
+        return p
+    fb = _past_from_results(year)
+    fb["race_id"] = fb["race_id"].astype(str)
+    print(f"{year}: 馬柱の表に無いレース {len(missing)}/{len(races)} を結果の表の過去走で補う", flush=True)
+    return pd.concat([p, fb.loc[fb["race_id"].isin(missing), PAST_COLS]], ignore_index=True)
+
+
 def load_pf(year: int) -> tuple[pd.DataFrame, pd.DataFrame]:
     from src.pipeline.inference.position_forecast import build_position_forecast
 
-    src = TABLES / str(year) / "race_shutuba_past_flat.parquet"
-    if src.exists():
-        p = pd.read_parquet(src, columns=["race_id", "date", "venue", "surface", "distance", "horse_number", "horse_id", "past_races"])
-    else:                                              # 2016〜2018 年は馬柱が無いので、結果の表の過去走から作る
-        p = _past_from_results(year)
+    p = past_frame(year)
     hrows, rrows = [], []
     for rid, g in p.groupby("race_id", sort=False):
         r0 = g.iloc[0]
