@@ -63,6 +63,16 @@ def _state_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("KEIBA_ENTRIES_STATE_DIR", str(tmp_path / "meta" / "entries_state"))
 
 
+@pytest.fixture(autouse=True)
+def _no_side_effects(monkeypatch):
+    """同期の後の処理（めぐ分析の作り直し・データで予想の起動）を偽物にする。本物は、父の対応表（data/page_reference）・
+    系統の台帳（data/meta/sire_lines）・めぐ分析（data/local/race_analysis。ここのテストの race_id は実在のレースの番号）を書く。"""
+    calls = {"analysis": [], "graded": []}
+    monkeypatch.setattr(ES, "_refresh_analysis", lambda storage, ids: calls["analysis"].append(list(ids)) or {"stub": len(ids)})
+    monkeypatch.setattr(ES, "_kick_graded_picks", lambda storage, races: calls["graded"].append(list(races)) or {"stub": True})
+    return calls
+
+
 def _run(now, storage, queue, **kw):
     return ES.run_entries_sync(now, storage=storage, queue=queue, schedule=SCHEDULE, wait=False, refresh_lists=False, **kw)
 
@@ -94,6 +104,16 @@ def test_registered_then_final_flow_and_history():
     s2 = ES.load_state(ids[0])
     assert s2["phase"] == "final" and s2["first_seen_phase"] == "registered" and len(s2["history"]) == 2
     assert s2["updated_at"] >= s1["updated_at"]
+
+
+def test_refetched_races_are_passed_to_analysis_and_graded_picks(_no_side_effects):
+    """同期で取り直したレースが、めぐ分析の作り直しとデータで予想の起動に渡る（どちらも本物は書かないようにスタブにしてある）。"""
+    ids = ["202608040801", "202608040802"]
+    cards = {i: {"race_id": i, "entries": [_ent(n, horse_number=n, bracket_number=n, jockey_id=f"j{n}") for n in (1, 2, 3)]} for i in ids}
+    st, q = FakeStorage({"20261024": _rl("20261024", ids)}, cards), FakeQueue()
+    r = _run(datetime(2026, 10, 23, 16, 6, tzinfo=JST), st, q)
+    assert r["analysis"] == {"stub": 2} and r["graded_picks"] == {"stub": True}
+    assert _no_side_effects["analysis"] == [ids] and [p["race_id"] for p in _no_side_effects["graded"][0]] == ids
 
 
 def test_scratch_is_recorded_as_notable_change():

@@ -17,6 +17,85 @@ import pytest
 os.environ["KEIBA_SKIP_DOTENV"] = "1"
 
 
+# --- 本物の置き場を書くテストの見張り（2026-11-16: test_entries_sync が系統の台帳・父の対応表・めぐ分析を本物に書いていた） ---
+# テストの開始時と終了時に、data/meta のファイル（git 管理のものと、git に無い新しいもの）の更新時刻・大きさを比べる。
+# 変わっていたら、CI（GITHUB_ACTIONS）または KEIBA_TEST_WATCH_STRICT=1 ではテスト全体を失敗にし、ほかでは警告だけにする
+# （ホストの共有の作業ツリーでは、root の cron の entries-sync が系統の台帳を書くことがあり、テストのせいでなくても変わるため）。
+# 書く必要のあるテストは tmp_path・環境変数・monkeypatch で差し替える。手元の置き場（data/local など）は cron が書くので見張らず、
+# 下の _isolate_local_outputs で環境変数を一時ディレクトリへ差し替える（import の時点で決まる定数の出力先、例えば smartrc_sire_lines.OUT・
+# build_horse_sire_map の出力先・run.GRADED_PICKS_DIR は、環境変数では守れない。それらを書く処理はテストの側でスタブにする）。
+def _watch_snapshot(root):
+    import subprocess
+
+    out, err = {}, None
+    try:
+        r = subprocess.run(["git", "-C", str(root), "ls-files", "--cached", "--others", "--exclude-standard", "data/meta"],
+                           capture_output=True, text=True, timeout=60)
+        if r.returncode != 0:
+            err = (r.stderr or "").strip()[:200] or f"rc={r.returncode}"
+        files = r.stdout.split("\n")
+    except Exception as exc:  # noqa: BLE001
+        files, err = [], str(exc)
+    for f in files:
+        if not f:
+            continue
+        try:
+            st = (root / f).stat()
+            out[f] = (st.st_mtime_ns, st.st_size)
+        except OSError:
+            continue
+    return out, err
+
+
+def pytest_sessionstart(session):  # noqa: D103
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    snap, err = _watch_snapshot(root)
+    session.config._keiba_watch = (root, snap, err)
+
+
+def _watch_changed(config):
+    w = getattr(config, "_keiba_watch", None)
+    if not w:
+        return None, None
+    root, before, err = w
+    if err or not before:
+        return None, err or "data/meta のファイルの一覧が空"
+    after, _ = _watch_snapshot(root)
+    return sorted(k for k in set(before) | set(after) if before.get(k) != after.get(k)), None
+
+
+def _watch_strict() -> bool:
+    return bool(os.environ.get("GITHUB_ACTIONS")) or os.environ.get("KEIBA_TEST_WATCH_STRICT") == "1"
+
+
+def pytest_sessionfinish(session, exitstatus):  # noqa: D103
+    changed, err = _watch_changed(session.config)
+    session.config._keiba_watch_result = (changed, err)
+    if changed and _watch_strict() and session.exitstatus == 0:
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config):  # noqa: D103
+    changed, err = getattr(config, "_keiba_watch_result", (None, None))
+    if err:
+        terminalreporter.write_line(f"WARNING 本物の置き場の見張りができませんでした: {err}")
+    if changed:
+        head = "ERROR" if _watch_strict() else "WARNING"
+        terminalreporter.write_line(f"{head} 本物の data/meta がテスト中に書き換わりました（テストの出力先を tmp_path などに差し替えてください。"
+                                    "ホストでは cron が書いた可能性もあります）:")
+        for k in changed[:30]:
+            terminalreporter.write_line(f"{head}   {k}")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_local_outputs(monkeypatch, tmp_path):
+    """めぐ分析の保存先・データで予想の置き場を、テストごとの一時ディレクトリへ（本物の data/local を書かない。指定するテストはそれが優先）。"""
+    monkeypatch.setenv("KEIBA_RACE_ANALYSIS_DIR", str(tmp_path / "_race_analysis"))
+    monkeypatch.setenv("GRADED_PICKS_DIR", str(tmp_path / "_graded_picks"))
+
+
 @pytest.fixture(autouse=True)
 def _isolate_data_health_output(monkeypatch, tmp_path):
     """データヘルスの結果・台帳をテストごとの一時ディレクトリへ（リポジトリの data/ を汚さない）。"""
