@@ -51,14 +51,19 @@ def _num(s):
 def load_master(path: Path = MASTER) -> pd.DataFrame:
     import pyarrow.parquet as pq
     have = set(pq.ParquetFile(path).schema_arrow.names)
-    d = pd.read_parquet(path, columns=[c for c in MASTER_COLS if c in have] + ["odds"])
+    d = pd.read_parquet(path, columns=[c for c in MASTER_COLS if c in have] + ["odds"] + (["is_entry"] if "is_entry" in have else []))
+    # 出馬表の段階の行（結果の無いレース。folklore の FOLKLORE_ENTRIES）。発走する前提で残す。最後の日付にしか無いので、
+    # as-of の集計（その日より前だけを数える）で他の行に数えられることはない
+    ent = d["is_entry"].fillna(False).astype(bool) if "is_entry" in d.columns else pd.Series(False, index=d.index)
+    d["is_entry"] = ent
     # 発走したか（中止の馬も含む）。着順の無い馬のうち、オッズが正なら発走して中止（着外）、0 なら取消・除外。
     # folklore の master はオッズが正の行だけを保存するので、今は全行 True（FOLKLORE_KEEP_DNF=1 の master では中止の馬の行が入る）。
     # オッズはこの判定にだけ使い、すぐに捨てる（切り口・点には使わない。catalog.FORBIDDEN_EXACT で検査する）
-    d["started"] = (_num(d["fin"]) > 0) | (_num(d["odds"]) > 0)
+    d["started"] = (_num(d["fin"]) > 0) | (_num(d["odds"]) > 0) | ent
     d = d.drop(columns=["odds"])
-    # 中止の馬も「出走した走」として過去の成績（騎手・厩舎・父の産駒・重賞の実績）に着外で数える
-    dnf = d["started"] & _num(d["fin"]).isna() & (d["surf"].astype(str) != "障")
+    # 中止の馬も「出走した走」として過去の成績（騎手・厩舎・父の産駒・重賞の実績）に着外で数える（出馬表の段階の行はここでは触らない。
+    # folklore で y3・y1 が 0.0 になっているが、最後の日付にしか無いので as-of の集計には入らない）
+    dnf = d["started"] & _num(d["fin"]).isna() & (d["surf"].astype(str) != "障") & ~ent
     d["ok"] = d["ok"].astype(str).str.lower().isin(["true", "1", "1.0"]) | dnf
     d.loc[dnf, ["y3", "y1"]] = 0.0
     for c in ("race_id", "horse_id", "jockey_id", "trainer_id"):

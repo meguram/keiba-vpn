@@ -71,7 +71,7 @@ BASELINES = {
 }
 JST = timezone(timedelta(hours=9))
 ROW_COLS = ["row", "race_id", "horse_id", "year", "dt", "field", "y3", "y1", "fin", "hn", "rkey", "course", "grade", "race_name", "venue",
-            "surf", "dist", "jockey_name", "ret_tan", "ret_fuku", "ret_tan_c", "ret_fuku_c", "pay_ok"]
+            "surf", "dist", "jockey_name", "ret_tan", "ret_fuku", "ret_tan_c", "ret_fuku_c", "pay_ok", "is_entry"]
 
 
 def _graded_target(d: pd.DataFrame) -> pd.Series:
@@ -842,7 +842,8 @@ def _cycle_table(year_max: int | None = None, levels: bool = False):
     _, mk_day = scored(T, pre, "dayof")
     X = S_pre[~S_pre["type"].isin(["M01", "M02"])].pivot_table(index="row", columns="type", values="x", aggfunc="first").fillna(0.0)   # めぐ指数は比較だけの型なので使わない
     X.columns = [f"x_{c}" for c in X.columns]
-    r = rows[rows["row"].isin(X.index) & rows["fin"].notna() & rows["grade"].isin(TL.GRADES)].copy()
+    ent = rows["is_entry"].fillna(False).astype(bool) if "is_entry" in rows.columns else pd.Series(False, index=rows.index)
+    r = rows[rows["row"].isin(X.index) & (rows["fin"].notna() | ent) & rows["grade"].isin(TL.GRADES)].copy()   # 出馬表の段階の行（前日の計算）も残す
     r = r.merge(mk_pre[["row", "score", "rank"]].rename(columns={"score": "score_pre", "rank": "rank_pre"}), on="row", how="left")
     r = r.merge(mk_day[["row", "score"]].rename(columns={"score": "score_day"}), on="row", how="left")
     r[["score_pre", "score_day"]] = r[["score_pre", "score_day"]].fillna(0.0)
@@ -983,6 +984,62 @@ def cmd_picks_history() -> None:
     tmp.write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":"), default=_f), encoding="utf-8")
     os.replace(tmp, out)
     print(out, f"{out.stat().st_size / 1e6:.2f} MB", len(res["rkeys"]), "重賞", sum(len(v["races"]) for v in res["rkeys"].values()), "回")
+
+
+def cmd_picks_upcoming() -> None:
+    """出馬表の段階の重賞（master の is_entry の行。src/research/graded/upcoming.py が folklore・frame・tally を作ってから呼ぶ）に、
+    凍結した B の規則と前日版の ◎ を当てはめ、<GRADED_PICKS_OUT>/<race_id>.json に書く。A は使わない。
+    当日の値（馬体重・馬場など）を使う規則は計算せず、理由を書く。使った結果の最終日がレースの日より前であることを確かめる（違えば止める）。"""
+    from src.research.graded import cycles as CY
+    from src.research.graded import picks as PK
+    P = json.loads(PREREG_CYCLES.read_text(encoding="utf-8"))
+    if _cycles_hash(P) != P["sha256_rules"]:
+        sys.exit("prereg_cycles.json の規則が凍結のハッシュと違う")
+    out_dir = Path(os.environ["GRADED_PICKS_OUT"])
+    names = pd.read_parquet(os.environ["GRADED_ENTRIES"], columns=["race_id", "horse_id", "horse_name"])
+    names = names[names["horse_name"].notna()]
+    names[["race_id", "horse_id", "horse_name"]] = names[["race_id", "horse_id", "horse_name"]].astype(str)
+    t = _cycle_table(year_max=9999)
+    if t.names != P["features"]:
+        sys.exit("特徴の列が凍結と違う")
+    fr = pd.read_parquet(GRADED_OUT / "frame.parquet", columns=["dt", "is_entry"])
+    done = pd.to_datetime(fr.loc[~fr["is_entry"].fillna(False).astype(bool), "dt"]).max()   # 結果の行（全クラス）の最終日
+    RB = P["rules"]["B"]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    nm = dict(zip(zip(names["race_id"], names["horse_id"]), names["horse_name"]))
+    for i in np.flatnonzero(t.r["is_entry"].iloc[t.starts].fillna(False).astype(bool).to_numpy()):
+        a = t.starts[i]
+        b = t.starts[i + 1] if i + 1 < len(t.starts) else len(t.r)
+        rid, rk = str(t.race["race_id"].iloc[i]), str(t.race["rkey"].iloc[i])
+        date = str(t.r["dt"].iloc[a])[:10]
+        if not (t.r["is_entry"].iloc[a:b].fillna(False).astype(bool)).all():
+            sys.exit(f"{rid}: 出馬表の段階のレースに結果の行が混ざっている")
+        if not str(done)[:10] < date:
+            sys.exit(f"{rid}: 使った結果の最終日 {str(done)[:10]} がレースの日 {date} より前でない（リークのおそれ）")
+        sel = np.zeros(len(t.starts), bool)
+        sel[i] = True
+
+        def hs(hn):
+            j = a + int(np.flatnonzero(t.r["hn"].to_numpy()[a:b] == hn)[0])
+            return {"hn": int(hn), "name": nm.get((rid, str(t.r["horse_id"].iloc[j])))}
+        base = CY.apply_rule(t, {"terms": {"score_pre": 1}, "k": None}, sel)["races"][0]
+        res = {"race_id": rid, "rkey": rk, "date": date, "data_until": str(done)[:10], "computed_at": datetime.now(JST).isoformat(timespec="seconds"),
+               "entries_sig": json.loads(os.environ.get("GRADED_ENTRIES_SIG") or "{}").get(rid),   # 計算に使った出馬表（upcoming.entries_sig）
+               "frozen_at": P["frozen_at"], "sha256_rules": P["sha256_rules"], "field": int(b - a), "base": hs(base["hn"]), "B": {"honmei": None, "kill": None},
+               "skipped": {}}
+        for kind in ("honmei", "kill"):
+            r = RB[f"{kind}_by_rkey"].get(rk)
+            if r is None:
+                res["skipped"][kind] = "no_rule"
+            elif PK.needs_dayof(r["terms"]):
+                res["skipped"][kind] = "dayof"     # 当日の値を使う規則は、前日には決められない
+            else:
+                x = CY.apply_rule(t, r, sel)["races"][0]
+                res["B"][kind] = hs(x["hn"]) if kind == "honmei" else [hs(h) for h in x["killed"]]
+        tmp = out_dir / f"{rid}.json.tmp"
+        tmp.write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+        os.replace(tmp, out_dir / f"{rid}.json")
+        print("picked", rid, rk, date, res["B"]["honmei"], res["skipped"], flush=True)
 
 
 def cmd_playbook() -> None:
@@ -1306,7 +1363,7 @@ def cmd_evaluate_longshot() -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["frame", "tally", "select", "evaluate", "smoke", "export", "select_roi", "smoke2", "evaluate2", "export_rules", "select_kill", "smoke_kill", "evaluate_kill", "select_buy", "smoke_buy", "evaluate_buy", "cycles", "freeze_cycles", "track_cycles", "select_longshot", "evaluate_longshot", "playbook", "picks_history"])
+    ap.add_argument("cmd", choices=["frame", "tally", "select", "evaluate", "smoke", "export", "select_roi", "smoke2", "evaluate2", "export_rules", "select_kill", "smoke_kill", "evaluate_kill", "select_buy", "smoke_buy", "evaluate_buy", "cycles", "freeze_cycles", "track_cycles", "select_longshot", "evaluate_longshot", "playbook", "picks_history", "picks_upcoming"])
     a = ap.parse_args()
     if a.cmd in ("smoke", "smoke2", "evaluate2"):
         cmd_evaluate(smoke=a.cmd != "evaluate2", round2=a.cmd != "smoke")
@@ -1329,6 +1386,9 @@ def main() -> None:
         return
     if a.cmd == "picks_history":
         cmd_picks_history()
+        return
+    if a.cmd == "picks_upcoming":
+        cmd_picks_upcoming()
         return
     if a.cmd == "cycles":
         cmd_cycles()

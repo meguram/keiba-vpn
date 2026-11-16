@@ -38,7 +38,7 @@ export type GPFigure = {
   course: string;
   rules: { honmei: GPRule; kill: GPRule | null };
   /** このレース: result = 結果つきの記録 / pending = 出馬表の確定後に表示 / dayof = 当日の値が要る規則 / default = 規則が無い重賞 */
-  this: { status: "result" | "pending" | "dayof" | "default" | "picked"; race: GPRace | null; period: Period };
+  this: { status: "result" | "pending" | "dayof" | "default" | "picked"; race: GPRace | null; period: Period; picked?: GPPicked | null };
   past: GPRace[];
   stats: Partial<Record<Period, GPPeriodStats>>;
   periods?: { dev: number[]; eval: number[] } | null;
@@ -48,6 +48,25 @@ export type GPFigure = {
 };
 
 export type Period = "dev" | "eval" | "forward";
+
+/** 前日の計算の該当馬（出馬表の確定後。結果はまだ無い）。skipped は計算しなかった理由（dayof = 当日の値を使う規則、no_rule = 規則なし） */
+export type GPPickHorse = { hn: number; name: string | null };
+export type GPPicked = {
+  race_id: string;
+  date: string;
+  data_until: string;
+  computed_at: string;
+  field: number;
+  base: GPPickHorse | null;
+  B: { honmei: GPPickHorse | null; kill: GPPickHorse[] | null };
+  skipped?: Partial<Record<"honmei" | "kill", "dayof" | "no_rule" | "default">>;
+};
+
+export const SKIP_LABEL: Record<string, string> = {
+  dayof: "当日に決まる値（馬体重・馬場など）を使う規則なので、前日には出しません（結果の後に記録します）",
+  no_rule: "規則がありません",
+  default: "2018〜2024 年にこの重賞の回が無く、規則を決められていないため出しません",
+};
 
 export const PERIOD_LABEL: Record<Period, string> = {
   dev: "2018〜2024 年（規則を選んだ期間・当てはめ）",

@@ -150,7 +150,7 @@ def test_figure_uses_only_earlier_races(tmp_path, monkeypatch):
     assert f["stats"]["eval"]["B_honmei"] == PK.stats(ev, "B", "honmei")
     # まだ記録に無い先の回は「出馬表の確定後」、当日の型を使う規則なら「当日」
     f2 = GP.figure_for(GP.load_history(), "R", "R2027", "2027-05-01")
-    assert f2["this"] == {"status": "pending", "race": None, "period": "forward"} and len(f2["past"]) == len(v["races"])
+    assert f2["this"] == {"status": "pending", "race": None, "period": "forward", "picked": None} and len(f2["past"]) == len(v["races"])
     h2 = json.loads(json.dumps(h))
     h2["rkeys"]["R"]["honmei"]["dayof"] = True
     assert GP.figure_for(h2, "R", "R2027", "2027-05-01")["this"]["status"] == "dayof"

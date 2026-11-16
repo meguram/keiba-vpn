@@ -27,6 +27,13 @@ YEAR_END = int(os.environ.get("FOLKLORE_YEAR_END", "2025"))
 # 発走して中止した馬（着順なし・オッズが正）の行も master に残す（既定 0 = 今までどおり着順の付いた馬だけ）。
 # 重賞の予想家で、中止の馬を「着外」として集計・評価に入れるため（docs/ideas/graded_rule_based_handicapper.md 第 16 節）
 KEEP_DNF = os.environ.get("FOLKLORE_KEEP_DNF", "0") == "1"
+# 出馬表の段階の行（結果の無いレース）を足す（重賞の「データで予想」の前日の計算。src/research/graded/upcoming.py）。
+# FOLKLORE_ENTRIES = race_result_flat と同じ列の parquet（結果の列は空）。FOLKLORE_CUTOFF = この日以降の結果の行を捨てる（試しの計算で、
+# その日の前日までの手元の結果だけで作るため）。足した行は is_entry=True。最後の日付にしか無いので、as-of の集計で他の行に数えられることはない
+ENTRIES = os.environ.get("FOLKLORE_ENTRIES") or None
+CUTOFF = os.environ.get("FOLKLORE_CUTOFF") or None
+RESULT_COLS = ["finish_position", "time_sec", "passing_order", "last_3f", "odds", "popularity", "pace", "lap_times", "weight", "weight_change",
+               "track_condition", "weather"]   # 出馬表の段階では決まっていない（結果・当日の値）
 YEARS = list(range(2016, YEAR_END + 1))
 LOCAL_VC = {"01", "02", "03", "04", "10"}
 CENTRAL_VC = {"05", "06", "08", "09"}
@@ -99,6 +106,20 @@ def load_results() -> pd.DataFrame:
     sh["horse_id"] = sh["horse_id"].astype(str)
     rule = sh.drop_duplicates("race_id")[["race_id", "weight_rule"]]
     d = d.merge(rule, on="race_id", how="left")
+    d["is_entry"] = False
+    if CUTOFF:
+        d = d[d["date"].astype(str) < CUTOFF]
+    if ENTRIES:
+        e = pd.read_parquet(ENTRIES)
+        e["race_id"], e["horse_id"] = e["race_id"].astype(str), e["horse_id"].astype(str)
+        if CUTOFF and (e["date"].astype(str) < CUTOFF).any():
+            raise SystemExit("出馬表の行に、結果を捨てる日（FOLKLORE_CUTOFF）より前のレースがある")
+        e = e[~e["race_id"].isin(set(d["race_id"]))]   # 結果のあるレースは足さない
+        for c in RESULT_COLS:
+            e[c] = None
+        e["is_entry"] = True
+        d = pd.concat([d, e[[c for c in d.columns if c in e.columns]]], ignore_index=True)
+        print("entries", len(e), "races", e["race_id"].nunique(), flush=True)
     return d
 
 
@@ -240,7 +261,11 @@ def add_history(d: pd.DataFrame) -> pd.DataFrame:
     d["k23_n_prev"] = k23.groupby(d["horse_id"]).cumsum() - k23
     d["k23_top3_prev"] = (k23 * d["y3"]).groupby(d["horse_id"]).cumsum() - k23 * d["y3"]
     # 通算・条件別の累積（その走を含まない）
-    d["ok"] = d["fin"].notna() & (d["surf"] != "障")
+    # 出馬表の段階の行（is_entry）も ok にする: as-of の集計（騎手・厩舎の直近の成績など）は「数える行の日付」に値を付ける作りなので、
+    # ok でない行には値が付かない。出馬表の行の y3・y1 は 0.0（着順が無いので parse_basic で 0 になる）だが、出馬表の行は最後の日付
+    # （FOLKLORE_CUTOFF の日）にしか無く、どの as-of の集計も同じ日と未来を数えないので、他の行に数えられることはない
+    ent = d["is_entry"].fillna(False).astype(bool) if "is_entry" in d.columns else False
+    d["ok"] = (d["fin"].notna() | ent) & (d["surf"] != "障")
     okf = d["ok"].astype(float)
     def cum(key_cols, val, name):
         k = [d["horse_id"]] + [d[c] for c in key_cols]
@@ -691,7 +716,7 @@ def add_derived(d: pd.DataFrame) -> pd.DataFrame:
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     ck = OUT / "_stage_people.parquet"
-    if not (ck.exists() and os.environ.get("FOLKLORE_RESUME", "1") == "1"):
+    if not (ck.exists() and os.environ.get("FOLKLORE_RESUME", "1") == "1" and not ENTRIES and not CUTOFF):
         d = load_results()
         print("results", len(d), flush=True)
         d = parse_basic(d)
@@ -711,10 +736,11 @@ def main() -> None:
     print("external done")
     d = add_race_context(d)
     d = add_derived(d)
+    ent = d["is_entry"].fillna(False).astype(bool) if "is_entry" in d.columns else pd.Series(False, index=d.index)
     ran = d["fin"].notna() | (KEEP_DNF & (d["odds"] > 0))
-    keep = d[(d["surf"].isin(["芝", "ダ"])) & ran & (d["odds"] > 0) & (d["field"] >= 5)].copy()
+    keep = d[(d["surf"].isin(["芝", "ダ"])) & ((ran & (d["odds"] > 0)) | ent) & (d["field"] >= 5)].copy()
     if KEEP_DNF:   # 中止の馬は着順の生の値が -1 のときに y3・y1 を作っているので、着外として作り直す
-        dnf = keep["fin"].isna()
+        dnf = keep["fin"].isna() & ~ent.loc[keep.index]
         keep.loc[dnf, "y3"] = 0.0
         keep.loc[dnf, "y1"] = 0.0
     drop = [c for c in keep.columns if keep[c].dtype == object and c in ("pace", "lap_times", "passing_order")]
