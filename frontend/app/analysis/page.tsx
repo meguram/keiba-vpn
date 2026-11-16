@@ -11,6 +11,8 @@ import { AnalysisTable } from "@/components/analysis/AnalysisTable";
 import { PositionMatrix } from "@/components/analysis/PositionMatrix";
 import { RunningMap } from "@/components/analysis/RunningMap";
 import { TrainerPatternTable } from "@/components/analysis/TrainerPatternTable";
+import { GradedPicks } from "@/components/analysis/GradedPicks";
+import type { GPFigure } from "@/lib/gradedPicks";
 import type { TPFigure } from "@/lib/trainerPattern";
 import type { RunningMapFigure } from "@/lib/raceAnalysis";
 import { entriesUnavailable, formatComputedAt, formatPeriod } from "@/lib/raceAnalysis";
@@ -312,18 +314,20 @@ export default function AnalysisPage() {
                           ? (mod.figure ? <RunningMap figure={mod.figure as RunningMapFigure} entries={data.entries} /> : null)
                           : mod.view === "trainer_pattern"
                             ? (mod.figure ? <TrainerPatternTable figure={mod.figure as TPFigure} entries={data.entries} /> : null)
+                            : mod.view === "graded_picks"
+                            ? (mod.figure ? <GradedPicks fig={mod.figure as GPFigure} notes={mod.notes} /> : null)
                             : <>
                               {/* 位置取りの幅（range）の列があるモジュールは、平均の位置から位置取りマトリックスを表の上に出す */}
                               {mod.columns?.filter((c) => c.fmt === "range").slice(0, 1).map((c) => <PositionMatrix key={c.key} entries={data.entries} module={mod} rangeKey={c.key} />)}
                               <AnalysisTable entries={data.entries} module={mod} />
                             </>)}
-                        {mod.status === "not_applicable" && <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>このレースでは表示できません（コース条件や元データが未確定です）。</p>}
+                        {mod.status === "not_applicable" && <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 8 }}>{mod.id === "graded_picks" ? "重賞（2018 年以降に記録のある重賞）だけで表示します。このレースは対象外か、該当馬の記録をまだ用意していません。" : "このレースでは表示できません（コース条件や元データが未確定です）。"}</p>}
                         {mod.status === "error" && <p style={{ fontSize: 13, color: "var(--err)", marginTop: 8 }}>この分析の計算に失敗しました。</p>}
                         {mod.status === "ok" && mod.source && formatPeriod(mod.source) && (
                           <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--text)" }}>{formatPeriod(mod.source)}</p>
                         )}
                         {/* 走法マップは軸と馬だけを見せる（説明文・注記は出さない） */}
-                        {mod.status === "ok" && mod.view !== "map" && mod.notes?.length ? (
+                        {mod.status === "ok" && mod.view !== "map" && !(mod.view === "graded_picks" && mod.figure) && mod.notes?.length ? (
                           <ul style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: 11, color: "var(--text-dim)" }}>
                             {mod.notes?.map((n) => <li key={n}>{n}</li>)}
                           </ul>

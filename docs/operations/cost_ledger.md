@@ -1,16 +1,28 @@
 # 費用の台帳（GCP + Cloudflare）
 
-最終更新: 2026-11-13 21:30 JST（費用の監査役〔引き継ぎ〕。課金エクスポートは GCS の転送が 11/12 21:00 JST まで反映、Cloud Monitoring・監査ログは 11/13 20:50 JST まで）
+最終更新: 2026-11-14 14:40 JST（費用の監査役。GCS の DATA_READ 監査ログの最終集計 11/13 14:40〜11/14 14:30 JST を 3 章 #7 に追加。課金エクスポートは GCS の転送が 11/13 21:00 JST まで反映）
 
 上限は **GCP + Cloudflare の合計で月 2,000 円**（`config/cost_assumptions.json` の `budget_jpy_per_month`、CLAUDE.md の「費用の上限」）。
 この台帳は、費用に効くものを 1 か所で管理する。費用に効く変更を入れるとき・計画を審査するときは、ここに行を足して合計を直す。
 試算の道具（`python -m src.scripts.ops.cost_estimate`）のシナリオは 10 月の設計の想定で、今の構成とは合っていない。今の数字はこの台帳を正とする。
 
-## 0. 結論（2026-11-13 時点）
+## 0. 結論（2026-11-14 時点。前の時刻の記述は経緯として残す）
+
+### 11/14 14:40 JST の更新（監査ログの最終集計。詳細は 3 章 #7）
+- **朝の大量読みの正体が分かった: ホストの root cron `backfill-all-horse`（毎日 06:00 JST、`python -m src.scraper.backfill --phase horse`）**。
+  `src/scraper/backfill.py:347-355` が馬 ID を集めるために race_result と race_shutuba を**年を絞らずに全件**（2016〜2026、約 8 万件）GCS から 1 件ずつ読む。06:00〜07:00 に race_result、07:00〜07:50 に race_shutuba。
+  呼び手は `megu-keiba@`・IP 175.177.45.24・UA gcloud-python 3.10.1 / Python 3.11.6（ホスト）で、**GCP の外**。1 日 約 8 万回・約 0.65〜0.8GiB。毎日 1 時間 50 分かけて、処理は 0〜2 頭（11/06〜11/14 の `logs/backfill_horse.log`）。
+  費用: Class B 月 約 145 円（いつもかかる）＋転送 月 約 21〜25GiB（請求月の無料の 100GiB を超えた月は 約 400〜470 円）。**新しく始まったものではなく、前からの見込みに入っている**。
+- 11/13 10:25〜10:45 JST の 約 1.4GiB は、別のセッションが 10:21 JST に手で流した 2026 年の書き出し（`logs/export_tables_2026_once_20261113.log`、13 カテゴリ × 約 3,000 レース）。**一度きり**（11/14 の同じ時間は 95MiB）。無料枠を超えた月なら 約 26 円。
+- **24 時間（11/13 14:40〜11/14 14:30 JST）の GCP の外への転送の推定は 約 3.6GiB**（読み出し 2.9GiB・一覧の応答 0.7GiB）。うち金曜の週次の全件読み 約 1.9GiB、朝の backfill 約 0.8GiB、調教の dry-run（一度きり・957858ad で修正済み）約 0.3GiB。
+  **金曜以外のふだんの日は 約 1.0〜1.1GiB/日、週の平均 約 1.3GiB/日**（fetch-agent の停止・cache-warm の合図方式・verify_past_values の一覧 0・調教の補いの修正が入った後の姿）。21:00 の見込み（3.2〜3.5GiB/日）より小さい。
+- **12 月の見込みを直す: 転送は 1 日 約 1.3GiB × 31 ≒ 40GiB で無料の 100GiB に収まり 0 円**（手で流す一度きりの全件読みに 約 60GiB の余裕）。**合計 約 1,400〜1,480 円 → backfill を直せば 約 1,250〜1,340 円**。2.6 の表の転送の行は 0 円が中央になる。
+- **11 月の無料枠**: 11/13 21:00 JST までで 70.7GiB。残り 約 17.8 日 × 1.3GiB ≒ 23GiB で **月末 約 94GiB の見込み（ぎりぎり収まる）**。手の一度きりの読みが 6GiB を超えると超える（超えても 1GiB 18.86 円）。backfill を早く直せば 約 83GiB で余裕ができる。
+- 対策の第一は backfill の馬 ID の集め方を手元の flat に替えること（3 章 #7。取得〔scraper〕の担当セッションへ）。
 
 ### 21:00 JST の更新（引き継いだ監査役）
 - **12 月の見込み（今の構成。21:30 に 280a6ab0・4d424c7a・7e1cc81f を入れて直した）: 転送を除いて 月 約 1,400〜1,480 円**。GCS の外への転送は、1 日の量が約 3.2GiB 未満なら請求月の無料の 100GiB に収まって 0 円、超えると 1GiB ごとに 18.86 円が乗る（12 月は 31 日。1 日 3.5GiB なら 約 +160 円、4GiB なら 約 +450 円、4.5GiB なら 約 +750 円）。
-  **中央の見込みは 1 日 約 3.2〜3.5GiB（verify_past_values の一覧 0 で 1 日 0.3〜0.4GiB 減る）→ 合計 約 1,400〜1,640 円（上限との差 −360〜−600 円、上限内）**。1 日 4.5GiB に戻ると 約 2,200 円で超過する。2.6 を参照。
+  **中央の見込みは 1 日 約 3.2〜3.5GiB（verify_past_values の一覧 0 で 1 日 0.3〜0.4GiB 減る）→ 合計 約 1,400〜1,640 円（上限との差 −360〜−600 円、上限内）**（**11/14 に 1 日 約 1.3GiB・転送 0 円・合計 約 1,400〜1,480 円へ更新。上の 11/14 の節と 3 章 #7**）。1 日 4.5GiB に戻ると 約 2,200 円で超過する。2.6 を参照。
   変更後の転送の 1 日分（11/14 JST）は、11/15〜16 の課金エクスポートで確定させる。
 - **11 月の転送の無料枠**: 請求月 202611 の無料の段（`tier_start_amount=0`）は、11/12 21:00 JST までで **65.9GiB**（`tier_start_amount=100` の 12.5GiB は 10/31〜11/01 朝の超過分で、無料の 100GiB のカウンタには入っていない）。
   残り 約 34GiB。1 日 3〜4GiB なら **11/21〜24 ごろに 100GiB を超え**、月末（12/01 17:00 JST）までに 約 +400〜750 円が 11 月に乗る（下の「11/18〜19」は 6.5GiB/日の前提で、今は外れた）。
@@ -96,8 +108,8 @@
 |---|---|---|---|---|---|---|---|---|---|---|
 | G1 | GCS の一覧（ListObjects、Class A） | 呼び手は 3 章 #2 | **1.2 万回/日 → 11/13 15:00 以降 約 5,000〜6,000 回/日**（1 時間 約 250 回。keiba-api 約 6 割・ホスト 約 3 割・VPS 1 時間 6〜9 回）。開催日の Jobs 稼働時は 1.7〜2.6 万 | 応答 平均 約 280KB（変更前 1 日 3.4GiB） | 1.2 万 × 0.8 円/千 = 9.6 円/日 → 約 4 円/日 | **約 110**（5,000 × 30 × 0.8 円/千 ≒ 120。21:30 に 280a6ab0 の verify_past_values の一覧 0（1 日 約 480 回）で −10。変更前 290） | **約 1,300**（Cloud Run の API の一覧の最悪 約 1,250〔#2、起動し直し 96 回/日〕＋ホスト・VPS 約 2,000 回/日 ≒ 50。Jobs 再開ならさらに +330） | 110 | Monitoring `storage.googleapis.com/api/request_count` method=ListObjects | 稼働中 |
 | G2 | GCS の書き込み（WriteObject、Class A） | ホストの取得・補填・ミラーの push、Cloud Run | 1.5 万回/日（11/11 は 7,200） | — | 約 12 円/日 | 350 | 600（2.5 万/日） | 360（VPS の push・run_axes の horse_lap 保存で 1 日 300〜600 回増） | Monitoring method=WriteObject | 稼働中 |
-| G3 | GCS の読み出し（ReadObject・GetObjectMetadata・GetBucketMetadata、Class B） | ホスト・VPS・Cloud Run | 21.7 万回/日（開催日 31〜38 万）。Jobs 停止後: 11/12 約 19 万、金曜 11/13 約 37 万（週次の全件読み） | — | 約 14 円/日 | **約 450**（週の平均 約 24 万/日。21:00 に直した） | 720（38 万/日） | 450 | Monitoring method=ReadObject 20.3 万・GetObjectMetadata 1.2 万・GetBucketMetadata 2,000 | 稼働中 |
-| G4 | **GCS の外への転送（Download APAC）** | **ホスト・VPS（GCP の外）が GCS を読む分** | 1 日 4〜10GiB（11/05〜11/11 平均 6.5GiB）。11/12 は 21 時間で 2.7GiB（fetch-agent・cache-warm の変更前） | — | 11/02〜 0 円（請求月の 100GiB の中）。11/12 21:00 JST までに 65.9GiB | **約 0〜160**（21:30 に直した。1 日 3.2〜3.5GiB × 31 − 100GiB。1 日 3.2GiB 未満なら 0、4.5GiB なら 約 750。変更前の見込みは 6.5GiB/日で 約 1,800） | **約 1,500**（6GiB/日 × 31 − 100）／10GiB/日なら 3,960 | 約 0〜160（11/15〜16 の課金で 11/14 の 1 日分を見て確定） | 課金 `Download APAC` の `price.tier_start_amount` | 稼働中 |
+| G3 | GCS の読み出し（ReadObject・GetObjectMetadata・GetBucketMetadata、Class B） | ホスト・VPS・Cloud Run | 21.7 万回/日（開催日 31〜38 万）。Jobs 停止後: 11/12 約 19 万、金曜 11/13 約 37 万（週次の全件読み） | — | 約 14 円/日 | **約 450**（週の平均 約 24 万/日。21:00 に直した。11/14: うち backfill-all-horse が 約 8 万/日〔3 章 #7〕。対策 A で 約 305） | 720（38 万/日） | 450 | Monitoring method=ReadObject 20.3 万・GetObjectMetadata 1.2 万・GetBucketMetadata 2,000 | 稼働中 |
+| G4 | **GCS の外への転送（Download APAC）** | **ホスト・VPS（GCP の外）が GCS を読む分** | 1 日 4〜10GiB（11/05〜11/11 平均 6.5GiB）。11/12 は 21 時間で 2.7GiB（fetch-agent・cache-warm の変更前） | — | 11/02〜 0 円（請求月の 100GiB の中）。11/12 21:00 JST までに 65.9GiB | **0**（11/14 に直した。1 日 約 1.3GiB × 31 ≒ 40GiB で無料の 100GiB の中。3 章 #7。以下は 21:30 の旧の見込み: 約 0〜160。1 日 3.2〜3.5GiB × 31 − 100GiB。1 日 3.2GiB 未満なら 0、4.5GiB なら 約 750。変更前の見込みは 6.5GiB/日で 約 1,800） | **約 1,500**（6GiB/日 × 31 − 100）／10GiB/日なら 3,960 | 約 0〜160（11/15〜16 の課金で 11/14 の 1 日分を見て確定） | 課金 `Download APAC` の `price.tier_start_amount` | 稼働中 |
 | G5 | **天気の取得の毎時の全件読み（11/13 13:40 再開 → 14:08 停止）** | **ホスト**（root cron `40 * * * *` → `scripts/cron/jma_weather_run.sh`） | 24 回/日 | 月ファイル 1,310 件・**345MiB**（Class B 1,310 回） | 13:40 の 1 回で確認（`logs/jma_weather.log`: skipped 39,500） | **約 4,400**（8.1GiB/日 × 30 × 18.86 円。Class B 月 約 60 円を含む） | 約 4,640（無料枠なし） | 同左（計画 polymorphic の ① に見積もりなし） | `src/scraper/jma_weather.py:242`・`:209`、`jma_weather_run.sh` の `run fetch --from 20160101` | **廃止（2026-11-13）** |
 | | **GCS の操作と転送の計（G5 を除く）** | | | | | **約 2,850** | **約 5,710** | **約 2,900** | | |
 
@@ -112,11 +124,13 @@
 | Cloud Run サービス（2.2） | 120〜180 | 1,030 | 120〜180 |
 | Cloud Run Jobs（2.3） | 0 | 15（再開すれば +2,700） | 0 |
 | GCS の操作（2.4 の G1〜G3） | 910（21:30 に直した。変更前 1,050） | 2,620（G1 の最悪を API の一覧の最悪で直した） | 910 |
-| GCS の外への転送（G4） | 0〜160（1 日 3.2〜3.5GiB。0〜750 の幅） | 1,500 | 0〜160 |
+| GCS の外への転送（G4） | **0**（11/14 に直した。1 日 約 1.3GiB。旧 0〜160〔3.2〜3.5GiB/日〕） | 1,500 | 0 |
 | 天気の取得（G5） | 0（廃止） | 0（廃止） | 0（廃止） |
 | 今日の変更の残り（4 章。監視 d6c72260・hotfix・run_axes。VPS 取得の段 1〜5 は取得役の停止中で 0） | +10 | +50 | +10（段 6 で取得を渡すと +約 50） |
 | **合計（21:30 に直した）** | **約 1,400〜1,640** | **約 5,690** | **約 1,400〜1,690** |
 | 上限 2,000 円との差 | **−360〜−600（上限内）** | +3,690 | −310〜−600 |
+| **合計（11/14 14:40 に直した。転送 0）** | **約 1,400〜1,480**（backfill の対策 A〔3 章 #7〕で 約 1,250〜1,340） | 約 5,690 | 約 1,400〜1,530 |
+| 上限 2,000 円との差（11/14） | **−520〜−600**（A で −660〜−750） | +3,690 | −470〜−600 |
 | 参考: 14:50 の時点の合計（G1・G3・G4 を直す前） | 約 3,330〜3,410（差 +1,330〜1,410） | 約 7,220 | 約 3,360〜3,460 |
 | 参考: G5 が毎時のまま動いた場合 | 約 8,000〜8,100 | 約 12,100 | |
 | G4・G5 を除いた合計（Scheduler・AR の変更前） | 約 1,820〜1,880 | 約 3,740 | 約 1,840〜1,900 |
@@ -146,7 +160,7 @@
 - ただしこの 7 日の GCS の転送は無料の 100GiB の中なので 0 円で入っている。転送料が付く月後半はこれより高くなる。
 - 11/12 の Jobs 停止の効果は、課金エクスポートでは 11/14〜15 に確かめる（1 日 約 60 円 → 約 0 円になっていること、Class A・B が減ること）。
 
-### 2.6 12 月の見込み（2026-11-13 21:00、今の構成）
+### 2.6 12 月の見込み（2026-11-13 21:00、今の構成。11/14 14:40 に G3・G4・合計を直した）
 
 | | 月額（円） | 根拠 |
 |---|---|---|
@@ -155,15 +169,15 @@
 | Cloud Run Jobs | 0 | 毎朝の g-0730-shadow 1 回だけ（無料枠の中） |
 | GCS の一覧（G1） | 約 110 | 1 日 約 5,000 回（15:00〜20:50 の実測、1 時間 約 250 回）から verify_past_values の 約 480 回を引いた値 |
 | GCS の書き込み（G2） | 約 350 | 1 日 1.3〜1.6 万回 |
-| GCS の読み出し（G3） | 約 450 | 週の平均 1 日 約 24 万回（平日 約 19 万、金曜 約 37 万） |
+| GCS の読み出し（G3） | 約 450（対策 A で 約 305） | 週の平均 1 日 約 24 万回（平日 約 19 万、金曜 約 37 万）。うち backfill-all-horse が毎日 約 8 万回（3 章 #7） |
 | 今日の変更の残り（監視 d6c72260・hotfix など） | 約 10 | 4 章 |
 | **小計（転送を除く）** | **約 1,400〜1,480** | |
-| GCS の外への転送（G4） | 0〜750（中央 0〜160） | 12 月は 31 日。1 日 3.2GiB 未満なら 0（無料の 100GiB の中）、3.5GiB で 約 160、3.8GiB で 約 330、4GiB で 約 450、4.5GiB で 約 750 |
-| **合計** | **約 1,400〜1,640（中央）／最大 約 2,230** | |
-| **上限 2,000 円との差** | **−360〜−600（上限内）／最大 +230** | 1 日の転送が 約 4.1GiB を超えると上限を超える |
+| GCS の外への転送（G4） | **0（中央。11/14 に直した）**／最大 約 750 | 1 日 約 1.3GiB（3 章 #7。ふだんの日 1.0〜1.1GiB＋金曜の週次 約 1.9GiB/週）× 31 ≒ 40GiB で無料の 100GiB の中。手で流す一度きりの全件読みに 約 60GiB の余裕。**条件: 11/15〜16 の課金エクスポートで 11/14（土）・15（日）の 1 日分が 1.5GiB 前後以下であること**（11/14 の計測は 14:30 までで、土日の午後の raceday 系は入っていない）。旧の見込み（3.2〜3.5GiB/日）は、そのあと止めた・直した処理を含む 11/12 の実績から。1 日 3.2GiB 未満なら 0、3.5GiB で 約 160、4GiB で 約 450、4.5GiB で 約 750 |
+| **合計** | **約 1,400〜1,480（中央。11/14 に直した。対策 A で 約 1,250〜1,340）／最大 約 2,230**（旧の中央 約 1,400〜1,640） | |
+| **上限 2,000 円との差** | **−520〜−600（上限内。A で −660〜−750）／最大 +230** | 1 日の転送が 約 4.1GiB を超えると上限を超える |
 
 - 転送の 1 日の量の根拠: 11/12（木、fetch-agent・cache-warm・verify_past_values の変更前、21 時間分）で 2.7GiB。verify_past_values の一覧 0（280a6ab0）で 1 日 0.3〜0.4GiB 減る。そこから VPS の一覧の応答が減り、週次の全件読み（週 約 1.5〜1.9GiB ≒ 1 日 約 0.25GiB）が乗る。開催日（土日）は多め。**11/14（土）の 1 日分を 11/15〜16 の課金エクスポートで見て確定させる**。
-- 見込みを崩すもの: (1) 7e1cc81f より前の版を master に昇格して Scheduler が作り直される（#6、+1,700〜2,700）、(2) 朝の呼び手の分からない大量読みが 11/13 から新しく始まったホストの読みだった場合（#2。毎日のものなら 11/12 の実績に入っている）、(3) VPS の取得を渡す段 6（+約 50。ホストが GCS から読み直す量は段ごとに実測する）、(4) API の起動し直しの最悪の回数（#4、無料枠を超えると +700）、(5) Cloud Run の API に残る一覧（#2 の「Cloud Run の API に残っている一覧」。今は 月 約 85 円、最悪 約 1,250 円）。
+- 見込みを崩すもの: (1) 7e1cc81f より前の版を master に昇格して Scheduler が作り直される（#6、+1,700〜2,700）、(2) 【11/14 に解消】朝の大量読みは前からある backfill-all-horse で、11/12 の実績に入っていた（#7）。代わりに、手で流す一度きりの全件読み（11/13 の書き出し 1.4GiB など）が月 60GiB を超えると転送が乗る、(3) VPS の取得を渡す段 6（+約 50。ホストが GCS から読み直す量は段ごとに実測する）、(4) API の起動し直しの最悪の回数（#4、無料枠を超えると +700）、(5) Cloud Run の API に残る一覧（#2 の「Cloud Run の API に残っている一覧」。今は 月 約 85 円、最悪 約 1,250 円）。
 
 ## 3. 監査の結果（重さの順）
 
@@ -199,7 +213,7 @@
   | VPS の `keiba-pull@`（cache_warm の一覧・release-pull の取得） | VPS | 一覧 毎分 1 回 → 1 日 1,440 回、取得（latest.json）1 日 約 1,200 回 | 監査ログ（15:05〜15:17 で一覧 11・取得 10） | 見ていない |
   | **ホストの `megu-keiba@`（IP 175.177.45.24）が `horse_training/2016〜2018/` を一括で読む** | **ホスト・まとまって（15:05〜15:06 に 4,100 件、15:16〜15:17 に 7,300 件）** | **12 分で 1.15 万件 × 平均 約 65KB ≒ 0.7GB**（1 件 15〜115KB を 5 件測った）。続く頻度はまだ分からない | 監査ログ。UA は gcloud-python 3.10.1 / Python 3.11.6（ホスト）。**原因（11/13 特定）**: `backfill_horse_training_recent --dry-run`（別のセッションが 3 回流した）の対象判定 `src/scripts/data/drift_coverage.default_loader` が、HybridStorage.load で GCS から 1 頭ずつ読む作り。同じ読み方を**夜間の調教の補い（root cron `0 13 * * 1-4` UTC ＝ 月〜木 22:00 JST）が毎回行っていた**：週 4 回 × 約 0.5GB ＝ 月 約 8GB・**約 150 円**（100GiB を超えた月）。**【解決: 957858ad（11/13 15:29 JST）】手元の複製（`data/local/horse_training`）を先に読み、GCS は GCP の中でだけ読む作りに直した → 月 約 150 円 → 0 円**。15:00〜15:17 の 約 1.9 万件の読みは直す前の dry-run で、一度きり | 見ていない |
   | **ホストの週次の全件読み: weekly-update（金 18:00 JST）と horse-name-index（金 18:30 JST）が、どちらも race_shutuba の全年を読み直す（二重）。続けて成長曲線の週次更新が horse_result を全頭読む** | ホスト・週 1 回（金曜。root cron `0 9 * * 5`・`30 9 * * 5` UTC） | race_shutuba 約 3.5 万件 × 2 回（18:20〜18:50）＋ horse_result 約 5.8 万件（18:50〜19:45）≒ **1 回 約 1.5〜1.9GiB → 月 約 7〜8GiB**（無料枠を超えた月で 約 130〜150 円）。Class B 月 約 60 万回 ≒ 40 円 | 監査ログ（2% の標本、11/13 18:20〜19:50）。`src/utils/horse_name_index.py:339-392`（`rebuild_horse_name_index_from_gcs_race_shutuba` が年ごとに `list_keys` して全件 `load`）、`src/scraper/auto_scrape.py:1008-1028`（horse-name-index）と `:1355-1358`（weekly-update の中でも同じ関数を呼ぶ）。`logs/weekly_update.log` 18:21〜18:45 と `logs/horse_name_index.log` 18:30〜18:49 に同じ「馬名インデックス shutuba: year=…」が出ている。成長曲線は `GrowthCurveService`（58,417 頭）。**CLAUDE.md の決まり 2 に反する。直し方の案: weekly-update 側の再構築をやめて 1 回にし、手元の flat（race_shutuba_flat）か horse_result の保存時の upsert（`horse_name_index.py:155`）に寄せる** | 見ていない |
-  | **まだ分からない: 朝 06〜08 JST・10〜11 JST の大量読み** | 不明（監査ログの開始より前） | Monitoring の ReadObject: 11/13 06〜08 JST 約 9.6 万回・約 0.9GiB、10〜11 JST 1.5 万回・約 1.5GiB（1 件が大きい）。11/12 の転送の実績 2.7GiB に朝の時間も含まれるので、毎日のものなら見込みに入っている。新しく始まったものだった場合だけ上乗せ | 候補（root cron、JST）: 06:00 backfill-all-horse、06:10 recent-retry、06:40 shutuba-audit、07:00 daily-race-lists・export_tables_daily、07:30 raceday-runner・lap-forecast、07:35 serving-state、07:40 feature-accumulate、07:50 host-snapshot。Cloud Run の起動時の束（東京の中なら転送 0）の可能性もある。**11/14 の朝の分を、監査ログを戻す前（14:44 JST まで）に集計する** | — |
+  | **【11/14 に特定】朝 06〜08 JST の大量読み = ホストの backfill-all-horse（毎日 06:00 JST）。10〜11 JST の 1.5GiB = 11/13 だけの手の書き出し** | ホスト（`megu-keiba@`・175.177.45.24）・毎日 06:00〜07:50 JST | 約 8 万回・約 0.65〜0.8GiB/日（Class B 月 約 145 円＋転送 月 約 21〜25GiB） | `src/scraper/backfill.py:347-355`（race_result・race_shutuba を年を絞らず全件 `list_keys`＋`load`）。10〜11 JST は `logs/export_tables_2026_once_20261113.log`（一度きり）。3 章 #7 | 見ていない |
   | 残り | 監査ログを 24 時間ためてから集計（11/14） | | | | — | Cloud Run の中の一覧なら転送 0 円。VPS の nginx の上流がホストの API なら、cache_warm の取り直しがホストの API で GCS を読む経路がある（`scripts/ops/vps/nginx-keiba-ui.conf:15`） | — |
   - `egress_billed()` を見て止めているのは `src/api/prerender.py:66-68` の 1 か所だけ。上の周期処理はどれも見ていない。
   - 監査ログ（14:44 JST から）の最初の 5 分: GCS の読み出し 25 件はすべて VPS から（keiba-fetch@ の一覧 18、keiba-pull@ の一覧 3・取得 4 ＝ release-pull と cache_warm）。
@@ -265,6 +279,93 @@
 - 対応: **7e1cc81f（cron-catchup-weekly-decision のセッション、11/13 20:47 JST）**で、`config/gcp_job_map.json` の 13 グループ（g-0530・g-0700・g-0730・g-0730-dayprep・g-0800・g-1000-mon・g-1910-eve・g-2130・g-5min・g-hourly・g-pump・g-results・g-sun-2200）に retired を付け、`scheduler_gen` は retired のグループを `--include-unready` でも作らないようにした（テスト `tests/ops/test_scheduler_gen_retired.py`）。コミットの確認では、出るコマンドは keiba-g-0730-shadow の update（無ければ create）だけ。
   **残る条件: master への昇格は 7e1cc81f を含む版でだけ行う。昇格の後に `gcloud scheduler jobs list` が keiba-g-0730-shadow の 1 件のままであることを確かめる**。
   別の手として、リポジトリの変数 `ENABLE_JOBS_DEPLOY` を false にすれば `deploy_gcp.sh:170-172` で Jobs の更新ごと飛ばせる（Jobs の版の `live-jobs` タグの付け替えも止まる点に注意）。
+
+### #7 監査ログの最終集計（11/13 14:40 〜 11/14 14:30 JST の 24 時間。2026-11-14 の監査役）
+
+集め方: GCS の DATA_READ 監査ログ（11/13 14:44 JST 有効化、11/14 14:44 すぎにユーザーが無効化）。`storage.objects.get` は `sample(insertId, 0.02)` の 2% の標本 × 50、`storage.objects.list` は全件（3,416 件）。
+監査ログには応答のバイト数が無いので、Cloud Monitoring の `storage.googleapis.com/network/sent_bytes_count`（10 分刻み、method 別）を、同じ 10 分の呼び手の件数の比で割り振った（1 件の大きさが違う呼び手が同じ 10 分に混ざると誤差が出る。下の backfill は 06 時台の単独の時間から 1 件の大きさを出して幅で示した）。
+GCP の内か外かは呼び元 IP で分けた（`2600:1900:…` は Google の中 ＝ Cloud Run・Jobs、東京の中なので転送 0）。道具は監査役の作業場所（`/tmp/claude-1000/audit/` の dump.py・est.py・mon_r.py）。GCS 自体は読んでいない。
+一覧（`storage.objects.list`）の監査ログには接頭辞（request の prefix）が入っていなかったので、**一覧は呼び手 × 時間帯までしか分けられない**（接頭辞の推定は時刻とコードの突き合わせ）。
+
+**24 時間の合計（Monitoring）**: ReadObject 35.4 万回・4.89GiB、ListObjects 3,461 回・2.05GiB。
+
+| 呼び手（principal） | 場所 | 呼び元 IP・UA | 読み出し（回・量） | 一覧（回・応答の量） | 外への転送 |
+|---|---|---|---|---|---|
+| `megu-keiba@` | **ホスト（GCP の外）** | 175.177.45.24・gcloud-python 3.10.1 / Python 3.11.6 | **約 24.4 万回・約 2.8GiB** | 718 回・約 0.52GiB | **約 3.3GiB** |
+| `keiba-api@` | Cloud Run（内） | 2600:1900:…・Python 3.11.18 | 約 11.4 万回・約 1.95GiB | 2,338 回・約 1.37GiB | 0（Class A 月 約 56 円・Class B 月 約 200 円） |
+| `keiba-pull@` | VPS（外） | 2400:8500:…:250:252・gcloud-python 3.17.1 / Python 3.10 | 約 3,100 回・約 0.07GiB（`ops/cache_dirty` の合図・`ops/releases` の latest.json） | 264 回・約 0.13GiB（合図方式の後は 1 時間 4〜16 回） | 約 0.2GiB |
+| `keiba-fetch@` | VPS（外） | 同上 | 0 | 90 回（11/13 15:00 まで。止めた後は 0） | 約 0.03GiB |
+| `keiba-deployer@` | GitHub Actions（外） | 20.3.167.84 | 約 100 回・約 0.02GiB（`ops/releases`・`models/fitted_artifacts`） | 0 | 約 0.02GiB |
+| `keiba-jobs@` | Cloud Run Jobs（内） | 2600:1900:… | 約 1,200 回（`ops/fetch_tasks_shadow`、07:30 の shadow の 1 回） | 6 回 | 0 |
+| **外への転送の計** | | | | | **約 3.6GiB/24 時間** |
+
+ホスト（`megu-keiba@`）の読み出しの中身（カテゴリ × 時間帯）:
+
+| 時間帯（JST） | 中身 | 回数 | 量 | 原因 | 頻度 |
+|---|---|---|---|---|---|
+| 11/14 06:00〜07:50 | race_result 2016〜2026 全件（06 時台）→ race_shutuba 2016〜2026 全件（07 時台） | 約 8 万 | 約 0.65〜0.8GiB（06 時台は単独で 362MiB・1 件 約 9KB、07 時台の race_shutuba は 1 件 約 7KB） | **backfill-all-horse**（下の 1） | **毎日** |
+| 11/13 18:00〜19:50 | race_shutuba 全年 × 2 回・horse_result 約 5.8 万頭 | 約 17 万 | 約 1.6GiB（一覧の応答 約 0.3GiB を足すと 約 1.9GiB） | 金曜の weekly-update・horse-name-index・成長曲線（3 章 #2 の表） | 週 1 回（金曜） |
+| 11/13 15:00〜15:17 | horse_training 2016〜2018 | 約 2.1 万 | 約 0.3GiB | 調教の dry-run（957858ad で修正済み） | 一度きり |
+| 11/14 03:00 | 一覧 70 回 | — | 約 0.06GiB | backfill-2020-fast（UTC 火・金 18:00 ＝ JST 水・土 03:00）の年の一覧 | 週 2 回 |
+| ほかの時間 | race_result_on_time・race_barometer・race_odds など当年の少量 | 1 時間 数百 | 1 時間 10〜50MiB | entries-sync・raceday 系 | 毎日 |
+
+時間帯ごとの外への読み出し（ホスト、MiB）: 06 時 361・07 時 約 270〜430・08 時 48・10〜12 時 各 15〜20・15 時 301・18 時 876・19 時 733・21 時 53。
+
+**1. 朝の大量読みの正体（11/13 の「まだ分からない」の答え）**
+- 06〜08 JST の 約 9.6 万回・約 0.9GiB は、**ホストの root cron `0 21 * * *`（UTC ＝ 06:00 JST）の backfill-all-horse**（`python -m src.scraper.backfill --phase horse`、`logs/backfill_horse.log`）。
+  - `src/scraper/backfill.py:347-355`（`_run_phase_horse`）が、馬 ID を集めるために `runner.storage.list_keys(category)` を**年を付けずに**呼び（`src/scraper/storage.py:1450-1460` は year が None だと `<category>/` 全体を一覧）、race_result・race_shutuba を 1 件ずつ `storage.load`（`storage.py:749`、L2 の TTL が切れていれば GCS）している。対象年度のログは [2020..2026] だが、ここは `years` を受け取らない（`backfill.py:892-894`）ので 2016〜2019 も読む。
+  - そのあと `pending[:500]` の 500 頭について `storage.load("horse_result", hid)`（`:371`）を読み、ほぼ全部が sire ありで skipped。**ここ 9 日の horses_processed は 0〜2 頭**で、1 日 1 時間 50 分・約 8 万回の読みのほとんどが「未処理の馬を探す」ためだけに使われている。
+  - Cloud Run（keiba-api）の 07:10〜07:50 の読み（horse_result・horse_pedigree_5gen・horse_training 約 2.2 万回）と 08:30〜08:40 の 409MiB（`ops/mirror/data/local/race_analysis` 約 1,300 件、1 件 約 300KB）は GCP の中なので転送 0。
+- 11/13 の 10〜11 JST の 約 1.5GiB（10:25〜10:45 に 約 9,100 回・1 件 約 150KB）は、別のセッションが 10:21 JST に手で流した**2026 年の書き出し**（`logs/export_tables_2026_once_20261113.log`、13 カテゴリ × 約 3,000 レース）。11/14 の同じ時間は 95MiB で、**毎日のものではない**。
+- どちらも 11/12 以前の課金の実績（1 日 3.7〜4.8GiB）に含まれていたもので、見込みへの上乗せではない。
+
+**2. ふだんの日の外への転送（今の構成）**
+
+| 項目 | 1 日の量 | 根拠 |
+|---|---|---|
+| backfill-all-horse（毎日） | 約 0.7〜0.8GiB（一覧 76 回 約 0.04GiB を含む） | 上の表 |
+| ホストのほかの読み・一覧（entries-sync・raceday 系など） | 約 0.1〜0.15GiB | 上の表の「ほかの時間」 |
+| VPS（keiba-pull@） | 約 0.1GiB | 合図方式の後の一覧 1 時間 4〜16 回＋合図・latest.json |
+| GitHub Actions の配備 | 約 0.02GiB/回 | keiba-deployer@ |
+| **ふだんの日の計** | **約 1.0〜1.1GiB** | |
+| 金曜の週次（weekly-update・horse-name-index・成長曲線） | ＋約 1.9GiB/週 | 3 章 #2 |
+| backfill-2020-fast・2021-fast の年の一覧 | ＋約 0.06GiB × 週 2〜4 回 | 11/14 03:00 |
+| **週の平均** | **約 1.3GiB/日（月 約 40GiB）** | |
+
+- 課金エクスポートの実績: 11/12 は 3.70GiB、11/13 は 3.71GiB（21:00 JST までの一部。手の書き出し 1.4GiB・調教の dry-run 0.3GiB・金曜の週次を含む）。どちらもこのあと止めた・直した処理（fetch-agent・cache-warm の毎分の一覧・verify_past_values・調教の補いの夜の読み）を含むので、ふだんの姿は上の表のほうに近い。**11/15〜16 の課金エクスポートで 11/14（土）・11/15（日）の 1 日分を見て確かめる**（土日は raceday 系が多いので 1.0〜1.5GiB を見込む）。
+- 費用: 12 月は 31 日 × 1.3GiB ≒ 40GiB で、請求月の無料の 100GiB に収まり**転送は 0 円**。手で流す一度きりの全件読み（11/13 の書き出しのような 1〜2GiB）は月 30 回ぶん入る余裕がある。上限に効くのは「全件読みを周期に入れる」変更だけ。
+  11 月は 11/13 21:00 JST までで 70.7GiB。残り 約 17.8 日 × 1.3GiB ≒ 23GiB → **月末 約 94GiB**。手の一度きりの読みが合わせて 6GiB を超えると、超えた分が 1GiB 18.86 円で 11 月に乗る。
+
+**3. 対策（コードはこの作業では変えない。担当の案つき）**
+
+| # | 対策 | 場所 | 効果の見込み | 担当の案 |
+|---|---|---|---|---|
+| A | **backfill の馬 ID の集め方を、GCS の全件読みから手元の flat に替える**。`collect_horse_ids_from_tables(TABLES_DIR, years)`（`src/pipeline/build_horse_entity_store.py:90`、race_result_flat・race_shutuba_flat の horse_id 列だけ）を使う。2026 の flat が古い日のために、当年だけは GCS の年つき一覧（`batch_list_blobs`、`storage.py:1157`）か race_lists を足す。少なくとも `src.config.gcp_guard.egress_billed()`（`src/config/gcp_guard.py:40`）が True のときは GCS を全件読まない（957858ad の `src/scripts/data/drift_coverage.py:38-42` と同じ形） | `src/scraper/backfill.py:347-355`、呼び出し `:892-894` | **Class B −約 8 万回/日（月 約 −145 円、確実）・転送 −約 0.7GiB/日（月 約 −21GiB。無料枠を超える月なら −約 400 円）**。06:00〜07:50 の 1 時間 50 分も数分に縮む | 取得（scraper・backfill）の担当セッション。CLAUDE.md の決まり 2 に反する周期処理なので、統括役の優先度は高め |
+| A' | （A の前の応急）処理する頭数が 0 の日が続くなら、毎日 → 週 1 回に下げる（root cron `0 21 * * *` → 曜日を 1 つ。`scripts/cron/` の登録スクリプトを lib_crontab で入れ替え） | root crontab `KEIBA_BACKFILL` の backfill-all-horse | 上の 6/7（月 約 −125 円＋転送 −18GiB） | 同上（cron の変更はユーザーの OK を得てから） |
+| A'' | 500 頭の sire の確かめ（`backfill.py:371`、`storage.load("horse_result")` 500 回/日）も、手元の horse_result（`data/local`）を先に読む | `src/scraper/backfill.py:371-375` | Class B −500 回/日・転送 −約 8MB/日（小） | A と一緒に |
+| B | 金曜の週次の二重の全件読みを 1 回にし、手元の flat に寄せる（3 章 #2 の表の直し方の案） | `src/utils/horse_name_index.py:394`（年ごとの `list_keys` `:428`＋1 件ずつ `load` `:410`）、呼び出し `src/scraper/auto_scrape.py:1016,1021`（horse-name-index）と `:1364,1366`（weekly-update の中） | 転送 −約 0.8〜1.0GiB/週（月 約 −4GiB）・Class B −約 15 万回/月（約 −10 円）。片方をやめるだけでも半分 | 馬名インデックス・週次更新の担当セッション（取得の担当と同じでよい） |
+| C | Cloud Run の API の一覧（1 日 約 2,300〜3,500 回）を減らす | 3 章 #2 の「Cloud Run の API に残っている一覧」の表（(a)〜(c)） | 実績 月 約 56〜85 円 → 数十円。最悪の 1,250 円の芽を摘む | API の担当セッション（ユーザーが戻ってから） |
+| D | 手で全件を読む一度きりの処理（書き出し・dry-run）は、GCP の中（Cloud Run Jobs）か手元の flat で行う。ホストで流すときは事前に「件数 × 1 件の大きさ」を見積もる | 運用の決まり（CLAUDE.md の決まり 2・3 の補い） | 11/13 は 1.7GiB（無料枠を超えた月なら 約 32 円）。11 月の残りの無料枠を守る | 統括役から各セッションへの周知 |
+
+**【A・A'' を入れた（2026-11-14、develop。取得の担当セッション）】** `src/scraper/backfill.py` の `_collect_phase_horse_ids`（`_run_phase_horse` から呼ぶ）。
+- 馬 ID は手元の flat（`data/page_reference/tables/<年>/{race_result,race_shutuba}_flat.parquet`）の**全年**から `collect_horse_ids_from_tables` で集める（以前と同じく年で絞らない）。当年（JST。1 月は前年も）だけ、GCS の年つきの一覧（`batch_list_blobs`）で **flat に無いレースと、8 日以内に GCS で更新されたレース**だけを `load` して補う（export_tables_daily は flat に無いレースを足すだけで既存の行を書き直さないので、出馬表の登録→確定の入れ替えはこの読み直しで拾う）。GCS で補って見つけた馬（flat にまだ無い）は手元の進捗 `data/local/meta/backfill_progress.json` の `horse_ids_from_gcs` に残し、読み直さなくなっても対象から落とさない（flat に入った・処理済みになったら外す。flat が 1 年も無く全件を読む GCP の中では残さない）。
+- `egress_billed()` が True（ホスト）なら、年を付けない全件の一覧はせず、過去年は GCS を一覧も読みもしない（flat の無い年は警告を出して飛ばす）。GCP の中（転送料なし）では全年を年つきで一覧して flat に無いレースだけ読み、flat が 1 年も無いときだけ以前の全件の読み方に戻す。
+- **前提（ホスト）**: 過去年に新しく取ったレース（`backfill --year 2020/2021 --phase fast`・`--phase past`）だけに出た馬は、その年の flat が追いつく（backfill_past_sync・export_tables）まで対象に入らない（遅れるだけで落ちはしない）。11/14 の数の一致は、過去年の flat が GCS に追いついている状態での確認。
+- 手元の flat だけで数え直した結果（GCS は読まない）: 58,701 頭・未処理 28,474 頭で、11/14 朝のログ（58,701 頭・未処理 28,974 − その朝の 500 頭）と一致。テスト `tests/scraper/test_backfill_horse_ids.py`（GCS はモック）で、以前の集め方と同じ未処理になること・flat に無い年／当年の新しいレース／最近更新された出馬表／flat が遅れている過去年／1 月の前年／GCS だけで見つけた馬の記録を確かめた。
+- A''（sire の確かめ）は手元の写し（HybridStorage のディスクキャッシュ `data/cache/horse_result/`）を先に読み、無いときだけ GCS を 1 頭ずつ読む（手元に無い馬を取得に回すと netkeiba へ余計に取りに行くので、GCS の確かめは残した）。**ホストの `data/cache/horse_result` は今 0 件**（保存は週 2 回以上読まれた馬だけ写す）なので、**A'' の効果は今は 約 0**（1 日 最大 500 回・約 8MB のまま）。
+- 見積もり（最悪の回数で。1 か月 30 日、単価は 1 章）:
+
+  | | 直す前 | 直した後（ふだん） | 直した後（最悪: 当年の全レースが更新された日） |
+  |---|---|---|---|
+  | 一覧（Class A） | 76 回/日（月 約 2 円）・約 0.04GiB/日 | 当年 2 カテゴリ × 約 4 ページ ≒ 8 回/日（月 約 0.2 円）・約 4MB/日 | 同じ（1 月は前年も一覧して 約 16 回/日・約 8MB/日） |
+  | 読み出し（Class B） | 約 8 万回/日（月 約 145 円） | 差分のレース（flat に無い・8 日以内の更新）数百＋sire 500 ≒ 1,000 回/日（月 約 2 円） | 当年 約 6,800＋500 ≒ 7,300 回/日（月 約 13 円。1 月で前年も全部なら 約 14,000 回/日・月 約 25 円） |
+  | 外への転送 | 約 0.65〜0.8GiB/日（月 約 20〜24GiB。無料枠を超える月なら 約 380〜450 円） | 約 20MB/日（月 約 0.6GiB。超える月でも 約 11 円） | 約 70MB/日（月 約 2GiB・約 40 円。1 月の前年込みで 約 80 円） |
+
+  **減る量: Class B −約 7.9 万回/日（月 −約 143 円）・転送 −約 0.63〜0.78GiB/日（月 −約 19〜23GiB。無料枠を超える月なら −約 360〜440 円）**。週の平均の外への転送は 約 1.3GiB/日 → 約 0.6GiB/日。06:00〜07:50 の 1 時間 50 分は数秒〜数分になる（手元の flat を読むのは 約 2 秒）。
+- 反映: ホストの checkout（`/home/jovyan/work/keiba-vpn`、develop）が develop を取り込んだ次の 06:00 JST の実行から。効いた印は Monitoring の 06〜08 JST の ReadObject（1 時間 4 万回・360MiB 前後）が消えること、`logs/backfill_horse.log` の「馬 ID の集め方 local_flat」の行。
+
+- 見積もりの直し（2.6 の 12 月の見込みへの反映）: 転送の行は**中央 0 円**（1 日 1.3GiB）、最悪は全件読みの周期処理が新しく入った場合。GCS の読み出し（G3）は A を入れると 約 450 → 約 305 円。**12 月の合計は 約 1,400〜1,480 円（A なし）／約 1,250〜1,340 円（A あり）**。上限 2,000 円との差 −520〜−750 円。
+- 監査ログを無効にした後は、同じ問いを Monitoring の時間ごとの ReadObject（回数・量）と課金エクスポートの `Download APAC` で見る。朝 06〜08 JST の 1 時間 4 万回・360MiB 前後が消えれば A が効いた印。
 
 ## 4. 今日（2026-11-13）入った・入る予定の変更の見込み
 

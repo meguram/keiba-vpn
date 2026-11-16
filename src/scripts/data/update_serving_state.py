@@ -10,6 +10,7 @@ python -m src.scripts.data.update_serving_state precompute --date YYYYMMDD   # �
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import time
 from pathlib import Path
@@ -78,8 +79,51 @@ def cmd_profile(limit: int) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     old = pd.read_parquet(p) if p.exists() else pd.DataFrame()
     new = attach_birthday(new, f.hist.attrs.reindex(miss))
-    pd.concat([old, new], ignore_index=True).drop_duplicates("horse_id", keep="last").to_parquet(p, index=False)
+    dyn = pd.concat([old, new], ignore_index=True).drop_duplicates("horse_id", keep="last")
+    dyn = retry_birthplace(dyn, hist_horses, st, limit)
+    dyn["birthday"] = birthday_as_text(dyn["birthday"]) if "birthday" in dyn.columns else None
+    dyn.to_parquet(p, index=False)
     print(f"保存 {p}（{len(new)} 頭、{time.time() - t0:.0f}s）")
+
+
+def birthday_as_text(v: pd.Series) -> pd.Series:
+    """profile_dyn の誕生日を保存の形（『2024年2月2日』の文字列）にそろえる。推論の表で日付に変えた値が混ざると、parquet に書けない。"""
+    def one(x):
+        if x is None or (isinstance(x, float) and pd.isna(x)) or x is pd.NaT:
+            return None
+        if isinstance(x, (pd.Timestamp, datetime.date)):
+            t = pd.Timestamp(x)
+            return f"{t.year}年{t.month}月{t.day}日"
+        return str(x)
+    return v.map(one).astype(object)
+
+
+def retry_birthplace(dyn: pd.DataFrame, ran: set[str], storage, limit: int = 0) -> pd.DataFrame:
+    """成績の文書（horse_result）に産地が無かった馬だけ、プロフィールの文書（horse_profile）を 1 頭 1 回だけ読み直して産地・誕生日を足す。
+    読み直した馬には bp_retry=True を付け、二度と読まない（ホストから GCS を繰り返し読まない。docs/operations/horse_attrs_coverage.md）。
+    対象は 2026 年に走った馬だけ。読み出しは 1 頭 1 回で、新しい馬のうち成績の文書に産地が無い馬の数だけ（週 数十回程度）。"""
+    d = dyn.copy()
+    if "bp_retry" not in d.columns:
+        d["bp_retry"] = False
+    d["bp_retry"] = d["bp_retry"].astype("boolean").fillna(False).astype(bool)
+    bp = d["birthplace"] if "birthplace" in d.columns else pd.Series(index=d.index, dtype=object)
+    lack = bp.isna() | (bp.astype(str).str.strip() == "")
+    idx = d.index[lack & ~d["bp_retry"] & d["horse_id"].astype(str).isin(ran)]
+    if limit:
+        idx = idx[:limit]
+    for i in idx:
+        try:
+            rec = storage.load("horse_profile", str(d.at[i, "horse_id"])) or {}
+        except Exception:
+            rec = {}
+        if str(rec.get("birthplace") or "").strip():
+            d.at[i, "birthplace"] = rec.get("birthplace")
+            if "birthday" in d.columns and (pd.isna(d.at[i, "birthday"]) or not str(d.at[i, "birthday"]).strip()):
+                d.at[i, "birthday"] = rec.get("birthday")
+        d.at[i, "bp_retry"] = True
+    if len(idx):
+        print(f"産地の読み直し（horse_profile）: {len(idx)} 頭、埋まった {int((d.loc[idx, 'birthplace'].astype(str).str.strip().replace('nan', '') != '').sum())} 頭")
+    return d
 
 
 def cmd_precompute(date: str) -> None:

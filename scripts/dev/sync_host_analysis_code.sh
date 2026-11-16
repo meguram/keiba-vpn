@@ -8,10 +8,11 @@ cd "$(dirname "$0")/../.."
 HOST=${KEIBA_HOST:-keiba-remote}
 REMOTE=${KEIBA_HOST_REPO:-/home/jovyan/work/keiba-vpn}
 PY=${KEIBA_HOST_PY:-/opt/conda/bin/python3}
-EXTRA="src/pipeline/features/tp28_workout_stats.py src/pipeline/features/tp85_pedprior.py src/scripts/data/tp85_ped_reference.py src/scripts/data/precompute_race_analysis.py"
+EXTRA="src/pipeline/features/tp28_workout_stats.py src/pipeline/features/tp85_pedprior.py src/scripts/data/tp85_ped_reference.py src/scripts/data/precompute_race_analysis.py src/research/graded/__init__.py src/research/graded/picks.py src/research/graded/race_keys.py"
 
 mapfile -t FILES < <(git ls-files src/research/race src/research/race_analysis $EXTRA | grep '\.py$' | sort -u)
 FILES+=(data/meta/trainer_pattern/trainer_pattern_2020_2025.json)   # 調教師×パターンの凍結表（めぐ分析の trainer_pattern が読む）
+FILES+=(src/research/graded/race_aliases.json src/research/graded/prereg_cycles.json)   # データで予想（graded_picks）が読む重賞の別名の表と凍結の規則
 dirty=$(git status --porcelain -- "${FILES[@]}" | grep -v '^??' || true)
 if [ -n "$dirty" ]; then echo "注意: 未コミットの変更を含むファイルを送ります:"; echo "$dirty"; fi
 

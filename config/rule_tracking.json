@@ -1,0 +1,239 @@
+{
+ "registered_at": "2026-11-14",
+ "note": "買い目の決まり（条件で買う・買わない）の前向き追跡の事前登録。決まりと閾値はこのファイルで固定し、track_from 以降の新しいレースで記録する。決まりを足すときは rules に since（足した日の翌日以降）を付けて足し、それより前のレースにはさかのぼらない。既存の決まりの中身・閾値は書き換えない（ハッシュで検査し、変わっていたら追記を拒否する）。根拠: docs/operations/retrain_trials/model_rule_backtest_20261114.md（valid 2022〜24 で見つけ、2025 年で確認）",
+ "frozen": {
+  "track_from": "2026-11-15",
+  "cuts_note": "自信の度合いの区切り。v6e_2016 の valid 2022〜24 の 5 分位（rank_rule_backtest の rule_backtest.json の cuts）。各モデル自身の勝率（出走馬で合計 1 に正規化）に当てはめる",
+  "p1_low": 0.23862906420705135,
+  "p1_high": 0.43175408404782395,
+  "gap_low": 0.034192994092286044,
+  "flat_low": 0.6705470487845742,
+  "flat_high": 0.8261078316566066,
+  "field_small_max": 9,
+  "field_large_min": 16,
+  "odds_lt": 2.0,
+  "min_races_to_judge": 1000,
+  "rules": [
+   {
+    "id": "T00",
+    "bet": "tansho",
+    "label": "単勝: 全部買う（基準）",
+    "buy_if": [],
+    "skip_if": []
+   },
+   {
+    "id": "T01",
+    "bet": "tansho",
+    "label": "単勝: ◎ が 1 番人気なら買わない",
+    "buy_if": [],
+    "skip_if": [
+     "fav"
+    ]
+   },
+   {
+    "id": "T02",
+    "bet": "tansho",
+    "label": "単勝: ◎ が 2.0 倍未満なら買わない",
+    "buy_if": [],
+    "skip_if": [
+     "odds_lt"
+    ]
+   },
+   {
+    "id": "T03",
+    "bet": "tansho",
+    "label": "単勝: ◎ が 1 番人気か 2.0 倍未満なら買わない",
+    "buy_if": [],
+    "skip_if": [
+     "fav",
+     "odds_lt"
+    ]
+   },
+   {
+    "id": "T04",
+    "bet": "tansho",
+    "label": "単勝: ◎ が 2〜5 番人気のときだけ",
+    "buy_if": [
+     "pop2to5"
+    ],
+    "skip_if": []
+   },
+   {
+    "id": "T05",
+    "bet": "tansho",
+    "label": "単勝: ◎ が 4〜5 番人気のときだけ",
+    "buy_if": [
+     "pop4to5"
+    ],
+    "skip_if": []
+   },
+   {
+    "id": "F00",
+    "bet": "fukusho",
+    "label": "複勝: 全部買う（基準）",
+    "buy_if": [],
+    "skip_if": []
+   },
+   {
+    "id": "F01",
+    "bet": "fukusho",
+    "label": "複勝: 自信のあるレースだけ（1 番手の確率が上位 20% か、確率の平たさが下位 20%）",
+    "buy_if": [
+     "p1_high",
+     "flat_low"
+    ],
+    "skip_if": []
+   },
+   {
+    "id": "F02",
+    "bet": "fukusho",
+    "label": "複勝: 混戦を外す（1 番手の確率が下位 20%・平たさが上位 20%・1〜2 番手の差が下位 20% のどれか）",
+    "buy_if": [],
+    "skip_if": [
+     "p1_low",
+     "flat_high",
+     "gap_low"
+    ]
+   },
+   {
+    "id": "U00",
+    "bet": "umaren",
+    "label": "馬連流し（◎→○▲）: 全部買う（基準）",
+    "buy_if": [],
+    "skip_if": []
+   },
+   {
+    "id": "U01",
+    "bet": "umaren",
+    "label": "馬連流し: 16 頭以上だけ",
+    "buy_if": [
+     "field_large"
+    ],
+    "skip_if": []
+   },
+   {
+    "id": "U02",
+    "bet": "umaren",
+    "label": "馬連流し: 不良馬場を外す",
+    "buy_if": [],
+    "skip_if": [
+     "going_bad"
+    ]
+   },
+   {
+    "id": "U03",
+    "bet": "umaren",
+    "label": "馬連流し: 弱みを外す（1〜2 番手の差が下位 20%・9 頭以下）",
+    "buy_if": [],
+    "skip_if": [
+     "gap_low",
+     "field_small"
+    ]
+   },
+   {
+    "id": "U04",
+    "bet": "umaren",
+    "label": "馬連流し: 弱みを外したうえで 16 頭以上だけ",
+    "buy_if": [
+     "field_large"
+    ],
+    "skip_if": [
+     "gap_low",
+     "field_small"
+    ]
+   },
+   {
+    "id": "W00",
+    "bet": "wide",
+    "label": "ワイド流し（◎→○▲）: 全部買う（基準）",
+    "buy_if": [],
+    "skip_if": []
+   },
+   {
+    "id": "W01",
+    "bet": "wide",
+    "label": "ワイド流し: 16 頭以上だけ",
+    "buy_if": [
+     "field_large"
+    ],
+    "skip_if": []
+   },
+   {
+    "id": "W02",
+    "bet": "wide",
+    "label": "ワイド流し: 不良馬場を外す",
+    "buy_if": [],
+    "skip_if": [
+     "going_bad"
+    ]
+   },
+   {
+    "id": "W03",
+    "bet": "wide",
+    "label": "ワイド流し: 弱みを外す（1〜2 番手の差が下位 20%・1 番手の確率が下位 20%）",
+    "buy_if": [],
+    "skip_if": [
+     "gap_low",
+     "p1_low"
+    ]
+   },
+   {
+    "id": "W04",
+    "bet": "wide",
+    "label": "ワイド流し: 弱みを外したうえで 16 頭以上だけ",
+    "buy_if": [
+     "field_large"
+    ],
+    "skip_if": [
+     "gap_low",
+     "p1_low"
+    ]
+   }
+  ]
+ },
+ "sources": [
+  {
+   "model": "v6",
+   "kind": "forward",
+   "dir": "data/local/inference/predictions_v6",
+   "label": "本番の v6e（画面の主。weight_triggered_predict が発走約 60 分前に保存）"
+  },
+  {
+   "model": "v4",
+   "kind": "forward",
+   "dir": "data/local/inference/predictions_v3",
+   "label": "v4（影の予測。参考）"
+  },
+  {
+   "model": "v5",
+   "kind": "forward",
+   "dir": "data/local/inference/predictions_v5",
+   "label": "v5（影の予測。参考）"
+  },
+  {
+   "model": "v6",
+   "kind": "backfill",
+   "dir": "data/local/inference/predictions_backfill_old_bundle_v6_2025_20261112094014",
+   "label": "本番の v6e（2020〜2025 学習）を 2026 年の過去日に後から当てた予測（2026-01-04〜10-24。固定前の参考）"
+  },
+  {
+   "model": "v6_2016",
+   "kind": "backfill",
+   "dir": "data/local/inference/predictions_backfill/bundle_v6_2025",
+   "label": "s18 の候補（2016〜2025 学習の v6e）を 2026 年の過去日に後から当てた予測（s12 で作り直し、2026-11-12 に差し替え。固定前の参考）"
+  }
+ ],
+ "eras": {
+  "v6": [
+   {
+    "from": "2026-10-25",
+    "bundle": "final_v6e/bundle_v6_2025（2020〜2025 学習）",
+    "note": "s18 で 2016〜2025 学習の版に入れ替えたら、ここに配備日を from にした行を足す（台帳の行に era が付き、集計で分かれる）"
+   }
+  ]
+ },
+ "not_tracked": {
+  "B3・A6": "ランキング比較の候補は、日々の予測を作る経路が無い（学習済みのモデルを本番のバンドルに入れて推論する改修と、s9〜s18 の流し直しが要る。結論は「本番に入れない」）。そのため追跡しない",
+  "v6_2016 の前向き": "s18 の配備までは日々の予測が無い。配備後は predictions_v6 に出るので、eras に行を足して v6 として追う"
+ }
+}

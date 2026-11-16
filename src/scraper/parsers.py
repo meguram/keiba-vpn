@@ -82,6 +82,34 @@ def parse_course_type(text: str) -> str:
     return ""
 
 
+_RACEDATA_WEATHERS = frozenset({"晴", "曇", "小雨", "雨", "小雪", "雪"})
+# 速報・出馬表がこれまで保存してきた馬場の書き方（略称）にそろえる（読み手の COND・pace_predictor などが「稍」「不」を見る）
+_RACEDATA_TRACK = {"良": "良", "稍": "稍", "稍重": "稍", "重": "重", "不": "不", "不良": "不"}
+
+
+def weather_track_from_racedata(tag: Any) -> tuple[str, str]:
+    """race.netkeiba.com の RaceData01 の 2026-10 下旬からの書き方: 天候はアイコンの title / aria-label
+    （``<span class="Icon_Weather02 Icon_W02" title="曇">``）、馬場は ``<span class="Item04"> 良</span>``。
+    「天候:」「馬場:」の文字が無いので、文字の正規表現では取れない（10/31 以降の速報で馬場・天候が空になった）。
+    障害レース（芝・ダートの馬場が並ぶ場合）の書き方は実物で未確認。取れなければ空のまま（値を推し量らない）。
+    値は許す範囲だけ入れ、馬場は略称（良・稍・重・不）にそろえる。馬場が 2 つ並ぶ（障害など）ときは先頭を採る（旧形式の正規表現と同じ）。"""
+    if tag is None:
+        return "", ""
+    weather = ""
+    icon = tag.select_one("[class*=Icon_Weather]")
+    if icon is not None:
+        w = re.sub(r"\s+", "", str(icon.get("title") or icon.get("aria-label") or ""))
+        weather = w if w in _RACEDATA_WEATHERS else ""
+    track = ""
+    # 馬場の span は芝が Item03、ダートが Item04（2026-11-15 に確かめた）。Item05 は直線の風。馬場の値を持つ最初の Item を採る
+    for item in tag.select("[class*=Item0]"):
+        m = re.fullmatch(r"[/／]?(稍重|不良|良|稍|重|不)", re.sub(r"\s+", "", item.get_text("", strip=True)))
+        if m:
+            track = _RACEDATA_TRACK[m.group(1)]
+            break
+    return weather, track
+
+
 class RaceResultParser:
     """
     過去のレース結果ページをパースする。
@@ -684,6 +712,10 @@ class RaceResultOnTimeParser(RaceResultParser):
         if not m_t:
             m_t = re.search(r"(?:芝|ダート?|障)\s*[:：]\s*(\S+)", data1)
         info["track_condition"] = m_t.group(1) if m_t else ""
+        if not info["weather"] or not info["track_condition"]:     # 2026-10 下旬からのアイコン・Item04 の書き方
+            w_icon, t_item = weather_track_from_racedata(data1_tag)
+            info["weather"] = info["weather"] or w_icon
+            info["track_condition"] = info["track_condition"] or t_item
 
         m_start = re.search(r"発走\s*[:：]?\s*(\d{1,2}:\d{2})", data1)
         if not m_start:
@@ -844,6 +876,10 @@ class RaceCardParser:
         if not m_t:
             m_t = re.search(r"(?:芝|ダート?|障)\s*[:：]\s*(\S+)", data1)
         info["track_condition"] = m_t.group(1) if m_t else ""
+        if not info["weather"] or not info["track_condition"]:     # 2026-10 下旬からのアイコン・Item04 の書き方
+            w_icon, t_item = weather_track_from_racedata(data1_tag)
+            info["weather"] = info["weather"] or w_icon
+            info["track_condition"] = info["track_condition"] or t_item
 
         # 発走時刻: 新形式 "発走 : 10:20" と旧形式 "10:05発走" の両方に対応
         m_start = re.search(r"発走\s*[:：]?\s*(\d{1,2}:\d{2})", data1)
