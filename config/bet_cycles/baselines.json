@@ -1,0 +1,10 @@
+{
+ "note": "比べる基準。先頭（B0）が評価の期間の「上向き」の判定の相手。",
+ "baselines": [
+  {"name": "B0 予測1位の単勝（全部買う）", "honmei": {"rule": "top"}, "tickets": [{"type": "tansho"}]},
+  {"name": "B1 予測1位の複勝（全部買う）", "honmei": {"rule": "top"}, "tickets": [{"type": "fukusho"}]},
+  {"name": "B2 予測1位→勝率2・3位のワイド流し", "honmei": {"rule": "top"}, "partners": {"mode": "pw", "n": 2}, "tickets": [{"type": "wide"}]},
+  {"name": "B3 予測1位→勝率2・3位の馬連流し", "honmei": {"rule": "top"}, "partners": {"mode": "pw", "n": 2}, "tickets": [{"type": "umaren"}]},
+  {"name": "M0 市場の1番人気の単勝", "honmei": {"rule": "market_fav"}, "tickets": [{"type": "tansho"}]}
+ ]
+}
