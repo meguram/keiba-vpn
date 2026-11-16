@@ -40,6 +40,7 @@ details{margin:2px 0}summary{cursor:pointer}.mk{font-weight:700;color:var(--acce
 JS = r"""
 const D=JSON.parse(document.getElementById('data').textContent);
 const TN={};D.types.forEach(t=>TN[t.id]=t.name);
+const LVT=(t,lv)=>String((D.lvtext&&D.lvtext[t+'|'+lv])||(TN[t]+' '+lv)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));   // 切り口 × 水準の日本語の文（level_text.describe。エスケープ済み）
 const $=s=>document.querySelector(s);const pct=v=>v==null?'—':(100*v).toFixed(1)+'%';
 const ci=o=>o?`${pct(o.est)} <span class="muted">[${pct(o.lo)}, ${pct(o.hi)}]</span>`:'—';
 const num=o=>o?`${o.est.toFixed(2)} <span class="muted">[${o.lo.toFixed(2)}, ${o.hi.toFixed(2)}]</span>`:'—';
@@ -78,22 +79,23 @@ function renderEval(){const E=D.eval.versions;const BK=Object.keys(D.eval.baseli
  $('#t-eval').innerHTML=h;document.querySelectorAll('#t-eval table').forEach(sortable)}
 // 2) 重賞ごと
 function renderRaces(){const R=D.races;const grades=[...new Set(R.map(r=>r.grade))].sort();
- $('#t-race').innerHTML=`<div class="ctl"><input id="rq" placeholder="重賞名・コースで絞り込み"><select id="rg"><option value="">全グレード</option>${grades.map(g=>`<option>${g}</option>`).join('')}</select><select id="rs"></select><select id="rk"><option value="">全パターン</option><option>好成績</option><option>凡走</option><option>参考</option><option>回収率で残った</option><option>成績だけ（回収率は足りない）</option></select></div><div id="rb"></div>`;
- const fill=()=>{const q=$('#rq').value.trim(),g=$('#rg').value;const L=R.filter(r=>(!g||r.grade===g)&&(!q||(r.rkey+r.course).includes(q)));
+ $('#t-race').innerHTML=`<div class="ctl"><select id="rv" aria-label="会場"></select><select id="rc" aria-label="コース"></select><input id="rq" placeholder="重賞名・コースで絞り込み"><select id="rg"><option value="">全グレード</option>${grades.map(g=>`<option>${g}</option>`).join('')}</select><select id="rs"></select><select id="rk"><option value="">全パターン</option><option>好成績</option><option>凡走</option><option>参考</option><option>回収率で残った</option><option>成績だけ（回収率は足りない）</option></select></div><div id="rb"></div>`;
+ const fill=()=>{const q=$('#rq').value.trim(),g=$('#rg').value,cv=$('#rv').value,cc=$('#rc').value;
+  const L=R.filter(r=>(!g||r.grade===g)&&(!q||(r.rkey+r.course).includes(q))&&(!cv||(r.course||'').startsWith(cv))&&(!cc||r.course===cc));
   $('#rs').innerHTML=L.map((r,i)=>`<option value="${R.indexOf(r)}">${r.rkey}（${r.grade}・${r.course}）</option>`).join('');show()};
  const show=()=>{const r=R[+$('#rs').value];if(!r){$('#rb').innerHTML='<p class="muted">該当なし</p>';return}const k=$('#rk').value;
   const ex=r.excluded.length?r.excluded.map(e=>`${e.year} 年（${e.course}）`).join('、'):'なし';
-  const rows=r.patterns.filter(p=>!k||p.k===k||p.rk===k).sort((a,b)=>b.x-a.x).map(p=>`<tr><td>${p.t} ${TN[p.t]}</td><td class="wrap">${p.lv}</td><td class="${kcls(p.k)}">${p.k}</td><td class="n" data-v="${p.m[0]+p.m[1]+p.m[2]+p.m[3]}">${rec(p.m)}</td><td class="n">${pct(p.mr[0])}</td><td class="n">${pct(p.mr[1])}</td><td class="n">${pct(p.mr[2])}</td><td class="n">${pct(p.ps)}</td><td class="n" data-v="${p.med[0]}">${p.med[0]}/${p.med[1]}</td><td class="n">${rec(p.s)}</td><td class="n">${pct(p.sr[2])}</td><td class="n">${p.x.toFixed(3)}</td><td>${p.ly}</td>${D.roi?`<td class="n" data-v="${p.rm?p.rm.np:''}">${p.rm?p.rm.np:'—'}</td><td class="n" data-v="${p.rm&&p.rm.t[0]!=null?p.rm.t[0]:''}">${roi3(p.rm&&p.rm.t)}</td><td class="n" data-v="${p.rm&&p.rm.f[0]!=null?p.rm.f[0]:''}">${roi3(p.rm&&p.rm.f)}</td><td class="n">${roi3(p.rs&&p.rs.f)}</td><td class="${rcls(p.rk)} wrap">${p.rk||''}</td>`:''}</tr>`);
+  const rows=r.patterns.filter(p=>!k||p.k===k||p.rk===k).sort((a,b)=>b.x-a.x).map(p=>`<tr><td class="wrap">${LVT(p.t,p.lv)}<div class="muted" style="font-size:11px">${p.t} ${TN[p.t]}</div></td><td class="wrap">${p.lv}</td><td class="${kcls(p.k)}">${p.k}</td><td class="n" data-v="${p.m[0]+p.m[1]+p.m[2]+p.m[3]}">${rec(p.m)}</td><td class="n">${pct(p.mr[0])}</td><td class="n">${pct(p.mr[1])}</td><td class="n">${pct(p.mr[2])}</td><td class="n">${pct(p.ps)}</td><td class="n" data-v="${p.med[0]}">${p.med[0]}/${p.med[1]}</td><td class="n">${rec(p.s)}</td><td class="n">${pct(p.sr[2])}</td><td class="n">${p.x.toFixed(3)}</td><td>${p.ly}</td>${D.roi?`<td class="n" data-v="${p.rm?p.rm.np:''}">${p.rm?p.rm.np:'—'}</td><td class="n" data-v="${p.rm&&p.rm.t[0]!=null?p.rm.t[0]:''}">${roi3(p.rm&&p.rm.t)}</td><td class="n" data-v="${p.rm&&p.rm.f[0]!=null?p.rm.f[0]:''}">${roi3(p.rm&&p.rm.f)}</td><td class="n">${roi3(p.rs&&p.rs.f)}</td><td class="${rcls(p.rk)} wrap">${p.rk||''}</td>`:''}</tr>`);
   $('#rb').innerHTML=`<div class="panel">${r.rkey}（${r.grade}・${r.course}、最新の回 ${r.latest}）。主の集計: 2016〜2024 年の ${r.n_main_ed} 回・${r.n_main_runs} 走。副の集計（同じコースの OP 以上の別レース）: ${r.n_sub_runs} 走。<br>主から外した回（別のコース）: ${ex}</div>`+
    table(['切り口','水準','種別','主 [1-2-3-着外]','勝率','連対率','複勝率','縮小後の複勝率','3着内の回/回','副 [1-2-3-着外]','副の複勝率','点 x','使った層'].concat(D.roi?['主の走数（払戻あり）','主の単勝の回収率','主の複勝の回収率','副の複勝の回収率','回収率の判定']:[]),rows)+(D.roi?'<p class="muted">回収率 = その条件の馬を全頭 100 円ずつ買ったときの払戻 ÷ 購入額（2016〜2024 年、[ ] はレース単位のブートストラップ 95% 区間）。回収率の判定は主に見る版（'+D.roi.primary+'）で、パターン（型 × 水準 × 点の向き）が発見・確認の両方の重賞で回収率の基準を満たしたか。「成績だけ」= 好成績・凡走だが回収率の基準は満たさない。</p>':'')+`<p class="muted">${(!k||k==='参考')?`「参考」（好成績・凡走の条件に届かないもの）は |点| の大きい ${r.n_ref_shown??'—'} 件だけ載せた（全 ${r.n_ref_all??'—'} 件）。`:''}`+'点 x = log（縮小した 実際の3着内 ÷ 頭数から見た期待）。好成績 = 主の集計で上振れし、3着内が出た回が 3 回以上。凡走 = 主で下振れし、該当馬がいた回が 4 回以上で 3着内の回が 1 回以下。</p>';
   document.querySelectorAll('#rb table').forEach(sortable)};
- $('#rq').oninput=fill;$('#rg').onchange=fill;$('#rs').onchange=show;$('#rk').onchange=show;fill()}
+ setupCourse($('#rv'),$('#rc'),D.course_opts||[],fill,true);$('#rq').oninput=fill;$('#rg').onchange=fill;$('#rs').onchange=show;$('#rk').onchange=show;fill()}
 // 3) 検証のレース
 function renderEvalRaces(){const R=D.eval_races;$('#t-er').innerHTML=`<div class="ctl"><input id="eq" placeholder="レース名で絞り込み"><select id="ey"><option value="">2025・2026</option><option>2025</option><option>2026</option></select><select id="eg"><option value="">全グレード</option><option>G1</option><option>G2</option><option>G3</option></select><select id="es"></select></div><div id="eb"></div>`;
  const fill=()=>{const q=$('#eq').value.trim(),y=$('#ey').value,g=$('#eg').value;const L=R.filter(r=>(!y||r.date.startsWith(y))&&(!g||r.grade===g)&&(!q||(r.name+r.rkey).includes(q)));
   $('#es').innerHTML=L.map(r=>`<option value="${R.indexOf(r)}">${r.date} ${r.rkey}（${r.grade}）</option>`).join('');show()};
  const show=()=>{const r=R[+$('#es').value];if(!r){$('#eb').innerHTML='<p class="muted">該当なし</p>';return}
-  const rows=r.horses.map(h=>`<tr><td class="mk">${h.mk}</td><td class="n">${h.hn}</td><td class="n">${h.sc.toFixed(2)}</td><td class="n">${h.n_good}</td><td class="n">${h.n_bad}</td><td class="n">${h.fin??'—'}</td><td class="n">${h.v6??'—'}</td>${D.roi?`<td class="n">${h.rv??'—'}</td>`:''}<td>${h.jk??''}</td><td class="wrap"><details><summary>上位 ${h.p.length} パターン</summary>${h.p.map(p=>`<div class="${kcls(p.k)}">${TN[p.t]}: ${p.lv} — ${p.ly} 主${rec(p.m)}（${p.med[0]}/${p.med[1]} 回）副${rec(p.s)} 全体${rec(p.g)} 点 ${p.x.toFixed(3)}${p.rm||p.rs||p.rg?` ／ 回収率（単・複）${['rm','rs','rg'].map((k,i)=>p[k]?`${['主','副','全重賞'][i]} ${p[k][1].toFixed(2)}・${p[k][2].toFixed(2)}（${p[k][0]} 走）`:'').filter(Boolean).join(' ')}`:''}${p.rk?` <span class="${rcls(p.rk)}">${p.rk}</span>`:''}</div>`).join('')}</details></td></tr>`);
+  const rows=r.horses.map(h=>`<tr><td class="mk">${h.mk}</td><td class="n">${h.hn}</td><td class="n">${h.sc.toFixed(2)}</td><td class="n">${h.n_good}</td><td class="n">${h.n_bad}</td><td class="n">${h.fin??'—'}</td><td class="n">${h.v6??'—'}</td>${D.roi?`<td class="n">${h.rv??'—'}</td>`:''}<td>${h.jk??''}</td><td class="wrap"><details><summary>上位 ${h.p.length} パターン</summary>${h.p.map(p=>`<div class="${kcls(p.k)}">${LVT(p.t,p.lv)}（${p.t}）— ${p.ly} 主${rec(p.m)}（${p.med[0]}/${p.med[1]} 回）副${rec(p.s)} 全体${rec(p.g)} 点 ${p.x.toFixed(3)}${p.rm||p.rs||p.rg?` ／ 回収率（単・複）${['rm','rs','rg'].map((k,i)=>p[k]?`${['主','副','全重賞'][i]} ${p[k][1].toFixed(2)}・${p[k][2].toFixed(2)}（${p[k][0]} 走）`:'').filter(Boolean).join(' ')}`:''}${p.rk?` <span class="${rcls(p.rk)}">${p.rk}</span>`:''}</div>`).join('')}</details></td></tr>`);
   $('#eb').innerHTML=`<div class="panel">${r.date} ${r.name}（${r.grade}・${r.course}）。◎の払戻: 単勝 ${r.pay.tansho} 円・複勝 ${r.pay.fukusho} 円${r.has_pay?'':'（払戻のデータなし。評価から除外）'}</div>`+
    table(['印','馬番','点','好成績','凡走','着順','v6e本番の順位'].concat(D.roi?['回収率版の順位']:[]).concat(['騎手','該当パターン（|点| の大きい順）']),rows);document.querySelectorAll('#eb table').forEach(sortable)};
  $('#eq').oninput=fill;$('#ey').onchange=fill;$('#eg').onchange=fill;$('#es').onchange=show;fill()}
@@ -104,7 +106,7 @@ function renderTypes(){const rows=D.types.map(t=>`<tr><td>${t.id}</td><td class=
   '<p class="muted">採用 = 発見で z ≥ 1.645 かつ 確認で z ≥ 1.2816。前日版・当日版の○は、束ねた後に点に使う型（相関 0.7 以上の型は代表 1 つにまとめる）。</p><h2>作れなかった・入れなかった切り口</h2>'+table(['ID','切り口','理由'],nb);
  document.querySelectorAll('#t-ty table').forEach(sortable)}
 function renderRoi(){const X=D.roi;if(!X){$('#t-roi').innerHTML='<p class="muted">2 回目の評価の材料が無い</p>';return}
- const c=o=>o?`${o.n}/${o.races}`:'—';const rows=X.primary_patterns.map(p=>`<tr><td>${p.t} ${TN[p.t]}</td><td class="wrap">${p.lv}</td><td class="${p.dir==='好'?'good':'bad'}">${p.dir}</td>`+['disc','conf'].map(k=>{const o=p[k];return o?`<td class="n">${c(o)}</td><td class="n">${pct(o.y3)} <span class="muted">(${pct(o.e3)})</span></td><td class="n" data-v="${o.t[0]}">${roi3(o.t)}</td><td class="n" data-v="${o.f[0]}">${roi3(o.f)}</td>`:'<td colspan="4">—</td>'}).join('')+'</tr>');
+ const c=o=>o?`${o.n}/${o.races}`:'—';const rows=X.primary_patterns.map(p=>`<tr><td class="wrap">${LVT(p.t,p.lv)}<div class="muted" style="font-size:11px">${p.t} ${TN[p.t]}</div></td><td class="wrap">${p.lv}</td><td class="${p.dir==='好'?'good':'bad'}">${p.dir}</td>`+['disc','conf'].map(k=>{const o=p[k];return o?`<td class="n">${c(o)}</td><td class="n">${pct(o.y3)} <span class="muted">(${pct(o.e3)})</span></td><td class="n" data-v="${o.t[0]}">${roi3(o.t)}</td><td class="n" data-v="${o.f[0]}">${roi3(o.f)}</td>`:'<td colspan="4">—</td>'}).join('')+'</tr>');
  $('#t-roi').innerHTML=`<h2>主に見る版で残ったパターン（${X.primary}）</h2><p class="muted wrap">好 = そのレースの as-of の点が正のときに当てはまった馬、凡 = 負のとき。発見 2018〜2021・確認 2022〜2024 の重賞での実際の成績と回収率。[ ] はレース単位のブートストラップの、採否に使った片側の区間（発見は 5%〜95%、確認は 10%〜90% の点。好は下限、凡は上限が全体の回収率を越えたものが残る）。複勝率の（ ）は頭数から見た期待。</p>`+
   table(['切り口','水準','向き','発見 走/レース','発見 複勝率','発見 単勝の回収率','発見 複勝の回収率','確認 走/レース','確認 複勝率','確認 単勝の回収率','確認 複勝の回収率'],rows);document.querySelectorAll('#t-roi table').forEach(sortable)}
 const R={eval:renderEval,race:renderRaces,er:renderEvalRaces,ty:renderTypes,roi:renderRoi},done={};
@@ -161,8 +163,23 @@ def slim(rep: dict) -> dict:
     return rep
 
 
+from src.scripts.docs.graded_course_filter import COURSE_JS  # noqa: E402
+
+
+def add_texts(rep: dict) -> dict:
+    """切り口 × 水準の日本語の文（lvtext: "型|水準" → 文）と、コースのプルダウンの候補（course_opts）を足す。"""
+    from src.research.graded import level_text as LT
+    from src.scripts.docs import graded_course_filter as CF
+    pairs = {(p["t"], p["lv"]) for r in rep.get("races", []) for p in r.get("patterns", [])}
+    pairs |= {(p["t"], p["lv"]) for r in rep.get("eval_races", []) for h in r.get("horses", []) for p in h.get("p", [])}
+    pairs |= {(p["t"], p["lv"]) for p in (rep.get("roi") or {}).get("primary_patterns", []) if "t" in p and "lv" in p}
+    rep["lvtext"] = {f"{t}|{lv}": LT.describe(t, lv)[0] for t, lv in sorted(pairs)}
+    rep["course_opts"] = CF.options({r["rkey"]: r.get("course", "") for r in rep.get("races", [])})
+    return rep
+
+
 def build(src: Path = SRC, out: Path = OUT) -> Path:
-    rep = slim(json.loads(src.read_text(encoding="utf-8")))
+    rep = add_texts(slim(json.loads(src.read_text(encoding="utf-8"))))
     data = json.dumps(rep, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     pre = rep["prereg"]
     html = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -173,7 +190,7 @@ def build(src: Path = SRC, out: Path = OUT) -> Path:
 2025・2026 年の重賞で 1 回だけ評価した。{'そのあとユーザーの依頼で、回収率まで裏付けのあるパターンだけで印を付ける版を足し、中止の馬の扱いを直したデータで 2 回目の評価（データを一度見た後）を行った（' + rep['roi']['frozen_at'] + ' に版の一覧を凍結）。' if rep.get('roi') else ''}各重賞で点に効いているルールの全件の表: <a href="graded_rules_table.html">重賞のルール一覧</a>・ゴール（◎ 勝率 30%・単回収 120%、消しの 95%）に向けた分析サイクル: <a href="graded_cycles.html">重賞の分析サイクル</a>（重賞ごとのまとめ: <a href="graded_race_playbook.html">重賞の選び方の早見表</a>）・うまうまー式の穴馬の分析: <a href="graded_longshot.html">重賞の穴馬分析</a>・計画: docs/ideas/graded_rule_based_handicapper.md・切り口の目録: docs/ideas/graded_handicapper_cuts.md・コード: src/research/graded/</p>
 <div class="tabs"><button data-k="eval">検証の結果</button><button data-k="race">重賞ごと</button><button data-k="er">検証のレース</button><button data-k="ty">切り口の採否</button>{'<button data-k="roi">回収率で残ったパターン</button>' if rep.get('roi') else ''}</div>
 <section id="t-eval"></section><section id="t-race" hidden></section><section id="t-er" hidden></section><section id="t-ty" hidden></section><section id="t-roi" hidden></section>
-</main><script type="application/json" id="data">{data}</script><script>{JS}</script></body></html>"""
+</main><script type="application/json" id="data">{data}</script><script>{COURSE_JS}{JS}</script></body></html>"""
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
     print(out, f"{out.stat().st_size / 1e6:.1f} MB")

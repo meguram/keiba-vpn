@@ -14,19 +14,27 @@ from html import escape
 import sys
 from pathlib import Path
 
+from src.research.graded import level_text as LT
+from src.scripts.docs import graded_course_filter as CF
 from src.scripts.docs.build_graded_handicapper_html import CSS
 
 REPO = Path(__file__).resolve().parents[3]
 SRC = Path(os.environ.get("GRADED_OUT", "/home/jovyan/work/graded_out_v2")) / "graded_rules.json"
 OUT = REPO / "data/meta/graded/graded_rules_table.html"
 
-HEAD = ["重賞", "格", "コース", "切り口", "水準", "好／凡", "区分", "集計の階層", "[1-2-3-着外]", "件数", "勝率", "連対率", "複勝率",
+HEAD = ["重賞", "格", "コース", "条件（切り口 × 水準）", "水準", "好／凡", "区分", "集計の階層", "[1-2-3-着外]", "件数", "勝率", "連対率", "複勝率",
         "払戻の解けた走数", "単勝の回収率", "複勝の回収率", "縮めた点 x", "縮めた比", "型の重み", "主の [1-2-3-着外]", "採否", "回収率の判定", "消しに使う"]
 
 EXTRA_CSS = """
 .pager{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0}.pager button{border:1px solid var(--border);background:var(--panel);color:var(--text);
 padding:4px 10px;border-radius:6px;cursor:pointer}.pager button:disabled{opacity:.4;cursor:default}th[data-s="a"]::after{content:" ▲"}th[data-s="d"]::after{content:" ▼"}
 .ctl label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:2px}.ctl input[type=search]{min-width:12em}
+.lg{display:inline-block;width:1.4em;height:.9em;border:1px solid var(--border);border-radius:3px;vertical-align:-1px;margin:0 4px 0 10px}
+tr.ad-roi td,.lg.ad-roi{background:var(--row-roi)}tr.ad-kill td,.lg.ad-kill{background:var(--row-kill)}
+td .sub{display:block;font-size:11px;color:var(--muted)}
+:root{--row-roi:rgba(47,111,222,.24);--row-perf:rgba(47,111,222,.09);--row-kill:rgba(179,38,30,.15)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--row-roi:rgba(122,167,255,.30);--row-perf:rgba(122,167,255,.11);--row-kill:rgba(255,138,128,.20)}}
+:root[data-theme="dark"]{--row-roi:rgba(122,167,255,.30);--row-perf:rgba(122,167,255,.11);--row-kill:rgba(255,138,128,.20)}
 .theme{float:right;border:1px solid var(--border);background:var(--panel);color:var(--text);border-radius:14px;padding:2px 10px;cursor:pointer;font-size:12px}
 """
 
@@ -44,18 +52,22 @@ const KEY=[i=>RN[C.r[i]],i=>D.races[C.r[i]].grade,i=>D.races[C.r[i]].course,i=>D
  i=>D.types[C.t[i]].w,i=>C.main[i][0],i=>C.flags[i]&7,i=>C.flags[i]&12,i=>C.flags[i]&16];
 KEY[5]=i=>C.dir[i]*2+(C.flags[i]&32?0:1);
 let view=[],page=0,sortK=-1,asc=true;const PS=200;
+// 行の背景: 消しに使う（赤み）＞ 回収率版で採用（青）。成績版だけで採用の行（表のほぼ全行。成績版は点の付く水準をすべて使う）は色なし。
+// 採否の列の文字はそのまま
+const rowCls=i=>{const f=C.flags[i];return f&16?'ad-kill':f&4?'ad-roi':''};
+const lvText=i=>D.lvtext[D.types[C.t[i]].id+'|'+D.levels[C.lv[i]]]||'';
 function cell(i){const r=D.races[C.r[i]],t=D.types[C.t[i]];const dir=D.dict.dir[C.dir[i]],k=D.dict.k[C.k[i]];const ly=D.dict.ly[C.ly[i]];const sk=D.dict.sub_kind[C.sub_kind[i]];
  const m=C.main[i];const kp=C.flags[i]&4;
- return `<tr><td>${esc(r.rkey)}</td><td>${esc(r.grade)}</td><td>${esc(r.venue)}${esc(r.surf)}${r.dist}</td><td class="wrap">${esc(t.id)} ${esc(t.name)}</td><td class="wrap">${esc(D.levels[C.lv[i]])}</td>`+
+ return `<tr class="${rowCls(i)}"><td>${esc(r.rkey)}</td><td>${esc(r.grade)}</td><td>${esc(r.venue)}${esc(r.surf)}${r.dist}</td><td class="wrap">${esc(lvText(i))}<span class="sub">${esc(t.id)} ${esc(t.name)}</span></td><td class="wrap">${esc(D.levels[C.lv[i]])}</td>`+
  `<td class="${dir==='好'?(C.flags[i]&32?'good':''):'bad'}">${dir==='好'?(C.flags[i]&32?'好（買い）':'好傾向（弱い）'):'凡（避ける）'}</td><td>${esc(k)}</td><td>${esc(ly)}${sk?`<span class="muted">（${esc(sk)}）</span>`:''}</td>`+
  `<td class="n">[${C.rec[i].join('-')}]</td><td class="n">${n_(i)}</td><td class="n">${pct(rate(i,0))}</td><td class="n">${pct(rate(i,1))}</td><td class="n">${pct(rate(i,2))}</td>`+
  `<td class="n">${C.np[i]}</td><td class="n">${pct(C.roi_t[i])}</td><td class="n">${pct(C.roi_f[i])}</td><td class="n">${C.x[i].toFixed(4)}</td><td class="n">${f2(Math.exp(C.x[i]))}</td><td class="n">${t.w==null?'—':f2(t.w)}</td>`+
  `<td class="n">${m[0]?`[${m[1]}-${m[2]}-${m[3]}-${m[0]-m[1]-m[2]-m[3]}]`:'—'}</td><td class="wrap">${adopt(C.flags[i])}</td><td class="${kp?'good':'muted'} wrap">${judge(i)}</td><td class="${C.flags[i]&16?'bad':''}">${C.flags[i]&16?'消し':''}</td></tr>`}
-function apply(){const q=$('#q').value.trim().toLowerCase(),g=$('#g').value,dr=$('#dir').value,ly=$('#ly').value,ad=$('#ad').value,jd=$('#jd').value,kd=$('#kd').value,kl=$('#kl').value;
+function apply(){const cv=$('#cv').value,cc=$('#cc').value;const q=$('#q').value.trim().toLowerCase(),g=$('#g').value,dr=$('#dir').value,ly=$('#ly').value,ad=$('#ad').value,jd=$('#jd').value,kd=$('#kd').value,kl=$('#kl').value;
  const mn=parseInt($('#mn').value)||0;const qt=$('#qt').value.trim().toLowerCase();
- const rok=D.races.map(r=>(!q||(r.rkey+' '+r.course).toLowerCase().includes(q))&&(!g||r.grade===g));
+ const rok=D.races.map(r=>(!q||(r.rkey+' '+r.course).toLowerCase().includes(q))&&(!g||r.grade===g)&&(!cv||r.course.startsWith(cv))&&(!cc||r.course===cc));
  const tok=D.types.map(t=>!qt||(t.id+' '+t.name).toLowerCase().includes(qt));
- view=[];for(let i=0;i<N;i++){if(!rok[C.r[i]])continue;if(qt&&!tok[C.t[i]]&&!D.levels[C.lv[i]].toLowerCase().includes(qt))continue;
+ view=[];for(let i=0;i<N;i++){if(!rok[C.r[i]])continue;if(qt&&!tok[C.t[i]]&&!D.levels[C.lv[i]].toLowerCase().includes(qt)&&!lvText(i).toLowerCase().includes(qt))continue;
   if(dr==='buy'&&!(C.dir[i]===0&&(C.flags[i]&32)))continue;if(dr==='weak'&&!(C.dir[i]===0&&!(C.flags[i]&32)))continue;if(dr==='1'&&C.dir[i]!==1)continue;if(ly!==''&&C.ly[i]!=+ly)continue;if(kd!==''&&C.k[i]!=+kd)continue;const f=C.flags[i];
   if(ad==='seiseki'&&!(f&3))continue;if(ad==='roi'&&!(f&4))continue;if(ad==='both'&&!((f&3)&&(f&4)))continue;if(ad==='seiseki_only'&&(f&4))continue;if(ad==='roi_only'&&(f&3))continue;
   if(ad==='preday'&&!(f&1))continue;if(ad==='dayof'&&!(f&2))continue;
@@ -71,6 +83,7 @@ function draw(){const np=Math.max(1,Math.ceil(view.length/PS));page=Math.min(pag
 document.querySelectorAll('#th th').forEach((th,j)=>th.onclick=()=>{asc=sortK===j?!asc:true;sortK=j;document.querySelectorAll('#th th').forEach(h=>delete h.dataset.s);th.dataset.s=asc?'a':'d';sortView();page=0;draw()});
 document.querySelectorAll('.prev').forEach(b=>b.onclick=()=>{page--;draw()});document.querySelectorAll('.next').forEach(b=>b.onclick=()=>{page++;draw()});
 ['#q','#qt','#mn'].forEach(s=>$(s).oninput=apply);['#g','#dir','#ly','#ad','#jd','#kd','#kl'].forEach(s=>$(s).onchange=apply);
+setupCourse($('#cv'),$('#cc'),D.course_opts,apply,false);if($('#bcv'))setupCourse($('#bcv'),$('#bcc'),D.course_opts,()=>bapply(),false);
 $('#theme').onclick=()=>{const r=document.documentElement;const dk=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.dataset.theme=dk?'light':'dark'};
 apply();
 
@@ -80,12 +93,14 @@ const BN=i=>BY.cols.rec[i].reduce((a,b)=>a+b,0);
 const BKEY=[i=>RN[BY.cols.r[i]],i=>D.races[BY.cols.r[i]].grade,i=>BY.cols.layer[i],i=>BY.cols.types[i],i=>BY.cols.levels[i],i=>BY.cols.rec[i][0]*1e6+BY.cols.rec[i][1]*1e3+BY.cols.rec[i][2],BN,
  i=>(BY.cols.rec[i][0]+BY.cols.rec[i][1]+BY.cols.rec[i][2])/BN(i),i=>BY.cols.roi_t[i],i=>BY.cols.roi_f[i],i=>BY.cols.ed[i],i=>BY.cols.nh[i],i=>BY.cols.p0[i],i=>BY.cols.pbin[i],i=>BY.cols.n_equiv[i]];
 function bcell(i){const c=BY.cols,r=D.races[c.r[i]];const a=c.rec[i];const n=BN(i);
- return `<tr><td>${esc(r.rkey)}</td><td>${esc(r.grade)}</td><td>${esc(c.layer[i])}</td><td class="wrap">${esc(c.types[i]).replace(/\|/g,' × ')}</td><td class="wrap">${esc(c.levels[i])}</td>`+
+ return `<tr><td>${esc(r.rkey)}</td><td>${esc(r.grade)}</td><td>${esc(c.layer[i])}</td><td class="wrap">${esc(c.text[i])}<span class="sub">${esc(c.types[i]).replace(/\|/g,' × ')}</span></td><td class="wrap">${esc(c.levels[i])}</td>`+
  `<td class="n">[${a.join('-')}]</td><td class="n">${n}</td><td class="n">${pct((a[0]+a[1]+a[2])/n)}</td><td class="n">${pct(c.roi_t[i])}</td><td class="n">${pct(c.roi_f[i])}</td>`+
  `<td class="n">${c.ed[i]}</td><td class="n">${c.nh[i]}</td><td class="n">${pct(c.p0[i])}</td><td class="n">${c.pbin[i].toExponential(1)}</td><td class="n">${c.n_equiv[i]}</td></tr>`}
 function bapply(){const q=$('#bq').value.trim().toLowerCase(),ly=$('#bly').value,mn=parseInt($('#bmn').value)||0,qt=$('#bqt').value.trim().toLowerCase();
+ const cv=$('#bcv').value,cc=$('#bcc').value;
  bview=[];const c=BY.cols;for(let i=0;i<c.r.length;i++){const r=D.races[c.r[i]];if(q&&!(r.rkey+' '+r.course).toLowerCase().includes(q))continue;if(ly&&c.layer[i]!==ly)continue;
-  if(BN(i)<mn)continue;if(qt&&!(c.types[i]+' '+c.levels[i]).toLowerCase().includes(qt))continue;bview.push(i)}
+  if(cv&&!r.course.startsWith(cv))continue;if(cc&&r.course!==cc)continue;
+  if(BN(i)<mn)continue;if(qt&&!(c.types[i]+' '+c.levels[i]+' '+c.text[i]).toLowerCase().includes(qt))continue;bview.push(i)}
  if(bsk>=0)bsort();bpage=0;bdraw()}
 function bsort(){const k=BKEY[bsk],sg=basc?1:-1;bview.sort((a,b)=>{const x=k(a),y=k(b);if(x==null&&y==null)return a-b;if(x==null)return 1;if(y==null)return -1;return (x>y?1:x<y?-1:a-b)*sg})}
 function bdraw(){const np=Math.max(1,Math.ceil(bview.length/PS));bpage=Math.min(bpage,np-1);const s=bpage*PS;$('#btb').innerHTML=bview.slice(s,s+PS).map(bcell).join('');
@@ -103,7 +118,7 @@ def _opt(pairs) -> str:
     return "".join(f'<option value="{escape(v)}">{escape(t)}</option>' for v, t in pairs)
 
 
-BUY_HEAD = ["重賞", "格", "層", "切り口（AND）", "水準", "[1-2-3-着外]", "件数", "3着内率", "単勝の回収率", "複勝の回収率", "異なる回", "異なる馬",
+BUY_HEAD = ["重賞", "格", "層", "条件（切り口の AND）", "水準", "[1-2-3-着外]", "件数", "3着内率", "単勝の回収率", "複勝の回収率", "異なる回", "異なる馬",
             "期待の3着内率", "二項の確率（単独）", "同じ馬の集まりになる条件の数"]
 
 
@@ -141,15 +156,27 @@ def buy_section(B: dict | None, R: dict) -> tuple[str, str]:
 <li>開発の検証（2016〜2021 年で探して 2022〜2024 年の重賞に当てはめた買いの馬）: 本物の組 {escape(rec(dv))}。偶然の組 {escape(' ／ '.join(rec(e) for e in dp))}。</li>
 {ev_li}<li>{escape(B['rules']['roi_note'])}。{escape(B['rules']['dedupe'])}。</li>
 <li>表は重賞 × 層ごとに、二項の確率の小さい順に {B['max_per_race']} 組まで（載せた {B['n_rows']:,} 組）。</li></ul></div>
-<div class="ctl"><label>重賞名・コース<input id="bq" type="search" placeholder="例: 京都牝馬S"></label><label>層<select id="bly">{_opt([("", "すべて"), ("主", "主"), ("副", "副")])}</select></label>
+<div class="ctl"><label>会場<select id="bcv"></select></label><label>コース<select id="bcc"></select></label><label>重賞名・コース<input id="bq" type="search" placeholder="例: 京都牝馬S"></label><label>層<select id="bly">{_opt([("", "すべて"), ("主", "主"), ("副", "副")])}</select></label>
 <label>切り口・水準<input id="bqt" type="search" placeholder="例: A04・1着"></label><label>件数の下限<input id="bmn" type="number" min="0" value="0" style="width:6em"></label></div>
 <div class="muted" id="bcnt"></div>{pager}<div class="scroll"><table><thead><tr id="bth">{''.join(f'<th>{h}</th>' for h in BUY_HEAD)}</tr></thead><tbody id="btb"></tbody></table></div>{pager}</section>"""
     tabs = '<div class="tabs"><button class="on" data-k="t-rules">ルールの一覧</button><button data-k="t-buy">買いの組み合わせ</button></div>'
     return sec, tabs
 
 
+def add_texts(R: dict) -> dict:
+    """切り口 × 水準の日本語の文（lvtext: "型|水準" → 文）・買いの組の文（buy.cols.text）・コースのプルダウンの候補（course_opts）を足す。"""
+    C = R["cols"]
+    pairs = {(R["types"][t]["id"], R["levels"][lv]) for t, lv in zip(C["t"], C["lv"])}
+    R["lvtext"] = {f"{t}|{lv}": LT.describe(t, lv)[0] for t, lv in sorted(pairs)}
+    B = R.get("buy")
+    if B:
+        B["cols"]["text"] = [LT.describe_combo(t.split("|"), lv.split("|")) for t, lv in zip(B["cols"]["types"], B["cols"]["levels"])]
+    R["course_opts"] = CF.options({r["rkey"]: r["course"] for r in R["races"]})
+    return R
+
+
 def build(src: Path = SRC, out: Path = OUT) -> Path:
-    R = json.loads(src.read_text(encoding="utf-8"))
+    R = add_texts(json.loads(src.read_text(encoding="utf-8")))
     data = json.dumps(R, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     o = R["overall_roi"]
     base = "・".join(f"{lab} 単勝 {100 * o[k]['ret_tan']:.1f}%・複勝 {100 * o[k]['ret_fuku']:.1f}%" for k, lab in (("disc", "2018〜2021 年"), ("conf", "2022〜2024 年")) if k in o)
@@ -161,9 +188,10 @@ def build(src: Path = SRC, out: Path = OUT) -> Path:
                '評価（2025・2026 年）では、各レースの日より前の件数（as-of）で判定するので、同じ行でも当たり方が変わる。'
                '「2 つ以上で消す」版では、馬が 2 つ以上の行に当たったときだけ消す（この列は行ごとの当たり）。</li>') if K else ""
     ctl = (f'<div class="ctl">'
+           f'<label>会場<select id="cv"></select></label><label>コース<select id="cc"></select></label>'
            f'<label>重賞名・コース<input id="q" type="search" placeholder="例: 皐月賞・中山芝2000"></label>'
            f'<label>格<select id="g">{_opt([("", "すべて"), ("G1", "G1"), ("G2", "G2"), ("G3", "G3")])}</select></label>'
-           f'<label>切り口・水準<input id="qt" type="search" placeholder="例: A01・前走・4角"></label>'
+           f'<label>条件（文・切り口・水準）<input id="qt" type="search" placeholder="例: 2 走前・A01・4角"></label>'
            f'<label>好／凡<select id="dir">{_opt([("", "すべて"), ("buy", "好（買い）"), ("weak", "好傾向（弱い）"), ("1", "凡（避ける）")])}</select></label>'
            f'<label>区分<select id="kd">{_opt([("", "すべて"), ("0", "好成績"), ("1", "凡走"), ("2", "参考")])}</select></label>'
            f'<label>集計の階層<select id="ly">{_opt([("", "すべて"), ("0", "主"), ("1", "副"), ("2", "全重賞")])}</select></label>'
@@ -197,12 +225,13 @@ def build(src: Path = SRC, out: Path = OUT) -> Path:
 <li><b>回収率の判定</b>: 回収率でも残った = 上の回収率版で採用されたパターン。基準は満たすが全重賞の層で使わない = パターンは回収率の基準を満たしたが、この重賞では点が全重賞の層で付くので、回収率版（主・副の層だけ）では点 0。成績だけ = 成績では点が付くが、回収率の基準は満たさない。</li>
 {kill_li}</ul></div>
 {tabs}<section class="tab" id="t-rules">
-{ctl}<div class="muted" id="cnt"></div>{pager}
+{ctl}<div class="muted" style="font-size:12px">行の色: <span class="lg ad-roi"></span>回収率版で採用<span class="lg ad-kill"></span>消しに使う。色なし = 成績版（前日・当日）だけで採用（表のほぼ全行。成績版は点の付く水準をすべて使うため色で分けない）。採否は「採否」「消しに使う」の列にも文字で出す</div>
+<div class="muted" id="cnt"></div>{pager}
 <div class="scroll"><table><thead><tr id="th">{''.join(f'<th>{h}</th>' for h in HEAD)}</tr></thead><tbody id="tb"></tbody></table></div>{pager}
 </section>{buy_sec}
 <p class="muted">結果の全体（検証・各重賞の表・検証のレース）: <a href="graded_handicapper.html">重賞のルールベース予想家</a>。
 作り: src/research/graded/rules_table.py → src/scripts/docs/build_graded_rules_table_html.py</p>
-</main><script type="application/json" id="data">{data}</script><script>{JS}</script></body></html>"""
+</main><script type="application/json" id="data">{data}</script><script>{CF.COURSE_JS}{JS}</script></body></html>"""
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
     print(out, f"{out.stat().st_size / 1e6:.1f} MB", R["n_rows"], "rows")

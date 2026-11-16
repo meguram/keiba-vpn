@@ -14,7 +14,9 @@ import sys
 from html import escape
 from pathlib import Path
 
+from src.research.graded import level_text as LT
 from src.research.graded import playbook as PB
+from src.scripts.docs import graded_course_filter as CF
 from src.scripts.docs.build_graded_handicapper_html import CSS
 
 REPO = Path(__file__).resolve().parents[3]
@@ -45,7 +47,8 @@ function apply(){const g=$('f-grade').value,v=$('f-venue').value,c=$('f-course')
  const s=$('f-sort').value;const key={grade:e=>e.dataset.grade+e.dataset.md,date:e=>e.dataset.md+e.dataset.grade,
   ach:e=>String(9-Number(e.dataset.score))+e.dataset.grade+e.dataset.md}[s];
  cards.slice().sort((x,y)=>key(x)<key(y)?-1:key(x)>key(y)?1:0).forEach(e=>box.appendChild(e))}
-['f-grade','f-venue','f-course','f-q','f-ach','f-sort'].forEach(id=>$(id).addEventListener('input',apply));apply();
+setupCourse($('f-venue'),$('f-course'),COPTS,apply,true);
+['f-grade','f-q','f-ach','f-sort'].forEach(id=>$(id).addEventListener('input',apply));apply();
 """
 
 GRADE_ORDER = {"G1": "1", "G2": "2", "G3": "3"}
@@ -110,11 +113,12 @@ def examples_html(ex: list[dict]) -> str:
         return ""
     li = []
     for x in ex:
-        lv = "・".join(f"{escape(v['name'])} = {escape(v['level'])}（{escape(v['layer'])}の層）" for v in x["levels"])
+        lv = "・".join(f"{escape(LT.describe(v['type'], v['level'])[0])}（{escape(v['type'])} {escape(v['name'])}、{escape(v['layer'])}の層）" for v in x["levels"])
         fin = int(x["fin"]) if x["fin"] == x["fin"] else "—"
         lvh = f'<br><span class="muted">{lv}</span>' if lv else ""
         pay = f"単勝の払戻 {round(x['tan']):,} 円" if x.get("tan") else ("払戻なし" if x.get("pay_ok", True) else "払戻のデータなし")
-        li.append(f"<li>{escape(x['date'])}: {x['hn']} 番 → {fin} 着（{pay}）{lvh}</li>")
+        nm = f" {escape(x['name'])}" if x.get("name") else ""
+        li.append(f"<li>{escape(x['date'])}: {x['hn']} 番{nm} → {fin} 着（{pay}）{lvh}</li>")
     return f"<details><summary class='sm'>2025・2026 年の ◎（重みの大きい型で当たった水準）</summary><ul class='sm'>{''.join(li)}</ul></details>"
 
 
@@ -246,9 +250,7 @@ def card_html(c: dict, tried: str = "多数の") -> str:
 def build(src: Path = SRC, out: Path = OUT) -> Path:
     P = json.loads(src.read_text(encoding="utf-8"))
     C, S = P["cards"], P["summary"]
-    venues = sorted({c["venue"] for c in C})
-    courses = sorted({c["course"] for c in C})
-    opt = lambda xs: "".join(f'<option value="{escape(x)}">{escape(x)}</option>' for x in xs)   # noqa: E731
+    copts = CF.options_json({c["rkey"]: c["course"] for c in C})
     both = "・".join(escape(x) for x in S["B_both_rkeys"]) or "なし"
     tried = f" {P['tried']:,} " if P.get("tried") else "多数の"
     CRIT.update(P.get("criteria") or {})
@@ -296,8 +298,8 @@ A の決め方の 2018〜2024 年の単勝の回収率が {S.get('A_dev_honmei',
 </ul></div>
 <div class="ctl">
 <select id="f-grade"><option value="">格: すべて</option><option value="1">G1</option><option value="2">G2</option><option value="3">G3</option></select>
-<select id="f-venue"><option value="">会場: すべて</option>{opt(venues)}</select>
-<select id="f-course"><option value="">コース: すべて</option>{opt(courses)}</select>
+<select id="f-venue" aria-label="会場"></select>
+<select id="f-course" aria-label="コース"></select>
 <input id="f-q" type="search" placeholder="重賞名で検索">
 <select id="f-ach"><option value="">達成: すべて</option><option value="bboth">B で両方を達成</option><option value="bhonmei">B で ◎ を達成</option>
 <option value="bkill">B で消しを達成</option><option value="ahonmei">A で ◎ を達成</option></select>
@@ -306,7 +308,7 @@ A の決め方の 2018〜2024 年の単勝の回収率が {S.get('A_dev_honmei',
 <div id="cards" class="cards">{''.join(card_html(c, tried) for c in C)}</div>
 <p class="muted">作り: {escape(P.get('made_at', ''))}（サイクルの終了 {escape(P.get('from_cycles_finished_at', ''))}）。src/research/graded/playbook.py → src/scripts/docs/build_graded_race_playbook_html.py。
 戻る: <a href="graded_handicapper.html">重賞のルールベース予想家</a>・<a href="graded_cycles.html">重賞の分析サイクル</a>・<a href="graded_rules_table.html">重賞のルール一覧</a></p>
-</main><script>{JS}</script></body></html>"""
+</main><script>const COPTS={copts};{CF.COURSE_JS}{JS}</script></body></html>"""
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
     print(out, f"{out.stat().st_size / 1e6:.2f} MB", len(C), "cards")

@@ -246,7 +246,9 @@ def build_cards(t: CY.Table, rules: dict, last_report: dict, khit_names: list[st
                     h = int(H[i, j])
                     lv = [{"type": q[2:], "name": CAT.BY_ID[q[2:]].name if q[2:] in CAT.BY_ID else q[2:], "level": v[0], "layer": v[1]}
                           for q in tops if (v := level_of(levels, t.r["row"].iloc[h], q[2:]))]
-                    ex.append({"date": str(dt[i])[:10] if dt is not None else "", "hn": int(t.r["hn"].iloc[h]), "fin": float(t.r["fin"].iloc[h]),
+                    nm = _val(t.r.iloc[h], "horse_name")
+                    ex.append({"date": str(dt[i])[:10] if dt is not None else "", "hn": int(t.r["hn"].iloc[h]), "name": None if nm is None else str(nm),
+                               "fin": float(t.r["fin"].iloc[h]),
                                "tan": float(t.rt[h]) * 100 if t.rt[h] > 0 else None, "pay_ok": bool(t.race["pay_ok"].iloc[i]), "levels": lv})
                 same = int((H[ri_e, j] == H[ri_e, b]).sum())   # 前日版の点の ◎ と同じ馬だった回
                 hc = {"rule": describe(r["terms"], khit_names, "honmei", sc), "label": r["label"], "eval": e | {"same_as_base": same}, "dev": honmei_stats(t, H[:, j], ri_d),
