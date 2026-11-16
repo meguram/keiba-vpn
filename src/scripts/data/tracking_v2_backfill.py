@@ -66,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     from src.scraper.storage import HybridStorage
 
     storage = HybridStorage()
-    agg = {"ok": 0, "skip": 0, "fail": 0, "total": 0}
+    agg = {"ok": 0, "race_only": 0, "skip": 0, "fail": 0, "total": 0}
     left = a.limit
     for day, rids in days.items():
         if a.limit:
@@ -76,8 +76,8 @@ def main(argv: list[str] | None = None) -> int:
         st = precompute_tracking_v2_for_race_ids(rids, storage, source="backfill", overwrite=a.overwrite)
         for k in agg:
             agg[k] += int(st.get(k, 0))
-        left -= st.get("ok", 0)
-        logger.info("%s: %s（累計 %s）", day, {k: st.get(k) for k in ("ok", "skip", "fail", "total")}, agg)
+        left -= st.get("ok", 0) + st.get("race_only", 0)
+        logger.info("%s: %s（累計 %s）", day, {k: st.get(k, 0) for k in ("ok", "race_only", "skip", "fail", "total")}, agg)
     print(json.dumps({"days": len(days), **agg}, ensure_ascii=False))
     return 0
 

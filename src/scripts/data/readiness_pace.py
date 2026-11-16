@@ -74,6 +74,8 @@ def pace_eval(inf: Path, act: pd.DataFrame, races_all: set[str]) -> dict:
     rows, n_doc = [], 0
     for f in glob.glob(str(inf / "tracking_v2" / "*" / "*.json")):
         d = json.load(open(f, encoding="utf-8"))
+        if d.get("race_only"):      # レース単位の z_hat だけの保存（新馬戦など。v2 なし）は数えない
+            continue
         n_doc += 1
         pu = d.get("pace_unified") or {}
         pf = d.get("pace_forecast") or {}

@@ -1,6 +1,6 @@
 "use client";
 
-import { PERIOD_LABEL, fin, killedTop3, odds, pct, periodsOf, rec, yen, type GPFigure, type GPHorse, type GPRace, type GPRule } from "@/lib/gradedPicks";
+import { PERIOD_LABEL, SKIP_LABEL, fin, killedTop3, odds, pct, periodsOf, rec, yen, type GPFigure, type GPHorse, type GPPicked, type GPRace, type GPRule } from "@/lib/gradedPicks";
 
 const CSS = `
 .gp-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -136,8 +136,38 @@ function StatsTable({ fig }: { fig: GPFigure }) {
   );
 }
 
+function PickedBlock({ p }: { p: GPPicked }) {
+  const kill = [...(p.B.kill ?? [])].sort((a, b) => a.hn - b.hn);
+  const sk = p.skipped ?? {};
+  return (
+    <div className="gp-race">
+      <h4>{p.date}・{p.field} 頭（出馬表の確定後に計算。結果はまだありません）</h4>
+      <div className="gp-scroll">
+        <table className="gp">
+          <thead><tr><th className="l">印</th><th>馬番</th><th className="l">馬名</th></tr></thead>
+          <tbody>
+            <tr><td className="l">◎（B）</td>{p.B.honmei ? <><td>{p.B.honmei.hn}</td><td className="l">{p.B.honmei.name ?? "（馬名なし）"}</td></> : <td className="l" colSpan={2} style={{ color: "var(--text-dim)", whiteSpace: "normal" }}>{SKIP_LABEL[sk.honmei ?? "no_rule"]}</td>}</tr>
+            <tr><td className="l">前日版の点の ◎（参考）</td>{p.base ? <><td>{p.base.hn}</td><td className="l">{p.base.name ?? "（馬名なし）"}</td></> : <td colSpan={2}>—</td>}</tr>
+          </tbody>
+        </table>
+      </div>
+      {p.B.kill == null ? (
+        <div className="gp-note">消し: {SKIP_LABEL[sk.kill ?? "no_rule"]}</div>
+      ) : kill.length === 0 ? (
+        <div className="gp-note">消した馬なし（頭数が少なく 3 頭を残した）</div>
+      ) : (
+        <div className="gp-note">消し（{kill.length} 頭）: {kill.map((h) => `${h.hn} ${h.name ?? "（馬名なし）"}`).join("・")}</div>
+      )}
+      <div className="gp-note">
+        使った結果は {p.data_until} まで（レースの前日以前。前日の結果は翌朝まで手元に無いので、日曜の重賞は金曜までの結果になることがあります）。
+        当日に決まる値（馬体重・馬場など）と、出馬表の段階で分からないブリンカーは使っていません。計算 {p.computed_at.slice(0, 16).replace("T", " ")}。
+      </div>
+    </div>
+  );
+}
+
 const THIS_MSG: Record<string, string> = {
-  pending: "このレースの該当馬は、まだ計算していません（出馬表の確定後に前日に計算して出す準備中です。結果が出た後は、記録の更新後に結果つきで出ます）。",
+  pending: "出馬表の確定後に表示します（前日に計算）。結果が出た後は、記録の更新後に結果つきで出ます。",
   dayof: "この重賞の規則は当日に決まる値（馬体重・馬場など）を使うので、前日には該当馬を出しません。結果の後に「これまで」に記録します。",
   default: "2018〜2024 年にこの重賞の回が無く、規則を決められていないため、該当馬を出しません。",
 };
@@ -160,7 +190,7 @@ export function GradedPicks({ fig, notes }: { fig: GPFigure; notes?: string[] })
           このレースの該当馬（{fig.rkey}・{fig.grade}・{fig.course}）
           {t.race && t.period === "dev" && <span className="gp-tag">規則を選んだ期間の回（当てはめ）</span>}
         </h3>
-        {t.race ? <RaceBlock x={t.race} /> : <div className="gp-note">{THIS_MSG[t.status] ?? THIS_MSG.pending}</div>}
+        {t.race ? <RaceBlock x={t.race} /> : t.picked ? <PickedBlock p={t.picked} /> : <div className="gp-note">{THIS_MSG[t.status] ?? THIS_MSG.pending}</div>}
       </div>
       <div className="gp-sec">
         <h3>成績・回収率（このレースより前の回）</h3>

@@ -95,6 +95,33 @@ def _stats_by_period(races: list[dict], track_from: str | None) -> dict[str, Any
     return out
 
 
+def load_picked(race_id: str, h: dict) -> dict | None:
+    """前日の計算の該当馬（<GRADED_PICKS_DIR>/races/<race_id>.json）。記録と同じ凍結の規則で作ったものだけ使う。"""
+    p = picks_dir() / "races" / f"{race_id}.json"
+    try:
+        x = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if x.get("sha256_rules") != h.get("sha256_rules") or x.get("frozen_at") != h.get("frozen_at"):
+        logger.warning("前日の計算の該当馬が凍結の規則と違うので使いません: %s", race_id)
+        return None
+    from src.research.graded.upcoming import entries_sig
+    cur = entries_sig(race_id)
+    if cur is not None and x.get("entries_sig") != cur:   # 取消・乗り替わりの後の古い計算は出さない（計算し直すまで「確定後に表示」）
+        logger.info("前日の計算の該当馬が今の出馬表と違うので使いません: %s", race_id)
+        return None
+    v = h["rkeys"].get(x.get("rkey")) or {}
+    hd, kd = (v.get("honmei") or {}).get("default"), (v.get("kill") or {}).get("default")
+    if hd or kd:
+        sk = dict(x.get("skipped") or {})
+        if hd:
+            sk["honmei"] = "default"
+        if kd:
+            sk["kill"] = "default"
+        x = x | {"B": {"honmei": None if hd else x["B"]["honmei"], "kill": None if kd else x["B"]["kill"]}, "skipped": sk}
+    return x
+
+
 def _without_default(x: dict, v: dict) -> dict:
     """規則が既定（2018〜2024 年に回が無く、決められていない）なら、その B の ◎・消しは出さない（None）。"""
     hd, kd = v["honmei"]["default"], bool(v["kill"] and v["kill"]["default"])
@@ -111,16 +138,19 @@ def figure_for(h: dict, rkey: str, race_id: str, date: str) -> dict[str, Any]:
     races = [_without_default(x, v) for x in v["races"]]
     past = [x for x in races if x["date"] < str(date)[:10] and x["race_id"] != race_id]
     this = next((x for x in races if x["race_id"] == race_id), None)
+    picked = load_picked(race_id, h) if this is None else None
     if this is not None:
         status = "result"
+    elif picked is not None:
+        status = "picked"    # 出馬表の確定後の前日の計算（upcoming.py）。当日の値を使う規則は picked["skipped"] に理由
     elif v["honmei"]["default"]:
         status = "default"
     elif v["honmei"]["dayof"] or (v["kill"] or {}).get("dayof"):
         status = "dayof"     # 当日の値（馬体重・馬場など）を使う規則は、前日には該当馬を出さない
     else:
-        status = "pending"   # 2 段目で、出馬表の確定後の前日の計算を入れる
+        status = "pending"   # 出馬表の確定前（確定後に前日の計算で出す）
     return {"rkey": rkey, "grade": v["grade"], "course": v["course"], "rules": {"honmei": v["honmei"], "kill": v["kill"]},
-            "this": {"status": status, "race": this, "period": PK.period_of(date, tf)},
+            "this": {"status": status, "race": this, "period": PK.period_of(date, tf), "picked": picked},
             "past": sorted(past, key=lambda x: x["date"], reverse=True), "stats": _stats_by_period(past, tf),
             "periods": h.get("periods"), "track_from": tf, "frozen_at": h.get("frozen_at"), "data_until": h.get("data_until")}
 

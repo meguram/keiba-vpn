@@ -58,8 +58,13 @@ def main() -> int:
     ap.add_argument("--out", default="/home/jovyan/work/retrain_out/base_2016")
     ap.add_argument("--years", default="2016-2025")
     ap.add_argument("--skip-layer-a", action="store_true", help="既にある <out>/layer_a.parquet を使う")
+    ap.add_argument("--pedigree-keys", default=str(PED / "pedigree_keys.parquet"),
+                    help="horse_id → 父・母父の ID の表。既定の表は 2020 年以降に走った馬だけなので、2016〜2019 年だけ走った馬の"
+                         " sire・dam_sire が空になる（データ監査 2026-11-16 の C1）。全馬で作った表を渡す")
     a = ap.parse_args()
     years = _years(a.years)
+    if a.skip_layer_a and a.pedigree_keys != str(PED / "pedigree_keys.parquet"):
+        ap.error("--pedigree-keys は母表（layer_a）を作るときに使う。--skip-layer-a と一緒には使えない")
     assert 2026 not in years, "2026 年は学習に使わない"
     out = Path(a.out)
     (out / "features").mkdir(parents=True, exist_ok=True)
@@ -74,7 +79,7 @@ def main() -> int:
 
     la_path = out / "layer_a.parquet"
     if not a.skip_layer_a:
-        keys = pd.read_parquet(PED / "pedigree_keys.parquet")
+        keys = pd.read_parquet(a.pedigree_keys)
         full = build_layer_a_dataframe(years=[str(y) for y in years], jra_only=True, pedigree_keys=keys)
         ct = add_course_variant(full, parsed_col="course_type", parsed_available=False)
         full["course_type_unknown"] = ct.isna().astype(np.int8)

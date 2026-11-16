@@ -202,3 +202,112 @@ def test_refresh_for_dates_flag_and_isolation(store, monkeypatch):
     monkeypatch.setattr(ev, "aggregate_day", lambda d, **k: (_ for _ in ()).throw(RuntimeError("x")))
     r = ev.refresh_for_dates(["20261024"], reason="t")
     assert r["status"] == "ok" and r["days"]["20261024"] == "error"
+
+
+# ───────────────────────── 監査 2026-11-16: 新馬戦（位置取り予想なし）でもレース単位の z_hat を保存する
+
+_V2 = {"intercept": 0.25, "coef": [0.0] * 16, "features": ["f0", "f1", "f2", "f3p", "stalk", "stalk2", "f0_stalk", "pressure", "known_frac",
+                                                          "field", "turf", "dist", "dist2", "heavy", "turf_dist", "heavy_turf"]}
+
+
+def _shinba_card(n=8):
+    return {"date": "2026-11-15", "venue": "東京", "surface": "芝", "distance": 1600, "track_condition": "良",
+            "entries": [{"horse_number": k, "horse_id": f"h{k}"} for k in range(1, n + 1)]}
+
+
+def _past(n=8):
+    return {"entries": [{"horse_id": f"h{k}", "past_races": []} for k in range(1, n + 1)]}
+
+
+@pytest.fixture()
+def shinba(store, monkeypatch):
+    """位置取りのペースが unknown（既知の馬が 1 頭だけ）のレース。v2 のモデルは返さない（attach は何もしない）。"""
+    from src.pipeline.inference import pace_coherence as pcoh
+    from src.pipeline.inference import position_forecast as pfm
+    from src.pipeline.models import tracking_difficulty_v2 as td2
+
+    monkeypatch.setenv("KEIBA_TRACKING_V2", "1")
+    monkeypatch.setattr(pcoh, "load_pace_v2", lambda path=None: _V2)
+    monkeypatch.setattr(svc, "tv2_load_model", lambda: object())
+    pf = {"level": "unknown", "front_runner_count": 0, "stalker_count": 0, "early_pressure": 0.0, "known_horses": 1, "field_size": 8}
+
+    def fake_pos(resp, past, date, course):
+        preds = [dict(p) for p in resp["predictions"]]
+        preds[2]["position_forecast"] = {"early_pos_norm": 0.2, "early_pos_est": 1}    # 既知の馬（馬番 3）だけ位置取りあり
+        return {**resp, "predictions": preds, "pace_forecast": pf}
+
+    monkeypatch.setattr(pfm, "attach_position_forecast", fake_pos)
+    monkeypatch.setattr(td2, "attach_tracking_v2_to_response", lambda resp, *a, **k: resp)
+    return monkeypatch
+
+
+def test_race_only_doc_keeps_race_level_z_hat_and_known_inputs(shinba):
+    doc, reason = svc.build_doc_reason(_shinba_card(), _past(), "202605050101", source="backfill")
+    assert reason == "race_only" and doc["race_only"] == "pace_unknown" and doc["n_with_v2"] == 0
+    assert doc["z_hat"] == pytest.approx(0.25)
+    # 学習（tp53）は、ペースが unknown でも位置取り予想のある馬に pf_early・pf_rank（early_pos_est）を付ける
+    assert doc["horses"] == {"3": {"horse_id": "h3", "position_early": 0.2, "inputs": {"pf_early": 0.2, "pf_rank": 1.0, "z_hat": doc["z_hat"]}}}
+
+
+def test_race_only_not_made_without_past_or_small_field_or_pace_model(shinba):
+    from src.pipeline.inference import pace_coherence as pcoh
+
+    assert svc.build_doc_reason(_shinba_card(), None, "R", source="backfill") == (None, "pace_unknown")            # 馬柱が無い（前夜に未取得）
+    assert svc.build_doc_reason(_shinba_card(7), _past(7), "R", source="backfill") == (None, "pace_unknown")      # 8 頭未満は学習に z_hat が無い
+    shinba.setattr(pcoh, "load_pace_v2", lambda path=None: None)
+    assert svc.build_doc_reason(_shinba_card(), _past(), "R", source="backfill") == (None, "pace_unknown")        # ペースの係数が無い
+
+
+def test_no_position_with_known_pace_level_is_not_race_only(shinba):
+    from src.pipeline.inference import position_forecast as pfm
+
+    shinba.setattr(pfm, "attach_position_forecast", lambda resp, *a: {**resp, "pace_forecast": {"level": "middle", "field_size": 8}})
+    assert svc.build_doc_reason(_shinba_card(), _past(), "R", source="backfill") == (None, "no_position")
+
+
+def test_precompute_counts_race_only_separately_from_ok(shinba):
+    class St:
+        def load(self, cat, rid):
+            return _shinba_card() if cat == "race_shutuba" else _past()
+
+    st = svc.precompute_tracking_v2_for_race_ids(["202605050101"], St(), source="backfill")
+    assert st["ok"] == 0 and st["race_only"] == 1 and st["skip"] == 0
+    assert svc.path_for("202605050101", "2026-11-15").exists()
+    # バックフィル（overwrite=False）でも、race_only の保存は「保存済み」と見なさずに作り直す
+    st2 = svc.precompute_tracking_v2_for_race_ids(["202605050101"], St(), source="backfill", overwrite=False)
+    assert st2["race_only"] == 1 and st2["skip"] == 0
+
+
+def test_cached_api_ignores_race_only_doc_and_computes_live(shinba):
+    from src.pipeline.inference import tracking_v2_eval as ev2
+    from src.pipeline.models import tracking_difficulty_v2 as td2
+
+    doc, _ = svc.build_doc_reason(_shinba_card(), _past(), "202605050101", source="backfill")
+    svc._write(svc.path_for("202605050101", "2026-11-15"), doc)
+    calls = []
+
+    def live(resp, *a, **k):
+        calls.append(1)
+        return resp
+
+    shinba.setattr(td2, "attach_tracking_v2_to_response", live)
+    resp = {"predictions": [{"horse_number": k, "horse_id": f"h{k}"} for k in range(1, 9)]}
+    out = svc.attach_tracking_v2_cached(resp, "202605050101", _past(), "2026-11-15", {}, _shinba_card())
+    assert calls == [1] and "tracking_v2_meta" not in out          # 保存ではなく、従来どおりその場で計算（後から馬柱がそろえば v2 が出る）
+    assert ev2.served_docs("2026-11-15") == {}                      # 突き合わせの集計にも入れない
+
+
+def test_stage_forecast_columns_uses_race_level_z_hat_when_horse_inputs_missing(tmp_path):
+    from src.pipeline.features import serving_v6 as sv6
+
+    d = tmp_path / "tracking_v2" / "2026-11-15"
+    d.mkdir(parents=True)
+    (d / "R1.json").write_text(json.dumps({"horses": {}, "z_hat": -0.4, "race_only": "pace_unknown"}))
+    (d / "R2.json").write_text(json.dumps({"z_hat": 0.3, "horses": {"1": {"horse_id": "a", "tracking_v2": {"drain_sec": 0.1},
+                                                                         "inputs": {"pf_early": 0.2, "pf_rank": 1.0, "z_hat": 0.3}}}}))
+    # 最上位の z_hat が無い古い保存（tracking_t6 の保存も同じ）は、丸めた tracking_v2_meta.pace_z で補う
+    (d / "R3.json").write_text(json.dumps({"tracking_v2_meta": {"pace_z": 0.12}, "horses": {}}))
+    base = pd.DataFrame({"race_id": ["R1", "R2", "R2", "R3"], "horse_id": ["x", "a", "b", "c"], "date": ["2026-11-15"] * 4})
+    out = sv6.stage_forecast_columns(base, ["z_hat", "pf_rank", "pf_early"], tmp_path)
+    assert np.allclose(out["z_hat"].to_numpy(), [-0.4, 0.3, 0.3, 0.12])
+    assert np.isnan(out["pf_rank"].iloc[0]) and out["pf_rank"].iloc[1] == 1.0 and np.isnan(out["pf_early"].iloc[2])

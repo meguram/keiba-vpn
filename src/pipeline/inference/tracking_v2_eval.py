@@ -95,11 +95,11 @@ def served_docs(date: str) -> dict[str, dict]:
         if p.name.endswith(".recomputed.json"):
             continue
         d = svc._read(p)
-        if d:
+        if d and not d.get("race_only"):     # レース単位の z_hat だけの保存（新馬戦など）は v2 を返さないので数えない
             out[str(d.get("race_id") or p.stem)] = d
     for p in sorted(day_dir.glob("*.recomputed.json")):
         d = svc._read(p)
-        if d:
+        if d and not d.get("race_only"):
             rid = str(d.get("race_id") or p.name.split(".")[0])
             d["_recomputed"] = True
             out[rid] = d

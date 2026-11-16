@@ -370,8 +370,8 @@ def _eve_precomputes(race_date_str: str, race_ids: list[str]) -> tuple[dict[str,
             v2_stats = precompute_tracking_v2_for_race_ids(race_ids, _storage(), source="raceday_eve")
             precompute_stats = {**precompute_stats, "tracking_v2": v2_stats}
             logger.info(
-                "  追走難度 v2 precompute: ok=%d skip=%d fail=%d / %d",
-                v2_stats.get("ok", 0), v2_stats.get("skip", 0), v2_stats.get("fail", 0), v2_stats.get("total", 0),
+                "  追走難度 v2 precompute: ok=%d race_only=%d skip=%d fail=%d / %d",
+                v2_stats.get("ok", 0), v2_stats.get("race_only", 0), v2_stats.get("skip", 0), v2_stats.get("fail", 0), v2_stats.get("total", 0),
             )
     except Exception as exc:
         logger.warning("追走難度 v2 precompute バッチ失敗: %s", exc)

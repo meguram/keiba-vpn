@@ -186,6 +186,7 @@ def run_entries_sync(
             result["plan"] = [{k: p[k] for k in ("race_id", "date", "prev_phase", "refetch")} for p in plan]
             return result
         if not todo:
+            result["graded_picks"] = _kick_graded_picks(storage, [])   # 前の回で計算できなかった（動いていた・失敗した）重賞を拾う
             _mark_done(sync, cp, result)
             return {**result, "fetched": 0}
 
@@ -228,6 +229,7 @@ def run_entries_sync(
                     notable.append({"race_id": p["race_id"], **c})
         result.update(fetched=len(todo), phases=phases, notable_changes=notable[:30])
         result["analysis"] = _refresh_analysis(storage, [p["race_id"] for p in todo])
+        result["graded_picks"] = _kick_graded_picks(storage, todo)
         _mark_done(sync, cp, result)
         return result
 
@@ -280,6 +282,23 @@ def _refresh_analysis(storage: Any, race_ids: list[str]) -> dict[str, int] | dic
     except Exception as exc:
         logger.exception("めぐ分析の事前計算に失敗")
         return {"error": str(exc)}
+
+
+def _kick_graded_picks(storage: Any, races: list[dict]) -> dict[str, Any]:
+    """出馬表の確定した重賞の「データで予想」（前日の計算）を裏で起動する（src/research/graded/upcoming.py。1 回 25 分ほどなので待たない）。
+    失敗しても出馬表の同期・めぐ分析の作り直しは止めない（警告だけ）。"""
+    t0 = time.time()
+    try:
+        from src.research.graded import upcoming
+
+        saved = upcoming.save_entries(storage, races)   # 重賞の名前のレースだけカードを読む
+        res = upcoming.kick(saved) | {"saved": saved}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("データで予想の前日の計算を起動できません: %s", exc, exc_info=True)
+        res = {"error": str(exc)}
+    res["seconds"] = round(time.time() - t0, 1)
+    logger.info("データで予想の前日の計算の起動: %s", res)
+    return res
 
 
 def _mark_done(sync: dict, cp: dict, result: dict) -> None:

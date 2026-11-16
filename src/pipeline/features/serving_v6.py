@@ -188,6 +188,11 @@ def stage_forecast_columns(base: pd.DataFrame, names: list[str], inference_dir: 
             v2, inp = h.get("tracking_v2") or {}, h.get("inputs") or {}
             row.update({k: v2.get(src) for k, src in EASE2_MAP.items()})
             row.update({k: inp.get(src) for k, src in PF_MAP.items()})
+            if row.get("z_hat") is None:
+                # z_hat はレース単位（学習は位置取り予想の無い馬・新馬戦にも付く）。馬の inputs に無ければ保存のレースの値を使う
+                # （最上位の z_hat が無い古い保存・tracking_t6 の保存は、丸めた tracking_v2_meta.pace_z）
+                z = tj.get("z_hat")
+                row["z_hat"] = z if z is not None else (tj.get("tracking_v2_meta") or {}).get("pace_z")
         if lj:
             row.update(lap_race_columns(lj))
             row.update(lapd_race_columns(lj))

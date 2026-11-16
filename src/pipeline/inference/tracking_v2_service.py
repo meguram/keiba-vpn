@@ -14,7 +14,9 @@
   version, race_id, date, venue, surface, distance, track_condition, n_horses, n_with_v2, horse_numbers（署名）, computed_at（JST）,
   source（raceday_eve / recomputed / backfill）, card_fetched_at, past_fetched_at, model（version とファイルの短いハッシュ）,
   pace_forecast（位置取り側のペース）, pace_unified（整合層のペースと z。無ければ None）, tracking_v2_meta,
-  horses: {馬番: {horse_id, tracking_v2{ease_pct,label,drain_sec,demand_sec?,capacity_sec?}, position_early, inputs{...}}}
+  horses: {馬番: {horse_id, tracking_v2{ease_pct,label,drain_sec,demand_sec?,capacity_sec?}, position_early, inputs{...}}},
+  z_hat（レース単位の想定ペース。学習と同じ式）, race_only（馬ごとの v2 が無いレースの理由。新馬戦など。horses は位置取り予想の
+  ある馬の inputs だけで tracking_v2 は無い。v6e の前段だけが使い、API の読み出し・突き合わせの集計は使わない）
 inputs は週次の突き合わせ用（実測のラベル Y = 実測の上がり偏差 − w_adj）。
 """
 
@@ -137,15 +139,20 @@ def _minimal_resp(card: dict) -> dict:
 
 
 def build_doc(card: dict, past: dict | None, race_id: str, *, source: str, resp: dict | None = None) -> dict | None:
-    """出馬表・馬柱から v2 を作って保存用の文書にする。材料不足（位置取りのペースが unknown、モデル無し等）は None。
+    """出馬表・馬柱から v2 を作って保存用の文書にする。材料不足（モデル無し等）は None。
 
-    resp を渡すと（予測 API の応答に位置取り予想が付いたもの）、それを土台にする。無ければ出馬表から作る。
+    位置取りのペースが unknown のレース（新馬戦など）は、条件を満たせばレース単位の z_hat だけの文書（race_only）を返す
+    （build_doc_reason を参照）。resp を渡すと（予測 API の応答に位置取り予想が付いたもの）、それを土台にする。無ければ出馬表から作る。
     """
     return build_doc_reason(card, past, race_id, source=source, resp=resp)[0]
 
 
 def build_doc_reason(card: dict, past: dict | None, race_id: str, *, source: str, resp: dict | None = None) -> tuple[dict | None, str]:
-    """build_doc と同じ。作れなかったときは理由（no_entries / model_missing / pace_unknown / no_position / no_horses）も返す。"""
+    """build_doc と同じ。作れなかったときは理由（no_entries / model_missing / pace_unknown / no_position / no_horses）も返す。
+
+    ペースが unknown で馬ごとの v2 が作れないレース（新馬戦など）でも、馬柱があり 8 頭以上で z_hat が計算できれば、
+    レース単位の z_hat だけの保存（理由 race_only）を返す。
+    """
     from src.pipeline.inference import pace_coherence as pcoh
     from src.pipeline.inference.position_forecast import attach_position_forecast
     from src.pipeline.models.tracking_difficulty_v2 import attach_tracking_v2_to_response
@@ -160,12 +167,19 @@ def build_doc_reason(card: dict, past: dict | None, race_id: str, *, source: str
     preds = resp.get("predictions") or []
     meta = resp.get("tracking_v2_meta")
     pf = resp.get("pace_forecast") or {}
+    z_race = _race_z(pf, preds, course)
     if not meta:
         if not preds:
             return None, "no_entries"
-        if tv2_load_model() is None:
+        if tv2_load_model() is None:      # v2 のモデルが無い環境は v6e の前段も動かさない前提（race_only も作らない）
             return None, "model_missing"
         if not pf or pf.get("level") == "unknown":
+            # 新馬戦など、位置取りのペースが判定できないレース: 馬ごとの v2 は作れないが、学習（tp53/tp54）と同じく
+            # レース単位の z_hat と、位置取り予想のある馬の pf_early・pf_rank は付ける（学習の新馬戦は z_hat が約 98% 埋まる。
+            # 保存が無いと v6e の前段でこれらが全馬欠損になっていた）。馬柱が無い・8 頭未満（学習に z_hat が無い）は作らない。
+            if z_race is not None and _past_count(past) >= RACE_ONLY_MIN_FIELD:
+                return _doc(card, past, race_id, date, preds, source=source, pf=pf, unified=None, meta=None,
+                            horses=_known_inputs(preds, z_race), z_race=z_race, race_only="pace_unknown"), "race_only"
             return None, "pace_unknown"
         return None, "no_position"
     unified = None
@@ -187,15 +201,60 @@ def build_doc_reason(card: dict, past: dict | None, race_id: str, *, source: str
                                "position_early": (p.get("position_forecast") or {}).get("early_pos_norm"), "inputs": capture.get(hn)}
     if not horses_out:
         return None, "no_horses"
-    return {
+    return _doc(card, past, race_id, date, preds, source=source, pf=pf, unified=unified, meta=meta, horses=horses_out, z_race=z_race), "ok"
+
+
+RACE_ONLY_MIN_FIELD = 8      # 学習（tp53_dataset.load_pf）は 8 頭未満のレースに位置取り・z_hat を付けない
+
+
+def _past_count(past: dict | None) -> int:
+    """馬柱の頭数（学習 tp53_dataset.load_pf の len(ents) と同じく、馬柱に載った馬を数える。馬柱が無ければ 0）。"""
+    return sum(1 for e in (past or {}).get("entries") or [] if isinstance(e, dict))
+
+
+def _known_inputs(preds: list[dict], z_race: float) -> dict[str, Any]:
+    """race_only の保存の horses: 位置取り予想のある馬だけ、inputs（pf_early・pf_rank・z_hat）を持つ（tracking_v2 は無い）。"""
+    out: dict[str, Any] = {}
+    for p in preds:
+        f = p.get("position_forecast") or {}
+        if p.get("horse_number") is None or f.get("early_pos_norm") is None:
+            continue
+        est = f.get("early_pos_est")
+        out[str(int(p["horse_number"]))] = {"horse_id": p.get("horse_id"), "position_early": f.get("early_pos_norm"),
+                                             "inputs": {"pf_early": float(f["early_pos_norm"]), "pf_rank": None if est is None else float(est), "z_hat": z_race}}
+    return out
+
+
+def _race_z(pf: dict, preds: list[dict], course: dict) -> float | None:
+    """レース単位の想定ペース z_hat（学習と同じ式。tracking_difficulty_v2.race_z_hat）。材料が無ければ None。"""
+    if not pf or not preds:
+        return None
+    try:
+        from src.pipeline.inference import pace_coherence as pcoh
+        from src.pipeline.models.tracking_difficulty_v2 import race_z_hat
+
+        field = int(pf.get("field_size") or len(preds))
+        z = race_z_hat(pcoh.load_pace_v2(), pf, field, course.get("surface"), course.get("distance"), course.get("track_condition"))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("レース単位の z_hat の計算に失敗: %s", exc)
+        return None
+    return None if z is None or z != z else float(z)
+
+
+def _doc(card: dict, past: dict | None, race_id: str, date: str, preds: list[dict], *, source: str, pf: dict, unified: Any, meta: Any,
+         horses: dict[str, Any], z_race: float | None, race_only: str | None = None) -> dict:
+    doc = {
         "version": VERSION, "race_id": race_id, "date": _day(date), "venue": card.get("venue"), "surface": card.get("surface"),
         "distance": card.get("distance"), "track_condition": card.get("track_condition"),
-        "n_horses": len(preds), "n_with_v2": len(horses_out), "horse_numbers": numbers_of(preds),
+        "n_horses": len(preds), "n_with_v2": sum(1 for h in horses.values() if h.get("tracking_v2")), "horse_numbers": numbers_of(preds),
         "computed_at": _now_jst(), "source": source, "card_fetched_at": _scraped(card), "past_fetched_at": _scraped(past),
         "model": model_info(),
-        "pace_forecast": {k: pf.get(k) for k in ("level", "label", "front_runner_count", "stalker_count", "early_pressure", "known_horses", "field_size")},
-        "pace_unified": unified, "tracking_v2_meta": meta, "horses": horses_out,
-    }, "ok"
+        "pace_forecast": {k: (pf or {}).get(k) for k in ("level", "label", "front_runner_count", "stalker_count", "early_pressure", "known_horses", "field_size")},
+        "pace_unified": unified, "tracking_v2_meta": meta, "horses": horses, "z_hat": z_race,
+    }
+    if race_only:
+        doc["race_only"] = race_only    # 馬ごとの v2 が無い（理由）。API の読み出し・突き合わせの集計はこの保存を使わない
+    return doc
 
 
 def tv2_load_model():
@@ -233,7 +292,8 @@ def precompute_tracking_v2_for_race_ids(race_ids: list[str], storage: Any = None
         try:
             card = storage.load("race_shutuba", rid) or {}
             date = str(card.get("date") or "")
-            if not overwrite and date and path_for(rid, date).exists():
+            # race_only（レース単位の z_hat だけ）の保存は「保存済み」と見なさない（後から馬柱がそろえば v2 が作れる）
+            if not overwrite and date and path_for(rid, date).exists() and not (_read(path_for(rid, date)) or {}).get("race_only"):
                 stats["skip"] += 1
                 stats["skip_reasons"]["exists"] = stats["skip_reasons"].get("exists", 0) + 1
                 continue
@@ -243,7 +303,10 @@ def precompute_tracking_v2_for_race_ids(race_ids: list[str], storage: Any = None
                 stats["skip_reasons"][reason] = stats["skip_reasons"].get(reason, 0) + 1
                 continue
             _write(path_for(rid, doc["date"]), doc)
-            stats["ok"] += 1
+            if reason == "race_only":    # v2 は作れていない（レース単位の z_hat だけ）。ok には数えない
+                stats["race_only"] = stats.get("race_only", 0) + 1
+            else:
+                stats["ok"] += 1
         except Exception as exc:  # noqa: BLE001
             logger.warning("追走難度 v2 の保存に失敗 %s: %s", rid, exc)
             stats["fail"] += 1
@@ -283,16 +346,18 @@ def attach_tracking_v2_cached(resp: dict, race_id: str, past_doc: dict | None, r
     try:
         if policy != "always" and date:
             saved = load_saved(race_id, date)
+            if saved is not None and saved.get("race_only"):
+                saved = None    # レース単位の z_hat だけの保存（v6e の前段用）: API は従来どおりその場で計算する
             if saved is not None:
                 same = sorted(saved.get("horse_numbers") or []) == nums
                 if same or policy == "none":
                     return _apply(resp, saved, source="saved" if same else "saved_stale")
                 rec = load_saved(race_id, date, recomputed=True)
-                if rec is not None and sorted(rec.get("horse_numbers") or []) == nums:
+                if rec is not None and not rec.get("race_only") and sorted(rec.get("horse_numbers") or []) == nums:
                     return _apply(resp, rec, source="recomputed_saved")
                 # 馬番の集合が変わった（取消・除外・追加）: その場で計算し、別に保存する（前夜の保存は残す）
                 doc = build_doc(card or {}, past_doc, race_id, source="recomputed", resp=resp)
-                if doc is not None:
+                if doc is not None and not doc.get("race_only"):   # race_only は API が読まないので書かない（毎回の書き直しを防ぐ）
                     try:
                         _write(path_for(race_id, doc["date"] or date, recomputed=True), doc)
                     except Exception as exc:  # noqa: BLE001
