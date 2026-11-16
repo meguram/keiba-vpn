@@ -136,21 +136,99 @@ def _build_meta_index(year: str, storage: Any) -> dict[str, dict]:
 
 def _add_shutuba_meta(storage: Any, race_ids: Any, index: dict[str, dict]) -> int:
     """指定レースのメタを出馬表から index に足す（既にあるレースは触らない）。--refresh で追記する新しいレースの、
-    障害レースの距離 0 などを出馬表のメタで補うために使う。足した件数を返す。"""
+    障害レースの距離 0 などを出馬表のメタで補うために使う。足した件数を返す。
+    速報の橋渡しの行から組んだメタで race_class が空のもの（_needs_shutuba_meta）は、空の欄だけを出馬表で補う。"""
     n = 0
     for rid in race_ids:
-        if rid in index:
+        if not _needs_shutuba_meta(index, rid):
             continue
         data = storage.load("race_shutuba", rid)
         if not data:
             continue
-        index[rid] = {f: data.get(f) for f in RACE_META_FIELDS}
+        cur = index.get(rid)
+        if cur is None:
+            index[rid] = {f: data.get(f) for f in RACE_META_FIELDS}
+        else:
+            for f in RACE_META_FIELDS:
+                if _is_blank_meta(f, cur.get(f)) and not _is_blank_meta(f, data.get(f)):
+                    cur[f] = data.get(f)
+            cur.pop(BRIDGED_META_FLAG, None)      # 同じ実行の中で読み直さない
         n += 1
     return n
 
 
+BRIDGED_META_FLAG = "_from_bridge"
+
+
+def _needs_shutuba_meta(index: dict[str, dict], rid: str) -> bool:
+    """出馬表を名前で読んで補うべきレースか。メタが無いか、速報の橋渡しの行から組んだメタで race_class が空のとき
+    （手元の race_shutuba_flat に値が無かったもの。障害レースなど本当に空のものは、確定結果が出るまで毎日 1 回読む。数件/日）。"""
+    cur = index.get(rid)
+    if cur is None:
+        return True
+    return bool(cur.get(BRIDGED_META_FLAG)) and _is_blank(cur.get("race_class"))
+
+
+def _is_blank(v: Any) -> bool:
+    return v is None or (isinstance(v, float) and v != v) or (isinstance(v, str) and v.strip() == "") or v is pd.NA
+
+
+def _is_blank_meta(field: str, v: Any) -> bool:
+    """メタの欄が「取れていない」か（_extract_race_meta と同じ判定。距離・頭数の 0 も欠け）。"""
+    return _is_blank(v) or (field in ("distance", "field_size") and v == 0)
+
+
+# 確定結果（db.netkeiba.com）と速報（race.netkeiba.com）の文書には race_class が無く（解析もしない）、flat の race_class は
+# 出馬表のメタの補い（_extract_race_meta の fallback）だけで入る。メタを race_result_flat から組むと、速報から橋渡しした行
+# （出馬表のメタを持たないまま書き出された速報の行）の空の race_class がそのままメタになり、確定結果に置き換わっても空のまま残った
+# （2026-10-24〜11-08 の全レース。2026-11 は 59% が空）。ローカルの race_shutuba_flat から空の欄だけを補う（GCS は読まない）。
+LOCAL_SHUTUBA_FILL_FIELDS = ("race_class",)
+
+
+def _local_shutuba_meta(year: str, fields: tuple[str, ...] = LOCAL_SHUTUBA_FILL_FIELDS) -> dict[str, dict]:
+    """ローカル race_shutuba_flat.parquet から、レースごとの fields の空でない値を返す（無ければ空の dict）。"""
+    p = OUTPUT_DIR / year / "race_shutuba_flat.parquet"
+    if not p.exists():
+        return {}
+    try:
+        names = set(pq.read_schema(p).names)
+        cols = [f for f in fields if f in names]
+        if "race_id" not in names or not cols:
+            return {}
+        df = pq.read_table(p, columns=["race_id", *cols]).to_pandas()
+    except Exception as e:  # noqa: BLE001  補いが無くても書き出しは続ける
+        logger.warning("[%s] race_shutuba_flat のメタを読めない: %s", year, e)
+        return {}
+    out: dict[str, dict] = {}
+    for f in cols:
+        s = df[["race_id", f]].copy()
+        s[f] = s[f].astype("string").str.strip()
+        s = s[s[f].notna() & (s[f] != "")].drop_duplicates(subset=["race_id"], keep="last")
+        for rid, v in zip(s["race_id"].astype(str), s[f]):
+            out.setdefault(rid, {})[f] = str(v)
+    return out
+
+
+def _fill_index_from_local_shutuba(year: str, index: dict[str, dict]) -> int:
+    """index の空の欄（LOCAL_SHUTUBA_FILL_FIELDS）を、ローカルの race_shutuba_flat の値で補う。補った欄の数を返す。"""
+    if not index:
+        return 0
+    sh = _local_shutuba_meta(year)
+    n = 0
+    for rid, meta in index.items():
+        add = sh.get(rid)
+        if not add:
+            continue
+        for f, v in add.items():
+            if _is_blank(meta.get(f)):
+                meta[f] = v
+                n += 1
+    return n
+
+
 def _build_meta_index_from_race_result_flat(year: str) -> dict[str, dict]:
-    """ローカル race_result_flat.parquet からメタを構築（race_shutuba の GCS 列挙・load を避ける）。"""
+    """ローカル race_result_flat.parquet からメタを構築（race_shutuba の GCS 列挙・load を避ける）。
+    同じレースに確定結果と速報の橋渡しの行があるときは確定結果の行を採り、空の race_class はローカルの race_shutuba_flat で補う。"""
     p = OUTPUT_DIR / year / "race_result_flat.parquet"
     if not p.exists():
         return {}
@@ -158,10 +236,15 @@ def _build_meta_index_from_race_result_flat(year: str) -> dict[str, dict]:
         schema = pq.read_schema(p)
         names = set(schema.names)
         cols = ["race_id"] + [f for f in RACE_META_FIELDS if f in names and f != "race_id"]
+        if BRIDGE_COL in names:
+            cols.append(BRIDGE_COL)
         tbl = pq.read_table(p, columns=cols)
         df = tbl.to_pandas()
         if "race_id" not in df.columns or df.empty:
             return {}
+        if BRIDGE_COL in df.columns:
+            bridged = df[BRIDGE_COL].fillna("") == BRIDGE_VALUE
+            df = pd.concat([df[~bridged], df[bridged]], ignore_index=True)   # 確定結果の行を先に（keep="first"）
         df = df.drop_duplicates(subset=["race_id"], keep="first")
         index: dict[str, dict] = {}
         for rec in df.to_dict("records"):
@@ -174,15 +257,79 @@ def _build_meta_index_from_race_result_flat(year: str) -> dict[str, dict]:
                     continue
                 if field in rec:
                     meta[field] = rec.get(field)
+            if rec.get(BRIDGE_COL) == BRIDGE_VALUE:
+                meta[BRIDGED_META_FLAG] = True
             index[rid] = meta
+        filled = _fill_index_from_local_shutuba(year, index)
         logger.info(
-            "[%s] メタデータ: ローカル race_result_flat から %d races（GCS shutuba なし）",
-            year, len(index),
+            "[%s] メタデータ: ローカル race_result_flat から %d races（GCS shutuba なし。空の欄をローカルの出馬表で %d 件補った）",
+            year, len(index), filled,
         )
         return index
     except Exception as e:
         logger.warning("[%s] race_result_flat メタ構築失敗: %s", year, e)
         return {}
+
+
+FILL_RACE_CLASS_CATEGORIES = ("race_result", "race_result_on_time")
+DAILY_EXPORT_LOCK = "/tmp/keiba_export_tables_daily.lock"
+
+
+def fill_race_class_from_local_shutuba(year: str, categories: tuple[str, ...] = FILL_RACE_CLASS_CATEGORIES, *,
+                                       apply: bool = False) -> list[dict]:
+    """書き出し済みの flat の空の race_class を、ローカルの race_shutuba_flat の値で埋め直す（netkeiba・GCS は読まない）。
+    apply=False は数えるだけ。レース単位の数（空・埋められる・埋めた後も空）を返す。空のまま残るのは主に障害レース（出馬表にも無い）。"""
+    sh = _local_shutuba_meta(year, ("race_class",))
+    out: list[dict] = []
+    for cat in categories:
+        p = OUTPUT_DIR / year / f"{cat}_flat.parquet"
+        if not p.exists():
+            out.append({"category": cat, "skipped": True, "reason": "flat が無い"})
+            continue
+        tbl = pq.read_table(p)
+        if "race_id" not in tbl.column_names:
+            out.append({"category": cat, "skipped": True, "reason": "race_id 列が無い"})
+            continue
+        # race_class の列だけを差し替え、ほかの列の型（null を含む整数の列など）は元のまま書く
+        rid = pd.Series(tbl.column("race_id").to_pylist(), dtype="object").astype(str)
+        if "race_class" in tbl.column_names:
+            rc = pd.Series(tbl.column("race_class").to_pylist(), dtype="object")
+        else:
+            rc = pd.Series([None] * tbl.num_rows, dtype="object")
+        blank = rc.map(_is_blank)
+        cand = rid.map(lambda r: sh.get(r, {}).get("race_class"))
+        fill = blank & cand.notna()
+        st = {"category": cat, "races": int(rid.nunique()), "empty_races": int(rid[blank].nunique()),
+              "fillable_races": int(rid[fill].nunique()), "applied": False}
+        st["still_empty_races"] = st["empty_races"] - st["fillable_races"]
+        if apply and fill.any():
+            new_rc = pa.array(rc.where(~fill, cand).tolist(), type=pa.string())
+            if "race_class" in tbl.column_names:
+                tbl = tbl.set_column(tbl.column_names.index("race_class"), pa.field("race_class", pa.string()), new_rc)
+            else:
+                tbl = tbl.append_column(pa.field("race_class", pa.string()), new_rc)
+            tmp = p.with_name(p.name + ".tmp")
+            pq.write_table(tbl, tmp)
+            os.replace(tmp, p)
+            st["applied"] = True
+        out.append(st)
+    return out
+
+
+def _rebuild_meta_index(year: str, prev: dict[str, dict]) -> dict[str, dict]:
+    """race_result を追記した後にメタを race_result_flat から作り直す。flat にまだ無いレース（確定結果が未公開で、出馬表から
+    名前で補ったもの）は前のメタを残す（捨てると、後続の速報などがそのレースのメタ＝race_class を持たずに書き出される）。"""
+    rebuilt = _build_meta_index_from_race_result_flat(year)
+    if not rebuilt:
+        return prev
+    for rid, meta in (prev or {}).items():
+        cur = rebuilt.setdefault(rid, meta)
+        if cur is not meta:
+            for f in RACE_META_FIELDS:      # 橋渡しの目印などメタ以外の欄は写さない
+                v = meta.get(f)
+                if _is_blank_meta(f, cur.get(f)) and not _is_blank_meta(f, v):
+                    cur[f] = v
+    return rebuilt
 
 
 def _clear_storage_cache(storage: Any) -> None:
@@ -970,7 +1117,7 @@ def export_year_local(year: str, categories: list[str], storage: Any = None, tod
                 else:
                     if cat == "race_result":
                         # 新しいレースのメタ（日付・場・距離など）を出馬表から名前で補う（一覧は取らない）
-                        _add_shutuba_meta(storage, [k for k in keys if k not in meta_index], meta_index)
+                        _add_shutuba_meta(storage, [k for k in keys if _needs_shutuba_meta(meta_index, k)], meta_index)
                     st = export_category_chunked(year, cat, storage, meta_index, keys=keys)
                     st["candidates"] = len(keys)
                 # 読めなかったもの（GCS が不調だった読み込みは export_category_chunked が除いている）を試行に数える
@@ -983,7 +1130,7 @@ def export_year_local(year: str, categories: list[str], storage: Any = None, tod
                 st["not_found"] = len(missing)
                 logger.info("[%s/%s] 一覧なしの追記: 候補 %d・読めた %d・無い %d", year, cat, len(keys), st.get("races", 0), len(missing))
             if cat == "race_result" and st.get("races"):
-                meta_index = _build_meta_index_from_race_result_flat(year) or meta_index
+                meta_index = _rebuild_meta_index(year, meta_index)
                 universes = {k: local_universe(year, today, k) for k in universes}
         except Exception as exc:  # noqa: BLE001  1 カテゴリの失敗で残りを止めない（終了コードで知らせる）
             logger.exception("[%s/%s] 一覧なしの追記に失敗", year, cat)
@@ -1071,7 +1218,7 @@ def export_year(
         if not meta_index:
             meta_index = _build_meta_index(year, storage)
         elif refresh and not force:
-            new_ids = [k for k in storage.batch_list_blobs("race_result", year) if is_jra_race(k) and k not in meta_index]
+            new_ids = [k for k in storage.batch_list_blobs("race_result", year) if is_jra_race(k) and _needs_shutuba_meta(meta_index, k)]
             logger.info("[%s] --refresh: 新しいレース %d 件のメタを出馬表から補う（%d 件）", year, len(new_ids),
                         _add_shutuba_meta(storage, new_ids, meta_index))
     else:
@@ -1085,7 +1232,7 @@ def export_year(
         all_stats.append(stats)
         if refresh and not force and cat == "race_result" and not stats.get("skipped"):
             # 追記した新しいレースのメタ（日付・場・距離など）を、後続カテゴリが使えるようにする
-            meta_index = _build_meta_index_from_race_result_flat(year) or meta_index
+            meta_index = _rebuild_meta_index(year, meta_index)
 
         flat_info = f"flat={stats.get('flat_rows', 0)}"
         race_info = f"race={stats.get('race_rows', 0)}"
@@ -1142,10 +1289,38 @@ def main() -> int:
                          f"（直近 {LOCAL_WINDOW_DAYS} 日・試行の間隔つき。対象: {', '.join(LOCAL_CATEGORIES)}）")
     ap.add_argument("--force", action="store_true",
                     help="対象カテゴリの既存ファイルを消して GCS から作り直す（レース数が同じで中身だけ変わったとき）")
+    ap.add_argument("--fill-race-class", action="store_true",
+                    help="書き出し済みの race_result / race_result_on_time の flat の空の race_class を、ローカルの race_shutuba_flat で"
+                         "埋め直す（netkeiba・GCS は読まない）。--apply が無ければ数えるだけ")
+    ap.add_argument("--apply", action="store_true", help="--fill-race-class で、数えるだけでなく flat を書き換える")
     args = ap.parse_args()
 
     years = [y.strip() for y in args.years.split(",")]
     cats = [c.strip() for c in args.categories.split(",")] if args.categories else None
+
+    if args.fill_race_class:
+        if args.refresh or args.force or args.from_local_results:
+            ap.error("--fill-race-class は --refresh / --force / --from-local-results と併用できません")
+        fill_cats = tuple(cats) if cats else FILL_RACE_CLASS_CATEGORIES
+        if args.apply:
+            # 日次の書き出し（scripts/cron/export_tables_daily.sh）と同じロック。重なると、読んでから書くまでの追記・橋渡しを上書きで失う
+            import fcntl
+
+            lock_f = open(DAILY_EXPORT_LOCK, "a")  # noqa: SIM115  終了まで持つ
+            try:
+                fcntl.flock(lock_f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                print(f"日次の書き出しが動いている（{DAILY_EXPORT_LOCK}）。終わってからもう一度実行してください", file=sys.stderr)
+                return 2
+        for year in years:
+            for s in fill_race_class_from_local_shutuba(year, fill_cats, apply=args.apply):
+                if s.get("skipped"):
+                    print(f"  {year} {s['category']:25s}  SKIPPED: {s['reason']}")
+                    continue
+                print(f"  {year} {s['category']:25s}  レース={s['races']:>5d}  空={s['empty_races']:>4d}"
+                      f"  埋められる={s['fillable_races']:>4d}  残る空={s['still_empty_races']:>4d}"
+                      f"  {'書き換えた' if s['applied'] else '（数えただけ）'}")
+        return 0
 
     if args.from_local_results:
         if not args.refresh or args.force or not cats:
