@@ -289,3 +289,8 @@ def test_cli_train_serve_reports_columns_missing_on_one_side(tmp_path, capsys):
 
 def test_parse_years_ignores_trailing_comma():
     assert ta.parse_years("2016,") == [2016]
+
+
+def test_young_jockeys_series_is_not_treated_as_obstacle():
+    df = _race(race_name="ヤングJSFR中山1(1勝)", surface="芝")
+    assert _issue(ta.check_result_races(df), "race_const", "障害の surface").n_total == 0
