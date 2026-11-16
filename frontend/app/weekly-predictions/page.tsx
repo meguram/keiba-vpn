@@ -24,8 +24,6 @@ import { EntriesDaySummary, EntriesStatusBadge } from "@/components/EntriesStatu
 import type { EntriesStatus } from "@/lib/entriesStatus";
 import type { ProbCalibration } from "@/lib/probCalibration";
 import { PredExtras } from "@/components/PredExtras";
-import { GrowthBadge } from "@/components/GrowthBadge";
-import type { Growth, GrowthMeta } from "@/lib/growth";
 import type { L3fCoherent, PaceUnified } from "@/components/PredExtras";
 import type { LapForecast } from "@/lib/lapForecast";
 import { bracketChipStyle, bracketOf } from "@/lib/bracket";
@@ -96,7 +94,6 @@ type PredEntry = {
   position_forecast?: PosFc | null;
   l3f_coherent?: L3fCoherent | null;
   tracking_v2?: TrackingV2 | null;
-  growth?: Growth | null;
 };
 
 type PredData = {
@@ -113,7 +110,6 @@ type PredData = {
   pace_forecast?: PaceForecast | null;
   pace_unified?: PaceUnified | null;
   class_benchmark?: ClassBenchmark | null;
-  growth_meta?: GrowthMeta | null;
   lap_forecast?: LapForecast | null;
   pace_type?: PaceType | null;
   scenario_forecast?: ScenarioForecast | null;
@@ -248,7 +244,6 @@ const TABLE_CSS = `
 .pt-tbl .ev.hi{font-weight:800}
 .pt-name{display:flex;align-items:center;gap:4px;min-width:0}
 .pt-name > .pt-tap{flex:0 1 auto;min-width:0;font-weight:700;color:var(--text);font-size:12.5px;letter-spacing:-.01em}
-.pt-name > button:not(.pt-tap){flex:none;margin-left:0 !important}
 .pt-tbl .c-br{width:24px}.pt-tbl .c-no{width:26px}.pt-tbl .c-win{width:46px}.pt-tbl .c-t3{width:46px}.pt-tbl .c-odds{width:58px}.pt-tbl .c-ev{width:44px}
 .pt-tbl tr > :nth-child(-n+3){position:sticky;z-index:1}
 .pt-tbl tr > :nth-child(1){left:0}.pt-tbl tr > :nth-child(2){left:24px}.pt-tbl tr > :nth-child(3){left:50px;box-shadow:1px 0 0 var(--border)}
@@ -276,7 +271,7 @@ const TABLE_CSS = `
 `;
 
 /* ── 予測テーブル ── */
-function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { raceId: string; preds: PredEntry[]; hasPred: boolean; message?: string; megu?: ExpectedMeguMeta | null; growthMeta?: GrowthMeta | null }) {
+function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; preds: PredEntry[]; hasPred: boolean; message?: string; megu?: ExpectedMeguMeta | null }) {
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>(null);
   const [card, setCard] = useState<{ horseId: string; tab: CardTab } | null>(null);   // 馬名のタップで開く情報パネル（騎手・調教師のタブもここ）
   const defaultOrder = (a: PredEntry, b: PredEntry) => (a.horse_number ?? 0) - (b.horse_number ?? 0);      // 既定は馬番順
@@ -445,7 +440,7 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
                     {p.horse_number ?? "-"}
                   </td>
                   <td style={{ textAlign: "left" }}>
-                    <span className="pt-name">{nameCell(p)}<GrowthBadge g={p.growth} meta={growthMeta} horse={p.horse_name} /></span>
+                    <span className="pt-name">{nameCell(p)}</span>
                   </td>
                   {probCell(p.win_prob, maxWin, "rgba(96,165,250,.75)", hasPred && p.win_prob != null && p.win_prob === maxWin && maxWin > 0, true)}
                   {probCell(p.top3_prob, maxT3, "rgba(52,211,153,.7)", hasPred && p.top3_prob != null && p.top3_prob === maxT3 && maxT3 > 0, false)}
@@ -622,7 +617,7 @@ function RacePanel({
         {pred && !failed && <PublicModeNote access={pred.access} />}
         {pred && !failed && tab === "predict" && <ProbCalNote pc={pred.prob_calibration} preds={preds} />}
         {pred && !failed && tab === "predict" && (
-          <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} growthMeta={pred.growth_meta} />
+          <PredTable raceId={race.race_id} preds={preds} hasPred={hasPred} message={pred.message} megu={pred.expected_megu_meta} />
         )}
         {pred && !failed && tab === "predict" && !locked && preds.length > 0 && (
           <MeguTable preds={preds} bench={pred.class_benchmark} meta={pred.expected_megu_meta} today={{ surface: race.surface, distance: Number(race.distance) || undefined }} />
