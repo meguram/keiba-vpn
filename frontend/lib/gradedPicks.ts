@@ -40,6 +40,10 @@ export type GPFigure = {
   /** このレース: result = 結果つきの記録 / pending = 出馬表の確定後に表示 / dayof = 当日の値が要る規則 / default = 規則が無い重賞 */
   this: { status: "result" | "pending" | "dayof" | "default" | "picked"; race: GPRace | null; period: Period; picked?: GPPicked | null };
   past: GPRace[];
+  /** 選び方の要約（1 行ずつ）。規則が無い・既定なら null */
+  brief?: { honmei: string | null; kill: string | null } | null;
+  /** 過去該当馬の成績（このレースより前の回）。recent = 2025 年以降（当てはめ）、dev = 2024 年まで（条件を決めた期間） */
+  simple_stats?: { recent: { B_honmei: GPHonmeiStats | null; B_kill: GPKillStats | null } | null; dev: { B_honmei: GPHonmeiStats | null; B_kill: GPKillStats | null } | null } | null;
   stats: Partial<Record<Period, GPPeriodStats>>;
   periods?: { dev: number[]; eval: number[] } | null;
   track_from?: string | null;
@@ -102,4 +106,10 @@ export function killedTop3(kill: GPHorse[] | null | undefined): number {
 /** 画面に出す期間の順（新しい順）。値の無い期間は出さない */
 export function periodsOf(stats: GPFigure["stats"]): Period[] {
   return (["forward", "eval", "dev"] as Period[]).filter((p) => stats[p]);
+}
+
+/** 馬の短い表記: 「14 マジョレルブルー（7着）」。着順が無ければ着順を付けない */
+export function horseShort(h: { hn: number; name: string | null; fin?: number | null }): string {
+  const f = h.fin != null && Number.isFinite(h.fin) ? `（${Math.round(h.fin)}着）` : "";
+  return `${h.hn} ${h.name ?? "（馬名なし）"}${f}`;
 }

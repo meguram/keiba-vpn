@@ -33,3 +33,8 @@ test("periodsOf は新しい期間から、値のある期間だけ", () => {
   assert.deepEqual(m.periodsOf({}), []);
   assert.ok(m.PERIOD_LABEL.dev.includes("当てはめ"));
 });
+
+test("horseShort は馬番・馬名と、あれば着順", () => {
+  assert.equal(m.horseShort({ hn: 14, name: "マジョレルブルー", fin: 7 }), "14 マジョレルブルー（7着）");
+  assert.equal(m.horseShort({ hn: 3, name: null }), "3 （馬名なし）");
+});
