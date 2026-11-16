@@ -1,7 +1,7 @@
 "use client";
 
 import { PRED_TTL_MS, fetchRaceList, getJson, hasFreshJson, prefetchJson, readStored } from "@/lib/httpCache";
-import { Fragment, useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates, getMockPredictions } from "@/lib/mock";
 import { featureEnabled } from "@/lib/features";
@@ -149,11 +149,6 @@ function fmtEv(v: number | null | undefined, cal = false): { text: string; color
   return { text: n.toFixed(2), color: "#f87171", bg: "rgba(239,68,68,0.07)" };
 }
 
-function fmtOdds(v: number | null | undefined): string {
-  if (v == null) return "-";
-  return `${Number(v).toFixed(1)}倍`;
-}
-
 function gradeChip(grade: string | undefined) {
   if (!grade) return null;
   const s =
@@ -189,44 +184,24 @@ function RaceSummaryBadges({ preds }: { preds: PredEntry[] }) {
   );
 }
 
-/** 馬体重「514(+2)」。未発表（前日〜当日の発表前）は "-" */
-function fmtWeight(w: number | null | undefined, d: number | null | undefined): string {
-  if (!w) return "-";
-  return d == null ? `${w}` : `${w}(${d > 0 ? "+" : d < 0 ? "" : "±"}${d})`;
-}
-
-/* ── 列での並べ替え ── */
-const BUY_TIER_RANK: Record<string, number> = { 強推奨: 1, 推奨: 2, 様子見: 3 };   // 買い判断の並び（小さいほど強い）
-
-type SortKey = "num" | "name" | "bracket" | "sexage" | "jwt" | "jockey" | "trainer" | "weight" | "win" | "top2" | "top3" | "odds" | "podds" | "evw" | "evp" | "tier";
+/* ── 列での並べ替え（表に出している値だけ） ── */
+type SortKey = "num" | "name" | "bracket" | "win" | "top3" | "odds" | "podds" | "evw" | "evp";
 type SortDir = "asc" | "desc";
-
-function sexAgeKey(v?: string | null): number | null {
-  const m = (v ?? "").match(/^(牡|牝|セ|騸)?(\d+)/);
-  return m ? Number(m[2]) * 10 + ({ 牡: 1, 牝: 2, セ: 3, 騸: 3 } as Record<string, number>)[m[1] ?? ""] : null;
-}
 
 /** 列の値。数値は数、文字は文字。値が無い（"-" 表示）ときは null（並べ替えでは常に末尾） */
 const SORT_VALUE: Record<SortKey, (p: PredEntry) => number | string | null> = {
   num: (p) => p.horse_number ?? null,
   name: (p) => p.horse_name ?? null,
   bracket: (p) => p.bracket_number ?? null,
-  sexage: (p) => sexAgeKey(p.sex_age),
-  jwt: (p) => p.jockey_weight ?? null,
-  jockey: (p) => p.jockey_name ?? null,
-  trainer: (p) => p.trainer_name ?? null,
-  weight: (p) => p.weight ?? null,
   win: (p) => p.win_prob ?? null,
-  top2: (p) => p.top2_prob ?? null,
   top3: (p) => p.top3_prob ?? null,
   odds: (p) => p.win_odds ?? null,
   podds: (p) => p.place_odds_min ?? null,
   evw: (p) => p.ev_win_cal ?? p.ev_win ?? null,
   evp: (p) => p.ev_place_cal ?? p.ev_place ?? p.expected_value ?? null,
-  tier: (p) => BUY_TIER_RANK[p.buy_tier ?? ""] ?? null,
 };
-// 『大きいほど良い』列は、最初のクリックを降順にする（勝率・連対率・複勝率・期待値・馬体重）
-const DESC_FIRST = new Set<SortKey>(["win", "top2", "top3", "evw", "evp", "weight"]);
+// 『大きいほど良い』列は、最初のクリックを降順にする（勝率・複勝率・期待値）
+const DESC_FIRST = new Set<SortKey>(["win", "top3", "evw", "evp"]);
 
 function sortPreds(preds: PredEntry[], key: SortKey | null, dir: SortDir, fallback: (a: PredEntry, b: PredEntry) => number): PredEntry[] {
   const out = [...preds].sort(fallback);                                   // 同じ値のときは既定の並び（安定）
@@ -242,62 +217,71 @@ function sortPreds(preds: PredEntry[], key: SortKey | null, dir: SortDir, fallba
   });
 }
 
-/* 出馬表の見せ方を幅で切り替える（横スクロールはしない）:
-   広い(1100px〜)=列を統合した表 / 中間(769〜1099px)=さらに畳んだ表 / 狭い(〜768px)=1頭1枚のカード。
-   3 つとも DOM に置き、CSS の display で切り替える（JS の幅検知なし＝SSR とハイドレーションが一致する）。 */
+/* AI 予測の表は、どの幅でも同じ 7 列（枠・馬番・馬名・AI勝率・AI複勝率・予想オッズ・期待値）。
+   予想オッズと期待値は 1 列に 2 段（上=単勝・下=複勝）にして、スマホ幅（390px）でも横スクロールなしで収める。
+   さらに狭い端末（表の幅 340px 未満）では表の枠の中だけ横に送れ、枠・馬番・馬名は左に固定する（sticky）。
+   騎手・性齢・斤量・馬体重・連対率・買い判断は表に出さない（馬名を押した情報パネルと、レース詳細で見られる。
+   docs/operations/weekly_predictions_table.md）。
+   色はサイトの変数（--text・--border・--surface）を使う（サイトはダークのみ。ライトの配色ができたら変数で追従する）。 */
 const TABLE_CSS = `
-.pt-tap{all:unset;cursor:pointer;display:inline-block;max-width:100%;padding:6px 2px;border-bottom:1px dotted rgba(148,163,184,.55);font:inherit;font-weight:inherit;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;box-sizing:border-box}
+.pt-tap{all:unset;cursor:pointer;display:inline-block;max-width:100%;padding:6px 0;border-bottom:1px dotted rgba(148,163,184,.55);font:inherit;font-weight:inherit;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;box-sizing:border-box}
 .pt-tap:hover{border-bottom-color:var(--accent)}
 .pt-tap:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
 .pt-sort{padding:0 !important}
-.pt-sortbtn{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:2px;width:100%;min-height:44px;padding:0 4px;font:inherit;color:inherit;overflow:hidden}
+.pt-sortbtn{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:1px;width:100%;min-height:44px;padding:0 3px;font:inherit;color:inherit;overflow:hidden;line-height:1.2}
 .pt-sortbtn:hover{background:rgba(148,163,184,.08)}
-.pt-sortbtn[data-left]{justify-content:flex-start}
+.pt-sortbtn[data-align="left"]{justify-content:flex-start}
+.pt-sortbtn[data-align="right"]{justify-content:flex-end;text-align:right}
 .pt-sortbtn:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-.pt-v-wide{display:block}.pt-v-mid{display:none}.pt-v-card{display:none}
-@media (max-width:1099px){.pt-v-wide{display:none}.pt-v-mid{display:block}}
-@media (max-width:768px){.pt-v-mid{display:none}.pt-v-card{display:block}}
-.pt-tbl{width:100%;table-layout:fixed;border-collapse:collapse;font-size:12px}
-.pt-tbl th,.pt-tbl td{overflow:hidden;text-overflow:ellipsis}
-.pt-tbl td{padding:7px 6px;border-bottom:1px solid rgba(36,48,73,.4);text-align:center;vertical-align:middle;font-size:12px}
-.pt-tbl td.l{text-align:left}
-.pt-tbl .sub{display:block;font-size:10px;color:var(--text-dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:400}
-.pt-tbl .sep{border-left:1px solid rgba(36,48,73,.35)}
+.pt-sortbtn > span:first-child{word-break:keep-all}
+.pt-sortbtn small{display:block;font-size:10px;font-weight:400;opacity:.85}
+.pt-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.pt-tbl{width:100%;min-width:340px;table-layout:fixed;border-collapse:separate;border-spacing:0;font-size:12px}
+.pt-tbl th{background:var(--surface2);border-bottom:1px solid var(--border);color:var(--text-dim);font-size:11px;font-weight:600}
+.pt-tbl td{overflow:hidden;padding:5px 4px;border-bottom:1px solid var(--border);text-align:center;vertical-align:middle;font-size:12px;background:linear-gradient(var(--rowbg,transparent),var(--rowbg,transparent)),var(--surface)}
+.pt-tbl td:nth-child(-n+2){padding-left:1px;padding-right:1px}
+.pt-tbl td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pt-tbl td.sep,.pt-tbl th.sep{border-left:1px solid var(--border)}
+.pt-tbl .ln{display:block;line-height:1.35}
+.pt-tbl .ln + .ln{font-size:11px;color:var(--text-dim)}
+.pt-tbl .ev{display:inline-block;padding:0 2px;border-radius:3px;text-align:right}
+.pt-tbl .ev.hi{font-weight:800}
+.pt-name{display:flex;align-items:center;gap:4px;min-width:0}
+.pt-name > .pt-tap{flex:0 1 auto;min-width:0;font-weight:700;color:var(--text);font-size:12.5px;letter-spacing:-.01em}
+.pt-name > button:not(.pt-tap){flex:none;margin-left:0 !important}
+.pt-tbl .c-br{width:24px}.pt-tbl .c-no{width:26px}.pt-tbl .c-win{width:46px}.pt-tbl .c-t3{width:46px}.pt-tbl .c-odds{width:58px}.pt-tbl .c-ev{width:44px}
+.pt-tbl tr > :nth-child(-n+3){position:sticky;z-index:1}
+.pt-tbl tr > :nth-child(1){left:0}.pt-tbl tr > :nth-child(2){left:24px}.pt-tbl tr > :nth-child(3){left:50px;box-shadow:1px 0 0 var(--border)}
+.pt-tbl thead tr > th:nth-child(-n+3){z-index:2}
+.pt-tbl td.pt-bar{background:linear-gradient(to left,var(--c) var(--w),transparent var(--w)) right bottom/100% 3px no-repeat,linear-gradient(var(--rowbg,transparent),var(--rowbg,transparent)),var(--surface)}
+.pt-top{color:var(--text) !important;font-weight:800 !important}
+.pt-legend{margin:6px 2px 0;font-size:11px;line-height:1.6;color:var(--text-dim)}
 .pt-sortbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 8px;font-size:12px;color:var(--text-dim)}
 .pt-chip{all:unset;box-sizing:border-box;cursor:pointer;min-height:36px;padding:0 12px;display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:999px;font-size:12px;color:var(--text)}
 .pt-chip[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);background:rgba(59,130,246,.10)}
 .pt-chip:focus-visible,.pt-select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pt-select{min-height:36px;padding:0 8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px}
 @media (hover:none) and (pointer:coarse){.pt-chip,.pt-select{min-height:44px}}
-.pt-card{display:grid;gap:6px;padding:10px 10px 10px 12px;border-bottom:1px solid rgba(36,48,73,.5)}
-.pt-card .r1{display:flex;align-items:center;gap:8px;min-width:0}
-.pt-card .pt-nums{flex:0 0 auto;display:inline-flex;gap:3px}
-.pt-card .pt-nums span{font-size:13px !important}
-.pt-card .nm{flex:1 1 auto;min-width:0;font-weight:700;color:#fff;font-size:15px}
-.pt-card .win{flex:0 0 auto;text-align:right;line-height:1.1}
-.pt-card .win b{font-size:20px;font-variant-numeric:tabular-nums}
-.pt-card .win small{display:block;font-size:10px;color:var(--text-dim)}
-.pt-card .r2{display:flex;flex-wrap:wrap;gap:2px 10px;font-size:12px;color:var(--text-dim);align-items:center}
-.pt-card .r3{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:12px}
-.pt-bar{display:inline-flex;align-items:center;gap:5px}
-.pt-bar i{display:inline-block;width:52px;height:6px;border-radius:3px;background:rgba(148,163,184,.2);position:relative;overflow:hidden}
-.pt-bar i::after{content:"";position:absolute;left:0;top:0;bottom:0;width:var(--w);background:var(--c);border-radius:3px}
-.pt-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:5px;font-weight:700;font-size:12px}
-@media (pointer: coarse){ .pt-tap{padding:12px 4px} }
+@media (pointer: coarse){ .pt-tap{padding:10px 0} }
+@media (min-width:769px){
+  .pt-tbl{max-width:880px;font-size:13px}
+  .pt-tbl td{padding:7px 8px;font-size:13px}
+  .pt-tbl .ln + .ln{font-size:12px}
+  .pt-tbl .ev{min-width:38px;padding:0 4px}
+  .pt-tbl .c-br{width:40px}.pt-tbl .c-no{width:44px}.pt-tbl .c-win{width:84px}.pt-tbl .c-t3{width:84px}.pt-tbl .c-odds{width:110px}.pt-tbl .c-ev{width:90px}
+  .pt-tbl tr > :nth-child(2){left:40px}.pt-tbl tr > :nth-child(3){left:84px}
+  .pt-name > .pt-tap{font-size:14px}
+}
 @media (max-width:639px){ .wp-main{padding:12px 6px !important} .wp-race-body{padding:0 4px 10px !important} }
 `;
 
 /* ── 予測テーブル ── */
 function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { raceId: string; preds: PredEntry[]; hasPred: boolean; message?: string; megu?: ExpectedMeguMeta | null; growthMeta?: GrowthMeta | null }) {
-  const TH: React.CSSProperties = {
-    padding: "8px 10px", fontSize: 11, fontWeight: 600, color: "var(--text-dim)",
-    textAlign: "center", borderBottom: "1px solid var(--border)", whiteSpace: "normal", lineHeight: 1.25, background: "var(--surface2)", overflow: "hidden",
-  };
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>(null);
-  const [card, setCard] = useState<{ horseId: string; tab: CardTab } | null>(null);   // 馬名・騎手・調教師のタップで開く情報パネル
+  const [card, setCard] = useState<{ horseId: string; tab: CardTab } | null>(null);   // 馬名のタップで開く情報パネル（騎手・調教師のタブもここ）
   const defaultOrder = (a: PredEntry, b: PredEntry) => (a.horse_number ?? 0) - (b.horse_number ?? 0);      // 既定は馬番順
   const sorted = sortPreds(preds, sort?.key ?? null, sort?.dir ?? "asc", defaultOrder);
-  const calibratedEv = preds.some((p) => p.ev_win_cal != null || p.ev_place_cal != null);     // EV の較正が有効なときだけ『(較正後)』と表示する
+  const calibratedEv = preds.some((p) => p.ev_win_cal != null || p.ev_place_cal != null);     // EV の較正が有効なときだけ『較正後』と表示する
   const { isMember, loading: authLoading } = useAuthStatus();
   const lock = !authLoading && !isMember;      // 匿名は勝率・複勝率まで。それ以外の列はサーバが落としているので見出しに 🔒 を付ける
   const LK = (label: string) => (lock ? `🔒${label}` : label);
@@ -311,42 +295,33 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
       return null;
     });
   }
-  const arrow = (key: SortKey) => (sort?.key === key ? (sort.dir === "asc" ? " ▲" : " ▼") : "");
-  const th = (key: SortKey, label: string, style: React.CSSProperties = {}, title?: string, cls?: string) => (
+  const arrow = (key: SortKey) => (sort?.key === key ? (sort.dir === "asc" ? "▲" : "▼") : "");
+  const th = (key: SortKey, label: React.ReactNode, opts: { align?: "left" | "right"; title?: string; cls?: string; sub?: string } = {}) => (
     <th
-      className={`pt-sort ${cls ?? ""}`}
-      style={{ ...TH, cursor: "pointer", userSelect: "none", color: sort?.key === key ? "var(--accent)" : TH.color, ...style }}
+      className={`pt-sort ${opts.cls ?? ""}`}
+      style={{ cursor: "pointer", userSelect: "none", color: sort?.key === key ? "var(--accent)" : undefined }}
       aria-sort={sort?.key === key ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
-      title={title ? `${title}（クリックで並べ替え）` : "クリックで並べ替え"}
+      title={opts.title ? `${opts.title}（クリックで並べ替え）` : "クリックで並べ替え"}
     >
-      <button
-        type="button"
-        onClick={() => toggle(key)}
-        className="pt-sortbtn"
-        data-left={style.textAlign === "left" ? "" : undefined}
-      >
-        {label}<span aria-hidden style={{ fontSize: 9, opacity: sort?.key === key ? 1 : 0.35 }}>{arrow(key) || " ↕"}</span>
+      <button type="button" onClick={() => toggle(key)} className="pt-sortbtn" data-align={opts.align}>
+        <span>{label}{opts.sub && <small>{opts.sub}</small>}</span>
+        {sort?.key === key && <span aria-hidden style={{ fontSize: 9 }}>{arrow(key)}</span>}
       </button>
     </th>
   );
 
-  const TD: React.CSSProperties = {
-    padding: "8px 10px", borderBottom: "1px solid rgba(36,48,73,0.4)",
-    textAlign: "center", verticalAlign: "middle", fontSize: 12,
-  };
-
-  /* 馬名・騎手・調教師: タップ/クリック（Enter・スペース）で情報パネルを開く。horse_id が無い行は文字のみ。 */
-  const tapCell = (p: PredEntry, tab: CardTab, text: string | null | undefined, color: string) => {
-    if (!text) return "-";
-    if (!p.horse_id) return text;
+  /* 馬名: タップ/クリック（Enter・スペース）で情報パネルを開く。horse_id が無い行は文字のみ。 */
+  const nameCell = (p: PredEntry) => {
+    const text = p.horse_name;
+    if (!text) return <span>-</span>;
+    if (!p.horse_id) return <span className="pt-tap" style={{ cursor: "default", borderBottom: "none" }}>{text}</span>;
     return (
       <button
         type="button"
         className="pt-tap"
         aria-haspopup="dialog"
-        title={tab === "horse" ? "馬の近走・血統・追い切りを見る" : tab === "jockey" ? "騎手の成績を見る" : "調教師の成績を見る"}
-        onClick={() => setCard({ horseId: p.horse_id as string, tab })}
-        style={{ color }}
+        title="馬の近走・血統・追い切り、騎手・調教師を見る"
+        onClick={() => setCard({ horseId: p.horse_id as string, tab: "horse" })}
       >
         {text}
       </button>
@@ -358,36 +333,51 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
     expected_megu: p.expected_megu ?? null, expected_through: megu?.data_through ?? null, expected_meta: megu ?? null,
   }));
 
-  const rowBgOf = (p: PredEntry) => {
+  // 総合順位の上位 3 頭は行をうっすら色付け（sticky の列にも同じ色が乗るよう CSS 変数で渡す）
+  const rowBgOf = (p: PredEntry): string | undefined => {
     const rank = p.composite_rank ?? p.pred_rank ?? 0;
-    return rank === 1 ? "rgba(239,68,68,0.04)" : rank === 2 ? "rgba(59,130,246,0.04)" : rank === 3 ? "rgba(34,197,94,0.03)" : undefined;
+    return rank === 1 ? "rgba(239,68,68,0.06)" : rank === 2 ? "rgba(59,130,246,0.06)" : rank === 3 ? "rgba(34,197,94,0.05)" : undefined;
   };
-  const evOf = (p: PredEntry) => ({
-    w: fmtEv(p.ev_win_cal ?? p.ev_win, p.ev_win_cal != null),
-    pl: fmtEv(p.ev_place_cal ?? p.ev_place ?? p.expected_value, p.ev_place_cal != null),
-  });
   const brOf = (p: PredEntry) => bracketOf(p.horse_number ?? 0, sorted.length, p.bracket_number);
-  const wakuChip = (p: PredEntry, size = 24) => {
+  const wakuChip = (p: PredEntry) => {
     const bn = brOf(p);
-    return bn ? <span title={`${bn}枠`} style={bracketChipStyle(bn, size)}>{bn}</span> : <span>-</span>;
+    return bn ? <span title={`${bn}枠`} style={bracketChipStyle(bn, 20)}>{bn}</span> : <span>-</span>;
   };
-  const numChip = (p: PredEntry, size = 24) =>
-    p.horse_number != null ? <span title={`${brOf(p) ?? "-"}枠 ${p.horse_number}番`} style={bracketChipStyle(brOf(p), size)}>{p.horse_number}</span> : <span>-</span>;
+  // 100 倍以上は小数を落とす（複勝の「105-280」がスマホの列幅に収まるように）
+  const num1 = (v: number | null | undefined) => (v == null ? "-" : Number(v) >= 100 ? Number(v).toFixed(0) : Number(v).toFixed(1));
   const placeOdds = (p: PredEntry) =>
-    p.place_odds_min != null && p.place_odds_max != null ? `${Number(p.place_odds_min).toFixed(1)}〜${Number(p.place_odds_max).toFixed(1)}` : "-";
+    p.place_odds_min != null && p.place_odds_max != null ? `${num1(p.place_odds_min)}-${num1(p.place_odds_max)}` : "-";
   const dim = hasPred ? "var(--text)" : "var(--text-dim)";
-  const evLabel = calibratedEv ? "期待値(勝/複・較正後)" : "期待値(勝/複)";
-  const evTitle = "勝期待値で並べ替え（複勝は『並び替え』の選択肢から）";
+  // 勝率・複勝率は、このレースの最大を基準にしたうっすらした棒（セルの下辺）を付け、最大の馬は太字にする
+  const maxWin = Math.max(0, ...preds.map((p) => p.win_prob ?? 0));
+  const maxT3 = Math.max(0, ...preds.map((p) => p.top3_prob ?? 0));
+  const probCell = (v: number | null | undefined, max: number, color: string, top: boolean, sep: boolean) => (
+    <td
+      className={`num ${sep ? "sep" : ""} ${v != null && hasPred && max > 0 ? "pt-bar" : ""} ${top ? "pt-top" : ""}`}
+      style={{ color: dim, fontWeight: 600, ...(v != null && max > 0 ? { ["--w" as string]: `${Math.round((v / max) * 100)}%`, ["--c" as string]: color } : {}) } as React.CSSProperties}
+    >
+      {fmtPct(v)}
+    </td>
+  );
+  const evSpan = (v: number | null | undefined, cal: boolean, label: string) => {
+    const f = fmtEv(v, cal);
+    const hi = v != null && Number(v) >= 1.0;
+    return (
+      <span className="ln">
+        <span className={`ev ${hi ? "hi" : ""}`} title={`${label}の期待値${cal ? "（較正後）" : ""}`} style={{ color: f.color, background: f.bg }}>{f.text}</span>
+      </span>
+    );
+  };
+  const evTitle = `期待値（上段=単勝・下段=複勝${calibratedEv ? "・過去の実績に合わせて較正した値" : ""}）。1.00 で元返し`;
 
-  // 並び替えバー: よく使う 4 つはチップ、そのほかは選択肢から。どの幅でも使える（表の見出しは主要な列だけ）
+  // 並び替えバー: よく使う 3 つはチップ、そのほか（表に出している値だけ）は選択肢から
   const QUICK: { key: SortKey; label: string }[] = [
     { key: "num", label: "馬番" }, { key: "win", label: "勝率" }, { key: "evw", label: "期待値" },
   ];
   const ALL: { key: SortKey; label: string }[] = [
-    { key: "num", label: "馬番" }, { key: "name", label: "馬名" }, { key: "bracket", label: "枠" }, { key: "sexage", label: "性齢" },
-    { key: "jwt", label: "斤量" }, { key: "jockey", label: "騎手" }, { key: "trainer", label: "調教師" }, { key: "weight", label: "馬体重" },
-    { key: "win", label: "勝率" }, { key: "top2", label: "連対率" }, { key: "top3", label: "複勝率" },
-    { key: "odds", label: "想定単勝" }, { key: "podds", label: "想定複勝" }, { key: "evw", label: "勝期待値" }, { key: "evp", label: "複期待値" }, { key: "tier", label: "買い判断" },
+    { key: "num", label: "馬番" }, { key: "name", label: "馬名" }, { key: "bracket", label: "枠" },
+    { key: "win", label: "AI勝率" }, { key: "top3", label: "AI複勝率" },
+    { key: "odds", label: "単勝オッズ予測" }, { key: "podds", label: "複勝オッズ予測" }, { key: "evw", label: "単勝期待値" }, { key: "evp", label: "複勝期待値" },
   ];
   const sortBar = (
     <div className="pt-sortbar" role="group" aria-label="並び替え">
@@ -426,132 +416,57 @@ function PredTable({ raceId, preds, hasPred, message, megu, growthMeta }: { race
       )}
       {sortBar}
 
-      {/* ── 広い画面（1100px〜）: 関連する列を 2 段にまとめた表 ── */}
-      <div className="pt-v-wide">
-        <table className="pt-tbl">
+      <div className="pt-scroll">
+        {/* 並べ替えは独自に持つので、共通の TableSorter は効かせない（data-no-sort） */}
+        <table className="pt-tbl" data-no-sort>
           <colgroup>
-            <col style={{ width: "5%" }} /><col style={{ width: "5%" }} /><col style={{ width: "22%" }} /><col style={{ width: "18%" }} />
-            <col style={{ width: "9%" }} /><col style={{ width: "9.5%" }} /><col style={{ width: "11%" }} /><col style={{ width: "12%" }} />
-            <col style={{ width: "8.5%" }} />
+            <col className="c-br" /><col className="c-no" /><col /><col className="c-win" /><col className="c-t3" /><col className="c-odds" /><col className="c-ev" />
           </colgroup>
           <thead>
             <tr>
-              {th("bracket", "枠", {}, "枠番（前日に確定）")}
+              {th("bracket", "枠", { title: "枠番（前日に確定）" })}
               {th("num", "馬番")}
-              {th("name", "馬名", { textAlign: "left" }, "馬名（下段: 性齢・斤量・馬体重。馬体重は当日の発表後）")}
-              {th("jockey", "騎手/調教師", { textAlign: "left" }, "騎手で並べ替え（調教師は『そのほか』から）")}
-              {th("win", "勝率", { borderLeft: "1px solid rgba(36,48,73,0.5)" })}
-              {th("top2", lock ? "連対🔒/複勝" : "連対/複勝", {}, "連対率で並べ替え（複勝率は『そのほか』から）")}
-              {th("odds", LK("想定単勝/複勝"), { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "想定単勝で並べ替え（想定複勝は『そのほか』から）")}
-              {th("evw", LK(calibratedEv ? "期待値(較正後)" : "期待値"), { borderLeft: "1px solid rgba(36,48,73,0.5)" }, evTitle)}
-              {th("tier", LK("買い判断"), { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "買い判断で並べ替え（期待値の最大で判定）")}
+              {th("name", "馬名", { align: "left", title: "馬名（押すと近走・血統・騎手・調教師の情報）" })}
+              {th("win", <>AI<br />勝率</>, { align: "right", cls: "sep", title: "AI の勝率" })}
+              {th("top3", <>AI<br />複勝率</>, { align: "right", title: "AI の複勝率（3着以内に入る確率）" })}
+              {th("odds", "オッズ", { align: "right", cls: "sep", sub: LK("予測 単/複"), title: "オッズの予測値（上段=単勝・下段=複勝の下限-上限）。単勝で並べ替え（複勝は『そのほか』から）" })}
+              {th("evw", "期待値", { align: "right", cls: "sep", sub: LK("単/複"), title: `${evTitle}。単勝で並べ替え（複勝は『そのほか』から）` })}
             </tr>
           </thead>
           <tbody>
             {sorted.map((p, i) => {
-              const ev = evOf(p);
+              const evW = p.ev_win_cal ?? p.ev_win;
+              const evP = p.ev_place_cal ?? p.ev_place ?? p.expected_value;
+              const bg = rowBgOf(p);
               return (
-                <Fragment key={p.horse_number ?? i}>
-                <tr style={{ background: rowBgOf(p) }}>
+                <tr key={p.horse_number ?? `i${i}`} style={bg ? ({ ["--rowbg" as string]: bg } as React.CSSProperties) : undefined}>
                   <td>{wakuChip(p)}</td>
-                  <td>{numChip(p)}</td>
-                  <td className="l" style={{ fontWeight: 600, color: "#fff" }}>
-                    {tapCell(p, "horse", p.horse_name, "#fff")}<GrowthBadge g={p.growth} meta={growthMeta} horse={p.horse_name} />
-                    <span className="sub">{[p.sex_age, p.jockey_weight != null ? `${p.jockey_weight}kg` : null, p.weight ? fmtWeight(p.weight, p.weight_change) : null].filter(Boolean).join("　")}</span>
+                  <td style={{ fontWeight: 800, fontVariantNumeric: "tabular-nums", color: "var(--text)" }} title={p.horse_number != null ? `${brOf(p) ?? "-"}枠 ${p.horse_number}番` : "馬番は未確定"}>
+                    {p.horse_number ?? "-"}
                   </td>
-                  <td className="l">
-                    {tapCell(p, "jockey", p.jockey_name, "var(--text)")}
-                    <span className="sub">{p.trainer_name ? <>{tapCell(p, "trainer", p.trainer_name, "var(--text-dim)")}</> : "-"}</span>
+                  <td style={{ textAlign: "left" }}>
+                    <span className="pt-name">{nameCell(p)}<GrowthBadge g={p.growth} meta={growthMeta} horse={p.horse_name} /></span>
                   </td>
-                  <td className="sep" style={{ fontWeight: hasPred ? 700 : 400, color: dim, fontSize: 13 }}>{fmtPct(p.win_prob)}</td>
-                  <td style={{ color: dim }}>{fmtPct(p.top2_prob)}<span className="sub" style={{ color: dim }}>{fmtPct(p.top3_prob)}</span></td>
-                  <td className="sep" style={{ color: "var(--text-dim)" }}>{fmtOdds(p.win_odds)}<span className="sub">{placeOdds(p)}</span></td>
-                  <td className="sep" style={{ background: ev.w.bg, fontWeight: hasPred ? 700 : 400, color: ev.w.color }}>{ev.w.text}<span className="sub" style={{ color: ev.pl.color }}>{ev.pl.text}</span></td>
-                  <td className="sep" style={{ color: "var(--text-dim)" }}>{p.buy_tier && p.buy_tier !== "—" ? p.buy_tier : "—"}</td>
+                  {probCell(p.win_prob, maxWin, "rgba(96,165,250,.75)", hasPred && p.win_prob != null && p.win_prob === maxWin && maxWin > 0, true)}
+                  {probCell(p.top3_prob, maxT3, "rgba(52,211,153,.7)", hasPred && p.top3_prob != null && p.top3_prob === maxT3 && maxT3 > 0, false)}
+                  <td className="num sep" style={{ color: "var(--text)" }}>
+                    <span className="ln">{num1(p.win_odds)}</span>
+                    <span className="ln">{placeOdds(p)}</span>
+                  </td>
+                  <td className="num sep">
+                    {evSpan(evW, p.ev_win_cal != null, "単勝")}
+                    {evSpan(evP, p.ev_place_cal != null, "複勝")}
+                  </td>
                 </tr>
-                </Fragment>
               );
             })}
           </tbody>
         </table>
       </div>
-
-      {/* ── 中間（769〜1099px）: 馬名の下に騎手・斤量・体重を畳んだ表 ── */}
-      <div className="pt-v-mid">
-        <table className="pt-tbl">
-          <colgroup>
-            <col style={{ width: "8%" }} /><col style={{ width: "8%" }} /><col style={{ width: "36%" }} /><col style={{ width: "16%" }} />
-            <col style={{ width: "16%" }} /><col style={{ width: "16%" }} />
-          </colgroup>
-          <thead>
-            <tr>
-              {th("bracket", "枠", {}, "枠番（前日に確定）")}
-              {th("num", "馬番")}
-              {th("name", "馬名", { textAlign: "left" }, "馬名（下段: 性齢・斤量・騎手・馬体重・調教師）")}
-              {th("win", "勝率", { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "勝率で並べ替え（連対率・複勝率は下段、『そのほか』から並べ替え）")}
-              {th("evw", LK(calibratedEv ? "期待値(較正後)" : "期待値"), { borderLeft: "1px solid rgba(36,48,73,0.5)" }, evTitle)}
-              {th("odds", LK("想定単勝"), { borderLeft: "1px solid rgba(36,48,73,0.5)" }, "想定単勝で並べ替え（下段: 想定複勝）")}
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((p, i) => {
-              const ev = evOf(p);
-              return (
-                <Fragment key={p.horse_number ?? i}>
-                <tr style={{ background: rowBgOf(p) }}>
-                  <td>{wakuChip(p, 22)}</td>
-                  <td>{numChip(p, 22)}</td>
-                  <td className="l" style={{ fontWeight: 600, color: "#fff" }}>
-                    {tapCell(p, "horse", p.horse_name, "#fff")}<GrowthBadge g={p.growth} meta={growthMeta} horse={p.horse_name} />
-                    <span className="sub">{[p.sex_age, p.jockey_weight != null ? `${p.jockey_weight}kg` : null, p.jockey_name, p.weight ? fmtWeight(p.weight, p.weight_change) : null].filter(Boolean).join("　")}</span>
-                    <span className="sub">{[p.trainer_name, p.buy_tier && p.buy_tier !== "—" ? `買い判断 ${p.buy_tier}` : null].filter(Boolean).join("　")}</span>
-                  </td>
-                  <td className="sep" style={{ fontWeight: hasPred ? 700 : 400, color: dim, fontSize: 13 }}>{fmtPct(p.win_prob)}<span className="sub" style={{ color: dim }}>{fmtPct(p.top2_prob)} / {fmtPct(p.top3_prob)}</span></td>
-                  <td className="sep" style={{ background: ev.w.bg, fontWeight: hasPred ? 700 : 400, color: ev.w.color }}>{ev.w.text}<span className="sub" style={{ color: ev.pl.color }}>複 {ev.pl.text}</span></td>
-                  <td className="sep" style={{ color: "var(--text-dim)" }}>{fmtOdds(p.win_odds)}<span className="sub">{placeOdds(p)}</span></td>
-                </tr>
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* ── 狭い画面（〜768px）: 1 頭 = 1 枚のカード ── */}
-      <div className="pt-v-card" role="list">
-        {sorted.map((p, i) => {
-          const ev = evOf(p);
-          const bar = (v: number | null | undefined, c: string) => (
-            <span className="pt-bar"><i style={{ ["--w" as string]: `${Math.min(100, Math.max(0, (v ?? 0) * 100))}%`, ["--c" as string]: c } as React.CSSProperties} /></span>
-          );
-          return (
-            <div key={p.horse_number ?? i} className="pt-card" role="listitem" style={{ background: rowBgOf(p) }}>
-              <div className="r1">
-                <span className="pt-nums">{wakuChip(p, 26)}{numChip(p, 26)}</span>
-                <span className="nm">{tapCell(p, "horse", p.horse_name, "#fff")}<GrowthBadge g={p.growth} meta={growthMeta} horse={p.horse_name} /></span>
-                <span className="win"><b style={{ color: dim }}>{fmtPct(p.win_prob)}</b><small>勝率</small></span>
-              </div>
-              <div className="r2">
-                {p.sex_age && <span>{p.sex_age}</span>}
-                {p.jockey_name && <span>{tapCell(p, "jockey", p.jockey_name, "var(--text)")}{p.jockey_weight != null && ` ${p.jockey_weight}kg`}</span>}
-                {p.trainer_name && <span>{tapCell(p, "trainer", p.trainer_name, "var(--text-dim)")}</span>}
-                {p.weight ? <span>馬体重 {fmtWeight(p.weight, p.weight_change)}</span> : null}
-              </div>
-              <div className="r3">
-                <span className="pt-bar" title="連対率">連対 {bar(p.top2_prob, "#60a5fa")}<b style={{ color: dim, fontVariantNumeric: "tabular-nums" }}>{fmtPct(p.top2_prob)}</b></span>
-                <span className="pt-bar" title="複勝率">複勝 {bar(p.top3_prob, "#34d399")}<b style={{ color: dim, fontVariantNumeric: "tabular-nums" }}>{fmtPct(p.top3_prob)}</b></span>
-              </div>
-              <div className="r3">
-                <span className="pt-badge" title="勝期待値" style={{ background: ev.w.bg, color: ev.w.color }}>期待値 {ev.w.text}</span>
-                <span className="pt-badge" title="複勝期待値" style={{ background: ev.pl.bg, color: ev.pl.color }}>複 {ev.pl.text}</span>
-                <span style={{ color: "var(--text-dim)" }} title="想定単勝オッズ">単勝 {fmtOdds(p.win_odds)}</span>
-                <span style={{ color: "var(--text-dim)" }} title="想定複勝オッズ">複勝 {placeOdds(p)}</span>
-                {p.buy_tier && p.buy_tier !== "—" && <span style={{ color: "var(--text-dim)" }}>買い判断 {p.buy_tier}</span>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <p className="pt-legend">
+        オッズ・期待値は上段＝単勝、下段＝複勝（複勝オッズは下限-上限）。期待値{calibratedEv ? "（較正後）" : ""}は 1.00 で元返しで、1.00 以上を青、{calibratedEv ? "1.10" : "1.20"} 以上を緑で示します。
+        騎手・調教師・性齢・斤量・馬体重は馬名を押した情報パネルで、連対率・買い判断は「詳細 →」のレース詳細（広い画面）で見られます。
+      </p>
 
       {!hasPred && (
         <p style={{ fontSize: 11, color: "var(--text-dim)", padding: "8px 10px" }}>

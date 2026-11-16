@@ -233,19 +233,11 @@ th[data-sortable][data-sort-dir="desc"]::after { content: " \25BC"; opacity: 1; 
   .wp-legend > summary { display: block; padding: 6px 10px; margin-bottom: 6px; font-size: 12px; color: var(--text-dim); cursor: pointer; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
   .wp-legend[open] > summary { margin-bottom: 6px; }
 
-  /* 週間予測: レースのヘッダと馬のカードを詰める */
+  /* 週間予測: レースのヘッダを詰める */
   section[id^="race-"] > div:first-child { padding: 8px 10px !important; gap: 4px 8px !important; }
   section[id^="race-"] [role="tablist"] { margin: 6px 0 2px !important; }
   section[id^="race-"] [role="tablist"] > button { min-height: 40px !important; padding: 0 12px !important; }
   .pt-sortbar { margin-bottom: 4px !important; }
-  .pt-card { display: flex !important; flex-wrap: wrap; gap: 2px 10px !important; padding: 6px 8px 6px 10px !important; }
-  .pt-card .r1 { flex: 1 1 100%; }
-  .pt-card .win small { font-size: 11px !important; }
-  .pt-card .nm { font-size: 16px !important; color: #8fbaff !important; }
-  .pt-card .nm a, .pt-card .nm button { color: inherit !important; }
-  .pt-card .win b { font-size: 18px !important; }
-  .pt-card .r2, .pt-card .r3 { font-size: 12px !important; }
-  .pt-bar i { width: 36px !important; }
   .mrc-legend { font-size: 11px !important; }
 
   /* ページ見出しと予測成績のタイル */

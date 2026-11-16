@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { GROWTH_NOTE, contributionRows, fmtPoints, growthView, indexLine, levelRow, levelSummary, pct, type Growth, type GrowthMeta } from "@/lib/growth";
 
 /* 成長度のバッジ（出馬表の馬名の近く）と、押して開く詳細。記号＋言葉＋色（色だけに頼らない）。 */
@@ -21,7 +22,8 @@ export function GrowthBadge({ g, meta, horse }: { g?: Growth | null; meta?: Grow
       >
         <span aria-hidden>{v.sym}</span><span>{v.word}</span>{g.provisional && <span style={{ fontWeight: 500, opacity: 0.85 }}>暫定</span>}
       </button>
-      {open && <GrowthDetail g={g} meta={meta} horse={horse} onClose={() => setOpen(false)} />}
+      {/* 詳細は body に出す（表の sticky のセルの中に置くと、重なり順の枠に閉じ込められて Nav や他の行の下に隠れる） */}
+      {open && typeof document !== "undefined" && createPortal(<GrowthDetail g={g} meta={meta} horse={horse} onClose={() => setOpen(false)} />, document.body)}
     </>
   );
 }
