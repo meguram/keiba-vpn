@@ -247,7 +247,11 @@ def _prior_win_rate_by_id_surface(
     id_col: str,
     prefix: str,
 ) -> pd.DataFrame:
-    """(id, surface_group) ごとに日付・発走時刻順の累計勝率（当行より前のみ）。"""
+    """(id, surface_group) ごとに日付・発走時刻順の累計勝率（当該レースより前のレースだけ）。
+
+    同じレースの中は丸ごと除く。以前は行の順（同じレースでは馬番の順）で「前」を数えていたため、同じレースに同じ父の馬がいると
+    馬番の若い馬の結果（勝ちを含む）が後ろの馬の値に入り、推論（同じレースの結果は無い）とずれていた（データ監査 2026-11-16）。
+    """
     if id_col not in work.columns:
         return pd.DataFrame()
 
@@ -271,16 +275,20 @@ def _prior_win_rate_by_id_surface(
     )
     fp = pd.to_numeric(w["finish_position"], errors="coerce")
     w["_win"] = (fp == 1).astype(np.float64)
-    g = w.groupby(["_pid", "surface_group"], sort=False)
-    cs = g["_win"].cumsum()
-    prior_wins = cs - w["_win"]
-    prior_races = g.cumcount()
-    if "_pending" in w.columns:
-        # 推論時の未確定行（結果なし）は件数に数えない。_pending 列が無ければ学習時と同じ挙動。
-        w["_cnt"] = (~w["_pending"].astype(bool)).astype(np.float64)
-        prior_races = g["_cnt"].cumsum() - w["_cnt"]
-    pr = prior_races.astype(float).replace(0, np.nan).to_numpy()
-    pw = prior_wins.to_numpy()
+    # 推論時の未確定行（結果なし）は件数に数えない。_pending 列が無ければ全行を数える。
+    w["_cnt"] = (~w["_pending"].astype(bool)).astype(np.float64) if "_pending" in w.columns else 1.0
+    key = ["_pid", "surface_group"]
+    # レース単位にまとめて累計し、当該レースの分を引く。レースの鍵は race_id だけ（同じレースで発走時刻の表記・欠けが行ごとに違っても
+    # 1 つにまとめる。割れると同じレースの前の塊の結果が後ろの塊に入る）。並びは日付・発走時刻の最小値と race_id
+    per_race = (w.groupby(key + ["race_id"], sort=False, dropna=False)
+                .agg(_d=("_d", "min"), _st_sec=("_st_sec", "min"), _win=("_win", "sum"), _cnt=("_cnt", "sum")).reset_index()
+                .sort_values(key + ["_d", "_st_sec", "race_id"], kind="mergesort", na_position="last"))
+    gr = per_race.groupby(key, sort=False, dropna=False)
+    per_race["_pw"] = gr["_win"].cumsum() - per_race["_win"]
+    per_race["_pr"] = gr["_cnt"].cumsum() - per_race["_cnt"]
+    w = w.merge(per_race[key + ["race_id", "_pw", "_pr"]], on=key + ["race_id"], how="left")
+    pr = w["_pr"].astype(float).replace(0, np.nan).to_numpy()
+    pw = w["_pw"].to_numpy()
     rate = np.where(np.isfinite(pr) & (pr > 0), pw / pr, np.nan)
 
     out = w[["race_id", "horse_number"]].copy()
