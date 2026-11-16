@@ -194,3 +194,29 @@ def _reload_folklore_after(monkeypatch):
     for k in ("FOLKLORE_ENTRIES", "FOLKLORE_CUTOFF"):
         os.environ.pop(k, None)
     importlib.reload(FB)
+
+
+def test_shutuba_short_names_resolve_to_graded_keys(tmp_path, monkeypatch):
+    """出馬表の略称（「マイルCS」など）でも、記録の別名の表で重賞の鍵に当たる。行のレース名は鍵にそろえる。"""
+    d, h = _history(tmp_path, monkeypatch, rkeys=("マイルチャンピオンS",))
+    h["aliases"] = {"マイルCS": {"to": "マイルチャンピオンS", "months": [11]}}
+    (d / "history.json").write_text(json.dumps(h), encoding="utf-8")
+    assert GP.rkey_of("マイルCS", "2026-11-22") == "マイルチャンピオンS"
+    assert GP.rkey_of("ふつう", "2026-11-22") is None
+    assert GP.rkey_of("マイルCS", "2026-05-22") is None              # 見たことのない月の略称は当てない
+    rows = UP.rows_from_card(_card(name="マイルCS"), "G1", "マイルチャンピオンS")
+    assert {r["race_name"] for r in rows} == {"マイルチャンピオンS"}
+
+
+def test_shutuba_aliases_only_unique_graded_targets(tmp_path, monkeypatch):
+    from src.research.graded import run as R
+    tb = tmp_path / "tables"
+    for y, rows in ((2025, [("1", "マイルCS", "マイルチャンピオンS", "2025-11-16"), ("2", "曖昧S", "重賞S", "2025-05-01"), ("3", "曖昧S", "別のOP", "2025-06-01"),
+                            ("4", "重賞S", "重賞S", "2025-05-02"), ("5", "略OP", "ふつうのOP", "2025-07-01"), ("6", "日付なし", "重賞S", None)]),):
+        (tb / str(y)).mkdir(parents=True)
+        pd.DataFrame([{"race_id": r, "race_name": s} for r, s, _, _ in rows]).to_parquet(tb / str(y) / "race_shutuba_flat.parquet")
+        pd.DataFrame([{"race_id": r, "race_name": x, "date": d} for r, _, x, d in rows]).to_parquet(tb / str(y) / "race_result_flat.parquet")
+    monkeypatch.setattr("src.research.graded.features.TABLES", tb)
+    monkeypatch.setattr("src.research.graded.race_keys.canonical_key", lambda name, month=None: name)
+    al = R._shutuba_aliases({"マイルチャンピオンS", "重賞S"}, 2024, 2025)    # 2024 年は表が無いので飛ばす
+    assert al == {"マイルCS": {"to": "マイルチャンピオンS", "months": [11]}}   # 曖昧・重賞でない行き先・日付の欠けは入れない

@@ -79,9 +79,13 @@ def rkey_of(race_name: str | None, date: str | None) -> str | None:
         return None
     from src.research.graded.race_keys import canonical_key
     try:
-        k = canonical_key(race_name, int(str(date)[5:7]))
+        mo = int(str(date)[5:7])
+        k = canonical_key(race_name, mo)
     except (TypeError, ValueError):
         return None
+    a = (h.get("aliases") or {}).get(k)      # 出馬表の略称（「マイルCS」など）→ 結果の名前の鍵（同じ月に見た略称だけ）
+    if isinstance(a, dict) and mo in (a.get("months") or []):
+        k = a["to"]
     return k if k in h["rkeys"] else None
 
 

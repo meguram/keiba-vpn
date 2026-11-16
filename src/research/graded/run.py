@@ -956,6 +956,32 @@ def _attach_final_odds(t, years: tuple[int, int]) -> None:
             sys.exit(f"確定オッズ・人気・馬名の無い馬が多すぎる（{miss} / {int(ev.sum())} 頭）。race_id・horse_id の型を確かめる")
 
 
+def _shutuba_aliases(rkeys: set[str], y0: int, y1: int) -> dict[str, dict]:
+    """出馬表のレース名（「マイルCS」「東スポ杯2歳S」などの略称）→ {"to": 記録の重賞の鍵, "months": [開催月]}。同じ race_id の出馬表と
+    結果の名前を突き合わせて作る（研究の別名の表 race_aliases.json は凍結した集計に効くので触らない）。
+    すべてのレース（重賞以外も）の組で数え、行き先が 1 つに決まり、それが記録の重賞の鍵である略称だけを入れる。月も持つ（月で鍵の変わる名前があるため）。"""
+    from src.research.graded import race_keys as RKY
+    from src.research.graded.features import TABLES
+    to: dict[str, set] = {}
+    months: dict[str, set] = {}
+    for y in range(y0, y1 + 1):
+        fs, fr = TABLES / str(y) / "race_shutuba_flat.parquet", TABLES / str(y) / "race_result_flat.parquet"
+        if not (fs.exists() and fr.exists()):
+            continue
+        m = (pd.read_parquet(fs, columns=["race_id", "race_name"]).drop_duplicates("race_id")
+             .merge(pd.read_parquet(fr, columns=["race_id", "race_name", "date"]).drop_duplicates("race_id"), on="race_id", suffixes=("_s", "_r")))
+        mo = pd.to_numeric(m["date"].astype(str).str[5:7], errors="coerce")
+        for a, b, mm in zip(m["race_name_s"], m["race_name_r"], mo):
+            if mm != mm:
+                continue
+            ks, kr = RKY.canonical_key(a, int(mm)), RKY.canonical_key(b, int(mm))
+            if ks != kr:
+                to.setdefault(ks, set()).add(kr)
+                months.setdefault(ks, set()).add(int(mm))
+    return {k: {"to": next(iter(v)), "months": sorted(months[k])} for k, v in sorted(to.items())
+            if len(v) == 1 and next(iter(v)) in rkeys and k not in rkeys}
+
+
 GRADED_PICKS_DIR = Path(os.environ.get("GRADED_PICKS_DIR") or (REPO / "data/local/graded_picks"))
 
 
@@ -976,6 +1002,7 @@ def cmd_picks_history() -> None:
     pk = json.loads(PREREG_KILL.read_text(encoding="utf-8"))
     kn = [v["name"].removeprefix("消し版") for v in pk["versions"] if v["passes"] and v["params"].get("honmei") == "そのまま"]
     res = PK.build_history(t, P, log["cycles"][-1]["report"], kn)
+    res["aliases"] = _shutuba_aliases(set(res["rkeys"]), PK.DEV[0], int(t.race["year"].max()))
     res["made_at"] = datetime.now(JST).isoformat(timespec="seconds")
     res["data_until"] = str(t.r["dt"].max())[:10]
     GRADED_PICKS_DIR.mkdir(parents=True, exist_ok=True)
