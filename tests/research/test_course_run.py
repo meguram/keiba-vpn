@@ -135,3 +135,39 @@ def test_honmei_tie_goes_to_smaller_number():
     X = np.array([[0], [0], [1]])
     hm, _ = SE.apply_cells(X, np.array(["a"] * 3), np.array([5, 2, 1]), {"buy": [{"ts": (0,), "cs": (0,), "rate": 1.0}], "kill": []}, "count")
     assert hm == {"a": 1}                                                              # 同点は馬番の小さい方（2 番）
+
+
+def test_cycles_html_even_midway(tmp_path):
+    import json
+
+    from src.scripts.docs import build_course_cycles_html as H
+    L = {"note": "全レース版 <x>", "goal": CR.GOAL, "races": 10, "rows": 100,
+         "cycles": [{"cycle": 1, "hyp": "基準 <b>", "params": {"name": "前日版"}, "adopted": True, "achieved_units": 2, "units": 5,
+                     "all": {"win": 0.4, "roi_t": 1.5, "roi_t_capped": 1.2, "coverage": 0.5, "kill_coverage": 0.3},
+                     "conf_2022_2024": {"win": 0.35, "roi_t": 1.1}, "closeness": 1.2, "seconds": 3}]}
+    src = tmp_path / "c.json"
+    src.write_text(json.dumps(L, ensure_ascii=False), encoding="utf-8")
+    h = H.build(src, tmp_path / "c.html").read_text(encoding="utf-8")
+    assert "途中" in h and f"1 / {len(CR.CYCLES)}" in h and "基準 &lt;b&gt;" in h and "全レース版 &lt;x&gt;" in h and "2025・2026 年は" in h
+
+
+def test_levels_work_with_nullable_numeric_columns():
+    """欠けありの数値型（馬体重が Int64 で欠けあり）でも、float に直してから水準を作れる。"""
+    from src.research.graded import catalog as CAT
+    d = pd.DataFrame({"wt": pd.array([480, None, 500], dtype="Int64"), "wtc": pd.array([2.0, None, -4.0], dtype="Float64")})
+    t = CAT.BY_ID["G06"]
+    with pytest.raises(ValueError):
+        t.fn(d)                                                       # そのままだと落ちる（元の不具合）
+    out = t.fn(CR._plain_numeric(d))
+    assert out.iloc[0] == "480-519kg" and out.iloc[2] == "480-519kg"
+
+
+def test_master_reuse_only_when_2024_and_same_settings(tmp_path):
+    p = tmp_path / "master.parquet"
+    assert not CR.master_ok(p)                                        # 無い
+    pd.DataFrame({"year": [2016, 2024]}).to_parquet(p)
+    assert not CR.master_ok(p)                                        # 作ったときの設定の記録が無い
+    (tmp_path / "course_master.json").write_text('{"year_end": 2024, "keep_dnf": true}', encoding="utf-8")
+    assert CR.master_ok(p)
+    pd.DataFrame({"year": [2016, 2025]}).to_parquet(p)
+    assert not CR.master_ok(p)                                        # 2025 年を含む（統計だけで判定し、行は読まない）

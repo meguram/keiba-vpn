@@ -59,7 +59,10 @@ def cmd_frame() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     e = env()
     t0 = time.time()
-    subprocess.run([sys.executable, "-m", "src.scripts.data.folklore_build"], env=e, cwd=REPO, check=True)
+    mp = OUT / "master" / "master.parquet"
+    if not (os.environ.get("COURSE_REUSE_MASTER") == "1" and master_ok(mp)):   # 作り済みの master を使い回すのは、2024 年までで同じ設定のときだけ
+        subprocess.run([sys.executable, "-m", "src.scripts.data.folklore_build"], env=e, cwd=REPO, check=True)
+        (OUT / "master" / "course_master.json").write_text(json.dumps({"year_end": YEAR_END, "keep_dnf": True}), encoding="utf-8")
     subprocess.run([sys.executable, "-m", "src.research.course.run", "_frame_inner"], env=e, cwd=REPO, check=True)
     print("frame", round(time.time() - t0), "秒", flush=True)
 
@@ -76,14 +79,40 @@ def _frame_inner() -> None:
         sys.exit("2025 年以降の行が入っている")
     keep = d["surf"].isin(["芝", "ダ"])
     d = d[keep].reset_index(drop=True)
-    L = CAT.levels(d)
-    L["__race_id"], L["__horse_id"] = d["race_id"].astype(str).to_numpy(), d["horse_id"].astype(str).to_numpy()   # 行の対応の検査用
     for c in d.columns:
         if d[c].dtype == object:
             d[c] = d[c].astype("string")
     d.to_parquet(OUT / "frame.parquet", index=False)
+    L = CAT.levels(_plain_numeric(d))   # 欠けありの数値型（Int64・Float64。馬体重など）は float に直してから切る（catalog.cut は to_numpy(float) で落ちる）
+    L["__race_id"], L["__horse_id"] = d["race_id"].astype(str).to_numpy(), d["horse_id"].astype(str).to_numpy()   # 行の対応の検査用
     L.to_parquet(OUT / "levels.parquet", index=False)
     print("frame", d.shape, "levels", L.shape, "years", int(d["year"].min()), int(d["year"].max()), flush=True)
+
+
+def _plain_numeric(d: pd.DataFrame) -> pd.DataFrame:
+    """欠けありの数値型（pandas の Int64・Float64 など）を float64（欠けは NaN）にした写し。"""
+    d = d.copy()
+    for c in d.columns:
+        if pd.api.types.is_extension_array_dtype(d[c].dtype) and pd.api.types.is_numeric_dtype(d[c].dtype) and not pd.api.types.is_bool_dtype(d[c].dtype):
+            d[c] = d[c].astype("float64")
+    return d
+
+
+def master_ok(path: Path) -> bool:
+    """使い回してよい master か: 年の列の最大（parquet の統計だけを読む）が YEAR_END 以下で、作ったときの設定の記録が今と同じ。"""
+    import pyarrow.parquet as pq
+    if not path.exists():
+        return False
+    try:
+        rec = json.loads((path.parent / "course_master.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if rec != {"year_end": YEAR_END, "keep_dnf": True}:
+        return False
+    md = pq.ParquetFile(path).metadata
+    j = pq.ParquetFile(path).schema_arrow.get_field_index("year")
+    mx = [md.row_group(i).column(j).statistics.max for i in range(md.num_row_groups) if md.row_group(i).column(j).statistics]
+    return bool(mx) and max(mx) <= YEAR_END
 
 
 def load_units(min_year: int = 2016) -> tuple[pd.DataFrame, pd.DataFrame]:
