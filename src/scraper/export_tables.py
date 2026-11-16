@@ -29,6 +29,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from src.scraper.race_result_fixups import resolve_surface, round_from_race_id, split_deadheat_win
 from src.utils.keiba_logging import script_basic_config
 
 logger = logging.getLogger(__name__)
@@ -103,6 +104,9 @@ def _extract_race_meta(data: dict, meta_index: dict[str, dict] | None = None) ->
             val = int(val)  # 年によって列の型が Float64 と Int64 に分かれ、年をまたぐ読み込みが落ちるのを防ぐ
         meta[field] = val
 
+    # 障害の面: 結果の解析がコース表記を読み違え「芝」「ダート」「空」で保存した障害（2020 年以降のほぼ全部。監査 C3）を「障」に直す。
+    # 空でない値は上の補いを通らないので、出馬表の面が「障」のとき・レース名が障害のときはここで上書きする（平地の値は変えない）
+    meta["surface"] = resolve_surface(meta.get("surface"), meta.get("race_name"), meta.get("distance"), fallback.get("surface"))
     meta["venue_code"] = race_id[4:6] if len(race_id) >= 6 else ""
     if not meta.get("round") and len(race_id) == 12 and race_id.isdigit():
         meta["round"] = int(race_id[-2:])   # 古い結果データは round が 0 のまま。race_id の末尾 2 桁がレース番号
@@ -182,7 +186,8 @@ def _is_blank_meta(field: str, v: Any) -> bool:
 # 出馬表のメタの補い（_extract_race_meta の fallback）だけで入る。メタを race_result_flat から組むと、速報から橋渡しした行
 # （出馬表のメタを持たないまま書き出された速報の行）の空の race_class がそのままメタになり、確定結果に置き換わっても空のまま残った
 # （2026-10-24〜11-08 の全レース。2026-11 は 59% が空）。ローカルの race_shutuba_flat から空の欄だけを補う（GCS は読まない）。
-LOCAL_SHUTUBA_FILL_FIELDS = ("race_class",)
+# surface も同じく補う。加えて、出馬表の面が「障」なら結果の誤った「芝」「ダート」を上書きする（障害の読み違い。監査 C3）。
+LOCAL_SHUTUBA_FILL_FIELDS = ("race_class", "surface")
 
 
 def _local_shutuba_meta(year: str, fields: tuple[str, ...] = LOCAL_SHUTUBA_FILL_FIELDS) -> dict[str, dict]:
@@ -210,7 +215,8 @@ def _local_shutuba_meta(year: str, fields: tuple[str, ...] = LOCAL_SHUTUBA_FILL_
 
 
 def _fill_index_from_local_shutuba(year: str, index: dict[str, dict]) -> int:
-    """index の空の欄（LOCAL_SHUTUBA_FILL_FIELDS）を、ローカルの race_shutuba_flat の値で補う。補った欄の数を返す。"""
+    """index の空の欄（LOCAL_SHUTUBA_FILL_FIELDS）を、ローカルの race_shutuba_flat の値で補う。出馬表の面が「障」なら空でない面も「障」で上書きする。
+    補った・上書きした欄の数を返す。"""
     if not index:
         return 0
     sh = _local_shutuba_meta(year)
@@ -220,8 +226,8 @@ def _fill_index_from_local_shutuba(year: str, index: dict[str, dict]) -> int:
         if not add:
             continue
         for f, v in add.items():
-            if _is_blank(meta.get(f)):
-                meta[f] = v
+            if _is_blank(meta.get(f)) or (f == "surface" and str(v).startswith("障") and meta.get(f) != "障"):
+                meta[f] = "障" if f == "surface" and str(v).startswith("障") else v
                 n += 1
     return n
 
@@ -262,7 +268,7 @@ def _build_meta_index_from_race_result_flat(year: str) -> dict[str, dict]:
             index[rid] = meta
         filled = _fill_index_from_local_shutuba(year, index)
         logger.info(
-            "[%s] メタデータ: ローカル race_result_flat から %d races（GCS shutuba なし。空の欄をローカルの出馬表で %d 件補った）",
+            "[%s] メタデータ: ローカル race_result_flat から %d races（GCS shutuba なし。空の欄・障害の面をローカルの出馬表で %d 件補った）",
             year, len(index), filled,
         )
         return index
@@ -340,11 +346,21 @@ def _clear_storage_cache(storage: Any) -> None:
     gc.collect()
 
 
+def _with_fixed_payoff(data: dict, entry_key: str = "entries") -> dict:
+    """1 着同着の単勝が 1 つに連結された保存物（監査 C5）なら、2 頭分に分けた払戻に差し替えた浅いコピーを返す（分けられなければそのまま）。"""
+    pay = data.get("payoff")
+    if not isinstance(pay, dict):
+        return data
+    fixed = split_deadheat_win(pay, data.get(entry_key) or data.get("entries"))
+    return data if fixed is pay else {**data, "payoff": fixed}
+
+
 def _data_to_flat_rows(
     data: dict, category: str,
     meta_index: dict[str, dict] | None = None,
 ) -> list[dict]:
     """1レース分のデータからフラット行を生成する。"""
+    data = _with_fixed_payoff(data, ENTRY_KEY_MAP.get(category, "entries"))
     meta = _extract_race_meta(data, meta_index)
     entry_key = ENTRY_KEY_MAP.get(category, "entries")
 
@@ -419,8 +435,18 @@ def _data_to_pair_odds_flat_rows(
     return rows
 
 
-def _data_to_race_row(data: dict) -> dict:
-    """1レース分のデータからレース単位行を生成する。"""
+def _data_to_race_row(data: dict, meta_index: dict[str, dict] | None = None) -> dict:
+    """1レース分のデータからレース単位行を生成する。
+    面（障害）・レース番号・同着の単勝の払戻は flat と同じ直し方をする（元のまま写すと race 表だけ round=0・障害が芝のまま残る。監査 C3〜C5）。
+    面は flat の行と同じ値になる（空の面は meta_index の値で埋まる。全カテゴリの race 表で同じ）。"""
+    data = _with_fixed_payoff(data)
+    if "surface" in data or "round" in data:
+        meta = _extract_race_meta(data, meta_index)
+        data = dict(data)
+        if "surface" in data and meta.get("surface") is not None:   # 補う値が無いときは元の値（空文字）のまま
+            data["surface"] = meta["surface"]
+        if "round" in data:
+            data["round"] = round_from_race_id(data.get("round"), data.get("race_id"))
     row = {}
     for k, v in data.items():
         if k == "_meta":
@@ -808,7 +834,7 @@ def export_category_chunked(
                 continue
             races_loaded += 1
 
-            race_rows.append(_data_to_race_row(data))
+            race_rows.append(_data_to_race_row(data, meta_index))
 
             if category == "race_pair_odds":
                 flat_rows.extend(_data_to_pair_odds_flat_rows(data, meta_index))

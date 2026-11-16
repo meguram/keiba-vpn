@@ -29,6 +29,7 @@ from typing import Any
 from bs4 import BeautifulSoup
 
 from src.scraper.finish_status import UNPARSED, finish_anomalies, normalize_finish
+from src.scraper.race_result_fixups import resolve_surface
 from src.scraper.selectors import (
     SelectorChain, safe_text, safe_attr, extract_id_from_url,
     extract_numbers, parse_weight_change,
@@ -254,6 +255,8 @@ class RaceResultParser:
             info["surface"], info["direction"], info["distance"] = course
         else:
             info["surface"], info["direction"], info["distance"] = "", "", 0
+        # 障害のコース表記を読み違えると「芝」「ダート」「空」になる（2020 年以降の障害のほぼ全部。監査 C3）。レース名で障害と分かれば「障」
+        info["surface"] = resolve_surface(info["surface"], raw_name, info["distance"])
         info["course_type"] = parse_course_type(data_text)
 
         m_w = re.search(r"天候\s*[:：]\s*(\S+)", data_text)
@@ -698,6 +701,7 @@ class RaceResultOnTimeParser(RaceResultParser):
             info["surface"], _, info["distance"] = course
         else:
             info["surface"], info["distance"] = "", 0
+        info["surface"] = resolve_surface(info["surface"], info["race_name"], info["distance"])   # 障害の読み違い（監査 C3）
 
         m_dir = re.search(r"(?:芝|ダ|ダート|障)(左|右|直)\s*\d+m", data1)
         if not m_dir:
