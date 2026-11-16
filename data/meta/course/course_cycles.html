@@ -1,0 +1,30 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>全レース版の分析サイクル</title><style>
+:root{--bg:#f7f8fa;--panel:#fff;--text:#1d2330;--muted:#5d6676;--border:#d9dee7;--accent:#2f6fde;--good:#137a3d;--bad:#b3261e;--head:#eef2f8}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1420;--panel:#161d2b;--text:#e4e9f2;--muted:#9aa6ba;--border:#2a3446;
+--accent:#7aa7ff;--good:#5fd38d;--bad:#ff8a80;--head:#1d2638}}
+:root[data-theme="dark"]{--bg:#0f1420;--panel:#161d2b;--text:#e4e9f2;--muted:#9aa6ba;--border:#2a3446;--accent:#7aa7ff;--good:#5fd38d;--bad:#ff8a80;--head:#1d2638}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:"Noto Sans JP",system-ui,sans-serif;font-size:14px;line-height:1.6}
+main{max-width:1180px;margin:0 auto;padding:16px}h1{font-size:20px;margin:4px 0 4px}h2{font-size:16px;margin:18px 0 8px}
+.muted{color:var(--muted);font-size:12.5px}.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.tabs button{border:1px solid var(--border);background:var(--panel);color:var(--text);padding:6px 12px;border-radius:16px;cursor:pointer;font-size:13px}
+.tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px;margin:10px 0}
+.scroll{overflow-x:auto;max-width:100%}table{border-collapse:collapse;font-size:12.5px;min-width:100%}
+th,td{border-bottom:1px solid var(--border);padding:4px 7px;text-align:left;white-space:nowrap;vertical-align:top}
+th{background:var(--head);position:sticky;top:0;cursor:pointer;user-select:none}td.n{text-align:right;font-variant-numeric:tabular-nums}
+.good{color:var(--good);font-weight:600}.bad{color:var(--bad);font-weight:600}.ctl{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}
+.ctl input,.ctl select{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:13px;max-width:100%}
+details{margin:2px 0}summary{cursor:pointer}.mk{font-weight:700;color:var(--accent)}.wrap{white-space:normal}
+</style></head><body><main>
+<h1>全レース版の分析サイクル（コース × クラスの群 × 良馬場）</h1>
+<div class="panel wrap"><p>全レース版の 20 サイクル（2016〜2024 年の中だけ。2025・2026 年は見ていない）。途中（2 / 20 サイクル）。採った最良の版: サイクル 2対象: 良馬場の平地 19,906 レース・276,702 走（2016〜2024 年）。</p>
+<ul class="muted">
+<li>値はすべて 2016〜2024 年の当てはめ（条件を探した同じ走で数えた値）。過学習してよい（ユーザーの指示）。2025・2026 年は、条件を凍結するまで見ない。</li>
+<li>ゴール: ◎ の勝率 30.0%・単勝の回収率 120.0%。単位の達成には、買ったレースの割合 30% 以上・5 回以上も要る。</li>
+<li>買い = 切り口 × 水準の AND で、複勝率 70% 以上・単複どちらかの回収率 100% 超。◎ = 当てはまった買いの条件の数が最大の馬（いなければ買わない）。</li>
+<li>消し = 3 着以内が 0 の条件。当てはめでは定義上すべて 4 着以下になるので、的中ではなく、消しを付けたレースの割合を出す。</li>
+<li>参考の 2022〜2024 年の値も、条件を探した期間の中（当てはめ）。採否には使わない。</li></ul></div>
+<div class="scroll"><table><thead><tr><th>サイクル</th><th>仮説（それまでに採った版から 1 つ変える）</th><th>採否</th><th>達成した単位</th><th>◎ 勝率</th><th>◎ 単回収</th><th>単回収（50 倍で打ち切り）</th><th>買ったレース</th><th>消しを付けたレース</th><th>参考: 2022〜2024 年の ◎ 勝率／単回収</th><th>ゴールまでの近さ</th><th>秒</th></tr></thead><tbody><tr><td class='n'>1</td><td class='wrap'>基準: 深さ 1・前日版・走数 2 以上<div class='muted'>前日版・群3・深さ1・走数2以上・消し10走1段・主20回・count</div></td><td class='good'>採用</td><td class='n'>56/268</td><td class='n'>33.3%</td><td class='n'>196.6%</td><td class='n'>182.9%</td><td class='n'>22.9%</td><td class='n'>13.7%</td><td class='n'>32.3%／166.5%</td><td class='n'>0.85</td><td class='n'>14</td></tr><tr><td class='n'>2</td><td class='wrap'>2 つの AND まで<div class='muted'>前日版・群3・深さ2・走数2以上・消し10走1段・主20回・count</div></td><td class='good'>採用</td><td class='n'>218/268</td><td class='n'>38.3%</td><td class='n'>204.9%</td><td class='n'>196.0%</td><td class='n'>99.8%</td><td class='n'>13.7%</td><td class='n'>39.0%／194.3%</td><td class='n'>1.28</td><td class='n'>205</td></tr></tbody></table></div>
+<p class="muted">作り: src/research/course/run.py → src/scripts/docs/build_course_cycles_html.py。計画書: docs/ideas/course_class_handicapper.md</p>
+</main></body></html>
