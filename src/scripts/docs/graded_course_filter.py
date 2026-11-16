@@ -41,13 +41,13 @@ def options_json(courses_by_key: dict[str, str]) -> str:
     return json.dumps(options(courses_by_key), ensure_ascii=False).replace("</", "<\\/")
 
 
-# setupCourse(会場の select, コースの select, 候補, 変わったときに呼ぶ関数, 「すべて」の文言の頭)。
+# setupCourse(会場の select, コースの select, 候補, 変わったときに呼ぶ関数, 「すべて」の文言の頭, 数の単位（既定「重賞」）)。
 # 会場の候補にも重賞の数を付ける。会場を変えると、コースの候補をその会場だけにし、選んでいたコースが外れたら「すべて」に戻す
 COURSE_JS = r"""
-function setupCourse(vs,cs,L,cb,head){const e=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function setupCourse(vs,cs,L,cb,head,unit){unit=unit||'重賞';const e=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
  const hv=head?'会場: ':'',hc=head?'コース: ':'';const nv={};L.forEach(x=>{nv[x.v]=(nv[x.v]||0)+x.n});
- vs.innerHTML=`<option value="">${hv}すべて</option>`+Object.keys(nv).map(v=>`<option value="${e(v)}">${e(v)}（${nv[v]} 重賞）</option>`).join('');
- const fill=()=>{const v=vs.value,cur=cs.value;cs.innerHTML=`<option value="">${hc}すべて</option>`+L.filter(x=>!v||x.v===v).map(x=>`<option value="${e(x.c)}">${e(x.c)}（${x.n} 重賞）</option>`).join('');
+ vs.innerHTML=`<option value="">${hv}すべて</option>`+Object.keys(nv).map(v=>`<option value="${e(v)}">${e(v)}（${nv[v]} ${unit}）</option>`).join('');
+ const fill=()=>{const v=vs.value,cur=cs.value;cs.innerHTML=`<option value="">${hc}すべて</option>`+L.filter(x=>!v||x.v===v).map(x=>`<option value="${e(x.c)}">${e(x.c)}（${x.n} ${unit}）</option>`).join('');
   cs.value=[...cs.options].some(o=>o.value===cur)?cur:''};
  vs.addEventListener('change',()=>{fill();cb()});cs.addEventListener('change',cb);fill()}
 """

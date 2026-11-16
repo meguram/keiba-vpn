@@ -60,4 +60,23 @@
 - 手順:
   1. `python -m src.research.course.run frame`
   2. `python -m src.research.course.run cycles`
-  3. 凍結・評価・HTML（data/meta/course/）は、サイクルの結果を見てから入れる。
+  3. `python -m src.research.course.run freeze`
+     - 最後に採った版の条件を <COURSE_OUT>/course_cells.json に書き、版・sha を `src/research/course/prereg_course.json` に書く。
+     - prereg を commit する。
+  4. `python -m src.research.course.run evaluate`
+     - 1 回だけ。prereg が commit されていて、条件の表が sha と一致するときだけ動く。
+     - 別の置き場（<COURSE_OUT>/eval）で 2026 年までの表を作り、2025・2026 年の良馬場の単位に、凍結した条件を名前で当てはめる。
+     - 済んだ印（EVALUATED_COURSE.json）で、2 回目を止める。
+  5. HTML
+     - サイクル: `python -m src.scripts.docs.build_course_cycles_html` → data/meta/course/course_cycles.html
+     - 単位ごとの早見表: `python -m src.scripts.docs.build_course_playbook_html` → data/meta/course/course_playbook.html
+       - 会場 → コースのプルダウン・クラスの群・◎ と消しの条件を文で・当てはめの値。評価の後は評価の値を並べる。
+
+## 6. 経過（2026-11-16）
+
+- frame: 2016〜2024 年の 41.8 万走。表は 2024 年までしか開いていない。
+- 20 サイクルのうち 17 本まで回ったところで、計算機のメモリが足りなくなり、実行の管理側が止めた（計算の不具合ではない）。再開はユーザーの確認待ち。
+  - 推奨: 最初から流し直す。空きメモリ 40GB 以上・load 20 未満のときに、ほかの重い計算と直列にする。
+- 17 本までの最良（当てはめ）は、サイクル 9（クラスの群を 4 つ、新馬を分ける）。
+  - 達成 265/332 単位、◎ 勝率 39.0%・単回収 212.6%、◎ を出したレース 99.9%。
+  - 深さ 3 は深さ 2 より良くならなかった。買いの走数の下限を上げると下がった。
