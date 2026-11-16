@@ -207,7 +207,7 @@ def run_config(d: pd.DataFrame, L: pd.DataFrame, p, keep_cells: bool = False) ->
         hrows = idx[list(hm.values())] if hm else np.array([], int)
         H.append(hrows)
         K[idx[kl]] = True
-        m = SE.metrics(Y, hrows, idx[kl], race[idx[kl]], nr)
+        m = SE.metrics(Y, race, hrows, idx[kl], nr)
         ach = bool(m["win"] is not None and m["win"] >= GOAL["win"] and (m["roi_t"] or 0) >= GOAL["roi_t"]
                    and (m["coverage"] or 0) >= MIN_COVERAGE and m["bet_races"] >= MIN_BET)
         per_unit.append({"unit": u, "layer": layer, "races": nr, "n_buy": len(cells["buy"]), "n_kill": len(cells["kill"]),
@@ -217,9 +217,9 @@ def run_config(d: pd.DataFrame, L: pd.DataFrame, p, keep_cells: bool = False) ->
                 | {k: c[k] for k in c if k not in ("ts", "cs")}   # noqa: E731
             out_cells[u] = {"layer": layer, "buy": [fmt(c) for c in cells["buy"]], "kill": [fmt(c) for c in cells["kill"]]}
     H = np.concatenate(H) if H else np.array([], int)
-    allm = SE.metrics(Y, H, K, race[K], len(set(race)))
+    allm = SE.metrics(Y, race, H, np.flatnonzero(K), len(set(race)))
     conf = (yr >= SE.CONF[0]) & (yr <= SE.CONF[1])
-    cm = SE.metrics(Y, H[conf[H]], K & conf, race[K & conf], len(set(race[conf])))
+    cm = SE.metrics(Y, race, H[conf[H]], np.flatnonzero(K & conf), len(set(race[conf])))
     out = {"params": SE.params_dict(p), "all": allm, "conf_2022_2024": cm, "units": len(per_unit),
            "achieved_units": sum(x["achieved"] for x in per_unit), "closeness": _closeness(allm), "per_unit": per_unit}
     if keep_cells:

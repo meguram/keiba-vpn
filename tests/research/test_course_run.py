@@ -171,3 +171,11 @@ def test_master_reuse_only_when_2024_and_same_settings(tmp_path):
     assert CR.master_ok(p)
     pd.DataFrame({"year": [2016, 2025]}).to_parquet(p)
     assert not CR.master_ok(p)                                        # 2025 年を含む（統計だけで判定し、行は読まない）
+
+
+def test_metrics_counts_kill_races():
+    Y = SE.y_matrix(pd.DataFrame({"fin": [1, 4, 5, 6, 2, 7], "field": [6] * 6, "pay_ok": [True] * 6, "ret_tan": [3.0, 0, 0, 0, 0, 0],
+                                  "ret_fuku": [1.5, 0, 0, 0, 1.2, 0], "ret_tan_c": [3.0, 0, 0, 0, 0, 0]}))
+    race = np.array(["a", "a", "a", "a", "b", "b"])
+    m = SE.metrics(Y, race, np.array([0]), np.array([1, 2, 3]), 2)
+    assert m["win"] == 1.0 and m["roi_t"] == 3.0 and m["kill_races"] == 1 and m["kill_per_race"] == 3.0 and m["coverage"] == 0.5
