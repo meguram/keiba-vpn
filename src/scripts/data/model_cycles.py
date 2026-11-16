@@ -4,6 +4,10 @@
     python -m src.scripts.data.model_cycles member NAME --spec '{...}' [--seeds 1]   # 勝ちの二値（XGBoost・GPU）の OOF（valid 2022〜2024）
     python -m src.scripts.data.model_cycles ens NAME                    # v6e16 の 7 メンバーの xgb_extras_ped の勝率を NAME に差し替えた LOYO アンサンブル
     python -m src.scripts.data.model_cycles score NAME [--ref REF]      # 勝ち馬の対数損失（レース単位）・◎の勝率・複勝率・回収率 4 種と、対の差の区間
+    python -m src.scripts.data.model_cycles parity NAME --spec '{...}'  # 学習（2025 年）と推論（2026 年の書き出し）の列ごとの欠けの割合
+    python -m src.scripts.data.model_cycles inf2026 NAME --spec '{...}' # 2026 年の推論の入力での参考の採点（選択には使わない）
+    python -m src.scripts.data.model_cycles record ID --name NAME ...    # 記録 model_cycles_log.json に 1 サイクル足す
+                                                                        # → python -m src.scripts.docs.build_model_cycles_html で HTML を作り直す
 
 - 入力は rank_bakeoff（RANK_BASE=2016）と同じ作り（2016〜2025 年の土台 retrain_out/base_2016、本番は書き換えない）。
 - fold は valid 2022〜2024（年ごとに広げる。学習は 2016 年から）。2026 年は学習・選択に使わない。2025 年（test）は最後に 1 回だけ（ここでは扱わない）。
@@ -29,7 +33,7 @@ CYC = Path(os.environ.get("CYCLES_OUT") or "/home/jovyan/work/retrain_out/cycles
 BASE = Path(os.environ.get("REBUILD_BASE") or "/home/jovyan/work/retrain_out/base_2016")
 ROOT = Path(__file__).resolve().parents[3]
 PROD_ENS = ROOT / "data/local/modeling/training_pipeline_v4/tp27_v6e/ens/v6.parquet"   # 本番 v6e の LOYO（valid 2022〜2024）
-CAND_ENS = BASE / "tp27_v6e/ens/v6.parquet"                                          # 候補 v6e16 の LOYO
+CAND_ENS = Path(os.environ.get("CYCLES_CAND_ENS") or "/home/jovyan/work/retrain_out/base_2016/tp27_v6e/ens/v6.parquet")   # 候補 v6e16 の LOYO（土台の向け替えに引きずられないよう固定）
 V6E_MEMBERS = ["lgb_extras_ped", "xgb_extras_ped", "lgb_extras", "lgb_softmax", "linear", "mtl_nn_extras_ped", "mtl_nn_s"]
 KEY = ["race_id", "horse_id"]
 
@@ -75,11 +79,47 @@ def newcomer_mask(meta: pd.DataFrame) -> np.ndarray:
 
 
 def apply_spec(X: pd.DataFrame, meta: pd.DataFrame, spec: dict) -> pd.DataFrame:
-    """サイクルの変更のうち、入力の列に関わるもの（落とす・新馬戦で空にする）。推論では束の feature_cols と前処理で同じことをする。"""
+    """サイクルの変更のうち、入力の列に関わるもの。学習（member）と推論の入力（parity・inf2026）の両方に同じ順で当てる。
+    順: drop・drop_prefix → blank（全行で空）→ clip_max → copy（dst ← src）→ zero_if_present → blank_newcomer。
+    書き換え（blank・clip_max・copy・zero_if_present）は数値の列だけ。spec に書いた列が X に無ければ止める（打ち間違いで黙って基準と同じになるのを防ぐ）。
+    採用するときは、本番の推論の前処理（束の feature_cols と _cast の前）にも同じ書き換えを実装する必要がある（今は無い）。"""
     drop = set(spec.get("drop", []))
     for p in spec.get("drop_prefix", []):
         drop |= {c for c in X.columns if c.startswith(p)}
     X = X.drop(columns=[c for c in X.columns if c in drop])
+    edits = spec.get("blank") or spec.get("clip_max") or spec.get("copy") or spec.get("zero_if_present")
+    if edits:                                       # 学習でも推論でも同じに当てられる列の書き換え（例: 追い切りを最終 1 本だけで作った形にそろえる）
+        named = list(spec.get("blank", [])) + list(spec.get("clip_max", {})) + list(spec.get("copy", {})) + list(spec.get("copy", {}).values()) \
+            + list(spec.get("zero_if_present", []))
+        miss = [c for c in named if c not in X.columns]
+        if miss:
+            raise SystemExit(f"spec の列が入力に無い: {miss}")
+        cat = [c for c in named if str(X[c].dtype) in ("category", "object")]
+        if cat:
+            raise SystemExit(f"書き換えは数値の列だけ（カテゴリの列: {cat}）")
+        X = X.copy()
+        for c in spec.get("blank", []):
+            if c in X.columns:
+                X[c] = np.nan
+        for c, v in spec.get("clip_max", {}).items():
+            if c in X.columns:
+                X[c] = X[c].clip(upper=v)
+        for dst, src in spec.get("copy", {}).items():
+            if dst in X.columns and src in X.columns:
+                X[dst] = X[src]
+        for c in spec.get("zero_if_present", []):
+            if c in X.columns:
+                X[c] = X[c].where(X[c].isna(), 0.0)
+    bb = spec.get("blank_before")                   # {"year": 2020, "prefix": ["wc_", "tl_"]}: その年より前の行だけ空（生き残りの漏れの除去。推論の行は 2026 年なので当たらない）
+    if bb and "year" in meta.columns:             # 年の列が無いのは推論の入力（2026 年）だけ。学習の経路は必ず year を渡す
+        cols = [c for c in X.columns if c.startswith(tuple(bb["prefix"]))]
+        if not cols:
+            raise SystemExit(f"blank_before の列が入力に無い: {bb['prefix']}")
+        print(f"[apply_spec] blank_before: " + ", ".join(f"{p_} {sum(c.startswith(p_) for c in cols)} 列" for p_ in bb["prefix"]), flush=True)
+        old = meta["year"].to_numpy() < int(bb["year"])
+        if old.any():
+            X = X.copy()
+            X.loc[old, cols] = np.nan
     bn = [c for c in spec.get("blank_newcomer", []) if c in X.columns]
     if bn:
         X = X.copy()
@@ -151,7 +191,7 @@ def cmd_member(a) -> None:
             age = (year[va].min() - 1) - year[tr]
             w = 0.5 ** (np.clip(age, 0, None) / float(spec["halflife_years"]))
         acc = np.zeros(len(va))
-        for s in range(a.seeds):
+        for s in range(spec.get("seed_offset", 0), spec.get("seed_offset", 0) + a.seeds):   # seed_offset: 対照用に seed をずらす
             acc += norm_race(race[va], fit_win(X.iloc[tr], win[tr], X.iloc[va], params, seed=s, weight=w))
         pred[va] = acc / a.seeds
         log(f"{a.name} fold {int(year[va][0])} 済み（{time.time() - t0:.0f}s）")
@@ -166,11 +206,11 @@ def cmd_member(a) -> None:
 
 
 # ---------------------------------------------------------------- アンサンブル（xgb の勝率を差し替え）
-def load_member_oofs(replace: dict[str, Path] | None = None) -> pd.DataFrame:
+def load_member_oofs(replace: dict[str, Path] | None = None, members: list[str] | None = None) -> pd.DataFrame:
     keys = pd.read_parquet(BASE / "tp_rank/keys.parquet")
     keys["race_id"], keys["horse_id"] = keys["race_id"].astype(str), keys["horse_id"].astype(str)
     base = None
-    for m in V6E_MEMBERS:
+    for m in members or V6E_MEMBERS:
         path = (replace or {}).get(m, BASE / "tp27_v6e/oof" / f"{m}__v4.parquet")
         o = pd.read_parquet(path)
         o["race_id"], o["horse_id"] = o["race_id"].astype(str), o["horse_id"].astype(str)
@@ -197,8 +237,9 @@ def cmd_ens(a) -> None:
     for kv in a.replace or []:
         k, v = kv.split("=")
         replace[k] = CYC / "oof" / f"{v}.parquet"
-    base = load_member_oofs(replace)
-    members = list(V6E_MEMBERS) + [n for n in (a.add or [])]
+    mems = a.members or list(V6E_MEMBERS)
+    base = load_member_oofs(replace, mems)
+    members = list(mems) + [n for n in (a.add or [])]
     for n in a.add or []:
         o = pd.read_parquet(CYC / "oof" / f"{n}.parquet")[KEY + ["p_win"]]
         o["race_id"], o["horse_id"] = o["race_id"].astype(str), o["horse_id"].astype(str)
@@ -328,7 +369,7 @@ def load_inf_x(limit_days: int | None = None) -> pd.DataFrame:
 
 def parity_table(spec: dict, train_year: int = 2025) -> tuple[pd.DataFrame, dict]:
     """モデルが使う列ごとに、学習（train_year の行）と推論（2026 年の書き出し）の欠けの割合を、新馬戦／それ以外で並べる。
-    学習側にはサイクルの変更（apply_spec）を当てる。推論側には、推論で同じ処理（新馬戦で空にする）を当てた後の値を出す。"""
+    学習側・推論側の両方に、サイクルの変更（apply_spec。落とす・書き換え・新馬戦で空にする）を当てた後の値を出す。"""
     X, meta, _ = load_cache()
     sel = meta["year"].to_numpy() == train_year
     Xt = apply_spec(X.loc[sel].reset_index(drop=True), meta.loc[sel].reset_index(drop=True), spec)
@@ -478,6 +519,49 @@ def cmd_parity(a) -> None:
         print(bad.sort_values(["gap_oth", "gap_new"], ascending=False).round(3).to_string())
 
 
+# ---------------------------------------------------------------- 記録（HTML のログの元）
+LOG_JSON = ROOT / "docs/operations/retrain_trials/model_cycles_log.json"
+SCORE_KEYS = ["ll", "top1_win", "top1_place", "roi_tansho", "roi_fukusho", "roi_umaren", "roi_wide"]
+
+
+def score_record(name: str, ref: str) -> dict:
+    """score/<name>.json から、記録に載せる値（自分と相手の指標、相手との対の差と区間）を取り出す。差は「name − ref」（正なら name が悪い）。"""
+    sc = json.loads((CYC / "score" / f"{name}.json").read_text(encoding="utf-8"))
+    me = sc["metrics"][name]
+    r5 = lambda v: round(v, 5) if isinstance(v, (int, float)) and np.isfinite(v) else None  # noqa: E731  NaN は null（厳密な JSON に）
+    if ref == "-":                                 # 基準そのもの（差なし）
+        return {"races": sc["races"], "ref": None, "metrics": {k: r5(me[k]) for k in SCORE_KEYS}, "ref_metrics": None, "diff": {}, "by": {}}
+    key = f"{name} - {ref}"
+    if key not in sc["diff"]:
+        raise SystemExit(f"score/{name}.json に相手 {ref} との差が無い（あるのは {list(sc['diff'])}）。先に score {name} --ref {ref} を回す")
+    rf = sc["metrics"][ref]
+    dd = sc["diff"][key]
+    return {"races": sc["races"], "ref": ref,
+            "metrics": {k: r5(me[k]) for k in SCORE_KEYS}, "ref_metrics": {k: r5(rf[k]) for k in SCORE_KEYS},
+            "diff": {k: [r5(v) for v in dd[k]] for k in SCORE_KEYS if k in dd},
+            "by": {k: [r5(v) for v in dd[k]] for k in dd if k.startswith("ll_")}}
+
+
+def cmd_record(a) -> None:
+    """1 サイクルの記録を model_cycles_log.json に足す（同じ id は置き換え）。作ったら build_model_cycles_html で HTML を作り直す。"""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    if a.name and not a.ref:
+        raise SystemExit("--name を付けたら --ref も付ける（基準そのものは -）")
+    log_ = json.loads(LOG_JSON.read_text(encoding="utf-8"))
+    rec = {"id": a.id, "phase": a.phase, "date": a.date or datetime.now(ZoneInfo("Asia/Tokyo")).strftime("%Y-%m-%d %H:%M JST"), "hypothesis": a.hypothesis, "change": a.change,
+           "spec": json.loads(a.spec) if a.spec else {}, "result": score_record(a.name, a.ref) if a.name else None,
+           "parity": a.parity, "verdict": a.verdict, "reason": a.reason, "next": a.next}
+    ids = [c["id"] for c in log_["cycles"]]
+    if a.id in ids:                                # 出し直しは元の位置に置き換える（推移の順を崩さない）
+        log_["cycles"][ids.index(a.id)] = rec
+    else:
+        log_["cycles"].append(rec)
+    LOG_JSON.write_text(json.dumps(log_, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    log(f"record {a.id}: {a.verdict}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -492,6 +576,7 @@ def main() -> None:
     e.add_argument("--replace", nargs="*", help="ほかのメンバーの差し替え MEMBER=NAME")
     e.add_argument("--add", nargs="*", help="足すメンバー（勝率だけ）")
     e.add_argument("--tag", default="")
+    e.add_argument("--members", nargs="*", help="使うメンバー（省くと v6e の 7 本）。重み 0 のメンバーを作り直さないときに絞る")
     s = sub.add_parser("score")
     s.add_argument("name")
     s.add_argument("--ref", default="cand_v6e16,prod_v6e")
@@ -504,8 +589,22 @@ def main() -> None:
     i.add_argument("--spec", default="")
     i.add_argument("--seeds", type=int, default=1)
     i.add_argument("--ens", default="", help="勝率の重み（ens/<名前>.json）。省くと候補の束の重み")
+    r = sub.add_parser("record", help="1 サイクルの記録を docs/operations/retrain_trials/model_cycles_log.json に足す")
+    r.add_argument("id")
+    r.add_argument("--phase", default="main", help="before_fix（データを直す前・参考）/ main")
+    r.add_argument("--date", default="")
+    r.add_argument("--name", default="", help="score/<name>.json の名前（無ければ結果なし）")
+    r.add_argument("--ref", default="", help="相手（score を回したときの --ref の 1 つ。基準そのものは -）。--name を付けたら必須")
+    r.add_argument("--hypothesis", required=True)
+    r.add_argument("--change", required=True)
+    r.add_argument("--spec", default="")
+    r.add_argument("--parity", default="")
+    r.add_argument("--verdict", required=True, choices=["基準", "採用", "不採用", "保留"])
+    r.add_argument("--reason", default="")
+    r.add_argument("--next", default="")
     a = ap.parse_args()
-    {"cache": cmd_cache, "member": cmd_member, "ens": cmd_ens, "score": cmd_score, "parity": cmd_parity, "inf2026": cmd_inf2026}[a.cmd](a)
+    {"cache": cmd_cache, "member": cmd_member, "ens": cmd_ens, "score": cmd_score, "parity": cmd_parity, "inf2026": cmd_inf2026,
+     "record": cmd_record}[a.cmd](a)
 
 
 if __name__ == "__main__":
