@@ -157,6 +157,8 @@ def test_gateway_lifespan_waits_for_warmup_but_never_blocks_startup_on_failure(m
 
     from src.api import cloudrun_entry as C
 
+    monkeypatch.setenv("KEIBA_EARLY_AUTH", "0")      # 従来の経路（起動処理が済んでからポートを開く）。既定の案 A は tests/api/test_cloudrun_early_auth.py
+
     async def noop(*a):
         return None
 

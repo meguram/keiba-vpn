@@ -23,6 +23,7 @@ lifespan を動かさなくても FastAPI のルーティングは動く。app.p
 
 from __future__ import annotations
 
+import contextvars
 import logging
 import os
 import time
@@ -77,6 +78,16 @@ MIRROR_GATE_SKIP = ("/api/health", "/api/v1/health", "/api/maintenance/status")
 # ログイン・ログイン状態・ログアウトは取り込みを待たず、きっかけにもしない（取り込みの待ち 最大 8 秒・取り込みのスレッドとの CPU の取り合いでログインが秒単位になっていた）。
 # 会員名簿の鮮度は、会員のログインの照合の前に名簿を 1 ファイルだけ取り直すことで保つ（60 秒に 1 回まで・待つのは最大 2 秒。src/api/auth.py の members_refresh_hook）
 MIRROR_GATE_SKIP_PREFIXES = ("/api/v1/auth/",)
+# 案 A: 起動処理（取り込み・ウォームアップ。中央 20 秒）を待たずにポートを開き、次のパスだけ先に答える（docs/operations/login_latency_plan_a.md）。
+# ログインまわりは会員名簿の取り込み（束より先・読み出し 1 回）だけを待つ。ほかの要求は起動処理の完了を待つ（Cloud Run の 60 秒の上限に収まる長さまで）。
+# KEIBA_EARLY_AUTH=0 で従来どおり（起動処理が済むまでポートを開かない）
+# 束（GCS の取り込みの大半）はポートを開く前に済ませる（CPU が確実にある間。--cpu-throttling では、ポートを開いた後は要求の間しか CPU が無く、
+# 束の取り込みが途中で切れて一覧での取り込みに落ちると操作料が増えるため）。裏に回すのはウォームアップ（自分への要求で予測の初回の読み込みを払う）だけ。
+EARLY_PATHS = ("/api/health", "/api/v1/health", "/api/maintenance/status", "/api/v1/maintenance/status")
+EARLY_PREFIXES = ("/api/v1/auth/", "/ops/")
+READY_WAIT_SEC = 40.0          # Cloud Run の --timeout 60 秒から、処理の見込みを引いた長さ。超えたら温まっていない応答を返さず 503 にする
+MEMBERS_WAIT_SEC = 10.0
+_IN_WARMUP: contextvars.ContextVar[bool] = contextvars.ContextVar("keiba_in_warmup", default=False)
 AUTH_STATUS_PATH = "/api/v1/auth/status"     # 起動からの秒数（Server-Timing の inst）を付ける。ログインの応答には付けない
 _STARTED_AT = time.monotonic()
 _INSTANCE_TAG = f"{os.getpid()}-{int(time.time())}"     # /ops/memory で、どの 1 台の値かを見分ける（起動ごとに変わる）
@@ -88,6 +99,10 @@ def mirror_mode() -> str:
 
 def gate_applies(path: str) -> bool:
     return not (path == "/ops" or path.startswith("/ops/") or path in MIRROR_GATE_SKIP or path.startswith(MIRROR_GATE_SKIP_PREFIXES))
+
+
+def early_auth_enabled() -> bool:
+    return (os.environ.get("KEIBA_EARLY_AUTH") or "1").strip() != "0"
 
 
 def _degraded_send(send: Callable, method: str, path: str, flag: dict) -> Callable:
@@ -157,13 +172,57 @@ async def warm_sequence(get: Callable[[str], Awaitable[tuple[int, Any]]], today:
 
 
 class Gateway:
-    """パスで 3 つの ASGI アプリに振り分ける。lifespan は、起動時ウォームアップ（あれば）を済ませてから完了を返す。"""
+    """パスで 3 つの ASGI アプリに振り分ける。lifespan は、起動時ウォームアップ（あれば）を裏で始めてすぐ完了を返す（案 A。KEIBA_EARLY_AUTH=0 なら済ませてから）。"""
 
     def __init__(self, fastapi_app: ASGIApp, flask_asgi: ASGIApp, ops_app: ASGIApp) -> None:
         self.fastapi_app, self.flask_asgi, self.ops_app = fastapi_app, flask_asgi, ops_app
         self.warmup: Callable[[], Awaitable[None]] | None = None
         self.refresher: Any = None          # request モード: gcs_mirror.RequestRefresher
         self.guard: Any = None              # src/api/memory_guard.MemoryGuard（メモリ・GCS の長い障害で自分で終わる）
+        self.ready: Any = None              # 案 A: 起動処理が裏で動いている間の「済んだ」の印（asyncio.Event）。None は待つものが無い
+        self._startup_task: Any = None
+
+    async def _wait_until_ready(self, path: str) -> bool:
+        """起動処理が裏で動いている間: ログインまわり・/ops は名簿だけ、ヘルスは待たず、ほかは起動処理の完了を READY_WAIT_SEC まで待つ。
+        起動処理そのものが送る要求（ウォームアップ）は待たない（自分自身を待って止まらないように）。処理してよければ True、時間切れは False。"""
+        import asyncio
+
+        if self.ready is None or self.ready.is_set() or _IN_WARMUP.get():
+            return True
+        if path.startswith(EARLY_PREFIXES) or path == "/ops":
+            if mirror_pull_enabled() and path.startswith("/api/v1/auth/"):
+                from src.ops.gcs_mirror import initial_members_pulled
+
+                end = time.monotonic() + MEMBERS_WAIT_SEC       # スレッドを占めないように、短い間隔で見る
+                while not initial_members_pulled.is_set() and time.monotonic() < end:
+                    await asyncio.sleep(0.05)
+            return True
+        if path in EARLY_PATHS:
+            return True
+        try:
+            await asyncio.wait_for(self.ready.wait(), timeout=READY_WAIT_SEC)
+            return True
+        except asyncio.TimeoutError:
+            logger.warning("起動処理が %.0f 秒で済まないので 503 を返す: %s", READY_WAIT_SEC, path)
+            return False
+
+    @staticmethod
+    async def _not_ready(send: Callable) -> None:
+        """温まっていない応答を返さない（VPS の nginx に欠けた応答を残さない。nginx は 503 なら前の保存を出す）。"""
+        await send({"type": "http.response.start", "status": 503, "headers": [
+            (b"content-type", b"application/json"), (b"cache-control", b"no-store"), (b"retry-after", b"10")]})
+        await send({"type": "http.response.body", "body": b'{"error":"starting","reason":"warming_up"}'})
+
+    async def _run_startup(self) -> None:
+        import asyncio
+
+        try:
+            await asyncio.wait_for(self.warmup(), timeout=WARMUP_TIMEOUT_SEC)
+        except Exception as exc:  # noqa: BLE001  時間切れ・失敗でも起動は続ける
+            logger.warning("起動時ウォームアップを打ち切り: %r", exc)
+        finally:
+            self.ready.set()          # 止められた（shutdown）ときも、待っている要求を放す
+            print(f"起動の段: 起動処理の完了まで {time.monotonic() - _STARTED_AT:.1f} 秒", flush=True)
 
     async def _gate(self) -> None:
         """前回の取り込みから間隔が空いていれば、このリクエストをきっかけに取り込みを始める。長く止まっていた後だけ、完了を少し待つ。
@@ -190,7 +249,18 @@ class Gateway:
             while True:
                 msg = await receive()
                 if msg["type"] == "lifespan.startup":
-                    if self.warmup is not None:       # uvicorn は lifespan の完了後にポートを開く = 温まるまで要求が来ない
+                    if self.warmup is not None and early_auth_enabled():
+                        import asyncio                # 案 A: 束の取り込み（名簿 → 束）だけを済ませてポートを開き、ウォームアップは裏で進める
+
+                        t0 = time.monotonic()
+                        if mirror_pull_enabled():
+                            from src.ops.gcs_mirror import initial_recent_pulled
+
+                            await asyncio.to_thread(initial_recent_pulled.wait, MIRROR_WAIT_SEC)
+                        print(f"起動の段: 束の取り込みまで {time.monotonic() - _STARTED_AT:.1f} 秒（lifespan の中 {time.monotonic() - t0:.1f} 秒）。ポートを開く", flush=True)
+                        self.ready = asyncio.Event()
+                        self._startup_task = asyncio.create_task(self._run_startup())
+                    elif self.warmup is not None:     # 従来: uvicorn は lifespan の完了後にポートを開く = 温まるまで要求が来ない
                         import asyncio
 
                         try:
@@ -199,9 +269,22 @@ class Gateway:
                             logger.warning("起動時ウォームアップを打ち切り: %r", exc)
                     await send({"type": "lifespan.startup.complete"})
                 elif msg["type"] == "lifespan.shutdown":
+                    st = self._startup_task
+                    if st is not None and not st.done():     # 起動処理の途中で終わる: 裏のタスクを止めてから完了を返す
+                        import asyncio
+
+                        st.cancel()
+                        try:
+                            await st
+                        except BaseException:  # noqa: BLE001  止めたことによる CancelledError など
+                            pass
                     await send({"type": "lifespan.shutdown.complete"})
                     return
         path = scope.get("path") or ""
+        if t == "http" and self.ready is not None and not self.ready.is_set():
+            if not await self._wait_until_ready(path):
+                await self._not_ready(send)
+                return
         if self.guard is not None and t == "http" and self.guard.claim():
             import asyncio
 
@@ -305,7 +388,8 @@ def build_app() -> ASGIApp:
 
 
 async def _startup(outer: ASGIApp, *, warm: bool, wait_full: bool) -> None:
-    """起動処理（CPU が必ず割り当てられる間に済ませる）。ウォームアップ → request モードなら全体の取り込みの完了も待つ。"""
+    """起動処理。ウォームアップ → request モードなら全体の取り込みの完了も待つ。
+    従来（KEIBA_EARLY_AUTH=0）はポートを開く前（CPU が必ず割り当てられる間）に済ませる。案 A では裏で進め、待っている要求がある間に CPU が割り当てられる。"""
     import asyncio
 
     if warm:
@@ -329,6 +413,7 @@ async def _warmup(outer: ASGIApp) -> None:
 
         await asyncio.to_thread(initial_recent_pulled.wait, MIRROR_WAIT_SEC)
     headers = {"X-Keiba-Proxy-Key": os.environ.get("KEIBA_PROXY_KEY", "")}
+    _IN_WARMUP.set(True)                       # この起動処理から自分に送る要求は、起動処理の完了を待たない（案 A）
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=outer), base_url="http://warmup", headers=headers, timeout=120) as c:
         async def get(path: str) -> tuple[int, Any]:
             r = await c.get(path)
