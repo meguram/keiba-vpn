@@ -52,7 +52,8 @@ DEFAULTS: dict[str, Any] = {
             "headless_ua_patterns": ["headlesschrome", "headless"],
             "page_visit_memory_seconds": 1800, "enumeration_sequential_run": 8},
     "honeypot": {"path_prefixes": ["/api/_hp/", "/api/archive/"], "block_seconds": 604800},
-    "login": {"paths": ["/login", "/api/v1/auth/login"], "max_failures": 5, "window_seconds": 900,
+    # 設定ファイル（config/anti_scraping.json。共有の ID の前提で 10 回・最長 1 時間）が読めないときの値。厳しい側に倒しておく
+    "login": {"paths": ["/login", "/api/v1/auth/login", "/api/auth/login"], "max_failures": 5, "window_seconds": 900,
               "lockout_seconds": [900, 3600, 86400], "global_failures_per_hour_alert": 30},
     "session": {"distinct_ips_window_seconds": 600, "distinct_ips_limit": 4, "block_seconds": 900},
     "log": {"dir": "data/local/meta/anti_scraping", "same_event_throttle_seconds": 60},

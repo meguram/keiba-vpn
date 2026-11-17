@@ -88,9 +88,9 @@
   },
   "login": {
     "paths": ["/login", "/api/v1/auth/login", "/api/auth/login"],
-    "max_failures": 5,
+    "max_failures": 10,
     "window_seconds": 900,
-    "lockout_seconds": [900, 3600, 86400],
+    "lockout_seconds": [900, 3600],
     "global_failures_per_hour_alert": 30
   },
   "session": {

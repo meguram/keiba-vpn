@@ -141,3 +141,47 @@ def test_auth_paths_skip_the_mirror_gate_and_report_instance_age(monkeypatch):
     assert 'inst;desc="age=' in r.headers.get("server-timing", "")
     assert "inst;" not in c.get("/api/v1/health").headers.get("server-timing", "")
     assert "inst;" not in c.post("/api/v1/auth/login", json={"id": "x", "password": "y"}).headers.get("server-timing", "")
+
+
+def test_previous_month_shared_password_is_explained_and_not_counted(flask_client, monkeypatch):
+    from src.scripts.ops import shared_login as sl
+    from src.utils.anti_scraping import get_engine
+
+    monkeypatch.setattr(sl, "previous_month", lambda now_=None: "2026-11")
+    monkeypatch.setattr(sl, "month_of", lambda now_=None: "2026-12")
+    mu.main(["add", "shared-id", "--password", sl.password_for("2026-12")])     # 共通ログイン（今月の共通パスワード）
+    mu.main(["add", "taro", "--password", "correct-horse-battery"])              # ふつうの会員
+    eng = get_engine()
+    eng._login_fail.clear()
+    eng._login_lock.clear()
+    prev = sl.password_for("2026-11")
+    for _ in range(12):                                               # 先月のパスワードを何度打っても、ロックの失敗に数えない
+        r = flask_client.post("/api/v1/auth/login", json={"id": "shared-id", "password": prev})
+        assert r.status_code == 401 and r.get_json()["reason"] == "password_rotated"
+        assert "X-Keiba-Login-Not-Counted" not in r.headers           # 内部の合図は外に出さない
+    assert not any(eng._login_fail.values()) and not eng._login_lock
+    for uid in ("taro", "nobody"):                                    # 共通 ID 以外（ほかの会員・存在しない ID）では、ふつうの失敗として数える
+        r = flask_client.post("/api/v1/auth/login", json={"id": uid, "password": prev})
+        assert r.status_code == 401 and r.get_json().get("reason") != "password_rotated"
+    assert sum(len(q) for q in eng._login_fail.values()) == 2
+    assert flask_client.post("/api/v1/auth/login", json={"id": "shared-id", "password": sl.password_for("2026-12")}).status_code == 200
+
+
+def test_previous_month_is_computed_across_year_end():
+    from datetime import datetime
+
+    from src.scripts.ops import shared_login as sl
+
+    assert sl.previous_month(datetime(2027, 1, 1, 0, 10, tzinfo=sl.JST)) == "2026-12"
+    assert sl.previous_month(datetime(2026, 12, 31, 23, 0, tzinfo=sl.JST)) == "2026-11"
+    assert not sl.is_previous_password("")
+    assert sl.is_previous_password(sl.password_for("2026-11"), now=datetime(2026, 12, 1, 0, 1, tzinfo=sl.JST))
+    assert not sl.is_previous_password(sl.password_for("2026-12"), now=datetime(2026, 12, 1, 0, 1, tzinfo=sl.JST))
+
+
+def test_lockout_config_suits_a_shared_account():
+    import json
+    from pathlib import Path
+
+    cfg = json.loads((Path(__file__).resolve().parents[2] / "config" / "anti_scraping.json").read_text(encoding="utf-8"))["login"]
+    assert cfg["max_failures"] >= 10 and max(cfg["lockout_seconds"]) <= 3600   # 共有の出口（携帯の CGNAT）で他の会員を長く巻き込まない

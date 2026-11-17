@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { invalidateJson, primeAuthStatus, type AuthStatusJson } from "@/lib/httpCache";
-import { lockedMessage } from "@/lib/loginMessage";
+import { lockedMessage, ROTATED_MESSAGE } from "@/lib/loginMessage";
 
 export default function LoginPage() {
   const [userId, setUserId] = useState("");
@@ -30,7 +30,8 @@ export default function LoginPage() {
           const body = (await res.json().catch(() => null)) as { retry_after?: number } | null;
           setError(lockedMessage(body?.retry_after ?? Number(res.headers.get("Retry-After") || 0)));
         } else {
-          setError("ログインID またはパスワードが正しくありません");
+          const body = (await res.json().catch(() => null)) as { reason?: string } | null;
+          setError(body?.reason === "password_rotated" ? ROTATED_MESSAGE : "ログインID またはパスワードが正しくありません");
         }
         setBusy(false);
         return;
