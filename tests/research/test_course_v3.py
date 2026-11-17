@@ -106,3 +106,12 @@ def test_market_q_and_edge():
     assert V.edge_p(b) == pytest.approx(0.1429, abs=1e-3)
     assert V.select_cells(cells, V.C3(edge_min=2.5))["u"]["buy"] == []                 # 勝ち 4 ÷ 市場 2 = 2.0
     assert V.select_cells(cells, V.C3(weight="edge"))["u"]["buy"][0]["rate"] == pytest.approx(2.0)
+
+
+def test_edge_split():
+    b = {"types": ["A01"], "levels": ["1着"], "n_t": 30, "k_t": 20, "w_t": 12, "rt_t": 1.2, "q_t": 6.0, "q_t1": 4.0, "w_t1": 10, "q_t2": 2.0, "w_t2": 2,
+         "ev": {"hyp": "能力", "hyp_ok": True, "dir": "ok", "stab": "ok", "breadth": "ok", "p_null": 0.01}}
+    cells = {"u": {"buy": [b], "kill": []}}
+    assert V.select_cells(cells, V.C3(edge_min=1.2, edge_split=True))["u"]["buy"] == []           # 後半は 2 ÷ 2 = 1.0 で続かない
+    b2 = b | {"w_t2": 4}
+    assert len(V.select_cells({"u": {"buy": [b2], "kill": []}}, V.C3(edge_min=1.2, edge_split=True))["u"]["buy"]) == 1

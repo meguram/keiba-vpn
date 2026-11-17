@@ -140,7 +140,8 @@ class C3:
     hyp_ex: str = ""           # 使わない仮説の型（「能力,人」のように。市場に織り込まれやすい型を外す版）
     # 買うレースの側（市場が見落としやすいレースに絞る版。出馬表の時点で分かる値だけ）
     edge_min: float = 0.0      # 条件の訓練の勝ち数 ÷ 市場の勝率の和（確定オッズから）の下限。市場より強い条件だけ（0 = 見ない）
-    edge_pmax: float = 0.05    # そのずれの偶然の見込み（市場の勝率どおりに勝つとしたときに、その勝ち数以上が出る確率。ポアソンの近似）の上限
+    edge_pmax: float = 0.05
+    edge_split: bool = False   # True = 訓練の中を時間で分け、2016〜21 のずれ（edge_min 以上）が 2022〜24 でも 1 を超える条件だけ    # そのずれの偶然の見込み（市場の勝率どおりに勝つとしたときに、その勝ち数以上が出る確率。ポアソンの近似）の上限
     classes: str = ""          # 買う単位の群（「新馬,新馬・未勝利」のように。空 = すべて）
     field_min: int = 0         # 出走表の頭数（field_decl）の下限
     # ◎ の作り
@@ -316,13 +317,18 @@ def add_market(cells: dict, d: pd.DataFrame, L: pd.DataFrame, c: C3) -> dict:
         dd["group"] = "全クラス"
     X, types, code = V2._codes(L, cells)
     q = market_q(dd)
+    yr = pd.to_numeric(dd["year"]).to_numpy()
+    Yw = SE.y_matrix(dd)[:, 2]
     unit = units_of(dd, c)
     course = dd["course"].astype(str).to_numpy()
     for u, cu in cells.items():
         idx = np.flatnonzero(course == u.split("|", 1)[0]) if cu.get("layer") == "副" else np.flatnonzero(unit == u)
-        Xu, qu = X[idx], q[idx]
+        Xu, qu, yu, wu = X[idx], q[idx], yr[idx], Yw[idx]
+        early = yu <= 2021
         for b in cu["buy"]:
-            b["q_t"] = float(qu[V2._mask_names(Xu, types, code, b)].sum())
+            m = V2._mask_names(Xu, types, code, b)
+            b["q_t"] = float(qu[m].sum())
+            b |= {"q_t1": float(qu[m & early].sum()), "w_t1": int(wu[m & early].sum()), "q_t2": float(qu[m & ~early].sum()), "w_t2": int(wu[m & ~early].sum())}
     return cells
 
 
@@ -337,7 +343,10 @@ def select_cells(cells: dict, c: C3) -> dict:
                "lb": lambda b: V2.wilson_lb(b["k_t"], b["n_t"])}[c.rank_by]
         if c.top_k:
             buy = sorted(buy, key=lambda b: (-key(b), len(b["types"])))[:c.top_k]
-        if c.edge_min:
+        if c.edge_min and c.edge_split:
+            buy = [b for b in buy if b.get("q_t1") and b.get("q_t2") and b["w_t1"] / b["q_t1"] >= c.edge_min and b["w_t2"] / b["q_t2"] > 1.0
+                   and edge_p({"w_t": b["w_t1"], "q_t": b["q_t1"]}) <= c.edge_pmax]
+        elif c.edge_min:
             buy = [b for b in buy if b.get("q_t") and b["w_t"] / b["q_t"] >= c.edge_min and edge_p(b) <= c.edge_pmax]
         w = {"count": lambda b: 1.0, "rate": lambda b: b["k_t"] / max(b["n_t"], 1), "roi": lambda b: b["rt_t"],
              "lb": lambda b: V2.wilson_lb(b["k_t"], b["n_t"]), "edge": lambda b: b["w_t"] / b["q_t"] if b.get("q_t") else 0.0}[c.weight]
@@ -508,7 +517,7 @@ def run_cycle(c: C3, d, L, tr, ev, shift) -> tuple[dict, dict]:
             cache_p.write_text(json.dumps(_CACHE[key], ensure_ascii=False), encoding="utf-8")
     if c.edge_min or c.weight == "edge":
         first = next((b for cu in _CACHE[key].values() for b in cu["buy"]), None)
-        if first is not None and "q_t" not in first:
+        if first is not None and "q_t2" not in first:
             add_market(_CACHE[key], d[tr].reset_index(drop=True), L[tr].reset_index(drop=True), c)
             (OUT3 / f"fit_{hashlib.sha1(repr(key).encode()).hexdigest()[:12]}.json").write_text(json.dumps(_CACHE[key], ensure_ascii=False), encoding="utf-8")
     kept = select_cells(_CACHE[key], c)
