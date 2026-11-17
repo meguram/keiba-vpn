@@ -71,3 +71,11 @@ def test_v3_html(tmp_path, monkeypatch):
     monkeypatch.setattr(H, "BASE", tmp_path)
     h = H.build(tmp_path / "o.html").read_text(encoding="utf-8")
     assert "&lt;仮説&gt;" in h and "125.0%" in h and "上位 5 件を除く" in h and "A01=1着" in h and "能力" in h and "2 回見ている" in h
+
+
+def test_hyp_ex():
+    b = {"types": ["A01"], "levels": ["1着"], "n_t": 10, "k_t": 8, "w_t": 4, "rt_t": 1.2,
+         "ev": {"hyp": "能力×人", "hyp_ok": True, "dir": "ok", "stab": "ok", "breadth": "ok", "p_null": 0.01}}
+    cells = {"u": {"buy": [b], "kill": []}}
+    assert len(V.select_cells(cells, V.C3())["u"]["buy"]) == 1
+    assert V.select_cells(cells, V.C3(hyp_ex="能力"))["u"]["buy"] == []                 # 能力の入った組は外す

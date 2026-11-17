@@ -137,6 +137,7 @@ class C3:
     req_stab: bool = True
     req_breadth: bool = True
     p_max: float = 0.05
+    hyp_ex: str = ""           # 使わない仮説の型（「能力,人」のように。市場に織り込まれやすい型を外す版）
     # ◎ の作り
     weight: str = "rate"       # count・rate・roi・lb
     min_score: float = 0.0     # ◎ の点の下限（届かないレースは見送り）
@@ -294,7 +295,9 @@ def select_cells(cells: dict, c: C3) -> dict:
     """訓練の値で買いの条件を絞り、◎ の点（rate）を版の重みで付ける。"""
     out = {}
     for u, cu in cells.items():
-        buy = [b for b in cu["buy"] if b["n_t"] >= c.min_n and (not c.min_roi_t or b["rt_t"] >= c.min_roi_t) and ev_pass(b, c) is None]
+        ex = {x for x in c.hyp_ex.split(",") if x}
+        buy = [b for b in cu["buy"] if b["n_t"] >= c.min_n and (not c.min_roi_t or b["rt_t"] >= c.min_roi_t) and ev_pass(b, c) is None
+               and not (ex & set(str((b.get("ev") or {}).get("hyp", "")).split("×")))]
         key = {"n": lambda b: b["n_t"], "rate": lambda b: b["k_t"] / max(b["n_t"], 1), "roi": lambda b: b["rt_t"],
                "lb": lambda b: V2.wilson_lb(b["k_t"], b["n_t"])}[c.rank_by]
         if c.top_k:
