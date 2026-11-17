@@ -68,8 +68,39 @@ def cgroup_memory(root: Path = CGROUP, meminfo: Path = MEMINFO) -> dict[str, Any
     used = cur
     if source == "cgroup2" and cur is not None and "file" in out and "shmem" in out:
         used = max(0, cur - max(0, out["file"] - out["shmem"]))      # 回収できるページキャッシュ（shmem=/tmp 以外のファイル）は除く
+    elif source == "cgroup1" and cur is not None:
+        # v1 の usage_in_bytes はページキャッシュを含む。v2 の分岐と同じく、ファイルの LRU（active_file + inactive_file）を除く。
+        # tmpfs（/tmp）・shmem のページはファイルではなく anon の LRU に載るので、使用中のまま数える。dirty・writeback もファイルの LRU に
+        # 入るため、書き込みが多いときは少し少なく見積もる。前提が外れたときの安全策として、下で /proc/meminfo の割合と大きいほうを使う
+        out["used_basis"] = "usage"
+        try:
+            st1 = {}
+            for line in (root / "memory" / "memory.stat").read_text(encoding="ascii").splitlines():
+                k, _, v = line.partition(" ")
+                if v.strip().isdigit():
+                    st1[k] = int(v)
+
+            def pick(name: str) -> int | None:
+                return st1.get(f"total_{name}", st1.get(name))
+
+            active, inactive = pick("active_file"), pick("inactive_file")
+            if active is not None and inactive is not None:
+                vals = {"anon": pick("rss"), "shmem": pick("shmem"), "cache": pick("cache")}
+                out.update({k: v for k, v in vals.items() if v is not None and k not in out})
+                out["file_lru"] = active + inactive
+                used = max(0, cur - active - inactive)
+                out["used_basis"] = "usage-file_lru"
+        except OSError:
+            pass
     out["used"] = used
     out["ratio"] = round(used / mx, 4) if used is not None and mx else None
+    if source in ("cgroup1", "cgroup2") and mi.get("MemTotal") and "MemAvailable" in mi:
+        # 安全策: cgroup の前提（書き込み層・/tmp が cgroup に数えられる等）が外れても点検が止まらないよう、VM 全体の割合と大きいほうを使う
+        mr = round((mi["MemTotal"] - mi["MemAvailable"]) / mi["MemTotal"], 4)
+        out["meminfo_ratio"] = mr
+        if out["ratio"] is None or mr > out["ratio"]:
+            out["ratio"] = mr
+            out["ratio_basis"] = "meminfo"
     if mi:
         out["shmem"] = out.get("shmem", mi.get("Shmem"))
     return out

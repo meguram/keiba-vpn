@@ -28,6 +28,24 @@ def test_cgroup_v1_and_meminfo_fallbacks(tmp_path):
     (v1 / "memory" / "memory.limit_in_bytes").write_text("2147483648\n")
     m = M.cgroup_memory(v1, tmp_path / "none")
     assert m["source"] == "cgroup1" and m["ratio"] == 0.25
+    st = v1 / "memory" / "memory.stat"
+    st.write_text("cache 300\nrss 200\nshmem 50\ntotal_active_file 134217728\ntotal_inactive_file 134217728\n")
+    m = M.cgroup_memory(v1, tmp_path / "none")
+    assert m["used"] == 536870912 - 268435456 and m["ratio"] == 0.125 and m["file_lru"] == 268435456   # ファイルの LRU は除く
+    assert m["anon"] == 200 and m["shmem"] == 50 and m["used_basis"] == "usage-file_lru"
+    st.write_text("active_file 100\ninactive_file 268435356\n")                  # total_ の無い形
+    assert M.cgroup_memory(v1, tmp_path / "none")["used"] == 536870912 - 268435456
+    st.write_text("active_file 600000000\ninactive_file 1\n")                    # 引きすぎても負にならない
+    assert M.cgroup_memory(v1, tmp_path / "none")["used"] == 0
+    st.write_text("garbage\ninactive_file x\n")                                   # 読めない形: 多く見積もる側（usage のまま）と印
+    m = M.cgroup_memory(v1, tmp_path / "none")
+    assert m["used"] == 536870912 and m["used_basis"] == "usage"
+    mi0 = tmp_path / "meminfo0"
+    mi0.write_text("MemTotal:        2097152 kB\nMemAvailable:     209715 kB\n")  # VM 全体では 90% 使っている
+    st.write_text("active_file 0\ninactive_file 268435456\n")
+    m = M.cgroup_memory(v1, mi0)                                                # cgroup の前提が外れても点検が止まらない
+    assert m["ratio"] == m["meminfo_ratio"] == 0.9 and m["ratio_basis"] == "meminfo"
+    st.unlink()
     mi = tmp_path / "meminfo"
     mi.write_text("MemTotal:        2097152 kB\nMemFree:          100000 kB\nMemAvailable:     524288 kB\nShmem:            300000 kB\n")
     m = M.cgroup_memory(tmp_path / "empty", mi)                  # Cloud Run（gen2）: cgroup のファイルが無い
