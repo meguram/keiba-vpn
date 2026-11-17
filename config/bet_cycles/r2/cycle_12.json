@@ -1,0 +1,82 @@
+{
+ "n": 12,
+ "min_hit": 0.08,
+ "rank_by": "robust",
+ "title": "第2回: 方策 — 候補の束を絞る（型ごとの候補 4〜6 本）",
+ "hypothesis": "候補が多いほど型ごとの選び方が偶然を拾う（第 1 回 cycle 12）。束を 6 本に絞ると交差検証の値が上がる。",
+ "change": "束を r 最大の ◎ × {ワイド, ワイド＋三連複, 単勝＋ワイド} × 人気の下限 {なし, 4} の 6 本に絞る。型は r の最大・期待値の最大の 5 分位。",
+ "grids": [
+  {
+   "prefix": "pr2s",
+   "base": {
+    "honmei": {
+     "rule": "fav1_exc",
+     "exc_by": "r",
+     "r_min": "auto",
+     "base": {
+      "rule": "r_max",
+      "fav_k": 1,
+      "p_min": 0.05
+     }
+    },
+    "partners": {
+     "mode": "p3",
+     "n": 2
+    }
+   },
+   "axes": {
+    "skip": [
+     {},
+     {
+      "h_pop_min": 4
+     }
+    ],
+    "tickets": [
+     [
+      {
+       "type": "wide"
+      }
+     ],
+     [
+      {
+       "type": "wide"
+      },
+      {
+       "type": "trio1"
+      }
+     ],
+     [
+      {
+       "type": "tansho"
+      },
+      {
+       "type": "wide"
+      }
+     ]
+    ]
+   }
+  }
+ ],
+ "policy_search": {
+  "typings": [
+   {
+    "kind": "feat",
+    "col": "q_r_max",
+    "name": "r の最大の5分位"
+   },
+   {
+    "kind": "feat",
+    "col": "q_ev_max",
+    "name": "期待値の最大の5分位"
+   }
+  ],
+  "min_cell": [
+   300
+  ],
+  "skip_below": [
+   null,
+   1.0
+  ],
+  "include_fixed": true
+ }
+}

@@ -1,0 +1,36 @@
+{
+ "n": 8,
+ "min_hit": 0.08,
+ "rank_by": "robust",
+ "title": "第2回: 方策 — 件数の下限と見送りの下限",
+ "hypothesis": "型ごとの件数の下限を上げ、見送りの下限を付けると、選び方の偶然が減る。",
+ "change": "型の作り方は r の最大の5分位と期待値の最大の5分位。件数の下限 300・600 × 見送りの下限なし・0.95・1.0・1.05。",
+ "include": [
+  "pool_r2.json"
+ ],
+ "policy_search": {
+  "typings": [
+   {
+    "kind": "feat",
+    "col": "q_r_max",
+    "name": "r の最大の5分位"
+   },
+   {
+    "kind": "feat",
+    "col": "q_ev_max",
+    "name": "期待値の最大の5分位"
+   }
+  ],
+  "min_cell": [
+   300,
+   600
+  ],
+  "skip_below": [
+   null,
+   0.95,
+   1.0,
+   1.05
+  ],
+  "include_fixed": true
+ }
+}

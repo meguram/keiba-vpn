@@ -1,0 +1,457 @@
+{
+ "hash": "f96a5aeff33e",
+ "frozen": "config/bet_cycles/frozen_20261117_final.json",
+ "git_head": "bfe3db4cdd092ea00ed990abf31fa06c3a01a1af",
+ "periods": {
+  "test": {
+   "metrics": {
+    "races": 3267,
+    "bet_races": 3200,
+    "bet_rate": 0.9794918885827977,
+    "hit_rate": 0.1828125,
+    "roi": 1.0467708333333334,
+    "avg_return": 314.03125,
+    "median_return": 0.0,
+    "median_hit_return": 960.0,
+    "avg_cost": 300.0,
+    "cost_total": 960000.0,
+    "return_total": 1004900.0,
+    "avg_hit_return": 1717.7777777777778,
+    "roi_ex_top1": 1.03009375,
+    "roi_ex_top5": 0.96915625,
+    "roi_lo": 0.9196022843546106,
+    "roi_hi": 1.1861948693907598,
+    "hit_lo": 0.16890162453055382,
+    "hit_hi": 0.1968579702079296,
+    "days": 109,
+    "daily_roi_sd": 0.6777788184031037,
+    "max_drawdown": 40970.0,
+    "max_drawdown_days": 4.651802083333333,
+    "plus_day_rate": 0.45871559633027525,
+    "profit": 44900.0,
+    "h_fav1_rate": 0.004375
+   },
+   "baselines": {
+    "B0 予測1位の単勝（全部買う）": {
+     "bet_races": 3267,
+     "bet_rate": 1.0,
+     "hit_rate": 0.33210896847260485,
+     "roi": 0.8986838077747169,
+     "roi_lo": null,
+     "roi_hi": null,
+     "roi_ex_top5": 0.8808692990511172,
+     "avg_return": 89.86838077747169,
+     "median_return": 0.0
+    },
+    "B1 予測1位の複勝（全部買う）": {
+     "bet_races": 3267,
+     "bet_rate": 1.0,
+     "hit_rate": 0.6565656565656566,
+     "roi": 0.9199571472298745,
+     "roi_lo": null,
+     "roi_hi": null,
+     "roi_ex_top5": 0.9129170492806856,
+     "avg_return": 91.99571472298744,
+     "median_return": 110.0
+    },
+    "M0 市場の1番人気の単勝": {
+     "bet_races": 3267,
+     "bet_rate": 1.0,
+     "hit_rate": 0.33241505968778695,
+     "roi": 0.7834098561371289,
+     "roi_lo": null,
+     "roi_hi": null,
+     "roi_ex_top5": 0.7757269666360576,
+     "avg_return": 78.34098561371289,
+     "median_return": 0.0
+    }
+   },
+   "diff_vs_B0": [
+    0.14808702555861653,
+    0.01425197315546895,
+    0.2923715401457229
+   ],
+   "tiers": {
+    "3": {
+     "bet_races": 896,
+     "bet_rate": 0.27425772880318333,
+     "hit_rate": 0.12611607142857142,
+     "roi": 1.1402157738095238,
+     "roi_lo": 0.8501507886076094,
+     "roi_hi": 1.4278357012536391,
+     "roi_ex_top5": 0.929985119047619,
+     "avg_return": 342.06473214285717,
+     "median_return": 0.0
+    },
+    "2": {
+     "bet_races": 1108,
+     "bet_rate": 0.3391490664217937,
+     "hit_rate": 0.19223826714801445,
+     "roi": 1.026684717208183,
+     "roi_lo": 0.8320198667772072,
+     "roi_hi": 1.2592223145386752,
+     "roi_ex_top5": 0.8517448856799037,
+     "avg_return": 308.0054151624549,
+     "median_return": 0.0
+    },
+    "1": {
+     "bet_races": 1196,
+     "bet_rate": 0.36608509335782063,
+     "hit_rate": 0.2165551839464883,
+     "roi": 0.9953734671125976,
+     "roi_lo": 0.7931184979721189,
+     "roi_hi": 1.2234915225705667,
+     "roi_ex_top5": 0.8188405797101449,
+     "avg_return": 298.61204013377926,
+     "median_return": 0.0
+    },
+    "0": {
+     "bet_races": 0,
+     "bet_rate": 0.0,
+     "hit_rate": null,
+     "roi": null,
+     "roi_lo": null,
+     "roi_hi": null,
+     "roi_ex_top5": null,
+     "avg_return": null,
+     "median_return": null
+    }
+   },
+   "fav1_exception": {
+    "n": 14,
+    "rentai": 0.8571428571428571,
+    "win": 0.6428571428571429,
+    "place": 0.9285714285714286,
+    "roi_tansho": 0.7714285714285715,
+    "roi_fukusho": 0.9785714285714285
+   },
+   "role": "test（凍結の後に 1 回だけ）",
+   "odds_source": "確定オッズ",
+   "pred": [
+    "/home/jovyan/work/retrain_out/cycles16_fix3/final/test2025_predictions.parquet"
+   ],
+   "drop": {
+    "no_pred": 177,
+    "no_pay": 0,
+    "small": 0,
+    "all_races_in_period": 3456,
+    "payoff_filled_from_flat": 0,
+    "computed_races": 3267
+   },
+   "miss_types": {
+    "◎ が 4 着以下（◎ が飛んだ）": 2489,
+    "◎ は 3 着内・相手が 1 頭も来ない": 125,
+    "◎ は 3 着内・相手も来たが組・着順が合わない": 1
+   },
+   "h_reasons": {
+    "1番人気より下で期待値最大": 2899,
+    "予測1位": 171,
+    "1番人気にペナルティ（λ=1）": 110,
+    "見送り（◎ が人気馬）": 67,
+    "1番人気の例外（連対率の予測が高い）": 14,
+    "予測1位（候補なし）": 6
+   }
+  },
+  "fwd2026": {
+   "metrics": {
+    "races": 2798,
+    "bet_races": 2743,
+    "bet_rate": 0.9803431022158685,
+    "hit_rate": 0.13306598614655488,
+    "roi": 0.8447685016405395,
+    "avg_return": 253.43055049216187,
+    "median_return": 0.0,
+    "median_hit_return": 1100.0,
+    "avg_cost": 300.0,
+    "cost_total": 822900.0,
+    "return_total": 695160.0,
+    "avg_hit_return": 1904.5479452054794,
+    "roi_ex_top1": 0.8023332118118848,
+    "roi_ex_top5": 0.7426783327257261,
+    "roi_lo": 0.6942347903553129,
+    "roi_hi": 0.9969689622725283,
+    "hit_lo": 0.12074182983487844,
+    "hit_hi": 0.14711548537015914,
+    "days": 95,
+    "daily_roi_sd": 0.7003936589708335,
+    "max_drawdown": 136090.0,
+    "max_drawdown_days": 15.710961234657917,
+    "plus_day_rate": 0.30526315789473685,
+    "profit": -127740.0,
+    "h_fav1_rate": 0.001093693036820999
+   },
+   "baselines": {
+    "B0 予測1位の単勝（全部買う）": {
+     "bet_races": 2798,
+     "bet_rate": 1.0,
+     "hit_rate": 0.3020014295925661,
+     "roi": 0.7799499642601858,
+     "roi_lo": null,
+     "roi_hi": null,
+     "roi_ex_top5": 0.7644031451036455,
+     "avg_return": 77.99499642601859,
+     "median_return": 0.0
+    },
+    "B1 予測1位の複勝（全部買う）": {
+     "bet_races": 2798,
+     "bet_rate": 1.0,
+     "hit_rate": 0.6079342387419585,
+     "roi": 0.8358827734095783,
+     "roi_lo": null,
+     "roi_hi": null,
+     "roi_ex_top5": 0.8235167977126518,
+     "avg_return": 83.58827734095783,
+     "median_return": 110.0
+    },
+    "M0 市場の1番人気の単勝": {
+     "bet_races": 2798,
+     "bet_rate": 1.0,
+     "hit_rate": 0.33845604002859186,
+     "roi": 0.7985346676197284,
+     "roi_lo": null,
+     "roi_hi": null,
+     "roi_ex_top5": 0.788241601143674,
+     "avg_return": 79.85346676197284,
+     "median_return": 0.0
+    }
+   },
+   "diff_vs_B0": [
+    0.0648185373803537,
+    -0.08738181553616997,
+    0.22978220964467327
+   ],
+   "tiers": {
+    "3": {
+     "bet_races": 1034,
+     "bet_rate": 0.3695496783416726,
+     "hit_rate": 0.0735009671179884,
+     "roi": 0.6900709219858157,
+     "roi_lo": 0.45039422684618524,
+     "roi_hi": 1.0143090621683761,
+     "roi_ex_top5": 0.45486782720825275,
+     "avg_return": 207.0212765957447,
+     "median_return": 0.0
+    },
+    "2": {
+     "bet_races": 832,
+     "bet_rate": 0.29735525375268046,
+     "hit_rate": 0.15625,
+     "roi": 0.9036858974358974,
+     "roi_lo": 0.6616178693279319,
+     "roi_hi": 1.1765463012248334,
+     "roi_ex_top5": 0.6825320512820513,
+     "avg_return": 271.1057692307692,
+     "median_return": 0.0
+    },
+    "1": {
+     "bet_races": 877,
+     "bet_rate": 0.31343817012151537,
+     "hit_rate": 0.18129988597491448,
+     "roi": 0.9712656784492588,
+     "roi_lo": 0.7549166757121465,
+     "roi_hi": 1.1988467550675075,
+     "roi_ex_top5": 0.7921322690992019,
+     "avg_return": 291.37970353477766,
+     "median_return": 0.0
+    },
+    "0": {
+     "bet_races": 0,
+     "bet_rate": 0.0,
+     "hit_rate": null,
+     "roi": null,
+     "roi_lo": null,
+     "roi_hi": null,
+     "roi_ex_top5": null,
+     "avg_return": null,
+     "median_return": null
+    }
+   },
+   "fav1_exception": {
+    "n": 3,
+    "rentai": 1.0,
+    "win": 1.0,
+    "place": 1.0,
+    "roi_tansho": 1.2666666666666666,
+    "roi_fukusho": 1.0333333333333334
+   },
+   "role": "前向きの参考（本番 v6e の予測。最終モデルではない）",
+   "odds_source": "確定オッズ",
+   "pred": [
+    "data/local/research/persona1/frame_test_2025new_2026prod.parquet",
+    "/home/jovyan/work/retrain_out/bet_cycles/inputs/pred_2026_after1019_predictions_v3.parquet"
+   ],
+   "drop": {
+    "no_pred": 269,
+    "no_pay": 0,
+    "small": 0,
+    "all_races_in_period": 3072,
+    "payoff_filled_from_flat": 264,
+    "computed_races": 2798
+   },
+   "miss_types": {
+    "◎ が 4 着以下（◎ が飛んだ）": 2272,
+    "◎ は 3 着内・相手が 1 頭も来ない": 94,
+    "◎ は 3 着内・相手も来たが組・着順が合わない": 12
+   },
+   "h_reasons": {
+    "1番人気より下で期待値最大": 2557,
+    "予測1位": 132,
+    "見送り（◎ が人気馬）": 55,
+    "1番人気にペナルティ（λ=1）": 50,
+    "1番人気の例外（連対率の予測が高い）": 3,
+    "予測1位（候補なし）": 1
+   }
+  },
+  "fwd2026_pre": {
+   "metrics": {
+    "races": 276,
+    "bet_races": 269,
+    "bet_rate": 0.9746376811594203,
+    "hit_rate": 0.21933085501858737,
+    "roi": 1.034820322180917,
+    "avg_return": 310.4460966542751,
+    "median_return": 0.0,
+    "median_hit_return": 560.0,
+    "avg_cost": 300.0,
+    "cost_total": 80700.0,
+    "return_total": 83510.0,
+    "avg_hit_return": 1415.4237288135594,
+    "roi_ex_top1": 0.8711276332094176,
+    "roi_ex_top5": 0.5708798017348203,
+    "roi_lo": 0.5831132252442215,
+    "roi_hi": 1.5130485213581597,
+    "hit_lo": 0.16928981840610505,
+    "hit_hi": 0.26459719315171243,
+    "days": 9,
+    "daily_roi_sd": 0.5022788367963056,
+    "max_drawdown": 11050.0,
+    "max_drawdown_days": 1.2323420074349443,
+    "plus_day_rate": 0.3333333333333333,
+    "profit": 2810.0,
+    "h_fav1_rate": 0.0037174721189591076
+   },
+   "baselines": {
+    "B0 予測1位の単勝（全部買う）": {
+     "bet_races": 276,
+     "bet_rate": 1.0,
+     "hit_rate": 0.3333333333333333,
+     "roi": 0.8199275362318841,
+     "roi_lo": null,
+     "roi_hi": null,
+     "roi_ex_top5": 0.7239130434782609,
+     "avg_return": 81.9927536231884,
+     "median_return": 0.0
+    },
+    "B1 予測1位の複勝（全部買う）": {
+     "bet_races": 276,
+     "bet_rate": 1.0,
+     "hit_rate": 0.6268115942028986,
+     "roi": 0.821376811594203,
+     "roi_lo": null,
+     "roi_hi": null,
+     "roi_ex_top5": 0.7847826086956522,
+     "avg_return": 82.1376811594203,
+     "median_return": 110.0
+    },
+    "M0 市場の1番人気の単勝": {
+     "bet_races": 276,
+     "bet_rate": 1.0,
+     "hit_rate": 0.37318840579710144,
+     "roi": 0.8757246376811594,
+     "roi_lo": null,
+     "roi_hi": null,
+     "roi_ex_top5": 0.7960144927536232,
+     "avg_return": 87.57246376811594,
+     "median_return": 0.0
+    }
+   },
+   "diff_vs_B0": [
+    0.21489278594903283,
+    -0.2382072669827965,
+    0.7094914515087262
+   ],
+   "tiers": {
+    "3": {
+     "bet_races": 65,
+     "bet_rate": 0.23550724637681159,
+     "hit_rate": 0.13846153846153847,
+     "roi": 0.818974358974359,
+     "roi_lo": 0.15654040404040406,
+     "roi_hi": 1.9441026892214268,
+     "roi_ex_top5": 0.10307692307692308,
+     "avg_return": 245.69230769230768,
+     "median_return": 0.0
+    },
+    "2": {
+     "bet_races": 100,
+     "bet_rate": 0.36231884057971014,
+     "hit_rate": 0.3,
+     "roi": 1.6926666666666668,
+     "roi_lo": 0.766277602774596,
+     "roi_hi": 2.9492539601430763,
+     "roi_ex_top5": 0.6513333333333333,
+     "avg_return": 507.8,
+     "median_return": 0.0
+    },
+    "1": {
+     "bet_races": 104,
+     "bet_rate": 0.37681159420289856,
+     "hit_rate": 0.19230769230769232,
+     "roi": 0.5371794871794872,
+     "roi_lo": 0.23142576681448634,
+     "roi_hi": 0.8888499987393792,
+     "roi_ex_top5": 0.19230769230769232,
+     "avg_return": 161.15384615384616,
+     "median_return": 0.0
+    },
+    "0": {
+     "bet_races": 0,
+     "bet_rate": 0.0,
+     "hit_rate": null,
+     "roi": null,
+     "roi_lo": null,
+     "roi_hi": null,
+     "roi_ex_top5": null,
+     "avg_return": null,
+     "median_return": null
+    }
+   },
+   "fav1_exception": {
+    "n": 1,
+    "rentai": 1.0,
+    "win": 1.0,
+    "place": 1.0,
+    "roi_tansho": 1.4,
+    "roi_fukusho": 1.1
+   },
+   "role": "前向きの参考（本番 v6e の予測・発走前のオッズで決めた版）",
+   "odds_source": "発走前のオッズ（最後のスナップショット）で ◎・人気を決めた",
+   "pred": [
+    "data/local/research/persona1/frame_test_2025new_2026prod.parquet",
+    "/home/jovyan/work/retrain_out/bet_cycles/inputs/pred_2026_after1019_predictions_v3.parquet"
+   ],
+   "drop": {
+    "no_pred": 7,
+    "no_pay": 0,
+    "small": 0,
+    "all_races_in_period": 3072,
+    "payoff_filled_from_flat": 264,
+    "computed_races": 276
+   },
+   "miss_types": {
+    "◎ が 4 着以下（◎ が飛んだ）": 199,
+    "◎ は 3 着内・相手が 1 頭も来ない": 9,
+    "◎ は 3 着内・相手も来たが組・着順が合わない": 2
+   },
+   "h_reasons": {
+    "1番人気より下で期待値最大": 240,
+    "予測1位": 18,
+    "1番人気にペナルティ（λ=1）": 10,
+    "見送り（◎ が人気馬）": 7,
+    "1番人気の例外（連対率の予測が高い）": 1
+   }
+  }
+ },
+ "note": "test は凍結を commit した後に 1 回だけ見た。結果は docs/operations/retrain_trials/bet_test2025_<hash>.json に写して commit する（2 回目を拒む印）。",
+ "status": "done"
+}

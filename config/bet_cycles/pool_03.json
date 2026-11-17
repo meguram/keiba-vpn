@@ -1,0 +1,10 @@
+{
+ "note": "方策の候補の束 3（cycle 10〜）。cycle 9 の方策で選ばれた形（◎ は 2 番人気以下の期待値最大・4 番人気以下）を中心に、券種・相手を少し広げた。",
+ "grids": [
+  {"prefix": "p3E", "base": {"honmei": {"rule": "fav1_exc", "p2_min": "auto", "base": {"rule": "ana_ev", "fav_k": 1, "max_rank": 8, "ev_min": 1.0}}, "partners": {"mode": "p3", "n": 2}, "skip": {"h_pop_min": 4}},
+   "axes": {"partners": [{"mode": "p3", "n": 2}, {"mode": "fav", "n": 2, "fav_k": 3}, {"mode": "p3", "n": 3}],
+            "tickets": [[{"type": "wide"}], [{"type": "wide"}, {"type": "trio1"}], [{"type": "tansho"}, {"type": "wide"}], [{"type": "fukusho"}, {"type": "wide"}], [{"type": "umaren"}, {"type": "wide"}]]}},
+  {"prefix": "p3X", "base": {"honmei": {"rule": "fav1_exc", "p2_min": "auto", "base": {"rule": "ana_ev", "fav_k": 1, "max_rank": 8, "ev_min": 1.0}}, "partners": {"mode": "p3", "n": 2}},
+   "axes": {"tickets": [[{"type": "wide"}], [{"type": "wide"}, {"type": "trio1"}], [{"type": "fukusho"}, {"type": "wide"}]]}}
+ ]
+}

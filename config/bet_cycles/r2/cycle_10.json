@@ -1,0 +1,82 @@
+{
+ "n": 10,
+ "min_hit": 0.08,
+ "rank_by": "robust",
+ "title": "第2回: 型 1（人気の ◎）の参考 — 予測 1 位と、r が高い 1 番人気だけ",
+ "hypothesis": "予測 1 位を ◎ にする形は、r が正の（市場より強いと見る）ときだけなら B0 を上回る。参考の系統として並べる。",
+ "change": "予測 1 位の ◎ を、見送り 5 通り（なし・予測 1 位の r 0 以上・0.1 以上・期待値 1.0 以上・r 0 以上かつ期待値 1.0 以上）× 単勝・複勝・ワイドで。",
+ "group_by": [
+  "skip",
+  "tickets"
+ ],
+ "grids": [
+  {
+   "prefix": "r2c10",
+   "base": {
+    "family": "参考: 予測1位の ◎",
+    "honmei": {
+     "rule": "top"
+    },
+    "partners": {
+     "mode": "p3",
+     "n": 2
+    },
+    "tickets": [
+     {
+      "type": "tansho"
+     }
+    ]
+   },
+   "axes": {
+    "skip": [
+     {},
+     {
+      "when": {
+       "r_top": [
+        0.0,
+        null
+       ]
+      }
+     },
+     {
+      "when": {
+       "r_top": [
+        0.1,
+        null
+       ]
+      }
+     },
+     {
+      "h_ev_min": 1.0
+     },
+     {
+      "h_ev_min": 1.0,
+      "when": {
+       "r_top": [
+        0.0,
+        null
+       ]
+      }
+     }
+    ],
+    "tickets": [
+     [
+      {
+       "type": "tansho"
+      }
+     ],
+     [
+      {
+       "type": "fukusho"
+      }
+     ],
+     [
+      {
+       "type": "wide"
+      }
+     ]
+    ]
+   }
+  }
+ ]
+}

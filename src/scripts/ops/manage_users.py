@@ -28,7 +28,7 @@ import sys
 import time
 from pathlib import Path
 
-ITERATIONS = 600_000
+ITERATIONS = 600_000      # src/api/auth.py の MEMBER_ITERATIONS と同じ値（存在しない ID の照合の回数）。変えるときは両方
 ID_RE = re.compile(r"^[A-Za-z0-9._@-]{3,64}$")
 MIN_PW = 10
 ALGO = "pbkdf2_sha256_pepper"

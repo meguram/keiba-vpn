@@ -1,0 +1,16 @@
+{
+ "note": "方策（型 → 買い方）の候補の束 1。cycle 2〜5 で各系統の上位に来た形を集めた（型 1・型 A・型 B・人気の最高オッズ）。見送り（skip）は方策の側で選ぶので、ここでは期待値の分位の見送りを入れない。",
+ "grids": [
+  {"prefix": "p1T", "base": {"family": "型1 人気の ◎（点数を絞る）", "honmei": {"rule": "top"}, "partners": {"mode": "p3", "n": 2}, "skip": {"h_pop_max": 3}},
+   "axes": {"skip.h_ev_min": [null, 1.0],
+            "tickets": [[{"type": "tansho"}], [{"type": "fukusho"}], [{"type": "umatan", "k": 1}], [{"type": "umaren", "k": 2}], [{"type": "trio2", "k": 3}]]}},
+  {"prefix": "p1A", "base": {"family": "型A 穴の ◎・人気の相手", "honmei": {"rule": "ana_ev", "fav_k": 3, "max_rank": 8, "ev_min": 1.0, "fallback": "skip"}, "partners": {"mode": "fav", "n": 2, "fav_k": 3}},
+   "axes": {"partners.n": [2, 3], "tickets": [[{"type": "trio1"}], [{"type": "umaren"}], [{"type": "wide"}], [{"type": "wide"}, {"type": "trio1"}]]}},
+  {"prefix": "p1B", "base": {"family": "型B 穴の ◎・相手を広く", "honmei": {"rule": "ana_ev", "fav_k": 3, "max_rank": 8, "ev_min": 1.0, "fallback": "skip"}, "partners": {"mode": "mix", "n": 2, "n_ana": 1, "fav_k": 3}},
+   "axes": {"partners.n_ana": [1, 2], "tickets": [[{"type": "trio1"}], [{"type": "wide"}], [{"type": "umaren"}], [{"type": "trio_form", "m": 1}]]}},
+  {"prefix": "p1P", "base": {"family": "型A 穴の ◎・人気の相手", "honmei": {"rule": "ana_p3", "fav_k": 3, "max_rank": 8, "fallback": "skip"}, "partners": {"mode": "fav", "n": 2, "fav_k": 3}},
+   "axes": {"tickets": [[{"type": "wide"}], [{"type": "trio1"}], [{"type": "fukusho"}, {"type": "wide"}]]}},
+  {"prefix": "p1F", "base": {"family": "型1 人気の ◎（点数を絞る）", "honmei": {"rule": "fav_maxodds", "fav_k": 3, "max_rank": 4}, "partners": {"mode": "p3", "n": 2}},
+   "axes": {"tickets": [[{"type": "tansho"}], [{"type": "wide"}], [{"type": "umaren"}]]}}
+ ]
+}

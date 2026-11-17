@@ -1,0 +1,77 @@
+{
+ "n": 2,
+ "min_hit": 0.08,
+ "rank_by": "robust",
+ "title": "第2回: r 最大の ◎ の境目（勝率の下限・r の下限・予測順位の上限）",
+ "hypothesis": "r が大きくても勝率が低すぎる馬は来ない。勝率の下限と r の下限を組み合わせ、予測順位で絞ると、的中率を保ったまま回収率が上がる。",
+ "change": "r 最大の ◎（2 番人気以下）: 勝率の下限 3・5・8・12% × r の下限（なし・0・0.1・0.2）× 予測順位の上限（なし・6）× 券種（単勝・ワイド 2 点・複勝＋ワイド）。",
+ "group_by": [
+  "honmei.base.p_min",
+  "honmei.base.r_min",
+  "tickets"
+ ],
+ "grids": [
+  {
+   "prefix": "r2c02",
+   "base": {
+    "honmei": {
+     "rule": "fav1_exc",
+     "exc_by": "r",
+     "r_min": "auto",
+     "base": {
+      "rule": "r_max",
+      "fav_k": 1,
+      "p_min": 0.05
+     }
+    },
+    "partners": {
+     "mode": "p3",
+     "n": 2
+    },
+    "tickets": [
+     {
+      "type": "tansho"
+     }
+    ]
+   },
+   "axes": {
+    "honmei.base.p_min": [
+     0.03,
+     0.05,
+     0.08,
+     0.12
+    ],
+    "honmei.base.r_min": [
+     -9.0,
+     0.0,
+     0.1,
+     0.2
+    ],
+    "honmei.base.max_rank": [
+     99,
+     6
+    ],
+    "tickets": [
+     [
+      {
+       "type": "tansho"
+      }
+     ],
+     [
+      {
+       "type": "wide"
+      }
+     ],
+     [
+      {
+       "type": "fukusho"
+      },
+      {
+       "type": "wide"
+      }
+     ]
+    ]
+   }
+  }
+ ]
+}

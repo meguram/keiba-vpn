@@ -1,0 +1,265 @@
+{
+ "n": 2,
+ "title": "穴の ◎ を本命らしく絞る（型 A・型 B）と、混戦だけの人気の最高オッズ ◎",
+ "hypothesis": "cycle 1 の期待値の ◎ は 10 番人気以下が過半で、本命とは言えない。◎ の候補を予測の上位（3・5・8 位まで）に絞っても、期待値・複勝率で選んだ穴の ◎ は B0 を上回る。相手を人気馬に絞る型 A は的中率を、相手を広げる型 B は払戻の跳ねを稼ぐ。人気の中で最高オッズの ◎ は、混戦（手の区切りの chaos）のときだけなら悪くない。",
+ "change": "型 A: 穴の ◎（期待値最大 or 複勝率最大、予測順位の上限 3・5・8）→ 3 番人気以内の複勝率上位 2〜3 頭の馬連・ワイド・三連複。型 B: 同じ ◎ → 人気 2 頭＋穴 2 頭の三連複 ◎ 1 頭軸・三連単フォーメーション・ワイド。切り替え: 混戦だけ人気の最高オッズ（予測 4 位まで）、それ以外は予測 1 位。",
+ "group_by": [
+  "honmei",
+  "tickets.0.type"
+ ],
+ "grids": [
+  {
+   "prefix": "c02A",
+   "base": {
+    "family": "型A 穴の ◎・人気の相手",
+    "honmei": {
+     "rule": "ana_ev",
+     "fav_k": 3
+    },
+    "partners": {
+     "mode": "fav",
+     "n": 2,
+     "fav_k": 3
+    },
+    "tickets": [
+     {
+      "type": "umaren"
+     }
+    ]
+   },
+   "axes": {
+    "honmei": [
+     {
+      "rule": "ana_ev",
+      "fav_k": 3,
+      "max_rank": 3
+     },
+     {
+      "rule": "ana_ev",
+      "fav_k": 3,
+      "max_rank": 5
+     },
+     {
+      "rule": "ana_ev",
+      "fav_k": 3,
+      "max_rank": 8
+     },
+     {
+      "rule": "ana_ev",
+      "fav_k": 3,
+      "max_rank": 5,
+      "ev_min": 1.0
+     },
+     {
+      "rule": "ana_ev",
+      "fav_k": 3,
+      "max_rank": 8,
+      "ev_min": 1.0
+     },
+     {
+      "rule": "ana_p3",
+      "fav_k": 3,
+      "max_rank": 5
+     },
+     {
+      "rule": "ana_p3",
+      "fav_k": 3,
+      "max_rank": 8
+     }
+    ],
+    "partners.n": [
+     2,
+     3
+    ],
+    "tickets": [
+     [
+      {
+       "type": "umaren"
+      }
+     ],
+     [
+      {
+       "type": "wide"
+      }
+     ],
+     [
+      {
+       "type": "trio1"
+      }
+     ],
+     [
+      {
+       "type": "fukusho"
+      },
+      {
+       "type": "wide"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "prefix": "c02B",
+   "base": {
+    "family": "型B 穴の ◎・相手を広く",
+    "honmei": {
+     "rule": "ana_ev",
+     "fav_k": 3
+    },
+    "partners": {
+     "mode": "mix",
+     "n": 2,
+     "n_ana": 2,
+     "fav_k": 3
+    },
+    "tickets": [
+     {
+      "type": "trio1"
+     }
+    ]
+   },
+   "axes": {
+    "honmei": [
+     {
+      "rule": "ana_ev",
+      "fav_k": 3,
+      "max_rank": 5
+     },
+     {
+      "rule": "ana_ev",
+      "fav_k": 3,
+      "max_rank": 8
+     },
+     {
+      "rule": "ana_ev",
+      "fav_k": 3,
+      "max_rank": 8,
+      "ev_min": 1.0
+     },
+     {
+      "rule": "ana_p3",
+      "fav_k": 3,
+      "max_rank": 8
+     }
+    ],
+    "partners.n_ana": [
+     1,
+     2,
+     3
+    ],
+    "tickets": [
+     [
+      {
+       "type": "trio1"
+      }
+     ],
+     [
+      {
+       "type": "tri_form",
+       "m": 2
+      }
+     ],
+     [
+      {
+       "type": "wide"
+      }
+     ],
+     [
+      {
+       "type": "umaren"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "prefix": "c02S",
+   "base": {
+    "family": "◎ の切り替え（型ごと）",
+    "honmei": {
+     "rule": "switch",
+     "by": "shape",
+     "map": {},
+     "default": {
+      "rule": "top"
+     }
+    },
+    "partners": {
+     "mode": "p3",
+     "n": 2
+    },
+    "tickets": [
+     {
+      "type": "tansho"
+     }
+    ]
+   },
+   "axes": {
+    "honmei.map": [
+     {
+      "chaos": {
+       "rule": "fav_maxodds",
+       "fav_k": 3,
+       "max_rank": 4
+      }
+     },
+     {
+      "chaos": {
+       "rule": "fav_maxodds",
+       "fav_k": 4,
+       "max_rank": 4
+      }
+     },
+     {
+      "chaos": {
+       "rule": "fav_maxodds",
+       "fav_k": 3,
+       "max_rank": 4
+      },
+      "mid": {
+       "rule": "fav_maxodds",
+       "fav_k": 3,
+       "max_rank": 3
+      }
+     }
+    ],
+    "tickets": [
+     [
+      {
+       "type": "tansho"
+      }
+     ],
+     [
+      {
+       "type": "fukusho"
+      }
+     ],
+     [
+      {
+       "type": "wide"
+      }
+     ],
+     [
+      {
+       "type": "umaren"
+      }
+     ],
+     [
+      {
+       "type": "trio1",
+       "k": 4
+      }
+     ]
+    ]
+   }
+  }
+ ],
+ "notes": {
+  "review": "型 B（予測 8 位以内の穴で期待値 1 以上の ◎ → 人気 2 頭＋穴 1 頭の三連複 ◎ 1 頭軸 3 点）が訓練 1.226［1.051〜1.403］、上位 5 件を除いて 1.111、2 年とも 1.18 以上。区間の下限が初めて 1 を超えた。予測の上位 5 位までに絞ると 0.99 に落ちる（6〜8 位の穴が効いている）。混戦だけ人気の最高オッズの ◎ は 0.93 で B0 を超えない。回顧（訓練）: ◎ が 6〜9 番人気で 1.25［1.03〜1.48］と良い。候補が無く予測 1 位に戻ったレース（◎ が 1 番人気）は 0.78［0.59〜0.97］で悪い。期待値の最大が低い 2 分位（q1・q2）は 0.99・0.86 で悪い。クラスは 1 勝 0.90・2 勝 0.71 が悪く、新馬 1.73・未勝利 1.62 が良い。不良馬場 0.73 が悪い。不的中の 85% は ◎ が 4 着以下（◎ が飛んだ）。",
+  "next": [
+   "候補が無いときは予測 1 位に戻さず見送る（fallback=skip）。",
+   "期待値の最大が低いレース（q_ev_max 1〜2）を見送る。◎ の人気の下限（4・6 番人気以下）を試す。",
+   "クラス・馬場の得意・不得意は、最後の推奨度の段で扱う（ここでは使わない。細かく割るほど偶然が増える）。"
+  ]
+ }
+}

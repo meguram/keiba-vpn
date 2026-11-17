@@ -247,6 +247,20 @@ def cmd_ens(a) -> None:
     pred, info = ens_win(base, members)
     out = base[KEY + ["year"]].copy()
     out["p_win"] = pred
+    if all(f"{m}__top2" in base.columns and f"{m}__top3" in base.columns for m in members):   # 連対・複勝も、v6e と同じ前進選択の LOYO で
+        from src.pipeline.models import ensemble as en
+
+        race, years, fin = base["race_id"].to_numpy(), base["year"].to_numpy(), base["finish_position"].to_numpy()
+        for t, k in (("top2", 2), ("top3", 3)):
+            P = np.clip(np.stack([base[f"{m}__{t}"].to_numpy() for m in members], axis=1), 1e-6, 1 - 1e-6)
+            y = (fin <= k).astype(float)
+            llv, pt = en.loyo_eval("greedy", P, years, race, y, float(k))
+            st = en.fit_method("greedy", P, en.logit(P), y)
+            out[f"p_{t}"] = pt
+            info[f"weights_{t}"] = dict(zip(members, [round(float(x), 4) for x in st]))
+            info[f"loyo_row_ll_{t}"] = float(llv)
+    else:
+        log("ens: 連対・複勝の列がそろわないメンバーがある（--add など）ので、p_top2・p_top3 は作らない")
     d = CYC / "ens"
     d.mkdir(parents=True, exist_ok=True)
     tag = a.tag or a.name
@@ -255,6 +269,50 @@ def cmd_ens(a) -> None:
     (d / f"{tag}.json").write_text(json.dumps({**info, "replace": {k: str(v) for k, v in replace.items()}, "add": a.add or [], "spec_check": spec_check},
                                               ensure_ascii=False, indent=1), encoding="utf-8")
     log(f"ens {tag}: 行 {len(out)} 行単位 LL {info['loyo_row_ll']:.5f} 重み {info['weights']}")
+
+
+def cmd_apply(a) -> None:
+    """束（bundle.json）の重みを、メンバーの OOF に当てて p_win・p_top2・p_top3 を作る（bet-optimizer への受け渡し用）。
+    --win-from を渡すと、p_win はその ens の値（LOYO）を使う（2022〜2024 年。束の勝率の重みは同じ年で当てたので、その年には当てない）。"""
+    from src.pipeline.models import ensemble as en
+    from src.pipeline.models import win_models as wm
+
+    bj = json.loads((CYC / "final" / a.bundle / "bundle.json").read_text(encoding="utf-8"))
+    names = [m["name"] for m in bj["members"]]
+    if bj["spec"].get("models", names) != names:
+        raise SystemExit(f"束の spec の並び {bj['spec'].get('models')} と members の並び {names} が違う")
+    mdir = BASE / a.member_dir / "oof"
+    base = None
+    for m in names:
+        o = pd.read_parquet(mdir / f"{m}__v4.parquet")
+        o["race_id"], o["horse_id"] = o["race_id"].astype(str), o["horse_id"].astype(str)
+        o = o[KEY + ["p_win", "p_top2", "p_top3"]].rename(columns={f"p_{t}": f"{m}__{t}" for t in ("win", "top2", "top3")})
+        n0 = 0 if base is None else len(base)
+        base = o if base is None else base.merge(o, on=KEY, how="inner")
+        if n0 and len(base) != n0:
+            log(f"apply: {m} を結合して行が {n0} → {len(base)}（メンバーの OOF の欠け）")
+    rows_lost = int(max(len(pd.read_parquet(mdir / f"{m}__v4.parquet", columns=["race_id"])) for m in names) - len(base))
+    race = base["race_id"].to_numpy()
+    out = base[KEY].copy()
+    out["year"] = out["race_id"].str[:4].astype(int)
+    for t, tot in (("win", 1.0), ("top2", 2.0), ("top3", 3.0)):
+        P = np.clip(np.stack([base[f"{m}__{t}"].to_numpy() for m in names], axis=1), 1e-6, 1 - 1e-6)
+        out[f"p_{t}"] = wm.normalize_to_total(race, en.apply_spec(bj["spec"]["targets"][t], P), tot)
+    note = (f"束 {a.bundle} の重み（{bj['spec']['source']}）をメンバーの OOF（{mdir}）に当てた。"
+            "連対・複勝の重みは候補 v6e16 の束（旧い OOF の 2022〜2024 年で決めた前進選択）を 5 メンバーに絞ったもので、今のメンバーの OOF には当て直していない")
+    if a.win_from:
+        w = read_pred(a.win_from)[KEY + ["p_win"]]
+        if set(zip(w["race_id"], w["horse_id"])) != set(zip(out["race_id"], out["horse_id"])):
+            raise SystemExit(f"{a.win_from} の行がメンバーの OOF の行とそろわない（{len(w)} 対 {len(out)}）")
+        out = out.drop(columns="p_win").merge(w, on=KEY, how="left")
+        out["p_win"] = wm.normalize_to_total(out["race_id"].to_numpy(), out["p_win"].to_numpy(), 1.0)
+        note += f"。p_win は {a.win_from}（LOYO。その年を除いた年で決めた重み）"
+    d = CYC / "handoff"
+    d.mkdir(parents=True, exist_ok=True)
+    out.to_parquet(d / f"{a.tag}.parquet", index=False)
+    (d / f"{a.tag}.json").write_text(json.dumps({"rows": len(out), "rows_lost_by_member_join": rows_lost, "races": int(out["race_id"].nunique()), "years": sorted(int(y) for y in out["year"].unique()),
+                                                 "note": note + "。" + a.note}, ensure_ascii=False, indent=1), encoding="utf-8")
+    log(f"apply {a.tag}: {len(out)} 行 {sorted(out['year'].unique())}")
 
 
 # ---------------------------------------------------------------- 評価
@@ -333,6 +391,15 @@ def cmd_score(a) -> None:
         cls = rc.reindex(a0.index)["race_class"].astype(str)
         e["ll_newcomer"] = paired_ci(dd[cls.str.contains("新馬").to_numpy()])
         e["ll_2yo"] = paired_ci(dd[cls.str.contains("２歳").to_numpy()])
+        if a.detail:                                    # 月別・クラス別の内訳（最後の比べ方で使う）
+            mon = pd.to_datetime(rc.reindex(a0.index)["date"]).dt.month.to_numpy()
+            e["by_month"] = {int(mth): [int((mon == mth).sum())] + list(paired_ci(dd[mon == mth])) for mth in sorted(set(mon[~np.isnan(mon)]))}
+            # race_class は「サラ系３歳 未勝利」などの文字列。重賞・リステッド・特別はクラス名を持たない（「サラ系３歳以上」など）ので、別のかたまりにする
+            grp = np.select([cls.str.contains("新馬"), cls.str.contains("未勝利"), cls.str.contains("１勝"), cls.str.contains("２勝"),
+                             cls.str.contains("３勝"), cls.str.contains("オープン"), cls.str.strip().isin(["", "nan", "None"])],
+                            ["新馬", "未勝利", "1勝", "2勝", "3勝", "オープン", "クラスの記載なし"], "重賞・特別など（クラス名なし）")
+            labs = ["新馬", "未勝利", "1勝", "2勝", "3勝", "オープン", "重賞・特別など（クラス名なし）", "クラスの記載なし"]
+            e["by_class"] = {g: [int((grp == g).sum())] + list(paired_ci(dd[grp == g])) for g in labs if (grp == g).any()}
         bd = rbe.boot_diff(T[a.name], T[r], n_boot=1000)
         e.update({k: v for k, v in bd.items() if k != "n"})
         res["diff"][f"{a.name} - {r}"] = e
@@ -584,6 +651,7 @@ def main() -> None:
     s = sub.add_parser("score")
     s.add_argument("name")
     s.add_argument("--ref", default="cand_v6e16,prod_v6e")
+    s.add_argument("--detail", action="store_true", help="月別・クラス別の内訳も出す")
     p = sub.add_parser("parity")
     p.add_argument("name")
     p.add_argument("--spec", default="")
@@ -593,7 +661,13 @@ def main() -> None:
     i.add_argument("--spec", default="")
     i.add_argument("--seeds", type=int, default=1)
     i.add_argument("--ens", default="", help="勝率の重み（ens/<名前>.json）。省くと候補の束の重み")
-    r = sub.add_parser("record", help="1 サイクルの記録を docs/operations/retrain_trials/model_cycles_log.json に足す")
+    ap_ = sub.add_parser("apply", help="束の重みをメンバーの OOF に当てて p_win・p_top2・p_top3 を作る（受け渡し用。出力 handoff/）")
+    ap_.add_argument("tag")
+    ap_.add_argument("--bundle", default="bundle_v6_2025")
+    ap_.add_argument("--member-dir", default="tp27_v6e", help="土台の中のメンバーの OOF の置き場（例 tp27_v6e_1921）")
+    ap_.add_argument("--win-from", default="", help="p_win をこの ens の値（LOYO）にする")
+    ap_.add_argument("--note", default="")
+    r = sub.add_parser("record",help="1 サイクルの記録を docs/operations/retrain_trials/model_cycles_log.json に足す")
     r.add_argument("id")
     r.add_argument("--phase", default="main", help="before_fix（データを直す前・参考）/ main")
     r.add_argument("--date", default="")
@@ -608,7 +682,7 @@ def main() -> None:
     r.add_argument("--next", default="")
     a = ap.parse_args()
     {"cache": cmd_cache, "member": cmd_member, "ens": cmd_ens, "score": cmd_score, "parity": cmd_parity, "inf2026": cmd_inf2026,
-     "record": cmd_record}[a.cmd](a)
+     "record": cmd_record, "apply": cmd_apply}[a.cmd](a)
 
 
 if __name__ == "__main__":

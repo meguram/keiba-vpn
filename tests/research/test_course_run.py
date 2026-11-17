@@ -179,3 +179,117 @@ def test_metrics_counts_kill_races():
     race = np.array(["a", "a", "a", "a", "b", "b"])
     m = SE.metrics(Y, race, np.array([0]), np.array([1, 2, 3]), 2)
     assert m["win"] == 1.0 and m["roi_t"] == 3.0 and m["kill_races"] == 1 and m["kill_per_race"] == 3.0 and m["coverage"] == 0.5
+
+
+def test_evaluate_frozen_matches_names_not_codes():
+    """凍結した条件は型・水準の名前で照らす（評価の表で水準の番号の振り方が変わっても同じ馬を選ぶ）。"""
+    d, L = _toy(n_races=6)
+    d["year"] = 2025
+    P = {"params": SE.params_dict(SE.Params(min_races=1))}
+    cells = {"東京芝1600|1勝・2勝": {"buy": [{"types": ["A01"], "levels": ["1着"], "rate": 1.0}], "kill": [{"types": ["A01"], "levels": ["2-3着"]}]}}
+    r = CR.evaluate_frozen(d, L, P, cells)
+    assert r["all"]["win"] == 1.0 and r["all"]["bet_races"] == 6 and r["all"]["kill_races"] == 6
+    r2 = CR.evaluate_frozen(d.assign(course="京都芝1600"), L, P, cells)
+    assert r2["all"]["bet_races"] == 0 and r2["per_unit"][0]["no_rule"]               # 2016〜2024 年に無い単位は買わない
+
+
+def test_playbook_html_from_best(tmp_path, monkeypatch):
+    import json
+
+    from src.scripts.docs import build_course_playbook_html as H
+    monkeypatch.setattr(CR, "PREREG", tmp_path / "prereg_course.json")      # リポジトリの凍結（本物）を読まない
+    d, L = _toy()
+    best = CR.run_config(d, L, SE.Params(depth=2, min_races=10), keep_cells=True)
+    src = tmp_path / "b.json"
+    src.write_text(json.dumps(best, ensure_ascii=False, default=float), encoding="utf-8")
+    h = H.build(src, tmp_path / "p.html", None).read_text(encoding="utf-8")
+    assert "前走で 1着だった馬" in h and "評価（2025・2026 年）はまだ" in h and "function setupCourse" in h and 'data-course="東京芝1600"' in h
+
+
+def test_evaluate_frozen_weight_rate_groups4_and_missing_type():
+    d, L = _toy(n_races=6)
+    d["year"] = 2025
+    d.loc[d["race_id"] == "東京芝16000", "race_class"] = "2歳新馬"
+    d["group"] = "新馬・未勝利"
+    P = {"params": SE.params_dict(SE.Params(min_races=1, groups=4, weight="rate"))}
+    cells = {"東京芝1600|新馬・未勝利": {"buy": [{"types": ["A01"], "levels": ["1着"], "rate": 0.9}], "kill": []},
+             "東京芝1600|新馬": {"buy": [{"types": ["A01"], "levels": ["無い水準"], "rate": 0.9}], "kill": []}}
+    r = CR.evaluate_frozen(d, L, P, cells)
+    assert r["all"]["bet_races"] == 5 and r["unmatched_levels"] == 1                 # 新馬の 1 回は別の単位・その単位の水準は評価の表に無い
+    with pytest.raises(ValueError):
+        CR.evaluate_frozen(d, L, P, {"東京芝1600|新馬・未勝利": {"buy": [{"types": ["Z99"], "levels": ["x"]}], "kill": []}})
+
+
+def test_eval_and_freeze_guards(tmp_path, monkeypatch):
+    monkeypatch.setattr(CR, "OUT", tmp_path)
+    monkeypatch.setattr(CR, "EVAL_MARK", tmp_path / "EVALUATED_COURSE.json")
+    monkeypatch.setattr(CR, "PREREG", tmp_path / "prereg_course.json")
+    monkeypatch.delenv("COURSE_EVAL_TOKEN", raising=False)
+    with pytest.raises(SystemExit):
+        CR._eval_inner()                                                              # トークンが無ければ流さない
+    (tmp_path / "course_best.json").write_text('{"params": {"a": 1}, "cells": {}}', encoding="utf-8")
+    (tmp_path / "course_cycles.json").write_text('{"cycles": [{"cycle": 1, "params": {"a": 1}}], "best_cycle": 1}', encoding="utf-8")
+    with pytest.raises(SystemExit):
+        CR.cmd_freeze()                                                               # サイクルが最後まで回っていない
+    CR.EVAL_MARK.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        CR.cmd_freeze()                                                               # 評価済みの印があれば凍結し直さない
+
+
+def test_frame_and_levels_before_filtering_keeps_rate_cutoffs():
+    """水準は単位に絞る前の表で作る: 絞った後に作ると、境目の基準（2017 年の重賞の行）が無くなる。"""
+    from src.research.graded import catalog as CAT
+    assert "2017" in __import__("inspect").getsource(CAT._ref) and "G1" in __import__("inspect").getsource(CAT._ref)
+    src = __import__("inspect").getsource(CR._eval_inner)
+    assert src.index("frame_and_levels") < src.index("keep =")                       # 前処理と水準 → その後で 2025 年以降・良馬場に絞る
+
+
+def test_pick_kill_prefers_goal_then_coverage():
+    rows = [{"kill_n": 5, "kill_depth": 1, "kill_precision": 0.93, "killed": 50000, "kill_coverage": 0.9},
+            {"kill_n": 10, "kill_depth": 1, "kill_precision": 0.97, "killed": 50000, "kill_coverage": 0.2},
+            {"kill_n": 15, "kill_depth": 2, "kill_precision": 0.96, "killed": 50000, "kill_coverage": 0.5}]
+    assert CR.pick_kill(rows)["kill_n"] == 15
+    assert CR.pick_kill(rows[:1] + [{"kill_n": 20, "kill_depth": 1, "kill_precision": 0.94, "killed": 50000, "kill_coverage": None}])["kill_n"] == 20
+
+
+def test_pick_kill_uses_lower_bound_and_handles_none():
+    rows = [{"kill_n": 20, "kill_depth": 2, "kill_precision": 0.97, "killed": 30, "kill_coverage": 0.9},      # 少ない: 下限は 95% 未満
+            {"kill_n": 10, "kill_depth": 1, "kill_precision": 0.96, "killed": 20000, "kill_coverage": 0.3}]
+    assert CR.pick_kill(rows)["kill_n"] == 10
+    assert CR.pick_kill([{"kill_n": 5, "kill_depth": 1, "kill_precision": None, "killed": 0, "kill_coverage": None}])["kill_n"] == 5
+
+
+def test_kill_select_periods_and_guards(tmp_path, monkeypatch):
+    import inspect
+    src = inspect.getsource(CR.cmd_kill_select)
+    assert "yr <= 2021" in src and "(yr >= 2022) & (yr <= YEAR_END)" in src and "evaluate_frozen" in src
+    monkeypatch.setattr(CR, "OUT", tmp_path)
+    monkeypatch.setattr(CR, "PREREG", tmp_path / "prereg_course.json")
+    monkeypatch.setattr(CR, "EVAL_MARK", tmp_path / "EVALUATED_COURSE.json")
+    (tmp_path / "course_cycles.json").write_text('{"cycles": [], "finished_at": "x", "best_cycle": 1}', encoding="utf-8")
+    CR.PREREG.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        CR.cmd_kill_select()                                                          # 凍結の後は選び直さない
+
+
+def test_playbook_html_uses_frozen_cells(tmp_path, monkeypatch):
+    """凍結の後は、凍結した条件の表（sha を照らす）を出す。sha が違えば止める。"""
+    import hashlib
+    import json
+
+    from src.scripts.docs import build_course_playbook_html as H
+    d, L = _toy()
+    best = CR.run_config(d, L, SE.Params(depth=2, min_races=10), keep_cells=True)
+    src = tmp_path / "b.json"
+    src.write_text(json.dumps(best, ensure_ascii=False, default=float), encoding="utf-8")
+    cells = tmp_path / "course_cells.json"
+    cells.write_text(json.dumps({u: c | {"buy": c["buy"][:1]} for u, c in best["cells"].items()}, ensure_ascii=False), encoding="utf-8")
+    pr = tmp_path / "prereg_course.json"
+    pr.write_text(json.dumps({"params": best["params"], "cells_file": "course_cells.json",
+                              "sha256_cells": hashlib.sha256(cells.read_bytes()).hexdigest()}), encoding="utf-8")
+    monkeypatch.setattr(CR, "PREREG", pr)
+    h = H.build(src, tmp_path / "p.html", None).read_text(encoding="utf-8")
+    assert "走数の多い 1 個" in h
+    cells.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        H.build(src, tmp_path / "p.html", None)

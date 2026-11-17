@@ -1,0 +1,108 @@
+{
+ "n": 5,
+ "min_hit": 0.08,
+ "rank_by": "robust",
+ "title": "第2回: 券種の組み合わせと本線の厚さ",
+ "hypothesis": "ワイドを本線にし、単勝・三連複を押さえに組むと、的中率を保ったまま回収率が上がる。本線 2 倍は効かない（第 1 回）ことを確かめる。",
+ "change": "r 最大の ◎ × 相手 2 通り × 券種の組 6 通り × 本線の倍率 1・2。",
+ "group_by": [
+  "tickets",
+  "main_w"
+ ],
+ "grids": [
+  {
+   "prefix": "r2c05",
+   "base": {
+    "honmei": {
+     "rule": "fav1_exc",
+     "exc_by": "r",
+     "r_min": "auto",
+     "base": {
+      "rule": "r_max",
+      "fav_k": 1,
+      "p_min": 0.05
+     }
+    },
+    "partners": {
+     "mode": "p3",
+     "n": 2
+    },
+    "tickets": [
+     {
+      "type": "wide"
+     }
+    ]
+   },
+   "axes": {
+    "partners": [
+     {
+      "mode": "p3",
+      "n": 2
+     },
+     {
+      "mode": "fav",
+      "n": 2,
+      "fav_k": 3
+     }
+    ],
+    "tickets": [
+     [
+      {
+       "type": "wide"
+      },
+      {
+       "type": "trio1"
+      }
+     ],
+     [
+      {
+       "type": "umaren"
+      },
+      {
+       "type": "wide"
+      }
+     ],
+     [
+      {
+       "type": "tansho"
+      },
+      {
+       "type": "wide"
+      }
+     ],
+     [
+      {
+       "type": "fukusho"
+      },
+      {
+       "type": "wide"
+      }
+     ],
+     [
+      {
+       "type": "tansho"
+      },
+      {
+       "type": "umaren"
+      },
+      {
+       "type": "trio1"
+      }
+     ],
+     [
+      {
+       "type": "umatan"
+      },
+      {
+       "type": "wide"
+      }
+     ]
+    ],
+    "main_w": [
+     1,
+     2
+    ]
+   }
+  }
+ ]
+}

@@ -99,7 +99,12 @@ def betting_race_values():
 
 @bp.get("/auth/status")
 def auth_status():
-    return jsonify(get_auth_status())
+    import time
+
+    t0 = time.perf_counter()
+    resp = jsonify(get_auth_status())
+    resp.headers["Server-Timing"] = f"app;dur={(time.perf_counter() - t0) * 1000:.1f}"     # 計測用（時間だけ）
+    return resp
 
 
 @bp.post("/admin/git-pull")

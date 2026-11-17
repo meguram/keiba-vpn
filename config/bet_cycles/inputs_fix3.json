@@ -1,0 +1,62 @@
+{
+ "tag": "fix3",
+ "note": "最終モデル（model-improve-cycles の cycles16_fix3、2016 年起点・LOYO のアンサンブル ens5_p01s3）での回し直し。OOF は p_win だけなので、p_top2・p_top3 は割引 Harville で補う（2025 年 test はモデルの p_top2・p_top3）。p_top 入りの OOF と 2019〜2021 年の OOF が届いたら、訓練 2019〜2022・評価 2023〜24 の inputs を別に作る。",
+ "note_local": "予測はすべて手元の retrain_out（リポジトリの外）。2026 年の参考は最終モデルの 2026 年の予測が無いので、本番 v6e の予測（inputs.json と同じ）で並べる（モデルが違うことを記録に書く）。",
+ "periods": {
+  "train": {
+   "years": [
+    2022,
+    2023
+   ],
+   "pred": [
+    "/home/jovyan/work/retrain_out/cycles16_fix3/ens/ens5_p01s3.parquet"
+   ],
+   "role": "訓練（探索・採否・回顧）"
+  },
+  "eval": {
+   "years": [
+    2024
+   ],
+   "pred": [
+    "/home/jovyan/work/retrain_out/cycles16_fix3/ens/ens5_p01s3.parquet"
+   ],
+   "role": "評価（上向きの確かめだけ）"
+  },
+  "test": {
+   "years": [
+    2025
+   ],
+   "pred": [
+    "/home/jovyan/work/retrain_out/cycles16_fix3/final/test2025_predictions.parquet"
+   ],
+   "role": "test（凍結の後に 1 回だけ）",
+   "ignore_ptop": true,
+   "note": "訓練・評価（勝率だけ）と同じく、連対率・複勝率は勝率から Harville で補う（test の p_top2・p_top3 列は読まない）。最後の材料（p_top 入りの OOF）では外す。"
+  },
+  "fwd2026": {
+   "years": [
+    2026
+   ],
+   "pred": [
+    "data/local/research/persona1/frame_test_2025new_2026prod.parquet",
+    "/home/jovyan/work/retrain_out/bet_cycles/inputs/pred_2026_after1019_predictions_v3.parquet"
+   ],
+   "role": "前向きの参考（本番 v6e の予測。最終モデルではない）",
+   "note": "2026-10-18 までは persona1 の表（本番の予測）、10-24 以降は本番の当日の予測（data/local/inference/predictions_v3/<日>/ を 1 つにまとめたもの。bet_cycles と同じ列）",
+   "fill_payoff_from_flat": true
+  },
+  "fwd2026_pre": {
+   "years": [
+    2026
+   ],
+   "pred": [
+    "data/local/research/persona1/frame_test_2025new_2026prod.parquet",
+    "/home/jovyan/work/retrain_out/bet_cycles/inputs/pred_2026_after1019_predictions_v3.parquet"
+   ],
+   "pre_odds": "data/local/research/persona1/pre_odds.parquet",
+   "role": "前向きの参考（本番 v6e の予測・発走前のオッズで決めた版）",
+   "note": "2026-10-18 までは persona1 の表（本番の予測）、10-24 以降は本番の当日の予測（data/local/inference/predictions_v3/<日>/ を 1 つにまとめたもの。bet_cycles と同じ列）",
+   "fill_payoff_from_flat": true
+  }
+ }
+}

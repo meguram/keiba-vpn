@@ -77,16 +77,63 @@ def _frame_inner() -> None:
     d = with_returns(d)
     if (d["year"] > YEAR_END).any():
         sys.exit("2025 年以降の行が入っている")
-    keep = d["surf"].isin(["芝", "ダ"])
-    d = d[keep].reset_index(drop=True)
+    d, L = frame_and_levels(d)
+    d.to_parquet(OUT / "frame.parquet", index=False)
+    L.to_parquet(OUT / "levels.parquet", index=False)
+    print("frame", d.shape, "levels", L.shape, "years", int(d["year"].min()), int(d["year"].max()), flush=True)
+
+
+MIN_AVAIL_GB = float(os.environ.get("COURSE_MIN_AVAIL_GB", "40"))
+MAX_LOAD = float(os.environ.get("COURSE_MAX_LOAD", "20"))
+
+
+def _meminfo() -> dict[str, float]:
+    out = {}
+    try:
+        for ln in Path("/proc/meminfo").read_text().splitlines():
+            k, v = ln.split(":", 1)
+            out[k] = float(v.split()[0]) / 1024 / 1024     # GiB
+    except (OSError, ValueError):
+        pass
+    return out
+
+
+def mem_now() -> dict[str, float]:
+    """この処理のメモリ（いま・最大、GiB）と、計算機の空き（GiB）。止められたときの原因を追うためにログに出す。"""
+    import resource
+    rss = 0.0
+    try:
+        for ln in Path("/proc/self/status").read_text().splitlines():
+            if ln.startswith("VmRSS:"):
+                rss = float(ln.split()[1]) / 1024 / 1024
+    except OSError:
+        pass
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024 / 1024
+    return {"rss_gb": round(rss, 1), "peak_gb": round(peak, 1), "avail_gb": round(_meminfo().get("MemAvailable", 0.0), 1)}
+
+
+def wait_resources(poll: int = 60) -> None:
+    """空きメモリ MIN_AVAIL_GB 以上・load（1 分）MAX_LOAD 未満になるまで待つ（統括役の決まり。ほかの重い計算と重ねない）。"""
+    while True:
+        av = _meminfo().get("MemAvailable", 0.0)
+        ld = os.getloadavg()[0]
+        if av >= MIN_AVAIL_GB and ld < MAX_LOAD:
+            return
+        print(f"待ち: 空き {av:.1f}GB・load {ld:.1f}（{MIN_AVAIL_GB:.0f}GB 以上・{MAX_LOAD:.0f} 未満で始める）", flush=True)
+        time.sleep(poll)
+
+
+def frame_and_levels(d: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """凍結の側と評価の側で共通の前処理: 芝ダに絞り、文字の列を string にし、欠けありの数値型を float にしてから、全年・全クラス・全馬場の
+    表のまま水準を作る（騎手・厩舎の率の境目は 2017 年の重賞の行の分位で決まるので、単位に絞る前に作る。catalog._ref）。"""
+    from src.research.graded import catalog as CAT
+    d = d[d["surf"].isin(["芝", "ダ"])].reset_index(drop=True)
     for c in d.columns:
         if d[c].dtype == object:
             d[c] = d[c].astype("string")
-    d.to_parquet(OUT / "frame.parquet", index=False)
-    L = CAT.levels(_plain_numeric(d))   # 欠けありの数値型（Int64・Float64。馬体重など）は float に直してから切る（catalog.cut は to_numpy(float) で落ちる）
+    L = CAT.levels(_plain_numeric(d))
     L["__race_id"], L["__horse_id"] = d["race_id"].astype(str).to_numpy(), d["horse_id"].astype(str).to_numpy()   # 行の対応の検査用
-    L.to_parquet(OUT / "levels.parquet", index=False)
-    print("frame", d.shape, "levels", L.shape, "years", int(d["year"].min()), int(d["year"].max()), flush=True)
+    return d, L
 
 
 def _plain_numeric(d: pd.DataFrame) -> pd.DataFrame:
@@ -237,6 +284,7 @@ def cmd_cycles() -> None:
     cur = {}
     path = OUT / "course_cycles.json"
     for c, cy in enumerate(CYCLES, 1):
+        wait_resources()
         t0 = time.time()
         cand = cur | cy["delta"]
         p = SE.Params(**cand)
@@ -248,12 +296,12 @@ def cmd_cycles() -> None:
             cur = cand
         log["cycles"].append({"cycle": c, "hyp": cy["hyp"], "params": r["params"], "all": r["all"], "conf_2022_2024": r["conf_2022_2024"],
                               "achieved_units": r["achieved_units"], "units": r["units"], "closeness": r["closeness"], "adopted": adopt,
-                              "seconds": round(time.time() - t0, 1)})
+                              "seconds": round(time.time() - t0, 1), "mem": mem_now()})
         log["best_cycle"] = best["cycle"]
         path.write_text(json.dumps(log, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
         a = r["all"]
         print(f"cycle {c} {cy['hyp']} 達成 {r['achieved_units']}/{r['units']} ◎ 勝率 {a['win']} 単回収 {a['roi_t']} 買う回 {a['coverage']} "
-              f"消しのレース {a['kill_coverage']} 採用 {adopt} {time.time() - t0:.0f}s", flush=True)
+              f"消しのレース {a['kill_coverage']} 採用 {adopt} {time.time() - t0:.0f}s メモリ {mem_now()}", flush=True)
     log["finished_at"] = datetime.now(JST).isoformat(timespec="seconds")
     path.write_text(json.dumps(log, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
     # 最後に採った版の条件を、単位ごとに書き出す（凍結の材料）
@@ -262,11 +310,228 @@ def cmd_cycles() -> None:
     (OUT / "course_best.json").write_text(json.dumps(fin, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
 
 
+KILL_GRID = [(n, k) for k in (1, 2) for n in (5, 10, 15, 20)]   # 消しの走数の下限 × 深さ
+KILL_GOAL = {"precision": 0.95, "per_race": 3}
+
+
+def wilson_lb(p: float | None, n: int, z: float = 1.96) -> float:
+    """割合 p（n 件）の 95% 信頼区間の下限（Wilson）。件数の少ない候補が偶然 95% を超えて採られないように使う。"""
+    if p is None or not n:
+        return 0.0
+    d = 1 + z * z / n
+    c = p + z * z / (2 * n)
+    r = z * ((p * (1 - p) + z * z / (4 * n)) / n) ** 0.5
+    return (c - r) / d
+
+
+def pick_kill(rows: list[dict]) -> dict:
+    """消しの選び直しの採否: 2022〜2024 年（探したのは 2016〜2021 年）で、消しの的中（4 着以下の割合）の信頼区間の下限が 95% 以上の候補のうち、
+    消しを付けたレース（3 頭以上）の割合が最も大きいもの。無ければ、その下限が最も高いもの。"""
+    lb = lambda r: wilson_lb(r.get("kill_precision"), int(r.get("killed") or 0))   # noqa: E731
+    ok = [r for r in rows if lb(r) >= KILL_GOAL["precision"]]
+    if ok:
+        return max(ok, key=lambda r: (r["kill_coverage"] or 0, lb(r)))
+    return max(rows, key=lambda r: (lb(r), r.get("kill_coverage") or 0))
+
+
+def cmd_kill_select() -> None:
+    """20 サイクルの後、凍結の前: 消しの決め方を選び直す。当てはめ（探した走で数える）では消しは定義上すべて 4 着以下になり比べられないので、
+    2016〜2024 年の中を分け、2016〜2021 年で探して 2022〜2024 年で確かめる（2025・2026 年は使わない）。◎ の版は 20 サイクルの最良のまま。
+    選んだ消しで 2016〜2024 年全体を探し直し、サイクル 21 として記録し、course_best.json を書き直す。"""
+    from src.research.course import search as SE
+    path = OUT / "course_cycles.json"
+    log = json.loads(path.read_text(encoding="utf-8"))
+    if not log.get("finished_at"):
+        sys.exit("20 サイクルが終わっていない")
+    if PREREG.exists() or EVAL_MARK.exists():
+        sys.exit("凍結・評価の後に消しを選び直さない")
+    if any(c.get("kill_select") for c in log["cycles"]):
+        sys.exit("消しの選び直しは済んでいる")
+    base = next(c for c in log["cycles"] if c["cycle"] == log["best_cycle"])["params"]
+    d, L = load_units()
+    yr = pd.to_numeric(d["year"]).to_numpy()
+    dis, chk = yr <= 2021, (yr >= 2022) & (yr <= YEAR_END)
+    if (yr > YEAR_END).any():
+        raise ValueError("2025 年以降の行が入っている")
+    # 探す期間は全体の約 2/3 のレースなので、走数・回数の下限（絶対値）を同じ割合で縮める（全期間で探し直したときと、条件の集まり・主副の内訳をそろえる）
+    frac = d.loc[dis, "race_id"].nunique() / d["race_id"].nunique()
+    rows = []
+    T0 = time.time()
+    for n, k in KILL_GRID:
+        wait_resources()
+        t0 = time.time()
+        cand = {kk: v for kk, v in base.items() if kk != "name"} | {"kill_n": n, "kill_depth": k}
+        pd_ = SE.Params(**(cand | {"kill_n": max(1, round(n * frac)), "min_races": max(1, round(cand.get("min_races", 20) * frac)),
+                                   "n_min": max(1, round(cand.get("n_min", 2) * frac)) if cand.get("n_min", 2) > 2 else cand.get("n_min", 2)}))
+        fit = run_config(d[dis].reset_index(drop=True), L[dis].reset_index(drop=True), pd_, keep_cells=True)
+        ev = evaluate_frozen(d[chk].reset_index(drop=True), L[chk].reset_index(drop=True), {"params": SE.params_dict(pd_)}, fit["cells"])
+        a = ev["all"]
+        lay = pd.Series([u["layer"] for u in fit["per_unit"]]).value_counts().to_dict()
+        rows.append({"kill_n": n, "kill_depth": k, "scaled": {"kill_n": pd_.kill_n, "min_races": pd_.min_races, "n_min": pd_.n_min, "frac": round(frac, 4)},
+                     "kill_precision": a["kill_precision"], "kill_precision_lb": wilson_lb(a["kill_precision"], int(a["killed"] or 0)),
+                     "kill_coverage": a["kill_coverage"], "kill_per_race": a["kill_per_race"], "killed": a["killed"], "kill_races": a["kill_races"],
+                     "layers": lay, "unmatched_levels": ev["unmatched_levels"], "seconds": round(time.time() - t0, 1), "mem": mem_now()})
+        print(f"消し 走数{n}・深さ{k}（探す期間では {pd_.kill_n}）: 2022〜2024 の的中 {a['kill_precision']}（下限 {rows[-1]['kill_precision_lb']:.4f}・{a['killed']} 頭） 消しのレース {a['kill_coverage']} 1 レース {a['kill_per_race']} "
+              f"{time.time() - t0:.0f}s メモリ {mem_now()}", flush=True)
+    sel = pick_kill(rows)
+    cand = {kk: v for kk, v in base.items() if kk != "name"} | {"kill_n": sel["kill_n"], "kill_depth": sel["kill_depth"]}
+    t0 = time.time()
+    best = run_config(d, L, SE.Params(**cand), keep_cells=True)
+    c = len(log["cycles"]) + 1
+    log["cycles"].append({"cycle": c, "hyp": f"消しの選び直し（2016〜2021 年で探し、2022〜2024 年の消しの的中で選ぶ）→ 走数{sel['kill_n']}・深さ{sel['kill_depth']}",
+                          "note": "選んだ後に 2016〜2024 年全体で探し直したので、条件の集まりは選んだときと同じではない（下限は期間の長さに合わせて縮めて探した）。"
+                                  "◎ の版（サイクル 9 まで）は 2022〜2024 年も含めた当てはめで選んだので、確かめた期間は完全には未使用でない。",
+                          "params": best["params"], "all": best["all"], "conf_2022_2024": best["conf_2022_2024"],
+                          "achieved_units": best["achieved_units"], "units": best["units"], "closeness": best["closeness"], "adopted": True,
+                          "kill_select": {"goal": KILL_GOAL, "rule": "信頼区間の下限（Wilson）が 95% 以上の候補で、消しを付けたレースの割合が最大",
+                                          "grid": rows, "selected": sel},
+                          "seconds": round(time.time() - T0, 1), "seconds_refit": round(time.time() - t0, 1), "mem": mem_now()})
+    log["best_cycle"] = c
+    log["kill_selected_at"] = datetime.now(JST).isoformat(timespec="seconds")
+    # 先に条件の表（course_best.json）を置き換え、そのあと記録を置き換える（間で落ちても、記録は前のまま → やり直せる）
+    bp = OUT / "course_best.json"
+    tmpb = bp.with_suffix(".json.tmp")
+    tmpb.write_text(json.dumps(best | {"cycle": c}, ensure_ascii=False, default=float), encoding="utf-8")
+    os.replace(tmpb, bp)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(log, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+    os.replace(tmp, path)
+    print("選んだ消し", sel, flush=True)
+
+
+PREREG = Path(__file__).with_name("prereg_course.json")              # 凍結（commit する）。差し替えの環境変数は持たない
+EVAL_MARK = Path(__file__).with_name("EVALUATED_COURSE.json")       # 評価済みの印（commit する。作業場所ではなくリポジトリに置く）
+
+
+def _sha_file(p: Path) -> str:
+    import hashlib
+    return hashlib.sha256(p.read_bytes()).hexdigest()
+
+
+def cmd_freeze() -> None:
+    """最後に採った版（course_best.json）を凍結する: 条件の表を <COURSE_OUT>/course_cells.json に書き、版・sha を prereg_course.json に書く
+    （prereg は commit する。評価はこの後に 1 回だけ）。凍結済み・評価済みなら止める。"""
+    if PREREG.exists() and os.environ.get("COURSE_RESELECT") != "1":
+        sys.exit(f"{PREREG} は凍結済み")
+    if EVAL_MARK.exists():
+        sys.exit(f"評価済みの印 {EVAL_MARK} がある。凍結し直さない")
+    B = json.loads((OUT / "course_best.json").read_text(encoding="utf-8"))
+    L = json.loads((OUT / "course_cycles.json").read_text(encoding="utf-8"))
+    if not L.get("finished_at"):
+        sys.exit("サイクルが最後まで回っていない（途中で止まった記録は凍結しない）")
+    bc = next((c for c in L["cycles"] if c["cycle"] == L.get("best_cycle")), None)
+    if bc is None or {k: v for k, v in bc["params"].items()} != B["params"]:
+        sys.exit("course_best.json の版が、記録の最良のサイクルの版と違う")
+    cells = OUT / "course_cells.json"
+    cells.write_text(json.dumps(B["cells"], ensure_ascii=False, sort_keys=True), encoding="utf-8")
+    body = {"frozen_at": datetime.now(JST).isoformat(timespec="seconds"),
+            "note": "全レース版の最後に採った版。2016〜2024 年に合わせて選んだ（過学習してよい）。2025・2026 年は見ていない。この後に 1 回だけ評価し、評価の後に変えない",
+            "params": B["params"], "best_cycle": L.get("best_cycle"), "cycles_finished_at": L.get("finished_at"),
+            "fit_2016_2024": B["all"], "achieved_units": B["achieved_units"], "units": B["units"],
+            "cells_file": "course_cells.json", "sha256_cells": _sha_file(cells),
+            "track_rule": "単位は良馬場で行われたレース。評価では実際に良馬場だったレースに当てはめる（前日の予想では馬場は見込み）"}
+    PREREG.write_text(json.dumps(body, ensure_ascii=False, indent=1), encoding="utf-8")
+    print("frozen", PREREG)
+
+
+def evaluate_frozen(d: pd.DataFrame, L: pd.DataFrame, P: dict, cells: dict) -> dict:
+    """凍結した条件を、2025・2026 年の単位（同じ群の分け方）に当てはめた値。条件の型・水準の名前を、評価の表の番号に直して、
+    凍結の側と同じ選び方（search.apply_cells）で ◎ と消しを決める。評価の表に一度も出ない水準・型の列が無いことは記録する（型の列が無ければ止める）。"""
+    from src.research.course import search as SE
+    from src.research.graded import buy as BY
+    p = SE.Params(**{k: v for k, v in P["params"].items() if k != "name"})
+    types = sorted({t for cu in cells.values() for kind in ("buy", "kill") for c in cu[kind] for t in c["types"]})
+    miss = [t for t in types if t not in L.columns]
+    if miss:
+        raise ValueError(f"評価の表に型の列が無い: {miss}")
+    X, names = BY.encode(L, types) if types else (np.zeros((len(L), 0), np.int32), {})
+    code = {t: {v: i for i, v in enumerate(names[t])} for t in types}
+    unmatched = 0
+
+    def conv(c):
+        nonlocal unmatched
+        cs = []
+        for t, lv in zip(c["types"], c["levels"]):
+            if lv not in code[t]:
+                unmatched += 1
+            cs.append(code[t].get(lv, -2))      # 評価の表に出ない水準は、どの行にも当たらない番号
+        return {"ts": tuple(types.index(t) for t in c["types"]), "cs": tuple(cs), "rate": c.get("rate", 1.0)}
+    Y = SE.y_matrix(d)
+    unit = regroup(d, p.groups).to_numpy()
+    race = d["race_id"].astype(str).to_numpy()
+    hn = pd.to_numeric(d["hn"], errors="coerce").fillna(99).to_numpy()
+    H, K, per = [], np.zeros(len(d), bool), []
+    for u in sorted(set(unit)):
+        idx = np.flatnonzero(unit == u)
+        nr = len(set(race[idx]))
+        cu = cells.get(u)
+        if cu is None:   # 2016〜2024 年に無い単位は買わない
+            per.append({"unit": u, "races": nr, "no_rule": True})
+            continue
+        cc = {"buy": [conv(c) for c in cu["buy"]], "kill": [conv(c) for c in cu["kill"]]}
+        hm, kl = SE.apply_cells(X[idx], race[idx], hn[idx], cc, p.weight)
+        hrows = idx[list(hm.values())] if hm else np.array([], int)
+        H.append(hrows)
+        K[idx[kl]] = True
+        per.append({"unit": u, **SE.metrics(Y, race, hrows, idx[kl], nr)})
+    H = np.concatenate(H) if H else np.array([], int)
+    return {"all": SE.metrics(Y, race, H, np.flatnonzero(K), len(set(race))), "per_unit": per, "unmatched_levels": unmatched}
+
+
+def cmd_evaluate() -> None:
+    import hashlib
+    """凍結の後に 1 回だけ: 2025・2026 年の表（別の置き場 <COURSE_OUT>/eval）で、凍結した条件を当てはめる。凍結が commit されていなければ止める。"""
+    P = json.loads(PREREG.read_text(encoding="utf-8"))
+    cells_p = OUT / P["cells_file"]
+    if _sha_file(cells_p) != P["sha256_cells"]:
+        sys.exit("条件の表が凍結の sha と違う")
+    r = subprocess.run(["git", "-C", str(REPO), "ls-files", "--error-unmatch", str(PREREG)], capture_output=True)
+    if r.returncode != 0 or subprocess.run(["git", "-C", str(REPO), "diff", "--quiet", "HEAD", "--", str(PREREG)]).returncode != 0:
+        sys.exit("prereg_course.json が commit されていない（凍結を commit してから評価する）")
+    import secrets
+    if EVAL_MARK.exists():
+        sys.exit("評価は済んでいる（リポジトリの印。1 回だけ）")
+    token = secrets.token_hex(16)
+    # 結果を出す前に、評価済みの印を先に立てる（重賞版と同じ。途中で落ちても、結果を見たうえでのやり直しをさせない）
+    EVAL_MARK.write_text(json.dumps({"started_at": datetime.now(JST).isoformat(timespec="seconds"), "prereg_sha_cells": P["sha256_cells"],
+                                     "token_sha": hashlib.sha256(token.encode()).hexdigest()}), encoding="utf-8")
+    ev_out = OUT / "eval"
+    e = env(2026) | {"FOLKLORE_OUT": str(ev_out / "master"), "GRADED_OUT": str(ev_out), "COURSE_EVAL_TOKEN": token}
+    subprocess.run([sys.executable, "-m", "src.scripts.data.folklore_build"], env=e, cwd=REPO, check=True)
+    subprocess.run([sys.executable, "-m", "src.research.course.run", "_eval_inner"], env=e | {"COURSE_OUT": str(OUT)}, cwd=REPO, check=True)
+
+
+def _eval_inner() -> None:
+    """cmd_evaluate からだけ呼ぶ（一度きりのトークンと、リポジトリの印・凍結の sha を照らす）。"""
+    import hashlib
+    from src.research.graded import features as F
+    from src.research.graded.run import with_returns
+    tok = os.environ.get("COURSE_EVAL_TOKEN", "")
+    mark = json.loads(EVAL_MARK.read_text(encoding="utf-8")) if EVAL_MARK.exists() else {}
+    if not tok or mark.get("token_sha") != hashlib.sha256(tok.encode()).hexdigest() or "evaluated_at" in mark:
+        sys.exit("評価は cmd_evaluate から 1 回だけ流す")
+    P = json.loads(PREREG.read_text(encoding="utf-8"))
+    if _sha_file(OUT / P["cells_file"]) != P["sha256_cells"] or mark.get("prereg_sha_cells") != P["sha256_cells"]:
+        sys.exit("条件の表が凍結の sha と違う")
+    d, L = frame_and_levels(with_returns(F.build(out=None)))       # 凍結の側と同じ前処理（全年の表で水準を作ってから絞る）
+    keep = ((pd.to_numeric(d["year"]) >= 2025) & (d["track"].astype(str) == "良") & d["cls"].map(group_of).notna()).to_numpy()
+    d, L = d[keep].reset_index(drop=True), L[keep].reset_index(drop=True).drop(columns=["__race_id", "__horse_id"])
+    d["group"] = d["cls"].map(group_of)
+    cells = json.loads((OUT / P["cells_file"]).read_text(encoding="utf-8"))
+    res = evaluate_frozen(d, L, P, cells) | {"evaluated_at": datetime.now(JST).isoformat(timespec="seconds"), "fit_2016_2024": P["fit_2016_2024"],
+                                              "params": P["params"], "races": int(d["race_id"].nunique())}
+    (OUT / "eval_course.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+    EVAL_MARK.write_text(json.dumps(mark | {"evaluated_at": res["evaluated_at"]}), encoding="utf-8")   # この印を commit する
+    a, f = res["all"], P["fit_2016_2024"]
+    print(f"評価 2025・2026: ◎ 勝率 {a['win']} 単回収 {a['roi_t']}（当てはめ 2016〜2024: {f['win']} / {f['roi_t']}）", flush=True)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("cmd", choices=["frame", "_frame_inner", "cycles"])
+    ap.add_argument("cmd", choices=["frame", "_frame_inner", "cycles", "kill_select", "freeze", "evaluate", "_eval_inner"])
     a = ap.parse_args()
-    {"frame": cmd_frame, "_frame_inner": _frame_inner, "cycles": cmd_cycles}[a.cmd]()
+    {"frame": cmd_frame, "_frame_inner": _frame_inner, "cycles": cmd_cycles, "kill_select": cmd_kill_select, "freeze": cmd_freeze, "evaluate": cmd_evaluate,
+     "_eval_inner": _eval_inner}[a.cmd]()
 
 
 if __name__ == "__main__":

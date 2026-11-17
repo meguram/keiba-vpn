@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# git pull / git merge 後に Next.js ビルドキャッシュを自動クリアする
+# フロントエンドのソースが変わっていれば古いキャッシュが残って表示が更新されないのを防ぐ
+#
+# 入れ方: bash scripts/dev/install_git_hooks.sh（.git/hooks/post-merge に写す。手順は docs/operations/stg_frontend_prod_build.md）
+#
+# ROOT は「マージした作業ツリー」の最上位にする（git rev-parse --show-toplevel）。
+# 以前はフックのファイルの場所（共有の .git/hooks）から作っていたため、どの worktree でマージしても
+# 共有の作業ツリーの frontend/.next* を消しに行っていた（2026-11-16）。
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [ -z "$ROOT" ] || [ ! -d "$ROOT/frontend" ]; then
+  exit 0
+fi
+FRONTEND="$ROOT/frontend"
+
+# フロントエンドのソースが今回の merge で変更されたか確認
+CHANGED=$(git diff-tree -r --name-only --no-commit-id ORIG_HEAD HEAD 2>/dev/null \
+  | grep -E "^frontend/" | head -1)
+
+if [ -z "$CHANGED" ]; then
+  exit 0
+fi
+
+echo "[post-merge] フロントエンドのソースが変更されました — Next.js キャッシュをクリアします（$FRONTEND）..."
+
+for dir in ".next" ".next-dev" ".next-stg" ".next-prod"; do
+  target="$FRONTEND/$dir"
+  if [ -d "$target" ]; then
+    if rm -rf "$target" 2>/dev/null; then
+      echo "[post-merge] 削除: $dir"
+    else
+      echo "[post-merge] 削除できなかった（権限など）: $dir"
+    fi
+  fi
+done
+
+echo "[post-merge] キャッシュクリア完了。サービスを再起動してください（自動再起動は watchdog が担当）。"

@@ -1,0 +1,9 @@
+{
+ "note": "方策の候補の束 4（cycle 12〜）。◎ = 2 番人気以下で期待値最大（予測 8 位以内・期待値 1 以上、1 番人気は連対率の予測がしきい値（bet_cycles fav1 が訓練で決める。v6e は 0.85）以上の例外のみ）。◎ の人気の下限（人気・穴の境目）× 相手 × 券種。",
+ "grids": [
+  {"prefix": "p4", "base": {"honmei": {"rule": "fav1_exc", "p2_min": "auto", "base": {"rule": "ana_ev", "fav_k": 1, "max_rank": 8, "ev_min": 1.0}}, "partners": {"mode": "p3", "n": 2}},
+   "axes": {"skip": [{"h_pop_min": 3}, {"h_pop_min": 4}, {"h_pop_min": 5}, {"h_pop_min": 6}],
+            "partners": [{"mode": "p3", "n": 2}, {"mode": "fav", "n": 2, "fav_k": 3}, {"mode": "mix", "n": 2, "n_ana": 1, "fav_k": 3}],
+            "tickets": [[{"type": "wide"}], [{"type": "wide"}, {"type": "trio1"}], [{"type": "tansho"}, {"type": "wide"}], [{"type": "fukusho"}, {"type": "wide"}], [{"type": "umaren"}, {"type": "wide"}]]}}
+ ]
+}

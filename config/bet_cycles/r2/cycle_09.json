@@ -1,0 +1,126 @@
+{
+ "n": 9,
+ "min_hit": 0.08,
+ "rank_by": "robust",
+ "title": "第2回: r の ◎ と期待値の ◎ の比べ（同じ見送り・券種で）",
+ "hypothesis": "r で選ぶ ◎ は、期待値（確定オッズ × 勝率）で選ぶ ◎ より、オッズの揺れに強く回収率も高い。",
+ "change": "◎ 4 通り（r 最大・期待値最大・r 最大で r 0.1 以上・期待値最大で期待値 1.1 以上）× 見送り 3 通り × 券種 3 通り。",
+ "group_by": [
+  "honmei",
+  "skip"
+ ],
+ "grids": [
+  {
+   "prefix": "r2c09",
+   "base": {
+    "honmei": {
+     "rule": "fav1_exc",
+     "exc_by": "r",
+     "r_min": "auto",
+     "base": {
+      "rule": "r_max",
+      "fav_k": 1,
+      "p_min": 0.05
+     }
+    },
+    "partners": {
+     "mode": "p3",
+     "n": 2
+    },
+    "tickets": [
+     {
+      "type": "wide"
+     }
+    ]
+   },
+   "axes": {
+    "honmei": [
+     {
+      "rule": "fav1_exc",
+      "exc_by": "r",
+      "r_min": "auto",
+      "base": {
+       "rule": "r_max",
+       "fav_k": 1,
+       "p_min": 0.05
+      }
+     },
+     {
+      "rule": "fav1_exc",
+      "exc_by": "r",
+      "r_min": "auto",
+      "base": {
+       "rule": "ana_ev",
+       "fav_k": 1,
+       "max_rank": 8
+      }
+     },
+     {
+      "rule": "fav1_exc",
+      "exc_by": "r",
+      "r_min": "auto",
+      "base": {
+       "rule": "r_max",
+       "fav_k": 1,
+       "p_min": 0.05,
+       "r_min": 0.1
+      }
+     },
+     {
+      "rule": "fav1_exc",
+      "exc_by": "r",
+      "r_min": "auto",
+      "base": {
+       "rule": "ana_ev",
+       "fav_k": 1,
+       "max_rank": 8,
+       "ev_min": 1.1
+      }
+     }
+    ],
+    "skip": [
+     {},
+     {
+      "when": {
+       "q_r_max": [
+        3,
+        null
+       ]
+      }
+     },
+     {
+      "when": {
+       "q_ev_max": [
+        3,
+        null
+       ]
+      }
+     }
+    ],
+    "tickets": [
+     [
+      {
+       "type": "wide"
+      }
+     ],
+     [
+      {
+       "type": "wide"
+      },
+      {
+       "type": "trio1"
+      }
+     ],
+     [
+      {
+       "type": "tansho"
+      },
+      {
+       "type": "wide"
+      }
+     ]
+    ]
+   }
+  }
+ ]
+}

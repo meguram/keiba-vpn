@@ -1,0 +1,91 @@
+{
+ "n": 3,
+ "min_hit": 0.08,
+ "rank_by": "robust",
+ "title": "第2回: 相手の選び方（型A 人気の相手・型B 広く・複勝率上位）",
+ "hypothesis": "r の ◎ は人気薄が多いので、相手は複勝率の高い人気馬に絞る方が回収率が上がる（型 A）。",
+ "change": "r 最大の ◎（勝率 5% 以上）× 相手 5 通り（複勝率上位 2・3 頭、3 番人気以内の 2・3 頭、人気 2＋穴 1）× 券種 4 通り。",
+ "group_by": [
+  "partners",
+  "tickets"
+ ],
+ "grids": [
+  {
+   "prefix": "r2c03",
+   "base": {
+    "honmei": {
+     "rule": "fav1_exc",
+     "exc_by": "r",
+     "r_min": "auto",
+     "base": {
+      "rule": "r_max",
+      "fav_k": 1,
+      "p_min": 0.05
+     }
+    },
+    "partners": {
+     "mode": "p3",
+     "n": 2
+    },
+    "tickets": [
+     {
+      "type": "wide"
+     }
+    ]
+   },
+   "axes": {
+    "partners": [
+     {
+      "mode": "p3",
+      "n": 2
+     },
+     {
+      "mode": "p3",
+      "n": 3
+     },
+     {
+      "mode": "fav",
+      "n": 2,
+      "fav_k": 3
+     },
+     {
+      "mode": "fav",
+      "n": 3,
+      "fav_k": 3
+     },
+     {
+      "mode": "mix",
+      "n": 2,
+      "n_ana": 1,
+      "fav_k": 3
+     }
+    ],
+    "tickets": [
+     [
+      {
+       "type": "wide"
+      }
+     ],
+     [
+      {
+       "type": "umaren"
+      }
+     ],
+     [
+      {
+       "type": "trio1"
+      }
+     ],
+     [
+      {
+       "type": "wide"
+      },
+      {
+       "type": "trio1"
+      }
+     ]
+    ]
+   }
+  }
+ ]
+}

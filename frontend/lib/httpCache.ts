@@ -103,6 +103,15 @@ export function fetchAuthStatus(): Promise<AuthStatusJson> {
   });
 }
 
+/** ログインの応答に入っている認証状態（GET /api/v1/auth/status と同じ形）で、状態のキャッシュを埋める。ログイン直後の画面が状態を取り直す往復を省く。 */
+export function primeAuthStatus(a: AuthStatusJson): void {
+  const url = "/api/v1/auth/status";
+  cache.clear();                    // ログインで区分が変わるので、匿名のときに取った応答はメモリからも捨てる
+
+  setStoredTier(a.logged_in ? (a.is_admin ? "admin" : a.is_member ? "member" : "user") : "anon");
+  cache.set(url, { at: Date.now(), promise: Promise.resolve(a) });
+}
+
 /** 開催日（YYYYMMDD）のレース一覧。サーバ側が重い API なので、画面間で共有する。 */
 export function fetchRaceList(date: string, ttlMs = 60_000): Promise<unknown> {
   return getJson<unknown>(`/api/race-list/${date}`, { ttlMs });

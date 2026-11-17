@@ -1,0 +1,90 @@
+{
+ "n": 11,
+ "min_hit": 0.08,
+ "rank_by": "robust",
+ "title": "第2回: 三連単・馬単（1 着固定）の参考",
+ "hypothesis": "r の ◎ は 1 着の確率が市場より高いと見ている馬なので、馬単・三連単の 1 着固定で払戻の跳ねを取れる。ただし的中率は低い（下限 8% で落ちる見込み）。",
+ "change": "r 最大の ◎ × 馬単 ◎→複勝率上位 2・3 頭、三連単 ◎→○▲→○▲△、と ワイドの押さえ。",
+ "group_by": [
+  "tickets"
+ ],
+ "grids": [
+  {
+   "prefix": "r2c11",
+   "base": {
+    "honmei": {
+     "rule": "fav1_exc",
+     "exc_by": "r",
+     "r_min": "auto",
+     "base": {
+      "rule": "r_max",
+      "fav_k": 1,
+      "p_min": 0.05
+     }
+    },
+    "partners": {
+     "mode": "p3",
+     "n": 3
+    },
+    "tickets": [
+     {
+      "type": "umatan"
+     }
+    ]
+   },
+   "axes": {
+    "tickets": [
+     [
+      {
+       "type": "umatan",
+       "k": 2
+      }
+     ],
+     [
+      {
+       "type": "umatan",
+       "k": 3
+      }
+     ],
+     [
+      {
+       "type": "tri_form",
+       "m": 1
+      }
+     ],
+     [
+      {
+       "type": "wide",
+       "k": 2
+      },
+      {
+       "type": "umatan",
+       "k": 2
+      }
+     ],
+     [
+      {
+       "type": "wide",
+       "k": 2
+      },
+      {
+       "type": "tri_form",
+       "m": 1
+      }
+     ]
+    ],
+    "skip": [
+     {},
+     {
+      "when": {
+       "q_r_max": [
+        3,
+        null
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

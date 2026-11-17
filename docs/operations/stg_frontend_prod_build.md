@@ -36,6 +36,13 @@
 
 **dev → 本番ビルドの初回**: `.next-stg` には `next dev` 由来のキャッシュが入っている（`BUILD_ID` が無い）。手順 2（別ディレクトリに作る間、dev のまま配信が続く）→ 3 で、dev の出力は `.next-stg.old` に退避され、成功確認後に削除される。
 
+## post-merge のフック（Next のキャッシュを消す）
+
+- 元のファイルは `scripts/dev/git-hooks/post-merge`（git の管理下）。`.git/hooks/` は管理の外なので、直したら入れ直す: `bash scripts/dev/install_git_hooks.sh`（共有の `.git/hooks/` に写す。worktree から動かしても同じ場所に入る）。共有の作業ツリーの `.git/hooks` が root 所有のマシンでは `sudo -n bash scripts/dev/install_git_hooks.sh`。直す前のフックが残っている各 PC（ホストを含む）で 1 回ずつ行う。
+- 中身: マージで `frontend/` が変わったとき、**マージした作業ツリー**（`git rev-parse --show-toplevel`）の `frontend/.next`・`.next-dev`・`.next-stg`・`.next-prod` を消す。
+- 2026-11-16 までは、作業ツリーをフックの場所（共有の `.git/hooks`）から求めていたため、worktree でマージしても共有の作業ツリー（ホストの stg・dev が動くツリー）の `.next*` を消しに行っていた。今は worktree でのマージは、その worktree だけを対象にする（テスト: `tests/scripts/test_post_merge_hook.py`）。
+- 共有の作業ツリーでの `git pull`・`merge` は、従来どおり `.next-stg` を消す（動いている next が 500 になる）。反映は上の手順 1 のとおり `git checkout <hash> -- <ファイル>` で行う。
+
 ## リスクと注意
 - 反映のたびに「ビルド → 切替」が要る（`next dev` のホットリロードは無い）。ソースが変わっても、切替するまで画面は旧ビルドのまま。
 - ビルド中はホストの CPU を使う（nice 19・並列 2 で抑えているが、load が高いときは数分かかる）。ビルドが終わらない・負荷が上がる場合は `ps` でビルドの PID を確認して止める（`.next-stg-build` は捨ててよい）。

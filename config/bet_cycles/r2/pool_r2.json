@@ -1,0 +1,125 @@
+{
+ "note": "第2回の方策の候補の束（r 最大の ◎ を中心に、的中率 8% 以上になりやすい形）",
+ "grids": [
+  {
+   "prefix": "pr2",
+   "base": {
+    "honmei": {
+     "rule": "fav1_exc",
+     "exc_by": "r",
+     "r_min": "auto",
+     "base": {
+      "rule": "r_max",
+      "fav_k": 1,
+      "p_min": 0.05
+     }
+    },
+    "partners": {
+     "mode": "p3",
+     "n": 2
+    }
+   },
+   "axes": {
+    "partners": [
+     {
+      "mode": "p3",
+      "n": 2
+     },
+     {
+      "mode": "fav",
+      "n": 2,
+      "fav_k": 3
+     }
+    ],
+    "skip": [
+     {},
+     {
+      "h_pop_min": 4
+     }
+    ],
+    "tickets": [
+     [
+      {
+       "type": "wide"
+      }
+     ],
+     [
+      {
+       "type": "wide"
+      },
+      {
+       "type": "trio1"
+      }
+     ],
+     [
+      {
+       "type": "tansho"
+      },
+      {
+       "type": "wide"
+      }
+     ],
+     [
+      {
+       "type": "fukusho"
+      },
+      {
+       "type": "wide"
+      }
+     ]
+    ]
+   }
+  },
+  {
+   "prefix": "pr2E",
+   "base": {
+    "honmei": {
+     "rule": "fav1_exc",
+     "exc_by": "r",
+     "r_min": "auto",
+     "base": {
+      "rule": "ana_ev",
+      "fav_k": 1,
+      "max_rank": 8,
+      "ev_min": 1.0
+     }
+    },
+    "partners": {
+     "mode": "p3",
+     "n": 2
+    }
+   },
+   "axes": {
+    "skip": [
+     {},
+     {
+      "h_pop_min": 4
+     }
+    ],
+    "tickets": [
+     [
+      {
+       "type": "wide"
+      }
+     ],
+     [
+      {
+       "type": "wide"
+      },
+      {
+       "type": "trio1"
+      }
+     ],
+     [
+      {
+       "type": "tansho"
+      },
+      {
+       "type": "wide"
+      }
+     ]
+    ]
+   }
+  }
+ ]
+}

@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { invalidateJson } from "@/lib/httpCache";
+import { invalidateJson, primeAuthStatus, type AuthStatusJson } from "@/lib/httpCache";
+import { lockedMessage } from "@/lib/loginMessage";
 
 export default function LoginPage() {
   const [userId, setUserId] = useState("");
@@ -25,11 +26,18 @@ export default function LoginPage() {
         body: JSON.stringify({ id: userId.trim(), password, remember }),
       });
       if (!res.ok) {
-        setError("ログインID またはパスワードが正しくありません");
+        if (res.status === 429) {
+          const body = (await res.json().catch(() => null)) as { retry_after?: number } | null;
+          setError(lockedMessage(body?.retry_after ?? Number(res.headers.get("Retry-After") || 0)));
+        } else {
+          setError("ログインID またはパスワードが正しくありません");
+        }
         setBusy(false);
         return;
       }
-      invalidateJson("/api/v1/auth/status");
+      const body = (await res.json().catch(() => null)) as { auth?: AuthStatusJson } | null;
+      if (body?.auth) primeAuthStatus(body.auth);
+      else invalidateJson("/api/v1/auth/status");
       router.push("/");
     } catch {
       setError("通信に失敗しました。もう一度お試しください");
