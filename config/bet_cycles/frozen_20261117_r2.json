@@ -1,0 +1,336 @@
+{
+ "frozen_at": "2026-11-17",
+ "tag": "r2",
+ "inputs": {
+  "tag": "r2",
+  "note": "第 2 回: 第 2 段のモデル（市場とのずれを学習、T-60 の雑音つきの版）。予測は 1 ファイル（part・odds_phase で絞る）。訓練 2019〜22・評価 2023〜24 は oof の確定の時点、test 2025 は 2 回目の確かめ（第 1 回で 1 回使った）、2026 年は推論の入力に当てた予測（確定の版と T-60 の版）。",
+  "note_local": "予測は手元の retrain_out（リポジトリの外）。",
+  "periods": {
+   "train": {
+    "years": [
+     2019,
+     2020,
+     2021,
+     2022
+    ],
+    "pred": [
+     {
+      "path": "/home/jovyan/work/retrain_out/cycles16_fix3/market/handoff/stage2_noise.parquet",
+      "where": {
+       "part": "oof",
+       "odds_phase": "final"
+      }
+     }
+    ],
+    "fill_payoff_from_flat": true,
+    "role": "訓練（探索・採否・回顧）",
+    "decision_odds": {
+     "kind": "sim_pre",
+     "phase": "t60",
+     "n": 5
+    }
+   },
+   "eval": {
+    "years": [
+     2023,
+     2024
+    ],
+    "pred": [
+     {
+      "path": "/home/jovyan/work/retrain_out/cycles16_fix3/market/handoff/stage2_noise.parquet",
+      "where": {
+       "part": "oof",
+       "odds_phase": "final"
+      }
+     }
+    ],
+    "role": "評価（上向きの確かめだけ）",
+    "decision_odds": {
+     "kind": "sim_pre",
+     "phase": "t60",
+     "n": 5
+    }
+   },
+   "test": {
+    "years": [
+     2025
+    ],
+    "pred": [
+     {
+      "path": "/home/jovyan/work/retrain_out/cycles16_fix3/market/handoff/stage2_noise.parquet",
+      "where": {
+       "part": "test2025",
+       "odds_phase": "final"
+      }
+     }
+    ],
+    "role": "test 2025（2 回目の確かめ。第 1 回で 1 回使った）",
+    "decision_odds": {
+     "kind": "sim_pre",
+     "phase": "t60",
+     "n": 5
+    }
+   },
+   "fwd2026": {
+    "years": [
+     2026
+    ],
+    "pred": [
+     {
+      "path": "/home/jovyan/work/retrain_out/cycles16_fix3/market/handoff/stage2_noise.parquet",
+      "where": {
+       "part": "infer2026",
+       "odds_phase": "final"
+      }
+     }
+    ],
+    "fill_payoff_from_flat": true,
+    "role": "前向きの参考（第 2 段の予測を 2026 年の推論の入力に当てたもの・確定オッズの offset）",
+    "decision_odds": {
+     "kind": "sim_pre",
+     "phase": "t60",
+     "n": 5
+    }
+   },
+   "fwd2026_pre": {
+    "years": [
+     2026
+    ],
+    "pred": [
+     {
+      "path": "/home/jovyan/work/retrain_out/cycles16_fix3/market/handoff/stage2_noise.parquet",
+      "where": {
+       "part": "infer2026",
+       "odds_phase": "final"
+      }
+     }
+    ],
+    "pre_odds": "data/local/research/persona1/pre_odds.parquet",
+    "pre_phase": [
+     "t60"
+    ],
+    "fill_payoff_from_flat": true,
+    "role": "前向きの参考（2026 年の推論の入力に当てた予測・本物の発走前オッズ T-60 で ◎・人気を決める版。T-60 の offset の予測が届いたら差し替える）。偏りの注意: ◎・人気は本物の T-60 で決めるが、予測の p・r は確定オッズの offset（締切の情報）を含むので、前向きの確かめとしては楽観に偏る。"
+   }
+  },
+  "note_decision": "本番の再現（ユーザー 2026-11-17）: ◎・期待値・人気・見送りの判定に使うオッズは、発走の約 60 分前（T-60）の再現。2026 年の 284R の T-60 と確定の対数の比を人気帯ごとに集め、確定オッズに逆向きに当てて 5 通り作り、その平均で評価する（精算は確定の払戻）。予測の p は確定の時点の offset のまま（過去に T-60 の予測は無い）。r は q の替わり分だけ動かす。fwd2026_pre（284R）は本物の T-60 のオッズで判定する。 偏りの注意: (1) 予測の p は確定の時点の offset のまま固定し、r だけを 1/オッズの比の分だけ動かす。offset のモデルなら本番では p も q と一緒に動き r はあまり変わらないので、この作りは人気薄の r を下げすぎ（穴の ◎ に不利）、一方で p に確定オッズの情報が残る（楽観）。向きの違う 2 つの偏りがある。(2) ずれの分布の元の 284R は、fwd2026_pre の確かめと同じレース（分布だけの弱い漏れ）。(3) 版を並べた平均なので、1 日の回収率の振れは 1 回の実現より小さく出る。",
+  "note_material": "stage2_noise.parquet（T-60 の雑音つき offset・xgb 3 目的・3 seed、オッズ・人気は入力の特徴量に入れていない）。2025 年 test は model-improve-cycles が選び方の確かめで 1 回見ている（◎ 勝率 19.9% の目安）。2026 年の予測は今 237 レース（全日の版は後で出る）。発走前オッズ（ずれの分布の元）は 284 レースで、予測のあるレースとは別の数え方。"
+ },
+ "pred_sha256": {
+  "/home/jovyan/work/retrain_out/cycles16_fix3/market/handoff/stage2_noise.parquet": "1a9cb181ed68b5ee2c8a07f48df2686052db6adba163ac9e82c1d4eb4318b137",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/local/modeling/betting/payoff.parquet": "4288df2abadb3b7ba5bcb132412cf9ebb96fcbe932d4bb11c4934b1f09a53f74",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/local/modeling/betting_2026/payoff.parquet": "8f0c297a32ab33307763c2b6df3b4912492677d54f3dca81e9eb7d724f43023b",
+  "data/local/research/persona1/pre_odds.parquet": "0ca5ee1bd506df0e8501c17429d12698803970e98b9883ec70f4a6ecb8b70382",
+  "config/bet_cycles/baselines.json": "84c7923e06d07c3f423f2e01b4c844c0dfb86aa3b28c9b6ec4ea8ed277359524",
+  "src/scripts/data/bet_cycles.py": "6641c705a64c0d5dc8a2f6231ab2ebd268b31a05bac63bbb577dc30f87492af4",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/local/research/persona1/pre_odds.parquet": "0ca5ee1bd506df0e8501c17429d12698803970e98b9883ec70f4a6ecb8b70382",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/calculated_data/tables/2019/race_result_flat.parquet": "02a7049217fea299efec95eeb0f3b144d602229a2de28d138ff1a6adec5dc67f",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/calculated_data/tables/2020/race_result_flat.parquet": "eebaac5d103cd4a77dabf31dc22f97b8572e87cb2247cdb5dd84f782e69f2e30",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/calculated_data/tables/2021/race_result_flat.parquet": "a6dc751352d1c419af9ac0977fa3bcedf4019be7beadb00dcac05ee69b8db888",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/calculated_data/tables/2022/race_result_flat.parquet": "0223c3711b7b3d4a2af9068581bfa3f040cec92e018a6ae7722a4781ec99a710",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/calculated_data/tables/2023/race_result_flat.parquet": "c2cc2e7c04c8b55f868f00f90bc555e15c27d064d5403592e2c1e90f26486c81",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/calculated_data/tables/2024/race_result_flat.parquet": "9f9242975492f0de1a15ada5353822d00e5413b4b29cf5f6e4af0cdeb9cfb99d",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/calculated_data/tables/2025/race_result_flat.parquet": "b7cde416f2da3c0a378a084e2130867e563f45e2a654b6bac989ca29be8a4aa1",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/calculated_data/tables/2026/race_result_flat.parquet": "7d2aa30b6889fff926739544d76c817ea338e844402f1d8ac4736d2584207006"
+ },
+ "spec": {
+  "honmei": {
+   "rule": "fav1_exc",
+   "exc_by": "r",
+   "r_min": 9.0,
+   "base": {
+    "rule": "r_max",
+    "fav_k": 1,
+    "p_min": 0.05
+   }
+  },
+  "partners": {
+   "mode": "p3",
+   "n": 2
+  },
+  "tickets": [
+   {
+    "type": "tansho"
+   }
+  ],
+  "skip": {
+   "in": {
+    "c_class": [
+     "未勝利",
+     "新馬"
+    ]
+   },
+   "when": {
+    "q_r_max": [
+     3,
+     null
+    ]
+   }
+  },
+  "name": "r2c14|honmei={\"rule\":\"fav1_exc\",\"exc_by\":\"r\",\"r_min\":\"auto\",\"base\":{\"rule\":\"r_max\",\"fav_k\":1,\"p_min\":0.05}}|tickets=[{\"type\":\"tansho\"}]|skip={\"in\":{\"c_class\":[\"未勝利\",\"新馬\"]},\"when\":{\"q_r_max\":[3,null]}}"
+ },
+ "selection": {
+  "cycle": 14,
+  "kind": "固定の格子",
+  "name": "r2c14|honmei={\"rule\":\"fav1_exc\",\"exc_by\":\"r\",\"r_min\":\"auto\",\"base\":{\"rule\":\"r_max\",\"fav_k\":1,\"p_min\":0.05}}|tickets=[{\"type\":\"tansho\"}]|skip={\"in\":{\"c_class\":[\"未勝利\",\"新馬\"]},\"when\":{\"q_r_max\":[3,null]}}",
+  "selcv_score": 1.0005339265850945,
+  "ranking": [
+   {
+    "cycle": 14,
+    "kind": "固定の格子",
+    "score": 1.0005339265850945,
+    "roi_cv": 1.133765932792584
+   },
+   {
+    "cycle": 7,
+    "kind": "方策（交差検証、12 本から選んだ）",
+    "score": 0.969121149266344,
+    "roi_cv": 1.0016491502683362
+   },
+   {
+    "cycle": 8,
+    "kind": "方策（交差検証、16 本から選んだ）",
+    "score": 0.969121149266344,
+    "roi_cv": 1.0016491502683362
+   },
+   {
+    "cycle": 9,
+    "kind": "固定の格子",
+    "score": 0.9673382233088834,
+    "roi_cv": 0.9972908733099906
+   },
+   {
+    "cycle": 12,
+    "kind": "方策（交差検証、4 本から選んだ）",
+    "score": 0.9661856460664366,
+    "roi_cv": 1.001268489961682
+   },
+   {
+    "cycle": 7,
+    "kind": "固定の格子",
+    "score": 0.9533692266016525,
+    "roi_cv": 0.9809569648924122
+   },
+   {
+    "cycle": 8,
+    "kind": "固定の格子",
+    "score": 0.9533692266016525,
+    "roi_cv": 0.9809569648924122
+   },
+   {
+    "cycle": 12,
+    "kind": "固定の格子",
+    "score": 0.9533692266016525,
+    "roi_cv": 0.9809569648924122
+   },
+   {
+    "cycle": 4,
+    "kind": "固定の格子",
+    "score": 0.9511195985920767,
+    "roi_cv": 1.0079227958654224
+   },
+   {
+    "cycle": 2,
+    "kind": "固定の格子",
+    "score": 0.9509713228492137,
+    "roi_cv": 0.9891211218581613
+   }
+  ],
+  "rule": "selcv の物差し min(上位5件を除いた回収率, 年ごとの回収率) が最大、的中率の下限・参戦 300R 以上・2 年そろう・参考の系統を除く（cycle 13 の後に固定）"
+ },
+ "qcuts": {
+  "p1": [
+   0.25099333143388786,
+   0.30461367226626934,
+   0.36398137434959965,
+   0.4475590766256061
+  ],
+  "gap12": [
+   0.03751929415379848,
+   0.08708054344959931,
+   0.154980862353996,
+   0.2616585471008832
+  ],
+  "ratio12": [
+   1.170280181021517,
+   1.420167779981459,
+   1.8042769391144775,
+   2.539652965512046
+  ],
+  "ent": [
+   0.6497253299239812,
+   0.7112160816399402,
+   0.7581360453663816,
+   0.8056975200220745
+  ],
+  "gini": [
+   0.5312777061513972,
+   0.5897245701465356,
+   0.6377030819855746,
+   0.6896038372470918
+  ],
+  "var5": [
+   0.003938543645600555,
+   0.007635999261049013,
+   0.012769433678678218,
+   0.022221926372259115
+  ],
+  "top3sum": [
+   0.583438295982093,
+   0.6529574378307461,
+   0.7128281700653365,
+   0.7786123750815447
+  ],
+  "p3_top3sum": [
+   1.4713117477771371,
+   1.61996089482528,
+   1.7543602678006884,
+   1.91385146280504
+  ],
+  "ev_max": [
+   1.209492070304379,
+   1.365475269682571,
+   1.5389633328593728,
+   1.8037280850858026
+  ],
+  "ev_top": [
+   0.8707648626816893,
+   1.0185608724734543,
+   1.1812675583761958,
+   1.437560146197159
+  ],
+  "mk_gap_top": [
+   0.028601669397531376,
+   0.07188148960385565,
+   0.10753028786750556,
+   0.14903704185679056
+  ],
+  "r_max": [
+   0.34025672314637273,
+   0.4917373690349473,
+   0.6271923371028181,
+   0.7967266017167042
+  ],
+  "r_top": [
+   0.08976733913209875,
+   0.24537183691705644,
+   0.39295591712102873,
+   0.5874062902027711
+  ]
+ },
+ "fav1": {
+  "n": 171,
+  "rentai": 0.8757327080890973,
+  "win": 0.690504103165299,
+  "place": 0.9355216881594373,
+  "roi_tansho": 0.8963657678780774,
+  "roi_fukusho": 0.9813599062133646,
+  "p2_min": 0.9,
+  "by": "p2"
+ },
+ "fav1r": null,
+ "tiers_model": null,
+ "tiers_eval_order": null,
+ "note": "test 2025 と 2026 年は、このファイルを commit した後に bet_cycles final で 1 回だけ見る。見た後は変えない（変えたら別の凍結として始める）。 第 2 回: 区切り（未勝利・新馬）は、統括役が model-improve-cycles の開発の検証 2022〜24 と 2025 年 test の値を見て渡したもの。この候補では評価 2023〜24 も test 2025 も手つかずの確かめにならない。test 2025 は 2 回目の確かめ（第 1 回で 1 回、model-improve-cycles も選び方の確かめで 1 回見た）。手つかずの確かめは 2026 年の全日の版だけ。2026 年で確かめるまでは仮の候補。確定オッズで判定すると訓練 158%・評価 154% で本番の再現（117%・114%）と約 40 点違う。推奨度の段は評価で並ばず作らない。",
+ "hash": "70ba29fa7b55"
+}

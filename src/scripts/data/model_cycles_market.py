@@ -42,6 +42,17 @@ def log(m: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {m}", flush=True)
 
 
+def _no_nan(x):
+    """JSON に書く前に NaN・inf を None にする（厳密な JSON にする）。"""
+    if isinstance(x, dict):
+        return {k: _no_nan(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [_no_nan(v) for v in x]
+    if isinstance(x, float) and not np.isfinite(x):
+        return None
+    return x
+
+
 def check_no_market_features(cols) -> None:
     """入力の特徴量にオッズ・人気が入っていないこと（offset にだけ使う決まり）。"""
     bad = [c for c in cols if any(k in str(c).lower() for k in FORBIDDEN_FEATURES)]
@@ -364,7 +375,7 @@ def cmd_apply2026(a) -> None:
     for c in ("race_id", "horse_id"):
         r[c] = r[c].astype(str)
     for c in ("odds", "popularity", "finish_position", "horse_number"):
-        r[c] = pd.to_numeric(r[c], errors="coerce")
+        r[c] = pd.to_numeric(r[c], errors="coerce").astype("float64")   # 欠けは NaN（nullable の NA にしない）
     r = r.drop_duplicates(KEY)
     base = xi[KEY].merge(r, on=KEY, how="left")
     # 受け渡し用: 推論の入力のある全レースに、確定オッズの offset で当てた予測（走った馬＝確定オッズのある馬だけ。取消の馬は外し、レースは残す）
@@ -411,7 +422,7 @@ def cmd_apply2026(a) -> None:
         d["r"] = np.log(d["p_win"].clip(1e-9) / d["q_used"].clip(1e-9))   # 選ぶときのずれは、その時点で見えている q で
         if ph != "final":                                       # 人気（1 番人気を除く規則に使う）も、その時点の q の順位で作り直す（確定の人気は発走前に見えない）
             d["popularity"] = d.groupby("race_id")["q_used"].rank(ascending=False, method="first")
-        d["ret_tan"] = np.where(d["finish_position"] == 1, d["odds"] * 100, 0.0)
+        d["ret_tan"] = np.where(d["finish_position"] == 1, d["odds"] * 100, 0.0)   # 着順の欠け（競走中止など）は外れ
         d["ret_fuku"] = np.nan
         nwin = d.groupby("race_id")["finish_position"].transform(lambda s_: (s_ == 1).sum())
         d = d[nwin == 1]
@@ -432,10 +443,13 @@ def cmd_apply2026(a) -> None:
     pd.concat(hand, ignore_index=True).to_parquet(out / f"{a.name}_pred2026.parquet", index=False)
     res["pred2026"] = {"path": str(out / f"{a.name}_pred2026.parquet"), "rows_by_phase": {h["odds_phase"].iloc[0]: int(len(h)) for h in hand},
                        "races_final": int(hand[0]["race_id"].nunique()), "days": int(xi.attrs.get("days", 0))}
-    (out / f"{a.name}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+    (out / f"{a.name}.json").write_text(json.dumps(_no_nan(res), ensure_ascii=False, indent=1, allow_nan=False), encoding="utf-8")
     for ph, rr in res["phases"].items():
         for ru in ("p", "r_p05", "gate:0.1"):
             s_ = rr[ru]
+            if not s_["races"]:
+                log(f"{ph} {ru}: 0R（この時点のオッズのそろうレースが無い）")
+                continue
             log(f"{ph} {ru}: {s_['races']}R ◎1番人気 {s_['fav_share']:.3f} 勝 {s_['win']:.3f} 単 {s_['roi_tan']:.3f}" + (f" 確定と同じ ◎ {s_['same_pick_as_final']:.3f}" if "same_pick_as_final" in s_ else ""))
 
 
@@ -546,16 +560,22 @@ def pick(d: pd.DataFrame, rule: str) -> pd.DataFrame:
 
 
 def summarize(sel: pd.DataFrame) -> dict:
+    """◎ の成績。分母はすべて ◎ の数 n（着順の欠け＝競走中止などは外れ、人気の欠けは 1 番人気でない、として数える。回収率と同じ分母）。0 件なら値は None。"""
     n = len(sel)
+    if n == 0:
+        return {"races": 0, "fav_share": None, "win": None, "place": None, "rentai": None, "roi_tan": None, "roi_fuku": None, "mean_pop": None}
+    sel = sel.assign(popularity=pd.to_numeric(sel["popularity"], errors="coerce").astype("float64"), finish_position=pd.to_numeric(sel["finish_position"], errors="coerce").astype("float64"))
     return {"races": n, "fav_share": float((sel["popularity"] == 1).mean()), "win": float((sel["finish_position"] == 1).mean()),
             "place": float((sel["finish_position"] <= 3).mean()), "rentai": float((sel["finish_position"] <= 2).mean()),
             "roi_tan": float(sel["ret_tan"].sum() / (100 * n)), "roi_fuku": float(sel["ret_fuku"].sum() / (100 * n)),
             "mean_pop": float(sel["popularity"].mean())}
 
 
-def boot_roi(a: pd.DataFrame, b: pd.DataFrame, col: str, n_boot: int = 1000, seed: int = 0) -> list[float]:
-    """同じレースでの ◎ の回収率の差（a − b）の 95% 区間。"""
+def boot_roi(a: pd.DataFrame, b: pd.DataFrame, col: str, n_boot: int = 1000, seed: int = 0) -> list[float] | None:
+    """同じレースでの ◎ の回収率の差（a − b）の 95% 区間。共通のレースが無ければ None。"""
     m = a[["race_id", col]].merge(b[["race_id", col]], on="race_id", suffixes=("_a", "_b"))
+    if len(m) == 0:
+        return None
     x = (m[f"{col}_a"] - m[f"{col}_b"]).to_numpy() / 100.0
     rng = np.random.default_rng(seed)
     bs = x[rng.integers(0, len(x), size=(n_boot, len(x)))].mean(1)
@@ -620,7 +640,7 @@ def cmd_report(a) -> None:
         res["models"][n] = r_
     d_ = MK / "eval"
     d_.mkdir(parents=True, exist_ok=True)
-    (d_ / f"{a.name}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+    (d_ / f"{a.name}.json").write_text(json.dumps(_no_nan(res), ensure_ascii=False, indent=1, allow_nan=False), encoding="utf-8")
     for n in names:
         for ru in ("p", "nofav", "r_p05", "gate:0.1"):
             s = res["models"][n]["rules"][ru]

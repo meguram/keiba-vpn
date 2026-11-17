@@ -71,3 +71,92 @@ def test_v3_html(tmp_path, monkeypatch):
     monkeypatch.setattr(H, "BASE", tmp_path)
     h = H.build(tmp_path / "o.html").read_text(encoding="utf-8")
     assert "&lt;仮説&gt;" in h and "125.0%" in h and "上位 5 件を除く" in h and "A01=1着" in h and "能力" in h and "2 回見ている" in h
+
+
+def test_hyp_ex():
+    b = {"types": ["A01"], "levels": ["1着"], "n_t": 10, "k_t": 8, "w_t": 4, "rt_t": 1.2,
+         "ev": {"hyp": "能力×人", "hyp_ok": True, "dir": "ok", "stab": "ok", "breadth": "ok", "p_null": 0.01}}
+    cells = {"u": {"buy": [b], "kill": []}}
+    assert len(V.select_cells(cells, V.C3())["u"]["buy"]) == 1
+    assert V.select_cells(cells, V.C3(hyp_ex="能力"))["u"]["buy"] == []                 # 能力の入った組は外す
+
+
+def test_race_side_filters():
+    from tests.research.test_course_run import _toy
+    d, L = _toy(n_races=6)
+    d["field_decl"] = [16 if r.endswith(("0", "1", "2")) else 10 for r in d["race_id"]]
+    kept = {"東京芝1600|1勝・2勝": {"buy": [{"types": ["A01"], "levels": ["1着"], "rate": 1.0, "win_c": 1.0}], "kill": []}}
+    H, _, _ = V.pick(d, L, kept, V.C3(groups=3))
+    assert len(H) == 6
+    H2, _, _ = V.pick(d, L, kept, V.C3(groups=3, field_min=15))
+    assert len(H2) == 3                                                               # 15 頭以上のレースだけ
+    H3, _, _ = V.pick(d, L, kept, V.C3(groups=3, classes="新馬"))
+    assert len(H3) == 0                                                               # 群が違う
+
+
+def test_market_q_and_edge():
+    d = pd.DataFrame({"race_id": ["a", "a", "b", "b"], "odds_final": [2.0, 2.0, 1.5, np.nan]})
+    q = V.market_q(d)
+    assert q[0] == pytest.approx(0.5) and q[2] == pytest.approx(1.0) and q[3] == 0.0
+    b = {"types": ["A01"], "levels": ["1着"], "n_t": 10, "k_t": 8, "w_t": 4, "rt_t": 1.2, "q_t": 2.0,
+         "ev": {"hyp": "能力", "hyp_ok": True, "dir": "ok", "stab": "ok", "breadth": "ok", "p_null": 0.01}}
+    cells = {"u": {"buy": [b], "kill": []}}
+    assert V.select_cells(cells, V.C3(edge_min=1.5, edge_pmax=0.2))["u"]["buy"][0]["rate"] == pytest.approx(0.8)
+    assert V.select_cells(cells, V.C3(edge_min=1.5))["u"]["buy"] == []                 # 勝ち 4・見込み 2 は偶然の見込み 14% で 5% を超える
+    assert V.edge_p(b) == pytest.approx(0.1429, abs=1e-3)
+    assert V.select_cells(cells, V.C3(edge_min=2.5))["u"]["buy"] == []                 # 勝ち 4 ÷ 市場 2 = 2.0
+    assert V.select_cells(cells, V.C3(weight="edge"))["u"]["buy"][0]["rate"] == pytest.approx(2.0)
+
+
+def test_edge_split():
+    b = {"types": ["A01"], "levels": ["1着"], "n_t": 30, "k_t": 20, "w_t": 12, "rt_t": 1.2, "q_t": 6.0, "q_t1": 4.0, "w_t1": 10, "q_t2": 2.0, "w_t2": 2,
+         "ev": {"hyp": "能力", "hyp_ok": True, "dir": "ok", "stab": "ok", "breadth": "ok", "p_null": 0.01}}
+    cells = {"u": {"buy": [b], "kill": []}}
+    assert V.select_cells(cells, V.C3(edge_min=1.2, edge_split=True))["u"]["buy"] == []           # 後半は 2 ÷ 2 = 1.0 で続かない
+    b2 = b | {"w_t2": 4}
+    assert len(V.select_cells({"u": {"buy": [b2], "kill": []}}, V.C3(edge_min=1.2, edge_split=True))["u"]["buy"]) == 1
+
+
+def test_freeze_eval_guards(tmp_path, monkeypatch):
+    import json
+    monkeypatch.setattr(V, "OUT3", tmp_path)
+    monkeypatch.setattr(V, "PREREG3", tmp_path / "p.json")
+    monkeypatch.setattr(V, "EVAL_MARK3", tmp_path / "e.json")
+    monkeypatch.delenv("COURSE_EVAL_TOKEN", raising=False)
+    with pytest.raises(SystemExit):
+        V._eval_inner()                                                               # トークンが無ければ流さない
+    V.EVAL_MARK3.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        V.cmd_evaluate()                                                              # 2 回目は流さない
+    with pytest.raises(SystemExit):
+        V.cmd_freeze(1)                                                               # 評価の後に凍結し直さない
+    with pytest.raises(SystemExit):
+        V.cmd_cycle("x", {}, None)                                                    # 評価の後にサイクルを足さない
+
+
+def test_freeze_requires_adopted(tmp_path, monkeypatch):
+    import json
+    monkeypatch.setattr(V, "OUT3", tmp_path)
+    monkeypatch.setattr(V, "PREREG3", tmp_path / "p.json")
+    monkeypatch.setattr(V, "EVAL_MARK3", tmp_path / "e.json")
+    log = {"cycles": [{"cycle": 1, "decision": "不採用", "params": {}}], "adopted_cycle": None}
+    (tmp_path / "course_v3_cycles.json").write_text(json.dumps(log), encoding="utf-8")
+    with pytest.raises(SystemExit):
+        V.cmd_freeze(1)                                                               # 採用の版でなければ凍結しない
+    with pytest.raises(SystemExit):
+        V.cmd_freeze(0)                                                               # 無いサイクル
+    V.PREREG3.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        V.cmd_freeze(1)                                                               # 凍結済み
+
+
+def test_measure_real_t60_denominator():
+    from tests.research.test_course_run import _toy
+    d, L = _toy(n_races=6)
+    d["odds_final"] = 3.0
+    d["pop_final"] = 1
+    kept = {"東京芝1600|1勝・2勝": {"buy": [{"types": ["A01"], "levels": ["1着"], "rate": 1.0, "win_c": 1.0}], "kill": []}}
+    rids = list(d["race_id"].unique())
+    real = {(rids[0], 1): (3.0, 1.0), (rids[1], 1): (0.0, 0.0), ("他", 1): (3.0, 1.0)}
+    r = V.measure(d, L, kept, V.C3(groups=3, pop_max=3), {"lr": [[0.0]] * 4}, real_pre=real)
+    assert r["real_t60"]["races"] == 2 and r["real_t60"]["bet_races"] == 1 and r["real_t60_missing_odds"] == 1
