@@ -508,3 +508,24 @@ def test_story_uses_selcv_row_for_cycle3():
                                                                                 {"cycle": 9, "kind": "方策（交差検証）", "cv": {"roi": 1.319}, "score": 1.171}]}}}}}
     h = sr.render(log, {}, {"n_races_drift": 280, "drift_by_band": [], "method": {}}, None)
     assert "123.3%" in h and "105.7" not in h and "方策（交差検証）" in h and "284" not in h
+
+
+def test_evidence_neighbors_and_mechanism():
+    spec = {"honmei": {"rule": "fav1_exc", "exc_by": "r", "r_min": 0.3, "base": {"rule": "r_max", "fav_k": 1, "p_min": 0.05, "max_rank": 8}},
+            "partners": {"mode": "p3", "n": 2}, "skip": {"h_pop_min": 4, "when": {"q_r_max": [3, None]}}, "tickets": [{"type": "wide"}]}
+    labs = [lab for lab, _ in bc._neighbors(spec)]
+    assert any("勝率の下限" in x for x in labs) and any("見送り q_r_max" in x for x in labs) and any("人気の下限" in x for x in labs)
+    assert any("相手の数" in x for x in labs) and any("予測順位の上限" in x for x in labs)
+    for _, s2 in bc._neighbors(spec):
+        assert s2 != spec
+    ev, rs = bc.mechanism(spec)
+    assert "ずれ" in ev and "Benter" in rs
+    pol = {"policy": {"typing": {"kind": "feat", "col": "q_r_max", "name": "r の最大の5分位"}, "map": {"1": spec, "2": "skip"}}}
+    assert "型" in bc.mechanism(pol)[0] and bc.mechanism(pol)[1]
+    assert bc.mechanism({"honmei": {"rule": "fav1_penalty", "lam": 1.0}})[1] == ""        # 1 番人気を避けるだけでは根拠にならない
+    assert bc._sign_p(5, 5) < 0.05 and bc._sign_p(3, 5) > 0.4
+    small = {"honmei": {"rule": "r_max", "max_rank": 3}, "skip": {"when": {"q_r_max": [4, 5]}}}
+    for lab, s2 in bc._neighbors(small):
+        assert s2["honmei"]["max_rank"] >= 3
+        w = s2["skip"]["when"]["q_r_max"]
+        assert w[1] is None or w[0] < w[1]

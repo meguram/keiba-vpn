@@ -2047,7 +2047,10 @@ def cmd_pick_final(a) -> None:
     if not rows:
         raise SystemExit("条件を満たすサイクルがありません")
     rows.sort(key=lambda r: -r["score"])
-    best = rows[0]
+    if getattr(a, "evidence", False):                       # 根拠の検査を通る中で一番（ユーザー 2026-11-17 の方針）
+        best, ev_log = _pick_with_evidence(rows, inputs, out, cuts)
+    else:
+        best, ev_log = rows[0], []
     n = best["cycle"]
     rec = json.loads((out / f"cycle_{n:02d}.json").read_text(encoding="utf-8"))
     if best["kind"].startswith("方策"):
@@ -2097,6 +2100,8 @@ def cmd_pick_final(a) -> None:
     if not fav1_rule_ok(spec):
         raise SystemExit("選んだ買い方が 1 番人気の方針に合いません（selcv をやり直す）")
     res = {"cycle": n, "kind": best["kind"], "name": spec.get("name"), "selcv_score": best["score"], "selcv_cv": best["cv"], "spec": spec, "check": chk,
+           "evidence_log": ev_log,
+           "rule_evidence": ("根拠の検査（年・似た単位は選び方の交差検証で、偶然の見込み、隣の水準、仕組みの説明）を通る中で、物差しが最大のもの" if ev_log else ""),
            "ranking": [{"cycle": r["cycle"], "kind": r["kind"], "score": r["score"], "roi_cv": r["cv"].get("roi")} for r in rows[:10]],
            "rule": "selcv の物差し min(上位5件を除いた回収率, 年ごとの回収率) が最大、的中率の下限・参戦 300R 以上・2 年そろう・参考の系統を除く（cycle 13 の後に固定）"}
     (out / "final_candidate.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_np), encoding="utf-8")
@@ -2389,6 +2394,210 @@ def cmd_tiers_select(a) -> None:
     print("選んだ:", chosen["axes"], "評価の段の順:", st.get("order_eval"))
 
 
+# ── 事象と根拠（ユーザー 2026-11-17「わけもわからずたまたま成績が出るのは勘弁してください」） ──────────────
+
+BENTER = ("Benter, W. (1994) Computer Based Horse Race Handicapping and Wagering Systems: A Report. "
+          "In Hausch, Lo & Ziemba (eds.) Efficiency of Racetrack Betting Markets（市場の確率とファンダメンタルの予測を組み合わせると市場より良い確率になる）")
+MECHANISM = {
+    "r_max": ("市場の確率 q よりモデルの勝率 p が高い馬（ずれ r = log(p/q) が大きい馬）を ◎ にすると、市場が過小評価した馬の払戻を受け取る。",
+              "パリミュチュエルのオッズは賭け手の合意で、全部の情報を反映しない。市場の確率とファンダメンタルの予測を組み合わせると、市場より良い確率が得られる（" + BENTER + "）。"),
+    "ana_ev": ("勝率 × オッズ（期待値）が大きい 2 番人気以下の馬を ◎ にする。",
+               "期待値が 1 を超える賭けだけが長期で利益になる。ただし期待値はオッズの時点に強く左右される（締切直前のオッズの動き: https://arxiv.org/abs/2509.14645）。本番の再現（T-60 で判定）で確かめた値を使う。"),
+}
+NO_REASON = {
+    "fav1_penalty": "1 番人気を避けるだけでは根拠にならない。公開の知見（本命-大穴バイアス: Griffith 1949、Ali 1977）はむしろ人気薄ほど回収率が低いことを示す。ずれ r や期待値との組み合わせが要る。",
+    "top": "予測 1 位の約 8 割は 1 番人気で、市場と同じ馬を買うので控除の分だけ負けやすい（参考）。",
+}
+
+
+def mechanism(spec: dict) -> tuple[str, str]:
+    """買い方の仕組み（事象と、公開の知見による根拠）。説明の無いものは根拠を空で返す（検査で不合格）。"""
+    if "policy" in spec:
+        ty = spec["policy"].get("typing", {})
+        subs = [v for v in spec["policy"]["map"].values() if v != "skip"]
+        ok = bool(subs) and all(mechanism(v)[1] != "" for v in subs)
+        return (f"レースを型（{ty.get('name', ty.get('kind'))}）に分け、型ごとに買い方と見送りを変える。",
+                ("型ごとの買い方はどれも上の仕組み（ずれ・期待値）による。市場とのずれ・期待値が小さいレースは控除（JRA の払戻率 70〜80%）を超える余地が小さく、"
+                 "ずれが大きいレースに絞るほど優位を払戻に変えられる。" if ok else ""))
+    h = spec.get("honmei") or {}
+    rule = h.get("rule", "top")
+    if rule == "fav1_exc":
+        rule = (h.get("base") or {}).get("rule", "fav1_penalty")
+    if rule in MECHANISM:
+        return MECHANISM[rule]
+    return ("（この決め方の仕組みの説明なし）" + (f" {NO_REASON[rule]}" if rule in NO_REASON else ""), "")
+
+
+def _neighbors(spec: dict) -> list[tuple[str, dict]]:
+    """主な設定を 1 段ずらした買い方（隣の水準）。とがった 1 点（偶然）ではないかを見る。方策は別に扱う（同じ型の作り方の別の設定）。"""
+    out = []
+
+    def mod(path, fn, lab):
+        s2 = json.loads(json.dumps(spec))
+        d = s2
+        ks = path.split(".")
+        for k in ks[:-1]:
+            if not isinstance(d, dict) or k not in d:
+                return
+            d = d[k]
+        if not isinstance(d, dict) or ks[-1] not in d:
+            return
+        v = fn(d[ks[-1]])
+        if v is None or v == d[ks[-1]]:
+            return
+        d[ks[-1]] = v
+        out.append((lab, s2))
+    base_h = "honmei.base" if (spec.get("honmei") or {}).get("rule") == "fav1_exc" else "honmei"
+    for f_, lab in ((0.6, "×0.6"), (1.6, "×1.6")):
+        mod(f"{base_h}.p_min", lambda v, f_=f_: round(float(v) * f_, 3), f"勝率の下限 {lab}")
+    for dv in (-1, 1):
+        mod(f"{base_h}.max_rank", lambda v, dv=dv: (max(3, int(v) + 2 * dv)) if int(v) < 50 else None, f"予測順位の上限 {dv * 2:+d}")
+        mod("skip.h_pop_min", lambda v, dv=dv: max(2, int(v) + dv), f"◎ の人気の下限 {dv:+d}")
+        mod("partners.n", lambda v, dv=dv: max(1, int(v) + dv), f"相手の数 {dv:+d}")
+    for dv in (-0.2, 0.2):
+        mod(f"{base_h}.ev_min", lambda v, dv=dv: round(max(0.0, float(v) + dv), 2), f"期待値の下限 {dv:+.1f}")
+        mod(f"{base_h}.r_min", lambda v, dv=dv: round(float(v) + dv / 2, 3) if float(v) > -9 else None, f"r の下限 {dv / 2:+.1f}")
+    for c, rng in ((spec.get("skip") or {}).get("when") or {}).items():
+        if c.startswith("q_") and rng and rng[0] is not None:
+            for dv in (-1, 1):
+                lo = int(rng[0]) + dv
+                hi = rng[1]
+                if 1 <= lo <= 5 and lo != int(rng[0]) and (hi is None or lo < hi):
+                    s2 = json.loads(json.dumps(spec))
+                    s2["skip"]["when"][c] = [lo, hi]
+                    out.append((f"見送り {c} の下限 {dv:+d}", s2))
+    return out
+
+
+def _sign_p(k: int, n: int) -> float:
+    """片側の符号検定（帰無: 単位ごとに B0 より上か下かは五分五分）。"""
+    from math import comb
+
+    return float(sum(comb(n, i) for i in range(k, n + 1)) / 2 ** n) if n else 1.0
+
+
+def evidence_check(spec: dict, per: dict, base_spec: dict, cv_arrays: tuple | None = None, policy_neighbors: list | None = None) -> dict:
+    """候補の買い方の根拠を、実データの統計で確かめる（訓練の期間だけ）。
+    年と単位は、選び方の交差検証の配列（cv_arrays = (cost, ret)。1 年を外して選び、外した年に当てた値）で見る（選び方の楽観を除く）。
+    1 年ごとに B0 より上、2 芝ダ×距離の単位（参戦 100R 以上が 5 つ以上）の 6 割以上で B0 より上かつ符号検定 p < 0.1、
+    3 B0 との差の区間が 0 より上かつ上位 5 件を除いた回収率が B0 の上位 5 件除き以上、4 隣の水準（参戦 300R 以上のもの）の上位 5 件除きが B0 以上で、
+    候補から 10 点以上は崩れない（隣が無ければ保留）、5 仕組みの説明（公開の知見）がある。すべて満たせば「根拠あり」。あわせて的中率の分と払戻の分の分解。"""
+    tr = per["train"]
+    r = run_period(tr, spec)
+    b = run_period(tr, base_spec)
+    m, mb = metrics_run(r, tr, tr.W), metrics_run(b, tr, tr.W)
+    cc, cr = cv_arrays if cv_arrays is not None else (r["cost"], r["ret"])
+    yrs = tr.feats["year"].to_numpy()
+    folds = {int(y): float(cr[yrs == y].sum() / max(cc[yrs == y].sum(), 1e-9)) for y in np.unique(yrs)}
+    bfold = {int(y): float(b["ret"][yrs == y].sum() / max(b["cost"][yrs == y].sum(), 1e-9)) for y in np.unique(yrs)}
+    years_ok = all(folds[y] > bfold[y] for y in folds)
+    unit = (tr.feats["c_surface"].astype(str) + "×" + tr.feats["c_dist_band"].astype(str)).to_numpy()
+    units = []
+    for u in np.unique(unit):
+        mk = unit == u
+        mu = metrics(np.where(mk, cc, 0), np.where(mk, cr, 0), tr.dates)
+        if (mu.get("bet_races") or 0) < 100:
+            continue
+        cb, rb = np.where(mk, b["cost"], 0), np.where(mk, b["ret"], 0)
+        units.append({"unit": str(u), "bet_races": mu["bet_races"], "roi": mu["roi"], "b0": float(rb.sum() / max(cb.sum(), 1e-9))})
+    k_up = sum(x["roi"] > x["b0"] for x in units)
+    unit_share = float(k_up / len(units)) if units else 0.0
+    unit_p = _sign_p(k_up, len(units))
+    units_ok = len(units) >= 5 and unit_share >= 0.6 and unit_p < 0.1
+    d = paired_diff(r, b, tr.W)
+    chance_ok = d[1] > 0 and (m.get("roi_ex_top5") or 0) >= (mb.get("roi_ex_top5") or 0)
+    if policy_neighbors is not None:
+        nb = policy_neighbors
+    else:
+        nb = []
+        for lab, s2 in _neighbors(spec):
+            mn = metrics_run(run_period(tr, s2), tr)
+            nb.append({"change": lab, "roi": mn.get("roi"), "roi_ex_top5": mn.get("roi_ex_top5"), "bet_races": mn.get("bet_races")})
+    nb_used = [x for x in nb if (x.get("bet_races") or 0) >= MIN_BET_RACES]
+    nb_ok = bool(nb_used) and all((x.get("roi_ex_top5") or 0) >= (mb.get("roi_ex_top5") or 0) and (x.get("roi") or 0) >= (m.get("roi") or 0) - 0.10
+                                  for x in nb_used)
+    ev, rs = mechanism(spec)
+    mech_ok = bool(rs)
+    dec = decompose(m, mb)
+    ok = years_ok and units_ok and chance_ok and nb_ok and mech_ok
+    why = []
+    if not years_ok:
+        why.append("選び方の交差検証で、訓練の年のどれかが B0 を下回る")
+    if not units_ok:
+        why.append(f"芝ダ×距離の単位（{len(units)} 個）で B0 を上回るのが {unit_share:.0%}・符号検定 p = {unit_p:.2f}（5 個以上・6 割以上・p<0.1 を満たさない）")
+    if not chance_ok:
+        why.append("B0 との差の区間が 0 をまたぐか、上位 5 件を除くと B0 の上位 5 件除きより下（偶然の幅）")
+    if not nb_ok:
+        why.append("隣の水準が無いか、隣で B0 を下回るか、10 点以上崩れる（とがった 1 点）")
+    if not mech_ok:
+        why.append("仕組みの説明（公開の知見）が無い")
+    return {"verdict": "根拠あり" if ok else "保留（採らない）", "reasons_failed": why, "event": ev, "reason_public": rs,
+            "years_cv": folds, "years_b0": bfold, "years_ok": years_ok, "units": units, "unit_share": unit_share, "unit_sign_p": unit_p, "units_ok": units_ok,
+            "diff_vs_B0": d, "roi_ex_top5": m.get("roi_ex_top5"), "b0_ex_top5": mb.get("roi_ex_top5"), "chance_ok": chance_ok,
+            "neighbors": nb, "neighbors_ok": nb_ok, "mechanism_ok": mech_ok, "decompose_vs_B0": dec, "roi": m.get("roi"), "b0_roi": mb.get("roi"),
+            "years_basis": "選び方の交差検証の配列" if cv_arrays is not None else "方策の交差検証の年ごとの値と標本内の配列"}
+
+
+def _spec_for_row(row: dict, inputs: dict, out: Path, cuts: dict, per: dict) -> tuple[dict, tuple | None, list | None]:
+    """selcv の行（固定の格子・方策）から、訓練全体で選ぶ買い方の spec（pick-final と同じ手順）と、
+    根拠の検査に使う交差検証の配列（固定の格子）・方策の隣（同じ型の作り方の別の設定）を返す。"""
+    n = row["cycle"]
+    rec = json.loads((out / f"cycle_{n:02d}.json").read_text(encoding="utf-8"))
+    tr = per["train"]
+    if row["kind"].startswith("方策"):
+        name = row["picks"][""]
+        sp = (rec.get("policy_specs") or {}).get(name) or next((t.get("spec") for t in rec.get("top", []) if t["name"] == name), None)
+        if sp is None and (rec.get("selected") or {}).get("name") == name:
+            sp = rec["selected"].get("spec")
+        if sp is None:
+            raise SystemExit(f"方策 {name} の中身が見つかりません")
+        stem = name.split("|min_cell=")[0]
+        nbs = [{"change": x["name"].split("|", 2)[-1], "roi": x["train"].get("roi"), "roi_ex_top5": x["train"].get("roi_ex_top5"),
+                "bet_races": x["train"].get("bet_races")} for x in rec.get("all", []) if x["name"].startswith(stem + "|") and x["name"] != name]
+        return sp, None, nbs
+    tr_spec = inputs["periods"]["train"]
+    cyc = json.loads((CYC_DIR / f"cycle_{n:02d}.json").read_text(encoding="utf-8"))
+    strats = [x for x in resolve_auto(expand_variants(cyc), out) if not family(x).startswith("参考") and fav1_rule_ok(x)]
+    key = strategy_hash({"pred": tr_spec["pred"], "years": tr_spec["years"], "cuts": cuts, "decision_odds": tr_spec.get("decision_odds"),
+                         "pre": (_sha(PRE_ODDS) if tr_spec.get("decision_odds") and PRE_ODDS.exists() else None), "specs": [strategy_hash(x) for x in strats]})
+    zp = out / f"cands_c{n:02d}_{key}.npz"
+    if not zp.exists():
+        raise SystemExit(f"{zp.name} がありません（同じ予測・区切り・買い方で selcv をやり直す）")
+    z = np.load(zp, allow_pickle=True)
+    if list(z["names"]) != [x["name"] for x in strats]:
+        raise SystemExit("候補の配列と設定が合いません（selcv をやり直す）")
+    base = json.loads((CFG_DIR / "baselines.json").read_text(encoding="utf-8"))["baselines"][0]
+    b0 = run_period(tr, base)
+    j = _fold_pick(z["cost"], z["ret"], np.ones(len(tr.races), bool), (b0["cost"], b0["ret"]), row["min_hit"], MIN_BET_RACES)
+    if j < 0:
+        raise SystemExit("訓練全体で条件を満たす候補がありません")
+    cc, cr, _ = selection_cv(z["cost"], z["ret"], tr.feats["year"].to_numpy(), (b0["cost"], b0["ret"]), row["min_hit"])
+    return strats[j], (cc, cr), None
+
+
+def _pick_with_evidence(rows: list[dict], inputs: dict, out: Path, cuts: dict) -> tuple[dict, list]:
+    """順位の上から、根拠の検査（evidence_check）を通る最初の行を選ぶ。通らなかった行と理由を記録する。"""
+    per, _ = prepare_periods(inputs, ("train",), cuts)
+    base = json.loads((CFG_DIR / "baselines.json").read_text(encoding="utf-8"))["baselines"][0]
+    log = []
+    for row in rows[:8]:
+        try:
+            sp, cva, pnb = _spec_for_row(row, inputs, out, cuts, per)
+            sp = resolve_auto([sp], out)[0]
+        except SystemExit as e:
+            log.append({"cycle": row["cycle"], "kind": row["kind"], "verdict": f"保留（{e}）"})
+            continue
+        ev = evidence_check(sp, per, base, cv_arrays=cva, policy_neighbors=pnb)
+        log.append({"cycle": row["cycle"], "kind": row["kind"], "name": sp.get("name"), **{k: ev[k] for k in ("verdict", "reasons_failed", "roi", "unit_share")}})
+        print(f"根拠の検査: cycle {row['cycle']} {row['kind']} → {ev['verdict']} {ev['reasons_failed']}", flush=True)
+        if ev["verdict"] == "根拠あり":
+            (out / "final_candidate_evidence.json").write_text(json.dumps({"row": row, "spec": sp, "evidence": ev, "log": log}, ensure_ascii=False, indent=1, default=_np),
+                                                              encoding="utf-8")
+            return row, log
+    (out / "final_candidate_evidence.json").write_text(json.dumps({"row": None, "log": log}, ensure_ascii=False, indent=1, default=_np), encoding="utf-8")
+    raise SystemExit("根拠の検査を通る候補がありません（上位 8 つ）。凍結しない（統括役に返す）")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -2423,6 +2632,7 @@ def main() -> None:
     tsx.set_defaults(func=cmd_tiers_select)
     pf = sub.add_parser("pick-final", help="selcv の結果から、決めた決まりで最後の候補を選ぶ")
     pf.add_argument("--inputs", default=None)
+    pf.add_argument("--evidence", action="store_true", help="根拠の検査（年・似た単位・偶然・隣の水準）を通る中で一番を選ぶ")
     pf.set_defaults(func=cmd_pick_final)
     fz = sub.add_parser("freeze", help="最後の候補を凍結する（config/bet_cycles/frozen_<日付>_<tag>.json）")
     fz.add_argument("--inputs", default=None)
