@@ -128,7 +128,11 @@ case "$STEP" in
     # CPU の割り当て: stg・prod ともリクエスト課金（アイドル中は課金されない。stg で速度・データの鮮度・課金を確かめ済み、2026-10-28）。
     #   prod だけ常時割り当てに戻すときは GitHub Variables の PROD_CPU_ALLOC=always（docs/operations/cost_recalc_20261028.md）
     # 会員名簿の正本: GitHub Variables の MEMBERS_STORE=gcs のときだけ GCS（stg・prod 共通。CI の配備で毎回付け直すので、手で付けても外れない）
+    # メモリ: 本番は 4Gi（2026-11-15〜16 に 2Gi の 99% に張り付き、GCS の時間切れが続いて 504。11-16 に OOM。docs/operations/api_memory_20261117.md）。
+    #   stg は 2Gi のまま（再発防止の直しで 2Gi に収まるかを stg で確かめるため）。本番を 2Gi に戻すかはユーザーの判断（同 docs）。
+    #   4Gi の費用は、サービスのメモリ代（直近 1 日 1〜5 円）の上乗せで最悪 +150 円/月。PROD_MEMORY で上書きでき、promote の確認の閾値も同じ値になる
     run env TAG="$REV_TAG" IMAGE="$API_IMAGE" API_TEST_USER="$([ "$TARGET" = stg ] && echo 1 || echo 0)" MEMBERS_STORE="${MEMBERS_STORE:-}" \
+      MEMORY="$([ "$TARGET" = stg ] && echo 2Gi || echo "${PROD_MEMORY:-4Gi}")" \
       CPU_ALLOC="$([ "$TARGET" = stg ] && echo request || echo "${PROD_CPU_ALLOC:-request}")" bash scripts/gcp/deploy_cloud_run_api.sh deploy --apply
     if [ "$DRY" = 1 ]; then
       echo "+ （タグ付き URL を取得して GITHUB_OUTPUT の tag_url に書く: タグ r${REV_TAG}）"
@@ -156,7 +160,7 @@ case "$STEP" in
     ;;
   promote)
     [ "$TARGET" = prod ] || { echo "promote は prod だけ（stg は通信を切り替えない）" >&2; exit 2; }
-    run env PROMOTE_TAG="r${REV_TAG}" bash scripts/gcp/deploy_cloud_run_api.sh promote --apply   # 本番反映が作ったリビジョンを名指しで（途中の stg 配備を拾わない）
+    run env PROMOTE_TAG="r${REV_TAG}" PROMOTE_MIN_MEMORY="${PROD_MEMORY:-4Gi}" bash scripts/gcp/deploy_cloud_run_api.sh promote --apply   # 本番反映が作ったリビジョンを名指しで（途中の stg 配備を拾わない）
     tag_live "${REG}/keiba-api:live-prod" "${REG}/keiba-api:live-rollback"   # 直前の本番の版も残す（切り戻し先が自動掃除で消えないように）
     # 本番の版を自動掃除から守る。タグは Cloud Run が実際に使っている digest に付ける（目次の版にだけ付けると、本体が消えうる）
     if [ "$DRY" = 1 ]; then tag_live "$API_IMAGE" "${REG}/keiba-api:live-prod"; else

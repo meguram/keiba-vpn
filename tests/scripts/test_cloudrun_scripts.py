@@ -128,3 +128,54 @@ def test_switch_script_has_safety_nets():
     s = (VPS / "switch_api_upstream.sh").read_text(encoding="utf-8")
     for needle in ("nginx -t", "revert", "/api/health", "cp -a \"$SITE\" \"$BAK\"", "keiba-proxykey.conf"):
         assert needle in s
+
+
+def _promote_with_memory(tmp_path, mem: str, **extra):
+    """promote --apply を、リビジョンのメモリが mem と答える偽の gcloud で動かす。"""
+    log = tmp_path / "gcloud.log"
+    g = tmp_path / "bin2" / "gcloud"
+    g.parent.mkdir(exist_ok=True)
+    g.write_text(
+        "#!/usr/bin/env bash\n"
+        f"echo \"$@\" >> {log}\n"
+        "case \"$*\" in\n"
+        "  *latestCreatedRevisionName*) echo keiba-api-00009-xyz ;;\n"
+        "  *containers[0].env*) echo 'KEIBA_ENV=prod' ;;\n"
+        f"  *limits.memory*) echo '{mem}' ;;\n"
+        "esac\nexit 0\n")
+    g.chmod(g.stat().st_mode | stat.S_IEXEC)
+    env = {**os.environ, "PATH": f"{g.parent}:{os.environ['PATH']}", "PROJECT_ID": "proj-x", "GCS_BUCKET": "bkt-x", **extra}
+    env.pop("KEIBA_ENV", None)
+    env.pop("PROMOTE_TAG", None)
+    r = run(GCP / "deploy_cloud_run_api.sh", "promote", "--apply", env=env)
+    return r, (log.read_text() if log.exists() else "")
+
+
+@pytest.mark.parametrize("mem,extra,ok", [
+    ("4Gi", {}, True),
+    ("8Gi", {}, True),
+    ("2Gi", {}, False),                                   # 2Gi で張り付いた（2026-11-15〜16）。本番へは切り替えない
+    ("", {}, False),                                      # 読めないときも切り替えない
+    ("2Gi", {"PROMOTE_MIN_MEMORY": "2Gi"}, True),          # 2Gi に戻すとユーザーが決めたとき
+    ("4096Mi", {}, True),
+])
+def test_promote_refuses_revisions_below_min_memory(tmp_path, mem, extra, ok):
+    r, calls = _promote_with_memory(tmp_path, mem, **extra)
+    assert (r.returncode == 0) == ok, r.stderr
+    assert ("update-traffic" in calls) == ok
+
+
+def test_ci_gives_prod_4gi_and_keeps_stg_2gi():
+    body = (ROOT / "scripts/ci/deploy_gcp.sh").read_text(encoding="utf-8")
+    assert 'MEMORY="$([ "$TARGET" = stg ] && echo 2Gi || echo "${PROD_MEMORY:-4Gi}")"' in body
+
+
+@pytest.mark.parametrize("bad", ["4GiB", "4gi", "3.5Gi", "abc"])
+def test_promote_refuses_when_threshold_is_unreadable(tmp_path, bad):
+    r, calls = _promote_with_memory(tmp_path, "8Gi", PROMOTE_MIN_MEMORY=bad)
+    assert r.returncode == 3 and "update-traffic" not in calls
+
+
+def test_ci_promote_threshold_follows_prod_memory():
+    body = (ROOT / "scripts/ci/deploy_gcp.sh").read_text(encoding="utf-8")
+    assert 'PROMOTE_MIN_MEMORY="${PROD_MEMORY:-4Gi}"' in body

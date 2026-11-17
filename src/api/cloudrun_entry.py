@@ -205,6 +205,19 @@ def _start_mirror_pull() -> Any:
     return None
 
 
+async def _memory_route() -> Any:
+    """メモリの内訳（cgroup・キャッシュ・/tmp・ミラーの木）。/ops は共有ヘッダが要り、VPS の nginx は /ops を通さない（Cloud Run の中の確認用）。"""
+    import asyncio
+
+    from fastapi.responses import JSONResponse
+
+    from src.api import mem_stats
+
+    snap = await asyncio.to_thread(mem_stats.snapshot)
+    snap["uptime_s"] = int(time.monotonic() - _STARTED_AT)
+    return JSONResponse(snap, headers={"Cache-Control": "no-store"})
+
+
 def build_app() -> ASGIApp:
     for k, v in _DEFAULTS.items():
         os.environ.setdefault(k, v)
@@ -221,6 +234,7 @@ def build_app() -> ASGIApp:
 
     ops = FastAPI(title="keiba ops", docs_url=None, redoc_url=None, openapi_url=None)
     ops.include_router(build_router())
+    ops.add_api_route("/ops/memory", _memory_route, methods=["GET"])
     gateway = Gateway(fastapi_app, _wsgi_bridge(create_app()), ops)
     gateway.refresher = refresher
     if mirror_pull_enabled() and not os.environ.get("KEIBA_MEMBERS_FILE"):      # 名簿の置き場を変えた環境では取り直しが効かないので付けない
