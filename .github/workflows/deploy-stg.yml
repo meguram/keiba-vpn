@@ -98,6 +98,8 @@ jobs:
         run: bash scripts/ci/deploy_gcp.sh build-api-image --target stg
       - name: 通信 0% のタグ付きリビジョン（rstg）を作る
         id: revision
+        env:
+          MEMBERS_STORE: ${{ vars.MEMBERS_STORE }}   # gcs で会員名簿の正本を GCS に（docs/operations/members_store_gcs.md。未設定は従来どおり）
         run: bash scripts/ci/deploy_gcp.sh api-revision --target stg
       - name: スモーク（鍵なし 401・鍵あり 200・ハートビート）
         env:

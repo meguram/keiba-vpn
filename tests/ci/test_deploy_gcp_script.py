@@ -88,3 +88,9 @@ def test_run_propagates_failure_of_the_command():
 def test_run_continues_after_success():
     r = _run_fn("run bash -c 'echo fine'")
     assert r.returncode == 0 and "AFTER" in r.stdout and "fine" in r.stdout
+
+
+def test_prod_revision_gets_4gi_and_stg_keeps_2gi():
+    assert "MEMORY=4Gi" in _run("api-revision", "prod").stdout
+    assert "MEMORY=2Gi" in _run("api-revision", "stg").stdout
+    assert "MEMORY=3Gi" in _run("api-revision", "prod", PROD_MEMORY="3Gi").stdout

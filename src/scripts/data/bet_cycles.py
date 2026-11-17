@@ -695,12 +695,21 @@ def poisson_weights(n: int, n_boot: int = 1000, seed: int = 0) -> np.ndarray:
     return np.random.default_rng(seed).poisson(1.0, size=(n_boot, n)).astype(np.float32)
 
 
+_REP: dict[int, int] = {}     # 本番の再現で「レース × 版」を並べた期間の長さ → 版の数（件数を版の数で割るため）
+
+
+def rep_of(n: int) -> int:
+    return _REP.get(int(n), 1)
+
+
 def metrics(cost: np.ndarray, ret: np.ndarray, dates: np.ndarray, W: np.ndarray | None = None) -> dict:
-    """必須の指標（参戦数・率、的中率、回収率、平均・中央値の回収額）と、区間・1 日の振れ・落ち込み・上位を除いた回収率。"""
+    """必須の指標（参戦数・率、的中率、回収率、平均・中央値の回収額）と、区間・1 日の振れ・落ち込み・上位を除いた回収率。
+    本番の再現（レース × 版を並べた期間）では、件数・合計・落ち込みを版の数で割り、上位を除く件数は版の数を掛ける。率は版を通した平均。"""
+    k_ = rep_of(len(cost))
     n_all = len(cost)
     b = cost > 0
     nb = int(b.sum())
-    m: dict[str, Any] = {"races": n_all, "bet_races": nb, "bet_rate": nb / n_all if n_all else 0.0}
+    m: dict[str, Any] = {"races": n_all // k_, "bet_races": int(round(nb / k_)), "bet_rate": nb / n_all if n_all else 0.0}
     if nb == 0:
         return m
     c, r = cost[b], ret[b]
@@ -711,7 +720,12 @@ def metrics(cost: np.ndarray, ret: np.ndarray, dates: np.ndarray, W: np.ndarray 
               "avg_hit_return": float(r[hit].mean()) if hit.any() else 0.0})
     srt = np.sort(r)[::-1]
     for k in (1, 5):
-        m[f"roi_ex_top{k}"] = float((r.sum() - srt[:k].sum()) / c.sum())
+        m[f"roi_ex_top{k}"] = float((r.sum() - srt[:k * k_].sum()) / c.sum())
+    m["cost_total"], m["return_total"] = m["cost_total"] / k_, m["return_total"] / k_
+    if k_ > 1:                                       # 版ごとの回収率の幅（並べた期間は版ごとに同じ長さで続く）
+        nn = n_all // k_
+        rois = [float(ret[i * nn:(i + 1) * nn].sum() / max(cost[i * nn:(i + 1) * nn].sum(), 1e-9)) for i in range(k_)]
+        m["sim_roi_min"], m["sim_roi_max"], m["n_versions"] = float(min(rois)), float(max(rois)), k_
     if W is not None:
         Wb = W[:, b]
         bs = (Wb @ r) / np.maximum(Wb @ c, 1e-9)
@@ -723,8 +737,8 @@ def metrics(cost: np.ndarray, ret: np.ndarray, dates: np.ndarray, W: np.ndarray 
     pl = (d["r"] - d["c"]).cumsum().to_numpy()
     dd = float(np.max(np.maximum.accumulate(np.r_[0.0, pl]) - np.r_[0.0, pl]))
     m.update({"days": int(len(d)), "daily_roi_sd": float(dr.std(ddof=1)) if len(d) > 1 else 0.0,
-              "max_drawdown": dd, "max_drawdown_days": dd / float(d["c"].mean()), "plus_day_rate": float((d["r"] > d["c"]).mean()),
-              "profit": float(r.sum() - c.sum())})
+              "max_drawdown": dd / k_, "max_drawdown_days": dd / float(d["c"].mean()), "plus_day_rate": float((d["r"] > d["c"]).mean()),
+              "profit": float(r.sum() - c.sum()) / k_})
     return m
 
 
@@ -796,11 +810,11 @@ def retrospective(res: dict, ft: pd.DataFrame, W: np.ndarray, axes=RETRO_AXES, m
             mask = np.zeros(len(ft), bool)
             mask[idx] = True
             c, r = np.where(mask, res["cost"], 0), np.where(mask, res["ret"], 0)
-            if (c > 0).sum() < min_n:
+            if (c > 0).sum() < min_n * rep_of(len(c)):
                 continue
             m = metrics(c, r, dates, W)
             m.pop("races", None)
-            row = {"axis": ax, "axis_label": lab, "level": str(lvl), **m, "races_in_level": int(mask.sum())}
+            row = {"axis": ax, "axis_label": lab, "level": str(lvl), **m, "races_in_level": int(mask.sum()) // rep_of(len(mask))}
             row.update(decompose(m, allm))
             row["verdict"] = ("保留" if m["roi_lo"] <= allm["roi"] <= m["roi_hi"] else ("良い" if m["roi"] > allm["roi"] else "悪い"))
             rows.append(row)
@@ -855,7 +869,7 @@ def fit_typing(ty: dict, ft: pd.DataFrame, R: np.ndarray | None = None, C: np.nd
         from sklearn.tree import DecisionTreeRegressor
 
         Y = np.where(C > 0, R / np.maximum(C, 1) - 1.0, 0.0).T             # レース × 買い方
-        tr = DecisionTreeRegressor(max_depth=int(ty.get("depth", 3)), min_samples_leaf=int(ty.get("min_leaf", 400)), random_state=seed)
+        tr = DecisionTreeRegressor(max_depth=int(ty.get("depth", 3)), min_samples_leaf=int(ty.get("min_leaf", 400)) * rep_of(len(X)), random_state=seed)
         tr.fit(X, Y)
         t = tr.tree_
         nodes = []
@@ -876,7 +890,7 @@ def choose_cells(labels: np.ndarray, R: np.ndarray, C: np.ndarray, mask: np.ndar
         m = mask & (labels == lv)
         c, r = C[:, m].sum(1), R[:, m].sum(1)
         nb = (C[:, m] > 0).sum(1)
-        roi = np.where((nb >= min_cell) & (c > 0), r / np.maximum(c, 1), -1.0)
+        roi = np.where((nb >= min_cell * rep_of(len(labels))) & (c > 0), r / np.maximum(c, 1), -1.0)
         j = int(np.argmax(roi))
         out[str(lv)] = -1 if roi[j] < 0 or (skip_below is not None and roi[j] < skip_below) else j
     return out
@@ -917,6 +931,12 @@ class Period:
     feats: pd.DataFrame
     W: np.ndarray
     drop: dict
+    k: int = 1                                   # 本番の再現: 発走前（T-60）のオッズを再現した版の数（races は「版 × レース」を並べたもの）
+    base: Any = None                             # 本番の再現のとき、確定オッズで判定する元の期間（楽観の値を並べるため）
+
+    @property
+    def sims(self) -> list:                      # 互換: 版を並べた期間なら真（中身は使わない）
+        return [self] if self.k > 1 else []
 
     @property
     def frecs(self) -> list[dict]:
@@ -929,8 +949,110 @@ class Period:
         return self.feats["date"].to_numpy()
 
 
+# ── 本番の再現: 発走前（T-60）のオッズを、確定オッズから逆向きに作る ─────────────────────────────
+
+POP_EDGES = [0, 1, 3, 6, 9, 99]                  # 人気帯（確定の人気）: 1・2〜3・4〜6・7〜9・10〜
+PRE_ODDS = ROOT / "data/local/research/persona1/pre_odds.parquet"
+
+
+def _pop_band(pop: np.ndarray) -> np.ndarray:
+    return np.searchsorted(np.asarray(POP_EDGES[1:-1]), np.asarray(pop, float), side="left")
+
+
+def load_drift(phase: str = "t60", path: Path = PRE_ODDS, years=(2026,)) -> dict[int, np.ndarray]:
+    """2026 年の発走前オッズ（phase の時点）と確定オッズの、対数の比 d = log(確定 / 発走前) を、確定の人気帯ごとに集める。
+    T-60 から確定にかけて、人気馬は下がり（d<0）、人気薄は大きく上がる（d>0）。"""
+    from src.config.data_paths import TABLES_DIR
+
+    pre = pd.read_parquet(path)
+    pre["race_id"] = pre["race_id"].astype(str)
+    pre = pre[(pre["phase"] == phase) & (pd.to_numeric(pre["win_odds"], errors="coerce") > 0)][["race_id", "horse_number", "win_odds"]]
+    fl = pd.concat([pd.read_parquet(Path(TABLES_DIR) / str(y) / "race_result_flat.parquet", columns=["race_id", "horse_number", "odds", "popularity"]) for y in years])
+    fl["race_id"] = fl["race_id"].astype(str)
+    for c in ("horse_number", "odds", "popularity"):
+        fl[c] = pd.to_numeric(fl[c], errors="coerce")
+    pre["horse_number"] = pd.to_numeric(pre["horse_number"], errors="coerce")
+    m = pre.merge(fl, on=["race_id", "horse_number"])
+    m = m[(m["odds"] > 0) & (m["popularity"] > 0)].copy()
+    m["d"] = np.log(m["odds"].to_numpy(float) / pd.to_numeric(m["win_odds"]).to_numpy(float))
+    d = m["d"].to_numpy()
+    b = _pop_band(m["popularity"].to_numpy(float))
+    out = {int(k): d[b == k] for k in np.unique(b)}
+    # レースごとの、確定の人気の順に並べたずれ（レースの中の並び＝人気の入れ替わり方を保って借りる）
+    out["races"] = [g.sort_values("popularity")["d"].to_numpy() for _, g in m.groupby("race_id") if len(g) >= 5]
+    return out
+
+
+def simulate_pre_period(p: "Period", drift: dict, seed: int, cuts: dict) -> "Period":
+    """確定オッズに、人気帯ごとの実測のずれ d を逆向きに当てて（発走前 = 確定 × exp(−d)）発走前のオッズを作った期間。
+    人気・期待値・q・r（r は q の替わり分だけ動かす）・特徴・分位をその版で作り直す。精算は確定の払戻のまま。
+    予測の p は確定の時点の offset のまま（過去の年に発走前の予測は無い。第 2 段の予測は T-60 の雑音つきで学習した版）。"""
+    rng = np.random.default_rng(1000 + seed)
+    races = []
+    pool = drift.get("races") or []
+    for r in p.races:
+        if pool:                                          # 2026 年の 1 レースを丸ごと借り、確定の人気の順位ごとに、その順位のずれを当てる
+            src = pool[int(rng.integers(len(pool)))]
+            rk = np.clip(np.where(r.pop < 99, r.pop, len(src)).astype(int) - 1, 0, len(src) - 1)
+            d = src[rk]
+        else:
+            b = _pop_band(r.pop)
+            d = np.array([rng.choice(drift[k]) if k in drift and len(drift[k]) else 0.0 for k in b])
+        o = r.odds * np.exp(-d)
+        s0, s1 = np.nansum(1.0 / r.odds), np.nansum(1.0 / o)
+        if s0 > 0 and s1 > 0:                             # 1/オッズの合計（控除の大きさ）を元のレースに合わせる
+            o = o * (s1 / s0)
+        pop = np.where(np.isfinite(o), pd.Series(o).rank(method="min").to_numpy(), 99.0)
+        q, rr = r.q, r.r
+        inv = np.where(np.isfinite(o), 1.0 / o, 0.0)
+        qs = inv / inv.sum() if inv.sum() > 0 else inv
+        if rr is not None:                                # r は「1/確定オッズの正規化 ÷ 1/再現オッズの正規化」の分だけ動かす（ずれ 0 なら動かない）
+            inv0 = np.where(np.isfinite(r.odds), 1.0 / r.odds, 0.0)
+            qf = inv0 / inv0.sum() if inv0.sum() > 0 else inv0
+            with np.errstate(divide="ignore", invalid="ignore"):
+                rr = rr + np.log(np.clip(qf, 1e-12, None) / np.clip(qs, 1e-12, None))
+            q = None if r.q is None else r.q * np.clip(qs, 1e-12, None) / np.clip(qf, 1e-12, None)
+        races.append(Race(r.race_id, r.date, r.hn, r.pw, r.p3, o, pop, r.fin, r.pay, r.p2, q, rr))
+    f = pd.DataFrame([race_features(r) for r in races])
+    keep = [c for c in p.feats.columns if c not in f.columns and not c.startswith("q_")]
+    ft = pd.concat([p.feats[keep].reset_index(drop=True), f], axis=1)
+    return Period(f"{p.name}_sim{seed}", races, apply_qcuts(ft, cuts), p.W, p.drop)
+
+
+def run_period(p: "Period", s: dict, detail: bool = False) -> dict:
+    """期間で買い方を実行する（本番の再現のときは「版 × レース」を並べた期間のまま。指標は metrics が版の数で割る）。
+    詳しい記録（records）には版の番号（ver）を付ける。"""
+    res = run_strategy(p.races, p.frecs, s, detail)
+    if detail and "records" in res:
+        n0 = len(p.races) // max(p.k, 1)
+        res["records"]["ver"] = np.arange(len(res["records"])) // max(n0, 1)
+    return res
+
+
+def metrics_run(res: dict, p: "Period", W=None) -> dict:
+    m = metrics(res["cost"], res["ret"], p.dates, W)
+    if p.k > 1 and m.get("bet_races"):
+        m["decision_odds"] = f"発走前（再現 {p.k} 通りを並べた平均）"
+    return m
+
+
+def stack_versions(p: "Period", versions: list["Period"]) -> "Period":
+    """発走前の再現の版を「版 × レース」に並べた期間。ブートストラップの重みは同じレースの版に同じ重み（レース単位の区間）。"""
+    races = [r for v in versions for r in v.races]
+    ft = pd.concat([v.feats for v in versions], ignore_index=True)
+    k = len(versions)
+    W = np.tile(p.W, (1, k))
+    if _REP.get(len(races), k) != k or _REP.get(len(p.races), 1) != 1:
+        raise RuntimeError("並べた期間の長さが別の期間と重なりました（件数の割り算を取り違える）")
+    _REP[len(races)] = k
+    return Period(p.name, races, ft, W, p.drop, k=k, base=p)
+
+
 def load_inputs(path: Path | None = None) -> dict:
     return json.loads((path or CFG_DIR / "inputs.json").read_text(encoding="utf-8"))
+
+
+_CACHE: dict = {}
 
 
 def prepare_periods(inputs: dict, names=("train", "eval"), cuts: dict | None = None, n_boot: int = 1000) -> tuple[dict[str, Period], dict]:
@@ -956,12 +1078,25 @@ def prepare_periods(inputs: dict, names=("train", "eval"), cuts: dict | None = N
         drop["computed_races"] = len(races)
         ft = feature_table(races, cond)
         per[nm] = (races, ft, drop)
-    if cuts is None:
-        cuts = fit_qcuts(per["train"][1]) if "train" in per else {}
     out = {}
     for nm, (races, ft, drop) in per.items():
-        ft = apply_qcuts(ft, cuts)
         out[nm] = Period(nm, races, ft, poisson_weights(len(races), n_boot, seed=zlib.crc32(nm.encode()) % 1000), drop)
+        _REP.setdefault(len(races), 1)
+        do = inputs["periods"][nm].get("decision_odds")
+        if do and do.get("kind") == "sim_pre":           # 本番の再現: 判定に使うオッズを発走前の再現にし、版を並べた期間にする
+            key = "drift_" + do.get("phase", "t60")
+            if key not in _CACHE:
+                _CACHE[key] = load_drift(do.get("phase", "t60"))
+            vs = [simulate_pre_period(out[nm], _CACHE[key], k, {}) for k in range(int(do.get("n", 5)))]
+            out[nm] = stack_versions(out[nm], vs)
+    if cuts is None:                                     # 分位の区切りは訓練で決める（本番の再現なら、再現の特徴で）
+        cuts = fit_qcuts(out["train"].feats) if "train" in out else {}
+    for nm, p in out.items():
+        p.feats = apply_qcuts(p.feats, cuts)
+        p.__dict__.pop("_frecs", None)
+        if p.base is not None:
+            p.base.feats = apply_qcuts(p.base.feats, cuts)
+            p.base.__dict__.pop("_frecs", None)
     return out, cuts
 
 
@@ -1030,7 +1165,10 @@ def summarize_variant(s: dict, per: dict[str, Period], res: dict[str, dict]) -> 
     row = {"name": s["name"], "hash": strategy_hash({k: v for k, v in s.items() if k != "name"}), "spec": s}
     for nm, p in per.items():
         r = res[nm]
-        row[nm] = metrics(r["cost"], r["ret"], p.dates, p.W)
+        row[nm] = metrics_run(r, p, p.W)
+        if nm + "_fin" in res:                                        # 確定オッズで判定した値（楽観）
+            rf = res[nm + "_fin"]
+            row[nm + "_fin"] = metrics(rf["cost"], rf["ret"], p.base.dates, p.base.W)
         row[nm]["violation_races"] = r["n_violation_races"]
         row[nm]["violations"] = r["violations"]
         row[nm]["h_not_top_rate"] = float(((r["hrank"] > 0).sum()) / max((r["hrank"] >= 0).sum(), 1))
@@ -1049,7 +1187,12 @@ def summarize_variant(s: dict, per: dict[str, Period], res: dict[str, dict]) -> 
 def _eval_one(args):
     s, per_names = args
     per = _GLOBAL_PER
-    return s, {nm: run_strategy(per[nm].races, per[nm].frecs, s) for nm in per_names}
+    out = {}
+    for nm in per_names:
+        out[nm] = run_period(per[nm], s)
+        if per[nm].base is not None:                       # 確定オッズで判定した値（楽観）も並べる
+            out[nm + "_fin"] = run_strategy(per[nm].base.races, per[nm].base.frecs, s)
+    return s, out
 
 
 _GLOBAL_PER: dict[str, Period] = {}
@@ -1172,6 +1315,8 @@ def perturb_period(p: Period, sigma: float, seed: int, cuts: dict) -> Period:
 
 
 def odds_robustness(spec: dict, p: Period, cuts: dict, sigmas=(0.1, 0.2), seeds=(0, 1, 2)) -> dict:
+    if p.k > 1:                                      # 本番の再現では、発走前の再現の版ごとの回収率の幅で代える（metrics の sim_roi_min・max）
+        return {}
     out = {}
     for sg in sigmas:
         rois = []
@@ -1231,7 +1376,7 @@ def policy_search(ps: dict, var_rows: list[dict], res_list: list[dict], per: dic
                 mt, me = lt == lv, le == lv
                 j = cells.get(str(lv), -1)
                 cm = metrics(np.where(mt, cc, 0), np.where(mt, cr, 0), tr.dates)
-                cell_tab.append({"type": str(lv), "races_train": int(mt.sum()), "races_eval": int(me.sum()),
+                cell_tab.append({"type": str(lv), "races_train": int(mt.sum()) // rep_of(len(mt)), "races_eval": int(me.sum()) // rep_of(len(me)),
                                  "chosen": var_rows[ok[j]]["name"] if j >= 0 else "見送り",
                                  "train_insample": metrics(np.where(mt, it_c, 0), np.where(mt, it_r, 0), tr.dates),
                                  "train_cv": {k: cm.get(k) for k in ("bet_races", "hit_rate", "roi")},
@@ -1288,7 +1433,7 @@ def cmd_run(a) -> None:
     out = OUT_DIR / inputs.get("tag", "v6e")
     out.mkdir(parents=True, exist_ok=True)
     tr_spec = inputs["periods"]["train"]
-    cuts_path = out / f"qcuts_train_{strategy_hash({'years': tr_spec['years'], 'pred': tr_spec['pred']})}.json"   # 訓練の年・予測が変われば別の区切り
+    cuts_path = out / f"qcuts_train_{strategy_hash({'years': tr_spec['years'], 'pred': tr_spec['pred'], **({'decision_odds': tr_spec['decision_odds']} if tr_spec.get('decision_odds') else {})})}.json"   # 訓練の年・予測が変われば別の区切り
     cuts = json.loads(cuts_path.read_text()) if cuts_path.exists() else None
     per, cuts = prepare_periods(inputs, ("train", "eval"), cuts)
     if not cuts_path.exists():
@@ -1377,10 +1522,11 @@ def cmd_run(a) -> None:
                                                "arrays": _save_best_arrays(out, n, sel)}
         rec["odds_robustness_train"] = odds_robustness(sel["spec"], per["train"], cuts)
         # 回顧（訓練の期間だけ。方策は訓練全体で当てはめた版＝標本内）
-        rr = run_strategy(per["train"].races, per["train"].frecs, sel["spec"], detail=True)
+        rr = run_period(per["train"], sel["spec"], detail=True)
         rec["retro"] = retrospective(rr, per["train"].feats, per["train"].W)
-        rec["miss_types"] = miss_types(rr)
-        rec["h_reasons"] = rr["records"]["reason"].value_counts().to_dict()
+        kk = per["train"].k
+        rec["miss_types"] = {a_: int(round(b_ / kk)) for a_, b_ in miss_types(rr).items()}            # 版の数で割った件数
+        rec["h_reasons"] = {a_: int(round(b_ / kk)) for a_, b_ in rr["records"]["reason"].value_counts().to_dict().items()}
         rr["records"].to_parquet(out / f"cycle_{n:02d}_selected_train_races.parquet", index=False)
     rec["n_tried_cum"] = int(sum(v.get("n_tried", 0) for k, v in state["cycles"].items() if int(k) <= n))
     rec["top"] = _slim(cands[:15])
@@ -1459,12 +1605,16 @@ def _slim(rows: list[dict], full: bool = True, with_eval: bool = False) -> list[
     for r in rows:
         if full:
             x = {"name": r["name"], "hash": r["hash"], "train": r["train"], "train_folds": r.get("train_folds"), "spec": r["spec"]}
+            if r.get("train_fin"):
+                x["train_fin"] = r["train_fin"]
         else:
             x = {"name": r["name"], "hash": r["hash"], "train_folds": r.get("train_folds"),
                  "train": {k: r["train"].get(k) for k in ("bet_races", "bet_rate", "hit_rate", "roi", "roi_lo", "roi_hi", "avg_return",
                                                          "median_return", "median_hit_return", "roi_ex_top5", "violation_races", "h_fav1_rate", "top_fav1_rate")}}
         if with_eval:
             x["eval"] = r.get("eval", {})
+            if r.get("eval_fin"):
+                x["eval_fin"] = r["eval_fin"]
         out.append(x)
     return out
 
@@ -1489,7 +1639,8 @@ def _print_rec(rec: dict) -> None:
         print(f"選んだ: [{s['family']}] {s['name']}  fold {s['train_folds']}")
         print(f"  訓練 {_fmt(s['train'])}\n  評価 {_fmt(s['eval'])}")
         print(f"  評価の確かめ: {rec['eval_check']}  改善: {rec['improved']}")
-        print(f"  オッズの揺れ（訓練）: {rec['odds_robustness_train']}")
+        if rec.get("odds_robustness_train"):
+            print(f"  オッズの揺れ（訓練）: {rec['odds_robustness_train']}")
         print(f"  ◎ の理由: {rec['h_reasons']}  不的中: {rec['miss_types']}")
     print(f"上位（訓練の区間の下限）: 試した {rec['n_variants']} 本・方策 {rec['n_policies']} 本・条件を満たす {rec['n_eligible']} 本・累計 {rec['n_tried_cum']} 本")
     for t in rec["top"][:10]:
@@ -1514,28 +1665,30 @@ def choose_fav1_threshold(grid: list[dict], target: float = FAV1_TARGET, min_n: 
 
 
 def fav1_rows(p: Period) -> pd.DataFrame:
-    return _fav1_rows(p)
+    return _fav1_rows(p)          # 本番の再現なら、並べた全部の版の発走前の人気で 1 番人気を決める（件数は版の数で割らずに数える）
 
 
 def _fav1_rows(p: Period) -> pd.DataFrame:
+    n0 = max(len(p.races) // max(p.k, 1), 1)
     """レースごとの 1 番人気（確定オッズの順）の予測の連対率・勝率と、着順・単複の払戻。"""
     rows = []
-    for r, f in zip(p.races, p.frecs):
+    for idx_, (r, f) in enumerate(zip(p.races, p.frecs)):
         j = int(np.argmin(r.pop))
         if r.pop[j] != 1:
             continue
         others = np.delete(r.pw, j)
         h = str(int(r.hn[j]))
-        rows.append({"race_id": r.race_id, "date": r.date, "p2": float(r.p2[j]), "pw": float(r.pw[j]), "gap": float(r.pw[j] - others.max()),
+        rows.append({"race_id": r.race_id, "ver": idx_ // n0, "date": r.date, "p2": float(r.p2[j]), "pw": float(r.pw[j]), "gap": float(r.pw[j] - others.max()),
                      "r": float(r.r[j]) if r.r is not None and np.isfinite(r.r[j]) else np.nan,
                      "is_top": int(j == 0), "fin": float(r.fin[j]), "tansho": r.pay["tansho"].get(h, 0), "fukusho": r.pay["fukusho"].get(h, 0)})
     return pd.DataFrame(rows)
 
 
-def fav1_stats(d: pd.DataFrame) -> dict:
+def fav1_stats(d: pd.DataFrame, k: int = 1) -> dict:
+    """k = 本番の再現の版の数（件数は版の数で割る。率は版を通した平均）。"""
     if not len(d):
         return {"n": 0}
-    return {"n": int(len(d)), "rentai": float((d["fin"] <= 2).mean()), "win": float((d["fin"] == 1).mean()), "place": float((d["fin"] <= 3).mean()),
+    return {"n": int(round(len(d) / k)), "rentai": float((d["fin"] <= 2).mean()), "win": float((d["fin"] == 1).mean()), "place": float((d["fin"] <= 3).mean()),
             "roi_tansho": float(d["tansho"].sum() / (100 * len(d))), "roi_fukusho": float(d["fukusho"].sum() / (100 * len(d)))}
 
 
@@ -1546,24 +1699,25 @@ def cmd_fav1(a) -> None:
     out.mkdir(parents=True, exist_ok=True)
     per, _ = prepare_periods(inputs, ("train", "eval"), cuts={}, n_boot=10)
     tr, ev = fav1_rows(per["train"]), fav1_rows(per["eval"])
+    kt, ke = per["train"].k, per["eval"].k
     by = getattr(a, "by", "p2") or "p2"                     # p2 = 予測の連対率（第 1 回）、r = 市場とのずれ（第 2 回）
     col = "p2" if by == "p2" else "r"
     steps = np.round(np.arange(0.40, 0.951, 0.025), 3) if by == "p2" else np.round(np.arange(-0.5, 1.51, 0.05), 3)
     grid = []
     for t in steps:
-        st = fav1_stats(tr[tr[col] >= t])
+        st = fav1_stats(tr[tr[col] >= t], kt)
         st["p2_min"] = float(t)                             # 名前は p2_min のまま（r のときは r のしきい値）
         st["by"] = by
         grid.append(st)
     chosen = choose_fav1_threshold(grid)
-    res = {"target_rentai": FAV1_TARGET, "min_n": FAV1_MIN_N, "train_all_fav1": fav1_stats(tr), "eval_all_fav1": fav1_stats(ev), "grid_train": grid,
+    res = {"target_rentai": FAV1_TARGET, "min_n": FAV1_MIN_N, "train_all_fav1": fav1_stats(tr, kt), "eval_all_fav1": fav1_stats(ev, ke), "grid_train": grid,
            "chosen": chosen}
     if chosen:
         t = chosen["p2_min"]
-        res["train_exception"] = fav1_stats(tr[tr[col] >= t])
-        res["eval_exception"] = fav1_stats(ev[ev[col] >= t])
-        res["train_rest"] = fav1_stats(tr[~(tr[col] >= t)])
-        res["eval_rest"] = fav1_stats(ev[~(ev[col] >= t)])
+        res["train_exception"] = fav1_stats(tr[tr[col] >= t], kt)
+        res["eval_exception"] = fav1_stats(ev[ev[col] >= t], ke)
+        res["train_rest"] = fav1_stats(tr[~(tr[col] >= t)], kt)
+        res["eval_rest"] = fav1_stats(ev[~(ev[col] >= t)], ke)
         res["by"] = by
         res["train_races"], res["eval_races"] = len(per["train"].races), len(per["eval"].races)
     fmt = lambda x: "－" if x is None else f"{x * 100:.1f}%"   # noqa: E731
@@ -1603,14 +1757,15 @@ def _fold_pick(C: np.ndarray, R: np.ndarray, fit: np.ndarray, base: tuple[np.nda
     """fit のレースだけで、cycle 8 以降と同じ考え方（的中率の下限・基準の上位 5 件除きより上）で最良の 1 本を選ぶ（-1 = なし）。
     1 年分しかないので、順位は上位 5 件を除いた回収率（年ごとの最小は使えない）。"""
     bc_, br_ = base[0][fit], base[1][fit]
-    b5 = (br_.sum() - np.sort(br_[bc_ > 0])[::-1][:5].sum()) / max(bc_.sum(), 1)
+    b5 = (br_.sum() - np.sort(br_[bc_ > 0])[::-1][:5 * rep_of(C.shape[1])].sum()) / max(bc_.sum(), 1)
     best, bj = -1.0, -1
     for j in range(C.shape[0]):
         c, r = C[j, fit], R[j, fit]
         b = c > 0
-        if b.sum() < min_n or (r[b] > 0).mean() < min_hit:
+        kk = rep_of(C.shape[1])
+        if b.sum() < min_n * kk or (r[b] > 0).mean() < min_hit:
             continue
-        ex5 = (r.sum() - np.sort(r[b])[::-1][:5].sum()) / c.sum()
+        ex5 = (r.sum() - np.sort(r[b])[::-1][:5 * kk].sum()) / c.sum()
         if ex5 >= b5 and ex5 > best:
             best, bj = ex5, j
     return bj
@@ -1635,12 +1790,12 @@ def cmd_selcv(a) -> None:
     inputs = load_inputs(Path(a.inputs) if a.inputs else None)
     out = OUT_DIR / inputs.get("tag", "v6e")
     tr_spec = inputs["periods"]["train"]
-    cuts = json.loads((out / f"qcuts_train_{strategy_hash({'years': tr_spec['years'], 'pred': tr_spec['pred']})}.json").read_text())
+    cuts = json.loads((out / f"qcuts_train_{strategy_hash({'years': tr_spec['years'], 'pred': tr_spec['pred'], **({'decision_odds': tr_spec['decision_odds']} if tr_spec.get('decision_odds') else {})})}.json").read_text())
     per, _ = prepare_periods(inputs, ("train",), cuts)
     tr = per["train"]
     years = tr.feats["year"].to_numpy()
     baselines = json.loads((CFG_DIR / "baselines.json").read_text(encoding="utf-8"))["baselines"]
-    b0 = run_strategy(tr.races, tr.frecs, baselines[0])
+    b0 = run_period(tr, baselines[0])
     base = (b0["cost"], b0["ret"])
     rows = []
     for n in [int(x) for x in a.cycles.split(",")]:
@@ -1651,7 +1806,8 @@ def cmd_selcv(a) -> None:
         if not strats:
             print(n, "固定の格子に、1 番人気の方針に合う候補なし", flush=True)
         if strats:
-            key = strategy_hash({"pred": tr_spec["pred"], "years": tr_spec["years"], "cuts": cuts, "specs": [strategy_hash(x) for x in strats]})
+            key = strategy_hash({"pred": tr_spec["pred"], "years": tr_spec["years"], "cuts": cuts, "decision_odds": tr_spec.get("decision_odds"), "pre": (_sha(PRE_ODDS) if tr_spec.get("decision_odds") and PRE_ODDS.exists() else None),
+                          "specs": [strategy_hash(x) for x in strats]})
             npz = out / f"cands_c{n:02d}_{key}.npz"           # 予測・区切り・買い方が変われば作り直す
             z = np.load(npz, allow_pickle=True) if npz.exists() else None
             if z is not None and list(z["names"]) == [x["name"] for x in strats]:
@@ -1738,7 +1894,7 @@ def level_stats(cost: np.ndarray, ret: np.ndarray, labels: np.ndarray, years: np
     for lv in np.unique(labels):
         m = labels == lv
         c, r = np.where(m, cost, 0), np.where(m, ret, 0)
-        if (c > 0).sum() < min_n:
+        if (c > 0).sum() < min_n * rep_of(len(cost)):
             continue
         st = metrics(c, r, dates, W)
         st["folds"] = {str(y): (float(r[years == y].sum() / c[years == y].sum()) if c[years == y].sum() > 0 else None) for y in np.unique(years)}
@@ -1804,13 +1960,13 @@ def cmd_tiers(a) -> None:
     inputs = load_inputs(Path(a.inputs) if a.inputs else None)
     out = OUT_DIR / inputs.get("tag", "v6e")
     tr_spec = inputs["periods"]["train"]
-    cuts = json.loads((out / f"qcuts_train_{strategy_hash({'years': tr_spec['years'], 'pred': tr_spec['pred']})}.json").read_text())
+    cuts = json.loads((out / f"qcuts_train_{strategy_hash({'years': tr_spec['years'], 'pred': tr_spec['pred'], **({'decision_odds': tr_spec['decision_odds']} if tr_spec.get('decision_odds') else {})})}.json").read_text())
     per, _ = prepare_periods(inputs, ("train", "eval"), cuts)
     spec = resolve_auto([json.loads(Path(a.spec).read_text(encoding="utf-8"))], out)[0]
     base = json.loads((CFG_DIR / "baselines.json").read_text(encoding="utf-8"))["baselines"][0]
     tr, ev = per["train"], per["eval"]
-    rt, re_ = run_strategy(tr.races, tr.frecs, spec), run_strategy(ev.races, ev.frecs, spec)
-    b0 = run_strategy(tr.races, tr.frecs, base)
+    rt, re_ = run_period(tr, spec), run_period(ev, spec)
+    b0 = run_period(tr, base)
     base_roi = float(b0["ret"].sum() / b0["cost"].sum())
     years = tr.feats["year"].to_numpy()
     allm = np.ones(len(tr.races), bool)
@@ -1876,7 +2032,7 @@ def cmd_tiers(a) -> None:
 def _period_out(inputs: dict) -> tuple[Path, dict, dict]:
     out = OUT_DIR / inputs.get("tag", "v6e")
     tr_spec = inputs["periods"]["train"]
-    cuts = json.loads((out / f"qcuts_train_{strategy_hash({'years': tr_spec['years'], 'pred': tr_spec['pred']})}.json").read_text())
+    cuts = json.loads((out / f"qcuts_train_{strategy_hash({'years': tr_spec['years'], 'pred': tr_spec['pred'], **({'decision_odds': tr_spec['decision_odds']} if tr_spec.get('decision_odds') else {})})}.json").read_text())
     return out, tr_spec, cuts
 
 
@@ -1910,14 +2066,15 @@ def cmd_pick_final(a) -> None:
         years = tr.feats["year"].to_numpy()
         cyc = json.loads((CYC_DIR / f"cycle_{n:02d}.json").read_text(encoding="utf-8"))
         strats = [x for x in resolve_auto(expand_variants(cyc), out) if not family(x).startswith("参考") and fav1_rule_ok(x)]
-        key = strategy_hash({"pred": tr_spec["pred"], "years": tr_spec["years"], "cuts": cuts, "specs": [strategy_hash(x) for x in strats]})
+        key = strategy_hash({"pred": tr_spec["pred"], "years": tr_spec["years"], "cuts": cuts, "decision_odds": tr_spec.get("decision_odds"), "pre": (_sha(PRE_ODDS) if tr_spec.get("decision_odds") and PRE_ODDS.exists() else None),
+                          "specs": [strategy_hash(x) for x in strats]})
         zp = out / f"cands_c{n:02d}_{key}.npz"
         if not zp.exists():
             raise SystemExit(f"{zp.name} がありません（同じ予測・区切り・買い方で selcv をやり直す）")
         z = np.load(zp, allow_pickle=True)
         assert list(z["names"]) == [x["name"] for x in strats], "候補の配列と設定が合いません（selcv をやり直す）"
         base = json.loads((CFG_DIR / "baselines.json").read_text(encoding="utf-8"))["baselines"][0]
-        b0 = run_strategy(tr.races, tr.frecs, base)
+        b0 = run_period(tr, base)
         bestj = _fold_pick(z["cost"], z["ret"], np.ones(len(tr.races), bool), (b0["cost"], b0["ret"]), best["min_hit"], MIN_BET_RACES)   # selcv と同じ選び方
         if bestj < 0:
             raise SystemExit("訓練全体で条件を満たす候補がありません")
@@ -1927,8 +2084,11 @@ def cmd_pick_final(a) -> None:
     chk = {}
     for nm in ("train", "eval"):
         pp = per2[nm]
-        r1, r0 = run_strategy(pp.races, pp.frecs, resolve_auto([spec], out)[0]), run_strategy(pp.races, pp.frecs, base)
-        m1 = metrics(r1["cost"], r1["ret"], pp.dates, pp.W)
+        r1, r0 = run_period(pp, resolve_auto([spec], out)[0]), run_period(pp, base)
+        m1 = metrics_run(r1, pp, pp.W)
+        if pp.base is not None:                              # 確定オッズで判定した値（楽観）も
+            rf = run_strategy(pp.base.races, pp.base.frecs, resolve_auto([spec], out)[0])
+            chk.setdefault("final_odds", {})[nm] = metrics(rf["cost"], rf["ret"], pp.base.dates, pp.base.W)
         m1["h_fav1_rate"] = float(((r1["hpop"] == 1) & (r1["hrank"] >= 0)).sum() / max((r1["hrank"] >= 0).sum(), 1))
         m1["top_fav1_rate"] = float(((r1["top_pop"] == 1) & (r1["hrank"] >= 0)).sum() / max((r1["hrank"] >= 0).sum(), 1))
         chk[nm] = {"metrics": m1, "B0": metrics(r0["cost"], r0["ret"], pp.dates), "diff_vs_B0": paired_diff(r1, r0, pp.W)}
@@ -1991,6 +2151,8 @@ def _input_hashes(inputs: dict) -> dict:
     paths = [str(pred_path(x)) for sp in inputs["periods"].values() for x in sp["pred"]]
     paths += [str(x) for x in PAYOFF_PATHS] + [x for sp in inputs["periods"].values() for x in ([sp["pre_odds"]] if sp.get("pre_odds") else [])]
     paths += [str(CFG_DIR / "baselines.json"), str(Path(__file__).resolve())]
+    if any((sp.get("decision_odds") or {}).get("kind") == "sim_pre" for sp in inputs["periods"].values()):
+        paths.append(str(PRE_ODDS))                          # 発走前の再現のずれの元
     from src.config.data_paths import TABLES_DIR
 
     yrs = sorted({y for sp in inputs["periods"].values() for y in sp["years"]})
@@ -2131,15 +2293,20 @@ def cmd_final(a) -> None:
            "group": grp, "inputs_changed_after_freeze": changed,
            "note": "test は凍結を commit した後に 1 回だけ見た。結果は docs/operations/retrain_trials/bet_test2025_<hash>.json に写して commit する（2 回目を拒む印）。"}
     for nm, p in per.items():
-        r = run_strategy(p.races, p.frecs, spec, detail=True)
-        m = metrics(r["cost"], r["ret"], p.dates, p.W)
+        r = run_period(p, spec, detail=True)
+        m = metrics_run(r, p, p.W)
+        if p.base is not None:
+            rf = run_strategy(p.base.races, p.base.frecs, spec)
+            fin_m = metrics(rf["cost"], rf["ret"], p.base.dates, p.base.W)
+        else:
+            fin_m = None
         m["h_fav1_rate"] = float(((r["hpop"] == 1) & (r["hrank"] >= 0)).sum() / max((r["hrank"] >= 0).sum(), 1))
         m["top_fav1_rate"] = float(((r["top_pop"] == 1) & (r["hrank"] >= 0)).sum() / max((r["hrank"] >= 0).sum(), 1))
         bs = {}
         for b in bases[:2] + bases[-1:]:
-            rb = run_strategy(p.races, p.frecs, b)
+            rb = run_period(p, b)
             bs[b["name"]] = {k: metrics(rb["cost"], rb["ret"], p.dates).get(k) for k in KEYS_CV}
-        rb0 = run_strategy(p.races, p.frecs, bases[0])
+        rb0 = run_period(p, bases[0])
         d = paired_diff(r, rb0, p.W)
         tiers = {}
         if body.get("tiers_model"):
@@ -2149,11 +2316,16 @@ def cmd_final(a) -> None:
                 st = metrics(np.where(mk, r["cost"], 0), np.where(mk, r["ret"], 0), p.dates, p.W)
                 tiers[str(k)] = {kk: st.get(kk) for kk in KEYS_CV}
         f1 = fav1_rows(p)
-        used = set(r["records"].loc[r["records"]["reason"].str.contains("1番人気の例外", na=False), "race_id"])   # 買い方が実際に例外で 1 番人気を ◎ にしたレース
-        exc = fav1_stats(f1[f1["race_id"].isin(used)]) if len(f1) else {}
+        rec_ = r["records"]
+        if "ver" not in rec_:
+            rec_["ver"] = 0
+        mk_ = rec_["reason"].str.contains("1番人気の例外", na=False)
+        used = set(zip(rec_.loc[mk_, "ver"], rec_.loc[mk_, "race_id"]))     # 買い方が実際に例外で 1 番人気を ◎ にした（版, レース）
+        exc = fav1_stats(f1[[(v, x) in used for v, x in zip(f1["ver"], f1["race_id"])]], p.k) if len(f1) else {}
         sp_ = inputs["periods"][nm]
-        res["periods"][nm] = {"metrics": m, "baselines": bs, "diff_vs_B0": d, "tiers": tiers, "fav1_exception": exc,
-                              "role": sp_.get("role"), "odds_source": "発走前のオッズ（最後のスナップショット）で ◎・人気を決めた" if sp_.get("pre_odds") else "確定オッズ",
+        res["periods"][nm] = {"metrics": m, "metrics_final_odds": fin_m, "baselines": bs, "diff_vs_B0": d, "tiers": tiers, "fav1_exception": exc,
+                              "role": sp_.get("role"), "odds_source": ("発走前のオッズ（実際のスナップショット）で ◎・人気を決めた" if sp_.get("pre_odds") else
+                                             (f"発走前のオッズの再現（{p.k} 通りを並べた平均）で判定" if p.k > 1 else "確定オッズで判定")),
                               "pred": sp_["pred"],
                               "drop": p.drop, "miss_types": miss_types(r), "h_reasons": r["records"]["reason"].value_counts().to_dict()}
         r["records"].to_parquet(out / f"final_{nm}_races_{body['hash']}.parquet", index=False)

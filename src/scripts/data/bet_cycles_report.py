@@ -24,7 +24,7 @@ LOG = ROOT / "docs/operations/retrain_trials/bet_cycles_log.json"
 HTML = ROOT / "docs/html/operations/bet_cycles.html"
 MD = ROOT / "docs/operations/retrain_trials/bet_optimization_20261116.md"
 MD_BEGIN, MD_END = "<!-- bet_cycles_report:begin -->", "<!-- bet_cycles_report:end -->"
-KEYS = ("h_fav1_rate", "top_fav1_rate", "races", "bet_races", "bet_rate", "hit_rate", "roi", "roi_lo", "roi_hi", "avg_return", "median_return", "median_hit_return", "avg_cost",
+KEYS = ("h_fav1_rate", "top_fav1_rate", "sim_roi_min", "sim_roi_max", "races", "bet_races", "bet_rate", "hit_rate", "roi", "roi_lo", "roi_hi", "avg_return", "median_return", "median_hit_return", "avg_cost",
         "roi_ex_top1", "roi_ex_top5", "daily_roi_sd", "max_drawdown", "max_drawdown_days", "plus_day_rate", "days")
 
 
@@ -59,6 +59,7 @@ def build_log(tag: str) -> dict:
             "n": r["n"], "title": r.get("title"), "hypothesis": r.get("hypothesis"), "change": r.get("change"),
             "n_variants": r.get("n_variants"), "n_policies": r.get("n_policies"), "n_eligible": r.get("n_eligible"), "n_tried_cum": r.get("n_tried_cum"),
             "selected": {"name": s.get("name"), "family": s.get("family"), "spec": s.get("spec"), "train": _m(s.get("train")), "eval": _m(s.get("eval")),
+                         "train_fin": _m(s.get("train_fin")) if s.get("train_fin") else None, "eval_fin": _m(s.get("eval_fin")) if s.get("eval_fin") else None,
                          "train_folds": s.get("train_folds"), "kind": s.get("kind"), "cells": s.get("cells")} if s else None,
             "eval_check": r.get("eval_check"), "improved": r.get("improved"), "vs_prev_selected": r.get("vs_prev_selected"), "odds_robustness": r.get("odds_robustness_train"),
             "families": [{"family": f["family"], "name": f["name"], "train": _m(f["train"]), "train_folds": f.get("train_folds"),
@@ -335,13 +336,25 @@ def render_cycle(c: dict) -> str:
          f"（試した {c.get('n_variants', 0)} 本{('・方策 ' + str(c['n_policies']) + ' 本') if c.get('n_policies') else ''}、条件を満たす {c.get('n_eligible', 0)} 本、累計 {c.get('n_tried_cum', 0)} 本）</p>"]
     if s:
         h.append(f"<p><b>選んだ</b>［{esc(s['family'])}］: {esc(spec_text(s['spec']))}<br><span class=\"muted\">{esc(s['name'])}</span></p>")
-        h.append(table(["期間"] + MUST_HEAD, [["訓練"] + must_cells(s["train"]), ["評価（確かめ）"] + must_cells(s["eval"])]))
+        rows_ = [["訓練" + ("（発走前で判定・本番の再現）" if s.get("train_fin") else "")] + must_cells(s["train"])]
+        if s.get("train_fin"):
+            rows_.append(["訓練（確定オッズで判定・楽観）"] + must_cells(s["train_fin"]))
+        rows_.append(["評価（確かめ" + ("・本番の再現）" if s.get("eval_fin") else "）")] + must_cells(s["eval"]))
+        if s.get("eval_fin"):
+            rows_.append(["評価（確定オッズで判定・楽観）"] + must_cells(s["eval_fin"]))
+        h.append(table(["期間"] + MUST_HEAD, rows_))
         ev = c.get("eval_check") or {}
         fo = s.get("train_folds") or {}
         rb = c.get("odds_robustness") or {}
+        if rb:
+            tail = "オッズの揺れ（訓練）: " + "・".join(f"σ={k} 平均 {pct(v['mean'])}（最小 {pct(v['min'])}）" for k, v in rb.items())
+        elif s["train"].get("sim_roi_min") is not None:
+            tail = f"発走前の再現の版ごとの回収率（訓練）: {pct(s['train'].get('sim_roi_min'))}〜{pct(s['train'].get('sim_roi_max'))}"
+        else:
+            tail = ""
         h.append(f"<p>訓練の年ごと: {'・'.join(f'{y} {pct(v)}' for y, v in fo.items())}。評価の確かめ: {verdict_badge(ev.get('verdict'))} "
                  f"（B0 との差 {ev.get('diff_vs_base', 0) * 100:+.1f} 点、区間 {ev.get('diff_lo', 0) * 100:+.1f}〜{ev.get('diff_hi', 0) * 100:+.1f}）。"
-                 f"オッズの揺れ（訓練）: " + "・".join(f"σ={k} 平均 {pct(v['mean'])}（最小 {pct(v['min'])}）" for k, v in rb.items()) + "</p>")
+                 + tail + "</p>")
         if s.get("cells"):
             rows = [[esc(x["type"]), esc(x["chosen"]), yen(x["races_train"]), yen((x.get("train_cv") or {}).get("bet_races")),
                      pct((x.get("train_cv") or {}).get("roi")), pct((x.get("train_insample") or {}).get("roi"))] for x in s["cells"]]

@@ -12,7 +12,7 @@
 #   bash scripts/gcp/deploy_cloud_run_api.sh all     [--dry-run|--apply]   # build → deploy(--no-traffic)。切替は promote
 #
 # 必須の環境変数: PROJECT_ID, GCS_BUCKET。任意: REGION(asia-northeast1) SERVICE(keiba-api) TAG(日時) AR_REPO(keiba-vpn)
-#   MEMORY(2Gi) CPU(1) MIN_INSTANCES(0) MAX_INSTANCES(3) CONCURRENCY(30) TIMEOUT(60) GCS_PREFIX WITH_NEXT_KEY(1 で KEIBA_PROXY_KEY_NEXT も載せる) CPU_ALLOC(request|always。既定 request)
+#   MEMORY(2Gi。本番は deploy_gcp.sh が 4Gi を渡す) CPU(1) MIN_INSTANCES(0) MAX_INSTANCES(3) CONCURRENCY(30) TIMEOUT(60) GCS_PREFIX WITH_NEXT_KEY(1 で KEIBA_PROXY_KEY_NEXT も載せる) CPU_ALLOC(request|always。既定 request)
 # 事前に scripts/gcp/setup_cloud_run_api.sh で サービスアカウント・Secret Manager・Artifact Registry を用意する。
 # =============================================================================
 set -euo pipefail
@@ -74,6 +74,9 @@ ENV_VARS+=",KEIBA_PRERENDER=1,KEIBA_PRERENDER_MAX_AGE_SEC=120,KEIBA_WARMUP_ON_ST
 [ -z "$GCS_PREFIX" ] || ENV_VARS+=",GCS_PREFIX=${GCS_PREFIX}"
 # API_TEST_USER=1 のときだけテストユーザー(config/members.json の test)を有効にする。stg のタグ付きリビジョン専用（deploy_gcp.sh が付ける）
 [ "${API_TEST_USER:-0}" != 1 ] || ENV_VARS+=",KEIBA_TEST_USER=1"
+# MEMBERS_STORE=gcs のときだけ、会員名簿の正本を GCS に置く（管理 API・決済の Webhook の書き込みを GCS へ世代の条件つきで書く）。
+# 先にホストの .env にも KEIBA_MEMBERS_STORE=gcs を入れてから使う（ホストの cron が名簿を上げ続けると、Cloud Run の書き込みを上書きする）。手順: docs/operations/members_store_gcs.md
+[ "${MEMBERS_STORE:-}" != gcs ] || ENV_VARS+=",KEIBA_MEMBERS_STORE=gcs"
 # Secret Manager（<環境変数名>=<シークレット名>:<バージョン>）。値はここに書かない
 # 秘密の名前は scripts/gcp/put_secret.sh で登録したもの（gcp_setup_runbook.md 5 章）。左が環境変数、右が Secret Manager の名前
 SECRETS="KEIBA_PROXY_KEY=KEIBA_PROXY_KEY:latest,KEIBA_HEARTBEAT_SECRET=KEIBA_HEARTBEAT_KEY:latest"
@@ -123,6 +126,20 @@ deploy() {
   echo "# 戻す: bash scripts/gcp/rollback_cloud_run_api.sh --apply"
 }
 
+mem_mib() {  # Cloud Run のメモリの表記（512Mi・2Gi・4G・4096M など。整数のみ）を MiB の整数に。読めなければ 0
+  local v="$1" n
+  case "$v" in
+    *Gi) n="${v%Gi}" ;; *Mi) n="${v%Mi}" ;; *G) n="${v%G}" ;; *M) n="${v%M}" ;; *) echo 0; return ;;
+  esac
+  [[ "$n" =~ ^[0-9]+$ ]] || { echo 0; return; }
+  case "$v" in
+    *Gi) echo $(( n * 1024 )) ;;
+    *Mi) echo "$n" ;;
+    *G) echo $(( n * 1000000000 / 1048576 )) ;;
+    *M) echo $(( n * 1000000 / 1048576 )) ;;
+  esac
+}
+
 promote() {
   # PROMOTE_TAG（例 rc1b30b715。本番反映が作った通信 0% のリビジョンのタグ）があれば、そのリビジョンを名指しで切り替える。
   # 「最新のリビジョン」にすると、本番反映の途中で stg の配備が入ったとき stg のリビジョン（テストユーザー付き）を指してしまう（2026-11-05）
@@ -138,6 +155,16 @@ promote() {
     # テストユーザーが有効なリビジョン(stg 用)を本番の通信に載せない
     if gcloud run revisions describe "$rev" --project "$PROJECT_ID" --region "$REGION" --format='value(spec.containers[0].env)' | grep -q KEIBA_TEST_USER; then
       echo "リビジョン $rev はテストユーザー有効(stg 用)のため、通信を切り替えません" >&2; exit 3
+    fi
+    # メモリが PROMOTE_MIN_MEMORY（既定 4Gi）未満のリビジョンを本番の通信に載せない（2Gi で張り付いた。docs/operations/api_memory_20261117.md）。
+    #   CI（scripts/ci/deploy_gcp.sh）は本番のメモリ（PROD_MEMORY。既定 4Gi）をそのまま閾値として渡す
+    local mem min_mib have_mib; mem="$(gcloud run revisions describe "$rev" --project "$PROJECT_ID" --region "$REGION" --format='value(spec.containers[0].resources.limits.memory)')"
+    min_mib="$(mem_mib "${PROMOTE_MIN_MEMORY:-4Gi}")"; have_mib="$(mem_mib "$mem")"
+    if [ "$min_mib" -le 0 ]; then       # 閾値が読めないときは安全な側（切り替えない）に倒す
+      echo "PROMOTE_MIN_MEMORY=${PROMOTE_MIN_MEMORY:-} を読めないため、通信を切り替えません（例: 4Gi）" >&2; exit 3
+    fi
+    if [ "$have_mib" -lt "$min_mib" ]; then
+      echo "リビジョン $rev のメモリ ${mem:-不明} は ${PROMOTE_MIN_MEMORY:-4Gi} 未満のため、通信を切り替えません" >&2; exit 3
     fi
   fi
   if [ -n "$rev" ]; then
