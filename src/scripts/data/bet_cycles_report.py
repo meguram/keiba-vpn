@@ -446,7 +446,9 @@ def main() -> None:
     else:
         log = build_log(a.tag)
         notes = {"v6e": "試しの回し: 本番 v6e の OOF（p_win・p_top2・p_top3）。道具と 20 サイクルの枠組みを作るために回した。採否は最終モデルの回しを正とする。",
-                 "fix3": "最終モデル（model-improve-cycles の cycles16_fix3）の OOF。"}
+                 "fix3": "最終モデル（model-improve-cycles の cycles16_fix3）の 2022〜24 年の OOF（勝率だけ。連対率・複勝率は Harville で補った）。",
+                 "fix3p": "最終モデルの p_top2・p_top3 入りの 2022〜24 年の OOF（handoff/oof_2022_2024。2025 年 test と同じ作り）。",
+                 "final": "最後の材料: 最終モデルの p_top 入りの OOF、訓練 2019〜22・評価 2023〜24。この回しで凍結し、test 2025 を 1 回だけ見る。"}
         log["note"] = notes.get(a.tag, "")
         for t in [x for x in a.others.split(",") if x]:
             o = build_log(t)
