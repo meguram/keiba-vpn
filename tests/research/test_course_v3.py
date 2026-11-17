@@ -79,3 +79,16 @@ def test_hyp_ex():
     cells = {"u": {"buy": [b], "kill": []}}
     assert len(V.select_cells(cells, V.C3())["u"]["buy"]) == 1
     assert V.select_cells(cells, V.C3(hyp_ex="能力"))["u"]["buy"] == []                 # 能力の入った組は外す
+
+
+def test_race_side_filters():
+    from tests.research.test_course_run import _toy
+    d, L = _toy(n_races=6)
+    d["field_decl"] = [16 if r.endswith(("0", "1", "2")) else 10 for r in d["race_id"]]
+    kept = {"東京芝1600|1勝・2勝": {"buy": [{"types": ["A01"], "levels": ["1着"], "rate": 1.0, "win_c": 1.0}], "kill": []}}
+    H, _, _ = V.pick(d, L, kept, V.C3(groups=3))
+    assert len(H) == 6
+    H2, _, _ = V.pick(d, L, kept, V.C3(groups=3, field_min=15))
+    assert len(H2) == 3                                                               # 15 頭以上のレースだけ
+    H3, _, _ = V.pick(d, L, kept, V.C3(groups=3, classes="新馬"))
+    assert len(H3) == 0                                                               # 群が違う

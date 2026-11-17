@@ -138,6 +138,9 @@ class C3:
     req_breadth: bool = True
     p_max: float = 0.05
     hyp_ex: str = ""           # 使わない仮説の型（「能力,人」のように。市場に織り込まれやすい型を外す版）
+    # 買うレースの側（市場が見落としやすいレースに絞る版。出馬表の時点で分かる値だけ）
+    classes: str = ""          # 買う単位の群（「新馬,新馬・未勝利」のように。空 = すべて）
+    field_min: int = 0         # 出走表の頭数（field_decl）の下限
     # ◎ の作り
     weight: str = "rate"       # count・rate・roi・lb
     min_score: float = 0.0     # ◎ の点の下限（届かないレースは見送り）
@@ -315,6 +318,8 @@ def pick(d: pd.DataFrame, L: pd.DataFrame, kept: dict, c: C3) -> tuple[np.ndarra
     race = d["race_id"].astype(str).to_numpy()
     hn = pd.to_numeric(d["hn"], errors="coerce").fillna(99).to_numpy()
     unit = units_of(d, c)
+    cls_ok = set(x for x in c.classes.split(",") if x)
+    fd = pd.to_numeric(d["field_decl"] if "field_decl" in d.columns else d["field"], errors="coerce").fillna(0).to_numpy()
     H, Pw, K = [], [], np.zeros(len(d), bool)
     for u in sorted(set(unit)):
         cu = kept.get(u)
@@ -337,7 +342,8 @@ def pick(d: pd.DataFrame, L: pd.DataFrame, kept: dict, c: C3) -> tuple[np.ndarra
             if c.kill_first:
                 s[kh[j]] = 0.0
             hm = -1
-            if s.max() > max(c.min_score, 0.0):
+            race_ok = (not cls_ok or u.split("|", 1)[1] in cls_ok) and fd[idx[j[0]]] >= c.field_min
+            if race_ok and s.max() > max(c.min_score, 0.0):
                 hm = int(j[np.lexsort((hn[idx][j], -s))][0])
                 H.append(idx[hm])
                 Pw.append(pw[hm])
