@@ -50,12 +50,14 @@ PREREG_KILL = Path(os.environ.get("GRADED_PREREG_KILL") or Path(__file__).with_n
 PREREG_BUY = Path(os.environ.get("GRADED_PREREG_BUY") or Path(__file__).with_name("prereg_buy.json"))
 ROUND2_NOTE = ("2 回目の評価（2025・2026 年の結果を一度見た後）。ユーザーの依頼（統括役経由、2026-11-14）: 各パターンに回収率を持たせ、"
                "回収率まで裏付けのあるパターンだけで印を付ける。基準はいろいろな版を並べる。")
-DISC, CONF, EVAL = (2018, 2021), (2022, 2024), (2025, 2026)
+# 材料の区切りの年（年 1 回の決め直しで変える。src/research/graded/material.py が GRADED_MATERIAL_END で渡す。既定は最初の材料の 2024 年）
+MATERIAL_END = int(os.environ.get("GRADED_MATERIAL_END") or 2024)
+DISC, CONF, EVAL = (2018, MATERIAL_END - 3), (MATERIAL_END - 2, MATERIAL_END), (MATERIAL_END + 1, MATERIAL_END + 2)
 ROUND3_NOTE = ("3 回目の評価（2025・2026 年の結果を二度見た後）。ユーザーの依頼（統括役経由、2026-11-15）: 好成績の点で ◎○ を選び、"
                "極端に成績の悪いルール（[0-0-0-n] など）に当てはまる馬を消して、相手を消去法で絞る。版はまとめて prereg_kill.json に凍結した。")
 ROUND4_NOTE = ("4 回目の評価（2025・2026 年の結果を三度見た後）。ユーザーの依頼（統括役経由、2026-11-15）: 「買い」は 3 着内が 7〜8 割を占め、"
                "単勝か複勝の回収率が 100% を超える抽出条件（切り口の AND）に限る。過学習は許す。版はまとめて prereg_buy.json に凍結した。")
-DEV_PAY = (2020, 2024)   # 払戻の表（payoff.parquet）は 2020 年から。開発期間の買い方の値はこの範囲だけ（版の選択には使わない）
+DEV_PAY = (2020, MATERIAL_END)   # 払戻の表（payoff.parquet）は 2020 年から。開発期間の買い方の値はこの範囲だけ（版の選択には使わない）
 Z_DISC, Z_CONF = 1.645, 1.2816          # 発見は片側 95%、確認は片側 90%
 LAMS = (0.5, 1.0, 2.0)
 PAYOFFS = [REPO / "data/local/modeling/betting/payoff.parquet", REPO / "data/local/modeling/betting_2026/payoff.parquet"]
@@ -185,7 +187,7 @@ def cmd_select() -> None:
     pick = vt[vt["set"] == "preday"].sort_values("auc_conf", ascending=False).iloc[0] if len(vt) else None
     pre = {
         "frozen_at": datetime.now(JST).isoformat(timespec="seconds"),
-        "note": "2016〜2024 年の中だけで決めた。2025・2026 年の評価の前に凍結し、評価の後に変えない。",
+        "note": f"2016〜{CONF[1]} 年の中だけで決めた。{EVAL[0]}・{EVAL[1]} 年の評価の前に凍結し、評価の後に変えない。",
         "periods": {"discovery": DISC, "confirm": CONF, "evaluate": EVAL},
         "thresholds": {"z_disc": Z_DISC, "z_conf": Z_CONF, "min_main_n": M.MIN_MAIN_N, "min_main_ed": M.MIN_MAIN_ED, "min_sub_n": M.MIN_SUB_N,
                        "min_sub_races": M.MIN_SUB_RACES, "sub_fallback_n": M.SUB_FALLBACK_N, "max_share": M.MAX_SHARE, "good_edhit": M.GOOD_EDHIT,
@@ -200,7 +202,7 @@ def cmd_select() -> None:
                       "rep": {s: reps[s].get(t) for s in sets}} for t in main_types},
         "sets": {s: {"adopted": sets[s], "used": sorted(set(reps[s].values()))} for s in sets},
         "comparison": {"megu": "前日版の使う型に M01・M02（めぐ指数の順位）を足した版。採否の対象にしない、比較だけ",
-                       "frozen_counts": "件数を 2024 年末で止めた版（採否・m・λ は同じ）"},
+                       "frozen_counts": f"件数を {CONF[1]} 年末で止めた版（採否・m・λ は同じ）"},
         "evaluation": {"metrics": "◎の勝率・複勝率、◎○▲の3着内の頭数、◎の単勝・複勝の回収率（各100円）、◎→○▲の馬連・ワイドの流し（2点・200円）の回収率",
                        "bootstrap": "レース単位 2000 回、95% 区間",
                        "breakdown": "G1・G2・G3 別、芝・ダート別、主あり（同じレース名 × 同じコースの過去の回が 4 回以上）／副・全体だけ の別（各 5 レース以上）",
@@ -231,7 +233,7 @@ def cmd_select_roi() -> None:
     out = {
         "frozen_at": datetime.now(JST).isoformat(timespec="seconds"),
         "evaluation_round": 2,
-        "note": ROUND2_NOTE + " 版の一覧・パターンの採否は 2016〜2024 年の中だけで決め、評価の前に凍結した。評価の後に版を足したり選び直したりしない。",
+        "note": ROUND2_NOTE + f" 版の一覧・パターンの採否は 2016〜{CONF[1]} 年の中だけで決め、評価の前に凍結した。評価の後に版を足したり選び直したりしない。",
         "base_prereg": {"path": "src/research/graded/prereg.json", "frozen_at": pre["frozen_at"], "uses": "縮める強さ m・主の重み λ・型の採否（採用した型）"},
         "periods": {"discovery": DISC, "confirm": CONF, "evaluate": EVAL},
         "grid": R.GRID, "small_grid": R.SMALL_GRID, "crit_m": R.CRIT_M, "families": [R.FAMILY_BIG, R.FAMILY_SMALL], "primary": R.version_name(R.PRIMARY), "n_versions": len(vers),
@@ -535,7 +537,7 @@ def cmd_select_kill() -> None:
     out = {
         "frozen_at": datetime.now(JST).isoformat(timespec="seconds"),
         "evaluation_round": 3,
-        "note": ROUND3_NOTE + " 版の一覧・主に見る版は 2016〜2024 年の中だけで、払戻を使わない消しの精度で決めた。評価の後に版を足したり選び直したりしない。",
+        "note": ROUND3_NOTE + f" 版の一覧・主に見る版は 2016〜{CONF[1]} 年の中だけで、払戻を使わない消しの精度で決めた。評価の後に版を足したり選び直したりしない。",
         "base_prereg": {"path": "src/research/graded/prereg.json", "frozen_at": pre["frozen_at"], "uses": "前日版の点・印（m・λ・型の重み・使う型）"},
         "roi_prereg": {"path": "src/research/graded/prereg_roi.json", "frozen_at": pre_roi["frozen_at"], "uses": "主に見る回収率版の避けるパターン（軸 回収率の避ける）"},
         "periods": {"discovery": DISC, "confirm": CONF, "evaluate": EVAL, "dev_bets": DEV_PAY},

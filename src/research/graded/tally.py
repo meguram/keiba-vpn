@@ -14,6 +14,8 @@ ed（そのパターンの馬がいたレースの数）・edhit（そのパタ�
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import pandas as pd
 
@@ -23,7 +25,7 @@ STATS = ["n", "w1", "w2", "w3", "e3", "e1", "ed", "edhit", "np", "rt", "rf", "rt
 RET = ["np", "rt", "rf", "rtc", "rfc"]
 LAYERS = ("main", "sub", "sub4", "glob")
 GRADES = ("G1", "G2", "G3")
-FREEZE_END = pd.Timestamp("2024-12-31")
+FREEZE_END = pd.Timestamp(f"{int(os.environ.get('GRADED_MATERIAL_END') or 2024)}-12-31")   # 材料の区切りの年の末（既定 2024）
 
 
 def base_frame(d: pd.DataFrame) -> pd.DataFrame:
