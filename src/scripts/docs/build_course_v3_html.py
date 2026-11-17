@@ -23,17 +23,21 @@ BASE = Path(os.environ.get("COURSE_OUT") or "/home/jovyan/work/course_out")
 OUT = REPO / "data/meta/course/course_v3_cycles.html"
 COLS = [("bet_races", "買ったレース", "n"), ("coverage", "買った割合", "p"), ("win", "勝率", "p"), ("rentai", "連対率", "p"), ("place", "複勝率", "p"),
         ("roi_t", "単回収", "p"), ("roi_f", "複回収", "p"), ("roi_t_trim5", "単回収（上位 5 件を除く）", "p"), ("roi_f_trim5", "複回収（上位 5 件を除く）", "p"),
-        ("kill_precision", "消しの的中", "p"), ("kill_coverage", "消しを付けたレース", "p")]
+        ("pay_per_win", "勝ったときの平均の単勝払戻", "y"), ("kill_precision", "消しの的中", "p"), ("kill_coverage", "消しを付けたレース", "p")]
 
 
 def fmt(v, kind: str) -> str:
     if v is None:
         return "—"
+    if kind == "y":
+        return f"{v:,.0f} 円"
     return f"{int(round(v)):,}" if kind == "n" else f"{100 * v:.1f}%"
 
 
 def cells(a: dict | None) -> str:
-    a = a or {}
+    a = dict(a or {})
+    if a.get("win") and a.get("roi_t") is not None:
+        a["pay_per_win"] = 100 * a["roi_t"] / a["win"]       # 回収率 = 的中率 × 平均の払戻（的中の分と払戻の分に分ける）
     return "".join(f"<td class='n'>{fmt(a.get(k), t)}</td>" for k, _, t in COLS)
 
 
@@ -67,10 +71,12 @@ def build(out: Path = OUT) -> Path:
                 lead = (f"<td class='n' rowspan='{len(per)}'>{c['cycle']}</td><td class='wrap' rowspan='{len(per)}'>{escape(c['hyp'])}"
                         f"<div class='muted'>{escape(c['params'].get('name', ''))}・条件 {c.get('n_buy', 0):,} 個"
                         f"（検査を通った条件のある単位 {es.get('units_with_any', '—')}/{es.get('units', '—')}）</div></td>"
-                        f"<td class='wrap' rowspan='{len(per)}'>{escape(c.get('review', ''))}</td>"
+                        f"<td class='wrap' rowspan='{len(per)}'>{escape(c.get('review', ''))}"
+                        f"{'<div><b>事象</b>: ' + escape(c['event']) + '</div>' if c.get('event') else ''}"
+                        f"{'<div><b>根拠</b>: ' + escape(c['basis']) + '</div>' if c.get('basis') else ''}</td>"
                         f"<td rowspan='{len(per)}'>{escape(c.get('decision', ''))}{'・目標に届く' if c.get('goal_met') else ''}</td>")
             rows.append(f"<tr class='{'good' if c.get('decision') == '採用' and i == 0 else ''}'>{lead}<td>{lab}</td>{cells(a)}</tr>")
-    head = "".join(f"<th>{escape(h)}</th>" for h in ["サイクル", "仮説", "回顧", "判断", "期間"] + [h for _, h, _ in COLS])
+    head = "".join(f"<th>{escape(h)}</th>" for h in ["サイクル", "仮説", "回顧・事象と根拠", "判断", "期間"] + [h for _, h, _ in COLS])
     adopted = L.get("adopted_cycle")
     kp = BASE / "v3" / f"kept_{adopted}.json" if adopted else None
     ct = cond_table(json.loads(kp.read_text(encoding="utf-8"))) if kp and kp.exists() else "<p class='muted'>採った版はまだ無い。</p>"

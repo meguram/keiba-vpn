@@ -517,10 +517,15 @@ def cmd_evidence() -> None:
     print(json.dumps(out, ensure_ascii=False, indent=1), flush=True)
 
 
-def cmd_review(n: int, text: str, decision: str) -> None:
+def cmd_review(n: int, text: str, decision: str, event: str = "", basis: str = "") -> None:
+    """回顧と判断。事象（何が起きているか）と根拠（なぜそうなるか）も書く（統括役の方針、2026-11-17）。"""
     log = _load_log()
     c = next(x for x in log["cycles"] if x["cycle"] == n)
     c["review"], c["decision"] = text, decision
+    if event:
+        c["event"] = event
+    if basis:
+        c["basis"] = basis
     if decision == "採用":
         log["current"] = {k: v for k, v in c["params"].items() if k != "name"}
         log["adopted_cycle"] = n
@@ -537,6 +542,8 @@ def main() -> None:
     ap.add_argument("--n", type=int, default=0)
     ap.add_argument("--text", default="")
     ap.add_argument("--decision", default="")
+    ap.add_argument("--event", default="")
+    ap.add_argument("--basis", default="")
     a = ap.parse_args()
     if a.cmd == "frame":
         cmd_frame()
@@ -547,7 +554,7 @@ def main() -> None:
     elif a.cmd == "cycle":
         cmd_cycle(a.hyp, json.loads(a.delta), a.base)
     else:
-        cmd_review(a.n, a.text, a.decision)
+        cmd_review(a.n, a.text, a.decision, a.event, a.basis)
 
 
 if __name__ == "__main__":
