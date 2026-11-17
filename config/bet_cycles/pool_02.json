@@ -1,13 +1,13 @@
 {
- "note": "方策の候補の束 2（cycle 9〜）。2 番人気以下の ◎（1 番人気は連対率の予測 0.85 以上の例外のみ）を主に、的中率 8% 以上になりやすい券種だけ。見送りは方策の側（型ごとの見送り）で選ぶので、ここでは期待値の分位の見送りを入れない。",
+ "note": "方策の候補の束 2（cycle 9〜）。2 番人気以下の ◎（1 番人気は連対率の予測がしきい値（bet_cycles fav1 が訓練で決める。v6e は 0.85）以上の例外のみ）を主に、的中率 8% 以上になりやすい券種だけ。見送りは方策の側（型ごとの見送り）で選ぶので、ここでは期待値の分位の見送りを入れない。",
  "grids": [
-  {"prefix": "p2E", "base": {"honmei": {"rule": "fav1_exc", "p2_min": 0.85, "base": {"rule": "ana_ev", "fav_k": 1, "max_rank": 8, "ev_min": 1.0}}, "partners": {"mode": "p3", "n": 2}},
+  {"prefix": "p2E", "base": {"honmei": {"rule": "fav1_exc", "p2_min": "auto", "base": {"rule": "ana_ev", "fav_k": 1, "max_rank": 8, "ev_min": 1.0}}, "partners": {"mode": "p3", "n": 2}},
    "axes": {"partners": [{"mode": "p3", "n": 2}, {"mode": "fav", "n": 2, "fav_k": 3}],
             "skip": [{}, {"h_pop_min": 4}],
             "tickets": [[{"type": "wide"}], [{"type": "wide"}, {"type": "trio1"}], [{"type": "tansho"}, {"type": "wide"}], [{"type": "fukusho"}, {"type": "wide"}]]}},
-  {"prefix": "p2P", "base": {"honmei": {"rule": "fav1_exc", "p2_min": 0.85, "base": {"rule": "ana_p3", "fav_k": 1, "max_rank": 6}}, "partners": {"mode": "p3", "n": 2}},
+  {"prefix": "p2P", "base": {"honmei": {"rule": "fav1_exc", "p2_min": "auto", "base": {"rule": "ana_p3", "fav_k": 1, "max_rank": 6}}, "partners": {"mode": "p3", "n": 2}},
    "axes": {"tickets": [[{"type": "wide"}], [{"type": "fukusho"}, {"type": "wide"}]]}},
-  {"prefix": "p2W", "base": {"honmei": {"rule": "fav1_exc", "p2_min": 0.85, "base": {"rule": "fav1_penalty", "lam": 1.0}}, "partners": {"mode": "p3", "n": 2}},
+  {"prefix": "p2W", "base": {"honmei": {"rule": "fav1_exc", "p2_min": "auto", "base": {"rule": "fav1_penalty", "lam": 1.0}}, "partners": {"mode": "p3", "n": 2}},
    "axes": {"tickets": [[{"type": "wide"}], [{"type": "fukusho"}, {"type": "wide"}], [{"type": "tansho"}, {"type": "wide"}]]}}
  ]
 }

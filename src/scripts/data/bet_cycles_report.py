@@ -32,6 +32,19 @@ def _m(d: dict | None) -> dict:
     return {k: (d or {}).get(k) for k in KEYS if (d or {}).get(k) is not None}
 
 
+NOTES_TAG = "v6e"         # config/bet_cycles/cycle_XX.json の notes（回顧の文）は、試しの回し（v6e）の結果を見て書いた
+
+
+def _notes(tag: str, cfg: dict, rec: dict) -> dict:
+    """回顧の文。設定の notes は v6e で書いたので、別の予測には config/bet_cycles/notes_<tag>.json があればそれを使う。"""
+    if tag == NOTES_TAG:
+        return cfg.get("notes") or rec.get("notes") or {}
+    p = bc.CFG_DIR / f"notes_{tag}.json"
+    if p.exists():
+        return (json.loads(p.read_text(encoding="utf-8")).get(str(rec["n"])) or {})
+    return {"review": f"（回顧の文は試しの回し（{NOTES_TAG}）で書いた。この予測（{tag}）の値は表を見る）"}
+
+
 def build_log(tag: str) -> dict:
     """cycle_XX.json から、git に入れる大きさの要約を作る。"""
     base = bc.OUT_DIR / tag
@@ -48,13 +61,14 @@ def build_log(tag: str) -> dict:
             "selected": {"name": s.get("name"), "family": s.get("family"), "spec": s.get("spec"), "train": _m(s.get("train")), "eval": _m(s.get("eval")),
                          "train_folds": s.get("train_folds"), "kind": s.get("kind"), "cells": s.get("cells")} if s else None,
             "eval_check": r.get("eval_check"), "improved": r.get("improved"), "vs_prev_selected": r.get("vs_prev_selected"), "odds_robustness": r.get("odds_robustness_train"),
-            "families": [{"family": f["family"], "name": f["name"], "spec": f.get("spec"), "train": _m(f["train"]), "train_folds": f.get("train_folds"),
+            "families": [{"family": f["family"], "name": f["name"], "train": _m(f["train"]), "train_folds": f.get("train_folds"),
                           "improved": f.get("improved"), "vs_prev": f.get("vs_prev"), "prev": f.get("prev")} for f in r.get("families") or []],
             "groups": {g: rows[:8] for g, rows in (r.get("groups") or {}).items()}, "miss_types": r.get("miss_types"), "h_reasons": r.get("h_reasons"),
             "retro": [{k: x.get(k) for k in ("axis", "axis_label", "level", "bet_races", "hit_rate", "roi", "roi_lo", "roi_hi", "roi_ex_top5",
                                              "log_hit", "log_payout", "log_cost", "verdict")} for x in retro[:30]],
-            "baselines": [{"name": b["name"], "train": _m(b["train"]), "eval": _m(b.get("eval"))} for b in r.get("baselines") or []],
-            "drop": r.get("drop"), "notes": cfg.get("notes") or r.get("notes") or {}, "selection_rule": r.get("selection_rule"),
+            "baselines": ([{"name": b["name"], "train": _m(b["train"]), "eval": _m(b.get("eval"))} for b in r.get("baselines") or []]
+                          if not cycles else []),          # 基準はどのサイクルでも同じなので、最初のサイクルにだけ
+            "drop": r.get("drop"), "notes": _notes(tag, cfg, r), "selection_rule": r.get("selection_rule"),
         })
     log = {"tag": tag, "cycles": cycles}
     w4 = bc.OUT_DIR / "w4" / "w4_train.json"
@@ -222,7 +236,8 @@ INTRO = """<p>ユーザー（統括役経由、2026-11-16）: 「勝率・複勝
 指示書: <code>/home/jovyan/work/progress/bet_optimizer_spec.md</code>。道具: <code>src/scripts/data/bet_cycles.py</code>（記録は <code>bet_cycles_report.py</code> で作り直す）。</p>
 <ul>
 <li><b>作法</b>: 訓練 2022〜23 で探す・選ぶ・回顧する。評価 2024 は「変わらず上向きか」を確かめるだけ（評価の値で選び直さない。次の仮説を考えるときに評価の値を見たことは各サイクルに書く）。test 2025 は凍結の後に 1 回だけ。</li>
-<li><b>予測</b>: 本番 v6e の OOF（試しの回し）。2022・23 の予測は LOYO のアンサンブルで、重みの当てはめに 2024 の着順も入っている（重みは 7 個で漏れは弱いが、評価 2024 は完全に手つかずではない）。最終モデルの OOF・test が届いたら回し直す。</li>
+<li><b>予測</b>: 本番 v6e の OOF で道具と 20 サイクルの枠組みを作り（試しの回し）、最終モデル（model-improve-cycles の cycles16_fix3）の OOF で回し直す（採否はこちらを正とする）。どちらも 2022・23 の予測は LOYO のアンサンブルで、重みの当てはめに 2024 の着順も入っている（漏れは弱いが、評価 2024 は完全に手つかずではない）。最終モデルの 2022〜24 の OOF は勝率だけなので、連対率・複勝率は割引 Harville で補った（p_top 入りの OOF と 2019〜21 年の OOF が届いたら、訓練 2019〜22・評価 2023〜24 で回し直し、そこで凍結する）。</li>
+<li><b>1 番人気の方針</b>（ユーザー 2026-11-16）: ◎ は 2 番人気以下から。1 番人気は、予測の連対率がしきい値以上（訓練で連対率 85% 以上になる最も緩い値）の例外のときだけ。cycle 7 以降の主な系統。最後の候補でも、この方針に合わない買い方は参考として外す（2026-11-17、test を見る前に決めた）。</li>
 <li><b>オッズ</b>: 確定オッズ（締切後）で ◎ の期待値・人気を決めている。実際に買う時点のオッズとはずれる。三連複・三連単はオッズが無いので確率だけで組む。精算は確定の払戻。オッズに揺れ（σ=0.1・0.2）を足した確かめを各サイクルに付けた。</li>
 <li><b>印と買い目の整合</b>: 買い目は必ず ◎ から組み、◎ は軸・1 着・本線。R1〜R8（<code>docs/ideas/betting_patterns.md</code> §4）をどの買い方にも機械的に当て、違反した買い方は採らない。</li>
 <li><b>選び方</b>（cycle 1 の結果を見た後に決めた）: 候補 = 参戦 300R 以上・違反なし・訓練の 2 年とも B0 より上・払戻の上位 5 件を除いた回収率も B0 以上。順位 = 訓練の回収率の 95% 区間の下限。前の最良は系統（型 1・型 A・型 B・方策など）ごとに持ち、改善は同じ系統の前の最良との対の差の区間が 0 より上のときだけ。「参考」の系統（制約なしの穴・ボックス）は並べるだけで選ばない。</li>
@@ -298,6 +313,8 @@ def render_html(log: dict) -> str:
     st = log.get("stages") or {}
     for k in sorted(st):
         out.append(render_stage(k, st[k]))
+    for tag, other in (log.get("others") or {}).items():          # 別の予測での回し（例: 試しの回し v6e）は要約だけ
+        out.append(render_other(tag, other))
     out.append("</main></body></html>")
     return "\n".join(out)
 
@@ -366,9 +383,24 @@ def render_cycle(c: dict) -> str:
     return "\n".join(h)
 
 
-def render_stage(key: str, st: dict) -> str:
+def render_other(tag: str, log: dict) -> str:
+    """別の予測での回しの要約: 各サイクルで選んだ 1 本の必須の指標と、段（selcv・推奨度など）。"""
+    h = [f'<h2 id="other-{esc(tag)}">別の予測での回し（{esc(tag)}）</h2>',
+         f"<p class=\"muted\">{esc(log.get('note', ''))}</p>"]
+    rows = []
+    for c in log["cycles"]:
+        s_ = c.get("selected")
+        if s_:
+            rows.append([f"{c['n']}", esc(s_["family"]), esc(spec_text(s_["spec"]))] + must_cells(s_["train"]) + [pct((s_.get("eval") or {}).get("roi"))])
+    h.append(table(["回", "系統", "買い方"] + MUST_HEAD + ["評価の回収率"], rows, left=3))
+    for k in sorted(log.get("stages") or {}):
+        h.append(render_stage(k, log["stages"][k], prefix=f"［{tag}］", level=3))
+    return "\n".join(h)
+
+
+def render_stage(key: str, st: dict, prefix: str = "", level: int = 2) -> str:
     """方策・推奨度・test の段（bet_cycles の stage 出力。中身は各段の html_rows を表にする）。"""
-    h = [f"<h2>{esc(st.get('title', key))}</h2>"]
+    h = [f"<h{level}>{esc(prefix)}{esc(st.get('title', key))}</h{level}>"]
     if st.get("text"):
         h.append("".join(f"<p>{esc(p)}</p>" for p in st["text"]))
     for t in st.get("tables") or []:
@@ -405,14 +437,23 @@ def render_md_tables(log: dict) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--tag", default="v6e")
+    ap.add_argument("--tag", default="v6e", help="主に載せる予測（サイクルの記録をすべて載せる）")
+    ap.add_argument("--others", default="", help="要約だけ並べる別の予測（カンマ区切り。最後は主 = 凍結した予測、従 = v6e など）")
     ap.add_argument("--from-log", action="store_true", help="bet_cycles_log.json だけから作り直す（cycle_XX.json が無い PC 用）")
     a = ap.parse_args()
     if a.from_log:
         log = json.loads(LOG.read_text(encoding="utf-8"))
     else:
         log = build_log(a.tag)
-        LOG.write_text(json.dumps(log, ensure_ascii=False, indent=1, default=bc._np), encoding="utf-8")
+        notes = {"v6e": "試しの回し: 本番 v6e の OOF（p_win・p_top2・p_top3）。道具と 20 サイクルの枠組みを作るために回した。採否は最終モデルの回しを正とする。",
+                 "fix3": "最終モデル（model-improve-cycles の cycles16_fix3）の OOF。"}
+        log["note"] = notes.get(a.tag, "")
+        for t in [x for x in a.others.split(",") if x]:
+            o = build_log(t)
+            o["note"] = notes.get(t, "")
+            o["cycles"] = [{k: c.get(k) for k in ("n", "title", "selected", "eval_check")} for c in o["cycles"]]   # 要約だけ（容量）
+            log.setdefault("others", {})[t] = o
+        LOG.write_text(json.dumps(log, ensure_ascii=False, separators=(",", ":"), default=bc._np) + "\n", encoding="utf-8")
     HTML.write_text(render_html(log), encoding="utf-8")
     if MD.exists():
         t = MD.read_text(encoding="utf-8")

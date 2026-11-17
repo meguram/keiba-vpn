@@ -17,7 +17,7 @@
    "base": {
     "honmei": {
      "rule": "fav1_exc",
-     "p2_min": 0.85
+     "p2_min": "auto"
     },
     "partners": {
      "mode": "p3",
@@ -33,7 +33,7 @@
     "honmei": [
      {
       "rule": "fav1_exc",
-      "p2_min": 0.85,
+      "p2_min": "auto",
       "base": {
        "rule": "ana_ev",
        "fav_k": 1,
@@ -43,7 +43,7 @@
      },
      {
       "rule": "fav1_exc",
-      "p2_min": 0.85,
+      "p2_min": "auto",
       "base": {
        "rule": "ana_ev",
        "fav_k": 1,
@@ -53,7 +53,7 @@
      },
      {
       "rule": "fav1_exc",
-      "p2_min": 0.85,
+      "p2_min": "auto",
       "base": {
        "rule": "ana_ev",
        "fav_k": 1,
@@ -63,7 +63,7 @@
      },
      {
       "rule": "fav1_exc",
-      "p2_min": 0.85,
+      "p2_min": "auto",
       "base": {
        "rule": "ana_ev",
        "fav_k": 1,
@@ -73,7 +73,7 @@
      },
      {
       "rule": "fav1_exc",
-      "p2_min": 0.85,
+      "p2_min": "auto",
       "base": {
        "rule": "ana_ev",
        "fav_k": 1,
@@ -83,7 +83,7 @@
      },
      {
       "rule": "fav1_exc",
-      "p2_min": 0.85,
+      "p2_min": "auto",
       "base": {
        "rule": "ana_ev",
        "fav_k": 1,
@@ -93,7 +93,7 @@
      },
      {
       "rule": "fav1_exc",
-      "p2_min": 0.85,
+      "p2_min": "auto",
       "base": {
        "rule": "ana_ev",
        "fav_k": 1,
@@ -103,7 +103,7 @@
      },
      {
       "rule": "fav1_exc",
-      "p2_min": 0.85,
+      "p2_min": "auto",
       "base": {
        "rule": "ana_ev",
        "fav_k": 1,
@@ -113,7 +113,7 @@
      },
      {
       "rule": "fav1_exc",
-      "p2_min": 0.85,
+      "p2_min": "auto",
       "base": {
        "rule": "ana_ev",
        "fav_k": 1,
@@ -123,7 +123,7 @@
      },
      {
       "rule": "fav1_exc",
-      "p2_min": 0.85,
+      "p2_min": "auto",
       "base": {
        "rule": "ana_p3",
        "fav_k": 1,
@@ -132,7 +132,7 @@
      },
      {
       "rule": "fav1_exc",
-      "p2_min": 0.85,
+      "p2_min": "auto",
       "base": {
        "rule": "ana_p3",
        "fav_k": 1,

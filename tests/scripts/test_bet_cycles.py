@@ -364,3 +364,14 @@ def test_parse_flat_payoff_rejects_concatenated_amount():
     for k in ("複勝", "馬連", "ワイド", "馬単", "三連複", "三連単"):
         raw[k] = [{"numbers": "4" if k == "複勝" else ("4-2" if k in ("馬連", "ワイド", "馬単") else "4-2-8"), "payout": "100", "popularity": "1"}]
     assert bc.parse_flat_payoff(json.dumps(raw, ensure_ascii=False)) is None
+
+
+def test_fav1_rule_ok():
+    assert bc.fav1_rule_ok({"honmei": {"rule": "fav1_exc", "base": {"rule": "ana_ev", "fav_k": 1}}})
+    assert not bc.fav1_rule_ok({"honmei": {"rule": "top"}})
+    assert bc.fav1_rule_ok({"honmei": {"rule": "top"}, "skip": {"h_pop_min": 4}})
+    assert not bc.fav1_rule_ok({"honmei": {"rule": "ana_ev", "fav_k": 3}})                       # 候補なしで予測 1 位に戻る
+    assert bc.fav1_rule_ok({"honmei": {"rule": "ana_ev", "fav_k": 3, "fallback": "skip"}})
+    assert not bc.fav1_rule_ok({"honmei": {"rule": "fav1_penalty", "lam": 0.5}})
+    pol = {"policy": {"typing": {"kind": "feat", "col": "x"}, "map": {"1": "skip", "2": {"honmei": {"rule": "top"}}}}}
+    assert not bc.fav1_rule_ok(pol)
