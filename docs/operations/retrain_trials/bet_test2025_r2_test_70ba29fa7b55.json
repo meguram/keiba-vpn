@@ -1,0 +1,146 @@
+{
+ "hash": "70ba29fa7b55",
+ "frozen": "config/bet_cycles/frozen_20261117_r2.json",
+ "git_head": "52f7f9cfa8611d2be544ed4690166d803e3a0b26",
+ "periods": {
+  "test": {
+   "metrics": {
+    "races": 3267,
+    "bet_races": 831,
+    "bet_rate": 0.2542393633302724,
+    "hit_rate": 0.18950156513363833,
+    "roi": 1.0703587767878642,
+    "avg_return": 107.03587767878642,
+    "median_return": 0.0,
+    "median_hit_return": 460.0,
+    "avg_cost": 100.0,
+    "cost_total": 83060.0,
+    "return_total": 88904.0,
+    "avg_hit_return": 564.8284625158831,
+    "roi_ex_top1": 1.037346496508548,
+    "roi_ex_top5": 0.9439200577895497,
+    "sim_roi_min": 1.0101941747572816,
+    "sim_roi_max": 1.1384705882352941,
+    "n_versions": 5,
+    "roi_lo": 0.9399433917729675,
+    "roi_hi": 1.1956298715470475,
+    "hit_lo": 0.17104515805840492,
+    "hit_hi": 0.2068067528307438,
+    "days": 109,
+    "daily_roi_sd": 0.6630694330094765,
+    "max_drawdown": 6894.0,
+    "max_drawdown_days": 9.047026246087166,
+    "plus_day_rate": 0.45871559633027525,
+    "profit": 5844.0,
+    "decision_odds": "発走前（再現 5 通りを並べた平均）",
+    "h_fav1_rate": 0.0,
+    "top_fav1_rate": 0.6060679027209246
+   },
+   "metrics_final_odds": {
+    "races": 3267,
+    "bet_races": 348,
+    "bet_rate": 0.10651974288337925,
+    "hit_rate": 0.10344827586206896,
+    "roi": 1.3836206896551724,
+    "avg_return": 138.36206896551724,
+    "median_return": 0.0,
+    "median_hit_return": 1100.0,
+    "avg_cost": 100.0,
+    "cost_total": 34800.0,
+    "return_total": 48150.0,
+    "avg_hit_return": 1337.5,
+    "roi_ex_top1": 1.2916666666666667,
+    "roi_ex_top5": 0.9744252873563218,
+    "roi_lo": 0.9376498069498069,
+    "roi_hi": 1.9049370899937281,
+    "hit_lo": 0.07552454397082328,
+    "hit_hi": 0.13756734803318976,
+    "days": 105,
+    "daily_roi_sd": 3.001515206674829,
+    "max_drawdown": 5200.0,
+    "max_drawdown_days": 15.689655172413792,
+    "plus_day_rate": 0.2857142857142857,
+    "profit": 13350.0
+   },
+   "baselines": {
+    "B0 予測1位の単勝（全部買う）": {
+     "bet_races": 3267,
+     "bet_rate": 1.0,
+     "hit_rate": 0.3419038873584328,
+     "roi": 0.8519130700948883,
+     "roi_lo": null,
+     "roi_hi": null,
+     "roi_ex_top5": 0.8412917049280686,
+     "avg_return": 85.19130700948882,
+     "median_return": 0.0
+    },
+    "B1 予測1位の複勝（全部買う）": {
+     "bet_races": 3267,
+     "bet_rate": 1.0,
+     "hit_rate": 0.6611570247933884,
+     "roi": 0.8877257422711968,
+     "roi_lo": null,
+     "roi_hi": null,
+     "roi_ex_top5": 0.8826752372206917,
+     "avg_return": 88.77257422711968,
+     "median_return": 110.0
+    },
+    "M0 市場の1番人気の単勝": {
+     "bet_races": 3267,
+     "bet_rate": 1.0,
+     "hit_rate": 0.31423324150596876,
+     "roi": 0.7845974900520355,
+     "roi_lo": null,
+     "roi_hi": null,
+     "roi_ex_top5": 0.7665442301805938,
+     "avg_return": 78.45974900520355,
+     "median_return": 0.0
+    }
+   },
+   "diff_vs_B0": [
+    0.21844570669297592,
+    0.08200315376158276,
+    0.3511296715289764
+   ],
+   "tiers": {},
+   "fav1_exception": {
+    "n": 0
+   },
+   "role": "test 2025（2 回目の確かめ。第 1 回で 1 回使った）",
+   "odds_source": "発走前のオッズの再現（5 通りを並べた平均）で判定",
+   "pred": [
+    {
+     "path": "/home/jovyan/work/retrain_out/cycles16_fix3/market/handoff/stage2_noise.parquet",
+     "where": {
+      "part": "test2025",
+      "odds_phase": "final"
+     }
+    }
+   ],
+   "drop": {
+    "no_pred": 177,
+    "no_pay": 0,
+    "small": 0,
+    "all_races_in_period": 3456,
+    "payoff_filled_from_flat": 0,
+    "computed_races": 3267
+   },
+   "miss_types": {
+    "◎ が 4 着以下（◎ が飛んだ）": 2151,
+    "◎ は 3 着内・相手が 1 頭も来ない": 225,
+    "◎ は 3 着内・相手も来たが組・着順が合わない": 990
+   },
+   "h_reasons": {
+    "見送り（条件）": 12182,
+    "1番人気より下で r 最大": 3210,
+    "予測1位": 943
+   }
+  }
+ },
+ "round": 2,
+ "round_note": "第 2 回: 2025 年 test は前の回の最適化で 1 回使っている。今回の値は 2 回目の確かめ（別のモデル・別の買い方）。",
+ "group": "test",
+ "inputs_changed_after_freeze": {},
+ "note": "test は凍結を commit した後に 1 回だけ見た。結果は docs/operations/retrain_trials/bet_test2025_<hash>.json に写して commit する（2 回目を拒む印）。",
+ "status": "done"
+}
