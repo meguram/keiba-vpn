@@ -47,4 +47,4 @@ ENV PYTHONUNBUFFERED=1 \
 
 EXPOSE 8080
 # KEIBA_ENV は必ず実行時に明示する（deploy_cloud_run_api.sh が KEIBA_ENV=prod を渡す。未設定だと起動を拒否）
-CMD ["sh", "-c", "exec python -m uvicorn src.api.cloudrun_entry:app --host 0.0.0.0 --port ${PORT} --workers 1 --timeout-keep-alive 75 --no-access-log"]
+CMD ["sh", "-c", "exec python -m uvicorn src.api.cloudrun_entry:app --host 0.0.0.0 --port ${PORT} --workers 1 --timeout-keep-alive 75 --timeout-graceful-shutdown 15 --no-access-log"]

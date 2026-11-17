@@ -24,10 +24,40 @@ def _read_int(path: Path) -> int | None:
     return int(raw) if raw.isdigit() else None       # memory.max は上限なしのとき "max"
 
 
-def cgroup_memory(root: Path = CGROUP) -> dict[str, Any]:
-    """cgroup v2 の使用量・上限（バイト）と割合。読めない環境（手元・cgroup v1）は空の値。"""
+MEMINFO = Path("/proc/meminfo")
+_NO_LIMIT = 1 << 60          # cgroup v1 の「上限なし」はとても大きな数
+
+
+def _meminfo(path: Path) -> dict[str, int]:
+    out: dict[str, int] = {}
+    try:
+        for line in path.read_text(encoding="ascii").splitlines():
+            k, _, rest = line.partition(":")
+            parts = rest.split()
+            if parts and parts[0].isdigit():
+                out[k] = int(parts[0]) * 1024
+    except OSError:
+        pass
+    return out
+
+
+def cgroup_memory(root: Path = CGROUP, meminfo: Path = MEMINFO) -> dict[str, Any]:
+    """使用量・上限（バイト）と割合。cgroup v2 → cgroup v1 → /proc/meminfo の順に読めたものを使う（source に記録）。
+    Cloud Run（gen2）は 1 台ごとの VM で、2026-11-17 の stg では cgroup v2 のファイルが無かった。VM の MemTotal はインスタンスのメモリに近く、
+    /tmp（tmpfs）は Shmem として「使用中」に入る（MemAvailable に含まれない）ので、used = MemTotal - MemAvailable で張り付きを見られる。"""
     cur, mx = _read_int(root / "memory.current"), _read_int(root / "memory.max")
-    out: dict[str, Any] = {"current": cur, "max": mx, "ratio": round(cur / mx, 4) if cur is not None and mx else None}
+    source = "cgroup2"
+    if cur is None:
+        cur, mx = _read_int(root / "memory" / "memory.usage_in_bytes"), _read_int(root / "memory" / "memory.limit_in_bytes")
+        source = "cgroup1"
+        if mx is not None and mx >= _NO_LIMIT:
+            mx = None
+    mi = _meminfo(meminfo)
+    if (cur is None or not mx) and mi.get("MemTotal") and "MemAvailable" in mi:
+        cur, mx, source = mi["MemTotal"] - mi["MemAvailable"], mi["MemTotal"], "meminfo"
+    if cur is None:
+        source = None
+    out: dict[str, Any] = {"current": cur, "max": mx, "source": source}
     try:
         for line in (root / "memory.stat").read_text(encoding="ascii").splitlines():
             k, _, v = line.partition(" ")
@@ -35,6 +65,13 @@ def cgroup_memory(root: Path = CGROUP) -> dict[str, Any]:
                 out[k] = int(v)
     except (OSError, ValueError):
         pass
+    used = cur
+    if source == "cgroup2" and cur is not None and "file" in out and "shmem" in out:
+        used = max(0, cur - max(0, out["file"] - out["shmem"]))      # 回収できるページキャッシュ（shmem=/tmp 以外のファイル）は除く
+    out["used"] = used
+    out["ratio"] = round(used / mx, 4) if used is not None and mx else None
+    if mi:
+        out["shmem"] = out.get("shmem", mi.get("Shmem"))
     return out
 
 
@@ -131,7 +168,8 @@ def storage_stats() -> dict[str, Any]:
         total += b
         caches.append({"entries": n, "approx_bytes": b})
     caches.sort(key=lambda c: -c["approx_bytes"])
-    return {"instances": len(insts), "load_cache_total_bytes": total, "load_caches": caches[:10]}
+    gcs = insts[0].gcs_health() if insts and hasattr(insts[0], "gcs_health") else None
+    return {"instances": len(insts), "load_cache_total_bytes": total, "load_caches": caches[:10], "gcs": gcs}
 
 
 def tmp_stats(budget: Budget | None = None) -> dict[str, Any]:

@@ -54,6 +54,20 @@ def clear_all(reason: str = "") -> list[str]:
     return failed
 
 
+def clear_some(names: tuple[str, ...] | list[str], reason: str = "") -> list[str]:
+    """登録済みの無効化関数のうち、names のものだけを実行する（世代は進めない）。実行した名前を返す。"""
+    with _lock:
+        items = [(n, _clearers[n]) for n in names if n in _clearers]
+    for name, fn in items:
+        try:
+            fn()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("キャッシュ無効化に失敗 %s: %s", name, exc)
+    if reason and items:
+        logger.info("キャッシュを捨てました（%s, %d 件）", reason, len(items))
+    return [n for n, _ in items]
+
+
 def bump(reason: str = "") -> None:
     """世代ファイルを更新する。次に ``sync()`` を呼んだ全プロセスがキャッシュを空にする。"""
     try:

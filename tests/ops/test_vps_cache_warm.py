@@ -62,7 +62,8 @@ class FakeWarmer:
 
 
 def _drain(state, w, **kw):
-    return cw.drain(state, w, max_requests=kw.get("max_requests", 100), max_sec=60, pause=0, log=lambda *_: None)
+    return cw.drain(state, w, max_requests=kw.get("max_requests", 100), max_sec=60, pause=0, log=lambda *_: None,
+                    now=kw.get("now"), **({"stop_after_fails": kw["stop_after_fails"]} if "stop_after_fails" in kw else {}))
 
 
 def test_drain_race_detail_queues_its_date_list():
@@ -84,10 +85,14 @@ def test_drain_all_expands_list_to_races():
 def test_drain_retries_then_gives_up_and_treats_404_as_done():
     st = {"seen": {}, "queue": [{"p": "/a", "n": 0}, {"p": "/b", "n": 0}]}
     w = FakeWarmer({"/a": (503, b""), "/b": (404, b"")})
-    r1 = _drain(st, w)
+    t0 = 1_000_000.0
+    r1 = _drain(st, w, now=t0)
     assert r1["ng"] == 1 and r1["ok"] == 1 and r1["left"] == 1
-    _drain(st, w)
-    r3 = _drain(st, w)
+    _drain(st, w, now=t0 + 60)                       # 失敗の直後（60 秒後の周）は投げ直さない
+    assert w.calls.count("/a") == 1
+    _drain(st, w, now=t0 + cw.retry_wait(1) + 1)
+    assert w.calls.count("/a") == 2
+    r3 = _drain(st, w, now=t0 + 10_000)
     assert r3["left"] == 0 and w.calls.count("/a") == cw.MAX_ATTEMPTS
 
 
@@ -197,3 +202,19 @@ def test_should_list_only_when_beacon_changes_with_safety_net():
 
 def test_beacon_is_not_a_marker():
     assert cw.parse_marker(cw.BEACON) is None
+
+
+def test_retry_wait_grows_and_caps():
+    assert cw.retry_wait(1) == cw.RETRY_BASE_SEC and cw.retry_wait(2) == 2 * cw.RETRY_BASE_SEC
+    assert cw.retry_wait(20) == cw.RETRY_MAX_SEC
+
+
+def test_drain_stops_the_tick_after_consecutive_server_errors():
+    st = {"seen": {}, "queue": [{"p": f"/p{i}", "n": 0} for i in range(20)]}
+    w = FakeWarmer({f"/p{i}": (504, b"") for i in range(20)})
+    r = _drain(st, w, now=1_000_000.0, stop_after_fails=5)
+    assert r["stopped"] is True and len(w.calls) == 5 and r["ng"] == 5
+    assert r["left"] == 20                                       # 残りは捨てずに次の周へ
+    w2 = FakeWarmer({"/p0": (504, b""), "/p1": (200, b"{}"), "/p2": (504, b"")})
+    st2 = {"seen": {}, "queue": [{"p": f"/p{i}", "n": 0} for i in range(3)]}
+    assert _drain(st2, w2, now=1_000_000.0, stop_after_fails=2)["stopped"] is False      # 成功を挟めば数え直す

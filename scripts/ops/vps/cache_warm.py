@@ -67,6 +67,11 @@ GLOBAL_PATHS = (
 )
 MAX_QUEUE = 5000
 MAX_ATTEMPTS = 3
+# API が 5xx・応答なしのとき: 同じパスは RETRY_BASE_SEC × 2^(失敗回数-1) 秒（上限 RETRY_MAX_SEC）空けてから投げ直す。
+# 1 周の中で続けて STOP_AFTER_FAILS 回失敗したら、その周は打ち切る（病んだ API に要求を積まない。2026-11-15 の 504 の再発防止）
+RETRY_BASE_SEC = 120.0
+RETRY_MAX_SEC = 900.0
+STOP_AFTER_FAILS = 5
 
 
 def env(name: str, default: str) -> str:
@@ -193,11 +198,17 @@ class Warmer:
             return 0, b""
 
 
+def retry_wait(n: int, base: float = RETRY_BASE_SEC, cap: float = RETRY_MAX_SEC) -> float:
+    """n 回目の失敗の後に空ける秒数。"""
+    return min(cap, base * (2 ** max(0, n - 1)))
+
+
 def drain(state: dict, warmer: Warmer, *, max_requests: int, max_sec: float, pause: float, log=print,
-          second_pass_sec: float = 0.0, now: float | None = None) -> dict:
+          second_pass_sec: float = 0.0, now: float | None = None, stop_after_fails: int = STOP_AFTER_FAILS) -> dict:
     """queue を先頭から処理する。レース詳細の応答の ``date`` から、その開催日の一覧も取り直す。
     ``second_pass_sec`` > 0 なら、取り直せたパスをその秒数後にもう 1 回取り直す（API 内の短い使い回しが切れたあとの値で上書きする）。
-    2 回目待ちの項目（``t`` = 取り直してよい時刻）は、時刻が来るまで飛ばす（要求数に数えない）。"""
+    2 回目待ちの項目（``t`` = 取り直してよい時刻）と、失敗の後の待ち（``w``）は、時刻が来るまで飛ばす（要求数に数えない）。
+    5xx・応答なしは ``retry_wait`` 秒空けてから投げ直し、続けて ``stop_after_fails`` 回失敗したらその周を打ち切る。"""
     q = deque(state["queue"])
     done = failed = 0
     started = time.monotonic()
@@ -206,13 +217,18 @@ def drain(state: dict, warmer: Warmer, *, max_requests: int, max_sec: float, pau
     requeue: list[dict] = []
     later: list[dict] = []
     second: dict[str, dict] = {}
+    streak = 0
+    stopped = False
     while q and done + failed < max_requests and time.monotonic() - started < max_sec:
         item = q.popleft()
-        if float(item.get("t") or 0) > clock:
+        if float(item.get("t") or 0) > clock or float(item.get("w") or 0) > clock:
             later.append(item)
             continue
         path = item["p"]
         status, body = warmer.fetch(path)
+        if status == 200 or status in (404, 400, 401, 403, 422):
+            streak = 0
+            item.pop("w", None)
         if status == 200:
             done += 1
             if second_pass_sec > 0 and not item.get("t") and path not in second:
@@ -242,15 +258,21 @@ def drain(state: dict, warmer: Warmer, *, max_requests: int, max_sec: float, pau
             done += 1
         else:
             failed += 1
+            streak += 1
             item["n"] = int(item.get("n", 0)) + 1
             if item["n"] < MAX_ATTEMPTS:
+                item["w"] = clock + retry_wait(item["n"])         # すぐには投げ直さない
                 requeue.append(item)
             log(f"取り直し失敗 {path} -> {status}（{item['n']}/{MAX_ATTEMPTS}）")
+            if stop_after_fails > 0 and streak >= stop_after_fails:
+                log(f"続けて {streak} 回失敗したため、この周の取り直しを打ち切ります（API の回復を待つ）")
+                stopped = True
+                break
         if pause:
             time.sleep(pause)
     pending = {x["p"] for x in later if x.get("t")} | {x["p"] for x in q if x.get("t")}
     state["queue"] = (list(q) + requeue + later + [x for p, x in second.items() if p not in pending])[: MAX_QUEUE * 2]
-    return {"ok": done, "ng": failed, "left": len(state["queue"])}
+    return {"ok": done, "ng": failed, "left": len(state["queue"]), "stopped": stopped}
 
 
 BEACON = f"{PREFIX}/_beacon.json"     # 書き手（ホストのミラーの push・配備）が目印を置くたびに上書きする合図（src/utils/cache_marker.py）

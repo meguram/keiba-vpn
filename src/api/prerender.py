@@ -342,6 +342,13 @@ def put(kind: str, key: str, body: bytes, *, since_ns: int, hard: int, deps: Ite
     """``since_ns``/``hard`` は計算を始める前の時刻・世代（計算中に deps のデータが保存されたら、この応答は読まれない）。失敗しても何もしない。"""
     if not enabled():
         return
+    try:
+        from src.scraper.storage import degraded_since
+
+        if degraded_since(since_ns):          # 計算の間に GCS の障害ですぐ返した・読めなかった: 欠けているかもしれない応答は置かない
+            return
+    except Exception:  # noqa: BLE001
+        pass
     max_age = max_age or default_max_age()
     _maybe_prune()
     p = _path(kind, key)

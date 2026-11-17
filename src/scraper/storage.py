@@ -32,6 +32,7 @@ import json
 import logging
 import os
 import tempfile
+import contextvars
 import threading
 import weakref
 import time as _time
@@ -82,6 +83,121 @@ def _load_env():
                 if "=" in line:
                     key, _, val = line.partition("=")
                     os.environ.setdefault(key.strip(), val.strip())
+
+
+class _GcsState:
+    """GCS のクライアントと健全性の記録。既定はインスタンスごと（従来どおり）。``KEIBA_GCS_SHARED_STATE=1``（Cloud Run の既定）では、
+    同じバケットのインスタンスで 1 つを共有する。API の多くの経路は要求のたびに ``HybridStorage()`` を作るので、インスタンスごとだと
+    毎回「失敗 0 件」から始まって障害検知が効かず、クライアントも毎回作り直していた（2026-11-15 の 504。docs/operations/api_memory_20261117.md）。"""
+
+    def __init__(self) -> None:
+        self.lock = threading.RLock()
+        self.client = None
+        self.bucket = None
+        self.retry = None
+        self.last_failure = 0.0
+        self.last_success = _time.time()
+        self.last_probe = 0.0
+        self.transport_errors: list[float] = []
+        self.rebuilds = 0
+        self.rebuild_at = 0.0           # 最後にクライアントを作り直した時刻（epoch 秒）
+        self.fail_fast = 0
+
+
+_SHARED_GCS: dict[str, _GcsState] = {}
+_GCS_BACKOFF_SEC = 60        # GCS 障害後にリトライまで待つ秒数（HybridStorage._gcs_backoff の既定）
+_SHARED_GCS_LOCK = threading.Lock()
+# 障害ですぐ返した（または通信の失敗で読めなかった）最後の時刻（ns）。応答の使い回し（prerender）が、その間に作った応答を置かないために見る
+_DEGRADED = {"last_ns": 0, "count": 0}
+# 要求ごとの印（Cloud Run の入口が要求の始めに dict を置く）。この要求の中で障害ですぐ返したら "failfast" を立てる
+_REQUEST_FLAG: "contextvars.ContextVar[dict | None]" = contextvars.ContextVar("keiba_gcs_request_flag", default=None)
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, "") or default)
+    except ValueError:
+        return default
+
+
+_MEM_PER_JSON_BYTE = 2.5     # 読み込んだ dict のメモリ ÷ JSON の文字列の長さ（2026-11-17、手元のモック 120 件で 1.75〜3.04、多くは 2.3〜2.6）
+
+
+def _approx_mem(json_len: int) -> int:
+    return int(json_len * _MEM_PER_JSON_BYTE)
+
+
+def _approx_obj_mem(obj: Any, max_nodes: int = 200_000) -> int:
+    """文字列を作らずに、JSON 風の値のおおよそのメモリ（sys.getsizeof の合計。max_nodes で打ち切り）。"""
+    import sys
+
+    total = seen = 0
+    stack = [obj]
+    while stack and seen < max_nodes:
+        o = stack.pop()
+        seen += 1
+        total += sys.getsizeof(o)
+        if isinstance(o, dict):
+            stack.extend(o.keys())
+            stack.extend(o.values())
+        elif isinstance(o, (list, tuple)):
+            stack.extend(o)
+    return total
+
+
+def _shared_state_enabled() -> bool:
+    return os.environ.get("KEIBA_GCS_SHARED_STATE", "").strip() == "1"
+
+
+def fail_fast_enabled() -> bool:
+    """不調の間は GCS を読まずにすぐ返すか（``KEIBA_GCS_FAIL_FAST=1``。Cloud Run の既定。ホストの cron・Jobs は従来どおり）。"""
+    return os.environ.get("KEIBA_GCS_FAIL_FAST", "").strip() == "1"
+
+
+def note_degraded() -> None:
+    _DEGRADED["last_ns"] = _time.time_ns()
+    _DEGRADED["count"] += 1
+    flag = _REQUEST_FLAG.get()
+    if flag is not None:
+        flag["failfast"] = True
+
+
+def degraded_since(since_ns: int) -> bool:
+    """since_ns 以降に、障害ですぐ返した・通信の失敗で読めなかったことがあるか。"""
+    return _DEGRADED["last_ns"] >= since_ns
+
+
+def gcs_unhealthy_now() -> bool:
+    """共有の GCS の状態（KEIBA_GCS_SHARED_STATE=1）のどれかが、いま不調（バックオフ中）か。共有しない環境では常に False。
+    応答のたびにイベントループの上で呼ぶので、インスタンスの集合（WeakSet）は回さない。"""
+    now = _time.time()
+    with _SHARED_GCS_LOCK:
+        states = list(_SHARED_GCS.values())
+    return any(st.last_failure and now - st.last_failure <= _GCS_BACKOFF_SEC for st in states)
+
+
+def begin_request_flag() -> "contextvars.Token":
+    return _REQUEST_FLAG.set({})
+
+
+def request_flag() -> dict | None:
+    return _REQUEST_FLAG.get()
+
+
+def end_request_flag(token: "contextvars.Token") -> None:
+    _REQUEST_FLAG.reset(token)
+
+
+# 通信の層の失敗（同じクライアントの接続が壊れているときに続く）。続いたらクライアントを作り直す
+_TRANSPORT_MARKERS = ("SSLError", "UNEXPECTED_EOF", "BrokenPipe", "ConnectionError", "ConnectionReset", "RemoteDisconnected",
+                      "ProtocolError", "Timeout", "timed out", "Max retries exceeded")
+
+
+def _is_transport_error(exc: BaseException | None) -> bool:
+    if exc is None:
+        return False
+    text = f"{type(exc).__name__}: {exc}"
+    return any(m in text for m in _TRANSPORT_MARKERS)
 
 
 class HybridStorage:
@@ -199,10 +315,13 @@ class HybridStorage:
                 logger.warning("KEIBA_ENV=dev のため GCS_BUCKET=%s を無視します（ローカルモードで動作）", self._bucket_name)
             self._bucket_name = ""
             self._dev_store = DevStore(dev_mock_root(self._base_dir))
-        self._gcs_client = None
-        self._gcs_bucket = None
+        if _shared_state_enabled() and self._bucket_name:
+            with _SHARED_GCS_LOCK:
+                self._gcs = _SHARED_GCS.setdefault(self._bucket_name, _GcsState())
+        else:
+            self._gcs = _GcsState()
         self._gcs_available: bool | None = None
-        self._gcs_init_lock = threading.RLock()
+        self._gcs_init_lock = self._gcs.lock
 
         # load() 用インメモリ LRU キャッシュ: {cache_key: (ts, data_or_None)}
         self._load_cache: dict[str, tuple[float, dict | None]] = {}
@@ -210,14 +329,19 @@ class HybridStorage:
         HybridStorage._instances.add(self)
         self._gcs_call_count = 0
 
-        # GCS 健全性トラッキング
-        self._gcs_last_failure: float = 0.0
-        self._gcs_backoff = 60  # GCS障害後にリトライまで待つ秒数
-        self._gcs_retry = None  # _get_bucket() 内で遅延初期化
+        # GCS 健全性トラッキング（状態は self._gcs。下のプロパティ）
+        self._gcs_backoff = _GCS_BACKOFF_SEC  # GCS障害後にリトライまで待つ秒数
+        self._GCS_TIMEOUT = _env_float("KEIBA_GCS_TIMEOUT_SEC", self._GCS_TIMEOUT)
 
         # メモリ L1 / ディスク L2 TTL（.env で調整可）
         self._mem_cache_ttl = float(os.environ.get("LOAD_CACHE_TTL_SEC", "3600"))
         self._mem_cache_max = int(os.environ.get("LOAD_CACHE_MAX_ENTRIES", "8000"))
+        # 量の上限（MB。0 = 上限なし＝従来どおり件数だけ）。読み込んだ dict は JSON の文字列の約 2.5 倍のメモリを使う（2026-11-17 に手元で測定）。
+        # Cloud Run は src/api/cloudrun_entry.py の既定で上限を付ける（件数だけだと、0.7MB の smartrc_race などで 2GiB に張り付いた）
+        self._mem_cache_max_bytes = int(_env_float("LOAD_CACHE_MAX_MB", 0) * 1024 * 1024)
+        self._load_cache_sizes: dict[str, int] = {}
+        self._load_cache_bytes = 0
+        self._load_cache_last_sweep = _time.time()
         self._disk_ttl_past = float(os.environ.get("DISK_L2_TTL_PAST_SEC", "172800"))
         self._disk_ttl_current = float(os.environ.get("DISK_L2_TTL_CURRENT_SEC", "43200"))
 
@@ -344,6 +468,39 @@ class HybridStorage:
         if n >= self._disk_l2_min_weekly_accesses():
             self._write_local_cache(category, key, data)
 
+    # 状態は self._gcs（_GcsState）に置き、従来の属性名で読み書きできるようにする（テスト・他のモジュールが使う）
+    @property
+    def _gcs_client(self):
+        return self._gcs.client
+
+    @_gcs_client.setter
+    def _gcs_client(self, v) -> None:
+        self._gcs.client = v
+
+    @property
+    def _gcs_bucket(self):
+        return self._gcs.bucket
+
+    @_gcs_bucket.setter
+    def _gcs_bucket(self, v) -> None:
+        self._gcs.bucket = v
+
+    @property
+    def _gcs_retry(self):
+        return self._gcs.retry
+
+    @_gcs_retry.setter
+    def _gcs_retry(self, v) -> None:
+        self._gcs.retry = v
+
+    @property
+    def _gcs_last_failure(self) -> float:
+        return self._gcs.last_failure
+
+    @_gcs_last_failure.setter
+    def _gcs_last_failure(self, v: float) -> None:
+        self._gcs.last_failure = v
+
     @property
     def gcs_enabled(self) -> bool:
         if self._gcs_available is None:
@@ -365,16 +522,58 @@ class HybridStorage:
             return True
         return (_time.time() - self._gcs_last_failure) > self._gcs_backoff
 
-    def _mark_gcs_failure(self):
+    def _mark_gcs_failure(self, exc: BaseException | None = None):
+        if fail_fast_enabled() and not _is_transport_error(exc):
+            # すぐ返す動き（Cloud Run）では、通信の失敗だけを不調として数える。壊れた JSON・403 など 1 件の失敗で、共有の状態ごと
+            # 60 秒止めない（例外が渡されない呼び出しも数えない）
+            return
         if self._gcs_last_failure == 0.0:
             logger.warning("GCS 障害検知 — %d秒間ローカルキャッシュモードへ移行",
                            self._gcs_backoff)
-        self._gcs_last_failure = _time.time()
+        now = _time.time()
+        self._gcs_last_failure = now
+        if fail_fast_enabled() and _is_transport_error(exc):
+            self._note_transport_error(now)
+
+    def _note_transport_error(self, now: float) -> None:
+        """通信の層の失敗が KEIBA_GCS_REBUILD_AFTER 回（既定 5）、KEIBA_GCS_REBUILD_WINDOW_SEC 秒（既定 60）の間に続いたら、
+        クライアントを作り直す（壊れた接続の使い回しで SSLEOF・BrokenPipe が続くのを断つ）。"""
+        st = self._gcs
+        n = int(_env_float("KEIBA_GCS_REBUILD_AFTER", 5))
+        win = _env_float("KEIBA_GCS_REBUILD_WINDOW_SEC", 60)
+        with st.lock:
+            st.transport_errors = [t for t in st.transport_errors if now - t < win] + [now]
+            if n > 0 and len(st.transport_errors) >= n:
+                st.transport_errors = []
+                st.client = st.bucket = None
+                st.rebuilds += 1
+                st.rebuild_at = now
+                logger.warning("GCS の通信の失敗が続いたため、クライアントを作り直します（%d 回目）", st.rebuilds)
 
     def _mark_gcs_success(self):
+        self._gcs.last_success = _time.time()
         if self._gcs_last_failure > 0:
             logger.info("GCS 復旧確認")
             self._gcs_last_failure = 0.0
+            self._gcs.transport_errors = []
+
+    def _probe_allowed(self) -> bool:
+        """不調の間、KEIBA_GCS_PROBE_SEC 秒（既定 15）に 1 件だけ GCS を試しに読ませる（復旧を知るため）。"""
+        st = self._gcs
+        with st.lock:
+            now = _time.time()
+            if now - max(st.last_probe, st.last_failure) >= _env_float("KEIBA_GCS_PROBE_SEC", 15):
+                st.last_probe = now
+                return True
+        return False
+
+    def gcs_health(self) -> dict[str, Any]:
+        """運用の確認用（/ops/memory）。"""
+        st = self._gcs
+        now = _time.time()
+        return {"healthy": self._gcs_healthy, "since_success_s": round(now - st.last_success, 1),
+                "backoff_left_s": round(max(0.0, self._gcs_backoff - (now - st.last_failure)), 1) if st.last_failure else 0.0,
+                "rebuilds": st.rebuilds, "fail_fast": st.fail_fast, "shared": self._gcs is _SHARED_GCS.get(self._bucket_name)}
 
     def check_gcs_connectivity(self, quick: bool = True) -> bool:
         """GCS 疎通確認。ソケットレベルで storage.googleapis.com:443 の最初のIPに接続テスト。"""
@@ -410,28 +609,30 @@ class HybridStorage:
         return build_gcp_credentials()
 
     def _get_bucket(self):
-        if self._gcs_bucket is None:
-            with self._gcs_init_lock:
-                if self._gcs_bucket is None:
-                    assert_gcp_allowed("GCS バケット")
-                    from google.cloud import storage as gcs_lib
-                    credentials = self._build_credentials()
-                    if credentials:
-                        self._gcs_client = gcs_lib.Client(
-                            credentials=credentials,
-                            project=credentials.project_id,
-                        )
-                    else:
-                        self._gcs_client = gcs_lib.Client()
-                    self._gcs_bucket = self._gcs_client.bucket(self._bucket_name)
-                    self._gcs_retry = self._build_retry()
-        return self._gcs_bucket
+        b = self._gcs.bucket                     # 作り直し（別スレッドが None にする）と競合しても None を返さないよう、手元に取って返す
+        if b is not None:
+            return b
+        with self._gcs_init_lock:
+            if self._gcs_bucket is None:
+                assert_gcp_allowed("GCS バケット")
+                from google.cloud import storage as gcs_lib
+                credentials = self._build_credentials()
+                if credentials:
+                    self._gcs_client = gcs_lib.Client(
+                        credentials=credentials,
+                        project=credentials.project_id,
+                    )
+                else:
+                    self._gcs_client = gcs_lib.Client()
+                self._gcs_retry = self._build_retry()
+                self._gcs_bucket = self._gcs_client.bucket(self._bucket_name)
+            return self._gcs_bucket
 
     @staticmethod
     def _build_retry():
-        """GCS API コールのリトライ設定。デフォルト120s→10sに短縮。"""
+        """GCS API コールのリトライ設定。デフォルト120s→10sに短縮。Cloud Run は KEIBA_GCS_RETRY_DEADLINE_SEC で更に短くする。"""
         from google.api_core.retry import Retry
-        return Retry(deadline=10, initial=0.5, maximum=2, multiplier=2)
+        return Retry(deadline=_env_float("KEIBA_GCS_RETRY_DEADLINE_SEC", 10), initial=0.5, maximum=2, multiplier=2)
 
     # ── パス構築 ─────────────────────────────────────
 
@@ -786,6 +987,11 @@ class HybridStorage:
                     return stale
             if not self.gcs_enabled:
                 return None
+            if fail_fast_enabled() and not self._probe_allowed():
+                # 写しが無く GCS も不調: GCS を呼ばずにすぐ返す（時間切れを待つスレッドを溜めない）。None はキャッシュに入れない
+                self._gcs.fail_fast += 1
+                note_degraded()
+                return None
 
         try:
             blob_path = self._gcs_blob_path(category, key)
@@ -803,13 +1009,13 @@ class HybridStorage:
                 raise
             data = json.loads(content)
             self._mark_gcs_success()
-            self._cache_put(cache_key, data)
+            self._cache_put(cache_key, data, nbytes=_approx_mem(len(content)))
             if self._is_locally_cached(category):
                 self._weekly_disk_l2_maybe_write(category, key, data)
             return data
         except Exception as e:
             logger.warning("GCS load 失敗 [%s/%s]: %s", category, key, e)
-            self._mark_gcs_failure()
+            self._mark_gcs_failure(e)
             if self._is_locally_cached(category):
                 stale = self._read_local_cache(category, key, allow_stale=True)
                 if stale is not None:
@@ -817,6 +1023,7 @@ class HybridStorage:
                     self._cache_put(cache_key, stale)
                     self._weekly_disk_l2_maybe_write(category, key, stale)
                     return stale
+            note_degraded()                       # 読めず、写しも無い: 欠けた応答になりうる
         return None
 
     def _dev_load(self, category: str, key: str, bypass_cache: bool) -> dict[str, Any] | None:
@@ -832,26 +1039,49 @@ class HybridStorage:
             self._cache_put(cache_key, data)
         return data
 
-    def _cache_put(self, cache_key: str, data: dict | None):
-        """LRU キャッシュにデータを格納する。上限超過時は最古エントリを削除。"""
+    def _cache_put(self, cache_key: str, data: dict | None, nbytes: int | None = None):
+        """キャッシュにデータを格納する。件数・量（LOAD_CACHE_MAX_MB）の上限を超えたら古いものから消す。期限切れは 60 秒に 1 回まとめて消す。
+        dict は挿入順なので、入れ直すたびに末尾へ回し、先頭から消す（全件の最小値探しをしない）。"""
+        size = int(nbytes) if nbytes is not None else (_approx_obj_mem(data) if self._mem_cache_max_bytes else 0)
+        now = _time.time()
         with self._load_cache_lock:
-            if len(self._load_cache) >= self._mem_cache_max:
-                oldest_key = min(self._load_cache, key=lambda k: self._load_cache[k][0])
-                del self._load_cache[oldest_key]
-            self._load_cache[cache_key] = (_time.time(), data)
+            if not self._load_cache and self._load_cache_sizes:      # 外から _load_cache.clear() された（export_tables など）
+                self._load_cache_sizes.clear()
+                self._load_cache_bytes = 0
+            self._cache_drop_unlocked(cache_key)
+            if now - self._load_cache_last_sweep >= 60:
+                self._load_cache_last_sweep = now
+                for k in [k for k, v in self._load_cache.items() if now - v[0] >= self._mem_ttl(k.split("/", 1)[0])]:
+                    self._cache_drop_unlocked(k)
+            while self._load_cache and (len(self._load_cache) >= self._mem_cache_max
+                                        or (self._mem_cache_max_bytes and self._load_cache_bytes + size > self._mem_cache_max_bytes)):
+                self._cache_drop_unlocked(next(iter(self._load_cache)))
+            self._load_cache[cache_key] = (now, data)
+            self._load_cache_sizes[cache_key] = size
+            self._load_cache_bytes += size
+
+    def _cache_drop_unlocked(self, cache_key: str) -> None:
+        if self._load_cache.pop(cache_key, None) is not None or cache_key in self._load_cache_sizes:
+            self._load_cache_bytes -= self._load_cache_sizes.pop(cache_key, 0)
+
+    def load_cache_bytes(self) -> int:
+        """load キャッシュのおおよその量（バイト。量の上限が無効なら大きさを数えないので 0 に近い）。"""
+        return max(0, self._load_cache_bytes)
 
     def invalidate_load_cache(self, category: str = "", key: str = ""):
         """load() キャッシュを無効化する。"""
         with self._load_cache_lock:
             if category and key:
-                self._load_cache.pop(f"{category}/{key}", None)
+                self._cache_drop_unlocked(f"{category}/{key}")
             elif category:
                 keys_to_del = [k for k in self._load_cache
                                if k.startswith(f"{category}/")]
                 for k in keys_to_del:
-                    del self._load_cache[k]
+                    self._cache_drop_unlocked(k)
             else:
                 self._load_cache.clear()
+                self._load_cache_sizes.clear()
+                self._load_cache_bytes = 0
 
     def _load_local(self, category: str, key: str) -> dict[str, Any] | None:
         paths = [self._local_path(category, key)]
@@ -1568,6 +1798,20 @@ class HybridStorage:
 
 # ── 下位互換エイリアス ─────────────────────────────────
 JsonStorage = HybridStorage
+
+
+_SHARED_STORAGE: list["HybridStorage"] = []
+_SHARED_STORAGE_LOCK = threading.Lock()
+
+
+def shared_storage() -> "HybridStorage":
+    """プロセスで 1 つの HybridStorage（リポジトリの根を base_dir に）。要求ごとに作ると、load キャッシュが効かず毎回 GCS を読む。
+    FastAPI・Flask のどちらからも import の循環なしで使える置き場（src/api/app.py の _get_storage と同じ考え方）。"""
+    if not _SHARED_STORAGE:
+        with _SHARED_STORAGE_LOCK:
+            if not _SHARED_STORAGE:
+                _SHARED_STORAGE.append(HybridStorage(str(Path(__file__).resolve().parents[2])))
+    return _SHARED_STORAGE[0]
 
 
 def _clear_all_load_caches() -> None:
