@@ -74,6 +74,9 @@ ENV_VARS+=",KEIBA_PRERENDER=1,KEIBA_PRERENDER_MAX_AGE_SEC=120,KEIBA_WARMUP_ON_ST
 [ -z "$GCS_PREFIX" ] || ENV_VARS+=",GCS_PREFIX=${GCS_PREFIX}"
 # API_TEST_USER=1 のときだけテストユーザー(config/members.json の test)を有効にする。stg のタグ付きリビジョン専用（deploy_gcp.sh が付ける）
 [ "${API_TEST_USER:-0}" != 1 ] || ENV_VARS+=",KEIBA_TEST_USER=1"
+# MEMBERS_STORE=gcs のときだけ、会員名簿の正本を GCS に置く（管理 API・決済の Webhook の書き込みを GCS へ世代の条件つきで書く）。
+# 先にホストの .env にも KEIBA_MEMBERS_STORE=gcs を入れてから使う（ホストの cron が名簿を上げ続けると、Cloud Run の書き込みを上書きする）。手順: docs/operations/members_store_gcs.md
+[ "${MEMBERS_STORE:-}" != gcs ] || ENV_VARS+=",KEIBA_MEMBERS_STORE=gcs"
 # Secret Manager（<環境変数名>=<シークレット名>:<バージョン>）。値はここに書かない
 # 秘密の名前は scripts/gcp/put_secret.sh で登録したもの（gcp_setup_runbook.md 5 章）。左が環境変数、右が Secret Manager の名前
 SECRETS="KEIBA_PROXY_KEY=KEIBA_PROXY_KEY:latest,KEIBA_HEARTBEAT_SECRET=KEIBA_HEARTBEAT_KEY:latest"

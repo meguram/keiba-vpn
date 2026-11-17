@@ -127,7 +127,8 @@ case "$STEP" in
     # stg のリビジョンにだけ、テストユーザー(test/test。会員扱い)を有効にする。prod のリビジョンには付けない
     # CPU の割り当て: stg・prod ともリクエスト課金（アイドル中は課金されない。stg で速度・データの鮮度・課金を確かめ済み、2026-10-28）。
     #   prod だけ常時割り当てに戻すときは GitHub Variables の PROD_CPU_ALLOC=always（docs/operations/cost_recalc_20261028.md）
-    run env TAG="$REV_TAG" IMAGE="$API_IMAGE" API_TEST_USER="$([ "$TARGET" = stg ] && echo 1 || echo 0)" \
+    # 会員名簿の正本: GitHub Variables の MEMBERS_STORE=gcs のときだけ GCS（stg・prod 共通。CI の配備で毎回付け直すので、手で付けても外れない）
+    run env TAG="$REV_TAG" IMAGE="$API_IMAGE" API_TEST_USER="$([ "$TARGET" = stg ] && echo 1 || echo 0)" MEMBERS_STORE="${MEMBERS_STORE:-}" \
       CPU_ALLOC="$([ "$TARGET" = stg ] && echo request || echo "${PROD_CPU_ALLOC:-request}")" bash scripts/gcp/deploy_cloud_run_api.sh deploy --apply
     if [ "$DRY" = 1 ]; then
       echo "+ （タグ付き URL を取得して GITHUB_OUTPUT の tag_url に書く: タグ r${REV_TAG}）"

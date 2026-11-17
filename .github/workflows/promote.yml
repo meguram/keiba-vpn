@@ -111,6 +111,8 @@ jobs:
         run: bash scripts/ci/deploy_gcp.sh build-images --target prod
       - name: API の通信 0% のタグ付きリビジョンを作る
         id: revision
+        env:
+          MEMBERS_STORE: ${{ vars.MEMBERS_STORE }}   # gcs で会員名簿の正本を GCS に（docs/operations/members_store_gcs.md。未設定は従来どおり）
         run: bash scripts/ci/deploy_gcp.sh api-revision --target prod
       - name: スモーク（失敗したら通信は切り替えない）
         env:

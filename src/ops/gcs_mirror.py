@@ -571,6 +571,57 @@ def refresh_members(root: Path = REPO_ROOT, backend: Backend | None = None, *, m
     return fetch_one(MEMBERS_REL, root, backend, miss_ttl=0.0)
 
 
+def members_store_gcs() -> bool:
+    """会員名簿の正本が GCS か（src/scripts/ops/manage_users.py の gcs_store_enabled と同じ判定）。"""
+    return (os.environ.get("KEIBA_MEMBERS_STORE") or "").strip().lower() == "gcs" and bool(os.environ.get("GCS_BUCKET"))
+
+
+def _roster_ok(data: bytes) -> int:
+    """名簿として正しければ会員の数、壊れていれば -1。"""
+    try:
+        d = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return -1
+    users = d.get("users") if isinstance(d, dict) else None
+    return len(users) if isinstance(users, list) else -1
+
+
+def pull_members_from_store(backend: Backend, root: Path = REPO_ROOT) -> dict:
+    """GCS が正本のとき、ホストの root の cron（push --only-auth）は名簿を上げず、GCS から手元へ取り込む（Cloud Run 側の書き込みを上書きしない）。
+    GCS にまだ名簿が無い（移行の初回）ときだけ、手元の名簿（正しく読めて 1 人以上）を置いて正本にする。
+    GCS の中身が壊れていたら手元を上書きしない。上書きの前に .bak を残す。名簿の中身はログに出さない。"""
+    key = f"{PREFIX}/{MEMBERS_REL}"
+    local = root / MEMBERS_REL
+    remote = backend.list(key).get(key)                  # md5 だけを先に見る（GCP の外から名簿を毎回丸ごと読まない。一覧 1 回 = Class A 1 回）
+    if remote is not None and local.is_file() and _md5(local.read_bytes()) == remote[0]:
+        return {"members": "変更なし"}
+    raw, gen = backend.read_gen(key)
+    if raw is None:
+        cur = local.read_bytes() if local.is_file() else b""
+        if _roster_ok(cur) < 1:
+            return {"members": "置かない（手元の名簿が無い・壊れている・空）"}
+        ok = backend.upload_if(key, cur, 0)
+        return {"members": "手元の名簿を GCS に置いた（移行の初回）" if ok else "GCS に先に置かれていた（次回に取り込む）"}
+    n = _roster_ok(raw)
+    if n < 0:
+        return {"members": "取り込まない（GCS の名簿が壊れている。手で確かめる）", "error": True}
+    from src.scripts.ops.manage_users import locked
+
+    local.parent.mkdir(parents=True, exist_ok=True)
+    with locked(local):                                  # ホストの CLI（manage_users）の書き込みと交互にならないように
+        if local.is_file():
+            bak = local.with_name(local.name + ".bak")
+            fd = os.open(bak, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "wb") as f:
+                f.write(local.read_bytes())
+        tmp = local.with_name(f"{local.name}.{os.getpid()}.tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            f.write(raw)
+        os.replace(tmp, local)
+    return {"members": "GCS から取り込んだ", "generation": gen, "users": n}
+
+
 initial_recent_pulled = threading.Event()      # 起動直後の「直近分」の取り込みが終わった（成否を問わず）。Cloud Run の起動時ウォームアップが待つ
 initial_full_pulled = threading.Event()        # 起動直後の「全体」の取り込みまで終わった（成否を問わず）。リクエスト課金では、起動の完了前に済ませる
 
@@ -880,6 +931,9 @@ def main(argv: list[str] | None = None) -> int:
         print(push_vps(GcsBackend(), manifest=META_DIR / "gcs_mirror_vps_manifest.json", dry_run=a.dry_run))
         return 0
     be = GcsBackend()
+    if a.action == "push" and a.only_auth and members_store_gcs():
+        print(pull_members_from_store(be))
+        return 0
     trees = AUTH_TREES if a.only_auth else PUSH_TREES
     if a.manifest == "none":
         manifest = None

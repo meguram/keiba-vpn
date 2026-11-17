@@ -10,6 +10,8 @@
   （--password はシェルの履歴に残る。残したくないときは対話入力か --password-stdin を使う）
 
 保存先: data/local/auth/members.json（git に入れない。環境変数 KEIBA_MEMBERS_FILE で変更）。config/members.json（動作確認用の test）は読むだけ。
+KEIBA_MEMBERS_STORE=gcs（＋GCS_BUCKET）のときは、GCS のミラーの名簿（gcs_mirror.MEMBERS_REL）を正本にして、世代の条件つきで書く
+（ホスト・Cloud Run の管理 API・決済の Webhook のどこから書いても失わない。書いたら手元の写しも更新する）。既定（未設定）は従来どおり手元のファイルだけ。
 API は会員ファイルの更新を自動で読み直す（再起動不要）。無効化・削除したユーザーは、ログイン中でも次のリクエストから使えなくなる。
 本番ではホストで実行する: ssh keiba-remote 'cd /home/jovyan/work/keiba-vpn && sudo -n /opt/conda/bin/python3 -m src.scripts.ops.manage_users list'
 """
@@ -73,6 +75,106 @@ def _save(path: Path, data: dict) -> None:
     os.replace(tmp, path)
 
 
+MEMBERS_STORE_RETRIES = 6
+
+
+def gcs_store_enabled() -> bool:
+    """名簿の正本を GCS に置く設定か（KEIBA_MEMBERS_STORE=gcs かつ GCS_BUCKET あり）。"""
+    from src.ops.gcs_mirror import members_store_gcs
+
+    return members_store_gcs()
+
+
+def _members_key() -> str:
+    from src.ops import gcs_mirror
+
+    return f"{gcs_mirror.PREFIX}/{gcs_mirror.MEMBERS_REL}"
+
+
+_backend_factory = None         # テストが差し替える（既定は gcs_mirror.GcsBackend）
+
+
+def _backend():
+    if _backend_factory is not None:
+        return _backend_factory()
+    from src.ops.gcs_mirror import GcsBackend
+
+    return GcsBackend()
+
+
+def _parse(raw: bytes) -> dict:
+    """GCS の名簿の中身を読む。壊れていれば UserError（上書きしない）。"""
+    try:
+        d = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as e:
+        raise UserError("GCS の会員名簿を読めません（壊れています）。手で確かめてください") from e
+    if not (isinstance(d, dict) and isinstance(d.get("users"), list)):
+        raise UserError("GCS の会員名簿の形が違います。手で確かめてください")
+    from src.api import auth
+
+    for u in d["users"]:
+        if u.get("id") and not u.get("idk"):
+            u["idk"] = auth.id_key(str(u.pop("id")))
+            u.pop("name", None)
+    return d
+
+
+_NO_MASTER = "GCS に会員名簿がまだありません。ホストの root の cron（gcs_mirror push --only-auth）が手元の名簿を置くのを待ってください"
+
+
+def _dump(data: dict) -> bytes:
+    return json.dumps(data, ensure_ascii=False, indent=1).encode("utf-8")
+
+
+def _transact(mutate):
+    """名簿を読み、mutate(data) で変えて保存する（戻り値は mutate の戻り値）。mutate が UserError を出せば何も書かない。
+    GCS が正本のときは、読んだ世代のままのときだけ書き、他が先に書いていたら読み直してやり直す（同時に書いても失わない）。"""
+    p = _path()
+    if not gcs_store_enabled():
+        with locked(p):
+            data = _load(p)
+            before = _dump(data)
+            result = mutate(data)
+            if _dump(data) != before:
+                _save(p, data)
+            return result
+    from src.ops import gcs_mirror
+
+    be = _backend()
+    key = _members_key()
+    for _ in range(MEMBERS_STORE_RETRIES):
+        with locked(p):                         # 同じマシンの書き手どうしで、手元の写しの保存の順序が逆転しないように、1 回の試行をまるごと囲む
+            raw, gen = be.read_gen(key)
+            if raw is None:                     # 正本を初めて置くのはホストの cron だけ（手元に写しが無い Cloud Run が空の名簿を正本にしないように）
+                raise UserError(_NO_MASTER)
+            data = _parse(raw)
+            before = _dump(data)
+            result = mutate(data)
+            payload = _dump(data)
+            if payload == before:
+                return result
+            if be.upload_if(key, payload, gen):
+                _save(p, data)                  # このマシンの写しもすぐ更新（照合は手元のファイルを読む）
+                try:                             # ほかのインスタンスが目録経由ですぐ取り込めるように（失敗しても次の一覧で追いつく）
+                    gcs_mirror.write_index_merge(be, "auth", {key: [gcs_mirror._md5(payload), time.time()]})
+                except Exception:  # noqa: BLE001
+                    pass
+                return result
+        time.sleep(0.05)
+    raise UserError("会員名簿の書き込みが混み合っています。少し待ってからもう一度お試しください")
+
+
+def _current() -> dict:
+    """いまの名簿（GCS が正本なら GCS、そうでなければ手元のファイル）。"""
+    p = _path()
+    if gcs_store_enabled():
+        raw, _ = _backend().read_gen(_members_key())
+        if raw is None:
+            raise UserError(_NO_MASTER)
+        return _parse(raw)
+    return _load(p)
+
+
 @contextlib.contextmanager
 def locked(path: Path | None = None):
     """会員ファイルの読み書きを、CLI・管理 API・決済の Webhook が同時に行っても壊れないように、排他ロックで囲む。"""
@@ -122,7 +224,7 @@ def list_users() -> list[dict]:
     """一覧（ID は出ない）。fp=指紋、source=config（動作確認用）/ managed（この管理で作成）。"""
     from src.api import auth
 
-    local = _load(_path())["users"]
+    local = _current()["users"]
     out = []
     for u in auth._read_users(auth._MEMBERS_FILE):
         out.append({"fp": "-", "source": "config", "label": u.get("id"), "enabled": bool(not u.get("requires_env") or auth._env_on(str(u["requires_env"]))), "created_at": None, "note": f"{u.get('requires_env')} が有効なときだけ", "plan": "paid"})
@@ -141,26 +243,24 @@ def create_user(user_id: str, password: str, billing: dict | None = None, plan: 
     if not ID_RE.match(uid):
         raise UserError("ログインID は英数字と . _ @ - の 3〜64 文字にしてください")
     check_password_rules(uid, password)
-    p = _path()
-    with locked(p):
-        data = _load(p)
-        k = auth.id_key(uid)
+    k = auth.id_key(uid)
+
+    def m(data: dict) -> None:
         if any(u.get("idk") == k for u in data["users"]) or any((u.get("id") or "").lower() == uid.lower() for u in auth._read_users(auth._MEMBERS_FILE)):
             raise UserError("そのログインID はすでに使われています")
         rec = {"idk": k, **_hash(password), "role": "member", "plan": plan, "enabled": True, "created_at": _now(), "updated_at": _now()}
         if billing is not None:
             rec["billing"] = dict(billing)
         data["users"].append(rec)
-        _save(p, data)
+
+    _transact(m)
     return k[:8]
 
 
 # ── 決済（Stripe）連携用 ──
 def update_billing(*, idk: str | None = None, customer: str | None = None, **fields) -> str:
     """idk か Stripe の顧客 ID で対象を決め、billing の項目（status・customer・subscription・period_end など）を更新する。見つからなければ UserError。"""
-    p = _path()
-    with locked(p):
-        data = _load(p)
+    def m(data: dict) -> str:
         hit = [u for u in data["users"] if (idk and u.get("idk") == idk) or (customer and (u.get("billing") or {}).get("customer") == customer)]
         if len(hit) != 1:
             raise UserError("対象のユーザーが見つかりません")
@@ -170,70 +270,73 @@ def update_billing(*, idk: str | None = None, customer: str | None = None, **fie
         if customer:
             b["customer"] = customer
         u["updated_at"] = _now()
-        _save(p, data)
         return str(u["idk"])[:8]
+
+    return _transact(m)
 
 
 def remove_pending(max_age_hours: float = 24.0, now: float | None = None) -> int:
     """決済が済まないまま残っている仮登録（billing.status=pending）を、一定時間後に消す。消した件数を返す。"""
     limit = (now if now is not None else time.time()) - max_age_hours * 3600
-    p = _path()
-    with locked(p):
-        data = _load(p)
+
+    def m(data: dict) -> int:
         keep = [u for u in data["users"] if not ((u.get("billing") or {}).get("status") == "pending" and float((u.get("billing") or {}).get("created_ts") or 0) < limit)]
         removed = len(data["users"]) - len(keep)
         if removed:
             data["users"] = keep
-            _save(p, data)
-    return removed
+        return removed
+
+    return _transact(m)
 
 
 def set_password(ident: str, password: str) -> str:
-    p = _path()
-    data = _load(p)
-    u = _resolve(data, ident)
     if re.fullmatch(r"[A-Za-z0-9._@-]{3,64}", (ident or "").strip()) and not re.fullmatch(r"[0-9a-f]{8}", (ident or "").strip()):
         check_password_rules(ident, password)
     else:
         check_password_rules("", password)
-    u.update(_hash(password))
-    u["updated_at"] = _now()
-    u["pw_changed_ts"] = int(time.time())          # これ以前に発行したログイン（cookie）は使えなくなる
-    _save(p, data)
-    return str(u["idk"])[:8]
+    h = _hash(password)
+
+    def m(data: dict) -> str:
+        u = _resolve(data, ident)
+        u.update(h)
+        u["updated_at"] = _now()
+        u["pw_changed_ts"] = int(time.time())          # これ以前に発行したログイン（cookie）は使えなくなる
+        return str(u["idk"])[:8]
+
+    return _transact(m)
 
 
 def set_enabled(ident: str, on: bool) -> str:
-    p = _path()
-    data = _load(p)
-    u = _resolve(data, ident)
-    u["enabled"] = bool(on)
-    u["updated_at"] = _now()
-    _save(p, data)
-    return str(u["idk"])[:8]
+    def m(data: dict) -> str:
+        u = _resolve(data, ident)
+        u["enabled"] = bool(on)
+        u["updated_at"] = _now()
+        return str(u["idk"])[:8]
+
+    return _transact(m)
 
 
 def set_plan(ident: str, plan: str) -> str:
     """区分を変える（paid=有料会員 / free=無料のログイン会員）。ログイン中のセッションにもすぐ効く。"""
     if plan not in ("paid", "free"):
         raise UserError("区分は paid（有料会員）か free（無料のログイン会員）にしてください")
-    p = _path()
-    with locked(p):
-        data = _load(p)
+
+    def m(data: dict) -> str:
         u = _resolve(data, ident)
         u["plan"] = plan
         u["updated_at"] = _now()
-        _save(p, data)
-    return str(u["idk"])[:8]
+        return str(u["idk"])[:8]
+
+    return _transact(m)
 
 
 def remove_user(ident: str) -> str:
-    p = _path()
-    data = _load(p)
-    u = _resolve(data, ident)
-    data["users"].remove(u)
-    _save(p, data)
-    return str(u["idk"])[:8]
+    def m(data: dict) -> str:
+        u = _resolve(data, ident)
+        data["users"].remove(u)
+        return str(u["idk"])[:8]
+
+    return _transact(m)
 
 
 # ── CLI ──
