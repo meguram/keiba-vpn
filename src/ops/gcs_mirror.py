@@ -583,8 +583,13 @@ def refresh_members(root: Path = REPO_ROOT, backend: Backend | None = None, *, m
         now = clock()
         if now - _members_refresh["at"] < min_interval:
             return False
-        _members_refresh["at"] = now
-    return fetch_one(MEMBERS_REL, root, backend, miss_ttl=0.0)
+        prev, _members_refresh["at"] = _members_refresh["at"], now
+    ok = fetch_one(MEMBERS_REL, root, backend, miss_ttl=0.0)
+    if not ok and min_interval <= 0:            # 起動時に取れなかった: 次のログインの取り直しを、間隔の制限で止めない
+        with _members_refresh_lock:
+            if _members_refresh["at"] == now:
+                _members_refresh["at"] = prev
+    return ok
 
 
 def members_store_gcs() -> bool:
@@ -640,6 +645,7 @@ def pull_members_from_store(backend: Backend, root: Path = REPO_ROOT) -> dict:
 
 initial_recent_pulled = threading.Event()      # 起動直後の「直近分」の取り込みが終わった（成否を問わず）。Cloud Run の起動時ウォームアップが待つ
 initial_full_pulled = threading.Event()        # 起動直後の「全体」の取り込みまで終わった（成否を問わず）。リクエスト課金では、起動の完了前に済ませる
+initial_members_pulled = threading.Event()     # 起動直後に会員名簿を（束より先に）取り込んだ（成否を問わず）。起動中でもログインに答えるため（cloudrun_entry の案 A）
 
 
 def _initial_from_bundle(be: Backend, root: Path, recent_days: float) -> dict | None:
@@ -663,7 +669,14 @@ def _initial_from_bundle(be: Backend, root: Path, recent_days: float) -> dict | 
 
 
 def _initial_pull(be: Backend, root: Path, recent_days: float) -> None:
-    """起動直後は束（あれば）、無ければ直近分を先に（表示に要る分を数秒で）続けて全体。失敗しても API は止めない。"""
+    """起動直後は会員名簿 → 束（あれば）、無ければ直近分を先に（表示に要る分を数秒で）続けて全体。失敗しても API は止めない。"""
+    try:
+        if not os.environ.get("KEIBA_MEMBERS_FILE"):          # 名簿の置き場を変えた環境（取り直しのフックを付けない）では読まない
+            refresh_members(root, be, min_interval=0.0)       # 名簿 1 件だけを先に（読み出し 1 回。起動中のログインがこれだけを待つ）
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("起動時の会員名簿の取り込みに失敗: %s", exc)
+    finally:
+        initial_members_pulled.set()
     try:
         b = _initial_from_bundle(be, root, recent_days)
         if b is not None:
@@ -699,6 +712,10 @@ def start_refresher(backend: Backend | None = None, root: Path = REPO_ROOT, *, i
                         logger.info("gcs_mirror pull: %s", r)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("gcs_mirror pull に失敗（次回に再試行）: %s", exc)
+                if first:                      # 起動時の取り込みに入る前に失敗: 起動処理・ログインが待ち続けないように印は立てる
+                    initial_members_pulled.set()
+                    initial_recent_pulled.set()
+                    initial_full_pulled.set()
             time.sleep(interval)
 
     t = threading.Thread(target=run, name="gcs-mirror-pull", daemon=True)
@@ -714,6 +731,7 @@ def start_initial(backend: Backend | None = None, root: Path = REPO_ROOT, *, rec
             _initial_pull(backend or GcsBackend(), root, recent_days)
         except Exception as exc:  # noqa: BLE001
             logger.warning("gcs_mirror の起動時の取り込みに失敗: %s", exc)
+            initial_members_pulled.set()
             initial_recent_pulled.set()
             initial_full_pulled.set()
 

@@ -84,6 +84,14 @@ def build(out: Path = OUT) -> Path:
         if a.get("real_t60"):
             cmp.append(f"<tr class='good'><td>第 2 版</td><td>2026 年の発走前オッズのあるレース（本物の T-60）</td>{cells(a['real_t60'])}</tr>")
     tc = f"<table><thead>{head(['版', '期間'])}</thead><tbody>{''.join(cmp)}</tbody></table>"
+    tu = ""
+    if E2 and E2.get("per_unit"):
+        us = [u for u in E2["per_unit"] if (u["reproduction"].get("bet_races") or 0) >= 20]
+        us.sort(key=lambda u: -(u["reproduction"].get("roi_t") or 0))
+        ur = "".join(f"<tr><td>{escape(u['unit'])}</td>{cells(u['reproduction'])}</tr>" for u in us)
+        tu = (f"<h2>評価 2025〜2026 の単位ごとの値（本番の再現。◎ を 20 レース以上買った {len(us)} 単位、単回収の高い順）</h2>"
+              f"<p class='muted'>回数が少ないので、上の方の単位も偶然の幅が大きい。単位を選んで使うなら、その選び方も次の版の確認の期間で確かめる。</p>"
+              f"<div class='scroll'><table><thead>{head(['単位'])}</thead><tbody>{ur}</tbody></table></div>")
     kp = next((c["kill_pick"] for c in L2["cycles"] if c.get("kill_pick")), None)
     tk = ""
     if kp:
@@ -104,7 +112,7 @@ def build(out: Path = OUT) -> Path:
 ずれを確定オッズに逆に当てて、20 通りの平均で判定した値。楽観は確定オッズで判定した値。</li>
 <li>2025・2026 年の評価は、凍結の後に 1 回だけ（第 1 版で一度見たので 2 回目）。</li></ul></div>
 <h2>第 1 版と第 2 版</h2><div class="scroll">{tc}</div>
-<h2>第 2 版のサイクル</h2><div class="scroll">{t2}</div>{tk}
+{tu}<h2>第 2 版のサイクル</h2><div class="scroll">{t2}</div>{tk}
 <p class="muted">作り: src/research/course/v2.py → src/scripts/docs/build_course_v2_html.py。計画書: docs/ideas/course_class_handicapper.md §8。
 第 1 版: <a href="course_cycles.html">サイクル</a>・<a href="course_playbook.html">早見表</a></p>
 </main></body></html>"""
