@@ -115,3 +115,48 @@ def test_edge_split():
     assert V.select_cells(cells, V.C3(edge_min=1.2, edge_split=True))["u"]["buy"] == []           # 後半は 2 ÷ 2 = 1.0 で続かない
     b2 = b | {"w_t2": 4}
     assert len(V.select_cells({"u": {"buy": [b2], "kill": []}}, V.C3(edge_min=1.2, edge_split=True))["u"]["buy"]) == 1
+
+
+def test_freeze_eval_guards(tmp_path, monkeypatch):
+    import json
+    monkeypatch.setattr(V, "OUT3", tmp_path)
+    monkeypatch.setattr(V, "PREREG3", tmp_path / "p.json")
+    monkeypatch.setattr(V, "EVAL_MARK3", tmp_path / "e.json")
+    monkeypatch.delenv("COURSE_EVAL_TOKEN", raising=False)
+    with pytest.raises(SystemExit):
+        V._eval_inner()                                                               # トークンが無ければ流さない
+    V.EVAL_MARK3.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        V.cmd_evaluate()                                                              # 2 回目は流さない
+    with pytest.raises(SystemExit):
+        V.cmd_freeze(1)                                                               # 評価の後に凍結し直さない
+    with pytest.raises(SystemExit):
+        V.cmd_cycle("x", {}, None)                                                    # 評価の後にサイクルを足さない
+
+
+def test_freeze_requires_adopted(tmp_path, monkeypatch):
+    import json
+    monkeypatch.setattr(V, "OUT3", tmp_path)
+    monkeypatch.setattr(V, "PREREG3", tmp_path / "p.json")
+    monkeypatch.setattr(V, "EVAL_MARK3", tmp_path / "e.json")
+    log = {"cycles": [{"cycle": 1, "decision": "不採用", "params": {}}], "adopted_cycle": None}
+    (tmp_path / "course_v3_cycles.json").write_text(json.dumps(log), encoding="utf-8")
+    with pytest.raises(SystemExit):
+        V.cmd_freeze(1)                                                               # 採用の版でなければ凍結しない
+    with pytest.raises(SystemExit):
+        V.cmd_freeze(0)                                                               # 無いサイクル
+    V.PREREG3.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        V.cmd_freeze(1)                                                               # 凍結済み
+
+
+def test_measure_real_t60_denominator():
+    from tests.research.test_course_run import _toy
+    d, L = _toy(n_races=6)
+    d["odds_final"] = 3.0
+    d["pop_final"] = 1
+    kept = {"東京芝1600|1勝・2勝": {"buy": [{"types": ["A01"], "levels": ["1着"], "rate": 1.0, "win_c": 1.0}], "kill": []}}
+    rids = list(d["race_id"].unique())
+    real = {(rids[0], 1): (3.0, 1.0), (rids[1], 1): (0.0, 0.0), ("他", 1): (3.0, 1.0)}
+    r = V.measure(d, L, kept, V.C3(groups=3, pop_max=3), {"lr": [[0.0]] * 4}, real_pre=real)
+    assert r["real_t60"]["races"] == 2 and r["real_t60"]["bet_races"] == 1 and r["real_t60_missing_odds"] == 1

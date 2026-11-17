@@ -429,7 +429,7 @@ def trimmed(Y: np.ndarray, rows: np.ndarray, col: int, k: int = 5) -> float | No
     return float((pays[k:].sum()) / npay)
 
 
-def measure(d: pd.DataFrame, L: pd.DataFrame, kept: dict, c: C3, shift: dict) -> dict:
+def measure(d: pd.DataFrame, L: pd.DataFrame, kept: dict, c: C3, shift: dict, real_pre: dict | None = None) -> dict:
     """ある期間の値: 絞り込みなし・楽観（確定オッズ）・本番の再現（20 通りの平均・5〜95%）。上位 5 件を除いた回収率も。"""
     Y = SE.y_matrix(d)
     race = d["race_id"].astype(str).to_numpy()
@@ -441,6 +441,23 @@ def measure(d: pd.DataFrame, L: pd.DataFrame, kept: dict, c: C3, shift: dict) ->
         x = SE.metrics(Y, race, rows, kr, nr)
         return x | {"roi_t_trim5": trimmed(Y, rows, 6), "roi_f_trim5": trimmed(Y, rows, 7)}
     out = {"no_filter": m(H)}
+    if real_pre:
+        # 本物の T-60（発走前のオッズがあり、この表にもあるレースだけ）。オッズの無い ◎ は、絞り込みのある版では買わない
+        rr = {k[0] for k in real_pre} & set(race)
+        if rr:
+            hn_all = pd.to_numeric(d["hn"], errors="coerce").fillna(-1).astype(int).to_numpy()
+            mm = np.isin(race, list(rr))
+            Hs, pws = H[mm[H]], Pw[mm[H]]
+            ro = np.array([real_pre.get((race[h], hn_all[h]), (np.nan, np.nan))[0] for h in Hs])
+            rp = np.array([real_pre.get((race[h], hn_all[h]), (np.nan, np.nan))[1] for h in Hs])
+            ks = kr[mm[kr]]
+            sel = Hs[keep_odds(c, ro, rp, pws)] if has_odds(c) else Hs
+            x = SE.metrics(Y, race, sel, ks, len(rr))
+            out["real_t60"] = x | {"roi_t_trim5": trimmed(Y, sel, 6), "roi_f_trim5": trimmed(Y, sel, 7)}
+            of, pf = d["odds_final"].to_numpy(float), d["pop_final"].to_numpy(float)
+            so = Hs[keep_odds(c, of[Hs], pf[Hs], pws)] if has_odds(c) else Hs
+            out["real_t60_optimistic"] = SE.metrics(Y, race, so, ks, len(rr))
+            out["real_t60_missing_odds"] = int((np.isnan(ro) | (np.nan_to_num(ro) <= 0)).sum())   # T-60 のオッズが無い ◎（絞り込みでは買わない）
     if not has_odds(c):
         out["optimistic"] = out["reproduction"] = out["no_filter"]
         return out
@@ -574,6 +591,88 @@ def cmd_evidence() -> None:
     print(json.dumps(out, ensure_ascii=False, indent=1), flush=True)
 
 
+def cmd_freeze(n: int) -> None:
+    """凍結: 選んだサイクル n の版と条件（kept_<n>.json）・ずれの分布の sha を prereg_course_v3.json に書く（commit する）。"""
+    if EVAL_MARK3.exists() or PREREG3.exists():
+        sys.exit("凍結・評価は済んでいる")
+    log = _load_log()
+    c = next((x for x in log["cycles"] if x["cycle"] == n), None)
+    if c is None:
+        sys.exit(f"サイクル {n} が無い（--n で選ぶ）")
+    if c.get("decision") != "採用" or log.get("adopted_cycle") != n:
+        sys.exit(f"サイクル {n} は今の採用の版ではない（adopted_cycle = {log.get('adopted_cycle')}）")
+    kp = OUT3 / f"kept_{n}.json"
+    body = {"frozen_at": datetime.now(CR.JST).isoformat(timespec="seconds"), "cycle": n, "params": c["params"], "note_looks": NOTE_LOOKS,
+            "note": "訓練 2016〜2024・試行錯誤 2025 年で選んだ。2026 年の着順・払戻はこの版では見ていない（第 1・2 版の評価で 2 回見た。この評価は 3 回目）。"
+                    "ただし本番の再現のずれの分布（shift.json）は、2026 年の T-60 と確定オッズの組から作っている（着順・払戻は使っていない）",
+            "n_draws": V2.N_DRAWS, "seed": V2.SEED,
+            "eval2025": c["eval2025"], "train": c["train"], "cells_file": kp.name, "sha256_cells": CR._sha_file(kp),
+            "shift_file": "v2/shift.json", "sha256_shift": CR._sha_file(CR.OUT / "v2" / "shift.json"),
+            "cycles": len(log["cycles"]), "goal_met_2025": c.get("goal_met")}
+    PREREG3.write_text(json.dumps(body, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+    print("frozen", PREREG3)
+
+
+def cmd_evaluate() -> None:
+    """凍結の後に 1 回だけ: 2026 年（封印していた期間。2025・2026 年は 3 回目）。凍結が commit されていて sha が一致するときだけ。印は計算の前に立てる。"""
+    import secrets
+    if EVAL_MARK3.exists():
+        sys.exit("評価は済んでいる（1 回だけ）")
+    P = json.loads(PREREG3.read_text(encoding="utf-8"))
+    if CR._sha_file(OUT3 / P["cells_file"]) != P["sha256_cells"] or CR._sha_file(CR.OUT / P["shift_file"]) != P["sha256_shift"]:
+        sys.exit("条件の表・ずれの分布が凍結の sha と違う")
+    r = subprocess.run(["git", "-C", str(CR.REPO), "ls-files", "--error-unmatch", str(PREREG3)], capture_output=True)
+    if r.returncode != 0 or subprocess.run(["git", "-C", str(CR.REPO), "diff", "--quiet", "HEAD", "--", str(PREREG3)]).returncode != 0:
+        sys.exit("prereg_course_v3.json が commit されていない")
+    master = CR.OUT / "eval" / "master" / "master.parquet"
+    need = [master, V2.PRE_ODDS, CR.REPO / "data/page_reference/tables/2026/race_result_flat.parquet",
+            CR.REPO / "data/page_reference/tables/2026/race_result_race.parquet"]
+    miss = [str(x) for x in need if not x.exists()]
+    if miss:
+        sys.exit(f"評価に要る表が無い（印を立てる前に止める。データのつながった作業場所で流す）: {miss}")
+    tok = secrets.token_hex(16)
+    EVAL_MARK3.write_text(json.dumps({"started_at": datetime.now(CR.JST).isoformat(timespec="seconds"), "prereg_sha_cells": P["sha256_cells"],
+                                      "token_sha": hashlib.sha256(tok.encode()).hexdigest()}), encoding="utf-8")
+    e = CR.env(2026) | {"FOLKLORE_OUT": str(CR.OUT / "eval" / "master"), "GRADED_OUT": str(CR.OUT / "eval"), "COURSE_EVAL_TOKEN": tok}
+    subprocess.run([sys.executable, "-m", "src.research.course.v3", "_eval_inner"], env=e, cwd=CR.REPO, check=True)
+
+
+def _eval_inner() -> None:
+    from src.research.graded import features as F
+    from src.research.graded.run import with_returns
+    tok = os.environ.get("COURSE_EVAL_TOKEN", "")
+    mark = json.loads(EVAL_MARK3.read_text(encoding="utf-8")) if EVAL_MARK3.exists() else {}
+    if not tok or mark.get("token_sha") != hashlib.sha256(tok.encode()).hexdigest() or "evaluated_at" in mark:
+        sys.exit("評価は cmd_evaluate から 1 回だけ流す")
+    P = json.loads(PREREG3.read_text(encoding="utf-8"))
+    if (CR._sha_file(OUT3 / P["cells_file"]) != P["sha256_cells"] or mark.get("prereg_sha_cells") != P["sha256_cells"]
+            or CR._sha_file(CR.OUT / P["shift_file"]) != P["sha256_shift"]):
+        sys.exit("条件の表・ずれの分布が凍結の sha と違う")
+    d, L = CR.frame_and_levels(with_returns(F.build(out=None)))
+    keep = ((pd.to_numeric(d["year"]) == 2026) & (d["track"].astype(str) == "良") & d["cls"].map(CR.group_of).notna()).to_numpy()
+    d, L = d[keep].reset_index(drop=True), L[keep].reset_index(drop=True).drop(columns=["__race_id", "__horse_id"])
+    d["group"] = d["cls"].map(CR.group_of)
+    d = V2.attach_final_odds(d, (2026,))
+    c = C3(**{k: v for k, v in P["params"].items() if k != "name"})
+    kept = json.loads((OUT3 / P["cells_file"]).read_text(encoding="utf-8"))
+    shift = json.loads((CR.OUT / P["shift_file"]).read_text(encoding="utf-8"))
+    pre = pd.read_parquet(V2.PRE_ODDS)
+    pre = pre[pre["phase"] == "t60"]
+    real = {(str(r), int(h)): (float(o), float(pp)) for r, h, o, pp in pre[["race_id", "horse_number", "win_odds", "popularity"]].itertuples(index=False)}
+    res = measure(d, L, kept, c, shift, real_pre=real)
+    _, _, code = V2._codes(L, kept)
+    res["unmatched_cells"] = sum(any(lv not in code[t] for t, lv in zip(b["types"], b["levels"])) for cu in kept.values()
+                                 for kind in ("buy", "kill") for b in cu[kind])
+    out = {"evaluated_at": datetime.now(CR.JST).isoformat(timespec="seconds"), "round": 3, "year": 2026,
+           "note": "2026 年は第 3 版では封印していた（サイクルの間は読んでいない）。2025・2026 年を見るのは 3 回目",
+           "all": res, "params": P["params"], "eval2025": P["eval2025"], "races": int(d["race_id"].nunique())}
+    (OUT3 / "eval_course_v3.json").write_text(json.dumps(out, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+    EVAL_MARK3.write_text(json.dumps(mark | {"evaluated_at": out["evaluated_at"]}), encoding="utf-8")
+    a = res["reproduction"]
+    print(f"評価 2026（3 回目）: 再現 単回収 {a.get('roi_t')}（{a.get('roi_t_p05')}〜{a.get('roi_t_p95')}） 複 {a.get('roi_f')} 買う {a.get('bet_races')}"
+          f" 楽観 {res['optimistic'].get('roi_t')} 本物の T-60 {(res.get('real_t60') or {}).get('roi_t')}", flush=True)
+
+
 def cmd_review(n: int, text: str, decision: str, event: str = "", basis: str = "") -> None:
     """回顧と判断。事象（何が起きているか）と根拠（なぜそうなるか）も書く（統括役の方針、2026-11-17）。"""
     log = _load_log()
@@ -592,7 +691,7 @@ def cmd_review(n: int, text: str, decision: str, event: str = "", basis: str = "
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["frame", "_frame_inner", "evidence", "cycle", "review"])
+    ap.add_argument("cmd", choices=["frame", "_frame_inner", "evidence", "cycle", "review", "freeze", "evaluate", "_eval_inner"])
     ap.add_argument("--hyp", default="")
     ap.add_argument("--delta", default="{}")
     ap.add_argument("--base", type=int, default=None)
@@ -606,6 +705,12 @@ def main() -> None:
         cmd_frame()
     elif a.cmd == "_frame_inner":
         _frame_inner()
+    elif a.cmd == "freeze":
+        cmd_freeze(a.n)
+    elif a.cmd == "evaluate":
+        cmd_evaluate()
+    elif a.cmd == "_eval_inner":
+        _eval_inner()
     elif a.cmd == "evidence":
         cmd_evidence()
     elif a.cmd == "cycle":
