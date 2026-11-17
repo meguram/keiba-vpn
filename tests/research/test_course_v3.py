@@ -53,3 +53,21 @@ def test_trimmed_roi():
     Y[:, 5] = 1
     Y[:, 6] = [10, 0, 0, 0, 0, 2]
     assert V.trimmed(Y, np.arange(6), 6, k=1) == pytest.approx(2 / 6)
+
+
+def test_v3_html(tmp_path, monkeypatch):
+    import json
+
+    from src.scripts.docs import build_course_v3_html as H
+    m = {"bet_races": 400, "coverage": 0.3, "win": 0.3, "rentai": 0.5, "place": 0.7, "roi_t": 1.25, "roi_f": 1.1, "roi_t_trim5": 1.05,
+         "kill_precision": 0.9, "kill_coverage": 0.5}
+    cyc = {"cycle": 1, "hyp": "<仮説>", "params": {"name": "基準"}, "review": "効いた", "decision": "採用", "goal_met": True, "n_buy": 10,
+           "eval2025": {"reproduction": m, "optimistic": m | {"roi_t": 1.3}}, "train": {"reproduction": m}, "ev_summary": {"units": 3, "units_with_any": 2}}
+    (tmp_path / "v3").mkdir()
+    (tmp_path / "v3/course_v3_cycles.json").write_text(json.dumps({"cycles": [cyc], "adopted_cycle": 1, "note_looks": "2 回見ている"}), encoding="utf-8")
+    kept = {"東京芝1600|1勝・2勝": {"buy": [{"types": ["A01"], "levels": ["1着"], "n_t": 20, "k_t": 15, "rt_t": 1.4,
+                                           "ev": {"hyp": "能力", "dir": "ok", "stab": "ok", "breadth": "ok", "p_null": 0.001}}]}}
+    (tmp_path / "v3/kept_1.json").write_text(json.dumps(kept, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(H, "BASE", tmp_path)
+    h = H.build(tmp_path / "o.html").read_text(encoding="utf-8")
+    assert "&lt;仮説&gt;" in h and "125.0%" in h and "上位 5 件を除く" in h and "A01=1着" in h and "能力" in h and "2 回見ている" in h
