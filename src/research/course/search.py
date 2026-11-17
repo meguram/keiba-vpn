@@ -139,13 +139,14 @@ def apply_cells(X: np.ndarray, race: np.ndarray, hn: np.ndarray, cells: dict, we
 
 
 def metrics(Y: np.ndarray, race: np.ndarray, honmei_rows: np.ndarray, killed_rows: np.ndarray, races_all: int) -> dict:
-    """◎ の勝率・回収率（払戻の解けた回で割る。上限なしと上限付き）・買った回の割合、消しを付けたレースの割合・1 レースの頭数。
+    """◎ の勝率・連対率・複勝率・回収率（払戻の解けた回で割る。上限なしと上限付き）・買った回の割合、消しを付けたレースの割合・1 レースの頭数。
     honmei_rows・killed_rows は行の番号、race は全行のレースの番号（Y と同じ長さ）。"""
     h = Y[honmei_rows] if len(honmei_rows) else np.zeros((0, Y.shape[1]))
     npay = h[:, 5].sum()
     kraces = len(set(race[killed_rows])) if len(killed_rows) else 0
     return {"races": int(races_all), "bet_races": int(len(h)), "coverage": float(len(h) / races_all) if races_all else None,
-            "win": float(h[:, 2].mean()) if len(h) else None, "place": float(h[:, 1].mean()) if len(h) else None,
+            "win": float(h[:, 2].mean()) if len(h) else None, "rentai": float((h[:, 2] + h[:, 3]).mean()) if len(h) else None,
+            "place": float(h[:, 1].mean()) if len(h) else None,
             "roi_t": float(h[:, 6].sum() / npay) if npay else None, "roi_f": float(h[:, 7].sum() / npay) if npay else None,
             "roi_t_capped": float(h[:, 9].sum() / npay) if npay else None,
             "killed": int(len(killed_rows)), "kill_races": int(kraces), "kill_coverage": float(kraces / races_all) if races_all else None,

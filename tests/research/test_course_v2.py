@@ -144,3 +144,100 @@ def test_freeze_guards(tmp_path, monkeypatch):
         V.cmd_freeze()                                                                # ずれの分布がサイクルのときと違う
     with pytest.raises(SystemExit):
         V.cmd_shift()                                                                 # サイクルの後に作り直さない
+
+
+def test_kill_rank_and_adopt_tie_break():
+    a = {"kill_precision": 0.96, "kill_coverage": 0.01}
+    b = {"kill_precision": 0.99, "kill_coverage": 0.005}
+    c = {"kill_precision": 0.90, "kill_coverage": 0.5}
+    a, b = a | {"killed": 20000}, b | {"killed": 20000}
+    assert V.kill_rank(a) > V.kill_rank(b) > V.kill_rank(c)                       # 下限 95% 以上の中で広い方。届かない版は後ろ
+    ra = {"conf": {"reproduction": {"bet_races": 600, "roi_t": 1.5} | a}}
+    rb = {"conf": {"reproduction": {"bet_races": 600, "roi_t": 1.5} | b}}
+    assert V.adopt_key(ra) == V.adopt_key(rb)                                     # 採否は ◎ だけ（消しは cmd_kill_pick で選ぶ）
+    assert V.kill_rank({"kill_precision": None, "kill_coverage": None}) == (False, 0.0, 0.0)
+
+
+def test_v2_html(tmp_path, monkeypatch):
+    import json
+
+    from src.scripts.docs import build_course_v2_html as H
+    m = {"bet_races": 600, "coverage": 0.5, "win": 0.4, "rentai": 0.6, "place": 0.8, "roi_t": 1.5, "roi_f": 1.2, "kill_precision": 0.97, "kill_coverage": 0.3}
+    cyc = {"cycle": 1, "hyp": "<基準>", "adopted": True, "qualified": True, "params": {"name": "x"},
+           "conf": {"reproduction": m, "optimistic": m | {"roi_t": 1.7}}, "disc": {"reproduction": m}}
+    (tmp_path / "v2").mkdir()
+    (tmp_path / "v2/course_v2_cycles.json").write_text(json.dumps({"cycles": [cyc], "best_cycle": 1, "note_conf": "高めに出る"}), encoding="utf-8")
+    monkeypatch.setattr(H, "BASE", tmp_path)
+    h = H.build(tmp_path / "o.html").read_text(encoding="utf-8")
+    assert "&lt;基準&gt;" in h and "◎ 連対率" in h and "60.0%" in h and "楽観" in h and "高めに出る" in h
+
+
+def test_metrics_rentai():
+    from src.research.course import search as SE
+    d, _ = _toy(n_races=4)
+    Y = SE.y_matrix(d)
+    race = d["race_id"].astype(str).to_numpy()
+    m = SE.metrics(Y, race, np.array([0, 1]), np.array([], int), 4)     # 1 着の馬と、2〜10 着のどれか
+    assert m["rentai"] == pytest.approx((1 + (d["fin"].iloc[1] <= 2)) / 2) and m["win"] == 0.5
+
+
+def _log_files(tmp_path, monkeypatch, r_conf, r_disc):
+    import json
+    monkeypatch.setattr(V, "OUT2", tmp_path)
+    monkeypatch.setattr(V, "PREREG2", tmp_path / "p.json")
+    monkeypatch.setattr(V, "EVAL_MARK2", tmp_path / "e.json")
+    (tmp_path / "shift.json").write_text("{}", encoding="utf-8")
+    params = {k: v for k, v in V.P2().__dict__.items()} | {"name": V.P2().name()}
+    cyc = {"cycle": 1, "params": params, "qualified": True, "adopted": True, "conf": r_conf, "disc": r_disc}
+    log = {"finished_at": "x", "best_cycle": 1, "shift_sha": CR._sha_file(tmp_path / "shift.json"), "cycles": [cyc]}
+    (tmp_path / "course_v2_cycles.json").write_text(json.dumps(log), encoding="utf-8")
+    (tmp_path / "course_v2_best.json").write_text(json.dumps({"params": params, "cycle": 1, "kept": {}}), encoding="utf-8")
+    monkeypatch.setattr(V, "load_split", lambda: (None, None, None, None, 1.0))
+    monkeypatch.setattr(CR, "wait_resources", lambda: None)
+
+
+def test_recount_and_kill_pick_flow(tmp_path, monkeypatch):
+    import json
+    m = {"bet_races": 600, "win": 0.4, "roi_t": 1.5, "kill_precision": 0.99, "kill_coverage": 0.01, "killed": 50}
+    rec = {"no_filter": m, "optimistic": m, "reproduction": m}
+    _log_files(tmp_path, monkeypatch, rec, rec)
+    new = {"no_filter": m | {"rentai": 0.6}, "optimistic": m | {"rentai": 0.6}, "reproduction": m | {"rentai": 0.6}}
+
+    def fake_run(p, *a):
+        k = m | ({"kill_precision": 0.97, "kill_coverage": 0.8, "killed": 5000} if p.kill_depth == 2 else {})
+        r = {"no_filter": k | {"rentai": 0.6}, "optimistic": k | {"rentai": 0.6}, "reproduction": k | {"rentai": 0.6}}
+        return {"params": p.__dict__ | {"name": p.name()}, "conf": r, "disc": new, "kept": {}, "confirm_log": {}, "seconds": 0, "mem": {}}
+    monkeypatch.setattr(V, "run_one", fake_run)
+    V.cmd_recount()
+    log = json.loads((tmp_path / "course_v2_cycles.json").read_text(encoding="utf-8"))
+    assert log["cycles"][0]["conf"]["reproduction"]["rentai"] == 0.6 and log.get("recounted_at")
+    log["cycles"].append(log["cycles"][0] | {"cycle": 2, "adopted": False, "params": log["cycles"][0]["params"] | {"kill_depth": 2}})
+    (tmp_path / "course_v2_cycles.json").write_text(json.dumps(log), encoding="utf-8")
+    V.cmd_kill_pick()
+    log = json.loads((tmp_path / "course_v2_cycles.json").read_text(encoding="utf-8"))
+    assert log["best_cycle"] == 3 and log["cycles"][-1]["kill_pick"]["selected"]["kill_depth"] == 2
+    with pytest.raises(SystemExit):
+        V.cmd_kill_pick()                                                             # 2 回目は止まる
+    with pytest.raises(SystemExit):
+        V.cmd_recount()                                                               # 選び直しの後は数え直さない
+    V.cmd_freeze()                                                                    # 凍結の照らし（版・qualified・shift）がつながる
+    assert json.loads(V.PREREG2.read_text(encoding="utf-8"))["best_cycle"] == 3
+
+
+def test_recount_stops_on_mismatch(tmp_path, monkeypatch):
+    m = {"bet_races": 600, "win": 0.4, "roi_t": 1.5, "kill_precision": 0.99, "kill_coverage": 0.01}
+    rec = {"no_filter": m, "optimistic": m, "reproduction": m}
+    _log_files(tmp_path, monkeypatch, rec, rec)
+    bad = {"no_filter": m, "optimistic": m, "reproduction": m | {"kill_coverage": 0.02}}
+    monkeypatch.setattr(V, "run_one", lambda p, *a: {"conf": bad, "disc": rec})
+    with pytest.raises(SystemExit):
+        V.cmd_recount()
+
+
+def test_kill_pick_stops_if_honmei_changes(tmp_path, monkeypatch):
+    m = {"bet_races": 600, "win": 0.4, "roi_t": 1.5, "kill_precision": 0.99, "kill_coverage": 0.01, "killed": 50}
+    rec = {"no_filter": m, "optimistic": m, "reproduction": m}
+    _log_files(tmp_path, monkeypatch, rec, rec)
+    monkeypatch.setattr(V, "run_one", lambda p, *a: {"params": {}, "conf": {"reproduction": m | {"win": 0.5}}, "disc": rec})
+    with pytest.raises(SystemExit):
+        V.cmd_kill_pick()

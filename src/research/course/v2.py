@@ -12,6 +12,8 @@
 使い方（COURSE_OUT は第 1 版と同じ。第 2 版の出力は <COURSE_OUT>/v2）:
   python -m src.research.course.v2 shift      # ずれの分布（2026 年のオッズの組だけ）
   python -m src.research.course.v2 cycles     # 20 サイクル（2016〜2024 年だけ）
+  python -m src.research.course.v2 recount    # 数え直し（連対率など後から足した値。採否は変えない）
+  python -m src.research.course.v2 kill_pick  # 消しの決め方を、確認の期間の消しの値で選ぶ（サイクル 21）
   python -m src.research.course.v2 freeze     # 凍結（prereg_course_v2.json を commit する）
   python -m src.research.course.v2 evaluate   # 2025・2026 年で 1 回だけ（2 回目）
 """
@@ -313,7 +315,7 @@ def has_filter(p: P2) -> bool:
 
 def _summ(draws: list[dict], base: dict) -> dict:
     rep = {}
-    for key in ("bet_races", "coverage", "win", "place", "roi_t", "roi_f", "roi_t_capped"):
+    for key in ("bet_races", "coverage", "win", "rentai", "place", "roi_t", "roi_f", "roi_t_capped"):
         v = np.array([x[key] for x in draws if x[key] is not None], float)
         rep[key] = float(v.mean()) if len(v) else None
         rep[key + "_p05"] = float(np.percentile(v, 5)) if len(v) else None
@@ -436,7 +438,7 @@ def qualified(r: dict) -> bool:
 
 def adopt_key(r: dict) -> tuple:
     """採否: 確認の期間の本番の再現で、◎ を買ったレースが MIN_BET_CONF 以上の版のうち、単回収の高い方（下限に届かない版は、届く版より下）。"""
-    return (qualified(r), r["conf"]["reproduction"].get("roi_t") or 0.0)
+    return (qualified(r), r["conf"]["reproduction"].get("roi_t") or 0.0)   # 消しは ◎ を変えないので、ここでは選べない（cmd_kill_pick で選ぶ）
 
 
 def _slim(r: dict) -> dict:
@@ -480,6 +482,116 @@ def cmd_cycles() -> None:
     log["finished_at"] = datetime.now(CR.JST).isoformat(timespec="seconds")
     path.write_text(json.dumps(log, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
     (OUT2 / "course_v2_best.json").write_text(json.dumps(best, ensure_ascii=False, default=float), encoding="utf-8")
+
+
+KILL_FIELDS = ("kill_n", "kill_depth", "k_min", "kill_rule", "kill_prec")
+
+
+def _write_json(path: Path, obj, indent: int | None = 1) -> None:
+    """記録は一時ファイルに書いてから置き換える（途中で落ちても前の記録が残る）。"""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=indent, default=float), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _same(a: dict, b: dict, keys=("bet_races", "win", "roi_t")) -> bool:
+    for k in keys:
+        x, y = a.get(k), b.get(k)
+        if (x is None) != (y is None) or (x is not None and abs(float(x) - float(y)) > 1e-9):
+            return False
+    return True
+
+
+def kill_rank(conf: dict) -> tuple:
+    """消しの比べ方（確認の期間の値）: 消しの的中の信頼区間の下限が 95% 以上の版を先に、その中で消しを付けたレースの割合が大きい順。
+    届かなければ下限の高い順。注意: 確認の期間は、消しの条件を残すのにも使った期間なので、二重に使っている（記録に書く）。"""
+    pr, cv, n = conf.get("kill_precision"), conf.get("kill_coverage") or 0.0, int(conf.get("killed") or 0)
+    lb = wilson_lb(pr * n, n) if pr is not None and n else 0.0       # 第 1 版の消しの選び直しと同じく、信頼区間の下限で 95% を判定する
+    ok = lb >= 0.95
+    return (ok, cv if ok else lb, lb)
+
+
+def cmd_kill_pick() -> None:
+    """20 サイクルの後・凍結の前: 消しの決め方を選ぶ。消しは ◎ を変えないので、◎ の単回収で比べる 20 サイクルの採否では選べない
+    （同じ値で採られない）。サイクルに出た消しの決め方を、最良の版の ◎ に付けて確認の期間の消しの値で比べ、サイクル 21 として記録する。"""
+    if PREREG2.exists() or EVAL_MARK2.exists():
+        sys.exit("凍結・評価の後に選び直さない")
+    path = OUT2 / "course_v2_cycles.json"
+    log = json.loads(path.read_text(encoding="utf-8"))
+    if not log.get("finished_at"):
+        sys.exit("サイクルが最後まで回っていない")
+    if any(c.get("kill_pick") for c in log["cycles"]):
+        sys.exit("消しの選び直しは済んでいる")
+    shift = json.loads((OUT2 / "shift.json").read_text(encoding="utf-8"))
+    best_p = P2(**{k: v for k, v in next(c for c in log["cycles"] if c["cycle"] == log["best_cycle"])["params"].items() if k != "name"})
+    bc = next(c for c in log["cycles"] if c["cycle"] == log["best_cycle"])
+    cands = [{k: bc["params"][k] for k in KILL_FIELDS}]           # 最良の版自身の消しを先に（同点なら最良の版のまま）
+    for c in log["cycles"]:
+        ks = {k: c["params"][k] for k in KILL_FIELDS}
+        if ks not in cands:
+            cands.append(ks)
+    d, L, dis, conf, frac = load_split()
+    cache, rows, best = {}, [], None
+    for ks in cands:
+        CR.wait_resources()
+        r = run_one(replace(best_p, **ks), d, L, dis, conf, frac, shift, cache)
+        for per in ("conf", "disc"):
+            if not _same(r[per]["reproduction"], bc[per]["reproduction"]):
+                sys.exit(f"消しの {ks} で ◎ の値が最良の版と違う（{per}）。消しが ◎ を変えない前提が崩れている")
+        rc = r["conf"]["reproduction"]
+        rows.append(ks | {"kill_precision": rc.get("kill_precision"), "kill_coverage": rc.get("kill_coverage"), "killed": rc.get("killed"),
+                          "kill_per_race": rc.get("kill_per_race"), "roi_t": rc.get("roi_t")})
+        print(f"消し {ks}: 確認の的中 {rc.get('kill_precision')} 消しのレース {rc.get('kill_coverage')}", flush=True)
+        if best is None or kill_rank(rc) > kill_rank(best["conf"]["reproduction"]):
+            best = r
+    c = len(log["cycles"]) + 1
+    sel = {k: best["params"][k] for k in KILL_FIELDS}
+    log["cycles"].append({"cycle": c, "hyp": f"消しの決め方を、確認の期間の消しの値で選ぶ → {sel}", "adopted": True, "qualified": qualified(best),
+                          "kill_pick": {"rule": "確認の期間で消しの的中の信頼区間の下限（Wilson）が 95% 以上の中で、消しを付けたレースの割合が最大"
+                                                "（届かなければ下限の高い順）",
+                                        "note": "確認の期間は、消しの条件を残すのにも使った期間なので二重に使っている。偏りのない値は 2025・2026 年の評価だけ",
+                                        "grid": rows, "selected": sel}} | _slim(best))
+    log["best_cycle"] = c
+    log["kill_picked_at"] = datetime.now(CR.JST).isoformat(timespec="seconds")
+    _write_json(OUT2 / "course_v2_best.json", best | {"cycle": c}, indent=None)     # 先に条件の表、次に記録
+    _write_json(path, log)
+    print("選んだ消し", sel, flush=True)
+
+
+def cmd_recount() -> None:
+    """20 サイクルの後・凍結の前: 各サイクルの版を同じ作りで数え直し、連対率など後から足した値を記録に入れる（採否は変えない）。
+    数え直した ◎ の単回収が記録と違えば止める（同じ作りであることの確かめ）。"""
+    if PREREG2.exists() or EVAL_MARK2.exists():
+        sys.exit("凍結・評価の後に数え直さない")
+    path = OUT2 / "course_v2_cycles.json"
+    log = json.loads(path.read_text(encoding="utf-8"))
+    if not log.get("finished_at"):
+        sys.exit("サイクルが最後まで回っていない")
+    if any(c.get("kill_pick") for c in log["cycles"]):
+        sys.exit("消しの選び直しの後に数え直さない（数え直し → 消しの選び直しの順）")
+    B = json.loads((OUT2 / "course_v2_best.json").read_text(encoding="utf-8"))
+    bc0 = next(c for c in log["cycles"] if c["cycle"] == log["best_cycle"])
+    if B.get("params") != bc0["params"] or B.get("cycle") != log["best_cycle"]:
+        sys.exit("course_v2_best.json が記録の最良の版と違う")
+    shift = json.loads((OUT2 / "shift.json").read_text(encoding="utf-8"))
+    d, L, dis, conf, frac = load_split()
+    cache = {}
+    for c in log["cycles"]:
+        CR.wait_resources()
+        p = P2(**{k: v for k, v in c["params"].items() if k != "name"})
+        r = run_one(p, d, L, dis, conf, frac, shift, cache)
+        for per in ("conf", "disc"):
+            for part in ("no_filter", "optimistic", "reproduction"):
+                old, new = c[per].get(part) or {}, r[per].get(part) or {}
+                keys = [k for k in old if not k.startswith("rentai")]     # 元の記録のキーはすべて一致すること（連対率だけが新しい）
+                if not _same(old, new, keys):
+                    sys.exit(f"サイクル {c['cycle']} の {per}・{part} が記録と違う")
+            c[per] = r[per]
+        print(f"数え直し {c['cycle']} 連対率（確認）{r['conf']['reproduction'].get('rentai')}", flush=True)
+    log["recounted_at"] = datetime.now(CR.JST).isoformat(timespec="seconds")
+    B |= {"conf": bc0["conf"], "disc": bc0["disc"]}
+    _write_json(OUT2 / "course_v2_best.json", B, indent=None)
+    _write_json(path, log)
 
 
 def cmd_freeze() -> None:
@@ -576,9 +688,9 @@ def _eval_inner() -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["shift", "cycles", "freeze", "evaluate", "_eval_inner"])
+    ap.add_argument("cmd", choices=["shift", "cycles", "recount", "kill_pick", "freeze", "evaluate", "_eval_inner"])
     a = ap.parse_args()
-    {"shift": cmd_shift, "cycles": cmd_cycles, "freeze": cmd_freeze, "evaluate": cmd_evaluate, "_eval_inner": _eval_inner}[a.cmd]()
+    {"shift": cmd_shift, "cycles": cmd_cycles, "recount": cmd_recount, "kill_pick": cmd_kill_pick, "freeze": cmd_freeze, "evaluate": cmd_evaluate, "_eval_inner": _eval_inner}[a.cmd]()
 
 
 if __name__ == "__main__":
