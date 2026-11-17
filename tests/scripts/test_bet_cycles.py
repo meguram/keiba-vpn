@@ -451,3 +451,33 @@ def test_exc_r_values_only_exception_level():
     spec = {"honmei": {"rule": "fav1_exc", "exc_by": "r", "r_min": 0.3, "base": {"rule": "r_max", "r_min": 0.1}}}
     assert bc._exc_r_values(spec) == [0.3]
     assert not bc.fav1_rule_ok({"honmei": {"rule": "fav1_exc", "exc_by": "r", "r_min": -9.0}})
+
+
+def test_simulate_pre_period_keeps_payout_and_moves_odds():
+    import pandas as pd
+
+    races = [_race(10, s) for s in range(5)]
+    for r in races:
+        r.r = np.zeros(len(r.pw))
+        r.q = 1.0 / r.odds / (1.0 / r.odds).sum()
+    feats = pd.DataFrame([bc.race_features(r) for r in races])
+    feats.insert(0, "race_id", [r.race_id for r in races])
+    feats.insert(1, "date", [r.date for r in races])
+    p = bc.Period("t", races, feats, bc.poisson_weights(len(races), 10), {})
+    drift = {0: np.array([-0.2]), 1: np.array([-0.1]), 2: np.array([0.1]), 3: np.array([0.4]), 4: np.array([0.8])}   # 人気薄ほど確定で上がる
+    q = bc.simulate_pre_period(p, drift, 0, {})
+    r0, s0 = races[0], q.races[0]
+    assert s0.pay is r0.pay                                         # 精算は確定の払戻のまま
+    i = int(np.argmax(r0.pop))                                     # いちばん人気薄の馬は、発走前のオッズが低い
+    assert s0.odds[i] < r0.odds[i]
+    j = int(np.argmin(r0.pop))
+    assert s0.odds[j] > r0.odds[j]
+    assert s0.r[i] < r0.r[i] and s0.r[j] > r0.r[j]                  # 人気薄は発走前のオッズが低い → q が上がり r は下がる
+    z = bc.simulate_pre_period(p, {k: np.array([0.0]) for k in range(5)}, 0, {})
+    assert np.allclose(z.races[0].r, r0.r) and np.allclose(z.races[0].odds, r0.odds)   # ずれ 0 なら動かない
+    q2 = bc.simulate_pre_period(p, drift, 1, {})
+    st = bc.stack_versions(p, [q, q2])
+    assert len(st.races) == 2 * len(races) and st.k == 2 and st.W.shape[1] == 2 * len(races) and st.base is p
+    res = bc.run_period(st, {"honmei": {"rule": "top"}, "tickets": [{"type": "tansho"}]})
+    m = bc.metrics(res["cost"], res["ret"], st.dates, st.W)
+    assert m["races"] == len(races) and m["n_versions"] == 2 and m["sim_roi_min"] <= m["roi"] <= m["sim_roi_max"] + 1e-9
