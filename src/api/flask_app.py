@@ -46,7 +46,10 @@ def _get_storage():
     if not hasattr(_get_storage, "_inst"):
         with _storage_lock:
             if not hasattr(_get_storage, "_inst"):
-                _get_storage._inst = HybridStorage(_BASE_DIR)
+                from src.scraper.storage import shared_storage
+
+                # FastAPI（src/api/app.py）と同じ 1 つを使う（load キャッシュの上限・中身を 2 重に持たない）
+                _get_storage._inst = shared_storage()
     return _get_storage._inst
 
 

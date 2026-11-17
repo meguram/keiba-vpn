@@ -12,6 +12,9 @@ import os
 
 import pytest
 
+# 手元・CI のテストでは、メモリの点検で自分を終わらせない（src/api/memory_guard.py。点検そのもののテストは引数で差し替える）
+os.environ.setdefault("KEIBA_MEMORY_GUARD", "0")
+
 # 開発PCの .env / .env.<KEIBA_ENV> を読まない（KEIBA_ENV=stg を指定したテストが .env.stg の挙動フラグ・会員設定に左右され、
 # ホストでだけ落ちていた。2026-11-08）。.env を読む挙動そのものは dotenv_path を渡して検証する
 os.environ["KEIBA_SKIP_DOTENV"] = "1"
@@ -159,3 +162,28 @@ def pytest_collection_modifyitems(config, items):  # noqa: D103
                 if missing:
                     item.add_marker(pytest.mark.skip(reason=f"当て込まれた係数が公開リポジトリに無い（config/fitted_artifacts.txt）: {missing[0]} ほか"))
                 break
+
+
+_CLOUDRUN_GCS_ENV = ("KEIBA_GCS_SHARED_STATE", "KEIBA_GCS_FAIL_FAST", "KEIBA_GCS_TIMEOUT_SEC", "KEIBA_GCS_RETRY_DEADLINE_SEC",
+                     "LOAD_CACHE_MAX_MB", "RACE_DETAIL_CACHE_MAX", "KEIBA_PRERENDER_MAX_MB")
+
+
+@pytest.fixture(autouse=True)
+def _restore_cloudrun_gcs_env():
+    """src/api/cloudrun_entry.build_app() は既定値を os.environ に setdefault する。GCS の共有の状態・すぐ返す動きが、
+    後のテストの HybridStorage に漏れないように、テストごとに元へ戻し、共有の状態も消す。"""
+    import os
+
+    saved = {k: os.environ.get(k) for k in _CLOUDRUN_GCS_ENV}
+    yield
+    for k, v in saved.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+    try:
+        from src.scraper import storage as _st
+
+        _st._SHARED_GCS.clear()
+    except Exception:  # noqa: BLE001
+        pass

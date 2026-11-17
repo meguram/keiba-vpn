@@ -81,6 +81,12 @@ class Backend(Protocol):
     def upload(self, key: str, data: bytes) -> None: ...
 
 
+def _mirror_retry(deadline: float):
+    from google.cloud.storage.retry import DEFAULT_RETRY
+
+    return DEFAULT_RETRY.with_deadline(deadline)
+
+
 class GcsBackend:
     def __init__(self) -> None:
         from src.config.gcp_credentials import storage_client
@@ -89,13 +95,17 @@ class GcsBackend:
         assert_gcp_allowed("運用データの GCS ミラー")
         self._client = storage_client()
         self._bucket = self._client.bucket(os.environ["GCS_BUCKET"])
+        # 1 回の通信の待ち（秒。大きいファイルでも読み続けている間は切れない）と、再試行込みの上限。ライブラリの既定（60 秒・120 秒）のままだと、
+        # GCS の障害の間に取り込みのスレッドが長く止まる（2026-11-15）。KEIBA_GCS_MIRROR_TIMEOUT_SEC・KEIBA_GCS_MIRROR_RETRY_SEC で変えられる
+        self._timeout = float(os.environ.get("KEIBA_GCS_MIRROR_TIMEOUT_SEC") or 30)
+        self._retry = _mirror_retry(float(os.environ.get("KEIBA_GCS_MIRROR_RETRY_SEC") or 60))
 
     def list(self, prefix: str) -> dict[str, tuple[str, float]]:
         return {b.name: (b.md5_hash or "", b.updated.timestamp() if b.updated else 0.0)
-                for b in self._client.list_blobs(self._bucket, prefix=prefix)}
+                for b in self._client.list_blobs(self._bucket, prefix=prefix, timeout=self._timeout, retry=self._retry)}
 
     def download(self, key: str) -> bytes:
-        return self._bucket.blob(key).download_as_bytes()
+        return self._bucket.blob(key).download_as_bytes(timeout=self._timeout, retry=self._retry)
 
     def upload(self, key: str, data: bytes) -> None:
         self._bucket.blob(key).upload_from_string(data, content_type="application/octet-stream")
@@ -106,7 +116,7 @@ class GcsBackend:
 
         b = self._bucket.blob(key)
         try:
-            data = b.download_as_bytes()
+            data = b.download_as_bytes(timeout=self._timeout, retry=self._retry)
         except NotFound:
             return None, 0
         return data, int(b.generation or 0)
@@ -116,14 +126,15 @@ class GcsBackend:
         from google.api_core.exceptions import PreconditionFailed
 
         try:
-            self._bucket.blob(key).upload_from_string(data, content_type="application/json", if_generation_match=generation)
+            self._bucket.blob(key).upload_from_string(data, content_type="application/json", if_generation_match=generation,
+                                                   timeout=self._timeout)
             return True
         except PreconditionFailed:
             return False
 
     def meta(self, key: str) -> tuple[str, int] | None:
         """1 つのオブジェクトの (md5 の base64, 世代)。無ければ None。メタデータの取得 1 回（Class B）で、中身は読まない。"""
-        b = self._bucket.get_blob(key)
+        b = self._bucket.get_blob(key, timeout=self._timeout, retry=self._retry)
         return None if b is None else (b.md5_hash or "", int(b.generation or 0))
 
 
@@ -724,6 +735,7 @@ class RequestRefresher:
         self._running = False
         self._last_start = clock()      # 起動時の取り込み直後から数える
         self._last_ok = clock()
+        self.failing = False            # 直前の取り込みが失敗した（入口はこの間、取り込みの完了を待たない）
         self._refresh = Refresh(clock)
 
     def should_wait(self) -> bool:
@@ -742,9 +754,11 @@ class RequestRefresher:
                 be = self.backend = self.backend or GcsBackend()
                 r = self._refresh(be, self.root, recent_days=self.recent_days, window=window_days())
                 self._last_ok = self._clock()
+                self.failing = False
                 if r["downloaded"]:
                     logger.info("gcs_mirror pull: %s", r)
             except Exception as exc:  # noqa: BLE001
+                self.failing = True
                 logger.warning("gcs_mirror pull に失敗（次回に再試行）: %s", exc)
             finally:
                 with self._lock:

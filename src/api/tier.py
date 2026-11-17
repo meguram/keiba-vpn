@@ -76,6 +76,8 @@ def _fill_predicted_odds(rows: list[dict], race_id: str) -> None:
         from src.utils import paid_zone as PZ
         from src.utils.race_probabilities import place_effective_odds
 
+        # 要求ごとの新しいインスタンス（想定オッズを毎回取り直す鮮度を保つ）。Cloud Run では GCS のクライアントと健全性は
+        # KEIBA_GCS_SHARED_STATE=1 で共有されるので、作り直しの費用は小さい。呼び出し元は to_thread（src/api/app.py の _tiered_json_async）
         single = PZ.calibrate_single(predicted_single_odds(HybridStorage(), race_id))
         omap = PZ.predicted_odds_map(single)
     except Exception:  # noqa: BLE001  想定オッズが取れなくても確率などは返す

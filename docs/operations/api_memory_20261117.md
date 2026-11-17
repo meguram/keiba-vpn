@@ -31,10 +31,28 @@
 
 | 段 | 内容 | 状態 |
 |---|---|---|
-| 1 | 本番は 4Gi・promote の確認。メモリの内訳の口 `GET /ops/memory`（共有ヘッダが要る。VPS の nginx は `/ops` を通さない） | 実装済み |
-| 2 | 障害検知（状態とクライアントの共有・すぐ返す・503 + no-store・クライアントの作り直し・時間切れの短縮）、`_gate` | 予定 |
-| 3 | キャッシュの上限（バイト数・期限切れの掃除・prerender） | 予定 |
-| 4 | 自分で終わる仕組み、`_fill_predicted_odds`、cache-warm の間隔 | 予定 |
+| 1 | 本番は 4Gi・promote の確認。メモリの内訳の口 `GET /ops/memory`（共有ヘッダが要る。VPS の nginx は `/ops` を通さない） | develop・stg に反映（56270a3b） |
+| 2 | GCS の障害: 健全性とクライアントの共有（`KEIBA_GCS_SHARED_STATE=1`）、不調の間はすぐ返す（`KEIBA_GCS_FAIL_FAST=1`、15 秒に 1 件だけ試す）、障害ですぐ返した画面の GET は 503 + Retry-After + no-store・不調の間は全応答 no-store・prerender に置かない、通信の失敗が 60 秒に 5 回でクライアントを作り直す、待ち 4 秒・再試行込み 4 秒、ミラーの timeout・retry、取り込みが失敗している間は `_gate` が待たない | 実装済み |
+| 3 | 量の上限: load キャッシュ `LOAD_CACHE_MAX_MB=256`（JSON の長さ × 2.5 で数える）・60 秒ごとに期限切れを消す、レース詳細のキャッシュは期限切れを消し 200 件まで、bundle のキャッシュに期限切れの掃除と 50 件、prerender 100MB、FastAPI と Flask の HybridStorage を 1 つに、`MALLOC_ARENA_MAX=2` | 実装済み |
+| 4 | `src/api/memory_guard.py`（下）、会員向けの出し分けを to_thread へ、VPS の cache-warm の間隔 | 実装済み |
+
+### 自分で終わる仕組み（`src/api/memory_guard.py`）
+
+- 外からの ping・liveness probe は足さない。入口（Gateway）が要求の始めに、30 秒に 1 回（同時の要求のうち 1 つだけ）スレッドで点検する。
+- メモリの割合は cgroup v2 → cgroup v1 → `/proc/meminfo`（`MemTotal - MemAvailable`。/tmp は Shmem として使用中に入る）の順で読む。
+  2026-11-17 の stg（gen2）では cgroup v2 のファイルが無かった。
+- 85% 以上: キャッシュ（load・一覧・bundle・レース詳細など。設定の取り直しは含めない）を捨て、prerender を半分に、GC と malloc_trim。5 分に 1 回まで。
+- 捨てた後も 92% 以上（起動から 5 分以上）: SIGTERM（uvicorn は `--timeout-graceful-shutdown 15` で処理中の要求を待つ）→ 20 秒後に `os._exit`。Cloud Run が入れ替える。
+- GCS: クライアントを作り直してから 600 秒以上成功せず、いまも不調で、かつメモリが 70% 以上のときだけ終わる。GCS だけの障害（地域の障害など）では終わらない
+  （新しい 1 台は起動時の取り込みもできず、手元の写しで答えている今の台より悪くなるため）。
+- `KEIBA_MEMORY_GUARD=0` で止められる。しきい値は `KEIBA_MEMORY_GUARD_SOFT`・`_HARD` などで変えられる。
+
+### 設計上の限界（承知のうえで残すもの）
+
+- 要求の中の並列処理（`ThreadPoolExecutor.submit`）は文脈を引き継がないため、その中で障害ですぐ返しても要求の印が立たず、503 にならない。
+  ただし、その時点で GCS が不調（共有の状態がバックオフ中）なら no-store は付くので、nginx に長く保存されることは無い。
+- 本文を送り始めた後（ストリーミング）の障害は 503 にできない。
+- load キャッシュの追い出しは挿入順（読まれても順は変わらない）。従来の件数の上限と同じ動き。
 
 ## 5. 測り方と結果（stg）
 
@@ -42,4 +60,20 @@
   共有ヘッダ付き・Cookie なし（cache-warm と同じ匿名の扱い）・`X-Keiba-Fresh: 1`。25 件ごとに `/ops/memory` を記録する。
 - stg への要求は全体で 1,000 件以内。同じ東京リージョンの中なので GCS の転送料はかからない。
 
-（結果は各段の後に追記する）
+### 直す前（段 1 だけの stg、2GiB、2026-11-17 15:50 JST ごろ、同じ 1 台）
+
+| 時点 | RSS | load キャッシュ（件数・概算） | prerender | ミラーの木 |
+|---|---|---|---|---|
+| 流す前（起動 318 秒） | 452MB | 151 件・5MB | 0.3MB | 412MB |
+| 100 件 | 575MB | 1,185 件・43MB | 16MB | 412MB |
+| 175 件 | 644MB | 2,000 件（件数の上限）・73MB | 20MB | 412MB |
+| 300 件 | 739MB | 2,000 件・約 500MB（大きい smartrc_race などが入ると増える） | 37MB | 412MB |
+
+- 朝の温め（2,899 件）の 1 割で RSS が +288MB。load キャッシュは件数の上限に早く達し、その後は 1 件の大きさで量が決まる（smartrc_race は 1 件約 0.7MB）。
+  件数だけの上限では量が抑えられない。
+- この版は cgroup の割合を読めなかった（段 2〜4 で `/proc/meminfo` に頼るよう直した）ので、RSS で比べる。
+- **ミラーの木 412MB は起動の時点からメモリを占める**。うち `data/local/race_analysis` が 3,062 件・286MB（ほかは `page_reference/tables` 76MB など）。
+  Cloud Run の書き込み層はメモリに数えるので、2GiB のうち約 2 割。日付の窓（`WINDOWED_DIRS`。古い日は読まれたときに 1 件だけ取る）に入れれば減らせる。
+  ただし、束（`base.tar.gz`）・目録の作りと、古い日の読み出しの費用（1 件ずつの Class B）に関わるため、今回は直さず、別の作業として提案する。
+
+（直した後の値は段 2〜4 の stg の配備の後に追記する）

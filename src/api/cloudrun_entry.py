@@ -38,11 +38,20 @@ _DEFAULTS = {
     "TZ": "Asia/Tokyo",
     "PYTHONUNBUFFERED": "1",
     "LOAD_CACHE_MAX_ENTRIES": "2000",
+    "LOAD_CACHE_MAX_MB": "256",                 # load キャッシュの量の上限（件数だけだと 2GiB に張り付いた。2026-11-15）
     "LOAD_CACHE_TTL_SEC": "900",
+    "RACE_DETAIL_CACHE_MAX": "200",             # レース詳細の応答（全カテゴリの dict を握る）。期限切れも消える（src/api/app.py）
+    "KEIBA_PRERENDER_MAX_MB": "100",            # /tmp/keiba-prerender（/tmp はメモリに数える）。既定 300MB
     "DISK_L2_MIN_WEEKLY_ACCESSES": "1000000",   # ディスクの L2 キャッシュは書かない（メモリを食うため）
     "KEIBA_BLOODLINE_PRELOAD": "0",
     "LOGS_RETENTION_DISABLED": "1",
     "KEIBA_MIRROR_PULL": "1",                   # 予測ファイル・出馬表の状態を GCS から取り込む（src/ops/gcs_mirror.py）
+    # GCS の障害で詰まらない（2026-11-15 の 504。docs/operations/api_memory_20261117.md）: 健全性とクライアントを共有し、不調の間は
+    # GCS を読まずにすぐ返す（15 秒に 1 件だけ試す）。1 回の読み出しの待ちは 4 秒・再試行込みで 4 秒まで（既定は 5 秒・10 秒）
+    "KEIBA_GCS_SHARED_STATE": "1",
+    "KEIBA_GCS_FAIL_FAST": "1",
+    "KEIBA_GCS_TIMEOUT_SEC": "4",
+    "KEIBA_GCS_RETRY_DEADLINE_SEC": "4",
 }
 
 Scope = dict[str, Any]
@@ -70,6 +79,7 @@ MIRROR_GATE_SKIP = ("/api/health", "/api/v1/health", "/api/maintenance/status")
 MIRROR_GATE_SKIP_PREFIXES = ("/api/v1/auth/",)
 AUTH_STATUS_PATH = "/api/v1/auth/status"     # 起動からの秒数（Server-Timing の inst）を付ける。ログインの応答には付けない
 _STARTED_AT = time.monotonic()
+_INSTANCE_TAG = f"{os.getpid()}-{int(time.time())}"     # /ops/memory で、どの 1 台の値かを見分ける（起動ごとに変わる）
 
 
 def mirror_mode() -> str:
@@ -78,6 +88,29 @@ def mirror_mode() -> str:
 
 def gate_applies(path: str) -> bool:
     return not (path == "/ops" or path.startswith("/ops/") or path in MIRROR_GATE_SKIP or path.startswith(MIRROR_GATE_SKIP_PREFIXES))
+
+
+def _degraded_send(send: Callable, method: str, path: str, flag: dict) -> Callable:
+    """GCS の障害の間の応答を、VPS の nginx・ブラウザに保存させない（確定レースは 30 日保持されるため、欠けた応答を残さない）。
+    この要求の中で障害ですぐ返した（flag["failfast"]）画面の GET は、200・404 でも 503 + Retry-After にする（nginx は前の保存を出せる:
+    proxy_cache_use_stale http_503）。それ以外でも、いま GCS が不調なら Cache-Control: no-store にする。"""
+
+    async def wrapped(msg: dict) -> None:
+        if msg.get("type") == "http.response.start":
+            from src.scraper import storage as _st
+
+            hit = bool(flag.get("failfast"))
+            if hit or _st.gcs_unhealthy_now():
+                headers = [(k, v) for k, v in msg.get("headers", []) if k.lower() not in (b"cache-control", b"etag", b"last-modified")]
+                headers.append((b"cache-control", b"no-store"))
+                status = msg.get("status", 200)
+                if hit and method == "GET" and path.startswith("/api/") and status in (200, 404):
+                    status = 503
+                    headers.append((b"retry-after", b"30"))
+                msg = {**msg, "status": status, "headers": headers}
+        await send(msg)
+
+    return wrapped
 
 
 def _with_instance_age(send: Callable) -> Callable:
@@ -130,11 +163,13 @@ class Gateway:
         self.fastapi_app, self.flask_asgi, self.ops_app = fastapi_app, flask_asgi, ops_app
         self.warmup: Callable[[], Awaitable[None]] | None = None
         self.refresher: Any = None          # request モード: gcs_mirror.RequestRefresher
+        self.guard: Any = None              # src/api/memory_guard.MemoryGuard（メモリ・GCS の長い障害で自分で終わる）
 
     async def _gate(self) -> None:
-        """前回の取り込みから間隔が空いていれば、このリクエストをきっかけに取り込みを始める。長く止まっていた後だけ、完了を少し待つ。"""
+        """前回の取り込みから間隔が空いていれば、このリクエストをきっかけに取り込みを始める。長く止まっていた後だけ、完了を少し待つ。
+        直前の取り込みが失敗していたら待たない（GCS の障害の間、要求のたびに最大 8 秒待っていた。2026-11-15）。"""
         r = self.refresher
-        wait = r.should_wait()
+        wait = r.should_wait() and not getattr(r, "failing", False)
         t = r.start_if_due()
         if t is not None and wait:
             import asyncio
@@ -167,6 +202,10 @@ class Gateway:
                     await send({"type": "lifespan.shutdown.complete"})
                     return
         path = scope.get("path") or ""
+        if self.guard is not None and t == "http" and self.guard.claim():
+            import asyncio
+
+            await asyncio.to_thread(self.guard.check)      # 30 秒に 1 回、同時の要求のうち 1 つだけ。キャッシュを捨てる・GC はイベントループの外で
         if self.refresher is not None and t == "http" and gate_applies(path):
             try:
                 await self._gate()
@@ -175,7 +214,17 @@ class Gateway:
         target = {"ops": self.ops_app, "flask": self.flask_asgi, "fastapi": self.fastapi_app}[self.route_for(path)]
         if t == "http" and path == AUTH_STATUS_PATH:
             send = _with_instance_age(send)
-        await target(scope, receive, send)
+        if t != "http":
+            await target(scope, receive, send)
+            return
+        from src.scraper import storage as _st
+
+        token = _st.begin_request_flag()          # この要求の中で GCS の障害ですぐ返したかの印（スレッドへは文脈ごと渡る）
+        flag = _st.request_flag()
+        try:
+            await target(scope, receive, _degraded_send(send, scope.get("method") or "GET", path, flag if flag is not None else {}))
+        finally:
+            _st.end_request_flag(token)
 
 
 def _pull_serving_state() -> None:
@@ -215,6 +264,7 @@ async def _memory_route() -> Any:
 
     snap = await asyncio.to_thread(mem_stats.snapshot)
     snap["uptime_s"] = int(time.monotonic() - _STARTED_AT)
+    snap["instance"] = _INSTANCE_TAG
     return JSONResponse(snap, headers={"Cache-Control": "no-store"})
 
 
@@ -237,6 +287,10 @@ def build_app() -> ASGIApp:
     ops.add_api_route("/ops/memory", _memory_route, methods=["GET"])
     gateway = Gateway(fastapi_app, _wsgi_bridge(create_app()), ops)
     gateway.refresher = refresher
+    from src.api import memory_guard
+
+    if memory_guard.enabled():
+        gateway.guard = memory_guard.MemoryGuard()
     if mirror_pull_enabled() and not os.environ.get("KEIBA_MEMBERS_FILE"):      # 名簿の置き場を変えた環境では取り直しが効かないので付けない
         from src.api import auth as _auth
         from src.ops import gcs_mirror

@@ -9,12 +9,31 @@ def test_cgroup_memory_reads_v2_files(tmp_path):
     (tmp_path / "memory.current").write_text("1073741824\n")
     (tmp_path / "memory.max").write_text("2147483648\n")
     (tmp_path / "memory.stat").write_text("anon 600\nfile 400\nshmem 300\nkernel 10\nother 1\n")
-    m = M.cgroup_memory(tmp_path)
-    assert m["current"] == 1 << 30 and m["max"] == 2 << 30 and m["ratio"] == 0.5
+    none = tmp_path / "no-meminfo"
+    m = M.cgroup_memory(tmp_path, none)
+    assert m["current"] == 1 << 30 and m["max"] == 2 << 30 and m["source"] == "cgroup2"
+    assert m["used"] == (1 << 30) - 100 and m["ratio"] == round(((1 << 30) - 100) / (2 << 30), 4)   # 回収できる file 100（400-300）は除く
     assert m["shmem"] == 300 and "other" not in m
     (tmp_path / "memory.max").write_text("max\n")                 # 上限なし
-    assert M.cgroup_memory(tmp_path)["ratio"] is None
-    assert M.cgroup_memory(tmp_path / "none") == {"current": None, "max": None, "ratio": None}
+    assert M.cgroup_memory(tmp_path, none)["ratio"] is None
+    assert M.cgroup_memory(tmp_path / "none", none) == {"current": None, "max": None, "ratio": None, "source": None, "used": None}
+
+
+def test_cgroup_v1_and_meminfo_fallbacks(tmp_path):
+    from src.api import mem_stats as M
+
+    v1 = tmp_path / "v1"
+    (v1 / "memory").mkdir(parents=True)
+    (v1 / "memory" / "memory.usage_in_bytes").write_text("536870912\n")
+    (v1 / "memory" / "memory.limit_in_bytes").write_text("2147483648\n")
+    m = M.cgroup_memory(v1, tmp_path / "none")
+    assert m["source"] == "cgroup1" and m["ratio"] == 0.25
+    mi = tmp_path / "meminfo"
+    mi.write_text("MemTotal:        2097152 kB\nMemFree:          100000 kB\nMemAvailable:     524288 kB\nShmem:            300000 kB\n")
+    m = M.cgroup_memory(tmp_path / "empty", mi)                  # Cloud Run（gen2）: cgroup のファイルが無い
+    assert m["source"] == "meminfo" and m["max"] == 2097152 * 1024 and m["ratio"] == 0.75 and m["shmem"] == 300000 * 1024
+    (v1 / "memory" / "memory.limit_in_bytes").write_text(str(1 << 62))     # v1 の上限なし → meminfo へ
+    assert M.cgroup_memory(v1, mi)["source"] == "meminfo"
 
 
 def test_dir_bytes_counts_and_truncates(tmp_path):

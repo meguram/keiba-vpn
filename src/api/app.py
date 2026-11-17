@@ -1110,12 +1110,14 @@ _storage_lock = threading.Lock()
 
 
 def _get_storage():
-    """HybridStorage のシングルトンインスタンスを返す。"""
-    from src.scraper.storage import HybridStorage
+    """HybridStorage のシングルトンインスタンスを返す。Flask（src/api/flask_app.py）と同じ 1 つ（src.scraper.storage.shared_storage。
+    base_dir はどちらもリポジトリの根）。別々だと load キャッシュの上限がそれぞれに掛かり、同じデータを 2 重に持つ。"""
     if not hasattr(_get_storage, "_inst"):
         with _storage_lock:
             if not hasattr(_get_storage, "_inst"):
-                _get_storage._inst = HybridStorage(BASE_DIR)
+                from src.scraper.storage import shared_storage
+
+                _get_storage._inst = shared_storage()
     return _get_storage._inst
 
 
@@ -2802,7 +2804,12 @@ from src.utils import cache_epoch as _cache_epoch  # noqa: E402
 _cache_epoch.register("app.race_list_cache", _RACE_LIST_CACHE.clear)
 _cache_epoch.register("app.race_list_memos", lambda: _invalidate_race_list_caches())
 _cache_epoch.register("app.status_cache", lambda: _status_cache.clear())
-_cache_epoch.register("app.bundle_cache", lambda: _bundle_cache.clear())
+def _clear_bundle_cache() -> None:
+    with _bundle_cache_lock:
+        _bundle_cache.clear()
+
+
+_cache_epoch.register("app.bundle_cache", _clear_bundle_cache)
 
 
 def _on_mirror_download(keys: list[str]) -> None:
@@ -3961,6 +3968,7 @@ _BUNDLE_CATEGORIES = [
 _bundle_cache: dict[str, tuple[float, dict]] = {}
 _bundle_cache_lock = threading.Lock()
 _BUNDLE_CACHE_TTL = 300
+_BUNDLE_CACHE_MAX = int(os.environ.get("BUNDLE_CACHE_MAX", "50"))     # 1 件にレースの全馬の成績を含む
 
 
 @app.get("/api/race/{race_id}/bundle", response_class=JSONResponse)
@@ -4032,7 +4040,11 @@ async def api_race_bundle(race_id: str):
 
     bundle = await asyncio.to_thread(_load)
     with _bundle_cache_lock:
+        for k in [k for k, v in _bundle_cache.items() if now - v[0] >= _BUNDLE_CACHE_TTL]:     # 期限切れを消す（上限が無かった）
+            del _bundle_cache[k]
         _bundle_cache[race_id] = (now, bundle)
+        while len(_bundle_cache) > _BUNDLE_CACHE_MAX:
+            del _bundle_cache[next(iter(_bundle_cache))]
     return JSONResponse(bundle)
 
 
@@ -6926,13 +6938,25 @@ _RACE_DETAIL_CACHE_MAX = int(os.environ.get("RACE_DETAIL_CACHE_MAX", "2000"))
 
 
 def _race_detail_cache_set(race_id: str, value: tuple) -> None:
-    """LRU 上限付きキャッシュ書き込み（ロック保持下で呼び出すこと）。"""
+    """LRU 上限付きキャッシュ書き込み（ロック保持下で呼び出すこと）。期限切れは書き込みのたびに消す
+    （残すと、load キャッシュから外れたレースの全カテゴリの dict を握り続ける。2026-11-15 のメモリの張り付き）。"""
+    now = _time.time()
+    for k in [k for k, v in _race_detail_cache.items() if now - v[0] >= _RACE_DETAIL_TTL]:
+        del _race_detail_cache[k]
     _race_detail_cache[race_id] = value
     if len(_race_detail_cache) > _RACE_DETAIL_CACHE_MAX:
         n_evict = max(1, _RACE_DETAIL_CACHE_MAX // 10)
         oldest = sorted(_race_detail_cache.items(), key=lambda kv: kv[1][0])[:n_evict]
         for k, _ in oldest:
             del _race_detail_cache[k]
+
+
+async def _tiered_json_async(request: Request, resp, redactor):
+    """_tiered_json をイベントループの外で動かす（会員向けの出し分けで想定オッズを GCS から読むことがある: src/api/tier.py の
+    _fill_predicted_odds。ループの上で読むと、GCS が遅いときに全要求が止まる）。開発者は素通りなので、スレッドに渡さない。"""
+    if is_developer(request):
+        return resp
+    return await asyncio.to_thread(_tiered_json, request, resp, redactor)
 
 
 def _tiered_json(request: Request, resp, redactor):
@@ -6957,7 +6981,7 @@ def _tiered_json(request: Request, resp, redactor):
 
 @app.get("/api/race/{race_id}", response_class=JSONResponse)
 async def get_race_detail(request: Request, race_id: str):
-    return _tiered_json(request, await _race_detail_impl(race_id), redact_race_detail)
+    return await _tiered_json_async(request, await _race_detail_impl(race_id), redact_race_detail)
 
 
 async def _race_detail_impl(race_id: str):
@@ -7127,7 +7151,7 @@ def _prediction_freshness(data: dict) -> dict:
 
 @app.get("/api/race/{race_id}/predictions", response_class=JSONResponse)
 async def get_race_predictions(request: Request, race_id: str):
-    return _tiered_json(request, await _race_predictions_impl(race_id), redact_predictions)
+    return await _tiered_json_async(request, await _race_predictions_impl(race_id), redact_predictions)
 
 
 async def _race_predictions_impl(race_id: str):
@@ -7493,7 +7517,7 @@ async def get_bloodline_aptitude(race_id: str):
 
 @app.post("/api/race/{race_id}/predict", response_class=JSONResponse)
 async def run_race_prediction(request: Request, race_id: str):
-    return _tiered_json(request, await _run_race_prediction_impl(request, race_id), redact_predictions)
+    return await _tiered_json_async(request, await _run_race_prediction_impl(request, race_id), redact_predictions)
 
 
 async def _run_race_prediction_impl(request: Request, race_id: str):
