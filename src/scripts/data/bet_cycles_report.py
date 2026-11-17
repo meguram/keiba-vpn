@@ -236,6 +236,7 @@ INTRO = """<p>ユーザー（統括役経由、2026-11-16）: 「勝率・複勝
 指示書: <code>/home/jovyan/work/progress/bet_optimizer_spec.md</code>。道具: <code>src/scripts/data/bet_cycles.py</code>（記録は <code>bet_cycles_report.py</code> で作り直す）。</p>
 <ul>
 <li><b>作法</b>: 訓練 2022〜23 で探す・選ぶ・回顧する。評価 2024 は「変わらず上向きか」を確かめるだけ（評価の値で選び直さない。次の仮説を考えるときに評価の値を見たことは各サイクルに書く）。test 2025 は凍結の後に 1 回だけ。</li>
+<li><b>サイクルの数え方</b>: cycle 1〜13 は買い方の格子（試した買い方を増やす回）、cycle 14〜20 は選び方を決めた段（選び方そのものの交差検証・推奨度の段の作り方・1 番人気の方針の適用・最終モデルでの回し直し・p_top での確かめ・2020 年の扱い・4 年への組み替え）で、選ぶ対象は増やしていない（統括役の判断で 20 サイクルとして数えた）。</li>
 <li><b>予測</b>: 本番 v6e の OOF で道具と 20 サイクルの枠組みを作り（試しの回し）、最終モデル（model-improve-cycles の cycles16_fix3）の OOF で回し直す（採否はこちらを正とする）。どちらも 2022・23 の予測は LOYO のアンサンブルで、重みの当てはめに 2024 の着順も入っている（漏れは弱いが、評価 2024 は完全に手つかずではない）。最終モデルの 2022〜24 の OOF は勝率だけなので、連対率・複勝率は割引 Harville で補った（p_top 入りの OOF と 2019〜21 年の OOF が届いたら、訓練 2019〜22・評価 2023〜24 で回し直し、そこで凍結する）。</li>
 <li><b>1 番人気の方針</b>（ユーザー 2026-11-16）: ◎ は 2 番人気以下から。1 番人気は、予測の連対率がしきい値以上（訓練で連対率 85% 以上になる最も緩い値）の例外のときだけ。cycle 7 以降の主な系統。最後の候補でも、この方針に合わない買い方は参考として外す（2026-11-17、test を見る前に決めた）。</li>
 <li><b>オッズ</b>: 確定オッズ（締切後）で ◎ の期待値・人気を決めている。実際に買う時点のオッズとはずれる。三連複・三連単はオッズが無いので確率だけで組む。精算は確定の払戻。オッズに揺れ（σ=0.1・0.2）を足した確かめを各サイクルに付けた。</li>
@@ -252,11 +253,12 @@ def render_html(log: dict) -> str:
     best = [c for c in cyc if c.get("selected")]
     last = best[-1] if best else None
     cards = []
-    if last:
+    if last and not any(k.startswith("stage_00") for k in (log.get("stages") or {})):   # 結論があるときは、結論の段が凍結した買い方を示す
         s = last["selected"]
         cards.append(("今いちばん新しい選んだ買い方", f"cycle {last['n']}［{esc(s['family'])}］",
                       f"{esc(spec_text(s['spec']))}<br>訓練 {pct(s['train']['roi'])}（{ci(s['train'])}）・的中 {pct(s['train']['hit_rate'])}・評価 {pct(s['eval'].get('roi'))}"))
-    cards.append(("進み", f"{len(cyc)} / 20 サイクル", f"試した買い方の累計 {cyc[-1].get('n_tried_cum', 0):,} 本" if cyc else ""))
+    n_done = len(cyc) + (7 if any(k.startswith("stage_cycles14_20") for k in (log.get("stages") or {})) else 0)   # 14〜20 は選び方を決めた段
+    cards.append(("進み", f"{n_done} / 20 サイクル", f"試した買い方の累計 {cyc[-1].get('n_tried_cum', 0):,} 本" if cyc else ""))
     if cyc and cyc[0].get("baselines"):
         b = cyc[0]["baselines"][0]
         cards.append(("基準 B0（予測1位の単勝・全部買う）", f"訓練 {pct(b['train']['roi'])}・評価 {pct(b['eval'].get('roi'))}",
@@ -265,7 +267,9 @@ def render_html(log: dict) -> str:
            f"<title>推奨馬券の最適化サイクル</title><style>{CSS}</style></head><body><main>",
            "<h1>推奨馬券の最適化サイクル</h1>",
            f"<p class=\"muted\">元の記録: <code>docs/operations/retrain_trials/bet_cycles_log.json</code>（tag={esc(log['tag'])}）。計画と結果の文: "
-           f"<code>docs/operations/retrain_trials/bet_optimization_20261116.md</code></p>", INTRO,
+           f"<code>docs/operations/retrain_trials/bet_optimization_20261116.md</code></p>",
+           *[render_stage(k, log["stages"][k]) for k in sorted(log.get("stages") or {}) if k.startswith("stage_00")],   # 結論（stage_00_*）は前置きより上
+           INTRO,
            '<div class="cards">' + "".join(f'<div class="card"><div class="k">{esc(k)}</div><div class="v">{v}</div><div class="muted">{m}</div></div>'
                                            for k, v, m in cards) + "</div>"]
     out.append("<h2>推移</h2>" + chart(cyc))
@@ -312,7 +316,8 @@ def render_html(log: dict) -> str:
         out.append(render_cycle(c))
     st = log.get("stages") or {}
     for k in sorted(st):
-        out.append(render_stage(k, st[k]))
+        if not k.startswith("stage_00"):
+            out.append(render_stage(k, st[k]))
     for tag, other in (log.get("others") or {}).items():          # 別の予測での回し（例: 試しの回し v6e）は要約だけ
         out.append(render_other(tag, other))
     out.append("</main></body></html>")

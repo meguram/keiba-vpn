@@ -375,3 +375,15 @@ def test_fav1_rule_ok():
     assert not bc.fav1_rule_ok({"honmei": {"rule": "fav1_penalty", "lam": 0.5}})
     pol = {"policy": {"typing": {"kind": "feat", "col": "x"}, "map": {"1": "skip", "2": {"honmei": {"rule": "top"}}}}}
     assert not bc.fav1_rule_ok(pol)
+
+
+def test_report_conclusion_stage_once_and_on_top():
+    from src.scripts.data import bet_cycles_report as rp
+
+    m = {"races": 10, "bet_races": 5, "bet_rate": 0.5, "hit_rate": 0.2, "roi": 1.0, "roi_lo": 0.9, "roi_hi": 1.1, "avg_return": 100, "median_return": 0,
+         "median_hit_return": 500, "avg_cost": 100, "roi_ex_top5": 0.9, "daily_roi_sd": 0.1, "max_drawdown": 0, "max_drawdown_days": 0, "h_fav1_rate": 0}
+    log = {"tag": "t", "cycles": [{"n": 1, "title": "t", "hypothesis": "h", "change": "c", "selected": None, "baselines": [{"name": "B0", "train": m, "eval": m}], "drop": {}}],
+           "stages": {"stage_00_conclusion": {"title": "結論XYZ", "text": ["x"], "tables": []}, "stage_cycles14_20": {"title": "c1420", "text": [], "tables": []}}}
+    h = rp.render_html(log)
+    assert h.count("結論XYZ") == 1
+    assert h.index("結論XYZ") < h.index("推移") and "14 / 20" not in h and "8 / 20" in h
