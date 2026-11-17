@@ -346,10 +346,15 @@ def render_cycle(c: dict) -> str:
         ev = c.get("eval_check") or {}
         fo = s.get("train_folds") or {}
         rb = c.get("odds_robustness") or {}
+        if rb:
+            tail = "オッズの揺れ（訓練）: " + "・".join(f"σ={k} 平均 {pct(v['mean'])}（最小 {pct(v['min'])}）" for k, v in rb.items())
+        elif s["train"].get("sim_roi_min") is not None:
+            tail = f"発走前の再現の版ごとの回収率（訓練）: {pct(s['train'].get('sim_roi_min'))}〜{pct(s['train'].get('sim_roi_max'))}"
+        else:
+            tail = ""
         h.append(f"<p>訓練の年ごと: {'・'.join(f'{y} {pct(v)}' for y, v in fo.items())}。評価の確かめ: {verdict_badge(ev.get('verdict'))} "
                  f"（B0 との差 {ev.get('diff_vs_base', 0) * 100:+.1f} 点、区間 {ev.get('diff_lo', 0) * 100:+.1f}〜{ev.get('diff_hi', 0) * 100:+.1f}）。"
-                 (f"オッズの揺れ（訓練）: " + "・".join(f"σ={k} 平均 {pct(v['mean'])}（最小 {pct(v['min'])}）" for k, v in rb.items()) if rb else
-                  (f"発走前の再現の版ごとの回収率（訓練）: {pct(s['train'].get('sim_roi_min'))}〜{pct(s['train'].get('sim_roi_max'))}" if s['train'].get('sim_roi_min') is not None else "")) + "</p>")
+                 + tail + "</p>")
         if s.get("cells"):
             rows = [[esc(x["type"]), esc(x["chosen"]), yen(x["races_train"]), yen((x.get("train_cv") or {}).get("bet_races")),
                      pct((x.get("train_cv") or {}).get("roi")), pct((x.get("train_insample") or {}).get("roi"))] for x in s["cells"]]
