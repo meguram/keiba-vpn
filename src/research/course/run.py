@@ -310,6 +310,95 @@ def cmd_cycles() -> None:
     (OUT / "course_best.json").write_text(json.dumps(fin, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
 
 
+KILL_GRID = [(n, k) for k in (1, 2) for n in (5, 10, 15, 20)]   # 消しの走数の下限 × 深さ
+KILL_GOAL = {"precision": 0.95, "per_race": 3}
+
+
+def wilson_lb(p: float | None, n: int, z: float = 1.96) -> float:
+    """割合 p（n 件）の 95% 信頼区間の下限（Wilson）。件数の少ない候補が偶然 95% を超えて採られないように使う。"""
+    if p is None or not n:
+        return 0.0
+    d = 1 + z * z / n
+    c = p + z * z / (2 * n)
+    r = z * ((p * (1 - p) + z * z / (4 * n)) / n) ** 0.5
+    return (c - r) / d
+
+
+def pick_kill(rows: list[dict]) -> dict:
+    """消しの選び直しの採否: 2022〜2024 年（探したのは 2016〜2021 年）で、消しの的中（4 着以下の割合）の信頼区間の下限が 95% 以上の候補のうち、
+    消しを付けたレース（3 頭以上）の割合が最も大きいもの。無ければ、その下限が最も高いもの。"""
+    lb = lambda r: wilson_lb(r.get("kill_precision"), int(r.get("killed") or 0))   # noqa: E731
+    ok = [r for r in rows if lb(r) >= KILL_GOAL["precision"]]
+    if ok:
+        return max(ok, key=lambda r: (r["kill_coverage"] or 0, lb(r)))
+    return max(rows, key=lambda r: (lb(r), r.get("kill_coverage") or 0))
+
+
+def cmd_kill_select() -> None:
+    """20 サイクルの後、凍結の前: 消しの決め方を選び直す。当てはめ（探した走で数える）では消しは定義上すべて 4 着以下になり比べられないので、
+    2016〜2024 年の中を分け、2016〜2021 年で探して 2022〜2024 年で確かめる（2025・2026 年は使わない）。◎ の版は 20 サイクルの最良のまま。
+    選んだ消しで 2016〜2024 年全体を探し直し、サイクル 21 として記録し、course_best.json を書き直す。"""
+    from src.research.course import search as SE
+    path = OUT / "course_cycles.json"
+    log = json.loads(path.read_text(encoding="utf-8"))
+    if not log.get("finished_at"):
+        sys.exit("20 サイクルが終わっていない")
+    if PREREG.exists() or EVAL_MARK.exists():
+        sys.exit("凍結・評価の後に消しを選び直さない")
+    if any(c.get("kill_select") for c in log["cycles"]):
+        sys.exit("消しの選び直しは済んでいる")
+    base = next(c for c in log["cycles"] if c["cycle"] == log["best_cycle"])["params"]
+    d, L = load_units()
+    yr = pd.to_numeric(d["year"]).to_numpy()
+    dis, chk = yr <= 2021, (yr >= 2022) & (yr <= YEAR_END)
+    if (yr > YEAR_END).any():
+        raise ValueError("2025 年以降の行が入っている")
+    # 探す期間は全体の約 2/3 のレースなので、走数・回数の下限（絶対値）を同じ割合で縮める（全期間で探し直したときと、条件の集まり・主副の内訳をそろえる）
+    frac = d.loc[dis, "race_id"].nunique() / d["race_id"].nunique()
+    rows = []
+    T0 = time.time()
+    for n, k in KILL_GRID:
+        wait_resources()
+        t0 = time.time()
+        cand = {kk: v for kk, v in base.items() if kk != "name"} | {"kill_n": n, "kill_depth": k}
+        pd_ = SE.Params(**(cand | {"kill_n": max(1, round(n * frac)), "min_races": max(1, round(cand.get("min_races", 20) * frac)),
+                                   "n_min": max(1, round(cand.get("n_min", 2) * frac)) if cand.get("n_min", 2) > 2 else cand.get("n_min", 2)}))
+        fit = run_config(d[dis].reset_index(drop=True), L[dis].reset_index(drop=True), pd_, keep_cells=True)
+        ev = evaluate_frozen(d[chk].reset_index(drop=True), L[chk].reset_index(drop=True), {"params": SE.params_dict(pd_)}, fit["cells"])
+        a = ev["all"]
+        lay = pd.Series([u["layer"] for u in fit["per_unit"]]).value_counts().to_dict()
+        rows.append({"kill_n": n, "kill_depth": k, "scaled": {"kill_n": pd_.kill_n, "min_races": pd_.min_races, "n_min": pd_.n_min, "frac": round(frac, 4)},
+                     "kill_precision": a["kill_precision"], "kill_precision_lb": wilson_lb(a["kill_precision"], int(a["killed"] or 0)),
+                     "kill_coverage": a["kill_coverage"], "kill_per_race": a["kill_per_race"], "killed": a["killed"], "kill_races": a["kill_races"],
+                     "layers": lay, "unmatched_levels": ev["unmatched_levels"], "seconds": round(time.time() - t0, 1), "mem": mem_now()})
+        print(f"消し 走数{n}・深さ{k}（探す期間では {pd_.kill_n}）: 2022〜2024 の的中 {a['kill_precision']}（下限 {rows[-1]['kill_precision_lb']:.4f}・{a['killed']} 頭） 消しのレース {a['kill_coverage']} 1 レース {a['kill_per_race']} "
+              f"{time.time() - t0:.0f}s メモリ {mem_now()}", flush=True)
+    sel = pick_kill(rows)
+    cand = {kk: v for kk, v in base.items() if kk != "name"} | {"kill_n": sel["kill_n"], "kill_depth": sel["kill_depth"]}
+    t0 = time.time()
+    best = run_config(d, L, SE.Params(**cand), keep_cells=True)
+    c = len(log["cycles"]) + 1
+    log["cycles"].append({"cycle": c, "hyp": f"消しの選び直し（2016〜2021 年で探し、2022〜2024 年の消しの的中で選ぶ）→ 走数{sel['kill_n']}・深さ{sel['kill_depth']}",
+                          "note": "選んだ後に 2016〜2024 年全体で探し直したので、条件の集まりは選んだときと同じではない（下限は期間の長さに合わせて縮めて探した）。"
+                                  "◎ の版（サイクル 9 まで）は 2022〜2024 年も含めた当てはめで選んだので、確かめた期間は完全には未使用でない。",
+                          "params": best["params"], "all": best["all"], "conf_2022_2024": best["conf_2022_2024"],
+                          "achieved_units": best["achieved_units"], "units": best["units"], "closeness": best["closeness"], "adopted": True,
+                          "kill_select": {"goal": KILL_GOAL, "rule": "信頼区間の下限（Wilson）が 95% 以上の候補で、消しを付けたレースの割合が最大",
+                                          "grid": rows, "selected": sel},
+                          "seconds": round(time.time() - T0, 1), "seconds_refit": round(time.time() - t0, 1), "mem": mem_now()})
+    log["best_cycle"] = c
+    log["kill_selected_at"] = datetime.now(JST).isoformat(timespec="seconds")
+    # 先に条件の表（course_best.json）を置き換え、そのあと記録を置き換える（間で落ちても、記録は前のまま → やり直せる）
+    bp = OUT / "course_best.json"
+    tmpb = bp.with_suffix(".json.tmp")
+    tmpb.write_text(json.dumps(best | {"cycle": c}, ensure_ascii=False, default=float), encoding="utf-8")
+    os.replace(tmpb, bp)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(log, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+    os.replace(tmp, path)
+    print("選んだ消し", sel, flush=True)
+
+
 PREREG = Path(__file__).with_name("prereg_course.json")              # 凍結（commit する）。差し替えの環境変数は持たない
 EVAL_MARK = Path(__file__).with_name("EVALUATED_COURSE.json")       # 評価済みの印（commit する。作業場所ではなくリポジトリに置く）
 
@@ -439,9 +528,9 @@ def _eval_inner() -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("cmd", choices=["frame", "_frame_inner", "cycles", "freeze", "evaluate", "_eval_inner"])
+    ap.add_argument("cmd", choices=["frame", "_frame_inner", "cycles", "kill_select", "freeze", "evaluate", "_eval_inner"])
     a = ap.parse_args()
-    {"frame": cmd_frame, "_frame_inner": _frame_inner, "cycles": cmd_cycles, "freeze": cmd_freeze, "evaluate": cmd_evaluate,
+    {"frame": cmd_frame, "_frame_inner": _frame_inner, "cycles": cmd_cycles, "kill_select": cmd_kill_select, "freeze": cmd_freeze, "evaluate": cmd_evaluate,
      "_eval_inner": _eval_inner}[a.cmd]()
 
 

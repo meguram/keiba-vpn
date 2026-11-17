@@ -241,3 +241,31 @@ def test_frame_and_levels_before_filtering_keeps_rate_cutoffs():
     assert "2017" in __import__("inspect").getsource(CAT._ref) and "G1" in __import__("inspect").getsource(CAT._ref)
     src = __import__("inspect").getsource(CR._eval_inner)
     assert src.index("frame_and_levels") < src.index("keep =")                       # 前処理と水準 → その後で 2025 年以降・良馬場に絞る
+
+
+def test_pick_kill_prefers_goal_then_coverage():
+    rows = [{"kill_n": 5, "kill_depth": 1, "kill_precision": 0.93, "killed": 50000, "kill_coverage": 0.9},
+            {"kill_n": 10, "kill_depth": 1, "kill_precision": 0.97, "killed": 50000, "kill_coverage": 0.2},
+            {"kill_n": 15, "kill_depth": 2, "kill_precision": 0.96, "killed": 50000, "kill_coverage": 0.5}]
+    assert CR.pick_kill(rows)["kill_n"] == 15
+    assert CR.pick_kill(rows[:1] + [{"kill_n": 20, "kill_depth": 1, "kill_precision": 0.94, "killed": 50000, "kill_coverage": None}])["kill_n"] == 20
+
+
+def test_pick_kill_uses_lower_bound_and_handles_none():
+    rows = [{"kill_n": 20, "kill_depth": 2, "kill_precision": 0.97, "killed": 30, "kill_coverage": 0.9},      # 少ない: 下限は 95% 未満
+            {"kill_n": 10, "kill_depth": 1, "kill_precision": 0.96, "killed": 20000, "kill_coverage": 0.3}]
+    assert CR.pick_kill(rows)["kill_n"] == 10
+    assert CR.pick_kill([{"kill_n": 5, "kill_depth": 1, "kill_precision": None, "killed": 0, "kill_coverage": None}])["kill_n"] == 5
+
+
+def test_kill_select_periods_and_guards(tmp_path, monkeypatch):
+    import inspect
+    src = inspect.getsource(CR.cmd_kill_select)
+    assert "yr <= 2021" in src and "(yr >= 2022) & (yr <= YEAR_END)" in src and "evaluate_frozen" in src
+    monkeypatch.setattr(CR, "OUT", tmp_path)
+    monkeypatch.setattr(CR, "PREREG", tmp_path / "prereg_course.json")
+    monkeypatch.setattr(CR, "EVAL_MARK", tmp_path / "EVALUATED_COURSE.json")
+    (tmp_path / "course_cycles.json").write_text('{"cycles": [], "finished_at": "x", "best_cycle": 1}', encoding="utf-8")
+    CR.PREREG.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        CR.cmd_kill_select()                                                          # 凍結の後は選び直さない
