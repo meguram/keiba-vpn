@@ -193,10 +193,11 @@ def test_evaluate_frozen_matches_names_not_codes():
     assert r2["all"]["bet_races"] == 0 and r2["per_unit"][0]["no_rule"]               # 2016〜2024 年に無い単位は買わない
 
 
-def test_playbook_html_from_best(tmp_path):
+def test_playbook_html_from_best(tmp_path, monkeypatch):
     import json
 
     from src.scripts.docs import build_course_playbook_html as H
+    monkeypatch.setattr(CR, "PREREG", tmp_path / "prereg_course.json")      # リポジトリの凍結（本物）を読まない
     d, L = _toy()
     best = CR.run_config(d, L, SE.Params(depth=2, min_races=10), keep_cells=True)
     src = tmp_path / "b.json"
@@ -269,3 +270,26 @@ def test_kill_select_periods_and_guards(tmp_path, monkeypatch):
     CR.PREREG.write_text("{}", encoding="utf-8")
     with pytest.raises(SystemExit):
         CR.cmd_kill_select()                                                          # 凍結の後は選び直さない
+
+
+def test_playbook_html_uses_frozen_cells(tmp_path, monkeypatch):
+    """凍結の後は、凍結した条件の表（sha を照らす）を出す。sha が違えば止める。"""
+    import hashlib
+    import json
+
+    from src.scripts.docs import build_course_playbook_html as H
+    d, L = _toy()
+    best = CR.run_config(d, L, SE.Params(depth=2, min_races=10), keep_cells=True)
+    src = tmp_path / "b.json"
+    src.write_text(json.dumps(best, ensure_ascii=False, default=float), encoding="utf-8")
+    cells = tmp_path / "course_cells.json"
+    cells.write_text(json.dumps({u: c | {"buy": c["buy"][:1]} for u, c in best["cells"].items()}, ensure_ascii=False), encoding="utf-8")
+    pr = tmp_path / "prereg_course.json"
+    pr.write_text(json.dumps({"params": best["params"], "cells_file": "course_cells.json",
+                              "sha256_cells": hashlib.sha256(cells.read_bytes()).hexdigest()}), encoding="utf-8")
+    monkeypatch.setattr(CR, "PREREG", pr)
+    h = H.build(src, tmp_path / "p.html", None).read_text(encoding="utf-8")
+    assert "走数の多い 1 個" in h
+    cells.write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        H.build(src, tmp_path / "p.html", None)
