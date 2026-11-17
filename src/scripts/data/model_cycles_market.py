@@ -221,7 +221,13 @@ def cmd_member(a) -> None:
     alpha = float(spec.get("win_weight_alpha", 0.0))
     pred = {t: np.full(len(meta), np.nan) for t in ys}
     t0 = time.time()
-    for tr, va in mc.folds_from_meta(meta):
+    vys = tuple(int(y) for y in a.valid_years.split(",")) if getattr(a, "valid_years", "") else (2022, 2023, 2024)
+    if off == "fl" and min(vys) <= max(BETA_YEARS):
+        raise SystemExit(f"offset fl の β は {min(BETA_YEARS)}〜{max(BETA_YEARS)} 年で当てているので、検証年 {vys} には使えない（raw にする）")
+    for vy in vys:
+        if not (year == vy).any():
+            raise SystemExit(f"検証年 {vy} の行が無い")
+    for tr, va in mc.folds_from_meta(meta, valid_years=vys):
         for t, y in ys.items():
             w = None
             if alpha:                                   # 第 3 段: 当たった馬（勝ち・連対・複勝の各目的で正例）の重み ∝ オッズ^α（オッズの無い馬は 1）
@@ -244,9 +250,235 @@ def cmd_member(a) -> None:
     o["r"] = np.log(o["p_win"] / o["q"])
     out.parent.mkdir(parents=True, exist_ok=True)
     o.to_parquet(out, index=False)
-    out.with_suffix(".json").write_text(json.dumps({"name": a.name, "spec": spec, "seeds": a.seeds, "cols": int(X.shape[1]), "seconds": round(time.time() - t0)},
+    out.with_suffix(".json").write_text(json.dumps({"name": a.name, "spec": spec, "seeds": a.seeds, "cols": int(X.shape[1]), "seconds": round(time.time() - t0),
+                                                    "valid_years": list(vys)},
                                                    ensure_ascii=False, indent=1), encoding="utf-8")
     log(f"{a.name}: cols={X.shape[1]} {time.time() - t0:.0f}s")
+
+
+# ---------------------------------------------------------------- 2026 年（推論の経路の入力）での確かめ
+def cmd_fitfull(a) -> None:
+    """2016〜2025 年の全行で学習して保存する（2026 年の推論の入力に当てるため）。spec は member と同じ。出力 MK/full/NAME/。"""
+    import xgboost as xgb
+
+    from src.pipeline.models import zoo
+
+    spec = json.loads(a.spec) if a.spec else {}
+    bad = set(spec) - MEMBER_KEYS
+    if bad:
+        raise SystemExit(f"この道具が対応しない spec: {sorted(bad)}")
+    if spec.get("offset", "none") not in ("none", "raw"):
+        raise SystemExit("全期間の版の offset は none・raw だけ（2026 年の発走前オッズの q は raw で作るため）")
+    out0 = MK / "full" / a.name
+    if (out0 / "meta.json").exists():
+        raise SystemExit(f"{out0} は作成済み（上書きしない。名前を分ける）")
+    if a.fit_end == 2024 and any(p_.joinpath("test2025.parquet").exists() for p_ in (MK / "full").glob("*")):
+        log("注意: ほかの名前で 2025 年 test が作成済み（同じ版を 2 度見ないこと）")
+    X, meta, info = mc.load_cache()
+    n0 = X.shape[1]
+    X = mc.apply_spec(X, meta, {k: v for k, v in spec.items() if k not in ("offset", "win_weight_alpha", "params", "offset_noise_sd")})
+    if n0 - X.shape[1] < BASE_DROP_N:
+        raise SystemExit(f"入力の列が {n0} → {X.shape[1]}（土台の 38 列の除外が spec に無い）")
+    check_no_market_features(X.columns)
+    params = {**info["params"], **spec.get("params", {})}
+    race = meta["race_id"].to_numpy()
+    fin = meta["finish_position"].to_numpy().astype(float)
+    if a.fit_end == 2024:                               # 2025 年 test を 1 回だけ予測する版（2025-01-01 の 10 日前まで学習。最終の束と同じ切り方）
+        dates = pd.to_datetime(meta["date"])
+        tr = np.flatnonzero(np.isfinite(fin) & (dates < pd.Timestamp("2025-01-01") - pd.Timedelta(days=10)).to_numpy())
+        if (MK / "full" / a.name / "test2025.parquet").exists():
+            raise SystemExit("2025 年 test は作成済み（1 回きり）")
+    else:
+        tr = np.flatnonzero(np.isfinite(fin) & (meta["year"].to_numpy() <= 2025))
+    off = spec.get("offset", "none")
+    q = load_market(meta, "raw" if off == "none" else off)
+    q2, q3 = zoo.harville_topk(race, q, 1.0, 1.0)
+    q2, q3 = norm_race(race, q2, 2.0), norm_race(race, q3, 3.0)
+    margins = {"win": logit(q), "top2": logit(np.clip(q2, 1e-5, 0.999)), "top3": logit(np.clip(q3, 1e-5, 0.999))}
+    ys = {"win": (fin == 1).astype(int), "top2": (fin <= 2).astype(int), "top3": (fin <= 3).astype(int)}
+    noise = float(spec.get("offset_noise_sd", 0.0))
+    rng = np.random.default_rng(12345)
+    out = out0
+    out.mkdir(parents=True, exist_ok=True)
+    t0 = time.time()
+    for t, y in ys.items():
+        for s in range(a.seeds):
+            p = dict(params)
+            m = xgb.XGBClassifier(n_estimators=p.get("n_estimators", 400), learning_rate=p.get("learning_rate", 0.05), max_depth=p.get("max_depth", 6),
+                                  subsample=p.get("subsample", 0.8), colsample_bytree=p.get("colsample_bytree", 0.7), reg_lambda=p.get("reg_lambda", 5.0),
+                                  min_child_weight=p.get("min_child_weight", 20), tree_method="hist", device=p.get("device", "cuda"),
+                                  enable_categorical=True, random_state=s, n_jobs=4, verbosity=0)
+            mtr = None if off == "none" else margins[t][tr] + (rng.normal(0.0, noise, len(tr)) if noise else 0.0)
+            m.fit(X.iloc[tr], y[tr], base_margin=mtr)
+            m.save_model(str(out / f"{t}_s{s}.json"))
+        log(f"fitfull {a.name} {t} 済み（{time.time() - t0:.0f}s）")
+    cats = {c: [str(v) for v in X[c].cat.categories] for c in X.columns if str(X[c].dtype) == "category"}
+    (out / "meta.json").write_text(json.dumps({"name": a.name, "spec": spec, "seeds": a.seeds, "feature_cols": list(X.columns), "cat_levels": cats,
+                                               "train_rows": int(len(tr)), "fit_end": a.fit_end}, ensure_ascii=False, indent=1), encoding="utf-8")
+    if a.fit_end == 2024:
+        va = np.flatnonzero(np.isfinite(fin) & (meta["year"].to_numpy() == 2025))
+        P = predict_full(a.name, X.iloc[va].reset_index(drop=True), race[va], q[va])
+        o = meta.iloc[va][KEY + ["year", "finish_position"]].reset_index(drop=True)
+        o[["p_win", "p_top2", "p_top3"]] = P.to_numpy()
+        o["q"] = q[va]
+        o["r"] = np.log(o["p_win"] / o["q"])
+        o.to_parquet(out / "test2025.parquet", index=False)
+        log(f"2025 年 test: {len(o)} 行 → {out / 'test2025.parquet'}")
+
+
+def predict_full(name: str, X: pd.DataFrame, race: np.ndarray, q: np.ndarray) -> pd.DataFrame:
+    """保存した全期間のモデルを、入力 X（学習と同じ列・型）と市場の勝率 q（offset）で当てる。"""
+    import xgboost as xgb
+
+    from src.pipeline.models import zoo
+
+    d = MK / "full" / name
+    meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
+    off = meta["spec"].get("offset", "none")
+    q2, q3 = zoo.harville_topk(race, q, 1.0, 1.0)
+    q2, q3 = norm_race(race, q2, 2.0), norm_race(race, q3, 3.0)
+    margins = {"win": logit(q), "top2": logit(np.clip(q2, 1e-5, 0.999)), "top3": logit(np.clip(q3, 1e-5, 0.999))}
+    out = {}
+    for t, tot in (("win", 1.0), ("top2", 2.0), ("top3", 3.0)):
+        acc = np.zeros(len(X))
+        for s in range(meta["seeds"]):
+            m = xgb.XGBClassifier(enable_categorical=True)
+            m.load_model(str(d / f"{t}_s{s}.json"))
+            acc += m.predict_proba(X[meta["feature_cols"]], base_margin=None if off == "none" else margins[t])[:, 1]
+        out[f"p_{t}"] = norm_race(race, acc / meta["seeds"], tot)
+    return pd.DataFrame(out)
+
+
+def cmd_apply2026(a) -> None:
+    """2026 年の推論の入力（stg の作り直しの書き出し）に、全期間のモデルを当てる。offset は確定オッズと、発走前のオッズ（t60・t15・t05）で替える。
+    発走前のオッズがそろうレース（手元の pre_odds.parquet）だけで、◎ の選び方ごとの成績（単勝は確定オッズ × 100 円で近似）と、◎ の重なりを比べる。"""
+    X0, _meta, _ = mc.load_cache()
+    xi = mc.load_inf_x()
+    xi = xi.sort_values(["race_id", "horse_id"]).reset_index(drop=True)
+    fm = json.loads((MK / "full" / a.name / "meta.json").read_text(encoding="utf-8"))
+    nr = mc.newcomer_races_2026()
+    meta_i = pd.DataFrame({"race_class": np.where(xi["race_id"].isin(nr), "新馬", "")})   # 学習と同じ書き換え（推論の行は 2026 年なので blank_before は当たらない）
+    X = mc.apply_spec(mc.cast_like(xi, X0), meta_i, {k: v for k, v in fm["spec"].items() if k not in ("offset", "win_weight_alpha", "params", "offset_noise_sd")})
+    del X0
+    r = pd.read_parquet(mc.TABLES / "2026/race_result_flat.parquet", columns=["race_id", "horse_id", "horse_number", "odds", "popularity", "finish_position"])
+    for c in ("race_id", "horse_id"):
+        r[c] = r[c].astype(str)
+    for c in ("odds", "popularity", "finish_position", "horse_number"):
+        r[c] = pd.to_numeric(r[c], errors="coerce")
+    r = r.drop_duplicates(KEY)
+    base = xi[KEY].merge(r, on=KEY, how="left")
+    # 受け渡し用: 推論の入力のある全レースに、確定オッズの offset で当てた予測（走った馬＝確定オッズのある馬だけ。取消の馬は外し、レースは残す）
+    run_ok = (base["odds"] > 0)
+    sa = (run_ok & (run_ok.groupby(base["race_id"]).transform("sum") >= 3)).to_numpy()
+    X, base = X.loc[run_ok.to_numpy()].reset_index(drop=True), base.loc[run_ok.to_numpy()].reset_index(drop=True)
+    sa = sa[run_ok.to_numpy()]
+    Xa, ba = X.loc[sa].reset_index(drop=True), base.loc[sa].reset_index(drop=True)
+    ra = ba["race_id"].to_numpy()
+    qa = q_from_odds(ra, ba["odds"].to_numpy())
+    Pa = predict_full(a.name, Xa, ra, np.clip(qa, 1e-5, 1.0))
+    hand = [ba[KEY + ["finish_position"]].assign(year=2026, p_win=Pa["p_win"].to_numpy(), p_top2=Pa["p_top2"].to_numpy(), p_top3=Pa["p_top3"].to_numpy(),
+                                                   q=qa, r=np.log(Pa["p_win"].to_numpy() / qa), odds_phase="final")]
+    del Xa
+    # 比べるレース: 4 つの時点（t60・t15・t05 と確定）すべてで、走った馬の発走前オッズがそろうレース（時点ごとに欠けを埋めない）
+    rid_ok = set(base["race_id"])
+    cover = {}
+    for ph in ("t60", "t15", "t05"):
+        po = load_pre_odds(ph)
+        j = base[["race_id", "horse_number"]].merge(po, on=["race_id", "horse_number"], how="left")
+        has = j.groupby("race_id")["q"].apply(lambda s_: bool(s_.notna().all()))
+        cover[ph] = int(has.sum())
+        rid_ok &= set(has[has].index)
+    sel = base["race_id"].isin(rid_ok).to_numpy()
+    X, base = X.loc[sel].reset_index(drop=True), base.loc[sel].reset_index(drop=True)
+    race = base["race_id"].to_numpy()
+    q_fin = q_from_odds(race, base["odds"].to_numpy())
+    res = {"races": int(len(set(race))), "races_with_phase": cover, "phases": {}}
+    picks = {}
+    for ph in ("final", "t60", "t15", "t05"):
+        if ph == "final":
+            q = q_fin
+        else:
+            po = load_pre_odds(ph)
+            q = base[["race_id", "horse_number"]].merge(po, on=["race_id", "horse_number"], how="left")["q"].to_numpy()
+            q = norm_race(race, q)                              # 比べるレースは全馬のオッズがそろう（取消の馬を除いて正規化し直す）
+        P = predict_full(a.name, X, race, np.clip(q, 1e-5, 1.0))
+        if ph != "final":                                       # 発走前のオッズの offset の版（そのオッズの q と、その q で測ったずれ）
+            hand.append(base[KEY + ["finish_position"]].assign(year=2026, p_win=P["p_win"].to_numpy(), p_top2=P["p_top2"].to_numpy(), p_top3=P["p_top3"].to_numpy(),
+                                                               q=q, r=np.log(P["p_win"].to_numpy() / q), odds_phase=ph))
+        d = base[KEY + ["horse_number", "popularity", "finish_position", "odds"]].copy()
+        d[["p_win", "p_top2", "p_top3"]] = P.to_numpy()
+        d["q_used"] = q
+        d["r"] = np.log(d["p_win"].clip(1e-9) / d["q_used"].clip(1e-9))   # 選ぶときのずれは、その時点で見えている q で
+        if ph != "final":                                       # 人気（1 番人気を除く規則に使う）も、その時点の q の順位で作り直す（確定の人気は発走前に見えない）
+            d["popularity"] = d.groupby("race_id")["q_used"].rank(ascending=False, method="first")
+        d["ret_tan"] = np.where(d["finish_position"] == 1, d["odds"] * 100, 0.0)
+        d["ret_fuku"] = np.nan
+        nwin = d.groupby("race_id")["finish_position"].transform(lambda s_: (s_ == 1).sum())
+        d = d[nwin == 1]
+        rr = {}
+        for ru in ("p", "nofav", "r_p05", "r_p05_nofav", "gate:0.1"):
+            s_ = pick(d, ru)
+            picks[(ph, ru)] = set(zip(s_["race_id"], s_["horse_id"]))
+            sm = summarize(s_.assign(ret_fuku=0.0))
+            sm.pop("roi_fuku")
+            rr[ru] = sm
+        res["phases"][ph] = rr
+    for ph in ("t60", "t15", "t05"):
+        for ru in ("p", "r_p05", "gate:0.1"):
+            a_, b_ = picks[(ph, ru)], picks[("final", ru)]
+            res["phases"][ph][ru]["same_pick_as_final"] = len(a_ & b_) / max(len(b_), 1)
+    out = MK / "eval2026"
+    out.mkdir(parents=True, exist_ok=True)
+    pd.concat(hand, ignore_index=True).to_parquet(out / f"{a.name}_pred2026.parquet", index=False)
+    res["pred2026"] = {"path": str(out / f"{a.name}_pred2026.parquet"), "rows_by_phase": {h["odds_phase"].iloc[0]: int(len(h)) for h in hand},
+                       "races_final": int(hand[0]["race_id"].nunique()), "days": int(xi.attrs.get("days", 0))}
+    (out / f"{a.name}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+    for ph, rr in res["phases"].items():
+        for ru in ("p", "r_p05", "gate:0.1"):
+            s_ = rr[ru]
+            log(f"{ph} {ru}: {s_['races']}R ◎1番人気 {s_['fav_share']:.3f} 勝 {s_['win']:.3f} 単 {s_['roi_tan']:.3f}" + (f" 確定と同じ ◎ {s_['same_pick_as_final']:.3f}" if "same_pick_as_final" in s_ else ""))
+
+
+def cmd_handoff(a) -> None:
+    """bet-optimizer への受け渡し: 2019〜2024 年の OOF（2020 年は追い切りを欠けにそろえた版）・2025 年 test・2026 年（確定・発走前のオッズの offset）を 1 つの表に。
+    列: race_id・horse_id・year・finish_position・p_win・p_top2・p_top3・q（offset に使った市場の勝率）・r（log(p_win/q)）・odds_phase（final・t60・t15・t05）・part。"""
+    m = pd.read_parquet(mc.CYC / "meta.parquet", columns=KEY + ["finish_position"])
+    m["race_id"], m["horse_id"] = m["race_id"].astype(str), m["horse_id"].astype(str)
+    parts = []
+    if len({a.oof_main, a.oof_1921, a.oof_2020}) != 3:
+        raise SystemExit("3 本の OOF は別の名前にする")
+    want = {a.oof_main: {2022, 2023, 2024}, a.oof_1921: {2019, 2021}, a.oof_2020: {2020}}
+    specs = {}
+    for name, part in ((a.oof_main, "oof"), (a.oof_1921, "oof"), (a.oof_2020, "oof")):
+        o = pd.read_parquet(MK / "oof" / f"{name}.parquet")
+        o["race_id"], o["horse_id"] = o["race_id"].astype(str), o["horse_id"].astype(str)
+        o = o[o["year"].isin(want[name])]
+        if set(o["year"].unique()) != want[name]:
+            raise SystemExit(f"{name} の年 {sorted(o['year'].unique())} が期待 {sorted(want[name])} と違う")
+        sp = json.loads((MK / "oof" / f"{name}.json").read_text(encoding="utf-8"))["spec"]
+        specs[name] = {k: v for k, v in sp.items() if k != "blank_before"}
+        o = o.merge(m, on=KEY, how="left")
+        parts.append(o.assign(odds_phase="final", part=part, source=name))
+    for nm in (a.full2024, a.full2025):
+        sp = json.loads((MK / "full" / nm / "meta.json").read_text(encoding="utf-8"))["spec"]
+        specs[nm] = {k: v for k, v in sp.items() if k != "blank_before"}
+    if len({json.dumps(v, sort_keys=True) for v in specs.values()}) != 1:
+        raise SystemExit(f"5 つの版の spec（blank_before 以外）がそろわない: {specs}")
+    t = pd.read_parquet(MK / "full" / a.full2024 / "test2025.parquet")
+    parts.append(t.assign(odds_phase="final", part="test2025", source=a.full2024))
+    p26 = pd.read_parquet(MK / "eval2026" / f"{a.full2025}_pred2026.parquet")
+    parts.append(p26.assign(part="infer2026", source=a.full2025))
+    cols = ["race_id", "horse_id", "year", "finish_position", "p_win", "p_top2", "p_top3", "q", "r", "odds_phase", "part", "source"]
+    h = pd.concat([x[cols] for x in parts], ignore_index=True)
+    dup = h.duplicated(["race_id", "horse_id", "odds_phase"]).sum()
+    if dup:
+        raise SystemExit(f"同じ馬・時点の行が重複 {dup}")
+    out = MK / "handoff"
+    out.mkdir(parents=True, exist_ok=True)
+    h.to_parquet(out / f"{a.tag}.parquet", index=False)
+    summ = h.groupby(["part", "year", "odds_phase"]).agg(rows=("horse_id", "size"), races=("race_id", "nunique")).reset_index()
+    (out / f"{a.tag}.json").write_text(json.dumps({"rows": len(h), "by": summ.to_dict("records"), "note": a.note}, ensure_ascii=False, indent=1, default=int), encoding="utf-8")
+    log(f"handoff {a.tag}: {len(h)} 行\n{summ.to_string(index=False)}")
 
 
 # ---------------------------------------------------------------- 評価
@@ -298,6 +530,10 @@ def pick(d: pd.DataFrame, rule: str) -> pd.DataFrame:
         key = d["r"].where(d["p_win"] >= 0.05, -np.inf).where(has, d["p_win"])
     elif rule == "nofav":
         key = d["p_win"].where(d["popularity"] != 1, -np.inf)
+    elif rule == "r_p05_nofav":                             # 1 番人気は ◎ にしない（例外なし）＋ p ≥ 0.05 の中でずれの 1 位
+        ok = (d["p_win"] >= 0.05) & (d["popularity"] != 1)
+        has = ok.groupby(d["race_id"]).transform("any")
+        key = d["r"].where(ok, -np.inf).where(has, d["p_win"].where(d["popularity"] != 1, -np.inf))
     elif rule.startswith("gate:"):
         tau = float(rule.split(":")[1])
         top = d.loc[d.groupby("race_id")["p_win"].idxmax()]
@@ -327,7 +563,8 @@ def boot_roi(a: pd.DataFrame, b: pd.DataFrame, col: str, n_boot: int = 1000, see
 
 
 def cmd_report(a) -> None:
-    rules = ["p", "nofav", "r", "r_p05", "gate:0", "gate:0.1", "gate:0.2", "gate:0.3"]
+    rules = ["p", "nofav", "r", "r_p05", "r_p05_nofav", "gate:0", "gate:0.1", "gate:0.2", "gate:0.3"]
+    SELECT_YEAR, CHECK_YEARS = 2022, (2023, 2024)         # 選び方・閾値は 2022 年で決め、2023〜2024 年で確かめる（選択の偏りを避ける）
     names = [a.name] + [x for x in a.ref.split(",") if x]
     F = {n: frame(n) for n in names}
     races = set.intersection(*[set(f["race_id"]) for f in F.values()])
@@ -360,7 +597,26 @@ def cmd_report(a) -> None:
             qd = pd.qcut(fav[c].rank(method="first"), 5, labels=False)
             conf[c] = [{"quintile": int(k), "n": int(len(g)), f"{c}_min": float(g[c].min()), f"{c}_max": float(g[c].max()),
                         "rentai": float((g["finish_position"] <= 2).mean()), "win": float((g["finish_position"] == 1).mean())} for k, g in fav.groupby(qd)]
-        r_["fav_top_races"] = {"n": int(len(fav)), "share": float(len(fav) / len(top)), "rentai": float((fav["finish_position"] <= 2).mean()), "by_conf": conf}
+        tails = {}
+        for c in ("p_win", "p_top2"):                      # 確信度の上位 20%・10%・5%（ほぼすべてが勝ち負けの帯があるか）。境目は検証の 3 年をまとめて決めた目安
+            if fav[c].notna().sum() < 50:
+                continue
+            for qq in (0.8, 0.9, 0.95):
+                cut = float(fav[c].quantile(qq))
+                g = fav[fav[c] >= cut]
+                tails[f"{c}_top{int(round((1 - qq) * 100))}"] = {"cut": cut, "n": int(len(g)), "rentai": float((g["finish_position"] <= 2).mean()),
+                                                                 "win": float((g["finish_position"] == 1).mean())}
+        r_["fav_top_races"] = {"n": int(len(fav)), "share": float(len(fav) / len(top)), "rentai": float((fav["finish_position"] <= 2).mean()), "by_conf": conf,
+                               "tails": tails}
+        # 選び方は 2022 年の単勝の回収率で決め、2023〜2024 年で確かめる
+        by_year = {}
+        for ru in rules:
+            sel = pick(d, ru)
+            sy = sel["race_id"].str[:4].astype(int)
+            by_year[ru] = {"select": summarize(sel[sy == SELECT_YEAR]), "check": summarize(sel[sy.isin(CHECK_YEARS)])}
+        cand_r = [ru for ru in rules if ru != "r" and by_year[ru]["select"]["races"] > 0]
+        best = max(cand_r, key=lambda ru: by_year[ru]["select"]["roi_tan"]) if cand_r else None
+        r_["select_check"] = {"select_year": SELECT_YEAR, "check_years": list(CHECK_YEARS), "chosen": best, "by_rule": by_year}
         res["models"][n] = r_
     d_ = MK / "eval"
     d_.mkdir(parents=True, exist_ok=True)
@@ -381,11 +637,27 @@ def main() -> None:
     m.add_argument("--spec", default="")
     m.add_argument("--seeds", type=int, default=1)
     m.add_argument("--force", action="store_true")
+    m.add_argument("--valid-years", default="", help="検証の年（既定 2022,2023,2024）。例 2019,2021")
     e = sub.add_parser("report")
     e.add_argument("name")
     e.add_argument("--ref", default="ens5_p01s3,prod_v6e")
+    f = sub.add_parser("fitfull", help="2016〜2025 年の全行で学習して保存（2026 年に当てる用）")
+    f.add_argument("name")
+    f.add_argument("--spec", default="")
+    f.add_argument("--seeds", type=int, default=3)
+    f.add_argument("--fit-end", type=int, choices=[2024, 2025], default=2025, help="2024: 2025 年 test を 1 回だけ予測する版")
+    g = sub.add_parser("apply2026", help="全期間のモデルを 2026 年の推論の入力に当て、確定・発走前（t60・t15・t05）のオッズの offset で比べる")
+    g.add_argument("name")
+    h = sub.add_parser("handoff", help="bet-optimizer への受け渡しの表を作る")
+    h.add_argument("tag")
+    h.add_argument("--oof-main", required=True, help="2022〜2024 年の OOF（oof/NAME）")
+    h.add_argument("--oof-1921", required=True, help="2019・2021 年の OOF")
+    h.add_argument("--oof-2020", required=True, help="2020 年の OOF（追い切りを欠けにそろえた版）")
+    h.add_argument("--full2024", required=True, help="2016〜2024 で学習した版（full/NAME/test2025.parquet）")
+    h.add_argument("--full2025", required=True, help="2016〜2025 で学習した版（eval2026/NAME_pred2026.parquet）")
+    h.add_argument("--note", default="")
     a = ap.parse_args()
-    {"market": cmd_market, "member": cmd_member, "report": cmd_report, "drift": cmd_drift}[a.cmd](a)
+    {"market": cmd_market, "member": cmd_member, "report": cmd_report, "drift": cmd_drift, "fitfull": cmd_fitfull, "apply2026": cmd_apply2026, "handoff": cmd_handoff}[a.cmd](a)
 
 
 if __name__ == "__main__":
