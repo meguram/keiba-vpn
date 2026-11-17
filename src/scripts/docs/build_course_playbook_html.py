@@ -43,7 +43,8 @@ def pct(v) -> str:
 def _cond(c: dict) -> str:
     s = LT.describe_combo(c["types"], c["levels"])
     tag = "（極小: 1〜2 走）" if c.get("tiny") else ""
-    stat = f"［{c.get('k', '—')}/{c.get('n', '—')} 走で 3 着内・単回収 {pct(c.get('roi_t'))}］" if "k" in c else f"［{c.get('n', '—')} 走で 3 着内 0］"
+    stat = (f"［{c.get('k', '—')}/{c.get('n', '—')} 走で 3 着内・単回収 {pct(c.get('roi_t'))}・複回収 {pct(c.get('roi_f'))}］" if "k" in c
+            else f"［{c.get('n', '—')} 走で 3 着内 0］")
     return f"<li>{escape(s)}{escape(tag)} <span class='muted'>{escape(stat)}</span></li>"
 
 
