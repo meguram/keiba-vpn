@@ -387,3 +387,67 @@ def test_report_conclusion_stage_once_and_on_top():
     h = rp.render_html(log)
     assert h.count("結論XYZ") == 1
     assert h.index("結論XYZ") < h.index("推移") and "14 / 20" not in h and "8 / 20" in h
+
+
+def test_load_pred_where_and_r_rule(tmp_path):
+    import pandas as pd
+
+    d = pd.DataFrame({"race_id": ["1"] * 4, "horse_id": ["a", "b", "a", "b"], "p_win": [0.6, 0.4, 0.5, 0.5], "q": [0.5, 0.5, 0.5, 0.5],
+                      "r": [0.2, -0.2, 0.0, 0.0], "part": ["oof", "oof", "test2025", "test2025"], "odds_phase": ["final"] * 4})
+    f = tmp_path / "p.parquet"
+    d.to_parquet(f)
+    o = bc.load_pred({"path": str(f), "where": {"part": "oof", "odds_phase": "final"}})
+    assert len(o) == 2 and set(o.columns) == {"race_id", "horse_id", "p_win", "q", "r"}
+    r = _race(8, 1)
+    r.r = np.array([0.1, -0.3, 0.5, 0.2, -0.1, 0.9, 0.0, 0.3])
+    r.pop = np.arange(1, 9, dtype=float)
+    f_ = bc.race_features(r)
+    i, why = bc.pick_honmei(r, f_, {"rule": "r_max", "fav_k": 1, "p_min": 0.0})
+    assert i == 5 and r.pop[i] != 1
+    assert bc.fav1_rule_ok({"honmei": {"rule": "r_max", "fav_k": 1}})
+    assert bc.fav1_rule_ok({"honmei": {"rule": "fav1_exc", "exc_by": "r", "r_min": "auto", "base": {"rule": "r_max", "fav_k": 1}}})
+    assert "r_max" in f_ and f_["r_max"] == pytest.approx(float(r.r[r.pw >= 0.05].max()))   # 勝率 5% 以上の中の最大
+
+
+def test_round2_cycle_configs_are_valid():
+    """config/bet_cycles/r2 の各サイクルの買い方が展開でき、r と連対率のある合成のレースで印の整合を守る（auto は仮の値に置き換える）。"""
+    races = [_race(12, 7), _race(16, 8)]
+    for r in races:
+        r.r = np.linspace(0.6, -0.6, len(r.pw))
+        r.p2 = bc.p2_from(r.pw, r.p3, None)
+    d = ROOT / "config/bet_cycles/r2"
+    old = bc.CYC_DIR
+    bc.CYC_DIR = d
+    try:
+        for p in sorted(d.glob("cycle_*.json")):
+            cyc = json.loads(p.read_text(encoding="utf-8"))
+            specs = json.loads(json.dumps(bc.expand_variants(cyc)).replace('"auto"', "0.5"))
+            assert specs, p.name
+            for spec in specs:
+                for r in races:
+                    f = bc.race_features(r)
+                    f.update({"shape": "one", "q_p1": 3, "q_ent": 3, "q_gap12": 3, "q_ev_max": 3, "q_r_max": 3, "q_r_top": 3, "fieldband": "10-13頭"})
+                    x = bc.play(r, f, spec)
+                    assert not x.get("violations"), (p.name, spec.get("name"), x.get("violations"))
+    finally:
+        bc.CYC_DIR = old
+
+
+def test_test_markers_block():
+    r1 = ["bet_test2025_f96a5aeff33e.json"]
+    assert bc.test_markers_block(1, "", r1)[0]                         # 第 1 回はもう見た
+    assert bc.test_markers_block(1, "test", r1)[0]                     # group を付けても同じ回は見られない
+    assert bc.test_markers_block(3, "test", r1)[0]                     # 回は 1・2 だけ
+    assert bc.test_markers_block(2, "test", [])[0]                     # 第 2 回は第 1 回の後だけ
+    assert not bc.test_markers_block(2, "test", r1)[0]
+    assert bc.test_markers_block(2, "fwd", r1)[0]                      # 2026 年は test の後
+    r2t = r1 + ["bet_test2025_r2_test_abcdefabcdef.json"]
+    assert bc.test_markers_block(2, "test", r2t)[0] and bc.test_markers_block(2, "", r2t)[0]
+    assert not bc.test_markers_block(2, "fwd", r2t)[0]
+    assert bc.test_markers_block(2, "fwd", r2t + ["TEST2025_EVALUATED_r2_fwd_abcdefabcdef.json"])[0]
+
+
+def test_exc_r_values_only_exception_level():
+    spec = {"honmei": {"rule": "fav1_exc", "exc_by": "r", "r_min": 0.3, "base": {"rule": "r_max", "r_min": 0.1}}}
+    assert bc._exc_r_values(spec) == [0.3]
+    assert not bc.fav1_rule_ok({"honmei": {"rule": "fav1_exc", "exc_by": "r", "r_min": -9.0}})

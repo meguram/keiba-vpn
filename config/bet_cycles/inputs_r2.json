@@ -1,0 +1,93 @@
+{
+ "tag": "r2",
+ "note": "第 2 回: 第 2 段のモデル（市場とのずれを学習、T-60 の雑音つきの版）。予測は 1 ファイル（part・odds_phase で絞る）。訓練 2019〜22・評価 2023〜24 は oof の確定の時点、test 2025 は 2 回目の確かめ（第 1 回で 1 回使った）、2026 年は推論の入力に当てた予測（確定の版と T-60 の版）。",
+ "note_local": "予測は手元の retrain_out（リポジトリの外）。",
+ "periods": {
+  "train": {
+   "years": [
+    2019,
+    2020,
+    2021,
+    2022
+   ],
+   "pred": [
+    {
+     "path": "/home/jovyan/work/retrain_out/cycles16_fix3/market/handoff/stage2_noise.parquet",
+     "where": {
+      "part": "oof",
+      "odds_phase": "final"
+     }
+    }
+   ],
+   "fill_payoff_from_flat": true,
+   "role": "訓練（探索・採否・回顧）"
+  },
+  "eval": {
+   "years": [
+    2023,
+    2024
+   ],
+   "pred": [
+    {
+     "path": "/home/jovyan/work/retrain_out/cycles16_fix3/market/handoff/stage2_noise.parquet",
+     "where": {
+      "part": "oof",
+      "odds_phase": "final"
+     }
+    }
+   ],
+   "role": "評価（上向きの確かめだけ）"
+  },
+  "test": {
+   "years": [
+    2025
+   ],
+   "pred": [
+    {
+     "path": "/home/jovyan/work/retrain_out/cycles16_fix3/market/handoff/stage2_noise.parquet",
+     "where": {
+      "part": "test2025",
+      "odds_phase": "final"
+     }
+    }
+   ],
+   "role": "test 2025（2 回目の確かめ。第 1 回で 1 回使った）"
+  },
+  "fwd2026": {
+   "years": [
+    2026
+   ],
+   "pred": [
+    {
+     "path": "/home/jovyan/work/retrain_out/cycles16_fix3/market/handoff/stage2_noise.parquet",
+     "where": {
+      "part": "infer2026",
+      "odds_phase": "final"
+     }
+    }
+   ],
+   "fill_payoff_from_flat": true,
+   "role": "前向きの参考（第 2 段の予測を 2026 年の推論の入力に当てたもの・確定オッズの offset）"
+  },
+  "fwd2026_pre": {
+   "years": [
+    2026
+   ],
+   "pred": [
+    {
+     "path": "/home/jovyan/work/retrain_out/cycles16_fix3/market/handoff/stage2_noise.parquet",
+     "where": {
+      "part": "infer2026",
+      "odds_phase": "t60"
+     }
+    }
+   ],
+   "pre_odds": "data/local/research/persona1/pre_odds.parquet",
+   "pre_phase": [
+    "t60"
+   ],
+   "fill_payoff_from_flat": true,
+   "role": "前向きの参考（T-60 の offset の予測・発走前オッズの T-60 で ◎・人気を決める版。いちばん手つかず）"
+  }
+ }
+}

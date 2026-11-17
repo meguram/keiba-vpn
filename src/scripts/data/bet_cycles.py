@@ -46,6 +46,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
 CFG_DIR = ROOT / "config/bet_cycles"
+CYC_DIR = Path(os.environ.get("BET_CYCLES_CYC_DIR") or CFG_DIR)    # サイクルの設定の置き場（第 2 回は config/bet_cycles/r2）
 OUT_DIR = Path(os.environ.get("BET_CYCLES_OUT") or ROOT / "data/local/research/bet_cycles")
 PAYOFF_PATHS = [ROOT / "data/local/modeling/betting/payoff.parquet", ROOT / "data/local/modeling/betting_2026/payoff.parquet"]
 UNIT = 100
@@ -161,6 +162,8 @@ class Race:
     fin: np.ndarray        # 着順（無ければ 99）
     pay: dict = field(default_factory=dict)
     p2: np.ndarray | None = None   # 連対率（合計 min(2, 頭数)。予測に p_top2 が無ければ Harville で補う）
+    q: np.ndarray | None = None    # 第 2 段のモデルの市場の確率（予測にあれば）
+    r: np.ndarray | None = None    # 市場とのずれ r = log(p/q)（予測にあれば。第 2 段のモデル）
 
 
 def _p3_from_win(pw: np.ndarray) -> np.ndarray:
@@ -210,12 +213,26 @@ def load_runners(years) -> pd.DataFrame:
     return f[f["horse_number"].notna()]
 
 
-def load_pred(path: Path) -> pd.DataFrame:
+def pred_path(x) -> Path:
+    """inputs の pred の 1 つ（文字列のパス、または {"path": …, "where": {列: 値 or [値]}}）のファイルのパス。"""
+    p = x["path"] if isinstance(x, dict) else x
+    return Path(p) if str(p).startswith("/") else ROOT / p
+
+
+def load_pred(path, where: dict | None = None) -> pd.DataFrame:
+    """予測を読む。where があれば、その列の値で絞る（第 2 段の 1 ファイルに part・odds_phase が並んでいる形）。"""
     import pyarrow.parquet as pq
 
+    if isinstance(path, dict):
+        where, path = path.get("where"), pred_path(path)
     names = pq.read_schema(path).names
-    cols = ["race_id", "horse_id", "p_win"] + [c for c in ("p_top2", "p_top3") if c in names]
-    o = pd.read_parquet(path, columns=cols)
+    cols = ["race_id", "horse_id", "p_win"] + [c for c in ("p_top2", "p_top3", "q", "r") if c in names]
+    if "part" in names and not where:
+        raise ValueError(f"{path} は part・odds_phase の混ざった 1 ファイルです。inputs で where を指定してください")
+    o = pd.read_parquet(path, columns=cols + [c for c in (where or {}) if c not in cols])
+    for c, v in (where or {}).items():
+        o = o[o[c].isin(v if isinstance(v, list) else [v])]
+    o = o[cols]
     o["race_id"], o["horse_id"] = o["race_id"].astype(str), o["horse_id"].astype(str)
     return o.drop_duplicates(["race_id", "horse_id"])
 
@@ -254,9 +271,11 @@ def build_races(pred: pd.DataFrame, flat: pd.DataFrame, pay: dict, years=None, o
         g = g.sort_values(["p_win", "horse_number"], ascending=[False, True], kind="stable")
         pw, p3 = normalize_probs(g["p_win"].to_numpy(), g["p_top3"].to_numpy(dtype=float) if has_p3 else None)
         p2 = p2_from(pw, p3, g["p_top2"].to_numpy(dtype=float) if "p_top2" in g else None)
+        qv = g["q"].to_numpy(dtype=float) if "q" in g else None
+        rv = g["r"].to_numpy(dtype=float) if "r" in g else (np.log(np.clip(pw, 1e-9, None) / np.clip(qv / np.nansum(qv), 1e-9, None)) if qv is not None else None)
         races.append(Race(rid, str(pd.Timestamp(g["date"].iloc[0]).date()), g["horse_number"].to_numpy(int), pw, p3,
                           g["odds"].to_numpy(float), g["popularity"].fillna(99).to_numpy(float),
-                          g["finish_position"].fillna(99).to_numpy(float), pr, p2))
+                          g["finish_position"].fillna(99).to_numpy(float), pr, p2, qv, rv))
     from src.scripts.data.rank_condition_analysis import race_conditions
 
     cond = race_conditions(flat[flat["race_id"].isin({r.race_id for r in races})]).set_index("race_id")
@@ -289,8 +308,21 @@ def race_features(r: Race) -> dict[str, float]:
         "ev_max_rank": j, "top_pop": float(pop[0]), "top_odds": float(odds[0]), "fav_rank": fav,
         "mk_gap_top": float(pw[0] - mk[0]) if np.isfinite(mk[0]) else np.nan,
         "fav1_p2": float(r.p2[fav]) if r.p2 is not None else np.nan, "fav1_pw": float(pw[fav]), "fav1_is_top": int(fav == 0),
+        **_r_features(r, pw, pop),
         "n_mk_under": int(np.nansum(pw - mk > 0.03)),
     }
+
+
+def _r_features(r: "Race", pw: np.ndarray, pop: np.ndarray, p_min: float = 0.05) -> dict:
+    """第 2 段のモデルの、市場とのずれ r の特徴（r が無ければ空）。r_max = 2 番人気以下・勝率 p_min 以上の中の r の最大（◎ の r_max の既定と同じ範囲）。"""
+    if r.r is None:
+        return {}
+    rr = np.where(np.isfinite(r.r), r.r, -9.0)
+    ok = (pw >= p_min) & (pop > 1) & (pop < 99) & np.isfinite(r.r)    # ◎ の r_max の既定（2 番人気以下・勝率 5% 以上）と同じ範囲
+    j = int(np.argmax(np.where(ok, rr, -9.0))) if ok.any() else 0
+    fav = int(np.argmin(pop))
+    return {"r_max": float(rr[j]) if ok.any() else np.nan, "r_max_pop": float(pop[j]), "r_top": float(rr[0]), "r_fav1": float(rr[fav]),
+            "n_r_pos": int(((rr > 0) & ok).sum())}
 
 
 def hand_shape(f: dict, r_one: float = 2.0, r_two: float = 1.3, r_close: float = 1.3, p_chaos: float = 0.2) -> str:
@@ -305,7 +337,7 @@ def hand_shape(f: dict, r_one: float = 2.0, r_two: float = 1.3, r_close: float =
     return "mid"
 
 
-QCUT_FEATURES = ("p1", "gap12", "ratio12", "ent", "gini", "var5", "top3sum", "p3_top3sum", "ev_max", "ev_top", "mk_gap_top")
+QCUT_FEATURES = ("p1", "gap12", "ratio12", "ent", "gini", "var5", "top3sum", "p3_top3sum", "ev_max", "ev_top", "mk_gap_top", "r_max", "r_top")
 
 
 def fit_qcuts(feats: pd.DataFrame, cols=QCUT_FEATURES, q=(0.2, 0.4, 0.6, 0.8)) -> dict[str, list[float]]:
@@ -357,17 +389,32 @@ def pick_honmei(r: Race, f: dict, h: dict) -> tuple[int | None, str]:
                                                                         else f"1番人気にペナルティ（λ={lam:g}）"))
     if rule == "fav1_exc":                   # 基本は 2 番人気以下から ◎。1 番人気が「ほぼ確実に勝ち負け」のときだけ例外で ◎ にする
         fav = int(np.argmin(r.pop))
-        ok = r.pop[fav] == 1 and r.p2 is not None and r.p2[fav] >= float(h.get("p2_min", 0.85))
+        if h.get("exc_by") == "r":                         # 第 2 段: 1 番人気の r（ずれ）がしきい値以上なら例外
+            ok = r.pop[fav] == 1 and r.r is not None and np.isfinite(r.r[fav]) and r.r[fav] >= float(h.get("r_min", 9.0))
+        else:
+            ok = r.pop[fav] == 1 and r.p2 is not None and r.p2[fav] >= float(h.get("p2_min", 0.85))
         if ok and h.get("gap_min") is not None:
             others = np.delete(r.pw, fav)
             ok = r.pw[fav] - (others.max() if len(others) else 0.0) >= float(h["gap_min"])
         if ok:
-            return fav, "1番人気の例外（連対率の予測が高い）"
+            return fav, ("1番人気の例外（r が高い）" if h.get("exc_by") == "r" else "1番人気の例外（連対率の予測が高い）")
         sub = dict(h.get("base") or {"rule": "fav1_penalty", "lam": 1.0})
         i, why = pick_honmei(r, f, sub)
         if i is not None and r.pop[i] == 1:  # 下の決め方が 1 番人気を選んだら、2 番人気以下の勝率最大に替える
             i, why = pick_honmei(r, f, {"rule": "fav1_penalty", "lam": 1.0})
         return i, why
+    if rule == "r_max":                      # 第 2 段: 勝率 p_min 以上の中で、市場とのずれ r = log(p/q) が最大の馬（fav_k 番人気以内は除く）
+        if r.r is None:
+            raise ValueError("予測に r（ずれ）がありません（第 2 段のモデルの予測を使う）")
+        rr = np.where(np.isfinite(r.r), r.r, -9.0)
+        k = int(h.get("fav_k", 1))
+        c = (r.pw >= float(h.get("p_min", 0.05))) & (r.pop > k) & (r.pop < 99) & np.isfinite(r.r) & np.isfinite(r.odds) \
+            & (rr >= float(h.get("r_min", -9.0))) & (np.arange(len(rr)) < int(h.get("max_rank", 99)))
+        if not c.any():
+            fb = h.get("fallback", "skip")
+            return (None, "見送り（r の候補なし）") if fb == "skip" else (0, "予測1位（r の候補なし）")
+        i = int(np.argmax(np.where(c, rr, -99.0)))
+        return i, ("予測1位" if i == 0 else f"{k}番人気より下で r 最大")
     if rule == "market_fav":                 # 市場の 1 番人気（基準の比べる相手。印の決め方の候補ではない）
         i = int(np.argmin(r.pop))
         return i, ("予測1位" if i == 0 else "市場の1番人気")
@@ -618,6 +665,7 @@ def run_strategy(races: list[Race], feats: list[dict], s: dict, detail: bool = F
     hpop = np.full(n, 99.0)
     nviol, vkinds, recs = 0, {}, []
     o_in3 = np.zeros(n)                      # 相手のうち 3 着以内に来た頭数
+    top_pop = np.array([float(rc.pop[0]) for rc in races]) if races else np.zeros(0)   # 予測 1 位（p）の人気
     for i, (r, f) in enumerate(zip(races, feats)):
         x = play(r, f, s)
         cost[i], ret[i] = x["cost"], x["ret"]
@@ -632,7 +680,7 @@ def run_strategy(races: list[Race], feats: list[dict], s: dict, detail: bool = F
             recs.append({"race_id": r.race_id, "H_num": int(r.hn[x["H"]]) if x.get("H") is not None else None,
                          "H_rank": int(hrank[i]), "reason": x["reason"], "cost": int(cost[i]), "ret": int(ret[i]),
                          "bets": json.dumps(x.get("bets", []), ensure_ascii=False), "violations": ",".join(x.get("violations", []))})
-    out = {"cost": cost, "ret": ret, "hrank": hrank, "hfin": hfin, "hpop": hpop, "o_in3": o_in3, "n_violation_races": nviol,
+    out = {"cost": cost, "ret": ret, "hrank": hrank, "hfin": hfin, "hpop": hpop, "o_in3": o_in3, "top_pop": top_pop, "n_violation_races": nviol,
            "violations": vkinds}
     if detail:
         out["records"] = pd.DataFrame(recs)
@@ -891,7 +939,7 @@ def prepare_periods(inputs: dict, names=("train", "eval"), cuts: dict | None = N
     for nm in names:
         spec = inputs["periods"][nm]
         years = spec["years"]
-        pred = pd.concat([load_pred(ROOT / p if not str(p).startswith("/") else Path(p)) for p in spec["pred"]], ignore_index=True)
+        pred = pd.concat([load_pred(p if isinstance(p, dict) else pred_path(p)) for p in spec["pred"]], ignore_index=True)
         pred = pred[pred["race_id"].str[:4].astype(int).isin(years)]
         if spec.get("ignore_ptop"):                 # 連対率・複勝率を勝率から Harville で補う側にそろえる（訓練が勝率だけのとき test も合わせる）
             pred = pred.drop(columns=[c for c in ("p_top2", "p_top3") if c in pred.columns])
@@ -940,7 +988,7 @@ def expand_variants(cyc: dict) -> list[dict]:
     out = list(cyc.get("variants") or [])
     grids = list(cyc.get("grids") or [])
     for inc in cyc.get("include") or []:                       # 候補の束（config/bet_cycles/pool_*.json）を読み込む
-        sub = json.loads((CFG_DIR / inc).read_text(encoding="utf-8"))
+        sub = json.loads(((CYC_DIR / inc) if (CYC_DIR / inc).exists() else (CFG_DIR / inc)).read_text(encoding="utf-8"))
         out += list(sub.get("variants") or [])
         grids += list(sub.get("grids") or [])
     for g in grids:
@@ -987,6 +1035,7 @@ def summarize_variant(s: dict, per: dict[str, Period], res: dict[str, dict]) -> 
         row[nm]["violations"] = r["violations"]
         row[nm]["h_not_top_rate"] = float(((r["hrank"] > 0).sum()) / max((r["hrank"] >= 0).sum(), 1))
         row[nm]["h_fav1_rate"] = float(((r["hpop"] == 1) & (r["hrank"] >= 0)).sum() / max((r["hrank"] >= 0).sum(), 1))   # ◎ が 1 番人気（確定オッズの順）
+        row[nm]["top_fav1_rate"] = float(((r["top_pop"] == 1) & (r["hrank"] >= 0)).sum() / max((r["hrank"] >= 0).sum(), 1))   # 予測 1 位（p）が 1 番人気
         if nm == "train":                                             # 訓練の中の fold（年）ごとの回収率
             yrs = p.feats["year"].to_numpy()
             row["train_folds"] = {}
@@ -1071,6 +1120,9 @@ def family(s: dict) -> str:
         return f"{head}・{tail}"
     if rule in ("top", "fav_maxodds", "market_fav") and not (s.get("skip") or {}).get("h_pop_min"):
         return "型1 人気の ◎（点数を絞る）"
+    if rule == "r_max":
+        mode = (s.get("partners") or {}).get("mode", "p3")
+        return "r（ずれ）の ◎・" + {"fav": "人気の相手", "mix": "相手を広く"}.get(mode, "複勝率上位の相手")
     if rule in ("ana_ev", "ana_p3", "ev_max") and not any(k in h for k in ("max_rank", "p3_min", "pw_min")):
         return "参考: 制約なしの穴・期待値の ◎"
     return "型A 穴の ◎・人気の相手" if (s.get("partners") or {}).get("mode") == "fav" else "型B 穴の ◎・相手を広く"
@@ -1088,8 +1140,12 @@ def fav1_rule_ok(s: dict) -> bool:
         return True
     rule = h.get("rule", "top")
     if rule == "fav1_exc":                            # 例外のとき以外は 2 番人気以下（base が 1 番人気を選んだら替える作り）
+        if h.get("exc_by") == "r":
+            return h.get("r_min") == "auto"           # 訓練で決めたしきい値（fav1 --by r）だけ。手書きの値は通さない
         p2 = h.get("p2_min", 0.85)
         return p2 == "auto" or float(p2) >= FAV1_TARGET  # しきい値を手で低く書いた買い方は通さない
+    if rule == "r_max":
+        return int(h.get("fav_k", 1)) >= 1 and h.get("fallback", "skip") == "skip"
     if rule == "switch":
         subs = list((h.get("map") or {}).values()) + [h.get("default", {"rule": "top"})]
         return all(x == "skip" or fav1_rule_ok({**s, "honmei": x}) for x in subs)
@@ -1108,7 +1164,7 @@ def perturb_period(p: Period, sigma: float, seed: int, cuts: dict) -> Period:
     for r in p.races:
         o = r.odds * np.exp(rng.normal(0.0, sigma, len(r.odds)))
         pop = np.where(np.isfinite(o), pd.Series(o).rank(method="min").to_numpy(), 99.0)
-        races.append(Race(r.race_id, r.date, r.hn, r.pw, r.p3, o, pop, r.fin, r.pay, r.p2))
+        races.append(Race(r.race_id, r.date, r.hn, r.pw, r.p3, o, pop, r.fin, r.pay, r.p2, r.q, r.r))
     f = pd.DataFrame([race_features(r) for r in races])
     keep = [c for c in p.feats.columns if c not in f.columns and not c.startswith("q_")]
     ft = pd.concat([p.feats[keep].reset_index(drop=True), f], axis=1)
@@ -1361,19 +1417,24 @@ def resolve_auto(strats: list[dict], out: Path) -> list[dict]:
     """p2_min が "auto" の値だけを、その予測で bet_cycles fav1 が訓練で決めたしきい値（stage_fav1_exception.json）に置き換える（再帰）。"""
     def has(x):
         if isinstance(x, dict):
-            return x.get("p2_min") == "auto" or any(has(v) for v in x.values())
+            return x.get("p2_min") == "auto" or x.get("r_min") == "auto" or any(has(v) for v in x.values())
         return isinstance(x, list) and any(has(v) for v in x)
     if not has(strats):
         return strats
-    st = out / "stage_fav1_exception.json"
-    if not st.exists():
-        raise SystemExit("p2_min=auto には、先に `bet_cycles fav1` で例外のしきい値を決める必要があります")
-    ch = json.loads(st.read_text(encoding="utf-8")).get("chosen")
-    val = float(ch["p2_min"]) if ch else 9.0          # しきい値が無ければ例外を作らない（9.0 は誰も満たさない）
+    def _val(name):
+        st = out / name
+        if not st.exists():
+            return None
+        ch = json.loads(st.read_text(encoding="utf-8")).get("chosen")
+        return float(ch["p2_min"]) if ch else 9.0          # しきい値が無ければ例外を作らない（9.0 は誰も満たさない）
+    val, rval = _val("stage_fav1_exception.json"), _val("stage_fav1r_exception.json")
+    txt = json.dumps(strats, ensure_ascii=False)
+    if ('"p2_min": "auto"' in txt and val is None) or ('"r_min": "auto"' in txt and rval is None):
+        raise SystemExit("auto には、先に `bet_cycles fav1`（r_min は `fav1 --by r`）で例外のしきい値を決める必要があります")
 
     def sub(x):
         if isinstance(x, dict):
-            return {k: (val if (k == "p2_min" and v == "auto") else sub(v)) for k, v in x.items()}
+            return {k: (val if (k == "p2_min" and v == "auto") else (rval if (k == "r_min" and v == "auto") else sub(v))) for k, v in x.items()}
         if isinstance(x, list):
             return [sub(v) for v in x]
         return x
@@ -1401,7 +1462,7 @@ def _slim(rows: list[dict], full: bool = True, with_eval: bool = False) -> list[
         else:
             x = {"name": r["name"], "hash": r["hash"], "train_folds": r.get("train_folds"),
                  "train": {k: r["train"].get(k) for k in ("bet_races", "bet_rate", "hit_rate", "roi", "roi_lo", "roi_hi", "avg_return",
-                                                         "median_return", "median_hit_return", "roi_ex_top5", "violation_races", "h_fav1_rate")}}
+                                                         "median_return", "median_hit_return", "roi_ex_top5", "violation_races", "h_fav1_rate", "top_fav1_rate")}}
         if with_eval:
             x["eval"] = r.get("eval", {})
         out.append(x)
@@ -1453,6 +1514,10 @@ def choose_fav1_threshold(grid: list[dict], target: float = FAV1_TARGET, min_n: 
 
 
 def fav1_rows(p: Period) -> pd.DataFrame:
+    return _fav1_rows(p)
+
+
+def _fav1_rows(p: Period) -> pd.DataFrame:
     """レースごとの 1 番人気（確定オッズの順）の予測の連対率・勝率と、着順・単複の払戻。"""
     rows = []
     for r, f in zip(p.races, p.frecs):
@@ -1462,6 +1527,7 @@ def fav1_rows(p: Period) -> pd.DataFrame:
         others = np.delete(r.pw, j)
         h = str(int(r.hn[j]))
         rows.append({"race_id": r.race_id, "date": r.date, "p2": float(r.p2[j]), "pw": float(r.pw[j]), "gap": float(r.pw[j] - others.max()),
+                     "r": float(r.r[j]) if r.r is not None and np.isfinite(r.r[j]) else np.nan,
                      "is_top": int(j == 0), "fin": float(r.fin[j]), "tansho": r.pay["tansho"].get(h, 0), "fukusho": r.pay["fukusho"].get(h, 0)})
     return pd.DataFrame(rows)
 
@@ -1480,20 +1546,25 @@ def cmd_fav1(a) -> None:
     out.mkdir(parents=True, exist_ok=True)
     per, _ = prepare_periods(inputs, ("train", "eval"), cuts={}, n_boot=10)
     tr, ev = fav1_rows(per["train"]), fav1_rows(per["eval"])
+    by = getattr(a, "by", "p2") or "p2"                     # p2 = 予測の連対率（第 1 回）、r = 市場とのずれ（第 2 回）
+    col = "p2" if by == "p2" else "r"
+    steps = np.round(np.arange(0.40, 0.951, 0.025), 3) if by == "p2" else np.round(np.arange(-0.5, 1.51, 0.05), 3)
     grid = []
-    for t in np.round(np.arange(0.40, 0.951, 0.025), 3):
-        st = fav1_stats(tr[tr["p2"] >= t])
-        st["p2_min"] = float(t)
+    for t in steps:
+        st = fav1_stats(tr[tr[col] >= t])
+        st["p2_min"] = float(t)                             # 名前は p2_min のまま（r のときは r のしきい値）
+        st["by"] = by
         grid.append(st)
     chosen = choose_fav1_threshold(grid)
     res = {"target_rentai": FAV1_TARGET, "min_n": FAV1_MIN_N, "train_all_fav1": fav1_stats(tr), "eval_all_fav1": fav1_stats(ev), "grid_train": grid,
            "chosen": chosen}
     if chosen:
         t = chosen["p2_min"]
-        res["train_exception"] = fav1_stats(tr[tr["p2"] >= t])
-        res["eval_exception"] = fav1_stats(ev[ev["p2"] >= t])
-        res["train_rest"] = fav1_stats(tr[tr["p2"] < t])
-        res["eval_rest"] = fav1_stats(ev[ev["p2"] < t])
+        res["train_exception"] = fav1_stats(tr[tr[col] >= t])
+        res["eval_exception"] = fav1_stats(ev[ev[col] >= t])
+        res["train_rest"] = fav1_stats(tr[~(tr[col] >= t)])
+        res["eval_rest"] = fav1_stats(ev[~(ev[col] >= t)])
+        res["by"] = by
         res["train_races"], res["eval_races"] = len(per["train"].races), len(per["eval"].races)
     fmt = lambda x: "－" if x is None else f"{x * 100:.1f}%"   # noqa: E731
     row = lambda lab, s_: [lab, f"{s_.get('n', 0):,}", fmt(s_.get("rentai")), fmt(s_.get("win")), fmt(s_.get("place")),   # noqa: E731
@@ -1513,8 +1584,12 @@ def cmd_fav1(a) -> None:
             f"評価 2024 は、そのしきい値で連対率が保たれるかを見るだけ。"]
     if not chosen:
         text.append(f"訓練では、連対率 {FAV1_TARGET:.0%} 以上を {FAV1_MIN_N} 件以上で満たすしきい値が無かった。例外は作らず、◎ はすべて 2 番人気以下から選ぶ。")
-    res.update(title="1 番人気を ◎ にしてよい例外（連対率のしきい値）", text=text, tables=tables)
-    (out / "stage_fav1_exception.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_np), encoding="utf-8")
+    if by == "r":
+        text[1] = text[1].replace("予測の連対率", "市場とのずれ r").replace("連対率が", "（実際の）連対率が", 1)
+        for t_ in tables:
+            t_["title"] = t_["title"].replace("予測の連対率", "r（市場とのずれ）")
+    res.update(title="1 番人気を ◎ にしてよい例外（" + ("市場とのずれ r" if by == "r" else "連対率") + "のしきい値。列 p2_min は r のときは r のしきい値）", text=text, tables=tables)
+    (out / ("stage_fav1_exception.json" if by == "p2" else "stage_fav1r_exception.json")).write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_np), encoding="utf-8")
     print(json.dumps({k: res[k] for k in ("chosen", "train_all_fav1", "eval_all_fav1") if k in res}, ensure_ascii=False, indent=1))
     for k in ("train_exception", "eval_exception", "train_rest", "eval_rest"):
         if k in res:
@@ -1569,7 +1644,7 @@ def cmd_selcv(a) -> None:
     base = (b0["cost"], b0["ret"])
     rows = []
     for n in [int(x) for x in a.cycles.split(",")]:
-        cyc = json.loads((CFG_DIR / f"cycle_{n:02d}.json").read_text(encoding="utf-8"))
+        cyc = json.loads((CYC_DIR / f"cycle_{n:02d}.json").read_text(encoding="utf-8"))
         rec_p = out / f"cycle_{n:02d}.json"
         rec = json.loads(rec_p.read_text(encoding="utf-8")) if rec_p.exists() else {}
         strats = [s for s in resolve_auto(expand_variants(cyc), out) if not family(s).startswith("参考") and fav1_rule_ok(s)]
@@ -1833,7 +1908,7 @@ def cmd_pick_final(a) -> None:
         per, _ = prepare_periods(inputs, ("train",), cuts, n_boot=10)
         tr = per["train"]
         years = tr.feats["year"].to_numpy()
-        cyc = json.loads((CFG_DIR / f"cycle_{n:02d}.json").read_text(encoding="utf-8"))
+        cyc = json.loads((CYC_DIR / f"cycle_{n:02d}.json").read_text(encoding="utf-8"))
         strats = [x for x in resolve_auto(expand_variants(cyc), out) if not family(x).startswith("参考") and fav1_rule_ok(x)]
         key = strategy_hash({"pred": tr_spec["pred"], "years": tr_spec["years"], "cuts": cuts, "specs": [strategy_hash(x) for x in strats]})
         zp = out / f"cands_c{n:02d}_{key}.npz"
@@ -1855,6 +1930,7 @@ def cmd_pick_final(a) -> None:
         r1, r0 = run_strategy(pp.races, pp.frecs, resolve_auto([spec], out)[0]), run_strategy(pp.races, pp.frecs, base)
         m1 = metrics(r1["cost"], r1["ret"], pp.dates, pp.W)
         m1["h_fav1_rate"] = float(((r1["hpop"] == 1) & (r1["hrank"] >= 0)).sum() / max((r1["hrank"] >= 0).sum(), 1))
+        m1["top_fav1_rate"] = float(((r1["top_pop"] == 1) & (r1["hrank"] >= 0)).sum() / max((r1["hrank"] >= 0).sum(), 1))
         chk[nm] = {"metrics": m1, "B0": metrics(r0["cost"], r0["ret"], pp.dates), "diff_vs_B0": paired_diff(r1, r0, pp.W)}
     d = chk["eval"]["diff_vs_B0"]
     chk["eval_verdict"] = ("上向き（基準との差の区間も 0 より上）" if d[1] > 0 else ("上向き（点推定のみ。区間は 0 をまたぐ）" if d[0] > 0 else "確かめられず（基準より下）"))
@@ -1890,9 +1966,29 @@ def _sha(path: Path) -> str:
     return h.hexdigest()
 
 
+def _exc_r_values(x) -> list:
+    """買い方の中の、1 番人気の r の例外のしきい値（fav1_exc で exc_by="r" の r_min）だけを集める。"""
+    out = []
+    if isinstance(x, dict):
+        if x.get("rule") == "fav1_exc" and x.get("exc_by") == "r":
+            out.append(x.get("r_min"))
+        for v in x.values():
+            out += _exc_r_values(v)
+    elif isinstance(x, list):
+        for v in x:
+            out += _exc_r_values(v)
+    return out
+
+
+def _fwd_keys(inputs: dict) -> set:
+    """2026 年の参考にかかわる入力（予測・その年の出走表・発走前オッズ）の、ハッシュの鍵の集合。"""
+    sub = {"periods": {k: v for k, v in inputs["periods"].items() if k.startswith("fwd")}}
+    return set(_input_hashes(sub)) - {str(Path(x)) for x in [str(CFG_DIR / "baselines.json")]} - set(_input_hashes({"periods": {}}))
+
+
 def _input_hashes(inputs: dict) -> dict:
     """凍結に入れる入力のハッシュ: 予測・払戻の表・発走前オッズ・基準の設定・道具そのもの。"""
-    paths = [x for sp in inputs["periods"].values() for x in sp["pred"]]
+    paths = [str(pred_path(x)) for sp in inputs["periods"].values() for x in sp["pred"]]
     paths += [str(x) for x in PAYOFF_PATHS] + [x for sp in inputs["periods"].values() for x in ([sp["pre_odds"]] if sp.get("pre_odds") else [])]
     paths += [str(CFG_DIR / "baselines.json"), str(Path(__file__).resolve())]
     from src.config.data_paths import TABLES_DIR
@@ -1924,7 +2020,14 @@ def cmd_freeze(a) -> None:
             raise SystemExit(f"{f} がありません（tiers-select・fav1 を先に流す）")
     tiers = json.loads((out / "stage_tiers.json").read_text(encoding="utf-8"))
     fav1 = json.loads((out / "stage_fav1_exception.json").read_text(encoding="utf-8"))
+    fav1r = json.loads((out / "stage_fav1r_exception.json").read_text(encoding="utf-8")) if (out / "stage_fav1r_exception.json").exists() else {}
     spec = resolve_auto([cand["spec"]], out)[0]
+    exc_r = _exc_r_values(spec)                              # r の例外のしきい値（exc_by="r" の階層だけ）が fav1 --by r の結果と同じか
+    if exc_r:
+        chr_ = fav1r.get("chosen")
+        want = float(chr_["p2_min"]) if chr_ else 9.0
+        if any(abs(float(v) - want) > 1e-9 for v in exc_r):
+            raise SystemExit("買い方の r の例外のしきい値が fav1 --by r の結果と違います（pick-final をやり直す）")
     if strategy_hash(tiers.get("spec")) != strategy_hash(spec):
         raise SystemExit("stage_tiers.json の買い方が最後の候補と違います（tiers-select を最後の候補でやり直す）")
     if "selection" not in tiers:
@@ -1939,7 +2042,7 @@ def cmd_freeze(a) -> None:
         raise SystemExit(f"凍結に入れる入力が見つかりません: {missing}")
     body = {"frozen_at": date.today().isoformat(), "tag": inputs.get("tag"), "inputs": inputs, "pred_sha256": preds, "spec": spec,
             "selection": {k: cand[k] for k in ("cycle", "kind", "name", "selcv_score", "ranking", "rule")}, "qcuts": cuts,
-            "fav1": fav1.get("chosen"), "tiers_model": (tiers or {}).get("model"), "tiers_eval_order": (tiers or {}).get("order_eval"),
+            "fav1": fav1.get("chosen"), "fav1r": fav1r.get("chosen"), "tiers_model": (tiers or {}).get("model"), "tiers_eval_order": (tiers or {}).get("order_eval"),
             "note": "test 2025 と 2026 年は、このファイルを commit した後に bet_cycles final で 1 回だけ見る。見た後は変えない（変えたら別の凍結として始める）。"}
     body["hash"] = strategy_hash({k: v for k, v in body.items() if k != "frozen_at"})
     dst = Path(a.out) if a.out else CFG_DIR / f"frozen_{date.today().strftime('%Y%m%d')}_{inputs.get('tag')}.json"
@@ -1947,6 +2050,37 @@ def cmd_freeze(a) -> None:
         raise SystemExit(f"{dst} はすでにあります（凍結は書き換えない）")
     dst.write_text(json.dumps(body, ensure_ascii=False, indent=1, default=_np) + "\n", encoding="utf-8")
     print(f"凍結: {dst}（hash {body['hash']}）。commit してから final を流す。")
+
+
+_MARK_RE = __import__("re").compile(r"^(?:TEST2025_EVALUATED_|bet_test2025_)(r(\d+)_)?(test_|fwd_)?([0-9a-f]{12})\.json$")
+
+
+def _marker_names(out: Path) -> list[str]:
+    return [x.name for x in sorted(OUT_DIR.glob("*/TEST2025_EVALUATED_*.json"))] + \
+        [x.name for x in sorted((ROOT / "docs/operations/retrain_trials").glob("bet_test2025_*.json"))]
+
+
+def test_markers_block(rnd: int, grp: str, names: list[str]) -> tuple[bool, str]:
+    """test・2026 年を見る前の印の判定。回は 1・2 だけ。第 2 回は第 1 回の印があるときだけ。同じ回で、
+    test を見る（grp="" か "test"）のは、その回の印（group なし・test）が無いときだけ。2026 年を見る（"fwd"）のは、その回の test が済み、
+    fwd の印（group なし・fwd）が無いときだけ。"""
+    if rnd not in (1, 2):
+        return True, f"回は 1・2 だけです（{rnd}）"
+    marks = []
+    for n in names:
+        m = _MARK_RE.match(n)
+        if m:
+            marks.append((int(m.group(2) or 1), (m.group(3) or "").rstrip("_")))
+    if rnd == 2 and not any(r_ == 1 for r_, _ in marks):
+        return True, "第 2 回は、第 1 回の test を見た後だけです"
+    same = [g for r_, g in marks if r_ == rnd]
+    if grp in ("", "test") and any(g in ("", "test") for g in same):
+        return True, f"第 {rnd} 回の test 2025 はすでに見ています（1 回だけ）"
+    if grp in ("", "fwd") and any(g in ("", "fwd") for g in same):
+        return True, f"第 {rnd} 回の 2026 年の参考はすでに見ています（1 回だけ）"
+    if grp == "fwd" and not any(g in ("", "test") for g in same):
+        return True, f"第 {rnd} 回の 2026 年の参考は、test 2025 を見た後に見ます（順序）"
+    return False, ""
 
 
 def cmd_final(a) -> None:
@@ -1963,32 +2097,44 @@ def cmd_final(a) -> None:
     clean = subprocess.run(["git", "diff", "--quiet", "HEAD", "--", rel], cwd=ROOT).returncode == 0
     if not (tracked and clean):
         raise SystemExit("凍結ファイルを commit してから流してください（test を見る前に固定する）")
-    if subprocess.run(["git", "diff", "--quiet", "HEAD", "--", "src/scripts/data/bet_cycles.py", "config/bet_cycles"], cwd=ROOT).returncode != 0:
-        raise SystemExit("道具か設定に未コミットの変更があります（commit してから流す）")
+    dirty = subprocess.run(["git", "status", "--porcelain", "--", "src/scripts/data/bet_cycles.py", "config/bet_cycles"], cwd=ROOT,
+                           capture_output=True, text=True).stdout.strip()
+    if dirty:                                                # 未追跡のファイルも含めて見る
+        raise SystemExit(f"道具か設定に未コミットの変更があります（commit してから流す）: {dirty[:200]}")
     out = OUT_DIR / body["tag"]
-    seen = sorted(OUT_DIR.glob("*/TEST2025_EVALUATED_*.json")) + sorted((ROOT / "docs/operations/retrain_trials").glob("bet_test2025_*.json"))
-    if seen:                                                 # 凍結を作り直しても（ハッシュが変わっても）2 回目は見ない
-        raise SystemExit(f"test 2025 はすでに見ています: {[str(x) for x in seen]}。test は 1 回だけ（見直しはしない）")
-    dst = out / f"TEST2025_EVALUATED_{body['hash']}.json"
+    rnd = int(getattr(a, "round", 1) or 1)
+    grp = getattr(a, "group", "") or ""
+    blocked, why = test_markers_block(rnd, grp, _marker_names(out))
+    if blocked:
+        raise SystemExit(why)
+    tagr = ("" if rnd == 1 else f"r{rnd}_") + (f"{grp}_" if grp else "")
+    dst = out / f"TEST2025_EVALUATED_{tagr}{body['hash']}.json"
     inputs = body["inputs"]
     now = _input_hashes(inputs)
+    changed = {}
     for k, v in body["pred_sha256"].items():                 # 予測・払戻・発走前オッズ・基準・道具が凍結の時と同じか
         if v is None or now.get(k) != v:
+            if grp == "fwd" and now.get(k) is not None and k in _fwd_keys(inputs):
+                changed[k] = {"frozen": v, "now": now.get(k)}   # 2026 年の参考は、凍結の後に差し替わった版で見てよい（統括役の判断）。記録に残す
+                continue
             raise SystemExit(f"入力が凍結の時と違うか、見つかりません: {k}")
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     dst.write_text(json.dumps({"status": "started", "hash": body["hash"]}), encoding="utf-8")   # 途中で落ちても 2 回目を流さない印
-    (ROOT / f"docs/operations/retrain_trials/bet_test2025_{body['hash']}.json").write_text(
+    (ROOT / f"docs/operations/retrain_trials/bet_test2025_{tagr}{body['hash']}.json").write_text(
         json.dumps({"status": "started", "hash": body["hash"], "frozen": rel}, ensure_ascii=False) + "\n", encoding="utf-8")   # git にも残す印（走り始めに書く）
-    names = [x for x in ("test", "fwd2026", "fwd2026_pre") if x in inputs["periods"]]
+    names = [x for x in inputs["periods"] if (x == "test" if grp == "test" else (x.startswith("fwd") if grp == "fwd" else x in ("test", "fwd2026", "fwd2026_pre")))]
     per, _ = prepare_periods(inputs, tuple(names), cuts=body["qcuts"])
     spec = body["spec"]
     bases = json.loads((CFG_DIR / "baselines.json").read_text(encoding="utf-8"))["baselines"]
-    res = {"hash": body["hash"], "frozen": rel, "git_head": head, "periods": {},
+    res = {"hash": body["hash"], "frozen": rel, "git_head": head, "periods": {}, "round": rnd,
+           "round_note": "" if rnd == 1 else f"第 {rnd} 回: 2025 年 test は前の回の最適化で 1 回使っている。今回の値は 2 回目の確かめ（別のモデル・別の買い方）。",
+           "group": grp, "inputs_changed_after_freeze": changed,
            "note": "test は凍結を commit した後に 1 回だけ見た。結果は docs/operations/retrain_trials/bet_test2025_<hash>.json に写して commit する（2 回目を拒む印）。"}
     for nm, p in per.items():
         r = run_strategy(p.races, p.frecs, spec, detail=True)
         m = metrics(r["cost"], r["ret"], p.dates, p.W)
         m["h_fav1_rate"] = float(((r["hpop"] == 1) & (r["hrank"] >= 0)).sum() / max((r["hrank"] >= 0).sum(), 1))
+        m["top_fav1_rate"] = float(((r["top_pop"] == 1) & (r["hrank"] >= 0)).sum() / max((r["hrank"] >= 0).sum(), 1))
         bs = {}
         for b in bases[:2] + bases[-1:]:
             rb = run_strategy(p.races, p.frecs, b)
@@ -2013,9 +2159,9 @@ def cmd_final(a) -> None:
         r["records"].to_parquet(out / f"final_{nm}_races_{body['hash']}.parquet", index=False)
     res["status"] = "done"
     dst.write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_np), encoding="utf-8")
-    (ROOT / f"docs/operations/retrain_trials/bet_test2025_{body['hash']}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_np) + "\n",
+    (ROOT / f"docs/operations/retrain_trials/bet_test2025_{tagr}{body['hash']}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_np) + "\n",
                                                                                         encoding="utf-8")
-    print(f"結果を docs/operations/retrain_trials/bet_test2025_{body['hash']}.json に書いた。commit すること（2 回目を拒む印になる）。")
+    print(f"結果を docs/operations/retrain_trials/bet_test2025_{tagr}{body['hash']}.json に書いた。commit すること（同じ回の 2 回目を拒む印になる）。")
     print(json.dumps({nm: {k: v.get(k) for k in ("bet_races", "races", "hit_rate", "roi", "roi_lo", "roi_hi", "avg_return", "median_return", "roi_ex_top5")}
                       for nm, v in ((n_, x["metrics"]) for n_, x in res["periods"].items())}, ensure_ascii=False, indent=1, default=_np))
 
@@ -2081,6 +2227,7 @@ def main() -> None:
     r.set_defaults(func=cmd_run)
     f1 = sub.add_parser("fav1", help="1 番人気を ◎ にしてよい例外のしきい値を訓練で決める")
     f1.add_argument("--inputs", default=None)
+    f1.add_argument("--by", default="p2", choices=["p2", "r"], help="例外のしきい値に使う値（p2 = 予測の連対率、r = 市場とのずれ）")
     f1.set_defaults(func=cmd_fav1)
     sc = sub.add_parser("selcv", help="選び方そのものの交差検証と、全候補の配列の保存")
     sc.add_argument("--cycles", required=True)
@@ -2111,6 +2258,8 @@ def main() -> None:
     fz.set_defaults(func=cmd_freeze)
     fn = sub.add_parser("final", help="凍結した買い方で test 2025 と 2026 年の参考を 1 回だけ見る")
     fn.add_argument("--frozen", required=True)
+    fn.add_argument("--group", default="", choices=["", "test", "fwd"], help="test と 2026 年の参考を別の時点で 1 回ずつ見る（印も別）")
+    fn.add_argument("--round", type=int, default=1, choices=[1, 2], help="何回目の最適化か（2 なら、2025 年 test は 2 回目の確かめとして別の印で 1 回だけ）")
     fn.set_defaults(func=cmd_final)
     a = ap.parse_args()
     a.func(a)

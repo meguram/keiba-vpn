@@ -1,0 +1,87 @@
+{
+ "n": 6,
+ "min_hit": 0.08,
+ "rank_by": "robust",
+ "title": "第2回: 1 番人気の例外を r で決めるか、連対率で決めるか",
+ "hypothesis": "1 番人気の r が高いとき（市場より強いと見ているとき）だけ ◎ にする例外は、連対率の例外より回収率が良い。",
+ "change": "r 最大の ◎（2 番人気以下）× 例外 3 通り（r のしきい値・連対率のしきい値・例外なし＝◎ は常に 2 番人気以下）× 券種 3 通り。",
+ "group_by": [
+  "honmei",
+  "tickets"
+ ],
+ "grids": [
+  {
+   "prefix": "r2c06",
+   "base": {
+    "honmei": {
+     "rule": "fav1_exc",
+     "exc_by": "r",
+     "r_min": "auto",
+     "base": {
+      "rule": "r_max",
+      "fav_k": 1,
+      "p_min": 0.05
+     }
+    },
+    "partners": {
+     "mode": "p3",
+     "n": 2
+    },
+    "tickets": [
+     {
+      "type": "wide"
+     }
+    ]
+   },
+   "axes": {
+    "honmei": [
+     {
+      "rule": "fav1_exc",
+      "exc_by": "r",
+      "r_min": "auto",
+      "base": {
+       "rule": "r_max",
+       "fav_k": 1,
+       "p_min": 0.05
+      }
+     },
+     {
+      "rule": "fav1_exc",
+      "p2_min": "auto",
+      "base": {
+       "rule": "r_max",
+       "fav_k": 1,
+       "p_min": 0.05
+      }
+     },
+     {
+      "rule": "r_max",
+      "fav_k": 1,
+      "p_min": 0.05
+     }
+    ],
+    "tickets": [
+     [
+      {
+       "type": "tansho"
+      }
+     ],
+     [
+      {
+       "type": "wide"
+      }
+     ],
+     [
+      {
+       "type": "wide"
+      },
+      {
+       "type": "trio1"
+      }
+     ]
+    ]
+   }
+  }
+ ],
+ "notes_pre": "fav1 --by r でしきい値が見つからないと（r で 1 番人気の連対率 85% を満たしにくい）、r の例外は『例外なし』と同じ中身になる。その場合は結果にそう書く。"
+}

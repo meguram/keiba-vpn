@@ -1,0 +1,63 @@
+{
+ "n": 7,
+ "min_hit": 0.08,
+ "rank_by": "robust",
+ "title": "第2回: 方策 — 型を分ける軸の比べ（r の最大・予測1位の r・期待値の最大・手の区切り・決定木）",
+ "hypothesis": "第 1 回では期待値の最大で分けるのが一番だった。第 2 段では r の最大で分ける方が良い。",
+ "change": "候補の束 pool_r2 で、型の作り方 6 通り（5 個以下）× 件数の下限 300 × 見送りの下限なし・1.0。",
+ "include": [
+  "pool_r2.json"
+ ],
+ "policy_search": {
+  "typings": [
+   {
+    "kind": "feat",
+    "col": "q_r_max",
+    "name": "r の最大の5分位"
+   },
+   {
+    "kind": "feat",
+    "col": "q_r_top",
+    "name": "予測1位の r の5分位"
+   },
+   {
+    "kind": "feat",
+    "col": "q_ev_max",
+    "name": "期待値の最大の5分位"
+   },
+   {
+    "kind": "feat",
+    "col": "shape",
+    "name": "手の区切り"
+   },
+   {
+    "kind": "feat",
+    "col": "q_p1",
+    "name": "1位の勝率の5分位"
+   },
+   {
+    "kind": "tree",
+    "depth": 2,
+    "min_leaf": 800,
+    "cols": [
+     "p1",
+     "gap12",
+     "ent",
+     "ev_max",
+     "r_max",
+     "r_top",
+     "field"
+    ],
+    "name": "決定木 深さ2"
+   }
+  ],
+  "min_cell": [
+   300
+  ],
+  "skip_below": [
+   null,
+   1.0
+  ],
+  "include_fixed": true
+ }
+}

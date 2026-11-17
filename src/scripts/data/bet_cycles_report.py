@@ -24,7 +24,7 @@ LOG = ROOT / "docs/operations/retrain_trials/bet_cycles_log.json"
 HTML = ROOT / "docs/html/operations/bet_cycles.html"
 MD = ROOT / "docs/operations/retrain_trials/bet_optimization_20261116.md"
 MD_BEGIN, MD_END = "<!-- bet_cycles_report:begin -->", "<!-- bet_cycles_report:end -->"
-KEYS = ("h_fav1_rate", "races", "bet_races", "bet_rate", "hit_rate", "roi", "roi_lo", "roi_hi", "avg_return", "median_return", "median_hit_return", "avg_cost",
+KEYS = ("h_fav1_rate", "top_fav1_rate", "races", "bet_races", "bet_rate", "hit_rate", "roi", "roi_lo", "roi_hi", "avg_return", "median_return", "median_hit_return", "avg_cost",
         "roi_ex_top1", "roi_ex_top5", "daily_roi_sd", "max_drawdown", "max_drawdown_days", "plus_day_rate", "days")
 
 
@@ -98,14 +98,14 @@ def ci(m: dict) -> str:
     return "－" if m.get("roi_lo") is None else f"{m['roi_lo'] * 100:.0f}〜{m['roi_hi'] * 100:.0f}%"
 
 
-MUST_HEAD = ["全レース", "参戦（率）", "◎ が1番人気", "的中率", "回収率", "平均回収額", "中央値回収額", "的中時の中央値", "1R の購入額", "95% 区間", "上位5件を除く",
+MUST_HEAD = ["全レース", "参戦（率）", "予測1位が1番人気（参戦の中）", "◎ が1番人気（参戦の中）", "的中率", "回収率", "平均回収額", "中央値回収額", "的中時の中央値", "1R の購入額", "95% 区間", "上位5件を除く",
              "1 日の回収率の標準偏差", "最大の落ち込み（円・日数分）"]
 
 
 def must_cells(m: dict) -> list[str]:
     if not m or not m.get("bet_races"):
         return [yen(m.get("races")) if m else "－", "0"] + ["－"] * (len(MUST_HEAD) - 2)
-    return [yen(m["races"]), f"{m['bet_races']:,}（{pct(m['bet_rate'], 0)}）", pct(m.get("h_fav1_rate"), 0), pct(m["hit_rate"]), pct(m["roi"]), yen(m["avg_return"]),
+    return [yen(m["races"]), f"{m['bet_races']:,}（{pct(m['bet_rate'], 0)}）", pct(m.get("top_fav1_rate"), 0), pct(m.get("h_fav1_rate"), 0), pct(m["hit_rate"]), pct(m["roi"]), yen(m["avg_return"]),
             yen(m["median_return"]), yen(m["median_hit_return"]), yen(m["avg_cost"]), ci(m), pct(m.get("roi_ex_top5")),
             f"{m.get('daily_roi_sd', 0):.2f}", f"{yen(m.get('max_drawdown'))}・{m.get('max_drawdown_days', 0):.1f}"]
 
@@ -133,10 +133,12 @@ def spec_text(s: dict | None) -> str:
     if h.get("rule") == "fav1_exc":                 # 2 番人気以下から（中の決め方を書く）。1 番人気は連対率の予測が p2_min 以上のときだけ
         inner = spec_text({**s, "honmei": h.get("base") or {"rule": "fav1_penalty", "lam": 1.0}}).split(" → ")[0].replace("◎: ", "")
         rest = spec_text({**s, "honmei": {"rule": "top"}}).split(" → ", 1)[1]
-        return f"◎: 2番人気以下で {inner}（1番人気は連対率の予測 {h.get('p2_min', 0.85)} 以上のときだけ例外） → {rest}"
+        exc = (f"1番人気の r が {h.get('r_min')} 以上" if h.get("exc_by") == "r" else f"1番人気は連対率の予測 {h.get('p2_min', 0.85)} 以上")
+        return f"◎: 2番人気以下で {inner}（{exc}のときだけ例外） → {rest}"
     rule = {"top": "予測1位", "fav_maxodds": f"{h.get('fav_k', 3)}番人気以内で最高オッズ", "ana_ev": f"{h.get('fav_k', 3)}番人気より下で期待値最大",
             "ana_p3": f"{h.get('fav_k', 3)}番人気より下で複勝率最大", "ev_max": "期待値最大",
-            "fav1_penalty": f"1番人気の勝率に×(1−{h.get('lam', 0.5)})のうえで勝率最大", "switch": "型で切り替え", "market_fav": "市場の1番人気"}.get(h.get("rule", "top"), h.get("rule"))
+            "fav1_penalty": f"1番人気の勝率に×(1−{h.get('lam', 0.5)})のうえで勝率最大",
+            "r_max": f"{h.get('fav_k', 1)}番人気より下・勝率{h.get('p_min', 0.05)}以上" + (f"・r {h['r_min']} 以上" if h.get('r_min', -9.0) > -9.0 else "") + "で r（ずれ）最大", "switch": "型で切り替え", "market_fav": "市場の1番人気"}.get(h.get("rule", "top"), h.get("rule"))
     extra = []
     if h.get("max_rank"):
         extra.append(f"予測{h['max_rank']}位以内")

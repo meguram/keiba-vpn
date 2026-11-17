@@ -91,8 +91,8 @@ def main() -> None:
     import pyarrow.parquet as pq
 
     t2i = None
-    if "p_top2" in pq.read_schema(ROOT / spec["pred"][0]).names:
-        t2i = (pd.concat([pd.read_parquet(ROOT / x, columns=["race_id", "horse_id", "p_top2"]) for x in spec["pred"]])
+    if "p_top2" in pq.read_schema(bc.pred_path(spec["pred"][0])).names:
+        t2i = (pd.concat([bc.load_pred(x if isinstance(x, dict) else bc.pred_path(x))[["race_id", "horse_id", "p_top2"]] for x in spec["pred"]])
                .assign(race_id=lambda d: d["race_id"].astype(str), horse_id=lambda d: d["horse_id"].astype(str))
                .drop_duplicates(["race_id", "horse_id"]).set_index(["race_id", "horse_id"])["p_top2"])
     flat = bc.load_runners(sorted({int(r.race_id[:4]) for r in races}))

@@ -1,0 +1,113 @@
+{
+ "n": 4,
+ "min_hit": 0.08,
+ "rank_by": "robust",
+ "title": "第2回: 見送り（r の最大・期待値の最大の分位、◎ の人気の下限）",
+ "hypothesis": "第 1 回では期待値の最大が低いレースの見送りが効いた。第 2 段では r の最大が低いレース（市場とのずれが小さい）を見送ると効く。",
+ "change": "r 最大の ◎ → 複勝率上位 2 頭のワイド・ワイド＋三連複・単勝＋ワイド × 見送り 8 通り（なし、r の最大の分位 q2・q3・q4 以上、期待値の最大の分位 q3 以上、◎ の人気の下限 4・6、r q3 以上かつ人気の下限 4）。",
+ "group_by": [
+  "skip",
+  "tickets"
+ ],
+ "grids": [
+  {
+   "prefix": "r2c04",
+   "base": {
+    "honmei": {
+     "rule": "fav1_exc",
+     "exc_by": "r",
+     "r_min": "auto",
+     "base": {
+      "rule": "r_max",
+      "fav_k": 1,
+      "p_min": 0.05
+     }
+    },
+    "partners": {
+     "mode": "p3",
+     "n": 2
+    },
+    "tickets": [
+     {
+      "type": "wide"
+     }
+    ]
+   },
+   "axes": {
+    "skip": [
+     {},
+     {
+      "when": {
+       "q_r_max": [
+        2,
+        null
+       ]
+      }
+     },
+     {
+      "when": {
+       "q_r_max": [
+        3,
+        null
+       ]
+      }
+     },
+     {
+      "when": {
+       "q_r_max": [
+        4,
+        null
+       ]
+      }
+     },
+     {
+      "when": {
+       "q_ev_max": [
+        3,
+        null
+       ]
+      }
+     },
+     {
+      "h_pop_min": 4
+     },
+     {
+      "h_pop_min": 6
+     },
+     {
+      "h_pop_min": 4,
+      "when": {
+       "q_r_max": [
+        3,
+        null
+       ]
+      }
+     }
+    ],
+    "tickets": [
+     [
+      {
+       "type": "wide"
+      }
+     ],
+     [
+      {
+       "type": "wide"
+      },
+      {
+       "type": "trio1"
+      }
+     ],
+     [
+      {
+       "type": "tansho"
+      },
+      {
+       "type": "wide"
+      }
+     ]
+    ]
+   }
+  }
+ ]
+}

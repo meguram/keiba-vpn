@@ -1,0 +1,134 @@
+{
+ "n": 1,
+ "min_hit": 0.08,
+ "rank_by": "robust",
+ "title": "第2回: ◎ の決め方の総当たり（予測1位・r 最大・期待値最大・連対率の例外）",
+ "hypothesis": "第 2 段のモデルは市場とのずれ r = log(p/q) を学んでいる。勝率が一定以上の中で r が最大の馬を ◎ にすると、予測 1 位や期待値最大より回収率が上がる。",
+ "change": "◎ の決め方: r 最大（勝率の下限 3・5・8%、2 番人気以下／4 番人気以下）、2 番人気以下で期待値最大、2 番人気以下で勝率最大（λ=1）、予測 1 位（参考）。いずれも 1 番人気は r の例外のみ。× 券種 5 通り。",
+ "group_by": [
+  "honmei",
+  "tickets.0.type"
+ ],
+ "grids": [
+  {
+   "prefix": "r2c01",
+   "base": {
+    "honmei": {
+     "rule": "fav1_exc",
+     "exc_by": "r",
+     "r_min": "auto",
+     "base": {
+      "rule": "r_max",
+      "fav_k": 1,
+      "p_min": 0.05
+     }
+    },
+    "partners": {
+     "mode": "p3",
+     "n": 4
+    },
+    "tickets": [
+     {
+      "type": "tansho"
+     }
+    ]
+   },
+   "axes": {
+    "honmei": [
+     {
+      "rule": "fav1_exc",
+      "exc_by": "r",
+      "r_min": "auto",
+      "base": {
+       "rule": "r_max",
+       "fav_k": 1,
+       "p_min": 0.03
+      }
+     },
+     {
+      "rule": "fav1_exc",
+      "exc_by": "r",
+      "r_min": "auto",
+      "base": {
+       "rule": "r_max",
+       "fav_k": 1,
+       "p_min": 0.05
+      }
+     },
+     {
+      "rule": "fav1_exc",
+      "exc_by": "r",
+      "r_min": "auto",
+      "base": {
+       "rule": "r_max",
+       "fav_k": 1,
+       "p_min": 0.08
+      }
+     },
+     {
+      "rule": "fav1_exc",
+      "exc_by": "r",
+      "r_min": "auto",
+      "base": {
+       "rule": "r_max",
+       "fav_k": 3,
+       "p_min": 0.05
+      }
+     },
+     {
+      "rule": "fav1_exc",
+      "exc_by": "r",
+      "r_min": "auto",
+      "base": {
+       "rule": "ana_ev",
+       "fav_k": 1,
+       "max_rank": 8
+      }
+     },
+     {
+      "rule": "fav1_exc",
+      "exc_by": "r",
+      "r_min": "auto",
+      "base": {
+       "rule": "fav1_penalty",
+       "lam": 1.0
+      }
+     },
+     {
+      "rule": "top"
+     }
+    ],
+    "tickets": [
+     [
+      {
+       "type": "tansho"
+      }
+     ],
+     [
+      {
+       "type": "fukusho"
+      }
+     ],
+     [
+      {
+       "type": "wide",
+       "k": 2
+      }
+     ],
+     [
+      {
+       "type": "umaren",
+       "k": 2
+      }
+     ],
+     [
+      {
+       "type": "trio1",
+       "k": 4
+      }
+     ]
+    ]
+   }
+  }
+ ]
+}

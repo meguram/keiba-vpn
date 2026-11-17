@@ -1,0 +1,28 @@
+{
+ "n": 13,
+ "min_hit": 0.08,
+ "rank_by": "robust",
+ "title": "第2回: 第 1 回の凍結した買い方の形を、第 2 段の予測で（比べる基準）",
+ "hypothesis": "第 1 回の凍結した方策（期待値の最大の5分位で型を分ける、◎ は 2 番人気以下で期待値最大）を、第 2 段の予測にそのまま当てた値が、r の ◎ の比べる相手になる。",
+ "change": "第 1 回の pool_02 と同じ候補・同じ型の作り方で方策を作る（例外は連対率のしきい値）。",
+ "include": [
+  "../pool_02.json"
+ ],
+ "policy_search": {
+  "typings": [
+   {
+    "kind": "feat",
+    "col": "q_ev_max",
+    "name": "期待値の最大の5分位"
+   }
+  ],
+  "min_cell": [
+   300
+  ],
+  "skip_below": [
+   null,
+   1.0
+  ],
+  "include_fixed": false
+ }
+}
