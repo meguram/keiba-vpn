@@ -92,3 +92,17 @@ def test_race_side_filters():
     assert len(H2) == 3                                                               # 15 頭以上のレースだけ
     H3, _, _ = V.pick(d, L, kept, V.C3(groups=3, classes="新馬"))
     assert len(H3) == 0                                                               # 群が違う
+
+
+def test_market_q_and_edge():
+    d = pd.DataFrame({"race_id": ["a", "a", "b", "b"], "odds_final": [2.0, 2.0, 1.5, np.nan]})
+    q = V.market_q(d)
+    assert q[0] == pytest.approx(0.5) and q[2] == pytest.approx(1.0) and q[3] == 0.0
+    b = {"types": ["A01"], "levels": ["1着"], "n_t": 10, "k_t": 8, "w_t": 4, "rt_t": 1.2, "q_t": 2.0,
+         "ev": {"hyp": "能力", "hyp_ok": True, "dir": "ok", "stab": "ok", "breadth": "ok", "p_null": 0.01}}
+    cells = {"u": {"buy": [b], "kill": []}}
+    assert V.select_cells(cells, V.C3(edge_min=1.5, edge_pmax=0.2))["u"]["buy"][0]["rate"] == pytest.approx(0.8)
+    assert V.select_cells(cells, V.C3(edge_min=1.5))["u"]["buy"] == []                 # 勝ち 4・見込み 2 は偶然の見込み 14% で 5% を超える
+    assert V.edge_p(b) == pytest.approx(0.1429, abs=1e-3)
+    assert V.select_cells(cells, V.C3(edge_min=2.5))["u"]["buy"] == []                 # 勝ち 4 ÷ 市場 2 = 2.0
+    assert V.select_cells(cells, V.C3(weight="edge"))["u"]["buy"][0]["rate"] == pytest.approx(2.0)
