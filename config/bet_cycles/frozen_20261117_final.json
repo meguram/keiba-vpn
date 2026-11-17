@@ -1,0 +1,468 @@
+{
+ "frozen_at": "2026-11-17",
+ "tag": "final",
+ "inputs": {
+  "tag": "final",
+  "note": "最後の材料: 最終モデル（cycles16_fix3）の p_top 入りの OOF。訓練 2019〜2022（2019〜21 年は各年をその前の年までで学習した OOF、2022 年は LOYO の OOF）・評価 2023〜24・test 2025（凍結の後に 1 回だけ）。2019 年の払戻は race_result_flat の払戻の列から読む（2020〜21 年で払戻の表と全件一致を確かめた）。 2019〜21 年は 2020 年を直した版（oof_2019_2021_v2。2020 年は学習・検証とも追い切りの列を欠けにそろえた。前後の年よりやや弱い）。",
+  "note_local": "予測はすべて手元の retrain_out（リポジトリの外）。2026 年の参考は最終モデルの 2026 年の予測が無いので、本番 v6e の予測（inputs.json と同じ）で並べる（モデルが違うことを記録に書く）。",
+  "periods": {
+   "train": {
+    "years": [
+     2019,
+     2020,
+     2021,
+     2022
+    ],
+    "pred": [
+     "/home/jovyan/work/retrain_out/cycles16_fix3/handoff/oof_2019_2021_v2.parquet",
+     "/home/jovyan/work/retrain_out/cycles16_fix3/handoff/oof_2022_2024.parquet"
+    ],
+    "fill_payoff_from_flat": true,
+    "role": "訓練（探索・採否・回顧）"
+   },
+   "eval": {
+    "years": [
+     2023,
+     2024
+    ],
+    "pred": [
+     "/home/jovyan/work/retrain_out/cycles16_fix3/handoff/oof_2022_2024.parquet"
+    ],
+    "role": "評価（上向きの確かめだけ）"
+   },
+   "test": {
+    "years": [
+     2025
+    ],
+    "pred": [
+     "/home/jovyan/work/retrain_out/cycles16_fix3/final/test2025_predictions.parquet"
+    ],
+    "role": "test（凍結の後に 1 回だけ）",
+    "note": "モデルの p_top2・p_top3 を使う（訓練・評価と同じ作り）。"
+   },
+   "fwd2026": {
+    "years": [
+     2026
+    ],
+    "pred": [
+     "data/local/research/persona1/frame_test_2025new_2026prod.parquet",
+     "/home/jovyan/work/retrain_out/bet_cycles/inputs/pred_2026_after1019_predictions_v3.parquet"
+    ],
+    "role": "前向きの参考（本番 v6e の予測。最終モデルではない）",
+    "note": "2026-10-18 までは persona1 の表（本番の予測）、10-24 以降は本番の当日の予測（data/local/inference/predictions_v3/<日>/ を 1 つにまとめたもの。bet_cycles と同じ列）",
+    "fill_payoff_from_flat": true
+   },
+   "fwd2026_pre": {
+    "years": [
+     2026
+    ],
+    "pred": [
+     "data/local/research/persona1/frame_test_2025new_2026prod.parquet",
+     "/home/jovyan/work/retrain_out/bet_cycles/inputs/pred_2026_after1019_predictions_v3.parquet"
+    ],
+    "pre_odds": "data/local/research/persona1/pre_odds.parquet",
+    "role": "前向きの参考（本番 v6e の予測・発走前のオッズで決めた版）",
+    "note": "2026-10-18 までは persona1 の表（本番の予測）、10-24 以降は本番の当日の予測（data/local/inference/predictions_v3/<日>/ を 1 つにまとめたもの。bet_cycles と同じ列）",
+    "fill_payoff_from_flat": true
+   }
+  }
+ },
+ "pred_sha256": {
+  "/home/jovyan/work/retrain_out/cycles16_fix3/handoff/oof_2019_2021_v2.parquet": "65df43939d6e297e2e5304bd8683d8a0994498a33601c2e5c7b25c41283bdbb3",
+  "/home/jovyan/work/retrain_out/cycles16_fix3/handoff/oof_2022_2024.parquet": "4ad7dfb10d2dcc809376a19ccbc4f5d0397c8840a1142efe2f019354eaea0fc4",
+  "/home/jovyan/work/retrain_out/cycles16_fix3/final/test2025_predictions.parquet": "b4c1a770468deff1a9abaeecb96664fb69842e14eda6500875c08e804ebc78ba",
+  "data/local/research/persona1/frame_test_2025new_2026prod.parquet": "061067535124e7680864482e10e7c5d99f11858b920cd689879c10a83668d9a0",
+  "/home/jovyan/work/retrain_out/bet_cycles/inputs/pred_2026_after1019_predictions_v3.parquet": "9c35b823aaf0271dc6f8ad6b5b87590882c99a22fea0025b26ba4b9de669b0f4",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/local/modeling/betting/payoff.parquet": "4288df2abadb3b7ba5bcb132412cf9ebb96fcbe932d4bb11c4934b1f09a53f74",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/local/modeling/betting_2026/payoff.parquet": "8f0c297a32ab33307763c2b6df3b4912492677d54f3dca81e9eb7d724f43023b",
+  "data/local/research/persona1/pre_odds.parquet": "0ca5ee1bd506df0e8501c17429d12698803970e98b9883ec70f4a6ecb8b70382",
+  "config/bet_cycles/baselines.json": "84c7923e06d07c3f423f2e01b4c844c0dfb86aa3b28c9b6ec4ea8ed277359524",
+  "src/scripts/data/bet_cycles.py": "a4f019cfd15bbbbc217fba00273f81c5256810abca4bb682352ea4652294b9c5",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/calculated_data/tables/2019/race_result_flat.parquet": "02a7049217fea299efec95eeb0f3b144d602229a2de28d138ff1a6adec5dc67f",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/calculated_data/tables/2020/race_result_flat.parquet": "eebaac5d103cd4a77dabf31dc22f97b8572e87cb2247cdb5dd84f782e69f2e30",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/calculated_data/tables/2021/race_result_flat.parquet": "a6dc751352d1c419af9ac0977fa3bcedf4019be7beadb00dcac05ee69b8db888",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/calculated_data/tables/2022/race_result_flat.parquet": "0223c3711b7b3d4a2af9068581bfa3f040cec92e018a6ae7722a4781ec99a710",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/calculated_data/tables/2023/race_result_flat.parquet": "c2cc2e7c04c8b55f868f00f90bc555e15c27d064d5403592e2c1e90f26486c81",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/calculated_data/tables/2024/race_result_flat.parquet": "9f9242975492f0de1a15ada5353822d00e5413b4b29cf5f6e4af0cdeb9cfb99d",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/calculated_data/tables/2025/race_result_flat.parquet": "b7cde416f2da3c0a378a084e2130867e563f45e2a654b6bac989ca29be8a4aa1",
+  "/home/jovyan/work/keiba-vpn-betcyc/data/calculated_data/tables/2026/race_result_flat.parquet": "7d2aa30b6889fff926739544d76c817ea338e844402f1d8ac4736d2584207006"
+ },
+ "spec": {
+  "name": "policy|期待値の最大の5分位|min_cell=300|skip_below=None",
+  "policy": {
+   "typing": {
+    "kind": "feat",
+    "col": "q_ev_max",
+    "name": "期待値の最大の5分位"
+   },
+   "map": {
+    "1": {
+     "honmei": {
+      "rule": "fav1_exc",
+      "p2_min": 0.925,
+      "base": {
+       "rule": "ana_ev",
+       "fav_k": 1,
+       "max_rank": 8,
+       "ev_min": 1.0
+      }
+     },
+     "partners": {
+      "mode": "p3",
+      "n": 2
+     },
+     "skip": {},
+     "tickets": [
+      {
+       "type": "wide"
+      },
+      {
+       "type": "trio1"
+      }
+     ],
+     "name": "p2E|partners={\"mode\":\"p3\",\"n\":2}|skip={}|tickets=[{\"type\":\"wide\"},{\"type\":\"trio1\"}]"
+    },
+    "2": {
+     "honmei": {
+      "rule": "fav1_exc",
+      "p2_min": 0.925,
+      "base": {
+       "rule": "ana_ev",
+       "fav_k": 1,
+       "max_rank": 8,
+       "ev_min": 1.0
+      }
+     },
+     "partners": {
+      "mode": "p3",
+      "n": 2
+     },
+     "skip": {},
+     "tickets": [
+      {
+       "type": "wide"
+      },
+      {
+       "type": "trio1"
+      }
+     ],
+     "name": "p2E|partners={\"mode\":\"p3\",\"n\":2}|skip={}|tickets=[{\"type\":\"wide\"},{\"type\":\"trio1\"}]"
+    },
+    "3": {
+     "honmei": {
+      "rule": "fav1_exc",
+      "p2_min": 0.925,
+      "base": {
+       "rule": "ana_ev",
+       "fav_k": 1,
+       "max_rank": 8,
+       "ev_min": 1.0
+      }
+     },
+     "partners": {
+      "mode": "p3",
+      "n": 2
+     },
+     "skip": {
+      "h_pop_min": 4
+     },
+     "tickets": [
+      {
+       "type": "tansho"
+      },
+      {
+       "type": "wide"
+      }
+     ],
+     "name": "p2E|partners={\"mode\":\"p3\",\"n\":2}|skip={\"h_pop_min\":4}|tickets=[{\"type\":\"tansho\"},{\"type\":\"wide\"}]"
+    },
+    "4": {
+     "honmei": {
+      "rule": "fav1_exc",
+      "p2_min": 0.925,
+      "base": {
+       "rule": "ana_ev",
+       "fav_k": 1,
+       "max_rank": 8,
+       "ev_min": 1.0
+      }
+     },
+     "partners": {
+      "mode": "fav",
+      "n": 2,
+      "fav_k": 3
+     },
+     "skip": {
+      "h_pop_min": 4
+     },
+     "tickets": [
+      {
+       "type": "wide"
+      },
+      {
+       "type": "trio1"
+      }
+     ],
+     "name": "p2E|partners={\"mode\":\"fav\",\"n\":2,\"fav_k\":3}|skip={\"h_pop_min\":4}|tickets=[{\"type\":\"wide\"},{\"type\":\"trio1\"}]"
+    },
+    "5": {
+     "honmei": {
+      "rule": "fav1_exc",
+      "p2_min": 0.925,
+      "base": {
+       "rule": "ana_ev",
+       "fav_k": 1,
+       "max_rank": 8,
+       "ev_min": 1.0
+      }
+     },
+     "partners": {
+      "mode": "fav",
+      "n": 2,
+      "fav_k": 3
+     },
+     "skip": {
+      "h_pop_min": 4
+     },
+     "tickets": [
+      {
+       "type": "tansho"
+      },
+      {
+       "type": "wide"
+      }
+     ],
+     "name": "p2E|partners={\"mode\":\"fav\",\"n\":2,\"fav_k\":3}|skip={\"h_pop_min\":4}|tickets=[{\"type\":\"tansho\"},{\"type\":\"wide\"}]"
+    }
+   },
+   "default": "skip"
+  }
+ },
+ "selection": {
+  "cycle": 9,
+  "kind": "方策（交差検証、16 本から選んだ）",
+  "name": "policy|期待値の最大の5分位|min_cell=300|skip_below=None",
+  "selcv_score": 0.9493460044962191,
+  "ranking": [
+   {
+    "cycle": 9,
+    "kind": "方策（交差検証、16 本から選んだ）",
+    "score": 0.9493460044962191,
+    "roi_cv": 0.9980021553510735
+   },
+   {
+    "cycle": 11,
+    "kind": "方策（交差検証、9 本から選んだ）",
+    "score": 0.9341140365046035,
+    "roi_cv": 1.0126669194153082
+   },
+   {
+    "cycle": 10,
+    "kind": "方策（交差検証、12 本から選んだ）",
+    "score": 0.909629574970484,
+    "roi_cv": 0.9858046461703596
+   },
+   {
+    "cycle": 9,
+    "kind": "固定の格子",
+    "score": 0.9064354727398206,
+    "roi_cv": 0.9736251214853044
+   },
+   {
+    "cycle": 11,
+    "kind": "固定の格子",
+    "score": 0.9064354727398206,
+    "roi_cv": 0.9736251214853044
+   },
+   {
+    "cycle": 10,
+    "kind": "固定の格子",
+    "score": 0.883487862440998,
+    "roi_cv": 0.9706712398140048
+   },
+   {
+    "cycle": 6,
+    "kind": "固定の格子",
+    "score": 0.8787907666243118,
+    "roi_cv": 0.937401266633459
+   },
+   {
+    "cycle": 12,
+    "kind": "方策（交差検証、4 本から選んだ）",
+    "score": 0.8388364457213215,
+    "roi_cv": 1.001897644191714
+   },
+   {
+    "cycle": 13,
+    "kind": "固定の格子",
+    "score": 0.8268975903614458,
+    "roi_cv": 1.0975014946193702
+   },
+   {
+    "cycle": 3,
+    "kind": "固定の格子",
+    "score": 0.8175672514619883,
+    "roi_cv": 0.966178593524438
+   }
+  ],
+  "rule": "selcv の物差し min(上位5件を除いた回収率, 年ごとの回収率) が最大、的中率の下限・参戦 300R 以上・2 年そろう・参考の系統を除く（cycle 13 の後に固定）"
+ },
+ "qcuts": {
+  "p1": [
+   0.23150821258281637,
+   0.2831435084920216,
+   0.33718677346695475,
+   0.417519846017786
+  ],
+  "gap12": [
+   0.033347722603427304,
+   0.07709619024152471,
+   0.1361958478088685,
+   0.2352868011390341
+  ],
+  "ratio12": [
+   1.1639037775643633,
+   1.3858823362211274,
+   1.7416437650979524,
+   2.440684803734289
+  ],
+  "ent": [
+   0.6873917466280229,
+   0.7504788410576209,
+   0.7933071346975706,
+   0.836165615223026
+  ],
+  "gini": [
+   0.49266495018185136,
+   0.5500909542782871,
+   0.5983754917106489,
+   0.6558901986465402
+  ],
+  "var5": [
+   0.003018727824802459,
+   0.006024431813602986,
+   0.01040679550199385,
+   0.018571832062370324
+  ],
+  "top3sum": [
+   0.5418791557549067,
+   0.6105947545240176,
+   0.6735007320722465,
+   0.7491710776988499
+  ],
+  "p3_top3sum": [
+   1.3160555203814486,
+   1.454858304525357,
+   1.5872501551179925,
+   1.7554769659548517
+  ],
+  "ev_max": [
+   1.5518202671004557,
+   1.9326616481526968,
+   2.402672147085461,
+   3.1240994754931948
+  ],
+  "ev_top": [
+   0.7046072841712282,
+   0.8445916700784372,
+   1.0053601289735268,
+   1.2524535652236934
+  ],
+  "mk_gap_top": [
+   -0.039650784108777766,
+   0.017952135264091253,
+   0.06635834640220409,
+   0.11568709957853274
+  ]
+ },
+ "fav1": {
+  "n": 34,
+  "rentai": 0.9411764705882353,
+  "win": 0.6764705882352942,
+  "place": 1.0,
+  "roi_tansho": 0.888235294117647,
+  "roi_fukusho": 0.9882352941176471,
+  "p2_min": 0.925
+ },
+ "tiers_model": {
+  "axes": {
+   "q_ev_max": {
+    "1": {
+     "judge": "判定できない",
+     "shrunk": 0.9306655266346172,
+     "n": 2642
+    },
+    "2": {
+     "judge": "判定できない",
+     "shrunk": 0.9467996757395345,
+     "n": 2642
+    },
+    "3": {
+     "judge": "判定できない",
+     "shrunk": 0.9809675163681192,
+     "n": 2461
+    },
+    "4": {
+     "judge": "得意",
+     "shrunk": 1.1351088386733605,
+     "n": 2545
+    },
+    "5": {
+     "judge": "得意",
+     "shrunk": 1.190628689227607,
+     "n": 2597
+    }
+   },
+   "c_class": {
+    "1勝": {
+     "judge": "判定できない",
+     "shrunk": 0.9769737946312654,
+     "n": 3644
+    },
+    "2勝": {
+     "judge": "判定できない",
+     "shrunk": 1.000566274390875,
+     "n": 1792
+    },
+    "3勝": {
+     "judge": "判定できない",
+     "shrunk": 0.9251406251787894,
+     "n": 776
+    },
+    "G2": {
+     "judge": "判定できない",
+     "shrunk": 0.9924551249633194,
+     "n": 135
+    },
+    "G3": {
+     "judge": "判定できない",
+     "shrunk": 1.1726128662348458,
+     "n": 258
+    },
+    "OP・L": {
+     "judge": "判定できない",
+     "shrunk": 0.8493697280108257,
+     "n": 597
+    },
+    "新馬": {
+     "judge": "判定できない",
+     "shrunk": 1.1599985740007368,
+     "n": 1117
+    },
+    "未勝利": {
+     "judge": "判定できない",
+     "shrunk": 1.1211695593771123,
+     "n": 4475
+    }
+   }
+  },
+  "overall": 1.0363932645301466,
+  "cuts": [
+   0.9867113206657193,
+   1.0578846572031981
+  ]
+ },
+ "tiers_eval_order": true,
+ "note": "test 2025 と 2026 年は、このファイルを commit した後に bet_cycles final で 1 回だけ見る。見た後は変えない（変えたら別の凍結として始める）。",
+ "hash": "f96a5aeff33e"
+}

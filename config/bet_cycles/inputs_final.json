@@ -1,6 +1,6 @@
 {
  "tag": "final",
- "note": "最後の材料: 最終モデル（cycles16_fix3）の p_top 入りの OOF。訓練 2019〜2022（2019〜21 年は各年をその前の年までで学習した OOF、2022 年は LOYO の OOF）・評価 2023〜24・test 2025（凍結の後に 1 回だけ）。2019 年の払戻は race_result_flat の払戻の列から読む（2020〜21 年で払戻の表と全件一致を確かめた）。",
+ "note": "最後の材料: 最終モデル（cycles16_fix3）の p_top 入りの OOF。訓練 2019〜2022（2019〜21 年は各年をその前の年までで学習した OOF、2022 年は LOYO の OOF）・評価 2023〜24・test 2025（凍結の後に 1 回だけ）。2019 年の払戻は race_result_flat の払戻の列から読む（2020〜21 年で払戻の表と全件一致を確かめた）。 2019〜21 年は 2020 年を直した版（oof_2019_2021_v2。2020 年は学習・検証とも追い切りの列を欠けにそろえた。前後の年よりやや弱い）。",
  "note_local": "予測はすべて手元の retrain_out（リポジトリの外）。2026 年の参考は最終モデルの 2026 年の予測が無いので、本番 v6e の予測（inputs.json と同じ）で並べる（モデルが違うことを記録に書く）。",
  "periods": {
   "train": {
@@ -11,7 +11,7 @@
     2022
    ],
    "pred": [
-    "/home/jovyan/work/retrain_out/cycles16_fix3/handoff/oof_2019_2021.parquet",
+    "/home/jovyan/work/retrain_out/cycles16_fix3/handoff/oof_2019_2021_v2.parquet",
     "/home/jovyan/work/retrain_out/cycles16_fix3/handoff/oof_2022_2024.parquet"
    ],
    "fill_payoff_from_flat": true,
