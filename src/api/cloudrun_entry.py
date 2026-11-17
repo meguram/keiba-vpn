@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from typing import Any, Awaitable, Callable
 
 from src.config.deployment import require_explicit_env
@@ -64,6 +65,11 @@ MIRROR_WAIT_SEC = 60.0
 MIRROR_FULL_WAIT_SEC = 90.0    # request モード: 起動の完了前に『全体』の取り込みまで待つ上限（超えても起動は続ける）
 # 取り込みのきっかけにしないパス（画面を開いているだけで 60 秒ごとに来る状態確認・ヘルスチェック・運用の受信）。内容を返す要求だけが鮮度を要る
 MIRROR_GATE_SKIP = ("/api/health", "/api/v1/health", "/api/maintenance/status")
+# ログイン・ログイン状態・ログアウトは取り込みを待たず、きっかけにもしない（取り込みの待ち 最大 8 秒・取り込みのスレッドとの CPU の取り合いでログインが秒単位になっていた）。
+# 会員名簿の鮮度は、会員のログインの照合の前に名簿を 1 ファイルだけ取り直すことで保つ（60 秒に 1 回まで・待つのは最大 2 秒。src/api/auth.py の members_refresh_hook）
+MIRROR_GATE_SKIP_PREFIXES = ("/api/v1/auth/",)
+AUTH_STATUS_PATH = "/api/v1/auth/status"     # 起動からの秒数（Server-Timing の inst）を付ける。ログインの応答には付けない
+_STARTED_AT = time.monotonic()
 
 
 def mirror_mode() -> str:
@@ -71,7 +77,19 @@ def mirror_mode() -> str:
 
 
 def gate_applies(path: str) -> bool:
-    return not (path == "/ops" or path.startswith("/ops/") or path in MIRROR_GATE_SKIP)
+    return not (path == "/ops" or path.startswith("/ops/") or path in MIRROR_GATE_SKIP or path.startswith(MIRROR_GATE_SKIP_PREFIXES))
+
+
+def _with_instance_age(send: Callable) -> Callable:
+    """ログイン状態の応答に Server-Timing の inst（インスタンスが起動してからの秒数）を足す。起動直後の応答か（コールドスタート）を外から見分ける計測用。"""
+    age = f'inst;desc="age={int(time.monotonic() - _STARTED_AT)}s"'.encode()
+
+    async def wrapped(msg: dict) -> None:
+        if msg.get("type") == "http.response.start":
+            msg = {**msg, "headers": [*msg.get("headers", []), (b"server-timing", age)]}
+        await send(msg)
+
+    return wrapped
 
 
 async def warm_sequence(get: Callable[[str], Awaitable[tuple[int, Any]]], today: str | None = None) -> list[str]:
@@ -155,6 +173,8 @@ class Gateway:
             except Exception as exc:  # noqa: BLE001  取り込みの都合でリクエストを失敗させない
                 logger.warning("取り込みの起動に失敗: %r", exc)
         target = {"ops": self.ops_app, "flask": self.flask_asgi, "fastapi": self.fastapi_app}[self.route_for(path)]
+        if t == "http" and path == AUTH_STATUS_PATH:
+            send = _with_instance_age(send)
         await target(scope, receive, send)
 
 
@@ -167,10 +187,14 @@ def _pull_serving_state() -> None:
         logger.info("serving_state: %s", r)
 
 
+def mirror_pull_enabled() -> bool:
+    return (os.environ.get("KEIBA_MIRROR_PULL") or "").strip() == "1" and bool(os.environ.get("GCS_BUCKET"))
+
+
 def _start_mirror_pull() -> Any:
     """予測ファイル・出馬表の状態を GCS（ops/mirror/）から取り込む。起動時に全部、以降は 1 分ごとに直近分（src/ops/gcs_mirror.py）。
     thread モードは常駐スレッド（None を返す）。request モードは起動時に 1 回だけ取り込み、以降はリクエストをきっかけに取り込む ``RequestRefresher`` を返す。"""
-    if (os.environ.get("KEIBA_MIRROR_PULL") or "").strip() != "1" or not os.environ.get("GCS_BUCKET"):
+    if not mirror_pull_enabled():
         return None         # バケットが無い環境（テスト・dev）では取り込まない
     from src.ops import gcs_mirror
 
@@ -199,6 +223,11 @@ def build_app() -> ASGIApp:
     ops.include_router(build_router())
     gateway = Gateway(fastapi_app, _wsgi_bridge(create_app()), ops)
     gateway.refresher = refresher
+    if mirror_pull_enabled() and not os.environ.get("KEIBA_MEMBERS_FILE"):      # 名簿の置き場を変えた環境では取り直しが効かないので付けない
+        from src.api import auth as _auth
+        from src.ops import gcs_mirror
+
+        _auth.members_refresh_hook = gcs_mirror.refresh_members
     # /ops/heartbeat（POST）は共有ヘッダではなく HMAC 署名で認証する。/ops/heartbeat/status・/check は共有ヘッダが要る
     outer = ProxyKeyMiddleware(gateway, exempt_paths=(*DEFAULT_EXEMPT, "/ops/heartbeat"))
     warm = (os.environ.get("KEIBA_WARMUP_ON_START") or "").strip() == "1"

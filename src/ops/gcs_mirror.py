@@ -548,10 +548,27 @@ def fetch_one(rel_path: str, root: Path = REPO_ROOT, backend: Backend | None = N
         _MISS[rel_path] = now
         return False
     local.parent.mkdir(parents=True, exist_ok=True)
-    tmp = local.with_name(local.name + ".tmp")
+    tmp = local.with_name(f"{local.name}.{os.getpid()}.{threading.get_ident()}.tmp")    # 取り込みのスレッドと同時に書いても一時ファイルがぶつからない
     tmp.write_bytes(data)
     os.replace(tmp, local)
     return True
+
+
+MEMBERS_REL = "/".join(split_tree(AUTH_TREES[0]))   # 会員名簿のファイル（AUTH_TREES の中身。src/api/auth.py の MEMBERS_LOCAL_FILE と同じ場所）
+MEMBERS_REFRESH_MIN_SEC = 60.0
+_members_refresh = {"at": -1e18}
+_members_refresh_lock = threading.Lock()
+
+
+def refresh_members(root: Path = REPO_ROOT, backend: Backend | None = None, *, min_interval: float = MEMBERS_REFRESH_MIN_SEC, clock=time.monotonic) -> bool:
+    """会員名簿だけを GCS から取り直す（会員のログインの照合の前に src/api/auth.py が呼ぶ。作ったばかりの会員・無効化・パスワードの変更をすぐ反映するため）。
+    読み出しは 1 回（Class B）。何度呼ばれても min_interval 秒に 1 回まで（最悪 1 分 1 回 × 30 日 = 4.3 万回 × 0.06 円/千回 ≒ 月 2.6 円）。取り直したら True。"""
+    with _members_refresh_lock:
+        now = clock()
+        if now - _members_refresh["at"] < min_interval:
+            return False
+        _members_refresh["at"] = now
+    return fetch_one(MEMBERS_REL, root, backend, miss_ttl=0.0)
 
 
 initial_recent_pulled = threading.Event()      # 起動直後の「直近分」の取り込みが終わった（成否を問わず）。Cloud Run の起動時ウォームアップが待つ

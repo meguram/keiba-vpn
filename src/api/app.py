@@ -1020,7 +1020,9 @@ async def login_submit(request: Request):
     user_id = str(form.get("id", "") or "").strip()
 
     if user_id:
-        if verify_member_login(user_id, password):
+        import asyncio
+
+        if await asyncio.to_thread(verify_member_login, user_id, password):      # 照合（PBKDF2）と名簿の取り直しでイベントループを塞がない
             return create_session_response(redirect_to=next_url, request=request, role=ROLE_MEMBER, uid=user_id)
     elif verify_password(password):
         return create_session_response(redirect_to=next_url, request=request)

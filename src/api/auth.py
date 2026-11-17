@@ -294,6 +294,12 @@ def verify_password(password: str) -> bool:
 
 _MEMBERS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "config", "members.json")
 _DUMMY_SALT = bytes(16)
+# 会員を作るときの PBKDF2 の反復回数（src/scripts/ops/manage_users.py が使う）。存在しない ID の照合も同じ回数にして、応答時間から ID の有無が分からないようにする
+MEMBER_ITERATIONS = 600_000
+# 会員名簿を GCS から取り直す関数（Cloud Run の入口 src/api/cloudrun_entry.py が gcs_mirror.refresh_members を入れる。60 秒に 1 回まで）。
+# 会員のログインの照合の前に呼び、作ったばかりの会員・無効化・パスワードの変更を、定期の取り込みを待たずに反映する。待つのは MEMBERS_REFRESH_WAIT_SEC まで
+members_refresh_hook = None
+MEMBERS_REFRESH_WAIT_SEC = 2.0
 
 
 def _env_on(name: str) -> bool:
@@ -393,13 +399,37 @@ def member_display_name(user_id: str) -> str:
 
 
 def verify_member_login(user_id: str, password: str) -> bool:
-    """会員の ID・パスワードを検証する。存在しない ID でも同じ計算量にする。無効・requires_env が未設定のアカウントは常に不可。"""
+    """会員の ID・パスワードを検証する。存在しない ID でも同じ計算量にする。無効・requires_env が未設定のアカウントは常に不可。
+    照合の前に、名簿の取り直し（members_refresh_hook）を最大 MEMBERS_REFRESH_WAIT_SEC 秒だけ待つ（ID の有無に関係なく同じ扱い）。"""
+    if normalize_id(user_id):
+        _refresh_members_briefly()
+    return _verify_member_login_once(user_id, password)
+
+
+def _refresh_members_briefly() -> None:
+    hook = members_refresh_hook
+    if hook is None:
+        return
+    import threading
+
+    def run() -> None:
+        try:
+            hook()
+        except Exception:  # noqa: BLE001  取り直しの失敗でログインの判定を壊さない（手元の名簿で照合する）
+            logger.warning("会員名簿の取り直しに失敗", exc_info=True)
+
+    t = threading.Thread(target=run, name="members-refresh", daemon=True)
+    t.start()
+    t.join(MEMBERS_REFRESH_WAIT_SEC)      # GCS が遅い・止まっているときも、ログインを長く待たせない
+
+
+def _verify_member_login_once(user_id: str, password: str) -> bool:
     password = password or ""
     rec = member_record(user_id)
     enabled = member_active(user_id)
     try:
         salt = bytes.fromhex(rec["salt"]) if rec else _DUMMY_SALT
-        iters = int(rec.get("iterations") or 200000) if rec else 200000
+        iters = int(rec.get("iterations") or 200000) if rec else MEMBER_ITERATIONS
         want = rec["hash"] if rec else ""
     except (KeyError, TypeError, ValueError):
         return False
