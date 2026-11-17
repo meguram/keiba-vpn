@@ -37,6 +37,19 @@ def password_for(month: str) -> str:
     return "-".join(chars[i:i + 4] for i in range(0, 16, 4))
 
 
+def previous_month(now: datetime | None = None) -> str:
+    first = (now or datetime.now(JST)).astimezone(JST).replace(day=1)
+    return month_of(first - timedelta(days=1))
+
+
+def is_previous_password(password: str, now: datetime | None = None) -> bool:
+    """先月の共通ログインのパスワードか（月替わりに古いパスワードを打った会員を、総当たりと区別して案内するため）。
+    値はペッパーと年月から決まるので、知っているのは先月の会員だけ。"""
+    if not password:
+        return False
+    return hmac.compare_digest(password.encode(), password_for(previous_month(now)).encode())
+
+
 def _state_path() -> Path:
     from src.api import auth
 

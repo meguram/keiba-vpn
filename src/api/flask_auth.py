@@ -38,6 +38,40 @@ def is_member_session(req: Request | None = None) -> bool:
     return token_tier(req.cookies.get(COOKIE_NAME, "")) in ("dev", "paid")
 
 
+LOGIN_NOT_COUNTED_HEADER = "X-Keiba-Login-Not-Counted"
+
+
+def _rotated_shared_password(uid: str, password: str) -> bool:
+    """共通ログイン（docs/operations/shared_login.md）の ID に、先月のパスワードを打ったか。
+    共通の ID かどうかは「今月の共通パスワードが、その記録のハッシュと合うか」で確かめる（Cloud Run には共通 ID の環境変数が無いため）。
+    ほかの会員の ID・存在しない ID では False（数える）。照合の量は ID の有無によらず同じにする（ID の有無の手がかりにしない）。"""
+    try:
+        import hashlib
+        import hmac as _hmac
+
+        from src.api import auth
+        from src.scripts.ops.shared_login import is_previous_password, month_of, password_for
+
+        if not is_previous_password(password):
+            return False
+        rec = auth.member_record(uid)
+        active = bool(rec) and auth.member_active(uid)
+        try:
+            salt = bytes.fromhex(rec["salt"]) if rec else auth._DUMMY_SALT
+            iters = int(rec.get("iterations") or 200000) if rec else auth.MEMBER_ITERATIONS
+            want = str(rec.get("hash") or "") if rec else ""
+        except (KeyError, TypeError, ValueError):
+            return False
+        cur = password_for(month_of())
+        if (rec or {}).get("algo") == "pbkdf2_sha256_pepper" or not rec:
+            got = auth.password_digest(cur, salt, iters)
+        else:
+            got = hashlib.pbkdf2_hmac("sha256", cur.encode(), salt, iters).hex()
+        return active and _hmac.compare_digest(got, want)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _ms(t0: float) -> str:
     return f"{(time.perf_counter() - t0) * 1000:.1f}"
 
@@ -57,6 +91,11 @@ def login_response(password: str, remember: bool = True, user_id: str = ""):
         role = ROLE_DEV
     pw = _ms(t0)
     if not ok:
+        if uid and _rotated_shared_password(uid, password):
+            resp = jsonify({"error": "password_rotated", "reason": "password_rotated"})
+            resp.status_code = 401
+            resp.headers[LOGIN_NOT_COUNTED_HEADER] = "1"     # 先月のパスワード（共通ログインの月替わり）は総当たりではないので、ロックの失敗に数えない
+            return resp
         resp = jsonify({"error": "invalid credentials" if uid else "invalid password"})
         resp.status_code = 401          # 失敗の応答には時間の内訳を付けない（ID の有無・取り直しの有無の手がかりにしない）
         return resp

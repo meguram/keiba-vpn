@@ -139,7 +139,10 @@ def register_flask(app: Any, engine: AntiScraping | None = None) -> None:
             resp.headers.setdefault("X-Robots-Tag", ROBOTS_TAG)
             if request.method == "POST" and eng.is_login_path(request.path):
                 ip = getattr(g, "_as_ip", None) or eng.client_ip(request.remote_addr, request.headers)
-                eng.login_record(ip, resp.status_code == 200)
+                if resp.headers.pop("X-Keiba-Login-Not-Counted", None):    # 共通ログインの先月のパスワード（src/api/flask_auth.py）は数えない（内部の合図は外に出さない）
+                    eng.event("login", "detect", ip=ip, reason="login_rotated")   # 数えないが、監視には残す
+                else:
+                    eng.login_record(ip, resp.status_code == 200)
         except Exception:  # noqa: BLE001
             pass
         return resp

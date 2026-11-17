@@ -25,7 +25,7 @@
 | レート制限 | IP 単位・ユーザー（セッション）単位・種別単位の滑動窓。データ API は 1 分 120 回・10 秒 40 回、ページは 1 分 180 回。**5 分間に異なる race_id を 60 件超**（馬 ID は 120 件超）も制限。超過は 429 + Retry-After → 違反の累積で段階的に一時ブロック（3 回 15 分 / 8 回 24 時間 / 20 回 7 日） | detect |
 | bot 判定 | UA なし・既知のスクレイピングライブラリ・ヘッドレス、ブラウザを名乗るのに Sec-Fetch-* が無い、API だけを叩く（ページを見ていない）、連番 ID の総なめ、人間にありえない速度、を点数化（閾値 6、10 分で減衰） | detect |
 | ハニーポット | 画面外のリンク（Nav 内）と `/api/archive/`・`/api/_hp/` などを踏む、`/.env`・`/wp-login.php` などのスキャナ探索パスを踏むと、その接続元を 7 日ブロック | **enforce** |
-| ログイン試行制限 | 同一接続元で 15 分に 5 回失敗 → 15 分ロック（繰り返すと 1 時間・24 時間）。成功で解除。FastAPI の `/login` と Flask の `/api/v1/auth/login` の両方 | **enforce** |
+| ログイン試行制限 | 同一接続元で 15 分に 10 回失敗 → 15 分ロック（繰り返すと 1 時間まで）。成功で解除。共通ログインの先月のパスワード（月替わり）は数えず「今月のパスワードで」と案内する（2026-11-17。共有の ID で、携帯の共有の出口の他の会員を長く巻き込まないため。`login_scale_review_20261117.md` 8 章）。FastAPI の `/login` と Flask の `/api/v1/auth/login` の両方 | **enforce** |
 | セッション異常 | 同じセッションが 10 分に 4 つ以上の接続元から使われたら検知（enforce でそのセッションを 15 分ブロック） | detect |
 | robots / ヘッダ | `/robots.txt` で全面 Disallow（主要な AI クローラーを名前でも拒否）、全レスポンスに `X-Robots-Tag: noindex, nofollow, noarchive, noai, noimageai` | 有効 |
 | 応答の最小化 | 拒否時の本文は `error` / `reason`（login_required / blocked / rate_limited）/ `retry_after` だけ。しきい値・スコア・検知した信号は返さない | 有効 |
