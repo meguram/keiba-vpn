@@ -83,6 +83,46 @@ def _frame_inner() -> None:
     print("frame", d.shape, "levels", L.shape, "years", int(d["year"].min()), int(d["year"].max()), flush=True)
 
 
+MIN_AVAIL_GB = float(os.environ.get("COURSE_MIN_AVAIL_GB", "40"))
+MAX_LOAD = float(os.environ.get("COURSE_MAX_LOAD", "20"))
+
+
+def _meminfo() -> dict[str, float]:
+    out = {}
+    try:
+        for ln in Path("/proc/meminfo").read_text().splitlines():
+            k, v = ln.split(":", 1)
+            out[k] = float(v.split()[0]) / 1024 / 1024     # GiB
+    except (OSError, ValueError):
+        pass
+    return out
+
+
+def mem_now() -> dict[str, float]:
+    """この処理のメモリ（いま・最大、GiB）と、計算機の空き（GiB）。止められたときの原因を追うためにログに出す。"""
+    import resource
+    rss = 0.0
+    try:
+        for ln in Path("/proc/self/status").read_text().splitlines():
+            if ln.startswith("VmRSS:"):
+                rss = float(ln.split()[1]) / 1024 / 1024
+    except OSError:
+        pass
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024 / 1024
+    return {"rss_gb": round(rss, 1), "peak_gb": round(peak, 1), "avail_gb": round(_meminfo().get("MemAvailable", 0.0), 1)}
+
+
+def wait_resources(poll: int = 60) -> None:
+    """空きメモリ MIN_AVAIL_GB 以上・load（1 分）MAX_LOAD 未満になるまで待つ（統括役の決まり。ほかの重い計算と重ねない）。"""
+    while True:
+        av = _meminfo().get("MemAvailable", 0.0)
+        ld = os.getloadavg()[0]
+        if av >= MIN_AVAIL_GB and ld < MAX_LOAD:
+            return
+        print(f"待ち: 空き {av:.1f}GB・load {ld:.1f}（{MIN_AVAIL_GB:.0f}GB 以上・{MAX_LOAD:.0f} 未満で始める）", flush=True)
+        time.sleep(poll)
+
+
 def frame_and_levels(d: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """凍結の側と評価の側で共通の前処理: 芝ダに絞り、文字の列を string にし、欠けありの数値型を float にしてから、全年・全クラス・全馬場の
     表のまま水準を作る（騎手・厩舎の率の境目は 2017 年の重賞の行の分位で決まるので、単位に絞る前に作る。catalog._ref）。"""
@@ -244,6 +284,7 @@ def cmd_cycles() -> None:
     cur = {}
     path = OUT / "course_cycles.json"
     for c, cy in enumerate(CYCLES, 1):
+        wait_resources()
         t0 = time.time()
         cand = cur | cy["delta"]
         p = SE.Params(**cand)
@@ -255,12 +296,12 @@ def cmd_cycles() -> None:
             cur = cand
         log["cycles"].append({"cycle": c, "hyp": cy["hyp"], "params": r["params"], "all": r["all"], "conf_2022_2024": r["conf_2022_2024"],
                               "achieved_units": r["achieved_units"], "units": r["units"], "closeness": r["closeness"], "adopted": adopt,
-                              "seconds": round(time.time() - t0, 1)})
+                              "seconds": round(time.time() - t0, 1), "mem": mem_now()})
         log["best_cycle"] = best["cycle"]
         path.write_text(json.dumps(log, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
         a = r["all"]
         print(f"cycle {c} {cy['hyp']} 達成 {r['achieved_units']}/{r['units']} ◎ 勝率 {a['win']} 単回収 {a['roi_t']} 買う回 {a['coverage']} "
-              f"消しのレース {a['kill_coverage']} 採用 {adopt} {time.time() - t0:.0f}s", flush=True)
+              f"消しのレース {a['kill_coverage']} 採用 {adopt} {time.time() - t0:.0f}s メモリ {mem_now()}", flush=True)
     log["finished_at"] = datetime.now(JST).isoformat(timespec="seconds")
     path.write_text(json.dumps(log, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
     # 最後に採った版の条件を、単位ごとに書き出す（凍結の材料）
