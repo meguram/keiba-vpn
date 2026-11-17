@@ -481,3 +481,30 @@ def test_simulate_pre_period_keeps_payout_and_moves_odds():
     res = bc.run_period(st, {"honmei": {"rule": "top"}, "tickets": [{"type": "tansho"}]})
     m = bc.metrics(res["cost"], res["ret"], st.dates, st.W)
     assert m["races"] == len(races) and m["n_versions"] == 2 and m["sim_roi_min"] <= m["roi"] <= m["sim_roi_max"] + 1e-9
+
+
+def test_story_report_numbers_come_from_sources():
+    from src.scripts.data import bet_story_report as sr
+
+    m = {"roi": 1.047, "roi_lo": 0.92, "roi_hi": 1.186, "hit_rate": 0.183, "bet_races": 3200, "races": 3267}
+    log = {"cycles": [], "w4": {"races": 100, "bet_races": 64, "w4_rate": 0.571, "model_honmei_absent_rate": 0.198},
+           "others": {"v6e": {"cycles": [{"n": 1, "baselines": [{"name": "B0", "train": {"roi": 0.895}, "eval": {"roi": 0.917}}]},
+                                         {"n": 3, "selected": {"train": {"roi": 1.581}, "eval": {"roi": 1.063}}}], "stages": {}}}}
+    test = {"periods": {"test": {"metrics": m, "baselines": {"B0 予測1位の単勝": {"roi": 0.899}}, "diff_vs_B0": [0.148, 0.014, 0.292]}}}
+    repro = {"n_races_drift": 280, "drift_by_band": [{"band": "10番人気以下", "n": 1254, "ratio": 2.14, "p10": 0.23, "p90": 1.25}],
+             "frozen_v1_repro": {"train": {"repro": {"roi": 0.973, "roi_lo": 0.932, "roi_hi": 1.016}, "final_odds_roi": 0.992, "B0_repro": 0.885}},
+             "cycle3_example": {"final_odds_best_train_roi": 1.581, "repro_best_train": {"roi": 1.054}, "repro_best_eval": {"roi": 0.992}}, "method": {}}
+    h = sr.render(log, test, repro, None)
+    for s_ in ("104.7%", "89.9%", "+14.8", "57.1%", "19.8%", "約 2.14 倍", "97.3%", "158.1%", "105.4%", "99.2%", "89.5%", "91.7%"):
+        assert s_ in h, s_
+    assert "<script" not in h and "考えたこと" in h and "次にどうしたか" in h
+
+
+def test_story_uses_selcv_row_for_cycle3():
+    from src.scripts.data import bet_story_report as sr
+
+    log = {"cycles": [], "others": {"v6e": {"cycles": [{"n": 3, "selected": {"train": {"roi": 1.581, "hit_rate": 0.029}, "eval": {"roi": 1.063}, "spec": {}}}],
+                                            "stages": {"stage_selcv": {"rows": [{"cycle": 3, "kind": "固定の格子", "cv": {"roi": 1.233}, "score": 1.14},
+                                                                                {"cycle": 9, "kind": "方策（交差検証）", "cv": {"roi": 1.319}, "score": 1.171}]}}}}}
+    h = sr.render(log, {}, {"n_races_drift": 280, "drift_by_band": [], "method": {}}, None)
+    assert "123.3%" in h and "105.7" not in h and "方策（交差検証）" in h and "284" not in h
