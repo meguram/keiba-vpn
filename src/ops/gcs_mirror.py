@@ -121,6 +121,11 @@ class GcsBackend:
         except PreconditionFailed:
             return False
 
+    def meta(self, key: str) -> tuple[str, int] | None:
+        """1 つのオブジェクトの (md5 の base64, 世代)。無ければ None。メタデータの取得 1 回（Class B）で、中身は読まない。"""
+        b = self._bucket.get_blob(key)
+        return None if b is None else (b.md5_hash or "", int(b.generation or 0))
+
 
 # ── 更新の目録（_index/） ────────────────────────────────────────────────
 # 費用の上限（CLAUDE.md）: Cloud Run の API が毎分 24 か所を一覧すると、一覧（Class A）だけで 1 日 3〜7 万回・月 700〜1,600 円になる。
@@ -592,7 +597,7 @@ def pull_members_from_store(backend: Backend, root: Path = REPO_ROOT) -> dict:
     GCS の中身が壊れていたら手元を上書きしない。上書きの前に .bak を残す。名簿の中身はログに出さない。"""
     key = f"{PREFIX}/{MEMBERS_REL}"
     local = root / MEMBERS_REL
-    remote = backend.list(key).get(key)                  # md5 だけを先に見る（GCP の外から名簿を毎回丸ごと読まない。一覧 1 回 = Class A 1 回）
+    remote = backend.meta(key)                           # 名簿 1 件のメタデータ（md5）だけを先に見る（Class B 1 回。一覧はしない・中身は変わったときだけ読む）
     if remote is not None and local.is_file() and _md5(local.read_bytes()) == remote[0]:
         return {"members": "変更なし"}
     raw, gen = backend.read_gen(key)

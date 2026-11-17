@@ -270,7 +270,7 @@ def render_html(log: dict) -> str:
            f"<title>推奨馬券の最適化サイクル</title><style>{CSS}</style></head><body><main>",
            "<h1>推奨馬券の最適化サイクル</h1>",
            f"<p class=\"muted\">元の記録: <code>docs/operations/retrain_trials/bet_cycles_log.json</code>（tag={esc(log['tag'])}）。計画と結果の文: "
-           f"<code>docs/operations/retrain_trials/bet_optimization_20261116.md</code></p>",
+           f"<code>docs/operations/retrain_trials/bet_optimization_20261116.md</code>。何を考えてどうなったかの過程: <a href=\"bet_optimization_story.html\">推奨馬券の最適化の過程</a></p>",
            *[render_stage(k, log["stages"][k]) for k in sorted(log.get("stages") or {}) if k.startswith("stage_00")],   # 結論（stage_00_*）は前置きより上
            INTRO,
            '<div class="cards">' + "".join(f'<div class="card"><div class="k">{esc(k)}</div><div class="v">{v}</div><div class="muted">{m}</div></div>'
@@ -473,7 +473,7 @@ def main() -> None:
         for t in [x for x in a.others.split(",") if x]:
             o = build_log(t)
             o["note"] = notes.get(t, "")
-            o["cycles"] = [{k: c.get(k) for k in ("n", "title", "selected", "eval_check")} for c in o["cycles"]]   # 要約だけ（容量）
+            o["cycles"] = [{k: c.get(k) for k in ("n", "title", "selected", "eval_check", "baselines")} for c in o["cycles"]]   # 要約だけ（容量。基準の中身は最初のサイクルにだけ入っている。ほかは空）
             log.setdefault("others", {})[t] = o
         LOG.write_text(json.dumps(log, ensure_ascii=False, separators=(",", ":"), default=bc._np) + "\n", encoding="utf-8")
     HTML.write_text(render_html(log), encoding="utf-8")

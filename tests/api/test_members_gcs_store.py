@@ -43,13 +43,17 @@ class FakeGcs:
             cur = self.objs.get(key, (None, 0))[1]
             self.objs[key] = (bytes(data), cur + 1)
 
-    def list(self, prefix):
+    def meta(self, key):
         import base64
         import hashlib
 
-        self.listed = getattr(self, "listed", 0) + 1
+        self.meta_calls = getattr(self, "meta_calls", 0) + 1
         with self.lock:
-            return {k: (base64.b64encode(hashlib.md5(v[0]).digest()).decode(), 0.0) for k, v in self.objs.items() if k.startswith(prefix)}
+            v = self.objs.get(key)
+        return None if v is None else (base64.b64encode(hashlib.md5(v[0]).digest()).decode(), v[1])
+
+    def list(self, prefix):
+        raise AssertionError("名簿の確認で一覧しない（GCP の外から繰り返す処理で一覧しない決まり）")
 
     def users(self):
         return json.loads(self.objs[KEY][0])["users"]
