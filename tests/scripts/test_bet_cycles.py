@@ -529,3 +529,20 @@ def test_evidence_neighbors_and_mechanism():
         assert s2["honmei"]["max_rank"] >= 3
         w = s2["skip"]["when"]["q_r_max"]
         assert w[1] is None or w[0] < w[1]
+
+
+def test_fav1_rule_ok_accepts_resolved_r_threshold(tmp_path):
+    (tmp_path / "stage_fav1r_exception.json").write_text(json.dumps({"chosen": None}), encoding="utf-8")
+    s = [{"honmei": {"rule": "fav1_exc", "exc_by": "r", "r_min": "auto", "base": {"rule": "r_max", "fav_k": 1}}}]
+    out = bc.resolve_auto(s, tmp_path)
+    assert out[0]["honmei"]["r_min"] == 9.0 and bc.fav1_rule_ok(out[0])          # 訓練で決めた（例外なし = 9.0）値は通す
+    assert not bc.fav1_rule_ok({"honmei": {"rule": "fav1_exc", "exc_by": "r", "r_min": -1.0}})   # 手書きの値は通さない
+    bc._RESOLVED_R.clear()                                          # 後のテストに残さない
+
+
+def test_skip_any_of():
+    f = {"field": 16, "c_class": "1勝"}
+    sk = {"any_of": [{"in": {"c_class": ["未勝利", "新馬"]}}, {"when": {"field": [15, None]}}]}
+    assert not bc._skip(f, sk)                                      # 15 頭以上に当たる
+    assert bc._skip({"field": 12, "c_class": "1勝"}, sk)            # どれにも当たらない
+    assert not bc._skip({"field": 12, "c_class": "未勝利"}, sk)

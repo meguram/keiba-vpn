@@ -1,0 +1,232 @@
+{
+ "n": 14,
+ "min_hit": 0.08,
+ "rank_by": "robust",
+ "title": "第2回: 情報の少ないレース（未勝利・新馬・15 頭以上）に絞る",
+ "hypothesis": "情報の少ない下級戦や多頭数のレースほど市場の効率が低く（Benter 1994 ほか）、ずれ r で選ぶ ◎ が市場より多く勝つ。第 2 段のずれの ◎ の勝率 ÷ q は、未勝利 1.37・1.36、新馬 1.33・1.37、15〜18 頭 1.30・1.34 で 2 期間（開発の検証 2022〜24・2025 年 test）の向きがそろった（model-improve-cycles の実データ）。これらのレースだけ参戦すると、本番の再現でも 100% を超える。",
+ "change": "r 最大の ◎（2 番人気以下／4 番人気以下、勝率の下限 5・8%）× 券種 4 通り × 絞り込み 4 通り（未勝利・新馬だけ／15 頭以上だけ／どちらか／両方）× r の最大の分位 q3 以上の見送りあり・なし。",
+ "notes_pre": "この区切りは 2025 年 test の値も見て見つけたもの（model-improve-cycles）。この区切りを使う候補では、2025 年 test は手つかずの確かめにならない。手つかずの確かめは 2026 年の分。",
+ "group_by": [
+  "skip",
+  "tickets",
+  "honmei"
+ ],
+ "grids": [
+  {
+   "prefix": "r2c14",
+   "base": {
+    "honmei": {
+     "rule": "fav1_exc",
+     "exc_by": "r",
+     "r_min": "auto",
+     "base": {
+      "rule": "r_max",
+      "fav_k": 1,
+      "p_min": 0.05
+     }
+    },
+    "partners": {
+     "mode": "p3",
+     "n": 2
+    },
+    "tickets": [
+     {
+      "type": "wide"
+     }
+    ]
+   },
+   "axes": {
+    "honmei": [
+     {
+      "rule": "fav1_exc",
+      "exc_by": "r",
+      "r_min": "auto",
+      "base": {
+       "rule": "r_max",
+       "fav_k": 1,
+       "p_min": 0.05
+      }
+     },
+     {
+      "rule": "fav1_exc",
+      "exc_by": "r",
+      "r_min": "auto",
+      "base": {
+       "rule": "r_max",
+       "fav_k": 1,
+       "p_min": 0.08
+      }
+     },
+     {
+      "rule": "fav1_exc",
+      "exc_by": "r",
+      "r_min": "auto",
+      "base": {
+       "rule": "r_max",
+       "fav_k": 3,
+       "p_min": 0.05
+      }
+     },
+     {
+      "rule": "fav1_exc",
+      "exc_by": "r",
+      "r_min": "auto",
+      "base": {
+       "rule": "r_max",
+       "fav_k": 3,
+       "p_min": 0.08
+      }
+     }
+    ],
+    "tickets": [
+     [
+      {
+       "type": "tansho"
+      }
+     ],
+     [
+      {
+       "type": "wide"
+      }
+     ],
+     [
+      {
+       "type": "tansho"
+      },
+      {
+       "type": "wide"
+      }
+     ],
+     [
+      {
+       "type": "umaren",
+       "k": 2
+      }
+     ]
+    ],
+    "skip": [
+     {
+      "in": {
+       "c_class": [
+        "未勝利",
+        "新馬"
+       ]
+      }
+     },
+     {
+      "when": {
+       "field": [
+        15,
+        null
+       ]
+      }
+     },
+     {
+      "any_of": [
+       {
+        "in": {
+         "c_class": [
+          "未勝利",
+          "新馬"
+         ]
+        }
+       },
+       {
+        "when": {
+         "field": [
+          15,
+          null
+         ]
+        }
+       }
+      ]
+     },
+     {
+      "in": {
+       "c_class": [
+        "未勝利",
+        "新馬"
+       ]
+      },
+      "when": {
+       "field": [
+        15,
+        null
+       ]
+      }
+     },
+     {
+      "in": {
+       "c_class": [
+        "未勝利",
+        "新馬"
+       ]
+      },
+      "when": {
+       "q_r_max": [
+        3,
+        null
+       ]
+      }
+     },
+     {
+      "when": {
+       "field": [
+        15,
+        null
+       ],
+       "q_r_max": [
+        3,
+        null
+       ]
+      }
+     },
+     {
+      "any_of": [
+       {
+        "in": {
+         "c_class": [
+          "未勝利",
+          "新馬"
+         ]
+        }
+       },
+       {
+        "when": {
+         "field": [
+          15,
+          null
+         ]
+        }
+       }
+      ],
+      "when": {
+       "q_r_max": [
+        3,
+        null
+       ]
+      }
+     },
+     {
+      "in": {
+       "c_class": [
+        "未勝利",
+        "新馬"
+       ]
+      },
+      "when": {
+       "field": [
+        15,
+        null
+       ],
+       "q_r_max": [
+        3,
+        null
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ]
+}
