@@ -43,6 +43,77 @@ EVAL_MARK3 = Path(__file__).with_name("EVALUATED_COURSE_V3.json")
 NOTE_LOOKS = ("2025・2026 年は、第 1 版・第 2 版の評価で 2 回見ている。第 3 版は 2025 年を見ながら試行錯誤するので、2025 年の値は信用できない（選んだ期間）。"
               "偏りのない値は、凍結の後に 1 回だけ見る 2026 年だけ")
 GOAL_ROI = 1.20
+# ---------------------------------------------------------------- 根拠の検査（計画書 §10.2）
+HYP = {}
+for _t, _h in [("A", "能力"), ("B", "能力"), ("F", "能力"), ("C", "適性"), ("D", "状態"), ("L", "状態"), ("E", "展開"), ("I", "人"), ("J", "人")]:
+    HYP[_t] = _h
+HYP_BY_ID = {"G01": "状態", "G03": "状態", "G09": "状態", "G02": "能力", "G04": "状態", "G05": "人", "G08": "状態",
+             "H01": "展開", "H02": "展開", "H06": "展開", "H03": "能力", "H04": "能力",
+             "K01": "適性", "K03": "適性", "K07": "適性", "K08": "適性",
+             "X01": "展開", "X02": "状態", "X04": "適性", "X05": "展開", "X07": "能力", "X08": "人", "X09": "状態", "X10": "適性", "X11": "能力",
+             "X12": "展開", "X13": "適性", "X14": "状態", "X15": "展開"}
+NO_HYP = {"H08", "H09", "X06", "K02", "K04", "K05", "K06", "I02", "B04", "B05"}     # 意味を取りにくい切り口（採らない）
+PAIR_OK = {frozenset(["適性", "状態"]), frozenset(["展開"]), frozenset(["能力"]), frozenset(["適性"]), frozenset(["状態"]), frozenset(["人"])}
+BLOCKS = [(2016, 2018), (2019, 2021), (2022, 2024)]
+DIST_BANDS = [0, 1400, 1800, 2200, 9999]
+
+
+def hyp_of(tid: str) -> str | None:
+    if tid in NO_HYP:
+        return None
+    return HYP_BY_ID.get(tid) or HYP.get(tid[0])
+
+
+def hyp_ok(types: list[str]) -> tuple[bool, str]:
+    """仮説の型: 型を付けない切り口を含まないこと。2 つの AND は、同じ型どうし・能力 × 他・適性 × 状態だけ。"""
+    hs = [hyp_of(t) for t in types]
+    if any(h is None for h in hs):
+        return False, "型なし"
+    if len(hs) == 1:
+        return True, hs[0]
+    a = frozenset(hs)
+    if "能力" in a or a in PAIR_OK:
+        return True, "×".join(hs)
+    return False, "組の意味なし（" + "×".join(hs) + "）"
+
+
+def level_orders(d: pd.DataFrame, L: pd.DataFrame) -> dict:
+    """順序のある切り口（数値の列から作った区分）の水準の並び（元の数値の中央値の順）。順序の無い切り口は入れない。"""
+    from src.research.graded import catalog as CAT
+    out = {}
+    for t in CAT.TYPES:
+        if t.id not in L.columns or not t.cols or t.cols[0] not in d.columns or t.id[0] in ("X",) or len(t.cols) > 1 and t.id not in ("A02",):
+            continue
+        v = pd.to_numeric(d[t.cols[0]], errors="coerce")
+        if v.notna().mean() < 0.5:
+            continue
+        lv = L[t.id].astype(str)
+        med = v.groupby(lv).median().drop(labels=[CAT.UNKNOWN], errors="ignore").dropna()
+        if len(med) >= 3:
+            out[t.id] = list(med.sort_values().index)
+    return out
+
+
+def direction(lv_unit: pd.Series, y3: np.ndarray, order: list[str], level: str) -> str:
+    """選んだ水準が並びの端で、隣へ向かって複勝率が下がる（隣 2 つまで）なら ok。間の水準・飛び抜けは ng。"""
+    rates = []
+    for x in order:
+        m = (lv_unit == x).to_numpy()
+        rates.append((x, y3[m].mean() if m.sum() >= 5 else None))
+    rates = [(x, r) for x, r in rates if r is not None]
+    names = [x for x, _ in rates]
+    if level not in names or len(rates) < 3:
+        return "不足"
+    i = names.index(level)
+    if i not in (0, len(rates) - 1):
+        return "ng"
+    seq = [r for _, r in (rates if i == 0 else rates[::-1])]
+    return "ok" if seq[0] >= seq[1] >= seq[2] else "ng"
+
+
+def binom_p(k: int, n: int, p0: float) -> float:
+    from scipy.stats import binom
+    return float(binom.sf(k - 1, n, min(max(p0, 1e-9), 1 - 1e-9))) if n else 1.0
 MIN_BET_2025 = 300
 
 
@@ -60,6 +131,12 @@ class C3:
     min_roi_t: float = 0.0     # 買いの条件の訓練の単回収の下限（0 = 見ない）
     top_k: int = 0             # 単位ごとに残す買いの条件の数（0 = すべて）。並べ方は rank_by
     rank_by: str = "n"         # n = 走数、rate = 複勝率、roi = 単回収、lb = 複勝率の信頼区間の下限
+    # 根拠の検査（計画書 §10.2。既定はすべて入れる）
+    req_hyp: bool = True
+    req_dir: bool = True
+    req_stab: bool = True
+    req_breadth: bool = True
+    p_max: float = 0.05
     # ◎ の作り
     weight: str = "rate"       # count・rate・roi・lb
     min_score: float = 0.0     # ◎ の点の下限（届かないレースは見送り）
@@ -149,22 +226,75 @@ def fit_cells(d: pd.DataFrame, L: pd.DataFrame, c: C3) -> dict:
     Y = SE.y_matrix(dd)
     unit = units_of(dd, c)
     course = dd["course"].astype(str).to_numpy()
+    yr = pd.to_numeric(dd["year"]).to_numpy()
+    fam = (dd["surf"].astype(str) + "|" + pd.cut(pd.to_numeric(dd["dist"], errors="coerce"), DIST_BANDS, labels=False).astype(str) + "|"
+           + dd["group"].astype(str)).to_numpy()
+    orders = level_orders(dd, L)
+    Ls = {t: L[t].astype(str) for t in orders}
     for u, cu in cells.items():
         idx = np.flatnonzero(course == u.split("|", 1)[0]) if cu.get("layer") == "副" else np.flatnonzero(unit == u)
         Xu, Yu = X[idx], Y[idx]
+        p0 = float(Yu[:, 1].mean()) if len(Yu) else 0.0
+        fidx = np.flatnonzero((fam == fam[idx[0]]) & (course != course[idx[0]])) if len(idx) else np.array([], int)
+        Xf, Yf = X[fidx], Y[fidx]
+        pf0 = float(Yf[:, 1].mean()) if len(Yf) else 0.0
         for b in cu["buy"]:
             m = V2._mask_names(Xu, types, code, b)
             s = Yu[m].sum(0)
             b |= {"n_t": int(s[0]), "k_t": int(s[1]), "w_t": int(s[2]), "rt_t": float(s[6] / s[5]) if s[5] else 0.0,
                   "rf_t": float(s[7] / s[5]) if s[5] else 0.0}
+            ok, h = hyp_ok(b["types"])
+            ev = {"hyp": h, "hyp_ok": ok}
+            if ok:
+                # 方向（順序のある切り口ごと）
+                dirs = [direction(Ls[t].iloc[idx].reset_index(drop=True), Yu[:, 1], orders[t], lv) if t in orders else "順序なし"
+                        for t, lv in zip(b["types"], b["levels"])]
+                ev["dir"] = "ng" if "ng" in dirs else ("不足" if "不足" in dirs else ("ok" if "ok" in dirs else "順序なし"))
+                # 年ごとの安定性（3 年ごとに、単位の平均より複勝率が高い）
+                st, nb = [], 0
+                for lo, hi in BLOCKS:
+                    bm = (yr[idx] >= lo) & (yr[idx] <= hi)
+                    mb = m & bm
+                    if mb.sum() >= 3 and bm.sum():
+                        nb += 1
+                        st.append(Yu[mb, 1].mean() > Yu[bm, 1].mean())
+                ev["stab"] = "不足" if nb < 2 else ("ok" if all(st) else "ng")
+                # 広さ（同じ芝ダ・距離帯・群のほかのコース）
+                if len(fidx):
+                    mf = V2._mask_names(Xf, types, code, b)
+                    ev["breadth_n"] = int(mf.sum())
+                    ev["breadth"] = "不足" if mf.sum() < 10 else ("ok" if Yf[mf, 1].mean() > pf0 else "ng")
+                else:
+                    ev["breadth"] = "不足"
+                ev["p_null"] = binom_p(b["k_t"], b["n_t"], p0)
+            b["ev"] = ev
+        for k in cu["kill"]:
+            ok, h = hyp_ok(k["types"])
+            k["ev"] = {"hyp": h, "hyp_ok": ok}
     return cells
+
+
+def ev_pass(b: dict, c: C3) -> str | None:
+    """根拠の検査で落ちた理由（通れば None）。"""
+    e = b.get("ev") or {}
+    if c.req_hyp and not e.get("hyp_ok"):
+        return "仮説の型"
+    if c.req_dir and e.get("dir") == "ng":
+        return "方向"
+    if c.req_stab and e.get("stab") != "ok":
+        return "年ごとの安定性"
+    if c.req_breadth and e.get("breadth") != "ok":
+        return "広さ"
+    if c.p_max and e.get("p_null", 1.0) > c.p_max:
+        return "偶然の見込み"
+    return None
 
 
 def select_cells(cells: dict, c: C3) -> dict:
     """訓練の値で買いの条件を絞り、◎ の点（rate）を版の重みで付ける。"""
     out = {}
     for u, cu in cells.items():
-        buy = [b for b in cu["buy"] if b["n_t"] >= c.min_n and (not c.min_roi_t or b["rt_t"] >= c.min_roi_t)]
+        buy = [b for b in cu["buy"] if b["n_t"] >= c.min_n and (not c.min_roi_t or b["rt_t"] >= c.min_roi_t) and ev_pass(b, c) is None]
         key = {"n": lambda b: b["n_t"], "rate": lambda b: b["k_t"] / max(b["n_t"], 1), "roi": lambda b: b["rt_t"],
                "lb": lambda b: V2.wilson_lb(b["k_t"], b["n_t"])}[c.rank_by]
         if c.top_k:
@@ -172,7 +302,7 @@ def select_cells(cells: dict, c: C3) -> dict:
         w = {"count": lambda b: 1.0, "rate": lambda b: b["k_t"] / max(b["n_t"], 1), "roi": lambda b: b["rt_t"],
              "lb": lambda b: V2.wilson_lb(b["k_t"], b["n_t"])}[c.weight]
         out[u] = {"layer": cu.get("layer"), "buy": [b | {"rate": float(w(b)), "win_c": b["w_t"] / max(b["n_t"], 1)} for b in buy],
-                  "kill": cu["kill"] if c.use_kill else []}
+                  "kill": [k for k in cu["kill"] if not c.req_hyp or (k.get("ev") or {}).get("hyp_ok")] if c.use_kill else []}
     return out
 
 
@@ -278,6 +408,24 @@ def measure(d: pd.DataFrame, L: pd.DataFrame, kept: dict, c: C3, shift: dict) ->
     return out
 
 
+def ev_summary(cells: dict, c: C3) -> dict:
+    """根拠の検査を通った条件の数（単位ごと・型ごと）と、落ちた理由の内訳。"""
+    from collections import Counter
+    why, by_h, per_unit = Counter(), Counter(), {}
+    for u, cu in cells.items():
+        k = 0
+        for b in cu["buy"]:
+            r = ev_pass(b, c) if b["n_t"] >= c.min_n else "走数"
+            why[r or "通った"] += 1
+            if r is None:
+                k += 1
+                by_h[(b.get("ev") or {}).get("hyp")] += 1
+        per_unit[u] = k
+    vals = np.array(list(per_unit.values()))
+    return {"reasons": dict(why), "by_hyp": dict(by_h.most_common()), "units": len(vals), "units_with_any": int((vals > 0).sum()),
+            "per_unit_median": float(np.median(vals)) if len(vals) else 0, "per_unit_max": int(vals.max()) if len(vals) else 0}
+
+
 def goal_met(r: dict) -> bool:
     a = r["eval2025"]["reproduction"]
     return (a.get("bet_races") or 0) >= MIN_BET_2025 and max(a.get("roi_t") or 0, a.get("roi_f") or 0) > GOAL_ROI
@@ -319,7 +467,7 @@ def run_cycle(c: C3, d, L, tr, ev, shift) -> tuple[dict, dict]:
     dt, Lt = d[tr].reset_index(drop=True), L[tr].reset_index(drop=True)
     de, Le = d[ev].reset_index(drop=True), L[ev].reset_index(drop=True)
     r = {"params": asdict(c) | {"name": c.name()}, "train": measure(dt, Lt, kept, c, shift), "eval2025": measure(de, Le, kept, c, shift),
-         "n_buy": sum(len(v["buy"]) for v in kept.values()), "seconds": round(time.time() - t0, 1), "mem": CR.mem_now()}
+         "n_buy": sum(len(v["buy"]) for v in kept.values()), "ev_summary": ev_summary(_CACHE[key], c), "seconds": round(time.time() - t0, 1), "mem": CR.mem_now()}
     return r, kept
 
 
@@ -349,6 +497,26 @@ def cmd_cycle(hyp: str, delta: dict, base: int | None) -> None:
                       "mem": r["mem"]}, ensure_ascii=False), flush=True)
 
 
+def cmd_evidence() -> None:
+    """サイクルの前に: 基準の版で、根拠の検査を通った条件の数（単位ごと・型ごと）と、落ちた理由の内訳を出す（2025 年は見ない）。"""
+    CR.wait_resources()
+    d, L, tr, ev = load3()
+    c = C3()
+    key = c.fit_key()
+    cache_p = OUT3 / f"fit_{hashlib.sha1(repr(key).encode()).hexdigest()[:12]}.json"
+    if cache_p.exists():
+        cells = json.loads(cache_p.read_text(encoding="utf-8"))
+    else:
+        cells = fit_cells(d[tr].reset_index(drop=True), L[tr].reset_index(drop=True), c)
+        cache_p.write_text(json.dumps(cells, ensure_ascii=False), encoding="utf-8")
+    out = {"base": ev_summary(cells, c)}
+    for name, cc in [("偶然の見込み 10%", replace(c, p_max=0.10)), ("広さを外す", replace(c, req_breadth=False)),
+                     ("安定性を外す", replace(c, req_stab=False)), ("広さ・安定性を外す", replace(c, req_breadth=False, req_stab=False))]:
+        out[name] = ev_summary(cells, cc)
+    (OUT3 / "evidence_summary.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(json.dumps(out, ensure_ascii=False, indent=1), flush=True)
+
+
 def cmd_review(n: int, text: str, decision: str) -> None:
     log = _load_log()
     c = next(x for x in log["cycles"] if x["cycle"] == n)
@@ -362,7 +530,7 @@ def cmd_review(n: int, text: str, decision: str) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["frame", "_frame_inner", "cycle", "review"])
+    ap.add_argument("cmd", choices=["frame", "_frame_inner", "evidence", "cycle", "review"])
     ap.add_argument("--hyp", default="")
     ap.add_argument("--delta", default="{}")
     ap.add_argument("--base", type=int, default=None)
@@ -374,6 +542,8 @@ def main() -> None:
         cmd_frame()
     elif a.cmd == "_frame_inner":
         _frame_inner()
+    elif a.cmd == "evidence":
+        cmd_evidence()
     elif a.cmd == "cycle":
         cmd_cycle(a.hyp, json.loads(a.delta), a.base)
     else:
