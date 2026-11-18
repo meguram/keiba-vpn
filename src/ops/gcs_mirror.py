@@ -69,7 +69,14 @@ TREES = (
 LAZY_TREES = (
     "data/calculated_data/tracking_difficulty::20*.json",     # 追走難度・想定ラップの事前計算（/api/race/{id}/tracking-difficulty）。1 レース約 35KB・全体で約 1GB
 )
-PUSH_TREES = TREES + LAZY_TREES
+# 上げるだけで、Cloud Run には降ろさない木（ホストの手元にしか無い記録の予備。Cloud Run には無いので、API で読む箇所は空のまま）。
+# 候補の影のランナーの前向きの記録の元（T-60 の単勝オッズの写し・判定と push の時刻の記録）。開催日の 5 分おきの push に乗るだけで、
+# 新しい周期処理は足さない。画面のキャッシュの目印は立てない（push で除く）。jobs の mirror_out からは書けない（tree_known で除く）。
+# 書き込みの最悪: launch_watch の 2 ファイル × 1 日 288 回（5 分おきの push のたびに中身が変わるとみなす）＋ T-60 の写し 36 ＝ 612 回/日
+# × 開催 9 日 ≒ 5,500 回（Class A）で約 4.4 円/月。GCS の外への転送は無い（ホストからの書き込みだけ）
+BACKUP_TREES = tuple(f"{_INF}/{t}" for t in ("odds_t60", "launch_watch"))
+PUSH_TREES = TREES + LAZY_TREES + BACKUP_TREES
+_BACKUP_PREFIXES = tuple(t + "/" for t in BACKUP_TREES)
 # レースごとのファイルが日付フォルダに積み上がる木。起動時と定期の取り込みでは、日付が直近 PULL_WINDOW_DAYS 日以内のフォルダだけ降ろす
 # （全体で 1 万件超 → 起動時の GCS 読み出しを約 1/10 に）。古い日は読まれたときに lazy_fetch で 1 件だけ取る。push は全体のまま。
 WINDOWED_DIRS = tuple(t for t in TREES if t.rsplit("/", 1)[-1] in ("predictions_backfill", "lap_forecast", "tracking_v2",
@@ -390,7 +397,7 @@ def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH
         try:      # 画面に出る応答の元（予測・ラップ・分析など）が変わったことを、VPS の事前ロード係へ目印で伝える（最善努力）
             from src.utils import cache_marker
 
-            cache_marker.mark_from_paths(sent)
+            cache_marker.mark_from_paths([k for k in sent if not k.startswith(_BACKUP_PREFIXES)])   # 記録の予備は画面の元ではない
         except Exception:  # noqa: BLE001
             pass
         _note_stage2_push(root, sent)
@@ -826,9 +833,9 @@ def pull_trees(trees: list[str] | tuple[str, ...], *, recent_days: float | None 
 
 
 def tree_known(tree: str) -> bool:
-    """job_map の mirror_out に書ける木か（PUSH_TREES のどれかの配下）。"""
+    """job_map の mirror_out に書ける木か（TREES・LAZY_TREES のどれかの配下。記録の予備 BACKUP_TREES はホストだけが書く）。"""
     d = split_tree(tree)[0].rstrip("/")
-    return any(d == split_tree(t)[0] or d.startswith(split_tree(t)[0] + "/") for t in PUSH_TREES)
+    return any(d == split_tree(t)[0] or d.startswith(split_tree(t)[0] + "/") for t in TREES + LAZY_TREES)
 
 
 def push_trees(trees: list[str] | tuple[str, ...], *, since_epoch: float | None = None, backend: Backend | None = None, root: Path = REPO_ROOT) -> dict[str, int]:

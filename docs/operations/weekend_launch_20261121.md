@@ -5,7 +5,7 @@
 - raceday-weight-runner: 本体の当日の推論・早送り
 - bet-optimizer: 凍結した買い方
 
-公開するかは 11/20（金）15:00 の判定で決める（§9）。費用の増分（最悪で月 約 20 円）はユーザーが了承済み（2026-11-18）。
+公開するかは 11/20（金）15:00 の判定で決める（§9）。費用の増分は最悪で月 約 25 円（ユーザーの了承は約 20 円。記録の予備の約 4.4 円を 11/18 夜に足した。統括役に報告済み）。
 
 ## 1. 何を・どこに載せるか
 
@@ -94,6 +94,25 @@
   - 見るのは、そのレースの `/api/v1/betting/optimize` の 200 の有無と時刻。誰も開かなかったレースは「推定（push の時刻から）」と書く。会員の Cookie は使わない。
 - API を周期で叩く ping は足さない（CLAUDE.md）。
 
+## 5b. 前向きの記録（試行の成績を後から集計する元。集計は bet-optimizer）
+
+11/21 からの試行で、レースごとに次の 4 種類を残す。どれも race_id で突き合わせられる。
+
+| 種類 | 置き場（ホスト） | 形式・主な項目 | GCS |
+|---|---|---|---|
+| 1. 実際の T-60 のオッズ | `data/local/inference/odds_t60/<YYYYMMDD>/<race_id>.json` | `phase=t60`・`snapshot_at`・`entries[]`（horse_number・win_odds・popularity） | 予備（上げるだけ） |
+| 1. 同上（第 2 段の入力のまま） | `data/local/inference/predictions_stage2/<YYYYMMDD>/<race_id>.parquet` | horse_id・horse_number・p_win・p_top2・p_top3・q・r・odds・pop_t60・odds_t60_at・odds_phase・model | ミラー |
+| 2. 判定（買い・見送りと理由・◎・p・q・r） | `data/local/inference/bets_stage2/<YYYYMMDD>/<race_id>.json` | status・skip_reason・skip_label・honmei・bets・horses[]（p_win・q・r・pop・odds）・r_max・q_r_max・c_class・field・frozen_hash・odds_phase | ミラー |
+| 2. システムの原因の見送り | `data/local/inference/launch_watch/<YYYYMMDD>.jsonl` の `event=system_skip` | race_id・reason・detail・at | 予備（上げるだけ） |
+| 3. 判定の時刻 | 判定ファイルの `as_of` | ISO8601（+09:00） | ミラー |
+| 3. 判定・push の時刻 | `launch_watch/<YYYYMMDD>.jsonl` の `event=decision`、`launch_watch/push_<YYYYMMDD>.jsonl` | ISO8601（+09:00） | 予備（上げるだけ） |
+| 4. 確定の着順と払戻 | 週明けに、`data/page_reference/tables/2026/race_result_flat.parquet`・payoff と race_id でつなぐ | — | 既存の表 |
+
+- odds_t60 と launch_watch は、ほかに元が無い。**ホストの手元から消さない**（掃除の対象にしない）。
+- 予備として、gcs_mirror の BACKUP_TREES で GCS へ上げるだけにしている（Cloud Run には降ろさない。画面のキャッシュの目印も立てない）。開催日の 5 分おきの push に乗る。
+- cron の push は `--recent-days 2`（更新時刻が 2 日以内のファイルだけ）。前向きの記録は 11/21 から書かれるので、開催日のうちに上がる。リハーサル（11/08・11/15）の記録は対象外で、上げない。
+- 試行の成績の集計（参戦・的中・回収率・見送りの理由ごとの内訳）は、週明けに bet-optimizer が行う。prediction_results（target の仮想精算）とは別に数える。
+
 ## 6. 戻し方と判断の基準
 
 | 対象 | 戻し方 | 効くまで |
@@ -132,7 +151,8 @@
 | 新しい木が空の間の起動時の一覧 | 最悪 96 回 × 30 日 × 3 木 | 最大 約 7 円 |
 | 影のランナーの GCS の読み出し（出馬表など） | 1 日 50MB を上限に止める（11/08 の 2 レースで 0.6MB・226 回）。開催 9 日で最大 0.45GiB | 最大 約 8.5 円 |
 | 見張り | ホストの記録・ログを読むだけ | 0 円 |
-| 合計 | | **最悪 月 約 20 円**（通常は 5 円未満） |
+| 記録の予備（odds_t60・launch_watch を GCS へ上げるだけ） | 最悪: launch_watch の 2 ファイル × 1 日 288 回（5 分おきの push のたびに中身が変わるとみなす）＋ T-60 の写し 36 ＝ 612 回/日 × 開催 9 日 ≒ 5,500 回（Class A）。画面のキャッシュの目印は立てないので、VPS の取り直しは増えない。GCS の外への転送は無い | 約 4.4 円 |
+| 合計 | | **最悪 月 約 25 円**（通常は 7 円未満） |
 
 ## 8. 事象と根拠
 
