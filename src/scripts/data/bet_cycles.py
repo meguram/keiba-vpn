@@ -2500,10 +2500,12 @@ def cmd_prereg_run(a) -> None:
     if cover < PREREG_MIN_COVER and not a.allow_low_cover:
         raise SystemExit(f"窓の全レース {n_all} のうち計算できたのは {dr.get('computed_races')}（{cover:.1%}）。内訳 {dr}。予測か発走前オッズの覆いが足りません"
                          "（印は書いていない。覆いの下限を下回っても流すなら、理由を記録して --allow-low-cover）")
-    judge_grp = grp["id"] in ("main", "separate")              # 事前登録で判定に使う群は confirm、参考の群は eval_only
-    tok = L.guard(tool=tool_, family="bet_cycles", version=body["hash"], period=(lo_, hi_), purpose="confirm" if judge_grp else "eval_only",
+    # 台帳の決まり（統括役の判断 2026-11-18）: 第 1 回（11/17）と参考の群（11/18）が同じ期間を見ているので、主・別枠も eval_only（採否に使わない）。
+    # 採否は前向きの記録（11/21〜、bet_forward_ledger）で決める。
+    tok = L.guard(tool=tool_, family="bet_cycles", version=body["hash"], period=(lo_, hi_), purpose="eval_only",
                   frozen_paths=[fz, pr, Path(__file__)], target_name=f"prereg {grp['id']}",
-                  reason="" if judge_grp else "事前登録の参考の群（判定には使わない）")
+                  reason=("事前登録の参考の群（判定には使わない）" if grp["id"] == "reference" else
+                          "評価の期間（採否に使わない。同じ期間を第 1 回・参考の群が見ている。採否は前向きの記録で決める）"))
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     mark.write_text(json.dumps({"status": "started", "hash": body["hash"], "group": grp["id"], "git_head": head, "pred": spec["pred"], "pred_sha256": pred_sha,
                                 "drop": dr}, ensure_ascii=False, default=_np) + "\n", encoding="utf-8")
