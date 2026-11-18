@@ -270,7 +270,7 @@ def render_html(log: dict) -> str:
            f"<title>推奨馬券の最適化サイクル</title><style>{CSS}</style></head><body><main>",
            "<h1>推奨馬券の最適化サイクル</h1>",
            f"<p class=\"muted\">元の記録: <code>docs/operations/retrain_trials/bet_cycles_log.json</code>（tag={esc(log['tag'])}）。計画と結果の文: "
-           f"<code>docs/operations/retrain_trials/bet_optimization_20261116.md</code>。何を考えてどうなったかの過程: <a href=\"bet_optimization_story.html\">推奨馬券の最適化の過程</a></p>",
+           f"<code>docs/operations/retrain_trials/bet_optimization_20261116.md</code>。何を考えてどうなったかの過程: <a href=\"bet_optimization_story.html\">推奨馬券の最適化の過程</a>。第 2 回の買い方の実例: <a href=\"bet_r2_walkthrough.html\">第2回の買い方の実例</a></p>",
            *[render_stage(k, log["stages"][k]) for k in sorted(log.get("stages") or {}) if k.startswith("stage_00")],   # 結論（stage_00_*）は前置きより上
            INTRO,
            '<div class="cards">' + "".join(f'<div class="card"><div class="k">{esc(k)}</div><div class="v">{v}</div><div class="muted">{m}</div></div>'

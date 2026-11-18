@@ -77,7 +77,7 @@ def render(log: dict, test: dict, repro: dict, r2: dict | None) -> str:
            "<h1>推奨馬券の最適化の過程 — 何を考え、何を試し、どうなったか</h1>",
            '<p class="muted">数字は記録のファイル（<code>docs/operations/retrain_trials/bet_cycles_log.json</code>・<code>bet_test2025_*.json</code>・'
            '<code>bet_repro_20261117.json</code>）から <code>src/scripts/data/bet_story_report.py</code> が引いて作る。サイクルごとの細かい記録は '
-           '<a href="bet_cycles.html">推奨馬券の最適化サイクル</a>。</p>']
+           '<a href="bet_cycles.html">推奨馬券の最適化サイクル</a>。第 2 回の買い方の実例（2025 年のサンプル）: <a href="bet_r2_walkthrough.html">第2回の買い方の実例</a>。</p>']
     # 1. 依頼とゴール
     out.append("<h2>1. ユーザーの依頼とゴール</h2>")
     out.append('<div class="lead"><ul>'

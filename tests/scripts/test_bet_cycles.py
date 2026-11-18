@@ -546,3 +546,21 @@ def test_skip_any_of():
     assert not bc._skip(f, sk)                                      # 15 頭以上に当たる
     assert bc._skip({"field": 12, "c_class": "1勝"}, sk)            # どれにも当たらない
     assert not bc._skip({"field": 12, "c_class": "未勝利"}, sk)
+
+
+def test_walkthrough_classify_and_status():
+    from src.scripts.data import bet_r2_walkthrough as w
+
+    cl = ["未勝利", "新馬"]
+    assert w.classify(100, 500, "未勝利", 12, 4, "", cl, 3) == "hit"
+    assert w.classify(100, 0, "未勝利", 12, 4, "", cl, 3) == "miss"
+    assert w.classify(0, 0, "1勝", 12, 5, "見送り（条件）", cl, 3) == "skip_class"
+    assert w.classify(0, 0, "1勝", 12, 2, "見送り（条件）", cl, 3) == "skip_r"        # 凍結の判定の順: r の分位がクラスより先
+    assert w.classify(0, 0, "新馬", 12, 0, "見送り（条件）", cl, 3) == "skip_none"    # r の最大が無い = ◎ の候補がいない
+    assert w.classify(0, 0, "新馬", 4, 5, "見送り（条件）", cl, 3) == "skip_field"
+    assert w.horse_status(2, 2, 0.2, 5, 1.0, 0.05).startswith("◎")
+    assert "1 番人気" in w.horse_status(0, 2, 0.3, 1, 0.1, 0.05)
+    assert "5%" in w.horse_status(1, 2, 0.03, 4, 0.9, 0.05)
+    assert "見送り" in w.horse_status(1, None, 0.2, 4, 0.9, 0.05)                       # ◎ がいないレースで「◎ より小さい」と言わない
+    a = w.allocate({"skip_r": 620, "skip_class": 1816, "skip_none": 0}, 9)
+    assert sum(a.values()) == 9 and "skip_none" not in a and a["skip_class"] > a["skip_r"] >= 1
