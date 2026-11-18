@@ -120,7 +120,7 @@ def mh(st: np.ndarray, flag: np.ndarray, y: np.ndarray, w: np.ndarray | None = N
 
 
 def boot(st, flag, y, race, reps: int, seed: int) -> np.ndarray:
-    """レースで束ねたポアソンのブートストラップ（各レースに Poisson(1) の重み）。"""
+    """束ねる単位（race に渡した鍵。今は開催日 × 場）ごとのポアソンのブートストラップ（各束に Poisson(1) の重み）。"""
     rng = np.random.default_rng(seed)
     if not len(st):
         return np.array([])
