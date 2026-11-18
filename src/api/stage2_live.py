@@ -58,6 +58,11 @@ def disabled(inf: Path | None = None) -> bool:
     return _mark_on((inf or _inf()) / "bets_stage2" / "_disabled.json")
 
 
+def dev_only(inf: Path | None = None) -> bool:
+    """開発者（view=full）だけに第 2 段の推奨を出す段か（``bets_stage2/_dev_only.json``。中身が {"disabled": false} なら無効）。"""
+    return _mark_on((inf or _inf()) / "bets_stage2" / "_dev_only.json")
+
+
 def v6c_disabled(inf: Path | None = None) -> bool:
     inf = inf or _inf()
     return disabled(inf) or _mark_on(inf / "predictions_v6c" / "_disabled.json")
@@ -152,6 +157,8 @@ def optimize_payload(race_id: str, view: str, cap: int | None, storage: Any) -> 
     try:
         card = storage.load("race_shutuba", race_id) or {}
     except Exception:  # noqa: BLE001
+        return None
+    if view != "full" and dev_only():               # 開発者だけに出す段（会員には今の target。止めの目印 _dev_only.json）
         return None
     d = load_decision(race_id, _day_of(card))
     if d is None:

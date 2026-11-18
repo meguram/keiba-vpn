@@ -159,3 +159,10 @@ def test_newcomer_and_missing_material_still_shown(inf, monkeypatch):
     out, _ = delegates.optimize_betting({"race_id": RID}, view="paid")
     assert out["sub_strategy"] == "stage2_r2" and out["skipped"] and out["stage2"]["skip_label"] == "見送り（T-60 オッズ未着）"
 
+
+
+def test_dev_only_mark_hides_from_members(inf):
+    _put(inf, _decision("buy"))
+    (inf / "bets_stage2" / "_dev_only.json").write_text('{"disabled": true}', encoding="utf-8")
+    assert delegates._optimize_stage2({"race_id": RID}, "paid") is None          # 会員には今の target
+    assert delegates._optimize_stage2({"race_id": RID}, "full") is not None      # 開発者には第 2 段
