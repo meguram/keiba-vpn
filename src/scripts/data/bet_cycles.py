@@ -9,7 +9,7 @@ cycle_XX.json（記録）・state.json（系統ごとの最良）・qcuts_train.
 
 作法（時間の漏れを防ぐ）:
 - 予測は OOF（その年を学習に含まないモデルの予測）だけ。期間は config/bet_cycles/inputs.json の periods。
-  訓練（2022〜23）で探す・選ぶ・回顧する。評価（2024）は「変わらず上向きか」の確かめだけ。test（2025）は凍結の後に 1 回だけ。
+  訓練で探す・選ぶ・回顧する（最終モデル・第 2 回は 2019〜22、試しの回し v6e は 2022〜23）。評価（2023〜24、v6e は 2024）は「変わらず上向きか」の確かめだけ。test（2025）は凍結の後に 1 回だけ。
 - 分位の区切り（混戦度など）は訓練の期間だけで決めて凍結し、他の期間にそのまま当てる。
 - オッズ・人気は確定（race_result_flat の最終オッズ）。実際に買う時点（締切前）のオッズとはずれる。
   三連複・三連単はオッズが無いので、確率だけで組む（期待値は単勝でだけ使う）。
@@ -1750,7 +1750,7 @@ def cmd_fav1(a) -> None:
             f"そのほぼすべてが勝ち負けに匹敵する成績であるべき。市場の注目度の穴をねらうべき。」",
             f"例外の規則: 1 番人気（確定オッズの順。発走前のオッズの人気とはずれうる）の予測の連対率が、しきい値以上のときだけ、その馬を ◎ にしてよい。"
             f"しきい値は訓練の期間で『そのしきい値と、それより厳しいすべてのしきい値（{FAV1_MIN_N} 件以上）で、例外にしたレースの 1 番人気の連対率が {FAV1_TARGET:.0%} 以上（目安 80〜90% の中ほどを推奨で決めた）』を満たす最も緩い値。"
-            f"評価 2024 は、そのしきい値で連対率が保たれるかを見るだけ。"]
+            f"評価の期間は、そのしきい値で連対率が保たれるかを見るだけ。"]
     if not chosen:
         text.append(f"訓練では、連対率 {FAV1_TARGET:.0%} 以上を {FAV1_MIN_N} 件以上で満たすしきい値が無かった。例外は作らず、◎ はすべて 2 番人気以下から選ぶ。")
     if by == "r":
@@ -1856,11 +1856,11 @@ def cmd_selcv(a) -> None:
         if strats:
             print(n, row["kind"], C.shape[0], {k: round(v, 3) if isinstance(v, float) else v for k, v in row["cv"].items()}, fold, row["picks"], same, flush=True)
     res = {"title": "選び方そのものの交差検証（訓練の中の年）", "rows": rows,
-           "text": ["各サイクルの格子（固定の買い方）の中から、2022 年だけで最良を選んで 2023 年に当て、2023 年だけで選んで 2022 年に当てた回収率。"
+           "text": ["各サイクルの格子（固定の買い方）の中から、訓練の年を 1 年ずつ外し、残りの年だけで最良を選んで外した年に当てた回収率（年ごとの値を並べる）。"
                     "選ぶ物差しは cycle 8 以降と同じ考え方（的中率の下限・基準の上位 5 件除きより上・上位 5 件を除いた回収率で順位、各年 150R 以上）。"
                     "数百本の中から選んだ標本内の回収率（各サイクルの『選んだ』の訓練の値）より、選び方の楽観を除いた値になる。"
                     "方策の行は、型ごとの選び方は交差検証の値だが、同じサイクルの方策どうし（型の作り方・件数の下限・見送りの下限）の選び直しの楽観は残る。"
-                    "どちらかの年で条件を満たす候補が無かった行は、1 年分だけの値なので順位から外した（印『1 年分』）。",
+                    "どれかの年で条件を満たす候補が無かった行は、一部の年だけの値なので順位から外した（印『1 年分』）。",
                     "1 番人気の方針（◎ は 2 番人気以下、1 番人気は連対率の予測が高い例外のときだけ。ユーザー 2026-11-16）に合わない買い方（予測 1 位・人気の最高オッズ・期待値最大の ◎、候補なしで予測 1 位に戻す穴の ◎、λ<1 のペナルティ）は、比べる参考として候補から外した（2026-11-17、test を見る前に決めた）。"]}
     res["tables"] = [{"title": f"サイクルごとの選び方の交差検証（訓練 {min(years)}〜{max(years)}）",
                       "head": ["回", "種類", "候補", "参戦", "的中率", "回収率", "95% 区間", "上位5件を除く", "年ごと（その年を外して選び、その年に当てた値）", "どの年も同じ形"],
@@ -2020,18 +2020,18 @@ def cmd_tiers(a) -> None:
         tv = {k: {kk: v.get(kk) for kk in ("bet_races", "roi", "roi_ex_top5")} for k, v in tier_rows(rt["cost"], rt["ret"], tcv, tr.dates, tr.W, "")[1].items()}
         print(json.dumps({"axes": axes, "train_cv": tv}, ensure_ascii=False, default=_np))
         return {"axes": axes, "train_cv": tv}
-    r2, s_ev = tier_rows(re_["cost"], re_["ret"], tev, ev.dates, ev.W, "評価 2024（確かめ）")
+    r2, s_ev = tier_rows(re_["cost"], re_["ret"], tev, ev.dates, ev.W, "評価（確かめ）")
     order_ok = all((s_ev[str(t)].get("roi") or 0) >= (s_ev[str(t - 1)].get("roi") or 0) for t in (3, 2))
     order_tr = all((s_tr[str(t)].get("roi") or 0) >= (s_tr[str(t - 1)].get("roi") or 0) for t in (3, 2))
     res = {"title": "得意・不得意の地図と推奨度の段（指示書 6）", "spec": spec, "model": full, "axes": axes, "base_roi_train": base_roi,
            "tiers_train_cv": s_tr, "tiers_eval": s_ev, "order_train_cv": order_tr, "order_eval": order_ok,
            "text": [f"買い方: {spec.get('name')}。判定と段の区切りは訓練の期間だけで決めた（評価の期間は段の順に回収率が並ぶかを見るだけ）。",
                     f"水準の判定（参戦 {TIER_MIN_N}R 以上の水準だけ）: 不得意 = 回収率の 95% 区間の上限が基準 B0 を下回る → 推奨しない（見送り）。"
-                    f"得意 = 区間の下限が基準 B0（{base_roi * 100:.1f}%）以上・2 年とも 100% 以上・上位 5 件を除いても 100% 以上。それ以外は判定できない。",
+                    f"得意 = 区間の下限が基準 B0（{base_roi * 100:.1f}%）以上・年ごとがすべて 100% 以上・上位 5 件を除いても 100% 以上。それ以外は判定できない。",
                     f"推奨度の点 = 軸ごとの、そのレースの水準の回収率を件数で全体に縮めた値（重み {TIER_PRIOR}R）の平均。不得意に当たらないレースを、点の 3 分位で ★★★・★★・★ に分けた。",
-                    "注意: 段を付ける買い方そのものは訓練の 2 年で選んだもので、段の交差検証は買い方の選び直しまではしていない（買い方の選び方の楽観は残る）。"
+                    "注意: 段を付ける買い方そのものは訓練の期間で選んだもので、段の交差検証は買い方の選び直しまではしていない（買い方の選び方の楽観は残る）。"
                     "交差検証の中の判定は、年ごとの条件が fit の 1 年分だけになる。9 軸の多くの水準を 95% 区間で判定するので、偶然の不得意・得意も含みうる。",
-                    f"訓練の段の値は年の交差検証（ある年で判定・区切りを決めて、もう一方の年に当てた）。段の順（★★★ ≥ ★★ ≥ ★）: 訓練 {'並んだ' if order_tr else '並ばなかった'}・評価 {'並んだ' if order_ok else '並ばなかった'}。",
+                    f"訓練の段の値は年の交差検証（1 年を外し、残りの年で判定・区切りを決めて、外した年に当てた）。段の順（★★★ ≥ ★★ ≥ ★）: 訓練 {'並んだ' if order_tr else '並ばなかった'}・評価 {'並んだ' if order_ok else '並ばなかった'}。",
                     "画面との関係（案。この調査では画面は変えない）: 今の UI のレース選択は、推奨ポートフォリオの期待回収率で色を分けている（config/ev_calibration.json の levels、★オレンジ）。"
                     "ここの段（★★★・★★・★・見送り）を、その levels の段に当てる形が考えられる。"],
            "tables": [{"title": "推奨度の段", "head": ["期間", "段", "参戦", "的中率", "回収率", "95% 区間", "上位5件を除く", "平均回収額", "中央値回収額"], "rows": r1 + r2, "left": 2},
@@ -2052,7 +2052,7 @@ def _period_out(inputs: dict) -> tuple[Path, dict, dict]:
 
 
 def cmd_pick_final(a) -> None:
-    """selcv の結果から、決めた決まり（min(上位5件除き, 年ごと) が最大・的中率の下限・参戦 300R 以上・2 年そろう）で最後の候補を選び、
+    """selcv の結果から、決めた決まり（min(上位5件除き, 年ごと) が最大・的中率の下限・参戦 300R 以上・どの年にも候補がある）で最後の候補を選び、
     その買い方（固定の格子なら、その選び方を訓練全体に当てて選んだ 1 本。方策なら訓練全体で当てはめた方策）を書き出す。"""
     inputs = load_inputs(Path(a.inputs) if a.inputs else None)
     out, tr_spec, cuts = _period_out(inputs)
@@ -2118,17 +2118,17 @@ def cmd_pick_final(a) -> None:
            "evidence_log": ev_log,
            "rule_evidence": ("根拠の検査（年・似た単位は選び方の交差検証で、偶然の見込み、隣の水準、仕組みの説明）を通る中で、物差しが最大のもの" if ev_log else ""),
            "ranking": [{"cycle": r["cycle"], "kind": r["kind"], "score": r["score"], "roi_cv": r["cv"].get("roi")} for r in rows[:10]],
-           "rule": "selcv の物差し min(上位5件を除いた回収率, 年ごとの回収率) が最大、的中率の下限・参戦 300R 以上・2 年そろう・参考の系統を除く（cycle 13 の後に固定）"}
+           "rule": "selcv の物差し min(上位5件を除いた回収率, 年ごとの回収率) が最大、的中率の下限・参戦 300R 以上・どの年にも候補がある・参考の系統を除く（cycle 13 の後に固定）"}
     (out / "final_candidate.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_np), encoding="utf-8")
     pc = lambda x: "－" if x is None else f"{x * 100:.1f}%"           # noqa: E731
     rowm = lambda lab, m: [lab, f"{m.get('races', 0):,}", f"{m.get('bet_races', 0):,}（{pc(m.get('bet_rate'))}）", pc(m.get("h_fav1_rate")), pc(m.get("hit_rate")),   # noqa: E731
                            pc(m.get("roi")), f"{(m.get('avg_return') or 0):,.0f}", f"{(m.get('median_return') or 0):,.0f}", f"{(m.get('median_hit_return') or 0):,.0f}",
                            (f"{pc(m.get('roi_lo'))}〜{pc(m.get('roi_hi'))}" if m.get("roi_lo") is not None else "－"), pc(m.get("roi_ex_top5"))]
     stage = {"title": "最後の候補（決めた決まりで選んだ 1 本。凍結の前）", "text": [res["rule"], f"選んだ: cycle {n}・{best['kind']}・{spec.get('name')}",
-             f"評価 2024 の確かめ: {chk['eval_verdict']}（B0 との差 {d[0] * 100:+.1f} 点、区間 {d[1] * 100:+.1f}〜{d[2] * 100:+.1f}）。評価は選び直しに使っていない。"],
+             f"評価の確かめ: {chk['eval_verdict']}（B0 との差 {d[0] * 100:+.1f} 点、区間 {d[1] * 100:+.1f}〜{d[2] * 100:+.1f}）。評価は選び直しに使っていない。"],
              "tables": [{"title": "必須の指標", "head": ["期間", "全レース", "参戦（率）", "◎ が1番人気", "的中率", "回収率", "平均回収額", "中央値回収額", "的中時の中央値", "95% 区間", "上位5件を除く"],
                          "rows": [rowm("選び方の交差検証（訓練）", best["cv"] | {"races": chk["train"]["metrics"].get("races")}), rowm("訓練（全体で選んだ 1 本）", chk["train"]["metrics"]),
-                                  rowm("評価 2024（確かめ）", chk["eval"]["metrics"]), rowm("基準 B0・評価 2024", chk["eval"]["B0"])], "left": 1},
+                                  rowm("評価（確かめ）", chk["eval"]["metrics"]), rowm("基準 B0・評価", chk["eval"]["B0"])], "left": 1},
                         {"title": "選び方の交差検証の順位（上位 10）", "head": ["回", "種類", "物差し", "交差検証の回収率"],
                          "rows": [[str(r["cycle"]), r["kind"], f"{r['score'] * 100:.1f}%", pc(r["roi_cv"])] for r in res["ranking"]], "left": 2}]}
     (out / "stage_candidate.json").write_text(json.dumps(stage, ensure_ascii=False, indent=1, default=_np), encoding="utf-8")
