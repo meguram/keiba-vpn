@@ -2354,7 +2354,7 @@ def cmd_final(a) -> None:
         sp_ = inputs["periods"][nm]
         res["periods"][nm] = {"metrics": m, "metrics_final_odds": fin_m, "baselines": bs, "diff_vs_B0": d, "tiers": tiers, "fav1_exception": exc,
                               "role": sp_.get("role"), "odds_source": ("発走前のオッズ（実際のスナップショット）で ◎・人気を決めた" if sp_.get("pre_odds") else
-                                             (f"発走前のオッズの再現（{p.k} 通りを並べた平均）で判定" if p.k > 1 else "確定オッズで判定")),
+                                             (f"発走前のオッズの再現（{p.k} 通りを並べた平均）で判定" if p.k > 1 else "楽観（確定オッズで判定）")),
                               "pred": sp_["pred"],
                               "drop": p.drop, "miss_types": miss_types(r), "h_reasons": r["records"]["reason"].value_counts().to_dict()}
         r["records"].to_parquet(out / f"final_{nm}_races_{body['hash']}.parquet", index=False)
@@ -2497,6 +2497,9 @@ def cmd_prereg_run(a) -> None:
            "h_reasons": r["records"]["reason"].value_counts().to_dict()}
     mark.write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_np) + "\n", encoding="utf-8")
     r["records"].to_parquet(OUT_DIR / body["tag"] / f"prereg_{grp['id']}_races_{body['hash']}.parquet", index=False)
+    n0_ = len(p.races) // max(p.k, 1)                         # 基準 B0 の版 × レースの記録（2025 年との合算で、同じ重みの差を出すため）
+    pd.DataFrame({"race_id": [x.race_id for x in p.races], "ver": np.arange(len(p.races)) // max(n0_, 1), "cost": rb0["cost"], "ret": rb0["ret"]}).to_parquet(
+        OUT_DIR / body["tag"] / f"prereg_{grp['id']}_b0_races_{body['hash']}.parquet", index=False)
     print(f"結果を {rel_mark} に書いた。commit すること。判定: {verdict}")
 
 

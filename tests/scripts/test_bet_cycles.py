@@ -586,3 +586,25 @@ def test_prereg_verdict_levels():
     assert v(m(1.05, 0.9, 1.2, 1.0), (-0.01, -0.2, 0.1)) == "否定"                          # 重なり: 差の点推定 ≤ 0 は、差の区間が 0 をまたいでも否定
     assert v(m(1.05, 0.9, 1.2, 1.0), (0.0, -0.2, 0.1)) == "否定"
     assert v(m(1.0, 0.9, 1.0, 1.0), (0.1, 0.01, 0.2)) != "否定"                              # 区間の上限 = 100% は否定ではない
+
+
+def test_combine_metrics_counts_like_bet_cycles():
+    import pandas as pd
+    from src.scripts.data import bet_r2_combine as cb
+
+    # 2 レース × 2 版。レース A は 2 版とも参戦（1 版だけ的中 500）、B は 1 版だけ参戦（外れ）
+    d = pd.DataFrame({"race_id": ["A", "A", "B", "B"], "ver": [0, 1, 0, 1], "cost": [100, 100, 100, 0], "ret": [500, 0, 0, 0]})
+    m = cb.metrics(d, 2, n_boot=50)
+    assert m["races"] == 2 and m["bet_races"] == 2                   # 参戦 3 件 ÷ 版 2 = 1.5 → 2
+    assert abs(m["roi"] - 500 / 300) < 1e-9 and abs(m["hit_rate"] - 1 / 3) < 1e-9
+
+
+def test_forward_summary_pending_and_settled():
+    import numpy as np
+    from src.scripts.data import bet_forward_ledger as fl
+
+    cost = np.array([100.0, 100.0, 0.0, 100.0])
+    ret = np.array([0.0, 450.0, np.nan, np.nan])                     # 最後は精算待ち
+    s = fl.summary(cost, ret, n_all=5, n_sys=1, n_boot=50)
+    assert s["bet_races"] == 3 and s["settled"] == 2 and s["pending"] == 1
+    assert abs(s["roi"] - 450 / 200) < 1e-9 and s["hit_rate"] == 0.5

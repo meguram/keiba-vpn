@@ -286,6 +286,7 @@ def render_html(log: dict) -> str:
            INTRO,
            '<div class="cards">' + "".join(f'<div class="card"><div class="k">{esc(k)}</div><div class="v">{v}</div><div class="muted">{m}</div></div>'
                                            for k, v, m in cards) + "</div>"]
+    out.append(render_round2_2026())
     out.append("<h2>推移</h2>" + chart(cyc))
     rows = []
     for c in cyc:
@@ -349,10 +350,10 @@ def render_cycle(c: dict) -> str:
         h.append(f"<p><b>選んだ</b>［{esc(s['family'])}］: {esc(spec_text(s['spec']))}<br><span class=\"muted\">{esc(s['name'])}</span></p>")
         rows_ = [["訓練" + ("（発走前で判定・本番の再現）" if s.get("train_fin") else "")] + must_cells(s["train"])]
         if s.get("train_fin"):
-            rows_.append(["訓練（確定オッズで判定・楽観）"] + must_cells(s["train_fin"]))
+            rows_.append(["訓練・楽観（確定オッズで判定）"] + must_cells(s["train_fin"]))
         rows_.append(["評価（確かめ" + ("・本番の再現）" if s.get("eval_fin") else "）")] + must_cells(s["eval"]))
         if s.get("eval_fin"):
-            rows_.append(["評価（確定オッズで判定・楽観）"] + must_cells(s["eval_fin"]))
+            rows_.append(["評価・楽観（確定オッズで判定）"] + must_cells(s["eval_fin"]))
         h.append(table(["期間"] + MUST_HEAD, rows_))
         ev = c.get("eval_check") or {}
         fo = s.get("train_folds") or {}
@@ -429,14 +430,80 @@ def render_other(tag: str, log: dict) -> str:
     return "\n".join(h)
 
 
+OLD2026 = "旧モデル（本番 v6e）での 2026 年の参考の値。第 2 回の買い方の判定には使わない"
+
+
 def render_stage(key: str, st: dict, prefix: str = "", level: int = 2) -> str:
-    """方策・推奨度・test の段（bet_cycles の stage 出力。中身は各段の html_rows を表にする）。"""
-    h = [f"<h{level}>{esc(prefix)}{esc(st.get('title', key))}</h{level}>"]
-    if st.get("text"):
-        h.append("".join(f"<p>{esc(p)}</p>" for p in st["text"]))
+    """方策・推奨度・test の段（bet_cycles の stage 出力。中身は各段の html_rows を表にする）。
+    第 1 回の結論（stage_00_conclusion）の 2026 年の行は、旧モデル（本番 v6e）の値なので、折りたたみに分けて出す。"""
+    s00 = key.startswith("stage_00")
+    title = st.get("title", key)
+    if s00:
+        title = title.replace("・2026 年の結果", "").replace("と、test 2025・2026 年", "と test 2025")
+    h = [f"<h{level}>{esc(prefix)}{esc(title)}</h{level}>"]
+    texts = st.get("text") or []
+    old_t = [x for x in texts if s00 and "2026 年" in x]
+    h.append("".join(f"<p>{esc(p)}</p>" for p in texts if p not in old_t))
+    old_tables = []
     for t in st.get("tables") or []:
-        h.append(f"<h4>{esc(t['title'])}</h4>" + table(t["head"], [[esc(c) for c in r] for r in t["rows"]], left=t.get("left", 1)))
+        rows = t["rows"]
+        old = [r for r in rows if s00 and str(r[0]).startswith("2026")]
+        rows = [r for r in rows if r not in old]
+        ttl = t["title"].replace("・2026 年", "") if s00 else t["title"]
+        if rows:
+            h.append(f"<h4>{esc(ttl)}</h4>" + table(t["head"], [[esc(c) for c in r] for r in rows], left=t.get("left", 1)))
+        if old:
+            old_tables.append(f"<h4>{esc(ttl)}</h4>" + table(t["head"], [[esc(c) for c in r] for r in old], left=t.get("left", 1)))
+    if old_t or old_tables:
+        h.append(f"<details><summary>{esc(OLD2026)}</summary>" + "".join(f"<p>{esc(p)}</p>" for p in old_t) + "".join(old_tables) + "</details>")
     return "\n".join(h)
+
+
+def render_round2_2026() -> str:
+    """第 2 回の買い方（凍結 frozen_20261117_r2）の評価の期間: 2025 年（test）・2026 年（事前登録の主・別枠）・合算。
+    元は docs/operations/retrain_trials/ の記録（bet_test2025_r2_test_<hash>.json・bet_2026_r2_{main,separate}_<hash>.json）。
+    2026 年の記録が無いうちは、予定の文だけを出す。合算は、主の群があれば bet_cycles の race 記録から作る（render の外で作って記録に置く）。"""
+    fz = ROOT / "config/bet_cycles/frozen_20261117_r2.json"
+    if not fz.exists():
+        return ""
+    h_ = json.loads(fz.read_text(encoding="utf-8"))["hash"]
+    T = ROOT / "docs/operations/retrain_trials"
+    t25 = T / f"bet_test2025_r2_test_{h_}.json"
+    rows = []
+
+    def mrow(lab, m, b0=None, d=None, src=""):
+        return [lab, f"{m.get('races', 0):,}", f"{m.get('bet_races', 0):,}（{pct(m.get('bet_rate'), 0)}）", pct(m.get("hit_rate")), pct(m.get("roi")),
+                f"{pct(m.get('roi_lo'))}〜{pct(m.get('roi_hi'))}", pct(m.get("roi_ex_top5")), yen(m.get("avg_return")), yen(m.get("median_return")),
+                pct(b0) if b0 is not None else "－", (f"{d[0] * 100:+.1f}（{d[1] * 100:+.1f}〜{d[2] * 100:+.1f}）" if d else "－"), src]
+    if t25.exists():
+        x = json.loads(t25.read_text(encoding="utf-8"))["periods"]["test"]
+        b0 = next((v.get("roi") for k, v in (x.get("baselines") or {}).items() if k.startswith("B0")), None)
+        rows.append(mrow("2025 年（test。区切りの選定にも使われた期間）", x["metrics"], b0, x.get("diff_vs_B0"), "T-60 の再現（5 通り）"))
+    got = []
+    for g, lab, src in (("main", "2026 年 1/5〜10/12（主）", "T-60 の再現（5 通り）"), ("separate", "2026 年 10/17〜11/08（別枠）", "本物の T-60")):
+        f = T / f"bet_2026_r2_{g}_{h_}.json"
+        if f.exists():
+            x = json.loads(f.read_text(encoding="utf-8"))
+            if x.get("status") == "done":
+                rows.append(mrow(lab + f"・判定 {x.get('verdict')}", x["metrics"], (x.get("B0") or {}).get("roi"), x.get("diff_vs_B0"), src))
+                got.append(g)
+    comb = T / f"bet_2025_2026_r2_combined_{h_}.json"
+    if comb.exists():
+        x = json.loads(comb.read_text(encoding="utf-8"))
+        rows.append(mrow("2025〜26 年の合算（主の群と 2025 年）", x["metrics"], (x.get("B0") or {}).get("roi"), x.get("diff_vs_B0"), "T-60 の再現（5 通り）"))
+    head = ["期間", "全レース", "参戦（率）", "的中率", "回収率", "95% 区間", "上位5件を除く", "平均回収額", "中央値回収額", "B0", "B0 との差（区間）", "判定のオッズ"]
+    out = ["<h2>第 2 回の買い方の評価の期間（2025 年・2026 年）</h2>",
+           "<p>最新のモデル（候補 r04＋第 2 段）の出力で、凍結した第 2 回の買い方（hash " + esc(h_) + "）を当てた値。"
+           "評価の期間で、判断・選び直しには使わない。この値を見て買い方・モデルを選び直さない（直すなら、新しい確かめの期間を立てる）。"
+           "精算は確定の払戻。主は T-60 のオッズの再現（2026 年の T-60 と確定の比を借りた 5 通り）、別枠は本物の T-60 のオッズで判定する。</p>"]
+    if rows:
+        out.append(table(head, rows, left=1))
+    if "main" not in got:
+        out.append("<p><b>最新のモデルでの 2026 年の値は、事前登録の 1 回の確かめの後に入る</b>（予定: 入力がそろい次第。事前登録 <code>config/bet_cycles/prereg_2026_r2.json</code>）。</p>")
+    out.append("<p class=\"muted\">" + ("合算は件数が増えるぶん区間が狭くなる。" if comb.exists() else "") + "主と別枠は判定のオッズの作りが違う（再現と本物）。"
+               "訓練・評価の期間（2019〜2024 年）の 2 歳戦の単勝は、上乗せ（2017〜2023 年）で回収率が約 1〜2 ポイント高めに出ている（bet_age2_premium の記録）。"
+               "2025・2026 年には上乗せは無い。</p>")
+    return "\n".join(out)
 
 
 def render_md_tables(log: dict) -> str:

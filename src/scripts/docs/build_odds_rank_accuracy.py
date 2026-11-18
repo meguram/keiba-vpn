@@ -457,7 +457,9 @@ def build(r: dict) -> Doc:
         f"T-60 の材料は秋（{min(days)}〜{max(days)}）の {t60['days']} 日・{t60['races']} レースだけ。分け方ごとの差は判断保留。週が増えたら同じスクリプトで作り直す。",
         "上を重く見る指標（NDCG など）は出していない。買い方に関わる上位は、1 番人気の的中と上位 3 頭の重なりで見た。",
         "残り（最優先）: 想定オッズと T-60 の人気の直接の比較。本番の想定オッズは発走の約 70 分前（馬体重の発表の後）に作られ、判定は T-60 で行うため。"
-        "2026 年の想定オッズ（final_odds_prediction）は GCS にしか無い。10/18 以降の約 300 文書を 1 回読むだけなら、転送は数 MB で 1 円未満の見込み。今回の決まり（GCS を読まない）に従い、読んでいない。読むかは統括役の判断。",
+        "2026 年の想定オッズ（final_odds_prediction）は GCS にしか無い。10/18 以降の約 280 文書を 1 回読むだけなら、転送は数 MB で 1 円未満の見込み。"
+        "統括役が一度きりの読み出しを承認した（2026-11-18）。ただし実行は権限の判定で止められ、まだ読んでいない。"
+        "取得は python -m src.scripts.data.odds_rank_fetch_sec77（一覧を使わない・上限 20MB・保存済みは読み直さない）。ユーザーが流したあと、比較を足す。",
         "作り直しの手順: ODDS_RANK_DATA_ROOT に本体のリポジトリ、ODDS_RANK_OUT に出力先を入れて、nice -n 10 python -m src.scripts.data.odds_rank_accuracy を流す。結果を docs/operations/odds_rank_accuracy_20261118.json に写し、python -m src.scripts.docs.build_odds_rank_accuracy を流す。",
     ])
     return d
