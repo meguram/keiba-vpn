@@ -12,7 +12,7 @@ const ts = createRequire(import.meta.url)("typescript");
 const src = ts.transpileModule(readFileSync(join(here, "columns.ts"), "utf8"), { compilerOptions: { module: ts.ModuleKind.ES2020, target: ts.ScriptTarget.ES2020 } }).outputText;
 const out = join(mkdtempSync(join(tmpdir(), "col-")), "columns.mjs");
 writeFileSync(out, src);
-const { categoryTrail, allCategoryPaths, chartMax, chartRange, chartIsEmpty, chartVariant, cascadeOptions, cascadePick, axis2Max, columnsIn, countIn, radialLayout, treeSireCount, formatTreemapValue } = await import(pathToFileURL(out).href);
+const { categoryTrail, allCategoryPaths, chartMax, chartRange, chartIsEmpty, chartVariant, cascadeOptions, cascadePick, axis2Max, columnsIn, countIn, radialLayout, treeSireCount, formatTreemapValue, articleParts, keyTableOf, VISUAL_TYPES } = await import(pathToFileURL(out).href);
 
 const dir = join(here, "..", "content", "columns");
 const articles = readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => JSON.parse(readFileSync(join(dir, f), "utf8")));
@@ -136,4 +136,64 @@ test("系統樹の値の表示: 距離・符号なしの小数・欠損", () => 
   assert.equal(formatTreemapValue(49.87, "val1"), "49.9");
   assert.equal(formatTreemapValue(-0.005, "val2"), "-0.01");
   assert.equal(formatTreemapValue(null, "dist"), "–");
+});
+
+test("記事の型: 結論・数字 3 つ・図 2 枚・使い方に分け、残りは折りたたみへ（数字は記事の値のまま）", () => {
+  const body = [
+    { type: "stats", items: [{ label: "a", value: "1.0%" }, { label: "b", value: "2.0%" }, { label: "c", value: "3.0%" }, { label: "d", value: "4.0%" }] },
+    { type: "text", text: "最初の文です。次の文です。" },
+    { type: "chart", title: "図1", xLabel: "", yLabel: "", xs: [], series: [] },
+    { type: "table", columns: ["型（定義）", "通説の向き", "走数", "差（発見）", "差（確認）", "格"], rows: [["x", "走る", 10, "+1.0pt", "+0.2pt", "格なし"]], caption: "表の説明" },
+    { type: "chart", title: "図2", xLabel: "", yLabel: "", xs: [], series: [] },
+    { type: "chart", title: "図3", xLabel: "", yLabel: "", xs: [], series: [] },
+    { type: "note", text: "注" },
+    { type: "link", href: "/column/x", label: "関連" },
+  ];
+  const guide = {
+    lead: ["調べたこと: q", "答え: 答えの文", "使い方: 使い方の文"], terms: ["複勝率", "無い語"],
+    guides: [{ match: { chart: "図2" }, text: "図2の読み方" }, { match: { stats: true }, text: "数字の読み方", example: "例の文" },
+      { match: { chart: "図" }, nth: 2, text: "3 枚目の読み方" }, { match: { text: "注" }, text: "注の読み方" }],
+  };
+  const p = articleParts(body, guide, { 複勝率: "3着以内の割合" });
+  assert.equal(p.answer, "答えの文");
+  assert.deepEqual(p.use, { title: "使い方", text: "使い方の文" });
+  assert.equal(p.question, "q");
+  assert.equal(p.statsGuide, "数字の読み方\n例）例の文");
+  assert.deepEqual(p.stats.map((s) => s.value), ["1.0%", "2.0%", "3.0%"]);
+  assert.deepEqual(p.statsRest.map((s) => s.value), ["4.0%"]);
+  assert.deepEqual(p.visuals.map((v) => [v.block.title, v.guide]), [["図1", undefined], ["図2", "図2の読み方"]]);
+  assert.equal(p.summary, "最初の文です。次の文です。");
+  assert.equal(articleParts([{ type: "text", text: "要約の文。使い方の文" }], guide, {}).summary, "要約の文。");   // 使い方と同じ文は要約から除く
+  assert.deepEqual(p.keyTable, { columns: ["型（定義）", "通説の向き", "差（発見）", "差（確認）", "格"], rows: [["x", "走る", "+1.0pt", "+0.2pt", "格なし"]], caption: "表の説明", guide: undefined });
+  assert.deepEqual(p.details.map((b) => b.type), ["table", "chart", "note"]);       // 元の表・3 枚目の図・注
+  assert.deepEqual(p.notes.map((n) => n.text), ["3 枚目の読み方", "注の読み方"]);   // 外に出ない部品の読み方は折りたたみへ（nth で 3 枚目を指す）
+  assert.deepEqual(p.terms, [{ term: "複勝率", desc: "3着以内の割合" }]);
+  assert.equal(p.links.length, 1);
+  // 残す数字を選ぶ・ガイドが無い記事は本文の 1 文目が結論
+  assert.deepEqual(articleParts(body, { stats: [0, 3] }, {}).stats.map((s) => s.value), ["1.0%", "4.0%"]);
+  assert.deepEqual(articleParts(body, { stats: [1, 1, 0, 2, 3] }, {}).stats.map((s) => s.value), ["2.0%", "1.0%", "3.0%"]);   // 重複を除き 3 つまで
+  const bare = articleParts(body, undefined, {});
+  assert.equal(bare.answer, "最初の文です。");
+  assert.equal(bare.summary, "次の文です。");
+  assert.equal(bare.use, null);
+  // 答え・使い方以外の行（「ただし注意:」など）は使い方の節に出す
+  assert.deepEqual(articleParts(body, { lead: ["調べたこと: q", "答え: a", "ただし注意: b"] }, {}).use, { title: "補足", text: "ただし注意: b" });
+  assert.deepEqual(articleParts(body, { lead: ["答え: a", "使い方: u", "ただし注意: b"] }, {}).use, { title: "使い方", text: "u\nただし注意: b" });
+});
+
+test("記事の型: 図が無い記事は主の表を図の代わりに出し、全記事で結論の文がある", () => {
+  const p = articleParts([{ type: "text", text: "t。" }, { type: "table", columns: ["a"], rows: [[1]] }], undefined, {});
+  assert.equal(p.visuals[0].block.type, "table");
+  assert.equal(p.details.length, 0);
+  assert.equal(keyTableOf({ type: "table", columns: ["a"], rows: [] }), null);
+  for (const a of articles) {
+    let g;
+    try { g = JSON.parse(readFileSync(join(dir, "guides", `${a.slug}.json`), "utf8")); } catch { g = undefined; }
+    const q = articleParts(a.body, g, {});
+    assert.ok(q.answer, `${a.slug}: 結論の文が無い`);
+    if (g) assert.ok(g.lead?.some((x) => x.startsWith("答え")), `${a.slug}: ガイドに「答え:」が無い`);
+    if (q.keyTable) assert.ok(q.keyTable.columns.includes("差（確認）"), `${a.slug}: 型ごとの答えに確認期間の差が無い`);
+    assert.ok(q.stats.length <= 3, a.slug);
+    assert.ok(q.visuals.length >= 1 || a.body.every((b) => !VISUAL_TYPES.has(b.type) && b.type !== "table"), `${a.slug}: 主の図が無い`);
+  }
 });

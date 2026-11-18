@@ -713,10 +713,11 @@ export function categoryLabel(path: string): string {
 
 /**
  * 記事ごとの読み方ガイド（content/columns/guides/<slug>.json）。記事の JSON は集計コードが毎回書き直すので、
- * 読み方の文章はそちらに置き、表示のときに差し込む。
- *   lead: 冒頭に出す「まず、ひとことで」の箇条書き
- *   terms: 共通の用語集（guides/glossary.json）から出す語、glossary: この記事だけの語
- *   guides: 差し込む読み方。match で記事のブロックを探して、その前（place: "after" なら後ろ）に置く
+ * 読み方の文章はそちらに置き、表示のとき articleParts で記事の型に割り振る。
+ *   lead: 「調べたこと:」「答え:」「使い方:」の 3 行。答えは結論の囲み、使い方は「使い方」の節に出す
+ *   terms: 共通の用語集（guides/glossary.json）から出す語、glossary: この記事だけの語（折りたたみの中）
+ *   guides: 読み方。match が主の図に当たれば図の下、それ以外（数字・表など）は折りたたみの中に出す
+ *   ガイドに数字を書くときは、記事の本文と同じ値にする（tests/research/test_column_guides.py が確かめる）
  */
 export type ColumnGuideMatch =
   | { stats: true }
@@ -732,13 +733,14 @@ export type ColumnGuideEntry = {
   title?: string;
   text: string;
   example?: string;
-  place?: "before" | "after";
   /** 同じ条件に当てはまるブロックが複数あるとき、何番目か（0 始まり）。"all" なら全部。省略は最初の 1 つ */
   nth?: number | "all";
 };
 
 export type ColumnGuide = {
   lead?: string[];
+  /** 外に出す数字の囲みの番号（0 始まり・3 つまで）。省略は先頭の 3 つ。結論の根拠になる数字を残すために使う */
+  stats?: number[];
   terms?: string[];
   glossary?: { term: string; desc: string }[];
   guides?: ColumnGuideEntry[];
@@ -756,33 +758,135 @@ export function guideMatches(m: ColumnGuideMatch, b: ColumnBlock): boolean {
   return false;
 }
 
-/** 記事の本文に、読み方ガイドを差し込む（アコーディオンの中も探す） */
-export function applyGuide(body: ColumnBlock[], guide: ColumnGuide | undefined, glossary: Record<string, string>): ColumnBlock[] {
-  if (!guide) return body;
-  const entries = guide.guides ?? [];
-  const seen = entries.map(() => 0);
-  const walk = (blocks: ColumnBlock[]): ColumnBlock[] => {
-    const out: ColumnBlock[] = [];
+/** 図として外に出す部品（主の図）。文字の部品（text・note・table など）以外 */
+export const VISUAL_TYPES = new Set<ColumnBlock["type"]>(["chart", "jockey_distance_chart", "heatmap", "treemap", "wordcloud", "trainer_pattern_table"]);
+const MAX_VISUALS = 2;
+const MAX_STATS = 3;
+
+type StatItem = Extract<ColumnBlock, { type: "stats" }>["items"][number];
+type TableBlock = Extract<ColumnBlock, { type: "table" }>;
+type LinkBlock = Extract<ColumnBlock, { type: "link" }>;
+
+/**
+ * 記事を、画面の型（結論 → 数字 → 図 → 本文の要約 → 型ごとの答え → 使い方 → 詳しい内容）に分けたもの。
+ * 記事の JSON（数字）はそのまま使い、並べ方だけを決める。
+ */
+export type ColumnArticleParts = {
+  /** 調べたこと（ガイドの「調べたこと:」。無ければ null） */
+  question: string | null;
+  /** 結論の文（ガイドの「答え:」。無ければ本文の 1 文目） */
+  answer: string;
+  /** 使い方の節（ガイドの「使い方:」は見出し「使い方」。それ以外の 3 行目は見出し「補足」で、行をそのまま出す） */
+  use: { title: string; text: string } | null;
+  /** 外に出す数字（3 つまで）と、その読み方、折りたたみに回す残り */
+  stats: StatItem[];
+  statsGuide?: string;
+  statsRest: StatItem[];
+  /** 主の図（2 枚まで）と、その図の読み方 */
+  visuals: { block: ColumnBlock; guide?: string }[];
+  /** 本文の要約（最初の text。結論を本文の 1 文目から取ったときは、その続き） */
+  summary: string | null;
+  /** 通説の型ごとの答え（列「通説の向き」のある表を、型・向き・差・格に縮めたもの）と、その読み方 */
+  keyTable: { columns: string[]; rows: (string | number)[][]; caption?: string; guide?: string } | null;
+  /** 折りたたみの中に置く部品（元の順） */
+  details: ColumnBlock[];
+  /** 外に出した部品に当たらない読み方。折りたたみの中に出す */
+  notes: { title: string; text: string; example?: string }[];
+  /** 言葉の説明（共通の用語集 + 記事の用語） */
+  terms: { term: string; desc: string }[];
+  links: LinkBlock[];
+};
+
+function flatBlocks(blocks: ColumnBlock[]): ColumnBlock[] {
+  return blocks.flatMap((b) => (b.type === "accordion" ? flatBlocks(b.blocks) : [b]));
+}
+
+function firstSentence(t: string): string {
+  const m = t.trim().match(/^[^。]*。/);
+  return m ? m[0] : t.trim();
+}
+
+function leadPart(lead: string[], key: string): string | null {
+  const hit = lead.find((x) => x.startsWith(key));
+  return hit ? hit.slice(key.length).replace(/^[:：]\s*/, "").trim() : null;
+}
+
+/** 通説シリーズの表（列「通説の向き」がある）を、型・向き・差（発見・確認とも）・格の列にする */
+export function keyTableOf(t: TableBlock): ColumnArticleParts["keyTable"] {
+  const dir = t.columns.indexOf("通説の向き");
+  if (dir < 0) return null;
+  const diffs = t.columns.flatMap((c, i) => (c.startsWith("差") ? [i] : []));
+  const ix = [0, dir, ...diffs, t.columns.length - 1].filter((v, i, a) => a.indexOf(v) === i);
+  return { columns: ix.map((i) => t.columns[i]), rows: t.rows.map((r) => ix.map((i) => r[i])), caption: t.caption };
+}
+
+/** ガイドの読み方ごとに、当たる部品を決める（nth: 何番目に当たる部品か。"all" は全部。省略は最初の 1 つ） */
+function guideTargets(entries: ColumnGuideEntry[], blocks: ColumnBlock[]): Map<ColumnBlock, number[]> {
+  const out = new Map<ColumnBlock, number[]>();
+  entries.forEach((e, k) => {
+    let seen = 0;
     for (const b of blocks) {
-      const before: ColumnBlock[] = [];
-      const after: ColumnBlock[] = [];
-      entries.forEach((e, i) => {
-        if (!guideMatches(e.match, b)) return;
-        const k = seen[i]++;
-        if (e.nth !== "all" && k !== (e.nth ?? 0)) return;
-        const g: ColumnGuideBlock = { type: "guide", title: e.title ?? "読み方", text: e.text, example: e.example };
-        (e.place === "after" ? after : before).push(g);
-      });
-      out.push(...before, b.type === "accordion" ? { ...b, blocks: walk(b.blocks) } : b, ...after);
+      if (!guideMatches(e.match, b)) continue;
+      if (e.nth === "all" || seen === (e.nth ?? 0)) out.set(b, [...(out.get(b) ?? []), k]);
+      seen++;
     }
-    return out;
+  });
+  return out;
+}
+
+export function articleParts(body: ColumnBlock[], guide: ColumnGuide | undefined, glossary: Record<string, string>): ColumnArticleParts {
+  const blocks = flatBlocks(body);
+  const lead = guide?.lead ?? [];
+  const entries = guide?.guides ?? [];
+  const targets = guideTargets(entries, blocks);
+  const used = new Set<number>();
+  const take = (b: ColumnBlock | undefined): string | undefined => {
+    const ks = (b && targets.get(b)) ?? [];
+    ks.forEach((k) => used.add(k));
+    return ks.length ? ks.map((k) => entries[k].text + (entries[k].example ? `\n例）${entries[k].example}` : "")).join("\n") : undefined;
   };
-  const head: ColumnBlock[] = [];
-  if (guide.lead?.length) head.push({ type: "guide", title: "まず、ひとことで", text: guide.lead.map((t) => `・${t}`).join("\n") });
-  const items = [
-    ...(guide.terms ?? []).filter((t) => glossary[t]).map((t) => ({ term: t, desc: glossary[t] })),
-    ...(guide.glossary ?? []),
+
+  const statsBlock = blocks.find((b) => b.type === "stats") as Extract<ColumnBlock, { type: "stats" }> | undefined;
+  const all = statsBlock?.items ?? [];
+  const pick = [...new Set(guide?.stats ?? all.map((_, i) => i))].filter((i) => i >= 0 && i < all.length).slice(0, MAX_STATS);
+  const stats = pick.map((i) => all[i]);
+  const statsRest = all.filter((_, i) => !pick.includes(i));
+  const statsGuide = take(statsBlock);
+
+  const keySrc = blocks.find((b) => b.type === "table" && keyTableOf(b)) as TableBlock | undefined;
+  const keyTable = keySrc ? { ...keyTableOf(keySrc)!, guide: take(keySrc) } : null;
+  let visualBlocks = blocks.filter((b) => VISUAL_TYPES.has(b.type)).slice(0, MAX_VISUALS);
+  if (!visualBlocks.length) {
+    const tbl = blocks.find((b) => b.type === "table" && b !== keySrc);    // 図が無い記事は、主の表を図の代わりに出す
+    if (tbl) visualBlocks = [tbl];
+  }
+  const visuals = visualBlocks.map((block) => ({ block, guide: take(block) }));
+
+  const firstText = blocks.find((b) => b.type === "text") as Extract<ColumnBlock, { type: "text" }> | undefined;
+  const leadAnswer = leadPart(lead, "答え");
+  const answer = leadAnswer ?? (firstText ? firstSentence(firstText.text) : "");
+  // 結論を本文の 1 文目から取ったときは、本文の要約にはその続きだけを出す（同じ文を 2 回出さない）
+  const summary = firstText ? (leadAnswer ? firstText.text : firstText.text.trim().slice(answer.length).trim()) || null : null;
+  const useText = leadPart(lead, "使い方");
+  // 「調べたこと」「答え」「使い方」以外の行（「ただし注意:」など）は、使い方の節に続けて出す（黙って落とさない）
+  const others = lead.filter((x) => !x.startsWith("調べたこと") && !x.startsWith("答え") && !x.startsWith("使い方"));
+  const useBody = [...(useText ? [useText] : []), ...others].join("\n");
+  const use = useBody ? { title: useText ? "使い方" : "補足", text: useBody } : null;
+  // 本文の要約が使い方と同じ文を含むときは、要約からその文を除く（通説シリーズは本文の最後に使い方の文がある）
+  const summaryOut = summary && use && summary.includes(use.text) ? summary.replace(use.text, "").trim() || null : summary;
+
+  const out = new Set<ColumnBlock>([...visualBlocks, ...(statsBlock ? [statsBlock] : []), ...(firstText ? [firstText] : [])]);
+  const links = blocks.filter((b) => b.type === "link") as LinkBlock[];
+  const details = blocks.filter((b) => !out.has(b) && b.type !== "link");
+
+  const notes = entries.flatMap((e, k) => (used.has(k) ? [] : [{ title: e.title ?? "読み方", text: e.text, example: e.example }]));
+  const terms = [
+    ...(guide?.terms ?? []).filter((t) => glossary[t]).map((t) => ({ term: t, desc: glossary[t] })),
+    ...(guide?.glossary ?? []),
   ];
-  if (items.length) head.push({ type: "glossary", title: "出てくる言葉のやさしい説明", items });
-  return [...head, ...walk(body)];
+  return {
+    question: leadPart(lead, "調べたこと"), answer, use,
+    stats, statsGuide, statsRest, visuals, summary: summaryOut, keyTable,
+    details, notes, terms, links,
+  };
 }
