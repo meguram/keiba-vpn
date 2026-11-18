@@ -12,7 +12,7 @@ th,td{border:1px solid var(--border);padding:4px 6px;text-align:right;white-spac
 code{font-size:.82rem;background:var(--head);padding:0 .3em;border-radius:3px;word-break:break-all}.good{color:var(--good)}.bad{color:var(--bad)}
 ul{padding-left:1.2em}</style></head><body><main>
 <h1>推奨馬券の最適化の過程 — 何を考え、何を試し、どうなったか</h1>
-<p class="muted">数字は記録のファイル（<code>docs/operations/retrain_trials/bet_cycles_log.json</code>・<code>bet_test2025_*.json</code>・<code>bet_repro_20261117.json</code>）から <code>src/scripts/data/bet_story_report.py</code> が引いて作る。サイクルごとの細かい記録は <a href="bet_cycles.html">推奨馬券の最適化サイクル</a>。第 2 回の買い方の実例（2025 年のサンプル）: <a href="bet_r2_walkthrough.html">第2回の買い方の実例</a>。</p>
+<p class="muted">数字は記録のファイル（<code>docs/operations/retrain_trials/bet_cycles_log.json</code>・<code>bet_test2025_*.json</code>・<code>bet_repro_20261117.json</code>）から <code>src/scripts/data/bet_story_report.py</code> が引いて作る。サイクルごとの細かい記録は <a href="bet_cycles.html">推奨馬券の最適化サイクル</a>。第 2 回の買い方の実例（2025 年のサンプル）: <a href="bet_r2_walkthrough.html">第2回の買い方の実例</a>。相手の選び方の下調べ: <a href="running_style_pairs.html">走法の近さと一緒に来る馬</a>。</p>
 <h2>1. ユーザーの依頼とゴール</h2>
 <div class="lead"><ul><li>勝率・複勝率の分布の型ごとに、一番良い買い方を 20 サイクルで探す。各サイクルの履歴を追えるように。</li><li>必ず出す指標: 全レースのうち何レースに参戦したか（参戦率）、的中率、回収率、平均回収額、中央値回収額。</li><li>買い目は本命（◎）を起点に組み、印と矛盾させない（◎ は軸・1 着・本線）。◎ は基本 2 番人気以下から。1 番人気は「ほぼ確実に勝ち負け」のときだけ例外。</li><li>訓練データで回収率の高いやり方を見つけ、評価データで変わらず上向きであることを確かめる。test は凍結の後に 1 回だけ。</li><li>最終ゴール（第 2 回から）: 評価でも test でも、変わらず回収率 100% を超える抽出の決まり。判定に使うオッズは本番で使える時点のもの。</li></ul></div>
 <h2>2. 第 1 回の 20 サイクル（2026-11-16〜17）</h2>

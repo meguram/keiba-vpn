@@ -82,7 +82,7 @@ OVERRIDE: dict[str, str] = {
     # 馬券と印（学習・実験の部にある馬券の記録）
     "bet_cycles": "res-bet", "bet_optimization_story": "res-bet", "bet_r2_walkthrough": "res-bet",
     # 特徴量と要因（学習・実験の部や馬券の部にある要因の調査）
-    "running_map_course_axis": "res-feature", "running_map_course_axis_rationale": "res-feature",
+    "running_map_course_axis": "res-feature", "running_map_course_axis_rationale": "res-feature", "running_style_pairs": "res-feature",
     "feature_investigation_catalog": "res-feature",
     "pace_consistency": "res-feature", "lap_forecast": "res-feature", "tracking_difficulty_v2": "res-feature",
     "handicapper_viewpoints": "res-feature", "data_acquisition": "res-feature", "feature_cross_search": "res-feature",
@@ -201,7 +201,7 @@ GROUPS: dict[str, list[Group]] = {
               [E("docs/ideas/sire_dam_influence.md", "父と母の影響"), E("docs/ideas/euro_kick_sire_lines.md", "欧州型の瞬発力の系統")]),
     ],
     "res-feature": [
-        Group("走法マップ", "走法の軸 × コースの適性。", ["running_map_course_axis", "running_map_course_axis_rationale"],
+        Group("走法マップ", "走法の軸 × コースの適性・走法や脚質が近い馬が一緒に来るか。", ["running_map_course_axis", "running_map_course_axis_rationale", "running_style_pairs"],
               [E("docs/ideas/running_map_axes_fixed.md", "走法マップの軸（固定）"), E("docs/ideas/running_axes_scale_1to10.md", "走法の軸の 1〜10 の尺度"),
                E("docs/ideas/running_style_pairs.md", "走法の組")]),
         Group("めぐ指数", "本番の版は megu_index_v3a（本番の仕様の棚）。",
