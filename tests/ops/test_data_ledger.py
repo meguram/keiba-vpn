@@ -407,10 +407,10 @@ def _guard_funcs(path: Path) -> set[str]:
 # guard を持つ研究の CLI と、その中で guard を呼んでよい入口の関数
 _GUARD_ENTRY = {
     "src/scripts/data/bet_cycles.py": {"cmd_final", "cmd_prereg_run"},
-    "src/scripts/data/bet_forward_ledger.py": {"main"},
-    "src/scripts/data/bet_age2_premium.py": {"run"},
-    "src/scripts/data/bet_r2_combine.py": {"main"},
-    "src/scripts/data/bet_r2_walkthrough.py": {"build"},
+    "src/scripts/data/bet_forward_ledger.py": {"_main_inner"},
+    "src/scripts/data/bet_age2_premium.py": {"_run_inner"},
+    "src/scripts/data/bet_r2_combine.py": {"_main_inner"},
+    "src/scripts/data/bet_r2_walkthrough.py": {"_build_inner"},
     "src/research/course/bet_opt_search.py": {"cmd_final"},
     "src/research/course/prereg_rules.py": {"cmd_run"},
     "src/research/course/upset_types.py": {"cmd_run"},
