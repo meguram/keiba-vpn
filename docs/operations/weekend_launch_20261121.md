@@ -98,7 +98,7 @@
 
 | 対象 | 戻し方 | 効くまで |
 |---|---|---|
-| 予測の表示と推奨馬券の両方 | ホストで root として `python -m src.pipeline.inference.candidate_runner --set-disabled on --day 20261121`（共有の作業ツリーで） | 約 9 分（push 5 分＋目録 60 秒＋prerender 120 秒＋画面 45 秒）。その日の判定ファイルを書き直すので、レースごとのキャッシュの目印も立つ |
+| 予測の表示と推奨馬券の両方 | ホストで root として `sudo env PYTHONPATH=$PWD /opt/conda/bin/python -m src.pipeline.inference.candidate_runner --set-disabled on --day 20261121`（共有の作業ツリーで） | 約 9〜11 分（push 5 分＋目録 60 秒＋prerender 120 秒＋画面 45 秒）。その日の判定ファイルを書き直すので、レースごとのキャッシュの目印も立つ |
 | 予測の表示だけ（推奨は第 2 段のまま） | 同じコマンドに `--v6c-only` を付ける | 同じ |
 | また有効にする | `--set-disabled off`。ミラーは削除を伝えないので、目印は消さずに `{"disabled": false}` で上書きする | 同じ |
 | 影のランナーを止める | `pkill -f src.pipeline.inference.candidate_runner`。止めた後のレースは今の表示。15 分おきに起動し直すので、止め続けるなら cron の行を消す | すぐ |
@@ -108,6 +108,9 @@
 
 - 本番の v6e・§77・target は動き続けているので、戻した先は常に生きている。
 - stg と本番は同じミラーを読むので、目印は両方に同時に効く。
+- 実測（2026-11-18 の stg、11/15 の判定で。VPS の中から 1 分おきに 1 回だけ問い合わせ）:
+  - `--set-disabled on`: 推奨馬券は 9 分 20 秒、確率の欄は 10 分 40 秒で今の表示に戻った。
+  - `--set-disabled off`: 21 分後には第 2 段の表示に戻っていた（細かい時間は 11/19 に測り直す）。
 
 戻す基準:
 - `system_skip` が、1 日の対象レースの 2 割を超える → 原因を調べる（T-60 の取得の失敗なら統括役へ）。失敗したレースには今の target が出るので、画面に空欄はできない。
