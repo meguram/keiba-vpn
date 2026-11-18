@@ -1,6 +1,6 @@
 # めぐAI印 v2（ユーザー定義）の評価と切替
 
-2026-10-22。評価スクリプト: `src/scripts/data/mark_v2_eval.py`（build / design / compare）。設定: `config/mark_rule.json`（`version` 1=従来、2=v2。環境変数 `KEIBA_MARK_RULE=v1|v2` で上書き）。**既定は v1（挙動は変わらない）**。
+2026-10-22。評価スクリプト: `src/scripts/data/mark_v2_eval.py`（build / design / compare）。設定: `config/mark_rule.json`（`version` 1=従来、2=v2。環境変数 `KEIBA_MARK_RULE=v1|v2` で上書き）。**既定は v1（挙動は変わらない）**（この文書を書いた 2026-10-22 の時点。2026-10-23 の `63ea516c` で `version` を 2 に切り替え、今の設定上の既定は v2）。
 
 ## 1. v2 の定義（ユーザーの言葉 → 実装）
 | 印 | ユーザー定義 | v2 の実装（`assign_mece_marks_v2`） |
@@ -56,6 +56,6 @@ A=現行 v1、B=ユーザー定義 v2、C=期待値追求型（各印を期待�
 v2 は定義に忠実（▲・○ が大きく改善、◎ の回収率が上がる）な代わりに、◎ の勝率と網羅が下がる（◎ は本命ではなく期待値の取れる馬を選ぶため）。
 
 ## 5. 判断
-- 回収率の区間下限と再現性を最優先とする基準では **A も B も勝たない**（B は設計年で高く確認年で再現しない）。よって **既定は v1 のまま出荷**し、v2 は設定で切り替えられるようにした。
+- 回収率の区間下限と再現性を最優先とする基準では **A も B も勝たない**（B は設計年で高く確認年で再現しない）。よって **既定は v1 のまま出荷**し、v2 は設定で切り替えられるようにした（その後 2026-10-23 の `63ea516c` で v2 に切り替えた）。
 - 切替を決めたら、`config/mark_rule.json` の `version` を 2 にする（または `.env` に `KEIBA_MARK_RULE=v2`）。同時に画面の凡例（`frontend/app/race/[id]/page.tsx`・`weekly-predictions/page.tsx`・`prediction-results/page.tsx` の印の説明）と `_MARK_LABELS`（`local_predictions.py`・`prob_calibration.py`・`app.py`）を v2 の文言にそろえる。保存済みの予測の印は読み出し時に付け直されるため、データの書き換えは不要。
 - 追加の検証: v2 の ★ は想定単勝 10 倍以上の上限なしなので、直前オッズ（T-10/T-5/T-2）が貯まったあと（10/24〜）に ★ の出現と回収率を再確認する。

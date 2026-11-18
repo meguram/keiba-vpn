@@ -7,6 +7,7 @@ import { USE_MOCK, getMockBetRecommendation } from "@/lib/mock";
 import { BetGroup, groupBets, nameMap, trioPartnerNums } from "@/lib/betGrouping";
 import { PaidBets, type PaidRec } from "@/components/PaidBets";
 import { TargetBets, type TargetRec } from "@/components/TargetBets";
+import { Stage2Bets, isStage2 } from "@/components/Stage2Bets";
 import { BetResultBanner, ResultCell, type BetResult, type RaceBetResult } from "@/components/BetResult";
 
 type OddsMode = "auto" | "actual" | "predicted";
@@ -268,7 +269,7 @@ export function BetRecommend({ raceId, hasPrediction, resultKey }: { raceId: str
   }
 
   if (target) {
-    return <TargetBets rec={target} />;
+    return isStage2(target) ? <Stage2Bets rec={target} /> : <TargetBets rec={target} />;   // 第 2 段の推奨（試行中）は専用の表示
   }
   if (paid) {
     return <PaidBets rec={paid} cap={cap} setCap={setCap} onRerun={run} loading={loading} />;

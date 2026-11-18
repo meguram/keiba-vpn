@@ -446,7 +446,7 @@ def build_bet(out_dir: Path) -> Page:
         pg.headline = headline_of(md_to_html(blk, md_p.parent, out_dir))
     c0 = stages.get("stage_00_conclusion")
     if c0:
-        parts.append("<p><b>第 1 回の凍結の結論</b>（下の §2 のとおり第 2 回の凍結もある。どちらを今の買い方とするかは、記録に書かれていない）</p>")
+        parts.append("<p><b>第 1 回の凍結の結論</b>（過去の記録。今の買い方の候補は、上の best の印のとおり第 2 回の凍結）</p>")
         parts.append(_render_stage(c0) + note(f"元: {link(log_p, out_dir)} の stages.stage_00_conclusion（第 1 回）。"))
         txt = c0.get("text") or []
         pg.headline = pg.headline or first_sentence(re.sub(r"^結論の見出し:\s*", "", txt[0] if txt else ""), 200)
@@ -476,7 +476,6 @@ def build_bet(out_dir: Path) -> Page:
         parts.append(note(f"元: {link(TRIALS / 'bet_round2_story.json', out_dir)}。"))
 
     parts.append(h(2, "4. 事象と根拠（各段の記録）", "stages"))
-    parts.append(note("各段の表の期間のラベルは記録のまま。前の回のラベルが残っている所がある（docs/operations/docs_inconsistencies_20261118.md の 8）。"))
     for k, st in stages.items():
         if k != "stage_00_conclusion":
             parts.append("<details><summary>" + esc(st.get("title")) + "</summary>" + _render_stage(st) + "</details>")

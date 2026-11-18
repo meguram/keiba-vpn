@@ -73,7 +73,7 @@ def test_build(tmp_path, monkeypatch):
     monkeypatch.setattr(B, "LEDGER", tmp_path / "none.json")
     out = B.build(tmp_path / "o.html", history=hist)
     s = out.read_text(encoding="utf-8")
-    D = json.loads(re.search(r'<script id="data" type="application/json">(.*?)</script>', s, re.S).group(1).replace("<\\/", "</"))
+    D = json.loads(re.search(r'<script id="data" type="application/json">(.*?)</script>', s, re.DOTALL).group(1).replace("<\\/", "</"))
     assert D["graded"]["rows"][0]["unit"] == "テスト記念" and D["course"]["rows"][0]["unit"] == unit
     assert "「前走の着順」が 1着" in D["course"]["rows"][0]["buy"][0]["text"]
     assert D["course"]["event"] == "事象の文" and "prefers-color-scheme" in s and "<script src" not in s
@@ -84,3 +84,27 @@ def test_build(tmp_path, monkeypatch):
         raise AssertionError("止まるはず")
     except SystemExit:
         pass
+
+
+def test_threshold_rows():
+    st = {"n": 30, "w": [10, 8, 6], "out": 6, "place": 0.8, "win": 0.33, "lo": 0.63, "hi": 0.9, "npay": 30, "rt": 30.0, "rf": 30.0, "roi_t": 1.0, "roi_f": 1.0}
+    rule = {"text": "前走 1 着以内", "hyp": "能力", "why": "w", "level": "単位", "disc": st, "conf": st, "conf_level": st,
+            "pass": {"0.75": False, "0.6": True, "0.5": True}, "reached": {"0.75": False, "0.6": True, "0.5": True}, "q": {"0.75": 1, "0.6": 0.01, "0.5": 0.001},
+            "neighbors": [], "breadth": 0.7, "base": 0.2}
+    T = {"layers": ["全馬"], "course": {"全馬": {"units": {"東京芝1600|1勝・2勝": {"rules": [rule], "ref": None, "n_disc": 300, "n_conf": 100}}}},
+         "graded": {"全馬": {"units": {"テスト記念|東京芝1600": {"rules": [], "ref": dict(rule, p50=0.2, adopted=False), "n_disc": 50, "n_conf": 10}}}}}
+    c = B.threshold_rows(T, "course", {})
+    assert B.threshold_rows(T, "course", {}, "1 番人気") == []                           # 無い層は空
+    assert c[0]["course"] == "東京芝1600" and c[0]["group"] == "1勝・2勝" and c[0]["best"]["0.6"] and not c[0]["best"]["0.75"]
+    g = B.threshold_rows(T, "graded", {"テスト記念": "G3"})
+    assert g[0]["grade"] == "G3" and g[0]["venue"] == "東京" and g[0]["ref"]["p50"] == 0.2 and not g[0]["rules"]
+    assert B.threshold_rows(None, "course", {}) == []                                   # 結果が無ければ空（ページはタブに案内を出す）
+
+
+def test_threshold_best_excludes_pop_alone():
+    st = {"n": 30, "w": [10, 8, 6], "out": 6, "place": 0.8, "lo": 0.63, "hi": 0.9, "e": 0.7, "roi_t": 1.0, "roi_f": 1.0}
+    rule = {"conf_level": st, "conf": st, "reached": {"0.75": False, "0.6": True, "0.5": True},
+            "pop_alone": {"0.75": False, "0.6": True, "0.5": False}}
+    T = {"layers": ["1 番人気"], "course": {"1 番人気": {"units": {"東京芝1600|1勝・2勝": {"rules": [rule], "ref": None, "n_disc": 30, "n_conf": 30}}}}}
+    r = B.threshold_rows(T, "course", {}, "1 番人気")[0]
+    assert not r["best"]["0.6"] and r["best"]["0.5"]                                    # 人気だけで届く線は数えない

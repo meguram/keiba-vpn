@@ -21,59 +21,100 @@ details{margin:.6em 0}summary{cursor:pointer}.mdsec{border-left:3px solid var(--
 <p>重賞のデータ分析型の予想（同じレース名 × 同じコースの過去の好走・凡走の条件）の今の結論と、評価の回ごとの結果の年表。元は docs/ideas/graded_rule_based_handicapper.md と data/meta/graded の HTML。</p>
 <h2 id="conclusion">1. 結論（担当の記録）</h2>
 <ul>
-<li>今の最良: 分析サイクルの B（20 サイクル。2018〜2024 年の回だけで重賞ごとに ◎・消しの規則を選び、2026-11-15 に凍結。§20・§24）。</li>
-<li>「好走データ予想」のタブで使っている。</li>
-<li>成績:</li>
+<li><strong>好走データ予想のタブで使っている版</strong>: 分析サイクルの B・重賞ごと（20 サイクル。2018〜2024 年の回だけで重賞ごとに ◎・消しの規則を選び、2026-11-15 に凍結。§20・§24）。</li>
+<li><strong>同じ期間で数字がいちばん良い版</strong>（2025・2026 年の重賞 239 レース。§20.3）: B・全体で 1 つ。§20.5 の推奨も「全体で 1 つに絞る」。</li>
+<li>ただし区間を出しておらず、前日版との差が偶然の範囲かは分からない。</li>
+<li>廃止した A（2025・2026 年の結果を見て選んだ版。§24）は、比べる対象に入れない。</li>
 </ul>
 <table>
 <thead>
 <tr>
-<th>期間</th>
-<th>位置づけ</th>
-<th>◎ の回数</th>
-<th>勝率</th>
-<th>複勝率</th>
+<th>版（2025・2026 年の 239 レース）</th>
+<th>◎ 勝率</th>
 <th>単勝の回収率</th>
+<th>複勝率</th>
 <th>複勝の回収率</th>
 <th>消しの的中</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>2018〜2024</td>
-<td>選んだ期間。当てはめ</td>
-<td>870</td>
-<td>76.0%</td>
-<td>—</td>
-<td>662.7%</td>
-<td>—</td>
-<td>—</td>
+<td>B・全体で 1 つ</td>
+<td>21.8%</td>
+<td>93.9%</td>
+<td>48.5%</td>
+<td>94.8%</td>
+<td>94.1%</td>
 </tr>
 <tr>
-<td>2025 年</td>
-<td>候補の作り方を決める過程で何度か見た期間</td>
-<td>130</td>
-<td>12.3%</td>
-<td>36.9%</td>
-<td>87.5%</td>
-<td>90.5%</td>
-<td>88.4%</td>
+<td>前日版（凍結の規則）</td>
+<td>20.5%</td>
+<td>73.3%</td>
+<td>49.4%</td>
+<td>82.2%</td>
+<td>94.1%</td>
 </tr>
 <tr>
-<td>2026 年（11/08 まで）</td>
-<td>同上</td>
-<td>109</td>
-<td>14.7%</td>
-<td>32.1%</td>
-<td>52.9%</td>
-<td>65.1%</td>
-<td>87.6%</td>
+<td>B・重賞ごと（タブの版）</td>
+<td>13.4%</td>
+<td>71.7%</td>
+<td>34.7%</td>
+<td>78.9%</td>
+<td>88.0%</td>
 </tr>
 </tbody>
 </table>
 <ul>
-<li>根拠: 1 重賞あたり年 1 回しかなく、規則の選び方が当てはめに寄っている（2018〜2024 年と 2025 年以降の差）。</li>
-<li>限界: 2025 年以降は控除後の水準を下回る。単位ごとの値は data/meta/graded/rules_overview.html。</li>
+<li>タブの版（B・重賞ごと）を年で分けると、次のとおり（history.json から）。</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>期間</th>
+<th>位置づけ</th>
+<th>◎</th>
+<th>勝率</th>
+<th>単勝の回収率</th>
+<th>複勝の回収率</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2018〜2024</td>
+<td>選んだ期間の当てはめ</td>
+<td>870 回</td>
+<td>76.0%</td>
+<td>662.7%</td>
+<td>—</td>
+</tr>
+<tr>
+<td>2025 年</td>
+<td>—</td>
+<td>130 回</td>
+<td>12.3%</td>
+<td>87.5%</td>
+<td>90.5%</td>
+</tr>
+<tr>
+<td>2026 年（11/08 まで）</td>
+<td>—</td>
+<td>109 回</td>
+<td>14.7%</td>
+<td>52.9%</td>
+<td>65.1%</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>
+<p>2025・2026 年は、候補の作り方を決める過程で何度か見た期間。</p>
+</li>
+<li>
+<p>根拠: 1 重賞あたり年 1 回しかない。重賞ごとに選ぶと、候補を増やすほど開発の回に合わせすぎる（§20.3）。</p>
+</li>
+<li>限界: どの版も 2025 年以降は、控除後の水準を下回る。単位ごとの値は data/meta/graded/rules_overview.html。</li>
+<li>閾値のルールの版（2026-11-18、course_class_handicapper.md §12）:</li>
+<li>重賞は、どの人気の層でも「人気・オッズを超える中身」を確かめられる条件が無かった。</li>
 </ul><p class="src">元: <a href="../../ideas/graded_rule_based_handicapper.md">graded_rule_based_handicapper.md</a> の best の印の中（担当のセッションが書く）。</p>
 <h2 id="timeline">2. 評価・結果の年表</h2>
 <div class="tw"><table><thead><tr><th>節</th><th>見出し（日付・評価の回を含む）</th></tr></thead><tbody><tr><td>15.</td><td>15. 結果（2026-11-13 19:44 JST に 1 回だけ評価）</td></tr><tr><td>17.4.1</td><td>17.4.1 採否の結果（2016〜2024 年の中だけ。凍結 2026-11-14T16:00:45+09:00）</td></tr><tr><td>17.6</td><td>17.6 結果（2 回目の評価、2026-11-14 16:39 に 1 回だけ流した。2025・2026 年の重賞 232 レース）</td></tr><tr><td>18.7</td><td>18.7 結果（3 回目の評価: 2025・2026 年の結果を二度見た後。2026-11-15 14:02 に 1 回だけ流した。重賞 232 レース、146 版）</td></tr><tr><td>19.5</td><td>19.5 結果（4 回目の評価: 2025・2026 年の結果を三度見た後。2026-11-15 15:37 に 1 回だけ流した）</td></tr><tr><td>20.3</td><td>20.3 結果（20 サイクル、決め方 262,405 通り。2025・2026 年の重賞 239 レース・130 重賞）</td></tr><tr><td>21.3</td><td>21.3 開発期間（2016〜2024 年）の結果</td></tr><tr><td>21.5</td><td>21.5 結果（2025・2026 年。この分析では初回、2026-11-14 までの重賞の主の層 216 レース）</td></tr><tr><td>22.3</td><td>22.3 結果（130 重賞。2025・2026 年の回は 1〜2 回で、1 回だけの重賞が 21）</td></tr><tr><td>24.</td><td>24. A の廃止（2026-11-16、ユーザーの指示）</td></tr></tbody></table></div>
@@ -339,7 +380,7 @@ details{margin:.6em 0}summary{cursor:pointer}.mdsec{border-left:3px solid var(--
 </thead>
 <tbody>
 <tr>
-<td>A・重賞ごと</td>
+<td>A・重賞ごと（廃止。§24。2025・2026 年の結果を見て選んだので評価ではない）</td>
 <td>100.0%</td>
 <td>1,081.9%</td>
 <td>100.0%</td>
@@ -348,7 +389,7 @@ details{margin:.6em 0}summary{cursor:pointer}.mdsec{border-left:3px solid var(--
 <td>100.0%（6.0）</td>
 </tr>
 <tr>
-<td>A・全体で 1 つ</td>
+<td>A・全体で 1 つ（廃止。§24）</td>
 <td>25.5%</td>
 <td>105.5%</td>
 <td>51.5%</td>
@@ -580,5 +621,5 @@ details{margin:.6em 0}summary{cursor:pointer}.mdsec{border-left:3px solid var(--
 <li>§20 の graded_cycles.html の「A と B の差」の節は外した。</li>
 </ul></div></details>
 <h2 id="links">3. 詳細へのリンク（調査の HTML）</h2>
-<div class="tw"><table><thead><tr><th>文書</th><th>更新日</th><th>大きさ</th></tr></thead><tbody><tr><td><a href="../../../data/meta/graded/graded_cycles.html">重賞の分析サイクル</a></td><td>2026-11-16</td><td>59 KB</td></tr><tr><td><a href="../../../data/meta/graded/graded_handicapper.html">重賞のルールベース予想家</a></td><td>2026-11-18</td><td>11,545 KB</td></tr><tr><td><a href="../../../data/meta/graded/graded_longshot.html">重賞の穴馬分析</a></td><td>2026-11-16</td><td>311 KB</td></tr><tr><td><a href="../../../data/meta/graded/graded_race_playbook.html">重賞の選び方の早見表</a></td><td>2026-11-16</td><td>1,085 KB</td></tr><tr><td><a href="../../../data/meta/graded/graded_rules_table.html">重賞のルール一覧</a></td><td>2026-11-16</td><td>8,062 KB</td></tr><tr><td><a href="../../../data/meta/graded/rules_overview.html">ルールの一覧</a></td><td>2026-11-18</td><td>1,008 KB</td></tr><tr><td><a href="../modeling/chapters/graded_handicapper.html">重賞のルールベース予想家（本の要約の章）</a></td><td>2026-11-14</td><td>8 KB</td></tr><tr><td><a href="../../ideas/graded_rule_based_handicapper.md">計画と経過の記録（md）</a></td><td>2026-11-18</td><td>133 KB</td></tr><tr><td><a href="../../ideas/graded_handicapper_cuts.md">切り口の目録（md）</a></td><td>2026-11-13</td><td>30 KB</td></tr></tbody></table></div><h2 id="forward">4. 前向きの記録（結果が出る前に印を残したもの）</h2><div class="tw"><table><thead><tr><th>項目</th><th>値</th></tr></thead><tbody><tr><td>前向きの記録の対象（レース数）</td><td>0</td></tr><tr><td>事前登録の凍結</td><td>2026-11-15T16:19:26+09:00</td></tr><tr><td>最終更新</td><td>2026-11-15T16:20:17+09:00</td></tr></tbody></table></div><p class="src">元: data/meta/graded/cycles_forward_ledger.json。</p>
+<div class="tw"><table><thead><tr><th>文書</th><th>更新日</th><th>大きさ</th></tr></thead><tbody><tr><td><a href="../../../data/meta/graded/graded_cycles.html">重賞の分析サイクル</a></td><td>2026-11-16</td><td>59 KB</td></tr><tr><td><a href="../../../data/meta/graded/graded_handicapper.html">重賞のルールベース予想家</a></td><td>2026-11-18</td><td>11,545 KB</td></tr><tr><td><a href="../../../data/meta/graded/graded_longshot.html">重賞の穴馬分析</a></td><td>2026-11-16</td><td>311 KB</td></tr><tr><td><a href="../../../data/meta/graded/graded_race_playbook.html">重賞の選び方の早見表</a></td><td>2026-11-16</td><td>1,085 KB</td></tr><tr><td><a href="../../../data/meta/graded/graded_rules_table.html">重賞のルール一覧</a></td><td>2026-11-16</td><td>8,062 KB</td></tr><tr><td><a href="../../../data/meta/graded/rules_overview.html">ルールの一覧</a></td><td>2026-11-18</td><td>6,201 KB</td></tr><tr><td><a href="../modeling/chapters/graded_handicapper.html">重賞のルールベース予想家（本の要約の章）</a></td><td>2026-11-18</td><td>9 KB</td></tr><tr><td><a href="../../ideas/graded_rule_based_handicapper.md">計画と経過の記録（md）</a></td><td>2026-11-18</td><td>134 KB</td></tr><tr><td><a href="../../ideas/graded_handicapper_cuts.md">切り口の目録（md）</a></td><td>2026-11-13</td><td>30 KB</td></tr></tbody></table></div><h2 id="forward">4. 前向きの記録（結果が出る前に印を残したもの）</h2><div class="tw"><table><thead><tr><th>項目</th><th>値</th></tr></thead><tbody><tr><td>前向きの記録の対象（レース数）</td><td>0</td></tr><tr><td>事前登録の凍結</td><td>2026-11-15T16:19:26+09:00</td></tr><tr><td>最終更新</td><td>2026-11-15T16:20:17+09:00</td></tr></tbody></table></div><p class="src">元: data/meta/graded/cycles_forward_ledger.json。</p>
 </main></body></html>

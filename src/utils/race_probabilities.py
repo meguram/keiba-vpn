@@ -314,7 +314,7 @@ def assign_mece_marks_v1(entries: list[dict], situational: bool | None = None, c
 #   ▲ 3 番手候補で、馬券内の確率が高そうな馬
 #   ★ オッズの高い（人気薄）馬で、馬券内率がある程度あり、期待値が一番高い馬（オッズの上限なし）
 #   △ 残った馬の中で馬券内に入る確率が高い 2〜3 頭（出走頭数で数を調整）
-# 使う版は config/mark_rule.json の version（環境変数 KEIBA_MARK_RULE=v1|v2 で上書き）。既定は v1（従来どおり）。
+# 使う版は config/mark_rule.json の version（今は 2。環境変数 KEIBA_MARK_RULE=v1|v2 で上書き）。下の version 1 は、設定ファイルが無い・壊れているときの予備の値。
 _MARK_RULE_DEFAULT = {
     "version": 1,
     "v2": {
@@ -329,7 +329,7 @@ _mark_rule_cache: dict = {}
 
 
 def mark_rule_config() -> dict:
-    """印の版の設定（config/mark_rule.json）。無い・壊れているときは既定（version 1）。ファイルの更新時刻で読み直す。"""
+    """印の版の設定（config/mark_rule.json）。無い・壊れているときは予備の値（version 1）。ファイルの更新時刻で読み直す。"""
     import json
     import os
     from pathlib import Path

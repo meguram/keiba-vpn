@@ -1,6 +1,6 @@
 {
  "version": 2,
- "note": "印の付け方の版。1=従来（v1）、2=めぐAI印 v2（ユーザー定義）。環境変数 KEIBA_MARK_RULE=v1|v2 でも上書き。既定は v1。評価: docs/html/modeling/chapters/megu_marking.html 末尾の『v2 の評価』",
+ "note": "印の付け方の版。1=従来（v1）、2=めぐAI印 v2（ユーザー定義）。環境変数 KEIBA_MARK_RULE=v1|v2 でも上書き。今の既定はこのファイルの version（2）。このファイルが無い・壊れているときだけ、コードの予備の値の v1 になる。リポジトリの配備の設定に KEIBA_MARK_RULE は無い（2026-11-18 に確認。稼働中の Cloud Run・VPS の環境変数の実値は未確認）。評価: docs/html/modeling/chapters/megu_marking.html 末尾の『v2 の評価』",
  "v2": {
   "honmei": {
    "win_prob_min": 0.10,

@@ -45,10 +45,20 @@ def _hhmm(dt: datetime) -> str:
 
 def _prediction_event(resp: dict, race_id: str, race_date: str | None) -> dict[str, Any]:
     """予測を作った時刻（at）と、馬体重が揃っていたか（weights_known。分からなければ None）。"""
-    if resp.get("prediction_source") in ("shadow", "backfill"):
+    if resp.get("prediction_source") in ("shadow", "backfill", "candidate"):
         from src.api import local_predictions as LP
 
         day = re.sub(r"\D", "", str(race_date or ""))[:8]
+        if resp.get("prediction_source") == "candidate":    # 候補の第 1 段の時刻（影のランナーの記録 → 無ければ予測ファイルの更新時刻）
+            try:
+                for line in (LP.inference_dir() / "launch_watch" / f"{day}.jsonl").read_text(encoding="utf-8").splitlines():
+                    ev = json.loads(line)
+                    if ev.get("event") == "v6c" and ev.get("race_id") == race_id:
+                        return {"at": ev.get("at"), "weights_known": None}
+            except (OSError, ValueError):
+                pass
+            p = LP.inference_dir() / "predictions_v6c" / day / f"{race_id}.parquet"
+            return {"at": _iso(p.stat().st_mtime) if p.exists() else None, "weights_known": None}
         try:
             for line in reversed((LP.inference_dir() / "events" / f"{day}.jsonl").read_text(encoding="utf-8").splitlines()):
                 ev = json.loads(line)
