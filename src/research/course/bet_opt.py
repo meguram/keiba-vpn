@@ -232,9 +232,26 @@ def cmd_diag() -> None:
     print(json.dumps(out, ensure_ascii=False, indent=1))
 
 
+def _final2026() -> None:
+    """凍結の後に 1 回だけ（cmd_final が CR.env(2026) の子の処理として呼ぶ）: 2026 年の単位の表に凍結の ◎（kept_17）を当て、◎ と全頭の行を書く。"""
+    tok = os.environ.get("RBO_FINAL_TOKEN", "")
+    mark = json.loads(MARK.read_text(encoding="utf-8")) if MARK.exists() else {}
+    if not tok or mark.get("token_sha") != hashlib.sha256(tok.encode()).hexdigest() or "evaluated_at" in mark:
+        sys.exit("cmd_final から 1 回だけ流す")
+    P = json.loads(V3.PREREG3.read_text(encoding="utf-8"))
+    if CR._sha_file(V3.OUT3 / P["cells_file"]) != P["sha256_cells"]:
+        sys.exit("第 3 版の凍結の条件の表が sha と違う")
+    kept = json.loads((V3.OUT3 / P["cells_file"]).read_text(encoding="utf-8"))
+    d, L = V3._frame_2026()
+    hm, fld = honmei_rows(d, L, kept, frozen_c3(), "frozen2026")
+    fld.to_parquet(OUT / "final_field_2026.parquet", index=False)
+    hm.to_parquet(OUT / "final_hm_2026.parquet", index=False)
+    print("2026", len(hm), "◎", int(d["race_id"].nunique()), "レース", flush=True)
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["wf", "diag", "search", "final"])
+    ap.add_argument("cmd", choices=["wf", "diag", "search", "final", "_final2026"])
     a = ap.parse_args(argv)
     if a.cmd == "wf":
         cmd_wf()
@@ -243,9 +260,11 @@ def main(argv=None) -> None:
     elif a.cmd == "search":
         from src.research.course import bet_opt_search as S
         S.cmd_search()
-    else:
+    elif a.cmd == "final":
         from src.research.course import bet_opt_search as S
         S.cmd_final()
+    else:
+        _final2026()
 
 
 if __name__ == "__main__":
