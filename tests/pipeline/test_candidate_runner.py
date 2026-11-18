@@ -231,3 +231,11 @@ def test_freshness_stops_on_old_rb_state(tmp_path):
     assert any("RB の状態が古い" in m for m in r.freshness({"rb_state": str(rb)}))
     (rb / "params.json").write_text(json.dumps({"cut": "2026-11-16"}))
     assert r.freshness({"rb_state": str(rb)}) == []
+
+
+def test_input_gaps_records_missing_share():
+    import numpy as np
+    import pandas as pd
+
+    X = pd.DataFrame({"tl_a": [1.0, np.nan], "wc_b": [np.nan, np.nan], "d_wt_dev": [1.0, 2.0], "attr_bp": [np.nan, 1.0], "x": [1, 2]})
+    assert cr.input_gaps(X) == {"na_oikiri": 0.75, "na_weight": 0.0, "na_attr": 0.5}
