@@ -2474,6 +2474,8 @@ def cmd_prereg_run(a) -> None:
     n_all = int(dr.get("all_races_in_period") or 0)
     dr["no_pre_odds"] = n_all - int(dr.get("computed_races", 0)) - sum(int(dr.get(k, 0)) for k in ("no_pred", "no_pay", "small"))
     cover = dr.get("computed_races", 0) / max(n_all, 1)
+    if a.allow_low_cover and not (a.cover_note or "").strip():
+        raise SystemExit("--allow-low-cover には、覆いが足りない理由（--cover-note）が要ります")
     if cover < PREREG_MIN_COVER and not a.allow_low_cover:
         raise SystemExit(f"窓の全レース {n_all} のうち計算できたのは {dr.get('computed_races')}（{cover:.1%}）。内訳 {dr}。予測か発走前オッズの覆いが足りません"
                          "（印は書いていない。覆いの下限を下回っても流すなら、理由を記録して --allow-low-cover）")
@@ -2489,7 +2491,7 @@ def cmd_prereg_run(a) -> None:
     res = {"status": "done", "hash": body["hash"], "prereg": str(pr.resolve().relative_to(ROOT)), "group": grp, "git_head": head, "pred": spec["pred"],
            "drift_src": str(DRIFT_SRC), "pre_odds_sha256_now": _sha(ROOT / spec["pre_odds"]) if spec.get("pre_odds") else None,
            "pred_sha256": pred_sha, "metrics": m, "B0": {k: m0.get(k) for k in KEYS_CV}, "diff_vs_B0": d, "verdict": verdict, "drop": dr,
-           "cover": cover, "allow_low_cover": bool(a.allow_low_cover),
+           "cover": cover, "allow_low_cover": bool(a.allow_low_cover), "cover_note": a.cover_note or "",
            "races_note": "指標の races は、窓の全レースのうち予測・払戻（別枠・参考は発走前オッズも）がそろって計算できたレース。内訳は drop。",
            "odds_source": "本物の T-60" if spec.get("pre_odds") else f"T-60 の再現（{p.k} 通り）", "miss_types": miss_types(r),
            "h_reasons": r["records"]["reason"].value_counts().to_dict()}
@@ -2804,6 +2806,7 @@ def main() -> None:
     pg.add_argument("--group", required=True, help="事前登録の群の id（main・separate・reference）")
     pg.add_argument("--pred", required=True, help='予測の指定（JSON）。例: {"path": "...parquet", "where": {"part": "infer2026"}}')
     pg.add_argument("--allow-low-cover", action="store_true", help="予測の覆いが下限（95%）を下回っても流す（理由を記録に書く）")
+    pg.add_argument("--cover-note", default="", help="覆いの下限を下回っても流すときの理由（記録に残す）")
     pg.add_argument("--check-only", action="store_true", help="2026 年を読まずに、事前の確かめ（commit・入力・test 2025 の再現）だけ行う")
     pg.set_defaults(func=cmd_prereg_run)
     fn = sub.add_parser("final", help="凍結した買い方で test 2025 と 2026 年の参考を 1 回だけ見る")
