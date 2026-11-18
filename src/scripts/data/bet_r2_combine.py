@@ -78,6 +78,10 @@ def main() -> None:
     mk = T / f"bet_2026_r2_main_{h}.json"
     if not mk.exists() or json.loads(mk.read_text(encoding="utf-8")).get("status") != "done":
         raise SystemExit("2026 年の主の群がまだ流れていません（事前登録の 1 回の確かめの後に合算する）")
+    from src.ops import data_ledger as L
+
+    tok = L.guard(tool="src/scripts/data/bet_r2_combine.py", family="bet_cycles", version=h, period=("2025-01-01", "2026-10-12"), purpose="eval_only",
+                  frozen_paths=[ROOT / "config/bet_cycles/frozen_20261117_r2.json"], reason="2025 年と 2026 年の主の、すでに見た記録の合算（評価の期間。判断に使わない）")
     a, ka = stacked(OUT / f"final_test_races_{h}.parquet")
     b, kb = stacked(OUT / f"prereg_main_races_{h}.parquet")
     if ka != kb:
@@ -90,7 +94,9 @@ def main() -> None:
            "B0": {k: m0.get(k) for k in ("roi", "roi_lo", "roi_hi", "hit_rate", "bet_races")}, "diff_vs_B0": paired(ab, b0),
            "note": "評価の期間の合算。判断・選び直しには使わない。判定のオッズは T-60 の再現（5 通り）。精算は確定の払戻。"}
     dst = T / f"bet_2025_2026_r2_combined_{h}.json"
+    res["ledger"] = tok.summary()
     dst.write_text(json.dumps(res, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    tok.finish(result_path=str(dst))
     print("書いた", dst.relative_to(ROOT), json.dumps(m, ensure_ascii=False))
 
 

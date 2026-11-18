@@ -127,6 +127,10 @@ def build(frozen: Path, seed: int | None = None) -> tuple[str, dict]:
     rec = json.loads(rec_path.read_text(encoding="utf-8"))
     rm = rec["periods"]["test"]["metrics"]
 
+    from src.ops import data_ledger as L
+
+    tok = L.guard(tool="src/scripts/data/bet_r2_walkthrough.py", family="bet_cycles", version=h, period=("2025-01-01", "2025-12-31"),
+                  purpose="reproduce", frozen_paths=[frozen], reason="実例のページ（test 2025 の記録の再現を確かめてから例を並べる。判断に使わない）")
     per, _ = bc.prepare_periods(body["inputs"], ("test",), cuts=cuts)
     p = per["test"]
     res = bc.run_period(p, spec, detail=True)
@@ -367,6 +371,7 @@ ul{padding-left:1.2em}"""
           f"<li>判定のオッズの時点で結果が大きく変わる。楽観（確定オッズで判定）では参戦 {rec['periods']['test']['metrics_final_odds']['bet_races']:,}・"
           f"回収率 {pct(rec['periods']['test']['metrics_final_odds']['roi'])}、T-60 の再現では参戦 {m['bet_races']:,}・{pct(m['roi'])}。本物の T-60 では、さらに下がる可能性がある。</li>",
           "<li>本番ではまだ使っていない。</li></ul></div>", "</main></body></html>"]
+    tok.finish(result_path=str(OUT))
     meta = {"picks": [(p.base.races[i].race_id, key) for i, key, _ in picks], "metrics": {k_: m.get(k_) for k_ in ("bet_races", "roi", "hit_rate")}}
     return "\n".join(o), meta
 

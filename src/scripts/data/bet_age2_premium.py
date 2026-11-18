@@ -41,6 +41,10 @@ def run(a) -> None:
     if any(t.get("type") != "tansho" for t in spec.get("tickets") or [{"type": "tansho"}]):
         raise SystemExit("この読み直しは単勝だけの買い方を前提にしています")
     names = [n for n in ("train", "eval", "test") if n in body["inputs"]["periods"]]
+    from src.ops import data_ledger as L
+
+    tok = L.guard(tool="src/scripts/data/bet_age2_premium.py", family="bet_cycles", version=body["hash"], period=("2019-01-01", "2025-12-31"),
+                  purpose="reproduce", frozen_paths=[fz], reason="2 歳戦の上乗せの印と補正で、凍結の買い方の記録を読み直す（選び直さない）")
     per, _ = bc.prepare_periods(body["inputs"], tuple(names), cuts=cuts)
     out = {"frozen": str(fz.resolve().relative_to(ROOT)), "hash": body["hash"], "flag": f"上乗せのあった期間（2016-06-04〜09-04、2017〜2023 年の 6〜12 月）の 2 歳戦で Σ(1/確定の単勝オッズ) < {FLAG_SIGMA}",
            "adjust": f"印のレースの単勝の払戻 × Σ_レース ÷ {NOW_SIGMA}", "note": "買い方は選び直さない。記録の読み直しだけ。", "periods": {}}
@@ -100,6 +104,7 @@ def run(a) -> None:
     out["r_check_train"] = rows
     dst = ROOT / f"docs/operations/retrain_trials/bet_age2_premium_{body['hash']}.json"
     dst.write_text(json.dumps(out, ensure_ascii=False, indent=1, default=float) + "\n", encoding="utf-8")
+    tok.finish(result_path=str(dst))
     print("書いた", dst.relative_to(ROOT))
     for x in rows:
         print(x)
