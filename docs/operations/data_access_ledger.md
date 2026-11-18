@@ -64,6 +64,26 @@ with L.guard(tool="src/…/x.py:evaluate", family="course", version=frozen_sha[:
 
 重賞（graded）は 5 回、全レース版（course）は 3 回、推奨馬券（bet_cycles）は test 2025 を 2 回見た。どちらの年も手つかずではない。
 
+## enforce の系統（2026-11-18 から）
+
+`bet_cycles`・`rules_bet_opt`・`prereg_rules`・`upset_types` は拒否（enforce）。統括役の承認（11/18）。
+
+- 本番・当日の経路から拒否の処理が呼ばれないことを確かめた（`tests/ops/test_data_ledger.py` の `test_guard_is_only_in_research_cli_entrypoints`・`test_importing_bet_cycles_does_not_load_ledger`）。
+  - guard を呼ぶのは研究の CLI の入口だけ: `bet_cycles.py` の `cmd_final`・`cmd_prereg_run`、`bet_opt_search.py` の `cmd_final`、`prereg_rules.py`・`upset_types.py` の `run`、`bet_forward_ledger.py`・`bet_age2_premium.py`・`bet_r2_combine.py`・`bet_r2_walkthrough.py` の `main`。
+  - 第 2 段の推奨（`src/pipeline/inference/stage2_bets.py`）は `bet_cycles` の補助の関数（`normalize_probs`・`play`・`_skip` など）だけを使い、guard のある関数を呼ばない。`bet_cycles` を import しても台帳は読み込まれない。
+  - 候補の影のランナー（`candidate_runner.py`・`scripts/cron/candidate_runner.sh`）・API（`src/api/`）・`src/pipeline/`・`src/ops/jobs/` に台帳の呼び出しは無い。cron から上の CLI を呼ぶ所も無い。
+  - guard を呼んでよい入口はテストの `_GUARD_ENTRY` に固定した（bet_cycles の `cmd_final`・`cmd_prereg_run`、bet_age2_premium の `run`、bet_r2_walkthrough の `build`、ほかは `main`・`cmd_run`・`cmd_final`）。guard を呼ぶファイルを足したら、そこに入口を書く。
+  - `src/api`・`src/pipeline`・`src/ops`・`scripts/cron`・`scripts/ops`・`scripts/server` に、台帳と guard を持つ CLI の名前が出てこないこともテストで確かめる。
+  - import しても台帳が読み込まれないことは補助の確かめで、根拠の主は上の静的な確かめ。
+
+enforce の系統で止まりやすい場面:
+
+- `confirm`・`reproduce` は、凍結のファイルと道具を commit 済みの clean な木で流す。共有の作業ツリーで別のセッションの未コミットの変更があると、`frozen_dirty` で止まる。
+- 道具は jovyan で流す。sudo で流したときは、元の利用者（`SUDO_USER`）の共有の置き場を使う。
+- `check_dates` のはみ出しで拒否されると、その実行は aborted として 1 回と数える。申告する期間は、読む表の範囲と合わせてから流す。
+- `bet_forward_ledger.py`（前向きの集計、`forward`）は、期間が 11/21 より前に掛かると拒否される。前向きの集計は 11/21 からの期間で流す。
+  - forward の行が積もると、同じ前向きの期間への bet_cycles の `confirm` は eval_only に落ちる（前向きの判定は forward のまま集計する）。
+
 ## 段取り
 
 1. 2026-11-18: 本体・決まり・テスト・CI の検査（一覧だけ）・過去の分。全部 warn。

@@ -31,7 +31,8 @@ ROOT = Path(__file__).resolve().parents[2]
 JST = timezone(timedelta(hours=9))
 POLICY = ROOT / "config/data_access/policy.json"
 GIT_LEDGER = ROOT / "config/data_access/ledger.jsonl"
-SHARED_DEFAULT = Path.home() / "work/progress/data_access/ledger.jsonl"   # ホストの共有の写し（全 worktree・clone から同じ場所）
+# ホストの共有の写し（全 worktree・clone から同じ場所）。sudo で流しても、元の利用者の HOME を使う（/root を指して拒否されないように）
+SHARED_DEFAULT = (Path(f"~{os.environ['SUDO_USER']}").expanduser() if os.environ.get("SUDO_USER") else Path.home()) / "work/progress/data_access/ledger.jsonl"
 
 PURPOSES = ("select", "confirm", "eval_only", "reproduce", "forward", "fit")
 # 見た回数に数える目的（reproduce・fit は別に数える）
