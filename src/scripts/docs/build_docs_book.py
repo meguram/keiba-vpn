@@ -582,24 +582,44 @@ def _split_blocks(css: str) -> list[tuple[str, str]]:
     return out
 
 
+_ROOT_QUAL = re.compile(r"^(?::root|html)((?:\[[^\]]*\]|:not\([^()]*\)|:(?!not\b)[\w-]+(?:\([^()]*\))?|\.[\w-]+)+)(.*)$")
+
+
+def _scope_selector(s: str, scope: str) -> str:
+    if s in (":root", "html", "body", "html,body"):
+        return scope
+    if s == "*":
+        return f"{scope}, {scope} *"
+    root = _ROOT_QUAL.match(s)
+    if root and not root.group(2).lstrip().startswith(")"):
+        # 「:root[data-theme="dark"]」「:root:not([data-theme="light"])」など、根の要素の属性で切り替える配色。
+        # 本の <html> の属性で判定し、章の中に効かせる（本は data-theme="dark"）
+        rest = re.sub(r"^[\s>+~]+", "", root.group(2))
+        body = re.match(r"^(?:body|html)((?:\.[\w-]+|\[[^\]]*\])*)(?=[\s>+~]|$)", rest)
+        if body:   # body・body.x は章の箱そのもの（クラス・属性は箱に付ける）
+            rest = rest[body.end():].lstrip(" >")
+            return f"html{root.group(1)} {scope}{body.group(1)}" + (f" {rest}" if rest else "")
+        return f"html{root.group(1)} {scope}" + (f" {rest}" if rest else "")
+    if s.startswith(("body ", "html ")):
+        return scope + " " + s.split(" ", 1)[1]
+    return f"{scope} {s}"
+
+
 def scope_css(css: str, scope: str) -> str:
     css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
     out = []
     for head, inner in _split_blocks(css):
-        if head.startswith("@media") or head.startswith("@supports"):
+        if head.startswith("@media") and "prefers-color-scheme" in head:
+            # 本の外枠はいつも暗い配色。OS の設定で章の配色が変わると暗い外枠の上で読めなくなるので、
+            # 暗い側はいつも効かせ、明るい側は捨てる
+            if re.search(r"prefers-color-scheme\s*:\s*dark", head):
+                out.append(scope_css(inner, scope))
+        elif head.startswith("@media") or head.startswith("@supports"):
             out.append(f"{head}{{{scope_css(inner, scope)}}}")
         elif head.startswith("@"):
             out.append(f"{head}{{{inner}}}")
         else:
-            sels = []
-            for s in (x.strip() for x in head.split(",")):
-                if s in (":root", "html", "body", "html,body", "*"):
-                    sels.append(scope if s != "*" else f"{scope}, {scope} *")
-                elif s.startswith(("body ", "html ")):
-                    sels.append(scope + " " + s.split(" ", 1)[1])
-                else:
-                    sels.append(f"{scope} {s}")
-            out.append(f"{', '.join(sels)}{{{inner}}}")
+            out.append(f"{', '.join(_scope_selector(x.strip(), scope) for x in head.split(','))}{{{inner}}}")
     return "\n".join(out)
 
 
@@ -953,7 +973,7 @@ def build(out: Path = DEFAULT_OUT) -> tuple[str, dict]:
     css = SHELL_CSS + "\n" + "\n".join(f"/* {gid} */\n" + scope_css(c, f".css-{gid}") for gid, c in css_groups.items()) + "\n.bk-chapter{background:transparent !important}"
     mermaid_src = quote(os.path.relpath(HTML_DIR / "assets" / "mermaid.min.js", book_dir))
     out_html = (
-        '<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<!doctype html><html lang="ja" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
         "<title>keiba-vpn ドキュメント総覧</title>"
         f"<style>{css}</style></head><body class=\"bk\"><div class=\"bk-layout\"><nav class=\"bk-side\"><h1><a href=\"#front\">ドキュメント総覧</a></h1>"
         '<div class="sub">docs/ の全 HTML を 1 冊に統合</div><input id="bk-q" type="search" placeholder="章・節をしぼり込む"><div class="tools"><button id="bk-open" type="button">すべて開く</button><button id="bk-close" type="button">すべて閉じる</button></div>'

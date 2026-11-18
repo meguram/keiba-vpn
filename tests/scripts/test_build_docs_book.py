@@ -182,8 +182,37 @@ def test_book_has_no_duplicate_ids_dead_anchors_or_broken_links():
     assert not broken, f"本の外へのリンクが切れている: {sorted(broken)[:10]}"
 
 
+def test_scope_css_keeps_dark_theme_rules_of_chapters():
+    css = (':root{--bg:#fff}@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000}}'
+           ':root[data-theme="dark"]{--bg:#111}:root[data-theme="dark"] body .x{color:red}')
+    out = B.scope_css(css, ".css-a")
+    assert ".css-a{--bg:#fff}" in out
+    assert 'html:not([data-theme="light"]) .css-a{--bg:#000}' in out
+    assert 'html[data-theme="dark"] .css-a{--bg:#111}' in out
+    assert 'html[data-theme="dark"] .css-a .x{color:red}' in out
+    assert ".css-a :root" not in out          # 章の中で当たらない形（.章 :root[…]）にしない
+    assert "@media" not in out                # 外枠はいつも暗いので、OS の配色の切り替えは外す（暗い側はいつも効かせる）
+    light = B.scope_css("@media (prefers-color-scheme: light){:root{--bg:#fff}}", ".css-a")
+    assert light == ""                        # 明るい側は捨てる
+    cases = {
+        ':root:not([a]):not([b]){c:1}': 'html:not([a]):not([b]) .css-a{c:1}',
+        ':root[data-theme="dark"] .x, .y{c:1}': 'html[data-theme="dark"] .css-a .x, .css-a .y{c:1}',
+        'html.dark body{c:1}': 'html.dark .css-a{c:1}',
+        ':root[data-theme="dark"] body.dark .x{c:1}': 'html[data-theme="dark"] .css-a.dark .x{c:1}',
+        ':root[data-theme="dark"]>body .x{c:1}': 'html[data-theme="dark"] .css-a .x{c:1}',
+        ':root:hover{c:1}': 'html:hover .css-a{c:1}',
+        ':root:not(:has(.a)) .x{c:1}': '.css-a :root:not(:has(.a)) .x{c:1}',   # 入れ子の括弧は移さない（壊れた選択子を作らない）
+    }
+    for src, want in cases.items():
+        assert B.scope_css(src, ".css-a") == want, (src, B.scope_css(src, ".css-a"))
+
+
 def test_book_does_not_depend_on_external_cdn():
     out, _ = _build()
+    assert '<html lang="ja" data-theme="dark">' in out   # 章の暗い配色が効く
+    css = re.search(r"<style>(.*?)</style>", out, re.S).group(1)
+    assert not re.search(r"\.css-[\w-]+ :root\[|\.css-[\w-]+ :root:not", css), "章の暗い配色が当たらない形で残っている"
+    assert "prefers-color-scheme" not in css
     assert "cdn.jsdelivr" not in out and "fonts.googleapis" not in out
     assert (B.HTML_DIR / "assets" / "mermaid.min.js").is_file() and 'src="assets/mermaid.min.js"' in out
 
