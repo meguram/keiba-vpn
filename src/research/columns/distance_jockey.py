@@ -146,7 +146,7 @@ def article(a: dict[str, Any], keep: dict[str, Any] | None) -> dict[str, Any]:
         "slug": "distance-jockey",
         "title": "距離で騎手の差は変わるか——長距離で大きいとは言えず、ほぼオッズどおり",
         "claim": "距離が長いほど騎手の影響が大きい",
-        "verdict": "inconclusive",
+        "verdict": "not_supported",   # 2026-11-18 に見直し（本文の結論に合わせる。統括役の承認）
         "summary": (f"偶然の分を除いた騎手間の勝率の差は、短距離 {pt(E['短距離']['win'])}・マイル {pt(E['マイル']['win'])}・中距離 {pt(E['中距離']['win'])}・長距離 {pt(E['長距離']['win'])}。"
                     "長距離とマイルは区別できず、人気の見込みを超える騎手の差はどの距離でもごく小さいです。"),
         "categories": ["jockey/distance"],

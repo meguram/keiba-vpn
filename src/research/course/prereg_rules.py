@@ -1,13 +1,13 @@
-"""事前登録した閾値のルールを、2017〜2024 年に 1 回だけ当てて確かめる（docs/ideas/course_class_handicapper.md §13）。
+"""事前登録した閾値のルールを、2018〜2024 年に 1 回だけ当てて確かめる（docs/ideas/course_class_handicapper.md §13）。
 
 - ルール・向き・範囲・期間・層・効果の下限・ブートストラップは config/prereg_threshold_rules.json（commit 済みであること）。式はこのファイルの rule_masks。
 - 通常の面は §12 と同じ単位（コース × クラスの群 × 良馬場）の行。重賞の面は G1〜G3 の全馬場の行。
 - 比べ方: ルールに当たる馬（⭕ でない馬）と当たらない馬を、層（年 × 対数オッズの帯 × 頭数の帯 × 面の鍵）の中で比べた
-  Mantel–Haenszel のリスク差（3 着内）。区間と p は、レースで束ねたポアソンのブートストラップ。
-- 採る条件: BH（登録の組の数）の後に q ≤ q_max・向きが登録どおり・|差| ≥ 効果の下限・2022〜24 で同じ向きかつ 2017〜21 の半分以上・
-  2024 年の区間がすべて逆向きの側に無い・（通常のみ）似た単位の 3/4 以上で同じ向き。
+  Mantel–Haenszel のリスク差（3 着内）。区間と p は、開催日 × 場で束ねたポアソンのブートストラップ。
+- 期間（戦略 C2・C7）: 採否 2018〜21（BH・効果の下限・件数・2020〜21 も同じ向き）・確かめ 2022〜24（持続: 同じ向きで半分以上・2024 年が逆向きでない）。
+  （通常のみ）似た単位は採否の期間で見る。通ったものは「候補」で、採否は凍結の後の前向きの追跡だけ（C1）。2025・2026 年は評価だけ。
 - 負の対照（N1〜N3）が q ≤ q_max なら、帰無が壊れているとして全体を使わない。
-- 1 回だけ: config とこのファイルが commit 済みで変更が無いこと（git）を確かめ、印を計算の前に立てる。2025 年以降は読まない。
+- 1 回だけ: config・このファイル・§14 の登録とコードが commit 済みで変更が無いこと（git）を確かめ、読み込みを済ませてから印を立てる。2025 年以降は読まない。
 使い方: python -m src.research.course.prereg_rules run   # <COURSE_OUT>/prereg/result.json
 """
 
@@ -150,17 +150,19 @@ def _roi_trim(Y: np.ndarray) -> dict:
 
 def evaluate(full: pd.DataFrame, C: dict, log=print) -> dict:
     """登録の組をすべて確かめる。full は 2024 年までの frame（TH.load の形。2016 年を含む）。前走の行は full 全体から引き、
-    その後で期間（C["period"]）と前走が地方・海外の馬の除外を当てる。"""
-    if (full["yr"] > C["period"][1]).any():
+    その後で期間（C["discovery"] の始め〜C["confirm"] の終わり）と、前走が地方・海外の馬の除外を当てる。"""
+    if (full["yr"] > C["confirm"][1]).any():
         raise ValueError("登録の期間の後の行がある")
     pv_all = prev_lookup(full)
     pr = full["prev_region"].astype("string").fillna("").to_numpy()
-    keep = (full["yr"].to_numpy() >= C["period"][0]) & ~np.isin(pr, ["地方", "海外"])
+    keep = (full["yr"].to_numpy() >= C["discovery"][0]) & ~np.isin(pr, ["地方", "海外"])
     d, pv = full[keep].reset_index(drop=True), pv_all[keep].reset_index(drop=True)
     M = rule_masks(d, pv)
     yr = d["yr"].to_numpy()
-    race = d["race_id"].astype(str).to_numpy()
+    clus = (d["date"].astype(str).str[:10] + "|" + d["venue"].astype(str)).to_numpy()   # ブートストラップで束ねる単位（開催日 × 場）
     popf = pd.to_numeric(d["pop_final"], errors="coerce").to_numpy(float)
+    D0, D1 = C["discovery"]
+    F0, F1 = C["confirm"]
     Pc = TH.pools(d, "course")
     side_rows = {"course": Pc["target"] != "", "graded": np.isin(d["grade"].astype(str).to_numpy(), ["G1", "G2", "G3"])}
     side_key = {"course": Pc["fam"], "graded": np.where(side_rows["graded"], (d["surf"].astype(str) + "|" + d["dband"]).to_numpy(), "")}
@@ -183,34 +185,71 @@ def evaluate(full: pd.DataFrame, C: dict, log=print) -> dict:
             app, flag = M[rid]
             m = app & side_rows[side] & lm
             st = strata(d.loc[m].reset_index(drop=True), side_key[side][m], C["odds_edges"])
-            f, yy, rr, yy_r = flag[m], y[m], race[m], yr[m]
-            est = mh(st, f, yy)
-            bs = boot(st, f, yy, rr, B["reps"], B["seed"])
+            f, yy, rr, yy_r = flag[m], y[m], clus[m], yr[m]
+            sd_ = (yy_r >= D0) & (yy_r <= D1)                    # 採否の期間（C2: 2018〜21）
+            sc_ = (yy_r >= F0) & (yy_r <= F1)                    # 確かめの期間（C2: 2022〜24）
+            est = mh(st[sd_], f[sd_], yy[sd_])
+            bs = boot(st[sd_], f[sd_], yy[sd_], rr[sd_], B["reps"], B["seed"])
             se = float(bs.std()) if len(bs) > 1 else None
-            per = {}
-            for lab, sel in (("2017〜21", (yy_r >= 2017) & (yy_r <= 2021)), ("2022〜24", (yy_r >= 2022) & (yy_r <= 2024)),
-                             ("2020〜24", yy_r >= 2020)):
-                per[lab] = mh(st[sel], f[sel], yy[sel])
+            bc = boot(st[sc_], f[sc_], yy[sc_], rr[sc_], B["reps"], B["seed"] + 2)
+            s2021 = (yy_r >= 2020) & (yy_r <= D1)            # 前走が地方・海外の馬を外せる採否の期間（2020〜21）
+            per = {f"{D0}〜{D1 % 100:02d}": est, f"{F0}〜{F1 % 100:02d}": mh(st[sc_], f[sc_], yy[sc_]),
+                   "2020〜21": mh(st[s2021], f[s2021], yy[s2021])}
+            Ym_ = Y[m]
+            shrink = {}
+            for lab, sel in ((f"{D0}〜{D1 % 100:02d}", sd_), (f"{F0}〜{F1 % 100:02d}", sc_)):   # 縮小（案 C）: (k − 見込み) ÷ (n + κ)
+                sf = Ym_[sel & f].sum(0)
+                shrink[lab] = {"n": int(sf[0]), "excess": float((sf[1] + sf[2] + sf[3] - sf[7]) / (sf[0] + C["shrink_kappa"])) if sf[0] else None}
             s24 = yy_r == 2024
             b24 = boot(st[s24], f[s24], yy[s24], rr[s24], B["reps"], B["seed"] + 1)
             br = {}
             keys = side_key[side][m]
-            for kk in pd.unique(keys):        # 似た単位（通常は採否に使う。重賞は並べるだけ）
-                km = keys == kk
+            for kk in pd.unique(keys):        # 似た単位（採否の期間で見る。通常は採否に使い、重賞は並べるだけ）
+                km = (keys == kk) & sd_
                 if km.sum() >= C["breadth"]["min_runs"] and f[km].any() and (~f[km]).any():
                     br[kk] = mh(st[km], f[km], yy[km])
             Ym = Y[m]
             p6 = pop6[m]
-            extra = {"pop6_rd": mh(st[p6], f[p6], yy[p6]) if p6.any() else None,                      # 参考: 6 番人気以下（BH の外）
-                     "n_flag_by_period": {"2017〜22": int(f[yy_r <= 2022].sum()), "2023〜24": int(f[yy_r >= 2023].sum())}}
+            extra = {"pop6_rd": mh(st[p6 & sd_], f[p6 & sd_], yy[p6 & sd_]) if (p6 & sd_).any() else None,   # 参考: 6 番人気以下（BH の外）
+                     "n_flag_by_period": {"〜2022": int(f[yy_r <= 2022].sum()), "2023〜24": int(f[yy_r >= 2023].sum())}}
             rows.append({"id": rid, "side": side, "layer": ly, "control": rid.startswith("N"), "n": int(m.sum()), "n_flag": int(f.sum()),
+                         "n_flag_disc": int((f & sd_).sum()), "n_flag_conf": int((f & sc_).sum()), "shrink": shrink,
                          "rd": est, "se": se, "lo": float(np.percentile(bs, 2.5)) if len(bs) else None, "hi": float(np.percentile(bs, 97.5)) if len(bs) else None,
+                         "conf_lo": float(np.percentile(bc, 2.5)) if len(bc) else None, "conf_hi": float(np.percentile(bc, 97.5)) if len(bc) else None,
                          "periods": per, "rd2024_lo": float(np.percentile(b24, 2.5)) if len(b24) else None,
                          "rd2024_hi": float(np.percentile(b24, 97.5)) if len(b24) else None, "breadth": br,
                          "flag": _stat(Ym[f]) | _roi_trim(Ym[f]), "other": _stat(Ym[~f]) | _roi_trim(Ym[~f]),
                          "base": _stat(Ym) | _roi_trim(Ym)} | extra)
             log(f"{rid}/{side}/{ly}: n {m.sum():,}・当たる {f.sum():,}・{time.time() - t0:.0f}s", flush=True)   # 差は出さない（途中で結果を見ない）
-    return judge(rows, C)
+    res = judge(rows, C)
+    res["roi_note"] = "回収率は確定オッズで数えた値（楽観）。2 歳戦の単勝の上乗せ（2016 夏〜2023）を含む。採否には使わない（C5）"
+    try:                                      # C4 は評価だけ。落ちても本体の結果は残す
+        res["honmei_eval"] = honmei_eval(d, M, y, C)
+    except Exception as exc:                  # noqa: BLE001
+        res["honmei_eval"] = {"error": repr(exc)}
+    return res
+
+
+def honmei_eval(d: pd.DataFrame, M: dict, y: np.ndarray, C: dict) -> dict:
+    """C4: 実際に使う凍結の ◎（重賞は好走データ予想のタブの B。history.json）で、ルールの ⭕・⭕ でないごとの ◎ の成績を並べる（評価だけ。採否に使わない）。
+    通常レースには、本番で使っている凍結の ◎ が無い（第 3 版はどのタブにも載せていない）ので並べない。"""
+    hp = CR.REPO / "data/local/graded_picks/history.json"
+    if not hp.exists():
+        return {"note": "history.json が無い（並べない）"}
+    H = json.loads(hp.read_text(encoding="utf-8"))
+    pick = {(x["race_id"], int(x["B"]["honmei"]["hn"])) for v in H["rkeys"].values() for x in v["races"] if x.get("B") and x["B"].get("honmei")}
+    key = list(zip(d["race_id"].astype(str), pd.to_numeric(d["hn"], errors="coerce").fillna(-1).astype(int)))
+    hm = np.array([k in pick for k in key])
+    yr = d["yr"].to_numpy()
+    out = {"note": "評価だけ（採否に使わない）。B の ◎ は 2018〜2024 年で選んだ規則なので、この期間は当てはめ", "n_honmei": int(hm.sum())}
+    for r in C["rules"]:
+        app, flag = M[r["id"]]
+        m = hm & app & (yr >= C["discovery"][0])
+        if not m.any():
+            continue
+        out[r["id"]] = {"⭕ でない": {"n": int((m & flag).sum()), "place": float(y[m & flag].mean()) if (m & flag).any() else None},
+                        "⭕": {"n": int((m & ~flag).sum()), "place": float(y[m & ~flag].mean()) if (m & ~flag).any() else None}}
+    return out
 
 
 def judge(rows: list[dict], C: dict) -> dict:
@@ -225,12 +264,21 @@ def judge(rows: list[dict], C: dict) -> dict:
         for r, qq in zip(sub, q):
             r["q"] = float(qq)
     broken = any(r["q"] <= C["q_max"] for r in rows if r["control"])
+    n_reg = sum(1 for r in rows if not r["control"])
+    for r in rows:   # C6: 試した数による割引き（Bonferroni の p と、t ≥ 3 の目安）。報告に並べる（採否は BH）
+        if not r["control"]:
+            z = (r["rd"] / r["se"]) if (r["rd"] is not None and r["se"]) else 0.0
+            r["discount"] = {"tests": n_reg, "p_bonf": float(min(1.0, r["p"] * n_reg)), "t": float(z), "t_ge_3": bool(abs(z) >= 3 and z < 0)}
     for r in rows:
         if r["control"]:
             continue
-        a, b = r["periods"]["2017〜21"], r["periods"]["2022〜24"]
+        D0, D1 = C["discovery"]
+        F0, F1 = C["confirm"]
+        a, b = r["periods"][f"{D0}〜{D1 % 100:02d}"], r["periods"][f"{F0}〜{F1 % 100:02d}"]
         c = {"1 BH": r["q"] <= C["q_max"] and (r["rd"] or 0) < 0,
              "2 効果の下限": r["rd"] is not None and abs(r["rd"]) * 100 >= C["effect_min_pt"][r["layer"]],
+             "3 件数": r["n_flag_disc"] >= C["min_flag"]["discovery"] and r["n_flag_conf"] >= C["min_flag"]["confirm"],
+             "3 2020〜21 も同じ向き": r["periods"].get("2020〜21") is not None and r["periods"]["2020〜21"] < 0,
              "3 最近の持続": a is not None and b is not None and b < 0 and abs(b) >= 0.5 * abs(a),
              "4 2024 年": r["rd2024_lo"] is not None and not (r["rd2024_lo"] > 0)}
         if r["side"] == "course":
@@ -238,8 +286,9 @@ def judge(rows: list[dict], C: dict) -> dict:
             c["5 似た単位"] = bool(v) and sum(x < 0 for x in v) >= C["breadth"]["share"] * len(v)
         r["checks"] = c
         r["adopted"] = bool(all(c.values()) and not broken)
-    return {"rows": rows, "null_broken": broken, "n_tests": sum(1 for r in rows if not r["control"]),
-            "adopted": [f"{r['id']}/{r['side']}/{r['layer']}" for r in rows if r.get("adopted")]}
+    return {"rows": rows, "null_broken": broken, "n_tests": n_reg,
+            "candidates": [f"{r['id']}/{r['side']}/{r['layer']}" for r in rows if r.get("adopted")],
+            "note": "C1: ここで通ったものは「候補」。採否は凍結の後の前向きの追跡だけで決める。2025・2026 年は評価だけ"}
 
 
 def _git_clean(paths: list[Path]) -> bool:
@@ -251,28 +300,46 @@ def _git_clean(paths: list[Path]) -> bool:
     return True
 
 
+def preflight(C: dict, need_history: bool = True) -> None:
+    """印の前の確かめ: 要る表がそろっているか・重い計算を流さない時刻でないか。
+    11/21・22 の 07:30〜17:00 は流さない。計算は 2 時間かからないので、05:30 からは始めない（禁止の時間帯に入らないように）。"""
+    need = [TH.FRAME] + ([CR.REPO / "data/local/graded_picks/history.json"] if need_history else []) + \
+        [CR.REPO / "data/page_reference/tables" / str(y) / "race_result_flat.parquet" for y in range(2016, C["confirm"][1] + 1)]
+    miss = [str(x) for x in need if not x.exists()]
+    if miss:
+        sys.exit(f"要る表が無い（データのつながった作業場所で流す）: {miss[:3]}")
+    now = datetime.now(CR.JST)
+    if now.strftime("%m-%d") in ("11-21", "11-22") and "05:30" <= now.strftime("%H:%M") < "17:00":
+        sys.exit("11/21・22 の 07:30〜17:00 は重い計算を流さない")
+
+
 def cmd_run() -> None:
-    """1 回だけ: config とコード（このファイル・threshold・v2・run）が commit 済みで変更が無いときだけ流す。印は計算の前に立てる。
-    印があれば、途中で落ちたときも流し直さない（流し直すかは、統括役に返して決める）。途中のログに差は出さない。"""
+    """1 回だけ: config とコード（このファイル・threshold・v2・run・§14 の config とコード）が commit 済みで変更が無いときだけ流す。
+    要る表と時刻を確かめ、表を読んでから、計算の前に印を立てる。印があれば、途中で落ちたときも流し直さない
+    （流し直すかは、統括役に返して決める）。途中のログに差は出さない。"""
     from src.research.course import v2 as V2
     if MARK.exists() or (OUTP / "result.json").exists():
         sys.exit("事前登録のルールは流し済み（1 回だけ）")
     code = Path(__file__)
-    deps = [CONFIG, code, Path(TH.__file__), Path(V2.__file__), Path(CR.__file__)]
+    deps = [CONFIG, code, Path(TH.__file__), Path(V2.__file__), Path(CR.__file__),
+            CR.REPO / "config/prereg_upset_types.json", CR.REPO / "src/research/course/upset_types.py"]   # §14 の凍結が先（§14.5 の 10）
     if not _git_clean(deps):
-        sys.exit("config・コードが commit されていないか、変更がある")
+        sys.exit("config・コード（§14 の登録を含む）が commit されていないか、変更がある")
     C = json.loads(CONFIG.read_text(encoding="utf-8"))
+    preflight(C)
     CR.wait_resources()
+    preflight(C)                              # 待っている間に時刻の決まりに入ったら止める
+    d = TH.load(C["confirm"][1])              # 読み込みは印の前（ここで落ちても 1 回を使わない）
     OUTP.mkdir(parents=True, exist_ok=True)
     head = subprocess.run(["git", "-C", str(CR.REPO), "rev-parse", "HEAD"], capture_output=True, text=True, check=False).stdout.strip()
     sha = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in deps + [TH.FRAME]}   # 層の作り（frame・コード）の sha
     MARK.write_text(json.dumps({"started_at": datetime.now(CR.JST).isoformat(timespec="seconds"), "git_head": head, "sha256": sha}), encoding="utf-8")
-    d = TH.load(C["period"][1])
     res = evaluate(d, C)
-    res |= {"ran_at": datetime.now(CR.JST).isoformat(timespec="seconds"), "git_head": head, "sha256": sha, "period": C["period"]}
+    res |= {"ran_at": datetime.now(CR.JST).isoformat(timespec="seconds"), "git_head": head, "sha256": sha,
+            "discovery": C["discovery"], "confirm": C["confirm"]}
     (OUTP / "result.json").write_text(json.dumps(res, ensure_ascii=False, default=float), encoding="utf-8")
     MARK.write_text(json.dumps(json.loads(MARK.read_text(encoding="utf-8")) | {"finished_at": res["ran_at"]}), encoding="utf-8")
-    print("result", OUTP / "result.json", "採った", res["adopted"], "帰無が壊れている" if res["null_broken"] else "", flush=True)
+    print("result", OUTP / "result.json", "候補", res["candidates"], "帰無が壊れている" if res["null_broken"] else "", flush=True)
 
 
 def main() -> None:

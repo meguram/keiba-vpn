@@ -204,3 +204,30 @@ def test_stage2_refuses_non_t60_odds(tmp_path):
     r = _stage2_runner(tmp_path)
     r.stage2("A", {"phase": "final", "entries": [{"horse_number": 1, "win_odds": 2.0}]})
     assert r.s2.seen is None and not (tmp_path / "pub").exists()       # 確定・直前のオッズでは判定しない（システムの原因の見送り）
+
+
+def test_preflight_lists_missing_workspace_files(tmp_path):
+    """影の作業場所に必須のものが無ければ一覧に出る（PX・第 2 段・束・RB が無いと main は止まる＝判定を書かない）。"""
+    cfg = {"env": {"KEIBA_INFERENCE_DIR": str(tmp_path / "inf"), "KEIBA_STAGE2_MODEL_DIR": str(tmp_path / "s2"),
+                   "KEIBA_V6_BUNDLE": str(tmp_path / "b"), "KEIBA_V6_RB_STATE": str(tmp_path / "rb")}}
+    miss = cr.preflight(cfg, "20261121")
+    assert any(m.startswith("PX") for m in miss) and any(m.startswith("第 2 段") for m in miss) and any(m.startswith("RB") for m in miss)
+    for p in ("inf/state/px_v5/svd.npz", "inf/tracking_v2/2026-11-21/x", "inf/lap_forecast/2026-11-21/x", "s2/meta.json", "b/bundle.json", "rb/params.json"):
+        (tmp_path / p).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / p).write_text("{}")
+    assert cr.preflight(cfg, "20261121") == []
+
+
+def test_freshness_stops_on_old_rb_state(tmp_path):
+    """RB の状態の cut が履歴の表の最終日より古いと止める（warm の後に StaleInputs → 判定を書かない＝今の表示）。"""
+    import pandas as pd
+
+    r = _bare_runner(tmp_path)
+    r.ctx = type("C", (), {"history_last_date": "2026-11-16"})()
+    rb = tmp_path / "rb"
+    rb.mkdir()
+    pd.DataFrame({"date": pd.to_datetime(["2026-11-15"]), "rb_mg_x": [1.0]}).to_parquet(rb / "hist.parquet")
+    (rb / "params.json").write_text(json.dumps({"cut": "2026-11-15"}))
+    assert any("RB の状態が古い" in m for m in r.freshness({"rb_state": str(rb)}))
+    (rb / "params.json").write_text(json.dumps({"cut": "2026-11-16"}))
+    assert r.freshness({"rb_state": str(rb)}) == []

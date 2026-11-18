@@ -895,7 +895,7 @@ export function articleParts(body: ColumnBlock[], guide: ColumnGuide | undefined
 export const FRONT_MAX_CHARS = 400;
 
 /** 最初に見える部分では使わない統計の言葉（使うなら折りたたみの中で言い換える） */
-export const FRONT_JARGON = /有意|95[%％]|区間|下限|[pPqQ] ?[=<＜]|[pPqQ] ?値|格 ?[SABC]|標準偏差|多重比較|回帰|検定/;
+export const FRONT_JARGON = /有意|95 ?[%％] ?(?:信頼)?区間|信頼区間|区間の下限|[pPqQ] ?[=<＜]|[pPqQ] ?値|格 ?[SABC]|標準偏差|多重比較|回帰|検定/;
 
 /**
  * 記事の最初に見える部分を決める（新聞の小コラムの量）。それ以外は「詳しい内容」の折りたたみに入れる。
@@ -911,4 +911,56 @@ export function frontPlan(p: ColumnArticleParts, verdict: ColumnVerdict) {
   const main: "visual" | "keyTable" | null = p.visuals.length ? "visual" : p.keyTable ? "keyTable" : null;
   const chars = lead + (showSummary ? p.summary!.length : 0);
   return { showSummary, showStats, main, chars };
+}
+
+/**
+ * 図の題・説明・軸の統計の言葉を、表示のときに平易な言い方にする（集計コードの文は変えない）。
+ * 値（p 値・区間）は図の「数値と検定」の表と、折りたたみの中に残る。
+ */
+const PLAIN_RULES: [RegExp, string][] = [
+  [/が(?:統計的に)?有意（[pP] ?[<＜] ?0\.05）(?:な(?![らく]))?/g, "が偶然とは考えにくい"],
+  [/（[pP] ?[<＜] ?0\.05）/g, ""],
+  [/縦線は ?95 ?[%％] ?信頼区間/g, "縦線は、値がぶれうる幅の目安"],
+  [/（95 ?[%％] ?区間つき）/g, "（縦線は、値がぶれうる幅の目安）"],
+  [/騎手間の標準偏差/g, "騎手による差の大きさ"],
+  [/縦線は[^。、]*?95 ?[%％] ?区間/g, "縦線は、値がぶれうる幅の目安"],
+  [/区間の下限/g, "縦線の下の端"],
+  [/（平均への回帰）/g, ""],
+  [/の差の [pP] ?値は ?[<＜] ?0\.001。/g, "の差は、偶然とは考えにくい大きさです。"],
+  [/総合や検定には入れていない/g, "総合の比べ方には入れていない"],
+  [/[^。]*の差の [pP] ?値は[^。]*。/g, ""],
+  [/有意でない/g, "偶然の範囲"],
+];
+
+export function plainStats(text: string): string;
+export function plainStats(text: string | undefined): string | undefined;
+export function plainStats(text: string | undefined): string | undefined {
+  if (!text) return text;
+  return PLAIN_RULES.reduce((s, [re, to]) => s.replace(re, to), text);
+}
+
+/** 図の部品の題・説明・軸・切り替えの説明に plainStats を当てる */
+export function plainBlock<T extends ColumnBlock>(b: T): T {
+  const x = { ...b } as Record<string, unknown>;
+  for (const k of ["title", "caption", "yLabel", "xLabel"]) if (typeof x[k] === "string") x[k] = plainStats(x[k] as string);
+  if (x.variants && typeof x.variants === "object") {
+    x.variants = Object.fromEntries(Object.entries(x.variants as Record<string, Record<string, unknown>>)
+      .map(([k, v]) => [k, typeof v?.caption === "string" ? { ...v, caption: plainStats(v.caption as string) } : v]));
+  }
+  return x as T;
+}
+
+/**
+ * 数字の囲みの補足から、統計の言葉を外す。最初の画面で使う。
+ *   ・統計の言葉を含む括弧（「（補正後 p=0.053）」など）を括弧ごと外す
+ *   ・「・p=0.930」「・格 B」のような区切りを外す（並列の「・」は切らない）
+ *   ・それでも統計の言葉が残る文（。で区切る）だけを外す
+ */
+export function plainStatSub(sub: string | undefined): string | undefined {
+  if (!sub) return sub;
+  let s = sub.replace(/（[^（）]*?(?:[pPqQ] ?[=<＜]|[pPqQ] ?値|有意|格 ?[SABC])[^（）]*?）/g, "");
+  s = s.replace(/・?(?:[pPqQ] ?[=<＜] ?[\d.]+|格 ?[SABC](?![A-Za-z]))(?=・|。|$)/g, "");
+  s = s.split(/(?<=。)/).filter((x) => !FRONT_JARGON.test(x)).join("");
+  s = s.replace(/^・+|・+$/g, "").replace(/・。/g, "。").trim();
+  return s || undefined;
 }

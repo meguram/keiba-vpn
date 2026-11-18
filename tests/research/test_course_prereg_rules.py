@@ -42,16 +42,20 @@ def test_mh_simple():
 
 
 def test_judge_controls_and_checks():
-    C = {"q_max": 0.05, "effect_min_pt": {"全馬": 1.0}, "breadth": {"share": 0.75}}
-    good = {"id": "U01", "side": "graded", "layer": "全馬", "control": False, "rd": -0.05, "se": 0.01,
-            "periods": {"2017〜21": -0.05, "2022〜24": -0.04, "2020〜24": -0.04}, "rd2024_lo": -0.1, "breadth": {}}
+    C = {"q_max": 0.05, "effect_min_pt": {"全馬": 1.0}, "breadth": {"share": 0.75}, "discovery": [2018, 2021], "confirm": [2022, 2024],
+         "min_flag": {"discovery": 24, "confirm": 20}}
+    good = {"id": "U01", "side": "graded", "layer": "全馬", "control": False, "rd": -0.05, "se": 0.01, "n_flag_disc": 100, "n_flag_conf": 50,
+            "periods": {"2018〜21": -0.05, "2022〜24": -0.04, "2020〜21": -0.04}, "rd2024_lo": -0.1, "breadth": {}}
     ctl = {"id": "N1", "side": "graded", "layer": "全馬", "control": True, "rd": 0.0, "se": 0.01, "periods": {}, "breadth": {}}
     r = PR.judge([dict(good), dict(ctl)], C)
-    assert r["adopted"] == ["U01/graded/全馬"] and not r["null_broken"]
+    assert r["candidates"] == ["U01/graded/全馬"] and not r["null_broken"]
+    assert r["rows"][0]["discount"]["tests"] == 1 and r["rows"][0]["discount"]["t_ge_3"]          # C6: 試した数と t ≥ 3
     r2 = PR.judge([dict(good), dict(ctl, rd=0.05)], C)
-    assert r2["null_broken"] and r2["adopted"] == []                                        # 負の対照が通れば、全体を使わない
-    r3 = PR.judge([dict(good, periods={"2017〜21": -0.05, "2022〜24": -0.01, "2020〜24": -0.02}), dict(ctl)], C)
-    assert r3["adopted"] == [] and not r3["rows"][0]["checks"]["3 最近の持続"]              # 最近で半分未満は採らない
+    assert r2["null_broken"] and r2["candidates"] == []                                        # 負の対照が通れば、全体を使わない
+    r3 = PR.judge([dict(good, periods={"2018〜21": -0.05, "2022〜24": -0.01, "2020〜21": -0.02}), dict(ctl)], C)
+    assert r3["candidates"] == [] and not r3["rows"][0]["checks"]["3 最近の持続"]
+    r4 = PR.judge([dict(good, n_flag_conf=19), dict(ctl)], C)
+    assert r4["candidates"] == [] and not r4["rows"][0]["checks"]["3 件数"]                     # 確かめ 20 走未満は採らない              # 最近で半分未満は採らない
 
 
 def test_run_guards(tmp_path, monkeypatch):
@@ -105,3 +109,61 @@ def test_boot_empty_and_prev_from_full():
     pv_full = PR.prev_lookup(d)
     pv_cut = PR.prev_lookup(d[d["race_id"] != "R0"].reset_index(drop=True))
     assert not np.isnan(pv_full["prev_wt"].iloc[4]) and np.isnan(pv_cut["prev_wt"].iloc[0])     # 前走の表は絞る前の全体から引く
+
+
+def test_evaluate_smoke_synthetic():
+    """合成の表で evaluate を最後まで流す（本番の 1 回の前に、落ちないことを確かめる。実データは使わない）。"""
+    from tests.research.test_course_threshold import _frame
+    rng = np.random.default_rng(3)
+    parts = []
+    for y in range(2018, 2025):
+        f = _frame(20, seed=y)
+        f["year"] = y
+        f["race_id"] = f"{y}" + f["race_id"].astype(str)
+        parts.append(f)
+    d = pd.concat(parts, ignore_index=True)
+    d["yr"] = d["year"]
+    d["clsn"] = 2.0
+    d["dband"] = "1401〜1800"
+    d["group"] = "1勝・2勝"
+    d["grade"] = np.where(d["race_id"].str.endswith(("0", "5")), "G3", "1勝")
+    d["p_grade"] = "G3"
+    d["date"] = d["year"].astype(str) + "-06-01"
+    d["venue"] = "東京"
+    d["prev_region"] = None
+    d["p_race_id"] = None
+    d["horse_id"] = [f"H{i}" for i in range(len(d))]
+    d["jockey_id"] = "J1"
+    d["wt"] = 470
+    d["p_pos1"] = d["p_pos4"]
+    d["age"] = 5
+    d["bracket_number"] = d["hn"]
+    d["odds_final"] = rng.uniform(1.5, 60, len(d))
+    d["pop_final"] = d.groupby("race_id")["odds_final"].rank()
+    C = json.loads(PR.CONFIG.read_text(encoding="utf-8")) | {"bootstrap": {"reps": 20, "seed": 1}}
+    res = PR.evaluate(d, C, log=lambda *a, **k: None)
+    assert res["n_tests"] == 22 and "candidates" in res and "honmei_eval" in res
+    assert all("shrink" in r and "discount" in r for r in res["rows"] if not r["control"])
+
+
+def test_judge_requires_2020_21_same_direction():
+    C = {"q_max": 0.05, "effect_min_pt": {"全馬": 1.0}, "breadth": {"share": 0.75}, "discovery": [2018, 2021], "confirm": [2022, 2024],
+         "min_flag": {"discovery": 24, "confirm": 20}}
+    row = {"id": "U01", "side": "graded", "layer": "全馬", "control": False, "rd": -0.05, "se": 0.01, "n_flag_disc": 100, "n_flag_conf": 50,
+           "periods": {"2018〜21": -0.05, "2022〜24": -0.04, "2020〜21": 0.01}, "rd2024_lo": -0.1, "breadth": {}}
+    r = PR.judge([row], C)
+    assert r["candidates"] == [] and not r["rows"][0]["checks"]["3 2020〜21 も同じ向き"]     # 前走の地域を外せる期間でも同じ向きが要る
+
+
+def test_preflight_time_guard(monkeypatch):
+    import datetime as dt
+
+    class _D(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return dt.datetime(2026, 11, 21, 9, 0, tzinfo=tz)
+    monkeypatch.setattr(PR, "datetime", _D)
+    monkeypatch.setattr(PR.TH, "FRAME", PR.CONFIG)                                       # 表の有無の確かめを通す
+    monkeypatch.setattr(PR.Path, "exists", lambda self: True)
+    with pytest.raises(SystemExit, match="11/21"):
+        PR.preflight({"confirm": [2022, 2024]})

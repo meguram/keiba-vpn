@@ -63,6 +63,19 @@ jobs:
       - name: No shuffle in time split (static)
         run: python -m src.scripts.ci.check_no_shuffle
 
+      - name: 見た回数の台帳は追記だけ・評価の道具の台帳の呼び出し（一覧）
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -eu
+          if [ -n "${BEFORE_SHA:-}" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            git fetch -q --depth=1 origin "$BEFORE_SHA"    # 取れなければ失敗にする（force-push で行を消した場合など）
+            python -m src.ops.data_ledger check-append-only --base FETCH_HEAD
+          else
+            echo "push 前の commit が無い（新しい枝・PR）: 追記だけの検査は飛ばす"
+          fi
+          python -m src.scripts.ci.check_ledger_guard
+
       - name: Unit & integration tests
         run: |
           set -euxo pipefail

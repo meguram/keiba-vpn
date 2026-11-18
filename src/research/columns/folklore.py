@@ -386,7 +386,7 @@ def tip(spec: Spec, a: dict) -> str:
     if reversed_(spec, a):
         return reversed_tip(spec.direction)
     if a.get("recent_only"):
-        return "集計では差がありますが、多数の通説を同時に検定する厳しい検定では偶然と区別できません。" + TIP_SMALL
+        return "集計では差がありますが、多くの通説をまとめて厳しく確かめると、偶然と区別できません。" + TIP_SMALL
     if a.get("not_replicated"):
         return ("使うなら、どちらの期間でも差が出た条件に絞ってください。"
                 if best_cell(spec, a) else "偶然の可能性があります。" + TIP_SMALL)
