@@ -637,9 +637,18 @@ def cmd_evaluate() -> None:
     subprocess.run([sys.executable, "-m", "src.research.course.v3", "_eval_inner"], env=e, cwd=CR.REPO, check=True)
 
 
-def _eval_inner() -> None:
+def _frame_2026() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """2026 年の単位の表（良・芝ダ・重賞以外）と水準。CR.env(2026) の環境で流す子の処理の中だけで呼ぶ。"""
     from src.research.graded import features as F
     from src.research.graded.run import with_returns
+    d, L = CR.frame_and_levels(with_returns(F.build(out=None)))
+    keep = ((pd.to_numeric(d["year"]) == 2026) & (d["track"].astype(str) == "良") & d["cls"].map(CR.group_of).notna()).to_numpy()
+    d, L = d[keep].reset_index(drop=True), L[keep].reset_index(drop=True).drop(columns=["__race_id", "__horse_id"])
+    d["group"] = d["cls"].map(CR.group_of)
+    return V2.attach_final_odds(d, (2026,)), L
+
+
+def _eval_inner() -> None:
     tok = os.environ.get("COURSE_EVAL_TOKEN", "")
     mark = json.loads(EVAL_MARK3.read_text(encoding="utf-8")) if EVAL_MARK3.exists() else {}
     if not tok or mark.get("token_sha") != hashlib.sha256(tok.encode()).hexdigest() or "evaluated_at" in mark:
@@ -648,11 +657,7 @@ def _eval_inner() -> None:
     if (CR._sha_file(OUT3 / P["cells_file"]) != P["sha256_cells"] or mark.get("prereg_sha_cells") != P["sha256_cells"]
             or CR._sha_file(CR.OUT / P["shift_file"]) != P["sha256_shift"]):
         sys.exit("条件の表・ずれの分布が凍結の sha と違う")
-    d, L = CR.frame_and_levels(with_returns(F.build(out=None)))
-    keep = ((pd.to_numeric(d["year"]) == 2026) & (d["track"].astype(str) == "良") & d["cls"].map(CR.group_of).notna()).to_numpy()
-    d, L = d[keep].reset_index(drop=True), L[keep].reset_index(drop=True).drop(columns=["__race_id", "__horse_id"])
-    d["group"] = d["cls"].map(CR.group_of)
-    d = V2.attach_final_odds(d, (2026,))
+    d, L = _frame_2026()
     c = C3(**{k: v for k, v in P["params"].items() if k != "name"})
     kept = json.loads((OUT3 / P["cells_file"]).read_text(encoding="utf-8"))
     shift = json.loads((CR.OUT / P["shift_file"]).read_text(encoding="utf-8"))
@@ -673,6 +678,142 @@ def _eval_inner() -> None:
           f" 楽観 {res['optimistic'].get('roi_t')} 本物の T-60 {(res.get('real_t60') or {}).get('roi_t')}", flush=True)
 
 
+# ---------------------------------------------------------------- 単位ごとの値（ルールの一覧の HTML 用。評価ではない）
+PER_UNIT = OUT3 / "per_unit_v3.json"
+REP_KEYS = ("bet_races", "coverage", "win", "rentai", "place", "roi_t", "roi_f", "roi_t_trim5", "roi_f_trim5")
+
+
+def per_unit(d: pd.DataFrame, L: pd.DataFrame, kept: dict, c: C3, shift: dict) -> dict:
+    """凍結した規則を期間の表 d に 1 回だけ当てはめ（pick）、◎・消しの行を単位ごとに分けて数える。本番の再現のずれの 20 通りは
+    d 全体で作ってから単位ごとに切る（単位ごとに作り直すと乱数の並びが変わり、単位の値の合計が全体の値と合わなくなる）。
+    単位の本番の再現は 20 通りを足し合わせた比（pooled_draws）、全体は measure と同じ回ごとの平均（記録との照合用）。
+    戻り値: {"units": {単位: {no_filter, optimistic, reproduction}}, "total": 同じ形（measure と一致するはず）}。"""
+    Y = SE.y_matrix(d)
+    race = d["race_id"].astype(str).to_numpy()
+    unit = units_of(d, c)
+    H, Pw, K = pick(d, L, kept, c)
+    kr = np.flatnonzero(K)
+    uh, uk = unit[H], unit[kr]
+    nr = pd.Series(race).groupby(unit).nunique().to_dict()
+    groups = {u: (uh == u, uk == u, int(nr[u])) for u in sorted(nr)}
+    groups["*"] = (np.ones(len(H), bool), np.ones(len(kr), bool), len(set(race)))
+
+    def pooled_draws(keeps: list[np.ndarray]) -> dict:
+        """単位ごとの本番の再現: 20 通りを足し合わせた比（勝ち数の和 ÷ ◎ の数の和、払戻の和 ÷ 払戻の解けた ◎ の和）。
+        買わなかった回も分母に入る（回ごとの率の平均だと、まれにしか買わない単位で率が上振れする）。p05・p95 は回ごとの値の幅。"""
+        out = {}
+        for u, (hm, km, n) in groups.items():
+            rows = [H[hm & kp] for kp in keeps]
+            allr = np.concatenate(rows) if rows else np.array([], int)
+            h = Y[allr]
+            nb, npay = len(allr), h[:, 5].sum()
+            r = {"bet_races": nb / len(keeps), "coverage": nb / len(keeps) / n if n else None,
+                 "win": float(h[:, 2].mean()) if nb else None, "rentai": float((h[:, 2] + h[:, 3]).mean()) if nb else None,
+                 "place": float(h[:, 1].mean()) if nb else None,
+                 "roi_t": float(h[:, 6].sum() / npay) if npay else None, "roi_f": float(h[:, 7].sum() / npay) if npay else None,
+                 "roi_t_trim5": trimmed(Y, allr, 6, 5 * len(keeps)), "roi_f_trim5": trimmed(Y, allr, 7, 5 * len(keeps))}
+            for key in ("roi_t", "roi_f"):
+                v = np.array([x for x in (SE.metrics(Y, race, rr, kr[km], n)[key] for rr in rows) if x is not None], float)
+                r[key + "_p05"] = float(np.percentile(v, 5)) if len(v) else None
+                r[key + "_p95"] = float(np.percentile(v, 95)) if len(v) else None
+            out[u] = r | {k: nf[u][k] for k in ("races", "killed", "kill_races", "kill_coverage", "kill_per_race", "kill_precision")}
+        return out
+
+    def m(keep: np.ndarray) -> dict:
+        out = {}
+        for u, (hm, km, n) in groups.items():
+            rows = H[hm & keep]
+            out[u] = SE.metrics(Y, race, rows, kr[km], n) | {"roi_t_trim5": trimmed(Y, rows, 6), "roi_f_trim5": trimmed(Y, rows, 7)}
+        return out
+    allk = np.ones(len(H), bool)
+    nf = m(allk)
+    if has_odds(c):
+        of, pf = d["odds_final"].to_numpy(float), d["pop_final"].to_numpy(float)
+        op = m(keep_odds(c, of[H], pf[H], Pw))
+        draws, keeps = [], []
+        for k in range(V2.N_DRAWS):
+            pre, pop = V2.simulate_pre(d, shift, k)
+            keeps.append(keep_odds(c, pre[H], pop[H], Pw))
+            draws.append(m(keeps[-1]))
+        rp = pooled_draws(keeps)
+        for u in ("*",):              # 全体は measure と同じ定義（回ごとの値の平均）にして、記録の値と照合する
+            r = {}
+            for key in REP_KEYS:
+                v = np.array([x[u][key] for x in draws if x[u][key] is not None], float)
+                r[key] = float(v.mean()) if len(v) else None
+                r[key + "_p05"] = float(np.percentile(v, 5)) if len(v) else None
+                r[key + "_p95"] = float(np.percentile(v, 95)) if len(v) else None
+            rp[u] = r | {k: nf[u][k] for k in ("races", "killed", "kill_races", "kill_coverage", "kill_per_race", "kill_precision")}
+    else:
+        op = rp = nf
+    res = {u: {"no_filter": nf[u], "optimistic": op[u], "reproduction": rp[u]} for u in groups}
+    return {"units": {u: v for u, v in res.items() if u != "*"}, "total": res["*"]}
+
+
+def check_total(got: dict, want: dict, keys=("bet_races", "roi_t", "roi_f", "win", "kill_precision")) -> list[str]:
+    """数え直した全体の値と、記録に残る値（サイクルの記録・凍結・評価）の食い違い。空なら一致。"""
+    bad = []
+    for kind in ("no_filter", "optimistic", "reproduction"):
+        if kind not in want:
+            continue
+        for k in keys:
+            a, b = got[kind].get(k), want[kind].get(k)
+            if (a is None) != (b is None) or (a is not None and abs(a - b) > 1e-9):
+                bad.append(f"{kind}.{k}: {a} != {b}")
+    return bad
+
+
+def cmd_per_unit() -> None:
+    """ルールの一覧の HTML 用に、凍結した版（prereg_course_v3.json）を訓練 2016〜2024・2025 年・2026 年に当て直し、単位ごとの値を
+    <COURSE_OUT>/v3/per_unit_v3.json に書く。規則は変えない（sha を照合）。2026 年は 1 回だけの評価が済んだ後にだけ読む（封印を破らない）。
+    評価の印・評価の結果のファイルには触らない。全体の値が記録の値と違えば止める（当て直しが凍結の規則と違う）。"""
+    P = json.loads(PREREG3.read_text(encoding="utf-8"))
+    if CR._sha_file(OUT3 / P["cells_file"]) != P["sha256_cells"] or CR._sha_file(CR.OUT / P["shift_file"]) != P["sha256_shift"]:
+        sys.exit("条件の表・ずれの分布が凍結の sha と違う")
+    mark = json.loads(EVAL_MARK3.read_text(encoding="utf-8")) if EVAL_MARK3.exists() else {}
+    if "evaluated_at" not in mark or not (OUT3 / "eval_course_v3.json").exists():
+        sys.exit("2026 年の 1 回だけの評価が済んでいない（封印中の 2026 年は読まない）")
+    CR.wait_resources()
+    e = CR.env(2026) | {"FOLKLORE_OUT": str(CR.OUT / "eval" / "master"), "GRADED_OUT": str(CR.OUT / "eval")}
+    subprocess.run([sys.executable, "-m", "src.research.course.v3", "_per_unit_inner"], env=e, cwd=CR.REPO, check=True)
+
+
+def _per_unit_inner() -> None:
+    from src.research.graded import catalog as CAT
+    P = json.loads(PREREG3.read_text(encoding="utf-8"))
+    if CR._sha_file(OUT3 / P["cells_file"]) != P["sha256_cells"] or CR._sha_file(CR.OUT / P["shift_file"]) != P["sha256_shift"]:
+        sys.exit("条件の表・ずれの分布が凍結の sha と違う")
+    mark = json.loads(EVAL_MARK3.read_text(encoding="utf-8")) if EVAL_MARK3.exists() else {}
+    if "evaluated_at" not in mark or not (OUT3 / "eval_course_v3.json").exists():
+        sys.exit("2026 年の 1 回だけの評価が済んでいない（封印中の 2026 年は読まない）")   # 子を直接流しても封印を破らない
+    c = C3(**{k: v for k, v in P["params"].items() if k != "name"})
+    kept = json.loads((OUT3 / P["cells_file"]).read_text(encoding="utf-8"))
+    shift = json.loads((CR.OUT / P["shift_file"]).read_text(encoding="utf-8"))
+    log = _load_log()
+    cyc = next(x for x in log["cycles"] if x["cycle"] == P["cycle"])
+    E = json.loads((OUT3 / "eval_course_v3.json").read_text(encoding="utf-8"))
+    out, bad = {}, []
+    d, L, tr, ev = load3()
+    for key, sel, want in (("train", tr, cyc["train"]), ("2025", ev, P["eval2025"])):
+        t0 = time.time()
+        out[key] = per_unit(d[sel].reset_index(drop=True), L[sel].reset_index(drop=True), kept, c, shift)
+        bad += [f"{key} {x}" for x in check_total(out[key]["total"], want)]
+        print(key, f"{time.time() - t0:.0f}s", CR.mem_now(), flush=True)
+    del d, L
+    d6, L6 = _frame_2026()
+    out["2026"] = per_unit(d6, L6, kept, c, shift)
+    bad += [f"2026 {x}" for x in check_total(out["2026"]["total"], E["all"])]
+    if bad:
+        sys.exit("当て直した全体の値が記録と違う: " + "; ".join(bad[:10]))
+    names = {t.id: t.name for t in CAT.TYPES}
+    res = {"made_at": datetime.now(CR.JST).isoformat(timespec="seconds"), "cycle": P["cycle"], "params": P["params"],
+           "sha256_cells": P["sha256_cells"], "periods": {"train": [2016, TRAIN_END], "2025": [EVAL_YEAR, EVAL_YEAR], "2026": [2026, 2026]},
+           "note": "凍結した第 3 版の規則を当て直して単位ごとに数えた値（評価ではない）。全体の値はサイクルの記録・凍結・2026 年の評価と一致を確かめた",
+           "type_names": names, "values": out}
+    PER_UNIT.write_text(json.dumps(res, ensure_ascii=False, default=float), encoding="utf-8")
+    print("per_unit", PER_UNIT, {k: len(v["units"]) for k, v in out.items()}, flush=True)
+
+
 def cmd_review(n: int, text: str, decision: str, event: str = "", basis: str = "") -> None:
     """回顧と判断。事象（何が起きているか）と根拠（なぜそうなるか）も書く（統括役の方針、2026-11-17）。"""
     log = _load_log()
@@ -691,7 +832,8 @@ def cmd_review(n: int, text: str, decision: str, event: str = "", basis: str = "
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["frame", "_frame_inner", "evidence", "cycle", "review", "freeze", "evaluate", "_eval_inner"])
+    ap.add_argument("cmd", choices=["frame", "_frame_inner", "evidence", "cycle", "review", "freeze", "evaluate", "_eval_inner",
+                                       "per_unit", "_per_unit_inner"])
     ap.add_argument("--hyp", default="")
     ap.add_argument("--delta", default="{}")
     ap.add_argument("--base", type=int, default=None)
@@ -713,6 +855,10 @@ def main() -> None:
         _eval_inner()
     elif a.cmd == "evidence":
         cmd_evidence()
+    elif a.cmd == "per_unit":
+        cmd_per_unit()
+    elif a.cmd == "_per_unit_inner":
+        _per_unit_inner()
     elif a.cmd == "cycle":
         cmd_cycle(a.hyp, json.loads(a.delta), a.base)
     else:

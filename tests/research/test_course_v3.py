@@ -160,3 +160,42 @@ def test_measure_real_t60_denominator():
     real = {(rids[0], 1): (3.0, 1.0), (rids[1], 1): (0.0, 0.0), ("他", 1): (3.0, 1.0)}
     r = V.measure(d, L, kept, V.C3(groups=3, pop_max=3), {"lr": [[0.0]] * 4}, real_pre=real)
     assert r["real_t60"]["races"] == 2 and r["real_t60"]["bet_races"] == 1 and r["real_t60_missing_odds"] == 1
+
+
+def test_per_unit_sums_to_measure():
+    """単位ごとに分けた値の全体が measure と一致し、単位の ◎ の数の合計が全体と同じ（ずれの乱数は全体で 1 回だけ作る）。"""
+    from tests.research.test_course_run import _toy
+    d, L = _toy(n_races=8)
+    d["odds_final"] = np.linspace(1.5, 30, len(d))
+    d["pop_final"] = (np.arange(len(d)) % 5) + 1
+    kept = {"東京芝1600|1勝・2勝": {"buy": [{"types": ["A01"], "levels": ["1着"], "rate": 1.0, "win_c": 0.5}], "kill": []}}
+    c = V.C3(groups=3, pop_max=3)
+    shift = {"lr": [[0.0]] * 4}
+    r = V.per_unit(d, L, kept, c, shift)
+    m = V.measure(d, L, kept, c, shift)
+    assert V.check_total(r["total"], m) == []
+    for kind in ("no_filter", "optimistic", "reproduction"):
+        assert abs(sum(u[kind]["bet_races"] for u in r["units"].values()) - r["total"][kind]["bet_races"]) < 1e-9
+    bad = V.check_total(r["total"], {"no_filter": dict(m["no_filter"], roi_t=9.9)})
+    assert bad and "roi_t" in bad[0]                                                  # 食い違いを拾う
+
+
+def test_per_unit_needs_evaluated(tmp_path, monkeypatch):
+    """2026 年の 1 回だけの評価が済む前は、単位ごとの数え直しで 2026 年を読まない。"""
+    import json
+    monkeypatch.setattr(V, "OUT3", tmp_path)
+    monkeypatch.setattr(V, "PREREG3", tmp_path / "p.json")
+    monkeypatch.setattr(V, "EVAL_MARK3", tmp_path / "e.json")
+    monkeypatch.setattr(V.CR, "OUT", tmp_path)
+    (tmp_path / "k.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "v2").mkdir()
+    (tmp_path / "v2/shift.json").write_text("{}", encoding="utf-8")
+    V.PREREG3.write_text(json.dumps({"cells_file": "k.json", "sha256_cells": V.CR._sha_file(tmp_path / "k.json"), "shift_file": "v2/shift.json",
+                                     "sha256_shift": V.CR._sha_file(tmp_path / "v2/shift.json")}), encoding="utf-8")
+    with pytest.raises(SystemExit, match="評価が済んでいない"):
+        V.cmd_per_unit()
+    V.EVAL_MARK3.write_text(json.dumps({"started_at": "x"}), encoding="utf-8")         # 印だけで評価の結果が無い
+    with pytest.raises(SystemExit, match="評価が済んでいない"):
+        V.cmd_per_unit()
+    with pytest.raises(SystemExit, match="評価が済んでいない"):
+        V._per_unit_inner()                                                           # 子を直接流しても 2026 年を読まない
