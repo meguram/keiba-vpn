@@ -73,6 +73,7 @@ def main() -> None:
     ap.add_argument("--stage", required=True)
     ap.add_argument("--rb-state", required=True)
     ap.add_argument("--rebuild-2016", action="store_true", help="2016〜2025 年の土台（再学習の親モデル）と突き合わせる。V6_STAGE は付けない")
+    ap.add_argument("--save-x", default="", help="突き合わせた行の推論の側・学習の側の行列を X_serving.parquet・X_train.parquet として保存する場所")
     a = ap.parse_args()
     if a.rebuild_2016:
         os.environ.setdefault("KEIBA_FIRST_YEAR", "2016")  # 推論の履歴の起点年（既定 2020）。2016 年の土台と合わせる
@@ -166,6 +167,18 @@ def main() -> None:
            "n_bad_nan_gt5pct": int((rep["nan_mismatch"] > 0.05).sum()), "n_bad_val_gt5pct": int((rep["val_mismatch"] > 0.05).sum()),
            "missing_in_train": rep[rep.get("note").notna()]["col"].tolist() if "note" in rep else [], "predict_compare": pred_cmp}
     Path(a.out).write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    if a.save_x:                                      # 突き合わせた同じ行の 2 つの行列（推論の側・学習の側）を保存する（判定の一致を外で測る用）。統計の JSON の後に書き、失敗しても止めない
+        try:
+            d_ = Path(a.save_x)
+            d_.mkdir(parents=True, exist_ok=True)
+            feat = [c for c in S.columns if c not in KEY]
+            both_cols = set(X_all.columns)            # 両方にある列だけ merge で _s・_t が付く
+            side = {"serving": {c: m[f"{c}_s"] if c in both_cols else m[c] for c in feat},
+                    "train": {c: m[f"{c}_t"] if c in both_cols else pd.Series(np.nan, index=m.index) for c in feat}}
+            for nm, cols in side.items():             # 型はそれぞれの側のまま（比べるときは数値・カテゴリの型合わせをする）
+                pd.concat([m[KEY].copy(), pd.DataFrame(cols)], axis=1).to_parquet(d_ / f"X_{nm}.parquet", index=False)
+        except Exception as e:  # noqa: BLE001
+            print(f"行列の保存に失敗（統計の JSON は書けている）: {e}")
     print(json.dumps({k: v for k, v in out.items() if k != "worst"}, ensure_ascii=False))
 
 

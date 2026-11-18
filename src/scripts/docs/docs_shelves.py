@@ -87,7 +87,7 @@ OVERRIDE: dict[str, str] = {
     "pace_consistency": "res-feature", "lap_forecast": "res-feature", "tracking_difficulty_v2": "res-feature",
     "handicapper_viewpoints": "res-feature", "data_acquisition": "res-feature", "feature_cross_search": "res-feature",
     "target_encoding_inventory": "res-feature", "jockey_trainer_roi": "res-feature", "jockey_switch_ev": "res-feature",
-    "similar_pairs_multi": "res-feature", "position_pace_course": "res-feature", "jockey_distance_dependence": "res-feature",
+    "similar_pairs_multi": "res-feature", "position_pace_course": "res-feature", "jockey_distance_dependence": "res-feature", "jockey_weight_affinity": "res-feature",
     "folklore_hypotheses": "res-feature", "folklore_verification": "res-feature", "feature_screening": "res-feature",
     "pace_type": "res-feature", "pace_benefit": "res-feature", "index_variance": "res-feature",
     "megu_excusable": "res-feature", "megu_marking": "res-feature", "revival_feature_set": "res-feature",
@@ -212,6 +212,6 @@ GROUPS: dict[str, list[Group]] = {
         Group("調教・状態・騎手", "追い切り・休養・輸送・騎手と調教師。",
               ["final_week_training_pattern", "training_condition_growth", "workout_remaining_ideas", "lap_groups_and_trainer_stats", "rest_and_interval",
                "transport_and_stay", "equipment_and_change", "geld_after_races", "growth_curve_weight", "jockey_trainer_roi", "jockey_switch_ev",
-               "jockey_distance_dependence", "trainer_comment_wordcloud", "slow_start_real_label"]),
+               "jockey_distance_dependence", "jockey_weight_affinity", "trainer_comment_wordcloud", "slow_start_real_label"]),
     ],
 }

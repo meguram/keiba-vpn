@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import threading
 from pathlib import Path
 
@@ -20,6 +21,10 @@ def led(tmp_path, monkeypatch):
     monkeypatch.setenv("KEIBA_LEDGER_GIT", str(tmp_path / "git" / "ledger.jsonl"))
     (tmp_path / "shared").mkdir()
     monkeypatch.delenv("KEIBA_LEDGER_MODE", raising=False)
+    pol = json.loads(L.POLICY.read_text(encoding="utf-8"))               # 決まりの写し（enforce の系統を空にし、warn を前提に確かめる）
+    pol["enforce_families"] = []
+    (tmp_path / "policy.json").write_text(json.dumps(pol, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setenv("KEIBA_LEDGER_POLICY", str(tmp_path / "policy.json"))
     return tmp_path
 
 
@@ -384,3 +389,71 @@ def test_amend_cli_and_show(led, capsys):
     assert L.main(["amend", "--ref", "nope", "--purpose", "eval_only", "--reason", "r", "--approved-by", "ユーザー"]) == 2
     L.main(["show", "--from", "2025-01-01", "--to", "2025-12-31"])
     assert "直し: confirm→eval_only" in capsys.readouterr().out
+
+
+def _guard_funcs(path: Path) -> set[str]:
+    """ファイルの中で guard を呼ぶ最上位の関数の名前。"""
+    import ast
+
+    t = ast.parse(path.read_text(encoding="utf-8"))
+    out = set()
+    for fn in t.body:
+        if isinstance(fn, ast.FunctionDef):
+            if any(isinstance(n, ast.Call) and ast.unparse(n.func).endswith(".guard") for n in ast.walk(fn)):
+                out.add(fn.name)
+    return out
+
+
+# guard を持つ研究の CLI と、その中で guard を呼んでよい入口の関数
+_GUARD_ENTRY = {
+    "src/scripts/data/bet_cycles.py": {"cmd_final", "cmd_prereg_run"},
+    "src/scripts/data/bet_forward_ledger.py": {"_main_inner"},
+    "src/scripts/data/bet_age2_premium.py": {"_run_inner"},
+    "src/scripts/data/bet_r2_combine.py": {"_main_inner"},
+    "src/scripts/data/bet_r2_walkthrough.py": {"_build_inner"},
+    "src/research/course/bet_opt_search.py": {"cmd_final"},
+    "src/research/course/prereg_rules.py": {"cmd_run"},
+    "src/research/course/upset_types.py": {"cmd_run"},
+}
+_PROD = ("src/pipeline/inference/stage2_bets.py", "src/pipeline/inference/candidate_runner.py", "src/api/stage2_live.py")
+
+
+def test_guard_is_only_in_research_cli_entrypoints():
+    """enforce（拒否で SystemExit）にした系統の guard は、研究の CLI の入口からだけ呼ぶ。本番・当日の経路
+    （候補の影のランナー・第 2 段の推奨 stage2_bets・API・cron）は、guard のある関数・モジュールを呼ばない。"""
+    import ast
+
+    have = set()
+    for p in list((ROOT / "src").rglob("*.py")):
+        rel = str(p.relative_to(ROOT))
+        if rel != "src/ops/data_ledger.py" and _guard_funcs(p):
+            have.add(rel)
+            assert _guard_funcs(p) <= _GUARD_ENTRY.get(rel, set()), (rel, _guard_funcs(p))
+    assert have == set(_GUARD_ENTRY), have ^ set(_GUARD_ENTRY)            # guard を呼ぶファイルを足したら、ここに入口を書く
+    entry_names = set().union(*_GUARD_ENTRY.values())
+    for f in _PROD:
+        t = ast.parse((ROOT / f).read_text(encoding="utf-8"))
+        used = {n.attr for n in ast.walk(t) if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id == "bc"}
+        used |= {a.name for n in ast.walk(t) if isinstance(n, ast.ImportFrom) and (n.module or "").endswith("bet_cycles") for a in n.names}
+        assert not (used & entry_names), (f, used & entry_names)
+    mods = [Path(k).stem for k in _GUARD_ENTRY if not k.endswith("bet_cycles.py")]
+    # 本番の経路（src の推論・API・ops、cron とサーバのシェル）は、bet_cycles 以外の guard を持つ CLI と台帳を参照しない
+    for d in ("src/api", "src/pipeline", "src/ops", "scripts/cron", "scripts/ops", "scripts/server"):
+        base = ROOT / d
+        if not base.exists():
+            continue
+        for p in base.rglob("*"):
+            if p.suffix not in (".py", ".sh") or str(p.relative_to(ROOT)) == "src/ops/data_ledger.py":
+                continue
+            t = p.read_text(encoding="utf-8", errors="ignore")
+            assert "data_ledger" not in t, p
+            assert not any(m in t for m in mods), (p, [m for m in mods if m in t])
+            if p.suffix == ".sh":
+                assert "bet_cycles" not in t, p
+
+
+def test_importing_bet_cycles_does_not_load_ledger():
+    r = subprocess.run([sys.executable, "-c", "import sys; import src.pipeline.inference.stage2_bets, src.scripts.data.bet_cycles, "
+                        "src.pipeline.inference.candidate_runner, src.api.stage2_live; "
+                        "print('src.ops.data_ledger' in sys.modules)"], cwd=ROOT, capture_output=True, text=True, timeout=300)
+    assert r.returncode == 0 and r.stdout.strip() == "False", r.stderr[-500:]

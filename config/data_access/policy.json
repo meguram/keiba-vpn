@@ -2,7 +2,7 @@
  "version": 1,
  "note": "データの見た回数の台帳の決まり（src/ops/data_ledger.py・docs/operations/data_access_ledger.md）。期間は日付の区間の重なりで判定する。enforce_families に入れた系統は拒否、ほかは警告＋記録。",
  "default_mode": "warn",
- "enforce_families": [],
+ "enforce_families": ["bet_cycles", "rules_bet_opt", "prereg_rules", "upset_types"],
  "amend_approvers": ["claude-orchestrator-handover", "ユーザー"],
  "amend_locked_families": ["prereg_rules", "upset_types"],
  "periods": [

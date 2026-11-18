@@ -122,7 +122,20 @@ def summary(cost: np.ndarray, ret: np.ndarray, n_all: int, n_sys: int, n_boot: i
     return out
 
 
+_TOKS: list = []
+
+
 def main() -> None:
+    """台帳の行を、途中で落ちたときも閉じる（例外は error、Ctrl-C などは aborted。started のまま残さない）。"""
+    try:
+        return _main_inner()
+    except BaseException as exc:
+        for t in _TOKS:
+            t.__exit__(type(exc), exc, None)
+        raise
+
+
+def _main_inner() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", default="2026-11-21")
     ap.add_argument("--end", default=None)
@@ -131,11 +144,15 @@ def main() -> None:
     h = json.loads(FROZEN.read_text(encoding="utf-8"))["hash"]
     days = day_dirs(a.start, a.end)
     tok = None
+    if not a.no_settle and a.start.replace("-", "") < "20261121":
+        raise SystemExit("前向きの記録は 2026-11-21 から（それより前は事前登録・封印の期間。台帳が拒否する）")
     if not a.no_settle:
         from src.ops import data_ledger as L
 
         tok = L.guard(tool="src/scripts/data/bet_forward_ledger.py", family="bet_cycles", version=h, period=(a.start, a.end), purpose="forward",
                       frozen_paths=[FROZEN], target_name="本番の試行の前向きの記録")
+
+        _TOKS.append(tok)
     per_day, allc, allr, alln, alls, allf = {}, [], [], 0, 0, 0
     by_month: dict[str, list] = {}
     for d in days:

@@ -150,6 +150,30 @@ def _append_watch(watch_dir: Path, day: str, rec: dict) -> None:
 # ── 本体の events ─────────────────────────────────────────────────────────
 
 
+# 推論の入力の取り込みの欠けの目印（群ごとに、列ごとの欠けの割合の平均）。産地（attr_）は欠けを 99 で表すので数えない
+GAP_GROUPS = {
+    "na_oikiri_eval": {"prefix": ("oikiri_",)},                  # race_oikiri（当日の追い切りの評価）。推論の時点で欠けやすい
+    "na_tl": {"prefix": ("tl_",)},                               # 馬別の調教ページ
+    "na_wc": {"prefix": ("wc_",)},
+    "na_weight": {"exact": ("weight", "weight_change"), "prefix": ("d_wt_",)},   # 馬体重（発表前・取り込み漏れ）
+}
+
+
+def input_gaps(X) -> dict:
+    """推論の入力の取り込みの欠け（群ごとに、列ごとの欠けの割合の平均）。学習との差が大きくなる日の目印として、判定の前に記録する。"""
+    out = {}
+    try:
+        names = [c for c in X.columns if isinstance(c, str)]
+        for k, g in GAP_GROUPS.items():
+            cols = [c for c in names if c in g.get("exact", ()) or c.startswith(g.get("prefix", ()) or ("\0",))]
+            if cols:
+                out[k] = round(float(X[cols].isna().mean().mean()), 3)
+    except Exception as exc:  # noqa: BLE001  記録だけ。推論は止めない
+        logger.debug("入力の欠けを数えられない: %s", exc)
+        out["gap_error"] = str(exc)[:80]
+    return out
+
+
 def main_done_ids(events_path: Path) -> set[str]:
     """本体の weight-runner の推論が済んだレース（status=ok）。"""
     out: set[str] = set()
@@ -459,7 +483,7 @@ class Runner:
                 self.card[rid] = card
                 s["predicted"] = True
                 rec = {"event": "v6c", "race_id": rid, "sec": round(time.time() - t0, 1), "rows": int(len(X)), "rss_gb": round(rss_gb(), 1),
-                       "gcs_mb": round(self.meter.bytes / 1e6, 1)}
+                       "gcs_mb": round(self.meter.bytes / 1e6, 1), **input_gaps(X)}
                 logger.info("第 1 段（候補）: %s", rec)
                 _append_watch(self.watch_dir, self.day, rec)
             except Exception as exc:  # noqa: BLE001

@@ -69,7 +69,20 @@ def b0_2025(body: dict) -> pd.DataFrame:
     return pd.DataFrame({"race_id": [x.race_id for x in p.races], "ver": np.arange(len(p.races)) // n0, "cost": r["cost"], "ret": r["ret"]})
 
 
+_TOKS: list = []
+
+
 def main() -> None:
+    """台帳の行を、途中で落ちたときも閉じる（例外は error、Ctrl-C などは aborted。started のまま残さない）。"""
+    try:
+        return _main_inner()
+    except BaseException as exc:
+        for t in _TOKS:
+            t.__exit__(type(exc), exc, None)
+        raise
+
+
+def _main_inner() -> None:
     from src.scripts.data import bet_cycles as bc
 
     body = json.loads((ROOT / "config/bet_cycles/frozen_20261117_r2.json").read_text(encoding="utf-8"))
@@ -82,6 +95,8 @@ def main() -> None:
 
     tok = L.guard(tool="src/scripts/data/bet_r2_combine.py", family="bet_cycles", version=h, period=("2025-01-01", "2026-10-12"), purpose="eval_only",
                   frozen_paths=[ROOT / "config/bet_cycles/frozen_20261117_r2.json"], reason="2025 年と 2026 年の主の、すでに見た記録の合算（評価の期間。判断に使わない）")
+
+    _TOKS.append(tok)
     a, ka = stacked(OUT / f"final_test_races_{h}.parquet")
     b, kb = stacked(OUT / f"prereg_main_races_{h}.parquet")
     if ka != kb:

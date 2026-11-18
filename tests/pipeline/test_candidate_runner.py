@@ -231,3 +231,14 @@ def test_freshness_stops_on_old_rb_state(tmp_path):
     assert any("RB の状態が古い" in m for m in r.freshness({"rb_state": str(rb)}))
     (rb / "params.json").write_text(json.dumps({"cut": "2026-11-16"}))
     assert r.freshness({"rb_state": str(rb)}) == []
+
+
+def test_input_gaps_records_missing_share():
+    import numpy as np
+    import pandas as pd
+
+    X = pd.DataFrame({"tl_a": [1.0, np.nan], "tl_b": [1.0, 1.0], "wc_b": [np.nan, np.nan], "oikiri_eval": [np.nan, 1.0],
+                      "weight": [np.nan, np.nan], "d_wt_dev": [1.0, 2.0], "f1_sim_z": [np.nan, np.nan], "attr_bp": [np.nan, 1.0], "x": [1, 2]})
+    X[0] = [1, 2]                                                   # 文字列でない列名があっても止まらない
+    got = cr.input_gaps(X)
+    assert got == {"na_oikiri_eval": 0.5, "na_tl": 0.25, "na_wc": 1.0, "na_weight": 0.5}     # f1_sim_・attr_ は数えない

@@ -174,6 +174,7 @@ def test_cmd_run_writes_ledger_and_refuses_second(tmp_path, monkeypatch):
     from src.ops import data_ledger as LG
     monkeypatch.setenv("KEIBA_LEDGER_SHARED", str(tmp_path / "ledger" / "shared.jsonl"))        # このテストだけの台帳（ほかのテストと混ぜない）
     monkeypatch.setenv("KEIBA_LEDGER_GIT", str(tmp_path / "ledger" / "git.jsonl"))
+    (tmp_path / "ledger").mkdir()                                       # enforce では共有の置き場が無いと拒否される（本番と同じ）
     monkeypatch.setattr(PR, "_git_clean", lambda paths: True)
     monkeypatch.setattr(PR, "preflight", lambda C, need_history=True: None)
     monkeypatch.setattr(PR.CR, "wait_resources", lambda: None)

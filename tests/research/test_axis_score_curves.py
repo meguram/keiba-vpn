@@ -60,3 +60,122 @@ def test_build_embeds_constants_and_escapes_script_end():
     h = page.build(d)
     assert "__MINN__" not in h and f"SIDE={page.MIN_SIDE}" in h and f"MINN={page.MIN_N}" in h
     assert h.count("</script>") == 1
+
+
+def test_parse_course_key_and_grid_union_and_order():
+    assert page.parse_course_key("京都芝1600m") == ("京都", "芝", 1600)
+    assert page.parse_course_key("中山ダ2400m") == ("中山", "ダ", 2400)
+    assert page.parse_course_key("全体") is None and page.parse_course_key("京都障1600m") is None
+    ent = [("阪神", "芝", 1600, 0), ("札幌", "芝", 1200, 1), ("京都", "ダ", 1800, 2), ("東京", "芝", 1400, 3), ("謎場", "芝", 1000, 4), ("札幌", "ダ", 1700, 5)]
+    g = page.build_course_grid(ent)
+    assert g["芝"]["venues"] == ["札幌", "東京", "阪神", "謎場"]                 # 競馬場の定義順、知らない場は末尾
+    assert g["芝"]["dists"] == [1000, 1200, 1400, 1600]                          # 距離の和集合を昇順
+    assert g["ダ"]["venues"] == ["札幌", "京都"] and g["ダ"]["dists"] == [1700, 1800]
+    assert g["芝"]["idx"]["阪神|1600"] == 0 and "阪神|1200" not in g["芝"]["idx"]
+    assert sum(len(x["idx"]) for x in g.values()) == len(ent)                    # 芝 + ダの格子の点数 = コース数
+
+
+def test_axis_course_grid_and_ts_grid_accept_dart_notation():
+    d = {"dims": {"course": {"groups": [{"key": "京都芝1600m"}, {"key": "中山ダ1800m"}, {"key": "壊れた"}]}}}
+    g = page.axis_course_grid(d)
+    assert g["芝"]["idx"] == {"京都|1600": 0} and g["ダ"]["idx"] == {"中山|1800": 1}
+    ts = {"courses": [{"venue": "中山", "surface": "ダート", "distance": 1800}, {"venue": "京都", "surface": "芝", "distance": 1600}]}
+    tg = page.ts_course_grid(ts)
+    assert tg["ダ"]["idx"] == {"中山|1800": 0} and tg["芝"]["idx"] == {"京都|1600": 1}
+
+
+def test_git_definition_dates_use_injected_runner_and_never_fail():
+    log = "2026-11-12 abc1234 feat(軸): 定義を直す\n"
+    assert page.parse_log_line("\n" + log) == {"date": "2026-11-12", "hash": "abc1234", "subject": "feat(軸): 定義を直す"}
+    assert page.parse_log_line("") is None and page.parse_log_line(None) is None
+    calls = []
+
+    def fn_ok(args):
+        calls.append(args)
+        return log
+
+    r = page.last_change("a/b.py", "func", runner=fn_ok)
+    assert r["grain"] == "関数" and r["func"] == "func" and "-L" in calls[0] and ":func:a/b.py" in calls[0]
+
+    def fn_file_only(args):
+        return None if "-L" in args else log
+
+    r = page.last_change("a/b.py", "func", runner=fn_file_only)
+    assert r["grain"] == "ファイル" and r["date"] == "2026-11-12"
+    assert page.last_change("a/b.py", "func", runner=lambda a: None) is None
+
+    out = page.axis_defs(["ts", "basic", "zzz"], runner=lambda a: log)
+    assert out["ts"]["hash"] == "abc1234" and out["basic"]["file"].endswith("basic_speed.py") and out["zzz"] is None
+    shallow = page.axis_defs(["ts"], runner=lambda a: "true\n" if "--is-shallow-repository" in a else log)
+    assert shallow == {"ts": None}                                              # 浅いクローンは日付が当てにならない
+
+
+def test_def_note_marks_stale_points_and_unknown():
+    info = {"date": "2026-11-13", "hash": "abc1234", "subject": "fix", "grain": "関数", "file": "src/x/run_axes.py", "func": "with_ts"}
+    assert "点が未更新の可能性" in page.def_note_html(info, "2026-11-12")
+    assert "点が未更新の可能性" not in page.def_note_html(info, "2026-11-13")           # 同じ日は印なし（定義 > 点 のときだけ）
+    s = page.def_note_html(info, "2026-11-12")
+    assert "2026-11-13" in s and "abc1234" in s and "関数単位" in s and "run_axes.py::with_ts" in s
+    assert "不明（git なし）" in page.def_note_html(None, "2026-11-12")
+
+
+def _mini_d(courses=("京都芝1600m", "中山ダ1800m")):
+    cell = {"A": [[200] * 10, [20] * 10, [60] * 10, [20.0] * 10, [60.0] * 10], "B": [[50] * 10, [5] * 10, [15] * 10, [5.0] * 10, [15.0] * 10]}
+    groups = [{"key": k, "label": k, "data": {"ts": cell}} for k in courses]
+    return {"meta": {"built": "2026-11-18", "exp_years": [2016, 2023], "periods": {"A": ["2024-01-01", "2025-12-31"], "B": ["2026-01-01", "2026-12-31"]},
+                     "runs": {"A": 2000, "B": 500}, "axis_runs": {"ts": {"A": 2000, "B": 500}}, "course_min_runs": 400, "history_mtime": "2026-11-12T00:00:00"},
+            "axes": [{"key": "ts", "label": "TS", "high": "高", "low": "低"}],
+            "dims": {"all": {"label": "全体", "groups": [{"key": "全体", "label": "全体", "data": {"ts": cell}}]},
+                     "course": {"label": "コース", "groups": groups}}}
+
+
+def _mini_ts(courses):
+    hist = [0] * 22
+    hist[11] = 10
+    cs = [{"venue": v, "surface": s, "distance": dd, "n": 10, "ts_sd": 9.5 + i / 10, "ts_skew": -1.5 if i == 0 else 0.1, "ts_p05": 35.0, "ts_p25": 45.0, "ts_p50": 50.0,
+           "ts_p75": 55.0, "ts_p95": 65.0, "ts_min": 12.0, "ts_max": 80.0, "ts_hist": hist, "peak20": 1 if i == 0 else 0}
+          for i, (v, s, dd) in enumerate(courses)]
+    band = {"surface": "芝", "band": "1500〜1700m", "n": 100, "races": 10, "ts_sd": 9.8, "ts_skew": -3.5, "ts_p05": 34.0, "ts_p50": 50.6, "ts_p95": 64.0, "peak_mean": 11.4, "front115": 0.67,
+            "peak20": 1, "rel": {"rho_split": 0.35, "rho_split_ci": [0.3, 0.4]}}
+    return {"meta": {"built": "2026-11-18", "runs": 100, "races": 10, "date_from": "2024-01-06", "date_to": "2026-11-07", "hist": {"lo": 10.0, "hi": 90.0, "step": 4.0, "peak_outlier": 20.0}},
+            "all_rel": None, "bands": [band], "courses": cs}
+
+
+def test_build_without_ts_json_has_no_ts_section_but_has_course_grid_section():
+    h = page.build(_mini_d())
+    assert 'id="cg-ts"' not in h and "table.sortable" not in h and 'id="cg-axes"' in h and "<h2>6. コース別" in h and "<h2>7. 限界" in h
+    assert "<th>定義の最終更新</th>" not in h and "点の作成日" not in h               # defs なしなら日付の列・注記は出ない
+    assert '"ts":null' in h
+
+
+def test_build_with_ts_json_rows_equal_course_count_and_embeds_numbers_from_json():
+    courses = [("京都", "芝", 1600), ("中山", "ダート", 1800), ("小倉", "芝", 1200)]
+    ts = _mini_ts(courses)
+    h = page.build(_mini_d(), ts, {"ts": {"date": "2026-11-13", "hash": "abc1234", "subject": "fix 定義", "grain": "関数", "file": "src/r/run_axes.py", "func": "with_ts"}})
+    assert 'id="cg-ts"' in h and "ts-dist" in h and h.count("table.sortable") == 1          # SORT_JS が入る
+    detail = h.split("<details class=\"fl\">")[1].split("</details>")[0]
+    assert detail.count("<tr>") - 1 == len(ts["courses"])                                  # 見出し行を除いた行 = コース数
+    assert "京都芝1600m（1 走・歪み -1.5）" in h                                          # 外れ値の文は JSON の値から作る
+    assert "定義の最終更新 2026-11-13" in h and "点が未更新の可能性" in h
+    assert h.count("</script>") == 2                                                       # 本体（データ・JS）+ 並べ替え
+    assert "<th>定義の最終更新</th>" in h
+    assert "歪みが大きいコースの主因は" in h and "検討中で、まだ本番の TS には反映していない" in h
+
+
+def test_ts_block_histogram_sums_to_runs_and_counts_outlier_peaks():
+    from src.scripts.data import ts_course_resolution as tcr
+
+    rng = np.random.default_rng(1)
+    ts = np.concatenate([rng.normal(50, 10, 500), [3.0, 95.0, -40.0]])        # 両端の外れ値の階級にも入る
+    g = pd.DataFrame({"ts": ts, "peak": np.concatenate([rng.normal(11.5, 0.3, 500), [20.5, 11.0, 25.0]])})
+    b = tcr.ts_block(g)
+    assert len(b["ts_hist"]) == 22 and sum(b["ts_hist"]) == len(g)            # 10〜90 を 4 点刻み 20 階級 + 両端
+    assert b["ts_hist"][0] == 2 and b["ts_hist"][-1] == 1                       # 10 未満（3.0, -40.0）と 90 以上（95.0）
+    assert b["peak20"] == 2 and b["ts_min"] == -40.0 and b["ts_max"] == 95.0
+    assert b["ts_p05"] < b["ts_p25"] < b["ts_p50"] < b["ts_p75"] < b["ts_p95"]
+
+
+def test_ts_section_box_id_does_not_collide_with_axis_box_ids():
+    h = page.build(_mini_d(), _mini_ts([("京都", "芝", 1600)]))
+    axis_keys = [a["key"] for a in _mini_d()["axes"]]                  # 軸側の箱は "cgbig-" + 軸キーで JS が作る（キーに ts がある）
+    assert 'id="cgbig-tsdist"' in h and all(f'id="cgbig-{k}"' not in h for k in axis_keys)

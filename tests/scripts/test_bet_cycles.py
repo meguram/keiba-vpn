@@ -608,3 +608,24 @@ def test_forward_summary_pending_and_settled():
     s = fl.summary(cost, ret, n_all=5, n_sys=1, n_boot=50)
     assert s["bet_races"] == 3 and s["settled"] == 2 and s["pending"] == 1
     assert abs(s["roi"] - 450 / 200) < 1e-9 and s["hit_rate"] == 0.5
+
+
+def test_forward_ledger_closes_ledger_row_on_error(monkeypatch):
+    from src.scripts.data import bet_forward_ledger as fl
+
+    seen = []
+
+    class Tok:
+        def __exit__(self, et, ev, tb):
+            seen.append(et.__name__)
+
+    def boom():
+        fl._TOKS.append(Tok())
+        raise RuntimeError("途中で落ちた")
+    monkeypatch.setattr(fl, "_main_inner", boom)
+    monkeypatch.setattr(fl, "_TOKS", [])
+    import pytest
+
+    with pytest.raises(RuntimeError):
+        fl.main()
+    assert seen == ["RuntimeError"]
