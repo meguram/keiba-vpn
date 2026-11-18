@@ -76,6 +76,7 @@ ENV_VARS+=",KEIBA_PRERENDER=1,KEIBA_PRERENDER_MAX_AGE_SEC=120,KEIBA_WARMUP_ON_ST
 [ -z "$GCS_PREFIX" ] || ENV_VARS+=",GCS_PREFIX=${GCS_PREFIX}"
 # API_TEST_USER=1 のときだけテストユーザー(config/members.json の test)を有効にする。stg のタグ付きリビジョン専用（deploy_gcp.sh が付ける）
 [ "${API_TEST_USER:-0}" != 1 ] || ENV_VARS+=",KEIBA_TEST_USER=1"
+[ -z "${STAGE2_START:-}" ] || ENV_VARS+=",KEIBA_STAGE2_START=${STAGE2_START}"   # 第 2 段の試行を読み始める日（stg だけ。deploy_gcp.sh）
 # MEMBERS_STORE=gcs のときだけ、会員名簿の正本を GCS に置く（管理 API・決済の Webhook の書き込みを GCS へ世代の条件つきで書く）。
 # 先にホストの .env にも KEIBA_MEMBERS_STORE=gcs を入れてから使う（ホストの cron が名簿を上げ続けると、Cloud Run の書き込みを上書きする）。手順: docs/operations/members_store_gcs.md
 [ "${MEMBERS_STORE:-}" != gcs ] || ENV_VARS+=",KEIBA_MEMBERS_STORE=gcs"
@@ -157,6 +158,10 @@ promote() {
     # テストユーザーが有効なリビジョン(stg 用)を本番の通信に載せない
     if gcloud run revisions describe "$rev" --project "$PROJECT_ID" --region "$REGION" --format='value(spec.containers[0].env)' | grep -q KEIBA_TEST_USER; then
       echo "リビジョン $rev はテストユーザー有効(stg 用)のため、通信を切り替えません" >&2; exit 3
+    fi
+    # 第 2 段の試行の開始日を下げたリビジョン(stg 用。過去の日のリハーサルを出す)を本番の通信に載せない
+    if gcloud run revisions describe "$rev" --project "$PROJECT_ID" --region "$REGION" --format='value(spec.containers[0].env)' | grep -q KEIBA_STAGE2_START; then
+      echo "リビジョン $rev は KEIBA_STAGE2_START 付き(stg 用)のため、通信を切り替えません" >&2; exit 3
     fi
     # メモリが PROMOTE_MIN_MEMORY（既定 4Gi）未満のリビジョンを本番の通信に載せない（2Gi で張り付いた。docs/operations/api_memory_20261117.md）。
     #   CI（scripts/ci/deploy_gcp.sh）は本番のメモリ（PROD_MEMORY。既定 4Gi）をそのまま閾値として渡す

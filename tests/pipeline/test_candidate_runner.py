@@ -150,3 +150,57 @@ def test_enable_mark(tmp_path, monkeypatch):
 def test_no_stage2_after_deadline():
     """期限（T-20）を過ぎてからは、材料がそろっても判定しない（システムの原因の見送り＝今の表示）。"""
     assert _plan(19, {"predicted": True, "odds": {"x": 1}}) == {"predict": [], "stage2": [], "expire": ["A"]}
+
+
+class _FakeS2:
+    """第 2 段のモデルの代わり: 渡されたオッズをそのまま記録し、q と offset がそのオッズから作られることを確かめる。"""
+    name = "fake"
+
+    def __init__(self):
+        self.seen = None
+
+    def predict_race(self, X, odds):
+        import numpy as np
+        import pandas as pd
+
+        from src.pipeline.inference.stage2_market import market_q
+
+        self.seen = np.asarray(odds, dtype=float)
+        q = market_q(self.seen)
+        p = q.copy()
+        p[2] = p[2] * 4
+        p = p / p.sum()
+        return pd.DataFrame({"p_win": p, "p_top2": 2 * p, "p_top3": 3 * p, "q": q, "r": np.log(p / q), "odds": self.seen})
+
+
+def _stage2_runner(tmp_path):
+    import pandas as pd
+
+    from src.pipeline.inference import stage2_bets as sb
+
+    r = _bare_runner(tmp_path)
+    r.frozen = sb.load_frozen()
+    r.s2, r.bundle_name = _FakeS2(), "b"
+    r.X = {"A": pd.DataFrame({"race_id": "A", "horse_id": [f"h{i}" for i in range(8)], "horse_number": list(range(1, 9))})}
+    r.card = {}
+    r._grade = lambda rid: "未勝利"
+    return r
+
+
+def test_stage2_uses_only_t60_odds_for_q_and_offset(tmp_path):
+    """q・offset（第 2 段のモデルへの入力）と人気は、T-60 の写しのオッズだけから作る。判定ファイルに odds_phase=t60 が残る。"""
+    r = _stage2_runner(tmp_path)
+    odds = [2.0, 3.0, 9.0, 7.0, 8.0, 12.0, 20.0, 40.0]
+    doc = {"phase": "t60", "snapshot_at": "2026-11-21T09:00:05+09:00",
+           "entries": [{"horse_number": i + 1, "win_odds": o, "popularity": 0} for i, o in enumerate(odds)]}
+    r.stage2("A", doc)
+    assert list(r.s2.seen) == odds
+    d = json.loads((tmp_path / "pub" / "bets_stage2" / "20261121" / "A.json").read_text(encoding="utf-8"))
+    assert d["odds_phase"] == "t60" and d["odds_t60_at"] == doc["snapshot_at"]
+    assert d["horses"][0]["odds"] in odds                   # 判定に使ったオッズも T-60 のもの
+
+
+def test_stage2_refuses_non_t60_odds(tmp_path):
+    r = _stage2_runner(tmp_path)
+    r.stage2("A", {"phase": "final", "entries": [{"horse_number": 1, "win_odds": 2.0}]})
+    assert r.s2.seen is None and not (tmp_path / "pub").exists()       # 確定・直前のオッズでは判定しない（システムの原因の見送り）
