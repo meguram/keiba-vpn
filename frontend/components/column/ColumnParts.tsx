@@ -6,7 +6,7 @@ import { ColumnTrainerPattern } from "@/components/column/ColumnTrainerPattern";
 import { VerdictMark } from "@/components/column/ColumnCard";
 import { ChipScroll } from "@/components/column/ChipScroll";
 import {
-  COLUMN_CATEGORIES, VERDICTS, articleParts, categoryLabel, categoryTrail, countIn,
+  COLUMN_CATEGORIES, VERDICTS, articleParts, categoryLabel, frontPlan, categoryTrail, countIn,
   type Column, type ColumnBlock, type ColumnGuide,
 } from "@/lib/columns";
 
@@ -88,47 +88,38 @@ export function ColumnTrail({ path, linkLast = true }: { path: string; linkLast?
   );
 }
 
-/** 記事: 結論 → 数字 → 図 → 本文の要約 → 型ごとの答え → 使い方 → 詳しい内容（折りたたみ）→ 関連するコラム */
+/** 記事（新聞の小コラムの量）: 結論・使い方 → 本文の要約 → 数字の囲み → 図か表 1 つ → 詳しい調べ方（折りたたみ）→ 関連するコラム。何を外に出すかは frontPlan が決める */
 export function ColumnArticle({ col, guide, glossary }: { col: Column; guide?: ColumnGuide; glossary: Record<string, string> }) {
   const p = articleParts(col.body, guide, glossary);
+  const f = frontPlan(p, col.verdict);
   const ds = col.dataset;
+  const visuals = f.main === "visual" ? p.visuals.slice(1) : p.visuals;     // 2 枚目からの図は折りたたみへ
   return (
     <article className="col col-article col-stack">
-      {p.question && <p className="col-small">調べたこと: {p.question}</p>}
       <div className="col-lead">
         <p className="col-lead-k">結論: <VerdictMark verdict={col.verdict} /></p>
         <p className="col-lead-t">{p.answer}</p>
+        {p.use && <p className="col-lead-u">{p.use.title}: {p.use.text}</p>}
       </div>
-      {p.stats.length > 0 && (
-        <div>
-          <Stats items={p.stats} />
-          {p.statsGuide && <p className="col-cap">読み方: {p.statsGuide}</p>}
-        </div>
-      )}
-      {p.visuals.map((v, i) => (
-        <div key={i}>
-          <Block b={v.block} />
-          {v.guide && <p className="col-cap">読み方: {v.guide}</p>}
-        </div>
-      ))}
-      {p.summary && <p className="col-pre">{p.summary}</p>}
-      {p.keyTable && (
-        <section>
-          <h2 className="col-h2">型ごとの答え</h2>
-          <Table columns={p.keyTable.columns} rows={p.keyTable.rows} caption={p.keyTable.caption} />
-          {p.keyTable.guide && <p className="col-cap">読み方: {p.keyTable.guide}</p>}
-        </section>
-      )}
-      {p.use && (
-        <section>
-          <h2 className="col-h2">{p.use.title}</h2>
-          <p className="col-pre">{p.use.text}</p>
-        </section>
-      )}
+      {f.showSummary && <p className="col-pre">{p.summary}</p>}
+      {f.showStats && <Stats items={p.stats} />}
+      {f.main === "visual" && <Block b={p.visuals[0].block} />}
+      {f.main === "keyTable" && p.keyTable && <Table columns={p.keyTable.columns} rows={p.keyTable.rows} caption={p.keyTable.caption} />}
       <details className="col-details">
-        <summary>詳しい内容（集計の条件・表・注・言葉の説明）</summary>
+        <summary>詳しい調べ方（数字・図・集計の条件・言葉の説明）</summary>
         <div className="col-more">
+          {!f.showSummary && p.summary && <p className="col-pre">{p.summary}</p>}
+          {!f.showStats && p.stats.length > 0 && <Stats items={p.stats} />}
           {p.statsRest.length > 0 && <Stats items={p.statsRest} />}
+          {p.statsGuide && <div><p className="col-h3">数字の読み方</p><p className="col-pre">{p.statsGuide}</p></div>}
+          {p.visuals[0]?.guide && f.main === "visual" && <div><p className="col-h3">図の読み方</p><p className="col-pre">{p.visuals[0].guide}</p></div>}
+          {visuals.map((v, i) => (
+            <div key={i}>
+              <Block b={v.block} />
+              {v.guide && <p className="col-cap">読み方: {v.guide}</p>}
+            </div>
+          ))}
+          {p.keyTable?.guide && <div><p className="col-h3">表の読み方</p><p className="col-pre">{p.keyTable.guide}</p></div>}
           {p.notes.map((n, i) => (
             <div key={i}>
               <p className="col-h3">{n.title}</p>
@@ -141,6 +132,7 @@ export function ColumnArticle({ col, guide, glossary }: { col: Column; guide?: C
             <p className="col-h3">集計の条件</p>
             <dl className="col-kv">
               <dt>通説</dt><dd>「{col.claim}」</dd>
+              {p.question && <><dt>調べたこと</dt><dd>{p.question}</dd></>}
               <dt>対象期間</dt><dd>{ds.period}</dd>
               {ds.conditions && <><dt>対象条件</dt><dd>{ds.conditions}</dd></>}
               {ds.sample && <><dt>件数</dt><dd>{ds.sample}</dd></>}

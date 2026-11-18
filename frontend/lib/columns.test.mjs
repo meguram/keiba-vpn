@@ -12,7 +12,7 @@ const ts = createRequire(import.meta.url)("typescript");
 const src = ts.transpileModule(readFileSync(join(here, "columns.ts"), "utf8"), { compilerOptions: { module: ts.ModuleKind.ES2020, target: ts.ScriptTarget.ES2020 } }).outputText;
 const out = join(mkdtempSync(join(tmpdir(), "col-")), "columns.mjs");
 writeFileSync(out, src);
-const { categoryTrail, allCategoryPaths, chartMax, chartRange, chartIsEmpty, chartVariant, cascadeOptions, cascadePick, axis2Max, columnsIn, countIn, radialLayout, treeSireCount, formatTreemapValue, articleParts, keyTableOf, VISUAL_TYPES } = await import(pathToFileURL(out).href);
+const { categoryTrail, allCategoryPaths, chartMax, chartRange, chartIsEmpty, chartVariant, cascadeOptions, cascadePick, axis2Max, columnsIn, countIn, radialLayout, treeSireCount, formatTreemapValue, articleParts, keyTableOf, VISUAL_TYPES, frontPlan, FRONT_MAX_CHARS } = await import(pathToFileURL(out).href);
 
 const dir = join(here, "..", "content", "columns");
 const articles = readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => JSON.parse(readFileSync(join(dir, f), "utf8")));
@@ -196,4 +196,13 @@ test("記事の型: 図が無い記事は主の表を図の代わりに出し、
     assert.ok(q.stats.length <= 3, a.slug);
     assert.ok(q.visuals.length >= 1 || a.body.every((b) => !VISUAL_TYPES.has(b.type) && b.type !== "table"), `${a.slug}: 主の図が無い`);
   }
+});
+
+test("小コラムの型: 織り込み済みの記事は数字の囲みを出さず、図か表は 1 つ、要約は短く専門の言葉が無いときだけ", () => {
+  const base = { answer: "答え。", use: { title: "使い方", text: "使い方。" }, stats: [{ label: "a", value: "1" }], statsRest: [], visuals: [{ block: { type: "chart" } }, { block: { type: "chart" } }], summary: "要約。", keyTable: { columns: [], rows: [] }, details: [], notes: [], terms: [], links: [], question: null };
+  assert.deepEqual(frontPlan(base, "not_supported"), { showSummary: true, showStats: false, main: "visual", chars: 10 });
+  assert.equal(frontPlan(base, "supported").showStats, true);
+  assert.equal(frontPlan({ ...base, visuals: [] }, "partial").main, "keyTable");
+  assert.equal(frontPlan({ ...base, summary: "差は +0.1pt（p=0.386）でした。" }, "partial").showSummary, false);
+  assert.equal(frontPlan({ ...base, summary: "あ".repeat(FRONT_MAX_CHARS) }, "partial").showSummary, false);
 });

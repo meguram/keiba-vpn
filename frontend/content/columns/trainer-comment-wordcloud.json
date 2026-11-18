@@ -2,7 +2,7 @@
   "slug": "trainer-comment-wordcloud",
   "title": "厩舎コメントって成績に関連する？——言葉で好走は分かれるが、人気に織り込み済み",
   "claim": "厩舎コメントの言葉で、好走する馬としない馬が分かれる",
-  "verdict": "partial",
+  "verdict": "not_supported",
   "summary": "『楽しみ』『能力』など前向きな言葉の馬は3着以内が多く、『叩く』『試す』などの馬は少ない傾向が出ました。ただし単勝人気をそろえると、差の残る語は 0 個でした。",
   "categories": [
     "stable/trainer"

@@ -127,11 +127,11 @@ export const COLUMN_CATEGORIES: ColumnCategory[] = [
 export type ColumnVerdict = "supported" | "partial" | "not_supported" | "inconclusive" | "pending";
 
 export const VERDICTS: Record<ColumnVerdict, { label: string; color: string }> = {
-  supported: { label: "傾向あり", color: "#3fb950" },
-  partial: { label: "条件付きで傾向あり", color: "#d29922" },
-  not_supported: { label: "傾向なし", color: "#f85149" },
-  inconclusive: { label: "判断保留", color: "#8b949e" },
-  pending: { label: "集計準備中", color: "#58a6ff" },
+  supported: { label: "使える", color: "#3fb950" },
+  partial: { label: "一部で使える", color: "#d29922" },
+  not_supported: { label: "人気に織り込み済み（使えない）", color: "#f85149" },
+  inconclusive: { label: "データ不足", color: "#8b949e" },
+  pending: { label: "集計中", color: "#58a6ff" },
 };
 
 /** 本文の部品。上から順に描画する */
@@ -768,7 +768,7 @@ type TableBlock = Extract<ColumnBlock, { type: "table" }>;
 type LinkBlock = Extract<ColumnBlock, { type: "link" }>;
 
 /**
- * 記事を、画面の型（結論 → 数字 → 図 → 本文の要約 → 型ごとの答え → 使い方 → 詳しい内容）に分けたもの。
+ * 記事を部品（結論・使い方・数字・図・本文の要約・型ごとの答え・詳しい調べ方）に分けたもの。外に出すかは frontPlan が決める。
  * 記事の JSON（数字）はそのまま使い、並べ方だけを決める。
  */
 export type ColumnArticleParts = {
@@ -889,4 +889,26 @@ export function articleParts(body: ColumnBlock[], guide: ColumnGuide | undefined
     stats, statsGuide, statsRest, visuals, summary: summaryOut, keyTable,
     details, notes, terms, links,
   };
+}
+
+/** 記事の最初に見える部分の文字数の目安（新聞の小コラムの量。結論・使い方・本文の要約の合計） */
+export const FRONT_MAX_CHARS = 400;
+
+/** 最初に見える部分では使わない統計の言葉（使うなら折りたたみの中で言い換える） */
+export const FRONT_JARGON = /有意|95[%％]|区間|下限|[pPqQ] ?[=<＜]|[pPqQ] ?値|格 ?[SABC]|標準偏差|多重比較|回帰|検定/;
+
+/**
+ * 記事の最初に見える部分を決める（新聞の小コラムの量）。それ以外は「詳しい内容」の折りたたみに入れる。
+ *   ・結論（結論の言葉 + 答え）と使い方は必ず出す
+ *   ・本文の要約は、結論・使い方と合わせて FRONT_MAX_CHARS 字以内に収まり、統計の言葉（FRONT_JARGON）を含まないときだけ出す
+ *   ・数字の囲みは「使える」「一部で使える」記事だけ。人気に織り込み済み・データ不足の記事は出さない
+ *   ・図か表は 1 つだけ（主の図。無ければ型ごとの答えの表）
+ */
+export function frontPlan(p: ColumnArticleParts, verdict: ColumnVerdict) {
+  const lead = p.answer.length + (p.use?.text.length ?? 0);
+  const showSummary = !!p.summary && lead + p.summary.length <= FRONT_MAX_CHARS && !FRONT_JARGON.test(p.summary);
+  const showStats = (verdict === "supported" || verdict === "partial") && p.stats.length > 0;
+  const main: "visual" | "keyTable" | null = p.visuals.length ? "visual" : p.keyTable ? "keyTable" : null;
+  const chars = lead + (showSummary ? p.summary!.length : 0);
+  return { showSummary, showStats, main, chars };
 }
