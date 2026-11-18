@@ -242,3 +242,48 @@ def test_input_gaps_records_missing_share():
     X[0] = [1, 2]                                                   # 文字列でない列名があっても止まらない
     got = cr.input_gaps(X)
     assert got == {"na_oikiri_eval": 0.5, "na_tl": 0.25, "na_wc": 1.0, "na_weight": 0.5}     # f1_sim_・attr_ は数えない
+
+
+def test_schedule_is_built_once_and_refreshed_only_from_the_schedule_doc(tmp_path, monkeypatch):
+    """時刻表は 1 回だけ作って使い回す。10 分おきの読み直しは race_day_schedule（1 件）がある日だけ（無い日に全レースの出馬表を読み直さない）。"""
+    from src.scraper import auto_scrape_queue as q
+
+    calls = {"build": 0}
+
+    def fake_build(storage, day):
+        calls["build"] += 1
+        return [{"race_id": "A", "post_time": POST.replace(tzinfo=None)}]
+
+    monkeypatch.setattr(q, "_fetch_race_schedule_storage", fake_build)
+    r = _bare_runner(tmp_path)
+    r._sched = None
+
+    class _S:
+        doc = None
+
+        def load(self, category, key, **_):
+            return self.doc
+
+    r.storage = _S()
+    assert r.schedule()[0]["post_time"].tzinfo is not None and r.schedule() and calls["build"] == 1
+    got = r.schedule(refresh=True)
+    assert calls["build"] == 1 and got[0]["race_id"] == "A"                       # 時刻表の文書が無い日は出馬表を読み直さない
+    got[0]["post_time"] = None
+    assert r.schedule()[0]["post_time"] is not None                               # 写しを返す（使い回しの表は変わらない）
+    rows = [{"race_id": "A", "post_time": POST.replace(tzinfo=None) + timedelta(minutes=10)}]
+    monkeypatch.setattr("src.scraper.race_day_schedule.schedule_payload_to_runtime_list", lambda snap: rows)
+    r.storage.doc = {"slots": [1]}
+    got = r.schedule(refresh=True)
+    assert calls["build"] == 1 and got[0]["post_time"] == POST + timedelta(minutes=10)   # 文書から読み直す（出馬表は読まない）
+
+
+def test_meter_summary_counts_kinds_and_rest():
+    m = cr.GcsMeter.__new__(cr.GcsMeter)
+    from collections import Counter
+
+    m.reads, m.bytes, m.lists, m.by_kind = 0, 0, 0, Counter()
+    for i in range(14):
+        m.note_kind(type("B", (), {"name": f"chuou/kind{chr(97 + i)}/2026/{i}.json"})())
+    m.note_kind(type("B", (), {"name": "chuou/kinda/2025/9.json"})())
+    s = m.summary()
+    assert s["gcs_by_kind"]["chuou/kinda/N/N.json"] == 2 and s["gcs_by_kind"]["(その他)"] == 2 and sum(s["gcs_by_kind"].values()) == 15
