@@ -1,0 +1,25 @@
+# 文書の食い違い・古い記述の一覧（2026-11-18、docs の階層化の棚卸しで見つけたもの）
+
+docs/html を日本語の階層（`docs/html/index.html` が目次）に整理したときの棚卸しで見つけた、食い違い・古い記述の一覧。
+**どちらが正しいかはここでは決めず、書き換えていない。** 直すのは、生成元・文書の持ち主の担当に回す（統括役が割り振る）。
+
+| # | 何が食い違うか | 場所 | 影響 | 回す先（案） |
+|---|---|---|---|---|
+| 1 | 同じ名前で中身が別の HTML が 2 つある。本の章（12KB、生成元のスクリプトが見つからない）と、研究の成果物（約 11MB、`build_graded_handicapper_html.py` が生成） | `docs/html/modeling/chapters/graded_handicapper.html` と `data/meta/graded/graded_handicapper.html` | 名前で探すと取り違える。本の章の数字が成果物の更新に追随しない | 重賞の担当 |
+| 2 | 出力の JSON に、存在しないパスを値として入れている（実体は `docs/html/pedigree/NOTE_APTITUDE_5GEN.html`） | `src/research/pedigree/note_aptitude_race_map.py` 243 行（`blend_doc_5gen`） | その値を辿るとリンク切れ | **2026-11-18 に直した**（docs-reorg。値を docs/html/pedigree/NOTE_APTITUDE_5GEN.html に） |
+| 3 | 出力先が `docs/html/keiba_ai_pipeline_proposal.html`（docs/html の直下）で、本の PARTS にも棚にも無い。実行すると、本と棚の「全 HTML が載っている」テストが落ちる | `src/scripts/docs/build_master_proposal.py` 22 行 | 実行した人の CI が落ちる | **2026-11-18 に直した**（docs-reorg。出力先を git の外の data/local/docs/ に。docs/ の中は指定できない。読めなくなっていた旧 ml_pipeline/index.html の CSS は design/ml_pipeline.html から読む）。残り: 取り込み元の多くが旧パス（docs/html の ml_pipeline・modeling_actions・race_performance など）のままで黙って飛ばされ、中身は modeling/chapters と notebooks だけになる。全文を 1 冊にしたものは本（book.html）が代わるので、作り直すか廃止するかは持ち主が決める |
+| 4 | 印の規則の既定の版: 設定の値は `version: 2` だが、同じ設定の注記とコードのコメントは「既定は v1」と書く。採用の台帳（model_versions §1）も「実際の既定がどちらかは要確認」としている | `config/mark_rule.json`（version と note）・`src/utils/race_probabilities.py` 317 行・`docs/html/operations/model_versions.html` §1 | 本番の印がどちらの版かを文書から決められない | 印・馬券の担当 **直した（2026-11-18、bet-optimizer）**: 設定上の既定は version 2（v1 は設定ファイルが無いときのコードの予備の値。リポジトリの配備の設定に KEIBA_MARK_RULE は無い）。設定の注記・コードのコメント・mark_rule_v2.md・テストの説明・model_versions を直した。稼働中の Cloud Run・VPS の環境変数の実値は見ていないので、model_versions では「要確認」を残した。 |
+| 5 | 推奨馬券の結論（`stages.stage_00_conclusion`）は第 1 回の凍結（hash f96a5aeff33e、test 2025 104.7%）のままで、第 2 回の凍結（hash 70ba29fa7b55、test 2025 107.0%）の結果は別のファイルにある。どちらを「今の買い方」とするかの記述が無い | `docs/operations/retrain_trials/bet_cycles_log.json`・`bet_test2025_*.json`・`config/bet_cycles/frozen_20261117_{final,r2}.json` | まとめのページ（推奨馬券の最適化）では両方を並べている | bet-optimizer **直した（2026-11-18、bet-optimizer）**: md に best の印を置き、今の候補は第 2 回（70ba29fa7b55）で、週末の試行に載せるものと明記した。第 1 回の結論の見出しにも「過去の記録」と書いた。 |
+| 6 | 親モデルの採用の台帳に「要確認」が残っている: 本番切替の正確な時刻、v3→v4→v5 の本番切替日、v6e の連対・複勝の test 値、本番（Cloud Run・VPS）の環境変数の実値 | `docs/html/operations/model_versions.html` §1・§2.1 | まとめのページ（馬の予測モデル）では「要確認」のまま写している。AUC は記録が無いので「記録なし」と出している | model-improve-cycles |
+| 7 | 要件定義書の §0 のカードの件数（done=11）が §11 の表のタグ数（12）と合わない（スキルの検証 `validate_requirements.py` の指摘。置き場を移す前からある） | `docs/html/02_本番の仕様/要件定義書.html` | 次に `/update-requirements` を流すときに直る見込み | 次の /update-requirements に任せる（統括役の判断） |
+| 8 | 推奨馬券の各段（`stages` の stage_candidate・stage_fav1_exception・stage_tiers・stage_selcv）の表の期間のラベルが、前の回（本番 v6e で試した回）のまま。例: 「訓練 2022〜23」の 13,212 レースは md の結論では「訓練 2019〜22」、「評価 2024」の 6,555 は「評価 2023〜24」。選び方の交差検証の表は「2022・2023」の 2 列に、md の 2019・2020 年の値が入り、2021・2022 年の値が無い | `docs/operations/retrain_trials/bet_cycles_log.json`（書くのは `src/scripts/data/bet_cycles_report.py`）と `bet_optimization_20261116.md` の結論の表 | 期間を取り違えて読まれる。まとめのページでは「ラベルは記録のまま」と注記している | bet-optimizer **直した（2026-11-18、bet-optimizer）**: 最終モデルの各段の記録のラベルを訓練 2019〜22・評価 2023〜24 に直し、選び方の交差検証の表を 4 年の列に作り直した。表を作るコードは、記録の HTML の見出しを入力の設定から引き、道具（bet_cycles.py）の固定の年の文言（2 年・2022〜23・評価 2024）は年を書かない形に直した。保存済みの最終モデル・第 2 回の各段の記録は手で直した（作り直すと「評価（確かめ）」のように年の無い文言になる）。W4 と［v6e］［fix3］［fix3p］の 2022〜23 は試しの回しの値で正しい。 |
+| 9 | 親モデルの記録の `status` と notes の見出しが「stg での確かめと第 2・3 段はこれから」「第 2・3 段（未着手）」のまま。同じ記録の conclusion（2026-11-18）と第 2 段のサイクル（m2-13 採用）と食い違う | `docs/operations/retrain_trials/model_cycles_log.json` | まとめのページでは status を「記述のまま・古いことがある」と添えて出している | model-improve-cycles |
+| 10 | 親モデルの best の印の「2025 年 test の ◎（p の 1 位）… ◎ の約 8 割が 1 番人気」を裏付ける r04 の値が記録に見当たらない。notes では r04 の開発 2022〜24 で「予測 1 位＝1 番人気 65.6%」、80.5% は第 2 段の offset のモデル（m2-01）の値、`bet_round2_story.json` は第 2 段のモデルについて「約 7 割」 | `model_cycles_20261116.md`（best の印）・`model_cycles_log.json`・`bet_round2_story.json` | 本番の候補の性質（人気馬に寄るか）を誤解しうる | model-improve-cycles |
+| 11 | 重賞の best の印の「今の最良: 分析サイクルの B（重賞ごと）」は、同じ 239 レースで前日版・B（全体で 1 つ）より ◎ の成績が低く、§20.5 の推奨も「全体で 1 つに絞る」。「最良」より「タブで使っている版」に近い。§20.3 の表には廃止した A（§24）の値が注記なしで並ぶ | `docs/ideas/graded_rule_based_handicapper.md`（best の印・§20.3・§20.5・§24） | 読み手が「最良の版」を取り違える | keiba-vpn-f8（重賞） |
+| 12 | 通常レースの best の印の「今の最良: 第 3 版のサイクル 17」は、§11 の「第 1 版の 80%・第 2 版の 77% と比べても下回る」と並ぶ。比べる期間もそろっていない（第 1・2 版は 2025〜2026 年、第 3 版は 2026 年）。best の表の訓練の複勝回収率が「—」だが §11 に 127.5% がある | `docs/ideas/course_class_handicapper.md`（best の印・§11） | 同上 | keiba-vpn-f8（全レース版） |
+
+## 置き場の変更（この作業で行ったこと）
+
+- 要件定義書を `docs/html/index.html` から `docs/html/02_本番の仕様/要件定義書.html` に移した（中の相対リンクは置き場に合わせて直した）。`/update-requirements` のスキル（SKILL.md・collect_state.py・validate_requirements.py）も新しい置き場に書く。
+- `docs/html/index.html` は文書の目次になった（`python -m src.scripts.docs.build_docs_shelves` の生成物）。他のページからの「要件定義書へ」のリンクは目次に着き、目次の冒頭から要件定義書へ進める。
+- 元の HTML は動かしていない（約 80 本の生成スクリプトが出力先を固定で持つため）。

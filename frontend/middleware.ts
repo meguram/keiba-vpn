@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextFetchEvent, NextRequest, NextResponse } from "next/server";
+import { createMaintenanceGate, type MaintenanceStatus } from "@/lib/maintenanceGate";
 import { pathEnabled } from "@/lib/features";
 import { MAINTENANCE_PATH, STATUS_URL } from "@/lib/maintenance";
 
@@ -61,32 +62,35 @@ function isScannerProbe(pathname: string): boolean {
 }
 
 // ── メンテナンス時間帯（毎日 JST 03:00–04:00）。判定の正は API（/api/maintenance/status）。15 秒だけメモリに持つ ──
+// 期限切れでも「保守ではない」ならすぐ答え、取り直しは裏で行う（lib/maintenanceGate.ts。画面・RSC の要求を最大 1.5 秒待たせない）。
 const MAINTENANCE_PASS_PREFIXES = ["/api/", "/_next/", "/data/image/", "/data/trainer_pattern.json", "/static/", "/favicon", "/login", "/logout", MAINTENANCE_PATH];
-let maintCache: { at: number; ttl: number; active: boolean; retry: number } | null = null;
 
-async function maintenanceState(): Promise<{ active: boolean; retry: number }> {
-  const now = Date.now();
-  if (maintCache && now - maintCache.at < maintCache.ttl) return maintCache;
+async function fetchMaintenanceStatus(): Promise<MaintenanceStatus> {
   const base = process.env.KEIBA_FASTAPI_URL;
-  if (!base) return { active: false, retry: 0 };
+  if (!base) return { active: false };
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 1500);
   try {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 1500);
     const res = await fetch(`${base}${STATUS_URL}`, { cache: "no-store", signal: ctl.signal });
-    clearTimeout(t);
     if (!res.ok) throw new Error(String(res.status));
-    const j = (await res.json()) as { active?: boolean; remaining_sec?: number | null; retry_after?: number };
-    const active = j.active === true;
-    const rem = typeof j.remaining_sec === "number" ? j.remaining_sec : 15;
-    maintCache = { at: now, ttl: active ? Math.max(1000, Math.min(15_000, rem * 1000)) : 15_000, active, retry: j.retry_after ?? 60 };
-  } catch {
-    // 取れないときは通常扱い（API が止まっていれば各画面の共通ハンドラが切り替える）
-    maintCache = { at: now, ttl: 5_000, active: false, retry: 0 };
+    return (await res.json()) as MaintenanceStatus;
+  } finally {
+    clearTimeout(t);
   }
-  return maintCache;
 }
 
-export async function middleware(request: NextRequest) {
+const maintenanceGate = createMaintenanceGate(fetchMaintenanceStatus);
+
+async function maintenanceState(event: NextFetchEvent): Promise<{ active: boolean; retry: number }> {
+  const r = maintenanceGate.read();
+  if (!r.mustWait && r.state) {
+    if (r.pending) event.waitUntil(r.pending.then(() => undefined));
+    return r.state;
+  }
+  return r.pending ? await r.pending : { active: false, retry: 0 };
+}
+
+export async function middleware(request: NextRequest, event: NextFetchEvent) {
   const { pathname } = request.nextUrl;
 
   if (isScannerProbe(pathname)) {
@@ -97,7 +101,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!MAINTENANCE_PASS_PREFIXES.some((p) => pathname === p || pathname.startsWith(p))) {
-    const st = await maintenanceState();
+    const st = await maintenanceState(event);
     // 管理者のセッション Cookie がある人は通す（本当の検証は API 側。偽の Cookie では API が 503 を返し、共通ハンドラがメンテナンス画面にする）
     if (st.active && !request.cookies.get(DEV_COOKIE)) {
       const url = request.nextUrl.clone();

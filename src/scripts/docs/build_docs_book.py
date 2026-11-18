@@ -79,10 +79,18 @@ def _decision_chapters() -> list[Chapter]:
     return [C(s, "", "決定", src=f"decisions/{s}.html", status="history") for s in order + rest]
 
 
+def _best_chapters() -> list[Chapter]:
+    """docs/html/01_いまのベスト分析/ のまとめのページ（build_docs_shelves が元の記録から生成する）。"""
+    from src.scripts.docs.build_docs_shelves import BEST_PAGES
+    from src.scripts.docs.docs_shelves import SHELF
+    return [C(slug, blurb, "結果", src=f"html/{SHELF['best'].dir}/{file}") for slug, file, blurb in BEST_PAGES]
+
+
 PARTS: list[Part] = [
+    Part("いまのベスト分析", "データ分析家が最初に見る所。重賞・通常レース・血統・馬の予測モデル・推奨馬券の今の最良の結論・数字・根拠・限界を、元の記録から生成した 1 枚ずつ。", _best_chapters()),
     Part("要件と全体像", "何を作るのか、どういう構成か。", [
         C("requirements", "keiba-vpn の要件定義書。目的、要件、KPI、構成、ワークフロー、ユーザーへの提供フロー、実装状況（実装済み／部分／モック／未実装）、関連文書の索引。`/update-requirements` で現状から再生成される。",
-          "要件", src="html/index.html"),
+          "要件", src="html/02_本番の仕様/要件定義書.html"),
         C("ARCHITECTURE", "システム仕様書。コンポーネント、データフロー、モデル、運用の全体像（2026-03〜05 の設計を土台に、現状の差分を冒頭に追記）。", "設計", src="html/design/ARCHITECTURE.html", status="snapshot",
           note="設計の土台は 2026-05。現在の構成（VPS＋GCP＋学習PC）との差分は冒頭の節を参照。",
           now=[("requirements", "要件定義書（最新状態）"), ("server_architecture", "いま動いているサーバー一覧"), ("decoupling_status", "公開基盤の現在の構成と脱ホスト移行")]),
@@ -250,6 +258,9 @@ PARTS: list[Part] = [
         C("bet_optimization_story", "推奨馬券の最適化の過程。何を考え、何を試し、どうなったかを時系列で: 予測 1 位の ◎ では届かない、穴の ◎ と見送り、1 点買いの崩れ、選び方の交差検証、test 2025、今の推奨の印のずれ（W4）、本番の再現（発走前のオッズ）で測り直した結果、第 2 回の方針。", "結果",
           src="html/operations/bet_optimization_story.html",
           see=[("bet_cycles", "推奨馬券の最適化サイクル")]),
+        C("bet_r2_walkthrough", "第 2 回で凍結した買い方の実例。2025 年のサンプルのレース（種を固定した乱数で選ぶ）で、モデルの p・市場の q・ずれ r から、レースの絞り込み・◎・単勝の買い目・結果までのつながりを全頭の表で示す。", "結果",
+          src="html/operations/bet_r2_walkthrough.html",
+          see=[("bet_optimization_story", "推奨馬券の最適化の過程"), ("bet_cycles", "推奨馬券の最適化サイクル")]),
         C("upstream_model_outputs", "最終層の入力になる上流モデル（親・前段・めぐ指数・追走難度・ラップ予想・オッズ予測など）の出力値の見方を、サンプル付きで並べた資料。", "仕様",
           src="html/modeling/final/upstream_model_outputs.html",
           see=[("model_versions", "モデルの版と採用状況"), ("final_layer_philosophies", "最終層の思想別の評価")]),
@@ -408,7 +419,7 @@ PARTS: list[Part] = [
 ]
 for _i, _p in enumerate(PARTS):
     if not _p.label:
-        _p.label = "第" + ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"][_i] + "部"
+        _p.label = "第" + ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV"][_i] + "部"
 
 CHAPTERS: dict[str, Chapter] = {c.slug: c for p in PARTS for c in p.chapters}
 GLOSSARY_PART = Part("用語集", "本文に出てくるデータサイエンスの専門用語の解説。", [C(GL.GLOSSARY_SLUG, GL.GLOSSARY_BLURB, "用語")], label="付録C")
@@ -418,10 +429,12 @@ STATUS = {"legacy": ("旧設計", "#fb923c"), "snapshot": ("時点の記録", "#
 
 
 def all_source_files() -> set[Path]:
-    """本に載せるべき HTML（docs/ 配下の全 HTML。本自身と docs/ideas/inbox/ を除く）。"""
+    """本に載せるべき HTML（docs/ 配下の全 HTML。本自身・docs/ideas/inbox/・目次のページを除く）。"""
+    from src.scripts.docs.build_docs_shelves import nav_pages
+    nav = nav_pages()   # 目次のページ（docs/html/index.html と各棚の 目次.html）は本に載せない
     out = {p for p in DOCS_DIR.rglob("*.html") if p.name != BOOK_NAME and "node_modules" not in p.parts
            and (DOCS_DIR / "ideas" / "inbox") not in p.parents}   # inbox は参考テキストの置き場で本には載せない
-    return {p.resolve() for p in out}
+    return {p.resolve() for p in out} - nav
 
 
 # ── 読み込みと整形 ─────────────────────────────────────────────────────────────
@@ -947,6 +960,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = ap.parse_args()
+    from src.scripts.docs.build_docs_shelves import write_all
+    write_all()   # 先に目次とまとめのページ（本の先頭の部）を作り直す
     out_html, built = build(args.out)
     args.out.write_text(out_html, encoding="utf-8")
     print(f"{args.out}: {len(built)} 章, {len(out_html) // 1024} KB")

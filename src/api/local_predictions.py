@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 SOURCE_NOTE = {
     "shadow": "検証用（shadow）。モデルの確率は前日夕方〜馬体重確定後に作った実モデルの出力ですが、画面向けに確定した予測ではありません。期待値は最新オッズで計算しています。",
+    "candidate": "試行中: 新しい候補のモデル（2016〜2025 年で学習した第 1 段）の当日の予測です。精度は確かめ中です。期待値は最新オッズで計算しています。",
     "backfill": "過去分の算出（バックフィル）。レース当日の確定した予測ではありません。その日より前の情報だけで後から算出したモデルの出力で、期待値は最新（確定）オッズで計算しています。",
 }
 _MARK_LABELS = {
@@ -51,6 +52,7 @@ def shadow_model_label(day: str, inf: Path | None = None) -> str:
 
 
 PRIMARY_LABEL = "bundle_v6_2025"
+CANDIDATE_LABEL = "bundle_v6_2025_r04"   # 新しい候補（cycles16_fix3/final、2016〜2025 年で学習）。予測の model 名として出る
 _KNOWN_BACKFILL_LABELS = ("bundle_v4_2025", "bundle_v5_2025")
 
 
@@ -60,11 +62,19 @@ def primary_model() -> str:
     return "legacy" if m in ("legacy", "v4", "v5", "off") else "v6e"
 
 
-def find_primary_prediction(race_id: str, day: str, inf: Path | None = None) -> tuple[Path, str, str] | None:
+def find_primary_prediction(race_id: str, day: str, inf: Path | None = None, candidate: bool = True) -> tuple[Path, str, str] | None:
     """v6e の予測（当日の shadow=predictions_v6、無ければ v6e のバックフィル）。KEIBA_PRED_MODEL=legacy のときは常に None。"""
     if primary_model() != "v6e" or not day or len(day) != 8:
         return None
     inf = inf or inference_dir()
+    try:  # 新しい候補の第 1 段（候補の影のランナー。試行中・止めの目印で戻る。src/api/stage2_live.py）。表示用だけ（candidate=False は v6e）
+        from src.api.stage2_live import v6c_path
+
+        cand = v6c_path(race_id, day, inf) if candidate else None
+        if cand is not None:
+            return cand, "candidate", CANDIDATE_LABEL
+    except Exception:  # noqa: BLE001
+        pass
     live = inf / "predictions_v6" / day / f"{race_id}.parquet"
     if live.exists():
         return live, "shadow", PRIMARY_LABEL
@@ -74,12 +84,12 @@ def find_primary_prediction(race_id: str, day: str, inf: Path | None = None) -> 
     return None
 
 
-def find_local_prediction(race_id: str, day: str, inf: Path | None = None) -> tuple[Path, str, str] | None:
+def find_local_prediction(race_id: str, day: str, inf: Path | None = None, candidate: bool = True) -> tuple[Path, str, str] | None:
     """(parquet のパス, source, モデル名)。優先順位は v6e（既定）> shadow(v4) > バックフィル。"""
     inf = inf or inference_dir()
     if not day or len(day) != 8:
         return None
-    prim = find_primary_prediction(race_id, day, inf)
+    prim = find_primary_prediction(race_id, day, inf, candidate=candidate)
     if prim:
         return prim
     shadow = inf / "predictions_v3" / day / f"{race_id}.parquet"
@@ -173,12 +183,13 @@ def build_payload(race_id: str, card: dict, odds_doc: dict | None, probs, source
         })
     scored = score_entries(entries, odds, alpha)
     note = SOURCE_NOTE.get(source, "")
-    mtype = "ensemble_v6e" if "v6" in label else "ensemble_v5" if "v5" in label else "ensemble_v4" if "v4" in label else "ensemble_v3"
+    mtype = "ensemble_v6_candidate" if source == "candidate" else "ensemble_v6e" if "v6" in label else "ensemble_v5" if "v5" in label else "ensemble_v4" if "v4" in label else "ensemble_v3"
     payload = {
         "race_id": race_id, "race_name": card.get("race_name", ""), "venue": card.get("venue", ""), "round": card.get("round", 0),
         "surface": card.get("surface", ""), "distance": card.get("distance", 0), "track_condition": card.get("track_condition", ""),
         "status": "success", "has_prediction": True, "model_type": mtype, "model_version": label,
-        "model_description": (f"アンサンブル v6e（{label}）の確率 — {'算出済み（過去分）' if source == 'backfill' else '当日の予測'}" if "v6" in label
+        "model_description": (f"新しい候補のモデル（{label}・試行中）の確率 — 当日の予測" if source == "candidate"
+                              else f"アンサンブル v6e（{label}）の確率 — {'算出済み（過去分）' if source == 'backfill' else '当日の予測'}" if "v6" in label
                               else f"アンサンブル（{label}）の確率 — {'算出済み（参考）' if source == 'backfill' else '検証用（shadow）'}"),
         "total_horses": len(scored), "predictions": scored,
         "prediction_source": source, "prediction_note": note,
@@ -189,27 +200,36 @@ def build_payload(race_id: str, card: dict, odds_doc: dict | None, probs, source
 
     if not market:  # 実オッズを使わない（有料ゾーン案A・B）: 市場補正をかけない
         return payload
+    if source == "candidate":  # 新しい候補の確率には v6e で当てはめた市場補正を当てない（素の値。統括役の判断 2026-11-18）
+        return payload
     return apply_prob_calibration(payload, odds_phase=(odds_doc or {}).get("phase"), alpha=alpha)
 
 
-def load_primary_prediction_payload(race_id: str, storage: Any, alpha: float = 0.55, inf: Path | None = None, market: bool = True) -> dict | None:
+def load_primary_prediction_payload(race_id: str, storage: Any, alpha: float = 0.55, inf: Path | None = None, market: bool = True,
+                                    candidate: bool | None = None) -> dict | None:
     """v6e の予測がローカルにあるレースだけ、その応答を返す（GCS の古い予測より優先するために使う）。無ければ None。"""
     if primary_model() != "v6e":
         return None
     try:
         card = storage.load("race_shutuba", race_id) or {}
-        if not find_primary_prediction(race_id, _day_of(card), inf):
+        if not find_primary_prediction(race_id, _day_of(card), inf, candidate=market if candidate is None else candidate):
             return None
     except Exception:  # noqa: BLE001
         return None
-    return load_local_prediction_payload(race_id, storage, alpha=alpha, inf=inf, market=market)
+    return load_local_prediction_payload(race_id, storage, alpha=alpha, inf=inf, market=market, candidate=candidate)
 
 
-def load_local_prediction_payload(race_id: str, storage: Any, alpha: float = 0.55, inf: Path | None = None, market: bool = True) -> dict | None:
+def load_local_prediction_payload(race_id: str, storage: Any, alpha: float = 0.55, inf: Path | None = None, market: bool = True,
+                                  candidate: bool | None = None) -> dict | None:
     """ローカルに予測があれば画面向けの応答にして返す。無い・読めないときは None（呼び出し側は従来の応答に進む）。"""
     try:
         card = storage.load("race_shutuba", race_id) or {}
-        found = find_local_prediction(race_id, _day_of(card), inf)
+        found = find_local_prediction(race_id, _day_of(card), inf, candidate=market if candidate is None else candidate)  # 実オッズを使わない推奨（target）は §77 と同じ v6e
+        if found and found[1] == "candidate":
+            from src.api.stage2_live import in_scope
+
+            if not in_scope(card):                 # 候補の表示は未勝利・新馬だけ（ほかは今の v6e。ユーザーの判断 2026-11-18）
+                found = find_local_prediction(race_id, _day_of(card), inf, candidate=False)
         if not found:
             return None
         import pandas as pd

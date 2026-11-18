@@ -100,7 +100,7 @@ bash docs/todos/verify/T-055_circuit_breaker.sh
 | T-034 SmartRC 除去 | 約 20 ファイルに及ぶため、影響範囲の確認が先 |
 | T-061（新規） 勝率 softmax の統一 | 学習済みモデルの出力尺度の確認が必要（学習PCで実モデルを使って判断） |
 
-TODO 全体の一覧と優先順位は `docs/html/index.html` の §14 を参照してください。
+TODO 全体の一覧と優先順位は `docs/html/02_本番の仕様/要件定義書.html`（要件定義書）の §14 を参照してください。
 
 ## 7. 実行結果（学習PC・2026-10-02〜04）
 

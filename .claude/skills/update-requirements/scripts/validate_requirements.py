@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""生成した docs/html/index.html（要件定義書）の機械検証。
+"""生成した docs/html/02_本番の仕様/要件定義書.html（要件定義書）の機械検証。
 
 検査項目:
   - 必須セクション (id) が揃い、順序どおりで、scheduling が最後の <section> であること
@@ -10,7 +10,7 @@
   - 関連ドキュメントの相対リンク先が実在すること
 
 Usage:
-    python3 .claude/skills/update-requirements/scripts/validate_requirements.py [path/to/index.html]
+    python3 .claude/skills/update-requirements/scripts/validate_requirements.py [path/to/要件定義書.html]
 終了コード: 0=OK, 1=エラーあり
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
-DEFAULT = ROOT / "docs/html/index.html"
+DEFAULT = ROOT / "docs/html/02_本番の仕様/要件定義書.html"
 SECTIONS = ["summary", "overview", "requirements", "kpi", "architecture", "data-flow", "ml-flow",
             "delivery", "infra", "quality", "decisions", "status-matrix", "risks", "related-docs", "scheduling"]
 PRIO = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
@@ -134,9 +134,12 @@ def main() -> int:
         elif int(m.group(1)) != matrix[k]:
             errors.append(f"§0 カード {k}={m.group(1)} が §11 のタグ数 {matrix[k]} と不一致")
     linked = {h.split("#")[0] for h in re.findall(r'href="([^"]+)"', text)}
-    on_disk = [f for f in path.parent.rglob("*.html") if f != path and not f.is_symlink()] + \
-              list((path.parent.parent / "decisions").glob("*.html")) if path.parent.name == "html" else []
-    unlinked = sorted(str(f.relative_to(path.parent.parent)) for f in on_disk
+    html_dir = next((d for d in [path.parent, *path.parents] if d.name == "html"), None)   # 要件書は docs/html の下の階層に置く
+    gen = '<meta name="generator" content="build_docs_shelves">'   # 目次・まとめのページ（build_docs_shelves の生成物）は載せなくてよい
+    on_disk = [f for f in html_dir.rglob("*.html") if f.resolve() != path.resolve() and not f.is_symlink()
+               and gen not in f.read_text(encoding="utf-8", errors="ignore")[:2000]] + \
+              list((html_dir.parent / "decisions").glob("*.html")) if html_dir else []
+    unlinked = sorted(str(f.relative_to(html_dir.parent)) for f in on_disk
                       if not any((path.parent / h).resolve() == f.resolve() for h in linked if h and not h.startswith(("http", "#"))))
     print(f"[info] §13 載せ漏れ検査の走査対象 html = {len(on_disk)} 件（0 の場合は検査が効いていない）")
     if unlinked:

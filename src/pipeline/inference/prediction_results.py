@@ -140,7 +140,7 @@ def load_predictions(storage: Any, race_id: str) -> dict | None:
     try:
         from src.api.local_predictions import load_primary_prediction_payload
 
-        prim = load_primary_prediction_payload(race_id, storage)
+        prim = load_primary_prediction_payload(race_id, storage, candidate=False)  # 成績の記録は v6e のまま（候補の試行は別に記録）
         if prim:
             return prim
     except Exception as exc:  # noqa: BLE001
@@ -165,7 +165,7 @@ def load_predictions(storage: Any, race_id: str) -> dict | None:
     except ImportError:
         return None
     try:
-        return load_local_prediction_payload(race_id, storage)
+        return load_local_prediction_payload(race_id, storage, candidate=False)
     except Exception as exc:  # noqa: BLE001
         logger.warning("ローカル予測の読み込み失敗 %s: %s", race_id, exc)
         return None

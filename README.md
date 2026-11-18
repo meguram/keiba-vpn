@@ -133,6 +133,7 @@ python3 -m src.research.genes.performance_genes combined --mstn CT --pdk4 GA --d
 
 ## 関連ドキュメント
 
+- [docs/html/index.html](docs/html/index.html) — **文書の目次**（日本語の階層: いまのベスト分析・本番の仕様・調査と検証・運用・過去の資料。`python -m src.scripts.docs.build_docs_shelves` で生成）。要件定義書は [docs/html/02_本番の仕様/要件定義書.html](docs/html/02_本番の仕様/要件定義書.html)
 - [docs/html/book.html](docs/html/book.html) — **全ドキュメントを 1 冊に統合**（要件・設計・データ・運用・モデリング・特徴量・決定記録・用語集。目次・章間リンク・専門用語の解説つき）。個々の HTML は `docs/html/{design,data,operations,pedigree,modeling/chapters}/` と `docs/decisions/` にあり、`python -m src.scripts.docs.build_docs_book` で本を作り直す
 - [docs/html/design/ARCHITECTURE.html](docs/html/design/ARCHITECTURE.html) — システム全体のアーキテクチャ
 - [docs/html/data/DATASOURCES.html](docs/html/data/DATASOURCES.html) — データソース仕様

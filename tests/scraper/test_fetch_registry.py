@@ -18,6 +18,7 @@ NON_FETCH_MODULES = {
     "src.api.flask_app", "src.db.batch.stats_snapshot", "src.monitor.app", "src.ops.fetch_owner", "src.ops.gcs_mirror",
     "src.ops.cost_guard", "src.ops.cron_catchup", "src.ops.vps_alive", "src.ops.host_postprocess", "src.ops.job_owner", "src.ops.model_publish", "src.ops.release_manifest", "src.ops.release_publish", "src.ops.scheduler_gen",
     "src.ops.state_sync", "src.pipeline.betting.odds_drift", "src.pipeline.build_jockey_trainer_stats",
+    "src.pipeline.inference.candidate_runner",   # 候補の影のランナー: 保存済みの出馬表と手元の T-60 の写しを読むだけ（netkeiba へは取りに行かない）
     "src.research.pedigree.build_ancestor_name_map", "src.research.pedigree.build_horse_pedigree_10gen",
     "src.research.pedigree.build_pedigree_10gen_3view_index", "src.research.pedigree.build_pedigree_10gen_index",
     "src.scraper.export_tables", "src.scraper.parse_audit", "src.scraper.parse_drift", "src.scraper.parse_drift_docs",

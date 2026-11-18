@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 docs/ と notebooks/feature_engineering/ の内容を単一 HTML に統合するビルダー。
-出力: docs/html/keiba_ai_pipeline_proposal.html
+出力: data/local/docs/keiba_ai_pipeline_proposal.html（git の外。--out で変えられる）
+docs/ の下の HTML はすべて本（build_docs_book の PARTS）と棚（docs_shelves）に載せる決まりなので、
+docs/ の写しを束ねたこの HTML は docs/ の中に置かない（全文を 1 冊にしたものは docs/html/book.html）。
 """
 from __future__ import annotations
 
@@ -19,7 +21,7 @@ except ImportError:
 ROOT = Path(__file__).resolve().parents[3]
 DOCS = ROOT / "docs"
 HTML_DIR = DOCS / "html"
-OUT = HTML_DIR / "keiba_ai_pipeline_proposal.html"
+OUT = ROOT / "data" / "local" / "docs" / "keiba_ai_pipeline_proposal.html"   # git の外（.gitignore の data/local/）
 
 
 def md_to_html(text: str) -> str:
@@ -189,14 +191,15 @@ def main() -> None:
     parts.append(
         '<section class="section" id="appendix-build">'
         '<h2><span class="num">付録</span> 統合 HTML の再生成</h2>'
-        '<p class="muted">以下を実行すると <code class="inline">keiba_ai_pipeline_proposal.html</code> が上書きされます。</p>'
+        '<p class="muted">以下を実行すると <code class="inline">data/local/docs/keiba_ai_pipeline_proposal.html</code>（既定。--out で変えられる。docs/ の中は不可）が上書きされます。</p>'
         f'<pre class="code">python3 {_esc(str(build_self.relative_to(ROOT)))}</pre>'
         f'<h3>build_master_proposal.py（全文）</h3><pre class="code">{_esc(read_text(build_self))}</pre>'
         "</section>"
     )
 
     # --- CSS: ml_pipeline から <style> 抽出 ---
-    ml = read_text(HTML_DIR / "ml_pipeline" / "index.html")
+    ml_p = HTML_DIR / "design" / "ml_pipeline.html"   # 旧 docs/html/ml_pipeline/index.html（9f69ca5e の整理で移った）
+    ml = read_text(ml_p) if ml_p.exists() else ""
     style_m = re.search(r"<style>([\s\S]*?)</style>", ml)
     extra_css = """
   .md-wrap { font-size: 14px; }
@@ -283,6 +286,9 @@ document.addEventListener("DOMContentLoaded", function() {{
 </body>
 </html>
 """
+    if DOCS.resolve() in OUT.resolve().parents:   # docs/ の HTML は本と棚に載せる決まり（載らない HTML を置くと CI が落ちる）
+        raise SystemExit(f"docs/ の中には書かない: {OUT}")
+    OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(doc, encoding="utf-8")
     print("Wrote", OUT, "bytes", OUT.stat().st_size)
 
@@ -315,4 +321,9 @@ def _ipynb_to_html(json_str: str) -> str:
 
 
 if __name__ == "__main__":
+    import argparse
+    _ap = argparse.ArgumentParser(description="docs/ と notebooks/feature_engineering/ を 1 枚の HTML に束ねる")
+    _ap.add_argument("--out", type=Path, default=OUT, help=f"出力先（既定 {OUT.relative_to(ROOT)}）。docs/ の中は指定できない")
+    _args = _ap.parse_args()
+    OUT = _args.out
     main()
