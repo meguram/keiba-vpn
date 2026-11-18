@@ -309,3 +309,30 @@ def test_parallel_confirms_only_one_allowed(led, monkeypatch):
     for t in ts:
         t.join()
     assert sorted(res) == ["denied", "denied", "denied", "ok"]
+
+
+def test_rules_bet_opt_second_final_is_denied(monkeypatch):
+    """rules_bet_opt の final（11/18 に 1 回流した）は、印を消しても台帳で 2 回目と判定される（enforce なら拒否）。"""
+    import ast
+
+    from src.research.course import bet_opt_search as S
+
+    P = json.loads((ROOT / "config/rules_bet_opt/prereg_final.json").read_text(encoding="utf-8"))
+    period = S.ledger_period(P)
+    assert period == ("2025-01-01", "2026-12-31")                          # 実際に読む群の日付の最小〜最大
+    monkeypatch.setenv("KEIBA_LEDGER_MODE", "enforce")
+    d = L.decide(L._read_jsonl(L.GIT_LEDGER), family="rules_bet_opt", version="prereg_final.json", period=period,
+                 purpose="confirm", reason="", policy=L.load_policy(L.POLICY))
+    assert any(v.startswith("confirm_again") for v in d.violations) and d.decision == "denied"
+    # 台帳の確かめが、印を立てる前（cmd_final の中）にある
+    src = (ROOT / "src/research/course/bet_opt_search.py").read_text(encoding="utf-8")
+    fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "cmd_final")
+    calls = [ast.unparse(n.func) for n in ast.walk(fn) if isinstance(n, ast.Call)]
+    assert "LG.guard" in calls and "BO.MARK.write_text" not in calls          # 印は guard の後の _final_run で立てる
+    assert "_final_run" in calls
+
+
+def test_summary_with_violation_is_not_for_decision(led):
+    _g().finish()
+    tok = _g()                                                             # warn: confirm_again の違反つきで通る
+    assert tok.summary()["use_for_decision"] is False

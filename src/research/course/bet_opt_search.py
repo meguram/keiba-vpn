@@ -492,6 +492,32 @@ def cmd_final() -> None:
     miss = [str(x) for x in need if not x.exists()]
     if miss:
         sys.exit(f"評価に要る表が無い（印を立てる前に止める）: {miss}")
+    # 見た回数の台帳（D1）: 印（EVALUATED.json）を消す・動かしても、同じ凍結で同じ期間の 2 回目の確かめを止める（出力先は鍵に入らない）。
+    # 11/18 の 1 回は過去の分（台帳の id "bf-rules-bet-opt-final"。元の一覧は config/data_access/backfill_20261118.json）として記録済み。
+    # version は凍結のファイル名で固定する（凍結を書き換えても同じ鍵になり、2 回目と判定される）
+    from src.ops import data_ledger as LG
+    led = LG.guard(tool="src/research/course/bet_opt_search.py:final", family="rules_bet_opt", version="prereg_final.json",
+                   period=ledger_period(P), purpose="confirm", frozen_paths=[BO.PREREG, BO.SPEC, *tools],
+                   meta={"prereg_sha": hashlib.sha256(BO.PREREG.read_bytes()).hexdigest()[:12], "spec_sha": P["spec_sha"]})
+    try:
+        _final_run(P, SR, P3, tools, led)
+    except BaseException as exc:
+        led.finish(status="aborted", error=f"{type(exc).__name__}: {exc}")   # 途中で落ちても 1 回と数える（印と同じ方針）
+        raise
+
+
+def ledger_period(P: dict) -> tuple[str, str]:
+    """台帳に申告する期間: 事前登録の群の日付の最小〜最大（実際に読む範囲）。"""
+    ds = [d for g in P["groups"] for d in (g.get("dates") or [])]
+    return (min(ds), max(ds)) if ds else ("2025-01-01", "2026-12-31")
+
+
+def _final_run(P: dict, SR: dict, P3: dict, tools: list, led) -> None:
+    import hashlib
+    import secrets
+    import subprocess
+    import sys
+    from datetime import datetime
     head = subprocess.run(["git", "-C", str(BO.CR.REPO), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     tok = secrets.token_hex(16)
     BO.MARK.write_text(json.dumps({"started_at": datetime.now(BO.CR.JST).isoformat(timespec="seconds"), "prereg_spec_sha": P["spec_sha"], "head": head,
@@ -517,6 +543,9 @@ def cmd_final() -> None:
     h26, f26 = pd.read_parquet(BO.OUT / "final_hm_2026.parquet"), pd.read_parquet(BO.OUT / "final_field_2026.parquet")
     h25, f25 = prep(h25, f25)
     h26, f26 = prep(h26, f26)
+    for h_ in (h25, h26):
+        if "date" in h_.columns:
+            led.check_dates(h_["date"].astype(str), "◎ の表")
     ds = pd.to_datetime(h26["date"].astype(str))
     lo, hi = pd.Timestamp(g["course_main"]["dates"][0]), pd.Timestamp(g["course_main"]["dates"][1])
     sep_lo = pd.Timestamp(g["course_separate"]["dates"][0])
@@ -533,9 +562,11 @@ def cmd_final() -> None:
     hg, fg = graded_frames((2025, 2026))
     out["groups"]["graded_2025_2026"] = run_group("graded_2025_2026", hg, fg, pool, rule, thr, g["graded"]["min_bets"], gammas=gam, with_fav=False)
     out["evaluated_at"] = datetime.now(BO.CR.JST).isoformat(timespec="seconds")
+    out["ledger"] = led.summary()
     (BO.OUT / "final_result.json").write_text(json.dumps(out, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
     mk = json.loads(BO.MARK.read_text(encoding="utf-8"))
     BO.MARK.write_text(json.dumps(mk | {"evaluated_at": out["evaluated_at"]}), encoding="utf-8")
+    led.finish(result_path=BO.OUT / "final_result.json")
     for k, v in out["groups"].items():
         c = v["by_gamma"]["0.0"]["cand"]
         print(k, v["judge"], "参戦", c.get("bet_races"), "回収", c.get("roi"), "区間", c.get("roi_lo"), c.get("roi_hi"), "上位5除き", c.get("roi_ex_top5"),

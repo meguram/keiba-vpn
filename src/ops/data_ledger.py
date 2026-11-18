@@ -137,8 +137,7 @@ def _append(path: Path, row: dict) -> None:
         fcntl.flock(f, fcntl.LOCK_EX)
         try:
             f.write(line)
-            f.flush()
-            os.fsync(f.fileno())
+            f.flush()                      # fsync はしない（1 回 0.2 秒ほどかかり、同時の書き込みで待ちが積もる。追記の 1 行は flock で守る）
         finally:
             fcntl.flock(f, fcntl.LOCK_UN)
 
@@ -363,7 +362,7 @@ class Token:
                 "periods": self.decision.periods, "seen_total": c.get("total", 0), "seen_family": c.get("family", 0),
                 "seen_lower_bound": c.get("lower_bound", False), "notes": self.decision.notes,
                 "violations": self.decision.violations,
-                "use_for_decision": self.purpose in ("select", "confirm", "forward")}
+                "use_for_decision": self.purpose in ("select", "confirm", "forward") and not self.decision.violations}
 
     def finish(self, result_path: str | Path | None = None, status: str = "done", error: str = "", auto: bool = False) -> None:
         if self._finished or self.id is None:
