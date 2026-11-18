@@ -2314,6 +2314,18 @@ def cmd_final(a) -> None:
     (ROOT / f"docs/operations/retrain_trials/bet_test2025_{tagr}{body['hash']}.json").write_text(
         json.dumps({"status": "started", "hash": body["hash"], "frozen": rel}, ensure_ascii=False) + "\n", encoding="utf-8")   # git にも残す印（走り始めに書く）
     names = [x for x in inputs["periods"] if (x == "test" if grp == "test" else (x.startswith("fwd") if grp == "fwd" else x in ("test", "fwd2026", "fwd2026_pre")))]
+    from src.ops import data_ledger as L
+
+    tool_ = str(Path(__file__).resolve().relative_to(ROOT)) + ":final"
+    toks = []
+    if any(x == "test" for x in names):
+        toks.append(L.guard(tool=tool_, family="bet_cycles", version=body["hash"], period=("2025-01-01", "2025-12-31"), purpose="confirm",
+                            frozen_paths=[fz, Path(__file__)], target_name="test 2025"))
+    if any(x.startswith("fwd") for x in names):
+        toks.append(L.guard(tool=tool_, family="bet_cycles", version=body["hash"], period=("2026-01-01", None), purpose="eval_only",
+                            frozen_paths=[fz, Path(__file__)], target_name="2026 年の参考",
+                            reason="2026 年の参考（前向きの参考。採否・選び直しに使わない）"))
+    res_ledger = []
     per, _ = prepare_periods(inputs, tuple(names), cuts=body["qcuts"])
     spec = body["spec"]
     bases = json.loads((CFG_DIR / "baselines.json").read_text(encoding="utf-8"))["baselines"]
@@ -2359,7 +2371,10 @@ def cmd_final(a) -> None:
                               "drop": p.drop, "miss_types": miss_types(r), "h_reasons": r["records"]["reason"].value_counts().to_dict()}
         r["records"].to_parquet(out / f"final_{nm}_races_{body['hash']}.parquet", index=False)
     res["status"] = "done"
+    res["ledger"] = [t.summary() for t in toks] + res_ledger
     dst.write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_np), encoding="utf-8")
+    for t in toks:
+        t.finish(result_path=str(dst))
     (ROOT / f"docs/operations/retrain_trials/bet_test2025_{tagr}{body['hash']}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_np) + "\n",
                                                                                         encoding="utf-8")
     print(f"結果を docs/operations/retrain_trials/bet_test2025_{tagr}{body['hash']}.json に書いた。commit すること（同じ回の 2 回目を拒む印になる）。")
@@ -2448,12 +2463,18 @@ def cmd_prereg_run(a) -> None:
         raise SystemExit("test 2025 の記録が完了していません")
     rm = tr["periods"]["test"]["metrics"]
     bases = json.loads((CFG_DIR / "baselines.json").read_text(encoding="utf-8"))["baselines"]
+    from src.ops import data_ledger as L
+
+    tool_ = str(Path(__file__).resolve().relative_to(ROOT)) + ":prereg-run"
+    rtok = L.guard(tool=tool_, family="bet_cycles", version=body["hash"], period=("2025-01-01", "2025-12-31"), purpose="reproduce",
+                   frozen_paths=[fz, pr, Path(__file__)], reason="凍結の道具が test 2025 の記録を再現するか（値は判断に使わない）")
     pt, _ = prepare_periods({"periods": {"test": inputs["periods"]["test"]}}, ("test",), cuts=body["qcuts"])
     rt = run_period(pt["test"], body["spec"])
     mt = metrics_run(rt, pt["test"], pt["test"].W)
     dt = paired_diff(rt, run_period(pt["test"], bases[0]), pt["test"].W)
     bad = [k for k in ("races", "bet_races", "roi", "roi_lo", "roi_hi", "roi_ex_top5", "hit_rate") if abs(float(mt.get(k) or 0) - float(rm.get(k) or 0)) > 1e-9]
     bad += ["diff_vs_B0"] if any(abs(x - y) > 1e-9 for x, y in zip(dt, tr["periods"]["test"]["diff_vs_B0"])) else []
+    rtok.finish(status="done" if not bad else "error", error=("再現しない: " + ",".join(bad)) if bad else "")
     if bad:
         raise SystemExit(f"道具が凍結のときと同じ判定をしません（test 2025 の記録と違う値: {bad}）")
     if a.check_only:                                         # 2026 年を読まずに、ここまでの確かめだけ
@@ -2479,23 +2500,34 @@ def cmd_prereg_run(a) -> None:
     if cover < PREREG_MIN_COVER and not a.allow_low_cover:
         raise SystemExit(f"窓の全レース {n_all} のうち計算できたのは {dr.get('computed_races')}（{cover:.1%}）。内訳 {dr}。予測か発走前オッズの覆いが足りません"
                          "（印は書いていない。覆いの下限を下回っても流すなら、理由を記録して --allow-low-cover）")
+    # 台帳の決まり（統括役の判断 2026-11-18）: 第 1 回（11/17）と参考の群（11/18）が同じ期間を見ているので、主・別枠も eval_only（採否に使わない）。
+    # 採否は前向きの記録（11/21〜、bet_forward_ledger）で決める。
+    tok = L.guard(tool=tool_, family="bet_cycles", version=body["hash"], period=(lo_, hi_), purpose="eval_only",
+                  frozen_paths=[fz, pr, Path(__file__)], target_name=f"prereg {grp['id']}",
+                  reason=("事前登録の参考の群（判定には使わない）" if grp["id"] == "reference" else
+                          "評価の期間（採否に使わない。同じ期間を第 1 回・参考の群が見ている。採否は前向きの記録で決める）"))
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     mark.write_text(json.dumps({"status": "started", "hash": body["hash"], "group": grp["id"], "git_head": head, "pred": spec["pred"], "pred_sha256": pred_sha,
                                 "drop": dr}, ensure_ascii=False, default=_np) + "\n", encoding="utf-8")
-    r = run_period(p, body["spec"], detail=True)
-    m = metrics_run(r, p, p.W)
-    rb0 = run_period(p, bases[0])
-    d = paired_diff(r, rb0, p.W)
-    m0 = metrics(rb0["cost"], rb0["ret"], p.dates, p.W)
-    verdict = prereg_verdict(m, d, reg["criteria"]["levels"])
+    try:
+        r = run_period(p, body["spec"], detail=True)
+        m = metrics_run(r, p, p.W)
+        rb0 = run_period(p, bases[0])
+        d = paired_diff(r, rb0, p.W)
+        m0 = metrics(rb0["cost"], rb0["ret"], p.dates, p.W)
+        verdict = prereg_verdict(m, d, reg["criteria"]["levels"])
+    except BaseException as exc:
+        tok.__exit__(type(exc), exc, None)
+        raise
     res = {"status": "done", "hash": body["hash"], "prereg": str(pr.resolve().relative_to(ROOT)), "group": grp, "git_head": head, "pred": spec["pred"],
            "drift_src": str(DRIFT_SRC), "pre_odds_sha256_now": _sha(ROOT / spec["pre_odds"]) if spec.get("pre_odds") else None,
            "pred_sha256": pred_sha, "metrics": m, "B0": {k: m0.get(k) for k in KEYS_CV}, "diff_vs_B0": d, "verdict": verdict, "drop": dr,
            "cover": cover, "allow_low_cover": bool(a.allow_low_cover), "cover_note": a.cover_note or "",
            "races_note": "指標の races は、窓の全レースのうち予測・払戻（別枠・参考は発走前オッズも）がそろって計算できたレース。内訳は drop。",
            "odds_source": "本物の T-60" if spec.get("pre_odds") else f"T-60 の再現（{p.k} 通り）", "miss_types": miss_types(r),
-           "h_reasons": r["records"]["reason"].value_counts().to_dict()}
+           "h_reasons": r["records"]["reason"].value_counts().to_dict(), "ledger": tok.summary()}
     mark.write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_np) + "\n", encoding="utf-8")
+    tok.finish(result_path=rel_mark)
     r["records"].to_parquet(OUT_DIR / body["tag"] / f"prereg_{grp['id']}_races_{body['hash']}.parquet", index=False)
     n0_ = len(p.races) // max(p.k, 1)                         # 基準 B0 の版 × レースの記録（2025 年との合算で、同じ重みの差を出すため）
     pd.DataFrame({"race_id": [x.race_id for x in p.races], "ver": np.arange(len(p.races)) // max(n0_, 1), "cost": rb0["cost"], "ret": rb0["ret"]}).to_parquet(

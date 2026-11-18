@@ -137,8 +137,7 @@ def _append(path: Path, row: dict) -> None:
         fcntl.flock(f, fcntl.LOCK_EX)
         try:
             f.write(line)
-            f.flush()
-            os.fsync(f.fileno())
+            f.flush()                      # fsync はしない（1 回 0.2 秒ほどかかり、同時の書き込みで待ちが積もる。追記の 1 行は flock で守る）
         finally:
             fcntl.flock(f, fcntl.LOCK_UN)
 
@@ -194,15 +193,77 @@ class Decision:
 def _starts(rows: list[dict]) -> list[dict]:
     """「読む前」の行（kind=start か backfill・申告）と、その後の終わりの行の状態をまとめる。"""
     fin: dict[str, dict] = {}
+    amend: dict[str, dict] = {}
+    base = {r.get("id"): r for r in rows if r.get("kind") in ("start", "record")}
+    pol = None
     for r in rows:
         if r.get("kind") == "finish" and r.get("ref"):
             fin[r["ref"]] = r
+        if r.get("kind") == "amend":
+            if pol is None:
+                pol = load_policy()
+            why = _amend_problem(r, base.get(r.get("ref")), pol, amend)
+            if why:
+                _say(f"[台帳] 直しの行 {r.get('id')} を使わない: {why}")
+            else:
+                amend[r["ref"]] = r                 # 1 つの行への直しは 1 回だけ
     out = []
     for r in rows:
         if r.get("kind") in ("start", "record"):
             f = fin.get(r["id"], {})
-            out.append({**r, "_status": f.get("status", "started"), "_result": f.get("result_path"), "_auto_error": f.get("auto", False)})
+            a = amend.get(r["id"])
+            extra = {"purpose": a["purpose"], "_amended_from": r.get("purpose"), "_amend_id": a["id"]} if a else {}
+            out.append({**r, **extra, "_status": f.get("status", "started"), "_result": f.get("result_path"), "_auto_error": f.get("auto", False)})
     return out
+
+
+# 許す直し: confirm → eval_only だけ（見た回数は減らさない。「採否に使った確かめ」を「評価だけ」に改めるだけ）
+_AMEND_OK = {("confirm", "eval_only")}
+
+
+def _amend_problem(a: dict, orig: dict | None, pol: dict, done: dict) -> str | None:
+    if orig is None:
+        return "直す行（start・record）が台帳に無い"
+    if a.get("ref") in done:
+        return "同じ行の直しは 1 回だけ"
+    if (orig.get("purpose"), a.get("purpose")) not in _AMEND_OK:
+        return f"直せるのは confirm→eval_only だけ（{orig.get('purpose')}→{a.get('purpose')}）"
+    fam = (orig.get("target") or {}).get("family")
+    if fam in (pol.get("amend_locked_families") or []):
+        return f"系統 {fam} は事前登録の 1 回だけの確かめなので直せない"
+    ap = str(a.get("approved_by") or "").strip()
+    if ap not in (pol.get("amend_approvers") or []):
+        return f"承認者 {ap or '（空）'} が policy.json の amend_approvers に無い"
+    if ap == a.get("session"):
+        return "承認者と直した担当が同じ"
+    if not str(a.get("reason") or "").strip():
+        return "理由が無い"
+    return None
+
+
+def amend(*, ref: str, purpose: str, reason: str, approved_by: str, session: str | None = None) -> dict:
+    """過去の行の目的を直す（追記だけの台帳なので、直しの行を足す）。直せるのは confirm→eval_only だけで、承認者は
+    policy.json の amend_approvers（統括役・ユーザー）に限る。直しは、すでに結果の JSON に埋め込んだ summary は変えない。"""
+    sess = session_name(session)
+    row = {"id": _new_id(sess) + "-amend", "kind": "amend", "ref": ref, "at": _now(), "session": sess,
+           "purpose": purpose, "reason": reason, "approved_by": approved_by}
+    lock_f = open(shared_path().parent / ".ledger.lock", "a") if shared_path().parent.is_dir() else None
+    try:
+        if lock_f is not None:
+            fcntl.flock(lock_f, fcntl.LOCK_EX)
+        rows = load_rows()
+        base = {r.get("id"): r for r in rows if r.get("kind") in ("start", "record")}
+        done = {r.get("ref"): r for r in rows if r.get("kind") == "amend"}
+        why = _amend_problem(row, base.get(ref), load_policy(), done)
+        if why:
+            raise ValueError(why)
+        for e in write_row(row, strict_shared=False):
+            _say("[台帳] " + e)
+    finally:
+        if lock_f is not None:
+            fcntl.flock(lock_f, fcntl.LOCK_UN)
+            lock_f.close()
+    return row
 
 
 def _counted(r: dict) -> bool:
@@ -338,7 +399,7 @@ def _now() -> str:
 
 
 def _new_id(session: str) -> str:
-    return f"{datetime.now(JST):%Y%m%dT%H%M%S}-{session}-{secrets.token_hex(3)}"
+    return f"{datetime.now(JST):%Y%m%dT%H%M%S%f}-{session}-{secrets.token_hex(3)}"   # マイクロ秒まで（同じ秒の行を書いた順に並べる）
 
 
 def _say(msg: str) -> None:
@@ -363,7 +424,7 @@ class Token:
                 "periods": self.decision.periods, "seen_total": c.get("total", 0), "seen_family": c.get("family", 0),
                 "seen_lower_bound": c.get("lower_bound", False), "notes": self.decision.notes,
                 "violations": self.decision.violations,
-                "use_for_decision": self.purpose in ("select", "confirm", "forward")}
+                "use_for_decision": self.purpose in ("select", "confirm", "forward") and not self.decision.violations}
 
     def finish(self, result_path: str | Path | None = None, status: str = "done", error: str = "", auto: bool = False) -> None:
         if self._finished or self.id is None:
@@ -531,7 +592,18 @@ def _cmd_show(a) -> int:
         t = r.get("target") or {}
         print(f"{r.get('at', '')[:16]}  {r.get('session', '不明'):<22} {t.get('family', ''):<14} {str(t.get('version', ''))[:14]:<14} "
               f"{p.get('from')}〜{p.get('to')}  {r.get('purpose'):<9} {r.get('decision', ''):<10} {r['_status'] if r.get('kind') == 'start' else '-':<7}"
-              f"{' 以上' if r.get('count_unknown') else ''}  {r.get('source', '')}")
+              f"{' 以上' if r.get('count_unknown') else ''}  {r.get('source', '')}"
+              f"{'  （直し: ' + str(r['_amended_from']) + '→' + str(r['purpose']) + '）' if r.get('_amend_id') else ''}")
+    return 0
+
+
+def _cmd_amend(a) -> int:
+    try:
+        row = amend(ref=a.ref, purpose=a.purpose, reason=a.reason, approved_by=a.approved_by, session=a.session)
+    except ValueError as exc:
+        print(f"直せない: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(row, ensure_ascii=False))
     return 0
 
 
@@ -623,6 +695,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     s.add_argument("--note")
     s.add_argument("--result-path")
     s.set_defaults(fn=_cmd_declare)
+    s = sp.add_parser("amend", help="過去の行の目的を直す（統括役の承認が必須）")
+    s.add_argument("--ref", required=True)
+    s.add_argument("--purpose", required=True, choices=PURPOSES)
+    s.add_argument("--reason", required=True)
+    s.add_argument("--approved-by", required=True)
+    s.add_argument("--session")
+    s.set_defaults(fn=_cmd_amend)
     s = sp.add_parser("sync", help="共有の写しと git の台帳をそろえる")
     s.set_defaults(fn=_cmd_sync)
     s = sp.add_parser("backfill", help="過去の分を手書きの一覧から起こす")

@@ -167,3 +167,27 @@ def test_preflight_time_guard(monkeypatch):
     monkeypatch.setattr(PR.Path, "exists", lambda self: True)
     with pytest.raises(SystemExit, match="11/21"):
         PR.preflight({"confirm": [2022, 2024]})
+
+
+def test_cmd_run_writes_ledger_and_refuses_second(tmp_path, monkeypatch):
+    """台帳つきの実行の経路: 結果と台帳の行が残り、出力先を変えても台帳で 2 回目を止める（台帳は pytest の一時の置き場）。"""
+    from src.ops import data_ledger as LG
+    monkeypatch.setenv("KEIBA_LEDGER_SHARED", str(tmp_path / "ledger" / "shared.jsonl"))        # このテストだけの台帳（ほかのテストと混ぜない）
+    monkeypatch.setenv("KEIBA_LEDGER_GIT", str(tmp_path / "ledger" / "git.jsonl"))
+    monkeypatch.setattr(PR, "_git_clean", lambda paths: True)
+    monkeypatch.setattr(PR, "preflight", lambda C, need_history=True: None)
+    monkeypatch.setattr(PR.CR, "wait_resources", lambda: None)
+    monkeypatch.setattr(PR.TH, "load", lambda y: pd.DataFrame({"date": ["2018-01-06", "2024-12-28"]}))
+    monkeypatch.setattr(PR.TH, "FRAME", PR.CONFIG)
+    monkeypatch.setattr(PR, "evaluate", lambda d, C: {"candidates": [], "null_broken": False})
+    monkeypatch.setattr(PR, "OUTP", tmp_path / "a")
+    monkeypatch.setattr(PR, "MARK", tmp_path / "a" / "m.json")
+    PR.cmd_run()
+    res = json.loads((tmp_path / "a" / "result.json").read_text(encoding="utf-8"))
+    assert "ledger" in res and json.loads(PR.MARK.read_text(encoding="utf-8")).get("finished_at")
+    rows = [r for r in LG._starts(LG.load_rows()) if (r.get("target") or {}).get("family") == "prereg_rules"]
+    assert rows and rows[-1]["_status"] == "done" and rows[-1].get("purpose") == "confirm"
+    monkeypatch.setattr(PR, "OUTP", tmp_path / "b")
+    monkeypatch.setattr(PR, "MARK", tmp_path / "b" / "m.json")
+    with pytest.raises(SystemExit, match="台帳に同じ版"):
+        PR.cmd_run()                                                                      # 出力先を変えても台帳で止まる

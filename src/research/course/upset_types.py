@@ -310,11 +310,25 @@ def cmd_run() -> None:
     OUTU.mkdir(parents=True, exist_ok=True)
     head = subprocess.run(["git", "-C", str(CR.REPO), "rev-parse", "HEAD"], capture_output=True, text=True, check=False).stdout.strip()
     sha = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in deps + [TH.FRAME]}
-    MARK.write_text(json.dumps({"started_at": datetime.now(CR.JST).isoformat(timespec="seconds"), "git_head": head, "sha256": sha}), encoding="utf-8")
-    res = evaluate(full, C)
-    res |= {"ran_at": datetime.now(CR.JST).isoformat(timespec="seconds"), "git_head": head, "sha256": sha}
-    (OUTU / "result.json").write_text(json.dumps(res, ensure_ascii=False, default=float), encoding="utf-8")
-    MARK.write_text(json.dumps(json.loads(MARK.read_text(encoding="utf-8")) | {"finished_at": res["ran_at"]}), encoding="utf-8")
+    from src.ops import data_ledger as LG
+    seen = [r for r in LG._starts(LG.load_rows()) if (r.get("target") or {}).get("family") == "upset_types"
+            and (r.get("target") or {}).get("version") == sha[CONFIG.name][:12]
+            and r.get("purpose") == "confirm" and LG._counted(r)]   # 落ちて結果の無い試み（auto の error）は数えない
+    if seen:                                  # 台帳でも 1 回だけを守る（出力先を変えても 2 回目と分かる）
+        sys.exit(f"台帳に同じ版の確かめがある（{len(seen)} 行）。1 回だけ")
+    with LG.guard(tool="src/research/course/upset_types.py:run", family="upset_types", version=sha[CONFIG.name][:12], session="graded-handicapper",
+                  period=("2016-01-01", f"{C['confirm'][1]}-12-31"), purpose="confirm", frozen_paths=deps,
+                  meta={"n_hypotheses": {"段1": 2, "段2": 10}, "git_head": head,
+                        "split": {"採否": f"{C['discovery'][0]}-{C['discovery'][1]}", "確かめ": f"{C['confirm'][0]}-{C['confirm'][1]}",
+                                  "前走の表だけ": "2016-2017"}},
+                  note="§14 1 回だけ") as tok:
+        tok.check_dates(full["date"])
+        MARK.write_text(json.dumps({"started_at": datetime.now(CR.JST).isoformat(timespec="seconds"), "git_head": head, "sha256": sha}), encoding="utf-8")
+        res = evaluate(full, C)
+        res |= {"ran_at": datetime.now(CR.JST).isoformat(timespec="seconds"), "git_head": head, "sha256": sha, "ledger": tok.summary()}
+        (OUTU / "result.json").write_text(json.dumps(res, ensure_ascii=False, default=float), encoding="utf-8")
+        tok.finish(result_path=OUTU / "result.json")   # 結果を書いた直後に台帳を閉じる（印の更新で落ちても「見た」と残す）
+        MARK.write_text(json.dumps(json.loads(MARK.read_text(encoding="utf-8")) | {"finished_at": res["ran_at"]}), encoding="utf-8")
     print("result", OUTU / "result.json", "段 1 の候補", res["stage1"]["candidates"], "段 2 の候補", res["stage2"]["candidates"], flush=True)
 
 

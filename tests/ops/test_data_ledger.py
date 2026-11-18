@@ -43,7 +43,7 @@ def test_second_confirm_is_denied_even_if_output_dir_changes(led, monkeypatch, t
     with pytest.raises(L.LedgerDenied):
         _g()
     rows = L.load_rows()
-    assert [r["decision"] for r in rows if r.get("kind") == "start"] == ["allowed", "denied"]
+    assert sorted(r["decision"] for r in rows if r.get("kind") == "start") == ["allowed", "denied"]   # 順によらない
 
 
 def test_second_confirm_is_warned_in_warn_mode(led, capsys):
@@ -309,3 +309,78 @@ def test_parallel_confirms_only_one_allowed(led, monkeypatch):
     for t in ts:
         t.join()
     assert sorted(res) == ["denied", "denied", "denied", "ok"]
+
+
+def test_rules_bet_opt_second_final_is_denied(monkeypatch):
+    """rules_bet_opt の final（11/18 に 1 回流した）は、印を消しても台帳で 2 回目と判定される（enforce なら拒否）。"""
+    import ast
+
+    from src.research.course import bet_opt_search as S
+
+    P = json.loads((ROOT / "config/rules_bet_opt/prereg_final.json").read_text(encoding="utf-8"))
+    period = S.ledger_period(P)
+    assert period == ("2025-01-01", "2026-12-31")                          # 実際に読む群の日付の最小〜最大
+    monkeypatch.setenv("KEIBA_LEDGER_MODE", "enforce")
+    d = L.decide(L._read_jsonl(L.GIT_LEDGER), family="rules_bet_opt", version="prereg_final.json", period=period,
+                 purpose="confirm", reason="", policy=L.load_policy(L.POLICY))
+    assert any(v.startswith("confirm_again") for v in d.violations) and d.decision == "denied"
+    # 台帳の確かめが、印を立てる前（cmd_final の中）にある
+    src = (ROOT / "src/research/course/bet_opt_search.py").read_text(encoding="utf-8")
+    fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "cmd_final")
+    calls = [ast.unparse(n.func) for n in ast.walk(fn) if isinstance(n, ast.Call)]
+    assert "LG.guard" in calls and "BO.MARK.write_text" not in calls          # 印は guard の後の _final_run で立てる
+    assert "_final_run" in calls
+
+
+def test_summary_with_violation_is_not_for_decision(led):
+    _g().finish()
+    tok = _g()                                                             # warn: confirm_again の違反つきで通る
+    assert tok.summary()["use_for_decision"] is False
+
+
+def test_amend_needs_approval_and_changes_count(led, monkeypatch):
+    _enforce(monkeypatch)
+    _g(version="ref").finish()
+    first = next(r for r in L.load_rows() if r.get("kind") == "start")
+    for bad in ("", " ", "自分で書いた"):
+        with pytest.raises(ValueError):
+            L.amend(ref=first["id"], purpose="eval_only", reason="参考の群", approved_by=bad)
+    with pytest.raises(ValueError):                                        # 承認者と直す担当が同じ
+        L.amend(ref=first["id"], purpose="eval_only", reason="r", approved_by="claude-orchestrator-handover",
+                session="claude-orchestrator-handover")
+    for p_ in ("reproduce", "fit", "select"):                              # confirm→eval_only 以外は直せない
+        with pytest.raises(ValueError):
+            L.amend(ref=first["id"], purpose=p_, reason="r", approved_by="claude-orchestrator-handover")
+    with pytest.raises(L.LedgerDenied):
+        _g(version="ref")
+    L.amend(ref=first["id"], purpose="eval_only", reason="参考の群（判定に使わない）", approved_by="claude-orchestrator-handover",
+            session="ledger")
+    tok = _g(version="ref")                                                # 直した後も見た回数は減らない: eval_only の後の confirm → eval_only
+    assert tok.purpose == "eval_only"
+    with pytest.raises(ValueError):                                        # 同じ行の 2 回目の直し
+        L.amend(ref=first["id"], purpose="eval_only", reason="x", approved_by="claude-orchestrator-handover", session="ledger")
+    with pytest.raises(ValueError):
+        L.amend(ref="no-such-id", purpose="eval_only", reason="x", approved_by="claude-orchestrator-handover", session="ledger")
+
+
+def test_amend_locked_family_and_bad_rows_are_skipped(led, monkeypatch, capsys):
+    _enforce(monkeypatch)
+    with _g(family="prereg_rules", period=("2025-01-01", "2025-12-31")) as tok:
+        pass
+    with pytest.raises(ValueError, match="直せない"):
+        L.amend(ref=tok.id, purpose="eval_only", reason="r", approved_by="claude-orchestrator-handover", session="ledger")
+    # 手で足した壊れた直しの行（purpose なし・承認なし）は使わない（落ちない）
+    L.write_row({"id": "x-amend", "kind": "amend", "ref": tok.id, "at": "2026-11-19T00:00:00+09:00"}, strict_shared=False)
+    with pytest.raises(L.LedgerDenied):
+        _g(family="prereg_rules", period=("2025-01-01", "2025-12-31"))
+    assert "使わない" in capsys.readouterr().err
+
+
+def test_amend_cli_and_show(led, capsys):
+    _g(version="cli").finish()
+    rid = next(r["id"] for r in L.load_rows() if r.get("kind") == "start")
+    assert L.main(["amend", "--ref", rid, "--purpose", "eval_only", "--reason", "参考", "--approved-by", "claude-orchestrator-handover",
+                   "--session", "ledger"]) == 0
+    assert L.main(["amend", "--ref", "nope", "--purpose", "eval_only", "--reason", "r", "--approved-by", "ユーザー"]) == 2
+    L.main(["show", "--from", "2025-01-01", "--to", "2025-12-31"])
+    assert "直し: confirm→eval_only" in capsys.readouterr().out

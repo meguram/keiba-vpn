@@ -120,7 +120,7 @@ def mh(st: np.ndarray, flag: np.ndarray, y: np.ndarray, w: np.ndarray | None = N
 
 
 def boot(st, flag, y, race, reps: int, seed: int) -> np.ndarray:
-    """レースで束ねたポアソンのブートストラップ（各レースに Poisson(1) の重み）。"""
+    """束ねる単位（race に渡した鍵。今は開催日 × 場）ごとのポアソンのブートストラップ（各束に Poisson(1) の重み）。"""
     rng = np.random.default_rng(seed)
     if not len(st):
         return np.array([])
@@ -333,12 +333,27 @@ def cmd_run() -> None:
     OUTP.mkdir(parents=True, exist_ok=True)
     head = subprocess.run(["git", "-C", str(CR.REPO), "rev-parse", "HEAD"], capture_output=True, text=True, check=False).stdout.strip()
     sha = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in deps + [TH.FRAME]}   # 層の作り（frame・コード）の sha
-    MARK.write_text(json.dumps({"started_at": datetime.now(CR.JST).isoformat(timespec="seconds"), "git_head": head, "sha256": sha}), encoding="utf-8")
-    res = evaluate(d, C)
-    res |= {"ran_at": datetime.now(CR.JST).isoformat(timespec="seconds"), "git_head": head, "sha256": sha,
-            "discovery": C["discovery"], "confirm": C["confirm"]}
-    (OUTP / "result.json").write_text(json.dumps(res, ensure_ascii=False, default=float), encoding="utf-8")
-    MARK.write_text(json.dumps(json.loads(MARK.read_text(encoding="utf-8")) | {"finished_at": res["ran_at"]}), encoding="utf-8")
+    from src.ops import data_ledger as LG
+    # 見た回数の台帳（D1）。前走の表を引くために 2016〜17 年の行も読むので、期間は 2016 年から申告する
+    seen = [r for r in LG._starts(LG.load_rows()) if (r.get("target") or {}).get("family") == "prereg_rules"
+            and (r.get("target") or {}).get("version") == sha[CONFIG.name][:12]
+            and r.get("purpose") == "confirm" and LG._counted(r)]   # 落ちて結果の無い試み（auto の error）は数えない
+    if seen:                                  # 台帳でも 1 回だけを守る（出力先を変えても 2 回目と分かる）
+        sys.exit(f"台帳に同じ版の確かめがある（{len(seen)} 行）。1 回だけ")
+    with LG.guard(tool="src/research/course/prereg_rules.py:run", family="prereg_rules", version=sha[CONFIG.name][:12], session="graded-handicapper",
+                  period=("2016-01-01", f"{C['confirm'][1]}-12-31"), purpose="confirm", frozen_paths=deps,
+                  meta={"n_hypotheses": 22, "git_head": head,
+                        "split": {"採否": f"{C['discovery'][0]}-{C['discovery'][1]}", "確かめ": f"{C['confirm'][0]}-{C['confirm'][1]}",
+                                  "前走の表だけ": "2016-2017"}},
+                  note="§13 1 回だけ") as tok:
+        tok.check_dates(d["date"])
+        MARK.write_text(json.dumps({"started_at": datetime.now(CR.JST).isoformat(timespec="seconds"), "git_head": head, "sha256": sha}), encoding="utf-8")
+        res = evaluate(d, C)
+        res |= {"ran_at": datetime.now(CR.JST).isoformat(timespec="seconds"), "git_head": head, "sha256": sha,
+                "discovery": C["discovery"], "confirm": C["confirm"], "ledger": tok.summary()}
+        (OUTP / "result.json").write_text(json.dumps(res, ensure_ascii=False, default=float), encoding="utf-8")
+        tok.finish(result_path=OUTP / "result.json")   # 結果を書いた直後に台帳を閉じる（印の更新で落ちても「見た」と残す）
+        MARK.write_text(json.dumps(json.loads(MARK.read_text(encoding="utf-8")) | {"finished_at": res["ran_at"]}), encoding="utf-8")
     print("result", OUTP / "result.json", "候補", res["candidates"], "帰無が壊れている" if res["null_broken"] else "", flush=True)
 
 

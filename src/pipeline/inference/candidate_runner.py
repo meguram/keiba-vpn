@@ -629,13 +629,14 @@ class Runner:
                 self.sleep_fn(poll)
 
 
-def set_disabled(cfg: dict, on: bool, day: str, *, v6c_only: bool = False) -> dict:
+def set_disabled(cfg: dict, on: bool, day: str, *, v6c_only: bool = False, dev_only: bool = False) -> dict:
     """止めの目印を書き（on: {"disabled": true}・off: {"disabled": false}。ミラーは削除を伝えないので消さない）、その日の判定ファイルに
     toggled_at を足して書き直す（push で中身が変わる → レースごとに画面のキャッシュの目印が立ち、prerender・VPS のキャッシュが取り直される）。"""
     pub = Path(cfg["publish_dir"])
     tree = "predictions_v6c" if v6c_only else "bets_stage2"
+    mark = "_dev_only.json" if dev_only else DISABLED_MARK
     now = datetime.now(_JST).isoformat(timespec="seconds")
-    _write_json(pub / tree / DISABLED_MARK, {"disabled": bool(on), "at": now, "scope": "v6c" if v6c_only else "all"})
+    _write_json(pub / tree / mark, {"disabled": bool(on), "at": now, "scope": "dev_only" if dev_only else ("v6c" if v6c_only else "all")})
     n = 0
     for p in sorted((pub / "bets_stage2" / day).glob("*.json")):
         try:
@@ -646,7 +647,7 @@ def set_disabled(cfg: dict, on: bool, day: str, *, v6c_only: bool = False) -> di
         except (OSError, ValueError) as exc:
             logger.warning("判定ファイルを書き直せない: %s %s", p, exc)
     _append_watch(Path(cfg.get("watch_dir") or pub / "launch_watch"), day, {"event": "set_disabled", "on": bool(on), "scope": tree, "touched": n})
-    return {"mark": str(pub / tree / DISABLED_MARK), "disabled": bool(on), "touched": n}
+    return {"mark": str(pub / tree / mark), "disabled": bool(on), "touched": n}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -656,11 +657,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--once", action="store_true", help="1 周だけ回して終わる（確認用）")
     ap.add_argument("--set-disabled", choices=["on", "off"], help="止めの目印を書いて終わる（推論はしない）")
     ap.add_argument("--v6c-only", action="store_true", help="--set-disabled を予測の表示（predictions_v6c）だけに")
+    ap.add_argument("--dev-only", action="store_true", help="--set-disabled on で、第 2 段の推奨を開発者（view=full）だけに出す（会員には今の target）")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     cfg = load_config(a.config or None)
     if a.set_disabled:
-        print(json.dumps(set_disabled(cfg, a.set_disabled == "on", a.day, v6c_only=a.v6c_only), ensure_ascii=False))
+        print(json.dumps(set_disabled(cfg, a.set_disabled == "on", a.day, v6c_only=a.v6c_only, dev_only=a.dev_only), ensure_ascii=False))
         return 0
     if not enabled(cfg):
         logger.info("候補の影のランナーは無効（config の enabled か KEIBA_CANDIDATE_RUNNER=1 で有効）")

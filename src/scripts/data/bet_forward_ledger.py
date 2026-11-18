@@ -130,6 +130,12 @@ def main() -> None:
     a = ap.parse_args()
     h = json.loads(FROZEN.read_text(encoding="utf-8"))["hash"]
     days = day_dirs(a.start, a.end)
+    tok = None
+    if not a.no_settle:
+        from src.ops import data_ledger as L
+
+        tok = L.guard(tool="src/scripts/data/bet_forward_ledger.py", family="bet_cycles", version=h, period=(a.start, a.end), purpose="forward",
+                      frozen_paths=[FROZEN], target_name="本番の試行の前向きの記録")
     per_day, allc, allr, alln, alls, allf = {}, [], [], 0, 0, 0
     by_month: dict[str, list] = {}
     for d in days:
@@ -165,7 +171,11 @@ def main() -> None:
     if a.no_settle:
         print(json.dumps(res, ensure_ascii=False, indent=1))
         return
+    if tok is not None:
+        res["ledger"] = tok.summary()
     OUT.write_text(json.dumps(res, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    if tok is not None:
+        tok.finish(result_path=str(OUT))
     print("書いた", OUT.relative_to(ROOT), json.dumps(total, ensure_ascii=False))
 
 
