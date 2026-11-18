@@ -105,5 +105,14 @@
    "覆い 79%（no_pre_odds 55 = 10/17 の 36 レースが t60 なし＋11/01 の 19 レースの t60 の取りこぼし）は道具の誤りではない。payoff_filled_from_flat 2997 は 2026 年全体の件数で、窓の件数ではない。",
    "入力の出どころ（predictions_backfill/bundle_v6_2025 が当日の保存か作り直しか）は、model-improve-cycles に確かめる。"
   ]
+ },
+ "closing_note": {
+  "at": "2026-11-18",
+  "by": "統括役の判断",
+  "text": [
+   "素性: model-improve-cycles によると、入力（data/local/inference/predictions_backfill/bundle_v6_2025）は 11/11〜12 に作り直した v6e で、本番が当日に出した予測ではない。事前登録の『本番が実際に出した予測』には当たらない。",
+   "作りの誤り: 市場の offset を通さない p（v6e）に、第 2 段の分布で決めた区切りを当てた。凍結の買い方の確かめにはならない。",
+   "参考の群はこれで終わりにする（流し直さない）。"
+  ]
  }
 }
