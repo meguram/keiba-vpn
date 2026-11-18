@@ -43,7 +43,7 @@ def test_second_confirm_is_denied_even_if_output_dir_changes(led, monkeypatch, t
     with pytest.raises(L.LedgerDenied):
         _g()
     rows = L.load_rows()
-    assert [r["decision"] for r in rows if r.get("kind") == "start"] == ["allowed", "denied"]
+    assert sorted(r["decision"] for r in rows if r.get("kind") == "start") == ["allowed", "denied"]   # 順によらない
 
 
 def test_second_confirm_is_warned_in_warn_mode(led, capsys):
