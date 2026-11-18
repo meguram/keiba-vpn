@@ -143,6 +143,18 @@ def cache_control_value(ma: int, s_maxage: int | None, anonymous: bool, settled:
     return f"private, max-age={ma}"
 
 
+def cdn_cache_control_value(cache_control: str, cfg: dict[str, Any] | None = None) -> str | None:
+    """Cloudflare のエッジにだけ効く期限（Cloudflare-CDN-Cache-Control。nginx・ブラウザは見ない）。public の応答にだけ付ける。
+
+    オリジンの s-maxage（6 時間〜30 日）は VPS の nginx 向けで、cache-warm の上書きは nginx にしか届かない。Cloudflare には短くだけ置く
+    （docs/operations/latency_plan_20261118.md の L6）。private・no-store の応答には付けない（Cloudflare は保存しない）。"""
+    cfg = cfg if cfg is not None else config()
+    sec = int(cfg.get("cdn_max_age") or 0)
+    if sec <= 0 or not cache_control.startswith("public"):
+        return None
+    return f"public, max-age={sec}"
+
+
 def _vary_add(existing: str) -> str:
     parts = [p.strip() for p in existing.split(",") if p.strip()]
     if not any(p.lower() == "cookie" for p in parts):
@@ -167,6 +179,9 @@ def install_fastapi(app) -> None:
                 )
                 path = request.url.path
                 resp.headers["Cache-Control"] = cache_control_value(ma, shared_s_maxage_for(path), anon, settled_s_maxage_for(path))
+                cdn = cdn_cache_control_value(resp.headers["Cache-Control"])
+                if cdn:
+                    resp.headers["Cloudflare-CDN-Cache-Control"] = cdn
                 resp.headers["Vary"] = _vary_add(resp.headers.get("Vary", ""))
             return resp
 
@@ -191,5 +206,8 @@ def install_flask(app) -> None:
             )
             response.headers["Cache-Control"] = cache_control_value(
                 ma, shared_s_maxage_for(request.path), anon, settled_s_maxage_for(request.path))
+            cdn = cdn_cache_control_value(response.headers["Cache-Control"])
+            if cdn:
+                response.headers["Cloudflare-CDN-Cache-Control"] = cdn
             response.headers["Vary"] = _vary_add(response.headers.get("Vary", ""))
         return response

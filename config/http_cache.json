@@ -2,6 +2,8 @@
   "version": 1,
   "_doc": "API の GET 応答に、ブラウザごとの短い再利用(Cache-Control: private, max-age)と Vary: Cookie を付ける許可リスト。共有キャッシュ(nginx/CDN)は private で使えない。会員区分(匿名/会員/開発者)で内容が変わっても、Cookie が違えば再取得になる。ルールに s_maxage があり、Cookie/Authorization の無い匿名リクエストの 200 だけは public, s-maxage にして CDN に置かせる(会員の応答は常に private)。ここに無いパス、GET 以外、200 以外、すでに Cache-Control があるものには付けない。無効化は enabled=false。",
   "enabled": true,
+  "cdn_max_age": 300,
+  "_cdn_max_age_doc": "public の応答にだけ Cloudflare-CDN-Cache-Control: public, max-age=<秒> を付ける（Cloudflare のエッジにだけ効く。nginx・ブラウザは見ない）。cache-warm の上書きは VPS の nginx にしか届かないので、Cloudflare には短くだけ置く。0 で付けない。docs/operations/latency_plan_20261118.md の L6",
   "settled": {
     "s_maxage": 2592000,
     "grace_days": 3,
