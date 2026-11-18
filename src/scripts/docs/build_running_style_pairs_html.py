@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import html
 import json
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -140,7 +141,7 @@ def render(r: dict, review: dict | None) -> str:
     rc_note = (f"4 角の位置の差との順位相関は {rc_:.2f}" + ("で、脚質とは別のものを測っている。" if _ok(rc_) and abs(rc_) < 0.2 else "。")) if _ok(rc_) else ""
     o = [f'<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>走法の近さと一緒に来る馬</title><style>{CSS}</style></head><body><main>',
          "<h1>脚質・展開予想・走法軸（2024 年の 3 軸）が近い馬は、一緒に 3 着以内に来やすいか</h1>",
-         f'<p class="muted">期間 {yrs[0]}〜{yrs[-1]} 年の芝・ダート。この調査で読んだ着順は {yrs[0]}〜{yrs[-1]} 年だけ。ただし型の元のうち、展開予想は 2025 年まで、走法軸の換算の基準は 2026 年までの結果で作られている（1 節）。{r["n_races"]:,} レース・{r["n_pairs"]:,} 組。'
+         f'<p class="muted">最終更新: {r.get("generated_at") or date.today().isoformat()}。期間 {yrs[0]}〜{yrs[-1]} 年の芝・ダート。この調査で読んだ着順は {yrs[0]}〜{yrs[-1]} 年だけ。ただし型の元のうち、展開予想は 2025 年まで、走法軸の換算の基準は 2026 年までの結果で作られている（1 節）。{r["n_races"]:,} レース・{r["n_pairs"]:,} 組。'
          "生成: <code>python -m src.scripts.docs.build_running_style_pairs_html</code>（元は <code>src/scripts/data/pair_cohesion.py</code> の結果）。"
          '関係: <a href="bet_optimization_story.html">推奨馬券の最適化の過程</a>・前の検証 <code>docs/ideas/running_style_pairs.md</code>（2025〜26 年）。</p>',
          '<div class="box lead"><b>結論</b><ol>' + "".join(f"<li>{esc(x)}</li>" for x in concl) + "</ol></div>",
