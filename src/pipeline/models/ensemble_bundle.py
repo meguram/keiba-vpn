@@ -131,6 +131,9 @@ class EnsembleBundle:
         d.mkdir(parents=True, exist_ok=True)
         meta = {"members": [{"name": m.name, "recipe": m.recipe, "params": _json_params(m.params), "feature_cols": m.feature_cols, "n_seeds": len(self.models.get(m.name, []))} for m in self.members],
                 "spec": self.spec, "gammas": {k: list(v) for k, v in self.gammas.items()}, "cat_levels": self.cat_levels}
+        from src.pipeline.models.training_years import first_year_stamp
+
+        meta.update(first_year_stamp())          # 起点年の記録（B7）。読み込み時の照合（check_first_year）は 11/23 の開催の後に入れる
         (d / "bundle.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
         for m in self.members:
             for i, mo in enumerate(self.models[m.name]):

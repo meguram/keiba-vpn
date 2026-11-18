@@ -1,0 +1,26 @@
+{
+ "version": 1,
+ "note": "データの見た回数の台帳の決まり（src/ops/data_ledger.py・docs/operations/data_access_ledger.md）。期間は日付の区間の重なりで判定する。enforce_families に入れた系統は拒否、ほかは警告＋記録。",
+ "default_mode": "warn",
+ "enforce_families": [],
+ "periods": [
+  {"name": "開発", "from": null, "to": "2021-12-31", "rule": "free"},
+  {"name": "開発の検証", "from": "2022-01-01", "to": "2024-12-31", "rule": "record"},
+  {"name": "test", "from": "2025-01-01", "to": "2025-12-31", "rule": "sealed"},
+  {"name": "封印", "from": "2026-01-01", "to": "2026-11-20", "rule": "sealed"},
+  {"name": "前向き", "from": "2026-11-21", "to": null, "rule": "forward"}
+ ],
+ "families": {
+  "bet_cycles": "推奨馬券の最適化（src/scripts/data/bet_cycles.py）",
+  "course": "全レース版（src/research/course/run.py・v2.py・v3.py）",
+  "prereg_rules": "事前登録の閾値のルール（src/research/course/prereg_rules.py）",
+  "upset_types": "穴馬が勝つレースの型（src/research/course/upset_types.py）",
+  "graded": "重賞の予想家（src/research/graded/run.py）",
+  "rules_bet_opt": "◎ の買う／見送る（src/research/course/bet_opt.py・bet_opt_search.py）",
+  "model": "親モデル（fit_final_v6.py・model_cycles_final.py・model_cycles_market.py・ptrain_test2025.py）",
+  "longshot": "穴馬モデル（longshot_model.py）",
+  "frozen_tracking": "凍結規則の前向き追跡（src/scripts/data/frozen_tracking.py）",
+  "columns": "めぐコラム（src/research/columns/）",
+  "tp_rules": "tp 系の凍結規則（tp48・tp56・tp59・tp62・tp72・tp74〜76）"
+ }
+}
