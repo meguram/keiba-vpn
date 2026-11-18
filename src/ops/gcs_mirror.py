@@ -31,15 +31,14 @@ PREFIX = "ops/mirror"
 # root の cron（scripts/cron/gcs_mirror_push_auth.sh）が上げる。Cloud Run は TREES として取り込み、src/api/auth.py の MEMBERS_LOCAL_FILE と同じ場所に置く。
 AUTH_TREES = ("data/local/auth::members.json",)
 _FEATURES = "data/local/features"
+_INF = _FEATURES.replace("features", "inference")
 TREES = (
     "data/local/inference/predictions_v3",
     "data/local/inference/predictions_v5",
     "data/local/inference/predictions_v6",
     # 候補の影のランナー（candidate_runner）の出力: 新しい候補の第 1 段・第 2 段・凍結した買い方の判定（1 レース 1 回だけ書く）。
     # API はファイルがあれば新しい表示、bets_stage2/_disabled.json があれば今の表示（weekend_launch_20261121.md）
-    "data/local/inference/predictions_v6c",
-    "data/local/inference/predictions_stage2",
-    "data/local/inference/bets_stage2",
+    *(f"{_INF}/{t}" for t in ("predictions_v6c", "predictions_stage2", "bets_stage2")),
     "data/local/inference/predictions_backfill",
     "data/local/inference/snapshots",
     "data/local/inference/lap_forecast",
@@ -398,7 +397,7 @@ def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH
     return {"seen": seen, "uploaded": uploaded, "would_upload": would}
 
 
-_STAGE2_TREE = "data/local/inference/bets_stage2/"
+_STAGE2_TREE = f"{_INF}/bets_stage2/"
 
 
 def _note_stage2_push(root: Path, sent: list[str]) -> None:
@@ -416,7 +415,7 @@ def _note_stage2_push(root: Path, sent: list[str]) -> None:
             parts = k[len(_STAGE2_TREE):].split("/")
             if len(parts) == 2:
                 by_day.setdefault(parts[0], []).append(parts[1].rsplit(".", 1)[0])
-        d = root / "data/local/inference/launch_watch"
+        d = root / _INF / "launch_watch"
         d.mkdir(parents=True, exist_ok=True)
         for day, rids in by_day.items():
             with (d / f"push_{day}.jsonl").open("a", encoding="utf-8") as f:

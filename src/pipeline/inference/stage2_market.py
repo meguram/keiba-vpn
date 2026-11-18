@@ -24,7 +24,6 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL_DIR = Path("/home/jovyan/work/retrain_out/cycles16_fix3/market/full/noise_fit2025")
 ODDS_SUM_RANGE = (1.0, 1.6)        # Σ1/単勝オッズ（払戻率の逆数）の正常の幅。外はオッズの取り込みの崩れとみなして使わない
 TARGETS = (("win", 1.0), ("top2", 2.0), ("top3", 3.0))
 
@@ -34,7 +33,11 @@ class OddsBroken(ValueError):
 
 
 def model_dir() -> Path:
-    return Path(os.environ.get("KEIBA_STAGE2_MODEL_DIR") or DEFAULT_MODEL_DIR)
+    """第 2 段のモデルの置き場（KEIBA_STAGE2_MODEL_DIR。影のランナーの設定 config/candidate_runtime.json が当てる。既定は無い）。"""
+    v = os.environ.get("KEIBA_STAGE2_MODEL_DIR")
+    if not v:
+        raise RuntimeError("KEIBA_STAGE2_MODEL_DIR が無い（第 2 段のモデルの置き場）")
+    return Path(v)
 
 
 def logit(p: np.ndarray) -> np.ndarray:
