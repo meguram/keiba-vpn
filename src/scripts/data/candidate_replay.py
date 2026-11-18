@@ -93,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
         if g.empty:
             return None
         g = g.sort_values("snap").drop_duplicates("horse_number", keep="last")
-        return {"race_id": rid, "snapshot_at": g["snap"].max().isoformat(),
+        return {"race_id": rid, "phase": "t60", "snapshot_at": g["snap"].max().isoformat(),
                 "entries": [{"horse_number": int(h), "win_odds": float(o), "popularity": p} for h, o, p in
                             zip(g["horse_number"], g["win_odds"], g["popularity"])]}
 

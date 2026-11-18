@@ -351,18 +351,30 @@ def best_cell(spec: Spec, a: dict) -> dict | None:
     return max(cand, key=lambda c: c["d"] * s)
 
 
+# 使い方の文（ガイドの「使い方:」と記事の本文の両方に入る。folklore_verified.py も同じ文を使う）
 DEFAULT_TIPS = {
     "supported": "人気（オッズ）にまだ織り込まれていない上積みです。印を少し上げる材料になります。",
     "partial": "全体では人気どおりです。使うなら、差が出た条件に絞って見るのが無難です。",
-    "not_supported": "人気（オッズ）がすでに織り込んでいます。この理由だけで印を動かす必要はありません。",
+    "not_supported": "この条件は人気（オッズ）に織り込み済みで、この理由だけで印を動かす必要はありません。",
     "inconclusive": "当てはまるレースがまだ少なく、結論は出せません。",
 }
 DEFAULT_TIPS_NEG = {
-    "supported": "人気ほど走らない傾向です。人気馬が当てはまるなら、評価を少し下げる材料になります。",
+    "supported": "当てはまる馬には、人気ほど走らない傾向があります。人気馬が当てはまるなら、評価を少し下げる材料になります。",
     "partial": "全体では人気どおりです。割り引くなら、差が出た条件に絞って見るのが無難です。",
-    "not_supported": "人気（オッズ）がすでに織り込んでいます。この理由だけで割り引く必要はありません。",
+    "not_supported": "この条件は人気（オッズ）に織り込み済みで、この理由だけで割り引く必要はありません。",
     "inconclusive": "当てはまるレースがまだ少なく、結論は出せません。",
 }
+# 通説と逆の向きに差が出たとき（direction > 0: 人気以上と言う通説 / それ以外: 人気ほど走らないと言う通説）
+TIP_REVERSED = "通説とは逆に、当てはまる馬は人気になりすぎています。人気馬が当てはまるなら、少し割り引くくらいがちょうどよさそうです。"
+TIP_REVERSED_NEG = "通説とは逆に、当てはまる馬は人気より走っています。この理由で割り引くのは損になりやすいです。"
+# 差が確かでないときの結び（前に、なぜ小さめかの文を置く）
+TIP_SMALL = "印を動かすなら、幅は小さめにしてください。"
+# 数字の読み方の 1 文目（folklore_verified.py のひな形と共通）
+EXPECTED_RATE_NOTE = "『オッズから見込まれる複勝率』は、同じくらいの人気の馬が普段どれだけ 3 着以内に来るかを表します。"
+
+
+def reversed_tip(direction: int) -> str:
+    return TIP_REVERSED if direction > 0 else TIP_REVERSED_NEG
 
 
 def reversed_(spec: Spec, a: dict) -> bool:
@@ -372,13 +384,12 @@ def reversed_(spec: Spec, a: dict) -> bool:
 def tip(spec: Spec, a: dict) -> str:
     v = a["verdict"]
     if reversed_(spec, a):
-        return ("通説とは逆に、人気になりすぎています。人気で当てはまるなら、少し割り引くくらいがちょうどよさそうです。" if spec.direction > 0
-                else "通説とは逆に、人気より走っています。この理由で割り引くのは損になりやすいです。")
+        return reversed_tip(spec.direction)
     if a.get("recent_only"):
-        return "集計では差がありますが、多数の通説を同時に検定する厳しい検定では偶然と区別できません。印を動かすなら小さめに。"
+        return "集計では差がありますが、多数の通説を同時に検定する厳しい検定では偶然と区別できません。" + TIP_SMALL
     if a.get("not_replicated"):
         return ("使うなら、どちらの期間でも差が出た条件に絞ってください。"
-                if best_cell(spec, a) else "偶然の可能性があるので、印を動かすなら小さめに。")
+                if best_cell(spec, a) else "偶然の可能性があります。" + TIP_SMALL)
     return spec.tips.get(v) or (DEFAULT_TIPS if spec.direction > 0 else DEFAULT_TIPS_NEG)[v]
 
 
@@ -457,7 +468,7 @@ def guide(spec: Spec, a: dict) -> dict[str, Any]:
         "lead": [f"調べたこと: {q}", f"答え: {headline(spec, a)}（同じ人気の馬と比べて {pt(a['main']['d'])}）。", f"使い方: {tip(spec, a)}"],
         "terms": ["複勝率", "オッズをそろえた差", "pt", "p値・q値"],
         "guides": [{"match": {"stats": True}, "title": "数字の読み方",
-                    "text": "『オッズから見込まれる複勝率』は、同じくらいの人気の馬が普段どれだけ 3 着以内に来るか。実際がこれより高ければ、人気以上に走っています。"}],
+                    "text": EXPECTED_RATE_NOTE + "実際がこれより高ければ、人気以上に走っています。"}],
     }
     if spec.extra_terms:
         g["glossary"] = spec.extra_terms

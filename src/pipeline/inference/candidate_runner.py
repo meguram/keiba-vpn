@@ -490,7 +490,9 @@ class Runner:
         X = self.X[rid]
         hn_all = X["horse_number"].astype(int).to_numpy()
         runners, od = runners_and_odds(hn_all, odds_doc.get("entries") or [])
-        base = {"odds_t60_at": odds_doc.get("snapshot_at"), "model": f"{self.bundle_name}+{self.s2.name}"}
+        if str(odds_doc.get("phase") or "") != "t60":      # 凍結の買い方は T-60 の offset の版だけ（確定・直前のオッズで判定しない）
+            return self._system_skip(rid, "no_odds_t60", f"オッズの phase が t60 でない: {odds_doc.get('phase')}")
+        base = {"odds_t60_at": odds_doc.get("snapshot_at"), "odds_phase": "t60", "model": f"{self.bundle_name}+{self.s2.name}"}
         try:
             Xr = X[X["horse_number"].astype(int).isin(runners)].reset_index(drop=True)
             odds = np.array([od[int(h)] for h in Xr["horse_number"].astype(int)], dtype=float)
@@ -500,6 +502,7 @@ class Runner:
             P.insert(0, "race_id", rid)
             P["pop_t60"] = sb.popularity_from_q(P["q"].to_numpy())
             P["odds_t60_at"] = odds_doc.get("snapshot_at")
+            P["odds_phase"] = "t60"                         # q・offset・人気はすべてこの T-60 のオッズから（stage2_market.predict_race）
             P["model"] = self.s2.name
             if not self._out("predictions_stage2", rid, "parquet").exists():      # 1 回だけ
                 _write_parquet(self._out("predictions_stage2", rid, "parquet"), P)

@@ -2,7 +2,7 @@
 
 粗い閾値（前走の上がり 3 位以内・着差 0.5 秒以内など）を 1〜3 個 AND でつなぎ、全部を満たす馬だけを残す（点の足し合わせはしない）。
 - 期間: 探す 2016〜2021 年、採否と確かめ 2022〜2024 年（最近の持続の検査に使う）。2025 年以降は凍結の後に 1 回だけ（search では読まない）。
-- 買う時点の層（LAYERS: 全馬・1 番人気・2 番人気以内・単勝 2.5 倍以下・2.0 倍以下）ごとに探す。人気は探す切り口には使わず、買う時点の最後の絞り込みの層として使う。
+- 買う時点の層（LAYERS: 全馬・1 番人気・2 番人気以内・単勝 2.5 倍以下・2.0 倍以下・4 番人気以下）ごとに探す。人気は探す切り口には使わず、買う時点の最後の絞り込みの層として使う。
   探す・採否は確定の人気で層を切る。確かめは、発走前のオッズ 20 通り（第 2 版の shift.json）で層を切り直した本番の再現も並べる。
 - 単位: 通常 = コース × クラスの群 × 良（件数の足りない条件はコースだけ → 芝ダ × 距離帯 × 群に寄せる）。
   重賞 = レース名 × コース（同じコースの 3 勝以上・全馬場の走で探す。足りなければ同じ芝ダ × 距離帯の 3 勝以上）。
@@ -29,6 +29,7 @@ import json
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -47,8 +48,10 @@ Q_MAX = 0.05         # BH の上限
 TOP = 3              # 単位ごとに出すルールの数
 UPPER_CLS = 4        # 重賞の寄せ先: 3 勝クラス以上（folklore の CLS: 4 = 3 勝、5 = OP・L、6〜8 = G3〜G1）
 DBANDS = [0, 1400, 1800, 2200, 9999]
-# 買う時点の層（最後の絞り込み）。人気・オッズは探す切り口には使わない。("pop", k) = k 番人気以内、("odds", x) = 単勝 x 倍以下
-LAYERS = {"全馬": None, "1 番人気": ("pop", 1), "2 番人気以内": ("pop", 2), "単勝 2.5 倍以下": ("odds", 2.5), "単勝 2.0 倍以下": ("odds", 2.0)}
+# 買う時点の層（最後の絞り込み）。人気・オッズは探す切り口には使わない。("pop", k) = k 番人気以内、("odds", x) = 単勝 x 倍以下、
+# ("popmin", k) = k 番人気以下（人気薄の側）
+LAYERS = {"全馬": None, "1 番人気": ("pop", 1), "2 番人気以内": ("pop", 2), "単勝 2.5 倍以下": ("odds", 2.5), "単勝 2.0 倍以下": ("odds", 2.0),
+          "4 番人気以下": ("popmin", 4)}
 ODDS_EDGES = [1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 7.0, 10.0, 15.0, 25.0, 50.0]   # 見込みの物差しのオッズの帯
 
 
@@ -57,6 +60,8 @@ def in_layer(spec, pop: np.ndarray, odds: np.ndarray) -> np.ndarray:
     if spec is None:
         return np.ones(len(pop), bool)
     kind, v = spec
+    if kind == "popmin":                                  # v 番人気以下（人気薄の側）
+        return np.nan_to_num(pop, nan=-np.inf) >= v
     x = pop if kind == "pop" else odds
     return np.nan_to_num(x, nan=np.inf) <= v
 HALF_LIFE = 3.0      # 重み付きの複勝率の半減期（年）。並べるだけで採否には使わない
@@ -521,7 +526,8 @@ def _stat(s) -> dict:
             "roi_t": float(s[5] / s[4]) if s[4] else None, "roi_f": float(s[6] / s[4]) if s[4] else None}   # 払戻は 1 円あたり（ret_tan）
 
 
-def cmd_search() -> None:
+def cmd_search(layers: list[str] | None = None) -> None:
+    """layers を渡すと、その層だけを流して search.json の該当の層だけを書き換える（ほかの層は残す）。"""
     CR.wait_resources()
     OUTT.mkdir(parents=True, exist_ok=True)
     d = load()
@@ -530,21 +536,40 @@ def cmd_search() -> None:
            "min_conf": MIN_CONF, "q_max": Q_MAX, "layers": list(LAYERS), "half_life": HALF_LIFE,
            "note": "2025 年以降は読んでいない。探す 2016〜21・採否と確かめ 2022〜24（最近の持続の検査に使うので、独立した確かめは凍結の後の 2025〜26 だけ）。"
                    "層（人気・オッズ）は確定の値で切る。全馬以外の層の 2022〜24 は、発走前のオッズ 20 通り（第 2 版の shift.json）で切り直した値も並べる",
-           "shift_sha": CR._sha_file(CR.OUT / "v2" / "shift.json")}
+           "shift_sha": CR._sha_file(CR.OUT / "v2" / "shift.json"), "frame_sha": CR._sha_file(FRAME), "code_sha": CR._sha_file(Path(__file__))}
+    path = OUTT / "search.json"
+    todo = list(dict.fromkeys(layers or list(LAYERS)))
+    bad = [x for x in todo if x not in LAYERS]
+    if bad:
+        sys.exit(f"知らない層: {bad}（{list(LAYERS)}）")
+    old = json.loads(path.read_text(encoding="utf-8")) if (layers and path.exists()) else {}
+    if old:
+        # 一部の層だけ流すときは、前の結果と作り（期間・下限・ずれの分布）が同じことを確かめる。違えば混ぜない
+        same = all(old.get(k) == out.get(k) for k in ("shift_sha", "min_disc", "min_conf", "q_max", "half_life", "frame_sha", "code_sha")) and \
+            list(old.get("lines", [])) == list(LINES) and \
+            list(old.get("disc", [])) == list(DISC) and list(old.get("conf", [])) == list(CONF)
+        if not same:
+            sys.exit("前の search.json と作りが違う（すべての層を流し直す）")
+        out["made_at_layers"] = dict(old.get("made_at_layers") or {ly: old.get("made_at") for ly in old.get("layers", [])})
     for side in ("course", "graded"):
-        out[side] = {}
-        for layer in LAYERS:
+        out[side] = {ly: v for ly, v in (old.get(side) or {}).items() if ly in LAYERS}   # 今の LAYERS に無い古い層は捨てる
+        for layer in todo:
             out[side][layer] = search(d, side, layer, shift, log=lambda *a: print(*a, flush=True))
-    (OUTT / "search.json").write_text(json.dumps(out, ensure_ascii=False, default=float), encoding="utf-8")
+    out["layers"] = [ly for ly in LAYERS if ly in out["course"] and ly in out["graded"]]
+    out.setdefault("made_at_layers", {})
+    for ly in todo:
+        out["made_at_layers"][ly] = out["made_at"]                                   # 層ごとの作った時刻
+    path.write_text(json.dumps(out, ensure_ascii=False, default=float), encoding="utf-8")
     print("search", OUTT / "search.json", flush=True)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["search"])
+    ap.add_argument("--layers", default="", help="流す層（「,」区切り。空ならすべて）")
     a = ap.parse_args()
     if a.cmd == "search":
-        cmd_search()
+        cmd_search([x for x in a.layers.split(",") if x] or None)
 
 
 if __name__ == "__main__":
