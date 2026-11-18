@@ -124,6 +124,7 @@
 | 3. 判定・push の時刻 | `launch_watch/<YYYYMMDD>.jsonl` の `event=decision`、`launch_watch/push_<YYYYMMDD>.jsonl` | ISO8601（+09:00） | 予備（上げるだけ） |
 | 4. 確定の着順と払戻 | 週明けに、`data/page_reference/tables/2026/race_result_flat.parquet`・payoff と race_id でつなぐ | — | 既存の表 |
 
+- 本番の書き込み先は、ホストの共有の作業ツリー `/home/jovyan/work/keiba-vpn/data/local/inference/` の下（影のランナーの `config/candidate_runtime.json` の `publish_dir`・`watch_dir`、T-60 の写しは raceday-runner の既定の推論の作業場所）。bet-optimizer の前向きの集計の道具（bet_forward_ledger）が読む場所と同じ。
 - odds_t60 と launch_watch は、ほかに元が無い。**ホストの手元から消さない**（掃除の対象にしない）。
 - 予備として、gcs_mirror の BACKUP_TREES で GCS へ上げるだけにしている（Cloud Run には降ろさない。画面のキャッシュの目印も立てない）。開催日の 5 分おきの push に乗る。
 - cron の push は `--recent-days 2`（更新時刻が 2 日以内のファイルだけ）。前向きの記録は 11/21 から書かれるので、開催日のうちに上がる。リハーサル（11/08・11/15）の記録は対象外で、上げない。
