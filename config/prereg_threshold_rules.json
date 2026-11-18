@@ -1,0 +1,31 @@
+{
+ "note": "事前登録した閾値のルール（docs/ideas/course_class_handicapper.md §13）。2017〜2024 年を流す前に commit する。式は src/research/course/prereg_rules.py の rule_masks（ID ごと）で、この json の formula はその日本語の写し。通常の面は §12 と同じ単位（コース × クラスの群 × 良馬場）、重賞の面は G1〜G3 の全馬場。向きはすべて −（⭕ でない馬が、オッズから見込む値より凡走する）。負の対照は BH の外。",
+ "registered_at": "2026-11-18",
+ "period": [2017, 2024],
+ "layers": ["全馬", "4 番人気以下"],
+ "sides": ["course", "graded"],
+ "q_max": 0.05,
+ "effect_min_pt": {"全馬": 1.0, "4 番人気以下": 0.5},
+ "bootstrap": {"reps": 1000, "seed": 20261118, "unit": "race", "kind": "poisson", "note": "2024 年だけの区間も同じ回数（種 +1）"},
+ "odds_edges": [1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 7.0, 10.0, 15.0, 20.0, 30.0, 50.0, 100.0, 200.0],
+ "breadth": {"side": "course", "min_runs": 300, "share": 0.75},
+ "rules": [
+  {"id": "U01", "side": "graded", "scope": "G1", "direction": "-", "formula": "前走のクラス別の着順が ⭕ でない（⭕ = 前走 G1・G2 で 3 着以内・G3 で 1 着か勝ち馬と 0.1 秒以内〈差 − 0.1 ×（自分の前走の斤量 − 前走の勝ち馬の斤量）〉・前走海外）。前走が重賞でない馬も ⭕ でない。G3 の勝ち馬の斤量を引けない馬は判定の外", "original": "⭕G1→着順不問／⭕G2→③着以内／⭕G3→①着or①着馬と0.1秒以内(＋斤量は1k＝−0.1秒計算)／⭕前走海外／❌それ以外", "source": "https://note.com/yupo1004/n/nee241b037a5a", "overlap_s12": "一部（着順・着差）"},
+  {"id": "U04", "side": "graded", "scope": "G1", "direction": "-", "formula": "前走の上がり 3F が 7 位以下 かつ 前走の初角と 4 角がともに 1 番手でない（初角が無ければ 4 角が 1 番手でない）。前走の 4 角の通過順位が欠ける馬は判定の外", "original": "⭕①位〜⑥位／⭕⑦位以下＋初角4角1番手／⭕前走海外／❌それ以外", "source": "https://note.com/yupo1004/n/nee241b037a5a", "overlap_s12": "あり（上がり）"},
+  {"id": "U06", "side": "graded", "scope": "G3", "direction": "-", "formula": "前走 5 着以下 かつ 前走の 4 角が 1〜4 番手", "original": "⭕前走④着以内／⭕前走❺着以下＋4角⑤番手以下／🔺前走❺着以下＋4角④番手＋G2／❌それ以外", "source": "https://note.com/yupo1004/n/n60da0f258bf3", "overlap_s12": "一部（着順・4 角）"},
+  {"id": "U04c", "side": "graded", "scope": "G3", "direction": "-", "formula": "前走の上がり 3F が 10 位以下、または 4〜9 位で前走が L 未満（OP・条件戦）", "original": "⭕前走上がり3位以内／⭕前走上がり4〜9位＋Ｌ以上／❌それ以外", "source": "https://note.com/yupo1004/n/n60da0f258bf3", "overlap_s12": "あり（上がり）"},
+  {"id": "U20", "side": "graded", "scope": "G3", "direction": "-", "formula": "前走の馬体重が 469kg 以下（前走の行を p_race_id で引く。引けない・体重 0 は判定の外）", "original": "⭕４７０k以上／🔺４６９k以下", "source": "https://note.com/yupo1004/n/n60da0f258bf3", "overlap_s12": "なし"},
+  {"id": "U15", "side": "graded", "scope": "G3", "direction": "-", "formula": "5 歳以下", "original": "⭕6歳以上／🔺5歳／🔺4歳＋前走OP以上①着／❌それ以外の4歳", "source": "https://note.com/yupo1004/n/n7f529eac1b45", "overlap_s12": "なし"},
+  {"id": "U18", "side": "graded", "scope": "G3", "direction": "-", "formula": "前走からの間隔が 29 日以下 かつ 前走が OP 以上（OP・L・G3・G2・G1）で 3 着以内でない", "original": "⭕中4週以上／⭕中4週未満＋前走OP以上③着以内／❌それ以外", "source": "https://note.com/yupo1004/n/n7f529eac1b45", "overlap_s12": "あり（間隔）"},
+  {"id": "U09b", "side": "graded", "scope": "G2", "direction": "-", "formula": "今回の距離が前走の距離以下（延長でない）", "original": "⭕今回、距離延長／🔺今回、距離短縮or同距離", "source": "https://note.com/yupo1004/n/n0e42685f084a", "overlap_s12": "あり（距離）"},
+  {"id": "U19", "side": "graded", "scope": "G2", "direction": "-", "formula": "斤量 59kg 以上", "original": "❌上に関係なく、斤量59K以上", "source": "https://note.com/yupo1004/n/n0e42685f084a", "overlap_s12": "一部（斤量の増減）"},
+  {"id": "G2a", "side": "both", "scope": "all", "direction": "-", "formula": "乗り替わり（前走の行の騎手と違う。前走の行を引けなければ判定の外）", "original": "前走と同じ騎手で臨む馬の方が成績が良い（過去 3 年の全体）", "source": "https://spaia.jp/column/horserace/8814", "overlap_s12": "なし"}
+ ],
+ "negative_controls": [
+  {"id": "N1", "formula": "馬の ID・レースの ID・塩 a のハッシュが奇数"},
+  {"id": "N2", "formula": "同じく塩 b"},
+  {"id": "N3", "formula": "同じく塩 c（3 本とも、ゲートの順・枠の内外と関係せず、同じ馬でも走ごとに変わる印）"}
+ ],
+ "exclusions": "前走が地方・海外と分かる馬（prev_region。2020 年から判定できる）は、全体から除く。2017〜19 年は判定できない。2020 年以降だけの値も感度として並べる。取消・除外の馬は frame に無い（started はすべて真）。",
+ "freeze": "2025〜26 年の評価は、通ったルールだけを凍結して 1 回だけ。成功 = Holm の補正の後に有意・向きが同じ・|差| が下限以上・負の対照が通らない。失敗したら作り直さずに捨てる。前向きの確かめは 2026-12〜2027-06（途中では見ない）。"
+}
