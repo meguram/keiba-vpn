@@ -1,7 +1,7 @@
 "use client";
 
 import { PendingLink } from "@/components/PendingLink";
-import { fetchRaceList } from "@/lib/httpCache";
+import { fetchRaceList, raceListUrl, readStored } from "@/lib/httpCache";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageShell } from "@/components/PageShell";
 import { GradeChip, WeekPicker } from "@/components/WeekPicker";
@@ -176,7 +176,7 @@ export default function RacesPage() {
           // 一覧を待たずに、表示しそうな開催日のレース一覧を並べて取り始める（latency_plan_20261118.md の L11）。
           // 下の effect の fetchRaceList と同じ URL・ttl なので、成功・取得中なら同じ要求にまとまる。外れたら下で正しい日を取るだけ。
           // 初回だけ（再試行 reloadKey>0 では足さない。一覧の API が落ちている間に、8 秒ごとに race-list を増やさないため）
-          if (reloadKey === 0) fetchRaceList(guessDisplayDate(new URLSearchParams(window.location.search).get("date") ?? "", today)).catch(() => { /* 先読みの失敗は無視 */ });
+          if (reloadKey === 0) fetchRaceList(guessDisplayDate(new URLSearchParams(window.location.search).get("date") ?? "", today), undefined, true).catch(() => { /* 先読みの失敗は無視 */ });
           const res = await fetch(`/api/scrape-dates?picker_past_days=${PAST_DAYS}&picker_future_days=0`, { cache: "no-store" });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           list = ((await res.json()).dates ?? []).filter((d: string) => d <= today);
@@ -198,17 +198,25 @@ export default function RacesPage() {
     if (!date) return;
     let alive = true;
     (async () => {
-      setLoadingRaces(true);
       setError("");
+      type ListJson = { races?: Record<string, unknown>[] } | Record<string, unknown>[];
+      const toRows = (d: ListJson) => ((Array.isArray(d) ? d : d.races) ?? []).map((x: Record<string, unknown>) => toRow(x));
+      // 前回このタブで見た一覧があれば先に出して（取得中を出さない）、最新を取れたら差し替える（L1）
+      const storedJson = USE_MOCK ? null : readStored<ListJson>(raceListUrl(date));
+      const stored = storedJson && toRows(storedJson).length > 0 ? storedJson : null;   // 空の一覧は前回の内容として出さない
+      if (stored) setRows(toRows(stored));
+      setLoadingRaces(!stored);
       try {
         if (USE_MOCK) {
           if (alive) setRows(MOCK_WEEKLY_RACES.map((r) => toRow({ ...r })));
           return;
         }
-        const d = (await fetchRaceList(date)) as { races?: Record<string, unknown>[] } | Record<string, unknown>[];
-        if (alive) setRows(((Array.isArray(d) ? d : d.races) ?? []).map((x: Record<string, unknown>) => toRow(x)));
+        const d = (await fetchRaceList(date, undefined, true)) as ListJson;
+        if (alive) setRows(toRows(d));
       } catch (e) {
-        if (alive) { setRows([]); setError(`レース一覧を取得できませんでした（${e instanceof Error ? e.message : String(e)}）`); }
+        // 最新が取れなくても、先に出した前回の一覧は消さない（取れなかったことは出し、自動の取り直しも続ける）
+        if (alive && stored) setError("最新のレース一覧を取得できませんでした。前回の内容を表示しています");
+        else if (alive) { setRows([]); setError(`レース一覧を取得できませんでした（${e instanceof Error ? e.message : String(e)}）`); }
       } finally {
         if (alive) setLoadingRaces(false);
       }
