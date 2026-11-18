@@ -336,3 +336,51 @@ def test_summary_with_violation_is_not_for_decision(led):
     _g().finish()
     tok = _g()                                                             # warn: confirm_again の違反つきで通る
     assert tok.summary()["use_for_decision"] is False
+
+
+def test_amend_needs_approval_and_changes_count(led, monkeypatch):
+    _enforce(monkeypatch)
+    _g(version="ref").finish()
+    first = next(r for r in L.load_rows() if r.get("kind") == "start")
+    for bad in ("", " ", "自分で書いた"):
+        with pytest.raises(ValueError):
+            L.amend(ref=first["id"], purpose="eval_only", reason="参考の群", approved_by=bad)
+    with pytest.raises(ValueError):                                        # 承認者と直す担当が同じ
+        L.amend(ref=first["id"], purpose="eval_only", reason="r", approved_by="claude-orchestrator-handover",
+                session="claude-orchestrator-handover")
+    for p_ in ("reproduce", "fit", "select"):                              # confirm→eval_only 以外は直せない
+        with pytest.raises(ValueError):
+            L.amend(ref=first["id"], purpose=p_, reason="r", approved_by="claude-orchestrator-handover")
+    with pytest.raises(L.LedgerDenied):
+        _g(version="ref")
+    L.amend(ref=first["id"], purpose="eval_only", reason="参考の群（判定に使わない）", approved_by="claude-orchestrator-handover",
+            session="ledger")
+    tok = _g(version="ref")                                                # 直した後も見た回数は減らない: eval_only の後の confirm → eval_only
+    assert tok.purpose == "eval_only"
+    with pytest.raises(ValueError):                                        # 同じ行の 2 回目の直し
+        L.amend(ref=first["id"], purpose="eval_only", reason="x", approved_by="claude-orchestrator-handover", session="ledger")
+    with pytest.raises(ValueError):
+        L.amend(ref="no-such-id", purpose="eval_only", reason="x", approved_by="claude-orchestrator-handover", session="ledger")
+
+
+def test_amend_locked_family_and_bad_rows_are_skipped(led, monkeypatch, capsys):
+    _enforce(monkeypatch)
+    with _g(family="prereg_rules", period=("2025-01-01", "2025-12-31")) as tok:
+        pass
+    with pytest.raises(ValueError, match="直せない"):
+        L.amend(ref=tok.id, purpose="eval_only", reason="r", approved_by="claude-orchestrator-handover", session="ledger")
+    # 手で足した壊れた直しの行（purpose なし・承認なし）は使わない（落ちない）
+    L.write_row({"id": "x-amend", "kind": "amend", "ref": tok.id, "at": "2026-11-19T00:00:00+09:00"}, strict_shared=False)
+    with pytest.raises(L.LedgerDenied):
+        _g(family="prereg_rules", period=("2025-01-01", "2025-12-31"))
+    assert "使わない" in capsys.readouterr().err
+
+
+def test_amend_cli_and_show(led, capsys):
+    _g(version="cli").finish()
+    rid = next(r["id"] for r in L.load_rows() if r.get("kind") == "start")
+    assert L.main(["amend", "--ref", rid, "--purpose", "eval_only", "--reason", "参考", "--approved-by", "claude-orchestrator-handover",
+                   "--session", "ledger"]) == 0
+    assert L.main(["amend", "--ref", "nope", "--purpose", "eval_only", "--reason", "r", "--approved-by", "ユーザー"]) == 2
+    L.main(["show", "--from", "2025-01-01", "--to", "2025-12-31"])
+    assert "直し: confirm→eval_only" in capsys.readouterr().out
