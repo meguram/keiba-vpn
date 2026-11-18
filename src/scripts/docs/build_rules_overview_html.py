@@ -262,7 +262,8 @@ ul.t{{margin:4px 0;padding-left:18px}}#tb td.wrap{{min-width:120px}}
 <h1>ルールの一覧（重賞・通常レース）</h1>
 <p class="muted">最小単位ごとに、今使っている規則と、訓練の期間・2025 年・2026 年の成績を並べた。数字は記録・凍結・評価の結果のファイルから作った（新しい評価は流していない）。
 作り: src/scripts/docs/build_rules_overview_html.py。関連: <a href="graded_handicapper.html">重賞のルールベース予想家</a>・<a href="graded_cycles.html">重賞の分析サイクル</a>・
-<a href="../course/course_v3_cycles.html">全レース版 第 3 版</a>・<a href="../course/course_v2.html">第 1 版・第 2 版</a></p>
+<a href="../course/course_v3_cycles.html">全レース版 第 3 版</a>・<a href="../course/course_v2.html">第 1 版・第 2 版</a>・
+<a href="../../../docs/html/operations/rules_bet_opt.html">◎ の買う／見送る（発走前オッズでの検証）</a></p>
 <div class="panel wrap"><b>注意</b><ul class="t">
 <li>2025・2026 年は、まっさらな確かめではない。重賞は規則の候補の作り方を決める過程で何度か見ている。通常レースは第 1 版・第 2 版の評価で 2 回見ており、
 第 3 版では 2025 年を見ながら試行錯誤した（2025 年は選んだ期間）。凍結の後に 1 回だけ見た 2026 年が、いちばん偏りの少ない値（それでも 3 回目）。</li>

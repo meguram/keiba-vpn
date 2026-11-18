@@ -106,7 +106,7 @@ def tip(direction: int, verdict: str, reversed_: bool) -> str:
     if reversed_:
         return F.reversed_tip(direction)
     if verdict == "partial":
-        return "差は小さく、確かさも低い（格 C）です。" + F.TIP_SMALL
+        return "差は小さく、確かさも低いです。" + F.TIP_SMALL
     table = F.DEFAULT_TIPS if direction > 0 else F.DEFAULT_TIPS_NEG
     return table["supported" if verdict == "supported" else "not_supported"]
 
@@ -188,7 +188,7 @@ def build(g: Group, tests: pd.DataFrame, meta: dict[str, dict], published: str) 
     }
     q = g.question or f"『{g.claim}』は本当か。"
     guide = {
-        "lead": [f"調べたこと: {q}", f"答え: {head}（同じ人気の馬と比べて {F.pt(main_d)}、{_tier_word(_tier(m))}）。", f"使い方: {tip(direction, verdict, rev)}"],
+        "lead": [f"調べたこと: {q}", f"答え: {head}（同じ人気の馬と比べて {F.pt(main_d)}）。", f"使い方: {tip(direction, verdict, rev)}"],
         "terms": ["複勝率", "オッズをそろえた差", "pt"],
         "glossary": [{"term": "格（S・A・B・C）", "desc": "偶然ではない確かさの目安です。S がもっとも確か、次いで A・B・C。『格なし』は、差があっても偶然と区別できないという意味です。発見期間で見つけた差が、確認期間でも同じ向きに出たかも含めて決めています。"}],
         "guides": [

@@ -6,7 +6,7 @@ import { VERDICTS, categoryLabel, type ColumnVerdict } from "@/lib/columns";
 
 /**
  * コラムの一覧と絞り込み（キーワード・結論・並び順）。カテゴリは URL（/column/category/...）で選ぶ。
- * 結論の「傾向なし」は、人気（オッズ）に織り込み済みで買いの根拠にならない通説。外れではなく成果として並べる。
+ * 結論の「人気に織り込み済み（使えない）」は、差が人気（オッズ）にすでに表れていて、馬券の根拠にならない通説。外れではなく成果として並べる。
  */
 const ORDER: ColumnVerdict[] = ["supported", "partial", "not_supported", "inconclusive", "pending"];
 
@@ -48,7 +48,7 @@ export function ColumnFilterList({ columns, empty }: { columns: ColumnSummary[];
         </select>
       </div>
       <p className="col-small" style={{ margin: "16px 0 8px" }}>
-        {shown.length} 本{verdict === "not_supported" && "（傾向なし = 人気に織り込み済みで、買いの根拠にならない通説）"}
+        {shown.length} 本{verdict === "not_supported" && "（人気に織り込み済みで、馬券の根拠にならない通説）"}
       </p>
       <div className="col-list">
         {shown.length ? shown.map((c) => <ColumnRow key={c.slug} column={c} />) : <p className="col-small" style={{ padding: 16 }}>当てはまるコラムはありません。</p>}

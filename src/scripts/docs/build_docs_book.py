@@ -87,7 +87,7 @@ def _best_chapters() -> list[Chapter]:
 
 
 PARTS: list[Part] = [
-    Part("いまのベスト分析", "データ分析家が最初に見る所。重賞・通常レース・血統・馬の予測モデル・推奨馬券の今の最良の結論・数字・根拠・限界を、元の記録から生成した 1 枚ずつ。", _best_chapters()),
+    Part("いまのベスト分析", "データ分析家が最初に見る所。重賞・通常レース・血統・走法軸・馬の予測モデル・推奨馬券の今の最良の結論・数字・根拠・限界を、元の記録から生成した 1 枚ずつ。", _best_chapters()),
     Part("要件と全体像", "何を作るのか、どういう構成か。", [
         C("requirements", "keiba-vpn の要件定義書。目的、要件、KPI、構成、ワークフロー、ユーザーへの提供フロー、実装状況（実装済み／部分／モック／未実装）、関連文書の索引。`/update-requirements` で現状から再生成される。",
           "要件", src="html/02_本番の仕様/要件定義書.html"),
@@ -258,9 +258,18 @@ PARTS: list[Part] = [
         C("bet_optimization_story", "推奨馬券の最適化の過程。何を考え、何を試し、どうなったかを時系列で: 予測 1 位の ◎ では届かない、穴の ◎ と見送り、1 点買いの崩れ、選び方の交差検証、test 2025、今の推奨の印のずれ（W4）、本番の再現（発走前のオッズ）で測り直した結果、第 2 回の方針。", "結果",
           src="html/operations/bet_optimization_story.html",
           see=[("bet_cycles", "推奨馬券の最適化サイクル")]),
+        C("running_style_pairs", "脚質が近い 2 頭・展開予想の向く側の 2 頭・走法軸（2024 年の 3 軸）が近い 2 頭は、一緒に 3 着以内に来やすいか（2016〜2024 年）。市場の見込み（Harville）との比、対照（無作為・人気の近さ）、条件別・年ごとの安定。走法軸は 2024 年の TS 系 3 軸だけ。", "結果",
+          src="html/operations/running_style_pairs.html",
+          see=[("bet_optimization_story", "推奨馬券の最適化の過程")]),
+        C("rules_bet_opt", "ルールの一覧の ◎ の買う／見送る（発走前オッズでの検証）。", "結果",
+          src="html/operations/rules_bet_opt.html",
+          see=[("bet_optimization_story", "推奨馬券の最適化の過程")]),
         C("bet_r2_walkthrough", "第 2 回で凍結した買い方の実例。2025 年のサンプルのレース（種を固定した乱数で選ぶ）で、モデルの p・市場の q・ずれ r から、レースの絞り込み・◎・単勝の買い目・結果までのつながりを全頭の表で示す。", "結果",
           src="html/operations/bet_r2_walkthrough.html",
           see=[("bet_optimization_story", "推奨馬券の最適化の過程"), ("bet_cycles", "推奨馬券の最適化サイクル")]),
+        C("odds_rank_accuracy", "想定オッズ（§77）で作った人気順が、実際の人気順（確定・発走 60 分前の T-60）とどれだけ合うか。順位の相関・1 番人気の的中・上位 3 頭の重なりを、旧来の想定オッズ・AI 勝率・前走の人気・無作為と比べた区間つきの表と、T-60 の人気から確定の人気への動き（遷移の表・対数オッズの変化・人気の絞り込みへの影響）。", "結果",
+          src="html/operations/odds_rank_accuracy.html",
+          see=[("bet_optimization_story", "推奨馬券の最適化の過程"), ("model_versions", "モデルの版と採用状況")]),
         C("upstream_model_outputs", "最終層の入力になる上流モデル（親・前段・めぐ指数・追走難度・ラップ予想・オッズ予測など）の出力値の見方を、サンプル付きで並べた資料。", "仕様",
           src="html/modeling/final/upstream_model_outputs.html",
           see=[("model_versions", "モデルの版と採用状況"), ("final_layer_philosophies", "最終層の思想別の評価")]),
@@ -336,7 +345,11 @@ PARTS: list[Part] = [
         C("v6_features", "v6 への追加候補の評価。V5 の構成 d（1,142 列）に累積して、新しい知見（追走難度 v2・位置取り予想・ラップ予想・展開タイプ・枠順バイアス・クラス基準）の別の使い方（独立列・レース内相対・シナリオ条件付き・前段 S3 の作り直し）と、他の調査の候補（めぐ指数/netkeiba 指数の履歴 RB・非 JRA 過去走・rs59・展開利・馬主名の正規化）を同じ手順で評価。独立列は全て不採用、RB が単独で基準を満たし、前段 S3 の作り直し（S3B）は RB の上でも増分があり、RB + S3B − 騎手/調教師の通算 10 列 − fe_year_frac（v6-lite、1,147 列）が勝率 −0.00059・連対 −0.00074・複勝 −0.00064。再現（新 seed）の結果と v6 最終学習に必要な作業。", "結果",
           [("ensemble_v5", "アンサンブル v5 の構成選択と最終学習（tp-52）"), ("index_variance", "めぐ指数と netkeiba 指数の分散・外れ値の扱い（tp-65）"), ("pace_type", "展開タイプ（tp-61）"), ("lap_forecast", "ハロンごとのラップ予想（tp-55）"), ("tracking_difficulty_v2", "追走難度 v2（tp-54）"), ("training_pipeline_decisions", "決定ログ")]),
         C("drift_diagnosis", "ドリフト診断：2026 年（テストセット②）にモデルと市場の勝率 LogLoss の差が開いた原因の切り分けと、週次監視の設計。差の拡大は 6〜10 月（同季節の基準に対して +0.0080、z=5.6）で、市場側・構成・季節・較正では説明できず、予測の尖り（順位付け）が落ちた形。調教ページ（horse_training）の被覆が 4 月から崩れ（4 月 79%・5 月 18%・6〜9 月 5〜6%）、調教系の特徴量 87 列が約 95% の行で欠損のまま予測されていた。欠損の再現実験、固定モデルの経年、寄与の概算。週次監視（直近 8 週の窓＋累積、EWMA/CUSUM、ラベルなしの先行指標、4 段階の警報、層別の FDR、v4/v5 shadow）の設計と、2025〜2026 年の各週へのバックテスト（2025 年の誤警報 3.8%）。", "結果",
-          [("deployment_readiness", "導入可否の確認"), ("ensemble_v5", "アンサンブル v5（tp-52）"), ("feature_gap_audit", "特徴量のやり残しの棚卸し"), ("training_pipeline_decisions", "決定ログ")]),
+          [("deployment_readiness", "導入可否の確認"), ("ensemble_v5", "アンサンブル v5（tp-52）"), ("feature_gap_audit", "特徴量のやり残しの棚卸し"), ("training_pipeline_decisions", "決定ログ"),
+           ("data_trend", "データの傾向の変化（2016〜2025）")]),
+        C("data_trend", "データの傾向の変化（2016〜2025）の大きさと、ルールの抽出・馬の予測モデル・推奨馬券への影響。143 指標の年ごとの揺れを偶然の幅と比べた地図（前残りの強まり・芝の時計の高速化・父の世代交代・斤量と頭数の段差、市場の当たり方と本命・大穴の偏りは不変）、2 歳戦の単勝の上乗せ（2017〜2023 年）の発見、学習の窓の古さの費用（1 年 0〜0.008、2020 年以降の窓どうしでは 0 に近い）と窓の選び方、ルールの平均への戻りのノイズと傾向の変化への分解、問題点と改善案。", "結果",
+          src="html/operations/data_trend.html",
+          see=[("drift_diagnosis", "ドリフトの診断"), ("model_cycles", "親モデルの改善サイクル"), ("bet_cycles", "推奨馬券の最適化サイクル")]),
         C("feature_gap_audit", "モデルを作り直す前の特徴量のやり残しの棚卸し。試した群の採否・増分の総括、V5 の列の由来、schema_defs.json 42 カテゴリの未使用データ（非 JRA の過去走・馬ごとの区間ラップ・母側きょうだい・併せ馬）、実行中の調査（v6・交互作用・予想家）と重なるものの除外、やり残し候補 13 個（見込み・必要データ・先読みリスク・工数・2 段階の評価計画）と、再学習の前にやるもの・後でよいもの。特徴量 1 群の見込み（≤0.0006）より 2026 年を含めた再学習の設計のほうが効く可能性が高い、という整理。", "結果",
           [("feature_investigation_catalog", "特徴量調査の総覧"), ("ensemble_v5", "アンサンブル v5（tp-52）"), ("deployment_readiness", "導入可否の確認"), ("training_pipeline_decisions", "決定ログ")]),
         C("handicapper_viewpoints", "予想家の観点の調査。15 のレース名で note の公開記事を検索して 249 本（X の本文は取得できず 0 件）を集め、予想の観点の頻度表を作り、V5 の特徴量との対応を 4 分類（入っている・試して不採用・データはあるが未実施・データなし）で整理。未実施でデータがあるのは、当日・前日のレースから見た馬場の実測の偏り（新規）、進路のロス・包まれ（棚卸しの候補 2・6 を補強）、前走ステップの傾向、騎手の積極性。予想家の主張は未検証で、観点の一覧であって効果の証拠ではない。", "結果",
@@ -575,24 +588,44 @@ def _split_blocks(css: str) -> list[tuple[str, str]]:
     return out
 
 
+_ROOT_QUAL = re.compile(r"^(?::root|html)((?:\[[^\]]*\]|:not\([^()]*\)|:(?!not\b)[\w-]+(?:\([^()]*\))?|\.[\w-]+)+)(.*)$")
+
+
+def _scope_selector(s: str, scope: str) -> str:
+    if s in (":root", "html", "body", "html,body"):
+        return scope
+    if s == "*":
+        return f"{scope}, {scope} *"
+    root = _ROOT_QUAL.match(s)
+    if root and not root.group(2).lstrip().startswith(")"):
+        # 「:root[data-theme="dark"]」「:root:not([data-theme="light"])」など、根の要素の属性で切り替える配色。
+        # 本の <html> の属性で判定し、章の中に効かせる（本は data-theme="dark"）
+        rest = re.sub(r"^[\s>+~]+", "", root.group(2))
+        body = re.match(r"^(?:body|html)((?:\.[\w-]+|\[[^\]]*\])*)(?=[\s>+~]|$)", rest)
+        if body:   # body・body.x は章の箱そのもの（クラス・属性は箱に付ける）
+            rest = rest[body.end():].lstrip(" >")
+            return f"html{root.group(1)} {scope}{body.group(1)}" + (f" {rest}" if rest else "")
+        return f"html{root.group(1)} {scope}" + (f" {rest}" if rest else "")
+    if s.startswith(("body ", "html ")):
+        return scope + " " + s.split(" ", 1)[1]
+    return f"{scope} {s}"
+
+
 def scope_css(css: str, scope: str) -> str:
     css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
     out = []
     for head, inner in _split_blocks(css):
-        if head.startswith("@media") or head.startswith("@supports"):
+        if head.startswith("@media") and "prefers-color-scheme" in head:
+            # 本の外枠はいつも暗い配色。OS の設定で章の配色が変わると暗い外枠の上で読めなくなるので、
+            # 暗い側はいつも効かせ、明るい側は捨てる
+            if re.search(r"prefers-color-scheme\s*:\s*dark", head):
+                out.append(scope_css(inner, scope))
+        elif head.startswith("@media") or head.startswith("@supports"):
             out.append(f"{head}{{{scope_css(inner, scope)}}}")
         elif head.startswith("@"):
             out.append(f"{head}{{{inner}}}")
         else:
-            sels = []
-            for s in (x.strip() for x in head.split(",")):
-                if s in (":root", "html", "body", "html,body", "*"):
-                    sels.append(scope if s != "*" else f"{scope}, {scope} *")
-                elif s.startswith(("body ", "html ")):
-                    sels.append(scope + " " + s.split(" ", 1)[1])
-                else:
-                    sels.append(f"{scope} {s}")
-            out.append(f"{', '.join(sels)}{{{inner}}}")
+            out.append(f"{', '.join(_scope_selector(x.strip(), scope) for x in head.split(','))}{{{inner}}}")
     return "\n".join(out)
 
 
@@ -946,7 +979,7 @@ def build(out: Path = DEFAULT_OUT) -> tuple[str, dict]:
     css = SHELL_CSS + "\n" + "\n".join(f"/* {gid} */\n" + scope_css(c, f".css-{gid}") for gid, c in css_groups.items()) + "\n.bk-chapter{background:transparent !important}"
     mermaid_src = quote(os.path.relpath(HTML_DIR / "assets" / "mermaid.min.js", book_dir))
     out_html = (
-        '<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<!doctype html><html lang="ja" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
         "<title>keiba-vpn ドキュメント総覧</title>"
         f"<style>{css}</style></head><body class=\"bk\"><div class=\"bk-layout\"><nav class=\"bk-side\"><h1><a href=\"#front\">ドキュメント総覧</a></h1>"
         '<div class="sub">docs/ の全 HTML を 1 冊に統合</div><input id="bk-q" type="search" placeholder="章・節をしぼり込む"><div class="tools"><button id="bk-open" type="button">すべて開く</button><button id="bk-close" type="button">すべて閉じる</button></div>'

@@ -52,7 +52,6 @@
 .col-row:hover { background: rgba(255, 255, 255, 0.02); }
 .col-row-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--col-fs-4); line-height: 1.5; color: var(--text-dim); }
 .col-row-title { font-size: var(--col-fs-3); font-weight: 700; line-height: 1.5; margin: 4px 0 2px; }
-.col-row-sum { font-size: var(--col-fs-4); line-height: 1.5; color: var(--text-dim); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
 /* 記事 */
 .col-article { max-width: 760px; margin: 0 auto; }
@@ -88,3 +87,4 @@
 .col-rel { list-style: none; }
 .col-rel li { padding: 4px 0; }
 .col-rel a { color: var(--accent); text-decoration: none; }
+.col-lead-u { font-size: var(--col-fs-3); line-height: 1.7; margin-top: var(--col-sp-1); white-space: pre-wrap; }

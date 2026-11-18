@@ -34,7 +34,6 @@ export function ColumnRow({ column }: { column: ColumnSummary }) {
         {column.draft && <span style={{ color: "var(--warn)" }}>[下書き] </span>}
         {column.title}
       </h2>
-      <p className="col-row-sum">{column.summary}</p>
     </Link>
   );
 }
