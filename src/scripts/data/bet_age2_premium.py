@@ -32,7 +32,20 @@ def in_premium_period(dates) -> np.ndarray:
     return ((y == 2016) & (md >= "06-04") & (md <= "09-04")) | ((y >= 2017) & (y <= 2023) & (d.dt.month.to_numpy() >= 6))
 
 
+_TOKS: list = []
+
+
 def run(a) -> None:
+    """台帳の行を、途中で落ちたときも閉じる（例外は error、Ctrl-C などは aborted。started のまま残さない）。"""
+    try:
+        return _run_inner(a)
+    except BaseException as exc:
+        for t in _TOKS:
+            t.__exit__(type(exc), exc, None)
+        raise
+
+
+def _run_inner(a) -> None:
     from src.scripts.data import bet_cycles as bc
 
     fz = Path(a.frozen)
@@ -45,6 +58,8 @@ def run(a) -> None:
 
     tok = L.guard(tool="src/scripts/data/bet_age2_premium.py", family="bet_cycles", version=body["hash"], period=("2019-01-01", "2025-12-31"),
                   purpose="reproduce", frozen_paths=[fz], reason="2 歳戦の上乗せの印と補正で、凍結の買い方の記録を読み直す（選び直さない）")
+
+    _TOKS.append(tok)
     per, _ = bc.prepare_periods(body["inputs"], tuple(names), cuts=cuts)
     out = {"frozen": str(fz.resolve().relative_to(ROOT)), "hash": body["hash"], "flag": f"上乗せのあった期間（2016-06-04〜09-04、2017〜2023 年の 6〜12 月）の 2 歳戦で Σ(1/確定の単勝オッズ) < {FLAG_SIGMA}",
            "adjust": f"印のレースの単勝の払戻 × Σ_レース ÷ {NOW_SIGMA}", "note": "買い方は選び直さない。記録の読み直しだけ。", "periods": {}}

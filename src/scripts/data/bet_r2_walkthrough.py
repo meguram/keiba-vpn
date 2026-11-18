@@ -103,7 +103,20 @@ def horse_status(i: int, H: int | None, pw: float, pop: float, r: float, p_min: 
     return "候補（r が ◎ より小さい）" if H is not None else "候補（このレースは見送り）"
 
 
+_TOKS: list = []
+
+
 def build(frozen: Path, seed: int | None = None) -> tuple[str, dict]:
+    """台帳の行を、途中で落ちたときも閉じる（例外は error、Ctrl-C などは aborted。started のまま残さない）。"""
+    try:
+        return _build_inner(frozen, seed)
+    except BaseException as exc:
+        for t in _TOKS:
+            t.__exit__(type(exc), exc, None)
+        raise
+
+
+def _build_inner(frozen: Path, seed: int | None = None) -> tuple[str, dict]:
     from src.config.data_paths import TABLES_DIR
     from src.scripts.data import bet_cycles as bc
 
@@ -131,6 +144,8 @@ def build(frozen: Path, seed: int | None = None) -> tuple[str, dict]:
 
     tok = L.guard(tool="src/scripts/data/bet_r2_walkthrough.py", family="bet_cycles", version=h, period=("2025-01-01", "2025-12-31"),
                   purpose="reproduce", frozen_paths=[frozen], reason="実例のページ（test 2025 の記録の再現を確かめてから例を並べる。判断に使わない）")
+
+    _TOKS.append(tok)
     per, _ = bc.prepare_periods(body["inputs"], ("test",), cuts=cuts)
     p = per["test"]
     res = bc.run_period(p, spec, detail=True)
