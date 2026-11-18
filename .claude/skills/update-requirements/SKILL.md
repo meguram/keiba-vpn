@@ -1,13 +1,13 @@
 ---
 name: update-requirements
-description: Regenerates the single-page product requirements document docs/html/index.html for keiba-vpn from the current git state, code, design docs (DEC/AREA), data layout and task state. Covers requirements, KPIs, architecture diagrams, data/ML workflows, user data-delivery flow, implementation-status matrix (implemented / partial / MOCK / TODO) and a dependency-ordered TODO schedule as the last section. Use when the user runs /update-requirements or asks to update, refresh, or regenerate the requirements/spec overview document.
+description: Regenerates the single-page product requirements document docs/html/02_本番の仕様/要件定義書.html for keiba-vpn from the current git state, code, design docs (DEC/AREA), data layout and task state. Covers requirements, KPIs, architecture diagrams, data/ML workflows, user data-delivery flow, implementation-status matrix (implemented / partial / MOCK / TODO) and a dependency-ordered TODO schedule as the last section. Use when the user runs /update-requirements or asks to update, refresh, or regenerate the requirements/spec overview document.
 ---
 
-keiba-vpn の**要件定義書（`docs/html/index.html`）を、実行時点の最新状態で再生成する**スキル。
+keiba-vpn の**要件定義書（`docs/html/02_本番の仕様/要件定義書.html`）を、実行時点の最新状態で再生成する**スキル。
 この HTML 1 本を読めば、目的・要件・KPI・構成・ワークフロー・ユーザーへの提供フロー・未実装事項のすべてが把握できる状態にするのがゴール。
-書き換える対象は `docs/html/index.html` のみ。**コード・データ・他ドキュメントは変更しない**（コミットもしない）。
+書き換える対象は `docs/html/02_本番の仕様/要件定義書.html` のみ（`docs/html/index.html` は文書の目次で、`python -m src.scripts.docs.build_docs_shelves` が作る生成物。このスキルでは書かない）。**コード・データ・他ドキュメントは変更しない**（コミットもしない）。
 
-> 初回実行時、既存の `index.html`（iframe 型ドキュメントポータル）は要件書に置き換わる。旧ポータルのナビゲーションは §13「関連ドキュメント」が引き継ぐ（旧版は git 履歴に残る）。
+> 2026-11-18 に要件定義書を `docs/html/index.html` から `docs/html/02_本番の仕様/要件定義書.html` に移した（`index.html` は日本語の階層の目次になった）。かつて初回実行時、既存の `index.html`（iframe 型ドキュメントポータル）は要件書に置き換わった。旧ポータルのナビゲーションは §13「関連ドキュメント」が引き継ぐ（旧版は git 履歴に残る）。
 
 ## 絶対ルール
 
@@ -25,7 +25,7 @@ keiba-vpn の**要件定義書（`docs/html/index.html`）を、実行時点の�
 python3 .claude/skills/update-requirements/scripts/collect_state.py > /tmp/keiba_state.json
 ```
 
-出力先は任意の作業用パスでよい（並列実行なら別パスにする）。引数は `--doc <前回版パス>` のみ（既定 `docs/html/index.html`）。未知の引数はエラーになる。
+出力先は任意の作業用パスでよい（並列実行なら別パスにする）。引数は `--doc <前回版パス>` のみ（既定 `docs/html/02_本番の仕様/要件定義書.html`）。未知の引数はエラーになる。
 
 JSON の内容: 前回要件書のメタ（`previous_doc`：前回 commit・既存 TODO 行）／git（現 commit・前回からの差分 `since_prev`）／DEC・AREA 一覧とステータス／`src/` パッケージ規模／全 API ルート（3 層）／フロント全ページ／MLflow モデル・settings／`data/` 構成／cron・Docker・CI・alembic／テスト構成／TODO・mock・stub 痕跡／関連ドキュメント一覧。
 ここで得るのは**下調べ**。最終判定は手順 2・3 で実物を読んで行う。収集結果は網羅性を保証しない。**収集値とソースの再集計が食い違ったら再集計を採用**し、食い違いがあったことを完了報告に一言書く。件数を文書に書く前に、ソースで裏取りする（例: API ルート数は `src/api/flask_app.py` の `register_blueprint` と `src/api/v1/routes/*.py` を、画面数は `frontend/app/**/page.tsx` を `Grep`/`Glob` で数え直す）。
@@ -76,7 +76,7 @@ JSON の内容: 前回要件書のメタ（`previous_doc`：前回 commit・既�
 ### 5. 文書の作成
 
 0. 「全体を再生成」とは、テンプレートから全セクションを組み直すこと。前回版の本文のうち変化が無いと再確認できた文章は再利用してよいが、ずれやすい値（件数・行番号・日付・計測値）は必ずソースから再導出する。
-1. `templates/requirements_template.html` を読み、**`{{...}}` をすべて実内容に置換し、HTML コメント（GUIDE）をすべて削除した実体の HTML** を `docs/html/index.html` に書き出す（CSS・JS・セクション ID と順序は変更しない。既存ファイルがあれば上書き）。
+1. `templates/requirements_template.html` を読み、**`{{...}}` をすべて実内容に置換し、HTML コメント（GUIDE）をすべて削除した実体の HTML** を `docs/html/02_本番の仕様/要件定義書.html` に書き出す（CSS・JS・セクション ID と順序は変更しない。既存ファイルがあれば上書き）。
 2. `{{COMMIT}}` = `git rev-parse --short HEAD`、`{{BRANCH}}` = 現ブランチ、`{{DATE}}` = 実行日（JST, `YYYY-MM-DD`）。未コミット変更があれば §0 に「作業ツリーに未コミット変更あり」と注記する。
 3. 図は外部ライブラリ不要の CSS 部品で描く: レイヤー図 = `.lanes/.lane`、フロー図 = `.flow .node/.arrow`。未実装ノードは `node is-todo`、モックは `node is-mock`（破線）。各ノードに実在するパス/ポート/カテゴリ名を併記する。
 4. セクション構成（固定・この順）:
@@ -92,7 +92,7 @@ JSON の内容: 前回要件書のメタ（`previous_doc`：前回 commit・既�
    - §7 提供フロー: 画面（`frontend_pages` 全件）× 使用 API × データ出所 × 認可 × 状況タグ、更新タイミングと鮮度。
    - §11 実装状況マトリクス: 1 行 = 1 項目（領域・モデル・画面・パイプライン。画面は 1 ページ 1 行）、各行に状況タグをちょうど 1 つ。§11 内に凡例や他のタグを置かない。§0 のカード（`data-card`）はこの表のタグ数と一致させる（`dep` はカードに含めず本文で別記）。
    - 本文中の件数（ルート数・画面数・モック数など）は、表の行数から数えて同じデータから書く。手書きで別々に数えない。
-   - §13 関連ドキュメント: `docs_index` の全件（`docs/decisions/**` と `docs/git_management/**` を含む）を章別に、`docs/html/index.html` からの相対リンク（`../decisions/…`、`../operations/…` 等）で載せる（旧ポータルの代替）。index 外の文書を補足リンクとして足してもよい（バリデータのリンク検査が効く。到達できない補足リンクは落とすかリンクにしない文字列で書く）。載っていない html があればバリデータが警告する。
+   - §13 関連ドキュメント: `docs_index` の全件（`docs/decisions/**` と `docs/git_management/**` を含む）を章別に、`docs/html/02_本番の仕様/要件定義書.html` からの相対リンク（`../../decisions/…`、`../../operations/…`、`../modeling/…` 等。置き場が docs/html の 1 段下であることに注意）で載せる（旧ポータルの代替）。index 外の文書を補足リンクとして足してもよい（バリデータのリンク検査が効く。到達できない補足リンクは落とすかリンクにしない文字列で書く）。載っていない html があればバリデータが警告する。
 
 ### 6. 検証（必須・通るまで直す）
 
@@ -105,5 +105,5 @@ python3 .claude/skills/update-requirements/scripts/validate_requirements.py
 
 ### 7. 完了報告
 
-ユーザーに次を**短く**伝える: 出力先 `docs/html/index.html`、今回の commit、実装済/部分/MOCK/TODO の件数、P0 の TODO 上位 3 件（= §14 の表順で先頭から 3 件の P0）。依存順なので最重要とは限らない場合は「実際の最重要経路は T-xxx → T-yyy」と一文添える、前回からの主な変化（前回版がある場合）。ブラウザで開く場合の案内は不要。
+ユーザーに次を**短く**伝える: 出力先 `docs/html/02_本番の仕様/要件定義書.html`、今回の commit、実装済/部分/MOCK/TODO の件数、P0 の TODO 上位 3 件（= §14 の表順で先頭から 3 件の P0）。依存順なので最重要とは限らない場合は「実際の最重要経路は T-xxx → T-yyy」と一文添える、前回からの主な変化（前回版がある場合）。ブラウザで開く場合の案内は不要。
 **コミットはしない**（するかどうかはユーザー判断）。

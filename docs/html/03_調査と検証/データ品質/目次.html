@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="build_docs_shelves">
+<title>データ品質 — keiba-vpn docs</title><style>
+:root{--bg:#fff;--fg:#1f2430;--mut:#5b6474;--line:#d9dee7;--acc:#2456c9;--chip:#eef2fa;--warn:#a15c00}
+@media (prefers-color-scheme:dark){:root{--bg:#141821;--fg:#e6e9ef;--mut:#9aa3b2;--line:#2c3342;--acc:#7aa9ff;--chip:#1f2635;--warn:#f0b35a}}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.7 system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+main{max-width:1100px;margin:0 auto;padding:16px 16px 64px}
+a{color:var(--acc)}h1{font-size:1.6em;margin:.4em 0}h2{margin-top:1.8em;border-bottom:1px solid var(--line);padding-bottom:.2em}
+.crumb{font-size:.9em;color:var(--mut)}.meta,.src{color:var(--mut);font-size:.88em}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;margin:.5em 0;font-size:.92em}
+th,td{border:1px solid var(--line);padding:4px 8px;vertical-align:top;text-align:left}th{background:var(--chip)}
+.chip{display:inline-block;background:var(--chip);border-radius:4px;padding:0 6px;font-size:.82em;margin-right:4px;white-space:nowrap}
+.old{color:var(--warn)}.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.card{border:1px solid var(--line);border-radius:8px;padding:10px 14px}.card h3{margin:.2em 0}
+details{margin:.6em 0}summary{cursor:pointer}.mdsec{border-left:3px solid var(--line);padding-left:12px;margin:.6em 0}
+</style></head><body><main>
+<nav class="crumb"><a href="../../index.html">目次</a> ／ <a href="../目次.html">調査と検証</a> ／ データ品質</nav>
+<h1>データ品質</h1>
+<p class="meta">生成物（<code>python -m src.scripts.docs.build_docs_shelves</code>。手で直さない）。</p>
+<p>データの欠け・誤り・ずれの調査と検査。</p>
+<h2>データと文書の食い違い</h2><p>データ品質の既知の問題と、文書どうし・文書とコードの食い違いの一覧。（いちばん新しく更新された現行の文書: <a href="../../modeling/chapters/feature_gap_audit.html">特徴量のやり残しの棚卸し（モデルを作り直す前に）</a>、2026-11-10）</p><div class="tw"><table><thead><tr><th>更新日</th><th>文書</th><th>種類</th><th>説明</th></tr></thead><tbody><tr><td>2026-11-10</td><td><a href="../../modeling/chapters/feature_gap_audit.html">特徴量のやり残しの棚卸し（モデルを作り直す前に）</a></td><td><span class="chip">結果</span></td><td>モデルを作り直す前の特徴量のやり残しの棚卸し。試した群の採否・増分の総括、V5 の列の由来、schema_defs.json 42 カテゴリの未使用データ（非 JRA の過去走・馬ごとの区間ラップ・母側きょうだい・併せ馬）、実行中の調査（v6・交互作用・予想家）と重なるものの除外、やり残し候補 13 個（見込み・必要データ・先読みリスク・工数・2 段階の評価計画）と、再学習の前にやるもの・後でよいもの。特徴量 1 群の見込み（≤0.0006）より 2026 年を含めた再学習の設計のほうが効く可能性が高い、という整理。</td></tr><tr><td>2026-10-22</td><td><a href="../../modeling/chapters/drift_diagnosis.html">ドリフト診断：2026 年にモデルと市場の差が開いた原因の切り分けと、週次監視の設計</a></td><td><span class="chip">結果</span></td><td>ドリフト診断：2026 年（テストセット②）にモデルと市場の勝率 LogLoss の差が開いた原因の切り分けと、週次監視の設計。差の拡大は 6〜10 月（同季節の基準に対して +0.0080、z=5.6）で、市場側・構成・季節・較正では説明できず、予測の尖り（順位付け）が落ちた形。調教ページ（horse_training）の被覆が 4 月から崩れ（4 月 79%・5 月 18%・6〜9 月 5〜6%）、調教系の特徴量 87 列が約 95% の行で欠損のまま予測されていた。欠損の再現実験、固定モデルの経年、寄与の概算。週次監視（直近 8 週の窓＋累積、EWMA/CUSUM、ラベルなしの先行指標、4 段階の警報、層別の FDR、v4/v5 shadow）の設計と、2025〜2026 年の各週へのバックテスト（2025 年の誤警報 3.8%）。</td></tr><tr><td>2026-10-22</td><td><a href="../../modeling/chapters/course_master_verification.html">JRA コース形状マスタの検証記録</a></td><td><span class="chip">ログ</span></td><td>JRA コース形状マスタ（108 コース）の検証記録。3 つの独立収集の突き合わせ、一次資料での再確認と訂正。</td></tr><tr><td>2026-10-21</td><td><a href="../../data/data_quality_issues.html">データ品質の既知の問題と対応</a></td><td><span class="chip">参照</span></td><td>2026-10-13〜20 に見つかったデータ・実装の問題（払戻の連結、2025 年のオッズ破損、出馬表フラットの潰れ、追い切りの空保存など）を、解決済みと未解決に分けてまとめたもの。再発を防ぐ検査の仕組みも。</td></tr><tr><td>2026-11-18</td><td><a href="../../../operations/docs_inconsistencies_20261118.md">文書の食い違い・古い記述の一覧（2026-11-18）</a></td><td><span class="chip">md・設定</span></td><td>docs/operations/docs_inconsistencies_20261118.md</td></tr><tr><td>2026-11-17</td><td><a href="../../../operations/data_audit_20261116.md">データの監査（2026-11-16）</a></td><td><span class="chip">md・設定</span></td><td>docs/operations/data_audit_20261116.md</td></tr></tbody></table></div>
+</main></body></html>

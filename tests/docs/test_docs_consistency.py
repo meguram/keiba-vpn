@@ -46,8 +46,14 @@ def _is_fitted(ref: str) -> bool:
     return False
 
 
+def _generated(p: Path) -> bool:
+    """build_docs_shelves の生成物（目次・まとめのページ）。元の記録の文をそのまま写すので、パスの検査は元の文書の側で行う
+    （生成物のリンク切れは tests/scripts/test_build_docs_shelves.py が見る）。"""
+    return '<meta name="generator" content="build_docs_shelves">' in p.read_text(encoding="utf-8", errors="ignore")[:2000]
+
+
 def _pages() -> list[Path]:
-    return [p for p in DOCS.rglob("*.html") if p.name != "book.html" and "node_modules" not in p.parts]
+    return [p for p in DOCS.rglob("*.html") if p.name != "book.html" and "node_modules" not in p.parts and not _generated(p)]
 
 
 def _text(p: Path) -> str:

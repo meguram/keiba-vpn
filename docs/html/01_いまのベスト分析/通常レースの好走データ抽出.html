@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="build_docs_shelves">
+<title>通常レースの好走データ抽出（全レース版） — keiba-vpn docs</title><style>
+:root{--bg:#fff;--fg:#1f2430;--mut:#5b6474;--line:#d9dee7;--acc:#2456c9;--chip:#eef2fa;--warn:#a15c00}
+@media (prefers-color-scheme:dark){:root{--bg:#141821;--fg:#e6e9ef;--mut:#9aa3b2;--line:#2c3342;--acc:#7aa9ff;--chip:#1f2635;--warn:#f0b35a}}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.7 system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+main{max-width:1100px;margin:0 auto;padding:16px 16px 64px}
+a{color:var(--acc)}h1{font-size:1.6em;margin:.4em 0}h2{margin-top:1.8em;border-bottom:1px solid var(--line);padding-bottom:.2em}
+.crumb{font-size:.9em;color:var(--mut)}.meta,.src{color:var(--mut);font-size:.88em}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;margin:.5em 0;font-size:.92em}
+th,td{border:1px solid var(--line);padding:4px 8px;vertical-align:top;text-align:left}th{background:var(--chip)}
+.chip{display:inline-block;background:var(--chip);border-radius:4px;padding:0 6px;font-size:.82em;margin-right:4px;white-space:nowrap}
+.old{color:var(--warn)}.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.card{border:1px solid var(--line);border-radius:8px;padding:10px 14px}.card h3{margin:.2em 0}
+details{margin:.6em 0}summary{cursor:pointer}.mdsec{border-left:3px solid var(--line);padding-left:12px;margin:.6em 0}
+</style></head><body><main>
+<nav class="crumb"><a href="../index.html">目次</a> ／ <a href="目次.html">いまのベスト分析</a> ／ 通常レースの好走データ抽出（全レース版）</nav>
+<h1>通常レースの好走データ抽出（全レース版）</h1>
+<p class="meta">生成物（<code>python -m src.scripts.docs.build_docs_shelves</code>。手で直さない）。元の記録（最終コミット日）: <a href="../../ideas/course_class_handicapper.md">course_class_handicapper.md</a>（2026-11-18）</p>
+<p>全レース（コース × クラスの群 × 良馬場）の好走データ抽出の今の結論と、版ごと（第 1〜3 版）の結果の年表。元は docs/ideas/course_class_handicapper.md と data/meta/course の HTML。</p>
+<h2 id="conclusion">1. 結論（担当の記録）</h2>
+<ul>
+<li>今の最良: 第 3 版のサイクル 17（2026-11-17 に凍結、049da502）。</li>
+<li>◎ は、根拠の検査を通り、訓練の期間に市場の勝率より多く勝った条件で選ぶ。</li>
+<li>消しは、切り口 2 つまでの組。消した馬は ◎ にしない。</li>
+<li>買うのは、◎ が発走前で 3 番人気以内のときだけ。</li>
+<li>成績（本番の再現）:</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>期間</th>
+<th>位置づけ</th>
+<th>◎ のレース</th>
+<th>勝率</th>
+<th>単勝の回収率</th>
+<th>複勝の回収率</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>訓練 2016〜2024</td>
+<td>当てはめ</td>
+<td>2,295</td>
+<td>62.2%</td>
+<td>202.5%</td>
+<td>—</td>
+</tr>
+<tr>
+<td>2025 年</td>
+<td>試行錯誤に使った期間</td>
+<td>284</td>
+<td>34.2%</td>
+<td>90.9%</td>
+<td>84.2%</td>
+</tr>
+<tr>
+<td>2026 年</td>
+<td>凍結の後に 1 回。2025・2026 年を見るのは 3 回目</td>
+<td>250</td>
+<td>25.0%</td>
+<td>61.7%（56〜69%）</td>
+<td>80.2%</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>根拠: 公開の情報の条件は、根拠の検査を通っても、オッズに織り込まれている（§11）。</li>
+<li>限界: 目標の 120% に届かない。偏りの少ない期間では 60〜80%。単位ごとの値は data/meta/graded/rules_overview.html。</li>
+</ul><p class="src">元: <a href="../../ideas/course_class_handicapper.md">course_class_handicapper.md</a> の best の印の中（担当のセッションが書く）。</p>
+<h2 id="timeline">2. 評価・結果の年表</h2>
+<div class="tw"><table><thead><tr><th>節</th><th>見出し（日付・評価の回を含む）</th></tr></thead><tbody><tr><td>7.</td><td>7. 結果（2026-11-17、凍結 306ee784・評価 1 回）</td></tr><tr><td>9.</td><td>9. 第 2 版の結果（2026-11-17、凍結 a1c4ff90・評価 1 回。2025・2026 年を見るのは 2 回目）</td></tr><tr><td>11.</td><td>11. 第 3 版の結果と結論（2026-11-17。凍結 049da502・2026 年を 1 回。2025・2026 年を見るのは 3 回目）</td></tr></tbody></table></div>
+<p class="src">元: <a href="../../ideas/course_class_handicapper.md">course_class_handicapper.md</a> の「結果」を含む見出し（文書の順）。</p>
+<details><summary>各回の結果の節（全文）</summary><div class="mdsec"><h2>7. 結果（2026-11-17、凍結 306ee784・評価 1 回）</h2>
+<table>
+<thead>
+<tr>
+<th>値</th>
+<th>当てはめ 2016〜2024 年（条件を探した走）</th>
+<th>評価 2025・2026 年（1 回だけ）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>◎ を出したレース</td>
+<td>99.9%（19,906 回）</td>
+<td>100%（4,390 回）</td>
+</tr>
+<tr>
+<td>◎ 勝率</td>
+<td>39.0%</td>
+<td>21.9%</td>
+</tr>
+<tr>
+<td>◎ 複勝率</td>
+<td>94.8%</td>
+<td>50.5%</td>
+</tr>
+<tr>
+<td>◎ 単回収</td>
+<td>212.6%</td>
+<td>79.6%</td>
+</tr>
+<tr>
+<td>◎ 複回収</td>
+<td>213.1%</td>
+<td>81.3%</td>
+</tr>
+<tr>
+<td>消しを付けたレース</td>
+<td>1.6%</td>
+<td>1.9%（82 回）</td>
+</tr>
+<tr>
+<td>消しの的中（4 着以下）</td>
+<td>100%（定義上）</td>
+<td>85.7%（328 頭）</td>
+</tr>
+<tr>
+<td>ゴールを満たした単位</td>
+<td>265 / 332</td>
+<td>19 / 315（5 回以上 ◎ を出した単位）</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>当てはめと評価の差が、過学習の大きさ。◎ の勝率は半分、回収率は 213% → 80% に落ちた。</li>
+<li>買いの条件は 1 単位に数百〜千個あり、1 つの条件は 10〜20 走の小さな集まり。複勝率 70% 以上・回収率 100% 超を満たす集まりを選んでいるので、ほとんどが偶然の当たり。</li>
+<li>30 回以上 ◎ を出した 38 単位のうち、評価で単回収が 100% を超えたのは 8 単位。単位ごとの値は早見表のカードにある（回数が少ないので、良い単位も偶然の幅が大きい）。</li>
+<li>消しは、2016〜2021 年で探し 2022〜2024 年で確かめた選び直しでも、評価でも、的中は 85% 前後。目標の 95% には届かない。</li>
+<li>14 頭立てなら、どの馬でも約 8 割が 4 着以下。「3 着以内 0」の条件の上乗せは小さい。</li>
+<li>消しの選び直し（<code>kill_select</code>、サイクル 21）は、20 サイクルの後・凍結の前に足した段。</li>
+<li>評価の 1 回目は、作業場所に表が無くて、計算の前に止まった。結果は計算していない。止まった印は course_out/EVALUATED_COURSE.aborted.json に残した。</li>
+<li>その後、データのつながった作業場所（凍結の commit の取り出し）で 1 回だけ流した。子の最大メモリは 14.9GB、17 分。</li>
+<li>次の版の課題（ユーザーの判断）:</li>
+<li>条件の数を絞る（走数の下限を上げる、条件の数に上限を設ける）。</li>
+<li>単位を大きくする（コースの群）。</li>
+<li>2016〜2024 年の中で時間で分けた確かめを採否に使う（当てはめだけで採らない）。</li>
+<li>消しは、別の作り（下位の確率の推定など）にする。</li>
+</ul></div><div class="mdsec"><h2>9. 第 2 版の結果（2026-11-17、凍結 a1c4ff90・評価 1 回。2025・2026 年を見るのは 2 回目）</h2>
+<p><strong>注意: 確認の期間（2022〜2024）で条件と絞り込みを選んだので、確認の値は高めに出る。偏りのない値は 2025・2026 年の評価だけ。</strong></p>
+<p>凍結した版（サイクル 21）:
+- 発見: 群 3・深さ 2・主 20 回
+- 確認: 買い 3 走以上・単の回収率 100% 超、消しは発見で 2 つの AND まで・確認 10 走以上・的中 95%
+- 絞り込み: 発走前のオッズ 3 倍以上・1 番人気を外す・期待値 1.2 以上</p>
+<table>
+<thead>
+<tr>
+<th>期間</th>
+<th>◎ を買ったレース（割合）</th>
+<th>◎ 勝率</th>
+<th>◎ 連対率</th>
+<th>◎ 複勝率</th>
+<th>単回収</th>
+<th>複回収</th>
+<th>消しの的中</th>
+<th>消しを付けたレース</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>発見 2016〜2021</td>
+<td>表は HTML</td>
+<td></td>
+<td></td>
+<td></td>
+<td>186.1%</td>
+<td></td>
+<td>100%（定義上）</td>
+<td></td>
+</tr>
+<tr>
+<td>確認 2022〜2024（本番の再現）</td>
+<td>2,717（39.9%）</td>
+<td>41.2%</td>
+<td>61.1%</td>
+<td>79.4%</td>
+<td>317.1%</td>
+<td>184.7%</td>
+<td>96.9%</td>
+<td>79.0%</td>
+</tr>
+<tr>
+<td>評価 2025〜2026（本番の再現、20 通りの平均）</td>
+<td>1,893（43.1%）</td>
+<td>12.5%</td>
+<td>26.7%</td>
+<td>39.2%</td>
+<td>76.8%（75.3〜78.0%）</td>
+<td>81.4%</td>
+<td>87.2%</td>
+<td>78.6%</td>
+</tr>
+<tr>
+<td>評価 2025〜2026（楽観 = 確定オッズで判定）</td>
+<td>1,788（40.7%）</td>
+<td>11.4%</td>
+<td>24.7%</td>
+<td>36.7%</td>
+<td>77.2%</td>
+<td>80.4%</td>
+<td>87.2%</td>
+<td>78.6%</td>
+</tr>
+<tr>
+<td>評価 2025〜2026（絞り込みなし）</td>
+<td>3,150（71.8%）</td>
+<td>21.4%</td>
+<td>38.7%</td>
+<td>52.2%</td>
+<td>75.7%</td>
+<td>84.0%</td>
+<td>87.2%</td>
+<td>78.6%</td>
+</tr>
+<tr>
+<td>評価: 2026 年の発走前オッズのあるレース（本物の T-60、156R）</td>
+<td>60</td>
+<td>20.0%</td>
+<td>31.7%</td>
+<td>45.0%</td>
+<td>113.7%</td>
+<td>81.7%</td>
+<td>86.6%</td>
+<td>70.5%</td>
+</tr>
+<tr>
+<td>第 1 版の評価（参考）</td>
+<td>4,390（100%）</td>
+<td>21.9%</td>
+<td>—</td>
+<td>50.5%</td>
+<td>79.6%</td>
+<td>81.3%</td>
+<td>85.7%</td>
+<td>1.9%</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>ゴール（確認でも評価でも、変わらず回収率 100% 超）には届かなかった。評価の単回収は 77%（区間 75〜78%）で、第 1 版（80%）と変わらない。</li>
+<li>確認の 317% との差が、確認の期間で選んだことによる偏りの大きさ。</li>
+<li>時間で分けて採っても、条件の数が多く、1 つは小さい集まり。確認の期間の偶然を拾っている。</li>
+<li>オッズの絞り込みは、評価では効かなかった（絞り込みなし 75.7% → 76.8%）。</li>
+<li>勝率は 21.4% → 12.5% に下がり、人気薄の ◎ が勝てていない。</li>
+<li>しきい値の隣の版も 76.5〜77.1% で、しきい値の近くに左右されてはいない。</li>
+<li>本物の T-60 の 156R（◎ は 60 回）は単回収 113.7% だが、60 回の勝ち数 12 回で、偶然の幅が大きい（参考）。</li>
+<li>消しは、評価でも的中 87.2%・消しを付けたレース 78.6%。目標の 95% には届かない。ただ、第 1 版（85.7%・1.9%）より広く付けられた。</li>
+<li>どの馬でもおよそ 8 割が 4 着以下になるので、上乗せは約 7 ポイント。</li>
+<li>評価で ◎ を 20 回以上買った 9 単位のうち、単回収 100% 超は 2 単位（HTML の単位ごとの表）。</li>
+<li>本番の再現と楽観の差は、評価ではほぼ無い（76.8% と 77.2%）。確認の期間では 10〜22 ポイントの差があった。これは、確定オッズで選んだ境目の偏りが、確認の期間に効いていたことを示す。</li>
+<li>次の版への読み（ユーザーの判断）:</li>
+<li>小さい集まりの条件を足し合わせる作りでは、時間で分けても、確認の期間の偶然を拾う。</li>
+<li>条件の数を大きく絞る、単位をまとめる、確認の期間をさらに分けて採否する（入れ子）などの手当てが要る。</li>
+</ul></div><div class="mdsec"><h2>11. 第 3 版の結果と結論（2026-11-17。凍結 049da502・2026 年を 1 回。2025・2026 年を見るのは 3 回目）</h2>
+<p>凍結した版（サイクル 17）:
+- 根拠の検査を通った条件のうち、訓練で市場の勝率を上回って勝つ条件（勝ち数 ÷ 市場の勝率 1.2 以上・偶然の見込み 5% 以下）だけで ◎ を作る。
+- 消しは 2 つの AND まで探し、消した馬は ◎ にしない。
+- ◎ が発走前の 3 番人気以内のときだけ買う。</p>
+<table>
+<thead>
+<tr>
+<th>期間</th>
+<th>◎ のレース（割合）</th>
+<th>勝率</th>
+<th>連対率</th>
+<th>複勝率</th>
+<th>単回収</th>
+<th>複回収</th>
+<th>単（上位 5 件除く）</th>
+<th>消しの的中</th>
+<th>消しのレース</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>訓練 2016〜2024（本番の再現）</td>
+<td>2,295</td>
+<td>62.2%</td>
+<td></td>
+<td></td>
+<td>202.5%</td>
+<td>127.5%</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>2025 年（試行錯誤に使った期間・再現）</td>
+<td>284（12.2%）</td>
+<td>34.2%</td>
+<td>52.5%</td>
+<td>63.8%</td>
+<td>90.9%</td>
+<td>84.2%</td>
+<td>79.5%</td>
+<td>85.7%</td>
+<td>81.2%</td>
+</tr>
+<tr>
+<td><strong>2026 年（封印・再現、区間）</strong></td>
+<td>250（12.1%）</td>
+<td>25.0%</td>
+<td>46.0%</td>
+<td>61.3%</td>
+<td><strong>61.7%（56〜69%）</strong></td>
+<td>80.2%</td>
+<td>50.5%</td>
+<td>85.4%</td>
+<td>81.8%</td>
+</tr>
+<tr>
+<td>2026 年（楽観）</td>
+<td>265</td>
+<td>24.2%</td>
+<td>45.3%</td>
+<td>60.0%</td>
+<td>60.4%</td>
+<td>78.9%</td>
+<td>50.0%</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>2026 年（絞り込みなし）</td>
+<td>346</td>
+<td>19.7%</td>
+<td>38.7%</td>
+<td>52.6%</td>
+<td>68.8%</td>
+<td>79.5%</td>
+<td>43.9%</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>2026 年の本物の T-60（156R、◎ 26 回）</td>
+<td>26</td>
+<td>42.3%</td>
+<td>53.8%</td>
+<td>57.7%</td>
+<td>103.5%</td>
+<td>72.3%</td>
+<td>49.2%</td>
+<td>86.0%</td>
+<td>77.6%</td>
+</tr>
+</tbody>
+</table>
+<p>結論:
+- <strong>目標（2025 年で 120% 超）には届かなかった。</strong> 2025 年の最良は 90.9%（284 レース）。
+- <strong>封印した 2026 年では 61.7% に下がった。</strong> 2025 年の 90.9% との差は、2025 年を見ながら 20 本の中から選んだ偏りの大きさ。
+  - 第 1 版の 80%・第 2 版の 77% と比べても、下回る。
+  - 本物の T-60 の 103.5% は ◎ 26 回・11 勝の値で、偶然の幅が大きく、参考にとどまる。
+- 事象と根拠（20 本で分かったこと）:
+  - 公開の情報（前走の成績・騎手・厩舎・適性など）の条件は、根拠の検査を通っても、オッズに織り込まれている。◎ は当たるが、回収率は控除後の市場の平均（約 80%）に張り付く（1〜10 本目）。
+  - 本命・大穴の偏りの向きは、どの期間でも成り立った。人気薄に絞ると下がり、上位人気に絞ると少し上がる（3・6 本目）。公開の研究とも合う（arXiv 2509.14645、神戸大の調査）。
+  - 市場の勝率を上回って勝つ条件（ずれの物差し）は、2025 年では効いた（81% → 86% → 91%）。2026 年には持ち越せなかった。訓練のずれの大半は、訓練の勝ちで選んだ偶然だった（訓練の勝率 60% → 2025 年 34% → 2026 年 25%）。
+  - 消しは、2 つの AND まで探すと、どの年も 8 割のレースに付き、的中 85〜86%（どの馬でも約 8 割が 4 着以下なので、上積みは約 6 ポイント）。目標の 95% には届かない。
+- 見立て:
+  - 公開の情報の条件と確定オッズの物差しでは、偏りのない期間で 60〜80% にとどまる。120% は届かない。
+- 次に何があれば届きうるか（ユーザーの判断）:
+  1. model-improve-cycles のずれ r（市場の勝率 q からのずれを学習したモデル）との組み合わせ。2 期間で向きがそろった帯（未勝利・新馬・15〜18 頭）で、r の大きい馬を ◎ の候補にする。
+  2. 発走前のオッズの蓄積。公開の研究では、締め切り前にオッズが下がった馬は、同じ確定オッズの馬より回収率が高い（arXiv 2509.14645）。今は 2026 年の 284R だけで、過去の年で確かめられない。
+  3. 偶然の見込みを、探索の多重性まで含めて数え直す（§10.4）。</p></div></details>
+<h2 id="links">3. 詳細へのリンク（調査の HTML）</h2>
+<div class="tw"><table><thead><tr><th>文書</th><th>更新日</th><th>大きさ</th></tr></thead><tbody><tr><td><a href="../../../data/meta/course/course_cycles.html">全レース版の分析サイクル</a></td><td>2026-11-17</td><td>13 KB</td></tr><tr><td><a href="../../../data/meta/course/course_playbook.html">全レース版の早見表</a></td><td>2026-11-17</td><td>628 KB</td></tr><tr><td><a href="../../../data/meta/course/course_v2.html">全レース版 第 2 版</a></td><td>2026-11-17</td><td>30 KB</td></tr><tr><td><a href="../../../data/meta/course/course_v3_cycles.html">全レース版 第 3 版</a></td><td>2026-11-18</td><td>149 KB</td></tr><tr><td><a href="../../ideas/course_class_handicapper.md">計画と経過の記録（md）</a></td><td>2026-11-18</td><td>29 KB</td></tr></tbody></table></div>
+</main></body></html>

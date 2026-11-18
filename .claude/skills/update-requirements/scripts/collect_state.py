@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """keiba-vpn の現在状態（git / コード / 設計 / データ / TODO 痕跡）を静的に収集して JSON 出力する。
 
-要件定義書 docs/html/index.html を更新するための「事実の下調べ」専用。重いデータ本体
+要件定義書 docs/html/02_本番の仕様/要件定義書.html を更新するための「事実の下調べ」専用。重いデータ本体
 （data/ 配下の Parquet/JSON）は読まず、ディレクトリ存在・直下件数のみを見る。
 
 Usage:
     python3 .claude/skills/update-requirements/scripts/collect_state.py > /tmp/keiba_state.json
-    python3 .../collect_state.py --doc PATH   # 前回版を docs/html/index.html 以外から読む（検証用）
+    python3 .../collect_state.py --doc PATH   # 前回版を docs/html/02_本番の仕様/要件定義書.html 以外から読む（検証用）
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
-REQ_DOC = ROOT / "docs/html/index.html"
+REQ_DOC = ROOT / "docs/html/02_本番の仕様/要件定義書.html"
 ENDPOINT_SCRIPT = ROOT / ".claude/skills/evaluate-keiba-architecture/scripts/collect_endpoints.py"
 
 SKIP_DIRS = {"node_modules", ".next", "__pycache__", ".git", "catboost_info", ".venv", "venv"}
@@ -247,7 +247,7 @@ def todo_markers(limit_per_file: int = 3, limit_total: int = 120) -> dict:
 def docs_index() -> list[dict]:
     rows = []
     for p in sorted((ROOT / "docs/html").rglob("*.html")):
-        if p.name == "index.html":
+        if p == REQ_DOC or p.name in ("index.html", "目次.html"):   # 要件書自身と、生成の目次（build_docs_shelves）は除く
             continue
         rows.append({"file": _rel(p), "title": _title(p)})
     for p in sorted((ROOT / "docs/decisions").glob("*.html")):
@@ -274,7 +274,7 @@ def task_docs() -> list[dict]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="keiba-vpn の現状を JSON で stdout に出力する（要件書更新の下調べ）")
-    ap.add_argument("--doc", type=Path, default=REQ_DOC, help="前回版の要件書パス（既定: docs/html/index.html）")
+    ap.add_argument("--doc", type=Path, default=REQ_DOC, help="前回版の要件書パス（既定: docs/html/02_本番の仕様/要件定義書.html）")
     doc = ap.parse_args().doc.resolve()
     prev = previous_doc(doc)
     state = {
