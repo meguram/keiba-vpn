@@ -1,0 +1,311 @@
+"""データの見た回数の台帳（src/ops/data_ledger.py）。出力先を変えても 2 回目の確かめが拒否されること等。"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import threading
+from pathlib import Path
+
+import pytest
+
+from src.ops import data_ledger as L
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.fixture()
+def led(tmp_path, monkeypatch):
+    monkeypatch.setenv("KEIBA_LEDGER_SHARED", str(tmp_path / "shared" / "ledger.jsonl"))
+    monkeypatch.setenv("KEIBA_LEDGER_GIT", str(tmp_path / "git" / "ledger.jsonl"))
+    (tmp_path / "shared").mkdir()
+    monkeypatch.delenv("KEIBA_LEDGER_MODE", raising=False)
+    return tmp_path
+
+
+def _enforce(monkeypatch):
+    monkeypatch.setenv("KEIBA_LEDGER_MODE", "enforce")
+
+
+def _g(**kw):
+    base = dict(tool="t.py", family="bet_cycles", version="abc123", period=("2025-01-01", "2025-12-31"), purpose="confirm")
+    base.update(kw)
+    return L.guard(**base)
+
+
+def test_second_confirm_is_denied_even_if_output_dir_changes(led, monkeypatch, tmp_path):
+    _enforce(monkeypatch)
+    out1 = tmp_path / "out1"
+    with _g() as tok:
+        tok.finish(result_path=out1)
+    # 出力先（result_path・環境変数）は鍵に入らない: 同じ対象・同じ期間の 2 回目は拒否
+    monkeypatch.setenv("PTRAIN_OUT", str(tmp_path / "other"))
+    with pytest.raises(L.LedgerDenied):
+        _g()
+    rows = L.load_rows()
+    assert [r["decision"] for r in rows if r.get("kind") == "start"] == ["allowed", "denied"]
+
+
+def test_second_confirm_is_warned_in_warn_mode(led, capsys):
+    _g().finish()
+    tok = _g()
+    assert tok.decision.decision == "warned"
+    assert "confirm_again" in tok.decision.violations[0]
+    assert "決まりの外" in capsys.readouterr().err
+
+
+def test_shifted_window_overlapping_counts_as_same_period(led, monkeypatch):
+    _enforce(monkeypatch)
+    _g(period=("2025-01-01", "2025-06-30")).finish()
+    with pytest.raises(L.LedgerDenied):
+        _g(period=("2025-06-30", "2025-12-31"))          # 1 日だけ重なる
+    _g(period=("2026-01-05", "2026-03-31")).finish()     # 重ならない（別の期間）は通る
+
+
+def test_new_version_same_family_is_downgraded_to_eval_only(led, monkeypatch):
+    _enforce(monkeypatch)
+    _g(version="v1").finish()
+    tok = _g(version="v2")
+    assert tok.purpose == "eval_only" and tok.decision.decision == "downgraded"
+    assert tok.summary()["use_for_decision"] is False
+    assert tok.summary()["seen_family"] == 1
+
+
+def test_eval_only_then_confirm_same_target_downgrades(led, monkeypatch):
+    _enforce(monkeypatch)
+    _g(purpose="eval_only", reason="下見ではなく報告のため").finish()
+    assert _g().purpose == "eval_only"
+
+
+def test_select_on_sealed_is_denied_and_dev_period_is_free(led, monkeypatch):
+    _enforce(monkeypatch)
+    with pytest.raises(L.LedgerDenied):
+        _g(purpose="select", period=("2024-01-01", "2026-03-31"))
+    tok = _g(purpose="select", period=("2016-01-01", "2021-12-31"))
+    assert tok.id is None and tok.decision.decision == "skipped"          # 開発の期間は記録しない
+    tok = _g(purpose="select", period=("2022-01-01", "2024-12-31"))
+    assert tok.decision.decision == "allowed" and tok.id                   # 開発の検証は記録だけ
+
+
+def test_eval_only_requires_reason_and_is_counted(led, monkeypatch):
+    _enforce(monkeypatch)
+    with pytest.raises(L.LedgerDenied):
+        _g(purpose="eval_only")
+    _g(purpose="eval_only", reason="報告の表のため").finish()
+    _g(purpose="eval_only", reason="もう一度", version="zz").finish()
+    c = L.tally(L.load_rows(), ("2025-01-01", "2025-12-31"), "bet_cycles")
+    assert c["total"] == 2 and c["by_purpose"]["eval_only"] == 2
+
+
+def test_forward_period_allows_repeated_eval_but_denies_select(led, monkeypatch):
+    _enforce(monkeypatch)
+    for _ in range(3):
+        _g(family="frozen_tracking", purpose="forward", period=("2026-11-21", "2026-11-30")).finish()
+    with pytest.raises(L.LedgerDenied):
+        _g(family="frozen_tracking", purpose="select", period=("2026-11-21", "2026-11-30"))
+    with pytest.raises(L.LedgerDenied):                                    # forward は封印の期間に使えない
+        _g(family="frozen_tracking", purpose="forward", period=("2026-11-01", "2026-11-30"))
+
+
+def test_another_worktree_sees_shared_copy(led, monkeypatch, tmp_path):
+    """別の worktree（git の台帳が空）から呼んでも、共有の写しで拒否される。"""
+    _enforce(monkeypatch)
+    _g().finish()
+    monkeypatch.setenv("KEIBA_LEDGER_GIT", str(tmp_path / "other_worktree" / "ledger.jsonl"))
+    with pytest.raises(L.LedgerDenied):
+        _g()
+
+
+def test_git_copy_alone_still_counts(led, monkeypatch, tmp_path):
+    """共有の写しが作り直されても、git の台帳に残った行で数える（ホストの故障に備える）。"""
+    _enforce(monkeypatch)
+    _g().finish()
+    (tmp_path / "shared" / "ledger.jsonl").unlink()
+    with pytest.raises(L.LedgerDenied):
+        _g()
+
+
+def test_enforce_without_shared_dir_is_denied(led, monkeypatch, tmp_path):
+    _enforce(monkeypatch)
+    monkeypatch.setenv("KEIBA_LEDGER_SHARED", str(tmp_path / "nowhere" / "ledger.jsonl"))
+    with pytest.raises(L.LedgerDenied):
+        _g()
+
+
+def test_env_cannot_lower_enforce(led, monkeypatch, tmp_path):
+    pol = json.loads(L.POLICY.read_text(encoding="utf-8"))
+    pol["enforce_families"] = ["bet_cycles"]
+    p = tmp_path / "policy.json"
+    p.write_text(json.dumps(pol), encoding="utf-8")
+    monkeypatch.setenv("KEIBA_LEDGER_POLICY", str(p))
+    monkeypatch.setenv("KEIBA_LEDGER_MODE", "warn")
+    _g().finish()
+    with pytest.raises(L.LedgerDenied):
+        _g()
+    assert _g(family="course").decision.mode == "warn"                     # 他の系統は warn のまま
+
+
+def test_crash_rerun_allowed_but_finished_run_counts(led, monkeypatch):
+    _enforce(monkeypatch)
+    with pytest.raises(RuntimeError):
+        with _g():
+            raise RuntimeError("途中で落ちた")
+    with _g() as tok:                                                     # 道具が書いた error で結果が無い: 再実行を許す
+        assert tok.decision.decision == "allowed"
+    with pytest.raises(L.LedgerDenied):
+        _g()
+
+
+def test_started_without_finish_counts(led, monkeypatch):
+    """終わりの行が無い（強制終了など）は 1 回と数える。"""
+    _enforce(monkeypatch)
+    _g()
+    with pytest.raises(L.LedgerDenied):
+        _g()
+
+
+def test_check_dates_outside_declared_period(led, monkeypatch, capsys):
+    tok = _g(period=("2026-01-05", "2026-10-12"))
+    tok.check_dates(["2026-01-05", "2026-10-12"])                         # 内側は通る
+    tok.check_dates(["2026-01-05", "2026-11-08"])                         # warn: 記録して続ける
+    assert "はみ出して" in capsys.readouterr().err
+    assert [r["violation"] for r in L.load_rows() if r.get("kind") == "violation"] == ["range_outside"]
+    _enforce(monkeypatch)
+    tok2 = _g(version="x2", period=("2025-01-01", "2025-12-31"))
+    with pytest.raises(L.LedgerDenied):
+        tok2.check_dates(["2025-03-01", "2026-01-04"])
+    tok3 = _g(version="x3", family="course", period=("2025-01-01", "2025-12-31"))
+    tok3.check_race_ids(["202501010101", "202509010101"])
+    with pytest.raises(L.LedgerDenied):
+        tok3.check_race_ids(["202501010101", "202605010101"])
+
+
+def test_frozen_dirty_is_violation(led, monkeypatch, tmp_path):
+    _enforce(monkeypatch)
+    f = tmp_path / "frozen.json"
+    f.write_text("{}", encoding="utf-8")
+    with pytest.raises(L.LedgerDenied, match="frozen_dirty"):
+        _g(frozen_paths=[f])
+    tracked = ROOT / "config/settings.yaml"                                # git 管理で変更の無いファイル
+    tok = _g(version="clean", frozen_paths=[tracked])
+    assert not any("frozen_dirty" in v for v in tok.decision.violations)
+
+
+def test_concurrent_writes_do_not_break_lines(led):
+    def w(i):
+        for j in range(20):
+            L.write_row({"id": f"c{i}-{j}", "kind": "note", "at": "2026-11-18T00:00:00+09:00", "x": "あ" * 200}, strict_shared=False)
+    ts = [threading.Thread(target=w, args=(i,)) for i in range(4)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert len(L.load_rows()) == 80
+
+
+def test_check_append_only():
+    base = '{"id":"a"}\n{"id":"b"}\n'
+    assert L.check_append_only(base, base + '{"id":"c"}\n') == []
+    assert L.check_append_only(base, '{"id":"c"}\n{"id":"b"}\n{"id":"a"}\n') == []   # union の並び替えは可
+    assert L.check_append_only(base, '{"id":"a"}\n{"id":"B"}\n') == ['{"id":"b"}']
+
+
+def test_union_merge_attribute():
+    r = subprocess.run(["git", "-C", str(ROOT), "check-attr", "merge", "config/data_access/ledger.jsonl"], capture_output=True, text=True)
+    assert r.stdout.strip().endswith("union")
+
+
+def test_tests_never_write_real_ledgers(monkeypatch):
+    monkeypatch.delenv("KEIBA_LEDGER_SHARED", raising=False)
+    monkeypatch.delenv("KEIBA_LEDGER_GIT", raising=False)
+    assert L.shared_path() != L.SHARED_DEFAULT and L.git_path() != L.GIT_LEDGER
+
+
+def test_policy_periods_are_contiguous():
+    from datetime import timedelta
+    ps = L.load_policy(L.POLICY)["periods"]
+    for a, b in zip(ps, ps[1:]):
+        assert L._d(a["to"]) + timedelta(days=1) == L._d(b["from"])
+    assert ps[0]["from"] is None and ps[-1]["to"] is None
+
+
+def test_backfill_file_is_valid():
+    src = ROOT / "config/data_access/backfill_20261118.json"
+    if not src.exists():
+        pytest.skip("過去の分の一覧がまだ無い")
+    d = json.loads(src.read_text(encoding="utf-8"))
+    ids = [e["id"] for e in d["entries"]]
+    assert len(ids) == len(set(ids))
+    for e in d["entries"]:
+        assert e["purpose"] in L.PURPOSES and e["family"] and e["evidence"], e["id"]
+        L._d(e["period"][0])
+
+
+def test_reversed_period_is_error(led):
+    with pytest.raises(ValueError):
+        _g(period=("2026-01-01", "2025-01-01"))
+
+
+def test_sys_exit_zero_inside_counts(led, monkeypatch):
+    _enforce(monkeypatch)
+    with pytest.raises(SystemExit):
+        with _g():
+            raise SystemExit(0)
+    with pytest.raises(L.LedgerDenied):
+        _g()
+
+
+def test_keyboard_interrupt_counts(led, monkeypatch):
+    _enforce(monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        with _g():
+            raise KeyboardInterrupt
+    with pytest.raises(L.LedgerDenied):
+        _g()
+
+
+def test_unknown_family_is_violation(led, monkeypatch):
+    _enforce(monkeypatch)
+    with pytest.raises(L.LedgerDenied, match="unknown_family"):
+        _g(family="bet_cycles2")
+
+
+def test_fit_only_in_test_and_reproduce_needs_frozen(led, monkeypatch):
+    _enforce(monkeypatch)
+    assert _g(family="model", purpose="fit").decision.decision == "allowed"
+    with pytest.raises(L.LedgerDenied, match="fit_outside"):
+        _g(family="model", purpose="fit", period=("2025-01-01", "2026-03-31"))
+    with pytest.raises(L.LedgerDenied, match="reproduce_unfrozen"):
+        _g(purpose="reproduce", reason="再現")
+
+
+def test_env_alone_cannot_redirect_outside_tests(monkeypatch):
+    monkeypatch.setattr(L, "TESTING", False)
+    monkeypatch.setenv("KEIBA_LEDGER_SHARED", "/tmp/empty.jsonl")
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "x")
+    assert L.shared_path() == L.SHARED_DEFAULT and L.git_path() == L.GIT_LEDGER
+
+
+def test_broken_last_line_is_skipped(led):
+    _g().finish()
+    with open(L.shared_path(), "a", encoding="utf-8") as f:
+        f.write('{"id": "half')
+    assert len(L.load_rows()) == 2
+
+
+def test_parallel_confirms_only_one_allowed(led, monkeypatch):
+    _enforce(monkeypatch)
+    res = []
+
+    def run():
+        try:
+            _g(version="par")
+            res.append("ok")
+        except L.LedgerDenied:
+            res.append("denied")
+    ts = [threading.Thread(target=run) for _ in range(4)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert sorted(res) == ["denied", "denied", "denied", "ok"]
