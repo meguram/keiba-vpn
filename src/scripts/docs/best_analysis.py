@@ -105,7 +105,17 @@ def load_json(p: Path):
 def md_to_html(text: str, src_dir: Path, out_dir: Path) -> str:
     """md を HTML にし、相対リンクを出力先から見たパスに直す（実在しない先はリンクを外して文字だけ残す）。"""
     import markdown  # 生成時だけ使う（requirements.txt）
-    h = markdown.markdown(text, extensions=["tables", "fenced_code"])
+    lines, prev, code = [], "", False
+    for ln in text.splitlines():
+        if ln.startswith("```"):
+            code = not code
+        if not code:
+            if re.match(r"^\s*(?:[-*+]|\d+\.)\s", ln) and prev.strip() and not re.match(r"^\s*(?:[-*+]|\d+\.)\s|^\s*\|", prev):
+                lines.append("")   # 太字の行などの直後の箇条を、段落につなげずに箇条にする
+            ln = re.sub(r"(?<=[\w.])\*(?=[・、。,）)\s]|$)", r"\\*", ln)   # pc_*・sr_* の * を強調の記号にしない
+        lines.append(ln)
+        prev = ln
+    h = markdown.markdown("\n".join(lines), extensions=["tables", "fenced_code"])
     h = re.sub(r"<script\b.*?</script>", "", h, flags=re.S)
 
     def fix(m: re.Match) -> str:
@@ -629,5 +639,244 @@ def build_pedigree(out_dir: Path, meta_files: list[Path]) -> Page:
         (HTML_DIR / "pedigree/PERFORMANCE_GENES.html", "競走馬パフォーマンス遺伝子ナレッジベース（知識の資料。検証の記録ではない）")] if p.exists()) + "</ul>")
     parts.append(note("数字の更新は、各調査の HTML を作り直したときに反映される。"))
     pg.headline = heads[0] if heads else ""
+    pg.body = "\n".join(parts)
+    return pg
+
+
+# ── 走法軸 ────────────────────────────────────────────────────────────────
+
+RUN_AXIS = HTML_DIR / "operations" / "running_map_course_axis.html"
+RUN_RATIONALE = HTML_DIR / "operations" / "running_map_course_axis_rationale.html"
+RUN_PAIRS_HTML = HTML_DIR / "operations" / "running_style_pairs.html"   # 走法が近い馬の組（bet-optimizer が出す予定）
+RUN_PAIRS_MD = DOCS / "ideas" / "running_style_pairs.md"
+RUN_AXES_MD = DOCS / "ideas" / "running_map_axes_fixed.md"
+RUN_SCALE_MD = DOCS / "ideas" / "running_axes_scale_1to10.md"
+TRIALS_README = TRIALS / "README.md"
+PRECOMPUTE = REPO / "src" / "research" / "race_analysis" / "precompute.py"
+
+
+def html_section_paras(p: Path, heading_pat: str, limit: int = 4) -> list[str]:
+    """heading_pat に合う見出しの節の、段落と箇条の文（表は除く）。"""
+    raw = re.sub(r"<(script|style)\b.*?</\1>", "", p.read_text(encoding="utf-8", errors="ignore"), flags=re.S)
+    m = re.search(r"<h([234])\b[^>]*>((?:(?!</h\1>).)*?(?:" + heading_pat + r").*?)</h\1>", raw, re.S)
+    if not m:
+        return []
+    rest = raw[m.end():]
+    n = re.search(r"<h[12]\b", rest)
+    sec = re.sub(r"<table\b.*?</table>", "", rest[: n.start() if n else len(rest)], flags=re.S)
+    out = [text_of(x.group(2)) for x in re.finditer(r"<(p|li)\b[^>]*>(.*?)</\1>", sec, re.S)]
+    return [x for x in out if len(x) >= 10 and not re.match(r"^(再現|再計算)\s*[:：]", x)][:limit]   # 手順の段落は除く
+
+
+def _clip(s: str, n: int = 700) -> str:
+    return s if len(s) <= n else s[:n] + "…"
+
+
+def html_box_items(p: Path, label: str = "結論") -> list[str]:
+    """<div class="box"><b>結論</b><ol><li>…</li></ol></div> の箇条（ページ冒頭の結論の枠）。"""
+    raw = p.read_text(encoding="utf-8", errors="ignore")
+    m = re.search(r'<div class="box[^"]*">\s*<(b|strong)>' + re.escape(label) + r"</\1>(.*?)</(?:ol|ul)>", raw, re.S)
+    return [text_of(x) for x in re.findall(r"<li\b[^>]*>(.*?)</li>", m.group(2), re.S)] if m else []
+
+
+def _running_axes_from_code() -> tuple[list[str], list[str], list[str]]:
+    """running_map.py の AXES・MAP_KEYS・WET_AXIS から (地図の軸, 道悪の地図で替える軸, 表示だけの軸) の表示名。"""
+    try:
+        src = RUN_MAP_PY.read_text(encoding="utf-8")
+    except OSError:
+        return [], [], []
+    names = dict(re.findall(r'\("(\w+)",\s*"ax_\w+",\s*-?1,\s*"([^"]+)"', src))
+    mk = re.search(r"^MAP_KEYS\s*=\s*\[(.*?)\]", src, re.M)
+    keys = re.findall(r'"(\w+)"', mk.group(1)) if mk else []
+    wa = re.search(r"^WET_AXIS\s*=\s*\{(.*?)\}", src, re.M)
+    wet = re.findall(r':\s*"(\w+)"', wa.group(1)) if wa else []
+    if not names or not keys or not wet or any(k not in names for k in keys + wet):
+        return [], [], []   # 書き方が変わって読めない。推測で振り分けない
+    rest = [k for k in names if k not in keys and k not in wet]
+    return [names[k] for k in keys], sorted({names[k] for k in wet}), [names[k] for k in rest]
+
+
+def _version_comment(path: Path, var: str) -> tuple[str | None, list[tuple[str, str, str]]]:
+    """VAR = "N"  # N: …（日付）。M: … の形のコメントを (版, 日付, 内容) に分ける（末尾の日付と決まり文句は落とす）。"""
+    try:
+        src = path.read_text(encoding="utf-8")
+    except OSError:
+        return None, []
+    m = re.search(r"^" + var + r'\s*=\s*"(\d+)"\s*#\s*(.*)$', src, re.M)
+    if not m:
+        return None, []
+    rows = []
+    bits = re.split(r"(?:^|(?<=。))\s*(\d+)[:：]\s*", m.group(2))   # 「…（日付）。38: …」の形で版ごとに区切る
+    for num_, text in zip(bits[1::2], bits[2::2]):
+        text = re.sub(r"分析ロジック・列定義を変えたら上げる.*$", "", text.strip()).strip()
+        d = re.findall(r"20\d\d-\d\d-\d\d", text)
+        text = re.sub(r"[（(]20\d\d-\d\d-\d\d[）)]。?$", "", text).strip()
+        rows.append((num_, d[-1] if d else NO_RECORD, text))
+    return m.group(1), rows
+
+
+def _style_pair_boost() -> str | None:
+    try:
+        m = re.search(r"^STYLE_PAIR_BOOST\s*=\s*(\{.*?\})", BETTING_PY.read_text(encoding="utf-8"), re.M)
+    except OSError:
+        return None
+    return m.group(1) if m else None
+
+
+def _ul(items: list[str], n: int = 400) -> str:
+    return "<ul>" + "".join(f"<li>{esc(_clip(x, n))}</li>" for x in items) + "</ul>" if items else f"<p>{NO_RECORD}</p>"
+
+
+RUN_MAP_PY = REPO / "src" / "research" / "race" / "running_map.py"
+BEST5_PY = REPO / "src" / "research" / "race" / "running_map_best5.py"
+BETTING_PY = REPO / "src" / "pipeline" / "inference" / "betting.py"
+
+
+def build_running(out_dir: Path) -> Page:
+    pg = Page("best_running", "走法軸のまとめ.html", "走法軸のまとめ（走法マップ・コース適性・予測への効き）",
+              "走法軸（ペース・位置取り・脚の使い方の型）の今の使い方（走法マップ・Best5・買い目の近い組）、コース適性の根拠と限界、"
+              "親モデルへの効き（簡易版の履歴の検定）、版の年表。元は走法マップの調査の HTML・md・コード。")
+    pg.sources = [p for p in (RUN_AXIS, RUN_RATIONALE, RUN_AXES_MD, RUN_SCALE_MD, RUN_PAIRS_MD, RUN_PAIRS_HTML, TRIALS_README,
+                              RUN_MAP_PY, BEST5_PY, BETTING_PY, PRECOMPUTE) if p.exists()]
+    parts: list[str] = []
+
+    # 1. 結論（何か・今の使い方）
+    parts.append(h(2, "1. 結論（走法軸とは・今の使い方）", "conclusion"))
+    map_axes, wet_axes, show_axes = _running_axes_from_code()
+    parts.append(table(["項目", "内容"], [
+        ["地図・グループ・近い馬に使う軸", "・".join(map_axes) or NO_RECORD],
+        ["道悪の地図の軸（WET_AXIS）", "・".join(wet_axes) or NO_RECORD],
+        ["値の表示・色分けだけの軸", "・".join(show_axes) or NO_RECORD],
+    ]) + note("元: src/research/race/running_map.py の AXES・MAP_KEYS・WET_AXIS（コードを正とする）。軸の定義は "
+              f"{link(RUN_AXES_MD, out_dir)}、10 点満点の目盛りは {link(RUN_SCALE_MD, out_dir)}。"))
+    mv = _mv_tables()
+    cur = mv.get("1") or []
+    own = [r[:4] for r in cur[1:] if r and r[0].startswith("走法")]
+    rel_ = [r[:4] for r in cur[1:] if r and any(k in r[0] for k in ("追走", "ラップ", "展開"))]
+    parts.append("<p><b>走法マップ（採用の台帳の行）</b></p>" + (table(cur[0][:4], own) if own else f"<p>{NO_RECORD}</p>"))
+    t29 = mv.get("2.9") or []
+    sec29 = [r for r in t29[1:] if r and r[0].startswith("走法")]
+    if sec29:
+        parts.append(table(t29[0], sec29) + note("元: model_versions.html §2.9 の走法マップの行。"))
+    try:
+        doc5 = re.search(r'^"""(.*?)"""', BEST5_PY.read_text(encoding="utf-8"), re.S)
+    except OSError:
+        doc5 = None
+    if doc5:
+        lines = [x.strip(" -") for x in doc5.group(1).strip().splitlines() if x.strip()]
+        parts.append("<p><b>Best5（地図の位置から適性が合う順に 5 頭）</b></p>" + _ul(lines, 300)
+                     + note("元: src/research/race/running_map_best5.py の説明。"))
+    refl = html_section_paras(RUN_AXIS, r"反映", 6) if RUN_AXIS.exists() else []
+    if refl:
+        parts.append("<p><b>コース適性の今の作り（反映の節）</b></p>" + _ul(refl) + note(f"元: {link(RUN_AXIS, out_dir)} の「反映」の節。"))
+
+    boost = _style_pair_boost()
+    parts.append("<p><b>走法が近い馬の組（買い目推奨）</b>: "
+                 + (f"買い目推奨の確率の倍率 STYLE_PAIR_BOOST = <code>{esc(boost)}</code>（src/pipeline/inference/betting.py）。" if boost else f"{NO_RECORD}。")
+                 + ("調査の HTML: " + link(RUN_PAIRS_HTML, out_dir) if RUN_PAIRS_HTML.exists() else f"新しい調査の HTML は{WIP}。") + "</p>")
+    if RUN_PAIRS_HTML.exists():
+        items = html_box_items(RUN_PAIRS_HTML) or html_section_paras(RUN_PAIRS_HTML, _CONCL, 3)
+        parts.append((_ul(items[:3], 300) if items else f"<p>{NO_RECORD}（結論の枠・節が見つからない）</p>")
+                     + note(f"元: {link(RUN_PAIRS_HTML, out_dir)} の冒頭の結論の枠（無ければ結論の節）の初めの 3 項目。"))
+    if RUN_PAIRS_MD.exists():
+        hs = [x for x in md_headings(RUN_PAIRS_MD) if x[0] == 2 and re.search(r"結果|反映|残り", x[1])]
+        parts.append("<details><summary>前の調査（md）の「結果」「反映」「残り」の節</summary>" + "".join(
+            '<div class="mdsec">' + md_to_html(md_section(RUN_PAIRS_MD, ln), RUN_PAIRS_MD.parent, out_dir) + "</div>" for _, _, ln in hs)
+            + "</details>" + note(f"元: {link(RUN_PAIRS_MD, out_dir)}（更新 {esc(git_date(RUN_PAIRS_MD))}）。"))
+
+    # 親モデルへの効き
+    res = top = None
+    if TRIALS_README.exists():
+        hs = md_headings(TRIALS_README)
+        tops = [x for x in hs if x[1].startswith("走法軸の履歴")]
+        top = tops[-1] if tops else None   # やり直した節が足されたら新しいほう
+        if top:
+            for d, t, ln in hs:
+                if ln <= top[2]:
+                    continue
+                if d <= top[0]:
+                    break   # 節の外
+                if "結果" in t:
+                    res = (d, t, ln)
+                    break
+    lim = ""
+    if res:
+        m = re.search(r"^- 限界:\s*(.+)$", md_section(TRIALS_README, res[2]), re.M)
+        lim = m.group(1).strip() if m else ""
+        parts.append(f"<p><b>親モデルへの効き（{esc(top[1])}）</b>: {esc(res[1])}。（このページの注: 節の本文のとおり、検定したのは簡易版の履歴）</p>"
+                     + (f"<p class=\"src\">記録の限界: {esc(lim)}</p>" if lim else "") + note("数字は §2。"))
+    bmap = {"umaren": "馬連", "umatan": "馬単", "wide": "ワイド", "sanrenpuku": "3 連複"}
+    bvals = re.findall(r'"(\w+)":\s*([\d.]+)', boost or "")
+    btxt = "・".join(f"{bmap.get(k, k)} ×{v}" for k, v in bvals)
+    verdict = re.sub(r"^結果\s*[—-]\s*", "", res[1]) if res else ""
+    axes_txt = "・".join(map_axes)
+    pg.headline = ((f"走法マップの地図の軸は {axes_txt}（コード）。" if map_axes else "")
+                   + (f"買い目推奨では走法が近い組の確率を {btxt}。" if btxt else "")
+                   + (f"親モデルへの簡易版の履歴は {verdict}。" if res else ""))
+
+    # 2. 数字
+    parts.append(h(2, "2. 数字（親モデルへの効き。期間は節の中）", "numbers"))
+    if res:
+        rule = md_section(TRIALS_README, top[2]).split("\n### ")[0]
+        parts.append("<details><summary>測る前に固定した合格線（節の前半）</summary><div class=\"mdsec\">"
+                     + md_to_html(rule, TRIALS_README.parent, out_dir) + "</div></details>")
+        parts.append('<div class="mdsec">' + md_to_html(md_section(TRIALS_README, res[2]), TRIALS_README.parent, out_dir) + "</div>"
+                     + note(f"元: {link(TRIALS_README, out_dir)} の「{esc(top[1])}」の節。（このページの注: 表の「関門 3」は、固定した合格線の関門 1 の条件 3）"))
+    else:
+        parts.append(f"<p>{NO_RECORD}</p>")
+
+    # 3. 事象と根拠
+    parts.append(h(2, "3. 事象と根拠（コースごとの適性）", "evidence"))
+    for p, title in [(RUN_RATIONALE, "rationale（得点分布の差から基準を引く測り方）の結論"),
+                     (RUN_AXIS, "course_axis（寄与率の測り方）の結論")]:
+        if p.exists():
+            parts.append(f"<h3>{esc(title)}</h3>" + _ul(html_box_items(p), 600)
+                         + note(f"元: {link(p, out_dir)}（更新 {esc(git_date(p))}）の冒頭の「結論」の枠。"))
+
+    # 4. 限界
+    parts.append(h(2, "4. 限界", "limits"))
+    for p, label in [(RUN_RATIONALE, "rationale（得点分布の差から基準を引く測り方）"), (RUN_AXIS, "course_axis（寄与率の測り方。「反映」の節の前の画面の値を含む）")]:
+        if p.exists():
+            parts.append(f"<h3>{esc(label)}</h3>" + _ul(html_section_paras(p, r"限界", 8)) + note(f"元: {link(p, out_dir)} の「限界」の節。"))
+    if lim:
+        parts.append(f"<h3>親モデルへの効き</h3><p>{esc(lim)}</p>")
+
+    # 5. 今の版
+    parts.append(h(2, "5. 今の版", "version"))
+    rver, rhist = _version_comment(RUN_MAP_PY, "REFERENCE_VERSION")
+    aver, ahist = _version_comment(PRECOMPUTE, "ANALYSIS_VERSION")
+    mv_run = next((r for r in cur[1:] if r and r[0].startswith("走法マップ")), None)
+    mv_ver = re.search(r"ANALYSIS_VERSION\s*(\d+)", mv_run[1]) if mv_run and len(mv_run) > 1 else None
+    parts.append(table(["何の版", "版", "その版の日付", "元"], [
+        ["走法マップの基準（REFERENCE_VERSION）", rver or NO_RECORD, rhist[0][1] if rhist and rhist[0][0] == rver else NO_RECORD, "src/research/race/running_map.py"],
+        ["分析全体（ANALYSIS_VERSION）", aver or NO_RECORD, ahist[0][1] if ahist and ahist[0][0] == aver else NO_RECORD, "src/research/race_analysis/precompute.py"],
+        ["採用の台帳の記載", mv_run[1] if mv_run and len(mv_run) > 1 else NO_RECORD, "", "model_versions.html §1"]]))
+    if mv_ver and aver and mv_ver.group(1) != aver:
+        parts.append(f"<p><b>食い違い</b>: 採用の台帳は ANALYSIS_VERSION {esc(mv_ver.group(1))}、コードは {esc(aver)}。</p>")
+
+    # 6. 年表
+    parts.append(h(2, "6. 経緯の年表", "timeline"))
+    for title, hist_ in [("走法マップの基準（REFERENCE_VERSION）", rhist), ("分析全体（ANALYSIS_VERSION）のうち「走法」を含む版", [r for r in ahist if "走法" in r[2]])]:
+        rows = sorted(([v, d, t] for v, d, t in hist_), key=lambda r: int(r[0]), reverse=True)   # 版の番号の新しい順
+        parts.append(f"<h3>{esc(title)}</h3>" + (table(["版", "日付", "変えたこと"], rows) if rows else f"<p>{NO_RECORD}</p>"))
+    parts.append(note("元: running_map.py の REFERENCE_VERSION のコメント（全件）と、precompute.py の ANALYSIS_VERSION のコメントのうち「走法」を含む版。"
+                      "日付はコメントの記載で、無い版は「記録なし」。"))
+
+    # 7. 詳細
+    parts.append(h(2, "7. 詳細へのリンク", "links"))
+    parts.append("<ul>" + "".join(f"<li>{link(p, out_dir, t)}（更新 {esc(git_date(p))}）</li>" for p, t in [
+        (RUN_RATIONALE, "走法軸 × コースの適性：優位の根拠（今の測り方）"),
+        (RUN_AXIS, "走法マップ 良馬場のコース別 軸の寄与と根拠（前の測り方・反映）"),
+        (RUN_AXES_MD, "走法マップの軸の確定定義（md）"),
+        (RUN_SCALE_MD, "走法軸の 1〜10 の目盛り（md）"),
+        (RUN_PAIRS_MD, "走法が近い馬は一緒に来るか（md）"),
+        (RUN_PAIRS_HTML, "走法が近い馬は一緒に来るか（HTML）"),
+        (TRIALS_README, "再学習の試しの記録（README。走法軸の履歴の節）"),
+    ] if p.exists()) + "</ul>")
+    if rel_:
+        parts.append("<p>関連する別のモデル（採用の台帳の行）:</p>" + table(cur[0][:4], rel_) + "<ul>" + "".join(
+            f"<li>{link(p, out_dir, t)}</li>" for p, t in [(HTML_DIR / "modeling/chapters/tracking_difficulty_v2.html", "追走難度 v2（tp-54）"),
+                                                           (HTML_DIR / "modeling/chapters/lap_forecast.html", "ハロンごとのラップ予想（tp-55）")] if p.exists()) + "</ul>")
+    pg.headline = pg.headline or NO_RECORD
     pg.body = "\n".join(parts)
     return pg

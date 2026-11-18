@@ -40,6 +40,7 @@ BEST_PAGES: list[tuple[str, str, str]] = [
     ("best_graded", "重賞の好走データ予想.html", "重賞のデータ分析型の予想の今の結論と、評価の回ごとの結果の年表（生成）。"),
     ("best_course", "通常レースの好走データ抽出.html", "全レース版（コース × クラス）の好走データ抽出の今の結論と、版ごとの結果の年表（生成）。"),
     ("best_pedigree", "血統分析のまとめ.html", "血統の各調査の結論を 1 枚に並べたもの（生成）。"),
+    ("best_running", "走法軸のまとめ.html", "走法軸の今の使い方・親モデルへの効き・コース適性の根拠と限界・版の年表（生成）。"),
     ("best_model", "馬の予測モデル.html", "今の本番のモデルの版・採用時の精度・更新の年表・改善中の候補（生成）。"),
     ("best_bet", "推奨馬券の最適化.html", "推奨馬券の凍結した買い方と test 2025 の結果・サイクルの年表（生成）。"),
 ]
@@ -100,7 +101,8 @@ def _git_dates() -> dict[str, str]:
     if _DATES is None:
         _DATES = {}
         try:
-            out = subprocess.run(["git", "-c", "core.quotePath=false", "log", "--format=@%cd", "--date=format:%Y-%m-%d", "--name-only", "--", "docs", "data/meta"],
+            out = subprocess.run(["git", "-c", "core.quotePath=false", "log", "--format=@%cd", "--date=format:%Y-%m-%d", "--name-only", "--", "docs", "data/meta",
+                                  *[str(q.relative_to(REPO)) for q in (BA.PRECOMPUTE, BA.RUN_MAP_PY, BA.BEST5_PY, BA.BETTING_PY)]],   # まとめのページが読むコード
                                  capture_output=True, text=True, cwd=REPO, timeout=120).stdout
         except (OSError, subprocess.SubprocessError):
             out = ""
@@ -338,7 +340,7 @@ def build_best_pages(items: list[Item]) -> list[tuple[Path, str, BA.Page]]:
     graded = [p for p in meta if meta_shelf(p) == "res-graded"]
     course = [p for p in meta if meta_shelf(p) == "res-course"]
     ped = [p for p in meta if meta_shelf(p) == "res-pedigree" and "sire_lines" in p.parts]
-    pages = [BA.build_graded(d, graded), BA.build_course(d, course), BA.build_pedigree(d, ped), BA.build_model(d), BA.build_bet(d)]
+    pages = [BA.build_graded(d, graded), BA.build_course(d, course), BA.build_pedigree(d, ped), BA.build_running(d), BA.build_model(d), BA.build_bet(d)]
     order = {slug: i for i, (slug, _, _) in enumerate(BEST_PAGES)}
     pages.sort(key=lambda p: order[p.slug])
     out = []

@@ -155,3 +155,8 @@ def test_repro_and_uplift_disjoint():
     r = TH._repro(Y, m_rule, base, pre_in)
     assert r["rule"]["place"] == 1.0 and abs(r["uplift"]["pt"] - 1.0) < 1e-9        # ルール対、層のほかの馬（重ならない 2 群）
     assert abs(r["base"]["n"] - 6.0) < 1e-9                                            # 20 通りの平均（ここでは 2 通り）
+
+
+def test_in_layer_popmin():
+    pop = np.array([1, 3, 4, 10, np.nan])
+    assert TH.in_layer(("popmin", 4), pop, np.zeros(5)).tolist() == [False, False, True, True, False]   # 4 番人気以下（人気の無い馬は入らない）

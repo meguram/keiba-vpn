@@ -643,3 +643,22 @@ def test_vps_owned_trees_follow_fetch_owner_and_exclude_cushion():
     assert gm.vps_owned_trees(set()) == []
     assert gm.vps_owned_trees({"daily-race-lists", "jra-baba-morning"}) == ["race_lists", "race_day_schedule"]
     assert "cushion" not in gm.VPS_TREES                  # 馬場は追記型の履歴なので丸ごと受け渡さない
+
+
+def test_backup_trees_are_pushed_but_not_pulled_marked_or_writable_by_jobs(tmp_path, monkeypatch):
+    """前向きの記録の予備（odds_t60・launch_watch）は GCS へ上げるだけ。Cloud Run の取り込み・束・画面のキャッシュの目印・jobs の書き込みには入れない。"""
+    for t in ("odds_t60", "launch_watch"):
+        tree = f"data/local/inference/{t}"
+        assert tree in gm.BACKUP_TREES and tree in gm.PUSH_TREES
+        assert tree not in gm.TREES and tree not in gm.BUNDLE_TREES and tree not in gm.WINDOWED_DIRS
+        assert not gm.tree_known(tree)
+    marked = []
+    monkeypatch.setattr("src.utils.cache_marker.mark_from_paths", lambda paths: marked.extend(paths))
+    for rel in ("data/local/inference/odds_t60/20261121/R1.json", "data/local/inference/launch_watch/20261121.jsonl",
+                "data/local/inference/bets_stage2/20261121/R1.json"):
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("{}")
+    g = Fake()
+    assert gm.push(g, tmp_path, gm.PUSH_TREES)["uploaded"] == 3
+    assert marked == ["data/local/inference/bets_stage2/20261121/R1.json"]

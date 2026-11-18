@@ -158,3 +158,4 @@ def test_newcomer_and_missing_material_still_shown(inf, monkeypatch):
                "skip_label": "見送り（T-60 オッズ未着）", "bets": [], "horse_marks": {}})
     out, _ = delegates.optimize_betting({"race_id": RID}, view="paid")
     assert out["sub_strategy"] == "stage2_r2" and out["skipped"] and out["stage2"]["skip_label"] == "見送り（T-60 オッズ未着）"
+
