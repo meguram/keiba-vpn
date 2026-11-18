@@ -71,7 +71,7 @@ OVERRIDE: dict[str, str] = {
     "DATA_HEALTH": "ops", "production_load": "ops",
     # データ品質
     "data_quality_issues": "res-data", "course_master_verification": "res-data", "drift_diagnosis": "res-data",
-    "feature_gap_audit": "res-data",
+    "feature_gap_audit": "res-data", "data_trend": "res-data",
     # 重賞
     "graded_handicapper": "res-graded",
     # 血統
@@ -189,6 +189,9 @@ GROUPS: dict[str, list[Group]] = {
               ["data_quality_issues", "feature_gap_audit", "drift_diagnosis", "course_master_verification"],
               [E("docs/operations/docs_inconsistencies_20261118.md", "文書の食い違い・古い記述の一覧（2026-11-18）"),
                E("docs/operations/data_audit_20261116.md", "データの監査（2026-11-16）")]),
+        Group("データの傾向の変化", "2016〜2025 年の傾向の変化（ドリフト）の大きさと、ルール・モデル・馬券への影響、問題点と改善案。",
+              ["data_trend"],
+              [E("docs/operations/data_trend_20261118.md", "データの傾向の変化の調査（2026-11-18）")]),
     ],
     "res-pedigree": [
         Group("血統のまとめ", "結論は「いまのベスト分析 / 血統分析のまとめ」。",
