@@ -131,7 +131,10 @@ case "$STEP" in
     # メモリ: 本番は 4Gi（2026-11-15〜16 に 2Gi の 99% に張り付き、GCS の時間切れが続いて 504。11-16 に OOM。docs/operations/api_memory_20261117.md）。
     #   stg は 2Gi のまま（再発防止の直しで 2Gi に収まるかを stg で確かめるため）。本番を 2Gi に戻すかはユーザーの判断（同 docs）。
     #   4Gi の費用は、サービスのメモリ代（直近 1 日 1〜5 円）の上乗せで最悪 +150 円/月。PROD_MEMORY で上書きでき、promote の確認の閾値も同じ値になる
+    # 第 2 段の試行（src/api/stage2_live.py）を読み始める日: stg だけ過去の開催日（11/15）に下げ、リハーサルの出力を stg の画面で確かめる
+    #   （本番は既定の 20261121 から。11/15 のファイルは本番には出ない。docs/operations/weekend_launch_20261121.md）。週末の後に外す
     run env TAG="$REV_TAG" IMAGE="$API_IMAGE" API_TEST_USER="$([ "$TARGET" = stg ] && echo 1 || echo 0)" MEMBERS_STORE="${MEMBERS_STORE:-}" \
+      STAGE2_START="$([ "$TARGET" = stg ] && echo "${STG_STAGE2_START:-20261115}" || echo "")" \
       MEMORY="$([ "$TARGET" = stg ] && echo 2Gi || echo "${PROD_MEMORY:-4Gi}")" \
       CPU_ALLOC="$([ "$TARGET" = stg ] && echo request || echo "${PROD_CPU_ALLOC:-request}")" bash scripts/gcp/deploy_cloud_run_api.sh deploy --apply
     if [ "$DRY" = 1 ]; then
