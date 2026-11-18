@@ -216,7 +216,7 @@ def build(frozen: Path, seed: int | None = None) -> tuple[str, dict]:
         vh = [int(ret[i + v * n0] > 0) for v in range(k)]
         vH = ["見送り" if pd.isna(recs.at[i + v * n0, "H_num"]) else f"{int(recs.at[i + v * n0, 'H_num'])} 番" for v in range(k)]
         steps.append(f"<span class=\"muted\">T-60 の再現 {k} 通りのうち、参戦 {sum(vb)} 通り・的中 {sum(vh)} 通り。各通りの ◎: {' / '.join(vH)}。"
-                     f"確定オッズで判定すると: {'参戦（◎ ' + str(fin_H[i]) + ' 番）' if fin_H[i] else '見送り'}。</span>")
+                     f"楽観（確定オッズで判定）では: {'参戦（◎ ' + str(fin_H[i]) + ' 番）' if fin_H[i] else '見送り'}。</span>")
         sample_rows.append([no, labels[key], f"{rs.date} {rs.race_id}", str(ft.at[i, "c_class"]), num(rmax, 2),
                             f"{int(rs.hn[H])} 番" if H is not None else "－", (int(rf.fin[H]) if rf.fin[H] < 99 else "－") if H is not None else "－",
                             f"{int(cost[i]):,}", f"{int(ret[i]):,}"])
@@ -258,7 +258,7 @@ def build(frozen: Path, seed: int | None = None) -> tuple[str, dict]:
     base_pop = np.array([p.base.races[j % n0].pop[hidx[j]] if hidx[j] >= 0 else 99 for j in range(len(p.races))])
     fin_bet = np.tile(rfin["cost"] > 0, k)
     fav_rows = [["◎ が確定の 1 番人気"] + grp(bet & (base_pop == 1)), ["◎ が確定の 2 番人気以下"] + grp(bet & (base_pop > 1))]
-    both_rows = [["確定オッズの判定でも参戦するレース"] + grp(bet & fin_bet), ["T-60 の再現でだけ参戦するレース"] + grp(bet & ~fin_bet)]
+    both_rows = [["楽観（確定オッズで判定）でも参戦するレース"] + grp(bet & fin_bet), ["T-60 の再現でだけ参戦するレース"] + grp(bet & ~fin_bet)]
     from src.scripts.data.bet_cycles import OUT_DIR
     exf = OUT_DIR / str(body.get("tag")) / "evidence_extra.json"
     n_cands = (json.loads(exf.read_text(encoding="utf-8")).get("rc") or {}).get("n_candidates") if exf.exists() else None
@@ -348,12 +348,12 @@ ul{padding-left:1.2em}"""
                                  ["上位 5 件の払戻を除いた回収率", pct(ex[0])],
                                  ["平均回収額 / 中央値回収額（1 レース 100 円）", f"{m['avg_return']:.0f} 円 / {m['median_return']:.0f} 円（的中時の中央値 {m.get('median_hit_return', 0):.0f} 円）"],
                                  ["基準: 予測 1 位の単勝を全部買う", pct(b0['roi'])],
-                                 ["確定オッズで判定した場合（楽観）", f"参戦 {rec['periods']['test']['metrics_final_odds']['bet_races']:,}・回収率 {pct(rec['periods']['test']['metrics_final_odds']['roi'])}"]]),
+                                 ["楽観（確定オッズで判定）", f"参戦 {rec['periods']['test']['metrics_final_odds']['bet_races']:,}・回収率 {pct(rec['periods']['test']['metrics_final_odds']['roi'])}"]]),
           "<h3>◎ の人気（T-60 の再現）ごと</h3>", table(["◎ の人気", "参戦", "的中率", "回収率", "払戻の合計（円）"], pop_rows),
           "<h3>◎ の r の大きさごと</h3>", table(["◎ の r", "参戦", "的中率", "回収率", "払戻の合計（円）"], r_rows),
           "<h3>クラスごと</h3>", table(["クラス", "参戦", "的中率", "回収率", "払戻の合計（円）"], cl_rows),
           "<h3>◎ が確定の 1 番人気だったか（p に残る確定オッズの情報の効き）</h3>", table(["◎", "参戦", "的中率", "回収率", "払戻の合計（円）"], fav_rows),
-          "<h3>確定オッズの判定でも参戦するか</h3>", table(["レース", "参戦", "的中率", "回収率", "払戻の合計（円）"], both_rows),
+          "<h3>楽観（確定オッズで判定）でも参戦するか</h3>", table(["レース", "参戦", "的中率", "回収率", "払戻の合計（円）"], both_rows),
           '<p class="muted">参戦の数・払戻の合計は、再現の通り数で割った 1 年分の値。区分ごとの値は件数が少なく、偶然の幅が大きい（区間は全体の行だけに付けた）。'
           "95% 区間は、選んだ後の 1 本についてのレース単位のブートストラップで、多くの候補から選んだことの効き（勝者の呪い）を含まない。実際の幅はもっと広い。"
           + (f"第 2 回では、訓練で {n_cands} 本の候補を比べて選んだ。" if n_cands else "") + "</p>"]
@@ -364,7 +364,7 @@ ul{padding-left:1.2em}"""
           f"<li>上位 5 件の払戻を除くと {pct(ex[0])}"
           + ("で、100% を割る。" if ex[0] is not None and ex[0] < 1 else "。") + "穴の単勝なので、少数の高配当に頼る形。"
           + (f"回収率の 95% 区間（{pct(m.get('roi_lo'))}〜{pct(m.get('roi_hi'))}）は 100% をまたぐ。" if m.get("roi_lo", 1) < 1 < m.get("roi_hi", 0) else "") + "</li>",
-          f"<li>判定のオッズの時点で結果が大きく変わる。確定オッズで判定すると参戦 {rec['periods']['test']['metrics_final_odds']['bet_races']:,}・"
+          f"<li>判定のオッズの時点で結果が大きく変わる。楽観（確定オッズで判定）では参戦 {rec['periods']['test']['metrics_final_odds']['bet_races']:,}・"
           f"回収率 {pct(rec['periods']['test']['metrics_final_odds']['roi'])}、T-60 の再現では参戦 {m['bet_races']:,}・{pct(m['roi'])}。本物の T-60 では、さらに下がる可能性がある。</li>",
           "<li>本番ではまだ使っていない。</li></ul></div>", "</main></body></html>"]
     meta = {"picks": [(p.base.races[i].race_id, key) for i, key, _ in picks], "metrics": {k_: m.get(k_) for k_ in ("bet_races", "roi", "hit_rate")}}

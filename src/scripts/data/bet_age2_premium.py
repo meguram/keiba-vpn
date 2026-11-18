@@ -3,7 +3,8 @@
 python -m src.scripts.data.bet_age2_premium [--frozen config/bet_cycles/frozen_20261117_r2.json]
 
 - 買い方は選び直さない（凍結のまま流し、記録の読み直しだけ）。新しい期間は見ない（訓練・評価・test 2025 は記録のある期間）。
-- 印: 2 歳戦で、確定の単勝オッズの Σ(1/オッズ) < 1.245 のレース（docs/operations/data_trend_20261118.md の案 A。期間でなくレースごとに付ける）。
+- 印: 上乗せのあった期間（2016-06-04〜09-04、2017〜2023 年の 6〜12 月）の 2 歳戦で、確定の単勝オッズの Σ(1/オッズ) < 1.245 のレース
+  （期間と Σ の両方。期間の外の Σ の低いレースは誤検出、期間の中で Σ が高いレースは人気の集中で上乗せが無かったレース）。
 - 補正: 印のレースの単勝の払戻を × Σ_レース ÷ 1.264（今の制度の控除にそろえる）。判定（◎・見送り）は凍結のまま変えない。
 - r の確かめ: 訓練の期間の全馬で、第 2 段の勝率 p に対する実際の勝率（勝率 ÷ p）と、市場 q に対する比（勝率 ÷ q）を、r の帯ごとに、
   印のある 2 歳戦と 3 歳以上で比べる。2 歳戦で r が高い馬ほど勝率 ÷ p が下がるなら、上乗せで q が低く出て r が甘くなっている。
@@ -22,6 +23,15 @@ FLAG_SIGMA = 1.245
 NOW_SIGMA = 1.264
 
 
+def in_premium_period(dates) -> np.ndarray:
+    """上乗せのあった期間（公式の企画の期間。data_trend_20261118.md §3）: 2016-06-04〜09-04、2017〜2023 年の 6〜12 月。"""
+    import pandas as pd
+
+    d = pd.to_datetime(pd.Series(dates))
+    y, md = d.dt.year.to_numpy(), d.dt.strftime("%m-%d").to_numpy()
+    return ((y == 2016) & (md >= "06-04") & (md <= "09-04")) | ((y >= 2017) & (y <= 2023) & (d.dt.month.to_numpy() >= 6))
+
+
 def run(a) -> None:
     from src.scripts.data import bet_cycles as bc
 
@@ -32,14 +42,14 @@ def run(a) -> None:
         raise SystemExit("この読み直しは単勝だけの買い方を前提にしています")
     names = [n for n in ("train", "eval", "test") if n in body["inputs"]["periods"]]
     per, _ = bc.prepare_periods(body["inputs"], tuple(names), cuts=cuts)
-    out = {"frozen": str(fz.resolve().relative_to(ROOT)), "hash": body["hash"], "flag": f"2 歳戦で Σ(1/確定の単勝オッズ) < {FLAG_SIGMA}",
+    out = {"frozen": str(fz.resolve().relative_to(ROOT)), "hash": body["hash"], "flag": f"上乗せのあった期間（2016-06-04〜09-04、2017〜2023 年の 6〜12 月）の 2 歳戦で Σ(1/確定の単勝オッズ) < {FLAG_SIGMA}",
            "adjust": f"印のレースの単勝の払戻 × Σ_レース ÷ {NOW_SIGMA}", "note": "買い方は選び直さない。記録の読み直しだけ。", "periods": {}}
     for nm in names:
         p = per[nm]
         n0 = len(p.base.races)
         age = p.base.feats["c_age_cond"].astype(str).to_numpy()
         sig = np.array([float(np.nansum(1.0 / r.odds)) for r in p.base.races])
-        flag = (age == "2歳") & (sig < FLAG_SIGMA)
+        flag = (age == "2歳") & (sig < FLAG_SIGMA) & in_premium_period([r.date for r in p.base.races])
         fac = np.where(flag, sig / NOW_SIGMA, 1.0)
         r = bc.run_period(p, spec)
         k = p.k
@@ -64,7 +74,7 @@ def run(a) -> None:
     p = per["train"].base
     age = p.feats["c_age_cond"].astype(str).to_numpy()
     sig = np.array([float(np.nansum(1.0 / r.odds)) for r in p.races])
-    grp = np.where((age == "2歳") & (sig < FLAG_SIGMA), "2歳（印あり）", np.where(age == "2歳", "2歳（印なし）", "3歳以上"))
+    grp = np.where((age == "2歳") & (sig < FLAG_SIGMA) & in_premium_period([r.date for r in p.races]), "2歳（印あり）", np.where(age == "2歳", "2歳（印なし）", "3歳以上"))
     edges = [-np.inf, 0.0, 0.3, 0.6, 1.0, np.inf]
     labels = ["r<0", "0〜0.3", "0.3〜0.6", "0.6〜1.0", "1.0〜"]
     rows = []
