@@ -171,3 +171,42 @@ def test_upcoming_dated_races_get_six_hours_and_long_prefixes_thirty_days():
     assert f("/api/admin/x") is None
     assert H.cache_control_value(30, 30, True, f("/api/race-list/20261029")) == "public, max-age=30, s-maxage=21600"
     assert H.cache_control_value(30, 30, False, f("/api/race-list/20261029")) == "private, max-age=30"   # 会員は共有しない
+
+
+def test_cloudflare_cdn_header_only_on_public(monkeypatch):
+    """Cloudflare のエッジの期限（Cloudflare-CDN-Cache-Control）は public の応答にだけ短く付ける（latency_plan_20261118.md の L6）。"""
+    assert H.cdn_cache_control_value("public, max-age=30, s-maxage=2592000", {"cdn_max_age": 300}) == "public, max-age=300"
+    assert H.cdn_cache_control_value("private, max-age=30", {"cdn_max_age": 300}) is None
+    assert H.cdn_cache_control_value("public, max-age=30", {"cdn_max_age": 0}) is None
+    cfg = {**CFG, "cdn_max_age": 300, "rules": [{"prefix": "/api/race/", "max_age": 30, "s_maxage": 45}]}
+    monkeypatch.setattr(H, "config", lambda: cfg)
+    app = FastAPI()
+
+    @app.get("/api/race/{rid}")
+    def race(rid: str):
+        return {"id": rid}
+
+    H.install_fastapi(app)
+    c = TestClient(app)
+    assert c.get("/api/race/1").headers["cloudflare-cdn-cache-control"] == "public, max-age=300"
+    assert "cloudflare-cdn-cache-control" not in c.get("/api/race/1", headers={"Cookie": "a=b"}).headers
+    assert "cloudflare-cdn-cache-control" not in c.get("/api/race/1", headers={"Authorization": "Bearer x"}).headers
+
+
+def test_cloudflare_cdn_header_flask(monkeypatch):
+    from flask import Flask
+
+    cfg = {**CFG, "cdn_max_age": 300, "rules": [{"prefix": "/api/v1/races/", "max_age": 30, "s_maxage": 45}]}
+    monkeypatch.setattr(H, "config", lambda: cfg)
+    app = Flask(__name__)
+
+    @app.get("/api/v1/races/<rid>")
+    def race(rid):
+        return {"id": rid}
+
+    H.install_flask(app)
+    c = app.test_client()
+    assert c.get("/api/v1/races/1").headers["Cloudflare-CDN-Cache-Control"] == "public, max-age=300"
+    c.set_cookie("a", "b")
+    assert "Cloudflare-CDN-Cache-Control" not in c.get("/api/v1/races/1").headers
+

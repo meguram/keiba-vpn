@@ -376,3 +376,62 @@ curl -s -o /dev/null -D h.txt -w 'dns=%{time_namelookup} con=%{time_connect} tls
 - 実装の順: L2a → L11 → L1 → L3（VPS で計測して 20ms 未満なら見送り）→ A2 → L9 → L6 → L4。L7 は別の計画とセキュリティのレビュー。L8 は後で相談。
 - 時期: 11/20（金）に本番の昇格（master）があるので、作業は `feature/latency` で行い、develop へは 11/22（日）の夜以降に入れる。小さく独立して安全なもの（L2a など）は、critic と CI を通し、統括役に断ってから develop に入れてよい。
 - §7 のユーザーへの確認は、週末明けに統括役から頼む。
+
+## 12. 実装の状況（2026-11-18）
+
+| 案 | 状態 | 置き場 | 要点 |
+|---|---|---|---|
+| L2a | develop に入った（統括役の了承）・CI 緑 | 2fe8b86a | 手元の確かめ（next dev ＋偽の保守 API）: 状態の API が 10 秒遅れたとき、画面の TTFB は変更前 2.4〜3.0 秒 → 変更後 0.3〜1.1 秒。保守の目印で 2 本目から 503、保守中の 429 でも 503 のまま、通常の 429 は待たずに 200 |
+| L11 | feature/latency | 3bf53408 | `/races` で開催日の一覧と race-list を並べて取る。外れる日（祝日の月曜開催とその翌日）は 1 本むだになるだけ |
+| L1 | feature/latency | 下の commit | `/races` の一覧・`/race/[id]` の本体と予測で、このタブに残した前回の内容を先に出す。最新が取れないときは「前回の内容を表示しています」と出し、自動の取り直しを続ける |
+| L6 | feature/latency（リポジトリ側） | 下の commit | 共有キャッシュに置ける応答に会員の値が混じらないテスト。public の応答にだけ `Cloudflare-CDN-Cache-Control: public, max-age=300`。アイコン・ブランドの画像に 1 日の期限。Cloudflare の規則は下の手順でユーザーが設定する |
+| L4 | **見送り**（critic の指摘） | — | 効く範囲（calendar・scrape-dates などの期限切れ）が小さい割に、副作用が大きい。下の「L4 を見送った理由」 |
+| L3・A2・L9 | 未着手 | — | §7 の VPS の計測と Cloud Run のログ（週明けに統括役からユーザーに依頼）を見てから |
+
+### L4 を見送った理由（critic のレビュー、2026-11-18）
+
+- `proxy_cache_background_update` で返す古い応答は、保存したときの `Cache-Control`（`public, max-age`・`s-maxage`）のまま出る。nginx は `Age` を付けないので、Cloudflare とブラウザがその古い応答をさらに満期まで使い、古さが nginx の期限＋Cloudflare の期限まで延びる。
+- 裏の取り直しが終わるまで、Cloudflare からの keepalive の接続の次の要求が待たされる（nginx の既知の挙動）。冷えた Cloud Run では最大 約 28 秒。
+- stg（読むだけ）では本番の古い保存を返し、裏の取り直し（rstg）は保存されずに捨てられるので、検証中のコードの応答が見えなくなる。
+- `proxy_cache_lock_timeout` を延ばしても、`proxy_cache_lock_age`（既定 5 秒）ごとに上流へ 1 本ずつ抜ける。両方を延ばすと、上流が詰まったときの待ちが最大 30 秒＋読み取りの期限に延びる。
+- 代わりに、期限切れの最初の 1 人の待ちは、L1（前回の内容を先に出す）と L6（Cloudflare に 5 分置く）で、利用者からは見えにくくなる。
+
+### L1 で変わる既存の挙動
+
+- 区分（匿名・会員・開発者）の記録は、**このページの中で認証の状態を取って確かめた後だけ**使う。再読み込みの直後・直接開いた直後は、認証の状態が返るまで前回の内容を出さない。
+  - 理由: 他のタブでのログアウト・セッション切れの後に再読み込みすると、記録が会員のまま残っていて、会員向けの内容が先に出ていた（既存の分析・週の予想の画面も同じ）。安全側に直した。
+  - そのため、前回の内容がすぐ出るのは、主に**同じタブの中の画面の行き来**（クライアント側の遷移）。
+- 要求を出したときと返ったときで区分が変わったら（ログイン・ログアウト）、その応答は残さない。
+- あふれたときは全部を捨てず、古い半分を消す。1 件 40 万文字を超える応答は残さない（匿名のレース本体は最大 約 270KB。2026-11-18 に 4 レースを実測）。
+
+### L6: Cloudflare の Cache Rule の設定（ユーザーの操作。ダッシュボード）
+
+Edge TTL を「オリジンを上書き」にすると、オリジンが `private`・`no-store` を返す匿名の応答（保守の状態・ログインの状態など）まで置かれうる。そこで Cloudflare はオリジンの指示に従わせ、Cloudflare だけに効く短い期限はオリジンが `Cloudflare-CDN-Cache-Control` で付ける（`config/http_cache.json` の `cdn_max_age`、300 秒。nginx・ブラウザはこのヘッダを見ない）。
+
+**規則を入れる前に（必須）**: この変更（`Cloudflare-CDN-Cache-Control`）が本番の API に入った後、VPS の nginx の API の保存を一度全部消す（`sudo bash scripts/ops/vps/purge_api_cache.sh` の全消去）。
+- 理由: それより前に nginx が保存した応答にはこのヘッダが無い（確定済みは最大 30 日残る）。そのまま規則を入れると、nginx の HIT で返る古い保存の `s-maxage`（最大 2,592,000 秒）が Cloudflare に効き、cache-warm の上書きが届かないまま最大 30 日残る。
+- 費用: 消した直後は、匿名の要求が URL ごとに 1 回 Cloud Run に届く（その後は nginx に保存される）。一度きりで、GCS の操作は Cloud Run の中なので転送料は 0 円。Cloud Run の秒は、ふだんの開催日の 1 日分の匿名の要求ほど。
+
+Caching → Cache Rules → Create rule:
+
+1. 条件（Custom filter expression）:
+   ```
+   (http.host eq "app.megu-keiba.com" and starts_with(http.request.uri.path, "/api/") and not len(http.request.headers["cookie"]) > 0 and not len(http.request.headers["authorization"]) > 0)
+   ```
+   - 対象を `/api/` に限る。HTML・RSC は入れない（Next の HTML は `s-maxage=31536000` を返すので、入れると 1 年残り、保守の切り替えも効かなくなる）。
+2. Cache eligibility: Eligible for cache。
+3. Edge TTL: **Use cache-control header if present, bypass cache if not**（オリジンの指示に従う。`private`・`no-store` は置かれない）。
+4. Browser TTL: Respect origin（ブラウザの `max-age` は 30 秒のまま）。
+
+確かめ方:
+- `curl -sI https://app.megu-keiba.com/api/race-list/<確定済みの日>` を 2 回続けて打ち、2 回目が `cf-cache-status: HIT` で `age` が 300 以下。
+- Cookie を付けた要求（`-H 'Cookie: a=b'`）は `DYNAMIC` か `BYPASS` のまま。
+- `/api/maintenance/status`・`/api/v1/auth/status` は `HIT` にならない。
+- 前から保存されていそうな確定済みの古い日（例: 1 か月前の開催日）でも、2 回目の `age` が 300 以下になること（全消去が効いているか。新しく保存された URL だけ見ても分からない）。
+- Cloudflare が `Cloudflare-CDN-Cache-Control` を優先しない場合（`age` が 300 を超える）は、規則を外して知らせてほしい（6 時間〜30 日の `s-maxage` が Cloudflare に効いてしまうため）。
+- 注意: Cloud Run が落ちている間に nginx が返す古い保存（`proxy_cache_use_stale`）にもこのヘッダが付いているので、Cloudflare はそれをさらに最大 300 秒置く。会員の値の漏れではなく、古い表示が最大 5 分延びるだけ。
+
+会員の値が混じらないことは `tests/api/test_shared_cache_tiers.py` が確かめている。
+- `public` は匿名の要求にだけ付く。
+- その中身に会員限定の項目が無い。
+- どの会員区分にも、セッション以外の Cookie や Authorization が付いた要求にも、`public` と Cloudflare 用の期限を付けない。
