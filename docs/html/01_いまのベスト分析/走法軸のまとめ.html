@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="build_docs_shelves">
+<title>走法軸のまとめ（走法マップ・コース適性・予測への効き） — keiba-vpn docs</title><style>
+:root{--bg:#fff;--fg:#1f2430;--mut:#5b6474;--line:#d9dee7;--acc:#2456c9;--chip:#eef2fa;--warn:#a15c00}
+@media (prefers-color-scheme:dark){:root{--bg:#141821;--fg:#e6e9ef;--mut:#9aa3b2;--line:#2c3342;--acc:#7aa9ff;--chip:#1f2635;--warn:#f0b35a}}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.7 system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+main{max-width:1100px;margin:0 auto;padding:16px 16px 64px}
+a{color:var(--acc)}h1{font-size:1.6em;margin:.4em 0}h2{margin-top:1.8em;border-bottom:1px solid var(--line);padding-bottom:.2em}
+.crumb{font-size:.9em;color:var(--mut)}.meta,.src{color:var(--mut);font-size:.88em}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;margin:.5em 0;font-size:.92em}
+th,td{border:1px solid var(--line);padding:4px 8px;vertical-align:top;text-align:left}th{background:var(--chip)}
+.chip{display:inline-block;background:var(--chip);border-radius:4px;padding:0 6px;font-size:.82em;margin-right:4px;white-space:nowrap}
+.old{color:var(--warn)}.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.card{border:1px solid var(--line);border-radius:8px;padding:10px 14px}.card h3{margin:.2em 0}
+details{margin:.6em 0}summary{cursor:pointer}.mdsec{border-left:3px solid var(--line);padding-left:12px;margin:.6em 0}
+</style></head><body><main>
+<nav class="crumb"><a href="../index.html">目次</a> ／ <a href="目次.html">いまのベスト分析</a> ／ 走法軸のまとめ（走法マップ・コース適性・予測への効き）</nav>
+<h1>走法軸のまとめ（走法マップ・コース適性・予測への効き）</h1>
+<p class="meta">生成物（<code>python -m src.scripts.docs.build_docs_shelves</code>。手で直さない）。元の記録（最終コミット日）: <a href="../operations/running_map_course_axis.html">running_map_course_axis.html</a>（2026-11-11）・<a href="../operations/running_map_course_axis_rationale.html">running_map_course_axis_rationale.html</a>（2026-11-11）・<a href="../../ideas/running_map_axes_fixed.md">running_map_axes_fixed.md</a>（2026-11-13）・<a href="../../ideas/running_axes_scale_1to10.md">running_axes_scale_1to10.md</a>（2026-11-12）・<a href="../../ideas/running_style_pairs.md">running_style_pairs.md</a>（2026-11-03）・<a href="../operations/running_style_pairs.html">running_style_pairs.html</a>（2026-11-18）・<a href="../../operations/retrain_trials/README.md">README.md</a>（2026-11-11）・<a href="../../../src/research/race/running_map.py">running_map.py</a>（2026-11-12）・<a href="../../../src/research/race/running_map_best5.py">running_map_best5.py</a>（2026-11-06）・<a href="../../../src/pipeline/inference/betting.py">betting.py</a>（2026-11-02）・<a href="../../../src/research/race_analysis/precompute.py">precompute.py</a>（2026-11-13）</p>
+<p>走法軸（ペース・位置取り・脚の使い方の型）の今の使い方（走法マップ・Best5・買い目の近い組）、コース適性の根拠と限界、親モデルへの効き（簡易版の履歴の検定）、版の年表。元は走法マップの調査の HTML・md・コード。</p>
+<h2 id="conclusion">1. 結論（走法軸とは・今の使い方）</h2>
+<div class="tw"><table><thead><tr><th>項目</th><th>内容</th></tr></thead><tbody><tr><td>地図・グループ・近い馬に使う軸</td><td>ギアチェンジ・TS・TS持続力・Cr性能・Hペース耐性・基礎スピード</td></tr><tr><td>道悪の地図の軸（WET_AXIS）</td><td>道悪適性</td></tr><tr><td>値の表示・色分けだけの軸</td><td>出脚・先行力・まくり特性</td></tr></tbody></table></div><p class="src">元: src/research/race/running_map.py の AXES・MAP_KEYS・WET_AXIS（コードを正とする）。軸の定義は <a href="../../ideas/running_map_axes_fixed.md">running_map_axes_fixed.md</a>、10 点満点の目盛りは <a href="../../ideas/running_axes_scale_1to10.md">running_axes_scale_1to10.md</a>。</p>
+<p><b>走法マップ（採用の台帳の行）</b></p><div class="tw"><table><thead><tr><th>モデル</th><th>採用中の版</th><th>採用日（出典）</th><th>状態</th></tr></thead><tbody><tr><td>走法マップ</td><td>ANALYSIS_VERSION 31</td><td>要確認 （直近のコミットは Best5 の見た目の変更）</td><td>画面のみ</td></tr></tbody></table></div>
+<div class="tw"><table><thead><tr><th>モデル</th><th>版</th><th>更新日</th><th>何が変わったか</th><th>主指標</th><th>採否</th><th>根拠</th></tr></thead><tbody><tr><td>走法マップ</td><td>ANALYSIS_VERSION 31</td><td>要確認</td><td>Best5 は W_DAY=0.5 の 1 パターン（2025・2026 年の外挿 1,565 レースで調整）</td><td>—</td><td>採用（画面）</td><td>running_map_best5.py の説明</td></tr></tbody></table></div><p class="src">元: model_versions.html §2.9 の走法マップの行。</p>
+<p><b>Best5（地図の位置から適性が合う順に 5 頭）</b></p><ul><li>走法マップの Best5: 地図の位置（コース特注ゾーン・馬場特注ゾーンの色）から、適性が合う順に 5 頭を選ぶ（1 パターンだけ）。</li><li>得点 = log(コース特注ゾーンの倍率) + W_DAY * log(馬場特注ゾーンの倍率)。倍率は隣り合う格子と混ぜて（平滑）から読む。</li><li>2025・2026 年の外挿（地図は過去のレースだけで作り、後のレースで評価。計 1,565 レース）で配分 W_DAY を調整した。</li><li>定数の配分は W_DAY=0〜4 でほぼ平らで、人気を除いた上乗せは 0.5 が最大、3 着内の的中も 0〜1 が最良（2 以上は下がる）。</li><li>クラス・レース番号・当日のレース数・芝ダ・地図の水準で配分を変えても、年をまたいだ検証では定数より良くならなかった（採用しない）。</li><li>当日のデータ量は、馬場特注ゾーンの倍率が少ないほど 1（中立）に寄る作りで、すでに効いている。</li><li>近さの加点・人気込みは効果が無かった。馬場特注ゾーンが無いレースは、コースだけで選ぶ。</li><li>同点は「コースの倍率（平滑なし）→ 馬番」で決め、並びの順（≒人気順）には頼らない。</li></ul><p class="src">元: src/research/race/running_map_best5.py の説明。</p>
+<p><b>コース適性の今の作り（反映の節）</b></p><ul><li>コース適性（寄与率・地図の重み・好走ゾーン・当日の馬場傾向）の期待得点を、頭数だけから 人気込み（B と同じ考え方） に変更した（ REFERENCE_VERSION 16、 running_map_course.POP_TABLE ）。画面に出るのは基準の作り直し後。この表（§2〜§5 の A）は変更前の値。</li><li>画面の好走ゾーンの倍率は「人気どおり = 1」になる。寄与率は B 相当（市場の織り込みを除いた下限）で、R² が小さく、コース別にはぶれる。</li><li>コース形状から決める方針（直線長・カーブ・坂から「求められる方向」を事前に置く）は、このデータでは裏付けが取れていないため未採用。</li></ul><p class="src">元: <a href="../operations/running_map_course_axis.html">running_map_course_axis.html</a> の「反映」の節。</p>
+<p><b>走法が近い馬の組（買い目推奨）</b>: 買い目推奨の確率の倍率 STYLE_PAIR_BOOST = <code>{&quot;umaren&quot;: 1.10, &quot;umatan&quot;: 1.10, &quot;wide&quot;: 1.08}</code>（src/pipeline/inference/betting.py）。調査の HTML: <a href="../operations/running_style_pairs.html">running_style_pairs.html</a></p>
+<ul><li>脚質（前走までの 4 角の位置）が離れた群どうしの 2 頭は、一緒に 3 着以内に来る割合が見込みの 0.977 倍で、見込みより少ない。 同じ群どうしは 1.005 倍で見込みとの差は偶然の範囲、隣の群どうしは 1.009 倍で見込みより多い。 同じ群 − 離れた群は +0.028（95% 区間 +0.008〜+0.045）で差がある。隣の群 − 離れた群は +0.031（+0.014〜+0.049）。 説明力はあるが小さく、言えるのは「脚質が大きく離れた組は来にくい」まで。「近いほど来やすい」とは言えない。</li><li>展開予想が向く側の 2 頭（スロー・ハイ予想のレースだけ）と 0 頭の差は +0.007（-0.037〜+0.052）で、差は偶然の範囲。1 頭ずつの市場のずれを掛ける前は +0.086（+0.042〜+0.132）で、差がある。掛ける前の差は、2 頭が一緒に来る分ではなく、市場が向く側の馬を 1 頭ずつ安く見ている分だった。</li><li>走法軸（2024 年の TS・ギアチェンジ・TS持続力の 3 軸）の近さは、最も近い組 − 最も遠い組が +0.016（-0.053〜+0.091）で、差は偶然の範囲。同じ組の 4 角の位置の差は +0.083（+0.016〜+0.152）で、差がある。走法軸の区間は広く、4 角の位置の差と同じ大きさの差も否定できない。本番の走法マップ（8 方面の地図）の近さは、2025 年以降にしか値が無く、測っていない。</li></ul><p class="src">元: <a href="../operations/running_style_pairs.html">running_style_pairs.html</a> の冒頭の結論の枠（無ければ結論の節）の初めの 3 項目。</p>
+<details><summary>前の調査（md）の「結果」「反映」「残り」の節</summary><div class="mdsec"><h2>結果</h2>
+<h3>1. 軸を決めて相手を近い馬にする（ワイド・馬連の回収率）</h3>
+<p>軸から近い 3 頭へ買った場合と、人気（オッズ）をそろえた近くない 3 頭へ買った場合の比較。</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>ワイド 近い / 他</th>
+<th>馬連 近い / 他</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>芝・軸=1 番人気</td>
+<td>86% / 72%</td>
+<td>88% / 67%</td>
+</tr>
+<tr>
+<td>芝・軸=コース適性 1 位</td>
+<td>89% / 82%</td>
+<td>95% / 62%</td>
+</tr>
+<tr>
+<td>ダート・軸=1 番人気</td>
+<td>86% / 79%</td>
+<td>81% / 77%</td>
+</tr>
+<tr>
+<td>ダート・軸=コース適性 1 位</td>
+<td>84% / 87%</td>
+<td>78% / 71%</td>
+</tr>
+</tbody>
+</table>
+<p>芝は 2025・2026 年とも近い馬が上。ダートは年によって逆転。どれも回収率 100% 未満で、これ単独では儲からない。
+「コース適性 1 位」は方面の重要度に検証期間を含むため、やや楽観的。</p>
+<h3>2. すべての 2 頭の組で、同じ確率水準どうしを比べる（買い目推奨に入れた根拠）</h3>
+<p>2 頭がそろって来る確率（オッズ・本番モデルそれぞれから着順分布で計算）を 20 層に分け、層ごとに
+「近い組」と「近くない組」の実際の的中を比べた（レース単位のブートストラップで 95% 区間）。</p>
+<table>
+<thead>
+<tr>
+<th>確率の元</th>
+<th>芝 馬連</th>
+<th>芝 ワイド</th>
+<th>ダート 馬連</th>
+<th>ダート ワイド</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>本番モデル v6（2026）</td>
+<td>1.16 [1.07, 1.27]</td>
+<td>1.13 [1.07, 1.20]</td>
+<td>1.16 [1.06, 1.27]</td>
+<td>1.12 [1.06, 1.19]</td>
+</tr>
+<tr>
+<td>単勝オッズ（2025）</td>
+<td>1.17</td>
+<td>1.14</td>
+<td>1.15</td>
+<td>1.08</td>
+</tr>
+<tr>
+<td>単勝オッズ（2026）</td>
+<td>1.20</td>
+<td>1.16</td>
+<td>1.19</td>
+<td>1.15</td>
+</tr>
+</tbody>
+</table>
+<p>近い組の確率は、近くない組より高い層に偏っている。層をそろえずに合計どうしで比べると（約 1.02 倍）、
+その偏りのため効果が見えなくなるので注意。</p></div><div class="mdsec"><h2>反映</h2>
+<p><code>src/pipeline/inference/betting.py</code> の <code>STYLE_PAIR_BOOST</code>: 走法が近い 2 頭の 馬連・馬単 ×1.10、ワイド ×1.08（区間の下限付近の控えめな値）。
+2 頭の確率は各馬の複勝率を超えないよう上限を置く。近い組は事前計算の走法マップ（<code>race_analysis</code> の保存先）から読み、無ければ補正しない。
+<code>BettingConfig(style_pair_boost=False)</code> で止められる。</p></div><div class="mdsec"><h2>残り</h2>
+<ul>
+<li>補正を入れた買い目推奨の実オッズでの回収率（実オッズは GCS にあり、費用の上限のため手元では未実施）。prediction_results の日次精算で様子を見る。</li>
+<li>
+<p>3 連複: 2026-11-03 に測定。本番 3 連複が評価するモデル上位 6 頭の 3 頭の組（2,795 レース・55,900 組）で、近い組を 1 つ以上含む 3 頭は
+  同じ確率水準の「近い組なし」の 1.16 倍 [1.00, 1.32]、2 つ以上で 1.19 倍 [1.03, 1.44]。区間が広く下限が 1 付近のため、補正は入れていない。</p>
+</li>
+<li>
+<p>ダート用に近さを測る方面を作り直すか（2 の結果ではダートでも効いているので優先度は低い）。</p>
+</li>
+</ul></div></details><p class="src">元: <a href="../../ideas/running_style_pairs.md">running_style_pairs.md</a>（更新 2026-11-03）。</p>
+<p><b>親モデルへの効き（走法軸の履歴（候補 15）— 合格線を測る前に固定（2026-11-10））</b>: 結果 — 不採用（2026-11-10）。（このページの注: 節の本文のとおり、検定したのは簡易版の履歴）</p><p class="src">記録の限界: 前後半比は相関では代わりになるが、2020〜2021 年の水準のずれで外れたため履歴としては評価していない。位置系は実測を全年で作れない。実測の軸が 2020〜2023 年に補填されたら、同じ検定をやり直せる。</p><p class="src">数字は §2。</p>
+<h2 id="numbers">2. 数字（親モデルへの効き。期間は節の中）</h2>
+<details><summary>測る前に固定した合格線（節の前半）</summary><div class="mdsec"><h2>走法軸の履歴（候補 15）— 合格線を測る前に固定（2026-11-10）</h2>
+<p>問い: 走法軸（ペース・位置取りの型）の過去走の値を親モデルに足すと良くなるか。実測の軸（<code>run_axes.py</code>）は馬別 200m ラップが要るため 2024 年以降しか無く（位置系は 2025〜2026 年のみ全件）、2016〜2023 年の履歴には使えない。そこで全年にある入力（<code>race_result_flat</code> の通過順・上がり 3F・タイム・ラップ・頭数）から「簡易版」を作り、実測との一致を確かめたうえで履歴特徴にする。以下の線は <strong>測る前に固定</strong>。test 2025・2026 は選択に使わない。</p>
+<p><strong>簡易版を作る軸</strong>（全年の入力だけで作れるもの）</p>
+<ul>
+<li>前後半比 <code>s_split</code>: 自分の上がり 3F の 200m 当たり ÷ 中盤の 200m 当たり（中盤 = タイム − 上がり 3F − レースの 1F 目）。コース偏差（実測と同じ）。</li>
+<li>先行力 <code>s_front</code>: 通過順のコーナー 1 つの相対順位（(順位−1)/(頭数−1)、前を高く、コース偏差）。どのコーナーを使うかは <strong>2025 年だけ</strong>で距離帯ごとに選ぶ（相関最大）。</li>
+<li>Cr性能 <code>s_cr</code>: 3 角 → 4 角の相対順位の前進（通過順が 4 コーナー分ある走のみ）。</li>
+<li>まくり特性 <code>s_makuri</code>: 1 角 → 3 角の相対順位の前進（実測は 400m 通過 → 3 角。近似）。</li>
+<li>消耗耐性 <code>s_endure</code>: <code>s_split</code> を距離帯別に [レースの前半ペース偏差, 先行力] で回帰した残差（実測の式の簡易形）。</li>
+</ul>
+<p><strong>作れない軸</strong>: TS・TS持続力・出脚・ギアチェンジ・急坂適性は馬別ラップが要る。TS は親モデルの速度系（pc_*・sr_*）と実質同じなので、簡易版も作らない。</p>
+<p><strong>関門 1（簡易版が実測の代わりになるか）</strong> — 2025 年で調整、2026 年（1〜10 月）で検証。全部満たした軸だけ関門 2 へ。</p>
+<ol>
+<li>2026 年の相関（実測 vs 簡易版）≥ <strong>0.70</strong>。</li>
+<li>2025 年と 2026 年の相関の差 ≤ 0.05。</li>
+<li>2016〜2023 年の簡易版の年平均が 2025〜2026 年の平均から ±0.10 標準偏差以内、年の標準偏差が ±10% 以内（時代ずれが無い）。</li>
+<li>簡易版の欠測率が年ごとに 2 ポイント以上ずれない（時代の見分け特徴にならない）。</li>
+</ol>
+<p><strong>関門 2（履歴として効くか）</strong> — 段 9 の予測勝率（LOYO、検証 2022〜2024 年）の残差に、前走までの値が残っているかのスコア検定（風と同じ手順。レース単位でまとめる）。</p>
+<ul>
+<li>候補は軸ごとに 2 本: 前走の値、前 3 走の平均。関門 1 を通った軸が m 本なら K = 2m 本。数えた本数は結果にすべて書く。</li>
+<li>合格線: |z| ≥ Φ⁻¹(1 − 0.005/K)（Bonferroni、全体 p&lt;0.01）、かつ 2022・2023・2024 年の符号が揃う。</li>
+<li>追加で残差に小さな木（葉 8・300 本、年を 1 つ除いて検証）を当て、対照（コース・馬場・クラスなど）に軸を足した版の LL の変化の 3 年平均が <strong>−0.0002 以下</strong>で、3 年とも負なら候補。</li>
+<li>どちらも満たさなければ <strong>不採用</strong>（親モデルの再学習はしない。風と同じ判断）。満たせば LOYO の束にして、test 2025 を <strong>1 回だけ</strong>評価し、勝率 LL が対照より <strong>−0.0002 以下</strong>なら採用。</li>
+<li>2026 年は、関門 1 の相関の検証（勝敗を使わない）にだけ入力を使い、勝率・成績の評価や選択には使わない。</li>
+</ul></div></details>
+<div class="mdsec"><h3>結果 — 不採用（2026-11-10）</h3>
+<p>素材は <code>src/scripts/data/run_axes_simple.py</code>（出力 <code>retrain_out/axes16</code>、ホスト）。数えた候補: 関門 1 は 5 軸、関門 2 は 1 軸 × 2 本（K=2、合格線 |z|≥2.81）。</p>
+<p><strong>関門 1</strong>（実測 <code>run_axes</code> との相関、2025 年で調整・2026 年で検証）</p>
+<table>
+<thead>
+<tr>
+<th>簡易版</th>
+<th>2025 年</th>
+<th>2026 年</th>
+<th>結果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>前後半比 s_split</td>
+<td>0.967</td>
+<td>0.970</td>
+<td>相関は合格。<strong>関門 3 で不合格</strong>: 年平均が 2020 年 +0.109、2021 年 +0.083（2025〜26 年は −0.04〜−0.07）で、基準との差が最大 0.16 標準偏差（線は 0.10）。2020〜2021 年に時計の水準のずれがある</td>
+</tr>
+<tr>
+<td>消耗耐性 s_endure</td>
+<td>0.890</td>
+<td>0.900</td>
+<td>4 つとも合格（年内のレース平均を引くので年平均は 0 に固定。年の標準偏差のずれは最大 5%）</td>
+</tr>
+<tr>
+<td>先行力 s_front</td>
+<td>0.172</td>
+<td>0.146</td>
+<td>不合格</td>
+</tr>
+<tr>
+<td>Cr性能 s_cr</td>
+<td>−0.042</td>
+<td>−0.061</td>
+<td>不合格</td>
+</tr>
+<tr>
+<td>まくり特性 s_makuri</td>
+<td>−0.100</td>
+<td>−0.094</td>
+<td>不合格（被覆も約 50% で、年ごとの欠測の差の線も外れた）</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>位置系 3 軸が合わないのは、実測の位置（netkeiba の馬別ラップの <code>position</code>）が公式の通過順と別の量だから。例: 8 頭立てで位置が 10 になる走があり、3 値しか取らないレースもある。公式の通過順から作ると別の軸になる（親モデルに既にある位置取りの列と重なる）ので、実測の代わりにはならない。</li>
+<li>簡易版の最初の版は上がり 3F の入力の誤り（比が 400 など）で相関が 0.01 まで落ちた。上がり 3F が 30〜50 秒・比が 0.6〜1.6 の外を欠測にした（勝敗は見ていない）。合格線は変えていない。</li>
+<li>簡易版の欠測率は 2016〜2019 年 4.1〜4.3%、2020 年以降 5.5〜5.9% と 1.4 ポイントの段差がある（線の 2 ポイント未満なので合格だが、年の見分けにはなりうる）。</li>
+</ul>
+<p><strong>関門 2</strong>（消耗耐性のみ。段 9 の予測勝率 LOYO、検証 2022〜2024 年、12.5 万走）</p>
+<table>
+<thead>
+<tr>
+<th>変数</th>
+<th>z</th>
+<th>年別（2022 / 2023 / 2024）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>前走の消耗耐性</td>
+<td>−0.02</td>
+<td>0.15 / −0.19 / 0.01</td>
+</tr>
+<tr>
+<td>前 3 走の平均</td>
+<td>−0.16</td>
+<td>0.35 / −0.73 / 0.11</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>残差の木（葉 8・300 本、年を 1 つ除く）の LL の変化（負 = 改善）: 対照（コース・馬場・クラス・前走の初角位置）−0.000259、軸を足した版 −0.000357。<strong>対照との差は −0.000098</strong>（年別 −0.000118 / −0.000169 / −0.000006）。線の −0.0002 に届かない。</li>
+<li>判定: <strong>不採用</strong>。履歴として効いていないので、test 2025 は評価せず、親モデルの再学習もしない。2026 年は勝率・成績の評価に使っていない。</li>
+<li>限界: 前後半比は相関では代わりになるが、2020〜2021 年の水準のずれで外れたため履歴としては評価していない。位置系は実測を全年で作れない。実測の軸が 2020〜2023 年に補填されたら、同じ検定をやり直せる。</li>
+<li>次の交互作用の探索（#4）に使える素材: <code>retrain_out/axes16/simple_axes.parquet</code>（キー race_id・horse_id、列 s_split・s_front・s_cr・s_makuri・s_endure、2016〜2026 年の平地）と、履歴 <code>simple_axes_hist.parquet</code>（s_endure_p1・s_endure_p3）。実測と一致を確かめたのは s_split（ただし 2020〜21 年のずれあり）と s_endure だけ。s_front・s_cr・s_makuri は公式の通過順から作った別の量。</li>
+</ul></div><p class="src">元: <a href="../../operations/retrain_trials/README.md">README.md</a> の「走法軸の履歴（候補 15）— 合格線を測る前に固定（2026-11-10）」の節。（このページの注: 表の「関門 3」は、固定した合格線の関門 1 の条件 3）</p>
+<h2 id="evidence">3. 事象と根拠（コースごとの適性）</h2>
+<h3>rationale（得点分布の差から基準を引く測り方）の結論</h3><ul><li>好走馬の得点分布と全体の得点分布の差は、ほとんどが「どのコースでも出る差」（実力・クラス・芝ダ） 。 軸の値そのままだと、コース × 軸 372 件のうち 191 件（2024-25 年）で |t| ≥ 2.3。実力の代理を除いても 79 件。 同じ芝ダ・同じクラス構成の全体で期待される差（基準）を引くと 24 件（偶然でも約 8 件）まで減る。</li><li>基準を引いたコース固有の差は、2024-25 年と 2026 年である程度続いている （相関 +0.25、基準を引く前は実力を除いても +0.45。2024-25 年で |t| ≥ 2 のうち 2026 年で同符号 27/38）。 軸別の相関は ギアチェンジ +0.40、Cr性能 +0.34、Hペース耐性 +0.24、TS（末脚の速さ） +0.16、基礎スピード +0.07、TS持続力 +0.07。 ギアチェンジ・Cr性能・Hペース耐性は、コースによって優位／不利が分かれる傾向が続いている 。TS持続力・基礎スピードはほぼ 0（コース差は検出できない）。 これは前の回帰方式（コース固有の係数の相関 +0.08）より再現が強い。「得点分布の差」の方が、少ない走数でも安定した測り方だと読める。</li><li>個別に「このコースでこの軸が優位／不利」と、両期間で言えたのは 7 件 （偶然なら 1 件に満たない）: 中山ダート1800m のギアチェンジ（優位寄り）、札幌芝1200m のギアチェンジ（不利寄り）、東京ダート1600m のギアチェンジ（優位寄り）、阪神ダート1800m のギアチェンジ（優位寄り）、中山ダート1800m のTS（末脚の速さ）（優位寄り）、東京ダート1300m のCr性能（不利寄り）、小倉ダート1700m の基礎スピード（優位寄り）。</li><li>ただし「適性だと確定」とまでは言わない 。基準を引いた後も t の標準偏差が 1.27（2024-25）/ 1.21（2026）と 1 より大きく、ギアチェンジは 1.59。 実力の除去は線形の代理だけで、コースごとの出走馬の強さの違い（同じクラスでも強い馬が集まるコース）が軸と結びつくと、適性に見える差が残る。人気・オッズは、補正にも判定にも使っていない。 「次の期間でも続くかを見る候補」の位置づけ。</li><li>前の回帰方式（コースの形状で束ねる）では、「距離が長いほど TS が効く」だけが両期間で同じ向きに出た（係数 +1.0 / +1.3、t = +1.9 / +2.3。弱い根拠）。 直線長・小回り・坂など、事前に考えやすい形状の筋は再現しなかった（§4）。</li><li>Hペース耐性が実力の代理だった点は、実力を除く前後で確認できる。軸のばらつきのうち実力で説明される割合は、Hペース耐性が芝 20%・ダート 22%（ギアチェンジ 12% / 9%、他は 5% 以下）。</li></ul><p class="src">元: <a href="../operations/running_map_course_axis_rationale.html">running_map_course_axis_rationale.html</a>（更新 2026-11-11）の冒頭の「結論」の枠。</p>
+<h3>course_axis（寄与率の測り方）の結論</h3><ul><li>Hペース耐性が高いのは、コースの要求ではなく「実力の代理」になっているから 。現行の寄与率は「得点 − 頭数だけの期待」を回帰するので、強い馬ほど得点が高い分がそのまま軸に乗る。 Hペース耐性は市場が見ている実力（人気込みの期待 − 頭数だけの期待）と相関 0.48（芝）・0.51（ダート）で、6 軸の中で最大。 人気で実力を除くと R² は芝 0.102 → 0.005、ダート 0.124 → 0.010 へ 1/10〜1/20 に落ち、芝では Hペース耐性の寄与率が 77% → 38% になる。</li><li>コース形状（直線の長さ・小回り・坂）との関係は、このデータでは確認できない 。コース固有の差を、直線長・小回り・ダート・坂の有無に重み付き回帰しても、 TS（直線が長いほど +）・TS持続力・Cr性能（小回りほど +）はいずれも |t| &lt; 1.5 で向きも弱い（§4）。東京芝の TS も平均との差は見えない（t = -0.9、向きはむしろ逆）。</li><li>コースごとの差の検定は 402 件（67 コース × 6 軸）で |t| ≥ 2.3 が 13 件。偶然でも約 9 件は出る数なので、個々の印は仮説の材料に留まる。</li><li>理由として考えられるのは、(a) 軸が「出走前の過去走のプロファイル」で測りが粗い、(b) 市場がすでに軸の情報を織り込んでいる（人気調整後の数字は下限）、(c) 軸ごとの効果が小さい（人気調整後の R² は 0.3〜1%）。 「効いていない」ではなく「この手法では検出できない」と読む。</li><li>クラス・タイム指数の水準で分けても、現行の寄与率では Hペース耐性が首位のまま（§3）。クラスが上がるほど Hペース耐性の係数は小さくなる（芝 0.106 → 0.067）が、順位は変わらない。</li></ul><p class="src">元: <a href="../operations/running_map_course_axis.html">running_map_course_axis.html</a>（更新 2026-11-11）の冒頭の「結論」の枠。</p>
+<h2 id="limits">4. 限界</h2>
+<h3>rationale（得点分布の差から基準を引く測り方）</h3><ul><li>実力の代理は「過去走の得点の平均」で、クラスの違い・馬場・展開の影響が残る。実力の指標を変えると（例: タイム指数）、除かれる量が変わる可能性がある。ここでは市場を見ない代理を優先した。</li><li>2024 年は整った走が少なく、2024-25 年の推定は実質 2025 年中心（23,942 走）。コース × 軸の標準誤差は大きく、差が小さいコースは検出できない。 「効いていない」ではなく「この量では検出できない」 と読む。</li><li>形状は 5 つの粗い指標。ゴール前の坂の高さ、初角までの距離、スタート形状、コーナーの数などは、コース数（約 40〜60）に対して多すぎるため入れていない。</li><li>2026 年はテストセット②。ここでの使い方は「確認 1 回」で、選択には使っていない。確認後の再推定（2024-26 年をまとめる）は、これから追加される走で改めて再確認してから。</li><li>画面（走法マップ・コース特注ゾーン）への反映は今回していない。反映するなら「距離が伸びるほど TS を評価」のような形状レベルの補正が候補で、コース単位の優位は出さない。</li></ul><p class="src">元: <a href="../operations/running_map_course_axis_rationale.html">running_map_course_axis_rationale.html</a> の「限界」の節。</p>
+<h3>course_axis（寄与率の測り方。「反映」の節の前の画面の値を含む）</h3><ul><li>現行の寄与率（A）は、コースの要求ではなく実力の代理を含む 。60/67 コースで Hペース耐性が首位（最小 16%）。画面の「寄与率」を「このコースで求められる能力」と読まないこと。</li><li>B は市場の織り込みを引くため、軸の効果の 下限 。「A は過大、B は過小」で、真の要求はその間にある。</li><li>コース固有の差の基準（芝ダ × クラスの平均）は同じ走で推定しており、その推定誤差は t に入っていない。場別・直線長別のように基準に占める割合が大きい集計ほど、差は 0 側に偏る（検出しにくい側の誤差）。</li><li>多重検定（402 件）。個々のコースの印は仮説の材料であり、確認には別期間（2026 年はテストセット②として温存）での再現が要る。</li><li>軸は出走前のプロファイル（過去走から作る）。新馬・履歴の薄い馬は父平均などで埋まるため、軸の測りは粗い。ここで効果が見えないことは、軸そのものが無意味という意味ではない。</li><li>良馬場のみ。道悪の地図は基礎スピードの代わりに道悪適性を入れた別の地図で、ここでは扱っていない。</li><li>タイム指数の水準は 2024〜2025 年のみ（2026 年のファイルが無い）。クラスの方が走数は多い。</li></ul><p class="src">元: <a href="../operations/running_map_course_axis.html">running_map_course_axis.html</a> の「限界」の節。</p>
+<h3>親モデルへの効き</h3><p>前後半比は相関では代わりになるが、2020〜2021 年の水準のずれで外れたため履歴としては評価していない。位置系は実測を全年で作れない。実測の軸が 2020〜2023 年に補填されたら、同じ検定をやり直せる。</p>
+<h2 id="version">5. 今の版</h2>
+<div class="tw"><table><thead><tr><th>何の版</th><th>版</th><th>その版の日付</th><th>元</th></tr></thead><tbody><tr><td>走法マップの基準（REFERENCE_VERSION）</td><td>17</td><td>2026-11-11</td><td>src/research/race/running_map.py</td></tr><tr><td>分析全体（ANALYSIS_VERSION）</td><td>39</td><td>2026-11-13</td><td>src/research/race_analysis/precompute.py</td></tr><tr><td>採用の台帳の記載</td><td>ANALYSIS_VERSION 31</td><td></td><td>model_versions.html §1</td></tr></tbody></table></div>
+<p><b>食い違い</b>: 採用の台帳は ANALYSIS_VERSION 31、コードは 39。</p>
+<h2 id="timeline">6. 経緯の年表</h2>
+<h3>走法マップの基準（REFERENCE_VERSION）</h3><div class="tw"><table><thead><tr><th>版</th><th>日付</th><th>変えたこと</th></tr></thead><tbody><tr><td>17</td><td>2026-11-11</td><td>10 点満点への換算の基準（クラス別 TS のアンカー・タイプ軸の平均/SD。axis_score10.py）を同梱</td></tr><tr><td>16</td><td>2026-11-10</td><td>コース適性（寄与率・地図の重み・好走ゾーン）の期待得点を人気込みにして、実力の代理を除く。人気表は基準に同梱し、読み込み時に running_map_course.POP_TABLE へ設定</td></tr><tr><td>15</td><td>2026-11-05</td><td>コース別の地図を良馬場だけ・道悪（稍重以上）だけで別々に測り、道悪の地図は基礎スピードの代わりに道悪適性を軸にする</td></tr><tr><td>14</td><td>2026-11-05</td><td>地図に使う軸に基礎スピードを足して 6 軸に・TS/TS持続力へ改名</td></tr><tr><td>13</td><td>2026-11-05</td><td>地図に使う軸に Hペース耐性を足して 6 軸に</td></tr><tr><td>12</td><td>2026-11-05</td><td>地図に使う軸をギアチェンジ・TS・TS持続力・Cr性能の 4 つに固定</td></tr><tr><td>11</td><td>記録なし</td><td>場のグループは 300 走以上・長距離が少ない場は 1800m 以上でまとめる。</td></tr><tr><td>10</td><td>記録なし</td><td>標本の少ないコースは同じ競馬場の距離帯（2600m 以上は長距離）でまとめる。</td></tr><tr><td>9</td><td>2026-11-03</td><td>コース別の地図を「軸の無い、上位 N 方面（コースごとに 3〜6）で走法の近い馬ほど近い」重み付き主成分にした</td></tr></tbody></table></div>
+<h3>分析全体（ANALYSIS_VERSION）のうち「走法」を含む版</h3><div class="tw"><table><thead><tr><th>版</th><th>日付</th><th>変えたこと</th></tr></thead><tbody><tr><td>37</td><td>2026-11-11</td><td>走法マップの各軸に、クラス基準（5=2勝で安定・4=1勝・3=未勝利・G1 上位=10）の 10 点満点 scores を付ける</td></tr><tr><td>29</td><td>2026-11-06</td><td>走法マップの各馬に、性別・父・母父だけから出す血統の傾向（10 観点の期待値と 80% 区間）を付ける</td></tr><tr><td>28</td><td>2026-11-06</td><td>走法マップの Best5 を、配分を調整した 1 パターンだけにする</td></tr><tr><td>27</td><td>2026-11-06</td><td>走法マップに Best5</td></tr><tr><td>26</td><td>2026-11-05</td><td>走法マップに道悪の地図（稍重以上・道悪適性入りの 6 軸）を足し、良馬場の地図は良馬場だけで測る</td></tr><tr><td>25</td><td>2026-11-05</td><td>走法マップに基礎スピードを足して 6 軸に・TS/TS持続力へ改名</td></tr><tr><td>24</td><td>2026-11-05</td><td>走法マップの軸に Hペース耐性を足して 5 軸に</td></tr><tr><td>23</td><td>2026-11-05</td><td>走法マップの各馬に着順を付ける（レース後に結果が入ったら作り直す。2026-11-05）。</td></tr><tr><td>22</td><td>2026-11-05</td><td>走法マップの軸をギアチェンジ・TS・TS持続力・Cr性能の4つに固定</td></tr><tr><td>19</td><td>2026-11-03</td><td>走法マップを上位 N 方面（3〜6）の軸の無い地図に</td></tr></tbody></table></div>
+<p class="src">元: running_map.py の REFERENCE_VERSION のコメント（全件）と、precompute.py の ANALYSIS_VERSION のコメントのうち「走法」を含む版。日付はコメントの記載で、無い版は「記録なし」。</p>
+<h2 id="links">7. 詳細へのリンク</h2>
+<ul><li><a href="../operations/running_map_course_axis_rationale.html">走法軸 × コースの適性：優位の根拠（今の測り方）</a>（更新 2026-11-11）</li><li><a href="../operations/running_map_course_axis.html">走法マップ 良馬場のコース別 軸の寄与と根拠（前の測り方・反映）</a>（更新 2026-11-11）</li><li><a href="../../ideas/running_map_axes_fixed.md">走法マップの軸の確定定義（md）</a>（更新 2026-11-13）</li><li><a href="../../ideas/running_axes_scale_1to10.md">走法軸の 1〜10 の目盛り（md）</a>（更新 2026-11-12）</li><li><a href="../../ideas/running_style_pairs.md">走法が近い馬は一緒に来るか（md）</a>（更新 2026-11-03）</li><li><a href="../operations/running_style_pairs.html">走法が近い馬は一緒に来るか（HTML）</a>（更新 2026-11-18）</li><li><a href="../../operations/retrain_trials/README.md">再学習の試しの記録（README。走法軸の履歴の節）</a>（更新 2026-11-11）</li></ul>
+<p>関連する別のモデル（採用の台帳の行）:</p><div class="tw"><table><thead><tr><th>モデル</th><th>採用中の版</th><th>採用日（出典）</th><th>状態</th></tr></thead><tbody><tr><td>追走難度</td><td>v2（tp54-1）</td><td>設定ファイルの最終コミット 2026-10-22（ 5ace8206 ）</td><td>本番（S3 の入力）</td></tr><tr><td>ラップ予想</td><td>tp55-1</td><td>日付 要確認 （設定の置き場を未確認）</td><td>本番（S3 の入力・展開タイプの入力）</td></tr><tr><td>展開タイプ</td><td>tp61-1</td><td>設定 2026-10-21（ dfd40fd0 ）、モデル 2026-10-22（ 833ab06b ）</td><td>画面のみ</td></tr></tbody></table></div><ul><li><a href="../modeling/chapters/tracking_difficulty_v2.html">追走難度 v2（tp-54）</a></li><li><a href="../modeling/chapters/lap_forecast.html">ハロンごとのラップ予想（tp-55）</a></li></ul>
+</main></body></html>

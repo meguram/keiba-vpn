@@ -25,7 +25,7 @@ class Shelf:
 
 SHELVES: list[Shelf] = [
     Shelf("best", "01_いまのベスト分析", "いまのベスト分析",
-          "データ分析家が最初に見る所。重賞・通常レース・血統・馬の予測モデル・推奨馬券について、今の最良の結論・数字・根拠・限界を 1 枚ずつに。"),
+          "データ分析家が最初に見る所。重賞・通常レース・血統・走法軸・馬の予測モデル・推奨馬券について、今の最良の結論・数字・根拠・限界を 1 枚ずつに。"),
     Shelf("spec", "02_本番の仕様", "本番の仕様",
           "今、本番（prod）と stg で実際に動いているものの仕様。全体の構成・データ・モデルと規則・画面と公開。"),
     Shelf("res-graded", "03_調査と検証/重賞", "重賞", "重賞のデータ分析型の予想（ルールベース）の調査・サイクルの記録。"),
@@ -201,7 +201,7 @@ GROUPS: dict[str, list[Group]] = {
               [E("docs/ideas/sire_dam_influence.md", "父と母の影響"), E("docs/ideas/euro_kick_sire_lines.md", "欧州型の瞬発力の系統")]),
     ],
     "res-feature": [
-        Group("走法マップ", "走法の軸 × コースの適性・走法や脚質が近い馬が一緒に来るか。", ["running_map_course_axis", "running_map_course_axis_rationale", "running_style_pairs"],
+        Group("走法マップ", "走法の軸 × コースの適性・走法や脚質が近い馬が一緒に来るか。結論は「いまのベスト分析 / 走法軸のまとめ」。", ["running_map_course_axis", "running_map_course_axis_rationale", "running_style_pairs"],
               [E("docs/ideas/running_map_axes_fixed.md", "走法マップの軸（固定）"), E("docs/ideas/running_axes_scale_1to10.md", "走法の軸の 1〜10 の尺度"),
                E("docs/ideas/running_style_pairs.md", "走法の組")]),
         Group("めぐ指数", "本番の版は megu_index_v3a（本番の仕様の棚）。",

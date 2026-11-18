@@ -113,3 +113,23 @@ def test_model_page_says_no_record_instead_of_guessing(tmp_path, monkeypatch):
     assert BA.WIP in pg.body          # 結論が無い → 作業中
     assert "AUC" in pg.body and BA.NO_RECORD in pg.body
     assert "食い違い・要確認" in pg.body   # 採用の台帳が読めない → 版の突き合わせができない
+
+
+def test_version_comment_is_split_per_version(tmp_path):
+    f = tmp_path / "v.py"
+    f.write_text('REFERENCE_VERSION = "3"    # 3: 軸を足す（2026-11-05）。2：全角の区切り（2026-11-03）。1: 最初\n', encoding="utf-8")
+    ver, rows = BA._version_comment(f, "REFERENCE_VERSION")
+    assert ver == "3"
+    assert rows == [("3", "2026-11-05", "軸を足す"), ("2", "2026-11-03", "全角の区切り"), ("1", BA.NO_RECORD, "最初")]
+
+
+def test_running_page_marks_wip_and_picks_up_the_pairs_html(tmp_path, monkeypatch):
+    monkeypatch.setattr(BA, "RUN_PAIRS_HTML", tmp_path / "running_style_pairs.html")
+    pg = BA.build_running(tmp_path)
+    assert BA.WIP in pg.body                     # 調査の HTML が無いうちは「作業中」
+    (tmp_path / "running_style_pairs.html").write_text(
+        '<html><body><h1>t</h1><div class="box"><b>結論</b><ol><li>一つ目の結論。</li><li>二つ目。</li><li>三つ目。</li><li>四つ目。</li></ol></div></body></html>',
+        encoding="utf-8")
+    pg = BA.build_running(tmp_path)
+    assert "一つ目の結論" in pg.body and "三つ目" in pg.body and "四つ目" not in pg.body   # できたら結論の初めの 3 項目とリンク
+    assert 'href="running_style_pairs.html"' in pg.body
