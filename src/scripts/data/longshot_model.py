@@ -258,7 +258,8 @@ def _margins(race, q, fband, cgrp):
 
 
 def _run_conf(pre: dict, variants: list[str], seeds: int, smoke: bool) -> dict:
-    return {"variants": variants, "seeds": seeds, "n_eval": int(pre["n_repro_eval"]), "prereg_sha": _sha(PREREG), "smoke": smoke, "ls_cols": LS_COLS}
+    return {"variants": variants, "seeds": seeds, "n_eval": int(pre["n_repro_eval"]), "prereg_sha": _sha(PREREG), "smoke": smoke, "ls_cols": LS_COLS,
+            "cycles_out": str(mc.CYC)}
 
 
 def cmd_gate1(a) -> None:
