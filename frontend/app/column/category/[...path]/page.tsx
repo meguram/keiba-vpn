@@ -1,7 +1,7 @@
-import Link from "next/link";
+import "@/styles/column.css";
 import { notFound } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
-import { ColumnLayout, SubCategories } from "@/components/column/ColumnParts";
+import { ColumnBrowse, ColumnTrail } from "@/components/column/ColumnParts";
 import { ColumnFilterList } from "@/components/column/ColumnFilterList";
 import { summarize } from "@/components/column/ColumnCard";
 import { COLUMNS } from "@/content/columns";
@@ -22,22 +22,10 @@ export default async function ColumnCategoryPage({ params }: { params: Promise<{
 
   return (
     <PageShell title={here.label} description={here.desc} note={false}>
-      <p className="text-sm" style={{ color: "var(--text-dim)" }}>
-        <Link href="/column" style={{ color: "var(--accent)" }}>めぐコラム</Link>
-        {trail.map((c, i) => {
-          const p = segs.slice(0, i + 1).join("/");
-          return (
-            <span key={p}>
-              {" › "}
-              {i < trail.length - 1 ? <Link href={`/column/category/${p}`} style={{ color: "var(--accent)" }}>{c.label}</Link> : c.label}
-            </span>
-          );
-        })}
-      </p>
-      <ColumnLayout columns={COLUMNS} active={path}>
-        <SubCategories columns={COLUMNS} path={path} node={here} />
+      <div className="col"><ColumnTrail path={path} linkLast={false} /></div>
+      <ColumnBrowse columns={COLUMNS} active={path}>
         <ColumnFilterList columns={columnsIn(COLUMNS, path).map(summarize)} empty="このカテゴリのコラムはまだありません。" />
-      </ColumnLayout>
+      </ColumnBrowse>
     </PageShell>
   );
 }
