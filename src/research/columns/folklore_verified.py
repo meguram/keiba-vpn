@@ -104,10 +104,9 @@ def headline(direction: int, verdict: str, reversed_: bool) -> str:
 
 def tip(direction: int, verdict: str, reversed_: bool) -> str:
     if reversed_:
-        return ("通説とは逆に、人気になりすぎています。人気で当てはまるなら、少し割り引くくらいがちょうどよさそうです。" if direction > 0
-                else "通説とは逆に、人気より走っています。この理由で割り引くのは損になりやすいです。")
+        return F.reversed_tip(direction)
     if verdict == "partial":
-        return "差は小さく、確かさも低い（格 C）です。印を動かすなら小さめに。"
+        return "差は小さく、確かさも低い（格 C）です。" + F.TIP_SMALL
     table = F.DEFAULT_TIPS if direction > 0 else F.DEFAULT_TIPS_NEG
     return table["supported" if verdict == "supported" else "not_supported"]
 
@@ -194,9 +193,9 @@ def build(g: Group, tests: pd.DataFrame, meta: dict[str, dict], published: str) 
         "glossary": [{"term": "格（S・A・B・C）", "desc": "偶然ではない確かさの目安です。S がもっとも確か、次いで A・B・C。『格なし』は、差があっても偶然と区別できないという意味です。発見期間で見つけた差が、確認期間でも同じ向きに出たかも含めて決めています。"}],
         "guides": [
             {"match": {"stats": True}, "title": "数字の読み方",
-             "text": "『オッズから見込まれる複勝率』は、同じくらいの人気の馬が普段どれだけ 3 着以内に来るか。『オッズをそろえた差』は、当てはまる馬と当てはまらない馬を同じ人気で比べた差なので、『実際 − 見込み』と少し違い、符号が逆に見えることがあります。"},
+             "text": F.EXPECTED_RATE_NOTE + "『オッズをそろえた差』は、当てはまる馬と当てはまらない馬を同じ人気で比べた差です。そのため『実際 − 見込み』とは少し違い、符号が逆に見えることがあります。"},
             {"match": {"table": TABLE_COLUMNS}, "title": "表の読み方",
-             "text": "同じテーマの型を並べています。『通説の向き』は、その通説が『走る』と言っているか『割引』と言っているか。『格』が付いた型だけが、偶然とは考えにくい差で、通説どおりか逆かも書いてあります。"},
+             "text": "同じテーマの型を並べています。『通説の向き』はその通説が『走る』と言っているか『割引』と言っているかを示します。偶然とは考えにくい差があったのは、『格』が付いた型だけです。その型には通説どおりか逆かも書いてあります。"},
         ],
     }
     result = {"slug": g.slug, "verdict": verdict, "reversed": rev, "tier": _tier(m), "diff": main_d, "n": n_main}

@@ -167,7 +167,7 @@ SPECS: list[Spec] = [
                 ("欧州帰り", lambda d: overseas_region(d) == "欧州"),
                 ("北米・豪州帰り", lambda d: overseas_region(d) == "北米・豪州")],
         ref_label="国内の前走から使う馬",
-        question="海外のレースを走って帰ってきた馬の、国内の初戦は人気ほど走らないのか。遠征先で違うか。",
+        question="海外のレースを走って帰ってきた馬は、国内の初戦で人気ほど走らないのか。遠征先で違うか。",
         conditions=ALL + "。出馬表の過去 5 走で、直前の 1 走が海外のレースだった馬",
         definition="海外帰り = 出馬表に載る直前の 1 走が海外（メイダン・シャティン・ロンシャンなど）。重賞級の馬が多いので件数は少なめです。"),
     # ── ローテーション: クラス ──
@@ -270,7 +270,7 @@ SPECS: list[Spec] = [
                 ("同型2頭以上", lambda d: d.groupby("race_id")["p_q1"].transform(lambda s: (s == 0).sum()) >= 3)],
         axis=Axis("芝・ダート", surface, ["芝", "ダート"]),
         ref_label="同型がいる馬",
-        question="前走で最初のコーナーを先頭で回った馬が、今回そのような馬が自分だけのとき、人気以上に残るのか。",
+        question="前走で最初のコーナーを先頭で回った馬は、今回そのような馬が自分だけのとき、人気以上に残るのか。",
         conditions=ALL + "。前走で最初のコーナーを先頭で通過した馬",
         definition="同型 = 同じレースで、前走の最初のコーナーを先頭で通過した馬。"),
     # ── 実績 ──
@@ -303,7 +303,7 @@ SPECS: list[Spec] = [
                 ("前走G1で6着以下", lambda d: (d["p_grade"] == "G1") & (d["p_finish_position"] >= 6))],
         axis=Axis("今回のグレード", lambda d: d["grade"], ["G2", "G3"]),
         ref_label="前走が G1 以外の馬",
-        question="前走で G1 を走った馬は、G2・G3 で人気以上に走るのか（大敗でも見直せるか）。",
+        question="前走で G1 を走った馬は G2・G3 で人気以上に走るのか（大敗でも見直せるか）。",
         conditions="JRA の G2・G3（平地）"),
     # ── 調教 ──
     Spec(  # B01〜B03
@@ -351,7 +351,7 @@ SPECS: list[Spec] = [
         axis=Axis("休養の長さ", lambda d: pd.Series(np.select([d["interval"] <= 180, d["interval"] <= 365, d["interval"] > 365], ["半年以内", "半年〜1年", "1年以上"], None), index=d.index),
                   ["半年以内", "半年〜1年", "1年以上"]),
         ref_label="休み明けで最終が馬なりの馬",
-        question="休み明けの初戦で、最終追い切りを強めや一杯に追われた馬は、人気以上に走るのか。",
+        question="休み明けの初戦で、最終追い切りで強めや一杯に追われた馬は、人気以上に走るのか。",
         conditions=ALL + "。休み明け（中 10 週以上）の初戦"),
     Spec(  # B13
         slug="workout-volume-layoff", title="休み明けは乗り込み量が多いほど走る？", claim="休み明けで追い切りの本数が多い馬は走る",
@@ -566,7 +566,7 @@ SPECS: list[Spec] = [
                 ("7歳以上のダート", lambda d: (d["age"] >= 7) & (d["surface"] == "ダート"))],
         axis=Axis("クラス", cls_band, ["1勝クラス", "2勝・3勝", "オープン以上"]),
         ref_label="4〜6 歳の馬",
-        question="7 歳以上の馬は、人気ほど走らないのか。芝とダートで違うか。",
+        question="7 歳以上の馬は人気ほど走らないのか。芝とダートで違うか。",
         conditions=ALL + "。4 歳以上の出走"),
     Spec(  # A30
         slug="three-year-old-summer", title="夏の3歳馬は古馬相手に買い？", claim="夏（6〜9 月）の 3 歳以上戦では 3 歳馬が有利",
@@ -598,7 +598,7 @@ SPECS: list[Spec] = [
                 ("メイン（11R）の1〜3番人気", lambda d: d["race_no"] == 11)],
         axis=Axis("芝・ダート", surface, ["芝", "ダート"]),
         ref_label="ほかのレースの 1〜3 番人気",
-        question="最終レースの人気馬は、ほかのレースの人気馬より人気ほど走らないのか。",
+        question="最終レースの人気馬はほかのレースの人気馬より人気ほど走らないのか。",
         conditions=ALL + "。1〜3 番人気の馬"),
 ]
 
