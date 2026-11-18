@@ -5,6 +5,7 @@
 出力:
   course … コース（場・芝ダ・距離）ごとの 走数・生ピークの平均・x の平均・標準偏差・歪み・コース内の 5/50/95%点
   band   … 芝ダ × 距離帯ごとの同じ値 + レース内の標準偏差 + 0.1 秒刻みの粗さ + 再現性
+  どちらにも 現行 TS の分布: ts_p05/25/50/75/95・ts_sd・ts_skew・ts_min/max・ts_hist（10〜90 を 4 点刻み 20 階級 + 両端の外れ値 = 22 階級）・peak20（最速ラップ 20 秒以上の走数）
   再現性 … 馬ごとに同じ芝ダ・距離帯の古い順 4 走を (1,3) と (2,4) に分けた平均の相関 → Spearman-Brown で 4 走の信頼性 R →
            1 走の信頼性 rho = R/(4-3R)（docs/ideas/running_axes_scale_1to10.md の問題 6 と同じ定義）。
            あわせて、2 走以上ある馬の ICC(1)（1 走の信頼性。馬の間の分散 ÷ 全体）。区間はレースでなく馬単位のブートストラップ。
@@ -27,6 +28,8 @@ from src.research.race import run_axes as ra  # noqa: E402
 
 DIST_ORDER = ["〜1200m", "1300〜1400m", "1500〜1700m", "1800〜2000m", "2100〜2400m", "2500m〜"]
 COURSE_MIN_RUNS = 300
+HIST_LO, HIST_HI, HIST_STEP = 10.0, 90.0, 4.0   # ts のヒストグラム: 10〜90 を 4 点刻み（20 階級）+ 両端の外れ値の階級（計 22）
+PEAK_OUTLIER = 20.0                              # 最速ラップがこれ以上の走 = 異常走（中止・歩様など）
 BOOT = 300
 MIN_HORSES = 150
 
@@ -40,6 +43,20 @@ def dist_stats(x: pd.Series) -> dict:
     q = x.quantile([0.05, 0.5, 0.95])
     return {"n": int(len(x)), "mean": round(float(x.mean()), 4), "sd": round(float(x.std()), 4), "skew": round(float(x.skew()), 3),
             "p05": round(float(q[0.05]), 3), "p50": round(float(q[0.5]), 3), "p95": round(float(q[0.95]), 3)}
+
+
+def ts_block(g: pd.DataFrame) -> dict:
+    """現行 TS の分布（5/25/50/75/95% 点・標準偏差・歪み・最小/最大・ヒストグラム）と、異常走（peak が 20 秒以上）の数。"""
+    t = g["ts"]
+    q = t.quantile([0.05, 0.25, 0.5, 0.75, 0.95])
+    inner = np.arange(HIST_LO, HIST_HI + 1e-9, HIST_STEP)
+    edges = np.concatenate([[-np.inf], inner, [np.inf]])
+    hist = np.histogram(t.to_numpy(), bins=edges)[0]
+    return {"ts_sd": round(float(t.std()), 3), "ts_skew": round(float(t.skew()), 3),
+            "ts_p05": round(float(q[0.05]), 2), "ts_p25": round(float(q[0.25]), 2), "ts_p50": round(float(q[0.5]), 2),
+            "ts_p75": round(float(q[0.75]), 2), "ts_p95": round(float(q[0.95]), 2),
+            "ts_min": round(float(t.min()), 2), "ts_max": round(float(t.max()), 2),
+            "ts_hist": [int(x) for x in hist], "peak20": int((g["peak"] >= PEAK_OUTLIER).sum())}
 
 
 def split_half(first4: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -106,6 +123,7 @@ def main() -> None:
         r = dist_stats(g["x"])
         r.update({"venue": v, "surface": s, "distance": int(d), "mu_s": round(float(g["mu_s"].iloc[0]), 4), "sd_s": round(float(g["sd_s"].iloc[0]), 4),
                   "peak_mean": round(float(g["peak"].mean()), 4), "races": int(g["race_id"].nunique()), "front115": round(float(g["peak_front"].mean()), 4)})
+        r.update(ts_block(g))
         courses.append(r)
 
     bands = []
@@ -119,16 +137,16 @@ def main() -> None:
             r.update({"surface": s, "band": b, "races": int(g["race_id"].nunique()), "peak_mean": round(float(g["peak"].mean()), 4),
                       "peak_sd": round(float(g["peak"].std()), 4), "front115": round(float(g["peak_front"].mean()), 4),
                       "within_race_sd": round(float(within.std()), 4), "grain_over_sd": round(0.1 / float(g["x"].std()), 3),
-                      "unique_peak": int(g["peak"].round(1).nunique()), "ts_sd": round(float(g["ts"].std()), 3), "ts_skew": round(float(g["ts"].skew()), 3),
-                      "ts_p05": round(float(g["ts"].quantile(0.05)), 2), "ts_p95": round(float(g["ts"].quantile(0.95)), 2),
-                      "sd_s_mean": round(float(g["sd_s"].mean()), 4)})
+                      "unique_peak": int(g["peak"].round(1).nunique()), "sd_s_mean": round(float(g["sd_s"].mean()), 4)})
+            r.update(ts_block(g))
             r["rel"] = reliability(g[["horse_id", "date", "ts"]], rng)
             bands.append(r)
             print(s, b, r["n"], "sd", r["sd"], "skew", r["skew"], "rel", r["rel"], flush=True)
 
     rel_all = reliability(h[["horse_id", "date", "ts"]], rng)
     meta = {"built": date.today().isoformat(), "runs": int(len(h)), "races": int(h["race_id"].nunique()),
-            "date_from": str(h["date"].min().date()), "date_to": str(h["date"].max().date()), "course_min_runs": COURSE_MIN_RUNS, "boot": BOOT}
+            "date_from": str(h["date"].min().date()), "date_to": str(h["date"].max().date()), "course_min_runs": COURSE_MIN_RUNS, "boot": BOOT,
+            "hist": {"lo": HIST_LO, "hi": HIST_HI, "step": HIST_STEP, "peak_outlier": PEAK_OUTLIER}}
     out_path.write_text(json.dumps({"meta": meta, "all_rel": rel_all, "bands": bands, "courses": courses}, ensure_ascii=False, indent=1), encoding="utf-8")
     print("wrote", out_path, meta, "all_rel", rel_all)
 

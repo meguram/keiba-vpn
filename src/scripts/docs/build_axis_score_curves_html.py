@@ -1,13 +1,16 @@
 """走法軸の点数（1〜10）ごとの勝率・複勝率を、対象（クラス・馬場・距離・コース）× 走法軸のマトリクスで見る専用 HTML を作る（読むだけ・HTML を書く）。
 
 入力: src/scripts/data/axis_score_curves.py の出力 JSON。
-使い方: python src/scripts/docs/build_axis_score_curves_html.py CURVES.json [OUT.html]
+使い方: python src/scripts/docs/build_axis_score_curves_html.py CURVES.json [OUT.html|- [TS.json]]
+  TS.json = src/scripts/data/ts_course_resolution.py の出力（6 節の TS の分布。無ければその部分は出さない）。軸の定義の最終更新は手元の git から作る。
 """
 from __future__ import annotations
 
 import html
 import json
 import math
+import re
+import subprocess
 import sys
 from pathlib import Path
 from statistics import NormalDist
@@ -15,13 +18,42 @@ from statistics import NormalDist
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
 
-from src.scripts.docs.build_course_axis_demand_html import CSS  # noqa: E402
+from src.scripts.docs.build_course_axis_demand_html import CSS, SORT_JS  # noqa: E402
 
 OUT = REPO / "docs/html/operations/running_axis_curves.html"
 MIN_N = 30            # 線を出す最低の走数（JS の MINN と同じ）
 MIN_SIDE = 100        # 高い側・低い側の走数がこれ未満なら差を出さない
 Z_MARK = 2.6          # 印を付ける z（軸 × 対象で数百の組を見るので 1.96 より厳しめ）
+SKEW_MARK = 1.0       # TS の歪みの絶対値がこれ以上のコースを強調する
+VENUE_ORDER = ["札幌", "函館", "福島", "新潟", "東京", "中山", "中京", "京都", "阪神", "小倉"]
+SURF_KEY = {"芝": "芝", "ダ": "ダ", "ダート": "ダ"}
+ONLY_SURFACE = {"wett": "芝", "wetd": "ダ"}          # 道悪適性は片方の馬場だけ（axis_score_curves.py の ONLY_SURFACE と同じ）
+COURSE_RE = re.compile(r"^(.+?)(芝|ダ)(\d+)m$")
+RUN_AXES = "src/research/race/run_axes.py"
+# 軸 → 定義のコード（ファイル, 関数）。モジュールの定数や 10 点換算（axis_score10.py）の変更は拾えない。endure・front・cr・makuri・slope は 1 つの関数 axes_from_frame の中で作られる（関数単位でも軸ごとには分けられない）
+AXIS_DEF = {
+    "ts": ("src/research/race/horse_ts.py", "course_ts"), "sustain": (RUN_AXES, "_sustain_one"), "debut": (RUN_AXES, "_debut"), "gear": (RUN_AXES, "_gear_one"),
+    "endure": (RUN_AXES, "axes_from_frame"), "front": (RUN_AXES, "axes_from_frame"), "cr": (RUN_AXES, "axes_from_frame"),
+    "makuri": (RUN_AXES, "axes_from_frame"), "slope": (RUN_AXES, "axes_from_frame"),
+    "basic": ("src/research/race/basic_speed.py", "compute"),
+    "wett": ("src/research/race/wet_going.py", "compute"), "wetd": ("src/research/race/wet_going.py", "compute"),
+}
+GIT_FMT = "%cs %h %s"
+LOG_LINE = re.compile(r"^(\d{4}-\d{2}-\d{2}) ([0-9a-f]{4,40}) (.*)$")
 EXTRA_CSS = """
+.cgw { overflow:auto; border:1px solid var(--border); border-radius:10px; margin:8px 0; }
+table.cg { border-collapse:separate; border-spacing:0; margin:0; width:auto; font-size:12px; }
+table.cg th, table.cg td { border:0; border-right:1px solid var(--border); border-bottom:1px solid var(--border); padding:4px 6px; }
+table.cg thead th { background:var(--panel); text-align:center; position:sticky; top:0; z-index:2; }
+table.cg th.rh { position:sticky; left:0; z-index:1; background:var(--panel); min-width:54px; font-weight:600; color:var(--text); }
+table.cg thead th.rh { z-index:3; }
+table.cg td.hm { min-width:74px; line-height:1.3; } table.cg td.hm b { font-size:14px; } table.cg td.hm small { display:block; font-size:10.5px; color:var(--muted); font-weight:400; }
+table.cg td.hm[data-a], table.cg td.hm[data-t] { cursor:pointer; } table.cg td.hm[data-a]:hover, table.cg td.hm[data-t]:hover { outline:2px solid var(--accent); outline-offset:-2px; }
+table.cg td.hm.sel { outline:2px solid var(--warn); outline-offset:-2px; }
+table.cg td.hm.sk { background:rgba(248,113,113,.30); }
+.defn { font-size:12px; font-weight:400; color:var(--muted); } .defn .strong { color:var(--warn); }
+.cgn { color:var(--muted); font-size:13px; margin:2px 0 10px; }
+details.fl { margin:8px 0; } details.fl summary { cursor:pointer; color:var(--accent); font-size:13px; }
 .ctl { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:10px 0; } .ctl label { font-size:13px; color:var(--muted); }
 .ctl button { background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:5px 12px; font-size:13px; cursor:pointer; }
 .ctl button.on { background:var(--accent); color:#0b1428; font-weight:700; }
@@ -57,12 +89,151 @@ def side_stats(arr: list, lo: tuple[int, int] = (0, 4), hi: tuple[int, int] = (5
     return {"nl": nl, "nh": nh, "raw": rh - rl, "adj": d_adj, "z": d_adj / se if se > 0 else 0.0}
 
 
+def parse_course_key(key: str) -> tuple[str, str, int] | None:
+    """「京都芝1600m」→ (京都, 芝, 1600)。ダートは「ダ」。読めなければ None。"""
+    m = COURSE_RE.match(key)
+    return (m.group(1), m.group(2), int(m.group(3))) if m else None
+
+
+def build_course_grid(entries: list[tuple[str, str, int, int]]) -> dict:
+    """(場, 芝/ダ, 距離, 添字) の並びから、馬場ごとの 縦 = 競馬場・横 = 距離 の格子を作る。
+    競馬場は VENUE_ORDER の順（知らない場は末尾）、距離はその馬場に出る距離の和集合を昇順。全軸で同じ列順になる。idx['場|距離'] = 添字。"""
+    out = {"芝": {"venues": [], "dists": [], "idx": {}}, "ダ": {"venues": [], "dists": [], "idx": {}}}
+    for venue, surf, dist, i in entries:
+        g = out[SURF_KEY[surf]]
+        g["idx"][f"{venue}|{dist}"] = i
+        if venue not in g["venues"]:
+            g["venues"].append(venue)
+        if dist not in g["dists"]:
+            g["dists"].append(dist)
+    for g in out.values():
+        g["venues"].sort(key=lambda v: (VENUE_ORDER.index(v) if v in VENUE_ORDER else len(VENUE_ORDER), v))
+        g["dists"].sort()
+    return out
+
+
+def axis_course_grid(d: dict) -> dict:
+    ent = []
+    for i, g in enumerate(d["dims"].get("course", {}).get("groups", [])):
+        p = parse_course_key(g["key"])
+        if p:
+            ent.append((p[0], p[1], p[2], i))
+    return build_course_grid(ent)
+
+
+def ts_course_grid(ts: dict) -> dict:
+    return build_course_grid([(c["venue"], c["surface"], int(c["distance"]), i) for i, c in enumerate(ts["courses"])])
+
+
+def run_git(args: list[str]) -> str | None:
+    """git を読むだけで呼ぶ。使えない・失敗したときは None（生成は止めない）。"""
+    try:
+        r = subprocess.run(["git", *args], cwd=REPO, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return r.stdout if r.returncode == 0 else None
+
+
+def parse_log_line(out: str | None) -> dict | None:
+    """「2026-11-12 abc1234 件名」の最初の 1 行を読む。"""
+    for line in (out or "").splitlines():
+        m = LOG_LINE.match(line.strip())
+        if m:
+            return {"date": m.group(1), "hash": m.group(2), "subject": m.group(3)}
+    return None
+
+
+def last_change(file: str, func: str | None, runner=run_git) -> dict | None:
+    """定義のコードの最終コミット（日付・短縮ハッシュ・件名）。関数単位（git log -L）が取れなければファイル単位。どちらも取れなければ None。"""
+    if func:
+        r = parse_log_line(runner(["log", "-1", f"--format={GIT_FMT}", "-s", "-L", f":{func}:{file}"]))
+        if r:
+            return {**r, "grain": "関数", "file": file, "func": func}
+    r = parse_log_line(runner(["log", "-1", f"--format={GIT_FMT}", "--", file]))
+    return {**r, "grain": "ファイル", "file": file, "func": None} if r else None
+
+
+def axis_defs(keys: list[str], runner=run_git) -> dict[str, dict | None]:
+    """軸ごとの 定義の最終更新。浅いクローンは日付が当てにならないので全部「不明」にする。"""
+    if (runner(["rev-parse", "--is-shallow-repository"]) or "").strip() == "true":
+        return {k: None for k in keys}
+    return {k: (last_change(*AXIS_DEF[k], runner=runner) if k in AXIS_DEF else None) for k in keys}
+
+
+def def_note_html(info: dict | None, score_date: str) -> str:
+    """見出し・一覧に出す「定義の最終更新 日付（ハッシュ: 件名）」。定義の更新が点の作成日より後なら「点が未更新の可能性」の印。"""
+    if not info:
+        return "定義の最終更新 不明（git なし）"
+    subj = info["subject"] if len(info["subject"]) <= 44 else info["subject"][:43] + "…"
+    where = f"{info['file'].rsplit('/', 1)[-1]}::{info['func']}" if info["func"] else info["file"].rsplit("/", 1)[-1]
+    stale = ' <span class="strong">点が未更新の可能性</span>' if score_date and info["date"] > score_date else ""
+    return (f"定義の最終更新 {info['date']}（<span title=\"{html.escape(info['subject'])}\">{info['hash']}: {html.escape(subj)}</span>）"
+            f" <span title=\"根拠の粒度\">[{info['grain']}単位 {html.escape(where)}]</span>{stale}")
+
+
+def _num(v: float | None, nd: int = 2) -> str:
+    return "—" if v is None else f"{v:.{nd}f}"
+
+
+def ts_section(ts: dict, note: str = "") -> str:
+    """コース別の TS 分布の節の静的な部分（説明・距離帯の表・コース一覧）。格子とヒストグラムは JS が描く。"""
+    meta = ts["meta"]
+    bands, courses = ts["bands"], ts["courses"]
+    pk = meta.get("hist", {}).get("peak_outlier", 20.0)
+    n_out_bands = sum(b.get("peak20", 0) for b in bands)
+    out_courses = [c for c in courses if c.get("peak20", 0) > 0]
+    out_txt = "、".join(f"{c['venue']}{'芝' if SURF_KEY[c['surface']] == '芝' else 'ダ'}{c['distance']}m（{c['peak20']} 走・歪み {c['ts_skew']:+.1f}）" for c in sorted(out_courses, key=lambda c: -c["peak20"]))
+
+    def band_row(b: dict) -> str:
+        r = b.get("rel") or {}
+        rho = f"{r['rho_split']:.2f} [{r['rho_split_ci'][0]:.2f}, {r['rho_split_ci'][1]:.2f}]" if r else "—"
+        rv = r["rho_split"] if r else -1
+        sk = ' class="num strong"' if abs(b["ts_skew"]) >= SKEW_MARK else ' class="num"'
+        return (f"<tr><td>{html.escape(b['surface'])}</td><td data-v=\"{DIST_ORDER_IDX.get(b['band'], 9)}\">{html.escape(b['band'])}</td><td class=\"num\">{b['n']:,}</td><td class=\"num\">{b['races']:,}</td>"
+                f"<td class=\"num\">{b['ts_sd']:.2f}</td><td{sk}>{b['ts_skew']:+.2f}</td><td class=\"num\">{b['ts_p05']:.1f}</td><td class=\"num\">{b['ts_p50']:.1f}</td><td class=\"num\">{b['ts_p95']:.1f}</td>"
+                f"<td class=\"num\" data-v=\"{rv:.4f}\">{rho}</td><td class=\"num\">{b['peak_mean']:.2f}</td><td class=\"num\">{b['front115'] * 100:.1f}%</td><td class=\"num\">{b['peak20']}</td></tr>")
+
+    band_rows = "".join(band_row(b) for b in bands)
+    srt = sorted(courses, key=lambda c: (0 if SURF_KEY[c["surface"]] == "芝" else 1, VENUE_ORDER.index(c["venue"]) if c["venue"] in VENUE_ORDER else 99, c["distance"]))
+    course_rows = "".join(
+        f"<tr><td>{html.escape(c['venue'])}</td><td>{html.escape(c['surface'])}</td><td class=\"num\">{c['distance']}</td><td class=\"num\">{c['n']:,}</td>"
+        f"<td class=\"num\">{c['ts_sd']:.2f}</td><td class=\"num{' strong' if abs(c['ts_skew']) >= SKEW_MARK else ''}\">{c['ts_skew']:+.2f}</td>"
+        f"<td class=\"num\">{c['ts_p05']:.1f}</td><td class=\"num\">{c['ts_p50']:.1f}</td><td class=\"num\">{c['ts_p95']:.1f}</td>"
+        f"<td class=\"num\">{c['ts_min']:.1f}</td><td class=\"num\">{c['ts_max']:.1f}</td><td class=\"num\">{c['peak20']}</td></tr>"
+        for c in srt)
+    rel = ts.get("all_rel") or {}
+    rel_txt = f"全体の 1 走の再現性 ρ = {rel['rho_split']:.2f}（区間 {rel['rho_split_ci'][0]:.2f}〜{rel['rho_split_ci'][1]:.2f}）。" if rel else ""
+    return f"""<h3 id="ts-dist">TS（ラスト 3F の最速ラップの偏差値）の分布{' <span class="defn">— ' + note + '</span>' if note else ''}</h3>
+<p class="sub">ここの「TS」は、走法軸の点数（上の「TS」の軸）ではなく、<b>各走の偏差値そのもの</b>。定義: ラスト 3F（最後の 3 区間）のうち最速のラップを、レース水準のずれで補正した値 x に直し、<b>コース（場 × 芝ダ × 距離）ごとの平均・標準偏差</b>（走数が少ないコースは芝ダ × 距離帯の値へ縮める）で <code>ts = 50 − 10 × (x − 平均) ÷ 標準偏差</code> にしたもの（速いほど高い）。
+集計期間 {meta['date_from']}〜{meta['date_to']}（{meta['runs']:,} 走・{meta['races']:,} レース。最速ラップが取れた平地の走）。{rel_txt}作成: {meta['built']}。</p>
+<p class="sub"><b>歪みが大きいコースの主因は、最速ラップが {pk:.0f} 秒以上の異常走</b>（中止・歩様の乱れなど）。{pk:.0f} 秒以上の走は、距離帯の表に入る走のうち {n_out_bands} 走だけで、{html.escape(out_txt) if out_txt else '該当コースなし'}。
+こうした 1 走が、そのコースの標準偏差の推定をわずかに膨らませ（ほかの走の TS の広がりが少し狭まる）、分布の左端に極端に長い裾を作って歪み（−13 前後）を出す。外れ値を含めたコースの標準偏差は 10 前後に見えるので、標準偏差だけでは見つからず、歪みと最小値で分かる。<b>打ち切り案（x をコースの 0.5%・99.5% 点で切る。走数 300 未満のコースは同じ距離帯の標準化した値の分位点で代用）は検討中で、まだ本番の TS には反映していない</b>。この表・図は現行の TS。</p>
+<div class="scroll"><table class="sortable"><thead><tr><th>芝ダ</th><th>距離帯</th><th>走数</th><th>レース数</th><th>TS の標準偏差</th><th>歪み</th><th>5%点</th><th>50%点</th><th>95%点</th><th>1 走の再現性 ρ [95%区間]</th><th>最速ラップ平均 (秒)</th><th>11.5 秒以内</th><th>{pk:.0f} 秒以上の走数</th></tr></thead><tbody>{band_rows}</tbody></table></div>
+<p class="sub">標準偏差が 10 に近いほど TS は設計どおりの広がり。歪み（絶対値 {SKEW_MARK:g} 以上を強調）が負に大きいのは、遅い側に異常走が長く伸びているため。再現性 ρ = 同じ芝ダ・距離帯を走った馬の古い順 4 走を (1,3) と (2,4) に分けた平均の相関 → Spearman-Brown → 1 走に換算（馬単位のブートストラップ）。区間が空欄（—）は標本が 150 頭未満。</p>
+<div id="cg-ts"></div>
+<details class="fl"><summary>コースごとの TS の分布（一覧・列で並べ替え。{len(courses)} コース）</summary>
+<div class="scroll"><table class="sortable"><thead><tr><th>場</th><th>芝ダ</th><th>距離</th><th>走数</th><th>標準偏差</th><th>歪み</th><th>5%点</th><th>50%点</th><th>95%点</th><th>最小</th><th>最大</th><th>{pk:.0f} 秒以上の走数</th></tr></thead><tbody>{course_rows}</tbody></table></div>
+</details>"""
+
+
 def fmt_pt(x: float | None) -> str:
     return "—" if x is None else f"{x * 100:+.1f}"
 
 
-def build(d: dict) -> str:
+DIST_ORDER_IDX = {b: i for i, b in enumerate(["〜1200m", "1300〜1400m", "1500〜1700m", "1800〜2000m", "2100〜2400m", "2500m〜"])}
+
+
+def build(d: dict, ts: dict | None = None, defs: dict | None = None) -> str:
+    """defs = axis_defs() の結果（軸 → 定義の最終更新）。None なら日付は出さない。"""
     meta = d["meta"]
+    score_date = meta["history_mtime"][:10]
+    notes = {a["key"]: def_note_html((defs or {}).get(a["key"]), score_date) for a in d["axes"]} if defs is not None else {}
+    cg = {"axg": axis_course_grid(d), "only": ONLY_SURFACE, "defn": notes, "skm": SKEW_MARK,
+          "ts": ({"grid": ts_course_grid(ts), "courses": [
+              {"v": c["venue"], "s": SURF_KEY[c["surface"]], "d": c["distance"], "n": c["n"], "sd": c["ts_sd"], "sk": c["ts_skew"], "q": [c["ts_p05"], c["ts_p25"], c["ts_p50"], c["ts_p75"], c["ts_p95"]],
+               "mn": c["ts_min"], "mx": c["ts_max"], "h": c["ts_hist"], "o": c["peak20"]} for c in ts["courses"]],
+                  "hist": ts["meta"]["hist"]} if ts else None)}
+    cg_json = json.dumps(cg, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     g_all = d["dims"]["all"]["groups"][0]["data"]
     tr = []
     for ax in d["axes"]:
@@ -77,8 +248,13 @@ def build(d: dict) -> str:
             f"<td class=\"num\">{fmt_pt(b['raw'] if b else None)}</td><td class=\"num\">{fmt_pt(b['adj'] if b else None)}</td></tr>")
     axis_rows = "".join(
         f"<tr><td>{html.escape(a['label'])}</td><td>{html.escape(a['high'])}</td><td>{html.escape(a['low'])}</td>"
-        f"<td class=\"num\">{meta['axis_runs'][a['key']]['A']:,}</td><td class=\"num\">{meta['axis_runs'][a['key']]['B']:,}</td></tr>"
+        f"<td class=\"num\">{meta['axis_runs'][a['key']]['A']:,}</td><td class=\"num\">{meta['axis_runs'][a['key']]['B']:,}</td>"
+        + (f"<td>{notes[a['key']]}</td>" if defs is not None else "") + "</tr>"
         for a in d["axes"])
+    def_th = "<th>定義の最終更新</th>" if defs is not None else ""
+    def_p = (f'<p class="sub"><b>点の作成日 {html.escape(score_date)}</b>（<code>axis_scores10.parquet</code> の更新日）。「定義の最終更新」は、軸を作るコードの<b>最終コミット日</b>で、意味の変更とは限らない（コメント・整形・テストの修正でも更新される）。'
+             "根拠の粒度: 「関数単位」= その軸を作る関数の最終コミット（<code>git log -L</code>）。Hペース耐性・先行力・Cr性能・まくり特性・急坂適性は 1 つの関数（<code>axes_from_frame</code>）の中で作られるので同じ日付になる。"
+             "<b>定義の最終更新が点の作成日より後の軸には「点が未更新の可能性」の印</b>（その後に点が作り直されていなければ、ここの点は古い定義のまま）。</p>") if defs is not None else ""
     n_marked = 0
     n_all = 0
     for dim in d["dims"].values():
@@ -91,6 +267,7 @@ def build(d: dict) -> str:
                     n_marked += abs(s["z"]) >= Z_MARK
     chance = n_all * math.erfc(Z_MARK / math.sqrt(2))      # |z|>=Z_MARK の両側確率 × 組数
     bonf = NormalDist().inv_cdf(1 - 0.025 / max(n_all, 1))   # 全組で 5% に抑える線（Bonferroni）
+    ts_part = ts_section(ts, notes.get("ts", "")) if ts else ""
     data_json = json.dumps(d, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     return f"""<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>走法軸の点数別 勝率・複勝率（軸 × 対象のマトリクス） — keiba-vpn docs</title><style>{CSS}{EXTRA_CSS}</style></head><body><main>
@@ -108,10 +285,11 @@ def build(d: dict) -> str:
 走法軸の点が高い馬ほど人気も高い（Hペース耐性は実力の代理でもある）ので、<b>実線が破線を上回る分</b>が「人気（市場が見ている実力）では説明できない上乗せ」の目安。実線だけを見ると実力の差が混ざる。</li>
 <li>期間: 実線 = {meta['periods']['A'][0]}〜{meta['periods']['A'][1]}（走数 {meta['runs']['A']:,}）。「2026 年を重ねる」を押すと、{meta['periods']['B'][0]}〜（走数 {meta['runs']['B']:,}。テストセット②。<b>確認だけで、選択には使わない</b>）を白抜きの点で重ねる。</li>
 <li>各マスの下の数字 = <b>高 − 低</b>（6.0 点以上の複勝率 − 4.5 点以下の複勝率、ポイント。5.0・5.5 点は除く）と、<b>補正後</b>（同じ差を、人気から期待される複勝率を引いてから取ったもの）。マスをクリックすると、下の拡大図に信頼区間（Wilson 95%）と数表が出る。</li>
+<li><b>コース別</b>（場 × 芝ダ × 距離。{meta['course_min_runs']} 走以上のコース）は、70 列ほどになって読みにくいので、3・5 節のボタンからは外し、<b>6 節に「走法軸ごと：縦 = 競馬場 × 横 = 距離」の表</b>として分けた。</li>
 </ul>
 
 <h2>2. 走法軸の一覧と走数</h2>
-<div class="scroll"><table><thead><tr><th>走法軸</th><th>点が高い</th><th>点が低い</th><th>走数 2024-25</th><th>走数 2026</th></tr></thead><tbody>{axis_rows}</tbody></table></div>
+<div class="scroll"><table><thead><tr><th>走法軸</th><th>点が高い</th><th>点が低い</th><th>走数 2024-25</th><th>走数 2026</th>{def_th}</tr></thead><tbody>{axis_rows}</tbody></table></div>
 <p class="sub">走数 = その軸の点が測れた走の数。位置取り由来の軸（Hペース耐性・先行力・Cr性能・まくり特性）は 2024 年の位置データが薄いので、2025 年中心。
 道悪適性（芝）は芝の走だけ、道悪適性（ダート）はダートの走だけ。急坂適性は、中山・阪神での過去走から作った点（どのコースの走にも付く）。<b>基礎スピード・道悪適性は、走法マップの良馬場／道悪の地図の軸で、馬場状態が点の計算に入る</b>。</p>
 
@@ -119,6 +297,7 @@ def build(d: dict) -> str:
 <div class="ctl" id="ctl"></div>
 <div class="big" id="big"><span class="muted">下のマスをクリックすると、ここに拡大図と数表が出る。</span></div>
 <div class="mxwrap"><table class="mx" id="mx"></table></div>
+<p class="sub">対象のボタンは、全体・クラス・馬場・距離。コース別は 6 節（場 × 距離の表）。</p>
 <p class="sub">左軸（勝率）の目盛は、この対象の中で走数 200 以上の区間の最大値（複勝率の 1/3 も含む）で共通（マス同士の高さを比べられる）。上限を超える区間は上端で切る（走数の少ない区間で起きる）。</p>
 
 <h2>4. 軸ごとの要約（全体・複勝率の高 − 低）</h2>
@@ -127,10 +306,19 @@ def build(d: dict) -> str:
 <p class="sub">軸 × 対象の全 {n_all} 組（2024-25 年）のうち |z| ≥ {Z_MARK} は {n_marked} 組。偶然だけでも約 {chance:.0f} 組は出る（全 {n_all} 組で偶然を 5% に抑える Bonferroni の線は |z| ≥ {bonf:.1f}）。対象（全体・クラス・馬場・距離・コース）は同じ走を重ねて切っているので、印は独立な発見の数ではない。z は、同じレースの馬どうしの相関と同じ馬の重複を無視した標準誤差なので、実際より大きめに出る。<b>印は「見る候補」で、個別のコース・軸の優位とは言い切れない</b>。再現するかは 2026 年の欄（同符号か）で確認する。</p>
 
 <h2>5. 一覧（補正後の差・対象 × 軸）</h2>
-<p class="sub">複勝率の「高 − 低」から人気分を引いた差（pt）。色 = 向き（緑 = 高い点ほど人気以上に来る、赤 = 逆）、濃さ = |z|。太枠 = |z| ≥ {Z_MARK}。上の対象のボタンで切り替わる。</p>
+<p class="sub">複勝率の「高 − 低」から人気分を引いた差（pt）。色 = 向き（緑 = 高い点ほど人気以上に来る、赤 = 逆）、濃さ = |z|。太枠 = |z| ≥ {Z_MARK}。上の対象のボタン（全体・クラス・馬場・距離）で切り替わる。コース別は 6 節。</p>
 <div class="scroll"><table class="mx2" id="hm"></table></div>
 
-<h2>6. 限界</h2>
+<h2>6. コース別（走法軸ごと：場 × 距離）</h2>
+{def_p}
+<p class="sub">走法軸ごとに見出しを分け、<b>縦 = 競馬場、横 = 距離</b>（同じ列は全ての軸・競馬場で同じ距離）。芝とダートはボタンで切り替わる（全ての表が同時に切り替わる）。
+セル: 大きい数字 = <b>補正後の差</b>（人気補正後の複勝率の 高 − 低、pt）、小さい数字 = 高−低（補正なし）と走数（2024-25）。緑 = 高い点ほど人気以上に来る、赤 = 逆、濃さ = |z|、太枠 = |z| ≥ {Z_MARK}。
+「—」= そのコースが無い、または走数が {meta['course_min_runs']} 走未満（コース別に出す下限）／高い側・低い側が {MIN_SIDE} 走未満。セルをクリックすると、その表の下に拡大図と数表が出る。</p>
+<div class="ctl" id="cgctl"></div>
+{ts_part}
+<div id="cg-axes"></div>
+
+<h2>7. 限界</h2>
 <ul>
 <li><b>実力が混ざる</b>: 実線（補正なし）は、点の高い馬ほど強い馬（人気の馬）が多いことを含む。人気で補正した破線との差を見ること。人気は市場が見ている実力のほぼ全てで、補正後の差は小さい（多くは 0 近辺）のが普通。</li>
 <li><b>点は「過去走」の値だが、基準は全期間</b>: 各走の点はその走より前の走から作るが、走歴が浅い馬の点を寄せる先（父の平均・全馬の平均）と、10 点への換算の基準は全期間（2024〜25 年・2026 年を含む）の値で作ってある（<code>build_axis_scores10.py</code>）。走歴の浅い馬では、点と着順の関係が実際より強く出うる。ここでは走歴で絞っていない。点の換算は全馬に同じ単調な変換なので、点と着順の関係そのものはほぼ変えない。</li>
@@ -140,20 +328,24 @@ def build(d: dict) -> str:
 <li>コース別は走数が少なく（{meta['course_min_runs']} 走以上のコースだけ）、区間ごとの走数は数十〜数百。線が切れるのは走数不足で、「効かない」ではなく「見えない」。</li>
 <li>点が高い・低いに寄る走は少なく、1〜2 点・9〜10 点の区間は走数が少ない（棒を見ること）。</li>
 </ul>
-<p class="muted">再現: ホストで <code>cd /home/jovyan/work/keiba-vpn &amp;&amp; nice -n 19 /opt/conda/bin/python -I src/scripts/data/axis_score_curves.py OUT.json</code> → 手元で <code>python src/scripts/docs/build_axis_score_curves_html.py OUT.json</code>。
+<p class="muted">再現: ホストで <code>cd /home/jovyan/work/keiba-vpn &amp;&amp; nice -n 19 /opt/conda/bin/python -I src/scripts/data/axis_score_curves.py OUT.json</code> → 手元で <code>python src/scripts/docs/build_axis_score_curves_html.py OUT.json [OUT.html [TS.json]]</code>
+（OUT.html を省くときは <code>-</code>。TS.json = 6 節の「TS の分布」。ホストで <code>cd /home/jovyan/work/keiba-vpn &amp;&amp; nice -n 19 /opt/conda/bin/python -I src/scripts/data/ts_course_resolution.py TS.json /home/jovyan/acq/horse_lap/horse_lap_*.jsonl</code> を実行し、手元へ持ってくる。
+定義の最終更新は手元の git から作る。git が使えない・浅いクローンのときは「不明（git なし）」）。
 元の点の表: <code>data/local/running_profile/axis_scores10.parquet</code>（{html.escape(meta['history_mtime'][:10])} 時点）。</p>
 
 <script>
 var D={data_json};
+var CG={cg_json};
 {JS.replace("__MINN__", str(MIN_N)).replace("__SIDE__", str(MIN_SIDE)).replace("__ZM__", str(Z_MARK))}
 </script>
+{SORT_JS if ts else ""}
 </main></body></html>"""
 
 
 JS = r"""
 (function(){
 var MINN=__MINN__,MINB=20,SIDE=__SIDE__,ZM=__ZM__,NS="http://www.w3.org/2000/svg";
-var DIMS=Object.keys(D.dims),st={dim:"class",ov:false,exp:true,sel:null};
+var DIMS=Object.keys(D.dims).filter(function(k){return k!=="course";}),st={dim:"class",ov:false,exp:true,sel:null,surf:"芝"};
 var AX=D.axes,axIdx={};AX.forEach(function(a){axIdx[a.key]=a;});
 function wilson(k,n){if(n<=0)return [0,0];var z=1.96,p=k/n,d=1+z*z/n,c=p+z*z/(2*n),h=z*Math.sqrt(p*(1-p)/n+z*z/(4*n*n));return [(c-h)/d,(c+h)/d];}
 function sum(a,i,j){var s=0;for(var k=i;k<j;k++)s+=a[k];return s;}
@@ -239,7 +431,10 @@ function render(){
 function big(){
   var el=document.getElementById("big");
   if(!st.sel){el.innerHTML='<span class="muted">下のマスをクリックすると、ここに拡大図と数表が出る。</span>';return;}
-  var g=groups()[st.sel[1]],a=axIdx[st.sel[0]],c=g.data[a.key];
+  bigInto(el,axIdx[st.sel[0]],groups()[st.sel[1]]);
+}
+function bigInto(el,a,g){
+  var c=g.data[a.key];
   var wmax=wmaxOf([g]),h=[];
   var s=side(c.A),sb=side(c.B);
   h.push('<b>'+a.label+' × '+g.label+'</b> <span class="muted">（高: '+a.high+' ／ 低: '+a.low+'）</span>');
@@ -264,15 +459,95 @@ function heat(){
     h.push('</tr>');});
   h.push('</tbody>');document.getElementById("hm").innerHTML=h.join("");
 }
-ctl();render();
+function heatBg(s){var al=Math.min(Math.abs(s.z)/4,1)*0.75,col=s.adj>=0?'74,222,128':'248,113,113';return 'background:rgba('+col+','+al.toFixed(2)+')';}
+function gridHead(g){return '<thead><tr><th class="rh">競馬場＼距離</th>'+g.dists.map(function(d){return '<th>'+d+'m</th>';}).join("")+'</tr></thead>';}
+function cgCtl(){
+  var el=document.getElementById("cgctl");if(!el)return;
+  el.innerHTML='<label>馬場</label>'+[["芝","芝"],["ダ","ダート"]].map(function(x){return '<button data-s="'+x[0]+'" class="'+(x[0]===st.surf?'on':'')+'">'+x[1]+'</button>';}).join("");
+  Array.prototype.forEach.call(el.querySelectorAll("button"),function(b){b.onclick=function(){st.surf=b.dataset.s;cgCtl();cgAxes();cgTs();};});
+}
+function cgAxes(){
+  var el=document.getElementById("cg-axes");if(!el)return;
+  var g=CG.axg[st.surf],gs=D.dims.course?D.dims.course.groups:[],h=[];
+  AX.forEach(function(a){
+    h.push('<h3>'+a.label+' <span class="defn">'+(CG.defn[a.key]?'— '+CG.defn[a.key]:'')+'</span></h3><p class="sub">高: '+a.high+' ／ 低: '+a.low+'</p>');
+    if(CG.only[a.key]&&CG.only[a.key]!==st.surf){h.push('<p class="cgn">この馬場（'+(st.surf==="芝"?"芝":"ダート")+'）では対象外（'+(CG.only[a.key]==="芝"?"芝":"ダート")+'の走だけで測る軸）。</p>');return;}
+    var rows=['<div class="cgw"><table class="cg" data-ax="'+a.key+'">'+gridHead(g)+'<tbody>'];
+    g.venues.forEach(function(v){
+      rows.push('<tr><th class="rh">'+v+'</th>');
+      g.dists.forEach(function(d){
+        var gi=g.idx[v+"|"+d],c=gi===undefined?null:gs[gi].data[a.key];
+        if(!c){rows.push('<td class="hm">—</td>');return;}
+        var n=sum(c.A[0],0,10),sd=side(c.A);
+        if(!sd){rows.push('<td class="hm" data-a="'+a.key+'" data-g="'+gi+'" title="高い側・低い側の走数が足りない"><small>走数不足</small><small>'+n.toLocaleString()+' 走</small></td>');return;}
+        rows.push('<td class="hm'+(Math.abs(sd.z)>=ZM?' k':'')+'" data-a="'+a.key+'" data-g="'+gi+'" style="'+heatBg(sd)+'" title="z '+sd.z.toFixed(1)+'"><b>'+f1(sd.adj)+'</b><small>高−低 '+f1(sd.raw)+'</small><small>'+n.toLocaleString()+' 走</small></td>');
+      });
+      rows.push('</tr>');
+    });
+    rows.push('</tbody></table></div><div class="big" id="cgbig-'+a.key+'" style="display:none"></div>');
+    h.push(rows.join(""));
+  });
+  el.innerHTML=h.join("");
+  Array.prototype.forEach.call(el.querySelectorAll("td[data-a]"),function(td){td.onclick=function(){
+    var k=td.dataset.a,tb=td.closest("table"),o=tb.querySelector("td.sel");if(o)o.classList.remove("sel");td.classList.add("sel");
+    var b=document.getElementById("cgbig-"+k);b.style.display="block";bigInto(b,axIdx[k],gs[+td.dataset.g]);
+  };});
+}
+function ncdf(x){var t=1/(1+0.2316419*Math.abs(x)),d=0.3989423*Math.exp(-x*x/2),p=d*t*(0.3193815+t*(-0.3565638+t*(1.781478+t*(-1.821256+t*1.330274))));return x>0?1-p:p;}
+function tsHist(c,hm){
+  var NB=c.h.length,W=880,H=300,pl=52,pr=16,pt=14,pb=40,iw=W-pl-pr,ih=H-pt-pb,bw=iw/NB,mx=Math.max.apply(null,c.h.concat([1])),s=[];
+  s.push('<svg xmlns="'+NS+'" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="TS のヒストグラム">');
+  s.push('<rect x="'+pl+'" y="'+pt+'" width="'+iw+'" height="'+ih+'" fill="#0b1428" stroke="#243358"/>');
+  var exp=[];
+  for(var i=0;i<NB;i++){var bh=ih*c.h[i]/mx,out=(i===0||i===NB-1);
+    s.push('<rect x="'+(pl+i*bw+1)+'" y="'+(pt+ih-bh)+'" width="'+(bw-2)+'" height="'+bh+'" fill="'+(out?"#f87171":"#7aa9ff")+'" opacity="0.85"/>');
+    if(c.h[i]>0)s.push('<text x="'+(pl+(i+0.5)*bw)+'" y="'+(pt+ih-bh-3)+'" fill="#9aa7c7" font-size="9.5" text-anchor="middle">'+c.h[i]+'</text>');
+    if(i>0&&i<NB-1){var lo=hm.lo+(i-1)*hm.step,hi=lo+hm.step;exp.push([pl+(i+0.5)*bw,pt+ih*(1-c.n*(ncdf((hi-50)/10)-ncdf((lo-50)/10))/mx)]);}}
+  s.push('<polyline points="'+exp.map(function(p){return p[0]+","+Math.max(p[1],pt);}).join(" ")+'" fill="none" stroke="#fbbf24" stroke-width="1.6" stroke-dasharray="4 3"/>');
+  for(var t=hm.lo;t<=hm.hi+1e-9;t+=20){var x=pl+(1+(t-hm.lo)/hm.step)*bw;s.push('<line x1="'+x+'" x2="'+x+'" y1="'+pt+'" y2="'+(pt+ih)+'" stroke="#243358"/><text x="'+x+'" y="'+(pt+ih+14)+'" fill="#9aa7c7" font-size="11" text-anchor="middle">'+t+'</text>');}
+  var x50=pl+(1+(50-hm.lo)/hm.step)*bw;
+  s.push('<line x1="'+x50+'" x2="'+x50+'" y1="'+pt+'" y2="'+(pt+ih)+'" stroke="#e6ecff" stroke-dasharray="2 3"/>');
+  s.push('<text x="'+(pl+iw/2)+'" y="'+(H-6)+'" fill="#9aa7c7" font-size="12" text-anchor="middle">TS（4 点刻み。赤 = 10 未満・90 以上）</text>');
+  s.push('<text x="'+(pl-6)+'" y="'+(pt+4)+'" fill="#9aa7c7" font-size="11" text-anchor="end">'+mx+'</text><text x="'+(pl-6)+'" y="'+(pt+ih)+'" fill="#9aa7c7" font-size="11" text-anchor="end">0</text>');
+  s.push('</svg>');return s.join("");
+}
+function tsBig(c,hm,el){
+  var q=c.q,h=[];
+  h.push('<b>'+c.v+(c.s==="芝"?"芝":"ダート")+c.d+'m の TS の分布</b> <span class="muted">（'+c.n.toLocaleString()+' 走）</span>');
+  h.push('<div class="lg"><span><i style="border-color:#7aa9ff"></i>走数（棒）</span><span><i class="d" style="border-color:#fbbf24"></i>TS が平均 50・標準偏差 10 の正規分布だったときの走数</span></div>');
+  h.push(tsHist(c,hm));
+  h.push('<div class="scroll"><table><thead><tr><th>標準偏差</th><th>歪み</th><th>5%点</th><th>25%点</th><th>50%点</th><th>75%点</th><th>95%点</th><th>最小</th><th>最大</th><th>'+hm.peak_outlier.toFixed(0)+' 秒以上の走数</th></tr></thead><tbody><tr><td class="num">'+c.sd.toFixed(2)+'</td><td class="num">'+(c.sk>=0?"+":"")+c.sk.toFixed(2)+'</td>'+q.map(function(x){return '<td class="num">'+x.toFixed(1)+'</td>';}).join("")+'<td class="num">'+c.mn.toFixed(1)+'</td><td class="num">'+c.mx.toFixed(1)+'</td><td class="num">'+c.o+'</td></tr></tbody></table></div>');
+  el.innerHTML=h.join("");
+}
+function cgTs(){
+  var el=document.getElementById("cg-ts");if(!el||!CG.ts)return;
+  var T=CG.ts,g=T.grid[st.surf],h=['<h4>コース別（縦 = 競馬場、横 = 距離）: TS の標準偏差</h4><p class="sub">大きい数字 = TS の標準偏差（設計値は 10）、下 = 歪み・走数・'+T.hist.peak_outlier.toFixed(0)+' 秒以上の走数。<b>赤 = 歪みの絶対値が '+CG.skm+' 以上</b>。クリックでヒストグラムと分位点。</p><div class="cgw"><table class="cg">'+gridHead(g)+'<tbody>'];
+  g.venues.forEach(function(v){
+    h.push('<tr><th class="rh">'+v+'</th>');
+    g.dists.forEach(function(d){
+      var i=g.idx[v+"|"+d];if(i===undefined){h.push('<td class="hm">—</td>');return;}
+      var c=T.courses[i];
+      h.push('<td class="hm'+(Math.abs(c.sk)>=CG.skm?' sk':'')+'" data-t="'+i+'"><b>'+c.sd.toFixed(1)+'</b><small>歪み '+(c.sk>=0?"+":"")+c.sk.toFixed(1)+'</small><small>'+c.n.toLocaleString()+' 走'+(c.o>0?'・外れ値 '+c.o:'')+'</small></td>');
+    });
+    h.push('</tr>');
+  });
+  h.push('</tbody></table></div><div class="big" id="cgbig-tsdist" style="display:none"></div>');
+  el.innerHTML=h.join("");
+  Array.prototype.forEach.call(el.querySelectorAll("td[data-t]"),function(td){td.onclick=function(){
+    var tb=td.closest("table"),o=tb.querySelector("td.sel");if(o)o.classList.remove("sel");td.classList.add("sel");
+    var b=document.getElementById("cgbig-tsdist");b.style.display="block";tsBig(T.courses[+td.dataset.t],T.hist,b);
+  };});
+}
+ctl();render();cgCtl();cgAxes();cgTs();
 })();
 """
 
 
 def main() -> None:
     d = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-    out = Path(sys.argv[2]) if len(sys.argv) > 2 else OUT
-    out.write_text(build(d), encoding="utf-8")
+    out = Path(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2] != "-" else OUT
+    ts = json.loads(Path(sys.argv[3]).read_text(encoding="utf-8")) if len(sys.argv) > 3 else None
+    out.write_text(build(d, ts, axis_defs([a["key"] for a in d["axes"]])), encoding="utf-8")
     print("wrote", out, f"{out.stat().st_size:,} bytes")
 
 
