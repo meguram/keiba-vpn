@@ -743,6 +743,13 @@ class ScraperRunner:
                 self.storage.save("race_odds", race_id, data)
                 logger.info("保存: race_odds/%s (%d件%s)", race_id,
                             len(data["entries"]), f", phase={phase}" if phase else "")
+                if phase == "t60":  # 第 2 段の影のランナー用の手元の写し（既定オフ。失敗しても取得に響かない）
+                    try:
+                        from src.pipeline.inference.odds_t60_copy import write_copy
+
+                        write_copy(race_id, data, phase)
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("T-60 オッズの手元の写しを呼べない（取得には影響なし）: %s", exc)
                 # TODO(未接続): GCS save 成功後に scrape_runs テーブルへ INSERT されていない。
                 #   src/db/scrape_runs.py の log_scrape_run() を呼び出して実行ログを記録すること。
                 #   必要: get_session() でセッションを取得し、target_type="race_odds",

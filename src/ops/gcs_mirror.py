@@ -20,7 +20,7 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -35,6 +35,11 @@ TREES = (
     "data/local/inference/predictions_v3",
     "data/local/inference/predictions_v5",
     "data/local/inference/predictions_v6",
+    # 候補の影のランナー（candidate_runner）の出力: 新しい候補の第 1 段・第 2 段・凍結した買い方の判定（1 レース 1 回だけ書く）。
+    # API はファイルがあれば新しい表示、bets_stage2/_disabled.json があれば今の表示（weekend_launch_20261121.md）
+    "data/local/inference/predictions_v6c",
+    "data/local/inference/predictions_stage2",
+    "data/local/inference/bets_stage2",
     "data/local/inference/predictions_backfill",
     "data/local/inference/snapshots",
     "data/local/inference/lap_forecast",
@@ -68,7 +73,8 @@ LAZY_TREES = (
 PUSH_TREES = TREES + LAZY_TREES
 # レースごとのファイルが日付フォルダに積み上がる木。起動時と定期の取り込みでは、日付が直近 PULL_WINDOW_DAYS 日以内のフォルダだけ降ろす
 # （全体で 1 万件超 → 起動時の GCS 読み出しを約 1/10 に）。古い日は読まれたときに lazy_fetch で 1 件だけ取る。push は全体のまま。
-WINDOWED_DIRS = tuple(t for t in TREES if t.rsplit("/", 1)[-1] in ("predictions_backfill", "lap_forecast", "tracking_v2"))
+WINDOWED_DIRS = tuple(t for t in TREES if t.rsplit("/", 1)[-1] in ("predictions_backfill", "lap_forecast", "tracking_v2",
+                                                                         "predictions_v6c", "predictions_stage2", "bets_stage2"))
 PULL_WINDOW_DAYS = 14.0
 _DATE_SEG = re.compile(r"^(\d{4})-?(\d{2})-?(\d{2})$")
 _SKIP = re.compile(r"(\.tmp|\.lock)$")
@@ -388,7 +394,35 @@ def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH
             cache_marker.mark_from_paths(sent)
         except Exception:  # noqa: BLE001
             pass
+        _note_stage2_push(root, sent)
     return {"seen": seen, "uploaded": uploaded, "would_upload": would}
+
+
+_STAGE2_TREE = "data/local/inference/bets_stage2/"
+
+
+def _note_stage2_push(root: Path, sent: list[str]) -> None:
+    """第 2 段の判定ファイルを上げ終えた時刻を、ホストの手元の見張りの記録（launch_watch/push_<日>.jsonl）に残す（最善努力・GCS は読まない）。
+    レースごとに『T-10 に API で見える状態だったか』を、push の完了＋目録の読み直し（60 秒）から推定するのに使う。"""
+    keys = [k for k in sent if k.startswith(_STAGE2_TREE)]
+    if not keys:
+        return
+    try:
+        import json as _json
+
+        now = datetime.now(timezone(timedelta(hours=9))).isoformat(timespec="seconds")
+        by_day: dict[str, list[str]] = {}
+        for k in keys:
+            parts = k[len(_STAGE2_TREE):].split("/")
+            if len(parts) == 2:
+                by_day.setdefault(parts[0], []).append(parts[1].rsplit(".", 1)[0])
+        d = root / "data/local/inference/launch_watch"
+        d.mkdir(parents=True, exist_ok=True)
+        for day, rids in by_day.items():
+            with (d / f"push_{day}.jsonl").open("a", encoding="utf-8") as f:
+                f.write(_json.dumps({"at": now, "event": "pushed", "race_ids": sorted(rids)}, ensure_ascii=False) + "\n")
+    except Exception:  # noqa: BLE001
+        logger.warning("第 2 段の push の時刻を記録できませんでした", exc_info=True)
 
 
 def window_days() -> float:

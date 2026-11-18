@@ -87,6 +87,9 @@ def _optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool 
         from src.pipeline.inference import target_bets as TB
 
         if TB.available():  # 既定方策 target（目標払戻つきの 3連複）。KEIBA_BET_STRATEGY=legacy で従来方式へ戻せる
+            s2 = _optimize_stage2(body, view)  # 候補の影のランナーの判定（試行中）があるレースだけ。無ければ None → 今の target
+            if s2 is not None:
+                return s2
             return _optimize_target(body, view)
     if view == "paid":
         return _optimize_paid(body)
@@ -105,7 +108,7 @@ def _optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool 
     try:  # 最新モデル(v6e)のローカル予測があれば、GCS の古い予測より優先する（KEIBA_PRED_MODEL=legacy で従来）
         from src.api.local_predictions import load_primary_prediction_payload
 
-        _prim = load_primary_prediction_payload(race_id, storage, market=market)
+        _prim = load_primary_prediction_payload(race_id, storage, market=market, candidate=False)  # 推奨の計算は v6e
         predictions = (_prim or {}).get("predictions") or []
         already_calibrated = bool(predictions)
     except Exception as exc:  # noqa: BLE001
@@ -118,7 +121,7 @@ def _optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool 
         try:
             from src.api.local_predictions import load_local_prediction_payload
 
-            local = load_local_prediction_payload(race_id, storage, market=market)
+            local = load_local_prediction_payload(race_id, storage, market=market, candidate=False)
         except Exception as exc:  # noqa: BLE001
             logger.warning("推奨用のローカル予測の読み込みに失敗 %s: %s", race_id, exc)
             local = None
@@ -245,6 +248,29 @@ def _optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool 
         "odds_note": odds["note"],
         **({"prob_calibration": prob_cal_meta} if prob_cal_meta else {}),
     }, 200
+
+
+def _optimize_stage2(body: dict[str, Any], view: str, storage: Any | None = None) -> tuple[dict[str, Any], int] | None:
+    """第 2 段の判定（bets_stage2、src/api/stage2_live.py）があれば target と同じ形で返す。無い・読めない・止めの目印があれば None。"""
+    race_id = body.get("race_id", "")
+    if not race_id:
+        return None
+    raw_cap = body.get("max_total_bet", DEFAULT_MAX_TOTAL_BET)
+    try:
+        cap = int(raw_cap) if raw_cap not in (None, 0) else None
+    except (TypeError, ValueError):
+        return None                                   # 金額の誤りは今の経路の検査（400）に任せる
+    if cap is not None and cap < 100:
+        return None
+    try:
+        from src.api import stage2_live as S2
+        from src.scraper.storage import HybridStorage
+
+        out = S2.optimize_payload(race_id, view, cap, storage or HybridStorage())
+    except Exception as exc:  # noqa: BLE001  第 2 段が読めなくても、今の推奨は出す
+        logger.warning("第 2 段の判定を読めない（今の推奨に戻す） %s: %s", race_id, exc)
+        return None
+    return (out, 200) if out is not None else None
 
 
 def _optimize_target(body: dict[str, Any], view: str, storage: Any | None = None) -> tuple[dict[str, Any], int]:

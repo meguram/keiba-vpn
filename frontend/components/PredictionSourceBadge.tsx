@@ -1,5 +1,5 @@
 /* GCS の確定した予測ではなく、ホストのローカルに残した予測（shadow / バックフィル）を表示しているときの注記。 */
-const LABEL: Record<string, string> = { backfill: "算出済み（参考）", shadow: "検証用（参考）" };
+const LABEL: Record<string, string> = { backfill: "算出済み（参考）", shadow: "検証用（参考）", candidate: "新しいモデル（試行中）" };
 
 export function PredictionSourceBadge({ source, note }: { source?: string; note?: string }) {
   if (!source || !LABEL[source]) return null;
