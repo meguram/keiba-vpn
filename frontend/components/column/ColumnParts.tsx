@@ -6,7 +6,7 @@ import { ColumnTrainerPattern } from "@/components/column/ColumnTrainerPattern";
 import { VerdictMark } from "@/components/column/ColumnCard";
 import { ChipScroll } from "@/components/column/ChipScroll";
 import {
-  COLUMN_CATEGORIES, VERDICTS, articleParts, categoryLabel, frontPlan, categoryTrail, countIn,
+  COLUMN_CATEGORIES, VERDICTS, articleParts, categoryLabel, frontPlan, plainBlock, plainStatSub, categoryTrail, countIn,
   type Column, type ColumnBlock, type ColumnGuide,
 } from "@/lib/columns";
 
@@ -102,14 +102,17 @@ export function ColumnArticle({ col, guide, glossary }: { col: Column; guide?: C
         {p.use && <p className="col-lead-u">{p.use.title}: {p.use.text}</p>}
       </div>
       {f.showSummary && <p className="col-pre">{p.summary}</p>}
-      {f.showStats && <Stats items={p.stats} />}
+      {f.showStats && <Stats items={p.stats} plain />}
       {f.main === "visual" && <Block b={p.visuals[0].block} />}
       {f.main === "keyTable" && p.keyTable && <Table columns={p.keyTable.columns} rows={p.keyTable.rows} caption={p.keyTable.caption} />}
       <details className="col-details">
         <summary>詳しい調べ方（数字・図・集計の条件・言葉の説明）</summary>
         <div className="col-more">
           {!f.showSummary && p.summary && <p className="col-pre">{p.summary}</p>}
-          {!f.showStats && p.stats.length > 0 && <Stats items={p.stats} />}
+          {(() => {
+            const more = f.showStats ? p.stats.filter((x) => x.sub !== plainStatSub(x.sub)) : p.stats;
+            return more.length > 0 && <div>{f.showStats && <p className="col-h3">数字の補足</p>}<Stats items={more} /></div>;
+          })()}
           {p.statsRest.length > 0 && <Stats items={p.statsRest} />}
           {p.statsGuide && <div><p className="col-h3">数字の読み方</p><p className="col-pre">{p.statsGuide}</p></div>}
           {p.visuals[0]?.guide && f.main === "visual" && <div><p className="col-h3">図の読み方</p><p className="col-pre">{p.visuals[0].guide}</p></div>}
@@ -168,14 +171,14 @@ export function ColumnArticle({ col, guide, glossary }: { col: Column; guide?: C
   );
 }
 
-function Stats({ items }: { items: { label: string; value: string; sub?: string }[] }) {
+function Stats({ items, plain = false }: { items: { label: string; value: string; sub?: string }[]; plain?: boolean }) {
   return (
     <div className="col-stats" style={{ "--n": Math.min(items.length, 3) } as React.CSSProperties}>
       {items.map((s) => (
         <div key={s.label} className="col-stat col-panel">
           <p className="col-stat-lab">{s.label}</p>
           <p className="col-stat-val">{s.value}</p>
-          {s.sub && <p className="col-stat-sub">{s.sub}</p>}
+          {(plain ? plainStatSub(s.sub) : s.sub) && <p className="col-stat-sub">{plain ? plainStatSub(s.sub) : s.sub}</p>}
         </div>
       ))}
     </div>
@@ -209,10 +212,10 @@ function Block({ b }: { b: ColumnBlock }) {
       <dl className="col-kv">{b.items.map((t) => <div key={t.term} style={{ display: "contents" }}><dt>{t.term}</dt><dd>{t.desc}</dd></div>)}</dl>
     );
     case "stats": return <Stats items={b.items} />;
-    case "chart": return <ColumnChart block={b} />;
-    case "jockey_distance_chart": return <JockeyDistanceChart block={b} />;
-    case "heatmap": return <ColumnHeatmap block={b} />;
-    case "treemap": return <ColumnTreemap block={b} />;
+    case "chart": return <ColumnChart block={plainBlock(b)} />;
+    case "jockey_distance_chart": return <JockeyDistanceChart block={plainBlock(b)} />;
+    case "heatmap": return <ColumnHeatmap block={plainBlock(b)} />;
+    case "treemap": return <ColumnTreemap block={plainBlock(b)} />;
     case "wordcloud": return <ColumnWordcloud block={b} />;
     case "trainer_pattern_table": return <ColumnTrainerPattern block={b} />;
     case "accordion": return <><p className="col-h3">{b.title}</p><ColumnBody blocks={b.blocks} /></>;

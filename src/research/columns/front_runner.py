@@ -172,7 +172,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
         "slug": "front-runner",
         "title": "逃げ・先行は本当に有利——ただし、前に行けそうな馬はすでに人気",
         "claim": "逃げ馬が有利",
-        "verdict": "supported",
+        "verdict": "partial",   # 2026-11-18 に見直し（本文の結論に合わせる。統括役の承認）
         "summary": (f"今走で逃げた馬の複勝率は芝 {pct(N[('芝', '逃げ')])}・ダート {pct(N[('ダート', '逃げ')])} で、追込の 3〜4 倍。前走までの位置取りで見ても前寄りが有利です。"
                     f"ただしオッズにほぼ織り込まれていて、ダートの前寄りは同じ単勝オッズの馬より 3 着以内に残りにくい（{dfront['t3'] * 100:+.1f}pt）です。"),
         "categories": ["style/front-runner"],

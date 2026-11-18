@@ -31,7 +31,7 @@ const MODES = [{ key: "lift" as const, label: "そのままの倍率" }, { key: 
 
 export function ColumnWordcloud({ block }: { block: ColumnWordcloudBlock }) {
   const narrow = useNarrow();
-  const [mode, setMode] = useState<"lift" | "adj">("lift");
+  const [mode, setMode] = useState<"lift" | "adj">("adj");
   const [sel, setSel] = useState<WordcloudItem | null>(null);
   const [view, setView] = useState<"cloud" | "list">("cloud");
   const [sort, setSort] = useState<SortKey>("rate-desc");

@@ -12,7 +12,7 @@ const ts = createRequire(import.meta.url)("typescript");
 const src = ts.transpileModule(readFileSync(join(here, "columns.ts"), "utf8"), { compilerOptions: { module: ts.ModuleKind.ES2020, target: ts.ScriptTarget.ES2020 } }).outputText;
 const out = join(mkdtempSync(join(tmpdir(), "col-")), "columns.mjs");
 writeFileSync(out, src);
-const { categoryTrail, allCategoryPaths, chartMax, chartRange, chartIsEmpty, chartVariant, cascadeOptions, cascadePick, axis2Max, columnsIn, countIn, radialLayout, treeSireCount, formatTreemapValue, articleParts, keyTableOf, VISUAL_TYPES, frontPlan, FRONT_MAX_CHARS } = await import(pathToFileURL(out).href);
+const { categoryTrail, allCategoryPaths, chartMax, chartRange, chartIsEmpty, chartVariant, cascadeOptions, cascadePick, axis2Max, columnsIn, countIn, radialLayout, treeSireCount, formatTreemapValue, articleParts, keyTableOf, VISUAL_TYPES, frontPlan, FRONT_MAX_CHARS, plainStats, plainBlock, plainStatSub } = await import(pathToFileURL(out).href);
 
 const dir = join(here, "..", "content", "columns");
 const articles = readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => JSON.parse(readFileSync(join(dir, f), "utf8")));
@@ -205,4 +205,24 @@ test("小コラムの型: 織り込み済みの記事は数字の囲みを出さ
   assert.equal(frontPlan({ ...base, visuals: [] }, "partial").main, "keyTable");
   assert.equal(frontPlan({ ...base, summary: "差は +0.1pt（p=0.386）でした。" }, "partial").showSummary, false);
   assert.equal(frontPlan({ ...base, summary: "あ".repeat(FRONT_MAX_CHARS) }, "partial").showSummary, false);
+});
+
+test("図と囲みの統計の言葉を、表示のときに平易にする（値は消さない所は残す）", () => {
+  assert.equal(plainStats("印は見込みとの差が偶然とは考えにくい点（p<0.05）。"), "印は見込みとの差が偶然とは考えにくい点。");
+  assert.equal(plainStats("縦線は 95% 信頼区間、＊は差が有意（p<0.05）。"), "縦線は、値がぶれうる幅の目安、＊は差が偶然とは考えにくい。");
+  assert.equal(plainStats("＊は差が有意（p<0.05）な月。"), "＊は差が偶然とは考えにくい月。");
+  assert.equal(plainStats("単勝回収率の高い種牡馬（95%区間つき）"), "単勝回収率の高い種牡馬（縦線は、値がぶれうる幅の目安）");
+  assert.equal(plainStats(undefined), undefined);
+  const b = plainBlock({ type: "chart", title: "t（95%区間つき）", caption: "c（p<0.05）", yLabel: "騎手間の標準偏差", xLabel: "x", xs: [], series: [], variants: { a: { caption: "v（p<0.05）", series: [] } } });
+  assert.deepEqual([b.title, b.caption, b.yLabel, b.variants.a.caption], ["t（縦線は、値がぶれうる幅の目安）", "c", "騎手による差の大きさ", "v"]);
+  assert.equal(plainStatSub("当てはまらない馬と比べて・格 B・確認期間 +2.1pt"), "当てはまらない馬と比べて・確認期間 +2.1pt");
+  assert.equal(plainStatSub("前走も良で 4 着以下の馬と比べて・p=0.930"), "前走も良で 4 着以下の馬と比べて");
+  assert.equal(plainStatSub("p=0.01"), undefined);
+  // 並列の「・」は切らず、統計の括弧だけを外す（critic の例）
+  assert.equal(plainStatSub("オッズ・コースをそろえた差（補正後 p=0.053）。4,897 走・複勝率 18.5%・見込みとの差 -0.9pt"), "オッズ・コースをそろえた差。4,897 走・複勝率 18.5%・見込みとの差 -0.9pt");
+  assert.equal(plainStatSub("母 10 歳のときの産駒と比べて（p=0.009）。生の差は -5.2pt"), "母 10 歳のときの産駒と比べて。生の差は -5.2pt");
+  assert.equal(plainStatSub("複勝率（p<0.001）。勝率は +0.4pt（p<0.001）"), "複勝率。勝率は +0.4pt");
+  assert.equal(plainStats("平均人気のハイとスローの差の p 値は 0.002。"), "");
+  assert.equal(plainStats("（差は有意でない）"), "（差は偶然の範囲）");
+  assert.equal(plainStats("差が有意（p<0.05）ならば"), "差が偶然とは考えにくいならば");   // 後ろの「な」を食わない
 });

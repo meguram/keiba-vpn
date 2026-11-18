@@ -321,7 +321,7 @@ export function ColumnChart({ block: whole }: { block: ColumnChartBlock }) {
       <div className="flex flex-wrap gap-4" style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
         {base.map((s, k) => <span key={k}><span style={{ display: "inline-block", width: 18, borderTop: "2px dashed #8b949e", verticalAlign: "middle", marginRight: 4 }} />{s.name}</span>)}
         {y2?.series.map((s, k) => <span key={`l2${k}`} style={{ color: Y2_COLOR }}><span style={{ display: "inline-block", width: 18, borderTop: `2.5px dashed ${Y2_COLOR}`, verticalAlign: "middle", marginRight: 4 }} />■ {s.name}（右軸）</span>)}
-        {showSig && <span>縦線は95%信頼区間。＊は2つの差が統計的に有意（p&lt;0.05）</span>}
+        {showSig && !(block.caption ?? "").includes("値がぶれうる幅") && <span>縦線は、値がぶれうる幅の目安です。＊は、2 つの差が偶然とは考えにくい点です。</span>}
         {block.minN != null && picked.some((i) => block.series[i]?.values.some((v, j) => typeof v === "number" && isSmall(block.series[i].n, block.minN, j))) && <span>点線・白抜きの点は{block.minN}走未満（参考）</span>}
         {block.caption && <span>{block.caption}</span>}
       </div>

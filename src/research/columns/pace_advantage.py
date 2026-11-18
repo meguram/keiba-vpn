@@ -150,7 +150,7 @@ def article(a: dict[str, Any]) -> dict[str, Any]:
         "slug": "pace-advantage",
         "title": "ハイペースになるほど、1番人気は信頼できない",
         "claim": "ハイペースは荒れやすい",
-        "verdict": "supported",
+        "verdict": "partial",   # 2026-11-18 に見直し（本文の結論に合わせる。統括役の承認）
         "summary": (f"1 番人気の複勝率はスロー {pct(F['slow'])}、ハイ {pct(F['high'])}。ペースは結果ですが、前に行く馬が多いレースはハイペースになりやすく、"
                     f"1 番人気の複勝率も下がります（オッズをそろえても 1 頭あたり {o.params['nf'] * 100:+.1f}pt）。"),
         "categories": ["style/front-runner", "upset/conditions"],

@@ -2,7 +2,7 @@
   "slug": "distance-jockey",
   "title": "距離で騎手の差は変わるか——長距離で大きいとは言えず、ほぼオッズどおり",
   "claim": "距離が長いほど騎手の影響が大きい",
-  "verdict": "inconclusive",
+  "verdict": "not_supported",
   "summary": "偶然の分を除いた騎手間の勝率の差は、短距離 4.0pt・マイル 4.9pt・中距離 5.3pt・長距離 5.6pt。長距離とマイルは区別できず、人気の見込みを超える騎手の差はどの距離でもごく小さいです。",
   "categories": [
     "jockey/distance"
