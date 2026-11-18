@@ -11,12 +11,33 @@
 |---|---|---|
 | `factory/self/horse_attrs.parquet` | 学習で使った産地・誕生日の表（2020〜2025 年の出走馬） | 学習のとき（`factory_self_eval attrs`） |
 | `factory/conn/horse_profile.parquet` | 馬主・生産者・産地・誕生日（2020〜2026 年 9 月ごろまでの出走馬） | 一度きり（`factory_conn_fetch`、2026-10-17） |
-| `state/profile_dyn.parquet` | 日次の補い（2026 年に走った馬のうち、上の表に無い馬） | 毎晩 23:10 JST（cron `serving-state-profile`、`update_serving_state profile`） |
+| `state/profile_dyn.parquet` | 日次の補い（2026 年に走った馬のうち、上の表に無い馬） | 毎朝 08:10 JST（cron `serving-state-profile`、`update_serving_state profile`）。開催日は 07:35 JST の `precompute` も、その日に補った新しい馬を書き足す（2026-11-19 から） |
 
 修正の前は、推論は 1 つめの表だけを使っていた。日次の補いは「2 つめの表に無い馬」だけを取りに行くので、2 つめの表にだけ居る馬の産地が欠けたままだった。
 
 - 毎晩の補い（`update_serving_state profile`）は、馬の成績の文書（`horse_result`）を読む。そこに産地が無かった馬は、プロフィールの文書（`horse_profile`）を 1 頭 1 回だけ読み直す（`retry_birthplace`、2026-11-14 から）。読み直した馬には `bp_retry` の印を付け、二度と読まない。
 - 推論の起動ごとの補い（`profile_for`）は、読み出しを増やしていない（Cloud Run のジョブは起動のたびに新しいコンテナなので、ここで足すと繰り返し読むことになる）。
+- 推論の補い（`profile_for`）は、表に無い馬を GCS から読む前に、手元の表を読む（2026-11-19 から）。
+  - 読む場所は 2 つ。自分の作業場所（`<KEIBA_INFERENCE_DIR>/state`）と、本体の置き場（`KEIBA_PROFILE_LOCAL_DIR`、無ければ `data/local/inference/state`）。
+  - 読む表は 2 つ。
+    - `profile_dyn.parquet`: 値の入っている行だけを使う。馬主・生産者・産地がすべて空の行は、手元にあるとみなさず GCS で読み直す。11/18 時点で 693 行中 135 行が空で、そのうち 11/21 の出走馬 3 頭は、今は GCS に値があった。
+    - `profile_absent.parquet`: precompute が「GCS に文書が無かった」と確かめた馬（新馬など）。確かめてから 3 時間（`KEIBA_PROFILE_ABSENT_TTL_SEC`）は読まない。
+  - ファイルが置き換わったら（更新時刻・大きさ・inode が変わったら）読み直す。そのため、07:35 の `precompute` が書いた分を、後から起動する weight-runner・影のランナーは GCS から読み直さない。
+  - 作業場所が別の影のランナー・作り直しも本体の表を読む（読むだけで書かない）。影のランナーの予測は、本体の v6e と同じ埋め方になる向きに変わる（本体の profile_dyn の産地が、attr_bp_* の累積に入る）。
+- 手元の表に書くのは、root で動く `update_serving_state` だけ。
+  - `precompute` は、その日に GCS から補った馬のうち、馬主・生産者・産地のどれかが取れた馬を `profile_dyn` に足す。すべて空の既にある行は置き換える。
+  - 文書が無かった馬は `profile_absent` に記録する。404 の馬だけで、読みの間に GCS の不調があった馬は記録しない。
+  - `profile`（毎朝）は、文書なしの記録を使わずに読む。
+- ログ:
+  - 手元の表を読んだとき: `手元の profile_dyn を読んだ: <path>（n 行、表に足した m 頭）`
+  - 補いのたび: `新しい馬の補い: 表に無い N 頭 → 手元 a・文書なしの記録 b・GCS c（見つからず d）`
+  - `precompute` の終わり: `profile_dyn に足した x 頭・文書なしと記録した y 頭`
+- 止め方: `KEIBA_PROFILE_LOCAL=0`、または目印のファイル `data/local/meta/profile_local.off`。手元を先に読む段と書き戻しの両方が止まり、今までの動き（毎回 GCS）に戻る。動いている影のランナーは、止めてから次の起動で効く（`weekend_launch_20261121.md` §6）。
+- 1 つのプロセスで、一度「値の無い馬」として表に入った馬は、そのプロセスの中では埋め直さない（今までと同じ）。次に起動したプロセスから埋まる。
+- 値は「今の」馬主・生産者・産地で、時点を持たない。
+  - 過去の日を作り直すときも最新の値になる。馬主が途中で替わった馬は、過去の日でも新しい馬主になる。
+  - 学習の側は走ったときの値なので、train-serve のずれの候補になる（今までの GCS の補いも同じ）。
+- `config/gcp_job_map.json` の serving-state-* の Jobs（今は止まっている）は、`state_out` と `parity: file_hash` で同じ場所を見る。Jobs に戻すときは、`profile_dyn.parquet`・`profile_absent.parquet`・`.profile_*.lock` を一致の確かめから外す。
 - 馬主・生産者の表から埋めるとき、学習の期間（2025 年まで）に走った馬は埋めない。産地ごとの累積が学習のときとずれないようにするため。日次の補いから足す分は、今までどおり除外しない。
 - 毎晩の補いは、`profile_dyn.parquet` の誕生日を保存の形（「2024年2月2日」の文字列）にそろえて書く。
 - 新しい親モデル（2016 年起点、s18）では、`rebuild_groups_2016.redirect_serving` が 1・2 つめを `retrain_out/base_2016/profile/` の表に向ける。同じ合わせ方で埋まる（2 つめの表は 2026 年の馬 10,941 頭のうち 10,382 頭の産地を持つ）。

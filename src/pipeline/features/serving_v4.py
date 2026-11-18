@@ -36,6 +36,40 @@ ATTRS_PATH = FAC / "self/horse_attrs.parquet"        # 馬の産地・誕生日�
 FROZEN_PATH = FAC / "self/attrs_frozen.json"
 STATE_DIR = Path(__import__("os").environ.get("KEIBA_INFERENCE_DIR") or ROOT / "data/local/inference") / "state"
 KEY = ["race_id", "horse_id"]
+PROFILE_COLS = ["horse_id", "owner", "breeder", "birthplace"]
+
+
+def profile_local_enabled() -> bool:
+    """新しい馬の補いで、GCS より先に手元の profile_dyn を読むか（既定は読む）。
+    止めるとき: 環境変数 ``KEIBA_PROFILE_LOCAL=0``、または目印のファイル ``data/local/meta/profile_local.off``（env を書き換えられない影のランナー用）。"""
+    if os.environ.get("KEIBA_PROFILE_LOCAL", "1").strip() == "0":
+        return False
+    return not (ROOT / "data/local/meta/profile_local.off").exists()
+
+
+def profile_local_dir() -> Path:
+    """本体の手元の表の置き場（``KEIBA_PROFILE_LOCAL_DIR``、無ければ <repo>/data/local/inference/state）。
+    ``KEIBA_INFERENCE_DIR`` に依らないので、作業場所が別の影のランナー・作り直しも本体の profile_dyn を読める（読むだけ）。"""
+    return Path(os.environ.get("KEIBA_PROFILE_LOCAL_DIR") or ROOT / "data/local/inference/state")
+
+
+def profile_absent_ttl_sec() -> float:
+    """『GCS に文書が無かった』記録を信じる時間（既定 3 時間）。新馬は走る前に文書が無いことが多い（11/21 の出馬表の 10 頭すべて）。
+    その日のうちに文書ができた場合に古い記録で読まない時間を短くするため、1 日を覆う長さにはしない（3 時間ごとに 1 回読み直す。量は数十頭 × 2 回）。"""
+    try:
+        return float(os.environ.get("KEIBA_PROFILE_ABSENT_TTL_SEC", "10800"))
+    except ValueError:
+        return 10800.0
+
+
+def profile_dyn_paths(state_dir: str | Path) -> list[Path]:
+    """読む profile_dyn の一覧（先にあるほうを優先）。手元を読まない設定では、今までどおり <state_dir> のものだけ。"""
+    paths = [Path(state_dir) / "profile_dyn.parquet"]
+    if profile_local_enabled():
+        p = profile_local_dir() / "profile_dyn.parquet"
+        if os.path.abspath(os.path.realpath(p)) != os.path.abspath(os.path.realpath(paths[0])):
+            paths.append(p)
+    return paths
 
 SIT_JSON = Path(__file__).with_name("serving_tp32_groups.json")       # {"groups": [採用した状況群], "columns": {群: [列名]}}（tp-32）
 SELF8 = ["change", "experience", "lags_margin", "pair", "rest", "seq_stats", "timedev", "attrs"]
@@ -558,36 +592,130 @@ class V4Features:
         self.groups = V4Groups(self.hist)
         self.state_dir = Path(state_dir) if state_dir else STATE_DIR
         self._day: dict[str, pd.DataFrame] = {}
+        self._dyn_mtime: dict[str, tuple] = {}
+        self.fetched: list[dict] = []                     # このプロセスで GCS から補った馬（誕生日つき。precompute が profile_dyn に書き戻す）
+        self.absent: dict[str, float] = {}                # GCS に文書が無かった馬 → 確かめた時刻（GCS の不調が無かった読みだけ。precompute が書き戻す）
+        self.skip_absent = True                           # 文書が無いと記録された馬を読み直さない（update_serving_state profile は False）
+        self._absent_sig: dict[str, tuple] = {}
+        self._absent_known: dict[str, float] = {}
+        self.profile_stats = {"miss": 0, "local": 0, "absent": 0, "gcs": 0, "notfound": 0, "dyn_rows": 0}   # dyn_rows: 手元の profile_dyn から表に足した頭数
         self.warmed = False
 
     def warm(self) -> dict:
         info = self.hist.warm()
-        dyn = self.state_dir / "profile_dyn.parquet"
-        if dyn.exists():
-            d = pd.read_parquet(dyn)
-            self.hist.profile = pd.concat([self.hist.profile, d[~d["horse_id"].isin(self.hist.profile["horse_id"])]], ignore_index=True)
-            self.hist.attrs = fill_attrs_from_profile(self.hist.attrs, d)      # 日次で補った馬（今までどおり除外しない）
-            info["profile_dyn"] = len(d)
+        n = self._absorb_profile_dyn()
+        if n is not None:
+            info["profile_dyn"] = n
         self.warmed = True
         return info
 
+    def _absorb_profile_dyn(self) -> int | None:
+        """手元の profile_dyn（<state_dir> と本体の置き場）を読み、まだ無い馬を足す。前に読んだときから mtime が変わったファイルだけ読む
+        （precompute が後から書き足した馬も拾う）。読むだけで書かない。足した列は hist.profile の列に限る（余計な列を混ぜない）。
+        誕生日は産地・誕生日の表（attrs）にだけ入れる（日次で補った馬なので、今までどおり除外しない）。
+        戻り値: 読んだファイルの行数の合計（読んだファイルが無ければ None）。"""
+        total = None
+        for path in profile_dyn_paths(self.state_dir):
+            try:
+                stt = path.stat()
+            except OSError:
+                continue
+            mt = (stt.st_mtime_ns, stt.st_size, stt.st_ino)          # os.replace で置き換わると変わる
+            if self._dyn_mtime.get(str(path)) == mt:
+                continue
+            try:
+                d = pd.read_parquet(path)
+            except Exception:  # noqa: BLE001
+                logger.warning("手元の profile_dyn を読めなかった（GCS の補いで続ける）: %s", path, exc_info=True)
+                continue
+            self._dyn_mtime[str(path)] = mt
+            d["horse_id"] = d["horse_id"].astype(str)
+            cols = [c for c in self.hist.profile.columns if c in d.columns] or PROFILE_COLS
+            # 馬主・生産者・産地がすべて空の行（読んだときに文書がまだ無かった馬。2026-11-18 に 693 行中 135 行）は、手元にあるとみなさない。
+            # 今は GCS に値があることが多い（11/21 の出走馬の 3 頭で確認）ので、補いの対象に残して読み直させる（update_serving_state profile・precompute が埋め直す）
+            filled = d[[c for c in ("owner", "breeder", "birthplace") if c in d.columns]].notna().any(axis=1) if len(d) else pd.Series(dtype=bool)
+            new = d[filled & ~d["horse_id"].isin(self.hist.profile["horse_id"].astype(str))].drop_duplicates("horse_id", keep="last")
+            if len(new):
+                self.hist.profile = pd.concat([self.hist.profile, new[cols]], ignore_index=True)
+            self.hist.attrs = fill_attrs_from_profile(self.hist.attrs, d)
+            self.profile_stats["dyn_rows"] = self.profile_stats.get("dyn_rows", 0) + len(new)
+            logger.info("手元の profile_dyn を読んだ: %s（%d 行、表に足した %d 頭）", path, len(d), len(new))
+            total = (total or 0) + len(d)
+        return total
+
     # ------------------------------------------------------------------ プロフィール（馬主・生産者・産地）
     def profile_for(self, horse_ids: list[str], storage: Any | None) -> pd.DataFrame:
-        """未登録の馬（新馬など）を horse_result から補い、状態にも追加する。"""
+        """未登録の馬（新馬など）の馬主・生産者・産地を補い、状態にも追加する。読む順: ①メモリ（hist.profile）→ ②手元の profile_dyn
+        （<state_dir> と本体の置き場。``profile_local_enabled``）→ ③残りだけ GCS の horse_result（無ければ horse_profile）。
+        ここでは書かない（手元の表に残すのは root で動く update_serving_state の precompute・profile だけ）。
+        値は『今の』馬主・生産者・産地（時点で持たない）。過去の日を作り直すときも最新の値になり、馬主が途中で替わった馬は過去の日でも新しい馬主になる
+        （学習の側は走ったときの値なので、train-serve のずれの候補。今までの GCS の補いも同じ）。"""
         known = set(self.hist.profile["horse_id"].astype(str))
         miss = [h for h in dict.fromkeys(map(str, horse_ids)) if h not in known]
+        n_miss, n_local, n_abs = len(miss), 0, 0
+        if miss and profile_local_enabled():
+            self._absorb_profile_dyn()
+            known = set(self.hist.profile["horse_id"].astype(str))
+            rest = [h for h in miss if h not in known]
+            n_local, miss = len(miss) - len(rest), rest
+            if miss and self.skip_absent:                 # 文書が無いと記録された馬（新馬など。走る前は horse_result も horse_profile も無い）は、期限内は読まない
+                ab = self._absent_recent()
+                rest = [h for h in miss if h not in ab]
+                skipped = [h for h in miss if h in ab]
+                n_abs, miss = len(skipped), rest
+                if skipped:                               # GCS で読んだときと同じく、値の無い行として足す（同じプロセスで何度も見に行かない）
+                    self.hist.profile = pd.concat([self.hist.profile, pd.DataFrame({"horse_id": skipped}).reindex(columns=PROFILE_COLS)], ignore_index=True)
+        n_nf = 0
         if miss and storage is not None:
+            from src.scraper.storage import degraded_since
+
             rows = []
             for h in miss:
+                t_ns = time.time_ns()
                 try:
                     rec = storage.load("horse_result", h) or storage.load("horse_profile", h) or {}
+                    ok = True
                 except Exception:
-                    rec = {}
-                rows.append({"horse_id": h, "owner": rec.get("owner"), "breeder": rec.get("breeder"), "birthplace": rec.get("birthplace"), "birthday": rec.get("birthday")})
+                    rec, ok = {}, False
+                row = {"horse_id": h, "owner": rec.get("owner"), "breeder": rec.get("breeder"), "birthplace": rec.get("birthplace"), "birthday": rec.get("birthday")}
+                rows.append(row)
+                if (ok and not rec and bool(getattr(storage, "gcs_enabled", False)) and bool(getattr(storage, "_gcs_healthy", False))
+                        and not degraded_since(t_ns)):
+                    self.absent[h] = time.time()          # 404 だけ（不調・時間切れ・読めなかったものは記録しない）
             add = pd.DataFrame(rows)
-            self.hist.profile = pd.concat([self.hist.profile, add[["horse_id", "owner", "breeder", "birthplace"]]], ignore_index=True)
+            n_nf = int(add[["owner", "breeder", "birthplace"]].isna().all(axis=1).sum())
+            self.hist.profile = pd.concat([self.hist.profile, add[PROFILE_COLS]], ignore_index=True)
             self.hist.attrs = fill_attrs_from_profile(self.hist.attrs, add)
+            self.fetched.extend(rows)
+        n_gcs = len(miss) if storage is not None else 0
+        for k, v in (("miss", n_miss), ("local", n_local), ("absent", n_abs), ("gcs", n_gcs), ("notfound", n_nf)):
+            self.profile_stats[k] += v
+        if n_miss:
+            logger.info("新しい馬の補い: 表に無い %d 頭 → 手元 %d・文書なしの記録 %d・GCS %d（見つからず %d）", n_miss, n_local, n_abs, n_gcs, n_nf)
         return self.hist.profile
+
+    def _absent_recent(self) -> set[str]:
+        """profile_absent.parquet（precompute が書く『GCS に文書が無かった馬』。profile_dyn と同じく <state_dir> と本体の置き場の 2 つ）のうち、
+        期限内の馬。ファイルが置き換わったら読み直す。"""
+        for path in profile_dyn_paths(self.state_dir):
+            path = path.with_name("profile_absent.parquet")
+            try:
+                stt = path.stat()
+            except OSError:
+                continue
+            sig = (stt.st_mtime_ns, stt.st_size, stt.st_ino)
+            if self._absent_sig.get(str(path)) == sig:
+                continue
+            try:
+                d = pd.read_parquet(path)
+            except Exception:  # noqa: BLE001
+                logger.warning("手元の profile_absent を読めなかった（GCS の補いで続ける）: %s", path, exc_info=True)
+                continue
+            self._absent_sig[str(path)] = sig
+            for h, t in zip(d["horse_id"].astype(str), pd.to_numeric(d["checked_at"], errors="coerce").fillna(0.0)):
+                self._absent_known[h] = max(float(t), self._absent_known.get(h, 0.0))
+        cut = time.time() - profile_absent_ttl_sec()
+        return {h for h, t in self._absent_known.items() if t >= cut}
 
     # ------------------------------------------------------------------ 日単位（馬主・馬自身）
     def day_groups(self, card_all: pd.DataFrame, storage: Any | None = None) -> pd.DataFrame:
