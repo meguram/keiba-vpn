@@ -46,7 +46,7 @@ def diff(d):
 def table(head, rows, cls=""):
     h = "".join(f"<th>{escape(x)}</th>" for x in head)
     b = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows)
-    return f'<div class="wrap"><table class="{cls}"><thead><tr>{h}</tr></thead><tbody>{b}</tbody></table></div>'
+    return f'<div class="scroll"><table class="{cls}"><thead><tr>{h}</tr></thead><tbody>{b}</tbody></table></div>'
 
 
 def met_row(name, m, b0=True):
@@ -89,8 +89,9 @@ def build(out: Path = OUT) -> Path:
         rows.append([("<b>" + escape(k) + "</b>") if k == best else escape(k), f"{c[k].get('bet_races', 0):,}", pct(c[k].get("roi")),
                      pct(c[k].get("roi_ex_top5")), f"{m.get(k, {}).get('p_rw', float('nan')):.2f}", f"{e[k].get('bet_races', 0):,}", pct(e[k].get("roi")),
                      pct(e[k].get("roi_ex_top5")), pt(e[k]["diff"]["B0"][0]) if e[k].get("bet_races") else "—"])
-    sec.append("<h2>探す（2020〜22）・評価（2023〜24）— 37 候補</h2>"
-               "<p>名前: g{帯}_{確からしさ}_{券種}。帯 0: 〜3 倍・1: 〜5・2: 〜10・3: 3〜10・4: 5〜20・5: 10 倍〜（T-60 の単勝オッズ）。"
+    n_c = len(c)
+    sec.append(f"<h2>探す（2020〜22）・評価（2023〜24）— {n_c} 候補</h2>"
+               "<p>名前: g{帯}_{確からしさ}_{券種}。logit_tan = ロジスティック回帰（勝ち ~ log q_T60 + log(1 + 点)、p̂ × オッズ > 1.05 のとき単勝）で、1 レースも買わなかった。帯 0: 〜3 倍・1: 〜5・2: 〜10・3: 3〜10・4: 5〜20・5: 10 倍〜（T-60 の単勝オッズ）。"
                "確からしさ: all = 全部・top_half / top_third = ◎ の点の上位半分・3 分の 1。<b>太字</b> = 探す期間で選んだ候補。"
                "p（RW）= Romano–Wolf の補正後の p（H0: 回収率 ≤ 100%）。</p>"
                + table(["候補", "探す 参戦", "探す 回収率", "上位 5 件除き", "p（RW）", "評価 参戦", "評価 回収率", "上位 5 件除き", "B0 との差"], rows))
@@ -104,7 +105,8 @@ def build(out: Path = OUT) -> Path:
         ["年ごと（候補／B0）", "・".join(f"{y}: {pct(v['cand']['roi'])}／{pct(v['B0']['roi'])}" for y, v in S["per_year"].items())],
         ["似た単位（評価、芝ダ × 距離帯 × 群）", f"{S['similar_units_eval']['n']} 群のうち B0 より上の割合 {pct(S['similar_units_eval']['share_better_than_B0'], 0)}"],
         ["楽観（確定オッズで判定）", f"探す {pct(S['search_optimistic'][best]['roi'])}・評価 {pct(ev['optimistic'][best]['roi'])}"],
-        ["多重比較", f"37 候補とも Romano–Wolf の p = 1.00・White の reality check p = {m.get('_white_p', float('nan')):.2f}"],
+        ["多重比較", f"Romano–Wolf の補正後 p の最小 {min(v['p_rw'] for k, v in m.items() if not k.startswith('_')):.2f}（{m.get('_n')} 候補）・"
+                     f"White の reality check p = {m.get('_white_p', float('nan')):.2f}"],
         ["採否（search_spec）", escape(json.dumps(S["adopt"], ensure_ascii=False))]]))
     # 凍結の後
     if F:
@@ -120,32 +122,51 @@ def build(out: Path = OUT) -> Path:
             for b, x in v["by_gamma"]["0.0"]["baselines"].items():
                 rows.append([escape(GROUPS.get(k, k)), escape(NAMES.get(f"{b}_fuku", b)), f"{x.get('bet_races', 0):,}", ci(x), pct(x.get("roi_ex_top5"))])
         sec.append("<h3>基準（同じ群）</h3>" + table(["群", "基準", "参戦", "回収率（95% 区間）", "上位 5 件除き"], rows))
-        rows = [[escape(GROUPS.get(k, k)), escape(json.dumps(v.get("coverage", {}), ensure_ascii=False)), pct(v["optimistic"].get(best, {}).get("roi"))]
+        def cov(x):
+            t = [f"◎ {x.get('honmei_in', 0)} レース", f"確定オッズなし {x.get('honmei_no_final_odds', 0)}", f"版 V0 以外で除外 {x.get('excluded_other_version', 0)}"]
+            if "races_t60_partial" in x:
+                t += [f"T-60 が全頭の 90% 未満で除外 {x['races_t60_partial']}", f"◎ に T-60 なし {x.get('honmei_no_t60', 0)}"]
+            return "・".join(t)
+        rows = [[escape(GROUPS.get(k, k)), escape(cov(v.get("coverage", {}))), pct(v["optimistic"].get(best, {}).get("roi"))]
                 for k, v in F["groups"].items()]
         sec.append("<h3>カバー率と楽観（確定オッズで判定）</h3>" + table(["群", "カバー率", "楽観の回収率"], rows))
     else:
         sec.append("<h2>凍結の後に 1 回だけ: 2025・2026 年</h2><p>まだ流していない。</p>")
     lv = "".join(f"<li><b>{escape(x['label'])}</b>: {escape(x['if'])}</li>" for x in P["criteria"]["levels"])
+    rule_txt = escape(P["rule"]["text"])
+    bought = {k: v for k, v in c.items() if v.get("bet_races")}
+    g5t = [x[k].get("roi") for x in (c, e) for k in x if k.startswith("g5_") and k.endswith("_tan") and x[k].get("bet_races")]
+    top_e = max(e.values(), key=lambda v: v.get("roi") or 0)
+    concl = [f"walk-forward の ◎ は、どの発走前オッズの帯・確からしさ・券種でも回収率 100% に届かない（2020〜22 年に買った {len(bought)} 候補すべて。"
+             f"最高 {pct(max(v['roi'] for v in bought.values()))}）。",
+             f"探す期間の条件（参戦 450 以上で回収率が最高）で選んだ規則「{rule_txt}」は、評価 2023〜24 年で {pct(ev['best']['roi'])}"
+             f"（95% 区間 {pct(ev['best']['roi_lo'])}〜{pct(ev['best']['roi_hi'])}）。同じレースの T-60 の 1 番人気の複勝は {pct(ev['baselines']['B_fav_fuku']['roi'])}。"]
+    if F:
+        G = F["groups"]
+        concl.append("凍結の後に 1 回だけ見た 2025・2026 年: " + "、".join(
+            f"{GROUPS.get(k, k)} {pct(G[k]['by_gamma']['0.0']['cand'].get('roi'))}（{G[k]['judge']}）" for k in ("course_main", "course_2025", "course_separate", "graded_2025_2026") if k in G) + "。")
+    concl += [f"人気薄の ◎（T-60 で 10 倍超）の単勝は {pct(min(g5t), 0)}〜{pct(max(g5t), 0)}（探す・評価）で、favourite-longshot bias の向きと一致する。",
+              "◎ を選んでも、同じレースで T-60 が 5 倍以下の馬を全部複勝で買うのと変わらない（評価の差 "
+              f"{pt(ev['best']['diff'].get('B_band1', [None])[0])}）。◎ の勝ち数は市場の見込みの 0.86〜0.95 倍で、上乗せが無い。",
+              "答え: <b>この ◎ は単勝・複勝とも見送り</b>。5 倍以下の複勝でも、市場の 1 番人気の複勝と同程度かそれ以下で、どちらも損。"]
+    concl_html = "".join(f"<li>{x}</li>" for x in concl)
+    upper = f"評価で最も良い候補でも {pct(top_e.get('roi'))}"
+    made = (F or {}).get("evaluated_at") or ""
+    made = made[:10] if made else datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d")
     sec.append(f"<h2>判定の 5 段（事前登録 prereg_final.json）</h2><ul class=\"t\">{lv}</ul>")
     html = f"""<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>◎ の買う／見送る</title><style>{CSS}
-ul.t{{margin:4px 0;padding-left:18px}}h2{{margin-top:28px}}
+ul.t{{margin:4px 0;padding-left:18px}}h2{{margin-top:28px}}th{{cursor:default}}td{{white-space:normal}}
 </style></head><body><main>
 <h1>ルールの一覧の ◎ の買う／見送る</h1>
 <p class="muted">対象: <a href="../../../data/meta/graded/rules_overview.html">ルールの一覧</a>の ◎（通常レースの第 3 版・重賞 B）。
 記録（計画・レビュー・事象と根拠）: docs/operations/rules_bet_opt_20261118.md。作り: src/scripts/docs/build_rules_bet_opt_html.py。
-最終更新: {datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d")}</p>
-<div class="panel wrap"><b>結論</b><ul class="t">
-<li>walk-forward の ◎ は、どの発走前オッズの帯・確からしさ・券種でも、回収率 100% に届かない（2020〜22 年の 37 候補すべて）。</li>
-<li>いちばん良いのは「◎ が T-60 で 5 倍以下のときだけ複勝」で、評価 2023〜24 年は {pct(ev['best']['roi'])}（95% 区間 {pct(ev['best']['roi_lo'])}〜{pct(ev['best']['roi_hi'])}）。
-市場の 1 番人気の複勝（{pct(ev['baselines']['B_fav_fuku']['roi'])}）と同程度。</li>
-<li>人気薄の ◎（T-60 で 10 倍超）の単勝は 43〜65% で、favourite-longshot bias の向きと一致する。</li>
-<li>ロジスティック回帰で、◎ の点は市場の勝率に上乗せする情報を持たなかった（係数 ≈ 0）。</li>
-<li>答え: <b>この ◎ は見送り</b>。買うとしても、市場の 1 番人気の複勝と同じ程度。</li></ul></div>
+最終更新: {made}</p>
+<div class="panel wrap"><b>結論</b><ul class="t">{concl_html}</ul></div>
 <div class="panel wrap"><b>事象と根拠</b><ul class="t">
-<li>事象: 人気側に絞るほど回収率が上がるが、上限は 85% 前後で、控除（20%）を超えない。</li>
+<li>事象: 人気側に絞るほど回収率が上がるが、{upper}で、控除（20%）を超えない。</li>
 <li>根拠 1: favourite-longshot bias（Snowberg &amp; Wolfers 2010）。人気薄ほど過大評価が控除に上乗せされる。</li>
-<li>根拠 2: Benter（1994）。市場と独立の情報を市場の確率に足して初めて価値が出る。◎ の点にはその上乗せが無かった。</li>
+<li>根拠 2: Benter（1994）。市場と独立の情報を市場の確率に足して初めて価値が出る。◎ には上乗せが見えない（同じ帯の馬を全部買うのと差が無い・勝ち数は市場の見込みの 0.86〜0.95 倍。ロジスティック回帰は参考）。</li>
 <li>注意: 2025・2026 年は「未検証」ではない（何度か見た期間）。発走前のオッズは 2026 年の T-60 と確定の比を借りて再現しており、締切前の売れ方の情報（γ）の感度を並べた。</li></ul></div>
 {''.join(sec)}
 </main></body></html>"""
