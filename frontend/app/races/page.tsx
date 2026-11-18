@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageShell } from "@/components/PageShell";
 import { GradeChip, WeekPicker } from "@/components/WeekPicker";
 import { RaceCalendar } from "@/components/RaceCalendar";
-import { latestOnOrBefore, resolveDate } from "@/lib/raceCalendar";
+import { guessDisplayDate, latestOnOrBefore, resolveDate } from "@/lib/raceCalendar";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockRaceDates } from "@/lib/mock";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { MemberUpgradeModal } from "@/components/upgrade/MemberUpgradeModal";
@@ -173,6 +173,10 @@ export default function RacesPage() {
         if (USE_MOCK) {
           list = getMockRaceDates().filter((d) => d <= today);
         } else {
+          // 一覧を待たずに、表示しそうな開催日のレース一覧を並べて取り始める（latency_plan_20261118.md の L11）。
+          // 下の effect の fetchRaceList と同じ URL・ttl なので、成功・取得中なら同じ要求にまとまる。外れたら下で正しい日を取るだけ。
+          // 初回だけ（再試行 reloadKey>0 では足さない。一覧の API が落ちている間に、8 秒ごとに race-list を増やさないため）
+          if (reloadKey === 0) fetchRaceList(guessDisplayDate(new URLSearchParams(window.location.search).get("date") ?? "", today)).catch(() => { /* 先読みの失敗は無視 */ });
           const res = await fetch(`/api/scrape-dates?picker_past_days=${PAST_DAYS}&picker_future_days=0`, { cache: "no-store" });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           list = ((await res.json()).dates ?? []).filter((d: string) => d <= today);
