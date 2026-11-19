@@ -10,12 +10,12 @@
   debut     出脚（1F目のタイム。50 + 10z）
   gear      ギアチェンジ（窓内で加速した分の合計。50 + 10z）
   endure    消耗耐性（ペース・位置を揃えて、落ちなかったか。50 + 10z、高 = 落ちない）
-  front     先行力（通過位置の相対順位。前を高く。50 + 10z）
-  cr        Cr性能（3角 → 4角の押し上げ。50 + 10z）
-  makuri    まくり特性（400m 通過 → 3角の押し上げ。50 + 10z）
+  front     先行力（1000m/600m 通過の累積タイム順位。前を高く。50 + 10z）
+  cr        Cr性能（3角 → 4角の累積タイム順位の押し上げ。50 + 10z）
+  makuri    まくり特性（2角 → 4角の累積タイム順位の押し上げ。2角の区間が無いコースは欠測。50 + 10z）
   slope     急坂適性（中山・阪神のみ。高 = 坂で落ちない。50 + 10z）
   abn       異常走（ラスト3Fで 20 秒/200m 超）。印のみで値は消さない
-欠測は NaN（0 にしない）。位置が無い（0 以下）走の位置系軸は NaN。
+欠測は NaN（0 にしない）。位置系の軸は、区間末の累積タイムのレース内順位から作る（horse_lap の position は横位置なので使わない）。
 
 python -m src.research.race.run_axes --laps horse_lap_2026.jsonl ... --out run_axes.parquet
 """
@@ -75,16 +75,18 @@ def read_runs(paths: Iterable[Path | str]) -> pd.DataFrame:
             if (seg <= 0).any():
                 continue
             corners = [x.get("corner") or "" for x in s]
+            i2 = corners.index("2C") if "2C" in corners else -1
             i3 = corners.index("3C") if "3C" in corners else -1
             i4 = corners.index("4C") if "4C" in corners else -1
             if not (0 <= i3 < i4):
                 i3 = i4 = -1
-            pos = np.array([x["position"] if x.get("position") is not None else np.nan for x in s], float)
+            if not (0 <= i2 < i3):
+                i2 = -1
             rows.append({
                 "race_id": str(r["race_id"]), "horse_id": str(e["horse_id"]), "horse_name": e.get("horse_name", ""),
                 "finish_order": int(e["finish_order"]), "nent": len(ents),
-                "lt": lt, "dist": dist, "pc": lt / (seg / 200.0), "cum": np.cumsum(lt), "pos": pos,
-                "len1": float(dist[0]), "i3": i3, "i4": i4,
+                "lt": lt, "dist": dist, "pc": lt / (seg / 200.0), "cum": np.cumsum(lt),
+                "len1": float(dist[0]), "i2": i2, "i3": i3, "i4": i4,
             })
     return pd.DataFrame(rows)
 
@@ -136,10 +138,16 @@ def _band_resid(y: pd.Series, X: np.ndarray, band: np.ndarray, exclude: np.ndarr
     return out
 
 
-def _rel(pos: np.ndarray, nent: int, j: int) -> float:
-    if j < 0 or j >= len(pos) or not np.isfinite(pos[j]) or pos[j] <= 0:
-        return np.nan
-    return (pos[j] - 1) / max(nent - 1, 1)
+def _cum_rank_rel(t: pd.DataFrame, idx: np.ndarray) -> np.ndarray:
+    """各走の「区間 idx[i] の末までの累積タイム」を、同じレースの完走馬の中で順位にし、0（先頭）〜1（最後方）に直す。
+    horse_lap の sections[].position は順位でなくコース横方向の位置なので、順位はこちらで作る（race_result_flat の
+    通過順位と 0.94〜0.98 で一致）。idx が範囲外（-1 など）の走は NaN。同タイムは平均順位。"""
+    v = np.round(np.array([c[j] if 0 <= j < len(c) else np.nan for c, j in zip(t["cum"], idx)], float), 2)   # 0.1 秒刻みの足し算の誤差で同タイムが割れないように
+    s = pd.Series(v, index=t.index)
+    g = s.groupby(t["race_id"])
+    rank = g.rank(method="average")
+    cnt = g.transform("count")
+    return ((rank - 1) / np.maximum(cnt - 1, 1)).where(s.notna() & (cnt >= 2)).to_numpy(float)
 
 
 # ── TS（レース水準補正つき） ─────────────────────────────────────────────
@@ -213,7 +221,7 @@ def _race_mean_excl(x: pd.Series, t: pd.DataFrame, exclude: np.ndarray) -> pd.Se
 
 def axes_from_frame(t: pd.DataFrame) -> pd.DataFrame:
     """ts・offset・mu_s・sd_s を持つ 1 走 1 行の表から全軸を作る。t は race_id, horse_id, date, venue, surface, distance,
-    finish_order, nent, lt, dist, pc, cum, pos, len1, i3, i4, offset, mu_s, sd_s, ts を持つこと。"""
+    finish_order, nent, lt, dist, pc, cum, len1, i2, i3, i4, offset, mu_s, sd_s, ts を持つこと。"""
     t = t.reset_index(drop=True).copy()
     n = len(t)
     dist_m = t["distance"].to_numpy(float)
@@ -245,34 +253,35 @@ def axes_from_frame(t: pd.DataFrame) -> pd.DataFrame:
     gx = gd - gd.groupby(t["race_id"]).transform("mean")
     out["gear"] = 50 + 10 * _band_std(gx, band)
 
-    # 通過位置・ペース（消耗耐性の共変量、先行力・押し上げ）
+    # 通過順位（累積タイム順位）・ペース（消耗耐性の共変量、先行力・Cr・まくり）
     mark = np.where(short, 600.0, 1000.0)
-    passt, relpos, r_s4, r3, r4 = [], [], [], [], []
+    passt, j_mark = [], []
     for i in range(n):
-        dist, cum, pos, nent = t["dist"].iat[i], t["cum"].iat[i], t["pos"].iat[i], int(t["nent"].iat[i])
+        dist, cum = t["dist"].iat[i], t["cum"].iat[i]
         passt.append(float(np.interp(mark[i], np.concatenate([[0.0], dist]), np.concatenate([[0.0], cum]))))
-        relpos.append(_rel(pos, nent, int(np.argmin(np.abs(dist - mark[i])))))
-        r_s4.append(_rel(pos, nent, int(np.argmin(np.abs(dist - 400.0)))))
-        r3.append(_rel(pos, nent, int(t["i3"].iat[i])))
-        r4.append(_rel(pos, nent, int(t["i4"].iat[i])))
-    t["passt"], t["relpos"] = passt, relpos
+        j_mark.append(int(np.argmin(np.abs(dist - mark[i]))))
+    t["passt"] = passt
+    t["relpos"] = _cum_rank_rel(t, np.array(j_mark))
+    r2 = _cum_rank_rel(t, t["i2"].to_numpy(int))
+    r3 = _cum_rank_rel(t, t["i3"].to_numpy(int))
+    r4 = _cum_rank_rel(t, t["i4"].to_numpy(int))
     t["pass_med"] = t.groupby("race_id")["passt"].transform("median")
     t["own_rel"] = t["passt"] - t["pass_med"]
     t["rp"] = course_dev(t, "pass_med")
 
-    # 消耗耐性
+    # 消耗耐性（共変量はペースと自分の通過差だけ。位置取りの順位は入れない）
     mid = np.array([pc[1:-2].mean() for pc in t["pc"]])
     t["D21"] = (LP[:, 4] + LP[:, 3]) / 2 - mid
-    resid = _band_resid(course_dev(t, "D21"), t[["rp", "own_rel", "relpos"]].to_numpy(float), band, bad)
-    r2 = resid - _race_mean_excl(resid, t, bad)
-    out["endure"] = 50 - 10 * _band_std(r2, band, bad)
+    resid = _band_resid(course_dev(t, "D21"), t[["rp", "own_rel"]].to_numpy(float), band, bad)
+    r_e = resid - _race_mean_excl(resid, t, bad)
+    out["endure"] = 50 - 10 * _band_std(r_e, band, bad)
 
-    # 先行力 / Cr性能 / まくり特性
+    # 先行力 / Cr性能 / まくり特性（どれも累積タイム順位から）
     t["front_raw"] = -t["relpos"]
     out["front"] = 50 + 10 * _band_std(course_dev(t, "front_raw"), band)
-    t["cr_raw"] = np.array(r3) - np.array(r4)
+    t["cr_raw"] = r3 - r4                       # 3C→4C で順位を上げた分（正 = 上げた）
     out["cr"] = 50 + 10 * _band_std(course_dev(t, "cr_raw"), band)
-    t["mk_raw"] = np.array(r_s4) - np.array(r3)
+    t["mk_raw"] = r2 - r4                       # 2C→4C で順位を上げた分（2C の区間が無いコースは欠測）
     out["makuri"] = 50 + 10 * _band_std(course_dev(t, "mk_raw"), band)
 
     # 急坂適性（中山・阪神の L1 のみ）
