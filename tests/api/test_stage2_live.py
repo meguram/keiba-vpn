@@ -177,6 +177,8 @@ def test_newcomer_and_missing_material_still_shown(inf, monkeypatch):
 
 def test_dev_only_mark_hides_from_members(inf):
     _put(inf, _decision("buy"))
+    _release(inf)
+    assert delegates._optimize_stage2({"race_id": RID}, "paid") is not None      # 解除した後は会員にも
     (inf / "bets_stage2" / "_dev_only.json").write_text('{"disabled": true}', encoding="utf-8")
     assert delegates._optimize_stage2({"race_id": RID}, "paid") is None          # 会員には今の target
     assert delegates._optimize_stage2({"race_id": RID}, "full") is not None      # 開発者には第 2 段
@@ -201,3 +203,45 @@ def test_trial_is_dev_only_and_v6c_hidden_without_marks(inf):
     _pred(inf / "predictions_v6" / DAY / f"{RID}.parquet")
     _pred(inf / "predictions_v6c" / DAY / f"{RID}.parquet")
     assert LP.find_primary_prediction(RID, DAY, inf)[1] == "shadow"
+
+
+@pytest.mark.parametrize("body", ["{broken", "", "{}", "[]", '{"disabled": null}', '{"disabled": 0}', '{"disabled": ""}'])
+def test_unreadable_or_ambiguous_marks_fail_closed(inf, body):
+    """目印が壊れている・空・あいまいなら止める側（解除は {"disabled": false} だけ）。"""
+    _put(inf, _decision("buy"))
+    (inf / "bets_stage2" / "_dev_only.json").write_text(body, encoding="utf-8")
+    assert delegates._optimize_stage2({"race_id": RID}, "paid") is None
+    (inf / "predictions_v6c").mkdir(parents=True, exist_ok=True)
+    (inf / "predictions_v6c" / "_disabled.json").write_text(body, encoding="utf-8")
+    assert S2.v6c_disabled(inf)
+
+
+def test_global_stop_wins_after_release(inf):
+    """会員・全員に出した後でも、全部止め（bets_stage2/_disabled.json）が勝つ。全部止めを外しても、試行の分は解除しない限り出ない。"""
+    _put(inf, _decision("buy"))
+    _pred(inf / "predictions_v6" / DAY / f"{RID}.parquet")
+    _pred(inf / "predictions_v6c" / DAY / f"{RID}.parquet")
+    _release(inf)
+    (inf / "bets_stage2" / "_disabled.json").write_text('{"disabled": true}', encoding="utf-8")
+    assert delegates._optimize_stage2({"race_id": RID}, "paid") is None and delegates._optimize_stage2({"race_id": RID}, "full") is None
+    assert LP.find_primary_prediction(RID, DAY, inf)[1] == "shadow"
+    for m in ("_dev_only.json",):
+        (inf / "bets_stage2" / m).unlink()
+    (inf / "predictions_v6c" / "_disabled.json").unlink()
+    (inf / "bets_stage2" / "_disabled.json").write_text('{"disabled": false}', encoding="utf-8")
+    assert delegates._optimize_stage2({"race_id": RID}, "paid") is None           # 試行の目印は無い → 開発者だけ
+    assert LP.find_primary_prediction(RID, DAY, inf)[1] == "shadow"               # 候補の確率は出ない
+
+
+def test_set_disabled_off_releases_end_to_end(inf):
+    """手順書の解除のコマンド（set_disabled off --dev-only / --v6c-only）が、API の判定まで効く。"""
+    from src.pipeline.inference import candidate_runner as cr
+
+    cfg = {"publish_dir": str(inf), "watch_dir": str(inf / "w")}
+    assert S2.dev_only(inf) and S2.v6c_disabled(inf)
+    cr.set_disabled(cfg, False, DAY, dev_only=True)
+    assert not S2.dev_only(inf) and S2.v6c_disabled(inf)
+    cr.set_disabled(cfg, False, DAY, v6c_only=True)
+    assert not S2.v6c_disabled(inf)
+    cr.set_disabled(cfg, True, DAY, dev_only=True)
+    assert S2.dev_only(inf)

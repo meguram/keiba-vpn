@@ -37,7 +37,7 @@ TREES = (
     "data/local/inference/predictions_v5",
     "data/local/inference/predictions_v6",
     # 候補の影のランナー（candidate_runner）の出力: 新しい候補の第 1 段・第 2 段・凍結した買い方の判定（1 レース 1 回だけ書く）。
-    # API はファイルがあれば新しい表示、bets_stage2/_disabled.json があれば今の表示（weekend_launch_20261121.md）
+    # API の出し方は目印で決まる（第 2 段は無ければ開発者だけ、候補の確率は無ければ出さない。src/api/stage2_live.py・weekend_launch_20261121.md）
     *(f"{_INF}/{t}" for t in ("predictions_v6c", "predictions_stage2", "bets_stage2")),
     "data/local/inference/predictions_backfill",
     "data/local/inference/snapshots",
