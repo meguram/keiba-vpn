@@ -15,13 +15,15 @@ PROJECT="${PROJECT:-$(gcloud config get-value project 2>/dev/null || true)}"
 
 # 秘密名 → 読めるサービスアカウント（最小権限）
 case "$NAME" in
-  SLACK_WEBHOOK_URL|SLACK_WEBHOOK_URL_PROD|SLACK_WEBHOOK_URL_STG)    READERS="keiba-api keiba-jobs" ;;
+  SLACK_WEBHOOK_URL)    READERS="keiba-api keiba-jobs keiba-login-rotator" ;;
+  SLACK_WEBHOOK_URL_PROD|SLACK_WEBHOOK_URL_STG)    READERS="keiba-api keiba-jobs" ;;
   KEIBA_PROXY_KEY)      READERS="keiba-api keiba-deployer" ;;      # deployer: CI のスモークが鍵つきで API を叩く
   KEIBA_PROXY_KEY_NEXT) READERS="keiba-api keiba-monitor" ;;       # 作り直しの間だけ API・監視ポータルが両方を通す（scripts/ops/rotate_proxy_key.sh）
   KEIBA_HEARTBEAT_KEY)  READERS="keiba-api" ;;
   APP_SECRET_KEY|JWT_SECRET|DEV_PASSWORD) READERS="keiba-api" ;;
   DEV_SECRET_KEY)       READERS="keiba-api keiba-jobs" ;;      # jobs: 共通ログインの月次更新(shared-login)がパスワードの元として使う
-  KEIBA_SHARED_LOGIN_ID) READERS="keiba-jobs" ;;                 # 共通ログインの ID(shared-login)
+  KEIBA_SHARED_LOGIN_ID) READERS="keiba-jobs keiba-login-rotator" ;;   # 共通ログインの ID(shared-login・毎月の切り替えの Job)
+  KEIBA_MEMBERS_PEPPER) READERS="keiba-login-rotator" ;;          # 名簿のペッパー（hex:…。login_rotate export-pepper で作る）。DEV_SECRET_KEY を Job に渡さないため
   R2_CREDENTIALS)       READERS="keiba-jobs" ;;
   *) echo "未登録の名前です: $NAME（scripts/gcp/put_secret.sh の表と docs/operations/gcp_setup_runbook.md 5 章に足してから）" >&2; exit 2 ;;
 esac

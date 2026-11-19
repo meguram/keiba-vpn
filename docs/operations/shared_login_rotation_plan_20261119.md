@@ -1,8 +1,9 @@
-# 共有アカウントのパスワードの毎月の切り替え — 基盤の計画（2026-11-19・承認待ち）
+# 共有アカウントのパスワードの毎月の切り替え — 基盤の計画（2026-11-19・承認済み）
 
-担当: member-rotation。この文書は計画だけ。実装は統括役（ユーザー）の承認の後。
+担当: member-rotation。2026-11-19 にユーザーが承認。実装と運用の手順は `shared_login_rotation.md`（コマンドは `python -m src.scripts.ops.login_rotate`。この計画の `shared_login run` は、そちらに置き換えた）。
 関係: `shared_login.md`（今の仕組み）・`members_store_gcs.md`（名簿の正本）・members-purge（`config/members.json` を git から外す。重ねない）。
 レビュー: 別エージェントの指摘 15 件（【重】5・【中】6・【軽】4）を反映した（9 章）。
+実装の後の見直し（critic・2026-11-19）: ペッパーの秘密の版 1 つ（約 9 円）を足し、費用は最悪 約 47 円/月。切り替えは下書きが済んだ月だけにした。詳しくは `shared_login_rotation.md`。
 
 ## 0. 結論
 

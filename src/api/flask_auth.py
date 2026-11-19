@@ -50,8 +50,18 @@ def _rotated_shared_password(uid: str, password: str) -> bool:
         import hmac as _hmac
 
         from src.api import auth
+        from src.scripts.ops.login_rotate import pw_mac
         from src.scripts.ops.shared_login import is_previous_password, month_of, password_for
 
+        # 新方式（docs/operations/shared_login_rotation.md）: 共有の記録だけが持つ prev_mac（先月の値の HMAC）と比べる。PBKDF2 は回さない。
+        # ID の有無で計算量を変えない（存在しない ID でも HMAC を 1 回計算する）
+        rec = auth.member_record(uid)
+        got_mac = pw_mac(password)
+        if rec and rec.get("prev_mac"):
+            return auth.member_active(uid) and _hmac.compare_digest(got_mac, str(rec["prev_mac"]))
+        if rec and rec.get("rotation_month"):      # 新方式に移った後で、先月の値が分からない記録
+            return False
+        # 旧方式（ペッパー＋年月から決まる値）。新方式の初回の切り替えまで残す
         if not is_previous_password(password):
             return False
         rec = auth.member_record(uid)

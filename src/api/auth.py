@@ -343,6 +343,8 @@ def _load_members() -> list[dict]:
 
 def _pepper() -> bytes:
     explicit = os.environ.get("KEIBA_MEMBERS_PEPPER", "")
+    if explicit.startswith("hex:"):         # DEV_SECRET_KEY から導いた今の値をそのまま渡す形（login_rotate export-pepper。共有ログインの Job 用）
+        return bytes.fromhex(explicit[4:].strip())
     if explicit:
         return explicit.encode()
     return hmac.new(_get_secret_key().encode(), b"keiba-members-pepper-v1", hashlib.sha256).digest()
