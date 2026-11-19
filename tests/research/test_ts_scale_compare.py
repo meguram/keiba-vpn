@@ -1,4 +1,4 @@
-"""ts_scale_compare の尺度計算の検算（合成データ）。cur が horse_ts.course_ts と一致し、外れ値でコースの SD が膨らまないこと。"""
+"""ts_scale_compare の尺度計算の検算（合成データ）。winz が horse_ts.course_ts と一致し、外れ値でコースの SD が膨らまないこと。"""
 import numpy as np
 import pandas as pd
 
@@ -21,9 +21,9 @@ def _frame() -> pd.DataFrame:
     return h.reset_index(drop=True)
 
 
-def test_cur_matches_course_ts() -> None:
+def test_winz_matches_course_ts() -> None:
     h = _frame()
-    ts = sc.scale_ts(h, "cur", np.ones(len(h), bool))
+    ts = sc.scale_ts(h, "winz", np.ones(len(h), bool))
     assert float((ts - h["ts"]).abs().max()) < 1e-9
 
 
@@ -54,8 +54,8 @@ def test_fit_subset_uses_only_fit_runs() -> None:
     """当てる走を全走以外にしたとき、mu・sd は fit の走だけで決まり、fit 外の走にも ts が付く。"""
     h = _frame()
     fit = (np.arange(len(h)) % 2 == 0)
-    ts = sc.scale_ts(h, "cur", fit)
-    ref = ht.course_ts(h[fit].drop(columns=["ts", "mu_s", "sd_s"]))       # fit の走だけで course_ts を作り直す
+    ts = sc.scale_ts(h, "winz", fit)
+    ref = ht.course_ts(h[fit].drop(columns=["ts", "mu_s", "sd_s", "x_w"]))       # fit の走だけで course_ts を作り直す
     assert float((ts[fit].to_numpy() - ref["ts"].to_numpy()).__abs__().max()) < 1e-9
     assert ts[~fit].notna().all()
 

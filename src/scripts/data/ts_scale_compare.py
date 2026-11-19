@@ -456,11 +456,11 @@ def main() -> None:
     rng = np.random.default_rng(20261118)
 
     fit = h["year"].isin(FIT_YEARS).to_numpy()
-    # 検算: 全走で当てた cur が horse_ts.course_ts の ts と一致する
-    chk = scale_ts(h, "cur", np.ones(len(h), bool))
+    # 検算: 全走で当てた winz が horse_ts.course_ts の ts と一致する（本番の TS は 2026-11-20 から winz）
+    chk = scale_ts(h, "winz", np.ones(len(h), bool))
     max_diff = float((chk - h["ts"]).abs().max())
-    print("check cur vs course_ts max abs diff:", max_diff, flush=True)
-    assert max_diff < 1e-6, f"cur が horse_ts.course_ts と一致しない: {max_diff}"
+    print("check winz vs course_ts max abs diff:", max_diff, flush=True)
+    assert max_diff < 1e-6, f"winz が horse_ts.course_ts と一致しない: {max_diff}"
 
     for nm in VARIANTS:
         h[f"ts_{nm}"] = scale_ts(h, nm, fit)
