@@ -243,5 +243,24 @@ class ExtrasScoreTest(unittest.TestCase):
         self.assertIsNone(out["score"])
 
 
+    def test_good_distance_range_extra(self):
+        import pandas as pd
+
+        gd = pd.DataFrame({"short_m": [1400.0, float("nan")], "long_m": [1800.0, float("nan")], "runs": [5, 2]}, index=["h1", "h2"])
+        row = pd.Series(dtype=float)
+        ok = rm._extras("h1", row, [], None, self.REF, gd)[rm.GD_KEY]
+        self.assertEqual((ok["short_m"], ok["long_m"], ok["runs"]), (1400, 1800, 5))
+        self.assertIsNone(ok["value"])
+        few = rm._extras("h2", row, [], None, self.REF, gd)[rm.GD_KEY]   # 走数が少ない馬は不明（走数は出す）
+        self.assertEqual((few["short_m"], few["long_m"], few["runs"]), (None, None, 2))
+        none = rm._extras("zz", row, [], None, self.REF, gd)[rm.GD_KEY]   # 走が無い馬
+        self.assertEqual((none["short_m"], none["long_m"], none["runs"]), (None, None, 0))
+        self.assertNotIn(rm.GD_KEY, rm._extras("h1", row, [], None, self.REF, None))   # 元の表が無ければ出さない
+
+    def test_good_distance_is_not_a_color_axis(self):
+        self.assertNotIn(rm.GD_KEY, rm.EXTRA_LABELS)
+        self.assertNotIn(rm.GD_KEY, rm._extra_keys({"venue": "中山", "surface": "芝"}))
+
+
 if __name__ == "__main__":
     unittest.main()

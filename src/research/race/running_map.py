@@ -84,6 +84,12 @@ EXTRA_LABELS = {
     "going_dirt": ("ダートタフ適正", "乾いたダートが得意", "乾いたダートが苦手"),
 }
 SLOPE_VENUES = ("中山", "阪神")
+# 好走距離レンジ（短）（長）: 偏差値ではないので EXTRA_LABELS・extra_axes（色分けの選択肢）には入れず、各馬の extras にだけ載せる
+GD_KEY = "gd_range"
+GD_TAU = 0.10          # 相対値のしきい値（good_distance_eval の選択結果。芝ダ混合・走数 3 以上）
+GD_MIN_RUNS = 3
+GD_FIRST_YEAR = 2016
+_GD_COLS = ["race_id", "horse_id", "date", "surface", "distance", "race_class", "sex_age", "finish_position"]
 MAP_COLS = [a[1] for a in AXES] + ["ax_slope"]
 # グループの説明に使う軸（1 軸 1 項目）
 _TRAIT_AXES = [(a[3], [i], a[4], a[5]) for i, a in enumerate(AXES)]
@@ -248,7 +254,7 @@ def _quantiles() -> dict[str, np.ndarray]:
 
 
 def clear_cache() -> None:
-    for f in (_data, _quantiles, _priors, _going_runs, _going_all):
+    for f in (_data, _quantiles, _priors, _going_runs, _going_all, _gd_runs):
         f.cache_clear()
 
 
@@ -455,6 +461,45 @@ def _going_all(as_of: str) -> pd.DataFrame:
     return ga.going_scores(runs, list(past["horse_id"].unique()), as_of).set_index("horse_id")
 
 
+@lru_cache(maxsize=1)
+def _gd_runs() -> pd.DataFrame:
+    """好走距離レンジの元（2016 年〜の平地の走ごとの点数）。race_result_flat は API が起動時に取り込み済みで、新しい読み出しは増えない。"""
+    from src.research.race import good_distance as gd
+
+    parts = [pd.read_parquet(rp.FLAT_DIR / str(y) / "race_result_flat.parquet", columns=_GD_COLS) for y in range(GD_FIRST_YEAR, 2100)
+             if (rp.FLAT_DIR / str(y) / "race_result_flat.parquet").exists()]
+    if not parts:
+        return pd.DataFrame(columns=["horse_id", "date", "surface", "distance", "points"])
+    d = pd.concat(parts, ignore_index=True)
+    d["race_id"] = d["race_id"].astype(str)
+    d["horse_id"] = d["horse_id"].astype(str)
+    d["distance"] = pd.to_numeric(d["distance"], errors="coerce")
+    d = d.drop_duplicates(["race_id", "horse_id"]).reset_index(drop=True)
+    d = gd.run_points(d)
+    d = d[["horse_id", "date", "surface", "distance", "points"]].copy()
+    d["date"] = pd.to_datetime(d["date"], errors="coerce")   # 常駐させるので小さい型にする（日付は日時型・馬場は区分型・距離と点は 4 バイト）
+    d["surface"] = d["surface"].astype("category")
+    d["distance"] = d["distance"].astype("float32")
+    d["points"] = d["points"].astype("float32")
+    return d
+
+
+def _gd_for(ids: list[str], as_of: str) -> Optional[pd.DataFrame]:
+    """対象日より前の走だけの好走距離レンジ（horse_id 索引）。元の表が無ければ None（画面には出さない）。"""
+    from src.research.race import good_distance as gd
+
+    try:
+        runs = _gd_runs()
+        if runs.empty:
+            return None
+        return gd.range_before(runs, ids, as_of, GD_TAU, GD_MIN_RUNS)
+    except Exception:   # 好走距離レンジは補助の表示。読めなくても走法の地図は出す
+        import logging
+
+        logging.getLogger(__name__).exception("好走距離レンジを作れませんでした")
+        return None
+
+
 def _extra_keys(conditions: dict[str, Any]) -> list[str]:
     keys = []
     if conditions.get("venue") in SLOPE_VENUES:
@@ -469,7 +514,8 @@ def _num(x: Any) -> Optional[float]:
     return None if x is None or (isinstance(x, float) and math.isnan(x)) else round(float(x), 1)
 
 
-def _extras(hid: str, row: pd.Series, keys: list[str], going: Optional[pd.DataFrame], s10ref: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+def _extras(hid: str, row: pd.Series, keys: list[str], going: Optional[pd.DataFrame], s10ref: Optional[dict[str, Any]] = None,
+            gd: Optional[pd.DataFrame] = None) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for k in keys:
         if k == "slope":
@@ -483,6 +529,11 @@ def _extras(hid: str, row: pd.Series, keys: list[str], going: Optional[pd.DataFr
                 v = _num(g[k])   # 道悪適性は 50±10 の偏差値（判定できなければ None）。基準の分布を持たないので偏差値のまま同じ幅で換算する
                 out[k] = {"value": v, "n_power": int(g[f"n_power_{k}"]), "n_normal": int(g[f"n_normal_{k}"]), "low": bool(g[f"low_{k}"]),
                           "score": s10.to_score10_deviation(v, s10ref)}
+    if gd is not None:   # 好走距離レンジ。走数が少ない（GD_MIN_RUNS 未満）・走が無い馬は短・長が None（不明）
+        g = gd.loc[hid] if hid in gd.index else None
+        known = g is not None and not math.isnan(g["short_m"])
+        out[GD_KEY] = {"value": None, "short_m": int(g["short_m"]) if known else None, "long_m": int(g["long_m"]) if known else None,
+                       "runs": int(g["runs"]) if g is not None else 0}
     return out
 
 
@@ -530,13 +581,14 @@ def build_running_map(entries: list[dict], race_id: str, conditions: dict[str, A
             if any(ids) else pd.DataFrame())
     extra_keys = _extra_keys(conditions)
     going = _going_all(as_of) if any(k.startswith("going_") for k in extra_keys) else None
+    gd_tbl = _gd_for([i for i in ids if i], as_of)
     s10ref = d["ref"].get("score10")
     peaks = s10.peak_ts_as_of(d["metrics"], [i for i in ids if i], as_of) if s10ref else None
-    out = _assemble(entries, ids, prof, race_id, conditions, extra_keys, going, load_result, wet=False, peaks=peaks)
+    out = _assemble(entries, ids, prof, race_id, conditions, extra_keys, going, load_result, wet=False, peaks=peaks, gd=gd_tbl)
     surface = conditions.get("surface")
     if surface in WET_AXIS and out.get("status") == "ok":
         try:
-            wet = _assemble(entries, ids, prof, race_id, conditions, [k for k in extra_keys if not k.startswith("going_")], None, None, wet=True, peaks=peaks)
+            wet = _assemble(entries, ids, prof, race_id, conditions, [k for k in extra_keys if not k.startswith("going_")], None, None, wet=True, peaks=peaks, gd=gd_tbl)
         except Exception:   # 道悪の地図は補助。失敗しても良馬場の地図は出す
             import logging
 
@@ -548,7 +600,7 @@ def build_running_map(entries: list[dict], race_id: str, conditions: dict[str, A
 
 
 def _assemble(entries: list[dict], ids: list[str], prof: pd.DataFrame, race_id: str, conditions: dict[str, Any], extra_keys: list[str],
-              going: Optional[pd.DataFrame], load_result, wet: bool, peaks: Optional[pd.Series] = None) -> dict[str, Any]:
+              going: Optional[pd.DataFrame], load_result, wet: bool, peaks: Optional[pd.Series] = None, gd: Optional[pd.DataFrame] = None) -> dict[str, Any]:
     qs = _quantiles()
     d = _data()
     map_keys, map_idx, weights, shown = mode_axes(wet, conditions.get("surface"))
@@ -569,7 +621,7 @@ def _assemble(entries: list[dict], ids: list[str], prof: pd.DataFrame, race_id: 
             continue
         picked.append(({**base, "n_runs": int(row["n_runs"]), "n_lap_runs": n_lap, "axis_runs": axis_runs, "estimated": n_lap == 0,
                         "own_weight": round(float(np.mean([row[f"own_{col}"] for _, _, col, *_ in A])), 3),
-                        "extras": _extras(hid, row, extra_keys, going, s10ref)}, row))
+                        "extras": _extras(hid, row, extra_keys, going, s10ref, gd)}, row))
 
     horses, Zs, Zraw = [], [], []
     signs = SIGNS

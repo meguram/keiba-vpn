@@ -53,7 +53,9 @@ export type RunningMapAxis = { key: string; label: string; high: string; low: st
 /** 地図の位置には入れない補助の軸（急坂適性・道悪の軸）。value は 50 が平均の偏差値で、判定できないときは null（不明） */
 export type RunningMapExtra = { value: number | null; runs?: number; n_power?: number; n_normal?: number; low?: boolean;
   /** クラス基準の 10 点満点（偏差値から。無ければ未定義） */
-  score?: number | null };
+  score?: number | null;
+  /** 好走距離レンジ（キー gd_range）: 好走した距離の幅（m）。3 走未満・走が無いときは null（不明）。runs は対象日より前の走数 */
+  short_m?: number | null; long_m?: number | null };
 
 export type RunningMapHorse = {
   key: string | null;

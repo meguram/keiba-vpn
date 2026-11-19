@@ -224,5 +224,36 @@ def test_評価の中と外の差の計算():
     assert c["d_plc"] == pytest.approx(0.5 - (-0.5))
 
 
+def test_画面用_芝ダを混ぜて対象日より前の走だけを使う():
+    runs = _rows([("a", "2026-01-05", "芝", 1600, 1.0), ("a", "2026-02-01", "ダート", 1800, 3.0), ("a", "2026-03-01", "芝", 1400, 1.0),
+                  ("a", "2026-04-01", "芝", 2400, 5.0), ("b", "2026-01-05", "芝", 1200, 1.0)])
+    out = gd.range_before(runs, ["a", "b", "c"], "2026-04-01", tau=0.10, min_runs=3)
+    assert list(out.index) == ["a", "b"]                       # 走が無い c は行が無い
+    assert out.loc["a", "runs"] == 3                           # 4/1 当日の走は含めない
+    assert (out.loc["a", "short_m"], out.loc["a", "long_m"]) == (1400, 1800)   # 芝ダ混合（1400・1600・1800 の 3 距離）
+    assert out.loc["b", "runs"] == 1 and np.isnan(out.loc["b", "short_m"]) and np.isnan(out.loc["b", "long_m"])   # 3 走未満は不明
+
+
+def test_画面用_対象日が変わると使う走が変わる():
+    runs = _rows([("a", "2026-01-05", "芝", 1600, 1.0), ("a", "2026-02-01", "芝", 1600, 1.0), ("a", "2026-03-01", "芝", 1600, 1.0),
+                  ("a", "2026-04-01", "芝", 2400, 5.0)])
+    before = gd.range_before(runs, ["a"], "2026-04-01")
+    after = gd.range_before(runs, ["a"], "2026-04-02")
+    assert (before.loc["a", "short_m"], before.loc["a", "long_m"]) == (1600, 1600)
+    assert (after.loc["a", "short_m"], after.loc["a", "long_m"]) == (1600, 2400)   # 2400 は 5/9 点 ≥ τ
+
+
+def test_画面用_障害と点なしの走は数えない():
+    runs = _rows([("a", "2026-01-05", "芝", 1600, 1.0), ("a", "2026-02-01", "障", 3000, 1.0), ("a", "2026-03-01", "芝", 1600, np.nan),
+                  ("a", "2026-03-10", "芝", 1600, 1.0), ("a", "2026-03-20", "ダート", 1700, 1.0)])
+    out = gd.range_before(runs, ["a"], "2026-06-01")
+    assert out.loc["a", "runs"] == 3 and (out.loc["a", "short_m"], out.loc["a", "long_m"]) == (1600, 1700)
+
+
+def test_画面用_対象の馬が全員走なしなら空():
+    runs = _rows([("a", "2026-05-01", "芝", 1600, 1.0)])
+    assert gd.range_before(runs, ["a"], "2026-04-01").empty
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

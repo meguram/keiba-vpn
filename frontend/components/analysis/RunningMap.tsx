@@ -511,9 +511,20 @@ function HorseDetail({ h, pedTraits, axes, topKeys, extraAxes, bracket, onClose,
           ))}
         </div>
       )}
+      {h.extras?.gd_range && (
+        <div style={{ display: "grid", gridTemplateColumns: "8.5em 1fr", gap: 6, marginTop: 8, paddingTop: 6, borderTop: "1px solid var(--border)", fontSize: 11.5 }}>
+          <span style={{ color: "var(--text-dim)" }} title="過去の走から、走った距離と好走した距離の点数で作った幅（芝・ダート混合、100m 刻み）。目安であり、勝ちやすさを示すものではありません">好走距離レンジ</span>
+          <span>{goodDistanceText(h.extras.gd_range)}</span>
+        </div>
+      )}
       <PedSection h={h} traits={pedTraits} />
     </div>
   );
+}
+
+function goodDistanceText(e: RunningMapExtra): string {
+  if (e.short_m == null || e.long_m == null) return `不明（過去の走 ${e.runs ?? 0} 走。3 走以上で判定）`;
+  return e.short_m === e.long_m ? `${e.short_m}m（過去の走 ${e.runs ?? 0} 走）` : `${e.short_m}m〜${e.long_m}m（過去の走 ${e.runs ?? 0} 走）`;
 }
 
 const fmtM = (v: number) => `${(Math.round(v / 10) * 10).toLocaleString()}m`;
