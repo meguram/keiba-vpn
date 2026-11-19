@@ -79,7 +79,7 @@ def build_table(frame: pd.DataFrame) -> dict[str, list[float]]:
 
 def expect(table: Optional[dict], n_field: np.ndarray, popularity: np.ndarray, fallback: np.ndarray) -> np.ndarray:
     """頭数と人気順から期待得点。人気が無い走・表が無いときは fallback（頭数だけの期待得点）。"""
-    n = np.asarray(n_field, dtype=float); p = np.asarray(popularity, dtype=float)
+    n = pd.Series(n_field).to_numpy(dtype=float, na_value=np.nan); p = pd.Series(popularity).to_numpy(dtype=float, na_value=np.nan)   # pandas の欠測（NA）は float に直せないので NaN にする
     out = np.array(fallback, dtype=float)
     if not table:
         return out
