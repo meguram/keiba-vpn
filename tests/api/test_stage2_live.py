@@ -46,6 +46,16 @@ def inf(tmp_path, monkeypatch):
     return tmp_path
 
 
+def _release(inf, *, paid=True, v6c=True):
+    """試行の分を会員・全員に出す目印（既定は止める側なので、明示的に外す）。"""
+    if paid:
+        (inf / "bets_stage2").mkdir(parents=True, exist_ok=True)
+        (inf / "bets_stage2" / "_dev_only.json").write_text('{"disabled": false}', encoding="utf-8")
+    if v6c:
+        (inf / "predictions_v6c").mkdir(parents=True, exist_ok=True)
+        (inf / "predictions_v6c" / "_disabled.json").write_text('{"disabled": false}', encoding="utf-8")
+
+
 def _put(inf, d, day=DAY):
     p = inf / "bets_stage2" / day / f"{RID}.json"
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -69,6 +79,7 @@ def test_buy_is_target_shaped(inf):
 
 
 def test_skip_keeps_reason_and_hides_bets(inf):
+    _release(inf)
     _put(inf, _decision("skip"))
     out, code = delegates.optimize_betting({"race_id": RID}, view="paid")
     assert code == 200 and out["skipped"] is True and out["bets"] == [] and out["level"] == 0
@@ -100,6 +111,7 @@ def _pred(path):
 
 
 def test_candidate_only_for_display(inf):
+    _release(inf)
     _pred(inf / "predictions_v6" / DAY / f"{RID}.parquet")
     _pred(inf / "predictions_v6c" / DAY / f"{RID}.parquet")
     assert LP.find_primary_prediction(RID, DAY, inf)[1] == "candidate"
@@ -129,6 +141,7 @@ def test_disabled_mark_off_means_enabled(inf):
 
 
 def test_members_do_not_get_market_odds(inf):
+    _release(inf)
     _put(inf, _decision("buy"))
     out, _ = delegates.optimize_betting({"race_id": RID}, view="paid")
     s = out["stage2"]
@@ -153,6 +166,7 @@ def test_other_classes_keep_current_target(inf, monkeypatch, grade):
 
 
 def test_newcomer_and_missing_material_still_shown(inf, monkeypatch):
+    _release(inf)
     monkeypatch.setitem(CARD, "grade", "新馬")
     _put(inf, {"strategy": "stage2_r2", "race_id": RID, "frozen_hash": "70ba29fa7b55", "status": "skip", "skip_reason": "no_odds_t60",
                "skip_label": "見送り（T-60 オッズ未着）", "bets": [], "horse_marks": {}})
@@ -163,6 +177,71 @@ def test_newcomer_and_missing_material_still_shown(inf, monkeypatch):
 
 def test_dev_only_mark_hides_from_members(inf):
     _put(inf, _decision("buy"))
+    _release(inf)
+    assert delegates._optimize_stage2({"race_id": RID}, "paid") is not None      # 解除した後は会員にも
     (inf / "bets_stage2" / "_dev_only.json").write_text('{"disabled": true}', encoding="utf-8")
     assert delegates._optimize_stage2({"race_id": RID}, "paid") is None          # 会員には今の target
     assert delegates._optimize_stage2({"race_id": RID}, "full") is not None      # 開発者には第 2 段
+
+
+def test_prediction_marks_never_use_stage2(inf, monkeypatch):
+    """予測の応答の印（bet_horse_marks）は全区分で共有されるので、第 2 段の試行の ◎ を使わない（開発者だけの目印があっても有料会員に漏れない）。"""
+    _put(inf, _decision("buy"))                                                  # 第 2 段は ◎3
+    (inf / "bets_stage2" / "_dev_only.json").write_text('{"disabled": true}', encoding="utf-8")
+    monkeypatch.setattr(delegates, "_optimize_target", lambda body, view, storage=None: ({"strategy": "target", "status": "bet", "level": 2,
+                                                                                         "bets": [{"combo": [5]}], "horse_marks": {"5": "honmei"}}, 200))
+    monkeypatch.setattr(delegates, "_MARKS_CACHE", {})                          # 後のテストに印のキャッシュを残さない
+    assert delegates.bet_horse_marks(RID) == {5: "honmei"}                       # 今の target の印（第 2 段の 3 ではない）
+    assert delegates._optimize_stage2({"race_id": RID}, "full")[0]["horse_marks"] == {"3": "honmei"}   # 開発者の推奨のタブには第 2 段
+
+
+def test_trial_is_dev_only_and_v6c_hidden_without_marks(inf):
+    """目印が無いときは止める側: 第 2 段は開発者だけ、候補の確率の欄は誰にも出さない（置き忘れで漏らさない）。"""
+    _put(inf, _decision("buy"))
+    assert delegates._optimize_stage2({"race_id": RID}, "paid") is None
+    assert delegates._optimize_stage2({"race_id": RID}, "full") is not None
+    _pred(inf / "predictions_v6" / DAY / f"{RID}.parquet")
+    _pred(inf / "predictions_v6c" / DAY / f"{RID}.parquet")
+    assert LP.find_primary_prediction(RID, DAY, inf)[1] == "shadow"
+
+
+@pytest.mark.parametrize("body", ["{broken", "", "{}", "[]", '{"disabled": null}', '{"disabled": 0}', '{"disabled": ""}'])
+def test_unreadable_or_ambiguous_marks_fail_closed(inf, body):
+    """目印が壊れている・空・あいまいなら止める側（解除は {"disabled": false} だけ）。"""
+    _put(inf, _decision("buy"))
+    (inf / "bets_stage2" / "_dev_only.json").write_text(body, encoding="utf-8")
+    assert delegates._optimize_stage2({"race_id": RID}, "paid") is None
+    (inf / "predictions_v6c").mkdir(parents=True, exist_ok=True)
+    (inf / "predictions_v6c" / "_disabled.json").write_text(body, encoding="utf-8")
+    assert S2.v6c_disabled(inf)
+
+
+def test_global_stop_wins_after_release(inf):
+    """会員・全員に出した後でも、全部止め（bets_stage2/_disabled.json）が勝つ。全部止めを外しても、試行の分は解除しない限り出ない。"""
+    _put(inf, _decision("buy"))
+    _pred(inf / "predictions_v6" / DAY / f"{RID}.parquet")
+    _pred(inf / "predictions_v6c" / DAY / f"{RID}.parquet")
+    _release(inf)
+    (inf / "bets_stage2" / "_disabled.json").write_text('{"disabled": true}', encoding="utf-8")
+    assert delegates._optimize_stage2({"race_id": RID}, "paid") is None and delegates._optimize_stage2({"race_id": RID}, "full") is None
+    assert LP.find_primary_prediction(RID, DAY, inf)[1] == "shadow"
+    for m in ("_dev_only.json",):
+        (inf / "bets_stage2" / m).unlink()
+    (inf / "predictions_v6c" / "_disabled.json").unlink()
+    (inf / "bets_stage2" / "_disabled.json").write_text('{"disabled": false}', encoding="utf-8")
+    assert delegates._optimize_stage2({"race_id": RID}, "paid") is None           # 試行の目印は無い → 開発者だけ
+    assert LP.find_primary_prediction(RID, DAY, inf)[1] == "shadow"               # 候補の確率は出ない
+
+
+def test_set_disabled_off_releases_end_to_end(inf):
+    """手順書の解除のコマンド（set_disabled off --dev-only / --v6c-only）が、API の判定まで効く。"""
+    from src.pipeline.inference import candidate_runner as cr
+
+    cfg = {"publish_dir": str(inf), "watch_dir": str(inf / "w")}
+    assert S2.dev_only(inf) and S2.v6c_disabled(inf)
+    cr.set_disabled(cfg, False, DAY, dev_only=True)
+    assert not S2.dev_only(inf) and S2.v6c_disabled(inf)
+    cr.set_disabled(cfg, False, DAY, v6c_only=True)
+    assert not S2.v6c_disabled(inf)
+    cr.set_disabled(cfg, True, DAY, dev_only=True)
+    assert S2.dev_only(inf)

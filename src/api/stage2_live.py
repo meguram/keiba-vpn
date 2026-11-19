@@ -4,11 +4,11 @@
 - 推奨馬券: 未勝利・新馬のレースで ``bets_stage2/<日>/<rid>.json``（凍結した買い方 70ba29fa7b55 の判定）があれば、既定方策 target と同じ形の応答で返す。
   それ以外のレース（重賞・条件戦）は今の target のまま（ユーザーの判断 2026-11-18。レース一覧の推奨度・予測の印も同じ）
   （strategy="target"・sub_strategy="stage2_r2"。サーバの target の分岐＝見送りの隠し方・一覧・精算・印をそのまま通す）。
-- ファイルが無いレースは今の表示のまま（v6e・target）。止めの目印があれば、ファイルがあっても今の表示に戻す:
-  - ``bets_stage2/_disabled.json``: 予測の表示も推奨馬券も戻す
-  - ``predictions_v6c/_disabled.json``: 予測の表示だけ戻す（推奨馬券は第 2 段のまま）
-  目印の中身が ``{"disabled": false}`` なら無効（ミラーは削除を伝えないので、戻すときは消さずに上書きする。
-  ``python -m src.pipeline.inference.candidate_runner --set-disabled on|off`` が目印とその日のファイルの書き直しをまとめて行う）。
+- ファイルが無いレースは今の表示のまま（v6e・target）。目印（どれも ``{"disabled": false}`` のときだけ「止めない」。ミラーは削除を
+  伝えないので、消さずに上書きする。``python -m src.pipeline.inference.candidate_runner --set-disabled on|off [--dev-only|--v6c-only]``）:
+  - ``bets_stage2/_disabled.json``: 全部止める（予測の表示も推奨馬券も今の表示）。**無ければ止めない**。
+  - ``bets_stage2/_dev_only.json``: 第 2 段の推奨を開発者（view=full）だけに出す。**無ければ開発者だけ**（止める側。会員に出すときだけ false）。
+  - ``predictions_v6c/_disabled.json``: 候補の確率の欄を出さない。**無ければ誰にも出さない**（止める側。出すときだけ false）。
 - 実オッズ由来の値（T-60 の単勝オッズ・人気・q・r と、それを offset にした第 2 段の勝率・買いの線）は開発者（view="full"）にだけ出す
   （config/public_fields.json の actual_odds_public）。会員には ◎ の馬番と「試行中」だけ。
 - 窓より古い日の取り寄せ（lazy_fetch）はしない（ファイルの無い日の GCS への問い合わせを増やさない）。
@@ -44,12 +44,14 @@ def _ok_day(day: str) -> bool:
     return bool(day) and len(day) == 8 and day.isdigit() and day >= start_day()
 
 
-def _mark_on(p: Path) -> bool:
-    """止めの目印が有効か。ファイルがあり、中身が {"disabled": false} でなければ有効（読めない・空も有効＝安全側）。"""
+def _mark_on(p: Path, default: bool = False) -> bool:
+    """止めの目印が有効か。ファイルがあり、中身が {"disabled": false} でなければ有効（読めない・空も有効＝安全側）。
+    ファイルが無いときは default（試行の分を会員・匿名に出す段は True＝止める側に倒す。置き忘れで漏らさない）。"""
     if not p.exists():
-        return False
+        return default
     try:
-        return bool(json.loads(p.read_text(encoding="utf-8") or "{}").get("disabled", True))
+        d = json.loads(p.read_text(encoding="utf-8") or "{}")
+        return not (isinstance(d, dict) and d.get("disabled") is False)      # 解除は {"disabled": false} だけ（null・0・空・配列は止める側）
     except (OSError, ValueError, AttributeError):
         return True
 
@@ -59,13 +61,15 @@ def disabled(inf: Path | None = None) -> bool:
 
 
 def dev_only(inf: Path | None = None) -> bool:
-    """開発者（view=full）だけに第 2 段の推奨を出す段か（``bets_stage2/_dev_only.json``。中身が {"disabled": false} なら無効）。"""
-    return _mark_on((inf or _inf()) / "bets_stage2" / "_dev_only.json")
+    """開発者（view=full）だけに第 2 段の推奨を出す段か（``bets_stage2/_dev_only.json``）。**目印が無ければ開発者だけ**（止める側）。
+    会員にも出すときだけ ``{"disabled": false}`` を置く（``candidate_runner --set-disabled off --dev-only``）。"""
+    return _mark_on((inf or _inf()) / "bets_stage2" / "_dev_only.json", default=True)
 
 
 def v6c_disabled(inf: Path | None = None) -> bool:
     inf = inf or _inf()
-    return disabled(inf) or _mark_on(inf / "predictions_v6c" / "_disabled.json")
+    # 候補の確率の欄は、**目印が無ければ誰にも出さない**（止める側）。出すときだけ {"disabled": false} を置く（--set-disabled off --v6c-only）
+    return disabled(inf) or _mark_on(inf / "predictions_v6c" / "_disabled.json", default=True)
 
 
 def _local(p: Path, day: str) -> bool:

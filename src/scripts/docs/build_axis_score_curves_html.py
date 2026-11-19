@@ -21,7 +21,7 @@ sys.path.insert(0, str(REPO))
 from src.scripts.docs.build_course_axis_demand_html import CSS, SORT_JS  # noqa: E402
 
 OUT = REPO / "docs/html/operations/running_axis_curves.html"
-MIN_N = 30            # 線を出す最低の走数（JS の MINN と同じ）
+MIN_N = 30            # 実測で線を引く最低の走数（これ未満の区間は推定で埋める）（JS の MINN と同じ）
 MIN_SIDE = 100        # 高い側・低い側の走数がこれ未満なら差を出さない
 Z_MARK = 2.6          # 印を付ける z（軸 × 対象で数百の組を見るので 1.96 より厳しめ）
 SKEW_MARK = 1.0       # TS の歪みの絶対値がこれ以上のコースを強調する
@@ -280,7 +280,7 @@ def build(d: dict, ts: dict | None = None, defs: dict | None = None) -> str:
 <ul>
 <li><b>点数</b>: 各走の<b>直前までの走</b>で作った走法軸の点（1〜10、0.5 刻み。画面の走法マップと同じ）。点の整数部で 10 区間に分けた（「5」の区間 = 5.0〜5.5 点）。測れない軸は欠測で、その走は数えない。</li>
 <li><b>勝率</b> = 1 着の割合。<b>複勝率</b> = 3 着以内（8 頭以上）／2 着以内（5〜7 頭）の割合。5 頭未満・障害・取消除外などは除いた。</li>
-<li>チャート: 青の実線・丸 = 勝率（左軸）、橙の実線・四角 = 複勝率（右軸）。<b>右軸は左軸の 3 倍</b>に固定してあるので、全体の平均（点線）が近い高さに並ぶ。灰色の棒 = 走数。走数 {MIN_N} 未満の区間は線を切って出さない。</li>
+<li>チャート: 青の実線・丸 = 勝率（左軸）、橙の実線・四角 = 複勝率（右軸）。<b>右軸は左軸の 3 倍</b>に固定してあるので、全体の平均（点線）が近い高さに並ぶ。灰色の棒 = 走数。走数 {MIN_N} 未満の区間は、<b>推定値</b>で埋めて 1〜10 点の全ての点を描く（走数 {MIN_N} 以上の区間が 3 つ未満の対象は、推定できないので従来どおり欠ける）（色枠で中が暗い印 + 点線でつなぐ。実測の区間は塗りつぶしの印 + 実線）。推定は、走数 {MIN_N} 以上の区間（3 区間以上あるとき）に、点数に対する 1 次のロジスティック曲線を走数で重み付けして当てはめ、その曲線に実測を {MIN_N} 走ぶんの重みで混ぜた値（走数 0 の区間は曲線そのもの。曲線は実測の区間の最小〜最大の範囲に収めた。人気から期待される率の破線は、平均なので走数が少なくても実測のままで、走数 0 の区間だけ補う）。<b>外側への延長なので、実際の値を保証しない</b>。信頼区間の帯は実測の区間だけ。</li>
 <li><b>薄い破線 = 人気補正の目安</b>: 同じ頭数・同じ人気順の馬が、{meta['exp_years'][0]}〜{meta['exp_years'][1]} 年に平均して取っていた勝率・複勝率の、その区間での平均。
 走法軸の点が高い馬ほど人気も高い（Hペース耐性は実力の代理でもある）ので、<b>実線が破線を上回る分</b>が「人気（市場が見ている実力）では説明できない上乗せ」の目安。実線だけを見ると実力の差が混ざる。</li>
 <li>期間: 実線 = {meta['periods']['A'][0]}〜{meta['periods']['A'][1]}（走数 {meta['runs']['A']:,}）。「2026 年を重ねる」を押すと、{meta['periods']['B'][0]}〜（走数 {meta['runs']['B']:,}。テストセット②。<b>確認だけで、選択には使わない</b>）を白抜きの点で重ねる。</li>
@@ -325,8 +325,8 @@ def build(d: dict, ts: dict | None = None, defs: dict | None = None) -> str:
 <li><b>頭数と中止の扱い</b>: 複勝の頭数の区切り（8 頭以上は 3 着以内）には、結果表の頭数（取消・除外を含みうる）を使った。着順のない走（競走中止など）は除いたので、勝率・複勝率はわずかに高めに出る。人気から期待される率の表には障害のレースも混ざる。いずれも影響は小さい見込みだが、数値は確かめていない。</li>
 <li><b>軸どうしは独立でない</b>: Hペース耐性は TS・TS持続力・前後半比と、先行力は出脚と相関がある。軸ごとの曲線は互いの影響を含む（1 軸ずつの周辺の図）。</li>
 <li>期間は 2024 年以降だけ（位置・ラップ由来の軸が使えるのが 2024 年以降のため）。2020〜2023 年は含めていない。2026 年は確認用で、決定には使わない。</li>
-<li>コース別は走数が少なく（{meta['course_min_runs']} 走以上のコースだけ）、区間ごとの走数は数十〜数百。線が切れるのは走数不足で、「効かない」ではなく「見えない」。</li>
-<li>点が高い・低いに寄る走は少なく、1〜2 点・9〜10 点の区間は走数が少ない（棒を見ること）。</li>
+<li>コース別は走数が少なく（{meta['course_min_runs']} 走以上のコースだけ）、区間ごとの走数は数十〜数百。点線の推定の区間は走数不足で、「効かない」ではなく「見えない」。</li>
+<li>点が高い・低いに寄る走は少なく、1〜2 点・9〜10 点の区間は走数が少ない（棒を見ること）。その区間の印は推定で、中央の区間の傾きを延ばし、実測の最小〜最大で頭打ちにしただけ（端での急な上昇・下降は描けない）。</li>
 </ul>
 <p class="muted">再現: ホストで <code>cd /home/jovyan/work/keiba-vpn &amp;&amp; nice -n 19 /opt/conda/bin/python -I src/scripts/data/axis_score_curves.py OUT.json</code> → 手元で <code>python src/scripts/docs/build_axis_score_curves_html.py OUT.json [OUT.html [TS.json]]</code>
 （OUT.html を省くときは <code>-</code>。TS.json = 6 節の「TS の分布」。ホストで <code>cd /home/jovyan/work/keiba-vpn &amp;&amp; nice -n 19 /opt/conda/bin/python -I src/scripts/data/ts_course_resolution.py TS.json /home/jovyan/acq/horse_lap/horse_lap_*.jsonl</code> を実行し、手元へ持ってくる。
@@ -348,6 +348,32 @@ var MINN=__MINN__,MINB=20,SIDE=__SIDE__,ZM=__ZM__,NS="http://www.w3.org/2000/svg
 var DIMS=Object.keys(D.dims).filter(function(k){return k!=="course";}),st={dim:"class",ov:false,exp:true,sel:null,surf:"芝"};
 var AX=D.axes,axIdx={};AX.forEach(function(a){axIdx[a.key]=a;});
 function wilson(k,n){if(n<=0)return [0,0];var z=1.96,p=k/n,d=1+z*z/n,c=p+z*z/(2*n),h=z*Math.sqrt(p*(1-p)/n+z*z/(4*n*n));return [(c-h)/d,(c+h)/d];}
+function fitLogit(k,n){ // 走数 MINN 以上の区間だけで、点数（区間の番号）に対する 1 次のロジスティック回帰（走数で重み付け）。3 区間未満・当てはめ不能なら null
+  var ix=[],i;for(i=0;i<10;i++){if(n[i]>=MINN)ix.push(i);}
+  if(ix.length<3)return null;
+  var K=0,N=0;ix.forEach(function(j){K+=k[j];N+=n[j];});
+  var p0=Math.min(Math.max(K/N,1e-4),1-1e-4),a=Math.log(p0/(1-p0)),b=0;
+  for(var it=0;it<40;it++){
+    var g0=0,g1=0,h00=0,h01=0,h11=0;
+    ix.forEach(function(j){var x=j-4.5,p=1/(1+Math.exp(-(a+b*x))),w=n[j]*p*(1-p);g0+=k[j]-n[j]*p;g1+=(k[j]-n[j]*p)*x;h00+=w;h01+=w*x;h11+=w*x*x;});
+    var det=h00*h11-h01*h01;if(!(det>1e-12))return null;
+    var da=(h11*g0-h01*g1)/det,db=(h00*g1-h01*g0)/det;
+    if(!isFinite(da)||!isFinite(db))return null;
+    a+=da;b+=db;if(Math.abs(da)+Math.abs(db)<1e-9)break;
+  }
+  return function(j){return 1/(1+Math.exp(-(a+b*(j-4.5))));};
+}
+function est(k,n,exact){ // exact = 人気から期待される率（平均なので走数が少なくても実測のまま。走数 0 だけ曲線で補う）
+   // 各区間の {v: 率, e: 推定か}。走数 MINN 以上は実測。未満は、当てはめ曲線に実測を（MINN 走ぶんの重みで）混ぜる。走数 0 は曲線そのもの
+  var f=fitLogit(k,n),out=[],lo=1,hi=0,i;
+  for(i=0;i<10;i++){if(n[i]>=MINN){lo=Math.min(lo,k[i]/n[i]);hi=Math.max(hi,k[i]/n[i]);}}
+  for(i=0;i<10;i++){ // 曲線は、実測の区間の最小〜最大の範囲に収める（端で勝率が跳ね上がる延長を防ぐ）
+    if(n[i]>=MINN||(exact&&n[i]>0))out.push({v:k[i]/n[i],e:false});
+    else if(f)out.push({v:(k[i]+MINN*Math.min(Math.max(f(i),lo),hi))/(n[i]+MINN),e:true});
+    else out.push(null);
+  }
+  return out;
+}
 function sum(a,i,j){var s=0;for(var k=i;k<j;k++)s+=a[k];return s;}
 function side(c){ // c = [n,w,p,ew,ep]
   var nl=sum(c[0],0,4),pl=sum(c[2],0,4),el=sum(c[4],0,4),nh=sum(c[0],5,10),ph=sum(c[2],5,10),eh=sum(c[4],5,10);
@@ -380,14 +406,17 @@ function chart(c,W,H,wmax,big){
     function flush(){if(up.length>1){var d="M"+up.map(function(p){return p[0]+" "+p[1];}).join("L")+"L"+lo.slice().reverse().map(function(p){return p[0]+" "+p[1];}).join("L")+"Z";s.push('<path d="'+d+'" fill="'+col+'" opacity="0.16"/>');}up=[];lo=[];}
   }
   band(1,"#7aa9ff",YW);band(2,"#fbbf24",YP);
-  function line(val,Y,col,dash,w,marker,minn,arr){
-    var seg=[];function flush(){if(seg.length>1)s.push('<polyline points="'+seg.map(function(p){return p[0]+","+p[1];}).join(" ")+'" fill="none" stroke="'+col+'" stroke-width="'+w+'"'+(dash?' stroke-dasharray="4 3"':'')+'/>');seg=[];}
-    for(var i=0;i<10;i++){if(arr[0][i]>=minn)seg.push([X(i),Y(val(i))]);else flush();}flush();
-    if(marker){var r=big?4:2.4;for(var i=0;i<10;i++){if(arr[0][i]>=minn){var x=X(i),y=Y(val(i));
-      s.push(marker==="c"?'<circle cx="'+x+'" cy="'+y+'" r="'+r+'" fill="'+col+'"/>':'<rect x="'+(x-r)+'" y="'+(y-r)+'" width="'+2*r+'" height="'+2*r+'" fill="'+col+'"/>');}}}
+  function line(S,Y,col,dash,w,marker){ // S = est() の結果。実測の区間は実線、推定の区間は点線でつなぐ
+    var i,seg=[];
+    for(i=0;i<9;i++){if(S[i]&&S[i+1]&&(S[i].e||S[i+1].e))s.push('<line x1="'+X(i)+'" y1="'+Y(S[i].v)+'" x2="'+X(i+1)+'" y2="'+Y(S[i+1].v)+'" stroke="'+col+'" stroke-width="'+(w*0.8)+'" stroke-dasharray="1.5 3"/>');}
+    function flush(){if(seg.length>1)s.push('<polyline points="'+seg.map(function(p){return p[0]+","+p[1];}).join(" ")+'" fill="none" stroke="'+col+'" stroke-width="'+w+'"'+(dash?' stroke-dasharray="4 3"':'')+'/>');seg=[];}
+    for(i=0;i<10;i++){if(S[i]&&!S[i].e)seg.push([X(i),Y(S[i].v)]);else flush();}flush();
+    if(marker){var r=big?4:2.4;for(i=0;i<10;i++){if(!S[i])continue;var x=X(i),y=Y(S[i].v),f=S[i].e?'#0b1428':col,sw=S[i].e?' stroke="'+col+'" stroke-width="1.4"':'';
+      s.push(marker==="c"?'<circle cx="'+x+'" cy="'+y+'" r="'+r+'" fill="'+f+'"'+sw+'/>':'<rect x="'+(x-r)+'" y="'+(y-r)+'" width="'+2*r+'" height="'+2*r+'" fill="'+f+'"'+sw+'/>');}}
   }
-  if(st.exp){line(function(i){return A[3][i]/A[0][i];},YW,"#7aa9ff",true,big?1.6:1,null,MINN,A);line(function(i){return A[4][i]/A[0][i];},YP,"#fbbf24",true,big?1.6:1,null,MINN,A);}
-  line(function(i){return A[1][i]/A[0][i];},YW,"#7aa9ff",false,big?2.4:1.6,"c",MINN,A);line(function(i){return A[2][i]/A[0][i];},YP,"#fbbf24",false,big?2.4:1.6,"s",MINN,A);
+  var SW=est(A[1],A[0]),SP=est(A[2],A[0]);
+  if(st.exp){line(est(A[3],A[0],true),YW,"#7aa9ff",true,big?1.6:1,null);line(est(A[4],A[0],true),YP,"#fbbf24",true,big?1.6:1,null);}
+  line(SW,YW,"#7aa9ff",false,big?2.4:1.6,"c");line(SP,YP,"#fbbf24",false,big?2.4:1.6,"s");
   if(st.ov){for(var i=0;i<10;i++){if(B[0][i]>=MINB){var r=big?4.5:2.8;
     s.push('<circle cx="'+X(i)+'" cy="'+YW(B[1][i]/B[0][i])+'" r="'+r+'" fill="none" stroke="#e6ecff" stroke-width="1.3"/>');
     s.push('<rect x="'+(X(i)-r)+'" y="'+(YP(B[2][i]/B[0][i])-r)+'" width="'+2*r+'" height="'+2*r+'" fill="none" stroke="#e6ecff" stroke-width="1.3"/>');}}}
@@ -438,13 +467,15 @@ function bigInto(el,a,g){
   var wmax=wmaxOf([g]),h=[];
   var s=side(c.A),sb=side(c.B);
   h.push('<b>'+a.label+' × '+g.label+'</b> <span class="muted">（高: '+a.high+' ／ 低: '+a.low+'）</span>');
-  h.push('<div class="lg"><span><i style="border-color:#7aa9ff"></i>勝率（左軸）</span><span><i style="border-color:#fbbf24"></i>複勝率（右軸 = 左の 3 倍）</span><span><i class="d" style="border-color:#7aa9ff"></i><i class="d" style="border-color:#fbbf24"></i>人気から期待される率（同じ色の破線）</span><span>帯 = Wilson 95%</span><span>白抜き = 2026 年</span></div>');
+  h.push('<div class="lg"><span><i style="border-color:#7aa9ff"></i>勝率（左軸）</span><span><i style="border-color:#fbbf24"></i>複勝率（右軸 = 左の 3 倍）</span><span><i class="d" style="border-color:#7aa9ff"></i><i class="d" style="border-color:#fbbf24"></i>人気から期待される率（同じ色の破線）</span><span>帯 = Wilson 95%（実測の区間だけ）</span><span>白抜き（白枠）= 2026 年</span><span>色枠で中が暗い印 + 点線 = 推定（走数 '+MINN+' 未満）</span></div>');
   h.push(chart(c,880,380,wmax,true));
   h.push('<p class="sub">高−低（6.0 点以上 − 4.5 点以下の複勝率）: 2024-25 '+(s?f1(s.raw)+' pt（補正後 '+f1(s.adj)+'、z '+s.z.toFixed(1)+'）':'走数不足')+' ／ 2026 '+(sb?f1(sb.raw)+' pt（補正後 '+f1(sb.adj)+'、z '+sb.z.toFixed(1)+'）':'走数不足')+'</p>');
   h.push('<div class="scroll"><table><thead><tr><th>点</th><th>走数</th><th>勝率</th><th>勝率の期待</th><th>複勝率</th><th>複勝率の期待</th><th>2026 走数</th><th>2026 勝率</th><th>2026 複勝率</th></tr></thead><tbody>');
   function r(x,n){return n>0?(x/n*100).toFixed(1)+"%":"—";}
+  var E=[est(c.A[1],c.A[0]),est(c.A[3],c.A[0],true),est(c.A[2],c.A[0]),est(c.A[4],c.A[0],true)];
+  function cell(S,i){var o=S[i];if(!o)return '<td class="num">—</td>';return o.e?'<td class="num" style="color:var(--muted);font-style:italic">'+(o.v*100).toFixed(1)+'%（推）</td>':'<td class="num">'+(o.v*100).toFixed(1)+'%</td>';}
   for(var i=0;i<10;i++){var n=c.A[0][i],m=c.B[0][i];
-    h.push('<tr><td>'+(i+1)+'</td><td class="num">'+n+'</td><td class="num">'+r(c.A[1][i],n)+'</td><td class="num">'+r(c.A[3][i],n)+'</td><td class="num">'+r(c.A[2][i],n)+'</td><td class="num">'+r(c.A[4][i],n)+'</td><td class="num">'+m+'</td><td class="num">'+r(c.B[1][i],m)+'</td><td class="num">'+r(c.B[2][i],m)+'</td></tr>');}
+    h.push('<tr><td>'+(i+1)+'</td><td class="num">'+n+'</td>'+cell(E[0],i)+cell(E[1],i)+cell(E[2],i)+cell(E[3],i)+'<td class="num">'+m+'</td><td class="num">'+r(c.B[1][i],m)+'</td><td class="num">'+r(c.B[2][i],m)+'</td></tr>');}
   h.push('</tbody></table></div>');
   el.innerHTML=h.join("");
 }

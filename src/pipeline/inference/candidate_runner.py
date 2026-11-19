@@ -14,12 +14,14 @@
   発走を過ぎたレース・判定済みのレースは書かない（再起動しても書き直さない）。どのファイルも 1 レース 1 回だけ書く。
 
 出力は 3 つの木（publish_dir の下）。ホストの gcs-mirror-push が 5 分おきに上げ、API はファイルがあれば新しい表示にする。
-止めの目印 ``bets_stage2/_disabled.json`` があると、API は今の表示（v6e・target）に戻る（ランナーは書き続けてよい）。
+止めの目印（src/api/stage2_live.py の説明）: ``bets_stage2/_disabled.json`` があると全部今の表示（v6e・target）。第 2 段は
+``bets_stage2/_dev_only.json``、候補の確率の欄は ``predictions_v6c/_disabled.json`` で、どちらも**目印が無ければ止める側**（開発者だけ・誰にも出さない）。
 
 設定は ``config/candidate_runtime.json``（環境変数の一式・出力先・期限・メモリと GCS の上限）。
 起動: ``python -m src.pipeline.inference.candidate_runner [--day YYYYMMDD] [--once]``（過去の日のリハーサルは src/scripts/data/candidate_replay.py）。
-止めの目印: ``python -m src.pipeline.inference.candidate_runner --set-disabled on|off [--v6c-only] --day YYYYMMDD``（目印と、その日の判定ファイルの
-書き直し＝push で画面のキャッシュの目印も立つ。ミラーは削除を伝えないので、戻すときも off で上書きする）。
+止めの目印: ``python -m src.pipeline.inference.candidate_runner --set-disabled on|off [--dev-only|--v6c-only] --day YYYYMMDD``（目印と、その日の
+判定ファイルの書き直し＝push で画面のキャッシュの目印も立つ。ミラーは削除を伝えないので、戻すときも off で上書きする）。
+旗なしの off は全部止めを外すだけで、第 2 段を会員に出す・候補の確率の欄を出すには、それぞれ ``off --dev-only``・``off --v6c-only`` が要る。
 既定はオフ: 設定の enabled が true か、環境変数 KEIBA_CANDIDATE_RUNNER=1 か、目印 data/local/meta/candidate_runner.on があるときだけ動く
 （追跡されるファイルを書き換えずに有効にする。共有の作業ツリーの毎時の pull を止めないため）。
 """
@@ -713,11 +715,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--config", default="")
     ap.add_argument("--once", action="store_true", help="1 周だけ回して終わる（確認用）")
     ap.add_argument("--set-disabled", choices=["on", "off"], help="止めの目印を書いて終わる（推論はしない）")
-    ap.add_argument("--v6c-only", action="store_true", help="--set-disabled を予測の表示（predictions_v6c）だけに")
-    ap.add_argument("--dev-only", action="store_true", help="--set-disabled on で、第 2 段の推奨を開発者（view=full）だけに出す（会員には今の target）")
+    ap.add_argument("--v6c-only", action="store_true", help="候補の確率の欄の目印（on で出さない・off で出す。目印が無ければ出さない）")
+    ap.add_argument("--dev-only", action="store_true", help="第 2 段を開発者だけにする目印（on で開発者だけ・off で会員にも。目印が無ければ開発者だけ）")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     cfg = load_config(a.config or None)
+    if a.set_disabled and a.dev_only and a.v6c_only:
+        ap.error("--dev-only と --v6c-only は一緒に使えない（目印は別のファイル。1 つずつ流す）")
     if a.set_disabled:
         print(json.dumps(set_disabled(cfg, a.set_disabled == "on", a.day, v6c_only=a.v6c_only, dev_only=a.dev_only), ensure_ascii=False))
         return 0

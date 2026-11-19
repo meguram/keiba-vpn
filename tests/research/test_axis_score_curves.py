@@ -179,3 +179,34 @@ def test_ts_section_box_id_does_not_collide_with_axis_box_ids():
     h = page.build(_mini_d(), _mini_ts([("京都", "芝", 1600)]))
     axis_keys = [a["key"] for a in _mini_d()["axes"]]                  # 軸側の箱は "cgbig-" + 軸キーで JS が作る（キーに ts がある）
     assert 'id="cgbig-tsdist"' in h and all(f'id="cgbig-{k}"' not in h for k in axis_keys)
+
+
+def test_estimate_fills_sparse_bins_within_observed_range():
+    """走数の少ない区間は、走数の多い区間への当てはめで埋め、実測の最小〜最大の範囲に収める（JS の est を node で動かす）。"""
+    import json
+    import shutil
+    import subprocess
+
+    import pytest
+
+    if shutil.which("node") is None:
+        pytest.skip("node が無い")
+    js = page.JS
+    src = js[js.index("function fitLogit"):js.index("function sum(a,i,j)")]
+    n = [0, 5, 400, 500, 600, 500, 400, 30, 0, 0]
+    rate = [0.0, 0.0, 0.04, 0.06, 0.08, 0.10, 0.12, 0.13, 0.0, 0.0]
+    k = [round(a * b) for a, b in zip(n, rate)]
+    few_k, few_n = [1, 2, 3, 0, 0, 0, 0, 0, 0, 0], [40, 50, 20, 0, 0, 0, 0, 0, 0, 0]       # 実測の区間が 2 つだけ
+    exp_n = [0, 5, 400, 500, 600, 500, 400, 30, 0, 0]
+    code = (f"var MINN={page.MIN_N};{src}console.log(JSON.stringify([est({json.dumps(k)},{json.dumps(n)}),"
+            f"est({json.dumps(few_k)},{json.dumps(few_n)}),est({json.dumps([x / 10 for x in exp_n])},{json.dumps(exp_n)},true)]));")
+    out = json.loads(subprocess.run(["node", "-e", code], capture_output=True, text=True, check=True).stdout)
+    est, few, exp = out
+    assert len(est) == 10 and all(o is not None for o in est)
+    assert [o["e"] for o in est] == [True, True, False, False, False, False, False, False, True, True]
+    obs = [o["v"] for o in est if not o["e"]]
+    assert all(min(obs) - 1e-9 <= est[i]["v"] <= max(obs) + 1e-9 for i in (0, 8, 9))   # 走数 0 の区間は曲線そのもの（実測の範囲内）
+    assert est[8]["v"] == pytest.approx(max(obs)) and est[9]["v"] == pytest.approx(max(obs))                                     # 上り調子の延長は、実測の最大で頭打ち
+    assert est[1]["v"] < est[2]["v"]                                                    # 走数 5 で勝ち 0 の区間は、実測に引かれて曲線より低い
+    assert all(o is None or not o["e"] for o in few)                                    # 実測の区間が 3 未満なら推定しない
+    assert exp[1] == {"v": 0.1, "e": False} and exp[0]["e"] and exp[8]["e"]              # 期待率: 走数が少なくても実測、走数 0 だけ曲線
