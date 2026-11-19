@@ -31,6 +31,14 @@ def test_expect_falls_back_without_popularity():
     assert (pe.expect(None, np.array([12]), np.array([1]), e_n[:1]) == e_n[:1]).all()
 
 
+def test_expect_accepts_pandas_nullable_popularity():
+    t = pe.build_table(_frame())
+    e_n = rmc.expected_score(np.array([12, 12]))
+    pop = pd.array([1, pd.NA], dtype="Int64").to_numpy()    # 欠測が pd.NA のまま入る（float に直せず落ちていた）
+    out = pe.expect(t, pd.array([12, 12], dtype="Int64").to_numpy(), pop, e_n)
+    assert out[0] == t["12"][0] and out[1] == e_n[1]
+
+
 def test_pop_switch_changes_expectation_only_when_table_set():
     n, pop, e_n = np.array([12]), np.array([1.0]), rmc.expected_score(np.array([12]))
     assert (rmc.expected_by_pop(n, pop, e_n) == e_n).all()
