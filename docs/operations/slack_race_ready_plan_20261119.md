@@ -1,6 +1,6 @@
 # 計画: レースごとの「予測・推奨が画面に出た」Slack 通知（stg・本番）
 
-担当: slack-notify。統括役: claude-orchestrator-handover。状態: **計画（承認待ち）**。
+担当: slack-notify。統括役: claude-orchestrator-handover。状態: **実装済み・既定オフ**（統括役の承認 2026-11-19: §8 は推奨どおり。1 レース 1 回・今週末は入れない・本番は app.megu-keiba.com）。
 
 ユーザーの依頼（原文）: 「stg/prodそれぞれで、レース開催日にAI予測結果、買い目推奨がUI上に反映されたタイミングで、そのレースIDが指定された対象リンク付きでslackに通知を飛ばすようにしてほしいです。」
 
@@ -227,3 +227,27 @@
 | 14 | events の複数行 | 直した（4b-2: 最後の `status=ok` の行。`v6_status=ok` も見る） |
 | 15 | 第 2 段の開始日を二重に持たない | 直した（4c 節） |
 | 16 | 1 回の実行の重さ | 直した（4f 節: nice 19。開催日でなければ早く終える） |
+
+## 10. 実装（2026-11-19）
+
+| 何 | どこ |
+|---|---|
+| push の時刻の手元の記録（`data/local/meta/race_push_log/<日>.jsonl`。ミラーの木の外で GCS へは上げない。`index_ok` 付き） | `src/ops/gcs_mirror.py` の `_note_race_push`（host の push だけ） |
+| 判定・送信・記録 | `src/scripts/ops/race_ready_notify.py` |
+| 設定 | `config/race_ready_notify.json` |
+| cron | `scripts/cron/race_ready_notify.sh`（.env を読む・flock -n・nice 19）、`scripts/cron/install_race_ready_notify_cron.sh [--no-mark\|--remove]` |
+| テスト | `tests/ops/test_race_ready_notify.py`・`tests/ops/test_gcs_mirror.py` |
+
+当て直し（`python -m src.scripts.ops.race_ready_notify --day 20261115 --replay`。push の時刻はファイルの更新時刻＋5 分で代用）:
+
+| 日 | レース | 「出た」の通知 | 遅れの警告 | 画面に出た見込み（発走の何分前） |
+|---|---|---|---|---|
+| 11/14 | 36 | 72（36 × 2 環境） | 0 | 44〜52 分前（中央 48） |
+| 11/15 | 36 | 72 | 0 | 44〜54 分前（中央 48） |
+
+weekend-launch の 11/15 の実測（API で見えるのは最も遅くて発走 44 分前）と合う。
+
+入れ方（11/24 以降。統括役の合図の後、共有の作業ツリーにこのコードが入ってから、root で）:
+1. `bash scripts/cron/install_race_ready_notify_cron.sh --no-mark`（送らずにログだけ。`logs/race_ready_notify.log` で判定の時刻を見る）
+2. 11/28 の朝より前に `bash scripts/cron/install_race_ready_notify_cron.sh`（目印を置いて送り始める）
+3. 止める: `rm data/local/meta/race_ready_notify.on`（すぐ効く）か、`--remove`

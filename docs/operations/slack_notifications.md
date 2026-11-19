@@ -46,6 +46,7 @@
 | O1 | API / FastAPI / ランナーの停止 | ハートビート（`cron_runs` の更新）が止まる | 15 分おきに判定 | 緊急 | alert | S2 と同じ | S2 に含む（cron ジョブの未開始/停止） |
 | O2 | ホストの負荷・メモリ・ディスクの逼迫 | load>18 が続く、空きメモリ<10GB、ディスク使用率>90% | 15 分おき | 注意 / 緊急 | alert | S2 と同じ | 案（`notify_event` で接続） |
 | O3 | 予測のないレース、前日夜の予測生成の完了 | 前日 23:00 JST 以降 | 開催前日に 1 回 | 通常 / 注意 | report | — | 案 |
+| R2 | **レースごとの「予測・推奨が画面に出た」**（場・R・レース名・発走・予測と推奨の中身・第 2 段の行・レースへのリンク）。遅れたとき（発走 10 分前を過ぎても出ない）は注意を 1 通にまとめる | 予測ファイルを上げた時刻と推奨の元（§77 か第 2 段の判定）がそろってから 4 分後（見込み）。ホストの手元の記録だけで判定（`src/scripts/ops/race_ready_notify.py`、cron 毎分 `scripts/cron/race_ready_notify.sh`） | 開催日に 1 レース × 環境ごとに 1 回 | 通常（緑）／遅れは注意 | `SLACK_WEBHOOK_URL_STG`・`_PROD`（汎用には落とさない。遅れは stg だけ） | `data/local/meta/slack_sent/race_ready_<日>.json`。発走後・15 分超は送らない | **実装済み・既定オフ**（`KEIBA_SLACK_NOTIFY=1` かつ目印 `data/local/meta/race_ready_notify.on`。11/28 から。計画 `slack_race_ready_plan_20261119.md`） |
 | E1 | 既存: cron 失敗・長期失敗の滞留・馬場取得・構造監視・GCP コスト | 各処理の失敗時 | 都度 | 注意 | default | 各処理の既存の仕様 | 既存（変更なし） |
 
 案の項目は `slack_notify.notify_event(title, lines, severity=, channel=, link=)` で 1 行で送れる（送信基盤・リトライ・秘密のマスクは共通）。

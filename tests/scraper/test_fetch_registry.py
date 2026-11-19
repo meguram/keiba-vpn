@@ -36,7 +36,7 @@ NON_FETCH_MODULES = {
     "src.scripts.data.scrape_status_notify", "src.scripts.data.sync_horse_result_cache", "src.scripts.data.tp55_backfill",
     "src.scripts.data.tp65_prep", "src.scripts.data.tracking_v2_eval", "src.scripts.data.verify_past_backfill",
     "src.scripts.ops.cloudrun_smoke", "src.scripts.ops.collect_prod_status", "src.scripts.ops.env_parity_check",
-    "src.scripts.ops.maintenance_notify", "src.scripts.ops.shared_login", "src.scripts.scraping.fetch_status",
+    "src.scripts.ops.maintenance_notify", "src.scripts.ops.race_ready_notify", "src.scripts.ops.shared_login", "src.scripts.scraping.fetch_status",
     "src.scripts.scraping.migrate_row_data_to_unique_paths",
 }
 

@@ -406,6 +406,10 @@
    "host_path": 1,
    "host_alias": 1
   },
+  "src/scripts/ops/race_ready_notify.py": {
+   "local_data": 10,
+   "page_reference": 3
+  },
   "src/scripts/ops/serving_state.py": {
    "local_data": 1
   },
