@@ -400,6 +400,7 @@ class BuildRunningMapGdTest(unittest.TestCase):
 
         for target, kw in [(rm, {"_data": {"return_value": {"metrics": None, "sires": None, "ref": {}}}}),
                            (rm, {"_priors": {"return_value": None}}),
+                           (rm, {"_going_all": {"return_value": None}}),
                            (rm, {"_assemble": {"side_effect": fake_assemble}}),
                            (rm.rp, {"profiles_as_of": {"return_value": pd.DataFrame({"horse_id": ["h1"]})}})]:
             for name, opts in kw.items():
