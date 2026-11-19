@@ -44,6 +44,9 @@ class RaceContext:
     entries: list[dict[str, Any]] = field(default_factory=list)   # 出走馬。key は馬ごとの一意キー
     track_condition: str | None = None                            # 馬場状態（発表前は None）
     race_name: str | None = None                                  # レース名（重賞の判定に使う）
+    grade: str | None = None                                      # 出馬表の格・クラス（「新馬」「1勝」「G3」…）
+    course_type: str | None = None                                # 出馬表の内回り・外回り（「内」「外」、標準は空文字）
+    race_class: str | None = None                                 # 出馬表のクラスの文（特別レースは grade が空でここにだけある）
 
 
 @dataclass

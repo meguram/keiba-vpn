@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from src.research.race_analysis.course_stats import GATE, JOCKEY, SIRE, CourseStatsModule
+from src.research.race_analysis.course_rules import CourseRulesModule
+from src.research.race_analysis.course_stats import (
+    GATE,
+    JOCKEY,
+    SIRE,
+    CourseStatsModule,
+)
 from src.research.race_analysis.graded_picks import GradedPicksModule
 from src.research.race_analysis.past_position import PastPositionModule
 from src.research.race_analysis.running_map_module import RunningMapModule
@@ -16,4 +22,5 @@ MODULES = (
     RunningMapModule(),
     TrainerPatternModule(),
     GradedPicksModule(),
+    CourseRulesModule(),
 )
