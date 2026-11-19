@@ -921,59 +921,6 @@ def _pick_values(v: dict, shown: dict) -> dict:
     return out
 
 
-def cmd_rule_stats() -> None:
-    """凍結した第 3 版の条件ごとに、訓練 2016〜2024・2025・2026 年の成績を数えて <COURSE_OUT>/v3/rule_stats_v3.json に書く（めぐ分析の表示用）。
-    規則は変えない（sha を照合）。2026 年は 1 回だけの評価が済んだ後にだけ読む。見た回数の台帳には eval_only（表示用）として記録する。"""
-    P = json.loads(PREREG3.read_text(encoding="utf-8"))
-    if CR._sha_file(OUT3 / P["cells_file"]) != P["sha256_cells"]:
-        sys.exit("条件の表が凍結の sha と違う")
-    mark = json.loads(EVAL_MARK3.read_text(encoding="utf-8")) if EVAL_MARK3.exists() else {}
-    if "evaluated_at" not in mark:
-        sys.exit("2026 年の 1 回だけの評価が済んでいない（封印中の 2026 年は読まない）")
-    CR.wait_resources()
-    e = CR.env(2026) | {"FOLKLORE_OUT": str(CR.OUT / "eval" / "master"), "GRADED_OUT": str(CR.OUT / "eval")}
-    subprocess.run([sys.executable, "-m", "src.research.course.v3", "_rule_stats_inner"], env=e, cwd=CR.REPO, check=True)
-
-
-def _rule_stats_inner() -> None:
-    from src.ops import data_ledger as DL
-    from src.research.graded import catalog as CAT
-    P = json.loads(PREREG3.read_text(encoding="utf-8"))
-    if CR._sha_file(OUT3 / P["cells_file"]) != P["sha256_cells"]:
-        sys.exit("条件の表が凍結の sha と違う")
-    mark = json.loads(EVAL_MARK3.read_text(encoding="utf-8")) if EVAL_MARK3.exists() else {}
-    if "evaluated_at" not in mark:
-        sys.exit("2026 年の 1 回だけの評価が済んでいない（封印中の 2026 年は読まない）")
-    c = C3(**{k: v for k, v in P["params"].items() if k != "name"})
-    kept = json.loads((OUT3 / P["cells_file"]).read_text(encoding="utf-8"))
-    names = {t.id: t.name for t in CAT.TYPES}
-    with DL.guard(tool="src/research/course/v3.py:rule_stats", family="course", version=P["sha256_cells"][:12],
-                  period=("2025-01-01", "2026-11-20"), purpose="eval_only",
-                  reason="めぐ分析の表示用に、凍結した第 3 版の条件ごとの成績を数える（条件は選び直さない・採否に使わない）",
-                  frozen_paths=[PREREG3, OUT3 / P["cells_file"]]) as tok:
-        out = {}
-        d, L, tr, ev = load3()
-        out["train"] = rule_stats_period(d[tr].reset_index(drop=True), L[tr].reset_index(drop=True), kept, c)
-        out["2025"] = rule_stats_period(d[ev].reset_index(drop=True), L[ev].reset_index(drop=True), kept, c)
-        tok.check_dates(d.loc[ev, "date"]) if "date" in d.columns else None
-        del d, L
-        d6, L6 = _frame_2026()
-        tok.check_dates(d6["date"]) if "date" in d6.columns else None
-        out["2026"] = rule_stats_period(d6, L6, kept, c)
-        data_until = str(pd.to_datetime(d6["date"]).max())[:10] if "date" in d6.columns and len(d6) else None
-        shown = pick_shown(out["train"], kept)
-        res = {"made_at": datetime.now(CR.JST).isoformat(timespec="seconds"), "cycle": P["cycle"], "sha256_cells": P["sha256_cells"],
-               "periods": {"train": [2016, TRAIN_END], "2025": [EVAL_YEAR, EVAL_YEAR], "2026": [2026, 2026]}, "data_until": data_until,
-               "rule_top": RULE_TOP, "rules": rule_list(kept, names, shown), "values": {k: _pick_values(v, shown) for k, v in out.items()},
-               "ledger": tok.summary(),
-               "note": "凍結した第 3 版の条件を当て直して数えた値（評価ではない・表示用）。2025・2026 年は何度か見た期間"}
-        RULE_STATS.write_text(json.dumps(res, ensure_ascii=False, default=float), encoding="utf-8")
-        RULE_STATS_REPO.parent.mkdir(parents=True, exist_ok=True)
-        RULE_STATS_REPO.write_text(json.dumps(res, ensure_ascii=False, default=float), encoding="utf-8")   # めぐ分析が読む写し（commit する）
-        tok.finish(result_path=RULE_STATS)
-    print("rule_stats", RULE_STATS, {k: len(v) for k, v in out.items()}, flush=True)
-
-
 def cmd_review(n: int, text: str, decision: str, event: str = "", basis: str = "") -> None:
     """回顧と判断。事象（何が起きているか）と根拠（なぜそうなるか）も書く（統括役の方針、2026-11-17）。"""
     log = _load_log()
@@ -993,7 +940,7 @@ def cmd_review(n: int, text: str, decision: str, event: str = "", basis: str = "
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["frame", "_frame_inner", "evidence", "cycle", "review", "freeze", "evaluate", "_eval_inner",
-                                       "per_unit", "_per_unit_inner", "rule_stats", "_rule_stats_inner"])
+                                       "per_unit", "_per_unit_inner", "rule_stats"])
     ap.add_argument("--hyp", default="")
     ap.add_argument("--delta", default="{}")
     ap.add_argument("--base", type=int, default=None)
@@ -1018,9 +965,8 @@ def main() -> None:
     elif a.cmd == "per_unit":
         cmd_per_unit()
     elif a.cmd == "rule_stats":
-        cmd_rule_stats()
-    elif a.cmd == "_rule_stats_inner":
-        _rule_stats_inner()
+        from src.research.course import course_rule_stats
+        course_rule_stats.cmd_rule_stats()
     elif a.cmd == "_per_unit_inner":
         _per_unit_inner()
     elif a.cmd == "cycle":

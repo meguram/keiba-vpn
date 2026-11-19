@@ -414,6 +414,8 @@ _GUARD_ENTRY = {
     "src/research/course/bet_opt_search.py": {"cmd_final"},
     "src/research/course/prereg_rules.py": {"cmd_run"},
     "src/research/course/upset_types.py": {"cmd_run"},
+    "src/research/course/course_rule_stats.py": {"_rule_stats_inner"},   # めぐ分析の表示用の数え直し（eval_only・研究の CLI）
+    "src/research/graded/pop_base.py": {"main"},                 # 同上（重賞の比べる相手）
 }
 _PROD = ("src/pipeline/inference/stage2_bets.py", "src/pipeline/inference/candidate_runner.py", "src/api/stage2_live.py")
 
