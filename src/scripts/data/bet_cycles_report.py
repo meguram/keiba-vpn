@@ -478,9 +478,9 @@ def render_round2_2026() -> str:
     if t25.exists():
         x = json.loads(t25.read_text(encoding="utf-8"))["periods"]["test"]
         b0 = next((v.get("roi") for k, v in (x.get("baselines") or {}).items() if k.startswith("B0")), None)
-        rows.append(mrow("2025 年（test。区切りの選定にも使われた期間）", x["metrics"], b0, x.get("diff_vs_B0"), "T-60 の再現（5 通り）"))
+        rows.append(mrow("2025 年（test。区切りの選定にも使われた期間。学習の X の予測）", x["metrics"], b0, x.get("diff_vs_B0"), "T-60 の再現（5 通り）"))
     got = []
-    for g, lab, src in (("main", "2026 年 1/5〜10/12（主）", "T-60 の再現（5 通り）"), ("separate", "2026 年 10/17〜11/08（別枠）", "本物の T-60")):
+    for g, lab, src in (("main", "2026 年 1/5〜10/12（主。推論の経路の予測）", "T-60 の再現（5 通り）"), ("separate", "2026 年 10/17〜11/08（別枠。推論の経路の予測）", "本物の T-60")):
         f = T / f"bet_2026_r2_{g}_{h_}.json"
         if f.exists():
             x = json.loads(f.read_text(encoding="utf-8"))
@@ -501,7 +501,10 @@ def render_round2_2026() -> str:
         out.append(table(head, rows, left=1))
     if "main" not in got:
         out.append("<p><b>最新のモデルでの 2026 年の値は、事前登録の 1 回の確かめの後に入る</b>（予定: 入力がそろい次第。事前登録 <code>config/bet_cycles/prereg_2026_r2.json</code>）。</p>")
-    out.append("<p class=\"muted\">" + ("合算は件数が増えるぶん区間が狭くなる。" if comb.exists() else "") + "主と別枠は判定のオッズの作りが違う（再現と本物）。"
+    out.append("<p><b>予測の経路が違う。</b>2025 年（と訓練・評価）は学習の X で作った予測（OOF）、2026 年の主・別枠は推論の経路（stg の作り直し）の予測。"
+               "未勝利・新馬の 68 レースのうち 11 レースで、買う／見送るが学習の X と推論の X で入れ替わった（weekend-launch の測定、docs/operations/weekend_launch_20261121.md の 9a。買うレースの約半分しか一致しない）。"
+               "2025 年の 107% は推論の経路でそのまま出るとは言えない。会員への公開の判断は、推論の経路での成績（2026 年の評価・前向きの記録）を主にする。</p>")
+    out.append("<p class=\"muted\">" + ("合算は件数が増えるぶん区間が狭くなる（予測の経路が違う年をまたぐ）。" if comb.exists() else "") + "主と別枠は判定のオッズの作りが違う（再現と本物）。"
                "訓練・評価の期間（2019〜2024 年）の 2 歳戦の単勝は、上乗せ（2017〜2023 年）で回収率が約 1〜2 ポイント高めに出ている（bet_age2_premium の記録）。"
                "2025・2026 年には上乗せは無い。</p>")
     return "\n".join(out)

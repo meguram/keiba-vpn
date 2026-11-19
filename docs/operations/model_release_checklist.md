@@ -14,6 +14,10 @@
 - [ ] **推論一致検証**: 学習時の予測と、推論経路（serving）の予測が同じレースで一致（許容誤差内）。バックフィルしたレースで数十 R 比べる。
 - [ ] バンドルを公開する場合は `publish_model`（`model_registry`）で sha256 つきの `manifest.json` を作る。ファイルを手で置換しない。
 - [ ] ライブラリのバージョン（`libraries`）が推論環境（ホスト／Cloud Run／Jobs のイメージ）と互換（`check_compatibility`）。
+- [ ] **履歴の起点年**（2026-11-18 追加）: 束の `bundle.json` に `first_year` がある（無ければ `python -m src.scripts.ops.stamp_bundle_first_year`）。
+      `config/gcp_job_map.json` の `models.<束>.first_year` を同じ値にする（ディスパッチャがジョブに `KEIBA_FIRST_YEAR` として渡す。同じジョブのモデルで食い違うと検査が落ちる）。
+      ホストの推論（weight-runner・Flask）は `.env` の `KEIBA_FIRST_YEAR` を同じ値にする。2016 年起点なら、馬の履歴の束・RB の状態・静的な表（`v6_factory`）も 2016 年版にそろえる。
+      stamp は手元の束を書き換えるだけなので、**stamp → model_publish で公開し直す**の順にする（GCS の版と manifest の sha256 が変わる）。ディスパッチャは取得した束の first_year と config の値を照らし、食い違えば止める。ホストの `.env` と config の照合はまだ無い（目で確かめる）。
 
 ## 3. 反映（同時に・同じ内容で）
 

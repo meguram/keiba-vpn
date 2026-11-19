@@ -268,6 +268,14 @@ def validate(doc: dict[str, Any], *, known_fetch_tasks: set[str] | None = None, 
             for m in j.get("models") or []:
                 if m not in models:
                     errs.append(f"{jid}: 未定義のモデル {m}")
+            fys = {m: models[m]["first_year"] for m in j.get("models") or [] if m in models and models[m].get("first_year") is not None}
+            for m, fy in fys.items():
+                if not isinstance(fy, int) or isinstance(fy, bool) or not 2000 <= fy <= 2030:
+                    errs.append(f"{jid}: {m} の first_year は 2000〜2030 の整数にする: {fy!r}")
+            if any((st.get("env") or {}).get("KEIBA_FIRST_YEAR") for st in j.get("steps") or []) or (j.get("parallel_env") or {}).get("KEIBA_FIRST_YEAR"):
+                errs.append(f"{jid}: KEIBA_FIRST_YEAR は step の env・parallel_env に書かない（モデルの first_year から決める）")
+            if len(set(fys.values())) > 1:
+                errs.append(f"{jid}: モデルの起点年（first_year）が食い違う: {fys}（ディスパッチャが KEIBA_FIRST_YEAR を決められない）")
             from src.ops import gcs_mirror as _gm
 
             outs = [o["path"] for o in j.get("state_out") or []] + list(j.get("mirror_out") or [])

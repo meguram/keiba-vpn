@@ -30,6 +30,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -243,6 +244,9 @@ class GcsMeter:
         self.reads = 0
         self.bytes = 0
         self.lists = 0
+        from collections import Counter
+
+        self.by_kind: Counter = Counter()                  # 読み出しの種類（置き場の名前の数字を N に伏せた形）ごとの回数。見積もりと原因探しの材料
         try:
             from google.cloud.storage import blob as _b
 
@@ -252,6 +256,7 @@ class GcsMeter:
             def _bytes(blob_self, *a, **k):
                 s = orig(blob_self, *a, **k)
                 meter.reads += 1
+                meter.note_kind(blob_self)
                 meter.bytes += len(s) if s else 0
                 return s
 
@@ -261,6 +266,7 @@ class GcsMeter:
             def _file(blob_self, filename, *a, **k):
                 out = orig_f(blob_self, filename, *a, **k)
                 meter.reads += 1
+                meter.note_kind(blob_self)
                 try:
                     meter.bytes += os.path.getsize(filename)
                 except OSError:
@@ -279,6 +285,15 @@ class GcsMeter:
             _c.Client.list_blobs = _list
         except Exception as exc:  # noqa: BLE001
             logger.warning("GCS の読み出しを数えられない: %s", exc)
+
+    def note_kind(self, blob) -> None:
+        self.by_kind[re.sub(r"\d+", "N", str(getattr(blob, "name", "") or ""))] += 1     # 置き場の名前の数字（日付・id）を伏せた形
+
+    def summary(self) -> dict:
+        top = dict(self.by_kind.most_common(12))
+        rest = sum(self.by_kind.values()) - sum(top.values())
+        return {"gcs_mb": round(self.bytes / 1e6, 2), "gcs_reads": self.reads, "gcs_lists": self.lists,
+                "gcs_by_kind": {**top, **({"(その他)": rest} if rest else {})}}
 
     @property
     def over(self) -> bool:
@@ -414,16 +429,34 @@ class Runner:
         inf = Path((self.cfg.get("env") or {}).get("KEIBA_INFERENCE_DIR") or "")
         return (inf / "tracking_v2" / self.iso / f"{rid}.json").exists()
 
-    def schedule(self) -> list[dict]:
-        from src.scraper.auto_scrape_queue import _fetch_race_schedule_storage
+    def schedule(self, *, refresh: bool = False) -> list[dict]:
+        """その日の発走時刻表。1 回作ったら使い回す（race_day_schedule が無い日は、全レースの出馬表を読んで作るため重い）。
+        refresh=True は、時刻表の文書（race_day_schedule・1 件）がある日だけ読み直す。無い日は前のまま（出馬表を読み直さない）。"""
+        if not refresh and getattr(self, "_sched", None) is not None:
+            return [dict(r) for r in self._sched]                 # 写しを返す（呼び出し側が post_time を書き換えても、使い回しの表は変えない）
+        if refresh:
+            snap = self.storage.load("race_day_schedule", self.day)
+            if not (isinstance(snap, dict) and snap.get("slots")):
+                if not getattr(self, "_refresh_skip_noted", False):
+                    self._refresh_skip_noted = True
+                    logger.warning("%s: race_day_schedule が無いので、発走時刻の読み直しをしない（変更は拾えない）", self.day)
+                    _append_watch(self.watch_dir, self.day, {"event": "schedule_refresh_skipped"})
+                return [dict(r) for r in (self._sched or [])]
+            from src.scraper.race_day_schedule import schedule_payload_to_runtime_list
 
+            rows = schedule_payload_to_runtime_list(snap)        # 読んだ文書をそのまま使う（2 回読まない）
+        else:
+            from src.scraper.auto_scrape_queue import _fetch_race_schedule_storage
+
+            rows = _fetch_race_schedule_storage(self.storage, self.day)
         out = []
-        for r in _fetch_race_schedule_storage(self.storage, self.day):
+        for r in rows:
             pt = r.get("post_time")
             if pt is not None and pt.tzinfo is None:
                 pt = pt.replace(tzinfo=_JST)
             out.append({**r, "post_time": pt})
-        return out
+        self._sched = out
+        return [dict(r) for r in out]
 
     def _out(self, tree: str, rid: str, ext: str) -> Path:
         return self.publish / tree / self.day / f"{rid}.{ext}"
@@ -611,7 +644,7 @@ class Runner:
             if not self.replay and time.monotonic() - last_refresh >= refresh_sec:   # 発走の繰り下げなどを拾う（時刻表 1 件の読み出し）
                 last_refresh = time.monotonic()
                 try:
-                    for r in self.schedule():
+                    for r in self.schedule(refresh=True):
                         if r.get("race_id") in by_id and r.get("post_time") and r["post_time"] != by_id[r["race_id"]]["post_time"]:
                             logger.info("発走時刻の変更: %s %s → %s", r["race_id"], by_id[r["race_id"]]["post_time"], r["post_time"])
                             by_id[r["race_id"]]["post_time"] = r["post_time"]
@@ -647,7 +680,7 @@ class Runner:
                 logger.info("%s: 終わり（未判定 %d レース・保存の試み %d 件・GCS 読み出し %.1fMB/%d 回・一覧 %d 回）", self.day, len(pending),
                             getattr(self, "storage_writes", 0), self.meter.bytes / 1e6, self.meter.reads, self.meter.lists)
                 _append_watch(self.watch_dir, self.day, {"event": "end", "pending": len(pending), "storage_writes": getattr(self, "storage_writes", 0),
-                                                          "gcs_mb": round(self.meter.bytes / 1e6, 2), "gcs_reads": self.meter.reads, "gcs_lists": self.meter.lists})
+                                                          **self.meter.summary()})
                 return
             if len(todo) <= 1:                             # まだ推論を待つレースがあれば眠らない
                 self.sleep_fn(poll)
@@ -714,14 +747,18 @@ def main(argv: list[str] | None = None) -> int:
             return 3                          # これらが無いと全レースで失敗する。期限の見送りも書かない（API は今の表示のまま）
     start_rss_watchdog(float(cfg.get("rss_hard_gb", 0) or 0),
                        on_kill=lambda: _append_watch(Path(cfg.get("watch_dir") or Path(cfg["main_inference_dir"]) / "launch_watch"), a.day,
-                                                     {"event": "killed_rss", "rss_gb": round(rss_gb(), 1)}))
+                                                     {"event": "killed_rss", "rss_gb": round(rss_gb(), 1), **r.meter.summary()}))
     try:
         r.warm()
     except StaleInputs as exc:
         logger.error("材料が古い・足りないので止める（画面は今の表示のまま）: %s", exc)
-        _append_watch(r.watch_dir, a.day, {"event": "stale_stop", "detail": str(exc)})
+        _append_watch(r.watch_dir, a.day, {"event": "stale_stop", "detail": str(exc), **r.meter.summary()})
         return 4
-    r.loop(once=a.once)
+    try:
+        r.loop(once=a.once)
+    except BaseException as exc:                     # 例外・中断で終わったときも、GCS の読み出しの内訳を残す
+        _append_watch(r.watch_dir, a.day, {"event": "abort", "error": str(exc)[:200], **r.meter.summary()})
+        raise
     return 0
 
 
