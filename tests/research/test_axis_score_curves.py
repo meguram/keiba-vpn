@@ -159,7 +159,7 @@ def test_build_with_ts_json_rows_equal_course_count_and_embeds_numbers_from_json
     assert "定義の最終更新 2026-11-13" in h and "点が未更新の可能性" in h
     assert h.count("</script>") == 2                                                       # 本体（データ・JS）+ 並べ替え
     assert "<th>定義の最終更新</th>" in h
-    assert "歪みが大きいコースの主因は" in h and "検討中で、まだ本番の TS には反映していない" in h
+    assert "打ち切ってから偏差値にしている" in h and "検討中" not in h
 
 
 def test_ts_block_histogram_sums_to_runs_and_counts_outlier_peaks():
