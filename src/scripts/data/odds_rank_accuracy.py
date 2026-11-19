@@ -447,18 +447,24 @@ def _clean(x):
 SEC77_DIR = Path(os.environ.get("SEC77_2026_DIR") or "/home/jovyan/work/odds_rank_out/sec77_2026")   # odds_rank_fetch_sec77 の保存先
 
 
-def _sec77_2026() -> pd.DataFrame:
+def _as_obj(x):
+    """保存の形によって文字列で入っていることがあるので、JSON → Python の表記の順に読む。"""
+    if not isinstance(x, str):
+        return x
     import ast
 
+    try:
+        return json.loads(x)
+    except json.JSONDecodeError:
+        return ast.literal_eval(x)
+
+
+def _sec77_2026() -> pd.DataFrame:
     rows = []
     for f in sorted(SEC77_DIR.glob("2026*.json")):
         d = json.loads(f.read_text(encoding="utf-8"))
-        ents = d.get("entries") or []
-        if isinstance(ents, str):
-            ents = ast.literal_eval(ents)
-        meta = d.get("_cache_meta") or {}
-        if isinstance(meta, str):
-            meta = ast.literal_eval(meta)
+        ents = _as_obj(d.get("entries") or [])
+        meta = _as_obj(d.get("_cache_meta") or {})
         for e in ents:
             if e.get("source") == "sec77" and e.get("predicted_win_odds"):
                 rows.append({"race_id": str(d.get("race_id") or f.stem), "horse_number": int(e["horse_number"]), "sec77_odds": float(e["predicted_win_odds"]),
@@ -489,8 +495,14 @@ def part_sec77(rng) -> dict:
     comp = pd.to_datetime(m["computed_at"], errors="coerce", utc=True).dt.tz_convert("Asia/Tokyo").dt.tz_localize(None)
     snap = pd.to_datetime(m["snapshot_at"], errors="coerce", utc=True).dt.tz_convert("Asia/Tokyo").dt.tz_localize(None)
     mb = ((start - comp).dt.total_seconds() / 60).groupby(m["race_id"]).first()
+    before = (comp < snap).groupby(m["race_id"]).first()          # 時刻が欠けたものは「前」に数えない
     res["computed_min_before"] = {"median": float(mb.median()), "p10": float(mb.quantile(0.1)), "p90": float(mb.quantile(0.9)),
-                                  "after_t60_share": float(((comp > snap).groupby(m["race_id"]).first()).mean())}
+                                  "before_t60_share": float(before.mean()), "races_all": int(m["race_id"].nunique())}
+    # T-60 の写しより前に作った想定オッズのレースだけで比べる（後で作り直した値は T-60 の情報を含みうる）
+    m = m[m["race_id"].isin(before[before].index)].copy()
+    res["races"], res["horses"] = int(m["race_id"].nunique()), int(len(m))
+    if m.empty:
+        return res
     a = per_race(m.assign(act_rank=m["r60"]), "neg_s").merge(meta, on="race_id", how="left")
     b = per_race(m.assign(act_rank=m["rf"]), "neg_s").merge(meta, on="race_id", how="left")
     c = per_race(m.assign(act_rank=m["rf"], neg60=-m["r60"]), "neg60")
@@ -505,6 +517,7 @@ def part_sec77(rng) -> dict:
         er = np.log(m["sec77_odds"]) - np.log(m[col])
         res[f"log_err_{nm}"] = {"mae": float(er.abs().mean()), "rmse": float(np.sqrt((er ** 2).mean())), "bias": float(er.mean())}
     # 絞り込み: 想定オッズの k 番以内を、T-60 の k 番人気以内の代わりに使うと
+    m = m[m["race_id"].isin(set(a["race_id"]))].copy()                # 順位の指標と同じレース（4 頭以上）
     m["rs"] = m.groupby("race_id")["neg_s"].rank(ascending=False, method="first")
     m["r60f"] = m.groupby("race_id")["popularity"].rank(method="first")
     res["filters"] = {}

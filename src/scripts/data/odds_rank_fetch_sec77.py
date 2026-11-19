@@ -3,7 +3,7 @@
     python -m src.scripts.data.odds_rank_fetch_sec77 [--out DIR] [--cap-mb 20]
 
 統括役の承認（2026-11-18）による一度きりの読み出し。繰り返す処理には入れない。
-- 一覧（list）は使わない。race_id から名前（chuou/data/preprocessed/netkeiba/pc/final_odds_prediction/<年>/<race_id>.json）を組み立てて 1 件ずつ読む。
+- 読み出しは src.ops.gcs_io.default_io()（.env のサービスアカウント）。一覧（list）は使わない。race_id から名前（chuou/data/preprocessed/netkeiba/pc/final_odds_prediction/<年>/<race_id>.json）を組み立てて 1 件ずつ読む。
 - 読み出しは GcsMeter（candidate_runner）で数え、上限（既定 20MB）を超えたら止める。一覧を呼んだら止める。
 - 手元に保存したものと、無かったもの（not_found.json）は読み直さない。
 - 見込み: 約 300 文書 × 数 KB = 数 MB。GCS から GCP の外への転送 約 18 円/GiB・読み出し 約 0.06 円/千回なので 1 円未満。
@@ -42,17 +42,19 @@ def main() -> None:
     if not todo:
         return
 
-    from dotenv import load_dotenv
+    from src.utils.project_env import load_project_dotenv
 
-    load_dotenv(DATA / ".env")
-    from google.api_core.exceptions import NotFound
-    from google.cloud import storage
-
+    load_project_dotenv(dotenv_path=DATA / ".env")          # .env のサービスアカウント（google.auth.default には頼らない）
     from src.config.data_paths import GCS_BASE
+    from src.config.gcp_credentials import gcp_credentials_available
+    from src.ops.gcs_io import default_io
+
+    if not gcp_credentials_available():
+        raise SystemExit(".env にサービスアカウントの鍵が無い（ADC には落とさない）")
     from src.pipeline.inference.candidate_runner import GcsMeter
 
     meter = GcsMeter(a.cap_mb)
-    bucket = storage.Client(project=os.environ.get("GCS_PROJECT_ID")).bucket(os.environ["GCS_BUCKET"])
+    io = default_io()
     got = miss = 0
     t0 = time.time()
     stopped = ""
@@ -62,12 +64,10 @@ def main() -> None:
                 stopped = f"上限で止めた: 読み出し {meter.bytes / 1e6:.2f}MB・一覧 {meter.lists} 回"
                 print(stopped, flush=True)
                 break
-            blob = bucket.blob(f"{GCS_BASE}/final_odds_prediction/{rid[:4]}/{rid}.json")
-            try:
-                b = blob.download_as_bytes(timeout=30)
-            except NotFound:
+            b = io.get_bytes(f"{GCS_BASE}/final_odds_prediction/{rid[:4]}/{rid}.json")   # 属性の取得 + 本体（無ければ None）
+            if b is None:
                 not_found.add(rid)
-                miss += 1                       # 見つからない読み出しは meter の reads に入らないので、ここで数える
+                miss += 1
                 continue
             tmp = out / f".{rid}.json.tmp"      # 書きかけを保存済みとみなさない
             tmp.write_bytes(b)
@@ -78,7 +78,7 @@ def main() -> None:
         raise
     finally:
         nf_f.write_text(json.dumps(sorted(not_found)), encoding="utf-8")
-        log = {"at": time.strftime("%Y-%m-%d %H:%M:%S"), "saved": got, "not_found": miss, "gets": got + miss, "bytes": meter.bytes,
+        log = {"at": time.strftime("%Y-%m-%d %H:%M:%S"), "saved": got, "not_found": miss, "docs": got + miss, "gcs_ops_approx": 2 * got + miss, "bytes": meter.bytes,
                "lists": meter.lists, "sec": round(time.time() - t0, 1), "cap_mb": a.cap_mb, "stopped": stopped}
         lf = out / "fetch_log.json"
         hist = json.loads(lf.read_text(encoding="utf-8")) if lf.exists() else []
