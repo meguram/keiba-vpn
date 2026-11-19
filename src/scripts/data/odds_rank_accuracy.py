@@ -496,13 +496,36 @@ def part_sec77(rng) -> dict:
     snap = pd.to_datetime(m["snapshot_at"], errors="coerce", utc=True).dt.tz_convert("Asia/Tokyo").dt.tz_localize(None)
     mb = ((start - comp).dt.total_seconds() / 60).groupby(m["race_id"]).first()
     before = (comp < snap).groupby(m["race_id"]).first()          # 時刻が欠けたものは「前」に数えない
+    pre_start = (comp < start).groupby(m["race_id"]).first()
     res["computed_min_before"] = {"median": float(mb.median()), "p10": float(mb.quantile(0.1)), "p90": float(mb.quantile(0.9)),
-                                  "before_t60_share": float(before.mean()), "races_all": int(m["race_id"].nunique())}
-    # T-60 の写しより前に作った想定オッズのレースだけで比べる（後で作り直した値は T-60 の情報を含みうる）
-    m = m[m["race_id"].isin(before[before].index)].copy()
+                                  "before_t60_share": float(before.mean()), "before_start_share": float(pre_start.mean()), "races_all": int(m["race_id"].nunique())}
+    # 厳しい版: T-60 の写しより前に作ったレースだけ
+    ms = m[m["race_id"].isin(before[before].index)]
+    if not ms.empty:
+        res["strict_t60"] = {"races": int(ms["race_id"].nunique()),
+                             "vs_t60": summarize(per_race(ms.assign(act_rank=ms["r60"]), "neg_s"), rng),
+                             "vs_final": summarize(per_race(ms.assign(act_rank=ms["rf"]), "neg_s"), rng),
+                             "t60_vs_final": summarize(per_race(ms.assign(act_rank=ms["rf"], neg60=-ms["r60"]), "neg60"), rng)}
+    # 残すレースと外すレースの分布（選び方の偏りの確かめ）
+    keep_ids = set(pre_start[pre_start].index)
+    rm = meta[meta["race_id"].isin(set(m["race_id"]))].assign(kept=lambda x: x["race_id"].isin(keep_ids))
+    res["selection"] = {col: {("残す" if k else "外す"): {str(v): int(n) for v, n in g[col].value_counts().items()} for k, g in rm.groupby("kept")}
+                        for col in ("date", "cls", "fs_band")}
+    # 主: 発走より前に作った想定オッズ（モデルはオッズを入力に使わない。発走後に作り直した値は外す）
+    m = m[m["race_id"].isin(keep_ids)].copy()
     res["races"], res["horses"] = int(m["race_id"].nunique()), int(len(m))
     if m.empty:
         return res
+    # 想定オッズの同順位（小数 2 桁に丸めた値・1.0 倍の頭打ち）の割合と、同順位を平均の順位にした版の相関
+    res["ties"] = {"horse_share": float(m.duplicated(["race_id", "sec77_odds"], keep=False).mean()),
+                   "race_share": float(m.groupby("race_id")["sec77_odds"].apply(lambda x: x.duplicated().any()).mean())}
+    avg = m.assign(pa=m.groupby("race_id")["sec77_odds"].rank(method="average"))
+    res["ties"]["spearman_vs_t60_avg"] = float(np.mean([stats.spearmanr(g["pa"], g["r60"]).statistic for _, g in avg.groupby("race_id") if len(g) >= 4]))
+    # 想定オッズは T-60 の人気に情報を足すか: 確定の人気との相関を、T-60 の順だけ と（T-60 の順 + 想定の順）の平均 で比べる（重みは前もって 1:1 に固定）
+    m["rs_avg"] = m.groupby("race_id")["sec77_odds"].rank(method="average")
+    comb = m.assign(neg_c=-(m["r60"] + m["rs_avg"]) / 2, neg60=-m["r60"], act_rank=m["rf"])
+    pc, p6 = per_race(comb, "neg_c"), per_race(comb, "neg60")
+    res["added_info"] = {"t60_only": summarize(p6, rng), "t60_plus_sec77": summarize(pc, rng), "diff": diff(pc, p6, rng, ("spearman", "top1", "top3"))}
     a = per_race(m.assign(act_rank=m["r60"]), "neg_s").merge(meta, on="race_id", how="left")
     b = per_race(m.assign(act_rank=m["rf"]), "neg_s").merge(meta, on="race_id", how="left")
     c = per_race(m.assign(act_rank=m["rf"], neg60=-m["r60"]), "neg60")
@@ -538,6 +561,8 @@ def main() -> None:
     res["pre"] = part_pre(rng)
     _log("部 2 終わり")
     res["sec77_2026"] = part_sec77(rng)
+    lf = SEC77_DIR / "fetch_log.json"
+    res["fetch_log"] = json.loads(lf.read_text(encoding="utf-8")) if lf.exists() else []   # GCS から読んだ量の記録
     _log(f"部 3 終わり（{res['sec77_2026'].get('races', 0)} レース）")
     (OUT / "result.json").write_text(json.dumps(_clean(res), ensure_ascii=False, indent=1), encoding="utf-8")
     _log(f"保存: {OUT / 'result.json'}")
