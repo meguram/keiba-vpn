@@ -4,6 +4,9 @@
 レースごとに lap_correction のモデル D（同日の残差 + ペース）で水準のずれ（秒）を推定して引き、
 コース（競馬場・芝ダ・距離）の補正後ピークの平均・標準偏差から偏差値にする（速いほど高い）。
 馬場状態の区分は使わない。クラスも使わない。
+外れ値（最速ラップが 20 秒以上の歩く走など）が 1 走あっても平均・標準偏差が崩れないよう、x はコース内の 0.5%・99.5% 点で打ち切ってから
+平均・標準偏差を出す（走数が 300 未満のコースは、同じ芝ダ・距離帯の z=(x−平均)/標準偏差の分位点を、そのコースの平均・標準偏差で x に戻して使う）。
+x 列は打ち切る前の値のまま、打ち切った後の値は x_w に入れる。
 
 python -m src.research.race.horse_ts --laps /home/jovyan/acq/horse_lap/horse_lap_2026.jsonl ...
 """
@@ -25,6 +28,8 @@ except ImportError:     # ホストでは未コミットのため /home/jovyan/a
 COURSE = ["venue", "surface", "distance"]
 SHRINK_MEAN = 100.0     # コースの頭数が少ないとき、同じ芝ダ・距離帯の平均へ寄せる強さ（頭数換算）
 SHRINK_SD = 200.0
+WIN_Q = 0.005           # x を打ち切る分位点（下側。上側は 1 - WIN_Q）
+WIN_MIN_N = 300         # 打ち切り点をコース単位で出す最小の走数
 
 
 def _shrunk_dev(d: pd.DataFrame, col: str) -> pd.Series:
@@ -66,20 +71,48 @@ def horse_peaks(paths: list[Path]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def course_ts(horses: pd.DataFrame) -> pd.DataFrame:
-    """horses: race_id, horse_id, peak, offset, venue, surface, distance → ts（コース単位の偏差値）を足して返す。"""
-    h = horses.dropna(subset=["offset"]).copy()
-    h["x"] = h["peak"] - h["offset"]
-    h["band"] = (h["distance"] // 400 * 400).astype(int)
-    g = h.groupby(COURSE)["x"]
+def _band(h: pd.DataFrame) -> np.ndarray:
+    return (h["distance"] // 400 * 400).astype(int).to_numpy()
+
+
+def _course_params(h: pd.DataFrame, x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """各行のコース平均 mu_s・標準偏差 sd_s。頭数が少ないコースは同じ芝ダ・距離帯の値へ縮める。"""
+    t = h[COURSE].reset_index(drop=True).assign(x=x, band=_band(h))
+    g = t.groupby(COURSE)["x"]
     c = pd.DataFrame({"n": g.size(), "mu": g.mean(), "sd": g.std()}).reset_index()
     c["band"] = (c["distance"] // 400 * 400).astype(int)
-    pool = h.groupby(["surface", "band"])["x"].agg(mu_p="mean", sd_p="std").reset_index()
+    pool = t.groupby(["surface", "band"])["x"].agg(mu_p="mean", sd_p="std").reset_index()
     c = c.merge(pool, on=["surface", "band"], how="left")
     c["mu_s"] = (c["n"] * c["mu"] + SHRINK_MEAN * c["mu_p"]) / (c["n"] + SHRINK_MEAN)
     c["sd_s"] = np.sqrt((c["n"] * c["sd"].fillna(c["sd_p"]) ** 2 + SHRINK_SD * c["sd_p"] ** 2) / (c["n"] + SHRINK_SD))
-    h = h.merge(c[COURSE + ["mu_s", "sd_s"]], on=COURSE, how="left")
-    h["ts"] = 50 - 10 * (h["x"] - h["mu_s"]) / h["sd_s"]
+    m = t[COURSE].merge(c[COURSE + ["mu_s", "sd_s"]], on=COURSE, how="left")
+    return m["mu_s"].to_numpy(), m["sd_s"].to_numpy()
+
+
+def _winsorize(h: pd.DataFrame, x: np.ndarray) -> np.ndarray:
+    """x をコース内の WIN_Q・1-WIN_Q 点で打ち切る。走数が WIN_MIN_N 未満のコースは、芝ダ・距離帯の z の分位点を、そのコースの mu_s・sd_s で x に戻す。"""
+    t = h[COURSE].reset_index(drop=True).assign(x=x, band=_band(h))
+    g = t.groupby(COURSE)["x"]
+    c = pd.DataFrame({"lo": g.quantile(WIN_Q), "hi": g.quantile(1 - WIN_Q), "n": g.size()}).reset_index()
+    m = t[COURSE].merge(c, on=COURSE, how="left")
+    big = (m["n"].fillna(0) >= WIN_MIN_N).to_numpy()
+    mu, sd = _course_params(h, x)
+    z = pd.Series((x - mu) / sd)
+    zg = z.groupby([t["surface"], t["band"]])
+    pz = pd.DataFrame({"lo_z": zg.quantile(WIN_Q), "hi_z": zg.quantile(1 - WIN_Q)}).reset_index()
+    zm = t[["surface", "band"]].merge(pz, on=["surface", "band"], how="left")
+    lo = np.where(big, m["lo"].to_numpy(), mu + zm["lo_z"].to_numpy() * sd)
+    hi = np.where(big, m["hi"].to_numpy(), mu + zm["hi_z"].to_numpy() * sd)
+    return np.minimum(np.maximum(x, np.nan_to_num(lo, nan=-np.inf)), np.nan_to_num(hi, nan=np.inf))
+
+
+def course_ts(horses: pd.DataFrame) -> pd.DataFrame:
+    """horses: race_id, horse_id, peak, offset, venue, surface, distance → x・x_w・mu_s・sd_s・ts（コース単位の偏差値）を足して返す。"""
+    h = horses.dropna(subset=["offset"]).copy()
+    h["x"] = h["peak"] - h["offset"]
+    h["x_w"] = _winsorize(h, h["x"].to_numpy())
+    h["mu_s"], h["sd_s"] = _course_params(h, h["x_w"].to_numpy())
+    h["ts"] = 50 - 10 * (h["x_w"] - h["mu_s"]) / h["sd_s"]
     return h
 
 
