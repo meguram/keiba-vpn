@@ -167,6 +167,7 @@ def range_before(runs: pd.DataFrame, horse_ids: Sequence[str], as_of, tau: float
     r = r[(pd.to_datetime(r["date"], errors="coerce") < pd.Timestamp(as_of)) & r["points"].notna()]
     if r.empty:
         return pd.DataFrame(columns=["short_m", "long_m", "runs"], dtype=float)
+    r = r.assign(horse_id=r["horse_id"].astype(str))   # 区分型のままだと groupby が未使用の区分まで展開する
     lr = latest_range(r, tau, by_surface=False).set_index("horse_id")
     out = pd.DataFrame({"short_m": lr["kd_short"].astype(float), "long_m": lr["kd_long"].astype(float), "runs": lr["n_runs"].astype(int)})
     out.loc[out["runs"] < min_runs, ["short_m", "long_m"]] = np.nan

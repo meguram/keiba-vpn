@@ -88,6 +88,7 @@ SLOPE_VENUES = ("中山", "阪神")
 GD_KEY = "gd_range"
 GD_TAU = 0.10          # 相対値のしきい値（good_distance_eval の選択結果。芝ダ混合・走数 3 以上）
 GD_MIN_RUNS = 3
+GD_RETRY_SEC = 600     # 読み込みに失敗したあと、読み直さない秒数
 GD_FIRST_YEAR = 2016
 _GD_COLS = ["race_id", "horse_id", "date", "surface", "distance", "race_class", "sex_age", "finish_position"]
 MAP_COLS = [a[1] for a in AXES] + ["ax_slope"]
@@ -254,6 +255,8 @@ def _quantiles() -> dict[str, np.ndarray]:
 
 
 def clear_cache() -> None:
+    global _gd_failed_at
+    _gd_failed_at = None
     for f in (_data, _quantiles, _priors, _going_runs, _going_all, _gd_runs):
         f.cache_clear()
 
@@ -461,41 +464,56 @@ def _going_all(as_of: str) -> pd.DataFrame:
     return ga.going_scores(runs, list(past["horse_id"].unique()), as_of).set_index("horse_id")
 
 
-@lru_cache(maxsize=1)
-def _gd_runs() -> pd.DataFrame:
-    """好走距離レンジの元（2016 年〜の平地の走ごとの点数）。race_result_flat は API が起動時に取り込み済みで、新しい読み出しは増えない。"""
+def _gd_year(path: Any) -> pd.DataFrame:
+    """1 年分の平地の走を、点数（run_points）まで付けて小さい型で返す。点数は同じレースの全馬で決まるので、年ごとに作ってよい。"""
     from src.research.race import good_distance as gd
 
-    parts = [pd.read_parquet(rp.FLAT_DIR / str(y) / "race_result_flat.parquet", columns=_GD_COLS) for y in range(GD_FIRST_YEAR, 2100)
-             if (rp.FLAT_DIR / str(y) / "race_result_flat.parquet").exists()]
+    d = pd.read_parquet(path, columns=_GD_COLS, use_threads=False)   # 並列読みは一時メモリが増える（実測 ピーク約 20MB 差）
+    d = d[d["surface"].isin(gd.GROUND)].copy()
+    d["race_id"] = d["race_id"].astype(str)
+    d["horse_id"] = d["horse_id"].astype(str)
+    d = d.drop_duplicates(["race_id", "horse_id"]).reset_index(drop=True)
+    d = gd.run_points(d)
+    return pd.DataFrame({"horse_id": d["horse_id"], "date": pd.to_datetime(d["date"], errors="coerce"),
+                         "surface": d["surface"].astype(str),
+                         "distance": pd.to_numeric(d["distance"], errors="coerce").astype("float32"),
+                         "points": d["points"].astype("float32")})
+
+
+@lru_cache(maxsize=1)
+def _gd_runs() -> pd.DataFrame:
+    """好走距離レンジの元（2016 年〜の平地の走ごとの点数）。年ごとに必要な列だけ読み、点数にしてから束ねる（全年の生の列を同時に持たない）。
+    計算が動くのは race-analysis-daily（Cloud Run Job）と VPS の entries_sync。API は保存済みの結果を読むだけでここは通らない。"""
+    parts = [_gd_year(p) for y in range(GD_FIRST_YEAR, 2100) if (p := rp.FLAT_DIR / str(y) / "race_result_flat.parquet").exists()]
     if not parts:
         return pd.DataFrame(columns=["horse_id", "date", "surface", "distance", "points"])
     d = pd.concat(parts, ignore_index=True)
-    d["race_id"] = d["race_id"].astype(str)
-    d["horse_id"] = d["horse_id"].astype(str)
-    d["distance"] = pd.to_numeric(d["distance"], errors="coerce")
-    d = d.drop_duplicates(["race_id", "horse_id"]).reset_index(drop=True)
-    d = gd.run_points(d)
-    d = d[["horse_id", "date", "surface", "distance", "points"]].copy()
-    d["date"] = pd.to_datetime(d["date"], errors="coerce")   # 常駐させるので小さい型にする（日付は日時型・馬場は区分型・距離と点は 4 バイト）
+    d["horse_id"] = d["horse_id"].astype("category")   # 常駐させるので小さい型にする（馬 ID・馬場は区分型）
     d["surface"] = d["surface"].astype("category")
-    d["distance"] = d["distance"].astype("float32")
-    d["points"] = d["points"].astype("float32")
     return d
 
 
+_gd_failed_at: Optional[float] = None
+
+
 def _gd_for(ids: list[str], as_of: str) -> Optional[pd.DataFrame]:
-    """対象日より前の走だけの好走距離レンジ（horse_id 索引）。元の表が無ければ None（画面には出さない）。"""
+    """対象日より前の走だけの好走距離レンジ（horse_id 索引）。元の表が無い・読めないときは None（画面には出さない）。
+    失敗は lru_cache に残らないので、失敗後 GD_RETRY_SEC の間は読み直さない（レースごとに全年を読み直さないため）。"""
+    import logging
+    import time
+
     from src.research.race import good_distance as gd
 
+    global _gd_failed_at
+    if _gd_failed_at is not None and time.monotonic() - _gd_failed_at < GD_RETRY_SEC:
+        return None
     try:
         runs = _gd_runs()
         if runs.empty:
             return None
         return gd.range_before(runs, ids, as_of, GD_TAU, GD_MIN_RUNS)
     except Exception:   # 好走距離レンジは補助の表示。読めなくても走法の地図は出す
-        import logging
-
+        _gd_failed_at = time.monotonic()
         logging.getLogger(__name__).exception("好走距離レンジを作れませんでした")
         return None
 

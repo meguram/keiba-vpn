@@ -262,5 +262,123 @@ class ExtrasScoreTest(unittest.TestCase):
         self.assertNotIn(rm.GD_KEY, rm._extra_keys({"venue": "中山", "surface": "芝"}))
 
 
+def _flat_rows(year: int) -> pd.DataFrame:
+    """race_result_flat の小さい版（馬場・馬 ID は区分型、日付は日時型）。平地 2 レース + 障害 1 レース + 重複 1 行。"""
+    rows = [
+        ("r1", "h1", f"{year}-05-01", "芝", 1600, "サラ系３歳以上 １勝クラス", "牡4", 1),
+        ("r1", "h2", f"{year}-05-01", "芝", 1600, "サラ系３歳以上 １勝クラス", "牡5", 2),
+        ("r1", "h2", f"{year}-05-01", "芝", 1600, "サラ系３歳以上 １勝クラス", "牡5", 2),   # 重複
+        ("r2", "h1", f"{year}-06-01", "ダート", 1800, "サラ系３歳以上 １勝クラス", "牡4", 5),
+        ("r3", "h1", f"{year}-07-01", "障害", 3000, "サラ系障害", "牡4", 1),
+    ]
+    d = pd.DataFrame(rows, columns=["race_id", "horse_id", "date", "surface", "distance", "race_class", "sex_age", "finish_position"])
+    d["date"] = pd.to_datetime(d["date"])
+    d["surface"] = d["surface"].astype("category")
+    d["horse_id"] = d["horse_id"].astype("category")
+    return d
+
+
+class GoodDistanceLoadTest(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        for y in (2023, 2024):
+            (Path(self.tmp.name) / str(y)).mkdir()
+            _flat_rows(y).to_parquet(Path(self.tmp.name) / str(y) / "race_result_flat.parquet")
+        p = mock.patch.object(rm.rp, "FLAT_DIR", Path(self.tmp.name))
+        p.start()
+        self.addCleanup(p.stop)
+        rm._gd_runs.cache_clear()
+        rm._gd_failed_at = None
+        self.addCleanup(rm._gd_runs.cache_clear)
+        self.addCleanup(setattr, rm, "_gd_failed_at", None)
+
+    def test_reads_flat_runs_only_with_points_and_small_types(self):
+        d = rm._gd_runs()
+        self.assertEqual(len(d), 6)   # 2 年 × (平地 3 走。障害・重複は除く)
+        self.assertEqual(set(d["surface"].astype(str)), {"芝", "ダート"})
+        self.assertEqual(list(d.columns), ["horse_id", "date", "surface", "distance", "points"])
+        self.assertTrue(pd.api.types.is_datetime64_any_dtype(d["date"]))
+        self.assertEqual(str(d["distance"].dtype), "float32")
+        self.assertEqual(str(d["points"].dtype), "float32")
+        h1_win = d[(d["horse_id"] == "h1") & (d["surface"] == "芝")]
+        self.assertEqual(h1_win["points"].tolist(), [5.0, 5.0])   # 古馬戦の勝ち 5 点
+        self.assertEqual(sorted(d.loc[d["horse_id"] == "h2", "points"].tolist()), [3.0, 3.0])   # 古馬戦 2 着 3 点
+
+    def test_range_for_horses_from_the_small_table(self):
+        out = rm._gd_for(["h1", "h2"], "2025-01-01")
+        self.assertIsNotNone(out)
+        self.assertEqual(int(out.loc["h1", "runs"]), 4)   # 芝 2 走 + ダート 2 走
+        self.assertEqual((out.loc["h1", "short_m"], out.loc["h1", "long_m"]), (1600.0, 1800.0))   # 1600m は 10/12、1800m は 2/12（>= 0.10）
+        self.assertTrue(np.isnan(out.loc["h2", "short_m"]))   # 2 走だけは不明
+        self.assertEqual(int(out.loc["h2", "runs"]), 2)
+        before = rm._gd_for(["h1"], "2024-05-01")   # その日より前の走だけ（同日は含めない）
+        self.assertEqual(int(before.loc["h1", "runs"]), 2)   # 2023 年の 2 走だけ（2024-05-01 の走は含めない）
+        self.assertTrue(np.isnan(before.loc["h1", "short_m"]))
+
+    def test_failure_returns_none_and_is_not_reread_per_race(self):
+        with mock.patch.object(rm, "_gd_runs", side_effect=OSError("読めない")) as m:
+            self.assertIsNone(rm._gd_for(["h1"], "2025-01-01"))
+            self.assertIsNone(rm._gd_for(["h1"], "2025-01-01"))
+            self.assertIsNone(rm._gd_for(["h2"], "2025-01-01"))
+        self.assertEqual(m.call_count, 1)   # 失敗後は一定時間、全年の読み直しをしない
+        rm.clear_cache()
+        self.assertIsNotNone(rm._gd_for(["h1"], "2025-01-01"))   # キャッシュを消せば読み直す
+
+    def test_missing_tables_give_none(self):
+        with mock.patch.object(rm.rp, "FLAT_DIR", __import__("pathlib").Path(self.tmp.name) / "none"):
+            rm._gd_runs.cache_clear()
+            self.assertIsNone(rm._gd_for(["h1"], "2025-01-01"))
+
+
+class BuildRunningMapGdTest(unittest.TestCase):
+    """build_running_map が好走距離レンジの表を良馬場・道悪の両方の地図へ渡す（失敗しても地図は出る）。"""
+
+    def setUp(self):
+        rm._gd_failed_at = None
+        self.addCleanup(setattr, rm, "_gd_failed_at", None)
+        self.calls: list[dict] = []
+
+        def fake_assemble(entries, ids, prof, race_id, conditions, extra_keys, going, load_result, wet, peaks=None, gd=None):
+            self.calls.append({"wet": wet, "gd": gd})
+            return {"status": "ok", "horses": []}
+
+        for target, kw in [(rm, {"_data": {"return_value": {"metrics": None, "sires": None, "ref": {}}}}),
+                           (rm, {"_priors": {"return_value": None}}),
+                           (rm, {"_assemble": {"side_effect": fake_assemble}}),
+                           (rm.rp, {"profiles_as_of": {"return_value": pd.DataFrame({"horse_id": ["h1"]})}})]:
+            for name, opts in kw.items():
+                p = mock.patch.object(target, name, **opts)
+                p.start()
+                self.addCleanup(p.stop)
+
+    def _build(self, surface="芝"):
+        return rm.build_running_map([{"horse_id": "h1", "horse_number": 1}], "r", {"date": "2026-11-01", "surface": surface, "venue": "東京"})
+
+    def test_attaches_table_to_good_and_wet_maps(self):
+        tbl = pd.DataFrame({"short_m": [1400.0], "long_m": [1800.0], "runs": [5]}, index=["h1"])
+        with mock.patch.object(rm, "_gd_for", return_value=tbl):
+            out = self._build()
+        self.assertEqual([c["wet"] for c in self.calls], [False, True])
+        self.assertTrue(all(c["gd"] is tbl for c in self.calls))
+        self.assertIn("wet", out)
+
+    def test_map_is_still_built_when_gd_fails(self):
+        with mock.patch.object(rm, "_gd_runs", side_effect=RuntimeError("壊れた")):
+            out = self._build()
+        self.assertEqual(out["status"], "ok")
+        self.assertIn("wet", out)
+        self.assertTrue(all(c["gd"] is None for c in self.calls))
+
+    def test_gd_constants_follow_the_evaluation(self):
+        from src.scripts.data import good_distance_eval as ev
+
+        self.assertIn(rm.GD_TAU, ev.TAUS)           # 評価で選んだ候補の中から採っている
+        self.assertEqual(rm.GD_MIN_RUNS, ev.MIN_PRIOR)   # 表示の最低走数も評価と同じ
+
+
 if __name__ == "__main__":
     unittest.main()
