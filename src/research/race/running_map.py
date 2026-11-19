@@ -480,13 +480,26 @@ def _gd_year(path: Any) -> pd.DataFrame:
                          "points": d["points"].astype("float32")})
 
 
+def _gd_last_year() -> int:
+    """この年の前年までは race_result_flat が全部そろっているはず、という年（年初は前年分が最新）。"""
+    return pd.Timestamp.now(tz="Asia/Tokyo").year - 1
+
+
 @lru_cache(maxsize=1)
 def _gd_runs() -> pd.DataFrame:
     """好走距離レンジの元（2016 年〜の平地の走ごとの点数）。年ごとに必要な列だけ読み、点数にしてから束ねる（全年の生の列を同時に持たない）。
+    全年そろって読めたときだけ返す（lru_cache に残る）。ファイルが無い・年が欠ける・壊れているときは例外にして、キャッシュさせない。
     計算が動くのは race-analysis-daily（Cloud Run Job）と VPS の entries_sync。API は保存済みの結果を読むだけでここは通らない。"""
-    parts = [_gd_year(p) for y in range(GD_FIRST_YEAR, 2100) if (p := rp.FLAT_DIR / str(y) / "race_result_flat.parquet").exists()]
-    if not parts:
-        return pd.DataFrame(columns=["horse_id", "date", "surface", "distance", "points"])
+    last = _gd_last_year()
+    paths = {y: rp.FLAT_DIR / str(y) / "race_result_flat.parquet" for y in range(GD_FIRST_YEAR, last + 1)}
+    missing = [y for y, p in paths.items() if not p.exists()]
+    if missing:
+        raise FileNotFoundError(f"race_result_flat が無い年があります: {missing}（{rp.FLAT_DIR}）")
+    parts = [_gd_year(p) for p in paths.values()]
+    # 当年分は途中まででよいので、あれば足す
+    cur = rp.FLAT_DIR / str(last + 1) / "race_result_flat.parquet"
+    if cur.exists():
+        parts.append(_gd_year(cur))
     d = pd.concat(parts, ignore_index=True)
     d["horse_id"] = d["horse_id"].astype("category")   # 常駐させるので小さい型にする（馬 ID・馬場は区分型）
     d["surface"] = d["surface"].astype("category")
@@ -497,24 +510,28 @@ _gd_failed_at: Optional[float] = None
 
 
 def _gd_for(ids: list[str], as_of: str) -> Optional[pd.DataFrame]:
-    """対象日より前の走だけの好走距離レンジ（horse_id 索引）。元の表が無い・読めないときは None（画面には出さない）。
-    失敗は lru_cache に残らないので、失敗後 GD_RETRY_SEC の間は読み直さない（レースごとに全年を読み直さないため）。"""
+    """対象日より前の走だけの好走距離レンジ（horse_id 索引）。元の表が読めないときは None（画面には出さない）。
+    元の表の読み込みに失敗したら GD_RETRY_SEC の間は読み直さない（レースごとに全年を読み直さないため）。この時間が過ぎれば読み直す。
+    1 レースの範囲の計算の失敗は、そのレースだけ None にする（後のレースには影響させない）。"""
     import logging
     import time
 
     from src.research.race import good_distance as gd
 
     global _gd_failed_at
+    log = logging.getLogger(__name__)
     if _gd_failed_at is not None and time.monotonic() - _gd_failed_at < GD_RETRY_SEC:
         return None
     try:
         runs = _gd_runs()
-        if runs.empty:
-            return None
-        return gd.range_before(runs, ids, as_of, GD_TAU, GD_MIN_RUNS)
     except Exception:   # 好走距離レンジは補助の表示。読めなくても走法の地図は出す
         _gd_failed_at = time.monotonic()
-        logging.getLogger(__name__).exception("好走距離レンジを作れませんでした")
+        log.exception("好走距離レンジの元の表を読めませんでした（%d 秒後に読み直します）", GD_RETRY_SEC)
+        return None
+    try:
+        return gd.range_before(runs, ids, as_of, GD_TAU, GD_MIN_RUNS)
+    except Exception:
+        log.exception("好走距離レンジを作れませんでした（このレースだけ付けません）: as_of=%s", as_of)
         return None
 
 

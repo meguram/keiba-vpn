@@ -288,9 +288,11 @@ class GoodDistanceLoadTest(unittest.TestCase):
         for y in (2023, 2024):
             (Path(self.tmp.name) / str(y)).mkdir()
             _flat_rows(y).to_parquet(Path(self.tmp.name) / str(y) / "race_result_flat.parquet")
-        p = mock.patch.object(rm.rp, "FLAT_DIR", Path(self.tmp.name))
-        p.start()
-        self.addCleanup(p.stop)
+        self.dir = Path(self.tmp.name)
+        for target, kw in [(rm.rp, {"FLAT_DIR": self.dir}), (rm, {"GD_FIRST_YEAR": 2023}), (rm, {"_gd_last_year": lambda: 2024})]:
+            p = mock.patch.multiple(target, **kw)
+            p.start()
+            self.addCleanup(p.stop)
         rm._gd_runs.cache_clear()
         rm._gd_failed_at = None
         self.addCleanup(rm._gd_runs.cache_clear)
@@ -328,8 +330,58 @@ class GoodDistanceLoadTest(unittest.TestCase):
         rm.clear_cache()
         self.assertIsNotNone(rm._gd_for(["h1"], "2025-01-01"))   # キャッシュを消せば読み直す
 
+    def test_failed_load_is_retried_after_the_wait(self):
+        with mock.patch("time.monotonic", return_value=1000.0), mock.patch.object(rm, "_gd_runs", side_effect=OSError("読めない")) as m:
+            self.assertIsNone(rm._gd_for(["h1"], "2025-01-01"))
+            with mock.patch("time.monotonic", return_value=1000.0 + rm.GD_RETRY_SEC - 1):
+                self.assertIsNone(rm._gd_for(["h1"], "2025-01-01"))
+            self.assertEqual(m.call_count, 1)
+            with mock.patch("time.monotonic", return_value=1000.0 + rm.GD_RETRY_SEC + 1):
+                self.assertIsNone(rm._gd_for(["h1"], "2025-01-01"))   # 時間が過ぎたので読み直す（まだ失敗）
+            self.assertEqual(m.call_count, 2)
+        with mock.patch("time.monotonic", return_value=1000.0 + 2 * rm.GD_RETRY_SEC + 2):
+            self.assertIsNotNone(rm._gd_for(["h1"], "2025-01-01"))   # 直っていれば付く
+
+    def test_range_failure_of_one_race_does_not_block_the_next(self):
+        from src.research.race import good_distance as gd
+
+        real = gd.range_before
+        with mock.patch.object(gd, "range_before", side_effect=ValueError("このレースだけ異常")):
+            self.assertIsNone(rm._gd_for(["h1"], "2025-01-01"))
+        self.assertIsNone(rm._gd_failed_at)   # 読み込みの失敗ではないのでフラグは立てない
+        with mock.patch.object(gd, "range_before", side_effect=real) as m:
+            self.assertIsNotNone(rm._gd_for(["h1"], "2025-01-01"))   # 次のレースにはすぐ付く
+        self.assertEqual(m.call_count, 1)
+
+    def test_missing_tables_give_none_and_are_read_again_once_they_appear(self):
+        import shutil
+
+        shutil.move(str(self.dir), str(self.dir) + "_moved")
+        self.addCleanup(shutil.rmtree, str(self.dir) + "_moved", True)
+        with mock.patch("time.monotonic", return_value=500.0):
+            self.assertIsNone(rm._gd_for(["h1"], "2025-01-01"))
+        self.assertIsNotNone(rm._gd_failed_at)
+        shutil.move(str(self.dir) + "_moved", str(self.dir))   # 後からファイルができた
+        with mock.patch("time.monotonic", return_value=500.0 + rm.GD_RETRY_SEC + 1):
+            self.assertIsNotNone(rm._gd_for(["h1"], "2025-01-01"))   # 空の表は残らず、読み直して付く
+
+    def test_a_missing_year_is_a_failure_not_a_cached_partial_table(self):
+        (self.dir / "2023" / "race_result_flat.parquet").unlink()   # 2024 だけ残る（一部の年が欠ける）
+        with mock.patch("time.monotonic", return_value=500.0):
+            self.assertIsNone(rm._gd_for(["h1"], "2025-01-01"))
+        self.assertEqual(rm._gd_runs.cache_info().currsize, 0)   # 不完全な表はキャッシュしない
+        _flat_rows(2023).to_parquet(self.dir / "2023" / "race_result_flat.parquet")
+        with mock.patch("time.monotonic", return_value=500.0 + rm.GD_RETRY_SEC + 1):
+            out = rm._gd_for(["h1"], "2025-01-01")
+        self.assertEqual(int(out.loc["h1", "runs"]), 4)
+
+    def test_current_year_file_is_optional_but_added_when_present(self):
+        (self.dir / "2025").mkdir()
+        _flat_rows(2025).to_parquet(self.dir / "2025" / "race_result_flat.parquet")
+        self.assertEqual(len(rm._gd_runs()), 9)
+
     def test_missing_tables_give_none(self):
-        with mock.patch.object(rm.rp, "FLAT_DIR", __import__("pathlib").Path(self.tmp.name) / "none"):
+        with mock.patch.object(rm.rp, "FLAT_DIR", self.dir / "none"):
             rm._gd_runs.cache_clear()
             self.assertIsNone(rm._gd_for(["h1"], "2025-01-01"))
 
@@ -374,9 +426,14 @@ class BuildRunningMapGdTest(unittest.TestCase):
         self.assertTrue(all(c["gd"] is None for c in self.calls))
 
     def test_gd_constants_follow_the_evaluation(self):
+        from pathlib import Path
+
         from src.scripts.data import good_distance_eval as ev
 
-        self.assertIn(rm.GD_TAU, ev.TAUS)           # 評価で選んだ候補の中から採っている
+        # 評価の選定結果（chosen）は実行ごとの出力 JSON にだけ入り、リポジトリには無い。確定した値は docs に書いてあるので、それと一致を見る
+        doc = (Path(__file__).resolve().parents[2] / "docs" / "ideas" / "running_map_axes_fixed.md").read_text(encoding="utf-8")
+        self.assertIn(f"相対値 **{rm.GD_TAU:.2f} 以上**", doc)
+        self.assertIn(rm.GD_TAU, ev.TAUS)           # 評価の候補の中から採っている
         self.assertEqual(rm.GD_MIN_RUNS, ev.MIN_PRIOR)   # 表示の最低走数も評価と同じ
 
 
