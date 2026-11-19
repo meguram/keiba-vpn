@@ -77,7 +77,7 @@ def _ms(t0: float) -> str:
 
 
 def login_response(password: str, remember: bool = True, user_id: str = ""):
-    """user_id が空なら開発者パスワード、あれば会員（config/members.json）として認証する。
+    """user_id が空なら開発者パスワード、あれば会員（会員名簿。正本は GCS。auth.MEMBERS_LOCAL_FILE）として認証する。
     成功の応答には、そのセッションの認証状態（GET /auth/status と同じ形）を auth に入れる（画面がログイン直後に状態を取り直す往復を省く）。
     成功の応答だけ Server-Timing に照合（pw）と全体（app）の時間を入れる（計測用。中身は時間だけ）。"""
     t0 = time.perf_counter()

@@ -290,7 +290,7 @@ def verify_password(password: str) -> bool:
     return hmac.compare_digest(password, dev_pw)
 
 
-# ── 会員アカウント（config/members.json。パスワードはハッシュだけを持つ） ──
+# ── 会員アカウント（config/members.json＝動作確認用の test。2026-11-19 から git の外で、無ければ読まない。パスワードはハッシュだけを持つ） ──
 
 _MEMBERS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "config", "members.json")
 _DUMMY_SALT = bytes(16)

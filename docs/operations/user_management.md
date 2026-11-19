@@ -4,7 +4,7 @@
 |------|----------|------|
 | 管理者（開発者） | ID なし。パスワードだけ（`.env` の `DEV_PASSWORD`） | `.env` を変更して API を再起動 |
 | 会員 | ログイン ID＋パスワード | `python -m src.scripts.ops.manage_users`（下記） |
-| 動作確認用 `test` | `config/members.json`。`KEIBA_TEST_USER=1` のときだけ有効（公開前は off） | ここからは変更しない |
+| 動作確認用 `test` | `config/members.json`（2026-11-19 から git の外。置いたマシンでだけ有効）。`KEIBA_TEST_USER=1` のときだけ有効（公開前は off） | ここからは変更しない |
 
 ## 会員の管理（ホストで実行）
 
