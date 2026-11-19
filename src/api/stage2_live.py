@@ -44,10 +44,11 @@ def _ok_day(day: str) -> bool:
     return bool(day) and len(day) == 8 and day.isdigit() and day >= start_day()
 
 
-def _mark_on(p: Path) -> bool:
-    """止めの目印が有効か。ファイルがあり、中身が {"disabled": false} でなければ有効（読めない・空も有効＝安全側）。"""
+def _mark_on(p: Path, default: bool = False) -> bool:
+    """止めの目印が有効か。ファイルがあり、中身が {"disabled": false} でなければ有効（読めない・空も有効＝安全側）。
+    ファイルが無いときは default（試行の分を会員・匿名に出す段は True＝止める側に倒す。置き忘れで漏らさない）。"""
     if not p.exists():
-        return False
+        return default
     try:
         return bool(json.loads(p.read_text(encoding="utf-8") or "{}").get("disabled", True))
     except (OSError, ValueError, AttributeError):
@@ -59,13 +60,15 @@ def disabled(inf: Path | None = None) -> bool:
 
 
 def dev_only(inf: Path | None = None) -> bool:
-    """開発者（view=full）だけに第 2 段の推奨を出す段か（``bets_stage2/_dev_only.json``。中身が {"disabled": false} なら無効）。"""
-    return _mark_on((inf or _inf()) / "bets_stage2" / "_dev_only.json")
+    """開発者（view=full）だけに第 2 段の推奨を出す段か（``bets_stage2/_dev_only.json``）。**目印が無ければ開発者だけ**（止める側）。
+    会員にも出すときだけ ``{"disabled": false}`` を置く（``candidate_runner --set-disabled off --dev-only``）。"""
+    return _mark_on((inf or _inf()) / "bets_stage2" / "_dev_only.json", default=True)
 
 
 def v6c_disabled(inf: Path | None = None) -> bool:
     inf = inf or _inf()
-    return disabled(inf) or _mark_on(inf / "predictions_v6c" / "_disabled.json")
+    # 候補の確率の欄は、**目印が無ければ誰にも出さない**（止める側）。出すときだけ {"disabled": false} を置く（--set-disabled off --v6c-only）
+    return disabled(inf) or _mark_on(inf / "predictions_v6c" / "_disabled.json", default=True)
 
 
 def _local(p: Path, day: str) -> bool:

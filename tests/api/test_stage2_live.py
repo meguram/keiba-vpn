@@ -46,6 +46,16 @@ def inf(tmp_path, monkeypatch):
     return tmp_path
 
 
+def _release(inf, *, paid=True, v6c=True):
+    """試行の分を会員・全員に出す目印（既定は止める側なので、明示的に外す）。"""
+    if paid:
+        (inf / "bets_stage2").mkdir(parents=True, exist_ok=True)
+        (inf / "bets_stage2" / "_dev_only.json").write_text('{"disabled": false}', encoding="utf-8")
+    if v6c:
+        (inf / "predictions_v6c").mkdir(parents=True, exist_ok=True)
+        (inf / "predictions_v6c" / "_disabled.json").write_text('{"disabled": false}', encoding="utf-8")
+
+
 def _put(inf, d, day=DAY):
     p = inf / "bets_stage2" / day / f"{RID}.json"
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -69,6 +79,7 @@ def test_buy_is_target_shaped(inf):
 
 
 def test_skip_keeps_reason_and_hides_bets(inf):
+    _release(inf)
     _put(inf, _decision("skip"))
     out, code = delegates.optimize_betting({"race_id": RID}, view="paid")
     assert code == 200 and out["skipped"] is True and out["bets"] == [] and out["level"] == 0
@@ -100,6 +111,7 @@ def _pred(path):
 
 
 def test_candidate_only_for_display(inf):
+    _release(inf)
     _pred(inf / "predictions_v6" / DAY / f"{RID}.parquet")
     _pred(inf / "predictions_v6c" / DAY / f"{RID}.parquet")
     assert LP.find_primary_prediction(RID, DAY, inf)[1] == "candidate"
@@ -129,6 +141,7 @@ def test_disabled_mark_off_means_enabled(inf):
 
 
 def test_members_do_not_get_market_odds(inf):
+    _release(inf)
     _put(inf, _decision("buy"))
     out, _ = delegates.optimize_betting({"race_id": RID}, view="paid")
     s = out["stage2"]
@@ -153,6 +166,7 @@ def test_other_classes_keep_current_target(inf, monkeypatch, grade):
 
 
 def test_newcomer_and_missing_material_still_shown(inf, monkeypatch):
+    _release(inf)
     monkeypatch.setitem(CARD, "grade", "新馬")
     _put(inf, {"strategy": "stage2_r2", "race_id": RID, "frozen_hash": "70ba29fa7b55", "status": "skip", "skip_reason": "no_odds_t60",
                "skip_label": "見送り（T-60 オッズ未着）", "bets": [], "horse_marks": {}})
@@ -177,3 +191,13 @@ def test_prediction_marks_never_use_stage2(inf, monkeypatch):
     monkeypatch.setattr(delegates, "_MARKS_CACHE", {})                          # 後のテストに印のキャッシュを残さない
     assert delegates.bet_horse_marks(RID) == {5: "honmei"}                       # 今の target の印（第 2 段の 3 ではない）
     assert delegates._optimize_stage2({"race_id": RID}, "full")[0]["horse_marks"] == {"3": "honmei"}   # 開発者の推奨のタブには第 2 段
+
+
+def test_trial_is_dev_only_and_v6c_hidden_without_marks(inf):
+    """目印が無いときは止める側: 第 2 段は開発者だけ、候補の確率の欄は誰にも出さない（置き忘れで漏らさない）。"""
+    _put(inf, _decision("buy"))
+    assert delegates._optimize_stage2({"race_id": RID}, "paid") is None
+    assert delegates._optimize_stage2({"race_id": RID}, "full") is not None
+    _pred(inf / "predictions_v6" / DAY / f"{RID}.parquet")
+    _pred(inf / "predictions_v6c" / DAY / f"{RID}.parquet")
+    assert LP.find_primary_prediction(RID, DAY, inf)[1] == "shadow"
