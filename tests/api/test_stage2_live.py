@@ -166,3 +166,14 @@ def test_dev_only_mark_hides_from_members(inf):
     (inf / "bets_stage2" / "_dev_only.json").write_text('{"disabled": true}', encoding="utf-8")
     assert delegates._optimize_stage2({"race_id": RID}, "paid") is None          # 会員には今の target
     assert delegates._optimize_stage2({"race_id": RID}, "full") is not None      # 開発者には第 2 段
+
+
+def test_prediction_marks_never_use_stage2(inf, monkeypatch):
+    """予測の応答の印（bet_horse_marks）は全区分で共有されるので、第 2 段の試行の ◎ を使わない（開発者だけの目印があっても有料会員に漏れない）。"""
+    _put(inf, _decision("buy"))                                                  # 第 2 段は ◎3
+    (inf / "bets_stage2" / "_dev_only.json").write_text('{"disabled": true}', encoding="utf-8")
+    monkeypatch.setattr(delegates, "_optimize_target", lambda body, view, storage=None: ({"strategy": "target", "status": "bet", "level": 2,
+                                                                                         "bets": [{"combo": [5]}], "horse_marks": {"5": "honmei"}}, 200))
+    monkeypatch.setattr(delegates, "_MARKS_CACHE", {})                          # 後のテストに印のキャッシュを残さない
+    assert delegates.bet_horse_marks(RID) == {5: "honmei"}                       # 今の target の印（第 2 段の 3 ではない）
+    assert delegates._optimize_stage2({"race_id": RID}, "full")[0]["horse_marks"] == {"3": "honmei"}   # 開発者の推奨のタブには第 2 段

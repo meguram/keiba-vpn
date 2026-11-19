@@ -71,23 +71,24 @@ def hide_skipped_bets(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool = True, forced_odds: dict | None = None,
-                     _ctx: dict | None = None, hide_skipped: bool = True) -> tuple[dict[str, Any], int]:
-    """推奨ポートフォリオ。見送り（推奨度 0）のレースは買い目を返さない（hide_skipped=False は内部の計算用）。"""
-    payload, code = _optimize_betting(body, view=view, market=market, forced_odds=forced_odds, _ctx=_ctx)
+                     _ctx: dict | None = None, hide_skipped: bool = True, stage2: bool = True) -> tuple[dict[str, Any], int]:
+    """推奨ポートフォリオ。見送り（推奨度 0）のレースは買い目を返さない（hide_skipped=False は内部の計算用）。
+    stage2=False は第 2 段の試行（stage2_live）を通らず、今の target だけで計算する（全区分で共有する予測の印など）。"""
+    payload, code = _optimize_betting(body, view=view, market=market, forced_odds=forced_odds, _ctx=_ctx, stage2=stage2)
     if code == 200 and hide_skipped and forced_odds is None and _ctx is None:
         payload = hide_skipped_bets(payload)
     return payload, code
 
 
 def _optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool = True, forced_odds: dict | None = None,
-                      _ctx: dict | None = None) -> tuple[dict[str, Any], int]:
+                      _ctx: dict | None = None, stage2: bool = True) -> tuple[dict[str, Any], int]:
     """推奨ポートフォリオ。view="paid" は会員向け（推奨度の段階と買い目の区分だけ。オッズ・期待値・金額の数値は出さない）。
     market=False は実オッズに触れない（市場補正もしない）。forced_odds={"single":…, "pairs":…} は想定オッズで計算する（有料ゾーン案B）。"""
     if _ctx is None and forced_odds is None and market:
         from src.pipeline.inference import target_bets as TB
 
         if TB.available():  # 既定方策 target（目標払戻つきの 3連複）。KEIBA_BET_STRATEGY=legacy で従来方式へ戻せる
-            s2 = _optimize_stage2(body, view)  # 候補の影のランナーの判定（試行中）があるレースだけ。無ければ None → 今の target
+            s2 = _optimize_stage2(body, view) if stage2 else None  # 候補の影のランナーの判定（試行中）があるレースだけ。無ければ None → 今の target
             if s2 is not None:
                 return s2
             return _optimize_target(body, view)
@@ -348,7 +349,8 @@ def bet_horse_marks(race_id: str) -> dict[int, str] | None:
         return hit[1]
     marks: dict[int, str] | None = None
     try:
-        payload, code = optimize_betting({"race_id": race_id, "max_total_bet": DEFAULT_MAX_TOTAL_BET}, view="full")
+        # 印は予測の応答に入り、全区分で共有する事前生成・キャッシュに載る。第 2 段の試行（開発者だけ）の ◎ を混ぜない（stage2=False）
+        payload, code = optimize_betting({"race_id": race_id, "max_total_bet": DEFAULT_MAX_TOTAL_BET}, view="full", stage2=False)
         if code == 200 and payload.get("horse_marks"):
             marks = {int(h): m for h, m in payload["horse_marks"].items()}
     except Exception as exc:  # noqa: BLE001

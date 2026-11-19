@@ -83,7 +83,7 @@ def _bets_state(race_id: str) -> dict[str, Any]:
         payload, code = optimize_betting({
             "race_id": race_id, "bankroll": 100000, "odds_mode": "auto", "odds_phase": "latest",
             "max_total_bet": DEFAULT_MAX_TOTAL_BET, "bet_types": ["tansho", "fukusho", "umaren", "wide", "sanrenpuku"],
-        })
+        }, stage2=False)                                  # 予測の応答（全区分で共有）に入るので、第 2 段の試行（開発者だけ）を通らない
     except Exception as exc:  # noqa: BLE001
         payload, code = {"error": str(exc)}, 500
     if code != 200:
