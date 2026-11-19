@@ -27,7 +27,7 @@ export const FEATURES = {
   auth: { label: "ログイン", enabled: true, paths: ["/login"] },
   "admin-users": { label: "ユーザー登録（管理者のみ）", enabled: true, paths: ["/admin/users"] },
   billing: { label: "有料プランの申込み・法的表記（データ利用許諾の確認後に有効化。手順: docs/operations/billing.md）", enabled: false, paths: ["/signup", "/legal"] },
-  "megu-analysis": { label: "めぐ分析（出馬表の統計データ・成長曲線・走法マップ。開発中）", enabled: true, devOnly: true, paths: ["/analysis"] },
+  "megu-analysis": { label: "めぐ分析（出馬表の統計データ・走法マップ・過去データの条件。有料会員と開発者。API は src/api/tier.py の会員限定）", enabled: true, paths: ["/analysis"] },
   "megu-column": { label: "めぐコラム（開発中）", enabled: true, devOnly: true, paths: ["/column"] },
 
   // ── 無効化中（コードは残置） ──

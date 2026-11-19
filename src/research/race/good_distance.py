@@ -158,3 +158,17 @@ def latest_range(runs: pd.DataFrame, tau: float, by_surface: bool) -> pd.DataFra
     g = sel.groupby(keys).agg(kd_short=("dist100", "min"), kd_long=("dist100", "max")).reset_index()
     base = p.drop_duplicates(keys)[keys + ["n_runs", "total"]].rename(columns={"total": "total_points"})
     return base.merge(g, on=keys, how="left")[keys + ["kd_short", "kd_long", "n_runs", "total_points"]]
+
+
+def range_before(runs: pd.DataFrame, horse_ids: Sequence[str], as_of, tau: float = 0.10, min_runs: int = 3) -> pd.DataFrame:
+    """画面用: as_of の日より前の走だけで、芝ダ混合の馬ごとのレンジ。runs の列: horse_id, date, surface, distance, points。
+    戻り値は horse_id 索引の short_m, long_m（m）と runs（点の付いた走数）。走数が min_runs 未満の馬は short_m・long_m が NaN。走が無い馬は行が無い。"""
+    r = runs[runs["horse_id"].isin(set(horse_ids))]
+    r = r[(pd.to_datetime(r["date"], errors="coerce") < pd.Timestamp(as_of)) & r["points"].notna()]
+    if r.empty:
+        return pd.DataFrame(columns=["short_m", "long_m", "runs"], dtype=float)
+    r = r.assign(horse_id=r["horse_id"].astype(str))   # 区分型のままだと groupby が未使用の区分まで展開する
+    lr = latest_range(r, tau, by_surface=False).set_index("horse_id")
+    out = pd.DataFrame({"short_m": lr["kd_short"].astype(float), "long_m": lr["kd_long"].astype(float), "runs": lr["n_runs"].astype(int)})
+    out.loc[out["runs"] < min_runs, ["short_m", "long_m"]] = np.nan
+    return out

@@ -443,6 +443,115 @@ def _clean(x):
     return x
 
 
+# ───────────── 部 3: 本番の想定オッズ（2026）→ T-60 の人気・確定の人気（同じレース）
+SEC77_DIR = Path(os.environ.get("SEC77_2026_DIR") or "/home/jovyan/work/odds_rank_out/sec77_2026")   # odds_rank_fetch_sec77 の保存先
+
+
+def _as_obj(x):
+    """保存の形によって文字列で入っていることがあるので、JSON → Python の表記の順に読む。"""
+    if not isinstance(x, str):
+        return x
+    import ast
+
+    try:
+        return json.loads(x)
+    except json.JSONDecodeError:
+        return ast.literal_eval(x)
+
+
+def _sec77_2026() -> pd.DataFrame:
+    rows = []
+    for f in sorted(SEC77_DIR.glob("2026*.json")):
+        d = json.loads(f.read_text(encoding="utf-8"))
+        ents = _as_obj(d.get("entries") or [])
+        meta = _as_obj(d.get("_cache_meta") or {})
+        for e in ents:
+            if e.get("source") == "sec77" and e.get("predicted_win_odds"):
+                rows.append({"race_id": str(d.get("race_id") or f.stem), "horse_number": int(e["horse_number"]), "sec77_odds": float(e["predicted_win_odds"]),
+                             "computed_at": meta.get("computed_at")})
+    return pd.DataFrame(rows)
+
+
+def part_sec77(rng) -> dict:
+    s = _sec77_2026()
+    if s.empty:
+        return {}
+    pre = pd.read_parquet(PRE, columns=["race_id", "phase", "snapshot_at", "horse_number", "win_odds", "popularity"])
+    pre["race_id"] = pre["race_id"].astype(str)
+    e = pre[(pre["phase"] == "t60") & (pre["popularity"] > 0) & (pre["win_odds"] > 0)].drop_duplicates(["race_id", "horse_number"], keep="last")
+    fin = pd.read_parquet(TABLES / "2026/race_result_flat.parquet", columns=["race_id", "horse_number", "popularity", "odds"])   # 人気・オッズだけ
+    fin["race_id"] = fin["race_id"].astype(str)
+    fin = fin[(fin["popularity"] > 0) & (fin["odds"] > 0)].rename(columns={"popularity": "pop_f", "odds": "odds_f"})
+    meta = classes(race_meta([2026]))
+    m = s.merge(e, on=["race_id", "horse_number"], how="inner").merge(fin, on=["race_id", "horse_number"], how="inner")
+    # 3 つがそろう馬だけで順位を付け直す
+    m["r60"] = m.groupby("race_id")["popularity"].rank(method="average")
+    m["rf"] = m.groupby("race_id")["pop_f"].rank(method="average")
+    m["neg_s"] = -m["sec77_odds"]
+    res: dict = {"files": len(list(SEC77_DIR.glob("2026*.json"))), "races": int(m["race_id"].nunique()), "horses": int(len(m))}
+    # 想定オッズを作った時刻（発走の何分前・T-60 の写しより前か）
+    st = meta.set_index("race_id")
+    start = pd.to_datetime(m["race_id"].map(st["date"]).astype(str) + " " + m["race_id"].map(st["start_time"]).astype(str), errors="coerce")
+    comp = pd.to_datetime(m["computed_at"], errors="coerce", utc=True).dt.tz_convert("Asia/Tokyo").dt.tz_localize(None)
+    snap = pd.to_datetime(m["snapshot_at"], errors="coerce", utc=True).dt.tz_convert("Asia/Tokyo").dt.tz_localize(None)
+    mb = ((start - comp).dt.total_seconds() / 60).groupby(m["race_id"]).first()
+    before = (comp < snap).groupby(m["race_id"]).first()          # 時刻が欠けたものは「前」に数えない
+    pre_start = (comp < start).groupby(m["race_id"]).first()
+    res["computed_min_before"] = {"median": float(mb.median()), "p10": float(mb.quantile(0.1)), "p90": float(mb.quantile(0.9)),
+                                  "before_t60_share": float(before.mean()), "before_start_share": float(pre_start.mean()), "races_all": int(m["race_id"].nunique())}
+    # 厳しい版: T-60 の写しより前に作ったレースだけ
+    ms = m[m["race_id"].isin(before[before].index)]
+    if not ms.empty:
+        res["strict_t60"] = {"races": int(ms["race_id"].nunique()),
+                             "vs_t60": summarize(per_race(ms.assign(act_rank=ms["r60"]), "neg_s"), rng),
+                             "vs_final": summarize(per_race(ms.assign(act_rank=ms["rf"]), "neg_s"), rng),
+                             "t60_vs_final": summarize(per_race(ms.assign(act_rank=ms["rf"], neg60=-ms["r60"]), "neg60"), rng)}
+    # 残すレースと外すレースの分布（選び方の偏りの確かめ）
+    keep_ids = set(pre_start[pre_start].index)
+    rm = meta[meta["race_id"].isin(set(m["race_id"]))].assign(kept=lambda x: x["race_id"].isin(keep_ids))
+    res["selection"] = {col: {("残す" if k else "外す"): {str(v): int(n) for v, n in g[col].value_counts().items()} for k, g in rm.groupby("kept")}
+                        for col in ("date", "cls", "fs_band")}
+    # 主: 発走より前に作った想定オッズ（モデルはオッズを入力に使わない。発走後に作り直した値は外す）
+    m = m[m["race_id"].isin(keep_ids)].copy()
+    res["races"], res["horses"] = int(m["race_id"].nunique()), int(len(m))
+    if m.empty:
+        return res
+    # 想定オッズの同順位（小数 2 桁に丸めた値・1.0 倍の頭打ち）の割合と、同順位を平均の順位にした版の相関
+    res["ties"] = {"horse_share": float(m.duplicated(["race_id", "sec77_odds"], keep=False).mean()),
+                   "race_share": float(m.groupby("race_id")["sec77_odds"].apply(lambda x: x.duplicated().any()).mean())}
+    avg = m.assign(pa=m.groupby("race_id")["sec77_odds"].rank(method="average"))
+    res["ties"]["spearman_vs_t60_avg"] = float(np.mean([stats.spearmanr(g["pa"], g["r60"]).statistic for _, g in avg.groupby("race_id") if len(g) >= 4]))
+    # 想定オッズは T-60 の人気に情報を足すか: 確定の人気との相関を、T-60 の順だけ と（T-60 の順 + 想定の順）の平均 で比べる（重みは前もって 1:1 に固定）
+    m["rs_avg"] = m.groupby("race_id")["sec77_odds"].rank(method="average")
+    comb = m.assign(neg_c=-(m["r60"] + m["rs_avg"]) / 2, neg60=-m["r60"], act_rank=m["rf"])
+    pc, p6 = per_race(comb, "neg_c"), per_race(comb, "neg60")
+    res["added_info"] = {"t60_only": summarize(p6, rng), "t60_plus_sec77": summarize(pc, rng), "diff": diff(pc, p6, rng, ("spearman", "top1", "top3"))}
+    a = per_race(m.assign(act_rank=m["r60"]), "neg_s").merge(meta, on="race_id", how="left")
+    b = per_race(m.assign(act_rank=m["rf"]), "neg_s").merge(meta, on="race_id", how="left")
+    c = per_race(m.assign(act_rank=m["rf"], neg60=-m["r60"]), "neg60")
+    res["vs_t60"], res["vs_final"], res["t60_vs_final"] = summarize(a, rng), summarize(b, rng), summarize(c, rng)
+    res["final_minus_t60"] = diff(b, a, rng, ("spearman", "top1", "top3"))
+    gp = gap_of(m, "sec77_odds")
+    res["gap_vs_t60"] = by_gap(a, gp, rng)
+    for col in ("fs_band", "cls", "shinba"):
+        res.setdefault("by", {})[col] = {str(v): summarize(g, rng) for v, g in a.groupby(col)}
+    # 対数オッズの誤差（想定 − T-60・想定 − 確定）
+    for nm, col in (("t60", "win_odds"), ("final", "odds_f")):
+        er = np.log(m["sec77_odds"]) - np.log(m[col])
+        res[f"log_err_{nm}"] = {"mae": float(er.abs().mean()), "rmse": float(np.sqrt((er ** 2).mean())), "bias": float(er.mean())}
+    # 絞り込み: 想定オッズの k 番以内を、T-60 の k 番人気以内の代わりに使うと
+    m = m[m["race_id"].isin(set(a["race_id"]))].copy()                # 順位の指標と同じレース（4 頭以上）
+    m["rs"] = m.groupby("race_id")["neg_s"].rank(ascending=False, method="first")
+    m["r60f"] = m.groupby("race_id")["popularity"].rank(method="first")
+    res["filters"] = {}
+    for k in (1, 2, 3, 5):
+        a_s, a_6 = (m["rs"] <= k).to_numpy(), (m["r60f"] <= k).to_numpy()
+        per = pd.DataFrame({"race_id": m["race_id"].to_numpy(), "io": a_s & ~a_6, "i": a_s, "f": a_s != a_6}).groupby("race_id").agg(io=("io", "sum"), i=("i", "sum"), f=("f", "any"))
+        res["filters"][f"top{k}"] = {"in_s_out_60": _ratio_boot(per["io"].to_numpy(float), per["i"].to_numpy(float), None, rng),
+                                     "race_any_flip": boot_mean(per["f"].to_numpy(float), rng)}
+    return res
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(SEED)
@@ -451,6 +560,10 @@ def main() -> None:
     _log("部 1 終わり")
     res["pre"] = part_pre(rng)
     _log("部 2 終わり")
+    res["sec77_2026"] = part_sec77(rng)
+    lf = SEC77_DIR / "fetch_log.json"
+    res["fetch_log"] = json.loads(lf.read_text(encoding="utf-8")) if lf.exists() else []   # GCS から読んだ量の記録
+    _log(f"部 3 終わり（{res['sec77_2026'].get('races', 0)} レース）")
     (OUT / "result.json").write_text(json.dumps(_clean(res), ensure_ascii=False, indent=1), encoding="utf-8")
     _log(f"保存: {OUT / 'result.json'}")
 

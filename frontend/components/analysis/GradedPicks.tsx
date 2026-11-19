@@ -1,6 +1,6 @@
 "use client";
 
-import { SKIP_LABEL, fin, horseShort, newVersion, odds, pct, rec, yen, type GPFigure, type GPHorse, type GPPicked, type GPRace, type GPRule } from "@/lib/gradedPicks";
+import { SKIP_LABEL, fin, horseShort, newVersion, odds, pct, rec, yen, type GPFigure, type GPHorse, type GPPicked, type GPRace, type GPRule, type GPSimple } from "@/lib/gradedPicks";
 
 const CSS = `
 .gp-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -122,29 +122,35 @@ const THIS_MSG: Record<string, string> = {
   default: "2018〜2024 年にこの重賞の回が無く、条件を決められていません。",
 };
 
+/** これ未満の回の数の回収率は強調しない（1 回の高配当で大きく動く）。条件を決めた期間（〜2024）の行も強調しない */
+const MIN_RACES = 10;
+
 /** 過去該当馬: ◎ と消しの着順の成績・◎ の回収率を、期間ごとに 1 行で */
 function PastSimple({ fig }: { fig: GPFigure }) {
   // 古い値（simple_stats が無い）は、期間別の成績から作る（2025〜 は凍結の前の回だけ）
-  const ss = fig.simple_stats ?? { recent: fig.stats.eval ?? fig.stats.forward ?? null, dev: fig.stats.dev ?? null };
+  const ss: { recent: GPSimple | null; dev: GPSimple | null } = fig.simple_stats ?? { recent: fig.stats.eval ?? fig.stats.forward ?? null, dev: fig.stats.dev ?? null };
   const rows = ([["2025〜（条件を決めた後）", ss.recent], ["〜2024（条件を決めた期間）", ss.dev]] as const).filter(([, v]) => v);
   if (!rows.length) return <div className="gp-note">このレースより前の回の記録がありません。</div>;
+  const after = fig.same_pop_includes_after;
   return (
     <div className="gp-scroll">
       <table className="gp">
-        <thead><tr><th className="l">期間</th><th>回</th><th>◎ の着</th><th>単回収</th><th>複回収</th><th>消し馬の着（頭）</th></tr></thead>
+        <thead><tr><th className="l">期間</th><th>回</th><th>◎ の着</th><th>単回収</th><th>複回収</th><th className="l">同じ人気の馬（複勝率・単回収・複回収）</th><th>消し馬の着（頭）</th></tr></thead>
         <tbody>
           {rows.map(([lab, v]) => (
             <tr key={lab}>
               <td className="l">{lab}</td>
               <td>{v!.B_honmei?.races ?? v!.B_kill?.races ?? "—"}</td>
               <td>{rec(v!.B_honmei?.rec)}</td>
-              <td className={v!.B_honmei?.roi_t != null && v!.B_honmei.roi_t > 1 ? "up" : ""}>{pct(v!.B_honmei?.roi_t)}</td>
-              <td className={v!.B_honmei?.roi_f != null && v!.B_honmei.roi_f > 1 ? "up" : ""}>{pct(v!.B_honmei?.roi_f)}</td>
+              <td className={lab.startsWith("2025") && (v!.B_honmei?.races ?? 0) >= MIN_RACES && v!.B_honmei?.roi_t != null && v!.same_pop?.roi_t != null && v!.B_honmei.roi_t > v!.same_pop.roi_t ? "up" : ""}>{pct(v!.B_honmei?.roi_t)}</td>
+              <td className={lab.startsWith("2025") && (v!.B_honmei?.races ?? 0) >= MIN_RACES && v!.B_honmei?.roi_f != null && v!.same_pop?.roi_f != null && v!.B_honmei.roi_f > v!.same_pop.roi_f ? "up" : ""}>{pct(v!.B_honmei?.roi_f)}</td>
+              <td className="l" style={{ color: "var(--text-dim)" }}>{v!.same_pop ? `${pct(v!.same_pop.place)}・${pct(v!.same_pop.roi_t)}・${pct(v!.same_pop.roi_f)}` : "—"}</td>
               <td>{v!.B_kill ? `${rec(v!.B_kill.rec)}（${v!.B_kill.killed}）` : "—"}</td>
             </tr>
           ))}
         </tbody>
       </table>
+      <div className="gp-note">着外は 4 着以下。「同じ人気の馬」は、◎ と同じ人気の馬の、同じ期間の全重賞（G1〜G3）での複勝率・単回収・複回収です。{after ? "この回は結果の最終日より前なので、2025〜 の比べる相手には、この回とそれより後の結果も入っています。" : ""}</div>
     </div>
   );
 }
@@ -159,6 +165,7 @@ export function GradedPicks({ fig, notes }: { fig: GPFigure; notes?: string[] })
   return (
     <div style={{ marginTop: 8 }}>
       <style>{CSS}</style>
+      <div className="gp-warn">参考です。回収率は保証しません。これまでの確かめでは、この ◎ はオッズに織り込み済みでした。「同じ人気の馬」の値と比べて読んでください。</div>
       <div className="gp-note">
         {nv ? `${(t.picked!.version!.discovery.to ?? "").slice(0, 4)} 年までのこの重賞の回で決めた条件です（直近の回は検証に使用）。` : "2024 年までのデータで決めた条件です（2025 年以降は、その条件で選んだ結果）。"}
         {fig.rkey}・{fig.grade}・{fig.course}

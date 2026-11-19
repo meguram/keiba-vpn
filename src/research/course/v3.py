@@ -814,6 +814,113 @@ def _per_unit_inner() -> None:
     print("per_unit", PER_UNIT, {k: len(v["units"]) for k, v in out.items()}, flush=True)
 
 
+# ---------------------------------------------------------------- 条件ごとの成績（めぐ分析の表示用。評価ではない）
+RULE_STATS = OUT3 / "rule_stats_v3.json"
+RULE_STATS_REPO = CR.REPO / "data/meta/course/rule_stats_v3.json"   # めぐ分析（src/research/race_analysis/course_rules.py）が読む写し
+RULE_TOP = 5            # 単位ごとに出す買い・消しの条件の数（買いは市場より強い度合いの高い順、消しは訓練の走数の多い順）
+POP_CAP = 13            # 人気の基準線の区切り（13 番人気以下はまとめる）
+
+
+def _rstat(Y: np.ndarray) -> dict:
+    """y_matrix の行の集まりから [1-2-3-着外]・単複の回収率（払戻の解けた走で割る）・件数。年を合わせられるよう、払戻の和（npay・tan・fuku）も持つ。"""
+    s = Y.sum(0) if len(Y) else np.zeros(Y.shape[1] if Y.ndim == 2 else 10)
+    n, k = int(s[0]), int(s[1])
+    return {"n": n, "rec": [int(s[2]), int(s[3]), int(s[4]), n - k], "place": float(k / n) if n else None,
+            "roi_t": float(s[6] / s[5]) if s[5] else None, "roi_f": float(s[7] / s[5]) if s[5] else None,
+            "npay": int(s[5]), "tan": float(s[6]), "fuku": float(s[7])}
+
+
+def _pop_tab(Y: np.ndarray, pop: np.ndarray) -> np.ndarray:
+    """人気ごとの [走, 3 着内, 払戻の解けた走, 単の払戻, 複の払戻]（人気 × 5）。"""
+    return np.stack([np.bincount(pop, weights=Y[:, j], minlength=POP_CAP + 1) for j in (0, 1, 5, 6, 7)], axis=1)
+
+
+def _pop_base(m: np.ndarray, pu: np.ndarray, Yu: np.ndarray, pool: np.ndarray) -> dict | None:
+    """当たった馬（m）と同じ人気の馬の値。人気ごとの率は、同じ芝ダ × クラスの群の全単位を合わせた表（pool）から、当たった馬を除いて取り、
+    当たった馬の人気の構成で重みづけする（単位 × 年の小さな表ではぶれすぎるため。別のエージェントのレビュー）。"""
+    if not m.any():
+        return None
+    t = pool - _pop_tab(Yu[m], pu[m])
+    n_p, k_p, np_p, rt_p, rf_p = (t[:, j] for j in range(5))
+    w = np.bincount(pu[m], minlength=POP_CAP + 1).astype(float)
+    ok, okp = n_p > 0, np_p > 0
+    pl = (w[ok] * k_p[ok] / n_p[ok]).sum() / w[ok].sum() if w[ok].sum() else None
+    rt = (w[okp] * rt_p[okp] / np_p[okp]).sum() / w[okp].sum() if w[okp].sum() else None
+    rf = (w[okp] * rf_p[okp] / np_p[okp]).sum() / w[okp].sum() if w[okp].sum() else None
+    f = lambda v: None if v is None else float(v)
+    return {"place": f(pl), "roi_t": f(rt), "roi_f": f(rf)}
+
+
+def ordered_conds(cu: dict) -> tuple[list[dict], list[dict]]:
+    """表示する条件の並び（rule_stats_period と rule_list で同じにする）。買いは市場より強い度合いの高い順、消しは訓練の走数の多い順。"""
+    buy = sorted(cu["buy"], key=lambda b: -(b.get("rate") or 0))
+    kill = sorted(cu["kill"], key=lambda k: -(k.get("n") or 0))
+    return buy, kill
+
+
+def rule_stats_period(d: pd.DataFrame, L: pd.DataFrame, kept: dict, c: C3) -> dict:
+    """期間の表 d に、凍結した条件（kept）を単位の走ごとに当てて数える（全条件。表示の絞り込みは訓練の値で後から行う）。
+    基準線（base_same_pop）は _pop_base を見る。"""
+    X, types, code = V2._codes(L, kept)
+    Y = SE.y_matrix(d)
+    unit = units_of(d, c)
+    pop = np.clip(np.nan_to_num(pd.to_numeric(d["pop_final"], errors="coerce").to_numpy(float), nan=0), 0, POP_CAP).astype(int)
+    fam = (d["surf"].astype(str) + "|" + pd.Series(unit).str.split("|", n=1).str[1].fillna("")).to_numpy()
+    pools = {f: _pop_tab(Y[fam == f], pop[fam == f]) for f in pd.unique(fam)}
+    out = {}
+    for u, cu in kept.items():
+        idx = np.flatnonzero(unit == u)
+        if not len(idx):
+            continue
+        Xu, Yu, pu = X[idx], Y[idx], pop[idx]
+        pool = pools[fam[idx[0]]]
+        buy, kill = ordered_conds(cu)
+        res = {}
+        for kind, conds in (("buy", buy), ("kill", kill)):
+            res[kind] = []
+            for cond in conds:
+                m = V2._mask_names(Xu, types, code, cond)
+                res[kind].append(_rstat(Yu[m]) | {"base_same_pop": _pop_base(m, pu, Yu, pool)})
+        out[u] = {"unit": _rstat(Yu)} | res
+    return out
+
+
+def pick_shown(train: dict, kept: dict, top: int = RULE_TOP) -> dict:
+    """単位ごとに表示する条件の番号（ordered_conds の並びの中の位置）。訓練の期間にこの単位で 1 件も当たらない条件（コース全体＝副の層を写した条件が
+    新馬の単位に当たらない、など）は出さない。上位 top 個まで。"""
+    out = {}
+    for u in kept:
+        t = train.get(u) or {}
+        hit = {k: [i for i, x in enumerate(t.get(k) or []) if x["n"] > 0] for k in ("buy", "kill")}
+        out[u] = {k: v[:top] for k, v in hit.items()} | {"n_hit": {k: len(v) for k, v in hit.items()}}
+    return out
+
+
+def rule_list(kept: dict, names: dict, shown: dict) -> dict:
+    """単位ごとの表示する条件の文（shown の番号）と、根拠の検査の結果。"""
+    def txt(b):
+        return " かつ ".join(f"「{names.get(t, t)}」が {lv}" for t, lv in zip(b["types"], b["levels"]))
+    out = {}
+    for u, cu in kept.items():
+        buy, kill = ordered_conds(cu)
+        sh = shown.get(u) or {"buy": [], "kill": []}
+        out[u] = {"layer": cu.get("layer"), "n_buy": len(buy), "n_kill": len(kill),
+                  "n_buy_hit": (sh.get("n_hit") or {}).get("buy"), "n_kill_hit": (sh.get("n_hit") or {}).get("kill"),
+                  "buy": [{"i": i, "text": txt(buy[i]), "hyp": (buy[i].get("ev") or {}).get("hyp"), "edge": buy[i].get("rate"),
+                           "p_null": (buy[i].get("ev") or {}).get("p_null")} for i in sh["buy"]],
+                  "kill": [{"i": i, "text": txt(kill[i]), "hyp": (kill[i].get("ev") or {}).get("hyp")} for i in sh["kill"]]}
+    return out
+
+
+def _pick_values(v: dict, shown: dict) -> dict:
+    """期間ごとの値を、表示する条件だけに絞る（並びは rule_list と同じ）。"""
+    out = {}
+    for u, x in v.items():
+        sh = shown.get(u) or {"buy": [], "kill": []}
+        out[u] = {"unit": x["unit"]} | {k: [x[k][i] for i in sh[k]] for k in ("buy", "kill")}
+    return out
+
+
 def cmd_review(n: int, text: str, decision: str, event: str = "", basis: str = "") -> None:
     """回顧と判断。事象（何が起きているか）と根拠（なぜそうなるか）も書く（統括役の方針、2026-11-17）。"""
     log = _load_log()
@@ -833,7 +940,7 @@ def cmd_review(n: int, text: str, decision: str, event: str = "", basis: str = "
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["frame", "_frame_inner", "evidence", "cycle", "review", "freeze", "evaluate", "_eval_inner",
-                                       "per_unit", "_per_unit_inner"])
+                                       "per_unit", "_per_unit_inner", "rule_stats"])
     ap.add_argument("--hyp", default="")
     ap.add_argument("--delta", default="{}")
     ap.add_argument("--base", type=int, default=None)
@@ -857,6 +964,9 @@ def main() -> None:
         cmd_evidence()
     elif a.cmd == "per_unit":
         cmd_per_unit()
+    elif a.cmd == "rule_stats":
+        from src.research.course import course_rule_stats
+        course_rule_stats.cmd_rule_stats()
     elif a.cmd == "_per_unit_inner":
         _per_unit_inner()
     elif a.cmd == "cycle":

@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[3]
 SRC = ROOT / "docs/operations/odds_rank_accuracy_20261118.json"
 MD = ROOT / "docs/operations/odds_rank_accuracy_20261118.md"
 HT = ROOT / "docs/html/operations/odds_rank_accuracy.html"
-DAY = "2026-11-18"
+DAY = "2026-11-19"
 
 
 def pct(x, d=1) -> str:
@@ -171,6 +171,9 @@ def rng_str(vals, fmt) -> str:
 
 
 def build(r: dict) -> Doc:
+    _fls = r.get("fetch_log") or []
+    fl_log = ({**_fls[-1], **{k: sum(x.get(k, 0) for x in _fls) for k in ("docs", "saved", "not_found", "bytes", "gcs_ops_approx", "lists")},
+               "at": " / ".join(x["at"] for x in _fls)} if _fls else None)       # 取得を何回流しても、読んだ量は合計で書く
     F, P = r["final"], r["pre"]
     o, vs = F["overall"], F["vs"]
     s25, pv25, u25, v825 = o["sec77_2025"], o["prev_pop_2025"], o["uniform_2025"], o["v8_2025"]
@@ -190,8 +193,8 @@ def build(r: dict) -> Doc:
     d = Doc()
 
     # ── 冒頭
-    d.raw_html(f'<h1>想定オッズで作った人気順の精度</h1><p class="muted">最終更新: {DAY}。調査だけ（モデル・本番は変えない）。費用 0 円（手元のデータだけ）。</p>')
-    d.md.append(f"# 想定オッズで作った人気順の精度\n\n最終更新: {DAY}。調査だけ（モデル・本番は変えない）。費用 0 円（手元のデータだけ）。\n")
+    d.raw_html(f'<h1>想定オッズで作った人気順の精度</h1><p class="muted">最終更新: {DAY}。調査だけ（モデル・本番は変えない）。費用は 1 円未満（手元のデータと、2026 年の想定オッズを GCS から 1 回だけ読んだ分。下の「注意と残り」）。</p>')
+    d.md.append(f"# 想定オッズで作った人気順の精度\n\n最終更新: {DAY}。調査だけ（モデル・本番は変えない）。費用は 1 円未満（手元のデータと、2026 年の想定オッズを GCS から 1 回だけ読んだ分。下の「注意と残り」）。\n")
     d.h(2, "結論")
     concl = [
         f"想定オッズ（§77）の順は、確定の人気順とよく合う。2025 年（本番と同じ作り方で 2025 年を学習に使わない版）は、順位の相関（Spearman）{f3(m(s25['spearman']))}、1 番人気の的中 {pct(m(s25['top1']))}、上位 3 頭の重なり {f2(m(s25['top3']))} 頭（3 頭中）。",
@@ -201,12 +204,19 @@ def build(r: dict) -> Doc:
     ]
     if prod:
         concl.append(f"2026 年の本番の版は、2025 年より外れが大きい。対数オッズの誤差（RMSE）は {prod['rmse_log']:.3f}（{prod['days']} 日、2025 年の値は {oof25['rmse_log']:.3f}）。"
-                     "上の順位の数字は、2026 年の本番では下がる見込み。順位そのものはまだ測っていない。")
+                     "順位の比較は下の 3 の節（10〜11 月）。")
     concl += [
         f"T-60 の人気と確定の人気の相関は {f3(m(t60['spearman']))}。T-60 の 1 番人気が確定で 1 番人気でなくなるのは {pct(fl['top1']['in60_out_f'][0])}（区間 {pct(fl['top1']['in60_out_f'][1])}〜{pct(fl['top1']['in60_out_f'][2])}。{t60['days']} 日・{t60['races']} レースと少ない）。T-60 は発走 60 分前の人気。",
         f"確定に向けて、上位人気に票が寄る。T-60 の 1 番人気の市場の確率は {pct(fav['t60'])} → {pct(fav['final'])}（{pt(fav['diff'][0])}）。人気薄のオッズは伸びる。",
-        "本番の判定は T-60 の時点で行う。想定オッズと T-60 の人気の直接の比較が最も要るが、まだ測っていない。2026 年の想定オッズは GCS にしか無いため（下の「残り」）。",
     ]
+    S3 = r.get("sec77_2026") or {}
+    if S3.get("vs_t60"):
+        concl.append(f"本番の想定オッズ（2026 年・発走前に作った {S3['races']} レース）の順は、本番の判定に使う T-60 の人気と相関 {f3(m(S3['vs_t60']['spearman']))}・1 番人気の一致 {pct(m(S3['vs_t60']['top1']))}。"
+                     f"確定の人気とは {f3(m(S3['vs_final']['spearman']))}・{pct(m(S3['vs_final']['top1']))}。T-60 の人気そのものは確定と {f3(m(S3['t60_vs_final']['spearman']))}・{pct(m(S3['t60_vs_final']['top1']))} で、想定オッズより確定に合う。")
+        concl.append(f"想定オッズは T-60 の人気に情報を足さない（確定との相関: T-60 の順だけ {f3(m(S3['added_info']['t60_only']['spearman']))}、想定の順と平均 {f3(m(S3['added_info']['t60_plus_sec77']['spearman']))}）。"
+                     f"作る時刻も発走の約 {S3['computed_min_before']['median']:.0f} 分前で T-60 と変わらない。判定は T-60 の人気のままにし、想定オッズは T-60 が取れないときの代わりに限る。")
+    else:
+        concl.append("本番の判定は T-60 の時点で行う。想定オッズと T-60 の人気の直接の比較は、まだ測っていない。")
     d.ul(concl)
     cards = [("相関（2025・確定）", f3(m(s25["spearman"])), f"旧来の V8 {f3(m(v825['spearman']))}"),
              ("1 番人気の的中（2025）", pct(m(s25["top1"])), f"無作為 {pct(u25['top1'])}"),
@@ -426,6 +436,65 @@ def build(r: dict) -> Doc:
     d.p("どちらの順も、T-60 より確定の人気に近い。T-60 の順位に混じる雑音が確定までに減るだけでも、この向きになる。そのため「締切に近い票ほど情報を持つ」の証拠とまでは言えない。"
         + (f"AI 勝率の出どころは、本番の当日の予測 {srcs.get('predictions_v6', 0):.0f} レース・後付けの予測 {srcs.get('predictions_backfill/bundle_v6_2025', 0):.0f} レース。" if srcs else ""))
 
+    # ── 部 3
+    if S3.get("vs_t60"):
+        cm = S3["computed_min_before"]
+        d.h(2, "3. 本番の想定オッズ（2026 年）→ T-60 の人気・確定の人気")
+        sel = S3.get("selection", {}).get("date", {})
+        d.p(f"材料: 本番が保存した想定オッズ（final_odds_prediction）を、pre_odds に T-60 があるレースだけ GCS から 1 回だけ読んだ（{S3['files']} 文書）。"
+            f"想定オッズを作った時刻の中央値は発走の {cm['median']:.0f} 分前。発走より前に作ったのは {pct(cm['before_start_share'])}、T-60 の写しより前に作ったのは {pct(cm['before_t60_share'])}（{cm['races_all']} レースのうち）。"
+            f"発走の後に作り直した値は外した。外したのは {'・'.join(sorted(sel.get('外す', {})))} の 3 日まるごとで、§77 の配備（10/24）の前後に後から作り直した日にあたる。残したのは {'・'.join(sorted(sel.get('残す', {})))}。クラス・頭数の構成は大きく変わらない（JSON の selection）。"
+            "想定オッズのモデルはオッズを入力に使わない（odds_pred_eval.py で検査）。そのため、T-60 の写しより後に作った値も T-60 のオッズは含まない。ただし、T-60 から発走までに変わる他の入力（取消など）が入るかは確かめていない。"
+            f"主の比較は発走より前に作った {S3['races']} レース（{S3['horses']:,} 頭）で行った。")
+        tie = S3.get("ties", {})
+        d.p(f"順位は本番が保存した想定単勝（小数 2 桁に丸めた値）で付けた。同じ値の馬は {pct(tie.get('horse_share'))}（同順位のあるレース {pct(tie.get('race_share'))}）。同順位を平均の順位にしても、T-60 との相関は {f3(tie.get('spearman_vs_t60_avg'))} で変わらない。")
+        rows = [["想定オッズ → T-60 の人気", ci(S3["vs_t60"]["spearman"]), cip(S3["vs_t60"]["top1"]), ci(S3["vs_t60"]["top3"], f2), ci(S3["vs_t60"]["mae_rank"], f2)],
+                ["想定オッズ → 確定の人気", ci(S3["vs_final"]["spearman"]), cip(S3["vs_final"]["top1"]), ci(S3["vs_final"]["top3"], f2), ci(S3["vs_final"]["mae_rank"], f2)],
+                ["T-60 の人気 → 確定の人気", ci(S3["t60_vs_final"]["spearman"]), cip(S3["t60_vs_final"]["top1"]), ci(S3["t60_vs_final"]["top3"], f2), ci(S3["t60_vs_final"]["mae_rank"], f2)]]
+        d.table(["比べ方（同じ 167 レース）".replace("167", str(S3["races"])), "Spearman", "1 番人気の一致", "上位 3 頭の重なり", "順位の誤差"], rows)
+        fm = S3["final_minus_t60"]
+        st_ = S3.get("strict_t60")
+        mo = F["by"]["month"]
+        mref = [mo[k]["sec77"] for k in ("2025-10", "2025-11") if k in mo]
+        d.p(f"想定オッズの順は、T-60 の人気より確定の人気と合う（相関の差 {ci(fm['spearman'])}、1 番人気の一致の差 {cipt(fm['top1'])}）。"
+            "目的変数が確定オッズなので、確定と合うのは作りの結果。2 の節と同じく、T-60 の順位に混じる雑音でもこの向きになる。"
+            "確定との一致は T-60 の人気のほうが高い（上の表の 3 行目）。")
+        if mref:
+            d.p(f"2025 年の OOF の同じ時期（10〜11 月）は、確定との相関 {rng_str([m(x['spearman']) for x in mref], f3)}・1 番人気の的中 {rng_str([m(x['top1']) for x in mref], pct)}。"
+                f"2026 年の本番（{f3(m(S3['vs_final']['spearman']))}・{pct(m(S3['vs_final']['top1']))}）は低いが、1 番人気の的中は区間が広く、時期・条件の違いもあり、本番の版が悪くなったとは言い切れない（判断保留）。")
+        if st_:
+            d.table([f"T-60 の写しより前に作った {st_['races']} レースだけ", "Spearman", "1 番人気の一致"],
+                    [["想定オッズ → T-60 の人気", ci(st_["vs_t60"]["spearman"]), cip(st_["vs_t60"]["top1"])],
+                     ["想定オッズ → 確定の人気", ci(st_["vs_final"]["spearman"]), cip(st_["vs_final"]["top1"])],
+                     ["T-60 の人気 → 確定の人気", ci(st_["t60_vs_final"]["spearman"]), cip(st_["t60_vs_final"]["top1"])]])
+            d.p("この 39 レースでは、確定との 1 番人気の一致は想定オッズのほうが高く、主の比較と逆になる。相関は主の比較と同じ並び。件数が少なく、区間は重なる。".replace("39", str(st_["races"])))
+        ai = S3["added_info"]
+        d.table(["確定の人気を当てる順（前もって重み 1:1 に固定）", "Spearman", "1 番人気の一致", "上位 3 頭の重なり"],
+                [["T-60 の人気だけ", ci(ai["t60_only"]["spearman"]), cip(ai["t60_only"]["top1"]), ci(ai["t60_only"]["top3"], f2)],
+                 ["T-60 の人気と想定オッズの順の平均", ci(ai["t60_plus_sec77"]["spearman"]), cip(ai["t60_plus_sec77"]["top1"]), ci(ai["t60_plus_sec77"]["top3"], f2)],
+                 ["差（平均 − T-60 だけ）", ci(ai["diff"]["spearman"]), cipt(ai["diff"]["top1"]), ci(ai["diff"]["top3"], f2)]])
+        d.p("想定オッズを足しても、確定の人気との一致は上がらない（差の区間が 0 をまたぐ）。T-60 の人気があれば、想定オッズの順は足しにならない。")
+        gl3 = [k for k in gl if k in S3["gap_vs_t60"]]
+        d.table(["想定の 2 位/1 位", "レース", "T-60 の 1 番人気との一致（区間）"], [[k, f"{S3['gap_vs_t60'][k]['races']}", cip(S3["gap_vs_t60"][k]["top1"])] for k in gl3])
+        d.p("1 節の同じ表は確定の 1 番人気との一致で、ここは T-60 の 1 番人気との一致。指標が違うので、値を並べて比べない。")
+        le60, lef = S3["log_err_t60"], S3["log_err_final"]
+        d.p(f"対数オッズの誤差: T-60 のオッズとは平均の絶対値 {le60['mae']:.3f}・平均 {le60['bias']:+.3f}、確定のオッズとは {lef['mae']:.3f}・{lef['bias']:+.3f}。"
+            "想定オッズは確定より平均で少し短く、T-60 より長い。T-60 より長いのは、T-60 の人気薄のオッズが確定より短いことの裏返し。その仕組みは決めていない（2 の節）。")
+        rows = [[f"{k} 番以内", cip(S3["filters"][f"top{k}"]["in_s_out_60"]), pct(S3["filters"][f"top{k}"]["race_any_flip"][0])] for k in (1, 2, 3, 5)]
+        d.table(["絞り込み", "想定オッズで入る → T-60 の人気で外れる（区間）", "顔ぶれが変わるレース"], rows)
+        d.p("人気の絞り込みを想定オッズの順で代えると、この割合だけ T-60 の人気と別の馬を選ぶ。本番の買い方は T-60 のオッズで判定する（src/pipeline/inference/candidate_runner.py）。想定オッズは T-60 より早い情報にならないので、判定は T-60 のままにする。")
+        lab3 = {"fs_band": "頭数", "cls": "クラス", "shinba": "新馬"}
+        rows = []
+        for col in ("fs_band", "cls", "shinba"):
+            g = S3["by"][col]
+            for v in order2.get(col, sorted(g)):
+                if v in g:
+                    rows.append([f"{lab3[col]}: {v}", f"{g[v]['races']}", ci(g[v]["spearman"]), cip(g[v]["top1"])])
+        d.details("分け方ごと（想定オッズ → T-60 の人気）")
+        d.table(["分け方", "レース", "Spearman（区間）", "1 番人気の的中（区間）"], rows)
+        d.p("参考の表。レース数が少なく区間が広いので、分け方の差は判断しない。")
+        d.end_details()
+
     # ── 事象と根拠
     d.h(2, "事象と根拠")
     sp_rng = rng_str([m(o[f"sec77_{y}"]["spearman"]) for y in (2022, 2023, 2024, 2025)], f3)
@@ -446,20 +515,22 @@ def build(r: dict) -> Doc:
          "それ以外のクラスとの差の区間が 0 をまたがない（上の表）。実力の近い馬がそろい、オッズの差が小さいため、と見る（見立て）。"],
         [f"T-60 → 確定で上位人気に票が寄る（1 番人気の市場の確率 {pt(fav['diff'][0])}・人気薄のオッズが伸びる）",
          "公開の知見: 締切に近い票ほど情報を持つ（Asch・Malkiel・Quandt 1982、Ottaviani・Sørensen）。ただし手元では、T-60 の票が少ないことによる雑音でも説明できる（上の節）。どちらかは決めていない。"],
-    ])
+    ] + ([[f"本番の想定オッズは T-60 の人気に情報を足さない（確定との相関の差 {ci(S3['added_info']['diff']['spearman'])}）",
+           "T-60 の人気は、想定オッズが使う情報（前走・騎手・厩舎など）を市場がすでに織り込んだ値。想定オッズは確定の市場を写すように学習しているので、T-60 の市場に足す分が残りにくい（見立て）。差の区間は 0 をまたぎ、件数は 2026 年 10〜11 月の発走前の値だけ。"]]
+          if S3.get("added_info") else []))
     d.p("出典: Asch, Malkiel, Quandt (1982) Racetrack Betting and Informed Behavior, Journal of Financial Economics 10(2) https://econpapers.repec.org/RePEc:eee:jfinec:v:10:y:1982:i:2:p:187-194 ／ Ottaviani, Sørensen, The Timing of Bets and the Favorite-Longshot Bias (CEPR DP4092) https://cepr.org/publications/dp4092")
 
     # ── 限界と残り
     d.h(2, "注意と残り")
     d.ul([
-        "主の期間は walk-forward の OOF（2025 年の版は 2020〜2023 年で学習）。本番の版（2020〜2025 年で学習）とは学習の年数が違う。本番の版の 2026 年の順位の精度は、まだ測っていない。対数の誤差では、2026 年の本番は 2025 年の OOF より外れが大きい（上の表）。",
+        "主の期間は walk-forward の OOF（2025 年の版は 2020〜2023 年で学習）。本番の版（2020〜2025 年で学習）とは学習の年数が違う。本番の版の 2026 年の順位は 3 の節（10〜11 月の発走前に作った値）。対数の誤差では、2026 年の本番は 2025 年の OOF より外れが大きい（上の表）。",
         "2024 年の版（単勝・複勝）と 2025 年の版の複勝は、木の本数が上限の 1500 に届いている（data/local/modeling/odds_pred/wp_fit_info.json）。もっと木を増やせば、少し良くなる余地がある。",
         f"T-60 の材料は秋（{min(days)}〜{max(days)}）の {t60['days']} 日・{t60['races']} レースだけ。分け方ごとの差は判断保留。週が増えたら同じスクリプトで作り直す。",
         "上を重く見る指標（NDCG など）は出していない。買い方に関わる上位は、1 番人気の的中と上位 3 頭の重なりで見た。",
-        "残り（最優先）: 想定オッズと T-60 の人気の直接の比較。本番の想定オッズは発走の約 70 分前（馬体重の発表の後）に作られ、判定は T-60 で行うため。"
-        "2026 年の想定オッズ（final_odds_prediction）は GCS にしか無い。10/18 以降の約 280 文書を 1 回読むだけなら、転送は数 MB で 1 円未満の見込み。"
-        "統括役が一度きりの読み出しを承認した（2026-11-18）。ただし実行は権限の判定で止められ、まだ読んでいない。"
-        "取得は python -m src.scripts.data.odds_rank_fetch_sec77（一覧を使わない・上限 20MB・保存済みは読み直さない）。ユーザーが流したあと、比較を足す。",
+        (f"GCS の読み出し（一度きり。ユーザーの許可・統括役が実行）: {fl_log['docs']} 文書を読み、{fl_log['saved']} を保存・見つからない {fl_log['not_found']}。"
+         f"読み出し {fl_log['bytes'] / 1e6:.2f}MB・操作 約 {fl_log['gcs_ops_approx']} 回・一覧 {fl_log['lists']} 回（{fl_log['at']}）。転送 約 18 円/GiB・操作 約 0.06 円/千回で 1 円未満。"
+         "保存先 /home/jovyan/work/odds_rank_out/sec77_2026/。二度は読まない（src/scripts/data/odds_rank_fetch_sec77.py は保存済みを飛ばす）。")
+        if fl_log else "残り: 想定オッズと T-60 の人気の直接の比較（2026 年の想定オッズは GCS にしか無い）。",
         "作り直しの手順: ODDS_RANK_DATA_ROOT に本体のリポジトリ、ODDS_RANK_OUT に出力先を入れて、nice -n 10 python -m src.scripts.data.odds_rank_accuracy を流す。結果を docs/operations/odds_rank_accuracy_20261118.json に写し、python -m src.scripts.docs.build_odds_rank_accuracy を流す。",
     ])
     return d
