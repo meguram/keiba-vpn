@@ -245,3 +245,19 @@ def test_set_disabled_off_releases_end_to_end(inf):
     assert not S2.v6c_disabled(inf)
     cr.set_disabled(cfg, True, DAY, dev_only=True)
     assert S2.dev_only(inf)
+
+
+_RATE = r"(?<!勝率 )(?<!勝率)\d+(\.\d+)?\s*[%％倍]|〜\s*\d"      # 回収率などの数字（規則の「勝率 5%」は除く）
+
+
+def test_no_return_rate_number_while_trial(inf):
+    """試行中のあいだは、回収率の数字（2025 年の検証の 107% など）を応答のどこにも出さない（会員・開発者とも。bet-optimizer の申し送り 2026-11-20）。"""
+    import re
+
+    _put(inf, _decision("buy"))
+    _release(inf)                                               # 会員にも出す段にして、会員向けの応答も確かめる
+    for view in ("full", "paid"):
+        out, _ = delegates.optimize_betting({"race_id": RID}, view=view)
+        assert out.get("sub_strategy") == "stage2_r2" and "試行中" in out["note"]
+        text = json.dumps(out, ensure_ascii=False)
+        assert "107" not in text and not re.search(_RATE, text), view

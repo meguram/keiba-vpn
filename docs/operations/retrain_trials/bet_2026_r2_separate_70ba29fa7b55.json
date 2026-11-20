@@ -1,0 +1,119 @@
+{
+ "status": "done",
+ "hash": "70ba29fa7b55",
+ "prereg": "config/bet_cycles/prereg_2026_r2.json",
+ "group": {
+  "id": "separate",
+  "name": "別枠",
+  "dates": [
+   "2026-10-17",
+   "2026-11-08"
+  ],
+  "input": "めぐ指数の直し（2026-11-18 14:12 JST）の後に stg の作り直しが処理した版の予測。候補・本番の両方とも直しためぐ指数で作られる。4 日（10/18・10/25・11/01・11/08）を別に作り直すかは、付け替えの漏れの判断（model-improve-cycles）による。日ごとにどちらのめぐ指数かは、全日の版に書かれたものに従う。",
+  "decision_odds": "本物の T-60 のオッズ（pre_odds.parquet、発走前オッズのある日）。精算は確定の払戻。",
+  "note": "件数が少ない（参戦は数十レースの見込み）ので、区間は広い。判定は下の基準どおりに書くが、主の群より弱い材料として扱う。再現のずれの元と同じレースなので、主の群の判定には使わない。"
+ },
+ "git_head": "ed749fbfd63bd896cdfbdd8eed457f805bc3acf4",
+ "pred": [
+  {
+   "path": "/home/jovyan/work/retrain_out/cycles16_fix3/market/handoff/stage2_noise.parquet",
+   "where": {
+    "part": "infer2026",
+    "odds_phase": "t60"
+   }
+  }
+ ],
+ "drift_src": "/home/jovyan/work/keiba-vpn-betcyc/data/local/research/persona1/pre_odds.parquet",
+ "pre_odds_sha256_now": "0ca5ee1bd506df0e8501c17429d12698803970e98b9883ec70f4a6ecb8b70382",
+ "pred_sha256": "5c21ffc15f556f8c7a93ad2eef464cca8c341015c6b6e1b071e2b65de456bd9a",
+ "metrics": {
+  "races": 209,
+  "bet_races": 17,
+  "bet_rate": 0.08133971291866028,
+  "hit_rate": 0.0,
+  "roi": 0.0,
+  "avg_return": 0.0,
+  "median_return": 0.0,
+  "median_hit_return": 0.0,
+  "avg_cost": 100.0,
+  "cost_total": 1700.0,
+  "return_total": 0.0,
+  "avg_hit_return": 0.0,
+  "roi_ex_top1": 0.0,
+  "roi_ex_top5": 0.0,
+  "roi_lo": 0.0,
+  "roi_hi": 0.0,
+  "hit_lo": 0.0,
+  "hit_hi": 0.0,
+  "days": 7,
+  "daily_roi_sd": 0.0,
+  "max_drawdown": 1700.0,
+  "max_drawdown_days": 7.0,
+  "plus_day_rate": 0.0,
+  "profit": -1700.0
+ },
+ "B0": {
+  "bet_races": 209,
+  "bet_rate": 1.0,
+  "hit_rate": 0.3492822966507177,
+  "roi": 0.7990430622009569,
+  "roi_lo": 0.6426984652348731,
+  "roi_hi": 0.9698137019230769,
+  "roi_ex_top5": 0.6822966507177034,
+  "avg_return": 79.90430622009569,
+  "median_return": 0.0
+ },
+ "diff_vs_B0": [
+  -0.7990430622009569,
+  -0.9698137019230769,
+  -0.6426984652348731
+ ],
+ "verdict": "否定",
+ "drop": {
+  "no_pred": 0,
+  "no_pay": 0,
+  "small": 0,
+  "all_races_in_period": 264,
+  "payoff_filled_from_flat": 2997,
+  "computed_races": 209,
+  "no_pre_odds": 55
+ },
+ "cover": 0.7916666666666666,
+ "allow_low_cover": true,
+ "cover_note": "別枠は、T-60 の発走前オッズのある日（窓 10/17〜11/08 のうち 7 日。10/17 は t60 なし、11/01 は 19 レースの t60 の取りこぼし）だけが対象。統括役の判断（2026-11-18）で理由を書いて流す。",
+ "races_note": "指標の races は、窓の全レースのうち予測・払戻（別枠・参考は発走前オッズも）がそろって計算できたレース。内訳は drop。",
+ "odds_source": "本物の T-60",
+ "miss_types": {
+  "◎ が 4 着以下（◎ が飛んだ）": 16,
+  "◎ は 3 着内・相手が 1 頭も来ない": 0,
+  "◎ は 3 着内・相手も来たが組・着順が合わない": 1
+ },
+ "h_reasons": {
+  "見送り（条件）": 192,
+  "1番人気より下で r 最大": 15,
+  "予測1位": 2
+ },
+ "ledger": {
+  "ledger_id": "20261120T100613401515-bet-optimizer-d93a16",
+  "purpose": "eval_only",
+  "decision": "allowed",
+  "periods": [
+   "封印"
+  ],
+  "seen_total": 24,
+  "seen_family": 2,
+  "seen_lower_bound": true,
+  "notes": [],
+  "violations": [],
+  "use_for_decision": false
+ },
+ "review_note": {
+  "at": "2026-11-20",
+  "by": "別のエージェント（general-purpose）の独立レビュー",
+  "text": [
+   "参戦 17・的中 0。ブートストラップの区間（0〜0）は的中 0 で退化したもので、何も言えない。正確な二項で、的中率の 95% の上限は約 19.5%。主の群の的中率 16% が正しくても 0/17 になる確率は約 5%、人気薄の市場の勝率 7% 程度なら約 29%。",
+   "覆い 79%（10/17 は t60 なし、11/01 は 19 レースの t60 の取りこぼし）。弱い材料として読む。",
+   "参戦率 8.1%（主・test は 25%）。窓 10/17〜11/08 の未勝利・新馬の中で、区切り（r の最大が 0.492 以上）を越える割合は、T-60 の再現の作りでは 46.9%、本物の T-60 では 確定の offset 15.6%・T-60 の offset 18.9%（着順は読まずに計算。retrain_out/bet_cycles/r2/separate_pass_rate_check.json）。offset の作りの差は小さく、再現の作りが通過を約 2.5〜3 倍に増やしている。主・test の回収率は、本番の試行（本物の T-60）の振る舞いをそのまま表さない恐れがある。"
+  ]
+ }
+}
