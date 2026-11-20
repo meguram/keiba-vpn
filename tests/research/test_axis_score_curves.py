@@ -209,4 +209,6 @@ def test_estimate_fills_sparse_bins_within_observed_range():
     assert est[8]["v"] == pytest.approx(max(obs)) and est[9]["v"] == pytest.approx(max(obs))                                     # 上り調子の延長は、実測の最大で頭打ち
     assert est[1]["v"] < est[2]["v"]                                                    # 走数 5 で勝ち 0 の区間は、実測に引かれて曲線より低い
     assert all(o is None or not o["e"] for o in few)                                    # 実測の区間が 3 未満なら推定しない
+    assert few[2] == {"v": pytest.approx(3 / 20), "e": False, "r": True, "n": 20}       # 推定できないときも、走数不足の区間は実測を参考として出す（省かない）
+    assert not few[0].get("r") and few[3] is None                                       # 走数 MINN 以上は通常の実測、走数 0 は描けない
     assert exp[1] == {"v": 0.1, "e": False} and exp[0]["e"] and exp[8]["e"]              # 期待率: 走数が少なくても実測、走数 0 だけ曲線
