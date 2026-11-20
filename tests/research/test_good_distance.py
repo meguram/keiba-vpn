@@ -255,5 +255,23 @@ def test_画面用_対象の馬が全員走なしなら空():
     assert gd.range_before(runs, ["a"], "2026-04-01").empty
 
 
+def test_適は割合が最大の距離で_同値なら重心に近い方_それも同じなら短い方():
+    d = np.array([1200, 1400, 1600, 1800, 2000])
+    assert gd.best_distance(np.array([0.1, 0.5, 0.2, 0.1, 0.1]), d) == 1400
+    assert gd.best_distance(np.array([0.3, 0.1, 0.1, 0.1, 0.4]), d) == 2000
+    assert gd.best_distance(np.array([0.3, 0.0, 0.0, 0.1, 0.3]), d) == 2000   # 同値の 1200・2000 のうち重心（約 1630）に近い 2000
+    assert gd.best_distance(np.array([0.4, 0.0, 0.2, 0.0, 0.4]), d) == 1200   # 重心 1600 から等距離 → 短い方
+
+
+def test_画面用_適と距離ごとの割合():
+    runs = _rows([("a", "2026-01-05", "芝", 1600, 1.0), ("a", "2026-02-01", "ダート", 1800, 3.0), ("a", "2026-03-01", "芝", 1400, 1.0),
+                  ("a", "2026-04-01", "芝", 2400, 5.0), ("b", "2026-01-05", "芝", 1200, 1.0)])
+    out = gd.profile_before(runs, ["a", "b"], "2026-04-01", tau=0.10, min_runs=3)
+    assert out.loc["a", "best_m"] == 1800 and out.loc["a", "hist"] == {1400: 0.2, 1600: 0.2, 1800: 0.6}
+    assert np.isnan(out.loc["b", "best_m"]) and out.loc["b", "hist"] == {1200: 1.0}   # 3 走未満は適が不明、割合は残す
+    assert abs(sum(out.loc["a", "hist"].values()) - 1) < 1e-6
+    assert (out.loc["a", "short_m"], out.loc["a", "long_m"]) == (1400, 1800)          # range_before と同じ
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
