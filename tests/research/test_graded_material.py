@@ -86,3 +86,15 @@ def test_diff_kill_roi():
     d = MT.diff({}, {}, ok, nk, None, None)
     assert d["kill"] == {"primary_old": "a", "primary_new": "b", "used_added": ["Y"], "used_removed": []}
     assert d["roi"]["primary_old"] is None
+
+
+def test_cut_accepts_nullable_int():
+    """出馬表の段階の馬体重は欠けありの Int64 になる。cut が落ちずに不明にすること（2026-11-20 の前日の計算の失敗）。"""
+    import pandas as pd
+
+    from src.research.graded import catalog as CAT
+    s = pd.Series([430, None, 500, 439, 519, 520], dtype="Int64")
+    out = CAT.cut(s, [439, 479, 519], ["a", "b", "c", "d"])
+    assert out.tolist() == ["a", CAT.UNKNOWN, "c", "a", "c", "d"]                        # 境目は右閉じ（float のときと同じ）
+    w = pd.Series([-10, None, 0, 10], dtype="Int64")                                   # 馬体重の増減（wtc）
+    assert CAT.cut(w, [-10, -3, 2, 9], list("abcde")).tolist() == ["a", CAT.UNKNOWN, "c", "e"]

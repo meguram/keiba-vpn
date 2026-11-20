@@ -61,7 +61,7 @@ def _num(s: pd.Series) -> pd.Series:
 
 def cut(x: pd.Series, edges: list[float], labels: list[str]) -> pd.Series:
     """右閉じの区間で水準を付ける（edges は昇順の境目。len(labels) == len(edges) + 1）。値が無ければ UNKNOWN。"""
-    v = _num(x).to_numpy(float)
+    v = _num(x).to_numpy(dtype=float, na_value=np.nan)   # 欠けありの整数型（Int64。出馬表の段階の馬体重など）でも落ちない
     idx = np.searchsorted(np.asarray(edges, float), v, side="left")
     out = np.asarray(labels, dtype=object)[np.clip(idx, 0, len(labels) - 1)]
     out[np.isnan(v)] = UNKNOWN
