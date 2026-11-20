@@ -5,6 +5,7 @@
 
 import type { TPFigure } from "@/lib/trainerPattern";
 import type { GPFigure } from "@/lib/gradedPicks";
+import type { CRFigure } from "@/lib/courseRules";
 
 export type CellFormat = "record" | "pct" | "int" | "text" | "runs" | "range";
 
@@ -43,8 +44,8 @@ export type AnalysisModuleMeta = {
   /** 分析の軸（父など）を表の列として出すときの見出し。値は各馬の cells の _key */
   key_header?: string | null;
   /** 見せ方。省略時は表。"map" は figure の走法マップ */
-  view?: "table" | "map" | "trainer_pattern" | "graded_picks";
-  figure?: RunningMapFigure | TPFigure | GPFigure | null;
+  view?: "table" | "map" | "trainer_pattern" | "graded_picks" | "course_rules";
+  figure?: RunningMapFigure | TPFigure | GPFigure | CRFigure | null;
 };
 
 /** 走法マップの方面（矢印）。arrow は 2 次元での向きと長さ、r2 はその方面がこの図でどれだけ表せているか（0〜1） */
@@ -53,7 +54,9 @@ export type RunningMapAxis = { key: string; label: string; high: string; low: st
 /** 地図の位置には入れない補助の軸（急坂適性・道悪の軸）。value は 50 が平均の偏差値で、判定できないときは null（不明） */
 export type RunningMapExtra = { value: number | null; runs?: number; n_power?: number; n_normal?: number; low?: boolean;
   /** クラス基準の 10 点満点（偏差値から。無ければ未定義） */
-  score?: number | null };
+  score?: number | null;
+  /** 好走距離レンジ（キー gd_range）: 好走した距離の幅（m）。3 走未満・走が無いときは null（不明）。runs は対象日より前の走数 */
+  short_m?: number | null; long_m?: number | null };
 
 export type RunningMapHorse = {
   key: string | null;

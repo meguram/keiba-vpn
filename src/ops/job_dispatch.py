@@ -297,6 +297,7 @@ def run_job(job: dict[str, Any], ctx: Ctx, params: dict[str, str], *, tick: date
         spec_models = job_map.load()["models"]
         from src.ops.model_publish import env_for, install
 
+        first_years: dict[str, int] = {}
         for name in job.get("models") or []:
             path = ctx.fetch_model(ctx.io, name, ctx.models_dir)
             k, v = env_for(spec_models, name, path)
@@ -304,6 +305,20 @@ def run_job(job: dict[str, Any], ctx: Ctx, params: dict[str, str], *, tick: date
                 env[k] = v
             models[name] = v
             install(spec_models, name, path, ctx.root)
+            if spec_models[name].get("first_year") is not None:
+                first_years[name] = int(spec_models[name]["first_year"])
+                from src.pipeline.models.training_years import bundle_first_year
+
+                actual = bundle_first_year(path) if Path(path).is_dir() else None
+                if actual is not None and actual != first_years[name]:      # 取得した実物（bundle.json / fit_info.json）と対応表の宣言を照らす
+                    raise ValueError(f"{name}: 取得した束の起点年 {actual} と config の first_year {first_years[name]} が食い違う")
+        # 履歴の起点年（KEIBA_FIRST_YEAR）はモデルの一式の属性。取得したコンポーネントの起点年がそろっていれば渡し、食い違えば止める
+        # （付け忘れると 2016 年起点の束を 2020 年からの履歴で動かすことになる。2026-11-07〜08 に本番で起きた）。
+        if len(set(first_years.values())) > 1:
+            raise ValueError(f"モデルの起点年が食い違う: {first_years}")
+        first_year_env = str(next(iter(first_years.values()))) if first_years else None
+        if first_year_env:
+            env["KEIBA_FIRST_YEAR"] = first_year_env
         rec["state"]["pull"] = ctx.pull(ctx.io, job.get("state_in") or [], ctx.root, params=params)
         if job.get("mirror_in"):      # 画面・取得役と同じ ops/mirror から参照データ（race_lists・発走時刻表など）を読む（読み取りだけ）
             rec["state"]["mirror_in"] = ctx.mirror_pull(job["mirror_in"], recent_days=float(job.get("mirror_in_days", 14)))
@@ -322,6 +337,8 @@ def run_job(job: dict[str, Any], ctx: Ctx, params: dict[str, str], *, tick: date
         except KeyError as exc:
             return finish(FAILED, f"step {i}: {exc}")
         senv = {**env, **{k: render(v, params, models) for k, v in (st.get("env") or {}).items()}}
+        if first_year_env:
+            senv["KEIBA_FIRST_YEAR"] = first_year_env      # step の env で上書きさせない（モデルの一式の起点年が正）
         if guarded:
             argv, senv = parallel_wrap(argv, senv)
         left = deadline - time.monotonic()

@@ -190,6 +190,9 @@
   "src/ops/release_publish.py": {
    "local_data": 3
   },
+  "src/pipeline/inference/candidate_runner.py": {
+   "local_data": 2
+  },
   "src/pipeline/inference/expected_megu.py": {
    "page_reference": 1
   },
@@ -210,6 +213,9 @@
   },
   "src/pipeline/inference/odds_t6.py": {
    "local_data": 1
+  },
+  "src/pipeline/inference/odds_t60_copy.py": {
+   "local_data": 3
   },
   "src/pipeline/inference/prediction_results.py": {
    "local_data": 2

@@ -71,22 +71,26 @@ def hide_skipped_bets(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool = True, forced_odds: dict | None = None,
-                     _ctx: dict | None = None, hide_skipped: bool = True) -> tuple[dict[str, Any], int]:
-    """推奨ポートフォリオ。見送り（推奨度 0）のレースは買い目を返さない（hide_skipped=False は内部の計算用）。"""
-    payload, code = _optimize_betting(body, view=view, market=market, forced_odds=forced_odds, _ctx=_ctx)
+                     _ctx: dict | None = None, hide_skipped: bool = True, stage2: bool = True) -> tuple[dict[str, Any], int]:
+    """推奨ポートフォリオ。見送り（推奨度 0）のレースは買い目を返さない（hide_skipped=False は内部の計算用）。
+    stage2=False は第 2 段の試行（stage2_live）を通らず、今の target だけで計算する（全区分で共有する予測の印など）。"""
+    payload, code = _optimize_betting(body, view=view, market=market, forced_odds=forced_odds, _ctx=_ctx, stage2=stage2)
     if code == 200 and hide_skipped and forced_odds is None and _ctx is None:
         payload = hide_skipped_bets(payload)
     return payload, code
 
 
 def _optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool = True, forced_odds: dict | None = None,
-                      _ctx: dict | None = None) -> tuple[dict[str, Any], int]:
+                      _ctx: dict | None = None, stage2: bool = True) -> tuple[dict[str, Any], int]:
     """推奨ポートフォリオ。view="paid" は会員向け（推奨度の段階と買い目の区分だけ。オッズ・期待値・金額の数値は出さない）。
     market=False は実オッズに触れない（市場補正もしない）。forced_odds={"single":…, "pairs":…} は想定オッズで計算する（有料ゾーン案B）。"""
     if _ctx is None and forced_odds is None and market:
         from src.pipeline.inference import target_bets as TB
 
         if TB.available():  # 既定方策 target（目標払戻つきの 3連複）。KEIBA_BET_STRATEGY=legacy で従来方式へ戻せる
+            s2 = _optimize_stage2(body, view) if stage2 else None  # 候補の影のランナーの判定（試行中）があるレースだけ。無ければ None → 今の target
+            if s2 is not None:
+                return s2
             return _optimize_target(body, view)
     if view == "paid":
         return _optimize_paid(body)
@@ -105,7 +109,7 @@ def _optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool 
     try:  # 最新モデル(v6e)のローカル予測があれば、GCS の古い予測より優先する（KEIBA_PRED_MODEL=legacy で従来）
         from src.api.local_predictions import load_primary_prediction_payload
 
-        _prim = load_primary_prediction_payload(race_id, storage, market=market)
+        _prim = load_primary_prediction_payload(race_id, storage, market=market, candidate=False)  # 推奨の計算は v6e
         predictions = (_prim or {}).get("predictions") or []
         already_calibrated = bool(predictions)
     except Exception as exc:  # noqa: BLE001
@@ -118,7 +122,7 @@ def _optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool 
         try:
             from src.api.local_predictions import load_local_prediction_payload
 
-            local = load_local_prediction_payload(race_id, storage, market=market)
+            local = load_local_prediction_payload(race_id, storage, market=market, candidate=False)
         except Exception as exc:  # noqa: BLE001
             logger.warning("推奨用のローカル予測の読み込みに失敗 %s: %s", race_id, exc)
             local = None
@@ -247,6 +251,29 @@ def _optimize_betting(body: dict[str, Any], *, view: str = "full", market: bool 
     }, 200
 
 
+def _optimize_stage2(body: dict[str, Any], view: str, storage: Any | None = None) -> tuple[dict[str, Any], int] | None:
+    """第 2 段の判定（bets_stage2、src/api/stage2_live.py）があれば target と同じ形で返す。無い・読めない・止めの目印があれば None。"""
+    race_id = body.get("race_id", "")
+    if not race_id:
+        return None
+    raw_cap = body.get("max_total_bet", DEFAULT_MAX_TOTAL_BET)
+    try:
+        cap = int(raw_cap) if raw_cap not in (None, 0) else None
+    except (TypeError, ValueError):
+        return None                                   # 金額の誤りは今の経路の検査（400）に任せる
+    if cap is not None and cap < 100:
+        return None
+    try:
+        from src.api import stage2_live as S2
+        from src.scraper.storage import HybridStorage
+
+        out = S2.optimize_payload(race_id, view, cap, storage or HybridStorage())
+    except Exception as exc:  # noqa: BLE001  第 2 段が読めなくても、今の推奨は出す
+        logger.warning("第 2 段の判定を読めない（今の推奨に戻す） %s: %s", race_id, exc)
+        return None
+    return (out, 200) if out is not None else None
+
+
 def _optimize_target(body: dict[str, Any], view: str, storage: Any | None = None) -> tuple[dict[str, Any], int]:
     """既定方策 target（src/pipeline/inference/target_bets.py）。開発者・有料会員のどちらにも同じ内容（購入額・想定払戻・的中率の目安）を返す。
     実オッズは計画にも応答にも使わない（想定オッズ＝AI の予測だけ）。view="paid" のときだけ会員向けの外枠（凡例・免責）を付ける。"""
@@ -322,7 +349,8 @@ def bet_horse_marks(race_id: str) -> dict[int, str] | None:
         return hit[1]
     marks: dict[int, str] | None = None
     try:
-        payload, code = optimize_betting({"race_id": race_id, "max_total_bet": DEFAULT_MAX_TOTAL_BET}, view="full")
+        # 印は予測の応答に入り、全区分で共有する事前生成・キャッシュに載る。第 2 段の試行（開発者だけ）の ◎ を混ぜない（stage2=False）
+        payload, code = optimize_betting({"race_id": race_id, "max_total_bet": DEFAULT_MAX_TOTAL_BET}, view="full", stage2=False)
         if code == 200 and payload.get("horse_marks"):
             marks = {int(h): m for h, m in payload["horse_marks"].items()}
     except Exception as exc:  # noqa: BLE001

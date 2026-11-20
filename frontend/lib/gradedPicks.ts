@@ -30,6 +30,9 @@ export type GPRule = { rule: GPRuleText; label: string; default: boolean; dayof:
 
 export type GPHonmeiStats = { races: number; rec: number[]; win: number; place: number; roi_t: number | null; roi_f: number | null; pay_races: number };
 export type GPKillStats = { races: number; killed: number; rec: number[]; top3_rate: number | null };
+/** ◎ と同じ人気の馬の値（比べる相手。src/research/graded/pop_base.py） */
+export type GPSamePop = { place: number | null; roi_t: number | null; roi_f: number | null; n_picks: number };
+export type GPSimple = { B_honmei: GPHonmeiStats | null; B_kill: GPKillStats | null; same_pop?: GPSamePop | null };
 export type GPPeriodStats = { B_honmei: GPHonmeiStats | null; B_kill: GPKillStats | null; base_honmei: GPHonmeiStats | null };
 
 export type GPFigure = {
@@ -43,7 +46,9 @@ export type GPFigure = {
   /** 選び方の要約（1 行ずつ）。規則が無い・既定なら null */
   brief?: { honmei: string | null; kill: string | null } | null;
   /** 過去該当馬の成績（このレースより前の回）。recent = 2025 年以降（当てはめ）、dev = 2024 年まで（条件を決めた期間） */
-  simple_stats?: { recent: { B_honmei: GPHonmeiStats | null; B_kill: GPKillStats | null } | null; dev: { B_honmei: GPHonmeiStats | null; B_kill: GPKillStats | null } | null } | null;
+  simple_stats?: { recent: GPSimple | null; dev: GPSimple | null } | null;
+  /** 比べる相手（2025〜）に、この回とそれより後の結果が入るか（振り返りのとき） */
+  same_pop_includes_after?: boolean;
   stats: Partial<Record<Period, GPPeriodStats>>;
   periods?: { dev: number[]; eval: number[] } | null;
   track_from?: string | null;

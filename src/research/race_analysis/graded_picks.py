@@ -193,6 +193,42 @@ def _brief_of(v: dict, picked: dict | None) -> dict:
             "kill": None if not v["kill"] or v["kill"]["default"] else brief(v["kill"], "kill", v["kill"].get("k"))}
 
 
+POP_BASE = Path(__file__).resolve().parents[3] / "data/meta/graded/pop_base.json"
+
+
+def _pop_until() -> str | None:
+    try:
+        return json.loads(POP_BASE.read_text(encoding="utf-8")).get("data_until")
+    except (OSError, ValueError):
+        return None
+
+
+def _pop_tables() -> dict | None:
+    """人気ごとの成績（G1〜G3 の全出走。src.research.graded.pop_base が作る）。dev・recent（2025＋2026 を足したもの）。"""
+    try:
+        v = json.loads(POP_BASE.read_text(encoding="utf-8"))["values"]
+    except (OSError, ValueError, KeyError):
+        return None
+    rec: dict[str, dict] = {}
+    for per in ("2025", "2026"):
+        for k, t in (v.get(per) or {}).items():
+            r = rec.setdefault(k, {"n": 0, "rec": [0, 0, 0, 0], "npay": 0, "tan": 0.0, "fuku": 0.0})
+            r["n"] += t["n"]
+            r["npay"] += t["npay"]
+            r["tan"] += t["tan"]
+            r["fuku"] += t["fuku"]
+            r["rec"] = [a + b for a, b in zip(r["rec"], t["rec"])]
+    return {"dev": v.get("dev") or {}, "recent": rec}
+
+
+def _same_pop(races: list[dict], table: dict | None) -> dict | None:
+    """◎ と同じ人気の馬の値（比べる相手）。"""
+    if not table or not races:
+        return None
+    from src.research.graded.pop_base import same_pop
+    return same_pop(table, [(x.get("B") or {}).get("honmei", {}).get("pop") if (x.get("B") or {}).get("honmei") else None for x in races])
+
+
 def figure_for(h: dict, rkey: str, race_id: str, date: str) -> dict[str, Any]:
     """画面に渡す値。これまで = 開催日がこのレースより前の回（新しい順）。このレース = 記録にあれば結果つき。"""
     PK = _pk()
@@ -214,14 +250,19 @@ def figure_for(h: dict, rkey: str, race_id: str, date: str) -> dict[str, Any]:
         status = "pending"   # 出馬表の確定前（確定後に前日の計算で出す）
     recent = [x for x in past if x["date"][:4] >= str(PK.EVAL[0])]
     old = [x for x in past if x["date"][:4] < str(PK.EVAL[0])]
-    simple = {"recent": {"B_honmei": PK.stats(recent, "B", "honmei"), "B_kill": PK.stats(recent, "B", "kill")} if recent else None,
-              "dev": {"B_honmei": PK.stats(old, "B", "honmei"), "B_kill": PK.stats(old, "B", "kill")} if old else None}
+    pt = _pop_tables()
+    simple = {"recent": {"B_honmei": PK.stats(recent, "B", "honmei"), "B_kill": PK.stats(recent, "B", "kill"),
+                         "same_pop": _same_pop(recent, (pt or {}).get("recent"))} if recent else None,
+              "dev": {"B_honmei": PK.stats(old, "B", "honmei"), "B_kill": PK.stats(old, "B", "kill"),
+                      "same_pop": _same_pop(old, (pt or {}).get("dev"))} if old else None}
     return {"rkey": rkey, "grade": v["grade"], "course": v["course"], "rules": {"honmei": v["honmei"], "kill": v["kill"]},
             "brief": _brief_of(v, picked),
             "simple_stats": simple,
             "this": {"status": status, "race": this, "period": PK.period_of(date, tf), "picked": picked},
             "past": sorted(past, key=lambda x: x["date"], reverse=True), "stats": _stats_by_period(past, tf),
-            "periods": h.get("periods"), "track_from": tf, "frozen_at": h.get("frozen_at"), "data_until": h.get("data_until")}
+            "periods": h.get("periods"), "track_from": tf, "frozen_at": h.get("frozen_at"), "data_until": h.get("data_until"),
+            # 比べる相手（同じ人気の馬）は 2025・2026 年の全重賞（結果の最終日まで）。振り返りのときは、このレースより後の結果も入る
+            "same_pop_includes_after": bool(str(date)[:4] >= "2025" and str(date)[:10] <= str(_pop_until() or ""))}
 
 
 class GradedPicksModule:

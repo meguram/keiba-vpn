@@ -7213,7 +7213,7 @@ async def _race_predictions_compute(race_id: str):
             from src.utils.race_probabilities import attach_calibrated_ev, buy_recommendation_tier
 
             preds = resp.get("predictions")
-            if not is_enabled() or not isinstance(preds, list):
+            if not is_enabled() or not isinstance(preds, list) or resp.get("prediction_source") == "candidate":   # 候補には v6e の EV の較正を当てない
                 return resp
             out = []
             for e in preds:

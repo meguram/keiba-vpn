@@ -1,0 +1,76 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>穴馬予想モデル</title><style>
+:root{--bg:#f7f8fa;--panel:#fff;--text:#1d2330;--muted:#5b6578;--border:#d8dde6;--accent:#2f6fde;--good:#1d8a4e;--bad:#b3261e;--hold:#a86400;--head:#eef1f6}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1420;--panel:#161d2b;--text:#e4e9f2;--muted:#9aa6ba;--border:#2a3446;--accent:#7aa7ff;--good:#5fd38d;--bad:#ff8a80;--hold:#f0b65a;--head:#1d2638}}
+:root[data-theme="dark"]{--bg:#0f1420;--panel:#161d2b;--text:#e4e9f2;--muted:#9aa6ba;--border:#2a3446;--accent:#7aa7ff;--good:#5fd38d;--bad:#ff8a80;--hold:#f0b65a;--head:#1d2638}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.7 system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+main{max-width:980px;margin:0 auto;padding:16px}h1{font-size:1.4rem;margin:.2em 0}
+h2{font-size:1.15rem;margin:1.8em 0 .5em;border-bottom:1px solid var(--border);padding-bottom:.2em}
+.muted{color:var(--muted);font-size:.88rem}.lead{background:var(--panel);border:1px solid var(--border);border-left:4px solid var(--hold);border-radius:6px;padding:10px 14px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:12px 0}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 12px}.card .k{color:var(--muted);font-size:.82rem}.card .v{font-size:1.25rem;font-weight:600}
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}table{border-collapse:collapse;width:100%;font-size:.86rem;margin:.5em 0}
+th,td{border:1px solid var(--border);padding:4px 7px;text-align:right}th{background:var(--head);font-weight:600}td.l,th.l{text-align:left}
+code{font-size:.82rem;background:var(--head);padding:0 .3em;border-radius:3px;word-break:break-all}.good{color:var(--good)}.bad{color:var(--bad)}
+ul{padding-left:1.2em}details{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin:10px 0}summary{cursor:pointer;font-weight:600}
+</style></head><body><main>
+<h1>穴馬予想モデル（4 番人気以下・市場を offset）</h1>
+<p class="muted">最終更新: 2026-11-18。記録の本文は <code>docs/operations/longshot_model_20261118.md</code>、道具は <code>src/scripts/data/longshot_model.py</code>、事前登録は <code>config/longshot_model/prereg_gate1.json</code>。</p>
+
+<div class="lead"><ul>
+<li><b>結論: 今回の作りの穴馬専用モデルは採らない。</b>第 2 段（基準 B0）と比べて、検出できる大きさの logloss の改善は無かった。関門 1（検証 2019〜21）で、事前登録の兆しの基準を満たす版は無く、関門 2（2022〜24）は流さない。</li>
+<li>否定したのは「足した 10 列」と「穴馬だけで学ぶ作り」まで。依頼の候補（荒れる型・前走の不利・展開・休み明け）は、ほとんどが v6 の列に既にあった。回収率への効きは、この段では判定できない。</li>
+<li>市場の較正は、確定オッズのままでも 3 着以内の logloss を毎年良くした（2019〜2024 の各年 −0.0018〜−0.0024）。主に Harville の q3 の偏りの直し。第 2 段の改善の候補として、親モデルの改善サイクルの段階 2 に回す。</li>
+<li>再挑戦の条件: v6 に無い新しい情報源（実物の T-60 のオッズの割れ方・オッズの動き・出遅れのラベルなど）が手に入ったとき。</li>
+</ul></div>
+
+<div class="cards">
+<div class="card"><div class="k">穴馬向けの列の分（B1 − B0・3 着以内）</div><div class="v">+0.00007</div><div class="muted">区間 −0.00007〜+0.00022・偶然の範囲</div></div>
+<div class="card"><div class="k">穴馬だけで学ぶ分（A1 − B0・3 着以内）</div><div class="v">−0.00003</div><div class="muted">区間 −0.00025〜+0.00021・偶然の範囲</div></div>
+<div class="card"><div class="k">確定オッズの較正の分（3 着以内）</div><div class="v good">−0.0018〜−0.0024</div><div class="muted">2019〜2024 の各年・区間は 0 を含まない</div></div>
+</div>
+
+<h2>1. 何を比べたか</h2>
+<ul>
+<li>対象: 確定の人気で 4 番人気以下の馬（2019〜21 年、111,490 頭・10,364 レース）。当てるのは 3 着以内（主）と 1 着（副）。</li>
+<li>作り: 市場の確率の logit を offset にした xgb（第 2 段の作法）。市場は、すべての腕で T-60 の再現（確定オッズ × 2026 年の実測のずれ）から作った。</li>
+<li>比べの区間: 開催日 × 場で束ねたブートストラップの 95%。差は「腕 − 相手」で、負が良い。</li>
+</ul>
+<div class="tw"><table>
+<thead><tr><th class="l">腕</th><th class="l">中身</th></tr></thead><tbody>
+<tr><td class="l">生の市場</td><td class="l">再現の 1/オッズの正規化・Harville の 3 着以内</td></tr>
+<tr><td class="l">較正した市場</td><td class="l">訓練の行だけで当てたロジスティック回帰（頭数の帯・クラスの群・Harville の q3）</td></tr>
+<tr><td class="l">B0</td><td class="l">第 2 段と同じ 1,193 列＋較正した offset（基準）</td></tr>
+<tr><td class="l">B1</td><td class="l">B0＋穴馬向けの列 10 列（荒れる型・前走の不利・展開）</td></tr>
+<tr><td class="l">B1perm</td><td class="l">負の対照。B1 の足した列を並べ替えた版</td></tr>
+<tr><td class="l">A1</td><td class="l">B1 の列で、訓練の再現の T-60 の人気が 3 番人気以下の行だけで学んだ版（検証では本命側を B0 の値で埋める）</td></tr>
+</tbody></table></div>
+
+<h2>2. 結果（3 着以内・4 番人気以下）</h2>
+<div class="tw"><table>
+<thead><tr><th class="l">比べ</th><th>logloss の差</th><th>95% 区間</th><th>2019</th><th>2020</th><th>2021</th></tr></thead><tbody>
+<tr><td class="l">較正した市場 − 生の市場</td><td>−0.00051</td><td>−0.00073〜−0.00028</td><td>−0.00079</td><td>−0.00018</td><td>−0.00055</td></tr>
+<tr><td class="l">B0 − 較正した市場</td><td>−0.00546</td><td>−0.00613〜−0.00481</td><td>−0.00716</td><td>−0.00376</td><td>−0.00549</td></tr>
+<tr><td class="l">B1 − B0</td><td>+0.00007</td><td>−0.00007〜+0.00022</td><td>−0.00004</td><td>+0.00006</td><td>+0.00019</td></tr>
+<tr><td class="l">A1 − B0</td><td>−0.00003</td><td>−0.00025〜+0.00021</td><td>−0.00057</td><td>+0.00016</td><td>+0.00032</td></tr>
+<tr><td class="l">B1perm − B0（対照）</td><td>+0.00001</td><td>−0.00012〜+0.00015</td><td>−0.00003</td><td>−0.00007</td><td>+0.00013</td></tr>
+</tbody></table></div>
+<p class="muted">判定の基準（事前登録）: 候補 − B0 の区間の上端が 0 未満、3 年のうち 2 年以上で負、対照の区間の上端が 0 以上。B1・A1 とも満たさない。1 着も同じ向き。人気の切りを 3・5 にずらしても、主の基準を満たす版は無い。ただし 3 番人気以下の A1 − B0 は −0.00025（−0.00047〜−0.00002）で、区間は 0 を含まない。効いたのは 2019 年の 1 年だけ（2020 年 +0.00001・2021 年 +0.00011）で、主の母集団でもないので兆しとは読まない。</p>
+
+<h2>3. 事象と根拠</h2>
+<div class="tw"><table>
+<thead><tr><th class="l">事象</th><th class="l">根拠</th></tr></thead><tbody>
+<tr><td class="l">穴馬向けの列を足しても伸びない</td><td class="l">足した列は v6 の列（weight_rule・field_size・grade・lag1_l3f_rank・d_prev_fin・f2_nfront・a_style）の組み合わせで、木はそれらを既に組み合わせて使える。並べ替えの対照とも差が無い。</td></tr>
+<tr><td class="l">穴馬だけで学んでも伸びない</td><td class="l">全馬で学んだ B0 が、穴馬の部分も同じ程度に当てている。（行を絞った損と、専用にした得の内訳は測っていない。）</td></tr>
+<tr><td class="l">B0 − 較正した市場の大きな差（−0.0055）は、市場を上回った分ではない</td><td class="l">大半は、T-60 の再現で混ぜた雑音を取り戻した分（1 着では B0 も確定の市場より悪い）。加えて、v6 の特徴量の一部は 2021-12 までの結果で当て込んでおり、検証の年 2019〜21 では外の年になっていない。B1・A1 − B0 の差では打ち消し合うので、判定は変わらない。</td></tr>
+<tr><td class="l">較正で良くなる</td><td class="l">3 着以内は、Harville の q3 が穴馬の 3 着以内の率を見誤る分の直しが主。1 着は favourite-longshot bias（人気薄の買われすぎ）。頭数が多いと弱まり、上のクラスと未勝利で強まる（Gramm &amp; Owens 2005 の要旨。<a href="https://ideas.repec.org/a/taf/apeclt/v12y2005i3p181-185.html">IDEAS</a>）。原因は確率の誤認とする研究もある（Snowberg &amp; Wolfers 2010。<a href="https://www.nber.org/papers/w15923">NBER</a>）。</td></tr>
+</tbody></table></div>
+
+<details><summary>作法と、外したもの</summary>
+<ul>
+<li>較正は fold の訓練の行だけで当てた。2022 年以降の行は読み込みの段で落とした。2026 年は、T-60 のずれのためにオッズと人気だけを読んだ（着順・払戻は読まない）。</li>
+<li>外した列: オッズの割れ方（再現では確定の情報が漏れる）・§14 の閾値（別担当の探索の結果で選ぶので、選びのリーク）・出遅れ（2016 年から揃わない）・展開利とラップ予想の OOF（walk-forward にできない）。</li>
+<li>事前の見込み: 穴馬の条件探しは過去 3 回とも否定だった（tp-72・§13 の 4 番人気以下の層・tp45）。</li>
+<li>レビュー: 計画は別エージェントの 15 件、道具は critic の 13 件を反映してから流した。結果への別エージェントのレビュー 9 件と対応は md の 6.3 節（特徴量の当て込みの期間・再現の雑音・選びの指標の粗さ・否定の範囲など）。</li>
+</ul></details>
+</main></body></html>

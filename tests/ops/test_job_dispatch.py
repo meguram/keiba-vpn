@@ -186,6 +186,66 @@ def test_models_are_fetched_and_exposed(tmp_path, patch_doc):
     assert argv[-1] == str(tmp_path / "models" / "mdl") and env["KEIBA_TEST_MODEL"] == argv[-1]
 
 
+def test_first_year_of_models_is_passed_as_env(tmp_path, patch_doc):
+    doc = patch_doc([J("a", models=["mdl", "m2"])])
+    doc["models"]["mdl"]["first_year"] = 2016
+    doc["models"]["m2"] = {"env": "KEIBA_TEST_M2", "local_path": "x/m2", "first_year": 2016}
+    r = Rec()
+    assert D.run_group("g1", ctx(MemoryIO(), r, tmp_path)) == 0
+    assert r.calls[0][1]["KEIBA_FIRST_YEAR"] == "2016"
+
+
+def test_mismatched_first_years_fail_before_running(tmp_path, patch_doc):
+    doc = patch_doc([J("a", models=["mdl", "m2"])])
+    doc["models"]["mdl"]["first_year"] = 2016
+    doc["models"]["m2"] = {"env": "KEIBA_TEST_M2", "local_path": "x/m2", "first_year": 2020}
+    r = Rec()
+    assert D.run_group("g1", ctx(MemoryIO(), r, tmp_path)) != 0 and r.calls == []
+
+
+def test_first_year_wins_over_step_env_and_base_env(tmp_path, patch_doc):
+    doc = patch_doc([J("a", models=["mdl"], steps=[{"argv": ["-m", "mod.m"], "env": {"KEIBA_FIRST_YEAR": "2020"}}])])
+    doc["models"]["mdl"]["first_year"] = 2016
+    r = Rec()
+    c = ctx(MemoryIO(), r, tmp_path)
+    c.base_env["KEIBA_FIRST_YEAR"] = "2020"
+    assert D.run_group("g1", c) == 0
+    assert r.calls[0][1]["KEIBA_FIRST_YEAR"] == "2016"
+
+
+def test_fetched_bundle_year_must_match_config(tmp_path, patch_doc):
+    import json as _json
+
+    doc = patch_doc([J("a", models=["mdl"])])
+    doc["models"]["mdl"]["first_year"] = 2020
+    d = tmp_path / "models" / "mdl"
+    d.mkdir(parents=True)
+    (d / "bundle.json").write_text(_json.dumps({"first_year": 2016}), encoding="utf-8")
+    r = Rec()
+    assert D.run_group("g1", ctx(MemoryIO(), r, tmp_path)) != 0 and r.calls == []
+
+
+def test_job_map_rejects_first_year_in_step_env_and_bad_type():
+    from src.ops import job_map as jm
+
+    doc = jm.load()
+    import copy
+
+    doc = copy.deepcopy(doc)
+    job = next(j for j in doc["jobs"] if j["destination"] == "gcp" and "bundle_v6e" in (j.get("models") or []))
+    job["steps"][0].setdefault("env", {})["KEIBA_FIRST_YEAR"] = "2016"
+    doc["models"]["bundle_v6e"]["first_year"] = "2020"
+    errs = jm.validate(doc)
+    assert any("step の env" in e for e in errs) and any("整数" in e for e in errs)
+
+
+def test_models_without_first_year_leave_env_unset(tmp_path, patch_doc):
+    patch_doc([J("a", models=["mdl"])])
+    r = Rec()
+    assert D.run_group("g1", ctx(MemoryIO(), r, tmp_path)) == 0
+    assert "KEIBA_FIRST_YEAR" not in r.calls[0][1]
+
+
 def test_dry_run_runs_nothing_and_writes_nothing(tmp_path, patch_doc):
     patch_doc([J("a", requires_race_day="tomorrow")])
     io, r = MemoryIO(), Rec()

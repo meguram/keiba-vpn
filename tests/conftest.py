@@ -19,6 +19,12 @@ os.environ.setdefault("KEIBA_MEMORY_GUARD", "0")
 # ホストでだけ落ちていた。2026-11-08）。.env を読む挙動そのものは dotenv_path を渡して検証する
 os.environ["KEIBA_SKIP_DOTENV"] = "1"
 
+# 見た回数の台帳（src/ops/data_ledger.py）: テストでは本物の台帳（ホストの共有の写し・config/data_access/ledger.jsonl）を書かず、
+# 一時ディレクトリ（KEIBA_LEDGER_SHARED・KEIBA_LEDGER_GIT で上書き可）に書く。切り替えは環境変数でなくこの印だけで行う
+import src.ops.data_ledger as _data_ledger  # noqa: E402
+
+_data_ledger.TESTING = True
+
 
 # --- 本物の置き場を書くテストの見張り（2026-11-16: test_entries_sync が系統の台帳・父の対応表・めぐ分析を本物に書いていた） ---
 # テストの開始時と終了時に、data/meta のファイル（git 管理のものと、git に無い新しいもの）の更新時刻・大きさを比べる。

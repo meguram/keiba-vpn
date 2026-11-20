@@ -546,3 +546,86 @@ def test_skip_any_of():
     assert not bc._skip(f, sk)                                      # 15 頭以上に当たる
     assert bc._skip({"field": 12, "c_class": "1勝"}, sk)            # どれにも当たらない
     assert not bc._skip({"field": 12, "c_class": "未勝利"}, sk)
+
+
+def test_walkthrough_classify_and_status():
+    from src.scripts.data import bet_r2_walkthrough as w
+
+    cl = ["未勝利", "新馬"]
+    assert w.classify(100, 500, "未勝利", 12, 4, "", cl, 3) == "hit"
+    assert w.classify(100, 0, "未勝利", 12, 4, "", cl, 3) == "miss"
+    assert w.classify(0, 0, "1勝", 12, 5, "見送り（条件）", cl, 3) == "skip_class"
+    assert w.classify(0, 0, "1勝", 12, 2, "見送り（条件）", cl, 3) == "skip_r"        # 凍結の判定の順: r の分位がクラスより先
+    assert w.classify(0, 0, "新馬", 12, 0, "見送り（条件）", cl, 3) == "skip_none"    # r の最大が無い = ◎ の候補がいない
+    assert w.classify(0, 0, "新馬", 4, 5, "見送り（条件）", cl, 3) == "skip_field"
+    assert w.horse_status(2, 2, 0.2, 5, 1.0, 0.05).startswith("◎")
+    assert "1 番人気" in w.horse_status(0, 2, 0.3, 1, 0.1, 0.05)
+    assert "5%" in w.horse_status(1, 2, 0.03, 4, 0.9, 0.05)
+    assert "見送り" in w.horse_status(1, None, 0.2, 4, 0.9, 0.05)                       # ◎ がいないレースで「◎ より小さい」と言わない
+    a = w.allocate({"skip_r": 620, "skip_class": 1816, "skip_none": 0}, 9)
+    assert sum(a.values()) == 9 and "skip_none" not in a and a["skip_class"] > a["skip_r"] >= 1
+
+
+def test_prereg_verdict_levels():
+    import json as _j
+    from pathlib import Path as _P
+
+    crit = _j.loads((_P(bc.ROOT) / "config/bet_cycles/prereg_2026_r2.json").read_text(encoding="utf-8"))["criteria"]
+    lv = crit["levels"]
+    assert tuple(crit["order"]) == bc.PREREG_ORDER and {x["label"] for x in lv} == set(bc.PREREG_ORDER)
+    m = lambda roi, lo, hi, ex: {"roi": roi, "roi_lo": lo, "roi_hi": hi, "roi_ex_top5": ex}   # noqa: E731
+    v = lambda mm, d: bc.prereg_verdict(mm, d, lv)                                             # noqa: E731
+    assert v(m(1.2, 1.02, 1.4, 1.05), (0.3, 0.1, 0.5)) == "100% 超えを確かめた"
+    assert v(m(1.2, 1.0, 1.4, 1.0), (0.3, 0.1, 0.5)) == "100% 超えを確かめた"                 # 等号（≥）は含む
+    assert v(m(1.1, 0.95, 1.3, 1.01), (0.2, 0.05, 0.4)) == "100% 超えの向き（確かめは弱い）"
+    assert v(m(1.0, 0.95, 1.3, 1.0), (0.2, 0.05, 0.4)) == "100% 超えの向き（確かめは弱い）"
+    assert v(m(0.98, 0.85, 1.1, 0.9), (0.1, 0.02, 0.2)) == "基準より上（100% は確かめられず）"
+    assert v(m(1.05, 0.9, 1.2, 1.0), (0.1, 0.0, 0.3)) == "確かめられず"                      # 差の区間の下限 0 は「> 0」に当たらない
+    assert v(m(1.05, 0.9, 1.2, 1.0), (0.1, -0.05, 0.3)) == "確かめられず"
+    assert v(m(0.9, 0.8, 0.98, 0.85), (0.05, 0.01, 0.2)) == "否定"                           # 重なり: 差の下限 > 0 でも区間の上限 < 100% なら否定
+    assert v(m(1.05, 0.9, 1.2, 1.0), (-0.01, -0.2, 0.1)) == "否定"                          # 重なり: 差の点推定 ≤ 0 は、差の区間が 0 をまたいでも否定
+    assert v(m(1.05, 0.9, 1.2, 1.0), (0.0, -0.2, 0.1)) == "否定"
+    assert v(m(1.0, 0.9, 1.0, 1.0), (0.1, 0.01, 0.2)) != "否定"                              # 区間の上限 = 100% は否定ではない
+
+
+def test_combine_metrics_counts_like_bet_cycles():
+    import pandas as pd
+    from src.scripts.data import bet_r2_combine as cb
+
+    # 2 レース × 2 版。レース A は 2 版とも参戦（1 版だけ的中 500）、B は 1 版だけ参戦（外れ）
+    d = pd.DataFrame({"race_id": ["A", "A", "B", "B"], "ver": [0, 1, 0, 1], "cost": [100, 100, 100, 0], "ret": [500, 0, 0, 0]})
+    m = cb.metrics(d, 2, n_boot=50)
+    assert m["races"] == 2 and m["bet_races"] == 2                   # 参戦 3 件 ÷ 版 2 = 1.5 → 2
+    assert abs(m["roi"] - 500 / 300) < 1e-9 and abs(m["hit_rate"] - 1 / 3) < 1e-9
+
+
+def test_forward_summary_pending_and_settled():
+    import numpy as np
+    from src.scripts.data import bet_forward_ledger as fl
+
+    cost = np.array([100.0, 100.0, 0.0, 100.0])
+    ret = np.array([0.0, 450.0, np.nan, np.nan])                     # 最後は精算待ち
+    s = fl.summary(cost, ret, n_all=5, n_sys=1, n_boot=50)
+    assert s["bet_races"] == 3 and s["settled"] == 2 and s["pending"] == 1
+    assert abs(s["roi"] - 450 / 200) < 1e-9 and s["hit_rate"] == 0.5
+
+
+def test_forward_ledger_closes_ledger_row_on_error(monkeypatch):
+    from src.scripts.data import bet_forward_ledger as fl
+
+    seen = []
+
+    class Tok:
+        def __exit__(self, et, ev, tb):
+            seen.append(et.__name__)
+
+    def boom():
+        fl._TOKS.append(Tok())
+        raise RuntimeError("途中で落ちた")
+    monkeypatch.setattr(fl, "_main_inner", boom)
+    monkeypatch.setattr(fl, "_TOKS", [])
+    import pytest
+
+    with pytest.raises(RuntimeError):
+        fl.main()
+    assert seen == ["RuntimeError"]

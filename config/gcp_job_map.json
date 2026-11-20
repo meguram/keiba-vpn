@@ -238,6 +238,7 @@
    "desc": "前段モデル"
   },
   "aux_v4": {
+   "first_year": 2020,
    "env": "KEIBA_V3_AUX",
    "local_path": "data/local/modeling/training_pipeline_v4/final_aux",
    "include": [
@@ -252,6 +253,7 @@
    "desc": "v5 アンサンブルのバンドル（影モード）"
   },
   "tl_reference_v5": {
+   "first_year": 2020,
    "env": "KEIBA_V5_TL_REF",
    "local_path": "data/local/modeling/training_pipeline_v4/tp35/tl_reference_v2.parquet",
    "entry": "tl_reference_v2.parquet",
@@ -281,20 +283,24 @@
   "bundle_v6e": {
    "env": "KEIBA_V6_BUNDLE",
    "local_path": "data/local/modeling/training_pipeline/final_v6e/bundle_v6_2025",
-   "desc": "v6e アンサンブルのバンドル（現在の画面・集計・推奨の親モデル。約167MB）"
+   "first_year": 2020,
+   "desc": "v6e アンサンブルのバンドル（現在の画面・集計・推奨の親モデル。約167MB）。first_year = 学習の履歴の起点年。ディスパッチャがジョブに KEIBA_FIRST_YEAR として渡す（2016 年起点の束へ替えるときはこの値も替える）"
   },
   "stage_v6e": {
+   "first_year": 2020,
    "env": "KEIBA_V6_STAGE",
    "local_path": "data/local/modeling/training_pipeline/final_stage/v6_e_2025",
    "desc": "v6e の前段 S3B（約2MB）"
   },
   "v4_train_table": {
+   "first_year": 2020,
    "env": "KEIBA_V4_TRAIN_TABLE",
    "local_path": "data/local/modeling/training_pipeline_v4/features/train_table.parquet",
    "entry": "train_table.parquet",
    "desc": "v4 の群（馬主・馬自身・メンバー構成・種牡馬 ID）の特徴量づくりが読む学習表（約92MB）"
   },
   "v6_factory": {
+   "first_year": 2020,
    "local_path": "data/local/modeling/training_pipeline/factory",
    "install_to": "data/local/modeling/training_pipeline/factory",
    "include": [

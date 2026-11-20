@@ -117,6 +117,30 @@ def concise_guide(g: dict[str, Any], body: list[dict[str, Any]]) -> dict[str, An
     return g
 
 
+# 見る数字: 小数（単位は任意）と、単位付きの 10 以上の整数（桁区切りのカンマ可）
+_UNITS = r"%|pt|頭|人|組|走|騎乗|レース|倍|秒|kg|m"
+_NUM = re.compile(rf"(?<![\d.,])[+\-]?(?:\d+\.\d+(?:{_UNITS})?|(?:\d{{1,3}}(?:,\d{{3}})+|\d{{2,}})(?:{_UNITS})(?![a-zA-Z]))")
+
+
+def _norm(s: str) -> str:
+    """数字と単位の間の空白と、桁区切りのカンマを除き、符号をそろえる（「3.5 倍」と「3.5倍」、「1,568」と「1568」、「−」と「-」を同じに見る）"""
+    s = s.replace("−", "-").replace("＋", "+")
+    s = re.sub(r"(\d)\s+(?=%|pt|頭|人|組|走|騎乗|レース|倍|秒|kg|m(?![a-zA-Z]))", r"\1", s)
+    return re.sub(r"(?<=\d),(?=\d{3})", "", s)
+
+
+def stale_numbers(guide: dict[str, Any], doc: dict[str, Any]) -> list[str]:
+    """ガイド（答え・使い方・読み方）の数字のうち、記事（全体）に無いもの。
+    記事を集計し直してガイドが古いまま残ると、同じ画面に違う数字が並ぶ（2026-11 に 16 本あった）。
+    閾値・定義・例えの数字（「100% 未満」「上がり 3F = 600m」）は、ガイドの numbers_ok に並べて外す。"""
+    hay = _norm(json.dumps(doc, ensure_ascii=False))
+    texts = list(guide.get("lead", [])) + [e.get("text", "") + " " + e.get("example", "") for e in guide.get("guides", [])]
+    ok = {_norm(x) for x in guide.get("numbers_ok", [])}
+    found = {n for t in texts for n in _NUM.findall(_norm(t))} - ok
+    # 符号付き（+1.5pt）は同じ符号で探す。符号なし（1.5pt 低い）は、記事の符号を問わない
+    return sorted(n for n in found if not re.search(rf"(?<![\d.]){re.escape(n)}(?![\d])", hay))
+
+
 def is_folklore(slug: str) -> bool:
     from src.research.columns.folklore_verified import folklore_slugs
     return slug in folklore_slugs()
@@ -149,6 +173,18 @@ def main() -> None:
         path.write_text(out + "\n", encoding="utf-8")
         if guide is not None:
             gp.write_text(json.dumps(concise_guide(guide, doc["body"]), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # ガイドの数字が記事に無ければ止める（集計し直した後、ガイドの文を直し忘れないように）
+    stale = {}
+    for path in sorted(COLS.glob("*.json")):
+        gp = GUIDES / f"{path.stem}.json"
+        if (only and path.stem not in only) or not gp.exists():
+            continue
+        miss = stale_numbers(json.loads(gp.read_text(encoding="utf-8")), json.loads(path.read_text(encoding="utf-8")))
+        if miss:
+            stale[path.stem] = miss
+    if stale:
+        raise SystemExit("ガイドに、記事に無い数字があります。guides/<slug>.json を記事の値に直してください:\n"
+                         + "\n".join(f"  {k}: {' '.join(v)}" for k, v in stale.items()))
 
 
 if __name__ == "__main__":

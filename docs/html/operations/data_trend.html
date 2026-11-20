@@ -1,0 +1,1004 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>データの傾向の変化</title><style>:root{color-scheme:light;--bg:#fcfcfb;--panel:#fff;--ink:#1d2330;--muted:#5b6578;--border:#d8dde6;--head:#eef1f6;--grid:#e3e6ec;
+--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--a:#2a5fc4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#1a1a19;--panel:#222221;--ink:#f0efec;--muted:#c3c2b7;--border:#3a3a38;--head:#2a2a28;--grid:#353533;
+--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--a:#8fb4ff}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#1a1a19;--panel:#222221;--ink:#f0efec;--muted:#c3c2b7;--border:#3a3a38;--head:#2a2a28;--grid:#353533;
+--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--a:#8fb4ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+main{max-width:1040px;margin:0 auto;padding:16px;overflow-wrap:anywhere}h1{font-size:1.4rem;margin:.2em 0}
+h2{font-size:1.15rem;margin:1.8em 0 .5em;border-bottom:1px solid var(--border);padding-bottom:.2em}h3{font-size:1rem;margin:1.2em 0 .3em}h4{font-size:.95rem}
+a{color:var(--a);word-break:break-all}code{font-size:.85em;background:var(--head);padding:0 .3em;border-radius:3px}
+.muted{color:var(--muted);font-size:.88rem}
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}table{border-collapse:collapse;width:100%;font-size:.84rem;margin:.5em 0}
+th,td{border:1px solid var(--border);padding:3px 6px;text-align:left;vertical-align:top}th{background:var(--head);font-weight:600}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:12px;margin:.6em 0}
+figure{margin:0;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px}figcaption{font-size:.8rem;color:var(--muted)}
+svg.chart{width:100%;height:auto;display:block}svg.chart .grid{stroke:var(--grid);stroke-width:1}svg.chart .ref{stroke:var(--muted);stroke-dasharray:4 3;stroke-width:1}
+svg.chart .tick{fill:var(--muted);font-size:11px}svg.chart .axis{fill:var(--muted);font-size:11px}svg.chart .lab{fill:var(--ink);font-size:11px}
+svg.chart circle,svg.chart rect{cursor:default}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:.8rem;color:var(--muted);margin-top:4px}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+</style></head><body><main><p class="muted">最終更新 2026-11-18 ・ 正は元の文書 <code>docs/operations/data_trend_20261118.md</code>。この HTML は、その md と調査の結果の JSON から手元の道具で作った生成物（md を直したら作り直す。グラフの数字は手で写していない）。点・棒にマウスを乗せると値が出る。</p>
+<h1>データの傾向の変化（ドリフト）の大きさと、予測への影響（2026-11-18）</h1>
+<p>ユーザーの依頼（統括役経由）:「まずは、データトレンドがどのくらいあるか、予測にどのくらい影響しそうか、を深く考えて、問題点と改善案を考えてほしいです。」</p>
+<p>この段は<b>調査と提案だけ</b>。モデル・規則・本番は変えていない。費用は 0 円（手元の表だけ。GCS は読んでいない）。</p>
+<p>HTML 版（グラフ入り）: <code>docs/html/operations/data_trend.html</code>。</p>
+<h2>0. 要約</h2>
+<h3>傾向はどのくらいあるか</h3>
+<ul>
+<li>2016〜2024 年の 9 年で、年ごとの値の揺れが「偶然の幅」（レース単位の標準誤差から見込む揺れ）を超えるかを、指標ごとに Cochran の Q・I²・ランダム効果の τ で測った（全 143 指標。Q の p に BH の補正を掛けると、p&lt;0.05 の 69 指標のうち 6 指標が落ちる）。</li>
+<li><b>市場と人気の当たり方は 10 年ほぼ動いていない</b>。1 番人気の勝率（0.318〜0.343）、市場の較正の傾き β（約 1.02）、人気帯・オッズ帯ごとの単複の回収率、本命・大穴の偏り（favourite-longshot bias）の大きさは、どれも偶然の幅に収まる。枠の有利不利も偶然の幅。</li>
+<li><b>本物の傾向（偶然の幅を超え、構成をそろえても残るもの）</b>:</li>
+<ul>
+<li>前残りの強まり: 4 角で前（相対位置 1/3 以内）と後ろの複勝率の差が 0.275 → 0.315（+0.0044/年、区間 +0.0031〜+0.0057）。芝で強い。</li>
+<li>芝の時計の高速化: 良馬場の勝ち時計が 1000m あたり約 −0.044 秒/年（2016 年 +0.15 → 2024 年 −0.23）。</li>
+<li>出走の間隔の延び: 平均 51.3 日（2017）→ 56.7 日（2024）。中 3 週以内の割合が減っている。</li>
+<li>種牡馬の世代交代: 指標の中で最も大きい（主な父の割合の τ が平均の 45〜57%）。ディープインパクト 3.8% → 0.9%、キングカメハメハ 4.1% → 0.6%、キズナ・エピファネイア 0 → 約 3%。</li>
+</ul>
+<li><b>制度・番組の変更による段差</b>（ある年を境に一度だけ動く）:</li>
+<ul>
+<li>2 歳戦の単勝の上乗せ（JRA プレミアム「2歳単勝」）: 2 歳戦の単勝オッズが、2016 年 6〜8 月と 2017〜2023 年の 6〜12 月に約 4.4% 高く出ていた（上乗せのあったレースだけなら約 5.0%。人気が集中したレースには上乗せが無いことが多い）。2024 年からは無い。<b>確実で、直しやすい偏り</b>（問題点 1）。</li>
+<li>斤量: 2023 年に平均 +0.65kg（54.67 → 55.32kg）、2024 年にさらに +0.33kg。58kg 以上の割合は 0.4% → 15%（負担重量の規則の変更）。</li>
+<li>頭数: 平均 14.58 頭（2016）→ 13.8 頭前後（2018 年から）。9 頭以下のレースは 4.9% → 約 10%。</li>
+<li>クラスの構成: 1 勝クラスの割合が 31.7% → 27〜28%（2020 年から。2019 年夏の降級の廃止の後）。</li>
+<li>上がり最速の馬の勝率: 0.30〜0.32（2016〜17）→ 0.33〜0.35（2018 年から）。頭数の段差と同じ年で、頭数の層（3 つ）で吸収しきれていない疑い・データの作り（上がりの同着の扱いなど）の疑いがある。原因は特定できていない。</li>
+</ul>
+<li><b>2026 年の入力</b>（出馬表だけ。結果は読んでいない）: レースの属性（頭数・距離・芝ダ・クラス・斤量・馬体重・性・年齢）の分布の PSI はどれも 0.01 未満で、2025 年と同じ。ただし、これはレースの属性に限った話で、特徴量の入力の質（2026 年に調教の被覆が落ちたことが週次の監視 <code>docs/operations/drift_monitor.md</code> に記録されている）は別。</li>
+</ul>
+<h3>予測にどのくらい効くか</h3>
+<div class="tw"><table><thead><tr><th>効く先</th><th>大きさ</th><th>根拠</th></tr></thead><tbody>
+<tr><td>② 馬の予測モデル</td><td><b>1 年古いモデルの損は、勝ち馬の対数損失で 0〜+0.008</b>。2016〜2019 年の窓を含む比較では +0.008（区間 +0.006〜+0.010）だが、その窓は追い切りが無く履歴も浅い弱さが混ざる。2020 年以降の窓どうしのきれいな比較は 2 つだけで、−0.0013（区間 −0.008〜+0.006）と +0.005（2025 年・何度か見た期間、区間 −0.001〜+0.012）。<b>0 に近い可能性がある</b></td><td>学習の窓の長さを 3 年に固定し、終わりを g 年ずらした比較（1 メンバー・1 seed）</td></tr>
+<tr><td>② 較正</td><td>小さい。較正の傾きは半年ごとに 0.97〜1.05、ECE 0.003〜0.004 で、古いモデルでも過信（傾き &lt; 1）は出ない</td><td>アンサンブルの OOF（2022〜24）と test 2025 の半年ごと</td></tr>
+<tr><td>① ルールの抽出</td><td>見つけた条件の上振れの戻り（平均への戻り）の大半は「選択のノイズ（偶然の上振れ）」。傾向の変化の分は、<b>複勝の上振れで 2〜4 ポイント、勝ちの上振れで 2〜11 ポイント</b>（件数の多い閾値版型ほど大きい）。回収率の上振れは、後の期間でほぼ 100% 戻る</td><td>2016〜18 年を開催日で無作為に半分に分けた対照・レースの中で結果を入れ替えた帰無と比べた</td></tr>
+<tr><td>③ 推奨馬券</td><td>市場の歪み（人気・オッズ帯別の回収率）は年とともに縮んでいない。2 歳戦の単勝の上乗せが 2023 年で終わったので、2019〜2023 年の 2 歳戦の単勝の回収率は、今の制度より約 4〜5% 高く出ている。第 2 回の凍結した買い方（未勝利・新馬の単勝）の訓練（2019〜22 年）・評価の 2023 年の回収率は、その分だけ高めに出ている見込み（目安は約 2 ポイント。参戦したレースのうち 2 歳戦の割合で出し直す必要がある）。test 2025 は上乗せの無い年なので影響しない</td><td>Σ(1/単勝オッズ) の年 × 月の表（2 歳戦の年平均 1.208〜1.214、3 歳以上 1.264）</td></tr>
+</tbody></table></div>
+<h3>問題点の上位</h3>
+<ul>
+<li><b>2 歳戦の単勝の上乗せが、どの評価にも入っていない</b>。2017〜2023 年の 2 歳戦の確定オッズ・払戻（払戻 = オッズ × 100 は各年 99% 以上で一致）は、今の制度より約 4〜5% 高い。生のオッズ・払戻で測る回収率・期待値・予測オッズ・EV の較正は、2 歳戦で今より甘く出る。レース内で正規化した市場の確率 q も、上乗せが全馬に同じ率で掛かっていなければ歪む（2 歳戦の q の較正が上乗せの有無で違う兆しがある。確かめていない）。第 2 段のずれ r = log(p/q) は上乗せのある年で学んでいる。</li>
+<li><b>ルールの「当てはめ（2016〜2024 年の全体で選ぶ）」の成績は、ほぼノイズ</b>。件数の少ない条件ほど戻りが大きい（5〜9 走で約 65%、200 走以上で約 26%）。今の「3 年ごとに同じ向き」の検査は弱く、「上振れが正なら可」の検査は帰無の 37〜45% が通る。</li>
+<li><b>入力の作りの段差が、傾向の変化と区別されずに混ざる</b>。追い切り（<code>tl_</code>・<code>wc_</code>）は 2020 年より前は空、タイムの予測（<code>s_</code>）は 2016 年が全部空、前段の出力（<code>mtl_</code>・EASE2・LAP）は LOYO（ほかの年すべてで学習）で作っている。PSI の大きい列の大半はこれで、傾向の監視の誤報になる。古さの測り方そのものも歪めうる（LOYO の列は古い年の行に後の年の情報を含む）。<code>mtl_</code> の効きの取り分は 2021 年を境に 32% → 16% と半減しており、前段の作りの確かめが要る。</li>
+<li><b>古さの費用が測りきれていない</b>。2026 年は test② として学習・選択に入れていない。この方針の費用（1 年あたり 0〜0.008）は、2020 年以降の窓どうしの比較が 2 つしかなく、決めきれない。</li>
+<li><b>オッズの時点のずれ</b>。モデルと市場の比較・回収率は確定オッズで測るが、本番と推奨馬券は発走 60 分前（T-60）のオッズで判断する。確定と T-60 の差は、締切前の売上の比率・ネット投票の比率（2019 年約 70% → 2020 年約 93%）とともに年で変わりうる。実物の発走前のオッズは 2026 年の約 280 レースしか無く、過去の年の T-60 は作り物の再現。</li>
+</ul>
+<h3>推奨の改善案（優先の順）</h3>
+<ul>
+<li><b>2 歳戦の単勝の上乗せの印を、回収率・期待値のすべての集計に入れる</b>（費用 0・手間 小）。印は期間ではなくレースごとに（2 歳戦で Σ(1/オッズ) &lt; 1.245）、今の制度にそろえる補正もレースごとに（× Σ_レース ÷ 1.264）。読み直した値は記録に並べるだけで、それで買い方を選び直さない（test 2025 を使い直すことになるため）。予測オッズ・EV の較正・第 2 段の r が 2 歳戦で甘くないかを確かめる。</li>
+<li><b>ルールの採否に、件数による縮小と持続の検査を入れる</b>。上振れを (k − 期待) ÷ (n + 約 15) で縮めると、後の期間の上振れをほぼ偏りなく予言できた（二乗誤差が縮小前の 0.11〜0.60 倍）。採る条件は「発見 24 走以上・確かめ 20 走以上・確かめで発見の上振れの 50% 以上が残る」。勝ちの上振れ（単勝の回収率を狙う規則）では傾向の変化の分が大きいので、直近の期間の確かめを重くする。試した条件の数を記録し、Reality Check などで割り引く。</li>
+<li><b>毎年 1 回、終わった年を足して学習し直す（広げる窓のまま）</b>。窓を狭める・新しい年を重くするのは、同じ設定（木の数・葉の最小の重みを固定）の比較では悪化か差なし（直近 3 年 +0.0045、半減期 1 年 +0.0028、2 年 +0.0007、4 年 +0.0016、直近 5 年 −0.0005）。2026 年を学習に入れるのは、2026 年の 1 回だけの確かめ（凍結した買い方の通しの確かめ・ルールの 2025・2026 年の確かめ）を済ませた後。その前に、古さの費用を 2020 年以降の窓どうし・3 seed・LOYO の列を外した版で測り直す。</li>
+<li><b>傾向の監視を、作りの段差と分けて年に 1 回まとめる</b>（費用 0）。この調査の道具を年明けに 1 回流し、本物の傾向（前残り・時計・間隔・父・斤量・頭数）と、作りの段差の列を分けて出す。PSI は段差の列を外して測る。週次の監視には、Σ(1/オッズ) の年齢別の推移と、発走前と確定の対数オッズの差の分布を足す（手元の記録だけで、今の週 1 回の実行の中に入れる）。</li>
+<li><b>前段 S3 の出力の取り分の半減の理由を確かめる</b>（LOYO の作りによる後の年の情報の混入か、<code>s_</code> の被覆の変化か）。</li>
+</ul>
+<h2>1. 範囲とデータの決まり</h2>
+<ul>
+<li>2016〜2024 年: 自由に使った。</li>
+<li>2025 年: 「何度か見た期間」。使った箇所には印を付けた（傾向の地図の年ごとの値、モデルの評価の参考の行、較正の test 2025）。判定（偶然の幅か）は 2016〜2024 年の 9 年だけで決め、2025 年は当てはまりの確かめだけに使った。</li>
+<li>2026 年: 着順・払戻・オッズの結果は読んでいない。出馬表（入力）の分布だけを見た。</li>
+<ul>
+<li>開示: 傾向の地図の担当が列を確かめたとき、2026 年の出馬表の表を全列で 1 回読み込み、odds・popularity の列も読んだ（値はすべて 0 で、どの計算にも使っていない）。PSI の計算はこの列を読まない作りにした。</li>
+</ul>
+<li>ルールの戻りの分析は 2016〜2024 年だけ（ルールの担当が凍結したルールを 2025・2026 年で 1 回だけ確かめる予定のため、ルールの単位の 2025 年の成績は作っていない）。</li>
+<li>材料: 結果の表 <code>retrain_out/data_fix/tables/&lt;年&gt;/race_result_*</code>、学習の表 <code>retrain_out/base_2016_fix2</code>、モデルの入力 <code>retrain_out/cycles16_fix3</code>（X・meta・市場・OOF）、ルールの表は全レース版の <code>course_out/frame.parquet</code>・<code>levels.parquet</code>（2024 年末で切ってある）。</li>
+<li>出力（数字の正）: <code>retrain_out/data_trend/{map,model,rules,web}/</code>（results.json・スクリプト・公開の出典の表）。2 歳戦の Σ の表は <code>map/age2_overround_month.csv</code>・<code>age2_overround_year.json</code>（生成のスクリプトは map の t14）。HTML 版は <code>retrain_out/data_trend/build</code> の build_html.py が、この md と各 results.json から作る（グラフの数字は手で写していない）。</li>
+</ul>
+<h2>2. 傾向の大きさの地図</h2>
+<h3>判定の決め方（結果を見る前に固定）</h3>
+<ul>
+<li>年ごとの値の標準誤差はレース単位のクラスタ（回収率はレースのブートストラップ 2,000 回）。</li>
+<li>Q の p ≥ 0.05 なら「偶然の幅」。それ以外は、一定・直線・段差（1 か所の境）を AIC で比べて「緩やかな傾向」か「段差（○年から）」を選ぶ。</li>
+<li>芝ダ × 距離帯 × 頭数帯の構成を 2016〜2024 年の合計に固定して標準化し、偶然の幅になる（または τ が半分未満になる）ものは「構成の変化によるもの」。</li>
+<li>注意（レビューの指摘）: 143 指標を Q で検定しているので、偽の陽性が約 7 件見込まれる。BH の補正（q&lt;0.05）で落ちるのは 6 指標（先行・差しの勝率、追込の複勝率、ダの 4 角先頭の勝率、芝の上がり最速の勝率、オッズ 20〜49.9 倍の単勝の回収率）。また、境の年を自由に選ぶ段差のモデルは AIC の上の自由度より柔らかく、段差に寄りやすい。傾きの区間が 0 をまたぐ「段差」（上がり最速・馬体重・厩舎の HHI・市場の対数損失）は弱い証拠として読む。</li>
+</ul>
+<h3>主な指標</h3>
+<div class="grid2">
+<figure><svg viewBox="0 0 660 300" role="img" aria-label="前と後ろの複勝率の差" class="chart">
+<title>前と後ろの複勝率の差</title>
+<line x1="64" x2="500" y1="260.0" y2="260.0" class="grid"/>
+<text x="58" y="264.0" class="tick" text-anchor="end">0.260</text>
+<line x1="64" x2="500" y1="200.0" y2="200.0" class="grid"/>
+<text x="58" y="204.0" class="tick" text-anchor="end">0.280</text>
+<line x1="64" x2="500" y1="140.0" y2="140.0" class="grid"/>
+<text x="58" y="144.0" class="tick" text-anchor="end">0.300</text>
+<line x1="64" x2="500" y1="80.0" y2="80.0" class="grid"/>
+<text x="58" y="84.0" class="tick" text-anchor="end">0.320</text>
+<line x1="64" x2="500" y1="20.0" y2="20.0" class="grid"/>
+<text x="58" y="24.0" class="tick" text-anchor="end">0.340</text>
+<text x="64.0" y="276" class="tick" text-anchor="middle">2016</text>
+<text x="112.4" y="276" class="tick" text-anchor="middle">2017</text>
+<text x="160.9" y="276" class="tick" text-anchor="middle">2018</text>
+<text x="209.3" y="276" class="tick" text-anchor="middle">2019</text>
+<text x="257.8" y="276" class="tick" text-anchor="middle">2020</text>
+<text x="306.2" y="276" class="tick" text-anchor="middle">2021</text>
+<text x="354.7" y="276" class="tick" text-anchor="middle">2022</text>
+<text x="403.1" y="276" class="tick" text-anchor="middle">2023</text>
+<text x="451.6" y="276" class="tick" text-anchor="middle">2024</text>
+<text x="500.0" y="276" class="tick" text-anchor="middle">2025</text>
+<text x="12" y="140.0" class="axis" transform="rotate(-90 12 140.0)" text-anchor="middle">複勝率の差</text>
+<line x1="475.8" x2="475.8" y1="20" y2="260" class="ref"/>
+<text x="478.8" y="30" class="tick">2025 は何度か見た期間</text>
+<line x1="64.0" x2="64.0" y1="238.7" y2="190.1" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="112.4" x2="112.4" y1="218.6" y2="171.6" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="160.9" x2="160.9" y1="188.8" y2="139.1" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="209.3" x2="209.3" y1="186.8" y2="136.9" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="257.8" x2="257.8" y1="161.8" y2="113.6" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="306.2" x2="306.2" y1="180.5" y2="131.0" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="354.7" x2="354.7" y1="135.4" y2="86.6" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="403.1" x2="403.1" y1="149.7" y2="102.1" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="451.6" x2="451.6" y1="119.4" y2="71.8" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="500.0" x2="500.0" y1="150.1" y2="102.7" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<path d="M64.0,214.4 L112.4,195.1 L160.9,163.9 L209.3,161.8 L257.8,137.7 L306.2,155.7 L354.7,111.0 L403.1,125.9 L451.6,95.6 L500.0,126.4" fill="none" stroke="var(--s1)" stroke-width="2"/>
+<circle cx="64.0" cy="214.4" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前と後ろの複勝率の差 2016: 0.275（区間 0.267〜0.283）</title></circle>
+<circle cx="112.4" cy="195.1" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前と後ろの複勝率の差 2017: 0.282（区間 0.274〜0.289）</title></circle>
+<circle cx="160.9" cy="163.9" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前と後ろの複勝率の差 2018: 0.292（区間 0.284〜0.300）</title></circle>
+<circle cx="209.3" cy="161.8" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前と後ろの複勝率の差 2019: 0.293（区間 0.284〜0.301）</title></circle>
+<circle cx="257.8" cy="137.7" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前と後ろの複勝率の差 2020: 0.301（区間 0.293〜0.309）</title></circle>
+<circle cx="306.2" cy="155.7" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前と後ろの複勝率の差 2021: 0.295（区間 0.286〜0.303）</title></circle>
+<circle cx="354.7" cy="111.0" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前と後ろの複勝率の差 2022: 0.310（区間 0.302〜0.318）</title></circle>
+<circle cx="403.1" cy="125.9" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前と後ろの複勝率の差 2023: 0.305（区間 0.297〜0.313）</title></circle>
+<circle cx="451.6" cy="95.6" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前と後ろの複勝率の差 2024: 0.315（区間 0.307〜0.323）</title></circle>
+<circle cx="500.0" cy="126.4" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前と後ろの複勝率の差 2025: 0.305（区間 0.297〜0.312）</title></circle>
+</svg><figcaption>4 角で前（相対位置 1/3 以内）の馬と後ろ（2/3 超）の馬の複勝率の差。縦線は 95% 区間。前残りが年々強い（緩やかな傾向）</figcaption></figure>
+<figure><svg viewBox="0 0 660 300" role="img" aria-label="芝の良馬場の勝ち時計" class="chart">
+<title>芝の良馬場の勝ち時計</title>
+<line x1="64" x2="500" y1="260.0" y2="260.0" class="grid"/>
+<text x="58" y="264.0" class="tick" text-anchor="end">-0.40</text>
+<line x1="64" x2="500" y1="180.0" y2="180.0" class="grid"/>
+<text x="58" y="184.0" class="tick" text-anchor="end">-0.20</text>
+<line x1="64" x2="500" y1="100.0" y2="100.0" class="grid"/>
+<text x="58" y="104.0" class="tick" text-anchor="end">0.00</text>
+<line x1="64" x2="500" y1="20.0" y2="20.0" class="grid"/>
+<text x="58" y="24.0" class="tick" text-anchor="end">0.20</text>
+<text x="64.0" y="276" class="tick" text-anchor="middle">2016</text>
+<text x="112.4" y="276" class="tick" text-anchor="middle">2017</text>
+<text x="160.9" y="276" class="tick" text-anchor="middle">2018</text>
+<text x="209.3" y="276" class="tick" text-anchor="middle">2019</text>
+<text x="257.8" y="276" class="tick" text-anchor="middle">2020</text>
+<text x="306.2" y="276" class="tick" text-anchor="middle">2021</text>
+<text x="354.7" y="276" class="tick" text-anchor="middle">2022</text>
+<text x="403.1" y="276" class="tick" text-anchor="middle">2023</text>
+<text x="451.6" y="276" class="tick" text-anchor="middle">2024</text>
+<text x="500.0" y="276" class="tick" text-anchor="middle">2025</text>
+<text x="12" y="140.0" class="axis" transform="rotate(-90 12 140.0)" text-anchor="middle">秒/1000m（年の効果）</text>
+<line x1="475.8" x2="475.8" y1="20" y2="260" class="ref"/>
+<text x="478.8" y="30" class="tick">2025 は何度か見た期間</text>
+<line x1="64.0" x2="64.0" y1="55.0" y2="28.7" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="112.4" x2="112.4" y1="63.8" y2="38.2" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="160.9" x2="160.9" y1="84.2" y2="56.6" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="209.3" x2="209.3" y1="100.2" y2="73.9" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="257.8" x2="257.8" y1="63.7" y2="35.1" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="306.2" x2="306.2" y1="137.1" y2="108.9" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="354.7" x2="354.7" y1="146.6" y2="121.2" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="403.1" x2="403.1" y1="166.3" y2="139.2" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="451.6" x2="451.6" y1="204.3" y2="177.1" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="500.0" x2="500.0" y1="234.2" y2="205.3" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<path d="M64.0,41.8 L112.4,51.0 L160.9,70.4 L209.3,87.0 L257.8,49.4 L306.2,123.0 L354.7,133.9 L403.1,152.8 L451.6,190.7 L500.0,219.7" fill="none" stroke="var(--s1)" stroke-width="2"/>
+<circle cx="64.0" cy="41.8" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>芝の良馬場の勝ち時計 2016: 0.15（区間 0.11〜0.18）</title></circle>
+<circle cx="112.4" cy="51.0" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>芝の良馬場の勝ち時計 2017: 0.12（区間 0.09〜0.15）</title></circle>
+<circle cx="160.9" cy="70.4" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>芝の良馬場の勝ち時計 2018: 0.07（区間 0.04〜0.11）</title></circle>
+<circle cx="209.3" cy="87.0" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>芝の良馬場の勝ち時計 2019: 0.03（区間 -0.00〜0.07）</title></circle>
+<circle cx="257.8" cy="49.4" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>芝の良馬場の勝ち時計 2020: 0.13（区間 0.09〜0.16）</title></circle>
+<circle cx="306.2" cy="123.0" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>芝の良馬場の勝ち時計 2021: -0.06（区間 -0.09〜-0.02）</title></circle>
+<circle cx="354.7" cy="133.9" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>芝の良馬場の勝ち時計 2022: -0.08（区間 -0.12〜-0.05）</title></circle>
+<circle cx="403.1" cy="152.8" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>芝の良馬場の勝ち時計 2023: -0.13（区間 -0.17〜-0.10）</title></circle>
+<circle cx="451.6" cy="190.7" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>芝の良馬場の勝ち時計 2024: -0.23（区間 -0.26〜-0.19）</title></circle>
+<circle cx="500.0" cy="219.7" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>芝の良馬場の勝ち時計 2025: -0.30（区間 -0.34〜-0.26）</title></circle>
+</svg><figcaption>コース × クラスの効果を除いた年の効果。負ほど速い。−0.044 秒/年の緩やかな傾向</figcaption></figure>
+<figure><svg viewBox="0 0 660 300" role="img" aria-label="上位 10 頭の父の出走の割合" class="chart">
+<title>上位 10 頭の父の出走の割合</title>
+<line x1="64" x2="500" y1="260.0" y2="260.0" class="grid"/>
+<text x="58" y="264.0" class="tick" text-anchor="end">0.200</text>
+<line x1="64" x2="500" y1="212.0" y2="212.0" class="grid"/>
+<text x="58" y="216.0" class="tick" text-anchor="end">0.220</text>
+<line x1="64" x2="500" y1="164.0" y2="164.0" class="grid"/>
+<text x="58" y="168.0" class="tick" text-anchor="end">0.240</text>
+<line x1="64" x2="500" y1="116.0" y2="116.0" class="grid"/>
+<text x="58" y="120.0" class="tick" text-anchor="end">0.260</text>
+<line x1="64" x2="500" y1="68.0" y2="68.0" class="grid"/>
+<text x="58" y="72.0" class="tick" text-anchor="end">0.280</text>
+<line x1="64" x2="500" y1="20.0" y2="20.0" class="grid"/>
+<text x="58" y="24.0" class="tick" text-anchor="end">0.300</text>
+<text x="64.0" y="276" class="tick" text-anchor="middle">2016</text>
+<text x="112.4" y="276" class="tick" text-anchor="middle">2017</text>
+<text x="160.9" y="276" class="tick" text-anchor="middle">2018</text>
+<text x="209.3" y="276" class="tick" text-anchor="middle">2019</text>
+<text x="257.8" y="276" class="tick" text-anchor="middle">2020</text>
+<text x="306.2" y="276" class="tick" text-anchor="middle">2021</text>
+<text x="354.7" y="276" class="tick" text-anchor="middle">2022</text>
+<text x="403.1" y="276" class="tick" text-anchor="middle">2023</text>
+<text x="451.6" y="276" class="tick" text-anchor="middle">2024</text>
+<text x="500.0" y="276" class="tick" text-anchor="middle">2025</text>
+<text x="12" y="140.0" class="axis" transform="rotate(-90 12 140.0)" text-anchor="middle">割合</text>
+<line x1="475.8" x2="475.8" y1="20" y2="260" class="ref"/>
+<text x="478.8" y="30" class="tick">2025 は何度か見た期間</text>
+<line x1="64.0" x2="64.0" y1="74.5" y2="55.3" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="112.4" x2="112.4" y1="104.6" y2="85.5" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="160.9" x2="160.9" y1="126.6" y2="107.5" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="209.3" x2="209.3" y1="116.2" y2="96.8" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="257.8" x2="257.8" y1="104.7" y2="85.3" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="306.2" x2="306.2" y1="95.2" y2="75.7" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="354.7" x2="354.7" y1="94.3" y2="74.7" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="403.1" x2="403.1" y1="153.2" y2="134.2" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="451.6" x2="451.6" y1="194.5" y2="175.9" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="500.0" x2="500.0" y1="225.0" y2="206.9" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<path d="M64.0,64.9 L112.4,95.1 L160.9,117.0 L209.3,106.5 L257.8,95.0 L306.2,85.4 L354.7,84.5 L403.1,143.7 L451.6,185.2 L500.0,215.9" fill="none" stroke="var(--s1)" stroke-width="2"/>
+<circle cx="64.0" cy="64.9" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>上位 10 頭の父の出走の割合 2016: 0.281（区間 0.277〜0.285）</title></circle>
+<circle cx="112.4" cy="95.1" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>上位 10 頭の父の出走の割合 2017: 0.269（区間 0.265〜0.273）</title></circle>
+<circle cx="160.9" cy="117.0" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>上位 10 頭の父の出走の割合 2018: 0.260（区間 0.256〜0.264）</title></circle>
+<circle cx="209.3" cy="106.5" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>上位 10 頭の父の出走の割合 2019: 0.264（区間 0.260〜0.268）</title></circle>
+<circle cx="257.8" cy="95.0" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>上位 10 頭の父の出走の割合 2020: 0.269（区間 0.265〜0.273）</title></circle>
+<circle cx="306.2" cy="85.4" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>上位 10 頭の父の出走の割合 2021: 0.273（区間 0.269〜0.277）</title></circle>
+<circle cx="354.7" cy="84.5" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>上位 10 頭の父の出走の割合 2022: 0.273（区間 0.269〜0.277）</title></circle>
+<circle cx="403.1" cy="143.7" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>上位 10 頭の父の出走の割合 2023: 0.248（区間 0.245〜0.252）</title></circle>
+<circle cx="451.6" cy="185.2" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>上位 10 頭の父の出走の割合 2024: 0.231（区間 0.227〜0.235）</title></circle>
+<circle cx="500.0" cy="215.9" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>上位 10 頭の父の出走の割合 2025: 0.218（区間 0.215〜0.222）</title></circle>
+</svg><figcaption>種牡馬の世代交代。2023 年から段差</figcaption></figure>
+<figure><svg viewBox="0 0 660 300" role="img" aria-label="斤量の平均" class="chart">
+<title>斤量の平均</title>
+<line x1="64" x2="500" y1="260.0" y2="260.0" class="grid"/>
+<text x="58" y="264.0" class="tick" text-anchor="end">54.5</text>
+<line x1="64" x2="500" y1="212.0" y2="212.0" class="grid"/>
+<text x="58" y="216.0" class="tick" text-anchor="end">54.8</text>
+<line x1="64" x2="500" y1="164.0" y2="164.0" class="grid"/>
+<text x="58" y="168.0" class="tick" text-anchor="end">55.0</text>
+<line x1="64" x2="500" y1="116.0" y2="116.0" class="grid"/>
+<text x="58" y="120.0" class="tick" text-anchor="end">55.2</text>
+<line x1="64" x2="500" y1="68.0" y2="68.0" class="grid"/>
+<text x="58" y="72.0" class="tick" text-anchor="end">55.5</text>
+<line x1="64" x2="500" y1="20.0" y2="20.0" class="grid"/>
+<text x="58" y="24.0" class="tick" text-anchor="end">55.8</text>
+<text x="64.0" y="276" class="tick" text-anchor="middle">2016</text>
+<text x="112.4" y="276" class="tick" text-anchor="middle">2017</text>
+<text x="160.9" y="276" class="tick" text-anchor="middle">2018</text>
+<text x="209.3" y="276" class="tick" text-anchor="middle">2019</text>
+<text x="257.8" y="276" class="tick" text-anchor="middle">2020</text>
+<text x="306.2" y="276" class="tick" text-anchor="middle">2021</text>
+<text x="354.7" y="276" class="tick" text-anchor="middle">2022</text>
+<text x="403.1" y="276" class="tick" text-anchor="middle">2023</text>
+<text x="451.6" y="276" class="tick" text-anchor="middle">2024</text>
+<text x="500.0" y="276" class="tick" text-anchor="middle">2025</text>
+<text x="12" y="140.0" class="axis" transform="rotate(-90 12 140.0)" text-anchor="middle">kg</text>
+<line x1="475.8" x2="475.8" y1="20" y2="260" class="ref"/>
+<text x="478.8" y="30" class="tick">2025 は何度か見た期間</text>
+<line x1="64.0" x2="64.0" y1="202.9" y2="189.7" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="112.4" x2="112.4" y1="208.6" y2="195.6" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="160.9" x2="160.9" y1="203.4" y2="190.3" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="209.3" x2="209.3" y1="223.2" y2="209.6" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="257.8" x2="257.8" y1="205.5" y2="192.4" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="306.2" x2="306.2" y1="227.7" y2="214.0" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="354.7" x2="354.7" y1="234.8" y2="220.9" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="403.1" x2="403.1" y1="110.8" y2="94.6" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="451.6" x2="451.6" y1="45.6" y2="31.6" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="500.0" x2="500.0" y1="40.7" y2="26.8" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<path d="M64.0,196.3 L112.4,202.1 L160.9,196.8 L209.3,216.4 L257.8,198.9 L306.2,220.9 L354.7,227.9 L403.1,102.7 L451.6,38.6 L500.0,33.8" fill="none" stroke="var(--s1)" stroke-width="2"/>
+<circle cx="64.0" cy="196.3" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>斤量の平均 2016: 54.83（区間 54.80〜54.87）</title></circle>
+<circle cx="112.4" cy="202.1" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>斤量の平均 2017: 54.80（区間 54.77〜54.84）</title></circle>
+<circle cx="160.9" cy="196.8" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>斤量の平均 2018: 54.83（区間 54.79〜54.86）</title></circle>
+<circle cx="209.3" cy="216.4" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>斤量の平均 2019: 54.73（区間 54.69〜54.76）</title></circle>
+<circle cx="257.8" cy="198.9" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>斤量の平均 2020: 54.82（区間 54.78〜54.85）</title></circle>
+<circle cx="306.2" cy="220.9" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>斤量の平均 2021: 54.70（区間 54.67〜54.74）</title></circle>
+<circle cx="354.7" cy="227.9" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>斤量の平均 2022: 54.67（区間 54.63〜54.70）</title></circle>
+<circle cx="403.1" cy="102.7" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>斤量の平均 2023: 55.32（区間 55.28〜55.36）</title></circle>
+<circle cx="451.6" cy="38.6" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>斤量の平均 2024: 55.65（区間 55.62〜55.69）</title></circle>
+<circle cx="500.0" cy="33.8" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>斤量の平均 2025: 55.68（区間 55.64〜55.71）</title></circle>
+</svg><figcaption>2023 年の負担重量の規則の変更で段差、2024 年にも上積み</figcaption></figure>
+<figure><svg viewBox="0 0 660 300" role="img" aria-label="平均頭数" class="chart">
+<title>平均頭数</title>
+<line x1="64" x2="500" y1="260.0" y2="260.0" class="grid"/>
+<text x="58" y="264.0" class="tick" text-anchor="end">13.5</text>
+<line x1="64" x2="500" y1="212.0" y2="212.0" class="grid"/>
+<text x="58" y="216.0" class="tick" text-anchor="end">13.8</text>
+<line x1="64" x2="500" y1="164.0" y2="164.0" class="grid"/>
+<text x="58" y="168.0" class="tick" text-anchor="end">14.0</text>
+<line x1="64" x2="500" y1="116.0" y2="116.0" class="grid"/>
+<text x="58" y="120.0" class="tick" text-anchor="end">14.2</text>
+<line x1="64" x2="500" y1="68.0" y2="68.0" class="grid"/>
+<text x="58" y="72.0" class="tick" text-anchor="end">14.5</text>
+<line x1="64" x2="500" y1="20.0" y2="20.0" class="grid"/>
+<text x="58" y="24.0" class="tick" text-anchor="end">14.8</text>
+<text x="64.0" y="276" class="tick" text-anchor="middle">2016</text>
+<text x="112.4" y="276" class="tick" text-anchor="middle">2017</text>
+<text x="160.9" y="276" class="tick" text-anchor="middle">2018</text>
+<text x="209.3" y="276" class="tick" text-anchor="middle">2019</text>
+<text x="257.8" y="276" class="tick" text-anchor="middle">2020</text>
+<text x="306.2" y="276" class="tick" text-anchor="middle">2021</text>
+<text x="354.7" y="276" class="tick" text-anchor="middle">2022</text>
+<text x="403.1" y="276" class="tick" text-anchor="middle">2023</text>
+<text x="451.6" y="276" class="tick" text-anchor="middle">2024</text>
+<text x="500.0" y="276" class="tick" text-anchor="middle">2025</text>
+<text x="12" y="140.0" class="axis" transform="rotate(-90 12 140.0)" text-anchor="middle">頭</text>
+<line x1="475.8" x2="475.8" y1="20" y2="260" class="ref"/>
+<text x="478.8" y="30" class="tick">2025 は何度か見た期間</text>
+<line x1="64.0" x2="64.0" y1="68.8" y2="36.7" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="112.4" x2="112.4" y1="116.1" y2="81.9" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="160.9" x2="160.9" y1="155.2" y2="119.5" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="209.3" x2="209.3" y1="214.0" y2="177.3" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="257.8" x2="257.8" y1="177.3" y2="141.3" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="306.2" x2="306.2" y1="198.2" y2="161.8" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="354.7" x2="354.7" y1="229.9" y2="193.1" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="403.1" x2="403.1" y1="205.0" y2="168.5" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="451.6" x2="451.6" y1="228.4" y2="190.7" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="500.0" x2="500.0" y1="194.8" y2="156.8" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<path d="M64.0,52.8 L112.4,99.0 L160.9,137.3 L209.3,195.6 L257.8,159.3 L306.2,180.0 L354.7,211.5 L403.1,186.7 L451.6,209.5 L500.0,175.8" fill="none" stroke="var(--s1)" stroke-width="2"/>
+<circle cx="64.0" cy="52.8" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>平均頭数 2016: 14.58（区間 14.50〜14.66）</title></circle>
+<circle cx="112.4" cy="99.0" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>平均頭数 2017: 14.34（区間 14.25〜14.43）</title></circle>
+<circle cx="160.9" cy="137.3" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>平均頭数 2018: 14.14（区間 14.05〜14.23）</title></circle>
+<circle cx="209.3" cy="195.6" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>平均頭数 2019: 13.84（区間 13.74〜13.93）</title></circle>
+<circle cx="257.8" cy="159.3" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>平均頭数 2020: 14.02（区間 13.93〜14.12）</title></circle>
+<circle cx="306.2" cy="180.0" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>平均頭数 2021: 13.92（区間 13.82〜14.01）</title></circle>
+<circle cx="354.7" cy="211.5" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>平均頭数 2022: 13.75（区間 13.66〜13.85）</title></circle>
+<circle cx="403.1" cy="186.7" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>平均頭数 2023: 13.88（区間 13.79〜13.98）</title></circle>
+<circle cx="451.6" cy="209.5" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>平均頭数 2024: 13.76（区間 13.66〜13.86）</title></circle>
+<circle cx="500.0" cy="175.8" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>平均頭数 2025: 13.94（区間 13.84〜14.04）</title></circle>
+</svg><figcaption>2018 年から段差（9 頭以下のレースが約 2 倍）</figcaption></figure>
+<figure><svg viewBox="0 0 660 300" role="img" aria-label="前走からの間隔の平均" class="chart">
+<title>前走からの間隔の平均</title>
+<line x1="64" x2="500" y1="260.0" y2="260.0" class="grid"/>
+<text x="58" y="264.0" class="tick" text-anchor="end">50.0</text>
+<line x1="64" x2="500" y1="200.0" y2="200.0" class="grid"/>
+<text x="58" y="204.0" class="tick" text-anchor="end">52.0</text>
+<line x1="64" x2="500" y1="140.0" y2="140.0" class="grid"/>
+<text x="58" y="144.0" class="tick" text-anchor="end">54.0</text>
+<line x1="64" x2="500" y1="80.0" y2="80.0" class="grid"/>
+<text x="58" y="84.0" class="tick" text-anchor="end">56.0</text>
+<line x1="64" x2="500" y1="20.0" y2="20.0" class="grid"/>
+<text x="58" y="24.0" class="tick" text-anchor="end">58.0</text>
+<text x="64.0" y="276" class="tick" text-anchor="middle">2017</text>
+<text x="118.5" y="276" class="tick" text-anchor="middle">2018</text>
+<text x="173.0" y="276" class="tick" text-anchor="middle">2019</text>
+<text x="227.5" y="276" class="tick" text-anchor="middle">2020</text>
+<text x="282.0" y="276" class="tick" text-anchor="middle">2021</text>
+<text x="336.5" y="276" class="tick" text-anchor="middle">2022</text>
+<text x="391.0" y="276" class="tick" text-anchor="middle">2023</text>
+<text x="445.5" y="276" class="tick" text-anchor="middle">2024</text>
+<text x="500.0" y="276" class="tick" text-anchor="middle">2025</text>
+<text x="12" y="140.0" class="axis" transform="rotate(-90 12 140.0)" text-anchor="middle">日</text>
+<line x1="472.8" x2="472.8" y1="20" y2="260" class="ref"/>
+<text x="475.8" y="30" class="tick">2025 は何度か見た期間</text>
+<line x1="64.0" x2="64.0" y1="242.6" y2="198.0" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="118.5" x2="118.5" y1="182.6" y2="135.1" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="173.0" x2="173.0" y1="159.4" y2="112.1" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="227.5" x2="227.5" y1="138.3" y2="89.3" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="282.0" x2="282.0" y1="138.3" y2="91.3" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="336.5" x2="336.5" y1="119.2" y2="70.8" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="391.0" x2="391.0" y1="117.9" y2="70.6" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="445.5" x2="445.5" y1="82.5" y2="33.4" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="500.0" x2="500.0" y1="77.7" y2="31.3" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<path d="M64.0,220.3 L118.5,158.9 L173.0,135.7 L227.5,113.8 L282.0,114.8 L336.5,95.0 L391.0,94.3 L445.5,58.0 L500.0,54.5" fill="none" stroke="var(--s1)" stroke-width="2"/>
+<circle cx="64.0" cy="220.3" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前走からの間隔の平均 2017: 51.3（区間 50.6〜52.1）</title></circle>
+<circle cx="118.5" cy="158.9" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前走からの間隔の平均 2018: 53.4（区間 52.6〜54.2）</title></circle>
+<circle cx="173.0" cy="135.7" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前走からの間隔の平均 2019: 54.1（区間 53.4〜54.9）</title></circle>
+<circle cx="227.5" cy="113.8" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前走からの間隔の平均 2020: 54.9（区間 54.1〜55.7）</title></circle>
+<circle cx="282.0" cy="114.8" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前走からの間隔の平均 2021: 54.8（区間 54.1〜55.6）</title></circle>
+<circle cx="336.5" cy="95.0" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前走からの間隔の平均 2022: 55.5（区間 54.7〜56.3）</title></circle>
+<circle cx="391.0" cy="94.3" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前走からの間隔の平均 2023: 55.5（区間 54.7〜56.3）</title></circle>
+<circle cx="445.5" cy="58.0" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前走からの間隔の平均 2024: 56.7（区間 55.9〜57.6）</title></circle>
+<circle cx="500.0" cy="54.5" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>前走からの間隔の平均 2025: 56.9（区間 56.1〜57.6）</title></circle>
+</svg><figcaption>365 日で頭打ち。2017 年から。緩やかに延びている</figcaption></figure>
+<figure><svg viewBox="0 0 660 300" role="img" aria-label="1 番人気の勝率" class="chart">
+<title>1 番人気の勝率</title>
+<line x1="64" x2="500" y1="260.0" y2="260.0" class="grid"/>
+<text x="58" y="264.0" class="tick" text-anchor="end">0.300</text>
+<line x1="64" x2="500" y1="180.0" y2="180.0" class="grid"/>
+<text x="58" y="184.0" class="tick" text-anchor="end">0.320</text>
+<line x1="64" x2="500" y1="100.0" y2="100.0" class="grid"/>
+<text x="58" y="104.0" class="tick" text-anchor="end">0.340</text>
+<line x1="64" x2="500" y1="20.0" y2="20.0" class="grid"/>
+<text x="58" y="24.0" class="tick" text-anchor="end">0.360</text>
+<text x="64.0" y="276" class="tick" text-anchor="middle">2016</text>
+<text x="112.4" y="276" class="tick" text-anchor="middle">2017</text>
+<text x="160.9" y="276" class="tick" text-anchor="middle">2018</text>
+<text x="209.3" y="276" class="tick" text-anchor="middle">2019</text>
+<text x="257.8" y="276" class="tick" text-anchor="middle">2020</text>
+<text x="306.2" y="276" class="tick" text-anchor="middle">2021</text>
+<text x="354.7" y="276" class="tick" text-anchor="middle">2022</text>
+<text x="403.1" y="276" class="tick" text-anchor="middle">2023</text>
+<text x="451.6" y="276" class="tick" text-anchor="middle">2024</text>
+<text x="500.0" y="276" class="tick" text-anchor="middle">2025</text>
+<text x="12" y="140.0" class="axis" transform="rotate(-90 12 140.0)" text-anchor="middle">勝率</text>
+<line x1="475.8" x2="475.8" y1="20" y2="260" class="ref"/>
+<text x="478.8" y="30" class="tick">2025 は何度か見た期間</text>
+<line x1="64.0" x2="64.0" y1="208.7" y2="80.8" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="112.4" x2="112.4" y1="185.6" y2="57.3" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="160.9" x2="160.9" y1="253.0" y2="126.3" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="209.3" x2="209.3" y1="221.4" y2="93.8" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="257.8" x2="257.8" y1="235.6" y2="108.5" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="306.2" x2="306.2" y1="214.3" y2="86.5" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="354.7" x2="354.7" y1="159.1" y2="30.0" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="403.1" x2="403.1" y1="202.8" y2="74.7" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="451.6" x2="451.6" y1="153.1" y2="24.0" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="500.0" x2="500.0" y1="201.8" y2="74.0" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<path d="M64.0,144.7 L112.4,121.5 L160.9,189.7 L209.3,157.6 L257.8,172.0 L306.2,150.4 L354.7,94.6 L403.1,138.7 L451.6,88.5 L500.0,137.9" fill="none" stroke="var(--s1)" stroke-width="2"/>
+<circle cx="64.0" cy="144.7" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>1 番人気の勝率 2016: 0.329（区間 0.313〜0.345）</title></circle>
+<circle cx="112.4" cy="121.5" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>1 番人気の勝率 2017: 0.335（区間 0.319〜0.351）</title></circle>
+<circle cx="160.9" cy="189.7" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>1 番人気の勝率 2018: 0.318（区間 0.302〜0.333）</title></circle>
+<circle cx="209.3" cy="157.6" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>1 番人気の勝率 2019: 0.326（区間 0.310〜0.342）</title></circle>
+<circle cx="257.8" cy="172.0" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>1 番人気の勝率 2020: 0.322（区間 0.306〜0.338）</title></circle>
+<circle cx="306.2" cy="150.4" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>1 番人気の勝率 2021: 0.327（区間 0.311〜0.343）</title></circle>
+<circle cx="354.7" cy="94.6" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>1 番人気の勝率 2022: 0.341（区間 0.325〜0.357）</title></circle>
+<circle cx="403.1" cy="138.7" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>1 番人気の勝率 2023: 0.330（区間 0.314〜0.346）</title></circle>
+<circle cx="451.6" cy="88.5" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>1 番人気の勝率 2024: 0.343（区間 0.327〜0.359）</title></circle>
+<circle cx="500.0" cy="137.9" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>1 番人気の勝率 2025: 0.331（区間 0.315〜0.347）</title></circle>
+</svg><figcaption>偶然の幅（I² = 0.05）。市場の当たり方は変わっていない</figcaption></figure>
+<figure><svg viewBox="0 0 660 300" role="img" aria-label="本命・大穴の偏り" class="chart">
+<title>本命・大穴の偏り</title>
+<line x1="64" x2="500" y1="260.0" y2="260.0" class="grid"/>
+<text x="58" y="264.0" class="tick" text-anchor="end">-0.100</text>
+<line x1="64" x2="500" y1="212.0" y2="212.0" class="grid"/>
+<text x="58" y="216.0" class="tick" text-anchor="end">-0.075</text>
+<line x1="64" x2="500" y1="164.0" y2="164.0" class="grid"/>
+<text x="58" y="168.0" class="tick" text-anchor="end">-0.050</text>
+<line x1="64" x2="500" y1="116.0" y2="116.0" class="grid"/>
+<text x="58" y="120.0" class="tick" text-anchor="end">-0.025</text>
+<line x1="64" x2="500" y1="68.0" y2="68.0" class="grid"/>
+<text x="58" y="72.0" class="tick" text-anchor="end">-0.000</text>
+<line x1="64" x2="500" y1="20.0" y2="20.0" class="grid"/>
+<text x="58" y="24.0" class="tick" text-anchor="end">0.025</text>
+<text x="64.0" y="276" class="tick" text-anchor="middle">2016</text>
+<text x="112.4" y="276" class="tick" text-anchor="middle">2017</text>
+<text x="160.9" y="276" class="tick" text-anchor="middle">2018</text>
+<text x="209.3" y="276" class="tick" text-anchor="middle">2019</text>
+<text x="257.8" y="276" class="tick" text-anchor="middle">2020</text>
+<text x="306.2" y="276" class="tick" text-anchor="middle">2021</text>
+<text x="354.7" y="276" class="tick" text-anchor="middle">2022</text>
+<text x="403.1" y="276" class="tick" text-anchor="middle">2023</text>
+<text x="451.6" y="276" class="tick" text-anchor="middle">2024</text>
+<text x="500.0" y="276" class="tick" text-anchor="middle">2025</text>
+<text x="12" y="140.0" class="axis" transform="rotate(-90 12 140.0)" text-anchor="middle">回収率の log オッズへの傾き</text>
+<line x1="64" x2="500" y1="68.0" y2="68.0" class="ref"/>
+<text x="504" y="72.0" class="tick">偏りなし</text>
+<line x1="475.8" x2="475.8" y1="20" y2="260" class="ref"/>
+<text x="478.8" y="30" class="tick">2025 は何度か見た期間</text>
+<line x1="64.0" x2="64.0" y1="196.2" y2="64.2" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="112.4" x2="112.4" y1="201.9" y2="81.0" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="160.9" x2="160.9" y1="220.3" y2="106.4" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="209.3" x2="209.3" y1="216.2" y2="104.8" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="257.8" x2="257.8" y1="164.7" y2="32.7" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="306.2" x2="306.2" y1="242.9" y2="128.5" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="354.7" x2="354.7" y1="243.6" y2="115.6" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="403.1" x2="403.1" y1="238.9" y2="125.9" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="451.6" x2="451.6" y1="217.0" y2="100.7" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="500.0" x2="500.0" y1="213.5" y2="97.7" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<path d="M64.0,131.1 L112.4,144.4 L160.9,165.1 L209.3,163.4 L257.8,101.4 L306.2,185.1 L354.7,181.2 L403.1,184.4 L451.6,160.7 L500.0,154.8" fill="none" stroke="var(--s1)" stroke-width="2"/>
+<circle cx="64.0" cy="131.1" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>本命・大穴の偏り 2016: -0.033（区間 -0.067〜0.002）</title></circle>
+<circle cx="112.4" cy="144.4" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>本命・大穴の偏り 2017: -0.040（区間 -0.070〜-0.007）</title></circle>
+<circle cx="160.9" cy="165.1" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>本命・大穴の偏り 2018: -0.051（区間 -0.079〜-0.020）</title></circle>
+<circle cx="209.3" cy="163.4" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>本命・大穴の偏り 2019: -0.050（区間 -0.077〜-0.019）</title></circle>
+<circle cx="257.8" cy="101.4" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>本命・大穴の偏り 2020: -0.017（区間 -0.050〜0.018）</title></circle>
+<circle cx="306.2" cy="185.1" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>本命・大穴の偏り 2021: -0.061（区間 -0.091〜-0.031）</title></circle>
+<circle cx="354.7" cy="181.2" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>本命・大穴の偏り 2022: -0.059（区間 -0.091〜-0.025）</title></circle>
+<circle cx="403.1" cy="184.4" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>本命・大穴の偏り 2023: -0.061（区間 -0.089〜-0.030）</title></circle>
+<circle cx="451.6" cy="160.7" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>本命・大穴の偏り 2024: -0.048（区間 -0.078〜-0.017）</title></circle>
+<circle cx="500.0" cy="154.8" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>本命・大穴の偏り 2025: -0.045（区間 -0.076〜-0.015）</title></circle>
+</svg><figcaption>負なら大穴ほど回収率が低い。毎年あるが、縮んでも広がってもいない（偶然の幅）</figcaption></figure>
+</div>
+<div class="tw"><table><thead><tr><th>指標</th><th>2016 → 2024（2025 は印）</th><th>年の揺れ τ ÷ 平均</th><th>傾き/年（95% 区間）</th><th>判定</th><th>事象と根拠</th></tr></thead><tbody>
+<tr><td>前と後ろの複勝率の差（全体）</td><td>0.275 → 0.315（0.305）</td><td>4.1%</td><td>+0.0044（+0.0031〜+0.0057）</td><td>緩やかな傾向</td><td>前残りが年々強い。構成をそろえても +0.0035/年で残り、層の中で起きている。芝 +0.0057/年、ダは標準化後 p=0.065 で境界</td></tr>
+<tr><td>内枠 − 外枠の複勝率（芝・14 頭以上）</td><td>平均 +1.4 ポイント</td><td>0</td><td>−0.0002（−0.0028〜+0.0025）</td><td>偶然の幅</td><td>芝の内枠の有利は毎年同じ大きさ（I²=0）</td></tr>
+<tr><td>1 番人気の勝率</td><td>0.329 → 0.343（0.331）</td><td>0.6%</td><td>+0.0015（−0.0010〜+0.0040）</td><td>偶然の幅</td><td>市場の当たり方は変わっていない</td></tr>
+<tr><td>市場の較正の傾き β</td><td>1.011 → 1.047（1.023）</td><td>0.4%</td><td>+0.0041（−0.0016〜+0.0098）</td><td>偶然の幅</td><td>条件付きロジットの傾き。1 なら較正。ほぼ 1 で一定</td></tr>
+<tr><td>本命・大穴の偏り（回収率を log オッズに回帰した傾き）</td><td>−0.033 → −0.048（−0.045）</td><td>0</td><td>−0.0025（−0.0074〜+0.0024）</td><td>偶然の幅</td><td>偏りは毎年ある（大穴ほど回収率が低い）が、縮んでも広がってもいない</td></tr>
+<tr><td>単勝の均等買いの回収率</td><td>0.741 → 0.710（0.718）</td><td>0</td><td>−0.0037（−0.0113〜+0.0038）</td><td>偶然の幅</td><td>控除 20% の水準で一定</td></tr>
+<tr><td>Σ(1/単勝オッズ)（2 歳戦の年平均）</td><td>1.249（2016）→ 1.208〜1.214（2017〜2023）→ 1.266（2024）・1.267（2025）</td><td>－</td><td>－</td><td>段差（制度）</td><td>2 歳戦の単勝の上乗せ（§3）。3 歳以上は 10 年 1.264 前後で一定。2 歳戦の複勝の回収率は 3 歳以上と同じ水準で、上乗せは単勝だけ</td></tr>
+<tr><td>上がり最速の馬の勝率</td><td>0.302 → 0.336（0.317）</td><td>4.4%</td><td>+0.0034（−0.0009〜+0.0077）</td><td>段差（2018 年から）・弱い</td><td>頭数の段差と同じ年。原因は特定できない</td></tr>
+<tr><td>芝の良馬場の勝ち時計（秒/1000m、コース × クラスの効果を除く）</td><td>+0.15 → −0.23（−0.30）</td><td>τ は SE の 7 倍</td><td>−0.044（−0.060〜−0.029）</td><td>緩やかな傾向</td><td>多くの競馬場で同じ向き。京都の芝は改修後に速い。ダは 2020 年から約 −0.09 の段差</td></tr>
+<tr><td>前走からの間隔の平均（日、2017〜）</td><td>51.3 → 56.7（56.9）</td><td>3.0%</td><td>+0.64（+0.40〜+0.87）</td><td>緩やかな傾向</td><td>標準化しても同じ。中 3 週以内の割合は −0.5 ポイント/年</td></tr>
+<tr><td>斤量の平均（kg）</td><td>54.83 → 55.65（55.68）</td><td>0.6%</td><td>－</td><td>段差（2023 年から）</td><td>負担重量の規則の変更（§3）。2024 年にも +0.33kg。58kg 以上 0.4% → 15%</td></tr>
+<tr><td>平均頭数</td><td>14.58 → 13.76（13.94）</td><td>2.1%</td><td>−0.093（−0.138〜−0.048）</td><td>段差（2018 年から）</td><td>9 頭以下のレースが 4.9% → 約 10%</td></tr>
+<tr><td>1 勝クラスのレースの割合</td><td>31.7% → 28.0%（27.3%）</td><td>5.3%</td><td>−0.0057（−0.0083〜−0.0031）</td><td>段差（2020 年から）</td><td>2019 年夏の降級の廃止の後</td></tr>
+<tr><td>上位 10 頭の父の出走の割合</td><td>28.1% → 23.1%（21.8%）</td><td>5.8%</td><td>−0.0039（−0.0075〜−0.0003）</td><td>段差（2023 年から）</td><td>ディープインパクト・キングカメハメハの最後の世代が減った</td></tr>
+<tr><td>騎手の上位 10 人の勝利の割合</td><td>33〜36%</td><td>1.2%</td><td>−0.0008（−0.0037〜+0.0021）</td><td>偶然の幅</td><td>前年の勝率との相関（騎手 0.86〜0.92・厩舎 0.77〜0.83）も一定。騎手の HHI は緩やかに低下（境界）</td></tr>
+<tr><td>馬場（芝の割合・良の割合）</td><td>芝 49〜50%</td><td>－</td><td>－</td><td>偶然の幅〜天候の揺れ</td><td>良の割合は AIC が段差を選ぶが、天候の年ごとの揺れで事象としては描かない</td></tr>
+<tr><td>馬体重の平均</td><td>0.4kg ほどの差</td><td>0.1%</td><td>－</td><td>実質の変化なし</td><td>統計的には段差だが大きさは平均の 0.1%</td></tr>
+</tbody></table></div>
+<h3>2026 年の入力の分布（出馬表、1/1〜11/8）</h3>
+<ul>
+<li>PSI（2024・2025 年と比べて）: 頭数・距離帯・芝ダ・クラス・斤量・馬体重・性・年齢はどれも 0.01 未満。競馬場だけ 0.061（通常の 1 年の差 2025 対 2024 の 0.067 より小さい）。</li>
+<li>事象: 2026 年のレースの属性の分布は 2025 年と同じ。根拠: PSI の定石の閾値（0.1 未満は変化なし）を大きく下回る。特徴量の入力の質（調教の被覆など）は、この PSI では見ていない。</li>
+</ul>
+<h2>3. 外部の事象（出典つき）</h2>
+<figure><svg viewBox="0 0 660 300" role="img" aria-label="Σ(1/単勝オッズ) の推移" class="chart">
+<title>Σ(1/単勝オッズ) の推移</title>
+<line x1="64" x2="500" y1="260.0" y2="260.0" class="grid"/>
+<text x="58" y="264.0" class="tick" text-anchor="end">1.200</text>
+<line x1="64" x2="500" y1="200.0" y2="200.0" class="grid"/>
+<text x="58" y="204.0" class="tick" text-anchor="end">1.220</text>
+<line x1="64" x2="500" y1="140.0" y2="140.0" class="grid"/>
+<text x="58" y="144.0" class="tick" text-anchor="end">1.240</text>
+<line x1="64" x2="500" y1="80.0" y2="80.0" class="grid"/>
+<text x="58" y="84.0" class="tick" text-anchor="end">1.260</text>
+<line x1="64" x2="500" y1="20.0" y2="20.0" class="grid"/>
+<text x="58" y="24.0" class="tick" text-anchor="end">1.280</text>
+<text x="65.9" y="276" class="tick" text-anchor="middle">2016</text>
+<text x="111.6" y="276" class="tick" text-anchor="middle">2017</text>
+<text x="157.3" y="276" class="tick" text-anchor="middle">2018</text>
+<text x="203.0" y="276" class="tick" text-anchor="middle">2019</text>
+<text x="248.7" y="276" class="tick" text-anchor="middle">2020</text>
+<text x="294.4" y="276" class="tick" text-anchor="middle">2021</text>
+<text x="340.1" y="276" class="tick" text-anchor="middle">2022</text>
+<text x="385.8" y="276" class="tick" text-anchor="middle">2023</text>
+<text x="431.5" y="276" class="tick" text-anchor="middle">2024</text>
+<text x="477.2" y="276" class="tick" text-anchor="middle">2025</text>
+<text x="12" y="140.0" class="axis" transform="rotate(-90 12 140.0)" text-anchor="middle">Σ(1/オッズ)</text>
+<line x1="64" x2="500" y1="110.0" y2="110.0" class="ref"/>
+<text x="504" y="114.0" class="tick">払戻率 80% の逆数</text>
+<path d="M64.0,239.0 L67.8,251.0 L71.6,245.0 L75.4,77.0 L79.2,65.0 L83.0,65.0 L86.8,68.0 M109.7,251.0 L113.5,251.0 L117.3,245.0 L121.1,251.0 L124.9,242.0 L128.7,242.0 L132.5,239.0 M155.4,239.0 L159.2,239.0 L163.0,230.0 L166.8,233.0 L170.6,245.0 L174.4,245.0 L178.2,230.0 M201.1,236.0 L204.9,242.0 L208.7,245.0 L212.5,251.0 L216.3,248.0 L220.1,248.0 L223.9,242.0 M246.8,242.0 L250.6,254.0 L254.4,248.0 L258.2,257.0 L262.0,254.0 L265.8,251.0 L269.6,242.0 M292.5,236.0 L296.3,242.0 L300.1,236.0 L303.9,251.0 L307.7,251.0 L311.5,251.0 L315.3,239.0 M338.2,236.0 L342.0,239.0 L345.8,242.0 L349.6,239.0 L353.4,251.0 L357.2,248.0 L361.0,233.0 M383.9,236.0 L387.7,239.0 L391.5,248.0 L395.3,242.0 L399.1,248.0 L402.9,248.0 L406.7,242.0 M429.6,56.0 L433.4,65.0 L437.2,53.0 L441.0,68.0 L444.8,65.0 L448.6,62.0 L452.4,59.0 M475.3,50.0 L479.1,56.0 L482.9,62.0 L486.7,59.0 L490.5,65.0 L494.3,65.0 L498.1,68.0" fill="none" stroke="var(--s1)" stroke-width="2"/>
+<circle cx="64.0" cy="239.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2016 年 6 月: 1.207</title></circle>
+<circle cx="67.8" cy="251.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2016 年 7 月: 1.203</title></circle>
+<circle cx="71.6" cy="245.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2016 年 8 月: 1.205</title></circle>
+<circle cx="75.4" cy="77.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2016 年 9 月: 1.261</title></circle>
+<circle cx="79.2" cy="65.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2016 年 10 月: 1.265</title></circle>
+<circle cx="83.0" cy="65.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2016 年 11 月: 1.265</title></circle>
+<circle cx="86.8" cy="68.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2016 年 12 月: 1.264</title></circle>
+<circle cx="109.7" cy="251.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2017 年 6 月: 1.203</title></circle>
+<circle cx="113.5" cy="251.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2017 年 7 月: 1.203</title></circle>
+<circle cx="117.3" cy="245.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2017 年 8 月: 1.205</title></circle>
+<circle cx="121.1" cy="251.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2017 年 9 月: 1.203</title></circle>
+<circle cx="124.9" cy="242.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2017 年 10 月: 1.206</title></circle>
+<circle cx="128.7" cy="242.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2017 年 11 月: 1.206</title></circle>
+<circle cx="132.5" cy="239.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2017 年 12 月: 1.207</title></circle>
+<circle cx="155.4" cy="239.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2018 年 6 月: 1.207</title></circle>
+<circle cx="159.2" cy="239.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2018 年 7 月: 1.207</title></circle>
+<circle cx="163.0" cy="230.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2018 年 8 月: 1.210</title></circle>
+<circle cx="166.8" cy="233.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2018 年 9 月: 1.209</title></circle>
+<circle cx="170.6" cy="245.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2018 年 10 月: 1.205</title></circle>
+<circle cx="174.4" cy="245.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2018 年 11 月: 1.205</title></circle>
+<circle cx="178.2" cy="230.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2018 年 12 月: 1.210</title></circle>
+<circle cx="201.1" cy="236.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2019 年 6 月: 1.208</title></circle>
+<circle cx="204.9" cy="242.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2019 年 7 月: 1.206</title></circle>
+<circle cx="208.7" cy="245.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2019 年 8 月: 1.205</title></circle>
+<circle cx="212.5" cy="251.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2019 年 9 月: 1.203</title></circle>
+<circle cx="216.3" cy="248.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2019 年 10 月: 1.204</title></circle>
+<circle cx="220.1" cy="248.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2019 年 11 月: 1.204</title></circle>
+<circle cx="223.9" cy="242.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2019 年 12 月: 1.206</title></circle>
+<circle cx="246.8" cy="242.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2020 年 6 月: 1.206</title></circle>
+<circle cx="250.6" cy="254.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2020 年 7 月: 1.202</title></circle>
+<circle cx="254.4" cy="248.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2020 年 8 月: 1.204</title></circle>
+<circle cx="258.2" cy="257.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2020 年 9 月: 1.201</title></circle>
+<circle cx="262.0" cy="254.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2020 年 10 月: 1.202</title></circle>
+<circle cx="265.8" cy="251.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2020 年 11 月: 1.203</title></circle>
+<circle cx="269.6" cy="242.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2020 年 12 月: 1.206</title></circle>
+<circle cx="292.5" cy="236.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2021 年 6 月: 1.208</title></circle>
+<circle cx="296.3" cy="242.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2021 年 7 月: 1.206</title></circle>
+<circle cx="300.1" cy="236.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2021 年 8 月: 1.208</title></circle>
+<circle cx="303.9" cy="251.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2021 年 9 月: 1.203</title></circle>
+<circle cx="307.7" cy="251.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2021 年 10 月: 1.203</title></circle>
+<circle cx="311.5" cy="251.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2021 年 11 月: 1.203</title></circle>
+<circle cx="315.3" cy="239.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2021 年 12 月: 1.207</title></circle>
+<circle cx="338.2" cy="236.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2022 年 6 月: 1.208</title></circle>
+<circle cx="342.0" cy="239.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2022 年 7 月: 1.207</title></circle>
+<circle cx="345.8" cy="242.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2022 年 8 月: 1.206</title></circle>
+<circle cx="349.6" cy="239.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2022 年 9 月: 1.207</title></circle>
+<circle cx="353.4" cy="251.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2022 年 10 月: 1.203</title></circle>
+<circle cx="357.2" cy="248.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2022 年 11 月: 1.204</title></circle>
+<circle cx="361.0" cy="233.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2022 年 12 月: 1.209</title></circle>
+<circle cx="383.9" cy="236.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2023 年 6 月: 1.208</title></circle>
+<circle cx="387.7" cy="239.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2023 年 7 月: 1.207</title></circle>
+<circle cx="391.5" cy="248.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2023 年 8 月: 1.204</title></circle>
+<circle cx="395.3" cy="242.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2023 年 9 月: 1.206</title></circle>
+<circle cx="399.1" cy="248.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2023 年 10 月: 1.204</title></circle>
+<circle cx="402.9" cy="248.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2023 年 11 月: 1.204</title></circle>
+<circle cx="406.7" cy="242.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2023 年 12 月: 1.206</title></circle>
+<circle cx="429.6" cy="56.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2024 年 6 月: 1.268</title></circle>
+<circle cx="433.4" cy="65.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2024 年 7 月: 1.265</title></circle>
+<circle cx="437.2" cy="53.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2024 年 8 月: 1.269</title></circle>
+<circle cx="441.0" cy="68.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2024 年 9 月: 1.264</title></circle>
+<circle cx="444.8" cy="65.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2024 年 10 月: 1.265</title></circle>
+<circle cx="448.6" cy="62.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2024 年 11 月: 1.266</title></circle>
+<circle cx="452.4" cy="59.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2024 年 12 月: 1.267</title></circle>
+<circle cx="475.3" cy="50.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2025 年 6 月（何度か見た期間）: 1.270</title></circle>
+<circle cx="479.1" cy="56.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2025 年 7 月（何度か見た期間）: 1.268</title></circle>
+<circle cx="482.9" cy="62.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2025 年 8 月（何度か見た期間）: 1.266</title></circle>
+<circle cx="486.7" cy="59.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2025 年 9 月（何度か見た期間）: 1.267</title></circle>
+<circle cx="490.5" cy="65.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2025 年 10 月（何度か見た期間）: 1.265</title></circle>
+<circle cx="494.3" cy="65.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2025 年 11 月（何度か見た期間）: 1.265</title></circle>
+<circle cx="498.1" cy="68.0" r="2.5" fill="var(--s1)" stroke="var(--bg)" stroke-width="0"><title>2 歳戦（6〜12 月） 2025 年 12 月（何度か見た期間）: 1.264</title></circle>
+<text x="506.1" y="72.0" class="lab">2 歳戦（6〜12 月）</text>
+<path d="M65.9,68.0 L111.6,68.0 L157.3,68.0 L203.0,68.0 L248.7,68.0 L294.4,68.0 L340.1,68.0 L385.8,68.0 L431.5,68.0 L477.2,68.0" fill="none" stroke="var(--s2)" stroke-width="2"/>
+<circle cx="65.9" cy="68.0" r="2.5" fill="var(--s2)" stroke="var(--bg)" stroke-width="0"><title>3 歳以上（年の中央値） 2016 年: 1.264</title></circle>
+<circle cx="111.6" cy="68.0" r="2.5" fill="var(--s2)" stroke="var(--bg)" stroke-width="0"><title>3 歳以上（年の中央値） 2017 年: 1.264</title></circle>
+<circle cx="157.3" cy="68.0" r="2.5" fill="var(--s2)" stroke="var(--bg)" stroke-width="0"><title>3 歳以上（年の中央値） 2018 年: 1.264</title></circle>
+<circle cx="203.0" cy="68.0" r="2.5" fill="var(--s2)" stroke="var(--bg)" stroke-width="0"><title>3 歳以上（年の中央値） 2019 年: 1.264</title></circle>
+<circle cx="248.7" cy="68.0" r="2.5" fill="var(--s2)" stroke="var(--bg)" stroke-width="0"><title>3 歳以上（年の中央値） 2020 年: 1.264</title></circle>
+<circle cx="294.4" cy="68.0" r="2.5" fill="var(--s2)" stroke="var(--bg)" stroke-width="0"><title>3 歳以上（年の中央値） 2021 年: 1.264</title></circle>
+<circle cx="340.1" cy="68.0" r="2.5" fill="var(--s2)" stroke="var(--bg)" stroke-width="0"><title>3 歳以上（年の中央値） 2022 年: 1.264</title></circle>
+<circle cx="385.8" cy="68.0" r="2.5" fill="var(--s2)" stroke="var(--bg)" stroke-width="0"><title>3 歳以上（年の中央値） 2023 年: 1.264</title></circle>
+<circle cx="431.5" cy="68.0" r="2.5" fill="var(--s2)" stroke="var(--bg)" stroke-width="0"><title>3 歳以上（年の中央値） 2024 年: 1.264</title></circle>
+<circle cx="477.2" cy="68.0" r="2.5" fill="var(--s2)" stroke="var(--bg)" stroke-width="0"><title>3 歳以上（年の中央値） 2025 年: 1.264</title></circle>
+<text x="485.2" y="85.0" class="lab">3 歳以上（年の中央値）</text>
+</svg>
+<div class="legend"><span><i style="background:var(--s1)"></i>2 歳戦（6〜12 月）</span><span><i style="background:var(--s2)"></i>3 歳以上（年の中央値）</span></div><figcaption>レースごとの Σ(1/確定単勝オッズ) の中央値（月ごと）。2 歳戦だけ 2016 年 6〜8 月と 2017〜2023 年の 6〜12 月が 1.201〜1.210（JRA プレミアム「2歳単勝」の上乗せ。年平均では 1.208〜1.214）。3 歳以上は 10 年 1.264 前後で一定（線は目安）</figcaption></figure>
+<div class="tw"><table><thead><tr><th>事象</th><th>時期</th><th>データに出たもの</th><th>出典</th></tr></thead><tbody>
+<tr><td>2 歳戦の単勝の上乗せ（JRA プレミアム「2歳単勝」: 通常の払戻に売上げの 5% 相当を上乗せ。人気が著しく集中すると上乗せされないことがある）</td><td>公式ページで 2016 年 6/4〜9/4、2017・2018 年は夏＋秋（9〜12 月）、2019・2021〜2023 年の夏を確認。2024 年は未確認（ページが開けない）</td><td>データでは 2016 年 6〜8 月と 2017〜2023 年の 6〜12 月のすべての月で、2 歳戦の Σ(1/単勝オッズ) の月の中央値が 1.201〜1.210（3 歳以上は 1.264 前後）。公式ページで確かめた期間より広い（2019〜2023 年の秋も上乗せの水準）。2017〜2023 年でも上乗せの水準（Σ&lt;1.245）のレースは 86〜92%で、1 番人気が 1.3 倍以下のレースでは 16〜41% だけ。2024・2025 年は 1〜3%（ほぼ 1 倍台前半の本命のレースで、オッズの端数の影響とみる）</td><td><a href="https://www.jra.go.jp/kouza/premium/2sai-tanshou/2016.html">https://www.jra.go.jp/kouza/premium/2sai-tanshou/2016.html</a> ・ <a href="https://jra.jp/kouza/premium/2sai-tanshou/2017autumn.html">https://jra.jp/kouza/premium/2sai-tanshou/2017autumn.html</a> ・ <a href="https://jra.jp/kouza/premium/2sai-tanshou/2019.html">https://jra.jp/kouza/premium/2sai-tanshou/2019.html</a> ・ <a href="https://www.jra.go.jp/kouza/premium/result.html">https://www.jra.go.jp/kouza/premium/result.html</a></td></tr>
+<tr><td>クラスの呼称の変更と 4 歳夏の降級の廃止</td><td>2019 年 6 月の夏季競馬から</td><td>1 勝クラスの割合の段差（2020 年から）</td><td><a href="https://www.jra.go.jp/keiba/rules/class.html">https://www.jra.go.jp/keiba/rules/class.html</a> ・ <a href="https://jra-van.jp/dlb/sdv/ml/20190508a.html">https://jra-van.jp/dlb/sdv/ml/20190508a.html</a></td></tr>
+<tr><td>負担重量の引き上げ（馬齢重量・別定の基礎重量・最低負担重量が +1kg、古馬 G1 は 58kg）</td><td>2023 年から（3 歳への適用の年は資料で 2023・2024 年が食い違う）</td><td>斤量の平均 2023 年 +0.65kg、2024 年 +0.33kg</td><td><a href="https://jra-van.jp/fun/kyanalyze/20230331.html">https://jra-van.jp/fun/kyanalyze/20230331.html</a> ・ <a href="https://www.jra.go.jp/keiba/rules/weight.html">https://www.jra.go.jp/keiba/rules/weight.html</a></td></tr>
+<tr><td>京都競馬場の改修の休止</td><td>2020-11-01 の開催が最後、2023-04-22 に再開</td><td>2021〜22 年は京都の行が無い（競馬場の構成の変化）。改修後の京都の芝は速い</td><td><a href="https://www.daily.co.jp/umaya/news/2023/04/18/0016255515.shtml">https://www.daily.co.jp/umaya/news/2023/04/18/0016255515.shtml</a></td></tr>
+<tr><td>阪神競馬場の改修の休止（芝の内側の張り替え・ダートの路盤の更新）</td><td>2024-04 の開催が最後、2025-03-01 に再開</td><td>2024 年の阪神の出走数は約 1/3</td><td><a href="https://www.daily.co.jp/umaya/news/2025/03/01/0018703747.shtml">https://www.daily.co.jp/umaya/news/2025/03/01/0018703747.shtml</a></td></tr>
+<tr><td>新型コロナによる無観客の開催</td><td>2020-02-29 から（2020-10-10 から一部の入場を再開）</td><td>電話・ネットの投票の比率が約 70%（2019）→ 約 93%（2020）。2020 年は単勝の回収率がやや高い（0.776）が偶然の幅</td><td><a href="https://www.bcnretail.com/market/detail/20200227_160121.html">https://www.bcnretail.com/market/detail/20200227_160121.html</a> ・ <a href="https://www.kantei.go.jp/jp/singi/gambletou_izonsho/kaigi/dai10/siryou02.pdf">https://www.kantei.go.jp/jp/singi/gambletou_izonsho/kaigi/dai10/siryou02.pdf</a></td></tr>
+<tr><td>芝のクッション値の公表</td><td>2020-09 から（専門サイトの注記。JRA の発表文は未確認）</td><td>公表の前は欠け</td><td><a href="https://www.jra.go.jp/keiba/baba/cushion/">https://www.jra.go.jp/keiba/baba/cushion/</a></td></tr>
+<tr><td>ディープインパクト・キングカメハメハの死亡</td><td>2019-07-30・2019-08-09</td><td>2023 年から上位の父の割合の段差</td><td><a href="https://www.daily.co.jp/horse/2019/07/31/0012564255.shtml">https://www.daily.co.jp/horse/2019/07/31/0012564255.shtml</a></td></tr>
+<tr><td>夏の暑熱対策（競走の時間帯の拡大）</td><td>2024 年に新潟で試行、2025 年は新潟・中京の 4 週、2026 年は 6 週（7/25〜8/30）</td><td>発走時刻の分布が午前と夕方に分かれる（2026 年の発走時刻は入力の監視で見る）</td><td><a href="https://www.jra.go.jp/news/202506/061604.html">https://www.jra.go.jp/news/202506/061604.html</a> ・ <a href="https://www.jra.go.jp/news/202511/111801.html">https://www.jra.go.jp/news/202511/111801.html</a></td></tr>
+<tr><td>2027 年夏の 1 日 7 レースの方針（報道、正式の発表の前）</td><td>2027 年</td><td>番組の構成の大きな変化の候補</td><td><a href="https://www.daily.co.jp/umaya/news/2026/05/29/0020410438.shtml">https://www.daily.co.jp/umaya/news/2026/05/29/0020410438.shtml</a></td></tr>
+<tr><td>払戻率</td><td>2014-06-07 から単複 80% など。2016〜2026 年の変更は見つからない</td><td>3 歳以上の Σ(1/オッズ) は 10 年一定</td><td><a href="https://www.jra.go.jp/news/other/20140303.html">https://www.jra.go.jp/news/other/20140303.html</a></td></tr>
+</tbody></table></div>
+<ul>
+<li>未確認: 国内の鞭・騎乗停止の規則の変更、ダートの砂の入れ替えの日付、ほかの競馬場の改修・エクイターフの時期、2024 年以降の 2 歳単勝の扱い（JRA ウルトラプレミアムに移った後）。日付の取れない改修は、競馬場 × コースの時計の月ごとの推移の段差で探せる。</li>
+<li>芝の時計の高速化は、対応する公開の事象を見つけていない（馬場の造り・番組・調教の変化などの複合と推定。根拠は弱い）。</li>
+</ul>
+<h2>4. 予測への影響</h2>
+<h3>4-1. 馬の予測モデル（XGBoost の勝ちの二値・1,193 列・漏れの除去 p01_fix を当てた入力）</h3>
+<div class="grid2">
+<figure><svg viewBox="0 0 660 300" role="img" aria-label="学習の窓の古さと、市場との差" class="chart">
+<title>学習の窓の古さと、市場との差</title>
+<line x1="64" x2="500" y1="260.0" y2="260.0" class="grid"/>
+<text x="58" y="264.0" class="tick" text-anchor="end">0.000</text>
+<line x1="64" x2="500" y1="212.0" y2="212.0" class="grid"/>
+<text x="58" y="216.0" class="tick" text-anchor="end">0.025</text>
+<line x1="64" x2="500" y1="164.0" y2="164.0" class="grid"/>
+<text x="58" y="168.0" class="tick" text-anchor="end">0.050</text>
+<line x1="64" x2="500" y1="116.0" y2="116.0" class="grid"/>
+<text x="58" y="120.0" class="tick" text-anchor="end">0.075</text>
+<line x1="64" x2="500" y1="68.0" y2="68.0" class="grid"/>
+<text x="58" y="72.0" class="tick" text-anchor="end">0.100</text>
+<line x1="64" x2="500" y1="20.0" y2="20.0" class="grid"/>
+<text x="58" y="24.0" class="tick" text-anchor="end">0.125</text>
+<text x="64.0" y="276" class="tick" text-anchor="middle">g=0（直前の 3 年）</text>
+<text x="209.3" y="276" class="tick" text-anchor="middle">g=1</text>
+<text x="354.7" y="276" class="tick" text-anchor="middle">g=2</text>
+<text x="500.0" y="276" class="tick" text-anchor="middle">g=3（3 年古い）</text>
+<text x="12" y="140.0" class="axis" transform="rotate(-90 12 140.0)" text-anchor="middle">勝ち馬の対数損失 − 市場</text>
+<line x1="64.0" x2="64.0" y1="165.0" y2="99.9" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="209.3" x2="209.3" y1="141.6" y2="74.3" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="354.7" x2="354.7" y1="126.1" y2="58.7" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="500.0" x2="500.0" y1="95.5" y2="25.8" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<path d="M64.0,132.2 L209.3,108.4 L354.7,93.4 L500.0,61.0" fill="none" stroke="var(--s1)" stroke-width="2"/>
+<circle cx="64.0" cy="132.2" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>2022 年 g=0（直前の 3 年）: 0.067（区間 0.049〜0.083）</title></circle>
+<circle cx="209.3" cy="108.4" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>2022 年 g=1: 0.079（区間 0.062〜0.097）</title></circle>
+<circle cx="354.7" cy="93.4" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>2022 年 g=2: 0.087（区間 0.070〜0.105）</title></circle>
+<circle cx="500.0" cy="61.0" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>2022 年 g=3（3 年古い）: 0.104（区間 0.086〜0.122）</title></circle>
+<text x="508.0" y="65.0" class="lab">2022 年</text>
+<line x1="64.0" x2="64.0" y1="197.2" y2="133.1" stroke="var(--s2)" stroke-width="1.5" opacity=".55"/>
+<line x1="209.3" x2="209.3" y1="189.8" y2="127.2" stroke="var(--s2)" stroke-width="1.5" opacity=".55"/>
+<line x1="354.7" x2="354.7" y1="165.0" y2="102.5" stroke="var(--s2)" stroke-width="1.5" opacity=".55"/>
+<line x1="500.0" x2="500.0" y1="149.9" y2="86.0" stroke="var(--s2)" stroke-width="1.5" opacity=".55"/>
+<path d="M64.0,163.6 L209.3,156.7 L354.7,132.6 L500.0,117.0" fill="none" stroke="var(--s2)" stroke-width="2"/>
+<circle cx="64.0" cy="163.6" r="4" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"><title>2023 年 g=0（直前の 3 年）: 0.050（区間 0.033〜0.066）</title></circle>
+<circle cx="209.3" cy="156.7" r="4" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"><title>2023 年 g=1: 0.054（区間 0.037〜0.069）</title></circle>
+<circle cx="354.7" cy="132.6" r="4" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"><title>2023 年 g=2: 0.066（区間 0.050〜0.082）</title></circle>
+<circle cx="500.0" cy="117.0" r="4" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"><title>2023 年 g=3（3 年古い）: 0.074（区間 0.057〜0.091）</title></circle>
+<text x="508.0" y="121.0" class="lab">2023 年</text>
+<line x1="64.0" x2="64.0" y1="198.5" y2="136.0" stroke="var(--s3)" stroke-width="1.5" opacity=".55"/>
+<line x1="209.3" x2="209.3" y1="184.3" y2="120.0" stroke="var(--s3)" stroke-width="1.5" opacity=".55"/>
+<line x1="354.7" x2="354.7" y1="176.9" y2="113.0" stroke="var(--s3)" stroke-width="1.5" opacity=".55"/>
+<line x1="500.0" x2="500.0" y1="145.8" y2="81.0" stroke="var(--s3)" stroke-width="1.5" opacity=".55"/>
+<path d="M64.0,168.4 L209.3,153.7 L354.7,144.9 L500.0,113.2" fill="none" stroke="var(--s3)" stroke-width="2"/>
+<circle cx="64.0" cy="168.4" r="4" fill="var(--s3)" stroke="var(--bg)" stroke-width="2"><title>2024 年 g=0（直前の 3 年）: 0.048（区間 0.032〜0.065）</title></circle>
+<circle cx="209.3" cy="153.7" r="4" fill="var(--s3)" stroke="var(--bg)" stroke-width="2"><title>2024 年 g=1: 0.055（区間 0.039〜0.073）</title></circle>
+<circle cx="354.7" cy="144.9" r="4" fill="var(--s3)" stroke="var(--bg)" stroke-width="2"><title>2024 年 g=2: 0.060（区間 0.043〜0.077）</title></circle>
+<circle cx="500.0" cy="113.2" r="4" fill="var(--s3)" stroke="var(--bg)" stroke-width="2"><title>2024 年 g=3（3 年古い）: 0.076（区間 0.059〜0.093）</title></circle>
+<text x="508.0" y="143.2" class="lab">2024 年</text>
+<line x1="64.0" x2="64.0" y1="227.4" y2="166.6" stroke="var(--s4)" stroke-width="1.5" opacity=".55"/>
+<line x1="209.3" x2="209.3" y1="219.1" y2="158.8" stroke="var(--s4)" stroke-width="1.5" opacity=".55"/>
+<line x1="354.7" x2="354.7" y1="215.0" y2="155.2" stroke="var(--s4)" stroke-width="1.5" opacity=".55"/>
+<line x1="500.0" x2="500.0" y1="198.1" y2="137.2" stroke="var(--s4)" stroke-width="1.5" opacity=".55"/>
+<path d="M64.0,197.7 L209.3,189.6 L354.7,185.9 L500.0,167.9" fill="none" stroke="var(--s4)" stroke-width="2"/>
+<circle cx="64.0" cy="197.7" r="4" fill="var(--s4)" stroke="var(--bg)" stroke-width="2"><title>2025 年（何度か見た期間） g=0（直前の 3 年）: 0.032（区間 0.017〜0.049）</title></circle>
+<circle cx="209.3" cy="189.6" r="4" fill="var(--s4)" stroke="var(--bg)" stroke-width="2"><title>2025 年（何度か見た期間） g=1: 0.037（区間 0.021〜0.053）</title></circle>
+<circle cx="354.7" cy="185.9" r="4" fill="var(--s4)" stroke="var(--bg)" stroke-width="2"><title>2025 年（何度か見た期間） g=2: 0.039（区間 0.023〜0.055）</title></circle>
+<circle cx="500.0" cy="167.9" r="4" fill="var(--s4)" stroke="var(--bg)" stroke-width="2"><title>2025 年（何度か見た期間） g=3（3 年古い）: 0.048（区間 0.032〜0.064）</title></circle>
+<text x="508.0" y="171.9" class="lab">2025 年（何度か見た期間）</text>
+</svg>
+<div class="legend"><span><i style="background:var(--s1)"></i>2022 年</span><span><i style="background:var(--s2)"></i>2023 年</span><span><i style="background:var(--s3)"></i>2024 年</span><span><i style="background:var(--s4)"></i>2025 年（何度か見た期間）</span></div><figcaption>長さ 3 年の学習の窓を、評価年の g 年前に終わるようにずらした（入力の作りの段差の 74 列を外した版）。小さいほど良い。縦線は 95% 区間</figcaption></figure>
+<figure><svg viewBox="0 0 660 192" role="img" aria-label="窓の選び方: 広げる窓（2016〜）との差" class="chart"><title>窓の選び方: 広げる窓（2016〜）との差</title>
+<line x1="260.0" x2="260.0" y1="14" y2="152" class="grid"/>
+<text x="260.0" y="168" class="tick" text-anchor="middle">-0.0050</text>
+<line x1="383.3" x2="383.3" y1="14" y2="152" class="grid"/>
+<text x="383.3" y="168" class="tick" text-anchor="middle">0.0000</text>
+<line x1="506.7" x2="506.7" y1="14" y2="152" class="grid"/>
+<text x="506.7" y="168" class="tick" text-anchor="middle">0.0050</text>
+<line x1="630.0" x2="630.0" y1="14" y2="152" class="grid"/>
+<text x="630.0" y="168" class="tick" text-anchor="middle">0.0100</text>
+<text x="445.0" y="188" class="axis" text-anchor="middle">対数損失の差（正なら悪い）</text>
+<text x="252" y="34" class="tick" text-anchor="end">直近 5 年</text>
+<rect x="370.5" y="24" width="12.8" height="14" rx="3" fill="var(--s1)"><title>直近 5 年: -0.0005（区間 -0.0037〜0.0025）</title></rect>
+<line x1="291.3" x2="445.2" y1="31.0" y2="31.0" stroke="var(--ink)" stroke-width="1.5"/>
+<text x="252" y="56" class="tick" text-anchor="end">半減期 2 年</text>
+<rect x="383.3" y="46" width="17.8" height="14" rx="3" fill="var(--s1)"><title>半減期 2 年: 0.0007（区間 -0.0024〜0.0038）</title></rect>
+<line x1="323.1" x2="477.8" y1="53.0" y2="53.0" stroke="var(--ink)" stroke-width="1.5"/>
+<text x="252" y="78" class="tick" text-anchor="end">半減期 4 年（k03 を引用）</text>
+<rect x="383.3" y="68" width="39.5" height="14" rx="3" fill="var(--s1)"><title>半減期 4 年（k03 を引用）: 0.0016（区間 -0.0012〜0.0043）</title></rect>
+<line x1="353.7" x2="489.4" y1="75.0" y2="75.0" stroke="var(--ink)" stroke-width="1.5"/>
+<text x="252" y="100" class="tick" text-anchor="end">半減期 1 年</text>
+<rect x="383.3" y="90" width="69.1" height="14" rx="3" fill="var(--s1)"><title>半減期 1 年: 0.0028（区間 -0.0011〜0.0067）</title></rect>
+<line x1="356.4" x2="549.3" y1="97.0" y2="97.0" stroke="var(--ink)" stroke-width="1.5"/>
+<text x="252" y="122" class="tick" text-anchor="end">直近 3 年</text>
+<rect x="383.3" y="112" width="110.0" height="14" rx="3" fill="var(--s2)"><title>直近 3 年: 0.0045（区間 0.0005〜0.0082）</title></rect>
+<line x1="395.4" x2="585.6" y1="119.0" y2="119.0" stroke="var(--ink)" stroke-width="1.5"/>
+<text x="252" y="144" class="tick" text-anchor="end">2020 年からだけ（k05 を引用）</text>
+<rect x="383.3" y="134" width="120.9" height="14" rx="3" fill="var(--s2)"><title>2020 年からだけ（k05 を引用）: 0.0049（区間 0.0007〜0.0089）</title></rect>
+<line x1="400.6" x2="602.9" y1="141.0" y2="141.0" stroke="var(--ink)" stroke-width="1.5"/>
+<line x1="383.3" x2="383.3" y1="14" y2="152" class="ref"/>
+<text x="387.3" y="12" class="tick">広げる窓</text>
+</svg><figcaption>2022〜2024 年の 10,349 レース。橙は区間ごと悪化。新しい年に寄せるほど悪い</figcaption></figure>
+<figure><svg viewBox="0 0 660 300" role="img" aria-label="較正の傾き（半年ごと）" class="chart">
+<title>較正の傾き（半年ごと）</title>
+<line x1="64" x2="500" y1="260.0" y2="260.0" class="grid"/>
+<text x="58" y="264.0" class="tick" text-anchor="end">0.90</text>
+<line x1="64" x2="500" y1="212.0" y2="212.0" class="grid"/>
+<text x="58" y="216.0" class="tick" text-anchor="end">0.95</text>
+<line x1="64" x2="500" y1="164.0" y2="164.0" class="grid"/>
+<text x="58" y="168.0" class="tick" text-anchor="end">1.00</text>
+<line x1="64" x2="500" y1="116.0" y2="116.0" class="grid"/>
+<text x="58" y="120.0" class="tick" text-anchor="end">1.05</text>
+<line x1="64" x2="500" y1="68.0" y2="68.0" class="grid"/>
+<text x="58" y="72.0" class="tick" text-anchor="end">1.10</text>
+<line x1="64" x2="500" y1="20.0" y2="20.0" class="grid"/>
+<text x="58" y="24.0" class="tick" text-anchor="end">1.15</text>
+<text x="64.0" y="276" class="tick" text-anchor="middle">2022H1</text>
+<text x="126.3" y="276" class="tick" text-anchor="middle">2022H2</text>
+<text x="188.6" y="276" class="tick" text-anchor="middle">2023H1</text>
+<text x="250.9" y="276" class="tick" text-anchor="middle">2023H2</text>
+<text x="313.1" y="276" class="tick" text-anchor="middle">2024H1</text>
+<text x="375.4" y="276" class="tick" text-anchor="middle">2024H2</text>
+<text x="437.7" y="276" class="tick" text-anchor="middle">2025H1</text>
+<text x="500.0" y="276" class="tick" text-anchor="middle">2025H2</text>
+<text x="12" y="140.0" class="axis" transform="rotate(-90 12 140.0)" text-anchor="middle">logit の傾き</text>
+<line x1="64" x2="500" y1="164.0" y2="164.0" class="ref"/>
+<text x="504" y="168.0" class="tick">理想 1</text>
+<line x1="406.6" x2="406.6" y1="20" y2="260" class="ref"/>
+<text x="409.6" y="30" class="tick">2025 は何度か見た期間</text>
+<line x1="64.0" x2="64.0" y1="160.4" y2="65.1" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="126.3" x2="126.3" y1="169.6" y2="84.2" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="188.6" x2="188.6" y1="224.4" y2="126.4" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="250.9" x2="250.9" y1="209.9" y2="122.5" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="313.1" x2="313.1" y1="164.8" y2="71.7" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="375.4" x2="375.4" y1="191.8" y2="90.4" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="437.7" x2="437.7" y1="193.4" y2="102.2" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<line x1="500.0" x2="500.0" y1="236.0" y2="143.1" stroke="var(--s1)" stroke-width="1.5" opacity=".55"/>
+<path d="M64.0,112.1 L126.3,126.4 L188.6,173.9 L250.9,167.6 L313.1,116.4 L375.4,143.2 L437.7,147.9 L500.0,192.9" fill="none" stroke="var(--s1)" stroke-width="2"/>
+<circle cx="64.0" cy="112.1" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>較正の傾き 2022H1: 1.05（区間 1.00〜1.10）</title></circle>
+<circle cx="126.3" cy="126.4" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>較正の傾き 2022H2: 1.04（区間 0.99〜1.08）</title></circle>
+<circle cx="188.6" cy="173.9" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>較正の傾き 2023H1: 0.99（区間 0.94〜1.04）</title></circle>
+<circle cx="250.9" cy="167.6" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>較正の傾き 2023H2: 1.00（区間 0.95〜1.04）</title></circle>
+<circle cx="313.1" cy="116.4" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>較正の傾き 2024H1: 1.05（区間 1.00〜1.10）</title></circle>
+<circle cx="375.4" cy="143.2" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>較正の傾き 2024H2: 1.02（区間 0.97〜1.08）</title></circle>
+<circle cx="437.7" cy="147.9" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>較正の傾き 2025H1: 1.02（区間 0.97〜1.06）</title></circle>
+<circle cx="500.0" cy="192.9" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>較正の傾き 2025H2: 0.97（区間 0.93〜1.02）</title></circle>
+</svg><figcaption>アンサンブル（2022〜2024 は OOF、2025H1・H2 は test 2025・何度か見た期間）。1 未満なら過信。ずっと 1 の近く</figcaption></figure>
+<figure><svg viewBox="0 0 660 300" role="img" aria-label="学習し直したモデルの効きの取り分" class="chart">
+<title>学習し直したモデルの効きの取り分</title>
+<line x1="64" x2="500" y1="260.0" y2="260.0" class="grid"/>
+<text x="58" y="264.0" class="tick" text-anchor="end">5.0</text>
+<line x1="64" x2="500" y1="220.0" y2="220.0" class="grid"/>
+<text x="58" y="224.0" class="tick" text-anchor="end">10.0</text>
+<line x1="64" x2="500" y1="180.0" y2="180.0" class="grid"/>
+<text x="58" y="184.0" class="tick" text-anchor="end">15.0</text>
+<line x1="64" x2="500" y1="140.0" y2="140.0" class="grid"/>
+<text x="58" y="144.0" class="tick" text-anchor="end">20.0</text>
+<line x1="64" x2="500" y1="100.0" y2="100.0" class="grid"/>
+<text x="58" y="104.0" class="tick" text-anchor="end">25.0</text>
+<line x1="64" x2="500" y1="60.0" y2="60.0" class="grid"/>
+<text x="58" y="64.0" class="tick" text-anchor="end">30.0</text>
+<line x1="64" x2="500" y1="20.0" y2="20.0" class="grid"/>
+<text x="58" y="24.0" class="tick" text-anchor="end">35.0</text>
+<text x="64.0" y="276" class="tick" text-anchor="middle">2017-2018</text>
+<text x="209.3" y="276" class="tick" text-anchor="middle">2019-2020</text>
+<text x="354.7" y="276" class="tick" text-anchor="middle">2021-2022</text>
+<text x="500.0" y="276" class="tick" text-anchor="middle">2023-2024</text>
+<text x="12" y="140.0" class="axis" transform="rotate(-90 12 140.0)" text-anchor="middle">total gain の割合（%）</text>
+<path d="M64.0,42.6 L209.3,82.0 L354.7,174.1 L500.0,169.7" fill="none" stroke="var(--s1)" stroke-width="2"/>
+<circle cx="64.0" cy="42.6" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>mtl_（前段 S3 の出力） 2017-2018: 32</title></circle>
+<circle cx="209.3" cy="82.0" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>mtl_（前段 S3 の出力） 2019-2020: 27</title></circle>
+<circle cx="354.7" cy="174.1" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>mtl_（前段 S3 の出力） 2021-2022: 16</title></circle>
+<circle cx="500.0" cy="169.7" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>mtl_（前段 S3 の出力） 2023-2024: 16</title></circle>
+<text x="508.0" y="173.7" class="lab">mtl_（前段 S3 の出力）</text>
+<path d="M64.0,232.1 L209.3,212.2 L354.7,109.7 L500.0,113.1" fill="none" stroke="var(--s2)" stroke-width="2"/>
+<circle cx="64.0" cy="232.1" r="4" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"><title>s_（タイムの予測） 2017-2018: 8</title></circle>
+<circle cx="209.3" cy="212.2" r="4" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"><title>s_（タイムの予測） 2019-2020: 11</title></circle>
+<circle cx="354.7" cy="109.7" r="4" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"><title>s_（タイムの予測） 2021-2022: 24</title></circle>
+<circle cx="500.0" cy="113.1" r="4" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"><title>s_（タイムの予測） 2023-2024: 23</title></circle>
+<text x="508.0" y="117.1" class="lab">s_（タイムの予測）</text>
+</svg>
+<div class="legend"><span><i style="background:var(--s1)"></i>mtl_（前段 S3 の出力）</span><span><i style="background:var(--s2)"></i>s_（タイムの予測）</span></div><figcaption>2 年ずつの窓で別々に学習したモデル。2021 年を境に mtl_ と s_ の取り分が入れ替わる</figcaption></figure>
+</div>
+<p>指標は勝ち馬の対数損失（レース内で正規化した p）。区間はレース単位のブートストラップ 95% で、学習の乱数（seed）の揺れは入っていない。seed だけを変えた差は −0.0036・−0.0018・+0.0003 と揺れ、単発の比較の 0.003〜0.005 と同じ大きさ。設定は既存の <code>cache_info.json</code> のまま（深さ 9・木 777 本・葉の最小の重み 89 など）で、窓ごとに当て直していない。</p>
+<p><b>古さ（3 年の学習の窓を、評価年 Y の g 年前に終わるようにずらす）</b></p>
+<div class="tw"><table><thead><tr><th>評価年</th><th>g あたりの悪化（全列）</th><th>g あたりの悪化（段差の 74 列を外す）</th></tr></thead><tbody>
+<tr><td>2022</td><td>+0.0133</td><td>+0.0119</td></tr>
+<tr><td>2023</td><td>+0.0083</td><td>+0.0085</td></tr>
+<tr><td>2024</td><td>+0.0032（0 をまたぐ）</td><td>+0.0091</td></tr>
+<tr><td>2022〜24 の合算</td><td>+0.0083（+0.0062〜+0.0104）</td><td>+0.0098（+0.0079〜+0.0120）</td></tr>
+<tr><td>2025（何度か見た期間）</td><td>+0.0044</td><td>+0.0049</td></tr>
+</tbody></table></div>
+<div class="tw"><table><thead><tr><th>2020 年以降の窓どうしの比較</th><th>全列</th><th>段差の 74 列を外す</th></tr></thead><tbody>
+<tr><td>Y2024: 窓 2020〜22 − 窓 2021〜23</td><td>−0.0013（−0.0083〜+0.0057）</td><td>+0.0077（+0.0009〜+0.0145）</td></tr>
+<tr><td>Y2025（何度か見た期間）: 窓 2021〜23 − 窓 2022〜24</td><td>+0.0054（−0.0014〜+0.0123）</td><td>+0.0042（−0.0027〜+0.0110）</td></tr>
+</tbody></table></div>
+<ul>
+<li>事象: 2016〜2019 年の窓を含む比較では、1 年古いと約 +0.008 悪い。ただし評価年が新しいほど傾きが小さく、2020 年以降の窓どうしでは 0 前後〜+0.008 で決めきれない。</li>
+<li>根拠と限界: 窓の長さをそろえているので学習の量の差ではない。しかし 2016〜2019 年の窓には、追い切りが無い・履歴が浅い・タイムの予測（<code>s_</code>）が 2016 年は空、という弱さがあり、古さと分けられない。段差の 74 列を外した版と全列の版の差は、合算で −0.0016（−0.0031〜−0.0001）、Y2024 で −0.0058（−0.0086〜−0.0033）と区間が 0 をまたがない（段差の列は古さの見え方を変える）。前段の出力（<code>mtl_</code>・EASE2・LAP）は LOYO で作っていて、古い年の行に後の年で学んだ情報が入るので、古さの測り方そのものが歪みうる（向きは決まらない）。<b>本当の古さの費用は 1 年あたり 0〜0.008 で、0 に近い可能性もある</b>。</li>
+</ul>
+<p><b>窓の選び方（2022〜24 年の 10,349 レース。差は広げる窓との対の差）</b></p>
+<div class="tw"><table><thead><tr><th>窓</th><th>対数損失</th><th>広げる窓との差（区間）</th></tr></thead><tbody>
+<tr><td>広げる窓（2016〜、今の作り）</td><td>1.94453</td><td>－</td></tr>
+<tr><td>直近 5 年</td><td>1.94401</td><td>−0.0005（−0.0037〜+0.0025）</td></tr>
+<tr><td>半減期 2 年の重み</td><td>1.94525</td><td>+0.0007（−0.0024〜+0.0038）</td></tr>
+<tr><td>半減期 4 年の重み（model-improve-cycles の k03 を引用）</td><td>－</td><td>+0.0016（−0.0012〜+0.0043）</td></tr>
+<tr><td>半減期 1 年の重み</td><td>1.94734</td><td>+0.0028（−0.0011〜+0.0067）</td></tr>
+<tr><td>直近 3 年</td><td>1.94899</td><td><b>+0.0045（+0.0005〜+0.0082）</b></td></tr>
+<tr><td>2020 年からだけ（k05 を引用）</td><td>－</td><td>+0.0049（+0.0007〜+0.0089）</td></tr>
+</tbody></table></div>
+<ul>
+<li>事象: 広げる窓と直近 5 年が最良で引き分け。新しい年に寄せるほど悪い。</li>
+<li>根拠と限界: 同じ設定のまま窓・重みだけを変えた比較。半減期の重みは合計を正規化しておらず（重みの合計は約 2 年分）、葉の最小の重み 89 のままなので、短い半減期の版は実質的に強く正則化されている。窓ごとに設定を当て直せば差は縮みうるが、「採らない」の結論は変わらない見込み（古さの損が 0〜0.008 と小さく、学習の量を減らす損のほうが大きい）。公開の知見（Dixon &amp; Coles 1997 の時間の減衰の重み・半減期 約 1 年）はサッカーの得点のモデルで、特徴量で状態を表すこのモデルには当てはまらなかった。</li>
+</ul>
+<p><b>較正</b>: アンサンブル（ens5_final）の半年ごとの傾き 1.054・1.039・0.990・0.996・1.050・1.022（2022H1〜2024H2）、ECE 0.003〜0.004。test 2025（印）は 1.017・0.970。3 年古いモデルも過信（傾き &lt; 1）は出ず、2023〜25 年は控えめな向き（1.06〜1.10）。事象: 古さの損は順位づけの力に出て、較正のずれは小さい。</p>
+<p><b>モデルと市場の差</b>（勝ち馬の対数損失 − 市場の値）: アンサンブルの半年ごとで 0.017〜0.048（2022H1 0.048 → 2024H2 0.020）、1 メンバーの XGBoost では 0.036〜0.058。</p>
+<p><b>特徴量の効き</b>: 2016〜2020 年で学習した 1 つのモデルの TreeSHAP は、2021〜2024 年で列の順位相関 0.998 以上（効きの形は変わらない）。2 年ずつの窓で学習し直すと、<code>mtl_</code>（前段 S3 の出力）の取り分が 32 → 27 → 16 → 16%、<code>s_</code>（タイムの予測）が 8 → 11 → 24 → 23% と 2021 年を境に入れ替わる（被覆の安定した列だけの版でも同じ）。</p>
+<p><b>入力の分布（PSI、SHAP の上位 50 列）</b>: 2016〜18 年比で 0.25 を超える列は 2020 年以降 14〜17 列。大半は作りの段差（追い切りの列は 2020 年に 1 回だけ 5〜11 に跳ぶ、タイムの予測は 2016 年が全部空）。緩やかなずれは <code>pxe_6</code>（0.07 → 0.38。父の世代交代によるとみる）・<code>o_cls_win</code>・<code>o_cls_top3</code>（0.04 → 0.15〜0.17）・<code>ped_sire_vn_t3</code>（0.08 → 0.16）など。ただし <code>o_cls_*</code>・<code>ped_sire_vn_t3</code> は 2016 年から積み上がる数え上げの作りによるずれの可能性があり、定義を確かめるまで「本物」とは分類しない。前年比は、段差を除けばおおむね 0.1 未満。</p>
+<h3>4-2. ルールの抽出（全レース版の材料・良馬場・重賞以外・2016〜2024 年の 27.7 万走、単位はコース × クラスの群 268）</h3>
+<div class="grid2">
+<figure><svg viewBox="0 0 660 192" role="img" aria-label="見つけた条件の上振れの戻り" class="chart"><title>見つけた条件の上振れの戻り</title>
+<line x1="260.0" x2="260.0" y1="14" y2="152" class="grid"/>
+<text x="260.0" y="168" class="tick" text-anchor="middle">0</text>
+<line x1="352.5" x2="352.5" y1="14" y2="152" class="grid"/>
+<text x="352.5" y="168" class="tick" text-anchor="middle">20</text>
+<line x1="445.0" x2="445.0" y1="14" y2="152" class="grid"/>
+<text x="445.0" y="168" class="tick" text-anchor="middle">40</text>
+<line x1="537.5" x2="537.5" y1="14" y2="152" class="grid"/>
+<text x="537.5" y="168" class="tick" text-anchor="middle">60</text>
+<line x1="630.0" x2="630.0" y1="14" y2="152" class="grid"/>
+<text x="630.0" y="168" class="tick" text-anchor="middle">80</text>
+<text x="445.0" y="188" class="axis" text-anchor="middle">戻り（%）</text>
+<text x="252" y="34" class="tick" text-anchor="end">閾値版型: 時間で分けた（→2022〜24）</text>
+<rect x="260.0" y="24" width="101.7" height="14" rx="3" fill="var(--s1)"><title>閾値版型: 時間で分けた（→2022〜24）: 22</title></rect>
+<text x="252" y="56" class="tick" text-anchor="end">閾値版型: 無作為の半分（対照）</text>
+<rect x="260.0" y="46" width="98.3" height="14" rx="3" fill="var(--s3)"><title>閾値版型: 無作為の半分（対照）: 21（区間 15〜28）</title></rect>
+<line x1="329.5" x2="390.0" y1="53.0" y2="53.0" stroke="var(--ink)" stroke-width="1.5"/>
+<text x="252" y="78" class="tick" text-anchor="end">第 1・2 版型: 時間で分けた（→2022〜24）</text>
+<rect x="260.0" y="68" width="334.5" height="14" rx="3" fill="var(--s1)"><title>第 1・2 版型: 時間で分けた（→2022〜24）: 72</title></rect>
+<text x="252" y="100" class="tick" text-anchor="end">第 1・2 版型: 無作為の半分（対照）</text>
+<rect x="260.0" y="90" width="335.7" height="14" rx="3" fill="var(--s3)"><title>第 1・2 版型: 無作為の半分（対照）: 73（区間 71〜74）</title></rect>
+<line x1="589.7" x2="602.3" y1="97.0" y2="97.0" stroke="var(--ink)" stroke-width="1.5"/>
+<text x="252" y="122" class="tick" text-anchor="end">ふるい: 時間で分けた（→2022〜24）</text>
+<rect x="260.0" y="112" width="182.2" height="14" rx="3" fill="var(--s1)"><title>ふるい: 時間で分けた（→2022〜24）: 39</title></rect>
+<text x="252" y="144" class="tick" text-anchor="end">ふるい: 無作為の半分（対照）</text>
+<rect x="260.0" y="134" width="208.1" height="14" rx="3" fill="var(--s3)"><title>ふるい: 無作為の半分（対照）: 45（区間 42〜49）</title></rect>
+<line x1="456.1" x2="485.0" y1="141.0" y2="141.0" stroke="var(--ink)" stroke-width="1.5"/>
+</svg><figcaption>複勝の上振れの戻り。時間で分けた戻りと、同じ期間の無作為の半分の戻りがほぼ同じ＝戻りの大半は選択のノイズ</figcaption></figure>
+<figure><svg viewBox="0 0 660 300" role="img" aria-label="発見の走数と戻り" class="chart">
+<title>発見の走数と戻り</title>
+<line x1="64" x2="500" y1="260.0" y2="260.0" class="grid"/>
+<text x="58" y="264.0" class="tick" text-anchor="end">20.0</text>
+<line x1="64" x2="500" y1="212.0" y2="212.0" class="grid"/>
+<text x="58" y="216.0" class="tick" text-anchor="end">30.0</text>
+<line x1="64" x2="500" y1="164.0" y2="164.0" class="grid"/>
+<text x="58" y="168.0" class="tick" text-anchor="end">40.0</text>
+<line x1="64" x2="500" y1="116.0" y2="116.0" class="grid"/>
+<text x="58" y="120.0" class="tick" text-anchor="end">50.0</text>
+<line x1="64" x2="500" y1="68.0" y2="68.0" class="grid"/>
+<text x="58" y="72.0" class="tick" text-anchor="end">60.0</text>
+<line x1="64" x2="500" y1="20.0" y2="20.0" class="grid"/>
+<text x="58" y="24.0" class="tick" text-anchor="end">70.0</text>
+<text x="64.0" y="276" class="tick" text-anchor="middle">5-9 走</text>
+<text x="151.2" y="276" class="tick" text-anchor="middle">10-19 走</text>
+<text x="238.4" y="276" class="tick" text-anchor="middle">20-49 走</text>
+<text x="325.6" y="276" class="tick" text-anchor="middle">50-99 走</text>
+<text x="412.8" y="276" class="tick" text-anchor="middle">100-199 走</text>
+<text x="500.0" y="276" class="tick" text-anchor="middle">200-499 走</text>
+<text x="12" y="140.0" class="axis" transform="rotate(-90 12 140.0)" text-anchor="middle">戻り（%）</text>
+<path d="M64.0,50.7 L151.2,112.9 L238.4,171.1 L325.6,203.6 L412.8,221.8 L500.0,233.5" fill="none" stroke="var(--s1)" stroke-width="2"/>
+<circle cx="64.0" cy="50.7" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>無作為の半分（ノイズ） 5-9 走: 64</title></circle>
+<circle cx="151.2" cy="112.9" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>無作為の半分（ノイズ） 10-19 走: 51</title></circle>
+<circle cx="238.4" cy="171.1" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>無作為の半分（ノイズ） 20-49 走: 39</title></circle>
+<circle cx="325.6" cy="203.6" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>無作為の半分（ノイズ） 50-99 走: 32</title></circle>
+<circle cx="412.8" cy="221.8" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>無作為の半分（ノイズ） 100-199 走: 28</title></circle>
+<circle cx="500.0" cy="233.5" r="4" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"><title>無作為の半分（ノイズ） 200-499 走: 26</title></circle>
+<text x="508.0" y="237.5" class="lab">無作為の半分（ノイズ）</text>
+<path d="M64.0,42.3 L151.2,101.2 L238.4,155.4 L325.6,184.1 L412.8,176.0 L500.0,162.8" fill="none" stroke="var(--s2)" stroke-width="2"/>
+<circle cx="64.0" cy="42.3" r="4" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"><title>→ 2022〜24（ノイズ＋傾向の変化） 5-9 走: 65</title></circle>
+<circle cx="151.2" cy="101.2" r="4" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"><title>→ 2022〜24（ノイズ＋傾向の変化） 10-19 走: 53</title></circle>
+<circle cx="238.4" cy="155.4" r="4" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"><title>→ 2022〜24（ノイズ＋傾向の変化） 20-49 走: 42</title></circle>
+<circle cx="325.6" cy="184.1" r="4" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"><title>→ 2022〜24（ノイズ＋傾向の変化） 50-99 走: 36</title></circle>
+<circle cx="412.8" cy="176.0" r="4" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"><title>→ 2022〜24（ノイズ＋傾向の変化） 100-199 走: 37</title></circle>
+<circle cx="500.0" cy="162.8" r="4" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"><title>→ 2022〜24（ノイズ＋傾向の変化） 200-499 走: 40</title></circle>
+<text x="508.0" y="166.8" class="lab">→ 2022〜24（ノイズ＋傾向の変化）</text>
+</svg>
+<div class="legend"><span><i style="background:var(--s1)"></i>無作為の半分（ノイズ）</span><span><i style="background:var(--s2)"></i>→ 2022〜24（ノイズ＋傾向の変化）</span></div><figcaption>ふるい（5 走以上・二項 p&lt;0.05）。件数の少ない条件ほど戻りが大きく、その大半はノイズ。広い条件ほど傾向の変化の分（線の間）が目立つ</figcaption></figure>
+</div>
+<p>上振れ = (着内 − 頭数から見込む着内) ÷ 走数（複勝は 3 着内、勝ちは 1 着）。戻り R = 1 − Σn·ℓ（後）÷ Σn·ℓ（発見）。採る基準は 3 種（閾値版型: 24 走以上・BH 5%／第 1・2 版型: 2 走以上・複勝率 70%・単か複の回収率 100% 超／ふるい: 5 走以上・二項 p&lt;0.05）。2016〜18 年の開催日を無作為に半分 A・B に分け（20 回）、A で探した条件を B（同じ期間の対照）・2019〜21・2022〜24 で見た。傾向の変化の分 = A→後の期間の戻り − A→B の戻り。</p>
+<div class="tw"><table><thead><tr><th>採る基準・上振れ</th><th>A→B（対照）</th><th>A→2019〜21</th><th>A→2022〜24</th><th>傾向の変化の分（2019〜21）</th><th>傾向の変化の分（2022〜24）</th></tr></thead><tbody>
+<tr><td>閾値版型・複勝</td><td>21.2%（15.0〜28.1）</td><td>24.5%</td><td>24.1%</td><td>+3.3（−2.3〜+8.2）</td><td>+2.9（−1.9〜+7.2）</td></tr>
+<tr><td>閾値版型・勝ち</td><td>17.9%（8.6〜28.6）</td><td>25.6%</td><td>21.7%</td><td><b>+7.7（+1.0〜+14.0）</b></td><td>+3.7（−1.0〜+8.8）</td></tr>
+<tr><td>閾値版型（複勝率 50% 以上）・勝ち</td><td>20.0%（6.8〜31.7）</td><td>30.9%</td><td>24.6%</td><td><b>+10.9（+2.6〜+19.4）</b></td><td>+4.7（−2.2〜+12.5）</td></tr>
+<tr><td>第 1・2 版型・複勝</td><td>72.6%（71.3〜74.0）</td><td>75.0%</td><td>74.2%</td><td>+2.4（+0.9〜+4.0）</td><td>+1.6（+0.1〜+3.4）</td></tr>
+<tr><td>第 1・2 版型・勝ち</td><td>68.2%（66.1〜70.3）</td><td>71.3%</td><td>70.2%</td><td>+3.1（+1.0〜+4.4）</td><td>+2.0（−0.5〜+3.2）</td></tr>
+<tr><td>ふるい・複勝</td><td>45.0%（42.4〜48.7）</td><td>48.7%</td><td>48.2%</td><td>+3.7（+1.6〜+5.8）</td><td>+3.2（+1.5〜+5.3）</td></tr>
+<tr><td>ふるい・勝ち</td><td>39.9%（35.6〜44.2）</td><td>44.7%</td><td>42.8%</td><td>+4.8（+2.8〜+6.9）</td><td>+2.9（+0.5〜+5.0）</td></tr>
+</tbody></table></div>
+<ul>
+<li>事象: 戻りの大半は選択のノイズ。傾向の変化の分は、複勝で 2〜4 ポイント、勝ちで 2〜11 ポイント（件数の多い閾値版型の 2019〜21 年で大きい）。後の期間ほど大きくなる形ではない（2022〜24 年のほうが小さい）。</li>
+<li>根拠: 週で分けた対照も同じ値（閾値版型・複勝 19.9%、ふるい・複勝 44.8%）で、開催週の馬場の偏りで対照が甘く出ているわけではない。同じ馬の重なりについては、そろえた集まりで比べると変わらない（ふるい +3.1）。ただし B から A に出た馬を単純に除くと A→B の戻りは大きく揺れる（51〜84%。B に残るのは A の日に一度も出なかった弱い少数の馬）。重なりはドリフトを小さく見せる向きにしか効かないので、上の値は上限の見積もり。</li>
+<li>回収率: 第 1・2 版型の単回収は、発見 177〜182% → 後の期間 73〜79%（単位の全体 71〜79% とほぼ同じ）。<b>回収率の上振れはほぼ 100% 戻る</b>。閾値版型は後の期間でも単位の全体より +5〜9 ポイント上（約 76%）だが、100% には遠く、上乗せの多くは本命・大穴の偏りとみる。</li>
+<li>帰無（レースの中で結果を入れ替え）: 第 1・2 版型の基準は、何も無いデータでも実データの 55% の数の条件を拾い、拾った条件の上振れの大きさは実データと同じ（0.61 対 0.61）。本物と偶然を分けるのは上振れの大きさではなく「見つかる数」（実データが帰無の 2.7〜10.8 倍）。閾値版型の BH は帰無で 0 件。</li>
+<li>件数との関係（ふるい・複勝、A→B / A→2022〜24）: 5〜9 走 64% / 65%、10〜19 走 51% / 53%、20〜49 走 39% / 42%、50〜99 走 32% / 36%、100〜199 走 28% / 38%、200〜499 走 26% / 40%（500 走以上は条件が少なく不安定なので省いた）。件数の多い広い条件ほど、ノイズが小さい分だけ傾向の変化の割合（7〜15 ポイント）が目立つ（条件の数が少なく区間は広め）。</li>
+<li>持続の検査（ふるいの条件で試した）: 発見 24 走以上・確かめ 20 走以上・確かめの上振れが発見の 50% 以上残る条件だけを採ると、その後（2022〜24 年）の戻りは 20〜24%（ノイズの床 21% とほぼ同じ）、その後も上振れが正の条件は 96〜98%。帰無で同じ検査を通るのは 15%（帰無は実データの約 1/4 の数しか見つからないので、検査の後に残る偶然の条件は 1 割弱）。確かめを「上振れが正なら可」にすると帰無の 37〜45% が通る。</li>
+<li>縮小: ℓ̂ = (k − 期待) ÷ (n + κ)。κ を無作為の半分だけで選ぶと 12.6〜15.8、時間で分けた組で最良の κ も同じ値（戻りが件数で決まるノイズである根拠）。縮小後の二乗誤差は縮小前の 0.11（第 1・2 版型）・0.41（ふるい）・0.60（閾値版型）倍、後の期間への傾きは 0.21〜0.74 → 0.97〜1.05。</li>
+<li>簡略化した点: 閾値版の探索のコードは見つからず、出力の形に合わせた。規則の事前の目録・3 つの層・年ごとの安定・似た単位の検査・深さ 3 の条件・同じ走の集まりの統合は入れていない（統合をしないので、件数の重みでは重なりの多い広い条件が効きすぎている可能性がある）。</li>
+</ul>
+<h3>4-3. 推奨馬券</h3>
+<ul>
+<li>市場の歪み: 人気帯（1・2・3・4〜6・7〜9・10〜）・オッズ帯（〜2.9 から 50〜 まで）ごとの単複の回収率は、どれも年の差が偶然の幅（BH の補正の後。補正前はオッズ 20〜49.9 倍の単勝だけ p=0.022）。本命・大穴の偏りは毎年あり（回収率の log オッズへの傾き 平均 −0.047）、10 年で縮んでいない。公開の知見では英国で縮んだという報告（Smith &amp; Vaughan Williams 2010）があるが、JRA の 2016〜2025 年では縮んでいない。</li>
+<li>2 歳戦の単勝の上乗せ:</li>
+<ul>
+<li>2 歳戦の単勝オッズは、2017〜2023 年の年平均で約 4.4%（1.264 ÷ 1.211）、上乗せのあったレースだけなら約 5.0%（1.264 ÷ 1.204）高い。払戻 = オッズ × 100 は各年 99.0〜99.8% で一致し、払戻にも上乗せが入っている。2 歳戦の単勝の均等買いの回収率は、年ごとの揺れ（SE 0.04〜0.07）が大きく、回収率の年の比較では見えない。</li>
+<li>未勝利・新馬のレースの 39〜41% が 2 歳戦。第 2 回の凍結した買い方（未勝利・新馬・r 最大の ◎ の単勝）の訓練 2019〜22・評価の 2023 年は上乗せのある期間（2023 年の 2 歳戦は 6〜12 月だけで、ほぼ全部が対象）、評価の 2024 年・test 2025 は無い期間。回収率 110% 前後の買い方なら、訓練の値は約 2 ポイント高い見込み（レースの割合で出した目安。参戦したレースのうち 2 歳戦の割合で出し直す）。test 2025（107.0%）は今の制度の値。凍結した買い方の区間（test 2025 で 94〜120%）や、T-60 と確定オッズの差（約 40 ポイント）より小さい。</li>
+<li>正規化した市場の確率 q: 上乗せは人気が集中したレースで掛からないなど一律ではなく、2 歳戦の q の較正（勝率 ÷ q）を上乗せのある年と無い年で比べると、q が 0.05〜0.1 の帯で 1.105 対 0.899（z ≈ 2.4、8 帯のうちの 1 つ）と違いの兆しがある（レビューの確かめ。2025 年を含む）。第 2 段の r = log(p/q) は上乗せのある年で学んでいるので、2 歳戦の r に歪みが入る経路がある。</li>
+<li>予測オッズ（単勝・複勝）・EV の較正（<code>config/ev_calibration.json</code>）・確率の市場補正の係数が、上乗せの期間の 2 歳戦の生のオッズで当てはめられていないかは、まだ確かめていない。</li>
+</ul>
+</ul>
+<h2>5. 問題点（根拠の数字つき）</h2>
+<div class="tw"><table><thead><tr><th>#</th><th>問題</th><th>どこが弱いか</th><th>根拠の数字</th><th>影響の大きさ</th></tr></thead><tbody>
+<tr><td>1</td><td>2 歳戦の単勝の上乗せが評価に入っていない</td><td>生のオッズ・払戻で測る回収率・期待値・予測オッズ・EV の較正。q と第 2 段の r にも入りうる</td><td>2 歳戦の Σ(1/オッズ) の年平均 1.208〜1.214（2017〜2023）対 1.266（2024〜）</td><td>2 歳戦の単勝の回収率で約 4〜5%、未勝利・新馬の全体で約 2 ポイント（目安）</td></tr>
+<tr><td>2</td><td>ルールの当てはめの成績がほぼノイズ</td><td>「2016〜2024 年の全体で選ぶ（過学習してよい）」と、弱い持続の検査</td><td>回収率の上振れの戻り ほぼ 100%、件数 5〜9 走の戻り 65%、帰無の 37〜45% が「上振れが正」の検査を通る</td><td>発見の期間の回収率は判断に使えない</td></tr>
+<tr><td>3</td><td>作りの段差と傾向の変化が混ざる</td><td>追い切りの列（2020 年より前は空）・タイムの予測（2016 年が空）・前段の出力（LOYO）</td><td>PSI の大きい列の大半が段差。段差の列の有無で古さの傾きが変わる（Y2024 で −0.0058）。<code>mtl_</code> の取り分 32% → 16%</td><td>監視の誤報。古さの測り方の歪み。前段の作りの確かめが要る</td></tr>
+<tr><td>4</td><td>古さの費用が測りきれていない</td><td>2020 年以降の窓どうしの比較が 2 つ、1 seed、1 メンバー</td><td>0〜0.008/年</td><td>2026 年を学習に入れる判断の材料が弱い</td></tr>
+<tr><td>5</td><td>オッズの時点のずれが測れない</td><td>回収率は確定オッズ、本番は T-60</td><td>実物の発走前のオッズは 2026 年の約 280 レースだけ</td><td>推奨馬券の本番の再現の幅（確定との差 約 40 ポイント）の年の変化が分からない</td></tr>
+<tr><td>6</td><td>評価の期間の割り当てが、制度の段差をまたぐ</td><td>馬券の訓練 2019〜22・評価 2023〜24・test 2025</td><td>上乗せの有無が訓練（全年）・評価 2023 と、評価 2024・test で違う</td><td>訓練と test の差の一部が、過学習ではなく制度の差</td></tr>
+</tbody></table></div>
+<ul>
+<li>下書きで挙げた「水準の動く列（斤量・時計など）を生のまま使っている」は、レビューで取り下げた。入力にはレース内の相対の列（<code>fd_jw_own_z</code>・<code>fd_jw_own_pct</code>・<code>fd_jwratio_*</code> など）があり、2023 年の斤量の一律 +1kg はこれで吸収される。生の値の列（<code>jockey_weight</code>・<code>weight_rule</code> など）の効きの年の推移を見るまでは、問題とは言えない。</li>
+</ul>
+<h2>6. 改善案</h2>
+<div class="tw"><table><thead><tr><th>#</th><th>案</th><th>期待の効果</th><th>根拠</th><th>リスク</th><th>手間</th><th>担当（提案）</th></tr></thead><tbody>
+<tr><td>A</td><td>2 歳戦の単勝の上乗せの印をレースごとに付け（2 歳戦で Σ(1/オッズ) &lt; 1.245）、今の制度にそろえた払戻（× Σ_レース ÷ 1.264）を、回収率・期待値の集計に並べる。読み直しは記録だけで、買い方を選び直さない。予測オッズ・EV の較正・第 2 段の r が 2 歳戦で甘くないか（q の較正の表を r でも）を確かめる</td><td>2 歳戦の回収率の見かけの +4〜5% を除く。凍結した買い方の訓練の値を今の制度で読み直せる</td><td>§2・§3（年 × 月の表・レースごとの割合・公式の企画）</td><td>印の閾値の近くのレース（オッズの端数）。2024 年以降も 1〜3% のレースが閾値を下回る（本命のレースの端数）</td><td>小（集計の列を 1 つ足す）</td><td>bet-optimizer（集計）・各集計の担当</td></tr>
+<tr><td>B</td><td>週次の監視に、Σ(1/オッズ) の年齢別・クラス別の推移と、発走前と確定の対数オッズの差の分布を足す</td><td>次の同じ種類の変更（払戻の企画・控除率の変更）と、オッズの時点のずれの変化を数週で見つける</td><td>3 歳以上は 10 年 1.264 前後で一定、変化は即座に出る</td><td>無し。手元の結果の表から読み、GCS に触れない。今の週 1 回の実行の中に入れ、cron を足さない</td><td>小</td><td>監視（drift_monitor）</td></tr>
+<tr><td>C</td><td>ルールの採否に、件数での縮小（上振れ ÷ (n + 15)）と持続の検査（発見 24 走以上・確かめ 20 走以上・発見の上振れの 50% 以上が残る）を入れる。試した条件の数を記録し、割り引く（Reality Check・Deflated Sharpe Ratio・t ≥ 3）</td><td>後の期間の上振れの予言の誤差を 0.11〜0.60 倍に。検査の後の偶然の条件は 1 割弱</td><td>§4-2</td><td>件数の少ない本物の条件を落とす。縮小の κ はこのデータでの値（材料が変われば当て直す）</td><td>中</td><td>keiba-vpn-f8・graded-rules-update（統括役を通す）</td></tr>
+<tr><td>D</td><td>ルールの「探す期間」を狭める必要は無い（複勝では傾向の変化の分が 2〜4 ポイント）。ただし勝ちの上振れ（単勝の回収率を狙う規則）と件数の多い広い条件では傾向の変化の分が大きい（勝ち 2〜11 ポイント、広い条件 7〜15 ポイント）ので、直近の期間の確かめを重くする</td><td>件数を保ちつつ、傾向の変化の大きいものだけ守る</td><td>§4-2</td><td>－</td><td>小</td><td>同上</td></tr>
+<tr><td>E</td><td>毎年 1 回、終わった年を足して学習し直す（広げる窓のまま。窓の短縮・新しい年の重みは採らない）。2026 年を学習に入れるのは、2026 年の 1 回だけの確かめ（凍結した買い方の通しの確かめ・ルールの 2025・2026 年の確かめ）を、2026 年を一度も選択に使わずに済ませた後。入れる前に、古さの費用を 2020 年以降の窓どうし・3 seed・LOYO の列を外した版・アンサンブルと第 2 段の回収率で測り直す</td><td>1 年あたり対数損失 0〜−0.008</td><td>§4-1</td><td>学習に入れた年は test に使えない（2027 年を test③ に切り替える。<code>docs/operations/drift_monitor.md</code> の手順）</td><td>中（年 1 回のバッチ・手元の GPU）</td><td>model-improve-cycles・統括役（判断はユーザー）</td></tr>
+<tr><td>F</td><td>傾向の地図を年に 1 回（年明け、結果がそろった後）この調査の道具で作り直し、本物の傾向と作りの段差を分けて出す。PSI は段差の列を外して測る。Q の p には BH を掛け、段差は境の年の探索を含めたブートストラップで確かめる</td><td>監視の誤報を減らす。前残り・時計・間隔・父・斤量・頭数の変化を数字で追える</td><td>§2・§4-1 の PSI</td><td>無し</td><td>小（手元の表だけ、費用 0）</td><td>監視・統括役</td></tr>
+<tr><td>G</td><td>前段 S3 の出力（<code>mtl_</code>）の取り分が 2021 年を境に半減した理由を確かめる（LOYO の作りによる後の年の情報の混入、または <code>s_</code> の被覆の変化）</td><td>前段の作りの漏れの有無の確定。古さの測り方の歪みの除去</td><td>§4-1 の効きの推移</td><td>－</td><td>小〜中</td><td>model-improve-cycles</td></tr>
+<tr><td>H</td><td>生の値の列（<code>jockey_weight</code>・<code>weight_rule</code>・時計の生の値など）の効きの年の推移を見て、水準の動く列だけを「その年の基準からの差」（前の年までで作る）に替える候補にする。年を特徴量に入れるのは採らない</td><td>未測定（候補）</td><td>§2 の段差・傾向</td><td>「その年の基準」を年の途中で作るときの先読み</td><td>中</td><td>model-improve-cycles のサイクル</td></tr>
+<tr><td>I</td><td>較正は、年 1 回の学習し直しのときに確かめるだけでよい（定期の当て直しは足さない）</td><td>手間を増やさない</td><td>較正の傾き 0.97〜1.05 で安定、古いモデルでも過信なし</td><td>制度の段差（A）の後は当て直す</td><td>無し</td><td>－</td></tr>
+</tbody></table></div>
+<p>採らない案と理由:</p>
+<ul>
+<li>学習の窓を直近 3 年にする・半減期 1〜2 年の重み: 同じ設定の比較で悪化か差なし（§4-1）。</li>
+<li>年・季節を特徴量に入れる: 木のモデルは学習した年の外へ伸ばせず、新しい年は最後の年と同じ扱いになるだけ。</li>
+<li>常駐の監視・GCS を読む監視: 費用の決まりに反する。年 1 回・週 1 回の手元の集計で足りる。</li>
+</ul>
+<p>費用: 案 A〜I はすべて手元の表と、手元の GPU のバッチだけ。常駐の処理・ポーリング・GCS の読み出しは増えず、月 2,000 円の上限に触れない。</p>
+<h2>7. 公開の知見</h2>
+<div class="tw"><table><thead><tr><th>知見</th><th>本件への示唆</th><th>出典</th></tr></thead><tbody>
+<tr><td>英国の平地で本命・大穴の偏りが 10 シーズンで縮んだ。偏りの係数は時間をおいて当て直すべき（Smith &amp; Vaughan Williams 2010）</td><td>JRA では 2016〜2025 年に縮んでいない。年 1 回の確かめで足りる</td><td><a href="https://econpapers.repec.org/RePEc:eee:intfor:v:26:y::i:3:p:543-550">https://econpapers.repec.org/RePEc:eee:intfor:v:26:y::i:3:p:543-550</a></td></tr>
+<tr><td>偏りの源はリスク愛好より確率の誤認（Snowberg &amp; Wolfers 2010）</td><td>偏りは制度が同じなら続きやすい</td><td><a href="https://www.nber.org/papers/w15923">https://www.nber.org/papers/w15923</a></td></tr>
+<tr><td>基礎のモデルと市場の確率を 2 段目で合成し、公開された手法の優位は長続きしない（Benter 1994）</td><td>市場との合成の重みは年 1 回当て直す</td><td><a href="https://www.gwern.net/doc/statistics/decision/1994-benter.pdf">https://www.gwern.net/doc/statistics/decision/1994-benter.pdf</a></td></tr>
+<tr><td>concept drift の対処の整理（窓・忘却・検出・時系列順の評価。Gama et al. 2014、Lu et al. 2018）</td><td>窓の長さと忘却は時系列順の検証で選ぶ（§4-1 で選んだ）</td><td><a href="https://research.tue.nl/en/publications/a-survey-on-concept-drift-adaptation/">https://research.tue.nl/en/publications/a-survey-on-concept-drift-adaptation/</a> ・ <a href="https://arxiv.org/abs/2004.05785">https://arxiv.org/abs/2004.05785</a></td></tr>
+<tr><td>時間の減衰の重み（Dixon &amp; Coles 1997、半減期 約 1 年は二次資料の値からの計算）</td><td>このモデルでは半減期 1 年は悪化（+0.0028、同じ設定の比較）</td><td><a href="https://sports-models-kb.pages.dev/dixon-coles-original-paper">https://sports-models-kb.pages.dev/dixon-coles-original-paper</a></td></tr>
+<tr><td>PSI の閾値 0.1・0.25（Lewis 1994 → Siddiqi 2017）。閾値は件数・区分の数に左右される（Yurdakul &amp; Naranjo 2020）</td><td>段差の列を外し、前年比と基準比を並べて読む</td><td><a href="https://arxiv.org/pdf/2303.01227">https://arxiv.org/pdf/2303.01227</a> ・ <a href="https://ideas.repec.org/a/rsk/journ5/7725371.html">https://ideas.repec.org/a/rsk/journ5/7725371.html</a></td></tr>
+<tr><td>多重検定・データの覗き見の補正（White 2000 の Reality Check、Bailey &amp; López de Prado 2014 の Deflated Sharpe Ratio、Harvey・Liu・Zhu 2016 の t ≥ 3.0）</td><td>試した条件の数を記録して割り引く（改善案 C）</td><td><a href="https://econometricsociety.org/publications/econometrica/browse/2000/09/01/reality-check-data-snooping">https://econometricsociety.org/publications/econometrica/browse/2000/09/01/reality-check-data-snooping</a> ・ <a href="https://papers.ssrn.com/abstract=2460551">https://papers.ssrn.com/abstract=2460551</a> ・ <a href="https://ideas.repec.org/a/oup/rfinst/v29y2016i1p5-68..html">https://ideas.repec.org/a/oup/rfinst/v29y2016i1p5-68..html</a></td></tr>
+</tbody></table></div>
+<p>注: 論文の多くは要旨・書誌・二次の要約で確かめたもの。JRA のページの一部は文字化けしていて、細目は「要確認」。</p>
+<h2>8. 別のエージェントのレビュー（指摘と対応）</h2>
+<p>作った本人と別のエージェントに、下書きと根拠のファイル一式を渡し、根拠・代わりの案・費用・リスク・見落としの観点で見てもらった（レビューの確かめの計算は 2016〜2025 年だけ、2026 年の結果は読んでいない）。</p>
+<div class="tw"><table><thead><tr><th>重要度</th><th>指摘</th><th>対応</th></tr></thead><tbody>
+<tr><td>高</td><td>2 歳戦の上乗せの率が 4.8%・4.6% と混ざる。年平均では約 4.4%、上乗せのあるレースでは約 5.0%。全レースには掛かっていない（人気が集中するレースでは無い）。期間で決める印と一律の補正は約 1 割を誤る。評価 2023 は「半分」ではなく全部が対象。月の表に 1〜5 月のありえないマスがあり、生成のスクリプトが無い</td><td>直した。率は 4.4%（年平均）・5.0%（上乗せのあるレース）に統一。印と補正をレースごと（Σ&lt;1.245、× Σ_レース ÷ 1.264）に変えた。月の表を「race_name か race_class に 2 歳」の判定で作り直し（1〜5 月のマスは消えた）、生成のスクリプト（map の t14）を置いた。「いちばん実害が大きい」を「確実で直しやすい偏り」に弱めた</td></tr>
+<tr><td>高</td><td>正規化した q は影響しない、とは言い切れない（2 歳戦の q の較正に違いの兆し）。第 2 段の r に入る経路がある</td><td>直した。問題点 1・案 A に入れ、確かめを依頼の項目にした</td></tr>
+<tr><td>高</td><td>モデルの古さの見出しの +0.008 は大きすぎる。段差の列を外した差は seed の揺れではなく区間が 0 をまたがない。2020 年以降の窓どうしの比較は 0 に近い。LOYO の前段が古さの測り方を歪める。区間に seed の揺れが入っていない</td><td>直した。見出しを「0〜0.008、0 に近い可能性」に、2020 年以降の比較の表を足し、LOYO と seed の限界を書いた。改善案 E に、2026 年を入れる前の測り直しの設計を入れた</td></tr>
+<tr><td>高</td><td>ルールの表の「時間で分けた戻り」（T1618 起点）と「傾向の変化の分」（A 起点）が合わない。勝ちの上振れでは傾向の変化の分が大きい（閾値版型 +7.7・+10.9）</td><td>直した。表を A 起点の戻りにし、勝ちの行を足した。要約・案 D を「複勝 2〜4、勝ち 2〜11 ポイント」に直した</td></tr>
+<tr><td>中</td><td>143 指標の Q の多重比較。段差のモデルは段差に寄りやすい。上がり最速の段差は頭数の段差と同じ年</td><td>直した。BH で落ちる 6 指標を書き、段差の判定の弱さと、上がり最速の頭数・データの作りの疑いを書いた。案 F に BH と段差のブートストラップを入れた</td></tr>
+<tr><td>中</td><td>窓と半減期の却下は、設定を固定した比較（半減期の重みは正規化していない）</td><td>直した。「同じ設定の比較」と条件を付け、根拠の強さを下げた</td></tr>
+<tr><td>中</td><td>2026 年の入力が「2025 年と同じ」は言い過ぎ（レースの属性だけ。調教の被覆の下落が監視に記録されている）</td><td>直した。「レースの属性の分布」に限定し、監視の記録に触れた</td></tr>
+<tr><td>中</td><td>水準の動く列（斤量）は、レース内の相対の列が既にある</td><td>直した。問題点から取り下げ、改善案 H を「生の値の列の効きの推移を見てから」に絞った。<code>o_cls_*</code>・<code>ped_sire_vn_t3</code> の PSI も「数え上げの作りの可能性」とした</td></tr>
+<tr><td>中</td><td>オッズの時点（確定と T-60）のずれの見落とし</td><td>直した。問題点 5 に入れ、案 B に発走前と確定の対数オッズの差の監視を足した</td></tr>
+<tr><td>中</td><td>test の使い切りの順番（2026 年を学習に入れる前に 1 回だけの確かめを済ませる）。上乗せで読み直した値で選び直すと test 2025 を使い直す</td><td>直した。案 A・E に書いた</td></tr>
+<tr><td>低</td><td>モデルと市場の差 0.02〜0.045 の出典が無い</td><td>直した。アンサンブル 0.017〜0.048・1 メンバー 0.036〜0.058 と出典を書いた</td></tr>
+<tr><td>低</td><td>同じ馬を除いた感度は、単純に除くと大きく揺れる</td><td>直した。条件として書き添えた</td></tr>
+</tbody></table></div>
+<h2>9. 限界</h2>
+<ul>
+<li>モデルの比較は XGBoost の 1 メンバー・1 seed・設定は固定。アンサンブル全体・第 2 段への効きは測っていない。</li>
+<li>古さの費用は、2016〜2019 年の窓の弱さ・LOYO の前段の出力と分けきれず、0〜0.008 の幅で書いた。</li>
+<li>ルールの戻りは、閾値版の探索の細部（目録・層・統合）を再現していない。</li>
+<li>上がり最速の勝率の段差・芝の時計の高速化の原因は特定できていない。</li>
+<li>2 歳戦の上乗せの 2024 年以降の扱いは、公式のページで確かめられていない（データでは 2024・2025 年に上乗せの水準は無い）。凍結した買い方への効きの約 2 ポイントは、レースの割合から出した目安。</li>
+<li>オッズの時点のずれ（確定と T-60）の年の変化は、過去の年の発走前のオッズが無く測れない。</li>
+</ul>
+</main></body></html>

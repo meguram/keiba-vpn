@@ -109,6 +109,7 @@ import two_strong from "./two-strong.json";
 import favorite_fade from "./favorite-fade.json";
 import index_claims from "./index-claims.json";
 import trainer_comment_wordcloud from "./trainer-comment-wordcloud.json";
+import trainer_pattern_table from "./trainer-pattern-table.json";
 
 export const GLOSSARY = glossary as Record<string, string>;
 
@@ -217,4 +218,5 @@ export const GUIDES: Record<string, ColumnGuide> = {
   "favorite-fade": favorite_fade as ColumnGuide,
   "index-claims": index_claims as ColumnGuide,
   "trainer-comment-wordcloud": trainer_comment_wordcloud as ColumnGuide,
+  "trainer-pattern-table": trainer_pattern_table as ColumnGuide,
 };

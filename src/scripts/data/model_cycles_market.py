@@ -371,10 +371,14 @@ def cmd_apply2026(a) -> None:
     meta_i = pd.DataFrame({"race_class": np.where(xi["race_id"].isin(nr), "新馬", "")})   # 学習と同じ書き換え（推論の行は 2026 年なので blank_before は当たらない）
     X = mc.apply_spec(mc.cast_like(xi, X0), meta_i, {k: v for k, v in fm["spec"].items() if k not in ("offset", "win_weight_alpha", "params", "offset_noise_sd")})
     del X0
-    r = pd.read_parquet(mc.TABLES / "2026/race_result_flat.parquet", columns=["race_id", "horse_id", "horse_number", "odds", "popularity", "finish_position"])
+    blind = bool(getattr(a, "blind", False))      # 2026 年の着順・払戻を読まない（bet-optimizer の 1 回きりの確かめを汚さない。2026-11-18 統括役の判断）
+    rcols = ["race_id", "horse_id", "horse_number", "odds"] + ([] if blind else ["popularity", "finish_position"])
+    r = pd.read_parquet(mc.TABLES / "2026/race_result_flat.parquet", columns=rcols)   # blind では確定の単勝オッズと馬番だけ
     for c in ("race_id", "horse_id"):
         r[c] = r[c].astype(str)
-    for c in ("odds", "popularity", "finish_position", "horse_number"):
+    if blind:
+        r["finish_position"] = np.nan
+    for c in [c for c in ("odds", "popularity", "finish_position", "horse_number") if c in r.columns]:
         r[c] = pd.to_numeric(r[c], errors="coerce").astype("float64")   # 欠けは NaN（nullable の NA にしない）
     r = r.drop_duplicates(KEY)
     base = xi[KEY].merge(r, on=KEY, how="left")
@@ -390,6 +394,32 @@ def cmd_apply2026(a) -> None:
     hand = [ba[KEY + ["finish_position"]].assign(year=2026, p_win=Pa["p_win"].to_numpy(), p_top2=Pa["p_top2"].to_numpy(), p_top3=Pa["p_top3"].to_numpy(),
                                                    q=qa, r=np.log(Pa["p_win"].to_numpy() / qa), odds_phase="final")]
     del Xa
+    if blind:
+        # 受け渡しの表だけ: 時点ごとに、その時点の発走前オッズが走った馬に全部そろうレースで当てる（ほかの時点がそろうかは問わない）
+        cover = {}
+        for ph in ("t60", "t15", "t05"):
+            po = load_pre_odds(ph)
+            j = base[["race_id", "horse_number"]].merge(po, on=["race_id", "horse_number"], how="left")
+            has = j.groupby("race_id")["q"].apply(lambda s_: bool(s_.notna().all()))
+            m_ = base["race_id"].isin(set(has[has].index)).to_numpy() & sa     # 確定の行と同じく、走った馬 3 頭以上のレースだけ
+            cover[ph] = int(has.sum())
+            if not m_.any():
+                continue
+            bp = base.loc[m_].reset_index(drop=True)
+            rc = bp["race_id"].to_numpy()
+            qp = norm_race(rc, j.loc[m_, "q"].to_numpy())
+            P = predict_full(a.name, X.loc[m_].reset_index(drop=True), rc, np.clip(qp, 1e-5, 1.0))
+            hand.append(bp[KEY + ["finish_position"]].assign(year=2026, p_win=P["p_win"].to_numpy(), p_top2=P["p_top2"].to_numpy(), p_top3=P["p_top3"].to_numpy(),
+                                                             q=qp, r=np.log(P["p_win"].to_numpy() / qp), odds_phase=ph))
+        out = MK / "eval2026"
+        out.mkdir(parents=True, exist_ok=True)
+        pb = out / f"{a.name}_pred2026_blind.parquet"            # 通常の実行（着順あり）とは別の名前にする（黙って置き換わらない）
+        pd.concat(hand, ignore_index=True).drop(columns=["finish_position"]).to_parquet(pb, index=False)
+        res = {"blind": True, "races_with_phase": cover, "pred2026": {"path": str(pb),
+               "rows_by_phase": {h["odds_phase"].iloc[0]: int(len(h)) for h in hand}, "races_final": int(hand[0]["race_id"].nunique()), "days": int(xi.attrs.get("days", 0))}}
+        (out / f"{a.name}_blind.json").write_text(json.dumps(_no_nan(res), ensure_ascii=False, indent=1, allow_nan=False), encoding="utf-8")
+        log(f"apply2026 {a.name}（着順を読まない）: {res['pred2026']['rows_by_phase']}・発走前オッズのそろうレース {cover}")
+        return
     # 比べるレース: 4 つの時点（t60・t15・t05 と確定）すべてで、走った馬の発走前オッズがそろうレース（時点ごとに欠けを埋めない）
     rid_ok = set(base["race_id"])
     cover = {}
@@ -453,6 +483,53 @@ def cmd_apply2026(a) -> None:
             log(f"{ph} {ru}: {s_['races']}R ◎1番人気 {s_['fav_share']:.3f} 勝 {s_['win']:.3f} 単 {s_['roi_tan']:.3f}" + (f" 確定と同じ ◎ {s_['same_pick_as_final']:.3f}" if "same_pick_as_final" in s_ else ""))
 
 
+def ref_table(pred: pd.DataFrame, card: pd.DataFrame, pre: pd.DataFrame) -> pd.DataFrame:
+    """本番の予測（race_id・horse_id・p_win…）に、出馬表の馬番で発走前オッズの市場の勝率 q を付け、r = log(p_win/q) にする。
+    q は、その時点のスナップショットにある馬だけでレース内の合計 1 に直す（無い馬は q・r が空 → ◎ の候補から外れる。本番の判定と同じ扱い）。
+    p_win はレース内で合計 1 に直す。着順・払戻は使わない。"""
+    d = pred.merge(card[["race_id", "horse_id", "horse_number"]], on=["race_id", "horse_id"], how="left")
+    d = d.merge(pre[["race_id", "horse_number", "win_odds"]], on=["race_id", "horse_number"], how="left")
+    d["p_win"] = d["p_win"] / d.groupby("race_id")["p_win"].transform("sum")
+    inv = np.where(d["win_odds"].to_numpy(float) > 0, 1.0 / d["win_odds"].to_numpy(float), np.nan)
+    d["q"] = inv / pd.Series(inv).groupby(d["race_id"].to_numpy()).transform("sum").to_numpy()
+    d["r"] = np.log(d["p_win"].clip(1e-9) / d["q"])
+    return d
+
+
+def cmd_refpred(a) -> None:
+    pdir = Path(a.pred_dir)
+    parts = []
+    for day in sorted(p.name for p in pdir.iterdir() if p.is_dir() and p.name.startswith("2026")):
+        fs = sorted((pdir / day).glob("*.parquet"))
+        if fs:
+            parts.append(pd.concat([pd.read_parquet(f) for f in fs], ignore_index=True).assign(date=f"{day[:4]}-{day[4:6]}-{day[6:]}"))
+    if not parts:
+        raise SystemExit(f"{pdir} に 2026 年の日付のフォルダ（予測）が無い")
+    pred = pd.concat(parts, ignore_index=True)
+    pred["race_id"], pred["horse_id"] = pred["race_id"].astype(str), pred["horse_id"].astype(str)
+    card = pd.read_parquet(mc.TABLES / "2026/race_shutuba_flat.parquet", columns=["race_id", "horse_id", "horse_number"])   # 出馬表（結果の表は読まない）
+    card["race_id"], card["horse_id"] = card["race_id"].astype(str), card["horse_id"].astype(str)
+    card["horse_number"] = pd.to_numeric(card["horse_number"], errors="coerce")
+    card = card.dropna(subset=["horse_number"]).drop_duplicates(["race_id", "horse_id"], keep="last")
+    pre = load_pre_odds(a.phase)
+    pre["horse_number"] = pd.to_numeric(pre["horse_number"], errors="coerce")
+    d = ref_table(pred, card, pre)
+    d["odds_phase"], d["part"], d["source"] = a.phase, "reference", "prod_v6e_saved"
+    has = d.groupby("race_id")["q"].transform(lambda s: s.notna().any())
+    cols = ["race_id", "horse_id", "date", "p_win", "p_top2", "p_top3", "q", "r", "odds_phase", "part", "source"]
+    out = Path(a.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    d[cols].to_parquet(out, index=False)
+    info = {"rows": int(len(d)), "races": int(d["race_id"].nunique()), "races_with_phase_odds": int(d.loc[has, "race_id"].nunique()),
+            "days": sorted(d["date"].unique().tolist()), "days_with_phase_odds": sorted(d.loc[has, "date"].unique().tolist()),
+            "horses_without_number": int(d["horse_number"].isna().sum()), "horses_without_phase_odds_in_phase_races": int((has & d["q"].isna()).sum()),
+            "pred_dir": str(pdir), "phase": a.phase, "pre_odds": str(PRE_ODDS),
+            "how": "p_win = 本番の保存先（predictions_backfill/bundle_v6_2025、v6e の 2026 年の作り直し）の予測をレース内で合計 1 に。q = 同じ時点（phase）の発走前オッズの 1/odds を、"
+                   "スナップショットにある馬だけでレース内の合計 1 に。r = log(p_win/q)。馬番は出馬表（race_shutuba_flat）から。第 2 段のモデルは通さない。着順・払戻は読まない。"}
+    out.with_suffix(".json").write_text(json.dumps(info, ensure_ascii=False, indent=1), encoding="utf-8")
+    log(f"refpred: {info['rows']} 行・{info['races']} レース（{a.phase} のオッズあり {info['races_with_phase_odds']} レース・{len(info['days_with_phase_odds'])} 日）→ {out}")
+
+
 def cmd_handoff(a) -> None:
     """bet-optimizer への受け渡し: 2019〜2024 年の OOF（2020 年は追い切りを欠けにそろえた版）・2025 年 test・2026 年（確定・発走前のオッズの offset）を 1 つの表に。
     列: race_id・horse_id・year・finish_position・p_win・p_top2・p_top3・q（offset に使った市場の勝率）・r（log(p_win/q)）・odds_phase（final・t60・t15・t05）・part。"""
@@ -480,7 +557,10 @@ def cmd_handoff(a) -> None:
         raise SystemExit(f"5 つの版の spec（blank_before 以外）がそろわない: {specs}")
     t = pd.read_parquet(MK / "full" / a.full2024 / "test2025.parquet")
     parts.append(t.assign(odds_phase="final", part="test2025", source=a.full2024))
-    p26 = pd.read_parquet(MK / "eval2026" / f"{a.full2025}_pred2026.parquet")
+    if a.blind2026:                                 # 着順を読まずに作った版（apply2026 --blind）。2026 年の行の着順は空のまま渡す
+        p26 = pd.read_parquet(MK / "eval2026" / f"{a.full2025}_pred2026_blind.parquet").assign(finish_position=np.nan)
+    else:
+        p26 = pd.read_parquet(MK / "eval2026" / f"{a.full2025}_pred2026.parquet")
     parts.append(p26.assign(part="infer2026", source=a.full2025))
     cols = ["race_id", "horse_id", "year", "finish_position", "p_win", "p_top2", "p_top3", "q", "r", "odds_phase", "part", "source"]
     h = pd.concat([x[cols] for x in parts], ignore_index=True)
@@ -491,7 +571,7 @@ def cmd_handoff(a) -> None:
     out.mkdir(parents=True, exist_ok=True)
     h.to_parquet(out / f"{a.tag}.parquet", index=False)
     summ = h.groupby(["part", "year", "odds_phase"]).agg(rows=("horse_id", "size"), races=("race_id", "nunique")).reset_index()
-    (out / f"{a.tag}.json").write_text(json.dumps({"rows": len(h), "by": summ.to_dict("records"), "note": a.note}, ensure_ascii=False, indent=1, default=int), encoding="utf-8")
+    (out / f"{a.tag}.json").write_text(json.dumps({"rows": len(h), "by": summ.to_dict("records"), "note": a.note, "infer2026_blind": bool(a.blind2026), "infer2026_finish_position": "空（2026 年の着順は読んでいない。着順は受け取る側が結果の表から付ける）" if a.blind2026 else "結果の表の着順"}, ensure_ascii=False, indent=1, default=int), encoding="utf-8")
     log(f"handoff {a.tag}: {len(h)} 行\n{summ.to_string(index=False)}")
 
 
@@ -668,6 +748,7 @@ def main() -> None:
     f.add_argument("--fit-end", type=int, choices=[2024, 2025], default=2025, help="2024: 2025 年 test を 1 回だけ予測する版")
     g = sub.add_parser("apply2026", help="全期間のモデルを 2026 年の推論の入力に当て、確定・発走前（t60・t15・t05）のオッズの offset で比べる")
     g.add_argument("name")
+    g.add_argument("--blind", action="store_true", help="2026 年の着順・払戻を読まない（受け渡しの表だけ作る。成績の比べはしない）")
     h = sub.add_parser("handoff", help="bet-optimizer への受け渡しの表を作る")
     h.add_argument("tag")
     h.add_argument("--oof-main", required=True, help="2022〜2024 年の OOF（oof/NAME）")
@@ -676,8 +757,14 @@ def main() -> None:
     h.add_argument("--full2024", required=True, help="2016〜2024 で学習した版（full/NAME/test2025.parquet）")
     h.add_argument("--full2025", required=True, help="2016〜2025 で学習した版（eval2026/NAME_pred2026.parquet）")
     h.add_argument("--note", default="")
+    h.add_argument("--blind2026", action="store_true", help="2026 年の行は apply2026 --blind の版（着順の列は空）を使う")
+    i = sub.add_parser("refpred", help="本番が保存した予測から、第 2 段を通さずに q・r を作る（bet-optimizer の reference 群）。着順・払戻は読まない")
+    i.add_argument("--pred-dir", default=str(mc.ROOT / "data/local/inference/predictions_backfill/bundle_v6_2025"))
+    i.add_argument("--phase", default="t60")
+    i.add_argument("--out", default=str(MK / "handoff" / "reference_prod_v6e_t60.parquet"))
     a = ap.parse_args()
-    {"market": cmd_market, "member": cmd_member, "report": cmd_report, "drift": cmd_drift, "fitfull": cmd_fitfull, "apply2026": cmd_apply2026, "handoff": cmd_handoff}[a.cmd](a)
+    {"market": cmd_market, "member": cmd_member, "report": cmd_report, "drift": cmd_drift, "fitfull": cmd_fitfull, "apply2026": cmd_apply2026, "handoff": cmd_handoff,
+     "refpred": cmd_refpred}[a.cmd](a)
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -31,10 +31,14 @@ PREFIX = "ops/mirror"
 # root の cron（scripts/cron/gcs_mirror_push_auth.sh）が上げる。Cloud Run は TREES として取り込み、src/api/auth.py の MEMBERS_LOCAL_FILE と同じ場所に置く。
 AUTH_TREES = ("data/local/auth::members.json",)
 _FEATURES = "data/local/features"
+_INF = _FEATURES.replace("features", "inference")
 TREES = (
     "data/local/inference/predictions_v3",
     "data/local/inference/predictions_v5",
     "data/local/inference/predictions_v6",
+    # 候補の影のランナー（candidate_runner）の出力: 新しい候補の第 1 段・第 2 段・凍結した買い方の判定（1 レース 1 回だけ書く）。
+    # API の出し方は目印で決まる（第 2 段は無ければ開発者だけ、候補の確率は無ければ出さない。src/api/stage2_live.py・weekend_launch_20261121.md）
+    *(f"{_INF}/{t}" for t in ("predictions_v6c", "predictions_stage2", "bets_stage2")),
     "data/local/inference/predictions_backfill",
     "data/local/inference/snapshots",
     "data/local/inference/lap_forecast",
@@ -65,10 +69,18 @@ TREES = (
 LAZY_TREES = (
     "data/calculated_data/tracking_difficulty::20*.json",     # 追走難度・想定ラップの事前計算（/api/race/{id}/tracking-difficulty）。1 レース約 35KB・全体で約 1GB
 )
-PUSH_TREES = TREES + LAZY_TREES
+# 上げるだけで、Cloud Run には降ろさない木（ホストの手元にしか無い記録の予備。Cloud Run には無いので、API で読む箇所は空のまま）。
+# 候補の影のランナーの前向きの記録の元（T-60 の単勝オッズの写し・判定と push の時刻の記録）。開催日の 5 分おきの push に乗るだけで、
+# 新しい周期処理は足さない。画面のキャッシュの目印は立てない（push で除く）。jobs の mirror_out からは書けない（tree_known で除く）。
+# 書き込みの最悪: launch_watch の 2 ファイル × 1 日 288 回（5 分おきの push のたびに中身が変わるとみなす）＋ T-60 の写し 36 ＝ 612 回/日
+# × 開催 9 日 ≒ 5,500 回（Class A）で約 4.4 円/月。GCS の外への転送は無い（ホストからの書き込みだけ）
+BACKUP_TREES = tuple(f"{_INF}/{t}" for t in ("odds_t60", "launch_watch"))
+PUSH_TREES = TREES + LAZY_TREES + BACKUP_TREES
+_BACKUP_PREFIXES = tuple(t + "/" for t in BACKUP_TREES)
 # レースごとのファイルが日付フォルダに積み上がる木。起動時と定期の取り込みでは、日付が直近 PULL_WINDOW_DAYS 日以内のフォルダだけ降ろす
 # （全体で 1 万件超 → 起動時の GCS 読み出しを約 1/10 に）。古い日は読まれたときに lazy_fetch で 1 件だけ取る。push は全体のまま。
-WINDOWED_DIRS = tuple(t for t in TREES if t.rsplit("/", 1)[-1] in ("predictions_backfill", "lap_forecast", "tracking_v2"))
+WINDOWED_DIRS = tuple(t for t in TREES if t.rsplit("/", 1)[-1] in ("predictions_backfill", "lap_forecast", "tracking_v2",
+                                                                         "predictions_v6c", "predictions_stage2", "bets_stage2"))
 PULL_WINDOW_DAYS = 14.0
 _DATE_SEG = re.compile(r"^(\d{4})-?(\d{2})-?(\d{2})$")
 _SKIP = re.compile(r"(\.tmp|\.lock)$")
@@ -385,10 +397,38 @@ def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH
         try:      # 画面に出る応答の元（予測・ラップ・分析など）が変わったことを、VPS の事前ロード係へ目印で伝える（最善努力）
             from src.utils import cache_marker
 
-            cache_marker.mark_from_paths(sent)
+            cache_marker.mark_from_paths([k for k in sent if not k.startswith(_BACKUP_PREFIXES)])   # 記録の予備は画面の元ではない
         except Exception:  # noqa: BLE001
             pass
+        _note_stage2_push(root, sent)
     return {"seen": seen, "uploaded": uploaded, "would_upload": would}
+
+
+_STAGE2_TREE = f"{_INF}/bets_stage2/"
+
+
+def _note_stage2_push(root: Path, sent: list[str]) -> None:
+    """第 2 段の判定ファイルを上げ終えた時刻を、ホストの手元の見張りの記録（launch_watch/push_<日>.jsonl）に残す（最善努力・GCS は読まない）。
+    レースごとに『T-10 に API で見える状態だったか』を、push の完了＋目録の読み直し（60 秒）から推定するのに使う。"""
+    keys = [k for k in sent if k.startswith(_STAGE2_TREE)]
+    if not keys:
+        return
+    try:
+        import json as _json
+
+        now = datetime.now(timezone(timedelta(hours=9))).isoformat(timespec="seconds")
+        by_day: dict[str, list[str]] = {}
+        for k in keys:
+            parts = k[len(_STAGE2_TREE):].split("/")
+            if len(parts) == 2:
+                by_day.setdefault(parts[0], []).append(parts[1].rsplit(".", 1)[0])
+        d = root / _INF / "launch_watch"
+        d.mkdir(parents=True, exist_ok=True)
+        for day, rids in by_day.items():
+            with (d / f"push_{day}.jsonl").open("a", encoding="utf-8") as f:
+                f.write(_json.dumps({"at": now, "event": "pushed", "race_ids": sorted(rids)}, ensure_ascii=False) + "\n")
+    except Exception:  # noqa: BLE001
+        logger.warning("第 2 段の push の時刻を記録できませんでした", exc_info=True)
 
 
 def window_days() -> float:
@@ -793,9 +833,9 @@ def pull_trees(trees: list[str] | tuple[str, ...], *, recent_days: float | None 
 
 
 def tree_known(tree: str) -> bool:
-    """job_map の mirror_out に書ける木か（PUSH_TREES のどれかの配下）。"""
+    """job_map の mirror_out に書ける木か（TREES・LAZY_TREES のどれかの配下。記録の予備 BACKUP_TREES はホストだけが書く）。"""
     d = split_tree(tree)[0].rstrip("/")
-    return any(d == split_tree(t)[0] or d.startswith(split_tree(t)[0] + "/") for t in PUSH_TREES)
+    return any(d == split_tree(t)[0] or d.startswith(split_tree(t)[0] + "/") for t in TREES + LAZY_TREES)
 
 
 def push_trees(trees: list[str] | tuple[str, ...], *, since_epoch: float | None = None, backend: Backend | None = None, root: Path = REPO_ROOT) -> dict[str, int]:

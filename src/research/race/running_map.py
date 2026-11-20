@@ -56,7 +56,7 @@ AXES: list[tuple[str, str, int, str, str, str]] = [
     ("wetd", "ax_wetd", 1, "道悪適性", "道悪のダートが得意", "道悪のダートが苦手"),   # 同上（ダート）
     ("front", "ax_front", 1, "先行力", "前に行く", "後ろから行く"),
     ("cr", "ax_cr", 1, "Cr性能", "3〜4角で位置を上げる", "3〜4角で位置を下げる"),
-    ("makuri", "ax_makuri", 1, "まくり特性", "道中〜3角で位置を上げる", "道中〜3角で位置を下げる"),
+    ("makuri", "ax_makuri", 1, "まくり特性", "道中〜4角で位置を上げる", "道中〜4角で位置を下げる"),
 ]
 AXIS_KEYS = [a[0] for a in AXES]
 # 地図・グループ・近い馬に使う走法軸（ユーザー指定 2026-11-05: ギアチェンジ・TS・TS持続力・Cr性能・Hペース耐性・基礎スピード）。ほかの方面は値の表示・色分けだけ
@@ -84,6 +84,13 @@ EXTRA_LABELS = {
     "going_dirt": ("ダートタフ適正", "乾いたダートが得意", "乾いたダートが苦手"),
 }
 SLOPE_VENUES = ("中山", "阪神")
+# 好走距離レンジ（短）（長）: 偏差値ではないので EXTRA_LABELS・extra_axes（色分けの選択肢）には入れず、各馬の extras にだけ載せる
+GD_KEY = "gd_range"
+GD_TAU = 0.10          # 相対値のしきい値（good_distance_eval の選択結果。芝ダ混合・走数 3 以上）
+GD_MIN_RUNS = 3
+GD_RETRY_SEC = 600     # 読み込みに失敗したあと、読み直さない秒数
+GD_FIRST_YEAR = 2016
+_GD_COLS = ["race_id", "horse_id", "date", "surface", "distance", "race_class", "sex_age", "finish_position"]
 MAP_COLS = [a[1] for a in AXES] + ["ax_slope"]
 # グループの説明に使う軸（1 軸 1 項目）
 _TRAIT_AXES = [(a[3], [i], a[4], a[5]) for i, a in enumerate(AXES)]
@@ -105,7 +112,7 @@ SIMILAR_MIN_COMMON = 3  # 距離を測るのに、2 頭とも実際に値があ�
 # 基準は作り直さない（データが増えても分布はほぼ変わらない）。作り方を変えたら REFERENCE_VERSION を上げる。
 
 REFERENCE_DIR = rp.STORE_DIR / "reference"
-REFERENCE_VERSION = "17"    # 17: 10 点満点への換算の基準（クラス別 TS のアンカー・タイプ軸の平均/SD。axis_score10.py）を同梱（2026-11-11）。16: コース適性（寄与率・地図の重み・好走ゾーン）の期待得点を人気込みにして、実力の代理を除く。人気表は基準に同梱し、読み込み時に running_map_course.POP_TABLE へ設定（2026-11-10）。15: コース別の地図を良馬場だけ・道悪（稍重以上）だけで別々に測り、道悪の地図は基礎スピードの代わりに道悪適性を軸にする（2026-11-05）。14: 地図に使う軸に基礎スピードを足して 6 軸に・TS/TS持続力へ改名（2026-11-05）。13: 地図に使う軸に Hペース耐性を足して 6 軸に（2026-11-05）。12: 地図に使う軸をギアチェンジ・TS・TS持続力・Cr性能の 4 つに固定（2026-11-05）。11: 場のグループは 300 走以上・長距離が少ない場は 1800m 以上でまとめる。10: 標本の少ないコースは同じ競馬場の距離帯（2600m 以上は長距離）でまとめる。9: コース別の地図を「軸の無い、上位 N 方面（コースごとに 3〜6）で走法の近い馬ほど近い」重み付き主成分にした（2026-11-03）
+REFERENCE_VERSION = "19"    # 19: TS の x をコース内の 0.5%・99.5% 点で打ち切ってから偏差値にする（異常走で広がりが崩れない。horse_ts.py。2026-11-20）。18: 先行力・Cr性能・まくり特性・Hペース耐性の位置を、横位置（horse_lap の position）でなく累積タイム順位で作る（2026-11-19）。17: 10 点満点への換算の基準（クラス別 TS のアンカー・タイプ軸の平均/SD。axis_score10.py）を同梱（2026-11-11）。16: コース適性（寄与率・地図の重み・好走ゾーン）の期待得点を人気込みにして、実力の代理を除く。人気表は基準に同梱し、読み込み時に running_map_course.POP_TABLE へ設定（2026-11-10）。15: コース別の地図を良馬場だけ・道悪（稍重以上）だけで別々に測り、道悪の地図は基礎スピードの代わりに道悪適性を軸にする（2026-11-05）。14: 地図に使う軸に基礎スピードを足して 6 軸に・TS/TS持続力へ改名（2026-11-05）。13: 地図に使う軸に Hペース耐性を足して 6 軸に（2026-11-05）。12: 地図に使う軸をギアチェンジ・TS・TS持続力・Cr性能の 4 つに固定（2026-11-05）。11: 場のグループは 300 走以上・長距離が少ない場は 1800m 以上でまとめる。10: 標本の少ないコースは同じ競馬場の距離帯（2600m 以上は長距離）でまとめる。9: コース別の地図を「軸の無い、上位 N 方面（コースごとに 3〜6）で走法の近い馬ほど近い」重み付き主成分にした（2026-11-03）
 _APTITUDE_FILE = "aptitude.json"
 _COURSE_MAPS_FILE = "course_maps.json"
 
@@ -248,7 +255,9 @@ def _quantiles() -> dict[str, np.ndarray]:
 
 
 def clear_cache() -> None:
-    for f in (_data, _quantiles, _priors, _going_runs, _going_all):
+    global _gd_failed_at
+    _gd_failed_at = None
+    for f in (_data, _quantiles, _priors, _going_runs, _going_all, _gd_runs):
         f.cache_clear()
 
 
@@ -455,6 +464,77 @@ def _going_all(as_of: str) -> pd.DataFrame:
     return ga.going_scores(runs, list(past["horse_id"].unique()), as_of).set_index("horse_id")
 
 
+def _gd_year(path: Any) -> pd.DataFrame:
+    """1 年分の平地の走を、点数（run_points）まで付けて小さい型で返す。点数は同じレースの全馬で決まるので、年ごとに作ってよい。"""
+    from src.research.race import good_distance as gd
+
+    d = pd.read_parquet(path, columns=_GD_COLS, use_threads=False)   # 並列読みは一時メモリが増える（実測 ピーク約 20MB 差）
+    d = d[d["surface"].isin(gd.GROUND)].copy()
+    d["race_id"] = d["race_id"].astype(str)
+    d["horse_id"] = d["horse_id"].astype(str)
+    d = d.drop_duplicates(["race_id", "horse_id"]).reset_index(drop=True)
+    d = gd.run_points(d)
+    return pd.DataFrame({"horse_id": d["horse_id"], "date": pd.to_datetime(d["date"], errors="coerce"),
+                         "surface": d["surface"].astype(str),
+                         "distance": pd.to_numeric(d["distance"], errors="coerce").astype("float32"),
+                         "points": d["points"].astype("float32")})
+
+
+def _gd_last_year() -> int:
+    """この年の前年までは race_result_flat が全部そろっているはず、という年（年初は前年分が最新）。"""
+    return pd.Timestamp.now(tz="Asia/Tokyo").year - 1
+
+
+@lru_cache(maxsize=1)
+def _gd_runs() -> pd.DataFrame:
+    """好走距離レンジの元（2016 年〜の平地の走ごとの点数）。年ごとに必要な列だけ読み、点数にしてから束ねる（全年の生の列を同時に持たない）。
+    全年そろって読めたときだけ返す（lru_cache に残る）。ファイルが無い・年が欠ける・壊れているときは例外にして、キャッシュさせない。
+    計算が動くのは race-analysis-daily（Cloud Run Job）と VPS の entries_sync。API は保存済みの結果を読むだけでここは通らない。"""
+    last = _gd_last_year()
+    paths = {y: rp.FLAT_DIR / str(y) / "race_result_flat.parquet" for y in range(GD_FIRST_YEAR, last + 1)}
+    missing = [y for y, p in paths.items() if not p.exists()]
+    if missing:
+        raise FileNotFoundError(f"race_result_flat が無い年があります: {missing}（{rp.FLAT_DIR}）")
+    parts = [_gd_year(p) for p in paths.values()]
+    # 当年分は途中まででよいので、あれば足す
+    cur = rp.FLAT_DIR / str(last + 1) / "race_result_flat.parquet"
+    if cur.exists():
+        parts.append(_gd_year(cur))
+    d = pd.concat(parts, ignore_index=True)
+    d["horse_id"] = d["horse_id"].astype("category")   # 常駐させるので小さい型にする（馬 ID・馬場は区分型）
+    d["surface"] = d["surface"].astype("category")
+    return d
+
+
+_gd_failed_at: Optional[float] = None
+
+
+def _gd_for(ids: list[str], as_of: str) -> Optional[pd.DataFrame]:
+    """対象日より前の走だけの好走距離レンジ（horse_id 索引）。元の表が読めないときは None（画面には出さない）。
+    元の表の読み込みに失敗したら GD_RETRY_SEC の間は読み直さない（レースごとに全年を読み直さないため）。この時間が過ぎれば読み直す。
+    1 レースの範囲の計算の失敗は、そのレースだけ None にする（後のレースには影響させない）。"""
+    import logging
+    import time
+
+    from src.research.race import good_distance as gd
+
+    global _gd_failed_at
+    log = logging.getLogger(__name__)
+    if _gd_failed_at is not None and time.monotonic() - _gd_failed_at < GD_RETRY_SEC:
+        return None
+    try:
+        runs = _gd_runs()
+    except Exception:   # 好走距離レンジは補助の表示。読めなくても走法の地図は出す
+        _gd_failed_at = time.monotonic()
+        log.exception("好走距離レンジの元の表を読めませんでした（%d 秒後に読み直します）", GD_RETRY_SEC)
+        return None
+    try:
+        return gd.range_before(runs, ids, as_of, GD_TAU, GD_MIN_RUNS)
+    except Exception:
+        log.exception("好走距離レンジを作れませんでした（このレースだけ付けません）: as_of=%s", as_of)
+        return None
+
+
 def _extra_keys(conditions: dict[str, Any]) -> list[str]:
     keys = []
     if conditions.get("venue") in SLOPE_VENUES:
@@ -469,7 +549,8 @@ def _num(x: Any) -> Optional[float]:
     return None if x is None or (isinstance(x, float) and math.isnan(x)) else round(float(x), 1)
 
 
-def _extras(hid: str, row: pd.Series, keys: list[str], going: Optional[pd.DataFrame], s10ref: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+def _extras(hid: str, row: pd.Series, keys: list[str], going: Optional[pd.DataFrame], s10ref: Optional[dict[str, Any]] = None,
+            gd: Optional[pd.DataFrame] = None) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for k in keys:
         if k == "slope":
@@ -483,6 +564,11 @@ def _extras(hid: str, row: pd.Series, keys: list[str], going: Optional[pd.DataFr
                 v = _num(g[k])   # 道悪適性は 50±10 の偏差値（判定できなければ None）。基準の分布を持たないので偏差値のまま同じ幅で換算する
                 out[k] = {"value": v, "n_power": int(g[f"n_power_{k}"]), "n_normal": int(g[f"n_normal_{k}"]), "low": bool(g[f"low_{k}"]),
                           "score": s10.to_score10_deviation(v, s10ref)}
+    if gd is not None:   # 好走距離レンジ。走数が少ない（GD_MIN_RUNS 未満）・走が無い馬は短・長が None（不明）
+        g = gd.loc[hid] if hid in gd.index else None
+        known = g is not None and not math.isnan(g["short_m"])
+        out[GD_KEY] = {"value": None, "short_m": int(g["short_m"]) if known else None, "long_m": int(g["long_m"]) if known else None,
+                       "runs": int(g["runs"]) if g is not None else 0}
     return out
 
 
@@ -530,13 +616,14 @@ def build_running_map(entries: list[dict], race_id: str, conditions: dict[str, A
             if any(ids) else pd.DataFrame())
     extra_keys = _extra_keys(conditions)
     going = _going_all(as_of) if any(k.startswith("going_") for k in extra_keys) else None
+    gd_tbl = _gd_for([i for i in ids if i], as_of)
     s10ref = d["ref"].get("score10")
     peaks = s10.peak_ts_as_of(d["metrics"], [i for i in ids if i], as_of) if s10ref else None
-    out = _assemble(entries, ids, prof, race_id, conditions, extra_keys, going, load_result, wet=False, peaks=peaks)
+    out = _assemble(entries, ids, prof, race_id, conditions, extra_keys, going, load_result, wet=False, peaks=peaks, gd=gd_tbl)
     surface = conditions.get("surface")
     if surface in WET_AXIS and out.get("status") == "ok":
         try:
-            wet = _assemble(entries, ids, prof, race_id, conditions, [k for k in extra_keys if not k.startswith("going_")], None, None, wet=True, peaks=peaks)
+            wet = _assemble(entries, ids, prof, race_id, conditions, [k for k in extra_keys if not k.startswith("going_")], None, None, wet=True, peaks=peaks, gd=gd_tbl)
         except Exception:   # 道悪の地図は補助。失敗しても良馬場の地図は出す
             import logging
 
@@ -548,7 +635,7 @@ def build_running_map(entries: list[dict], race_id: str, conditions: dict[str, A
 
 
 def _assemble(entries: list[dict], ids: list[str], prof: pd.DataFrame, race_id: str, conditions: dict[str, Any], extra_keys: list[str],
-              going: Optional[pd.DataFrame], load_result, wet: bool, peaks: Optional[pd.Series] = None) -> dict[str, Any]:
+              going: Optional[pd.DataFrame], load_result, wet: bool, peaks: Optional[pd.Series] = None, gd: Optional[pd.DataFrame] = None) -> dict[str, Any]:
     qs = _quantiles()
     d = _data()
     map_keys, map_idx, weights, shown = mode_axes(wet, conditions.get("surface"))
@@ -569,7 +656,7 @@ def _assemble(entries: list[dict], ids: list[str], prof: pd.DataFrame, race_id: 
             continue
         picked.append(({**base, "n_runs": int(row["n_runs"]), "n_lap_runs": n_lap, "axis_runs": axis_runs, "estimated": n_lap == 0,
                         "own_weight": round(float(np.mean([row[f"own_{col}"] for _, _, col, *_ in A])), 3),
-                        "extras": _extras(hid, row, extra_keys, going, s10ref)}, row))
+                        "extras": _extras(hid, row, extra_keys, going, s10ref, gd)}, row))
 
     horses, Zs, Zraw = [], [], []
     signs = SIGNS

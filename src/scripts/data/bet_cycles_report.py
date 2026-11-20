@@ -238,17 +238,28 @@ INTRO = """<p>ユーザー（統括役経由、2026-11-16）: 「勝率・複勝
 各サイクルの履歴を追えるように。全体レースのうち何レースに参戦して、的中率、回収率、平均回収額、中央値回収額がどのくらいかを明確に。」
 指示書: <code>/home/jovyan/work/progress/bet_optimizer_spec.md</code>。道具: <code>src/scripts/data/bet_cycles.py</code>（記録は <code>bet_cycles_report.py</code> で作り直す）。</p>
 <ul>
-<li><b>作法</b>: 訓練 2022〜23 で探す・選ぶ・回顧する。評価 2024 は「変わらず上向きか」を確かめるだけ（評価の値で選び直さない。次の仮説を考えるときに評価の値を見たことは各サイクルに書く）。test 2025 は凍結の後に 1 回だけ。</li>
+<li><b>作法</b>: 訓練の期間で探す・選ぶ・回顧する（最終モデル・第 2 回は訓練 2019〜22・評価 2023〜24、試しの回し v6e は訓練 2022〜23・評価 2024）。評価は「変わらず上向きか」を確かめるだけ（評価の値で選び直さない。次の仮説を考えるときに評価の値を見たことは各サイクルに書く）。test 2025 は凍結の後に 1 回だけ。</li>
 <li><b>サイクルの数え方</b>: cycle 1〜13 は買い方の格子（試した買い方を増やす回）、cycle 14〜20 は選び方を決めた段（選び方そのものの交差検証・推奨度の段の作り方・1 番人気の方針の適用・最終モデルでの回し直し・p_top での確かめ・2020 年の扱い・4 年への組み替え）で、選ぶ対象は増やしていない（統括役の判断で 20 サイクルとして数えた）。</li>
 <li><b>予測</b>: 本番 v6e の OOF で道具と 20 サイクルの枠組みを作り（試しの回し）、最終モデル（model-improve-cycles の cycles16_fix3）の OOF で回し直す（採否はこちらを正とする）。どちらも 2022・23 の予測は LOYO のアンサンブルで、重みの当てはめに 2024 の着順も入っている（漏れは弱いが、評価 2024 は完全に手つかずではない）。最終モデルの 2022〜24 の OOF は勝率だけなので、連対率・複勝率は割引 Harville で補った（p_top 入りの OOF と 2019〜21 年の OOF が届いたら、訓練 2019〜22・評価 2023〜24 で回し直し、そこで凍結する）。</li>
 <li><b>1 番人気の方針</b>（ユーザー 2026-11-16）: ◎ は 2 番人気以下から。1 番人気は、予測の連対率がしきい値以上（訓練で連対率 85% 以上になる最も緩い値）の例外のときだけ。cycle 7 以降の主な系統。最後の候補でも、この方針に合わない買い方は参考として外す（2026-11-17、test を見る前に決めた）。</li>
 <li><b>オッズ</b>: 確定オッズ（締切後）で ◎ の期待値・人気を決めている。実際に買う時点のオッズとはずれる。三連複・三連単はオッズが無いので確率だけで組む。精算は確定の払戻。オッズに揺れ（σ=0.1・0.2）を足した確かめを各サイクルに付けた。</li>
 <li><b>印と買い目の整合</b>: 買い目は必ず ◎ から組み、◎ は軸・1 着・本線。R1〜R8（<code>docs/ideas/betting_patterns.md</code> §4）をどの買い方にも機械的に当て、違反した買い方は採らない。</li>
-<li><b>選び方</b>（cycle 1 の結果を見た後に決めた）: 候補 = 参戦 300R 以上・違反なし・訓練の 2 年とも B0 より上・払戻の上位 5 件を除いた回収率も B0 以上。順位 = 訓練の回収率の 95% 区間の下限。前の最良は系統（型 1・型 A・型 B・方策など）ごとに持ち、改善は同じ系統の前の最良との対の差の区間が 0 より上のときだけ。「参考」の系統（制約なしの穴・ボックス）は並べるだけで選ばない。</li>
-<li><b>最後の候補の決め方</b>（cycle 13 の後に固定）: 「訓練で一番良く、かつ評価でも上向き」の「訓練」は、<b>選び方そのものの交差検証</b>（各サイクルの格子の中から 2022 年だけで最良を選んで 2023 年に当て、その逆も行った回収率。方策はもとから交差検証の値）で測る。物差しは min（上位 5 件を除いた回収率, 年ごとの回収率）、条件は的中率 8% 以上・参戦 300R 以上。参考の系統は除く。</li>
-<li><b>評価 2024 の扱いの注意</b>: 評価 2024 は、各サイクルで選んだ 1 本（10 本ほど）について見てきた。順位付け・選び直しには使っていないが、次の仮説を考えるときに見ているので、もう手つかずの確かめではない。手つかずなのは test 2025 だけ。</li>
+<li><b>選び方</b>（cycle 1 の結果を見た後に決めた）: 候補 = 参戦 300R 以上・違反なし・訓練の年ごとにすべて B0 より上・払戻の上位 5 件を除いた回収率も B0 以上。順位 = 訓練の回収率の 95% 区間の下限。前の最良は系統（型 1・型 A・型 B・方策など）ごとに持ち、改善は同じ系統の前の最良との対の差の区間が 0 より上のときだけ。「参考」の系統（制約なしの穴・ボックス）は並べるだけで選ばない。</li>
+<li><b>最後の候補の決め方</b>（cycle 13 の後に固定）: 「訓練で一番良く、かつ評価でも上向き」の「訓練」は、<b>選び方そのものの交差検証</b>（各サイクルの格子の中から、訓練の年を 1 年ずつ外して残りで最良を選び、外した年に当てた回収率。方策はもとから交差検証の値）で測る。物差しは min（上位 5 件を除いた回収率, 年ごとの回収率）、条件は的中率 8% 以上・参戦 300R 以上。参考の系統は除く。</li>
+<li><b>評価の扱いの注意</b>: 評価の期間は、各サイクルで選んだ 1 本（10 本ほど）について見てきた。順位付け・選び直しには使っていないが、次の仮説を考えるときに見ているので、もう手つかずの確かめではない。手つかずなのは test 2025 だけ。</li>
 <li><b>金額</b>: 1 点 100 円の均等が基本、1 レースの上限 2,000 円。中央値回収額は、的中率が 50% 未満だと 0 円になる（隣に的中したレースの払戻の中央値を並べた）。</li>
 </ul>"""
+
+
+def period_label(log: dict, name: str) -> str:
+    """tag の入力の設定（config/bet_cycles/inputs_<tag>.json、v6e は inputs.json）から期間の年を引く（無ければ空）。"""
+    tag = str(log.get("tag") or "")
+    p = ROOT / "config/bet_cycles" / ("inputs.json" if tag == "v6e" else f"inputs_{tag}.json")
+    try:
+        ys = json.loads(p.read_text(encoding="utf-8"))["periods"][name]["years"]
+    except (OSError, KeyError, ValueError):
+        return "の期間"
+    return f"{min(ys)}" if min(ys) == max(ys) else f"{min(ys)}〜{str(max(ys))[2:]}"
 
 
 def render_html(log: dict) -> str:
@@ -270,11 +281,12 @@ def render_html(log: dict) -> str:
            f"<title>推奨馬券の最適化サイクル</title><style>{CSS}</style></head><body><main>",
            "<h1>推奨馬券の最適化サイクル</h1>",
            f"<p class=\"muted\">元の記録: <code>docs/operations/retrain_trials/bet_cycles_log.json</code>（tag={esc(log['tag'])}）。計画と結果の文: "
-           f"<code>docs/operations/retrain_trials/bet_optimization_20261116.md</code>。何を考えてどうなったかの過程: <a href=\"bet_optimization_story.html\">推奨馬券の最適化の過程</a></p>",
+           f"<code>docs/operations/retrain_trials/bet_optimization_20261116.md</code>。何を考えてどうなったかの過程: <a href=\"bet_optimization_story.html\">推奨馬券の最適化の過程</a>。第 2 回の買い方の実例: <a href=\"bet_r2_walkthrough.html\">第2回の買い方の実例</a></p>",
            *[render_stage(k, log["stages"][k]) for k in sorted(log.get("stages") or {}) if k.startswith("stage_00")],   # 結論（stage_00_*）は前置きより上
            INTRO,
            '<div class="cards">' + "".join(f'<div class="card"><div class="k">{esc(k)}</div><div class="v">{v}</div><div class="muted">{m}</div></div>'
                                            for k, v, m in cards) + "</div>"]
+    out.append(render_round2_2026())
     out.append("<h2>推移</h2>" + chart(cyc))
     rows = []
     for c in cyc:
@@ -285,14 +297,14 @@ def render_html(log: dict) -> str:
         ev = c.get("eval_check") or {}
         rows.append([f"{c['n']}", esc(s["family"]), esc(spec_text(s["spec"]))] + must_cells(s["train"])
                     + [pct(s["eval"].get("roi")), verdict_badge(ev.get("verdict"))])
-    out.append("<h3>必須の指標（各サイクルで選んだ 1 本。訓練 2022〜23）</h3>"
+    out.append(f"<h3>必須の指標（各サイクルで選んだ 1 本。訓練{(' ' + period_label(log, 'train')) if period_label(log, 'train') != 'の期間' else 'の期間'}）</h3>"
                + table(["回", "系統", "買い方"] + MUST_HEAD + ["評価の回収率", "評価の確かめ"], rows, left=3))
     rows = []
     for c in cyc:
         s = c.get("selected")
         if s:
             rows.append([f"{c['n']}", esc(s["family"])] + must_cells(s["eval"]))
-    out.append("<h3>同じ 1 本の評価 2024（確かめだけ。順位付けには使わない）</h3>" + table(["回", "系統"] + MUST_HEAD, rows, left=2))
+    out.append(f"<h3>同じ 1 本の評価 {period_label(log, 'eval')}（確かめだけ。順位付けには使わない）</h3>" + table(["回", "系統"] + MUST_HEAD, rows, left=2))
     if cyc and cyc[0].get("baselines"):
         rows = [[esc(b["name"]), "訓練"] + must_cells(b["train"]) for b in cyc[0]["baselines"]]
         rows += [[esc(b["name"]), "評価"] + must_cells(b["eval"]) for b in cyc[0]["baselines"]]
@@ -338,10 +350,10 @@ def render_cycle(c: dict) -> str:
         h.append(f"<p><b>選んだ</b>［{esc(s['family'])}］: {esc(spec_text(s['spec']))}<br><span class=\"muted\">{esc(s['name'])}</span></p>")
         rows_ = [["訓練" + ("（発走前で判定・本番の再現）" if s.get("train_fin") else "")] + must_cells(s["train"])]
         if s.get("train_fin"):
-            rows_.append(["訓練（確定オッズで判定・楽観）"] + must_cells(s["train_fin"]))
+            rows_.append(["訓練・楽観（確定オッズで判定）"] + must_cells(s["train_fin"]))
         rows_.append(["評価（確かめ" + ("・本番の再現）" if s.get("eval_fin") else "）")] + must_cells(s["eval"]))
         if s.get("eval_fin"):
-            rows_.append(["評価（確定オッズで判定・楽観）"] + must_cells(s["eval_fin"]))
+            rows_.append(["評価・楽観（確定オッズで判定）"] + must_cells(s["eval_fin"]))
         h.append(table(["期間"] + MUST_HEAD, rows_))
         ev = c.get("eval_check") or {}
         fo = s.get("train_folds") or {}
@@ -399,7 +411,7 @@ def render_cycle(c: dict) -> str:
         h.append(f"<p class=\"muted\">{esc(nt['decision_note'])}</p>")
     if nt.get("next"):
         h.append("<p><b>次の仮説</b></p><ul>" + "".join(f"<li>{esc(x)}</li>" for x in nt["next"]) + "</ul>")
-    h.append("<p class=\"muted\">評価 2024 の値は、選んだ 1 本と基準についてだけ見た。次の仮説を考えるときにこの値を見ている。</p></section>")
+    h.append("<p class=\"muted\">評価の期間の値は、選んだ 1 本と基準についてだけ見た。次の仮説を考えるときにこの値を見ている。</p></section>")
     return "\n".join(h)
 
 
@@ -418,14 +430,84 @@ def render_other(tag: str, log: dict) -> str:
     return "\n".join(h)
 
 
+OLD2026 = "旧モデル（本番 v6e）での 2026 年の参考の値。第 2 回の買い方の判定には使わない"
+
+
 def render_stage(key: str, st: dict, prefix: str = "", level: int = 2) -> str:
-    """方策・推奨度・test の段（bet_cycles の stage 出力。中身は各段の html_rows を表にする）。"""
-    h = [f"<h{level}>{esc(prefix)}{esc(st.get('title', key))}</h{level}>"]
-    if st.get("text"):
-        h.append("".join(f"<p>{esc(p)}</p>" for p in st["text"]))
+    """方策・推奨度・test の段（bet_cycles の stage 出力。中身は各段の html_rows を表にする）。
+    第 1 回の結論（stage_00_conclusion）の 2026 年の行は、旧モデル（本番 v6e）の値なので、折りたたみに分けて出す。"""
+    s00 = key.startswith("stage_00")
+    title = st.get("title", key)
+    if s00:
+        title = title.replace("・2026 年の結果", "").replace("と、test 2025・2026 年", "と test 2025")
+    h = [f"<h{level}>{esc(prefix)}{esc(title)}</h{level}>"]
+    texts = st.get("text") or []
+    old_t = [x for x in texts if s00 and "2026 年" in x]
+    h.append("".join(f"<p>{esc(p)}</p>" for p in texts if p not in old_t))
+    old_tables = []
     for t in st.get("tables") or []:
-        h.append(f"<h4>{esc(t['title'])}</h4>" + table(t["head"], [[esc(c) for c in r] for r in t["rows"]], left=t.get("left", 1)))
+        rows = t["rows"]
+        old = [r for r in rows if s00 and str(r[0]).startswith("2026")]
+        rows = [r for r in rows if r not in old]
+        ttl = t["title"].replace("・2026 年", "") if s00 else t["title"]
+        if rows:
+            h.append(f"<h4>{esc(ttl)}</h4>" + table(t["head"], [[esc(c) for c in r] for r in rows], left=t.get("left", 1)))
+        if old:
+            old_tables.append(f"<h4>{esc(ttl)}</h4>" + table(t["head"], [[esc(c) for c in r] for r in old], left=t.get("left", 1)))
+    if old_t or old_tables:
+        h.append(f"<details><summary>{esc(OLD2026)}</summary>" + "".join(f"<p>{esc(p)}</p>" for p in old_t) + "".join(old_tables) + "</details>")
     return "\n".join(h)
+
+
+def render_round2_2026() -> str:
+    """第 2 回の買い方（凍結 frozen_20261117_r2）の評価の期間: 2025 年（test）・2026 年（事前登録の主・別枠）・合算。
+    元は docs/operations/retrain_trials/ の記録（bet_test2025_r2_test_<hash>.json・bet_2026_r2_{main,separate}_<hash>.json）。
+    2026 年の記録が無いうちは、予定の文だけを出す。合算は、主の群があれば bet_cycles の race 記録から作る（render の外で作って記録に置く）。"""
+    fz = ROOT / "config/bet_cycles/frozen_20261117_r2.json"
+    if not fz.exists():
+        return ""
+    h_ = json.loads(fz.read_text(encoding="utf-8"))["hash"]
+    T = ROOT / "docs/operations/retrain_trials"
+    t25 = T / f"bet_test2025_r2_test_{h_}.json"
+    rows = []
+
+    def mrow(lab, m, b0=None, d=None, src=""):
+        return [lab, f"{m.get('races', 0):,}", f"{m.get('bet_races', 0):,}（{pct(m.get('bet_rate'), 0)}）", pct(m.get("hit_rate")), pct(m.get("roi")),
+                f"{pct(m.get('roi_lo'))}〜{pct(m.get('roi_hi'))}", pct(m.get("roi_ex_top5")), yen(m.get("avg_return")), yen(m.get("median_return")),
+                pct(b0) if b0 is not None else "－", (f"{d[0] * 100:+.1f}（{d[1] * 100:+.1f}〜{d[2] * 100:+.1f}）" if d else "－"), src]
+    if t25.exists():
+        x = json.loads(t25.read_text(encoding="utf-8"))["periods"]["test"]
+        b0 = next((v.get("roi") for k, v in (x.get("baselines") or {}).items() if k.startswith("B0")), None)
+        rows.append(mrow("2025 年（test。区切りの選定にも使われた期間。学習の X の予測）", x["metrics"], b0, x.get("diff_vs_B0"), "T-60 の再現（5 通り）"))
+    got = []
+    for g, lab, src in (("main", "2026 年 1/5〜10/12（主。推論の経路の予測）", "T-60 の再現（5 通り）"), ("separate", "2026 年 10/17〜11/08（別枠。推論の経路の予測）", "本物の T-60")):
+        f = T / f"bet_2026_r2_{g}_{h_}.json"
+        if f.exists():
+            x = json.loads(f.read_text(encoding="utf-8"))
+            if x.get("status") == "done":
+                rows.append(mrow(lab + f"・判定 {x.get('verdict')}", x["metrics"], (x.get("B0") or {}).get("roi"), x.get("diff_vs_B0"), src))
+                got.append(g)
+    comb = T / f"bet_2025_2026_r2_combined_{h_}.json"
+    if comb.exists():
+        x = json.loads(comb.read_text(encoding="utf-8"))
+        rows.append(mrow("2025〜26 年の合算（主の群と 2025 年）", x["metrics"], (x.get("B0") or {}).get("roi"), x.get("diff_vs_B0"), "T-60 の再現（5 通り）"))
+    head = ["期間", "全レース", "参戦（率）", "的中率", "回収率", "95% 区間", "上位5件を除く", "平均回収額", "中央値回収額", "B0", "B0 との差（区間）", "判定のオッズ"]
+    out = ["<h2>第 2 回の買い方の評価の期間（2025 年・2026 年）</h2>",
+           "<p>最新のモデル（候補 r04＋第 2 段）の出力で、凍結した第 2 回の買い方（hash " + esc(h_) + "）を当てた値。"
+           "評価の期間（採否に使わない）。見た回数の台帳の決まりで、2026 年の主・別枠も評価だけとして扱う（同じ期間を第 1 回と参考の群が見ている）。"
+           "採否は 11/21 からの本番の試行の前向きの記録で決める。この値を見て買い方・モデルを選び直さない（直すなら、新しい確かめの期間を立てる）。"
+           "精算は確定の払戻。主は T-60 のオッズの再現（2026 年の T-60 と確定の比を借りた 5 通り）、別枠は本物の T-60 のオッズで判定する。</p>"]
+    if rows:
+        out.append(table(head, rows, left=1))
+    if "main" not in got:
+        out.append("<p><b>最新のモデルでの 2026 年の値は、事前登録の 1 回の確かめの後に入る</b>（予定: 入力がそろい次第。事前登録 <code>config/bet_cycles/prereg_2026_r2.json</code>）。</p>")
+    out.append("<p><b>予測の経路が違う。</b>2025 年（と訓練・評価）は学習の X で作った予測（OOF）、2026 年の主・別枠は推論の経路（stg の作り直し）の予測。"
+               "未勝利・新馬の 68 レースのうち 11 レースで、買う／見送るが学習の X と推論の X で入れ替わった（weekend-launch の測定、docs/operations/weekend_launch_20261121.md の 9a。買うレースの約半分しか一致しない）。"
+               "2025 年の 107% は推論の経路でそのまま出るとは言えない。会員への公開の判断は、推論の経路での成績（2026 年の評価・前向きの記録）を主にする。</p>")
+    out.append("<p class=\"muted\">" + ("合算は件数が増えるぶん区間が狭くなる（予測の経路が違う年をまたぐ）。" if comb.exists() else "") + "主と別枠は判定のオッズの作りが違う（再現と本物）。"
+               "訓練・評価の期間（2019〜2024 年）の 2 歳戦の単勝は、上乗せ（2017〜2023 年）で回収率が約 1〜2 ポイント高めに出ている（bet_age2_premium の記録）。"
+               "2025・2026 年には上乗せは無い。</p>")
+    return "\n".join(out)
 
 
 def render_md_tables(log: dict) -> str:

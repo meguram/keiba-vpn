@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { bracketChipStyle } from "@/lib/bracket";
+import { fmtM, goodDistanceText } from "@/lib/goodDistance";
 import type { AnalysisEntry, RunningMapAxis, RunningMapBest5, RunningMapDayTrend, RunningMapExtra, RunningMapFigure, RunningMapHorse, RunningMapPedTrait } from "@/lib/raceAnalysis";
 
 /** グループの色（A〜E） */
@@ -511,12 +512,16 @@ function HorseDetail({ h, pedTraits, axes, topKeys, extraAxes, bracket, onClose,
           ))}
         </div>
       )}
+      {h.extras?.gd_range && (
+        <div style={{ display: "grid", gridTemplateColumns: "8.5em 1fr", gap: 6, marginTop: 8, paddingTop: 6, borderTop: "1px solid var(--border)", fontSize: 11.5 }}>
+          <span style={{ color: "var(--text-dim)" }} title="過去の走から、走った距離と好走した距離の点数で作った幅（芝・ダート混合、100m 刻み）。目安であり、勝ちやすさを示すものではありません">好走距離レンジ</span>
+          <span>{goodDistanceText(h.extras.gd_range)}</span>
+        </div>
+      )}
       <PedSection h={h} traits={pedTraits} />
     </div>
   );
 }
-
-const fmtM = (v: number) => `${(Math.round(v / 10) * 10).toLocaleString()}m`;
 
 /** 血統（性別・父・母父）だけから出した予想。馬場・距離は実際の値、走りの特性は 10 点満点（直近 2 年に走った馬の中での位置）。馬の実測とは別 */
 function PedSection({ h, traits }: { h: RunningMapHorse; traits: RunningMapPedTrait[] }) {

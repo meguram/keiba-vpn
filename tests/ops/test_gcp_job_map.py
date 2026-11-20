@@ -39,6 +39,23 @@ def test_every_gcp_module_exists():
             assert Path(mod.replace(".", "/") + ".py").exists() or Path(mod.replace(".", "/") + "/__init__.py").exists(), f"{j['id']}: {mod}"
 
 
+def test_models_of_a_job_share_one_first_year():
+    """ジョブが取得するモデルの起点年（first_year）は 1 つにそろう（ディスパッチャが KEIBA_FIRST_YEAR を決めるため）。"""
+    import copy
+
+    doc = copy.deepcopy(DOC)
+    job = next(j for j in doc["jobs"] if j["destination"] == "gcp" and len(j.get("models") or []) >= 2)
+    a, b = job["models"][:2]
+    doc["models"][a]["first_year"], doc["models"][b]["first_year"] = 2016, 2020
+    errs = jm.validate(doc, known_fetch_tasks=set(FT.ALLOWED_TASKS), agent_tasks=set(FT.DEFAULT_AGENT_TASKS))
+    assert any("起点年" in e for e in errs)
+
+
+def test_current_v6e_bundle_declares_first_year_2020():
+    # 今の本番の v6e は 2020 年起点で学習した。2016 年起点の束へ替えるときは、この値と束の bundle.json の first_year を一緒に替える
+    assert DOC["models"]["bundle_v6e"]["first_year"] == 2020
+
+
 def test_host_jobs_are_never_cut_over_targets():
     from src.scripts.ops import cutover_plan as cp
 

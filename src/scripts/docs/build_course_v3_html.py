@@ -104,7 +104,7 @@ def build(out: Path = OUT) -> Path:
 {te}<h2>サイクル</h2><div class="scroll"><table><thead><tr>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table></div>
 <h2>採った版の条件（単位ごとに走数の多い 5 個まで）</h2>{ct}
 <p class="muted">作り: src/research/course/v3.py → src/scripts/docs/build_course_v3_html.py。計画書: docs/ideas/course_class_handicapper.md §10。
-第 2 版: <a href="course_v2.html">第 1 版・第 2 版</a></p>
+第 2 版: <a href="course_v2.html">第 1 版・第 2 版</a>・単位ごとの規則と成績: <a href="../graded/rules_overview.html">ルールの一覧（重賞・通常レース）</a></p>
 </main></body></html>"""
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")

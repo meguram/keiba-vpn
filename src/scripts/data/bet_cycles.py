@@ -9,7 +9,7 @@ cycle_XX.json（記録）・state.json（系統ごとの最良）・qcuts_train.
 
 作法（時間の漏れを防ぐ）:
 - 予測は OOF（その年を学習に含まないモデルの予測）だけ。期間は config/bet_cycles/inputs.json の periods。
-  訓練（2022〜23）で探す・選ぶ・回顧する。評価（2024）は「変わらず上向きか」の確かめだけ。test（2025）は凍結の後に 1 回だけ。
+  訓練で探す・選ぶ・回顧する（最終モデル・第 2 回は 2019〜22、試しの回し v6e は 2022〜23）。評価（2023〜24、v6e は 2024）は「変わらず上向きか」の確かめだけ。test（2025）は凍結の後に 1 回だけ。
 - 分位の区切り（混戦度など）は訓練の期間だけで決めて凍結し、他の期間にそのまま当てる。
 - オッズ・人気は確定（race_result_flat の最終オッズ）。実際に買う時点（締切前）のオッズとはずれる。
   三連複・三連単はオッズが無いので、確率だけで組む（期待値は単勝でだけ使う）。
@@ -957,6 +957,7 @@ class Period:
 
 # ── 本番の再現: 発走前（T-60）のオッズを、確定オッズから逆向きに作る ─────────────────────────────
 
+DRIFT_SRC: Path | None = None                   # 再現のずれの元を差し替えるとき（凍結のときの写し）。None なら PRE_ODDS
 POP_EDGES = [0, 1, 3, 6, 9, 99]                  # 人気帯（確定の人気）: 1・2〜3・4〜6・7〜9・10〜
 PRE_ODDS = ROOT / "data/local/research/persona1/pre_odds.parquet"
 
@@ -1072,6 +1073,10 @@ def prepare_periods(inputs: dict, names=("train", "eval"), cuts: dict | None = N
         if spec.get("ignore_ptop"):                 # 連対率・複勝率を勝率から Harville で補う側にそろえる（訓練が勝率だけのとき test も合わせる）
             pred = pred.drop(columns=[c for c in ("p_top2", "p_top3") if c in pred.columns])
         flat = load_runners(years)
+        if spec.get("dates"):                       # 日付の窓（事前登録の群）: 出走表をその期間に絞る（両端を含む）
+            lo, hi = spec["dates"]
+            dd = pd.to_datetime(flat["date"]).dt.strftime("%Y-%m-%d")
+            flat = flat[(dd >= lo) & (dd <= hi)]
         pay = load_payoffs(set(flat["race_id"]))
         n_fill = fill_payoffs_from_flat(pay, years) if spec.get("fill_payoff_from_flat") else 0
         oo = None
@@ -1087,12 +1092,15 @@ def prepare_periods(inputs: dict, names=("train", "eval"), cuts: dict | None = N
     out = {}
     for nm, (races, ft, drop) in per.items():
         out[nm] = Period(nm, races, ft, poisson_weights(len(races), n_boot, seed=zlib.crc32(nm.encode()) % 1000), drop)
+        if _REP.get(len(races), 1) != 1:              # 版を並べた別の期間と長さが重なると、件数を版の数で割り違える
+            raise RuntimeError(f"期間 {nm} の長さ {len(races)} が、版を並べた別の期間と重なりました")
         _REP.setdefault(len(races), 1)
         do = inputs["periods"][nm].get("decision_odds")
         if do and do.get("kind") == "sim_pre":           # 本番の再現: 判定に使うオッズを発走前の再現にし、版を並べた期間にする
-            key = "drift_" + do.get("phase", "t60")
+            src_ = DRIFT_SRC or PRE_ODDS                  # 再現のずれの元（凍結のときの中身に固定できる）
+            key = "drift_" + do.get("phase", "t60") + "|" + str(src_)
             if key not in _CACHE:
-                _CACHE[key] = load_drift(do.get("phase", "t60"))
+                _CACHE[key] = load_drift(do.get("phase", "t60"), path=src_)
             vs = [simulate_pre_period(out[nm], _CACHE[key], k, {}) for k in range(int(do.get("n", 5)))]
             out[nm] = stack_versions(out[nm], vs)
     if cuts is None:                                     # 分位の区切りは訓練で決める（本番の再現なら、再現の特徴で）
@@ -1750,7 +1758,7 @@ def cmd_fav1(a) -> None:
             f"そのほぼすべてが勝ち負けに匹敵する成績であるべき。市場の注目度の穴をねらうべき。」",
             f"例外の規則: 1 番人気（確定オッズの順。発走前のオッズの人気とはずれうる）の予測の連対率が、しきい値以上のときだけ、その馬を ◎ にしてよい。"
             f"しきい値は訓練の期間で『そのしきい値と、それより厳しいすべてのしきい値（{FAV1_MIN_N} 件以上）で、例外にしたレースの 1 番人気の連対率が {FAV1_TARGET:.0%} 以上（目安 80〜90% の中ほどを推奨で決めた）』を満たす最も緩い値。"
-            f"評価 2024 は、そのしきい値で連対率が保たれるかを見るだけ。"]
+            f"評価の期間は、そのしきい値で連対率が保たれるかを見るだけ。"]
     if not chosen:
         text.append(f"訓練では、連対率 {FAV1_TARGET:.0%} 以上を {FAV1_MIN_N} 件以上で満たすしきい値が無かった。例外は作らず、◎ はすべて 2 番人気以下から選ぶ。")
     if by == "r":
@@ -1856,11 +1864,11 @@ def cmd_selcv(a) -> None:
         if strats:
             print(n, row["kind"], C.shape[0], {k: round(v, 3) if isinstance(v, float) else v for k, v in row["cv"].items()}, fold, row["picks"], same, flush=True)
     res = {"title": "選び方そのものの交差検証（訓練の中の年）", "rows": rows,
-           "text": ["各サイクルの格子（固定の買い方）の中から、2022 年だけで最良を選んで 2023 年に当て、2023 年だけで選んで 2022 年に当てた回収率。"
+           "text": ["各サイクルの格子（固定の買い方）の中から、訓練の年を 1 年ずつ外し、残りの年だけで最良を選んで外した年に当てた回収率（年ごとの値を並べる）。"
                     "選ぶ物差しは cycle 8 以降と同じ考え方（的中率の下限・基準の上位 5 件除きより上・上位 5 件を除いた回収率で順位、各年 150R 以上）。"
                     "数百本の中から選んだ標本内の回収率（各サイクルの『選んだ』の訓練の値）より、選び方の楽観を除いた値になる。"
                     "方策の行は、型ごとの選び方は交差検証の値だが、同じサイクルの方策どうし（型の作り方・件数の下限・見送りの下限）の選び直しの楽観は残る。"
-                    "どちらかの年で条件を満たす候補が無かった行は、1 年分だけの値なので順位から外した（印『1 年分』）。",
+                    "どれかの年で条件を満たす候補が無かった行は、一部の年だけの値なので順位から外した（印『1 年分』）。",
                     "1 番人気の方針（◎ は 2 番人気以下、1 番人気は連対率の予測が高い例外のときだけ。ユーザー 2026-11-16）に合わない買い方（予測 1 位・人気の最高オッズ・期待値最大の ◎、候補なしで予測 1 位に戻す穴の ◎、λ<1 のペナルティ）は、比べる参考として候補から外した（2026-11-17、test を見る前に決めた）。"]}
     res["tables"] = [{"title": f"サイクルごとの選び方の交差検証（訓練 {min(years)}〜{max(years)}）",
                       "head": ["回", "種類", "候補", "参戦", "的中率", "回収率", "95% 区間", "上位5件を除く", "年ごと（その年を外して選び、その年に当てた値）", "どの年も同じ形"],
@@ -2020,18 +2028,18 @@ def cmd_tiers(a) -> None:
         tv = {k: {kk: v.get(kk) for kk in ("bet_races", "roi", "roi_ex_top5")} for k, v in tier_rows(rt["cost"], rt["ret"], tcv, tr.dates, tr.W, "")[1].items()}
         print(json.dumps({"axes": axes, "train_cv": tv}, ensure_ascii=False, default=_np))
         return {"axes": axes, "train_cv": tv}
-    r2, s_ev = tier_rows(re_["cost"], re_["ret"], tev, ev.dates, ev.W, "評価 2024（確かめ）")
+    r2, s_ev = tier_rows(re_["cost"], re_["ret"], tev, ev.dates, ev.W, "評価（確かめ）")
     order_ok = all((s_ev[str(t)].get("roi") or 0) >= (s_ev[str(t - 1)].get("roi") or 0) for t in (3, 2))
     order_tr = all((s_tr[str(t)].get("roi") or 0) >= (s_tr[str(t - 1)].get("roi") or 0) for t in (3, 2))
     res = {"title": "得意・不得意の地図と推奨度の段（指示書 6）", "spec": spec, "model": full, "axes": axes, "base_roi_train": base_roi,
            "tiers_train_cv": s_tr, "tiers_eval": s_ev, "order_train_cv": order_tr, "order_eval": order_ok,
            "text": [f"買い方: {spec.get('name')}。判定と段の区切りは訓練の期間だけで決めた（評価の期間は段の順に回収率が並ぶかを見るだけ）。",
                     f"水準の判定（参戦 {TIER_MIN_N}R 以上の水準だけ）: 不得意 = 回収率の 95% 区間の上限が基準 B0 を下回る → 推奨しない（見送り）。"
-                    f"得意 = 区間の下限が基準 B0（{base_roi * 100:.1f}%）以上・2 年とも 100% 以上・上位 5 件を除いても 100% 以上。それ以外は判定できない。",
+                    f"得意 = 区間の下限が基準 B0（{base_roi * 100:.1f}%）以上・年ごとがすべて 100% 以上・上位 5 件を除いても 100% 以上。それ以外は判定できない。",
                     f"推奨度の点 = 軸ごとの、そのレースの水準の回収率を件数で全体に縮めた値（重み {TIER_PRIOR}R）の平均。不得意に当たらないレースを、点の 3 分位で ★★★・★★・★ に分けた。",
-                    "注意: 段を付ける買い方そのものは訓練の 2 年で選んだもので、段の交差検証は買い方の選び直しまではしていない（買い方の選び方の楽観は残る）。"
+                    "注意: 段を付ける買い方そのものは訓練の期間で選んだもので、段の交差検証は買い方の選び直しまではしていない（買い方の選び方の楽観は残る）。"
                     "交差検証の中の判定は、年ごとの条件が fit の 1 年分だけになる。9 軸の多くの水準を 95% 区間で判定するので、偶然の不得意・得意も含みうる。",
-                    f"訓練の段の値は年の交差検証（ある年で判定・区切りを決めて、もう一方の年に当てた）。段の順（★★★ ≥ ★★ ≥ ★）: 訓練 {'並んだ' if order_tr else '並ばなかった'}・評価 {'並んだ' if order_ok else '並ばなかった'}。",
+                    f"訓練の段の値は年の交差検証（1 年を外し、残りの年で判定・区切りを決めて、外した年に当てた）。段の順（★★★ ≥ ★★ ≥ ★）: 訓練 {'並んだ' if order_tr else '並ばなかった'}・評価 {'並んだ' if order_ok else '並ばなかった'}。",
                     "画面との関係（案。この調査では画面は変えない）: 今の UI のレース選択は、推奨ポートフォリオの期待回収率で色を分けている（config/ev_calibration.json の levels、★オレンジ）。"
                     "ここの段（★★★・★★・★・見送り）を、その levels の段に当てる形が考えられる。"],
            "tables": [{"title": "推奨度の段", "head": ["期間", "段", "参戦", "的中率", "回収率", "95% 区間", "上位5件を除く", "平均回収額", "中央値回収額"], "rows": r1 + r2, "left": 2},
@@ -2052,7 +2060,7 @@ def _period_out(inputs: dict) -> tuple[Path, dict, dict]:
 
 
 def cmd_pick_final(a) -> None:
-    """selcv の結果から、決めた決まり（min(上位5件除き, 年ごと) が最大・的中率の下限・参戦 300R 以上・2 年そろう）で最後の候補を選び、
+    """selcv の結果から、決めた決まり（min(上位5件除き, 年ごと) が最大・的中率の下限・参戦 300R 以上・どの年にも候補がある）で最後の候補を選び、
     その買い方（固定の格子なら、その選び方を訓練全体に当てて選んだ 1 本。方策なら訓練全体で当てはめた方策）を書き出す。"""
     inputs = load_inputs(Path(a.inputs) if a.inputs else None)
     out, tr_spec, cuts = _period_out(inputs)
@@ -2118,17 +2126,17 @@ def cmd_pick_final(a) -> None:
            "evidence_log": ev_log,
            "rule_evidence": ("根拠の検査（年・似た単位は選び方の交差検証で、偶然の見込み、隣の水準、仕組みの説明）を通る中で、物差しが最大のもの" if ev_log else ""),
            "ranking": [{"cycle": r["cycle"], "kind": r["kind"], "score": r["score"], "roi_cv": r["cv"].get("roi")} for r in rows[:10]],
-           "rule": "selcv の物差し min(上位5件を除いた回収率, 年ごとの回収率) が最大、的中率の下限・参戦 300R 以上・2 年そろう・参考の系統を除く（cycle 13 の後に固定）"}
+           "rule": "selcv の物差し min(上位5件を除いた回収率, 年ごとの回収率) が最大、的中率の下限・参戦 300R 以上・どの年にも候補がある・参考の系統を除く（cycle 13 の後に固定）"}
     (out / "final_candidate.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_np), encoding="utf-8")
     pc = lambda x: "－" if x is None else f"{x * 100:.1f}%"           # noqa: E731
     rowm = lambda lab, m: [lab, f"{m.get('races', 0):,}", f"{m.get('bet_races', 0):,}（{pc(m.get('bet_rate'))}）", pc(m.get("h_fav1_rate")), pc(m.get("hit_rate")),   # noqa: E731
                            pc(m.get("roi")), f"{(m.get('avg_return') or 0):,.0f}", f"{(m.get('median_return') or 0):,.0f}", f"{(m.get('median_hit_return') or 0):,.0f}",
                            (f"{pc(m.get('roi_lo'))}〜{pc(m.get('roi_hi'))}" if m.get("roi_lo") is not None else "－"), pc(m.get("roi_ex_top5"))]
     stage = {"title": "最後の候補（決めた決まりで選んだ 1 本。凍結の前）", "text": [res["rule"], f"選んだ: cycle {n}・{best['kind']}・{spec.get('name')}",
-             f"評価 2024 の確かめ: {chk['eval_verdict']}（B0 との差 {d[0] * 100:+.1f} 点、区間 {d[1] * 100:+.1f}〜{d[2] * 100:+.1f}）。評価は選び直しに使っていない。"],
+             f"評価の確かめ: {chk['eval_verdict']}（B0 との差 {d[0] * 100:+.1f} 点、区間 {d[1] * 100:+.1f}〜{d[2] * 100:+.1f}）。評価は選び直しに使っていない。"],
              "tables": [{"title": "必須の指標", "head": ["期間", "全レース", "参戦（率）", "◎ が1番人気", "的中率", "回収率", "平均回収額", "中央値回収額", "的中時の中央値", "95% 区間", "上位5件を除く"],
                          "rows": [rowm("選び方の交差検証（訓練）", best["cv"] | {"races": chk["train"]["metrics"].get("races")}), rowm("訓練（全体で選んだ 1 本）", chk["train"]["metrics"]),
-                                  rowm("評価 2024（確かめ）", chk["eval"]["metrics"]), rowm("基準 B0・評価 2024", chk["eval"]["B0"])], "left": 1},
+                                  rowm("評価（確かめ）", chk["eval"]["metrics"]), rowm("基準 B0・評価", chk["eval"]["B0"])], "left": 1},
                         {"title": "選び方の交差検証の順位（上位 10）", "head": ["回", "種類", "物差し", "交差検証の回収率"],
                          "rows": [[str(r["cycle"]), r["kind"], f"{r['score'] * 100:.1f}%", pc(r["roi_cv"])] for r in res["ranking"]], "left": 2}]}
     (out / "stage_candidate.json").write_text(json.dumps(stage, ensure_ascii=False, indent=1, default=_np), encoding="utf-8")
@@ -2306,6 +2314,18 @@ def cmd_final(a) -> None:
     (ROOT / f"docs/operations/retrain_trials/bet_test2025_{tagr}{body['hash']}.json").write_text(
         json.dumps({"status": "started", "hash": body["hash"], "frozen": rel}, ensure_ascii=False) + "\n", encoding="utf-8")   # git にも残す印（走り始めに書く）
     names = [x for x in inputs["periods"] if (x == "test" if grp == "test" else (x.startswith("fwd") if grp == "fwd" else x in ("test", "fwd2026", "fwd2026_pre")))]
+    from src.ops import data_ledger as L
+
+    tool_ = str(Path(__file__).resolve().relative_to(ROOT)) + ":final"
+    toks = []
+    if any(x == "test" for x in names):
+        toks.append(L.guard(tool=tool_, family="bet_cycles", version=body["hash"], period=("2025-01-01", "2025-12-31"), purpose="confirm",
+                            frozen_paths=[fz, Path(__file__)], target_name="test 2025"))
+    if any(x.startswith("fwd") for x in names):
+        toks.append(L.guard(tool=tool_, family="bet_cycles", version=body["hash"], period=("2026-01-01", None), purpose="eval_only",
+                            frozen_paths=[fz, Path(__file__)], target_name="2026 年の参考",
+                            reason="2026 年の参考（前向きの参考。採否・選び直しに使わない）"))
+    res_ledger = []
     per, _ = prepare_periods(inputs, tuple(names), cuts=body["qcuts"])
     spec = body["spec"]
     bases = json.loads((CFG_DIR / "baselines.json").read_text(encoding="utf-8"))["baselines"]
@@ -2346,17 +2366,173 @@ def cmd_final(a) -> None:
         sp_ = inputs["periods"][nm]
         res["periods"][nm] = {"metrics": m, "metrics_final_odds": fin_m, "baselines": bs, "diff_vs_B0": d, "tiers": tiers, "fav1_exception": exc,
                               "role": sp_.get("role"), "odds_source": ("発走前のオッズ（実際のスナップショット）で ◎・人気を決めた" if sp_.get("pre_odds") else
-                                             (f"発走前のオッズの再現（{p.k} 通りを並べた平均）で判定" if p.k > 1 else "確定オッズで判定")),
+                                             (f"発走前のオッズの再現（{p.k} 通りを並べた平均）で判定" if p.k > 1 else "楽観（確定オッズで判定）")),
                               "pred": sp_["pred"],
                               "drop": p.drop, "miss_types": miss_types(r), "h_reasons": r["records"]["reason"].value_counts().to_dict()}
         r["records"].to_parquet(out / f"final_{nm}_races_{body['hash']}.parquet", index=False)
     res["status"] = "done"
+    res["ledger"] = [t.summary() for t in toks] + res_ledger
     dst.write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_np), encoding="utf-8")
+    for t in toks:
+        t.finish(result_path=str(dst))
     (ROOT / f"docs/operations/retrain_trials/bet_test2025_{tagr}{body['hash']}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_np) + "\n",
                                                                                         encoding="utf-8")
     print(f"結果を docs/operations/retrain_trials/bet_test2025_{tagr}{body['hash']}.json に書いた。commit すること（同じ回の 2 回目を拒む印になる）。")
     print(json.dumps({nm: {k: v.get(k) for k in ("bet_races", "races", "hit_rate", "roi", "roi_lo", "roi_hi", "avg_return", "median_return", "roi_ex_top5")}
                       for nm, v in ((n_, x["metrics"]) for n_, x in res["periods"].items())}, ensure_ascii=False, indent=1, default=_np))
+
+
+PREREG_ORDER = ("否定", "100% 超えを確かめた", "100% 超えの向き（確かめは弱い）", "基準より上（100% は確かめられず）", "確かめられず")
+
+
+def prereg_verdict(m: dict, d: tuple, levels: list[dict]) -> str:
+    """事前登録の判定の基準（criteria.levels）を、事前登録の criteria.order の順に当て、最初に当たった段を返す（段が重なるときは先のもの）。
+    levels の if の文は人が読むためのもの。式はここで固定し、ラベルと式の対応はテストで押さえる。"""
+    roi, lo, hi, ex = (m.get(k) for k in ("roi", "roi_lo", "roi_hi", "roi_ex_top5"))
+    d0, dlo, dhi = d
+    if roi is None or lo is None or hi is None or ex is None:
+        return "判定できない（参戦なし）"
+    have = {x["label"] for x in levels}
+    if set(PREREG_ORDER) != have:
+        raise ValueError(f"事前登録の段のラベルが道具と違います: {sorted(have ^ set(PREREG_ORDER))}")
+    if d0 <= 0 or hi < 1.0:
+        return "否定"
+    if dlo > 0 and lo >= 1.0 and ex >= 1.0:
+        return "100% 超えを確かめた"
+    if dlo > 0 and roi >= 1.0 and ex >= 1.0:
+        return "100% 超えの向き（確かめは弱い）"
+    if dlo > 0:
+        return "基準より上（100% は確かめられず）"
+    return "確かめられず"
+
+
+PREREG_MIN_COVER = 0.95      # 窓の全レースのうち、予測がそろって計算できたレースの割合の下限（下回れば印を書く前に止める）
+
+
+def cmd_prereg_run(a) -> None:
+    """事前登録（config/bet_cycles/prereg_*.json）の 1 つの群を、凍結した買い方で 1 回だけ流す。
+    結果を見る前に: 凍結・事前登録・道具・config/bet_cycles が commit 済みで変わっていないこと、凍結の入力（2026 年の分を除く）が凍結のときと同じこと、
+    道具が test 2025 の記録を再現すること、その群の印が手元にも git の履歴にも無いこと、予測が窓をほぼ覆うことを確かめ、それから印を書いて流す。"""
+    import subprocess
+
+    fz, pr = Path(a.frozen), Path(a.prereg)
+    body = json.loads(fz.read_text(encoding="utf-8"))
+    reg = json.loads(pr.read_text(encoding="utf-8"))
+    if strategy_hash({k: v for k, v in body.items() if k not in ("frozen_at", "hash")}) != body["hash"] or reg.get("frozen_hash") != body["hash"]:
+        raise SystemExit("凍結のハッシュが合わないか、事前登録の凍結と違います")
+    for f in (fz, pr, Path(__file__).resolve()):
+        rel = str(f.resolve().relative_to(ROOT))
+        tracked = subprocess.run(["git", "ls-files", "--error-unmatch", rel], cwd=ROOT, capture_output=True).returncode == 0
+        clean = subprocess.run(["git", "diff", "--quiet", "HEAD", "--", rel], cwd=ROOT).returncode == 0
+        if not (tracked and clean):
+            raise SystemExit(f"{rel} を commit してから流してください（結果を見る前に固定する）")
+    dirty = subprocess.run(["git", "status", "--porcelain", "--", "config/bet_cycles"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    if dirty:
+        raise SystemExit(f"config/bet_cycles に未コミットの変更があります: {dirty[:200]}")
+    inputs = body["inputs"]
+    now = _input_hashes(inputs)
+    tool_key = str(Path(__file__).resolve().relative_to(ROOT))
+    fwd = _fwd_keys(inputs)
+    for k, v in body["pred_sha256"].items():                 # 2026 年の分（予測・出走表・発走前オッズ）と道具（下の再現で確かめる）以外は凍結のときと同じ
+        if k == tool_key or k in fwd:
+            continue
+        if v is None or now.get(k) != v:
+            raise SystemExit(f"入力が凍結の時と違います: {k}")
+    grp = next((g for g in reg["groups"] if g["id"] == a.group), None)
+    if grp is None:
+        raise SystemExit(f"事前登録に群 {a.group} がありません")
+    lo_, hi_ = grp["dates"]
+    if not (_re.fullmatch(r"\d{4}-\d{2}-\d{2}", lo_) and _re.fullmatch(r"\d{4}-\d{2}-\d{2}", hi_) and lo_ <= hi_):
+        raise SystemExit(f"事前登録の日付の窓が YYYY-MM-DD の 2 つ（lo ≤ hi）ではありません: {grp['dates']}")
+    name = f"bet_2026_{body['tag']}_{grp['id']}_{body['hash']}.json"
+    rel_mark = f"docs/operations/retrain_trials/{name}"
+    mark = ROOT / rel_mark
+    seen = subprocess.run(["git", "log", "--all", "--oneline", "--", rel_mark], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    if mark.exists() or seen:
+        raise SystemExit(f"群 {grp['id']} はすでに流しています（1 回だけ）: {name}")
+    # 再現のずれの元（発走前オッズ）は週ごとに増えるので、凍結のときの中身の写しに固定する（sha を照合）
+    global DRIFT_SRC
+    want = body["pred_sha256"].get(str(PRE_ODDS.relative_to(ROOT))) or body["pred_sha256"].get(str(PRE_ODDS))
+    cand_ = [PRE_ODDS] + sorted((OUT_DIR / body["tag"]).glob("pre_odds_frozen_*.parquet"))
+    DRIFT_SRC = next((c for c in cand_ if c.exists() and _sha(c) == want), None)
+    if DRIFT_SRC is None:
+        raise SystemExit("凍結のときの発走前オッズ（再現のずれの元）が見つかりません（写し pre_odds_frozen_*.parquet を置く）")
+    # 道具が凍結のときと同じ判定をすることを、2025 年 test の記録の再現で確かめる（回収率・区間・上位 5 件除き・B0 との差）
+    tr = json.loads((ROOT / f"docs/operations/retrain_trials/bet_test2025_r2_test_{body['hash']}.json").read_text(encoding="utf-8"))
+    if tr.get("status") != "done":
+        raise SystemExit("test 2025 の記録が完了していません")
+    rm = tr["periods"]["test"]["metrics"]
+    bases = json.loads((CFG_DIR / "baselines.json").read_text(encoding="utf-8"))["baselines"]
+    from src.ops import data_ledger as L
+
+    tool_ = str(Path(__file__).resolve().relative_to(ROOT)) + ":prereg-run"
+    rtok = L.guard(tool=tool_, family="bet_cycles", version=body["hash"], period=("2025-01-01", "2025-12-31"), purpose="reproduce",
+                   frozen_paths=[fz, pr, Path(__file__)], reason="凍結の道具が test 2025 の記録を再現するか（値は判断に使わない）")
+    pt, _ = prepare_periods({"periods": {"test": inputs["periods"]["test"]}}, ("test",), cuts=body["qcuts"])
+    rt = run_period(pt["test"], body["spec"])
+    mt = metrics_run(rt, pt["test"], pt["test"].W)
+    dt = paired_diff(rt, run_period(pt["test"], bases[0]), pt["test"].W)
+    bad = [k for k in ("races", "bet_races", "roi", "roi_lo", "roi_hi", "roi_ex_top5", "hit_rate") if abs(float(mt.get(k) or 0) - float(rm.get(k) or 0)) > 1e-9]
+    bad += ["diff_vs_B0"] if any(abs(x - y) > 1e-9 for x, y in zip(dt, tr["periods"]["test"]["diff_vs_B0"])) else []
+    rtok.finish(status="done" if not bad else "error", error=("再現しない: " + ",".join(bad)) if bad else "")
+    if bad:
+        raise SystemExit(f"道具が凍結のときと同じ判定をしません（test 2025 の記録と違う値: {bad}）")
+    if a.check_only:                                         # 2026 年を読まずに、ここまでの確かめだけ
+        print(f"確かめだけ: 凍結・事前登録・入力・道具の再現（test 2025）は合格。ずれの元 {DRIFT_SRC.name}。群 {grp['id']} は未実行")
+        return
+    base_nm = "fwd2026" if grp["id"] == "main" else "fwd2026_pre"     # 主は T-60 の再現、別枠・参考は本物の T-60
+    spec = json.loads(json.dumps(inputs["periods"][base_nm]))
+    spec["pred"] = [json.loads(a.pred)]
+    spec["dates"] = grp["dates"]
+    spec["role"] = f"事前登録の群 {grp['name']}（{lo_}〜{hi_}）"
+    pp = pred_path(spec["pred"][0])
+    pred_sha = _sha(pp) if pp.exists() else None
+    if pred_sha is None:
+        raise SystemExit(f"予測のファイルがありません: {pp}")
+    per, _ = prepare_periods({"periods": {grp["id"]: spec}}, (grp["id"],), cuts=body["qcuts"])   # 着順・払戻の集計はまだしない
+    p = per[grp["id"]]
+    dr = dict(p.drop)
+    n_all = int(dr.get("all_races_in_period") or 0)
+    dr["no_pre_odds"] = n_all - int(dr.get("computed_races", 0)) - sum(int(dr.get(k, 0)) for k in ("no_pred", "no_pay", "small"))
+    cover = dr.get("computed_races", 0) / max(n_all, 1)
+    if a.allow_low_cover and not (a.cover_note or "").strip():
+        raise SystemExit("--allow-low-cover には、覆いが足りない理由（--cover-note）が要ります")
+    if cover < PREREG_MIN_COVER and not a.allow_low_cover:
+        raise SystemExit(f"窓の全レース {n_all} のうち計算できたのは {dr.get('computed_races')}（{cover:.1%}）。内訳 {dr}。予測か発走前オッズの覆いが足りません"
+                         "（印は書いていない。覆いの下限を下回っても流すなら、理由を記録して --allow-low-cover）")
+    # 台帳の決まり（統括役の判断 2026-11-18）: 第 1 回（11/17）と参考の群（11/18）が同じ期間を見ているので、主・別枠も eval_only（採否に使わない）。
+    # 採否は前向きの記録（11/21〜、bet_forward_ledger）で決める。
+    tok = L.guard(tool=tool_, family="bet_cycles", version=body["hash"], period=(lo_, hi_), purpose="eval_only",
+                  frozen_paths=[fz, pr, Path(__file__)], target_name=f"prereg {grp['id']}",
+                  reason=("事前登録の参考の群（判定には使わない）" if grp["id"] == "reference" else
+                          "評価の期間（採否に使わない。同じ期間を第 1 回・参考の群が見ている。採否は前向きの記録で決める）"))
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    mark.write_text(json.dumps({"status": "started", "hash": body["hash"], "group": grp["id"], "git_head": head, "pred": spec["pred"], "pred_sha256": pred_sha,
+                                "drop": dr}, ensure_ascii=False, default=_np) + "\n", encoding="utf-8")
+    try:
+        r = run_period(p, body["spec"], detail=True)
+        m = metrics_run(r, p, p.W)
+        rb0 = run_period(p, bases[0])
+        d = paired_diff(r, rb0, p.W)
+        m0 = metrics(rb0["cost"], rb0["ret"], p.dates, p.W)
+        verdict = prereg_verdict(m, d, reg["criteria"]["levels"])
+    except BaseException as exc:
+        tok.__exit__(type(exc), exc, None)
+        raise
+    res = {"status": "done", "hash": body["hash"], "prereg": str(pr.resolve().relative_to(ROOT)), "group": grp, "git_head": head, "pred": spec["pred"],
+           "drift_src": str(DRIFT_SRC), "pre_odds_sha256_now": _sha(ROOT / spec["pre_odds"]) if spec.get("pre_odds") else None,
+           "pred_sha256": pred_sha, "metrics": m, "B0": {k: m0.get(k) for k in KEYS_CV}, "diff_vs_B0": d, "verdict": verdict, "drop": dr,
+           "cover": cover, "allow_low_cover": bool(a.allow_low_cover), "cover_note": a.cover_note or "",
+           "races_note": "指標の races は、窓の全レースのうち予測・払戻（別枠・参考は発走前オッズも）がそろって計算できたレース。内訳は drop。",
+           "odds_source": "本物の T-60" if spec.get("pre_odds") else f"T-60 の再現（{p.k} 通り）", "miss_types": miss_types(r),
+           "h_reasons": r["records"]["reason"].value_counts().to_dict(), "ledger": tok.summary()}
+    mark.write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_np) + "\n", encoding="utf-8")
+    tok.finish(result_path=rel_mark)
+    r["records"].to_parquet(OUT_DIR / body["tag"] / f"prereg_{grp['id']}_races_{body['hash']}.parquet", index=False)
+    n0_ = len(p.races) // max(p.k, 1)                         # 基準 B0 の版 × レースの記録（2025 年との合算で、同じ重みの差を出すため）
+    pd.DataFrame({"race_id": [x.race_id for x in p.races], "ver": np.arange(len(p.races)) // max(n0_, 1), "cost": rb0["cost"], "ret": rb0["ret"]}).to_parquet(
+        OUT_DIR / body["tag"] / f"prereg_{grp['id']}_b0_races_{body['hash']}.parquet", index=False)
+    print(f"結果を {rel_mark} に書いた。commit すること。判定: {verdict}")
 
 
 TIER_MIN_BET = 300        # 段の作り方を選ぶときの、各段の参戦の下限（訓練の交差検証）
@@ -2659,6 +2835,15 @@ def main() -> None:
     fz.add_argument("--out", default=None)
     fz.add_argument("--note", default="", help="凍結ファイルに残す注意（例: 評価・test が手つかずでない事情）")
     fz.set_defaults(func=cmd_freeze)
+    pg = sub.add_parser("prereg-run", help="事前登録の 1 つの群を、凍結した買い方で 1 回だけ流す")
+    pg.add_argument("--frozen", required=True)
+    pg.add_argument("--prereg", required=True)
+    pg.add_argument("--group", required=True, help="事前登録の群の id（main・separate・reference）")
+    pg.add_argument("--pred", required=True, help='予測の指定（JSON）。例: {"path": "...parquet", "where": {"part": "infer2026"}}')
+    pg.add_argument("--allow-low-cover", action="store_true", help="予測の覆いが下限（95%）を下回っても流す（理由を記録に書く）")
+    pg.add_argument("--cover-note", default="", help="覆いの下限を下回っても流すときの理由（記録に残す）")
+    pg.add_argument("--check-only", action="store_true", help="2026 年を読まずに、事前の確かめ（commit・入力・test 2025 の再現）だけ行う")
+    pg.set_defaults(func=cmd_prereg_run)
     fn = sub.add_parser("final", help="凍結した買い方で test 2025 と 2026 年の参考を 1 回だけ見る")
     fn.add_argument("--frozen", required=True)
     fn.add_argument("--group", default="", choices=["", "test", "fwd"], help="test と 2026 年の参考を別の時点で 1 回ずつ見る（印も別）")
