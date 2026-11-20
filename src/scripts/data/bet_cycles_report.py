@@ -490,7 +490,7 @@ def render_round2_2026() -> str:
     comb = T / f"bet_2025_2026_r2_combined_{h_}.json"
     if comb.exists():
         x = json.loads(comb.read_text(encoding="utf-8"))
-        rows.append(mrow("2025〜26 年の合算（主の群と 2025 年）", x["metrics"], (x.get("B0") or {}).get("roi"), x.get("diff_vs_B0"), "T-60 の再現（5 通り）"))
+        rows.append(mrow("2025〜26 年の合算（参考。主の群と 2025 年。2025 年は選んだ後の値で上振れを含み、予測の経路も違う）", x["metrics"], (x.get("B0") or {}).get("roi"), x.get("diff_vs_B0"), "T-60 の再現（5 通り）"))
     head = ["期間", "全レース", "参戦（率）", "的中率", "回収率", "95% 区間", "上位5件を除く", "平均回収額", "中央値回収額", "B0", "B0 との差（区間）", "判定のオッズ"]
     out = ["<h2>第 2 回の買い方の評価の期間（2025 年・2026 年）</h2>",
            "<p>最新のモデル（候補 r04＋第 2 段）の出力で、凍結した第 2 回の買い方（hash " + esc(h_) + "）を当てた値。"
@@ -499,12 +499,23 @@ def render_round2_2026() -> str:
            "精算は確定の払戻。主は T-60 のオッズの再現（2026 年の T-60 と確定の比を借りた 5 通り）、別枠は本物の T-60 のオッズで判定する。</p>"]
     if rows:
         out.append(table(head, rows, left=1))
+    notes = []
+    for g, lab in (("main", "主"), ("separate", "別枠")):
+        f = T / f"bet_2026_r2_{g}_{h_}.json"
+        if f.exists():
+            xx = json.loads(f.read_text(encoding="utf-8"))
+            if xx.get("status") != "done":
+                continue
+            rn = xx.get("review_note") or {}
+            notes += [f"<li>{esc(lab)}: {esc(x)}</li>" for x in rn.get("text") or []]
+    if notes:
+        out.append("<details open><summary>2026 年の読み方（別のエージェントのレビューの注記）</summary><ul>" + "".join(notes) + "</ul></details>")
     if "main" not in got:
         out.append("<p><b>最新のモデルでの 2026 年の値は、事前登録の 1 回の確かめの後に入る</b>（予定: 入力がそろい次第。事前登録 <code>config/bet_cycles/prereg_2026_r2.json</code>）。</p>")
     out.append("<p><b>予測の経路が違う。</b>2025 年（と訓練・評価）は学習の X で作った予測（OOF）、2026 年の主・別枠は推論の経路（stg の作り直し）の予測。"
                "未勝利・新馬の 68 レースのうち 11 レースで、買う／見送るが学習の X と推論の X で入れ替わった（weekend-launch の測定、docs/operations/weekend_launch_20261121.md の 9a。買うレースの約半分しか一致しない）。"
                "2025 年の 107% は推論の経路でそのまま出るとは言えない。会員への公開の判断は、推論の経路での成績（2026 年の評価・前向きの記録）を主にする。</p>")
-    out.append("<p class=\"muted\">" + ("合算は件数が増えるぶん区間が狭くなる（予測の経路が違う年をまたぐ）。" if comb.exists() else "") + "主と別枠は判定のオッズの作りが違う（再現と本物）。"
+    out.append("<p class=\"muted\">" + (f"合算は件数が増えるぶん区間が狭くなるが、2025 年が選んだ後の値（上振れを含む）なので上振れした値で、予測の経路が違う年をまたぐ。年ごとの値を主に読む。合算の点推定は {pct(json.loads(comb.read_text(encoding='utf-8'))['metrics']['roi'])}。" if comb.exists() else "") + "主と別枠は判定のオッズの作りが違う（再現と本物）。"
                "訓練・評価の期間（2019〜2024 年）の 2 歳戦の単勝は、上乗せ（2017〜2023 年）で回収率が約 1〜2 ポイント高めに出ている（bet_age2_premium の記録）。"
                "2025・2026 年には上乗せは無い。</p>")
     return "\n".join(out)

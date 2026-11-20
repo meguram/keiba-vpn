@@ -1,0 +1,47 @@
+{
+ "hash": "70ba29fa7b55",
+ "parts": {
+  "2025": 3267,
+  "2026_main": 2701
+ },
+ "metrics": {
+  "races": 5968,
+  "bet_races": 1514,
+  "bet_rate": 0.25361930294906165,
+  "hit_rate": 0.17653276955602537,
+  "roi": 0.9703356236786469,
+  "roi_lo": 0.8878449522845449,
+  "roi_hi": 1.0542363532824486,
+  "roi_ex_top5": 0.8982822410147991,
+  "avg_return": 97.03356236786469,
+  "median_return": 0.0
+ },
+ "B0": {
+  "roi": 0.8487768096514745,
+  "roi_lo": 0.8169421004735297,
+  "roi_hi": 0.8824788786282162,
+  "hit_rate": 0.34316353887399464,
+  "bet_races": 5968
+ },
+ "diff_vs_B0": [
+  0.12155881402717239,
+  0.0385251021843302,
+  0.21499104268630587
+ ],
+ "note": "評価の期間の合算。判断・選び直しには使わない。判定のオッズは T-60 の再現（5 通り）。精算は確定の払戻。",
+ "ledger": {
+  "ledger_id": "20261120T101616063298-bet-optimizer-c3da37",
+  "purpose": "eval_only",
+  "decision": "allowed",
+  "periods": [
+   "test",
+   "封印"
+  ],
+  "seen_total": 39,
+  "seen_family": 5,
+  "seen_lower_bound": true,
+  "notes": [],
+  "violations": [],
+  "use_for_decision": false
+ }
+}
