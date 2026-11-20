@@ -1,0 +1,114 @@
+{
+ "status": "done",
+ "hash": "70ba29fa7b55",
+ "prereg": "config/bet_cycles/prereg_2026_r2.json",
+ "group": {
+  "id": "main",
+  "name": "主",
+  "dates": [
+   "2026-01-05",
+   "2026-10-12"
+  ],
+  "input": "model-improve-cycles の全日の版（付け替えの判断・全日の版の確定の後）の第 2 段の予測。この期間はめぐ指数のずれなし。",
+  "decision_odds": "T-60 の再現（凍結の作法と同じ: 2026 年の T-60 と確定の比を借りて 5 通り、精算は確定の払戻）。この期間は本物の T-60 のオッズが無い。",
+  "note": "再現のずれの元（2026 年の T-60 のオッズのあるレース）は、この期間の外（10/17 以降）。"
+ },
+ "git_head": "ed749fbfd63bd896cdfbdd8eed457f805bc3acf4",
+ "pred": [
+  {
+   "path": "/home/jovyan/work/retrain_out/cycles16_fix3/market/handoff/stage2_noise.parquet",
+   "where": {
+    "part": "infer2026",
+    "odds_phase": "final"
+   }
+  }
+ ],
+ "drift_src": "/home/jovyan/work/keiba-vpn-betcyc/data/local/research/persona1/pre_odds.parquet",
+ "pre_odds_sha256_now": null,
+ "pred_sha256": "5c21ffc15f556f8c7a93ad2eef464cca8c341015c6b6e1b071e2b65de456bd9a",
+ "metrics": {
+  "races": 2701,
+  "bet_races": 683,
+  "bet_rate": 0.2528693076638282,
+  "hit_rate": 0.16076134699853586,
+  "roi": 0.848696925329429,
+  "avg_return": 84.86969253294289,
+  "median_return": 0.0,
+  "median_hit_return": 430.0,
+  "avg_cost": 100.0,
+  "cost_total": 68300.0,
+  "return_total": 57966.0,
+  "avg_hit_return": 527.9234972677596,
+  "roi_ex_top1": 0.8181844802342606,
+  "roi_ex_top5": 0.7281112737920937,
+  "sim_roi_min": 0.7449339207048458,
+  "sim_roi_max": 1.0236389684813754,
+  "n_versions": 5,
+  "roi_lo": 0.7475964339187373,
+  "roi_hi": 0.9716453028256616,
+  "hit_lo": 0.14391201511025428,
+  "hit_hi": 0.17831090800464153,
+  "days": 86,
+  "daily_roi_sd": 0.55955502918683,
+  "max_drawdown": 10522.0,
+  "max_drawdown_days": 13.24878477306003,
+  "plus_day_rate": 0.37209302325581395,
+  "profit": -10334.0,
+  "decision_odds": "発走前（再現 5 通りを並べた平均）"
+ },
+ "B0": {
+  "bet_races": 2701,
+  "bet_rate": 1.0,
+  "hit_rate": 0.344687152906331,
+  "roi": 0.8449833395038875,
+  "roi_lo": 0.79728514295762,
+  "roi_hi": 0.8938184534380811,
+  "roi_ex_top5": 0.8332469455757127,
+  "avg_return": 84.49833395038874,
+  "median_return": 0.0
+ },
+ "diff_vs_B0": [
+  0.0037135858255414878,
+  -0.11185158555505004,
+  0.14353569278957434
+ ],
+ "verdict": "否定",
+ "drop": {
+  "no_pred": 6,
+  "no_pay": 0,
+  "small": 0,
+  "all_races_in_period": 2712,
+  "payoff_filled_from_flat": 360,
+  "computed_races": 2701,
+  "no_pre_odds": 5
+ },
+ "cover": 0.9959439528023599,
+ "allow_low_cover": false,
+ "cover_note": "",
+ "races_note": "指標の races は、窓の全レースのうち予測・払戻（別枠・参考は発走前オッズも）がそろって計算できたレース。内訳は drop。",
+ "odds_source": "T-60 の再現（5 通り）",
+ "miss_types": {
+  "◎ が 4 着以下（◎ が飛んだ）": 1937,
+  "◎ は 3 着内・相手が 1 頭も来ない": 148,
+  "◎ は 3 着内・相手も来たが組・着順が合わない": 781
+ },
+ "h_reasons": {
+  "見送り（条件）": 10090,
+  "1番人気より下で r 最大": 2631,
+  "予測1位": 784
+ },
+ "ledger": {
+  "ledger_id": "20261120T100538924431-bet-optimizer-273f25",
+  "purpose": "eval_only",
+  "decision": "allowed",
+  "periods": [
+   "封印"
+  ],
+  "seen_total": 22,
+  "seen_family": 1,
+  "seen_lower_bound": true,
+  "notes": [],
+  "violations": [],
+  "use_for_decision": false
+ }
+}
