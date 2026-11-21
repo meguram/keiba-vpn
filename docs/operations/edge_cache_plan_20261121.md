@@ -25,7 +25,7 @@
 - **区分の判定は、今のセッションの Cookie では VPS の上でできません。**
   - 今の Cookie の検証は、署名だけでなく名簿（`member_active`・`pw_changed_ts`）も見ています（`src/api/auth.py:83-104`）。
   - VPS に名簿を置かないために、Cloud Run が別に「区分の Cookie」（env・区分・発行時刻・期限・HMAC）を出します。期限は 2 時間にし、迷ったら Cloud Run に流します（§3.5）。
-  - **課金を止めた人に、最大 2 時間フォルダの中身が出続けます。** 今のセッションは次の要求で止まるので、ここは今より後退します（承認の項目。§7）。
+  - 課金を止めた人に、最大 2 時間フォルダの中身が出続けます。ただし会員は共有アカウントで、課金を止めた人も月替わりの切り替えまでは今も入れるので、実質の後退は無いと統括役が判断しました（§9）。
 - **VPS の nginx は 1.18 で、njs も `secure_link` もありません。** `auth_request` と `gzip_static` はあります。区分の判定は、`auth_request` で 127.0.0.1 の小さな確認役に聞く形にします。
   - 確認役が落ちても 500 にせず Cloud Run に流す設定（`error_page`）と、deploy ユーザーが置ける全停止の印（`_ctl/OFF`）を必ず入れます（§3.6）。
 - **最初に試すのは、確定済みのレース × 会員の区分です。** まだ本番に無い weekend-launch の P1（`race_settled`）に頼らずに済み、効果がいちばん大きい所です。11/21 のブラウザの予測の要求 66 件のうち 61 件は、確定済みの 11/14・15 のレースでした。匿名の分は、P1 が入ってから同じ仕組みで作ります。開発者の区分を VPS に置くかは、承認の項目です（§7）。
@@ -414,7 +414,54 @@ location = /_edge_tier { internal; proxy_pass http://127.0.0.1:<確認役>; prox
 
 1. `sudo journalctl -u keiba-cache-warm --since today | grep -c ' 429'`（latency_plan §7 の 4）。
 2. ブラウザ（会員のログインあり）で `/races`・レース詳細を開き、開発者ツールで API の TTFB と LCP を 1〜2 回（§7 の 6）。
-3. 段 2 で: `/srv/keiba-edge` の作成（deploy が書け、www-data が読める）、確認役の unit、nginx の include の追加。手順は実装の段で書く。
+3. 段 2 で: `/srv/keiba-edge` の作成、確認役の unit、nginx の include の追加（下の「7.1 ユーザーの操作の手順」）。
+
+### 7.1 ユーザーの操作の手順（段 2 の前に、統括役から頼む）
+
+VPS の root（ConoHa のコンソールか、root で入れる ssh）で流します。`<…>` は実装の段で決まる値です。
+
+**A. cache-warm の 429 の件数（latency_plan §7 の 4）**
+
+```bash
+sudo journalctl -u keiba-cache-warm --since today --no-pager | grep -c ' 429'
+sudo journalctl -u keiba-cache-warm --since "-7 days" --no-pager | grep ' 429' | tail -5
+```
+
+**B. ブラウザの計測（会員でログインしたブラウザ。latency_plan §7 の 3・6）**
+
+1. Chrome で https://app.megu-keiba.com/races を開き、F12 → Network、「Disable cache」は外す、絞り込みに `/api/` と入れる。
+2. 再読み込みし、各行の `Waiting for server response`（TTFB）と、応答の見出しの `X-Cache-Status`・`cf-cache-status` を書き留める。
+3. 確定済みのレースの詳細（例 `/race/202608050411`）でも 1〜2 回。
+4. Lighthouse（F12 → Lighthouse → Performance・Mobile）で LCP を 1 回。
+
+**C. 段 2 の置き場・確認役・nginx（stg の待ち受け 8081 から）**
+
+```bash
+# 1) 置き場（deploy が書き、www-data（nginx）が読む）
+sudo install -d -o deploy -g www-data -m 2750 /srv/keiba-edge /srv/keiba-edge/stg /srv/keiba-edge/prod
+sudo install -d -o deploy -g www-data -m 2750 /srv/keiba-edge/stg/_ctl /srv/keiba-edge/prod/_ctl
+
+# 2) 区分の Cookie の鍵（Cloud Run の Secret と同じ値。env ごとに別）
+sudo install -d -o root -g root -m 755 /etc/keiba-edge
+sudo install -o root -g www-data -m 640 /dev/null /etc/keiba-edge/stg.key
+sudo sh -c 'printf %s "<stg の EDGE_TIER_KEY>" > /etc/keiba-edge/stg.key'
+
+# 3) 確認役の unit（リポジトリの scripts/ops/vps/ に置く版を配る。名前は実装の段で決める）
+sudo install -o root -g root -m 644 <リポジトリ>/scripts/ops/vps/templates/keiba-edge-tier.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now keiba-edge-tier
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:<確認役のポート>/healthz   # 200
+
+# 4) nginx（stg の server ブロックに include を足す。prod は段 4）
+sudo install -o root -g root -m 644 <リポジトリ>/scripts/ops/vps/templates/keiba-edge-stg.conf /etc/nginx/snippets/
+sudo nginx -t && sudo systemctl reload nginx
+
+# 戻し（root 不要の方）: deploy で置けば reload なしに全部 Cloud Run
+touch /srv/keiba-edge/stg/_ctl/OFF
+# 戻し（最後の手段・root）: include を外して reload
+sudo rm /etc/nginx/snippets/keiba-edge-stg.conf && sudo nginx -t && sudo systemctl reload nginx
+```
+
+- 確認役を止めても API が 500 にならず Cloud Run に流れることを、段 2 の合格条件で確かめます（`sudo systemctl stop keiba-edge-tier` → 対象のパスが 200）。
 
 判断してほしいこと（推奨を先に書く）:
 
@@ -442,3 +489,16 @@ location = /_edge_tier { internal; proxy_pass http://127.0.0.1:<確認役>; prox
 | 低 | 本番は `KEIBA_PREDICTION_RESULTS_GCS=1` で、予測成績は手元で作れない見込み | 直した。段 6 までは対象から外す（§3.3） |
 | 低 | 401 は 4 種でなく 6 種。predictions の 200 は 1,659 件。nginx の置き場の 68KB は権限のせいの見込み | 直した。ログを数え直すと 401 は 10 種・4,098 件だった（レビューの 6 種よりも多い）。数字と費用を直し、68KB の記述を改めた（§0・§1・§4） |
 
+## 9. 統括役の判断（2026-11-22。ユーザーは推奨で進めてよいとの指示）
+
+| 項目 | 判断 |
+|---|---|
+| ① 1 か月分の埋め方 | 案 A（手元にも書く設定を入れた日から先だけ。GCS 0 回・0 円） |
+| ② 区分の Cookie の期限 | 2 時間で可。**理由: 会員は共有アカウントで、課金を止めた人も月替わりのパスワードの切り替えまでは今も同じアカウントで入れる。そのため、区分の Cookie の 2 時間の遅れは、今の失効より実質的に後退しない。** 月替わりの切り替えは `not_before` で効く（§3.5） |
+| ③ 当日・確定前の会員の予測 | 2 週の開催で取りこぼしが無いと確かめてから（段 7） |
+| ④ 開発者の区分 | 段 1〜4 では VPS に置かない |
+| 段 0 の時期 | 11/23 の開催の後（11/24 以降）。開催日に VPS の設定を変えない |
+| 実装の前 | §3.5・§3.6 の 2 回目のレビューを通す |
+| ユーザーの操作 | 段 2 の前に統括役から頼む（§7.1） |
+| L3 の計測の結果 | latency-plan の後継（11/24 以降）に統括役から渡す |
+| 次 | ここで区切り、11/24 の合図を待つ |
