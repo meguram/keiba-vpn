@@ -87,10 +87,18 @@ class TestFastApi(unittest.TestCase):
         self.assertTrue(j["active"])
         self.assertEqual(j["phase"], "active")
         self.assertEqual(j["remaining_sec"], 50 * 60)
-        self.assertIn("no-store", r.headers["cache-control"])
-        n = self.get("/api/maintenance/status", "2026-10-21 02:45").json()
+        # 要求者で変わらないので nginx にだけ置く。保守中・予告中は秒読みをずらさないよう 15 秒、ふだんは 120 秒。ブラウザは毎回取り直す
+        self.assertEqual(r.headers["cache-control"], "public, max-age=0, s-maxage=15, stale-while-revalidate=15")
+        rn = self.get("/api/maintenance/status", "2026-10-21 02:45")
+        n = rn.json()
         self.assertEqual(n["phase"], "notice")
         self.assertEqual(n["starts_in_sec"], 15 * 60)
+        self.assertIn("s-maxage=15,", rn.headers["cache-control"])
+        ri = self.get("/api/maintenance/status", "2026-10-21 12:00")
+        self.assertFalse(ri.json()["active"])
+        self.assertEqual(ri.headers["cache-control"], "public, max-age=0, s-maxage=120, stale-while-revalidate=60")
+        from src.api.maintenance_mw import status_cache_control
+        self.assertEqual(status_cache_control("2026-10-21T03:10"), "no-store, max-age=0")       # 試験用の ?at= は置かない
 
     def test_bypass_admin_token_internal(self):
         self.assertEqual(self.get("/api/race/x/predictions", "2026-10-21 03:10", admin=True).status_code, 200)

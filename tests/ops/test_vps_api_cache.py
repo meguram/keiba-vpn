@@ -49,7 +49,7 @@ def test_snippet_never_serves_member_requests_from_cache():
     assert "proxy_set_header X-Keiba-Fresh $keiba_refresh;" in text, "取り直しのときだけ API 内の使い回しも飛ばさせる"
     directives = "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("#"))
     assert "proxy_cache_valid" not in directives, "上流が public を付けたものだけ保存する（既定の保存時間を足さない）"
-    assert "proxy_cache_key $request_uri;" in directives, "stg と本番で同じ保存物を使う（鍵にホスト・ポートを入れない）"
+    assert "proxy_cache_key $keiba_cache_key_prefix$request_uri;" in directives, "stg と本番で同じ保存物を使う（鍵にホスト・ポートを入れない。接頭辞は stg の保守の状態だけ）"
     zones = (TPL / "nginx-zones.conf").read_text(encoding="utf-8")
     assert "keys_zone=keiba_apicache" in zones
     m = re.search(r"keys_zone=keiba_apicache:\S+ max_size=(\d+)[mg] inactive=(\d+)d", zones)

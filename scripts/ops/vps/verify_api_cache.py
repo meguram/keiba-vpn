@@ -7,10 +7,12 @@
   合言葉つき(X-Keiba-Refresh)の要求だけ、読まずに取り直して保存し直す（合言葉なしは効かない・上流には渡さない）
   取り直しのときだけ上流に X-Keiba-Fresh: 1 が付く / stg（別ポート）は本番が保存した分を読むが、自分の取得は保存しない
   Vary で保存先を分けない: 圧縮なし（事前ロード）で保存した物を gzip の利用者が HIT で読み、その逆は展開して返す / 上流へは常に gzip で頼む
-  期限切れの後の最初の要求は古いものを返さず、上流から取り直す（EXPIRED。background_update を入れていない）
+  stale-while-revalidate の秒数の内は古いものを即座に返して裏で取り直し、秒数を過ぎた物は古いものを返さずに取り直す（古さの上限）
+  swr の内の同時の要求は上流 1 本・swr の外は同時の本数だけ上流へ行く（群がりの記録）/ stg は swr の裏の取り直しでも保存しない
+  Cookie も Authorization も無い会員だけの API は nginx が 401 を返す（上流へ行かない）/ 127.0.0.1 は API の別枠（120 回/分で止まらない）
 使い方: python3 scripts/ops/vps/verify_api_cache.py   （nginx が PATH に必要。VPS 上で実行する）
 """
-import gzip, os, shutil, socket, subprocess, sys, tempfile, threading, time, urllib.request
+import gzip, os, shutil, socket, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -53,6 +55,16 @@ class Up(BaseHTTPRequestHandler):
         elif p == "/api/stgonly": self._send(f"stgonly-{who}", pub)
         elif p == "/api/gz": self._send(f"gz-{who}-{hits.get('/api/gz', 0) + 1}-" + "x" * 2000, pub, gz=True)     # 圧縮される大きさ・呼ぶたびに変わる
         elif p == "/api/stale": self._send(f"stale-{hits.get('/api/stale', 0) + 1}", {**pub, "Cache-Control": "public, max-age=60, s-maxage=2"}, gz=True)
+        elif p.startswith("/api/swr"):
+            if "slow" in p: time.sleep(2.0)                   # Cloud Run の起動し直し相当
+            self._send(f"swr-{hits.get(p, 0) + 1}-" + "x" * 2000, {**pub, "Cache-Control": "public, max-age=2, s-maxage=2, stale-while-revalidate=4"}, gz=True)
+        elif p.startswith("/api/herd"):
+            time.sleep(1.0)
+            cc = "public, max-age=2, s-maxage=2, stale-while-revalidate=30" if p.endswith("in") else "public, max-age=1, s-maxage=1, stale-while-revalidate=1"
+            self._send(f"herd-{hits.get(p, 0) + 1}", {**pub, "Cache-Control": cc})
+        elif p == "/api/maintenance/status": self._send(f"mnt-{hits.get(p, 0) + 1}", {**pub, "Cache-Control": "public, max-age=0, s-maxage=120"})
+        elif p.startswith("/api/v1/betting/") or p.startswith("/api/race/1/result") or p.startswith("/api/growth-curve/"):
+            self._send(f"member-path-{who}", {"Cache-Control": "private, max-age=0"})
         else: self._send("other", {})
 
     do_HEAD = do_GET
@@ -98,7 +110,10 @@ def main() -> int:
     zones = zones.replace("/etc/nginx/keiba-refresh.conf", f"{tmp}/refresh.conf")
     with open(f"{tmp}/readonly.conf", "w") as f: f.write(f'"{stg_port}" 1;\n')      # stg のポートは読むだけ（vps_09 が書くのと同じ形）
     zones = zones.replace("/etc/nginx/keiba-cache-readonly.conf", f"{tmp}/readonly.conf")
+    gate = open(os.path.join(TPL, "nginx-api-gate.conf")).read()
     loc = f"""location /api/ {{{{
+            limit_req zone=keiba_api_ext burst=60 nodelay;
+            limit_req zone=keiba_api_lo burst=300 nodelay;
             proxy_pass http://127.0.0.1:{up_port};
             proxy_http_version 1.1;
             proxy_set_header Connection "";
@@ -112,8 +127,11 @@ http {{
     access_log off;
     client_body_temp_path {tmp}/b; proxy_temp_path {tmp}/p; fastcgi_temp_path {tmp}/f; uwsgi_temp_path {tmp}/u; scgi_temp_path {tmp}/s;
 {zones}
+{gate}
     server {{
         listen 127.0.0.1:{ng_port};
+        set_real_ip_from 127.0.0.1;
+        real_ip_header CF-Connecting-IP;
         {loc.format()}
     }}
     server {{
@@ -178,12 +196,90 @@ http {{
         r6, e6, c6 = req_raw(ng_port, "/api/gz", headers={**GZ, "Cookie": "keiba_dev_session=abc"})
         r7, e7, c7 = req_raw(ng_port, "/api/gz", headers=GZ)
         check("Cookie 付きは BYPASS のまま・匿名の保存物は変わらない", c6 == "BYPASS" and text_of(r6, e6).startswith("gz-member-") and c7 == "HIT" and text_of(r7, e7).startswith("gz-anon-2-"), f"{c6},{c7}")
-        # 期限切れの後の最初の要求は、古いもの（STALE）を返さずに取り直す（background_update が無いこと）
+        # swr の無い物は、期限切れの後の最初の要求が古いもの（STALE）を返さずに取り直す（use_stale に updating が無いこと）
         req_raw(ng_port, "/api/stale", headers=GZ); time.sleep(3)
         ra, ea, ca = req_raw(ng_port, "/api/stale", headers=GZ)
         rb, eb, cb = req_raw(ng_port, "/api/stale", headers=GZ)
-        check("期限切れの後の最初の要求は取り直した新しい本文（STALE で古いものを返さない）", ca == "EXPIRED" and text_of(ra, ea) == "stale-2"
+        check("swr の無い物は期限切れの後の最初の要求で取り直す（STALE で古いものを返さない）", ca == "EXPIRED" and text_of(ra, ea) == "stale-2"
               and cb == "HIT" and text_of(rb, eb) == "stale-2", f"{ca},{text_of(ra, ea)},{cb},{text_of(rb, eb)}")
+        # stale-while-revalidate: 秒数の内は即座に古いものを返し、裏で取り直す。同じ接続の次の要求を待たせない。秒数を過ぎたら取り直す
+        import http.client
+        req_raw(ng_port, "/api/swr/slow", headers=GZ); time.sleep(3.5)             # s-maxage=2 を過ぎ、swr=4 の内
+        hc = http.client.HTTPConnection("127.0.0.1", ng_port, timeout=10)
+        t0 = time.monotonic(); hc.request("GET", "/api/swr/slow", headers=GZ); r0 = hc.getresponse(); b0 = r0.read(); d1 = time.monotonic() - t0
+        t0 = time.monotonic(); hc.request("GET", "/api/swr/fast"); r1 = hc.getresponse(); r1.read(); d2 = time.monotonic() - t0
+        check("swr の内は STALE で古い本文を即座に返す（gzip で保存した物）", r0.getheader("X-Cache-Status") == "STALE" and text_of(b0, r0.getheader("Content-Encoding") or "").startswith("swr-1-")
+              and d1 < 0.5, f"{r0.getheader('X-Cache-Status')},{d1:.2f}")
+        check("裏の取り直しを起こした接続でも、続く要求は待たない（keepalive_timeout 0）", d2 < 0.5 and (r0.getheader("Connection") or "").lower() == "close", f"{d2:.2f},{r0.getheader('Connection')}")
+        rc_, ec_, cc_ = req_raw(ng_port, "/api/swr/slow", headers={"Cookie": "keiba_dev_session=abc"})
+        rf_, ef_, cf_ = req_raw(ng_port, "/api/swr/slow", headers={"X-Keiba-Refresh": token})
+        check("swr の内でも Cookie 付き・取り直しは BYPASS（古いものを返さない）", cc_ == "BYPASS" and cf_ == "BYPASS", f"{cc_},{cf_}")
+        # 取り直し（BYPASS）は待って保存し終えている。保存から s-maxage（2 秒）の内に読むと、その本文が HIT（圧縮なしの相手には展開して返す）
+        rt, et, ct = req_raw(ng_port, "/api/swr/slow")
+        check("取り直した本文が保存され、次は HIT・展開して返す", ct == "HIT" and text_of(rt, et) == text_of(rf_, ef_) and et == "", f"{ct},{text_of(rt, et)[:8]},{text_of(rf_, ef_)[:8]},{et}")
+        time.sleep(10.0)                  # 最後の保存（裏の取り直しが残っていればその保存も）から s-maxage＋swr（6 秒）を十分に過ぎる。間に要求を出さない
+        n0 = hits.get("/api/swr/slow", 0)
+        t0 = time.monotonic(); ru, eu, cu = req_raw(ng_port, "/api/swr/slow"); d3 = time.monotonic() - t0
+        check("s-maxage＋swr を過ぎた物は古いものを返さず取り直す（古さの上限）", cu == "EXPIRED" and text_of(ru, eu).startswith(f"swr-{n0 + 1}-") and d3 > 1.5, f"{cu},{text_of(ru, eu)[:8]},{d3:.2f}")
+        # 群がりの記録: 期限切れの鍵に同時に 10 本。swr の内は上流 1 本、swr の外は 10 本（docs の費用の見積もりの根拠）
+        def burst(path):
+            out: list = []
+            ths = [threading.Thread(target=lambda: out.append(req(ng_port, path)[1])) for _ in range(10)]
+            b = hits.get(path, 0); [x.start() for x in ths]; [x.join() for x in ths]; time.sleep(1.5)
+            return hits.get(path, 0) - b, sorted(set(out))
+        burst("/api/herd/in"); burst("/api/herd/out"); time.sleep(3.5)
+        n_in, st_in = burst("/api/herd/in")
+        n_out, st_out = burst("/api/herd/out")
+        print(f"INFO 群がり: swr の内 上流 {n_in} 本 {st_in} / swr の外 上流 {n_out} 本 {st_out}")
+        check("swr の内の同時 10 本は上流 1 本（裏の取り直しだけ）", n_in == 1, f"{n_in},{st_in}")
+        # stg（読むだけ）が swr の内で裏の取り直しを起こしても、保存しない（検証中のコードの応答を本番の保存物に入れない）
+        req(ng_port, "/api/swr/stg"); time.sleep(3.5)
+        _, s_stg = req(stg_port, "/api/swr/stg"); time.sleep(1.5)       # まだ swr の内（保存から約 5 秒）
+        b_prod, s_prod = req(ng_port, "/api/swr/stg")
+        check("stg が swr の内で起こした裏の取り直しは保存されない（本番の保存物は古いまま STALE）", s_stg == "STALE" and s_prod == "STALE" and b_prod.startswith("swr-1-"), f"{s_stg},{s_prod},{b_prod[:8]}")
+        # 会員だけの API: Cookie も Authorization も無ければ nginx が 401（上流へ行かない）。Cookie 付きは上流へ
+        n0 = sum(v for k, v in hits.items() if k.startswith(("/api/v1/betting/", "/api/race/1/result", "/api/growth-curve/")))
+        try:
+            req(ng_port, "/api/v1/betting/race-values?date=20261123"); g = None
+        except urllib.error.HTTPError as e:
+            g = (e.code, e.headers.get("X-Keiba-Gate"), e.headers.get("Content-Type"), e.read().decode())
+        import json as _json
+        body_ok = g is not None and _json.loads(g[3]) == {"error": "この情報は会員限定です。ログインしてください。", "login_url": "/login", "reason": "member_required"}
+        n1 = sum(v for k, v in hits.items() if k.startswith(("/api/v1/betting/", "/api/race/1/result", "/api/growth-curve/")))
+        check("匿名の会員だけの API は nginx が 401（本文は API と同じ・上流へ行かない）", g is not None and g[0] == 401 and g[1] == "member-401" and body_ok
+              and (g[2] or "").startswith("application/json") and n1 == n0, f"{g},{n1 - n0}")
+        bm, _ = req(ng_port, "/api/v1/betting/race-values?date=20261123", headers={"Cookie": "keiba_dev_session=abc"})
+        check("Cookie 付きは会員だけの API も上流へ（判定は API）", bm == "member-path-member", bm)
+        try:
+            req(ng_port, "/api/race/1/result"); r401 = False
+        except urllib.error.HTTPError as e:
+            r401 = e.code == 401
+        b_rs, _ = req(ng_port, "/api/race/1/result-status")
+        b_gs, _ = req(ng_port, "/api/growth-curve/status")
+        check("一覧の形どおり（result は 401・result-status と growth-curve/status は上流へ）", r401 and b_rs == "member-path-anon" and b_gs == "member-path-anon", f"{r401},{b_rs},{b_gs}")
+        # 127.0.0.1 は別枠: 150 本続けても 429 にならない（旧の 120 回/分・burst 60 なら 61 本目から 429）
+        codes = []
+        for _ in range(150):
+            try:
+                req(ng_port, "/api/pub"); codes.append(200)
+            except urllib.error.HTTPError as e:
+                codes.append(e.code)
+        check("127.0.0.1 は API の別枠（150 本続けても 429 にならない）", 429 not in codes, str(codes.count(429)))
+        # 外の要求（CF-Connecting-IP が実 IP になる）は実 IP ごとの 120 回/分・burst 60 の枠
+        codes = []
+        for _ in range(75):
+            try:
+                req(ng_port, "/api/pub", headers={"CF-Connecting-IP": "203.0.113.1"}); codes.append(200)
+            except urllib.error.HTTPError as e:
+                codes.append(e.code)
+        check("外の要求は実 IP ごとの枠（burst を越えると 429）", 429 not in codes[:60] and codes.count(429) >= 5, f"{codes.count(429)}")
+        b_other, _ = req(ng_port, "/api/pub", headers={"CF-Connecting-IP": "203.0.113.2"})
+        check("別の実 IP は別の枠（429 にならない）", b_other == "pub-anon", b_other)
+        # stg（読むだけ）の保守の状態は、本番の保存物を読まない（Cloud Run ごとの臨時メンテを stg で見られる）
+        _, m1 = req(ng_port, "/api/maintenance/status"); _, m2 = req(ng_port, "/api/maintenance/status")
+        bs1, ms1 = req(stg_port, "/api/maintenance/status")
+        _, b_ph = req(stg_port, "/api/pub")
+        check("stg の保守の状態は本番の保存物を読まない（ほかのパスは今までどおり共有）", (m1, m2) == ("MISS", "HIT") and ms1 == "MISS" and b_ph == "HIT", f"{m1},{m2},{ms1},{b_ph}")
         # 事前ロードの上書き取得
         b, s_ = req(ng_port, "/api/ver"); b2, s2_ = req(ng_port, "/api/ver")
         check("上書きの前: 同じ本文が HIT", b == b2 == "ver-1" and s2_ == "HIT", f"{b},{b2},{s2_}")
