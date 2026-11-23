@@ -87,6 +87,7 @@ jobs:
       JOBS_PARALLEL: ${{ vars.JOBS_PARALLEL }}
       FETCH_SHADOW: ${{ vars.FETCH_SHADOW }}
       GCP_BILLING_BQ_TABLE: ${{ vars.GCP_BILLING_BQ_TABLE }}
+      WITH_NEXT_KEY: ${{ vars.WITH_NEXT_KEY }}   # 共有鍵の作り直しの間だけ 1（KEIBA_PROXY_KEY_NEXT も載せる。scripts/ops/rotate_proxy_key.sh）
     steps:
       - uses: actions/checkout@v4   # PIN
       - uses: actions/download-artifact@v4   # PIN

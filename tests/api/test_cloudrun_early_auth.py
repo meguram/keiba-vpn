@@ -187,3 +187,54 @@ def test_startup_refresh_failure_does_not_block_the_next_login_refresh(tmp_path,
     gcs_mirror._MISS.clear()
     assert not gcs_mirror.refresh_members(tmp_path, Down(), min_interval=0.0)          # 起動時に取れなかった
     assert gcs_mirror.refresh_members(tmp_path, Up())                                   # 直後のログインの取り直しは、60 秒の制限で止まらない
+
+
+def test_ready_path_reports_startup_completion_without_proxy_key(entry, monkeypatch):
+    """起動プローブの道 /ops/ready: 起動処理が済むまで 503、済めば 200。共有鍵が必須でも鍵なしで答える（Cloud Run のプローブは鍵を持たない）。"""
+    monkeypatch.setenv("KEIBA_PROXY_KEY_REQUIRED", "1")
+    monkeypatch.setenv("KEIBA_PROXY_KEY", "k-test")
+
+    async def run():
+        gw_app = entry.build_app()
+        gw = gw_app.app
+        release = asyncio.Event()
+
+        async def slow_startup():
+            await release.wait()
+
+        gw.warmup = slow_startup
+        task, q = await _start(gw_app)
+        r = await _get(gw_app, entry.READY_PATH, timeout=2)           # 起動処理を待たずにすぐ答える
+        assert r.status_code == 503 and r.json() == {"ready": False} and r.headers["cache-control"] == "no-store"
+        assert (await _get(gw_app, "/ops/memory", timeout=2)).status_code == 401       # ほかの /ops は今どおり鍵が要る
+        release.set()
+        await asyncio.wait_for(gw.ready.wait(), 5)
+        r = await _get(gw_app, entry.READY_PATH, timeout=2)
+        assert r.status_code == 200 and r.json() == {"ready": True}
+        await q.put({"type": "lifespan.shutdown"})
+        await task
+
+    asyncio.run(run())
+
+
+def test_deploy_script_uses_http_startup_probe_on_ready_path():
+    from pathlib import Path
+
+    from src.api import cloudrun_entry
+
+    s = (Path(__file__).resolve().parents[2] / "scripts" / "gcp" / "deploy_cloud_run_api.sh").read_text(encoding="utf-8")
+    assert f"httpGet.path={cloudrun_entry.READY_PATH}" in s and '--startup-probe "$STARTUP_PROBE"' in s
+    assert "periodSeconds=4" in s and "failureThreshold=60" in s                  # 4 × 60 = 240 秒（Cloud Run の上限）に収める
+
+
+def test_preload_models_runs_each_step_and_survives_failures(entry, monkeypatch):
+    """起動処理の先読み: 追走の v2・ペースの型・めぐ指数の年の表を読む。1 つが失敗しても残りを読み、起動は続ける。"""
+    from src.pipeline.inference import expected_megu, pace_type, tracking_v2_service
+
+    calls = []
+    monkeypatch.setattr(tracking_v2_service, "tv2_load_model", lambda: calls.append("tv2"))
+    monkeypatch.setattr(pace_type, "_boosters", lambda: (_ for _ in ()).throw(RuntimeError("no model")))
+    monkeypatch.setattr(expected_megu, "runs_for_horse", lambda hid, d: calls.append(("megu", hid, d)) or ([], ""))
+    took = entry.preload_models("20261123")
+    assert calls == ["tv2", ("megu", "", "20261123")]
+    assert set(took) == {"tracking_v2", "pace_type", "expected_megu"}

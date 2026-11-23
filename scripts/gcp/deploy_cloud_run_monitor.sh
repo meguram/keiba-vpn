@@ -30,6 +30,8 @@ ENV_VARS="KEIBA_ENV=prod,KEIBA_RUN_LOCATION=gcp,GCS_BUCKET=${GCS_BUCKET},GCS_PRO
 [ -z "${KEIBA_API_URL_PROD:-}" ] || ENV_VARS+=",KEIBA_API_URL_PROD=${KEIBA_API_URL_PROD}"
 [ -z "${KEIBA_API_URL_STG:-}" ] || ENV_VARS+=",KEIBA_API_URL_STG=${KEIBA_API_URL_STG}"
 SECRETS="KEIBA_PROXY_KEY=KEIBA_PROXY_KEY:latest,KEIBA_HEARTBEAT_SECRET=KEIBA_HEARTBEAT_KEY:latest,SLACK_WEBHOOK_URL=SLACK_WEBHOOK_URL:latest"
+# 共有鍵の作り直しの間だけ WITH_NEXT_KEY=1 で NEXT も載せる（src/monitor/cloud_app.py は両方を通す。scripts/ops/rotate_proxy_key.sh）
+[ "${WITH_NEXT_KEY:-0}" != 1 ] || SECRETS+=",KEIBA_PROXY_KEY_NEXT=KEIBA_PROXY_KEY_NEXT:latest"
 
 # メモリ 512Mi・CPU 1・最大 1 台: GCS の小さな JSON を読んで表を作るだけ。料金は無料枠の範囲の見込み（リクエストが少ない）
 run gcloud run deploy "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --image "$IMAGE" \
