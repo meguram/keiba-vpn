@@ -88,6 +88,9 @@ def harville_top3_cached(d: pd.DataFrame, k: int) -> np.ndarray:
 
 
 def _ret(d: pd.DataFrame, kind: str) -> np.ndarray:
+    """1 単位の賭け金あたりの払戻。winplace は単勝と複勝に半分ずつ。"""
+    if kind == "winplace":
+        return (_ret(d, "win") + _ret(d, "place")) / 2
     return np.nan_to_num(d["ret_tan" if kind == "win" else "ret_fuku"].to_numpy(float))
 
 
@@ -98,6 +101,8 @@ def place_slots(d: pd.DataFrame) -> np.ndarray:
 
 
 def _hit(d: pd.DataFrame, kind: str) -> np.ndarray:
+    if kind == "winplace":
+        return (_hit(d, "win") + _hit(d, "place")) / 2
     if kind == "win":
         return d["y1"].fillna(0).to_numpy(float)
     fin = pd.to_numeric(d["fin"], errors="coerce").to_numpy() if "fin" in d else np.where(d["y3"].fillna(0) > 0, 1, 99)
@@ -124,7 +129,8 @@ def evaluate(d: pd.DataFrame, strat: Strategy, kind: str = "win", n_boot: int = 
     stake = S.sum(0) / len(ks)
     pay = stake * ret
     # 市場比の物差しは確定の市場（払戻を決める市場）。判定には使わない。T-60 の再現の q は人気馬を低く見るので、物差しにすると市場比が水増しになる（サイクル 1 で分かった）
-    Q = d["q_final"].to_numpy(float) if kind == "win" else harville_top3_final(d)
+    Q = (d["q_final"].to_numpy(float) if kind == "win" else harville_top3_final(d) if kind == "place"
+         else (d["q_final"].to_numpy(float) + harville_top3_final(d)) / 2)
     exp_hit = (S * Q[None, :]).sum(0) / len(ks)
     hits = stake * hit
     n_bets = (S > 0).sum(1).mean()

@@ -37,6 +37,7 @@
 - `python -m src.research.megu_cycles.mc_data build`: 表と自前の確率（<MEGU_CYCLES_OUT>/runners.parquet）。
 - `python -m src.research.megu_cycles.cycles run N`: サイクル N。結果は cycle_NN.json、所見は cycle_NN.md。
 - `src/research/megu_cycles/mc_eval.py`: 成績・帰無・関門・確かめ（台帳）。
+- サイクルごとの確率の版は `cycles.CYCLE_RICH`（4: v1・5: v2・6〜10: v4・11 以降: v5）。外す列の決まりは `mc_data.RICH_VERSIONS`。
 
 ## 記録
 - cycle_NN.md: 仮説・設計・試した数・結果・2022〜24 に当てたか・合否・課題・次に生かすこと・打ち切る方向。

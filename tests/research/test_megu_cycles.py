@@ -73,3 +73,21 @@ def test_frame_reader_filters_2025():
     src = inspect.getsource(D.load_frame)
     assert '("year", "<=", YEAR_END)' in src and "assert" in src
     assert D.YEAR_END == 2024
+
+
+def test_winplace_is_half_and_half():
+    d = _races()
+    d["fin"] = np.where(d["y1"] > 0, 1, np.where(d["y3"] > 0, 2, 9))
+    d["field"] = 8
+    r_w = E.evaluate(d, lambda e, k: np.ones(len(e)), "win", n_boot=0)
+    r_p = E.evaluate(d, lambda e, k: np.ones(len(e)), "place", n_boot=0)
+    r_wp = E.evaluate(d, lambda e, k: np.ones(len(e)), "winplace", n_boot=0)
+    assert abs(r_wp["roi"] - (r_w["roi"] + r_p["roi"]) / 2) < 1e-9
+
+
+def test_place_slots_small_field():
+    d = _races(3, n=7)
+    d["field"] = 7
+    p = E.harville_top3(d, d["q_final"].to_numpy())
+    assert np.allclose(pd.Series(p).groupby(d["race_id"]).sum().to_numpy(), 2.0, atol=1e-6)
+    assert (E.place_slots(d) == 2).all()

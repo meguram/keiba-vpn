@@ -29,11 +29,17 @@ SEGS = ("flat", "graded")
 
 
 # ---------------------------------------------------------------- 共通の部品
+# サイクルごとの確率の版（再現のため）。11 以降は v5。13 は v5 の学習の平均（cycle13 の中で差し替える）
+CYCLE_RICH = {4: "rich_pred.parquet", 5: "rich_pred_v2.parquet", 6: "rich_pred_v4.parquet", 7: "rich_pred_v4.parquet", 8: "rich_pred_v4.parquet",
+              9: "rich_pred_v4.parquet", 10: "rich_pred_v4.parquet"}
+RICH_FILE = D.RICH
+
+
 def _prep(d: pd.DataFrame, rich: bool) -> pd.DataFrame:
     d = d.sort_values(["race_id", "hn"]).reset_index(drop=True)
     d["p_model"] = E.race_norm(d, d["pm_win"].to_numpy(float))
-    if rich and D.RICH.exists():
-        r = pd.read_parquet(D.RICH, filters=[("year", ">=", int(d["year"].min())), ("year", "<=", int(d["year"].max()))])
+    if rich and RICH_FILE.exists():
+        r = pd.read_parquet(RICH_FILE, filters=[("year", ">=", int(d["year"].min())), ("year", "<=", int(d["year"].max()))])
         r = r.drop_duplicates(["race_id", "horse_id"])
         d = d.merge(r[["race_id", "horse_id", "pr_win", "pr_top3"]], on=["race_id", "horse_id"], how="left")
         d["p_rich"] = E.race_norm(d, d["pr_win"].fillna(1e-4).to_numpy(float))      # 欠けは固定の小さな値（読む年の範囲に依らない）
@@ -151,22 +157,19 @@ CYCLES = {1: cycle1}
 
 
 def cmd_run(n: int) -> None:
+    global RICH_FILE
+    RICH_FILE = D.OUT / CYCLE_RICH.get(n, D.RICH.name)
     t0 = time.time()
     d = load_select()
     body = CYCLES[n](d)
     body["sec"] = round(time.time() - t0)
+    body["rich_file"] = str(RICH_FILE)
     write_cycle(n, body)
     for seg, s in body["segments"].items():
         print(seg, s.get("best"), "\n  2017〜19:", short(s.get("select_a")), "\n  2020〜21:", short(s.get("select_b")),
               "\n  帰無:", s.get("null_b"), "\n  関門:", s.get("gate"), s.get("gate_why"), flush=True)
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["run"])
-    ap.add_argument("n", type=int)
-    a = ap.parse_args()
-    cmd_run(a.n)
 
 
 
@@ -289,15 +292,438 @@ CYCLES[5] = cycle5
 
 
 def cycle6(d: pd.DataFrame) -> dict:
-    """サイクル 5 と同じ設計を、結果を使わない決まり（年別の欠けの率）で列を外した確率 v3 で流す。2017〜19 で選び直す。"""
+    """サイクル 5 と同じ設計を、結果を使わない決まりで列を外した確率で流す（実際に流したのは v4。CYCLE_RICH[6]）。2017〜19 で選び直す。"""
     out = cycle5(d)
     out["cycle"] = 6
     out["hypothesis"] = "記録の取れ方が年で変わる列を結果を使わずに外した確率（v3）でも、確定の市場に足す情報があり、期待値の判定が効く。"
-    out["rich_file"] = str(D.RICH)
     return out
 
 
 CYCLES[6] = cycle6
+
+
+# ---------------------------------------------------------------- サイクル 7: レースの見送り × 年の揺れに強い選び方
+def race_feat(d: pd.DataFrame, k: int, ab: tuple[float, float], col: str = "p_rich") -> dict[str, np.ndarray]:
+    """発走前に分かるレースの値（走ごとに並べる）。favq: T-60 の再現の 1 番人気の q。dis: 自前と市場の確率の差の大きさ（レースの和）。"""
+    rid = d["race_id"].to_numpy()
+    q = E.q_pre(d, k)
+    p = combo_p(d, k, *ab, col=col)
+    favq = pd.Series(q).groupby(rid).transform("max").to_numpy()
+    dis = pd.Series(np.abs(p - q)).groupby(rid).transform("sum").to_numpy()
+    return {"favq": favq, "dis": dis}
+
+
+def keep_mask(d: pd.DataFrame, k: int, ab, rule: tuple | None, cuts: dict) -> np.ndarray:
+    if rule is None:
+        return np.ones(len(d), bool)
+    name, lv = rule
+    if name in ("favq", "dis"):
+        v = race_feat(d, k, ab)[name]
+        b = np.searchsorted(cuts[name], v, side="right")
+        return b == lv
+    if name == "field":
+        return field_band(d) == lv
+    if name == "grp":
+        return group_of(d) == lv
+    if name == "surf":
+        return d["surf"].astype(str).to_numpy() == lv
+    if name == "track":
+        return (d["track"].astype(str).to_numpy() == "良") == (lv == "良")
+    raise ValueError(name)
+
+
+def strat_ev_skip(ab, t: float, omax: float, rule, cuts, col: str = "p_rich"):
+    def s(d: pd.DataFrame, k: int) -> np.ndarray:
+        p = combo_p(d, k, *ab, col=col)
+        o = d[f"odds_pre{k}"].to_numpy(float)
+        return ((p * o >= t) & (o <= omax) & keep_mask(d, k, ab, rule, cuts)).astype(float)
+    return s
+
+
+def yearly_min(d: pd.DataFrame, st, kind: str = "win") -> tuple[float, float]:
+    vals, bpy = [], []
+    for y in sorted(d["year"].unique()):
+        r = E.evaluate(d[d["year"] == y].reset_index(drop=True), st, kind, n_boot=0)
+        vals.append(r["roi"] if r["roi"] is not None else 0.0)
+        bpy.append(r["bets"])
+    return float(min(vals)), float(min(bpy))
+
+
+def cycle7(d: pd.DataFrame) -> dict:
+    out = {"cycle": 7, "hypothesis": "自前の確率 × T-60 の期待値（サイクル 6 の combo）に、発走前に分かるレースの値での見送り（頭数・1 番人気の強さ・"
+           "自前と市場の差の大きさ・クラス・芝ダ・馬場）を足すと、期待値の高く見えても当たりにくい・控除負けするレースを避けられる。"
+           "選び方は 2017〜19 の年ごとの最小の回収率（年の揺れに強い）。", "segments": {}}
+    n_trials = 0
+    for seg in SEGS:
+        a_d, b_d = sub(d, "select_a", seg), sub(d, "select_b", seg)
+        ab = fit_combo(a_d, col="p_rich")
+        rf = race_feat(a_d, 0, ab)
+        first = ~pd.Series(a_d["race_id"]).duplicated().to_numpy()
+        cuts = {n: list(np.quantile(v[first], [1 / 3, 2 / 3])) for n, v in rf.items()}
+        rules = [None] + [("favq", i) for i in range(3)] + [("dis", i) for i in range(3)] + [("field", x) for x in ("≤10", "11-14", "15+")]
+        rules += [("surf", x) for x in ("芝", "ダ")] + [("track", x) for x in ("良", "良以外")]
+        if seg == "flat":
+            rules += [("grp", x) for x in ("新馬未勝利", "1-2勝", "3勝OP")]
+        rows = []
+        for t, omax, rule in itertools.product((1.1, 1.2, 1.3, 1.5, 1.7, 2.0), (20.0, 50.0), rules):
+            st = strat_ev_skip(ab, t, omax, rule, cuts)
+            ymin, bmin = yearly_min(a_d, st)
+            rows.append({"t": t, "omax": omax, "rule": rule, "ymin": ymin, "bmin": bmin})
+            n_trials += 1
+        ok = [r for r in rows if r["bmin"] >= 50]
+        seg_out = {"combo_ab": ab, "cuts": cuts, "trials": len(rows),
+                   "top5": sorted(ok, key=lambda r: -r["ymin"])[:5]}
+        if ok:
+            best = max(ok, key=lambda r: r["ymin"])
+            st = strat_ev_skip(ab, best["t"], best["omax"], best["rule"], cuts)
+            a = E.evaluate(a_d, st, "win")
+            b = E.evaluate(b_d, st, "win")
+            nl = E.null_perm(b_d, st, ["p_rich"], "win", n=30)
+            g_ok, why = E.gate(a, b, nl)
+            seg_out |= {"best": {k: best[k] for k in ("t", "omax", "rule")}, "select_a": a, "select_b": b, "null_b": nl, "gate": g_ok, "gate_why": why}
+        out["segments"][seg] = seg_out
+    out["n_trials"] = n_trials
+    return out
+
+
+CYCLES[7] = cycle7
+
+
+# ---------------------------------------------------------------- サイクル 8: 第 2 段の重みの交差の当てはめ
+def crossfit_combo(a_d: pd.DataFrame, col: str = "p_rich") -> dict:
+    """2017〜19 の年ごとに、その年を抜いた 2 年で a・b を当てはめる（同じ年で当てはめて数える楽観を除く）。"""
+    out = {}
+    for y in sorted(a_d["year"].unique()):
+        out[int(y)] = fit_combo(a_d[a_d["year"] != y].reset_index(drop=True), col=col)
+    return out
+
+
+def strat_ev_cf(abs_by_year: dict | None, ab_all, t: float, omax: float, col: str = "p_rich"):
+    def s(d: pd.DataFrame, k: int) -> np.ndarray:
+        p = np.zeros(len(d))
+        yrs = d["year"].to_numpy()
+        for y in np.unique(yrs):
+            ab = abs_by_year.get(int(y), ab_all) if abs_by_year else ab_all
+            m = yrs == y
+            p[m] = combo_p(d[m].reset_index(drop=True), k, *ab, col=col)
+        o = d[f"odds_pre{k}"].to_numpy(float)
+        return ((p * o >= t) & (o <= omax)).astype(float)
+    return s
+
+
+def cycle8(d: pd.DataFrame) -> dict:
+    out = {"cycle": 8, "hypothesis": "サイクル 6 の 2017〜19 の高さの一部は、第 2 段の重み a・b を同じ 2017〜19 で当てはめて数えた楽観。"
+           "年を 1 つずつ抜いて当てはめる（交差の当てはめ）と、2017〜19 の値は下がり、2020〜21 との差が縮む。", "segments": {}}
+    n_trials = 0
+    for seg in SEGS:
+        a_d, b_d = sub(d, "select_a", seg), sub(d, "select_b", seg)
+        ab_all = fit_combo(a_d, col="p_rich")
+        cf = crossfit_combo(a_d)
+        rows = []
+        for t, omax in itertools.product((1.0, 1.1, 1.2, 1.3, 1.5, 1.7, 2.0), (10.0, 20.0, 50.0)):
+            rows.append({"t": t, "omax": omax, "a": E.evaluate(a_d, strat_ev_cf(cf, ab_all, t, omax), "win", n_boot=500)})
+            n_trials += 1
+        best = pick_best(rows)
+        seg_out = {"ab_all": ab_all, "ab_crossfit": {str(k): v for k, v in cf.items()}, "trials": len(rows),
+                   "grid": [{"t": r["t"], "omax": r["omax"], "roi_a": r["a"]["roi"], "bpy_a": r["a"]["bets_per_year"]} for r in rows]}
+        if best:
+            st_b = strat_ev_cf(None, ab_all, best["t"], best["omax"])
+            b = E.evaluate(b_d, st_b, "win")
+            nl = E.null_perm(b_d, st_b, ["p_rich"], "win", n=30)
+            ok, why = E.gate(best["a"], b, nl)
+            seg_out |= {"best": {"t": best["t"], "omax": best["omax"]}, "select_a": best["a"], "select_b": b, "null_b": nl, "gate": ok, "gate_why": why}
+        out["segments"][seg] = seg_out
+    out["n_trials"] = n_trials
+    return out
+
+
+CYCLES[8] = cycle8
+
+
+# ---------------------------------------------------------------- サイクル 9: T-60 の市場を offset にした学習の確率
+def attach_offset(d: pd.DataFrame) -> pd.DataFrame:
+    o = pd.read_parquet(D.OFFSET, filters=[("year", ">=", int(d["year"].min())), ("year", "<=", int(d["year"].max()))]).drop_duplicates(["race_id", "horse_id"])
+    d = d.merge(o[["race_id", "horse_id"] + [f"po{k}" for k in range(D.N_PRE)]], on=["race_id", "horse_id"], how="left")
+    for k in range(D.N_PRE):
+        q = E.q_pre(d, k)
+        d[f"po{k}"] = d[f"po{k}"].fillna(pd.Series(q))          # 欠け（特徴量の表に無い走）は市場の確率のまま
+        d[f"pk{k}"] = E.race_norm(d, d[f"po{k}"].to_numpy(float))
+    return d
+
+
+def strat_ev_off(t: float, omax: float):
+    def s(d: pd.DataFrame, k: int) -> np.ndarray:
+        p = d[f"pk{k}"].to_numpy(float)
+        o = d[f"odds_pre{k}"].to_numpy(float)
+        return ((p * o >= t) & (o <= omax)).astype(float)
+    return s
+
+
+def cycle9(d: pd.DataFrame) -> dict:
+    out = {"cycle": 9, "hypothesis": "第 2 段を a・b の 2 つの数でなく、T-60 の再現の市場を offset にした学習（市場の知らない分だけを特徴量から学ぶ）にすると、"
+           "確率が市場に対して較正され、期待値の判定が安定する（2017〜19 と 2020〜21 の差が縮む）。", "segments": {}}
+    d = attach_offset(d)
+    yv = d["y1"].fillna(0).to_numpy()
+    out["logloss_2017_21"] = {"pk0": float(-np.mean(np.log(np.clip(d["pk0"].to_numpy()[yv == 1], 1e-9, 1)))),
+                              "q_pre0": float(-np.mean(np.log(np.clip(E.q_pre(d, 0)[yv == 1], 1e-9, 1))))}
+    n_trials = 0
+    for seg in SEGS:
+        a_d, b_d = sub(d, "select_a", seg), sub(d, "select_b", seg)
+        rows = []
+        for t, omax in itertools.product((1.0, 1.1, 1.2, 1.3, 1.5, 1.7, 2.0), (10.0, 20.0, 50.0)):
+            rows.append({"t": t, "omax": omax, "a": E.evaluate(a_d, strat_ev_off(t, omax), "win", n_boot=500)})
+            n_trials += 1
+        best = pick_best(rows)
+        seg_out = {"trials": len(rows), "grid": [{"t": r["t"], "omax": r["omax"], "roi_a": r["a"]["roi"], "bpy_a": r["a"]["bets_per_year"]} for r in rows]}
+        if best:
+            st = strat_ev_off(best["t"], best["omax"])
+            b = E.evaluate(b_d, st, "win")
+            nl = E.null_perm(b_d, st, [f"pk{k}" for k in range(D.N_PRE)], "win", n=30)
+            ok, why = E.gate(best["a"], b, nl)
+            seg_out |= {"best": {"t": best["t"], "omax": best["omax"]}, "select_a": best["a"], "select_b": b, "null_b": nl, "gate": ok, "gate_why": why}
+        out["segments"][seg] = seg_out
+    out["n_trials"] = n_trials
+    return out
+
+
+CYCLES[9] = cycle9
+
+
+# ---------------------------------------------------------------- サイクル 10: 複勝（自前の 3 着内の確率 × 想定の複勝の払戻）
+def place_payout_map(a_d: pd.DataFrame) -> dict:
+    """2017〜19 の、当たった複勝の払戻の平均を、T-60 の再現の単勝オッズの帯 × 頭数の帯ごとに（版 0）。発走前の想定の複勝の払戻に使う。"""
+    hit = E._hit(a_d, "place") > 0
+    o = a_d["odds_pre0"].to_numpy(float)
+    band = np.searchsorted(E.ODDS_BANDS[1:-1], o, side="right")
+    fb = field_band(a_d)
+    t = pd.DataFrame({"b": band, "f": fb, "r": a_d["ret_fuku"].to_numpy(float)})[hit]
+    by_b = t.groupby("b")["r"].mean()
+    out = {}
+    for (b, f), g in t.groupby(["b", "f"])["r"]:
+        out[f"{b}|{f}"] = float(g.mean()) if len(g) >= 30 else float(by_b[b])     # 当たり 30 件未満の枠は帯だけの平均（跳ねを抑える）
+    return out
+
+
+def p3_combo(d: pd.DataFrame, k: int, ab3: tuple[float, float]) -> np.ndarray:
+    """3 着内の確率: 自前の 3 着内（pr_top3 をレースで払われる着数の和に直す）と、市場（T-60）の Harville の 3 着内の logit の組み合わせ。"""
+    slots = E.place_slots(d)
+    pm = d["pr_top3"].fillna(1e-3).to_numpy(float)
+    pm = np.clip(E.race_norm(d, pm) * slots, 1e-4, 1 - 1e-4)
+    hq = np.clip(E.harville_top3_cached(d, k), 1e-4, 1 - 1e-4)
+    z = ab3[0] * np.log(pm / (1 - pm)) + ab3[1] * np.log(hq / (1 - hq))
+    return 1 / (1 + np.exp(-z))
+
+
+def fit_p3(a_d: pd.DataFrame) -> tuple[float, float]:
+    y = E._hit(a_d, "place")
+    slots = E.place_slots(a_d)
+    pm = np.clip(E.race_norm(a_d, a_d["pr_top3"].fillna(1e-3).to_numpy(float)) * slots, 1e-4, 1 - 1e-4)
+    hs = [np.clip(E.harville_top3_cached(a_d, k), 1e-4, 1 - 1e-4) for k in range(D.N_PRE)]
+
+    def nll(w):
+        tot = 0.0
+        for hq in hs:
+            z = w[0] * np.log(pm / (1 - pm)) + w[1] * np.log(hq / (1 - hq))
+            p = np.clip(1 / (1 + np.exp(-z)), 1e-9, 1 - 1e-9)
+            tot -= np.sum(y * np.log(p) + (1 - y) * np.log(1 - p))
+        return tot
+
+    r = minimize(nll, x0=[0.5, 0.5], method="Nelder-Mead", options={"xatol": 1e-3, "fatol": 1e-2})
+    return float(r.x[0]), float(r.x[1])
+
+
+def strat_place(ab3, pmap: dict, t: float, omax: float):
+    def s(d: pd.DataFrame, k: int) -> np.ndarray:
+        p3 = p3_combo(d, k, ab3)
+        o = d[f"odds_pre{k}"].to_numpy(float)
+        band = np.searchsorted(E.ODDS_BANDS[1:-1], o, side="right")
+        fb = field_band(d)
+        pay = np.array([pmap.get(f"{b}|{f}", np.nan) for b, f in zip(band, fb)])
+        return ((p3 * pay >= t) & (o <= omax)).astype(float)
+    return s
+
+
+def cycle10(d: pd.DataFrame) -> dict:
+    out = {"cycle": 10, "hypothesis": "複勝は当たりが多く、年の揺れが小さい。自前の 3 着内の確率（豊富な特徴量）と市場の Harville を組み合わせ、"
+           "想定の複勝の払戻（T-60 の単勝オッズの帯 × 頭数の帯の、2017〜19 の当たりの平均）との期待値で買うと、単勝より差の小さい買い方になる。", "segments": {}}
+    n_trials = 0
+    for seg in SEGS:
+        a_d, b_d = sub(d, "select_a", seg), sub(d, "select_b", seg)
+        ab3 = fit_p3(a_d)
+        pmap = place_payout_map(a_d)
+        rows = []
+        for t, omax in itertools.product((1.0, 1.05, 1.1, 1.2, 1.3, 1.5), (5.0, 10.0, 20.0, 50.0)):
+            rows.append({"t": t, "omax": omax, "a": E.evaluate(a_d, strat_place(ab3, pmap, t, omax), "place", n_boot=500)})
+            n_trials += 1
+        best = pick_best(rows)
+        seg_out = {"ab3": ab3, "trials": len(rows), "grid": [{"t": r["t"], "omax": r["omax"], "roi_a": r["a"]["roi"], "bpy_a": r["a"]["bets_per_year"]} for r in rows]}
+        if best:
+            st = strat_place(ab3, pmap, best["t"], best["omax"])
+            b = E.evaluate(b_d, st, "place")
+            nl = E.null_perm(b_d, st, ["pr_top3"], "place", n=30)
+            ok, why = E.gate(best["a"], b, nl)
+            seg_out |= {"best": {"t": best["t"], "omax": best["omax"]}, "select_a": best["a"], "select_b": b, "null_b": nl, "gate": ok, "gate_why": why}
+        out["segments"][seg] = seg_out
+    out["n_trials"] = n_trials
+    return out
+
+
+CYCLES[10] = cycle10
+
+
+# ---------------------------------------------------------------- 判定のオッズの感度: SmartRC の想定人気（2021 年だけ値がある）
+PRERACE = D.Path("/home/jovyan/work/folklore_out/prerace.parquet")
+
+
+def smartrc_check(b_d: pd.DataFrame, strat, kind: str = "win") -> dict | None:
+    """判定のオッズを SmartRC の想定の勝率（E_q）から作った想定オッズ（0.8 / E_q）に替えて、2021 年で数える（確定の並びを使わない判定）。"""
+    if not PRERACE.exists():
+        return None
+    pr = pd.read_parquet(PRERACE, columns=["race_id", "horse_id", "year", "E_q"], filters=[("year", "==", 2021)]).dropna(subset=["E_q"])
+    pr["race_id"], pr["horse_id"] = pr["race_id"].astype(str), pr["horse_id"].astype(str)
+    e = b_d[b_d["year"] == 2021].merge(pr[["race_id", "horse_id", "E_q"]], on=["race_id", "horse_id"], how="inner")
+    e = e[e.groupby("race_id")["race_id"].transform("size") == e.groupby("race_id")["field"].transform("first")]   # 全頭そろったレースだけ
+    if e.empty:
+        return None
+    e = e.sort_values(["race_id", "hn"]).reset_index(drop=True)
+    q = E.race_norm(e, e["E_q"].to_numpy(float))
+    for k in range(D.N_PRE):
+        e[f"odds_pre{k}"] = 0.8 / np.clip(q, 1e-4, None)
+    r = E.evaluate(e, strat, kind, n_boot=1000)
+    r["races_covered"] = int(e["race_id"].nunique())
+    return r
+
+
+def cycle11(d: pd.DataFrame) -> dict:
+    """サイクル 6 の設計（combo × 期待値、2017〜19 の区間の下限で選ぶ）を、mtl_* と水準の段の列も外した確率 v5 で 1 回だけ流す。"""
+    out = cycle5(d)
+    out["cycle"] = 11
+    out["hypothesis"] = ("2018・19 の上積みの山は mtl_*（上流の補助モデル）が作る。これと水準の段の列を外した確率（v5）なら、"
+                         "2017〜19 と 2020〜21 の差が縮み、関門の 0.9 倍を越える。縮まなければ、この確率の族は壁として打ち切る。")
+    for seg, v in out["segments"].items():
+        if v.get("best"):
+            ab = v["combo_ab_t60"]
+            st = strat_ev(lambda e, k, ab=tuple(ab): combo_p(e, k, *ab, col="p_rich"), v["best"]["t"], v["best"]["omax"]) if v["best"]["variant"] == "combo" \
+                else strat_ev(lambda e, k: e["p_rich"].to_numpy(float), v["best"]["t"], v["best"]["omax"])
+            v["smartrc_2021"] = smartrc_check(sub(d, "select_b", seg), st)
+    return out
+
+
+CYCLES[11] = cycle11
+
+
+# ---------------------------------------------------------------- サイクル 12: 3 つの確率の組み合わせ（v5・約 120 列の確率・T-60 の市場）
+def fit_combo3(d: pd.DataFrame) -> tuple[float, float, float]:
+    l1 = np.log(np.clip(d["p_rich"].to_numpy(float), 1e-6, 1))
+    l2 = np.log(np.clip(d["p_model"].to_numpy(float), 1e-6, 1))
+    y = d["y1"].fillna(0).to_numpy(float)
+    rid = pd.factorize(d["race_id"])[0]
+    lqs = [np.log(np.clip(E.q_pre(d, k), 1e-6, 1)) for k in range(D.N_PRE)]
+
+    def nll(w):
+        tot = 0.0
+        for lq in lqs:
+            z = w[0] * l1 + w[1] * l2 + w[2] * lq
+            mx = pd.Series(z).groupby(rid).transform("max").to_numpy()
+            lse = np.log(pd.Series(np.exp(z - mx)).groupby(rid).transform("sum").to_numpy()) + mx
+            tot -= np.sum(y * (z - lse))
+        return tot
+
+    r = minimize(nll, x0=[0.4, 0.1, 0.5], method="Nelder-Mead", options={"xatol": 1e-3, "fatol": 1e-2})
+    return tuple(float(x) for x in r.x)
+
+
+def combo3_p(d: pd.DataFrame, k: int, w) -> np.ndarray:
+    z = (w[0] * np.log(np.clip(d["p_rich"].to_numpy(float), 1e-6, 1)) + w[1] * np.log(np.clip(d["p_model"].to_numpy(float), 1e-6, 1))
+         + w[2] * np.log(np.clip(E.q_pre(d, k), 1e-6, 1)))
+    z = z - pd.Series(z).groupby(d["race_id"].to_numpy()).transform("max").to_numpy()
+    return E.race_norm(d, np.exp(z))
+
+
+def cycle12(d: pd.DataFrame) -> dict:
+    out = {"cycle": 12, "hypothesis": "v5 の確率と、別の列から作った約 120 列の確率（frame の as-of の列）は誤差の向きが違う。3 つ（v5・120 列・T-60 の市場）を"
+           "条件付き logit で組むと確率が鋭くなり、同じ期待値の水準で件数が増えて、2020〜21 の区間が狭まる。", "segments": {}}
+    n_trials = 0
+    for seg in SEGS:
+        a_d, b_d = sub(d, "select_a", seg), sub(d, "select_b", seg)
+        w = fit_combo3(a_d)
+        rows = []
+        for t, omax in itertools.product((1.1, 1.2, 1.3, 1.5, 1.7), (20.0, 50.0)):
+            st = strat_ev(lambda e, k, w=w: combo3_p(e, k, w), t, omax)
+            rows.append({"t": t, "omax": omax, "a": E.evaluate(a_d, st, "win", n_boot=500)})
+            n_trials += 1
+        best = pick_best(rows)
+        seg_out = {"w": w, "trials": len(rows), "grid": [{"t": r["t"], "omax": r["omax"], "roi_a": r["a"]["roi"], "bpy_a": r["a"]["bets_per_year"]} for r in rows]}
+        if best:
+            st = strat_ev(lambda e, k, w=w: combo3_p(e, k, w), best["t"], best["omax"])
+            b = E.evaluate(b_d, st, "win")
+            nl = E.null_perm(b_d, st, ["p_rich", "p_model"], "win", n=30)
+            ok, why = E.gate(best["a"], b, nl)
+            seg_out |= {"best": {"t": best["t"], "omax": best["omax"]}, "select_a": best["a"], "select_b": b, "null_b": nl, "gate": ok, "gate_why": why,
+                        "smartrc_2021": smartrc_check(b_d, st)}
+        out["segments"][seg] = seg_out
+    out["n_trials"] = n_trials
+    return out
+
+
+CYCLES[12] = cycle12
+
+
+# ---------------------------------------------------------------- サイクル 14: 単勝＋複勝（同じ馬に半分ずつ）
+def cycle14(d: pd.DataFrame) -> dict:
+    out = {"cycle": 14, "hypothesis": "単勝の期待値で選んだ馬（v5 の combo）に、単勝と複勝を半分ずつ賭けると、当たりの数が増えて区間が狭まる。"
+           "複勝の払戻率の壁（約 80%）で回収率は下がるが、選んだ馬は複勝でも市場より当たる（サイクル 10 の市場比 1.2〜1.3）。", "segments": {}}
+    n_trials = 0
+    for seg in SEGS:
+        a_d, b_d = sub(d, "select_a", seg), sub(d, "select_b", seg)
+        ab = fit_combo(a_d, col="p_rich")
+        rows = []
+        for t, omax in itertools.product((1.2, 1.3, 1.5, 1.7), (20.0, 50.0)):
+            st = strat_ev(lambda e, k, ab=ab: combo_p(e, k, *ab, col="p_rich"), t, omax)
+            rows.append({"t": t, "omax": omax, "a": E.evaluate(a_d, st, "winplace", n_boot=500)})
+            n_trials += 1
+        best = pick_best(rows)
+        seg_out = {"ab": ab, "trials": len(rows), "grid": [{"t": r["t"], "omax": r["omax"], "roi_a": r["a"]["roi"], "bpy_a": r["a"]["bets_per_year"]} for r in rows]}
+        if best:
+            st = strat_ev(lambda e, k, ab=ab: combo_p(e, k, *ab, col="p_rich"), best["t"], best["omax"])
+            b = E.evaluate(b_d, st, "winplace")
+            nl = E.null_perm(b_d, st, ["p_rich"], "winplace", n=30)
+            ok, why = E.gate(best["a"], b, nl)
+            seg_out |= {"best": {"t": best["t"], "omax": best["omax"]}, "select_a": best["a"], "select_b": b, "null_b": nl, "gate": ok, "gate_why": why}
+        out["segments"][seg] = seg_out
+    out["n_trials"] = n_trials
+    return out
+
+
+CYCLES[14] = cycle14
+
+
+def cmd_md(n: int, title: str) -> None:
+    """cycle_NN.json から cycle_NN.md の頭（結論・仮説・結果の表）を作る。課題・次に生かすこと・打ち切りは手で足す。"""
+    b = json.loads((DOCS / f"cycle_{n:02d}.json").read_text(encoding="utf-8"))
+    segs = b["segments"]
+    passed = [k for k, v in segs.items() if v.get("gate")]
+    head = (f"**結論: 関門を通った区分 {'・'.join('平場' if k == 'flat' else '重賞' for k in passed)}。**" if passed
+            else "**結論: 不合格（関門で落ちた）。2022〜24 には当てていない。**")
+    L = [f"# サイクル {n}: {title}", "", head, "", "## 仮説", b.get("hypothesis", ""), "", f"## 試した数: {b.get('n_trials')}", "", "## 結果",
+         "| 区分 | 選んだ設定 | 2017〜19 | 2020〜21 | 帰無 p | 関門 |", "|---|---|---|---|---|---|"]
+    for k, v in segs.items():
+        nl = v.get("null_b") or {}
+        L.append(f"| {'平場' if k == 'flat' else '重賞'} | {json.dumps(v.get('best'), ensure_ascii=False)} | {short(v.get('select_a'))} | {short(v.get('select_b'))} | "
+                 f"{nl.get('p', '-') if not isinstance(nl.get('p'), float) else round(nl['p'], 3)} | {'通過' if v.get('gate') else ('不合格: ' + '・'.join(v['gate_why']) if v.get('gate_why') else '判定なし（2017〜19 で年 50 件以上の設定が無い）')} |")
+    (DOCS / f"cycle_{n:02d}.md").write_text("\n".join(L) + "\n", encoding="utf-8")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("cmd", choices=["run", "md"])
+    ap.add_argument("n", type=int)
+    ap.add_argument("--title", default="")
+    a = ap.parse_args()
+    if a.cmd == "run":
+        cmd_run(a.n)
+    else:
+        cmd_md(a.n, a.title)
 
 
 if __name__ == "__main__":
