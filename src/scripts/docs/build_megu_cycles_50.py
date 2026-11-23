@@ -168,7 +168,7 @@ def build() -> str:
     o.append(table(["回", "方向", "試した設定", "結果"], cycle_rows(), num_cols=frozenset({0, 2})))
     o.append("""<h2>道具と記録</h2>
 <ul>
-<li>道具: <code>src/research/megu_cycles/</code>（mc_data・mc_eval・cycles・mc_final）。台帳の系統 megu_cycles（config/data_access/ledger.jsonl）。</li>
+<li>道具: <code>src/research/megu_cycles/</code>（mc_data・mc_eval・cycles・mc_final）。台帳の系統 megu_cycles（src/ops/data_ledger.py の台帳）。</li>
 <li>記録: <code>docs/operations/megu_cycles/</code>（README・lessons・cycle_01〜50・confirm_log・final_once・drift_check・trials）。候補の凍結は config/megu_cycles/candidates/。</li>
 </ul>
 </main>
