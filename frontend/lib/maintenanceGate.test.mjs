@@ -29,6 +29,9 @@ function harness(responses, capMs) {
   return { gate, adv: (ms) => { t += ms; }, calls: () => calls };
 }
 
+/** 次の保守が 14 秒後: 保守ではない値の保持が 15 秒（14 秒 + 1 秒）になる（猶予・失敗の扱いを短い時間で確かめる） */
+const SOON = { active: false, starts_in_sec: 14 };
+
 test("起動直後（値なし）は待つ。期限内は取り直さない", async () => {
   const h = harness([{ active: false }]);
   const r1 = h.gate.read();
@@ -44,7 +47,7 @@ test("起動直後（値なし）は待つ。期限内は取り直さない", as
 });
 
 test("期限切れでも猶予内の「保守ではない」は待たない。取り直しは 1 本だけ。済んだら新しい値", async () => {
-  const h = harness([{ active: false }, { active: true, remaining_sec: 600, retry_after: 120 }]);
+  const h = harness([SOON, { active: true, remaining_sec: 600, retry_after: 120 }]);
   await h.gate.read().pending;
   h.adv(16_000);
   const a = h.gate.read();
@@ -61,7 +64,7 @@ test("期限切れでも猶予内の「保守ではない」は待たない。�
 });
 
 test("猶予（期限 + 45 秒）より古い「保守ではない」は待つ（夜に要求が途切れたプロセス）", async () => {
-  const h = harness([{ active: false }, { active: true, remaining_sec: 1800 }]);
+  const h = harness([SOON, { active: true, remaining_sec: 1800 }]);
   await h.gate.read().pending;
   h.adv(m.NORMAL_TTL_MS + m.STALE_GRACE_MS + 1);
   const r = h.gate.read();
@@ -126,7 +129,7 @@ test("終わりの時刻が分からない保守中の値は、最後の成功�
 });
 
 test("猶予の境目: 期限 + 45 秒の 1ms 前は待たず、過ぎたら待つ", () => {
-  const h = harness([{ active: false }]);
+  const h = harness([SOON]);
   return h.gate.read().pending.then(() => {
     h.adv(m.NORMAL_TTL_MS + m.STALE_GRACE_MS - 1);
     assert.equal(h.gate.read().mustWait, false);
@@ -141,7 +144,7 @@ test("保守中に不正な応答（null）が返っても、保守は解けな�
 });
 
 test("前の値が「保守ではない」ときの失敗は「保守ではない」のまま、待たずに答え続ける（Cloud Run が冷えている間）", async () => {
-  const h = harness([{ active: false }, new Error("a"), new Error("b"), new Error("c")]);
+  const h = harness([SOON, new Error("a"), new Error("b"), new Error("c")]);
   await h.gate.read().pending;
   for (let i = 0; i < 3; i++) {
     h.adv(30_000);
@@ -153,7 +156,7 @@ test("前の値が「保守ではない」ときの失敗は「保守ではな�
 });
 
 test("失敗の後は取り直しが解放され、次の期限切れで再び取りに行く", async () => {
-  const h = harness([{ active: false }, new Error("x"), { active: false }]);
+  const h = harness([SOON, new Error("x"), { active: false }]);
   await h.gate.read().pending;
   h.adv(16_000);
   const st = await h.gate.read().pending;
@@ -177,4 +180,29 @@ test("取得が終わらない・同期で例外・不正な応答でも、取�
 test("保守中の期限は残り秒で縮む（1〜15 秒）", async () => {
   const h = harness([{ active: true, remaining_sec: 3 }]);
   assert.equal((await h.gate.read().pending).ttl, 3000);
+});
+
+test("保守ではない値は、次の保守の開始まで・最長 5 分だけ保持する（Cloud Run への確認を減らす）", async () => {
+  assert.equal(m.stateFromStatus({ active: false }, 0).ttl, m.NORMAL_TTL_MAX_MS);
+  assert.equal(m.stateFromStatus({ active: false, starts_in_sec: null }, 0).ttl, m.NORMAL_TTL_MAX_MS);
+  assert.equal(m.stateFromStatus({ active: false, starts_in_sec: 3600 }, 0).ttl, m.NORMAL_TTL_MAX_MS);
+  assert.equal(m.stateFromStatus({ active: false, starts_in_sec: 120 }, 0).ttl, 121_000);
+  assert.equal(m.stateFromStatus({ active: false, starts_in_sec: 3 }, 0).ttl, m.NORMAL_TTL_MS);   // 開始の直前でも 15 秒より短くしない
+  const h = harness([{ active: false, starts_in_sec: 7200 }, { active: true, remaining_sec: 600 }]);
+  await h.gate.read().pending;
+  h.adv(m.NORMAL_TTL_MAX_MS - 1);
+  assert.equal(h.gate.read().pending, null);
+  assert.equal(h.calls(), 1);
+  h.adv(2);
+  const r = h.gate.read();
+  assert.equal(r.mustWait, false);
+  assert.equal((await r.pending).active, true);
+  assert.equal(h.calls(), 2);
+});
+
+test("保守の開始の時刻を越えて「保守ではない」を保持しない", async () => {
+  const h = harness([{ active: false, starts_in_sec: 60 }, { active: true, remaining_sec: 3600 }]);
+  await h.gate.read().pending;
+  h.adv(61_000);
+  assert.ok(h.gate.read().pending);
 });

@@ -43,6 +43,7 @@
 
 - **有効化**: `.env` に `KEIBA_MAINTENANCE_WINDOW=1`（**既定はオフ**）。dev 環境は更に `KEIBA_MAINTENANCE_DEV=1` が要る（dev は既定で無効）。環境変数の追加後は API の再起動が要る（Flask も同様）。
 - **設定の正**: `config/maintenance.json`（時間帯 `daily.start/end`、`notice_minutes`、文言、除外、バイパス、`notify.slack_start_end`）。**30 秒キャッシュで読み直す**ので、書き換えるだけで再起動なしに反映される。壊れていれば既定値で動く（メンテナンスを誤って有効にしない側）。
+- **告知は開始の 30 分以上前に出す**（臨時の `override` も同じ。2026-11-23 から）。画面（`MaintenanceShell`）は平常時に最長 30 分おき・告知の始まり（開始 30 分前）の直後に 1 回だけ状態を聞き、Next.js の middleware は保守ではない値を開始まで・最長 5 分持つ。直前に決めた臨時の保守は、API の 503 で画面が切り替わる（帯の告知は出ないことがある）。
 - **止めたいとき（再起動なし）**: `config/maintenance.json` の `"enabled": false`（約 30 秒で反映）。完全に外すなら `.env` から `KEIBA_MAINTENANCE_WINDOW` を消して再起動。
 
 ## 臨時メンテナンス

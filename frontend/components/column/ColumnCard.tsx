@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { IntentLink } from "@/components/IntentLink";
 import { VERDICTS, categoryTrail, type Column } from "@/lib/columns";
 
 /** 一覧に出す分だけ（本文 body を含めない。クライアントの一覧に渡しても重くならない） */
@@ -24,7 +24,7 @@ function leafLabel(path: string): string {
 /** 一覧の 1 行: 結論・カテゴリ・日付 → 題 → 要約（2 行まで） */
 export function ColumnRow({ column }: { column: ColumnSummary }) {
   return (
-    <Link href={`/column/${column.slug}`} className="col-row">
+    <IntentLink href={`/column/${column.slug}`} className="col-row">
       <div className="col-row-meta">
         <VerdictMark verdict={column.verdict} />
         <span>{[...new Set(column.categories.map(leafLabel))].join("・")}</span>
@@ -34,6 +34,6 @@ export function ColumnRow({ column }: { column: ColumnSummary }) {
         {column.draft && <span style={{ color: "var(--warn)" }}>[下書き] </span>}
         {column.title}
       </h2>
-    </Link>
+    </IntentLink>
   );
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { prefetchJson } from "@/lib/httpCache";
+import { useIntentPrefetch } from "@/components/IntentLink";
 
 type Props = Omit<React.ComponentProps<typeof Link>, "onClick"> & {
   /** マウスが乗った／触れ始めたときに温める GET の URL（安全な GET のみ） */
@@ -11,12 +12,13 @@ type Props = Omit<React.ComponentProps<typeof Link>, "onClick"> & {
   onClick?: React.MouseEventHandler<HTMLAnchorElement>;
 };
 
-/** クリック直後に『読み込み中』を示し、その間の再クリック（連打）を無視するリンク。 */
+/** クリック直後に『読み込み中』を示し、その間の再クリック（連打）を無視するリンク。画面の先読みはマウスが乗った・触れたときだけ（IntentLink と同じ）。 */
 export function PendingLink({ warm, onClick, style, children, ...rest }: Props) {
   const [pending, setPending] = useState(false);
   const path = usePathname();
   const warmed = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warmPage = useIntentPrefetch(rest.href);
 
   useEffect(() => {
     setPending(false);
@@ -24,6 +26,7 @@ export function PendingLink({ warm, onClick, style, children, ...rest }: Props) 
   }, [path]);
 
   function warmUp() {
+    warmPage();                                     // 画面の区画は、画面に入ったときではなく、ここで先読みする
     if (warmed.current || !warm?.length) return;
     warmed.current = true;
     warm.forEach((u) => prefetchJson(u, { ttlMs: 30_000 }));
@@ -32,6 +35,7 @@ export function PendingLink({ warm, onClick, style, children, ...rest }: Props) 
   return (
     <Link
       {...rest}
+      prefetch={rest.prefetch ?? false}
       aria-busy={pending || undefined}
       onMouseEnter={warmUp}
       onFocus={warmUp}

@@ -61,7 +61,7 @@ function isScannerProbe(pathname: string): boolean {
   return SCANNER_PROBES.some((x) => p === x || p.startsWith(x + "/") || p.startsWith(x + "."));
 }
 
-// ── メンテナンス時間帯（毎日 JST 03:00–04:00）。判定の正は API（/api/maintenance/status）。15 秒だけメモリに持つ ──
+// ── メンテナンス時間帯（毎日 JST 03:00–04:00）。判定の正は API（/api/maintenance/status）。保守ではない間は次の開始まで・最長 5 分、保守中は 15 秒だけメモリに持つ ──
 // 期限切れでも「保守ではない」ならすぐ答え、取り直しは裏で行う（lib/maintenanceGate.ts。画面・RSC の要求を最大 1.5 秒待たせない）。
 const MAINTENANCE_PASS_PREFIXES = ["/api/", "/_next/", "/data/image/", "/data/trainer_pattern.json", "/static/", "/favicon", "/login", "/logout", MAINTENANCE_PATH];
 

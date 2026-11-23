@@ -9,6 +9,7 @@ import { PendingLink } from "@/components/PendingLink";
 import { USE_MOCK, MOCK_WEEKLY_RACES } from "@/lib/mock";
 import { LEVEL_STYLE, TIER_LEGEND, TARGET_TIER_HINT, ValueLevel, chipHint, chipText, hasTier, isTargetValues, useRaceValuesState, mixedProbCalibration } from "@/lib/raceValue";
 import { useNarrow } from "@/components/RaceStrip";
+import { IntentLink } from "@/components/IntentLink";
 
 type RaceRow = { race_id: string; round: number; venue: string; race_name: string; start_time?: string | null; grade?: string | null; list_grade_icon?: string | null };
 
@@ -107,9 +108,9 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
             </PendingLink>
           );
         })}
-        <Link href={listHref} style={{ ...BTN, marginLeft: "auto", flex: "none", minHeight: narrow ? 38 : undefined, color: "var(--accent)" }}>
+        <IntentLink href={listHref} style={{ ...BTN, marginLeft: "auto", flex: "none", minHeight: narrow ? 38 : undefined, color: "var(--accent)" }}>
           {narrow ? "一覧へ" : `${cur.venue}の一覧へ（${date.slice(4, 6)}/${date.slice(6, 8)}）`}
-        </Link>
+        </IntentLink>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: narrow ? "nowrap" : "wrap" }}>

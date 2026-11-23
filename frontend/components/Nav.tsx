@@ -1,11 +1,11 @@
 "use client";
 
 import { clearStored, fetchAuthStatus } from "@/lib/httpCache";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { USE_MOCK } from "@/lib/mock";
 import { isNavActive, visibleNavItems } from "@/lib/siteNav";
+import { IntentLink } from "@/components/IntentLink";
 
 export function Nav() {
   const path = usePathname();
@@ -80,7 +80,7 @@ export function Nav() {
         background: "#0d1117",
         borderBottom: "1px solid #21262d",
       }}>
-        <Link href="/" className="hit44 nav-brand" style={{
+        <IntentLink href="/" className="hit44 nav-brand" style={{
           fontWeight: 700,
           fontSize: 14,
           color: "#f0f6fc",
@@ -92,21 +92,21 @@ export function Nav() {
         }}>
           <img src="/megu-icon.png" alt="" width={22} height={22} style={{ borderRadius: "50%", display: "block" }} />
           <span>めぐ競馬</span>
-        </Link>
+        </IntentLink>
 
         {navItems.length > 0 && (
           <div className="nav-links" role="navigation" aria-label="メインメニュー">
             {navItems.map((it) => {
               const active = isNavActive(it, path);
               return (
-                <Link
+                <IntentLink
                   key={it.id}
                   href={it.href}
                   className={`hit44 nav-link${active ? " is-active" : ""}`}
                   aria-current={active ? "page" : undefined}
                 >
                   {it.label}
-                </Link>
+                </IntentLink>
               );
             })}
           </div>
@@ -127,7 +127,7 @@ export function Nav() {
             {loggedIn ? `👤 ${userName}${isAdmin ? "" : paid ? "（有料会員）" : "（無料）"}` : "ゲスト"}
           </span>
           {isAdmin && (
-            <Link href="/admin/users" className="hit44 nav-btn" style={{
+            <IntentLink href="/admin/users" className="hit44 nav-btn" style={{
               fontSize: 12,
               color: "#3fb950",
               textDecoration: "none",
@@ -140,7 +140,7 @@ export function Nav() {
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
             >
               ユーザ登録
-            </Link>
+            </IntentLink>
           )}
           {loggedIn ? (
             <button type="button" onClick={logout} className="hit44 nav-btn" style={{
@@ -159,7 +159,7 @@ export function Nav() {
               ログアウト
             </button>
           ) : (
-            <Link href="/login" className="hit44 nav-btn" style={{
+            <IntentLink href="/login" className="hit44 nav-btn" style={{
               fontSize: 12,
               color: "#58a6ff",
               textDecoration: "none",
@@ -172,7 +172,7 @@ export function Nav() {
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
             >
               ログイン
-            </Link>
+            </IntentLink>
           )}
         </div>
       </nav>
