@@ -32,7 +32,7 @@ SEGS = ("flat", "graded")
 # サイクルごとの確率の版（再現のため）。11 以降は v5。13 は v5 の学習の平均（cycle13 の中で差し替える）
 CYCLE_RICH = {4: "rich_pred.parquet", 5: "rich_pred_v2.parquet", 6: "rich_pred_v4.parquet", 7: "rich_pred_v4.parquet", 8: "rich_pred_v4.parquet",
               9: "rich_pred_v4.parquet", 10: "rich_pred_v4.parquet", 13: "rich_pred_v5bag.parquet", 15: "rich_pred_v5bag.parquet",
-              16: "rich_pred_v6bag.parquet", 17: "rich_pred_v5bag.parquet", 18: "rich_pred_v5bag.parquet", 19: "rich_pred_v5bag.parquet", 20: "rich_pred_v5bag.parquet", 21: "rich_pred_v5bag.parquet", 22: "rich_pred_v5bag.parquet", 23: "rich_pred_v5bag.parquet", 24: "rich_pred_v7bag.parquet"}
+              16: "rich_pred_v6bag.parquet", 17: "rich_pred_v5bag.parquet", 18: "rich_pred_v5bag.parquet", 19: "rich_pred_v5bag.parquet", 20: "rich_pred_v5bag.parquet", 21: "rich_pred_v5bag.parquet", 22: "rich_pred_v5bag.parquet", 23: "rich_pred_v5bag.parquet", 24: "rich_pred_v7bag.parquet", 29: "rich_pred_v5bag.parquet"}
 RICH_FILE = D.RICH
 
 
@@ -159,10 +159,12 @@ CYCLES = {1: cycle1}
 
 def cmd_run(n: int) -> None:
     global RICH_FILE
-    RICH_FILE = D.OUT / CYCLE_RICH.get(n, D.RICH.name)
+    cfgp = DOCS / f"cycle_{n:02d}.cfg.json"
+    cfg = json.loads(cfgp.read_text(encoding="utf-8")) if cfgp.exists() else {}
+    RICH_FILE = D.OUT / cfg.get("rich", CYCLE_RICH.get(n, D.RICH.name))
     t0 = time.time()
     d = load_select()
-    body = CYCLES[n](d)
+    body = CYCLES[n](d) if n in CYCLES else cycle_generic(d, n)
     body["sec"] = round(time.time() - t0)
     body["rich_file"] = str(RICH_FILE)
     write_cycle(n, body)
@@ -956,6 +958,103 @@ def cycle24(d: pd.DataFrame) -> dict:
 
 
 CYCLES[24] = cycle24
+
+
+# ---------------------------------------------------------------- サイクル 29: 確定オッズの見込みで期待値を計る（T-60 の人気の順位ごとの平均のずれ）
+def mean_drift_by_rank() -> np.ndarray:
+    """2026 年の発走前（T-60）と確定のオッズの対数の比の、T-60 の人気の順位ごとの平均（オッズの列だけ。着順・払戻は読まない）。"""
+    from src.scripts.data.bet_cycles import load_drift
+    pool = load_drift("t60")["races"]
+    mx = max(len(r) for r in pool)
+    sums, cnt = np.zeros(mx), np.zeros(mx)
+    for r in pool:
+        sums[: len(r)] += r
+        cnt[: len(r)] += 1
+    return sums / np.maximum(cnt, 1)
+
+
+def strat_ev_adj(ab, t: float, omax: float, md: np.ndarray):
+    def s(d: pd.DataFrame, k: int) -> np.ndarray:
+        p = combo_p(d, k, *ab, col="p_rich")
+        o = d[f"odds_pre{k}"].to_numpy(float)
+        rk = np.clip(pop_pre(d, k).astype(int) - 1, 0, len(md) - 1)
+        o_final = o * np.exp(md[rk])                        # 確定のオッズの見込み（人気馬は短く、人気薄は長くなる）
+        return ((p * o_final >= t) & (o <= omax)).astype(float)
+    return s
+
+
+def cycle29(d: pd.DataFrame) -> dict:
+    out = {"cycle": 29, "hypothesis": "T-60 のオッズは人気馬で確定より長く、人気薄で短い（終盤の資金）。期待値を、T-60 の人気の順位ごとの平均のずれで"
+           "確定のオッズの見込みに直してから計ると、人気馬の過大な期待値を避けられ、回収率が上がる。", "segments": {}}
+    md = mean_drift_by_rank()
+    out["mean_drift_by_rank"] = md[:18].tolist()
+    n_trials = 0
+    for seg in SEGS:
+        a_d, b_d = sub(d, "select_a", seg), sub(d, "select_b", seg)
+        ab = fit_combo(a_d, col="p_rich")
+        rows = []
+        for t, omax in itertools.product((1.2, 1.3, 1.5), (20.0, 50.0)):
+            rows.append({"t": t, "omax": omax, "a": E.evaluate(a_d, strat_ev_adj(ab, t, omax, md), "win", n_boot=500)})
+            n_trials += 1
+        best = pick_best(rows)
+        seg_out = {"combo_ab_t60": ab, "trials": len(rows), "grid": [{"t": r["t"], "omax": r["omax"], "roi_a": r["a"]["roi"], "bpy_a": r["a"]["bets_per_year"]} for r in rows]}
+        if best:
+            st = strat_ev_adj(ab, best["t"], best["omax"], md)
+            b = E.evaluate(b_d, st, "win")
+            nl = E.null_perm(b_d, st, ["p_rich"], "win", n=30)
+            ok, why = E.gate(best["a"], b, nl)
+            seg_out |= {"best": {"t": best["t"], "omax": best["omax"]}, "select_a": best["a"], "select_b": b, "null_b": nl, "gate": ok, "gate_why": why}
+        out["segments"][seg] = seg_out
+    out["n_trials"] = n_trials
+    return out
+
+
+CYCLES[29] = cycle29
+
+
+# ---------------------------------------------------------------- 汎用のサイクル（設定は docs/operations/megu_cycles/cycle_NN.cfg.json）
+def strat_generic(ab, t: float, omax: float, omin: float = 1.0, field_max: int | None = None, age2: bool | None = None):
+    def s(d: pd.DataFrame, k: int) -> np.ndarray:
+        p = combo_p(d, k, *ab, col="p_rich")
+        o = d[f"odds_pre{k}"].to_numpy(float)
+        m = (p * o >= t) & (o <= omax) & (o >= omin)
+        if field_max:
+            m &= pd.to_numeric(d["field"], errors="coerce").to_numpy() <= field_max
+        if age2 is not None:
+            m &= (pd.to_numeric(d["age"], errors="coerce").to_numpy() == 2) == age2
+        return m.astype(float)
+    return s
+
+
+def cycle_generic(d: pd.DataFrame, n: int) -> dict:
+    cfg = json.loads((DOCS / f"cycle_{n:02d}.cfg.json").read_text(encoding="utf-8"))
+    out = {"cycle": n, "hypothesis": cfg["hypothesis"], "cfg": cfg, "segments": {}}
+    e0 = d if cfg.get("phase", "t60") == "t60" else swap_phase(d, cfg["phase"])
+    if cfg.get("group"):
+        e0 = e0[group_of(e0) == cfg["group"]].reset_index(drop=True)
+    n_trials = 0
+    for seg in cfg.get("segs", ["flat", "graded"]):
+        a_d, b_d = sub(e0, "select_a", seg), sub(e0, "select_b", seg)
+        ab = fit_combo(sub(e0, "select_a", cfg.get("fit_seg", seg)), col="p_rich")
+        rows = []
+        grid = list(itertools.product(cfg.get("t", [1.2, 1.3, 1.5]), cfg.get("omax", [20.0, 50.0]), cfg.get("omin", [1.0])))
+        for t, omax, omin in grid:
+            st = strat_generic(ab, t, omax, omin, cfg.get("field_max"), cfg.get("age2"))
+            rows.append({"t": t, "omax": omax, "omin": omin, "a": E.evaluate(a_d, st, cfg.get("kind", "win"), n_boot=500)})
+            n_trials += 1
+        best = pick_best(rows)
+        seg_out = {"combo_ab_t60": ab, "trials": len(rows),
+                   "grid": [{"t": r["t"], "omax": r["omax"], "omin": r["omin"], "roi_a": r["a"]["roi"], "bpy_a": r["a"]["bets_per_year"]} for r in rows]}
+        if best:
+            st = strat_generic(ab, best["t"], best["omax"], best["omin"], cfg.get("field_max"), cfg.get("age2"))
+            b = E.evaluate(b_d, st, cfg.get("kind", "win"))
+            nl = E.null_perm(b_d, st, ["p_rich"], cfg.get("kind", "win"), n=30)
+            ok, why = E.gate(best["a"], b, nl)
+            seg_out |= {"best": {"t": best["t"], "omax": best["omax"], "omin": best["omin"]}, "select_a": best["a"], "select_b": b, "null_b": nl,
+                        "gate": ok, "gate_why": why}
+        out["segments"][seg] = seg_out
+    out["n_trials"] = n_trials
+    return out
 
 
 # ---------------------------------------------------------------- 2022〜24 に当てる（関門を通り、凍結した候補だけ）
