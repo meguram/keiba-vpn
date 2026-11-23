@@ -177,6 +177,14 @@ def build_rows(p: "bc.Period", body: dict, setting: str, frames: dict, waku: dic
         if H is None:
             cnt["no_honmei"] += 1
             continue
+        nums = {int(h) for h in r.hn}
+        paid = {int(x) for bt in bc.BET_TYPES for c in r.pay.get(bt, {}) for x in c.replace(">", "-").split("-")}
+        if not paid <= nums:          # 払戻の組の馬が出走表に無い（オッズの欠けで取消とみなされた勝ち馬など）: 精算できないので買わず、数える
+            cnt["pay_mismatch"] = cnt.get("pay_mismatch", 0) + 1
+            bad = cnt.setdefault("pay_mismatch_races", [])
+            if r.race_id not in bad:
+                bad.append(r.race_id)
+            continue
         n = len(r.pw)
         if n > NH:
             raise ValueError(f"{r.race_id} の頭数 {n} が {NH} を超えます")

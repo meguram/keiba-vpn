@@ -105,6 +105,16 @@ def test_kelly_buys_positive_edge():
     assert c > 0 and c % 100 == 0 and c <= 500 and r == c * 5
 
 
+def test_pay_mismatch_is_skipped_and_counted():
+    """払戻の組の馬が出走表に無いレース（オッズの欠けで取消とみなされた勝ち馬）は買わずに数える。"""
+    body = json.loads((ROOT / "config/bet_cycles/frozen_20261117_r2.json").read_text(encoding="utf-8"))
+    r = _race()
+    r.pay["wide"] = dict(r.pay["wide"], **{"3-15": 900})
+    feats = pd.DataFrame([{"date": r.date, "field": 8, "c_class": "未勝利", "q_r_max": 4}])
+    rows = D.build_rows(bc.Period("t", [r], feats, np.ones((1, 1)), {}), body, "a2", {}, {})
+    assert len(rows.meta) == 0 and rows.counts["pay_mismatch"] == 1 and rows.counts["pay_mismatch_races"] == [RID]
+
+
 def test_dead_heat_and_versions():
     """同着（3連複の当たりが 2 組）と、版（k=2）の平均。"""
     body = json.loads((ROOT / "config/bet_cycles/frozen_20261117_r2.json").read_text(encoding="utf-8"))
