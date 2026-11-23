@@ -19,6 +19,8 @@ ROOT = Path(__file__).resolve().parents[3]
 SEL = ROOT / "config/bet_patterns/selection.json"
 RES = ROOT / "docs/operations/retrain_trials/bet_patterns.json"
 DST = ROOT / "docs/html/operations/final/bet_patterns_from_honmei.html"
+SEL_EX = ROOT / "config/bet_patterns/selection_extra.json"           # 後から足した組み方（参考の行）
+RES_EX = ROOT / "docs/operations/retrain_trials/bet_patterns_extra.json"
 TITLE = "◎ からの馬券のパターンの成績"
 PNAME = {"train": "訓練 2019〜22（選んだ期間）", "eval": "評価 2023〜24（確かめ）", "test": "2025（結果だけ）", "main2026": "2026 主 01/05〜10/12（結果だけ）",
          "pre2026": "2026 10/17〜11/20 本物の T-60（参考）"}
@@ -177,6 +179,46 @@ def build() -> str:
         for k in keys:
             drows = [row(esc(PNAME[nm]), period_cells((P.get(nm) or {}).get(s, {}).get("rules", {}).get(k))) for nm in PNAME if nm in P]
             body.append(f"<details><summary>{esc(key_name(k, names))}</summary><div class=\"dbody\">{table(drows, DCOLS)}</div></details>")
+    # ---- 追加の組み方（参考）
+    if SEL_EX.exists() and RES_EX.exists():
+        ex = json.loads(SEL_EX.read_text(encoding="utf-8"))
+        rx = json.loads(RES_EX.read_text(encoding="utf-8"))
+        if rx["selection_extra_hash"] != ex["hash"]:
+            raise SystemExit("追加の評価の結果が今の selection_extra.json と違う版のものです")
+        xnames = {s["id"]: s["name"] for s in ex["structs"]}
+        xkinds = {s["id"]: s for s in ex["structs"]}
+        PX = rx["periods"]
+        body.append('<h2 id="extra">追加の組み方（参考の行）</h2>')
+        body.append(f'<p class="sub">主の選択・事前登録の後に、統括役の最終チェックで足した組み方（{esc("・".join(xnames.values()))}）。'
+                    "同じ手順（訓練だけで段 A・B、1 年抜き、reality check）で選び、評価・2025・2026 には参考の行として 1 回だけ当てた（台帳は eval_only）。主の規則の合否は変えない。</p>")
+        for s in ("a2", "all"):
+            st = ex["settings"][s]
+            rows = []
+            for k, v in st["per"].items():
+                if not v:
+                    rows.append(row(esc(xnames[k]), ["各年 100 レース以上の規則なし"] + ["－"] * 9))
+                    continue
+                g = lambda nm: (PX.get(nm) or {}).get(s, {}).get("rules", {}).get(k) or {}
+                ev = g("eval")
+                rc = st["rc"].get(k, {})
+                rows.append(row(esc(xnames[k]), [esc(spec_txt(v["final"], xkinds)), pct(g("train").get("roi")),
+                                                 pct(st["cv"]["per"].get(k, {}).get("roi_cv")), pv_txt(rc.get("p_value")),
+                                                 roi_cell(ev.get("roi"), ev.get("roi_lo"), ev.get("roi_hi")), diff_cell(ev),
+                                                 roi_cell(g("test").get("roi"), g("test").get("roi_lo"), g("test").get("roi_hi")),
+                                                 roi_cell(g("main2026").get("roi"), g("main2026").get("roi_lo"), g("main2026").get("roi_hi")),
+                                                 roi_cell(g("pre2026").get("roi"), g("pre2026").get("roi_lo"), g("pre2026").get("roi_hi")),
+                                                 f'{num(ev.get("bet_races"))}R・{num(ev.get("points_avg"), 1)} 点' if ev else "－"]))
+            n = st["n_tried"]
+            body.append(f"<h3>{SNAME[s]}（試した数: 段 A {num(n['A'])}・段 B {num(n['B'])}）</h3>")
+            body.append(table(rows, ["組み方", "選んだ条件（訓練だけで選択）", "訓練", "1 年抜き", "reality check の p 値", "評価 2023〜24",
+                                     "評価: 素の単勝との差", "2025", "2026 主", "2026 本物の T-60", "評価の参戦・点数"]))
+            for k, v in st["per"].items():
+                if v:
+                    drows = [row(esc(PNAME[nm]), period_cells((PX.get(nm) or {}).get(s, {}).get("rules", {}).get(k))) for nm in PNAME if nm in PX]
+                    body.append(f"<details><summary>{esc(xnames[k])}</summary><div class=\"dbody\">{table(drows, DCOLS)}</div></details>")
+        body.append('<p class="sub">3連単の ◎ 2 着付けのフォーメーションは「1 着列（2 列目の頭数）→ ◎ → 3 着列（3 列目の頭数）」、◎ 3 着付けは「1 着列 → 2 着列 → ◎」。'
+                    "列は同じ候補の並び（複勝率の順）の上位から取る。枠連のボックスは、◎ と相手の枠の組すべて（同じ枠に 2 頭いればゾロ目も）。"
+                    "どれも上の楽観・割引きの限界の注記がそのまま当てはまる。</p>")
     # ---- 3連複フォーメーション
     body.append('<h2 id="trio_f">3連複 フォーメーション（必須の形）</h2>')
     fl = []
@@ -234,7 +276,7 @@ def build() -> str:
 <li>段 C: 段 B の上位 {g["top_pairs"]} の組み方の 2 つずつと、決めておいた組（単勝＋ワイド、馬連＋3連複）。</li>
 <li>物差し: min(上位 5 件を除いた回収率, 年ごとの回収率の最小)。訓練の各年 {g["MIN_BETS_PER_YEAR"]} レース以上の参戦が条件。</li>
 <li>期待値・合成オッズの想定オッズは、単勝は T-60 の再現、連系は上の換算（市場の確率から Harville）。モデルの組の確率は MB60（<code>fit_blend_distribution</code>）。予測の p は確定オッズの offset を含むので楽観。</li>
-<li>試していないもの: 枠連のボックス・3連単の 2 着／3 着付けのフォーメーション（◎ の 2 着付け・3 着付けは 1 列の流しだけ）、◎ を含まない組（◎ 固定の依頼の外）。WIN5 などレースをまたぐ券は対象外。</li>
+<li>試していないもの: ◎ を含まない組（◎ 固定の依頼の外）、WIN5 などレースをまたぐ券。枠連のボックス・3連単の ◎ 2 着／3 着付けのフォーメーションは、後から足した（上の「追加の組み方」）。</li>
 <li>2025・2026 年は結果を出すだけで、選び直しに使っていない（見た回数の台帳に eval_only で申告）。評価 2023〜24 は confirm。1 回目は行を作る途中（精算の前）で止まり、data.py を直して（払戻の組の馬が出走表に無いレースを数えて外す）流し直した。値を見たのは 2 回目だけ。流し直しは台帳の行でも止める。ただし A2 の ◎ と見送りは、A2 の作成のときに訓練 2019〜22 で選ばれ、評価 2023〜24 でも確かめ済み。ここで新しく問えるのは「同じ ◎ で、素の単勝より上か」だけなので、合否は対の差で決めた。</li>
 <li><b>楽観の向き</b>: 予測の p（確定オッズの offset を含む）と、確定オッズから逆向きに作った T-60 の再現の両方に、締切までの情報が残る。組の期待値（モデルの組の確率 × 想定オッズ）・合成オッズ・Kelly・相手の想定単勝の範囲は、このオッズと p に強く頼るので、素の単勝より楽観が大きくなりうる（水準だけでなく、単勝との差も上に偏る）。期待値 1.3 などは較正した期待値ではなく、換算の上の目安。</li>
 <li><b>割引きの限界</b>: reality check は段 A の規則の素の回収率だけが対象で、段 B（配分・見送り）・段 C（組み合わせ）・A2 自体の探索を含まない。分散の大きい 3連単に引きずられ、標準化もしていない。A2 の ◎ を同じ訓練で選んだので、p 値は実際より小さく出る。1 年抜きも、想定オッズの換算（訓練 4 年で当てはめ）・A2 の ◎・分位の区切りは抜いた年を含んだまま。組み方ごとの 1 年抜きの値も「その組み方を選ぶ」という選択を含む。手順全体の外の年での値は「全体の最良」の 1 年抜きだけ。</li>
