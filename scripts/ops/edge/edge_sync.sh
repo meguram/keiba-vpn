@@ -26,6 +26,10 @@ GIT=(git -c credential.helper= -c credential.helper='!gh auth git-credential')
 [ "$(id -u)" != 0 ] || { echo "root では流さない（jovyan で。手元の状態に root の持ち物を作らない）" >&2; exit 2; }
 set -o pipefail
 mkdir -p "$EDGE_HOME" "$OUT"
+# cron が追記するログ（$EDGE_HOME/sync-<env>.log）の上限: 5MB を超えたら 1 世代だけ残して切り替える（この回の出力は .1 に入り、次の回から新しいファイル）
+for f in "$EDGE_HOME/sync-$ENV_NAME.log"; do
+  [ "$(stat -c %s "$f" 2>/dev/null || echo 0)" -lt 5242880 ] || mv -f "$f" "$f.1"
+done
 log() { echo "$(date '+%F %T') [edge-sync $ENV_NAME] $*"; }
 exec 9>"$EDGE_HOME/.lock-$ENV_NAME"
 case " ${EDGE_RENDER_ARGS:-} " in

@@ -254,3 +254,20 @@ def test_remote_apply_replaces_deletes_and_resyncs(tmp_path):
     assert not (root / "anon/api/race/stray.json").exists() and not (root / "anon/api/race/stray.json.gz").exists()
     assert (root / "anon/api/race/old.json").exists() and (root / "anon/api/race/old.json.gz").exists()
     assert (root / "_meta/heartbeat.json").exists()                  # _meta は消さない
+
+
+def test_prune_mirror_only_old_race_categories(tmp_path):
+    import os
+    import time as _t
+    from argparse import Namespace
+
+    old = _t.time() - 50 * 86400
+    for cat, key in (("race_shutuba", "202605050101"), ("horse_result", "2019100001")):
+        _put(tmp_path, cat, key, {})
+        os.utime(tmp_path / "data/local/mirror" / cat / key[:4] / f"{key}.json", (old, old))
+    _put(tmp_path, "race_result", "202611280101", {})                  # 新しい
+    assert er.cmd_prune(Namespace(base=str(tmp_path), mirror_days=40)) == 0
+    m = tmp_path / "data/local/mirror"
+    assert not (m / "race_shutuba/2026/202605050101.json").exists()
+    assert (m / "horse_result/2019/2019100001.json").exists()          # 馬のカテゴリは消さない
+    assert (m / "race_result/2026/202611280101.json").exists()

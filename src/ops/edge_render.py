@@ -456,12 +456,15 @@ async def render_all(app, targets: list[tuple[str, str]], cookies: dict[str, str
     return stats
 
 
-def targets_for(cfg: dict[str, Any], base: Path, dates: Iterable[str], races: Iterable[str], tiers: list[str]) -> list[tuple[str, str]]:
+def targets_for(cfg: dict[str, Any], base: Path, dates: Iterable[str], races: Iterable[str], tiers: list[str],
+                ready=None) -> list[tuple[str, str]]:
+    """作る対象。ready（既定は確定済み＝写しに出馬表と結果がある）を満たすレースだけ。"""
+    ready = ready or race_settled_in_mirror
     out: list[tuple[str, str]] = []
-    rids: list[str] = [r for r in races if race_settled_in_mirror(base, r)]
+    rids: list[str] = [r for r in races if ready(base, r)]
     for d in dates:
         all_day = races_of(base, d)
-        day = [r for r in all_day if race_settled_in_mirror(base, r)]
+        day = [r for r in all_day if ready(base, r)]
         rids.extend(day)
         if not day or len(day) != len(all_day):       # その日の全レースが写しに揃っていないと、一覧（race-list）が欠ける
             continue
@@ -490,9 +493,15 @@ def cmd_render(args: argparse.Namespace) -> int:
     tiers = args.tier or list(cfg.get("tiers") or ["anon"])
     today = datetime.now(JST)
     dates = args.date or ([] if args.race else eligible_dates(cfg, today))
-    targets = targets_for(cfg, base, dates, args.race or [], tiers)
+    if args.diagnose:
+        # 診断: 確定前でも写しに出馬表があれば作ってみて、捨てる理由を数える（ファイルは試しの置き場にだけ書く。送らない）
+        targets = targets_for(cfg, base, dates, args.race or [], tiers, ready=lambda b, r: in_mirror(b, "race_shutuba", r))
+    else:
+        targets = targets_for(cfg, base, dates, args.race or [], tiers)
     sha = tree_sha(ROOT)
     out_dir = Path(args.out) / args.env / sha
+    if args.diagnose:
+        out_dir = Path(args.out) / "_diagnose" / args.env / sha
     man_path = out_dir / "_meta" / "manifest.json"
     try:
         manifest = json.loads(man_path.read_text(encoding="utf-8"))
@@ -513,7 +522,7 @@ def cmd_render(args: argparse.Namespace) -> int:
     dirty = dirty_keys(base, targets, stats.pop("skipped_targets"))
     stats["dirty_keys"] = len(dirty)
     stats["dropped"] = prune_outputs(out_dir, manifest, prev_fps, {out_rel(t, p) for t, p in targets if target_key(p) not in dirty}, only={out_rel(t, p) for t, p in targets})
-    if not args.race and not args.date:
+    if not args.race and not args.date and not args.diagnose:
         # 範囲（直近 window 日・写しに揃ったレース）を外れたものは消す（VPS からも push で消える → Cloud Run の経路に戻る）
         stats["removed"] = prune_outputs(out_dir, manifest, prev_fps, {out_rel(t, p) for t, p in targets})
     man_path.parent.mkdir(parents=True, exist_ok=True)
@@ -654,12 +663,19 @@ def cmd_push(args: argparse.Namespace) -> int:
 
 
 def cmd_prune(args: argparse.Namespace) -> int:
-    """写し（data/local/mirror）のうち、更新から mirror_days 日を過ぎたものを消す。"""
+    """写し（data/local/mirror）のうち、レースのカテゴリで、更新から mirror_days 日を過ぎたものを消す。
+
+    馬のカテゴリ（horse_result など）は消さない: 直近のレースに出た馬でも、最後の保存が古いことがある（消すと黙って当たりが下がる）。
+    馬の写しは馬の数で頭打ち（数万頭 × 数十 KB）。"""
+    from src.scraper.storage import HybridStorage
+
     base = Path(args.base).resolve() if args.base else ROOT
     root = base / "data" / "local" / "mirror"
     cut = time.time() - args.mirror_days * 86400
+    race_cats = [c for c, t in HybridStorage.CATEGORY_MAP.items() if t == "race"]
     n = 0
-    for p in root.rglob("*.json") if root.is_dir() else []:
+    files = [p for c in race_cats if (root / c).is_dir() for p in (root / c).rglob("*.json")]
+    for p in files:
         try:
             if p.stat().st_mtime < cut:
                 p.unlink()
@@ -681,6 +697,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--race", action="append", help="race_id（12 桁）")
     r.add_argument("--tier", action="append", choices=("anon", "member"))
     r.add_argument("--full", action="store_true", help="入力の指紋を見ず全部作り直す（深夜。推論の出力の変化を拾う）")
+    r.add_argument("--diagnose", action="store_true", help="確定前のレースも作ってみて、捨てる理由を数える（<out>/_diagnose に書く。push しない）")
     u = sub.add_parser("push")
     u.add_argument("--env", choices=("stg", "prod"), required=True)
     u.add_argument("--out", required=True)

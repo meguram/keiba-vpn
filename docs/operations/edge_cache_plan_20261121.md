@@ -592,13 +592,31 @@ sudo rm /etc/nginx/snippets/keiba-edge-stg.conf && sudo nginx -t && sudo systemc
 ホストの cron（統括役が共有の作業ツリーを早送りした後に足す。root の cron から jovyan で）:
 
 ```
-*/15 * * * *  runuser -u jovyan -- bash /home/jovyan/work/keiba-vpn/scripts/ops/edge/edge_sync.sh stg   >> /home/jovyan/work/keiba-edge/sync-stg.log 2>&1
-40 4 * * *    runuser -u jovyan -- env EDGE_RENDER_ARGS=--full bash /home/jovyan/work/keiba-vpn/scripts/ops/edge/edge_sync.sh stg >> /home/jovyan/work/keiba-edge/sync-stg.log 2>&1
-50 4 * * *    cd /home/jovyan/work/keiba-vpn && /opt/conda/bin/python3 -m src.ops.edge_render prune --mirror-days 40   # 写しの掃除（写しは root の持ち物なので root で）
+*/15 * * * * nice -n 10 runuser -u jovyan -- sh -c 'bash /home/jovyan/work/keiba-vpn/scripts/ops/edge/edge_sync.sh stg >> /home/jovyan/work/keiba-edge/sync-stg.log 2>&1' # KEIBA_EDGE
+40 4 * * *   nice -n 10 runuser -u jovyan -- sh -c 'EDGE_RENDER_ARGS=--full bash /home/jovyan/work/keiba-vpn/scripts/ops/edge/edge_sync.sh stg >> /home/jovyan/work/keiba-edge/sync-stg.log 2>&1' # KEIBA_EDGE
+20 4 * * *   cd /home/jovyan/work/keiba-vpn && nice -n 10 /opt/conda/bin/python3 -m src.ops.edge_render prune --mirror-days 40 >> /home/jovyan/work/keiba-vpn/logs/edge_prune.log 2>&1 # KEIBA_EDGE
 ```
 
 - prod は、stg で 11/28〜29 の確定分を確かめた後（11/30 以降の平日）に同じ形で足す。
-- 写しの掃除（40 日。作る範囲の 35 日より長く残す）は root で流す（写しは root の cron が書くため）。
+- edge_sync は jovyan で動かす。ログも jovyan のシェルが開くので、jovyan の持ち物になる。
+- 写しの掃除だけは root で動かす。
+  - 理由: 写しは root の cron（取得）が書くので、写しのフォルダは root の 755 で、jovyan では消せない。
+  - 掃除は消すだけで、写しの置き場にファイルを作らない。ログは共有の作業ツリーの logs/（root の持ち物）に書く。
+  - 消すのはレースのカテゴリだけ。馬のカテゴリは、直近のレースに出た馬でも最後の保存が古いことがあるので消さない。
+  - 04:20 に流し、04:40 の `--full` と重ねない。
+- ログ: `sync-<env>.log` は edge_sync.sh が 5MB で 1 世代に切り替える。`render-<env>.log` は毎回上書き。`edge_prune.log` は 1 日 1 行。
+- 診断: 確定前のレースも作ってみて、捨てる理由を数える。15 分ごとの回と同じツリー・同じロックで流す（途中で版が替わらないように）。
+
+  ```
+  T=/home/jovyan/work/keiba-edge/stg/src
+  cd $T && KEIBA_PAGE_REFERENCE_DIR=/home/jovyan/work/keiba-vpn/data/page_reference PYTHONPATH=$T PYTHONPYCACHEPREFIX=/home/jovyan/work/keiba-edge/pyc \
+    flock /home/jovyan/work/keiba-edge/.lock-stg nice -n 19 ionice -c3 /opt/conda/bin/python3 -m src.ops.edge_render render \
+    --env stg --out /home/jovyan/work/keiba-edge/out --base /home/jovyan/work/keiba-vpn --date 20261128 --diagnose --full
+  ```
+
+  - `<out>/_diagnose/` に書くだけで、送らない。
+  - 11/26 ごろ、11/28 の出馬表が写しに入ったら流す。
+  - 終わったら `rm -rf /home/jovyan/work/keiba-edge/out/_diagnose` で消す。
 
 分かっている穴（受け入れる理由）:
 
