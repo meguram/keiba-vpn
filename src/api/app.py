@@ -3021,8 +3021,9 @@ async def race_list_payload(date: str, with_result_status: bool = True, refresh:
                 row["result_kind"] = st.get("kind")
                 row["result_view_url"] = st.get("result_view_url")
             races.append(row)
-        if with_result_status and races and all(r.get("has_race_result") for r in races):
-            _mark_confirmed(date=date)          # 全レースの結果がそろった日だけ、日付の一覧に印。race_id の印は、結果の本体を見る詳細・result-status だけが付ける
+        if with_result_status and races and all(r.get("result_viewable") for r in races):
+            # 全レースに結果が出た日だけ、日付の一覧に印。race_id の印は、結果の本体を見る詳細・result-status だけが付ける
+            _mark_result(date, "confirmed" if all(r.get("has_race_result") for r in races) else "flash")
         return {"date": date, "venues": venues, "races": races}
     from src.api.response_cache import race_list_ttl
 
@@ -4513,27 +4514,30 @@ def _resolve_date_for_race(storage, race_id: str) -> str:
         return _race_date_index.get(race_id, "")
 
 
-# 結果が確定した（結果の本体に着順がある）と、このプロセスが見たレース・開催日。HTTP キャッシュの見出しで、開催からの日数を待たずに
-# 確定済み（30 日）にする（2026-11-23: 直近の開催のレースが 3 日の猶予の間 30 秒のままで、予測の MISS が台の時間の大半だった）。
-# 入れるのは、結果をすでに読んでいる処理（race_id: レース詳細・result-status が結果の本体を見たとき、開催日: レース一覧で全レースがそろったとき）だけで、
-# GCS の読み出しは増えない。長くするのは cache-warm が取り直すパスだけで、当日のうちは 6 時間（http_cache_headers._confirmed_s_maxage）。
-_confirmed_race_ids: set[str] = set()
-_confirmed_dates: set[str] = set()
+# 結果が出た（確定の結果か速報に、着順の entries がある）と、このプロセスが見たレース・開催日。HTTP キャッシュの見出しで、開催からの日数を
+# 待たずに長く置く（2026-11-23: 直近の開催のレースが 3 日の猶予の間 30 秒のままで、予測の MISS が台の時間の大半だった）。
+# 確定の結果は数日後に取り込まれることが多い（11/23 時点で 11/21〜23 は速報だけ）ので、速報も数える。ただし速報だけなら 6 時間まで
+# （http_cache_headers._confirmed_s_maxage）。どちらの保存にも目印が置かれ、VPS の cache-warm が取り直す（src/utils/cache_epoch.UI_CATEGORIES）。
+# 入れるのは、結果をすでに読んでいる処理（race_id: レース詳細・result-status、開催日: レース一覧で全レースに結果が出たとき）だけで、
+# GCS の読み出しは増えない。長くするのは cache-warm が取り直すパスだけ。
+_result_levels: dict[str, str] = {}       # token（race_id / 開催日）→ "confirmed" | "flash"
 
 
-def _mark_confirmed(race_ids: Any = (), date: str = "") -> None:
-    for rid in race_ids:
-        if rid:
-            _confirmed_race_ids.add(str(rid))
-    if date:
-        _confirmed_dates.add(date)
+def _has_finish_entries(blob: Any) -> bool:
+    """表示（race_result_display）と同じく、着順の entries があるときだけ結果が出たとみなす。"""
+    return isinstance(blob, dict) and isinstance(blob.get("entries"), list) and len(blob["entries"]) > 0
 
 
-def _is_confirmed(token: str) -> bool:
-    return token in _confirmed_race_ids if len(token) == 12 else token in _confirmed_dates
+def _mark_result(token: str, level: str) -> None:
+    if token and level in ("confirmed", "flash") and _result_levels.get(token) != "confirmed":
+        _result_levels[token] = level
 
 
-_hch_module.set_settled_peek(_is_confirmed)
+def _result_level(token: str) -> str:
+    return _result_levels.get(token, "")
+
+
+_hch_module.set_settled_peek(_result_level)
 
 # 確定済み判定用: 索引を引くだけ（構築は裏のスレッド）。未構築なら空 → 年の規則に任せる。
 # race_id の日付は「確定済み（30 日）」の判定にだけ使い、当日・未来の race_id は短い s-maxage のまま（http_cache_headers.settled_s_maxage_for）
@@ -7106,11 +7110,12 @@ async def _race_detail_compute(race_id: str):
         except Exception:
             result["race_result_lap"] = None
 
-        from src.utils.race_result_availability import _blob_has_entries
         from src.utils.race_result_display import prepare_race_result_display
 
-        if _blob_has_entries(result.get("race_result")):
-            _mark_confirmed((race_id,))
+        if _has_finish_entries(result.get("race_result")):
+            _mark_result(race_id, "confirmed")
+        elif _has_finish_entries(result.get("race_result_on_time")):
+            _mark_result(race_id, "flash")   # 確定の結果は数日後に取り込まれることが多いので、速報（発走 +15 分）の時点で短めに長くする
         prepared = prepare_race_result_display(
             result.get("race_result"),
             result.get("race_result_on_time"),
@@ -7784,8 +7789,8 @@ async def api_race_result_status(race_id: str):
         from src.utils.race_result_availability import race_result_status
 
         st = race_result_status(_get_storage(), race_id)
-        if st.get("has_confirmed"):
-            _mark_confirmed((race_id,))
+        if st.get("has_confirmed") or st.get("has_flash"):
+            _mark_result(race_id, "confirmed" if st.get("has_confirmed") else "flash")
         return st
 
     return JSONResponse(await asyncio.to_thread(_run))
