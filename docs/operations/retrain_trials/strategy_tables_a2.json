@@ -1,0 +1,227 @@
+{
+ "made_at": "2026-11-22T03:39:29+09:00",
+ "frozen": "config/bet_cycles/frozen_20261117_r2.json",
+ "hash": "70ba29fa7b55",
+ "spec_name": "r2c14|honmei={\"rule\":\"fav1_exc\",\"exc_by\":\"r\",\"r_min\":\"auto\",\"base\":{\"rule\":\"r_max\",\"fav_k\":1,\"p_min\":0.05}}|tickets=[{\"type\":\"tansho\"}]|skip={\"in\":{\"c_class\":[\"未勝利\",\"新馬\"]},\"when\":{\"q_r_max\":[3,null]}}",
+ "tickets": [
+  "tansho"
+ ],
+ "periods": {
+  "train": {
+   "years": [
+    2019,
+    2020,
+    2021,
+    2022
+   ],
+   "metrics": {
+    "races": 13212,
+    "bet_races": 3455,
+    "bet_rate": 0.26150469270360277,
+    "hit_rate": 0.1918958031837916,
+    "hit_lo": 0.18319974690675736,
+    "hit_hi": 0.20063306912779807,
+    "roi": 1.1717568740955138,
+    "roi_lo": 1.1041100474369956,
+    "roi_hi": 1.2394554874670147,
+    "roi_ex_top5": 1.1307438494934876,
+    "avg_return": 117.17568740955137,
+    "median_return": 0.0,
+    "cost_total": 345500.0,
+    "return_total": 404842.0,
+    "days": 433,
+    "decision_odds": "発走前（再現 5 通りを並べた平均）",
+    "sim_roi_min": 1.140683859750797,
+    "sim_roi_max": 1.183502759221609,
+    "n_versions": 5
+   },
+   "recorded": {
+    "roi": 1.1717568740955138,
+    "bet_races": 3455,
+    "source": "final_candidate.json"
+   },
+   "reproduced": true,
+   "honmei": {
+    "n": 3455.0,
+    "rec": [
+     663.0,
+     526.0,
+     441.2,
+     1824.8
+    ],
+    "no_finish": 0.0,
+    "win": 0.1918958031837916,
+    "win_lo": 0.1791098158325077,
+    "win_hi": 0.20536618908197,
+    "place": 0.47183791606367587,
+    "place_lo": 0.45523232811871495,
+    "place_hi": 0.4885060610575921,
+    "versions": 5
+   },
+   "role": "訓練（探索・採否・回顧）"
+  },
+  "eval": {
+   "years": [
+    2023,
+    2024
+   ],
+   "metrics": {
+    "races": 6555,
+    "bet_races": 1699,
+    "bet_rate": 0.2591914569031274,
+    "hit_rate": 0.19540906415538553,
+    "hit_lo": 0.18368673101067542,
+    "hit_hi": 0.2089407119899988,
+    "roi": 1.1411418481459683,
+    "roi_lo": 1.0469714164574249,
+    "roi_hi": 1.2429857119585244,
+    "roi_ex_top5": 1.0756562683931725,
+    "avg_return": 114.11418481459683,
+    "median_return": 0.0,
+    "cost_total": 169900.0,
+    "return_total": 193880.0,
+    "days": 213,
+    "decision_odds": "発走前（再現 5 通りを並べた平均）",
+    "sim_roi_min": 1.1191943127962085,
+    "sim_roi_max": 1.1794871794871795,
+    "n_versions": 5
+   },
+   "recorded": {
+    "roi": 1.1411418481459683,
+    "bet_races": 1699,
+    "source": "final_candidate.json"
+   },
+   "reproduced": true,
+   "honmei": {
+    "n": 1699.0,
+    "rec": [
+     332.0,
+     278.4,
+     234.4,
+     854.1999999999999
+    ],
+    "no_finish": 0.0,
+    "win": 0.19540906415538553,
+    "win_lo": 0.17725028192777126,
+    "win_hi": 0.21494215687569707,
+    "place": 0.49723366686286047,
+    "place_lo": 0.4734916190973422,
+    "place_hi": 0.5209881962888921,
+    "versions": 5
+   },
+   "role": "評価（上向きの確かめだけ）"
+  },
+  "test2025": {
+   "years": [
+    2025
+   ],
+   "metrics": {
+    "races": 3267,
+    "bet_races": 831,
+    "bet_rate": 0.2542393633302724,
+    "hit_rate": 0.18950156513363833,
+    "hit_lo": 0.17104515805840492,
+    "hit_hi": 0.2068067528307438,
+    "roi": 1.0703587767878642,
+    "roi_lo": 0.9399433917729675,
+    "roi_hi": 1.1956298715470475,
+    "roi_ex_top5": 0.9439200577895497,
+    "avg_return": 107.03587767878642,
+    "median_return": 0.0,
+    "cost_total": 83060.0,
+    "return_total": 88904.0,
+    "days": 109,
+    "decision_odds": "発走前（再現 5 通りを並べた平均）",
+    "sim_roi_min": 1.0101941747572816,
+    "sim_roi_max": 1.1384705882352941,
+    "n_versions": 5
+   },
+   "reproduced": true,
+   "recorded": {
+    "roi": 1.0703587767878642,
+    "bet_races": 831,
+    "source": "final_test_races_70ba29fa7b55.parquet"
+   },
+   "honmei": {
+    "n": 830.6,
+    "rec": [
+     157.4,
+     132.8,
+     110.2,
+     430.2000000000001
+    ],
+    "no_finish": 0.0,
+    "win": 0.18950156513363833,
+    "win_lo": 0.16430128026439692,
+    "win_hi": 0.21756079372616152,
+    "place": 0.4820611606067903,
+    "place_lo": 0.4482398443813395,
+    "place_hi": 0.5160476503936093,
+    "versions": 5
+   },
+   "role": "test 2025（2 回目の確かめ。第 1 回で 1 回使った）"
+  },
+  "main2026": {
+   "years": [
+    2026
+   ],
+   "metrics": {
+    "races": 2701,
+    "bet_races": 683,
+    "bet_rate": 0.2528693076638282,
+    "hit_rate": 0.16076134699853586,
+    "hit_lo": 0.14391201511025428,
+    "hit_hi": 0.17831090800464153,
+    "roi": 0.848696925329429,
+    "roi_lo": 0.7475964339187373,
+    "roi_hi": 0.9716453028256616,
+    "roi_ex_top5": 0.7281112737920937,
+    "avg_return": 84.86969253294289,
+    "median_return": 0.0,
+    "cost_total": 68300.0,
+    "return_total": 57966.0,
+    "days": 86,
+    "decision_odds": "発走前（再現 5 通りを並べた平均）",
+    "sim_roi_min": 0.7449339207048458,
+    "sim_roi_max": 1.0236389684813754,
+    "n_versions": 5
+   },
+   "reproduced": true,
+   "recorded": {
+    "roi": 0.848696925329429,
+    "bet_races": 683,
+    "source": "prereg_main_races_70ba29fa7b55.parquet"
+   },
+   "honmei": {
+    "n": 683.0,
+    "rec": [
+     109.8,
+     92.2,
+     92.4,
+     388.6
+    ],
+    "no_finish": 0.0,
+    "win": 0.16076134699853586,
+    "win_lo": 0.135123136004215,
+    "win_hi": 0.19019437534046768,
+    "place": 0.4310395314787701,
+    "place_lo": 0.3943869473317221,
+    "place_hi": 0.4684635264893161,
+    "versions": 5
+   },
+   "role": "2026 年の主（事前登録の群 main、推論の経路の予測・評価だけ）",
+   "verdict": "否定",
+   "dates": [
+    "2026-01-05",
+    "2026-10-12"
+   ]
+  }
+ },
+ "pred_sha_now": "5c21ffc15f556f8c7a93ad2eef464cca8c341015c6b6e1b071e2b65de456bd9a",
+ "pred_sha_frozen": "1a9cb181ed68b5ee2c8a07f48df2686052db6adba163ac9e82c1d4eb4318b137",
+ "optimistic_final_odds": {
+  "train": 1.582587954680978,
+  "eval": 1.5413793103448277,
+  "test2025": 1.3836206896551724
+ }
+}

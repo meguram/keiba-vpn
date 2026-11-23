@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { fetchRaceList, getJson, prefetchJson, readStored } from "@/lib/httpCache";
+import { fetchRaceList, getJson, likelyMember, prefetchJson, readStored } from "@/lib/httpCache";
+import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { LoadingNotice } from "@/components/LoadingNotice";
 import { useAutoRetry } from "@/lib/hooks/useAutoRetry";
 import { WeekPicker } from "@/components/WeekPicker";
@@ -48,6 +49,11 @@ export default function AnalysisPage() {
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
   const [load, setLoad] = useState<Load>({ state: "idle" });
+  // 会員限定の API（有料会員・開発者でなければ 401）。会員でないと分かったら呼ばずに案内を出す（401 で Cloud Run を起こさない）。
+  // 前に会員と分かったタブは確認と並行して取る。確認に失敗したときは、今までどおり API に任せる
+  const { isMember, failed: authFailed, loading: authLoading } = useAuthStatus();
+  const canFetch = isMember || !!authFailed || (authLoading && likelyMember());
+  const anon = !authLoading && !isMember && !authFailed;
 
   /** URL の ?date= ?venue= ?race= ?m= を書き換える（再読込・共有しても同じ表示に戻る） */
   function syncUrl(patch: Record<string, string | null>) {
@@ -153,6 +159,8 @@ export default function AnalysisPage() {
   /* 選んだレースの分析。素早く切り替えたときは、最後に選んだレースの応答だけを使う */
   useEffect(() => {
     if (!activeRaceId) { setLoad({ state: "idle" }); return; }
+    if (anon) { setLoad({ state: "error", status: 401, message: "401" }); return; }
+    if (!canFetch) { setLoad({ state: "loading" }); return; }
     let cancelled = false;
     const url = analysisUrl(activeRaceId);
     const stored = readStored<RaceAnalysis>(url);   // 前回見た結果を先に出し、裏で最新に差し替える
@@ -161,7 +169,7 @@ export default function AnalysisPage() {
       .then((data) => { if (!cancelled) setLoad({ state: "ok", data }); })
       .catch((e: Error & { status?: number }) => { if (!cancelled && !stored) setLoad({ state: "error", status: e.status, message: e.message }); });
     return () => { cancelled = true; };
-  }, [activeRaceId, reload]);
+  }, [activeRaceId, reload, anon, canFetch]);
 
   function chooseDate(d: string) {
     setSelectedDate(d);
@@ -183,7 +191,7 @@ export default function AnalysisPage() {
     setSelectedRaceId(raceId);
     syncUrl({ race: raceId, ...(r?.venue ? { venue: r.venue } : {}) });
   }
-  const warm = useCallback((id: string) => prefetchJson(analysisUrl(id), { ttlMs: 60_000, persist: true }), []);
+  const warm = useCallback((id: string) => { if (isMember) prefetchJson(analysisUrl(id), { ttlMs: 60_000, persist: true }); }, [isMember]);
 
   /* 表示できたら、同じ開催場の次の 2 レースを先に取っておく（切り替えが即時になる） */
   useEffect(() => {

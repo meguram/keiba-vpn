@@ -171,3 +171,112 @@ def test_upcoming_dated_races_get_six_hours_and_long_prefixes_thirty_days():
     assert f("/api/admin/x") is None
     assert H.cache_control_value(30, 30, True, f("/api/race-list/20261029")) == "public, max-age=30, s-maxage=21600"
     assert H.cache_control_value(30, 30, False, f("/api/race-list/20261029")) == "private, max-age=30"   # 会員は共有しない
+
+
+def test_upcoming_race_id_stays_short_even_when_indexed(monkeypatch):
+    """race_id は索引で日付が分かっても、確定前は 6 時間にしない（cache-warm が取り直さない final-odds・result-status なども前方一致で当たるため）。"""
+    cfg = {**SCFG, "settled": {**SCFG["settled"], "upcoming_s_maxage": 21600}}
+    monkeypatch.setattr(H, "_race_date_peek", lambda rid: {"202606050811": "20261029", "202606050812": "20261025"}.get(rid, ""))
+    f = lambda p: H.settled_s_maxage_for(p, cfg, NOW)  # noqa: E731
+    assert f("/api/race/202606050811") is None                     # 当日のレース → 短い s_maxage のまま
+    assert f("/api/race/202606050811/final-odds") is None
+    assert f("/api/v1/races/202606050811/running-map") is None
+    assert f("/api/race/202606050812/predictions") == 604800       # 4 日前（確定済み）→ 長く
+    assert f("/api/race-list/20261029") == 21600                   # 開催日のパスは今どおり 6 時間
+
+
+def test_app_race_date_peek_builds_index_in_background_without_gcs(monkeypatch, tmp_path):
+    """app の peek: 初回は待たずに返し、裏のスレッドが race_lists（local_only・ローカルのファイル）から索引を作る。GCS は触らない。"""
+    import json
+    import time as _t
+
+    import src.api.app as A
+
+    class _Store:
+        """race_lists だけを持つ storage の代わり。GCS への経路（list_blobs・_get_bucket）を呼んだら落とす。"""
+        def __init__(self, d):
+            self.d = d
+
+        def list_keys(self, category, year=None):
+            assert category == "race_lists"
+            return sorted(p.stem for p in self.d.glob("*.json"))
+
+        def load(self, category, key, bypass_cache=False):
+            assert category == "race_lists"
+            return json.loads((self.d / f"{key}.json").read_text(encoding="utf-8"))
+
+        def _get_bucket(self):
+            raise AssertionError("GCS を読んではいけない")
+
+    (tmp_path / "20261025.json").write_text(json.dumps({"races": [{"race_id": "202606050812"}]}), encoding="utf-8")
+    st = _Store(tmp_path)
+    monkeypatch.setattr(A, "_get_storage", lambda: st)
+    monkeypatch.setattr(A, "_race_date_index", {})
+    monkeypatch.setattr(A, "_race_date_index_built", False)
+    monkeypatch.setattr(A, "_race_date_index_tried_at", None)
+    assert H._race_date_peek is A._peek_race_date
+    first = A._peek_race_date("202606050812")
+    for _ in range(300):
+        if A._race_date_index_built:
+            break
+        _t.sleep(0.01)
+    assert first in ("", "20261025")
+    assert A._race_date_index_built
+    assert A._peek_race_date("202606050812") == "20261025"
+    assert A._resolve_date_for_race(st, "202606050812") == "20261025"
+
+
+def test_race_lists_is_local_only_and_never_lists_gcs(monkeypatch, tmp_path):
+    """索引の元の race_lists は local_only: 一覧も読み出しもローカルだけで、GCS（_get_bucket）に落ちない。"""
+    from src.scraper.storage import HybridStorage
+
+    assert HybridStorage.CATEGORY_MAP["race_lists"] == "local_only"
+    st = HybridStorage.__new__(HybridStorage)
+    monkeypatch.setattr(st, "_page_ref_dir", tmp_path / "pr", raising=False)
+    monkeypatch.setattr(st, "_local_dir", tmp_path / "local", raising=False)
+
+    def _no_gcs(*a, **k):
+        raise AssertionError("GCS を読んではいけない")
+
+    monkeypatch.setattr(st, "_get_bucket", _no_gcs, raising=False)
+    assert st.list_keys("race_lists") == []
+    assert st.load("race_lists", "20261025") is None
+
+
+def test_stale_while_revalidate_bounded_by_s_maxage():
+    """匿名の public 応答だけ stale-while-revalidate=min(上限, s-maxage) を付ける。古さの上限は s-maxage＋その秒数。会員には付けない。"""
+    assert H.cache_control_value(30, 30, True, None, 60) == "public, max-age=30, s-maxage=30, stale-while-revalidate=30"   # 当日のレース: 最大 60 秒
+    assert H.cache_control_value(60, 60, True, None, 60) == "public, max-age=60, s-maxage=60, stale-while-revalidate=60"
+    assert H.cache_control_value(30, 600, True, None, 60) == "public, max-age=30, s-maxage=600, stale-while-revalidate=60"
+    assert H.cache_control_value(30, 30, True, 2592000, 60) == "public, max-age=30, s-maxage=2592000, stale-while-revalidate=60"
+    assert H.cache_control_value(30, 30, False, None, 60) == "private, max-age=30"
+    assert H.cache_control_value(30, 30, True, None, 0) == "public, max-age=30, s-maxage=30"
+    assert H.stale_while_revalidate_cap({"stale_while_revalidate": 60}) == 60
+    assert H.stale_while_revalidate_cap({}) == 0
+    assert H.stale_while_revalidate_cap({"stale_while_revalidate": "x"}) == 0
+
+
+def test_fastapi_adds_stale_while_revalidate_only_for_anonymous(monkeypatch):
+    cfg = {**SCFG, "stale_while_revalidate": 60}
+    monkeypatch.setattr(H, "config", lambda: cfg)
+    monkeypatch.setattr(H, "_race_date_peek", None)
+    app = FastAPI()
+
+    @app.get("/api/race/{rid}")
+    def race(rid: str):
+        return {"id": rid}
+
+    H.install_fastapi(app)
+    c = TestClient(app)
+    y = datetime.now(JST).year
+    assert c.get(f"/api/race/{y}06050811").headers["cache-control"] == "public, max-age=30, s-maxage=30, stale-while-revalidate=30"
+    assert c.get(f"/api/race/{y}06050811", headers={"Cookie": "k=v"}).headers["cache-control"] == "private, max-age=30"
+
+
+def test_repo_config_stale_while_revalidate_is_small():
+    """本物の設定: 上限は 60 秒以下（古さの上限が s-maxage＋60 秒に収まる）。"""
+    import json
+    from pathlib import Path
+
+    cfg = json.loads((Path(__file__).resolve().parents[2] / "config" / "http_cache.json").read_text(encoding="utf-8"))
+    assert 0 < H.stale_while_revalidate_cap(cfg) <= 60

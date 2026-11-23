@@ -4,6 +4,7 @@
   着順 0（中止・取消など）は点を付けず、走数にも数えない。
 相対値 = 距離（100m 刻み）ごとの点数 ÷ その馬の累計点数。相対値 >= τ の距離の最小・最大が レンジ（短）（長）。
   τ 以上の距離が無いとき（距離が多く点が散るとき）は、相対値が最大の距離（同値は全部）をレンジとする。
+（適）= 相対値が最大の距離（同値は重心に近い方、それも同じなら短い方）。
 走ごとの値（as-of）は、その走の日より前の走だけを使う（同じ日の別レースは混ぜない）。
 """
 from __future__ import annotations
@@ -160,15 +161,45 @@ def latest_range(runs: pd.DataFrame, tau: float, by_surface: bool) -> pd.DataFra
     return base.merge(g, on=keys, how="left")[keys + ["kd_short", "kd_long", "n_runs", "total_points"]]
 
 
-def range_before(runs: pd.DataFrame, horse_ids: Sequence[str], as_of, tau: float = 0.10, min_runs: int = 3) -> pd.DataFrame:
-    """画面用: as_of の日より前の走だけで、芝ダ混合の馬ごとのレンジ。runs の列: horse_id, date, surface, distance, points。
-    戻り値は horse_id 索引の short_m, long_m（m）と runs（点の付いた走数）。走数が min_runs 未満の馬は short_m・long_m が NaN。走が無い馬は行が無い。"""
+def best_distance(rel: np.ndarray, dists: np.ndarray) -> int:
+    """相対値が最大の距離（（適）。最も得点の高い距離）。同値が複数あれば、割合で重みを付けた平均の距離に近い方、それも同じなら短い方。"""
+    rel = np.asarray(rel, float)
+    dists = np.asarray(dists)
+    top = np.flatnonzero(rel >= rel.max() - _EPS)
+    if len(top) == 1:
+        return int(dists[top[0]])
+    centre = float((rel * dists).sum() / rel.sum())
+    return int(min(dists[top], key=lambda d: (abs(d - centre), d)))
+
+
+def profile_before(runs: pd.DataFrame, horse_ids: Sequence[str], as_of, tau: float = 0.10, min_runs: int = 3) -> pd.DataFrame:
+    """画面用: as_of の日より前の走だけで、芝ダ混合の馬ごとの距離の得点分布。runs の列: horse_id, date, surface, distance, points。
+    戻り値は horse_id 索引の short_m・long_m（レンジ）・best_m（最も得点の高い距離）・runs（点の付いた走数）・hist（{距離 m: 相対値}。0 の距離は省く）。
+    走数が min_runs 未満の馬は short_m・long_m・best_m が NaN（hist は残す）。走が無い馬は行が無い。"""
+    cols = ["short_m", "long_m", "best_m", "runs", "hist"]
     r = runs[runs["horse_id"].isin(set(horse_ids))]
     r = r[(pd.to_datetime(r["date"], errors="coerce") < pd.Timestamp(as_of)) & r["points"].notna()]
     if r.empty:
-        return pd.DataFrame(columns=["short_m", "long_m", "runs"], dtype=float)
+        return pd.DataFrame(columns=cols)
     r = r.assign(horse_id=r["horse_id"].astype(str))   # 区分型のままだと groupby が未使用の区分まで展開する
+    p = profile_table(r, by_surface=False).sort_values(["horse_id", "dist100"])
     lr = latest_range(r, tau, by_surface=False).set_index("horse_id")
-    out = pd.DataFrame({"short_m": lr["kd_short"].astype(float), "long_m": lr["kd_long"].astype(float), "runs": lr["n_runs"].astype(int)})
-    out.loc[out["runs"] < min_runs, ["short_m", "long_m"]] = np.nan
+    best, hist = {}, {}
+    for hid, g in p.groupby("horse_id", sort=False):
+        d, v = g["dist100"].to_numpy(), g["rel"].to_numpy()
+        best[hid] = best_distance(v, d)
+        hist[hid] = {int(a): round(float(b), 4) for a, b in zip(d, v)}
+    out = pd.DataFrame({"short_m": lr["kd_short"].astype(float), "long_m": lr["kd_long"].astype(float),
+                        "best_m": pd.Series(best, dtype=float).reindex(lr.index), "runs": lr["n_runs"].astype(int)})
+    out["hist"] = pd.Series(hist).reindex(out.index)
+    out.loc[out["runs"] < min_runs, ["short_m", "long_m", "best_m"]] = np.nan
     return out
+
+
+def range_before(runs: pd.DataFrame, horse_ids: Sequence[str], as_of, tau: float = 0.10, min_runs: int = 3) -> pd.DataFrame:
+    """画面用: as_of の日より前の走だけで、芝ダ混合の馬ごとのレンジ。runs の列: horse_id, date, surface, distance, points。
+    戻り値は horse_id 索引の short_m, long_m（m）と runs（点の付いた走数）。走数が min_runs 未満の馬は short_m・long_m が NaN。走が無い馬は行が無い。"""
+    out = profile_before(runs, horse_ids, as_of, tau, min_runs)
+    if out.empty:
+        return pd.DataFrame(columns=["short_m", "long_m", "runs"], dtype=float)
+    return out[["short_m", "long_m", "runs"]]

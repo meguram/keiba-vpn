@@ -88,28 +88,72 @@ export function hasFreshJson(url: string, ttlMs = 15_000): boolean {
 
 export function invalidateJson(prefix: string): void {
   for (const k of [...cache.keys()]) if (k.startsWith(prefix)) cache.delete(k);
+  if (AUTH_URL.startsWith(prefix)) dropStoredAuth();
 }
 
 export type AuthStatusJson = { logged_in?: boolean; is_admin?: boolean; is_member?: boolean; user_id?: string | null; user_name?: string | null };
 
+const AUTH_URL = "/api/v1/auth/status";
+/** メモリの保持。ページ間の移動（Nav は画面を移るたびに聞く）で取り直さない。ログイン・ログアウトでは捨てる。 */
+export const AUTH_TTL_MS = 3 * 60_000;
+/** 「未ログイン」の結果だけ、このタブの sessionStorage に残す（ページを開き直すたびに Cloud Run へ聞かない）。
+ *  会員・ログイン済みの結果は残さない（決済から戻ったとき・セッションが切れたときに古い区分を出さないため。新しいタブは必ず聞き直す）。 */
+const AUTH_STORE_KEY = `${STORE_PREFIX}auth`;
+const ANON_STORE_MS = 5 * 60_000;
+const ANON: AuthStatusJson = { logged_in: false, is_admin: false, is_member: false };
+
+function dropStoredAuth(): void {
+  try { ss()?.removeItem(AUTH_STORE_KEY); } catch { /* 何もしない */ }
+}
+
+/** 「未ログイン」を残した時刻からの経過が 5 分未満か。残す時刻はネットワークから取れた応答のときだけ書く（使い回しで延ばさない）。 */
+function storedAnon(): boolean {
+  const st = ss();
+  if (!st) return false;
+  try {
+    const raw = st.getItem(AUTH_STORE_KEY);
+    if (!raw) return false;
+    const at = Number(raw);
+    return Number.isFinite(at) && Date.now() - at >= 0 && Date.now() - at < ANON_STORE_MS;
+  } catch { return false; }
+}
+
+function tierOf(a: AuthStatusJson): string {
+  return a.logged_in ? (a.is_admin ? "admin" : a.is_member ? "member" : "user") : "anon";
+}
+
 /** ログイン状態。1 ページで Nav・フック・各画面が同時に呼んでも 1 回だけ取りに行く。 */
 export function fetchAuthStatus(): Promise<AuthStatusJson> {
-  return getJson<AuthStatusJson>("/api/v1/auth/status", { ttlMs: 20_000, credentials: "include" }).then((a) => {
-    setStoredTier(a.logged_in ? (a.is_admin ? "admin" : a.is_member ? "member" : "user") : "anon");
+  const network = !hasFreshJson(AUTH_URL, AUTH_TTL_MS);
+  if (network && storedAnon()) return Promise.resolve(ANON);   // メモリには入れない（残した時刻の 5 分で切れるように）
+  return getJson<AuthStatusJson>(AUTH_URL, { ttlMs: AUTH_TTL_MS, credentials: "include" }).then((a) => {
+    setStoredTier(tierOf(a));
+    if (network) {
+      if (!a.logged_in) { try { ss()?.setItem(AUTH_STORE_KEY, String(Date.now())); } catch { /* 何もしない */ } }
+      else dropStoredAuth();
+    }
     return a;
   }).catch((e: Error & { status?: number }) => {
-    if (e.status !== undefined && e.status < 500) return { logged_in: false, is_admin: false, is_member: false };
+    if (e.status !== undefined && e.status < 500) return ANON;
     throw e;
   });
 }
 
+/** このタブで前に分かったログイン区分（会員 API を「認証の確認と並行して先に取るか」の目安だけに使う。呼ばない判断は fetchAuthStatus の結果で行う）。 */
+export function likelyMember(): boolean {
+  const st = ss();
+  try {
+    const t = st?.getItem(TIER_KEY);
+    return t === "member" || t === "admin";
+  } catch { return false; }
+}
+
 /** ログインの応答に入っている認証状態（GET /api/v1/auth/status と同じ形）で、状態のキャッシュを埋める。ログイン直後の画面が状態を取り直す往復を省く。 */
 export function primeAuthStatus(a: AuthStatusJson): void {
-  const url = "/api/v1/auth/status";
   cache.clear();                    // ログインで区分が変わるので、匿名のときに取った応答はメモリからも捨てる
-
-  setStoredTier(a.logged_in ? (a.is_admin ? "admin" : a.is_member ? "member" : "user") : "anon");
-  cache.set(url, { at: Date.now(), promise: Promise.resolve(a) });
+  dropStoredAuth();
+  setStoredTier(tierOf(a));
+  cache.set(AUTH_URL, { at: Date.now(), promise: Promise.resolve(a) });
 }
 
 /** 開催日（YYYYMMDD）のレース一覧。サーバ側が重い API なので、画面間で共有する。 */

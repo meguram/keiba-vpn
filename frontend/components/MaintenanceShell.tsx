@@ -20,6 +20,44 @@ async function fetchStatus(): Promise<MaintenanceStatus | null> {
   }
 }
 
+/* ── 受けた状態をこのタブに残す（ページを開き直すたびに Cloud Run へ聞かない）。受信時刻からの経過で数えるので、残した値でも境界は正しく先取りできる ── */
+const STAMP_KEY = "mt:stamp";
+const STAMP_MAX_MS = 30 * 60_000;
+
+function readStamp(): Stamped | null {
+  try {
+    const raw = window.sessionStorage.getItem(STAMP_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as Stamped;
+    const age = Date.now() - v.receivedAt;
+    if (!v?.status || !(age >= 0 && age < STAMP_MAX_MS)) return null;
+    return { status: parseStatus(v.status), receivedAt: v.receivedAt };
+  } catch { return null; }
+}
+
+function writeStamp(v: Stamped): void {
+  try { window.sessionStorage.setItem(STAMP_KEY, JSON.stringify(v)); } catch { /* 何もしない */ }
+}
+
+/** 平常時の次の確認までの時間（ms）。定期の問い合わせは 30 分に 1 回まで（CLAUDE.md の「15 分未満のタブの定期問い合わせを足さない」）。
+ *  次の保守が分かっていれば、告知が始まる時刻（開始の NOTICE_LEAD_SEC 前）の少し後に 1 回だけ取る。
+ *  前提: 保守の告知（config/maintenance.json の notice_minutes・臨時の override）は開始の 30 分以上前に出す。
+ *  notice_minutes を 30 より長くしても、帯が出るのは開始の 30 分前から（それより前に告知を出すなら NOTICE_LEAD_SEC も揃える）。
+ *  それより直前に決めた臨時の保守は、API の 503（下の fetch の包み）と Next.js の middleware で切り替わる。 */
+const NORMAL_RECHECK_MAX_MS = 30 * 60_000;
+const NOTICE_LEAD_SEC = 30 * 60;
+/** 受信時点の残りから決めた、次に確認する時刻（ms）。残した値を後で使うときも同じ時刻になる（告知の境界を跨いで使い回さない）。 */
+export function normalRecheckAt(st: Stamped): number {
+  return st.receivedAt + normalRecheckMs(st.status.starts_in_sec);
+}
+function normalRecheckMs(startsInSec: number | null): number {
+  const left = startsInSec;
+  if (left == null || left <= 0) return NORMAL_RECHECK_MAX_MS;
+  // 告知の時刻を過ぎても平常のまま（notice_minutes が 30 分より短い設定）なら、次は開始の直後に 1 回だけ取る（数秒おきに聞き続けない）
+  const sec = left > NOTICE_LEAD_SEC ? left - NOTICE_LEAD_SEC + 5 : left + 2;
+  return Math.max(5_000, Math.min(NORMAL_RECHECK_MAX_MS, sec * 1000));
+}
+
 let hookInstalled = false;
 /** fetch を 1 回だけ包み、メンテナンスの 503（X-Keiba-Maintenance）や API の 502/504 を検知して全画面共通で切り替える。 */
 function installFetchHook() {
@@ -113,12 +151,19 @@ export function MaintenanceShell({ chrome, children }: { chrome: React.ReactNode
   const wasBlocked = useRef(false);
   const lastRecheck = useRef(0);
 
+  const [fails, setFails] = useState(0);   // 取得の失敗で、平常時の次の確認を組み直すため
+  const lastFail = useRef(0);
   const refresh = useCallback(async () => {
     const st = await fetchStatus();
-    if (st) setStamped({ status: st, receivedAt: Date.now() });
+    lastFail.current = st ? 0 : Date.now();
+    if (st) {
+      const v = { status: st, receivedAt: Date.now() };
+      writeStamp(v);
+      setStamped(v);
+    } else setFails((n) => n + 1);
   }, []);
 
-  // 初回: fetch の包み・プレビュー（dev のみ ?maintenance=notice|active|ended）・状態取得
+  // 初回: fetch の包み・プレビュー（dev のみ ?maintenance=notice|active|ended）・状態取得（このタブに残した値が新しければ聞かない）
   useEffect(() => {
     installFetchHook();
     if (process.env.NODE_ENV !== "production") {
@@ -126,10 +171,12 @@ export function MaintenanceShell({ chrome, children }: { chrome: React.ReactNode
       const pv = previewStatus(q.get("maintenance"), q.get("remaining"));
       if (pv) { setPreview(pv); setStamped({ status: pv, receivedAt: Date.now() }); return; }
     }
-    refresh();
+    const kept = readStamp();
+    if (kept && kept.status.phase === "normal" && normalRecheckAt(kept) - Date.now() > 5_000) setStamped(kept);
+    else refresh();
   }, [refresh]);
 
-  // 画面の更新（秒）・ポーリング（通常 60 秒、事前告知/開催中は 15 秒、終了後の確認は 5 秒）
+  // 画面の更新（秒）・問い合わせ（通常は告知の始まりの前に 1 回・最長 30 分おき、事前告知/開催中は 15 秒、終了後の確認は 5 秒）
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(tick);
@@ -137,10 +184,26 @@ export function MaintenanceShell({ chrome, children }: { chrome: React.ReactNode
   const phase = stamped ? livePhase(stamped, now) : "normal";
   useEffect(() => {
     if (preview) return;
-    const every = phase === "normal" ? 60_000 : 15_000;
-    const t = setInterval(refresh, every);
-    return () => clearInterval(t);
-  }, [phase, preview, refresh]);
+    if (phase !== "normal") {
+      const t = setInterval(refresh, 15_000);
+      return () => clearInterval(t);
+    }
+    // 平常時: 期限が来たら 1 回だけ取る。隠れたタブでは取らず、見えるようになったときに取る
+    const due = () => {
+      if (document.visibilityState === "hidden") { document.addEventListener("visibilitychange", onVisible); return; }
+      void refresh();
+    };
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      document.removeEventListener("visibilitychange", onVisible);
+      void refresh();
+    };
+    // 失敗の後は 5 分あけて取り直す（API が落ちている間に聞き続けない）
+    const retryAt = lastFail.current ? lastFail.current + 5 * 60_000 : 0;
+    const at = stamped ? Math.max(normalRecheckAt(stamped), retryAt) : (retryAt || Date.now() + NORMAL_RECHECK_MAX_MS);
+    const t = setTimeout(due, Math.max(1_000, at - Date.now()));
+    return () => { clearTimeout(t); document.removeEventListener("visibilitychange", onVisible); };
+  }, [phase, preview, refresh, stamped, fails]);
 
   // 開始・終了の境界を跨いだら、すぐ取り直す（ローカルの経過で先取りした表示を、サーバの状態で確定する）
   const prevPhase = useRef(phase);

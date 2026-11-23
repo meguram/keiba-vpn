@@ -118,7 +118,9 @@ def settled_s_maxage_for(path: str, cfg: dict[str, Any] | None = None, today: "d
             if s > 0 and _is_settled(token, today, int(st.get("grace_days", 3))):
                 return s
             up = int(st.get("upcoming_s_maxage") or 0)
-            return up if up > 0 and _token_date(token) is not None else None
+            # 当日・未来の 6 時間は開催日(8桁)のパスだけ。race_id(12桁)は、cache-warm が取り直さないパス（final-odds・result-status・
+            # bundle・card・running-map など）まで前方一致で長く置かれるので、確定前は短い s_maxage のまま（race_id の索引は確定の判定にだけ使う）
+            return up if up > 0 and len(token) == 8 and _token_date(token) is not None else None
     lg = cfg.get("long") or {}
     ls = int(lg.get("s_maxage") or 0)
     if ls > 0 and any(path.startswith(pre) for pre in lg.get("prefixes") or []):
@@ -135,12 +137,34 @@ def is_anonymous_request(cookie_header: str, authorization: str, remote_addr: st
     return not dev_auto_login_applies(remote_addr, headers)
 
 
-def cache_control_value(ma: int, s_maxage: int | None, anonymous: bool, settled: int | None = None) -> str:
+def stale_while_revalidate_cap(cfg: dict[str, Any] | None = None) -> int:
+    """共有キャッシュが期限切れの後に古いものを返してよい秒数の上限（``stale_while_revalidate``。無ければ 0 = 付けない）。"""
+    cfg = cfg if cfg is not None else config()
+    try:
+        return max(0, int(cfg.get("stale_while_revalidate") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def cache_control_value(ma: int, s_maxage: int | None, anonymous: bool, settled: int | None = None, swr_cap: int = 0) -> str:
     """匿名で ``s_maxage`` のあるパスだけ共有キャッシュ可（public）。それ以外は従来どおり private（会員の応答が他人に渡らない）。
-    確定済みのレース（settled）は共有側だけ長く置く。ブラウザの max-age は短いまま。"""
+    確定済みのレース（settled）は共有側だけ長く置く。ブラウザの max-age は短いまま。
+
+    ``swr_cap`` > 0 なら ``stale-while-revalidate=min(swr_cap, s-maxage)`` を足す。nginx は期限切れの後この秒数だけ古いものを即座に返し、
+    裏で 1 本だけ取り直す（proxy_cache_background_update）。古さの上限は s-maxage＋この秒数（当日のレース 30 秒なら 60 秒）。
+    この秒数を過ぎた鍵に同時に来た要求は、nginx が束ねず、その本数だけ上流へ行く（群がりの見積もりは docs/operations/edge_fix_20261123.md）。"""
     if anonymous and s_maxage:
-        return f"public, max-age={ma}, s-maxage={max(s_maxage, settled or 0)}"
+        sm = max(s_maxage, settled or 0)
+        swr = min(swr_cap, sm) if swr_cap > 0 else 0
+        return f"public, max-age={ma}, s-maxage={sm}" + (f", stale-while-revalidate={swr}" if swr else "")
     return f"private, max-age={ma}"
+
+
+def shared_short_value(s_maxage: int, cfg: dict[str, Any] | None = None) -> str:
+    """要求者で中身が変わらない匿名の応答（メンテナンスの状態・Cookie の無い auth/status）を、nginx にだけ s_maxage 秒置かせる見出し。
+    ブラウザは毎回取り直す（max-age=0）。期限切れの後は stale-while-revalidate の秒数だけ古いものを返して裏で取り直す。"""
+    swr = min(stale_while_revalidate_cap(cfg), s_maxage)
+    return f"public, max-age=0, s-maxage={s_maxage}" + (f", stale-while-revalidate={swr}" if swr else "")
 
 
 def _vary_add(existing: str) -> str:
@@ -166,7 +190,8 @@ def install_fastapi(app) -> None:
                     getattr(request.client, "host", None), request.headers,
                 )
                 path = request.url.path
-                resp.headers["Cache-Control"] = cache_control_value(ma, shared_s_maxage_for(path), anon, settled_s_maxage_for(path))
+                resp.headers["Cache-Control"] = cache_control_value(
+                    ma, shared_s_maxage_for(path), anon, settled_s_maxage_for(path), stale_while_revalidate_cap())
                 resp.headers["Vary"] = _vary_add(resp.headers.get("Vary", ""))
             return resp
 
@@ -190,6 +215,6 @@ def install_flask(app) -> None:
                 request.headers.get("Cookie", ""), request.headers.get("Authorization", ""), request.remote_addr, request.headers,
             )
             response.headers["Cache-Control"] = cache_control_value(
-                ma, shared_s_maxage_for(request.path), anon, settled_s_maxage_for(request.path))
+                ma, shared_s_maxage_for(request.path), anon, settled_s_maxage_for(request.path), stale_while_revalidate_cap())
             response.headers["Vary"] = _vary_add(response.headers.get("Vary", ""))
         return response

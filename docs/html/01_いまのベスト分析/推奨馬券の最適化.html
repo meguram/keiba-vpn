@@ -17,11 +17,14 @@ details{margin:.6em 0}summary{cursor:pointer}.mdsec{border-left:3px solid var(--
 </style></head><body><main>
 <nav class="crumb"><a href="../index.html">目次</a> ／ <a href="目次.html">いまのベスト分析</a> ／ 推奨馬券の最適化（凍結した買い方と 2025 年 test の結果）</nav>
 <h1>推奨馬券の最適化（凍結した買い方と 2025 年 test の結果）</h1>
-<p class="meta">生成物（<code>python -m src.scripts.docs.build_docs_shelves</code>。手で直さない）。元の記録（最終コミット日）: <a href="../../operations/retrain_trials/bet_cycles_log.json">bet_cycles_log.json</a>（2026-11-18）・<a href="../../operations/retrain_trials/bet_optimization_20261116.md">bet_optimization_20261116.md</a>（2026-11-18）</p>
+<p class="meta">生成物（<code>python -m src.scripts.docs.build_docs_shelves</code>。手で直さない）。元の記録（最終コミット日）: <a href="../../operations/retrain_trials/bet_cycles_log.json">bet_cycles_log.json</a>（2026-11-18）・<a href="../../operations/retrain_trials/bet_optimization_20261116.md">bet_optimization_20261116.md</a>（2026-11-20）</p>
 <p>推奨馬券の買い方の最適化の結論。凍結した買い方、訓練・評価・test 2025 の回収率と区間、基準（予測 1 位の単勝）との差、第 2 回の確かめ、サイクルの年表。元は bet_cycles_log.json と test の記録。</p>
 <h2 id="conclusion">1. 結論（担当の記録）</h2>
-<h2>いまのベスト（2026-11-18 時点）</h2>
+<h2>いまのベスト（2026-11-20 時点）</h2>
 <ul>
+<li><strong>2026 年の確かめ（2026-11-20、評価だけ）</strong>: 主（1/5〜10/12、推論の経路の予測、T-60 の再現）は参戦 683 / 2,701・的中率 16.1%・回収率 84.9%（95% 区間 74.8〜97.2%）・上位 5 件除き 72.8%、基準（予測 1 位の単勝）84.5% との差 +0.4pt（−11.2〜+14.4）で、上乗せは見えない。別枠（本物の T-60、7 日）は参戦 17・的中 0。事前登録の段はどちらも「否定」。</li>
+<li><strong>判断（統括役、結果を見た後）</strong>: 第 2 回の買い方は会員への表示に進めない。11/21 からの影（開発者だけ）は続け、前向きの記録の打ち切りの線（<code>config/bet_cycles/forward_stop_r2.json</code>: ◎ の勝率 ÷ T-60 の市場の勝率が 150 参戦で 0.85 未満、300 参戦で 1.0 未満なら外す）で決める。</li>
+<li><strong>重い発見</strong>: T-60 のオッズの「再現」（2026 年の T-60 と確定の比を借りる作り）は r を大きく出す。10/17〜11/08 の未勝利・新馬の中で、区切りを越える割合は、再現の作りでは 46.9%、本物の T-60 では 16〜19%（確定の offset でも T-60 の offset でも同程度。着順は読まずに計算）。再現の作りが通過を約 2.5〜3 倍に増やしている。過去の評価（訓練・評価 2019〜24、test 2025）の回収率は、本物の T-60 での振る舞いを表さない恐れがある。</li>
 <li><strong>今の買い方の候補</strong>: 第 2 回の凍結（<code>config/bet_cycles/frozen_20261117_r2.json</code>、hash 70ba29fa7b55）。第 1 回の凍結（hash f96a5aeff33e）は過去の記録で、今の候補ではない。今週末（11/21・22）の本番の画面に「試行中」として載せる（担当 weekend-launch、統括役の判断）。2026 年の手つかずの確かめ（1 回だけ）の前の、仮の候補。</li>
 <li><strong>規則</strong>: 未勝利・新馬（障害の未勝利も含む）のうち、2 番人気以下・勝率 5% 以上の馬の r（= log(p/q)、第 2 段のモデル）の最大が 0.492 以上（訓練で上位 60%）のレースだけ参戦。◎ はその中で r が最大の馬。単勝 100 円を 1 点。1 番人気の例外なし。推奨度の段なし。</li>
 <li><strong>期間・判定</strong>: 訓練 2019〜22・評価 2023〜24・test 2025。判定は T-60 のオッズの再現（2026 年の T-60 と確定の比を借りて 5 通り）、精算は確定の払戻。</li>

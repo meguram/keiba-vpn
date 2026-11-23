@@ -302,6 +302,41 @@ class GcsMeter:
         return self.bytes > self.cap
 
 
+def nothing_left(cfg: dict, day: str, now: datetime) -> bool:
+    """起動し直しのとき、warm の前（時刻表を読む前）に終われるか。前の起動の記録（launch_watch の scope の race_ids と posts）があり、
+    その全レースが「判定済み（bets_stage2 のファイル）」か「期限（発走の deadline_min 分前）を過ぎた」なら True。
+    安全側に倒す: 記録が無い・壊れている・対象が空・発走時刻の分からないレースがあるときは False（warm して今までどおり動く）。
+    期限の前のシステムの見送りは数えない（起動し直しで判定し直す。restore_state と同じ）。"""
+    watch = Path(cfg.get("watch_dir") or Path(cfg["main_inference_dir"]) / "launch_watch") / f"{day}.jsonl"
+    scope = None
+    try:
+        for ln in watch.read_text(encoding="utf-8", errors="replace").splitlines():
+            try:
+                e = json.loads(ln)
+            except ValueError:
+                continue
+            if isinstance(e, dict) and e.get("event") == "scope" and isinstance(e.get("race_ids"), list) and isinstance(e.get("posts"), dict):
+                scope = e
+    except OSError:
+        return False
+    if not scope or not scope["race_ids"]:
+        return False
+    dl = timedelta(minutes=int(cfg.get("deadline_min", 20)))
+    pub = Path(cfg["publish_dir"]) / "bets_stage2" / day
+    for rid in map(str, scope["race_ids"]):
+        if (pub / f"{rid}.json").exists():
+            continue
+        try:
+            pt = datetime.fromisoformat(str(scope["posts"].get(rid)))
+        except (TypeError, ValueError):
+            return False
+        if pt.tzinfo is None:
+            pt = pt.replace(tzinfo=_JST)
+        if now < pt - dl:
+            return False
+    return True
+
+
 def preflight(cfg: dict, day: str) -> list[str]:
     """warm の前に、影の作業場所に要るものがそろっているか（無いと黙って空の列になる・全レースで失敗する）。足りないものの一覧を返す。"""
     env = cfg.get("env") or {}
@@ -625,7 +660,8 @@ class Runner:
         allr = len(races)
         races = [r for r in races if self._grade(r["race_id"]) in SCOPE_GRADES]      # 未勝利・新馬だけ（ほかは今の表示のまま）
         logger.info("%s: 対象 %d / %d レース（未勝利・新馬）", self.day, len(races), allr)
-        _append_watch(self.watch_dir, self.day, {"event": "scope", "races": len(races), "all": allr})
+        _append_watch(self.watch_dir, self.day, {"event": "scope", "races": len(races), "all": allr, "race_ids": [r["race_id"] for r in races],
+                                                  "posts": {r["race_id"]: r["post_time"].isoformat() for r in races}})
         if not races:
             return
         by_id = {r["race_id"]: r for r in races}
@@ -739,6 +775,9 @@ def main(argv: list[str] | None = None) -> int:
     from src.scraper.storage import HybridStorage
 
     r.storage = HybridStorage()
+    if nothing_left(cfg, a.day, datetime.now(_JST)):                 # 起動し直しで、対象のレースがすべて済んでいれば warm も時刻表の読み出しもしない
+        logger.info("%s: 対象のレースはすべて判定済みか期限切れ。warm せずに終わる", a.day)
+        return 0
     if not [x for x in r.schedule() if x.get("post_time")]:          # 開催の無い日は重い warm をせずに終わる
         logger.info("%s: 発走時刻表が無い（開催なし）。終わる", a.day)
         return 0

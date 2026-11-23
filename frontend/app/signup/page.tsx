@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { invalidateJson } from "@/lib/httpCache";
 
 export default function SignupPage() {
   const [userId, setUserId] = useState("");
@@ -27,6 +28,7 @@ export default function SignupPage() {
         setBusy(false);
         return;
       }
+      invalidateJson("/api/v1/auth/status");   // 決済から戻ったとき、このタブに残した「未ログイン」を使わない
       window.location.href = d.checkout_url;
     } catch {
       setError("通信に失敗しました。もう一度お試しください");

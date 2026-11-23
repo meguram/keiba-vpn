@@ -97,13 +97,25 @@ def betting_race_values():
     ))
 
 
+AUTH_STATUS_SHARED_S_MAXAGE = 300
+
+
 @bp.get("/auth/status")
 def auth_status():
     import time
 
+    from src.api.http_cache_headers import is_anonymous_request, shared_short_value
+
     t0 = time.perf_counter()
     resp = jsonify(get_auth_status())
     resp.headers["Server-Timing"] = f"app;dur={(time.perf_counter() - t0) * 1000:.1f}"     # 計測用（時間だけ）
+    # Cookie・Authorization の無い要求の答えは常に同じ（未ログイン）なので、VPS の nginx に共有で置かせる（1 画面ごとに Cloud Run に行っていた）。
+    # nginx は Cookie・Authorization 付きの要求を読みも保存もしないので、ログイン後の答えに古い未ログインが出ることはない。ブラウザは毎回取り直す。
+    if is_anonymous_request(request.headers.get("Cookie", ""), request.headers.get("Authorization", ""), request.remote_addr, request.headers):
+        resp.headers["Cache-Control"] = shared_short_value(AUTH_STATUS_SHARED_S_MAXAGE)
+    else:
+        resp.headers["Cache-Control"] = "private, no-store"
+    resp.headers["Vary"] = "Cookie"
     return resp
 
 

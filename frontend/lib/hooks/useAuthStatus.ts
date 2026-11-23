@@ -7,6 +7,8 @@ export type AuthStatus = {
   loggedIn: boolean;
   isAdmin: boolean;
   isMember: boolean;
+  /** 確認に失敗した（5xx・通信失敗）。未ログインと決めつけず、会員 API は呼んでよい（API 側が判定する） */
+  failed?: boolean;
 };
 
 export function useAuthStatus(): AuthStatus {
@@ -33,7 +35,7 @@ export function useAuthStatus(): AuthStatus {
           isMember: !!d.is_member,
         })
       )
-      .catch(() => setStatus((s) => ({ ...s, loading: false })));
+      .catch(() => setStatus((s) => ({ ...s, loading: false, failed: true })));
   }, []);
 
   return status;

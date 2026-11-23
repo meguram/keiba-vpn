@@ -6,7 +6,9 @@ import type { TargetRec } from "@/components/TargetBets";
 
 /** 第 2 段のモデル（市場とのずれ）と凍結した買い方（第 2 回）の推奨（試行中）。
  *  サーバは既定方策 target と同じ形（strategy="target"・sub_strategy="stage2_r2"）で返し、判定の中身を stage2 に入れる。
- *  見送りのレースは理由を出す。回収率は確かめ中であることを必ず表示する。 */
+ *  見送りのレースは理由を出す。回収率は確かめ中であることを必ず表示し、検証の回収率の数字は出さない（試行中のあいだ。
+ *  レースの結果が出た後の BetResultBanner は、そのレース 1 つの実績で、検証の値ではないので出してよい）。
+ *  文言の取り決めは tests/frontend/test_stage2_bets_text.py と tests/api/test_stage2_live.py の両方で縛る。 */
 export type Stage2Horse = { horse_number: number; p_win: number | null; q: number | null; r: number | null; pop: number | null; odds: number | null };
 export type Stage2Info = {
   frozen_hash?: string; status?: "buy" | "skip"; skip_reason?: string | null; skip_label?: string | null;
@@ -39,7 +41,7 @@ export function Stage2Bets({ rec }: { rec: Stage2Rec }) {
         <span style={{ display: "inline-block", padding: "2px 10px", borderRadius: 999, fontSize: 12.5, fontWeight: 800, color: "#f59e0b", border: "1px solid #f59e0b" }}>
           試行中
         </span>
-        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>回収率は確かめ中です（2025 年の検証では 107%、区間 94〜120%）</span>
+        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>回収率は確かめ中です</span>
       </div>
       <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 8, lineHeight: 1.6 }}>
         {rec.evidence}

@@ -1,0 +1,15 @@
+# /etc/logrotate.d/keiba-nginx-timed（vps_13_access_log.sh が配置）。応答時間つきのアクセスログ（templates/nginx-keiba-log.conf）。
+# 量の目安: 既定の access.log と同じ程度（2026-11 で 1 日 約 1〜2MB）。14 日・圧縮で 数十 MB に収まる。
+/var/log/nginx/keiba/timed.log {
+	daily
+	missingok
+	rotate 14
+	compress
+	delaycompress
+	notifempty
+	create 0640 www-data deploy
+	sharedscripts
+	postrotate
+		invoke-rc.d nginx rotate >/dev/null 2>&1
+	endscript
+}
