@@ -284,6 +284,14 @@ def build_rows(p: "bc.Period", body: dict, setting: str, frames: dict, waku: dic
                     yw[(b if a == fH else a) - 1] += v
         put("y_waku", yw, (-1,), np.int32)
         put("waku_sold", int(bool(wk) and fH > 0 and (fr > 0).all()), (), np.int8)
+        ww = np.full((3, 3), -1, np.int32)          # 枠連の当たりの組（枠 a, 枠 b, 払戻）。ボックス用（◎ の枠を含まない組も）
+        if wk:
+            if len(wk) > 3:
+                raise ValueError(f"{r.race_id} の枠連の当たりの組が多すぎます（{len(wk)}）")
+            for j, (c, v) in enumerate(wk.items()):
+                a, b = (int(x) for x in c.split("-"))
+                ww[j] = (a, b, v)
+        put("w_waku", ww, (3, 3), np.int32)
         wu = np.full((2, 3), -1, np.int32); wwi = np.full((7, 3), -1, np.int32); wtr = np.full((3, 4), -1, np.int32)
         if len(win_um) > 2 or len(win_wide) > 7 or len(win_trio) > 3:      # 同着で当たりの欄が足りない（黙って切らない）
             raise ValueError(f"{r.race_id} の当たりの組が多すぎます（馬連 {len(win_um)}・ワイド {len(win_wide)}・3連複 {len(win_trio)}）")

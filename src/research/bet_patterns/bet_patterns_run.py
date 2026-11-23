@@ -4,6 +4,7 @@
   python -m src.research.bet_patterns.bet_patterns_run select                   # 訓練だけで想定オッズの換算・組み方・閾値を選ぶ → config/bet_patterns/selection.json
   python -m src.research.bet_patterns.bet_patterns_run prereg                   # 評価の前に主の規則・基準・合格の条件を書く → config/bet_patterns/prereg.json
   （selection.json・prereg.json・道具を commit してから）
+  python -m src.research.bet_patterns.bet_patterns_run select-extra / evaluate-extra   # 後から足した組み方（参考の行。主の規則は変えない）
   python -m src.research.bet_patterns.bet_patterns_run evaluate                 # 選んだ規則を評価・2025・2026 に 1 回だけ当てる → docs/operations/retrain_trials/bet_patterns.json
 
 期間と台帳の目的: train（2019〜22）は select、eval（2023〜24）は confirm（1 回だけ）、test（2025）・main2026・pre2026（本物の T-60）は eval_only（選び直しに使わない）。
@@ -290,6 +291,91 @@ def cmd_evaluate(a) -> None:
     print("A2 の照合", json.dumps(chk, ensure_ascii=False))
 
 
+SELECTION_EXTRA = D.ROOT / "config/bet_patterns/selection_extra.json"
+RESULT_EXTRA = D.ROOT / "docs/operations/retrain_trials/bet_patterns_extra.json"
+
+
+def _extra_done(nm: str) -> list[str]:
+    from src.ops import data_ledger as L
+
+    rows = L.load_rows()
+    out = []
+    for r in rows:
+        t = r.get("target") or {}
+        if r.get("kind") == "start" and t.get("family") == FAMILY and t.get("name") == f"bet_patterns_extra {nm}":
+            if not any(x.get("ref") == r.get("id") and x.get("kind") == "finish" and x.get("status") == "error" for x in rows):
+                out.append(r.get("at"))
+    return out
+
+
+def cmd_select_extra(a) -> None:
+    """主の選択の後に足した組み方（S.EXTRA_STRUCTS）を、訓練だけで同じ手順（段 A・B、1 年抜き、reality check）で選ぶ。主の規則は変えない。"""
+    from src.ops import data_ledger as L
+
+    sel = json.loads(SELECTION.read_text(encoding="utf-8"))
+    if SELECTION_EXTRA.exists() or RESULT_EXTRA.exists() or any(_extra_done(nm) for nm in ("eval", "test", "main2026", "pre2026")):
+        raise SystemExit("追加の選択・評価はすでにあります（選び直さない）")
+    res = {"base_selection_hash": sel["hash"], "structs": [dict(s) for s in S.EXTRA_STRUCTS], "settings": {},
+           "note": "統括役の最終チェック（2026-11-23）で足した組み方。主の選択・事前登録の主の規則は変えない。評価は参考の行として 1 回だけ（eval_only）"}
+    with L.guard(tool="src/research/bet_patterns/bet_patterns_run.py", family=FAMILY, version="search-extra", period=PERIODS["train"],
+                 purpose="select", reason="主の選択の後に足した組み方（3連単の ◎ 2 着・3 着付けのフォーメーション、枠連のボックス）を訓練だけで選ぶ",
+                 target_name="bet_patterns_extra train"):
+        for s in D.SETTINGS:
+            rows = D.load_rows(rows_path("train", s))
+            if "w_waku" not in rows.arr:
+                raise SystemExit("訓練の行に枠連の当たりの組（w_waku）がありません。build で作り直してから")
+            pp = S.Prep(rows, sel["odds_map"]["coefs"])
+            A = S.stage_a(pp, a.workers, S.EXTRA_STRUCTS)
+            se = S.Searcher(pp, A, a.workers)
+            r = se.run(TRAIN_YEARS)
+            res["settings"][s] = {"n_tried": r["n_tried"], "rc": S.reality_check(A), "cv": S.cv(se, TRAIN_YEARS),
+                                  "per": {sid: (None if v is None else {**v, "ys": se.ev(v["final"])["ys"]}) for sid, v in r["per"].items()},
+                                  "pairs": r["pairs"]}
+            print(s, r["n_tried"], {k: (v or {}).get("score") for k, v in r["per"].items()}, flush=True)
+    res = json.loads(json.dumps(res, default=_js))
+    res["hash"] = _hash(res)
+    res["made_at"] = _now()
+    SELECTION_EXTRA.write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_js) + "\n", encoding="utf-8")
+    print("書いた", SELECTION_EXTRA, res["hash"])
+
+
+def cmd_evaluate_extra(a) -> None:
+    """追加の組み方の最良を、訓練（当てはめ）・評価・2025・2026 に 1 回だけ当てる（参考の行。合否は付けない）。"""
+    from src.ops import data_ledger as L
+
+    sel = json.loads(SELECTION.read_text(encoding="utf-8"))
+    ex = json.loads(SELECTION_EXTRA.read_text(encoding="utf-8"))
+    if _hash({k: v for k, v in ex.items() if k not in ("hash", "made_at")}) != ex["hash"] or ex["base_selection_hash"] != sel["hash"]:
+        raise SystemExit("selection_extra.json のハッシュか、元の選択が合いません")
+    for f in (SELECTION_EXTRA, Path(__file__).resolve(), Path(S.__file__).resolve(), Path(D.__file__).resolve(), Path(OM.__file__).resolve()):
+        if not _committed(f):
+            raise SystemExit(f"{f.relative_to(D.ROOT)} を commit してから評価する")
+    body = D.load_frozen()
+    coefs = sel["odds_map"]["coefs"]
+    specs = {s: {"base_tan": [BASE_TAN], **{sid: [v["final"]] for sid, v in ex["settings"][s]["per"].items() if v}} for s in D.SETTINGS}
+    out = json.loads(RESULT_EXTRA.read_text(encoding="utf-8")) if RESULT_EXTRA.exists() else \
+        {"made_at": _now(), "selection_extra_hash": ex["hash"], "periods": {}, "ledger": {}}
+    if out.get("selection_extra_hash") != ex["hash"]:
+        raise SystemExit("前回の結果が別の版のものです")
+    for nm in (a.periods.split(",") if a.periods else ["train", "eval", "test", "main2026", "pre2026"]):
+        if nm in out["periods"] or (nm != "train" and _extra_done(nm)):
+            raise SystemExit(f"期間 {nm} はすでに流しています（1 回だけ）")
+        with L.guard(tool="src/research/bet_patterns/bet_patterns_run.py", family=FAMILY, version=ex["hash"], period=PERIODS[nm],
+                     purpose="reproduce" if nm == "train" else "eval_only", frozen_paths=[SELECTION_EXTRA],
+                     reason="追加の組み方の参考の行（主の規則の合否は変えない。選び直しに使わない）", target_name=f"bet_patterns_extra {nm}") as tok:
+            rows = {s: D.load_rows(rows_path("train", s)) for s in D.SETTINGS} if nm == "train" else D.build_period(nm, body)
+            tok.check_race_ids(set().union(*[set(r.meta["race_id"]) for r in rows.values()]), f"bet_patterns_extra {nm}")
+            per = {}
+            for s in D.SETTINGS:
+                pp = S.Prep(rows[s], coefs)
+                per[s] = {"counts": rows[s].counts, "rules": {k: S.period_metrics(pp, v, base=[BASE_TAN]) for k, v in specs[s].items()}}
+            out["periods"][nm] = per
+            out["ledger"][nm] = tok.summary()
+        out["made_at"] = _now()
+        RESULT_EXTRA.write_text(json.dumps(out, ensure_ascii=False, indent=1, default=_js) + "\n", encoding="utf-8")
+        print(nm, json.dumps({s: {k: round(v["roi"] or 0, 3) for k, v in per[s]["rules"].items()} for s in per}, ensure_ascii=False), flush=True)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -298,10 +384,15 @@ def main() -> None:
     s = sub.add_parser("select")
     s.add_argument("--workers", type=int, default=S.cpu_workers())
     s.add_argument("--force", action="store_true")
+    s = sub.add_parser("select-extra")
+    s.add_argument("--workers", type=int, default=S.cpu_workers())
+    s = sub.add_parser("evaluate-extra")
+    s.add_argument("--periods", default="")
     s = sub.add_parser("evaluate")
     s.add_argument("--periods", default="", help="一部の期間だけ（落ちた後の続き。流した期間は流し直さない）")
     a = ap.parse_args()
-    {"build": cmd_build, "select": cmd_select, "prereg": cmd_prereg, "evaluate": cmd_evaluate}[a.cmd](a)
+    {"build": cmd_build, "select": cmd_select, "prereg": cmd_prereg, "evaluate": cmd_evaluate,
+     "select-extra": cmd_select_extra, "evaluate-extra": cmd_evaluate_extra}[a.cmd](a)
 
 
 if __name__ == "__main__":

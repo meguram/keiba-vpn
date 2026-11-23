@@ -87,6 +87,15 @@ def test_trio_and_trifecta():
     assert _play(pp, "tri_m", (2, 2)) == (600, 5000, 6)
 
 
+def test_extra_structs():
+    """後から足した組み方: 3連単の ◎ 2 着・3 着付けのフォーメーションと、枠連のボックス。"""
+    pp = _pp()
+    assert _play(pp, "tri_2f", (1, 3)) == (200, 0, 2)          # {1}→3→{2,4}（◎ は 1 着なので外れ）
+    assert _play(pp, "tri_3f", (2, 3)) == (400, 0, 4)          # {1,2}→{1,2,4}→3 の 2×2 点
+    assert _play(pp, "waku_box", (1, 1)) == (100, 700, 1)      # 枠 {3,1} の 1 点（1-3 が当たり）
+    assert _play(pp, "waku_box", (3, 3)) == (600, 700, 6)      # 枠 {3,1,2,4} の 6 点
+
+
 def test_skip_and_stakes():
     pp = _pp()
     assert _play(pp, "trio_1", (7, 7), skip={"cap": 10})[0] == 0          # 21 点は上限 10 で見送り

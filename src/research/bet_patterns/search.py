@@ -50,8 +50,14 @@ STRUCTS = [
     {"id": "tri_m", "name": "3連単 ◎ 1 頭軸マルチ", "kind": "t_multi", "score": "p3", "shapes": tuple((n, n) for n in (2, 3, 4))},
     {"id": "tri_f", "name": "3連単 フォーメーション ◎→2 列目→3 列目", "kind": "t1_form", "score": "p3", "shapes": _FORM},
 ]
-SBYID = {s["id"]: s for s in STRUCTS}
-BOX = ("um_box", "wide_box", "trio_box")
+# 追加（統括役の最終チェック 2026-11-23）: 主の選択（STRUCTS）の後に足した組み方。訓練だけで別に選び、評価は参考の行として 1 回だけ
+EXTRA_STRUCTS = [
+    {"id": "tri_2f", "name": "3連単 フォーメーション 1 着列→◎→3 着列", "kind": "t2_form", "score": "p3", "shapes": _FORM},
+    {"id": "tri_3f", "name": "3連単 フォーメーション 1 着列→2 着列→◎", "kind": "t3_form", "score": "p3", "shapes": _FORM},
+    {"id": "waku_box", "name": "枠連 ボックス（◎ の枠＋相手の枠）", "kind": "waku_box", "score": "p2", "shapes": tuple((n, n) for n in (1, 2, 3, 4)), "ev": False},
+]
+SBYID = {s["id"]: s for s in STRUCTS + EXTRA_STRUCTS}
+BOX = ("um_box", "wide_box", "trio_box", "waku_box")
 
 # 相手の閾値の格子（同じ形を全部の組み方に）
 P_MIN = {"p2": (0.0, 0.1, 0.2), "p3": (0.0, 0.2, 0.35)}
@@ -183,6 +189,9 @@ def _comps(pp: Prep, st: dict, R: np.ndarray | None, sh) -> list[tuple[str, np.n
     if kind in ("t2", "t3"):
         M = (Ra < n3) & (Rb < n3) & pp.offdiag
         return [(kind, M.reshape(N, -1))]
+    if kind in ("t2_form", "t3_form"):                 # 1 着列（2 列目の数）× ◎ 以外の列（3 列目の数）。◎ は 2 着か 3 着に固定
+        M = (Ra < n2) & (Rb < n3) & pp.offdiag
+        return [("t2" if kind == "t2_form" else "t3", M.reshape(N, -1))]
     if kind == "t_multi":
         M = ((Ra < n3) & (Rb < n3) & pp.offdiag).reshape(N, -1)
         return [("t1", M), ("t2", M), ("t3", M)]
@@ -203,7 +212,20 @@ def play_rows(pp: Prep, spec: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]
         n = spec["sh"][1]
         S = (R < n) | pp.isH
         m = S.sum(axis=1)
-        if st["kind"] == "trio_box":
+        if st["kind"] == "waku_box":                   # ◎ と相手の枠の組すべて（同じ枠に 2 頭いればゾロ目も）
+            cnt = (S[:, :, None] & pp.frame1h).sum(axis=1)          # [N, 8] 枠ごとの頭数
+            F = cnt > 0
+            zoro = cnt >= 2
+            nf = F.sum(axis=1)
+            sold = pp.a["waku_sold"] > 0
+            pts = np.where(sold, nf * (nf - 1) // 2 + zoro.sum(axis=1), 0)
+            w = pp.a["w_waku"]
+            fa, fb = np.clip(w[:, :, 0] - 1, 0, NF - 1), np.clip(w[:, :, 1] - 1, 0, NF - 1)
+            ok = w[:, :, 0] > 0
+            inF = np.take_along_axis(F, fa, 1) & np.take_along_axis(F, fb, 1)
+            hit = ok & np.where(fa == fb, np.take_along_axis(zoro, fa, 1), inF)
+            ret = (hit * np.maximum(w[:, :, 2], 0)).sum(axis=1)
+        elif st["kind"] == "trio_box":
             pts = np.array([comb(int(x), 3) for x in m])
             w = pp.a["w_trio"]
             ok = (w[:, :, 0] >= 0)
@@ -334,9 +356,9 @@ def _ev_worker(spec: dict) -> dict:
     return e
 
 
-def stage_a(pp: Prep, workers: int = 8) -> dict:
+def stage_a(pp: Prep, workers: int = 8, structs: list | None = None) -> dict:
     _G["pp"], _G["W"] = pp, _boot_W(pp.nr)
-    ids = [s["id"] for s in STRUCTS]
+    ids = [s["id"] for s in (structs or STRUCTS)]
     if workers <= 1:
         res = [_stage_a_worker(i) for i in ids]
     else:
