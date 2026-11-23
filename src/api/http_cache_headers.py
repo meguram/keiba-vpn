@@ -118,7 +118,9 @@ def settled_s_maxage_for(path: str, cfg: dict[str, Any] | None = None, today: "d
             if s > 0 and _is_settled(token, today, int(st.get("grace_days", 3))):
                 return s
             up = int(st.get("upcoming_s_maxage") or 0)
-            return up if up > 0 and _token_date(token) is not None else None
+            # 当日・未来の 6 時間は開催日(8桁)のパスだけ。race_id(12桁)は、cache-warm が取り直さないパス（final-odds・result-status・
+            # bundle・card・running-map など）まで前方一致で長く置かれるので、確定前は短い s_maxage のまま（race_id の索引は確定の判定にだけ使う）
+            return up if up > 0 and len(token) == 8 and _token_date(token) is not None else None
     lg = cfg.get("long") or {}
     ls = int(lg.get("s_maxage") or 0)
     if ls > 0 and any(path.startswith(pre) for pre in lg.get("prefixes") or []):

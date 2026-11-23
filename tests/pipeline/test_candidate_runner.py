@@ -66,6 +66,7 @@ def test_config_is_off_by_default_and_complete():
 
 def test_odds_copy_off_by_default(tmp_path, monkeypatch):
     monkeypatch.delenv("KEIBA_ODDS_T60_LOCAL_COPY", raising=False)
+    monkeypatch.setattr(oc, "ENABLE_MARK", tmp_path / "odds_t60_copy.on")      # ホストで有効にした目印に左右されない
     monkeypatch.setenv("KEIBA_ODDS_T60_DIR", str(tmp_path))
     doc = {"snapshot_at": "2026-11-21T09:00:05+09:00", "entries": [{"horse_number": 1, "win_odds": 2.3, "popularity": 1}]}
     assert oc.write_copy("R1", doc, "t60") is None and not any(tmp_path.iterdir())
@@ -287,3 +288,36 @@ def test_meter_summary_counts_kinds_and_rest():
     m.note_kind(type("B", (), {"name": "chuou/kinda/2025/9.json"})())
     s = m.summary()
     assert s["gcs_by_kind"]["chuou/kinda/N/N.json"] == 2 and s["gcs_by_kind"]["(その他)"] == 2 and sum(s["gcs_by_kind"].values()) == 15
+
+
+def _scope(tmp_path, ids, posts=None, extra=None):
+    (tmp_path / "w").mkdir(exist_ok=True)
+    rows = [{"event": "scope", "race_ids": ids, "posts": posts if posts is not None else {r: POST.isoformat() for r in ids}}] + (extra or [])
+    (tmp_path / "w" / "20261121.jsonl").write_text("\n".join(json.dumps(x) for x in rows) + "\n[1, 2]\n", encoding="utf-8")
+
+
+def test_nothing_left_skips_warm_after_all_races_are_done(tmp_path):
+    """起動し直しのとき、前の起動の scope の全レースが判定済みか期限切れなら、warm も時刻表の読み出しもせずに終わる。"""
+    cfg = {"watch_dir": str(tmp_path / "w"), "publish_dir": str(tmp_path / "pub"), "deadline_min": 20, "main_inference_dir": str(tmp_path)}
+    early = POST - timedelta(minutes=30)
+    assert not cr.nothing_left(cfg, "20261121", early)                            # 記録が無い（最初の起動）→ warm する
+    _scope(tmp_path, ["A", "B"], {"A": POST.isoformat(), "B": (POST + timedelta(hours=2)).isoformat()})
+    assert not cr.nothing_left(cfg, "20261121", early)                            # A・B が残っている
+    (tmp_path / "pub" / "bets_stage2" / "20261121").mkdir(parents=True)
+    (tmp_path / "pub" / "bets_stage2" / "20261121" / "A.json").write_text("{}")
+    assert not cr.nothing_left(cfg, "20261121", early)                            # B はまだ期限の前
+    assert cr.nothing_left(cfg, "20261121", POST + timedelta(hours=2) - timedelta(minutes=19))   # B は期限切れ・A は判定済み
+
+
+def test_nothing_left_is_safe_side(tmp_path):
+    """終わってはいけないときは終わらない: 対象が空・発走時刻の分からないレース・期限の前のシステムの見送り・古い形の scope だけ。"""
+    cfg = {"watch_dir": str(tmp_path / "w"), "publish_dir": str(tmp_path / "pub"), "deadline_min": 20, "main_inference_dir": str(tmp_path)}
+    early = POST - timedelta(minutes=30)
+    _scope(tmp_path, [])
+    assert not cr.nothing_left(cfg, "20261121", POST + timedelta(hours=5))
+    _scope(tmp_path, ["A"], {"A": None})
+    assert not cr.nothing_left(cfg, "20261121", POST + timedelta(hours=5))
+    _scope(tmp_path, ["A"], extra=[{"event": "system_skip", "race_id": "A", "reason": "stage2_error"}])
+    assert not cr.nothing_left(cfg, "20261121", early)                            # 期限の前のシステムの見送りは数えない（判定し直す）
+    (tmp_path / "w" / "20261121.jsonl").write_text(json.dumps({"event": "scope", "race_ids": ["A"]}) + "\n", encoding="utf-8")
+    assert not cr.nothing_left(cfg, "20261121", POST + timedelta(hours=5))       # 古い形（posts 無し）

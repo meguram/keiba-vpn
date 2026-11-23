@@ -35,6 +35,7 @@ import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/l
 const SHOW_HORSE_LINK = featureEnabled("horse-detail");
 /* ── 型 ── */
 import { turnOf } from "@/lib/courseTurn";
+import { IntentLink } from "@/components/IntentLink";
 
 type RaceItem = {
   direction?: string;
@@ -567,13 +568,13 @@ function RacePanel({
               {hasPred ? "✓ 予測済" : pred.provisional_entries ? "確定後に予測" : "未予測"}
             </span>
           )}
-          <Link
+          <IntentLink
             href={`/race/${race.race_id}`}
             className="hit44"
             style={{ fontSize: 11, color: "var(--accent)", textDecoration: "none", border: "1px solid rgba(59,130,246,0.3)", padding: "3px 8px", borderRadius: 4 }}
           >
             詳細 →
-          </Link>
+          </IntentLink>
         </div>
       </div>
 
@@ -847,22 +848,26 @@ export default function WeeklyPredictionsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRaceId, preds]);
 
-  /* 一覧が出たら、その日の他のレースの予測も裏で先に取っておく（選んだときは待たずに出る）。選択中のレースの取得を優先し、2 本ずつ */
+  /* 選んだレースの前後（同じ開催場の次の 2 つと前の 1 つ）の予測だけを裏で先に取っておく（←/→・次のレースへの切替が待たずに出る）。
+     1 本ずつ・選んだレースの取得の後に。以前はその日の全レース（最大 40 件・2 本ずつ）を取っていて、1 回開くと API が約 37 件出ていた。
+     それ以外のレースは、マウスが乗った・触れたときの先読み（warmPred）で温める */
   useEffect(() => {
-    if (USE_MOCK || !races.length) return;
+    if (USE_MOCK || !activeRaceId) return;
     let cancelled = false;
-    const ids = [...visibleRaces, ...races.filter((r) => !visibleRaces.includes(r))].map((r) => r.race_id).filter((id) => id && id !== activeRaceId).slice(0, 40);
-    let i = 0;
+    const i = visibleRaces.findIndex((r) => r.race_id === activeRaceId);
+    if (i < 0) return;
+    const ids = [visibleRaces[i + 1], visibleRaces[i + 2], visibleRaces[i - 1]].map((r) => r?.race_id).filter((id): id is string => !!id);
     const worker = async () => {
-      while (!cancelled && i < ids.length) {
-        const id = ids[i++];
+      await getJson(`/api/race/${activeRaceId}/predictions`, { ttlMs: PRED_TTL_MS, persist: true }).catch(() => undefined);   // 選んだレースの取得（loadPred と同じ 1 本）が済んでから
+      for (const id of ids) {
+        if (cancelled) return;
         await getJson(`/api/race/${id}/predictions`, { ttlMs: PRED_TTL_MS, persist: true }).catch(() => undefined);
       }
     };
-    const t = setTimeout(() => { void worker(); void worker(); }, 300);
+    const t = setTimeout(() => { void worker(); }, 800);
     return () => { cancelled = true; clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [races]);
+  }, [activeRaceId, visibleRaces]);
 
   /* 既定のレース（先頭）が選ばれたときも URL に race を入れる（再読み込み・共有で同じレースが開く） */
   useEffect(() => {

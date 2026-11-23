@@ -156,10 +156,10 @@ def test_levels_work_with_nullable_numeric_columns():
     from src.research.graded import catalog as CAT
     d = pd.DataFrame({"wt": pd.array([480, None, 500], dtype="Int64"), "wtc": pd.array([2.0, None, -4.0], dtype="Float64")})
     t = CAT.BY_ID["G06"]
-    with pytest.raises(ValueError):
-        t.fn(d)                                                       # そのままだと落ちる（元の不具合）
+    raw = t.fn(d)                                                     # cut が欠けありの型を直接受けられる（2026-11-20 の前日の計算の直し）
     out = t.fn(CR._plain_numeric(d))
     assert out.iloc[0] == "480-519kg" and out.iloc[2] == "480-519kg"
+    assert raw.tolist() == out.tolist()                               # float に直したときと同じ水準
 
 
 def test_master_reuse_only_when_2024_and_same_settings(tmp_path):

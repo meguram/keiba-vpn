@@ -1,7 +1,7 @@
 // middleware の保守の確認（/api/maintenance/status）を、画面の要求に待たせないための入れ物。
 // docs/operations/latency_plan_20261118.md の L2a。
 //
-// - 期限内の値はそのまま返す（今までどおり 15 秒保持）。
+// - 期限内の値はそのまま返す（保守中は 15 秒、保守ではないときは次の開始まで・最長 5 分保持）。
 // - 期限切れでも「保守ではない」値で、期限から STALE_GRACE_MS 以内なら、その値ですぐ答え、取り直しは裏で 1 本だけ走らせる（待たない）。
 //   それより古い値（夜に要求が途切れたプロセスなど）は待つ。保守の開始の見落としを「期限 + 猶予」の内に収めるため。
 // - 期限切れの値が「保守中」のとき・まだ値が無いとき（プロセスの起動直後）は、今までどおり取り直しを待つ。
@@ -15,10 +15,14 @@
 // - 取得そのものは FETCH_CAP_MS で打ち切る（呼び出し側の打ち切りに頼らず、取り直しが残り続けないように）。
 // 取り直しの回数は今と同じ（期限 1 回につき 1 本まで）なので、Cloud Run への要求は増えない。
 
-export type MaintenanceStatus = { active?: boolean; remaining_sec?: number | null; retry_after?: number };
+export type MaintenanceStatus = { active?: boolean; remaining_sec?: number | null; starts_in_sec?: number | null; retry_after?: number };
 export type MaintenanceState = { at: number; ttl: number; active: boolean; retry: number; okAt: number; endsAt: number | null };
 
 export const NORMAL_TTL_MS = 15_000;
+/** 保守ではないときの保持の上限。次の保守の開始（starts_in_sec）までなら、最長 5 分まで聞き直さない（Cloud Run への要求を減らす）。
+ *  開始の時刻を（15 秒の下限を除いて）過ぎて保持しないので、毎日の保守・前もって決めた臨時の保守（override）の始まりは遅れない。
+ *  直前に決めた臨時の保守は最長 5 分遅れるが、その間も API が 503 を返し、画面の共通処理（MaintenanceShell）が保守の画面にする。 */
+export const NORMAL_TTL_MAX_MS = 300_000;
 export const FAIL_TTL_MS = 5_000;
 export const STALE_GRACE_MS = 45_000;
 export const FAIL_KEEP_MAX_MS = 60_000;
@@ -30,12 +34,18 @@ export function stateFromStatus(j: MaintenanceStatus, at: number): MaintenanceSt
   const rem = typeof j.remaining_sec === "number" ? j.remaining_sec : 15;
   return {
     at,
-    ttl: active ? Math.max(1000, Math.min(NORMAL_TTL_MS, rem * 1000)) : NORMAL_TTL_MS,
+    ttl: active ? Math.max(1000, Math.min(NORMAL_TTL_MS, rem * 1000)) : normalTtl(j.starts_in_sec),
     active,
     retry: j.retry_after ?? 60,
     okAt: at,
     endsAt: active && typeof j.remaining_sec === "number" ? at + j.remaining_sec * 1000 : null,
   };
+}
+
+function normalTtl(startsIn: number | null | undefined): number {
+  if (typeof startsIn !== "number" || !Number.isFinite(startsIn)) return NORMAL_TTL_MAX_MS;
+  // starts_in_sec は切り捨ての整数なので 1 秒足す（開始の直前に切れて、残り 0 秒の応答で 15 秒の下限が効くのを避ける）
+  return Math.max(NORMAL_TTL_MS, Math.min(NORMAL_TTL_MAX_MS, startsIn * 1000 + 1000));
 }
 
 /** 失敗のときの値。前の値を延ばせるのは上限の内だけ。 */

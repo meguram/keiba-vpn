@@ -35,35 +35,27 @@ HORSE_RE = re.compile(r"^h(\d{10})$")
 DATE_RE = re.compile(r"^\d{8}$")
 JST = timezone(timedelta(hours=9))
 
+# 匿名で 200 が返るパスだけ取り直す。会員だけのパス（匿名は 401 で保存もされない）は外した（2026-11-23。VPS の access.log の 11/22〜23 で、
+# 次の 11 種は cache-warm の要求が全部 401 だった: race の result・tracking-difficulty・v1 megu-index-predicted・v1 analysis、
+# race-quality/day・bets-summary・bets-by-level・megu-index-dates、馬の detail・growth-curve・megu-index-history。docs/operations/edge_cache_plan_20261121.md 段 0）。
+# 要求が減るので、limit_req（127.0.0.1 から 120 回/分）の 429 も減る。会員の区分を保存する仕組み（計画の段 2 以降）を入れるときに戻す。
 RACE_PATHS = (
     "/api/race/{id}",
     "/api/race/{id}/predictions",
-    "/api/race/{id}/result",
-    "/api/race/{id}/tracking-difficulty",
-    "/api/v1/races/{id}/megu-index-predicted",
-    "/api/v1/races/{id}/analysis",
 )
-HORSE_PATHS = (
-    "/api/horse/{id}/detail",
-    "/api/v1/horse/{id}/growth-curve",
-    "/api/v1/horse/{id}/megu-index-history",
-)
+HORSE_PATHS: tuple[str, ...] = ()      # 馬のページの 3 種は全部 401（匿名の保存物は無い）。目印 h<馬ID> は読んで処理済みにするだけ
 # 開催日の目印で取り直す、その日の集計（画面が実際に要求する URL の形。クエリまで一致しないと別の保存物になる）
 DATE_EXTRA_PATHS = (
     "/api/prediction-results?scope=day&date={d}",
-    "/api/prediction-results/bets-summary?date={d}",
-    "/api/race-quality/day?date={d}",
 )
 RESULTS_PATHS = (
     "/api/prediction-results/days",
     "/api/prediction-results/news?limit=6",
-    "/api/prediction-results/bets-by-level",
 )
 GLOBAL_PATHS = (
     "/api/scrape-dates?picker_past_days=14&picker_future_days=14",
     "/api/scrape-dates?picker_past_days=120",
     "/api/scrape-dates?filter=meeting",
-    "/api/megu-index-dates",
 )
 MAX_QUEUE = 5000
 MAX_ATTEMPTS = 3

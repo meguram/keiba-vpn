@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { USE_MOCK, MOCK_WEEKLY_RACES, getMockBetRecommendation } from "@/lib/mock";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
-import { getJson, prefetchJson, readStored } from "@/lib/httpCache";
+import { getJson, likelyMember, prefetchJson, readStored } from "@/lib/httpCache";
 
 /** レースの「価値」= 推奨買い目の期待回収率（バックエンド delegates.race_value_summary と同じ区分） */
 export type ValueLevel = "hot" | "good" | "ok" | "pass" | "none";
@@ -117,9 +117,9 @@ async function fetchValues(date: string): Promise<Map<string, RaceValue>> {
   return map;
 }
 
-/** 先に取り始めておく（日付の確定や認証の確認を待たない）。ログイン前なら 401 で失敗するだけで何も残らない。 */
+/** 先に取り始めておく（日付の確定や認証の確認を待たない）。このタブで前に会員と分かったときだけ（匿名の 401 で Cloud Run を起こさない）。 */
 export function prefetchRaceValues(date: string): void {
-  if (USE_MOCK || !date) return;
+  if (USE_MOCK || !date || !likelyMember()) return;
   prefetchJson(raceValuesUrl(date), { ttlMs: TTL_MS, credentials: "include", persist: true });
 }
 
@@ -133,7 +133,7 @@ function initialValues(date: string): Map<string, RaceValue> | null {
 
 export type RaceValuesState = { values: Map<string, RaceValue>; loading: boolean; failed: boolean };
 
-/** 開催日（YYYYMMDD）の各レースの価値と、取得の状態。前回の内容があれば先に出し、裏で更新する。認証の確認とは並行して取りに行く。 */
+/** 開催日（YYYYMMDD）の各レースの価値と、取得の状態。前回の内容があれば先に出し、裏で更新する。このタブで前に会員と分かっていれば、認証の確認と並行して取りに行く。 */
 export function useRaceValuesState(date: string): RaceValuesState {
   const [state, setState] = useState<RaceValuesState>({ values: new Map(), loading: true, failed: false });
   const { loading, isMember: loggedIn } = useAuthStatus();
@@ -142,6 +142,7 @@ export function useRaceValuesState(date: string): RaceValuesState {
     let timer: ReturnType<typeof setTimeout> | undefined;
     if (!date && !USE_MOCK) return;
     if (!USE_MOCK && !loading && !loggedIn) { setState({ values: new Map(), loading: false, failed: false }); return; }   // ログイン必須の API。未ログインと分かったら呼ばない
+    if (!USE_MOCK && loading && !likelyMember()) return;   // 会員と分かっていないタブは、認証の確認を待ってから呼ぶ（匿名の 401 を出さない）
     const first = initialValues(date);
     setState(first ? { values: first, loading: true, failed: false } : (s) => ({ values: s.values, loading: true, failed: false }));
     const run = (attempt: number) => {
