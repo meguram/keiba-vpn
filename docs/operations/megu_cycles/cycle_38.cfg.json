@@ -1,0 +1,1 @@
+{"hypothesis": "期待値で選んだ平場の馬の複勝（単勝でなく）は、当たりが多く区間が狭い。T-15 で判定すると 100% を越える。", "rich": "rich_pred_v5bag.parquet", "phase": "t15", "segs": ["flat"], "kind": "place", "t": [1.3, 1.5], "omax": [50.0]}

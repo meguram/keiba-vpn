@@ -420,7 +420,7 @@ _GUARD_ENTRY = {
     "src/research/course/megu_why.py": {"_collect_inner", "cmd_graded", "cmd_perm"},   # 100% を超えない理由の診断（eval_only・研究の CLI）
     "src/research/course/megu_oikiri.py": {"_select_inner", "_final_inner"},   # 追い切りの切り口の 1 回だけの評価（eval_only・研究の CLI）
     "src/research/megu_cycles/mc_data.py": {"cmd_build", "cmd_build_rich", "cmd_build_offset", "cmd_build_bag"},   # めぐサイクルの表（reproduce・研究の CLI）
-    "src/research/megu_cycles/mc_eval.py": {"confirm"},                       # めぐサイクルの 2022〜24 の確かめ（confirm）
+    "src/research/megu_cycles/mc_eval.py": {"confirm", "eval_only_guard"},   # めぐサイクルの 2022〜24 の確かめ（confirm）・割引きと最後の確かめ（eval_only）
 }
 _PROD = ("src/pipeline/inference/stage2_bets.py", "src/pipeline/inference/candidate_runner.py", "src/api/stage2_live.py")
 

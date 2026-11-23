@@ -263,3 +263,9 @@ def ledger_confirms() -> int:
 
 def confirm_log() -> list:
     return json.loads(CONFIRM_LOG.read_text(encoding="utf-8")) if CONFIRM_LOG.exists() else []
+
+
+def eval_only_guard(tool: str, version: str, period: tuple[str, str], reason: str, frozen=()):
+    """評価だけ（eval_only）の読み出しの台帳の申告。with で使う（割引きの評価・最後の 1 回の確かめ）。"""
+    from src.ops import data_ledger as DL
+    return DL.guard(tool=tool, family="megu_cycles", version=version, period=period, purpose="eval_only", reason=reason, frozen_paths=list(frozen))

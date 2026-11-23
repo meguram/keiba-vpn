@@ -32,7 +32,7 @@ SEGS = ("flat", "graded")
 # サイクルごとの確率の版（再現のため）。11 以降は v5。13 は v5 の学習の平均（cycle13 の中で差し替える）
 CYCLE_RICH = {4: "rich_pred.parquet", 5: "rich_pred_v2.parquet", 6: "rich_pred_v4.parquet", 7: "rich_pred_v4.parquet", 8: "rich_pred_v4.parquet",
               9: "rich_pred_v4.parquet", 10: "rich_pred_v4.parquet", 13: "rich_pred_v5bag.parquet", 15: "rich_pred_v5bag.parquet",
-              16: "rich_pred_v6bag.parquet", 17: "rich_pred_v5bag.parquet", 18: "rich_pred_v5bag.parquet", 19: "rich_pred_v5bag.parquet", 20: "rich_pred_v5bag.parquet", 21: "rich_pred_v5bag.parquet", 22: "rich_pred_v5bag.parquet", 23: "rich_pred_v5bag.parquet", 24: "rich_pred_v7bag.parquet", 29: "rich_pred_v5bag.parquet"}
+              16: "rich_pred_v6bag.parquet", 17: "rich_pred_v5bag.parquet", 18: "rich_pred_v5bag.parquet", 19: "rich_pred_v5bag.parquet", 20: "rich_pred_v5bag.parquet", 21: "rich_pred_v5bag.parquet", 22: "rich_pred_v5bag.parquet", 23: "rich_pred_v5bag.parquet", 24: "rich_pred_v7bag.parquet", 29: "rich_pred_v5bag.parquet", 44: "rich_pred_v5bag.parquet", 48: "rich_pred_v5bag.parquet", 49: "rich_pred_v5bag.parquet"}
 RICH_FILE = D.RICH
 
 
@@ -1012,6 +1012,360 @@ def cycle29(d: pd.DataFrame) -> dict:
 CYCLES[29] = cycle29
 
 
+# ---------------------------------------------------------------- サイクル 41: 最終レースの効果（市場の値だけ）
+def strat_lastrace(pp_max: int, last_only: bool = True):
+    def s(d: pd.DataFrame, k: int) -> np.ndarray:
+        rno = d["race_id"].astype(str).str[-2:].astype(int).to_numpy()
+        m = pop_pre(d, k) <= pp_max
+        if last_only:
+            m &= rno == 12
+        return m.astype(float)
+    return s
+
+
+def cycle41(d: pd.DataFrame) -> dict:
+    out = {"cycle": 41, "hypothesis": "最終レースの効果（McGlothlin 1956・Ali 1977）: その日の負けを取り返そうとする買い手が最終レースで大穴を過剰に買い、"
+           "人気馬が割安になる。最終レース（12R）の T-60 の人気上位を買うと、ほかのレースの同じ人気より回収率が高く、100% を越える。", "segments": {}}
+    n_trials = 0
+    for seg in SEGS:
+        a_d, b_d = sub(d, "select_a", seg), sub(d, "select_b", seg)
+        rows = []
+        for pp, kind in itertools.product((1, 2, 3), ("win", "place")):
+            rows.append({"pp": pp, "kind": kind, "a": E.evaluate(a_d, strat_lastrace(pp), kind, n_boot=500),
+                         "ref_all": E.evaluate(a_d, strat_lastrace(pp, False), kind, n_boot=0)["roi"]})
+            n_trials += 1
+        best = pick_best(rows)
+        seg_out = {"trials": len(rows), "grid": [{"pp": r["pp"], "kind": r["kind"], "roi_a": r["a"]["roi"], "bpy_a": r["a"]["bets_per_year"], "roi_all_races": r["ref_all"]} for r in rows]}
+        if best:
+            st = strat_lastrace(best["pp"])
+            b = E.evaluate(b_d, st, best["kind"])
+            nl = E.null_perm(b_d, st, ["odds_pre0", "odds_pre1", "odds_pre2", "odds_pre3", "odds_pre4"], best["kind"], n=30)
+            ok, why = E.gate(best["a"], b, nl)
+            seg_out |= {"best": {"pp": best["pp"], "kind": best["kind"]}, "select_a": best["a"], "select_b": b, "null_b": nl, "gate": ok, "gate_why": why}
+        out["segments"][seg] = seg_out
+    out["n_trials"] = n_trials
+    return out
+
+
+CYCLES[41] = cycle41
+
+
+# ---------------------------------------------------------------- サイクル 42: 人気騎手の過剰人気（市場 + 騎手の成績だけの第 2 段）
+def attach_frame_cols(d: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+    f = pd.read_parquet(D.FRAME, columns=["race_id", "horse_id"] + cols, filters=[("year", ">=", int(d["year"].min())), ("year", "<=", int(d["year"].max()))])
+    f["race_id"], f["horse_id"] = f["race_id"].astype(str), f["horse_id"].astype(str)
+    return d.merge(f.drop_duplicates(["race_id", "horse_id"]), on=["race_id", "horse_id"], how="left")
+
+
+def fit_cov(d: pd.DataFrame, covs: list[str]) -> np.ndarray:
+    y = d["y1"].fillna(0).to_numpy(float)
+    rid = pd.factorize(d["race_id"])[0]
+    X = np.column_stack([d[c].fillna(d[c].median()).to_numpy(float) for c in covs])
+    X = (X - X.mean(0)) / np.where(X.std(0) > 0, X.std(0), 1)
+    lqs = [np.log(np.clip(E.q_pre(d, k), 1e-6, 1)) for k in range(D.N_PRE)]
+
+    def nll(w):
+        tot = 0.0
+        for lq in lqs:
+            z = w[0] * lq + X @ w[1:]
+            mx = pd.Series(z).groupby(rid).transform("max").to_numpy()
+            lse = np.log(pd.Series(np.exp(z - mx)).groupby(rid).transform("sum").to_numpy()) + mx
+            tot -= np.sum(y * (z - lse))
+        return tot
+
+    r = minimize(nll, x0=np.r_[1.0, np.zeros(len(covs))], method="Nelder-Mead", options={"xatol": 1e-4, "fatol": 1e-2, "maxiter": 4000})
+    return r.x, X.mean(0), X.std(0)
+
+
+def strat_cov(w, covs, stats, t: float, omax: float):
+    mu, sd = stats
+
+    def s(d: pd.DataFrame, k: int) -> np.ndarray:
+        X = np.column_stack([d[c].fillna(np.nanmedian(d[c].to_numpy(float))).to_numpy(float) for c in covs])
+        Xs = X - np.nanmean(X, 0)
+        Xs = Xs / np.where(np.nanstd(X, 0) > 0, np.nanstd(X, 0), 1)
+        z = w[0] * np.log(np.clip(E.q_pre(d, k), 1e-6, 1)) + Xs @ w[1:]
+        z = z - pd.Series(z).groupby(d["race_id"].to_numpy()).transform("max").to_numpy()
+        p = E.race_norm(d, np.exp(z))
+        o = d[f"odds_pre{k}"].to_numpy(float)
+        return ((p * o >= t) & (o <= omax)).astype(float)
+    return s
+
+
+def cycle42(d: pd.DataFrame) -> dict:
+    covs = ["j_rate", "t_rate"]
+    out = {"cycle": 42, "hypothesis": "人気騎手・人気厩舎の過剰人気（公開の知見: 有名な騎手の馬は売れ過ぎる）。自前の確率を使わず、T-60 の市場と、"
+           "騎手・調教師の as-of の勝率だけの第 2 段（条件付き logit）で、市場が騎手・厩舎の名前に払い過ぎている分を取り除くと、期待値の判定が効く。",
+           "covs": covs, "segments": {}}
+    d = attach_frame_cols(d, covs)
+    n_trials = 0
+    for seg in SEGS:
+        a_d, b_d = sub(d, "select_a", seg), sub(d, "select_b", seg)
+        w, mu, sd = fit_cov(a_d, covs)
+        rows = []
+        for t, omax in itertools.product((1.05, 1.1, 1.2, 1.3), (20.0, 50.0)):
+            rows.append({"t": t, "omax": omax, "a": E.evaluate(a_d, strat_cov(w, covs, (mu, sd), t, omax), "win", n_boot=500)})
+            n_trials += 1
+        best = pick_best(rows)
+        seg_out = {"w": list(map(float, w)), "trials": len(rows), "grid": [{"t": r["t"], "omax": r["omax"], "roi_a": r["a"]["roi"], "bpy_a": r["a"]["bets_per_year"]} for r in rows]}
+        if best:
+            st = strat_cov(w, covs, (mu, sd), best["t"], best["omax"])
+            b = E.evaluate(b_d, st, "win")
+            nl = E.null_perm(b_d, st, covs, "win", n=30)
+            ok, why = E.gate(best["a"], b, nl)
+            seg_out |= {"best": {"t": best["t"], "omax": best["omax"]}, "select_a": best["a"], "select_b": b, "null_b": nl, "gate": ok, "gate_why": why}
+        out["segments"][seg] = seg_out
+    out["n_trials"] = n_trials
+    return out
+
+
+CYCLES[42] = cycle42
+
+
+# ---------------------------------------------------------------- サイクル 43: 判定のオッズのずれの大きさへの感度（候補の凍結値。探さない）
+def sim_scaled(d: pd.DataFrame, phase: str, scale: float) -> pd.DataFrame:
+    from src.scripts.data.bet_cycles import load_drift
+    pool = load_drift(phase)["races"]
+    rid = d["race_id"].to_numpy()
+    odds = d["odds_final"].to_numpy(float)
+    pop = np.nan_to_num(d["pop_final"].to_numpy(float), nan=99.0)
+    starts = np.flatnonzero(np.r_[True, rid[1:] != rid[:-1]])
+    ends = np.r_[starts[1:], len(d)]
+    e = d.copy()
+    for k in range(D.N_PRE):
+        rng = np.random.default_rng(1000 + k)
+        out = np.empty(len(d))
+        for s_, e_ in zip(starts, ends):
+            src = pool[int(rng.integers(len(pool)))]
+            rk = np.clip(np.where(pop[s_:e_] < 99, pop[s_:e_], len(src)).astype(int) - 1, 0, len(src) - 1)
+            o = odds[s_:e_] * np.exp(-scale * src[rk])
+            out[s_:e_] = o * (np.sum(1.0 / o) / np.sum(1.0 / odds[s_:e_]))
+        e[f"odds_pre{k}"] = out
+    return e
+
+
+def cycle43(d: pd.DataFrame) -> dict:
+    out = {"cycle": 43, "hypothesis": "候補の回収率は、判定のオッズの再現のずれの大きさ（2026 年の 1 年から借りた値）に強く依る。ずれを 0.5・1・1.5・2 倍にして、"
+           "凍結した設定のまま 2017〜21 で数え、どの候補がどれだけ楽観に頼るかを測る（探さない）。", "segments": {}, "n_trials": 0, "sensitivity": {}}
+    d = d.sort_values(["race_id", "hn"]).reset_index(drop=True)
+    for name in ("c13_flat", "c18_flat_t05", "c21_maiden_t60", "c23_flat_t15", "c24_flat_v7"):
+        spec = json.loads((CAND / f"{name}.json").read_text(encoding="utf-8"))
+        global RICH_FILE
+        RICH_FILE = D.OUT / spec["probability"]["file"]
+        e0 = _prep(D.load_table((2017, 2021)), True)
+        if spec.get("group"):
+            e0 = e0[group_of(e0) == spec["group"]].reset_index(drop=True)
+        e0 = e0[E.seg_mask(e0, "flat")].reset_index(drop=True)
+        ab = tuple(spec["combo_ab_t60"])
+        st = strat_ev(lambda x, k, ab=ab: combo_p(x, k, *ab, col="p_rich"), spec["t"], spec["omax"])
+        res = {}
+        for sc in (0.0, 0.5, 1.0, 1.5, 2.0):
+            r = E.evaluate(sim_scaled(e0, spec.get("phase", "t60"), sc), st, "win", n_boot=300)
+            res[str(sc)] = {"roi": r["roi"], "bets_per_year": r["bets_per_year"], "roi_ci": r.get("roi_ci"), "mr": r["market_ratio"]}
+        out["sensitivity"][name] = res
+    return out
+
+
+CYCLES[43] = cycle43
+
+
+# ---------------------------------------------------------------- サイクル 44: ワイド（期待値の上位 2 頭の組）
+def wide_payoffs(years) -> dict:
+    from src.scripts.data import bet_cycles as bc
+    pay = bc.load_payoffs()
+    bc.fill_payoffs_from_flat(pay, years)
+    return {rid: v.get("wide", {}) for rid, v in pay.items() if str(rid)[:4].isdigit() and int(str(rid)[:4]) in set(years)}
+
+
+def harville_pair_top3(q: np.ndarray, i: int, j: int) -> float:
+    n = len(q)
+
+    def p3(a, b, c):
+        return q[a] * q[b] / (1 - q[a]) * q[c] / (1 - q[a] - q[b])
+    tot = 0.0
+    for x in range(n):
+        if x in (i, j):
+            continue
+        tot += p3(i, j, x) + p3(j, i, x) + p3(i, x, j) + p3(j, x, i) + p3(x, i, j) + p3(x, j, i)
+    return tot
+
+
+def eval_wide(d: pd.DataFrame, ab, t: float, omax: float, wpay: dict, n_boot: int = 500) -> dict:
+    """各版で、期待値 ≥ t の馬が 2 頭以上いるレースの、期待値の上位 2 頭のワイドを 1 点。5 版の平均。"""
+    rows = []
+    for k in range(D.N_PRE):
+        p = combo_p(d, k, *ab, col="p_rich")
+        o = d[f"odds_pre{k}"].to_numpy(float)
+        ev = np.where((o <= omax), p * o, 0.0)
+        for rid, idx in pd.Series(np.arange(len(d))).groupby(d["race_id"].to_numpy()).indices.items():
+            sel = idx[ev[idx] >= t]
+            if len(sel) < 2:
+                continue
+            top = sel[np.argsort(-ev[sel])[:2]]
+            hn = d["hn"].to_numpy()[top].astype(int)
+            key = "-".join(map(str, sorted(hn)))
+            fin = pd.to_numeric(d["fin"], errors="coerce").to_numpy()[top]
+            hit = bool((fin <= 3).all())
+            ret = (wpay.get(rid, {}).get(key, 0) / 100.0) if hit else 0.0
+            qf = d["q_final"].to_numpy()[idx]
+            ii = [int(np.flatnonzero(idx == x)[0]) for x in top]
+            rows.append({"k": k, "rid": rid, "date": str(d["date"].iloc[top[0]])[:10], "ret": ret, "hit": float(hit),
+                         "exp": harville_pair_top3(qf, ii[0], ii[1])})
+    if not rows:
+        return {"roi": None, "bets_per_year": 0, "market_ratio": None, "base_same_pop": None}
+    r = pd.DataFrame(rows)
+    years = d["year"].nunique()
+    out = {"kind": "wide", "bets": len(r) / D.N_PRE, "bets_per_year": len(r) / D.N_PRE / years, "roi": float(r["ret"].mean()),
+           "market_ratio": float(r["hit"].sum() / r["exp"].sum()), "base_same_pop": None, "hit_rate": float(r["hit"].mean())}
+    g = r.groupby("date")[["ret", "hit", "exp"]].sum().assign(n=r.groupby("date").size())
+    A = g[["n", "ret", "hit", "exp"]].to_numpy()
+    rng = np.random.default_rng(0)
+    B = A[rng.integers(0, len(A), size=(n_boot, len(A)))].sum(1)
+    out["roi_ci"] = [float(np.percentile(B[:, 1] / B[:, 0], 2.5)), float(np.percentile(B[:, 1] / B[:, 0], 97.5))]
+    out["mr_ci"] = [float(np.percentile(B[:, 2] / B[:, 3], 2.5)), float(np.percentile(B[:, 2] / B[:, 3], 97.5))]
+    return out
+
+
+def cycle44(d: pd.DataFrame) -> dict:
+    out = {"cycle": 44, "hypothesis": "券種を変える: 単勝の期待値で選んだ馬が同じレースに 2 頭以上いるとき、上位 2 頭のワイドは当たりが多く、"
+           "2 頭とも市場より 3 着内に来やすい（自前の確率の上積み）なら、ワイドの控除（22.5%）を越える。", "segments": {}}
+    wpay = wide_payoffs(range(2017, 2022))
+    n_trials = 0
+    seg = "flat"
+    a_d, b_d = sub(d, "select_a", seg), sub(d, "select_b", seg)
+    ab = fit_combo(a_d, col="p_rich")
+    rows = []
+    for t, omax in itertools.product((1.0, 1.1, 1.2, 1.3), (20.0, 50.0)):
+        rows.append({"t": t, "omax": omax, "a": eval_wide(a_d, ab, t, omax, wpay)})
+        n_trials += 1
+    best = pick_best(rows)
+    seg_out = {"combo_ab_t60": ab, "trials": len(rows), "grid": [{"t": r["t"], "omax": r["omax"], "roi_a": r["a"]["roi"], "bpy_a": r["a"]["bets_per_year"]} for r in rows]}
+    if best:
+        b = eval_wide(b_d, ab, best["t"], best["omax"], wpay)
+        b["base_same_pop"] = 0.0
+        best["a"]["base_same_pop"] = 0.0
+        ok, why = E.gate(best["a"], b, None)
+        seg_out |= {"best": {"t": best["t"], "omax": best["omax"]}, "select_a": best["a"], "select_b": b, "gate": ok, "gate_why": why}
+    out["segments"][seg] = seg_out
+    out["n_trials"] = n_trials
+    return out
+
+
+CYCLES[44] = cycle44
+
+
+def cycle48(d: pd.DataFrame) -> dict:
+    """サイクル 12 の 3 つの確率の組み合わせを、学習の平均（v5bag）と約 120 列の確率と T-60 の市場で、平場だけ流す。"""
+    out = cycle12(d)
+    out["cycle"] = 48
+    out["hypothesis"] = "学習の平均（v5bag）に、別の列の約 120 列の確率を足して 3 つで組むと、平場の確率が鋭くなり c13 より回収率・件数が上がる。"
+    out["segments"].pop("graded", None)
+    return out
+
+
+# ---------------------------------------------------------------- サイクル 49: 勝ち目の薄い馬を避ける（自前の確率の順位も上位）
+def strat_ev_rank(ab, t: float, omax: float, rmax: int):
+    def s(d: pd.DataFrame, k: int) -> np.ndarray:
+        p = combo_p(d, k, *ab, col="p_rich")
+        o = d[f"odds_pre{k}"].to_numpy(float)
+        rk = pd.Series(p).groupby(d["race_id"].to_numpy()).rank(ascending=False, method="first").to_numpy()
+        return ((p * o >= t) & (o <= omax) & (rk <= rmax)).astype(float)
+    return s
+
+
+def cycle49(d: pd.DataFrame) -> dict:
+    out = {"cycle": 49, "hypothesis": "期待値が高く見えても、組んだ確率のレースの中の順位が低い馬（オッズの長さだけで期待値が高い馬）は、確率の推定の誤差の影響が大きい。"
+           "組んだ確率の順位が上位（3・5 位以内）の馬だけを買うと、誤差に強くなり回収率が上がる。", "segments": {}}
+    n_trials = 0
+    for seg in ("flat",):
+        a_d, b_d = sub(d, "select_a", seg), sub(d, "select_b", seg)
+        ab = fit_combo(a_d, col="p_rich")
+        rows = []
+        for t, rmax in itertools.product((1.1, 1.2, 1.3), (3, 5)):
+            rows.append({"t": t, "rmax": rmax, "a": E.evaluate(a_d, strat_ev_rank(ab, t, 50.0, rmax), "win", n_boot=500)})
+            n_trials += 1
+        best = pick_best(rows)
+        seg_out = {"combo_ab_t60": ab, "trials": len(rows), "grid": [{"t": r["t"], "rmax": r["rmax"], "roi_a": r["a"]["roi"], "bpy_a": r["a"]["bets_per_year"]} for r in rows]}
+        if best:
+            st = strat_ev_rank(ab, best["t"], 50.0, best["rmax"])
+            b = E.evaluate(b_d, st, "win")
+            nl = E.null_perm(b_d, st, ["p_rich"], "win", n=30)
+            ok, why = E.gate(best["a"], b, nl)
+            seg_out |= {"best": {"t": best["t"], "rmax": best["rmax"]}, "select_a": best["a"], "select_b": b, "null_b": nl, "gate": ok, "gate_why": why}
+        out["segments"][seg] = seg_out
+    out["n_trials"] = n_trials
+    return out
+
+
+CYCLES[48] = cycle48
+CYCLES[49] = cycle49
+
+
+# ---------------------------------------------------------------- サイクル 50: 割引きの評価（2022〜24 に当てた候補を同じ開催日で同時にブートストラップ）
+def candidate_daily(name: str, d_all_cache: dict) -> pd.DataFrame:
+    """候補の凍結した設定で、2022〜24 の開催日ごとの賭け金・払戻（5 版の平均）を返す。"""
+    global RICH_FILE
+    spec = json.loads((CAND / f"{name}.json").read_text(encoding="utf-8"))
+    RICH_FILE = D.OUT / spec["probability"]["file"]
+    key = spec["probability"]["file"]
+    if key not in d_all_cache:
+        d_all_cache[key] = load_all()
+    d = d_all_cache[key]
+    if spec.get("phase", "t60") != "t60":
+        d = swap_phase(d, spec["phase"])
+    if spec.get("group"):
+        d = d[group_of(d) == spec["group"]].reset_index(drop=True)
+    d = d[E.period_mask(d, "confirm") & E.seg_mask(d, spec["segment"])].reset_index(drop=True)
+    ab = tuple(spec["combo_ab_t60"])
+    st = strat_ev(lambda x, k: combo_p(x, k, *ab, col="p_rich"), spec["t"], spec["omax"])
+    S = np.vstack([st(d, k) for k in range(D.N_PRE)]).mean(0)
+    g = pd.DataFrame({"date": d["date"].astype(str).str[:10], "s": S, "p": S * d["ret_tan"].fillna(0).to_numpy()}).groupby("date").sum()
+    return g
+
+
+def cycle50(d: pd.DataFrame) -> dict:
+    names = [r["spec"]["name"] for r in E.confirm_log()]
+    out = {"cycle": 50, "hypothesis": "2022〜24 に当てた候補は同じ考えの変種で強く相関する。同じ開催日で同時にブートストラップし、全候補の同時の 95% 下限"
+           "（標準化した最大の偏差の分位で割り引く。Romano-Wolf 型）と、相関を無視した Holm を並べて、割引きの後も 100% を超えるかを見る。",
+           "segments": {}, "n_trials": 0, "candidates": names}
+    with E.eval_only_guard("src/research/megu_cycles/cycles.py:cycle50", "discount-v1", ("2022-01-01", "2024-12-31"),
+                           "2022〜24 に当てた候補の多重比較の割引き（同時のブートストラップ）。設定は選び直さない") as tok:
+        cache: dict = {}
+        G = {n: candidate_daily(n, cache) for n in names}
+        tok.finish()
+    dates = sorted(set().union(*[set(g.index) for g in G.values()]))
+    A = np.stack([G[n].reindex(dates).fillna(0)[["s", "p"]].to_numpy() for n in names])      # (候補, 日, 2)
+    roi = A[:, :, 1].sum(1) / A[:, :, 0].sum(1)
+    rng = np.random.default_rng(20261124)
+    nb = 4000
+    idx = rng.integers(0, len(dates), size=(nb, len(dates)))
+    B = A[:, idx, :].sum(2)                                   # (候補, nb, 2)
+    rb = B[:, :, 1] / B[:, :, 0]
+    sd = rb.std(1)
+    z = (rb - roi[:, None]) / sd[:, None]
+    cmax = float(np.quantile((-z).max(0), 0.95))              # 全候補の同時の片側 95%
+    p_raw = (rb <= 1.0).mean(1)                               # 片側の p（回収率 ≤ 1 の割合）
+    order = np.argsort(p_raw)
+    holm = np.empty(len(names))
+    run = 0.0
+    for r_, i in enumerate(order):
+        run = max(run, min(1.0, (len(names) - r_) * p_raw[i]))
+        holm[i] = run
+    corr = np.corrcoef(rb)
+    out["discount"] = {n: {"roi_2022_24": float(roi[i]), "sd": float(sd[i]), "lb_simultaneous_95": float(roi[i] - cmax * sd[i]),
+                           "lb_single_95": float(np.quantile(rb[i], 0.05)), "p_raw": float(p_raw[i]), "p_holm": float(holm[i])}
+                       for i, n in enumerate(names)}
+    out["c_max"] = cmax
+    out["corr"] = {n: {m: float(corr[i, j]) for j, m in enumerate(names)} for i, n in enumerate(names)}
+    t = json.loads((DOCS / "trials.json").read_text(encoding="utf-8"))
+    out["n_total_trials"] = t["total_trials"]
+    out["select_b_looks"] = t["select_b_looks"]["count"]
+    return out
+
+
+CYCLES[50] = cycle50
+
+
 # ---------------------------------------------------------------- 汎用のサイクル（設定は docs/operations/megu_cycles/cycle_NN.cfg.json）
 def strat_generic(ab, t: float, omax: float, omin: float = 1.0, field_max: int | None = None, age2: bool | None = None):
     def s(d: pd.DataFrame, k: int) -> np.ndarray:
@@ -1032,6 +1386,14 @@ def cycle_generic(d: pd.DataFrame, n: int) -> dict:
     e0 = d if cfg.get("phase", "t60") == "t60" else swap_phase(d, cfg["phase"])
     if cfg.get("group"):
         e0 = e0[group_of(e0) == cfg["group"]].reset_index(drop=True)
+    if cfg.get("surf"):
+        e0 = e0[e0["surf"].astype(str) == cfg["surf"]].reset_index(drop=True)
+    if cfg.get("venues"):
+        e0 = e0[e0["venue"].astype(str).isin(cfg["venues"])].reset_index(drop=True)
+    if cfg.get("cls"):
+        e0 = e0[pd.to_numeric(e0["cls"], errors="coerce").isin(cfg["cls"])].reset_index(drop=True)
+    if cfg.get("field_min"):
+        e0 = e0[pd.to_numeric(e0["field"], errors="coerce") >= cfg["field_min"]].reset_index(drop=True)
     n_trials = 0
     for seg in cfg.get("segs", ["flat", "graded"]):
         a_d, b_d = sub(e0, "select_a", seg), sub(e0, "select_b", seg)
