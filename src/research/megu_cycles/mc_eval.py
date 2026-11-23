@@ -219,7 +219,7 @@ def spec_hash(spec: dict) -> str:
     return hashlib.sha256(json.dumps(spec, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:12]
 
 
-def confirm(d_all: pd.DataFrame, strat: Strategy, spec: dict, kind: str, seg: str, reason: str) -> dict:
+def confirm(d_all: pd.DataFrame, strat: Strategy, spec: dict, kind: str, seg: str, reason: str, extra=None) -> dict:
     """2022〜24 に当てる（関門を通った候補だけ）。台帳に confirm を申告する。通算 max_candidates まで。"""
     from src.ops import data_ledger as DL
     log = confirm_log()
@@ -230,12 +230,16 @@ def confirm(d_all: pd.DataFrame, strat: Strategy, spec: dict, kind: str, seg: st
     if any(r.get("version") == v for r in log):
         raise SystemExit(f"同じ設定（{v}）はもう 2022〜24 に当てた")
     frozen = [D.GOAL, D.ROOT / "src/research/megu_cycles/mc_eval.py", D.ROOT / "src/research/megu_cycles/cycles.py", D.ROOT / "src/research/megu_cycles/mc_data.py"]
+    if spec.get("name"):
+        frozen.append(D.ROOT / "config/megu_cycles/candidates" / f"{spec['name']}.json")
     with DL.guard(tool="src/research/megu_cycles/mc_eval.py:confirm", family="megu_cycles", version=v, period=("2022-01-01", "2024-12-31"),
                   purpose="confirm", reason=reason, frozen_paths=frozen, meta={"spec": spec, "n_confirm_before": max(len(log), n_led)}) as tok:
         m = period_mask(d_all, "confirm") & seg_mask(d_all, seg)
         e = d_all[m].reset_index(drop=True)
         tok.check_dates(e["date"].astype(str))
         r = evaluate(e, strat, kind)
+        if extra is not None:                      # 事前に決めた副の読み（同じ 1 回の確かめの中で数える）
+            r["extra"] = extra(e)
         tok.finish()
     s_m = period_mask(d_all, "select") & seg_mask(d_all, seg)
     s = evaluate(d_all[s_m].reset_index(drop=True), strat, kind)

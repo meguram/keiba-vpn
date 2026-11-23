@@ -31,7 +31,7 @@ SEGS = ("flat", "graded")
 # ---------------------------------------------------------------- 共通の部品
 # サイクルごとの確率の版（再現のため）。11 以降は v5。13 は v5 の学習の平均（cycle13 の中で差し替える）
 CYCLE_RICH = {4: "rich_pred.parquet", 5: "rich_pred_v2.parquet", 6: "rich_pred_v4.parquet", 7: "rich_pred_v4.parquet", 8: "rich_pred_v4.parquet",
-              9: "rich_pred_v4.parquet", 10: "rich_pred_v4.parquet"}
+              9: "rich_pred_v4.parquet", 10: "rich_pred_v4.parquet", 13: "rich_pred_v5bag.parquet", 15: "rich_pred_v5bag.parquet"}
 RICH_FILE = D.RICH
 
 
@@ -575,13 +575,15 @@ CYCLES[10] = cycle10
 PRERACE = D.Path("/home/jovyan/work/folklore_out/prerace.parquet")
 
 
-def smartrc_check(b_d: pd.DataFrame, strat, kind: str = "win") -> dict | None:
-    """判定のオッズを SmartRC の想定の勝率（E_q）から作った想定オッズ（0.8 / E_q）に替えて、2021 年で数える（確定の並びを使わない判定）。"""
+def smartrc_check(b_d: pd.DataFrame, strat, kind: str = "win", year: int | None = 2021) -> dict | None:
+    """判定のオッズを SmartRC の想定の勝率（E_q）から作った想定オッズ（0.8 / E_q）に替えて数える（確定の並びを使わない判定）。
+    既定は 2021 年（選ぶ期間）。year=None なら b_d の年すべて（2024 年まで）。"""
     if not PRERACE.exists():
         return None
-    pr = pd.read_parquet(PRERACE, columns=["race_id", "horse_id", "year", "E_q"], filters=[("year", "==", 2021)]).dropna(subset=["E_q"])
+    flt = [("year", "==", year)] if year else [("year", ">=", int(b_d["year"].min())), ("year", "<=", min(int(b_d["year"].max()), D.YEAR_END))]
+    pr = pd.read_parquet(PRERACE, columns=["race_id", "horse_id", "year", "E_q"], filters=flt).dropna(subset=["E_q"])
     pr["race_id"], pr["horse_id"] = pr["race_id"].astype(str), pr["horse_id"].astype(str)
-    e = b_d[b_d["year"] == 2021].merge(pr[["race_id", "horse_id", "E_q"]], on=["race_id", "horse_id"], how="inner")
+    e = (b_d[b_d["year"] == year] if year else b_d).merge(pr[["race_id", "horse_id", "E_q"]], on=["race_id", "horse_id"], how="inner")
     e = e[e.groupby("race_id")["race_id"].transform("size") == e.groupby("race_id")["field"].transform("first")]   # 全頭そろったレースだけ
     if e.empty:
         return None
@@ -698,6 +700,75 @@ def cycle14(d: pd.DataFrame) -> dict:
 CYCLES[14] = cycle14
 
 
+def cycle13(d: pd.DataFrame) -> dict:
+    """サイクル 11 と同じ設計を、v5 の列で設定の違う XGBoost 3 本の平均（rich_pred_v5bag）で流す。"""
+    out = cycle11(d)
+    out["cycle"] = 13
+    out["hypothesis"] = ("v5 の確率を設定の違う 3 本の学習の平均にすると、1 本の学習の雑音が減って確率が鋭くなり、"
+                         "同じ期待値の水準で市場比が上がり、2020〜21 の市場比の区間の下限が 1 を越える。")
+    return out
+
+
+CYCLES[13] = cycle13
+
+
+def cycle15(d: pd.DataFrame) -> dict:
+    """サイクル 12 の設計（3 つの確率の組み合わせ）を、学習の平均（v5bag）で流す。重賞で件数と区間を狙う。"""
+    out = cycle12(d)
+    out["cycle"] = 15
+    out["hypothesis"] = ("サイクル 12 の重賞（103% → 104%、市場比の下限 0.93 だけで不合格）は、確率の雑音が区間を広げていた。"
+                         "学習の平均（v5bag）で組むと、重賞でも市場比が上がり区間の下限が 1 を越える。")
+    return out
+
+
+CYCLES[15] = cycle15
+
+
+# ---------------------------------------------------------------- 2022〜24 に当てる（関門を通り、凍結した候補だけ）
+CAND = D.ROOT / "config/megu_cycles/candidates"
+
+
+def cmd_confirm(name: str) -> None:
+    global RICH_FILE
+    spec = json.loads((CAND / f"{name}.json").read_text(encoding="utf-8"))
+    RICH_FILE = D.OUT / spec["probability"]["file"]
+    import hashlib
+    for key, path in (("probability", RICH_FILE), ("table", D.TABLE)):
+        h = hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+        if h != spec[key]["sha256_16"]:
+            raise SystemExit(f"{path} の sha が凍結と違う")
+    d_all = load_all()
+    assert RICH_FILE.name == spec["probability"]["file"] and d_all["pr_win"].notna().mean() > 0.99
+    ab = tuple(spec["combo_ab_t60"])
+    st = strat_ev(lambda e, k: combo_p(e, k, *ab, col="p_rich"), spec["t"], spec["omax"])
+
+    def extra(e: pd.DataFrame) -> dict:
+        """副の読み: 判定のオッズを SmartRC の想定（0.8 / E_q、全頭そろったレースだけ）に替えて、2022〜24 を年ごと・通しで数える。"""
+        out = {}
+        for y in (2022, 2023, 2024):
+            r = smartrc_check(e[e["year"] == y].reset_index(drop=True), st, spec["kind"], year=y)
+            out[str(y)] = r
+        r = smartrc_check(e, st, spec["kind"], year=None)
+        out["all"] = r
+        return out
+
+    row = E.confirm(d_all, st, spec, spec["kind"], spec["segment"], extra=extra,
+                    reason=f"候補 {name} を 2022〜24 に 1 回だけ当てる（関門・帰無 200 回・SmartRC・別のエージェントの見直しの後）")
+    print(json.dumps({k: row[k] for k in ("version", "goal_met", "why")}, ensure_ascii=False))
+    print("選ぶ期間（2017〜21）:", short(row["select"]))
+    print("確かめ（2022〜24）:", short(row["confirm"]))
+    sm = row["confirm"].get("extra", {})
+    for k, v in sm.items():
+        print("  SmartRC", k, short(v) if v else "-")
+    sec = (sm.get("all") or {}).get("roi")
+    final = bool(row["goal_met"] and sec is not None and sec >= 0.95)       # 当てる前に決めた合格の線（主と副の両方）
+    log = E.confirm_log()
+    log[-1]["secondary_smartrc_roi"] = sec
+    log[-1]["pass_final"] = final
+    E.CONFIRM_LOG.write_text(json.dumps(log, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+    print("合格（主と副）:", final)
+
+
 def cmd_md(n: int, title: str) -> None:
     """cycle_NN.json から cycle_NN.md の頭（結論・仮説・結果の表）を作る。課題・次に生かすこと・打ち切りは手で足す。"""
     b = json.loads((DOCS / f"cycle_{n:02d}.json").read_text(encoding="utf-8"))
@@ -716,14 +787,16 @@ def cmd_md(n: int, title: str) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["run", "md"])
-    ap.add_argument("n", type=int)
+    ap.add_argument("cmd", choices=["run", "md", "confirm"])
+    ap.add_argument("n")
     ap.add_argument("--title", default="")
     a = ap.parse_args()
     if a.cmd == "run":
-        cmd_run(a.n)
+        cmd_run(int(a.n))
+    elif a.cmd == "md":
+        cmd_md(int(a.n), a.title)
     else:
-        cmd_md(a.n, a.title)
+        cmd_confirm(a.n)
 
 
 if __name__ == "__main__":
