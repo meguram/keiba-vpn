@@ -15,6 +15,16 @@
   "scripts/ops/cutover/host_cron_switch.sh": {
    "local_data": 2
   },
+  "src/ops/edge_render.py": {
+   "host_path": 1,
+   "local_data": 9,
+   "page_reference": 2
+  },
+  "scripts/ops/edge/edge_sync.sh": {
+   "host_path": 2,
+   "local_data": 2,
+   "page_reference": 6
+  },
   "scripts/ops/fitted_artifacts.sh": {
    "local_data": 2
   },
