@@ -65,7 +65,7 @@ ul.jobs { padding-left:18px; margin:6px 0; } ul.jobs > li { margin:10px 0; }
 <h2 id="summary">まとめ</h2>
 <div class="kpis">
   <div class="kpi"><b>1 件</b><span>GCP で動いている定期実行（<code>keiba-g-0730-shadow</code>）</span></div>
-  <div class="kpi"><b>5 件</b><span>ConoHa VPS で動いている systemd タイマー（<code>keiba-cache-warm.timer</code>・<code>keiba-release-pull-ui.timer</code>・<code>keiba-release-pull-ui-stg.timer</code>・<code>keiba-release-pull-fetch.timer</code>・<code>keiba-ui-health.timer</code>）</span></div>
+  <div class="kpi"><b>6 件</b><span>ConoHa VPS で動いている systemd タイマー（<code>keiba-cache-warm.timer</code>・<code>keiba-release-pull-ui.timer</code>・<code>keiba-release-pull-ui-stg.timer</code>・<code>keiba-release-pull-fetch.timer</code>・<code>keiba-ui-health.timer</code>・<code>keiba-edge-guard@.timer</code>）</span></div>
   <div class="kpi"><b>1 件</b><span>ホストで動いている（この一覧に載せたもの: <code>KEIBA-VPS-ALIVE</code>）</span></div>
   <div class="kpi"><b>27 件</b><span>今は動いていない・今後起動しうるもの（GCP 削除済み 13、GCP 停止中 1、ConoHa VPS 停止中 2、ConoHa VPS 今後 6、ホスト 今後 5）</span></div>
   <div class="kpi"><b>2 種</b><span>廃止（jma-weather（気象庁の時別値）・smoke-auto-thu-noon・-sat-morning・-sun-night）</span></div>
@@ -97,6 +97,7 @@ ul.jobs { padding-left:18px; margin:6px 0; } ul.jobs > li { margin:10px 0; }
 <tr><td><code>keiba-release-pull-ui-stg.timer</code><br>→ <code>keiba-release-pull@ui-stg.service</code><br><span class="b ok">稼働中</span><br><span class="ev">id: vps-release-pull-ui-stg</span></td><td class="when">5 分おき</td><td>stg の画面の新しい版の取り込み</td><td>MemoryMax 150M</td><td>ほぼ 0 円</td><td>無い</td><td class="ev"><code>scripts/ops/vps/templates/keiba-release-pull-ui-stg.timer</code>、<code>scripts/ops/vps/vps_05_stg_instance.sh:104</code></td></tr>
 <tr><td><code>keiba-release-pull-fetch.timer</code><br>→ <code>keiba-release-pull@fetch.service</code><br><span class="b ok">稼働中</span><br><span class="ev">id: vps-release-pull-fetch</span></td><td class="when">毎日 03:20<br><code>20 3 * * *</code></td><td>取得の実行役のコードの新しい版の取り込み（メンテナンス窓 03:00〜04:00）</td><td>MemoryMax 150M</td><td>ほぼ 0 円</td><td>無い</td><td class="ev"><code>scripts/ops/vps/templates/keiba-release-pull-fetch.timer</code>、<code>scripts/ops/vps/vps_03_units.sh:60</code></td></tr>
 <tr><td><code>keiba-ui-health.timer</code><br>→ <code>keiba-ui-health.service</code><br><span class="b ok">稼働中</span><br><span class="ev">id: vps-ui-health</span></td><td class="when">5 分おき</td><td>VPS の中の自己診断: keiba-ui・nginx・cloudflared が止まっていれば 1 回再起動し、/version.json・ディスク・空きメモリを見て Slack へ</td><td>（指定なし）</td><td>0 円（API は叩かない）</td><td>ホストは server_watchdog（3 分おき）で自分のサーバーを見ている（対象は別）</td><td class="ev"><code>scripts/ops/vps/healthcheck.sh</code>、<code>scripts/ops/vps/vps_02_install_stack.sh:82</code></td></tr>
+<tr><td><code>keiba-edge-guard@.timer</code><br>→ <code>keiba-edge-guard@.service</code><br><span class="b ok">稼働中</span><br><span class="ev">id: vps-edge-guard</span></td><td class="when">60 秒おき</td><td>ホストの作り直し（edge_sync）の heartbeat が 5 分より古ければ確定前（_ctl/STALE_PRE.auto）、30 分より古ければ全部（_ctl/OFF.auto）のフォルダ配信を止める。戻れば自分の印（.auto）だけ外す。人の _ctl/OFF には触れない</td><td>（指定なし）</td><td>0 円（VPS の中のファイルだけ。GCS・Cloud Run に触れない）</td><td>—</td><td class="ev"><code>scripts/ops/vps/edge_stale_guard.sh</code>、<code>scripts/ops/vps/vps_14_edge_files.sh</code>、<code>docs/operations/edge_cache_plan_20261121.md §11.2</code></td></tr>
 <tr><td><code>keiba-fetch-agent.service</code><br><span class="b warn">停止中</span><br><span class="ev">id: vps-fetch-agent</span></td><td class="when">常駐</td><td>取得の実行役（常駐）: タスク表を毎分見て、netkeiba の取得を実行する<br><span class="ev">11/13 15:00 に停止・無効（担当なしで GCS のタスク表を毎分 6 回一覧していたため）。段 6 で file モードにしてから再開</span></td><td>keiba-fetch.slice: MemoryHigh 220M・MemoryMax 250M</td><td>停止中 0 円</td><td>取得はすべてホストの cron が担当（正）</td><td class="ev"><code>scripts/ops/vps/templates/keiba-fetch-agent.service</code>、<code>config/fetch_owner.json</code>、<code>コミット dda6af55</code></td></tr>
 </table></div>
 
@@ -478,6 +479,21 @@ ul.jobs { padding-left:18px; margin:6px 0; } ul.jobs > li { margin:10px 0; }
 <div><b>費用の目安（月）</b>: 0 円（API は叩かない）</div>
 <div><b>ホストでも同じ処理？</b>: ホストは server_watchdog（3 分おき）で自分のサーバーを見ている（対象は別）</div>
 <div><b>根拠</b>: <span class="ev"><code>scripts/ops/vps/healthcheck.sh</code>、<code>scripts/ops/vps/vps_02_install_stack.sh:82</code></span></div>
+<div><b>メモ</b>: —</div>
+</div></details>
+<details id="job-vps-edge-guard"><summary><span class="b ok">稼働中</span> <b>keiba-edge-guard@.timer</b> <span class="mu">— 60 秒おき・（指定なし）</span><br><span class="sm">ホストの作り直し（edge_sync）の heartbeat が 5 分より古ければ確定前（_ctl/STALE_PRE.auto）、30 分より古ければ全部（_ctl/OFF.auto）のフォルダ配信を止める。戻れば自分の印（.auto）だけ外す。人の _ctl/OFF には触れない</span></summary>
+<div class="dbody">
+<div><b>id</b>: <code>vps-edge-guard</code>（ConoHa VPS・systemd タイマー・重さ 軽い）</div>
+<div><b>名前</b>: timer <code>keiba-edge-guard@.timer</code>・service <code>keiba-edge-guard@.service</code></div>
+<div><b>スケジュール</b>: 60 秒おき</div>
+<div><b>入口</b>: <code>/opt/keiba-ui/bin/edge_stale_guard.sh &lt;env&gt;</code></div>
+<div><b>取得先の URL の例</b>: なし</div>
+<div><b>読む</b>: /srv/keiba-edge/&lt;env&gt;/current/_meta/heartbeat.json の更新時刻</div>
+<div><b>書く</b>: <ul><li>/srv/keiba-edge/&lt;env&gt;/_ctl/STALE_PRE.auto・OFF.auto</li><li>journal（logger -t keiba-edge-guard）</li></ul></div>
+<div><b>メモリの枠</b>: （指定なし）</div>
+<div><b>費用の目安（月）</b>: 0 円（VPS の中のファイルだけ。GCS・Cloud Run に触れない）</div>
+<div><b>ホストでも同じ処理？</b>: —</div>
+<div><b>根拠</b>: <span class="ev"><code>scripts/ops/vps/edge_stale_guard.sh</code>、<code>scripts/ops/vps/vps_14_edge_files.sh</code>、<code>docs/operations/edge_cache_plan_20261121.md §11.2</code></span></div>
 <div><b>メモ</b>: —</div>
 </div></details>
 <details id="job-vps-heartbeat"><summary><span class="b warn">停止中</span> <b>keiba-heartbeat.timer</b> <span class="mu">— 5 分おき・MemoryMax 48M</span><br><span class="sm">VPS の資源・ユニットの状態を監視ポータル（Cloud Run）へ送る</span></summary>

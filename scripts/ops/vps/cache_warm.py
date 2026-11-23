@@ -196,18 +196,24 @@ EDGE_RE = re.compile(r"^/api/(race/\d{12}(/predictions)?|race-list/\d{8})$")
 
 
 def edge_body(path: str, root: str | None = None) -> bytes | None:
-    """フォルダにある応答の本文。無い・止めの印がある・対象外のパスは None。"""
-    root = root if root is not None else env("EDGE_ANON_DIR", "/srv/keiba-edge/prod/current/anon")
+    """フォルダにある応答の本文。無い・止めの印がある・対象外のパスは None。
+
+    root は env の置き場（既定 /srv/keiba-edge/prod）。nginx と同じ順で current/anon/ → pre_live/（確定前。見張りが current/pre か空に付け替える）を見る。
+    止めの印（人の _ctl/OFF・見張りの _ctl/OFF.auto）があるとき・nginx がフォルダを見ていない（スニペットが無い）ときは None
+    （今どおり取り直す。nginx の API キャッシュを古くしない）。"""
+    root = root if root is not None else env("EDGE_DIR", "/srv/keiba-edge/prod")
     if not root or not EDGE_RE.match(path):
         return None
-    off = Path(env("EDGE_CTL_OFF", "/srv/keiba-edge/prod/_ctl/OFF"))
+    ctl = Path(root) / "_ctl"
     snippet = Path(env("EDGE_SNIPPET", "/etc/nginx/snippets/keiba-edge-prod.conf"))
-    if off.exists() or not snippet.exists():      # nginx がフォルダを見ていないときは、今どおり取り直す（nginx の API キャッシュを古くしない）
+    if (ctl / "OFF").exists() or (ctl / "OFF.auto").exists() or not snippet.exists():
         return None
-    try:
-        return Path(root + path + ".json").read_bytes()
-    except OSError:
-        return None
+    for d in ("current/anon", "pre_live"):
+        try:
+            return (Path(root) / d / (path.lstrip("/") + ".json")).read_bytes()
+        except OSError:
+            continue
+    return None
 
 
 def retry_wait(n: int, base: float = RETRY_BASE_SEC, cap: float = RETRY_MAX_SEC) -> float:

@@ -9,7 +9,9 @@
 # - GCS を読まない（作る処理は data/local/mirror の写しだけを読む）。ホスト → VPS は ssh の tar（GCP の外どうし。課金なし。ホストに rsync は無い）。
 # - 版: 最後に成功した配備（prod は promote.yml、stg は deploy-stg.yml）の commit。ブランチの先頭ではない（承認待ちで先に進むため）。
 #   その commit を別のツリー（$EDGE_HOME/<env>/src）に取り出して作る。共有の作業ツリー（ホストの cron が動く）は使わない。
-# - 止める: config/edge_render.json の enabled を false（作らない）、VPS で touch /srv/keiba-edge/<env>/_ctl/OFF（返さない）。
+# - 止める（1 行）: touch /home/jovyan/work/keiba-edge/STOP（作らない・送らない。消せば次の分から戻る）。
+#   VPS で touch /srv/keiba-edge/<env>/_ctl/OFF（返さない）。版ごとの止め方は config/edge_render.json の enabled。
+# - cron は 1 分ごと（E5）。作り直すものが無い回は API を読み込まず、heartbeat だけを送る（約 1 秒）。
 set -euo pipefail
 
 ENV_NAME="${1:-}"
@@ -26,7 +28,12 @@ GIT=(git -c credential.helper= -c credential.helper='!gh auth git-credential')
 [ "$(id -u)" != 0 ] || { echo "root では流さない（jovyan で。手元の状態に root の持ち物を作らない）" >&2; exit 2; }
 set -o pipefail
 mkdir -p "$EDGE_HOME" "$OUT"
+# cron が追記するログ（$EDGE_HOME/sync-<env>.log）の上限: 5MB を超えたら 1 世代だけ残して切り替える（この回の出力は .1 に入り、次の回から新しいファイル）
+for f in "$EDGE_HOME/sync-$ENV_NAME.log"; do
+  [ "$(stat -c %s "$f" 2>/dev/null || echo 0)" -lt 5242880 ] || mv -f "$f" "$f.1"
+done
 log() { echo "$(date '+%F %T') [edge-sync $ENV_NAME] $*"; }
+if [ -e "$EDGE_HOME/STOP" ]; then exit 0; fi                  # 止めの印（統括役が 1 行で置ける）
 exec 9>"$EDGE_HOME/.lock-$ENV_NAME"
 case " ${EDGE_RENDER_ARGS:-} " in
   *" --full "*) flock -w 1800 9 || { log "前の回が 30 分終わらないので、深夜の全部の作り直しを抜かした"; exit 1; } ;;   # 深夜の回は待つ（黙って抜けない）
@@ -36,6 +43,10 @@ esac
 # 1) 配備中の版
 # cron の cwd はリポジトリの外なので -R で名指しする。そのブランチの、成功した配備の workflow の commit
 SHA="${EDGE_SHA:-}"                                   # 試しのときだけ（EDGE_DRY=1 と組みで、版を名指しする）
+SHA_CACHE="$EDGE_HOME/.deployed-$ENV_NAME"            # 1 分ごとに GitHub を引かない: 10 分は前回の答えを使う
+if [ -z "$SHA" ] && [ -f "$SHA_CACHE" ] && [ $(( $(date +%s) - $(stat -c %Y "$SHA_CACHE") )) -lt 600 ]; then
+  SHA="$(cat "$SHA_CACHE")"; FROM_CACHE=1
+fi
 if [ -z "$SHA" ]; then
   # API に変更が無い push では deploy のジョブが skip されても run は success になる。deploy のジョブが成功した run だけを採る
   for rid in $(gh run list -R "$GH_REPO_NAME" --workflow "$WF" --branch "$BR" --status success -L 10 --json databaseId -q '.[].databaseId' 2>/dev/null || true); do
@@ -44,7 +55,11 @@ if [ -z "$SHA" ]; then
     fi
   done
 fi
+if ! [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] && [ -f "$SHA_CACHE" ]; then   # GitHub に届かない: 前回の答え（10 分より古くても）で続ける
+  SHA="$(cat "$SHA_CACHE")"; FROM_CACHE=1; log "配備中の版を引けないので、前回の答え（${SHA:0:12}）で作る"
+fi
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { log "配備中の版が分からない（gh run list $WF）。作らない"; exit 1; }
+if [ -z "${EDGE_SHA:-}" ] && [ -z "${FROM_CACHE:-}" ]; then printf '%s' "$SHA" > "$SHA_CACHE"; fi   # GitHub で引き直したときだけ書く
 
 # 2) 別のツリーを、その版に
 if [ ! -d "$TREE/.git" ]; then
@@ -90,15 +105,21 @@ done < <(grep -v '^#' "$TREE/config/fitted_artifacts.txt" 2>/dev/null | sed 's/[
 cd "$TREE"
 KEIBA_PAGE_REFERENCE_DIR="$BASE/data/page_reference" PYTHONPATH="$TREE" PYTHONPYCACHEPREFIX="$EDGE_HOME/pyc" \
   nice -n 19 ionice -c3 "$PY" -m src.ops.edge_render render --env "$ENV_NAME" --out "$OUT" --base "$BASE" ${EDGE_RENDER_ARGS:-} \
-  > "$EDGE_HOME/render-$ENV_NAME.log" 2>&1 || { log "作る処理が失敗（$EDGE_HOME/render-$ENV_NAME.log）"; tail -n 5 "$EDGE_HOME/render-$ENV_NAME.log"; exit 1; }
-tail -n 1 "$EDGE_HOME/render-$ENV_NAME.log"
+  > "$EDGE_HOME/render-$ENV_NAME.log" 2>&1 && rc=0 || rc=$?
+if [ "$rc" = 3 ]; then         # 負荷が高く作り直しを見送った（edge_render の DEFERRED）。送らない（heartbeat が古くなり、VPS の見張りが確定前を止める）
+  log "見送り: $(tail -n 1 "$EDGE_HOME/render-$ENV_NAME.log")"; exit 0
+fi
+[ "$rc" = 0 ] || { log "作る処理が失敗（$EDGE_HOME/render-$ENV_NAME.log）"; tail -n 5 "$EDGE_HOME/render-$ENV_NAME.log"; exit 1; }
+# 作り直した回だけログに残す（作らない回は 1 分ごとなので書かない）
+grep -q '"rendered": 0,' "$EDGE_HOME/render-$ENV_NAME.log" || tail -n 1 "$EDGE_HOME/render-$ENV_NAME.log"
 S12="${SHA:0:12}"
 [ -f "$OUT/$ENV_NAME/$S12/_meta/heartbeat.json" ] || { log "作った結果が無い"; exit 1; }
 [ "${EDGE_DRY:-0}" = 1 ] && { log "EDGE_DRY=1 なので送らない"; exit 0; }
 
 # 5) 送る（手元の記録で変わったファイルだけ。ssh の tar。VPS では 1 ファイルずつ置き換え）→ current を付け替える → 古い版は 1 つだけ残す
 RESYNC=""; case " ${EDGE_RENDER_ARGS:-} " in *" --full "*) RESYNC=--resync ;; esac   # 深夜は全部送り直す（VPS の中身との食い違いを直す）
-PYTHONPATH="$TREE" "$PY" -m src.ops.edge_render push --env "$ENV_NAME" --out "$OUT" --sha "$S12" --remote "$REMOTE" $RESYNC
+res="$(PYTHONPATH="$TREE" "$PY" -m src.ops.edge_render push --env "$ENV_NAME" --out "$OUT" --sha "$S12" --remote "$REMOTE" $RESYNC)"
 # 手元の古い版も 2 つまで
 ls -1dt -- "$OUT/$ENV_NAME"/*/ 2>/dev/null | tail -n +3 | xargs -r rm -rf --
-log "送った（${S12}）"
+# 何か送った回だけログに残す（heartbeat だけの回は 1 分ごとなので書かない）
+case "$res" in *'"sent": 0, "deleted": 0'*) ;; *) log "送った（${S12}）: $res" ;; esac

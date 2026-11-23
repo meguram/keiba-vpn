@@ -1,0 +1,10 @@
+[Unit]
+Description=keiba edge: heartbeat の古さの見張り（%i、1 分ごと）
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

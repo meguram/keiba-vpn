@@ -24,6 +24,7 @@
   "longshot": "穴馬モデル（longshot_model.py）",
   "frozen_tracking": "凍結規則の前向き追跡（src/scripts/data/frozen_tracking.py）",
   "columns": "めぐコラム（src/research/columns/）",
+  "megu_cycles": "めぐサイクル（src/research/megu_cycles/。回収率 100% 超の買い方の 50 サイクル）",
   "tp_rules": "tp 系の凍結規則（tp48・tp56・tp59・tp62・tp72・tp74〜76）"
  }
 }

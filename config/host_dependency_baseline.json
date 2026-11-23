@@ -17,11 +17,11 @@
   },
   "src/ops/edge_render.py": {
    "host_path": 1,
-   "local_data": 9,
+   "local_data": 10,
    "page_reference": 2
   },
   "scripts/ops/edge/edge_sync.sh": {
-   "host_path": 2,
+   "host_path": 3,
    "local_data": 2,
    "page_reference": 6
   },
