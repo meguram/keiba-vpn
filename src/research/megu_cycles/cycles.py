@@ -32,7 +32,7 @@ SEGS = ("flat", "graded")
 # サイクルごとの確率の版（再現のため）。11 以降は v5。13 は v5 の学習の平均（cycle13 の中で差し替える）
 CYCLE_RICH = {4: "rich_pred.parquet", 5: "rich_pred_v2.parquet", 6: "rich_pred_v4.parquet", 7: "rich_pred_v4.parquet", 8: "rich_pred_v4.parquet",
               9: "rich_pred_v4.parquet", 10: "rich_pred_v4.parquet", 13: "rich_pred_v5bag.parquet", 15: "rich_pred_v5bag.parquet",
-              16: "rich_pred_v6bag.parquet", 17: "rich_pred_v5bag.parquet", 18: "rich_pred_v5bag.parquet", 19: "rich_pred_v5bag.parquet", 20: "rich_pred_v5bag.parquet", 21: "rich_pred_v5bag.parquet", 22: "rich_pred_v5bag.parquet", 23: "rich_pred_v5bag.parquet"}
+              16: "rich_pred_v6bag.parquet", 17: "rich_pred_v5bag.parquet", 18: "rich_pred_v5bag.parquet", 19: "rich_pred_v5bag.parquet", 20: "rich_pred_v5bag.parquet", 21: "rich_pred_v5bag.parquet", 22: "rich_pred_v5bag.parquet", 23: "rich_pred_v5bag.parquet", 24: "rich_pred_v7bag.parquet"}
 RICH_FILE = D.RICH
 
 
@@ -945,6 +945,17 @@ def cycle23(d: pd.DataFrame) -> dict:
 
 
 CYCLES[23] = cycle23
+
+
+def cycle24(d: pd.DataFrame) -> dict:
+    out = cycle11(d)
+    out["cycle"] = 24
+    out["hypothesis"] = ("サイクル 16 の落ち込みは、汚れた s_*（未来の年を含む上流の学習）ではなく、sr・f3 など（値は as-of、定数の当てはめが 2021 年末まで）"
+                         "を外したことによる。s_* だけを外した v7 でも c13 と同じ水準が出る。")
+    return out
+
+
+CYCLES[24] = cycle24
 
 
 # ---------------------------------------------------------------- 2022〜24 に当てる（関門を通り、凍結した候補だけ）

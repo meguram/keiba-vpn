@@ -218,7 +218,9 @@ RICH_VERSIONS = {"v1": r"^$", "v2": r"^tl_|^wc_|^rb_nk_", "v3": r"^tl_|^wc_|^rb_
                  "v4": r"^tl_|^wc_|^rb_|^fr_class_level$|^comment_", "v5": RICH_EXCLUDE_RE,
                  # v6（サイクル 16）: v5 に加え、上流で未来の年を含む学習の s_*（EASE2・LAP）と、2021 年末までで当てはめた族（sr・f3・f2・e・pc。
                  #   horse_history/common.py の FIT_END）を外す。汚れの少ない確かめのため
-                 "v6": RICH_EXCLUDE_RE + r"|^s_|^sr_|^fm_sr|^f3|^fm_f3|^f2|^e_|^pc_"}
+                 "v6": RICH_EXCLUDE_RE + r"|^s_|^sr_|^fm_sr|^f3|^fm_f3|^f2|^e_|^pc_",
+                 # v7（サイクル 24）: v5 から s_* だけを外す（上流で未来の年を含む学習の列だけ。sr・f3 などの定数の当てはめは残す）
+                 "v7": RICH_EXCLUDE_RE + r"|^s_"}
 
 
 def _rich_matrix(version: str = "v5"):
