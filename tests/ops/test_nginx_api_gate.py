@@ -60,7 +60,7 @@ def test_api_location_uses_split_limits_in_all_site_templates():
         assert "zone=keiba_api " not in api, name
     zones = (TPL / "nginx-zones.conf").read_text(encoding="utf-8")   # 新規の導入（vps_02）でもサイトの参照する枠がある
     sec = zones[zones.index("# API の制限の枠（外の実 IP ごと・127.0.0.1 の別枠）"):zones.index("# API の制限の枠ここまで")]
-    assert "zone=keiba_api_ext:10m rate=120r/m" in sec and "zone=keiba_api_lo:1m rate=600r/m" in sec
+    assert "zone=keiba_api_ext:10m rate=120r/m" in sec and "zone=keiba_api_lo:1m rate=300r/m" in sec
     assert '"127.0.0.1" "";' in sec and '"warm:$lo_port"' in sec and '"lo:$lo_port2"' in sec
 
 

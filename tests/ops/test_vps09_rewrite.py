@@ -147,3 +147,34 @@ def test_limit_zones_only_adds_zone_definitions(env):
     assert not (ngx / "snippets" / "keiba-api-cache.conf").exists()          # スニペット（段 3）はまだ入れない
     _run(e, "--limit-zones")
     assert (ngx / "conf.d" / "keiba-ui-zones.conf").read_text(encoding="utf-8") == zones
+
+
+def test_existing_zone_rates_follow_template(env):
+    """zones に節がすでにあれば、rate をテンプレートの値に合わせ直す（600 → 300 回/分の入れ替え）。ほかの行は変えない・冪等。"""
+    ngx, tpl_dir, e = env
+    _run(e, "--limit-zones")
+    z = ngx / "conf.d" / "keiba-ui-zones.conf"
+    base = z.read_text(encoding="utf-8")
+    assert "zone=keiba_api_lo:1m rate=300r/m" in base and "zone=keiba_api_ext:10m rate=120r/m" in base
+    for mode in (("--limit-zones",), ()):
+        old = base.replace("zone=keiba_api_lo:1m rate=300r/m", "zone=keiba_api_lo:1m rate=600r/m").replace(
+            "zone=keiba_api_ext:10m rate=120r/m", "zone=keiba_api_ext:10m rate=99r/m")
+        assert "rate=600r/m" in old and "rate=99r/m" in old
+        z.write_text(old, encoding="utf-8")
+        _run(e, *mode)
+        got = z.read_text(encoding="utf-8")
+        assert "zone=keiba_api_lo:1m rate=300r/m" in got and "zone=keiba_api_ext:10m rate=120r/m" in got, mode
+        _run(e, *mode)
+        assert z.read_text(encoding="utf-8") == got, mode                       # 2 回目は何も変えない
+    assert [l for l in got.splitlines() if "rate=" not in l] == [l for l in base.splitlines() if "rate=" not in l] or "keiba_apicache" in got
+
+
+def test_rate_sync_fails_and_restores_when_zone_line_has_other_shape(env):
+    ngx, tpl_dir, e = env
+    _run(e, "--limit-zones")
+    z = ngx / "conf.d" / "keiba-ui-zones.conf"
+    bad = z.read_text(encoding="utf-8").replace("zone=keiba_api_lo:1m rate=300r/m", "zone=keiba_api_lo:1m  rate=600r/m")
+    z.write_text(bad, encoding="utf-8")
+    r = subprocess.run(["bash", str(VPS / "vps_09_api_cache.sh"), "--limit-zones"], env=e, capture_output=True, text=True, timeout=60)
+    assert r.returncode != 0 and "合わせられません" in r.stderr
+    assert z.read_text(encoding="utf-8") == bad                                    # 戻して止まる

@@ -57,11 +57,24 @@ restore() {
 }
 # --limit-zones: 制限の枠（zone）の定義だけを zones に足す（使うのはサイトの /api/ の location。足すだけなら動きは変わらない）。
 # テンプレートが新の枠を参照するので、段 3（スニペットの入れ替え）の前でもテンプレートからサイトを作り直せるようにする
+# 節がすでにあれば、制限の枠の rate をテンプレートの値に合わせ直す（2026-11-23 に 127.0.0.1 の枠を 600 → 300 回/分にした）
+# 合わせ直せなければ（テンプレートか zones に行が無い・形が違う）戻して止まる
+sync_limit_rates() {
+  local z r
+  for z in keiba_api_ext keiba_api_lo; do
+    r="$(grep -oE "zone=${z}:[0-9]+[kmg] rate=[0-9]+r/[ms]" "$HERE/templates/nginx-zones.conf" | grep -oE 'rate=[0-9]+r/[ms]' || true)"
+    if [ -z "$r" ]; then echo "テンプレートに ${z} の rate がありません" >&2; restore; exit 1; fi
+    sed -i -E "s#(zone=${z}:[0-9]+[kmg]) rate=[0-9]+r/[ms]#\1 ${r}#" "$ZONES"
+    if ! grep -qE "zone=${z}:[0-9]+[kmg] ${r}" "$ZONES"; then echo "zones の ${z} の rate を ${r} に合わせられません（行の形を確かめる）" >&2; restore; exit 1; fi
+  done
+  echo "制限の枠の rate: $(grep -oE 'zone=keiba_api_(ext|lo):[0-9]+[kmg] rate=[0-9]+r/[ms]' "$ZONES" | tr '\n' ' ')"
+}
 if [ "$MODE" = "--limit-zones" ]; then
   if ! grep -q 'zone=keiba_api_ext' "$ZONES"; then
     sed -n '/^# API の制限の枠（外の実 IP ごと・127.0.0.1 の別枠）/,/^# API の制限の枠ここまで/p' "$HERE/templates/nginx-zones.conf" >> "$ZONES"
   fi
-  if nginx -t; then systemctl reload nginx; echo "制限の枠の定義を足しました（バックアップ: $BK）"; else restore; exit 1; fi
+  sync_limit_rates
+  if nginx -t; then systemctl reload nginx; echo "制限の枠の定義を足し・rate を合わせました（バックアップ: $BK）"; else restore; exit 1; fi
   exit 0
 fi
 if [ "$MODE" = "--remove" ]; then
@@ -84,6 +97,7 @@ if [ -d "$TPL_DIR" ]; then install -m 644 "$HERE/templates/nginx-keiba-ui.conf" 
 if ! grep -q 'zone=keiba_api_ext' "$ZONES"; then
   sed -n '/^# API の制限の枠（外の実 IP ごと・127.0.0.1 の別枠）/,/^# API の制限の枠ここまで/p' "$HERE/templates/nginx-zones.conf" >> "$ZONES"
 fi
+sync_limit_rates
 # 動いているサイトの /api/ の location の制限を、新の 2 つの枠にする（冪等: 新の形ならそのまま。画像の location は旧の枠のまま）
 for s in $TARGETS; do
   if ! grep -q 'zone=keiba_api_ext' "$s"; then

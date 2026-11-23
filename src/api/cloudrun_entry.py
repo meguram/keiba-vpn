@@ -70,8 +70,10 @@ def _wsgi_bridge(wsgi_app: Any) -> ASGIApp:
         return WSGIMiddleware(wsgi_app)
 
 
-WARMUP_TIMEOUT_SEC = 150.0     # Cloud Run の起動プローブ（TCP。既定 240 秒）に収める
-MIRROR_WAIT_SEC = 60.0
+# 起動処理の上限。Cloud Run の起動プローブ（HTTP の /ops/ready。上限 240 秒）に、余裕を取って収める:
+# import（〜16 秒）＋ 束の取り込み MIRROR_WAIT_SEC 45 ＋ 起動処理 WARMUP_TIMEOUT_SEC 120（ウォームアップ・先読み・全体の取り込みを含む）≒ 181 秒
+WARMUP_TIMEOUT_SEC = 120.0
+MIRROR_WAIT_SEC = 45.0
 MIRROR_FULL_WAIT_SEC = 90.0    # request モード: 起動の完了前に『全体』の取り込みまで待つ上限（超えても起動は続ける）
 # 取り込みのきっかけにしないパス（画面を開いているだけで 60 秒ごとに来る状態確認・ヘルスチェック・運用の受信）。内容を返す要求だけが鮮度を要る
 MIRROR_GATE_SKIP = ("/api/health", "/api/v1/health", "/api/maintenance/status")
@@ -89,6 +91,12 @@ READY_WAIT_SEC = 40.0          # Cloud Run の --timeout 60 秒から、処理�
 MEMBERS_WAIT_SEC = 10.0
 _IN_WARMUP: contextvars.ContextVar[bool] = contextvars.ContextVar("keiba_in_warmup", default=False)
 AUTH_STATUS_PATH = "/api/v1/auth/status"     # 起動からの秒数（Server-Timing の inst）を付ける。ログインの応答には付けない
+# Cloud Run の起動プローブ（HTTP）が見る道。起動処理（ウォームアップ・全体の取り込み）が済むまで 503、済めば 200。
+# 済むまで Cloud Run はこの台に要求を送らず、起動中の CPU の割り当ても続く（--cpu-throttling でも起動の間は CPU がある）。
+# 案 A（ポートを先に開いてログインに先に答える）だけだと、TCP のプローブがすぐ通り、2 台目の起動（autoscaling）で
+# 温まっていない台に要求が送られ、CPU の少ない裏の起動処理（28〜160 秒）を待たされていた（2026-11-23 の計測）。
+# 共有鍵は要らない（Cloud Run のプローブは鍵を持たない。答えは ready の真偽だけ）。VPS の nginx は /ops を通さない。
+READY_PATH = "/ops/ready"
 _STARTED_AT = time.monotonic()
 _INSTANCE_TAG = f"{os.getpid()}-{int(time.time())}"     # /ops/memory で、どの 1 台の値かを見分ける（起動ごとに変わる）
 
@@ -169,6 +177,44 @@ async def warm_sequence(get: Callable[[str], Awaitable[tuple[int, Any]]], today:
         await call(f"/api/race/{races[0]}/predictions")
         await call(f"/api/race/{races[0]}")
     return called
+
+
+def preload_models(today: str | None = None) -> dict[str, float]:
+    """台ごとに初回だけ重い読み込みを、起動処理の中（起動プローブが通る前・CPU がある間）で先に済ませる。かかった秒数を返す。
+    ウォームアップの 1 レースの予測だけでは通らない経路がある（予測の無いレースの出馬表だけの経路が使う追走の v2 のモデル 1.5 秒など。
+    2026-11-23 の手元の計測）。どれも lru_cache・ファイルの更新時刻のキャッシュで、2 回目からは読み直さない。失敗しても起動は続ける。"""
+    from datetime import datetime, timedelta, timezone
+
+    today = today or datetime.now(timezone(timedelta(hours=9))).strftime("%Y%m%d")
+    took: dict[str, float] = {}
+
+    def step(name: str, fn: Callable[[], Any]) -> None:
+        t0 = time.monotonic()
+        try:
+            fn()
+        except Exception as exc:  # noqa: BLE001  読めなくても、要求の中で今までどおり読む
+            logger.warning("先読み %s に失敗: %r", name, exc)
+        took[name] = round(time.monotonic() - t0, 2)
+
+    def _tv2() -> None:
+        from src.pipeline.inference.tracking_v2_service import tv2_load_model
+
+        tv2_load_model()
+
+    def _pace() -> None:
+        from src.pipeline.inference import pace_type
+
+        pace_type._boosters()
+
+    def _megu_years() -> None:
+        from src.pipeline.inference import expected_megu
+
+        expected_megu.runs_for_horse("", today)          # その年と前 2 年の表を読んで、更新時刻のキャッシュに載せる
+
+    step("tracking_v2", _tv2)
+    step("pace_type", _pace)
+    step("expected_megu", _megu_years)
+    return took
 
 
 class Gateway:
@@ -281,6 +327,12 @@ class Gateway:
                     await send({"type": "lifespan.shutdown.complete"})
                     return
         path = scope.get("path") or ""
+        if t == "http" and path == READY_PATH:
+            ok = self.ready is None or self.ready.is_set()
+            await send({"type": "http.response.start", "status": 200 if ok else 503, "headers": [
+                (b"content-type", b"application/json"), (b"cache-control", b"no-store")]})
+            await send({"type": "http.response.body", "body": b'{"ready":true}' if ok else b'{"ready":false}'})
+            return
         if t == "http" and self.ready is not None and not self.ready.is_set():
             if not await self._wait_until_ready(path):
                 await self._not_ready(send)
@@ -380,7 +432,7 @@ def build_app() -> ASGIApp:
 
         _auth.members_refresh_hook = gcs_mirror.refresh_members
     # /ops/heartbeat（POST）は共有ヘッダではなく HMAC 署名で認証する。/ops/heartbeat/status・/check は共有ヘッダが要る
-    outer = ProxyKeyMiddleware(gateway, exempt_paths=(*DEFAULT_EXEMPT, "/ops/heartbeat"))
+    outer = ProxyKeyMiddleware(gateway, exempt_paths=(*DEFAULT_EXEMPT, "/ops/heartbeat", READY_PATH))
     warm = (os.environ.get("KEIBA_WARMUP_ON_START") or "").strip() == "1"
     if warm or refresher is not None:
         gateway.warmup = lambda: _startup(outer, warm=warm, wait_full=refresher is not None)
@@ -420,7 +472,8 @@ async def _warmup(outer: ASGIApp) -> None:
             return r.status_code, (r.json() if r.status_code == 200 else None)
 
         called = await warm_sequence(get)
-    logger.info("起動時ウォームアップ完了: %d 件・%.1f 秒", len(called), asyncio.get_running_loop().time() - t0)
+    took = await asyncio.to_thread(preload_models)
+    logger.info("起動時ウォームアップ完了: %d 件・%.1f 秒（先読み %s）", len(called), asyncio.get_running_loop().time() - t0, took)
 
 
 app = build_app() if os.environ.get("KEIBA_CLOUDRUN_LAZY") != "1" else None  # テストは KEIBA_CLOUDRUN_LAZY=1 で import だけする

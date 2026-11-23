@@ -4,7 +4,8 @@
 - レースの単位（コース × クラスの群）で、めぐ分析に出る買いの条件（rule_stats_v3.json の各単位の上位 5 つ）を見る。
 - 訓練（抽出の期間 2016〜2024 年）のその条件の単勝の回収率が 100% 以上なら、当てはまる馬の単勝を 100 円買う。複勝も同じく、訓練の複勝の回収率で別に判定する。
 - 1 頭が複数の条件に当てはまっても 1 点（馬ごとに重複を除く）。
-- 判定に使う値は訓練の値だけ（2025・2026 年の値では選ばない）。条件の水準の一部（人気など）は確定オッズで決まるので、判定は楽観。
+- 判定に使う値は訓練の値だけ（2025・2026 年の値では選ばない）。条件はオッズ・人気を使わない（src/research/graded/catalog.py:45・:54）ので、
+  オッズの時点による楽観は無い。楽観の元は探し方（訓練の値は条件を選んだ期間の当てはめ）。
 
 使い方: python -m src.research.course.course_rule_bets（子の処理で 2026 年の表を作る。出力 <COURSE_OUT>/v3/rule_bets_v3.json と
 docs/operations/retrain_trials/strategy_tables_b.json）。
@@ -132,7 +133,7 @@ def _inner() -> None:
            "rules_total": sum(len(v) for v in rules.values()), "rules_buy_tansho": n_t, "rules_buy_fukusho": n_f, "rules_buy_small_n": n_small,
            "units": len(rules), "values": out,
            "note": ("凍結した第 3 版の条件のうち、めぐ分析に出る買いの条件（各単位の上位 5）で、訓練の回収率 100% 以上のものに当てはまる馬を買う。"
-                    "対象は良馬場・芝ダ・重賞以外のレース。訓練の値は条件を選んだ期間の当てはめの値（楽観）。条件の水準は確定オッズの人気などを含む（楽観）")}
+                    "対象は良馬場・芝ダ・重賞以外のレース。訓練の値は条件を選んだ期間の当てはめの値（楽観）。条件はオッズ・人気を使わないので、オッズの時点による楽観は無い")}
     OUT.write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
     OUT_REPO.write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float) + "\n", encoding="utf-8")
     print("rule_bets", OUT, {k: (v["tansho"]["bets"], v["tansho"]["roi"], v["fukusho"]["roi"]) for k, v in out.items()}, flush=True)
