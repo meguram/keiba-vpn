@@ -21,6 +21,7 @@ _CFG = Path(os.environ.get("KEIBA_HTTP_CACHE_CONFIG") or Path(__file__).resolve(
 _cache: dict[str, Any] = {"at": 0.0, "cfg": None}
 _JST = timezone(timedelta(hours=9))
 _race_date_peek: Callable[[str], str] | None = None
+_settled_peek: Callable[[str], bool] | None = None
 
 
 def config() -> dict[str, Any]:
@@ -63,6 +64,38 @@ def set_race_date_peek(fn: Callable[[str], str] | None) -> None:
     """race_id → 開催日(YYYYMMDD) を I/O なしで引く関数を登録する（索引が未構築なら空文字を返すこと）。"""
     global _race_date_peek
     _race_date_peek = fn
+
+
+def set_settled_peek(fn: Callable[[str], bool] | None) -> None:
+    """token（12桁の race_id / 8桁の開催日）の結果が確定済み（結果の本体がある）と、このプロセスが知っているかを I/O なしで返す関数を登録する。
+    True なら、開催からの日数（grace_days）を待たずに長く置く（_confirmed_s_maxage）。知らなければ False（日数の規則に任せる）。"""
+    global _settled_peek
+    _settled_peek = fn
+
+
+# 確定の印で長くしてよいパス: VPS の cache-warm がデータの保存の目印で取り直すものだけ（scripts/ops/vps/cache_warm.py の RACE_PATHS・date_paths）。
+# それ以外（card・running-map・final-odds など）は、確定の後に結果の取り直し（ラップ・通過の追記など）で変わっても取り直されないので、日数の規則のまま。
+_CONFIRMED_WARMED = {"/api/race/": ("", "/predictions"), "/api/race-list/": ("",)}
+
+
+def _confirmed_s_maxage(path: str, pre: str, token: str, st: dict, today: "datetime | None") -> int | None:
+    """確定の印がある token のパスの保持秒数。印が無い・対象外のパスは None。
+    開催日が前日以前と分かれば settled.s_maxage（30 日）、当日・日付不明は upcoming_s_maxage（6 時間。同じ日のうちの結果の取り直しに備える）。"""
+    rests = _CONFIRMED_WARMED.get(pre)
+    if _settled_peek is None or rests is None or path[len(pre) + len(token):] not in rests:
+        return None
+    try:
+        if not _settled_peek(token):
+            return None
+    except Exception:  # noqa: BLE001  覗き見は失敗しても日数の規則に落とすだけ
+        return None
+    d = _token_date(token)
+    now = today or datetime.now(_JST)
+    if d is not None and d.date() < now.date():
+        s = int(st.get("s_maxage") or 0)
+        return s if s > 0 else None
+    up = int(st.get("upcoming_s_maxage") or 0)
+    return up if up > 0 else None
 
 
 def _first_token(path: str, prefix: str) -> str:
@@ -117,6 +150,9 @@ def settled_s_maxage_for(path: str, cfg: dict[str, Any] | None = None, today: "d
             token = _first_token(path, pre)
             if s > 0 and _is_settled(token, today, int(st.get("grace_days", 3))):
                 return s
+            cs = _confirmed_s_maxage(path, pre, token, st, today)
+            if cs:
+                return cs
             up = int(st.get("upcoming_s_maxage") or 0)
             # 当日・未来の 6 時間は開催日(8桁)のパスだけ。race_id(12桁)は、cache-warm が取り直さないパス（final-odds・result-status・
             # bundle・card・running-map など）まで前方一致で長く置かれるので、確定前は短い s_maxage のまま（race_id の索引は確定の判定にだけ使う）

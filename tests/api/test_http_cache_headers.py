@@ -273,6 +273,55 @@ def test_fastapi_adds_stale_while_revalidate_only_for_anonymous(monkeypatch):
     assert c.get(f"/api/race/{y}06050811", headers={"Cookie": "k=v"}).headers["cache-control"] == "private, max-age=30"
 
 
+def test_confirmed_results_are_settled_without_waiting_grace_days(monkeypatch):
+    """結果が確定した（このプロセスが見た）レース・開催日は、開催からの日数を待たずに確定済み。知らないものは今までどおり日数の規則。"""
+    cfg = {**SCFG, "settled": {**SCFG["settled"], "upcoming_s_maxage": 21600}}
+    monkeypatch.setattr(H, "_race_date_peek", lambda rid: {"202606050811": "20261029", "202606050812": "20261029"}.get(rid, ""))
+    monkeypatch.setattr(H, "_settled_peek", lambda t: t in {"202606050811", "20261028"})
+    f = lambda p: H.settled_s_maxage_for(p, cfg, NOW)  # noqa: E731
+    assert f("/api/race/202606050811") == 21600                   # 当日のレースでも、結果が確定していれば 6 時間（同じ日の取り直しに備える）
+    assert f("/api/race/202606050811/predictions") == 21600
+    assert f("/api/race/202606050811/entry/2021101429/card") is None      # cache-warm が取り直さないパスは日数の規則のまま
+    assert f("/api/v1/races/202606050811/running-map") is None
+    assert f("/api/race/202606050812") is None                    # 同じ日でも、まだ確定を見ていないレースは短いまま
+    assert f("/api/race-list/20261028") == 604800                 # 前日以前で全レースがそろった日の一覧は長く（日数の規則なら 2 日前はまだ動く）
+    assert f("/api/race-list/20261029") == 21600                  # まだの日は今どおり 6 時間
+    monkeypatch.setattr(H, "_race_date_peek", lambda rid: {"202606050811": "20261027"}.get(rid, ""))
+    assert f("/api/race/202606050811") == 604800                  # 開催日が前日以前と分かれば 30 日（ここでは 7 日の設定）
+    monkeypatch.setattr(H, "_race_date_peek", lambda rid: "")
+    assert f("/api/race/202606050811") == 21600                   # 日付が分からなければ 6 時間
+    monkeypatch.setattr(H, "_settled_peek", lambda t: (_ for _ in ()).throw(RuntimeError("boom")))
+    assert f("/api/race/202606050811") is None                    # 覗き見の失敗は日数の規則に落ちる
+
+
+def test_app_marks_confirmed_from_results_it_already_read(monkeypatch):
+    """app: 結果を読んだ処理が確定を見たら覚え、HTTP キャッシュの見出しの覗き見がそれを返す。"""
+    import src.api.app as A
+
+    monkeypatch.setenv("KEIBA_ANTI_SCRAPING", "off")
+    monkeypatch.setattr(A, "_confirmed_race_ids", set())
+    monkeypatch.setattr(A, "_confirmed_dates", set())
+    assert H._settled_peek is A._is_confirmed
+    assert not A._is_confirmed("202606050811") and not A._is_confirmed("20261029")
+    A._mark_confirmed(("202606050811",))
+    A._mark_confirmed(date="20261029")
+    assert A._is_confirmed("202606050811") and A._is_confirmed("20261029")
+    assert not A._is_confirmed("202606050812")
+
+    class _St:
+        def exists(self, cat, key):
+            return cat == "race_result"
+
+        def load(self, cat, key):
+            return {"entries": [{"horse_id": "x", "rank": 1}]}
+
+    monkeypatch.setattr(A, "_get_storage", lambda: _St())
+    c = TestClient(A.app)
+    r = c.get("/api/race/202606050899/result-status")
+    assert r.status_code == 200 and r.json()["has_confirmed"] is True
+    assert A._is_confirmed("202606050899")
+
+
 def test_repo_config_stale_while_revalidate_is_small():
     """本物の設定: 上限は 60 秒以下（古さの上限が s-maxage＋60 秒に収まる）。"""
     import json
