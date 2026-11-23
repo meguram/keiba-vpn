@@ -502,3 +502,62 @@ sudo rm /etc/nginx/snippets/keiba-edge-stg.conf && sudo nginx -t && sudo systemc
 | ユーザーの操作 | 段 2 の前に統括役から頼む（§7.1） |
 | L3 の計測の結果 | latency-plan の後継（11/24 以降）に統括役から渡す |
 | 次 | ここで区切り、11/24 の合図を待つ |
+
+## 10. 追記（2026-11-23、担当 edge-cache）: 「本番の費用をほぼ 0 円に」を受けた順番の組み替え
+
+ユーザーの指示（11/23）: 本番の費用がほぼ 0 円になるように、VPS の上で基本を解決する。統括役の §9 の判断（案 A・区分の Cookie 2 時間・開発者は置かない）はそのまま使う。
+
+### 10.1 今の費用と、フォルダで消える部分
+
+- 課金エクスポートの 11/16〜22 の 1 日あたり（円）:
+
+  | 項目 | 1 日 | 月の見込み | フォルダで減るか |
+  |---|---|---|---|
+  | Cloud Run（CPU・メモリ・外への送信） | 15〜21 | 約 450〜630 | **減る**（下） |
+  | GCS の保存（Standard Tokyo 約 1.8GiB） | 約 6.7 | 約 200 | 減らない |
+  | GCS の操作（Class A・B） | 約 8〜15 | 約 250〜450 | 一部（cache-warm の合図の一覧・Cloud Run の起動の読み） |
+  | Artifact Registry | 3〜8 | 約 100〜240 | 減らない |
+  | Secret Manager | 約 0〜3 | 約 0〜90 | 減らない |
+
+- Cloud Run の要求の 94%（11/21 は 8,796 件のうち 8,312 件）は VPS の cache-warm でした。edge-fix の E（11/23 19:34）で会員だけの 11 種（1 日 約 4,000 件）は外れました。残りの cache-warm は、匿名の race・predictions・race-list・成績などの取り直しです。
+- フォルダで消せるのは、この cache-warm の取り直しと、利用者・SSR の MISS です。**GCS の保存・Artifact Registry・ホストの GCS の操作は残ります。「ほぼ 0 円」の下限は、Cloud Run を除いて月 約 550〜900 円です**（別の担当の範囲。この計画では減らない）。
+- 素の基準（edge-fix の後）は、11/24 以降の課金エクスポートと VPS の timed.log で取り直します（11/23 夜の 3 時間分はテストの要求が多く、基準にならない）。
+
+### 10.2 試しの結果（11/23 夜。ホストで API を手元だけで呼び、GCS には届かない形で読もうとしたものを数えた）
+
+- 確定済みのレース 202608050411（11/15）で、匿名と会員（使い捨ての鍵で署名した、試しのプロセスの中だけのトークン）を呼んだ。
+- `race/{id}` は GCS の 11 種（race_shutuba・race_result・race_result_on_time・race_result_lap・race_odds・race_pair_odds・race_index・race_barometer・race_paddock・race_trainer_comment・smartrc_race）が無いと、200 のまま 543〜785 バイトに欠ける（本番は 27KB）。**200 は正しさの印にならない。**
+- `predictions` は race_predictions・race_shutuba_past・race_odds・race_result・race_shutuba（6 回）を読む。
+- `race-list/{日}` は、その日のレースの race_shutuba と、race_result・race_result_on_time の年の一覧（`list_blobs`）と `exists` を使う。
+- `tracking-difficulty` は手元だけで作れた（53KB）。`v1/races/{id}/analysis` は Flask 側の口なので、作る処理は Cloud Run と同じ Gateway（FastAPI＋Flask）を組んで呼ぶ。
+- 1 本あたりの時間は 0.01〜1.2 秒（入力が欠けた状態）。
+- `HybridStorage.load` は、`GCS_BUCKET` が空・1 回失敗した後の 60 秒の待避中は、Blob に触れずに None を返す。作る処理は、手元だけのカテゴリ以外で None を返した `load`・一覧・`exists`・`note_degraded` を要求ごとの印に記録し、印が立った応答は捨てる。1 件ごとに待避の状態を戻す。
+
+### 10.3 順番の組み替え（§3.10・§5 からの逸脱）
+
+**匿名を会員より先に作る。** §3.10 は「P1 が本番に入るまで匿名のファイルは作らない」としていたが、次の理由で変える。
+
+- 費用の大半は匿名の取り直し（cache-warm）で、匿名は区分の Cookie も確認役も要らない（Cookie も Authorization も無い要求にだけ返す）。
+- 匿名のファイルは、今 nginx に置いている匿名の応答と同じコードで作るので、中身は今より後退しない。
+- P1 が配備されれば、版の置き場（`<env>/<sha12>/`）ごと作り直す（§3.2）。P1 の確定の前後の出し分けは、確定の合図（結果の保存）で作り直す。
+
+| 段 | 中身 | いつ |
+|---|---|---|
+| E1 | 保存のときに手元にも写す。**コードは変えない。** 既にある `HybridStorage._maybe_write_local_mirror`（GCS への保存が成功した後に `data/local/mirror/<カテゴリ>/<年>/<キー>.json` へ同じ JSON を書く。失敗は警告だけで保存は成功のまま）を、ホストの `data/local/meta/local_mirror_config.json`（git の外）で 13 種に有効にする。35 日より古い写しは E2 の深夜の処理で消す | 11/23 夜（開催日の時間の外）に有効化。11/26 ごろの 11/28 の出馬表から貯まる |
+| E2 | 作る処理（`src/ops/edge_render.py`）。本番の版・本番の環境変数・手元だけ・印が立てば捨てる。匿名（race・predictions・race-list）と会員（＋result・tracking-difficulty・analysis）。区分は、作る処理の中だけの使い捨ての鍵で署名したトークンで渡す（auth のコードを変えない） | 11/24〜27 |
+| E3 | VPS の stg で匿名をフォルダから返す（Cookie も Authorization も無い要求だけ。無ければ今の経路）。`_ctl/OFF`・rsync（deploy）・置き場 | 11/27 に stg。11/28〜29 のレースで確かめ、本番は 11/30 以降の平日 |
+| E4 | 区分の Cookie（Cloud Run）・VPS の確認役・会員のファイル | E3 の後。`EDGE_TIER_KEY` は、値を出さない gcloud のコマンドをユーザーに流してもらう（手元の gcloud は設定のディレクトリに書けず動かない） |
+| E5 | 確定前・開催日の匿名を、入力の変化で作り直す。cache-warm のうちフォルダで足りるパスを止める | E3 の本番の後、開催 1 週で取りこぼしを確かめてから |
+
+- 会員の照合: このマシンには会員のログインが無い。会員のファイルは stg の `KEIBA_TEST_USER`（stg の Cloud Run）の応答と比べるか、統括役に手段を頼む。
+- nginx: 新しいスニペット（`nginx-edge-files.conf`）に分ける。ただし、サーバの段の `location`（名前付きの予備の経路）を足すには、サイトのテンプレート 3 つに include の 1 行が要り、edge-fix と重なる。順番は統括役に決めてもらう。
+- 開催日（土日祝の 07:30〜17:00）は、ホストの開催日のコードと VPS の設定を変えない。
+
+### 10.4 E1 の写しの対象と、書き手の確かめ
+
+- 対象（13 種）: race_shutuba・race_result・race_result_on_time・race_result_lap・race_odds・race_pair_odds・race_index・race_barometer・race_paddock・race_trainer_comment・smartrc_race・race_predictions・race_shutuba_past。
+- 書き手（scout の調べ）: どれもホストの cron・開催日のランナーが保存する。VPS は影（`shadow/`）にだけ書く。`/etc/keiba-fetch/fetch.env` に `KEIBA_FETCH_AGENT_TASKS` は無いことを 11/23 に確認した。
+  - 例外: Cloud Run の API も、開発者だけの口（`/data-viewer`・`POST /api/race/{id}/predict`）と `GET /api/betting/pair-odds/{id}`（GCS に無いときに取得）で書きうる。ホストの写しは、その分だけ古くなりうる。
+  - 対策: E2 は確定済みのレース（結果と払戻がある）だけから作る。確定の後にこれらの口で書き直されることは、まず無い。
+- 副作用: ホストの `growth_curve_service` は、race_index の写しがあれば GCS より先に読む（`src/pipeline/inference/growth_curve_service.py:113`）。中身は同じで、ホストの GCS の読み出しが減る向き。
+- 費用: GCS の操作は 0 回の増加（保存の成功の後に手元へ書くだけ）。ディスクは 1 レース 13 種で 0.1〜1MB 程度、35 日で 1GB 未満の見込み（空き 5.9TB）。
