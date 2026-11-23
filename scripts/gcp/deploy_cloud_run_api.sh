@@ -111,6 +111,10 @@ YAML
   rm -f "$cfg"
 }
 
+# 起動プローブ: 起動処理が済むまで 503 を返す /ops/ready（src/api/cloudrun_entry.py の READY_PATH）。済むまで要求を送らせない。
+# 上限は Cloud Run の 240 秒（4 秒 × 60 回）。起動処理の最悪は 束の取り込み 60 秒＋ウォームアップの打ち切り 150 秒＋import（〜16 秒）。
+STARTUP_PROBE="${STARTUP_PROBE:-httpGet.path=/ops/ready,initialDelaySeconds=0,timeoutSeconds=3,periodSeconds=4,failureThreshold=60}"
+
 deploy() {
   # 初回（サービスがまだ無い）は --no-traffic が使えない。2 回目以降は新リビジョンをトラフィック 0% で作る
   local traffic=(--no-traffic --tag "r${TAG//[^a-zA-Z0-9]/}")
@@ -123,6 +127,7 @@ deploy() {
     --concurrency "$CONCURRENCY" --timeout "$TIMEOUT" \
     "$THROTTLE_FLAG" --cpu-boost --execution-environment gen2 \
     --port 8080 --ingress all --allow-unauthenticated \
+    --startup-probe "$STARTUP_PROBE" \
     --set-env-vars "$ENV_VARS" --set-secrets "$SECRETS" \
     "${traffic[@]}"
   echo "# 新リビジョンはトラフィック 0%（タグ URL で確認）。確認後: bash $0 promote --apply"
