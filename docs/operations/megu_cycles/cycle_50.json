@@ -93,5 +93,5 @@
  "n_total_trials": 1663,
  "select_b_looks": 70,
  "sec": 8,
- "rich_file": "/home/jovyan/work/megu_cycles_out/rich_pred_v7bag.parquet"
+ "rich_file": "候補ごと（config/megu_cycles/candidates の probability.file）"
 }

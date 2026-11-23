@@ -166,7 +166,7 @@ def cmd_run(n: int) -> None:
     d = load_select()
     body = CYCLES[n](d) if n in CYCLES else cycle_generic(d, n)
     body["sec"] = round(time.time() - t0)
-    body["rich_file"] = str(RICH_FILE)
+    body["rich_file"] = str(RICH_FILE) if n not in (20, 43, 50) else "候補ごと（config/megu_cycles/candidates の probability.file）"
     write_cycle(n, body)
     for seg, s in body["segments"].items():
         print(seg, s.get("best"), "\n  2017〜19:", short(s.get("select_a")), "\n  2020〜21:", short(s.get("select_b")),
@@ -1172,7 +1172,9 @@ CYCLES[43] = cycle43
 # ---------------------------------------------------------------- サイクル 44: ワイド（期待値の上位 2 頭の組）
 def wide_payoffs(years) -> dict:
     from src.scripts.data import bet_cycles as bc
-    pay = bc.load_payoffs()
+    ys = set(years)
+    rids = {r for r in pd.read_parquet(D.TABLE, columns=["race_id", "year"], filters=[("year", ">=", min(ys)), ("year", "<=", max(ys))])["race_id"].astype(str)}
+    pay = bc.load_payoffs(rids)                      # 読む年のレースだけ（2022 年以降の払戻を読まない）
     bc.fill_payoffs_from_flat(pay, years)
     return {rid: v.get("wide", {}) for rid, v in pay.items() if str(rid)[:4].isdigit() and int(str(rid)[:4]) in set(years)}
 
@@ -1308,6 +1310,9 @@ def candidate_daily(name: str, d_all_cache: dict) -> pd.DataFrame:
     spec = json.loads((CAND / f"{name}.json").read_text(encoding="utf-8"))
     RICH_FILE = D.OUT / spec["probability"]["file"]
     key = spec["probability"]["file"]
+    import hashlib
+    if hashlib.sha256(RICH_FILE.read_bytes()).hexdigest()[:16] != spec["probability"]["sha256_16"]:
+        raise SystemExit(f"{RICH_FILE} の sha が凍結と違う")
     if key not in d_all_cache:
         d_all_cache[key] = load_all()
     d = d_all_cache[key]
