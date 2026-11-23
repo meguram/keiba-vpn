@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>めぐサイクル 50 回のまとめ</title>
+<style>
+:root { --bg:#f7f8fb; --panel:#ffffff; --panel2:#eef1f7; --border:#d5dbe7; --text:#1b2333; --muted:#5b6578;
+  --accent:#2f5fc4; --ok:#1d7f45; --warn:#9a6200; --bad:#b4232c; --code:#eef1f7; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60;
+  --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; } }
+:root[data-theme="dark"] { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60; --text:#e6ecff; --muted:#9aa7c7;
+  --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1180px; margin:0 auto; padding:28px 16px 80px; }
+a { color:var(--accent); }
+h1 { font-size:24px; margin:0 0 6px; line-height:1.4; }
+h2 { font-size:19px; margin:40px 0 6px; padding-top:16px; border-top:1px solid var(--border); }
+h3 { font-size:16px; margin:22px 0 4px; }
+p, li { overflow-wrap:anywhere; }
+.sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+.scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:8px 0 14px; border:1px solid var(--border); border-radius:8px; }
+table { border-collapse:collapse; width:100%; min-width:760px; font-size:13.5px; background:var(--panel); }
+th, td { border-bottom:1px solid var(--border); border-right:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+td.n { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+th { background:var(--panel2); color:var(--muted); font-weight:600; white-space:nowrap; }
+tr:last-child td { border-bottom:none; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 5px; border-radius:5px; font-size:12px; overflow-wrap:anywhere; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 16px; margin:12px 0; }
+.b { display:inline-block; font-size:11.5px; padding:0 8px; border-radius:10px; border:1px solid currentColor; white-space:nowrap; }
+.ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .mu { color:var(--muted); }
+details { background:var(--panel); border:1px solid var(--border); border-radius:10px; margin:8px 0; }
+summary { cursor:pointer; padding:8px 12px; }
+details[open] > summary { border-bottom:1px solid var(--border); }
+.dbody { padding:8px 14px 12px; font-size:13.5px; }
+</style>
+</head>
+<body>
+<main>
+<h1>めぐサイクル 50 回のまとめ</h1>
+<p class="sub">作成 2026-11-24 02:21（JST）。数字は記録の JSON から生成（<code>src/research/megu_cycles/</code>・<code>src/scripts/docs/build_megu_cycles_50.py</code>）。
+記録は <code>docs/operations/megu_cycles/</code>（cycle_01〜50.md・lessons.md）。担当 megu-cycles。費用 0 円（手元の表だけ。GCS を読まない）。</p>
+
+<div class="box">
+<b>結論</b>
+<ul>
+<li>目標（選ぶ期間 2017〜21 と確かめ 2022〜24 の両方で 100% 以上・差が小さい・年 50 件以上）を満たしたのは、<b>平場の単勝の 5 候補</b>。<b>重賞は 0</b>。</li>
+<li>5 候補は 1 つの考えの変種。市場の列を使わない自前の確率（約 1,000 列の XGBoost 3 本の平均）と、発走前のオッズ（過去の年は、確定オッズに 2026 年の発走前と確定のずれを当てた再現）の確率を条件付き logit で組み、期待値 1.3 以上・50 倍以下の単勝を買う。上積みは新馬・未勝利と人気薄に集まる。</li>
+<li>2025 年の 1 回だけの確かめで事前の線（2025 ≥ 100% かつ ≥ 2022〜24 × 0.9）を満たしたのは 2 候補（c21 新馬未勝利・T-60・c23 平場・T-15）。ただし 2025 年の 95% 区間はどの候補も 100% を含み、5 候補の同時の下限は 67〜77%。<b>「100% を超える」と言い切れる候補は無い</b>。</li>
+<li>相関を入れた割引き（2022〜24）の後も同時の下限が 100% を超えたのは c18 平場・T-5。本物の発走前オッズでの粗い測りでは、T-5 の再現が一番楽観寄り（s* 1.62。区間の無い目安）。</li>
+<li>次の本当の確かめは、前向きの記録（2026-11-21〜、本物の発走前オッズと推論の経路の特徴量）。2025 年の線を満たした c21 新馬未勝利・T-60・c23 平場・T-15 を前向きに数えることを勧める。</li>
+</ul>
+</div>
+
+<h2>目標の判定（サイクル 1 の前に固定。config/megu_cycles/goal.json）</h2>
+<ul>
+<li>重賞・平場のそれぞれで: 選ぶ期間（2017〜21）と確かめ（2022〜24）の両方で回収率 100% 以上、確かめ ≥ 選ぶ期間 × 0.9、確かめで年 50 件以上。</li>
+<li>判定は発走前に分かる値だけ（T-60 などの再現オッズ 5 通りの平均）。精算は確定の払戻。</li>
+<li>2022〜24 に当てる前の関門（2017〜19 で選び、2020〜21 で一次の確かめ・帰無・市場比の下限 &gt; 1）。2022〜24 に当てたのは通算 5 候補（上限 10）。</li>
+<li>2025 年は 50 サイクルの後に 1 回だけ（config/megu_cycles/final_prereg.json を先に commit）。2026 年は特徴量の表に行が無く数えていない。</li>
+</ul>
+<h2>目標を満たした候補（すべて平場の単勝）</h2>
+<div class="scroll"><table><thead><tr><th>候補</th><th>2017〜21</th><th>件/年</th><th>2022〜24（95% 区間）</th><th>件/年</th><th>市場比（区間）</th><th>同じ人気の基準線</th><th>副 SmartRC</th><th>2025 年（95% 区間）</th><th>件/年</th><th>市場比（区間）</th><th>基準線</th><th>副 SmartRC 2025</th><th>2025 の判定</th></tr></thead><tbody><tr><td>c13 平場・T-60</td><td class="n">103.7%</td><td class="n">836</td><td class="n">107.5%（95〜122%）</td><td class="n">705</td><td class="n">1.22（1.14〜1.31）</td><td class="n">77.3%</td><td class="n">122.5%</td><td class="n">96.7%（79〜118%）</td><td class="n">609</td><td class="n">1.16（1.02〜1.29）</td><td class="n">77.6%</td><td class="n">98.9%</td><td>不合格</td></tr><tr><td>c18 平場・T-5</td><td class="n">143.6%</td><td class="n">160</td><td class="n">147.5%（106〜193%）</td><td class="n">142</td><td class="n">1.44（1.18〜1.71）</td><td class="n">75.0%</td><td class="n">133.3%</td><td class="n">131.0%（73〜203%）</td><td class="n">87</td><td class="n">1.36（0.89〜1.89）</td><td class="n">75.7%</td><td class="n">133.7%</td><td>不合格</td></tr><tr><td>c21 新馬未勝利・T-60</td><td class="n">122.9%</td><td class="n">314</td><td class="n">124.0%（99〜152%）</td><td class="n">249</td><td class="n">1.27（1.13〜1.40）</td><td class="n">77.6%</td><td class="n">151.0%</td><td class="n">124.6%（80〜180%）</td><td class="n">208</td><td class="n">1.29（1.04〜1.54）</td><td class="n">76.0%</td><td class="n">109.2%</td><td>合格</td></tr><tr><td>c23 平場・T-15</td><td class="n">126.0%</td><td class="n">252</td><td class="n">122.9%（96〜153%）</td><td class="n">216</td><td class="n">1.30（1.12〜1.49）</td><td class="n">75.9%</td><td class="n">123.9%</td><td class="n">141.7%（81〜217%）</td><td class="n">142</td><td class="n">1.34（0.98〜1.77）</td><td class="n">76.9%</td><td class="n">122.3%</td><td>合格</td></tr><tr><td>c24 平場・T-60・s_* なし</td><td class="n">101.5%</td><td class="n">764</td><td class="n">104.3%（91〜120%）</td><td class="n">658</td><td class="n">1.19（1.11〜1.29）</td><td class="n">76.8%</td><td class="n">111.8%</td><td class="n">98.6%（70〜131%）</td><td class="n">579</td><td class="n">1.00（0.86〜1.14）</td><td class="n">76.7%</td><td class="n">85.4%</td><td>不合格</td></tr></tbody></table></div>
+<p>市場比 = 勝ち数 ÷ 確定の市場の勝率の和。同じ人気の基準線 = 同じ期間の確定の人気ごとの全馬の回収率を、買った馬の人気で重みづけした値。副 SmartRC は判定のオッズを SmartRC の想定人気（0.8/E_q）に替えた値で、取得時刻の記録が無く確定に近い情報を含むおそれがあるため、独立の確かめとは読まない。</p>
+<h2>割引き（相関を入れた同時の下限）</h2>
+<div class="scroll"><table><thead><tr><th>候補</th><th>2022〜24</th><th>単独の下限（片側 95%）</th><th>同時の下限（2022〜24）</th><th>Holm（近似）</th><th>2025 年</th><th>同時の下限（2025）</th></tr></thead><tbody><tr><td>c13 平場・T-60</td><td class="n">107.5%</td><td class="n">97.1%</td><td class="n">94.4%</td><td class="n">0.241</td><td class="n">96.7%</td><td class="n">77.0%</td></tr><tr><td>c18 平場・T-5</td><td class="n">147.5%</td><td class="n">112.5%</td><td class="n">103.3%</td><td class="n">0.049</td><td class="n">131.0%</td><td class="n">68.1%</td></tr><tr><td>c21 新馬未勝利・T-60</td><td class="n">124.0%</td><td class="n">103.2%</td><td class="n">97.3%</td><td class="n">0.121</td><td class="n">124.6%</td><td class="n">75.3%</td></tr><tr><td>c23 平場・T-15</td><td class="n">122.9%</td><td class="n">100.6%</td><td class="n">94.4%</td><td class="n">0.136</td><td class="n">141.7%</td><td class="n">74.4%</td></tr><tr><td>c24 平場・T-60・s_* なし</td><td class="n">104.3%</td><td class="n">93.1%</td><td class="n">90.0%</td><td class="n">0.278</td><td class="n">98.6%</td><td class="n">66.5%</td></tr></tbody></table></div>
+<p>5 候補の開催日ごとの回収率の相関は 0.58〜0.87。開催日を同時にブートストラップし、標準化した偏差の最大の 95% 分位（2022〜24: 1.99）で割り引いた。試した設定は通算 1,663、2020〜21 を見た回数は 70、2022〜24 に当てたのは 5 候補。割引きは確かめに当てた候補の数（5）で行った。ただし c18〜c24 は c13 の 2022〜24 の結果を見た後に作った変種で、2022〜24 は後の候補にとって完全な外ではない（この割引きは楽観寄り）。</p>
+<h2>判定のオッズの再現の楽観（本物の発走前オッズで測った）</h2>
+<div class="scroll"><table><thead><tr><th>時点</th><th>レース</th><th>勝ち馬の対数損失: 本物</th><th>確定</th><th>再現（倍率 1）</th><th>合う倍率 s*</th></tr></thead><tbody><tr><td>t60</td><td class="n">280</td><td class="n">1.9548</td><td class="n">1.9058</td><td class="n">1.9731</td><td class="n">0.86</td></tr><tr><td>t15</td><td class="n">281</td><td class="n">1.9365</td><td class="n">1.8986</td><td class="n">1.9333</td><td class="n">1.04</td></tr><tr><td>t05</td><td class="n">186</td><td class="n">1.9595</td><td class="n">1.9145</td><td class="n">1.9291</td><td class="n">1.62</td></tr></tbody></table></div>
+<div class="scroll"><table><thead><tr><th>候補</th><th>時点</th><th>s*（目安）</th><th>凍結の 2017〜21</th><th>曲線(s*) ÷ 曲線(1)</th><th>見積もり 2017〜21</th><th>2022〜24</th><th>見積もり 2022〜24</th></tr></thead><tbody><tr><td>c13 平場・T-60</td><td>t60</td><td class="n">0.86</td><td class="n">103.7%</td><td class="n">1.046</td><td class="n">108.6%</td><td class="n">107.5%</td><td class="n">112.5%</td></tr><tr><td>c18 平場・T-5</td><td>t05</td><td class="n">1.62</td><td class="n">143.6%</td><td class="n">0.799</td><td class="n">114.7%</td><td class="n">147.5%</td><td class="n">117.8%</td></tr><tr><td>c21 新馬未勝利・T-60</td><td>t60</td><td class="n">0.86</td><td class="n">122.9%</td><td class="n">1.087</td><td class="n">133.5%</td><td class="n">124.0%</td><td class="n">134.7%</td></tr><tr><td>c23 平場・T-15</td><td>t15</td><td class="n">1.04</td><td class="n">126.0%</td><td class="n">0.985</td><td class="n">124.1%</td><td class="n">122.9%</td><td class="n">121.0%</td></tr><tr><td>c24 平場・T-60・s_* なし</td><td>t60</td><td class="n">0.86</td><td class="n">101.5%</td><td class="n">1.065</td><td class="n">108.1%</td><td class="n">104.3%</td><td class="n">111.0%</td></tr></tbody></table></div>
+<p>本物の発走前オッズ（2026 年の秋。全頭がそろったレース: t60 280・t15 281・t05 186 レース。市場の値だけ）。s* &lt; 1 は再現が本物より厳しめ、&gt; 1 は楽観。見積もりは、凍結の値にサイクル 43 の曲線の比を掛けたもの。</p><p><b>この測りの限界（批評の指摘）</b>: s* に区間が無い（倍率ごとに 5 回の繰り返し・レースのブートストラップなし。t05 は曲線が滑らかでない）。drift の再現は全頭がそろったレースから、凍結の再現は 5 頭以上が対応したレースから借りるので、s* はサイクル 43 の倍率と単位が厳密には合わない。勝ち馬の対数損失を市場全体で合わせただけで、買う馬（人気薄・自前の確率の高い馬）の条件付きの持ち込みは測れていない。曲線の外（倍率 2 より上）は端の値になる。目安として読む。</p>
+<h2>壁（目標を満たさなかったところ）</h2>
+<ul>
+<li><b>重賞</b>（10 サイクル）: 2017〜19 が 88〜96% で止まる。市場比は 1.1 前後で、平場（1.15〜1.4）より小さく、控除の壁（同じ人気の基準線 約 78% から 100% に約 1.28 倍が要る）に届かない。件数も年 130 レース程度で区間が広い。</li>
+<li><b>条件の切り口だけ</b>（めぐ分析の水準・人気の区画）: 選び過ぎで、帰無と区別できない（megu-why と同じ）。</li>
+<li><b>券種</b>: 複勝・ワイド・単勝＋複勝は控除の壁で上積みが残らない。</li>
+<li><b>見送り</b>: レースの値の 1 水準・1 レース 1 点・順位の制限は、上積みの源（人気薄・新馬未勝利）を捨てるか、選び過ぎになる。</li>
+<li><b>データのリーク</b>: 過去の年の調教の記録の偏り（tl_*・wc_*）、全期間の集計（rb_*）、上流の補助モデル（mtl_*）が、2017〜19 の成績を水増ししていた。結果を使わない決まり（記録の率・最頻値の段）で外した。</li>
+</ul>
+<h2>汚れと限界</h2>
+<ul>
+<li>確率の特徴量の表（model-cycles の X_xgb）には、上流で未来の年を含む学習（s_* の元の EASE2・LAP）と、2021 年末までの定数の当てはめ（sr・f3）が残る。s_* を外した c24 は 2025 年で市場比 1.00 に落ちた。</li>
+<li>判定のオッズは、確定オッズに 2026 年のずれを当てた再現。本物の発走前オッズで測ると T-60 は厳しめ・T-5 は楽観（上の表）。</li>
+<li>2020〜21 は関門のたびに見た（70 回）。2022〜24 は 5 候補で 5 回見た。</li>
+<li>2026 年の候補の成績は数えていない（特徴量の表に行が無い）。運用には推論の経路で同じ特徴量を作る必要があり、学習と推論のずれの問題が残る。</li>
+<li>判定のオッズの再現のずれの母集団（data/local/research/persona1/pre_odds.parquet）には、前向きの期間（2026-11-21〜22）の発走前オッズ（約 48 レース。オッズの値だけで結果ではない）が入っていた。表を作った時点（2026-11-23）のファイルで、凍結の候補（2017〜24）と 2025 年の確かめは同じ母集団を使ったので互いには整合するが、事前登録の「11-21 以降を使わない」には反する（drift の測りの側は 11-20 までで切った）。</li>
+<li>台帳: drift の測りで 2026 年の結果の表を年の初めから読み込んだ（range_outside の警告。計算に使ったのは発走前オッズのある 10/18〜11/15 のレースだけ）。build_phase は 2022〜24 の確定オッズ（結果ではない）を申告なしに読んだ。</li>
+<li>候補 c24 の凍結ファイルの columns_rule は v5 と書かれているが、確率のファイルは v7（s_* なし）。数えた値は v7 で正しい（記録の誤記）。</li>
+</ul>
+<h2>50 サイクルの一覧</h2>
+<div class="scroll"><table><thead><tr><th>回</th><th>方向</th><th>試した設定</th><th>結果</th></tr></thead><tbody><tr><td class="n">1</td><td>自前の確率 × T-60 の再現オッズの期待値（Benter 型）</td><td class="n">60</td><td>不合格</td></tr><tr><td class="n">2</td><td>人気の偏りの区画（T-60 の人気 × クラスの群 × 頭数 × 単複）</td><td class="n">224</td><td>不合格</td></tr><tr><td class="n">3</td><td>券種をまたぐ価格のずれ（複勝・馬連・ワイド と 単勝の市場）</td><td class="n">23</td><td>不合格</td></tr><tr><td class="n">4</td><td>豊富な特徴量（1,231 列）の自前の確率 × T-60 の期待値</td><td class="n">60</td><td>不合格</td></tr><tr><td class="n">5</td><td>サイクル 4 の作り直し（調教の記録の列を外した確率 v2）</td><td class="n">60</td><td>関門を通過（当てない）</td></tr><tr><td class="n">6</td><td>結果を使わない決まりで列を外した確率（v4）× T-60 の期待値</td><td class="n">60</td><td>不合格</td></tr><tr><td class="n">7</td><td>レースの見送り × 年の揺れに強い選び方</td><td class="n">372</td><td>不合格</td></tr><tr><td class="n">8</td><td>第 2 段の重みの交差の当てはめ</td><td class="n">42</td><td>不合格</td></tr><tr><td class="n">9</td><td>T-60 の市場を offset にした学習の確率 × 期待値</td><td class="n">42</td><td>不合格</td></tr><tr><td class="n">10</td><td>複勝（自前の 3 着内 × 想定の複勝の払戻）</td><td class="n">48</td><td>不合格</td></tr><tr><td class="n">11</td><td>mtl_* と水準の段の列を外した確率 v5 × 期待値（サイクル 6 の設計）</td><td class="n">60</td><td>不合格</td></tr><tr><td class="n">12</td><td>3 つの確率の組み合わせ（v5・約 120 列・T-60 の市場）</td><td class="n">20</td><td>不合格</td></tr><tr><td class="n">13</td><td>v5 の学習の平均（3 本）× 期待値（サイクル 11 の設計）</td><td class="n">60</td><td>目標を満たした</td></tr><tr><td class="n">14</td><td>単勝＋複勝（期待値で選んだ馬に半分ずつ）</td><td class="n">16</td><td>不合格</td></tr><tr><td class="n">15</td><td>学習の平均 × 3 つの確率の組み合わせ（重賞を狙う）</td><td class="n">20</td><td>不合格</td></tr><tr><td class="n">16</td><td>汚れの少ない列（v6: s_*・sr・f3・f2・e・pc も外す）の学習の平均</td><td class="n">60</td><td>不合格</td></tr><tr><td class="n">17</td><td>期待値に応じた賭け金（上限付きの分数 Kelly）</td><td class="n">36</td><td>関門を通過（当てない）</td></tr><tr><td class="n">18</td><td>判定の時点を T-5 に（発走 5 分前の再現オッズ）</td><td class="n">60</td><td>目標を満たした</td></tr><tr><td class="n">19</td><td>重賞を、平場で当てはめた第 2 段で買う（T-60・T-5、単勝・単勝＋複勝）</td><td class="n">32</td><td>不合格</td></tr><tr><td class="n">20</td><td>候補の中身の一貫性（選ぶ期間 2017〜21 だけ。探さない）</td><td class="n">0</td><td>検査（探さない）</td></tr><tr><td class="n">21</td><td>新馬・未勝利だけ（情報の薄い市場）</td><td class="n">16</td><td>目標を満たした</td></tr><tr><td class="n">22</td><td>1 レース 1 点（期待値が最大の馬だけ）</td><td class="n">16</td><td>関門を通過（当てない）</td></tr><tr><td class="n">23</td><td>判定の時点を T-15 に</td><td class="n">60</td><td>目標を満たした</td></tr><tr><td class="n">24</td><td>s_* だけを外した v7（汚れた上流の列だけを外す）</td><td class="n">60</td><td>目標を満たした</td></tr><tr><td class="n">25</td><td>人気側を外す（判定のオッズの下限 5・10 倍）</td><td class="n">18</td><td>関門を通過（当てない）</td></tr><tr><td class="n">26</td><td>重賞の単勝＋複勝（平場の第 2 段・T-15）</td><td class="n">8</td><td>不合格</td></tr><tr><td class="n">27</td><td>2 歳の馬だけ（一番情報の薄い市場）</td><td class="n">6</td><td>不合格</td></tr><tr><td class="n">28</td><td>少頭数（12 頭以下）だけ</td><td class="n">6</td><td>関門を通過（当てない）</td></tr><tr><td class="n">29</td><td>確定オッズの見込みで期待値を計る（T-60 の順位ごとの平均のずれ）</td><td class="n">12</td><td>不合格</td></tr><tr><td class="n">30</td><td>重賞（v7・T-15・平場の第 2 段・低い閾値）</td><td class="n">6</td><td>不合格</td></tr><tr><td class="n">31</td><td>判定のオッズの上限を 100・300 倍に広げる</td><td class="n">6</td><td>不合格</td></tr><tr><td class="n">32</td><td>1-2 勝クラスだけ（閾値を高く）</td><td class="n">4</td><td>不合格</td></tr><tr><td class="n">33</td><td>3 勝・OP クラスだけ（効かない側の確かめ）</td><td class="n">4</td><td>不合格</td></tr><tr><td class="n">34</td><td>新馬・未勝利 × 汚れの少ない v7</td><td class="n">3</td><td>不合格</td></tr><tr><td class="n">35</td><td>新馬・未勝利 × T-15</td><td class="n">3</td><td>関門を通過（当てない）</td></tr><tr><td class="n">36</td><td>ダートだけ</td><td class="n">3</td><td>不合格</td></tr><tr><td class="n">37</td><td>芝だけ</td><td class="n">3</td><td>不合格</td></tr><tr><td class="n">38</td><td>期待値で選んだ平場の馬の複勝（T-15）</td><td class="n">2</td><td>不合格</td></tr><tr><td class="n">39</td><td>重賞の複勝（T-5・平場の第 2 段）</td><td class="n">6</td><td>不合格</td></tr><tr><td class="n">40</td><td>新馬・未勝利 × T-5 × 人気薄（5・10 倍以上）</td><td class="n">4</td><td>関門を通過（当てない）</td></tr><tr><td class="n">41</td><td>最終レースの効果（市場の値だけ）</td><td class="n">12</td><td>不合格</td></tr><tr><td class="n">42</td><td>人気騎手・人気厩舎の過剰人気（市場 + 騎手・調教師の成績だけ）</td><td class="n">16</td><td>不合格</td></tr><tr><td class="n">43</td><td>判定のオッズのずれの大きさへの感度（候補の凍結値。探さない）</td><td class="n">0</td><td>検査（探さない）</td></tr><tr><td class="n">44</td><td>ワイド（期待値の上位 2 頭の組）</td><td class="n">8</td><td>不合格</td></tr><tr><td class="n">45</td><td>ローカル開催だけ（小さな市場）</td><td class="n">3</td><td>不合格</td></tr><tr><td class="n">46</td><td>重賞の G3 だけ（T-15・平場の第 2 段）</td><td class="n">4</td><td>不合格</td></tr><tr><td class="n">47</td><td>多頭数（16 頭以上）だけ</td><td class="n">3</td><td>不合格</td></tr><tr><td class="n">48</td><td>3 つの確率の組み合わせ（学習の平均 + 120 列 + 市場、平場）</td><td class="n">10</td><td>不合格</td></tr><tr><td class="n">49</td><td>勝ち目の薄い馬を避ける（組んだ確率の順位も上位）</td><td class="n">6</td><td>不合格</td></tr><tr><td class="n">50</td><td>多重比較の割引き（2022〜24 に当てた 5 候補を、相関を入れて同時に評価）</td><td class="n">0</td><td>検査（探さない）</td></tr></tbody></table></div>
+<h2>道具と記録</h2>
+<ul>
+<li>道具: <code>src/research/megu_cycles/</code>（mc_data・mc_eval・cycles・mc_final）。台帳の系統 megu_cycles（config/data_access/ledger.jsonl）。</li>
+<li>記録: <code>docs/operations/megu_cycles/</code>（README・lessons・cycle_01〜50・confirm_log・final_once・drift_check・trials）。候補の凍結は config/megu_cycles/candidates/。</li>
+</ul>
+</main>
+</body>
+</html>

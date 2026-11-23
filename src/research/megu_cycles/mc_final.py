@@ -67,7 +67,10 @@ def bag_2025(version: str) -> pd.DataFrame:
     names = [c for c in pq.ParquetFile(D.X_RICH).schema_arrow.names
              if c not in D.RICH_EXCLUDE and not re.search(D.RICH_VERSIONS[version], c)
              and not re.search(r"odds|pop|ninki|tansho|fukusho|payoff|market|ret_", c, re.I)]
-    X = pd.read_parquet(D.X_RICH, columns=names)[keep].reset_index(drop=True)
+    X = pd.read_parquet(D.X_RICH, columns=names)
+    assert len(X) == len(yr_all)
+    assert (meta["race_id"].astype(str).to_numpy() == pd.read_parquet(D.META_RICH, columns=["race_id"])["race_id"].astype(str).to_numpy()[keep]).all()
+    X = X[keep].reset_index(drop=True)
     for c in X.columns:
         if isinstance(X[c].dtype, pd.CategoricalDtype):
             X[c] = X[c].cat.codes.where(X[c].notna(), np.nan)
@@ -154,7 +157,8 @@ def cmd_drift() -> None:
         fl = pd.read_parquet(D.ROOT / "data/page_reference/tables/2026/race_result_flat.parquet",
                              columns=["race_id", "date", "horse_number", "odds", "popularity", "finish_position"])
         fl["race_id"] = fl["race_id"].astype(str)
-        fl = fl[pd.to_datetime(fl["date"]).dt.strftime("%Y-%m-%d") <= DRIFT_END]
+        dd = pd.to_datetime(fl["date"]).dt.strftime("%Y-%m-%d")
+        fl = fl[(dd >= "2026-10-18") & (dd <= DRIFT_END)]       # 申告した期間だけ（2026-11-24 の 1 回目は下限が無く、台帳に range_outside が残った）
         for c in ("horse_number", "odds", "popularity", "finish_position"):
             fl[c] = pd.to_numeric(fl[c], errors="coerce")
         fl = fl[(fl["odds"] > 0)]
