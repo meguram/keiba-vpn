@@ -39,6 +39,10 @@ def shape_txt(s: dict, kind: str, sh) -> str:
         return "相手なし"
     if kind in ("trio_form", "t1_form") and n2 != n3:
         return f"2 列目 上位 {n2} 頭・3 列目 上位 {n3} 頭"
+    if kind == "t2_form":
+        return f"1 着列 上位 {n2} 頭・3 着列 上位 {n3} 頭"
+    if kind == "t3_form":
+        return f"1 着列 上位 {n2} 頭・2 着列 上位 {n3} 頭"
     if kind.endswith("_box"):
         return f"◎＋上位 {n3} 頭のボックス"
     return f"相手 上位 {n3} 頭"
