@@ -241,3 +241,42 @@ def test_race_lists_is_local_only_and_never_lists_gcs(monkeypatch, tmp_path):
     monkeypatch.setattr(st, "_get_bucket", _no_gcs, raising=False)
     assert st.list_keys("race_lists") == []
     assert st.load("race_lists", "20261025") is None
+
+
+def test_stale_while_revalidate_bounded_by_s_maxage():
+    """匿名の public 応答だけ stale-while-revalidate=min(上限, s-maxage) を付ける。古さの上限は s-maxage＋その秒数。会員には付けない。"""
+    assert H.cache_control_value(30, 30, True, None, 60) == "public, max-age=30, s-maxage=30, stale-while-revalidate=30"   # 当日のレース: 最大 60 秒
+    assert H.cache_control_value(60, 60, True, None, 60) == "public, max-age=60, s-maxage=60, stale-while-revalidate=60"
+    assert H.cache_control_value(30, 600, True, None, 60) == "public, max-age=30, s-maxage=600, stale-while-revalidate=60"
+    assert H.cache_control_value(30, 30, True, 2592000, 60) == "public, max-age=30, s-maxage=2592000, stale-while-revalidate=60"
+    assert H.cache_control_value(30, 30, False, None, 60) == "private, max-age=30"
+    assert H.cache_control_value(30, 30, True, None, 0) == "public, max-age=30, s-maxage=30"
+    assert H.stale_while_revalidate_cap({"stale_while_revalidate": 60}) == 60
+    assert H.stale_while_revalidate_cap({}) == 0
+    assert H.stale_while_revalidate_cap({"stale_while_revalidate": "x"}) == 0
+
+
+def test_fastapi_adds_stale_while_revalidate_only_for_anonymous(monkeypatch):
+    cfg = {**SCFG, "stale_while_revalidate": 60}
+    monkeypatch.setattr(H, "config", lambda: cfg)
+    monkeypatch.setattr(H, "_race_date_peek", None)
+    app = FastAPI()
+
+    @app.get("/api/race/{rid}")
+    def race(rid: str):
+        return {"id": rid}
+
+    H.install_fastapi(app)
+    c = TestClient(app)
+    y = datetime.now(JST).year
+    assert c.get(f"/api/race/{y}06050811").headers["cache-control"] == "public, max-age=30, s-maxage=30, stale-while-revalidate=30"
+    assert c.get(f"/api/race/{y}06050811", headers={"Cookie": "k=v"}).headers["cache-control"] == "private, max-age=30"
+
+
+def test_repo_config_stale_while_revalidate_is_small():
+    """本物の設定: 上限は 60 秒以下（古さの上限が s-maxage＋60 秒に収まる）。"""
+    import json
+    from pathlib import Path
+
+    cfg = json.loads((Path(__file__).resolve().parents[2] / "config" / "http_cache.json").read_text(encoding="utf-8"))
+    assert 0 < H.stale_while_revalidate_cap(cfg) <= 60

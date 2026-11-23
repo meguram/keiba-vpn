@@ -2,6 +2,8 @@
   "version": 1,
   "_doc": "API の GET 応答に、ブラウザごとの短い再利用(Cache-Control: private, max-age)と Vary: Cookie を付ける許可リスト。共有キャッシュ(nginx/CDN)は private で使えない。会員区分(匿名/会員/開発者)で内容が変わっても、Cookie が違えば再取得になる。ルールに s_maxage があり、Cookie/Authorization の無い匿名リクエストの 200 だけは public, s-maxage にして CDN に置かせる(会員の応答は常に private)。ここに無いパス、GET 以外、200 以外、すでに Cache-Control があるものには付けない。無効化は enabled=false。",
   "enabled": true,
+  "stale_while_revalidate": 60,
+  "_doc_stale_while_revalidate": "匿名の public 応答に stale-while-revalidate=min(この値, s-maxage) を付ける。VPS の nginx は期限切れの後この秒数だけ古いものを即座に返し、裏で 1 本だけ取り直す（templates/nginx-api-cache.conf の 7）。古さの上限は s-maxage＋この秒数。0 で付けない。",
   "settled": {
     "s_maxage": 2592000,
     "grace_days": 3,

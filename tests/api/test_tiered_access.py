@@ -212,6 +212,47 @@ def test_flask_login_and_member_gate(monkeypatch):
     assert d.get("/api/v1/auth/status").get_json()["tier"] == "dev"
 
 
+def test_flask_auth_status_shared_only_for_anonymous(monkeypatch):
+    """auth/status: Cookie の無い答え（未ログイン）だけ nginx に共有で置かせる。ログイン後は private・no-store（古い未ログインが出ない）。"""
+    monkeypatch.setenv("KEIBA_ENV", "stg")
+    monkeypatch.setenv("DEV_SECRET_KEY", "k")
+    monkeypatch.setenv("KEIBA_TEST_USER", "1")
+    from src.api.flask_app import create_app
+
+    c = create_app().test_client()
+    r = c.get("/api/v1/auth/status")
+    assert r.get_json()["tier"] == "public"
+    assert r.headers["Cache-Control"] == "public, max-age=0, s-maxage=300, stale-while-revalidate=60"
+    assert "Cookie" in r.headers["Vary"]
+    assert c.post("/api/v1/auth/login", json={"id": "test", "password": "test"}).status_code == 200
+    r = c.get("/api/v1/auth/status")
+    assert r.get_json()["tier"] == "member"
+    assert r.headers["Cache-Control"] == "private, no-store"
+    assert create_app().test_client().get("/api/v1/auth/status", headers={"Authorization": "Bearer x"}).headers["Cache-Control"] == "private, no-store"
+
+
+def test_flask_public_rules_get_stale_while_revalidate(monkeypatch):
+    """Flask(/api/v1) の経路でも、匿名の public に stale-while-revalidate が付き、会員には付かない。"""
+    from flask import Flask
+
+    from src.api import http_cache_headers as H
+
+    cfg = {"enabled": True, "stale_while_revalidate": 60, "rules": [{"prefix": "/api/v1/races/", "max_age": 60, "s_maxage": 30}], "never": []}
+    monkeypatch.setattr(H, "config", lambda: cfg)
+    monkeypatch.setattr(H, "_race_date_peek", None)
+    app = Flask("t")
+
+    @app.get("/api/v1/races/<rid>/x")
+    def _x(rid):
+        return {"id": rid}
+
+    H.install_flask(app)
+    c = app.test_client()
+    assert c.get("/api/v1/races/209906050811/x").headers["Cache-Control"] == "public, max-age=60, s-maxage=30, stale-while-revalidate=30"
+    c.set_cookie("k", "v")
+    assert c.get("/api/v1/races/209906050811/x").headers["Cache-Control"] == "private, max-age=60"
+
+
 def test_test_user_cannot_login_when_flag_off(monkeypatch):
     monkeypatch.setenv("KEIBA_ENV", "stg")
     monkeypatch.setenv("DEV_SECRET_KEY", "k")
