@@ -40,6 +40,25 @@ def status_for(at: str | None = None) -> dict:
     return st
 
 
+# 状態は設定と時刻だけで決まり、要求者（会員・匿名・管理者）で変わらないので、VPS の nginx に共有で置かせる。
+# Next.js の middleware が 1 画面ごとに（15 秒のメモリを越えるたび）聞きに来て、Cloud Run を起こし続けていた（2026-11-23 の計測で 1 日 1,100 件）。
+# 保守でないとき 120 秒置くと最悪 1 日 720 回（＋取り直し）。保守の始まりの見え方は最大 2 分＋swr 遅れるが、API 自身が保守中は 503 を返すので安全。
+# 保守中・予告中（残り秒数・開始までの秒数を返す。毎日 1 時間＋予告）は 15 秒にして、秒読みと始まり・終わりの見え方をずらさない。
+STATUS_SHARED_S_MAXAGE = 120
+STATUS_ACTIVE_S_MAXAGE = 15
+
+
+def status_cache_control(at: str | None, st: dict | None = None) -> str:
+    """?at=（試験用の時刻の指定）付きは置かない。それ以外は nginx にだけ置く（ブラウザは毎回取り直す）。"""
+    if at:
+        return "no-store, max-age=0"
+    from src.api.http_cache_headers import shared_short_value
+
+    st = st or {}
+    counting = bool(st.get("active")) or st.get("phase") in ("active", "notice")
+    return shared_short_value(STATUS_ACTIVE_S_MAXAGE if counting else STATUS_SHARED_S_MAXAGE)
+
+
 def decide(path: str, *, remote_addr: str | None, headers: dict[str, str], is_admin: bool) -> tuple[dict | None, str | None]:
     """(止めるときの status, バイパス理由)。止めないときは status が None。"""
     cfg = M.load_config()
@@ -87,7 +106,8 @@ def install_fastapi(app: Any, is_admin: Callable[[Any], bool]) -> None:
 
     @app.get("/api/maintenance/status", response_class=JSONResponse)
     async def maintenance_status(at: str | None = None):
-        return JSONResponse(status_for(at), headers={"Cache-Control": "no-store, max-age=0"})
+        st = status_for(at)
+        return JSONResponse(st, headers={"Cache-Control": status_cache_control(at, st)})
 
 
 def _cookie_admin(request: Any) -> bool:
@@ -121,6 +141,8 @@ def install_flask(app: Any, is_admin: Callable[[], bool]) -> None:
 
     @app.get("/api/v1/maintenance/status")
     def _maintenance_status():
-        resp = make_response(jsonify(status_for(request.args.get("at"))))
-        resp.headers["Cache-Control"] = "no-store, max-age=0"
+        at = request.args.get("at")
+        st = status_for(at)
+        resp = make_response(jsonify(st))
+        resp.headers["Cache-Control"] = status_cache_control(at, st)
         return resp

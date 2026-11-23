@@ -81,6 +81,7 @@ jobs:
       REGION: ${{ vars.CLOUD_RUN_REGION }}
       SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
       SMOKE_RACE_ID: ${{ vars.SMOKE_RACE_ID }}
+      WITH_NEXT_KEY: ${{ vars.WITH_NEXT_KEY }}   # 共有鍵の作り直しの間だけ 1（scripts/ops/rotate_proxy_key.sh）
     steps:
       - uses: actions/checkout@v4   # PIN
       - name: GCP に認証（Workload Identity Federation。鍵ファイルは使わない）

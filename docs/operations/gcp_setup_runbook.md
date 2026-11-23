@@ -121,7 +121,8 @@ echo "$PROJECT $REGION $BILLING_ACCOUNT"
 | 秘密の名前 | 中身 | 読める SA | 備考 |
 |---|---|---|---|
 | `SLACK_WEBHOOK_URL`（または `_PROD` / `_STG`） | Slack の Incoming Webhook URL | api, jobs | 環境別に分けるなら `_PROD`/`_STG` |
-| `KEIBA_PROXY_KEY` | VPS の nginx が付ける `X-Keiba-Proxy-Key` の値 | api | VPS の `.env`（権限 600）にも同じ値。長いランダム文字列 |
+| `KEIBA_PROXY_KEY` | VPS の nginx が付ける `X-Keiba-Proxy-Key` の値 | api, deployer | VPS の `/etc/keiba-ui/proxykey.env`（権限 600）にも同じ値。長いランダム文字列。監視ポータル（keiba-monitor）も読む |
+| `KEIBA_PROXY_KEY_NEXT` | 共有鍵の作り直しの間だけ使う新しい鍵 | api, monitor | `scripts/ops/rotate_proxy_key.sh` が作る。手順は docs/operations/edge_fix_20261123.md の「H」 |
 | `KEIBA_HEARTBEAT_KEY` | VPS → `/ops/heartbeat` の認証 | api | |
 | `APP_SECRET_KEY` / `JWT_SECRET` / `DEV_PASSWORD` | アプリのセッション署名・開発者ログイン | api | ホストの `.env` と**同じ値**にする（セッションの互換）。Cloud Run へ移すまでは登録だけ |
 | `DEV_SECRET_KEY` | セッション署名。共通ログインのパスワードの元にもなる | api, jobs | ホストの `.env` と**同じ値**（同じなら月次のパスワードも切替前後で同じ）。jobs は shared-login ジョブが読む |
