@@ -32,7 +32,7 @@ SEGS = ("flat", "graded")
 # サイクルごとの確率の版（再現のため）。11 以降は v5。13 は v5 の学習の平均（cycle13 の中で差し替える）
 CYCLE_RICH = {4: "rich_pred.parquet", 5: "rich_pred_v2.parquet", 6: "rich_pred_v4.parquet", 7: "rich_pred_v4.parquet", 8: "rich_pred_v4.parquet",
               9: "rich_pred_v4.parquet", 10: "rich_pred_v4.parquet", 13: "rich_pred_v5bag.parquet", 15: "rich_pred_v5bag.parquet",
-              16: "rich_pred_v6bag.parquet", 17: "rich_pred_v5bag.parquet", 18: "rich_pred_v5bag.parquet", 19: "rich_pred_v5bag.parquet", 20: "rich_pred_v5bag.parquet", 21: "rich_pred_v5bag.parquet"}
+              16: "rich_pred_v6bag.parquet", 17: "rich_pred_v5bag.parquet", 18: "rich_pred_v5bag.parquet", 19: "rich_pred_v5bag.parquet", 20: "rich_pred_v5bag.parquet", 21: "rich_pred_v5bag.parquet", 22: "rich_pred_v5bag.parquet", 23: "rich_pred_v5bag.parquet"}
 RICH_FILE = D.RICH
 
 
@@ -896,6 +896,55 @@ def cycle21(d: pd.DataFrame) -> dict:
 
 
 CYCLES[21] = cycle21
+
+
+# ---------------------------------------------------------------- サイクル 22: 1 レース 1 点（期待値が最大の馬だけ）
+def strat_ev_top1(ab, t: float, omax: float):
+    def s(d: pd.DataFrame, k: int) -> np.ndarray:
+        p = combo_p(d, k, *ab, col="p_rich")
+        o = d[f"odds_pre{k}"].to_numpy(float)
+        ev = np.where(o <= omax, p * o, 0.0)
+        mx = pd.Series(ev).groupby(d["race_id"].to_numpy()).transform("max").to_numpy()
+        return ((ev >= t) & (ev == mx)).astype(float)
+    return s
+
+
+def cycle22(d: pd.DataFrame) -> dict:
+    out = {"cycle": 22, "hypothesis": "同じレースで複数の馬を買うと、当たりは高々 1 頭で、期待値の低い側の馬が控除の負けを足す。"
+           "1 レース 1 点（期待値が最大の馬だけ）にすると回収率が上がる。", "segments": {}}
+    n_trials = 0
+    for seg in SEGS:
+        a_d, b_d = sub(d, "select_a", seg), sub(d, "select_b", seg)
+        ab = fit_combo(a_d, col="p_rich")
+        rows = []
+        for t, omax in itertools.product((1.1, 1.2, 1.3, 1.5), (20.0, 50.0)):
+            rows.append({"t": t, "omax": omax, "a": E.evaluate(a_d, strat_ev_top1(ab, t, omax), "win", n_boot=500)})
+            n_trials += 1
+        best = pick_best(rows)
+        seg_out = {"ab": ab, "trials": len(rows), "grid": [{"t": r["t"], "omax": r["omax"], "roi_a": r["a"]["roi"], "bpy_a": r["a"]["bets_per_year"]} for r in rows]}
+        if best:
+            st = strat_ev_top1(ab, best["t"], best["omax"])
+            b = E.evaluate(b_d, st, "win")
+            nl = E.null_perm(b_d, st, ["p_rich"], "win", n=30)
+            ok, why = E.gate(best["a"], b, nl)
+            seg_out |= {"best": {"t": best["t"], "omax": best["omax"]}, "select_a": best["a"], "select_b": b, "null_b": nl, "gate": ok, "gate_why": why}
+        out["segments"][seg] = seg_out
+    out["n_trials"] = n_trials
+    return out
+
+
+CYCLES[22] = cycle22
+
+
+def cycle23(d: pd.DataFrame) -> dict:
+    out = cycle11(swap_phase(d, "t15"))
+    out["cycle"] = 23
+    out["phase"] = "t15"
+    out["hypothesis"] = "判定の時点を T-15 にすると、T-60 と T-5 の間の成績になり、手での購入でも間に合う時点で 100% を越える。"
+    return out
+
+
+CYCLES[23] = cycle23
 
 
 # ---------------------------------------------------------------- 2022〜24 に当てる（関門を通り、凍結した候補だけ）
