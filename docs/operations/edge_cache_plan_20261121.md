@@ -592,12 +592,14 @@ sudo rm /etc/nginx/snippets/keiba-edge-stg.conf && sudo nginx -t && sudo systemc
 ホストの cron（統括役が共有の作業ツリーを早送りした後に足す。root の cron から jovyan で）:
 
 ```
-*/15 * * * * nice -n 10 runuser -u jovyan -- sh -c 'bash /home/jovyan/work/keiba-vpn/scripts/ops/edge/edge_sync.sh stg >> /home/jovyan/work/keiba-edge/sync-stg.log 2>&1' # KEIBA_EDGE
-40 4 * * *   nice -n 10 runuser -u jovyan -- sh -c 'EDGE_RENDER_ARGS=--full bash /home/jovyan/work/keiba-vpn/scripts/ops/edge/edge_sync.sh stg >> /home/jovyan/work/keiba-edge/sync-stg.log 2>&1' # KEIBA_EDGE
+*/15 * * * * nice -n 10 /usr/sbin/runuser -u jovyan -- sh -c 'bash /home/jovyan/work/keiba-vpn/scripts/ops/edge/edge_sync.sh stg >> /home/jovyan/work/keiba-edge/sync-stg.log 2>&1' # KEIBA_EDGE
+40 4 * * *   nice -n 10 /usr/sbin/runuser -u jovyan -- sh -c 'EDGE_RENDER_ARGS=--full bash /home/jovyan/work/keiba-vpn/scripts/ops/edge/edge_sync.sh stg >> /home/jovyan/work/keiba-edge/sync-stg.log 2>&1' # KEIBA_EDGE
 20 4 * * *   cd /home/jovyan/work/keiba-vpn && nice -n 10 /opt/conda/bin/python3 -m src.ops.edge_render prune --mirror-days 40 >> /home/jovyan/work/keiba-vpn/logs/edge_prune.log 2>&1 # KEIBA_EDGE
 ```
 
 - prod は、stg で 11/28〜29 の確定分を確かめた後（11/30 以降の平日）に同じ形で足す。
+- `runuser` は `/usr/sbin` にあり、root の crontab の PATH に無い。絶対パスで書く（11/24 の初回は、これで 15 分ごとの回が動いていなかった）。
+- E5 を入れたら、1 行目の `*/15` を `*` にする（1 分ごと）。作らない回は API を読み込まず、約 1 秒で終わる。
 - edge_sync は jovyan で動かす。ログも jovyan のシェルが開くので、jovyan の持ち物になる。
 - 写しの掃除だけは root で動かす。
   - 理由: 写しは root の cron（取得）が書くので、写しのフォルダは root の 755 で、jovyan では消せない。
@@ -677,23 +679,38 @@ sudo rm /etc/nginx/snippets/keiba-edge-stg.conf && sudo nginx -t && sudo systemc
 - 出馬表の段階の推定（状態ファイルが無いときだけ。木曜 12:00）
 - レース詳細の品質の警告（検査が古くなると付く）
 
-### 11.2 作り
+### 11.2 作り（実装 11/24。別の見張りのプロセスは作らず、今の作る処理を 1 分ごとに起こす形にした）
 
-- **見張り（新）: `src/ops/edge_watch.py`**
-  - API を読み込まない軽いプロセスで、30 秒ごとに上の入力の更新時刻・大きさを見る（stat だけ）。
-  - events・launch_watch は、前回の位置から後ろに足された行だけを読み、race_id を拾う。
-  - 次のときに、そのレース（と、その日の一覧）を「作り直す」に積む。
-    - 変わった入力がある。
-    - 時刻の区切りが来た（発走 ＋5 分・予測の窓の終わり・0 時）。
-    - 安全網: 当日の確定前のレースは、前回から 10 分。
-  - 積んだものがあれば、`edge_render render --race … --date …` を新しいプロセスで起こす（API の中のキャッシュを持ち越さない）。続けて `push` する。
-  - 起こすのは 1 度に 1 つ。終わるまで次は積むだけにする（最短 30 秒おき）。
-- **作る処理: `edge_render`**
-  - 対象に「確定前（写しに出馬表がある・今日から 7 日先まで）」を足す。
-  - 本文の比較では `pipeline_status.as_of` を除く。as_of だけが変わったときは書き換えず、送らない。
-- **systemd ではなく cron の 1 分ごとの起動＋flock**（ホストはコンテナで systemd が無い）。
-  - 1 回の起動で 約 55 秒、30 秒ごとに 2 周して終わる。前の回が動いていれば何もしない。
-  - 止める: `config/edge_render.json` の `watch_enabled: false`。
+- **起こし方:** root の cron が 1 分ごとに `edge_sync.sh stg` を jovyan で起こす（flock で 1 度に 1 つ）。
+- **作る処理（`edge_render render`、引数なし）の対象:**
+  - 確定済み: 直近 35 日（E3 と同じ）。
+  - 確定前: 前日〜7 日先（`upcoming_days`）。写しに出馬表があるレースの詳細・予測と、全レースの出馬表が揃った日の一覧。
+- **指紋（作り直すかの判定）:** 入力の更新時刻・大きさに、次を足した。
+  - 推論の出力（v6e・v6c の parquet）
+  - 出馬表の段階（entries_state）
+  - 予測の経過（events・launch_watch のうち、そのレースの行だけ）
+  - 時刻の区切り: 確定前で、当日・前日は 10 分ごと（`pending_bucket_sec`）。先の日は日付が替わるごと。発走後の判定・予測の窓の文言・is_future のため。
+- **API を読み込むのは作るときだけ:** 指紋が全部同じ回は API を読み込まない（約 0 秒・RSS 22MB）。heartbeat だけ書いて送る。作る回は 1 回の起動で、変わった対象をまとめて作る（11/24 の試しで RSS 最大 455MB）。
+- **as_of を除いて比べる:** 本文の比較から `pipeline_status.as_of` を除き、as_of だけが変わったときは書き換えず、送らない。
+- **歯止め:** 1 分の load が `max_load`（20）を超えた回は作り直しを飛ばし、heartbeat も進めない。開催日の推論を優先する。
+- **止め方（統括役が 1 行で）:** `touch /home/jovyan/work/keiba-edge/STOP`。作らない・送らない。消せば次の分から戻る。
+  - STOP だけでは、VPS は返すのを止めない。heartbeat が古くなり、5 分で見張りが確定前を止め、30 分で全部を止める。
+  - すぐに返すのを止めるときは、VPS でも `touch /srv/keiba-edge/<env>/_ctl/OFF` を置く。
+- **見送りの印:** 負荷で見送った回は終了コード 3 で、edge_sync は送らない。ログに「見送り」と書く。深夜の `--full` は見送らない。
+- **捨てた対象:** そのときの指紋を `_meta/skipped.json` に覚え、指紋が変わるまで作り直さない。入力の欠けが続くレースがあっても、毎分 API を読み込まない。
+- **配備の版:** GitHub に聞くのは 10 分に 1 回。配備が替わってから作る版が替わるまで、最大 10 分遅れる。GitHub に届かないときは、前回の答えで続ける。
+- **確定前の置き場:** 確定前のレースと、確定前のレースを含む日の一覧は `current/pre/` に、確定済みは `current/anon/` に置く。nginx は anon → pre の順に見る。
+- **指紋に足したもの（critic の指摘）:**
+  - 候補の止めの印（`predictions_v6c/_disabled.json`・`bets_stage2/_disabled.json`）を全体の指紋に入れる。
+  - predictions_v3（shadow）を入れる。
+  - 先の日は 1 時間ごと（出馬表の段階の推定が木曜 12:00 に替わるため）。
+  - as_of は pipeline_status の中のものだけを除く。
+- **VPS の見張り（`edge_stale_guard.sh`・`keiba-edge-guard@<env>.timer`、1 分ごと、deploy で動く）:**
+  - heartbeat が 5 分より古ければ `_ctl/STALE_PRE.auto` を置き、確定前を返さない。
+  - 30 分より古ければ `_ctl/OFF.auto` を置き、全部を返さない。30 分にしたのは、深夜の `--full` が長くかかっても止めないため。
+  - nginx と cache-warm は、どちらの印も見て今の経路に戻る。
+  - 新しくなれば、自分の印（.auto）だけを外す。人の `_ctl/OFF` は別の名前なので、触れない。
+  - 自動で止まった間は purge しない（root と費用が要るため）。確定前のパスは nginx の s-maxage 30 秒ですぐ取り直される。確定済みのパスは 30 日の保存物が返るが、確定後の中身はまれにしか変わらない。
 - **範囲:** 匿名だけ（E3 と同じ nginx の口。nginx の設定は変えない）。会員は E4。
 
 ### 11.3 量の見積もり（開催日・最悪の置き方）
@@ -706,8 +723,9 @@ sudo rm /etc/nginx/snippets/keiba-edge-stg.conf && sudo nginx -t && sudo systemc
 | 安全網（10 分ごと、09:00〜17:00 の確定前） | 最悪 48 回 × 36 × 2 種（実際は発走の後は確定に移って減る） | 最悪 約 3,500 本/日 |
 | 一覧の作り直し | 変化のたび × 3 日分 | 約 500 本/日 |
 | 作る CPU | 約 4,900 本 × 最大 1 秒 | 最悪 約 80 分/日（1 コアの換算） |
-| 起動の CPU | 最短 30 秒おき × 8 時間 ＝ 最悪 960 回 × 10 秒 | 最悪 約 160 分/日 |
-| 合計の CPU | 最悪 約 4 コア時間/日（nice 19・ionice idle） | ホスト 24 コアの 8 時間（192 コア時間）の 約 2% |
+| 起動の CPU | 作る回は最短 1 分おき × 8 時間 ＝ 最悪 480 回 × 約 5〜10 秒（作らない回は約 0 秒） | 最悪 約 80 分/日 |
+| 合計の CPU | 最悪 約 3 コア時間/日（nice 19・ionice idle） | ホスト 24 コアの 8 時間（192 コア時間）の 約 1.5% |
+| メモリ | 作る回の RSS 最大 約 455MB（11/24 の試し）。作らない回は 22MB | 90GB のうち 0.5% |
 | ディスクの書き込み | 中身が変わったときだけ。約 1,400 本 × (20KB＋gz 5KB) | 約 35MB/日 |
 | VPS への転送 | 変わった本文の gz を tar（ssh） | 約 10〜20MB/日。GCP の外どうしで 0 円 |
 | GCS の操作 | 0 回（作る処理は GCS のクライアントを作れない。見張りは stat だけ） | 0 円 |
@@ -728,18 +746,18 @@ sudo rm /etc/nginx/snippets/keiba-edge-stg.conf && sudo nginx -t && sudo systemc
 
 - **止まり方（自動）:** E3 の `cache_warm.py` の `edge_body` が、フォルダにファイルがあるパスの取り直しをしない。E5 で確定前の詳細・予測・一覧がフォルダに入れば、その分の cache-warm の Cloud Run の要求が消える。
   - 残るのは、race-calendar・scrape-dates・prediction-results の 3 種と、クエリ付きの一覧。これらは段 6 でクエリの正規化をしてから。
-- **戻し方:** `touch /srv/keiba-edge/prod/_ctl/OFF`（deploy で置ける。reload なし）。
+- **戻し方:** `touch /srv/keiba-edge/prod/_ctl/OFF`（deploy で置ける。reload なし。見張りは人の OFF を外さない）。
   1. nginx がフォルダを見なくなる。
   2. cache-warm も取り直しに戻る（`edge_body` が OFF を見る）。
   3. 続けて `sudo bash scripts/ops/vps/purge_api_cache.sh` で API キャッシュを消す（フォルダにあった間、取り直していないため。最悪 約 2 円・1 回）。
-- 作る側を止める: `config/edge_render.json` の `watch_enabled: false`。または crontab の `KEIBA_EDGE` の行をコメントにする。
+- 作る側を止める: `touch /home/jovyan/work/keiba-edge/STOP`（1 行）。または crontab の `KEIBA_EDGE` の行をコメントにする。版ごとに止めるときは `config/edge_render.json` の `enabled: false`。
 - **cache-warm そのものは止めない（timer は残す）。** フォルダで足りない時（ホストの停止・OFF）の予備として、今の取り直しが自動で戻る形にしておく。
 
 ### 11.5 段取り
 
 | 段 | 中身 | いつ |
 |---|---|---|
-| 1 | edge_render に確定前の対象・as_of を除く比較。見張り `edge_watch.py`（テスト・critic） | 11/24〜26（平日） |
+| 1 | edge_render に確定前の対象・指紋の拡張・as_of を除く比較・見送り。cron を 1 分ごとに（テスト・critic）。**E5 を初めて入れた回は全部を作り直す**（指紋と本文の比べ方が変わるため）。人が見ている平日の昼に `EDGE_RENDER_ARGS=--full` で 1 回流す | 11/24〜26（平日） |
 | 2 | stg で、11/28 の出馬表（11/26 ごろ写しに入る）を使い、診断と見張りを平日に回す | 11/26〜27 |
 | 3 | VPS の stg に、heartbeat の古さで確定前を止める見張り（timer）を入れる | 11/27 |
 | 4 | stg の見張りを、11/28・29 の開催日に動かすか（統括役の判断。新しい処理を開催日に初めて動かすことになる） | 11/27 の報告で判断を仰ぐ |

@@ -333,6 +333,19 @@ def eligible_dates(cfg: dict[str, Any], today: datetime) -> list[str]:
     return out
 
 
+def pending_dates(cfg: dict[str, Any], today: datetime) -> list[str]:
+    """確定前も作る日（E5）: 前日（結果待ち）から upcoming_days 日先まで。写しの有効化より前の日は含めない。"""
+    since = datetime.strptime(cfg["mirror_since"], "%Y%m%d").replace(tzinfo=JST) + timedelta(days=int(cfg.get("entries_lead_days", 5)))
+    first = max(since, today - timedelta(days=int(cfg.get("settled_grace_days", 1))))
+    last = today + timedelta(days=int(cfg.get("upcoming_days", 0)))
+    out = []
+    d = first
+    while d.date() <= last.date():
+        out.append(d.strftime("%Y%m%d"))
+        d += timedelta(days=1)
+    return out
+
+
 def mirror_root(base: Path) -> Path:
     o = os.environ.get("KEIBA_EDGE_MIRROR_DIR", "").strip()
     return Path(o) if o else base / "data" / "local" / "mirror"
@@ -357,40 +370,93 @@ def _stat_sig(p: Path) -> str:
         return "-"
 
 
-def race_fingerprint(base: Path, rid: str, cats: Iterable[str]) -> str:
-    """そのレースの写し（レースのカテゴリ）の更新時刻と大きさ。推論の出力（data/local/inference）などは含まない → 深夜の --full で拾う。"""
+def _lines_sig(path: Path, rid: str, cache: dict[Path, bytes]) -> str:
+    """追記の記録（events・launch_watch）のうち、そのレースの行だけの指紋。ファイルは 1 回の実行で 1 度だけ読む。"""
+    if path not in cache:
+        try:
+            cache[path] = path.read_bytes()
+        except OSError:
+            cache[path] = b""
+    b = rid.encode()
+    return hashlib.md5(b"\n".join(x for x in cache[path].splitlines() if b in x)).hexdigest()
+
+
+def race_fingerprint(base: Path, rid: str, cats: Iterable[str], date: str = "", *, now: datetime | None = None,
+                     bucket_sec: int = 0, cache: dict[Path, bytes] | None = None) -> str:
+    """そのレースの入力の指紋。
+
+    - 写し（レースのカテゴリ）の更新時刻と大きさ。
+    - 開催日（date）が分かれば、推論の出力（v6e・v6c）・出馬表の段階・予測の経過の行（events・launch_watch）。
+    - 確定前（写しに結果が無い）で bucket_sec > 0 なら、時刻の区切りも入れる。応答の発走後の判定・予測の窓の文言・is_future が、
+      入力が同じでも時間で変わるため。当日と前日は bucket_sec ごと、先の日は日付が替わるごと。
+    推論の出力以外の data/local の変化（lap_forecast など。匿名では落ちる）は入らない → 深夜の --full で拾う。"""
     root = mirror_root(base)
-    return hashlib.md5("|".join(_stat_sig(root / c / rid[:4] / f"{rid}.json") for c in sorted(cats)).encode()).hexdigest()
-
-
-def date_fingerprint(base: Path, date: str, cats: Iterable[str]) -> str:
-    parts = [_stat_sig(race_lists_dir(base) / f"{date}.json")] + [race_fingerprint(base, r, cats) for r in races_of(base, date)]
+    parts = [_stat_sig(root / c / rid[:4] / f"{rid}.json") for c in sorted(cats)]
+    if date:
+        loc = base / "data" / "local"
+        inf = loc / "inference"
+        cache = {} if cache is None else cache
+        parts += [_stat_sig(inf / d / date / f"{rid}.parquet") for d in ("predictions_v6", "predictions_v6c", "predictions_v3")]
+        parts.append(_stat_sig(loc / "meta" / "entries_state" / f"{rid}.json"))
+        parts += [_lines_sig(inf / d / f"{date}.jsonl", rid, cache) for d in ("events", "launch_watch")]
+        if bucket_sec > 0 and not race_settled_in_mirror(base, rid):
+            now = now or datetime.now(JST)
+            today = now.strftime("%Y%m%d")
+            # 先の日も 1 時間ごと（出馬表の段階の推定が木曜 12:00 に替わるなど。src/scraper/entries_phase.py）
+            # 区切りはレースごとにずらす（全レースが同じ分に作り直しに集まらないように）
+            off = int(rid[-6:]) * 37 if rid[-6:].isdigit() else 0
+            ts = now.timestamp()
+            parts.append(f"t{int((ts + off % bucket_sec) // bucket_sec)}" if date <= today else f"h{int((ts + off % 3600) // 3600)}")
     return hashlib.md5("|".join(parts).encode()).hexdigest()
 
 
-def global_fingerprint(cfg: dict[str, Any], env: str, sha: str) -> str:
-    return hashlib.md5(json.dumps([sha, env, cfg], sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+def date_fingerprint(base: Path, date: str, cats: Iterable[str], **kw) -> str:
+    parts = [_stat_sig(race_lists_dir(base) / f"{date}.json")] + [race_fingerprint(base, r, cats, date, **kw) for r in races_of(base, date)]
+    return hashlib.md5("|".join(parts).encode()).hexdigest()
 
 
-def target_fingerprints(cfg: dict[str, Any], base: Path, env: str, sha: str, targets: list[tuple[str, str]]) -> dict[str, str]:
+def global_fingerprint(cfg: dict[str, Any], env: str, sha: str, base: Path | None = None) -> str:
+    """版・env・設定。加えて、候補の止めの印（置く・外すで、全レースの応答が変わる。src/api/stage2_live.py）。"""
+    marks = []
+    if base is not None:
+        inf = base / "data" / "local" / "inference"
+        marks = [_stat_sig(inf / "predictions_v6c" / "_disabled.json"), _stat_sig(inf / "bets_stage2" / "_disabled.json")]
+    return hashlib.md5(json.dumps([sha, env, cfg, marks], sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def target_fingerprints(cfg: dict[str, Any], base: Path, env: str, sha: str, targets: list[tuple[str, str]],
+                        race_date: dict[str, str] | None = None, now: datetime | None = None) -> dict[str, str]:
     cats = sorted(mirrored_categories(base))
-    g = global_fingerprint(cfg, env, sha)
+    g = global_fingerprint(cfg, env, sha, base)
+    race_date = race_date or {}
+    kw = {"now": now, "bucket_sec": int(cfg.get("pending_bucket_sec", 0)), "cache": {}}
     out: dict[str, str] = {}
     for tier, path in targets:
         key = target_key(path)
-        f = date_fingerprint(base, key, cats) if len(key) == 8 else race_fingerprint(base, key, cats)
+        f = date_fingerprint(base, key, cats, **kw) if len(key) == 8 else race_fingerprint(base, key, cats, race_date.get(key, ""), **kw)
         out[out_rel(tier, path)] = hashlib.md5(f"{g}|{f}".encode()).hexdigest()
     return out
 
-
-# ---------------------------------------------------------------- 書き出し
 
 def out_rel(tier: str, path: str) -> str:
     return f"{tier}{path}.json"
 
 
+def content_md5(body: bytes) -> str:
+    """本文の指紋。pipeline_status.as_of（作るたびに変わる）だけは除く。as_of だけが変わったときは書き換えず、送らない。"""
+    try:
+        doc = json.loads(body)
+    except ValueError:
+        return hashlib.md5(body).hexdigest()
+    ps = doc.get("pipeline_status") if isinstance(doc, dict) else None
+    if not isinstance(ps, dict) or "as_of" not in ps:
+        return hashlib.md5(body).hexdigest()
+    ps = {k: v for k, v in ps.items() if k != "as_of"}
+    return hashlib.md5(json.dumps({**doc, "pipeline_status": ps}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
 def write_if_changed(out_dir: Path, rel: str, body: bytes, manifest: dict[str, str]) -> bool:
-    md5 = hashlib.md5(body).hexdigest()
+    md5 = content_md5(body)
     p = out_dir / rel
     if manifest.get(rel) == md5 and p.is_file() and p.with_name(p.name + ".gz").is_file():
         return False
@@ -429,8 +495,8 @@ async def render_all(app, targets: list[tuple[str, str]], cookies: dict[str, str
                 continue
             FLAGS.clear()
             c.cookies.clear()
-            if cookies.get(tier):
-                c.cookies.set(COOKIE_NAME, cookies[tier])
+            if cookies.get("anon" if tier == PENDING_TIER else tier):
+                c.cookies.set(COOKIE_NAME, cookies["anon" if tier == PENDING_TIER else tier])
             try:
                 r = await c.get(path, headers={"X-Keiba-Fresh": "1", "Accept-Encoding": "identity"})
                 status, body = r.status_code, r.content
@@ -454,6 +520,35 @@ async def render_all(app, targets: list[tuple[str, str]], cookies: dict[str, str
             else:
                 stats["same"] += 1
     return stats
+
+
+def race_pending_in_mirror(base: Path, rid: str) -> bool:
+    """写しに出馬表がある（確定前も含む）レース。"""
+    return in_mirror(base, "race_shutuba", rid)
+
+
+DEFERRED = 3            # 負荷が高く作り直しを見送った回の終了コード（edge_sync.sh は送らない）
+PENDING_TIER = "pre"     # 確定前の匿名の置き場（nginx は anon の次に見る。VPS の見張りが heartbeat の古さで止める）
+
+
+def default_targets(cfg: dict[str, Any], base: Path, tiers: list[str], today: datetime) -> tuple[list[tuple[str, str]], dict[str, str]]:
+    """引数なしの回の対象: 確定済み（直近 window 日）＋確定前（前日〜upcoming_days 日先。E5）。レース → 開催日の対応も返す。
+
+    確定前のレース・確定前のレースを含む日の一覧は "pre" の置き場に、確定済みは "anon" に置く（匿名だけ。会員は E4）。"""
+    settled_d = eligible_dates(cfg, today)
+    pend_d = pending_dates(cfg, today) if int(cfg.get("upcoming_days", 0)) > 0 else []
+    t = targets_for(cfg, base, [d for d in settled_d if d not in pend_d], [], tiers)
+    for d in pend_d:
+        rids = races_of(base, d)
+        ready = [r for r in rids if race_pending_in_mirror(base, r)]
+        for r in ready:
+            tier = "anon" if race_settled_in_mirror(base, r) else PENDING_TIER
+            t += [(tier, p.format(rid=r)) for p in cfg["race_paths"].get("anon", [])] if "anon" in tiers else []
+        if ready and len(ready) == len(rids) and "anon" in tiers:
+            tier = "anon" if all(race_settled_in_mirror(base, r) for r in rids) else PENDING_TIER
+            t += [(tier, p.format(date=d)) for p in cfg["date_paths"].get("anon", [])]
+    race_date = {r: d for d in dict.fromkeys(settled_d + pend_d) for r in races_of(base, d)}
+    return list(dict.fromkeys(t)), race_date
 
 
 def targets_for(cfg: dict[str, Any], base: Path, dates: Iterable[str], races: Iterable[str], tiers: list[str],
@@ -484,20 +579,17 @@ def cmd_render(args: argparse.Namespace) -> int:
         print("config/edge_render.json の enabled が false なので何もしない")
         return 0
     base = Path(args.base).resolve() if args.base else ROOT
-    apply_clean_environ(cfg, args.env, secrets.token_hex(32))
-    sys.path.insert(0, str(ROOT))
-    install_guards(base)
-    from src.api import auth
-
-    cookies = install_member(auth)
     tiers = args.tier or list(cfg.get("tiers") or ["anon"])
-    today = datetime.now(JST)
-    dates = args.date or ([] if args.race else eligible_dates(cfg, today))
+    now = datetime.now(JST)
+    race_date: dict[str, str] = {}
     if args.diagnose:
         # 診断: 確定前でも写しに出馬表があれば作ってみて、捨てる理由を数える（ファイルは試しの置き場にだけ書く。送らない）
-        targets = targets_for(cfg, base, dates, args.race or [], tiers, ready=lambda b, r: in_mirror(b, "race_shutuba", r))
+        dates = args.date or ([] if args.race else eligible_dates(cfg, now))
+        targets = targets_for(cfg, base, dates, args.race or [], tiers, ready=race_pending_in_mirror)
+    elif args.race or args.date:
+        targets = targets_for(cfg, base, args.date or [], args.race or [], tiers)
     else:
-        targets = targets_for(cfg, base, dates, args.race or [], tiers)
+        targets, race_date = default_targets(cfg, base, tiers, now)
     sha = tree_sha(ROOT)
     out_dir = Path(args.out) / args.env / sha
     if args.diagnose:
@@ -512,24 +604,71 @@ def cmd_render(args: argparse.Namespace) -> int:
         prev_fps = {} if args.full else json.loads(fp_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         prev_fps = {}
-    fps = target_fingerprints(cfg, base, args.env, sha, targets)
+    # 手で対象を指定した回（--race・--date）は、開催日が分からない指紋を残さない（次の引数なしの回の判定を崩さない）
+    explicit = bool(args.race or args.date)
+    fps = {} if explicit else target_fingerprints(cfg, base, args.env, sha, targets, race_date, now)
+    # 捨てた対象は、そのときの指紋を覚え、指紋が変わるまで作り直さない（入力の欠けが続くレースで毎分 API を読み込まない）
+    sk_path = out_dir / "_meta" / "skipped.json"
+    try:
+        skipped = {} if args.full else json.loads(sk_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        skipped = {}
+
+    def _needed(rel: str) -> bool:
+        fp = fps.get(rel)
+        if fp and skipped.get(rel) == fp:
+            return False
+        return not (fp and fp == prev_fps.get(rel) and rel in manifest and (out_dir / rel).is_file())
+
+    todo = [(t, p) for t, p in targets if _needed(out_rel(t, p))]
     t0 = time.time()
-    app = build_gateway()
-    assert_storages_guarded()
-    stats = asyncio.run(render_all(app, targets, cookies, out_dir, manifest, fps, prev_fps))
-    # 捨てた対象があるレース・日は、同じ回のほかの対象（プロセスの中のキャッシュで欠けを持ち越しうる）と前の回のファイルも消す。
-    # VPS からも push で消え、今の Cloud Run の経路に戻る（印が立ったら Cloud Run に流す）
-    dirty = dirty_keys(base, targets, stats.pop("skipped_targets"))
-    stats["dirty_keys"] = len(dirty)
-    stats["dropped"] = prune_outputs(out_dir, manifest, prev_fps, {out_rel(t, p) for t, p in targets if target_key(p) not in dirty}, only={out_rel(t, p) for t, p in targets})
+    stats: dict[str, Any] = {"written": 0, "same": 0, "skipped": 0, "unchanged_input": len(targets) - len(todo), "reasons": {}}
+    load1 = os.getloadavg()[0]
+    max_load = float(cfg.get("max_load", 0) or 0)
+    if todo and max_load and load1 > max_load and not args.full:
+        # ホストが混んでいる（開催日の推論など）: 作り直しを飛ばす。heartbeat は進めない（VPS の見張りが古さで確定前を止める）。
+        # 終了コード 3 で edge_sync に伝える（送らない）。深夜の --full は見送らない
+        print(json.dumps({"deferred": len(todo), "load1": round(load1, 1), "max_load": max_load}, ensure_ascii=False))
+        return DEFERRED
+    if todo:
+        apply_clean_environ(cfg, args.env, secrets.token_hex(32))
+        sys.path.insert(0, str(ROOT))
+        install_guards(base)
+        from src.api import auth
+
+        cookies = install_member(auth)
+        app = build_gateway()
+        assert_storages_guarded()
+        stats = asyncio.run(render_all(app, todo, cookies, out_dir, manifest, fps, prev_fps))
+        stats["unchanged_input"] = len(targets) - len(todo)
+        # 捨てた対象があるレース・日は、同じ回のほかの対象（プロセスの中のキャッシュで欠けを持ち越しうる）と前の回のファイルも消す。
+        # VPS からも push で消え、今の Cloud Run の経路に戻る（印が立ったら Cloud Run に流す）
+        dirty = dirty_keys(base, todo, stats.pop("skipped_targets"))
+        stats["dirty_keys"] = len(dirty)
+        stats["dropped"] = prune_outputs(out_dir, manifest, prev_fps, {out_rel(t, p) for t, p in todo if target_key(p) not in dirty},
+                                         only={out_rel(t, p) for t, p in todo})
+        for t, p in todo:
+            rel = out_rel(t, p)
+            if rel in manifest:
+                skipped.pop(rel, None)
+            elif fps.get(rel):
+                skipped[rel] = fps[rel]
     if not args.race and not args.date and not args.diagnose:
-        # 範囲（直近 window 日・写しに揃ったレース）を外れたものは消す（VPS からも push で消える → Cloud Run の経路に戻る）
+        # 範囲（確定済みの直近 window 日・確定前の日・写しに揃ったレース）を外れたものは消す（VPS からも push で消える → Cloud Run の経路に戻る）
         stats["removed"] = prune_outputs(out_dir, manifest, prev_fps, {out_rel(t, p) for t, p in targets})
     man_path.parent.mkdir(parents=True, exist_ok=True)
     man_path.write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True), encoding="utf-8")
     fp_path.write_text(json.dumps(prev_fps, ensure_ascii=False, sort_keys=True), encoding="utf-8")
-    hb = {"generated_at": datetime.now(JST).isoformat(timespec="seconds"), "env": args.env, "sha": sha, "targets": len(targets), **stats,
-          "seconds": round(time.time() - t0, 1)}
+    want = {out_rel(t, p) for t, p in targets}
+    sk_path.write_text(json.dumps({k: v for k, v in skipped.items() if k in want}, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+    hb = {"generated_at": datetime.now(JST).isoformat(timespec="seconds"), "env": args.env, "sha": sha, "targets": len(targets),
+          "rendered": len(todo), **stats, "load1": round(load1, 1), "seconds": round(time.time() - t0, 1)}
+    try:
+        import resource
+
+        hb["max_rss_mb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024)
+    except Exception:  # noqa: BLE001
+        pass
     (out_dir / "_meta" / "heartbeat.json").write_text(json.dumps(hb, ensure_ascii=False), encoding="utf-8")
     print(json.dumps(hb, ensure_ascii=False))
     return 0

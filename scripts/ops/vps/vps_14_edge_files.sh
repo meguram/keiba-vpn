@@ -47,6 +47,7 @@ lines = open(p, encoding="utf-8").read().splitlines(keepends=True)
 open(p, "w", encoding="utf-8").writelines(l for l in lines if "/etc/nginx/snippets/keiba-edge-" not in l)
 PY
   rm -f "$SNIP"
+  systemctl disable --now "keiba-edge-guard@${ENV_NAME}.timer" 2>/dev/null || true
   # 止めの印も置く（cache-warm はこれを見て、フォルダの代わりに nginx の API キャッシュの取り直しに戻る）
   [ -d "$ROOTD/$ENV_NAME/_ctl" ] && install -o deploy -g www-data -m 640 /dev/null "$ROOTD/$ENV_NAME/_ctl/OFF" || true
   if nginx -t; then systemctl reload nginx; echo "フォルダ配信を外しました（置き場は残す。バックアップ: $BK）"; else restore; exit 1; fi
@@ -60,7 +61,8 @@ if ! grep -q "/etc/nginx/snippets/keiba-edge-" "$SITE"; then
 fi
 
 # 置き場（deploy が書き、www-data が読む。setgid で新しいファイルも www-data の組）
-install -d -o deploy -g www-data -m 2750 "$ROOTD" "$ROOTD/$ENV_NAME" "$ROOTD/$ENV_NAME/_ctl"
+install -d -o deploy -g www-data -m 2750 "$ROOTD" "$ROOTD/$ENV_NAME" "$ROOTD/$ENV_NAME/_ctl" "$ROOTD/$ENV_NAME/_empty"
+[ -L "$ROOTD/$ENV_NAME/pre_live" ] || runuser -u deploy -- ln -sfn current/pre "$ROOTD/$ENV_NAME/pre_live"   # 確定前の入口（見張りが付け替える）
 sed "s/__EDGE_ENV__/${ENV_NAME}/g" "$HERE/templates/nginx-edge-files.conf" > "$SNIP.tmp"
 install -o root -g root -m 644 "$SNIP.tmp" "$SNIP"
 rm -f "$SNIP.tmp"
@@ -83,3 +85,10 @@ print("サイトに include を足した")
 PY
 
 if nginx -t; then systemctl reload nginx; echo "フォルダ配信を入れました（${ENV_NAME}。バックアップ: $BK）"; else restore; exit 1; fi
+
+# heartbeat の古さの見張り（ホストの作り直しが止まったら、確定前は pre_live を空に・全部は _ctl/OFF.auto。戻れば元に。人の OFF には触れない）
+install -o root -g root -m 755 "$HERE/edge_stale_guard.sh" /opt/keiba-ui/bin/edge_stale_guard.sh
+install -o root -g root -m 644 "$HERE/templates/keiba-edge-guard@.service" "$HERE/templates/keiba-edge-guard@.timer" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now "keiba-edge-guard@${ENV_NAME}.timer"
+echo "見張りを入れました（keiba-edge-guard@${ENV_NAME}.timer）"
