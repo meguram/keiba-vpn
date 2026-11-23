@@ -32,7 +32,7 @@ SEGS = ("flat", "graded")
 # サイクルごとの確率の版（再現のため）。11 以降は v5。13 は v5 の学習の平均（cycle13 の中で差し替える）
 CYCLE_RICH = {4: "rich_pred.parquet", 5: "rich_pred_v2.parquet", 6: "rich_pred_v4.parquet", 7: "rich_pred_v4.parquet", 8: "rich_pred_v4.parquet",
               9: "rich_pred_v4.parquet", 10: "rich_pred_v4.parquet", 13: "rich_pred_v5bag.parquet", 15: "rich_pred_v5bag.parquet",
-              16: "rich_pred_v6bag.parquet", 17: "rich_pred_v5bag.parquet", 18: "rich_pred_v5bag.parquet"}
+              16: "rich_pred_v6bag.parquet", 17: "rich_pred_v5bag.parquet", 18: "rich_pred_v5bag.parquet", 19: "rich_pred_v5bag.parquet", 20: "rich_pred_v5bag.parquet", 21: "rich_pred_v5bag.parquet"}
 RICH_FILE = D.RICH
 
 
@@ -794,6 +794,110 @@ def cycle18(d: pd.DataFrame) -> dict:
 CYCLES[18] = cycle18
 
 
+# ---------------------------------------------------------------- サイクル 19: 重賞を、平場で当てはめた第 2 段で買う（件数の壁への対応）
+def cycle19(d: pd.DataFrame) -> dict:
+    out = {"cycle": 19, "hypothesis": "重賞だけで第 2 段の重みを当てはめると件数が少なく不安定（サイクル 11〜15）。平場の 2017〜19 で当てはめた重み"
+           "（同じ自前の確率・同じ市場）をそのまま重賞に使い、判定の時点を T-60・T-5 の 2 通りで、単勝・単勝＋複勝を見る。", "segments": {}}
+    n_trials = 0
+    rows_all = {}
+    for phase in ("t60", "t05"):
+        e = d if phase == "t60" else swap_phase(d, phase)
+        ab = fit_combo(sub(e, "select_a", "flat"), col="p_rich")
+        a_d, b_d = sub(e, "select_a", "graded"), sub(e, "select_b", "graded")
+        for kind, t, omax in itertools.product(("win", "winplace"), (1.0, 1.1, 1.2, 1.3), (20.0, 50.0)):
+            st = strat_ev(lambda x, k, ab=ab: combo_p(x, k, *ab, col="p_rich"), t, omax)
+            rows_all[(phase, kind, t, omax)] = {"phase": phase, "kind": kind, "t": t, "omax": omax, "ab": ab, "a": E.evaluate(a_d, st, kind, n_boot=500)}
+            n_trials += 1
+    rows = list(rows_all.values())
+    best = pick_best(rows)
+    seg_out = {"trials": len(rows), "grid": [{k: r[k] for k in ("phase", "kind", "t", "omax")} | {"roi_a": r["a"]["roi"], "bpy_a": r["a"]["bets_per_year"]} for r in rows]}
+    if best:
+        e = d if best["phase"] == "t60" else swap_phase(d, best["phase"])
+        b_d = sub(e, "select_b", "graded")
+        ab = best["ab"]
+        st = strat_ev(lambda x, k, ab=ab: combo_p(x, k, *ab, col="p_rich"), best["t"], best["omax"])
+        b = E.evaluate(b_d, st, best["kind"])
+        nl = E.null_perm(b_d, st, ["p_rich"], best["kind"], n=30)
+        ok, why = E.gate(best["a"], b, nl)
+        seg_out |= {"best": {k: best[k] for k in ("phase", "kind", "t", "omax", "ab")}, "select_a": best["a"], "select_b": b, "null_b": nl, "gate": ok, "gate_why": why}
+    out["segments"]["graded"] = seg_out
+    out["n_trials"] = n_trials
+    return out
+
+
+CYCLES[19] = cycle19
+
+
+# ---------------------------------------------------------------- サイクル 20: 候補の中身の一貫性（選ぶ期間 2017〜21 だけ。探さない）
+def cycle20(d: pd.DataFrame) -> dict:
+    out = {"cycle": 20, "hypothesis": "c13_flat・c18_flat_t05 の効きが本物なら、選ぶ期間（2017〜21）の中で、年・芝ダ・クラスの群・頭数・オッズの帯のどこでも"
+           "市場比が 1 を超え、一部の区画だけの偶然ではない。探し直しはしない（設定は凍結のまま）。", "segments": {}, "n_trials": 0}
+    cands = {}
+    for name in ("c13_flat", "c18_flat_t05"):
+        spec = json.loads((CAND / f"{name}.json").read_text(encoding="utf-8"))
+        e = d if spec.get("phase", "t60") == "t60" else swap_phase(d, spec["phase"])
+        e = e[E.seg_mask(e, "flat")].reset_index(drop=True)
+        ab = tuple(spec["combo_ab_t60"])
+        st = strat_ev(lambda x, k, ab=ab: combo_p(x, k, *ab, col="p_rich"), spec["t"], spec["omax"])
+        S = np.vstack([st(e, k) for k in range(D.N_PRE)]).mean(0)
+        e = e.assign(_s=S, _grp=group_of(e), _fb=field_band(e),
+                     _ob=pd.cut(e["odds_final"], [0, 3, 5, 10, 20, 50, 1e9]).astype(str))
+        tab = {}
+        # 馬ごとの値（オッズの帯）は、レースの中の正規化が崩れるので、全体で決めた賭け金（_s）をそのまま帯で足す
+        rows = {}
+        for lv, g in e.groupby("_ob"):
+            st_ = g["_s"].sum()
+            rows[str(lv)] = {"roi": float((g["_s"] * g["ret_tan"].fillna(0)).sum() / st_) if st_ > 0 else None, "bets": float((g["_s"] > 0).sum()),
+                             "mr": float((g["_s"] * g["y1"].fillna(0)).sum() / (g["_s"] * g["q_final"]).sum()) if st_ > 0 else None, "base": None}
+        tab["_ob"] = rows
+        for col in ("year", "surf", "_grp", "_fb"):        # レース単位の値だけ（レースを丸ごと含む）
+            rows = {}
+            for lv, g in e.groupby(col):
+                g = g.reset_index(drop=True)
+                r = E.evaluate(g, st, "win", n_boot=300)
+                rows[str(lv)] = {"roi": r["roi"], "bets": r["bets"], "mr": r["market_ratio"], "mr_ci": r.get("mr_ci"), "base": r["base_same_pop"]}
+            tab[col] = rows
+        cands[name] = tab
+    out["segments"] = {}
+    out["consistency"] = cands
+    return out
+
+
+CYCLES[20] = cycle20
+
+
+# ---------------------------------------------------------------- サイクル 21: 新馬・未勝利だけ（情報の薄い市場）
+def cycle21(d: pd.DataFrame) -> dict:
+    out = {"cycle": 21, "hypothesis": "新馬・未勝利は走った記録が少なく、市場の情報が薄い（公開の知見）。自前の確率の上積みはそこで大きい。"
+           "新馬・未勝利だけで第 2 段を当てはめ、期待値で買うと、平場全体より回収率が高く、年 50 件以上を保てる。"
+           "注: サイクル 20 で 2017〜21 の群ごとの値を見たので、2020〜21 の関門は汚れている。", "segments": {}}
+    n_trials = 0
+    for phase in ("t60", "t05"):
+        e = d if phase == "t60" else swap_phase(d, phase)
+        e = e[group_of(e) == "新馬未勝利"].reset_index(drop=True)
+        a_d, b_d = sub(e, "select_a", "flat"), sub(e, "select_b", "flat")
+        ab = fit_combo(a_d, col="p_rich")
+        rows = []
+        for t, omax in itertools.product((1.1, 1.2, 1.3, 1.5), (20.0, 50.0)):
+            st = strat_ev(lambda x, k, ab=ab: combo_p(x, k, *ab, col="p_rich"), t, omax)
+            rows.append({"t": t, "omax": omax, "a": E.evaluate(a_d, st, "win", n_boot=500)})
+            n_trials += 1
+        best = pick_best(rows)
+        seg_out = {"ab": ab, "trials": len(rows), "grid": [{"t": r["t"], "omax": r["omax"], "roi_a": r["a"]["roi"], "bpy_a": r["a"]["bets_per_year"]} for r in rows]}
+        if best:
+            st = strat_ev(lambda x, k, ab=ab: combo_p(x, k, *ab, col="p_rich"), best["t"], best["omax"])
+            b = E.evaluate(b_d, st, "win")
+            nl = E.null_perm(b_d, st, ["p_rich"], "win", n=30)
+            ok, why = E.gate(best["a"], b, nl)
+            seg_out |= {"best": {"t": best["t"], "omax": best["omax"], "phase": phase}, "select_a": best["a"], "select_b": b, "null_b": nl, "gate": ok, "gate_why": why}
+        out["segments"][f"flat_maiden_{phase}"] = seg_out
+    out["n_trials"] = n_trials
+    return out
+
+
+CYCLES[21] = cycle21
+
+
 # ---------------------------------------------------------------- 2022〜24 に当てる（関門を通り、凍結した候補だけ）
 CAND = D.ROOT / "config/megu_cycles/candidates"
 
@@ -813,6 +917,8 @@ def cmd_confirm(name: str) -> None:
         h = hashlib.sha256(D.pre_phase_path(spec["phase"]).read_bytes()).hexdigest()[:16]
         if h != spec["phase_file_sha256_16"]:
             raise SystemExit("判定の時点の再現オッズの表の sha が凍結と違う")
+    if spec.get("group"):
+        d_all = d_all[group_of(d_all) == spec["group"]].reset_index(drop=True)
     assert RICH_FILE.name == spec["probability"]["file"] and d_all["pr_win"].notna().mean() > 0.99
     ab = tuple(spec["combo_ab_t60"])
     st = strat_ev(lambda e, k: combo_p(e, k, *ab, col="p_rich"), spec["t"], spec["omax"])
@@ -855,7 +961,7 @@ def cmd_md(n: int, title: str) -> None:
          "| 区分 | 選んだ設定 | 2017〜19 | 2020〜21 | 帰無 p | 関門 |", "|---|---|---|---|---|---|"]
     for k, v in segs.items():
         nl = v.get("null_b") or {}
-        L.append(f"| {'平場' if k == 'flat' else '重賞'} | {json.dumps(v.get('best'), ensure_ascii=False)} | {short(v.get('select_a'))} | {short(v.get('select_b'))} | "
+        L.append(f"| {'平場' if k == 'flat' else '重賞' if k == 'graded' else k} | {json.dumps(v.get('best'), ensure_ascii=False)} | {short(v.get('select_a'))} | {short(v.get('select_b'))} | "
                  f"{nl.get('p', '-') if not isinstance(nl.get('p'), float) else round(nl['p'], 3)} | {'通過' if v.get('gate') else ('不合格: ' + '・'.join(v['gate_why']) if v.get('gate_why') else '判定なし（2017〜19 で年 50 件以上の設定が無い）')} |")
     (DOCS / f"cycle_{n:02d}.md").write_text("\n".join(L) + "\n", encoding="utf-8")
 
