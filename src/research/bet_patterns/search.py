@@ -520,6 +520,8 @@ def period_metrics(pp: Prep, specs: list[dict], seed: int = 20261123, base: list
             a_, b_, _ = play_rows(pp, s0)
             c0 += a_; r0 += b_
         cr0, rr0 = to_races(pp, c0), to_races(pp, r0)
+        if not cr0.sum():
+            return {**period_metrics(pp, specs, seed), "diff_roi": None}
         bs0 = (W @ rr0.astype(np.float32)) / np.maximum(W @ cr0.astype(np.float32), 1e-9)
         d = bs - bs0
         diff = {"diff_roi": float(rr.sum() / cr.sum() - rr0.sum() / cr0.sum()), "diff_lo": float(np.quantile(d, 0.025)),

@@ -1,10 +1,10 @@
 """◎ を固定した馬券のパターンの道具（A2 = 第 2 回の凍結 frozen_20261117_r2 の ◎）。
 
-  python -m src.research.bet_patterns.run build                    # 訓練の行を作る（台帳に select を申告してから着順・払戻を読む）
-  python -m src.research.bet_patterns.run select                   # 訓練だけで想定オッズの換算・組み方・閾値を選ぶ → config/bet_patterns/selection.json
-  python -m src.research.bet_patterns.run prereg                   # 評価の前に主の規則・基準・合格の条件を書く → config/bet_patterns/prereg.json
+  python -m src.research.bet_patterns.bet_patterns_run build                    # 訓練の行を作る（台帳に select を申告してから着順・払戻を読む）
+  python -m src.research.bet_patterns.bet_patterns_run select                   # 訓練だけで想定オッズの換算・組み方・閾値を選ぶ → config/bet_patterns/selection.json
+  python -m src.research.bet_patterns.bet_patterns_run prereg                   # 評価の前に主の規則・基準・合格の条件を書く → config/bet_patterns/prereg.json
   （selection.json・prereg.json・道具を commit してから）
-  python -m src.research.bet_patterns.run evaluate                 # 選んだ規則を評価・2025・2026 に 1 回だけ当てる → docs/operations/retrain_trials/bet_patterns.json
+  python -m src.research.bet_patterns.bet_patterns_run evaluate                 # 選んだ規則を評価・2025・2026 に 1 回だけ当てる → docs/operations/retrain_trials/bet_patterns.json
 
 期間と台帳の目的: train（2019〜22）は select、eval（2023〜24）は confirm（1 回だけ）、test（2025）・main2026・pre2026（本物の T-60）は eval_only（選び直しに使わない）。
 重い計算なので nice -n 19 で流す。費用 0 円（手元のファイルだけ。GCS を読まない）。
@@ -44,7 +44,7 @@ def rows_path(period: str, setting: str) -> Path:
 def guard(period: str, version: str, reason: str, frozen=(), purpose: str | None = None):
     from src.ops import data_ledger as L
 
-    return L.guard(tool="src/research/bet_patterns/run.py", family=FAMILY, version=version, period=PERIODS[period],
+    return L.guard(tool="src/research/bet_patterns/bet_patterns_run.py", family=FAMILY, version=version, period=PERIODS[period],
                    purpose=purpose or PURPOSE[period], frozen_paths=list(frozen), reason=reason, target_name=f"bet_patterns {period}")
 
 
@@ -170,12 +170,20 @@ def _final_specs(st: dict) -> dict[str, list[dict]]:
             out[key] = [st["per"][p[0]]["final"], st["per"][p[1]]["final"]]
     for sid in ("trio_f", "tri_f"):
         v = st["per"].get(sid)
-        if v:
+        if v and max_points(v["final"]) > CAP_UI:          # 選んだ形で上限が効くときだけ（効かなければ同じ規則の重複になる）
             sk = dict(v["final"].get("skip") or {})
             if sk.get("cap") is None or sk["cap"] > CAP_UI:
                 sk["cap"] = CAP_UI
                 out[f"{sid}_cap{CAP_UI}"] = [dict(v["final"], skip=sk)]
     return out
+
+
+def max_points(spec: dict) -> int:
+    """フォーメーションの最大の点数（相手がそろったとき）。"""
+    n2, n3 = spec["sh"]
+    if S.SBYID[spec["s"]]["kind"] == "t1_form":
+        return n2 * (n3 - 1)
+    return n2 * (n3 - n2) + n2 * (n2 - 1) // 2
 
 
 def primary_key(st: dict) -> str:
@@ -193,8 +201,8 @@ def _committed(path: Path) -> bool:
 def cmd_prereg(a) -> None:
     """評価の前に、主の規則・基準・合格の条件を書いて固定する（評価の値を見て主を選び直さないため）。"""
     sel = json.loads(SELECTION.read_text(encoding="utf-8"))
-    if RESULT.exists():
-        raise SystemExit("評価の結果がすでにあります（事前登録は評価の前だけ）")
+    if RESULT.exists() or seen_after_train() or PREREG.exists():
+        raise SystemExit("評価の結果・事前登録がすでにあります（事前登録は評価の前に 1 回だけ）")
     reg = {"selection_hash": sel["hash"], "registered_at": _now(),
            "primary": {s: primary_key(sel["settings"][s]) for s in D.SETTINGS},
            "baseline": "base_tan（素の A2: ◎ の単勝 1 点・均等）",
@@ -210,7 +218,7 @@ def cmd_prereg(a) -> None:
 
 def verdict(m: dict) -> str:
     if m.get("diff_lo") is not None and m["diff_lo"] > 0:
-        return "合格（基準の単勝を上回るを確かめた）"
+        return "合格（基準の単勝を上回ることを確かめた）"
     if (m.get("diff_roi") or 0) > 0:
         return "向きだけ（区間は 0 をまたぐ）"
     return "不合格（基準の単勝以下）"
@@ -261,11 +269,12 @@ def cmd_evaluate(a) -> None:
                 pp = S.Prep(rows[s], coefs)
                 per[s] = {"counts": rows[s].counts, "rules": {k: S.period_metrics(pp, v, base=[BASE_TAN]) for k, v in specs[s].items()}}
                 pk = reg["primary"][s]
-                per[s]["primary"] = {"key": pk, "verdict": verdict(per[s]["rules"][pk])}
+                per[s]["primary"] = {"key": pk, "verdict": verdict(per[s]["rules"][pk]) if nm == "eval" else "参考（合否は評価だけ）"}
             out["periods"][nm] = per
             out["ledger"][nm] = tok.summary()
         print(nm, json.dumps({s: {"primary": per[s]["primary"], "roi": {k: round(v["roi"] or 0, 3) for k, v in per[s]["rules"].items()}} for s in per},
                              ensure_ascii=False), flush=True)
+        out["made_at"] = _now()
         RESULT.write_text(json.dumps(out, ensure_ascii=False, indent=1, default=_js) + "\n", encoding="utf-8")
     # A2（素の単勝 ◎・設定 a2）の記録との照合（行の作りの検算）
     a2 = json.loads(A2_TABLE.read_text(encoding="utf-8"))["periods"]

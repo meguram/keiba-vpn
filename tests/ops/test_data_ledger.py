@@ -416,6 +416,7 @@ _GUARD_ENTRY = {
     "src/research/course/upset_types.py": {"cmd_run"},
     "src/research/course/course_rule_stats.py": {"_rule_stats_inner"},   # めぐ分析の表示用の数え直し（eval_only・研究の CLI）
     "src/research/graded/pop_base.py": {"main"},                 # 同上（重賞の比べる相手）
+    "src/research/bet_patterns/bet_patterns_run.py": {"guard"},  # ◎ からの馬券のパターン（研究の CLI。各 cmd の中だけで呼ぶ）
 }
 _PROD = ("src/pipeline/inference/stage2_bets.py", "src/pipeline/inference/candidate_runner.py", "src/api/stage2_live.py")
 
