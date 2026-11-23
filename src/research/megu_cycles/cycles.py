@@ -31,7 +31,8 @@ SEGS = ("flat", "graded")
 # ---------------------------------------------------------------- 共通の部品
 # サイクルごとの確率の版（再現のため）。11 以降は v5。13 は v5 の学習の平均（cycle13 の中で差し替える）
 CYCLE_RICH = {4: "rich_pred.parquet", 5: "rich_pred_v2.parquet", 6: "rich_pred_v4.parquet", 7: "rich_pred_v4.parquet", 8: "rich_pred_v4.parquet",
-              9: "rich_pred_v4.parquet", 10: "rich_pred_v4.parquet", 13: "rich_pred_v5bag.parquet", 15: "rich_pred_v5bag.parquet"}
+              9: "rich_pred_v4.parquet", 10: "rich_pred_v4.parquet", 13: "rich_pred_v5bag.parquet", 15: "rich_pred_v5bag.parquet",
+              16: "rich_pred_v6bag.parquet", 17: "rich_pred_v5bag.parquet", 18: "rich_pred_v5bag.parquet"}
 RICH_FILE = D.RICH
 
 
@@ -724,6 +725,75 @@ def cycle15(d: pd.DataFrame) -> dict:
 CYCLES[15] = cycle15
 
 
+def cycle16(d: pd.DataFrame) -> dict:
+    """サイクル 13 の設計を、汚れの少ない列（v6: s_*・sr・f3・f2・e・pc も外す）の学習の平均で流す。"""
+    out = cycle11(d)
+    out["cycle"] = 16
+    out["hypothesis"] = ("c13_flat の効きは、汚れのある族（未来の年を含む上流の s_*、2021 年末までで当てはめた sr・f3 など）に頼っていない。"
+                         "それらを外した学習の平均でも、2017〜19・2020〜21 で同じ水準が出る。")
+    return out
+
+
+# ---------------------------------------------------------------- サイクル 17: 期待値に応じた賭け金（上限付きの Kelly）
+def strat_kelly(ab, t: float, omax: float, frac: float, cap: float):
+    def s(d: pd.DataFrame, k: int) -> np.ndarray:
+        p = combo_p(d, k, *ab, col="p_rich")
+        o = d[f"odds_pre{k}"].to_numpy(float)
+        f = (p * o - 1) / np.clip(o - 1, 1e-6, None)           # Kelly の賭けの割合
+        w = np.clip(frac * f / 0.01, 0, cap)                     # 1% の Kelly を 1 単位に。上限 cap 単位
+        return np.where((p * o >= t) & (o <= omax), np.maximum(w, 1e-9), 0.0)
+    return s
+
+
+def cycle17(d: pd.DataFrame) -> dict:
+    out = {"cycle": 17, "hypothesis": "期待値が高い馬ほど多く賭ける（上限付きの分数 Kelly）と、上積みの大きい馬の重みが増えて回収率が上がる。"
+           "期待値の推定が粗いなら、かえって下がる（その確かめ）。確率は v5bag、第 2 段は c13 と同じ当てはめ。", "segments": {}}
+    n_trials = 0
+    for seg in SEGS:
+        a_d, b_d = sub(d, "select_a", seg), sub(d, "select_b", seg)
+        ab = fit_combo(a_d, col="p_rich")
+        rows = []
+        for t, frac, cap in itertools.product((1.1, 1.2, 1.3), (0.25, 0.5, 1.0), (3.0, 10.0)):
+            st = strat_kelly(ab, t, 50.0, frac, cap)
+            rows.append({"t": t, "frac": frac, "cap": cap, "a": E.evaluate(a_d, st, "win", n_boot=500)})
+            n_trials += 1
+        best = pick_best(rows)
+        seg_out = {"ab": ab, "trials": len(rows), "grid": [{k: r[k] for k in ("t", "frac", "cap")} | {"roi_a": r["a"]["roi"], "bpy_a": r["a"]["bets_per_year"]} for r in rows]}
+        if best:
+            st = strat_kelly(ab, best["t"], 50.0, best["frac"], best["cap"])
+            b = E.evaluate(b_d, st, "win")
+            nl = E.null_perm(b_d, st, ["p_rich"], "win", n=30)
+            ok, why = E.gate(best["a"], b, nl)
+            seg_out |= {"best": {k: best[k] for k in ("t", "frac", "cap")}, "select_a": best["a"], "select_b": b, "null_b": nl, "gate": ok, "gate_why": why}
+        out["segments"][seg] = seg_out
+    out["n_trials"] = n_trials
+    return out
+
+
+CYCLES[16] = cycle16
+CYCLES[17] = cycle17
+
+
+# ---------------------------------------------------------------- サイクル 18: 判定の時点を T-5 に（発走 5 分前の再現オッズ）
+def swap_phase(d: pd.DataFrame, phase: str) -> pd.DataFrame:
+    o = pd.read_parquet(D.pre_phase_path(phase)).drop_duplicates(["race_id", "horse_id"])
+    d = d.drop(columns=[f"odds_pre{k}" for k in range(D.N_PRE)]).merge(o, on=["race_id", "horse_id"], how="left")
+    assert d[[f"odds_pre{k}" for k in range(D.N_PRE)]].notna().all().all()
+    return d.sort_values(["race_id", "hn"]).reset_index(drop=True)
+
+
+def cycle18(d: pd.DataFrame) -> dict:
+    out = cycle11(swap_phase(d, "t05"))
+    out["cycle"] = 18
+    out["phase"] = "t05"
+    out["hypothesis"] = ("判定の時点を T-60 から T-5 に遅らせると、判定のオッズが確定に近づき（終盤の資金の情報が入る）、"
+                         "期待値の判定の雑音が減って回収率が上がる。運用は発走 5 分前の購入（自動の購入なら可能）。")
+    return out
+
+
+CYCLES[18] = cycle18
+
+
 # ---------------------------------------------------------------- 2022〜24 に当てる（関門を通り、凍結した候補だけ）
 CAND = D.ROOT / "config/megu_cycles/candidates"
 
@@ -738,6 +808,11 @@ def cmd_confirm(name: str) -> None:
         if h != spec[key]["sha256_16"]:
             raise SystemExit(f"{path} の sha が凍結と違う")
     d_all = load_all()
+    if spec.get("phase", "t60") != "t60":
+        d_all = swap_phase(d_all, spec["phase"])
+        h = hashlib.sha256(D.pre_phase_path(spec["phase"]).read_bytes()).hexdigest()[:16]
+        if h != spec["phase_file_sha256_16"]:
+            raise SystemExit("判定の時点の再現オッズの表の sha が凍結と違う")
     assert RICH_FILE.name == spec["probability"]["file"] and d_all["pr_win"].notna().mean() > 0.99
     ab = tuple(spec["combo_ab_t60"])
     st = strat_ev(lambda e, k: combo_p(e, k, *ab, col="p_rich"), spec["t"], spec["omax"])

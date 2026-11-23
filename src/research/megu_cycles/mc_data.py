@@ -67,10 +67,10 @@ def attach_odds(d: pd.DataFrame) -> pd.DataFrame:
     return d
 
 
-def simulate_pre(d: pd.DataFrame, n: int = N_PRE) -> np.ndarray:
+def simulate_pre(d: pd.DataFrame, n: int = N_PRE, phase: str = "t60") -> np.ndarray:
     """T-60 の再現オッズ（n 通り）。bet_cycles.simulate_pre_period と同じ作り（レースを丸ごと借り、確定の人気の順位のずれを当てる）。"""
     from src.scripts.data.bet_cycles import load_drift
-    pool = load_drift("t60")["races"]
+    pool = load_drift(phase)["races"]
     rid = d["race_id"].to_numpy()
     odds = d["odds_final"].to_numpy(float)
     pop = np.nan_to_num(d["pop_final"].to_numpy(float), nan=99.0)
@@ -215,7 +215,10 @@ OFFSET = OUT / "offset_pred_v4.parquet"      # サイクル 9 は v4 の列（RI
 
 # 確率の版ごとの、外す列の決まり（再現のため残す。サイクルごとの版は cycles.CYCLE_RICH）
 RICH_VERSIONS = {"v1": r"^$", "v2": r"^tl_|^wc_|^rb_nk_", "v3": r"^tl_|^wc_|^rb_nk_|^fr_class_level$|^comment_",
-                 "v4": r"^tl_|^wc_|^rb_|^fr_class_level$|^comment_", "v5": RICH_EXCLUDE_RE}
+                 "v4": r"^tl_|^wc_|^rb_|^fr_class_level$|^comment_", "v5": RICH_EXCLUDE_RE,
+                 # v6（サイクル 16）: v5 に加え、上流で未来の年を含む学習の s_*（EASE2・LAP）と、2021 年末までで当てはめた族（sr・f3・f2・e・pc。
+                 #   horse_history/common.py の FIT_END）を外す。汚れの少ない確かめのため
+                 "v6": RICH_EXCLUDE_RE + r"|^s_|^sr_|^fm_sr|^f3|^fm_f3|^f2|^e_|^pc_"}
 
 
 def _rich_matrix(version: str = "v5"):
@@ -287,19 +290,20 @@ BAG_SETS = [dict(max_depth=8, colsample_bytree=0.3, subsample=0.7, seed=1), dict
             dict(max_depth=10, colsample_bytree=0.2, subsample=0.6, min_child_weight=300, seed=3)]
 
 
-def cmd_build_bag() -> None:
+def cmd_build_bag(version: str = "v5") -> None:
     """v5 と同じ列で、設定の違う XGBoost 3 本を年ごとに前へ進めて学び、勝ちの確率を平均する（設定は固定。2022〜24 を見て選ばない）。"""
     import xgboost as xgb
     from src.ops import data_ledger as DL
     t0 = time.time()
-    tok = DL.guard(tool="src/research/megu_cycles/mc_data.py:build_bag", family="megu_cycles", version="build-bag-v5", period=("2022-01-01", "2024-12-31"),
+    tok = DL.guard(tool="src/research/megu_cycles/mc_data.py:build_bag", family="megu_cycles", version=f"build-bag-{version}", period=("2022-01-01", "2024-12-31"),
                    purpose="reproduce", reads=("着順",), frozen_paths=[GOAL],
                    reason="v5 の列の学習の平均の教師（2022・23 年の着順）を読むだけ。成績は数えない")
-    X, meta, names = _rich_matrix()
+    X, meta, names = _rich_matrix(version)
     fin = pd.to_numeric(meta["finish_position"], errors="coerce").to_numpy()
     yr = pd.to_numeric(meta["year"]).to_numpy(int)
     y = (fin == 1).astype(int)
     P = np.zeros(len(X))
+    dest = RICH_BAG if version == "v5" else OUT / f"rich_pred_{version}bag.parquet"
     for i, bs in enumerate(BAG_SETS):
         params = dict(XGB_PARAMS, **bs)
         for t in range(2017, YEAR_END + 1):
@@ -311,15 +315,38 @@ def cmd_build_bag() -> None:
     out["race_id"], out["horse_id"] = out["race_id"].astype(str), out["horse_id"].astype(str)
     out["pr_win"] = np.where(yr >= 2017, P, np.nan)
     out["pr_top3"] = np.nan
-    out.to_parquet(RICH_BAG, index=False)
-    tok.finish(result_path=RICH_BAG)
+    out.to_parquet(dest, index=False)
+    tok.finish(result_path=dest)
     print("build_bag", len(out), round(time.time() - t0), "秒", flush=True)
+
+
+# ---------------------------------------------------------------- 別の時点の再現オッズ（サイクル 18〜）。runners.parquet は凍結の sha に入るので別の表に置く
+def pre_phase_path(phase: str) -> Path:
+    return OUT / f"pre_{phase}.parquet"
+
+
+def cmd_build_phase(phase: str) -> None:
+    """runners.parquet と同じ行の並びで、phase（t05・t15 など）の再現オッズ 5 通りを作る（着順・払戻は読まない）。"""
+    d = pd.read_parquet(TABLE, columns=["race_id", "horse_id", "hn", "odds_final", "pop_final"])
+    d = d.sort_values(["race_id", "hn"]).reset_index(drop=True)
+    pre = simulate_pre(d, phase=phase)
+    out = d[["race_id", "horse_id"]].copy()
+    for k in range(N_PRE):
+        out[f"odds_pre{k}"] = pre[k]
+    out.to_parquet(pre_phase_path(phase), index=False)
+    print("phase", phase, len(out), flush=True)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["build", "build_rich", "build_offset", "build_bag"])
+    ap.add_argument("cmd", choices=["build", "build_rich", "build_offset", "build_bag", "build_phase"])
+    ap.add_argument("--version", default="v5")
+    ap.add_argument("--phase", default="t05")
     a = ap.parse_args()
+    if a.cmd == "build_phase":
+        return cmd_build_phase(a.phase)
+    if a.cmd == "build_bag":
+        return cmd_build_bag(a.version)
     {"build": cmd_build, "build_rich": cmd_build_rich, "build_offset": cmd_build_offset, "build_bag": cmd_build_bag}[a.cmd]()
 
 
