@@ -925,8 +925,9 @@ def _wait_saved_after(storage: Any, category: str, key: str, since: datetime, un
 
 
 def _sleep_until(at: datetime) -> None:
-    wait = (at - datetime.now(_JST)).total_seconds()
-    if wait > 0:
+    """壁時計(datetime.now)で at を過ぎるまで待つ。time.sleep は単調時計なので、WSL2 などで壁時計とずれると数 ms 早く起きる。
+    早起きのまま次の判定に進むと、T-60 が T-45 に持ち越され、T-10・T-05 が捨てられた（2026-11-22 の監査）。起きるたびに残りを測り直す。"""
+    while (wait := (at - datetime.now(_JST)).total_seconds()) > 0:
         time.sleep(wait)
 
 
@@ -1072,7 +1073,7 @@ def task_raceday_runner() -> None:
                 and now < e["at"] <= now + timedelta(seconds=LATE_LOOKAHEAD_SECONDS) and e["at"] < e["race"]["post_time"]
             ]
             if soon:
-                time.sleep(max(0.0, (min(soon) - now).total_seconds()))
+                _sleep_until(min(soon))
         _run_late_due()
 
     logger.info("  取得方式: %s", "直接実行（キューを待たない）" if direct else "キュー経由")
@@ -1089,7 +1090,7 @@ def task_raceday_runner() -> None:
                 ev["at"].strftime("%H:%M"),
                 wait_sec / 60,
             )
-            time.sleep(wait_sec)
+            _sleep_until(ev["at"])
 
         _run_late_due()
 
@@ -1232,7 +1233,7 @@ def task_raceday_result_runner() -> None:
                 target_time.strftime("%H:%M"),
                 wait_sec / 60,
             )
-            time.sleep(wait_sec)
+            _sleep_until(target_time)
 
         batch = []
         for r in schedule:

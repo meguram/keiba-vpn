@@ -6,23 +6,28 @@
   private・no-store・Set-Cookie 付き・POST は保存しない / 上流が誤って public を付けても会員の本文が匿名に出ない
   合言葉つき(X-Keiba-Refresh)の要求だけ、読まずに取り直して保存し直す（合言葉なしは効かない・上流には渡さない）
   取り直しのときだけ上流に X-Keiba-Fresh: 1 が付く / stg（別ポート）は本番が保存した分を読むが、自分の取得は保存しない
+  Vary で保存先を分けない: 圧縮なし（事前ロード）で保存した物を gzip の利用者が HIT で読み、その逆は展開して返す / 上流へは常に gzip で頼む
+  期限切れの後の最初の要求は古いものを返さず、上流から取り直す（EXPIRED。background_update を入れていない）
 使い方: python3 scripts/ops/vps/verify_api_cache.py   （nginx が PATH に必要。VPS 上で実行する）
 """
-import os, shutil, socket, subprocess, sys, tempfile, threading, time, urllib.request
+import gzip, os, shutil, socket, subprocess, sys, tempfile, threading, time, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TPL = os.path.join(HERE, "templates")
 hits: dict[str, int] = {}
 fresh_seen: list[str] = []      # 上流に届いた X-Keiba-Fresh の値（届いた順）
+ae_seen: list[str] = []         # 上流に届いた Accept-Encoding（届いた順）
 
 
 class Up(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
 
-    def _send(self, body: str, headers: dict):
+    def _send(self, body: str, headers: dict, gz: bool = False):
         hits[self.path.split("?")[0]] = hits.get(self.path.split("?")[0], 0) + 1
         b = body.encode()
+        if gz and "gzip" in (self.headers.get("Accept-Encoding") or ""):     # 上流（GZipMiddleware）と同じく、頼まれたときだけ圧縮
+            b = gzip.compress(b); headers = {**headers, "Content-Encoding": "gzip"}
         self.send_response(200)
         for k, v in headers.items(): self.send_header(k, v)
         self.send_header("Content-Length", str(len(b)))
@@ -33,6 +38,7 @@ class Up(BaseHTTPRequestHandler):
         p = self.path.split("?")[0]
         if self.headers.get("X-Keiba-Refresh") is not None: hits["leaked-refresh-header"] = hits.get("leaked-refresh-header", 0) + 1
         fresh_seen.append(self.headers.get("X-Keiba-Fresh") or "")
+        ae_seen.append(self.headers.get("Accept-Encoding") or "")
         who = "member" if (self.headers.get("Cookie") or self.headers.get("Authorization")) else "anon"
         pub = {"Cache-Control": "public, max-age=300, s-maxage=60", "Vary": "Accept-Encoding, Cookie"}
         if p == "/api/pub": self._send(f"pub-{who}", pub)
@@ -45,6 +51,8 @@ class Up(BaseHTTPRequestHandler):
         elif p == "/api/setcookie": self._send(f"setcookie-{who}", {**pub, "Set-Cookie": "a=b"})
         elif p == "/api/nohdr": self._send(f"nohdr-{who}", {})
         elif p == "/api/stgonly": self._send(f"stgonly-{who}", pub)
+        elif p == "/api/gz": self._send(f"gz-{who}-{hits.get('/api/gz', 0) + 1}-" + "x" * 2000, pub, gz=True)     # 圧縮される大きさ・呼ぶたびに変わる
+        elif p == "/api/stale": self._send(f"stale-{hits.get('/api/stale', 0) + 1}", {**pub, "Cache-Control": "public, max-age=60, s-maxage=2"}, gz=True)
         else: self._send("other", {})
 
     do_HEAD = do_GET
@@ -52,6 +60,17 @@ class Up(BaseHTTPRequestHandler):
     def do_POST(self):
         self.rfile.read(int(self.headers.get("Content-Length") or 0))
         self._send("post", {"Cache-Control": "public, max-age=60, s-maxage=60"})
+
+
+def req_raw(port, path, headers=None):
+    """本文を展開せずに返す: (本文のバイト列, Content-Encoding, X-Cache-Status)。"""
+    r = urllib.request.Request(f"http://127.0.0.1:{port}{path}", headers=headers or {})
+    with urllib.request.urlopen(r, timeout=10) as resp:
+        return resp.read(), resp.headers.get("Content-Encoding") or "", resp.headers.get("X-Cache-Status", "-")
+
+
+def text_of(raw: bytes, enc: str) -> str:
+    return (gzip.decompress(raw) if enc == "gzip" else raw).decode()
 
 
 def free_port() -> int:
@@ -140,9 +159,31 @@ http {{
         req(ng_port, "/api/sm"); _, s = req(ng_port, "/api/sm")
         time.sleep(3)
         _, s_after = req(ng_port, "/api/sm")
-        check("s-maxage が TTL に効く(max-age=300 でなく 2 秒で失効)", s == "HIT" and s_after in ("EXPIRED", "MISS", "UPDATING"), f"{s},{s_after}")
+        check("s-maxage が TTL に効く(max-age=300 でなく 2 秒で失効)", s == "HIT" and s_after in ("EXPIRED", "MISS"), f"{s},{s_after}")
         req(ng_port, "/api/pub?x=1"); _, sq = req(ng_port, "/api/pub?x=1"); _, sq2 = req(ng_port, "/api/pub?x=2")
         check("クエリ違いは別キー", sq == "HIT" and sq2 == "MISS", f"{sq},{sq2}")
+        # Vary で保存先を分けない（事前ロード = 圧縮なし、利用者 = gzip で同じ保存物）
+        GZ = {"Accept-Encoding": "gzip, deflate, br"}
+        k = len(ae_seen)
+        r1, e1, c1 = req_raw(ng_port, "/api/gz")                      # 事前ロードと同じ圧縮なしの要求で保存
+        r2, e2, c2 = req_raw(ng_port, "/api/gz", headers=GZ)          # 利用者（gzip）
+        check("圧縮なしで保存した物を gzip の利用者が HIT で読む", c1 == "MISS" and c2 == "HIT" and e2 == "gzip" and text_of(r2, e2) == text_of(r1, e1) and hits["/api/gz"] == 1, f"{c1},{c2},{e2},{hits.get('/api/gz')}")
+        check("圧縮なしの相手には展開して返す", e1 == "" and text_of(r1, e1).startswith("gz-anon-1-"), f"{e1}")
+        check("上流へは常に Accept-Encoding: gzip", ae_seen[k:] == ["gzip"], str(ae_seen[k:]))
+        r3, e3, c3 = req_raw(ng_port, "/api/gz", headers={"X-Keiba-Refresh": token})       # 事前ロードの取り直し（圧縮なし）
+        r4, e4, c4 = req_raw(ng_port, "/api/gz", headers=GZ)
+        r5, e5, c5 = req_raw(ng_port, "/api/gz")
+        check("事前ロードの取り直しが gzip の利用者にも圧縮なしの相手にも届く", c3 == "BYPASS" and text_of(r3, e3).startswith("gz-anon-2-")
+              and c4 == "HIT" and text_of(r4, e4).startswith("gz-anon-2-") and c5 == "HIT" and text_of(r5, e5).startswith("gz-anon-2-"), f"{c3},{c4},{c5}")
+        r6, e6, c6 = req_raw(ng_port, "/api/gz", headers={**GZ, "Cookie": "keiba_dev_session=abc"})
+        r7, e7, c7 = req_raw(ng_port, "/api/gz", headers=GZ)
+        check("Cookie 付きは BYPASS のまま・匿名の保存物は変わらない", c6 == "BYPASS" and text_of(r6, e6).startswith("gz-member-") and c7 == "HIT" and text_of(r7, e7).startswith("gz-anon-2-"), f"{c6},{c7}")
+        # 期限切れの後の最初の要求は、古いもの（STALE）を返さずに取り直す（background_update が無いこと）
+        req_raw(ng_port, "/api/stale", headers=GZ); time.sleep(3)
+        ra, ea, ca = req_raw(ng_port, "/api/stale", headers=GZ)
+        rb, eb, cb = req_raw(ng_port, "/api/stale", headers=GZ)
+        check("期限切れの後の最初の要求は取り直した新しい本文（STALE で古いものを返さない）", ca == "EXPIRED" and text_of(ra, ea) == "stale-2"
+              and cb == "HIT" and text_of(rb, eb) == "stale-2", f"{ca},{text_of(ra, ea)},{cb},{text_of(rb, eb)}")
         # 事前ロードの上書き取得
         b, s_ = req(ng_port, "/api/ver"); b2, s2_ = req(ng_port, "/api/ver")
         check("上書きの前: 同じ本文が HIT", b == b2 == "ver-1" and s2_ == "HIT", f"{b},{b2},{s2_}")

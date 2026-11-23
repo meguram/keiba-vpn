@@ -98,13 +98,21 @@ def test_drain_retries_then_gives_up_and_treats_404_as_done():
 
 def test_paths_for_horse_and_date_extras():
     horse = [p for p, _ in cw.paths_for_key("h2021101429", NOW)]
-    assert horse == ["/api/horse/2021101429/detail", "/api/v1/horse/2021101429/growth-curve", "/api/v1/horse/2021101429/megu-index-history"]
+    assert horse == []                      # 馬のページは匿名で 401（保存されない）ので取り直さない
     assert cw.parse_marker(_name("20261025", "h2021101429")) == ("20261025", "h2021101429")
     assert cw.parse_marker(_name("20261025", "h20211014")) is None
     date = [p for p, _ in cw.paths_for_key("20261025", NOW)]
-    for p in ("/api/prediction-results?scope=day&date=20261025", "/api/prediction-results/bets-summary?date=20261025",
-              "/api/race-quality/day?date=20261025", "/api/prediction-results/days"):
+    for p in ("/api/prediction-results?scope=day&date=20261025", "/api/prediction-results/days"):
         assert p in date
+
+
+def test_member_only_paths_are_not_warmed():
+    """匿名で 401 しか返らない会員だけのパスは取り直さない（保存されず、limit_req の枠を食うだけ）。"""
+    member_only = ("/result", "/tracking-difficulty", "/megu-index-predicted", "/analysis", "race-quality/day", "bets-summary",
+                   "bets-by-level", "megu-index-dates", "/api/horse/", "/api/v1/horse/")
+    paths = [p for k in ("202605050811", "20261025", "h2021101429", cw.ALL_KEY) for p, _ in cw.paths_for_key(k, NOW)]
+    assert paths
+    assert not [p for p in paths if any(m in p for m in member_only)]
 
 
 def test_drain_second_pass_waits_then_runs_once():

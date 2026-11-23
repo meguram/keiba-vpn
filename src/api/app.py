@@ -4441,33 +4441,64 @@ CATEGORY_TO_METHOD = {
 
 _race_date_index: dict[str, str] = {}
 _race_date_index_built = False
+_race_date_index_tried_at: float | None = None   # 最後に構築を始めた時刻（単調時計）。None = 未着手
 _race_date_index_lock = threading.Lock()
+_race_date_index_build_lock = threading.Lock()   # 構築を 1 本に絞る（I/O は _race_date_index_lock の外）
+_RACE_DATE_INDEX_REFRESH_SEC = 600.0   # 起動直後はミラーの取り込みと並行するので、途中の race_lists で作っても 10 分で作り直す（ローカルのみ）
+
+
+def _build_race_date_index(storage, wait: bool = False) -> None:
+    """race_lists（local_only。ローカルのファイルだけで GCS を読まない）から race_id → 開催日 を作り直す。同時には 1 本だけ。
+    wait=False は、ほかが作っている最中なら何もしない。wait=True はその完了を待ち、まだ未構築なら自分で作る。"""
+    global _race_date_index_built
+    if not _race_date_index_build_lock.acquire(blocking=wait):
+        return
+    if wait and _race_date_index_built:
+        _race_date_index_build_lock.release()
+        return
+    try:
+        new_index: dict[str, str] = {}
+        for date in storage.list_keys("race_lists"):
+            rl = storage.load("race_lists", date)
+            if not rl:
+                continue
+            for r in rl.get("races", []):
+                rid = r.get("race_id", "")
+                if rid:
+                    new_index[rid] = date
+        with _race_date_index_lock:
+            _race_date_index.update(new_index)
+            _race_date_index_built = True
+    except Exception as e:  # noqa: BLE001  索引が無くても短い s-maxage になるだけ
+        logger.warning("race_id の日付の索引を作れません: %s", e)
+    finally:
+        _race_date_index_build_lock.release()
 
 
 def _ensure_race_date_index(storage):
-    """race_id → date の逆引きインデックスをローカル race_lists から構築する。"""
-    global _race_date_index_built
+    """race_id → date の逆引きインデックスをローカル race_lists から構築する（構築済みなら何もしない）。"""
     if _race_date_index_built:
         return
-    with _race_date_index_lock:
-        if _race_date_index_built:
-            return
-    # I/O outside lock to avoid holding lock during I/O
-    new_index: dict[str, str] = {}
-    dates = storage.list_keys("race_lists")
-    for date in dates:
-        rl = storage.load("race_lists", date)
-        if not rl:
-            continue
-        for r in rl.get("races", []):
-            rid = r.get("race_id", "")
-            if rid:
-                new_index[rid] = date
-    with _race_date_index_lock:
-        if _race_date_index_built:
-            return
-        _race_date_index.update(new_index)
-        _race_date_index_built = True
+    _build_race_date_index(storage, wait=True)   # 裏のスレッドが作っている最中なら、終わるまで待つ
+
+
+def _peek_race_date(race_id: str) -> str:
+    """確定判定用（HTTP キャッシュの見出し）: 索引を引くだけで I/O はしない。未構築・10 分より古いときは裏のスレッドで作り直す。
+
+    async のミドルウェアから呼ばれるので、構築（race_lists 約 1,700 ファイル）は待たない。できるまでは空 → 短い s-maxage のまま（安全側）。
+    作り直しはローカルのファイルを読むだけ（race_lists は local_only）で、GCS の読み出し・一覧は増えない。"""
+    global _race_date_index_tried_at
+    tried = _race_date_index_tried_at
+    now = _time.monotonic()
+    if tried is None or now - tried > (_RACE_DATE_INDEX_REFRESH_SEC if _race_date_index_built else 60.0):
+        with _race_date_index_lock:      # 同時に来た要求のうち 1 つだけがスレッドを起こす
+            start = _race_date_index_tried_at == tried
+            if start:
+                _race_date_index_tried_at = now
+        if start:
+            threading.Thread(target=_build_race_date_index, args=(_get_storage(),),
+                             name="race-date-index", daemon=True).start()
+    return _race_date_index.get(race_id, "")
 
 
 def _resolve_date_for_race(storage, race_id: str) -> str:
@@ -4480,8 +4511,9 @@ def _resolve_date_for_race(storage, race_id: str) -> str:
         return _race_date_index.get(race_id, "")
 
 
-# 確定済み判定用: 構築済みの索引だけを引く(重い構築はしない)。未構築なら空 → 年の規則に任せる
-_hch_module.set_race_date_peek(lambda rid: _race_date_index.get(rid, ""))
+# 確定済み判定用: 索引を引くだけ（構築は裏のスレッド）。未構築なら空 → 年の規則に任せる。
+# race_id の日付は「確定済み（30 日）」の判定にだけ使い、当日・未来の race_id は短い s-maxage のまま（http_cache_headers.settled_s_maxage_for）
+_hch_module.set_race_date_peek(_peek_race_date)
 
 
 def _run_scrape_job(job_id: str, race_id: str, category: str,
