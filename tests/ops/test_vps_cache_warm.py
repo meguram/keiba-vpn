@@ -226,3 +226,27 @@ def test_drain_stops_the_tick_after_consecutive_server_errors():
     w2 = FakeWarmer({"/p0": (504, b""), "/p1": (200, b"{}"), "/p2": (504, b"")})
     st2 = {"seen": {}, "queue": [{"p": f"/p{i}", "n": 0} for i in range(3)]}
     assert _drain(st2, w2, now=1_000_000.0, stop_after_fails=2)["stopped"] is False      # 成功を挟めば数え直す
+
+
+def test_drain_uses_edge_folder_instead_of_cloud_run(tmp_path, monkeypatch):
+    """ホストが作った応答のフォルダにあるパスは、Cloud Run に取り直しに行かない（本文はファイルから。開催日の一覧の手がかりには使う）。"""
+    root = tmp_path / "anon"
+    (root / "api" / "race").mkdir(parents=True)
+    (root / "api" / "race" / f"{RACE}.json").write_text(json.dumps({"date": "2026-10-25"}))
+    monkeypatch.setenv("EDGE_CTL_OFF", str(tmp_path / "OFF"))
+    monkeypatch.setenv("EDGE_SNIPPET", str(tmp_path / "snippet.conf"))
+    assert cw.edge_body(f"/api/race/{RACE}", str(root)) is None     # nginx がフォルダを見ていない（スニペットが無い）
+    (tmp_path / "snippet.conf").write_text("")
+    st = {"seen": {}, "queue": [{"p": f"/api/race/{RACE}", "n": 0}, {"p": f"/api/race/{RACE}/predictions", "n": 0}]}
+    w = FakeWarmer({})
+    res = cw.drain(st, w, max_requests=100, max_sec=60, pause=0, log=lambda *_: None, second_pass_sec=600, edge_dir=str(root))
+    assert f"/api/race/{RACE}" not in w.calls                       # フォルダにある
+    assert f"/api/race/{RACE}/predictions" in w.calls               # フォルダに無い → 今どおり取り直す
+    assert "/api/race-list/20261025" in w.calls                     # 本文の日付から一覧を取り直す（一覧はフォルダに無い）
+    assert res["edge"] == 1
+    assert not any(x["p"] == f"/api/race/{RACE}" for x in st["queue"])   # 2 回目の取り直しも積まない
+    (tmp_path / "OFF").write_text("")                                # 止めの印があればフォルダを見ない
+    assert cw.edge_body(f"/api/race/{RACE}", str(root)) is None
+    monkeypatch.setenv("EDGE_CTL_OFF", str(tmp_path / "NONE"))
+    assert cw.edge_body(f"/api/race/{RACE}", str(root)) is not None
+    assert cw.edge_body(f"/api/race/{RACE}?x=1", str(root)) is None

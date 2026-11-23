@@ -561,3 +561,74 @@ sudo rm /etc/nginx/snippets/keiba-edge-stg.conf && sudo nginx -t && sudo systemc
   - 対策: E2 は確定済みのレース（結果と払戻がある）だけから作る。確定の後にこれらの口で書き直されることは、まず無い。
 - 副作用: ホストの `growth_curve_service` は、race_index の写しがあれば GCS より先に読む（`src/pipeline/inference/growth_curve_service.py:113`）。中身は同じで、ホストの GCS の読み出しが減る向き。
 - 費用: GCS の操作は 0 回の増加（保存の成功の後に手元へ書くだけ）。ディスクは 1 レース 13 種で 0.1〜1MB 程度、35 日で 1GB 未満の見込み（空き 5.9TB）。
+
+### 10.5 E2・E3 の作り（11/23 実装）
+
+| 部品 | 場所 | 中身 |
+|---|---|---|
+| 作る処理 | `src/ops/edge_render.py render` | Cloud Run と同じ Gateway（FastAPI＋Flask）を同じプロセスで呼ぶ。環境は作り直す（ホストの `.env`・`KEIBA_*` を持ち込まない。`config/edge_render.json` の Cloud Run の値だけ） |
+| 守り | 同 | `HybridStorage` の置き場を写し（`data/local/mirror`）に差し替える。次のどれかが起きた応答は「印」が立ち、捨てる。200 以外も捨てる。<br>・GCS のクライアントを作る（`GCS_BUCKET` は無いバケット名にして、GCS に行く口は必ずここに当てる）<br>・外へのソケットの接続・HTTP・保存<br>・写しの対象外のカテゴリ、写しに無い馬のキー（読む・有無・更新時刻・一覧）<br>・`exists_gcs`・`get_scraped_at_from_blob`・`list_years`・`note_degraded`<br>・**WARNING 以上のログ**（API の付与の失敗は握りつぶされ、欠けた 200 になるため）<br>印が立ったレースは、同じ回のほかの対象・そのレースの日の一覧・前の回のファイルも消す（プロセスの中のキャッシュで欠けを持ち越さない。VPS からも消えて Cloud Run の経路に戻る） |
+| 手元の別の置き場 | `config/edge_render.json` の `local_fallback` | 血統（`data/local/horse_pedigree_5gen`）・調教（`data/local/horse_training`）。GCS と同じ並びの手元の写し |
+| 対象 | 同 | 写しに出馬表と結果があるレース（確定済み）の `race/{id}`・`predictions`（匿名）。開催日の全レースが揃った日の `race-list/{日}`。開催日は「写しの有効化＋5 日」より後・直近 35 日・前日まで |
+| 作り直し | 同 | 写しのファイルの更新時刻と大きさ（指紋）が変わったものだけ。推論の出力の変化は指紋に入らないので、深夜に `--full` で全部作り直す。本文の MD5 が同じなら書き換えない |
+| 送る | `src/ops/edge_render.py push` | 手元の記録（manifest と送った記録）で差分を決め、ssh の tar で送る。VPS では 1 ファイルずつ `os.replace`。最後に `current` を付け替え、古い版は 1 つ残す。ホストに rsync は無い |
+| 段取り | `scripts/ops/edge/edge_sync.sh <env>` | 最後に成功した配備（prod は promote.yml、stg は deploy-stg.yml）の commit を別のツリー（`/home/jovyan/work/keiba-edge/<env>/src`）に取り出し、git に無い係数（`config/fitted_artifacts.txt`）をホストから重ねて、作って送る。jovyan で流す |
+| VPS | `scripts/ops/vps/vps_14_edge_files.sh --env <env>`・`templates/nginx-edge-files.conf` | 置き場 `/srv/keiba-edge/<env>/`（deploy:www-data 2750）。サイトの `location ~ ^/api/` の前に include の 1 行。匿名（Cookie も Authorization も無い）・GET/HEAD・クエリなし・合言葉なし・`_ctl/OFF` なしのときだけフォルダを見る。無ければ `/api/__edge_miss$uri` に内部の転送をして、今の `/api/` の location（上流へは元の `$request_uri`）が受ける |
+
+試しの結果（11/23 夜）:
+
+- 照合: 11/15 の確定済みの 2 レースで、写し（試しのため、この 2 レースの 17 種と出走馬だけ GCS から 1 回取った。約 2.4MB、0.1 円未満）から作った匿名の応答を本番の公開 URL と比べた。
+  - `race/{id}`: 項目まで一致した。
+  - `predictions`: 確率まで一致した。違いは `pipeline_status`（進み具合の表示）の時刻と文言だけ。ホストは経過の記録を持つので、作った側の方が正確。
+- 作る時間: 2 レース × 2 区分 × 最大 5 種で 8〜11 秒（API の読み込みを含む）。
+- stg（8081）に vps_14 を入れて確かめた。
+  - フォルダにあるもの: `X-Edge: hit` で 1ms 前後。gzip あり・なし、HEAD のどれも通る。
+  - フォルダに無いもの、クエリ付き、Cookie 付き、cache-warm の合言葉つき、`_ctl/OFF` のとき: 今の経路（`X-Cache-Status`）に流れる。
+  - 本番（8080）は変わらない。
+- 足りなかった入力: 最初は horse_result・horse_training・horse_pedigree_5gen・race_oikiri・final_odds_prediction。
+  - 写しを 17 種に広げた（11/23 22:3x JST）。
+  - 血統と調教は、手元の別の置き場から読む。
+
+ホストの cron（統括役が共有の作業ツリーを早送りした後に足す。root の cron から jovyan で）:
+
+```
+*/15 * * * *  runuser -u jovyan -- bash /home/jovyan/work/keiba-vpn/scripts/ops/edge/edge_sync.sh stg   >> /home/jovyan/work/keiba-edge/sync-stg.log 2>&1
+40 4 * * *    runuser -u jovyan -- env EDGE_RENDER_ARGS=--full bash /home/jovyan/work/keiba-vpn/scripts/ops/edge/edge_sync.sh stg >> /home/jovyan/work/keiba-edge/sync-stg.log 2>&1
+50 4 * * *    cd /home/jovyan/work/keiba-vpn && /opt/conda/bin/python3 -m src.ops.edge_render prune --mirror-days 40   # 写しの掃除（写しは root の持ち物なので root で）
+```
+
+- prod は、stg で 11/28〜29 の確定分を確かめた後（11/30 以降の平日）に同じ形で足す。
+- 写しの掃除（40 日。作る範囲の 35 日より長く残す）は root で流す（写しは root の cron が書くため）。
+
+分かっている穴（受け入れる理由）:
+
+- 写しは「ホストが GCS に保存できた後」に書く。次の場合、そのレースは「写しに無い＝GCS に無い」とみなされ、欠けた中身になりうる。
+  - 写しの書き込みの失敗（警告だけ）
+  - `save_mode=gcs_only`（`skip_local_mirror`）の保存。開発者の手動の取り直しの口だけ。
+  - 写しの設定を一時的に切った間の保存
+  - 理由: どれもまれで、欠けたレースは深夜の `--full` でも直らない。そのため、気づいたらそのレースの写しを入れ直すか、`_ctl/OFF` を置く。カテゴリを足すときは `mirror_since` を足した日に進める（窓の中の古いレースに写しが無いため）。
+- critic（11/23）の指摘で直したもの: gh の `-R`、捨てたときに前の回のファイルも消す、有無・更新時刻の予備と印、`GCS_BUCKET` を無いバケットに、ソケットの塞ぎ、WARNING を印に、同じレース・日の巻き添えで消す、`Vary: Cookie`、rewrite でメソッドを保つ、data/page_reference・data/cache・models のリンク、深夜の回の待ち、`--resync`、写しの掃除の既定を 40 日。
+
+- フォルダから外れたとき（`_ctl/OFF`・`vps_14 --remove`・印が立ったレースのファイルを消したとき）は、nginx の API キャッシュ（確定済みは 30 日）が返る。cache-warm はフォルダにあった間それを取り直していないので、その間に更新があったパスは古い。
+  - `_ctl/OFF` を置いた・`--remove` を流したとき（`--remove` は OFF も置く）は、続けて `sudo bash scripts/ops/vps/purge_api_cache.sh` で API キャッシュを全部消す。費用は edge-fix の段 1 と同じく最悪 約 2 円（1 回）。
+  - 印でファイルを消したレースは、確定済みで、更新はまれ。気づいたら、そのレースだけ取り直す（cache-warm の合図か purge）。
+- 同じプロセスの中のほかのモジュールのキャッシュ（負のキャッシュ）が、別のレースへ欠けを持ち越す道は残る（HybridStorage は None を覚えない）。WARNING を印にしているので、多くはそこで捕まる。
+- WARNING 以上をすべて印にしているので、害の無い WARNING が毎回出ると、全部が捨てられる（安全側）。heartbeat の `reasons` で見つけたら、その WARNING の出所を直すか、ここで除く一覧を足す。
+
+**cache-warm との関係（費用が減る条件）:** フォルダは cache-warm（合言葉つき）を素通りさせる。cache-warm が確定済みのレースを取り直す限り、Cloud Run の要求は減らない。匿名の利用者の要求は、もともと nginx の API キャッシュの HIT が多い。そのため、E3 を本番に入れるときに、cache-warm（VPS）の取り直しの前に、フォルダにファイルがあるパスは取り直さない形にする。cache-warm は VPS で動くので、`/srv/keiba-edge/prod/current/anon<パス>.json` の有無を見るだけでよい（GCS も Cloud Run も使わない）。
+→ 実装済み（`scripts/ops/vps/cache_warm.py` の `edge_body`）。フォルダにファイルがあり、`_ctl/OFF` が無く、本番のスニペット（`/etc/nginx/snippets/keiba-edge-prod.conf`）があるときだけ取り直さない。本文はファイルから読み、開催日の一覧の取り直しの手がかりに使う。VPS には E3 の本番と同じときに `vps_10_cache_warm.sh` で入れる。
+
+### 10.6 費用（最悪の回数）
+
+| 項目 | 最悪の回数 | 月額 |
+|---|---|---|
+| 写し（保存の後に手元へ書く） | GCS の操作は増えない | 0 円 |
+| 作る処理の GCS | 0 回（クライアントを作ろうとした時点で例外。応答は捨てる） | 0 円 |
+| 作る処理の Cloud Run | 0 回（同じプロセスの中で呼ぶ。外へ HTTP を出さない） | 0 円 |
+| ホスト → VPS | ssh の tar。15 分ごと × 96 回/日。変わったファイルだけ（確定の日に 1 日 数 MB、版の切り替えで最大 約 50MB） | 0 円（GCP の外どうし） |
+| VPS のディスク | 匿名 2 種で 1 レース 約 60KB（gzip を並べて）× 35 日 約 360 レース ≒ 25MB × 版 2 つ | 0 円（空き 71GB） |
+| ホストの CPU | 15 分ごとの起動（API の読み込み 約 5〜10 秒）＋変わったレースだけ（1 本 0.1〜1 秒）。深夜の `--full` は最悪 360 レース × 2 種 × 約 1 秒 ≒ 12 分（nice 19） | 電気代のみ |
+| Cloud Run | 減る。フォルダに当たった匿名の要求は Cloud Run に届かない。cache-warm の取り直しは、上の「cache-warm との関係」の直しを入れてから減る | 減る方向（条件付き） |
+
+- Cloud Run の月額は、フォルダに無い要求（会員・ログイン・確定前・35 日より前）の分だけ残る。利用者の数に比例して増えるのは、会員の分（E4 まで）と確定前の分（E5 まで）。
+- 最悪の起動の回数は今と同じ（96 回/日 × 30 日）。起動 1 回は 約 30 秒 × 1 vCPU・4GiB ≒ 0.15 円 → 月 最大 約 430 円。会員・確定前がフォルダに入れば、起動のきっかけ自体が減る。

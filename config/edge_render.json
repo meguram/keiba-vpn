@@ -1,0 +1,50 @@
+{
+  "_comment": "VPS のフォルダから返す API の応答を、ホストが手元のデータだけで作る処理（src/ops/edge_render.py）の設定。docs/operations/edge_cache_plan_20261121.md §10。",
+  "enabled": true,
+  "mirror_since": "20261123",
+  "_mirror_since": "ホストの data/local/meta/local_mirror_config.json で写しを有効にした日（JST）。この日より後に出馬表が出たレースだけを作る（それより前のレースは写しが欠けている）",
+  "entries_lead_days": 5,
+  "local_fallback": {
+    "_comment": "写しに無いときに読む、ホストの手元の別の置き場（<root>/<馬IDの先頭4桁>/<馬ID>.json）。血統は変わらない・調教は保存のときに手元にも書かれる（src/scraper/horse_training_local.py）",
+    "horse_pedigree_5gen": "data/local/horse_pedigree_5gen",
+    "horse_training": "data/local/horse_training"
+  },
+  "window_days": 35,
+  "settled_grace_days": 1,
+  "tiers": ["anon"],
+  "_tiers": "anon・member（dev は作らない。§9 の④）。member は E4 で足す",
+  "race_paths": {
+    "anon": ["/api/race/{rid}", "/api/race/{rid}/predictions"],
+    "member": ["/api/race/{rid}", "/api/race/{rid}/predictions", "/api/race/{rid}/result", "/api/race/{rid}/tracking-difficulty", "/api/v1/races/{rid}/analysis"]
+  },
+  "date_paths": {
+    "anon": ["/api/race-list/{date}"],
+    "member": []
+  },
+  "env": {
+    "_comment": "Cloud Run の環境変数のうち応答に効くもの（scripts/gcp/deploy_cloud_run_api.sh の ENV_VARS と scripts/ci/deploy_gcp.sh。tests/ops/test_edge_render.py が食い違いを確かめる）。値が空のキーは、作る処理の中で消す",
+    "common": {
+      "KEIBA_ENV": "prod",
+      "KEIBA_RUN_LOCATION": "gcp",
+      "KEIBA_ODDS_TRIFECTA": "0",
+      "KEIBA_PROB_CALIBRATION": "1",
+      "KEIBA_PACE_TYPE": "1",
+      "KEIBA_PACE_COHERENCE": "1",
+      "KEIBA_PACE_COHERENCE_V2": "1",
+      "KEIBA_GROWTH_INDEX": "1",
+      "KEIBA_LAP_FORECAST": "1",
+      "KEIBA_TRACKING_V2": "1",
+      "KEIBA_TRAINING_COVERAGE": "1",
+      "KEIBA_PREDICTION_RESULTS": "1",
+      "KEIBA_PREDICTION_RESULTS_GCS": "1",
+      "KEIBA_PUBLIC_MODE": "",
+      "KEIBA_TEST_USER": "",
+      "KEIBA_STAGE2_START": ""
+    },
+    "stg": {
+      "KEIBA_STAGE2_START": "20261114",
+      "KEIBA_TEST_USER": "1"
+    },
+    "prod": {}
+  }
+}
