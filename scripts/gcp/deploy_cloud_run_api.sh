@@ -12,7 +12,7 @@
 #   bash scripts/gcp/deploy_cloud_run_api.sh all     [--dry-run|--apply]   # build → deploy(--no-traffic)。切替は promote
 #
 # 必須の環境変数: PROJECT_ID, GCS_BUCKET。任意: REGION(asia-northeast1) SERVICE(keiba-api) TAG(日時) AR_REPO(keiba-vpn)
-#   MEMORY(2Gi。本番は deploy_gcp.sh が 4Gi を渡す) CPU(1) MIN_INSTANCES(0) MAX_INSTANCES(3) CONCURRENCY(30) TIMEOUT(60) GCS_PREFIX WITH_NEXT_KEY(1 で KEIBA_PROXY_KEY_NEXT も載せる) CPU_ALLOC(request|always。既定 request)
+#   MEMORY(2Gi。本番は deploy_gcp.sh が 4Gi を渡す) CPU(1) MIN_INSTANCES(0) MAX_INSTANCES(1) CONCURRENCY(30) TIMEOUT(60) GCS_PREFIX WITH_NEXT_KEY(1 で KEIBA_PROXY_KEY_NEXT も載せる) CPU_ALLOC(request|always。既定 request)
 # 事前に scripts/gcp/setup_cloud_run_api.sh で サービスアカウント・Secret Manager・Artifact Registry を用意する。
 # =============================================================================
 set -euo pipefail
@@ -44,7 +44,13 @@ case "$CPU_ALLOC" in
   request) THROTTLE_FLAG="--cpu-throttling" ;;
   *) echo "CPU_ALLOC は always か request: $CPU_ALLOC" >&2; exit 2 ;;
 esac
-MIN_INSTANCES="${MIN_INSTANCES:-0}"; MAX_INSTANCES="${MAX_INSTANCES:-3}"
+# 最大台数は既定 1（2026-11-24）。2 台目を起こすと、起こしたきっかけの要求が新しい台の起動（束 15 秒＋起動処理 30 秒前後）を待ち、
+# 26〜37 秒かかっていた（4 回目のモンキーテスト。HTTP の起動プローブでも防げない）。nginx のキャッシュとフォルダで Cloud Run に来る量は少なく、1 台で足りる。
+# 台数は版ごとの設定（stg の rstg の版とは取り合わない）。ログインの集中（全員が同時にログインし直す場面）に備えて増やすときは、
+# GitHub の変数 CLOUD_RUN_MAX_INSTANCES（promote.yml・deploy-stg.yml が MAX_INSTANCES に渡す）で、コードを変えずに戻せる。
+# 費用: 理屈の上限（台が休まず動く）は 1 台 × 月 2,592,000 秒 × 約 0.0051 円 ≒ 月 約 1.3 万円（3 台なら約 4 万円）。
+MIN_INSTANCES="${MIN_INSTANCES:-0}"; MAX_INSTANCES="${MAX_INSTANCES:-1}"
+case "$MAX_INSTANCES" in [1-9]|10) ;; *) echo "MAX_INSTANCES は 1〜10: $MAX_INSTANCES（GitHub の変数 CLOUD_RUN_MAX_INSTANCES を確かめる）" >&2; exit 2 ;; esac
 CONCURRENCY="${CONCURRENCY:-30}"; TIMEOUT="${TIMEOUT:-60}"
 GCS_BUCKET="${GCS_BUCKET:-YOUR_GCS_BUCKET}"
 GCS_PREFIX="${GCS_PREFIX:-}"
