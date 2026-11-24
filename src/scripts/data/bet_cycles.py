@@ -2382,6 +2382,105 @@ def cmd_final(a) -> None:
                       for nm, v in ((n_, x["metrics"]) for n_, x in res["periods"].items())}, ensure_ascii=False, indent=1, default=_np))
 
 
+TIER_GROUPS = (("推奨あり（★★★＋★★）", (3, 2)), ("推奨なし（★＋見送り）", (1, 0)))
+
+
+def honmei_finish(p: "Period", rec: pd.DataFrame, mask: np.ndarray) -> list[int]:
+    """参戦したレースの ◎（H_num）の着順の 1-2-3-着外（取消・着順なしは着外に入れる）。"""
+    if getattr(p, "k", 1) > 1:
+        raise ValueError("版を並べた期間（k>1）の ◎ の着順は数えられない（版の数だけ重なる）")
+    out = [0, 0, 0, 0]
+    hns = pd.to_numeric(rec["H_num"], errors="coerce").to_numpy(float)
+    for race, hn, m in zip(p.races, hns, mask):
+        if not m or not np.isfinite(hn):
+            continue
+        f = race.fin[race.hn == int(hn)]
+        fp = int(f[0]) if len(f) else 99
+        out[fp - 1 if fp in (1, 2, 3) else 3] += 1
+    return out
+
+
+def cmd_tiers2(a) -> None:
+    """第 1 回の凍結の推奨度の段（★★★・★★・★）を、推奨あり（★★★＋★★）／推奨なし（★＋見送り）の 2 分類にまとめて数え直す。
+    段の区切り・買い方は凍結のまま（まとめるだけ）。訓練は年の交差検証（cmd_tiers と同じ作り）、評価・test・2026 年は凍結の段の模型。
+    段ごとの値はどの期間もすでに見ている（2025・2026 年は 11/17 の final）ので、どの行も「見た後の 2 分類」で、新しい確かめにならない。"""
+    fz = Path(a.frozen)
+    body = json.loads(fz.read_text(encoding="utf-8"))
+    if strategy_hash({k: v for k, v in body.items() if k not in ("frozen_at", "hash")}) != body["hash"]:
+        raise SystemExit("凍結ファイルのハッシュが合いません（中身が変わった）")
+    inputs, spec, model = body["inputs"], body["spec"], body["tiers_model"]
+    names = [x for x in ("train", "eval", "test", "fwd2026", "fwd2026_pre") if x in inputs["periods"]]
+    from src.ops import data_ledger as L
+
+    tool_ = str(Path(__file__).resolve().relative_to(ROOT)) + ":tiers2"
+    toks = [L.guard(tool=tool_, family="bet_cycles", version=body["hash"], period=("2019-01-01", "2024-12-31"), purpose="reproduce",
+                    frozen_paths=[fz, Path(__file__)], target_name="訓練・評価（2 分類の数え直し）",
+                    reason="推奨度の段を推奨あり／なしの 2 分類にまとめて数え直す（ユーザーの依頼）。段・買い方は凍結のまま。採否・選び直しに使わない"),
+            L.guard(tool=tool_, family="bet_cycles", version=body["hash"], period=("2025-01-01", "2025-12-31"), purpose="eval_only",
+                    frozen_paths=[fz, Path(__file__)], target_name="test 2025（2 分類の数え直し）",
+                    reason="推奨度の段を推奨あり／なしの 2 分類にまとめて数え直す（ユーザーの依頼）。段・買い方は凍結のまま。採否・選び直しに使わない"),
+            L.guard(tool=tool_, family="bet_cycles", version=body["hash"], period=("2026-01-01", "2026-11-15"), purpose="eval_only",
+                    frozen_paths=[fz, Path(__file__)], target_name="2026 年の参考（2 分類の数え直し）",
+                    reason="推奨度の段を推奨あり／なしの 2 分類にまとめて数え直す（ユーザーの依頼）。段・買い方は凍結のまま。採否・選び直しに使わない")]
+    try:
+        _tiers2_body(a, fz, body, inputs, spec, model, names, toks)
+    except BaseException as exc:                     # 台帳の行を started のまま残さない（prereg_run と同じ）
+        for tk in toks:
+            tk.__exit__(type(exc), exc, None)
+        raise
+
+
+def _tiers2_body(a, fz, body, inputs, spec, model, names, toks) -> None:
+    per, _ = prepare_periods(inputs, tuple(names), cuts=body["qcuts"])
+    base = json.loads((CFG_DIR / "baselines.json").read_text(encoding="utf-8"))["baselines"][0]
+    labels = {"train": "訓練 2019〜22（年の交差検証）", "eval": "評価 2023〜24",
+              "test": "test 2025", "fwd2026": "2026 年 1/4〜11/15（本番 v6e の予測・確定オッズ）",
+              "fwd2026_pre": "2026 年 10/18〜11/15（本番 v6e の予測・発走前のオッズで決めた）"}
+    rows, res = [], {"hash": body["hash"], "frozen": str(fz.resolve().relative_to(ROOT)), "periods": {}}
+    for nm in names:
+        pp = per[nm]
+        r = run_period(pp, spec, detail=True)
+        if nm == "train":                                # cmd_tiers と同じ: 1 年を外し、残りの年で判定・区切りを決めて外した年に当てる
+            years = pp.feats["year"].to_numpy()
+            b0 = run_period(pp, base)
+            t = np.zeros(len(pp.races), int)
+            for y in np.unique(years):
+                fm = years != y
+                base_fold = float(b0["ret"][fm].sum() / max(b0["cost"][fm].sum(), 1))
+                mdl = fit_tiers(r["cost"], r["ret"], pp.feats, fm, base_fold, pp.dates, pp.W, years, list(model["axes"]))
+                t[years == y] = assign_tiers(pp.feats[years == y].reset_index(drop=True), mdl)
+        else:
+            t = assign_tiers(pp.feats, model)
+        res["periods"][nm] = {"label": labels[nm], "groups": {}, "skip_races": int(((t == 0) & (r["cost"] > 0)).sum())}
+        for gname, tv in TIER_GROUPS:
+            mk = np.isin(t, tv) & (r["cost"] > 0)
+            st = metrics(np.where(mk, r["cost"], 0), np.where(mk, r["ret"], 0), pp.dates, pp.W)
+            fin = honmei_finish(pp, r["records"], mk)
+            res["periods"][nm]["groups"][gname] = {**{k: st.get(k) for k in KEYS_CV}, "honmei_finish": fin, "races": st.get("races")}
+            rows.append([labels[nm], gname, f"{st.get('bet_races', 0):,}", f"{(st.get('hit_rate') or 0) * 100:.1f}%", f"{(st.get('roi') or 0) * 100:.1f}%",
+                         (f"{st['roi_lo'] * 100:.0f}〜{st['roi_hi'] * 100:.0f}%" if st.get("roi_lo") is not None else "－"),
+                         f"{(st.get('roi_ex_top5') or 0) * 100:.1f}%", f"{(st.get('avg_return') or 0):,.0f}", f"{(st.get('median_return') or 0):,.0f}",
+                         "-".join(str(x) for x in fin)])
+    res.update({"title": "推奨度の段を推奨あり／なしの 2 分類にまとめた数え直し（第 1 回の凍結）",
+                "text": ["推奨あり = ★★★＋★★、推奨なし = ★＋見送り（不得意）。段の区切り・買い方は凍結のまま変えず、まとめただけ。"
+                         f"見送り（不得意）は、どの期間も {sum(v['skip_races'] for v in res['periods'].values())} 件（凍結の段の模型に不得意の水準が無い）。推奨なしは実際には ★ だけ。",
+                         "開示: ★ を外す（推奨なしに回す）判断は、どの期間の段の値も見た後の判断（2025・2026 年の段の値も 11/17 の確かめで出ている）。"
+                         "どの行も「見た後の 2 分類」で、新しい確かめにならない。2 分類の値は段の値を足したもの。次の確かめは前向きの記録になる。",
+                         "どの期間も判定は確定オッズで行う楽観の値（2026 年 10/18〜11/15 の行だけ発走前のオッズで決めた）。訓練は年の交差検証で、段の区切りは外した年を除いて決めた。",
+                         "前向き（11/21〜）の行は無い。第 1 回の買い方は本番の影のランナーで判定していない（今の試行は第 2 回の買い方）。",
+                         "◎ の 1-2-3-着外は参戦したレースの ◎ の着順（取消・着順なしは着外）。"],
+                "tables": [{"title": "推奨あり／なしの 2 分類", "head": ["期間", "分類", "参戦", "的中率", "回収率", "95% 区間", "上位5件を除く", "平均回収額",
+                                                                "中央値回収額", "◎ 1-2-3-着外"], "rows": rows, "left": 2}],
+                "ledger": [tk.summary() for tk in toks]})
+    dst = Path(a.out) if a.out else ROOT / f"docs/operations/retrain_trials/bet_tiers2_{body['hash']}.json"
+    dst.write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_np) + "\n", encoding="utf-8")
+    for tk in toks:
+        tk.finish(result_path=str(dst))
+    print("書いた", dst)
+    for row in rows:
+        print(" | ".join(row))
+
+
 PREREG_ORDER = ("否定", "100% 超えを確かめた", "100% 超えの向き（確かめは弱い）", "基準より上（100% は確かめられず）", "確かめられず")
 
 
@@ -2849,6 +2948,10 @@ def main() -> None:
     fn.add_argument("--group", default="", choices=["", "test", "fwd"], help="test と 2026 年の参考を別の時点で 1 回ずつ見る（印も別）")
     fn.add_argument("--round", type=int, default=1, choices=[1, 2], help="何回目の最適化か（2 なら、2025 年 test は 2 回目の確かめとして別の印で 1 回だけ）")
     fn.set_defaults(func=cmd_final)
+    t2 = sub.add_parser("tiers2", help="第 1 回の凍結の推奨度の段を、推奨あり（★★★＋★★）／なし（★＋見送り）の 2 分類で数え直す")
+    t2.add_argument("--frozen", default=str(CFG_DIR / "frozen_20261117_final.json"))
+    t2.add_argument("--out", default=None)
+    t2.set_defaults(func=cmd_tiers2)
     a = ap.parse_args()
     a.func(a)
 

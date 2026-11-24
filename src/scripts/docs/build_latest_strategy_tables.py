@@ -101,6 +101,25 @@ def roi_cell(v, lo, hi) -> str:
 
 
 # ---------------------------------------------------------------- 行を作る
+def tiers2_rows() -> tuple[list[str], str]:
+    """第 1 回の凍結の推奨度の段を、推奨あり（★★★＋★★）／なし（★＋見送り）にまとめた表（bet_cycles tiers2 の記録）。"""
+    f = SRC / "bet_tiers2_f96a5aeff33e.json"          # 文面が名指す第 1 回の凍結の記録だけを読む
+    if not f.exists():
+        return [], ""
+    t2 = json.loads(f.read_text(encoding="utf-8"))
+    out = []
+    for pv in t2["periods"].values():
+        for g, m in pv["groups"].items():
+            f = m.get("honmei_finish") or [0, 0, 0, 0]
+            n = sum(f)
+            out.append(row(esc(f"{pv['label']}・{g}"),
+                           [f'{num(m.get("bet_races") or 0)}／{num(m.get("races") or 0)}', pct(m.get("hit_rate")),
+                            roi_cell(m.get("roi"), m.get("roi_lo"), m.get("roi_hi")) if m.get("roi") is not None else "－",
+                            rec(f), pct(f[0] / n) if n else "－", pct(sum(f[:3]) / n) if n else "－"]))
+    return out, f.name
+
+
+
 def a2_rows(a2: dict) -> tuple[list[str], dict]:
     names = {"train": "訓練 2019〜22", "eval": "評価 2023〜24", "test2025": "test 2025（2 回目の確かめ）", "main2026": "2026 年 主（{}）".format("〜".join((a2["periods"].get("main2026") or {}).get("dates") or ["?", "?"]))}
     out, by = [], {}
@@ -202,6 +221,13 @@ def build() -> str:
     RS = json.loads((ROOT / "data/meta/course/rule_stats_v3.json").read_text(encoding="utf-8"))
     r1, b1 = a1_rows(a1)
     r2, b2 = a2_rows(a2)
+    t2_rows, t2_src = tiers2_rows()
+    t2_html = "" if not t2_rows else (
+        "<h3>参考: 第 1 回の買い方の推奨あり／なし（推奨度の段をまとめた 2 分類）</h3>\n"
+        "<p class=\"sub\">第 1 回の凍結（f96a5aeff33e）の推奨度の段のうち、★★★＋★★ を推奨あり、★＋見送りを推奨なしにまとめた（段の区切り・買い方は凍結のまま）。"
+        "見送りはどの期間も 0 件で、推奨なしは実際には ★ だけ。★ を外す判断はどの期間の段の値も見た後なので（2025・2026 年も 11/17 に見ている）、どの行も「見た後の 2 分類」で、新しい確かめにならない。"
+        "判定は確定オッズで行う楽観の値（2026 年 10/18〜11/15 の行だけ発走前のオッズ）。的中率は区間なし。"
+        f"元: <code>docs/operations/retrain_trials/{esc(t2_src)}</code>。</p>\n" + table(t2_rows))
     rbt, bbt = b_rows(b, "tansho")
     rbf, bbf = b_rows(b, "fukusho")
 
@@ -322,6 +348,8 @@ def build() -> str:
 <li>訓練・評価は学習の X で作った予測（OOF）、test 2025 は test の予測。2026 年は推論の経路の予測で、入力の経路は本番に近い（p は確定の offset のまま）。</li>
 <li>対象レースは、予測と払戻がそろって計算できたレース。</li>
 </ul>
+
+{t2_html}
 
 <h2 id="b">B めぐ分析の「過去データの条件」で買う</h2>
 <p class="sub">凍結の第 3 版（sha {esc(b["sha256_cells"][:12])}）。対象は良馬場・芝ダ・重賞以外のレース。単位（コース × クラスの群）ごとに、めぐ分析に出る買いの条件（上位 5 つ、全 {num(b["rules_total"])} 条件）を見る。訓練の単勝の回収率 100% 以上の条件は {num(b["rules_buy_tansho"])}、複勝は {num(b["rules_buy_fukusho"])}。1 頭が複数の条件に当てはまっても 1 点。</p>

@@ -709,3 +709,22 @@ def test_forward_checks_are_frozen_once_reached(tmp_path):
     assert later["decision"] == "打ち切り" and later["checks"][0]["R"] == 0.5
     import json
     assert json.loads(path.read_text(encoding="utf-8"))["2"]["race_ids"] == ["a", "b"]
+
+
+
+def test_tiers2_groups_and_honmei_finish():
+    """2 分類は ★★★＋★★ と ★＋見送り。◎ の着順は参戦したレースだけ数え、取消（着順なし）は着外。"""
+    import pandas as pd
+
+    assert dict(bc.TIER_GROUPS) == {"推奨あり（★★★＋★★）": (3, 2), "推奨なし（★＋見送り）": (1, 0)}
+    races = [bc.Race(f"r{i}", "2022-01-05", np.array([1, 2, 3]), np.array([0.5, 0.3, 0.2]), np.array([0.9, 0.8, 0.7]),
+                     np.array([2.0, 3.0, 5.0]), np.array([1, 2, 3]), np.array(fin)) for i, fin in enumerate([[1, 2, 3], [3, 1, 2], [2, 3, 99], [1, 2, 3]])]
+
+    class P:
+        pass
+
+    pp = P()
+    pp.races = races
+    rec = pd.DataFrame({"H_num": [1, 1, 3, np.nan]})
+    assert bc.honmei_finish(pp, rec, np.array([True, True, True, True])) == [1, 0, 1, 1]
+    assert bc.honmei_finish(pp, rec, np.array([True, False, False, False])) == [1, 0, 0, 0]
