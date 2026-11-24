@@ -109,7 +109,7 @@ def oikiri_section() -> str:
 <li>「切り口 対 外の比」が 1 を超えるのは、外の馬（加速なら減速の馬）が市場に負けることも含む。2025・26 年の合否の決まりは事前に定めていない（下の表の「確かめの決まり」は参考）。</li>
 <li>めぐ分析の B に足しても（B∩切り口）、上積みは確かめられない（下の表）。</li>
 <li>2026 年は追い切りの記録がある走が {pc(fin['coverage']['2026']['flat'], 0)}（平場）しかない。2025 年は {pc(fin['coverage']['2025']['flat'], 0)}。
-表の終わり（{esc(fin.get('laps_max', '－'))}）だけでは説明できず、原因は確かめていない。2026 年の値は参考にとどめる。</li>
+原因は、この道具が読んだ追い切りの表（training_laps_fresh.parquet、10/19 に作った固定の表。最後の日 {esc(fin.get('laps_max', '－'))}）が、2026-05 以降の行をほとんど持たないこと。手元の調教の記録を重ねた表では、2026 年の出走の 98.9% にレース週の追い切りがある（表に行が無いだけで、取得の漏れではない。docs/operations/data_intake_20261124.md）。2026 年の値は参考にとどめる。</li>
 </ul></div>""")
     o.append(f"""<p class="sub">道具: <code>src/research/course/megu_oikiri.py</code>。第 1 段の診断に従い、結果で組を拾う探し方はしない。切り口 {O['k']} 本を先に決めて測った。</p>
 <ul>
@@ -123,7 +123,7 @@ def oikiri_section() -> str:
     cov = dict(O.get("coverage") or {}) | dict(fin.get("coverage") or {})
     o.append("<h3>追い切りの記録がある走の割合（年ごと）</h3>")
     o.append(table(["面"] + list(cov), [["平場"] + [pc(v["flat"], 0) for v in cov.values()], ["重賞"] + [pc(v["graded"], 0) for v in cov.values()]], set(range(1, len(cov) + 1))))
-    o.append('<p class="sub">2018 年までは記録が薄いので、選ぶ期間は 2019〜21 年にした。</p>')
+    o.append('<p class="sub">2018 年までは記録が薄いので、選ぶ期間は 2019〜21 年にした。2026 年の低さは、final を流したときに読んだ表（training_laps_fresh の固定、10/19）の古さによる（表に行が無い。2026-11-24 の data-intake の調べ）。</p>')
     rows = []
     for k, lab in O["cuts"].items():
         r = O["flat"][k]

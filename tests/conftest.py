@@ -31,8 +31,9 @@ _data_ledger.TESTING = True
 # 変わっていたら、CI（GITHUB_ACTIONS）または KEIBA_TEST_WATCH_STRICT=1 ではテスト全体を失敗にし、ほかでは警告だけにする
 # （ホストの共有の作業ツリーでは、root の cron の entries-sync が系統の台帳を書くことがあり、テストのせいでなくても変わるため）。
 # 書く必要のあるテストは tmp_path・環境変数・monkeypatch で差し替える。手元の置き場（data/local など）は cron が書くので見張らず、
-# 下の _isolate_local_outputs で環境変数を一時ディレクトリへ差し替える（import の時点で決まる定数の出力先、例えば smartrc_sire_lines.OUT・
-# build_horse_sire_map の出力先・run.GRADED_PICKS_DIR は、環境変数では守れない。それらを書く処理はテストの側でスタブにする）。
+# 下の _isolate_local_outputs で環境変数を一時ディレクトリへ差し替える（import の時点で決まる定数の出力先、例えば
+# build_horse_sire_map の出力先・run.GRADED_PICKS_DIR は、環境変数では守れない。それらを書く処理はテストの側でスタブにする。
+# smartrc_sire_lines.OUT・_DEFAULT_OUT は _isolate_local_outputs が tmp_path へ差し替える）。
 def _watch_snapshot(root):
     import subprocess
 
@@ -103,6 +104,9 @@ def _isolate_local_outputs(monkeypatch, tmp_path):
     """めぐ分析の保存先・データで予想の置き場を、テストごとの一時ディレクトリへ（本物の data/local を書かない。指定するテストはそれが優先）。"""
     monkeypatch.setenv("KEIBA_RACE_ANALYSIS_DIR", str(tmp_path / "_race_analysis"))
     monkeypatch.setenv("GRADED_PICKS_DIR", str(tmp_path / "_graded_picks"))
+    # smartrc の系統の台帳（既定は data/local。2026-11-24 に data/meta から移した）。data/meta の見張りでは気付けないので差し替える
+    monkeypatch.setattr("src.scraper.smartrc_sire_lines.OUT", tmp_path / "_sire_lines.json")
+    monkeypatch.setattr("src.scraper.smartrc_sire_lines._DEFAULT_OUT", tmp_path / "_sire_lines.json")
 
 
 @pytest.fixture(autouse=True)
