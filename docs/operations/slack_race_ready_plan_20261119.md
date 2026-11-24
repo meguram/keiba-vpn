@@ -114,7 +114,7 @@
   - Webhook は `os.environ[webhook_env]` を直接読む。空なら、その環境には送らない。汎用の `SLACK_WEBHOOK_URL` には落とさない。
   - `send_payload` に渡す辞書は、`{"KEIBA_ENV": "<stg|prod>", "SLACK_WEBHOOK_URL_<STG|PROD>": url}` だけにする。`KEIBA_NOTIFY_ENV_LABEL` などを引き継がないので、見出しの【STG】【PROD】が環境ごとに正しく付く。
   - テストでは、「_PROD が空なら本番に送らない」「stg の通知が stg の URL にだけ行く」「リンクの文字列（`https://app.megu-keiba.com/race/<rid>`）」を固定する。
-- cron のラッパーで `.env` を読む（`scrape_status_notify.sh:12` と同じく `set -a; . ./.env`）。`cron_run.sh` は `.env` を読まないため。
+- `.env` は本体が `_load_env`（`dotenv_values`。既にある環境変数・`.env.stg` などで上書きしない）で読む（`cron_run.sh` は `.env` を読まないため。shell で source すると値の `$`・空白を解釈するので、2026-11-24 に source をやめた）。
 - Webhook の値は、ログ・記録・テスト・dry-run の出力に出さない（`redact` を通す）。
 
 ### 4d. 通知の中身（見本）
@@ -235,7 +235,7 @@
 | push の時刻の手元の記録（`data/local/meta/race_push_log/<日>.jsonl`。ミラーの木の外で GCS へは上げない。`index_ok` 付き） | `src/ops/gcs_mirror.py` の `_note_race_push`（host の push だけ） |
 | 判定・送信・記録 | `src/scripts/ops/race_ready_notify.py` |
 | 設定 | `config/race_ready_notify.json` |
-| cron | `scripts/cron/race_ready_notify.sh`（.env を読む・flock -n・nice 19）、`scripts/cron/install_race_ready_notify_cron.sh [--no-mark\|--remove]` |
+| cron | `scripts/cron/race_ready_notify.sh`（flock -n・nice 19。.env は本体が読む）、`scripts/cron/install_race_ready_notify_cron.sh [--no-mark\|--remove]` |
 | テスト | `tests/ops/test_race_ready_notify.py`・`tests/ops/test_gcs_mirror.py` |
 
 当て直し（`python -m src.scripts.ops.race_ready_notify --day 20261115 --replay`。push の時刻はファイルの更新時刻＋5 分で代用）:

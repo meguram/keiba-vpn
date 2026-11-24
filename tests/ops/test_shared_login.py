@@ -67,3 +67,14 @@ def test_dry_run_reports_without_writing_or_notifying(env):
     time.sleep(1.1)
     assert sl.ensure(ID, nov, dry=True) == "would-rotated"
     assert auth.verify_member_login(ID, sl.password_for("2026-10")) and len(env) == 1
+
+
+def test_show_refuses_after_moving_to_rotation(env, monkeypatch, capsys):
+    monkeypatch.setenv("KEIBA_SHARED_LOGIN_ID", ID)
+    monkeypatch.setattr("src.utils.project_env.load_project_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr(auth, "member_record", lambda uid: {"rotation_month": "2027-01"})
+    assert sl.main(["show"]) == 2
+    out = capsys.readouterr()
+    assert "パスワード:" not in out.out and sl.password_for(sl.month_of()) not in out.out + out.err   # 使えない派生の値を出さない
+    monkeypatch.setattr(auth, "member_record", lambda uid: {"enabled": True})          # 旧方式の記録は今までどおり出す
+    assert sl.main(["show"]) == 0 and sl.password_for(sl.month_of()) in capsys.readouterr().out

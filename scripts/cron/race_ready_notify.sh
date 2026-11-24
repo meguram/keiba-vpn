@@ -6,13 +6,8 @@
 set -u
 PROJECT_DIR="${1:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)}"
 cd "$PROJECT_DIR" || exit 1
-# cron_run.sh は .env を読まないので、ここで読む（Webhook の変数。値はログに出さない）
+# .env（Webhook の変数）は本体が race_ready_notify._load_env で読む（shell で source しない。上書きしない。値はログに出さない）
 mkdir -p logs
-if [ -f .env ]; then
-  set +u; set -a
-  . ./.env 2>/dev/null || echo "[$(date -Is)] .env を読めませんでした（通知の変数が無いかもしれない）" >> logs/race_ready_notify.log
-  set +a; set -u
-fi
 PY="${KEIBA_PYTHON:-/opt/conda/bin/python3}"
 [ -x "$PY" ] || PY="$(command -v python3)"
 exec 9>"/tmp/keiba-race-ready-notify.lock"

@@ -136,7 +136,10 @@ def collect(day: str, root: Path, *, replay: bool = False) -> list[Race]:
                     race.pushed[tree] = datetime.fromtimestamp(p.stat().st_mtime, JST) + REPLAY_PUSH_LAG
     else:
         rows = _jsonl(root / PUSH_LOG / f"{day}.jsonl")
-        index_ok_at = sorted(t for t in (_t(r.get("at")) for r in rows if r.get("tree") == "_index" and r.get("index_ok") is True) if t)
+        # 目録の回復の行（tree=_index）は書いた日のファイルに入る。前日の夜に上げた翌日分の失敗が前日のうちに回復した回も拾う
+        prev = (datetime(int(day[:4]), int(day[4:6]), int(day[6:])) - timedelta(days=1)).strftime("%Y%m%d")
+        idx_rows = rows + [r for r in _jsonl(root / PUSH_LOG / f"{prev}.jsonl") if r.get("tree") == "_index"]
+        index_ok_at = sorted(t for t in (_t(r.get("at")) for r in idx_rows if r.get("tree") == "_index" and r.get("index_ok") is True) if t)
         for row in rows:
             at = _t(row.get("at"))
             tree = str(row.get("tree") or "")
@@ -412,6 +415,21 @@ def replay_day(day: str, *, root: Path = ROOT, cfg: dict | None = None, start: s
     return got
 
 
+def _load_env(root: Path) -> None:
+    """cron から <root>/.env の Webhook・KEIBA_SLACK_NOTIFY を読む。既にある環境変数は上書きしない。
+    shell で source しない（値の $・空白を解釈しない）。load_project_dotenv も使わない（KEIBA_ENV で .env.stg/.env.prod が上書きし、送り先が変わりうるため）。"""
+    if (os.environ.get("KEIBA_SKIP_DOTENV") or "").strip() == "1":
+        return
+    p = root / ".env"
+    if not p.is_file():
+        return
+    from dotenv import dotenv_values
+
+    for k, v in dotenv_values(p).items():
+        if v is not None:
+            os.environ.setdefault(k, v)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--day", default="", help="YYYYMMDD（既定は JST の今日）")
@@ -425,6 +443,7 @@ def main(argv: list[str] | None = None) -> int:
     day = a.day or now.strftime("%Y%m%d")
     if not (root / "data/page_reference/race_lists" / f"{day}.json").exists():
         return 0                                                    # 非開催日（重い処理の前に終える）
+    _load_env(root)
     if a.replay:
         for x in replay_day(day, root=root):
             if x["kind"] == "ready":

@@ -135,6 +135,12 @@ def main(argv: list[str] | None = None) -> int:
         print("KEIBA_SHARED_LOGIN_ID が未設定のため何もしません")
         return 0
     if a.cmd == "show":
+        from src.api import auth
+
+        rec = auth.member_record(uid)
+        if rec and rec.get("rotation_month"):   # 乱数の毎月の切り替え（login_rotate）に移った記録。派生の値は使えないので出さない
+            print("この記録は毎月の切り替え（login_rotate）に移っています。値は docs/operations/shared_login_rotation.md の「下書きの取り出し」で確かめてください", file=sys.stderr)
+            return 2
         m = month_of()
         print(f"{m}\nログインID: {uid}\nパスワード: {password_for(m)}")
         return 0

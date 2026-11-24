@@ -207,6 +207,7 @@ def test_stage2_line_dev_only_and_waiting(tmp_path):
 def test_stage2_for_members_when_not_dev_only_and_not_before_start(tmp_path, monkeypatch):
     make_day(tmp_path)
     rid = "202605050101"
+    _w(tmp_path, f"{R.INF}/bets_stage2/_dev_only.json", {"disabled": False})         # 目印が無ければ開発者だけ（stage2_live.dev_only の既定）。会員に出す段
     event(tmp_path, rid, "09:05", sec77="no_model")                                   # 第 2 段が会員に出るなら §77 は要らない
     pushed(tmp_path, "predictions_v6", [rid], "09:06")
     _w(tmp_path, f"{R.INF}/bets_stage2/{DAY}/{rid}.json", {"strategy": "stage2_r2", "status": "skip", "skip_label": "候補なし"})
@@ -222,6 +223,23 @@ def test_stage2_for_members_when_not_dev_only_and_not_before_start(tmp_path, mon
 def test_non_race_day_returns_quickly(tmp_path):
     assert R.main(["--root", str(tmp_path), "--day", DAY]) == 0
     assert not (tmp_path / R.STATE_DIR).exists()
+
+
+def test_env_is_read_from_root_without_overriding(tmp_path, monkeypatch):
+    monkeypatch.delenv("KEIBA_SKIP_DOTENV", raising=False)
+    monkeypatch.delenv("SLACK_WEBHOOK_URL_STG", raising=False)
+    monkeypatch.setenv("KEIBA_SLACK_NOTIFY", "0")
+    (tmp_path / ".env").write_text("SLACK_WEBHOOK_URL_STG=https://x/$notvar y\nKEIBA_SLACK_NOTIFY=1\n", encoding="utf-8")
+    R._load_env(tmp_path)
+    assert R.os.environ["SLACK_WEBHOOK_URL_STG"] == "https://x/$notvar y"             # shell のように $・空白を解釈しない
+    assert R.os.environ["KEIBA_SLACK_NOTIFY"] == "0"                                  # 既にある値は上書きしない
+    monkeypatch.delenv("SLACK_WEBHOOK_URL_STG")
+
+
+def test_main_reads_env_only_on_race_days(tmp_path, monkeypatch):
+    called = []
+    monkeypatch.setattr(R, "_load_env", lambda root: called.append(root))
+    assert R.main(["--root", str(tmp_path), "--day", DAY]) == 0 and called == []     # 非開催日は .env も読まない
 
 
 def test_main_without_mark_does_not_send(tmp_path, monkeypatch):
@@ -268,6 +286,20 @@ def test_index_failure_is_lifted_by_the_next_successful_index(tmp_path):
     pushed(tmp_path, "_index", [], "09:05", index_ok=True)                            # 次の push で目録を書けた
     r = run(tmp_path, at("09:09"))
     assert sorted(x["env"] for x in r["sent"]) == ["prod", "stg"]
+
+
+def test_index_recovery_written_on_the_previous_evening_is_seen(tmp_path):
+    make_day(tmp_path)
+    rid = "202605050101"
+    event(tmp_path, rid, "09:00")
+    eve = datetime(2026, 11, 27, 21, 0, tzinfo=JST)
+    p = tmp_path / R.PUSH_LOG / f"{DAY}.jsonl"                                        # 前日の夜に上げた翌日分（目録は失敗）
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({"at": eve.isoformat(), "tree": "predictions_v6", "race_ids": [rid], "index_ok": False}) + "\n", encoding="utf-8")
+    (tmp_path / R.PUSH_LOG / "20261127.jsonl").write_text(                            # 回復の行は書いた日（前日）のファイルに入る
+        json.dumps({"at": (eve + timedelta(minutes=5)).isoformat(), "tree": "_index", "race_ids": [], "index_ok": True}) + "\n", encoding="utf-8")
+    races = {r.race_id: r for r in R.collect(DAY, tmp_path)}
+    assert races[rid].pushed["predictions_v6"] == eve + timedelta(minutes=5)          # 30 分の推定ではなく回復の時刻
 
 
 def test_late_warning_over_budget_is_not_counted_as_failure(tmp_path):
