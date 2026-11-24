@@ -829,6 +829,15 @@ def rated_records(records: list[dict], min_level: int = RATED_MIN_LEVEL) -> list
     return [target_view(r) for r in records if r.get("included") and (record_level(r) is not None) and record_level(r) >= min_level]
 
 
+def buy_all_of(bt: dict) -> dict:
+    """推奨した買い目をすべて買った場合の購入・払戻（bets_t.all）。all の無い古い記録は今の数え方（total_bet・total_return）のまま。
+    集計（rated_all_bets・level_summary）と API（bets-summary の各レース）で同じ扱いにするための入口。"""
+    a = bt.get("all")
+    if isinstance(a, dict):
+        return {"total_bet": int(a.get("total_bet") or 0), "total_return": int(round(a.get("total_return") or 0))}
+    return {"total_bet": int(bt.get("total_bet") or 0), "total_return": int(round(bt.get("total_return") or 0))}
+
+
 def rated_all_bets(records: list[dict], min_level: int = RATED_MIN_LEVEL) -> dict[str, int]:
     """推奨度が min_level 以上のレースで、推奨した買い目をすべて買った場合（bets_t.all）の合計。
     実オッズで絞らない数え方（確定オッズはレース後の値で、絞ると当たる買い目が落ちやすい）。会員の画面で今の数え方と並べる。"""
@@ -837,8 +846,8 @@ def rated_all_bets(records: list[dict], min_level: int = RATED_MIN_LEVEL) -> dic
         lv = record_level(r)
         if not r.get("included") or lv is None or lv < min_level:     # rated_records と同じ集合
             continue
-        a = (r.get("bets_t") or {}).get("all") or {}
-        bet, ret = int(a.get("total_bet") or 0), int(round(a.get("total_return") or 0))
+        a = buy_all_of(r.get("bets_t") or {})
+        bet, ret = a["total_bet"], a["total_return"]
         if bet <= 0:
             continue
         out["invested"] += bet
@@ -872,6 +881,12 @@ def level_summary(records: list[dict]) -> tuple[dict[str, dict], int]:
         bt = r["bets_t"]
         c = out.setdefault(str(lv), dict(_BLANK_LEVEL))
         c["races"] += 1
+        a = buy_all_of(bt)
+        if a["total_bet"]:                           # 推奨した買い目をすべて買った場合（実オッズで絞らない）
+            c["all_bought"] = c.get("all_bought", 0) + 1
+            c["all_hit"] = c.get("all_hit", 0) + int(a["total_return"] > 0)
+            c["all_invested"] = c.get("all_invested", 0) + a["total_bet"]
+            c["all_returned"] = c.get("all_returned", 0) + a["total_return"]
         if bt.get("total_bet"):
             c["bought"] += 1
             c["hit"] += int(bt["total_return"] > 0)
@@ -1033,14 +1048,20 @@ def bets_level_card(today: _date, base: Path | None = None) -> dict:
             c = bl.get(str(lv)) or _BLANK_LEVEL
             levels.append({"level": lv, "label": labels[lv], "races": c["bought"], "hit_races": c["hit"], "hit_rate": rate(c["hit"], c["bought"]),
                            "no_buy_races": c["races"] - c["bought"],
-                           "invested": c["invested"], "returned": c["returned"], "roi": rate(c["returned"], c["invested"])})
+                           "invested": c["invested"], "returned": c["returned"], "roi": rate(c["returned"], c["invested"]),
+                           "all": {"races": c.get("all_bought", 0), "hit_races": c.get("all_hit", 0), "hit_rate": rate(c.get("all_hit", 0), c.get("all_bought", 0)),
+                                   "invested": c.get("all_invested", 0), "returned": c.get("all_returned", 0),
+                                   "roi": rate(c.get("all_returned", 0), c.get("all_invested", 0))}})
         tot = {k: sum(x[k] for x in levels) for k in ("races", "hit_races", "invested", "returned", "no_buy_races")}
+        tot_all = {k: sum(x["all"][k] for x in levels) for k in ("races", "hit_races", "invested", "returned")}
         periods.append({"key": key, "label": label, "from": lo, "to": hi, "data_from": r["days"][0] if r["days"] else None,
                         "data_to": r["days"][-1] if r["days"] else None, "days": len(r["days"]), "status": r["status"],
-                        "levels": levels, "total": {**tot, "roi": rate(tot["returned"], tot["invested"]), "hit_rate": rate(tot["hit_races"], tot["races"])},
+                        "levels": levels, "total": {**tot, "roi": rate(tot["returned"], tot["invested"]), "hit_rate": rate(tot["hit_races"], tot["races"]),
+                                                    "all": {**tot_all, "roi": rate(tot_all["returned"], tot_all["invested"]), "hit_rate": rate(tot_all["hit_races"], tot_all["races"])}},
                         "skipped_races": (bl.get("0") or _BLANK_LEVEL)["races"], "unrated_races": unrated, "no_buy_races": tot["no_buy_races"]})
     return {"as_of": today.strftime("%Y%m%d"), "year": y, "periods": periods,
-            "note": "画面に出している推奨馬券（最大5パターン。想定オッズは §77 のモデル）のうち、実際のオッズ（確定）が想定オッズ以上のパターンだけを購入したとみなした仮想購入。推奨度は画面のレース推奨度と同じ、払戻は確定払戻。実際の購入ではありません。"}
+            "note": "回収率は、画面に出している推奨馬券（最大5パターン。想定オッズは §77 のモデル）をすべて買ったとみなした仮想購入（100% 超は確かめられていません）。"
+                    "小さく添えた値は、確定オッズ（レース後の値）が想定オッズ以上のパターンだけを買ったとみなした場合で、当たる買い目が落ちやすい数え方です。推奨度は画面のレース推奨度と同じ、払戻は確定払戻。実際の購入ではありません。"}
 
 
 def mark_card(today: _date, base: Path | None = None) -> dict:

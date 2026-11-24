@@ -203,7 +203,8 @@ def test_level_summary_counts_skipped_and_unrated_separately():
     recs = [_rec(0, 1), _rec(1, 1, ret=300), _rec(1, 4), _rec(None, 1)]
     by, unrated = pr.level_summary(recs)
     assert unrated == 1 and by["0"]["races"] == 1 and by["0"]["invested"] == 0
-    assert by["1"] == {"races": 2, "bought": 2, "hit": 1, "invested": 200, "returned": 300}
+    assert {k: by["1"][k] for k in ("races", "bought", "hit", "invested", "returned")} == {"races": 2, "bought": 2, "hit": 1, "invested": 200, "returned": 300}
+    assert (by["1"]["all_bought"], by["1"]["all_invested"]) == (2, 200)        # all の無い記録は、すべて買う側も今の数え方のまま
 
 
 def test_period_summary_has_rated_summary_series_and_counts(tmp_path):

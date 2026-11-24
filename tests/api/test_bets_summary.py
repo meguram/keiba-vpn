@@ -28,6 +28,22 @@ def test_bets_summary_flags_hits_and_gives_day_and_week_roi(tmp_path, monkeypatc
     assert out["week"]["invested"] == 4000 and out["week"]["returned"] == 4000 and out["week"]["roi"] == 1.0
 
 
+def test_bets_summary_mainly_shows_buy_all(tmp_path, monkeypatch):
+    """主はすべて買った場合（bets_t.all）。selected と日・週の roi は確定オッズ ≥ 想定の買い目だけ。"""
+    monkeypatch.setattr(pr, "store_dir", lambda: tmp_path)
+    monkeypatch.setattr(api, "_is_dev", lambda: False)
+    monkeypatch.setattr(api, "is_member", lambda _request: True)
+    monkeypatch.setattr(api, "is_developer", lambda _request: True)
+    api._CACHE.clear()
+    d = _doc("20261010", [("R1", 0, 0), ("R2", 1000, 3000)])
+    d["races"][0]["bets_t"]["all"] = {"total_bet": 2000, "total_return": 5000}
+    d["races"][1]["bets_t"]["all"] = {"total_bet": 2000, "total_return": 3000}
+    (tmp_path / "20261010.json").write_text(json.dumps(d), encoding="utf-8")
+    out = json.loads(asyncio.run(api.prediction_results_bets_summary(object(), "20261010")).body)
+    assert out["races"]["R1"]["hit"] is True and out["races"]["R1"]["selected"]["total_bet"] == 0
+    assert out["day"]["all"]["invested"] == 4000 and out["day"]["all"]["roi"] == 2.0 and out["day"]["roi"] == 3.0
+
+
 def test_bets_summary_is_member_only():
     assert tier.member_only_path("/api/prediction-results/bets-summary")
     assert not tier.member_only_path("/api/prediction-results/mark-card")

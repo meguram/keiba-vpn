@@ -66,28 +66,34 @@ function kaiNichi(raceId: string): string {
   return kai && nichi ? `${kai}回 ${nichi}日目` : "";
 }
 
-/** 日・週の回収率の帯（有料会員のみ）。仮想購入＝推奨馬券を保存済みの最新オッズで買ったとみなした結果 */
+/** 日・週の回収率の帯（有料会員のみ）。主は推奨馬券をすべて買ったとみなした結果、添えは確定オッズ ≥ 想定の買い目だけの結果 */
 function RoiBar({ b }: { b: BetsSummary }) {
   const emptyText = (c?: RatedCounts) =>
     c && c.unrated > 0 && c.rated === 0 ? `推奨度の記録がまだありません（未記録 ${c.unrated}R${c.skipped ? `・見送り ${c.skipped}R` : ""}）`
       : c && c.settled > 0 ? `推奨度が標準以上のレースがありません（見送り ${c.skipped}R）` : "集計できるレースがありません";
-  const cell = (label: string, x: { roi: number | null; invested: number; returned: number; races_bought: number; races_hit: number; counts?: RatedCounts }, sub?: string) => (
-    <div style={{ flex: "1 1 220px", minWidth: 0 }}>
-      <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{label}{sub ? <span style={{ marginLeft: 6 }}>{sub}</span> : null}</div>
-      {x.races_bought > 0 ? (
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: (x.roi ?? 0) >= 1 ? "#4ade80" : "#f87171" }}>{roiText(x.roi)}</span>
-          <span style={{ fontSize: 12, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{yen(x.invested)} → {yen(x.returned)}・的中 {x.races_hit}/{x.races_bought}R</span>
-        </div>
-      ) : <div style={{ fontSize: 13, color: "var(--text-dim)", padding: "4px 0" }}>{emptyText(x.counts)}</div>}
-    </div>
-  );
+  const cell = (label: string, s: BetsSummary["day"], sub?: string) => {
+    const x = s.all ?? s;                                   // 主: すべて買った場合（古い応答なら今の数え方）
+    return (
+      <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+        <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{label}{sub ? <span style={{ marginLeft: 6 }}>{sub}</span> : null}</div>
+        {x.races_bought > 0 ? (
+          <>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: (x.roi ?? 0) >= 1 ? "#4ade80" : "#f87171" }}>{roiText(x.roi)}</span>
+              <span style={{ fontSize: 12, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{yen(x.invested)} → {yen(x.returned)}・的中 {x.races_hit}/{x.races_bought}R</span>
+            </div>
+            {s.all && <div style={{ fontSize: 11, color: "var(--text-dim)" }}>確定オッズ ≥ 想定の買い目だけなら {roiText(s.roi)}（{s.races_hit}/{s.races_bought}R 的中）</div>}
+          </>
+        ) : <div style={{ fontSize: 13, color: "var(--text-dim)", padding: "4px 0" }}>{emptyText(s.counts)}</div>}
+      </div>
+    );
+  };
   const w = b.week;
   return (
     <section aria-label="推奨馬券の回収率" title={b.note} style={{ display: "flex", gap: 20, flexWrap: "wrap", padding: "10px 14px", marginBottom: 12, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12 }}>
       {cell(`この日の回収率・標準以上（${b.label}）`, b.day, b.day.status === "final" ? "" : "暫定")}
       {cell(`この週の回収率・標準以上（${formatMD(w.from)}〜${formatMD(w.to)}）`, w, w.status === "final" ? `${w.days.length}日分` : `${w.days.length}日分・暫定`)}
-      <div style={{ flexBasis: "100%", fontSize: 10, color: "var(--text-dim)" }}>推奨度が標準以上のレースの推奨馬券の仮想購入（見送りのレースは含めません。保存済みの最新オッズで購入したとみなし、払戻は確定払戻）。実際の購入ではありません。</div>
+      <div style={{ flexBasis: "100%", fontSize: 10, color: "var(--text-dim)" }}>推奨度が標準以上のレースの推奨馬券をすべて買ったとみなした仮想購入（見送りのレースは含めません。払戻は確定払戻。100% 超は確かめられていません）。添えた値は、確定オッズ（レース後の値）が想定オッズ以上の買い目だけを買ったとみなした場合で、当たる買い目が落ちやすい数え方です。実際の購入ではありません。</div>
     </section>
   );
 }
@@ -118,7 +124,7 @@ function VenueBlock({ venue, rows, values, bets }: { venue: string; rows: Row[];
               <PendingLink
                 href={`/race/${r.race_id}`}
                 warm={[`/api/race/${r.race_id}`, `/api/race/${r.race_id}/predictions`]}
-                title={`${venue} ${r.round}R ${r.race_name}${v ? `\n${valueTitle(v)}` : ""}${bet ? `\n仮想購入 ${yen(bet.total_bet)} → ${yen(bet.total_return)}（回収率 ${roiText(bet.roi)}）${bet.hit ? " 的中" : " 不的中"}` : ""}`}
+                title={`${venue} ${r.round}R ${r.race_name}${v ? `\n${valueTitle(v)}` : ""}${bet ? `\n仮想購入（すべて買った場合） ${yen(bet.total_bet)} → ${yen(bet.total_return)}（回収率 ${roiText(bet.roi)}）${bet.hit ? " 的中" : " 不的中"}${bet.selected ? `\n確定オッズ ≥ 想定の買い目だけ ${yen(bet.selected.total_bet)} → ${yen(bet.selected.total_return)}` : ""}` : ""}`}
                 style={{ display: "grid", gridTemplateColumns: "34px 44px 1fr auto", alignItems: "center", gap: 10, padding: "8px 14px", textDecoration: "none", color: "var(--text)", background: isG ? "rgba(251,191,36,0.06)" : undefined }}
               >
                 <span style={{ background: lv === "hot" ? ls!.bg : "#3b82f6", boxShadow: lv === "hot" ? ls!.glow : undefined, color: "#fff", borderRadius: 6, textAlign: "center", fontWeight: 700, fontSize: 13, padding: "3px 0" }}>{r.round}</span>
