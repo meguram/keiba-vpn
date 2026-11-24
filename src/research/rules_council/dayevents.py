@@ -63,7 +63,6 @@ def main() -> None:
         s = pd.concat(shu, ignore_index=True)
         s["race_id"] = s["race_id"].astype(str)
         m = r.merge(s, on=["race_id", "horse_number"], how="inner", suffixes=("", "_shu"))
-        m = m[fin.reindex(m.index).notna() | True]
         ch = m[(m["jockey_id"].astype(str) != m["jockey_id_shu"].astype(str)) & m["jockey_id_shu"].notna() & m["jockey_id"].notna()]
         out["jockey_change"] = per_year(set(ch["race_id"]), ch[["race_id", "horse_id"]].astype(str).drop_duplicates())
         out["jockey_change"]["matched_runs"] = int(len(m))
@@ -85,7 +84,7 @@ GOING_RANK = {"良": 0, "稍": 1, "稍重": 1, "重": 2, "不": 3, "不良": 3}
 def cmd_stage0b() -> dict:
     """RC-5 の段 0b（着順を使わない）。1 号の決定の H1 と、取消の区別の監査。
     H1: 今回の発走の 75 分前までに発走した同じ日・場・芝ダの直前のレースの馬場状態が、その日の最初のレースより悪い × 道悪の実績がある馬
-    （frame の bad_top3_prev ≥ 1。前走までの値）。取消の区別: 着順 −1 の馬の、通過順・オッズの有無。"""
+    （前の日までの稍重以上での 3 着内 ≥ 1）。取消の区別: finish_status（2016〜19 年）で出走取消・競走除外・中止を分ける。"""
     rr = []
     for y in range(2016, F.YEAR_END + 1):
         rr.append(pd.read_parquet(TABLES / str(y) / "race_result_race.parquet", columns=["race_id", "date", "venue", "surface", "start_time", "track_condition"]))
@@ -103,26 +102,52 @@ def cmd_stage0b() -> dict:
         for k in range(len(g)):
             ok = np.flatnonzero(m <= m[k] - 75)
             worse[ids[k]] = bool(len(ok) >= 1 and gg[ok[-1]] > gg[0]) if len(ok) else False
-    fr = pd.read_parquet(F.CR.OUT / "v3" / "frame.parquet", columns=["race_id", "horse_id", "bad_top3_prev", "year"], filters=[("year", "<=", F.YEAR_END)])
-    fr["race_id"], fr["horse_id"] = fr["race_id"].astype(str), fr["horse_id"].astype(str)
+    # 道悪の実績（1 号の決定の定義: as-of で稍重以上の 3 着内が 1 回以上）。前のレースの着順から、日をずらした累計で作る（今回のレースは入れない）
+    hist = []
+    for y in range(2016, F.YEAR_END + 1):
+        h = pd.read_parquet(TABLES / str(y) / "race_result_flat.parquet", columns=["race_id", "date", "horse_id", "finish_position", "track_condition"])
+        hist.append(h)
+    h = pd.concat(hist, ignore_index=True)
+    h["race_id"], h["horse_id"] = h["race_id"].astype(str), h["horse_id"].astype(str)
+    fp = pd.to_numeric(h["finish_position"], errors="coerce")
+    gr = h["track_condition"].astype(str).map(lambda v: GOING_RANK.get(v, GOING_RANK.get(v[:1], np.nan)))
+    h["wet3"] = ((fp >= 1) & (fp <= 3) & (gr >= 1)).astype(float)
+    h = h.sort_values(["horse_id", "date"])
+    day = h.groupby(["horse_id", "date"])["wet3"].sum().groupby(level=0).cumsum() - h.groupby(["horse_id", "date"])["wet3"].sum()
+    h = h.merge(day.rename("wet3_prev").reset_index(), on=["horse_id", "date"], how="left")
+    fr = h[["race_id", "horse_id", "wet3_prev"]].drop_duplicates(["race_id", "horse_id"])
     full = pd.read_parquet(F.OUTW / "full.parquet", columns=["race_id", "horse_id", "year"])
     full["race_id"], full["horse_id"] = full["race_id"].astype(str), full["horse_id"].astype(str)
     full["pre"] = np.load(F.OUTW / "full_pre.npy")[0]
-    x = full.merge(fr.drop(columns="year"), on=["race_id", "horse_id"], how="left")
+    x = full.merge(fr, on=["race_id", "horse_id"], how="left")
     x["worse"] = x["race_id"].map(worse).fillna(False).astype(bool)
-    h1 = x["worse"] & (pd.to_numeric(x["bad_top3_prev"], errors="coerce") >= 1)
+    h1 = x["worse"] & (x["wet3_prev"] >= 1)
     out = {"H1": {"races_worse": int(sum(worse.values())), "fav_runs_per_year": float((h1 & (x["pre"] < 10)).sum() / 9),
                   "fav_runs_2024": int((h1 & (x["pre"] < 10) & (x["year"] == 2024)).sum()),
                   "le50_runs_per_year": float((h1 & (x["pre"] <= 50)).sum() / 9),
-                  "note": "道悪の実績は frame の bad_top3_prev（前走までの道悪の 3 着内の数）≥ 1"}}
-    # 取消の区別の監査（2022 年の結果の表）
-    r = pd.read_parquet(TABLES / "2022" / "race_result_flat.parquet", columns=["finish_position", "passing_order", "odds"])
-    z = r[r["finish_position"].astype(str) == "-1"]
-    has_pass = z["passing_order"].astype(str).str.len() > 0
-    has_odds = pd.to_numeric(z["odds"], errors="coerce") > 0
-    out["scratch_audit_2022"] = {"no_finish": int(len(z)), "passing_and_odds（中止とみる）": int((has_pass & has_odds).sum()),
-                                 "no_passing_no_odds（取消か除外）": int((~has_pass & ~has_odds).sum()), "other": int((has_pass ^ has_odds).sum()),
-                                 "note": "通過順もオッズも無い馬は、出走取消（T-60 より前に分かる）と競走除外（発走の直前）を区別できない"}
+                  "note": "道悪の実績は、前の日までの稍重・重・不良での 3 着内の数 ≥ 1（race_result_flat から作った as-of。前の版は frame の bad_top3_prev＝重・不良だけで、定義と違った）"}}
+    # 取消の区別の監査: 2016〜19 年は finish_status（scratched・excluded・dnf）がある。2020 年以降は列が無いか空。芝ダだけ
+    aud, sc = {}, []
+    for y in range(2016, F.YEAR_END + 1):
+        f = TABLES / str(y) / "race_result_flat.parquet"
+        import pyarrow.parquet as pq
+        names = pq.ParquetFile(f).schema_arrow.names
+        cols = ["race_id", "surface", "finish_position", "passing_order", "odds"] + (["finish_status"] if "finish_status" in names else [])
+        r = pd.read_parquet(f, columns=cols)
+        r = r[r["surface"].astype(str).str[0].isin(["芝", "ダ"]) & (r["finish_position"].astype(str) == "-1")]
+        st = r["finish_status"].astype(str) if "finish_status" in r else pd.Series(["None"] * len(r), index=r.index)
+        aud[y] = {"no_finish": int(len(r)), **{k: int(v) for k, v in st.value_counts().items()}}
+        sc.append(r.loc[st == "scratched", ["race_id"]].assign(year=y))
+    out["scratch_audit"] = aud
+    scr = pd.concat(sc, ignore_index=True)
+    races = set(scr["race_id"].astype(str))
+    yrs = {y for y, v in aud.items() if v.get("scratched", 0) >= 10}
+    races = set(scr.loc[scr["year"].isin(yrs), "race_id"].astype(str))
+    fav_in = full[full["race_id"].isin(races) & (full["pre"] < 10)]
+    n_years = len({y for y, v in aud.items() if v.get("scratched", 0) >= 10})   # 2024 年の 1 頭のような年は数えない
+    out["scratch_races_known"] = {"races": int(len(races)), "years_with_status": n_years,
+                                  "fav_runs_per_year": float(len(fav_in) / max(n_years, 1)),
+                                  "note": "出走取消が分かるのは finish_status のある年だけ。一桁の走は、逃げ候補・先行型の条件を掛ける前の上限"}
     p_ = F.CR.REPO / "docs/operations/retrain_trials/rules_council_rc5_stage0b.json"
     p_.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(out, ensure_ascii=False, indent=1))
