@@ -216,7 +216,8 @@ def _is_today_or_later(path: str, cfg: dict[str, Any], s_maxage: int, today: "da
         if path.startswith(pre):
             d = _token_date(_first_token(path, pre))
             if d is None:
-                return s_maxage < int(st.get("s_maxage") or 0)
+                settled_s = int(st.get("s_maxage") or 0)
+                return settled_s <= 0 or s_maxage < settled_s     # 確定済みの長い保持を止めた設定では、日付不明は常に置かせない
             return d.date() >= (today or datetime.now(_JST)).date()
     return False
 
