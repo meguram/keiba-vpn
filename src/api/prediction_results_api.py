@@ -136,7 +136,10 @@ async def prediction_results(request: Request, scope: str = Query("day", pattern
                                "kpi": _kpi(ps["summary"]), "summary": ps["summary"], "label": _label(d)}
         # 推奨度（レース期待値）が標準以上のレースだけの集計。推奨度は会員向けなので、tier.py の許可リストが匿名の応答からは落とす
         out["rated"] = {"min_level": pr.RATED_MIN_LEVEL, "label": "標準以上", "counts": ps["rated_counts"],
-                        "kpi": _kpi(ps["rated_summary"]), "summary": ps["rated_summary"], "legend": PZ.legend()}
+                        "kpi": _kpi(ps["rated_summary"]), "summary": ps["rated_summary"], "legend": PZ.legend(),
+                        # 推奨した買い目をすべて買った場合（実オッズで絞らない）。kpi（確定オッズ ≥ 想定の買い目だけ）と並べて出す
+                        "kpi_all": {**(ra := ps.get("rated_all") or {"invested": 0, "returned": 0, "races_bought": 0, "races_hit": 0, "estimated_races": 0}),
+                                    "roi": pr.rate(ra["returned"], ra["invested"])}}
         if scope == "day":
             doc = pr.read_day(d)
             out["races"] = (doc or {}).get("races", [])
@@ -235,6 +238,12 @@ def _bets_block(s: dict) -> dict:
             "races_bought": b["races_bought"], "races_hit": b["races_hit"], "estimated_races": b["estimated_races"]}
 
 
+def _all_block(ps: dict) -> dict:
+    """推奨した買い目をすべて買った場合の合計（period_summary の rated_all）。"""
+    a = ps.get("rated_all") or {"invested": 0, "returned": 0, "races_bought": 0, "races_hit": 0, "estimated_races": 0}
+    return {**a, "roi": pr.rate(a["returned"], a["invested"])}
+
+
 @router.get("/api/prediction-results/bets-summary", response_class=JSONResponse)
 async def prediction_results_bets_summary(request: Request, date: str = Query(..., pattern=r"^\d{8}$")):
     """レース一覧用: 指定日の各レースの仮想購入の結果（的中フラグ）と、その日・その週の回収率。会員限定（tier.py）。"""
@@ -245,16 +254,24 @@ async def prediction_results_bets_summary(request: Request, date: str = Query(..
         wk = pr.period_summary("week", date)
         day = pr.period_summary("day", date)
         races = {}
-        for r in pr.rated_records(doc.get("races") or []):      # 標準以上のレースの、画面の推奨馬券(target)の仮想購入。見送り・未記録のレースは出さない
-            b = r.get("bets") or {}
-            tb = b.get("total_bet") or 0
+        for r in doc.get("races") or []:       # 標準以上のレースの、画面の推奨馬券(target)の仮想購入。見送り・未記録のレースは出さない
+            lv = pr.record_level(r)
+            if not r.get("included") or lv is None or lv < pr.RATED_MIN_LEVEL:
+                continue
+            bt = r.get("bets_t") or {}
+            sb, sr = int(bt.get("total_bet") or 0), round(bt.get("total_return") or 0)     # 添え: 確定オッズ ≥ 想定の買い目だけ
+            a = pr.buy_all_of(bt)                                                           # 主: 推奨した買い目をすべて買った場合（all の無い古い記録は今の数え方）
+            tb, ret = a["total_bet"], a["total_return"]
             if not tb:
                 continue
-            ret = b.get("total_return") or 0
-            races[r["race_id"]] = {"total_bet": tb, "total_return": round(ret), "hit": ret > 0, "roi": pr.rate(ret, tb), "estimated": bool(b.get("estimated"))}
-        return {"date": date, "label": _label(date), "week": {"from": wk_lo, "to": wk_hi, "days": wk["days"], "status": wk["status"], "counts": wk["rated_counts"], **_bets_block(wk["rated_summary"])},
-                "day": {"status": day["status"], "counts": day["rated_counts"], **_bets_block(day["rated_summary"])}, "races": races,
-                "note": "推奨度が標準以上のレースの推奨馬券（最大5パターン・想定オッズは §77 のモデル）のうち、実際のオッズ（確定）が想定オッズ以上のパターンだけを購入したとみなした仮想購入（払戻は確定払戻）。見送りのレースは含めません。実際の購入ではありません。"}
+            races[r["race_id"]] = {"total_bet": tb, "total_return": ret, "hit": ret > 0, "roi": pr.rate(ret, tb),
+                                   "estimated": bool(ret > 0 and r.get("result_status") != "final"),
+                                   "selected": {"total_bet": sb, "total_return": sr, "hit": sr > 0, "roi": pr.rate(sr, sb)}}
+        return {"date": date, "label": _label(date),
+                "week": {"from": wk_lo, "to": wk_hi, "days": wk["days"], "status": wk["status"], "counts": wk["rated_counts"], **_bets_block(wk["rated_summary"]), "all": _all_block(wk)},
+                "day": {"status": day["status"], "counts": day["rated_counts"], **_bets_block(day["rated_summary"]), "all": _all_block(day)}, "races": races,
+                "note": "推奨度が標準以上のレースの推奨馬券（最大5パターン・想定オッズは §77 のモデル）をすべて買ったとみなした仮想購入（100% 超は確かめられていません。払戻は確定払戻）。"
+                        "添えた値は、確定オッズ（レース後の値）が想定オッズ以上のパターンだけを買ったとみなした場合で、当たる買い目が落ちやすい数え方です。見送りのレースは含めません。実際の購入ではありません。"}
     if not is_member(request):
         return JSONResponse(MEMBER_REQUIRED_BODY, status_code=401)
     return _respond(request, await asyncio.to_thread(lambda: _cached(("bets", date), _run)))

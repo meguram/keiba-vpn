@@ -172,6 +172,19 @@ case "$STEP" in
     ;;
   jobs)
     [ "$TARGET" = prod ] || { echo "jobs は prod だけ" >&2; exit 2; }
+    # 共有ログインの毎月の切り替え（専用の Job keiba-login-rotate。docs/operations/shared_login_rotation.md）。
+    # ENABLE_JOBS_DEPLOY と関係なく、Job があればイメージを進めて live- タグで守る（タグが無いと 1 日後の自動掃除で使用中の版が消え、月初めに起動できない）
+    if [ "$DRY" = 1 ]; then
+      echo "+ gcloud run jobs update keiba-login-rotate --image $JOBS_IMAGE（Job があるときだけ）"; tag_live "$JOBS_IMAGE" "${REG}/jobs:live-login-rotate"
+    elif lr_out="$(gcloud run jobs describe keiba-login-rotate --project "$PROJECT_ID" --region "$REGION" --format='value(name)' 2>&1)"; then
+      if gcloud run jobs update keiba-login-rotate --image "$JOBS_IMAGE" --project "$PROJECT_ID" --region "$REGION" --quiet; then
+        tag_live "$JOBS_IMAGE" "${REG}/jobs:live-login-rotate"
+      else
+        echo "::warning title=共有ログインの Job を更新できません::keiba-login-rotate のイメージを進められませんでした。今の版のタグ（live-login-rotate）は残っています"
+      fi
+    elif ! printf '%s' "$lr_out" | grep -qiE 'NOT_FOUND|not found|cannot find'; then
+      echo "::warning title=共有ログインの Job を確かめられません::keiba-login-rotate の describe が失敗しました（権限など）。イメージと live-login-rotate のタグを進めていません"
+    fi
     if [ "${ENABLE_JOBS_DEPLOY:-}" != "true" ]; then
       echo "ENABLE_JOBS_DEPLOY が true ではないため、Jobs の更新は行いません（Cloud Shell でキュー・Run Job・IAM を整えたあとに有効化）"; exit 0
     fi

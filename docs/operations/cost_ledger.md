@@ -83,6 +83,7 @@
 | F2 | Artifact Registry 保存 | GCS 相当（asia-northeast1 `keiba-vpn`） | 配備ごとに API の版 0.87GB・Jobs の版 1.13GB が増える | 変更前 16GiB（API 13 版・Jobs 6 版。2 日の保持で残っていた） | 6〜10 円/日 | 160（保持 1 日。11/13 14:4x に変更済み） | 220（1 日に配備 10 回） | 165（hotfix の本番配備で 1 版増） | 掃除の設定（live-・新しい 3 版・**1 日**）。`scripts/gcp/deploy_cloud_run_api.sh:103` ほか。Jobs の `live-jobs`・`live-jobs-a/b` で 3.4GB が Jobs 停止中も残る | 稼働中 |
 | F3 | Cloud Scheduler | Scheduler | 常時 | **1 件**（keiba-g-0730-shadow。停止中の keiba-g-* 13 件は 11/13 14:4x JST に削除、smoke-auto 3 件も 11/13 に削除） | 17 件で 9 円/日（停止中も課金されていた） | 0〜15 | 15 | 0〜15 | 課金 `Cloud Scheduler Jobs` の数量が 11/06〜11/12 ずっと 17。**11/14〜15 の課金で数量が 1〜4 件に下がることを確かめる** | 稼働中 |
 | F4 | Secret Manager | Cloud Run・Jobs | アクセスごと | — | 0〜2 円/日 | 10 | 30 | 10 | 課金 `Secret access operations`（Jobs 停止で 4,000 → 700 回/日） | 稼働中 |
+| F6 | 共有ログインの毎月の切り替え（Scheduler keiba-login-rotate・Job keiba-login-rotate・秘密 KEIBA_SHARED_LOGIN_PW） | Scheduler・Jobs・Secret Manager | 1・25〜31 日の 06:00（月 8 回・再試行込みで最悪 24 回） | Job 60 秒・GCS 10 件・秘密の版 3 つ（パスワード 2・ペッパー 1） | 0（未作成） | 0 | 47（Scheduler 15・版 27・Jobs 4・GCS 1 未満） | 0（作成はユーザー。作った後は 約 47） | `docs/operations/shared_login_rotation.md`・2026-11-19 承認 | 未作成 |
 | F5 | Cloudflare | Cloudflare | — | 無料プラン（Tunnel・Access・DNS） | 0 | 0 | 0 | 0 | R2 の接続なし | 稼働中 |
 | | **固定費の計** | | | | | **約 360〜375** | **約 475** | **約 365〜380** | | |
 

@@ -21,6 +21,20 @@ def _no_anti_scraping(monkeypatch):
     monkeypatch.setenv("KEIBA_ANTI_SCRAPING", "off")
 
 
+@pytest.fixture(autouse=True)
+def _test_user_file(tmp_path, monkeypatch):
+    """動作確認用の test/test を、テストの中で作った名簿に置く（config/members.json は git に入れない。CI の checkout には無い）。"""
+    import hashlib
+
+    salt = bytes(range(16))
+    rec = {"id": "test", "role": "member", "algo": "pbkdf2_sha256", "iterations": 1000, "salt": salt.hex(),
+           "hash": hashlib.pbkdf2_hmac("sha256", b"test", salt, 1000).hex(), "requires_env": "KEIBA_TEST_USER"}
+    p = tmp_path / "config_members.json"
+    p.write_text(json.dumps({"users": [rec]}), encoding="utf-8")
+    monkeypatch.setattr(auth, "_MEMBERS_FILE", str(p))
+    monkeypatch.setattr(auth, "MEMBERS_LOCAL_FILE", str(tmp_path / "local_members.json"))   # 無いファイル＝実の名簿を読まない
+
+
 ENTRY = {
     "pred_rank": 3, "horse_number": 5, "horse_name": "テスト", "horse_id": "2020100001", "bracket_number": 3, "sex_age": "牡4",
     "jockey_name": "騎手", "jockey_weight": 56.0, "trainer_name": "調教師", "weight": 480, "weight_change": 2,

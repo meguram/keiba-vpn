@@ -406,7 +406,7 @@ def _guard_funcs(path: Path) -> set[str]:
 
 # guard を持つ研究の CLI と、その中で guard を呼んでよい入口の関数
 _GUARD_ENTRY = {
-    "src/scripts/data/bet_cycles.py": {"cmd_final", "cmd_prereg_run"},
+    "src/scripts/data/bet_cycles.py": {"cmd_final", "cmd_prereg_run", "cmd_tiers2"},
     "src/scripts/data/bet_forward_ledger.py": {"_main_inner"},
     "src/scripts/data/bet_age2_premium.py": {"_run_inner"},
     "src/scripts/data/bet_r2_combine.py": {"_main_inner"},
@@ -420,7 +420,8 @@ _GUARD_ENTRY = {
     "src/research/course/megu_why.py": {"_collect_inner", "cmd_graded", "cmd_perm"},   # 100% を超えない理由の診断（eval_only・研究の CLI）
     "src/research/course/megu_oikiri.py": {"_select_inner", "_final_inner"},   # 追い切りの切り口の 1 回だけの評価（eval_only・研究の CLI）
     "src/research/megu_cycles/mc_data.py": {"cmd_build", "cmd_build_rich", "cmd_build_offset", "cmd_build_bag"},   # めぐサイクルの表（reproduce・研究の CLI）
-    "src/research/megu_cycles/mc_eval.py": {"confirm", "eval_only_guard"},   # めぐサイクルの 2022〜24 の確かめ（confirm）・割引きと最後の確かめ（eval_only）
+    "src/research/megu_cycles/mc_eval.py": {"confirm", "eval_only_guard"},
+    "src/research/megu_cycles/mc_final.py": {"cmd_final", "cmd_drift"},     # めぐサイクルの最後の 1 回の確かめ・再現の楽観の測り（eval_only）   # めぐサイクルの 2022〜24 の確かめ（confirm）・割引きと最後の確かめ（eval_only）
 }
 _PROD = ("src/pipeline/inference/stage2_bets.py", "src/pipeline/inference/candidate_runner.py", "src/api/stage2_live.py")
 

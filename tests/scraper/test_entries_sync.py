@@ -66,7 +66,7 @@ def _state_dir(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def _no_side_effects(monkeypatch):
     """同期の後の処理（めぐ分析の作り直し・データで予想の起動）を偽物にする。本物は、父の対応表（data/page_reference）・
-    系統の台帳（data/meta/sire_lines）・めぐ分析（data/local/race_analysis。ここのテストの race_id は実在のレースの番号）を書く。"""
+    系統の台帳（data/local/meta/sire_lines）・めぐ分析（data/local/race_analysis。ここのテストの race_id は実在のレースの番号）を書く。"""
     calls = {"analysis": [], "graded": []}
     monkeypatch.setattr(ES, "_refresh_analysis", lambda storage, ids: calls["analysis"].append(list(ids)) or {"stub": len(ids)})
     monkeypatch.setattr(ES, "_kick_graded_picks", lambda storage, races: calls["graded"].append(list(races)) or {"stub": True})

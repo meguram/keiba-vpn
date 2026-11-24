@@ -257,14 +257,17 @@ def _ymd(s: Any) -> str:
 
 def save_entries(storage: Any, races: list[dict]) -> list[str]:
     """出馬表の確定した重賞のカードを <GRADED_PICKS_DIR>/entries/<race_id>.json に書く（計算に使う列だけ。中身が変わったときだけ）。
-    races は entries-sync の計画の行（race_id・race_name・date）。重賞の名前の行だけカードを読む（ほかのレースは読まない）。書いた race_id を返す。"""
+    races は entries-sync の計画の行（race_id・race_name・date・list_grade_icon）。重賞の名前か、一覧の格のアイコンが平地の重賞の行だけ
+    カードを読む（ほかのレースは読まない）。一覧の名前は出馬表とも結果とも違う略称のことがある（2026-11-23 の「東スポ2歳S」。
+    出馬表は「東スポ杯2歳S」）ので、名前で当たらなくてもアイコンで拾い、カードの名前で重賞かを決める。書いた race_id を返す。"""
+    from src.api.race_calendar import grade_of
     from src.research.race_analysis.graded_picks import rkey_of
     from src.research.race_analysis.service import _load_card
     out = []
     d = picks_dir() / "entries"
     for r in races:
         rid = str(r.get("race_id"))
-        if not rkey_of(r.get("race_name"), _ymd(r.get("date"))):
+        if not rkey_of(r.get("race_name"), _ymd(r.get("date"))) and grade_of({"list_grade_icon": r.get("list_grade_icon"), "race_name": r.get("race_name")}) not in ("G1", "G2", "G3"):
             continue
         card, _ = _load_card(storage, rid)
         if not card or not rkey_of(card.get("race_name"), card.get("date")) or not confirmed(card):

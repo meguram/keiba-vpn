@@ -321,3 +321,24 @@ def test_nothing_left_is_safe_side(tmp_path):
     assert not cr.nothing_left(cfg, "20261121", early)                            # 期限の前のシステムの見送りは数えない（判定し直す）
     (tmp_path / "w" / "20261121.jsonl").write_text(json.dumps({"event": "scope", "race_ids": ["A"]}) + "\n", encoding="utf-8")
     assert not cr.nothing_left(cfg, "20261121", POST + timedelta(hours=5))       # 古い形（posts 無し）
+
+
+def test_stage_inputs_not_required_below_min_field(tmp_path):
+    """8 頭未満は前段が保存値を書かない（tracking_t6.MIN_FIELD）ので、保存値が無くても通す。8 頭以上は保存値が要る。"""
+    import polars as pl
+
+    from src.pipeline.inference import tracking_t6
+
+    assert cr.STAGE_MIN_FIELD == tracking_t6.MIN_FIELD
+    r = _bare_runner(tmp_path)
+    r.cfg = {"env": {"KEIBA_INFERENCE_DIR": str(tmp_path / "inf")}}
+    r.iso = "2026-11-21"
+    assert r.stage_inputs_ok("202608050506", 7)
+    assert not r.stage_inputs_ok("202608050506", 8)
+    assert not r.stage_inputs_ok("202608050506", None)
+    d = tmp_path / "inf" / "tracking_v2" / "2026-11-21"
+    d.mkdir(parents=True)
+    (d / "202608050509.json").write_text("{}")
+    assert r.stage_inputs_ok("202608050509", 8)
+    assert cr.card_field_size(pl.DataFrame({"horse_number": [1, 2], "field_size": [7, 7]})) == 7
+    assert cr.card_field_size(pl.DataFrame({"horse_number": [1, 2, 3]})) == 3

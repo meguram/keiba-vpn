@@ -30,6 +30,18 @@ def _dates(a: str, b: str) -> list[str]:
 RECENT_DAYS = 7
 
 
+def _alert_missing_odds_config() -> None:
+    """想定オッズの係数が無く、推奨馬券(target)を 1 レースも追記できないときに通知する（黙って推奨度 0 を積まない）。"""
+    try:
+        from src.ops.alerting import notify
+
+        notify("想定オッズの係数が無く、推奨馬券の成績を記録できません",
+               ["config/odds_pred/odds_pred_config.json と data/local/modeling/odds_pred/odds_pred_config.json のどちらも読めません"],
+               severity="warning", job="prediction-results-refresh")
+    except Exception:  # noqa: BLE001  通知の失敗で集計を止めない
+        pass
+
+
 def _alert_missing_basis(missing: dict[str, int]) -> None:
     """直近の日に、検証と同じ想定オッズ(sec77)が無く推奨馬券を集計できないレースがあれば通知する（過去の再計算待ちの日は対象にしない）。"""
     cut = (datetime.now() - timedelta(days=RECENT_DAYS)).strftime("%Y%m%d")
@@ -55,6 +67,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--sync-gcs", action="store_true", help="ローカルの日次記録を GCS へ一括で置く")
     ap.add_argument("--add-levels", action="store_true", help="保存済みの日次記録に仮想購入の推奨度だけを追記する")
+    ap.add_argument("--recompute-target-bets", action="store_true",
+                    help="--add-target-bets と使う。race_ev の無い（2026-11-24 の直しより前の、係数が無いまま作った）記録も作り直す")
     ap.add_argument("--add-target-bets", action="store_true", help="保存済みの日次記録に、画面の推奨馬券（target）の仮想購入（推奨度つき）を追記する。推奨度の集計（見送りを除く）に必要")
     ap.add_argument("--skip-final", action="store_true", help="確定済みの日は再集計しない（定期実行用。過去の予測が手元に無い環境で確定済みの記録を劣化させない）")
     a = ap.parse_args(argv)
@@ -83,10 +97,13 @@ def main(argv: list[str] | None = None) -> int:
         for d in days:
             if pr.read_day(d) is None:
                 continue
-            res = pr.add_target_bets(d, storage, dry_run=a.dry_run)
+            res = pr.add_target_bets(d, storage, dry_run=a.dry_run, recompute=a.recompute_target_bets)
             print(d, res)
             if res.get("basis"):
                 missing[d] = res["basis"]
+            if res.get("config_missing"):
+                _alert_missing_odds_config()
+                return 1
         _alert_missing_basis(missing)
         return 0
     if a.add_levels:

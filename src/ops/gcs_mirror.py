@@ -385,13 +385,16 @@ def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH
             logger.warning("起動時の取り込みの束を置けませんでした", exc_info=True)
     if manifest is not None and not dry_run:
         _save_manifest(manifest, known, recent, bundle_at)
+    index_ok: bool | None = None
     if index_writer and not dry_run:
         try:
             if manifest is not None:
                 backend.upload(index_key(index_writer), _index_doc(index_writer, recent))
             elif sent:
                 write_index_merge(backend, index_writer, {f"{PREFIX}/{k}": recent[f"{PREFIX}/{k}"] for k in sent})
+            index_ok = True
         except Exception:  # noqa: BLE001  目録は補助（無ければ API は一覧に戻る）
+            index_ok = False
             logger.warning("更新の目録を書けませんでした: %s", index_writer, exc_info=True)
     if sent:
         try:      # 画面に出る応答の元（予測・ラップ・分析など）が変わったことを、VPS の事前ロード係へ目印で伝える（最善努力）
@@ -401,6 +404,8 @@ def push(backend: Backend, root: Path = REPO_ROOT, trees: tuple[str, ...] = PUSH
         except Exception:  # noqa: BLE001
             pass
         _note_stage2_push(root, sent)
+    if index_writer == "host" and not dry_run:
+        _note_race_push(root, sent, index_ok)
     return {"seen": seen, "uploaded": uploaded, "would_upload": would}
 
 
@@ -429,6 +434,51 @@ def _note_stage2_push(root: Path, sent: list[str]) -> None:
                 f.write(_json.dumps({"at": now, "event": "pushed", "race_ids": sorted(rids)}, ensure_ascii=False) + "\n")
     except Exception:  # noqa: BLE001
         logger.warning("第 2 段の push の時刻を記録できませんでした", exc_info=True)
+
+
+# レースごとの予測・判定を上げた時刻の手元の記録（Slack の「画面に出た」通知 src/scripts/ops/race_ready_notify.py が読む）。
+# 置き場はホストの meta の race_push_log/<日>.jsonl（ミラーの木の外。GCS へは上げない＝操作 0 回・0 円）。
+# manifest の recent は 2 日で刈られるので、後から当て直すときの元にもする。docs/operations/slack_race_ready_plan_20261119.md
+RACE_PUSH_TREES = tuple(f"{_INF}/{t}/" for t in ("predictions_v6", "predictions_v6c", "bets_stage2"))
+RACE_PUSH_LOG = _FEATURES.replace("features", "meta") + "/race_push_log"
+
+
+def _note_race_push(root: Path, sent: list[str], index_ok: bool | None) -> None:
+    """予測（v6・v6c）と第 2 段の判定を上げ終えた時刻を、木ごと・日ごとに 1 行ずつ手元に残す（最善努力・GCS は読まない）。
+    index_ok=False は目録の書き込みに失敗した回（そのままだと Cloud Run が気付くのは一覧に戻る 20〜30 分後）。
+    host の push は毎回目録を丸ごと書き直すので、失敗の後に初めて成功した回にも ``tree="_index"`` の行を残す（上げたファイルが無い回でも）。
+    通知はその時刻を「見えるようになった時刻」に使う。失敗が続いている間の目印は race_push_log/_index_failed（手元だけ）。"""
+    try:
+        import json as _json
+
+        jst = timezone(timedelta(hours=9))
+        now = datetime.now(jst).isoformat(timespec="seconds")
+        d = root / RACE_PUSH_LOG
+        flag = d / "_index_failed"
+        if index_ok is False or (index_ok is True and flag.exists()):
+            d.mkdir(parents=True, exist_ok=True)
+            with (d / f"{datetime.now(jst):%Y%m%d}.jsonl").open("a", encoding="utf-8") as f:
+                f.write(_json.dumps({"at": now, "tree": "_index", "race_ids": [], "index_ok": index_ok}, ensure_ascii=False) + "\n")
+            if index_ok is False:
+                flag.touch()
+            else:
+                flag.unlink(missing_ok=True)
+        rows: dict[tuple[str, str], list[str]] = {}
+        for k in sent:
+            for t in RACE_PUSH_TREES:
+                if k.startswith(t):
+                    parts = k[len(t):].split("/")
+                    if len(parts) == 2 and _DATE_SEG.match(parts[0]) and not parts[1].startswith("_"):
+                        rows.setdefault((parts[0].replace("-", ""), t.rstrip("/").rsplit("/", 1)[-1]), []).append(parts[1].rsplit(".", 1)[0])
+                    break
+        if not rows:
+            return
+        d.mkdir(parents=True, exist_ok=True)
+        for (day, tree), rids in sorted(rows.items()):
+            with (d / f"{day}.jsonl").open("a", encoding="utf-8") as f:
+                f.write(_json.dumps({"at": now, "tree": tree, "race_ids": sorted(set(rids)), "index_ok": index_ok}, ensure_ascii=False) + "\n")
+    except Exception:  # noqa: BLE001
+        logger.warning("予測・判定の push の時刻を記録できませんでした", exc_info=True)
 
 
 def window_days() -> float:

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import statistics
 import sys
@@ -42,6 +43,8 @@ FAIL_CRIT = 3            # 連続失敗がこの回数で『緊急』
 OVERDUE_GRACE_MIN = 20   # 予定時刻からこの分数を過ぎても始まらなければ未開始とみなす
 OVERDUE_CRIT_MIN = 180   # 未開始がこの分数を超えたら緊急
 STUCK_HOURS = 6          # 実行中がこの時間を超えたら停止の疑い
+# 開催日に一日中動くランナー（07:30 ごろ起動・最終レースの後に終わる。正常で 7〜9 時間）は、この時間を超えたら停止の疑い。id の前方一致
+STUCK_HOURS_BY_PREFIX = (("raceday-runner", 11), ("raceday-result-runner", 11), ("raceday-weight-runner", 11))
 SCHEMA_SPIKE_MIN = 20    # スキーマ違反の急増: 直近 24 時間の件数がこの値以上で、過去の中央値の 3 倍以上
 BLOCK_MIN = 5            # 403/429 の失敗がこの件数以上で取得停止の兆候
 COVERAGE_FLOOR = 0.90    # 調教の被覆の下限
@@ -52,6 +55,13 @@ HOST_TAIL_MAX_H = 24     # 最後の記録から今までの空白は、この�
 # 期待する開催日条件: raceday（その日が開催日）/ eve（翌日が開催日）/ always
 EXPECT = (("raceday-eve", "eve"), ("raceday-runner", "raceday"), ("raceday-result-runner", "raceday"), ("raceday-evening", "raceday"),
           ("raceday-comment", "raceday"), ("raceday-weight-runner", "raceday"))
+
+
+def stuck_hours_of(job_id: str) -> float:
+    for prefix, h in STUCK_HOURS_BY_PREFIX:
+        if job_id.startswith(prefix):
+            return h
+    return STUCK_HOURS
 
 
 def expectation_of(job_id: str) -> str:
@@ -156,6 +166,8 @@ def collect_cron(now: datetime, *, status_fn: Callable[..., dict] | None = None,
 
     予定時刻がホストの停止中（host_down_windows）だった未開始は overdue_min にせず missed_down（停止期間）に入れる。
     ジョブ自体の異常ではないので、detect_anomalies が 1 件にまとめて 1 回だけ知らせる。
+    実行の記録（cron_run.sh）もログも無いジョブは、動いたかどうか分からないので overdue_min にせず unrecorded にする
+    （足したばかりの cron・何もしない日に黙って終わる cron を『緊急の未開始』と誤報しない。cron_run.sh で包めば判定できる）。
     """
     from src.monitor import cron_status as CSM
 
@@ -181,12 +193,17 @@ def collect_cron(now: datetime, *, status_fn: Callable[..., dict] | None = None,
                         target = pf.astimezone(JST) if exp == "raceday" else pf.astimezone(JST) + timedelta(days=1)
                         day_ok = raceday(target.strftime("%Y%m%d"))
                     started = last.get("started_at")
-                    last_start = datetime.fromisoformat(started).timestamp() if started else (runs[-1][0] if runs else 0.0)
+                    # 最後の行は『最後に終わった回』。長い回が後から終わると、その後に始まった短い回より古い開始になるので、記録の中の最も新しい開始を使う
+                    starts = [datetime.fromisoformat(started).timestamp()] if started else []
+                    starts += [r[0] for r in runs]
+                    last_start = max(starts, default=0.0)
                     late = (cnow - pf).total_seconds() / 60
-                    if day_ok and late > OVERDUE_GRACE_MIN and last_start < pf.timestamp() - 60:
+                    if day_ok and late > OVERDUE_GRACE_MIN and last_start < pf.timestamp() - 60 and starts:
                         missed_down = next(((a, b) for a, b in down if a < pf.timestamp() < b), None)
                         if missed_down is None:
                             overdue_min = round(late)
+            # 記録もログも無いあいだは、予定時刻・開催日・実行中に関係なく立て続ける（消えて立ち直すと、1 回だけのはずの通知が出直す）
+            unrecorded = bool(j.get("cron_exprs")) and not j.get("yields") and not last.get("started_at") and not runs
             running_since = j.get("running_since")
             running_h = None
             if j.get("state") == "running" and running_since:
@@ -199,7 +216,7 @@ def collect_cron(now: datetime, *, status_fn: Callable[..., dict] | None = None,
                 "state": j.get("state"), "result": last.get("result"), "started_at": last.get("started_at"),
                 "ended_at": last.get("ended_at"), "duration_sec": last.get("duration_sec"), "exit_code": last.get("exit_code"),
                 "next_run": j.get("next_run"), "consecutive_failures": consecutive_failures(runs),
-                "overdue_min": overdue_min, "missed_down": missed_down, "running_hours": running_h, "yields": bool(j.get("yields")),
+                "overdue_min": overdue_min, "missed_down": missed_down, "unrecorded": unrecorded, "running_hours": running_h, "yields": bool(j.get("yields")),
                 "cause": ((j.get("cause") or {}).get("label")), "cause_id": ((j.get("cause") or {}).get("pattern_id")),
             })
     return jobs
@@ -348,11 +365,43 @@ def read_json(p: Path) -> dict | None:
         return None
 
 
-def collect_misc(meta: Path, env_key: str) -> dict:
+HEALTH_MAX_AGE_DAYS = 3     # data_health の結果がこれより古ければ fail を知らせない（作る定期処理が無い。2026-10-15 の結果で fail を出し続けた）
+
+
+def health_age_days(generated_at: str | None, now: datetime | None = None) -> float | None:
+    """data_health の結果の古さ（日）。時刻が無い・読めないときは None。"""
+    if not generated_at:
+        return None
+    try:
+        t = datetime.fromisoformat(str(generated_at))
+    except ValueError:
+        return None
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=JST)
+    now = now or datetime.now(JST)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=JST)
+    return (now - t).total_seconds() / 86400
+
+
+def _health_stale(h: dict) -> str:
+    """表示用: 古い data_health の結果なら、何日前の結果かを添える。"""
+    age = h.get("age_days")
+    return f" ※{math.ceil(age)} 日前の結果（作る定期処理なし）" if age is not None and age > HEALTH_MAX_AGE_DAYS else ""
+
+
+def collect_misc(meta: Path, env_key: str, now: datetime | None = None) -> dict:
     """auto_scrape_status / data_health / drift_monitor（調教の被覆）。"""
     out: dict[str, Any] = {"auto": read_json(meta / "auto_scrape_status.json") or {}}
-    dh = read_json(meta / "data_health" / env_key / "latest.json")
+    dh_path = meta / "data_health" / env_key / "latest.json"
+    dh = read_json(dh_path)
     if dh:
+        age = health_age_days(dh.get("generated_at"), now)
+        if age is None:                               # 作った時刻が無い・読めない → ファイルの更新時刻で古さを測る
+            try:
+                age = health_age_days(datetime.fromtimestamp(dh_path.stat().st_mtime, JST).isoformat(), now)
+            except OSError:
+                age = None
         rid_dir = meta / "data_health" / env_key / "race_ids"
         files = {}
         if rid_dir.is_dir():
@@ -365,7 +414,8 @@ def collect_misc(meta: Path, env_key: str) -> dict:
                          "complete": (dh.get("completeness") or {}).get("complete"),
                          "reasons": [r.get("message") for r in ((dh.get("completeness") or {}).get("reasons") or [])][:4],
                          "findings": [f"{x.get('area')}: {x.get('message')}"[:120] for x in (dh.get("findings") or []) if x.get("severity") in ("fail", "warn")][:4],
-                         "generated_at": dh.get("generated_at"), "missing_lists": files}
+                         "generated_at": dh.get("generated_at"), "missing_lists": files,
+                         "age_days": age}
     dm = read_json(meta / "drift_monitor" / "latest.json")
     if dm:
         cov = dm.get("coverage") or {}
@@ -390,7 +440,11 @@ def detect_anomalies(jobs: list[dict], queue: dict | None, schema: dict | None, 
             out[f"cron:{jid}:overdue"] = {"severity": "critical" if m >= OVERDUE_CRIT_MIN else "warning",
                                          "title": f"{j['name']} が予定時刻から {m} 分たっても始まっていない",
                                          "detail": f"最終実行 {j.get('started_at') or '記録なし'}"}
-        if j.get("running_hours") and j["running_hours"] >= STUCK_HOURS:
+        if j.get("unrecorded"):
+            out[f"cron:{jid}:unrecorded"] = {"severity": "warning", "repeat": False,
+                                            "title": f"{j['name']} の実行の記録もログも無い（動いたか判定できない）",
+                                            "detail": "未開始・失敗は判定していません。crontab の行を scripts/cron/cron_run.sh <id> -- で包むと判定できます（足したばかりで、ログを書く行なら、最初の実行の後に消えます）。"}
+        if j.get("running_hours") and j["running_hours"] >= stuck_hours_of(jid):
             out[f"cron:{jid}:stuck"] = {"severity": "warning", "title": f"{j['name']} が {j['running_hours']:.1f} 時間実行中（停止の疑い）", "detail": ""}
         if j.get("cause_id") and any(k in str(j["cause_id"]).lower() for k in ("dns", "network", "403", "429", "block")) and cf >= 1:
             out["net:cause"] = {"severity": "critical", "title": "取得の停止の兆候（ネットワーク/アクセス拒否）",
@@ -423,8 +477,12 @@ def detect_anomalies(jobs: list[dict], queue: dict | None, schema: dict | None, 
         out["coverage:training"] = {"severity": "critical", "title": f"調教データの被覆が低下（{tc.get('month')}: {tc['block'] * 100:.0f}%）",
                                     "detail": f"下限 {float(tc.get('floor') or COVERAGE_FLOOR) * 100:.0f}%。調教系の特徴量が欠損のまま予測される"}
     h = misc.get("health") or {}
+    age = h.get("age_days")
     if h.get("overall") == "fail":
         out["health:fail"] = {"severity": "warning", "title": "データヘルスが fail", "detail": "; ".join(h.get("findings") or [])}
+        if age is not None and age > HEALTH_MAX_AGE_DAYS:
+            # 古い結果（作る定期処理が無い）: 再通知しない。項目は消さない（消すと「復旧」と誤って知らせるため）
+            out["health:fail"] |= {"repeat": False, "title": f"データヘルスが fail（{math.ceil(age)} 日前の結果・更新なし）"}
     return out
 
 
@@ -531,7 +589,7 @@ def build_summary(now: datetime, jobs: list[dict], queue: dict | None, schema: d
         kp.append(("調教の被覆", f"{tc['block'] * 100:.0f}%（{tc.get('month')}）"))
     h = misc.get("health") or {}
     if h:
-        kp.append(("データヘルス", f"{h.get('overall')}（欠損リスト {sum((h.get('missing_lists') or {}).values())} 件）"))
+        kp.append(("データヘルス", f"{h.get('overall')}（欠損リスト {sum((h.get('missing_lists') or {}).values())} 件）{_health_stale(h)}"))
     blocks.append(SN.fields(kp))
 
     groups: dict[str, list[dict]] = {}
@@ -601,8 +659,8 @@ def build_coverage(now: datetime, misc: dict, schema: dict | None) -> dict:
     blocks = [SN.section(f"*週次カバレッジ {now.strftime('%m/%d')}*")]
     kp = []
     if h:
-        kp.append(("データヘルス", f"{h.get('overall')}（fail {h.get('counts', {}).get('fail', 0)} / warn {h.get('counts', {}).get('warn', 0)}）"))
-        kp.append(("2020年以降の充足", "満たす" if h.get("complete") else "未達"))
+        kp.append(("データヘルス", f"{h.get('overall')}（fail {h.get('counts', {}).get('fail', 0)} / warn {h.get('counts', {}).get('warn', 0)}）{_health_stale(h)}"))
+        kp.append(("2020年以降の充足", ("満たす" if h.get("complete") else "未達") + _health_stale(h)))
     if tc.get("block") is not None:
         kp.append(("調教の被覆", f"{tc['block'] * 100:.0f}%（{tc.get('month')}、下限 {float(tc.get('floor') or COVERAGE_FLOOR) * 100:.0f}%）"))
     else:
@@ -611,9 +669,9 @@ def build_coverage(now: datetime, misc: dict, schema: dict | None) -> dict:
         kp.append(("スキーマ違反（7日）", f"{sum(schema['by_day'].values())} 件"))
     blocks.append(SN.fields(kp))
     if h.get("reasons"):
-        blocks.append(SN.section("*未達の理由*\n" + "\n".join("• " + SN.esc(x) for x in h["reasons"])))
+        blocks.append(SN.section(f"*未達の理由*{_health_stale(h)}\n" + "\n".join("• " + SN.esc(x) for x in h["reasons"])))
     if h.get("missing_lists"):
-        blocks.append(SN.section("*欠損・不適合・未検証の race_id*\n" + SN.code_table(["リスト", "件数"], [[k, str(v)] for k, v in h["missing_lists"].items()], aligns="lr")))
+        blocks.append(SN.section(f"*欠損・不適合・未検証の race_id*{_health_stale(h)}\n" + SN.code_table(["リスト", "件数"], [[k, str(v)] for k, v in h["missing_lists"].items()], aligns="lr")))
     if h.get("findings"):
         blocks.append(SN.section("*指摘*\n" + "\n".join("• " + SN.esc(x) for x in h["findings"])))
     sev = "critical" if (tc.get("block") is not None and tc["block"] < float(tc.get("floor") or COVERAGE_FLOOR)) else ("warning" if not h.get("complete", True) else "normal")
@@ -677,7 +735,7 @@ def run(mode: str, now: datetime, *, send: bool = False, state_path: Path | None
                                                           runs_dir=Path(inp["runs_dir"]) if inp.get("runs_dir") else None)
     queue = inp["queue"] if "queue" in inp else fetch_queue(e.get("KEIBA_NOTIFY_API_BASE") or "http://127.0.0.1:23220")
     schema = inp["schema"] if "schema" in inp else collect_schema(REPO_ROOT, now)
-    misc = inp["misc"] if "misc" in inp else collect_misc(meta, env_key)
+    misc = inp["misc"] if "misc" in inp else collect_misc(meta, env_key, now)
     anomalies = detect_anomalies(jobs, queue, schema, misc)
     res: dict[str, Any] = {"code": 0, "mode": mode, "anomalies": list(anomalies)}
     payload = None

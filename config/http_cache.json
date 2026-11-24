@@ -4,6 +4,8 @@
   "enabled": true,
   "stale_while_revalidate": 60,
   "_doc_stale_while_revalidate": "匿名の public 応答に stale-while-revalidate=min(この値, s-maxage) を付ける。VPS の nginx は期限切れの後この秒数だけ古いものを即座に返し、裏で 1 本だけ取り直す（templates/nginx-api-cache.conf の 7）。古さの上限は s-maxage＋この秒数。0 で付けない。",
+  "cdn_max_age": 300,
+  "_cdn_max_age_doc": "public の応答に Cloudflare-CDN-Cache-Control を付ける（Cloudflare のエッジにだけ効く。nginx・ブラウザは見ない）。s-maxage がこの秒数以上なら public, max-age=<秒>、それ未満（当日のレースなど）と保守・認証の状態は no-store（Cloudflare に置かせない）。cache-warm の上書きは VPS の nginx にしか届かないので、Cloudflare には短くだけ置く。0 で public の応答をすべて no-store にする。docs/operations/latency_plan_20261118.md の L6",
   "settled": {
     "s_maxage": 2592000,
     "grace_days": 3,

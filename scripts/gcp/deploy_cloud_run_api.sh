@@ -75,6 +75,7 @@ ENV_VARS+=",KEIBA_PRERENDER=1,KEIBA_PRERENDER_MAX_AGE_SEC=120,KEIBA_WARMUP_ON_ST
 [ "$CPU_ALLOC" != request ] || ENV_VARS+=",KEIBA_MIRROR_MODE=request"
 [ -z "$GCS_PREFIX" ] || ENV_VARS+=",GCS_PREFIX=${GCS_PREFIX}"
 # API_TEST_USER=1 のときだけテストユーザー(config/members.json の test)を有効にする。stg のタグ付きリビジョン専用（deploy_gcp.sh が付ける）
+# 2026-11-19 から config/members.json は git の外で、CI で作るイメージには入らない（付けても test では入れない）。昇格の止め（下）の目印として残す
 [ "${API_TEST_USER:-0}" != 1 ] || ENV_VARS+=",KEIBA_TEST_USER=1"
 [ -z "${STAGE2_START:-}" ] || ENV_VARS+=",KEIBA_STAGE2_START=${STAGE2_START}"   # 第 2 段の試行を読み始める日（stg だけ。deploy_gcp.sh）
 # MEMBERS_STORE=gcs のときだけ、会員名簿の正本を GCS に置く（管理 API・決済の Webhook の書き込みを GCS へ世代の条件つきで書く）。

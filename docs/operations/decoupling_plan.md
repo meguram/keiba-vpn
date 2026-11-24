@@ -62,7 +62,7 @@
 | D-07 | **画面のビルド・昇格・配備がホスト**（`next build`、`promote.sh`、`maintenance_deploy`、`stage_deploy`） | `scripts/ops/vps/build_release.sh`・`promote.sh`、`src/scripts/ops/{stage_deploy,maintenance_deploy}.py`、ホストの root cron | ホストが止まると配備できない（公開は動くが更新できない） | **CI（Cloud Build 等）でビルド→GCS→VPS が pull**（`pull_release` 実装済み）。API は `gcloud run deploy`（4.8） | 部分的に準備済み |
 | D-08 | **監視ポータル `<MONITOR_HOST>` がホスト :23900**（Tunnel `<TUNNEL_STG>` 経由）。ホストのファイル（`cron_runs`・`quality_health`・`page_quality`・`model_perf`）を直接読む | `src/monitor/app.py`・`cron_status.py`・`cron_failure_patterns.py`・`model_perf.py` | 監視が見えなくなる＝異常に気づけない | **Cloud Run**（最小 0）＋GCS から読む（4.6） | 未着手 |
 | D-09 | **秘密情報がホストの `.env`**（netkeiba ログイン・GCS 鍵・Slack Webhook・`DEV_PASSWORD`/`DEV_SECRET_KEY`・Cloudflare トークン） | ホストの `.env`（root 所有 640） | ホストが運用の鍵の保管庫になっている | **Secret Manager**（GCP 側）＋VPS の `.env`（netkeiba・Cloudflare のみ）。ホストには研究に要るものだけ | 手順書あり・登録は未実施 |
-| D-10 | **ログインのセッション署名・会員名簿**（`DEV_SECRET_KEY`、`config/members.json`）がホストの値とリポジトリ | `src/api/auth.py`・`flask_auth.py` | セッションの互換が切り替え時に切れる／会員名簿がイメージ内 | Secret Manager に**同じ値**を登録して切替。名簿は当面イメージ内（更新＝再デプロイ）、会員が増えたら GCS/Firestore へ | 設計済み（cloud_run_api.md） |
+| D-10 | **ログインのセッション署名・会員名簿**（`DEV_SECRET_KEY`、`config/members.json`）がホストの値とリポジトリ | `src/api/auth.py`・`flask_auth.py` | セッションの互換が切り替え時に切れる／会員名簿がイメージ内 | Secret Manager に**同じ値**を登録して切替。名簿は当面イメージ内（更新＝再デプロイ）、会員が増えたら GCS/Firestore へ（2026-11-17 に GCS の正本へ移行。`config/members.json` は 11-19 に git の外へ） | 設計済み（cloud_run_api.md） |
 
 ### 2.2 中（7）
 
@@ -150,7 +150,7 @@ gs://<bucket>/models/<component>/latest.json       # {version, sha256, created_a
 ### 4.5 API・UI・認証
 - API: Cloud Run（最小 0・最大 3・1 ワーカー・2GiB）。共有ヘッダ `X-Keiba-Proxy-Key` と Access のサービストークン（準備済み）。
 - UI: VPS の Next.js。上流は `switch_api_upstream.sh cloudrun`。**`api-internal`（ホスト向け）の Access アプリ・Public Hostname・Tunnel `<TUNNEL_STG>` のルートは、切替後に削除**する。
-- 認証: `DEV_SECRET_KEY`/`DEV_PASSWORD` を Secret Manager に**ホストと同じ値**で登録（切替でセッションを切らない）。会員名簿 `config/members.json` は当面イメージ内。`KEIBA_TEST_USER` は公開前に off（`tiered_access.md`）。
+- 認証: `DEV_SECRET_KEY`/`DEV_PASSWORD` を Secret Manager に**ホストと同じ値**で登録（切替でセッションを切らない）。会員名簿は GCS の正本（`members_store_gcs.md`）。`config/members.json` は 2026-11-19 から git の外（`members_json_purge_20261119.md`）。`KEIBA_TEST_USER` は公開前に off（`tiered_access.md`）。
 
 ### 4.6 監視ポータルの置き場（Cloud Run か VPS か）
 

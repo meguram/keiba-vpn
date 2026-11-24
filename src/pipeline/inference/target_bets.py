@@ -25,6 +25,7 @@ from functools import lru_cache
 from itertools import permutations
 
 from src.pipeline.inference import portfolio_pattern as PP
+from src.config.data_paths import LOCAL as _LOCAL_DATA
 from src.pipeline.inference import portfolio_target as PT
 from src.pipeline.inference.exotic_probabilities import fit_blend_distribution, normalize_marginal
 
@@ -33,6 +34,9 @@ logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[3]
 CONFIG_PATH = Path(os.environ.get("KEIBA_TARGET_BETS_CONFIG") or ROOT / "config" / "target_bets.json")
 ODDS_PRED_PATH = Path(os.environ.get("KEIBA_ODDS_PRED_CONFIG") or ROOT / "config" / "odds_pred" / "odds_pred_config.json")
+# ホストの作業ツリーには config/ の写しが無く、実物は学習の出力の場所にだけある（edge_sync.sh と同じ代わりの場所）。
+# 無いと全レースが「確率が得られない」の見送りになり、推奨度 0 の記録が黙って積まれた（2026-11-24 に判明）
+ODDS_PRED_FALLBACK = _LOCAL_DATA / "modeling" / "odds_pred" / "odds_pred_config.json"
 
 MARK_SYMBOLS = {"honmei": "◎", "pair": "○", "show_val": "▲", "star": "★", "anchor": "△", "kesi": "消"}
 N_KEEP_EV, N_KEEP_P = 40, 25   # 検証（portfolio_target_eval）と同じ候補の刈り込み: 期待値上位 or 的中確率上位
@@ -67,7 +71,26 @@ def config() -> dict[str, Any]:
 
 
 def odds_pred_config() -> dict[str, Any]:
-    return _load(ODDS_PRED_PATH)
+    data = _load(ODDS_PRED_PATH)
+    if not data and not os.environ.get("KEIBA_ODDS_PRED_CONFIG"):     # 明示の指定が無いときだけ、代わりの場所を見る
+        data = _load(ODDS_PRED_FALLBACK)
+    return data
+
+
+def odds_pred_version() -> str | None:
+    """今読んでいる想定オッズの係数の版（中身の sha256 の先頭 12 桁）。代わりの場所を読んだときに、配布物との食い違いを後で確かめるため。"""
+    import hashlib
+
+    cfg = odds_pred_config()
+    if not cfg:
+        return None
+    return hashlib.sha256(json.dumps(cfg, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:12]
+
+
+def odds_ready() -> bool:
+    """全券種の想定オッズの係数（poly2 の馬連〜3連単）がそろっているか。無いと推奨は計算できない（見送りとは別）。"""
+    co = odds_pred_config().get("poly2") or {}
+    return all(k in co for k in ("umaren", "wide", "umatan", "sanrenpuku", "sanrentan"))
 
 
 def reload() -> None:

@@ -75,7 +75,7 @@ function Trend({ series }: { series: SeriesPoint[] }) {
         ))}
       </svg>
       <div style={{ display: "flex", gap: 14, fontSize: 12, color: "var(--text-dim)", flexWrap: "wrap" }}>
-        <span><b style={{ color: "#34d399" }}>━</b> 推奨馬券の回収率（破線＝100%）</span>
+        <span><b style={{ color: "#34d399" }}>━</b> 推奨馬券の回収率（確定オッズ ≥ 想定の買い目だけ。破線＝100%）</span>
       </div>
     </div>
   );
@@ -121,7 +121,7 @@ function RaceCard({ r, member, levelLabels }: { r: RaceRecord; member: boolean; 
         <span>{(r.result_top3 ?? []).map((x) => `${x.finish}着 ${x.horse_number}番`).join(" / ")}</span>
         {member && lv != null && lv >= 1 && b && b.total_bet > 0 && (
           <>
-            <span style={dim}>仮想購入</span>
+            <span style={dim}>仮想購入（確定オッズ ≥ 想定の買い目だけ）</span>
             <span style={{ fontWeight: 700, color: b.total_return >= b.total_bet ? "#34d399" : "var(--text)" }}>
               {yen(b.total_bet)} → {yen(b.total_return)}（{pct(b.total_return / b.total_bet)}）{b.estimated ? <span style={dim}> 概算</span> : null}
             </span>
@@ -220,13 +220,15 @@ export default function PredictionResultsPage() {
 
           <div className="pr-tiles" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
             <Tile label="予測1位の1着率" value={pct(kpi.top1.win)} sub={`${kpi.top1.n}レース`} />
-            <Tile label="仮想購入の回収率（標準以上）" value={useRated ? pct(kpi.roi) : "—"} sub={useRated ? `${yen(kpi.invested)} → ${yen(kpi.returned)}` : "推奨度が標準以上のレースがありません"} locked={!member} />
-            <Tile label="的中レース（購入）" value={useRated ? `${kpi.races_hit}/${kpi.races_bought}` : "—"} sub="標準以上のレースで推奨馬券をどれか当てた" locked={!member} />
+            <Tile label="回収率（推奨どおり全部買った場合）" value={useRated && rated?.kpi_all ? pct(rated.kpi_all.roi) : "—"} sub={!useRated ? "推奨度が標準以上のレースがありません" : rated?.kpi_all ? `${yen(rated.kpi_all.invested)} → ${yen(rated.kpi_all.returned)}・的中 ${rated.kpi_all.races_hit}/${rated.kpi_all.races_bought}レース${rated.kpi_all.estimated_races ? `（うち${rated.kpi_all.estimated_races}レースは払戻の概算）` : ""}` : "この集計はまだありません"} locked={!member} />
+            <Tile label="回収率（確定オッズ ≥ 想定の買い目だけ）" value={useRated ? pct(kpi.roi) : "—"} sub={useRated ? `${yen(kpi.invested)} → ${yen(kpi.returned)}・的中 ${kpi.races_hit}/${kpi.races_bought}レース` : "推奨度が標準以上のレースがありません"} locked={!member} />
             <Tile label="確率の精度" value={kpi.winner_logloss == null ? "—" : kpi.winner_logloss.toFixed(3)} sub={kpi.winner_logloss_model ? `勝ち馬の対数損失（小さいほど良い）。市場補正済みの${kpi.winner_logloss_model.n}レースは モデルのみ ${kpi.winner_logloss_model.model.toFixed(3)} → 補正後 ${kpi.winner_logloss_model.calibrated.toFixed(3)}` : "勝ち馬の対数損失（小さいほど良い）"} />
           </div>
 
           {member && useRated && (
             <div style={{ ...card, fontSize: 12.5, color: "var(--text-dim)" }}>
+              <b style={{ color: "var(--text)" }}>2 つの回収率の違い:</b> 「推奨どおり全部買った場合」は、推奨した買い目をすべて買ったとして数えます。100% を超えるかは確かめられていません。
+              「確定オッズ ≥ 想定の買い目だけ」は、レース後に決まる確定オッズが想定オッズ以上だった買い目だけを買ったとして数えます（確定オッズが取れなかった買い目も買わなかったとして数えます）。当たる買い目は確定オッズが下がって外れやすい傾向があり（2026 年は当たった買い目 142 点のうち 132 点が、この条件で買わなかったことになった）、実際に買える数え方でもありません。日別の推移・券種別の表・各レースの仮想購入は、この数え方です。<br />
               <b style={{ color: "var(--text)" }}>回収率の読み方:</b> 払戻率は券種により 72.5〜80%（単勝・複勝 80%、3連単 72.5%）で、均等に買えば平均は 100% を下回ります。
               期間が短いと回収率は大きくぶれ、100% を超えた日や月があっても、買い方が確かに儲かるという意味にはなりません。
               後から作った予測は、その期間のデータを含めて学習したモデルによる可能性があり、実際の運用より回収率が高めに出やすい点にも注意してください。

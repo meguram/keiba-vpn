@@ -101,6 +101,25 @@ def roi_cell(v, lo, hi) -> str:
 
 
 # ---------------------------------------------------------------- 行を作る
+def tiers2_rows() -> tuple[list[str], str]:
+    """第 1 回の凍結の推奨度の段を、推奨あり（★★★＋★★）／なし（★＋見送り）にまとめた表（bet_cycles tiers2 の記録）。"""
+    t2p = SRC / "bet_tiers2_f96a5aeff33e.json"          # 文面が名指す第 1 回の凍結の記録だけを読む
+    if not t2p.exists():
+        return [], ""
+    t2 = json.loads(t2p.read_text(encoding="utf-8"))
+    out = []
+    for pv in t2["periods"].values():
+        for g, m in pv["groups"].items():
+            f = m.get("honmei_finish") or [0, 0, 0, 0]
+            n = sum(f)
+            out.append(row(esc(f"{pv['label']}・{g}"),
+                           [f'{num(m.get("bet_races") or 0)}／{num(m.get("races") or 0)}', pct(m.get("hit_rate")),
+                            roi_cell(m.get("roi"), m.get("roi_lo"), m.get("roi_hi")) if m.get("roi") is not None else "－",
+                            rec(f), pct(f[0] / n) if n else "－", pct(sum(f[:3]) / n) if n else "－"]))
+    return out, t2p.name
+
+
+
 def a2_rows(a2: dict) -> tuple[list[str], dict]:
     names = {"train": "訓練 2019〜22", "eval": "評価 2023〜24", "test2025": "test 2025（2 回目の確かめ）", "main2026": "2026 年 主（{}）".format("〜".join((a2["periods"].get("main2026") or {}).get("dates") or ["?", "?"]))}
     out, by = [], {}
@@ -202,6 +221,13 @@ def build() -> str:
     RS = json.loads((ROOT / "data/meta/course/rule_stats_v3.json").read_text(encoding="utf-8"))
     r1, b1 = a1_rows(a1)
     r2, b2 = a2_rows(a2)
+    t2_rows, t2_src = tiers2_rows()
+    t2_html = "" if not t2_rows else (
+        "<h3>参考: 第 1 回の買い方の推奨あり／なし（推奨度の段をまとめた 2 分類）</h3>\n"
+        "<p class=\"sub\">第 1 回の凍結（f96a5aeff33e）の推奨度の段のうち、★★★＋★★ を推奨あり、★＋見送りを推奨なしにまとめた（段の区切り・買い方は凍結のまま）。"
+        "見送りはどの期間も 0 件で、推奨なしは実際には ★ だけ。★ を外す判断はどの期間の段の値も見た後なので（2025・2026 年も 11/17 に見ている）、どの行も「見た後の 2 分類」で、新しい確かめにならない。"
+        "判定は確定オッズで行う楽観の値（2026 年 10/18〜11/15 の行だけ発走前のオッズ）。的中率は区間なし。"
+        f"元: <code>docs/operations/retrain_trials/{esc(t2_src)}</code>。</p>\n" + table(t2_rows))
     rbt, bbt = b_rows(b, "tansho")
     rbf, bbf = b_rows(b, "fukusho")
 
@@ -211,11 +237,14 @@ def build() -> str:
     d26 = f'{(b["values"]["2026"].get("date_min") or "?")[5:].replace("-", "/")}〜{(b["values"]["2026"].get("date_max") or "?")[5:].replace("-", "/")}'
     w26 = "〜".join(x[5:].replace("-", "/") for x in (a2["periods"]["main2026"].get("dates") or ["", ""]))
     a1p = a1["periods"]["sealed2026"]
-    if any(set(map(str, q["target"]["level_counts"])) - {"0", "0.0"} or q["target"]["bought_races"] or not q["target"]["races_ok"]
-           for q in a1["periods"].values()):
-        raise SystemExit("target の推奨度が 0 以外になった。A1 の文面（全レース見送り・記録の誤りの疑い）を見直してから作り直す")
+    if not a1p["target"]["bought_races"]:
+        raise SystemExit("target の推奨が 0 件。係数が無いまま作った記録の疑い（2026-11-24 の誤り）。--recompute-target-bets で作り直してから流す")
+    t_share = a1p["target"]["bought_races"] / max(a1p["target"]["races_ok"], 1)
+    ta1 = a1p["target"]["all"]
+    t_ci = ("回収率の区間は 100% を含む" if ta1["roi_lo"] <= 1.0 <= ta1["roi_hi"] else
+            "回収率の区間の上限は 100% 未満" if ta1["roi_hi"] < 1.0 else "回収率の区間の下限は 100% を超える")
     p1 = a1p["label"]
-    summary = [relabel(b1["t_sealed2026"], f"A1 本番の推奨 target（v6e・{p1}）※記録の誤りの疑い"),
+    summary = [relabel(b1["t_sealed2026"], f"A1 本番の推奨 target（v6e・{p1}）"),
                relabel(b1["l_sealed2026"], f"A1 参考: 従来方式（見送りも買った・{p1}・楽観）"),
                relabel(b2["main2026"], f"A2 第 2 回の買い方（単勝・試行中・{w26}・楽観）"),
                relabel(bbt["2026"], f"B めぐ分析の条件・単勝（{d26}）"),
@@ -279,7 +308,7 @@ def build() -> str:
 <div class="box">
 <b>どの表が何の成績か・注意</b>
 <ul>
-<li><b>A1</b> 今の本番で会員に出ている推奨（v6e＋target）。2026 年の日次の記録（後から作り直した backfill が大半で、会員が実際に見た推奨の記録ではない）の集計。この記録では target の推奨度がすべて 0（見送り）で、同じ区切りの検証の参戦 30% と食い違う。記録の誤りの疑いが強く、公開の前に原因を確かめる。従来方式の行は見送りのレースも買ったとして数え、計画に発走後のオッズを使うため楽観。</li>
+<li><b>A1</b> 今の本番で会員に出ている推奨（v6e＋target）。2026 年の日次の記録（後から作り直した backfill が大半で、会員が実際に見た推奨の記録ではない）の集計。target の行は 2026-11-24 に作り直した記録（それまでの記録は、ホストに想定オッズの係数が無いまま作られ、全レースが推奨度 0 だった）。従来方式の行は見送りのレースも買ったとして数え、計画に発走後のオッズを使うため楽観。</li>
 <li><b>A2</b> 試行中の第 2 回の買い方（r04＋第 2 段＋frozen_20261117_r2、単勝 1 点だけ）。判定は T-60 のオッズの再現 5 通りの平均、精算は確定の払戻。予測の p は確定オッズの offset を含むので、T-60 の再現の値も楽観。2026 年は推論の経路の予測で、評価だけ（事前登録の判定は「否定」）。</li>
 <li><b>B</b> めぐ分析の過去データの条件（凍結の第 3 版）のうち、訓練の回収率 100% 以上の条件に当てはまる馬を買う。条件はオッズ・人気を使わない（<code>src/research/graded/catalog.py:45</code>・<code>:54</code>）ので、オッズの時点による楽観は無い。楽観の元は探し方（訓練の行は当てはめ）。訓練の行は条件を見つけた期間の当てはめの値で、成績の目安にならない。2025 年も第 3 版を選ぶのに使った期間。</li>
 </ul>
@@ -290,15 +319,17 @@ def build() -> str:
 {table(summary)}
 <ul>
 {verdict_lines}
-<li>A1 の target は、記録では 2026 年に推奨が 0 件。記録の誤りの疑いが強く、買い目の成績は数えられない（下の A1 の注）。</li>
+<li>A1 の target は、2026 年に {num(a1p["target"]["bought_races"])} レース（{pct(t_share)}）で推奨した。{t_ci}（下の A1 の注）。</li>
 </ul>
 
 <h2 id="a1">A1 本番の推奨（v6e＋target）</h2>
 <p class="sub">記録: <code>data/local/prediction_results/*.json</code> の写し（{num(a1["days"])} 日・モデル {esc(", ".join(a1["models"]))}）。検証の行は既定方策を決めたとき（2026-10-24）の値で、v6e より前のモデル。判定に使ったオッズは記録に無く、楽観かは確かめていない。対象レースは、target が sec77 の想定オッズのそろったレース、従来方式が計画のできたレース。</p>
 {table(r1)}
 <ul>
-<li>target: sec77 の想定オッズがそろった {num(a1p["target"]["races_ok"])} レース（{esc(src_txt)}）すべてが推奨度 0（見送り）。想定オッズの基準が違う・計算できない等で外したレースは {num(a1p["target"]["races_basis_missing"])}。同じ区切り（期待回収率 2.0 前後）の検証では、レースの約 30% が参戦した。食い違いが大きく、記録の作りの誤りの疑いが強い。</li>
-<li>◎ の印が付いたのは {num(a1p["honmei"]["n"])} レース（全 {num(a1p["races"])} レース）。予測 1 位は全レースに付く。</li>
+<li>target: sec77 の想定オッズがそろった {num(a1p["target"]["races_ok"])} レース（{esc(src_txt)}）のうち {num(a1p["target"]["bought_races"])} レース（{pct(t_share)}）で推奨した（検証の同じ区切りでは約 30%）。外したレース（想定オッズの基準が違う・計算できない）は {num(a1p["target"]["races_basis_missing"])}。</li>
+<li>target の計画は想定オッズ（AI の予測）だけで決まり、発走後のオッズを使わない。精算は確定の払戻で、推奨した買い目を全部買ったとして数える。</li>
+<li>2026-11-24 より前の記録は、ホストに想定オッズの係数（<code>odds_pred_config.json</code>）が無いまま作られ、全レースが「計画できない」の見送り（推奨度 0）になっていた。本番の画面（Cloud Run）は係数を配備のときに重ねる作りで、配る係数の sha256 はホストのものと一致した。会員の画面そのものは確かめていない。</li>
+<li>◎ の印が付いたのは {num(a1p["honmei"]["n"])} レース（全 {num(a1p["races"])} レース）。記録の ◎ は予測の従来の印で、作り直しでも変えていない。会員の画面の ◎ は推奨が出たレースでは買い目から決め直すので、そのレースでは食い違う（この ◎ の成績は画面の ◎ を表さない）。予測 1 位は全レースに付く。</li>
 <li>従来方式は推奨度 0（見送り）のレースも買ったとして数える。推奨度 1 以上は {num(sum(v["bet_races"] for k, v in a1p["legacy"]["by_level"].items() if k != "0"))} レースだけ。前向きの行は {num(a1["periods"].get("forward", {}).get("legacy", {}).get("estimated_races", 0))} レースが払戻の概算を含む。</li>
 <li>従来方式の行は、計画に使ったオッズが発走後に保存された最新（latest {num(a1p["legacy"]["odds_phase"].get("latest", 0))}・final {num(a1p["legacy"]["odds_phase"].get("final", 0))} レース）なので楽観。</li>
 </ul>
@@ -318,6 +349,8 @@ def build() -> str:
 <li>対象レースは、予測と払戻がそろって計算できたレース。</li>
 </ul>
 
+{t2_html}
+
 <h2 id="b">B めぐ分析の「過去データの条件」で買う</h2>
 <p class="sub">凍結の第 3 版（sha {esc(b["sha256_cells"][:12])}）。対象は良馬場・芝ダ・重賞以外のレース。単位（コース × クラスの群）ごとに、めぐ分析に出る買いの条件（上位 5 つ、全 {num(b["rules_total"])} 条件）を見る。訓練の単勝の回収率 100% 以上の条件は {num(b["rules_buy_tansho"])}、複勝は {num(b["rules_buy_fukusho"])}。1 頭が複数の条件に当てはまっても 1 点。</p>
 <h3>単勝</h3>
@@ -335,7 +368,7 @@ def build() -> str:
 
 <h2 id="evidence">事象と根拠</h2>
 <ul>
-<li><b>A1</b> 事象: 2026 年の target は全レース見送り。根拠: 記録の推奨度がすべて 0。推奨はレースの期待回収率が区切り（<code>race_ev_threshold</code> 2.0）以上のときだけ出る。v6e と sec77 の想定オッズの組で区切りを越えなかったのか、記録の作りの誤りかは、確かめていない（この表は数えるだけ）。</li>
+<li><b>A1</b> 事象: 作り直す前の記録では、2026 年の target が全レース見送りだった。根拠: ホストの作業ツリーに <code>config/odds_pred/odds_pred_config.json</code> が無かった。そのため <code>target_bets.all_candidates</code> が計算できず、「確率が得られない」の見送りが推奨度 0 として記録された。係数を指して本番と同じ <code>_optimize_target</code> で計算し直すと、{pct(t_share)} のレースで推奨が出た。作り直しでは区切り（<code>race_ev_threshold</code> 2.0）を変えていない。</li>
 <li><b>A2</b> 事象: 訓練 {pct(a2r("train"))} → 評価 {pct(a2r("eval"))} → test 2025 {pct(a2r("test2025"))} → 2026 年 {pct(a2r("main2026"))} と下がる。根拠（仮説・分けていない）: ① 訓練で買い方を選んだことによる平均への回帰（訓練→評価→test で既に下がっている）。② 2026 年は推論の経路の予測で入力が違う（未勝利・新馬の 68 レースのうち 11 レースで買う／見送るが入れ替わった。weekend-launch の 2026-11-18 の測定を <code>docs/operations/retrain_trials/bet_optimization_20261116.md</code> から引用）。どちらがどれだけかは分けていない。</li>
 <li><b>B</b> 事象: 単勝の回収率は訓練 {pct(bt("train"))} に対し 2025 年 {pct(bt("2025"))}・2026 年 {pct(bt("2026"))}。根拠: 条件は訓練の走で見つけたもので、訓練の走数の中央値は {num(n_med)} と少ない。見つけた期間の値は大きく上に偏る（選択の偏り）。{excl_txt}</li>
 </ul>

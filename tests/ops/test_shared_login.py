@@ -40,7 +40,8 @@ def test_rotation_on_new_month_revokes_old_sessions_and_notifies_once(env):
     assert not auth.verify_member_login(ID, sl.password_for("2026-10"))
     assert auth.verify_member_login(ID, sl.password_for("2026-11"))
     assert auth.token_role(old) is None                                         # 前月のログインは解除
-    assert len(env) == 2 and sl.password_for("2026-11") in env[1] and ID in env[1]
+    assert len(env) == 2 and "2026年11月" in env[1]
+    assert all(sl.password_for(m) not in s and ID not in s for s in env for m in ("2026-10", "2026-11"))   # Slack に平文を出さない
     assert sl.ensure(ID, nov) == "ok" and len(env) == 2                         # 冪等
 
 
@@ -66,3 +67,14 @@ def test_dry_run_reports_without_writing_or_notifying(env):
     time.sleep(1.1)
     assert sl.ensure(ID, nov, dry=True) == "would-rotated"
     assert auth.verify_member_login(ID, sl.password_for("2026-10")) and len(env) == 1
+
+
+def test_show_refuses_after_moving_to_rotation(env, monkeypatch, capsys):
+    monkeypatch.setenv("KEIBA_SHARED_LOGIN_ID", ID)
+    monkeypatch.setattr("src.utils.project_env.load_project_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr(auth, "member_record", lambda uid: {"rotation_month": "2027-01"})
+    assert sl.main(["show"]) == 2
+    out = capsys.readouterr()
+    assert "パスワード:" not in out.out and sl.password_for(sl.month_of()) not in out.out + out.err   # 使えない派生の値を出さない
+    monkeypatch.setattr(auth, "member_record", lambda uid: {"enabled": True})          # 旧方式の記録は今までどおり出す
+    assert sl.main(["show"]) == 0 and sl.password_for(sl.month_of()) in capsys.readouterr().out

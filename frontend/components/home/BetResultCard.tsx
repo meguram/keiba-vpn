@@ -5,10 +5,12 @@ import { PendingLink } from "@/components/PendingLink";
 import { getJson } from "@/lib/httpCache";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 
-type LevelRow = { level: number; label: string; races: number; no_buy_races?: number; hit_races: number; hit_rate: number | null; invested: number; returned: number; roi: number | null };
+type AllPart = { races: number; hit_races: number; hit_rate: number | null; invested: number; returned: number; roi: number | null };
+/** races〜roi は確定オッズ ≥ 想定の買い目だけ。all は推奨した買い目をすべて買った場合（主に出す。古い応答には無い） */
+type LevelRow = { level: number; label: string; races: number; no_buy_races?: number; hit_races: number; hit_rate: number | null; invested: number; returned: number; roi: number | null; all?: AllPart };
 type LevelPeriod = {
   key: string; label: string; from: string; to: string; data_from: string | null; data_to: string | null; days: number;
-  levels: LevelRow[]; total: { races: number; hit_races: number; invested: number; returned: number; roi: number | null; hit_rate: number | null };
+  levels: LevelRow[]; total: { races: number; hit_races: number; invested: number; returned: number; roi: number | null; hit_rate: number | null; all?: AllPart };
   skipped_races: number; unrated_races: number; no_buy_races?: number;
 };
 type LevelCard = { periods: LevelPeriod[]; note?: string };
@@ -46,7 +48,8 @@ const CSS = `
 
 /** 推奨馬券の回収率（推奨度別）。見送りは除く。同じ期間タブに連動。会員のみ（API が会員限定）。 */
 function LevelSection({ p, note }: { p: LevelPeriod; note?: string }) {
-  const bought = p.total.races;
+  const main = (x: { races: number; hit_races: number; hit_rate: number | null; invested: number; returned: number; roi: number | null; all?: AllPart }) => x.all ?? x;
+  const bought = main(p.total).races;
   return (
     <div className="mrc-bets" aria-label="推奨馬券の回収率（推奨度別）">
       <h3>推奨度別の回収率</h3>
@@ -54,19 +57,22 @@ function LevelSection({ p, note }: { p: LevelPeriod; note?: string }) {
         <div className="mrc-lv-sub" style={{ padding: "4px 0 6px" }}>この期間に、見送り以外で集計できる推奨馬券がありません{p.skipped_races ? `（見送り ${p.skipped_races}R）` : ""}</div>
       ) : (
         <div role="list">
-          {p.levels.map((l) => (
-            <div key={l.level} role="listitem" className="mrc-lv">
-              <span className="mrc-lv-name">{l.label}</span>
-              <span className="mrc-lv-sub">
-                {l.races > 0 ? <>{l.races}R・的中 {l.hit_races}R（{pct(l.hit_rate)}）<br />{yen(l.invested)} → {yen(l.returned)}</> : "該当レースなし"}
-              </span>
-              <span className="mrc-lv-roi" style={{ color: roiColor(l.roi) }}>{l.roi == null ? "—" : pct(l.roi)}</span>
-            </div>
-          ))}
+          {p.levels.map((l) => {
+            const m = main(l);
+            return (
+              <div key={l.level} role="listitem" className="mrc-lv">
+                <span className="mrc-lv-name">{l.label}</span>
+                <span className="mrc-lv-sub">
+                  {m.races > 0 ? <>{m.races}R・的中 {m.hit_races}R（{pct(m.hit_rate)}）<br />{yen(m.invested)} → {yen(m.returned)}{l.all ? <><br />確定オッズ ≥ 想定の買い目だけなら {l.races > 0 ? `${pct(l.roi)}（${l.races}R）` : "購入なし"}</> : null}</> : "該当レースなし"}
+                </span>
+                <span className="mrc-lv-roi" style={{ color: roiColor(m.roi) }}>{m.roi == null ? "—" : pct(m.roi)}</span>
+              </div>
+            );
+          })}
           <div className="mrc-lv" style={{ borderTop: "1px solid var(--border)" }}>
             <span className="mrc-lv-name">合計</span>
-            <span className="mrc-lv-sub">{bought}R・的中 {p.total.hit_races}R（{pct(p.total.hit_rate)}）<br />{yen(p.total.invested)} → {yen(p.total.returned)}</span>
-            <span className="mrc-lv-roi" style={{ color: roiColor(p.total.roi) }}>{pct(p.total.roi)}</span>
+            <span className="mrc-lv-sub">{bought}R・的中 {main(p.total).hit_races}R（{pct(main(p.total).hit_rate)}）<br />{yen(main(p.total).invested)} → {yen(main(p.total).returned)}{p.total.all ? <><br />確定オッズ ≥ 想定の買い目だけなら {p.total.races > 0 ? `${pct(p.total.roi)}（${p.total.races}R）` : "購入なし"}</> : null}</span>
+            <span className="mrc-lv-roi" style={{ color: roiColor(main(p.total).roi) }}>{pct(main(p.total).roi)}</span>
           </div>
         </div>
       )}
@@ -74,7 +80,9 @@ function LevelSection({ p, note }: { p: LevelPeriod; note?: string }) {
         <div className="mrc-bets-note" style={{ color: "#fbbf24" }}>対象が{bought}レースと少なく、1回の的中で回収率が大きく動きます。目安にはなりません（{SMALL_SAMPLE}レース以上で参考になります）。</div>
       )}
       <div className="mrc-bets-note">
-        見送り{p.skipped_races}Rは除く{(p.no_buy_races ?? 0) > 0 ? `・実際のオッズが想定オッズに届かず購入しなかった${p.no_buy_races}Rも除く` : ""}{p.unrated_races > 0 ? `・推奨度の記録が無い${p.unrated_races}Rも除く` : ""}。{note ?? ""}
+        見送り{p.skipped_races}Rは除く{p.total.all
+          ? ((p.total.races + (p.no_buy_races ?? 0) - p.total.all.races) > 0 ? `・推奨度は付いたが買い目の無かった${p.total.races + (p.no_buy_races ?? 0) - p.total.all.races}Rも除く` : "")
+          : ((p.no_buy_races ?? 0) > 0 ? `・実際のオッズが想定オッズに届かず購入しなかった${p.no_buy_races}Rも除く` : "")}{p.unrated_races > 0 ? `・推奨度の記録が無い${p.unrated_races}Rも除く` : ""}。{note ?? ""}
       </div>
     </div>
   );
@@ -99,6 +107,7 @@ export function BetResultCard() {
   const cur = lv.periods.find((p) => p.key === sel && p.days > 0) ?? lv.periods.find((p) => p.days > 0) ?? lv.periods[0];
 
   const allRaces = cur.total.races + (cur.no_buy_races ?? 0) + cur.skipped_races + cur.unrated_races;   // 集計できた全レース（購入＋推奨は出たが実オッズが想定未満で購入せず＋見送り＋推奨度の記録なし）
+  const joined = cur.total.races + (cur.no_buy_races ?? 0);                                                 // 参戦: 推奨度が標準以上のレース（予測成績の画面の counts.rated と同じ数え方）
 
   return (
     <section aria-label="推奨馬券の成績" className="mrc">
@@ -118,8 +127,8 @@ export function BetResultCard() {
         <div className="mrc-meta">
           <b>{cur.data_from && cur.data_to ? `${md(cur.data_from)}〜${md(cur.data_to)}` : `${md(cur.from)}〜${md(cur.to)}`}</b>・開催 {cur.days}日
           {allRaces > 0 && (
-            <> ・全 {allRaces}R のうち <b>{cur.total.races}R に参戦</b>
-              {cur.total.races > 0 ? `（約 ${(allRaces / cur.total.races).toFixed(1)} レースに1回・${pct(cur.total.races / allRaces)}）` : "（見送りのみ）"}</>
+            <> ・全 {allRaces}R のうち <b>{joined}R に参戦</b>
+              {joined > 0 ? `（約 ${(allRaces / joined).toFixed(1)} レースに1回・${pct(joined / allRaces)}）` : "（見送りのみ）"}</>
           )}
         </div>
         <LevelSection p={cur} note={lv.note} />

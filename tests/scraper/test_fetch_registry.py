@@ -20,6 +20,7 @@ NON_FETCH_MODULES = {
     "src.ops.state_sync", "src.pipeline.betting.odds_drift", "src.pipeline.build_jockey_trainer_stats",
     "src.ops.edge_render",   # VPS のフォルダに置く API の応答を、ホストの写し（data/local/mirror）だけで作る（netkeiba・GCS へは取りに行かない）
     "src.pipeline.inference.candidate_runner",   # 候補の影のランナー: 保存済みの出馬表と手元の T-60 の写しを読むだけ（netkeiba へは取りに行かない）
+    "src.pipeline.inference.candidate_rb_schedule",   # 影のランナーの材料の予約の判断: 手元の暦・結果の表を読むだけ
     "src.research.pedigree.build_ancestor_name_map", "src.research.pedigree.build_horse_pedigree_10gen",
     "src.research.pedigree.build_pedigree_10gen_3view_index", "src.research.pedigree.build_pedigree_10gen_index",
     "src.scraper.export_tables", "src.scraper.parse_audit", "src.scraper.parse_drift", "src.scraper.parse_drift_docs",
@@ -36,7 +37,7 @@ NON_FETCH_MODULES = {
     "src.scripts.data.scrape_status_notify", "src.scripts.data.sync_horse_result_cache", "src.scripts.data.tp55_backfill",
     "src.scripts.data.tp65_prep", "src.scripts.data.tracking_v2_eval", "src.scripts.data.verify_past_backfill",
     "src.scripts.ops.cloudrun_smoke", "src.scripts.ops.collect_prod_status", "src.scripts.ops.env_parity_check",
-    "src.scripts.ops.maintenance_notify", "src.scripts.ops.shared_login", "src.scripts.scraping.fetch_status",
+    "src.scripts.ops.maintenance_notify", "src.scripts.ops.race_ready_notify", "src.scripts.ops.shared_login", "src.scripts.scraping.fetch_status",
     "src.scripts.scraping.migrate_row_data_to_unique_paths",
 }
 
