@@ -1,0 +1,109 @@
+{
+ "name": "forward_union_rc2_v1",
+ "fixed_at": "commit の日（git log -1 -- config/rules_council/forward_union_rc2.json の日付が正。作ったのは 2026-11-24 JST）",
+ "session": "rules-council",
+ "decision": "docs/operations/roi_plus_council/decisions.md の「RC-2 の結果の判断と RC-3 の決定」A",
+ "what": "RC-2 の段 S'（種 1000）で 1 段目を通った増やす向きの水準の和集合。今の定義のまま固定し、選び直さない。回収率の主張はしない（台帳の状態を決めるだけ）",
+ "levels": [
+  "A01=6-9着",
+  "A03=6着以下・0.6秒以上",
+  "A06=4-5着",
+  "B02=3勝以下×6着以下",
+  "B05=前走 3勝以下×6着以下",
+  "C08=3着内なし",
+  "E05=上がり4位以下×4着以下",
+  "E06=中団×4-9着",
+  "G05=遠征（関西馬が関東へ）",
+  "I04=格上げの乗り替わり",
+  "K08=件数が少ない",
+  "X02=中5-8週×2-3歳"
+ ],
+ "level_types_source": "src/research/graded/catalog.py の水準（RC-2 と同じ型の目録・同じ水準の名前）",
+ "population": "本物の T-60 のオッズ < 10 倍（判定）・全クラス・芝ダ。精算は確定の払戻",
+ "count_from": "この JSON を初めて commit した日の翌日以降のレースだけ",
+ "yardstick": {
+  "main": "同じ期間の一桁の中での、和集合の中の市場比 ÷ 外の市場比（市場比 = 勝ち ÷ Σ確定の q）",
+  "sub": "中の市場比 ÷ 帯の比（探す側 70% の 確定オッズの帯 × クラス群 の 勝ち ÷ q。rc2_real の rho）"
+ },
+ "lines": {
+  "stop": [
+   "1,500 点で主の比 < 0.98",
+   "4,000 点で主の比 < 1.00"
+  ],
+  "mature": "7,000 点で 主の比 > 1.00（点推定）かつ片側 p ≤ 0.05（開催で束ねたブートストラップ）",
+  "look": "途中の確かめは月 1 回まで、記録だけ"
+ },
+ "needs": "2026 年以降の出馬表から graded/catalog の水準を作る道具（KEIBA_SESSION=rules-council、台帳 eval_only。凍結の日より前の 2026 年の行は作りの確かめだけ）",
+ "reference_at_freeze": {
+  "A01=6-9着": {
+   "n": 13500,
+   "mr_band": 1.0921,
+   "roi": 0.882
+  },
+  "A03=6着以下・0.6秒以上": {
+   "n": 17101,
+   "mr_band": 1.0818,
+   "roi": 0.8586
+  },
+  "A06=4-5着": {
+   "n": 10627,
+   "mr_band": 1.1013,
+   "roi": 0.8892
+  },
+  "B02=3勝以下×6着以下": {
+   "n": 16959,
+   "mr_band": 1.077,
+   "roi": 0.8665
+  },
+  "B05=前走 3勝以下×6着以下": {
+   "n": 16959,
+   "mr_band": 1.077,
+   "roi": 0.8665
+  },
+  "C08=3着内なし": {
+   "n": 35771,
+   "mr_band": 1.057,
+   "roi": 0.8485
+  },
+  "E05=上がり4位以下×4着以下": {
+   "n": 27962,
+   "mr_band": 1.0599,
+   "roi": 0.8578
+  },
+  "E06=中団×4-9着": {
+   "n": 12645,
+   "mr_band": 1.0822,
+   "roi": 0.8759
+  },
+  "G05=遠征（関西馬が関東へ）": {
+   "n": 9388,
+   "mr_band": 1.0694,
+   "roi": 0.8705
+  },
+  "I04=格上げの乗り替わり": {
+   "n": 15430,
+   "mr_band": 1.0594,
+   "roi": 0.8489
+  },
+  "K08=件数が少ない": {
+   "n": 15400,
+   "mr_band": 1.0539,
+   "roi": 0.8341
+  },
+  "X02=中5-8週×2-3歳": {
+   "n": 7505,
+   "mr_band": 1.0736,
+   "roi": 0.8884
+  }
+ },
+ "n_distinct_sets": "12 水準。B02=3勝以下×6着以下 と B05=前走 3勝以下×6着以下 は同じ集合（探す側で走・勝ちが同じ）なので、異なる集合は 11",
+ "frozen_sha256": {
+  "src/research/graded/catalog.py": "b0c22d2ead7abc37e916b3433673c97b5c31c834b132c30febff80b52f49659e",
+  "src/research/graded/model.py": "4ee44d025c948840680e00a660422e71ac01d62b731f154a8625c7e875cee168",
+  "src/research/course/longshot_rules.py": "6442fc637bef1525a6dc5e20c07f126bfe2bc779b38759adfbf772fb299aafef",
+  "src/research/rules_council/engine.py": "a7357cd99b748ef214724bb620ca5a44ca3a547966526a47b23e66ccdde42105",
+  "docs/operations/retrain_trials/rules_council_rc2.json": "dc5722f45b78f99c52448282362f3e838e9d1b33a6f685d447e2031c8529ea78",
+  "config/rules_council/prereg_rc2.json": "704b306d50e802805de693fda0f2e36916511ffd25855cdc01b0859ddde0453d"
+ },
+ "frozen_commit": "222ac24ea33bc6477d7b0b50575594beb5389d3b"
+}
