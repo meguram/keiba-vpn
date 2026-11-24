@@ -4,7 +4,7 @@
     python -m src.pipeline.inference.candidate_rb_schedule morning   # 当日の朝（07:05〜07:40 JST）: 「動き<TAB>MMDD<TAB>理由」
 
 - それまでの予約（retrain_out/cycles16_fix3/rb_live/schedule.sh）は日付を手で書く一度きりの形で、11/23（祝日）の分が抜けていた。
-  ここでは JRA の暦（data/page_reference/cushion/race_calendar_<年>.json。祝日・月曜の開催を含む）を読む。
+  ここでは JRA の暦（UI バンドルの cushion/race_calendar_<年>.json。src.scraper.jra_calendar が書く。祝日・月曜の開催を含む）を読む。
 - 前夜の 18:30 に RB を作っても、その日の結果は翌朝 07:00 の export_tables_daily（速報から race_result_flat への橋渡し）まで表に入らない。
   そのため 11/22・23 の朝に cut が古く、影のランナーが止まりかけた（StaleInputs）。朝は「前の開催日の全レースが結果の表に入った」ら作り直す。
 - 週の最初の開催日の前夜は、めぐ指数の週次（金 18:00 開始・書き終わり 18:45〜23:24）が前の週の開催日を書くのを待つ（eve.sh の第 3・4 引数）。
@@ -19,11 +19,24 @@ import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+from src.config import data_paths as _dp
+
 ROOT = Path(__file__).resolve().parents[3]
 JST = timezone(timedelta(hours=9))
-CAL_DIR = Path(os.environ.get("KEIBA_RACE_CALENDAR_DIR") or ROOT / "data/page_reference/cushion")
-TABLES = Path(os.environ.get("KEIBA_TABLES_DIR") or ROOT / "data/page_reference/tables")
-RB_STATE = Path(os.environ.get("CANDIDATE_RB_STATE") or "/home/jovyan/work/retrain_out/cycles16_fix3/rb_live/state_live")
+CAL_DIR = Path(os.environ.get("KEIBA_RACE_CALENDAR_DIR") or _dp.PAGE_REF / "cushion")
+TABLES = Path(os.environ.get("KEIBA_TABLES_DIR") or _dp.PAGE_REF / "tables")      # rb_live.sh・phase1_days.sh が読む表と同じ置き場
+
+
+def _rb_state_default() -> Path:
+    """影のランナーが読む RB の状態（config/candidate_runtime.json の env.KEIBA_V6_RB_STATE）。"""
+    try:
+        cfg = json.loads((ROOT / "config/candidate_runtime.json").read_text(encoding="utf-8"))
+        return Path((cfg.get("env") or {}).get("KEIBA_V6_RB_STATE") or "")
+    except (OSError, ValueError):
+        return Path("")
+
+
+RB_STATE = Path(os.environ.get("CANDIDATE_RB_STATE") or _rb_state_default())
 MISSING_OK = 2              # 結果がそろったとみなす欠けの上限（中止のレース）
 MEGU_WAIT_DEADLINE = "03:00"     # めぐ指数を待つ期限（対象日の JST）。期限を過ぎたら入っていなくても作る（eve.sh の決まり）
 

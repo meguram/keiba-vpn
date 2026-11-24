@@ -20,6 +20,7 @@ NON_FETCH_MODULES = {
     "src.ops.state_sync", "src.pipeline.betting.odds_drift", "src.pipeline.build_jockey_trainer_stats",
     "src.ops.edge_render",   # VPS のフォルダに置く API の応答を、ホストの写し（data/local/mirror）だけで作る（netkeiba・GCS へは取りに行かない）
     "src.pipeline.inference.candidate_runner",   # 候補の影のランナー: 保存済みの出馬表と手元の T-60 の写しを読むだけ（netkeiba へは取りに行かない）
+    "src.pipeline.inference.candidate_rb_schedule",   # 影のランナーの材料の予約の判断: 手元の暦・結果の表を読むだけ
     "src.research.pedigree.build_ancestor_name_map", "src.research.pedigree.build_horse_pedigree_10gen",
     "src.research.pedigree.build_pedigree_10gen_3view_index", "src.research.pedigree.build_pedigree_10gen_index",
     "src.scraper.export_tables", "src.scraper.parse_audit", "src.scraper.parse_drift", "src.scraper.parse_drift_docs",
