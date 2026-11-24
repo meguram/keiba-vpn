@@ -88,6 +88,7 @@ jobs:
       FETCH_SHADOW: ${{ vars.FETCH_SHADOW }}
       GCP_BILLING_BQ_TABLE: ${{ vars.GCP_BILLING_BQ_TABLE }}
       WITH_NEXT_KEY: ${{ vars.WITH_NEXT_KEY }}   # 共有鍵の作り直しの間だけ 1（KEIBA_PROXY_KEY_NEXT も載せる。scripts/ops/rotate_proxy_key.sh）
+      MAX_INSTANCES: ${{ vars.CLOUD_RUN_MAX_INSTANCES }}   # 空なら 1（scripts/gcp/deploy_cloud_run_api.sh）。ログインの集中に備えて増やすときだけ設定
     steps:
       - uses: actions/checkout@v4   # PIN
       - uses: actions/download-artifact@v4   # PIN

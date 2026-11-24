@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>モンキーテストの結果（本番・匿名）</title>
+<style>
+:root { --bg:#f7f8fb; --panel:#ffffff; --panel2:#eef1f7; --border:#d5dbe7; --text:#1b2333; --muted:#5b6578;
+  --accent:#2f5fc4; --ok:#1d7f45; --warn:#9a6200; --bad:#b4232c; --code:#eef1f7; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60;
+  --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; } }
+:root[data-theme="dark"] { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60; --text:#e6ecff; --muted:#9aa7c7;
+  --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1180px; margin:0 auto; padding:28px 16px 80px; }
+a { color:var(--accent); }
+h1 { font-size:24px; margin:0 0 6px; line-height:1.4; }
+h2 { font-size:19px; margin:40px 0 6px; padding-top:16px; border-top:1px solid var(--border); }
+h3 { font-size:16px; margin:22px 0 4px; }
+p, li { overflow-wrap:anywhere; }
+.sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+.scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:8px 0 14px; border:1px solid var(--border); border-radius:8px; }
+table { border-collapse:collapse; width:100%; min-width:760px; font-size:13.5px; background:var(--panel); }
+th, td { border-bottom:1px solid var(--border); border-right:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+td.n { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+th { background:var(--panel2); color:var(--muted); font-weight:600; white-space:nowrap; }
+tr:last-child td { border-bottom:none; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 5px; border-radius:5px; font-size:12px; overflow-wrap:anywhere; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 16px; margin:12px 0; }
+.b { display:inline-block; font-size:11.5px; padding:0 8px; border-radius:10px; border:1px solid currentColor; white-space:nowrap; }
+.ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .mu { color:var(--muted); }
+details { background:var(--panel); border:1px solid var(--border); border-radius:10px; margin:8px 0; }
+summary { cursor:pointer; padding:8px 12px; }
+details[open] > summary { border-bottom:1px solid var(--border); }
+.dbody { padding:8px 14px 12px; font-size:13.5px; }
+</style>
+</head>
+<body>
+<main>
+<h1>モンキーテストの結果（本番・匿名）</h1>
+<p class="sub">作成 2026-11-24（JST）。手で書いたページ。数字は統括役が受けた調べ役の報告から。開催日の監査は <a href="raceday_audit_and_load_test_20261123.html">開催日の監査とモンキーテスト（11/22・23）</a>。</p>
+
+<h2 id="summary">結論</h2>
+<div class="box">
+<ul>
+<li>4 回の計測で、予測の最初の表示は p50（中央値）1.84 秒 → 0.12 秒になった。</li>
+<li>Cloud Run に届く要求は、3 人の段（段②）の 1 画面あたり 3.8 件 → 0.48 件に減った。</li>
+<li>API のうち nginx（VPS のキャッシュ）で答えた割合は 82%。</li>
+<li>残る問題の 1 つは、2 台目の起動の長い待ち。最大台数を 1 にする直しを 11/25〜26 に入れる予定。</li>
+<li>もう 1 つは、50 人の同時が未計測なこと。nginx の IP ごとの制限があるため。</li>
+</ul>
+</div>
+
+<h2 id="setup">試験の作り</h2>
+<ul>
+<li>本番を匿名で巡回した。道具は Playwright（headless Chromium。画面を出さないブラウザ）。</li>
+<li>ブラウザの名乗り（User-Agent）に <code>keiba-monkey-test</code> を付けた。</li>
+<li>段① は 1 人で 4 分、段② は 3 人で 4 分。どちらも同じ IP の制限の内に収まる人数。</li>
+<li>429（回数の制限）・5xx（サーバの失敗）・タイムアウトは、4 回とも 0。</li>
+<li>このページの ①〜④ は回の番号。1 人・3 人の区別は「段①・段②」と書く。</li>
+</ul>
+<details><summary>スクリプトと結果の置き場（開く）</summary><div class="dbody">
+<ul>
+<li>置き場はホストの <code>/home/jovyan/.claude-jovyan/jobs/d9a2cca5/tmp/monkey/</code>（リポジトリの外）。</li>
+<li>スクリプト: <code>monkey.py</code>（巡回）・<code>analyze.py</code>（集計）・<code>timed_stats.py</code>（nginx の応答時間のログ）・<code>cr_metrics.py</code>（Cloud Run の指標）・<code>nginx_exempt.sh</code>（試験の間だけ制限を外す）。</li>
+<li>結果: <code>out/</code>（①）・<code>out_after/</code>（②）・<code>out_after2/</code>（③）・<code>out_after3/</code>（④）。</li>
+</ul>
+</div></details>
+
+<h2 id="compare">4 回の比較</h2>
+<p class="sub">① 直す前（11/23 18:38）、② 直した後（22:03）、③（22:25）、④（11/24 16:54）。HIT は nginx のキャッシュから返ったもの。p95 は遅いほうから 5% の位置。swr は stale-while-revalidate（期限切れの直後に古いものを即座に返し、裏で取り直す秒数）。台の時間（billable）は Cloud Run の課金の対象の秒。</p>
+<div class="scroll"><table><thead><tr><th>指標</th><th>① 直す前</th><th>② 直した後</th><th>③</th><th>④</th></tr></thead><tbody>
+<tr><td>画面数（段①/段②）</td><td class="n">32/32</td><td class="n">35/105</td><td class="n">38/102</td><td class="n">39/108</td></tr>
+<tr><td>ブラウザの要求/画面（段①）</td><td class="n">約 25</td><td class="n">6.0</td><td class="n">6.0</td><td class="n">約 6</td></tr>
+<tr><td>直近の開催（11/21〜23）の Cache-Control</td><td><code>s-maxage=30</code></td><td>30 秒・swr 30 秒</td><td>30 秒・swr 30 秒（96 件すべて）</td><td>6 時間 72 件・30 日 32 件・30 秒 2 件</td></tr>
+<tr><td>直近の開催の予測・出馬表の HIT</td><td class="n">0</td><td class="n">0</td><td class="n">2/96</td><td class="n">51/106</td></tr>
+<tr><td>予測・出馬表の HIT 率（段② 最初/再訪）</td><td class="n">0%/0%</td><td class="n">0%/29%</td><td class="n">8%/38%</td><td class="n">約 51%/約 90%</td></tr>
+<tr><td>予測の最初の p50/p95（段②）</td><td class="n">1.84/2.99 秒</td><td class="n">1.95/3.17 秒</td><td class="n">1.38/3.54 秒</td><td class="n">0.12/5.87 秒</td></tr>
+<tr><td>出馬表の最初の p50/p95（段②）</td><td class="n">0.56/0.84 秒</td><td class="n">0.52/1.02 秒</td><td class="n">0.48/0.76 秒</td><td class="n">0.16/1.50 秒</td></tr>
+<tr><td>nginx で答え、Cloud Run へ行かなかった API の率（段②）</td><td class="n">－</td><td class="n">55%</td><td class="n">65%</td><td class="n">82%</td></tr>
+<tr><td>Cloud Run の要求/画面（段①/段②）</td><td class="n">3.8/3.8</td><td class="n">1.5/1.1</td><td class="n">1.2/0.9</td><td class="n">0.9/0.48</td></tr>
+<tr><td>台の時間 billable（段①/段②）</td><td class="n">24.2/20.4 秒</td><td class="n">55.2/68.6 秒</td><td class="n">38.1/48.7 秒</td><td class="n">26.9/51.5 秒</td></tr>
+<tr><td>台の時間/画面（段②）</td><td class="n">0.64 秒</td><td class="n">0.65 秒</td><td class="n">0.48 秒</td><td class="n">0.48 秒</td></tr>
+<tr><td>2 台目の起動と長い待ち</td><td>有り 12.7/11.8 秒</td><td>有り 29.9/11.9 秒</td><td>無し・最大 3.9 秒</td><td>有り 36.8/26.4 秒</td></tr>
+<tr><td>応答前の取り消し（件）</td><td class="n">1</td><td class="n">10</td><td class="n">16</td><td class="n">49</td></tr>
+</tbody></table></div>
+<ul>
+<li>直近の開催の HIT（件数）と HIT 率（段② の最初/再訪の割合）は、数える範囲が違う。</li>
+<li>④ の直近の開催の HIT が 51/106 に留まったのは、前の 30 秒の保存物が入れ替わる途中だったため。</li>
+<li>④ の応答前の取り消し 49 件のうち 45 件は、ブラウザの stale-while-revalidate の裏の取り直し。利用者はブラウザのキャッシュから 0 秒で見ていた。</li>
+<li>残りの 4 件は、2 台目の起動の待ち。</li>
+<li>④ の予測の p95 5.87 秒は、2 台目の起動の待ちを含む（次の節）。</li>
+<li>④ の長い待ちは、表は報告の 36.8 秒、次の節の流れの調べでは 37.1 秒。</li>
+</ul>
+
+<h2 id="fixes">各回の間に入れた直し</h2>
+<p class="sub">edge-fix は nginx とアプリのキャッシュ・待ちの直し、edge-front は画面（フロント）の直しの作業名。cache-warm は VPS がキャッシュを先に取り直す処理。401 は「ログインが要る」の応答。② → ③ の間の直しは、報告に記載が無い。</p>
+<h3>① → ②</h3>
+<ul>
+<li>edge-fix 1 回目: nginx が Vary（応答の変種を分ける見出し）で保存先を分けない。上流へは gzip で頼む。</li>
+<li>edge-fix 1 回目: 応答時間のログを残す。cache-warm の対象から 401 しか返らないパスを外す。</li>
+<li>edge-fix 1 回目: 今年の確定済みのレースを 30 日置く。期限切れの直後は古いものを返す（swr）。</li>
+<li>edge-fix 1 回目: 保守の状態を 120 秒、匿名の auth を 300 秒置く。匿名の会員 API には nginx が 401 を返す。</li>
+<li>edge-front: 匿名では会員 API を呼ばない。先読みはマウスが乗ったときだけ。</li>
+</ul>
+<h3>③ → ④</h3>
+<ul>
+<li>edge-fix 2 回目: 直近の開催を確定の結果で判定する。速報だけなら 6 時間置く。</li>
+<li>edge-fix 2 回目: 起動プローブで、起動の準備が終わるまでその台に要求を送らない。</li>
+<li>edge-fix 2 回目: モデルを起動の中で先に読む。</li>
+</ul>
+<p class="sub">直しの中身は <code>docs/operations/edge_fix_20261123.md</code>。</p>
+
+<h2 id="scaleout">2 台目の起動の流れ（④）</h2>
+<ol>
+<li>1 台目で、別々のレースの予測 3 本が同時に期限切れになり、計算された。CPU を取り合い、6.5〜7.2 秒かかった。</li>
+<li>Cloud Run の自動の台数調整（AUTOSCALING）で 2 台目が起きた。</li>
+<li>起動中の台に回された 2 本が、37.1 秒・26.4 秒待った。起動の中身は、束（データのまとめ）の取り込み 15.3 秒と起動処理 32.1 秒。</li>
+</ol>
+<div class="box">
+<b>直し（11/25〜26 に反映予定）</b>
+<ul>
+<li>本番の最大台数を 3 → 1 にする。台が増えないので、2 台目の起動の待ちが起きない。</li>
+<li>0 台からの最初の起動の待ちと、1 台の中の CPU の取り合いは残る。</li>
+<li>理屈の上限の費用も、月 約 3.3〜4 万円 → 約 1.3 万円に下がる。</li>
+<li>nginx の use_stale（上流が答えないときに古いものを返す条件）に http_429 を足す。</li>
+</ul>
+</div>
+
+<h2 id="cost">費用</h2>
+<ul>
+<li>試験は 1 回 約 0.4〜0.7 円。</li>
+<li>実際の費用は、11/19〜23 で 1 日 約 34〜48 円。</li>
+<li>月にすると 約 1,100〜1,450 円で、予算 2,000 円の内。</li>
+</ul>
+<div class="box"><b class="warn">「月 約 3.3〜4 万円 → 約 1.3 万円」は理屈の値で、実際の費用ではない。</b> 50 人が 24 時間使い続けた場合の上限。</div>
+
+<h2 id="next">未計測と次の手</h2>
+<ul>
+<li>50 人の同時は未計測。試験の間だけ、nginx の制限からホストの IP を外す操作が要る（<code>nginx_exempt.sh</code>）。</li>
+<li>最大台数 1 の直しの後に、5 回目を流す。</li>
+<li>VPS から配る仕組み（edge-cache）の本番は 11/30 以降。計画は <code>docs/operations/edge_cache_plan_20261121.md</code>。</li>
+</ul>
+</main>
+</body>
+</html>

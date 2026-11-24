@@ -43,8 +43,8 @@ def test_deploy_default_and_dry_run_execute_nothing(fake_gcloud):
         assert not log.exists(), "gcloud が呼ばれた"
     out = r.stdout
     assert "gcloud run deploy keiba-api" in out
-    # 要件: 最小 0 / 最大 3 / 同時実行 20-40 / タイムアウト 60 / KEIBA_ENV=prod / KEIBA_RUN_LOCATION=gcp / 共有ヘッダ必須
-    assert "--min-instances 0" in out and "--max-instances 3" in out and "--timeout 60" in out
+    # 要件: 最小 0 / 最大 1（2026-11-24 に 3 → 1）/ 同時実行 20-40 / タイムアウト 60 / KEIBA_ENV=prod / KEIBA_RUN_LOCATION=gcp / 共有ヘッダ必須
+    assert "--min-instances 0" in out and "--max-instances 1" in out and "--timeout 60" in out    # 2 台目の起動待ちを無くす（2026-11-24）
     assert 20 <= int(re.search(r"--concurrency (\d+)", out).group(1)) <= 40
     assert "KEIBA_ENV=prod" in out and "KEIBA_RUN_LOCATION=gcp" in out and "KEIBA_PROXY_KEY_REQUIRED=1" in out
     assert "--set-secrets" in out and "KEIBA_PROXY_KEY=KEIBA_PROXY_KEY:latest" in out and "--no-traffic" not in out.split("gcloud builds")[0]

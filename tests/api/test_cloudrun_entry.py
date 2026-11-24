@@ -174,3 +174,20 @@ def test_request_mode_waits_for_full_initial_pull_at_startup(entry, monkeypatch)
     asyncio.run(entry._startup(None, warm=False, wait_full=True))          # 時間切れでも例外を出さず起動を続ける
     gcs_mirror.initial_full_pulled.set()
     asyncio.run(entry._startup(None, warm=False, wait_full=True))
+
+
+def test_startup_info_lines_reach_stdout(monkeypatch, capsys):
+    """起動の段の INFO（「起動時ウォームアップ完了」など）が Cloud Run のログ（stdout）に出る。ルートのロガーの水準は変えない。"""
+    import logging
+
+    monkeypatch.setenv("KEIBA_CLOUDRUN_LAZY", "1")
+    from src.api import cloudrun_entry
+
+    root_level = logging.getLogger().level
+    lg = logging.getLogger("api.cloudrun")
+    assert lg.getEffectiveLevel() == logging.INFO and lg.propagate is False
+    h = next(h for h in lg.handlers if isinstance(h, logging.StreamHandler))
+    monkeypatch.setattr(h, "stream", sys.stdout)
+    cloudrun_entry.logger.info("起動時ウォームアップ完了: %d 件", 3)
+    assert "起動時ウォームアップ完了: 3 件" in capsys.readouterr().out
+    assert logging.getLogger().level == root_level
