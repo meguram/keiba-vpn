@@ -1,0 +1,13 @@
+{
+  "_doc": "レースごとの「予測・推奨が画面に出た」Slack 通知の設定（src/scripts/ops/race_ready_notify.py）。秘密は書かない（webhook_env は変数名だけ）。計画: docs/operations/slack_race_ready_plan_20261119.md",
+  "lead_sec": 240,
+  "max_age_min": 15,
+  "late_warn_min": 10,
+  "max_per_run": 20,
+  "send_gap_sec": 1.2,
+  "targets": {
+    "stg": {"base_url": "https://stg.megu-keiba.com", "webhook_env": "SLACK_WEBHOOK_URL_STG", "keiba_env": "stg", "late": true},
+    "prod": {"base_url": "https://app.megu-keiba.com", "webhook_env": "SLACK_WEBHOOK_URL_PROD", "keiba_env": "prod", "late": false,
+             "features": {"stage2": true}}
+  }
+}

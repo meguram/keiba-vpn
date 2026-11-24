@@ -662,3 +662,86 @@ def test_backup_trees_are_pushed_but_not_pulled_marked_or_writable_by_jobs(tmp_p
     g = Fake()
     assert gm.push(g, tmp_path, gm.PUSH_TREES)["uploaded"] == 3
     assert marked == ["data/local/inference/bets_stage2/20261121/R1.json"]
+
+
+def test_push_notes_race_push_times_locally_for_the_slack_notice(tmp_path, monkeypatch):
+    """予測（v6・v6c）と第 2 段の判定を上げた時刻を、手元の race_push_log/<日>.jsonl に残す（host の push だけ・止めの目印は除く）。"""
+    import json
+
+    from src.utils import cache_marker
+
+    monkeypatch.setattr(cache_marker, "mark_from_paths", lambda rels: 0)
+    trees = tuple(f"data/local/inference/{t}" for t in ("predictions_v6", "predictions_v6c", "bets_stage2"))
+    _w(tmp_path, "data/local/inference/predictions_v6/20261128/202605050101.parquet", b"a")
+    _w(tmp_path, "data/local/inference/predictions_v6/20261128/202605050102.parquet", b"b")
+    _w(tmp_path, "data/local/inference/bets_stage2/20261128/202605050101.json", b"{}")
+    _w(tmp_path, "data/local/inference/bets_stage2/_dev_only.json", b"{}")
+    man = tmp_path / "data/local/meta/m.json"
+    g = Fake()
+    gm.push(g, tmp_path, trees, manifest=man, index_writer="host")
+    rows = [json.loads(x) for x in (tmp_path / gm.RACE_PUSH_LOG / "20261128.jsonl").read_text(encoding="utf-8").splitlines()]
+    by = {r["tree"]: r for r in rows}
+    assert set(by) == {"predictions_v6", "bets_stage2"}
+    assert by["predictions_v6"]["race_ids"] == ["202605050101", "202605050102"]
+    assert by["bets_stage2"]["race_ids"] == ["202605050101"] and by["bets_stage2"]["index_ok"] is True
+    assert not any(k.startswith(f"{gm.PREFIX}/{gm.RACE_PUSH_LOG}") for k in g.objs)   # GCS へは上げない
+    gm.push(g, tmp_path, trees, manifest=man, index_writer="host")                    # 変化なし → 行を足さない
+    assert len((tmp_path / gm.RACE_PUSH_LOG / "20261128.jsonl").read_text(encoding="utf-8").splitlines()) == 2
+    _w(tmp_path, "data/local/inference/predictions_v6/20261128/202605050103.parquet", b"c")
+    gm.push(g, tmp_path, trees, index_writer="jobs")                                  # host 以外は書かない
+    assert len((tmp_path / gm.RACE_PUSH_LOG / "20261128.jsonl").read_text(encoding="utf-8").splitlines()) == 2
+
+
+def test_race_push_note_records_index_failure(tmp_path, monkeypatch):
+    import json
+
+    from src.utils import cache_marker
+
+    monkeypatch.setattr(cache_marker, "mark_from_paths", lambda rels: 0)
+
+    class IndexFails(Fake):
+        def upload(self, key, data):
+            if "/_index/" in key:
+                raise OSError("boom")
+            super().upload(key, data)
+
+    _w(tmp_path, "data/local/inference/predictions_v6/20261128/202605050101.parquet", b"a")
+    gm.push(IndexFails(), tmp_path, ("data/local/inference/predictions_v6",), manifest=tmp_path / "m.json", index_writer="host")
+    row = json.loads((tmp_path / gm.RACE_PUSH_LOG / "20261128.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert row["index_ok"] is False
+
+
+def test_push_survives_race_push_note_failure(tmp_path, monkeypatch):
+    """手元の記録の置き場に書けなくても、push の結果は変わらない（最善努力）。"""
+    from src.utils import cache_marker
+
+    monkeypatch.setattr(cache_marker, "mark_from_paths", lambda rels: 0)
+    _w(tmp_path, gm.RACE_PUSH_LOG, b"not a dir")                                      # フォルダの場所がファイル → mkdir が失敗する
+    _w(tmp_path, "data/local/inference/predictions_v6/20261128/202605050101.parquet", b"a")
+    r = gm.push(Fake(), tmp_path, ("data/local/inference/predictions_v6",), manifest=tmp_path / "m.json", index_writer="host")
+    assert r["uploaded"] == 1
+
+
+def test_index_recovery_row_is_written_even_without_race_files(tmp_path, monkeypatch):
+    import json
+
+    from src.utils import cache_marker
+
+    monkeypatch.setattr(cache_marker, "mark_from_paths", lambda rels: 0)
+    fail = {"on": True}
+
+    class Flaky(Fake):
+        def upload(self, key, data):
+            if "/_index/" in key and fail["on"]:
+                raise OSError("boom")
+            super().upload(key, data)
+
+    g = Flaky()
+    _w(tmp_path, "data/local/inference/predictions_v6/20261128/202605050101.parquet", b"a")
+    gm.push(g, tmp_path, ("data/local/inference/predictions_v6",), manifest=tmp_path / "m.json", index_writer="host")
+    fail["on"] = False
+    gm.push(g, tmp_path, ("data/local/inference/predictions_v6",), manifest=tmp_path / "m.json", index_writer="host")   # 上げるファイルなし
+    gm.push(g, tmp_path, ("data/local/inference/predictions_v6",), manifest=tmp_path / "m.json", index_writer="host")   # 成功が続く → 足さない
+    rows = [json.loads(x) for p in (tmp_path / gm.RACE_PUSH_LOG).glob("*.jsonl") for x in p.read_text(encoding="utf-8").splitlines()]
+    idx = [r["index_ok"] for r in rows if r["tree"] == "_index"]
+    assert idx == [False, True]

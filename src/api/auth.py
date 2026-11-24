@@ -290,7 +290,7 @@ def verify_password(password: str) -> bool:
     return hmac.compare_digest(password, dev_pw)
 
 
-# ── 会員アカウント（config/members.json。パスワードはハッシュだけを持つ） ──
+# ── 会員アカウント（config/members.json＝動作確認用の test。2026-11-19 から git の外で、無ければ読まない。パスワードはハッシュだけを持つ） ──
 
 _MEMBERS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "config", "members.json")
 _DUMMY_SALT = bytes(16)
@@ -343,6 +343,8 @@ def _load_members() -> list[dict]:
 
 def _pepper() -> bytes:
     explicit = os.environ.get("KEIBA_MEMBERS_PEPPER", "")
+    if explicit.startswith("hex:"):         # DEV_SECRET_KEY から導いた今の値をそのまま渡す形（login_rotate export-pepper。共有ログインの Job 用）
+        return bytes.fromhex(explicit[4:].strip())
     if explicit:
         return explicit.encode()
     return hmac.new(_get_secret_key().encode(), b"keiba-members-pepper-v1", hashlib.sha256).digest()

@@ -72,14 +72,16 @@ def _write_state(d: dict) -> None:
     os.replace(tmp, p)
 
 
-def message(user_id: str, month: str, password: str) -> str:
+def message(user_id: str, month: str, password: str = "") -> str:
+    """Slack の文面。パスワード・ID は入れない（Slack の履歴に平文を残さない。2026-11-19）。値はホストの root で show を実行して確かめる。"""
     y, m = month.split("-")
-    return (f"【めぐ競馬】共通ログイン情報を更新しました（{int(y)}年{int(m)}月分）\nログインID: {user_id}\nパスワード: {password}\n"
-            "有効: 月末まで（翌月1日に自動で更新され、これまでのログインは解除されます）\n※ このメッセージは配布後に削除してください")
+    return (f"【めぐ競馬】共通ログインのパスワードを更新しました（{int(y)}年{int(m)}月分）\n"
+            "値はホストで確認: sudo /opt/conda/bin/python3 -m src.scripts.ops.shared_login show\n"
+            "有効: 月末まで（翌月1日に自動で更新され、これまでのログインは解除されます）")
 
 
 def ensure(user_id: str, now: datetime | None = None, notify: bool = True, dry: bool = False) -> str:
-    """戻り値: created / rotated / notified（通知だけ再送）/ ok（変更なし）/ disabled（無効にされているので触らない）。
+    """戻り値: created / rotated / notified（通知だけ再送）/ ok（変更なし）/ disabled（無効にされているので触らない）/ managed（login_rotate に移った記録なので触らない）。
     dry=True は判定だけ（名簿・状態を書かず、通知しない）。戻り値は同じ語に ``would-`` を付ける（ok と disabled はそのまま）。"""
     from src.api import auth
     from src.scripts.ops import manage_users as mu
@@ -95,6 +97,8 @@ def ensure(user_id: str, now: datetime | None = None, notify: bool = True, dry: 
         result = "created"
     elif rec.get("enabled", True) is False:
         return "disabled"
+    elif rec.get("rotation_month"):
+        return "managed"         # 乱数の毎月の切り替え（login_rotate）に移った記録。派生の値に戻さない
     elif not auth.verify_member_login(user_id, pw):
         if not dry:
             mu.set_password(user_id, pw)
@@ -131,6 +135,12 @@ def main(argv: list[str] | None = None) -> int:
         print("KEIBA_SHARED_LOGIN_ID が未設定のため何もしません")
         return 0
     if a.cmd == "show":
+        from src.api import auth
+
+        rec = auth.member_record(uid)
+        if rec and rec.get("rotation_month"):   # 乱数の毎月の切り替え（login_rotate）に移った記録。派生の値は使えないので出さない
+            print("この記録は毎月の切り替え（login_rotate）に移っています。値は docs/operations/shared_login_rotation.md の「下書きの取り出し」で確かめてください", file=sys.stderr)
+            return 2
         m = month_of()
         print(f"{m}\nログインID: {uid}\nパスワード: {password_for(m)}")
         return 0

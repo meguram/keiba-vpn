@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# テストユーザー（id: test / pw: test。config/members.json にはハッシュだけ）の有効・無効を .env の KEIBA_TEST_USER で切り替える。
+# テストユーザー（id: test / pw: test。config/members.json にはハッシュだけ。このファイルは 2026-11-19 から git の外で、置いたマシンでだけ有効）の有効・無効を .env の KEIBA_TEST_USER で切り替える。
 # .env を書き換えるだけで再起動はしない（反映は API の次の再起動＝メンテナンス窓の自動デプロイ、または手動の restart_server.sh）。
 #   bash scripts/ops/test_user_flag.sh on      # stg 用: KEIBA_TEST_USER=1
 #   bash scripts/ops/test_user_flag.sh off     # 公開前・prod: KEIBA_TEST_USER=0

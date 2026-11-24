@@ -3877,7 +3877,7 @@
     "kind": "none"
    },
    "blockers": [],
-   "enabled": true,
+   "enabled": false,
    "ready": true,
    "parallel_env": {
     "KEIBA_SHARED_LOGIN_DRY": "1"
@@ -3885,7 +3885,7 @@
    "mirror_in": [
     "data/local/auth"
    ],
-   "reason": "2026-10-29: 並走中は KEIBA_SHARED_LOGIN_DRY=1 で判定だけ（名簿・状態を書かず、通知しない）。名簿は ops/mirror の members.json を mirror_in で読む。状態ファイル shared_login_state.json は state で持ち回る（以前は config を丸ごと state にしていた）。切替時の残り: 名簿の正本をホストから移し、Jobs が書き換えた名簿を ops/mirror へ上げる（今は root の gcs-mirror-push-auth が上げている）",
+   "reason": "2026-11-19: 無効。毎月の切り替えは専用の Job keiba-login-rotate（src/scripts/ops/login_rotate.py・docs/operations/shared_login_rotation.md）に移す。job_dispatch（keiba-jobs）に秘密を渡さないため、ここからは動かさない。以前: 2026-10-29: 並走中は KEIBA_SHARED_LOGIN_DRY=1 で判定だけ（名簿・状態を書かず、通知しない）。名簿は ops/mirror の members.json を mirror_in で読む。状態ファイル shared_login_state.json は state で持ち回る（以前は config を丸ごと state にしていた）。切替時の残り: 名簿の正本をホストから移し、Jobs が書き換えた名簿を ops/mirror へ上げる（今は root の gcs-mirror-push-auth が上げている）",
    "ready_note": "2026-10-29 並走（棚卸し §14）のため ready。書き込みは parallel/ と state/ だけ（src/ops/parallel_step.py）。並走中に確かめること: 秘密 DEV_SECRET_KEY（パスワードの元。ホストと同じ値）と KEIBA_SHARED_LOGIN_ID を Secret Manager に登録し、Jobs に渡す（SECRETS_EXTRA。ユーザー作業）。未登録の間は『ID 未設定』で何もしない（exit 0）",
    "ready_confirmed_at": "2026-10-29"
   },
