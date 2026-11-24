@@ -158,7 +158,7 @@ GROUPS: dict[str, list[Group]] = {
                E("docs/operations/cost_changes_20261113.md", "費用に効く変更（2026-11-13）"), E("docs/operations/cost_recalc_20261028.md", "費用の再計算（2026-10-28）"),
                E("docs/operations/billing.md", "課金エクスポートの見方"), E("config/cost_assumptions.json", "費用の前提（上限・単価）")]),
         Group("監視・負荷", "監視ポータル・ドリフトの監視・負荷の限界と対応。",
-              ["production_load", "vps_load_and_cache", "DATA_HEALTH"],
+              ["production_load", "vps_load_and_cache", "raceday_audit_and_load_test_20261123", "DATA_HEALTH"],
               [E("docs/monitoring-portal.md", "監視ポータルの仕様"), E("docs/operations/drift_monitor.md", "ドリフトの監視"),
                E("docs/operations/diagnostics.md", "診断の手順")]),
     ],
