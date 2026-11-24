@@ -297,6 +297,59 @@ class ScrapeStatusTest(unittest.TestCase):
         self.assertEqual(an["cron:d:overdue"]["severity"], "critical")
         self.assertIn("cron:e:stuck", an)
 
+    def test_stuck_threshold_per_job(self):
+        # 開催日に一日中動くランナーは 9 時間でも正常。11 時間を超えたら停止の疑い。ほかのジョブは 6 時間のまま
+        jobs = [job("raceday-runner", "R", running_hours=9, state="running"), job("raceday-result-runner", "RR", running_hours=12, state="running"),
+                job("horse-training-backfill", "H", running_hours=7, state="running")]
+        an = SS.detect_anomalies(jobs, None, None, {})
+        self.assertNotIn("cron:raceday-runner:stuck", an)
+        self.assertIn("cron:raceday-result-runner:stuck", an)
+        self.assertIn("cron:horse-training-backfill:stuck", an)
+
+    def test_collect_cron_unrecorded_and_latest_start(self):
+        now = datetime(2026, 11, 24, 3, 15, tzinfo=timezone.utc)                          # JST 12:15
+        st = {"groups": [{"name": "g", "jobs": [
+            {"id": "new", "cron_exprs": ["20 4 * * *"], "state": "waiting", "last_run": None},              # 記録もログも無い（足したばかり）
+            {"id": "every", "cron_exprs": ["* * * * *"], "state": "running", "last_run": None},             # 毎分・実行中でも、記録が無いことは知らせる
+            {"id": "silent", "cron_exprs": ["20 4 * * *"], "state": "waiting",
+             "last_run": {"started_at": "2026-11-20T13:20:00+09:00"}},                                       # ログの時刻だけ（古い）は従来どおり未開始
+            {"id": "flock", "cron_exprs": ["*/15 23,0-7 * * *"], "state": "waiting",
+             "last_run": {"started_at": "2026-11-24T07:45:00+09:00"}},                                       # 最後に終わった長い回の開始は古い
+        ]}]}
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t)
+            short = datetime(2026, 11, 24, 3, 0, tzinfo=timezone.utc).timestamp()                    # 12:00 JST に始まった短い回
+            long_ = datetime(2026, 11, 23, 22, 45, tzinfo=timezone.utc).timestamp()
+            (t / "flock.tsv").write_text(f"{short}\t{short + 2}\t0\t1\n{long_}\t{short + 60}\t0\t2\n", encoding="utf-8")
+            jobs = {j["id"]: j for j in SS.collect_cron(now, status_fn=lambda: st, runs_dir=t, down=[])}
+        self.assertIsNone(jobs["new"]["overdue_min"])
+        self.assertTrue(jobs["new"]["unrecorded"])
+        self.assertIsNone(jobs["every"]["overdue_min"])
+        self.assertIsNotNone(jobs["silent"]["overdue_min"])
+        self.assertFalse(jobs["silent"]["unrecorded"])
+        self.assertIsNone(jobs["flock"]["overdue_min"])
+        an = SS.detect_anomalies(list(jobs.values()), None, None, {})
+        self.assertNotIn("cron:new:overdue", an)
+        self.assertIs(an["cron:new:unrecorded"]["repeat"], False)
+        self.assertEqual(an["cron:new:unrecorded"]["severity"], "warning")
+        self.assertIs(an["cron:every:unrecorded"]["repeat"], False)                 # 毎分のものも記録が無ければ 1 回知らせる
+
+    def test_unrecorded_is_sent_once_and_does_not_flap(self):
+        # 予定時刻の直後（20 分以内）・実行中でも消えない。消えないので、状態の quiet が残り、送り直さない
+        st = {"groups": [{"name": "g", "jobs": [{"id": "new", "cron_exprs": ["20 4 * * *"], "state": "waiting", "last_run": None}]}]}
+        state: dict = {}
+        sent = []
+        with tempfile.TemporaryDirectory() as t:
+            for d, h, m, run_state in ((24, 3, 0, "waiting"), (24, 4, 25, "waiting"), (24, 4, 30, "running"), (24, 5, 0, "waiting"), (25, 3, 0, "waiting")):
+                now = datetime(2026, 11, d, h, m, tzinfo=timezone.utc)
+                st["groups"][0]["jobs"][0]["state"] = run_state
+                jobs = SS.collect_cron(now, status_fn=lambda: st, runs_dir=Path(t), down=[])
+                an = SS.detect_anomalies(jobs, None, None, {})
+                self.assertIn("cron:new:unrecorded", an)
+                items, resolved, state = SS.step_state(state, an, now)
+                sent += [i["key"] for i in items] + [r["key"] for r in resolved]
+        self.assertEqual(sent, ["cron:new:unrecorded"])
+
     def test_detect_network_schema_coverage(self):
         q = {"stats": {}, "failed_reasons": {"http_403": 4, "http_429": 2}}
         schema = {"last24": 40, "by_day": {"a": 2, "b": 3, "c": 4, "d": 40}, "categories": {"x": 40}}

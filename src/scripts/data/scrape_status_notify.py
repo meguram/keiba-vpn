@@ -43,6 +43,8 @@ FAIL_CRIT = 3            # 連続失敗がこの回数で『緊急』
 OVERDUE_GRACE_MIN = 20   # 予定時刻からこの分数を過ぎても始まらなければ未開始とみなす
 OVERDUE_CRIT_MIN = 180   # 未開始がこの分数を超えたら緊急
 STUCK_HOURS = 6          # 実行中がこの時間を超えたら停止の疑い
+# 開催日に一日中動くランナー（07:30 ごろ起動・最終レースの後に終わる。正常で 7〜9 時間）は、この時間を超えたら停止の疑い。id の前方一致
+STUCK_HOURS_BY_PREFIX = (("raceday-runner", 11), ("raceday-result-runner", 11), ("raceday-weight-runner", 11))
 SCHEMA_SPIKE_MIN = 20    # スキーマ違反の急増: 直近 24 時間の件数がこの値以上で、過去の中央値の 3 倍以上
 BLOCK_MIN = 5            # 403/429 の失敗がこの件数以上で取得停止の兆候
 COVERAGE_FLOOR = 0.90    # 調教の被覆の下限
@@ -53,6 +55,13 @@ HOST_TAIL_MAX_H = 24     # 最後の記録から今までの空白は、この�
 # 期待する開催日条件: raceday（その日が開催日）/ eve（翌日が開催日）/ always
 EXPECT = (("raceday-eve", "eve"), ("raceday-runner", "raceday"), ("raceday-result-runner", "raceday"), ("raceday-evening", "raceday"),
           ("raceday-comment", "raceday"), ("raceday-weight-runner", "raceday"))
+
+
+def stuck_hours_of(job_id: str) -> float:
+    for prefix, h in STUCK_HOURS_BY_PREFIX:
+        if job_id.startswith(prefix):
+            return h
+    return STUCK_HOURS
 
 
 def expectation_of(job_id: str) -> str:
@@ -157,6 +166,8 @@ def collect_cron(now: datetime, *, status_fn: Callable[..., dict] | None = None,
 
     予定時刻がホストの停止中（host_down_windows）だった未開始は overdue_min にせず missed_down（停止期間）に入れる。
     ジョブ自体の異常ではないので、detect_anomalies が 1 件にまとめて 1 回だけ知らせる。
+    実行の記録（cron_run.sh）もログも無いジョブは、動いたかどうか分からないので overdue_min にせず unrecorded にする
+    （足したばかりの cron・何もしない日に黙って終わる cron を『緊急の未開始』と誤報しない。cron_run.sh で包めば判定できる）。
     """
     from src.monitor import cron_status as CSM
 
@@ -182,12 +193,17 @@ def collect_cron(now: datetime, *, status_fn: Callable[..., dict] | None = None,
                         target = pf.astimezone(JST) if exp == "raceday" else pf.astimezone(JST) + timedelta(days=1)
                         day_ok = raceday(target.strftime("%Y%m%d"))
                     started = last.get("started_at")
-                    last_start = datetime.fromisoformat(started).timestamp() if started else (runs[-1][0] if runs else 0.0)
+                    # 最後の行は『最後に終わった回』。長い回が後から終わると、その後に始まった短い回より古い開始になるので、記録の中の最も新しい開始を使う
+                    starts = [datetime.fromisoformat(started).timestamp()] if started else []
+                    starts += [r[0] for r in runs]
+                    last_start = max(starts, default=0.0)
                     late = (cnow - pf).total_seconds() / 60
-                    if day_ok and late > OVERDUE_GRACE_MIN and last_start < pf.timestamp() - 60:
+                    if day_ok and late > OVERDUE_GRACE_MIN and last_start < pf.timestamp() - 60 and starts:
                         missed_down = next(((a, b) for a, b in down if a < pf.timestamp() < b), None)
                         if missed_down is None:
                             overdue_min = round(late)
+            # 記録もログも無いあいだは、予定時刻・開催日・実行中に関係なく立て続ける（消えて立ち直すと、1 回だけのはずの通知が出直す）
+            unrecorded = bool(j.get("cron_exprs")) and not j.get("yields") and not last.get("started_at") and not runs
             running_since = j.get("running_since")
             running_h = None
             if j.get("state") == "running" and running_since:
@@ -200,7 +216,7 @@ def collect_cron(now: datetime, *, status_fn: Callable[..., dict] | None = None,
                 "state": j.get("state"), "result": last.get("result"), "started_at": last.get("started_at"),
                 "ended_at": last.get("ended_at"), "duration_sec": last.get("duration_sec"), "exit_code": last.get("exit_code"),
                 "next_run": j.get("next_run"), "consecutive_failures": consecutive_failures(runs),
-                "overdue_min": overdue_min, "missed_down": missed_down, "running_hours": running_h, "yields": bool(j.get("yields")),
+                "overdue_min": overdue_min, "missed_down": missed_down, "unrecorded": unrecorded, "running_hours": running_h, "yields": bool(j.get("yields")),
                 "cause": ((j.get("cause") or {}).get("label")), "cause_id": ((j.get("cause") or {}).get("pattern_id")),
             })
     return jobs
@@ -424,7 +440,11 @@ def detect_anomalies(jobs: list[dict], queue: dict | None, schema: dict | None, 
             out[f"cron:{jid}:overdue"] = {"severity": "critical" if m >= OVERDUE_CRIT_MIN else "warning",
                                          "title": f"{j['name']} が予定時刻から {m} 分たっても始まっていない",
                                          "detail": f"最終実行 {j.get('started_at') or '記録なし'}"}
-        if j.get("running_hours") and j["running_hours"] >= STUCK_HOURS:
+        if j.get("unrecorded"):
+            out[f"cron:{jid}:unrecorded"] = {"severity": "warning", "repeat": False,
+                                            "title": f"{j['name']} の実行の記録もログも無い（動いたか判定できない）",
+                                            "detail": "未開始・失敗は判定していません。crontab の行を scripts/cron/cron_run.sh <id> -- で包むと判定できます（足したばかりで、ログを書く行なら、最初の実行の後に消えます）。"}
+        if j.get("running_hours") and j["running_hours"] >= stuck_hours_of(jid):
             out[f"cron:{jid}:stuck"] = {"severity": "warning", "title": f"{j['name']} が {j['running_hours']:.1f} 時間実行中（停止の疑い）", "detail": ""}
         if j.get("cause_id") and any(k in str(j["cause_id"]).lower() for k in ("dns", "network", "403", "429", "block")) and cf >= 1:
             out["net:cause"] = {"severity": "critical", "title": "取得の停止の兆候（ネットワーク/アクセス拒否）",

@@ -10,7 +10,8 @@ case "$PROJECT_DIR" in
   */.claude/worktrees/*) echo "共有の作業ツリー（/home/jovyan/work/keiba-vpn）の scripts/cron から流す（worktree から入れると cron が worktree を指す）" >&2; exit 1 ;;
 esac
 TAG="KEIBA-CANDIDATE-RB"
-RUN="bash ${PROJECT_DIR}/scripts/cron/candidate_rb_live.sh"
+# cron_run.sh で包む: 監視（scrape_status_notify）が実行の記録で未開始・失敗を判定する（本体の出力は rb_live/eve.log で、何もしない日は黙って終わるため）
+RUN="bash ${PROJECT_DIR}/scripts/cron/cron_run.sh candidate_rb_live -- bash ${PROJECT_DIR}/scripts/cron/candidate_rb_live.sh"
 LOG=">> ${PROJECT_DIR}/logs/candidate_rb_live.cron.log 2>&1"
 L1="30 9 * * * ${RUN} eve ${PROJECT_DIR} ${LOG} # ${TAG}"
 L2="5-40/5 22 * * * ${RUN} morning ${PROJECT_DIR} ${LOG} # ${TAG}"
