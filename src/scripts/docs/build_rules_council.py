@@ -4,6 +4,7 @@
   docs/html/operations/final/rules_council_t60_band.html   RC-1 本物の T-60 で再現の帯を確かめる
   docs/html/operations/final/rules_council_favorites.html  RC-2 一桁オッズ × 全体 × 深さ 1
   docs/html/operations/final/rules_council_daybias.html    RC-3 当日の馬場の偏り
+  docs/html/operations/final/rules_council_debut.html      RC-4 初出走の馬の目録に無い列
   docs/html/operations/final/rules_council_summary.html    まとめ（議題の一覧・通算の数え・勝ち筋の台帳）
 入力: docs/operations/retrain_trials/rules_council_*.json、config/rules_council/prereg_rc2.json、docs/operations/retrain_trials/rules_council_pages.json（結論の文）
 使い方: python -m src.scripts.docs.build_rules_council
@@ -139,6 +140,30 @@ def build_rc3(Bd: dict, texts: dict) -> str:
     return page("当日の馬場の偏りのルール探し（RC-3）", b)
 
 
+def build_rc4(Bd: dict, texts: dict) -> str:
+    b = ["<h2>結論</h2>", '<div class="box">' + bullets(texts["conclusion"]) + "</div>"]
+    rows = []
+    for col, r in Bd["cols"].items():
+        for band in ("一桁", "穴馬"):
+            v = r.get(band)
+            if not v:
+                continue
+            for t in ("top20", "top10"):
+                rows.append([esc(col), band, {"top20": "上位 20%", "top10": "上位 10%"}[t], f"{v[t + '_runs']:,}", f"{v[t + '_wins']:.0f}", nm(v[t + "_lift"]), nm(v[t + "_Q"]),
+                             nm(v[t + "_lift_over_Q"]), nm(v[t + "_se"])])
+    b.append(f"<h2>上限と市場の値付け（探す側 70%・再現 ≤ 50 倍の初出走 {Bd['runs']:,} 走のうち 2018〜24 の列の分かる走）</h2>")
+    b.append("<p>上限 ＝ 列の上位の勝率 ÷ 同じ帯の初出走の勝率（市場を使わない）。Q ＝ 上位の群の確定の q の平均 ÷ 帯の q の平均（オッズだけ）。"
+             "上限 ÷ Q は探す側の市場比の粗い値。要る倍率は 一桁 約 1.27・穴馬 約 1.3。</p>")
+    b.append(table(["列", "帯", "上位（前の年の分布の分位）", "走", "勝ち", "上限", "Q", "上限 ÷ Q", "SE"], rows, {3, 4, 5, 6, 7, 8}))
+    cy = Bd["coverage_by_year"]
+    b.append(fold("生産者・母が付く率（初出走の年・その後の出走の数）", table(["年", "生産者", "母"], [[y, pc(v["has_breeder"], 0), pc(v["has_dam"], 0)] for y, v in cy.items()], {1, 2})
+                  + table(["その後の出走（2016〜19 年の初出走）", "生産者", "母"], [[k, pc(v["has_breeder"], 1), pc(v["has_dam"], 1)] for k, v in Bd["coverage_by_later_runs_2016_19"].items()], {1, 2})))
+    b.append("<h2>判定と見た回数</h2>" + bullets(texts["judge"]))
+    b.append("<h2>作り方・再現</h2>" + bullets(["<code>python -m src.research.rules_council.debut</code>（列）→ <code>debut bound</code>（結果 <code>docs/operations/retrain_trials/rules_council_rc4_bound.json</code>）。費用 0 円。",
+                                                "決定は <code>docs/operations/roi_plus_council/decisions.md</code> の「RC-4 の判断」。"]))
+    return page("初出走の馬の目録に無い列のルール探し（RC-4）", b)
+
+
 def build_summary(texts: dict) -> str:
     b = ["<h2>結論</h2>", '<div class="box">' + bullets(texts["conclusion"]) + "</div>"]
     b.append("<h2>議題の一覧</h2>" + table(["議題", "日付", "中身", "結果", "頁"],
@@ -157,6 +182,7 @@ def main() -> None:
            "rules_council_favorites.html": build_rc2(json.loads((TRI / "rules_council_rc2.json").read_text(encoding="utf-8")),
                                                      json.loads(PREREG2.read_text(encoding="utf-8")), texts["rc2"]),
            "rules_council_daybias.html": build_rc3(json.loads((TRI / "rules_council_rc3_bound.json").read_text(encoding="utf-8")), texts["rc3"]),
+           "rules_council_debut.html": build_rc4(json.loads((TRI / "rules_council_rc4_bound.json").read_text(encoding="utf-8")), texts["rc4"]),
            "rules_council_summary.html": build_summary(texts["summary"])}
     for k, v in out.items():
         (DST / k).write_text(v, encoding="utf-8")

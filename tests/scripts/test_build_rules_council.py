@@ -17,7 +17,8 @@ def test_pages_build_from_results():
     t60, rc2 = _load("rules_council_t60.json"), _load("rules_council_rc2.json")
     P = json.loads(B.PREREG2.read_text(encoding="utf-8"))
     bd = _load("rules_council_rc3_bound.json")
-    for h in (B.build_rc1(t60, texts["rc1"]), B.build_rc2(rc2, P, texts["rc2"]), B.build_rc3(bd, texts["rc3"]), B.build_summary(texts["summary"])):
+    for h in (B.build_rc1(t60, texts["rc1"]), B.build_rc2(rc2, P, texts["rc2"]), B.build_rc3(bd, texts["rc3"]),
+              B.build_rc4(_load("rules_council_rc4_bound.json"), texts["rc4"]), B.build_summary(texts["summary"])):
         assert h.startswith("<!doctype html>") and h.endswith("</html>")
 
 
@@ -41,3 +42,11 @@ def test_rc3_bound_matches_text():
     mults = [v for k in ("inner", "front") for kk, o in bd[k].items() if isinstance(o, dict) for m, v in o.items() if "mult" in m]
     assert abs(max(mults) - bd["max_mult"]) < 1e-12 and bd["max_mult"] < 1.27   # 要る倍率（一桁の 損益分岐 ÷ 帯の比）に届かない、という結論の前提
     assert f"{bd['max_mult']:.2f}" in " ".join(texts["rc3"]["conclusion"])
+
+
+def test_rc4_text_matches_bound():
+    texts = _load("rules_council_pages.json")
+    bd = _load("rules_council_rc4_bound.json")
+    v = [r[b][f"{t}_lift_over_Q"] for r in bd["cols"].values() for b in ("一桁", "穴馬") if b in r for t in ("top20", "top10")]
+    c = " ".join(texts["rc4"]["conclusion"])
+    assert f"{min(v):.2f}〜{max(v):.2f}" in c and max(v) < 1.27
