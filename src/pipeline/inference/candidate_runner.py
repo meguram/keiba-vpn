@@ -59,6 +59,16 @@ def load_config(path: Path | str | None = None) -> dict:
 ENABLE_MARK = ROOT / "data/local/meta/candidate_runner.on"
 SCOPE_GRADES = ("未勝利", "新馬")
 SYSTEM_REASONS = ("no_prediction", "no_odds_t60", "stage2_error", "odds_broken", "deadline", "no_stage_inputs")
+STAGE_MIN_FIELD = 8      # 前段 S3（tracking_t6.MIN_FIELD）が保存値を書く最少の頭数。重い tracking_t6 を読み込まないよう写す（テストで一致を確かめる）
+
+
+def card_field_size(card) -> int | None:
+    """出馬表の頭数: field_size の列（前段と同じ値）があればその最大、無ければ行数。"""
+    if "field_size" in card.columns:
+        v = card["field_size"].drop_nulls()
+        if len(v):
+            return int(v.max())
+    return int(card.height) if card.height else None
 
 
 def enabled(cfg: dict) -> bool:
@@ -461,8 +471,12 @@ class Runner:
             logger.warning("RB の状態のめぐ指数の最終日を読めない: %s", exc)
         return out
 
-    def stage_inputs_ok(self, rid: str) -> bool:
-        """前段 S3 の保存値（tracking_v2/<日>/<rid>.json）があるか。無いと展開・位置取りの列が黙って空になる。"""
+    def stage_inputs_ok(self, rid: str, field_size: int | None = None) -> bool:
+        """前段 S3 の保存値（tracking_v2/<日>/<rid>.json）があるか。無いと展開・位置取りの列が黙って空になる。
+        8 頭未満のレースは、前段が保存値を書かない（tracking_t6.MIN_FIELD。学習の表も 8 頭未満は位置取り・z_hat が空）ので、無くてよい。
+        11/21 の 7 頭立ての新馬 202608050506 を、本番の v6e は予測したのに、ここで見送っていた。"""
+        if field_size is not None and 0 < field_size < STAGE_MIN_FIELD:
+            return True
         inf = Path((self.cfg.get("env") or {}).get("KEIBA_INFERENCE_DIR") or "")
         return (inf / "tracking_v2" / self.iso / f"{rid}.json").exists()
 
@@ -524,15 +538,15 @@ class Runner:
             try:
                 if self.degraded:
                     raise RuntimeError("メモリの上限を超えた後なので推論しない")
-                if not self.replay and not self.stage_inputs_ok(rid):
-                    s["no_stage_inputs"] = True
-                    raise RuntimeError("前段 S3 の保存値（tracking_v2）が無い")
                 if self.meter.over:
                     raise RuntimeError(f"GCS の読み出しが 1 日の上限を超えた（{self.meter.bytes / 1e6:.0f}MB）")
                 card = wtp.fill_card_meta(wtp.card_frame(self.storage, [rid]), [races_by_id[rid]])
                 card = card.filter(pl.col("horse_number").fill_null(0) > 0)
                 if card.height == 0:
                     raise RuntimeError("馬番のある出馬表が無い")
+                if not self.replay and not self.stage_inputs_ok(rid, card_field_size(card)):    # 頭数は出馬表で分かるので、読んだ後に確かめる
+                    s["no_stage_inputs"] = True
+                    raise RuntimeError("前段 S3 の保存値（tracking_v2）が無い")
                 kw = {}
                 if self.replay:              # 過去の日の当て直し: その日（その R の発走）より後の結果を履歴に入れない（backfill_predictions と同じ）
                     import datetime as _dt

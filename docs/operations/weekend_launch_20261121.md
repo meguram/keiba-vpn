@@ -89,6 +89,15 @@
 
 ## 4. 事前の確認（金の夜〜土の朝）
 
+材料の予約は、2026-11-24 から `scripts/cron/candidate_rb_live.sh`（判断は `src/pipeline/inference/candidate_rb_schedule.py`）の cron で動かす。日付を手で書く `rb_live/schedule.sh` は使わない。
+- 登録: 共有の作業ツリーで `sudo bash /home/jovyan/work/keiba-vpn/scripts/cron/install_candidate_rb_live_cron.sh`（root の crontab。worktree からは入れられない。タグ KEIBA-CANDIDATE-RB。`--remove` で外す）。
+- `eve`（毎日 18:30 JST）: 翌日が JRA の暦（`race_calendar_<年>.json`。祝日・月曜の開催を含む）の開催日なら、`rb_live/eve.sh` で前段と RB を作る。名前は `<YYMMDD>e`。週の最初の開催日の前夜は、めぐ指数の週次が前の週の開催日を書くまで待つ（期限は対象日の 03:00）。
+- `morning`（07:05〜07:40 JST に 5 分おき）: 開催日に、export_tables_daily のロックを待たずに取れたら（書き出し中は次の回へ）、前の開催日の全レース（出馬表のレース。中止の 2 件までは欠けてよい）の結果が `race_result_flat` にそろったら、RB を作り直す。名前は `<YYMMDD>m`。07:45 に影のランナーが RB を読み始めるので、それより後には付け替えない。
+- 前夜の RB は、その日の結果がまだ表に無いので cut が古い（11/22・23 の朝に起きた）。続きの開催日は、当日の朝の作り直しが本番の材料になる。
+- 失敗の記録は `rb_live/eve.log` の「警告:」。作り直しに失敗した日は `rb_live/fail_<YYMMDD>m` を置いて繰り返さない。そのときは `sudo bash rb_live/rb_live.sh <名前>` を手で流す（07:45 より前に）。
+- 残り: `rb_live.sh` は `.claude/worktrees/model-cycles` の道具で動く（無いと警告して止まる）。`rb_runs_2016.py`・`phase1_days.sh` の年は 2026 年までの固定で、2027 年の開催の前に直す。
+- 8 頭未満のレースは前段が保存値を書かない（`tracking_t6.MIN_FIELD`）。影のランナーは、その場合に保存値が無くても見送らない（11/21 の 7 頭立て 202608050506）。
+
 | いつ | 何を見る | 正常 |
 |---|---|---|
 | 金 夜 | `base_2016/s12/inf/tracking_v2/2026-11-21/` のレース数 | 開催の全レース（障害は lap_forecast に無くてよい） |
