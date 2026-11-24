@@ -55,3 +55,17 @@ export function resolveDate(fromUrl: string, latest: string, today: string): { d
   if (fromUrl > today) return { date: latest, future: true };
   return { date: fromUrl, future: false };
 }
+
+/**
+ * 開催日の一覧が届く前に、表示する開催日を推定する（/races の race-list を一覧と並べて取るため。latency_plan_20261118.md の L11）。
+ * URL の ?date= が今日以前ならそれ。無ければ今日以前で最新の土日（JRA の開催はほぼ土日）。外れたときは一覧の後に正しい日を取り直すだけ。
+ * 外れる日: 祝日の月曜開催の日とその翌日（推定は前の日曜、一覧では月曜）、平日の特別開催の週。どれも race-list が 1 本むだになるだけ。
+ * 曜日の計算は weekDates.ts と同じ考え方だが、このファイルを単独で変換するテスト（raceCalendar.test.mjs）のため import しない。
+ */
+export function guessDisplayDate(fromUrl: string, today: string): string {
+  if (/^\d{8}$/.test(fromUrl) && fromUrl <= today) return fromUrl;
+  const d = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(4, 6)) - 1, Number(today.slice(6, 8))));
+  const back = d.getUTCDay() === 6 || d.getUTCDay() === 0 ? 0 : d.getUTCDay();   // 月=1日前の日曜 … 金=5日前の日曜
+  d.setUTCDate(d.getUTCDate() - back);
+  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
+}

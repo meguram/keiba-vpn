@@ -71,6 +71,12 @@ const nextConfig = {
         source: "/data/trainer_pattern.json",
         headers: [{ key: "Cache-Control", value: "public, max-age=3600, stale-while-revalidate=86400" }],
       },
+      // アイコン・ブランドの画像（public/）。期限が無いと Cloudflare が毎回オリジンに確かめに行く（約 150ms、REVALIDATED）。
+      // 名前に版が付かないので 1 日にとどめる。差し替え後は最大 1 日＋次の 1 回（stale-while-revalidate）前の画像が出うる（latency_plan_20261118.md の L6）
+      ...["/megu-icon.png", "/brand/:path*"].map((source) => ({
+        source,
+        headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }],
+      })),
     ];
   },
   async rewrites() {

@@ -1,6 +1,6 @@
 /** GET の JSON を取るときの共通処理: 同じ URL の同時リクエストは 1 本にまとめ、短時間は結果を使い回す。
  *  ページ間の移動（クライアント遷移）でもメモリは残るので、一覧→詳細で同じ API を取り直さない。 */
-type Entry<T = unknown> = { at: number; promise: Promise<T> };
+type Entry<T = unknown> = { at: number; promise: Promise<T>; persisted?: boolean; req?: ReqAt };
 
 const cache = new Map<string, Entry>();
 
@@ -13,27 +13,56 @@ export type JsonOpts = { ttlMs?: number; credentials?: RequestCredentials; force
 /* ── 前回の表示を先に出すための保存（このタブの間だけ。ログイン区分が変わったら全部捨てる） ── */
 const STORE_PREFIX = "jc:";
 const TIER_KEY = "jc:tier";
+/** 1 件の上限（文字数。UTF-16 で約 800KB）。レース本体は匿名で最大 約 270KB（バイト。2026-11-18 に 4 レースを実測）なので収まり、まれな巨大な応答だけ外す */
+const STORE_MAX_CHARS = 400_000;
 
 function ss(): Storage | null {
   try { return typeof window !== "undefined" ? window.sessionStorage : null; } catch { return null; }
 }
 
-export function clearStored(): void {
-  const st = ss();
-  if (!st) return;
+function removeAllStored(st: Storage): void {
   for (const k of Object.keys(st)) if (k.startsWith(STORE_PREFIX)) st.removeItem(k);
 }
 
-/** ログイン区分（匿名/会員/開発者）を記録する。前と違えば、前の区分で保存した内容は捨てる（会員向けの項目が残らないように）。 */
-export function setStoredTier(tier: string): void {
+/** ログアウトなどで全部捨てる。取得中の応答も、返ってきたときに残さない（authEpoch が変わるため） */
+export function clearStored(): void {
+  authEpoch++;
+  const st = ss();
+  if (st) removeAllStored(st);
+}
+
+/** ログイン区分（匿名/会員/開発者）を記録する。前と違えば、前の区分で保存した内容は捨てる（会員向けの項目が残らないように）。
+ *  writable=false: 読むだけ確かめた扱い（「未ログイン」を残した近道）。別のタブでログインした後は Cookie が会員なのに区分が匿名のままになりうるので、
+ *  その間に返った応答は残さない（会員の値を匿名の記録に入れない）。 */
+export function setStoredTier(tier: string, writable = true): void {
   const st = ss();
   if (!st) return;
-  if (st.getItem(TIER_KEY) !== tier) { clearStored(); st.setItem(TIER_KEY, tier); }
+  const prev = st.getItem(TIER_KEY);
+  if (prev !== tier) {
+    if (prev !== null) authEpoch++;            // 区分が変わった（前の区分で出した要求の応答は残さない）。最初の確認（記録なし→区分）は変わり目にしない
+    removeAllStored(st);
+    st.setItem(TIER_KEY, tier);
+  }
+  tierConfirmed = true;
+  tierWritable = writable;
+}
+
+/** 区分の変わり目（ログイン・ログアウト・区分の変化）で増える。要求を出したときと返ったときで違えば、その応答は残さない */
+let authEpoch = 0;
+
+/** このページ（JS の実行）の中で、認証の状態を取って区分を確かめたか。再読み込みの直後は、前の区分の記録が今の認証と合うか分からないので、
+ *  確かめるまで readStored は何も返さない（他のタブでのログアウト・セッション切れの後に、会員向けの内容を先に出さないため）。 */
+let tierConfirmed = false;
+/** このページでネットワークの応答で区分を確かめたか（書き込みの条件）。近道（storedAnon）だけでは false のまま */
+let tierWritable = false;
+
+function storedTier(): string | null {
+  return ss()?.getItem(TIER_KEY) ?? null;
 }
 
 export function readStored<T>(url: string, maxAgeMs = 30 * 60_000): T | null {
   const st = ss();
-  if (!st || !st.getItem(TIER_KEY)) return null;
+  if (!st || !st.getItem(TIER_KEY) || !tierConfirmed) return null;
   try {
     const raw = st.getItem(`${STORE_PREFIX}d:${url}`);
     if (!raw) return null;
@@ -42,14 +71,41 @@ export function readStored<T>(url: string, maxAgeMs = 30 * 60_000): T | null {
   } catch { return null; }
 }
 
-function writeStored(url: string, data: unknown): void {
+/** 古いものから消す（あふれたとき）。全部は消さない（ほかの画面の前回の内容を残すため） */
+function evictOldest(st: Storage, keep: number): void {
+  const items: { k: string; at: number }[] = [];
+  for (const k of Object.keys(st)) {
+    if (!k.startsWith(`${STORE_PREFIX}d:`)) continue;
+    const m = /^\{"at":(\d+)/.exec((st.getItem(k) ?? "").slice(0, 32));   // 先頭の at だけ読む（全件を JSON.parse しない）
+    const at = m ? Number(m[1]) : 0;                                         // 読めないものは先に消す
+    items.push({ k, at });
+  }
+  items.sort((a, b) => a.at - b.at);
+  for (const { k } of items.slice(0, Math.max(0, items.length - keep))) st.removeItem(k);
+}
+
+/** at: 要求を出したときの区分と変わり目の番号。返るまでに区分が変わったら（ログイン・ログアウト）、前の区分の応答は残さない */
+type ReqAt = { tier: string | null; epoch: number };
+function reqAt(): ReqAt {
+  return { tier: storedTier(), epoch: authEpoch };
+}
+
+function writeStored(url: string, data: unknown, at: ReqAt): void {
   const st = ss();
-  if (!st || !st.getItem(TIER_KEY)) return;       // 区分が分からないうちは残さない
+  if (!st || !st.getItem(TIER_KEY) || !tierConfirmed || !tierWritable) return;   // 区分が分からない・このページでネットワークで確かめていないうちは残さない
+  if (at.epoch !== authEpoch) return;
+  if (at.tier !== null && st.getItem(TIER_KEY) !== at.tier) return;
+  const raw = JSON.stringify({ at: Date.now(), data });
+  if (raw.length > STORE_MAX_CHARS) return;        // 1 件が大きすぎるものは残さない
+  const key = `${STORE_PREFIX}d:${url}`;
   try {
-    st.setItem(`${STORE_PREFIX}d:${url}`, JSON.stringify({ at: Date.now(), data }));
+    st.setItem(key, raw);
   } catch {
-    clearStored();                                  // 容量超過: 全部捨てて、区分だけ戻す
-    try { st.setItem(TIER_KEY, "?"); } catch { /* 何もしない */ }
+    try {                                          // 容量超過: 古い半分を消して 1 回だけ入れ直す
+      const n = Object.keys(st).filter((k) => k.startsWith(`${STORE_PREFIX}d:`)).length;
+      evictOldest(st, Math.floor(n / 2));
+      st.setItem(key, raw);
+    } catch { /* 入らなければ残さない */ }
   }
 }
 
@@ -57,7 +113,16 @@ function writeStored(url: string, data: unknown): void {
 export function getJson<T>(url: string, opts: JsonOpts = {}): Promise<T> {
   const ttl = opts.ttlMs ?? 15_000;
   const hit = cache.get(url) as Entry<T> | undefined;
-  if (hit && !opts.force && Date.now() - hit.at < ttl) return hit.promise;
+  if (hit && !opts.force && Date.now() - hit.at < ttl) {
+    // 先読み（persist なし）に相乗りしたときも、persist を求められたら結果を残す（1 回だけ）
+    if (opts.persist && !hit.persisted) {
+      hit.persisted = true;
+      const at = hit.req ?? reqAt();               // 区分は、その要求を出したときの値で比べる（今の値ではない）
+      hit.promise.then((data) => writeStored(url, data, at)).catch(() => { /* 失敗は残さない */ });
+    }
+    return hit.promise;
+  }
+  const at = reqAt();
   const promise = fetch(url, { credentials: opts.credentials }).then(async (r) => {
     if (!r.ok) {
       const err = new Error(`${url}: ${r.status}`) as Error & { status?: number };
@@ -65,10 +130,10 @@ export function getJson<T>(url: string, opts: JsonOpts = {}): Promise<T> {
       throw err;
     }
     const data = (await r.json()) as T;
-    if (opts.persist) writeStored(url, data);
+    if (opts.persist) writeStored(url, data, at);
     return data;
   });
-  const entry: Entry<T> = { at: Date.now(), promise };
+  const entry: Entry<T> = { at: Date.now(), promise, persisted: !!opts.persist, req: at };
   cache.set(url, entry as Entry);
   promise.catch(() => { if (cache.get(url) === (entry as Entry)) cache.delete(url); });
   return promise;
@@ -125,7 +190,11 @@ function tierOf(a: AuthStatusJson): string {
 /** ログイン状態。1 ページで Nav・フック・各画面が同時に呼んでも 1 回だけ取りに行く。 */
 export function fetchAuthStatus(): Promise<AuthStatusJson> {
   const network = !hasFreshJson(AUTH_URL, AUTH_TTL_MS);
-  if (network && storedAnon()) return Promise.resolve(ANON);   // メモリには入れない（残した時刻の 5 分で切れるように）
+  if (network && storedAnon()) {
+    // このタブで 5 分以内にネットワークで確かめた「未ログイン」。区分の確認（readStored の前提）もここで済ませる（しないと前回の内容が 5 分出ない）
+    setStoredTier("anon", false);   // 読むだけ（この間に返った応答は残さない。setStoredTier の注）
+    return Promise.resolve(ANON);   // メモリには入れない（残した時刻の 5 分で切れるように）
+  }
   return getJson<AuthStatusJson>(AUTH_URL, { ttlMs: AUTH_TTL_MS, credentials: "include" }).then((a) => {
     setStoredTier(tierOf(a));
     if (network) {
@@ -151,12 +220,19 @@ export function likelyMember(): boolean {
 /** ログインの応答に入っている認証状態（GET /api/v1/auth/status と同じ形）で、状態のキャッシュを埋める。ログイン直後の画面が状態を取り直す往復を省く。 */
 export function primeAuthStatus(a: AuthStatusJson): void {
   cache.clear();                    // ログインで区分が変わるので、匿名のときに取った応答はメモリからも捨てる
+  authEpoch++;                      // 取得中の匿名の応答が後から返っても、会員の区分で残さない
   dropStoredAuth();
   setStoredTier(tierOf(a));
   cache.set(AUTH_URL, { at: Date.now(), promise: Promise.resolve(a) });
 }
 
-/** 開催日（YYYYMMDD）のレース一覧。サーバ側が重い API なので、画面間で共有する。 */
-export function fetchRaceList(date: string, ttlMs = 60_000): Promise<unknown> {
-  return getJson<unknown>(`/api/race-list/${date}`, { ttlMs });
+/** 開催日（YYYYMMDD）のレース一覧。サーバ側が重い API なので、画面間で共有する。
+ *  persist: このタブの sessionStorage にも残す（/races が次に開いたとき前回の一覧を先に出すため。latency_plan_20261118.md の L1）。
+ *  同じ URL の取得は最初の呼び出しの persist で決まるので、先読みと本読みで揃える。 */
+export function fetchRaceList(date: string, ttlMs = 60_000, persist = false): Promise<unknown> {
+  return getJson<unknown>(`/api/race-list/${date}`, { ttlMs, persist });
+}
+
+export function raceListUrl(date: string): string {
+  return `/api/race-list/${date}`;
 }

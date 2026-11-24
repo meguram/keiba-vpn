@@ -43,3 +43,25 @@ test("年月の選択肢は範囲内だけ", () => {
   assert.deepEqual(m.monthsOfYear(2026, "202001", "202610"), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   assert.deepEqual(m.monthsOfYear(2020, "202003", "202610").slice(0, 2), [3, 4]);
 });
+
+test("guessDisplayDate: URL の今日以前の日付はそのまま。無い・未来なら今日以前で最新の土日", () => {
+  assert.equal(m.guessDisplayDate("20261115", "20261118"), "20261115");
+  assert.equal(m.guessDisplayDate("", "20261118"), "20261115");          // 水 → 前の日曜
+  assert.equal(m.guessDisplayDate("20261122", "20261118"), "20261115");  // 未来 → 前の日曜
+  assert.equal(m.guessDisplayDate("", "20261121"), "20261121");          // 土はその日
+  assert.equal(m.guessDisplayDate("", "20261122"), "20261122");          // 日はその日
+  assert.equal(m.guessDisplayDate("", "20261117"), "20261115");          // 火 → 2 日前の日曜
+  assert.equal(m.guessDisplayDate("bad", "20261102"), "20261101");       // 月 → 前日の日曜（月をまたぐ）
+  assert.equal(m.guessDisplayDate("", "20260102"), "20251228");          // 年をまたぐ
+});
+
+test("guessDisplayDate: ふつうの週は、一覧が届いた後の resolveDate と同じ日になる（外れるのは祝日の月曜開催とその翌日）", () => {
+  const all = ["20261031", "20261101", "20261107", "20261108", "20261114", "20261115"];   // 土日の開催
+  for (const today of ["20261110", "20261111", "20261112", "20261113", "20261114", "20261115", "20261117", "20261118"]) {
+    assert.equal(m.guessDisplayDate("", today), m.resolveDate("", m.latestOnOrBefore(all, today), today).date, today);
+  }
+  // 祝日の月曜開催（2026-10-12 スポーツの日）の週
+  const holiday = ["20261010", "20261011", "20261012"];
+  assert.equal(m.resolveDate("", m.latestOnOrBefore(holiday, "20261013"), "20261013").date, "20261012");
+  assert.equal(m.guessDisplayDate("", "20261013"), "20261011");   // 外れる（1 本むだになるだけ）
+});

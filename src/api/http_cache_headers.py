@@ -10,6 +10,8 @@ Cookie が変わる（ログイン・ログアウト）と別の応答として�
 
 from __future__ import annotations
 
+import re
+
 import json
 import os
 import time
@@ -206,6 +208,59 @@ def shared_short_value(s_maxage: int, cfg: dict[str, Any] | None = None) -> str:
     return f"public, max-age=0, s-maxage={s_maxage}" + (f", stale-while-revalidate={swr}" if swr else "")
 
 
+def _is_today_or_later(path: str, cfg: dict[str, Any], s_maxage: int, today: "datetime | None" = None) -> bool:
+    """``settled.prefixes`` のレース・開催日で、当日以降かもしれないか（当日の race-list・速報の印で長く置く当日のレースなど）。
+    開催日が分からないときは、確定済みの 30 日（前の年のレース）でなければ当日かもしれないとみなす（起動の直後で索引がまだ無いときなど）。"""
+    st = cfg.get("settled") or {}
+    for pre in st.get("prefixes") or []:
+        if path.startswith(pre):
+            d = _token_date(_first_token(path, pre))
+            if d is None:
+                return s_maxage < int(st.get("s_maxage") or 0)
+            return d.date() >= (today or datetime.now(_JST)).date()
+    return False
+
+
+def cdn_cache_control_value(cache_control: str, cfg: dict[str, Any] | None = None, path: str = "",
+                            today: "datetime | None" = None) -> str | None:
+    """Cloudflare のエッジにだけ効く期限（Cloudflare-CDN-Cache-Control。nginx・ブラウザは見ない）。public の応答にだけ付ける。
+
+    オリジンの s-maxage（6 時間〜30 日）は VPS の nginx 向けで、cache-warm の上書きは nginx にしか届かない。Cloudflare には短くだけ置く
+    （docs/operations/latency_plan_20261118.md の L6）。
+    - s-maxage が ``cdn_max_age`` 以上: ``public, max-age=<cdn_max_age>``。
+    - s-maxage がそれ未満（当日のレース 30 秒など）・ブラウザに置かせない応答（max-age=0。保守と認証の状態の shared_short_value）・
+      ``cdn_max_age`` が 0: ``no-store``。
+      付けないと Cloudflare の規則（オリジンに従う）が s-maxage・stale-while-revalidate をそのまま使い、nginx の古さの上限に
+      Cloudflare の分が足される。
+    - 開催日が今日以降と分かるレース・開催日（当日の race-list は 6 時間、速報の印が付いた当日のレースも長く置く）: ``no-store``。
+      当日は cache-warm が nginx を取り直し続ける（着順・取消の訂正など）ので、Cloudflare の分だけ古くしない。
+    - private・no-store の応答には付けない（Cloudflare は保存しない）。"""
+    if not cache_control.startswith("public"):
+        return None
+    cfg = cfg if cfg is not None else config()
+    try:
+        sec = max(0, int(cfg.get("cdn_max_age") or 0))
+    except (TypeError, ValueError):
+        sec = 0                                   # 設定が壊れていても 500 にせず、Cloudflare には置かせない
+    m = re.search(r"s-maxage=(\d+)", cache_control)
+    sm = int(m.group(1)) if m else 0
+    if sec <= 0 or sm < sec or re.search(r"(^|[ ,])max-age=0(,|$)", cache_control):
+        return "no-store"
+    if path and _is_today_or_later(path, cfg, sm, today):
+        return "no-store"
+    return f"public, max-age={sec}"
+
+
+def _set_cdn_header(headers, path: str) -> None:
+    """最後に決まった Cache-Control（このミドルウェアが付けたものも、ルートが自分で付けた shared_short_value も）から、
+    Cloudflare の見出しを付ける。ルートがすでに付けていれば変えない。"""
+    if "Cloudflare-CDN-Cache-Control" in headers:
+        return
+    cdn = cdn_cache_control_value(headers.get("Cache-Control", "") or "", path=path)
+    if cdn:
+        headers["Cloudflare-CDN-Cache-Control"] = cdn
+
+
 def _vary_add(existing: str) -> str:
     parts = [p.strip() for p in existing.split(",") if p.strip()]
     if not any(p.lower() == "cookie" for p in parts):
@@ -232,6 +287,7 @@ def install_fastapi(app) -> None:
                 resp.headers["Cache-Control"] = cache_control_value(
                     ma, shared_s_maxage_for(path), anon, settled_s_maxage_for(path), stale_while_revalidate_cap())
                 resp.headers["Vary"] = _vary_add(resp.headers.get("Vary", ""))
+            _set_cdn_header(resp.headers, request.url.path)
             return resp
 
     app.add_middleware(_HttpCacheMW)
@@ -256,4 +312,5 @@ def install_flask(app) -> None:
             response.headers["Cache-Control"] = cache_control_value(
                 ma, shared_s_maxage_for(request.path), anon, settled_s_maxage_for(request.path), stale_while_revalidate_cap())
             response.headers["Vary"] = _vary_add(response.headers.get("Vary", ""))
+        _set_cdn_header(response.headers, request.path)
         return response

@@ -1,6 +1,6 @@
 "use client";
 
-import { PRED_TTL_MS, getJson } from "@/lib/httpCache";
+import { PRED_TTL_MS, getJson, readStored } from "@/lib/httpCache";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -284,6 +284,10 @@ export default function RaceDetailPage() {
   const [tdData, setTdData] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  // 前回の内容を出したまま、最新の取得に失敗している（L1）。本体と予測は並行で取るので、印は別々に持つ
+  const [staleBody, setStaleBody] = useState(false);
+  const [stalePred, setStalePred] = useState(false);
+  const staleNotice = staleBody || stalePred;
   const [notFound, setNotFound] = useState(false);
   const [navDate, setNavDate] = useState("");
   const [meguById, setMeguById] = useState<Record<string, MeguHorseData>>({});
@@ -294,24 +298,33 @@ export default function RaceDetailPage() {
   const narrow = useNarrow();
 
   const loadSeq = useRef(0);
+  const tdRaceRef = useRef<string | null>(null);
+  // いま本体を出しているレース。取り直しが失敗し続けて保存の期限（30 分）を過ぎても、出した内容を「取得中」・エラーで消さないため
+  const shownRaceRef = useRef<string | null>(null);
   const loadPrediction = useCallback(async (seq?: number) => {
     if (!raceId) return;
     if (USE_MOCK) {
       setPredData(getMockPredictions(raceId) as PredData);
       return;
     }
+    const url = `/api/race/${raceId}/predictions`;
+    const current = () => seq === undefined || seq === loadSeq.current;
+    // 前回このタブで見た予測があれば先に出し、最新を取れたら差し替える（L1。週の予想の画面と同じ扱い）
+    const stored = readStored<PredData>(url);
+    if (stored && current()) setPredData((p) => p ?? stored);
     try {
-      const d = await getJson<PredData>(`/api/race/${raceId}/predictions`, { ttlMs: PRED_TTL_MS });
-      if (seq === undefined || seq === loadSeq.current) setPredData(d);
-    } catch { /* ignore */ }
+      const d = await getJson<PredData>(url, { ttlMs: PRED_TTL_MS, persist: true });
+      if (current()) { setPredData(d); setStalePred(false); }
+    } catch {
+      if (stored && current()) setStalePred(true);   // 前回の予測を出したまま最新が取れない（オッズ・期待値が古いままになりうる）ことを出す。取り直しは下の useAutoRetry（予測だけ）
+    }
   }, [raceId]);
   const loadRace = useCallback(async () => {
     if (!raceId) return;
-    setLoading(true);
+    const shown = shownRaceRef.current === raceId;
+    if (!shown) setLoading(true);
     setLoadError("");
     setNotFound(false);
-    setPredData(null);
-    setTdData(null);
     if (USE_MOCK) {
       await new Promise((r) => setTimeout(r, 300));
       setRaceData(getMockRaceDetail(raceId) as RaceData);
@@ -322,9 +335,15 @@ export default function RaceDetailPage() {
     // レースを素早く切り替えたとき、遅れて届いた古い応答が新しい画面を上書きしないようにする
     const seq = ++loadSeq.current;
     const fresh = () => seq === loadSeq.current;
+    // 前回このタブで見た本体があれば先に出して（取得中を出さない）、最新を取れたら差し替える（L1）
+    const raceUrl = `/api/race/${raceId}`;
+    const storedRace = readStored<RaceData>(raceUrl);
+    if (storedRace && raceExists(storedRace)) { setRaceData(storedRace); setLoading(false); shownRaceRef.current = raceId; }
+    // 別のレースに移ったときだけ、予測・走りやすさ・印を消す（同じレースの取り直しでは一度消さない＝ちらつかせない）
+    if (tdRaceRef.current !== raceId) { setPredData(null); setTdData(null); setStaleBody(false); setStalePred(false); tdRaceRef.current = raceId; }
     try {
       // 本体・予測・走りやすさを同時に取りに行く（予測は本体の後ではなく並行。重い走りやすさは本体を待たせない）
-      const racePromise = getJson<RaceData>(`/api/race/${raceId}`, { ttlMs: 20_000 });
+      const racePromise = getJson<RaceData>(raceUrl, { ttlMs: 20_000, persist: true });
       loadPrediction(seq);
       if (SHOW_TRACKING) {
         getJson<Record<string, unknown>>(`/api/race/${raceId}/tracking-difficulty`, { ttlMs: 60_000 })
@@ -337,11 +356,14 @@ export default function RaceDetailPage() {
       } catch (e) {
         if (!fresh()) return;
         if ((e as { status?: number }).status === 404) { setNotFound(true); return; }
+        if ((storedRace && raceExists(storedRace)) || shown) { setStaleBody(true); return; }   // 最新が取れなくても、先に出した前回の内容は消さない（取れなかったことは出す）
         throw new Error("レースデータの取得に失敗しました。通信状況を確認して、もう一度お試しください。");
       }
       if (!fresh()) return;
       if (!raceExists(rd)) { setNotFound(true); return; }
       setRaceData(rd);
+      shownRaceRef.current = raceId;
+      setStaleBody(false);          // 印は最新が取れるまで残す（取り直しのたびに消さない）
     } catch (e: unknown) {
       if (fresh()) setLoadError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -398,7 +420,10 @@ export default function RaceDetailPage() {
       .catch(() => { /* APIなければモックフォールバック */ });
   }, [raceId]);
 
-  useAutoRetry(!!loadError, () => { void loadRace(); }, 8000);
+  // 自動の取り直しは本体の失敗だけ（予測だけの失敗で本体・走りやすさまで 8 秒ごとに取り直さない）
+  useAutoRetry(!!loadError || staleBody, () => { void loadRace(); }, 8000);
+  // 予測だけが古いときは、予測だけを取り直す（完了したレースでは 60 秒ごとの予測の更新が動かないため）
+  useAutoRetry(stalePred && !staleBody && !loadError, () => { void loadPrediction(); }, 8000);
 
   /* ── ローディング ── */
   if (loading) {
@@ -883,6 +908,12 @@ export default function RaceDetailPage() {
   return (
     <div style={{ minHeight: "100dvh", background: "var(--bg)", color: "var(--text)", padding: narrow ? "0 2px" : 24 }}>
       {navDate && <RaceNav raceId={raceId} date={navDate} />}
+      {staleNotice && (
+        <div role="alert" style={{ color: "var(--err)", fontSize: 13, padding: "6px 0" }}>
+          ⚠️ 最新のレース情報を取得できませんでした。前回の内容を表示しています
+          <span style={{ marginLeft: 10, color: "var(--text-dim)" }}>自動で取り直しています…</span>
+        </div>
+      )}
       {Header}
       {!lock && <PipelineStatus status={predData?.pipeline_status} compact={narrow} />}
 
