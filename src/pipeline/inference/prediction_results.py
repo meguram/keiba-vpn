@@ -290,6 +290,10 @@ def simulate_target_bets(storage: Any, race_id: str, result: dict, max_total_bet
     single = predicted_single_odds(storage, race_id)       # キャッシュだけを見る（従来モデルでその場計算して基準を混ぜない）
     if not single or single.get("odds_model") != TARGET_ODDS_BASIS:
         return {"status": "basis", "strategy": "target", "basis": (single or {}).get("odds_model") or "none"}
+    from src.pipeline.inference import target_bets as TB
+
+    if not TB.odds_ready():      # 係数が無いと全レースが「計画できない」の見送りになる。推奨度 0 として残さず、集計から外す（後で作り直す）
+        return {"status": "config", "strategy": "target", "basis": TARGET_ODDS_BASIS, "error": "想定オッズの係数（odds_pred_config.json）がありません"}
     payload, code = _optimize_target({"race_id": race_id, "max_total_bet": max_total_bet}, "full", storage)
     if code != 200:
         return {"status": "error", "strategy": "target", "error": str(payload.get("error") or code)[:120]}
@@ -336,7 +340,9 @@ def simulate_target_bets(storage: Any, race_id: str, result: dict, max_total_bet
         t["hit"] += int(hit)
     for t in by_type.values():
         t["returned"] = round(t["returned"])
-    return {"status": "ok", "strategy": "target", "basis": TARGET_ODDS_BASIS, "selection": TARGET_SELECTION, "level": level, "total_bet": total_bet,
+    return {"status": "ok", "strategy": "target", "basis": TARGET_ODDS_BASIS, "selection": TARGET_SELECTION, "level": level,
+            "race_ev": payload.get("race_ev"), "skip_reason": payload.get("skip_reason") if level == 0 else None, "odds_cfg": TB.odds_pred_version(),
+            "total_bet": total_bet,
             "total_return": round(total_ret), "by_type": by_type, "estimated": estimated, "n_bets": len(bets), "n_pass": sum(1 for x in patterns if x["passed"]),
             "n_unknown": n_unknown, "all": {"total_bet": all_bet, "total_return": round(all_ret)}, "patterns": patterns,
             "flat": {"stake_yen": FLAT_STAKE_YEN, "total_bet": FLAT_STAKE_YEN * flat_n, "total_return": round(flat_ret), "n": flat_n, "hits": flat_hit}}
@@ -853,19 +859,28 @@ def level_summary(records: list[dict]) -> tuple[dict[str, dict], int]:
     return out, unrated
 
 
-def add_target_bets(date: str, storage: Any, base: Path | None = None, *, dry_run: bool = False, max_races: int | None = None) -> dict[str, int]:
+def add_target_bets(date: str, storage: Any, base: Path | None = None, *, dry_run: bool = False, max_races: int | None = None,
+                    recompute: bool = False) -> dict[str, int]:
     """保存済みの日次記録に、画面の推奨馬券（target）の仮想購入 bets_t を後から足す。印・着順・既存の数値は変えない。
-    すでに bets_t がある（計算できた）レースは飛ばす。確定済みの日にも追記できる（force で書き戻す）。"""
+    すでに bets_t がある（計算できた）レースは飛ばす。確定済みの日にも追記できる（force で書き戻す）。
+    recompute=True は、推奨度 0 で race_ev を持たない（2026-11-24 の直しより前に作った）記録も作り直す。その前の記録は、ホストに
+    想定オッズの係数が無いまま作られ、全レースが推奨度 0 になっていた（推奨度 1 以上の記録は作り直さない）。"""
     doc = read_day(date, base)
     out = {"races": 0, "added": 0, "already": 0, "failed": 0}
     if not doc:
         return out
     cap = doc.get("max_total_bet", DEFAULT_MAX_TOTAL_BET)
+    from src.pipeline.inference import target_bets as TB
+
+    if not TB.odds_ready():          # 係数が無いと全レースが計算できない。1 レースずつ読まずに抜け、呼び出し元に知らせる
+        logger.error("想定オッズの係数（odds_pred_config.json）が無いため、推奨馬券(target)を追記できません %s", date)
+        return {**out, "config_missing": 1}
     for rec in doc.get("races") or []:
         if not rec.get("included"):
             continue
         out["races"] += 1
-        if record_level(rec) is not None:               # 検証と同じ基準(sec77)で計算済み
+        stale = recompute and record_level(rec) == 0 and "race_ev" not in (rec.get("bets_t") or {})      # 直しより前の推奨度 0（係数が無いまま作った疑い）
+        if record_level(rec) is not None and not stale:     # 検証と同じ基準(sec77)で計算済み
             out["already"] += 1
             continue
         if max_races is not None and out["added"] + out["failed"] >= max_races:

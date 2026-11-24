@@ -610,6 +610,40 @@ def test_forward_summary_pending_and_settled():
     assert abs(s["roi"] - 450 / 200) < 1e-9 and s["hit_rate"] == 0.5
 
 
+def test_forward_summary_R_and_stop_rule():
+    """R = Σ ◎ が 1 着 ÷ Σ q。線（forward_stop_r2.json）は届く前は判定せず、線の時点の件数だけで 1 回判定する。"""
+    import json
+
+    import pytest
+
+    import numpy as np
+    from src.scripts.data import bet_forward_ledger as fl
+
+    recs = [{"status": "buy", "honmei": {"q": 0.1}}, {"status": "buy", "honmei": {"q": 0.2}}, {"status": "skip"}, {"status": "buy", "honmei": {"q": 0.3}}]
+    q = fl.honmei_q(recs)
+    assert np.isnan(q[2]) and q[0] == 0.1
+    cost = np.array([100.0, 100.0, 0.0, 100.0])
+    ret = np.array([0.0, 450.0, np.nan, np.nan])                     # 最後は精算待ち → R に入れない
+    s = fl.summary(cost, ret, n_all=4, n_sys=0, n_boot=50, q=q)
+    assert s["R_bets"] == 2 and s["R_wins"] == 1 and abs(s["R"] - 1 / 0.3) < 1e-9
+    rule = json.loads(fl.STOP.read_text(encoding="utf-8"))
+    q1 = np.full(400, 0.1)
+    out = fl.stop_check(np.zeros(9), q1[:9], rule)
+    assert out["decision"] == "線に届いていない" and out["next_check_at"] == 150 and out["checks"] == []
+    w = np.zeros(400)
+    w[:12] = 1                                   # 最初の 150 件で R = 12 / 15 = 0.8 < 0.85 → 打ち切り
+    w[150:250] = 1                               # 後で当たっても、150 件の判定は変わらない
+    out = fl.stop_check(w[:200], q1[:200], rule)
+    assert out["decision"] == "打ち切り" and out["checks"][0]["R"] == pytest.approx(0.8) and out["next_check_at"] == 300
+    out = fl.stop_check(w, q1, rule)
+    assert out["decision"] == "打ち切り" and [c["stop"] for c in out["checks"]] == [True, False]
+    w2 = np.zeros(200)
+    w2[:14] = 1                                  # 14 / 15 = 0.93 → 続ける
+    assert fl.stop_check(w2, q1[:200], rule)["decision"] == "続ける"
+    with pytest.raises(SystemExit):
+        fl.stop_check(w2, q1[:200], {"checks": [{"at_bets": 1, "stop_if": "R <= 0.9"}]})
+
+
 def test_forward_ledger_closes_ledger_row_on_error(monkeypatch):
     from src.scripts.data import bet_forward_ledger as fl
 
@@ -629,3 +663,49 @@ def test_forward_ledger_closes_ledger_row_on_error(monkeypatch):
     with pytest.raises(RuntimeError):
         fl.main()
     assert seen == ["RuntimeError"]
+
+
+def test_forward_R_uses_finish_without_waiting_for_payoff():
+    """R は ◎ の着順だけで数える（払戻が未精算でも入る）。着順の無い参戦は入れない。"""
+    import numpy as np
+    from src.scripts.data import bet_forward_ledger as fl
+
+    cost = np.array([100.0, 100.0, 100.0])
+    ret = np.array([np.nan, np.nan, np.nan])
+    s = fl.summary(cost, ret, n_all=3, n_sys=0, n_boot=50, q=np.array([0.1, 0.2, 0.3]), win=np.array([1.0, 0.0, np.nan]))
+    assert s["pending"] == 3 and s["R_bets"] == 2 and s["R_wins"] == 1 and abs(s["R"] - 1 / 0.3) < 1e-9
+
+
+
+def test_honmei_win_reads_finish_and_counts_missing_horse_as_loss(tmp_path, monkeypatch):
+    """表にレースがあり ◎ の行が無い（中止・失格・取消）は外れ（0）。レースが無い（未確定）は nan。"""
+    import numpy as np
+    import pandas as pd
+    from src.config import data_paths
+    from src.scripts.data import bet_forward_ledger as fl
+
+    (tmp_path / "2026").mkdir()
+    pd.DataFrame({"race_id": ["A", "A", "B"], "horse_number": [1, 2, 3], "finish_position": [1, 2, 1]}).to_parquet(tmp_path / "2026" / "race_result_flat.parquet")
+    monkeypatch.setattr(data_paths, "TABLES_DIR", tmp_path)
+    recs = [{"race_id": "A", "status": "buy", "honmei": {"horse_number": 1}}, {"race_id": "A", "status": "buy", "honmei": {"horse_number": 2}},
+            {"race_id": "B", "status": "buy", "honmei": {"horse_number": 9}}, {"race_id": "2026C", "status": "buy", "honmei": {"horse_number": 1}},
+            {"race_id": "A", "status": "skip"}, {"race_id": "A", "status": "buy", "honmei": {"horse_number": ""}}]
+    for r in recs:
+        r["race_id"] = r["race_id"] if r["race_id"].startswith("2026") else "2026" + r["race_id"]
+    pd.DataFrame({"race_id": ["2026A", "2026A", "2026B"], "horse_number": [1, 2, 3], "finish_position": [1, 2, 1]}).to_parquet(tmp_path / "2026" / "race_result_flat.parquet")
+    w = fl.honmei_win(recs)
+    assert w[0] == 1 and w[1] == 0 and w[2] == 0 and np.isnan(w[3]) and np.isnan(w[4]) and np.isnan(w[5])
+
+
+
+def test_forward_checks_are_frozen_once_reached(tmp_path):
+    """線に届いた判定は一度だけ書き、後で R が変わっても判定し直さない。"""
+    from src.scripts.data import bet_forward_ledger as fl
+
+    path = tmp_path / "checks.json"
+    first = fl.freeze_checks({"decision": "打ち切り", "checks": [{"at_bets": 2, "stop_if": "R < 0.85", "R": 0.5, "stop": True}]}, ["a", "b", "c"], path)
+    assert first["decision"] == "打ち切り"
+    later = fl.freeze_checks({"decision": "続ける", "checks": [{"at_bets": 2, "stop_if": "R < 0.85", "R": 1.5, "stop": False}]}, ["x", "y"], path)
+    assert later["decision"] == "打ち切り" and later["checks"][0]["R"] == 0.5
+    import json
+    assert json.loads(path.read_text(encoding="utf-8"))["2"]["race_ids"] == ["a", "b"]

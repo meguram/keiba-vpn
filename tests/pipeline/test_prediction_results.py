@@ -1,6 +1,13 @@
 import pytest
 
 from src.pipeline.inference import prediction_results as pr
+from src.pipeline.inference import target_bets as TB
+
+
+@pytest.fixture(autouse=True)
+def _odds_coefficients_present(monkeypatch):
+    """想定オッズの係数は git に無い（CI に無い）。精算のテストは係数がある前提にする（無いときの扱いは個別のテスト）。"""
+    monkeypatch.setattr(TB, "odds_ready", lambda: True)
 
 
 class FakeStorage:
@@ -311,3 +318,63 @@ def test_target_bets_not_simulated_on_legacy_odds_and_old_records_are_unrated(tm
     monkeypatch.setattr(pr, "simulate_target_bets", lambda storage, rid, res, cap: {"status": "basis", "basis": "legacy"})
     out = pr.add_target_bets("20261018", object(), tmp_path)
     assert out["basis"] == 1 and pr.read_day("20261018", tmp_path)["races"][0]["bets_t"]["status"] == "basis"
+
+
+def test_missing_odds_coefficients_are_not_recorded_as_skip(monkeypatch):
+    """係数が無いと全レースが「計画できない」になる。推奨度 0（見送り）として残さず、集計から外す（2026-11-24 の誤り）。"""
+    from src.pipeline.inference import odds_source as OS
+
+    monkeypatch.setattr(OS, "predicted_single_odds", lambda storage, rid: {"entries": [], "odds_model": "sec77"})
+    monkeypatch.setattr(TB, "odds_ready", lambda: False)
+    out = pr.simulate_target_bets(object(), "r", {"finish": {1: 1}})
+    assert out["status"] == "config" and pr.record_level({"bets_t": out}) is None
+
+
+def test_skip_keeps_race_ev_and_reason(monkeypatch):
+    from src.api.v1 import delegates as D
+    from src.pipeline.inference import odds_source as OS
+
+    monkeypatch.setattr(OS, "predicted_single_odds", lambda storage, rid: {"entries": [], "odds_model": "sec77"})
+    monkeypatch.setattr(D, "_optimize_target", lambda body, view, storage=None: ({"status": "skip", "level": 0, "bets": [], "race_ev": 1.37, "skip_reason": "水準に届きません"}, 200))
+    out = pr.simulate_target_bets(object(), "r", {"finish": {1: 1}})
+    assert out["race_ev"] == 1.37 and out["skip_reason"] == "水準に届きません" and out["level"] == 0
+
+
+def test_recompute_rebuilds_records_made_before_the_fix(tmp_path, monkeypatch):
+    old = {"status": "ok", "basis": pr.TARGET_ODDS_BASIS, "selection": pr.TARGET_SELECTION, "level": 0, "total_bet": 0, "total_return": 0}
+    recs = [_rec(None, 1), _rec(None, 1)]
+    recs[0]["race_id"], recs[1]["race_id"] = "a", "b"
+    recs[0]["bets_t"] = dict(old)                                  # 直しより前の記録（race_ev が無い）
+    recs[1]["bets_t"] = {**old, "race_ev": 1.5}                    # 直しの後の記録
+    pr.write_day({"date": "20261018", "status": "final", "summary": pr.summarize(recs), "highlights": [], "races": recs, "notes": []}, tmp_path)
+    monkeypatch.setattr(pr, "load_race_result", lambda storage, rid: {"finish": {1: 1}})
+    new = {**old, "level": 3, "race_ev": 2.5, "total_bet": 1000}
+    monkeypatch.setattr(pr, "simulate_target_bets", lambda storage, rid, res, cap: dict(new))
+    assert pr.add_target_bets("20261018", object(), tmp_path)["added"] == 0           # 既定では作り直さない
+    out = pr.add_target_bets("20261018", object(), tmp_path, recompute=True)
+    assert out["added"] == 1 and out["already"] == 1
+    doc = pr.read_day("20261018", tmp_path)
+    assert doc["races"][0]["bets_t"]["level"] == 3 and doc["races"][1]["bets_t"]["race_ev"] == 1.5
+
+
+def test_add_target_bets_stops_when_odds_coefficients_are_missing(tmp_path, monkeypatch):
+    recs = [_rec(None, 1)]
+    pr.write_day({"date": "20261018", "status": "final", "summary": pr.summarize(recs), "highlights": [], "races": recs, "notes": []}, tmp_path)
+    monkeypatch.setattr(TB, "odds_ready", lambda: False)
+    monkeypatch.setattr(pr, "simulate_target_bets", lambda *a: pytest.fail("係数が無いのに 1 レースずつ計算した"))
+    assert pr.add_target_bets("20261018", object(), tmp_path, recompute=True)["config_missing"] == 1
+
+
+def test_recompute_keeps_rated_records_and_failed_recomputes(tmp_path, monkeypatch):
+    """推奨度 1 以上の古い記録は作り直さない。作り直しが失敗（error）しても既存の記録を消さない。"""
+    old0 = {"status": "ok", "basis": pr.TARGET_ODDS_BASIS, "selection": pr.TARGET_SELECTION, "level": 0, "total_bet": 0, "total_return": 0}
+    recs = [_rec(2, 1), _rec(None, 1)]
+    recs[0]["race_id"], recs[1]["race_id"] = "a", "b"
+    recs[1]["bets_t"] = dict(old0)
+    pr.write_day({"date": "20261018", "status": "final", "summary": pr.summarize(recs), "highlights": [], "races": recs, "notes": []}, tmp_path)
+    monkeypatch.setattr(pr, "load_race_result", lambda storage, rid: {"finish": {1: 1}})
+    monkeypatch.setattr(pr, "simulate_target_bets", lambda storage, rid, res, cap: {"status": "error", "strategy": "target"})
+    out = pr.add_target_bets("20261018", object(), tmp_path, recompute=True)
+    assert out["already"] == 1 and out["failed"] == 1 and out["added"] == 0
+    doc = pr.read_day("20261018", tmp_path)
+    assert doc["races"][0]["bets_t"]["level"] == 2 and doc["races"][1]["bets_t"] == old0
