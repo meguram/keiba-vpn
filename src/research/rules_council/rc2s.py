@@ -162,7 +162,7 @@ def cmd_power(reps: int, n_null: int, seed: int, mode: str = "k70") -> None:
                 E.check_stop()
                 j = int(rng.choice(el))
                 rows = np.flatnonzero((Wd.flat == j).any(1))
-                rows_s = rows[Wd.year[rows] <= SEARCH_END]
+                rows_s = rows[Wd.s_mask[rows]]                          # 探す側の行（k70 は 2016〜24 の 70%、year21 は 2016〜21）
                 m, got = Wd.sim.calibrate(rows_s, Wd.odds, roi_t)     # 2016〜21 の期待の回収率で合わせ、同じ倍率を 2022〜24 にも掛ける
                 if abs(got - roi_t) > 0.005:
                     miss += 1

@@ -32,7 +32,9 @@ from src.research.rules_council.rc2s import ALPHA2, FWD_MIN, holm_pass
 REPO = F.CR.REPO
 PREREG = REPO / "config/rules_council/prereg_rc2.json"
 OUT_REPO = REPO / "docs/operations/retrain_trials/rules_council_rc2.json"
-FROZEN = [PREREG] + [REPO / f"src/research/rules_council/{x}.py" for x in ("engine", "rc_frame", "rc2", "rc2s", "rc2_real")]
+FROZEN = ([PREREG] + [REPO / f"src/research/rules_council/{x}.py" for x in ("engine", "rc_frame", "rc2", "rc2s", "rc2_real")]
+          + [REPO / "src/research/graded/model.py", REPO / "src/research/graded/catalog.py", REPO / "src/research/course/longshot_rules.py",
+             REPO / "config/longshot_rules/prereg.json"])      # 水準の定義（NO_INFO・型の規則）に効くファイルも凍結する
 NULL_OUT = F.OUTW / "rc2_null.json"
 SEARCH_OUT = F.OUTW / "rc2_search.json"
 EMIN = 1000.0
@@ -41,6 +43,15 @@ N_SEEDS = 5
 F_ALPHA, F_N_MIN, F_MAX_CAND = 0.01, 300, 3
 T60_NOTE = {"H06": "頭数（取消の後に変わりうる。T-60 では出走表の頭数）", "H10": "クッション値（当日の朝に発表）",
             "I03": "継続騎乗・乗り替わり（出馬表で確定）", "I04": "乗り替わりの格（同上）", "H08": "開催の何日目（前日に確定）"}
+
+
+def check_split() -> None:
+    """分け方が prereg の sha256 と同じか（全走の表を作り直して開催の集合が変わったら止める）。"""
+    import hashlib
+    keys = np.array(sorted(pd.read_parquet(F.OUTW / "full.parquet", columns=["kaisai"])["kaisai"].unique()))
+    sha = hashlib.sha256(json.dumps(sorted(keys[E.search70(keys)].tolist())).encode()).hexdigest()
+    if sha != prereg()["split"]["search_kaisai_sha256"]:
+        raise SystemExit("開催の 70/30 の分け方が prereg の sha256 と違う")
 
 
 def world(pre_seed: int) -> RC.RC2:
@@ -67,6 +78,7 @@ def prereg() -> dict:
 
 def cmd_null() -> None:
     clean_or_stop(FROZEN)
+    check_split()
     P = prereg()
     t0 = time.time()
     with guard("select", "RC-2 段 S' の 1 段目の線（探す側 70% の本物の着順のまま水準を入れ替えた帰無 200 回 × 再現 5 本）") as tok:
@@ -104,8 +116,9 @@ def committed_lines() -> dict:
         for k in ("t_up", "t_down", "n_elig"):
             if abs(float(a[k]) - float(b[k])) > 1e-9:
                 raise SystemExit(f"prereg の線が rc2_null.json と違う（種 {s} の {k}）")
-    if int(g.get("n_perm", -1)) != nul["n_perm"]:
-        raise SystemExit("prereg の n_perm が rc2_null.json と違う")
+    for k in ("n_perm", "perm_seeds", "emin"):
+        if g.get(k) != nul[k]:
+            raise SystemExit(f"prereg の {k} が rc2_null.json と違う")
     return g
 
 
@@ -148,7 +161,10 @@ def level_row(R, r, j) -> dict:
 
 def cmd_search() -> None:
     clean_or_stop(FROZEN)
+    check_split()
     g = committed_lines()
+    if SEARCH_OUT.exists() or (OUT_REPO.exists() and "search" in json.loads(OUT_REPO.read_text(encoding="utf-8"))):
+        raise SystemExit("段 S' はもう流した（1 回だけ）")
     t0 = time.time()
     with guard("select", "RC-2 段 S'（探す側 70% の本物の着順で 1 回だけ。1 段目・2 段目・候補の条件・参考の表）") as tok:
         mains = {}
@@ -158,6 +174,7 @@ def cmd_search() -> None:
             d = R.P.d
             win, rt = d["win"].to_numpy(float), d["rt"].to_numpy(float)
             ln = g["seeds"][str(s)]
+            assert len(R.elig) == int(ln["n_elig"]), ("検定する水準の数が線と違う", s)
             mains[s] = (R, two_stage(R, win, rt, np.arange(len(d)), float(ln["t_up"]), float(ln["t_down"])))
             print("seed", s, "up1", len(mains[s][1]["up1"]), "down1", len(mains[s][1]["down1"]), "s2", len(mains[s][1]["s2"]), round(time.time() - t0), flush=True)
         R0, r0 = mains[0]
@@ -214,7 +231,10 @@ def cmd_search() -> None:
 
 def cmd_confirm() -> None:
     clean_or_stop(FROZEN + [OUT_REPO])
+    check_split()
     res = json.loads(OUT_REPO.read_text(encoding="utf-8"))
+    if "confirm" in res:
+        raise SystemExit("確かめの側はもう開いた（1 回だけ）")
     frozen = res["search"]["frozen"]
     if not frozen:
         raise SystemExit("候補が無いので確かめは流さない（prereg の打ち切りの規則）")
@@ -230,8 +250,9 @@ def cmd_confirm() -> None:
             names = {P.level_name(j): j for j in range(P.n_levels)}
             sel = np.zeros(P.n_levels, bool)
             for nm in frozen:
-                if nm in names:
-                    sel[names[nm]] = True
+                if nm not in names:
+                    raise SystemExit(f"凍結した水準 {nm} が種 {s} の母集団に無い")
+                sel[names[nm]] = True
             hit = np.where(flat >= 0, sel[np.maximum(flat, 0)], False).any(1)
             b = np.flatnonzero(hit & ~srch)
             x = d.iloc[b]

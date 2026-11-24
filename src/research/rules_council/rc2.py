@@ -61,7 +61,10 @@ class RC2:
         self.flat_all = P.flat()
         self.fwd_rows = np.flatnonzero(yr == FWD_YEAR)          # 2024 年は符号だけ使う（着順を読まない）
         keep = np.flatnonzero(srch)
-        self.P = E.Pop(P.d.iloc[keep].reset_index(drop=True), P.codes[keep], P.types, P.levels, P.full_rows[keep])
+        dk = P.d.iloc[keep].reset_index(drop=True)
+        for c, src in (("ridx", "race_id"), ("kidx", "kaisai"), ("hidx", "horse_id")):   # 絞った後に 0 から連続に振り直す（permute の前提）
+            dk[c] = pd.factorize(dk[src].astype(str))[0]
+        self.P = E.Pop(dk, P.codes[keep], P.types, P.levels, P.full_rows[keep])
         self.flat = self.P.flat()
         d = self.P.d
         self.q = d["q"].to_numpy()
