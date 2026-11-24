@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import statistics
 import sys
@@ -348,11 +349,43 @@ def read_json(p: Path) -> dict | None:
         return None
 
 
-def collect_misc(meta: Path, env_key: str) -> dict:
+HEALTH_MAX_AGE_DAYS = 3     # data_health の結果がこれより古ければ fail を知らせない（作る定期処理が無い。2026-10-15 の結果で fail を出し続けた）
+
+
+def health_age_days(generated_at: str | None, now: datetime | None = None) -> float | None:
+    """data_health の結果の古さ（日）。時刻が無い・読めないときは None。"""
+    if not generated_at:
+        return None
+    try:
+        t = datetime.fromisoformat(str(generated_at))
+    except ValueError:
+        return None
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=JST)
+    now = now or datetime.now(JST)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=JST)
+    return (now - t).total_seconds() / 86400
+
+
+def _health_stale(h: dict) -> str:
+    """表示用: 古い data_health の結果なら、何日前の結果かを添える。"""
+    age = h.get("age_days")
+    return f" ※{math.ceil(age)} 日前の結果（作る定期処理なし）" if age is not None and age > HEALTH_MAX_AGE_DAYS else ""
+
+
+def collect_misc(meta: Path, env_key: str, now: datetime | None = None) -> dict:
     """auto_scrape_status / data_health / drift_monitor（調教の被覆）。"""
     out: dict[str, Any] = {"auto": read_json(meta / "auto_scrape_status.json") or {}}
-    dh = read_json(meta / "data_health" / env_key / "latest.json")
+    dh_path = meta / "data_health" / env_key / "latest.json"
+    dh = read_json(dh_path)
     if dh:
+        age = health_age_days(dh.get("generated_at"), now)
+        if age is None:                               # 作った時刻が無い・読めない → ファイルの更新時刻で古さを測る
+            try:
+                age = health_age_days(datetime.fromtimestamp(dh_path.stat().st_mtime, JST).isoformat(), now)
+            except OSError:
+                age = None
         rid_dir = meta / "data_health" / env_key / "race_ids"
         files = {}
         if rid_dir.is_dir():
@@ -365,7 +398,8 @@ def collect_misc(meta: Path, env_key: str) -> dict:
                          "complete": (dh.get("completeness") or {}).get("complete"),
                          "reasons": [r.get("message") for r in ((dh.get("completeness") or {}).get("reasons") or [])][:4],
                          "findings": [f"{x.get('area')}: {x.get('message')}"[:120] for x in (dh.get("findings") or []) if x.get("severity") in ("fail", "warn")][:4],
-                         "generated_at": dh.get("generated_at"), "missing_lists": files}
+                         "generated_at": dh.get("generated_at"), "missing_lists": files,
+                         "age_days": age}
     dm = read_json(meta / "drift_monitor" / "latest.json")
     if dm:
         cov = dm.get("coverage") or {}
@@ -423,8 +457,12 @@ def detect_anomalies(jobs: list[dict], queue: dict | None, schema: dict | None, 
         out["coverage:training"] = {"severity": "critical", "title": f"調教データの被覆が低下（{tc.get('month')}: {tc['block'] * 100:.0f}%）",
                                     "detail": f"下限 {float(tc.get('floor') or COVERAGE_FLOOR) * 100:.0f}%。調教系の特徴量が欠損のまま予測される"}
     h = misc.get("health") or {}
+    age = h.get("age_days")
     if h.get("overall") == "fail":
         out["health:fail"] = {"severity": "warning", "title": "データヘルスが fail", "detail": "; ".join(h.get("findings") or [])}
+        if age is not None and age > HEALTH_MAX_AGE_DAYS:
+            # 古い結果（作る定期処理が無い）: 再通知しない。項目は消さない（消すと「復旧」と誤って知らせるため）
+            out["health:fail"] |= {"repeat": False, "title": f"データヘルスが fail（{math.ceil(age)} 日前の結果・更新なし）"}
     return out
 
 
@@ -531,7 +569,7 @@ def build_summary(now: datetime, jobs: list[dict], queue: dict | None, schema: d
         kp.append(("調教の被覆", f"{tc['block'] * 100:.0f}%（{tc.get('month')}）"))
     h = misc.get("health") or {}
     if h:
-        kp.append(("データヘルス", f"{h.get('overall')}（欠損リスト {sum((h.get('missing_lists') or {}).values())} 件）"))
+        kp.append(("データヘルス", f"{h.get('overall')}（欠損リスト {sum((h.get('missing_lists') or {}).values())} 件）{_health_stale(h)}"))
     blocks.append(SN.fields(kp))
 
     groups: dict[str, list[dict]] = {}
@@ -601,8 +639,8 @@ def build_coverage(now: datetime, misc: dict, schema: dict | None) -> dict:
     blocks = [SN.section(f"*週次カバレッジ {now.strftime('%m/%d')}*")]
     kp = []
     if h:
-        kp.append(("データヘルス", f"{h.get('overall')}（fail {h.get('counts', {}).get('fail', 0)} / warn {h.get('counts', {}).get('warn', 0)}）"))
-        kp.append(("2020年以降の充足", "満たす" if h.get("complete") else "未達"))
+        kp.append(("データヘルス", f"{h.get('overall')}（fail {h.get('counts', {}).get('fail', 0)} / warn {h.get('counts', {}).get('warn', 0)}）{_health_stale(h)}"))
+        kp.append(("2020年以降の充足", ("満たす" if h.get("complete") else "未達") + _health_stale(h)))
     if tc.get("block") is not None:
         kp.append(("調教の被覆", f"{tc['block'] * 100:.0f}%（{tc.get('month')}、下限 {float(tc.get('floor') or COVERAGE_FLOOR) * 100:.0f}%）"))
     else:
@@ -611,9 +649,9 @@ def build_coverage(now: datetime, misc: dict, schema: dict | None) -> dict:
         kp.append(("スキーマ違反（7日）", f"{sum(schema['by_day'].values())} 件"))
     blocks.append(SN.fields(kp))
     if h.get("reasons"):
-        blocks.append(SN.section("*未達の理由*\n" + "\n".join("• " + SN.esc(x) for x in h["reasons"])))
+        blocks.append(SN.section(f"*未達の理由*{_health_stale(h)}\n" + "\n".join("• " + SN.esc(x) for x in h["reasons"])))
     if h.get("missing_lists"):
-        blocks.append(SN.section("*欠損・不適合・未検証の race_id*\n" + SN.code_table(["リスト", "件数"], [[k, str(v)] for k, v in h["missing_lists"].items()], aligns="lr")))
+        blocks.append(SN.section(f"*欠損・不適合・未検証の race_id*{_health_stale(h)}\n" + SN.code_table(["リスト", "件数"], [[k, str(v)] for k, v in h["missing_lists"].items()], aligns="lr")))
     if h.get("findings"):
         blocks.append(SN.section("*指摘*\n" + "\n".join("• " + SN.esc(x) for x in h["findings"])))
     sev = "critical" if (tc.get("block") is not None and tc["block"] < float(tc.get("floor") or COVERAGE_FLOOR)) else ("warning" if not h.get("complete", True) else "normal")
@@ -677,7 +715,7 @@ def run(mode: str, now: datetime, *, send: bool = False, state_path: Path | None
                                                           runs_dir=Path(inp["runs_dir"]) if inp.get("runs_dir") else None)
     queue = inp["queue"] if "queue" in inp else fetch_queue(e.get("KEIBA_NOTIFY_API_BASE") or "http://127.0.0.1:23220")
     schema = inp["schema"] if "schema" in inp else collect_schema(REPO_ROOT, now)
-    misc = inp["misc"] if "misc" in inp else collect_misc(meta, env_key)
+    misc = inp["misc"] if "misc" in inp else collect_misc(meta, env_key, now)
     anomalies = detect_anomalies(jobs, queue, schema, misc)
     res: dict[str, Any] = {"code": 0, "mode": mode, "anomalies": list(anomalies)}
     payload = None

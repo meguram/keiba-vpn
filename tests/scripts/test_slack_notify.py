@@ -306,6 +306,42 @@ class ScrapeStatusTest(unittest.TestCase):
         self.assertIn("schema:spike", an)
         self.assertEqual(an["coverage:training"]["severity"], "critical")
         self.assertIn("health:fail", an)
+        old = {"health": {"overall": "fail", "findings": ["x"], "age_days": 40.0}}          # 40 日前の結果: 項目は残すが再通知しない
+        a = SS.detect_anomalies([], None, None, old)["health:fail"]
+        self.assertIs(a["repeat"], False)
+        self.assertIn("40 日前", a["title"])
+        self.assertNotIn("repeat", SS.detect_anomalies([], None, None, {"health": {"overall": "fail", "age_days": 3.0}})["health:fail"])  # 3 日ちょうどは今の結果
+        now = datetime(2026, 11, 24, 12, 0, tzinfo=SS.JST)
+        self.assertAlmostEqual(SS.health_age_days("2026-11-23T12:00:00+09:00", now), 1.0)
+        self.assertAlmostEqual(SS.health_age_days("2026-11-23T12:00:00+09:00", now.replace(tzinfo=None)), 1.0)
+        self.assertIsNone(SS.health_age_days(None, now))
+        self.assertIsNone(SS.health_age_days("壊れた", now))
+        self.assertEqual(SS._health_stale({"age_days": 3.2}), " ※4 日前の結果（作る定期処理なし）")
+        self.assertEqual(SS._health_stale({"age_days": 1.0}), "")
+
+    def test_stale_health_is_not_resolved_nor_repeated(self):
+        """古い結果に変わっても「復旧」と知らせず、再通知もしない（前の状態に health:fail があるとき）。"""
+        now = datetime(2026, 11, 24, 12, 0, tzinfo=SS.JST)
+        state = {"health:fail": {"first": now.timestamp() - 86400 * 30, "last_notified": now.timestamp() - 86400, "repeats": 1,
+                                 "severity": "warning", "title": "データヘルスが fail"}}
+        cur = SS.detect_anomalies([], None, None, {"health": {"overall": "fail", "age_days": 40.0}})
+        out = SS.step_state(state, cur, now)
+        notify, resolved = out[0], out[1]
+        self.assertEqual([i for i in notify if i["key"] == "health:fail"], [])
+        self.assertEqual([i for i in resolved if i.get("key") == "health:fail"], [])
+
+    def test_collect_misc_age_from_generated_at_or_mtime(self):
+        with tempfile.TemporaryDirectory() as d:
+            meta = Path(d)
+            p = meta / "data_health" / "stg" / "latest.json"
+            p.parent.mkdir(parents=True)
+            now = datetime(2026, 11, 24, 12, 0, tzinfo=SS.JST)
+            p.write_text(json.dumps({"generated_at": "2026-10-15T10:51:10+09:00", "summary": {"overall": "fail"}}), encoding="utf-8")
+            self.assertGreater(SS.collect_misc(meta, "stg", now)["health"]["age_days"], 40)
+            p.write_text(json.dumps({"summary": {"overall": "fail"}}), encoding="utf-8")       # 時刻が無い → ファイルの更新時刻
+            age = SS.collect_misc(meta, "stg")["health"]["age_days"]
+            self.assertIsNotNone(age)
+            self.assertLess(age, 1)
         self.assertEqual(SS.detect_anomalies([], {"stats": {}, "failed_reasons": {"http_403": 2}}, None, {}), {})
         small = {"last24": 5, "by_day": {"a": 1, "b": 1, "c": 1, "d": 5}, "categories": {}}
         self.assertNotIn("schema:spike", SS.detect_anomalies([], None, small, {}))
