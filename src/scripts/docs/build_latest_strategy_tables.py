@@ -103,10 +103,10 @@ def roi_cell(v, lo, hi) -> str:
 # ---------------------------------------------------------------- 行を作る
 def tiers2_rows() -> tuple[list[str], str]:
     """第 1 回の凍結の推奨度の段を、推奨あり（★★★＋★★）／なし（★＋見送り）にまとめた表（bet_cycles tiers2 の記録）。"""
-    f = SRC / "bet_tiers2_f96a5aeff33e.json"          # 文面が名指す第 1 回の凍結の記録だけを読む
-    if not f.exists():
+    t2p = SRC / "bet_tiers2_f96a5aeff33e.json"          # 文面が名指す第 1 回の凍結の記録だけを読む
+    if not t2p.exists():
         return [], ""
-    t2 = json.loads(f.read_text(encoding="utf-8"))
+    t2 = json.loads(t2p.read_text(encoding="utf-8"))
     out = []
     for pv in t2["periods"].values():
         for g, m in pv["groups"].items():
@@ -116,7 +116,7 @@ def tiers2_rows() -> tuple[list[str], str]:
                            [f'{num(m.get("bet_races") or 0)}／{num(m.get("races") or 0)}', pct(m.get("hit_rate")),
                             roi_cell(m.get("roi"), m.get("roi_lo"), m.get("roi_hi")) if m.get("roi") is not None else "－",
                             rec(f), pct(f[0] / n) if n else "－", pct(sum(f[:3]) / n) if n else "－"]))
-    return out, f.name
+    return out, t2p.name
 
 
 
