@@ -829,6 +829,27 @@ def rated_records(records: list[dict], min_level: int = RATED_MIN_LEVEL) -> list
     return [target_view(r) for r in records if r.get("included") and (record_level(r) is not None) and record_level(r) >= min_level]
 
 
+def rated_all_bets(records: list[dict], min_level: int = RATED_MIN_LEVEL) -> dict[str, int]:
+    """推奨度が min_level 以上のレースで、推奨した買い目をすべて買った場合（bets_t.all）の合計。
+    実オッズで絞らない数え方（確定オッズはレース後の値で、絞ると当たる買い目が落ちやすい）。会員の画面で今の数え方と並べる。"""
+    out = {"invested": 0, "returned": 0, "races_bought": 0, "races_hit": 0, "estimated_races": 0}
+    for r in records:
+        lv = record_level(r)
+        if not r.get("included") or lv is None or lv < min_level:     # rated_records と同じ集合
+            continue
+        a = (r.get("bets_t") or {}).get("all") or {}
+        bet, ret = int(a.get("total_bet") or 0), int(round(a.get("total_return") or 0))
+        if bet <= 0:
+            continue
+        out["invested"] += bet
+        out["returned"] += ret
+        out["races_bought"] += 1
+        out["races_hit"] += int(ret > 0)
+        # 公式の払戻が無い（速報）レースの当たりは想定オッズで概算する。全部買うは確定オッズ < 想定の当たりも入るので、多めに出うる
+        out["estimated_races"] += int(ret > 0 and r.get("result_status") != "final")
+    return out
+
+
 def rated_counts(records: list[dict], min_level: int = RATED_MIN_LEVEL) -> dict[str, int]:
     """集計できたレース settled を、標準以上 rated・見送り skipped・推奨度が未記録 unrated に分けた件数。"""
     inc = [r for r in records if r.get("included")]
@@ -923,6 +944,8 @@ def period_summary(scope: str, date: str, base: Path | None = None) -> dict:
     rated_by_day = [summarize(rated_records(x.get("races") or [])) for x in docs]
     rated_summ = merge_summaries(rated_by_day) if docs else summarize([])
     counts = {k: sum(rated_counts(x.get("races") or [])[k] for x in docs) for k in ("settled", "rated", "skipped", "unrated")}
+    all_by_day = [rated_all_bets(x.get("races") or []) for x in docs]
+    rated_all = {k: sum(d[k] for d in all_by_day) for k in ("invested", "returned", "races_bought", "races_hit", "estimated_races")}
     series = []
     for x, rs in zip(docs, rated_by_day):
         s = x["summary"]
@@ -936,7 +959,7 @@ def period_summary(scope: str, date: str, base: Path | None = None) -> dict:
     return {"scope": scope, "date": date, "from": lo, "to": hi, "days": [x["date"] for x in docs],
             "statuses": {x["date"]: x["status"] for x in docs},
             "status": "final" if docs and all(x["status"] == "final" for x in docs) else "provisional",
-            "summary": summ, "rated_summary": rated_summ, "rated_counts": counts, "series": series,
+            "summary": summ, "rated_summary": rated_summ, "rated_counts": counts, "rated_all": rated_all, "series": series,
             "highlights": [h for x in docs for h in _rated_highlights(x)][:12],
             "notes": (docs[-1].get("notes") if docs else [])}
 

@@ -136,7 +136,10 @@ async def prediction_results(request: Request, scope: str = Query("day", pattern
                                "kpi": _kpi(ps["summary"]), "summary": ps["summary"], "label": _label(d)}
         # 推奨度（レース期待値）が標準以上のレースだけの集計。推奨度は会員向けなので、tier.py の許可リストが匿名の応答からは落とす
         out["rated"] = {"min_level": pr.RATED_MIN_LEVEL, "label": "標準以上", "counts": ps["rated_counts"],
-                        "kpi": _kpi(ps["rated_summary"]), "summary": ps["rated_summary"], "legend": PZ.legend()}
+                        "kpi": _kpi(ps["rated_summary"]), "summary": ps["rated_summary"], "legend": PZ.legend(),
+                        # 推奨した買い目をすべて買った場合（実オッズで絞らない）。kpi（確定オッズ ≥ 想定の買い目だけ）と並べて出す
+                        "kpi_all": {**(ra := ps.get("rated_all") or {"invested": 0, "returned": 0, "races_bought": 0, "races_hit": 0, "estimated_races": 0}),
+                                    "roi": pr.rate(ra["returned"], ra["invested"])}}
         if scope == "day":
             doc = pr.read_day(d)
             out["races"] = (doc or {}).get("races", [])
