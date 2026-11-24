@@ -105,8 +105,8 @@ def cmd_stage0b() -> dict:
     # 道悪の実績（1 号の決定の定義: as-of で稍重以上の 3 着内が 1 回以上）。前のレースの着順から、日をずらした累計で作る（今回のレースは入れない）
     hist = []
     for y in range(2016, F.YEAR_END + 1):
-        h = pd.read_parquet(TABLES / str(y) / "race_result_flat.parquet", columns=["race_id", "date", "horse_id", "finish_position", "track_condition"])
-        hist.append(h)
+        h = pd.read_parquet(TABLES / str(y) / "race_result_flat.parquet", columns=["race_id", "date", "horse_id", "finish_position", "track_condition", "surface"])
+        hist.append(h[h["surface"].astype(str).str[0].isin(["芝", "ダ"])])     # 障害は実績に数えない
     h = pd.concat(hist, ignore_index=True)
     h["race_id"], h["horse_id"] = h["race_id"].astype(str), h["horse_id"].astype(str)
     fp = pd.to_numeric(h["finish_position"], errors="coerce")
@@ -125,7 +125,7 @@ def cmd_stage0b() -> dict:
     out = {"H1": {"races_worse": int(sum(worse.values())), "fav_runs_per_year": float((h1 & (x["pre"] < 10)).sum() / 9),
                   "fav_runs_2024": int((h1 & (x["pre"] < 10) & (x["year"] == 2024)).sum()),
                   "le50_runs_per_year": float((h1 & (x["pre"] <= 50)).sum() / 9),
-                  "note": "道悪の実績は、前の日までの稍重・重・不良での 3 着内の数 ≥ 1（race_result_flat から作った as-of。前の版は frame の bad_top3_prev＝重・不良だけで、定義と違った）"}}
+                  "note": "道悪の実績は、前の日までの稍重・重・不良での 3 着内の数 ≥ 1（芝ダの race_result_flat から作った as-of。表は 2016 年からなので 2016〜17 年は低め。前の版は frame の bad_top3_prev＝重・不良だけで、定義と違った）"}}
     # 取消の区別の監査: 2016〜19 年は finish_status（scratched・excluded・dnf）がある。2020 年以降は列が無いか空。芝ダだけ
     aud, sc = {}, []
     for y in range(2016, F.YEAR_END + 1):
@@ -140,7 +140,6 @@ def cmd_stage0b() -> dict:
         sc.append(r.loc[st == "scratched", ["race_id"]].assign(year=y))
     out["scratch_audit"] = aud
     scr = pd.concat(sc, ignore_index=True)
-    races = set(scr["race_id"].astype(str))
     yrs = {y for y, v in aud.items() if v.get("scratched", 0) >= 10}
     races = set(scr.loc[scr["year"].isin(yrs), "race_id"].astype(str))
     fav_in = full[full["race_id"].isin(races) & (full["pre"] < 10)]

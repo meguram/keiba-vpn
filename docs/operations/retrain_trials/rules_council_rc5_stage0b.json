@@ -3,8 +3,8 @@
   "races_worse": 322,
   "fav_runs_per_year": 111.55555555555556,
   "fav_runs_2024": 90,
-  "le50_runs_per_year": 286.1111111111111,
-  "note": "道悪の実績は、前の日までの稍重・重・不良での 3 着内の数 ≥ 1（race_result_flat から作った as-of。前の版は frame の bad_top3_prev＝重・不良だけで、定義と違った）"
+  "le50_runs_per_year": 285.8888888888889,
+  "note": "道悪の実績は、前の日までの稍重・重・不良での 3 着内の数 ≥ 1（芝ダの race_result_flat から作った as-of。表は 2016 年からなので 2016〜17 年は低め。前の版は frame の bad_top3_prev＝重・不良だけで、定義と違った）"
  },
  "scratch_audit": {
   "2016": {

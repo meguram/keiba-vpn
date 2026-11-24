@@ -24,7 +24,7 @@ def main() -> None:
     full["srch"] = E.search70(full["kaisai"].to_numpy())
     x = b.merge(full, on=["race_id", "horse_id"], how="left")
     R = RC.RC2(0, mode="k70")
-    s = json.loads(open("/home/jovyan/work/course_out/rules_council/rc2_search.json", encoding="utf-8").read())
+    s = json.loads(open(E.F.OUTW / "rc2_search.json", encoding="utf-8").read())
     nm = {R.P.level_name(j): j for j in range(R.P.n_levels)}
     sel = np.zeros(R.P.n_levels, bool)
     for n in [r["level"] for r in s["down1"]]:
@@ -36,7 +36,14 @@ def main() -> None:
     out = {"megu_c13_bets_2017_24": int(len(x)), "bets_search_side": int(x["srch"].sum()), "bets_search_fav": int(fav.sum()),
            "E_search_fav": float(x.loc[fav, "q"].sum()), "overlap_runs": int((fav & x["kill"]).sum()), "overlap_E": float(x.loc[fav & x["kill"], "q"].sum()),
            "overlap_share_of_fav_bets": float((fav & x["kill"]).sum() / max(fav.sum(), 1)), "overlap_share_of_all_search_bets": float((fav & x["kill"]).sum() / max(x["srch"].sum(), 1))}
-    out["note"] = "線（1 号の判断）: 重なりの E ≥ 200 かつ 一桁の買い目に占める割合 ≤ 50%。62% で外れ、(b) は閉じた"
+    w = x["stake"].astype(float)
+    out["weighted"] = {"fav_bets": float(w[fav].sum()), "overlap": float(w[fav & x["kill"]].sum()),
+                       "overlap_share_of_fav_bets": float(w[fav & x["kill"]].sum() / max(w[fav].sum(), 1e-9)),
+                       "overlap_E": float((w * x["q"])[fav & x["kill"]].sum())}
+    share = out["overlap_share_of_fav_bets"]
+    out["note"] = (f"線（1 号の判断）: 重なりの E ≥ 200 かつ 一桁の買い目に占める割合 ≤ 50%。割合は {share:.1%}（行の和集合）・"
+                   f"{out['weighted']['overlap_share_of_fav_bets']:.1%}（5 本の買う割合の重み）で、{'外れ' if share > 0.5 else '通り'}。"
+                   "買い目の数は、再現 5 本のうち 1 本でも買う行の数")
     (E.F.CR.REPO / "docs/operations/retrain_trials/rules_council_kill_overlap.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(out, ensure_ascii=False, indent=1))
 
