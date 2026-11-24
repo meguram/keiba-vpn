@@ -80,7 +80,7 @@ OVERRIDE: dict[str, str] = {
     "pedigree_roi": "res-pedigree", "pedigree_side_cohit": "res-pedigree", "dam_age_firstfoal": "res-pedigree",
     "weight_growth_performance": "res-pedigree",
     # 馬券と印（学習・実験の部にある馬券の記録）
-    "bet_cycles": "res-bet", "latest_strategy_tables": "res-bet", "megu_why_below_100": "res-bet", "megu_cycles_50": "res-bet", "longshot_course_rules": "res-bet", "rules_council_summary": "res-bet", "rules_council_favorites": "res-bet", "rules_council_t60_band": "res-bet", "bet_patterns_from_honmei": "res-bet", "bet_optimization_story": "res-bet", "bet_r2_walkthrough": "res-bet", "rules_bet_opt": "res-bet", "odds_rank_accuracy": "res-bet",
+    "bet_cycles": "res-bet", "latest_strategy_tables": "res-bet", "megu_why_below_100": "res-bet", "megu_cycles_50": "res-bet", "longshot_course_rules": "res-bet", "rules_council_summary": "res-bet", "rules_council_favorites": "res-bet", "rules_council_t60_band": "res-bet", "rules_council_daybias": "res-bet", "bet_patterns_from_honmei": "res-bet", "bet_optimization_story": "res-bet", "bet_r2_walkthrough": "res-bet", "rules_bet_opt": "res-bet", "odds_rank_accuracy": "res-bet",
     # 特徴量と要因（学習・実験の部や馬券の部にある要因の調査）
     "running_map_course_axis": "res-feature", "running_map_course_axis_rationale": "res-feature", "running_axis_curves": "res-feature", "running_style_pairs": "res-feature",
     "feature_investigation_catalog": "res-feature",
@@ -176,7 +176,7 @@ GROUPS: dict[str, list[Group]] = {
     ],
     "res-bet": [
         Group("推奨馬券の最適化", "結論は「いまのベスト分析 / 推奨馬券の最適化」。サイクルの正は bet_cycles（生成）。",
-              ["latest_strategy_tables", "megu_why_below_100", "megu_cycles_50", "longshot_course_rules", "rules_council_summary", "rules_council_favorites", "rules_council_t60_band", "bet_patterns_from_honmei", "bet_cycles", "bet_optimization_story", "bet_r2_walkthrough", "rules_bet_opt", "odds_rank_accuracy", "bet_optimization", "bet_allocation_table", "betting_edge_search", "monthly_roi_search",
+              ["latest_strategy_tables", "megu_why_below_100", "megu_cycles_50", "longshot_course_rules", "rules_council_summary", "rules_council_favorites", "rules_council_t60_band", "rules_council_daybias", "bet_patterns_from_honmei", "bet_cycles", "bet_optimization_story", "bet_r2_walkthrough", "rules_bet_opt", "odds_rank_accuracy", "bet_optimization", "bet_allocation_table", "betting_edge_search", "monthly_roi_search",
                "trifecta_true_odds", "proven_methods_roi"],
               [E("docs/operations/retrain_trials/bet_optimization_20261116.md", "推奨馬券の最適化の記録（2026-11-16〜）")]),
         Group("印と期待値", "印の規則・消し印・期待値と確率の較正。",

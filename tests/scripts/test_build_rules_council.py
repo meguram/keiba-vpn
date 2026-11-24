@@ -16,7 +16,8 @@ def test_pages_build_from_results():
     texts = _load("rules_council_pages.json")
     t60, rc2 = _load("rules_council_t60.json"), _load("rules_council_rc2.json")
     P = json.loads(B.PREREG2.read_text(encoding="utf-8"))
-    for h in (B.build_rc1(t60, texts["rc1"]), B.build_rc2(rc2, P, texts["rc2"]), B.build_summary(texts["summary"])):
+    bd = _load("rules_council_rc3_bound.json")
+    for h in (B.build_rc1(t60, texts["rc1"]), B.build_rc2(rc2, P, texts["rc2"]), B.build_rc3(bd, texts["rc3"]), B.build_summary(texts["summary"])):
         assert h.startswith("<!doctype html>") and h.endswith("</html>")
 
 
@@ -32,3 +33,11 @@ def test_conclusion_numbers_match_results():
     t = _load("rules_council_t60.json")["versions"]["主: 前半でずれ → 後半で比べる"]["< 10"]
     c1 = " ".join(texts["rc1"]["conclusion"])
     assert B.pc(t["入れ替わりの割合（q）"]) in c1 and B.pc(t["再現どうしの入れ替わり（床）"]) in c1
+
+
+def test_rc3_bound_matches_text():
+    texts = _load("rules_council_pages.json")
+    bd = _load("rules_council_rc3_bound.json")
+    mults = [v for k in ("inner", "front") for kk, o in bd[k].items() if isinstance(o, dict) for m, v in o.items() if "mult" in m]
+    assert abs(max(mults) - bd["max_mult"]) < 1e-12 and bd["max_mult"] < 1.27   # 要る倍率（一桁の 損益分岐 ÷ 帯の比）に届かない、という結論の前提
+    assert f"{bd['max_mult']:.2f}" in " ".join(texts["rc3"]["conclusion"])

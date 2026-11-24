@@ -3,6 +3,7 @@
 頁:
   docs/html/operations/final/rules_council_t60_band.html   RC-1 本物の T-60 で再現の帯を確かめる
   docs/html/operations/final/rules_council_favorites.html  RC-2 一桁オッズ × 全体 × 深さ 1
+  docs/html/operations/final/rules_council_daybias.html    RC-3 当日の馬場の偏り
   docs/html/operations/final/rules_council_summary.html    まとめ（議題の一覧・通算の数え・勝ち筋の台帳）
 入力: docs/operations/retrain_trials/rules_council_*.json、config/rules_council/prereg_rc2.json、docs/operations/retrain_trials/rules_council_pages.json（結論の文）
 使い方: python -m src.scripts.docs.build_rules_council
@@ -116,6 +117,28 @@ def build_rc2(R: dict, P: dict, texts: dict) -> str:
     return page("一桁オッズ × 全体 × 深さ 1 のルール探し（RC-2）", b)
 
 
+def build_rc3(Bd: dict, texts: dict) -> str:
+    b = ["<h2>結論</h2>", '<div class="box">' + bullets(texts["conclusion"]) + "</div>"]
+    rows = []
+    for k, nm_ in (("inner", "内外（枠 1〜4）"), ("front", "前後（最後の角 3 番手以内）")):
+        o = Bd[k]
+        for k2, lab in (("ge_2", "有利な側（+2 以上）"), ("ge_3", "有利な側（+3 以上）"), ("le_-2", "逆の側（−2 以下）"), ("le_-3", "逆の側（−3 以下）")):
+            v = o[k2]
+            t3 = v.get("top3_mult", v.get("top3_mult_other_side"))
+            w1 = v.get("win_mult", v.get("win_mult_other_side"))
+            rows.append([nm_, lab, f"{v['n']:,}", nm(t3, 3), nm(w1, 3)])
+    b.append("<h2>上限の計算（市場を使わない。市場が全く値段に入れていないときの上限）</h2>")
+    b.append(f"<p>1 レースの内枠の 3 着内の数の信頼度 ρ = {nm(Bd['rho_race_inner'], 3)}（観測の分散 {nm(Bd['var_obs_inner'], 3)}、偏りが無いときの超幾何の分散 {nm(Bd['var_null_inner'], 3)}）。"
+             f"日の数 {Bd['inner']['days']:,}、レース {Bd['inner']['races']:,}。倍率の最大 {nm(Bd['max_mult'], 3)}。</p>")
+    b.append(f"<p>日の中の相関（奇数・偶数のレース）: 内外 {nm(Bd['inner']['split_half_corr'], 3)}・前後 {nm(Bd['front']['split_half_corr'], 3)}。"
+             f"直前 2 レースの和と次のレースの相関: 内外 {nm(Bd['inner']['corr_prev2_next'], 3)}・前後 {nm(Bd['front']['corr_prev2_next'], 3)}。</p>")
+    b.append(table(["偏り", "直前 2 レースの偏りの和", "次のレース", "3 着内の倍率", "1 着の倍率"], rows, {2, 3, 4}))
+    b.append("<h2>判定と見た回数</h2>" + bullets(texts["judge"]))
+    b.append("<h2>作り方・再現</h2>" + bullets(["<code>python -m src.research.rules_council.daybias bound</code>（結果 <code>docs/operations/retrain_trials/rules_council_rc3_bound.json</code>）。費用 0 円。",
+                                                "決定は <code>docs/operations/roi_plus_council/decisions.md</code> の「RC-3 の判断」。"]))
+    return page("当日の馬場の偏りのルール探し（RC-3）", b)
+
+
 def build_summary(texts: dict) -> str:
     b = ["<h2>結論</h2>", '<div class="box">' + bullets(texts["conclusion"]) + "</div>"]
     b.append("<h2>議題の一覧</h2>" + table(["議題", "日付", "中身", "結果", "頁"],
@@ -133,6 +156,7 @@ def main() -> None:
     out = {"rules_council_t60_band.html": build_rc1(json.loads((TRI / "rules_council_t60.json").read_text(encoding="utf-8")), texts["rc1"]),
            "rules_council_favorites.html": build_rc2(json.loads((TRI / "rules_council_rc2.json").read_text(encoding="utf-8")),
                                                      json.loads(PREREG2.read_text(encoding="utf-8")), texts["rc2"]),
+           "rules_council_daybias.html": build_rc3(json.loads((TRI / "rules_council_rc3_bound.json").read_text(encoding="utf-8")), texts["rc3"]),
            "rules_council_summary.html": build_summary(texts["summary"])}
     for k, v in out.items():
         (DST / k).write_text(v, encoding="utf-8")
