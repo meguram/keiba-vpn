@@ -7,7 +7,7 @@
 #   bash scripts/gcp/set_api_max_instances.sh 3 --apply    # 版を作り（通信 0%）、確かめてから通信を 100% 移す
 #
 # ホストで root の gcloud の認証を使うときの例:
-#   sudo -n env CLOUDSDK_CONFIG=/home/jovyan/.config/gcloud bash scripts/gcp/set_api_max_instances.sh 3 --apply
+#   sudo -n env CLOUDSDK_CONFIG=<root で使う gcloud の設定の置き場> bash scripts/gcp/set_api_max_instances.sh 3 --apply   # 置き場は docs の手順
 # 次の promote でも同じ台数にするなら: gh variable set CLOUD_RUN_MAX_INSTANCES --body 3（しないと次の promote で 1 台に戻る）
 # イメージは今の本番の版と同じ digest なので、Artifact Registry の live-prod の印がそのまま守る。
 set -euo pipefail
