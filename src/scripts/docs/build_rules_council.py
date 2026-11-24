@@ -171,6 +171,8 @@ def build_summary(texts: dict) -> str:
                                            f'<a href="{esc(r["page"])}">頁</a>' if r.get("page") else "－"] for r in texts["agendas"]]))
     b.append("<h2>勝ち筋の台帳（市場比が 1 を超えたか）</h2>" + table(["源", "状態", "大きさ", "注"], [[esc(x) for x in r] for r in texts["ledger"]]))
     b.append("<h2>通算の数え</h2>" + table(["項目", "値"], [[esc(k), esc(v)] for k, v in texts["counts"]]))
+    if texts.get("retro"):
+        b.append("<h2>中間の振り返り（RC-0〜RC-5）</h2>" + bullets(texts["retro"]))
     b.append("<h2>次に見ること</h2>" + bullets(texts["next"]))
     return page("ルールの会議のまとめ", b)
 

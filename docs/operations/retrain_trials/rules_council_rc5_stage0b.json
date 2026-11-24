@@ -1,0 +1,16 @@
+{
+ "H1": {
+  "races_worse": 322,
+  "fav_runs_per_year": 63.888888888888886,
+  "fav_runs_2024": 59,
+  "le50_runs_per_year": 164.44444444444446,
+  "note": "道悪の実績は frame の bad_top3_prev（前走までの道悪の 3 着内の数）≥ 1"
+ },
+ "scratch_audit_2022": {
+  "no_finish": 379,
+  "passing_and_odds（中止とみる）": 146,
+  "no_passing_no_odds（取消か除外）": 226,
+  "other": 7,
+  "note": "通過順もオッズも無い馬は、出走取消（T-60 より前に分かる）と競走除外（発走の直前）を区別できない"
+ }
+}
