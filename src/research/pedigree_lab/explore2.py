@@ -24,9 +24,13 @@ from src.research.pedigree_lab.scene_map import RACE_LEVEL, masks
 
 def frame() -> pd.DataFrame:
     cols = list(dict.fromkeys(gates.FCOLS + ["dband", "going", "distance", "dchg", "rage", "sexb", "sire_all_n", "dam_v_nrun",
-                                             "sire_rasurf_top3", "sire_surf_top3", "layoff"]))
+                                             "sire_rasurf_top3", "sire_surf_top3", "layoff", "age"]))
     F = pd.read_parquet(data.OUT / "feat_v4.parquet", columns=cols)
     F = scene_dist.marks(gates.scenes(F))
+    # 対象（2014 年以降の生まれ・中央の新馬デビュー）は全行で判定する（開発の行に絞った後では、保留の開催の新馬戦が消える。critic 8）
+    Fs = F.sort_values(["horse_id", "date"], kind="stable")
+    okv = (pd.to_numeric(Fs["by"], errors="coerce").fillna(0) >= 2014) & (Fs.groupby("horse_id")["cls"].transform("first") == "NEW")
+    F["ok_new"] = okv.sort_index().to_numpy()
     for k, v in masks(F).items():
         F[f"m_{k}"] = v
     O = pd.read_parquet(data.OUT / "kf_v4_pure_dd.parquet")
@@ -80,18 +84,17 @@ def run_joint(X, n_boot):
     Z, idx = interaction_cols(X, mk)
     b, bs = fit_boot(X, Z, n_boot)
     res = summarize(b, bs, idx)
-    # 最大 |t| の同時の区間（初ダートを除く 11 本と、全 12 本）
-    names = list(idx)
+    # 最大 |t| の同時の区間（初ダートは事前に既知の陽性の対照なので除き、11 本で作る。critic 9）
+    names = [n for n in idx if n != "初ダート"]
     se = np.array([bs[:, idx[n]].std() for n in names])
     t = (bs[:, [idx[n] for n in names]] - b[[idx[n] for n in names]]) / se
     cmax = float(np.percentile(np.abs(t).max(1), 95))
     for i, n in enumerate(names):
         res[n]["sim_ci"] = [round(float(b[idx[n]] - cmax * se[i]), 4), round(float(b[idx[n]] + cmax * se[i]), 4)]
-    # 経験ベイズの縮め（初ダートを除く 11 本の効果の間の τ²）
-    est = np.array([b[idx[n]] for n in names if n != "初ダート"])
-    ses = np.array([se[i] for i, n in enumerate(names) if n != "初ダート"])
-    tau2 = max(float(np.var(est) - np.mean(ses ** 2)), 0.0)
-    mu = float(np.average(est, weights=1 / (ses ** 2 + tau2 + 1e-12)))
+    # 経験ベイズの縮め（11 本の効果の間の τ²。係数どうしの相関は無視した近似: critic 10）
+    est = np.array([b[idx[n]] for n in names])
+    tau2 = max(float(np.var(est, ddof=1) - np.mean(se ** 2)), 0.0)
+    mu = float(np.average(est, weights=1 / (se ** 2 + tau2 + 1e-12)))
     for i, n in enumerate(names):
         w = tau2 / (tau2 + se[i] ** 2) if tau2 > 0 else 0.0
         res[n]["eb"] = round(mu + w * (b[idx[n]] - mu), 4)
@@ -121,11 +124,9 @@ def run_bands(X, n_boot):
 
 
 def run_career(X, n_boot):
-    F = X.sort_values(["horse_id", "date"], kind="stable")
-    ok = (pd.to_numeric(F["by"], errors="coerce").fillna(0) >= 2014) & (F.groupby("horse_id")["cls"].transform("first") == "NEW")
-    c = F["career"].to_numpy()
+    c = X["career"].to_numpy()
     lab = np.where(c == 0, "0", np.where(c <= 2, "1〜2", np.where(c <= 5, "3〜5", "6〜")))
-    lab = pd.Series(np.where(ok, lab, "対象外"), index=F.index).sort_index().to_numpy()
+    lab = np.where(X["ok_new"].to_numpy(), lab, "対象外")
     mk = {lv: lab == lv for lv in ("0", "1〜2", "3〜5", "6〜")}
     Z, idx = interaction_cols(X, mk)
     b, bs = fit_boot(X, Z, n_boot)
@@ -140,9 +141,13 @@ def run_career(X, n_boot):
 
 def run_layoff(X, n_boot):
     lay = X["m_休み明け（90 日以上）"].to_numpy()
-    early = (X["sire_rasurf_top3"] - X["sire_surf_top3"]).to_numpy()      # 父 × レースの年齢条件の上乗せ（H6'）
-    young = X["rage"].isin(["A2", "A3"]).to_numpy() | (X["rage"].eq("A3U").to_numpy() & (X["date"].dt.month.to_numpy() <= 8))
-    q = pd.qcut(pd.Series(early[lay]).rank(method="first"), 3, labels=["早熟", "中", "晩成"]).astype(str).to_numpy()
+    # 父 × レースの年齢条件の上乗せ（H6'）。2・3 歳戦では大きいほど早熟、3 歳以上・4 歳以上戦では大きいほど晩成なので、
+    # 向きをそろえた「早熟の度合い」にする（critic 1）。年齢はレースの条件ではなく馬の年齢で分ける（critic 11）
+    up = (X["sire_rasurf_top3"] - X["sire_surf_top3"]).to_numpy()
+    sign = np.where(X["rage"].isin(["A2", "A3"]).to_numpy(), 1.0, -1.0)
+    early = up * sign
+    young = X["age"].to_numpy() <= 3
+    q = pd.qcut(pd.Series(early[lay]).rank(method="first"), 3, labels=["晩成", "中", "早熟"]).astype(str).to_numpy()
     tert = np.full(len(X), "", dtype=object)
     tert[lay] = q
     mk = {}

@@ -35,6 +35,7 @@ def sire_names(ids: set[str]) -> dict[str, str]:
 
 
 def main() -> None:
+    data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", "sire_profile", "父の適性の一覧（記述だけ。critic 5 で台帳を足した）"))
     X = pd.read_parquet(data.OUT / "feat_v4.parquet",
                         columns=["date", "sire", "surf", "dband", "rage", "sire_surf_top3", "sire_sd_top3", "sire_rasurf_top3", "sire_all_n"])
     big = X.groupby("sire").size()
@@ -69,6 +70,7 @@ def main() -> None:
            "late_top": D.dropna(subset=["early_turf"]).sort_values("early_turf").head(10).to_dict("records")}
     (data.OUT / "sire_profile.json").write_text(json.dumps(out, ensure_ascii=False, indent=1))
     print(json.dumps(out, ensure_ascii=False)[:2500])
+    data.finish_all(str(data.OUT / "sire_profile.json"))
 
 
 if __name__ == "__main__":

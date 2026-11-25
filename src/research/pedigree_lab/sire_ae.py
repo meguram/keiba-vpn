@@ -46,8 +46,9 @@ def stats(w: pd.DataFrame) -> dict:
     sd_true = float(np.sqrt(max(var_obs - noise, 0)))
     top = a1 >= np.quantile(a1, 0.9)
     direct = float(np.average(a2[top], weights=n[top]))
-    # 見込みの倍率: 上位 10% の平均の z（正規の 1.755）× 真の sd × 2 期の相関（真の値の持続の目安）
-    implied = 1 + 1.755 * sd_true * max(corr, 0)
+    # 見込みの倍率: 観測の A/E で上位 10% を選んだ次の期の期待値 ≈ m2 + 1.755·相関·観測の sd
+    # （2 期の相関はすでに雑音の分だけ下がっているので、sd は観測の値を使う。critic 3 で直した）
+    implied = m2 + 1.755 * max(corr, 0) * np.sqrt(var2)
     return {"sires": int(len(w)), "corr": round(float(corr), 3), "sd_obs": round(float(np.sqrt(var_obs)), 4),
             "sd_noise": round(float(np.sqrt(noise)), 4), "sd_true": round(sd_true, 4),
             "top10_next_period_AE": round(direct, 4), "implied_top10": round(implied, 4),

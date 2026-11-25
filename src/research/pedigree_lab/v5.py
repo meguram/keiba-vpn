@@ -127,7 +127,8 @@ def cols_A(X: pd.DataFrame) -> list[str]:
 
 
 def henery(p: np.ndarray, rid: np.ndarray, n_run: np.ndarray, g: float, d: float) -> np.ndarray:
-    """2 着・3 着の確率を p^g・p^d に比例させた Harville（Henery 型）。複勝の払いの範囲（8 頭以上 3 着・以下 2 着）。"""
+    """2 着・3 着の確率を p^g・p^d に比例させた Harville（Henery 型）。頭数によらず 3 着内の確率（正解の top3 に合わせる）。
+    3 頭以下の判定は表の行数で行うので、レースの全頭を渡すこと（n_run は使わない）。"""
     out = np.zeros_like(p)
     starts = np.flatnonzero(np.r_[True, rid[1:] != rid[:-1]])
     ends = np.r_[starts[1:], len(p)]

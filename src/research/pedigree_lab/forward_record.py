@@ -45,8 +45,12 @@ def main() -> None:
     ap.add_argument("--date", required=True)
     a = ap.parse_args()
     day = pd.Timestamp(a.date)
-    data.TOKENS.append(data._guard(("2016-01-01", str((day - pd.Timedelta(days=1)).date())), "forward", f"forward_{a.date}",
-                                   f"前向きの記録 {a.date}（as-of の特徴量の元。凍結の第 4 版で当てる。評価ではない）"))
+    # 台帳: 特徴量の元として 2016 年から前日までの結果を読む。封印の期間（2025〜26）に重なるので、期間ごとに分けて開く
+    # （critic 4。2025〜26 の行は評価ではなく as-of の集計の元。扱いは統括役に確かめる）
+    data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"forward_{a.date}_dev",
+                                   f"前向きの記録 {a.date} の as-of の特徴量の元（開発の期間）"))
+    data.TOKENS.append(data._guard(("2025-01-01", str((day - pd.Timedelta(days=1)).date())), "forward", f"forward_{a.date}_recent",
+                                   f"前向きの記録 {a.date} の as-of の特徴量の元（2025 年〜前日。評価ではない）"))
     runs = build_base.load_runs()
     runs = runs[runs["date"] < day]
     E = entries(day)
@@ -57,7 +61,10 @@ def main() -> None:
     miss = sorted(set(E["horse_id"]) - set(ped["horse_id"]))
     if miss:
         ped = pd.concat([ped, build_base.load_ped(miss)], ignore_index=True)
-    X, _ = features4.build(r, ped, sub=True)
+    X, kinfo = features4.build(r, ped, sub=True)
+    frozen = json.loads((data.OUT / "kinfo_v4.json").read_text())
+    if any(abs(kinfo[k] - frozen[k]) > 1e-6 for k in frozen if k != "rho") or kinfo["rho"] != frozen["rho"]:
+        raise SystemExit("縮めの k が凍結の第 4 版と違う（作りがずれている。critic 7）")
     X["split"] = -1                      # gates.FCOLS の列をそろえる（前向きの行は分けに入らない）
     F = gates.scenes(X[gates.FCOLS].copy())
     D = scene_dist.marks(X[list(dict.fromkeys(gates.FCOLS + ["dband", "going"]))].copy())
@@ -69,7 +76,7 @@ def main() -> None:
     out = T[["race_id", "date", "venue", "surface", "distance", "horse_number", "horse_id", "p_win", "rank", "FD", "DB0"]].copy()
     out["p_win"] = out["p_win"].round(5)
     out["date"] = out["date"].dt.date.astype(str)
-    out["no_pedigree"] = out["horse_id"].isin(miss).to_numpy() & T["sire"].eq("").to_numpy()
+    out["no_pedigree"] = (T["sire"].isna() | T["sire"].eq("")).to_numpy()      # 血統の JSON が無い馬（critic 6）
     OUTDIR.mkdir(parents=True, exist_ok=True)
     path = OUTDIR / f"{a.date}.csv"
     meta = {"made_at": datetime.now(JST).isoformat(timespec="seconds"), "model": "v4_pure_dd（freeze_v4_gate.sha256）",

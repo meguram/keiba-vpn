@@ -22,12 +22,12 @@ def main() -> None:
     W = X[X["win"] == 1].copy()
     W["g"] = np.log(W["p_win"]) - np.log(1 / W["n_run"])
     W["field"] = pd.cut(W["n_run"], [0, 10, 14, 18], labels=["〜10 頭", "11〜14 頭", "15〜18 頭"]).astype(str)
-    W["sire_n"] = pd.cut(np.expm1(W["sire_all_n"]), [-1, 300, 1000, 3000, 1e9], labels=["〜300 走", "300〜1000", "1000〜3000", "3000 走〜"]).astype(str)
+    # 父の産駒の数は馬の属性で、勝ち馬の行で分けると結果で条件付けた集計になるので出さない（2 体の R1・critic 2）
     lab = {"cls": {"NEW": "新馬", "MDN": "未勝利", "C1": "1 勝", "C2": "2 勝", "C3": "3 勝", "OP": "OP・重賞"},
            "rage": {"A2": "2 歳戦", "A3": "3 歳戦", "A3U": "3 歳以上", "A4U": "4 歳以上"}, "surf": {"T": "芝", "D": "ダート"},
            "dband": {"S": "〜1300", "M": "1400-1600", "I": "1700-2000", "L": "2100-2400", "E": "2500〜"}}
     out = {"all": {"races": len(W), "gain": round(float(W["g"].mean()), 4)}}
-    for col in ("cls", "rage", "surf", "dband", "field", "sire_n"):
+    for col in ("cls", "rage", "surf", "dband", "field"):
         g = W.groupby(col)["g"].agg(["mean", "size"])
         out[col] = {lab.get(col, {}).get(k, k): {"gain": round(float(v["mean"]), 4), "races": int(v["size"])} for k, v in g.iterrows()}
     path = data.OUT / "where_gain.json"
