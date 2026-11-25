@@ -88,13 +88,39 @@ def run_wintop3(X: pd.DataFrame) -> dict:
     return out
 
 
+def run_seedfloor() -> dict:
+    """第 4 版 pure を LightGBM の種だけ 3 通りで学び直した 2 代母の単位の OOF の改善の散らばり。"""
+    from src.research.pedigree_lab import ablate, model, v5
+    X = v5.base_frame("v4")
+    dev = X["split"].isin([0, 1]).to_numpy()
+    cols = ablate.col_sets(X)["pure"]
+    gains = []
+    for sd in (11, 23, 37):
+        o = v5.oof_for(X, cols, "dd", dict(seed=sd, bagging_seed=sd, feature_fraction_seed=sd), ("win",))
+        gains.append(v5.gain(X, o["win"], dev))
+        print("seed", sd, gains[-1], flush=True)
+    return {"gains": gains, "mean": round(float(np.mean(gains)), 5), "sd": round(float(np.std(gains, ddof=1)), 5)}
+
+
+def run_harville(X: pd.DataFrame) -> dict:
+    """凍結の勝ちの確率から着順を 1 回模擬し（Gumbel の技法・Plackett-Luce）、模擬の勝ち・3 着内で傾きの比を出す。"""
+    rng = np.random.default_rng(17)
+    g = np.log(np.clip(X["p_win"].to_numpy(), 1e-9, 1)) + rng.gumbel(size=len(X))
+    rk = pd.Series(g).groupby(X["race_id"].to_numpy()).rank(ascending=False, method="first").to_numpy()
+    Y = X.assign(win=(rk == 1).astype(int), top3=(rk <= 3).astype(int))
+    return run_wintop3(Y)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("what", choices=["recal", "wintop3"])
+    ap.add_argument("what", choices=["recal", "wintop3", "seedfloor", "harville"])
     a = ap.parse_args()
     data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"explore3_{a.what}", f"探す側の記述の 3 巡目: {a.what}（尤度だけ）"))
-    X = load()
-    res = run_recal(X) if a.what == "recal" else run_wintop3(X)
+    if a.what == "seedfloor":
+        res = run_seedfloor()
+    else:
+        X = load()
+        res = {"recal": run_recal, "wintop3": run_wintop3, "harville": run_harville}[a.what](X)
     path = data.OUT / f"explore3_{a.what}.json"
     path.write_text(json.dumps(res, ensure_ascii=False, indent=1))
     print(json.dumps(res, ensure_ascii=False))
