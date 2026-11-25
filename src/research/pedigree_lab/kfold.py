@@ -56,6 +56,9 @@ def fit_temp(raw: np.ndarray, y: np.ndarray, rid: np.ndarray, total: np.ndarray,
     return float(best[1])
 
 
+SAVE_DIR = None      # main で設定: 折のモデルと温度を保存する場所（保留・2025・26・前向きに同じ予測器を当てるため）
+
+
 def run(X: pd.DataFrame, cols: list[str], target: str, f: np.ndarray, dev: np.ndarray, hold: np.ndarray,
         rounds: int = 2000) -> tuple[np.ndarray, dict]:
     y = X[target].to_numpy()
@@ -86,12 +89,17 @@ def run(X: pd.DataFrame, cols: list[str], target: str, f: np.ndarray, dev: np.nd
                           valid_sets=[lgb.Dataset(X.loc[va, cols], y[va])], callbacks=[lgb.early_stopping(100, verbose=False)])
         iters.append(m.best_iteration)
         raw[te] = m.predict(X.loc[te, cols], num_iteration=m.best_iteration)
+        if SAVE_DIR is not None:
+            m.save_model(str(SAVE_DIR / f"{target}_fold{k}.txt"), num_iteration=m.best_iteration)
         hraw += m.predict(X.loc[hold, cols], num_iteration=m.best_iteration) / K
     raw[hold] = hraw
     if OBJ == "softmax" and target == "win":
         # ロジット → レースの最大を引いて exp（race_norm は log を取るので、レースの中の差がそのまま残る）
         raw = np.exp(raw - pd.Series(raw).groupby(rid).transform("max").to_numpy()) * 0.999
     temp = fit_temp(raw[dev], y[dev], rid[dev], total[dev], target)
+    if SAVE_DIR is not None:
+        import json as _j
+        (SAVE_DIR / f"{target}_meta.json").write_text(_j.dumps({"temp": temp, "cols": cols, "iters": iters, "obj": OBJ}, ensure_ascii=False))
     p = np.full(len(X), np.nan)
     for part in (dev, hold):
         p[part] = model.race_norm(raw[part], rid[part], total[part], temp)
@@ -106,8 +114,10 @@ def main() -> None:
     ap.add_argument("--group", default="meeting", choices=["meeting", "dd"])
     ap.add_argument("--obj", default="binary", choices=["binary", "softmax"])
     a = ap.parse_args()
-    global OBJ
+    global OBJ, SAVE_DIR
     OBJ = a.obj
+    SAVE_DIR = data.OUT / f"models_{a.tag}_{a.set}_{a.group}{'' if a.obj == 'binary' else '_sm'}"
+    SAVE_DIR.mkdir(exist_ok=True)
     X = pd.read_parquet(data.OUT / f"feat_{a.tag}.parquet")
     X = X[(X["date"].dt.year >= 2017) & (X["date"].dt.year <= 2024)].reset_index(drop=True)
     cols = ablate.col_sets(X)[a.set]
