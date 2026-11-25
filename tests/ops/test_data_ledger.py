@@ -426,6 +426,7 @@ _GUARD_ENTRY = {
     "src/research/rules_council/rc2_real.py": {"guard"},          # RC-2 の段 S'（研究の CLI。各 cmd の中だけで呼ぶ）
     "src/research/rules_council/benter_diag.py": {"cmd_volume", "cmd_sstar", "cmd_depend"},   # RC-6 の着順なしの診断（eval_only。研究の CLI）
     "src/research/rules_council/forward_union.py": {"cmd_build", "cmd_ledger"},   # RC-2 の和集合の前向きの台帳（eval_only・forward。研究の CLI）
+    "src/research/rules_council/results_table.py": {"main"},   # R0-07 説明の結果の表（select。研究の CLI・1 回だけ）
     "src/research/megu_cycles/mc_final.py": {"cmd_final", "cmd_drift"},     # めぐサイクルの最後の 1 回の確かめ・再現の楽観の測り（eval_only）   # めぐサイクルの 2022〜24 の確かめ（confirm）・割引きと最後の確かめ（eval_only）
 }
 _PROD = ("src/pipeline/inference/stage2_bets.py", "src/pipeline/inference/candidate_runner.py", "src/api/stage2_live.py")
