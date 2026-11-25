@@ -4,9 +4,14 @@ import { useEffect, useState } from "react";
 import { USE_MOCK } from "@/lib/mock";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 
-export type RaceBet = { total_bet: number; total_return: number; hit: boolean; roi: number | null; estimated: boolean };
+/** total_* は推奨した買い目をすべて買った場合。selected は確定オッズ ≥ 想定の買い目だけの場合（無い応答もある） */
+export type RaceBet = { total_bet: number; total_return: number; hit: boolean; roi: number | null; estimated: boolean;
+  selected?: { total_bet: number; total_return: number; hit: boolean; roi: number | null } };
+export type AllBlock = { invested: number; returned: number; roi: number | null; races_bought: number; races_hit: number; estimated_races: number };
 export type RatedCounts = { settled: number; rated: number; skipped: number; unrated: number };
-export type BetsBlock = { counts?: RatedCounts; invested: number; returned: number; roi: number | null; races_bought: number; races_hit: number; estimated_races: number; status: string };
+export type BetsBlock = { counts?: RatedCounts; invested: number; returned: number; roi: number | null; races_bought: number; races_hit: number; estimated_races: number; status: string;
+  /** 推奨した買い目をすべて買った場合（主に出す）。上の invested などは確定オッズ ≥ 想定の買い目だけ */
+  all?: AllBlock };
 export type BetsSummary = { date: string; label: string; week: BetsBlock & { from: string; to: string; days: string[] }; day: BetsBlock; races: Record<string, RaceBet>; note: string };
 
 const cache = new Map<string, { at: number; v: BetsSummary }>();

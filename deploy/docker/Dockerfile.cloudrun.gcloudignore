@@ -27,3 +27,5 @@ config/*.local.json
 **/__pycache__/
 *.pyc
 *.ipynb
+# 会員名簿（試験用の test も）はイメージに入れない（docs/operations/members_json_purge_20261119.md）
+config/members.json

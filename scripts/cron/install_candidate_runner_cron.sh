@@ -7,7 +7,8 @@
 set -eu
 PROJECT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)"
 TAG="KEIBA-CANDIDATE-RUNNER"
-RUN="KEIBA_CANDIDATE_RUNNER=1 bash ${PROJECT_DIR}/scripts/cron/candidate_runner.sh ${PROJECT_DIR} >> ${PROJECT_DIR}/logs/candidate_runner.cron.log 2>&1"
+# cron_run.sh で包む: 監視（scrape_status_notify）が実行の記録で未開始・失敗を判定する（包まないと、何もしない回はログが増えず未開始と誤報する）
+RUN="KEIBA_CANDIDATE_RUNNER=1 bash ${PROJECT_DIR}/scripts/cron/cron_run.sh candidate_runner -- bash ${PROJECT_DIR}/scripts/cron/candidate_runner.sh ${PROJECT_DIR} >> ${PROJECT_DIR}/logs/candidate_runner.cron.log 2>&1"
 L1="45 22 * * * ${RUN} # ${TAG}"
 L2="*/15 23,0-7 * * * ${RUN} # ${TAG}"
 META="${PROJECT_DIR}/data/local/meta"

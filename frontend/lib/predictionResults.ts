@@ -55,6 +55,8 @@ export type RatedBlock = {
   label: string;
   counts: { settled: number; rated: number; skipped: number; unrated: number };
   kpi: Kpi;
+  /** 推奨した買い目をすべて買った場合（実オッズで絞らない）。kpi は確定オッズ ≥ 想定の買い目だけ */
+  kpi_all?: { roi: number | null; invested: number; returned: number; races_bought: number; races_hit: number; estimated_races?: number };
   summary: { marks: Record<MarkKey, Counts> };
   legend: { level: number; label: string; short: string }[];
 };

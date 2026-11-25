@@ -97,6 +97,28 @@ def test_rated_block_has_standard_or_above_aggregate_for_members(client):
     assert set(d["rated"]["counts"]) == {"settled", "rated", "skipped", "unrated"} and "marks" in d["rated"]["kpi"]
 
 
+def test_rated_block_has_buy_all_kpi_next_to_selected(client):
+    """会員の画面では、推奨どおり全部買った場合（bets_t.all）と、確定オッズ ≥ 想定の買い目だけの場合を並べる。"""
+    c, tmp = client
+    _put(tmp, "20261018")
+    doc = pr.read_day("20261018", tmp)
+    for r in doc["races"]:
+        if r.get("included"):
+            r["bets_t"]["all"] = {"total_bet": 2000, "total_return": 0}       # 全部買うと外れ・絞ると的中、という形
+    pr.write_day(doc, tmp, force=True)
+    d = c.get("/api/prediction-results?scope=day&date=20261018").json()
+    ka, k = d["rated"]["kpi_all"], d["rated"]["kpi"]
+    assert ka["invested"] == 2000 * ka["races_bought"] and ka["returned"] == 0 and ka["roi"] == 0.0 and ka["races_hit"] == 0
+    assert k["invested"] == 1000 * k["races_bought"] and k["roi"] == 3.0
+
+
+def test_buy_all_kpi_skips_skipped_and_empty(client):
+    c, tmp = client
+    _put(tmp, "20261018", level=0)
+    d = c.get("/api/prediction-results?scope=day&date=20261018").json()
+    assert d["rated"]["kpi_all"] == {"invested": 0, "returned": 0, "races_bought": 0, "races_hit": 0, "estimated_races": 0, "roi": None}
+
+
 def test_rated_block_is_not_shown_to_guests(guest_client):
     g, tmp = guest_client
     _put(tmp, "20261018")

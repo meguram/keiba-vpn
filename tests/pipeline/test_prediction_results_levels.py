@@ -45,6 +45,19 @@ def test_bets_level_card_excludes_skipped_and_reports_unrated(tmp_path):
     assert p["unrated_races"] == 2                                           # 旧データ 1R + 未記録 1R
 
 
+def test_bets_level_card_adds_buy_all_next_to_selected(tmp_path):
+    """推奨度ごとに、推奨した買い目をすべて買った場合（all）も返す。確定オッズで絞って購入なしのレースも all には入る。"""
+    r1, r2 = _trec("R1", 3, 1000, 1500), _trec("R2", 3, 0, 0)
+    r1["bets_t"]["all"] = {"total_bet": 2000, "total_return": 1500}
+    r2["bets_t"]["all"] = {"total_bet": 2000, "total_return": 4000}
+    _write(tmp_path, "20261017", [r1, r2])
+    p = next(x for x in pr.bets_level_card(date(2026, 10, 24), tmp_path)["periods"] if x["key"] == "recent_5w")
+    l3 = next(x for x in p["levels"] if x["level"] == 3)
+    assert (l3["races"], l3["invested"], l3["roi"]) == (1, 1000, 1.5)
+    assert l3["all"] == {"races": 2, "hit_races": 2, "hit_rate": 1.0, "invested": 4000, "returned": 5500, "roi": 1.375}
+    assert p["total"]["all"]["invested"] == 4000 and p["total"]["all"]["roi"] == 1.375
+
+
 def test_portfolio_level_matches_ui_thresholds(monkeypatch):
     class C:
         def __init__(self, ev): self.bet_type, self.ev, self.bet_amount = "tansho", ev, 100

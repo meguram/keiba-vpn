@@ -508,7 +508,7 @@ th { background: var(--panel); color: var(--accent-2); white-space: nowrap; }
 <thead><tr><th>区分</th><th>見える項目</th><th>決め方</th></tr></thead>
 <tbody>
 <tr><td>匿名</td><td>勝率・複勝率まで</td><td>サーバーが応答から項目を落とす（許可リスト方式）。会員限定のパスは 401</td></tr>
-<tr><td>会員</td><td>想定オッズ・期待値・印（めぐ AI）・推奨馬券・付随情報</td><td><code>config/members.json</code>（ハッシュのみ）。共通ログインは毎月 1 日に更新</td></tr>
+<tr><td>会員</td><td>想定オッズ・期待値・印（めぐ AI）・推奨馬券・付随情報</td><td>会員名簿（正本は GCS。ハッシュのみ。git には置かない）。共通ログインは毎月 1 日に更新</td></tr>
 <tr><td>開発者（所有者）</td><td>全項目</td><td>本人の認証</td></tr>
 </tbody></table>
 <p>一般公開（不特定多数）に出してよい項目の正は <code>config/public_fields.json</code>。公開モードでは、自前の計算（A）だけを開発者以外に出す。取得元の規約に沿った設計。</p>

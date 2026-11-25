@@ -1,0 +1,7 @@
+[Unit]
+Description=keiba edge: ホストの作り直しが止まったらフォルダ配信を止める（%i）
+
+[Service]
+Type=oneshot
+User=deploy
+ExecStart=/opt/keiba-ui/bin/edge_stale_guard.sh %i

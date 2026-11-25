@@ -190,19 +190,46 @@ class Warmer:
             return 0, b""
 
 
+# ホストが作った応答のフォルダ（docs/operations/edge_cache_plan_20261121.md §10。nginx の keiba-edge-prod.conf が匿名に返す）。
+# ここにファイルがあるパスは、匿名にはフォルダから返るので、Cloud Run に取り直しに行かない（本文はファイルを読んで、開催日の一覧の取り直しの手がかりに使う）。
+EDGE_RE = re.compile(r"^/api/(race/\d{12}(/predictions)?|race-list/\d{8})$")
+
+
+def edge_body(path: str, root: str | None = None) -> bytes | None:
+    """フォルダにある応答の本文。無い・止めの印がある・対象外のパスは None。
+
+    root は env の置き場（既定 /srv/keiba-edge/prod）。nginx と同じ順で current/anon/ → pre_live/（確定前。見張りが current/pre か空に付け替える）を見る。
+    止めの印（人の _ctl/OFF・見張りの _ctl/OFF.auto）があるとき・nginx がフォルダを見ていない（スニペットが無い）ときは None
+    （今どおり取り直す。nginx の API キャッシュを古くしない）。"""
+    root = root if root is not None else env("EDGE_DIR", "/srv/keiba-edge/prod")
+    if not root or not EDGE_RE.match(path):
+        return None
+    ctl = Path(root) / "_ctl"
+    snippet = Path(env("EDGE_SNIPPET", "/etc/nginx/snippets/keiba-edge-prod.conf"))
+    if (ctl / "OFF").exists() or (ctl / "OFF.auto").exists() or not snippet.exists():
+        return None
+    for d in ("current/anon", "pre_live"):
+        try:
+            return (Path(root) / d / (path.lstrip("/") + ".json")).read_bytes()
+        except OSError:
+            continue
+    return None
+
+
 def retry_wait(n: int, base: float = RETRY_BASE_SEC, cap: float = RETRY_MAX_SEC) -> float:
     """n 回目の失敗の後に空ける秒数。"""
     return min(cap, base * (2 ** max(0, n - 1)))
 
 
 def drain(state: dict, warmer: Warmer, *, max_requests: int, max_sec: float, pause: float, log=print,
-          second_pass_sec: float = 0.0, now: float | None = None, stop_after_fails: int = STOP_AFTER_FAILS) -> dict:
+          second_pass_sec: float = 0.0, now: float | None = None, stop_after_fails: int = STOP_AFTER_FAILS,
+          edge_dir: str | None = None) -> dict:
     """queue を先頭から処理する。レース詳細の応答の ``date`` から、その開催日の一覧も取り直す。
     ``second_pass_sec`` > 0 なら、取り直せたパスをその秒数後にもう 1 回取り直す（API 内の短い使い回しが切れたあとの値で上書きする）。
     2 回目待ちの項目（``t`` = 取り直してよい時刻）と、失敗の後の待ち（``w``）は、時刻が来るまで飛ばす（要求数に数えない）。
     5xx・応答なしは ``retry_wait`` 秒空けてから投げ直し、続けて ``stop_after_fails`` 回失敗したらその周を打ち切る。"""
     q = deque(state["queue"])
-    done = failed = 0
+    done = failed = from_edge = 0
     started = time.monotonic()
     clock = time.time() if now is None else now
     dates_done: set[str] = set()
@@ -217,7 +244,13 @@ def drain(state: dict, warmer: Warmer, *, max_requests: int, max_sec: float, pau
             later.append(item)
             continue
         path = item["p"]
-        status, body = warmer.fetch(path)
+        local = edge_body(path, edge_dir)
+        if local is not None:
+            from_edge += 1
+            status, body = 200, local
+            item["t"] = item.get("t") or 1       # 2 回目の取り直しも要らない（フォルダの中身は作る処理が更新する）
+        else:
+            status, body = warmer.fetch(path)
         if status == 200 or status in (404, 400, 401, 403, 422):
             streak = 0
             item.pop("w", None)
@@ -260,11 +293,11 @@ def drain(state: dict, warmer: Warmer, *, max_requests: int, max_sec: float, pau
                 log(f"続けて {streak} 回失敗したため、この周の取り直しを打ち切ります（API の回復を待つ）")
                 stopped = True
                 break
-        if pause:
+        if pause and local is None:
             time.sleep(pause)
     pending = {x["p"] for x in later if x.get("t")} | {x["p"] for x in q if x.get("t")}
     state["queue"] = (list(q) + requeue + later + [x for p, x in second.items() if p not in pending])[: MAX_QUEUE * 2]
-    return {"ok": done, "ng": failed, "left": len(state["queue"]), "stopped": stopped}
+    return {"ok": done, "ng": failed, "left": len(state["queue"]), "stopped": stopped, "edge": from_edge}
 
 
 BEACON = f"{PREFIX}/_beacon.json"     # 書き手（ホストのミラーの push・配備）が目印を置くたびに上書きする合図（src/utils/cache_marker.py）

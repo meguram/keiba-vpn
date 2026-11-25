@@ -1,0 +1,43 @@
+{
+ "fixed_at": "2026-11-23",
+ "note": "めぐサイクル（50 サイクル）の目標の判定。サイクル 1 の前に固定し、途中で動かさない（docs/operations/megu_cycles/README.md）。",
+ "segments": {
+  "graded": "重賞（G1・G2・G3。frame の cls 6〜8）",
+  "flat": "平場（重賞以外の全クラス。frame の cls 0〜5。障害は対象外）"
+ },
+ "periods": {
+  "select_a": ["2017-01-01", "2019-12-31"],
+  "select_b": ["2020-01-01", "2021-12-31"],
+  "select": ["2017-01-01", "2021-12-31"],
+  "confirm": ["2022-01-01", "2024-12-31"],
+  "final_once": ["2025-01-01", "2026-11-20"],
+  "note": "2016 年は自前の確率の学習だけに使う（年ごとに前へ進める学習の最初の年。予測が無い）。2025・2026 は 50 サイクルの後に 1 回だけ。"
+ },
+ "goal": {
+  "roi_select_min": 1.0,
+  "roi_confirm_min": 1.0,
+  "confirm_over_select_min": 0.9,
+  "confirm_bets_per_year_min": 50,
+  "report": ["confirm の 95% 区間（開催日で束ねたブートストラップ 2000 回）の下限", "同じ人気の基準線との差（同じ期間・区分・確定の人気の全馬の回収率を、買った馬の人気の分布で重みづけ）"],
+  "roi_definition": "払戻の合計 ÷ 賭け金の合計。判定（買う・買わない）は発走前に分かる値だけ。精算は確定の払戻。判定のオッズは T-60 の再現 5 通りの平均（主）。"
+ },
+ "gate_to_confirm": {
+  "note": "2022〜24 に当てる前の関門（選ぶ期間の中だけで判定）",
+  "roi_select_a_min": 1.0,
+  "roi_select_b_min": 1.0,
+  "select_b_over_a_min": 0.9,
+  "market_ratio_select_b_ci_low_min": 1.0,
+  "select_b_bets_per_year_min": 50,
+  "null": "並べ替えの帰無（区分 × 確定のオッズ帯の層で、判定の値を入れ替える）で select_b の回収率が上位 5% に入る"
+ },
+ "confirm_budget": {
+  "max_candidates": 10,
+  "ledger_family": "megu_cycles",
+  "discount": "Holm（confirm に当てた候補の数）と、全試行の select の成績からのブートストラップの割引き"
+ },
+ "decision_odds": {
+  "main": "T-60 の再現（src/scripts/data/bet_cycles.py の load_drift と同じ作り。2026 年の発走前オッズと確定オッズの列だけを読み、着順・払戻は読まない）。5 通り",
+  "sensitivity": ["確定オッズ（楽観の参考）", "SmartRC の想定人気（folklore_out/prerace.parquet、2020 年〜）"]
+ },
+ "probabilities": "市場の列を使わない自前の確率（frame の as-of の列 = src/research/graded/catalog.py の ALLOWED_COLUMNS から めぐ指数 mg_rank_* を除く。年ごとに前へ進める学習: y 年は y−1 年までで学習）。stage2・v6e は確定オッズの offset を含み、上流が 2022〜24 を見て版を選んだので主にしない"
+}

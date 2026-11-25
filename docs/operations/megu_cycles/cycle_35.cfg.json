@@ -1,0 +1,1 @@
+{"hypothesis": "新馬・未勝利を T-15 で判定すると、c21（T-60）より回収率が上がり、年 100 件以上を保つ。", "rich": "rich_pred_v5bag.parquet", "phase": "t15", "segs": ["flat"], "group": "新馬未勝利", "t": [1.2, 1.3, 1.5], "omax": [50.0]}

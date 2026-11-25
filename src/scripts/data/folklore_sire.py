@@ -4,7 +4,7 @@
 
 粒度（血統の単位）:
   父 / 父の小系統（smartrc）/ 父の大系統（smartrc）/ 父のタイプ（smartrc: 米国型ミスプロ系など）/ 母父 / 母父の小系統（smartrc）
-  系統は data/meta/sire_lines/sire_smartrc_lines.json（種牡馬 ID → smartrc の小系統・大系統・タイプ）。馬 → 父・母父は
+  系統は smartrc の台帳（src.scraper.smartrc_sire_lines.load。data/local/meta/sire_lines/sire_smartrc_lines.json、無ければ data/meta の種の版）（種牡馬 ID → smartrc の小系統・大系統・タイプ）。馬 → 父・母父は
   data/page_reference/pedigree_race_index/horse_sire_map.parquet（ID で結合）。
 条件替わり: 延長・短縮（同じ面で 100m 以上）・大幅延長・大幅短縮（400m 以上）・初ダート・初芝・休み明け初戦・叩き 2 戦目・
   芝の道悪・ダートの道悪・小回り（芝）・昇級初戦・前走から内回り→外回り。
@@ -19,7 +19,6 @@
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -33,7 +32,6 @@ sys.path.insert(0, str(ROOT))
 from src.scripts.data.folklore_verify import OUT, TIERS, bh, diff_test  # noqa: E402
 
 SIRE_MAP = ROOT / "data/page_reference/pedigree_race_index/horse_sire_map.parquet"
-LEDGER = ROOT / "data/meta/sire_lines/sire_smartrc_lines.json"
 DISC, CONF = (2016, 2022), (2023, 2025)
 MIN_N1, MIN_R1, MIN_CONF = 200, 150, 60
 LEVELS = {"sire": "父", "line_s": "父の小系統", "line_l": "父の大系統", "line_t": "父のタイプ", "dsire": "母父", "dline_s": "母父の小系統",
@@ -68,7 +66,9 @@ def add_blood(d: pd.DataFrame) -> pd.DataFrame:
     d = d.copy()
     d["horse_id"] = d["horse_id"].astype(str)
     d = d.merge(m, on="horse_id", how="left")
-    led = json.load(open(LEDGER))["sires"]
+    from src.scraper import smartrc_sire_lines as ssl
+
+    led = ssl.load().get("sires", {})
 
     def lk(ids, field):
         return ids.map(lambda x: (led.get(str(x)) or {}).get(field) if pd.notna(x) else None)

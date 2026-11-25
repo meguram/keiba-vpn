@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>開催日の監査とモンキーテスト（11/22・23）</title>
+<style>
+:root { --bg:#f7f8fb; --panel:#ffffff; --panel2:#eef1f7; --border:#d5dbe7; --text:#1b2333; --muted:#5b6578;
+  --accent:#2f5fc4; --ok:#1d7f45; --warn:#9a6200; --bad:#b4232c; --code:#eef1f7; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60;
+  --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; } }
+:root[data-theme="dark"] { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60; --text:#e6ecff; --muted:#9aa7c7;
+  --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1180px; margin:0 auto; padding:28px 16px 80px; }
+a { color:var(--accent); }
+h1 { font-size:24px; margin:0 0 6px; line-height:1.4; }
+h2 { font-size:19px; margin:40px 0 6px; padding-top:16px; border-top:1px solid var(--border); }
+h3 { font-size:16px; margin:22px 0 4px; }
+p, li { overflow-wrap:anywhere; }
+.sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+.scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:8px 0 14px; border:1px solid var(--border); border-radius:8px; }
+table { border-collapse:collapse; width:100%; min-width:760px; font-size:13.5px; background:var(--panel); }
+th, td { border-bottom:1px solid var(--border); border-right:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+td.n { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+th { background:var(--panel2); color:var(--muted); font-weight:600; white-space:nowrap; }
+tr:last-child td { border-bottom:none; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 5px; border-radius:5px; font-size:12px; overflow-wrap:anywhere; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 16px; margin:12px 0; }
+.b { display:inline-block; font-size:11.5px; padding:0 8px; border-radius:10px; border:1px solid currentColor; white-space:nowrap; }
+.ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .mu { color:var(--muted); }
+details { background:var(--panel); border:1px solid var(--border); border-radius:10px; margin:8px 0; }
+summary { cursor:pointer; padding:8px 12px; }
+details[open] > summary { border-bottom:1px solid var(--border); }
+.dbody { padding:8px 14px 12px; font-size:13.5px; }
+</style>
+</head>
+<body>
+<main>
+<h1>開催日の監査とモンキーテスト（11/22・23）</h1>
+<p class="sub">作成 2026-11-24（JST）。手で書いたページ。元の記録は <code>docs/operations/edge_fix_20261123.md</code>・<code>docs/operations/edge_cache_plan_20261121.md</code>（§10・§11）・<code>docs/operations/latency_plan_20261118.md</code>（§12）と、統括役が受けた調べ役の報告。</p>
+
+<h2 id="summary">結論</h2>
+<div class="box">
+<ul>
+<li>11/22・23 の本番で、予測・推奨は全 48 レースで発走 10 分前に間に合った。GCS への反映は発走 48.7〜58.5 分前。</li>
+<li>ページの速さはコンマ秒になっていなかった。予測の外れ（キャッシュに無い）は 1.2〜2.3 秒、当たりは 0.13〜0.26 秒。</li>
+<li>原因を直して本番に入れ、Cloud Run に届く要求の数は大きく減った。</li>
+<li>直近の開催の 30 日キャッシュの判定と、VPS から配る仕組みは進行中。</li>
+</ul>
+</div>
+
+<h2 id="audit">開催日の監査（11/22・23）</h2>
+
+<h3>予測・推奨</h3>
+<ul>
+<li>48 レース全部で、予測の失敗・やり直し・欠けは 0。</li>
+<li>想定オッズ（§77。AI が予測する発走前のオッズ）は 48/48 で ok。</li>
+<li>予測の出来上がりは発走 51.6〜60.4 分前（平均 56.4 分）。</li>
+<li>GCS への反映は発走 48.7〜58.5 分前（平均 53.0 分）。</li>
+<li>API が読めるまでの遅れを足しても、最も遅いレースで発走 約 45 分前。</li>
+</ul>
+<details><summary>発走との差が小さい 10 レース（開く）</summary><div class="dbody">
+<div class="scroll"><table><thead><tr><th>日</th><th>race_id</th><th>発走</th><th>予測の出来上がり</th><th>GCS への反映</th><th>予測の余裕</th><th>反映の余裕</th></tr></thead><tbody>
+<tr><td>11/23</td><td><code>202603030607</code></td><td class="n">13:05</td><td class="n">12:11:13</td><td class="n">12:16:18</td><td class="n">53.8 分</td><td class="n">48.7 分</td></tr>
+<tr><td>11/23</td><td><code>202605050612</code></td><td class="n">16:05</td><td class="n">15:11:17</td><td class="n">15:16:20</td><td class="n">53.7 分</td><td class="n">48.7 分</td></tr>
+<tr><td>11/22</td><td><code>202605050506</code></td><td class="n">12:40</td><td class="n">11:48:23</td><td class="n">11:51:13</td><td class="n">51.6 分</td><td class="n">48.8 分</td></tr>
+<tr><td>11/22</td><td><code>202608050606</code></td><td class="n">12:55</td><td class="n">12:01:16</td><td class="n">12:06:10</td><td class="n">53.7 分</td><td class="n">48.8 分</td></tr>
+<tr><td>11/22</td><td><code>202608050611</code></td><td class="n">15:40</td><td class="n">14:48:17</td><td class="n">14:51:12</td><td class="n">51.7 分</td><td class="n">48.8 分</td></tr>
+<tr><td>11/23</td><td><code>202603030610</code></td><td class="n">14:40</td><td class="n">13:46:19</td><td class="n">13:51:12</td><td class="n">53.7 分</td><td class="n">48.8 分</td></tr>
+<tr><td>11/23</td><td><code>202605050601</code></td><td class="n">10:00</td><td class="n">09:05:09</td><td class="n">09:11:10</td><td class="n">54.8 分</td><td class="n">48.8 分</td></tr>
+<tr><td>11/23</td><td><code>202603030602</code></td><td class="n">10:15</td><td class="n">09:21:49</td><td class="n">09:26:07</td><td class="n">53.2 分</td><td class="n">48.9 分</td></tr>
+<tr><td>11/23</td><td><code>202605050605</code></td><td class="n">12:20</td><td class="n">11:26:31</td><td class="n">11:31:07</td><td class="n">53.5 分</td><td class="n">48.9 分</td></tr>
+<tr><td>11/22</td><td><code>202605050501</code></td><td class="n">09:50</td><td class="n">08:53:41</td><td class="n">08:56:19</td><td class="n">56.3 分</td><td class="n">53.7 分</td></tr>
+</tbody></table></div>
+<p class="sub">余裕は発走の何分前か。</p>
+</div></details>
+
+<h3>影のランナー（開発者だけの試行）</h3>
+<ul>
+<li>11/21〜23 の 3 日で、対象 31 レース。</li>
+<li>判定は 30 レース（買い 9・見送り 21）。</li>
+<li>システムの見送りが 1 レース。7 頭立てで前段が無かった。直し済み。</li>
+<li>全判定が、発走 38 分前までに API で見えた。</li>
+</ul>
+
+<h3>見つかった問題</h3>
+<ul>
+<li>(a) 直前オッズの取りこぼし（T-60 などは発走の何分前に取る段か）。待ちの単調時計と判定の壁時計がずれ、数 ms 早く起きていた。
+  <ul>
+  <li>T-60 が T-45 に回った。T-10 は 7/24 しか取れず、T-05 は 2〜4/24。</li>
+  <li>発走時のオッズが、発走 2 分前の段（t02）の名前で保存された。</li>
+  <li>直してホストに入れた。11/28 から効く。</li>
+  </ul></li>
+<li>(b) 今年の race_id の API が <code>s-maxage=30</code> だった。索引が Cloud Run で作られないため。</li>
+<li>(c) <code>Vary: Accept-Encoding</code> のため、温めたキャッシュ（圧縮なし）を利用者（gzip で圧縮を受ける）が使えなかった。</li>
+<li>(d) 開催中の本物の閲覧は少なかった（iPhone から約 48 件、レースのページ 6 回）。nginx のログに応答時間が残っていなかった。</li>
+</ul>
+
+<h2 id="monkey">モンキーテスト（本番・匿名）</h2>
+<ul>
+<li>Playwright で本番を匿名で巡回した。ブラウザの名乗り（User-Agent）に <code>keiba-monkey-test</code> を付けた。</li>
+<li>条件は ① 1 人 4 分、② 3 人 4 分。</li>
+<li>50 人の同時は未計測。nginx の IP ごとの制限があるため。</li>
+<li>429・5xx・タイムアウトは、3 回とも 0。</li>
+<li>11/24 の 4 回目を含む結果は <a href="monkey_test_results.html">モンキーテストの結果</a>。</li>
+</ul>
+
+<h3>3 回の比較</h3>
+<div class="scroll"><table><thead><tr><th>指標</th><th>直す前（18:38）</th><th>直した後（22:03）</th><th>3 回目（22:25）</th></tr></thead><tbody>
+<tr><td>画面数（①/②）</td><td class="n">32/32</td><td class="n">35/105</td><td class="n">38/102</td></tr>
+<tr><td>ブラウザの要求/画面（①）</td><td class="n">約 25</td><td class="n">6.0</td><td class="n">6.0</td></tr>
+<tr><td>Cloud Run に届いた要求/画面（①/②）</td><td class="n">3.8/3.8</td><td class="n">1.5/1.1</td><td class="n">1.2/0.9</td></tr>
+<tr><td>台の時間（billable、①/②）</td><td class="n">24.2/20.4 秒</td><td class="n">55.2/68.6 秒</td><td class="n">38.1/48.7 秒</td></tr>
+<tr><td>台の時間/画面（②）</td><td class="n">0.64 秒</td><td class="n">0.65 秒</td><td class="n">0.48 秒</td></tr>
+<tr><td>予測・最初の p50/p95（②）</td><td class="n">1.84/2.99 秒</td><td class="n">1.95/3.17 秒</td><td class="n">1.38/3.54 秒</td></tr>
+<tr><td>出馬表・最初の p50/p95（②）</td><td class="n">0.56/0.84 秒</td><td class="n">0.52/1.02 秒</td><td class="n">0.48/0.76 秒</td></tr>
+<tr><td>予測・出馬表の HIT 率（② 最初/再訪）</td><td class="n">0%/0%</td><td class="n">0%/29%</td><td class="n">8%/38%</td></tr>
+<tr><td>直近の開催（11/21〜23）の Cache-Control</td><td><code>s-maxage=30</code></td><td><code>s-maxage=30</code>, swr=30</td><td>同じ（96 件すべて）</td></tr>
+<tr><td>2 台目の起動と長い待ち</td><td>起動あり 12.7 秒・11.8 秒</td><td>起動あり 29.9 秒・11.9 秒</td><td>起動なし・最大 3.9 秒</td></tr>
+</tbody></table></div>
+<ul>
+<li>HIT 率は nginx のキャッシュから返った割合。p50・p95 は応答時間の中央と上位 5%。</li>
+<li>台の時間（billable）は Cloud Run の課金の対象の秒。swr は stale-while-revalidate（期限切れの直後に古いものを返す秒数）。</li>
+<li>予測の外れ（キャッシュに無い）は 1.2〜2.3 秒、当たりは 0.13〜0.26 秒（調べ役の報告）。</li>
+<li>台の時間の合計は、直した後に増えた（① 24.2 → 55.2 秒）。② の画面あたりは 0.64 → 0.48 秒に減った。</li>
+</ul>
+
+<h3>フロントの直しの前後（1 ページあたり・手元の計測）</h3>
+<div class="scroll"><table><thead><tr><th>1 ページあたりの要求（件。注記の行を除く）</th><th>直す前</th><th>直した後</th></tr></thead><tbody>
+<tr><td>API の合計</td><td class="n">5.9</td><td class="n">3.4</td></tr>
+<tr><td>auth/status</td><td class="n">1.00</td><td class="n">0.03</td></tr>
+<tr><td>maintenance/status</td><td class="n">1.00</td><td class="n">0.03</td></tr>
+<tr><td>会員 API の 401</td><td class="n">0.83</td><td class="n">0</td></tr>
+<tr><td>RSC（Next.js の画面データ）の先読み</td><td class="n">16.5</td><td class="n">0.9</td></tr>
+<tr><td>週の予想の 1 回の API（件）</td><td class="n">37</td><td class="n">9</td></tr>
+<tr><td>週の予想の API の p95</td><td class="n">3.5 秒</td><td class="n">1.7 秒</td></tr>
+</tbody></table></div>
+
+<h3>試験と仮定の費用</h3>
+<ul>
+<li>今回の試験は 1 回 約 0.7 円で、3 回流した。</li>
+<li>50 人が 24 時間使い続けた場合の理屈の値は、直す前 月 1.8〜4.1 万円、直した後 月 1.5〜3.8 万円。</li>
+<li>主な費用は Cloud Run の台の時間で、最大 3 台で頭打ちになる。</li>
+</ul>
+<div class="box"><b class="warn">理屈の値で、実際の費用ではない。</b> 1 日 約 60 万画面という極端な仮定で出した。実際の費用は次の節。</div>
+
+<h2 id="cost">実際の費用（課金エクスポート）</h2>
+<div class="scroll"><table><thead><tr><th>日</th><th>Cloud Run</th><th>GCS</th><th>Artifact Registry</th><th>Secret Manager</th><th>計</th></tr></thead><tbody>
+<tr><td>11/19</td><td class="n">15.1 円</td><td class="n">13.8 円</td><td class="n">5.0 円</td><td class="n">0.0 円</td><td class="n">約 34 円</td></tr>
+<tr><td>11/20</td><td class="n">21.1 円</td><td class="n">19.6 円</td><td class="n">6.6 円</td><td class="n">0.0 円</td><td class="n">約 48 円</td></tr>
+<tr><td>11/21</td><td class="n">20.2 円</td><td class="n">16.8 円</td><td class="n">4.4 円</td><td class="n">0.9 円</td><td class="n">約 43 円</td></tr>
+<tr><td>11/22</td><td class="n">17.7 円</td><td class="n">15.5 円</td><td class="n">4.1 円</td><td class="n">2.9 円</td><td class="n">約 41 円</td></tr>
+<tr><td>11/23</td><td class="n">19.8 円</td><td class="n">18.2 円</td><td class="n">4.3 円</td><td class="n">2.9 円</td><td class="n">約 46 円</td></tr>
+</tbody></table></div>
+<ul>
+<li>計は報告の値で、4 項目の和と最大 約 1 円ずれる。</li>
+<li>月にすると 約 1,100〜1,450 円で、予算 2,000 円の内。</li>
+<li>Secret Manager の増えは版の保管料（<code>DEV_SECRET_KEY</code> の古い版）。</li>
+<li>11/24 に古い版を無効にした。破棄は確認待ち。</li>
+</ul>
+
+<h2 id="fixes">本番に入れた直し（11/23〜24）</h2>
+<h3>edge-fix 1 回目（本番）</h3>
+<ul>
+<li>nginx が <code>Vary</code> で保存先を分けない。上流へは gzip で頼む。</li>
+<li>応答時間とキャッシュの状態をログに残す。</li>
+<li>cache-warm の対象から、匿名では 401 しか返らないパスを外す。</li>
+<li>合言葉を作り直す。</li>
+<li>今年の確定済みのレースを nginx に 30 日置く。</li>
+<li>期限切れの直後は古いものを即座に返し、裏で取り直す（stale-while-revalidate）。</li>
+<li>保守の状態を 120 秒、匿名の auth を 300 秒置く。</li>
+<li>匿名の会員 API には nginx が 401 を返す。</li>
+<li>API の制限の枠を、外の IP ごとと、VPS の中（Next.js のサーバ側・cache-warm）とに分ける。</li>
+</ul>
+<h3>edge-front（本番）</h3>
+<ul>
+<li>匿名では会員 API を呼ばない。</li>
+<li>先読みは、マウスが乗ったときだけ。</li>
+</ul>
+<h3>edge-fix 2 回目（本番の承認待ち）</h3>
+<ul>
+<li>直近の開催の判定を、結果で行う。確定の結果があれば 30 日、速報だけなら 6 時間まで置く。</li>
+<li>起動の準備が終わるまで、その台は要求を受けない。</li>
+<li>モデルを起動の中で先に読む。</li>
+</ul>
+<p class="sub">直しの中身と費用の見積もりは <code>docs/operations/edge_fix_20261123.md</code>。</p>
+
+<h2 id="next">残り・次の手</h2>
+<ul>
+<li>直近の開催の確定の結果は、11/25 夜〜11/26 朝に入る見込み。3 日開催の後で公開が遅れている。</li>
+<li>VPS から配る仕組み（edge-cache）は stg で試し、本番は 11/30 以降の平日。
+  <ul>
+  <li>ホストが手元のデータだけで応答を作り、VPS の nginx が返す。</li>
+  <li>Cloud Run の費用を、利用者の数によらずほぼ一定にする。</li>
+  <li>計画は <code>docs/operations/edge_cache_plan_20261121.md</code> の §10・§11。</li>
+  </ul></li>
+<li>Cloudflare のキャッシュ（PR #3 の L6）は develop に入った。次の昇格の後に、ユーザーの操作（nginx の全消去 → Cloudflare の規則）が要る。手順は <code>docs/operations/latency_plan_20261118.md</code> の §12。</li>
+<li>50 人の同時の計測には、試験の間だけ nginx の制限を外す操作が要る。</li>
+</ul>
+</main>
+</body>
+</html>

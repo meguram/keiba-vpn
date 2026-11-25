@@ -11,7 +11,9 @@ smartrc の馬情報（horses/view）・全戦績（fullresults）には、馬�
   3. 1 で 1 頭も分からない種牡馬は、その産駒 1 頭の馬情報を smartrc から取る（fetch。2.2〜4.0 秒間隔、制限を受けたら止める）。
   smartrc で系統が空欄の種牡馬（比較的新しく輸入された海外の種牡馬など。smartrc の画面でも系統欄は空白）は台帳に入れず、
   netkeiba の『○○系』を使う（2026-11-06 ユーザー指示。build_horse_sire_map.line_labels が netkeiba の台帳で補う）。
-出力: data/meta/sire_lines/sire_smartrc_lines.json
+出力: 手元の台帳（src.config.data_paths.LOCAL の meta/sire_lines/sire_smartrc_lines.json。ホストの entries-sync が新しい種牡馬の出た日に書くので、git の外に置く。2026-11-24）
+  手元に無いときは、git に残した種の版 data/meta/sire_lines/sire_smartrc_lines.json を読む（種の版には書かない）。
+  種の版を新しくするときは、ホストの手元の台帳を data/meta へ写して commit する（worktree・CI の研究の道具は種の版を読む）。
   {"built": 日時, "complete_at": 全種牡馬を試し終えた日時 or null, "sires": {"<種牡馬ID>": {name, small, small_name, large, large_name, type, type_name, n, from}}}
 
 使い方:
@@ -40,8 +42,12 @@ logger = logging.getLogger(__name__)
 REPO = Path(__file__).resolve().parents[2]
 JST = timezone(timedelta(hours=9))
 MASTER = REPO / "data/meta/sire_lines/smartrc_line_master.json"
-OUT = Path(os.environ.get("KEIBA_SMARTRC_SIRE_LINES") or REPO / "data/meta/sire_lines/sire_smartrc_lines.json")
-from src.config.data_paths import MODELING_DIR, PAGE_REF  # noqa: E402
+from src.config.data_paths import LOCAL, MODELING_DIR, PAGE_REF  # noqa: E402
+
+SEED = REPO / "data/meta/sire_lines/sire_smartrc_lines.json"        # git に残す種の版（読むだけ。手元の台帳が無い・読めないときに使う）
+_DEFAULT_OUT = LOCAL / "meta/sire_lines/sire_smartrc_lines.json"
+# KEIBA_SMARTRC_SIRE_LINES で別の場所を指したときは、種の版に落ちない（その場所だけを読み書きする。空なら一から作る）
+OUT = Path(os.environ.get("KEIBA_SMARTRC_SIRE_LINES") or _DEFAULT_OUT)
 
 TP32 = MODELING_DIR / "training_pipeline_v4/tp32"   # 学習の成果物（ホストの data/local。共通の定義から取る）
 SIRE_MAP = PAGE_REF / "pedigree_race_index/horse_sire_map.parquet"
@@ -64,10 +70,19 @@ def names(codes: dict[str, Any], m: dict[str, Any] | None = None) -> dict[str, A
 
 
 def load(path: Path | None = None) -> dict[str, Any]:
+    """台帳を読む。既定の手元の台帳がまだ無いときは、種の版（SEED）を読む。"""
     path = path or OUT
+    if path == _DEFAULT_OUT and not path.exists():
+        path = SEED
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
+        if path == _DEFAULT_OUT:                      # 手元の台帳が壊れている → 種の版から（取得済みの行を消して書き直さないため）
+            logger.warning("系統の台帳を読めなかった（種の版を読む）: %s", path, exc_info=True)
+            try:
+                return json.loads(SEED.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                pass
         return {"sires": {}}
 
 
@@ -82,11 +97,24 @@ def is_complete(path: Path | None = None) -> bool:
     return bool(load(path).get("complete_at"))
 
 
+def _writable(path: Path) -> bool:
+    """既定の置き場で手元のデータの置き場（LOCAL）が無い場所（CI・リンクを張る前の worktree）なら False（本物のフォルダを作らない）。"""
+    if path == _DEFAULT_OUT and not LOCAL.is_dir():
+        logger.warning("手元のデータの置き場が無いので系統の台帳を書かない: %s", path)
+        return False
+    return True
+
+
 def _save(doc: dict[str, Any], path: Path | None = None) -> bool:
     """台帳を書く。作った時刻（built）以外が今のファイルと同じなら書かない（時刻だけの書き換えで git の差分を出さない。
     entries-sync の事前計算が出馬表の取り直しのたびに build を呼ぶため。2026-11-13）。書いたら True"""
     path = path or OUT
-    prev = load(path) if path.exists() else None
+    if not _writable(path):
+        return False
+    try:                                              # 今のファイルだけと比べる（壊れているときは種の版と比べず書き直す）
+        prev = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+    except (OSError, ValueError):
+        prev = None
     if prev is not None and {k: v for k, v in prev.items() if k != "built"} == \
             json.loads(json.dumps({k: v for k, v in doc.items() if k != "built"}, ensure_ascii=False)):
         return False
@@ -162,6 +190,8 @@ def build(path: Path | None = None) -> dict[str, int]:
 def fetch(max_n: int = 100, path: Path | None = None) -> dict[str, int]:
     """台帳に無い種牡馬を、産駒 1 頭の smartrc 馬情報（horses/view）から補う。全部試し終えたら complete_at を付ける。"""
     path = path or OUT
+    if not _writable(path):                           # 書けない場所では取りに行かない（取った結果を捨てて、次にまた取りに行くため）
+        return {"fetched": 0, "not_writable": 1}
     from src.scraper.smartrc_client import SmartRCClient, SmartRCRestricted
 
     m = master()

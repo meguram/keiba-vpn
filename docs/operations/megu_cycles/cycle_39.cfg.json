@@ -1,0 +1,1 @@
+{"hypothesis": "重賞を T-5 で判定し、平場で当てはめた第 2 段の期待値で複勝を買うと、重賞の件数の壁（区間の広さ）を複勝の当たりの多さで越える。", "rich": "rich_pred_v5bag.parquet", "phase": "t05", "segs": ["graded"], "fit_seg": "flat", "kind": "place", "t": [1.0, 1.1, 1.2], "omax": [20.0, 50.0]}

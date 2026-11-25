@@ -139,7 +139,8 @@ def _plan(storage: Any, dates: list[str], today, cp: dict, force_all: bool) -> l
                 critical=bool(cp.get("critical")), list_count_changed=bool(changed),
             )
             plan.append({"race_id": rid, "date": ymd, "venue": str(r.get("venue") or ""), "round": int(r.get("round") or 0),
-                         "race_name": str(r.get("race_name") or ""), "list_entries_count": cnt, "refetch": go,
+                         "race_name": str(r.get("race_name") or ""), "list_grade_icon": str(r.get("list_grade_icon") or ""),
+                         "list_entries_count": cnt, "refetch": go,
                          "prev_phase": (prev or {}).get("phase")})
     return plan
 
@@ -291,7 +292,7 @@ def _kick_graded_picks(storage: Any, races: list[dict]) -> dict[str, Any]:
     try:
         from src.research.graded import upcoming
 
-        saved = upcoming.save_entries(storage, races)   # 重賞の名前のレースだけカードを読む
+        saved = upcoming.save_entries(storage, races)   # 重賞の名前か、一覧のアイコンが平地の重賞のレースだけカードを読む
         res = upcoming.kick(saved) | {"saved": saved}
     except Exception as exc:  # noqa: BLE001
         logger.warning("データで予想の前日の計算を起動できません: %s", exc, exc_info=True)

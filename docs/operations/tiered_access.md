@@ -26,7 +26,8 @@ UI の隠しではなく、**サーバが匿名の応答から項目を落とす
 
 - ログイン: `POST /api/v1/auth/login {id, password, remember}`。`id` が空なら開発者パスワード（`DEV_PASSWORD`）、あれば会員。
 - 状態: `GET /api/v1/auth/status` / `GET /api/auth/status` → `tier`（`public` / `member` / `dev`）・`is_member`・`is_developer`。
-- 会員アカウントは `config/members.json`（ソルト付き PBKDF2-SHA256 のハッシュのみ。平文は置かない）。`requires_env` が指す環境変数が `1` のときだけ有効。
+- 会員の名簿は `data/local/auth/members.json`（正本は GCS。`members_store_gcs.md`）。ハッシュだけを持ち、平文は置かない。
+- 動作確認用の test は `config/members.json`。2026-11-19 から git の外で、置いたマシンでだけ有効（CI で作るイメージには入らない。`members_json_purge_20261119.md`）。`requires_env` が指す環境変数が `1` のときだけ有効。
 
 ## テストユーザー（id: test / pw: test）
 
@@ -36,7 +37,7 @@ UI の隠しではなく、**サーバが匿名の応答から項目を落とす
 ## 公開に向けた残り
 
 - Cloudflare Access（現状は所有者のみ）の緩和は未実施。緩和するときは anti_scraping を enforce にし、`KEIBA_TEST_USER` を `off` にする（`docs/operations/go_live.md`）。
-- 有料会員の登録・課金は未実装（`config/members.json` を手で足す段階）。
+- 会員は `manage_users`・管理 API・決済で作る（`user_management.md`）。`config/members.json` には足さない。
 
 ## 実オッズは開発者以外に出さない（`actual_odds_public`）
 

@@ -26,12 +26,22 @@ from __future__ import annotations
 import contextvars
 import logging
 import os
+import sys
 import time
 from typing import Any, Awaitable, Callable
 
 from src.config.deployment import require_explicit_env
 
 logger = logging.getLogger("api.cloudrun")
+# 起動の段の記録（ウォームアップ・先読み・全体の取り込み・serving_state の完了）を Cloud Run のログに出す。
+# ルートのロガーは WARNING でハンドラも無いので、logger.info は捨てられていた（2026-11-24。「起動時ウォームアップ完了」が 0 件）。
+# ルートは INFO にしない（ほかのモジュールの INFO で Cloud Logging の量が増える）。このロガーにだけ INFO を stdout へ出す。
+if not logger.handlers:
+    _h = logging.StreamHandler(sys.stdout)
+    _h.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+    logger.addHandler(_h)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
 # メモリ 2GiB に収めるための既定（コンテナの書き込み層もメモリ扱い）。環境変数で上書き可。
 _DEFAULTS = {

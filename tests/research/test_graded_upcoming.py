@@ -80,6 +80,25 @@ def test_save_entries_only_confirmed_graded_and_only_when_changed(tmp_path, monk
     assert UP.save_entries(st, _plan("A")) == ["A"]                # 乗り替わりなどで変われば書き直す
 
 
+def test_save_entries_picks_graded_by_list_icon_when_list_name_differs(tmp_path, monkeypatch):
+    """一覧の略称（2026-11-23 の「東スポ2歳S」）が重賞の名前に当たらなくても、一覧の格のアイコンが G1〜G3 ならカードを読み、
+    カードの名前で重賞なら書き置く。L・OP のアイコンと、アイコンが重賞でもカードが重賞でない行は書かない。"""
+    d, _ = _history(tmp_path, monkeypatch)
+    st = _Storage({"A": _card("A"), "L": _card("L"), "X": _card("X", name="ふつう")})
+    loaded = []
+    orig = st.load
+    st.load = lambda c, k, bypass_cache=False: (loaded.append(k), orig(c, k))[1]
+    plan = [{"race_id": "A", "race_name": "略称", "date": "20260502", "list_grade_icon": "Icon_GradeType2"},
+            {"race_id": "L", "race_name": "略称", "date": "20260502", "list_grade_icon": "Icon_GradeType16"},
+            {"race_id": "X", "race_name": "略称", "date": "20260502", "list_grade_icon": "Icon_GradeType3"},
+            {"race_id": "J", "race_name": "略称", "date": "20260502", "list_grade_icon": "Icon_GradeType11"},    # 障害の重賞
+            {"race_id": "N", "race_name": "略称", "date": "20260502", "list_grade_icon": ""}]
+    st.cards.update(J=_card("J"), N=_card("N"))
+    assert UP.save_entries(st, plan) == ["A"]
+    assert "L" not in loaded and "J" not in loaded and "N" not in loaded and "X" in loaded
+    assert (d / "entries" / "A.json").exists() and not (d / "entries" / "X.json").exists()
+
+
 def test_kick_starts_one_job_uses_pid_lock_and_skips_done(tmp_path, monkeypatch):
     d, _ = _history(tmp_path, monkeypatch)
     calls = []

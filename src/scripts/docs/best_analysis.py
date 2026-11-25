@@ -445,7 +445,7 @@ def build_bet(out_dir: Path) -> Page:
               "第 2 回の確かめ、サイクルの年表。元は bet_cycles_log.json と test の記録。")
     log_p = TRIALS / "bet_cycles_log.json"
     md_p = TRIALS / "bet_optimization_20261116.md"
-    pg.sources = [log_p, md_p]
+    pg.sources = [log_p, md_p, *sorted(TRIALS.glob("bet_tiers2_*.json"))]
     log = load_json(log_p) or {}
     parts: list[str] = []
     parts.append(h(2, "1. 結論（担当の記録）", "conclusion"))
@@ -462,6 +462,11 @@ def build_bet(out_dir: Path) -> Page:
         pg.headline = pg.headline or first_sentence(re.sub(r"^結論の見出し:\s*", "", txt[0] if txt else ""), 200)
     if not blk and not c0:
         parts.append(f"<p>{WIP}</p>")
+    for t2p in [TRIALS / "bet_tiers2_f96a5aeff33e.json"]:      # 推奨度の段を推奨あり／なしの 2 分類にまとめた数え直し（第 1 回の凍結）
+        t2 = load_json(t2p) or {}
+        if t2.get("tables"):
+            parts.append(h(3, "推奨あり／なしの 2 分類（第 1 回の凍結の推奨度の段をまとめた）", "tiers2"))
+            parts.append(_render_stage({**t2, "title": ""}).replace("<h3></h3>", "") + note(f"元: {link(t2p, out_dir)}（bet_cycles tiers2）。"))
 
     parts.append(h(2, "2. 2025 年 test の記録（凍結の後に 1 回だけ見たもの）", "test"))
     rows = []

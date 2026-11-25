@@ -1,13 +1,13 @@
 {
- "made_at": "2026-11-23T18:46:03+09:00",
- "source_dir": "/home/jovyan/work/retrain_out/strategy_tables/prediction_results",
- "days": 96,
+ "made_at": "2026-11-24T11:33:59+09:00",
+ "source_dir": "/home/jovyan/.claude-jovyan/jobs/788811b9/tmp/pr_new",
+ "days": 98,
  "models": {
-  "bundle_v6_2025": 3066
+  "bundle_v6_2025": 3113
  },
  "sources": {
   "backfill": 2836,
-  "shadow": 230
+  "shadow": 277
  },
  "periods": {
   "sealed2026": {
@@ -21,27 +21,31 @@
     "shadow": 206
    },
    "target_sources": {
-    "backfill": 2719,
+    "backfill": 2815,
     "shadow": 206
    },
    "provisional_days": 0,
    "target": {
-    "races_ok": 2925,
-    "races_basis_missing": 117,
+    "races_ok": 3021,
+    "races_basis_missing": 21,
     "level_counts": {
-     "0.0": 2925
+     "0.0": 2238,
+     "2.0": 248,
+     "1.0": 225,
+     "4.0": 193,
+     "3.0": 117
     },
-    "bought_races": 0,
+    "bought_races": 783,
     "all": {
-     "bet_races": 0,
-     "cost": 0.0,
-     "ret": 0.0,
-     "hit_rate": null,
-     "hit_lo": null,
-     "hit_hi": null,
-     "roi": null,
-     "roi_lo": null,
-     "roi_hi": null
+     "bet_races": 783,
+     "cost": 1565500.0,
+     "ret": 1483790.0,
+     "hit_rate": 0.16602809706257982,
+     "hit_lo": 0.14160723786151969,
+     "hit_hi": 0.19371006107132782,
+     "roi": 0.9478058128393485,
+     "roi_lo": 0.7600164583157806,
+     "roi_hi": 1.1271521196970642
     }
    },
    "legacy": {
@@ -226,19 +230,21 @@
     "races_ok": 24,
     "races_basis_missing": 0,
     "level_counts": {
-     "0.0": 24
+     "0.0": 22,
+     "3.0": 1,
+     "2.0": 1
     },
-    "bought_races": 0,
+    "bought_races": 2,
     "all": {
-     "bet_races": 0,
-     "cost": 0.0,
+     "bet_races": 2,
+     "cost": 4000.0,
      "ret": 0.0,
-     "hit_rate": null,
-     "hit_lo": null,
-     "hit_hi": null,
-     "roi": null,
-     "roi_lo": null,
-     "roi_hi": null
+     "hit_rate": 0.0,
+     "hit_lo": 0.0,
+     "hit_hi": 0.6576280471103807,
+     "roi": 0.0,
+     "roi_lo": 0.0,
+     "roi_hi": 0.0
     }
    },
    "legacy": {

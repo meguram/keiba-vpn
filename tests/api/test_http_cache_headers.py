@@ -338,3 +338,112 @@ def test_repo_config_stale_while_revalidate_is_small():
 
     cfg = json.loads((Path(__file__).resolve().parents[2] / "config" / "http_cache.json").read_text(encoding="utf-8"))
     assert 0 < H.stale_while_revalidate_cap(cfg) <= 60
+
+
+def test_cloudflare_cdn_header_only_on_public():
+    """Cloudflare のエッジの期限（Cloudflare-CDN-Cache-Control）は、長く置く public の応答にだけ短く付ける（latency_plan_20261118.md の L6）。
+    当日のレース（s-maxage が cdn_max_age 未満）・保守と認証の状態（max-age=0）は no-store（Cloudflare に置かせない）。"""
+    c = {"cdn_max_age": 300}
+    assert H.cdn_cache_control_value("public, max-age=30, s-maxage=2592000, stale-while-revalidate=60", c) == "public, max-age=300"
+    assert H.cdn_cache_control_value("public, max-age=30, s-maxage=300", c) == "public, max-age=300"
+    assert H.cdn_cache_control_value("public, max-age=30, s-maxage=30, stale-while-revalidate=30", c) == "no-store"
+    assert H.cdn_cache_control_value("public, max-age=30", c) == "no-store"
+    assert H.cdn_cache_control_value(H.shared_short_value(300, {"stale_while_revalidate": 60}), c) == "no-store"
+    assert H.cdn_cache_control_value(H.shared_short_value(120, {}), c) == "no-store"
+    assert H.cdn_cache_control_value("public, max-age=30, s-maxage=2592000", {"cdn_max_age": 0}) == "no-store"
+    assert H.cdn_cache_control_value("private, max-age=30", c) is None
+    assert H.cdn_cache_control_value("no-store", c) is None
+    assert H.cdn_cache_control_value("public, max-age=30, s-maxage=2592000", {"cdn_max_age": "x"}) == "no-store"   # 壊れた設定でも 500 にしない
+
+
+def test_cloudflare_cdn_header_today_or_later_is_not_stored(monkeypatch):
+    """当日・未来と分かるレース・開催日は、s-maxage が長くても Cloudflare に置かせない（当日は cache-warm が nginx を取り直し続ける）。"""
+    monkeypatch.setattr(H, "_race_date_peek", lambda rid: {"202606050811": "20261124", "202606050812": "20261101"}.get(rid, ""))
+    c = {**SCFG, "cdn_max_age": 300}
+    today = datetime(2026, 11, 24, 10, 0, tzinfo=JST)
+    long_cc = "public, max-age=30, s-maxage=21600, stale-while-revalidate=60"
+    assert H.cdn_cache_control_value(long_cc, c, "/api/race-list/20261124", today) == "no-store"          # 当日の一覧（6 時間）
+    assert H.cdn_cache_control_value(long_cc, c, "/api/race-list/20261129", today) == "no-store"          # 未来
+    assert H.cdn_cache_control_value(long_cc, c, "/api/race/202606050811/predictions", today) == "no-store"  # 速報の印が付いた当日のレース
+    assert H.cdn_cache_control_value(long_cc, c, "/api/race-list/20261123", today) == "public, max-age=300"  # 前日
+    assert H.cdn_cache_control_value(long_cc, c, "/api/race/202606050812", today) == "public, max-age=300"
+    assert H.cdn_cache_control_value(long_cc, c, "/api/horse/2021101429/detail", today) == "public, max-age=300"
+    # 日付が分からない（索引がまだ無い）: 確定済みの 30 日（前の年）でなければ当日かもしれないので置かせない
+    assert H.cdn_cache_control_value(long_cc, c, "/api/race/202606059999", today) == "no-store"
+    assert H.cdn_cache_control_value("public, max-age=30, s-maxage=2592000", c, "/api/race/202506059999", today) == "public, max-age=300"
+
+
+def test_cloudflare_cdn_header_keeps_route_value(monkeypatch):
+    """ルートがすでに Cloudflare-CDN-Cache-Control を付けていれば、ミドルウェアは変えない。"""
+    cfg = {**CFG, "cdn_max_age": 300}
+    monkeypatch.setattr(H, "config", lambda: cfg)
+    app = FastAPI()
+
+    @app.get("/api/own")
+    def own():
+        return JSONResponse({"ok": True}, headers={"Cache-Control": "public, max-age=30, s-maxage=600",
+                                                   "Cloudflare-CDN-Cache-Control": "public, max-age=60"})
+
+    H.install_fastapi(app)
+    assert TestClient(app).get("/api/own").headers["cloudflare-cdn-cache-control"] == "public, max-age=60"
+
+
+def test_repo_cdn_max_age_is_short():
+    import json
+    from pathlib import Path
+
+    cfg = json.loads((Path(__file__).resolve().parents[2] / "config" / "http_cache.json").read_text(encoding="utf-8"))
+    assert 0 < int(cfg["cdn_max_age"]) <= 300     # cache-warm の上書きが届かない Cloudflare には短くだけ
+
+
+def test_cloudflare_cdn_header_fastapi(monkeypatch):
+    cfg = {**CFG, "cdn_max_age": 300, "stale_while_revalidate": 60,
+           "rules": [{"prefix": "/api/race/", "max_age": 30, "s_maxage": 600}, {"prefix": "/api/live/", "max_age": 30, "s_maxage": 30}]}
+    monkeypatch.setattr(H, "config", lambda: cfg)
+    monkeypatch.setattr(H, "_race_date_peek", None)
+    app = FastAPI()
+
+    @app.get("/api/race/{rid}")
+    def race(rid: str):
+        return {"id": rid}
+
+    @app.get("/api/live/{rid}")
+    def live(rid: str):
+        return {"id": rid}
+
+    @app.get("/api/status")
+    def status():
+        return JSONResponse({"ok": True}, headers={"Cache-Control": H.shared_short_value(300, cfg)})
+
+    H.install_fastapi(app)
+    c = TestClient(app)
+    assert c.get("/api/race/1").headers["cloudflare-cdn-cache-control"] == "public, max-age=300"
+    assert c.get("/api/live/1").headers["cloudflare-cdn-cache-control"] == "no-store"
+    assert c.get("/api/status").headers["cloudflare-cdn-cache-control"] == "no-store"   # ルートが自分で付けた shared_short にも付く
+    assert "cloudflare-cdn-cache-control" not in c.get("/api/race/1", headers={"Cookie": "a=b"}).headers
+    assert "cloudflare-cdn-cache-control" not in c.get("/api/race/1", headers={"Authorization": "Bearer x"}).headers
+
+
+def test_cloudflare_cdn_header_flask(monkeypatch):
+    from flask import Flask, jsonify
+
+    cfg = {**CFG, "cdn_max_age": 300, "rules": [{"prefix": "/api/v1/races/", "max_age": 30, "s_maxage": 600}]}
+    monkeypatch.setattr(H, "config", lambda: cfg)
+    app = Flask(__name__)
+
+    @app.get("/api/v1/races/<rid>")
+    def race(rid):
+        return {"id": rid}
+
+    @app.get("/api/v1/auth/status")
+    def auth():
+        r = jsonify({"logged_in": False})
+        r.headers["Cache-Control"] = H.shared_short_value(300, cfg)
+        return r
+
+    H.install_flask(app)
+    c = app.test_client()
+    assert c.get("/api/v1/races/1").headers["Cloudflare-CDN-Cache-Control"] == "public, max-age=300"
+    assert c.get("/api/v1/auth/status").headers["Cloudflare-CDN-Cache-Control"] == "no-store"
+    c.set_cookie("a", "b")
+    assert "Cloudflare-CDN-Cache-Control" not in c.get("/api/v1/races/1").headers

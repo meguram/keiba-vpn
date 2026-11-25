@@ -290,6 +290,10 @@ def simulate_target_bets(storage: Any, race_id: str, result: dict, max_total_bet
     single = predicted_single_odds(storage, race_id)       # キャッシュだけを見る（従来モデルでその場計算して基準を混ぜない）
     if not single or single.get("odds_model") != TARGET_ODDS_BASIS:
         return {"status": "basis", "strategy": "target", "basis": (single or {}).get("odds_model") or "none"}
+    from src.pipeline.inference import target_bets as TB
+
+    if not TB.odds_ready():      # 係数が無いと全レースが「計画できない」の見送りになる。推奨度 0 として残さず、集計から外す（後で作り直す）
+        return {"status": "config", "strategy": "target", "basis": TARGET_ODDS_BASIS, "error": "想定オッズの係数（odds_pred_config.json）がありません"}
     payload, code = _optimize_target({"race_id": race_id, "max_total_bet": max_total_bet}, "full", storage)
     if code != 200:
         return {"status": "error", "strategy": "target", "error": str(payload.get("error") or code)[:120]}
@@ -336,7 +340,9 @@ def simulate_target_bets(storage: Any, race_id: str, result: dict, max_total_bet
         t["hit"] += int(hit)
     for t in by_type.values():
         t["returned"] = round(t["returned"])
-    return {"status": "ok", "strategy": "target", "basis": TARGET_ODDS_BASIS, "selection": TARGET_SELECTION, "level": level, "total_bet": total_bet,
+    return {"status": "ok", "strategy": "target", "basis": TARGET_ODDS_BASIS, "selection": TARGET_SELECTION, "level": level,
+            "race_ev": payload.get("race_ev"), "skip_reason": payload.get("skip_reason") if level == 0 else None, "odds_cfg": TB.odds_pred_version(),
+            "total_bet": total_bet,
             "total_return": round(total_ret), "by_type": by_type, "estimated": estimated, "n_bets": len(bets), "n_pass": sum(1 for x in patterns if x["passed"]),
             "n_unknown": n_unknown, "all": {"total_bet": all_bet, "total_return": round(all_ret)}, "patterns": patterns,
             "flat": {"stake_yen": FLAT_STAKE_YEN, "total_bet": FLAT_STAKE_YEN * flat_n, "total_return": round(flat_ret), "n": flat_n, "hits": flat_hit}}
@@ -823,6 +829,36 @@ def rated_records(records: list[dict], min_level: int = RATED_MIN_LEVEL) -> list
     return [target_view(r) for r in records if r.get("included") and (record_level(r) is not None) and record_level(r) >= min_level]
 
 
+def buy_all_of(bt: dict) -> dict:
+    """推奨した買い目をすべて買った場合の購入・払戻（bets_t.all）。all の無い古い記録は今の数え方（total_bet・total_return）のまま。
+    集計（rated_all_bets・level_summary）と API（bets-summary の各レース）で同じ扱いにするための入口。"""
+    a = bt.get("all")
+    if isinstance(a, dict):
+        return {"total_bet": int(a.get("total_bet") or 0), "total_return": int(round(a.get("total_return") or 0))}
+    return {"total_bet": int(bt.get("total_bet") or 0), "total_return": int(round(bt.get("total_return") or 0))}
+
+
+def rated_all_bets(records: list[dict], min_level: int = RATED_MIN_LEVEL) -> dict[str, int]:
+    """推奨度が min_level 以上のレースで、推奨した買い目をすべて買った場合（bets_t.all）の合計。
+    実オッズで絞らない数え方（確定オッズはレース後の値で、絞ると当たる買い目が落ちやすい）。会員の画面で今の数え方と並べる。"""
+    out = {"invested": 0, "returned": 0, "races_bought": 0, "races_hit": 0, "estimated_races": 0}
+    for r in records:
+        lv = record_level(r)
+        if not r.get("included") or lv is None or lv < min_level:     # rated_records と同じ集合
+            continue
+        a = buy_all_of(r.get("bets_t") or {})
+        bet, ret = a["total_bet"], a["total_return"]
+        if bet <= 0:
+            continue
+        out["invested"] += bet
+        out["returned"] += ret
+        out["races_bought"] += 1
+        out["races_hit"] += int(ret > 0)
+        # 公式の払戻が無い（速報）レースの当たりは想定オッズで概算する。全部買うは確定オッズ < 想定の当たりも入るので、多めに出うる
+        out["estimated_races"] += int(ret > 0 and r.get("result_status") != "final")
+    return out
+
+
 def rated_counts(records: list[dict], min_level: int = RATED_MIN_LEVEL) -> dict[str, int]:
     """集計できたレース settled を、標準以上 rated・見送り skipped・推奨度が未記録 unrated に分けた件数。"""
     inc = [r for r in records if r.get("included")]
@@ -845,6 +881,12 @@ def level_summary(records: list[dict]) -> tuple[dict[str, dict], int]:
         bt = r["bets_t"]
         c = out.setdefault(str(lv), dict(_BLANK_LEVEL))
         c["races"] += 1
+        a = buy_all_of(bt)
+        if a["total_bet"]:                           # 推奨した買い目をすべて買った場合（実オッズで絞らない）
+            c["all_bought"] = c.get("all_bought", 0) + 1
+            c["all_hit"] = c.get("all_hit", 0) + int(a["total_return"] > 0)
+            c["all_invested"] = c.get("all_invested", 0) + a["total_bet"]
+            c["all_returned"] = c.get("all_returned", 0) + a["total_return"]
         if bt.get("total_bet"):
             c["bought"] += 1
             c["hit"] += int(bt["total_return"] > 0)
@@ -853,19 +895,28 @@ def level_summary(records: list[dict]) -> tuple[dict[str, dict], int]:
     return out, unrated
 
 
-def add_target_bets(date: str, storage: Any, base: Path | None = None, *, dry_run: bool = False, max_races: int | None = None) -> dict[str, int]:
+def add_target_bets(date: str, storage: Any, base: Path | None = None, *, dry_run: bool = False, max_races: int | None = None,
+                    recompute: bool = False) -> dict[str, int]:
     """保存済みの日次記録に、画面の推奨馬券（target）の仮想購入 bets_t を後から足す。印・着順・既存の数値は変えない。
-    すでに bets_t がある（計算できた）レースは飛ばす。確定済みの日にも追記できる（force で書き戻す）。"""
+    すでに bets_t がある（計算できた）レースは飛ばす。確定済みの日にも追記できる（force で書き戻す）。
+    recompute=True は、推奨度 0 で race_ev を持たない（2026-11-24 の直しより前に作った）記録も作り直す。その前の記録は、ホストに
+    想定オッズの係数が無いまま作られ、全レースが推奨度 0 になっていた（推奨度 1 以上の記録は作り直さない）。"""
     doc = read_day(date, base)
     out = {"races": 0, "added": 0, "already": 0, "failed": 0}
     if not doc:
         return out
     cap = doc.get("max_total_bet", DEFAULT_MAX_TOTAL_BET)
+    from src.pipeline.inference import target_bets as TB
+
+    if not TB.odds_ready():          # 係数が無いと全レースが計算できない。1 レースずつ読まずに抜け、呼び出し元に知らせる
+        logger.error("想定オッズの係数（odds_pred_config.json）が無いため、推奨馬券(target)を追記できません %s", date)
+        return {**out, "config_missing": 1}
     for rec in doc.get("races") or []:
         if not rec.get("included"):
             continue
         out["races"] += 1
-        if record_level(rec) is not None:               # 検証と同じ基準(sec77)で計算済み
+        stale = recompute and record_level(rec) == 0 and "race_ev" not in (rec.get("bets_t") or {})      # 直しより前の推奨度 0（係数が無いまま作った疑い）
+        if record_level(rec) is not None and not stale:     # 検証と同じ基準(sec77)で計算済み
             out["already"] += 1
             continue
         if max_races is not None and out["added"] + out["failed"] >= max_races:
@@ -908,6 +959,8 @@ def period_summary(scope: str, date: str, base: Path | None = None) -> dict:
     rated_by_day = [summarize(rated_records(x.get("races") or [])) for x in docs]
     rated_summ = merge_summaries(rated_by_day) if docs else summarize([])
     counts = {k: sum(rated_counts(x.get("races") or [])[k] for x in docs) for k in ("settled", "rated", "skipped", "unrated")}
+    all_by_day = [rated_all_bets(x.get("races") or []) for x in docs]
+    rated_all = {k: sum(d[k] for d in all_by_day) for k in ("invested", "returned", "races_bought", "races_hit", "estimated_races")}
     series = []
     for x, rs in zip(docs, rated_by_day):
         s = x["summary"]
@@ -921,7 +974,7 @@ def period_summary(scope: str, date: str, base: Path | None = None) -> dict:
     return {"scope": scope, "date": date, "from": lo, "to": hi, "days": [x["date"] for x in docs],
             "statuses": {x["date"]: x["status"] for x in docs},
             "status": "final" if docs and all(x["status"] == "final" for x in docs) else "provisional",
-            "summary": summ, "rated_summary": rated_summ, "rated_counts": counts, "series": series,
+            "summary": summ, "rated_summary": rated_summ, "rated_counts": counts, "rated_all": rated_all, "series": series,
             "highlights": [h for x in docs for h in _rated_highlights(x)][:12],
             "notes": (docs[-1].get("notes") if docs else [])}
 
@@ -995,14 +1048,20 @@ def bets_level_card(today: _date, base: Path | None = None) -> dict:
             c = bl.get(str(lv)) or _BLANK_LEVEL
             levels.append({"level": lv, "label": labels[lv], "races": c["bought"], "hit_races": c["hit"], "hit_rate": rate(c["hit"], c["bought"]),
                            "no_buy_races": c["races"] - c["bought"],
-                           "invested": c["invested"], "returned": c["returned"], "roi": rate(c["returned"], c["invested"])})
+                           "invested": c["invested"], "returned": c["returned"], "roi": rate(c["returned"], c["invested"]),
+                           "all": {"races": c.get("all_bought", 0), "hit_races": c.get("all_hit", 0), "hit_rate": rate(c.get("all_hit", 0), c.get("all_bought", 0)),
+                                   "invested": c.get("all_invested", 0), "returned": c.get("all_returned", 0),
+                                   "roi": rate(c.get("all_returned", 0), c.get("all_invested", 0))}})
         tot = {k: sum(x[k] for x in levels) for k in ("races", "hit_races", "invested", "returned", "no_buy_races")}
+        tot_all = {k: sum(x["all"][k] for x in levels) for k in ("races", "hit_races", "invested", "returned")}
         periods.append({"key": key, "label": label, "from": lo, "to": hi, "data_from": r["days"][0] if r["days"] else None,
                         "data_to": r["days"][-1] if r["days"] else None, "days": len(r["days"]), "status": r["status"],
-                        "levels": levels, "total": {**tot, "roi": rate(tot["returned"], tot["invested"]), "hit_rate": rate(tot["hit_races"], tot["races"])},
+                        "levels": levels, "total": {**tot, "roi": rate(tot["returned"], tot["invested"]), "hit_rate": rate(tot["hit_races"], tot["races"]),
+                                                    "all": {**tot_all, "roi": rate(tot_all["returned"], tot_all["invested"]), "hit_rate": rate(tot_all["hit_races"], tot_all["races"])}},
                         "skipped_races": (bl.get("0") or _BLANK_LEVEL)["races"], "unrated_races": unrated, "no_buy_races": tot["no_buy_races"]})
     return {"as_of": today.strftime("%Y%m%d"), "year": y, "periods": periods,
-            "note": "画面に出している推奨馬券（最大5パターン。想定オッズは §77 のモデル）のうち、実際のオッズ（確定）が想定オッズ以上のパターンだけを購入したとみなした仮想購入。推奨度は画面のレース推奨度と同じ、払戻は確定払戻。実際の購入ではありません。"}
+            "note": "回収率は、画面に出している推奨馬券（最大5パターン。想定オッズは §77 のモデル）をすべて買ったとみなした仮想購入（100% 超は確かめられていません）。"
+                    "小さく添えた値は、確定オッズ（レース後の値）が想定オッズ以上のパターンだけを買ったとみなした場合で、当たる買い目が落ちやすい数え方です。推奨度は画面のレース推奨度と同じ、払戻は確定払戻。実際の購入ではありません。"}
 
 
 def mark_card(today: _date, base: Path | None = None) -> dict:

@@ -502,3 +502,265 @@ sudo rm /etc/nginx/snippets/keiba-edge-stg.conf && sudo nginx -t && sudo systemc
 | ユーザーの操作 | 段 2 の前に統括役から頼む（§7.1） |
 | L3 の計測の結果 | latency-plan の後継（11/24 以降）に統括役から渡す |
 | 次 | ここで区切り、11/24 の合図を待つ |
+
+## 10. 追記（2026-11-23、担当 edge-cache）: 「本番の費用をほぼ 0 円に」を受けた順番の組み替え
+
+ユーザーの指示（11/23）: 本番の費用がほぼ 0 円になるように、VPS の上で基本を解決する。統括役の §9 の判断（案 A・区分の Cookie 2 時間・開発者は置かない）はそのまま使う。
+
+### 10.1 今の費用と、フォルダで消える部分
+
+- 課金エクスポートの 11/16〜22 の 1 日あたり（円）:
+
+  | 項目 | 1 日 | 月の見込み | フォルダで減るか |
+  |---|---|---|---|
+  | Cloud Run（CPU・メモリ・外への送信） | 15〜21 | 約 450〜630 | **減る**（下） |
+  | GCS の保存（Standard Tokyo 約 1.8GiB） | 約 6.7 | 約 200 | 減らない |
+  | GCS の操作（Class A・B） | 約 8〜15 | 約 250〜450 | 一部（cache-warm の合図の一覧・Cloud Run の起動の読み） |
+  | Artifact Registry | 3〜8 | 約 100〜240 | 減らない |
+  | Secret Manager | 約 0〜3 | 約 0〜90 | 減らない |
+
+- Cloud Run の要求の 94%（11/21 は 8,796 件のうち 8,312 件）は VPS の cache-warm でした。edge-fix の E（11/23 19:34）で会員だけの 11 種（1 日 約 4,000 件）は外れました。残りの cache-warm は、匿名の race・predictions・race-list・成績などの取り直しです。
+- フォルダで消せるのは、この cache-warm の取り直しと、利用者・SSR の MISS です。**GCS の保存・Artifact Registry・ホストの GCS の操作は残ります。「ほぼ 0 円」の下限は、Cloud Run を除いて月 約 550〜900 円です**（別の担当の範囲。この計画では減らない）。
+- 素の基準（edge-fix の後）は、11/24 以降の課金エクスポートと VPS の timed.log で取り直します（11/23 夜の 3 時間分はテストの要求が多く、基準にならない）。
+
+### 10.2 試しの結果（11/23 夜。ホストで API を手元だけで呼び、GCS には届かない形で読もうとしたものを数えた）
+
+- 確定済みのレース 202608050411（11/15）で、匿名と会員（使い捨ての鍵で署名した、試しのプロセスの中だけのトークン）を呼んだ。
+- `race/{id}` は GCS の 11 種（race_shutuba・race_result・race_result_on_time・race_result_lap・race_odds・race_pair_odds・race_index・race_barometer・race_paddock・race_trainer_comment・smartrc_race）が無いと、200 のまま 543〜785 バイトに欠ける（本番は 27KB）。**200 は正しさの印にならない。**
+- `predictions` は race_predictions・race_shutuba_past・race_odds・race_result・race_shutuba（6 回）を読む。
+- `race-list/{日}` は、その日のレースの race_shutuba と、race_result・race_result_on_time の年の一覧（`list_blobs`）と `exists` を使う。
+- `tracking-difficulty` は手元だけで作れた（53KB）。`v1/races/{id}/analysis` は Flask 側の口なので、作る処理は Cloud Run と同じ Gateway（FastAPI＋Flask）を組んで呼ぶ。
+- 1 本あたりの時間は 0.01〜1.2 秒（入力が欠けた状態）。
+- `HybridStorage.load` は、`GCS_BUCKET` が空・1 回失敗した後の 60 秒の待避中は、Blob に触れずに None を返す。作る処理は、手元だけのカテゴリ以外で None を返した `load`・一覧・`exists`・`note_degraded` を要求ごとの印に記録し、印が立った応答は捨てる。1 件ごとに待避の状態を戻す。
+
+### 10.3 順番の組み替え（§3.10・§5 からの逸脱）
+
+**匿名を会員より先に作る。** §3.10 は「P1 が本番に入るまで匿名のファイルは作らない」としていたが、次の理由で変える。
+
+- 費用の大半は匿名の取り直し（cache-warm）で、匿名は区分の Cookie も確認役も要らない（Cookie も Authorization も無い要求にだけ返す）。
+- 匿名のファイルは、今 nginx に置いている匿名の応答と同じコードで作るので、中身は今より後退しない。
+- P1 が配備されれば、版の置き場（`<env>/<sha12>/`）ごと作り直す（§3.2）。P1 の確定の前後の出し分けは、確定の合図（結果の保存）で作り直す。
+
+| 段 | 中身 | いつ |
+|---|---|---|
+| E1 | 保存のときに手元にも写す。**コードは変えない。** 既にある `HybridStorage._maybe_write_local_mirror`（GCS への保存が成功した後に `data/local/mirror/<カテゴリ>/<年>/<キー>.json` へ同じ JSON を書く。失敗は警告だけで保存は成功のまま）を、ホストの `data/local/meta/local_mirror_config.json`（git の外）で 13 種に有効にする。35 日より古い写しは E2 の深夜の処理で消す | 11/23 夜（開催日の時間の外）に有効化。11/26 ごろの 11/28 の出馬表から貯まる |
+| E2 | 作る処理（`src/ops/edge_render.py`）。本番の版・本番の環境変数・手元だけ・印が立てば捨てる。匿名（race・predictions・race-list）と会員（＋result・tracking-difficulty・analysis）。区分は、作る処理の中だけの使い捨ての鍵で署名したトークンで渡す（auth のコードを変えない） | 11/24〜27 |
+| E3 | VPS の stg で匿名をフォルダから返す（Cookie も Authorization も無い要求だけ。無ければ今の経路）。`_ctl/OFF`・rsync（deploy）・置き場 | 11/27 に stg。11/28〜29 のレースで確かめ、本番は 11/30 以降の平日 |
+| E4 | 区分の Cookie（Cloud Run）・VPS の確認役・会員のファイル | E3 の後。`EDGE_TIER_KEY` は、値を出さない gcloud のコマンドをユーザーに流してもらう（手元の gcloud は設定のディレクトリに書けず動かない） |
+| E5 | 確定前・開催日の匿名を、入力の変化で作り直す。cache-warm のうちフォルダで足りるパスを止める | E3 の本番の後、開催 1 週で取りこぼしを確かめてから |
+
+- 会員の照合: このマシンには会員のログインが無い。会員のファイルは stg の `KEIBA_TEST_USER`（stg の Cloud Run）の応答と比べるか、統括役に手段を頼む。
+- nginx: 新しいスニペット（`nginx-edge-files.conf`）に分ける。ただし、サーバの段の `location`（名前付きの予備の経路）を足すには、サイトのテンプレート 3 つに include の 1 行が要り、edge-fix と重なる。順番は統括役に決めてもらう。
+- 開催日（土日祝の 07:30〜17:00）は、ホストの開催日のコードと VPS の設定を変えない。
+
+### 10.4 E1 の写しの対象と、書き手の確かめ
+
+- 対象（13 種）: race_shutuba・race_result・race_result_on_time・race_result_lap・race_odds・race_pair_odds・race_index・race_barometer・race_paddock・race_trainer_comment・smartrc_race・race_predictions・race_shutuba_past。
+- 書き手（scout の調べ）: どれもホストの cron・開催日のランナーが保存する。VPS は影（`shadow/`）にだけ書く。`/etc/keiba-fetch/fetch.env` に `KEIBA_FETCH_AGENT_TASKS` は無いことを 11/23 に確認した。
+  - 例外: Cloud Run の API も、開発者だけの口（`/data-viewer`・`POST /api/race/{id}/predict`）と `GET /api/betting/pair-odds/{id}`（GCS に無いときに取得）で書きうる。ホストの写しは、その分だけ古くなりうる。
+  - 対策: E2 は確定済みのレース（結果と払戻がある）だけから作る。確定の後にこれらの口で書き直されることは、まず無い。
+- 副作用: ホストの `growth_curve_service` は、race_index の写しがあれば GCS より先に読む（`src/pipeline/inference/growth_curve_service.py:113`）。中身は同じで、ホストの GCS の読み出しが減る向き。
+- 費用: GCS の操作は 0 回の増加（保存の成功の後に手元へ書くだけ）。ディスクは 1 レース 13 種で 0.1〜1MB 程度、35 日で 1GB 未満の見込み（空き 5.9TB）。
+
+### 10.5 E2・E3 の作り（11/23 実装）
+
+| 部品 | 場所 | 中身 |
+|---|---|---|
+| 作る処理 | `src/ops/edge_render.py render` | Cloud Run と同じ Gateway（FastAPI＋Flask）を同じプロセスで呼ぶ。環境は作り直す（ホストの `.env`・`KEIBA_*` を持ち込まない。`config/edge_render.json` の Cloud Run の値だけ） |
+| 守り | 同 | `HybridStorage` の置き場を写し（`data/local/mirror`）に差し替える。次のどれかが起きた応答は「印」が立ち、捨てる。200 以外も捨てる。<br>・GCS のクライアントを作る（`GCS_BUCKET` は無いバケット名にして、GCS に行く口は必ずここに当てる）<br>・外へのソケットの接続・HTTP・保存<br>・写しの対象外のカテゴリ、写しに無い馬のキー（読む・有無・更新時刻・一覧）<br>・`exists_gcs`・`get_scraped_at_from_blob`・`list_years`・`note_degraded`<br>・**WARNING 以上のログ**（API の付与の失敗は握りつぶされ、欠けた 200 になるため）<br>印が立ったレースは、同じ回のほかの対象・そのレースの日の一覧・前の回のファイルも消す（プロセスの中のキャッシュで欠けを持ち越さない。VPS からも消えて Cloud Run の経路に戻る） |
+| 手元の別の置き場 | `config/edge_render.json` の `local_fallback` | 血統（`data/local/horse_pedigree_5gen`）・調教（`data/local/horse_training`）。GCS と同じ並びの手元の写し |
+| 対象 | 同 | 写しに出馬表と結果があるレース（確定済み）の `race/{id}`・`predictions`（匿名）。開催日の全レースが揃った日の `race-list/{日}`。開催日は「写しの有効化＋5 日」より後・直近 35 日・前日まで |
+| 作り直し | 同 | 写しのファイルの更新時刻と大きさ（指紋）が変わったものだけ。推論の出力の変化は指紋に入らないので、深夜に `--full` で全部作り直す。本文の MD5 が同じなら書き換えない |
+| 送る | `src/ops/edge_render.py push` | 手元の記録（manifest と送った記録）で差分を決め、ssh の tar で送る。VPS では 1 ファイルずつ `os.replace`。最後に `current` を付け替え、古い版は 1 つ残す。ホストに rsync は無い |
+| 段取り | `scripts/ops/edge/edge_sync.sh <env>` | 最後に成功した配備（prod は promote.yml、stg は deploy-stg.yml）の commit を別のツリー（`/home/jovyan/work/keiba-edge/<env>/src`）に取り出し、git に無い係数（`config/fitted_artifacts.txt`）をホストから重ねて、作って送る。jovyan で流す |
+| VPS | `scripts/ops/vps/vps_14_edge_files.sh --env <env>`・`templates/nginx-edge-files.conf` | 置き場 `/srv/keiba-edge/<env>/`（deploy:www-data 2750）。サイトの `location ~ ^/api/` の前に include の 1 行。匿名（Cookie も Authorization も無い）・GET/HEAD・クエリなし・合言葉なし・`_ctl/OFF` なしのときだけフォルダを見る。無ければ `/api/__edge_miss$uri` に内部の転送をして、今の `/api/` の location（上流へは元の `$request_uri`）が受ける |
+
+試しの結果（11/23 夜）:
+
+- 照合: 11/15 の確定済みの 2 レースで、写し（試しのため、この 2 レースの 17 種と出走馬だけ GCS から 1 回取った。約 2.4MB、0.1 円未満）から作った匿名の応答を本番の公開 URL と比べた。
+  - `race/{id}`: 項目まで一致した。
+  - `predictions`: 確率まで一致した。違いは `pipeline_status`（進み具合の表示）の時刻と文言だけ。ホストは経過の記録を持つので、作った側の方が正確。
+- 作る時間: 2 レース × 2 区分 × 最大 5 種で 8〜11 秒（API の読み込みを含む）。
+- stg（8081）に vps_14 を入れて確かめた。
+  - フォルダにあるもの: `X-Edge: hit` で 1ms 前後。gzip あり・なし、HEAD のどれも通る。
+  - フォルダに無いもの、クエリ付き、Cookie 付き、cache-warm の合言葉つき、`_ctl/OFF` のとき: 今の経路（`X-Cache-Status`）に流れる。
+  - 本番（8080）は変わらない。
+- 足りなかった入力: 最初は horse_result・horse_training・horse_pedigree_5gen・race_oikiri・final_odds_prediction。
+  - 写しを 17 種に広げた（11/23 22:3x JST）。
+  - 血統と調教は、手元の別の置き場から読む。
+
+ホストの cron（統括役が共有の作業ツリーを早送りした後に足す。root の cron から jovyan で）:
+
+```
+*/15 * * * * nice -n 10 /usr/sbin/runuser -u jovyan -- sh -c 'bash /home/jovyan/work/keiba-vpn/scripts/ops/edge/edge_sync.sh stg >> /home/jovyan/work/keiba-edge/sync-stg.log 2>&1' # KEIBA_EDGE
+40 4 * * *   nice -n 10 /usr/sbin/runuser -u jovyan -- sh -c 'EDGE_RENDER_ARGS=--full bash /home/jovyan/work/keiba-vpn/scripts/ops/edge/edge_sync.sh stg >> /home/jovyan/work/keiba-edge/sync-stg.log 2>&1' # KEIBA_EDGE
+20 4 * * *   cd /home/jovyan/work/keiba-vpn && nice -n 10 /opt/conda/bin/python3 -m src.ops.edge_render prune --mirror-days 40 >> /home/jovyan/work/keiba-vpn/logs/edge_prune.log 2>&1 # KEIBA_EDGE
+```
+
+- prod は、stg で 11/28〜29 の確定分を確かめた後（11/30 以降の平日）に同じ形で足す。
+- `runuser` は `/usr/sbin` にあり、root の crontab の PATH に無い。絶対パスで書く（11/24 の初回は、これで 15 分ごとの回が動いていなかった）。
+- E5 を入れたら、1 行目の `*/15` を `*` にする（1 分ごと）。作らない回は API を読み込まず、約 1 秒で終わる。
+- edge_sync は jovyan で動かす。ログも jovyan のシェルが開くので、jovyan の持ち物になる。
+- 写しの掃除だけは root で動かす。
+  - 理由: 写しは root の cron（取得）が書くので、写しのフォルダは root の 755 で、jovyan では消せない。
+  - 掃除は消すだけで、写しの置き場にファイルを作らない。ログは共有の作業ツリーの logs/（root の持ち物）に書く。
+  - 消すのはレースのカテゴリだけ。馬のカテゴリは、直近のレースに出た馬でも最後の保存が古いことがあるので消さない。
+  - 04:20 に流し、04:40 の `--full` と重ねない。
+- ログ: `sync-<env>.log` は edge_sync.sh が 5MB で 1 世代に切り替える。`render-<env>.log` は毎回上書き。`edge_prune.log` は 1 日 1 行。
+- 診断: 確定前のレースも作ってみて、捨てる理由を数える。15 分ごとの回と同じツリー・同じロックで流す（途中で版が替わらないように）。
+
+  ```
+  T=/home/jovyan/work/keiba-edge/stg/src
+  cd $T && KEIBA_PAGE_REFERENCE_DIR=/home/jovyan/work/keiba-vpn/data/page_reference PYTHONPATH=$T PYTHONPYCACHEPREFIX=/home/jovyan/work/keiba-edge/pyc \
+    flock /home/jovyan/work/keiba-edge/.lock-stg nice -n 19 ionice -c3 /opt/conda/bin/python3 -m src.ops.edge_render render \
+    --env stg --out /home/jovyan/work/keiba-edge/out --base /home/jovyan/work/keiba-vpn --date 20261128 --diagnose --full
+  ```
+
+  - `<out>/_diagnose/` に書くだけで、送らない。
+  - 11/26 ごろ、11/28 の出馬表が写しに入ったら流す。
+  - 終わったら `rm -rf /home/jovyan/work/keiba-edge/out/_diagnose` で消す。
+
+分かっている穴（受け入れる理由）:
+
+- 写しは「ホストが GCS に保存できた後」に書く。次の場合、そのレースは「写しに無い＝GCS に無い」とみなされ、欠けた中身になりうる。
+  - 写しの書き込みの失敗（警告だけ）
+  - `save_mode=gcs_only`（`skip_local_mirror`）の保存。開発者の手動の取り直しの口だけ。
+  - 写しの設定を一時的に切った間の保存
+  - 理由: どれもまれで、欠けたレースは深夜の `--full` でも直らない。そのため、気づいたらそのレースの写しを入れ直すか、`_ctl/OFF` を置く。カテゴリを足すときは `mirror_since` を足した日に進める（窓の中の古いレースに写しが無いため）。
+- critic（11/23）の指摘で直したもの: gh の `-R`、捨てたときに前の回のファイルも消す、有無・更新時刻の予備と印、`GCS_BUCKET` を無いバケットに、ソケットの塞ぎ、WARNING を印に、同じレース・日の巻き添えで消す、`Vary: Cookie`、rewrite でメソッドを保つ、data/page_reference・data/cache・models のリンク、深夜の回の待ち、`--resync`、写しの掃除の既定を 40 日。
+
+- フォルダから外れたとき（`_ctl/OFF`・`vps_14 --remove`・印が立ったレースのファイルを消したとき）は、nginx の API キャッシュ（確定済みは 30 日）が返る。cache-warm はフォルダにあった間それを取り直していないので、その間に更新があったパスは古い。
+  - `_ctl/OFF` を置いた・`--remove` を流したとき（`--remove` は OFF も置く）は、続けて `sudo bash scripts/ops/vps/purge_api_cache.sh` で API キャッシュを全部消す。費用は edge-fix の段 1 と同じく最悪 約 2 円（1 回）。
+  - 印でファイルを消したレースは、確定済みで、更新はまれ。気づいたら、そのレースだけ取り直す（cache-warm の合図か purge）。
+- 同じプロセスの中のほかのモジュールのキャッシュ（負のキャッシュ）が、別のレースへ欠けを持ち越す道は残る（HybridStorage は None を覚えない）。WARNING を印にしているので、多くはそこで捕まる。
+- WARNING 以上をすべて印にしているので、害の無い WARNING が毎回出ると、全部が捨てられる（安全側）。heartbeat の `reasons` で見つけたら、その WARNING の出所を直すか、ここで除く一覧を足す。
+
+**cache-warm との関係（費用が減る条件）:** フォルダは cache-warm（合言葉つき）を素通りさせる。cache-warm が確定済みのレースを取り直す限り、Cloud Run の要求は減らない。匿名の利用者の要求は、もともと nginx の API キャッシュの HIT が多い。そのため、E3 を本番に入れるときに、cache-warm（VPS）の取り直しの前に、フォルダにファイルがあるパスは取り直さない形にする。cache-warm は VPS で動くので、`/srv/keiba-edge/prod/current/anon<パス>.json` の有無を見るだけでよい（GCS も Cloud Run も使わない）。
+→ 実装済み（`scripts/ops/vps/cache_warm.py` の `edge_body`）。フォルダにファイルがあり、`_ctl/OFF` が無く、本番のスニペット（`/etc/nginx/snippets/keiba-edge-prod.conf`）があるときだけ取り直さない。本文はファイルから読み、開催日の一覧の取り直しの手がかりに使う。VPS には E3 の本番と同じときに `vps_10_cache_warm.sh` で入れる。
+
+### 10.6 費用（最悪の回数）
+
+| 項目 | 最悪の回数 | 月額 |
+|---|---|---|
+| 写し（保存の後に手元へ書く） | GCS の操作は増えない | 0 円 |
+| 作る処理の GCS | 0 回（クライアントを作ろうとした時点で例外。応答は捨てる） | 0 円 |
+| 作る処理の Cloud Run | 0 回（同じプロセスの中で呼ぶ。外へ HTTP を出さない） | 0 円 |
+| ホスト → VPS | ssh の tar。15 分ごと × 96 回/日。変わったファイルだけ（確定の日に 1 日 数 MB、版の切り替えで最大 約 50MB） | 0 円（GCP の外どうし） |
+| VPS のディスク | 匿名 2 種で 1 レース 約 60KB（gzip を並べて）× 35 日 約 360 レース ≒ 25MB × 版 2 つ | 0 円（空き 71GB） |
+| ホストの CPU | 15 分ごとの起動（API の読み込み 約 5〜10 秒）＋変わったレースだけ（1 本 0.1〜1 秒）。深夜の `--full` は最悪 360 レース × 2 種 × 約 1 秒 ≒ 12 分（nice 19） | 電気代のみ |
+| Cloud Run | 減る。フォルダに当たった匿名の要求は Cloud Run に届かない。cache-warm の取り直しは、上の「cache-warm との関係」の直しを入れてから減る | 減る方向（条件付き） |
+
+- Cloud Run の月額は、フォルダに無い要求（会員・ログイン・確定前・35 日より前）の分だけ残る。利用者の数に比例して増えるのは、会員の分（E4 まで）と確定前の分（E5 まで）。
+- 最悪の起動の回数は今と同じ（96 回/日 × 30 日）。起動 1 回は 約 30 秒 × 1 vCPU・4GiB ≒ 0.15 円 → 月 最大 約 430 円。会員・確定前がフォルダに入れば、起動のきっかけ自体が減る。
+
+## 11. E5 の計画（2026-11-24、担当 edge-cache）: 確定前・開催日の匿名をフォルダから返す
+
+狙い: cache-warm の取り直しの中心（確定前のレースの `race/{id}`・`predictions` と開催日の `race-list`）を、ホストの作り直しに置き換える。11/21 の cache-warm の 200 は 約 4,200 件/日で、そのうち 約 3,300 件がこの 3 種だった。
+
+### 11.1 確定前の応答の、作り直しのきっかけ
+
+入力の変化（scout の調べ。path は 11/24 の develop）:
+
+| 入力 | 置き場 | 粒度 | 匿名の応答への効き |
+|---|---|---|---|
+| 出馬表・速報・結果・オッズ・指数など 17 種 | `data/local/mirror/<cat>/<年>/<race_id>.json` | レース | 詳細・予測（市場補正後の勝率・pipeline_status のオッズの段）・一覧 |
+| 予測 v6e | `data/local/inference/predictions_v6/<日>/<race_id>.parquet`（`weight_triggered_predict.py:383`） | レース | 予測 |
+| 予測 v6c（候補） | `data/local/inference/predictions_v6c/<日>/<race_id>.parquet`（`candidate_runner.py:550`） | レース | 予測（未勝利・新馬） |
+| 予測の経過 | `data/local/inference/events/<日>.jsonl`・`launch_watch/<日>.jsonl`（追記） | 日（行に race_id） | pipeline_status の段と時刻 |
+| 出馬表の段階 | `data/local/meta/entries_state/<race_id>.json`（`entries_sync.py:225`） | レース | entries_status・pipeline_status・一覧 |
+| その日のレースの一覧 | `data/page_reference/race_lists/<日>.json` | 日 | 一覧 |
+| 設定・係数 | `config/edge_render.json`・git に無い係数・版 | 全体 | 全部 |
+
+時刻で変わる値（入力が同じでも変わる）:
+
+- `pipeline_status.race_over`（発走 ＋5 分）と、予測の段の文言（予測の窓の終わりの前後）（`pipeline_status.py:110・139`）
+- `pipeline_status.as_of`（作るたびに変わる）
+- `entries_status.is_future`（日付）
+- 出馬表の段階の推定（状態ファイルが無いときだけ。木曜 12:00）
+- レース詳細の品質の警告（検査が古くなると付く）
+
+### 11.2 作り（実装 11/24。別の見張りのプロセスは作らず、今の作る処理を 1 分ごとに起こす形にした）
+
+- **起こし方:** root の cron が 1 分ごとに `edge_sync.sh stg` を jovyan で起こす（flock で 1 度に 1 つ）。
+- **作る処理（`edge_render render`、引数なし）の対象:**
+  - 確定済み: 直近 35 日（E3 と同じ）。
+  - 確定前: 前日〜7 日先（`upcoming_days`）。写しに出馬表があるレースの詳細・予測と、全レースの出馬表が揃った日の一覧。
+- **指紋（作り直すかの判定）:** 入力の更新時刻・大きさに、次を足した。
+  - 推論の出力（v6e・v6c の parquet）
+  - 出馬表の段階（entries_state）
+  - 予測の経過（events・launch_watch のうち、そのレースの行だけ）
+  - 時刻の区切り: 確定前で、当日・前日は 10 分ごと（`pending_bucket_sec`）。先の日は日付が替わるごと。発走後の判定・予測の窓の文言・is_future のため。
+- **API を読み込むのは作るときだけ:** 指紋が全部同じ回は API を読み込まない（約 0 秒・RSS 22MB）。heartbeat だけ書いて送る。作る回は 1 回の起動で、変わった対象をまとめて作る（11/24 の試しで RSS 最大 455MB）。
+- **as_of を除いて比べる:** 本文の比較から `pipeline_status.as_of` を除き、as_of だけが変わったときは書き換えず、送らない。
+- **歯止め:** 1 分の load が `max_load`（20）を超えた回は作り直しを飛ばし、heartbeat も進めない。開催日の推論を優先する。
+- **止め方（統括役が 1 行で）:** `touch /home/jovyan/work/keiba-edge/STOP`。作らない・送らない。消せば次の分から戻る。
+  - STOP だけでは、VPS は返すのを止めない。heartbeat が古くなり、5 分で見張りが確定前を止め、30 分で全部を止める。
+  - すぐに返すのを止めるときは、VPS でも `touch /srv/keiba-edge/<env>/_ctl/OFF` を置く。
+- **見送りの印:** 負荷で見送った回は終了コード 3 で、edge_sync は送らない。ログに「見送り」と書く。深夜の `--full` は見送らない。
+- **捨てた対象:** そのときの指紋を `_meta/skipped.json` に覚え、指紋が変わるまで作り直さない。入力の欠けが続くレースがあっても、毎分 API を読み込まない。
+- **配備の版:** GitHub に聞くのは 10 分に 1 回。配備が替わってから作る版が替わるまで、最大 10 分遅れる。GitHub に届かないときは、前回の答えで続ける。
+- **確定前の置き場:** 確定前のレースと、確定前のレースを含む日の一覧は `current/pre/` に、確定済みは `current/anon/` に置く。nginx は anon → pre の順に見る。
+- **指紋に足したもの（critic の指摘）:**
+  - 候補の止めの印（`predictions_v6c/_disabled.json`・`bets_stage2/_disabled.json`）を全体の指紋に入れる。
+  - predictions_v3（shadow）を入れる。
+  - 先の日は 1 時間ごと（出馬表の段階の推定が木曜 12:00 に替わるため）。
+  - as_of は pipeline_status の中のものだけを除く。
+- **VPS の見張り（`edge_stale_guard.sh`・`keiba-edge-guard@<env>.timer`、1 分ごと、deploy で動く）:**
+  - heartbeat が 5 分より古ければ `_ctl/STALE_PRE.auto` を置き、確定前を返さない。
+  - 30 分より古ければ `_ctl/OFF.auto` を置き、全部を返さない。30 分にしたのは、深夜の `--full` が長くかかっても止めないため。
+  - nginx と cache-warm は、どちらの印も見て今の経路に戻る。
+  - 新しくなれば、自分の印（.auto）だけを外す。人の `_ctl/OFF` は別の名前なので、触れない。
+  - 自動で止まった間は purge しない（root と費用が要るため）。確定前のパスは nginx の s-maxage 30 秒ですぐ取り直される。確定済みのパスは 30 日の保存物が返るが、確定後の中身はまれにしか変わらない。
+- **範囲:** 匿名だけ（E3 と同じ nginx の口。nginx の設定は変えない）。会員は E4。
+
+### 11.3 量の見積もり（開催日・最悪の置き方）
+
+前提: 1 日 36 レース（3 場）、匿名 2 種（詳細・予測）＋その日の一覧 1 本。1 本を作るのに 0.3〜1 秒（11/23 の試し）、プロセスの起動に 約 5〜10 秒（API の読み込み）。
+
+| 項目 | 回数・量 | 見積もり |
+|---|---|---|
+| 入力の変化による作り直し | 1 レースあたり 約 12 回（出馬表・馬体重 3、オッズ 2、予測 3、経過 2、速報・結果 2）× 36 × 2 種 | 約 860 本/日 |
+| 安全網（10 分ごと、09:00〜17:00 の確定前） | 最悪 48 回 × 36 × 2 種（実際は発走の後は確定に移って減る） | 最悪 約 3,500 本/日 |
+| 一覧の作り直し | 変化のたび × 3 日分 | 約 500 本/日 |
+| 作る CPU | 約 4,900 本 × 最大 1 秒 | 最悪 約 80 分/日（1 コアの換算） |
+| 起動の CPU | 作る回は最短 1 分おき × 8 時間 ＝ 最悪 480 回 × 約 5〜10 秒（作らない回は約 0 秒） | 最悪 約 80 分/日 |
+| 合計の CPU | 最悪 約 3 コア時間/日（nice 19・ionice idle） | ホスト 24 コアの 8 時間（192 コア時間）の 約 1.5% |
+| メモリ | 作る回の RSS 最大 約 455MB（11/24 の試し）。作らない回は 22MB | 90GB のうち 0.5% |
+| ディスクの書き込み | 中身が変わったときだけ。約 1,400 本 × (20KB＋gz 5KB) | 約 35MB/日 |
+| VPS への転送 | 変わった本文の gz を tar（ssh） | 約 10〜20MB/日。GCP の外どうしで 0 円 |
+| GCS の操作 | 0 回（作る処理は GCS のクライアントを作れない。見張りは stat だけ） | 0 円 |
+| 平日 | 確定前は 7 日先までの出馬表のあるレースだけ。変化は少なく、安全網は当日だけ | 1 日 数分 |
+
+開催日の処理との重なり:
+
+- raceday-runner・weight-runner・影のランナー（candidate_runner）は、T-60・T-45・T-15・馬体重の時刻に推論で CPU を使う。今は平時の負荷 3.5（24 コア）。
+- 見張りの作る処理は nice 19・ionice idle で、取り合いのときは必ず後に回る。最悪 1 コアを使い続けても、24 コアのうち 1 つ。
+- 推論の出力（parquet）を読むだけで、書き込みはしない。ロックも取らない。
+- 写しの書き込み（取得の保存の後）は今と同じ。見張りは足さない。
+- 遅れの上限:
+  - 入力が変わってから VPS に届くまでは、見張り 30 秒＋起動 10 秒＋作る数秒＋送る 1〜2 秒で、約 1 分以内。今は s-maxage 30 秒＋swr 30 秒で最大 60 秒。
+  - 負荷が高く遅れた分は、nginx が古いファイルを返し続ける。
+  - 見張りが止まったときのために、VPS の見張りで `heartbeat.json` が 5 分より古ければ、確定前のファイルを使わない。これは 11.5 の段 3。
+
+### 11.4 cache-warm の止め方と戻し方
+
+- **止まり方（自動）:** E3 の `cache_warm.py` の `edge_body` が、フォルダにファイルがあるパスの取り直しをしない。E5 で確定前の詳細・予測・一覧がフォルダに入れば、その分の cache-warm の Cloud Run の要求が消える。
+  - 残るのは、race-calendar・scrape-dates・prediction-results の 3 種と、クエリ付きの一覧。これらは段 6 でクエリの正規化をしてから。
+- **戻し方:** `touch /srv/keiba-edge/prod/_ctl/OFF`（deploy で置ける。reload なし。見張りは人の OFF を外さない）。
+  1. nginx がフォルダを見なくなる。
+  2. cache-warm も取り直しに戻る（`edge_body` が OFF を見る）。
+  3. 続けて `sudo bash scripts/ops/vps/purge_api_cache.sh` で API キャッシュを消す（フォルダにあった間、取り直していないため。最悪 約 2 円・1 回）。
+- 作る側を止める: `touch /home/jovyan/work/keiba-edge/STOP`（1 行）。または crontab の `KEIBA_EDGE` の行をコメントにする。版ごとに止めるときは `config/edge_render.json` の `enabled: false`。
+- **cache-warm そのものは止めない（timer は残す）。** フォルダで足りない時（ホストの停止・OFF）の予備として、今の取り直しが自動で戻る形にしておく。
+
+### 11.5 段取り
+
+| 段 | 中身 | いつ |
+|---|---|---|
+| 1 | edge_render に確定前の対象・指紋の拡張・as_of を除く比較・見送り。cron を 1 分ごとに（テスト・critic）。**E5 を初めて入れた回は全部を作り直す**（指紋と本文の比べ方が変わるため）。人が見ている平日の昼に `EDGE_RENDER_ARGS=--full` で 1 回流す | 11/24〜26（平日） |
+| 2 | stg で、11/28 の出馬表（11/26 ごろ写しに入る）を使い、診断と見張りを平日に回す | 11/26〜27 |
+| 3 | VPS の stg に、heartbeat の古さで確定前を止める見張り（timer）を入れる | 11/27 |
+| 4 | stg の見張りを、11/28・29 の開催日に動かすか（統括役の判断。新しい処理を開催日に初めて動かすことになる） | 11/27 の報告で判断を仰ぐ |
+| 5 | 本番: vps_14 --env prod・vps_10（cache-warm）・見張りの prod | 11/30 以降の平日。開催日の 07:30〜17:00 には入れない |
+
+- 費用の確かめ: 本番に入れた 1〜2 日後に、課金エクスポートで Cloud Run の CPU・要求と GCS の操作を、入れる前の 1 週と比べる（CLAUDE.md）。

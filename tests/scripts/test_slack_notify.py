@@ -297,6 +297,59 @@ class ScrapeStatusTest(unittest.TestCase):
         self.assertEqual(an["cron:d:overdue"]["severity"], "critical")
         self.assertIn("cron:e:stuck", an)
 
+    def test_stuck_threshold_per_job(self):
+        # 開催日に一日中動くランナーは 9 時間でも正常。11 時間を超えたら停止の疑い。ほかのジョブは 6 時間のまま
+        jobs = [job("raceday-runner", "R", running_hours=9, state="running"), job("raceday-result-runner", "RR", running_hours=12, state="running"),
+                job("horse-training-backfill", "H", running_hours=7, state="running")]
+        an = SS.detect_anomalies(jobs, None, None, {})
+        self.assertNotIn("cron:raceday-runner:stuck", an)
+        self.assertIn("cron:raceday-result-runner:stuck", an)
+        self.assertIn("cron:horse-training-backfill:stuck", an)
+
+    def test_collect_cron_unrecorded_and_latest_start(self):
+        now = datetime(2026, 11, 24, 3, 15, tzinfo=timezone.utc)                          # JST 12:15
+        st = {"groups": [{"name": "g", "jobs": [
+            {"id": "new", "cron_exprs": ["20 4 * * *"], "state": "waiting", "last_run": None},              # 記録もログも無い（足したばかり）
+            {"id": "every", "cron_exprs": ["* * * * *"], "state": "running", "last_run": None},             # 毎分・実行中でも、記録が無いことは知らせる
+            {"id": "silent", "cron_exprs": ["20 4 * * *"], "state": "waiting",
+             "last_run": {"started_at": "2026-11-20T13:20:00+09:00"}},                                       # ログの時刻だけ（古い）は従来どおり未開始
+            {"id": "flock", "cron_exprs": ["*/15 23,0-7 * * *"], "state": "waiting",
+             "last_run": {"started_at": "2026-11-24T07:45:00+09:00"}},                                       # 最後に終わった長い回の開始は古い
+        ]}]}
+        with tempfile.TemporaryDirectory() as t:
+            t = Path(t)
+            short = datetime(2026, 11, 24, 3, 0, tzinfo=timezone.utc).timestamp()                    # 12:00 JST に始まった短い回
+            long_ = datetime(2026, 11, 23, 22, 45, tzinfo=timezone.utc).timestamp()
+            (t / "flock.tsv").write_text(f"{short}\t{short + 2}\t0\t1\n{long_}\t{short + 60}\t0\t2\n", encoding="utf-8")
+            jobs = {j["id"]: j for j in SS.collect_cron(now, status_fn=lambda: st, runs_dir=t, down=[])}
+        self.assertIsNone(jobs["new"]["overdue_min"])
+        self.assertTrue(jobs["new"]["unrecorded"])
+        self.assertIsNone(jobs["every"]["overdue_min"])
+        self.assertIsNotNone(jobs["silent"]["overdue_min"])
+        self.assertFalse(jobs["silent"]["unrecorded"])
+        self.assertIsNone(jobs["flock"]["overdue_min"])
+        an = SS.detect_anomalies(list(jobs.values()), None, None, {})
+        self.assertNotIn("cron:new:overdue", an)
+        self.assertIs(an["cron:new:unrecorded"]["repeat"], False)
+        self.assertEqual(an["cron:new:unrecorded"]["severity"], "warning")
+        self.assertIs(an["cron:every:unrecorded"]["repeat"], False)                 # 毎分のものも記録が無ければ 1 回知らせる
+
+    def test_unrecorded_is_sent_once_and_does_not_flap(self):
+        # 予定時刻の直後（20 分以内）・実行中でも消えない。消えないので、状態の quiet が残り、送り直さない
+        st = {"groups": [{"name": "g", "jobs": [{"id": "new", "cron_exprs": ["20 4 * * *"], "state": "waiting", "last_run": None}]}]}
+        state: dict = {}
+        sent = []
+        with tempfile.TemporaryDirectory() as t:
+            for d, h, m, run_state in ((24, 3, 0, "waiting"), (24, 4, 25, "waiting"), (24, 4, 30, "running"), (24, 5, 0, "waiting"), (25, 3, 0, "waiting")):
+                now = datetime(2026, 11, d, h, m, tzinfo=timezone.utc)
+                st["groups"][0]["jobs"][0]["state"] = run_state
+                jobs = SS.collect_cron(now, status_fn=lambda: st, runs_dir=Path(t), down=[])
+                an = SS.detect_anomalies(jobs, None, None, {})
+                self.assertIn("cron:new:unrecorded", an)
+                items, resolved, state = SS.step_state(state, an, now)
+                sent += [i["key"] for i in items] + [r["key"] for r in resolved]
+        self.assertEqual(sent, ["cron:new:unrecorded"])
+
     def test_detect_network_schema_coverage(self):
         q = {"stats": {}, "failed_reasons": {"http_403": 4, "http_429": 2}}
         schema = {"last24": 40, "by_day": {"a": 2, "b": 3, "c": 4, "d": 40}, "categories": {"x": 40}}
@@ -306,6 +359,42 @@ class ScrapeStatusTest(unittest.TestCase):
         self.assertIn("schema:spike", an)
         self.assertEqual(an["coverage:training"]["severity"], "critical")
         self.assertIn("health:fail", an)
+        old = {"health": {"overall": "fail", "findings": ["x"], "age_days": 40.0}}          # 40 日前の結果: 項目は残すが再通知しない
+        a = SS.detect_anomalies([], None, None, old)["health:fail"]
+        self.assertIs(a["repeat"], False)
+        self.assertIn("40 日前", a["title"])
+        self.assertNotIn("repeat", SS.detect_anomalies([], None, None, {"health": {"overall": "fail", "age_days": 3.0}})["health:fail"])  # 3 日ちょうどは今の結果
+        now = datetime(2026, 11, 24, 12, 0, tzinfo=SS.JST)
+        self.assertAlmostEqual(SS.health_age_days("2026-11-23T12:00:00+09:00", now), 1.0)
+        self.assertAlmostEqual(SS.health_age_days("2026-11-23T12:00:00+09:00", now.replace(tzinfo=None)), 1.0)
+        self.assertIsNone(SS.health_age_days(None, now))
+        self.assertIsNone(SS.health_age_days("壊れた", now))
+        self.assertEqual(SS._health_stale({"age_days": 3.2}), " ※4 日前の結果（作る定期処理なし）")
+        self.assertEqual(SS._health_stale({"age_days": 1.0}), "")
+
+    def test_stale_health_is_not_resolved_nor_repeated(self):
+        """古い結果に変わっても「復旧」と知らせず、再通知もしない（前の状態に health:fail があるとき）。"""
+        now = datetime(2026, 11, 24, 12, 0, tzinfo=SS.JST)
+        state = {"health:fail": {"first": now.timestamp() - 86400 * 30, "last_notified": now.timestamp() - 86400, "repeats": 1,
+                                 "severity": "warning", "title": "データヘルスが fail"}}
+        cur = SS.detect_anomalies([], None, None, {"health": {"overall": "fail", "age_days": 40.0}})
+        out = SS.step_state(state, cur, now)
+        notify, resolved = out[0], out[1]
+        self.assertEqual([i for i in notify if i["key"] == "health:fail"], [])
+        self.assertEqual([i for i in resolved if i.get("key") == "health:fail"], [])
+
+    def test_collect_misc_age_from_generated_at_or_mtime(self):
+        with tempfile.TemporaryDirectory() as d:
+            meta = Path(d)
+            p = meta / "data_health" / "stg" / "latest.json"
+            p.parent.mkdir(parents=True)
+            now = datetime(2026, 11, 24, 12, 0, tzinfo=SS.JST)
+            p.write_text(json.dumps({"generated_at": "2026-10-15T10:51:10+09:00", "summary": {"overall": "fail"}}), encoding="utf-8")
+            self.assertGreater(SS.collect_misc(meta, "stg", now)["health"]["age_days"], 40)
+            p.write_text(json.dumps({"summary": {"overall": "fail"}}), encoding="utf-8")       # 時刻が無い → ファイルの更新時刻
+            age = SS.collect_misc(meta, "stg")["health"]["age_days"]
+            self.assertIsNotNone(age)
+            self.assertLess(age, 1)
         self.assertEqual(SS.detect_anomalies([], {"stats": {}, "failed_reasons": {"http_403": 2}}, None, {}), {})
         small = {"last24": 5, "by_day": {"a": 1, "b": 1, "c": 1, "d": 5}, "categories": {}}
         self.assertNotIn("schema:spike", SS.detect_anomalies([], None, small, {}))
