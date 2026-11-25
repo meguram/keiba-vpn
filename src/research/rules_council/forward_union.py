@@ -141,6 +141,7 @@ def cmd_ledger(force_look: bool = False) -> dict:
         d = pd.read_parquet(FWD / "frame_2026.parquet")
         L = pd.read_parquet(FWD / "levels_2026.parquet")
         keep = (d["date"].astype(str) >= COUNT_FROM).to_numpy()
+        last_date = str(d["date"].max())
         d, L = d[keep].reset_index(drop=True), L[keep].reset_index(drop=True)
         d["in_union"] = _union_mask(L)
         d["race_id"], d["horse_id"] = d["race_id"].astype(str), d["horse_id"].astype(str)
@@ -156,6 +157,13 @@ def cmd_ledger(force_look: bool = False) -> dict:
         tok.check_dates(fl["date"])
         x = d.drop(columns=["date"]).merge(fl, on=["race_id", "horse_id"], how="inner").merge(pre, on=["race_id", "horse_number"], how="left")
         n_races0 = int(x["race_id"].nunique())
+        if n_races0 == 0:                                                   # まだ数え始めの後の結果が無い
+            res = {"count_from": COUNT_FROM, "races_with_results": 0, "bets_in_union": 0, "status": "満期前（まだ対象のレースが無い）",
+                   "frame_last_date": last_date, "note": "2026 年の水準の表（build）を、開催日の後に作り直してから流す"}
+            LEDGER_OUT.write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+            tok.finish(result_path=LEDGER_OUT)
+            print(json.dumps(res, ensure_ascii=False, indent=1))
+            return res
         ok = x.groupby("race_id")["win_odds"].transform(lambda s: bool(s.notna().all() and (s > 0).all()))
         dropped = int(x.loc[~ok, "race_id"].nunique())
         x = x[ok].copy()
