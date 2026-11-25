@@ -103,6 +103,7 @@ data/dev_mock/
 
 # ensure_monitor.sh のロック
 .ensure_monitor.lock
+.ensure_council_viewer.lock
 
 # 会員名簿は git に入れない（試験用の test も含む。正本は GCS・ホストの data/local/auth/。docs/operations/members_json_purge_20261119.md）
 config/members.json
