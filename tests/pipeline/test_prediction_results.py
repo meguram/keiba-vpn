@@ -422,21 +422,17 @@ def test_remark_day_skips_when_the_prediction_changed(tmp_path, monkeypatch):
     assert pr.remark_day("20261019", st, tmp_path)["failed"] == 1
 
 
-def test_screen_marks_keeps_bet_marks_and_needs_sec77_cache(monkeypatch):
-    """買い目の印があれば残して足りない印だけ埋める（keep_assigned）。sec77 の想定オッズのキャッシュが無ければ買い目を作らない。"""
+def test_screen_marks_uses_win_prob_order_and_never_bet_marks(monkeypatch):
+    """記録の印は画面と同じ段: ◎○▲ は AI の勝率の 1・2・3 位、★ は印のルールか期待値の順。買い目からの印は使わない。"""
     from src.api.v1 import delegates as D
-    from src.pipeline.inference import odds_source as OS
 
-    entries = [{"horse_number": i, "win_prob": p, "top2_prob": p * 1.6, "top3_prob": p * 2, "mark_type": "none"}
-               for i, p in enumerate([0.35, 0.25, 0.2, 0.12, 0.08], 1)]
-    monkeypatch.setattr(D, "bet_horse_marks", lambda rid: {3: "honmei", 1: "pair"})
-    monkeypatch.setattr(OS, "predicted_single_odds", lambda storage, rid: {"odds_model": "sec77"})
-    out, basis = pr.screen_marks("r", entries, object())
-    m = {e["horse_number"]: e["mark_type"] for e in out}
-    assert basis == "bets" and m[3] == "honmei" and m[1] == "pair"
-    assert sorted(v for v in m.values() if v in ("honmei", "pair", "show_val", "star")) == ["honmei", "pair", "show_val", "star"]
-    monkeypatch.setattr(OS, "predicted_single_odds", lambda storage, rid: {"odds_model": "legacy"})
     called = []
     monkeypatch.setattr(D, "bet_horse_marks", lambda rid: called.append(rid) or {3: "honmei"})
-    out2, basis2 = pr.screen_marks("r", entries, object())
-    assert basis2 == "rule" and called == [] and {e["horse_number"]: e["mark_type"] for e in out2}[1] == "honmei"
+    entries = [{"horse_number": i, "win_prob": p, "top2_prob": p * 1.6, "top3_prob": p * 2, "mark_type": m, "ev_win": e}
+               for i, p, m, e in [(1, 0.35, "pair", 0.9), (2, 0.25, "honmei", 1.0), (3, 0.2, "none", 1.4), (4, 0.12, "none", 1.2), (5, 0.08, "none", 0.7)]]
+    out, basis = pr.screen_marks("r", entries, object())
+    m = {e["horse_number"]: e["mark_type"] for e in out}
+    assert basis == "rule" and called == []
+    assert (m[1], m[2], m[3]) == ("honmei", "pair", "show_val")
+    assert list(m.values()).count("star") == 1
+    assert [e["mark_type"] for e in entries] == ["pair", "honmei", "none", "none", "none"]      # 入力は書き換えない

@@ -357,32 +357,35 @@ def _bucket(pos: int | None) -> str | None:
 
 
 def screen_marks(race_id: str, entries: list[dict], storage: Any = None) -> tuple[list[dict], str]:
-    """画面と同じ段で印を決める（src/api/app.py の _with_bet_marks → _with_complete_marks）。
-    推奨馬券があるレースは買い目から印を決め（marks_basis=bets）、最後に complete_marks で ◎○▲★ を過不足なくする。
-    - 買い目は、検証と同じ想定オッズ（sec77）のキャッシュがあるレースだけで作る（無いレースで想定オッズを推論して保存しない）。
-    - 買い目は今の推奨の設定で作る。過去の日を付け直すと、その日の画面ではなく今の設定での印になる（記録の notes に書く）。
-    - 消印・較正後の期待値は予測の経路（v6e のローカル予測は自分で付ける）のまま。GCS・shadow の古い経路の予測では画面とずれうる。
-    戻り値: 印を付け直した一覧と marks_basis（bets・rule）。失敗したら元の印のまま（rule）。"""
-    basis = "rule"
-    out = entries
+    """画面と同じ段で印を決める（src/api/app.py の _with_position: _with_calibrated_ev（消印・較正の期待値）→ _with_complete_marks）。
+    ◎○▲ は AI の勝率の 1・2・3 位、★△消は印のルールの結果（complete_marks、rules-council R0-10）。買い目からの印は使わない。
+    消印は、保存済みの予測に消が無いときだけ付ける（画面の _with_kesi と同じ）。市場補正（apply_prob_calibration）は記録の側では行わない。
+    戻り値: 印を付け直した一覧と marks_basis（rule）。失敗したら元の印のまま。"""
+    out = [dict(e) for e in entries]
     try:
-        from src.api.v1.delegates import bet_horse_marks
-        from src.pipeline.inference import bet_marks as BM
-        from src.pipeline.inference.odds_source import predicted_single_odds
+        from src.utils.race_probabilities import assign_kesi_mark
 
-        single = predicted_single_odds(storage, race_id) if storage is not None else None
-        marks = bet_horse_marks(race_id) if (single and single.get("odds_model") == TARGET_ODDS_BASIS) else None
-        if marks:
-            out, basis = BM.apply_to_entries(out, marks), "bets"
+        if not any(e.get("mark_type") == "kesi" for e in out):
+            assign_kesi_mark(out)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("買い目からの印の付与に失敗 %s: %s", race_id, exc)
+        logger.warning("消印の付与に失敗 %s: %s", race_id, exc)
+    try:
+        from src.utils.ev_calibration import is_enabled
+        from src.utils.race_probabilities import attach_calibrated_ev
+
+        if is_enabled():
+            for e in out:
+                if any(e.get(k) is not None for k in ("ev_win", "ev_top2", "ev_place")):
+                    attach_calibrated_ev(e)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("期待値の較正に失敗 %s: %s", race_id, exc)
     try:
         from src.utils.race_probabilities import complete_marks
 
-        out = complete_marks(out, keep_assigned=basis == "bets")
+        out = complete_marks(out)
     except Exception as exc:  # noqa: BLE001
         logger.warning("印の埋め直しに失敗 %s: %s", race_id, exc)
-    return out, basis
+    return out, "rule"
 
 
 def _pick(e: dict, fm: dict, res: dict) -> dict:
@@ -969,7 +972,7 @@ def remark_day(date: str, storage: Any, base: Path | None = None, *, dry_run: bo
     if out["remarked"]:
         doc["summary"] = summarize(doc["races"])
         doc["highlights"] = highlights(doc["races"])
-        note = "印は、画面と同じ段（買い目からの印 → complete_marks）で、今の推奨の設定で付け直した（2026-11-25〜。その日の画面の印と違うことがある）"
+        note = "印は、画面と同じ段（◎○▲ は AI の勝率の順、★△消は印のルール。complete_marks）で付け直した（2026-11-25〜。その日の画面の印と違うことがある）"
         doc["notes"] = [n for n in (doc.get("notes") or []) if not n.startswith("印は、画面と同じ段")] + [note]
         if not dry_run:
             write_day(doc, base, force=True)
