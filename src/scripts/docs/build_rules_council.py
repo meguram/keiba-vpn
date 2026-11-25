@@ -166,6 +166,8 @@ def build_rc4(Bd: dict, texts: dict) -> str:
 
 def build_summary(texts: dict) -> str:
     b = ["<h2>結論</h2>", '<div class="box">' + bullets(texts["conclusion"]) + "</div>"]
+    from src.scripts.docs.build_rules_council_table import results_html
+    b.append(results_html())
     b.append("<h2>議題の一覧</h2>" + table(["議題", "日付", "中身", "結果", "頁"],
                                          [[esc(r["id"]), esc(r["date"]), esc(r["what"]), esc(r["result"]),
                                            f'<a href="{esc(r["page"])}">頁</a>' if r.get("page") else "－"] for r in texts["agendas"]]))
