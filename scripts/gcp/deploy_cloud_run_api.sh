@@ -80,8 +80,9 @@ ENV_VARS+=",MALLOC_ARENA_MAX=2"
 ENV_VARS+=",KEIBA_PRERENDER=1,KEIBA_PRERENDER_MAX_AGE_SEC=120,KEIBA_WARMUP_ON_START=1"
 [ "$CPU_ALLOC" != request ] || ENV_VARS+=",KEIBA_MIRROR_MODE=request"
 [ -z "$GCS_PREFIX" ] || ENV_VARS+=",GCS_PREFIX=${GCS_PREFIX}"
-# API_TEST_USER=1 のときだけテストユーザー(config/members.json の test)を有効にする。stg のタグ付きリビジョン専用（deploy_gcp.sh が付ける）
-# 2026-11-19 から config/members.json は git の外で、CI で作るイメージには入らない（付けても test では入れない）。昇格の止め（下）の目印として残す
+# API_TEST_USER=1 のときだけテストユーザー（test/test）を有効にする。stg のタグ付きリビジョン専用（deploy_gcp.sh が付ける）。
+# 2026-11-19 から config/members.json は git の外で、CI で作るイメージには入らない。test の 1 件は Secret Manager の KEIBA_STG_TEST_USER（stg 専用）から、
+# この版にだけ載せる（下の SECRETS。作り方は scripts/ops/stg_test_user_secret.sh）。KEIBA_TEST_USER は昇格の止め（下）の目印も兼ねる
 [ "${API_TEST_USER:-0}" != 1 ] || ENV_VARS+=",KEIBA_TEST_USER=1"
 [ -z "${STAGE2_START:-}" ] || ENV_VARS+=",KEIBA_STAGE2_START=${STAGE2_START}"   # 第 2 段の試行を読み始める日（stg だけ。deploy_gcp.sh）
 # MEMBERS_STORE=gcs のときだけ、会員名簿の正本を GCS に置く（管理 API・決済の Webhook の書き込みを GCS へ世代の条件つきで書く）。
@@ -92,6 +93,7 @@ ENV_VARS+=",KEIBA_PRERENDER=1,KEIBA_PRERENDER_MAX_AGE_SEC=120,KEIBA_WARMUP_ON_ST
 SECRETS="KEIBA_PROXY_KEY=KEIBA_PROXY_KEY:latest,KEIBA_HEARTBEAT_SECRET=KEIBA_HEARTBEAT_KEY:latest"
 SECRETS+=",SLACK_WEBHOOK_URL=SLACK_WEBHOOK_URL:latest,DEV_SECRET_KEY=DEV_SECRET_KEY:latest,DEV_PASSWORD=DEV_PASSWORD:latest"
 [ "${WITH_NEXT_KEY:-0}" != 1 ] || SECRETS+=",KEIBA_PROXY_KEY_NEXT=KEIBA_PROXY_KEY_NEXT:latest"
+[ "${API_TEST_USER:-0}" != 1 ] || SECRETS+=",KEIBA_STG_TEST_USER=KEIBA_STG_TEST_USER:latest"   # stg の版だけ。本番の版には載せない
 
 # deploy/docker/Dockerfile.cloudrun を指定するため、cloudbuild 設定を一時生成する
 build() {
@@ -168,7 +170,7 @@ promote() {
       rev="$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format='value(status.latestCreatedRevisionName)')"
     fi
     # テストユーザーが有効なリビジョン(stg 用)を本番の通信に載せない
-    if gcloud run revisions describe "$rev" --project "$PROJECT_ID" --region "$REGION" --format='value(spec.containers[0].env)' | grep -q KEIBA_TEST_USER; then
+    if gcloud run revisions describe "$rev" --project "$PROJECT_ID" --region "$REGION" --format='value(spec.containers[0].env)' | grep -qE 'KEIBA_TEST_USER|KEIBA_STG_TEST_USER'; then
       echo "リビジョン $rev はテストユーザー有効(stg 用)のため、通信を切り替えません" >&2; exit 3
     fi
     # 第 2 段の試行の開始日を下げたリビジョン(stg 用。過去の日のリハーサルを出す)を本番の通信に載せない

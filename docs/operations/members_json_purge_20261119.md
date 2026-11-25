@@ -42,6 +42,7 @@
 
 - **本番の Cloud Run**: 会員は `KEIBA_MEMBERS_STORE=gcs` で GCS の正本を読む（GitHub の Variables に `MEMBERS_STORE=gcs` が 2026-11-17 から設定済み。`deploy-stg.yml`・`promote.yml` が毎回付ける）。test は `KEIBA_TEST_USER` が無いので、もともと無効。**影響なし**。
 - **stg（rstg）**: `KEIBA_TEST_USER=1` が付くが、イメージに `config/members.json` が無くなるので、**test/test でログインできなくなる**。自動の配備・CI・監視は test/test を使っていない。手で確かめるときは、管理画面か `manage_users` で試験用の会員を作る。
+  - **2026-11-25 に戻した**: rstg は Secret Manager の `KEIBA_STG_TEST_USER`（stg 専用）から test を読む（`tiered_access.md` の「stg の test」）。
 - **ホストの API（Flask :23110 など）**: 会員は `data/local/auth/members.json`（cron が GCS から取り込む）。`.env` は `KEIBA_TEST_USER=0`。**影響なし**。
 - **VPS**: nginx の中継だけで、名簿を持たない。
 
