@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { invalidateJson, primeAuthStatus, type AuthStatusJson } from "@/lib/httpCache";
 import { lockedMessage, ROTATED_MESSAGE } from "@/lib/loginMessage";
+import { adsenseLoaded } from "@/lib/adsense";
 
 export default function LoginPage() {
   const [userId, setUserId] = useState("");
@@ -39,7 +40,9 @@ export default function LoginPage() {
       const body = (await res.json().catch(() => null)) as { auth?: AuthStatusJson } | null;
       if (body?.auth) primeAuthStatus(body.auth);
       else invalidateJson("/api/v1/auth/status");
-      router.push("/");
+      // 匿名の間に広告のスクリプトを読んでいたら、全体を読み直して捨てる（一度読んだスクリプトは外せない。会員の画面に残さない）
+      if (adsenseLoaded()) window.location.assign("/");
+      else router.push("/");
     } catch {
       setError("通信に失敗しました。もう一度お試しください");
       setBusy(false);

@@ -6,6 +6,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
 import { SiteFooter } from "@/components/SiteFooter";
+import { AdSenseLoader } from "@/components/ads/AdSenseLoader";
+import { ADSENSE_CLIENT } from "@/lib/adsense";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -25,6 +27,8 @@ export const metadata: Metadata = {
     shortcut: "/data/image/icon.jpg",
     apple: "/data/image/icon.jpg",
   },
+  // AdSense のサイトの所有の確認（meta タグ）。全区分で同じ HTML にするため、スクリプトとは別に置く（第三者のコードは読まない）
+  other: { "google-adsense-account": ADSENSE_CLIENT },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -33,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <EnvBadge />
         <TableSorter />
+        <AdSenseLoader />
         <MaintenanceShell
           chrome={
             <>
