@@ -45,12 +45,18 @@ def main() -> None:
     ap.add_argument("--date", required=True)
     a = ap.parse_args()
     day = pd.Timestamp(a.date)
-    # 台帳: 特徴量の元として 2016 年から前日までの結果を読む。封印の期間（2025〜26）に重なるので、期間ごとに分けて開く
-    # （critic 4。2025〜26 の行は評価ではなく as-of の集計の元。扱いは統括役に確かめる）
-    data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"forward_{a.date}_dev",
-                                   f"前向きの記録 {a.date} の as-of の特徴量の元（開発の期間）"))
-    data.TOKENS.append(data._guard(("2025-01-01", str((day - pd.Timedelta(days=1)).date())), "forward", f"forward_{a.date}_recent",
-                                   f"前向きの記録 {a.date} の as-of の特徴量の元（2025 年〜前日。評価ではない）"))
+    # 台帳（統括役の答え・11/26）: 2016-01-01〜2026-11-20 は reproduce（凍結の第 4 版の再現。見た回数に数えない。凍結のファイルを渡す）、
+    # 2026-11-21〜前日は forward。凍結の模型は公開のリポジトリに置かないので、sha256 は理由の文に書く
+    frozen = [ROOT / "src/research/pedigree_lab" / f for f in
+              ("forward_record.py", "gates.py", "features4.py", "features2.py", "data.py", "final_eval.py", "scene_dist.py", "build_base.py", "model.py")]
+    sha = (data.OUT / "freeze_v4_gate.sha256").read_text().split()[0][:16] if (data.OUT / "freeze_v4_gate.sha256").exists() else "?"
+    data.TOKENS.append(data._guard(("2016-01-01", "2026-11-20"), "reproduce", f"forward_{a.date}_v4",
+                                   "凍結の第 4 版で前向きの出馬表の血統の点を作るための as-of の特徴量の元。着順は産駒の成績の集計にだけ使い、"
+                                   f"評価・選び直し・閾値の決めに使わない（模型 models_v4_pure_dd・kf の sha {sha}…・freeze_v4_gate.sha256）",
+                                   frozen_paths=frozen))
+    if day > pd.Timestamp("2026-11-21"):
+        data.TOKENS.append(data._guard(("2026-11-21", str((day - pd.Timedelta(days=1)).date())), "forward", f"forward_{a.date}_recent",
+                                       f"前向きの記録 {a.date} の as-of の特徴量の元（2026-11-21〜前日。評価ではない）"))
     runs = build_base.load_runs()
     runs = runs[runs["date"] < day]
     E = entries(day)

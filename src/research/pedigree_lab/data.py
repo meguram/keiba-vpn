@@ -17,9 +17,9 @@ DEV_END = pd.Timestamp("2024-12-31")
 FAMILY = "pedigree_lab"
 
 
-def _guard(period: tuple[str, str], purpose: str, version: str, reason: str):
+def _guard(period: tuple[str, str], purpose: str, version: str, reason: str, frozen_paths=()):
     from src.research.pedigree_lab import pl_ledger      # 台帳の入口は pl_ledger だけ（test_data_ledger の登録）
-    return pl_ledger.open_token(period, purpose, version, reason)
+    return pl_ledger.open_token(period, purpose, version, reason, frozen_paths)
 
 
 def _prep(r: pd.DataFrame) -> pd.DataFrame:
