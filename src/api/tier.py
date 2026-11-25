@@ -16,10 +16,8 @@ from typing import Any
 PUBLIC_ENTRY_FIELDS = (
     "horse_number", "horse_name", "horse_id", "bracket_number", "sex_age",
     "jockey_name", "jockey_weight", "trainer_name", "weight", "weight_change",
-    "mark_type", "mark", "mark_source",            # 印（語・記号・どちらの決め方か public|member）。public_mark_type があればそちらを出す
+    "mark_type", "mark",                           # 印（語と記号）。全員に同じめぐAI印（mark_type）
 )
-# 印の担当（回収率の会議）が新しい決め方の印を置く欄。語は mark_type と同じ（honmei/pair/show_val/anchor/star/kesi/none）
-PUBLIC_MARK_FIELD = "public_mark_type"
 MARK_SYMBOLS = {"honmei": "◎", "pair": "○", "show_val": "▲", "anchor": "△", "star": "★", "kesi": "消"}
 
 PUBLIC_TOP_FIELDS = (
@@ -43,17 +41,10 @@ LOCKED_GROUPS = {
 
 
 def _public_mark(e: dict) -> dict[str, str]:
-    """匿名・無料会員に出す印。public_mark_type（印の担当の新しい印）があればそれ。無いときは設定
-    （config/public_fields.json の public_marks.fallback_to_mark_type）で、今の mark_type か印なし。"""
-    from src.utils import public_policy as P
-
-    if e.get(PUBLIC_MARK_FIELD):
-        mt, src = e[PUBLIC_MARK_FIELD], "public"          # 無料の AI 印（印の担当の決め方）
-    elif bool(P.section("public_marks").get("fallback_to_mark_type", True)):
-        mt, src = e.get("mark_type"), "member"           # 今のめぐAI印
-    else:
-        mt, src = "none", "public"
-    return {"mark_type": mt, "mark": MARK_SYMBOLS.get(mt, ""), "mark_source": src} if isinstance(mt, str) and mt else {}
+    """匿名・無料会員に出す印。印は 1 種類（全員に同じめぐAI印 mark_type。ユーザーの判断 2026-11-25）。
+    無料の新しい印（public_mark_type）は影の記録だけで、画面・応答には出さない。"""
+    mt = e.get("mark_type")
+    return {"mark_type": mt, "mark": MARK_SYMBOLS.get(mt, "")} if isinstance(mt, str) and mt else {}
 
 
 def _rank_by_win_prob(rows: list[dict]) -> list[dict]:
@@ -153,7 +144,7 @@ def redact_predictions(resp: dict[str, Any]) -> dict[str, Any]:
     rows = []
     for e in resp.get("predictions") or []:
         if isinstance(e, dict):
-            rows.append({**{k: e[k] for k in PUBLIC_ENTRY_FIELDS if k in e and k not in ("mark_type", "mark", "mark_source")}, **_public_mark(e)})
+            rows.append({**{k: e[k] for k in PUBLIC_ENTRY_FIELDS if k in e and k not in ("mark_type", "mark")}, **_public_mark(e)})
     if "predictions" in resp:
         out["predictions"] = sorted(rows, key=lambda r: int(r.get("horse_number") or 99))    # 予測の順位が分からないよう馬番順
     out["access"] = {"tier": "public", "member_only": sorted(LOCKED_GROUPS)}

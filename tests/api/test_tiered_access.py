@@ -89,15 +89,12 @@ def test_redact_predictions_orders_by_horse_number_not_by_prediction():
     assert [e["horse_number"] for e in out["predictions"]] == [5, 6]
 
 
-def test_public_mark_prefers_public_mark_type_and_fallback_switch(monkeypatch):
-    from src.utils import public_policy as P
-
-    top = {**TOP, "predictions": [{**ENTRY, "public_mark_type": "pair"}, {**ENTRY, "horse_number": 6}]}
+def test_public_mark_is_the_same_mark_type_and_hides_public_mark_type():
+    """印は 1 種類（全員に同じめぐAI印）。無料の新しい印（public_mark_type）は影の記録だけで、匿名の応答に出さない。"""
+    top = {**TOP, "predictions": [{**ENTRY, "public_mark_type": "pair"}, {**ENTRY, "horse_number": 6, "mark_type": "kesi"}]}
     out = redact_predictions(top)
-    assert [(e["mark_type"], e["mark"]) for e in out["predictions"]] == [("pair", "○"), ("honmei", "◎")]
-    monkeypatch.setattr(P, "section", lambda name: {"fallback_to_mark_type": False} if name == "public_marks" else {})
-    out = redact_predictions(top)
-    assert [(e["mark_type"], e["mark"]) for e in out["predictions"]] == [("pair", "○"), ("none", "")]
+    assert [(e["mark_type"], e["mark"]) for e in out["predictions"]] == [("honmei", "◎"), ("kesi", "消")]
+    assert all("public_mark_type" not in e for e in out["predictions"])
 
 
 def test_redact_predictions_does_not_mutate_input_and_handles_no_prediction():

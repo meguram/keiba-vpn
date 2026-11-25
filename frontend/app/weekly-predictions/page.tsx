@@ -80,8 +80,6 @@ type PredEntry = {
   /** 印の語と記号。匿名・無料会員には予測の数値の代わりにこれだけが来る（src/api/tier.py） */
   mark_type?: string;
   mark?: string;
-  /** public=無料の AI 印（public_mark_type）／member=今のめぐAI印 */
-  mark_source?: string;
   pred_rank?: number;
   composite_rank?: number;
   win_prob?: number | null;
@@ -452,7 +450,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
                   <td style={{ fontWeight: 800, fontVariantNumeric: "tabular-nums", color: "var(--text)" }} title={p.horse_number != null ? `${brOf(p) ?? "-"}枠 ${p.horse_number}番` : "馬番は未確定"}>
                     {p.horse_number ?? "-"}
                   </td>
-                  <td style={{ fontWeight: 800, color: "#fbbf24" }} title={markOf(p) ? (p.mark_source === "public" ? "無料のAI印" : "めぐAI印") : undefined}>
+                  <td style={{ fontWeight: 800, color: "#fbbf24" }} title={markOf(p) ? "めぐAI印" : undefined}>
                     {markOf(p) || ""}
                   </td>
                   <td style={{ textAlign: "left" }}>
