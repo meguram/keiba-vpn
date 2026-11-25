@@ -40,7 +40,7 @@
 | レース一覧（`/api/race-list/*`）・レース品質 | 不可（403）。B の許可が出るまで | 同左 | 可 |
 
 ## 切り替えスイッチ（`config/public_fields.json`）
-- `mode`: `private`（現状。Cloudflare Access で所有者のみ。従来の匿名／会員の出し分けのまま）／`public`（一般公開用）。環境変数 `KEIBA_PUBLIC_MODE=public|private` で上書き。**設定ファイルが読めないときは安全側（public・何も許可しない）。**
+- `mode`: `private`（現状。本番は匿名にも開いている。匿名・無料会員の出し分けは `tier.py` の private の経路の許可リスト。`tiered_access.md`）／`public`（一般公開用）。環境変数 `KEIBA_PUBLIC_MODE=public|private` で上書き。**設定ファイルが読めないときは安全側（public・何も許可しない）。**
 - `release.minimal_identifiers_public`: 馬番・馬名・レースの識別だけ出す。
 - `release.b_facts_public`: 出馬表・結果などの事実（B）を出す。
 - `release.odds_derived_public`: オッズ由来（O）を出す。会員にだけ出る（匿名には出ない）。
@@ -72,7 +72,7 @@
 ## 運用モード（3 段階）
 | 段階 | 内容 | 設定 | 規約上の位置づけ |
 |---|---|---|---|
-| 1 私的限定（現状） | Cloudflare Access で所有者だけが見る。全項目 | `mode=private` | 私的利用の範囲（第14条）。最も安全 |
+| 1 私的限定（2026-11 まで） | Cloudflare Access で所有者だけが見る。全項目 | `mode=private` | 私的利用の範囲（第14条）。最も安全。今の本番は Access の外で、private の経路の許可リスト（`tiered_access.md`）で出し分ける |
 | 2 非営利で出力のみ公開 | 無料・広告なし・個人運営。A（自前の出力）だけを公開。B/C/O は出さない | `mode=public`、`release` は全て false（現在の既定） | グレー。不特定多数への公開は第14条の私的利用の範囲外とされうるが、netkeiba の事実データそのものは出さない。A が派生物である点は未確定 |
 | 3 商用（広告・有料会員） | 営利。B/O の公開も含みうる | 取得元の切り替え、または netkeiba の承認が前提 | 第15条(1)で営利は不可（承認で例外）。**netkeiba 承認、または取得元をライセンスデータへ切り替えるまで不可** |
 

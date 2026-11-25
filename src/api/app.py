@@ -73,7 +73,7 @@ from src.api.auth import (
     COOKIE_NAME,
 )
 from src.utils.keiba_logging import standard_log_formatter
-from src.api.tier import MEMBER_REDACTORS, MEMBER_REQUIRED_BODY, OWNER_REQUIRED_BODY, member_only_path, owner_only_path, redact_predictions, redact_race_detail
+from src.api.tier import MEMBER_REDACTORS, MEMBER_REQUIRED_BODY, OWNER_REQUIRED_BODY, member_only_path, owner_only_path, redact_entry_card, redact_predictions, redact_race_detail
 from src.config.ports import mlflow_tracking_uri as _default_mlflow_uri
 
 
@@ -7423,7 +7423,7 @@ async def _race_predictions_compute(race_id: str):
 
 
 @app.get("/api/race/{race_id}/entry/{horse_id}/card", response_class=JSONResponse)
-async def get_entry_card(race_id: str, horse_id: str):
+async def get_entry_card(request: Request, race_id: str, horse_id: str):
     """出馬表の馬名・騎手・調教師をタップしたときの情報（実データの事実。予測に依らない）。
 
     馬の近5走・同条件の成績・追い切り、騎手・調教師の条件別成績などを 1 回でまとめて返す。
@@ -7435,7 +7435,9 @@ async def get_entry_card(race_id: str, horse_id: str):
         return JSONResponse(data, status_code=400)
     if data.get("status") == "not_found":
         return JSONResponse(data, status_code=404)
-    return JSONResponse(data, headers={"Cache-Control": "private, max-age=120"})
+    if not is_member(request):
+        data = redact_entry_card(data)     # 匿名・無料会員: 追い切り・厩舎コメント・めぐ指数・近走の人気を落とす（src/api/tier.py）
+    return JSONResponse(data, headers={"Cache-Control": "private, max-age=120", "Vary": "Cookie"})
 
 
 @app.get("/api/race/{race_id}/bloodline-aptitude", response_class=JSONResponse)

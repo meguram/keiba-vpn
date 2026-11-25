@@ -58,6 +58,8 @@ type RaceItem = {
   entries_updated_at?: string | null;
 };
 
+const MARK_SYMBOL: Record<string, string> = { honmei: "◎", pair: "○", show_val: "▲", anchor: "△", star: "★", kesi: "消" };
+
 type PredEntry = {
   horse_number?: number;                 // 馬番が未確定の段階（特別登録・出走馬決定）は API が null を返す（画面は『-』を出す）
   /** 馬番が未確定の段階（特別登録・出走馬決定）では true */
@@ -72,6 +74,11 @@ type PredEntry = {
   weight?: number | null;
   weight_change?: number | null;
   popularity?: number | null;
+  /** 印の語と記号。匿名・無料会員には予測の数値の代わりにこれだけが来る（src/api/tier.py） */
+  mark_type?: string;
+  mark?: string;
+  /** public=無料の AI 印（public_mark_type）／member=今のめぐAI印 */
+  mark_source?: string;
   pred_rank?: number;
   composite_rank?: number;
   win_prob?: number | null;
@@ -279,7 +286,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
   const sorted = sortPreds(preds, sort?.key ?? null, sort?.dir ?? "asc", defaultOrder);
   const calibratedEv = preds.some((p) => p.ev_win_cal != null || p.ev_place_cal != null);     // EV の較正が有効なときだけ『較正後』と表示する
   const { isMember, loading: authLoading } = useAuthStatus();
-  const lock = !authLoading && !isMember;      // 匿名は勝率・複勝率まで。それ以外の列はサーバが落としているので見出しに 🔒 を付ける
+  const lock = !authLoading && !isMember;      // 匿名・無料会員は印だけ。予測の数値の列はサーバが落としているので見出しに 🔒 を付ける
   const LK = (label: string) => (lock ? `🔒${label}` : label);
 
   // 見出しのクリック: 1 回目=その列の向き（既定は昇順、大きいほど良い列は降順）→ 2 回目=逆 → 3 回目=元の並びに戻す
@@ -308,7 +315,8 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
 
   /* 馬名: タップ/クリック（Enter・スペース）で情報パネルを開く。horse_id が無い行は文字のみ。 */
   const nameCell = (p: PredEntry) => {
-    const text = p.horse_name;
+    const mk = p.mark || MARK_SYMBOL[p.mark_type ?? ""] || "";
+    const text = p.horse_name ? <>{mk ? <span title={p.mark_source === "public" ? "無料のAI印" : "めぐAI印"} style={{ marginRight: 3, color: "#fbbf24" }}>{mk}</span> : null}{p.horse_name}</> : null;
     if (!text) return <span>-</span>;
     if (!p.horse_id) return <span className="pt-tap" style={{ cursor: "default", borderBottom: "none" }}>{text}</span>;
     return (
@@ -352,7 +360,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
       className={`num ${sep ? "sep" : ""} ${v != null && hasPred && max > 0 ? "pt-bar" : ""} ${top ? "pt-top" : ""}`}
       style={{ color: dim, fontWeight: 600, ...(v != null && max > 0 ? { ["--w" as string]: `${Math.round((v / max) * 100)}%`, ["--c" as string]: color } : {}) } as React.CSSProperties}
     >
-      {fmtPct(v)}
+      {lock ? "🔒" : fmtPct(v)}
     </td>
   );
   const evSpan = (v: number | null | undefined, cal: boolean, label: string) => {
@@ -423,8 +431,8 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
               {th("bracket", "枠", { title: "枠番（前日に確定）" })}
               {th("num", "馬番")}
               {th("name", "馬名", { align: "left", title: "馬名（押すと近走・血統・騎手・調教師の情報）" })}
-              {th("win", <>AI<br />勝率</>, { align: "right", cls: "sep", title: "AI の勝率" })}
-              {th("top3", <>AI<br />複勝率</>, { align: "right", title: "AI の複勝率（3着以内に入る確率）" })}
+              {th("win", <>{lock ? "🔒" : ""}AI<br />勝率</>, { align: "right", cls: "sep", title: lock ? "AI の勝率（会員限定）" : "AI の勝率" })}
+              {th("top3", <>{lock ? "🔒" : ""}AI<br />複勝率</>, { align: "right", title: lock ? "AI の複勝率（会員限定）" : "AI の複勝率（3着以内に入る確率）" })}
               {th("odds", "オッズ", { align: "right", cls: "sep", sub: LK("予測 単/複"), title: "オッズの予測値（上段=単勝・下段=複勝の下限-上限）。単勝で並べ替え（複勝は『そのほか』から）" })}
               {th("evw", "期待値", { align: "right", cls: "sep", sub: LK("単/複"), title: `${evTitle}。単勝で並べ替え（複勝は『そのほか』から）` })}
             </tr>

@@ -24,7 +24,8 @@ export type RacePick = {
   horse_number: number;
   horse_name: string;
   finish: number | null;
-  win_prob: number;
+  /** 有料会員だけ（匿名・無料会員の応答には無い） */
+  win_prob?: number | null;
   win_odds?: number | null;
   ev_win?: number | null;
   mark?: string | null;

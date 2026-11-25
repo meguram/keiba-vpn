@@ -116,7 +116,7 @@ function RaceCard({ r, member, levelLabels }: { r: RaceRecord; member: boolean; 
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 10px", marginTop: 8, alignItems: "center", fontSize: 13 }}>
         <span style={dim}>予測1位</span>
-        <span>{r.top1?.horse_number}番 {r.top1?.horse_name} <FinishChip pos={r.top1?.finish} /> <span style={dim}>勝率{pct(r.top1?.win_prob)}</span></span>
+        <span>{r.top1?.horse_number}番 {r.top1?.horse_name} <FinishChip pos={r.top1?.finish} /> {r.top1?.win_prob != null ? <span style={dim}>勝率{pct(r.top1.win_prob)}</span> : !member ? <span style={dim}>勝率 🔒会員限定</span> : null}</span>
         <span style={dim}>結果</span>
         <span>{(r.result_top3 ?? []).map((x) => `${x.finish}着 ${x.horse_number}番`).join(" / ")}</span>
         {member && lv != null && lv >= 1 && b && b.total_bet > 0 && (
