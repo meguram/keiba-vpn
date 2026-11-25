@@ -44,7 +44,7 @@
 
 置き場所:
 
-- 全ページの下（`frontend/components/SiteFooter.tsx`。`app/layout.tsx` から出す）。法的表記へのリンクは、billing の機能（`lib/features.ts`）が有効なときだけ出す。
+- 全ページの下（`frontend/components/SiteFooter.tsx`。`app/layout.tsx` から出す）。利用規約・プライバシーポリシーへのリンクは常に出す（機能 legal）。特商法の表記は billing の機能（`lib/features.ts`）が有効なときだけ出す。
 - サンプル買い目・回収率の近く: ホームの成績のカード（`BET_NOTE`）、API が返す disclaimer（`config/paid_zone.json`・`config/target_bets.json` の notice）。
 - 特商法の表記の「ご注意」と、利用規約の第 5 条（免責）。
 - 公開サイト（`site_public`）は、もとから同じ趣旨の注記を自動で付ける（`site_public/build.py`）。

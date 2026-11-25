@@ -26,7 +26,9 @@ export const FEATURES = {
   "prediction-results": { label: "予測成績（予測結果の集計・ホームの速報）", enabled: true, paths: ["/prediction-results"] },
   auth: { label: "ログイン", enabled: true, paths: ["/login"] },
   "admin-users": { label: "ユーザー登録（管理者のみ）", enabled: true, paths: ["/admin/users"] },
-  billing: { label: "有料プランの申込み・法的表記（データ利用許諾の確認後に有効化。手順: docs/operations/billing.md）", enabled: false, paths: ["/signup", "/legal"] },
+  billing: { label: "有料プランの申込み・特商法の表記（データ利用許諾の確認後に有効化。手順: docs/operations/billing.md）", enabled: false, paths: ["/signup", "/legal/tokushoho"] },
+  // 利用規約・プライバシーポリシーは常に公開する（AdSense の審査はプライバシーポリシーの公開を求める。2026-11-25）。特商法の表記（/legal/tokushoho）は billing が有効なときだけ（billing が先に当たる。app/legal/[doc]/page.tsx でも二重に見る）
+  legal: { label: "利用規約・プライバシーポリシー", enabled: true, paths: ["/legal"] },
   "megu-analysis": { label: "めぐ分析（出馬表の統計データ・走法マップ・過去データの条件。有料会員と開発者。API は src/api/tier.py の会員限定）", enabled: true, paths: ["/analysis"] },
   "megu-column": { label: "めぐコラム（開発中）", enabled: true, devOnly: true, paths: ["/column"] },
 
