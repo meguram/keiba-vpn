@@ -13,13 +13,13 @@ export function SiteFooter() {
     >
       <p style={{ margin: 0 }}>馬券の購入は 20 歳以上の方に限られます（20 歳未満の方は購入できません）。</p>
       <p style={{ margin: 0 }}>当サイトの予想・サンプル買い目は参考情報で、的中や結果を保証するものではありません。</p>
-      {featureEnabled("billing") && (  // 法的表記（/legal）は billing の機能と一緒に公開する（lib/features.ts）
       <p style={{ margin: "6px 0 0" }}>
         <Link href="/legal/terms" style={{ color: "inherit" }}>利用規約</Link>・
-        <Link href="/legal/privacy" style={{ color: "inherit" }}>プライバシーポリシー</Link>・
-        <Link href="/legal/tokushoho" style={{ color: "inherit" }}>特定商取引法に基づく表記</Link>
+        <Link href="/legal/privacy" style={{ color: "inherit" }}>プライバシーポリシー</Link>
+        {featureEnabled("billing") && (  // 特商法の表記は billing（申込み）と一緒に公開する（lib/features.ts）
+          <>・<Link href="/legal/tokushoho" style={{ color: "inherit" }}>特定商取引法に基づく表記</Link></>
+        )}
       </p>
-      )}
     </footer>
   );
 }

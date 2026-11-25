@@ -69,3 +69,23 @@ def test_results_table_numbers_come_from_json():
     pages = BT.child_pages(D)
     assert set(pages) == {r["page"] for r in BT.ROWS}
     assert "<h2>やり方ごとの成績表</h2>" in BT.results_html()
+
+
+def test_results_table_why_columns_follow_r09():
+    """R0-09 の決定: 札は 7 つのどれか、「説明の確かめ」は回収率の列と隣り合わない、注意の文は表より前。"""
+    from src.scripts.docs import build_rules_council_table as BT
+    for r in BT.ROWS:
+        assert r["check"].split("（")[0] in BT.CHECK_LABELS, r["id"]
+    sec = BT.easy_section(BT.load())
+    head = next(line for line in sec.splitlines() if line.startswith("| やり方"))
+    cols = [c.strip() for c in head.strip("|").split("|")]
+    i = cols.index("説明の確かめ")
+    assert all("戻り" not in cols[j] for j in (i - 1, i + 1) if 0 <= j < len(cols))
+    assert sec.index(BT.WHY_EASY) < sec.index("| やり方")
+    h = BT.results_html()
+    assert h.index(BT.WHY_NOTE) < h.index("<table>") and BT.MEGU_WHY.split("（")[0] in h
+    hcols = h.split("<thead><tr>", 1)[1].split("</tr>", 1)[0].replace("</th>", "").split("<th>")[1:]
+    k = hcols.index("説明の確かめ")
+    assert all("回収率" not in hcols[j] for j in (k - 1, k + 1) if 0 <= j < len(hcols))
+    for lab in ("確かめ中", "確かめられない"):
+        assert lab in BT.CHECK_LABELS and lab in BT.MEGU_WHY
