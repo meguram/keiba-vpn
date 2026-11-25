@@ -202,8 +202,9 @@ def run_D(X: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("case", choices=["A", "B", "C", "D", "E", "null", "ref"])
+    ap.add_argument("case", choices=["A", "B", "C", "D", "E", "N", "null", "ref"])
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--no-n", action="store_true", help="件数の列（*_n・*_nrun・res_n）を外す（帰無の世代・時代の説明の確かめ）")
     a = ap.parse_args()
     t0 = time.time()
     data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"v5_{a.case}_{a.seed}",
@@ -226,9 +227,11 @@ def main() -> None:
         Xn["split"] = data.split_meetings(Xn["meeting"])
         Xn = Xn[(Xn["date"].dt.year >= 2017)].reset_index(drop=True)
         cols = ablate.col_sets(Xn)["pure"]
+        if a.no_n:
+            cols = [c for c in cols if not (c.endswith("_n") or c.endswith("_nrun"))]
         o = oof_for(Xn, cols, "dd")
         dev = Xn["split"].isin([0, 1]).to_numpy()
-        res |= {"seed": a.seed, "dd_win_gain": gain(Xn, o["win"], dev), "n_cols": len(cols)}
+        res |= {"seed": a.seed, "no_n": a.no_n, "dd_win_gain": gain(Xn, o["win"], dev), "n_cols": len(cols)}
     else:
         X = base_frame("v4" if a.case != "E" else "v5e")
         dev = X["split"].isin([0, 1]).to_numpy()
@@ -245,6 +248,9 @@ def main() -> None:
                 cols = ablate.col_sets(X)["pure"]
                 params = dict(min_data_in_leaf=2000, num_leaves=15, lambda_l2=50.0, extra_trees=True)
                 tg = ("win", "top3")
+            elif a.case == "N":     # 第 4 版 pure から件数の列を外す（帰無の世代・時代の説明の確かめ・本物の側）
+                cols = [c for c in ablate.col_sets(X)["pure"] if not (c.endswith("_n") or c.endswith("_nrun"))]
+                params, tg = None, ("win",)
             elif a.case == "E":
                 cols = ablate.col_sets(X)["pure"]
                 params, tg = None, ("win",)
@@ -266,7 +272,7 @@ def main() -> None:
                     data.OUT / f"kf_v5{a.case}_dd.parquet", index=False)
     res["sec"] = round(time.time() - t0)
     print(json.dumps(res, ensure_ascii=False, default=str))
-    name = f"v5_{a.case}" + (f"_{a.seed}" if a.case == "null" else "")
+    name = f"v5_{a.case}" + (f"_{a.seed}" if a.case == "null" else "") + ("_noN" if a.no_n else "")
     (data.OUT / f"{name}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=str))
     with open(data.OUT / "trials.jsonl", "a") as fh:
         fh.write(json.dumps(res, ensure_ascii=False, default=str) + "\n")
