@@ -33,7 +33,7 @@ export function useNarrow(): boolean {
 
 /**
  * 開催日の中でレースを移動するバー。レース詳細（RaceNav）と同じ作り:
- * 開催場タブ（★ = 特に価値の高いレースの数）、R チップ（サンプル買い目の期待回収率で色分け）、前後の R ボタン。
+ * 開催場タブ（★ = 特に価値の高いレースの数）、R チップ（サンプル買い目の参考度で色分け）、前後の R ボタン。
  */
 export function RaceStrip({
   races, venue, onVenue, values, valuesState, selectedRaceId, onSelectRace, onWarm, showValue = true, disabledIds, disabledHint = "まだ選べません",
@@ -169,7 +169,7 @@ export function RaceStrip({
 
       {showValue && values.size > 0 && !narrow && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", fontSize: 11, color: "var(--text-dim)" }}>
-          <span>{hasTier(values) ? "買い目の参考度:" : "サンプル買い目の期待回収率:"}</span>
+          <span>買い目の参考度:</span>
           {hasTier(values)
             ? TIER_LEGEND.map((t) => (
               <span key={t.label} title={isTargetValues(values) ? TARGET_TIER_HINT[t.label] : LEVEL_STYLE[t.level].hint} style={{ padding: "1px 8px", borderRadius: 6, border: `1px solid ${LEVEL_STYLE[t.level].border}`, background: LEVEL_STYLE[t.level].bg, color: LEVEL_STYLE[t.level].color, opacity: t.level === "pass" ? 0.8 : 1 }}>
@@ -181,7 +181,7 @@ export function RaceStrip({
               {LEVEL_STYLE[k].label}
             </span>
           ))}
-          <span>{isTargetValues(values) ? "（選んだ買い目のどれかが当たる確率の大きさ。回収率の高さではありません）" : "（確率はモデルの出力で未検証。目安として参照）"}</span>
+          <span>{isTargetValues(values) ? "（選んだ買い目のどれかが当たる確率の大きさ。回収を約束しません）" : "（確率はモデルの出力で未検証。目安として参照）"}</span>
           {mixedProbCalibration(values) && <span title="オッズが出たレースは確率を市場補正して計算し、段の閾値と当日の順位を、補正しないレース（オッズ未確定・予測オッズ）とは別に付けています">※ 市場補正したレースとしないレースは基準が別</span>}
         </div>
       )}

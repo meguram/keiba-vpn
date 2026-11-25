@@ -43,8 +43,6 @@ function Row({ label, x, kind, dim }: { label: string; x: CRStat | null; kind: "
       <td>{x ? n.toLocaleString() : "—"}</td>
       <td>{rec(x?.rec)}</td>
       <Cell v={x?.place} base={b?.place} good={good} n={n} />
-      <Cell v={x?.roi_t} base={b?.roi_t} good={good} n={n} />
-      <Cell v={x?.roi_f} base={b?.roi_f} good={good} n={n} />
     </tr>
   );
 }
@@ -54,7 +52,7 @@ function Table({ s, kind }: { s: CRPeriods; kind: "buy" | "kill" | "all" }) {
     <div className="cr-scroll">
       <table className="cr">
         <thead>
-          <tr><th className="l">期間</th><th>件数</th><th>1-2-3-着外</th><th>複勝率</th><th>単勝の払戻率</th><th>複勝の払戻率</th></tr>
+          <tr><th className="l">期間</th><th>件数</th><th>1-2-3-着外</th><th>複勝率</th></tr>
         </thead>
         <tbody>
           <Row label="2025〜26 年" x={combine(s["2025"], s["2026"])} kind={kind} />
@@ -89,7 +87,7 @@ export function CourseRules({ fig, notes }: { fig: CRFigure; notes?: string[] })
   return (
     <div>
       <style>{CSS}</style>
-      <div className="cr-warn">参考です。払戻率は過去の値で、今後を保証しません。このレースのどの馬が条件に当てはまるかは、まだ表示していません。</div>
+      <div className="cr-warn">参考です。過去の値で、今後を保証しません。選んだ期間の回収率は、将来を表さないので出していません。このレースのどの馬が条件に当てはまるかは、まだ表示していません。</div>
       {!fig.track_ok && <div className="cr-warn">当日の馬場が「{fig.track}」です。これらは良馬場の条件なので、このレースには当てはまりません。</div>}
       {fig.includes_after && <div className="cr-warn">このレースは結果の最終日（{fig.data_until}）より前です。2025〜26 年の値には、このレース自身とそれより後の結果が入っています（振り返りの参考）。</div>}
       <div className="cr-note">

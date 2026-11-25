@@ -18,14 +18,14 @@ export type PaidRec = {
 };
 
 export const TIER_STYLE: Record<number, { color: string; bg: string; border: string; desc: string }> = {
-  0: { color: "#8b9bb4", bg: "transparent", border: "#35445f", desc: "買わないほうがよいレース" },
-  1: { color: "#bfdbfe", bg: "rgba(96,165,250,0.14)", border: "#60a5fa", desc: "期待回収率が約100%（損益分岐のあたり）" },
-  2: { color: "#bbf7d0", bg: "rgba(34,197,94,0.18)", border: "#22c55e", desc: "プラスが見込める" },
-  3: { color: "#fde68a", bg: "rgba(245,158,11,0.20)", border: "#f59e0b", desc: "プラスの見込みが高め" },
-  4: { color: "#fff", bg: "linear-gradient(135deg,#f97316,#ef4444)", border: "#fb923c", desc: "その中でも特に高い（目安）" },
+  0: { color: "#8b9bb4", bg: "transparent", border: "#35445f", desc: "見送りのレース" },
+  1: { color: "#bfdbfe", bg: "rgba(96,165,250,0.14)", border: "#60a5fa", desc: "参考度 1" },
+  2: { color: "#bbf7d0", bg: "rgba(34,197,94,0.18)", border: "#22c55e", desc: "参考度 2" },
+  3: { color: "#fde68a", bg: "rgba(245,158,11,0.20)", border: "#f59e0b", desc: "参考度 3" },
+  4: { color: "#fff", bg: "linear-gradient(135deg,#f97316,#ef4444)", border: "#fb923c", desc: "参考度 4（いちばん高い段。回収を約束しません）" },
 };
 
-/** 方式 A（確率のみ）の参考度は『確信度』の段階。値段（期待回収率）の説明を出さない */
+/** 方式 A（確率のみ）の参考度は『確信度』の段階。値段の説明を出さない */
 const CONFIDENCE_DESC: Record<number, string> = {
   0: "本命が抜けておらず、確信度が低い", 1: "確信度がやや低い", 2: "確信度は標準", 3: "確信度がやや高い", 4: "本命が抜けており、確信度が高い",
 };

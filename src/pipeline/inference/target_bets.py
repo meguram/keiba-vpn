@@ -386,7 +386,8 @@ def build_plans(entries: list[dict], single: dict | None, max_total_bet: int | N
     budget = int(max_total_bet) if max_total_bet else default_budget()
     out = []
     for pc in plans_cfg:
-        item = {"id": pc["id"], "label": pc["label"], "note": pc.get("note", ""), "evidence": pc.get("evidence", ""), "kind": pc["kind"]}
+        # 検証の期間の回収率（evidence）は応答に載せない（選んだ期間の回収率は将来を表さないので画面に出さない。2026-11-25 ユーザーの判断）
+        item = {"id": pc["id"], "label": pc["label"], "note": pc.get("note", ""), "kind": pc["kind"]}
         if pc["kind"] == "pattern":
             pat = cfg.get("pattern") or {}
             prm = PP.PatternParams(mult=float(pat.get("mult", 5.0)), k=float(pat.get("k", 2.0)), tau=float(pat.get("tau", 1.0)), bet_ev_min=float(pat.get("bet_ev_min", 0.9)),

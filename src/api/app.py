@@ -7291,38 +7291,22 @@ async def _race_predictions_compute(race_id: str):
             logger.warning("EV の較正の付与に失敗 %s: %s", race_id, exc)
             return resp
 
-    def _with_bet_marks(resp: dict) -> dict:
-        # 推奨馬券を正とし、印（◎○▲△）は買い目から決める。推奨が無いレース・計算できないレースは従来の印のまま
-        try:
-            preds = resp.get("predictions")
-            if not isinstance(preds, list) or not preds or not resp.get("has_prediction", True):
-                return resp
-            from src.api.v1.delegates import bet_horse_marks
-            from src.pipeline.inference import bet_marks as BM
-
-            marks = bet_horse_marks(race_id)
-            if not marks:
-                return resp
-            return {**resp, "predictions": BM.apply_to_entries(preds, marks), "marks_basis": "bets"}
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("買い目からの印の付与に失敗 %s: %s", race_id, exc)
-            return resp
-
     def _with_complete_marks(resp: dict) -> dict:
-        # 印を過不足なく（◎○▲★ を各 1 頭。ユーザーの方針 2026-11-25）。買い目からの印・印のルールの後の最後の段。全区分で同じ印
+        # 印の最後の段: ◎○▲ は AI の勝率の 1・2・3 位、★△消は印のルール。◎○▲★ を各 1 頭（ユーザーの方針 2026-11-25）。全区分で同じ印
         preds = resp.get("predictions")
         if not isinstance(preds, list) or not preds or not resp.get("has_prediction", True):
             return resp
         try:
             from src.utils.race_probabilities import complete_marks
 
-            return {**resp, "predictions": complete_marks(preds, keep_assigned=resp.get("marks_basis") == "bets")}
+            return {**resp, "predictions": complete_marks(preds)}
         except Exception as exc:  # noqa: BLE001
             logger.warning("印の埋め直しに失敗 %s: %s", race_id, exc)
             return resp
 
     def _with_position(resp: dict) -> dict:
-        resp = _with_complete_marks(_with_bet_marks(_with_calibrated_ev(resp)))
+        # 印は AI の勝率の順（◎○▲）と印のルール（★△消）だけで決める。買い目からの印（_with_bet_marks）は使わない（rules-council R0-10・依頼 2 の追記）
+        resp = _with_complete_marks(_with_calibrated_ev(resp))
         # 過去走の通過順位から作る位置取り予想（実モデルの予測ではない）。失敗しても予測の応答は返す
         try:
             from src.pipeline.inference.position_forecast import attach_position_forecast

@@ -31,4 +31,10 @@ def race_analysis(race_id: str):
             from src.research.race_analysis.graded_picks import redact_actual_odds
 
             payload = redact_actual_odds(payload)
+    from src.api.flask_auth import is_logged_in as _is_dev
+
+    if not _is_dev():                    # 選んだ期間の回収率は、開発者以外には出さない（src/api/tier.py の strip_research_roi）
+        from src.api.tier import strip_research_roi
+
+        payload = strip_research_roi(payload)
     return jsonify(payload)

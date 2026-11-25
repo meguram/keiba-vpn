@@ -71,7 +71,7 @@ export const PUBLIC_CATEGORIES: CategorySection[] = [
             accent: "var(--home-orange)",
             icon: "🏆",
             title: "今週のAI予測",
-            desc: "今週のレース別の勝率・複勝率・期待値とサンプル買い目を一覧表示。出馬表・オッズ・個別レース詳細へ遷移可能。",
+            desc: "今週のレース別の勝率・複勝率とサンプル買い目を一覧表示。出馬表・オッズ・個別レース詳細へ遷移可能。",
             tags: ["出馬表", "オッズ", "サンプル買い目"],
           },
           {

@@ -211,7 +211,7 @@ export default function PredictionResultsPage() {
         <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
           {rated && (
             <div style={{ ...card, fontSize: 13 }}>
-              <b>集計の対象: 参考度（レース期待値）が『{rated.label}』以上のレース</b>
+              <b>集計の対象: 参考度が『{rated.label}』以上のレース</b>
               {useRated
                 ? <> — {rated.counts.rated}/{rated.counts.settled} レースが対象（約 {(rated.counts.settled / rated.counts.rated).toFixed(1)} レースに1回。見送り {rated.counts.skipped}{rated.counts.unrated > 0 ? `・参考度の記録なし ${rated.counts.unrated}` : ""}）。下の数字はこの{rated.counts.rated}レースの集計です。</>
                 : <> — 該当するレースがありません（見送り {rated.counts.skipped}・参考度の記録なし {rated.counts.unrated}）。下は全体の集計です。</>}

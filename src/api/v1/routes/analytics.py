@@ -59,9 +59,9 @@ def pedigree_race_note_v2():
 def _betting_view() -> str:
     """開発者（所有者）は従来の詳細表示、会員は有料ゾーンの表示（推奨度の段階と買い目の区分だけ。オッズ・期待値・金額の数値なし）。"""
     from src.api.flask_auth import is_logged_in
-    from src.utils import paid_zone as PZ
 
-    return "full" if (is_logged_in() or not PZ.enabled()) else "paid"
+    # 開発者以外は、有料ゾーンの設定によらず会員向けの表示（期待値・Kelly の数値は誰にも出さない。2026-11-25）
+    return "full" if is_logged_in() else "paid"
 
 
 @bp.post("/betting/optimize")
@@ -73,6 +73,10 @@ def betting_optimize():
         from src.api.v1.delegates import attach_bet_results
 
         attach_bet_results(payload, str(body["race_id"]))
+    if _betting_view() == "paid" and isinstance(payload, dict):     # 開発者以外: 期待値・Kelly・検証の期間の回収率を落とす（src/api/tier.py）
+        from src.api.tier import strip_bet_ev
+
+        payload = strip_bet_ev(payload)
     return jsonify(payload), code
 
 
@@ -91,10 +95,16 @@ def betting_race_values():
         cap = None if raw_cap in ("", "0", "null") else int(raw_cap) if raw_cap.isdigit() else -1
         if cap is not None and cap < 100:
             return jsonify({"error": "max_total_bet は 100 円以上の整数（上限なしは 0）"}), 400
-    return jsonify(race_value_summary(
+    view = _betting_view()
+    out = race_value_summary(
         date, odds_mode=request.args.get("odds_mode", "auto"), odds_phase=request.args.get("odds_phase", "latest"),
-        max_total_bet=cap, view=_betting_view(),
-    ))
+        max_total_bet=cap, view=view,
+    )
+    if view == "paid" and isinstance(out, dict):                    # 開発者以外: 期待回収率・期待値の数値を落とす
+        from src.api.tier import strip_bet_ev
+
+        out = strip_bet_ev(out)
+    return jsonify(out)
 
 
 AUTH_STATUS_SHARED_S_MAXAGE = 300
