@@ -94,7 +94,7 @@ def search_row(r: dict, m: dict | None) -> dict:
     m = m or {}
     if r["id"] == "RC-6":                                     # 2-1 の写し（数え直していない。stake の重み・90% の幅）
         return {"races": "記録なし", "bets": f"{m['bets']:,.0f}（買う割合の重み）", "hit": "未集計",
-                "roi": f"{pc(m['roi'])}（90% の幅 {ci(m['roi_ci90'])}）", "seeds": "－（この値が 5 通りの平均）",
+                "roi": f"{pc(m['roi'])}（90% の幅 {m['roi_ci90'][0] * 100:.1f}〜{m['roi_ci90'][1] * 100:.1f}%）", "seeds": "－（この値が 5 通りの平均）",
                 "base": f"{pc(m['base_ii_final_band_only'])}（確定オッズの帯）", "nopay": pc(m["base_ii_final_band_only"] * m["excess_mr"]), "note": m.get("note", "")}
     races = "－"
     if "races_pop" in m:
@@ -132,7 +132,7 @@ def b_notes(D: dict) -> list[str]:
     return [f"AI の買い目を全部買うと、1 点 100 円・1 通り（種 1000）で {pc(a['roi'])}（{pc(a['hit_rate_bets'])} の的中）、5 通りの平均で {seeds_text(a)}。1 通り目は 5 通りの中で上の方。",
             f"残した側の勝つ割合の上乗せ（市場比 ÷ 帯の比）は {da['excess_mr']:.3f} → {dk['excess_mr']:.3f} で、消しても増えていない。",
             f"高く見える分は、勝った馬の払戻のぶれ（{da['payout_term']:.3f} → {dk['payout_term']:.3f}）だけから来ている。ぶれを除くと、残した側 {pc(dk['roi_without_payout_term'])}・全部 {pc(da['roi_without_payout_term'])}。",
-            f"消した側は、1 点 100 円で {pc(x['roi'])}、買う割合の重みで {pc(xs['roi'])}（残した側は {pc(ks['roi'])}）。重みの付け方で 100% のどちら側かが入れかわる。"]
+            f"消した側は、1 点 100 円・1 通りで {pc(x['roi'])}（5 通りの平均 {seeds_text(x)}）、買う割合の重みで {pc(xs['roi'])}（残した側は {pc(ks['roi'])}）。数え方で 100% のどちら側かが入れかわる。"]
 
 
 def md_table(head: list[str], rows: list[list[str]]) -> str:
@@ -158,7 +158,7 @@ def easy_section(D: dict) -> str:
                       "### 確かめ・最後の 1 回の数字（めぐの AI × オッズ。単勝。出典 docs/operations/megu_cycles/confirm_log.json・final_once.json）", "",
                       MEGU_NOTE, "", b, "",
                       "- 2022〜24 で 5 つを同時に割り引くと、100% を超えると言えるのは c18 だけ（cycle_50.md）。",
-                      "- 2025 の合格の印は「2025 年の戻り ≥ 100% かつ 2022〜24 の 0.9 倍以上」（final_once.json の pass）。幅の下は 5 つとも 100% を割る。",
+                      "- 2025 の合格の印は「2025 年の戻り ≥ 100% かつ 2022〜24 の 0.9 倍以上」（final_once.json の pass）。前向きの記録に進む条件で、100% 超の証明ではない。幅の下は 5 つとも 100% を割る。",
                       "- 前向き（2026-11-28 から、本物のオッズ）: c13・c21・c23 の系統と、RC-2 の和集合を **記録中**。", END])
 
 
@@ -181,7 +181,7 @@ def child_pages(D: dict) -> dict[str, str]:
     pages = {}
     for r in results_rows(D):
         m = rows.get(r["key"]) or {}
-        lines = [f"# {r['id']} {r['name']}", "", "[成績表にもどる](../easy_summary.md)", "", f"**注意**: {HEAD_EASY}", "",
+        lines = [f"# {r['id']} {r['name']}", "", "[成績表にもどる](../easy_summary.md)", "", f"**注意**: {HEAD_NOTE}", "", HEAD_EASY, "",
                  "## 何を確かめたか", "", f"- {r['easy']}と、もうかるか。", "",
                  "## 買い方", "", f"- **買う馬**: {r['horse']}", f"- **買うレース**: {r['race']}", "- 単勝を 1 点 100 円。", "",
                  f"## 数字（探した期間: {r['period']} の開催の 7 割）", ""]
