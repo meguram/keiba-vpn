@@ -143,8 +143,6 @@ type PredEntry = {
   /** 印の語（honmei/pair/show_val/anchor/star/kesi/none）と記号。匿名・無料会員には予測の数値の代わりにこれだけが来る */
   mark_type?: string;
   mark?: string;
-  /** public=無料の AI 印（public_mark_type）／member=今のめぐAI印 */
-  mark_source?: string;
   pred_rank?: number;
   composite_rank?: number;
   pred_score?: number | null;
@@ -593,7 +591,7 @@ export default function RaceDetailPage() {
                 <td className="m-hide" style={{ ...TD, textAlign: "center" }}><BracketBadge bn={hasNo ? wakuOf(Number(hn), shutubaEntries.length, Number(e.bracket_number) || null) : null} /></td>
                 <td style={{ ...TD, textAlign: "center" }}><NumBadge no={hasNo ? hn : null} bn={hasNo ? wakuOf(Number(hn), shutubaEntries.length, Number(e.bracket_number) || null) : null} /></td>
                 <td className="m-name" style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left" }}>
-                  {markOf(pr) ? <span title={pr?.mark_source === "public" ? "無料のAI印" : "めぐAI印"} style={{ marginRight: 4, color: "#fbbf24" }}>{markOf(pr)}</span> : null}<HorseName id={e.horse_id} name={e.horse_name} />
+                  {markOf(pr) ? <span title="めぐAI印" style={{ marginRight: 4, color: "#fbbf24" }}>{markOf(pr)}</span> : null}<HorseName id={e.horse_id} name={e.horse_name} />
                   <span className="m-sub">{subLine(e) || "—"}</span>
                 </td>
                 <td className="m-hide" style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{pick(e, "sex_age") || `${pick(e, "sex")}${pick(e, "age")}` || "—"}</td>
@@ -821,7 +819,7 @@ export default function RaceDetailPage() {
                     <td className="m-hide" style={{ ...TD, textAlign: "center" }}><BracketBadge bn={wakuOf(Number(p.horse_number), preds.length, bracketOf.get(Number(p.horse_number)) ?? (Number(p.bracket_number) || null))} /></td>
                     <td style={{ ...TD, textAlign: "center" }}><NumBadge no={p.horse_number} bn={wakuOf(Number(p.horse_number), preds.length, bracketOf.get(Number(p.horse_number)) ?? (Number(p.bracket_number) || null))} /></td>
                     <td className="m-name" style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left", whiteSpace: "nowrap" }}>
-                      {markOf(p) ? <span title={p.mark_source === "public" ? "無料のAI印" : "めぐAI印"} style={{ marginRight: 4, color: "#fbbf24" }}>{markOf(p)}</span> : null}<HorseName id={p.horse_id} name={p.horse_name} />
+                      {markOf(p) ? <span title="めぐAI印" style={{ marginRight: 4, color: "#fbbf24" }}>{markOf(p)}</span> : null}<HorseName id={p.horse_id} name={p.horse_name} />
                       <span className="m-sub">{[p.sex_age, p.jockey_name, p.jockey_weight].filter((x) => x != null && x !== "").join(" ") || (shutubaByNo.get(Number(p.horse_number)) ? subLine(shutubaByNo.get(Number(p.horse_number))!) : "") || "—"}</span>
                     </td>
                     {/* AI columns — redact when null or entry.redacted === true */}

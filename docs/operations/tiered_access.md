@@ -16,7 +16,7 @@ UI の隠しではなく、**サーバが応答から項目を落とす**（許�
 | 結果の事実（着順・タイム・着差・上がり・通過・ラップ） | 見える | 見える |
 | 確定の結果の単勝オッズ・人気・払戻（`race_result` の元が確定の結果のときだけ。判定は `tier.race_result_confirmed`、応答の `access.result_confirmed`） | 見える | 見える |
 | 確定前のオッズ・人気（出馬表の `odds`・`popularity`、速報 `race_result_on_time`、`race_odds`・`race_pair_odds`、速報だけの段の結果のオッズ・払戻） | 見えない | 見える |
-| 印（`mark_type`・記号の `mark`）。`public_mark_type` があればそれ。無いときの扱いは `public_fields.json` の `public_marks.fallback_to_mark_type` | 見える（馬番順） | 見える |
+| 印（`mark_type`・記号の `mark`）。印は 1 種類（全員に同じめぐAI印）。無料の新しい印 `public_mark_type` は影の記録だけで出さない（2026-11-25） | 見える（馬番順） | 見える |
 | 勝率・複勝率・順位・連対率・想定オッズ・期待値・買い判断・印の説明・展開・めぐ指数 | 見えない | 見える |
 | 馬柱・近走（`horses` の `race_history`）・タイム指数・各指数・備考・厩舎コメント・追い切り・パドック・バロメーター・SmartRC | 見えない | 見える |
 | 出走馬カード（`/api/race/{id}/entry/{horse}/card`） | 近走の公式の事実・同条件の成績・騎手・調教師の成績。追い切り・厩舎コメント・成長曲線（めぐ指数）・近走の人気は落とす（`access.locked`） | 全部 |
