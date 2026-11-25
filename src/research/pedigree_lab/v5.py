@@ -203,7 +203,7 @@ def run_D(X: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("case", choices=["A", "B", "C", "D", "E", "F", "N", "null", "ref"])
+    ap.add_argument("case", choices=["A", "B", "C", "D", "E", "F", "G", "N", "null", "ref"])
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--no-n", action="store_true", help="件数の列（*_n・*_nrun・res_n）を外す（帰無の世代・時代の説明の確かめ）")
     a = ap.parse_args()
@@ -234,7 +234,7 @@ def main() -> None:
         dev = Xn["split"].isin([0, 1]).to_numpy()
         res |= {"seed": a.seed, "no_n": a.no_n, "dd_win_gain": gain(Xn, o["win"], dev), "n_cols": len(cols)}
     else:
-        X = base_frame({"E": "v5e", "F": "v6e"}.get(a.case, "v4"))
+        X = base_frame({"E": "v5e", "F": "v6e", "G": "v7g"}.get(a.case, "v4"))
         dev = X["split"].isin([0, 1]).to_numpy()
         ref = v4_ref(X)
         res["v4_dd_win_gain"] = gain(X, ref["dd"]["p_win"].to_numpy(), dev)
@@ -252,7 +252,7 @@ def main() -> None:
             elif a.case == "N":     # 第 4 版 pure から件数の列を外す（帰無の世代・時代の説明の確かめ・本物の側）
                 cols = [c for c in ablate.col_sets(X)["pure"] if not (c.endswith("_n") or c.endswith("_nrun"))]
                 params, tg = None, ("win",)
-            elif a.case in ("E", "F"):     # F: 第 4 版 ＋ 父・母父の埋め込み（features6）
+            elif a.case in ("E", "F", "G"):     # F: 第 4 版 ＋ 父・母父の埋め込み（features6）
                 cols = ablate.col_sets(X)["pure"]
                 params, tg = None, ("win",)
             if a.case == "D":
