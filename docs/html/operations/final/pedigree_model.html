@@ -1,0 +1,138 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>血統だけの勝率・複勝率モデル</title><style>
+:root { --bg:#f7f8fb; --panel:#ffffff; --panel2:#eef1f7; --border:#d5dbe7; --text:#1b2333; --muted:#5b6578;
+  --accent:#2f5fc4; --ok:#1d7f45; --warn:#9a6200; --bad:#b4232c; --code:#eef1f7; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60;
+  --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; } }
+:root[data-theme="dark"] { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60; --text:#e6ecff; --muted:#9aa7c7;
+  --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1180px; margin:0 auto; padding:28px 16px 80px; }
+a { color:var(--accent); }
+h1 { font-size:24px; margin:0 0 6px; line-height:1.4; }
+h2 { font-size:19px; margin:40px 0 6px; padding-top:16px; border-top:1px solid var(--border); }
+h3 { font-size:16px; margin:22px 0 4px; }
+p, li { overflow-wrap:anywhere; }
+.sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+.scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:8px 0 14px; border:1px solid var(--border); border-radius:8px; }
+table { border-collapse:collapse; width:100%; min-width:760px; font-size:13.5px; background:var(--panel); }
+th, td { border-bottom:1px solid var(--border); border-right:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+td.n { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+th { background:var(--panel2); color:var(--muted); font-weight:600; white-space:nowrap; }
+tr:last-child td { border-bottom:none; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 5px; border-radius:5px; font-size:12px; overflow-wrap:anywhere; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 16px; margin:12px 0; }
+.b { display:inline-block; font-size:11.5px; padding:0 8px; border-radius:10px; border:1px solid currentColor; white-space:nowrap; }
+.ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .mu { color:var(--muted); }
+details { background:var(--panel); border:1px solid var(--border); border-radius:10px; margin:8px 0; }
+summary { cursor:pointer; padding:8px 12px; }
+details[open] > summary { border-bottom:1px solid var(--border); }
+.dbody { padding:8px 14px 12px; font-size:13.5px; }
+</style></head><body><main>
+<h1>血統だけの勝率・複勝率モデル</h1>
+<p class="sub">作成 2026-11-26（JST）。担当 pedigree-lab（2026-11-25 22:40〜11-26 22:40）。血統の専門家 2 体（1 号 血統理論・2 号 統計）と「絶対回収率プラスにするマン」3 体の会議で進めた。記録は <code>docs/operations/pedigree_lab/log.md</code>・<code>decisions.md</code>。費用 0 円（手元のファイルだけ）。</p>
+
+<h2>結論</h2>
+<div class="box"><ul>
+<li><b>血統だけで、勝率は確かに当たる。</b>純粋な血統（年齢・性・成績・オッズを使わない約 170 列）の勝ちの対数損失は、一様（1/頭数）より 0.082 nats 良い（開発の 2 代母の単位の 5 分割の OOF）。<b>見ていない 2025・26 年でも 0.077 [0.067, 0.089]</b> と 95% を保ち、較正の傾きは 1.04 だった。</li>
+<li><b>ただし市場（確定オッズ）は約 0.69 nats 良く、血統の約 8 倍の情報を持つ。</b>血統が市場に足す分は、全体で 0.0002 nats とごく小さい（Benter の 2 段の α 0.03〜0.07）。</li>
+<li><b>血統のモデルだけで回収率 100% を超える買い方は、見つからなかった。</b>事前に登録した「初ダート」では、開発の行で血統の傾きが全体の約 8 倍に上がった（α の上乗せ +0.36 [0.18, 0.55]）。しかし大きさは単勝で市場の 1.19〜1.22 倍、複勝で 1.16〜1.18 倍にとどまり、控除に届かない（門 0 の算数で閉じた）。2025・26 年では、この上乗せ自体も +0.08 [−0.37, +0.50] で再現しなかった。</li>
+<li>期待値（T-60 の再現オッズ）で絞る案・ワイドと馬連の軸にする案も、比か量が足りず閉じた。保留（split 2）と 2025・26 年の回収率は、一度も開けていない。</li>
+<li>純粋な血統の改善のうち約 1 割（0.009）は、血統ではなく世代・時代の情報だった（血統を生年 × 性の中で入れ替えた帰無でも残る）。</li>
+</ul></div>
+
+<h2>進め方と決まり</h2>
+<ul>
+<li>データ: 5 代血統（<code>data/local/horse_pedigree_5gen</code>）は 2016〜2026 の平地の出走 508,689 件（58,603 頭）の 99.97% で揃う。着順の表が 2016 年からなので、2016 年は as-of の集計の助走にだけ使い、開発は 2017〜2024 年。</li>
+<li>as-of: 産駒の成績は、そのレースの日より厳密に前の結果だけで集計し、その馬自身の過去走は全部の集計から引く（総当たりの試験 <code>tests/research/test_pedigree_lab_asof.py</code>）。</li>
+<li>分け方: 主は開催（race_id の先頭 8 桁）単位の無作為（ユーザーの指示）。開発 = split 0・1（85%）、保留 = split 2（15%・回収率は未開封）。覚え込みの確かめに 2 代母の単位の 5 分割も並べた。</li>
+<li>2025・26 年は最後に 1 回だけ（台帳 eval_only・KEIBA_SESSION=pedigree-lab）。買い方ではなく、モデルの最終の評価に使った（会議の 1 号の承認）。</li>
+<li>試した数: 仮説 14＋6、場面 6＋1、回収率の探り 16（開発の行だけ）、門 0 の算数 3＋3＋2、特徴量の版 5、第 5 版の案 6、帰無 10。</li>
+</ul>
+
+<h2>特徴量の一覧（なぜ効くのか）</h2>
+<p>β は条件付きロジット（勝ち）で「基準の列」に足したときの係数（レースの中の偏差を sd で割った 1 sd あたり）。探す側 = 開発の split 0、確かめる側 = split 1・2、2025・26 は最後の 1 回。仮説と向きは数を見る前に固定した。</p>
+<div class="scroll"><table><thead><tr><th>束（列）</th><th>なぜ効くのか</th><th>探す側</th><th>確かめる側</th><th>2025・26</th><th>判定</th></tr></thead><tbody>
+<tr><td>父 × 芝ダ（H1）</td><td>芝とダートの向き不向きは、筋肉の量・蹄の形・走り方の遺伝で決まる。新馬 0.60 → 2 勝以上 0.27 と、本人の実績が溜まるほど消える。</td><td class="n">+0.33</td><td class="n">+0.38</td><td class="n">+0.39</td><td><span class="b ok">採る</span></td></tr>
+<tr><td>父 × 芝ダ × 距離帯（H2）</td><td>速筋と遅筋・心肺の能力は遺伝し、得意な距離に出る。</td><td class="n">+0.34</td><td class="n">+0.39</td><td class="n">+0.33</td><td><span class="b ok">採る</span></td></tr>
+<tr><td>父 × レースの年齢条件 × 芝ダ（H6'）</td><td>成長の速さ（早熟・晩成）は遺伝する。鍵はレースの年齢条件（2 歳戦・3 歳戦・3 歳以上）なので、馬の年齢は漏れない。</td><td class="n">+0.39</td><td class="n">+0.40</td><td class="n">+0.41</td><td><span class="b ok">採る</span></td></tr>
+<tr><td>母父（H3）</td><td>遺伝の半分は母から来る。母の能力は記録に薄いので、母父の産駒の成績が代わりになる。</td><td class="n">+0.10</td><td class="n">+0.09</td><td class="n">+0.10</td><td><span class="b ok">採る</span></td></tr>
+<tr><td>きょうだい（母の 1 頭 1 票: 走り始めて 1 年以上の産駒の勝ち上がりの割合）（H4）</td><td>母の遺伝と子宮・授乳の環境が共通。新馬 0.20 → 4 歳以上 0.04 と、若いほど効く。</td><td class="n">+0.11</td><td class="n">+0.09</td><td class="n">+0.11</td><td><span class="b ok">採る</span></td></tr>
+<tr><td>母の産駒の 5 走以内の勝ち上がり（H12）</td><td>母から来る仕上がりの速さと丈夫さ。</td><td class="n">+0.06</td><td class="n">+0.06</td><td class="n">+0.05</td><td><span class="b ok">採る</span></td></tr>
+<tr><td>牝系（2 代母の子孫の 1 頭 1 票）（H7）</td><td>繁殖の選別と遺伝の重なり。上のクラスでは消える（選抜による切り詰め）。牝系は「勝ち上がりの速さ・丈夫さ」として若い時期に効く。</td><td class="n">+0.04</td><td class="n">+0.04</td><td class="n">+0.05</td><td><span class="b ok">採る</span></td></tr>
+<tr><td>ニックス（父 × 母父。父 + 母父 − 全体へ縮小）（H9）</td><td>補い合う形質の組み合わせ、または配合の選別（牧場の方針）。どちらかはまだ区別できていない。</td><td class="n">+0.07</td><td class="n">+0.08</td><td class="n">+0.04</td><td><span class="b ok">採る</span><span class="mu">（仕組みは未確定）</span></td></tr>
+<tr><td>父の距離の幅で割った距離のずれ（H14）</td><td>距離の適性の幅も遺伝する。幅の狭い父ほど、ずれの罰が大きい。</td><td class="n">−0.05</td><td class="n">−0.04</td><td class="n">−0.03</td><td><span class="b ok">採る（負）</span></td></tr>
+<tr><td>父系（父父・父父父。父の縮める先）</td><td>兄弟の種牡馬は遺伝子の半分を共有するので、産駒の傾向が似る。父の産駒が少ないときの縮める先。</td><td colspan="3" class="mu">重要度の束 0.14（2 位）</td><td><span class="b ok">採る</span></td></tr>
+<tr><td>近交の指数（5 代。経路の重複を含む）（H10）</td><td>近交弱勢と、特定の祖先の形質を濃くする効果が打ち消し合う。</td><td class="n">−0.04</td><td class="n">−0.02</td><td class="n">—</td><td><span class="b warn">境目（負の向きだけ）</span></td></tr>
+<tr><td>全きょうだいの上乗せ（H4b）</td><td>全きょうだいが余計に共有するのは父の分で、父の集計にすでに入る。</td><td class="n">−0.02</td><td class="n">+0.02</td><td class="n">—</td><td><span class="b bad">外す</span></td></tr>
+<tr><td>父 × 場 × 芝ダ（H8）</td><td>コースの形の適性は、芝ダ・距離の上乗せとしてごく小さい。</td><td class="n">−0.26</td><td class="n">−0.23</td><td class="n">—</td><td><span class="b bad">外す</span></td></tr>
+<tr><td>父 × 馬場（H5・同じ産駒の中の差の H5'）</td><td>パワー型と蹄の違いで道悪の向き不向きが分かれる、という説。</td><td colspan="3" class="mu">条件の箱でも同じ産駒の中の差でも測れない（τ² ≤ 0・区間が 0 をまたぐ）</td><td><span class="b bad">閉じる</span></td></tr>
+<tr><td>母父のダート寄り（同じ産駒の中の差）（H13）</td><td>ダートの適性は母父から来やすい、という説。</td><td class="n">−0.00</td><td class="n">−0.04</td><td class="n">—</td><td><span class="b bad">閉じる（逆向き）</span></td></tr>
+</tbody></table></div>
+<details><summary>予測器の列の重要度（束ね別・2 代母の単位の 5 折の gain の割合）</summary><div class="dbody"><div class="scroll"><table><thead><tr><th>束</th><th>割合</th><th>列の数</th></tr></thead><tbody>
+<tr><td>母父</td><td class="n">0.215</td><td class="n">48</td></tr><tr><td>父系（父父・父父父）</td><td class="n">0.144</td><td class="n">36</td></tr>
+<tr><td>父 × レースの年齢条件・芝ダ</td><td class="n">0.128</td><td class="n">11</td></tr><tr><td>父の全体・クラス・場・馬場</td><td class="n">0.102</td><td class="n">24</td></tr>
+<tr><td>母・きょうだい</td><td class="n">0.099</td><td class="n">15</td></tr><tr><td>父 × 芝ダ・距離帯</td><td class="n">0.091</td><td class="n">15</td></tr>
+<tr><td>牝系（2 代母）</td><td class="n">0.075</td><td class="n">14</td></tr><tr><td>ニックス</td><td class="n">0.038</td><td class="n">9</td></tr>
+<tr><td>全きょうだい</td><td class="n">0.036</td><td class="n">8</td></tr><tr><td>父の距離の幅</td><td class="n">0.032</td><td class="n">3</td></tr>
+<tr><td>父の 1 頭 1 票</td><td class="n">0.027</td><td class="n">4</td></tr><tr><td>父の同じ産駒の中の差</td><td class="n">0.016</td><td class="n">4</td></tr><tr><td>インブリード</td><td class="n">0.006</td><td class="n">2</td></tr>
+</tbody></table></div><p>縮小の強さ k は、役 × 条件 × 物差しごとにモーメント法で決めた（同じ馬の走りの相関を design effect で割り引き、2019 年末までの行）。父の主効果は約 130〜190 走、父 × 芝ダの上乗せは約 290〜470 走、父 × 馬場・父 × 場は上限（効きが雑音に埋もれる）。</p></div></details>
+
+<h2>モデルの成績</h2>
+<p>勝ちのレース内の対数損失（勝ち馬の −log p の平均）の、一様（1/頭数）からの改善（nats）。勝率はレースの中で和 1 に揃え、温度 1 つで較正した。</p>
+<div class="scroll"><table><thead><tr><th>版・分け方</th><th>開発の OOF（開催の単位）</th><th>2 代母の単位</th><th>説明</th></tr></thead><tbody>
+<tr><td>第 1 版（403 列・馬の状態の鍵を含む）</td><td class="n">0.159</td><td class="n">—</td><td>道悪の判定の不具合・馬の状態（キャリア等）が混ざる。血統だけの結果ではない</td></tr>
+<tr><td>第 2〜3 版の主（年齢の鍵の産駒成績を含む）</td><td class="n">0.106</td><td class="n">0.120</td><td>年齢の代わりを運ぶ列があった</td></tr>
+<tr><td><b>第 4 版 pure（凍結）</b></td><td class="n"><b>0.092</b></td><td class="n"><b>0.082</b></td><td>年齢・性・成績・オッズなし（約 170 列）。複勝は開催の単位 0.028・2 代母 0.013（覚え込みで水増し）</td></tr>
+<tr><td>第 4 版 ＋ 年齢・性（ped_age・副）</td><td class="n">0.134</td><td class="n">—</td><td>年齢・性は血統ではない（比べのため）</td></tr>
+<tr><td>第 5 版 E（＋3・4 代の祖先の子孫の適性）</td><td class="n">0.094</td><td class="n">0.085（+0.0038 [+0.0020, +0.0058]）</td><td>全体は良くなるが、初ダートの α を 0.039 下げ、凍結の線で外れた</td></tr>
+<tr><td>第 5 版 A（偏差だけ）・B（強い正則化）・D（線形）</td><td class="n">0.075・0.090・—</td><td class="n">0.072・0.082・0.071</td><td>A は覚え込みが縮むが 1 割悪い・B は同等・D は木の 87%</td></tr>
+<tr><td>帰無（血統を生年 × 性の中で入れ替え・10 回）</td><td class="n">—</td><td class="n">0.0087（sd 0.0011）</td><td>0 にならない分は世代・時代の情報。血統に固有の分は約 0.073</td></tr>
+<tr><td>市場（確定オッズ・基準線）</td><td class="n">約 0.69</td><td class="n">約 0.69</td><td>血統の約 8 倍</td></tr>
+</tbody></table></div>
+<h3>2025・26 年での最終の評価（凍結の第 4 版・1 回だけ・87,842 行・6,364 レース）</h3>
+<div class="scroll"><table><thead><tr><th>線</th><th>結果</th><th>判定</th></tr></thead><tbody>
+<tr><td>M1 勝ちの改善が開発の 75% 以上・下限 50% 以上</td><td class="n">0.0773 [0.0667, 0.0890]（開発の 95%）</td><td><span class="b ok">通る</span></td></tr>
+<tr><td>M2 較正の傾き 0.85〜1.15・平均の比 0.95〜1.05</td><td class="n">傾き 1.038・比 0.999</td><td><span class="b ok">通る</span></td></tr>
+<tr><td>M3 採った仮説 9 本の符号が 8 本以上で同じ</td><td class="n">9 本とも同じ</td><td><span class="b ok">通る</span></td></tr>
+<tr><td>M4 初ダートの α の上乗せの点 +0.18 以上</td><td class="n">+0.081 [−0.37, +0.50]（ダート 2 戦目 −0.18）</td><td><span class="b bad">落ちる</span></td></tr>
+<tr><td>M5 記述</td><td>Benter の全体の α 0.034・学習に無い新しい父の行（7.7%）の改善 0.103・2 歳戦 0.146・新馬戦 0.172</td><td class="mu">—</td></tr>
+</tbody></table></div>
+<details><summary>較正（2025・26 年・勝率の 10 分位）</summary><div class="dbody"><div class="scroll"><table><thead><tr><th>分位</th><th>予測</th><th>実際</th></tr></thead><tbody>
+<tr><td>1</td><td class="n">0.032</td><td class="n">0.028</td></tr><tr><td>2</td><td class="n">0.041</td><td class="n">0.039</td></tr><tr><td>3</td><td class="n">0.048</td><td class="n">0.049</td></tr>
+<tr><td>4</td><td class="n">0.054</td><td class="n">0.063</td></tr><tr><td>5</td><td class="n">0.061</td><td class="n">0.062</td></tr><tr><td>6</td><td class="n">0.068</td><td class="n">0.070</td></tr>
+<tr><td>7</td><td class="n">0.077</td><td class="n">0.078</td></tr><tr><td>8</td><td class="n">0.089</td><td class="n">0.086</td></tr><tr><td>9</td><td class="n">0.105</td><td class="n">0.102</td></tr>
+<tr><td>10</td><td class="n">0.149</td><td class="n">0.149</td></tr></tbody></table></div></div></details>
+
+<h2>買い方の成績（血統のモデルだけで 100% を超えるか）</h2>
+<h3>血統は市場に何を足すか（Benter の 2 段・開発の行）</h3>
+<div class="scroll"><table><thead><tr><th>場面（事前に 6 つ）</th><th>行</th><th>α の上乗せ [95%]</th><th>読み</th></tr></thead><tbody>
+<tr><td>初ダート</td><td class="n">14,357</td><td class="n">+0.368 [+0.158, +0.509]</td><td>1 号が数を見る前に 1 位に置いた場面。ダート 2 戦目では +0.01 で消える</td></tr>
+<tr><td>初芝</td><td class="n">3,987</td><td class="n">+0.09 [−0.38, +0.79]</td><td>件数が少ない</td></tr>
+<tr><td>距離の延長・短縮</td><td class="n">67,216・64,194</td><td class="n">−0.06・+0.03</td><td>無い</td></tr>
+<tr><td>道悪・新馬</td><td class="n">41,085・32,752</td><td class="n">−0.01・+0.01</td><td>無い（新馬は市場が血統を読む）</td></tr>
+</tbody></table></div>
+<h3>門 0（モデルの上の算数。払戻を読む前に閉じた）</h3>
+<div class="scroll"><table><thead><tr><th>案</th><th>なぜ効くはずか（数を見る前）</th><th>上限（市場比）</th><th>要る線</th><th>量（年）</th><th>判定</th></tr></thead><tbody>
+<tr><td>R-A 初ダートの中の 1 位かつ全頭 3 位以内・複勝</td><td>市場は芝の着順で値付けし、初めてのダートの血統を軽く見る</td><td class="n">複勝 1.179・単勝 1.218（モデルの上の単勝の期待回収率 97.7%）</td><td class="n">1.25</td><td class="n">331</td><td><span class="b bad">閉じる</span></td></tr>
+<tr><td>R-B 初ダートの上位 20%・複勝</td><td>同上</td><td class="n">複勝 1.157・単勝 1.188（95.8%）</td><td class="n">1.25</td><td class="n">387</td><td><span class="b bad">閉じる</span></td></tr>
+<tr><td>PL2-a 初ダート × Benter の期待値（T-60 の再現・3 段）</td><td>場面の傾きが大きく、期待値の上位は血統の点の高い馬に寄る</td><td class="n">× s* 0.86 で 1.18・1.26・1.32</td><td class="n">1.27</td><td class="n">143・62・23</td><td><span class="b bad">閉じる</span></td></tr>
+<tr><td>PL2-c R-A を軸、相手は pure の 1 位（馬連・ワイド）</td><td>軸の倍率が組に残る</td><td class="n">馬連 1.237・ワイド 1.217</td><td class="n">1.29</td><td class="n">331</td><td><span class="b bad">閉じる</span></td></tr>
+</tbody></table></div>
+<ul>
+<li>形の確かめ（尤度だけ）: 血統の点の 5 分位で単調（A/E 0.86 → 1.23）・後半の年にも残る・ダート 2 戦目で消える、は当たった。ダート寄りの血統ほど効く・芝で凡走した馬ほど効く、は外れた。上乗せは「ダート適性の遺伝の見落とし」より「初めての条件で手がかりが無いときの血統の全体の質」に近い（結果を見た後の読み）。</li>
+<li>開発の行で最初に見た回収率（第 3 版・16 通り）: 初ダートの上位 20% は複勝 90.6%、レースの 1 位は単勝 125% [92, 164]・複勝 97% [83, 114]。選び直しの楽観を含み、100% 超の根拠にしていない。</li>
+<li>2025・26 年では、初ダートの上乗せ自体が +0.08 [−0.37, +0.50] に下がった（M4）。</li>
+</ul>
+
+<h2>課題と次</h2>
+<ul>
+<li><b>覚え込み</b>: 開催の無作為の分けでは、木が同じ馬の別の開催の走りから能力を覚える（複勝のモデルで 0.028 → 0.013）。買い方の判定は 2 代母の単位で行った。</li>
+<li><b>世代・時代の情報</b>: 帰無でも 0.009 が残る。件数の列（*_n）を外した帰無で確かめていない。</li>
+<li><b>市場の取りこぼしは小さい</b>: 血統の大半は確定オッズに織り込まれている。初ダートの上乗せ（開発の行で単勝の市場比約 1.2）は、ルールの会議の R0-16（めぐ AI で説明した後に何が残るか・前向きの記録だけ）へ申し送った。2025・26 年では再現しなかった。</li>
+<li><b>第 5 版 E（祖先の子孫の適性）</b>は全体の情報を足す（+0.004 nats・全体の α 0.070 → 0.094）。親モデルの列の候補にはなりうる（本番への反映はこの研究の外）。</li>
+<li>見た回数: 開発の回収率 16 回（第 3 版）・保留の回収率 0 回・2025・26 年 1 回（モデルの評価。以後、血統の特徴量を使う買い方の研究は 2025・26 年を評価に使わない）。</li>
+<li>再現: <code>src/research/pedigree_lab/</code>（build_base → run_features --gen 4 → kfold → benter・gates・pl2・v5・final_eval）。中間の出力は <code>/home/jovyan/work/pedigree_lab_out/</code>（git の外）。凍結の sha は <code>freeze_v4_gate.sha256</code>。</li>
+</ul>
+</main></body></html>
