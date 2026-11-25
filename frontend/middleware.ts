@@ -1,4 +1,5 @@
 import { NextFetchEvent, NextRequest, NextResponse } from "next/server";
+import { publicRedirectUrl } from "@/lib/publicRedirect";
 import { createMaintenanceGate, type MaintenanceStatus } from "@/lib/maintenanceGate";
 import { pathEnabled } from "@/lib/features";
 import { MAINTENANCE_PATH, STATUS_URL } from "@/lib/maintenance";
@@ -116,10 +117,7 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
 
   // 無効化中の機能（lib/features.ts）への直リンクはホームへ戻す
   if (!pathEnabled(pathname)) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    url.search = "";
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(publicRedirectUrl(request.headers, request.nextUrl.origin, "/"));
   }
 
   if (!isDevOnly(pathname)) return NextResponse.next();
@@ -129,11 +127,7 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
   // Edge ではクッキーの有無だけを見る。署名検証と実データの認可は API 側（auth.py）が行う。
   if (request.cookies.get(DEV_COOKIE)) return NextResponse.next();
 
-  const url = request.nextUrl.clone();
-  url.pathname = "/login";
-  url.search = "";
-  url.searchParams.set("next", pathname);
-  return NextResponse.redirect(url);
+  return NextResponse.redirect(publicRedirectUrl(request.headers, request.nextUrl.origin, `/login?${new URLSearchParams({ next: pathname })}`));
 }
 
 export const config = {
