@@ -82,7 +82,7 @@ export default function BettingPage() {
     }
     const money = Number(bankroll);
     if (bankroll.trim() === "" || !Number.isFinite(money) || money <= 0) {
-      setError("軍資金は 1 円以上の数値で入力してください");
+      setError("予算は 1 円以上の数値で入力してください");
       return;
     }
     setLoading(true);
@@ -174,7 +174,7 @@ export default function BettingPage() {
             />
           </div>
           <div className="space-y-1">
-            <label htmlFor="bet-bankroll" className="text-xs" style={{ color: "var(--text-dim)" }}>軍資金（円）</label>
+            <label htmlFor="bet-bankroll" className="text-xs" style={{ color: "var(--text-dim)" }}>予算（円）</label>
             <input
               id="bet-bankroll"
               type="number"
@@ -196,7 +196,7 @@ export default function BettingPage() {
           <>
             <dl className="grid grid-cols-2 gap-3 md:grid-cols-4">
               {[
-                { label: "軍資金", value: `¥${result.bankroll.toLocaleString()}` },
+                { label: "予算", value: `¥${result.bankroll.toLocaleString()}` },
                 { label: "合計賭け金", value: `¥${result.total_bet.toLocaleString()}` },
                 { label: "期待収益", value: `+¥${result.expected_profit.toLocaleString()}`, color: "var(--ok)" },
                 { label: "Kelly 比率", value: `${(result.kelly_fraction * 100).toFixed(1)}%`, color: "var(--accent)" },

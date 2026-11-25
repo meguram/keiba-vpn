@@ -1,6 +1,6 @@
 # サービス・エンドポイント一覧
 
-> **最終更新**: 2026-10-13  
+> **最終更新**: 2026-11-25  
 > **用途**: ローカル開発・stg/prod 運用時に「何をどの URL / ポートで起動するか」を一覧する。  
 > **関連**: [PROJECT_LAYOUT.md](PROJECT_LAYOUT.md) · [environment-stg.md](../environment-stg.md) · [DEC-013 Flask 正](../decisions/DEC-013-api-framework-flask-primary.md) · `scripts/server/` · `.env.example`
 
@@ -14,6 +14,12 @@
 | stg | 23200 | 23210 | 23220 | 23230 |
 | prod | 23300 | 23310 | 23320 | 23330 |
 | 共通 | 監視ポータル 23900 | | | |
+
+**会議の記録のビューア（共通 23950、`KEIBA_PORT_COUNCIL`）**: 「絶対回収率プラスにするマン」の `docs/operations/roi_plus_council/` の Markdown と関係の HTML を、要求のたびに読み直して返す読み取り専用のサーバ（`src/scripts/docs/council_viewer.py`）。
+認証が無いので **127.0.0.1 だけで待ち受ける**（Cursor の Remote-SSH の「ポート」で 23950 を転送、または `ssh -L`）。
+`/live` は担当 rules-council のセッションの記録（`~/.claude-jovyan/projects/…rules-council/*.jsonl` とサブエージェントの記録）の差分を 2.5 秒おきに読み、Server-Sent Events（`/live/stream`）で流す（ツールの出力は出さない・秘密を含みうる行は伏せる。`src/scripts/docs/council_live.py`）。
+起動 `bash scripts/server/start_council_viewer.sh --bg`、停止 `--stop`、落ちていれば起動 `scripts/server/ensure_council_viewer.sh`（cron の `@reboot sleep 30`・`*/5`。登録は手で行う。行はスクリプトの先頭のコメント）。
+番号は 8090 ではなく 23950（8000 番台は他と衝突しやすいので避け、共通は 239xx という `config/ports.env` の方針）。`KEIBA_PORT_COUNCIL=8090` で替えられる。
 
 PostgreSQL（5432）/ Redis（6379）、`docker-compose.serving.yml`・`mlflow/server/`（VPS デプロイ用）、MLflow Model Serve（5001〜5010）は従来のポートのまま。以降の本文中の旧番号（3000/3001/5000/5100/8000/9090）は dev=231xx / stg=232xx / prod=233xx に読み替える（VPS・model serve の節を除く）。
 

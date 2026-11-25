@@ -1,24 +1,34 @@
 # 公開（匿名）と会員の出し分け
 
-方針（2026-10-21 ユーザー決定）: **勝率・複勝率までは誰でも見られる。想定単勝（想定オッズ）・期待値・めぐAI印（旧「推奨」）・推奨馬券・その他の付随情報は会員のみ。**
-UI の隠しではなく、**サーバが匿名の応答から項目を落とす**（許可リスト方式）。コード: `src/api/tier.py`、テスト: `tests/api/test_tiered_access.py`。
+方針（2026-11-25 ユーザーの確定。2026-10-21・11-19 の決まりを置き換える）:
+- 匿名・無料会員（`is_member()` が偽）には、**レースと出走馬の公式の事実と、印（◎○▲△★消）だけ**を出す。
+- **netkeiba 独自の情報・確定前のオッズ・予測の数値（勝率・複勝率・順位）は有料会員から**。
+- 確定後の結果の表の確定オッズ・人気・払戻は、JRA が公表する確定の事実なので誰にでも出す。
 
-## 匿名で見える / 見えない
+UI の隠しではなく、**サーバが応答から項目を落とす**（許可リスト方式）。コード: `src/api/tier.py`。テスト: `tests/api/test_tiered_access.py`・`tests/api/test_check_anon_scope.py`。
+本番では `config/public_fields.json` の `mode=private`（`KEIBA_PUBLIC_MODE` が空）。下の表は private の経路の出し方。
 
-| 区分 | 匿名 | 会員・開発者 |
+## 匿名・無料会員で見える / 見えない
+
+| 区分 | 匿名・無料 | 有料会員・開発者 |
 |---|---|---|
-| 出馬表の事実（馬番・馬名・枠・性齢・騎手・斤量・調教師・馬体重）、レース結果、馬の過去走 | 見える | 見える |
-| 勝率（`win_prob`）・複勝率（`top3_prob` / `show_prob`） | 見える（並びは勝率順に振り直し） | 見える |
-| 連対率（`top2_prob` / `place_prob`） | 見えない | 見える |
-| 想定単勝・想定複勝・人気・確定前オッズ（`race_odds` / `race_pair_odds` / 出馬表の `odds`・`popularity`） | 見えない | 見える |
-| 期待値（`ev_*`・`expected_value`・`buy_tier`） | 見えない | 見える |
-| めぐAI印（`mark_type`・`recommendation`・`megu_mark`・`kesi_reason`）・`bet_suggestion` | 見えない | 見える |
-| 推奨馬券（`POST /api/v1/betting/optimize`）・レース価値（`/betting/race-values`） | 401 | 見える |
-| 展開予想・ラップ・追走難度・レース質・想定めぐ指数・成長度・クラス基準・市場補正の注記 | 見えない | 見える |
-| 指数・パドック・バロメーター・厩舎コメント・SmartRC（`/api/race/{id}` の付随カテゴリ） | 見えない | 見える |
+| レースの見出し・出馬表の事実（馬番・馬名・枠・性齢・騎手・斤量・調教師・馬体重） | 見える | 見える |
+| 結果の事実（着順・タイム・着差・上がり・通過・ラップ） | 見える | 見える |
+| 確定の結果の単勝オッズ・人気・払戻（`race_result` の元が確定の結果のときだけ。判定は `tier.race_result_confirmed`、応答の `access.result_confirmed`） | 見える | 見える |
+| 確定前のオッズ・人気（出馬表の `odds`・`popularity`、速報 `race_result_on_time`、`race_odds`・`race_pair_odds`、速報だけの段の結果のオッズ・払戻） | 見えない | 見える |
+| 印（`mark_type`・記号の `mark`）。`public_mark_type` があればそれ。無いときの扱いは `public_fields.json` の `public_marks.fallback_to_mark_type` | 見える（馬番順） | 見える |
+| 勝率・複勝率・順位・連対率・想定オッズ・期待値・買い判断・印の説明・展開・めぐ指数 | 見えない | 見える |
+| 馬柱・近走（`horses` の `race_history`）・タイム指数・各指数・備考・厩舎コメント・追い切り・パドック・バロメーター・SmartRC | 見えない | 見える |
+| 出走馬カード（`/api/race/{id}/entry/{horse}/card`） | 近走の公式の事実・同条件の成績・騎手・調教師の成績。追い切り・厩舎コメント・成長曲線（めぐ指数）・近走の人気は落とす（`access.locked`） | 全部 |
+| 予測成績（`/api/prediction-results/*`） | 印と着順の突き合わせ。勝率・オッズ・人気・仮想購入は落とす | 仮想購入まで |
+| Flask `/api/v1/races/{id}/results` | 確定の結果はそのまま。速報のときはオッズ・人気・払戻を落とす | そのまま |
 
-会員限定のパス（匿名は 401 `reason: member_required`）: `tracking-difficulty`・`/api/race/{id}/bundle`・`bloodline-aptitude`・`/api/race-quality/*`・`/api/v1/betting/*`・`/api/v1/races/{id}/(final-odds|megu-index*|predictions/laps)`・`/api/v1/horse/{id}/(megu-index-history|growth-curve)`・`/api/predictions`・`pedigree-race-stats` / `data-analysis` 系。一覧は `tier.py` の `_MEMBER_ONLY_PATTERNS`。
-項目を足す・外すときは `tier.py`（`PUBLIC_ENTRY_FIELDS` / `PUBLIC_TOP_FIELDS` / `LOCKED_GROUPS` / `RACE_DETAIL_MEMBER_KEYS`）とテストを直す。**予測応答に新しい項目を足しても、許可リストに入れない限り匿名には出ない。**
+- 画面は、落とした欄を空欄にせず「🔒 会員限定」と出す（`EntryCardPanel`・レース詳細・週の予想・予測成績）。
+- 出し分けを変えて配備したら、nginx の API のキャッシュを purge する（`scripts/ops/vps/purge_api_cache.sh`。確定済みのレースの匿名の応答は s-maxage 30 日で置かれるので、purge しないと前の版が出続ける）。edge のフォルダは、指紋に配備の commit が入るので自動で作り直される。Cloudflare は API を置かない（`cf-cache-status: DYNAMIC`。2026-11-25 に確認）。
+- 漏れの検査: `python -m src.scripts.ops.check_anon_scope --base <URL> --date <YYYYMMDD>`。匿名で取得して、出してはいけない欄（`tier.SCOPE_FORBIDDEN_KEYS`）が 1 つも無いことを確かめる。無料会員で確かめるときは `KEIBA_SCOPE_COOKIE` を付ける。周期では流さない（1 回で約 40 件の要求）。
+
+会員限定のパス（匿名・無料会員は 401 `reason: member_required`）: `/api/data/*`（生の JSON）・`/api/horse/*`（馬のページ）・`/api/betting/pair-odds/*`・`/api/odds/*`（2026-11-25 に追加）・`tracking-difficulty`・`/api/race/{id}/bundle`・`bloodline-aptitude`・`/api/race-quality/*`・`/api/v1/betting/*`・`/api/v1/races/{id}/(final-odds|megu-index*|predictions/laps)`・`/api/v1/horse/{id}/(megu-index-history|growth-curve)`・`/api/predictions`・`pedigree-race-stats` / `data-analysis` 系。一覧は `tier.py` の `_MEMBER_ONLY_PATTERNS`。
+項目を足す・外すときは `tier.py`（`PUBLIC_ENTRY_FIELDS`・`RACE_HEADER_KEYS`・`SHUTUBA_PUBLIC_ENTRY_KEYS`・`RESULT_PUBLIC_ENTRY_KEYS`・`CARD_RECENT_KEYS`・`SCOPE_FORBIDDEN_KEYS`）とテストを直す。**応答に新しい項目を足しても、許可リストに入れない限り匿名・無料には出ない。**
 
 ## ロール
 
@@ -36,7 +46,7 @@ UI の隠しではなく、**サーバが匿名の応答から項目を落とす
 
 ## 公開に向けた残り
 
-- Cloudflare Access（現状は所有者のみ）の緩和は未実施。緩和するときは anti_scraping を enforce にし、`KEIBA_TEST_USER` を `off` にする（`docs/operations/go_live.md`）。
+- 本番（app.megu-keiba.com）は Cloudflare Access の外で、匿名にも開いている。公開の範囲は上の表の private の経路で決まる。
 - 会員は `manage_users`・管理 API・決済で作る（`user_management.md`）。`config/members.json` には足さない。
 
 ## 実オッズは開発者以外に出さない（`actual_odds_public`）

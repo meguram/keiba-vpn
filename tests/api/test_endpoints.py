@@ -272,13 +272,23 @@ class TestHorseIdBadFormats(unittest.TestCase):
 class TestRawDataEndpoint(unittest.TestCase):
     """data/{category}/{key} — 404 と不正入力ハンドリング。"""
 
+    def _member(self):
+        from src.api import auth
+
+        return {auth.COOKIE_NAME: auth._make_token(role="member")}
+
+    def test_anonymous_is_member_required(self):
+        """生の JSON は会員限定（追い切り・厩舎コメント・オッズを含む。src/api/tier.py の _MEMBER_ONLY_PATTERNS）。"""
+        r = client.get(f"/api/data/race_oikiri/{FAKE_RACE_ID}")
+        self.assertEqual(r.status_code, 401)
+
     def test_unknown_category_returns_404(self):
-        r = client.get("/api/data/nonexistent_cat/somekey")
+        r = client.get("/api/data/nonexistent_cat/somekey", cookies=self._member())
         self.assertEqual(r.status_code, 404)
         self.assertIn("error", r.json())
 
     def test_valid_category_missing_key_returns_404(self):
-        r = client.get(f"/api/data/race_shutuba/{FAKE_RACE_ID}")
+        r = client.get(f"/api/data/race_shutuba/{FAKE_RACE_ID}", cookies=self._member())
         self.assertEqual(r.status_code, 404)
 
     def test_xss_category_no_html_echo(self):

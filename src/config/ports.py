@@ -48,6 +48,11 @@ def monitor_port() -> int:
     return _resolve("KEIBA_PORT_MONITOR")
 
 
+def council_port() -> int:
+    """会議の記録のビューア（``src/scripts/docs/council_viewer.py``）。"""
+    return _resolve("KEIBA_PORT_COUNCIL")
+
+
 def postgres_port() -> int:
     return _resolve("KEIBA_PORT_POSTGRES")
 

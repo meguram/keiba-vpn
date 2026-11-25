@@ -52,7 +52,7 @@ def _keys(out):
 def test_private_mode_is_unchanged():
     assert P.is_public_mode() is False
     assert tier.redact_predictions_member(TOP) is TOP and tier.redact_race_detail_member(DETAIL) is DETAIL
-    assert "win_prob" in _keys(tier.redact_predictions(TOP))
+    assert "win_prob" not in _keys(tier.redact_predictions(TOP)) and "mark_type" in _keys(tier.redact_predictions(TOP))
 
 
 def test_public_mode_default_only_class_a(monkeypatch, tmp_path):
@@ -64,8 +64,11 @@ def test_public_mode_default_only_class_a(monkeypatch, tmp_path):
         banned = set(p["entry_O"]) | set(p["entry_B"]) | set(p["entry_C"]) | set(p["top_O"]) | set(p["top_identifiers"])
         assert not (banned & keys), (role, banned & keys)
         assert out["access"]["public_mode"] is True and "B" in out["access"]["withheld"] and "O" in out["access"]["withheld"]
-        assert {"win_prob", "top3_prob", "show_prob"} <= keys
-    assert "mark_type" in _keys(tier.redact_predictions_member(TOP)) and "mark_type" not in _keys(tier.redact_predictions(TOP))
+        if role == "member":
+            assert {"win_prob", "top3_prob", "show_prob"} <= keys
+        else:                                                      # 匿名・無料会員: 予測の数値は出さず、印だけ（2026-11-25）
+            assert not ({"win_prob", "top3_prob", "show_prob", "pred_rank"} & keys) and {"mark_type", "mark"} <= keys
+    assert "mark_type" in _keys(tier.redact_predictions_member(TOP))
 
 
 def test_odds_cannot_be_recovered_from_public_fields(monkeypatch, tmp_path):

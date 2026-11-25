@@ -151,7 +151,7 @@ def resolve_odds(storage, race_id: str, mode: str = "auto", phase: str = LATEST)
             phase="predicted",
             allowed_bet_types=set(SINGLE_ONLY_BET_TYPES),
         )
-        notes.append("予測オッズ基準の暫定推奨（単勝・複勝のみ）")
+        notes.append("予測オッズ基準の暫定のサンプル買い目（単勝・複勝のみ）")
     else:
         notes.append("予測オッズも未計算")
     result["note"] = "。".join(notes)

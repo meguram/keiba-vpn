@@ -4,7 +4,7 @@ import { GRADE_STYLE, gradeOf, isGraded, shortName, startTimeOf } from "@/lib/ra
 
 type ChipRace = { race_name?: string | null; start_time?: string | null; grade?: string | null; list_grade_icon?: string | null };
 
-/** 重賞のチップの上辺の色の帯（box-shadow の内側に描くので、枠の色＝推奨度の色・大きさは変えない）。重賞でなければ undefined */
+/** 重賞のチップの上辺の色の帯（box-shadow の内側に描くので、枠の色＝参考度の色・大きさは変えない）。重賞でなければ undefined */
 export function chipAccent(r: ChipRace): string | undefined {
   const g = gradeOf(r);
   return g && isGraded(g) ? `inset 0 3px 0 ${GRADE_STYLE[g].border}` : undefined;

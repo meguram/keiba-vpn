@@ -171,7 +171,7 @@ def article(a: dict[str, Any], keep: dict[str, Any] | None) -> dict[str, Any]:
     return {
         "slug": "jockey-roi",
         "title": "勝率の高い騎手ほど回収率は高い——それでも100%には届かず、「穴騎手」も続かない",
-        "claim": "勝率の高い騎手が最も儲かる",
+        "claim": "勝率の高い騎手を買えば回収率が 100% を超える",
         "verdict": "partial",
         "summary": (f"勝率上位 20% の騎手の単勝回収率は {pct(wq[-1])}（下位 20% は {pct(wq[0])}）と高めですが、100% には届きません。回収率の高い「穴騎手」も続かず、"
                     f"前半の上位 10 人は後半 {pct(pj['top10B'], 0)} に下がります（前後半の相関 {pj['corr']:.2f}）。高い回収率の多くは高配当の偶然です。"),

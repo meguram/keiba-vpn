@@ -54,6 +54,16 @@ function Empty({ text = "データなし", note, compact }: { text?: string; not
   );
 }
 
+/** 会員限定の欄（匿名・無料会員にはサーバが中身を落としている）。空欄やエラーにせず、短い 1 行で示す */
+function MemberLock({ what }: { what?: string }) {
+  return (
+    <div className="ec-empty c">
+      <b>🔒 会員限定</b>
+      {what && <small>{what}は有料会員の方だけに表示しています</small>}
+    </div>
+  );
+}
+
 function TagChip({ tag }: { tag: Tag }) {
   const t = TONE[tag.tone];
   return <span className="ec-tag" style={{ color: t.fg, background: t.bg, borderColor: t.bd }}>{tag.text}</span>;
@@ -346,8 +356,9 @@ function TrainingBlock({ h }: { h: HorseCard }) {
   );
 }
 
-function HorseView({ h, mode, cur, jockeyName, expected, expectedMeta }: { h: HorseCard; mode: ViewportMode; cur?: Cur; jockeyName?: string | null; expected?: ExpectedMegu | null; expectedMeta?: ExpectedMeguMeta | null }) {
+function HorseView({ h, mode, cur, jockeyName, expected, expectedMeta, locked }: { h: HorseCard; mode: ViewportMode; cur?: Cur; jockeyName?: string | null; expected?: ExpectedMegu | null; expectedMeta?: ExpectedMeguMeta | null; locked: Set<string> }) {
   const mobile = mode === "mobile";
+  const lockTrain = locked.has("training"), lockComment = locked.has("trainer_comment"), lockGrowth = locked.has("growth");
   const sc = h.same_conditions.filter((s) => (s.starts ?? 0) > 0);
   const pick = sc.length ? [...sc].sort((a, b) => (b.starts ?? 0) - (a.starts ?? 0))[0] : null;
   const ch = h.changes;
@@ -374,14 +385,14 @@ function HorseView({ h, mode, cur, jockeyName, expected, expectedMeta }: { h: Ho
           big={ch.jockey_changed == null ? "不明" : ch.jockey_changed ? "▽乗り替わり" : "△継続騎乗"}
           sub={ch.jockey_changed ? <>前走 <b>{ch.previous_jockey ?? "-"}</b> → 今回 <b>{jockeyName ?? "-"}</b></> : ch.jockey_changed === false ? <><b>{jockeyName ?? ""}</b> が続けて騎乗</> : "前走の騎手が不明"}
         />
-        <Tile
+        {lockTrain ? <Tile label="最終追い切り" tone="muted" big="🔒" word sub="会員限定" /> : <Tile
           label="最終追い切り" tone={g.tone} tag={h.training ? { text: g.word, tone: g.tone } : undefined}
           big={h.training ? <span className="ec-grade big" style={{ background: g.bg, color: g.fg, borderColor: g.letter === "-" ? "var(--border)" : g.bg }}>{g.letter}</span> : "—"} word={!h.training}
           sub={h.training ? [h.training.training_date, h.training.course].filter(Boolean).join(" ・ ") || "日付・コースの記載なし" : "追い切りデータなし"}
-        />
+        />}
       </div>
 
-      <Section title={`近${h.recent.length || 5}走`} hint={h.recent.length ? "着順・人気・上がり" : undefined}>
+      <Section title={`近${h.recent.length || 5}走`} hint={h.recent.length ? (locked.size ? "着順・上がり（人気は会員限定）" : "着順・人気・上がり") : undefined}>
         {h.recent.length === 0 ? <Empty text="近走データなし" note="初出走、またはまだ取り込まれていません" /> : (
           <>
             <Trend runs={h.recent} />
@@ -397,7 +408,7 @@ function HorseView({ h, mode, cur, jockeyName, expected, expectedMeta }: { h: Ho
       )}
 
       <Section title="成長曲線" hint={h.growth && h.growth.status === "ok" ? `${h.growth.axis.name}の推移` : undefined}>
-        <GrowthCurve g={h.growth} />
+        {lockGrowth ? <MemberLock what="めぐ指数の成長曲線" /> : <GrowthCurve g={h.growth} />}
       </Section>
 
       <Section title="今回と同じ条件での成績" hint="この馬の過去走">
@@ -409,14 +420,14 @@ function HorseView({ h, mode, cur, jockeyName, expected, expectedMeta }: { h: Ho
         )}
       </Section>
 
-      {h.trainer_comment && (
+      {lockComment ? <Section title="厩舎コメント"><MemberLock what="厩舎コメント" /></Section> : h.trainer_comment && (
         <Section title="厩舎コメント">
           <Quote text={h.trainer_comment.comment} who={trainerName} note={h.trainer_comment.evaluation} />
         </Section>
       )}
 
       <Section title="最終追い切り" collapsible={mobile} defaultOpen={!mobile}>
-        <TrainingBlock h={h} />
+        {lockTrain ? <MemberLock what="追い切りの評価・短評・ラップ" /> : <TrainingBlock h={h} />}
       </Section>
 
       <Section title="血統・プロフィール" collapsible={mobile} defaultOpen={!mobile}>
@@ -507,7 +518,8 @@ function WhoBlock({ e, kind, name, horse }: { e: EntityCard; kind: "jockey" | "t
   );
 }
 
-function EntityView({ e, kind, mode, name, horse }: { e: EntityCard; kind: "jockey" | "trainer"; mode: ViewportMode; name: string; horse: { no?: number; name: string; bracket?: number | null; weight?: number | null } }) {
+function EntityView({ e, kind, mode, name, horse, locked }: { e: EntityCard; kind: "jockey" | "trainer"; mode: ViewportMode; name: string; horse: { no?: number; name: string; bracket?: number | null; weight?: number | null }; locked: Set<string> }) {
+  const commentLock = kind === "trainer" && locked.has("trainer_comment") ? <Section title="この馬の厩舎コメント"><MemberLock what="厩舎コメント" /></Section> : null;
   const mobile = mode === "mobile";
   const jk = kind === "jockey";
   const who = jk ? "騎手" : "調教師";
@@ -517,7 +529,7 @@ function EntityView({ e, kind, mode, name, horse }: { e: EntityCard; kind: "jock
         <WhoBlock e={e} kind={kind} name={name} horse={horse} />
         <Empty text={`この${who}の集計がありません`} note="集計が取り込まれるまで表示できません" />
         {e.profile && <Section title="プロフィール"><Profile e={e} /></Section>}
-        {e.comment && <Section title="この馬の厩舎コメント"><Quote text={e.comment.comment} who={e.name} note={e.comment.evaluation} /></Section>}
+        {commentLock ?? (e.comment && <Section title="この馬の厩舎コメント"><Quote text={e.comment.comment} who={e.name} note={e.comment.evaluation} /></Section>)}
       </>
     );
   }
@@ -592,7 +604,7 @@ function EntityView({ e, kind, mode, name, horse }: { e: EntityCard; kind: "jock
         </Section>
       )}
 
-      {!jk && e.comment && <Section title="この馬の厩舎コメント"><Quote text={e.comment.comment} who={e.name} note={e.comment.evaluation} /></Section>}
+      {commentLock ?? (!jk && e.comment && <Section title="この馬の厩舎コメント"><Quote text={e.comment.comment} who={e.name} note={e.comment.evaluation} /></Section>)}
 
       {e.profile && <Section title="プロフィール" collapsible={mobile} defaultOpen={!mobile}><Profile e={e} /></Section>}
 
@@ -910,8 +922,9 @@ export function EntryCardPanel({ raceId, horses, horseId, tab, onTab, onHorse, o
         <div><button type="button" className="ec-btn" style={{ marginTop: 8, padding: "0 14px" }} onClick={() => load()}>再読み込み</button></div>
       </div>
     );
-    if (tab === "horse") return <HorseView h={card.horse} mode={mode} cur={curRace} jockeyName={jockeyName} expected={cur?.expected_megu} expectedMeta={cur?.expected_meta} />;
-    return <EntityView e={tab === "jockey" ? card.jockey : card.trainer} kind={tab} mode={mode} name={tab === "jockey" ? jockeyFull : trainerFull} horse={{ no, name: horseName, bracket, weight: jw }} />;
+    const locked = new Set(card.access?.locked ?? []);
+    if (tab === "horse") return <HorseView h={card.horse} mode={mode} cur={curRace} jockeyName={jockeyName} expected={cur?.expected_megu} expectedMeta={cur?.expected_meta} locked={locked} />;
+    return <EntityView e={tab === "jockey" ? card.jockey : card.trainer} kind={tab} mode={mode} name={tab === "jockey" ? jockeyFull : trainerFull} horse={{ no, name: horseName, bracket, weight: jw }} locked={locked} />;
   }, [loading, error, card, tab, mode, load, curRace?.surface, curRace?.distance, cur?.expected_megu, jockeyName, jockeyFull, trainerFull, no, horseName, bracket, jw]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   if (typeof document === "undefined") return null;

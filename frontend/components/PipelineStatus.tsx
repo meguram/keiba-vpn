@@ -13,7 +13,7 @@ export type PipelineStatusData = {
   race_over?: boolean;
 };
 
-/** 開催日の予測パイプライン（出馬表→馬体重→AI予測→オッズ→推奨買い目）の進み具合。全工程が済むと『完了』を出す。 */
+/** 開催日の予測パイプライン（出馬表→馬体重→AI予測→オッズ→サンプル買い目）の進み具合。全工程が済むと『完了』を出す。 */
 export function PipelineStatus({ status, compact = false }: { status?: PipelineStatusData | null; compact?: boolean }) {
   if (!status?.stages?.length) return null;
   const nextStage = status.stages.find((s) => s.key === status.next);
@@ -25,7 +25,7 @@ export function PipelineStatus({ status, compact = false }: { status?: PipelineS
     <section role="status" aria-label="予測パイプラインの進み具合" style={{ margin: "0 0 10px", padding: compact ? "8px 10px" : "12px 16px", borderRadius: 10, border: `1px solid ${tone.border}`, background: tone.bg }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: compact ? 6 : 8 }}>
         <strong style={{ fontSize: compact ? 12 : 13, color: tone.color }}>
-          {status.complete ? "✔ 予測から推奨買い目まで完了" : `処理中 ${status.done}/${status.total}`}
+          {status.complete ? "✔ 予測からサンプル買い目まで完了" : `処理中 ${status.done}/${status.total}`}
         </strong>
         {status.complete && doneAt && <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{doneAt} に予測を作成</span>}
         {!status.complete && nextStage && (

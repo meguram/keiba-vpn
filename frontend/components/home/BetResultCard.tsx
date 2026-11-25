@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { PendingLink } from "@/components/PendingLink";
+import { BET_NOTE } from "@/components/SiteFooter";
 import { getJson } from "@/lib/httpCache";
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 
 type AllPart = { races: number; hit_races: number; hit_rate: number | null; invested: number; returned: number; roi: number | null };
-/** races〜roi は確定オッズ ≥ 想定の買い目だけ。all は推奨した買い目をすべて買った場合（主に出す。古い応答には無い） */
+/** races〜roi は確定オッズ ≥ 想定の買い目だけ。all はサンプル買い目をすべて買った場合（主に出す。古い応答には無い） */
 type LevelRow = { level: number; label: string; races: number; no_buy_races?: number; hit_races: number; hit_rate: number | null; invested: number; returned: number; roi: number | null; all?: AllPart };
 type LevelPeriod = {
   key: string; label: string; from: string; to: string; data_from: string | null; data_to: string | null; days: number;
@@ -46,15 +47,15 @@ const CSS = `
 @media (max-width:767px){.mrc{padding:0 12px}}
 `;
 
-/** 推奨馬券の回収率（推奨度別）。見送りは除く。同じ期間タブに連動。会員のみ（API が会員限定）。 */
+/** サンプル買い目の回収率（参考度別）。見送りは除く。同じ期間タブに連動。会員のみ（API が会員限定）。 */
 function LevelSection({ p, note }: { p: LevelPeriod; note?: string }) {
   const main = (x: { races: number; hit_races: number; hit_rate: number | null; invested: number; returned: number; roi: number | null; all?: AllPart }) => x.all ?? x;
   const bought = main(p.total).races;
   return (
-    <div className="mrc-bets" aria-label="推奨馬券の回収率（推奨度別）">
-      <h3>推奨度別の回収率</h3>
+    <div className="mrc-bets" aria-label="サンプル買い目の回収率（参考度別）">
+      <h3>参考度別の回収率</h3>
       {bought === 0 ? (
-        <div className="mrc-lv-sub" style={{ padding: "4px 0 6px" }}>この期間に、見送り以外で集計できる推奨馬券がありません{p.skipped_races ? `（見送り ${p.skipped_races}R）` : ""}</div>
+        <div className="mrc-lv-sub" style={{ padding: "4px 0 6px" }}>この期間に、見送り以外で集計できるサンプル買い目がありません{p.skipped_races ? `（見送り ${p.skipped_races}R）` : ""}</div>
       ) : (
         <div role="list">
           {p.levels.map((l) => {
@@ -81,14 +82,14 @@ function LevelSection({ p, note }: { p: LevelPeriod; note?: string }) {
       )}
       <div className="mrc-bets-note">
         見送り{p.skipped_races}Rは除く{p.total.all
-          ? ((p.total.races + (p.no_buy_races ?? 0) - p.total.all.races) > 0 ? `・推奨度は付いたが買い目の無かった${p.total.races + (p.no_buy_races ?? 0) - p.total.all.races}Rも除く` : "")
-          : ((p.no_buy_races ?? 0) > 0 ? `・実際のオッズが想定オッズに届かず購入しなかった${p.no_buy_races}Rも除く` : "")}{p.unrated_races > 0 ? `・推奨度の記録が無い${p.unrated_races}Rも除く` : ""}。{note ?? ""}
+          ? ((p.total.races + (p.no_buy_races ?? 0) - p.total.all.races) > 0 ? `・参考度は付いたが買い目の無かった${p.total.races + (p.no_buy_races ?? 0) - p.total.all.races}Rも除く` : "")
+          : ((p.no_buy_races ?? 0) > 0 ? `・実際のオッズが想定オッズに届かず購入しなかった${p.no_buy_races}Rも除く` : "")}{p.unrated_races > 0 ? `・参考度の記録が無い${p.unrated_races}Rも除く` : ""}。{note ?? ""}
       </div>
     </div>
   );
 }
 
-/** ホームの『推奨馬券の成績』: 先週・直近5週間・年の切り替えで、推奨度（見送りを除く）別の購入レース数・的中・回収率を見せる。会員のみ（API が会員限定）。集計が無ければ何も出さない。 */
+/** ホームの『サンプル買い目の成績』: 先週・直近5週間・年の切り替えで、参考度（見送りを除く）別の購入レース数・的中・回収率を見せる。会員のみ（API が会員限定）。集計が無ければ何も出さない。 */
 export function BetResultCard() {
   const { isMember } = useAuthStatus();
   const [lv, setLv] = useState<LevelCard | null>(null);
@@ -106,15 +107,15 @@ export function BetResultCard() {
   if (!lv || !lv.periods.some((p) => p.days > 0)) return null;
   const cur = lv.periods.find((p) => p.key === sel && p.days > 0) ?? lv.periods.find((p) => p.days > 0) ?? lv.periods[0];
 
-  const allRaces = cur.total.races + (cur.no_buy_races ?? 0) + cur.skipped_races + cur.unrated_races;   // 集計できた全レース（購入＋推奨は出たが実オッズが想定未満で購入せず＋見送り＋推奨度の記録なし）
-  const joined = cur.total.races + (cur.no_buy_races ?? 0);                                                 // 参戦: 推奨度が標準以上のレース（予測成績の画面の counts.rated と同じ数え方）
+  const allRaces = cur.total.races + (cur.no_buy_races ?? 0) + cur.skipped_races + cur.unrated_races;   // 集計できた全レース（購入＋推奨は出たが実オッズが想定未満で購入せず＋見送り＋参考度の記録なし）
+  const joined = cur.total.races + (cur.no_buy_races ?? 0);                                                 // 対象: 参考度が標準以上のレース（予測成績の画面の counts.rated と同じ数え方）
 
   return (
-    <section aria-label="推奨馬券の成績" className="mrc">
+    <section aria-label="サンプル買い目の成績" className="mrc">
       <style>{CSS}</style>
       <div className="mrc-panel">
         <div className="mrc-head">
-          <h2>推奨馬券の成績</h2>
+          <h2>サンプル買い目の成績</h2>
           <PendingLink href="/prediction-results" className="mrc-link">成績をすべて見る →</PendingLink>
         </div>
         <div className="mrc-tabs" role="group" aria-label="期間">
@@ -127,11 +128,12 @@ export function BetResultCard() {
         <div className="mrc-meta">
           <b>{cur.data_from && cur.data_to ? `${md(cur.data_from)}〜${md(cur.data_to)}` : `${md(cur.from)}〜${md(cur.to)}`}</b>・開催 {cur.days}日
           {allRaces > 0 && (
-            <> ・全 {allRaces}R のうち <b>{joined}R に参戦</b>
+            <> ・全 {allRaces}R のうち <b>{joined}R が対象</b>
               {joined > 0 ? `（約 ${(allRaces / joined).toFixed(1)} レースに1回・${pct(joined / allRaces)}）` : "（見送りのみ）"}</>
           )}
         </div>
         <LevelSection p={cur} note={lv.note} />
+        <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--text-dim)" }}>{BET_NOTE}</p>
       </div>
     </section>
   );

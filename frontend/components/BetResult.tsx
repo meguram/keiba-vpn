@@ -1,6 +1,6 @@
 "use client";
 
-/* 推奨馬券の結果（仮想購入）。サーバーが結果の出たレースの買い目に result を付ける（src/api/v1/delegates.attach_bet_results）。 */
+/* サンプル買い目の結果（仮想購入）。サーバーが結果の出たレースの買い目に result を付ける（src/api/v1/delegates.attach_bet_results）。 */
 
 export type BetResult = { hit: boolean; payout: number; estimated?: boolean; actual_multiple?: number | null; passed?: boolean | null };
 export type RaceBetResult = {

@@ -14,7 +14,7 @@ from typing import Any
 
 JST = timezone(timedelta(hours=9))
 STAGES = ("entries", "weights", "prediction", "odds", "bets")
-LABELS = {"entries": "出馬表", "weights": "馬体重", "prediction": "AI予測", "odds": "オッズ", "bets": "推奨買い目"}
+LABELS = {"entries": "出馬表", "weights": "馬体重", "prediction": "AI予測", "odds": "オッズ", "bets": "サンプル買い目"}
 
 # 馬体重ランナーが各レースを見る窓（発走の何分前）。src/scraper/raceday_weight_watch.py の既定と同じ
 WINDOW_START_MIN, WINDOW_DEADLINE_MIN = 65, 30
@@ -157,7 +157,7 @@ def pipeline_status(race_id: str, resp: dict, storage: Any, *, now: datetime | N
     if has_pred:
         b = _bets_state(race_id)
         if b["ok"]:
-            stages.append(_stage("bets", "done", "見送り（推奨なし）" if b["n"] == 0 else "作成済み", None))
+            stages.append(_stage("bets", "done", "見送り（サンプル買い目なし）" if b["n"] == 0 else "作成済み", None))
         else:
             stages.append(_stage("bets", "waiting", b["reason"]))
     else:

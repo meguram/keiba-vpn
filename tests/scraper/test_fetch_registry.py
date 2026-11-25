@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 # sh から起動する -m のモジュールのうち、外部からデータを取得しないもの。
 # 新しい sh から新しいモジュールを起動するときは、取得なら fr.FETCH_MODULE_PATTERN に、取得でなければここに足す
 NON_FETCH_MODULES = {
-    "src.api.flask_app", "src.db.batch.stats_snapshot", "src.monitor.app", "src.ops.fetch_owner", "src.ops.gcs_mirror",
+    "src.api.flask_app", "src.scripts.docs.council_viewer", "src.db.batch.stats_snapshot", "src.monitor.app", "src.ops.fetch_owner", "src.ops.gcs_mirror",
     "src.ops.cost_guard", "src.ops.cron_catchup", "src.ops.vps_alive", "src.ops.host_postprocess", "src.ops.job_owner", "src.ops.model_publish", "src.ops.release_manifest", "src.ops.release_publish", "src.ops.scheduler_gen",
     "src.ops.state_sync", "src.pipeline.betting.odds_drift", "src.pipeline.build_jockey_trainer_stats",
     "src.ops.edge_render",   # VPS のフォルダに置く API の応答を、ホストの写し（data/local/mirror）だけで作る（netkeiba・GCS へは取りに行かない）

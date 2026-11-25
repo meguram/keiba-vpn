@@ -174,7 +174,7 @@ def _bets_sentence(summary: dict) -> str | None:
     b = summary["bets"]
     if not b["races_bought"]:
         return None
-    return f"推奨馬券 {b['races_bought']}R購入・{b['races_hit']}R的中・回収率 {_pct(pr.rate(b['returned'], b['invested']))}"
+    return f"サンプル買い目 {b['races_bought']}R（仮想）・{b['races_hit']}R的中・回収率 {_pct(pr.rate(b['returned'], b['invested']))}（過去の集計）"
 
 
 def build_news(limit: int = 6) -> dict:
@@ -270,7 +270,7 @@ async def prediction_results_bets_summary(request: Request, date: str = Query(..
         return {"date": date, "label": _label(date),
                 "week": {"from": wk_lo, "to": wk_hi, "days": wk["days"], "status": wk["status"], "counts": wk["rated_counts"], **_bets_block(wk["rated_summary"]), "all": _all_block(wk)},
                 "day": {"status": day["status"], "counts": day["rated_counts"], **_bets_block(day["rated_summary"]), "all": _all_block(day)}, "races": races,
-                "note": "推奨度が標準以上のレースの推奨馬券（最大5パターン・想定オッズは §77 のモデル）をすべて買ったとみなした仮想購入（100% 超は確かめられていません。払戻は確定払戻）。"
+                "note": "参考度が標準以上のレースのサンプル買い目（最大5パターン・想定オッズは §77 のモデル）をすべて買ったとみなした仮想購入（100% 超は確かめられていません。払戻は確定払戻）。"
                         "添えた値は、確定オッズ（レース後の値）が想定オッズ以上のパターンだけを買ったとみなした場合で、当たる買い目が落ちやすい数え方です。見送りのレースは含めません。実際の購入ではありません。"}
     if not is_member(request):
         return JSONResponse(MEMBER_REQUIRED_BODY, status_code=401)

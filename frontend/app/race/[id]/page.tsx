@@ -125,8 +125,13 @@ type RaceData = {
   race_shutuba?: { entries?: RaceEntry[] };
   race_result?: { entries?: RaceEntry[]; payoffs?: unknown[]; pace?: { first_half_3f?: number | null; second_half_3f?: number | null } };
   race_odds?: { win?: RaceOddsEntry[]; entries?: RaceOddsEntry[] };
+  /** 匿名・無料会員の応答。result_confirmed=確定の結果（確定オッズ・人気・払戻はこの時だけ来る） */
+  access?: { tier?: string; result_confirmed?: boolean };
   [k: string]: unknown;
 };
+
+const MARK_SYMBOL: Record<string, string> = { honmei: "◎", pair: "○", show_val: "▲", anchor: "△", star: "★", kesi: "消" };
+const markOf = (p?: { mark?: string; mark_type?: string } | null) => (p?.mark || MARK_SYMBOL[p?.mark_type ?? ""] || "");
 
 type PredEntry = {
   position_forecast?: PosFc | null;
@@ -135,6 +140,11 @@ type PredEntry = {
   horse_name?: string;
   horse_id?: string;
   recommendation?: string;
+  /** 印の語（honmei/pair/show_val/anchor/star/kesi/none）と記号。匿名・無料会員には予測の数値の代わりにこれだけが来る */
+  mark_type?: string;
+  mark?: string;
+  /** public=無料の AI 印（public_mark_type）／member=今のめぐAI印 */
+  mark_source?: string;
   pred_rank?: number;
   composite_rank?: number;
   pred_score?: number | null;
@@ -165,7 +175,7 @@ type PredData = {
   gate_bias?: GateBias;
   status?: string;
   has_prediction?: boolean;
-  /** "bets" = 印を推奨馬券（買い目）から決めている */
+  /** "bets" = 印をサンプル買い目（買い目）から決めている */
   model_type?: string;
   model_description?: string;
   prediction_source?: string;
@@ -178,7 +188,7 @@ type PredData = {
   prob_calibration?: ProbCalibration | null;
   /** 出馬表の公示の段階（特別登録／出走馬決定／出馬表確定／馬体重発表済み）と最終更新 */
   entries_status?: EntriesStatus | null;
-  /** 予測パイプライン（出馬表→馬体重→AI予測→オッズ→推奨買い目）の進み具合 */
+  /** 予測パイプライン（出馬表→馬体重→AI予測→オッズ→サンプル買い目）の進み具合 */
   pipeline_status?: PipelineStatusData | null;
   provisional_entries?: boolean;
   [k: string]: unknown;
@@ -211,7 +221,7 @@ function gradeStyle(grade: string | undefined): React.CSSProperties {
 
 function evColor(v: number | null | undefined, cal = false): string {
   if (v == null) return "var(--text-dim)";
-  if (cal) return v >= 1.1 ? "var(--ok)" : v >= 1.0 ? "var(--accent)" : v >= 0.9 ? "var(--text-dim)" : "var(--err)";      // 較正後: 買い推奨度の閾値に合わせる
+  if (cal) return v >= 1.1 ? "var(--ok)" : v >= 1.0 ? "var(--accent)" : v >= 0.9 ? "var(--text-dim)" : "var(--err)";      // 較正後: 買い判断（buy_tier）の閾値に合わせる
   if (v >= 1.3) return "var(--ok)";
   if (v >= 1.0) return "var(--accent)";
   if (v >= 0.8) return "var(--text-dim)";
@@ -223,7 +233,7 @@ type Tab = "shutuba" | "result" | "predict" | "bet" | "horses";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "predict", label: "🤖 AI予測・期待値" },
-  { id: "bet", label: "💴 推奨馬券" },
+  { id: "bet", label: "💴 サンプル買い目" },
   { id: "shutuba", label: "出馬表" },
   { id: "result", label: "レース結果" },
   ...(SHOW_TRACKING ? [{ id: "horses" as Tab, label: "出走馬詳細" }] : []),
@@ -515,6 +525,9 @@ export default function RaceDetailPage() {
     const n = Number(e.finish_position ?? e.position);
     return Number.isFinite(n) && n > 0 ? n : 10_000;
   };
+  // 確定オッズ・人気は確定の結果だけ（匿名・無料はサーバの判定 access.result_confirmed。会員は値がある時）。確定前のオッズは出さない
+  const showFinalOdds = (rd?.access ? !!rd.access.result_confirmed : rd?.race_result != null && (rd.race_result as { _display_source?: string })._display_source === "race_result")
+    && (rd?.race_result?.entries ?? []).some((e) => positive(e.odds) != null);
   const resultEntries = [...(rd?.race_result?.entries ?? [])].sort((a, b) => finishKey(a) - finishKey(b) || (Number(a.horse_number) || 99) - (Number(b.horse_number) || 99));
   const allTimes = resultEntries.map((e) => parseTimeSec((e.time ?? e.finish_time) as string | undefined)).filter((v): v is number => v != null && v > 0);
   const bestTime = allTimes.length ? Math.min(...allTimes) : null;
@@ -553,7 +566,7 @@ export default function RaceDetailPage() {
   const shutubaByNo = new Map<number, RaceEntry>();
   shutubaEntries.forEach((e) => { const n = Number(e.horse_number ?? e.number); if (n > 0) shutubaByNo.set(n, e); });
   const subLine = (e: RaceEntry) => [pick(e, "sex_age") || `${pick(e, "sex")}${pick(e, "age")}`, pick(e, "jockey_name", "jockey"), pick(e, "jockey_weight", "weight", "impost")].filter(Boolean).join(" ");
-  const pctCell = (v: number | null | undefined, red?: boolean) => (red || v == null) ? "—" : `${(v * 100).toFixed(1)}%`;
+  const pctCell = (v: number | null | undefined, red?: boolean) => lock ? "🔒" : (red || v == null) ? "—" : `${(v * 100).toFixed(1)}%`;
 
   const ShutubaTbl = shutubaEntries.length === 0 ? (
     <div style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>📋 出馬表データがありません</div>
@@ -562,7 +575,7 @@ export default function RaceDetailPage() {
       <table className="m-sticky" style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 13 }}>
         <thead style={{ background: "var(--surface2)" }}>
           <tr>
-            {[["枠", "m-hide"], ["馬番", ""], ["馬名", ""], ["性齢", "m-hide"], ["斤量", "m-hide"], ["騎手", "m-hide"], ["調教師", "m-hide"], ["勝率", ""], ["複勝率", ""], ["想定単勝", ""]].map(([h, c]) => <th key={h} className={c || undefined} style={TH}>{h}</th>)}
+            {[["枠", "m-hide"], ["馬番", ""], ["馬名", ""], ["性齢", "m-hide"], ["斤量", "m-hide"], ["騎手", "m-hide"], ["調教師", "m-hide"], ["勝率", ""], ["複勝率", ""], ["想定単勝", ""]].map(([h, c]) => <th key={h} className={c || undefined} style={TH}>{lock && ["勝率", "複勝率", "想定単勝"].includes(h) ? "🔒" : ""}{h}</th>)}
             {SHOW_MEGU && <th style={{ ...TH, borderLeft: "2px solid rgba(167,139,250,0.3)", color: "#a78bfa" }}>想定めぐ指数</th>}
             {SHOW_MEGU && <th style={{ ...TH, color: "#a78bfa" }}>実測めぐ指数</th>}
           </tr>
@@ -580,7 +593,7 @@ export default function RaceDetailPage() {
                 <td className="m-hide" style={{ ...TD, textAlign: "center" }}><BracketBadge bn={hasNo ? wakuOf(Number(hn), shutubaEntries.length, Number(e.bracket_number) || null) : null} /></td>
                 <td style={{ ...TD, textAlign: "center" }}><NumBadge no={hasNo ? hn : null} bn={hasNo ? wakuOf(Number(hn), shutubaEntries.length, Number(e.bracket_number) || null) : null} /></td>
                 <td className="m-name" style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left" }}>
-                  <HorseName id={e.horse_id} name={e.horse_name} />
+                  {markOf(pr) ? <span title={pr?.mark_source === "public" ? "無料のAI印" : "めぐAI印"} style={{ marginRight: 4, color: "#fbbf24" }}>{markOf(pr)}</span> : null}<HorseName id={e.horse_id} name={e.horse_name} />
                   <span className="m-sub">{subLine(e) || "—"}</span>
                 </td>
                 <td className="m-hide" style={{ ...TD, fontSize: 12, color: "var(--text-dim)" }}>{pick(e, "sex_age") || `${pick(e, "sex")}${pick(e, "age")}` || "—"}</td>
@@ -619,6 +632,10 @@ export default function RaceDetailPage() {
       { key: "posdiff", label: "位置取り", val: (e: RaceEntry) => { const v = positionVerdict(estByNo.get(Number(e.horse_number))?.est, firstCornerPos(e.passing_order)); return v ? Math.abs(v.diff) : null; } },
     ] : []),
     { key: "l3f", label: "上り3F", val: (e) => { const n = Number(e.last3f ?? e.last_3f); return Number.isFinite(n) && n > 0 ? n : null; } },
+    ...(showFinalOdds ? [
+      { key: "pop", label: "人気", val: (e: RaceEntry) => { const n = Number(e.popularity); return Number.isFinite(n) && n > 0 ? n : null; } },
+      { key: "fodds", label: "単勝", val: (e: RaceEntry) => positive(e.odds) ?? null },
+    ] : []),
   ];
   const RES_HIDE = new Set(["waku", "jockey", "passing", "est", "corner1", "posdiff"]);   // 狭い画面では畳む列（騎手は馬名の下に出す）
   // 並べ替え: 値が取れない行（取消・データなし）は、昇順でも降順でも最後。同じ値は元の順（着順）のまま
@@ -681,6 +698,8 @@ export default function RaceDetailPage() {
                   );
                 })()}
                 <td style={TD}>{e.last3f ?? e.last_3f ?? "—"}</td>
+                {showFinalOdds && <td style={TD}>{positive(Number(e.popularity)) ?? "—"}</td>}
+                {showFinalOdds && <td style={TD}>{positive(e.odds) != null ? `${positive(e.odds)!.toFixed(1)}倍` : "—"}</td>}
                 {SHOW_MEGU && (
                   <MeguCell
                     value={megu.megu_final}
@@ -775,8 +794,8 @@ export default function RaceDetailPage() {
               </tr>
               <tr>
                 {(["枠","馬番","馬名","勝率","連対率","複勝率","単勝","複勝",(calibratedEv ? "勝期待値(較正後)" : "勝期待値"),(calibratedEv ? "複期待値(較正後)" : "複期待値"),"買い判断"] as string[]).map((h, i) => {
-                  // 会員限定の列: 勝率(3)・複勝率(5)以外の AI 列（連対率・想定オッズ・期待値・買い判断）
-                  const isAiCol = i >= 4 && i !== 5;
+                  // 会員限定の列: 予測の列すべて（勝率・複勝率も。匿名・無料会員には印だけを出す。2026-11-25）
+                  const isAiCol = i >= 3;
                   return (
                     <th
                       key={h}
@@ -802,7 +821,7 @@ export default function RaceDetailPage() {
                     <td className="m-hide" style={{ ...TD, textAlign: "center" }}><BracketBadge bn={wakuOf(Number(p.horse_number), preds.length, bracketOf.get(Number(p.horse_number)) ?? (Number(p.bracket_number) || null))} /></td>
                     <td style={{ ...TD, textAlign: "center" }}><NumBadge no={p.horse_number} bn={wakuOf(Number(p.horse_number), preds.length, bracketOf.get(Number(p.horse_number)) ?? (Number(p.bracket_number) || null))} /></td>
                     <td className="m-name" style={{ ...TD, fontWeight: 600, color: "#fff", textAlign: "left", whiteSpace: "nowrap" }}>
-                      <HorseName id={p.horse_id} name={p.horse_name} />
+                      {markOf(p) ? <span title={p.mark_source === "public" ? "無料のAI印" : "めぐAI印"} style={{ marginRight: 4, color: "#fbbf24" }}>{markOf(p)}</span> : null}<HorseName id={p.horse_id} name={p.horse_name} />
                       <span className="m-sub">{[p.sex_age, p.jockey_name, p.jockey_weight].filter((x) => x != null && x !== "").join(" ") || (shutubaByNo.get(Number(p.horse_number)) ? subLine(shutubaByNo.get(Number(p.horse_number))!) : "") || "—"}</span>
                     </td>
                     {/* AI columns — redact when null or entry.redacted === true */}
@@ -854,7 +873,7 @@ export default function RaceDetailPage() {
       ) : null}
 
       <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 12 }}>
-        買い判断は期待値の最大で判定。期待値: {calibratedEv ? "過去の実績に合わせて較正した期待回収率。緑≥1.10 / 青≥1.00 / 灰≥0.90 / 赤＜0.90。推奨は較正後の期待値の最大で判定" : "緑≥1.3 / 青≥1.0 / 赤＜0.8"}
+        買い判断は期待値の最大で判定。期待値: {calibratedEv ? "過去の実績に合わせて較正した期待回収率。緑≥1.10 / 青≥1.00 / 灰≥0.90 / 赤＜0.90。買い判断（期待値 高・中・様子見）は較正後の期待値の最大で判定" : "緑≥1.3 / 青≥1.0 / 赤＜0.8"}
       </p>
     </div>
   );
@@ -949,7 +968,7 @@ export default function RaceDetailPage() {
       {tab === "shutuba" && ShutubaTbl}
       {tab === "result" && renderResultTbl()}
       {tab === "predict" && PredPanel}
-      {tab === "bet" && (lock ? <MemberLockCard title="推奨馬券" /> : <BetRecommend raceId={raceId} hasPrediction={hasPred} />)}
+      {tab === "bet" && (lock ? <MemberLockCard title="サンプル買い目" /> : <BetRecommend raceId={raceId} hasPrediction={hasPred} />)}
       {tab === "horses" && HorseDetails}
     </div>
   );

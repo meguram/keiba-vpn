@@ -66,11 +66,11 @@ function kaiNichi(raceId: string): string {
   return kai && nichi ? `${kai}回 ${nichi}日目` : "";
 }
 
-/** 日・週の回収率の帯（有料会員のみ）。主は推奨馬券をすべて買ったとみなした結果、添えは確定オッズ ≥ 想定の買い目だけの結果 */
+/** 日・週の回収率の帯（有料会員のみ）。主はサンプル買い目をすべて買ったとみなした結果、添えは確定オッズ ≥ 想定の買い目だけの結果 */
 function RoiBar({ b }: { b: BetsSummary }) {
   const emptyText = (c?: RatedCounts) =>
-    c && c.unrated > 0 && c.rated === 0 ? `推奨度の記録がまだありません（未記録 ${c.unrated}R${c.skipped ? `・見送り ${c.skipped}R` : ""}）`
-      : c && c.settled > 0 ? `推奨度が標準以上のレースがありません（見送り ${c.skipped}R）` : "集計できるレースがありません";
+    c && c.unrated > 0 && c.rated === 0 ? `参考度の記録がまだありません（未記録 ${c.unrated}R${c.skipped ? `・見送り ${c.skipped}R` : ""}）`
+      : c && c.settled > 0 ? `参考度が標準以上のレースがありません（見送り ${c.skipped}R）` : "集計できるレースがありません";
   const cell = (label: string, s: BetsSummary["day"], sub?: string) => {
     const x = s.all ?? s;                                   // 主: すべて買った場合（古い応答なら今の数え方）
     return (
@@ -90,10 +90,10 @@ function RoiBar({ b }: { b: BetsSummary }) {
   };
   const w = b.week;
   return (
-    <section aria-label="推奨馬券の回収率" title={b.note} style={{ display: "flex", gap: 20, flexWrap: "wrap", padding: "10px 14px", marginBottom: 12, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12 }}>
+    <section aria-label="サンプル買い目の回収率" title={b.note} style={{ display: "flex", gap: 20, flexWrap: "wrap", padding: "10px 14px", marginBottom: 12, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12 }}>
       {cell(`この日の回収率・標準以上（${b.label}）`, b.day, b.day.status === "final" ? "" : "暫定")}
       {cell(`この週の回収率・標準以上（${formatMD(w.from)}〜${formatMD(w.to)}）`, w, w.status === "final" ? `${w.days.length}日分` : `${w.days.length}日分・暫定`)}
-      <div style={{ flexBasis: "100%", fontSize: 10, color: "var(--text-dim)" }}>推奨度が標準以上のレースの推奨馬券をすべて買ったとみなした仮想購入（見送りのレースは含めません。払戻は確定払戻。100% 超は確かめられていません）。添えた値は、確定オッズ（レース後の値）が想定オッズ以上の買い目だけを買ったとみなした場合で、当たる買い目が落ちやすい数え方です。実際の購入ではありません。</div>
+      <div style={{ flexBasis: "100%", fontSize: 10, color: "var(--text-dim)" }}>参考度が標準以上のレースのサンプル買い目をすべて買ったとみなした仮想購入（見送りのレースは含めません。払戻は確定払戻。100% 超は確かめられていません）。添えた値は、確定オッズ（レース後の値）が想定オッズ以上の買い目だけを買ったとみなした場合で、当たる買い目が落ちやすい数え方です。実際の購入ではありません。</div>
     </section>
   );
 }
@@ -115,7 +115,7 @@ function VenueBlock({ venue, rows, values, bets }: { venue: string; rows: Row[];
         {sorted.map((r) => {
           const isG = !!r.grade && GRADES.has(r.grade);
           const v = values.get(r.race_id);
-          const lv = v && v.level !== "none" ? v.level : null;       // 買い目の推奨度（有料会員のみ取得できる）
+          const lv = v && v.level !== "none" ? v.level : null;       // 買い目の参考度（有料会員のみ取得できる）
           const ls = lv ? LEVEL_STYLE[lv] : null;
           const bet = bets?.[r.race_id];
           const hit = !!bet?.hit;
@@ -140,7 +140,7 @@ function VenueBlock({ venue, rows, values, bets }: { venue: string; rows: Row[];
                 </span>
                 {(r.has_result || bet) && (
                   <span style={{ display: "flex", alignItems: "center", gap: 6, marginRight: 18 }}>
-                    {hit && <span title={`推奨馬券が的中（仮想購入 ${yen(bet!.total_bet)} → ${yen(bet!.total_return)}）`} style={{ fontSize: 11, fontWeight: 800, color: "#1a1204", background: "linear-gradient(135deg,#fde68a,#f59e0b)", borderRadius: 4, padding: "1px 7px", whiteSpace: "nowrap" }}>的中 {roiText(bet!.roi)}</span>}
+                    {hit && <span title={`サンプル買い目が的中（仮想購入 ${yen(bet!.total_bet)} → ${yen(bet!.total_return)}）`} style={{ fontSize: 11, fontWeight: 800, color: "#1a1204", background: "linear-gradient(135deg,#fde68a,#f59e0b)", borderRadius: 4, padding: "1px 7px", whiteSpace: "nowrap" }}>的中 {roiText(bet!.roi)}</span>}
                     {r.has_result && <span style={{ fontSize: 10, color: "#4ade80", border: "1px solid rgba(74,222,128,0.4)", borderRadius: 4, padding: "1px 6px" }}>結果</span>}
                   </span>
                 )}
@@ -168,8 +168,8 @@ export default function RacesPage() {
   useAutoRetry(!!error, () => { setError(""); setReloadKey((n) => n + 1); }, 8000);
   const { isMember, loading: authLoading } = useAuthStatus();
   const today = todayJst();
-  const values = useRaceValues(date);          // 買い目の推奨度（有料会員のみ）
-  const betsSummary = useBetsSummary(date);    // 推奨馬券の的中・日と週の回収率（有料会員のみ）
+  const values = useRaceValues(date);          // 買い目の参考度（有料会員のみ）
+  const betsSummary = useBetsSummary(date);    // サンプル買い目の的中・日と週の回収率（有料会員のみ）
 
   /* 開催日の一覧（過去 30 日。今日が開催日なら今日を含む）。古い日はカレンダーから選ぶ。初期は『直近の開催日』（?date= があればそれ。未来なら直近に切り替える） */
   useEffect(() => {

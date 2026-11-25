@@ -1,0 +1,1077 @@
+{
+ "inputs": {
+  "full_info": {
+   "rows": 418449,
+   "races": 29956,
+   "kaisai": 324,
+   "pre_sha256": "e00f4c98d335b3f7322fbb7540bb29e037813c6c1166faa2d7d70f23caf37f46",
+   "fold_sha256": "5e294f787476222344e7e638bce4e0e00247fea54d807919a8316ff5d23bf066"
+  },
+  "split70_seed": 20261124,
+  "split70_share": 0.7
+ },
+ "rule": "場 × 芝ダ × 距離 × 内外（京都は改修の前後を別）。30% の側が 150 レース未満なら、同じ場・芝ダ・内外で、合わせた群の端から端までが 200m 以内になる相手と近い順に合わせる（鎖は許さない）。届かなければ件数不足。内外不明・京都の改修中は 30% の検定に入れない",
+ "units": [
+  {
+   "unit": "中京ダ1200/1400",
+   "base": "中京ダ",
+   "dists": [
+    1200,
+    1400
+   ],
+   "races": 870,
+   "races_30": 273,
+   "merged": true,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "中京ダ1800/1900",
+   "base": "中京ダ",
+   "dists": [
+    1800,
+    1900
+   ],
+   "races": 891,
+   "races_30": 285,
+   "merged": true,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "中京芝1200/1400",
+   "base": "中京芝",
+   "dists": [
+    1200,
+    1400
+   ],
+   "races": 473,
+   "races_30": 148,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "中京芝1600",
+   "base": "中京芝",
+   "dists": [
+    1600
+   ],
+   "races": 348,
+   "races_30": 112,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "中京芝2000/2200",
+   "base": "中京芝",
+   "dists": [
+    2000,
+    2200
+   ],
+   "races": 612,
+   "races_30": 196,
+   "merged": true,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "中京芝3000",
+   "base": "中京芝",
+   "dists": [
+    3000
+   ],
+   "races": 3,
+   "races_30": 1,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "中山ダ1200",
+   "base": "中山ダ",
+   "dists": [
+    1200
+   ],
+   "races": 1137,
+   "races_30": 281,
+   "merged": false,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "中山ダ1800",
+   "base": "中山ダ",
+   "dists": [
+    1800
+   ],
+   "races": 1230,
+   "races_30": 293,
+   "merged": false,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "中山ダ2400/2500",
+   "base": "中山ダ",
+   "dists": [
+    2400,
+    2500
+   ],
+   "races": 91,
+   "races_30": 23,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "中山芝内1800/2000",
+   "base": "中山芝内",
+   "dists": [
+    1800,
+    2000
+   ],
+   "races": 760,
+   "races_30": 187,
+   "merged": true,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "中山芝内2500",
+   "base": "中山芝内",
+   "dists": [
+    2500
+   ],
+   "races": 92,
+   "races_30": 19,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "中山芝内3600",
+   "base": "中山芝内",
+   "dists": [
+    3600
+   ],
+   "races": 9,
+   "races_30": 2,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "中山芝外1200",
+   "base": "中山芝外",
+   "dists": [
+    1200
+   ],
+   "races": 322,
+   "races_30": 81,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "中山芝外1600",
+   "base": "中山芝外",
+   "dists": [
+    1600
+   ],
+   "races": 563,
+   "races_30": 146,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "中山芝外2200",
+   "base": "中山芝外",
+   "dists": [
+    2200
+   ],
+   "races": 150,
+   "races_30": 39,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "京都ダ改修前1200/1400",
+   "base": "京都ダ改修前",
+   "dists": [
+    1200,
+    1400
+   ],
+   "races": 672,
+   "races_30": 198,
+   "merged": true,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "京都ダ改修前1800/1900",
+   "base": "京都ダ改修前",
+   "dists": [
+    1800,
+    1900
+   ],
+   "races": 643,
+   "races_30": 190,
+   "merged": true,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "京都ダ改修後1200/1400",
+   "base": "京都ダ改修後",
+   "dists": [
+    1200,
+    1400
+   ],
+   "races": 267,
+   "races_30": 79,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "京都ダ改修後1800/1900",
+   "base": "京都ダ改修後",
+   "dists": [
+    1800,
+    1900
+   ],
+   "races": 294,
+   "races_30": 92,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "京都芝内外不明改修前1400/1600",
+   "base": "京都芝内外不明改修前",
+   "dists": [
+    1400,
+    1600
+   ],
+   "races": 385,
+   "races_30": 122,
+   "merged": true,
+   "short": true,
+   "unclear": true
+  },
+  {
+   "unit": "京都芝内外不明改修後1400/1600",
+   "base": "京都芝内外不明改修後",
+   "dists": [
+    1400,
+    1600
+   ],
+   "races": 165,
+   "races_30": 54,
+   "merged": true,
+   "short": true,
+   "unclear": true
+  },
+  {
+   "unit": "京都芝内改修前1200",
+   "base": "京都芝内改修前",
+   "dists": [
+    1200
+   ],
+   "races": 136,
+   "races_30": 44,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "京都芝内改修前2000",
+   "base": "京都芝内改修前",
+   "dists": [
+    2000
+   ],
+   "races": 217,
+   "races_30": 65,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "京都芝内改修後1200",
+   "base": "京都芝内改修後",
+   "dists": [
+    1200
+   ],
+   "races": 49,
+   "races_30": 17,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "京都芝内改修後2000",
+   "base": "京都芝内改修後",
+   "dists": [
+    2000
+   ],
+   "races": 91,
+   "races_30": 29,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "京都芝外改修前1400/1600",
+   "base": "京都芝外改修前",
+   "dists": [
+    1400,
+    1600
+   ],
+   "races": 67,
+   "races_30": 19,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "京都芝外改修前1800",
+   "base": "京都芝外改修前",
+   "dists": [
+    1800
+   ],
+   "races": 220,
+   "races_30": 73,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "京都芝外改修前2200/2400",
+   "base": "京都芝外改修前",
+   "dists": [
+    2200,
+    2400
+   ],
+   "races": 155,
+   "races_30": 49,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "京都芝外改修前3000/3200",
+   "base": "京都芝外改修前",
+   "dists": [
+    3000,
+    3200
+   ],
+   "races": 15,
+   "races_30": 4,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "京都芝外改修後1400/1600",
+   "base": "京都芝外改修後",
+   "dists": [
+    1400,
+    1600
+   ],
+   "races": 27,
+   "races_30": 7,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "京都芝外改修後1800",
+   "base": "京都芝外改修後",
+   "dists": [
+    1800
+   ],
+   "races": 89,
+   "races_30": 27,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "京都芝外改修後2200/2400",
+   "base": "京都芝外改修後",
+   "dists": [
+    2200,
+    2400
+   ],
+   "races": 61,
+   "races_30": 23,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "京都芝外改修後3000/3200",
+   "base": "京都芝外改修後",
+   "dists": [
+    3000,
+    3200
+   ],
+   "races": 7,
+   "races_30": 1,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "函館ダ1000",
+   "base": "函館ダ",
+   "dists": [
+    1000
+   ],
+   "races": 181,
+   "races_30": 72,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "函館ダ1700",
+   "base": "函館ダ",
+   "dists": [
+    1700
+   ],
+   "races": 339,
+   "races_30": 128,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "函館ダ2400",
+   "base": "函館ダ",
+   "dists": [
+    2400
+   ],
+   "races": 16,
+   "races_30": 9,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "函館芝1000/1200",
+   "base": "函館芝",
+   "dists": [
+    1000,
+    1200
+   ],
+   "races": 394,
+   "races_30": 150,
+   "merged": true,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "函館芝1800/2000",
+   "base": "函館芝",
+   "dists": [
+    1800,
+    2000
+   ],
+   "races": 311,
+   "races_30": 124,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "函館芝2600",
+   "base": "函館芝",
+   "dists": [
+    2600
+   ],
+   "races": 55,
+   "races_30": 21,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "小倉ダ1000",
+   "base": "小倉ダ",
+   "dists": [
+    1000
+   ],
+   "races": 264,
+   "races_30": 89,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "小倉ダ1700",
+   "base": "小倉ダ",
+   "dists": [
+    1700
+   ],
+   "races": 574,
+   "races_30": 187,
+   "merged": false,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "小倉ダ2400",
+   "base": "小倉ダ",
+   "dists": [
+    2400
+   ],
+   "races": 19,
+   "races_30": 5,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "小倉芝1200",
+   "base": "小倉芝",
+   "dists": [
+    1200
+   ],
+   "races": 668,
+   "races_30": 223,
+   "merged": false,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "小倉芝1700/1800",
+   "base": "小倉芝",
+   "dists": [
+    1700,
+    1800
+   ],
+   "races": 368,
+   "races_30": 121,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "小倉芝2000",
+   "base": "小倉芝",
+   "dists": [
+    2000
+   ],
+   "races": 338,
+   "races_30": 109,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "小倉芝2600",
+   "base": "小倉芝",
+   "dists": [
+    2600
+   ],
+   "races": 85,
+   "races_30": 26,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "新潟ダ1200",
+   "base": "新潟ダ",
+   "dists": [
+    1200
+   ],
+   "races": 566,
+   "races_30": 218,
+   "merged": false,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "新潟ダ1800",
+   "base": "新潟ダ",
+   "dists": [
+    1800
+   ],
+   "races": 655,
+   "races_30": 228,
+   "merged": false,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "新潟ダ2500",
+   "base": "新潟ダ",
+   "dists": [
+    2500
+   ],
+   "races": 16,
+   "races_30": 11,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "新潟芝内1200/1400",
+   "base": "新潟芝内",
+   "dists": [
+    1200,
+    1400
+   ],
+   "races": 355,
+   "races_30": 135,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "新潟芝内2200/2400",
+   "base": "新潟芝内",
+   "dists": [
+    2200,
+    2400
+   ],
+   "races": 141,
+   "races_30": 50,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "新潟芝内外不明2000",
+   "base": "新潟芝内外不明",
+   "dists": [
+    2000
+   ],
+   "races": 211,
+   "races_30": 80,
+   "merged": false,
+   "short": true,
+   "unclear": true
+  },
+  {
+   "unit": "新潟芝外1600",
+   "base": "新潟芝外",
+   "dists": [
+    1600
+   ],
+   "races": 258,
+   "races_30": 95,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "新潟芝外1800/2000",
+   "base": "新潟芝外",
+   "dists": [
+    1800,
+    2000
+   ],
+   "races": 298,
+   "races_30": 104,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "新潟芝直1000",
+   "base": "新潟芝直",
+   "dists": [
+    1000
+   ],
+   "races": 216,
+   "races_30": 88,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "札幌ダ1000",
+   "base": "札幌ダ",
+   "dists": [
+    1000
+   ],
+   "races": 157,
+   "races_30": 17,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "札幌ダ1700",
+   "base": "札幌ダ",
+   "dists": [
+    1700
+   ],
+   "races": 401,
+   "races_30": 39,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "札幌ダ2400",
+   "base": "札幌ダ",
+   "dists": [
+    2400
+   ],
+   "races": 25,
+   "races_30": 3,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "札幌芝1000/1200",
+   "base": "札幌芝",
+   "dists": [
+    1000,
+    1200
+   ],
+   "races": 224,
+   "races_30": 20,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "札幌芝1500",
+   "base": "札幌芝",
+   "dists": [
+    1500
+   ],
+   "races": 173,
+   "races_30": 18,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "札幌芝1800/2000",
+   "base": "札幌芝",
+   "dists": [
+    1800,
+    2000
+   ],
+   "races": 360,
+   "races_30": 39,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "札幌芝2600",
+   "base": "札幌芝",
+   "dists": [
+    2600
+   ],
+   "races": 76,
+   "races_30": 8,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "東京ダ1300/1400",
+   "base": "東京ダ",
+   "dists": [
+    1300,
+    1400
+   ],
+   "races": 1078,
+   "races_30": 306,
+   "merged": true,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "東京ダ1600",
+   "base": "東京ダ",
+   "dists": [
+    1600
+   ],
+   "races": 1001,
+   "races_30": 278,
+   "merged": false,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "東京ダ2100",
+   "base": "東京ダ",
+   "dists": [
+    2100
+   ],
+   "races": 338,
+   "races_30": 95,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "東京ダ2400",
+   "base": "東京ダ",
+   "dists": [
+    2400
+   ],
+   "races": 2,
+   "races_30": 0,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "東京芝1400/1600",
+   "base": "東京芝",
+   "dists": [
+    1400,
+    1600
+   ],
+   "races": 1132,
+   "races_30": 323,
+   "merged": true,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "東京芝1800/2000",
+   "base": "東京芝",
+   "dists": [
+    1800,
+    2000
+   ],
+   "races": 882,
+   "races_30": 241,
+   "merged": true,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "東京芝2300/2400/2500",
+   "base": "東京芝",
+   "dists": [
+    2300,
+    2400,
+    2500
+   ],
+   "races": 302,
+   "races_30": 84,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "東京芝3400",
+   "base": "東京芝",
+   "dists": [
+    3400
+   ],
+   "races": 9,
+   "races_30": 3,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "福島ダ1150",
+   "base": "福島ダ",
+   "dists": [
+    1150
+   ],
+   "races": 308,
+   "races_30": 63,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "福島ダ1700",
+   "base": "福島ダ",
+   "dists": [
+    1700
+   ],
+   "races": 504,
+   "races_30": 100,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "福島ダ2400",
+   "base": "福島ダ",
+   "dists": [
+    2400
+   ],
+   "races": 14,
+   "races_30": 3,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "福島芝1200",
+   "base": "福島芝",
+   "dists": [
+    1200
+   ],
+   "races": 473,
+   "races_30": 92,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "福島芝1800/2000",
+   "base": "福島芝",
+   "dists": [
+    1800,
+    2000
+   ],
+   "races": 484,
+   "races_30": 91,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "福島芝2600",
+   "base": "福島芝",
+   "dists": [
+    2600
+   ],
+   "races": 98,
+   "races_30": 20,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "阪神ダ1200",
+   "base": "阪神ダ",
+   "dists": [
+    1200
+   ],
+   "races": 548,
+   "races_30": 192,
+   "merged": false,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "阪神ダ1400",
+   "base": "阪神ダ",
+   "dists": [
+    1400
+   ],
+   "races": 690,
+   "races_30": 248,
+   "merged": false,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "阪神ダ1800/2000",
+   "base": "阪神ダ",
+   "dists": [
+    1800,
+    2000
+   ],
+   "races": 1222,
+   "races_30": 430,
+   "merged": true,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "阪神芝内1200/1400",
+   "base": "阪神芝内",
+   "dists": [
+    1200,
+    1400
+   ],
+   "races": 531,
+   "races_30": 200,
+   "merged": true,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "阪神芝内2000/2200",
+   "base": "阪神芝内",
+   "dists": [
+    2000,
+    2200
+   ],
+   "races": 449,
+   "races_30": 165,
+   "merged": true,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "阪神芝内3000",
+   "base": "阪神芝内",
+   "dists": [
+    3000
+   ],
+   "races": 15,
+   "races_30": 3,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "阪神芝外1600/1800",
+   "base": "阪神芝外",
+   "dists": [
+    1600,
+    1800
+   ],
+   "races": 849,
+   "races_30": 318,
+   "merged": true,
+   "short": false,
+   "unclear": false
+  },
+  {
+   "unit": "阪神芝外2400/2600",
+   "base": "阪神芝外",
+   "dists": [
+    2400,
+    2600
+   ],
+   "races": 168,
+   "races_30": 52,
+   "merged": true,
+   "short": true,
+   "unclear": false
+  },
+  {
+   "unit": "阪神芝外3200",
+   "base": "阪神芝外",
+   "dists": [
+    3200
+   ],
+   "races": 4,
+   "races_30": 0,
+   "merged": false,
+   "short": true,
+   "unclear": false
+  }
+ ],
+ "sha256": "c3266f7d260f664211394d567824f448d704c5684349972eb41300613182b370",
+ "n_units": 85,
+ "n_ok": 23,
+ "n_single": 49
+}

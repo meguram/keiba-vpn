@@ -1,0 +1,43 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>初出走の馬の目録に無い列のルール探し（RC-4）</title><style>
+:root { --bg:#f7f8fb; --panel:#ffffff; --panel2:#eef1f7; --border:#d5dbe7; --text:#1b2333; --muted:#5b6578;
+  --accent:#2f5fc4; --ok:#1d7f45; --warn:#9a6200; --bad:#b4232c; --code:#eef1f7; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60;
+  --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; } }
+:root[data-theme="dark"] { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60; --text:#e6ecff; --muted:#9aa7c7;
+  --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1180px; margin:0 auto; padding:28px 16px 80px; }
+a { color:var(--accent); }
+h1 { font-size:24px; margin:0 0 6px; line-height:1.4; }
+h2 { font-size:19px; margin:40px 0 6px; padding-top:16px; border-top:1px solid var(--border); }
+h3 { font-size:16px; margin:22px 0 4px; }
+p, li { overflow-wrap:anywhere; }
+.sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+.scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:8px 0 14px; border:1px solid var(--border); border-radius:8px; }
+table { border-collapse:collapse; width:100%; min-width:760px; font-size:13.5px; background:var(--panel); }
+th, td { border-bottom:1px solid var(--border); border-right:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+td.n { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+th { background:var(--panel2); color:var(--muted); font-weight:600; white-space:nowrap; }
+tr:last-child td { border-bottom:none; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 5px; border-radius:5px; font-size:12px; overflow-wrap:anywhere; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 16px; margin:12px 0; }
+.b { display:inline-block; font-size:11.5px; padding:0 8px; border-radius:10px; border:1px solid currentColor; white-space:nowrap; }
+.ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .mu { color:var(--muted); }
+details { background:var(--panel); border:1px solid var(--border); border-radius:10px; margin:8px 0; }
+summary { cursor:pointer; padding:8px 12px; }
+details[open] > summary { border-bottom:1px solid var(--border); }
+.dbody { padding:8px 14px 12px; font-size:13.5px; }
+</style></head><body><main>
+<h1>初出走の馬の目録に無い列のルール探し（RC-4）</h1>
+<p class="sub">作成 2026-11-25 15:01（JST）。担当 rules-council。2025・2026 年の着順・払戻は開いていない。</p>
+<h2>結論</h2>
+<div class="box"><ul><li><b>R0 で閉じた（算数の打ち切り）。</b>初出走の馬の、調教師・種牡馬・母（兄姉）・生産者の初出走での成績（その日より前だけで数える）は、市場がよく値段に入れている。</li><li>市場を使わない上限は大きく見えるが、上位の厩舎・牧場の馬は帯の中でも人気の側に寄る。確定の q の伸び（Q）で割ると、16 の組で 0.45〜1.25 で、要る倍率（一桁 約 1.27・穴馬 約 1.3）に届く組は無い。</li><li>上位の線は、その年より前の分布だけで決めた（2018〜24 を数える）。全期間の分布で決めた最初の計算では、生産者 × 一桁 × 上位 10% が 1.31 に見えたが、先読みと 2016 年の偽の初出走が入っていた。</li><li>生産者・母が付くのは 2020 年以降ほぼ全部だが、2016〜19 年は後に多く走った馬ほど付く（出走 0 回で 0.2%、11 回以上で 76%）。</li><li>前向きの量も、一桁の上位 20% で年 200〜300 走の見込みで、2 年では確かめきれない。</li></ul></div>
+<h2>上限と市場の値付け（探す側 70%・再現 ≤ 50 倍の初出走 22,491 走のうち 2018〜24 の列の分かる走）</h2>
+<p>上限 ＝ 列の上位の勝率 ÷ 同じ帯の初出走の勝率（市場を使わない）。Q ＝ 上位の群の確定の q の平均 ÷ 帯の q の平均（オッズだけ）。上限 ÷ Q は探す側の市場比の粗い値。要る倍率は 一桁 約 1.27・穴馬 約 1.3。</p>
+<div class="scroll"><table><thead><tr><th>列</th><th>帯</th><th>上位（前の年の分布の分位）</th><th>走</th><th>勝ち</th><th>上限</th><th>Q</th><th>上限 ÷ Q</th><th>SE</th></tr></thead><tbody><tr><td>調教師</td><td>一桁</td><td>上位 20%</td><td class="n">1,103</td><td class="n">289</td><td class="n">1.37</td><td class="n">1.33</td><td class="n">1.03</td><td class="n">0.06</td></tr><tr><td>調教師</td><td>一桁</td><td>上位 10%</td><td class="n">613</td><td class="n">171</td><td class="n">1.46</td><td class="n">1.42</td><td class="n">1.03</td><td class="n">0.08</td></tr><tr><td>調教師</td><td>穴馬</td><td>上位 20%</td><td class="n">1,920</td><td class="n">83</td><td class="n">1.27</td><td class="n">1.28</td><td class="n">0.99</td><td class="n">0.11</td></tr><tr><td>調教師</td><td>穴馬</td><td>上位 10%</td><td class="n">870</td><td class="n">35</td><td class="n">1.18</td><td class="n">1.38</td><td class="n">0.86</td><td class="n">0.14</td></tr><tr><td>種牡馬の産駒</td><td>一桁</td><td>上位 20%</td><td class="n">701</td><td class="n">176</td><td class="n">1.34</td><td class="n">1.28</td><td class="n">1.05</td><td class="n">0.08</td></tr><tr><td>種牡馬の産駒</td><td>一桁</td><td>上位 10%</td><td class="n">411</td><td class="n">114</td><td class="n">1.48</td><td class="n">1.42</td><td class="n">1.05</td><td class="n">0.10</td></tr><tr><td>種牡馬の産駒</td><td>穴馬</td><td>上位 20%</td><td class="n">2,081</td><td class="n">86</td><td class="n">1.21</td><td class="n">1.23</td><td class="n">0.98</td><td class="n">0.11</td></tr><tr><td>種牡馬の産駒</td><td>穴馬</td><td>上位 10%</td><td class="n">672</td><td class="n">21</td><td class="n">0.91</td><td class="n">1.27</td><td class="n">0.72</td><td class="n">0.16</td></tr><tr><td>母の産駒（兄姉）</td><td>一桁</td><td>上位 20%</td><td class="n">257</td><td class="n">58</td><td class="n">1.19</td><td class="n">1.24</td><td class="n">0.96</td><td class="n">0.13</td></tr><tr><td>母の産駒（兄姉）</td><td>一桁</td><td>上位 10%</td><td class="n">169</td><td class="n">37</td><td class="n">1.16</td><td class="n">1.29</td><td class="n">0.90</td><td class="n">0.15</td></tr><tr><td>母の産駒（兄姉）</td><td>穴馬</td><td>上位 20%</td><td class="n">434</td><td class="n">13</td><td class="n">0.89</td><td class="n">1.14</td><td class="n">0.78</td><td class="n">0.22</td></tr><tr><td>母の産駒（兄姉）</td><td>穴馬</td><td>上位 10%</td><td class="n">173</td><td class="n">3</td><td class="n">0.52</td><td class="n">1.14</td><td class="n">0.45</td><td class="n">0.26</td></tr><tr><td>生産者</td><td>一桁</td><td>上位 20%</td><td class="n">220</td><td class="n">76</td><td class="n">1.74</td><td class="n">1.42</td><td class="n">1.23</td><td class="n">0.14</td></tr><tr><td>生産者</td><td>一桁</td><td>上位 10%</td><td class="n">61</td><td class="n">17</td><td class="n">1.40</td><td class="n">1.43</td><td class="n">0.98</td><td class="n">0.24</td></tr><tr><td>生産者</td><td>穴馬</td><td>上位 20%</td><td class="n">760</td><td class="n">33</td><td class="n">1.15</td><td class="n">1.35</td><td class="n">0.85</td><td class="n">0.15</td></tr><tr><td>生産者</td><td>穴馬</td><td>上位 10%</td><td class="n">58</td><td class="n">4</td><td class="n">1.83</td><td class="n">1.47</td><td class="n">1.25</td><td class="n">0.62</td></tr></tbody></table></div>
+<details><summary>生産者・母が付く率（初出走の年・その後の出走の数）</summary><div class="dbody"><div class="scroll"><table><thead><tr><th>年</th><th>生産者</th><th>母</th></tr></thead><tbody><tr><td>2016</td><td class="n">15%</td><td class="n">15%</td></tr><tr><td>2017</td><td class="n">21%</td><td class="n">21%</td></tr><tr><td>2018</td><td class="n">33%</td><td class="n">33%</td></tr><tr><td>2019</td><td class="n">70%</td><td class="n">69%</td></tr><tr><td>2020</td><td class="n">100%</td><td class="n">100%</td></tr><tr><td>2021</td><td class="n">100%</td><td class="n">100%</td></tr><tr><td>2022</td><td class="n">100%</td><td class="n">100%</td></tr><tr><td>2023</td><td class="n">100%</td><td class="n">100%</td></tr><tr><td>2024</td><td class="n">100%</td><td class="n">100%</td></tr></tbody></table></div><div class="scroll"><table><thead><tr><th>その後の出走（2016〜19 年の初出走）</th><th>生産者</th><th>母</th></tr></thead><tbody><tr><td>0</td><td class="n">0.2%</td><td class="n">0.0%</td></tr><tr><td>1-2</td><td class="n">9.0%</td><td class="n">8.9%</td></tr><tr><td>11+</td><td class="n">76.4%</td><td class="n">76.3%</td></tr><tr><td>3-5</td><td class="n">18.9%</td><td class="n">18.8%</td></tr><tr><td>6-10</td><td class="n">32.9%</td><td class="n">32.8%</td></tr></tbody></table></div></div></details>
+<h2>判定と見た回数</h2><ul><li>3 体の R1 の一致（q で割った上限を先に・量が重い・付く馬の偏り）どおり、R0 で閉じた。</li><li>上限と Q で、探す側 70% の市場比の粗い値を 16 の組で見た（見た回数 2 回: 最初の計算と訂正の計算。最後の割引きに入れる）。確かめの側 30% は開いていない。</li><li>分位・帯・列の組み合わせ・合成の重みを変えた再試行はしない。</li></ul>
+<h2>作り方・再現</h2><ul><li><code>python -m src.research.rules_council.debut</code>（列）→ <code>debut bound</code>（結果 <code>docs/operations/retrain_trials/rules_council_rc4_bound.json</code>）。費用 0 円。</li><li>決定は <code>docs/operations/roi_plus_council/decisions.md</code> の「RC-4 の判断」。</li></ul>
+</main></body></html>

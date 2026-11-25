@@ -1,0 +1,48 @@
+{
+ "title": "無料ユーザーに出す印の影の記録の止める規則（門 B） — 事前登録",
+ "registered_at": "2026-11-25",
+ "registered_by": "bet-optimizer（rules-council の印の議題の R3）",
+ "enabled": true,
+ "enabled_note": "false にすると、影の記録の止める判定を出さない（記録は続ける）。設定 1 つで切る",
+ "marks_config": "config/public_marks.json",
+ "metric": "◎（honmei.main）の excess_mr = （◎ の勝ち数 ÷ ◎ の確定の q の和）÷（同じ確定オッズの帯 × クラス群の、◎ 以外の馬の同じ比）。q は確定の単勝オッズの逆数をレース内で合計 1 に直した値。基準から ◎ を除くのは、◎ 自身が基準に入って 1 に縮むのを防ぐため",
+ "checks": [
+  {
+   "at_races": 200,
+   "stop_if": "excess_mr < 0.90"
+  },
+  {
+   "at_races": 300,
+   "stop_if": "excess_mr < 0.90"
+  },
+  {
+   "at_races": 400,
+   "stop_if": "excess_mr < 0.90"
+  },
+  {
+   "at_races": 500,
+   "stop_if": "excess_mr < 0.90"
+  }
+ ],
+ "kesi_stop": {
+  "stop_if": "消の馬の複勝率の Clopper-Pearson 95% の下限 > 同じ T-60 の人気の基準線の複勝率",
+  "at": "各 check と同じ時点"
+ },
+ "gate_b": "影の記録 300 レースまで、上のどの線にも当たらないこと。各線は、その件数に最初に届いた時点の参戦だけで 1 回判定し、打ち切りは保つ",
+ "simulation": {
+  "how": "◎ の T-60 の市場の勝率 q を、2026-11-21〜23 の手元の T-60 のうち ◎ のあるレース（道具の decide_race で印が付いたレース。着順は読まない）から引き直し、真の比を置いて 20,000 回。帯の基準の比は 1 と置いた（帯の ◎ 以外の多くの馬で数えるので振れは小さい）",
+  "false_stop_at_ratio_1.1": 0.032,
+  "stop_at_ratio_1.0": 0.219,
+  "stop_at_ratio_0.8": 0.975,
+  "rejected_schedules": {
+   "50 レースごと 100〜500": 0.111,
+   "100 レースごと 100〜500": 0.099
+  },
+  "rule": "決定（真の比 1.1 で誤って止める確率 15% 以下）を満たす。早い時点の線ほど誤って止めやすいので、200 レースから見る",
+  "tool": "src/research/public_marks/marks.py の simulate",
+  "limits": "帯の基準の振れを無視して 1 と置いている。基準は ◎ 以外の多くの馬で測るので振れは小さいが、誤って止める確率は少し小さめに出る。本命と大穴の偏り（人気の帯の比が 1 より大きい）は、基準で割るので excess_mr には入らない前提",
+  "scope_note": "◎ の線だけの値。消の止める線（Clopper-Pearson）を含めた全体の誤って止める確率は含まない",
+  "races_in_pool": 37
+ },
+ "count_basis": "at_races は ◎ のあるレース（印なし・取消で ◎ の無いレースは数えない）の数"
+}

@@ -24,7 +24,8 @@ export type RacePick = {
   horse_number: number;
   horse_name: string;
   finish: number | null;
-  win_prob: number;
+  /** 有料会員だけ（匿名・無料会員の応答には無い） */
+  win_prob?: number | null;
   win_odds?: number | null;
   ev_win?: number | null;
   mark?: string | null;
@@ -45,17 +46,17 @@ export type RaceRecord = {
   marks?: Record<MarkKey, RacePick[]>;
   result_top3?: { horse_number: number; finish: number }[];
   bets?: { total_bet: number; total_return: number; estimated?: boolean; status?: string; level?: number | null; lv?: { level?: number | null } };
-  /** 画面に出している推奨馬券（target）の仮想購入。level は画面のレース推奨度（0=見送り〜4）。未記録のレースには無い */
+  /** 画面に出しているサンプル買い目（target）の仮想購入。level は画面のレース参考度（0=見送り〜4）。未記録のレースには無い */
   bets_t?: { status: string; level?: number; total_bet?: number; total_return?: number; estimated?: boolean };
 };
 
-/** 推奨度（レース期待値）が『標準』以上のレースだけの集計。会員・開発者の応答にだけ付く。 */
+/** 参考度（レース期待値）が『標準』以上のレースだけの集計。会員・開発者の応答にだけ付く。 */
 export type RatedBlock = {
   min_level: number;
   label: string;
   counts: { settled: number; rated: number; skipped: number; unrated: number };
   kpi: Kpi;
-  /** 推奨した買い目をすべて買った場合（実オッズで絞らない）。kpi は確定オッズ ≥ 想定の買い目だけ */
+  /** サンプル買い目をすべて買った場合（実オッズで絞らない）。kpi は確定オッズ ≥ 想定の買い目だけ */
   kpi_all?: { roi: number | null; invested: number; returned: number; races_bought: number; races_hit: number; estimated_races?: number };
   summary: { marks: Record<MarkKey, Counts> };
   legend: { level: number; label: string; short: string }[];
@@ -104,7 +105,7 @@ export const SCOPES: { id: PredictionResults["scope"]; label: string }[] = [
   { id: "season", label: "シーズン" },
 ];
 
-/** レース記録の推奨度（0=見送り〜4=最注目）。画面の推奨馬券（target）の仮想購入のもの。未記録は null。 */
+/** レース記録の参考度（0=見送り〜4=最注目）。画面のサンプル買い目（target）の仮想購入のもの。未記録は null。 */
 export const raceLevel = (r: RaceRecord): number | null => (r.bets_t?.status === "ok" ? r.bets_t.level ?? null : null);
 
 export const pct = (x: number | null | undefined, digits = 0): string => (x == null ? "—" : `${(x * 100).toFixed(digits)}%`);

@@ -1,0 +1,189 @@
+{
+ "title": "無料ユーザーに出す印（public_mark_type）の決め方 — 事前登録",
+ "registered_at": "2026-11-25",
+ "registered_by": "bet-optimizer（rules-council の印の議題の R3、decisions.md）",
+ "status": "影の記録だけ（公開前）。公開は門 B を通り、R0〜R3・統括役とユーザーの承認の後",
+ "decide": {
+  "when": "発走 50 分前（T-50）の 1 回で決めて固める（decisions.md「印の議題: 決定 3 の改め」577bf7c7）。発走後に計算し直さない",
+  "before_text": "印は発走 50 分前に出ます",
+  "inputs": [
+   "予測の行の p_win・p_top3（本番の推論の経路 predictions_v3。T-50 までに最後に書かれたもの）",
+   "T-60 の単勝オッズと人気（odds_t60 の snapshot_at が T-50 以前のもの）"
+  ],
+  "post_time": "発走時刻は出馬表（race_shutuba の start_time）。T-50 = 発走時刻 − 50 分",
+  "forbidden_inputs": [
+   "確定オッズ",
+   "T-50 より後に取ったオッズ・人気",
+   "T-50 より後に書かれた予測",
+   "着順・払戻"
+  ],
+  "p_uses_odds": false,
+  "p_uses_odds_note": "p のモデル（bundle_v6_2025）の入力の 1,193 列に、オッズ・人気・払戻・市場の列は無い（列名で確かめた）。予測が使うオッズの取得時刻の条件は当たらない",
+  "record_times": "行ごとに、オッズの取得時刻（t60_at）・予測の最後の書き込み時刻（pred_mtime）・発走時刻（post_time）・決めた時刻（decide_at = T-50）を残す",
+  "frozen": "固めた後は印を変えない。取消の馬は『取消』と出し、ほかの馬の印も付け直さない",
+  "odds_source": "T-60 のオッズは手元の写し odds_t60（raceday-runner が書く。取得時刻 snapshot_at と書き込み時刻 written_at を持つ）を使う。会議の文の pre_odds.parquet は研究用の表で開催日に増えないため、同じ T-60 の値の出どころとして odds_t60 に替えた",
+  "availability": "オッズは max(snapshot_at, written_at)、予測はファイルの更新時刻を、使えるようになった時刻とみなす。written_at が無いオッズは確かめられないので『odds』。T-75 より前に取ったオッズは T-60 とみなさない",
+  "pred_mtime_note": "予測の書き直しの履歴は残らないので、T-50 にはあったが後で書き直されたレースも『予測待ち』になる。影の記録の偏りとして件数を門 A で出す",
+  "scratch": "T-60 の単勝が 999.9 以上の馬（予測からは抜けていることが多い）は取消とみなし、印の計算から外して『取消』と記録する。ほかの馬の印は付け直さない"
+ },
+ "p_model": {
+  "name": "bundle_v6_2025（v6e）",
+  "path": "/home/jovyan/work/retrain_out/cycles16_fix3/final/bundle_v6_2025/bundle.json",
+  "bundle_json_sha256_16": "a668bf5eb922a582",
+  "fit_end": 2025,
+  "trained_years": "2016〜2025（fit_info.json の base は base_2016_cyc3、fit_end 2025）",
+  "in_training_column": "影の記録の行に in_training（その開催が p のモデルの学習に入っていたか）を書く。2026-11-28 以降の開催は false",
+  "check_70": "70% の側（2019〜24）は v6e の学習に入っているので、v6e の p は使わない。開催単位の out-of-fold（cycles16_fix3 の年を外した OOF。handoff/oof_2019_2021_v2・oof_2022_2024）を、推論と同じ見え方の代わりとして使い、その違いを記録する"
+ },
+ "q": {
+  "decide": "T-60 の単勝オッズの逆数をレース内で合計 1 に直した値",
+  "measure": "市場比 R・excess_mr は確定の q（確定の単勝オッズの逆数を合計 1 に直した値）で測る",
+  "variants_for_check70": [
+   "T-60 の再現 s=1",
+   "T-60 の再現 s*=0.86",
+   "SmartRC の想定人気"
+  ],
+  "verdict_on": "3 通りのうち悪い側で判定する"
+ },
+ "marks": {
+  "honmei": {
+   "text": "AI の評価が最も高い",
+   "main": "p_win が最大の馬",
+   "alt": "p_win ≥ 0.08 の中で p_win × T-60 の単勝オッズが最大の馬"
+  },
+  "pair": {
+   "text": "2 番目",
+   "main": "p_win が 2 番目の馬",
+   "alt": "honmei の alt と同じ並びの 2 番目"
+  },
+  "show_val": {
+   "text": "AI の複勝の評価が高い",
+   "main": "◎○ を除き、p_win から Harville で換算した 3 着内の確率が最大の馬",
+   "alt": "◎○ を除き、Harville の 3 着内の確率 ≥ 0.25 の中で、自前 ÷ 市場（T-60 の q から Harville）の比が最大の馬",
+   "note": "Harville は人気馬で 3 着内を過大に出す偏りがある。▲ は前向きの記録だけで判定する"
+  },
+  "anchor": {
+   "text": "AI の評価は高いが、人気も高い",
+   "main": "まだ印の無い馬のうち、p_win の順位が 5 位以内かつ T-60 の人気が 3 位以内で、p_win が最大の馬（0〜1 頭）"
+  },
+  "star": {
+   "text": "AI の評価が人気より高い穴（発走前 10 倍以上）",
+   "main": "まだ印の無い馬のうち、T-60 の単勝 10 倍以上で r = log(p_win / q) > 0 の中で r が最大の馬（0〜1 頭）",
+   "alt": "同じ条件で r > log(1.25)",
+   "symbol_note": "語は star、記号は ★（scope-fix の対応表のまま。会議の文の ☆ と同じ印）"
+  },
+  "kesi": {
+   "text": "今の消の型（config/kesi_mark.json）",
+   "main": "人気は T-60 の人気。10 番人気以下で p_top3 ≤ p3_max（kesi_mark.json の値）、◎○▲★ の馬には付けない、8 頭未満は付けない"
+  }
+ },
+ "candidates": {
+  "count": 8,
+  "list": [
+   "honmei.main",
+   "honmei.alt",
+   "show_val.main",
+   "show_val.alt",
+   "anchor.main",
+   "star.main",
+   "star.alt",
+   "kesi.main"
+  ],
+  "max_rule": "印 1 つに 2 まで・全体 10 まで",
+  "correction": "Bonferroni（片側 0.005）",
+  "primary": "honmei.main"
+ },
+ "no_mark": {
+  "rules": [
+   {
+    "id": "field",
+    "if": "出走 8 頭未満",
+    "text": "出走頭数が少ないため、印を付けていません"
+   },
+   {
+    "id": "odds",
+    "if": "T-60 の単勝オッズが全頭そろわない・取れていない・phase が t60 でない",
+    "text": "発走前のオッズがそろわないため、印を付けていません"
+   },
+   {
+    "id": "split",
+    "if": "p_win の最大 < 0.25",
+    "text": "AI の評価が割れているため、印を付けていません"
+   }
+  ],
+  "target_share": [
+   0.2,
+   0.4
+  ],
+  "share_basis": "区切り 0.25 は、2026 年の本番の予測（v6e の backfill、2,994 レース）の p の分布だけで決めた（着順・払戻・オッズは見ていない）。頭数と合わせて 29.3%",
+  "timing_rules": [
+   {
+    "id": "wait_odds",
+    "if": "オッズの取得時刻が T-50 より後（45 分前に取れた 9 件など）",
+    "text": "印なし（オッズ待ち）"
+   },
+   {
+    "id": "wait_pred",
+    "if": "予測の最後の書き込みが T-50 より後",
+    "text": "印なし（予測待ち）"
+   }
+  ],
+  "timing_note": "時刻の都合の印なし（timing_rules）は、ほかの理由（rules）と分けて数える。印なしの目標 20〜40% は rules の分で見て、時刻の分は別に出す",
+  "data_rules": [
+   {
+    "id": "data",
+    "if": "出馬表・予測・特徴量の対応づけができない、T-60 にいる取消でない馬が予測にいない、p が欠ける、予測が無い（データの不整合）",
+    "text": "データがそろわないため、印を付けていません"
+   }
+  ],
+  "count_note": "印なしの割合（目標 20〜40%）は rules と data_rules の分で見る。分母は出馬表のその日のレース（T-60 のファイルが無いレースも数える）。時刻の都合の分（timing_rules）は別に出す"
+ },
+ "shadow": {
+  "start": "この設定を固めた commit の次の開催日",
+  "when": "開催日の 17:00 より後に、手元の odds_t60 と predictions_v3 から計算する。予測の行に欄は足さない",
+  "record": "docs/operations/retrain_trials/public_marks_shadow/<日>.jsonl（レースごとに、印・候補・理由・T-60 の取得時刻・予測の更新時刻・in_training）",
+  "cost": "0 円（手元のファイルだけ。GCS は読まない）",
+  "record_fields": [
+   "config_hash",
+   "stop_hash",
+   "post_time",
+   "t60_at",
+   "t60_written_at",
+   "pred_mtime",
+   "decide_at",
+   "in_training",
+   "inputs_sha（odds・pred・features の sha256 の先頭）",
+   "marks",
+   "alt",
+   "scratched",
+   "no_mark",
+   "no_mark_timing",
+   "tool_sha（道具の sha256 の先頭）"
+  ],
+  "refuse": "固めた日以前・その日の 17:00 より前・出馬表か odds_t60 が無い・既に記録がある、のどれかなら書かない",
+  "time_zone": "記録の時刻はすべて JST（+09:00）で書く"
+ },
+ "stop_rule": "config/public_marks_stop.json",
+ "frozen_rule": "この設定と config/public_marks_stop.json を最初に commit した日が固めた日。固めた後に変わっていたら、影の記録の道具は止まる（変えるなら会議で新しい登録を立てる）",
+ "params": {
+  "min_field": 8,
+  "split_pmax": 0.25,
+  "star_odds": 10.0,
+  "star_alt_ratio": 1.25,
+  "honmei_alt_pmin": 0.08,
+  "show_alt_p3min": 0.25,
+  "anchor_prank": 5,
+  "anchor_pop": 3,
+  "scratch_odds": 999.9,
+  "decide_before_min": 50,
+  "odds_oldest_min": 75,
+  "day_done_hour": 17,
+  "kesi": {
+   "min_field": 8,
+   "min_pop": 10,
+   "p3_max": 0.08,
+   "source": "config/kesi_mark.json（version 2）の値を固めた日に写した。本番の消の設定が後で変わっても、この印は写した値のまま"
+  }
+ },
+ "params_note": "道具（src/research/public_marks/marks.py）は区切りをすべてここから読む。道具の sha256 の先頭も記録の行に残す"
+}

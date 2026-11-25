@@ -1,0 +1,62 @@
+{
+ "H1": {
+  "races_worse": 322,
+  "fav_runs_per_year": 111.55555555555556,
+  "fav_runs_2024": 90,
+  "le50_runs_per_year": 285.8888888888889,
+  "note": "道悪の実績は、前の日までの稍重・重・不良での 3 着内の数 ≥ 1（芝ダの race_result_flat から作った as-of。表は 2016 年からなので 2016〜17 年は低め。前の版は frame の bad_top3_prev＝重・不良だけで、定義と違った）"
+ },
+ "scratch_audit": {
+  "2016": {
+   "no_finish": 308,
+   "dnf": 148,
+   "excluded": 85,
+   "scratched": 75
+  },
+  "2017": {
+   "no_finish": 297,
+   "dnf": 149,
+   "scratched": 75,
+   "excluded": 73
+  },
+  "2018": {
+   "no_finish": 334,
+   "dnf": 149,
+   "excluded": 103,
+   "scratched": 82
+  },
+  "2019": {
+   "no_finish": 367,
+   "excluded": 161,
+   "dnf": 142,
+   "scratched": 64
+  },
+  "2020": {
+   "no_finish": 316,
+   "None": 316
+  },
+  "2021": {
+   "no_finish": 283,
+   "None": 283
+  },
+  "2022": {
+   "no_finish": 291,
+   "None": 291
+  },
+  "2023": {
+   "no_finish": 309,
+   "None": 309
+  },
+  "2024": {
+   "no_finish": 359,
+   "None": 358,
+   "scratched": 1
+  }
+ },
+ "scratch_races_known": {
+  "races": 289,
+  "years_with_status": 4,
+  "fav_runs_per_year": 300.75,
+  "note": "出走取消が分かるのは finish_status のある年だけ。一桁の走は、逃げ候補・先行型の条件を掛ける前の上限"
+ }
+}

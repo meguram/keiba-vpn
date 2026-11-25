@@ -545,7 +545,7 @@ def highlights(records: list[dict], limit_each: int = 3) -> list[dict]:
         b = r.get("bets") or {}
         if b.get("total_bet") and b["total_return"] >= max(5000, 3 * b["total_bet"]):
             big.append({"kind": "big_return", "race_id": r["race_id"], "value": b["total_return"],
-                        "text": f"{label} 推奨馬券が{b['total_bet']:,}円→{b['total_return']:,}円"})
+                        "text": f"{label} サンプル買い目が{b['total_bet']:,}円→{b['total_return']:,}円（仮想）"})
         h = (r.get("marks") or {}).get("honmei") or []
         for p in h:
             if p.get("win_prob", 0) >= 0.30 and (p.get("finish") or 0) >= 6:
@@ -573,7 +573,7 @@ def build_day(date: str, storage: Any, max_total_bet: int | None = DEFAULT_MAX_T
         srcs[r.get("prediction_source") or "gcs"] += 1
         if r.get("model_version"):
             models.add(str(r["model_version"]))
-    notes = ["仮想購入は、推奨馬券（上限 {:,} 円/R）をその時点で保存済みの最新オッズで選び、払戻は確定払戻（無ければオッズからの概算）で精算".format(max_total_bet or 0)]
+    notes = ["仮想購入は、サンプル買い目（上限 {:,} 円/R）をその時点で保存済みの最新オッズで選び、払戻は確定払戻（無ければオッズからの概算）で精算".format(max_total_bet or 0)]
     if srcs.get("backfill") or srcs.get("shadow"):
         notes.append("バックフィル/shadow で算出した予測を含む（レース当日の確定した予測ではない）")
     return {
@@ -1060,8 +1060,8 @@ def bets_level_card(today: _date, base: Path | None = None) -> dict:
                                                     "all": {**tot_all, "roi": rate(tot_all["returned"], tot_all["invested"]), "hit_rate": rate(tot_all["hit_races"], tot_all["races"])}},
                         "skipped_races": (bl.get("0") or _BLANK_LEVEL)["races"], "unrated_races": unrated, "no_buy_races": tot["no_buy_races"]})
     return {"as_of": today.strftime("%Y%m%d"), "year": y, "periods": periods,
-            "note": "回収率は、画面に出している推奨馬券（最大5パターン。想定オッズは §77 のモデル）をすべて買ったとみなした仮想購入（100% 超は確かめられていません）。"
-                    "小さく添えた値は、確定オッズ（レース後の値）が想定オッズ以上のパターンだけを買ったとみなした場合で、当たる買い目が落ちやすい数え方です。推奨度は画面のレース推奨度と同じ、払戻は確定払戻。実際の購入ではありません。"}
+            "note": "回収率は、画面に出しているサンプル買い目（最大5パターン。想定オッズは §77 のモデル）をすべて買ったとみなした仮想購入（100% 超は確かめられていません）。"
+                    "小さく添えた値は、確定オッズ（レース後の値）が想定オッズ以上のパターンだけを買ったとみなした場合で、当たる買い目が落ちやすい数え方です。参考度は画面のレースの参考度と同じ、払戻は確定払戻。実際の購入ではありません。"}
 
 
 def mark_card(today: _date, base: Path | None = None) -> dict:

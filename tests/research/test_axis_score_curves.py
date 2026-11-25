@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from src.scripts.data import axis_score_curves as asc
 from src.scripts.docs import build_axis_score_curves_html as page
@@ -58,7 +59,8 @@ def test_build_embeds_constants_and_escapes_script_end():
          "axes": [{"key": "ts", "label": "</script>TS", "high": "高", "low": "低"}],
          "dims": {"all": {"label": "全体", "groups": [{"key": "全体", "label": "全体", "data": {"ts": c}}]}}}
     h = page.build(d)
-    assert "__MINN__" not in h and f"SIDE={page.MIN_SIDE}" in h and f"MINN={page.MIN_N}" in h
+    assert "__MINN__" not in h and "__MZ__" not in h and f"SIDE={page.MIN_SIDE}" in h and f"MINN={page.MIN_N}" in h and f"MZ={page.MONO_Z}" in h
+    assert "近似線（全ての曲線を区分して描く）" in h and '"m":{"w":' in h
     assert h.count("</script>") == 1
 
 
@@ -212,3 +214,137 @@ def test_estimate_fills_sparse_bins_within_observed_range():
     assert few[2] == {"v": pytest.approx(3 / 20), "e": False, "r": True, "n": 20}       # 推定できないときも、走数不足の区間は実測を参考として出す（省かない）
     assert not few[0].get("r") and few[3] is None                                       # 走数 MINN 以上は通常の実測、走数 0 は描けない
     assert exp[1] == {"v": 0.1, "e": False} and exp[0]["e"] and exp[8]["e"]              # 期待率: 走数が少なくても実測、走数 0 だけ曲線
+
+
+def _nondecreasing(v):
+    return all(b >= a - 1e-12 for a, b in zip(v, v[1:]))
+
+
+def test_mono_fit_clean_increasing_input_uses_isotonic_line():
+    n = [500] * 10
+    k = [20, 25, 32, 38, 45, 50, 58, 64, 70, 78]
+    m = page.mono_fit(k, n, [40.0] * 10)
+    assert m["z"] > page.MONO_Z and m["za"] > page.MONO_Z
+    assert m["f"] == pytest.approx([x / 500 for x in k], abs=1e-5)       # すでに単調なら実測をそのまま通る
+    assert _nondecreasing(m["f"])
+
+
+def test_mono_fit_flat_noisy_input_is_flat_weighted_mean_line():
+    n = [400, 400, 400, 400, 400, 400, 400, 400, 400, 100]
+    k = [40, 44, 37, 42, 39, 43, 38, 41, 44, 9]
+    m = page.mono_fit(k, n)
+    assert m["k"] == "flat" and abs(m["z"]) < page.MONO_Z and m["za"] is None
+    assert m["f"] == pytest.approx([sum(k) / sum(n)] * 10, abs=1e-5)       # 走数で重みを付けた平均の水平線
+
+
+def test_mono_fit_peak_and_valley_use_unimodal_isotonic():
+    n = [500] * 10
+    rate = [0.05, 0.10, 0.15, 0.20, 0.25, 0.20, 0.15, 0.10, 0.05, 0.03]
+    k = [round(500 * r) for r in rate]
+    m = page.mono_fit(k, n)
+    assert m["k"] == "peak" and m["zq"] < -page.MONO_Z
+    top = m["f"].index(max(m["f"]))
+    assert _nondecreasing(m["f"][:top + 1]) and _nondecreasing(m["f"][top:][::-1])
+    assert m["f"] == pytest.approx(rate, abs=1e-5)                           # すでに山型なら実測をそのまま通る
+    v = page.mono_fit([500 - x for x in k], n)
+    assert v["k"] == "valley" and v["f"] == pytest.approx([1 - r for r in rate], abs=1e-5)
+
+
+def test_concave_rise_with_small_end_drop_stays_up_not_peak():
+    """上がって頭打ちになり、端の走数の少ない区間だけが下がる形（TS × 全体）は、右側の下がりが有意でないので山型にしない。"""
+    n = [7857, 18038, 22508, 11965, 8281, 2413, 1875, 1224, 755, 481]
+    rate = [0.027, 0.06, 0.086, 0.088, 0.088, 0.089, 0.087, 0.097, 0.106, 0.069]
+    m = page.mono_fit([round(a * b) for a, b in zip(n, rate)], n)
+    assert m["k"] == "up" and m["zq"] < -page.MONO_Z
+
+
+def test_mono_fit_pools_high_end_drop_like_ts_9_and_10():
+    n = [7857, 18038, 22508, 11965, 8281, 2413, 1875, 1224, 755, 481]
+    rate = [0.027, 0.06, 0.086, 0.088, 0.088, 0.089, 0.087, 0.097, 0.106, 0.069]
+    k = [round(a * b) for a, b in zip(n, rate)]
+    m = page.mono_fit(k, n)
+    assert m["k"] == "up" and m["z"] > page.MONO_Z and _nondecreasing(m["f"])
+    assert m["f"][8] == pytest.approx(m["f"][9]) and m["f"][9] > k[9] / n[9]   # 9 > 10 の逆転は、まとめた平均になる
+    assert m["f"][0] == pytest.approx(k[0] / n[0], abs=1e-5)                   # 走数の多い区間は実測のまま
+
+
+def test_isotonic_fit_decreasing_and_zero_bins_and_small_end_block():
+    n = [0, 300, 300, 0, 300, 300, 300, 300, 10, 0]
+    k = [0, 90, 80, 0, 60, 50, 40, 30, 0, 0]                 # 右肩下がり。9 点の区間は走数 10 で率 0%（向きには合うが、端で暴れる値）
+    m = page.mono_fit(k, n)
+    f = m["f"]
+    assert m["z"] < -page.MONO_Z and len(f) == 10
+    assert all(b <= a + 1e-12 for a, b in zip(f, f[1:]))     # 単調に下がる
+    assert f[0] == pytest.approx(f[1]) and f[9] == pytest.approx(f[8])        # 走数 0 の端は平らに延ばす
+    assert f[2] >= f[3] >= f[4] and f[3] == pytest.approx((f[2] + f[4]) / 2, abs=1e-5)   # 走数 0 の間は直線でつなぐ
+    assert f[8] == pytest.approx(30 / 310, abs=1e-5) and f[7] == pytest.approx(f[8])   # 走数 30 未満の端の塊は内側とまとめる（0% のまま描かない）
+    assert page.isotonic_fit([0] * 10, [0] * 10, True) is None
+
+
+def test_mono_fit_all_zero_hits_or_too_few_bins_is_not_judged():
+    assert page.mono_fit([0] * 10, [100] * 10) == {"k": None, "z": None, "zq": None, "za": None, "f": None}
+    assert page.mono_fit([0, 5, 9] + [0] * 7, [10, 10, 10] + [0] * 7)["z"] is not None
+    few = page.mono_fit([5, 9] + [0] * 8, [10, 10] + [0] * 8)
+    assert few["z"] is None and few["k"] is None and few["f"] is None     # 走数 1 以上の区間が 2 つだけ → 判定できない（実測のまま）
+
+
+def test_with_mono_counts_and_embeds_fit_only_for_period_a():
+    up = {"A": [[500] * 10, [20, 25, 32, 38, 45, 50, 58, 64, 70, 78], [60 + 10 * i for i in range(10)], [40.0] * 10, [100.0] * 10],
+          "B": [[50] * 10, [5] * 10, [15] * 10, [5.0] * 10, [15.0] * 10]}
+    flat = {"A": [[400] * 10, [40, 44, 37, 42, 39, 43, 38, 41, 44, 39], [400] * 10, [40.0] * 10, [400.0] * 10], "B": up["B"]}
+    d = {"axes": [{"key": "ts"}, {"key": "gear"}], "dims": {"all": {"groups": [{"data": {"ts": up, "gear": flat}}]}}}
+    out, cnt = page.with_mono(d)
+    assert "m" not in d["dims"]["all"]["groups"][0]["data"]["ts"]                # 元の dict は変えない
+    c = out["dims"]["all"]["groups"][0]["data"]
+    assert c["ts"]["m"]["w"]["k"] == "up" and c["ts"]["m"]["p"]["k"] == "up" and c["gear"]["m"]["w"]["k"] == "flat" and c["gear"]["m"]["p"]["k"] is None
+    assert "m" not in c["ts"]["B"] and c["ts"]["B"] == up["B"]
+    z = {x: 0 for x in (*page.KINDS, "na")}
+    assert cnt == {"ts": {"w": {**z, "up": 1}, "p": {**z, "up": 1}}, "gear": {"w": {**z, "flat": 1}, "p": {**z, "na": 1}}}   # 複勝が全て当たりの曲線は判定できない
+
+
+def test_every_chart_draws_fit_line_and_kind_glyph_in_node():
+    """生成した HTML の JS を node の仮 DOM で動かし、全てのマスの小さな図と拡大図に、勝率・複勝率の近似線（class="fit"）と区分の記号があることを数える。"""
+    import json
+    import re
+    import shutil
+    import subprocess
+
+    if shutil.which("node") is None:
+        pytest.skip("node が無い")
+    d = _mini_d()
+    flat = {"A": [[400] * 10, [40, 44, 37, 42, 39, 43, 38, 41, 44, 39], [120, 118, 121, 119, 122, 120, 118, 121, 119, 122], [40.0] * 10, [120.0] * 10],
+            "B": d["dims"]["all"]["groups"][0]["data"]["ts"]["B"]}
+    d["dims"]["course"]["groups"][1]["data"]["ts"] = flat
+    up = {"A": [[500] * 10, [20, 25, 32, 38, 45, 50, 58, 64, 70, 78], [60 + 10 * i for i in range(10)], [40.0] * 10, [100.0] * 10], "B": flat["B"]}
+    na = {"A": [[300] * 10, [0] * 10, [60 + 5 * i for i in range(10)], [30.0] * 10, [80.0] * 10], "B": flat["B"]}      # 勝ちが 0 → 勝率は判定できない
+    d["dims"]["class"] = {"label": "クラス", "groups": [{"key": "1勝", "label": "1勝", "data": {"ts": up}}, {"key": "2勝", "label": "2勝", "data": {"ts": na}}]}  # 初めに開く対象（st.dim の既定）
+    js = re.findall(r"<script>(.*?)</script>", page.build(d), re.S)[0]
+    audit = ("var bad=[],n=0,G={};Object.keys(D.dims).forEach(function(dk){D.dims[dk].groups.forEach(function(g){AX.forEach(function(a){var c=g.data[a.key];if(!c)return;"
+             "var el={};bigInto(el,a,g);[chart(c,178,104,0.2,false),el.innerHTML].forEach(function(svg){n++;"
+             "[['w','#7aa9ff','勝'],['p','#fbbf24','複']].forEach(function(x){var k=kindOf(c,x[0]),fit=new RegExp('stroke=\"'+x[1]+'\" stroke-width=\"[0-9.]+\" class=\"fit\"').test(svg);"
+             "var gl=(k?KG[k]:'？');G[dk+g.key+x[0]]=gl;if(fit!==!!k||svg.indexOf(x[2]+gl+'</tspan>')<0)bad.push(dk+g.key+x[0]);});});});});});"
+             "console.log(JSON.stringify({n:n,bad:bad,g:G}));")
+    stub = ("var els={};function mk(){return {innerHTML:'',style:{},classList:{add:function(){},remove:function(){}},querySelectorAll:function(){return []},"
+            "querySelector:function(){return null},scrollIntoView:function(){}};}var document={getElementById:function(id){return els[id]||(els[id]=mk());}};")
+    code = stub + js.replace("ctl();render();cgCtl();cgAxes();cgTs();", "ctl();render();cgCtl();cgAxes();cgTs();" + audit)
+    out = json.loads(subprocess.run(["node", "-e", code], capture_output=True, text=True, check=True).stdout)
+    assert out["n"] == 2 * 5 and out["bad"] == []                    # 全体 1 + クラス 2 + コース 2 の 5 マス × （小さな図・拡大図）
+    assert out["g"]["class1勝w"] == "↗" and out["g"]["course中山ダ1800mw"] == "→" and out["g"]["class2勝w"] == "？"   # 判定できない曲線は近似線なし・「？」
+
+
+
+def test_quad_trend_vertex_scale_and_classify_needs_matching_curvature():
+    n = [500] * 10
+    k = [round(500 * (0.30 - 0.01 * (i - 3) ** 2)) for i in range(10)]          # 頂点は区間 3
+    q = page.quad_trend(k, n)
+    assert q["c"] < 0 and q["v"] == pytest.approx(3.0, abs=0.1)
+    assert page.quad_trend([1, 2, 3] + [0] * 7, [10, 10, 10] + [0] * 7) is None    # 区間 4 未満
+    assert page.mono_fit(k, n)["k"] == "peak"
+
+
+def test_mono_section_table_counts_every_kind():
+    d = _mini_d()
+    _, cnt = page.with_mono(d)
+    h = page.mono_section(d, cnt)
+    assert all(lbl in h for lbl in page.KIND_LABEL.values())
+    assert "区分した曲線は" in h and "平ら" in h

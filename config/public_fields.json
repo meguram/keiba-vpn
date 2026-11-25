@@ -2,7 +2,11 @@
   "version": 1,
   "_doc": "一般公開（不特定多数）の画面・API に出してよい項目の許可リスト。正はこのファイル。仕様・分類表: docs/operations/public_data_inventory.md。規約: netkeiba 利用規約 第14条（データ等を不特定多数が知りうる状態におくのは私的利用の範囲外）・第15条（営利目的は不可）。",
   "mode": "private",
-  "_mode_doc": "private=現状（Cloudflare Access で所有者のみ。従来の匿名/会員の出し分けだけ）。public=一般公開用。匿名・会員（開発者以外）には A 分類（自前計算）だけを出し、B/C/O 分類は release の許可が true になるまで出さない。環境変数 KEIBA_PUBLIC_MODE=public|private で上書きできる。開発者（所有者・私的利用）は常に全項目。",
+  "_mode_doc": "private=現状（本番は匿名にも開いている。匿名・無料会員の出し分けは src/api/tier.py の private の経路の許可リスト。docs/operations/tiered_access.md）。public=一般公開用。匿名・会員（開発者以外）には A 分類（自前計算）だけを出し、B/C/O 分類は release の許可が true になるまで出さない。環境変数 KEIBA_PUBLIC_MODE=public|private で上書きできる。開発者（所有者・私的利用）は常に全項目。",
+  "public_marks": {
+    "fallback_to_mark_type": true,
+    "_doc": "匿名・無料会員に出す印（src/api/tier.py の redact_predictions）。予測の行に public_mark_type（印の担当が決める新しい印。語は mark_type と同じ）があればそれを出す。無いとき true=今の mark_type を出す／false=印なし（none）。docs/operations/public_marks_plan.md"
+  },
   "release": {
     "minimal_identifiers_public": false,
     "b_facts_public": true,
@@ -21,8 +25,9 @@
     "top_identifiers": ["race_name", "venue", "round", "date", "start_time", "grade", "surface", "distance", "track_condition"],
     "top_A_member": ["position_forecast", "tracking_v2", "l3f_coherent", "pace_forecast", "gate_bias", "pace_unified", "pace_type", "scenario_forecast", "lap_forecast", "expected_megu", "expected_megu_meta", "growth", "growth_meta", "class_benchmark"],
     "top_O": ["bet_suggestion", "prob_calibration", "ev_calibrated"],
-    "entry_A_anonymous": ["win_prob", "top3_prob", "show_prob", "pred_rank"],
-    "entry_A_member": ["top2_prob", "place_prob", "win_prob_model", "top3_prob_model", "pred_score", "normalized_score", "composite_score", "composite_rank", "mark_type", "recommendation", "megu_mark", "kesi_reason", "position_forecast", "tracking_v2", "l3f_coherent", "expected_megu", "expected_megu_meta", "growth", "growth_meta", "class_benchmark"],
+    "entry_A_anonymous": [],
+    "_entry_A_anonymous": "匿名・無料会員には予測の数値を出さず、印（mark_type・mark）だけを出す（2026-11-25。src/api/tier.py の _public_mark）",
+    "entry_A_member": ["win_prob", "top3_prob", "show_prob", "pred_rank", "top2_prob", "place_prob", "win_prob_model", "top3_prob_model", "pred_score", "normalized_score", "composite_score", "composite_rank", "mark_type", "recommendation", "megu_mark", "kesi_reason", "position_forecast", "tracking_v2", "l3f_coherent", "expected_megu", "expected_megu_meta", "growth", "growth_meta", "class_benchmark"],
     "entry_actual_odds": [
     "win_odds", "place_odds_min", "place_odds_max", "place_odds_avg", "place_odds_eff", "top2_odds_est", "popularity", "odds_source",
     "ev_win", "ev_place", "ev_top2", "expected_value"

@@ -1794,8 +1794,8 @@ function placeOddsBg(n) {
 }
 
 function buyTierClass(tier) {
-  if (tier === '強推奨') return 'buy-tier-strong';
-  if (tier === '推奨') return 'buy-tier-ok';
+  if (tier === '期待値 高' || tier === '強推奨') return 'buy-tier-strong';
+  if (tier === '期待値 中' || tier === '推奨') return 'buy-tier-ok';
   if (tier === '様子見') return 'buy-tier-watch';
   return 'val-na';
 }

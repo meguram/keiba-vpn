@@ -421,6 +421,12 @@ _GUARD_ENTRY = {
     "src/research/course/megu_oikiri.py": {"_select_inner", "_final_inner"},   # 追い切りの切り口の 1 回だけの評価（eval_only・研究の CLI）
     "src/research/megu_cycles/mc_data.py": {"cmd_build", "cmd_build_rich", "cmd_build_offset", "cmd_build_bag"},   # めぐサイクルの表（reproduce・研究の CLI）
     "src/research/megu_cycles/mc_eval.py": {"confirm", "eval_only_guard"},
+    "src/research/rules_council/rc_frame.py": {"build"},          # ルールの会議の全走の表（T-60 の再現のずれの元を読む。eval_only・研究の CLI）
+    "src/research/rules_council/t60_check.py": {"main"},          # 本物の T-60 と再現の帯の確かめ（オッズだけ。eval_only）
+    "src/research/rules_council/rc2_real.py": {"guard"},          # RC-2 の段 S'（研究の CLI。各 cmd の中だけで呼ぶ）
+    "src/research/rules_council/benter_diag.py": {"cmd_volume", "cmd_sstar", "cmd_depend"},   # RC-6 の着順なしの診断（eval_only。研究の CLI）
+    "src/research/rules_council/forward_union.py": {"cmd_build", "cmd_ledger"},   # RC-2 の和集合の前向きの台帳（eval_only・forward。研究の CLI）
+    "src/research/rules_council/results_table.py": {"main"},   # R0-07 説明の結果の表（select。研究の CLI・1 回だけ）
     "src/research/megu_cycles/mc_final.py": {"cmd_final", "cmd_drift"},     # めぐサイクルの最後の 1 回の確かめ・再現の楽観の測り（eval_only）   # めぐサイクルの 2022〜24 の確かめ（confirm）・割引きと最後の確かめ（eval_only）
 }
 _PROD = ("src/pipeline/inference/stage2_bets.py", "src/pipeline/inference/candidate_runner.py", "src/api/stage2_live.py")

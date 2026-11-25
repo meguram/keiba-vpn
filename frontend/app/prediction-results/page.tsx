@@ -42,7 +42,7 @@ function Tile({ label, value, sub, locked }: { label: string; value: string; sub
   );
 }
 
-/** 日別推移の折れ線（推奨馬券の回収率）。外部ライブラリなしの SVG。 */
+/** 日別推移の折れ線（サンプル買い目の回収率）。外部ライブラリなしの SVG。 */
 function Trend({ series }: { series: SeriesPoint[] }) {
   const W = 640, H = 200, L = 40, R = 12, T = 12, B = 30;
   if (series.length < 2) return <div style={dim}>推移は 2 日分以上の集計がそろうと表示されます。</div>;
@@ -75,7 +75,7 @@ function Trend({ series }: { series: SeriesPoint[] }) {
         ))}
       </svg>
       <div style={{ display: "flex", gap: 14, fontSize: 12, color: "var(--text-dim)", flexWrap: "wrap" }}>
-        <span><b style={{ color: "#34d399" }}>━</b> 推奨馬券の回収率（確定オッズ ≥ 想定の買い目だけ。破線＝100%）</span>
+        <span><b style={{ color: "#34d399" }}>━</b> サンプル買い目の回収率（確定オッズ ≥ 想定の買い目だけ。破線＝100%）</span>
       </div>
     </div>
   );
@@ -110,13 +110,13 @@ function RaceCard({ r, member, levelLabels }: { r: RaceRecord; member: boolean; 
         <span style={{ fontWeight: 700, fontSize: 14 }}>{r.race_name}</span>
         {lv != null && (
           <span style={{ fontSize: 11, fontWeight: 700, padding: "1px 8px", borderRadius: 999, border: "1px solid var(--border)",
-            color: lv >= 1 ? "#fbbf24" : "var(--text-dim)" }}>推奨度 {levelLabels[lv] ?? lv}</span>
+            color: lv >= 1 ? "#fbbf24" : "var(--text-dim)" }}>参考度 {levelLabels[lv] ?? lv}</span>
         )}
         {r.result_status === "provisional" && <span style={{ ...dim, marginLeft: "auto" }}>暫定</span>}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 10px", marginTop: 8, alignItems: "center", fontSize: 13 }}>
         <span style={dim}>予測1位</span>
-        <span>{r.top1?.horse_number}番 {r.top1?.horse_name} <FinishChip pos={r.top1?.finish} /> <span style={dim}>勝率{pct(r.top1?.win_prob)}</span></span>
+        <span>{r.top1?.horse_number}番 {r.top1?.horse_name} <FinishChip pos={r.top1?.finish} /> {r.top1?.win_prob != null ? <span style={dim}>勝率{pct(r.top1.win_prob)}</span> : !member ? <span style={dim}>勝率 🔒会員限定</span> : null}</span>
         <span style={dim}>結果</span>
         <span>{(r.result_top3 ?? []).map((x) => `${x.finish}着 ${x.horse_number}番`).join(" / ")}</span>
         {member && lv != null && lv >= 1 && b && b.total_bet > 0 && (
@@ -165,13 +165,13 @@ export default function PredictionResultsPage() {
   const latest = days?.latest ?? "";
   const canNext = !!latest && !!date && periodKey(scope, shiftDate(date, scope, 1)) <= periodKey(scope, latest);
   const rated = member ? data?.rated : undefined;
-  const useRated = !!rated && rated.counts.rated > 0;                      // 会員: 推奨度が標準以上のレースだけで集計（無ければ全体）
+  const useRated = !!rated && rated.counts.rated > 0;                      // 会員: 参考度が標準以上のレースだけで集計（無ければ全体）
   const kpi = useRated ? rated!.kpi : data?.kpi;
   const levelLabels = useMemo(() => Object.fromEntries((rated?.legend ?? []).map((t) => [t.level, t.short || t.label])) as Record<number, string>, [rated]);
   const trendSeries = useMemo(() => (data?.series ?? []).map((p) => ({ ...p, roi: p.roi_rated ?? null })), [data]);
   const empty = !!data && data.summary.races_settled === 0;
   const races = useMemo(() => (data?.races ?? []), [data]);
-  const hits = useMemo(() => (member && scope === "day" ? races.filter((r) => r.included && (raceLevel(r) ?? 0) >= 1 && (r.bets_t?.total_return ?? 0) > 0) : []), [member, scope, races]);   // 推奨馬券を出したレースのうち、的中したレースだけ
+  const hits = useMemo(() => (member && scope === "day" ? races.filter((r) => r.included && (raceLevel(r) ?? 0) >= 1 && (r.bets_t?.total_return ?? 0) > 0) : []), [member, scope, races]);   // サンプル買い目を出したレースのうち、的中したレースだけ
 
   return (
     <PageShell title="予測成績" description="予測と実際の結果の突き合わせ。毎日、最終レースの後に集計します（確定結果が入ると自動で『確定』に更新）。" note={false}>
@@ -211,26 +211,26 @@ export default function PredictionResultsPage() {
         <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
           {rated && (
             <div style={{ ...card, fontSize: 13 }}>
-              <b>集計の対象: 推奨度（レース期待値）が『{rated.label}』以上のレース</b>
+              <b>集計の対象: 参考度（レース期待値）が『{rated.label}』以上のレース</b>
               {useRated
-                ? <> — {rated.counts.rated}/{rated.counts.settled} レースに参戦（約 {(rated.counts.settled / rated.counts.rated).toFixed(1)} レースに1回。見送り {rated.counts.skipped}{rated.counts.unrated > 0 ? `・推奨度の記録なし ${rated.counts.unrated}` : ""}）。下の数字はこの{rated.counts.rated}レースの集計です。</>
-                : <> — 該当するレースがありません（見送り {rated.counts.skipped}・推奨度の記録なし {rated.counts.unrated}）。下は全体の集計です。</>}
+                ? <> — {rated.counts.rated}/{rated.counts.settled} レースが対象（約 {(rated.counts.settled / rated.counts.rated).toFixed(1)} レースに1回。見送り {rated.counts.skipped}{rated.counts.unrated > 0 ? `・参考度の記録なし ${rated.counts.unrated}` : ""}）。下の数字はこの{rated.counts.rated}レースの集計です。</>
+                : <> — 該当するレースがありません（見送り {rated.counts.skipped}・参考度の記録なし {rated.counts.unrated}）。下は全体の集計です。</>}
             </div>
           )}
 
           <div className="pr-tiles" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
             <Tile label="予測1位の1着率" value={pct(kpi.top1.win)} sub={`${kpi.top1.n}レース`} />
-            <Tile label="回収率（推奨どおり全部買った場合）" value={useRated && rated?.kpi_all ? pct(rated.kpi_all.roi) : "—"} sub={!useRated ? "推奨度が標準以上のレースがありません" : rated?.kpi_all ? `${yen(rated.kpi_all.invested)} → ${yen(rated.kpi_all.returned)}・的中 ${rated.kpi_all.races_hit}/${rated.kpi_all.races_bought}レース${rated.kpi_all.estimated_races ? `（うち${rated.kpi_all.estimated_races}レースは払戻の概算）` : ""}` : "この集計はまだありません"} locked={!member} />
-            <Tile label="回収率（確定オッズ ≥ 想定の買い目だけ）" value={useRated ? pct(kpi.roi) : "—"} sub={useRated ? `${yen(kpi.invested)} → ${yen(kpi.returned)}・的中 ${kpi.races_hit}/${kpi.races_bought}レース` : "推奨度が標準以上のレースがありません"} locked={!member} />
+            <Tile label="回収率（サンプル買い目をすべて買った場合）" value={useRated && rated?.kpi_all ? pct(rated.kpi_all.roi) : "—"} sub={!useRated ? "参考度が標準以上のレースがありません" : rated?.kpi_all ? `${yen(rated.kpi_all.invested)} → ${yen(rated.kpi_all.returned)}・的中 ${rated.kpi_all.races_hit}/${rated.kpi_all.races_bought}レース${rated.kpi_all.estimated_races ? `（うち${rated.kpi_all.estimated_races}レースは払戻の概算）` : ""}` : "この集計はまだありません"} locked={!member} />
+            <Tile label="回収率（確定オッズ ≥ 想定の買い目だけ）" value={useRated ? pct(kpi.roi) : "—"} sub={useRated ? `${yen(kpi.invested)} → ${yen(kpi.returned)}・的中 ${kpi.races_hit}/${kpi.races_bought}レース` : "参考度が標準以上のレースがありません"} locked={!member} />
             <Tile label="確率の精度" value={kpi.winner_logloss == null ? "—" : kpi.winner_logloss.toFixed(3)} sub={kpi.winner_logloss_model ? `勝ち馬の対数損失（小さいほど良い）。市場補正済みの${kpi.winner_logloss_model.n}レースは モデルのみ ${kpi.winner_logloss_model.model.toFixed(3)} → 補正後 ${kpi.winner_logloss_model.calibrated.toFixed(3)}` : "勝ち馬の対数損失（小さいほど良い）"} />
           </div>
 
           {member && useRated && (
             <div style={{ ...card, fontSize: 12.5, color: "var(--text-dim)" }}>
-              <b style={{ color: "var(--text)" }}>2 つの回収率の違い:</b> 「推奨どおり全部買った場合」は、推奨した買い目をすべて買ったとして数えます。100% を超えるかは確かめられていません。
+              <b style={{ color: "var(--text)" }}>2 つの回収率の違い:</b> 「サンプル買い目をすべて買った場合」は、画面に出したパターンを、オッズで絞らずにすべて買ったとして数えます。100% を超えるかは確かめられていません。
               「確定オッズ ≥ 想定の買い目だけ」は、レース後に決まる確定オッズが想定オッズ以上だった買い目だけを買ったとして数えます（確定オッズが取れなかった買い目も買わなかったとして数えます）。当たる買い目は確定オッズが下がって外れやすい傾向があり（2026 年は当たった買い目 142 点のうち 132 点が、この条件で買わなかったことになった）、実際に買える数え方でもありません。日別の推移・券種別の表・各レースの仮想購入は、この数え方です。<br />
               <b style={{ color: "var(--text)" }}>回収率の読み方:</b> 払戻率は券種により 72.5〜80%（単勝・複勝 80%、3連単 72.5%）で、均等に買えば平均は 100% を下回ります。
-              期間が短いと回収率は大きくぶれ、100% を超えた日や月があっても、買い方が確かに儲かるという意味にはなりません。
+              期間が短いと回収率は大きくぶれ、100% を超えた日や月があっても、その買い方で将来も 100% を超えるという意味にはなりません。将来の結果を保証するものではありません。
               後から作った予測は、その期間のデータを含めて学習したモデルによる可能性があり、実際の運用より回収率が高めに出やすい点にも注意してください。
             </div>
           )}
@@ -244,11 +244,11 @@ export default function PredictionResultsPage() {
 
           {member && useRated && Object.keys(kpi.by_type).length > 0 && (
             <section aria-label="券種別の仮想購入">
-              <h2 style={h2}>券種別の仮想購入（推奨度が標準以上のレースで、推奨馬券の5パターンのうち、実際のオッズ（確定）が想定オッズ以上のものだけを買った場合）</h2>
+              <h2 style={h2}>券種別の仮想購入（参考度が標準以上のレースで、サンプル買い目の5パターンのうち、実際のオッズ（確定）が想定オッズ以上のものだけを買った場合）</h2>
               <div style={{ ...card, overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                   <thead><tr style={{ color: "var(--text-dim)", textAlign: "right" }}>
-                    <th style={{ textAlign: "left", padding: "4px 6px" }}>券種</th><th>点数</th><th>的中</th><th>投資</th><th>払戻</th><th>回収率</th></tr></thead>
+                    <th style={{ textAlign: "left", padding: "4px 6px" }}>券種</th><th>点数</th><th>的中</th><th>金額</th><th>払戻</th><th>回収率</th></tr></thead>
                   <tbody>
                     {Object.entries(kpi.by_type).map(([bt, v]) => (
                       <tr key={bt} style={{ borderTop: "1px solid var(--border)", textAlign: "right" }}>
@@ -265,7 +265,7 @@ export default function PredictionResultsPage() {
 
           {hits.length > 0 && (
             <section aria-label="的中したレース">
-              <h2 style={h2}>的中したレース（推奨馬券を出したレース）</h2>
+              <h2 style={h2}>的中したレース（サンプル買い目を出したレース）</h2>
               <div style={{ display: "grid", gap: 8 }}>
                 {hits.map((r) => (
                   <PendingLink key={r.race_id} href={`/race/${r.race_id}`} style={{ ...card, textDecoration: "none", color: "var(--text)", padding: "10px 14px", minHeight: 44 }}>
