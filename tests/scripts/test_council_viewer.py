@@ -113,6 +113,30 @@ def test_index_lists_everything(root: Path):
     assert "latest_strategy_tables.html" not in out
 
 
+def test_index_shows_easy_summary_body_on_top(root: Path):
+    (root / cv.COUNCIL_REL / "easy_summary.md").write_text("# やさしい説明\n\n試したことは **3 つ**。\n", encoding="utf-8")
+    out = cv.index_html(root)
+    assert "<strong>3 つ</strong>" in out
+    assert out.index("やさしい説明") < out.index("<h2>議題（rc）</h2>")
+
+
+def test_relative_links_point_into_council(root: Path):
+    c = root / cv.COUNCIL_REL
+    (c / "easy").mkdir()
+    (c / "easy" / "RC-02.md").write_text("# RC-2 のやさしい説明\n\n[もどる](../easy_summary.md#表)\n", encoding="utf-8")
+    (c / "easy_summary.md").write_text(
+        "# 説明\n\n| 議題 | 説明 |\n|---|---|\n| RC-2 | [くわしく](easy/RC-02.md) |\n\n"
+        "[外](../../secret.md) [web](https://example.com/) [頭](#x) [根](/council/protocol.md) "
+        "[html](../../html/operations/final/rules_council_summary.html)\n", encoding="utf-8")
+    out = cv.index_html(root)
+    assert 'href="/council/easy/RC-02.md"' in out
+    assert 'href="../../secret.md"' in out and 'href="https://example.com/"' in out and 'href="#x"' in out
+    assert 'href="/council/protocol.md"' in out
+    assert 'href="../../html/operations/final/rules_council_summary.html"' in out
+    sub = cv.md_page(root, "easy/RC-02.md")
+    assert sub and 'href="/council/easy_summary.md#' in sub
+
+
 def test_index_picks_up_new_files(root: Path):
     (root / cv.COUNCIL_REL / "rc" / "R2_03_new.md").write_text("# 新しい資料（2026-11-30）\n", encoding="utf-8")
     assert "R2_03_new.md" in cv.index_html(root)
@@ -133,6 +157,8 @@ def test_server_rejects_traversal(root: Path):
         assert get("/") == 200
         assert get("/healthz") == 200
         assert get("/council/rc/R0_01_order.md") == 200
+        assert get("/doc/rc/R0_01_order.md") == 200  # /doc/ は /council/ と同じ
+        assert get("/doc/../../../../secret.md") == 404
         assert get("/html/operations/final/rules_council_summary.html") == 200
         c = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=5)
         c.request("GET", "/council/protocol.md")
