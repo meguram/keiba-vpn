@@ -106,6 +106,10 @@ def asof(df: pd.DataFrame, keys: list[str], vals: list[str]) -> tuple[np.ndarray
     tot = cum.reindex(idx).to_numpy()
     # 自分の過去走（同じ鍵・前の日）。1 日に 1 走なので、日の順の累積から自分を引く
     hid = pd.factorize(df["horse_id"])[0]
+    # 自分の引きは「同じ鍵・同じ馬で 1 日 1 行」が前提。重なると今回の値を余分に引く（第 5 版 E の漏れ）。重なりは止める
+    dup = pd.DataFrame({"k": kid, "h": hid, "d": d})[~bad].duplicated().any()
+    if dup:
+        raise ValueError("asof: 同じ鍵・同じ馬・同じ日の行が複数ある（自分の引きが今回の値を含む）")
     h = pd.DataFrame(VV, columns=[*vals, "_n"])
     h["kid"], h["hid"], h["d"] = kid, hid, d
     h = h.sort_values(["kid", "hid", "d"], kind="stable")

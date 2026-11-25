@@ -4,8 +4,6 @@
 """
 from __future__ import annotations
 
-import json
-
 import pandas as pd
 
 from src.research.pedigree_lab import data, final_eval, gates
@@ -13,6 +11,7 @@ from src.research.pedigree_lab import data, final_eval, gates
 
 def main() -> None:
     X = final_eval.build_all("v4", check_only=True)
+    X = X[X["split"] != 2].reset_index(drop=True)          # 保留（split 2）は使わない（critic の指摘 2）
     F = gates.scenes(X[gates.FCOLS].copy())
     X["FD"], X["SD"] = F["FD"].to_numpy(), F["SD"].to_numpy()
     p = final_eval.predict(X, "v4")
@@ -22,8 +21,7 @@ def main() -> None:
         res = final_eval.evaluate(X, p, 0.08152)
     finally:
         data.DEV_END = old
-    print("dryrun ok", json.dumps({k: (v if not isinstance(v, dict) else {kk: vv for kk, vv in v.items() if kk != "deciles"})
-                                   for k, v in res.items()}, ensure_ascii=False, default=str)[:1500])
+    print("dryrun ok（数は出さない）", sorted(res))
     data.finish_all()
 
 

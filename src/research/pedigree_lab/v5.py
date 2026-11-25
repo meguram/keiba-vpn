@@ -138,10 +138,10 @@ def henery(p: np.ndarray, rid: np.ndarray, n_run: np.ndarray, g: float, d: float
         A = q1[:, None] * q2[None, :] / (1 - q2[:, None])
         np.fill_diagonal(A, 0)
         P2 = A.sum(0)
-        if n_run[s] < 8:
-            out[s:e] = q1 + P2
+        if e - s <= 3:            # 3 頭以下は全頭が 3 着内
+            out[s:e] = 1.0
             continue
-        den = 1 - q3[:, None] - q3[None, :]
+        den = 1 - q3[:, None] - q3[None, :]          # 正解は 3 着内（top3）なので、頭数によらず 3 着内の確率（critic の指摘 4）
         np.fill_diagonal(den, 1)
         W = A / np.clip(den, 1e-6, None)
         out[s:e] = q1 + P2 + (W.sum() - W.sum(0) - W.sum(1)) * q3

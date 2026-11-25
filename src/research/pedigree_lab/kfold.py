@@ -118,6 +118,8 @@ def main() -> None:
     OBJ = a.obj
     SAVE_DIR = data.OUT / f"models_{a.tag}_{a.set}_{a.group}{'' if a.obj == 'binary' else '_sm'}"
     SAVE_DIR.mkdir(exist_ok=True)
+    data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"kfold_{a.tag}_{a.set}_{a.group}",
+                                   "開催・2 代母の単位の OOF（学習と開発の対数損失。critic の指摘 9 で台帳を足した）"))
     X = pd.read_parquet(data.OUT / f"feat_{a.tag}.parquet")
     X = X[(X["date"].dt.year >= 2017) & (X["date"].dt.year <= 2024)].reset_index(drop=True)
     cols = ablate.col_sets(X)[a.set]
@@ -133,6 +135,7 @@ def main() -> None:
         print(f"{a.set} {a.group} {tg}: {time.time() - s:.0f}s {info}", flush=True)
     suffix = "" if a.obj == "binary" else "_sm"
     out.to_parquet(data.OUT / f"kf_{a.tag}_{a.set}_{a.group}{suffix}.parquet", index=False)
+    data.finish_all(str(data.OUT / f"kf_{a.tag}_{a.set}_{a.group}{suffix}.parquet"))
     n = X["n_run"].to_numpy()
     m = X["win"].to_numpy() == 1
     for nm, part in (("dev", dev),):        # 保留は表示しない（段 3 の最後に 1 回だけ開ける）

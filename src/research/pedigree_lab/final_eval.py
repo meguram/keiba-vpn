@@ -131,6 +131,8 @@ def main() -> None:
     ap.add_argument("--version", default="v4", choices=["v4", "v5e"])
     ap.add_argument("--check-only", action="store_true")
     a = ap.parse_args()
+    if a.version != "v4" and not a.check_only:
+        raise SystemExit("v4 以外は OOF の比べの元が未定（開ける前に止める。critic の指摘 7）")
     X = build_all(a.version, a.check_only)
     meta = json.loads((data.OUT / f"models_{a.version}_pure_dd" / "win_meta.json").read_text())
     chk = check_equal(X, a.version, meta["cols"])

@@ -43,3 +43,12 @@ def test_split_meetings_is_by_meeting():
     lab = split_meetings(m)
     assert (pd.DataFrame({"m": m, "l": lab}).groupby("m")["l"].nunique() == 1).all()
     assert set(lab.unique()) == {0, 1, 2}
+
+
+def test_asof_rejects_same_day_duplicates():
+    """同じ鍵・同じ馬・同じ日の行が複数あると、自分の引きに今回の値が入るので止める。"""
+    import pytest
+    df = pd.DataFrame({"date": pd.to_datetime(["2020-01-01", "2020-01-01", "2020-01-02"]), "horse_id": ["a", "a", "b"],
+                       "sire": ["s", "s", "s"], "win": [1, 1, 0]})
+    with pytest.raises(ValueError):
+        asof(df, ["sire"], ["win"])

@@ -109,7 +109,8 @@ def run_c() -> dict:
            "partner_mean_q": round(float(q[partner].mean()), 4), "axis_mean_q": round(float(q[ax].mean()), 4),
            "partner_E_pb_over_q": round(float(np.mean(pb[partner] / q[partner])), 4)}
     res["pass_umaren"] = bool(res["umaren_E_ratio"] >= 1.29 and res["per_year_full"] >= 250)
-    res["pass_wide"] = bool(res["wide_E_ratio"] >= 1.29 and res["per_year_full"] >= 250)
+    res["wide_per_year_full"] = round(int(n8.sum()) / N_YEARS_DEV, 1)          # ワイドの量は 8 頭以上の組で数える（critic の指摘 6）
+    res["pass_wide"] = bool(res["wide_E_ratio"] >= 1.29 and res["wide_per_year_full"] >= 250)
     return res
 
 
