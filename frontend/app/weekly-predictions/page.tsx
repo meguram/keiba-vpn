@@ -59,6 +59,9 @@ type RaceItem = {
 };
 
 const MARK_SYMBOL: Record<string, string> = { honmei: "◎", pair: "○", show_val: "▲", anchor: "△", star: "★", kesi: "消" };
+/** 印の並び（ユーザーの指定 2026-11-25）: ◎ > ○ > ▲ > ★ > △ > 無印 > 消 */
+const MARK_ORDER: Record<string, number> = { "◎": 0, "○": 1, "▲": 2, "★": 3, "△": 4, "": 5, "消": 6 };
+const markOf = (p: { mark?: string; mark_type?: string }) => p.mark || MARK_SYMBOL[p.mark_type ?? ""] || "";
 
 type PredEntry = {
   horse_number?: number;                 // 馬番が未確定の段階（特別登録・出走馬決定）は API が null を返す（画面は『-』を出す）
@@ -189,12 +192,13 @@ function RaceSummaryBadges({ preds }: { preds: PredEntry[] }) {
 }
 
 /* ── 列での並べ替え（表に出している値だけ） ── */
-type SortKey = "num" | "name" | "bracket" | "win" | "top3" | "odds" | "podds" | "evw" | "evp";
+type SortKey = "num" | "mark" | "name" | "bracket" | "win" | "top3" | "odds" | "podds" | "evw" | "evp";
 type SortDir = "asc" | "desc";
 
 /** 列の値。数値は数、文字は文字。値が無い（"-" 表示）ときは null（並べ替えでは常に末尾） */
 const SORT_VALUE: Record<SortKey, (p: PredEntry) => number | string | null> = {
   num: (p) => p.horse_number ?? null,
+  mark: (p) => MARK_ORDER[markOf(p)] ?? MARK_ORDER[""],              // 無印も値（消より前）にする
   name: (p) => p.horse_name ?? null,
   bracket: (p) => p.bracket_number ?? null,
   win: (p) => p.win_prob ?? null,
@@ -221,9 +225,9 @@ function sortPreds(preds: PredEntry[], key: SortKey | null, dir: SortDir, fallba
   });
 }
 
-/* AI 予測の表は、どの幅でも同じ 7 列（枠・馬番・馬名・AI勝率・AI複勝率・予想オッズ・期待値）。
+/* AI 予測の表は、どの幅でも同じ 8 列（枠・馬番・印・馬名・AI勝率・AI複勝率・予想オッズ・期待値）。
    予想オッズと期待値は 1 列に 2 段（上=単勝・下=複勝）にして、スマホ幅（390px）でも横スクロールなしで収める。
-   さらに狭い端末（表の幅 340px 未満）では表の枠の中だけ横に送れ、枠・馬番・馬名は左に固定する（sticky）。
+   さらに狭い端末（表の幅 360px 未満）では表の枠の中だけ横に送れ、枠・馬番・印・馬名は左に固定する（sticky）。
    騎手・性齢・斤量・馬体重・連対率・買い判断は表に出さない（馬名を押した情報パネルと、レース詳細で見られる。
    docs/operations/weekly_predictions_table.md）。
    色はサイトの変数（--text・--border・--surface）を使う（サイトはダークのみ。ライトの配色ができたら変数で追従する）。 */
@@ -240,10 +244,10 @@ const TABLE_CSS = `
 .pt-sortbtn > span:first-child{word-break:keep-all}
 .pt-sortbtn small{display:block;font-size:10px;font-weight:400;opacity:.85}
 .pt-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
-.pt-tbl{width:100%;min-width:340px;table-layout:fixed;border-collapse:separate;border-spacing:0;font-size:12px}
+.pt-tbl{width:100%;min-width:360px;table-layout:fixed;border-collapse:separate;border-spacing:0;font-size:12px}
 .pt-tbl th{background:var(--surface2);border-bottom:1px solid var(--border);color:var(--text-dim);font-size:11px;font-weight:600}
 .pt-tbl td{overflow:hidden;padding:5px 4px;border-bottom:1px solid var(--border);text-align:center;vertical-align:middle;font-size:12px;background:linear-gradient(var(--rowbg,transparent),var(--rowbg,transparent)),var(--surface)}
-.pt-tbl td:nth-child(-n+2){padding-left:1px;padding-right:1px}
+.pt-tbl td:nth-child(-n+3){padding-left:1px;padding-right:1px}
 .pt-tbl td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pt-tbl td.sep,.pt-tbl th.sep{border-left:1px solid var(--border)}
 .pt-tbl .ln{display:block;line-height:1.35}
@@ -252,10 +256,10 @@ const TABLE_CSS = `
 .pt-tbl .ev.hi{font-weight:800}
 .pt-name{display:flex;align-items:center;gap:4px;min-width:0}
 .pt-name > .pt-tap{flex:0 1 auto;min-width:0;font-weight:700;color:var(--text);font-size:12.5px;letter-spacing:-.01em}
-.pt-tbl .c-br{width:24px}.pt-tbl .c-no{width:26px}.pt-tbl .c-win{width:46px}.pt-tbl .c-t3{width:46px}.pt-tbl .c-odds{width:58px}.pt-tbl .c-ev{width:44px}
-.pt-tbl tr > :nth-child(-n+3){position:sticky;z-index:1}
-.pt-tbl tr > :nth-child(1){left:0}.pt-tbl tr > :nth-child(2){left:24px}.pt-tbl tr > :nth-child(3){left:50px;box-shadow:1px 0 0 var(--border)}
-.pt-tbl thead tr > th:nth-child(-n+3){z-index:2}
+.pt-tbl .c-br{width:24px}.pt-tbl .c-no{width:26px}.pt-tbl .c-mk{width:20px}.pt-tbl .c-win{width:46px}.pt-tbl .c-t3{width:46px}.pt-tbl .c-odds{width:58px}.pt-tbl .c-ev{width:44px}
+.pt-tbl tr > :nth-child(-n+4){position:sticky;z-index:1}
+.pt-tbl tr > :nth-child(1){left:0}.pt-tbl tr > :nth-child(2){left:24px}.pt-tbl tr > :nth-child(3){left:50px}.pt-tbl tr > :nth-child(4){left:70px;box-shadow:1px 0 0 var(--border)}
+.pt-tbl thead tr > th:nth-child(-n+4){z-index:2}
 .pt-tbl td.pt-bar{background:linear-gradient(to left,var(--c) var(--w),transparent var(--w)) right bottom/100% 3px no-repeat,linear-gradient(var(--rowbg,transparent),var(--rowbg,transparent)),var(--surface)}
 .pt-top{color:var(--text) !important;font-weight:800 !important}
 .pt-legend{margin:6px 2px 0;font-size:11px;line-height:1.6;color:var(--text-dim)}
@@ -271,8 +275,8 @@ const TABLE_CSS = `
   .pt-tbl td{padding:7px 8px;font-size:13px}
   .pt-tbl .ln + .ln{font-size:12px}
   .pt-tbl .ev{min-width:38px;padding:0 4px}
-  .pt-tbl .c-br{width:40px}.pt-tbl .c-no{width:44px}.pt-tbl .c-win{width:84px}.pt-tbl .c-t3{width:84px}.pt-tbl .c-odds{width:110px}.pt-tbl .c-ev{width:90px}
-  .pt-tbl tr > :nth-child(2){left:40px}.pt-tbl tr > :nth-child(3){left:84px}
+  .pt-tbl .c-br{width:40px}.pt-tbl .c-no{width:44px}.pt-tbl .c-mk{width:40px}.pt-tbl .c-win{width:84px}.pt-tbl .c-t3{width:84px}.pt-tbl .c-odds{width:110px}.pt-tbl .c-ev{width:90px}
+  .pt-tbl tr > :nth-child(2){left:40px}.pt-tbl tr > :nth-child(3){left:84px}.pt-tbl tr > :nth-child(4){left:124px}
   .pt-name > .pt-tap{font-size:14px}
 }
 @media (max-width:639px){ .wp-main{padding:12px 6px !important} .wp-race-body{padding:0 4px 10px !important} }
@@ -315,8 +319,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
 
   /* 馬名: タップ/クリック（Enter・スペース）で情報パネルを開く。horse_id が無い行は文字のみ。 */
   const nameCell = (p: PredEntry) => {
-    const mk = p.mark || MARK_SYMBOL[p.mark_type ?? ""] || "";
-    const text = p.horse_name ? <>{mk ? <span title={p.mark_source === "public" ? "無料のAI印" : "めぐAI印"} style={{ marginRight: 3, color: "#fbbf24" }}>{mk}</span> : null}{p.horse_name}</> : null;
+    const text = p.horse_name;
     if (!text) return <span>-</span>;
     if (!p.horse_id) return <span className="pt-tap" style={{ cursor: "default", borderBottom: "none" }}>{text}</span>;
     return (
@@ -379,7 +382,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
     { key: "num", label: "馬番" }, { key: "win", label: "勝率" }, { key: "evw", label: "期待値" },
   ];
   const ALL: { key: SortKey; label: string }[] = [
-    { key: "num", label: "馬番" }, { key: "name", label: "馬名" }, { key: "bracket", label: "枠" },
+    { key: "num", label: "馬番" }, { key: "mark", label: "印" }, { key: "name", label: "馬名" }, { key: "bracket", label: "枠" },
     { key: "win", label: "AI勝率" }, { key: "top3", label: "AI複勝率" },
     { key: "odds", label: "単勝オッズ予測" }, { key: "podds", label: "複勝オッズ予測" }, { key: "evw", label: "単勝期待値" }, { key: "evp", label: "複勝期待値" },
   ];
@@ -424,12 +427,13 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
         {/* 並べ替えは独自に持つので、共通の TableSorter は効かせない（data-no-sort） */}
         <table className="pt-tbl" data-no-sort>
           <colgroup>
-            <col className="c-br" /><col className="c-no" /><col /><col className="c-win" /><col className="c-t3" /><col className="c-odds" /><col className="c-ev" />
+            <col className="c-br" /><col className="c-no" /><col className="c-mk" /><col /><col className="c-win" /><col className="c-t3" /><col className="c-odds" /><col className="c-ev" />
           </colgroup>
           <thead>
             <tr>
               {th("bracket", "枠", { title: "枠番（前日に確定）" })}
               {th("num", "馬番")}
+              {th("mark", "印", { title: "印。押すと ◎ > ○ > ▲ > ★ > △ > 無印 > 消 の順（もう一度押すと逆）" })}
               {th("name", "馬名", { align: "left", title: "馬名（押すと近走・血統・騎手・調教師の情報）" })}
               {th("win", <>{lock ? "🔒" : ""}AI<br />勝率</>, { align: "right", cls: "sep", title: lock ? "AI の勝率（会員限定）" : "AI の勝率" })}
               {th("top3", <>{lock ? "🔒" : ""}AI<br />複勝率</>, { align: "right", title: lock ? "AI の複勝率（会員限定）" : "AI の複勝率（3着以内に入る確率）" })}
@@ -447,6 +451,9 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
                   <td>{wakuChip(p)}</td>
                   <td style={{ fontWeight: 800, fontVariantNumeric: "tabular-nums", color: "var(--text)" }} title={p.horse_number != null ? `${brOf(p) ?? "-"}枠 ${p.horse_number}番` : "馬番は未確定"}>
                     {p.horse_number ?? "-"}
+                  </td>
+                  <td style={{ fontWeight: 800, color: "#fbbf24" }} title={markOf(p) ? (p.mark_source === "public" ? "無料のAI印" : "めぐAI印") : undefined}>
+                    {markOf(p) || ""}
                   </td>
                   <td style={{ textAlign: "left" }}>
                     <span className="pt-name">{nameCell(p)}</span>
@@ -929,6 +936,7 @@ export default function WeeklyPredictionsPage() {
         <summary>印・期待値の見方</summary>
         <div style={{ marginBottom: 16, padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-dim)", display: "flex", gap: 16, flexWrap: "wrap" }}>
           <span>サンプル買い目が出るレースの印はサンプル買い目から決まります（◎=買い目の金額が最大・○▲=2・3番手・△=買い目に入るその他の馬・買い目に入らない馬は印なし）。見送りのレースは下の定義のままです。</span>
+          <span>印の列は、見出しを押すと ◎ &gt; ○ &gt; ▲ &gt; ★ &gt; △ &gt; 無印 &gt; 消 の順に並びます。</span>
           <span>印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / 消: 3着内に来る確率が低い（10人気以下で複勝確率が低い馬。過去の実績では約2.5%・目標5%以下。複数付くことも付かないこともある）</span>
           <span>
             期待値（過去の実績に合わせて較正した期待回収率）: <strong style={{ color: "#22c55e" }}>≥1.10</strong> / <strong style={{ color: "#60a5fa" }}>≥1.00</strong> / <strong style={{ color: "var(--text-dim)" }}>≥0.90</strong> / <strong style={{ color: "#f87171" }}>＜0.90</strong>
