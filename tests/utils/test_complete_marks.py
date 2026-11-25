@@ -1,4 +1,5 @@
-"""印を過不足なく（◎○▲★ を各 1 頭、1 頭 1 印。ユーザーの方針 2026-11-25）。src/utils/race_probabilities.complete_marks。"""
+"""画面の印の最後の段（src/utils/race_probabilities.complete_marks）。rules-council R0-10・依頼 2 の追記（2026-11-25）:
+◎○▲ は AI の勝率の 1・2・3 位、★△消は印のルールのまま、1 頭 1 印、◎○▲★ を各 1 頭（頭数が 4 未満なら上から）。"""
 
 from src.utils.race_probabilities import complete_marks, marks_complete
 
@@ -11,41 +12,31 @@ def _marks(rows):
     return {r["horse_number"]: r["mark_type"] for r in rows}
 
 
-def test_missing_honmei_takes_the_pair_horse_and_pair_is_refilled():
-    """◎ が閾値で付かず勝率 1 位が ○ のレース: ◎ は ○ の馬に繰り上げ、○ は次の馬で埋める（◎ が ○ より弱くならない）。"""
-    rows = [_e(1, 0.30, 0.6, "pair"), _e(2, 0.20, 0.5, "show_val"), _e(3, 0.15, 0.45, "anchor"), _e(4, 0.10, 0.3), _e(5, 0.05, 0.2, "kesi")]
+def test_top3_by_win_prob_overrides_rule_honmei():
+    """印のルールの ◎（勝率の閾値を超えた中で期待値が最大）は使わない。◎○▲ は勝率の 1・2・3 位。"""
+    rows = [_e(1, 0.30, 0.6, "pair"), _e(2, 0.20, 0.5), _e(3, 0.12, 0.45, "honmei", ev=1.6), _e(4, 0.15, 0.4, "show_val"),
+            _e(5, 0.08, 0.3, "anchor"), _e(6, 0.05, 0.2, "kesi")]
     out = complete_marks(rows)
     m = _marks(out)
-    assert m[1] == "honmei" and m[5] == "kesi" and marks_complete(out)
-    assert sorted(v for v in m.values() if v in ("honmei", "pair", "show_val", "star")) == ["honmei", "pair", "show_val", "star"]
-    assert rows[0]["mark_type"] == "pair"                      # 入力は書き換えない
+    assert (m[1], m[2], m[4]) == ("honmei", "pair", "show_val")
+    assert m[3] == "star" and m[5] == "anchor" and m[6] == "kesi" and marks_complete(out)   # 元の ◎ は無印に戻り、★ の埋めで期待値の順に選ばれる
+    assert rows[0]["mark_type"] == "pair"                                                   # 入力は書き換えない
 
 
-def test_exactly_one_each_and_duplicates_are_demoted():
-    rows = [_e(1, 0.3, 0.6, "honmei", ev=1.2), _e(2, 0.25, 0.6, "honmei", ev=0.9), _e(3, 0.2, 0.5), _e(4, 0.1, 0.4), _e(5, 0.05, 0.2)]
+def test_rule_star_kept_unless_in_top3():
+    rows = [_e(1, 0.3, 0.6), _e(2, 0.2, 0.5), _e(3, 0.15, 0.4), _e(4, 0.08, 0.3, "star", ev=1.4), _e(5, 0.06, 0.2, ev=2.0)]
+    assert _marks(complete_marks(rows))[4] == "star"
+    rows2 = [_e(1, 0.3, 0.6, "star", ev=1.2), _e(2, 0.2, 0.5), _e(3, 0.15, 0.4), _e(4, 0.08, 0.3, ev=1.5), _e(5, 0.06, 0.2, ev=0.8)]
+    m = _marks(complete_marks(rows2))
+    assert m[1] == "honmei" and m[4] == "star"                                              # 上位 3 頭の ★ は ◎ になり、★ は埋め直す
+
+
+def test_every_race_gets_all_four_once():
+    rows = [_e(i, w, t) for i, (w, t) in enumerate([(0.12, 0.35), (0.11, 0.4), (0.10, 0.3), (0.09, 0.28), (0.08, 0.2)], 1)]
     out = complete_marks(rows)
-    m = _marks(out)
-    assert m[1] == "honmei" and m[2] != "honmei" and marks_complete(out)
-
-
-def test_bet_marks_race_keeps_bet_marks_and_fills_from_unmarked():
-    """買い目からの印のレース（keep_assigned）: 買い目の ◎・▲・△ は書き換えず、足りない ○・★ は無印の馬から埋める（△ は無印がいない時だけ）。"""
-    rows = [_e(1, 0.3, 0.6, "honmei", recommendation="◎ 買い目の軸"), _e(2, 0.2, 0.5, "show_val"), _e(3, 0.15, 0.4, "anchor", ev=1.4),
-            _e(4, 0.08, 0.3, ev=0.8), _e(5, 0.06, 0.25, ev=0.9), _e(6, 0.02, 0.1, "kesi", ev=2.0)]
-    out = complete_marks(rows, keep_assigned=True)
-    m = _marks(out)
-    assert (m[1], m[2], m[3], m[6]) == ("honmei", "show_val", "anchor", "kesi") and marks_complete(out)
-    assert {m[4], m[5]} == {"pair", "star"} and out[0]["recommendation"] == "◎ 買い目の軸"
-
-
-def test_honmei_fill_uses_win_prob_not_ev():
-    """◎ を埋めるときは勝率の順（期待値の高い人気薄の ★ を ◎ に上げない）。"""
-    rows = [_e(1, 0.35, 0.7, "pair", ev=0.8), _e(2, 0.20, 0.5, "show_val", ev=0.9), _e(3, 0.04, 0.2, "star", ev=1.6, win_odds=40),
-            _e(4, 0.10, 0.3, ev=0.7), _e(5, 0.05, 0.2, ev=0.6)]
-    out = complete_marks(rows)
-    m = _marks(out)
-    assert m[1] == "honmei" and m[3] == "star" and marks_complete(out)
-    assert "recommendation" not in out[0]
+    assert marks_complete(out) and _marks(out)[1] == "honmei"
+    two_stars = complete_marks([_e(1, 0.3, 0.6), _e(2, 0.2, 0.5), _e(3, 0.1, 0.4), _e(4, 0.08, 0.3, "star", ev=1.1), _e(5, 0.05, 0.2, "star", ev=1.5)])
+    assert _marks(two_stars)[5] == "star" and _marks(two_stars)[4] == "anchor" and marks_complete(two_stars)
 
 
 def test_scratched_or_unpredicted_horses_get_no_mark():
@@ -57,20 +48,18 @@ def test_scratched_or_unpredicted_horses_get_no_mark():
     assert sorted(r["mark_type"] for r in out[:3]) == ["honmei", "pair", "show_val"] and marks_complete(out)
 
 
-def test_skip_race_without_any_mark_gets_all_four():
-    """見送り・閾値で何も付かないレースでも ◎○▲★ を付ける（◎・○ は勝率、★ は期待値、▲ は複勝率の順）。"""
-    rows = [_e(i, w, t) for i, (w, t) in enumerate([(0.12, 0.35), (0.11, 0.4), (0.10, 0.3), (0.09, 0.28), (0.08, 0.2)], 1)]
+def test_small_field_and_kesi_in_top3():
+    rows = [_e(1, 0.5, 0.9, "kesi", kesi_reason="x"), _e(2, 0.3, 0.8, "anchor"), _e(3, 0.2, 0.7)]
     out = complete_marks(rows)
-    assert marks_complete(out) and _marks(out)[1] == "honmei"
-
-
-def test_small_field_marks_from_the_top_and_kesi_only_when_needed():
-    rows = [_e(1, 0.5, 0.9, "kesi"), _e(2, 0.3, 0.8, "anchor"), _e(3, 0.2, 0.7)]
-    out = complete_marks(rows)
-    m = _marks(out)
-    assert sorted(m.values()) == ["honmei", "pair", "show_val"] and marks_complete(out)      # 3 頭: ◎○▲ だけ（★ は無し）
+    assert _marks(out) == {1: "honmei", 2: "pair", 3: "show_val"} and "kesi_reason" not in out[0] and marks_complete(out)
     two = complete_marks([_e(1, 0.6, 0.9, "star"), _e(2, 0.4, 0.8)])
-    assert sorted(_marks(two).values()) == ["honmei", "pair"] and marks_complete(two)
+    assert _marks(two) == {1: "honmei", 2: "pair"} and marks_complete(two)
+
+
+def test_changed_marks_drop_old_recommendation():
+    rows = [_e(1, 0.35, 0.7, "pair", recommendation="○ 買い目の2番手"), _e(2, 0.2, 0.5, "honmei", recommendation="◎"), _e(3, 0.1, 0.3), _e(4, 0.05, 0.2)]
+    out = complete_marks(rows)
+    assert "recommendation" not in out[0] and "recommendation" not in out[1]
 
 
 def test_marks_complete_detects_gaps():

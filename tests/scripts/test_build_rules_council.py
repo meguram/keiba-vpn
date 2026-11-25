@@ -87,5 +87,5 @@ def test_results_table_why_columns_follow_r09():
     hcols = h.split("<thead><tr>", 1)[1].split("</tr>", 1)[0].replace("</th>", "").split("<th>")[1:]
     k = hcols.index("説明の確かめ")
     assert all("回収率" not in hcols[j] for j in (k - 1, k + 1) if 0 <= j < len(hcols))
-    for lab in ("確かめ中", "確かめられない"):
+    for lab in ("新しい予測が足りない", "確かめられない"):
         assert lab in BT.CHECK_LABELS and lab in BT.MEGU_WHY

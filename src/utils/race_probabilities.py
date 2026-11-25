@@ -483,7 +483,7 @@ def _fill_key(mt: str):
     """足りない印を埋めるときの順位。◎・○ は順位の印なので勝率の順（期待値で選ぶと人気薄が ◎ に上がり、○ より弱くなる）。
     ★ は ◎○▲ の次の注目馬なので期待値の順、▲ は 3 着以内の確率の順。"""
     if mt in ("honmei", "pair"):
-        return lambda x: (_f(x, "win_prob"), _f(x, "top2_prob"), _f(x, "top3_prob"))
+        return lambda x: (_f(x, "win_prob"), _f(x, "top2_prob"), _f(x, "top3_prob"), -int(x.get("horse_number") or 99))   # 同じ値は馬番の小さい方
     if mt == "star":
         return lambda x: (max(_ev(x, "win"), _ev(x, "place")), _f(x, "top3_prob"))
     return lambda x: (_f(x, "top3_prob"), _f(x, "win_prob"))
@@ -494,41 +494,35 @@ def _markable(e: dict) -> bool:
     return isinstance(e, dict) and e.get("win_prob") is not None and bool(e.get("horse_number")) and e.get("mark_type") != "scratched"
 
 
-def complete_marks(entries: list[dict], *, keep_assigned: bool = False) -> list[dict]:
-    """印を過不足なくする（新しい一覧を返す。入力は書き換えない）。
-    - ◎○▲★ が 2 頭以上なら、評価の高い 1 頭を残し、残りは △ にする。頭数（印を付けてよい馬）が 4 未満なら ◎○▲★ の上から頭数まで。
-    - 足りない印を ◎ → ○ → ★ → ▲ の順に埋める。◎・○ は下の印（○・★・▲）の馬も候補にして勝率の順で繰り上げ、空いた印は後の番で埋める。
-    - keep_assigned=True（買い目から印を決めたレース）: 付いている印（◎○▲△）は書き換えず、足りない印は無印の馬から埋める（無ければ △ の馬）。
-    - 消の馬は、ほかに馬がいない時だけ使う。印を変えた馬の説明文（recommendation）は外す（古い印の説明が残らないように）。"""
+def complete_marks(entries: list[dict]) -> list[dict]:
+    """画面の印を決める最後の段（新しい一覧を返す。入力は書き換えない）。rules-council R0-10・依頼 2 の追記（2026-11-25）:
+    - ◎○▲ は AI の勝率（win_prob）の 1・2・3 位（同じ値は連対率・複勝率の順）。印のルールの ◎（期待値の候補）や買い目からの印では決めない。
+    - ★・△・消は印のルールのまま。ただし勝率の上位 3 頭に付いていた印は ◎○▲ に替わり、上位 3 頭でない馬の ◎○▲ は無印に戻す。
+    - ★ が無ければ（4 頭以上のとき）、無印・△ の馬から期待値の順で 1 頭（無ければ消の馬から）。1 頭 1 印。
+    - 取消・確率の無い馬には付けない。印を変えた馬の説明文（recommendation）は外す。"""
     out = [dict(e) if isinstance(e, dict) else e for e in entries]
     rows = [e for e in out if _markable(e)]
     n = len(rows)
     if n == 0:
         return out
     before = {id(e): e.get("mark_type") for e in rows}
-    for mt in TOP_MARKS:
-        have = [e for e in rows if e.get("mark_type") == mt]
-        if len(have) > 1:
-            keep = max(have, key=_fill_key(mt))
-            for e in have:
-                if e is not keep:
-                    e["mark_type"] = "anchor"
-    required = TOP_MARKS[: min(4, n)]
+    ranked = sorted(rows, key=_fill_key("honmei"), reverse=True)
+    top = {id(e): mt for e, mt in zip(ranked, ("honmei", "pair", "show_val"))}
     for e in rows:
-        if e.get("mark_type") in TOP_MARKS and e["mark_type"] not in required:
-            e["mark_type"] = "anchor"
-    order = [mt for mt in _FILL_ORDER if mt in required]
-    for i, mt in enumerate(order):                     # 繰り上げた後の空きは後ろの番で埋まる
-        if any(e.get("mark_type") == mt for e in rows):
-            continue
-        lower = set(order[i + 1:]) if (mt in ("honmei", "pair") and not keep_assigned) else set()
-        tiers = ([{"none", "", None}, {"anchor"}, {"kesi"}] if keep_assigned
-                 else [{"none", "", None, "anchor"} | lower, {"kesi"}])
-        for tier in tiers:
+        if id(e) in top:
+            e["mark_type"] = top[id(e)]
+            e.pop("kesi_reason", None)
+        elif e.get("mark_type") in ("honmei", "pair", "show_val"):
+            e["mark_type"] = "none"
+    stars = sorted((e for e in rows if e.get("mark_type") == "star"), key=_fill_key("star"), reverse=True)
+    for e in stars[1:]:                                    # ★ が 2 頭以上なら期待値の高い 1 頭だけ
+        e["mark_type"] = "anchor"
+    if n >= 4 and not stars:
+        for tier in ({"none", "", None, "anchor"}, {"kesi"}):
             pool = [e for e in rows if e.get("mark_type") in tier]
             if pool:
-                pick = max(pool, key=_fill_key(mt))
-                pick["mark_type"] = mt
+                pick = max(pool, key=_fill_key("star"))
+                pick["mark_type"] = "star"
                 pick.pop("kesi_reason", None)
                 break
     for e in rows:

@@ -51,7 +51,9 @@ def _keys(out):
 
 def test_private_mode_is_unchanged():
     assert P.is_public_mode() is False
-    assert tier.redact_predictions_member(TOP) is TOP and tier.redact_race_detail_member(DETAIL) is DETAIL
+    assert tier.redact_race_detail_member(DETAIL) is DETAIL
+    m = tier.redact_predictions_member(TOP)                      # private の会員: 期待値・買い判断・推奨の文だけを落とす（2026-11-25）
+    assert "win_prob" in _keys(m) and not ({"ev_win", "ev_win_cal", "expected_value", "buy_tier", "bet_suggestion"} & _keys(m))
     assert "win_prob" not in _keys(tier.redact_predictions(TOP)) and "mark_type" in _keys(tier.redact_predictions(TOP))
 
 
@@ -87,11 +89,12 @@ def test_release_switches(monkeypatch, tmp_path):
     assert {"jockey_name", "weight", "sex_age"} <= k and "horse_id" not in k
     _set(monkeypatch, tmp_path, odds_derived_public=True)
     m, g = _keys(tier.redact_predictions_member(TOP)), _keys(tier.redact_predictions(TOP))
-    assert "ev_win_cal" in m and "ev_win_cal" not in g                       # 較正後の期待値は会員に出る
+    assert "ev_win_cal" not in m and "ev_win_cal" not in g                   # 期待値は会員にも出さない（2026-11-25）
     assert not ({"ev_win", "ev_place", "ev_top2", "expected_value", "win_odds", "place_odds_min", "place_odds_max", "popularity",
                  "top2_odds_est", "odds_source", "bet_suggestion"} & m)      # 実オッズ（と、確率から逆算できる生の期待値）は出さない
     _set(monkeypatch, tmp_path, odds_derived_public=True, actual_odds_public=True)
-    assert {"ev_win", "win_odds", "popularity", "bet_suggestion"} <= _keys(tier.redact_predictions_member(TOP))     # 許可が取れたら出せる
+    assert {"win_odds", "popularity"} <= _keys(tier.redact_predictions_member(TOP))     # 許可が取れたら実オッズは出せる（期待値・推奨の文は会員にも出さない）
+    assert not ({"ev_win", "bet_suggestion"} & _keys(tier.redact_predictions_member(TOP)))
     assert "win_odds" not in _keys(tier.redact_predictions(TOP))                                                     # ゲストには常に出ない
 
 

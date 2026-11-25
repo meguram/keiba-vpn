@@ -317,9 +317,13 @@ def test_fastapi_predictions_by_tier(monkeypatch):
     anon = c.get("/api/race/202608020311/predictions").json()
     assert "ev_win" not in anon["predictions"][0] and "bet_suggestion" not in anon and anon["access"]["tier"] == "public"
     assert "win_prob" not in anon["predictions"][0] and anon["predictions"][0]["mark"] == "◎"
-    for role in ("member", "dev"):
-        full = c.get("/api/race/202608020311/predictions", cookies=_cookie(role)).json()
-        assert full["predictions"][0]["ev_win"] == 1.2 and "bet_suggestion" in full
+    full = c.get("/api/race/202608020311/predictions", cookies=_cookie("dev")).json()
+    assert full["predictions"][0]["ev_win"] == 1.2 and "bet_suggestion" in full          # 開発者は全項目
+    mem = c.get("/api/race/202608020311/predictions", cookies=_cookie("member")).json()
+    e0 = mem["predictions"][0]
+    assert e0["win_prob"] and e0["win_odds"] == 8.5 and e0["top2_prob"]                    # 会員: 確率・オッズは出る
+    assert not ({"ev_win", "ev_place", "ev_top2", "ev_win_cal", "ev_place_cal", "expected_value", "buy_tier"} & set(e0))
+    assert "bet_suggestion" not in mem                                                       # 期待値・買い判断・推奨の文は会員にも出さない
 
 
 def test_fastapi_member_only_paths_401_for_anonymous(monkeypatch):
@@ -543,7 +547,7 @@ def test_predictions_by_four_tiers(tier_env, monkeypatch):
         assert not (guest_locked & keys), (t, guest_locked & keys)
         assert {"mark_type", "mark", "horse_name"} <= keys and not ({"win_prob", "top3_prob", "show_prob", "pred_rank"} & keys)
     pe = out["paid"]["predictions"][0]
-    assert {"ev_win_cal", "mark_type", "top2_prob"} <= set(pe)                       # 有料: 較正後の期待値・印・連対率
+    assert {"mark_type", "top2_prob"} <= set(pe) and "ev_win_cal" not in pe          # 有料: 印・連対率（期待値は会員にも出さない）
     assert not ({"ev_win", "ev_place", "expected_value", "popularity", "top2_odds_est", "odds_source"} & set(pe))     # 実オッズ（と生の期待値）は出さない
     assert pe.get("win_odds") != ENTRY["win_odds"] and "bet_suggestion" not in out["paid"]
     assert "horse_id" not in pe                                                       # 取得元固有（C）は誰にも出さない
@@ -712,7 +716,7 @@ def test_paid_predictions_get_predicted_odds_not_actual(tier_env, monkeypatch):
     paid = {e["horse_number"]: e for e in _get(c, "/api/race/202608020311/predictions", "paid").json()["predictions"]}
     assert paid[5]["win_odds"] == round(want[5], 1) and paid[6]["win_odds"] == round(want[6], 1) and paid[5]["odds_source"] == "predicted"
     assert paid[6]["popularity"] == 1 and paid[5]["popularity"] == 2                       # 想定人気（想定単勝の低い順）
-    assert paid[5]["ev_win"] == round(ENTRY["win_prob"] * want[5], 3)                       # 想定オッズ × 勝率（実オッズ 8.5 ではない）
+    assert "ev_win" not in paid[5]                                                          # 期待値は会員にも出さない（2026-11-25）
     assert ENTRY["win_odds"] not in [e["win_odds"] for e in paid.values()]
     for t in ("guest", "free"):
         assert not any("win_odds" in e for e in _get(c, "/api/race/202608020311/predictions", t).json()["predictions"]), t

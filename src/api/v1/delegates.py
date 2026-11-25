@@ -312,26 +312,23 @@ def _optimize_target(body: dict[str, Any], view: str, storage: Any | None = None
     if TB.require_sec77() and not (raw_single and raw_single.get("odds_model") == "sec77"):
         out = TB.pending_odds_plan(race_id, cap)      # 検証と別の想定オッズ（従来モデル）で推奨を作らない
         return {"view": view, **out, "race_tier": PZ.tier_info(0), "legend": PZ.legend(), "max_total_bet": cap,
-                "disclaimer": TB.config().get("notice") or PZ.disclaimer(), "evidence": TB.config().get("evidence"), "note": out["skip_reason"]}, 200
+                "disclaimer": TB.config().get("notice") or PZ.disclaimer(), "note": out["skip_reason"]}, 200
     single = PZ.calibrate_single(raw_single)
     marked = _paid_marks(preds, single)
     out = TB.build_target_portfolio(marked, single, cap, race_id=race_id)
     if out.get("plans"):      # 画面に出すのは既定のプラン（最大5パターン）だけ。馬券別の補助プランは返さない
         out["plans"] = [p for p in out["plans"] if p.get("id") == out.get("default_plan")]
-    try:  # 推奨馬券を正として、印は買い目から決め直す（買い目が無いレースは従来の印のまま）
-        from src.pipeline.inference import bet_marks as BM
-
-        hm = BM.aligned_mark_types(marked, out.get("bets") if out.get("status") == "bet" else None)
-        if hm:
-            BM.relabel_legs(out, hm)
-            out["horse_marks"] = {str(h): m for h, m in hm.items()}
-    except Exception as exc:  # noqa: BLE001  印が揃えられなくても買い目は出す
-        logger.warning("買い目からの印の付け直しに失敗 %s: %s", race_id, exc)
+    # 脚には印を付けない。印は予測の表だけ（AI の勝率の順の ◎○▲・印のルールの ★△消）で、サンプル買い目は印とは別の欄
+    #（rules-council R0-10・依頼 2 の追記）。ここで付け直すと、確率の補正・候補のモデルの違いで表の印と食い違いうる
+    for plan in [out, *(out.get("plans") or [])]:
+        for b in plan.get("bets") or []:
+            for leg in b.get("legs") or []:
+                leg["mark"] = ""
     cfg = TB.config()
     tier = PZ.tier_info(int(out.get("level") or 0))
     return {
         "view": view, **out, "race_tier": tier, "legend": PZ.legend(), "max_total_bet": cap,
-        "disclaimer": cfg.get("notice") or PZ.disclaimer(), "evidence": cfg.get("evidence"),
+        "disclaimer": cfg.get("notice") or PZ.disclaimer(),
         "note": "金額は『当たったときに払戻が約%g倍になる』ように決めています。倍率・払戻は想定オッズ（AI の予測）で、実際のオッズではありません。" % out["target_multiple"],
     }, 200
 

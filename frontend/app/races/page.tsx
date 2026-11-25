@@ -93,7 +93,7 @@ function RoiBar({ b }: { b: BetsSummary }) {
     <section aria-label="サンプル買い目の回収率" title={b.note} style={{ display: "flex", gap: 20, flexWrap: "wrap", padding: "10px 14px", marginBottom: 12, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12 }}>
       {cell(`この日の回収率・標準以上（${b.label}）`, b.day, b.day.status === "final" ? "" : "暫定")}
       {cell(`この週の回収率・標準以上（${formatMD(w.from)}〜${formatMD(w.to)}）`, w, w.status === "final" ? `${w.days.length}日分` : `${w.days.length}日分・暫定`)}
-      <div style={{ flexBasis: "100%", fontSize: 10, color: "var(--text-dim)" }}>参考度が標準以上のレースのサンプル買い目をすべて買ったとみなした仮想購入（見送りのレースは含めません。払戻は確定払戻。100% 超は確かめられていません）。添えた値は、確定オッズ（レース後の値）が想定オッズ以上の買い目だけを買ったとみなした場合で、当たる買い目が落ちやすい数え方です。実際の購入ではありません。</div>
+      <div style={{ flexBasis: "100%", fontSize: 10, color: "var(--text-dim)" }}>参考度が標準以上のレースのサンプル買い目をすべて買ったとみなした仮想購入（見送りのレースは含めません。払戻は確定払戻。100% を上回るかは確かめられていません）。添えた値は、確定オッズ（レース後の値）が想定オッズ以上の買い目だけを買ったとみなした場合で、当たる買い目が落ちやすい数え方です。実際の購入ではありません。</div>
     </section>
   );
 }

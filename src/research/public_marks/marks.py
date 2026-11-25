@@ -1,12 +1,14 @@
 """無料ユーザーに出す印（public_mark_type）を、発走 50 分前（T-50）の 1 回で決める（事前登録 config/public_marks_v2.json）。
 
 python -m src.research.public_marks.marks shadow --day 20261129     # 開催日の 17:00 より後に、手元の T-60 と予測から影の記録を書く
+python -m src.research.public_marks.marks extras --day 20261129     # 翌日以降（結果の表の書き出しの後）に、記述の列を別の記録に書く
 python -m src.research.public_marks.marks simulate                  # 止める規則（config/public_marks_stop_v2.json）の模擬（着順は読まない）
 
 - v2: 印は過不足なく全レースに付ける。予測があり予測待ちでないレースには、必ず ◎○▲★ を頭数まで（重複なし）、△・消は 0 頭以上。
   付ける順は ◎ → ○ → ▲ → ★ → △ → 消。★ の mode は ana・fallback_r・no_odds_p（T-50 までにオッズが無いときは市場と比べず、△・消は付けない）。
-- 入力は、予測の行の p_win・p_top3（本番の推論の経路 predictions_v3。T-50 までに最後に書かれたもの）と、
-  T-60 の単勝オッズの手元の写し（odds_t60。取得と書き込みが T-50 以前のもの）だけ。確定オッズ・T-50 より後の値・着順・払戻は読まない。
+- 印の入力は、予測の行の p_win・p_top3（本番の推論の経路 predictions_v3。T-50 までに最後に書かれたもの）と、
+  T-60 の単勝オッズの手元の写し（odds_t60。取得と書き込みが T-50 以前のもの）だけ。確定オッズ・T-50 より後の値・着順・払戻は印に使わない。
+- 記述の列（R0-10 の 4）は extras_day が別の記録（<日>.extras.jsonl）に書き、そこでだけ確定オッズ（手元の結果の表）を読む。
 - 予測の最後の書き込みが T-50 より後のレースは「予測待ち」（wait_pred）として記録だけに残す。画面の印なしではなく、測る側の穴
   （本番では T-50 の時点の予測で印が付くが、書き直しの履歴は残らない）。
 - 取消（T-60 の単勝 999.9 以上）の馬は印を付けず「取消」と記録し、ほかの馬の印は付け直さない。
@@ -265,6 +267,94 @@ def load_pred(pf: Path, ff: Path):
     return p, pm
 
 
+def final_odds_table(day: str) -> tuple[dict[str, dict[int, float]], dict[str, list[int]], str | None]:
+    """確定の単勝オッズ（手元の結果の表 race_result_flat だけ。GCS は読まない）。記述の列だけに使う。
+    戻り値: {race_id: {馬番: 確定オッズ}}・{race_id: 確定オッズの無い馬番（取消・除外など）}・表の sha256 の先頭（無ければ None）。"""
+    import pandas as pd
+
+    from src.config.data_paths import TABLES_DIR
+
+    f = Path(TABLES_DIR) / day[:4] / "race_result_flat.parquet"
+    if not f.exists():
+        return {}, {}, None
+    t = pd.read_parquet(f, columns=["race_id", "horse_number", "odds"])
+    t = t[t["race_id"].astype(str).str[:4] == day[:4]]
+    odds, missing = {}, {}
+    for rid, hn, v in zip(t["race_id"].astype(str), pd.to_numeric(t["horse_number"], errors="coerce"), pd.to_numeric(t["odds"], errors="coerce")):
+        if not np.isfinite(hn):
+            continue
+        if np.isfinite(v) and v > 0:
+            odds.setdefault(rid, {})[int(hn)] = float(v)
+        else:
+            missing.setdefault(rid, []).append(int(hn))
+    return odds, missing, _sha(f)
+
+
+def extras(o: dict | None, p, res: dict, final: dict[int, float]) -> dict:
+    """記述の列（R0-10 の 4。印の決め方には使わない）: オッズ 3 つ（T-50 に使った T-60・T-5・確定）・確定オッズでも
+    期待値 1 以上が残る印の馬の割合（◎○▲★△、消は除く）・★ ana の勝者の呪い
+    （選んだ時点の r − 同じレースの 10 倍以上の帯の ★ 以外の馬の r の平均。r は decide と同じく取消を除いて合計 1 に直した p と q で計算）。"""
+    marks = {int(k): v for k, v in res["marks"].items()}
+    scr = set(res.get("scratched") or [])
+    t60 = {}
+    if o and res.get("odds_used"):
+        for e in o.get("entries") or []:
+            try:
+                t60[int(e["horse_number"])] = _num(e.get("win_odds"))
+            except (KeyError, TypeError, ValueError):
+                continue
+    pw = {}
+    if p is not None and "horse_number" in p.columns:
+        rows = [(int(h), float(x)) for h, x in zip(p["horse_number"], p["p_win"]) if int(h) not in scr and np.isfinite(float(x))]
+        tot = sum(x for _, x in rows)
+        if tot > 0:
+            pw = {h: x / tot for h, x in rows}
+    odds3 = {str(h): {"t50_used": t60.get(h), "t5": None, "final": final.get(h)} for h in marks}
+    ev_rows = [pw[h] * final[h] for h in marks if marks[h] != "kesi" and h in pw and h in final]
+    out = {"odds3": odds3, "t5_note": "T-5 は取得していない（KEIBA_ODDS_LATE_SNAPSHOTS が既定で無効）",
+           "ev_final_ge1_share": round(sum(v >= 1 for v in ev_rows) / len(ev_rows), 3) if ev_rows else None,
+           "ev_final_n": len(ev_rows), "star_winner_curse": None}
+    star = [h for h, m in marks.items() if m == "star"]
+    if res.get("mode") == "ana" and star and t60 and pw:
+        inv = {h: 1 / v for h, v in t60.items() if h in pw and 0 < v < SCRATCH_ODDS}
+        z = sum(inv.values())
+        r = {h: math.log(pw[h] / (inv[h] / z)) if pw[h] > 0 else -math.inf for h in inv}
+        band = [r[h] for h in r if t60[h] >= STAR_ODDS and h != star[0] and np.isfinite(r[h])]
+        if star[0] in r and band:
+            out["star_winner_curse"] = round(r[star[0]] - float(np.mean(band)), 4)
+    return out
+
+
+def extras_day(day: str, inf: Path = INF, out: Path = OUT) -> dict:
+    """影の記録の日の記述の列を、別の記録 <日>.extras.jsonl に 1 回だけ書く（翌日以降、手元の結果の表に確定オッズが入ってから）。
+    影の記録の印は変えない。結果の表にその日のレースが無ければ書かない。"""
+    src = out / f"{day}.jsonl"
+    dst = out / f"{day}.extras.jsonl"
+    if not src.exists():
+        raise SystemExit(f"{src} がありません（影の記録の後に流す）")
+    if dst.exists():
+        raise SystemExit(f"{dst} は既にあります（書き直さない）")
+    rows = [json.loads(x) for x in src.read_text(encoding="utf-8").splitlines() if x.strip()]
+    fo, missing, fsha = final_odds_table(day)
+    if not any(r["race_id"] in fo for r in rows):
+        raise SystemExit(f"{day} のレースの確定オッズが手元の結果の表にまだありません（表の書き出しの後に流す）")
+    res_rows = []
+    for r in rows:
+        if r.get("status") != "marked":
+            continue
+        rid = r["race_id"]
+        of = inf / "odds_t60" / day / f"{rid}.json"
+        o = json.loads(of.read_text(encoding="utf-8")) if of.exists() else None
+        p, _ = load_pred(inf / "predictions_v3" / day / f"{rid}.parquet", inf / "features" / day / f"{rid}.parquet")
+        if _sha(inf / "predictions_v3" / day / f"{rid}.parquet") != (r.get("inputs_sha") or {}).get("pred"):
+            res_rows.append({"race_id": rid, "skipped": "予測のファイルが影の記録の後に変わった"})
+            continue
+        ex = extras(o, p, r, fo.get(rid, {}))
+        res_rows.append({"race_id": rid, "final_table_sha": fsha, "final_missing": missing.get(rid, []), **ex})
+    dst.write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in res_rows), encoding="utf-8")
+    return {"day": day, "rows": len(res_rows), "final_table_sha": fsha}
+
+
 def shadow_day(day: str, inf: Path = INF, out: Path = OUT, check_frozen: bool = True, card: dict | None = None,
                now: datetime | None = None) -> dict:
     """開催日の影の記録（開催日の 17:00 より後に流す）。固めた日より後の開催日だけ。既にある日は書き直さない。
@@ -352,10 +442,15 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("shadow")
     s.add_argument("--day", required=True)
+    e = sub.add_parser("extras")
+    e.add_argument("--day", required=True)
     sub.add_parser("simulate")
     a = ap.parse_args()
     if a.cmd == "shadow":
         print(json.dumps(shadow_day(a.day), ensure_ascii=False))
+        return
+    if a.cmd == "extras":
+        print(json.dumps(extras_day(a.day), ensure_ascii=False))
         return
     stop = json.loads(STOP.read_text(encoding="utf-8"))
     at = [c["at_races"] for c in stop["checks"]]

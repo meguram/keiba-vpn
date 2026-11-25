@@ -5,13 +5,13 @@ import { OddsDist } from "@/components/OddsDistPopup";
 import type { ColumnTrainerPatternBlock } from "@/lib/columns";
 import { patHint, patWord, pct, rowStats, SLOPE_LEGEND, splitPat, sumRows, type TPRow, type TPTable } from "@/lib/trainerPattern";
 
-type SortKey = "name" | "n" | "heads" | "win" | "place" | "winRoi" | "placeRoi";
+type SortKey = "name" | "n" | "heads" | "win" | "place";
 type Node = { id: string; name: string; hint?: string; row: TPRow; kids?: Node[] };
 type Flat = { id: string; trainer: string; place: string; pat: string; hint: string; row: TPRow };
 
 const COLS: { key: SortKey; label: string; xm?: boolean }[] = [
   { key: "n", label: "出走" }, { key: "heads", label: "頭数", xm: true }, { key: "win", label: "勝率" },
-  { key: "place", label: "複勝率" }, { key: "winRoi", label: "単勝回収率" }, { key: "placeRoi", label: "複勝回収率" },
+  { key: "place", label: "複勝率" },
 ];
 const PAGE = 200;
 
@@ -45,21 +45,17 @@ function stat(r: TPRow, k: SortKey): number {
     case "n": return s.n;
     case "heads": return s.heads ?? -1;
     case "win": return s.win ?? -1;
-    case "place": return s.place ?? -1;
-    case "winRoi": return s.winRoi ?? -1;
-    default: return s.placeRoi ?? -1;
+    default: return s.place ?? -1;
   }
 }
 
 function Cells({ r, t, edges, maxOdds }: { r: TPRow; t: string; edges: number[]; maxOdds: number }) {
   const s = rowStats(r);
-  const roi = (v: number | null) => <td className={v != null && v > 1 ? "up" : ""}>{pct(v)}</td>;
   return (
     <>
       <td>{s.n}</td><td className="xm">{s.heads ?? "–"}</td>
       <td className="xs">{s.c1}-{s.c2}-{s.c3}-{s.c4p}</td>
       <td>{pct(s.win)}</td><td>{pct(s.place)}</td>
-      {roi(s.winRoi)}{roi(s.placeRoi)}
       <td style={{ textAlign: "center" }}><OddsDist row={r} edges={edges} maxOdds={maxOdds} title={t} /></td>
     </>
   );
@@ -94,7 +90,6 @@ export function ColumnTrainerPattern({ block }: { block: ColumnTrainerPatternBlo
   const [mode, setMode] = useState<"trainer" | "flat">("trainer");
   const [q, setQ] = useState("");
   const [minN, setMinN] = useState(30);
-  const [onlyUp, setOnlyUp] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "n", dir: -1 });
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [limit, setLimit] = useState(PAGE);
@@ -109,7 +104,6 @@ export function ColumnTrainerPattern({ block }: { block: ColumnTrainerPatternBlo
   };
 
   const data = useMemo(() => (table ? build(table) : null), [table]);
-  const up = (r: TPRow) => { const s = rowStats(r); return (s.winRoi ?? 0) > 1 || (s.placeRoi ?? 0) > 1; };
   const cmp = (a: TPRow, b: TPRow, an: string, bn: string) => {
     if (sort.key === "name") return an.localeCompare(bn, "ja") * sort.dir;
     return (stat(a, sort.key) - stat(b, sort.key)) * sort.dir || an.localeCompare(bn, "ja");
@@ -129,10 +123,10 @@ export function ColumnTrainerPattern({ block }: { block: ColumnTrainerPatternBlo
   let count = 0;
   if (data && table) {
     if (mode === "trainer") {
-      const ts = data.tree.filter((t) => t.row[0] >= minN && (!needle || t.name.includes(needle)) && (!onlyUp || up(t.row)))
+      const ts = data.tree.filter((t) => t.row[0] >= minN && (!needle || t.name.includes(needle)))
         .sort((a, b) => cmp(a.row, b.row, a.name, b.name));
       count = ts.length;
-      const sub = (ns: Node[]) => ns.filter((n) => n.row[0] >= minN && (!onlyUp || up(n.row))).sort((a, b) => cmp(a.row, b.row, a.name, b.name));
+      const sub = (ns: Node[]) => ns.filter((n) => n.row[0] >= minN).sort((a, b) => cmp(a.row, b.row, a.name, b.name));
       body = ts.map((t) => (
         <Fragment key={t.id}>
           <tr className="t1" onClick={() => setOpen((o) => ({ ...o, [t.id]: !o[t.id] }))} aria-expanded={!!open[t.id]}>
@@ -150,7 +144,7 @@ export function ColumnTrainerPattern({ block }: { block: ColumnTrainerPatternBlo
         </Fragment>
       ));
     } else {
-      const fs = data.flat.filter((f) => f.row[0] >= minN && (!needle || f.trainer.includes(needle)) && (!onlyUp || up(f.row)))
+      const fs = data.flat.filter((f) => f.row[0] >= minN && (!needle || f.trainer.includes(needle)))
         .sort((a, b) => cmp(a.row, b.row, a.trainer + a.place + a.pat, b.trainer + b.place + b.pat));
       count = fs.length;
       body = fs.slice(0, limit).map((f) => (
@@ -185,7 +179,6 @@ export function ColumnTrainerPattern({ block }: { block: ColumnTrainerPatternBlo
                   {[0, 10, 30, 100, 300].map((n) => <option key={n} value={n}>{n}走以上</option>)}
                 </select>
               </label>
-              <label><input type="checkbox" checked={onlyUp} onChange={(e) => { setOnlyUp(e.target.checked); setLimit(PAGE); }} />回収率100%超だけ</label>
               <span>{count.toLocaleString("en-US")} 件</span>
             </div>
             <div className="tpc-scroll">
@@ -211,7 +204,7 @@ export function ColumnTrainerPattern({ block }: { block: ColumnTrainerPatternBlo
               坂路の型: {SLOPE_LEGEND.map((l, i) => <span key={l.name}>{i ? "　" : ""}<b>{l.name}</b>＝{l.desc}</span>)}。ウッド・ポリは 4F（800m）の時計帯。
             </p>
             <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--text-dim)" }}>
-              {block.caption ?? ""} 集計 {table.y0}〜{table.y1} 年、単勝 {table.max_odds} 倍以上は除く。見出しをクリックで並べ替え。
+              {block.caption ?? ""} 集計 {table.y0}〜{table.y1} 年、単勝 {table.max_odds} 倍以上は除く。見出しをクリックで並べ替え。選んだ期間の回収率は、将来を表さないので出していません。
             </p>
           </>
         )}

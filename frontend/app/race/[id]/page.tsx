@@ -26,6 +26,7 @@ import { useAutoRetry } from "@/lib/hooks/useAutoRetry";
 import { firstCornerPos, positionVerdict, summarizePositions } from "@/lib/resultCheck";
 import type { ForecastHorse, GateBias, PaceForecast, PositionForecast as PosFc } from "@/lib/positionForecast";
 import { turnOf } from "@/lib/courseTurn";
+import { MarkNote } from "@/components/MarkNote";
 
 const SHOW_MEGU = featureEnabled("megu-index");
 const SHOW_TRACKING = featureEnabled("tracking-difficulty");
@@ -153,13 +154,6 @@ type PredEntry = {
   win_prob_model?: number | null;
   top2_prob_model?: number | null;
   top3_prob_model?: number | null;
-  ev_win?: number | null;
-  ev_place?: number | null;
-  /** EV の較正が有効なときの、較正後の値。あれば画面はこちらを表示する */
-  ev_win_cal?: number | null;
-  ev_place_cal?: number | null;
-  expected_value?: number | null;
-  buy_tier?: string;
   win_odds?: number | null;
   place_odds_min?: number | null;
   place_odds_max?: number | null;
@@ -217,20 +211,11 @@ function gradeStyle(grade: string | undefined): React.CSSProperties {
   return { background: "rgba(245,158,11,0.2)", color: "var(--warn)" };
 }
 
-function evColor(v: number | null | undefined, cal = false): string {
-  if (v == null) return "var(--text-dim)";
-  if (cal) return v >= 1.1 ? "var(--ok)" : v >= 1.0 ? "var(--accent)" : v >= 0.9 ? "var(--text-dim)" : "var(--err)";      // 較正後: 買い判断（buy_tier）の閾値に合わせる
-  if (v >= 1.3) return "var(--ok)";
-  if (v >= 1.0) return "var(--accent)";
-  if (v >= 0.8) return "var(--text-dim)";
-  return "var(--err)";
-}
-
 /* ── タブ ── */
 type Tab = "shutuba" | "result" | "predict" | "bet" | "horses";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "predict", label: "🤖 AI予測・期待値" },
+  { id: "predict", label: "🤖 AI予測" },
   { id: "bet", label: "💴 サンプル買い目" },
   { id: "shutuba", label: "出馬表" },
   { id: "result", label: "レース結果" },
@@ -324,7 +309,7 @@ export default function RaceDetailPage() {
       const d = await getJson<PredData>(url, { ttlMs: PRED_TTL_MS, persist: true });
       if (current()) { setPredData(d); setStalePred(false); }
     } catch {
-      if (stored && current()) setStalePred(true);   // 前回の予測を出したまま最新が取れない（オッズ・期待値が古いままになりうる）ことを出す。取り直しは下の useAutoRetry（予測だけ）
+      if (stored && current()) setStalePred(true);   // 前回の予測を出したまま最新が取れない（オッズが古いままになりうる）ことを出す。取り直しは下の useAutoRetry（予測だけ）
     }
   }, [raceId]);
   const loadRace = useCallback(async () => {
@@ -570,6 +555,7 @@ export default function RaceDetailPage() {
     <div style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>📋 出馬表データがありません</div>
   ) : (
     <div style={{ overflowX: "auto" }}>
+      {predData?.has_prediction === true && predByNo.size > 0 && <MarkNote />}
       <table className="m-sticky" style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 13 }}>
         <thead style={{ background: "var(--surface2)" }}>
           <tr>
@@ -737,8 +723,8 @@ export default function RaceDetailPage() {
 
   /* ── AI予測 ── */
   const preds = predData?.predictions ?? [];
-  const calibratedEv = preds.some((p) => p.ev_win_cal != null || p.ev_place_cal != null);       // EV の較正が有効なときだけ『(較正後)』と表示する
-  const hasPred = predData?.has_prediction === true && preds.some((p) => p.pred_score != null || p.composite_score != null || p.win_prob != null);
+  // 匿名・無料会員の応答には確率が無く印だけが来るので、印でも「予測あり」とみなす
+  const hasPred = predData?.has_prediction === true && preds.some((p) => p.pred_score != null || p.composite_score != null || p.win_prob != null || !!p.mark_type);
   const sortedPreds = hasPred
     ? [...preds].sort((a, b) => (a.composite_rank ?? a.pred_rank ?? 99) - (b.composite_rank ?? b.pred_rank ?? 99))
     : preds;
@@ -750,7 +736,7 @@ export default function RaceDetailPage() {
     .sort((a, b) => Number(a.horse_number) - Number(b.horse_number))
     .map((p) => ({ no: Number(p.horse_number), name: p.horse_name ?? "", bracket: wakuOf(Number(p.horse_number), preds.length, bracketOf.get(Number(p.horse_number)) ?? (Number(p.bracket_number) || null)), f: p.position_forecast ?? null }));
 
-  const PRED_HIDE = new Set([0, 4, 7, 9, 10]);   // 枠・連対率・想定複勝・複期待値・買い判断は狭い画面で畳む
+  const PRED_HIDE = new Set([0, 4, 7]);   // 枠・連対率・想定複勝は狭い画面で畳む
   const PredPanel = (
     <div>
       {isAdmin && <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
@@ -787,11 +773,9 @@ export default function RaceDetailPage() {
                 <th style={{ ...TH, textAlign: "center" }} colSpan={3}>出走馬</th>
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={3}>{predData?.prob_calibration?.applied ? "予測確率（市場補正後）" : "予測確率"}</th>
                 <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>想定オッズ</th>
-                <th style={{ ...TH, borderLeft: "1px solid var(--border)" }} colSpan={2}>期待値</th>
-                <th style={{ ...TH, borderLeft: "1px solid var(--border)" }}>買い判断</th>
               </tr>
               <tr>
-                {(["枠","馬番","馬名","勝率","連対率","複勝率","単勝","複勝",(calibratedEv ? "勝期待値(較正後)" : "勝期待値"),(calibratedEv ? "複期待値(較正後)" : "複期待値"),"買い判断"] as string[]).map((h, i) => {
+                {(["枠","馬番","馬名","勝率","連対率","複勝率","単勝","複勝"] as string[]).map((h, i) => {
                   // 会員限定の列: 予測の列すべて（勝率・複勝率も。匿名・無料会員には印だけを出す。2026-11-25）
                   const isAiCol = i >= 3;
                   return (
@@ -800,7 +784,7 @@ export default function RaceDetailPage() {
                       className={PRED_HIDE.has(i) ? "m-hide" : undefined}
                       style={{
                         ...TH,
-                        borderLeft: [3,6,8,10].includes(i) ? "1px solid rgba(36,48,73,0.5)" : undefined,
+                        borderLeft: [3,6].includes(i) ? "1px solid rgba(36,48,73,0.5)" : undefined,
                         color: isAiCol && lock ? "var(--text-dim)" : TH.color,
                       }}
                     >
@@ -840,13 +824,6 @@ export default function RaceDetailPage() {
                         ? "●●〜●●"
                         : `${Number(p.place_odds_min).toFixed(1)}〜${Number(p.place_odds_max).toFixed(1)}`}
                     </td>
-                    <td style={{ ...TD, borderLeft: "1px solid rgba(36,48,73,0.3)", color: (p.redacted || (p.ev_win_cal ?? p.ev_win) == null) ? "var(--text-dim)" : evColor(p.ev_win_cal ?? p.ev_win, p.ev_win_cal != null), fontWeight: 600 }}>
-                      {(p.redacted || (p.ev_win_cal ?? p.ev_win) == null) ? "●●" : Number(p.ev_win_cal ?? p.ev_win).toFixed(2)}
-                    </td>
-                    <td className="m-hide" style={{ ...TD, color: (p.redacted || (p.ev_place_cal ?? p.ev_place ?? p.expected_value) == null) ? "var(--text-dim)" : evColor(p.ev_place_cal ?? p.ev_place ?? p.expected_value, p.ev_place_cal != null), fontWeight: 600 }}>
-                      {(p.redacted || (p.ev_place_cal ?? p.ev_place ?? p.expected_value) == null) ? "●●" : Number(p.ev_place_cal ?? p.ev_place ?? p.expected_value).toFixed(2)}
-                    </td>
-                    <td className="m-hide" style={{ ...TD, fontSize: 11 }}>{lock ? "🔒" : (p.buy_tier ?? "—")}</td>
                 </tr>
                 );
               })}
@@ -856,6 +833,7 @@ export default function RaceDetailPage() {
       ) : (
         <div style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>出馬表がないため予測表を表示できません</div>
       )}
+      {hasPred && <MarkNote />}
 
       {hasPred && predData?.feature_highlights?.length ? (
         <div style={{ marginTop: 16, padding: "12px 16px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8 }}>
@@ -870,9 +848,6 @@ export default function RaceDetailPage() {
         </div>
       ) : null}
 
-      {!lock && <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 12 }}>
-        買い判断は期待値の最大で判定。期待値: {calibratedEv ? "過去の実績に合わせて較正した期待回収率。緑≥1.10 / 青≥1.00 / 灰≥0.90 / 赤＜0.90。買い判断（期待値 高・中・様子見）は較正後の期待値の最大で判定" : "緑≥1.3 / 青≥1.0 / 赤＜0.8"}
-      </p>}
     </div>
   );
 

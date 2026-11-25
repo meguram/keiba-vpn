@@ -33,17 +33,16 @@ function Body({ row, edges, maxOdds, title }: { row: TPRow; edges: number[]; max
   const { bins, total } = binStats(row, edges, maxOdds);
   const m = Math.max(...bins.map((b) => b.n), 1);
   const seg = (c: number, col: string) => (c > 0 ? <i style={{ width: (c / m) * 120, background: col }} /> : null);
-  const roi = (v: number | null) => <span className={"c ro" + (v != null && v > 1 ? " up" : "")}>{pct(v)}</span>;
   return (
     <>
       <div className="h">{title} のオッズ分布（{total.n}走・3着以内 {total.t3}・1着 {total.w}）</div>
       <div className="lg">
         棒の長さ＝区間の出走数。<i style={{ background: RED }} />1着 <i style={{ background: YELLOW }} />2・3着 <i style={{ background: BLUE }} />4着以下。
-        右は区間ごとの率と回収率（100% 超は緑）
+        右は区間ごとの勝率・複勝率。選んだ期間の回収率は、将来を表さないので出していません。
       </div>
       <div className="r hd">
         <span>オッズ</span><span className="bs" /><span className="n">割合（走数）</span>
-        <span className="c">勝率</span><span className="c">複勝率</span><span className="c">単勝回収率</span><span className="c">複勝回収率</span>
+        <span className="c">勝率</span><span className="c">複勝率</span>
       </div>
       {bins.map((b) => (
         <div className="r" key={b.label}>
@@ -51,13 +50,11 @@ function Body({ row, edges, maxOdds, title }: { row: TPRow; edges: number[]; max
           <span className="bs">{seg(b.w, RED)}{seg(b.t3 - b.w, YELLOW)}{seg(b.n - b.t3, BLUE)}</span>
           <span className="n">{pct(b.share)}（{b.n}）</span>
           <span className="c w">{pct(b.win)}</span><span className="c y">{pct(b.place)}</span>
-          {roi(b.winRoi)}{roi(b.placeRoi)}
         </div>
       ))}
       <div className="r tt">
         <span>合計</span><span className="bs" /><span className="n">{total.n}走</span>
         <span className="c w">{pct(total.win)}</span><span className="c y">{pct(total.place)}</span>
-        {roi(total.winRoi)}{roi(total.placeRoi)}
       </div>
     </>
   );

@@ -5,7 +5,7 @@ import { USE_MOCK, MOCK_WEEKLY_RACES, getMockBetRecommendation } from "@/lib/moc
 import { useAuthStatus } from "@/lib/hooks/useAuthStatus";
 import { getJson, likelyMember, prefetchJson, readStored } from "@/lib/httpCache";
 
-/** レースの「価値」= サンプル買い目の期待回収率（バックエンド delegates.race_value_summary と同じ区分） */
+/** レースの参考度の段（バックエンド delegates.race_value_summary と同じ区分）。画面には段の名前だけを出し、期待回収率の数値は出さない */
 export type ValueLevel = "hot" | "good" | "ok" | "pass" | "none";
 
 export type RaceValue = {
@@ -27,10 +27,10 @@ export type RaceValue = {
 };
 
 export const LEVEL_STYLE: Record<ValueLevel, { label: string; hint: string; color: string; bg: string; border: string; glow?: string }> = {
-  hot: { label: "★ 相対的に高い", hint: "較正後の期待回収率が高水準で、その日の上位 20%（目安。年によって実現回収率は大きく動く）", color: "#fff", bg: "linear-gradient(135deg,#f97316,#ef4444)", border: "#fb923c", glow: "0 0 10px rgba(249,115,22,.65)" },
-  good: { label: "やや高い", hint: "較正後の期待回収率が高め（目安）", color: "#bbf7d0", bg: "rgba(34,197,94,0.22)", border: "#22c55e" },
-  ok: { label: "平均並み", hint: "較正後の期待回収率が損益分岐の近く（目安）", color: "#bfdbfe", bg: "rgba(96,165,250,0.14)", border: "#60a5fa" },
-  pass: { label: "見送り水準", hint: "較正後の期待回収率が基準未満、または買い目なし", color: "#8b9bb4", bg: "transparent", border: "#35445f" },
+  hot: { label: "★ 相対的に高い", hint: "その日の参考度の上位（目安。回収を約束しません）", color: "#fff", bg: "linear-gradient(135deg,#f97316,#ef4444)", border: "#fb923c", glow: "0 0 10px rgba(249,115,22,.65)" },
+  good: { label: "やや高い", hint: "参考度がやや高め（目安）", color: "#bbf7d0", bg: "rgba(34,197,94,0.22)", border: "#22c55e" },
+  ok: { label: "平均並み", hint: "参考度は平均並み（目安）", color: "#bfdbfe", bg: "rgba(96,165,250,0.14)", border: "#60a5fa" },
+  pass: { label: "見送り水準", hint: "サンプル買い目なし", color: "#8b9bb4", bg: "transparent", border: "#35445f" },
   none: { label: "未計算", hint: "予測またはオッズが無い", color: "#8b9bb4", bg: "transparent", border: "#35445f" },
 };
 
@@ -54,12 +54,12 @@ export function hasTier(values: Map<string, RaceValue>): boolean {
   return false;
 }
 
-/** チップの2行目の文言: 5段階の参考度があればそのラベル、無ければ期待回収率（開発者）、見送りは「見送」 */
+/** チップの2行目の文言: 5段階の参考度があればそのラベル、無ければ段の名前（期待回収率の数値は出さない。2026-11-25）、見送りは「見送」 */
 export function chipLabel(v: RaceValue | undefined): string {
   if (v?.tier?.label) return v.tier.label;
   const lv = v?.level ?? "none";
   if (lv === "none" && v?.reason === "予測待ち") return "予測前";
-  return v?.expected_roi != null && lv !== "pass" ? `${(v.expected_roi * 100).toFixed(0)}%` : lv === "pass" ? "見送" : "–";
+  return lv === "pass" ? "見送" : lv === "none" ? "–" : LEVEL_STYLE[lv].label.replace(/^★ /, "");
 }
 
 const BET_JA: Record<string, string> = { tansho: "単勝", fukusho: "複勝", umaren: "馬連", wide: "ワイド", umatan: "馬単", sanrenpuku: "3連複" };
@@ -69,11 +69,11 @@ export function valueTitle(v: RaceValue | undefined): string {
   const s = LEVEL_STYLE[v.level];
   if (v.level === "none") return `${s.label}${v.reason ? `（${v.reason}）` : ""}`;
   if (v.tier) return `参考度: ${v.tier.label}${v.n_bets ? `｜買い目 ${v.n_bets} 点` : ""}`;
-  const roi = v.expected_roi != null ? `サンプル買い目の期待回収率（較正後） ${(v.expected_roi * 100).toFixed(0)}%` : "買い目なし";
-  const top = v.top_bet ? ` ／ 最有力 ${BET_JA[v.top_bet.bet_type] ?? v.top_bet.bet_type} ${v.top_bet.label}（期待値 ${v.top_bet.ev.toFixed(2)}）` : "";
-  const rank = v.rank ? ` ／ その日 ${v.rank} 位${v.prob_calibrated ? "（市場補正したレースの中）" : ""}` : "";
+  // 期待回収率・期待値の数値は出さない（2026-11-25 ユーザーの判断）
+  const bets = v.n_bets ? `サンプル買い目 ${v.n_bets} 点` : "買い目なし";
+  const top = v.top_bet ? ` ／ 最初の買い目 ${BET_JA[v.top_bet.bet_type] ?? v.top_bet.bet_type} ${v.top_bet.label}` : "";
   const pc = v.prob_calibrated ? " ／ 確率は市場補正後" : "";
-  return `${s.label}｜${roi}${top}${rank}${pc}`;
+  return `${s.label}｜${bets}${top}${pc}`;
 }
 
 function levelOf(roi: number | null, n: number): ValueLevel {

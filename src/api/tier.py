@@ -127,11 +127,29 @@ def _withheld() -> list[str]:
     return w
 
 
+# 会員（有料。開発者は除く）にも見せない値（ユーザーの判断 2026-11-25・rules-council R0-10）。会員に見せる数値は AI の確率とオッズまで。
+# 期待値（p×オッズ）・その段の買い判断・Kelly の目安・期待値の文を含む推奨の文。
+MEMBER_HIDDEN_ENTRY_KEYS = frozenset({
+    "ev_win", "ev_place", "ev_top2", "ev_win_cal", "ev_place_cal", "ev_top2_cal", "expected_value", "buy_tier", "kelly_fraction", "kelly",
+    "recommendation",                                   # 印の説明文（「★ 中穴妙味」など、禁止語を含む）
+    "composite_score", "composite_rank",                # p3^0.55 × EV^0.45。確率と並べると期待値を逆算できる
+})
+MEMBER_HIDDEN_TOP_KEYS = frozenset({"bet_suggestion", "ev_calibrated"})
+
+
+def _drop_member_hidden(resp: dict[str, Any]) -> dict[str, Any]:
+    out = {k: v for k, v in resp.items() if k not in MEMBER_HIDDEN_TOP_KEYS}
+    if isinstance(resp.get("predictions"), list):
+        out["predictions"] = [{k: v for k, v in e.items() if k not in MEMBER_HIDDEN_ENTRY_KEYS} if isinstance(e, dict) else e
+                              for e in resp["predictions"]]
+    return out
+
+
 def redact_predictions_member(resp: dict[str, Any]) -> dict[str, Any]:
-    """会員向け。公開モードのときだけ、B/C/O 分類を落とす。private モードでは従来どおり何も落とさない。"""
+    """会員向け。公開モードでは B/C/O 分類を落とす。どちらのモードでも、期待値・買い判断・Kelly の目安は落とす（開発者は素通り）。"""
     from src.utils import public_policy as P
 
-    return _redact_predictions_public_mode(resp, "member") if P.is_public_mode() else resp
+    return _drop_member_hidden(_redact_predictions_public_mode(resp, "member") if P.is_public_mode() else resp)
 
 
 def redact_predictions(resp: dict[str, Any]) -> dict[str, Any]:
@@ -498,3 +516,80 @@ MEMBER_REQUIRED_BODY = {
     "reason": "member_required",
     "login_url": "/login",
 }
+
+
+# ── 研究（選んだ期間）の回収率と、サンプル買い目の期待値（2026-11-25 ユーザーの判断）──
+# 開発者以外の応答から落とす。選んだ期間の回収率は将来を表さないので、画面にも API にも出さない。
+ROI_NOTICE = "選んだ期間の回収率は、将来を表さないので出していません。"
+_ROI_KEY = re.compile(r"(^|_)roi(_|$)")
+_ROI_SENTENCE = re.compile(r"[^。]*(回収率|払戻率)[^。]*。?")
+
+
+def _is_roi_key(k: Any) -> bool:
+    return isinstance(k, str) and bool(_ROI_KEY.search(k))
+
+
+def strip_research_roi(obj: Any) -> Any:
+    """めぐ分析（/api/v1/races/<id>/analysis）の応答から、回収率・払戻率の列・値・文を落とす（入力は書き換えない）。
+    列（columns の key が *_roi）は列ごと、値（*_roi・roi_*）はキーごと、notes の文は回収率・払戻率を含む文だけを落とし、落とした部品には 1 行の注記を足す。"""
+    if isinstance(obj, list):
+        return [strip_research_roi(v) for v in obj]
+    if not isinstance(obj, dict):
+        return obj
+    out: dict[str, Any] = {}
+    removed = False
+    for k, v in obj.items():
+        if _is_roi_key(k):
+            removed = True
+            continue
+        if k == "columns" and isinstance(v, list):
+            kept = [c for c in v if not (isinstance(c, dict) and _is_roi_key(c.get("key")))]
+            removed = removed or len(kept) != len(v)
+            out[k] = strip_research_roi(kept)
+            continue
+        if k == "notes" and isinstance(v, list):
+            notes = []
+            for t in v:
+                if isinstance(t, str):
+                    t2 = _ROI_SENTENCE.sub("", t).strip()
+                    removed = removed or t2 != t
+                    if t2:
+                        notes.append(t2)
+                else:
+                    notes.append(strip_research_roi(t))
+            out[k] = notes
+            continue
+        out[k] = strip_research_roi(v)
+    if removed and ("notes" in out or "columns" in out):
+        notes = out.get("notes") if isinstance(out.get("notes"), list) else []
+        if ROI_NOTICE not in notes:
+            out["notes"] = [*notes, ROI_NOTICE]
+    return out
+
+
+BET_HIDDEN_KEYS = frozenset({
+    "race_ev", "portfolio_ev", "expected_payout_yen", "ev_line_multiple", "ev", "ev_calibrated", "expected_return", "expected_roi",
+    "roi_pct", "roi_pct_calibrated", "roi_range_calibrated", "kelly_fraction", "evidence",
+})
+_EV_PHRASE = re.compile(r"[^。]*期待値[^。]*。?")
+
+
+def strip_bet_ev(obj: Any) -> Any:
+    """サンプル買い目の応答（開発者以外）から、期待値・期待回収率・Kelly・検証の期間の回収率を落とす（入力は書き換えない）。
+    仮想購入の結果（result の invested・returned・roi）は実際の記録なので残す。期待値を書いた文（見送りの理由など）は、その文だけ落とす。"""
+    if isinstance(obj, list):
+        return [strip_bet_ev(v) for v in obj]
+    if not isinstance(obj, dict):
+        return obj
+    out: dict[str, Any] = {}
+    for k, v in obj.items():
+        if k == "result":
+            out[k] = v
+        elif k in BET_HIDDEN_KEYS:
+            continue
+        elif isinstance(v, str) and "期待値" in v:
+            t = _EV_PHRASE.sub("", v).strip()
+            out[k] = t or "このレースはサンプル買い目の条件に届きません（見送り）。"
+        else:
+            out[k] = strip_bet_ev(v)
+    return out
