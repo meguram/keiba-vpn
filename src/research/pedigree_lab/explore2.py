@@ -163,14 +163,14 @@ def run_layoff(X, n_boot):
     return res
 
 
-def run_nulldrop():
+def run_nulldrop(seed: int = 0):
     from src.research.pedigree_lab import ablate, features4, v5
     from src.research.pedigree_lab.report_stats import GROUPS
-    r = data.load_dev(reason="帰無（回 0）で母父・母の束を落とす", version="nulldrop_0")
+    r = data.load_dev(reason=f"帰無（回 {seed}）で母父・母の束を落とす", version=f"nulldrop_{seed}")
     ped = data.load_ped()
     sx = r.drop_duplicates("horse_id").set_index("horse_id")["sex"].reindex(ped["horse_id"]).fillna("?").to_numpy()
     grp = ped["horse_id"].str[:4].to_numpy() + "_" + sx
-    rng = np.random.default_rng(1000)
+    rng = np.random.default_rng(1000 + seed)
     perm = np.arange(len(ped))
     for ii in pd.Series(np.arange(len(ped))).groupby(grp).indices.values():
         perm[ii] = rng.permutation(ii)
@@ -183,7 +183,7 @@ def run_nulldrop():
     full = ablate.col_sets(Xn)["pure"]
     g0 = v5.gain(Xn, v5.oof_for(Xn, full, "dd")["win"], dev)
     pats = dict(GROUPS)
-    res = {"null_full": g0}
+    res = {"seed": seed, "null_full": g0}
     for nm in ("母父", "母・きょうだい"):
         cols = [c for c in full if not re.search(pats[nm], c)]
         g = v5.gain(Xn, v5.oof_for(Xn, cols, "dd")["win"], dev)
@@ -195,14 +195,15 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("what", choices=["joint", "bands", "career", "layoff", "nulldrop"])
     ap.add_argument("--boot", type=int, default=1000)
+    ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
     data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"explore2_{a.what}", f"探す側の記述の 2 巡目: {a.what}（尤度だけ）"))
     if a.what == "nulldrop":
-        res = run_nulldrop()
+        res = run_nulldrop(a.seed)
     else:
         X = frame()
         res = {"joint": run_joint, "bands": run_bands, "career": run_career, "layoff": run_layoff}[a.what](X, a.boot)
-    path = data.OUT / f"explore2_{a.what}.json"
+    path = data.OUT / (f"explore2_{a.what}.json" if a.what != "nulldrop" or a.seed == 0 else f"explore2_nulldrop_{a.seed}.json")
     path.write_text(json.dumps(res, ensure_ascii=False, indent=1))
     print(json.dumps(res, ensure_ascii=False))
     data.finish_all(str(path))

@@ -36,6 +36,9 @@ def col_sets(X: pd.DataFrame) -> dict[str, list[str]]:
         "sire_only": [c for c in noage if c.startswith(("sire_", "rel_sire_", "ss_", "sss_"))],
         "bms_only": [c for c in noage if c.startswith(("bms_", "rel_bms_"))],
         "dam_only": [c for c in noage if c.startswith(("dam_", "dd_", "full_", "rel_dam", "rel_dd", "rel_full"))],
+        # 市場の側の切り口 (4): 父系側と母系側（インブリードは両方に入れない）
+        "pat_side": [c for c in noage if c.startswith(("sire_", "rel_sire_", "ss_", "rel_ss_", "sss_", "rel_sss_"))],
+        "mat_side": [c for c in noage if c.startswith(("bms_", "rel_bms_", "dam_", "dd_", "full_", "rel_dam", "rel_dd", "rel_full"))],
     }
 
 
