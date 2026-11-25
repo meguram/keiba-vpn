@@ -166,14 +166,16 @@ def test_non_positive_finish_positions_are_ignored():
 
 
 def test_old_saved_marks_with_many_pairs_and_old_anchor_still_aggregate():
-    """旧ルールで保存された予測（○・✓・▲が複数）でも、予測成績の集計が壊れない。保存済みの印は書き換えない。"""
+    """旧ルールで保存された予測（○・✓・▲が複数）でも、予測成績の集計が壊れない。保存済みの印は書き換えない。
+    数える印は画面と同じ段（complete_marks）で ◎○▲★ を 1 頭ずつにそろえる（2026-11-25、印を全レースに過不足なく）。"""
     st = _storage()
     preds = st.docs[("race_predictions", "202610180101")]["predictions"]
     for e, m in zip(preds, ["honmei", "pair", "pair", "anchor", "show_val", "show_val"]):
         e["mark_type"] = m
     rec = pr.build_race_record("202610180101", {"venue": "東京", "round": 1}, st)
-    assert rec["included"]
-    assert [x["horse_number"] for x in rec["marks"]["pair"]] == [2, 3]
+    assert rec["included"] and rec["marks_basis"] in ("rule", "bets")
+    for m in ("honmei", "pair", "show_val", "star"):
+        assert len(rec["marks"][m]) == 1
     assert [e["mark_type"] for e in preds] == ["honmei", "pair", "pair", "anchor", "show_val", "show_val"]
     assert pr.MARK_SYMBOLS["anchor"] == "△"
 
@@ -379,3 +381,62 @@ def test_recompute_keeps_rated_records_and_failed_recomputes(tmp_path, monkeypat
     assert out["already"] == 1 and out["failed"] == 1 and out["added"] == 0
     doc = pr.read_day("20261018", tmp_path)
     assert doc["races"][0]["bets_t"]["level"] == 2 and doc["races"][1]["bets_t"] == old0
+
+
+
+def test_remark_day_rebuilds_marks_only_and_skips_new_records(tmp_path, monkeypatch):
+    """保存済みの日次記録の印だけを画面と同じ段で付け直す。推奨馬券の仮想購入・top1・logloss は変えない。marks_basis のある記録は飛ばす。"""
+    monkeypatch.setattr(pr, "screen_marks", lambda rid, entries, storage=None: (__import__("src.utils.race_probabilities", fromlist=["x"]).complete_marks(entries), "rule"))
+    st = _storage()
+    rec = pr.build_race_record("202610180101", {"venue": "東京", "round": 1}, st)
+    old = {**rec, "race_id": "202610180101", "marks": {"honmei": []}}
+    old.pop("marks_basis", None)
+    old["bets_t"] = {"status": "ok", "basis": "sec77", "selection": "actual_ge_est", "level": 2, "total_bet": 100, "total_return": 0, "by_type": {}}
+    new = {**rec, "race_id": "X"}
+    pr.write_day({"date": "20261018", "status": "final", "summary": pr.summarize([old, new]), "highlights": [], "races": [old, new], "notes": []}, tmp_path)
+    before = pr.read_day("20261018", tmp_path)
+    assert pr.remark_day("20261018", st, tmp_path, dry_run=True)["remarked"] == 1
+    assert pr.read_day("20261018", tmp_path) == before                     # dry_run は書かない
+    out = pr.remark_day("20261018", st, tmp_path)
+    assert out == {"races": 2, "remarked": 1, "already": 1, "failed": 0}
+    doc = pr.read_day("20261018", tmp_path)
+    r0 = doc["races"][0]
+    assert r0["marks_basis"] == "rule" and len(r0["marks"]["honmei"]) == 1 and r0["bets_t"]["level"] == 2
+    assert r0["top1"]["mark"] == "honmei" and r0["winner_logloss"] == old["winner_logloss"]
+    assert doc["summary"]["bets"] == before["summary"]["bets"] and doc["summary"]["marks"]["honmei"]["n"] == 2
+    assert any(n.startswith("印は、画面と同じ段") for n in doc["notes"])
+    assert pr.remark_day("20261018", st, tmp_path)["remarked"] == 0         # 2 回目は付け直さない
+
+
+def test_remark_day_skips_when_the_prediction_changed(tmp_path, monkeypatch):
+    st = _storage()
+    rec = pr.build_race_record("202610180101", {"venue": "東京", "round": 1}, st)
+    rec.pop("marks_basis", None)
+    rec["prediction_source"] = "backfill"                                    # 記録の後に予測の出どころが替わった
+    pr.write_day({"date": "20261018", "status": "final", "summary": pr.summarize([rec]), "highlights": [], "races": [rec], "notes": []}, tmp_path)
+    out = pr.remark_day("20261018", st, tmp_path)
+    assert out["remarked"] == 0 and out["source_changed"] == 1
+    monkeypatch.setattr(pr, "load_predictions", lambda storage, rid: None)
+    rec2 = {**rec, "prediction_source": pr.load_predictions.__defaults__ and "gcs" or "gcs"}
+    pr.write_day({"date": "20261019", "status": "final", "summary": pr.summarize([rec2]), "highlights": [], "races": [rec2], "notes": []}, tmp_path)
+    assert pr.remark_day("20261019", st, tmp_path)["failed"] == 1
+
+
+def test_screen_marks_keeps_bet_marks_and_needs_sec77_cache(monkeypatch):
+    """買い目の印があれば残して足りない印だけ埋める（keep_assigned）。sec77 の想定オッズのキャッシュが無ければ買い目を作らない。"""
+    from src.api.v1 import delegates as D
+    from src.pipeline.inference import odds_source as OS
+
+    entries = [{"horse_number": i, "win_prob": p, "top2_prob": p * 1.6, "top3_prob": p * 2, "mark_type": "none"}
+               for i, p in enumerate([0.35, 0.25, 0.2, 0.12, 0.08], 1)]
+    monkeypatch.setattr(D, "bet_horse_marks", lambda rid: {3: "honmei", 1: "pair"})
+    monkeypatch.setattr(OS, "predicted_single_odds", lambda storage, rid: {"odds_model": "sec77"})
+    out, basis = pr.screen_marks("r", entries, object())
+    m = {e["horse_number"]: e["mark_type"] for e in out}
+    assert basis == "bets" and m[3] == "honmei" and m[1] == "pair"
+    assert sorted(v for v in m.values() if v in ("honmei", "pair", "show_val", "star")) == ["honmei", "pair", "show_val", "star"]
+    monkeypatch.setattr(OS, "predicted_single_odds", lambda storage, rid: {"odds_model": "legacy"})
+    called = []
+    monkeypatch.setattr(D, "bet_horse_marks", lambda rid: called.append(rid) or {3: "honmei"})
+    out2, basis2 = pr.screen_marks("r", entries, object())
+    assert basis2 == "rule" and called == [] and {e["horse_number"]: e["mark_type"] for e in out2}[1] == "honmei"

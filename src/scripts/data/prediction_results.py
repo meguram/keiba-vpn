@@ -67,6 +67,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--sync-gcs", action="store_true", help="ローカルの日次記録を GCS へ一括で置く")
     ap.add_argument("--add-levels", action="store_true", help="保存済みの日次記録に仮想購入の推奨度だけを追記する")
+    ap.add_argument("--remark-marks", action="store_true",
+                    help="保存済みの日次記録の印を、画面と同じ段（買い目からの印 → complete_marks）で付け直す（marks_basis の無い記録だけ）")
     ap.add_argument("--recompute-target-bets", action="store_true",
                     help="--add-target-bets と使う。race_ev の無い（2026-11-24 の直しより前の、係数が無いまま作った）記録も作り直す")
     ap.add_argument("--add-target-bets", action="store_true", help="保存済みの日次記録に、画面の推奨馬券（target）の仮想購入（推奨度つき）を追記する。推奨度の集計（見送りを除く）に必要")
@@ -92,6 +94,12 @@ def main(argv: list[str] | None = None) -> int:
     from src.scraper.storage import HybridStorage
 
     storage = HybridStorage()
+    if a.remark_marks:
+        for d in days:
+            if pr.read_day(d) is None:
+                continue
+            print(d, pr.remark_day(d, storage, dry_run=a.dry_run))
+        return 0
     if a.add_target_bets:
         missing: dict[str, int] = {}
         for d in days:

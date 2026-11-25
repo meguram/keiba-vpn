@@ -356,6 +356,43 @@ def _bucket(pos: int | None) -> str | None:
     return "f1" if pos == 1 else "f2" if pos == 2 else "f3" if pos == 3 else "f4p"
 
 
+def screen_marks(race_id: str, entries: list[dict], storage: Any = None) -> tuple[list[dict], str]:
+    """画面と同じ段で印を決める（src/api/app.py の _with_bet_marks → _with_complete_marks）。
+    推奨馬券があるレースは買い目から印を決め（marks_basis=bets）、最後に complete_marks で ◎○▲★ を過不足なくする。
+    - 買い目は、検証と同じ想定オッズ（sec77）のキャッシュがあるレースだけで作る（無いレースで想定オッズを推論して保存しない）。
+    - 買い目は今の推奨の設定で作る。過去の日を付け直すと、その日の画面ではなく今の設定での印になる（記録の notes に書く）。
+    - 消印・較正後の期待値は予測の経路（v6e のローカル予測は自分で付ける）のまま。GCS・shadow の古い経路の予測では画面とずれうる。
+    戻り値: 印を付け直した一覧と marks_basis（bets・rule）。失敗したら元の印のまま（rule）。"""
+    basis = "rule"
+    out = entries
+    try:
+        from src.api.v1.delegates import bet_horse_marks
+        from src.pipeline.inference import bet_marks as BM
+        from src.pipeline.inference.odds_source import predicted_single_odds
+
+        single = predicted_single_odds(storage, race_id) if storage is not None else None
+        marks = bet_horse_marks(race_id) if (single and single.get("odds_model") == TARGET_ODDS_BASIS) else None
+        if marks:
+            out, basis = BM.apply_to_entries(out, marks), "bets"
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("買い目からの印の付与に失敗 %s: %s", race_id, exc)
+    try:
+        from src.utils.race_probabilities import complete_marks
+
+        out = complete_marks(out, keep_assigned=basis == "bets")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("印の埋め直しに失敗 %s: %s", race_id, exc)
+    return out, basis
+
+
+def _pick(e: dict, fm: dict, res: dict) -> dict:
+    hn = int(e.get("horse_number") or 0)
+    return {"horse_number": hn, "horse_name": e.get("horse_name", ""), "finish": fm.get(hn),
+            "win_prob": round(float(e.get("win_prob") or 0), 4), "win_odds": e.get("win_odds"),
+            "ev_win": e.get("ev_win_cal") if e.get("ev_win_cal") is not None else e.get("ev_win"), "mark": e.get("mark_type"),
+            "popularity": (res.get("popularity") or {}).get(hn), "final_odds": (res.get("odds") or {}).get(hn)}
+
+
 def build_race_record(race_id: str, meta: dict, storage: Any, max_total_bet: int | None = DEFAULT_MAX_TOTAL_BET) -> dict:
     """1 レースの予測と結果の突き合わせ。予測・結果のどちらかが無いときは理由つきで返す（集計から除外）。"""
     rec: dict[str, Any] = {
@@ -371,6 +408,7 @@ def build_race_record(race_id: str, meta: dict, storage: Any, max_total_bet: int
     entries = [e for e in pred["predictions"] if e.get("win_prob") is not None]
     if not entries:
         return {**rec, "included": False, "reason": "no_prediction"}
+    entries, rec["marks_basis"] = screen_marks(race_id, entries, storage)       # 画面と同じ印（全レースに ◎○▲★ を過不足なく）で数える
     fm = res["finish"]
     rec.update(included=True, result_status=res["status"], payoff_official=res["official"],
                prediction_source=pred.get("prediction_source") or "gcs", model_version=pred.get("model_version") or pred.get("model_type"),
@@ -378,11 +416,7 @@ def build_race_record(race_id: str, meta: dict, storage: Any, max_total_bet: int
     top1 = max(entries, key=lambda e: float(e.get("win_prob") or 0))
 
     def pick(e: dict) -> dict:
-        hn = int(e.get("horse_number") or 0)
-        return {"horse_number": hn, "horse_name": e.get("horse_name", ""), "finish": fm.get(hn),
-                "win_prob": round(float(e.get("win_prob") or 0), 4), "win_odds": e.get("win_odds"),
-                "ev_win": e.get("ev_win_cal") if e.get("ev_win_cal") is not None else e.get("ev_win"), "mark": e.get("mark_type"),
-                "popularity": (res.get("popularity") or {}).get(hn), "final_odds": (res.get("odds") or {}).get(hn)}
+        return _pick(e, fm, res)
 
     rec["top1"] = pick(top1)
     rec["marks"] = {m: [pick(e) for e in entries if e.get("mark_type") == m] for m in MARKS}
@@ -893,6 +927,53 @@ def level_summary(records: list[dict]) -> tuple[dict[str, dict], int]:
             c["invested"] += bt["total_bet"]
             c["returned"] += bt["total_return"]
     return out, unrated
+
+
+def remark_day(date: str, storage: Any, base: Path | None = None, *, dry_run: bool = False) -> dict[str, int]:
+    """保存済みの日次記録の印を、画面と同じ段（screen_marks）で付け直す。印（marks・top1 の mark）・summary・highlights だけを変え、
+    着順・推奨馬券の仮想購入などほかの数値は変えない。既に marks_basis のある（直しの後に作った）レースは飛ばす。"""
+    doc = read_day(date, base)
+    out = {"races": 0, "remarked": 0, "already": 0, "failed": 0}
+    if not doc:
+        return out
+    for rec in doc.get("races") or []:
+        if not rec.get("included"):
+            continue
+        out["races"] += 1
+        if rec.get("marks_basis"):
+            out["already"] += 1
+            continue
+        try:
+            pred = load_predictions(storage, rec["race_id"])
+            res = load_race_result(storage, rec["race_id"])
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("印の付け直しの読み込みに失敗 %s: %s", rec.get("race_id"), exc)
+            pred, res = None, None
+        entries = [e for e in ((pred or {}).get("predictions") or []) if e.get("win_prob") is not None]
+        if not entries or not res:
+            out["failed"] += 1
+            continue
+        src_now = pred.get("prediction_source") or "gcs"
+        model_now = pred.get("model_version") or pred.get("model_type")
+        if src_now != (rec.get("prediction_source") or "gcs") or (rec.get("model_version") and model_now != rec.get("model_version")):
+            out["source_changed"] = out.get("source_changed", 0) + 1        # 記録を作った後に予測が替わった → 1 つの記録の中で食い違うので付け直さない
+            continue
+        entries, basis = screen_marks(rec["race_id"], entries, storage)
+        fm = res["finish"]
+        rec["marks"] = {m: [_pick(e, fm, res) for e in entries if e.get("mark_type") == m] for m in MARKS}
+        by_hn = {int(e.get("horse_number") or 0): e.get("mark_type") for e in entries}
+        if rec.get("top1"):
+            rec["top1"]["mark"] = by_hn.get(int(rec["top1"].get("horse_number") or 0))
+        rec["marks_basis"] = basis
+        out["remarked"] += 1
+    if out["remarked"]:
+        doc["summary"] = summarize(doc["races"])
+        doc["highlights"] = highlights(doc["races"])
+        note = "印は、画面と同じ段（買い目からの印 → complete_marks）で、今の推奨の設定で付け直した（2026-11-25〜。その日の画面の印と違うことがある）"
+        doc["notes"] = [n for n in (doc.get("notes") or []) if not n.startswith("印は、画面と同じ段")] + [note]
+        if not dry_run:
+            write_day(doc, base, force=True)
+    return out
 
 
 def add_target_bets(date: str, storage: Any, base: Path | None = None, *, dry_run: bool = False, max_races: int | None = None,
