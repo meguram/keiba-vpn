@@ -232,3 +232,66 @@ def test_shadow_day_writes_rows_from_horse_id_predictions(tmp_path):
     rows = [json.loads(x) for x in (out / f"{day}.jsonl").read_text(encoding="utf-8").splitlines()]
     r1 = next(x for x in rows if x["race_id"] == "R1")
     assert r1["marks"]["1"] == "honmei" and r1["pred_mtime"].endswith("+09:00") and r1["inputs_sha"]["pred"] and r1["tool_sha"] and r1["mode"] == "ana"
+
+
+def test_extras_are_descriptive_columns_only():
+    """記述の列（R0-10 の 4）: オッズ 3 つ・確定オッズでも期待値 1 以上の割合・★ ana の勝者の呪い。印は変えない。"""
+    hn, pw, p3, odds, pop = _race()
+    p = _pred(hn, pw, p3)
+    o = _odds_doc(hn, odds, pop)
+    res = M.decide_race(o, p, POST, POST - timedelta(minutes=55))
+    before = dict(res["marks"])
+    final = {h: float(x) * 1.1 for h, x in zip(hn, odds)}
+    ex = M.extras(o, p, res, final)
+    assert res["marks"] == before and set(ex["odds3"]) == {str(h) for h in res["marks"]}
+    assert all(v["t5"] is None for v in ex["odds3"].values()) and ex["odds3"]["1"]["final"] == pytest.approx(2.75)
+    marked = [h for h, m in res["marks"].items() if m != "kesi"]
+    pwn = pw / pw.sum()
+    want = sum(pwn[h - 1] * final[h] >= 1 for h in marked) / len(marked)
+    assert ex["ev_final_ge1_share"] == pytest.approx(round(want, 3)) and ex["ev_final_n"] == len(marked)
+    q = (1 / odds) / (1 / odds).sum()
+    r = np.log(pwn / q)
+    star = [h for h, m in res["marks"].items() if m == "star"][0]
+    band = [r[i] for i in range(10) if odds[i] >= 10 and i + 1 != star]
+    assert ex["star_winner_curse"] == pytest.approx(round(r[star - 1] - np.mean(band), 4))       # ★ 自身は帯の平均に入れない
+
+
+def test_extras_none_for_non_ana_and_excludes_scratched_from_p():
+    hn, pw, p3, _, _ = _race()
+    res = M.decide(hn, pw, p3)
+    res.update({"odds_used": False, "scratched": []})
+    ex = M.extras(None, _pred(hn, pw, p3), res, {})
+    assert ex["star_winner_curse"] is None and ex["ev_final_ge1_share"] is None
+    hn, pw, p3, odds, pop = _race()
+    odds2 = odds.copy()
+    odds2[9] = 999.9
+    p = _pred(hn, pw, p3)
+    o = _odds_doc(hn, odds2, pop)
+    res2 = M.decide_race(o, p, POST, POST - timedelta(minutes=55))
+    final = {h: 1.0001 / (pw[h - 1] / pw[:9].sum()) for h in hn[:9]}          # 取消を除いて合計 1 に直した p なら期待値がわずかに 1 を超える
+    ex2 = M.extras(o, p, res2, final)
+    assert ex2["ev_final_ge1_share"] == 1.0
+
+
+def test_final_odds_table_reads_the_local_results_table(tmp_path, monkeypatch):
+    import pandas as pd
+
+    from src.config import data_paths
+
+    (tmp_path / "2026").mkdir()
+    pd.DataFrame({"race_id": ["202611290101"] * 3, "horse_number": [1, 2, 3], "odds": [2.4, None, 0.0]}).to_parquet(tmp_path / "2026" / "race_result_flat.parquet")
+    monkeypatch.setattr(data_paths, "TABLES_DIR", tmp_path)
+    odds, missing, sha = M.final_odds_table("20261129")
+    assert odds == {"202611290101": {1: 2.4}} and missing == {"202611290101": [2, 3]} and sha
+
+
+def test_extras_day_refuses_without_shadow_or_table_and_writes_once(tmp_path, monkeypatch):
+    with pytest.raises(SystemExit, match="影の記録"):
+        M.extras_day("20261129", inf=tmp_path, out=tmp_path)
+    (tmp_path / "20261129.jsonl").write_text(json.dumps({"race_id": "R1", "status": "marked", "marks": {}}) + "\n", encoding="utf-8")
+    monkeypatch.setattr(M, "final_odds_table", lambda day: ({}, {}, None))
+    with pytest.raises(SystemExit, match="確定オッズ"):
+        M.extras_day("20261129", inf=tmp_path, out=tmp_path)
+    (tmp_path / "20261129.extras.jsonl").write_text("", encoding="utf-8")
+    with pytest.raises(SystemExit, match="書き直さない"):
+        M.extras_day("20261129", inf=tmp_path, out=tmp_path)
