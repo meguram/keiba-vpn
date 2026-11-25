@@ -44,10 +44,11 @@ HYP4 = [  # 第 4 版で足した列（2 体の段 1 の R1。数を見る前に
 ]
 
 
-def clogit(Xm: np.ndarray, y: np.ndarray, rid_codes: np.ndarray, n_iter: int = 25, w: np.ndarray | None = None) -> np.ndarray:
+def clogit(Xm: np.ndarray, y: np.ndarray, rid_codes: np.ndarray, n_iter: int = 25, w: np.ndarray | None = None,
+           b0: np.ndarray | None = None) -> np.ndarray:
     """条件付きロジット（各レースの勝ち馬 1 頭）。ニュートン法。w はレースの重み（ブートストラップ用、行ごとに展開済み）。"""
     k = Xm.shape[1]
-    b = np.zeros(k)
+    b = np.zeros(k) if b0 is None else np.array(b0, dtype=float)      # b0: 初期値（ブートストラップを速くする）
     if w is None:
         w = np.ones(len(y))
     for _ in range(n_iter):
