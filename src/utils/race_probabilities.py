@@ -467,6 +467,79 @@ def assign_mece_marks_v2(entries: list[dict], params: dict | None = None) -> Non
         e["mark_type"] = "anchor"
 
 
+# 過不足のない印（ユーザーの方針 2026-11-25）: 予測があるすべてのレースで ◎・○・▲・★ を各 1 頭（頭数が 4 未満なら上から頭数まで）。
+# 1 頭に 2 つの印は付けない。足りない印は、印のルールが使う評価の順で埋める（閾値・オッズの幅の条件は外す）。△・消は 0 頭以上のまま。
+TOP_MARKS = ("honmei", "pair", "show_val", "star")
+_FILL_ORDER = ("honmei", "pair", "star", "show_val")       # 埋める順は v2 の印の順（◎ → ○ → ★ → ▲）
+
+
+def _ev(x: dict, kind: str) -> float:
+    """較正後の期待値があればそれ（0.0 も値として使う）、無ければ未較正の値。"""
+    v = x.get(f"ev_{kind}_cal")
+    return float(v) if v is not None else _f(x, f"ev_{kind}")
+
+
+def _fill_key(mt: str):
+    """足りない印を埋めるときの順位。◎・○ は順位の印なので勝率の順（期待値で選ぶと人気薄が ◎ に上がり、○ より弱くなる）。
+    ★ は ◎○▲ の次の注目馬なので期待値の順、▲ は 3 着以内の確率の順。"""
+    if mt in ("honmei", "pair"):
+        return lambda x: (_f(x, "win_prob"), _f(x, "top2_prob"), _f(x, "top3_prob"), -int(x.get("horse_number") or 99))   # 同じ値は馬番の小さい方
+    if mt == "star":
+        return lambda x: (max(_ev(x, "win"), _ev(x, "place")), _f(x, "top3_prob"))
+    return lambda x: (_f(x, "top3_prob"), _f(x, "win_prob"))
+
+
+def _markable(e: dict) -> bool:
+    """印を付けてよい馬: 馬番があり、勝率がある（取消・除外の馬・確率の無い馬には付けない。予測成績の集計と同じ絞り込み）。"""
+    return isinstance(e, dict) and e.get("win_prob") is not None and bool(e.get("horse_number")) and e.get("mark_type") != "scratched"
+
+
+def complete_marks(entries: list[dict]) -> list[dict]:
+    """画面の印を決める最後の段（新しい一覧を返す。入力は書き換えない）。rules-council R0-10・依頼 2 の追記（2026-11-25）:
+    - ◎○▲ は AI の勝率（win_prob）の 1・2・3 位（同じ値は連対率・複勝率の順）。印のルールの ◎（期待値の候補）や買い目からの印では決めない。
+    - ★・△・消は印のルールのまま。ただし勝率の上位 3 頭に付いていた印は ◎○▲ に替わり、上位 3 頭でない馬の ◎○▲ は無印に戻す。
+    - ★ が無ければ（4 頭以上のとき）、無印・△ の馬から期待値の順で 1 頭（無ければ消の馬から）。1 頭 1 印。
+    - 取消・確率の無い馬には付けない。印を変えた馬の説明文（recommendation）は外す。"""
+    out = [dict(e) if isinstance(e, dict) else e for e in entries]
+    rows = [e for e in out if _markable(e)]
+    n = len(rows)
+    if n == 0:
+        return out
+    before = {id(e): e.get("mark_type") for e in rows}
+    ranked = sorted(rows, key=_fill_key("honmei"), reverse=True)
+    top = {id(e): mt for e, mt in zip(ranked, ("honmei", "pair", "show_val"))}
+    for e in rows:
+        if id(e) in top:
+            e["mark_type"] = top[id(e)]
+            e.pop("kesi_reason", None)
+        elif e.get("mark_type") in ("honmei", "pair", "show_val"):
+            e["mark_type"] = "none"
+    stars = sorted((e for e in rows if e.get("mark_type") == "star"), key=_fill_key("star"), reverse=True)
+    for e in stars[1:]:                                    # ★ が 2 頭以上なら期待値の高い 1 頭だけ
+        e["mark_type"] = "anchor"
+    if n >= 4 and not stars:
+        for tier in ({"none", "", None, "anchor"}, {"kesi"}):
+            pool = [e for e in rows if e.get("mark_type") in tier]
+            if pool:
+                pick = max(pool, key=_fill_key("star"))
+                pick["mark_type"] = "star"
+                pick.pop("kesi_reason", None)
+                break
+    for e in rows:
+        if e.get("mark_type") != before[id(e)]:
+            e.pop("recommendation", None)
+    return out
+
+
+def marks_complete(entries: list[dict]) -> bool:
+    """過不足の検査: ◎○▲★ がちょうど 1 頭ずつ（頭数が 4 未満なら上から頭数まで）、1 頭 1 印。"""
+    rows = [e for e in entries if _markable(e)]
+    n = len(rows)
+    counts = {mt: sum(1 for e in rows if e.get("mark_type") == mt) for mt in TOP_MARKS}
+    want = TOP_MARKS[: min(4, n)]
+    return all(counts[mt] == 1 for mt in want) and all(counts[mt] == 0 for mt in TOP_MARKS[min(4, n):])
+
+
 def assign_mece_marks(entries: list[dict], situational: bool | None = None, cfg: dict[str, float] | None = None) -> None:
     """印を付ける入口。版は mark_rule_version()（既定 v1＝従来どおり。situational / cfg を指定した呼び出しは常に v1）。"""
     if situational is None and cfg is None and mark_rule_version() == 2:
@@ -597,9 +670,9 @@ def buy_recommendation_tier(entry: dict) -> str:
     else:
         best = max(float(entry.get("ev_win") or 0), float(entry.get("ev_top2") or 0), float(entry.get("ev_place") or 0))
     if best >= th["strong"]:
-        return "強推奨"
+        return "期待値 高"
     if best >= th["recommend"]:
-        return "推奨"
+        return "期待値 中"
     if best >= th["watch"]:
         return "様子見"
     return "—"

@@ -1,0 +1,43 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>当日の馬場の偏りのルール探し（RC-3）</title><style>
+:root { --bg:#f7f8fb; --panel:#ffffff; --panel2:#eef1f7; --border:#d5dbe7; --text:#1b2333; --muted:#5b6578;
+  --accent:#2f5fc4; --ok:#1d7f45; --warn:#9a6200; --bad:#b4232c; --code:#eef1f7; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60;
+  --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; } }
+:root[data-theme="dark"] { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60; --text:#e6ecff; --muted:#9aa7c7;
+  --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1180px; margin:0 auto; padding:28px 16px 80px; }
+a { color:var(--accent); }
+h1 { font-size:24px; margin:0 0 6px; line-height:1.4; }
+h2 { font-size:19px; margin:40px 0 6px; padding-top:16px; border-top:1px solid var(--border); }
+h3 { font-size:16px; margin:22px 0 4px; }
+p, li { overflow-wrap:anywhere; }
+.sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+.scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:8px 0 14px; border:1px solid var(--border); border-radius:8px; }
+table { border-collapse:collapse; width:100%; min-width:760px; font-size:13.5px; background:var(--panel); }
+th, td { border-bottom:1px solid var(--border); border-right:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+td.n { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+th { background:var(--panel2); color:var(--muted); font-weight:600; white-space:nowrap; }
+tr:last-child td { border-bottom:none; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 5px; border-radius:5px; font-size:12px; overflow-wrap:anywhere; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 16px; margin:12px 0; }
+.b { display:inline-block; font-size:11.5px; padding:0 8px; border-radius:10px; border:1px solid currentColor; white-space:nowrap; }
+.ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .mu { color:var(--muted); }
+details { background:var(--panel); border:1px solid var(--border); border-radius:10px; margin:8px 0; }
+summary { cursor:pointer; padding:8px 12px; }
+details[open] > summary { border-bottom:1px solid var(--border); }
+.dbody { padding:8px 14px 12px; font-size:13.5px; }
+</style></head><body><main>
+<h1>当日の馬場の偏りのルール探し（RC-3）</h1>
+<p class="sub">作成 2026-11-25 20:43（JST）。担当 rules-council。2025・2026 年の着順・払戻は開いていない。</p>
+<h2>結論</h2>
+<div class="box"><ul><li><b>R0 で閉じた（算数の打ち切り）。</b>その日の前のレースの枠・位置取りの偏り（当日の馬場の偏り）は、市場が全く値段に入れていないとしても、次のレースの倍率（3 着内・1 着、両方の側）が 0.98〜1.18 にとどまる。多くは 1.00〜1.13 で、最大の 1.18 は 55 レースだけの値。</li><li>要る倍率（オッズを使わないルールで 損益分岐 ÷ 帯の比、一桁で約 1.27）に届かない。本物の市場比・回収率は開いていない。</li><li>1 レースの偏りの大半は偶然のばらつき（信頼度 約 0.07）で、日の中の持続も弱い（相関 0.03〜0.06）。直前の 2 レースで作った値で、本番（発走 75 分前までの結果だけ）より楽観。側の全体の平均なので、部分集合（内枠 × 先行型など）の上限ではない。</li><li>前走の惜敗は、目録の型（A03・E05）の組み直しなので外した。</li></ul></div>
+<h2>上限の計算（市場を使わない。市場が全く値段に入れていないときの上限）</h2>
+<p>1 レースの内枠の 3 着内の数の信頼度 ρ = 0.069（観測の分散 0.657、偏りが無いときの超幾何の分散 0.611）。日の数 5,167、レース 19,449。倍率の最大 1.178。</p>
+<p>日の中の相関（奇数・偶数のレース）: 内外 0.060・前後 0.050。直前 2 レースの和と次のレースの相関: 内外 0.029・前後 0.035。</p>
+<div class="scroll"><table><thead><tr><th>偏り</th><th>直前 2 レースの偏りの和</th><th>次のレース</th><th>3 着内の倍率</th><th>1 着の倍率</th></tr></thead><tbody><tr><td>内外（枠 1〜4）</td><td>有利な側（+2 以上）</td><td class="n">879</td><td class="n">1.044</td><td class="n">1.065</td></tr><tr><td>内外（枠 1〜4）</td><td>有利な側（+3 以上）</td><td class="n">112</td><td class="n">0.990</td><td class="n">0.985</td></tr><tr><td>内外（枠 1〜4）</td><td>逆の側（−2 以下）</td><td class="n">714</td><td class="n">1.039</td><td class="n">1.043</td></tr><tr><td>内外（枠 1〜4）</td><td>逆の側（−3 以下）</td><td class="n">29</td><td class="n">1.152</td><td class="n">1.047</td></tr><tr><td>前後（最後の角 3 番手以内）</td><td>有利な側（+2 以上）</td><td class="n">988</td><td class="n">1.005</td><td class="n">0.984</td></tr><tr><td>前後（最後の角 3 番手以内）</td><td>有利な側（+3 以上）</td><td class="n">76</td><td class="n">1.046</td><td class="n">1.050</td></tr><tr><td>前後（最後の角 3 番手以内）</td><td>逆の側（−2 以下）</td><td class="n">770</td><td class="n">1.106</td><td class="n">1.134</td></tr><tr><td>前後（最後の角 3 番手以内）</td><td>逆の側（−3 以下）</td><td class="n">55</td><td class="n">1.178</td><td class="n">1.088</td></tr></tbody></table></div>
+<h2>判定と見た回数</h2><ul><li>条件 3（上限の計算で届く余地）を満たさないので、R1 の一致どおり R0 で閉じた。</li><li>決まりからの外れ 1 回: 上限の計算で、目的のレースの着順を 2016〜24 の全部（確かめの側 30% を含む）で使った（市場・払戻は見ていない）。当日の偏りの族は、以後 30% を確かめに使えない。</li><li>定義（内外・前後・閾値・前のレースの数）を変えた再試行はしない。</li></ul>
+<h2>作り方・再現</h2><ul><li><code>python -m src.research.rules_council.daybias bound</code>（結果 <code>docs/operations/retrain_trials/rules_council_rc3_bound.json</code>）。費用 0 円。</li><li>決定は <code>docs/operations/roi_plus_council/decisions.md</code> の「RC-3 の判断」。</li></ul>
+</main></body></html>

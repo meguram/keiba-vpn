@@ -210,7 +210,7 @@ class TestRaceProbabilities(unittest.TestCase):
         from unittest import mock
 
         with mock.patch("src.utils.ev_calibration.load_config", return_value={"enabled": False}):          # 較正が無効のときは従来の閾値
-            self.assertEqual(buy_recommendation_tier({"ev_win": 1.3}), "強推奨")
+            self.assertEqual(buy_recommendation_tier({"ev_win": 1.3}), "期待値 高")
             self.assertEqual(buy_recommendation_tier({"ev_place": 0.95}), "様子見")
 
     def test_buy_recommendation_tier_calibrated(self):
@@ -221,7 +221,7 @@ class TestRaceProbabilities(unittest.TestCase):
                "tiers": {"strong": 1.1, "recommend": 1.0, "watch": 0.9}}
         with mock.patch("src.utils.ev_calibration.load_config", return_value=cfg):
             self.assertEqual(buy_recommendation_tier({"ev_win": 3.0}), "—")                        # 単勝の EV は高くても較正後は 0.7
-            self.assertEqual(buy_recommendation_tier({"ev_place": 1.5}), "強推奨")                  # 較正後 1.2
+            self.assertEqual(buy_recommendation_tier({"ev_place": 1.5}), "期待値 高")                  # 較正後 1.2
             self.assertEqual(buy_recommendation_tier({"ev_place": 0.9}), "様子見")                  # 較正後 0.96
             self.assertEqual(buy_recommendation_tier({"ev_win": 0}), "—")                           # EV が無い馬は較正しない
 
@@ -373,7 +373,7 @@ def test_buy_tier_uses_calibrated_ev_only_when_enabled(monkeypatch):
 
     e = {"ev_win": 1.5, "ev_top2": 0.5, "ev_place": 0.5}
     monkeypatch.setattr(ev_calibration, "load_config", lambda: {})
-    assert buy_recommendation_tier(e) == "強推奨"
+    assert buy_recommendation_tier(e) == "期待値 高"
     monkeypatch.setattr(ev_calibration, "load_config", lambda: {"enabled": True, "k": {"win": 0.2}, "base": {"win": 0.8}})
     assert buy_recommendation_tier(e) == "様子見"      # 0.8 + 0.2×(1.5−0.8) = 0.94 → 様子見（0.9 以上）
 

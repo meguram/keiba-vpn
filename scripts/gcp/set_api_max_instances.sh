@@ -4,7 +4,7 @@
 # services update は使わない（最後に作られた版 = stg の版のひな形を使うことがあるため。scripts/gcp/api_revision_clone.py）。
 #
 #   bash scripts/gcp/set_api_max_instances.sh 3            # 作る版の要点を見せるだけ（変更しない）
-#   bash scripts/gcp/set_api_max_instances.sh 3 --apply    # 版を作り（通信 0%）、確かめてから通信を 100% 移す
+#   bash scripts/gcp/set_api_max_instances.sh 3 --apply    # 版を作り（通信 0%）、確かめてから通信を 100% 移す（ユーザーが自分で流す。正の戻しは変数＋promote）
 #
 # ホストで root の gcloud の認証を使うときの例:
 #   sudo -n env CLOUDSDK_CONFIG=<root で使う gcloud の設定の置き場> bash scripts/gcp/set_api_max_instances.sh 3 --apply   # 置き場は docs の手順

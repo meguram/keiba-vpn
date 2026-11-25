@@ -324,7 +324,7 @@ def suggest_race_bets(entries: list[dict]) -> dict[str, Any]:
     filtered = filtered[:4]
 
     if not filtered:
-        notes.append("期待値・印の基準を満たす馬券は見つかりませんでした（様子見推奨）。")
+        notes.append("期待値・印の基準を満たす馬券は見つかりませんでした（様子見）。")
         return {
             "strategy_label": "様子見",
             "headline": "明確な買い目なし",
@@ -350,7 +350,7 @@ def suggest_race_bets(entries: list[dict]) -> dict[str, Any]:
 
     high = [p for p in filtered if p["confidence"] == "high"]
     if high:
-        notes.append(f"推奨度「高」: {', '.join(p['bet_type_label'] + p['selection'] for p in high)}")
+        notes.append(f"参考度「高」: {', '.join(p['bet_type_label'] + p['selection'] for p in high)}")
     notes.append("印なし・期待値低めの馬は買い目から外しています。")
 
     return {

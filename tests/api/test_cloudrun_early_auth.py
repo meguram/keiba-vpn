@@ -238,3 +238,57 @@ def test_preload_models_runs_each_step_and_survives_failures(entry, monkeypatch)
     took = entry.preload_models("20261123")
     assert calls == ["tv2", ("megu", "", "20261123")]
     assert set(took) == {"tracking_v2", "pace_type", "expected_megu"}
+
+
+def _bundle_pulled(entry, monkeypatch, ok: bool):
+    """束の取り込みの印を、このテストだけの Event に差し替える（プロセス全体の印を汚さない）。
+    ok=False は、束が読めず一覧の取り込みも失敗した起動（直近分・全体の印は成否を問わず立つが、束の成功の印は立たない）。"""
+    import threading
+
+    from src.ops import gcs_mirror
+
+    recent, whole, bundle = threading.Event(), threading.Event(), threading.Event()
+    recent.set()
+    whole.set()
+    if ok:
+        bundle.set()
+    monkeypatch.setattr(gcs_mirror, "initial_recent_pulled", recent)
+    monkeypatch.setattr(gcs_mirror, "initial_full_pulled", whole)
+    monkeypatch.setattr(gcs_mirror, "initial_bundle_ok", bundle)
+    monkeypatch.setattr(entry, "mirror_pull_enabled", lambda: True)
+    monkeypatch.setattr(entry, "_start_mirror_pull", lambda: None)          # GCS の取り込みのスレッドは立てない
+
+
+@pytest.mark.parametrize("flag,ok,waits", [("", True, False), ("0", True, True), ("", False, True)])
+def test_ready_before_warmup_when_bundle_pulled_everything(entry, monkeypatch, flag, ok, waits):
+    """束と追いつきが成功した起動は、ウォームアップを流さずに内容の要求を通す（既定）。
+    KEIBA_READY_BEFORE_WARMUP=0・束の道が失敗した起動（全体の印は立つが束の成功の印は立たない）は従来どおり待つ。"""
+    monkeypatch.setenv("KEIBA_READY_BEFORE_WARMUP", flag)
+    _bundle_pulled(entry, monkeypatch, ok)
+    preloaded = []
+    monkeypatch.setattr(entry, "preload_models", lambda: preloaded.append(1) or {})
+
+    async def run():
+        gw_app = entry.build_app()
+        gw = gw_app.app
+        release = asyncio.Event()
+
+        async def slow_startup():
+            await release.wait()
+
+        gw.warmup = slow_startup
+        task, q = await _start(gw_app)
+        assert gw.ready.is_set() is (not waits)
+        r = await _get(gw_app, entry.READY_PATH, timeout=2)
+        assert r.status_code == (503 if waits else 200)
+        content = asyncio.create_task(_get(gw_app, "/api/v1/races", timeout=10))
+        await asyncio.sleep(0.2)
+        assert content.done() is (not waits)
+        release.set()
+        await content
+        await asyncio.wait_for(gw._startup_task, 5)
+        assert preloaded == ([] if waits else [1])                  # 早く通すときは、ウォームアップの代わりに先読みだけ
+        await q.put({"type": "lifespan.shutdown"})
+        await task
+
+    asyncio.run(run())

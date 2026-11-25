@@ -1,0 +1,22 @@
+{
+ "races_2024": 3199,
+ "lambda_1.0": {
+  "mean_ll_diff_per_race": 0.05152952240795361,
+  "sd_per_race": 0.297117228960003,
+  "races_for_80pct": 389.8698851625999,
+  "years_at_3200_flat_races": 0.12183433911331248
+ },
+ "lambda_0.5": {
+  "mean_ll_diff_per_race": 0.0028158224437581994,
+  "sd_per_race": 0.33244453055307216,
+  "races_for_80pct": 163457.21866845732,
+  "years_at_3200_flat_races": 51.08038083389292
+ },
+ "lambda_0.25": {
+  "mean_ll_diff_per_race": -0.027131807648760255,
+  "sd_per_race": 0.36184648386483276,
+  "races_for_80pct": null,
+  "years_at_3200_flat_races": null
+ },
+ "note": "λ = 1 は組んだ確率がそのまま真（Benter が正しい）、λ = 0.5・0.25 は効きを半分・4 分の 1 にした真。判定の q は再現 T-60 の種 0。本物の T-60 では q が確定に近い分だけ差は小さくなる（楽観）"
+}

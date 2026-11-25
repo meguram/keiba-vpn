@@ -13,8 +13,9 @@ import { useAutoRetry } from "@/lib/hooks/useAutoRetry";
 import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import { WeekPicker } from "@/components/WeekPicker";
 import { sameRoundIn } from "@/lib/raceGrade";
-import { RaceStrip, useNarrow } from "@/components/RaceStrip";
+import { RaceStrip } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
+import { MarkNote } from "@/components/MarkNote";
 import { MeguTable } from "@/components/MeguTable";
 import { WeeklyBetTab } from "@/components/WeeklyBetTab";
 import { RaceResult } from "@/components/RaceResult";
@@ -58,6 +59,11 @@ type RaceItem = {
   entries_updated_at?: string | null;
 };
 
+const MARK_SYMBOL: Record<string, string> = { honmei: "◎", pair: "○", show_val: "▲", anchor: "△", star: "★", kesi: "消" };
+/** 印の並び（ユーザーの指定 2026-11-25）: ◎ > ○ > ▲ > ★ > △ > 無印 > 消 */
+const MARK_ORDER: Record<string, number> = { "◎": 0, "○": 1, "▲": 2, "★": 3, "△": 4, "": 5, "消": 6 };
+const markOf = (p: { mark?: string; mark_type?: string }) => p.mark || MARK_SYMBOL[p.mark_type ?? ""] || "";
+
 type PredEntry = {
   horse_number?: number;                 // 馬番が未確定の段階（特別登録・出走馬決定）は API が null を返す（画面は『-』を出す）
   /** 馬番が未確定の段階（特別登録・出走馬決定）では true */
@@ -72,6 +78,9 @@ type PredEntry = {
   weight?: number | null;
   weight_change?: number | null;
   popularity?: number | null;
+  /** 印の語と記号。匿名・無料会員には予測の数値の代わりにこれだけが来る（src/api/tier.py） */
+  mark_type?: string;
+  mark?: string;
   pred_rank?: number;
   composite_rank?: number;
   win_prob?: number | null;
@@ -129,23 +138,6 @@ function fmtPct(v: number | null | undefined): string {
   return `${(v * 100).toFixed(1)}%`;
 }
 
-/** 較正後の期待値（cal=true）の色の閾値は、買い推奨度（強推奨 1.10 / 推奨 1.00 / 様子見 0.90）に合わせる */
-function fmtEv(v: number | null | undefined, cal = false): { text: string; color: string; bg: string } {
-  if (v == null) return { text: "-", color: "var(--text-dim)", bg: "transparent" };
-  const n = Number(v);
-  if (cal) {
-    if (n >= 1.1) return { text: n.toFixed(2), color: "#22c55e", bg: "rgba(34,197,94,0.10)" };
-    if (n >= 1.0) return { text: n.toFixed(2), color: "#60a5fa", bg: "rgba(96,165,250,0.08)" };
-    if (n >= 0.9) return { text: n.toFixed(2), color: "var(--text-dim)", bg: "transparent" };
-    return { text: n.toFixed(2), color: "#f87171", bg: "rgba(239,68,68,0.07)" };
-  }
-  if (n >= 1.5) return { text: n.toFixed(2), color: "#22c55e", bg: "rgba(34,197,94,0.10)" };
-  if (n >= 1.2) return { text: n.toFixed(2), color: "#4ade80", bg: "rgba(74,222,128,0.08)" };
-  if (n >= 1.0) return { text: n.toFixed(2), color: "#60a5fa", bg: "rgba(96,165,250,0.08)" };
-  if (n >= 0.8) return { text: n.toFixed(2), color: "var(--text-dim)", bg: "transparent" };
-  return { text: n.toFixed(2), color: "#f87171", bg: "rgba(239,68,68,0.07)" };
-}
-
 function gradeChip(grade: string | undefined) {
   if (!grade) return null;
   const s =
@@ -159,46 +151,23 @@ function gradeChip(grade: string | undefined) {
   );
 }
 
-/* ── サマリーバッジ（勝期待値 >= 1.0 の頭数など） ── */
-function RaceSummaryBadges({ preds }: { preds: PredEntry[] }) {
-  const hasP = preds.filter((p) => p.win_prob != null);
-  if (!hasP.length) return null;
-  const evOk = hasP.filter((p) => (p.ev_win_cal ?? p.ev_win ?? 0) >= 1.0).length;
-  const evGreat = hasP.filter((p) => (p.ev_win_cal != null ? p.ev_win_cal >= 1.1 : (p.ev_win ?? 0) >= 1.3)).length;
-  return (
-    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-      {evGreat > 0 && (
-        <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 4, background: "rgba(34,197,94,0.10)", color: "#22c55e" }}>
-          EV≥1.3: {evGreat}頭
-        </span>
-      )}
-      {evOk > 0 && (
-        <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 4, background: "rgba(59,130,246,0.10)", color: "#60a5fa" }}>
-          EV≥1.0: {evOk}頭
-        </span>
-      )}
-    </div>
-  );
-}
-
 /* ── 列での並べ替え（表に出している値だけ） ── */
-type SortKey = "num" | "name" | "bracket" | "win" | "top3" | "odds" | "podds" | "evw" | "evp";
+type SortKey = "num" | "mark" | "name" | "bracket" | "win" | "top3" | "odds" | "podds";
 type SortDir = "asc" | "desc";
 
 /** 列の値。数値は数、文字は文字。値が無い（"-" 表示）ときは null（並べ替えでは常に末尾） */
 const SORT_VALUE: Record<SortKey, (p: PredEntry) => number | string | null> = {
   num: (p) => p.horse_number ?? null,
+  mark: (p) => MARK_ORDER[markOf(p)] ?? MARK_ORDER[""],              // 無印も値（消より前）にする
   name: (p) => p.horse_name ?? null,
   bracket: (p) => p.bracket_number ?? null,
   win: (p) => p.win_prob ?? null,
   top3: (p) => p.top3_prob ?? null,
   odds: (p) => p.win_odds ?? null,
   podds: (p) => p.place_odds_min ?? null,
-  evw: (p) => p.ev_win_cal ?? p.ev_win ?? null,
-  evp: (p) => p.ev_place_cal ?? p.ev_place ?? p.expected_value ?? null,
 };
-// 『大きいほど良い』列は、最初のクリックを降順にする（勝率・複勝率・期待値）
-const DESC_FIRST = new Set<SortKey>(["win", "top3", "evw", "evp"]);
+// 『大きいほど良い』列は、最初のクリックを降順にする（勝率・複勝率）
+const DESC_FIRST = new Set<SortKey>(["win", "top3"]);
 
 function sortPreds(preds: PredEntry[], key: SortKey | null, dir: SortDir, fallback: (a: PredEntry, b: PredEntry) => number): PredEntry[] {
   const out = [...preds].sort(fallback);                                   // 同じ値のときは既定の並び（安定）
@@ -214,9 +183,9 @@ function sortPreds(preds: PredEntry[], key: SortKey | null, dir: SortDir, fallba
   });
 }
 
-/* AI 予測の表は、どの幅でも同じ 7 列（枠・馬番・馬名・AI勝率・AI複勝率・予想オッズ・期待値）。
-   予想オッズと期待値は 1 列に 2 段（上=単勝・下=複勝）にして、スマホ幅（390px）でも横スクロールなしで収める。
-   さらに狭い端末（表の幅 340px 未満）では表の枠の中だけ横に送れ、枠・馬番・馬名は左に固定する（sticky）。
+/* AI 予測の表は、どの幅でも同じ 7 列（枠・馬番・印・馬名・AI勝率・AI複勝率・予想オッズ）。期待値は出さない（2026-11-25 ユーザーの判断）。
+   予想オッズは 1 列に 2 段（上=単勝・下=複勝）にして、スマホ幅（390px）でも横スクロールなしで収める。
+   さらに狭い端末（表の幅 360px 未満）では表の枠の中だけ横に送れ、枠・馬番・印・馬名は左に固定する（sticky）。
    騎手・性齢・斤量・馬体重・連対率・買い判断は表に出さない（馬名を押した情報パネルと、レース詳細で見られる。
    docs/operations/weekly_predictions_table.md）。
    色はサイトの変数（--text・--border・--surface）を使う（サイトはダークのみ。ライトの配色ができたら変数で追従する）。 */
@@ -233,22 +202,20 @@ const TABLE_CSS = `
 .pt-sortbtn > span:first-child{word-break:keep-all}
 .pt-sortbtn small{display:block;font-size:10px;font-weight:400;opacity:.85}
 .pt-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
-.pt-tbl{width:100%;min-width:340px;table-layout:fixed;border-collapse:separate;border-spacing:0;font-size:12px}
+.pt-tbl{width:100%;min-width:360px;table-layout:fixed;border-collapse:separate;border-spacing:0;font-size:12px}
 .pt-tbl th{background:var(--surface2);border-bottom:1px solid var(--border);color:var(--text-dim);font-size:11px;font-weight:600}
 .pt-tbl td{overflow:hidden;padding:5px 4px;border-bottom:1px solid var(--border);text-align:center;vertical-align:middle;font-size:12px;background:linear-gradient(var(--rowbg,transparent),var(--rowbg,transparent)),var(--surface)}
-.pt-tbl td:nth-child(-n+2){padding-left:1px;padding-right:1px}
+.pt-tbl td:nth-child(-n+3){padding-left:1px;padding-right:1px}
 .pt-tbl td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pt-tbl td.sep,.pt-tbl th.sep{border-left:1px solid var(--border)}
 .pt-tbl .ln{display:block;line-height:1.35}
 .pt-tbl .ln + .ln{font-size:11px;color:var(--text-dim)}
-.pt-tbl .ev{display:inline-block;padding:0 2px;border-radius:3px;text-align:right}
-.pt-tbl .ev.hi{font-weight:800}
 .pt-name{display:flex;align-items:center;gap:4px;min-width:0}
 .pt-name > .pt-tap{flex:0 1 auto;min-width:0;font-weight:700;color:var(--text);font-size:12.5px;letter-spacing:-.01em}
-.pt-tbl .c-br{width:24px}.pt-tbl .c-no{width:26px}.pt-tbl .c-win{width:46px}.pt-tbl .c-t3{width:46px}.pt-tbl .c-odds{width:58px}.pt-tbl .c-ev{width:44px}
-.pt-tbl tr > :nth-child(-n+3){position:sticky;z-index:1}
-.pt-tbl tr > :nth-child(1){left:0}.pt-tbl tr > :nth-child(2){left:24px}.pt-tbl tr > :nth-child(3){left:50px;box-shadow:1px 0 0 var(--border)}
-.pt-tbl thead tr > th:nth-child(-n+3){z-index:2}
+.pt-tbl .c-br{width:24px}.pt-tbl .c-no{width:26px}.pt-tbl .c-mk{width:20px}.pt-tbl .c-win{width:46px}.pt-tbl .c-t3{width:46px}.pt-tbl .c-odds{width:58px}
+.pt-tbl tr > :nth-child(-n+4){position:sticky;z-index:1}
+.pt-tbl tr > :nth-child(1){left:0}.pt-tbl tr > :nth-child(2){left:24px}.pt-tbl tr > :nth-child(3){left:50px}.pt-tbl tr > :nth-child(4){left:70px;box-shadow:1px 0 0 var(--border)}
+.pt-tbl thead tr > th:nth-child(-n+4){z-index:2}
 .pt-tbl td.pt-bar{background:linear-gradient(to left,var(--c) var(--w),transparent var(--w)) right bottom/100% 3px no-repeat,linear-gradient(var(--rowbg,transparent),var(--rowbg,transparent)),var(--surface)}
 .pt-top{color:var(--text) !important;font-weight:800 !important}
 .pt-legend{margin:6px 2px 0;font-size:11px;line-height:1.6;color:var(--text-dim)}
@@ -264,8 +231,8 @@ const TABLE_CSS = `
   .pt-tbl td{padding:7px 8px;font-size:13px}
   .pt-tbl .ln + .ln{font-size:12px}
   .pt-tbl .ev{min-width:38px;padding:0 4px}
-  .pt-tbl .c-br{width:40px}.pt-tbl .c-no{width:44px}.pt-tbl .c-win{width:84px}.pt-tbl .c-t3{width:84px}.pt-tbl .c-odds{width:110px}.pt-tbl .c-ev{width:90px}
-  .pt-tbl tr > :nth-child(2){left:40px}.pt-tbl tr > :nth-child(3){left:84px}
+  .pt-tbl .c-br{width:40px}.pt-tbl .c-no{width:44px}.pt-tbl .c-mk{width:40px}.pt-tbl .c-win{width:84px}.pt-tbl .c-t3{width:84px}.pt-tbl .c-odds{width:110px}
+  .pt-tbl tr > :nth-child(2){left:40px}.pt-tbl tr > :nth-child(3){left:84px}.pt-tbl tr > :nth-child(4){left:124px}
   .pt-name > .pt-tap{font-size:14px}
 }
 @media (max-width:639px){ .wp-main{padding:12px 6px !important} .wp-race-body{padding:0 4px 10px !important} }
@@ -277,9 +244,8 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
   const [card, setCard] = useState<{ horseId: string; tab: CardTab } | null>(null);   // 馬名のタップで開く情報パネル（騎手・調教師のタブもここ）
   const defaultOrder = (a: PredEntry, b: PredEntry) => (a.horse_number ?? 0) - (b.horse_number ?? 0);      // 既定は馬番順
   const sorted = sortPreds(preds, sort?.key ?? null, sort?.dir ?? "asc", defaultOrder);
-  const calibratedEv = preds.some((p) => p.ev_win_cal != null || p.ev_place_cal != null);     // EV の較正が有効なときだけ『較正後』と表示する
   const { isMember, loading: authLoading } = useAuthStatus();
-  const lock = !authLoading && !isMember;      // 匿名は勝率・複勝率まで。それ以外の列はサーバが落としているので見出しに 🔒 を付ける
+  const lock = !authLoading && !isMember;      // 匿名・無料会員は印だけ。予測の数値の列はサーバが落としているので見出しに 🔒 を付ける
   const LK = (label: string) => (lock ? `🔒${label}` : label);
 
   // 見出しのクリック: 1 回目=その列の向き（既定は昇順、大きいほど良い列は降順）→ 2 回目=逆 → 3 回目=元の並びに戻す
@@ -352,28 +318,17 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
       className={`num ${sep ? "sep" : ""} ${v != null && hasPred && max > 0 ? "pt-bar" : ""} ${top ? "pt-top" : ""}`}
       style={{ color: dim, fontWeight: 600, ...(v != null && max > 0 ? { ["--w" as string]: `${Math.round((v / max) * 100)}%`, ["--c" as string]: color } : {}) } as React.CSSProperties}
     >
-      {fmtPct(v)}
+      {lock ? "🔒" : fmtPct(v)}
     </td>
   );
-  const evSpan = (v: number | null | undefined, cal: boolean, label: string) => {
-    const f = fmtEv(v, cal);
-    const hi = v != null && Number(v) >= 1.0;
-    return (
-      <span className="ln">
-        <span className={`ev ${hi ? "hi" : ""}`} title={`${label}の期待値${cal ? "（較正後）" : ""}`} style={{ color: f.color, background: f.bg }}>{f.text}</span>
-      </span>
-    );
-  };
-  const evTitle = `期待値（上段=単勝・下段=複勝${calibratedEv ? "・過去の実績に合わせて較正した値" : ""}）。1.00 で元返し`;
-
   // 並び替えバー: よく使う 3 つはチップ、そのほか（表に出している値だけ）は選択肢から
   const QUICK: { key: SortKey; label: string }[] = [
-    { key: "num", label: "馬番" }, { key: "win", label: "勝率" }, { key: "evw", label: "期待値" },
+    { key: "num", label: "馬番" }, { key: "win", label: "勝率" }, { key: "mark", label: "印" },
   ];
   const ALL: { key: SortKey; label: string }[] = [
-    { key: "num", label: "馬番" }, { key: "name", label: "馬名" }, { key: "bracket", label: "枠" },
+    { key: "num", label: "馬番" }, { key: "mark", label: "印" }, { key: "name", label: "馬名" }, { key: "bracket", label: "枠" },
     { key: "win", label: "AI勝率" }, { key: "top3", label: "AI複勝率" },
-    { key: "odds", label: "単勝オッズ予測" }, { key: "podds", label: "複勝オッズ予測" }, { key: "evw", label: "単勝期待値" }, { key: "evp", label: "複勝期待値" },
+    { key: "odds", label: "単勝オッズ予測" }, { key: "podds", label: "複勝オッズ予測" },
   ];
   const sortBar = (
     <div className="pt-sortbar" role="group" aria-label="並び替え">
@@ -416,29 +371,30 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
         {/* 並べ替えは独自に持つので、共通の TableSorter は効かせない（data-no-sort） */}
         <table className="pt-tbl" data-no-sort>
           <colgroup>
-            <col className="c-br" /><col className="c-no" /><col /><col className="c-win" /><col className="c-t3" /><col className="c-odds" /><col className="c-ev" />
+            <col className="c-br" /><col className="c-no" /><col className="c-mk" /><col /><col className="c-win" /><col className="c-t3" /><col className="c-odds" />
           </colgroup>
           <thead>
             <tr>
               {th("bracket", "枠", { title: "枠番（前日に確定）" })}
               {th("num", "馬番")}
+              {th("mark", "印", { title: "印（◎○▲★△消）。押すと ◎ > ○ > ▲ > ★ > △ > 無印 > 消 の順（もう一度押すと逆）" })}
               {th("name", "馬名", { align: "left", title: "馬名（押すと近走・血統・騎手・調教師の情報）" })}
-              {th("win", <>AI<br />勝率</>, { align: "right", cls: "sep", title: "AI の勝率" })}
-              {th("top3", <>AI<br />複勝率</>, { align: "right", title: "AI の複勝率（3着以内に入る確率）" })}
+              {th("win", <>{lock ? "🔒" : ""}AI<br />勝率</>, { align: "right", cls: "sep", title: lock ? "AI の勝率（会員限定）" : "AI の勝率" })}
+              {th("top3", <>{lock ? "🔒" : ""}AI<br />複勝率</>, { align: "right", title: lock ? "AI の複勝率（会員限定）" : "AI の複勝率（3着以内に入る確率）" })}
               {th("odds", "オッズ", { align: "right", cls: "sep", sub: LK("予測 単/複"), title: "オッズの予測値（上段=単勝・下段=複勝の下限-上限）。単勝で並べ替え（複勝は『そのほか』から）" })}
-              {th("evw", "期待値", { align: "right", cls: "sep", sub: LK("単/複"), title: `${evTitle}。単勝で並べ替え（複勝は『そのほか』から）` })}
             </tr>
           </thead>
           <tbody>
             {sorted.map((p, i) => {
-              const evW = p.ev_win_cal ?? p.ev_win;
-              const evP = p.ev_place_cal ?? p.ev_place ?? p.expected_value;
               const bg = rowBgOf(p);
               return (
                 <tr key={p.horse_number ?? `i${i}`} style={bg ? ({ ["--rowbg" as string]: bg } as React.CSSProperties) : undefined}>
                   <td>{wakuChip(p)}</td>
                   <td style={{ fontWeight: 800, fontVariantNumeric: "tabular-nums", color: "var(--text)" }} title={p.horse_number != null ? `${brOf(p) ?? "-"}枠 ${p.horse_number}番` : "馬番は未確定"}>
                     {p.horse_number ?? "-"}
+                  </td>
+                  <td style={{ fontWeight: 800, color: "#fbbf24" }} title={markOf(p) ? "めぐAI印" : undefined}>
+                    {markOf(p) || ""}
                   </td>
                   <td style={{ textAlign: "left" }}>
                     <span className="pt-name">{nameCell(p)}</span>
@@ -449,19 +405,15 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
                     <span className="ln">{num1(p.win_odds)}</span>
                     <span className="ln">{placeOdds(p)}</span>
                   </td>
-                  <td className="num sep">
-                    {evSpan(evW, p.ev_win_cal != null, "単勝")}
-                    {evSpan(evP, p.ev_place_cal != null, "複勝")}
-                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+      {hasPred && <MarkNote />}
       <p className="pt-legend">
-        オッズ・期待値は上段＝単勝、下段＝複勝（複勝オッズは下限-上限）。期待値{calibratedEv ? "（較正後）" : ""}は 1.00 で元返しで、1.00 以上を青、{calibratedEv ? "1.10" : "1.20"} 以上を緑で示します。
-        騎手・調教師・性齢・斤量・馬体重は馬名を押した情報パネルで、連対率・買い判断は「詳細 →」のレース詳細（広い画面）で見られます。
+        オッズは上段＝単勝、下段＝複勝（複勝オッズは下限-上限）。騎手・調教師・性齢・斤量・馬体重は馬名を押した情報パネルで、連対率は「詳細 →」のレース詳細（広い画面）で見られます。
       </p>
 
       {!hasPred && (
@@ -484,7 +436,8 @@ function RacePanel({
   onReload: (id: string) => void;
   value?: RaceValue;
 }) {
-  const hasPred = pred?.has_prediction === true && (pred.predictions?.some((p) => p.win_prob != null) ?? false);
+  // 匿名・無料会員の応答には確率が無く印だけが来るので、印でも「予測あり」とみなす
+  const hasPred = pred?.has_prediction === true && (pred.predictions?.some((p) => p.win_prob != null || !!p.mark_type) ?? false);
   const preds = pred?.predictions ?? [];
   const heads = race.entries_count ?? race.field_size ?? pred?.total_horses;
   const conds = [
@@ -513,7 +466,7 @@ function RacePanel({
     }
     return m;
   }, [preds]);
-  const tabs: [typeof tab, string][] = [["predict", "AI予測・期待値"], ["bet", "推奨馬券"], ...(result ? [["result", "レース結果"] as [typeof tab, string]] : started && !locked ? [["result", "レース結果（待ち）"] as [typeof tab, string]] : [])];
+  const tabs: [typeof tab, string][] = [["predict", "AI予測"], ["bet", "サンプル買い目"], ...(result ? [["result", "レース結果"] as [typeof tab, string]] : started && !locked ? [["result", "レース結果（待ち）"] as [typeof tab, string]] : [])];
 
   return (
     <section
@@ -552,11 +505,10 @@ function RacePanel({
               boxShadow: LEVEL_STYLE[value.level].glow,
             }}
           >
-            {value.level === "hot" ? "★ " : ""}推奨 {value.tier?.label ?? (value.expected_roi != null ? `${(value.expected_roi * 100).toFixed(0)}%` : "見送り")}
+            {value.level === "hot" ? "★ " : ""}{value.tier?.label ? `参考度 ${value.tier.label}` : value.level !== "pass" ? `参考度 ${LEVEL_STYLE[value.level].label.replace(/^★ /, "")}` : "見送り"}
           </span>
         )}
 
-        {hasPred && <RaceSummaryBadges preds={preds} />}
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           {pred && !failed && (
@@ -633,7 +585,6 @@ function RacePanel({
 
 /* ── メインページ ── */
 export default function WeeklyPredictionsPage() {
-  const narrow = useNarrow();
   const [dates, setDates] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState("");
   const [races, setRaces] = useState<RaceItem[]>([]);
@@ -680,7 +631,7 @@ export default function WeeklyPredictionsPage() {
     const v = q.get("venue");
     if (v) setSelectedVenue(v);
     const dq = q.get("date");
-    if (dq && /^\d{8}$/.test(dq) && !USE_MOCK) {         // 開催日一覧・認証の確認を待たずに、開く日のレース一覧と推奨度を先に取り始める
+    if (dq && /^\d{8}$/.test(dq) && !USE_MOCK) {         // 開催日一覧・認証の確認を待たずに、開く日のレース一覧と参考度を先に取り始める
       prefetchJson(`/api/race-list/${dq}`, { ttlMs: 60_000 });
       prefetchRaceValues(dq);
     }
@@ -748,7 +699,7 @@ export default function WeeklyPredictionsPage() {
         const list: string[] = d.dates ?? d ?? [];
         setDates(list);
         if (list.length) setSelectedDate(initial(list));
-        if (list.length) {                                  // 近い開催日の推奨度も裏で温めておく（日付を切り替えたときすぐ出る）
+        if (list.length) {                                  // 近い開催日の参考度も裏で温めておく（日付を切り替えたときすぐ出る）
           const t0 = new Date();
           const day = (x: string) => Date.UTC(+x.slice(0, 4), +x.slice(4, 6) - 1, +x.slice(6, 8));
           const near = list.filter((x) => Math.abs(day(x) - Date.UTC(t0.getFullYear(), t0.getMonth(), t0.getDate())) <= 7 * 86400000).slice(0, 8);
@@ -902,7 +853,7 @@ export default function WeeklyPredictionsPage() {
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 12 }}>
           <h1 style={{ fontSize: 18, fontWeight: 700, color: "#f0f6fc", margin: 0 }}>🤖 今週のAI予測</h1>
           <p className="hide-narrow" style={{ fontSize: 12, color: "var(--text-dim)", margin: 0 }}>
-            前回と次回の開催（最大2週分）の勝率・期待値を一覧表示
+            前回と次回の開催（最大2週分）の AI の勝率と印を一覧表示
           </p>
         </div>
       </div>
@@ -916,17 +867,7 @@ export default function WeeklyPredictionsPage() {
 
       {/* メインコンテンツ */}
       <div className="wp-main" style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 24px" }}>
-        {/* 凡例（狭い画面では折りたたむ） */}
-        <details className="wp-legend" open={!narrow}>
-        <summary>印・期待値の見方</summary>
-        <div style={{ marginBottom: 16, padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-dim)", display: "flex", gap: 16, flexWrap: "wrap" }}>
-          <span>推奨馬券が出るレースの印は推奨馬券から決まります（◎=買い目の購入額が最大・○▲=2・3番手・△=買い目に入るその他の馬・買い目に入らない馬は印なし）。見送りのレースは下の定義のままです。</span>
-          <span>印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / 消: 3着内に来る確率が低い（10人気以下で複勝確率が低い馬。過去の実績では約2.5%・目標5%以下。複数付くことも付かないこともある）</span>
-          <span>
-            期待値（過去の実績に合わせて較正した期待回収率）: <strong style={{ color: "#22c55e" }}>≥1.10</strong> / <strong style={{ color: "#60a5fa" }}>≥1.00</strong> / <strong style={{ color: "var(--text-dim)" }}>≥0.90</strong> / <strong style={{ color: "#f87171" }}>＜0.90</strong>
-          </span>
-        </div>
-        </details>
+        {/* 印の凡例は外した（2026-11-25 ユーザーの指摘）。印の並びは印の列の見出しの title に 1 行 */}
 
         {loadingRaces && <LoadingNotice what="レース一覧" size={36} padding="60px 0" onRetry={() => loadRaces(selectedDate)} />}
 

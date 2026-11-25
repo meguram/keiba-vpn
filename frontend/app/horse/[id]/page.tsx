@@ -442,11 +442,12 @@ export default function HorsePage() {
   const [tab, setTab] = useState<Tab>("pedigree");
   const [detail, setDetail] = useState<HorseDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(true);
+  const [memberOnly, setMemberOnly] = useState(false);     // 匿名・無料会員は 401（馬柱・指数は会員限定。src/api/tier.py）
 
   useEffect(() => {
     if (!horseId) return;
     fetch(`/api/horse/${horseId}/detail`)
-      .then(r => r.ok ? r.json() : null)
+      .then(r => { if (r.status === 401) setMemberOnly(true); return r.ok ? r.json() : null; })
       .then(d => setDetail(d))
       .catch(() => setDetail(null))
       .finally(() => setLoadingDetail(false));
@@ -518,10 +519,16 @@ export default function HorsePage() {
 
       {/* コンテンツ */}
       <div style={{ maxWidth: 1000, margin: "0 auto", padding: "24px" }}>
-        {tab === "pedigree" && <PedigreeTab detail={detail} loading={loadingDetail} />}
-        {tab === "results"  && <ResultsTab  detail={detail} loading={loadingDetail} />}
-        {tab === "index"    && horseId && <IndexTab  horseId={horseId} />}
-        {tab === "growth"   && horseId && <GrowthTab horseId={horseId} />}
+        {memberOnly ? (
+          <p style={{ color: "var(--text-dim)", fontSize: 13 }}>🔒 会員限定（馬のページの過去成績・指数は有料会員の方だけに表示しています）</p>
+        ) : (
+          <>
+            {tab === "pedigree" && <PedigreeTab detail={detail} loading={loadingDetail} />}
+            {tab === "results"  && <ResultsTab  detail={detail} loading={loadingDetail} />}
+            {tab === "index"    && horseId && <IndexTab  horseId={horseId} />}
+            {tab === "growth"   && horseId && <GrowthTab horseId={horseId} />}
+          </>
+        )}
       </div>
     </div>
   );

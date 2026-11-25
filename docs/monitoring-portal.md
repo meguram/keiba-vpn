@@ -19,6 +19,7 @@
 | Flask `/api/v1` | 23110 | [ヘルス](http://127.0.0.1:23110/api/v1/health) | ログイン等。Next.js から `/api/v1/*` を中継 |
 | FastAPI（レガシー UI / API） | 23120 | [UI](http://127.0.0.1:23120/) ・ [ヘルス](http://127.0.0.1:23120/api/health) ・ [API 仕様 (/docs)](http://127.0.0.1:23120/docs) | `data/dev_mock/` を読む |
 | 監視ポータル（本書） | 23900 | [ダッシュボード](http://127.0.0.1:23900/) | `127.0.0.1` のみ bind。要ログイン |
+| 会議の記録（絶対回収率プラスにするマン） | 23950 | [目次](http://127.0.0.1:23950/) | `127.0.0.1` のみ bind。認証なし・読み取り専用（`src/scripts/docs/council_viewer.py`）。全環境共通 |
 | MLflow Tracking | 23130 | [http://127.0.0.1:23130/](http://127.0.0.1:23130/) | 既定ではオフ（`START_MLFLOW_LOCAL=true` で起動） |
 
 監視ポータルの各ページ: [ダッシュボード `/`](http://127.0.0.1:23900/) ・ [サービス `/services`](http://127.0.0.1:23900/services) ・ [スクレイピング `/scraping`](http://127.0.0.1:23900/scraping) ・ [Cron `/cron`](http://127.0.0.1:23900/cron) ・ [データ `/data`](http://127.0.0.1:23900/data) ・ [システム `/system`](http://127.0.0.1:23900/system) ・ [ログ `/logs`](http://127.0.0.1:23900/logs) ・ [Git `/git`](http://127.0.0.1:23900/git) ・ [データストア `/data-stores`](http://127.0.0.1:23900/data-stores) ・ [仕様書 `/specs`](http://127.0.0.1:23900/specs)

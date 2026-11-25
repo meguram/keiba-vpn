@@ -117,7 +117,7 @@ def pending_odds_plan(race_id: str, cap: int | None) -> dict[str, Any]:
     prm = params(budget)
     return {"strategy": "target", "race_id": race_id, "budget_yen": budget, "target_multiple": prm.mult, "safety_k": prm.k, "max_bets": prm.max_bets,
             "unit_yen": PT.UNIT, "status": "skip", "level": 0, "bets": [], "total_yen": 0, "odds_basis": "pending", "odds_pending": True,
-            "skip_reason": "想定オッズ（検証と同じモデル）の準備中のため、推奨馬券はまだ出せません"}
+            "skip_reason": "想定オッズ（検証と同じモデル）の準備中のため、サンプル買い目はまだ出せません"}
 
 
 def default_budget() -> int:
@@ -239,7 +239,7 @@ def build_target_portfolio(entries: list[dict], single: dict | None, max_total_b
                 "level": 0}
     idx, stakes = PT.select_portfolio(cand["p"], cand["odds"], prm)
     if len(idx) == 0:
-        return {**base, "status": "skip", "skip_reason": "払戻が購入額の約%g倍に届く買い目の組み合わせがありません（条件を満たす買い目なし）" % prm.mult,
+        return {**base, "status": "skip", "skip_reason": "払戻が金額の約%g倍に届く買い目の組み合わせがありません（条件を満たす買い目なし）" % prm.mult,
                 "bets": [], "total_yen": 0, "level": 0, "odds_basis": cand["basis"]}
     by_hn = {int(e["horse_number"]): e for e in cand["entries"]}
     bets = []
@@ -386,7 +386,8 @@ def build_plans(entries: list[dict], single: dict | None, max_total_bet: int | N
     budget = int(max_total_bet) if max_total_bet else default_budget()
     out = []
     for pc in plans_cfg:
-        item = {"id": pc["id"], "label": pc["label"], "note": pc.get("note", ""), "evidence": pc.get("evidence", ""), "kind": pc["kind"]}
+        # 検証の期間の回収率（evidence）は応答に載せない（選んだ期間の回収率は将来を表さないので画面に出さない。2026-11-25 ユーザーの判断）
+        item = {"id": pc["id"], "label": pc["label"], "note": pc.get("note", ""), "kind": pc["kind"]}
         if pc["kind"] == "pattern":
             pat = cfg.get("pattern") or {}
             prm = PP.PatternParams(mult=float(pat.get("mult", 5.0)), k=float(pat.get("k", 2.0)), tau=float(pat.get("tau", 1.0)), bet_ev_min=float(pat.get("bet_ev_min", 0.9)),
@@ -395,7 +396,7 @@ def build_plans(entries: list[dict], single: dict | None, max_total_bet: int | N
             idx, st, ev, hit = r["idx"], r["stakes"], r["ev"], r["hit_prob"]
             thr = float(cfg.get("race_ev_threshold", 2.0))
             if len(idx) == 0:
-                item.update(status="skip", skip_reason="払戻が購入額の約%g倍に届く買い目の組み合わせがありません" % prm.mult, bets=[], total_yen=0, level=0, race_ev=None)
+                item.update(status="skip", skip_reason="払戻が金額の約%g倍に届く買い目の組み合わせがありません" % prm.mult, bets=[], total_yen=0, level=0, race_ev=None)
             elif ev is None or ev < thr:
                 item.update(status="skip", skip_reason="レースの期待値が水準（%.2f）に届きません（このレース %.2f）" % (thr, ev or 0.0), bets=[], total_yen=0, level=0, race_ev=round(ev, 2) if ev else None)
             else:

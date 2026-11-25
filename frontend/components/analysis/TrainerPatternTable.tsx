@@ -32,7 +32,6 @@ const THIN = 30;
 
 function Cells({ r, edges, maxOdds, title }: { r: TPRow; edges: number[]; maxOdds: number; title: string }) {
   const s = rowStats(r);
-  const roi = (v: number | null) => <td className={v != null && v > 1 ? "up" : ""}>{pct(v)}</td>;
   return (
     <>
       <td>{s.n}</td>
@@ -40,8 +39,6 @@ function Cells({ r, edges, maxOdds, title }: { r: TPRow; edges: number[]; maxOdd
       <td>{s.c1}-{s.c2}-{s.c3}-{s.c4p}</td>
       <td>{pct(s.win)}</td>
       <td>{pct(s.place)}</td>
-      {roi(s.winRoi)}
-      {roi(s.placeRoi)}
       <td style={{ textAlign: "center" }}><OddsDist row={r} edges={edges} maxOdds={maxOdds} title={title} /></td>
     </>
   );
@@ -69,7 +66,7 @@ export function TrainerPatternTable({ figure, entries }: { figure: TPFigure; ent
         <thead>
           <tr>
             <th className="l">馬 / 調教師</th><th className="l">最終追い切りのパターン</th><th>出走</th><th className="xs">頭数</th><th>着順内訳</th>
-            <th>勝率</th><th>複勝率</th><th>単勝回収率</th><th>複勝回収率</th><th title="オッズ区間別の出走数。カーソルを合わせる／タップで詳細">オッズ分布</th>
+            <th>勝率</th><th>複勝率</th><th title="オッズ区間別の出走数。カーソルを合わせる／タップで詳細">オッズ分布</th>
           </tr>
         </thead>
         <tbody>
@@ -94,14 +91,14 @@ export function TrainerPatternTable({ figure, entries }: { figure: TPFigure; ent
                   : (() => { const c = workCell(h.wk); return <td className="lv">{c.text}{c.tag && <span className="tag">{c.tag}</span>}</td>; })()}
                 {row
                   ? <Cells r={row} edges={edges} maxOdds={maxOdds} title={`${h.trainer_name ?? ""} ${place ?? ""} ${pat ?? ""}`} />
-                  : <><td className="na" colSpan={7}>{reason(h, code)}</td><td className="xs" /></>}
+                  : <><td className="na" colSpan={5}>{reason(h, code)}</td><td className="xs" /></>}
               </tr>
             );
           })}
         </tbody>
       </table>
       <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--text-dim)" }}>
-        パターン名にカーソルを合わせる（タップ）と定義が出ます。出走が {THIN} 走に満たない行は薄く表示しています（参考程度）。「集計の対象外」は、追い切りはあるものの、集計に使う種別（レース週の月〜金の 4F の時計）ではない馬です。表の集計は {figure.y0}〜{figure.y1} 年（単勝 {figure.max_odds} 倍以上は除く）。
+        パターン名にカーソルを合わせる（タップ）と定義が出ます。出走が {THIN} 走に満たない行は薄く表示しています（参考程度）。「集計の対象外」は、追い切りはあるものの、集計に使う種別（レース週の月〜金の 4F の時計）ではない馬です。表の集計は {figure.y0}〜{figure.y1} 年（単勝 {figure.max_odds} 倍以上は除く）。選んだ期間の回収率は、将来を表さないので出していません。
       </p>
     </div>
   );

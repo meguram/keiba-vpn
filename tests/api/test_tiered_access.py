@@ -13,7 +13,16 @@ from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
 from src.api import auth
-from src.api.tier import LOCKED_GROUPS, PUBLIC_ENTRY_FIELDS, member_only_path, redact_predictions, redact_race_detail
+from src.api.tier import (
+    LOCKED_GROUPS,
+    PUBLIC_ENTRY_FIELDS,
+    find_scope_leaks,
+    member_only_path,
+    race_result_confirmed,
+    redact_entry_card,
+    redact_predictions,
+    redact_race_detail,
+)
 
 @pytest.fixture(autouse=True)
 def _no_anti_scraping(monkeypatch):
@@ -59,23 +68,33 @@ TOP = {
 }
 
 
-def test_redact_predictions_keeps_only_win_and_show_prob():
+def test_redact_predictions_keeps_only_facts_and_marks():
+    """匿名・無料会員には予測の数値（勝率・複勝率・順位）を出さず、印だけを出す（2026-11-25 ユーザーの判断）。"""
     out = redact_predictions(TOP)
     for e in out["predictions"]:
         assert set(e) <= set(PUBLIC_ENTRY_FIELDS)
-        assert {"win_prob", "show_prob", "top3_prob"} <= set(e)
+        assert e["mark_type"] == "honmei" and e["mark"] == "◎"
+        assert not ({"win_prob", "show_prob", "top3_prob", "pred_rank"} & set(e))
     locked = {k for ks in LOCKED_GROUPS.values() for k in ks}
     flat = set(out) | {k for e in out["predictions"] for k in e}
     assert not (locked & flat), locked & flat
     assert "bet_suggestion" not in out and "prob_calibration" not in out and "_compute_meta" not in out
     assert out["race_id"] == TOP["race_id"] and out["entries_status"] == {"phase": "final"}
     assert out["access"]["tier"] == "public"
+    assert not find_scope_leaks(out)
 
 
-def test_redact_predictions_ranks_by_win_prob_not_composite():
+def test_redact_predictions_orders_by_horse_number_not_by_prediction():
     out = redact_predictions(TOP)
-    assert [e["horse_number"] for e in out["predictions"]] == [6, 5]
-    assert [e["pred_rank"] for e in out["predictions"]] == [1, 2]
+    assert [e["horse_number"] for e in out["predictions"]] == [5, 6]
+
+
+def test_public_mark_is_the_same_mark_type_and_hides_public_mark_type():
+    """印は 1 種類（全員に同じめぐAI印）。無料の新しい印（public_mark_type）は影の記録だけで、匿名の応答に出さない。"""
+    top = {**TOP, "predictions": [{**ENTRY, "public_mark_type": "pair"}, {**ENTRY, "horse_number": 6, "mark_type": "kesi"}]}
+    out = redact_predictions(top)
+    assert [(e["mark_type"], e["mark"]) for e in out["predictions"]] == [("honmei", "◎"), ("kesi", "消")]
+    assert all("public_mark_type" not in e for e in out["predictions"])
 
 
 def test_redact_predictions_does_not_mutate_input_and_handles_no_prediction():
@@ -88,20 +107,93 @@ def test_redact_predictions_does_not_mutate_input_and_handles_no_prediction():
     assert entries_only["predictions"] == [{"horse_number": 1, "horse_name": "A"}]
 
 
-def test_redact_race_detail_drops_odds_and_side_info_keeps_facts():
-    detail = {
-        "race_id": "x", "race_name": "R", "race_shutuba": {"entries": [{"horse_number": 1, "horse_name": "A", "odds": 3.0, "popularity": 1}]},
-        "race_result": {"entries": [{"horse_number": 1, "odds": 3.0}]}, "race_odds": {"entries": []}, "race_pair_odds": {}, "race_index": {},
-        "race_paddock": {}, "race_barometer": {}, "race_trainer_comment": {}, "smartrc_race": {}, "horses": {"a": {}},
-        "data_availability": {"race_odds": True, "race_shutuba": True},
+_HIST = {"date": "2026/10/04", "race_name": "2歳未勝利", "finish_position": 1, "odds": 1.1, "popularity": 1, "time_index": 88,
+         "remarks": "出遅れ", "stable_comment": "c", "start_index": 1, "chase_index": 2, "closing_index": 3}
+_PAYOFF = {"単勝": {"numbers": "1", "payout": 300, "popularity": 1}}
+
+
+def _detail(confirmed: bool) -> dict:
+    """レース詳細の応答（prepare_race_result_display の後の形）。confirmed=False は速報（race_result_on_time）だけ。"""
+    res_entry = {"horse_number": 1, "horse_name": "A", "horse_id": "h", "finish_position": 1, "finish_time": "1:47.1", "last_3f": 32.5,
+                 "passing_order": "1-1", "odds": 3.0, "popularity": 1, "jockey_name": "J"}
+    return {
+        "race_id": "x", "race_name": "R", "date": "20261024",
+        "race_shutuba": {"race_name": "R", "entries": [{"horse_number": 1, "horse_name": "A", "horse_id": "h", "odds": 3.0, "popularity": 1}],
+                         "_meta": {"src": "netkeiba"}},
+        "race_result": {"entries": [res_entry], "payoff": _PAYOFF, "lap_times": [12.0], "_display_source": "race_result" if confirmed else "race_result_on_time"},
+        "race_result_on_time": {"entries": [res_entry], "payoff": _PAYOFF},
+        "race_result_lap": {"lap_times": [12.0], "entries_lap": [{"horse_number": 1, "last_3f": 32.5, "lap": [1]}]},
+        "race_odds": {"entries": []}, "race_pair_odds": {}, "race_index": {}, "race_paddock": {}, "race_barometer": {},
+        "race_trainer_comment": {}, "smartrc_race": {}, "race_oikiri": {"x": 1}, "race_shutuba_past": {"x": 1},
+        "horses": {"h": {"horse_name": "A", "race_history": [_HIST]}},
+        "data_availability": {"race_odds": {"json": True}, "race_shutuba": {"json": True}, "race_result_on_time": {"json": True}},
     }
-    out = redact_race_detail(detail)
-    for k in ("race_odds", "race_pair_odds", "race_index", "race_paddock", "race_barometer", "race_trainer_comment", "smartrc_race"):
-        assert k not in out
-    assert out["race_shutuba"]["entries"] == [{"horse_number": 1, "horse_name": "A"}]
-    assert out["race_result"] == detail["race_result"] and out["horses"] == {"a": {}}
-    assert out["data_availability"] == {"race_shutuba": True}
-    assert detail["race_shutuba"]["entries"][0]["odds"] == 3.0  # 元は変えない
+
+
+def test_redact_race_detail_flash_only_has_no_odds_anywhere():
+    d = _detail(confirmed=False)
+    out = redact_race_detail(d)
+    assert find_scope_leaks(out) == []
+    assert not race_result_confirmed(d) and out["access"]["result_confirmed"] is False
+    assert out["race_result"]["entries"][0]["finish_position"] == 1 and out["race_result"]["entries"][0]["last_3f"] == 32.5
+    assert out["race_shutuba"]["entries"] == [{"horse_number": 1, "horse_name": "A", "horse_id": "h"}]
+    assert "horses" not in out and "race_result_on_time" not in out
+    assert out["data_availability"] == {"race_shutuba": {"json": True}}
+    assert d["race_shutuba"]["entries"][0]["odds"] == 3.0  # 元は変えない
+
+
+def test_redact_race_detail_confirmed_keeps_final_odds_and_payoff_only_in_result():
+    d = _detail(confirmed=True)
+    out = redact_race_detail(d)
+    assert race_result_confirmed(d) and out["access"]["result_confirmed"] is True
+    e = out["race_result"]["entries"][0]
+    assert e["odds"] == 3.0 and e["popularity"] == 1 and out["race_result"]["payoff"] == _PAYOFF
+    assert find_scope_leaks(out, confirmed=True) == []
+    leaks = find_scope_leaks(out)                       # 確定でない扱いの検査では、結果の中のオッズを漏れとして拾う
+    assert leaks and all(x.startswith(".race_result.") for x in leaks)
+    assert "odds" not in out["race_shutuba"]["entries"][0]
+
+
+def test_find_scope_leaks_catches_forbidden_keys_anywhere():
+    assert find_scope_leaks({"horses": {"h": {"race_history": []}}}) == [".horses.h.race_history"]
+    assert find_scope_leaks({"race_shutuba": {"entries": [{"odds": 1}]}}, confirmed=True) == [".race_shutuba.entries[].odds"]
+    assert find_scope_leaks({"horse": {"training": {}, "recent": [{"popularity": 1}]}}) == [".horse.training", ".horse.recent[].popularity"]
+
+
+_CARD = {
+    "status": "ok", "race_id": "x", "horse_id": "h",
+    "horse": {"status": "ok", "name": "A", "recent": [{"date": "20260905", "race_name": "札幌2歳S", "finish": 1, "time": "1:50.3", "popularity": 1,
+                                                       "jockey": "J", "last3f": 35.9, "passing": "2-2", "distance": 1800}],
+              "same_conditions": [{"label": "芝", "starts": 2}], "training": {"evaluation": "A", "comment": "動き絶好", "lap_times": "-52.6"},
+              "trainer_comment": {"comment": "仕上がり上々"}, "growth": {"status": "ok"}},
+    "jockey": {"status": "ok", "name": "J"},
+    "trainer": {"status": "ok", "name": "T", "comment": {"comment": "仕上がり上々"}},
+}
+
+
+def test_redact_entry_card_drops_training_comment_growth_and_popularity():
+    out = redact_entry_card(_CARD)
+    assert find_scope_leaks(out) == []
+    assert "comment" not in out["trainer"] and "growth" not in out["horse"]
+    r = out["horse"]["recent"][0]
+    assert r["finish"] == 1 and r["time"] == "1:50.3" and r["last3f"] == 35.9 and "popularity" not in r
+    assert out["horse"]["same_conditions"] == _CARD["horse"]["same_conditions"]
+    assert set(out["access"]["locked"]) == {"training", "trainer_comment", "growth"}
+    assert _CARD["horse"]["training"]["evaluation"] == "A"      # 元は変えない
+
+
+def test_fastapi_entry_card_by_tier(monkeypatch):
+    monkeypatch.setenv("KEIBA_ENV", "stg")
+    monkeypatch.setenv("DEV_SECRET_KEY", "k")
+    _, c = _fastapi()
+    import src.api.entry_card as ec
+
+    monkeypatch.setattr(ec, "build_entry_card", lambda rid, hid, storage: json.loads(json.dumps(_CARD)))
+    anon = c.get("/api/race/x/entry/h/card")
+    assert anon.status_code == 200 and find_scope_leaks(anon.json()) == []
+    assert "private" in anon.headers.get("cache-control", "")
+    full = c.get("/api/race/x/entry/h/card", cookies=_cookie("member")).json()
+    assert full["horse"]["training"]["evaluation"] == "A" and full["trainer"]["comment"]
 
 
 @pytest.mark.parametrize("path,expected", [
@@ -145,6 +237,62 @@ def test_test_user_is_off_by_default_and_hashed(monkeypatch):
     assert '"password"' not in text and '"hash"' in text
 
 
+def _stg_secret(password: bytes = b"test") -> str:
+    import hashlib
+
+    salt = bytes(range(16, 32))
+    return json.dumps({"id": "test", "role": "member", "algo": "pbkdf2_sha256", "iterations": 1000, "salt": salt.hex(),
+                       "hash": hashlib.pbkdf2_hmac("sha256", password, salt, 1000).hex()})
+
+
+def test_stg_test_user_from_secret_needs_both_the_secret_and_the_flag(tmp_path, monkeypatch):
+    """stg の版（rstg）は Secret Manager の KEIBA_STG_TEST_USER から test を読む。本番の版は秘密も KEIBA_TEST_USER も持たない。"""
+    monkeypatch.setattr(auth, "_MEMBERS_FILE", str(tmp_path / "none.json"))        # イメージに config/members.json が無い状態
+    monkeypatch.delenv("KEIBA_TEST_USER", raising=False)
+    monkeypatch.delenv(auth.STG_TEST_USER_ENV, raising=False)
+    assert auth.verify_member_login("test", "test") is False                          # 本番: どちらも無い
+    monkeypatch.setenv(auth.STG_TEST_USER_ENV, _stg_secret())
+    assert auth.verify_member_login("test", "test") is False                          # 秘密だけ（KEIBA_TEST_USER なし）
+    monkeypatch.setenv("KEIBA_TEST_USER", "0")
+    assert auth.verify_member_login("test", "test") is False
+    monkeypatch.delenv(auth.STG_TEST_USER_ENV)
+    monkeypatch.setenv("KEIBA_TEST_USER", "1")
+    assert auth.verify_member_login("test", "test") is False                          # 目印だけ（秘密なし）
+    monkeypatch.setenv(auth.STG_TEST_USER_ENV, _stg_secret())
+    assert auth.verify_member_login("test", "test") is True                           # stg: 両方ある
+    assert auth.verify_member_login("test", "wrong") is False
+    assert auth.verify_member_login("Test2", "test") is False
+    monkeypatch.setenv("KEIBA_TEST_USER", "0")                                         # 目印を外すと、その場で通らなくなる
+    assert auth.verify_member_login("test", "test") is False
+
+
+def test_stg_test_user_secret_ignores_other_ids_and_broken_values(tmp_path, monkeypatch):
+    monkeypatch.setattr(auth, "_MEMBERS_FILE", str(tmp_path / "none.json"))
+    monkeypatch.setenv("KEIBA_TEST_USER", "1")
+    other = json.loads(_stg_secret())
+    other["id"] = "admin"
+    monkeypatch.setenv(auth.STG_TEST_USER_ENV, json.dumps(other))
+    assert auth.verify_member_login("admin", "test") is False                         # test 以外の ID はこの経路で作れない
+    monkeypatch.setenv(auth.STG_TEST_USER_ENV, "{not json")
+    assert auth.verify_member_login("test", "test") is False
+    monkeypatch.setenv(auth.STG_TEST_USER_ENV, json.dumps({**json.loads(_stg_secret()), "requires_env": ""}))
+    monkeypatch.setenv("KEIBA_TEST_USER", "1")
+    assert auth.member_record("test")["requires_env"] == "KEIBA_TEST_USER"             # 秘密の中身で requires_env を外せない
+
+
+def test_stg_test_user_secret_change_takes_effect_and_wins_over_the_file(monkeypatch):
+    """名簿のファイル（fixture）にも test がある状態で、秘密の側が勝つ。秘密を差し替えると、同じプロセスで古いハッシュは通らない。"""
+    monkeypatch.setenv("KEIBA_TEST_USER", "1")
+    monkeypatch.delenv(auth.STG_TEST_USER_ENV, raising=False)
+    assert auth.verify_member_login("test", "test") is True                           # ファイルの test
+    monkeypatch.setenv(auth.STG_TEST_USER_ENV, _stg_secret(b"other"))
+    assert auth.verify_member_login("test", "test") is False                          # 秘密が勝つ
+    assert auth.verify_member_login("test", "other") is True
+    monkeypatch.setenv(auth.STG_TEST_USER_ENV, _stg_secret(b"third"))
+    assert auth.verify_member_login("test", "other") is False                         # 差し替えがキャッシュに残らない
+    assert auth.verify_member_login("test", "third") is True
+
+
 # ── FastAPI / Flask の端から端 ──
 
 def _fastapi():
@@ -168,10 +316,14 @@ def test_fastapi_predictions_by_tier(monkeypatch):
     monkeypatch.setattr(appmod, "_race_predictions_impl", fake)
     anon = c.get("/api/race/202608020311/predictions").json()
     assert "ev_win" not in anon["predictions"][0] and "bet_suggestion" not in anon and anon["access"]["tier"] == "public"
-    assert anon["predictions"][0]["win_prob"] == 0.30
-    for role in ("member", "dev"):
-        full = c.get("/api/race/202608020311/predictions", cookies=_cookie(role)).json()
-        assert full["predictions"][0]["ev_win"] == 1.2 and "bet_suggestion" in full
+    assert "win_prob" not in anon["predictions"][0] and anon["predictions"][0]["mark"] == "◎"
+    full = c.get("/api/race/202608020311/predictions", cookies=_cookie("dev")).json()
+    assert full["predictions"][0]["ev_win"] == 1.2 and "bet_suggestion" in full          # 開発者は全項目
+    mem = c.get("/api/race/202608020311/predictions", cookies=_cookie("member")).json()
+    e0 = mem["predictions"][0]
+    assert e0["win_prob"] and e0["win_odds"] == 8.5 and e0["top2_prob"]                    # 会員: 確率・オッズは出る
+    assert not ({"ev_win", "ev_place", "ev_top2", "ev_win_cal", "ev_place_cal", "expected_value", "buy_tier"} & set(e0))
+    assert "bet_suggestion" not in mem                                                       # 期待値・買い判断・推奨の文は会員にも出さない
 
 
 def test_fastapi_member_only_paths_401_for_anonymous(monkeypatch):
@@ -393,9 +545,9 @@ def test_predictions_by_four_tiers(tier_env, monkeypatch):
     for t in ("guest", "free"):
         keys = set(out[t]) | {k for e in out[t]["predictions"] for k in e}
         assert not (guest_locked & keys), (t, guest_locked & keys)
-        assert {"win_prob", "top3_prob", "show_prob", "horse_name"} <= keys
+        assert {"mark_type", "mark", "horse_name"} <= keys and not ({"win_prob", "top3_prob", "show_prob", "pred_rank"} & keys)
     pe = out["paid"]["predictions"][0]
-    assert {"ev_win_cal", "mark_type", "top2_prob"} <= set(pe)                       # 有料: 較正後の期待値・印・連対率
+    assert {"mark_type", "top2_prob"} <= set(pe) and "ev_win_cal" not in pe          # 有料: 印・連対率（期待値は会員にも出さない）
     assert not ({"ev_win", "ev_place", "expected_value", "popularity", "top2_odds_est", "odds_source"} & set(pe))     # 実オッズ（と生の期待値）は出さない
     assert pe.get("win_odds") != ENTRY["win_odds"] and "bet_suggestion" not in out["paid"]
     assert "horse_id" not in pe                                                       # 取得元固有（C）は誰にも出さない
@@ -564,7 +716,7 @@ def test_paid_predictions_get_predicted_odds_not_actual(tier_env, monkeypatch):
     paid = {e["horse_number"]: e for e in _get(c, "/api/race/202608020311/predictions", "paid").json()["predictions"]}
     assert paid[5]["win_odds"] == round(want[5], 1) and paid[6]["win_odds"] == round(want[6], 1) and paid[5]["odds_source"] == "predicted"
     assert paid[6]["popularity"] == 1 and paid[5]["popularity"] == 2                       # 想定人気（想定単勝の低い順）
-    assert paid[5]["ev_win"] == round(ENTRY["win_prob"] * want[5], 3)                       # 想定オッズ × 勝率（実オッズ 8.5 ではない）
+    assert "ev_win" not in paid[5]                                                          # 期待値は会員にも出さない（2026-11-25）
     assert ENTRY["win_odds"] not in [e["win_odds"] for e in paid.values()]
     for t in ("guest", "free"):
         assert not any("win_odds" in e for e in _get(c, "/api/race/202608020311/predictions", t).json()["predictions"]), t
@@ -597,3 +749,36 @@ def test_actual_odds_never_in_member_responses_matrix(tier_env, monkeypatch):
 
 def test_fastapi_final_odds_is_member_only():
     assert member_only_path("/api/race/202608020311/final-odds") and member_only_path("/api/race/202608020311/final-odds/precompute")
+
+
+
+def test_flask_results_flash_has_no_odds_for_free_and_guest(monkeypatch):
+    """Flask の /api/v1/races/<id>/results: 速報（確定前）のときは、有料会員以外にオッズ・人気・払戻を出さない。確定の結果は出す。"""
+    import contextlib
+
+    from src.api import flask_app as fa
+
+    monkeypatch.setenv("KEIBA_ENV", "stg")
+    monkeypatch.setenv("DEV_SECRET_KEY", "k")
+    monkeypatch.setenv("KEIBA_TEST_USER", "1")
+
+    class _S:
+        def scalars(self, _q):
+            return type("R", (), {"all": lambda self: []})()
+
+    blobs = {"race_result_on_time": {"entries": [{"horse_number": 1, "finish_position": 1, "odds": 3.0, "popularity": 1}], "payoff": _PAYOFF}}
+
+    class _St:
+        def load(self, cat, _rid):
+            return blobs.get(cat)
+
+    monkeypatch.setattr(fa, "init_engine", lambda *a, **k: None)
+    monkeypatch.setattr(fa, "get_session", lambda: contextlib.nullcontext(_S()))
+    monkeypatch.setattr(fa, "_get_storage", lambda: _St())
+    c = fa.create_app().test_client()
+    body = c.get("/api/v1/races/x/results").get_json()
+    assert find_scope_leaks(body) == [] and body["entries"][0]["finish_position"] == 1
+    assert c.post("/api/v1/auth/login", json={"id": "test", "password": "test"}).status_code == 200
+    assert c.get("/api/v1/races/x/results").get_json()["entries"][0]["odds"] == 3.0          # 有料会員はそのまま
+    blobs["race_result"] = blobs.pop("race_result_on_time")
+    assert fa.create_app().test_client().get("/api/v1/races/x/results").get_json()["payoff"] == _PAYOFF   # 確定の結果は匿名にも出す

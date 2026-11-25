@@ -162,23 +162,23 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", fontSize: 11, color: "var(--text-dim)" }}>
           {hasTier(values) ? (
             <>
-              <span>買い目の推奨度:</span>
+              <span>買い目の参考度:</span>
               {TIER_LEGEND.map((t) => (
                 <span key={t.label} title={isTargetValues(values) ? TARGET_TIER_HINT[t.label] : LEVEL_STYLE[t.level].hint} style={{ padding: "1px 8px", borderRadius: 6, border: `1px solid ${LEVEL_STYLE[t.level].border}`, background: LEVEL_STYLE[t.level].bg, color: LEVEL_STYLE[t.level].color, opacity: t.level === "pass" ? 0.8 : 1 }}>
                   {t.level === "hot" ? "★ " : ""}{t.label}
                 </span>
               ))}
-              <span>{isTargetValues(values) ? "（選んだ買い目のどれかが当たる確率の大きさ。回収率の高さではありません）" : "（過去の実績に合わせて補正した目安。年による変動が大きい）"}</span>
+              <span>{isTargetValues(values) ? "（選んだ買い目のどれかが当たる確率の大きさ。回収を約束しません）" : "（目安。回収を約束しません）"}</span>
             </>
           ) : (
             <>
-              <span>推奨の期待回収率（較正後）:</span>
+              <span>買い目の参考度:</span>
               {(["hot", "good", "ok", "pass"] as ValueLevel[]).map((k) => (
             <span key={k} title={LEVEL_STYLE[k].hint} style={{ padding: "1px 8px", borderRadius: 6, border: `1px solid ${LEVEL_STYLE[k].border}`, background: LEVEL_STYLE[k].bg, color: LEVEL_STYLE[k].color, opacity: k === "pass" ? 0.8 : 1 }}>
               {LEVEL_STYLE[k].label}
             </span>
           ))}
-              <span>（過去の実績に合わせて補正した目安。年による変動が大きい）</span>
+              <span>（目安。回収を約束しません）</span>
             </>
           )}
           {mixedProbCalibration(values) && <span title="オッズが出たレースは確率を市場補正して計算し、段の閾値と当日の順位を、補正しないレース（オッズ未確定・予測オッズ）とは別に付けています">※ 市場補正したレースとしないレースは基準が別</span>}

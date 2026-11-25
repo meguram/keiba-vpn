@@ -250,11 +250,21 @@ def create_app() -> Flask:
         if not rows:
             storage = _get_storage()
             try:
-                data = storage.load("race_result", race_id) or storage.load("race_result_on_time", race_id)
+                data, flash = storage.load("race_result", race_id), False
+                if not data:
+                    data, flash = storage.load("race_result_on_time", race_id), True
             except Exception:
                 data = None
             if not data:
                 return jsonify({"error": "results not found"}), 404
+            from src.api.flask_auth import is_member_session
+
+            if flash and isinstance(data, dict) and not is_member_session():
+                # 無料会員・匿名: 速報（確定前）のオッズ・人気・払戻は出さない（確定の結果のものは公式の事実として出す。src/api/tier.py）
+                data = {k: v for k, v in data.items() if k not in ("payoff", "payoffs")}
+                if isinstance(data.get("entries"), list):
+                    data["entries"] = [{k: v for k, v in e.items() if k not in ("odds", "popularity")} if isinstance(e, dict) else e
+                                       for e in data["entries"]]
             return jsonify(data)
         return jsonify(result_payload)
 

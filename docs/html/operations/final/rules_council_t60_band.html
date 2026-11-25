@@ -1,0 +1,43 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>本物の T-60 で再現の帯を確かめる（RC-1）</title><style>
+:root { --bg:#f7f8fb; --panel:#ffffff; --panel2:#eef1f7; --border:#d5dbe7; --text:#1b2333; --muted:#5b6578;
+  --accent:#2f5fc4; --ok:#1d7f45; --warn:#9a6200; --bad:#b4232c; --code:#eef1f7; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60;
+  --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; } }
+:root[data-theme="dark"] { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60; --text:#e6ecff; --muted:#9aa7c7;
+  --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --code:#0b1428; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:15px/1.7 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:1180px; margin:0 auto; padding:28px 16px 80px; }
+a { color:var(--accent); }
+h1 { font-size:24px; margin:0 0 6px; line-height:1.4; }
+h2 { font-size:19px; margin:40px 0 6px; padding-top:16px; border-top:1px solid var(--border); }
+h3 { font-size:16px; margin:22px 0 4px; }
+p, li { overflow-wrap:anywhere; }
+.sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+.scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:8px 0 14px; border:1px solid var(--border); border-radius:8px; }
+table { border-collapse:collapse; width:100%; min-width:760px; font-size:13.5px; background:var(--panel); }
+th, td { border-bottom:1px solid var(--border); border-right:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+td.n { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+th { background:var(--panel2); color:var(--muted); font-weight:600; white-space:nowrap; }
+tr:last-child td { border-bottom:none; }
+code { font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; background:var(--code); padding:1px 5px; border-radius:5px; font-size:12px; overflow-wrap:anywhere; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 16px; margin:12px 0; }
+.b { display:inline-block; font-size:11.5px; padding:0 8px; border-radius:10px; border:1px solid currentColor; white-space:nowrap; }
+.ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .mu { color:var(--muted); }
+details { background:var(--panel); border:1px solid var(--border); border-radius:10px; margin:8px 0; }
+summary { cursor:pointer; padding:8px 12px; }
+details[open] > summary { border-bottom:1px solid var(--border); }
+.dbody { padding:8px 14px 12px; font-size:13.5px; }
+</style></head><body><main>
+<h1>本物の T-60 で再現の帯を確かめる（RC-1）</h1>
+<p class="sub">作成 2026-11-25 20:43（JST）。担当 rules-council。2025・2026 年の着順・払戻は開いていない。</p>
+<h2>結論</h2>
+<div class="box"><ul><li><b>T-60 の再現（確定オッズ × 2026 年のずれ）で決めた一桁（&lt; 10 倍）の母集団は、本物の T-60 と分布・向きが合う。</b>議題 RC-2 の母集団は、再現 &lt; 10 倍のままにした。</li><li>1 頭ごとの一致は乱数の床と同じ大きさ。本物との入れ替わり（q の重み）は 18.4% で、再現どうしでも 19.3% 入れ替わる。</li><li>向きの偏り（外→内 ÷ 内→外）は 0.90、母集団の q の和の比は 0.99。確定オッズで決めると偏りは 1.49 で、締め切りに向けて人気になった馬が入る（先読みの向き）。</li><li>事前の線（入れ替わり ≤ 10%）は、乱数の床より下で届かない作りだった。1 号が線の作りの誤りと判断し、見た後に線を替えた（通算に「線の変更 1 回」。着順は読んでいない）。</li><li>標本は 328 レースと小さい。最後の確かめは、本物の T-60 の前向きの記録が担う。</li></ul></div>
+<h2>数字</h2>
+<p>本物の T-60 は 2026-10-18〜2026-11-22 の 328 レース（T-60 の記録がある 4,425 走）。主の版は、開催日の前半（137 レース、〜2026-11-07 の前日）でずれを作り、後半（191 レース）で比べた。再現 5 本の中央値。</p>
+<div class="scroll"><table><thead><tr><th>版</th><th>一桁の上端</th><th>本物の走</th><th>入れ替わり（q）</th><th>再現どうしの床</th><th>向きの偏り</th><th>q の和の比</th><th>元の線</th><th>替えた線</th></tr></thead><tbody><tr><td>主: 前半でずれ → 後半で比べる</td><td>&lt; 10</td><td class="n">758</td><td class="n">18.4%</td><td class="n">19.3%</td><td class="n">0.90</td><td class="n">0.990</td><td>×</td><td>○</td></tr><tr><td>主: 前半でずれ → 後半で比べる</td><td>&lt; 9</td><td class="n">675</td><td class="n">20.5%</td><td class="n">22.0%</td><td class="n">0.76</td><td class="n">0.973</td><td>×</td><td>○</td></tr><tr><td>主: 前半でずれ → 後半で比べる</td><td>&lt; 8</td><td class="n">581</td><td class="n">23.8%</td><td class="n">23.3%</td><td class="n">0.71</td><td class="n">0.960</td><td>×</td><td>○</td></tr><tr><td>主: 前半でずれ → 後半で比べる</td><td>&lt; 7</td><td class="n">484</td><td class="n">25.0%</td><td class="n">25.6%</td><td class="n">0.64</td><td class="n">0.945</td><td>×</td><td>×</td></tr><tr><td>主: 前半でずれ → 後半で比べる</td><td>&lt; 6.5</td><td class="n">432</td><td class="n">26.0%</td><td class="n">26.5%</td><td class="n">0.68</td><td class="n">0.953</td><td>×</td><td>○</td></tr><tr><td>副: 開催日を交互に（奇数日でずれ → 偶数日で比べる）</td><td>&lt; 10</td><td class="n">619</td><td class="n">16.2%</td><td class="n">17.4%</td><td class="n">0.92</td><td class="n">0.993</td><td>×</td><td>○</td></tr><tr><td>副: 開催日を交互に（奇数日でずれ → 偶数日で比べる）</td><td>&lt; 9</td><td class="n">546</td><td class="n">18.8%</td><td class="n">20.1%</td><td class="n">0.89</td><td class="n">0.990</td><td>×</td><td>○</td></tr><tr><td>副: 開催日を交互に（奇数日でずれ → 偶数日で比べる）</td><td>&lt; 8</td><td class="n">469</td><td class="n">21.3%</td><td class="n">22.0%</td><td class="n">0.85</td><td class="n">0.984</td><td>×</td><td>○</td></tr><tr><td>副: 開催日を交互に（奇数日でずれ → 偶数日で比べる）</td><td>&lt; 7</td><td class="n">392</td><td class="n">22.6%</td><td class="n">23.6%</td><td class="n">0.86</td><td class="n">0.983</td><td>×</td><td>○</td></tr><tr><td>副: 開催日を交互に（奇数日でずれ → 偶数日で比べる）</td><td>&lt; 6.5</td><td class="n">343</td><td class="n">26.0%</td><td class="n">26.4%</td><td class="n">1.05</td><td class="n">1.007</td><td>×</td><td>○</td></tr><tr><td>参考: 全部でずれ → 全部で比べる（今の道具の作り。自分と比べる）</td><td>&lt; 10</td><td class="n">1318</td><td class="n">16.5%</td><td class="n">17.3%</td><td class="n">0.94</td><td class="n">0.995</td><td>×</td><td>○</td></tr><tr><td>参考: 全部でずれ → 全部で比べる（今の道具の作り。自分と比べる）</td><td>&lt; 9</td><td class="n">1184</td><td class="n">18.2%</td><td class="n">19.3%</td><td class="n">0.85</td><td class="n">0.985</td><td>×</td><td>○</td></tr><tr><td>参考: 全部でずれ → 全部で比べる（今の道具の作り。自分と比べる）</td><td>&lt; 8</td><td class="n">1022</td><td class="n">21.6%</td><td class="n">20.9%</td><td class="n">0.82</td><td class="n">0.978</td><td>×</td><td>○</td></tr><tr><td>参考: 全部でずれ → 全部で比べる（今の道具の作り。自分と比べる）</td><td>&lt; 7</td><td class="n">851</td><td class="n">22.8%</td><td class="n">23.6%</td><td class="n">0.88</td><td class="n">0.986</td><td>×</td><td>○</td></tr><tr><td>参考: 全部でずれ → 全部で比べる（今の道具の作り。自分と比べる）</td><td>&lt; 6.5</td><td class="n">756</td><td class="n">23.8%</td><td class="n">25.5%</td><td class="n">0.95</td><td class="n">0.994</td><td>×</td><td>○</td></tr><tr><td>参考: 11/21 以降（前半のずれで）</td><td>&lt; 10</td><td class="n">181</td><td class="n">17.9%</td><td class="n">17.4%</td><td class="n">1.14</td><td class="n">1.012</td><td>×</td><td>○</td></tr><tr><td>参考: 11/21 以降（前半のずれで）</td><td>&lt; 9</td><td class="n">166</td><td class="n">18.3%</td><td class="n">19.4%</td><td class="n">0.92</td><td class="n">0.992</td><td>×</td><td>○</td></tr><tr><td>参考: 11/21 以降（前半のずれで）</td><td>&lt; 8</td><td class="n">141</td><td class="n">22.4%</td><td class="n">23.1%</td><td class="n">0.89</td><td class="n">0.988</td><td>×</td><td>○</td></tr><tr><td>参考: 11/21 以降（前半のずれで）</td><td>&lt; 7</td><td class="n">116</td><td class="n">23.1%</td><td class="n">27.1%</td><td class="n">0.98</td><td class="n">0.998</td><td>×</td><td>○</td></tr><tr><td>参考: 11/21 以降（前半のずれで）</td><td>&lt; 6.5</td><td class="n">108</td><td class="n">25.9%</td><td class="n">27.2%</td><td class="n">0.81</td><td class="n">0.972</td><td>×</td><td>○</td></tr></tbody></table></div>
+<p>参考: 確定オッズで母集団を決めると、入れ替わり 11.5%・偏り 1.49（外→内に偏る＝締め切りに向けて人気になった馬が入る、先読みの向き）。</p>
+<h2>線と判定</h2><ul><li>元の線（1 号の決定 RC-0）: 入れ替わり ≤ 10% かつ 偏り 0.67〜1.5。どの上端でも不合格。</li><li>替えた線（1 号の判断 RC-1）: 入れ替わり ≤ 床 + 2 ポイント・偏り 0.67〜1.5・q の和の比 0.95〜1.05。&lt; 10 で通過。</li><li>11/21 以降（48 レース）の偏りは 1.14 で、線の中だが外→内に寄る。</li></ul>
+<h2>作り方・再現</h2><ul><li><code>KEIBA_SESSION=rules-council python -m src.research.rules_council.t60_check --seeds 5</code>（結果 <code>docs/operations/retrain_trials/rules_council_t60.json</code>）。</li><li>読むのは 2026 年の確定オッズ・確定の人気・本物の T-60 のオッズだけ（台帳 eval_only）。費用 0 円。</li></ul>
+</main></body></html>

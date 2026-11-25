@@ -37,7 +37,7 @@ type Candidate = {
 type ProbabilityModel = { kind: string; alpha2?: number; alpha3?: number; fitted_to?: string[] };
 
 type Recommendation = {
-  /** 見送り（推奨度 0）のレース。サーバが買い目・金額・期待値を返さない */
+  /** 見送り（参考度 0）のレース。サーバが買い目・金額・期待値を返さない */
   skipped?: boolean;
   result?: RaceBetResult | null;
   probability_model?: ProbabilityModel | null;
@@ -114,14 +114,8 @@ const NOWRAP_CTD: React.CSSProperties = { ...CTD, whiteSpace: "nowrap" };
 const NOWRAP_TH: React.CSSProperties = { ...TH, whiteSpace: "nowrap" };
 const NOWRAP_TD: React.CSSProperties = { ...TD, whiteSpace: "nowrap" };
 
-function evColor(ev?: number, cal = false): string {
-  if (ev == null) return "var(--text-dim)";
-  if (cal) return ev >= 1.1 ? "#22c55e" : ev >= 1.0 ? "#60a5fa" : ev >= 0.9 ? "var(--text-dim)" : "#f87171";      // 較正後: 買い推奨度の閾値に合わせる
-  return ev >= 1.3 ? "#22c55e" : ev >= 1.0 ? "#60a5fa" : "#f87171";
-}
-
-/** AI 予測（確率）× オッズ → 期待値 → Kelly 配分の推奨馬券。計算本体はサーバ（/api/v1/betting/optimize）。 */
-/** 馬番 → 印（買い目の各馬番に印を添えるための表示用。週間予測の『推奨馬券』タブで使う） */
+/** AI 予測（確率）× オッズ → 期待値 → Kelly 配分のサンプル買い目。計算本体はサーバ（/api/v1/betting/optimize）。 */
+/** 馬番 → 印（買い目の各馬番に印を添えるための表示用。週間予測の『サンプル買い目』タブで使う） */
 
 export function BetRecommend({ raceId, hasPrediction, resultKey }: { raceId: string; hasPrediction: boolean; resultKey?: string }) {
   const [bankroll, setBankroll] = useState("100000");
@@ -155,12 +149,12 @@ export function BetRecommend({ raceId, hasPrediction, resultKey }: { raceId: str
     setNeedLogin(false);
     const amount = Number(bankroll);
     if (!Number.isFinite(amount) || amount < 100) {
-      setError("資金は 100 円以上で入力してください");
+      setError("予算は 100 円以上で入力してください");
       return;
     }
     const capNum = cap.trim() === "" ? 0 : Number(cap);
     if (!Number.isFinite(capNum) || capNum < 0 || (capNum > 0 && capNum < 100)) {
-      setError("購入上限は 100 円以上で入力してください（空欄か 0 で上限なし）");
+      setError("1R 上限は 100 円以上で入力してください（空欄か 0 で上限なし）");
       return;
     }
     const maxTotalBet = capNum === 0 ? null : capNum;
@@ -224,7 +218,7 @@ export function BetRecommend({ raceId, hasPrediction, resultKey }: { raceId: str
           return;
         }
         setTarget(null);
-        if (body && (body as { view?: string }).view === "paid") {   // 会員向け: 推奨度の段階と買い目の区分だけの応答
+        if (body && (body as { view?: string }).view === "paid") {   // 会員向け: 参考度の段階と買い目の区分だけの応答
           setPaid(body as PaidRec);
           setRec(null);
           return;
@@ -263,7 +257,7 @@ export function BetRecommend({ raceId, hasPrediction, resultKey }: { raceId: str
   if (!hasPrediction) {
     return (
       <div style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>
-        AI 予測がまだありません。「🤖 AI予測・期待値」タブで予測を実行すると、推奨馬券を計算します。
+        AI 予測がまだありません。「🤖 AI予測」タブで予測を実行すると、サンプル買い目を計算します。
       </div>
     );
   }
@@ -292,10 +286,10 @@ export function BetRecommend({ raceId, hasPrediction, resultKey }: { raceId: str
           </select>
         )}
         <span style={{ color: "var(--border)" }}>|</span>
-        <label style={{ color: "var(--text-dim)" }}>資金
+        <label style={{ color: "var(--text-dim)" }}>予算
           <input type="number" min={100} step={1000} value={bankroll} onChange={(e) => setBankroll(e.target.value)} style={{ marginLeft: 4, width: 84, padding: "3px 6px", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: 12 }} />
         </label>
-        <label style={{ color: "var(--text-dim)" }} title="1 レースの購入合計の上限。Kelly が示す額がこれより小さいときはその額。空欄か 0 で上限なし">1R上限
+        <label style={{ color: "var(--text-dim)" }} title="1 レースの合計額の上限。空欄か 0 で上限なし">1R 上限
           <input type="number" min={0} step={500} value={cap} placeholder="なし" onChange={(e) => setCap(e.target.value)} style={{ marginLeft: 4, width: 68, padding: "3px 6px", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: 12 }} />
         </label>
         <button onClick={run} disabled={loading} style={{ background: "#1e3a5f", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.3)", padding: "4px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1 }}>
@@ -305,7 +299,7 @@ export function BetRecommend({ raceId, hasPrediction, resultKey }: { raceId: str
 
       {needLogin && (
         <div style={{ padding: "12px 16px", borderRadius: 8, background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.25)", fontSize: 13 }}>
-          🔒 推奨馬券はログインすると表示されます。{" "}
+          🔒 サンプル買い目はログインすると表示されます。{" "}
           <Link href={`/login?next=/race/${raceId}`} style={{ color: "var(--accent)" }}>ログインする →</Link>
         </div>
       )}
@@ -337,19 +331,12 @@ export function BetRecommend({ raceId, hasPrediction, resultKey }: { raceId: str
               </span>
             ) : null}
             {[
-              ["購入", `¥${rec.total_bet.toLocaleString()}`],
-              ["期待払戻", `¥${Math.round(rec.expected_return).toLocaleString()}`],
-              [rec.calibrated ? "期待回収率(較正後)" : "期待回収率", rec.total_bet > 0 ? `${((rec.expected_return / rec.total_bet) * 100).toFixed(rec.calibrated ? 0 : 1)}%` : "—"],
+              ["合計額", `¥${rec.total_bet.toLocaleString()}`],
             ].map(([k, v]) => (
               <span key={k} style={{ padding: "2px 9px", borderRadius: 999, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-dim)" }}>
                 {k} <b style={{ color: "#fff", fontSize: 13 }}>{v}</b>
               </span>
             ))}
-            {rec.calibrated && rec.roi_range_calibrated && (
-              <span style={{ color: "var(--text-dim)" }} title="このルールで買った場合の過去の実現回収率は、年によって幅があります（目安）">
-                過去の実績 {Math.round(rec.roi_range_calibrated[0] * 100)}〜{Math.round(rec.roi_range_calibrated[1] * 100)}%
-              </span>
-            )}
             {rec.odds_note && <span style={{ color: "var(--text-dim)" }}>{rec.odds_note}</span>}
           </div>
           )}
@@ -357,7 +344,7 @@ export function BetRecommend({ raceId, hasPrediction, resultKey }: { raceId: str
 
           {rec.candidates.length === 0 ? (
             <div style={{ textAlign: "center", padding: 32, color: "var(--text-dim)", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10 }}>
-              {rec.skipped ? "このレースは見送りです（推奨馬券はありません）。" : "期待値が基準（1.05）を超える買い目がありません。このレースは見送りが妥当です。"}
+              {rec.skipped ? "このレースは見送りです（サンプル買い目はありません）。" : "このレースはサンプル買い目がありません（見送り）。"}
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
@@ -406,7 +393,6 @@ export function BetRecommend({ raceId, hasPrediction, resultKey }: { raceId: str
                           <th style={{ ...CTH, textAlign: "left" }}>買い目</th>
                           <th style={CTH}>点</th>
                           <th style={CTH}>オッズ</th>
-                          <th style={CTH}>{rec.calibrated ? "期待値(較正後)" : "期待値"}</th>
                           <th style={CTH}>金額</th>
                           {rec.result && <th style={CTH}>結果</th>}
                         </tr>
@@ -428,13 +414,12 @@ export function BetRecommend({ raceId, hasPrediction, resultKey }: { raceId: str
                                 </td>
                                 <td style={NOWRAP_CTD}>{g.items.length}</td>
                                 <td style={NOWRAP_CTD}>{g.oddsMin ? (g.oddsMin === g.oddsMax || !multi ? `${g.oddsMin.toFixed(1)}倍` : `${g.oddsMin.toFixed(1)}〜${g.oddsMax.toFixed(1)}倍`) : "—"}</td>
-                                <td style={{ ...NOWRAP_CTD, fontWeight: 700, color: evColor(g.evAvg, rec.calibrated) }} title={multi ? "金額加重の平均" : undefined}>{g.evAvg.toFixed(2)}</td>
                                 <td style={{ ...NOWRAP_CTD, fontWeight: 700, color: "#fff" }}>¥{g.total.toLocaleString()}</td>
                                 {rec.result && <ResultCell hit={rs.length ? gHit : null} payout={gPay} hits={multi && rs.length ? rs.filter((r) => r.hit).length : undefined} n={multi ? rs.length : undefined} />}
                               </tr>
                               {multi && isOpen && (
                                 <tr>
-                                  <td colSpan={rec.result ? 7 : 6} style={{ padding: "4px 12px 8px 34px", background: "rgba(255,255,255,0.02)", borderTop: "1px dashed var(--border)" }}>
+                                  <td colSpan={rec.result ? 6 : 5} style={{ padding: "4px 12px 8px 34px", background: "rgba(255,255,255,0.02)", borderTop: "1px dashed var(--border)" }}>
                                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }} data-no-sort>
                                       <thead>
                                         <tr style={{ color: "var(--text-dim)" }}>
@@ -443,7 +428,6 @@ export function BetRecommend({ raceId, hasPrediction, resultKey }: { raceId: str
                                           <th style={{ ...TH, fontWeight: 500 }}>オッズ</th>
                                           {showPredicted && <th style={{ ...TH, fontWeight: 500 }}>予測オッズ</th>}
                                           {showPredicted && <th style={{ ...TH, fontWeight: 500 }}>乖離</th>}
-                                          <th style={{ ...TH, fontWeight: 500 }}>期待値</th>
                                           <th style={{ ...TH, fontWeight: 500 }}>金額</th>
                                           {rec.result && <th style={{ ...TH, fontWeight: 500 }}>結果</th>}
                                         </tr>
@@ -459,7 +443,6 @@ export function BetRecommend({ raceId, hasPrediction, resultKey }: { raceId: str
                                             <td style={{ ...TD, borderTop: "1px solid var(--border)" }}>{c.odds != null ? `${c.odds.toFixed(1)}倍` : "—"}</td>
                                             {showPredicted && <td style={{ ...TD, borderTop: "1px solid var(--border)", color: "var(--text-dim)" }}>{c.predicted_odds != null ? `${c.predicted_odds.toFixed(1)}倍` : "—"}</td>}
                                             {showPredicted && <td style={{ ...TD, borderTop: "1px solid var(--border)", color: c.odds_gap == null ? "var(--text-dim)" : c.odds_gap > 0 ? "#22c55e" : "#f87171" }}>{c.odds_gap != null ? `${c.odds_gap > 0 ? "+" : ""}${(c.odds_gap * 100).toFixed(0)}%` : "—"}</td>}
-                                            <td style={{ ...TD, borderTop: "1px solid var(--border)", fontWeight: 700, color: evColor(c.ev, rec.calibrated) }} title={c.ev_raw != null ? `未較正の期待値 ${c.ev_raw.toFixed(2)}` : undefined}>{c.ev != null ? c.ev.toFixed(2) : "—"}</td>
                                             <td style={{ ...TD, borderTop: "1px solid var(--border)", fontWeight: 700, color: "#fff" }}>¥{c.bet_amount.toLocaleString()}</td>
                                             {rec.result && <ResultCell hit={c.result ? c.result.hit : null} payout={c.result?.payout ?? 0} />}
                                           </tr>
@@ -493,10 +476,8 @@ export function BetRecommend({ raceId, hasPrediction, resultKey }: { raceId: str
         </p>
       )}
       <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 12, lineHeight: 1.7 }}>
-        {rec?.calibrated
-          ? "期待値（較正後）= 的中確率 × オッズを、過去の確定オッズ・確定払戻での実現回収率に合わせて補正した値（買い目の選定は補正前の期待値 1.05 以上）。補正前の値は各買い目にマウスを載せると表示。ワイド・馬連などは年による変動が大きく、較正は目安。"
-          : "期待値 = 的中確率 × オッズ（1.0 超でプラス期待）。"}予測オッズ基準の期待値は「モデル対モデル」で市場に対する優位性ではなく、買う価値の判断は実オッズが出てから行う。推奨金額は 1/4 Kelly 基準の比率で、1R の購入合計が購入上限（既定 2,000 円）に収まるよう 100 円単位で配分。
-        確率は AI モデルの出力です。期待値の較正は過去データ（確定オッズ・確定払戻）での目安で、的中や回収を保証するものではありません。
+        サンプル買い目の金額は、1R の合計額が 1R 上限（既定 2,000 円）に収まるよう 100 円単位で配分。買う判断は実オッズが出てから行う。
+        確率は AI モデルの出力です。的中や回収を保証するものではありません。
       </p>
     </div>
   );

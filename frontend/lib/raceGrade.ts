@@ -28,7 +28,7 @@ export function isGraded(g: GradeKey | null | undefined): boolean {
 }
 
 /** 格の色（JRA の慣例に近い: G1 青・G2 赤・G3 緑。障害の重賞も同じ色）。札は白い文字で、ライト・ダークの両方で読める濃さにする。
- *  L・OP は暗い地に明るい文字の札（重賞の塗りと見分けるため。推奨度の色のチップの上でも読めるよう不透明にする） */
+ *  L・OP は暗い地に明るい文字の札（重賞の塗りと見分けるため。参考度の色のチップの上でも読めるよう不透明にする） */
 export const GRADE_STYLE: Record<GradeKey, { bg: string; fg: string; border: string }> = {
   G1: { bg: "#1d4ed8", fg: "#ffffff", border: "#3b82f6" },
   G2: { bg: "#b91c1c", fg: "#ffffff", border: "#ef4444" },

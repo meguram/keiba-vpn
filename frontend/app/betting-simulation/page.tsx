@@ -213,7 +213,7 @@ export default function BettingSimulationPage() {
   }
 
   if (isAdmin === null) return (
-    <PageShell title="馬券シミュレーション" description="モンテカルロ軍資金シミュレーション（AREA-12）">
+    <PageShell title="馬券シミュレーション" description="モンテカルロの残高シミュレーション（AREA-12）">
       <div className="card flex flex-col items-center gap-4 py-12">
         <p className="text-sm" style={{ color: "var(--text-dim)" }}>認証確認中…</p>
       </div>
@@ -221,7 +221,7 @@ export default function BettingSimulationPage() {
   );
 
   if (!isAdmin) return (
-    <PageShell title="馬券シミュレーション" description="モンテカルロ軍資金シミュレーション（AREA-12）">
+    <PageShell title="馬券シミュレーション" description="モンテカルロの残高シミュレーション（AREA-12）">
       <div className="card flex flex-col items-center gap-4 py-12">
         <span style={{ fontSize: 40 }}>🔒</span>
         <p className="font-semibold">管理者専用ページ</p>
@@ -278,7 +278,7 @@ export default function BettingSimulationPage() {
   };
 
   const kpis = result ? [
-    { label: "中央値 最終軍資金", value: `¥${FMT.format(Math.round(result.medianFinal))}`, color: result.medianFinal > bankroll ? "var(--ok)" : "var(--warn)" },
+    { label: "中央値 最終の残高", value: `¥${FMT.format(Math.round(result.medianFinal))}`, color: result.medianFinal > bankroll ? "var(--ok)" : "var(--warn)" },
     { label: "利益達成率", value: `${(result.profitRate * 100).toFixed(1)}%`, color: result.profitRate >= 0.6 ? "var(--ok)" : result.profitRate >= 0.4 ? "var(--warn)" : "var(--err)" },
     { label: "破産確率", value: `${(result.ruinRate * 100).toFixed(1)}%`, color: result.ruinRate <= 0.05 ? "var(--ok)" : result.ruinRate <= 0.15 ? "var(--warn)" : "var(--err)" },
     { label: "中央値 最大DD", value: `${(result.medianMaxDD * 100).toFixed(1)}%`, color: result.medianMaxDD <= 0.3 ? "var(--ok)" : result.medianMaxDD <= 0.5 ? "var(--warn)" : "var(--err)" },
@@ -286,7 +286,7 @@ export default function BettingSimulationPage() {
   ] : null;
 
   return (
-    <PageShell title="馬券シミュレーション" description="モンテカルロ軍資金シミュレーション（AREA-12）">
+    <PageShell title="馬券シミュレーション" description="モンテカルロの残高シミュレーション（AREA-12）">
       {toast && (
         <div className="fixed top-4 right-4 z-50 rounded-lg px-4 py-2 text-sm shadow-lg"
              style={{ background: "var(--surface2)", color: "var(--text)", border: "1px solid var(--border)" }}>
@@ -317,7 +317,7 @@ export default function BettingSimulationPage() {
             </div>
           </div>
 
-          <NumInput label="初期軍資金（円）" value={bankroll} onChange={setBankroll} min={1000} max={10000000} step={1000} />
+          <NumInput label="初期の予算（円）" value={bankroll} onChange={setBankroll} min={1000} max={10000000} step={1000} />
           <SliderInput label="期待勝率（%）" value={winProbPct} onChange={setWinProbPct} min={1} max={99} step={0.5} />
           <SliderInput label="単勝オッズ（倍）" value={winOdds} onChange={setWinOdds} min={1.1} max={50} step={0.1} />
 
@@ -366,7 +366,7 @@ export default function BettingSimulationPage() {
             </div>
           </div>
 
-          <SliderInput label="破産閾値（初期軍資金の %）" value={ruinPct} onChange={setRuinPct} min={1} max={50} step={1} unit="%" />
+          <SliderInput label="破産閾値（初期の予算の %）" value={ruinPct} onChange={setRuinPct} min={1} max={50} step={1} unit="%" />
 
           <button type="button" className="btn w-full" onClick={handleRun} disabled={running}>
             {running ? "計算中…" : "▶ シミュレーション実行"}
@@ -410,7 +410,7 @@ export default function BettingSimulationPage() {
               <div className="card space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold">
-                    軍資金推移 <span className="font-normal text-xs" style={{ color: "var(--text-dim)" }}>（{FMT.format(nTrials)} 試行）</span>
+                    残高の推移 <span className="font-normal text-xs" style={{ color: "var(--text-dim)" }}>（{FMT.format(nTrials)} 試行）</span>
                   </h3>
                   <button type="button" onClick={() => setLogScale(l => !l)}
                           className="rounded border px-2 py-0.5 text-xs"
@@ -436,7 +436,7 @@ export default function BettingSimulationPage() {
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span style={{ width: 18, height: 0, borderTop: "2px dashed rgba(148,163,184,0.5)", display: "inline-block" }} />
-                    初期軍資金
+                    初期の予算
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span style={{ width: 18, height: 0, borderTop: "2px dashed rgba(239,68,68,0.5)", display: "inline-block" }} />
@@ -448,7 +448,7 @@ export default function BettingSimulationPage() {
               {/* Distribution histogram */}
               <div className="card space-y-2">
                 <h3 className="text-sm font-semibold">
-                  最終軍資金の分布 <span className="font-normal text-xs" style={{ color: "var(--text-dim)" }}>（{FMT.format(nTrials)} 試行）</span>
+                  最終の残高の分布 <span className="font-normal text-xs" style={{ color: "var(--text-dim)" }}>（{FMT.format(nTrials)} 試行）</span>
                 </h3>
                 <div style={{ height: 200 }}>
                   <Bar data={histData} options={histOptions} />

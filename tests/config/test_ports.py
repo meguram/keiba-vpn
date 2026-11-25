@@ -57,6 +57,13 @@ def test_unknown_service_or_env_rejected():
         ports.port("flask", "qa")
 
 
+def test_council_port_from_file_and_env(monkeypatch):
+    monkeypatch.delenv("KEIBA_PORT_COUNCIL", raising=False)
+    assert ports.council_port() == _all_ports()["KEIBA_PORT_COUNCIL"]
+    monkeypatch.setenv("KEIBA_PORT_COUNCIL", "8090")
+    assert ports.council_port() == 8090
+
+
 def test_mlflow_uri_prefers_env(monkeypatch):
     monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
     assert ports.mlflow_tracking_uri() == "http://mlflow:5000"

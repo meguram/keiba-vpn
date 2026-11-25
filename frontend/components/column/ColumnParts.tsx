@@ -89,7 +89,8 @@ export function ColumnTrail({ path, linkLast = true }: { path: string; linkLast?
 }
 
 /** 記事（新聞の小コラムの量）: 結論・使い方 → 本文の要約 → 数字の囲み → 図か表 1 つ → 詳しい調べ方（折りたたみ）→ 関連するコラム。何を外に出すかは frontPlan が決める */
-export function ColumnArticle({ col, guide, glossary }: { col: Column; guide?: ColumnGuide; glossary: Record<string, string> }) {
+/** linkCategories=false: カテゴリを文字だけにする（匿名向けの /learn。/column の一覧は開発者だけなので、つなげない） */
+export function ColumnArticle({ col, guide, glossary, linkCategories = true }: { col: Column; guide?: ColumnGuide; glossary: Record<string, string>; linkCategories?: boolean }) {
   const p = articleParts(col.body, guide, glossary);
   const f = frontPlan(p, col.verdict);
   const ds = col.dataset;
@@ -144,7 +145,7 @@ export function ColumnArticle({ col, guide, glossary }: { col: Column; guide?: C
               <dt>カテゴリ</dt>
               <dd>
                 {col.categories.map((c, i) => (
-                  <span key={c}>{i > 0 && "・"}<Link href={`/column/category/${c}`} className="col-link">{categoryLabel(c)}</Link></span>
+                  <span key={c}>{i > 0 && "・"}{linkCategories ? <Link href={`/column/category/${c}`} className="col-link">{categoryLabel(c)}</Link> : categoryLabel(c)}</span>
                 ))}
               </dd>
             </dl>

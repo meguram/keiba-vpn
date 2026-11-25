@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { HomeDashboard } from "@/components/home/HomeDashboard";
+import { LearnEntry } from "@/components/home/LearnEntry";
 import "@/styles/home.css";
 
 export const metadata: Metadata = {
@@ -10,8 +11,11 @@ export const metadata: Metadata = {
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={null}>
-      <HomeDashboard />
-    </Suspense>
+    <>
+      <Suspense fallback={null}>
+        <HomeDashboard />
+      </Suspense>
+      <LearnEntry />
+    </>
   );
 }

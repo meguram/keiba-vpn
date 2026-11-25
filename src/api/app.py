@@ -73,7 +73,7 @@ from src.api.auth import (
     COOKIE_NAME,
 )
 from src.utils.keiba_logging import standard_log_formatter
-from src.api.tier import MEMBER_REDACTORS, MEMBER_REQUIRED_BODY, OWNER_REQUIRED_BODY, member_only_path, owner_only_path, redact_predictions, redact_race_detail
+from src.api.tier import MEMBER_REDACTORS, MEMBER_REQUIRED_BODY, OWNER_REQUIRED_BODY, member_only_path, owner_only_path, redact_entry_card, redact_predictions, redact_race_detail
 from src.config.ports import mlflow_tracking_uri as _default_mlflow_uri
 
 
@@ -7291,25 +7291,22 @@ async def _race_predictions_compute(race_id: str):
             logger.warning("EV の較正の付与に失敗 %s: %s", race_id, exc)
             return resp
 
-    def _with_bet_marks(resp: dict) -> dict:
-        # 推奨馬券を正とし、印（◎○▲△）は買い目から決める。推奨が無いレース・計算できないレースは従来の印のまま
+    def _with_complete_marks(resp: dict) -> dict:
+        # 印の最後の段: ◎○▲ は AI の勝率の 1・2・3 位、★△消は印のルール。◎○▲★ を各 1 頭（ユーザーの方針 2026-11-25）。全区分で同じ印
+        preds = resp.get("predictions")
+        if not isinstance(preds, list) or not preds or not resp.get("has_prediction", True):
+            return resp
         try:
-            preds = resp.get("predictions")
-            if not isinstance(preds, list) or not preds or not resp.get("has_prediction", True):
-                return resp
-            from src.api.v1.delegates import bet_horse_marks
-            from src.pipeline.inference import bet_marks as BM
+            from src.utils.race_probabilities import complete_marks
 
-            marks = bet_horse_marks(race_id)
-            if not marks:
-                return resp
-            return {**resp, "predictions": BM.apply_to_entries(preds, marks), "marks_basis": "bets"}
+            return {**resp, "predictions": complete_marks(preds)}
         except Exception as exc:  # noqa: BLE001
-            logger.warning("買い目からの印の付与に失敗 %s: %s", race_id, exc)
+            logger.warning("印の埋め直しに失敗 %s: %s", race_id, exc)
             return resp
 
     def _with_position(resp: dict) -> dict:
-        resp = _with_bet_marks(_with_calibrated_ev(resp))
+        # 印は AI の勝率の順（◎○▲）と印のルール（★△消）だけで決める。買い目からの印（_with_bet_marks）は使わない（rules-council R0-10・依頼 2 の追記）
+        resp = _with_complete_marks(_with_calibrated_ev(resp))
         # 過去走の通過順位から作る位置取り予想（実モデルの予測ではない）。失敗しても予測の応答は返す
         try:
             from src.pipeline.inference.position_forecast import attach_position_forecast
@@ -7423,7 +7420,7 @@ async def _race_predictions_compute(race_id: str):
 
 
 @app.get("/api/race/{race_id}/entry/{horse_id}/card", response_class=JSONResponse)
-async def get_entry_card(race_id: str, horse_id: str):
+async def get_entry_card(request: Request, race_id: str, horse_id: str):
     """出馬表の馬名・騎手・調教師をタップしたときの情報（実データの事実。予測に依らない）。
 
     馬の近5走・同条件の成績・追い切り、騎手・調教師の条件別成績などを 1 回でまとめて返す。
@@ -7435,7 +7432,9 @@ async def get_entry_card(race_id: str, horse_id: str):
         return JSONResponse(data, status_code=400)
     if data.get("status") == "not_found":
         return JSONResponse(data, status_code=404)
-    return JSONResponse(data, headers={"Cache-Control": "private, max-age=120"})
+    if not is_member(request):
+        data = redact_entry_card(data)     # 匿名・無料会員: 追い切り・厩舎コメント・めぐ指数・近走の人気を落とす（src/api/tier.py）
+    return JSONResponse(data, headers={"Cache-Control": "private, max-age=120", "Vary": "Cookie"})
 
 
 @app.get("/api/race/{race_id}/bloodline-aptitude", response_class=JSONResponse)

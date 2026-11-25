@@ -25,6 +25,7 @@ case "$NAME" in
   KEIBA_SHARED_LOGIN_ID) READERS="keiba-jobs keiba-login-rotator" ;;   # 共通ログインの ID(shared-login・毎月の切り替えの Job)
   KEIBA_MEMBERS_PEPPER) READERS="keiba-login-rotator" ;;          # 名簿のペッパー（hex:…。login_rotate export-pepper で作る）。DEV_SECRET_KEY を Job に渡さないため
   R2_CREDENTIALS)       READERS="keiba-jobs" ;;
+  KEIBA_STG_TEST_USER)  READERS="keiba-api" ;;                  # stg の版（rstg）だけが載せる動作確認用の test の 1 件（scripts/ops/stg_test_user_secret.sh で作る）
   *) echo "未登録の名前です: $NAME（scripts/gcp/put_secret.sh の表と docs/operations/gcp_setup_runbook.md 5 章に足してから）" >&2; exit 2 ;;
 esac
 

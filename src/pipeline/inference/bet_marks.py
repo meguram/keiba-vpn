@@ -14,7 +14,7 @@ ORDERED_TYPES = ("umatan", "sanrentan")
 _TOP = ("honmei", "pair", "show_val")
 SYMBOLS = {"honmei": "◎", "pair": "○", "show_val": "▲", "anchor": "△", "star": "★", "kesi": "消"}
 LABELS = {
-    "honmei": "◎ 買い目の軸（購入額が最大）", "pair": "○ 買い目の2番手", "show_val": "▲ 買い目の3番手", "anchor": "△ 買い目に入る馬", "none": "",
+    "honmei": "◎ 買い目の軸（金額が最大）", "pair": "○ 買い目の2番手", "show_val": "▲ 買い目の3番手", "anchor": "△ 買い目に入る馬", "none": "",
 }
 
 

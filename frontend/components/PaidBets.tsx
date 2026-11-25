@@ -3,7 +3,7 @@
 import type { CSSProperties } from "react";
 import { BetResultBanner, ResultCell, type BetResult, type RaceBetResult } from "@/components/BetResult";
 
-/** 会員向けの推奨馬券（有料ゾーン）。サーバーが『レース単位の推奨度』と『買い目の区分』だけを返す。オッズ・期待値・確率・金額の計算値は来ない。 */
+/** 会員向けのサンプル買い目（有料ゾーン）。サーバーが『レース単位の参考度』と『買い目の区分』だけを返す。オッズ・期待値・確率・金額の計算値は来ない。 */
 export type PaidTier = { level: number; label: string; short?: string };
 export type PaidLeg = { horse_number: number; horse_name: string; mark: string };
 export type PaidBet = {
@@ -18,14 +18,14 @@ export type PaidRec = {
 };
 
 export const TIER_STYLE: Record<number, { color: string; bg: string; border: string; desc: string }> = {
-  0: { color: "#8b9bb4", bg: "transparent", border: "#35445f", desc: "買わないほうがよいレース" },
-  1: { color: "#bfdbfe", bg: "rgba(96,165,250,0.14)", border: "#60a5fa", desc: "期待回収率が約100%（損益分岐のあたり）" },
-  2: { color: "#bbf7d0", bg: "rgba(34,197,94,0.18)", border: "#22c55e", desc: "プラスが見込める" },
-  3: { color: "#fde68a", bg: "rgba(245,158,11,0.20)", border: "#f59e0b", desc: "プラスの見込みが高め" },
-  4: { color: "#fff", bg: "linear-gradient(135deg,#f97316,#ef4444)", border: "#fb923c", desc: "その中でも特に高い（目安）" },
+  0: { color: "#8b9bb4", bg: "transparent", border: "#35445f", desc: "見送りのレース" },
+  1: { color: "#bfdbfe", bg: "rgba(96,165,250,0.14)", border: "#60a5fa", desc: "参考度 1" },
+  2: { color: "#bbf7d0", bg: "rgba(34,197,94,0.18)", border: "#22c55e", desc: "参考度 2" },
+  3: { color: "#fde68a", bg: "rgba(245,158,11,0.20)", border: "#f59e0b", desc: "参考度 3" },
+  4: { color: "#fff", bg: "linear-gradient(135deg,#f97316,#ef4444)", border: "#fb923c", desc: "参考度 4（いちばん高い段。回収を約束しません）" },
 };
 
-/** 方式 A（確率のみ）の推奨度は『確信度』の段階。値段（期待回収率）の説明を出さない */
+/** 方式 A（確率のみ）の参考度は『確信度』の段階。値段の説明を出さない */
 const CONFIDENCE_DESC: Record<number, string> = {
   0: "本命が抜けておらず、確信度が低い", 1: "確信度がやや低い", 2: "確信度は標準", 3: "確信度がやや高い", 4: "本命が抜けており、確信度が高い",
 };
@@ -39,7 +39,7 @@ export function TierBadge({ tier, size = 14 }: { tier: PaidTier; size?: number }
   const s = TIER_STYLE[tier.level] ?? TIER_STYLE[0];
   return (
     <span
-      title={`推奨度 ${tier.level}: ${tier.label}（${s.desc}）`}
+      title={`参考度 ${tier.level}: ${tier.label}（${s.desc}）`}
       style={{ display: "inline-block", padding: "2px 10px", borderRadius: 999, fontSize: size, fontWeight: 800, color: s.color, background: s.bg, border: `1px solid ${s.border}` }}
     >
       {tier.label}
@@ -61,7 +61,7 @@ export function PaidBets({
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-        <span style={{ fontSize: 12.5, color: "var(--text-dim)" }}>推奨度</span>
+        <span style={{ fontSize: 12.5, color: "var(--text-dim)" }}>参考度</span>
         <TierBadge tier={rec.race_tier} size={14} />
         <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{tierDesc(rec.race_tier.level, rec.basis)}</span>
         <details style={{ display: "inline-block" }}>
@@ -72,11 +72,11 @@ export function PaidBets({
                 <span key={t.level} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-dim)" }}><TierBadge tier={t} size={12} />{tierDesc(t.level, rec.basis)}</span>
               ))}
             </div>
-            <div style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: 6, lineHeight: 1.6 }}>{rec.note ?? "推奨度は、推奨する買い目全体（組み合わせ）の見通しを段階にした目安です。オッズや期待値の数値は表示しません。"}</div>
+            <div style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: 6, lineHeight: 1.6 }}>{rec.note ?? "参考度は、サンプル買い目全体（組み合わせ）の見通しを段階にした目安です。オッズや期待値の数値は表示しません。"}</div>
           </div>
         </details>
         <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <label style={{ fontSize: 12, color: "var(--text-dim)" }} htmlFor="paid-cap">購入上限</label>
+          <label style={{ fontSize: 12, color: "var(--text-dim)" }} htmlFor="paid-cap">1R 上限</label>
           <input id="paid-cap" value={cap} onChange={(e) => setCap(e.target.value)} inputMode="numeric" placeholder="なし" style={{ width: 76, padding: "3px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", color: "inherit", fontSize: 12.5 }} />
           <button onClick={onRerun} disabled={loading} style={{ padding: "3px 11px", borderRadius: 6, fontSize: 12, cursor: "pointer", border: "1px solid var(--border)", background: "transparent", color: "var(--text)" }}>{loading ? "計算中…" : "再計算"}</button>
         </span>

@@ -52,6 +52,8 @@ export type EntryCard = {
   status: "ok" | "not_found" | "bad_request"; race_id: string; horse_id: string; as_of?: string | null;
   race?: { name?: string | null; venue?: string | null; surface?: string | null; distance?: number | null; grade?: string | null };
   horse: HorseCard; jockey: EntityCard; trainer: EntityCard; sources?: string[];
+  /** 匿名・無料会員の応答に付く。locked はサーバが落とした欄（training・trainer_comment・growth）。src/api/tier.py の redact_entry_card */
+  access?: { tier?: string; locked?: string[] };
 };
 
 const done = new Map<string, EntryCard>();

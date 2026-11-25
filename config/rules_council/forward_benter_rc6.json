@@ -1,0 +1,163 @@
+{
+ "name": "forward_benter_rc6_v1",
+ "fixed_at": "commit の日（git log -1 -- config/rules_council/forward_benter_rc6.json の日付が正。作ったのは 2026-11-25 JST）",
+ "owners": [
+  "rules-council（線・判定の規則）",
+  "bet-optimizer（c21・c23 の再生の台帳。docs/operations/megu_cycles/forward_plan_c21_c23.md）"
+ ],
+ "decisions": "docs/operations/roi_plus_council/decisions.md の「RC-6 の判断」「RC-6 の 1-1・1-3 の判断」「RC-6 の λ_be と満期の判断」「RC-6 の下限と満期の判断（critic の指摘の後）」",
+ "scope": "Benter の 2 段の系統（megu-cycles の凍結の候補 c13・c21・c23）の前向きの記録だけ。第 2 回の試行（config/bet_cycles/forward_stop_r2.json）は別の系統として扱い、含めない",
+ "rule": "線・λ_be の式と下限・満期・族・α・検定の作りは、commit の後に変えない。変えたら新しい確かめの期間を立てる。最初の再生の結果より前に commit する（bet-optimizer はこのファイルが再生より前に commit 済みで、その後変わっていないことを確かめてから流す）",
+ "count": {
+  "races": "凍結（2026-11-24）の後の最初の開催日（2026-11-28）以降の JRA のレース。G1-a・G1-b は候補の segment flat（重賞以外。新馬・未勝利を含み、障害を除く）、G1-c は新馬・未勝利（障害を除く）。G1-a と G1-c は新馬未勝利で重なる（α は族ごとに配るので合計 0.015 を超えない）。2026-10-18〜11-20 は s* の当てはめに使い、11-21〜27 は凍結の前後で揃っていないので、どちらも数えない",
+  "decision_q": "判定の時点の本物の写しは data/local/research/persona1/pre_odds.parquet の phase t60（G1-a・G1-c）・t15（G1-b）だけを使う。取消の馬は外してレースの中で和 1",
+  "snapshot_time": "写しの時刻（発走の何分前か）を全レースに記録する。T-60 で 50 分前より遅い写し、T-15 で発走の 10〜20 分前を外れた写しも、印を付けて主の集計に入れ、分けた値も出す（結果を見る前に決めた）",
+  "missing": "写しの無いレースと、出走馬のうち 1 頭でも p_rich（自前の確率）が無いレースは数えず、件数を族ごとに記録する",
+  "settle": "確定の払戻"
+ },
+ "entry_conditions": [
+  "bag を学び直した予測で、2022〜24 の予測ファイルの sha 082ac61b9bdc58e7 が再現すること。一致しないときは『2022〜24 の予測と行ごとの相関 ≥ 0.999 かつ c13・c21・c23 の 2022〜24 の買い目の一致 ≥ 98%』でよい（どちらも着順を使わない）。差は記録に残す",
+  "2026 年の as-of の特徴量で、列ごとの欠けの率が 2024 年と比べて 5 ポイントを超えて変わる列が、全列の 5% 以下であること。超えた列は記録に一覧で残す",
+  "判定の記録を bet_forward_ledger と同じ列（race_id・as_of・odds_phase・オッズの出どころ・判定・精算）で書くこと",
+  "数え始めは 2026-11-28 に固定する。上の条件は最初の再生の前に 1 回だけ確かめる（列の欠けの率は、2026-11-28・29 の対象のレースの as-of の特徴量で、2024 年の行と比べる）。満たさなければ、この系統の前向きは数えない（後から数え始めの日を選び直さない）"
+ ],
+ "families": {
+  "G1-a": {
+   "label": "平場（重賞以外）・T-60",
+   "candidate": "c13_flat",
+   "a_b": "config/megu_cycles/candidates/c13_flat.json の combo_ab_t60",
+   "alpha_one_sided": 0.005,
+   "races_at_maturity": "3,200 レースか 2027-11-27 の早い方",
+   "lambda_be_floor": 0.5907,
+   "floor_from": "族の時点の全部の層の s* の点推定（t60 0.81）での族の買い目の λ_be（2024 年の行）。新馬未勝利の層の s* は不安定（交点なし 17%）なので使わない",
+   "power_at_maturity_fisher": {
+    "s_one (1.000)": {
+     "line": 0.827,
+     "power": 0.62
+    },
+    "s_point (0.809)": {
+     "line": 0.591,
+     "power": 1.0
+    },
+    "s_low90 (0.404)": {
+     "line": 0.591,
+     "power": 0.999
+    }
+   },
+   "interim": "1,600 レースか 2027-05-27 の早い方"
+  },
+  "G1-b": {
+   "label": "平場（重賞以外）・T-15",
+   "candidate": "c23_flat_t15",
+   "a_b": "config/megu_cycles/candidates/c23_flat_t15.json の combo_ab_t60（キーの名前は t60 だが、c23 の凍結では t15 の再現で当てはめた値。combo_fit のとおり）",
+   "alpha_one_sided": 0.005,
+   "races_at_maturity": "2,900 レースか 2027-11-27 の早い方",
+   "lambda_be_floor": 0.6841,
+   "floor_from": "族の時点の全部の層の s* の点推定（t15 1.02）での族の買い目の λ_be（2024 年の行）。新馬未勝利の層の s* は不安定（交点なし 17%）なので使わない",
+   "power_at_maturity_fisher": {
+    "s_one (1.000)": {
+     "line": 0.684,
+     "power": 0.887
+    },
+    "s_point (1.024)": {
+     "line": 0.684,
+     "power": 0.891
+    },
+    "s_low90 (0.479)": {
+     "line": 0.684,
+     "power": 0.806
+    }
+   },
+   "interim": "1,450 レースか 2027-05-27 の早い方"
+  },
+  "G1-c": {
+   "label": "新馬未勝利・T-60",
+   "candidate": "c21_maiden_t60",
+   "a_b": "config/megu_cycles/candidates/c21_maiden_t60.json の combo_ab_t60",
+   "alpha_one_sided": 0.005,
+   "races_at_maturity": "1,449 レース（2024 年の新馬未勝利のレース数）か 2027-11-27 の早い方。1,449 に届かなくても 2027-11-27 で満期",
+   "lambda_be_floor": 0.5413,
+   "floor_from": "族の時点の全部の層の s* の点推定（t60 0.81）での族の買い目の λ_be（2024 年の行）。新馬未勝利の層の s* は不安定（交点なし 17%）なので使わない",
+   "power_at_maturity_fisher": {
+    "s_one (1.000)": {
+     "line": 0.763,
+     "power": 0.485
+    },
+    "s_point (0.809)": {
+     "line": 0.541,
+     "power": 0.98
+    },
+    "s_low90 (0.404)": {
+     "line": 0.541,
+     "power": 0.943
+    }
+   },
+   "interim": "725 レースか 2027-05-27 の早い方"
+  },
+  "control": {
+   "candidate": "c13_flat の買い目",
+   "note": "対照。α を配らない（R と回収率の記録だけ）"
+  }
+ },
+ "alpha_total_one_sided": 0.015,
+ "alpha_note": "bet-optimizer は c21・c23 について、この族の外で α を取らない。forward_stop_r2.json の第 2 回の試行は別の系統",
+ "main_measure": {
+  "model": "p_λ ∝ q · exp(λ·d)、d = (a·log p_rich + b·log q) − log q。λ = 0 は市場そのもの、λ = 1 は凍結の組み方。q は判定の時点の本物の q",
+  "estimate": "λ̂ は、族の対象のレースの全部（買い目のあるレースに限らない）の、レースの中の全頭での勝ち馬の対数尤度の最尤",
+  "se": "検定の分母は、開催日で束ねたサンドイッチの SE（ロバストの分散）。Fisher の SE と、開催日で束ねたブートストラップの区間は記録として並べる",
+  "lambda_be_fwd": "その時点までの対象のレースで、p_λ を真とし、凍結の買い目（λ = 1 の確率 × 判定の時点のオッズ ≥ 1.3・判定の時点のオッズ ≤ 50）の回収率の見込み Σ_買い目 p_λ · 確定の単勝オッズ ÷ 点数 が 1.00 になる λ（[-2, 3] を 0.01 刻みで走査し、最初に符号が変わる区間で解く＝最小の根）。着順を使わない。道具は λ_be_fwd を計算して記録に書いてから着順を読み、その順と時刻を記録に残す。求まらないとき（[-2, 3] で 1.00 に交わらないとき）は線 = 下限とし、その旨を記録する",
+  "line": "max(λ_be_fwd, lambda_be_floor)",
+  "looks": {
+   "interim": "族ごとの interim の時点で 1 回",
+   "final": "満期で 1 回",
+   "obf": {
+    "alpha": 0.005,
+    "looks": [
+     0.5,
+     1.0
+    ],
+    "z_interim": 3.648,
+    "z_final": 2.58,
+    "p_interim": 0.000132,
+    "p_final": 0.00495,
+    "how": "O'Brien–Fleming（等間隔 2 回、相関 √0.5 の 2 変量正規で 片側合計 0.005 を厳密に合わせた値）"
+   },
+   "other_times": "決めた時点以外では合否を見ない（月 1 回の記録は R の止める線だけ）"
+  },
+  "pass": "z = (λ̂ − line) ÷ SE（サンドイッチ）が、中間で ≥ 3.648、満期で ≥ 2.580（合否は z で決める。p は参考）。中間・満期が日付で来て情報の割合が 0.5・1.0 からずれても z の線は固定（α の合計は最大で約 0.00507 になりうる）。通っても言えるのは『模型の上で損益分岐を超える見込み』まで。『回収率 100% 超』とは書かない",
+  "stop": "中間: λ̂ の片側 95% の上限（λ̂ + 1.645 SE）が line より下なら、その族を止める（影の記録は続ける）。満期: 合格（z ≥ 2.580）に届かなければ、その族は不合格（保留を残さない）。3 族とも不合格なら系統を打ち切る",
+  "few_bets": "中間・満期の時点で、その族の凍結の買い目が 30 点未満なら、λ_be_fwd は求めず線 = 下限とする（記録する）"
+ },
+ "power_note": "満期の検出力（families.*.power_at_maturity_fisher）は Fisher の SE で計算した（真の λ = 1）。本番の検定はサンドイッチの SE なので、ここの検出力は楽観の側。G1-a・G1-c は s = 1（λ_be が下限より上）では 80% に届かない。結果: docs/operations/retrain_trials/rules_council_rc6_lambda.json",
+ "sstar_note": "s* の区間（rules_council_rc6_sstar.json）は、ブートストラップで交点の無かった回を除いた条件付きの値（T-60 全部 40/1,000・新馬未勝利 167/1,000・T-15 全部 58/1,000）",
+ "records_without_alpha": {
+  "R_and_roi": "候補ごとの R（勝ち ÷ Σ 判定の時点の本物の q）と回収率、払戻の上位 1% を除いた回収率",
+  "stop_lines_R": {
+   "c21_maiden_t60": {
+    "150": 1.05,
+    "300": 1.12
+   },
+   "c23_flat_t15": {
+    "150": 1.01,
+    "300": 1.09
+   },
+   "how": "本当の R 1.3 で誤って止める確率 ≤ 15% の最大の値（rules_council_rc6_power.json）。当たった候補は会員への表示の議論に進めない。影の記録は続ける"
+  },
+  "payout_drift": "確定オッズ ÷ 判定の時点のオッズ（払戻のずれ）",
+  "lambda_be_by_s": "3 通りの s での λ_be（2024 年の表）と λ_be_fwd の差",
+  "s_forward": "本物の q と確定の対数のずれから測った s（着順なし）"
+ },
+ "claims": "満期まで、会員にも開発者の画面にも回収率の数字を出さない。本番の推奨・会員の画面への反映は、統括役とユーザーの承認の後",
+ "ledger": "道具の入口で data_ledger.guard（purpose=forward、期間は 2026-11-25 以降）。KEIBA_SESSION を付け、config/data_access/ledger.jsonl を commit する",
+ "inputs_sha256": {
+  "config/megu_cycles/candidates/c13_flat.json": "7571c678d7102eb6261ea23133660d53a84a4933678730013aa3750fe42a1a27",
+  "config/megu_cycles/candidates/c21_maiden_t60.json": "ac89be5e5dc271d3f1da3e539a422635aa01d81c2365d9f02ba1b94d21a62e6b",
+  "config/megu_cycles/candidates/c23_flat_t15.json": "fbcb79450267b53ca99f273db93aeb58315591ca008bf5252acf75e7b7b6fe9f",
+  "docs/operations/retrain_trials/rules_council_rc6_lambda.json": "418a683f2665a429e6d0a5881aaa5d8de92c821c4e3aee74457c3e61b73f4e02",
+  "docs/operations/retrain_trials/rules_council_rc6_power.json": "317479a51ad459eb6b6a4a2321da8fbbae302432b0821fd4fec4cf92c5eb12f0",
+  "docs/operations/retrain_trials/rules_council_rc6_sstar.json": "94b642c189ee63d313271b773489d38ed02caea6128c22ec19ec4c6dbc41859d",
+  "docs/operations/retrain_trials/rules_council_rc6_gate1.json": "4162e15ed61ecc9139f53abefffd44f3b6d53c58eca75bc481e4d7ccaddbab8e",
+  "docs/operations/retrain_trials/rules_council_rc6_volume.json": "4ea8bd81fca2f00cd67f0d6381687949254f69db1d1926e965add563daf1aae6",
+  "src/research/rules_council/benter_diag.py": "79ffd46a91402f636fc97d81462abcf19bcd4b3aef31371f1ab7e101947a828c"
+ }
+}

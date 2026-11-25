@@ -322,15 +322,43 @@ def _read_users(path: str) -> list[dict]:
     return [u for u in users if isinstance(u, dict) and (u.get("id") or u.get("idk"))]
 
 
+# stg の版（rstg）だけが持つ、動作確認用の test の 1 件（旧形式の JSON）。Secret Manager の KEIBA_STG_TEST_USER を、
+# deploy_cloud_run_api.sh が API_TEST_USER=1（stg）のときだけ環境変数として載せる。本番の版には載らず、promote もこの名前の版を通信に載せない。
+# KEIBA_TEST_USER=1 のときだけ読む（片方だけでは読まない）。名簿の正本（GCS・MEMBERS_LOCAL_FILE）は本番と共有なので、test はそこに置かない
+STG_TEST_USER_ENV = "KEIBA_STG_TEST_USER"
+_stg_warned: list = []
+
+
+def _stg_test_user() -> dict | None:
+    raw = (os.environ.get(STG_TEST_USER_ENV) or "").strip()
+    if not raw or not _env_on("KEIBA_TEST_USER"):
+        return None
+    import json
+
+    try:
+        u = json.loads(raw)
+    except ValueError:
+        if not _stg_warned:
+            _stg_warned.append(1)
+            logger.warning("%s を読めません（JSON でない）", STG_TEST_USER_ENV)      # 毎リクエストで呼ばれるので 1 回だけ
+        return None
+    if not isinstance(u, dict) or u.get("id") != "test" or u.get("idk"):
+        return None
+    return {**u, "requires_env": "KEIBA_TEST_USER"}      # 照合のたびに KEIBA_TEST_USER も確かめる（member_active）
+
+
 def _load_members() -> list[dict]:
     """会員の一覧。ファイルの更新時刻が変わったときだけ読み直す（毎リクエストでも軽い）。"""
     paths = [_MEMBERS_FILE, MEMBERS_LOCAL_FILE]
-    key = tuple((p, os.path.getmtime(p) if os.path.exists(p) else None) for p in paths)
+    stg = _stg_test_user()
+    key = (tuple((p, os.path.getmtime(p) if os.path.exists(p) else None) for p in paths), stg and (stg.get("salt"), stg.get("hash")))
     if _members_cache["key"] != key:
         merged: dict[str, dict] = {}
         for p in paths:
             for u in _read_users(p):
                 merged[str(u.get("idk") or u.get("id"))] = u
+        if stg is not None:
+            merged["test"] = stg
         _members_cache.update(key=key, users=list(merged.values()))
     return _members_cache["users"]
 
