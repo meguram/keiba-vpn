@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { invalidateJson, primeAuthStatus, type AuthStatusJson } from "@/lib/httpCache";
 import { lockedMessage, ROTATED_MESSAGE } from "@/lib/loginMessage";
 
@@ -11,7 +10,6 @@ export default function LoginPage() {
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const router = useRouter();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,7 +37,9 @@ export default function LoginPage() {
       const body = (await res.json().catch(() => null)) as { auth?: AuthStatusJson } | null;
       if (body?.auth) primeAuthStatus(body.auth);
       else invalidateJson("/api/v1/auth/status");
-      router.push("/");
+      // ログインの後は全体を読み直す。匿名の間に読んだ広告のスクリプトは外せず、ログイン前の区分の確認が後から返ると
+      // 会員の画面で読み込まれうる（components/ads/AdSenseLoader.tsx）。読み直せば区分を最初から取り直す
+      window.location.assign("/");
     } catch {
       setError("通信に失敗しました。もう一度お試しください");
       setBusy(false);

@@ -22,9 +22,9 @@ function leafLabel(path: string): string {
 }
 
 /** 一覧の 1 行: 結論・カテゴリ・日付 → 題 → 要約（2 行まで） */
-export function ColumnRow({ column }: { column: ColumnSummary }) {
+export function ColumnRow({ column, href }: { column: ColumnSummary; href?: string }) {
   return (
-    <IntentLink href={`/column/${column.slug}`} className="col-row">
+    <IntentLink href={href ?? `/column/${column.slug}`} className="col-row">
       <div className="col-row-meta">
         <VerdictMark verdict={column.verdict} />
         <span>{[...new Set(column.categories.map(leafLabel))].join("・")}</span>

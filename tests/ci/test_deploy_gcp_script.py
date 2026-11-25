@@ -45,6 +45,14 @@ def test_test_user_is_enabled_only_on_the_stg_revision():
     on = subprocess.run(["bash", "scripts/gcp/deploy_cloud_run_api.sh", "deploy", "--dry-run"], cwd=ROOT, env={**base, "API_TEST_USER": "1"}, capture_output=True, text=True)
     off = subprocess.run(["bash", "scripts/gcp/deploy_cloud_run_api.sh", "deploy", "--dry-run"], cwd=ROOT, env={**base, "API_TEST_USER": "0"}, capture_output=True, text=True)
     assert "KEIBA_TEST_USER=1" in on.stdout and "KEIBA_TEST_USER" not in off.stdout
+    # test の 1 件（Secret Manager の stg 専用の秘密）は stg の版にだけ載せる。本番の版の出力には名前も出ない
+    assert "KEIBA_STG_TEST_USER=KEIBA_STG_TEST_USER:latest" in on.stdout and "KEIBA_STG_TEST_USER" not in off.stdout
+
+
+def test_promote_refuses_revisions_with_the_stg_test_user():
+    text = (ROOT / "scripts/gcp/deploy_cloud_run_api.sh").read_text(encoding="utf-8")
+    assert "grep -qE 'KEIBA_TEST_USER|KEIBA_STG_TEST_USER'" in text      # 昇格の止め（テストユーザー付きの版を本番の通信に載せない）
+    assert "KEIBA_STG_TEST_USER)  READERS=\"keiba-api\"" in (ROOT / "scripts/gcp/put_secret.sh").read_text(encoding="utf-8")
 
 
 def test_prod_revision_is_tagged_with_the_commit():
@@ -94,3 +102,41 @@ def test_prod_revision_gets_4gi_and_stg_keeps_2gi():
     assert "MEMORY=4Gi" in _run("api-revision", "prod").stdout
     assert "MEMORY=2Gi" in _run("api-revision", "stg").stdout
     assert "MEMORY=3Gi" in _run("api-revision", "prod", PROD_MEMORY="3Gi").stdout
+
+
+def _fake_gcloud(tmp_path, describe: str) -> dict:
+    """gcloud を偽物に差し替える。revisions describe の分岐は describe（case の行）で決め、update-traffic は呼ばれたら印を残す。"""
+    b = tmp_path / "bin"
+    b.mkdir()
+    (b / "gcloud").write_text(
+        "#!/usr/bin/env bash\n"
+        'case "$*" in\n'
+        "  *'revisions describe'*'resources.limits.memory'*) echo 4Gi ;;\n"
+        f"{describe}\n"
+        "  *'revisions list'*) printf 'rev-cur\\nrev-stg\\nrev-prod\\n' ;;\n"
+        "  *'services describe'*) echo rev-cur ;;\n"
+        f'  *update-traffic*) echo "$*" > "{tmp_path}/switched" ;;\n'
+        "esac\n", encoding="utf-8")
+    (b / "gcloud").chmod(0o755)
+    return {**os.environ, "PATH": f"{b}:{os.environ['PATH']}", "PROJECT_ID": "p", "GCS_BUCKET": "b"}
+
+
+def test_promote_really_refuses_a_revision_that_only_has_the_stg_secret(tmp_path):
+    e = _fake_gcloud(tmp_path, "  *'revisions describe'*) echo \"[{'name': 'KEIBA_STG_TEST_USER', 'valueFrom': {}}]\" ;;")
+    r = subprocess.run(["bash", "scripts/gcp/deploy_cloud_run_api.sh", "promote", "--apply"], cwd=ROOT, env=e, capture_output=True, text=True)
+    assert r.returncode == 3 and not (tmp_path / "switched").exists(), r.stderr
+
+
+def test_rollback_refuses_stg_revisions(tmp_path):
+    e = _fake_gcloud(tmp_path, "  *'revisions describe'*) echo \"[{'name': 'KEIBA_TEST_USER', 'value': '1'}]\" ;;")
+    r = subprocess.run(["bash", "scripts/gcp/rollback_cloud_run_api.sh", "--to", "rev-stg", "--apply"], cwd=ROOT, env=e, capture_output=True, text=True)
+    assert r.returncode == 3 and not (tmp_path / "switched").exists(), r.stderr
+    r = subprocess.run(["bash", "scripts/gcp/rollback_cloud_run_api.sh", "--apply"], cwd=ROOT, env=e, capture_output=True, text=True)
+    assert r.returncode != 0 and not (tmp_path / "switched").exists()       # どの版も stg 用なら戻し先なし
+
+
+def test_rollback_skips_stg_revisions_when_choosing_the_previous_one(tmp_path):
+    e = _fake_gcloud(tmp_path, "  *'revisions describe rev-stg'*) echo KEIBA_STG_TEST_USER ;;\n  *'revisions describe'*) echo KEIBA_ENV ;;")
+    r = subprocess.run(["bash", "scripts/gcp/rollback_cloud_run_api.sh", "--apply"], cwd=ROOT, env=e, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert "rev-prod=100" in (tmp_path / "switched").read_text()

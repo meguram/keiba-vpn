@@ -33,9 +33,15 @@ const AI_AND_SCRAPER_BOTS = [
   "Scrapy",
 ];
 
+// 広告（AdSense）の巡回だけは許す。審査・広告の中身の判定・所有の確認に要る（support.google.com/adsense/answer/10532）。
+// 検索の索引は今までどおり拒否（下の * と X-Robots-Tag の noindex）。
+const ADSENSE_BOTS = ["Mediapartners-Google", "Google-Display-Ads-Bot"];
+
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
+      // /api/ は閉じたまま（Nav の罠のリンクをたどって巡回の IP が止められないように。API の要求も増やさない）
+      ...ADSENSE_BOTS.map((userAgent) => ({ userAgent, allow: "/", disallow: "/api/" })),
       { userAgent: "*", disallow: "/" },
       ...AI_AND_SCRAPER_BOTS.map((userAgent) => ({ userAgent, disallow: "/" })),
     ],

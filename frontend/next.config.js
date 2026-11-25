@@ -77,6 +77,11 @@ const nextConfig = {
         source,
         headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }],
       })),
+      // AdSense の ads.txt（public/）。巡回とブラウザが CDN で受け取れるよう 1 日持たせる（中身は ID を変えたときだけ変わる）
+      {
+        source: "/ads.txt",
+        headers: [{ key: "Cache-Control", value: "public, max-age=86400" }],
+      },
     ];
   },
   async rewrites() {

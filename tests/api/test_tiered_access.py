@@ -240,6 +240,62 @@ def test_test_user_is_off_by_default_and_hashed(monkeypatch):
     assert '"password"' not in text and '"hash"' in text
 
 
+def _stg_secret(password: bytes = b"test") -> str:
+    import hashlib
+
+    salt = bytes(range(16, 32))
+    return json.dumps({"id": "test", "role": "member", "algo": "pbkdf2_sha256", "iterations": 1000, "salt": salt.hex(),
+                       "hash": hashlib.pbkdf2_hmac("sha256", password, salt, 1000).hex()})
+
+
+def test_stg_test_user_from_secret_needs_both_the_secret_and_the_flag(tmp_path, monkeypatch):
+    """stg の版（rstg）は Secret Manager の KEIBA_STG_TEST_USER から test を読む。本番の版は秘密も KEIBA_TEST_USER も持たない。"""
+    monkeypatch.setattr(auth, "_MEMBERS_FILE", str(tmp_path / "none.json"))        # イメージに config/members.json が無い状態
+    monkeypatch.delenv("KEIBA_TEST_USER", raising=False)
+    monkeypatch.delenv(auth.STG_TEST_USER_ENV, raising=False)
+    assert auth.verify_member_login("test", "test") is False                          # 本番: どちらも無い
+    monkeypatch.setenv(auth.STG_TEST_USER_ENV, _stg_secret())
+    assert auth.verify_member_login("test", "test") is False                          # 秘密だけ（KEIBA_TEST_USER なし）
+    monkeypatch.setenv("KEIBA_TEST_USER", "0")
+    assert auth.verify_member_login("test", "test") is False
+    monkeypatch.delenv(auth.STG_TEST_USER_ENV)
+    monkeypatch.setenv("KEIBA_TEST_USER", "1")
+    assert auth.verify_member_login("test", "test") is False                          # 目印だけ（秘密なし）
+    monkeypatch.setenv(auth.STG_TEST_USER_ENV, _stg_secret())
+    assert auth.verify_member_login("test", "test") is True                           # stg: 両方ある
+    assert auth.verify_member_login("test", "wrong") is False
+    assert auth.verify_member_login("Test2", "test") is False
+    monkeypatch.setenv("KEIBA_TEST_USER", "0")                                         # 目印を外すと、その場で通らなくなる
+    assert auth.verify_member_login("test", "test") is False
+
+
+def test_stg_test_user_secret_ignores_other_ids_and_broken_values(tmp_path, monkeypatch):
+    monkeypatch.setattr(auth, "_MEMBERS_FILE", str(tmp_path / "none.json"))
+    monkeypatch.setenv("KEIBA_TEST_USER", "1")
+    other = json.loads(_stg_secret())
+    other["id"] = "admin"
+    monkeypatch.setenv(auth.STG_TEST_USER_ENV, json.dumps(other))
+    assert auth.verify_member_login("admin", "test") is False                         # test 以外の ID はこの経路で作れない
+    monkeypatch.setenv(auth.STG_TEST_USER_ENV, "{not json")
+    assert auth.verify_member_login("test", "test") is False
+    monkeypatch.setenv(auth.STG_TEST_USER_ENV, json.dumps({**json.loads(_stg_secret()), "requires_env": ""}))
+    monkeypatch.setenv("KEIBA_TEST_USER", "1")
+    assert auth.member_record("test")["requires_env"] == "KEIBA_TEST_USER"             # 秘密の中身で requires_env を外せない
+
+
+def test_stg_test_user_secret_change_takes_effect_and_wins_over_the_file(monkeypatch):
+    """名簿のファイル（fixture）にも test がある状態で、秘密の側が勝つ。秘密を差し替えると、同じプロセスで古いハッシュは通らない。"""
+    monkeypatch.setenv("KEIBA_TEST_USER", "1")
+    monkeypatch.delenv(auth.STG_TEST_USER_ENV, raising=False)
+    assert auth.verify_member_login("test", "test") is True                           # ファイルの test
+    monkeypatch.setenv(auth.STG_TEST_USER_ENV, _stg_secret(b"other"))
+    assert auth.verify_member_login("test", "test") is False                          # 秘密が勝つ
+    assert auth.verify_member_login("test", "other") is True
+    monkeypatch.setenv(auth.STG_TEST_USER_ENV, _stg_secret(b"third"))
+    assert auth.verify_member_login("test", "other") is False                         # 差し替えがキャッシュに残らない
+    assert auth.verify_member_login("test", "third") is True
+
+
 # ── FastAPI / Flask の端から端 ──
 
 def _fastapi():

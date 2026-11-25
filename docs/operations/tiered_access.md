@@ -38,11 +38,22 @@ UI の隠しではなく、**サーバが応答から項目を落とす**（許�
 - 状態: `GET /api/v1/auth/status` / `GET /api/auth/status` → `tier`（`public` / `member` / `dev`）・`is_member`・`is_developer`。
 - 会員の名簿は `data/local/auth/members.json`（正本は GCS。`members_store_gcs.md`）。ハッシュだけを持ち、平文は置かない。
 - 動作確認用の test は `config/members.json`。2026-11-19 から git の外で、置いたマシンでだけ有効（CI で作るイメージには入らない。`members_json_purge_20261119.md`）。`requires_env` が指す環境変数が `1` のときだけ有効。
+- stg の版（rstg）の test は、Secret Manager の `KEIBA_STG_TEST_USER`（stg 専用）から読む（2026-11-25〜）。下の「stg の test」。
 
 ## テストユーザー（id: test / pw: test）
 
 動作確認用。`KEIBA_TEST_USER=1` のときだけログインできる（**既定オフ**）。切替: `bash scripts/ops/test_user_flag.sh on|off|status`（`.env` を書くだけ。反映は API の再起動後）。
 **一般公開（Cloudflare Access を外す）前には必ず `off`**。test/test は誰でも推測できるため、公開環境で有効のままだと有料会員の機能が誰にでも開く。
+
+### stg の test（rstg。2026-11-25〜）
+
+- 読む場所: 環境変数 `KEIBA_STG_TEST_USER`（旧形式の 1 件の JSON）。`src/api/auth.py::_stg_test_user`。
+- 通る条件: `KEIBA_STG_TEST_USER` があり、かつ `KEIBA_TEST_USER=1`。片方だけでは通らない。ID は `test` だけ。
+- 載せるのは `scripts/gcp/deploy_cloud_run_api.sh` で、`API_TEST_USER=1`（`deploy_gcp.sh --target stg`）のときだけ。本番の版には秘密も目印も載らない。
+- promote と `rollback_cloud_run_api.sh` は、`KEIBA_TEST_USER`・`KEIBA_STG_TEST_USER` を持つ版を本番の通信に載せない。
+- 秘密は配備より先に要る（無いと `gcloud run deploy` が失敗する）。2026-11-25 に作成済み。
+- 秘密を作る・作り直す: `bash scripts/ops/stg_test_user_secret.sh`（値は画面に出ない）。反映は次の stg の配備から。
+- 名簿の正本（GCS・`data/local/auth/`）は本番と共有なので、test はそこに入れない。
 
 ## 公開に向けた残り
 
