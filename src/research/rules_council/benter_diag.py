@@ -5,10 +5,11 @@
 - gate1  : 1-3 門 1（対数尤度の差）の検出力（記録用。α は近い値）。
 - sstar  : 1-4 s* の区間（2026-10-18〜11-20 の本物の発走前オッズの、市場の対数損失だけ）。
 - lambda : 事前登録の λ_be・下限・満期・満期の検出力（config/rules_council/forward_benter_rc6.json に写す）。
-1-2（再現への依存）は事前登録の後に足す（1 号の判断で、commit の前には要らない）。
+- depend : 1-2 再現の作りへの依存（判定のオッズの作りを替えたときの買い目の残り。着順なし）。
+- split  : 2-1 探す側 70% の c13 の回収率の分解（探す側の着順を見る。1 回だけ。台帳の guard は無く、回数は decisions.md の通算の欄で数える）。
 凍結の候補: config/megu_cycles/candidates/c13_flat.json・c21_maiden_t60.json・c23_flat_t15.json（変えない）。
 費用 0 円（手元の表だけ。GCS は読まない）。土日の 07:30〜17:00 は止める。
-使い方: KEIBA_SESSION=rules-council python -m src.research.rules_council.benter_diag volume|power|gate1|sstar|lambda（nice -n 19）
+使い方: KEIBA_SESSION=rules-council python -m src.research.rules_council.benter_diag volume|power|gate1|sstar|lambda|depend|split（nice -n 19）
 出力: docs/operations/retrain_trials/rules_council_rc6_<名前>.json
 """
 
@@ -405,11 +406,183 @@ def cmd_lambda() -> dict:
     return out
 
 
+DEP_S = (0.5, 0.86, 1.04, 1.62)
+
+
+def _band_pool(phase: str) -> tuple[list[np.ndarray], int]:
+    """2026 年の本物の写し（phase）のずれ d = log(確定 ÷ 写し) を、確定オッズの帯（rc_frame.ODDS_EDGES）ごとに集める。"""
+    from src.config.data_paths import TABLES_DIR
+    from src.research.rules_council import rc_frame as RF
+    pre = pd.read_parquet(PRE)
+    pre["race_id"] = pre["race_id"].astype(str)
+    pre = pre[(pre["phase"] == phase) & (pd.to_numeric(pre["win_odds"], errors="coerce") > 0)][["race_id", "horse_number", "win_odds"]]
+    pre["horse_number"] = pd.to_numeric(pre["horse_number"], errors="coerce")
+    fl = pd.read_parquet(Path(TABLES_DIR) / "2026" / "race_result_flat.parquet", columns=["race_id", "horse_number", "odds", "popularity"])
+    fl["race_id"] = fl["race_id"].astype(str)
+    for c in ("horse_number", "odds", "popularity"):
+        fl[c] = pd.to_numeric(fl[c], errors="coerce")
+    m = pre.merge(fl, on=["race_id", "horse_number"])
+    m = m[(m["odds"] > 0) & (m["popularity"] > 0)]                       # load_drift と同じ母集団
+    dd = np.log(m["odds"].to_numpy(float) / pd.to_numeric(m["win_odds"]).to_numpy(float))
+    b = RF.odds_bin(m["odds"].to_numpy(float))
+    nb = len(RF.ODDS_EDGES) - 1
+    pool = [dd[b == k] for k in range(nb)]
+    for k in range(nb):                                   # 空の帯は、近い帯から借りる
+        if not len(pool[k]):
+            j = min((j for j in range(nb) if len(pool[j])), key=lambda j: abs(j - k))
+            pool[k] = pool[j]
+    return pool, int(len(m))
+
+
+def _sim_band(odds: np.ndarray, rid: np.ndarray, pool: list[np.ndarray], s: float, seed: int) -> np.ndarray:
+    """帯ごとのずれから馬ごとに無作為に引き、判定のオッズ = 確定 × exp(−s·d)。レースで 1/オッズの和を確定に合わせる。"""
+    from src.research.rules_council import rc_frame as RF
+    rng = np.random.default_rng(seed)
+    b = RF.odds_bin(odds)
+    d = np.empty(len(odds))
+    for k in np.unique(b):
+        i = np.flatnonzero(b == k)
+        d[i] = pool[k][rng.integers(len(pool[k]), size=len(i))]
+    o = odds * np.exp(-s * d)
+    g = pd.Series(1.0 / odds).groupby(rid).transform("sum").to_numpy() / pd.Series(1.0 / o).groupby(rid).transform("sum").to_numpy()
+    return o / g
+
+
+def _sim_rank(d: pd.DataFrame, pool_races: list, s: float, seed0: int) -> np.ndarray:
+    """megu の作り（レースを丸ごと借り、確定の人気の順位のずれを当てる）に s を掛けた版。種を変えると、元の 5 本どうしの揺れ（床）が出る。"""
+    rid = d["race_id"].to_numpy()
+    odds = d["odds_final"].to_numpy(float)
+    pop = np.nan_to_num(pd.to_numeric(d["pop_final"], errors="coerce").to_numpy(float), nan=99.0)
+    starts = np.flatnonzero(np.r_[True, rid[1:] != rid[:-1]])
+    ends = np.r_[starts[1:], len(d)]
+    rng = np.random.default_rng(seed0)
+    out = np.empty(len(d))
+    for a, e in zip(starts, ends):
+        src = pool_races[int(rng.integers(len(pool_races)))]
+        rk = np.clip(np.where(pop[a:e] < 99, pop[a:e], len(src)).astype(int) - 1, 0, len(src) - 1)
+        o = odds[a:e] * np.exp(-s * src[rk])
+        out[a:e] = o * (np.sum(1.0 / o) / np.sum(1.0 / odds[a:e]))
+    return out
+
+
+def cmd_depend(seed: int = 20261126) -> dict:
+    """1-2 再現への依存（着順なし。1 号の決定 RC-6 の 1-2）。
+    凍結の 3 候補の 2017〜24 年の買い目（再現 5 本の平均の買う割合 stake）が、判定のオッズの作りを替えるとどれだけ残るか（Σ min(元, 新) ÷ Σ 元）。
+    - band_s: 帯ごとのずれから馬ごとに無作為に引く版（確定の人気の順位を使わない）。s = 0.5・0.86・1.04・1.62。
+    - rank_s: 元の作り（人気の順位）に s を掛けた版。s = 1 で種だけ変えたものが床（元の作りどうしの揺れ）。
+    残りが 5 割未満（入れ替わりが 5 割以上）なら『過去の上積みは再現の作りが生んだ値』と記録し、模擬に植える効きを R 1.15 に下げる。"""
+    E.check_stop()
+    from src.ops import data_ledger as DL
+    from src.research.megu_cycles import cycles as C
+    from src.research.megu_cycles import mc_data as D
+    from src.scripts.data.bet_cycles import load_drift
+    pre = pd.read_parquet(PRE, columns=["snapshot_at"])
+    period = (str(pre["snapshot_at"].min())[:10], str(pre["snapshot_at"].max())[:10])
+    out = {"s_grid": list(DEP_S), "line": "残り < 0.5 なら『再現の作りが生んだ値』", "cands": {}}
+    with DL.guard(tool="rules_council.benter_diag", family="rules_council", version="rc6_depend", period=period, purpose="eval_only",
+                  reads=("T-60・T-15 のオッズ", "確定オッズ"), reason="RC-6 の 1-2: 再現の作りへの依存（買い目の入れ替わり。着順・払戻の列は load_all が読み込むが使わない）",
+                  session="rules-council") as tok:
+        pools = {}
+        for name in CANDS:
+            E.check_stop()
+            d, sp, ab = load_cand(name)
+            d = d.sort_values(["race_id", "hn"]).reset_index(drop=True)
+            phase = sp.get("phase", "t60")
+            if phase not in pools:
+                pools[phase] = (_band_pool(phase), load_drift(phase)["races"])
+            (bpool, n_pool), rpool = pools[phase]
+            st = C.strat_ev(lambda x, k: C.combo_p(x, k, *ab, col="p_rich"), sp["t"], sp["omax"])
+            base = d["stake"].to_numpy(float)
+            odds = d["odds_final"].to_numpy(float)
+            rid = d["race_id"].to_numpy()
+
+            def stake_with(make) -> np.ndarray:
+                e = d.copy()
+                for k in range(D.N_PRE):
+                    e[f"odds_pre{k}"] = make(k)
+                return np.vstack([st(e, k) for k in range(D.N_PRE)]).mean(0)
+
+            def keep(new: np.ndarray) -> dict:
+                m = float(np.minimum(base, new).sum())
+                # kept は Σ新 ÷ Σ元 が上限（数が減るだけで下がる）。数の増減に左右されない kept_sym（Σmin ÷ Σmax）と kept_norm（Σmin ÷ min(Σ元, Σ新)）も並べる
+                return {"kept": m / float(base.sum()), "kept_sym": m / float(np.maximum(base, new).sum()),
+                        "kept_norm": m / float(min(base.sum(), new.sum())), "bets_ratio": float(new.sum() / base.sum())}
+            r = {"phase": phase, "rows": int(len(d)), "bets_base": float(base.sum()), "pool_rows_2026": n_pool}
+            r["floor_rank_s1_reseed"] = keep(stake_with(lambda k: _sim_rank(d, rpool, 1.0, seed + 100 + k)))
+            for s in DEP_S:
+                r[f"band_s{s}"] = keep(stake_with(lambda k, s=s: _sim_band(odds, rid, bpool, s, seed + 1000 * round(s * 100) + k)))
+                r[f"rank_s{s}"] = keep(stake_with(lambda k, s=s: _sim_rank(d, rpool, s, seed + 200 + 1000 * round(s * 100) + k)))
+            worst = min(r[f"band_s{s}"]["kept"] for s in DEP_S)
+            r["verdict_literal"] = "残り < 0.5 の s がある（決定の線どおりなら R 1.15 に下げる）" if worst < 0.5 else "どの s でも残り ≥ 0.5"
+            r["band_minus_rank"] = {f"s{s}": r[f"band_s{s}"]["kept"] - r[f"rank_s{s}"]["kept"] for s in DEP_S}
+            out["cands"][name] = r
+            print(name, json.dumps(r, ensure_ascii=False), flush=True)
+        path = OUT / "rules_council_rc6_depend.json"
+        path.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+        tok.finish(result_path=path)
+    return out
+
+
+def cmd_split(n_boot: int = 2000, seed: int = 20261127) -> dict:
+    """2-1 分解（1 号の決定 RC-6 の 2-1。探す側 70% の着順を見る 6 回目。1 回だけ。結果で凍結・線・母集団を変えない）。
+    c13 の買い目（再現 5 本の平均の stake）の、探す側 70% の開催（2017〜24）の回収率を ROI = 基準線 × 超過の市場比 × 払戻の項 に分ける。
+    - 基準線 B = Σ s·ROI_帯 ÷ Σ s（ROI_帯 = 同じ表・探す側 70% の全馬の、確定オッズの帯ごとの単勝回収率）。
+    - 超過の市場比 = MR ÷ MR_帯（MR = Σ s·勝ち ÷ Σ s·q確定、MR_帯 = Σ s·q·ρ_帯 ÷ Σ s·q、ρ_帯 = 帯の 勝ち ÷ Σq）。
+    - 払戻の項 = (ROI ÷ B) ÷ (MR ÷ MR_帯)。勝った馬が帯の中で高いオッズに偏ったかどうか（運か物差しのずれ）。
+    信頼区間は開催で束ねたブートストラップ。確かめの側 30% は開かない。"""
+    E.check_stop()
+    from src.research.megu_cycles import mc_eval as ME
+    from src.research.rules_council import rc_frame as RF
+    d, sp, ab = load_cand("c13_flat")
+    d = d[d["year"].astype(int) <= 2024].reset_index(drop=True)
+    d["kaisai"] = d["race_id"].astype(str).str[:8]
+    d = d[E.search70(d["kaisai"].to_numpy())].reset_index(drop=True)
+    s = d["stake"].to_numpy(float)
+    pay = ME._ret(d, "win")
+    win = ME._hit(d, "win")
+    q = d["q_final"].to_numpy(float)
+    b = RF.odds_bin(d["odds_final"].to_numpy(float))
+    ks = d["kaisai"].to_numpy()
+
+    def terms(idx: np.ndarray) -> dict:
+        s_, p_, w_, q_, b_ = s[idx], pay[idx], win[idx], q[idx], b[idx]
+        nb = len(RF.ODDS_EDGES) - 1
+        n_b = np.bincount(b_, minlength=nb).astype(float)
+        roi_b = np.divide(np.bincount(b_, p_, nb), n_b, out=np.zeros(nb), where=n_b > 0)
+        qb = np.bincount(b_, q_, nb)
+        rho_b = np.divide(np.bincount(b_, w_, nb), qb, out=np.ones(nb), where=qb > 0)
+        S = s_.sum()
+        roi = (s_ * p_).sum() / S
+        B = (s_ * roi_b[b_]).sum() / S
+        mr = (s_ * w_).sum() / (s_ * q_).sum()
+        mr_b = (s_ * q_ * rho_b[b_]).sum() / (s_ * q_).sum()
+        return {"roi": roi, "base": B, "excess_mr": mr / mr_b, "payout_term": (roi / B) / (mr / mr_b), "mr": mr, "mr_band": mr_b}
+    allidx = np.arange(len(d))
+    pt = terms(allidx)
+    uk = np.unique(ks)
+    pos = {k: np.flatnonzero(ks == k) for k in uk}
+    rng = np.random.default_rng(seed)
+    bs = []
+    for i in range(n_boot):
+        if i % 200 == 0:
+            E.check_stop()
+        idx = np.concatenate([pos[k] for k in rng.choice(uk, size=len(uk))])
+        bs.append(terms(idx))
+    ci = {k: [float(np.quantile([x[k] for x in bs], 0.05)), float(np.quantile([x[k] for x in bs], 0.95))] for k in pt}
+    out = {"cand": "c13_flat", "side": "探す側 70%（2017〜24）", "kaisai": int(len(uk)), "bets": float(s.sum()),
+           "point": {k: float(v) for k, v in pt.items()}, "ci90": ci,
+           "note": "探す側 70% の着順を見た 6 回目。結果で凍結・線・母集団を変えない。確かめの側 30% は開かない"}
+    path = OUT / "rules_council_rc6_split.json"
+    path.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(json.dumps(out, ensure_ascii=False, indent=1))
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["volume", "power", "gate1", "sstar", "lambda"])
+    ap.add_argument("cmd", choices=["volume", "power", "gate1", "sstar", "lambda", "depend", "split"])
     a = ap.parse_args()
-    {"volume": cmd_volume, "power": cmd_power, "gate1": cmd_gate1, "sstar": cmd_sstar, "lambda": cmd_lambda}[a.cmd]()
+    {"volume": cmd_volume, "power": cmd_power, "gate1": cmd_gate1, "sstar": cmd_sstar, "lambda": cmd_lambda, "depend": cmd_depend, "split": cmd_split}[a.cmd]()
 
 
 if __name__ == "__main__":
