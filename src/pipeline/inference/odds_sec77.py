@@ -106,6 +106,43 @@ def predict_frame(X: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+LOG_DIR: Path | None = None          # 試しで差し替える置き場（None なら _log_dir()）
+_MODEL_INFO: dict = {}
+
+
+def _log_dir() -> Path:
+    """手元の追記の記録の置き場。推論の作業場所（KEIBA_INFERENCE_DIR）に従う（worktree から流しても本体の記録に混ざらない）。"""
+    if LOG_DIR is not None:
+        return LOG_DIR
+    if os.environ.get("KEIBA_SEC77_LOG_DIR"):
+        return Path(os.environ["KEIBA_SEC77_LOG_DIR"])
+    from src.config.data_paths import LOCAL
+
+    return Path(os.environ.get("KEIBA_INFERENCE_DIR") or LOCAL / "inference") / "sec77_log"
+
+
+def model_info() -> dict:
+    """想定オッズの模型の版（meta.json の fitted_at・trained_years と、meta と 2 つの模型のファイルの sha256 の先頭）。模型の更新時刻で読み直す。
+    記録だけなので、読めないときは {} を返して保存・推奨を止めない。試行 6 の模型（KEIBA_ODDS_T6=1）のときはその旨を残す。"""
+    import hashlib
+
+    try:
+        files = [MODEL_DIR / n for n in ("meta.json", "share_model.txt", "place_model.txt")]
+        key = tuple(f.stat().st_mtime for f in files)
+        if _MODEL_INFO.get("key") != key:
+            h = hashlib.sha256()
+            for f in files:
+                h.update(f.read_bytes())
+            meta = json.loads(files[0].read_text(encoding="utf-8"))
+            _MODEL_INFO.update(key=key, info={"fitted_at": meta.get("fitted_at"), "trained_years": meta.get("trained_years"), "sha16": h.hexdigest()[:16]})
+        info = dict(_MODEL_INFO["info"])
+    except Exception:  # noqa: BLE001
+        return {}
+    if (os.environ.get("KEIBA_ODDS_T6") or "").strip() == "1":
+        info["t6_requested"] = True          # 試行 6 の模型を使う設定（§77 に戻ったかは区別できないので、版は §77 の serving のもの）
+    return info
+
+
 def payload_for_race(rows: pd.DataFrame, horse_numbers: dict[str, int], race_name: str, elapsed: float = 0.0) -> dict | None:
     """1 レース分の予測行 → 最終オッズ予測のキャッシュと同じ形の応答。馬番が分からない馬がいれば None。"""
     entries = []
@@ -118,13 +155,68 @@ def payload_for_race(rows: pd.DataFrame, horse_numbers: dict[str, int], race_nam
     if not entries:
         return None
     entries.sort(key=lambda e: e["horse_number"])
-    return {"race_id": str(rows["race_id"].iloc[0]), "race_name": race_name or "-", "elapsed_sec": round(float(elapsed), 2), "entries": entries}
+    from datetime import datetime, timedelta, timezone
+
+    created = datetime.now(timezone(timedelta(hours=9))).isoformat(timespec="seconds")
+    return {"race_id": str(rows["race_id"].iloc[0]), "race_name": race_name or "-", "elapsed_sec": round(float(elapsed), 2), "entries": entries,
+            "model": model_info(), "created_at": created}       # 記録だけ（推奨・画面の計算は entries だけを使う）
 
 
-def save_for_race(storage, payload: dict) -> bool:
+def save_for_race(storage, payload: dict, weights_known: bool | None = None, log: bool = True, extra: dict | None = None) -> bool:
+    """保存する。log=True（開催日の予測の経路）のときだけ、手元の追記の記録にも 1 行を足す（過去のレースの取り込み直しでは記録しない）。"""
     from src.pipeline.inference.final_odds_service import FinalOddsCache
 
-    return bool(FinalOddsCache.save_cached(storage, payload["race_id"], payload, source=SOURCE))
+    ok = bool(FinalOddsCache.save_cached(storage, payload["race_id"], payload, source=SOURCE))
+    if ok and log and (os.environ.get("KEIBA_RUN_LOCATION") or "").strip().lower() != "gcp":   # Cloud Run Jobs のコンテナでは消えるので書かない
+        try:
+            append_log(payload, weights_known, extra=extra)
+        except Exception:  # noqa: BLE001  記録に失敗しても保存・推奨には影響させない
+            logger.exception("[sec77] 手元の記録に書けません: %s", payload.get("race_id"))
+    return ok
+
+
+def training_null_share(X: pd.DataFrame, race_id: str) -> float | None:
+    """そのレースの馬の、追い切りの列（tl_*・wc_*）の空の割合（記録だけ）。列やレースが無ければ None。"""
+    cols = [c for c in X.columns if str(c).startswith(("tl_", "wc_"))]
+    if not cols or "race_id" not in X.columns:
+        return None
+    g = X.loc[X["race_id"].astype(str) == str(race_id), cols]
+    return round(float(g.isna().to_numpy().mean()), 4) if len(g) else None
+
+
+def append_log(payload: dict, weights_known: bool | None = None, log_dir: Path | None = None, extra: dict | None = None) -> Path:
+    """§77 を保存するたびに、手元の追記の記録 sec77_log/<作った日>.jsonl に 1 行を足す（GCS には上げない。記録だけ）。
+    中身: race_id・作った時刻・模型の版・その時点で馬体重が入っていたか・馬ごとの q̂（想定単勝オッズの逆数を合計 1 に直した値）・
+    同じレースの何回目の保存か（上書きの回数を数える）。"""
+    import fcntl
+
+    d = log_dir or _log_dir()
+    created = str(payload.get("created_at") or "")
+    day = str((extra or {}).get("race_day") or created[:10].replace("-", "") or "unknown")   # レースの日で分ける（前日の保存も同じファイル）
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / f"{day}.jsonl"
+    rid = str(payload["race_id"])
+    inv = {int(e["horse_number"]): 1.0 / float(e["predicted_win_odds"]) for e in payload.get("entries") or [] if float(e.get("predicted_win_odds") or 0) > 0}
+    z = sum(inv.values()) or 1.0
+    row = {"race_id": rid, "created_at": created, "model": payload.get("model") or {}, "weights_known": weights_known,
+           "env": os.environ.get("KEIBA_ENV") or "", "odds_model": SOURCE, **(extra or {}),
+           "q_hat": {str(h): round(v / z, 6) for h, v in sorted(inv.items())},
+           "win_odds": {str(e["horse_number"]): e["predicted_win_odds"] for e in payload.get("entries") or []}}
+    with f.open("a+", encoding="utf-8") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)                  # 同時に書いても write_n が重ならない
+        fh.seek(0)
+        n_prev = 0
+        for line in fh.read().splitlines():
+            try:
+                x = json.loads(line)
+            except ValueError:
+                continue
+            n_prev += int(isinstance(x, dict) and x.get("race_id") == rid)
+        row["write_n"] = n_prev + 1
+        fh.seek(0, 2)
+        fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+        fcntl.flock(fh, fcntl.LOCK_UN)
+    return f
 
 
 def is_sec77(single: dict | None) -> bool:

@@ -313,7 +313,12 @@ def run_for_races(
             except Exception as exc:
                 logger.exception("v6 の予測に失敗（v4・v5 には影響しない）: %s", ids)
                 v6_err = str(exc)
-        sec77_status = _save_sec77_odds(ctx, card, F, storage, X6, ids)
+        try:          # 記録だけの値（本体を止めない）
+            wk77 = {str(r["race_id"]): bool(weights_known.get(str(r["race_id"]), (info.get("weights_known_ratio") or 0) >= 0.9)) for r in races}
+            day77 = {str(r["race_id"]): r["post_time"].strftime("%Y%m%d") for r in races if r.get("post_time")}
+        except Exception:  # noqa: BLE001
+            wk77, day77 = {}, {}
+        sec77_status = _save_sec77_odds(ctx, card, F, storage, X6, ids, weights_known=wk77, race_days=day77)
     except Exception as exc:
         logger.exception("特徴量の作成に失敗: %s", ids)
         for r in races:
@@ -407,7 +412,8 @@ def run_for_races(
 
 
 
-def _save_sec77_odds(ctx, card, F, storage, X6, ids) -> dict[str, str]:
+def _save_sec77_odds(ctx, card, F, storage, X6, ids, weights_known: dict[str, bool] | None = None,
+                     race_days: dict[str, str] | None = None) -> dict[str, str]:
     """§77 の想定単勝・想定複勝を計算して、最終オッズ予測のキャッシュに保存する（odds_source.predicted_single_odds を通る全表示が使う）。
     失敗しても予測の本体・他の経路には影響しない。ただし stg/prod の推奨馬券は sec77 が無いレースには出さない（target_bets.require_sec77）ので、
     作れなかった理由をレースごとに返し（イベントの sec77 欄）、モデルが無いときは ERROR で記録する。戻り値: race_id → ok / no_model / disabled / no_numbers / error。"""
@@ -433,7 +439,11 @@ def _save_sec77_odds(ctx, card, F, storage, X6, ids) -> dict[str, str]:
             hn = {h: int(n) for h, n in zip(c["horse_id"], c["horse_number"].fillna(0)) if n and int(n) > 0}
             name = str(c["race_name"].iloc[0]) if "race_name" in c.columns and len(c) else ""
             payload = os77.payload_for_race(g, hn, name, elapsed=sec)
-            if payload and os77.save_for_race(storage, payload):
+            try:
+                tn = os77.training_null_share(X, str(rid))      # 追い切りの列の空の割合（記録だけ）
+            except Exception:  # noqa: BLE001
+                tn = None
+            if payload and os77.save_for_race(storage, payload, weights_known=(weights_known or {}).get(str(rid)), extra={"training_null_share": tn, "race_day": (race_days or {}).get(str(rid))}):
                 out[str(rid)] = "ok"
             else:
                 out[str(rid)] = "no_numbers" if not payload else "error"

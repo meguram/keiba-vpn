@@ -173,3 +173,70 @@ class OddsT6SwitchTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+def test_append_log_counts_rewrites_and_keeps_q_hat(tmp_path):
+    """§77 を保存するたびに手元の記録へ 1 行。同じレースの 2 回目は write_n=2。q̂ は想定単勝オッズの逆数を合計 1 に直した値。"""
+    from src.pipeline.inference import odds_sec77 as os77
+
+    payload = {"race_id": "202611290101", "created_at": "2026-11-29T09:00:00+09:00", "model": {"sha16": "x"},
+               "entries": [{"horse_number": 1, "predicted_win_odds": 2.0}, {"horse_number": 2, "predicted_win_odds": 4.0}]}
+    f = os77.append_log(payload, True, log_dir=tmp_path)
+    os77.append_log({**payload, "created_at": "2026-11-29T09:05:00+09:00"}, False, log_dir=tmp_path)
+    rows = [__import__("json").loads(x) for x in f.read_text(encoding="utf-8").splitlines()]
+    assert f.name == "20261129.jsonl" and [r["write_n"] for r in rows] == [1, 2]
+    assert rows[0]["weights_known"] is True and rows[1]["weights_known"] is False and rows[0]["model"] == {"sha16": "x"}
+    assert abs(rows[0]["q_hat"]["1"] - 2 / 3) < 1e-6 and abs(sum(rows[0]["q_hat"].values()) - 1) < 1e-6
+
+
+def test_save_for_race_logs_only_when_asked(tmp_path, monkeypatch):
+    from src.pipeline.inference import final_odds_service as F
+    from src.pipeline.inference import odds_sec77 as os77
+
+    monkeypatch.setattr(F.FinalOddsCache, "save_cached", classmethod(lambda cls, storage, rid, payload, source=None: True))
+    monkeypatch.setattr(os77, "LOG_DIR", tmp_path)
+    monkeypatch.delenv("KEIBA_RUN_LOCATION", raising=False)
+    payload = {"race_id": "R", "created_at": "2026-12-05T09:00:00+09:00", "entries": [{"horse_number": 1, "predicted_win_odds": 2.0}]}
+    assert os77.save_for_race(object(), payload, log=False) and not list(tmp_path.glob("*.jsonl"))
+    assert os77.save_for_race(object(), payload, weights_known=True) and (tmp_path / "20261205.jsonl").exists()
+    monkeypatch.setenv("KEIBA_RUN_LOCATION", "gcp")                 # Cloud Run Jobs では書かない
+    assert os77.save_for_race(object(), {**payload, "created_at": "2026-12-06T09:00:00+09:00"}) and not (tmp_path / "20261206.jsonl").exists()
+    with mock_patch_model_dir(os77, tmp_path / "none"):
+        assert os77.model_info() == {}                                   # 模型が読めなくても例外にしない
+
+
+def test_append_log_uses_race_day_and_skips_bad_lines(tmp_path):
+    from src.pipeline.inference import odds_sec77 as os77
+
+    (tmp_path / "20261206.jsonl").write_text("1\nnot json\n", encoding="utf-8")
+    payload = {"race_id": "R", "created_at": "2026-12-05T23:59:00+09:00", "entries": [{"horse_number": 1, "predicted_win_odds": 2.0}]}
+    f = os77.append_log(payload, None, log_dir=tmp_path, extra={"race_day": "20261206"})
+    rows = f.read_text(encoding="utf-8").splitlines()
+    assert f.name == "20261206.jsonl" and __import__("json").loads(rows[-1])["write_n"] == 1
+
+
+class mock_patch_model_dir:
+    def __init__(self, mod, path):
+        self.mod, self.path = mod, path
+
+    def __enter__(self):
+        self.old = self.mod.MODEL_DIR
+        self.mod.MODEL_DIR = self.path
+        self.mod._MODEL_INFO.clear()
+
+    def __exit__(self, *a):
+        self.mod.MODEL_DIR = self.old
+        self.mod._MODEL_INFO.clear()
+
+
+
+def test_training_null_share_and_extra_in_log(tmp_path):
+    from src.pipeline.inference import odds_sec77 as os77
+
+    X = pd.DataFrame({"race_id": ["A", "A", "B"], "tl_f_t4": [1.0, None, None], "wc_x": [None, None, 2.0], "other": [None, None, None]})
+    assert os77.training_null_share(X, "A") == 0.75 and os77.training_null_share(X, "B") == 0.5
+    assert os77.training_null_share(X, "C") is None and os77.training_null_share(X[["race_id", "other"]], "A") is None
+    payload = {"race_id": "A", "created_at": "2026-12-05T09:00:00+09:00", "entries": [{"horse_number": 1, "predicted_win_odds": 2.0}]}
+    f = os77.append_log(payload, True, log_dir=tmp_path, extra={"training_null_share": 0.75})
+    assert __import__("json").loads(f.read_text(encoding="utf-8"))["training_null_share"] == 0.75

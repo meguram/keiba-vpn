@@ -110,7 +110,7 @@ def main() -> None:
                         errs["sec77"].append(np.log(e["predicted_win_odds"]) - np.log(act[n]))
                         if n in leg_map:
                             errs["legacy"].append(np.log(leg_map[n]) - np.log(act[n]))
-                if not a.dry_run and os77.save_for_race(storage, payload):
+                if not a.dry_run and os77.save_for_race(storage, payload, log=False):
                     saved += 1
             rep = {k: ({"n": len(v), "rmse": float(np.sqrt(np.mean(np.square(v)))), "bias": float(np.mean(v))} if v else None) for k, v in errs.items()}
             rep.update({"races": len(ok_ids), "saved": saved, "sec": round(time.time() - t0)})
