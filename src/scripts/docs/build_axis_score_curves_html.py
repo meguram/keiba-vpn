@@ -15,6 +15,8 @@ import sys
 from pathlib import Path
 from statistics import NormalDist
 
+import numpy as np
+
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
 
@@ -25,8 +27,8 @@ MIN_N = 30            # 実測で線を引く最低の走数（これ未満の�
 MIN_B = 20            # 2026 年の重ねで、これ未満の区間は薄い破線の枠（参考）にする（JS の MINB と同じ）
 MIN_SIDE = 100        # 高い側・低い側の走数がこれ未満なら差を出さない
 Z_MARK = 2.6          # 印を付ける z（軸 × 対象で数百の組を見るので 1.96 より厳しめ）
-MONO_Z = Z_MARK       # 単調と判定する傾きの z（点数の区間番号に対するロジスティック回帰。走数で重み。|z| がこれ以上なら近似線で描く）
-MONO_MIN_BINS = 3     # 単調の判定に要る、走数 1 以上の区間の数
+MONO_Z = Z_MARK       # 曲線の区分（右肩上がり・右肩下がり・山型・谷型と平らの境）に使う z（点数の区間番号に対するロジスティック回帰。走数で重み）
+MONO_MIN_BINS = 3     # 区分に要る、走数 1 以上の区間の数（山型・谷型では頂点の左右それぞれに要る数）
 SKEW_MARK = 1.0       # TS の歪みの絶対値がこれ以上のコースを強調する
 VENUE_ORDER = ["札幌", "函館", "福島", "新潟", "東京", "中山", "中京", "京都", "阪神", "小倉"]
 SURF_KEY = {"芝": "芝", "ダ": "ダ", "ダート": "ダ"}
@@ -179,37 +181,119 @@ def isotonic_fit(k: list, n: list, up: bool, min_block: int = MIN_N) -> list[flo
     return out
 
 
-def mono_fit(k: list, n: list, e: list | None = None) -> dict:
-    """1 本の曲線（10 区間の 当たり数 k・走数 n・人気から期待される当たり数の合計 e）の単調の判定と近似線。
-    z = 傾きの z、za = 人気補正後の傾きの z（e があるとき）、f = 近似線（単調と判定したときだけ。10 区間の率）。"""
+def quad_trend(k: list, n: list) -> dict | None:
+    """点数の区間番号に対する 2 次のロジスティック回帰（走数で重み）。c = 2 次の係数、zc = その z、v = 頂点の区間番号（0〜9 の尺度）。
+    判定できないとき（走数 1 以上の区間が 4 未満・全て外れか当たり・収束しない）は None。"""
+    ix = [i for i in range(len(n)) if n[i] > 0]
+    K, N = sum(k[i] for i in ix), sum(n[i] for i in ix)
+    if len(ix) < 4 or K <= 0 or K >= N:
+        return None
+    X = np.array([[1.0, i - 4.5, (i - 4.5) ** 2] for i in ix])
+    kk, nn = np.array([k[i] for i in ix], float), np.array([n[i] for i in ix], float)
+    p0 = K / N
+    beta = np.array([math.log(p0 / (1 - p0)), 0.0, 0.0])
+    for _ in range(80):
+        p = 1 / (1 + np.exp(-(X @ beta)))
+        H = X.T @ (X * (nn * p * (1 - p))[:, None])
+        try:
+            step = np.linalg.solve(H, X.T @ (kk - nn * p))
+        except np.linalg.LinAlgError:
+            return None
+        beta = beta + step
+        if not np.all(np.isfinite(beta)) or np.abs(beta).max() > 50:
+            return None
+        if np.abs(step).sum() < 1e-10:
+            cov = np.linalg.inv(H)
+            c, b = float(beta[2]), float(beta[1])
+            se = math.sqrt(cov[2, 2]) if cov[2, 2] > 0 else 0.0
+            return {"c": c, "zc": c / se if se > 0 else 0.0, "v": (-b / (2 * c) + 4.5) if c != 0 else None}
+    return None
+
+
+def unimodal_fit(k: list, n: list, peak: bool, min_block: int = MIN_N) -> list[float] | None:
+    """単峰の等調回帰（山型 = 頂点まで上がって下がる、谷型 = その逆）。頂点の位置は、走数で重みを付けた二乗誤差が最小になる所を全て試して選ぶ。
+    左右それぞれを isotonic_fit で当てはめる（左は 0〜m、右は m+1〜9。左が上がり右が下がりなら全体は山型のまま）。"""
+    ix = [i for i in range(len(n)) if n[i] > 0]
+    if len(ix) < 2:
+        return None
+    best, best_sse = None, math.inf
+    for m in ix[:-1]:
+        left = isotonic_fit(k[:m + 1], n[:m + 1], peak, min_block)
+        right = isotonic_fit(k[m + 1:], n[m + 1:], not peak, min_block)
+        if left is None or right is None:
+            continue
+        f = left + right
+        sse = sum(n[i] * (k[i] / n[i] - f[i]) ** 2 for i in ix)
+        if sse < best_sse - 1e-15:
+            best, best_sse = f, sse
+    return best
+
+
+def sub_trend(k: list, n: list, lo: int, hi: int) -> dict | None:
+    """区間 lo〜hi（両端を含む）だけでの 1 次の傾き（logit_trend）。"""
+    return logit_trend([k[i] if lo <= i <= hi else 0 for i in range(len(n))], [n[i] if lo <= i <= hi else 0 for i in range(len(n))])
+
+
+def classify_curve(k: list, n: list) -> tuple[str | None, dict | None, dict | None]:
+    """曲線の区分（事前に決めた基準。上から順に当てる）。返り値 = (区分, 1 次の当てはめ, 2 次の当てはめ)。
+    1. 山型・谷型: 2 次の係数の |z| ≥ MONO_Z、頂点が走数 1 以上の区間の内側、かつ頂点の左右（それぞれ走数 1 以上の区間が 3 以上。頂点が区間ちょうどなら
+       その区間は両側に入る）の 1 次の傾きがどちらも |z| ≥ MONO_Z で逆向き、その向きが 2 次の係数の符号と合う（山型 = 左が上がり・右が下がり・上に凸）。
+    2. 右肩上がり・右肩下がり: 1 次の傾きの |z| ≥ MONO_Z。
+    3. 平ら: 1 次の傾きの |z| < MONO_Z。
+    1 次の当てはめができない曲線は None（判定できない）。"""
     t = logit_trend(k, n)
+    if t is None:
+        return None, None, None
+    q = quad_trend(k, n)
+    ix = [i for i in range(len(n)) if n[i] > 0]
+    if q and abs(q["zc"]) >= MONO_Z and q["v"] is not None and ix[0] < q["v"] < ix[-1]:
+        v = q["v"]
+        lo_ix, hi_ix = [i for i in ix if i <= v], [i for i in ix if i >= v]
+        if len(lo_ix) >= MONO_MIN_BINS and len(hi_ix) >= MONO_MIN_BINS:
+            tl, th = sub_trend(k, n, 0, int(math.floor(v))), sub_trend(k, n, int(math.ceil(v)), len(n) - 1)
+            if tl and th and abs(tl["z"]) >= MONO_Z and abs(th["z"]) >= MONO_Z and tl["z"] * th["z"] < 0 and (tl["z"] > 0) == (q["c"] < 0):
+                return ("peak" if tl["z"] > 0 else "valley"), t, q
+    if abs(t["z"]) >= MONO_Z:
+        return ("up" if t["z"] > 0 else "down"), t, q
+    return "flat", t, q
+
+
+KINDS = ("up", "down", "flat", "peak", "valley")
+
+
+def mono_fit(k: list, n: list, e: list | None = None) -> dict:
+    """1 本の曲線（10 区間の 当たり数 k・走数 n・人気から期待される当たり数の合計 e）の区分と近似線。
+    k = 区分（up・down・flat・peak・valley、判定できなければ None）、z = 1 次の傾きの z、zq = 2 次の係数の z、za = 人気補正後の傾きの z（e があるとき）、
+    f = 近似線（10 区間の率。判定できないときは None）。上がり・下がりは等調回帰、平らは走数で重みを付けた平均の水平線、山型・谷型は単峰の等調回帰。"""
+    kind, t, q = classify_curve(k, n)
     ta = logit_trend(k, n, [e[i] / n[i] if n[i] > 0 else 0.5 for i in range(len(n))]) if e is not None else None
-    out: dict = {"z": round(t["z"], 2) if t else None, "za": round(ta["z"], 2) if ta else None}
-    if t and abs(t["z"]) >= MONO_Z:
-        f = isotonic_fit(k, n, t["z"] > 0)
-        out["f"] = [round(v, 5) for v in f] if f else None
-    else:
-        out["f"] = None
+    out: dict = {"k": kind, "z": round(t["z"], 2) if t else None, "zq": round(q["zc"], 2) if q else None, "za": round(ta["z"], 2) if ta else None}
+    f = None
+    if kind in ("up", "down"):
+        f = isotonic_fit(k, n, kind == "up")
+    elif kind in ("peak", "valley"):
+        f = unimodal_fit(k, n, kind == "peak")
+    elif kind == "flat":
+        f = [sum(k) / sum(n)] * len(n)
+    out["f"] = [round(v, 5) for v in f] if f else None
+    if out["f"] is None:
+        out["k"] = None
     return out
 
 
 def with_mono(d: dict) -> tuple[dict, dict]:
-    """全ての曲線（期間 A の勝率・複勝率）に mono_fit の結果 m = {w, p} を足した写しと、軸ごとの数 {軸: {w: [上がり, 下がり, 判定できた数], p: [...]}}。期間 B は当てはめない。"""
+    """全ての曲線（期間 A の勝率・複勝率）に mono_fit の結果 m = {w, p} を足した写しと、軸ごとの区分の数 {軸: {w: {区分: 数, "na": 判定できない数}, p: {...}}}。
+    期間 B は当てはめない。"""
     out = json.loads(json.dumps(d))
-    cnt: dict[str, dict[str, list[int]]] = {}
+    cnt: dict[str, dict[str, dict[str, int]]] = {}
     for dim in out["dims"].values():
         for g in dim["groups"]:
             for ax, c in g["data"].items():
                 A = c["A"]
                 c["m"] = {"w": mono_fit(A[1], A[0], A[3]), "p": mono_fit(A[2], A[0], A[4])}
-                cc = cnt.setdefault(ax, {"w": [0, 0, 0], "p": [0, 0, 0]})
+                cc = cnt.setdefault(ax, {r: {x: 0 for x in (*KINDS, "na")} for r in ("w", "p")})
                 for r in ("w", "p"):
-                    m = c["m"][r]
-                    if m["z"] is None:
-                        continue
-                    cc[r][2] += 1
-                    if m["f"]:
-                        cc[r][0 if m["z"] > 0 else 1] += 1
+                    cc[r][c["m"][r]["k"] or "na"] += 1
     return out, cnt
 
 
@@ -339,43 +423,52 @@ def ts_section(ts: dict, note: str = "") -> str:
 </details>"""
 
 
+KIND_LABEL = {"up": "右肩上がり ↗", "down": "右肩下がり ↘", "flat": "平ら →", "peak": "山型 ∧", "valley": "谷型 ∨", "na": "判定できない ？"}
+
+
 def mono_section(d: dict, cnt: dict) -> str:
-    """1 節の「近似線」の説明と、軸ごとの単調と判定した曲線の数の表。"""
-    n_curves = sum(v[r][2] for v in cnt.values() for r in ("w", "p"))
+    """1 節の「近似線」の説明と、軸ごとの区分の数の表。"""
+    n_curves = sum(sum(v[r][x] for x in KINDS) for v in cnt.values() for r in ("w", "p"))
     chance = n_curves * math.erfc(MONO_Z / math.sqrt(2))
-    rows = "".join(
-        f"<tr><td>{html.escape(a['label'])}</td><td class=\"num\">{cnt[a['key']]['w'][0]}</td><td class=\"num\">{cnt[a['key']]['w'][1]}</td>"
-        f"<td class=\"num\">{cnt[a['key']]['p'][0]}</td><td class=\"num\">{cnt[a['key']]['p'][1]}</td><td class=\"num\">{cnt[a['key']]['w'][2]}・{cnt[a['key']]['p'][2]}</td></tr>"
-        for a in d["axes"] if a["key"] in cnt)
+    tot = {x: sum(v[r][x] for v in cnt.values() for r in ("w", "p")) for x in (*KINDS, "na")}
+
+    def row(a: dict) -> str:
+        c = cnt[a["key"]]
+        return (f"<tr><td>{html.escape(a['label'])}</td>"
+                + "".join(f"<td class=\"num\">{c['w'][x]}・{c['p'][x]}</td>" for x in (*KINDS, "na")) + "</tr>")
+    rows = "".join(row(a) for a in d["axes"] if a["key"] in cnt)
     ex = why = ""
     g_all = (d["dims"].get("all", {}).get("groups") or [{"data": {}}])[0]["data"]
     ts = g_all.get("ts")
     if ts:
         A = ts["A"]
         m, t = mono_fit(A[1], A[0], A[3]), logit_trend(A[1], A[0])
-        if m["f"] and t and m["z"] > 0 and A[0][0] > 0 and A[0][8] > 0 and A[0][9] > 0 and A[1][9] / A[0][9] < A[1][8] / A[0][8]:
+        if m["k"] == "up" and t and A[0][0] > 0 and A[0][8] > 0 and A[0][9] > 0 and A[1][9] / A[0][9] < A[1][8] / A[0][8]:
             ex = (f"例: TS × 全体の勝率の実測は 9 点の区間 {A[1][8] / A[0][8] * 100:.1f}%（{A[0][8]:,} 走）・10 点の区間 {A[1][9] / A[0][9] * 100:.1f}%（{A[0][9]:,} 走）で、10 点が下がる。"
-                  f"傾きの z は {m['z']:+.1f} で右肩上がりと判定し、近似線は 9 点 {m['f'][8] * 100:.1f}%・10 点 {m['f'][9] * 100:.1f}% になる。")
+                  f"傾きの z は {m['z']:+.1f} で右肩上がりと判定し（2 次の z は {m['zq']:+.1f} だが、頂点より右の下がりが偶然の範囲なので山型にしない）、近似線は 9 点 {m['f'][8] * 100:.1f}%・10 点 {m['f'][9] * 100:.1f}% になる。")
 
             def lg(i: int) -> float:
                 return 100 / (1 + math.exp(-(t["a"] + t["b"] * (i - 4.5))))
             why = (f"<li>ロジスティック回帰の当てはめの線を使わない理由: 1 次の曲線は形が決まっている。TS × 全体の勝率では、1 点の区間（{A[0][0]:,} 走・実測 {A[1][0] / A[0][0] * 100:.1f}%）を {lg(0):.1f}% に、"
                    f"10 点の区間（{A[0][9]:,} 走・実測 {A[1][9] / A[0][9] * 100:.1f}%）を {lg(9):.1f}% に描いてしまう。等調回帰は走数の多い区間の実測をほぼそのまま通る。</li>")
-    fits = {a["key"]: [mono_fit(g_all[a["key"]]["A"][i], g_all[a["key"]]["A"][0]) for i in (1, 2)] for a in d["axes"] if a["key"] in g_all}
-    flat_axes = [a["label"] for a in d["axes"] if a["key"] in fits and all(m["z"] is not None and not m["f"] for m in fits[a["key"]])]
-    flat = f"全体の勝率・複勝率とも単調と言えない軸: {html.escape('・'.join(flat_axes))}。" if flat_axes else ""
-    return f"""<h3>近似線（単調と判定した曲線）</h3>
+    return f"""<h3>近似線（全ての曲線を区分して描く）</h3>
 <ul>
-<li><b>単調と判定した曲線は、主の線を近似線にする</b>。近似線 = 走数で重みを付けた等調回帰（点数の順に率が下がらない〔右肩下がりなら上がらない〕範囲で、実測に最も近い線）。{ex}</li>
-<li><b>判定の基準</b>: 区間の番号を点数とし、区間の走数で重みを付けたロジスティック回帰（1 次）の傾きの z が |z| ≥ {MONO_Z:g}（4 節の印と同じ厳しさ）。勝率と複勝率は別々に判定する。走数 1 以上の区間が {MONO_MIN_BINS} 未満の曲線は判定しない。</li>
-<li><b>実測との関係</b>: 実測は消さない。拡大図では区間ごとの実測を小さな点（大きさ = 走数）と Wilson 95% の細い縦線で重ね、点に乗せると実測の率・走数が出る。数表は実測・近似・期待と、実測/期待・近似/期待を並べる。</li>
+<li><b>全ての曲線（2024-25 年の勝率・複勝率）を区分し、主の線をその区分の近似線にする</b>。区分は図の左上と各マスの下に記号で出す（↗ 右肩上がり・↘ 右肩下がり・→ 平ら・∧ 山型・∨ 谷型・？ 判定できない）。</li>
+<li><b>近似線の作り方</b>: 右肩上がり・右肩下がり = 走数で重みを付けた等調回帰（点数の順に率が下がらない〔上がらない〕範囲で、実測に最も近い線）。平ら = 走数で重みを付けた平均の水平線。山型・谷型 = 単峰の等調回帰（頂点の位置は二乗誤差が最小になる所）。{ex}</li>
+<li><b>区分の基準</b>（区間の番号を点数とし、区間の走数で重みを付けたロジスティック回帰。上から順に当てる。|z| の線は 4 節の印と同じ {MONO_Z:g}）:
+<ol><li>山型・谷型: 2 次の係数の |z| ≥ {MONO_Z:g}、頂点が走数のある区間の内側、かつ頂点の左右（それぞれ走数のある区間が {MONO_MIN_BINS} 以上。頂点が区間ちょうどなら、その区間は両側に入る）の 1 次の傾きがどちらも |z| ≥ {MONO_Z:g} で逆向き、その向きが 2 次の係数の符号と合う。</li>
+<li>右肩上がり・右肩下がり: 1 次の傾きの |z| ≥ {MONO_Z:g}。</li>
+<li>平ら: それ以外（1 次の傾きの |z| &lt; {MONO_Z:g}）。「差が無い」ではなく「傾きが偶然の範囲」。</li></ol>
+走数 1 以上の区間が {MONO_MIN_BINS} 未満・全て外れか全て当たり・1 次の当てはめが収束しない曲線は「判定できない」とし、実測の線のまま（走数 {MIN_N} 未満の区間は推定・薄い印）。勝率と複勝率は別々に区分する。</li>
+<li><b>実測との関係</b>: 実測は消さない。区間ごとの実測を小さな点（大きさ = 走数）で重ね、拡大図では Wilson 95% の細い縦線も添える。点に乗せると実測の率・走数・近似の値が出る。数表は実測・近似・期待と、実測/期待・近似/期待を並べる。</li>
 <li><b>端の扱い</b>: 走数の合計が {MIN_N} 未満の塊は、隣の塊（端なら内側、間なら値の近い側）とまとめた平均にする（走数の少ない端で暴れない）。走数 0 の区間は隣の値で埋めて点線で描く（端は平らに延ばし、傾きでは延ばさない）。</li>
-<li><b>単調と言えない曲線は今のまま</b>（実測の線。走数 {MIN_N} 未満の区間は推定・薄い印）。</li>
-<li><b>2026 年の重ねは当てはめない</b>（実測の白抜きの点のまま）。判定と近似線は 2024-25 年だけで作る。2026 年は確認だけで、選択には使わない。</li>
+<li><b>2026 年の重ねは当てはめない</b>（実測の白抜きの点のまま）。区分と近似線は 2024-25 年だけで作る。2026 年は確認だけで、選択には使わない。</li>
+<li>6 節の「TS の分布」は率の曲線でなく走数のヒストグラムなので、近似線の対象外。</li>
 {why}
 </ul>
-<div class="scroll"><table><thead><tr><th>走法軸</th><th>勝率 右肩上がり</th><th>勝率 右肩下がり</th><th>複勝率 右肩上がり</th><th>複勝率 右肩下がり</th><th>判定した対象の数（勝率・複勝率）</th></tr></thead><tbody>{rows}</tbody></table></div>
-<p class="sub">対象 = 全体・クラス・馬場・距離・コースの全て（2024-25 年）。判定した曲線は勝率・複勝率あわせて {n_curves:,} 本で、偶然だけでも約 {chance:.0f} 本は |z| ≥ {MONO_Z:g} になる。{flat}</p>"""
+<div class="scroll"><table><thead><tr><th>走法軸（勝率・複勝率の数）</th>{"".join(f"<th>{KIND_LABEL[x]}</th>" for x in (*KINDS, "na"))}</tr></thead><tbody>{rows}</tbody></table></div>
+<p class="sub">対象 = 全体・クラス・馬場・距離・コースの全て（2024-25 年）。各欄は「勝率の数・複勝率の数」。区分した曲線は {n_curves:,} 本（右肩上がり {tot['up']:,}・右肩下がり {tot['down']:,}・平ら {tot['flat']:,}・山型 {tot['peak']:,}・谷型 {tot['valley']:,}。判定できない {tot['na']:,}）。
+傾きが無くても、偶然だけで約 {chance:.0f} 本は 1 次の |z| ≥ {MONO_Z:g}（右肩上がり・右肩下がり）になる（山型・谷型は頂点をデータから選ぶので、この数に含めていない）。z は同じレースの馬どうしの相関を無視しているので大きめに出る。</p>"""
 
 
 def fmt_pt(x: float | None) -> str:
@@ -543,10 +636,13 @@ function est(k,n,exact){ // exact = 人気から期待される率（平均な�
   return out;
 }
 function sum(a,i,j){var s=0;for(var k=i;k<j;k++)s+=a[k];return s;}
-function fitOf(c,r){return c.m&&c.m[r]&&c.m[r].f?c.m[r].f:null;} // 単調と判定した曲線の近似線（Python の mono_fit が作る。判定しない曲線は null）
+function fitOf(c,r){return c.m&&c.m[r]&&c.m[r].k&&c.m[r].f?c.m[r].f:null;} // 区分した曲線の近似線（Python の mono_fit が作る。判定できない曲線は null）
 function zt(x){return x===null||x===undefined?'—':(x>=0?'+':'')+x.toFixed(1);}
-function monoTxt(c,r){var m=c.m&&c.m[r];if(!m||m.z===null)return '判定できない（実測の線）';
-  return (m.f?'近似線（'+(m.z>0?'右肩上がり':'右肩下がり')+'）':'単調と言えない（実測の線）')+'。傾きの z '+zt(m.z)+'・人気補正後の傾きの z '+zt(m.za);}
+var KL={up:"右肩上がり",down:"右肩下がり",flat:"平ら",peak:"山型",valley:"谷型"},KG={up:"↗",down:"↘",flat:"→",peak:"∧",valley:"∨"};
+function kindOf(c,r){var m=c.m&&c.m[r];return m&&m.k&&m.f?m.k:null;}
+function glyph(c,r){var k=kindOf(c,r);return k?KG[k]:"？";}
+function monoTxt(c,r){var m=c.m&&c.m[r],k=kindOf(c,r);if(!k)return '判定できない（実測の線）';
+  return KL[k]+' '+KG[k]+'（近似線）。1 次の傾きの z '+zt(m.z)+'・2 次の z '+zt(m.zq)+'・人気補正後の傾きの z '+zt(m.za);}
 function side(c){ // c = [n,w,p,ew,ep]
   var nl=sum(c[0],0,4),pl=sum(c[2],0,4),el=sum(c[4],0,4),nh=sum(c[0],5,10),ph=sum(c[2],5,10),eh=sum(c[4],5,10);
   if(nl<SIDE||nh<SIDE)return null;
@@ -600,7 +696,7 @@ function chart(c,W,H,wmax,big){
     var i,seg=[];
     if(big){for(i=0;i<10;i++){if(A[0][i]>0){var wi=wilson(A[idx][i],A[0][i]);s.push('<line x1="'+X(i)+'" x2="'+X(i)+'" y1="'+Y(wi[0])+'" y2="'+Y(wi[1])+'" stroke="'+col+'" stroke-width="1" opacity="0.55"/>');}}}
     for(i=0;i<9;i++){if(A[0][i]===0||A[0][i+1]===0)s.push('<line x1="'+X(i)+'" y1="'+Y(F[i])+'" x2="'+X(i+1)+'" y2="'+Y(F[i+1])+'" stroke="'+col+'" stroke-width="'+(w*0.8)+'" stroke-dasharray="1.5 3"/>');}
-    function flush(){if(seg.length>1)s.push('<polyline points="'+seg.map(function(p){return p[0]+","+p[1];}).join(" ")+'" fill="none" stroke="'+col+'" stroke-width="'+w+'"/>');seg=[];}
+    function flush(){if(seg.length>1)s.push('<polyline points="'+seg.map(function(p){return p[0]+","+p[1];}).join(" ")+'" fill="none" stroke="'+col+'" stroke-width="'+w+'" class="fit"/>');seg=[];}
     for(i=0;i<10;i++){if(A[0][i]>0)seg.push([X(i),Y(F[i])]);else flush();}flush();
     var nmx=Math.max.apply(null,A[0].concat([1]));
     for(i=0;i<10;i++){if(A[0][i]<=0)continue;var v=A[idx][i]/A[0][i],x=X(i),y=Y(v),r=(big?1.6:0.9)+(big?4:2)*Math.sqrt(A[0][i]/nmx);
@@ -613,6 +709,8 @@ function chart(c,W,H,wmax,big){
   if(st.ov){for(var i=0;i<10;i++){if(B[0][i]>0){var r=big?4.5:2.8,ld=B[0][i]>=MINB?'':' stroke-dasharray="2 2" opacity="0.45"'; // 走数 MINB 未満は薄い破線の枠（参考）
     s.push('<circle cx="'+X(i)+'" cy="'+YW(B[1][i]/B[0][i])+'" r="'+r+'" fill="none" stroke="#e6ecff" stroke-width="1.3"'+ld+'/>');
     s.push('<rect x="'+(X(i)-r)+'" y="'+(YP(B[2][i]/B[0][i])-r)+'" width="'+2*r+'" height="'+2*r+'" fill="none" stroke="#e6ecff" stroke-width="1.3"'+ld+'/>');}}}
+  // 区分の記号（左上。勝 = 勝率、複 = 複勝率）
+  var gf=big?12:8;s.push('<text class="kind" x="'+(pl+3)+'" y="'+(pt+gf)+'" font-size="'+gf+'"><tspan fill="#7aa9ff">勝'+glyph(c,"w")+'</tspan> <tspan fill="#fbbf24">複'+glyph(c,"p")+'</tspan></text>');
   // 軸の目盛
   var tf=big?11:8.5;
   s.push('<text x="'+(pl-4)+'" y="'+(pt+4)+'" fill="#7aa9ff" font-size="'+tf+'" text-anchor="end">'+(wmax*100).toFixed(0)+'%</text><text x="'+(pl-4)+'" y="'+(pt+ih)+'" fill="#7aa9ff" font-size="'+tf+'" text-anchor="end">0</text>');
@@ -643,7 +741,7 @@ function render(){
       if(!nt){h.push('<td><div class="cap">—</div></td>');return;}
       var s=side(c.A),cap=s?'高−低 <b>'+f1(s.raw)+'</b><br>補正後 <b'+(Math.abs(s.z)>=ZM?' style="color:var(--warn)"':'')+'>'+f1(s.adj)+'</b>':'高−低は走数不足（n='+nt.toLocaleString()+'）';
       var fw=fitOf(c,"w"),fp=fitOf(c,"p");
-      if(fw||fp)cap+='<br><small class="muted">近似線: '+(fw?'勝率'+(c.m.w.z>0?'↑':'↓'):'')+(fw&&fp?'・':'')+(fp?'複勝率'+(c.m.p.z>0?'↑':'↓'):'')+'</small>';
+      cap+='<br><small class="muted">区分: 勝率 '+(kindOf(c,"w")?KL[kindOf(c,"w")]:'判定できない')+' '+glyph(c,"w")+'・複勝率 '+(kindOf(c,"p")?KL[kindOf(c,"p")]:'判定できない')+' '+glyph(c,"p")+'</small>';
       if((!fw&&est(c.A[1],c.A[0]).some(function(o){return o&&o.r;}))||(!fp&&est(c.A[2],c.A[0]).some(function(o){return o&&o.r;})))cap+='<br><small class="muted">薄い印 = 走数 '+MINN+' 未満（参考）</small>';
       h.push('<td data-a="'+a.key+'" data-g="'+gi+'" class="'+(st.sel&&st.sel[0]===a.key&&st.sel[1]===gi?'sel':'')+'">'+chart(c,178,104,wmax,false)+'<div class="cap">'+cap+'</div></td>');
     });
@@ -664,9 +762,9 @@ function bigInto(el,a,g){
   var wmax=wmaxOf([g]),h=[];
   var s=side(c.A),sb=side(c.B);
   h.push('<b>'+a.label+' × '+g.label+'</b> <span class="muted">（高: '+a.high+' ／ 低: '+a.low+'）</span>');
-  h.push('<div class="lg"><span><i style="border-color:#7aa9ff"></i>勝率（左軸）</span><span><i style="border-color:#fbbf24"></i>複勝率（右軸 = 左の 3 倍）</span><span><i class="d" style="border-color:#7aa9ff"></i><i class="d" style="border-color:#fbbf24"></i>人気から期待される率（同じ色の破線）</span>'+(!fitOf(c,"w")||!fitOf(c,"p")?'<span>帯 = Wilson 95%（走数 '+MINN+' 以上の実測の区間。近似線でない曲線）</span>':'')+'<span>白抜き（白枠）= 2026 年（実測のまま）</span>'+(fitOf(c,"w")||fitOf(c,"p")?'<span>近似線（単調と判定した曲線）= 太い実線。小さな点 = 区間の実測（大きさ = 走数、細い縦線 = Wilson 95%、点に乗せると率・走数）。点線 = 走数 0 の区間への延長</span>':'')+(!fitOf(c,"w")||!fitOf(c,"p")?'<span>色枠で中が暗い印 + 点線 = 推定（走数 '+MINN+' 未満）</span>':'')+((!fitOf(c,"w")&&est(c.A[1],c.A[0]).some(function(o){return o&&o.r;}))||(!fitOf(c,"p")&&est(c.A[2],c.A[0]).some(function(o){return o&&o.r;}))?'<span>薄い印 + 薄い破線 + 縦の帯 = 走数 '+MINN+' 未満の実測（推定できない対象・参考。帯 = Wilson 95%）</span>':'')+(st.ov?'<span>薄い破線の白枠 = 2026 年で走数 '+MINB+' 未満（参考）</span>':'')+'<span>走数 0 の区間は点なし。↑ = 軸の上端を超えた値</span></div>');
+  h.push('<div class="lg"><span><i style="border-color:#7aa9ff"></i>勝率（左軸）</span><span><i style="border-color:#fbbf24"></i>複勝率（右軸 = 左の 3 倍）</span><span><i class="d" style="border-color:#7aa9ff"></i><i class="d" style="border-color:#fbbf24"></i>人気から期待される率（同じ色の破線）</span>'+(!fitOf(c,"w")||!fitOf(c,"p")?'<span>帯 = Wilson 95%（走数 '+MINN+' 以上の実測の区間。近似線でない曲線）</span>':'')+'<span>白抜き（白枠）= 2026 年（実測のまま）</span>'+(fitOf(c,"w")||fitOf(c,"p")?'<span>近似線（区分ごと。↗↘ = 等調回帰、→ = 平均の水平線、∧∨ = 単峰の等調回帰）= 太い実線。小さな点 = 区間の実測（大きさ = 走数、細い縦線 = Wilson 95%、点に乗せると率・走数）。点線 = 走数 0 の区間への延長</span>':'')+(!fitOf(c,"w")||!fitOf(c,"p")?'<span>色枠で中が暗い印 + 点線 = 推定（走数 '+MINN+' 未満）</span>':'')+((!fitOf(c,"w")&&est(c.A[1],c.A[0]).some(function(o){return o&&o.r;}))||(!fitOf(c,"p")&&est(c.A[2],c.A[0]).some(function(o){return o&&o.r;}))?'<span>薄い印 + 薄い破線 + 縦の帯 = 走数 '+MINN+' 未満の実測（推定できない対象・参考。帯 = Wilson 95%）</span>':'')+(st.ov?'<span>薄い破線の白枠 = 2026 年で走数 '+MINB+' 未満（参考）</span>':'')+'<span>走数 0 の区間は点なし。↑ = 軸の上端を超えた値</span></div>');
   h.push(chart(c,880,380,wmax,true));
-  h.push('<p class="sub">勝率: '+monoTxt(c,"w")+' ／ 複勝率: '+monoTxt(c,"p")+'（|z| ≥ '+MZ+' で単調と判定。2024-25 年だけで判定し、2026 年は当てはめない）</p>');
+  h.push('<p class="sub">勝率: '+monoTxt(c,"w")+' ／ 複勝率: '+monoTxt(c,"p")+'（区分の線は |z| ≥ '+MZ+'。2024-25 年だけで区分し、2026 年は当てはめない）</p>');
   h.push('<p class="sub">高−低（6.0 点以上 − 4.5 点以下の複勝率）: 2024-25 '+(s?f1(s.raw)+' pt（補正後 '+f1(s.adj)+'、z '+s.z.toFixed(1)+'）':'走数不足')+' ／ 2026 '+(sb?f1(sb.raw)+' pt（補正後 '+f1(sb.adj)+'、z '+sb.z.toFixed(1)+'）':'走数不足')+'</p>');
   h.push('<div class="scroll"><table><thead><tr><th>点</th><th>走数</th><th>勝率 実測</th><th>勝率 近似</th><th>勝率の期待</th><th>実測/期待</th><th>近似/期待</th><th>複勝率 実測</th><th>複勝率 近似</th><th>複勝率の期待</th><th>実測/期待</th><th>近似/期待</th><th>2026 走数</th><th>2026 勝率</th><th>2026 複勝率</th></tr></thead><tbody>');
   function r(x,n){return n>0?(x/n*100).toFixed(1)+"%":"—";}
