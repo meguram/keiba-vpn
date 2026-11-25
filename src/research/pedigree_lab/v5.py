@@ -208,6 +208,8 @@ def main() -> None:
     ap.add_argument("--no-n", action="store_true", help="件数の列（*_n・*_nrun・res_n）を外す（帰無の世代・時代の説明の確かめ）")
     ap.add_argument("--keep-own", action="store_true", help="帰無の確かめ 3: as-of の集計で自分の過去走を引かない")
     a = ap.parse_args()
+    if a.keep_own and a.case != "null":
+        raise SystemExit("--keep-own は null のときだけ使う（critic 4 回目の 12）")
     t0 = time.time()
     data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"v5_{a.case}_{a.seed}",
                                    f"段 2 の第 5 版の案 {a.case}（対数損失・α。回収率は見ない）"))

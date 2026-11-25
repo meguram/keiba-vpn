@@ -58,7 +58,8 @@ def diff_col(F: pd.DataFrame, A: np.ndarray, B: np.ndarray, keys=("sire", "surf"
     g = -F["fpct"].to_numpy()
     D = F.assign(_a=g * A, _na=A.astype(float), _b=g * B, _nb=B.astype(float))
     s, _ = asof(D, list(keys), ["_a", "_na", "_b", "_nb"])
-    base, _ = asof(D.assign(_k="1"), ["_k", "surf"], ["_a", "_na", "_b", "_nb"])
+    # 基準の群の平均は、鍵に芝ダがあるときだけ芝ダで分ける（H20 は芝 − ダートの差なので芝ダで分けない。critic 4 回目の 1）
+    base, _ = asof(D.assign(_k="1"), ["_k", "surf"] if "surf" in keys else ["_k"], ["_a", "_na", "_b", "_nb"])
     mA0 = base[:, 0] / np.maximum(base[:, 1], 1)
     mB0 = base[:, 2] / np.maximum(base[:, 3], 1)
     mA = (s[:, 0] + K * mA0) / (s[:, 1] + K)

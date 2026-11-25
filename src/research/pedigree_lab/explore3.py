@@ -37,7 +37,7 @@ def softmax(eta, rid):
 
 
 def run_recal(X: pd.DataFrame) -> dict:
-    sn = np.expm1(X["sire_all_n"].to_numpy())
+    sn = np.nan_to_num(np.expm1(X["sire_all_n"].to_numpy()), nan=0.0)      # 欠けは「〜300」の帯（critic 4 回目の 10）
     sb = np.digitize(sn, [300, 1000, 3000])
     first = (np.expm1(X["dam_v_nrun"].to_numpy()) < 0.5).astype(int)
     band = sb * 2 + first
@@ -104,11 +104,18 @@ def run_seedfloor() -> dict:
 
 def run_harville(X: pd.DataFrame) -> dict:
     """凍結の勝ちの確率から着順を 1 回模擬し（Gumbel の技法・Plackett-Luce）、模擬の勝ち・3 着内で傾きの比を出す。"""
-    rng = np.random.default_rng(17)
-    g = np.log(np.clip(X["p_win"].to_numpy(), 1e-9, 1)) + rng.gumbel(size=len(X))
-    rk = pd.Series(g).groupby(X["race_id"].to_numpy()).rank(ascending=False, method="first").to_numpy()
-    Y = X.assign(win=(rk == 1).astype(int), top3=(rk <= 3).astype(int))
-    return run_wintop3(Y)
+    # 模擬を 10 回（critic 4 回目の 9: 1 回では模擬の散らばりが分からない）
+    runs = []
+    for k in range(10):
+        rng = np.random.default_rng(17 + k)
+        g = np.log(np.clip(X["p_win"].to_numpy(), 1e-9, 1)) + rng.gumbel(size=len(X))
+        rk = pd.Series(g).groupby(X["race_id"].to_numpy()).rank(ascending=False, method="first").to_numpy()
+        runs.append(run_wintop3(X.assign(win=(rk == 1).astype(int), top3=(rk <= 3).astype(int))))
+    out = {}
+    for nm in runs[0]:
+        r = [x[nm]["top3_over_win"] for x in runs]
+        out[nm] = {"mean": round(float(np.mean(r)), 3), "min": round(float(np.min(r)), 3), "max": round(float(np.max(r)), 3)}
+    return out
 
 
 def main() -> None:

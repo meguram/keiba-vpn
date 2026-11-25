@@ -17,6 +17,7 @@ from src.research.pedigree_lab import data
 from src.research.pedigree_lab.data import asof
 from src.research.pedigree_lab.explore2 import fit_boot
 from src.research.pedigree_lab.explore5 import attach, diff_col, frame, groups, sim_ci, zcol
+from src.research.pedigree_lab.hyp_tests import clogit
 
 
 def ci(b, bs, j):
@@ -34,8 +35,13 @@ def run_pop(n_boot: int) -> dict:
     yr["cs"] = yr.groupby("sire")["sum"].cumsum() - yr["sum"]
     yr["cn"] = yr.groupby("sire")["size"].cumsum() - yr["size"]
     X = X.merge(yr[["sire", "year", "cs", "cn"]], on=["sire", "year"], how="left")
+    # 自分の前年までの走りを引く（critic 4 回目の 3）
+    hy = X.groupby(["horse_id", "year"])["gap"].agg(["sum", "size"]).reset_index().sort_values(["horse_id", "year"])
+    hy["hs"] = hy.groupby("horse_id")["sum"].cumsum() - hy["sum"]
+    hy["hn"] = hy.groupby("horse_id")["size"].cumsum() - hy["size"]
+    X = X.merge(hy[["horse_id", "year", "hs", "hn"]], on=["horse_id", "year"], how="left")
     X = X.sort_values(["race_id", "horse_number"]).reset_index(drop=True)
-    X["pop_prev"] = X["cs"] / (X["cn"] + 30)
+    X["pop_prev"] = ((X["cs"] - X["hs"]) / (X["cn"] - X["hn"] + 30)).fillna(0.0)
     z = zcol(X, X["pop"].to_numpy())
     res = {}
     # B: 曲がりを足す
@@ -105,27 +111,46 @@ def run_popq(n_boot: int) -> dict:
     b, bs = fit_boot(X, np.c_[X["lp"], X["lq"], z, q1, q2], n_boot)
     res["with_quality"] = {"pop": ci(b, bs, 2), "sire_all_fpct": ci(b, bs, 3), "sire_v_win": ci(b, bs, 4)}
     # 帰無: 父の札を、生年 × 性の中で馬の単位に入れ替えて人気度を作る
+    # 帰無（父の札を生年 × 性の中で馬の単位に入れ替えて人気度を作る）を 5 回（critic 4 回目の 4: 1 回では入れ替えの散らばりが入らない）
     H = X.drop_duplicates("horse_id")[["horse_id", "sire", "by", "sexb"]].reset_index(drop=True)
-    rng = np.random.default_rng(99)
-    perm = np.arange(len(H))
-    for ii in pd.Series(np.arange(len(H))).groupby(H["by"].astype(str) + "_" + H["sexb"].astype(str)).indices.values():
-        perm[ii] = rng.permutation(ii)
-    fake = dict(zip(H["horse_id"], H["sire"].to_numpy()[perm]))
-    Xn = X.assign(sire=X["horse_id"].map(fake))
-    s, c = asof(Xn, ["sire"], ["gap"])
-    zn = zcol(X, s[:, 0] / (c + 30))
-    b, bs = fit_boot(X, np.c_[X["lp"], X["lq"], zn], n_boot)
-    res["null_pop"] = ci(b, bs, 2)
+    grp = pd.Series(np.arange(len(H))).groupby(H["by"].astype(str) + "_" + H["sexb"].astype(str)).indices
+    y = X["win"].to_numpy(float)
+    rc = pd.factorize(X["race_id"])[0]
+    nulls = []
+    for k in range(5):
+        rng = np.random.default_rng(99 + k)
+        perm = np.arange(len(H))
+        for ii in grp.values():
+            perm[ii] = rng.permutation(ii)
+        fake = dict(zip(H["horse_id"], H["sire"].to_numpy()[perm]))
+        s, c = asof(X.assign(sire=X["horse_id"].map(fake)), ["sire"], ["gap"])
+        zn = zcol(X, s[:, 0] / (c + 30))
+        nulls.append(round(float(clogit(np.c_[X["lp"], X["lq"], zn], y, rc)[2]), 4))
+    res["null_pop_5"] = {"coefs": nulls, "mean": round(float(np.mean(nulls)), 4), "sd": round(float(np.std(nulls, ddof=1)), 4)}
     return res
+
+
+def run_popfwd(n_boot: int) -> dict:
+    """critic 4 回目の 2: 人気度の元の lp を、時間の順の walk-forward の予測（年 t を t より前の年で学んだ模型。2019〜24）に替える。"""
+    W = pd.read_parquet(data.OUT / "oof_v4_pure.parquet")[["race_id", "horse_id", "p_win"]].rename(columns={"p_win": "p_wf"})
+    X = attach(frame()).merge(W, on=["race_id", "horse_id"], how="inner").sort_values(["race_id", "horse_number"]).reset_index(drop=True)
+    rid = X["race_id"].to_numpy()
+    v = X["p_wf"].clip(1e-5, 1).to_numpy()
+    X["lpw"] = np.log(v / pd.Series(v).groupby(rid).transform("sum").to_numpy())
+    X["gap"] = X["lq"] - X["lpw"]
+    s, c = asof(X, ["sire"], ["gap"])
+    z = zcol(X, s[:, 0] / (c + 30))
+    b, bs = fit_boot(X, np.c_[X["lpw"], X["lq"], z], n_boot)
+    return {"rows": len(X), "pop_wf": ci(b, bs, 2), "lp_wf": ci(b, bs, 0)}
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("what", choices=["pop", "yoshiba", "yoshiba2", "popq"])
+    ap.add_argument("what", choices=["pop", "yoshiba", "yoshiba2", "popq", "popfwd"])
     ap.add_argument("--boot", type=int, default=300)
     a = ap.parse_args()
     data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"explore6_{a.what}", f"1 号の R2 の確かめ: {a.what}（尤度だけ）"))
-    res = {"pop": run_pop, "yoshiba": run_yoshiba, "yoshiba2": run_yoshiba2, "popq": run_popq}[a.what](a.boot)
+    res = {"pop": run_pop, "yoshiba": run_yoshiba, "yoshiba2": run_yoshiba2, "popq": run_popq, "popfwd": run_popfwd}[a.what](a.boot)
     path = data.OUT / f"explore6_{a.what}.json"
     path.write_text(json.dumps(res, ensure_ascii=False, indent=1))
     print(json.dumps(res, ensure_ascii=False))
