@@ -103,7 +103,7 @@ def run_joint(X, n_boot):
 
 
 def band(v, edges, labels):
-    return pd.cut(v, edges, labels=labels).astype(str).to_numpy()
+    return np.asarray(pd.Series(pd.cut(v, edges, labels=labels)).astype(str))
 
 
 def run_bands(X, n_boot):
