@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from src.scripts.data import axis_score_curves as asc
 from src.scripts.docs import build_axis_score_curves_html as page
@@ -58,7 +59,8 @@ def test_build_embeds_constants_and_escapes_script_end():
          "axes": [{"key": "ts", "label": "</script>TS", "high": "高", "low": "低"}],
          "dims": {"all": {"label": "全体", "groups": [{"key": "全体", "label": "全体", "data": {"ts": c}}]}}}
     h = page.build(d)
-    assert "__MINN__" not in h and f"SIDE={page.MIN_SIDE}" in h and f"MINN={page.MIN_N}" in h
+    assert "__MINN__" not in h and "__MZ__" not in h and f"SIDE={page.MIN_SIDE}" in h and f"MINN={page.MIN_N}" in h and f"MZ={page.MONO_Z}" in h
+    assert "近似線（単調と判定した曲線）" in h and '"m":{"w":' in h
     assert h.count("</script>") == 1
 
 
@@ -212,3 +214,65 @@ def test_estimate_fills_sparse_bins_within_observed_range():
     assert few[2] == {"v": pytest.approx(3 / 20), "e": False, "r": True, "n": 20}       # 推定できないときも、走数不足の区間は実測を参考として出す（省かない）
     assert not few[0].get("r") and few[3] is None                                       # 走数 MINN 以上は通常の実測、走数 0 は描けない
     assert exp[1] == {"v": 0.1, "e": False} and exp[0]["e"] and exp[8]["e"]              # 期待率: 走数が少なくても実測、走数 0 だけ曲線
+
+
+def _nondecreasing(v):
+    return all(b >= a - 1e-12 for a, b in zip(v, v[1:]))
+
+
+def test_mono_fit_clean_increasing_input_uses_isotonic_line():
+    n = [500] * 10
+    k = [20, 25, 32, 38, 45, 50, 58, 64, 70, 78]
+    m = page.mono_fit(k, n, [40.0] * 10)
+    assert m["z"] > page.MONO_Z and m["za"] > page.MONO_Z
+    assert m["f"] == pytest.approx([x / 500 for x in k], abs=1e-5)       # すでに単調なら実測をそのまま通る
+    assert _nondecreasing(m["f"])
+
+
+def test_mono_fit_flat_noisy_input_is_not_judged_monotone():
+    n = [400] * 10
+    k = [40, 44, 37, 42, 39, 43, 38, 41, 44, 39]
+    m = page.mono_fit(k, n)
+    assert abs(m["z"]) < page.MONO_Z and m["f"] is None and m["za"] is None
+
+
+def test_mono_fit_pools_high_end_drop_like_ts_9_and_10():
+    n = [7857, 18038, 22508, 11965, 8281, 2413, 1875, 1224, 755, 481]
+    rate = [0.027, 0.06, 0.086, 0.088, 0.088, 0.089, 0.087, 0.097, 0.106, 0.069]
+    k = [round(a * b) for a, b in zip(n, rate)]
+    m = page.mono_fit(k, n)
+    assert m["z"] > page.MONO_Z and _nondecreasing(m["f"])
+    assert m["f"][8] == pytest.approx(m["f"][9]) and m["f"][9] > k[9] / n[9]   # 9 > 10 の逆転は、まとめた平均になる
+    assert m["f"][0] == pytest.approx(k[0] / n[0], abs=1e-5)                   # 走数の多い区間は実測のまま
+
+
+def test_isotonic_fit_decreasing_and_zero_bins_and_small_end_block():
+    n = [0, 300, 300, 0, 300, 300, 300, 300, 10, 0]
+    k = [0, 90, 80, 0, 60, 50, 40, 30, 0, 0]                 # 右肩下がり。9 点の区間は走数 10 で率 0%（向きには合うが、端で暴れる値）
+    m = page.mono_fit(k, n)
+    f = m["f"]
+    assert m["z"] < -page.MONO_Z and len(f) == 10
+    assert all(b <= a + 1e-12 for a, b in zip(f, f[1:]))     # 単調に下がる
+    assert f[0] == pytest.approx(f[1]) and f[9] == pytest.approx(f[8])        # 走数 0 の端は平らに延ばす
+    assert f[2] >= f[3] >= f[4] and f[3] == pytest.approx((f[2] + f[4]) / 2, abs=1e-5)   # 走数 0 の間は直線でつなぐ
+    assert f[8] == pytest.approx(30 / 310, abs=1e-5) and f[7] == pytest.approx(f[8])   # 走数 30 未満の端の塊は内側とまとめる（0% のまま描かない）
+    assert page.isotonic_fit([0] * 10, [0] * 10, True) is None
+
+
+def test_mono_fit_all_zero_hits_or_too_few_bins_is_not_judged():
+    assert page.mono_fit([0] * 10, [100] * 10) == {"z": None, "za": None, "f": None}
+    assert page.mono_fit([0, 5, 9] + [0] * 7, [10, 10, 10] + [0] * 7)["z"] is not None
+    assert page.mono_fit([5, 9] + [0] * 8, [10, 10] + [0] * 8)["z"] is None     # 走数 1 以上の区間が 2 つだけ
+
+
+def test_with_mono_counts_and_embeds_fit_only_for_period_a():
+    up = {"A": [[500] * 10, [20, 25, 32, 38, 45, 50, 58, 64, 70, 78], [60 + 10 * i for i in range(10)], [40.0] * 10, [100.0] * 10],
+          "B": [[50] * 10, [5] * 10, [15] * 10, [5.0] * 10, [15.0] * 10]}
+    flat = {"A": [[400] * 10, [40, 44, 37, 42, 39, 43, 38, 41, 44, 39], [400] * 10, [40.0] * 10, [400.0] * 10], "B": up["B"]}
+    d = {"axes": [{"key": "ts"}, {"key": "gear"}], "dims": {"all": {"groups": [{"data": {"ts": up, "gear": flat}}]}}}
+    out, cnt = page.with_mono(d)
+    assert "m" not in d["dims"]["all"]["groups"][0]["data"]["ts"]                # 元の dict は変えない
+    c = out["dims"]["all"]["groups"][0]["data"]
+    assert c["ts"]["m"]["w"]["f"] and c["ts"]["m"]["p"]["f"] and c["gear"]["m"]["w"]["f"] is None
+    assert "m" not in c["ts"]["B"] and c["ts"]["B"] == up["B"]
+    assert cnt == {"ts": {"w": [1, 0, 1], "p": [1, 0, 1]}, "gear": {"w": [0, 0, 1], "p": [0, 0, 0]}}   # 複勝が全て当たりの曲線は判定しない
