@@ -18,10 +18,8 @@ FAMILY = "pedigree_lab"
 
 
 def _guard(period: tuple[str, str], purpose: str, version: str, reason: str):
-    from src.ops import data_ledger
-    os.environ.setdefault("KEIBA_SESSION", "pedigree-lab")
-    return data_ledger.guard(tool="pedigree_lab.data", family=FAMILY, version=version, period=period,
-                             purpose=purpose, reason=reason, session="pedigree-lab")
+    from src.research.pedigree_lab import pl_ledger      # 台帳の入口は pl_ledger だけ（test_data_ledger の登録）
+    return pl_ledger.open_token(period, purpose, version, reason)
 
 
 def _prep(r: pd.DataFrame) -> pd.DataFrame:
