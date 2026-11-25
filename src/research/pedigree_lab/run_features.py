@@ -9,7 +9,7 @@ import argparse
 import json
 import time
 
-from src.research.pedigree_lab import data, features, features2
+from src.research.pedigree_lab import data, features, features2, features4
 
 
 def main() -> None:
@@ -23,6 +23,9 @@ def main() -> None:
     ped = data.load_ped()
     if a.gen == 1:
         X = features.build(r, ped)
+    elif a.gen == 4:
+        X, kinfo = features4.build(r, ped, sub=a.sub)
+        (data.OUT / f"kinfo_{a.tag}.json").write_text(json.dumps(kinfo, ensure_ascii=False, indent=1))
     else:
         X, kinfo = features2.build(r, ped, sub=a.sub)
         (data.OUT / f"kinfo_{a.tag}.json").write_text(json.dumps(kinfo, ensure_ascii=False, indent=1))

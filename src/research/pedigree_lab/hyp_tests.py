@@ -34,6 +34,16 @@ HYP = [  # (名前, 調べる列, 基準の列, 行の絞り込み)
 ]
 
 
+HYP4 = [  # 第 4 版で足した列（2 体の段 1 の R1。数を見る前に向きを固定: wet_e +・rasurf +・quick +・surf_e +・dz −）
+    ("H5' 父の道悪寄り（同じ産駒の中の差・重不良）", ["sire_wet_e"], ["sire_surf_top3"], ("going", "W")),
+    ("H5's 同（稍重。予想 ≈0）", ["sire_wet_e"], ["sire_surf_top3"], ("going", "S")),
+    ("H6' 父×レースの年齢条件×芝ダ", ["sire_rasurf_top3"], ["sire_surf_top3"], None),
+    ("H12 母の産駒の 5 走以内の勝ち上がり", ["dam_v_quick"], ["sire_all_top3", "bms_all_top3", "dam_v_win"], None),
+    ("H13 母父のダート寄り（ダートの行）", ["bms_surf_e"], ["sire_surf_top3", "bms_all_top3"], ("surf", "D")),
+    ("H14 父の距離の幅で割ったずれ（予想 −）", ["sire_dz"], ["sire_sd_top3"], None),
+]
+
+
 def clogit(Xm: np.ndarray, y: np.ndarray, rid_codes: np.ndarray, n_iter: int = 25, w: np.ndarray | None = None) -> np.ndarray:
     """条件付きロジット（各レースの勝ち馬 1 頭）。ニュートン法。w はレースの重み（ブートストラップ用、行ごとに展開済み）。"""
     k = Xm.shape[1]
@@ -95,6 +105,7 @@ def main() -> None:
     ap.add_argument("--tag", default="v3")
     ap.add_argument("--mode", default="random", choices=["random", "forward"],
                     help="random: 開催の無作為 70/30（主。ユーザーの指示）/ forward: 2017〜22 と 2023〜24（参考）")
+    ap.add_argument("--hyp", default="base", choices=["base", "v4"])
     a = ap.parse_args()
     X = pd.read_parquet(data.OUT / f"feat_{a.tag}.parquet")
     X = X[(X["date"].dt.year >= 2017) & (X["date"].dt.year <= 2024)].reset_index(drop=True)
@@ -104,7 +115,7 @@ def main() -> None:
     yr = X["date"].dt.year
     explore_mask = (X["split"] == 0) if a.mode == "random" else (yr <= 2022)
     out = []
-    for name, test, basec, filt in HYP:
+    for name, test, basec, filt in (HYP if a.hyp == "base" else HYP4):
         cols = basec + test
         D = X if filt is None else X[X[filt[0]] == filt[1]]
         em = explore_mask.loc[D.index]
@@ -124,7 +135,7 @@ def main() -> None:
         e, c = r["explore"], r["confirm"]
         print(f"{name:28s} 探す {e[0]:+.3f} [{e[1]:+.3f},{e[2]:+.3f}]  確かめ {c[0]:+.3f} [{c[1]:+.3f},{c[2]:+.3f}]  "
               f"クラス {r['clsg']}  年齢 {r['ageg']}", flush=True)
-    (data.OUT / f"hyp_tests_{a.tag}_{a.mode}.json").write_text(json.dumps(out, ensure_ascii=False, indent=1))
+    (data.OUT / f"hyp_tests_{a.tag}_{a.mode}_{a.hyp}.json").write_text(json.dumps(out, ensure_ascii=False, indent=1))
 
 
 if __name__ == "__main__":

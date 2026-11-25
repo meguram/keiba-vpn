@@ -29,6 +29,9 @@ def add_context(r: pd.DataFrame) -> pd.DataFrame:
     r["cls"] = r["grade"].map({"新馬": "NEW", "未勝利": "MDN", "1勝": "C1", "2勝": "C2", "3勝": "C3"}).fillna("OP")
     r["ageb"] = r["age"].clip(upper=5).fillna(5).astype(int).astype(str)
     r["sexb"] = np.where(r["sex"] == "牝", "F", "M")
+    # レースの年齢条件（レースの単位。同じレースの全馬で同じなので、馬の年齢は漏れない。第 4 版）
+    r["rage"] = r["race_class"].str.extract(r"(２歳|３歳以上|３歳|４歳以上)")[0].map(
+        {"２歳": "A2", "３歳": "A3", "３歳以上": "A3U", "４歳以上": "A4U"}).fillna("A3U")
     r["by"] = r["horse_id"].str[:4]
     r = r.sort_values(["horse_id", "date"], kind="stable")
     g = r.groupby("horse_id")
@@ -50,15 +53,15 @@ def add_context(r: pd.DataFrame) -> pd.DataFrame:
 ROLES = {"sss": ["sss"], "ss": ["ss"], "sire": ["sire"], "bms": ["ds"], "dd": ["dd"], "dam": ["dam"],
          "full": ["sire", "dam"], "nick": ["sire", "ds"]}      # 親（上の階層）が先に来る順
 CONDS = {"all": [], "surf": ["surf"], "sd": ["surf", "dband"], "sg": ["surf", "going"], "vs": ["venue", "surf"],
-         "cls": ["cls"], "agesurf": ["ageb", "surf"],
+         "cls": ["cls"], "agesurf": ["ageb", "surf"], "ra": ["rage"], "rasurf": ["rage", "surf"],
          # 副の版（馬の状態の鍵）
          "deb": ["debut"], "lay": ["layoff"], "fs": ["first_surf", "surf"], "dchg": ["dchg"]}
-PARENT = {"surf": "all", "sd": "surf", "sg": "surf", "vs": "surf", "cls": "all", "agesurf": "surf",
+PARENT = {"surf": "all", "sd": "surf", "sg": "surf", "vs": "surf", "cls": "all", "agesurf": "surf", "ra": "all", "rasurf": "surf",
           "deb": "all", "lay": "all", "fs": "surf", "dchg": "all"}
 MAIN_CONDS = {
-    "sire": ["all", "surf", "sd", "sg", "vs", "cls", "agesurf"],
-    "bms": ["all", "surf", "sd", "sg", "cls", "agesurf"],
-    "ss": ["all", "surf", "sd", "sg"], "sss": ["all", "surf"],
+    "sire": ["all", "surf", "sd", "sg", "vs", "cls", "agesurf", "ra", "rasurf"],
+    "bms": ["all", "surf", "sd", "sg", "cls", "agesurf", "ra", "rasurf"],
+    "ss": ["all", "surf", "sd", "sg", "rasurf"], "sss": ["all", "surf"],
     "dam": ["all", "surf"], "dd": ["all", "surf"], "full": ["all"], "nick": ["all", "surf"],
 }
 SUB_CONDS = {"sire": ["deb", "lay", "fs", "dchg"], "bms": ["deb", "fs", "dchg"], "ss": ["deb", "fs"]}
