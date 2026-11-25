@@ -736,6 +736,8 @@ def pull_members_from_store(backend: Backend, root: Path = REPO_ROOT) -> dict:
 initial_recent_pulled = threading.Event()      # 起動直後の「直近分」の取り込みが終わった（成否を問わず）。Cloud Run の起動時ウォームアップが待つ
 initial_full_pulled = threading.Event()        # 起動直後の「全体」の取り込みまで終わった（成否を問わず）。リクエスト課金では、起動の完了前に済ませる
 initial_members_pulled = threading.Event()     # 起動直後に会員名簿を（束より先に）取り込んだ（成否を問わず）。起動中でもログインに答えるため（cloudrun_entry の案 A）
+initial_bundle_ok = threading.Event()          # 束と、その後の追いつき（目録・束に無い木）が成功した（= 全体が揃った）。失敗では立たない。
+                                               # cloudrun_entry がウォームアップを待たずに要求を通すかの判定に使う（initial_recent_pulled より先に立てる）
 
 
 def _initial_from_bundle(be: Backend, root: Path, recent_days: float) -> dict | None:
@@ -770,6 +772,7 @@ def _initial_pull(be: Backend, root: Path, recent_days: float) -> None:
     try:
         b = _initial_from_bundle(be, root, recent_days)
         if b is not None:
+            initial_bundle_ok.set()                           # 直近分の印より先に（待っている側が見た時に必ず立っている）
             initial_recent_pulled.set()
             logger.info("gcs_mirror pull(束): %s", b)
             return

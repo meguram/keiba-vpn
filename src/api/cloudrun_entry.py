@@ -123,6 +123,17 @@ def early_auth_enabled() -> bool:
     return (os.environ.get("KEIBA_EARLY_AUTH") or "1").strip() != "0"
 
 
+def ready_before_warmup_enabled() -> bool:
+    """束と追いつきが成功した起動（gcs_mirror.initial_bundle_ok）では、ウォームアップ（自分への 5 件の要求・約 15 秒）を待たずに要求を通す（既定 1）。
+    2026-11-25: 0 台からの最初の要求が、束まで約 15 秒＋ウォームアップ約 15 秒の計 約 30 秒待っていた（stg の timed.log・Cloud Run のログ）。
+    - データは束の道の成功で揃っている。束が読めない・追いつきが失敗した起動（GCS の障害など）は立たないので、従来どおり起動処理を待つ。
+    - 早く通すときは、自分への内容の要求（ウォームアップ）を流さず、モデルの先読み（約 0.1 秒）だけにする。
+      リクエスト課金では起動プローブが通った後の CPU は要求の間だけなので、裏の要求は最初の要求と CPU・メモリを取り合うだけになる。
+      その分の初回の読み込みは、最初の数件の要求が払う。
+    0 で従来どおり（済むまで待つ）。"""
+    return (os.environ.get("KEIBA_READY_BEFORE_WARMUP") or "1").strip() != "0"
+
+
 def _degraded_send(send: Callable, method: str, path: str, flag: dict) -> Callable:
     """GCS の障害の間の応答を、VPS の nginx・ブラウザに保存させない（確定レースは 30 日保持されるため、欠けた応答を残さない）。
     この要求の中で障害ですぐ返した（flag["failfast"]）画面の GET は、200・404 でも 503 + Retry-After にする（nginx は前の保存を出せる:
@@ -315,7 +326,18 @@ class Gateway:
                             await asyncio.to_thread(initial_recent_pulled.wait, MIRROR_WAIT_SEC)
                         print(f"起動の段: 束の取り込みまで {time.monotonic() - _STARTED_AT:.1f} 秒（lifespan の中 {time.monotonic() - t0:.1f} 秒）。ポートを開く", flush=True)
                         self.ready = asyncio.Event()
-                        self._startup_task = asyncio.create_task(self._run_startup())
+                        early = False
+                        if mirror_pull_enabled() and ready_before_warmup_enabled():
+                            from src.ops.gcs_mirror import initial_bundle_ok
+
+                            early = initial_bundle_ok.is_set()
+                            print("起動の段: " + ("束と追いつきが済んだので、ウォームアップを流さずに要求を通す" if early
+                                                  else "束の道が済んでいないので、従来どおり起動処理の完了まで要求を待たせる"), flush=True)
+                        if early:
+                            self.ready.set()
+                            self._startup_task = asyncio.create_task(asyncio.to_thread(preload_models))
+                        else:
+                            self._startup_task = asyncio.create_task(self._run_startup())
                     elif self.warmup is not None:     # 従来: uvicorn は lifespan の完了後にポートを開く = 温まるまで要求が来ない
                         import asyncio
 
