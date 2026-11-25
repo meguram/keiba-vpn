@@ -31,8 +31,40 @@ ROOT = Path(__file__).resolve().parents[2]
 JST = timezone(timedelta(hours=9))
 POLICY = ROOT / "config/data_access/policy.json"
 GIT_LEDGER = ROOT / "config/data_access/ledger.jsonl"
-# ホストの共有の写し（全 worktree・clone から同じ場所）。sudo で流しても、元の利用者の HOME を使う（/root を指して拒否されないように）
-SHARED_DEFAULT = (Path(f"~{os.environ['SUDO_USER']}").expanduser() if os.environ.get("SUDO_USER") else Path.home()) / "work/progress/data_access/ledger.jsonl"
+SHARED_REL = Path("work/progress/data_access/ledger.jsonl")
+
+
+def _shared_default(env: Any = None, euid: int | None = None) -> Path:
+    """ホストの共有の写しの場所（全 worktree・clone から同じ場所）。
+
+    SUDO_USER は、本当に sudo で root として動いているとき（euid 0）だけ使い、元の利用者の HOME にする。
+    root でない処理に SUDO_USER が残っているとき（統括役が立てたセッションの SUDO_USER=root など）は使わない
+    （2026-11-25: SUDO_USER=root で /root/... を指し、読めない台帳を空とみなして「0 回」と記録した）。
+    """
+    env = os.environ if env is None else env
+    euid = os.geteuid() if euid is None else euid
+    su = str(env.get("SUDO_USER") or "").strip()
+    if euid == 0 and su and su != "root":
+        try:
+            home = Path(f"~{su}").expanduser()
+        except (RuntimeError, KeyError):   # 知らない利用者（版により例外か ~名前 のまま）
+            home = None
+        if home is not None and home.is_absolute():
+            return home / SHARED_REL
+    return _own_home() / SHARED_REL
+
+
+def _own_home() -> Path:
+    """いま動いている利用者（euid）の家。HOME は見ない（SUDO_USER=root と一緒に HOME=/root が残っていても取り違えない）。"""
+    try:
+        import pwd
+
+        return Path(pwd.getpwuid(os.geteuid()).pw_dir)
+    except (ImportError, KeyError):          # passwd に無い uid のコンテナなど
+        return Path.home()
+
+
+SHARED_DEFAULT = _shared_default()
 
 PURPOSES = ("select", "confirm", "eval_only", "reproduce", "forward", "fit")
 # 見た回数に数える目的（reproduce・fit は別に数える）
@@ -120,19 +152,30 @@ def _read_jsonl(path: Path) -> list[dict]:
     return rows
 
 
-def load_rows(paths: Iterable[Path] | None = None) -> list[dict]:
-    """共有の写し ∪ git の台帳（id で重複を除く。順は at の昇順）。"""
+def load_rows(paths: Iterable[Path] | None = None, errors: list | None = None) -> list[dict]:
+    """共有の写し ∪ git の台帳（id で重複を除く。順は at の昇順）。
+
+    errors に list を渡すと、読めない置き場を (path, 例外) で足して残りを読む（渡さなければ例外をそのまま上げる）。
+    """
     seen: dict[str, dict] = {}
     for p in (paths if paths is not None else (shared_path(), git_path())):
-        for r in _read_jsonl(Path(p)):
+        try:
+            got = _read_jsonl(Path(p))
+        except OSError as exc:
+            if errors is None:
+                raise
+            errors.append((Path(p), exc))
+            continue
+        for r in got:
             rid = r.get("id")
             if rid and rid not in seen:
                 seen[rid] = r
     return sorted(seen.values(), key=lambda r: (str(r.get("at", "")), str(r.get("id"))))
 
 
-def _append(path: Path, row: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+def _append(path: Path, row: dict, *, make_parent: bool = True) -> None:
+    if make_parent:
+        path.parent.mkdir(parents=True, exist_ok=True)
     line = json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n"
     with open(path, "a", encoding="utf-8") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
@@ -143,12 +186,23 @@ def _append(path: Path, row: dict) -> None:
             fcntl.flock(f, fcntl.LOCK_UN)
 
 
+def _shared_usable(path: Path) -> bool:
+    """共有の写しの置き場が、読み書きできるディレクトリか（無い・ファイル・権限が無いなら False）。"""
+    try:
+        if not path.parent.is_dir() or not os.access(path.parent, os.R_OK | os.W_OK | os.X_OK):
+            return False
+        return not path.exists() or os.access(path, os.R_OK | os.W_OK)
+    except OSError:
+        return False
+
+
 def write_row(row: dict, *, strict_shared: bool) -> list[str]:
     """共有の写しと git の台帳の両方に 1 行を足す。書けなかった置き場の説明を返す（strict_shared なら共有に書けないとき止める）。"""
     errs: list[str] = []
-    for label, p in (("共有の写し", shared_path()), ("git の台帳", git_path())):
+    for label, p in (("git の台帳", git_path()), ("共有の写し", shared_path())):   # git を先に（共有で止めても行を残す）
         try:
-            _append(p, row)
+            # 共有の置き場は作らない（無い場所に作ると、次からは空の写しを正とみなして回数を少なく数える）
+            _append(p, row, make_parent=(label != "共有の写し"))
         except OSError as exc:
             errs.append(f"{label} {p} に書けない: {exc}")
             if strict_shared and label == "共有の写し":
@@ -248,7 +302,7 @@ def amend(*, ref: str, purpose: str, reason: str, approved_by: str, session: str
     sess = session_name(session)
     row = {"id": _new_id(sess) + "-amend", "kind": "amend", "ref": ref, "at": _now(), "session": sess,
            "purpose": purpose, "reason": reason, "approved_by": approved_by}
-    lock_f = open(shared_path().parent / ".ledger.lock", "a") if shared_path().parent.is_dir() else None
+    lock_f = open(shared_path().parent / ".ledger.lock", "a") if _shared_usable(shared_path()) else None
     try:
         if lock_f is not None:
             fcntl.flock(lock_f, fcntl.LOCK_EX)
@@ -421,9 +475,13 @@ class Token:
     def summary(self) -> dict:
         """結果の JSON に載せる台帳の要約（「この期間を何回見たか」を報告に必ず残す）。"""
         c = self.decision.counts or {}
+        unk = bool(c.get("unknown"))         # 共有の写しが使えず、回数が分からない（0 と書かない）
         return {"ledger_id": self.id, "purpose": self.purpose, "decision": self.decision.decision,
-                "periods": self.decision.periods, "seen_total": c.get("total", 0), "seen_family": c.get("family", 0),
-                "seen_lower_bound": c.get("lower_bound", False), "notes": self.decision.notes,
+                "periods": self.decision.periods,
+                "seen_total": None if unk else c.get("total", 0), "seen_family": None if unk else c.get("family", 0),
+                "seen_lower_bound": unk or c.get("lower_bound", False), "seen_unknown": unk,
+                "seen_at_least": {"total": c.get("total", 0), "family": c.get("family", 0)} if unk else None,
+                "notes": self.decision.notes,
                 "violations": self.decision.violations,
                 "use_for_decision": self.purpose in ("select", "confirm", "forward") and not self.decision.violations}
 
@@ -515,34 +573,48 @@ def guard(*, tool: str, family: str, version: str, period: tuple[str, str | None
 
 def _guard_locked(*, tool, family, version, period, purpose, reads, frozen_paths, reason, sess, note, target_name,
                   meta, policy, mode) -> Token:
-    shared_ok = True
-    try:
-        rows = load_rows()
-    except OSError as exc:
-        rows, shared_ok = [], False
-        _say(f"[台帳] 読めない: {exc}")
-    if mode == "enforce" and not shared_path().parent.is_dir():
-        shared_ok = False                  # 共有の置き場が無い（別のホスト・取り違え）: 空の台帳とみなして通さない
+    errs: list = []
+    rows = load_rows(errors=errs)            # 読めない置き場は飛ばして、読めた分だけで数える（下限になる）
+    for p, exc in errs:
+        _say(f"[台帳] {p} が読めない: {exc}")
+    # 共有の写しが無い・読めない・書けない（別のホスト・取り違え・権限）: 回数は「不明」。enforce では通さない
+    shared_ok = _shared_usable(shared_path()) and not any(p == shared_path() for p, _ in errs)
+    d_unknown = not shared_ok
     dirty = _git_dirty(frozen_paths) if frozen_paths else []
     d = decide(rows, family=family, version=str(version), period=period, purpose=purpose, reason=reason,
                policy=policy, frozen_dirty=dirty, frozen_given=bool(frozen_paths))
     if not shared_ok and d.decision != "skipped":
-        d.violations.append(f"shared_missing: 共有の写し {shared_path()} が無い・読めない")
+        d.violations.append(f"shared_missing: 共有の写し {shared_path()} が無い・読めない・書けない（見た回数は不明）")
         d.decision = "denied" if mode == "enforce" else "warned"
+        d.counts["unknown"] = True
+        if d.notes:                          # 上の注記の回数は、読めた台帳だけで数えた下限
+            d.notes.append("上の注記の回数は、共有の写しが使えず、読めた台帳だけで数えた下限（実際は以上）")
     if d.decision == "skipped":
         return Token(None, family, str(version), period, purpose, d, mode)
+    if d_unknown:
+        # 0 と書かない（2025・26 年の eval_only の決まりを回数で守っている）。読めた分（git の台帳など）は下限として残す
+        counts_before = {"total": None, "family": None, "unknown": True,
+                         "at_least": {"total": d.counts.get("total", 0), "family": d.counts.get("family", 0)}}
+    else:
+        counts_before = {"total": d.counts.get("total", 0), "family": d.counts.get("family", 0)}
     row = {"id": _new_id(sess), "kind": "start", "at": _now(), "session": sess, "tool": tool,
            "target": {"family": family, "version": str(version), "name": target_name},
            "period": {"from": period[0], "to": period[1], "names": d.periods},
            "reads": list(reads), "purpose": d.purpose, "requested_purpose": purpose, "reason": reason or None,
            "decision": d.decision, "mode": mode, "violations": d.violations, "notes": d.notes,
            "git_head": _git_head(), "note": note or None, "meta": meta or None, "source": "tool",
-           "counts_before": {"total": d.counts.get("total", 0), "family": d.counts.get("family", 0)}}
-    for e in write_row(row, strict_shared=(mode == "enforce")):
+           "counts_before": counts_before}
+    # 共有が使えないと分かっているときは、下の違反の一覧（shared_missing）で拒否する
+    for e in write_row(row, strict_shared=(mode == "enforce" and shared_ok)):
         _say("[台帳] " + e)
     head = (f"[台帳] {family}・{version} の {period[0]}〜{period[1]}（{'・'.join(d.periods)}）: 目的 {purpose}"
-            f"{' → ' + d.purpose if d.purpose != purpose else ''}。この期間は全体で {d.counts.get('total', 0)} 回"
-            f"{'以上' if d.counts.get('lower_bound') else ''}・この系統で {d.counts.get('family', 0)} 回見ている（今回を除く）")
+            f"{' → ' + d.purpose if d.purpose != purpose else ''}。")
+    if d_unknown:
+        head += (f"この期間を見た回数は不明（共有の写しが使えない。読めた台帳だけで全体 {d.counts.get('total', 0)} 回以上・"
+                 f"この系統で {d.counts.get('family', 0)} 回以上。今回を除く）")
+    else:
+        head += (f"この期間は全体で {d.counts.get('total', 0)} 回{'以上' if d.counts.get('lower_bound') else ''}・"
+                 f"この系統で {d.counts.get('family', 0)} 回見ている（今回を除く）")
     _say(head)
     for n in d.notes:
         _say("[台帳] " + n)
@@ -627,7 +699,7 @@ def _cmd_sync(a) -> int:
             n1 += 1
     for r in b_rows:
         if r["id"] not in a_ids:
-            _append(sh, r)
+            _append(sh, r, make_parent=False)   # 共有の置き場は作らない（無いなら止まる）
             n2 += 1
     print(f"git へ {n1} 行・共有へ {n2} 行を足した")
     return 0
