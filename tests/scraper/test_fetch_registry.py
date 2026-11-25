@@ -18,6 +18,7 @@ NON_FETCH_MODULES = {
     "src.api.flask_app", "src.scripts.docs.council_viewer", "src.db.batch.stats_snapshot", "src.monitor.app", "src.ops.fetch_owner", "src.ops.gcs_mirror",
     "src.ops.cost_guard", "src.ops.cron_catchup", "src.ops.vps_alive", "src.ops.host_postprocess", "src.ops.job_owner", "src.ops.model_publish", "src.ops.release_manifest", "src.ops.release_publish", "src.ops.scheduler_gen",
     "src.ops.state_sync", "src.pipeline.betting.odds_drift", "src.pipeline.build_jockey_trainer_stats",
+    "src.ops.adsense_check",  # 自サイトの ads.txt・robots・HTML と AdSense API の審査の状態を読むだけ（netkeiba・GCS へは取りに行かない）
     "src.ops.edge_render",   # VPS のフォルダに置く API の応答を、ホストの写し（data/local/mirror）だけで作る（netkeiba・GCS へは取りに行かない）
     "src.pipeline.inference.candidate_runner",   # 候補の影のランナー: 保存済みの出馬表と手元の T-60 の写しを読むだけ（netkeiba へは取りに行かない）
     "src.pipeline.inference.candidate_rb_schedule",   # 影のランナーの材料の予約の判断: 手元の暦・結果の表を読むだけ
