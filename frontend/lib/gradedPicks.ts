@@ -22,7 +22,16 @@ export type GPRace = {
   winners: GPHorse[];
   base: GPHorse | null;
   B: { honmei: GPHorse | null; kill: GPHorse[] | null };
+  /** 足すだけの更新で足した回の印（src/research/graded/picks.py の append_history）。source が「前日の計算」なら前日に実際に出した印。
+   *  それ以外（「記録の規則（前日の計算なし）」・version の無い 2026-11-15 までの回）は、レースの後に前日までのデータで規則を当てはめた印 */
+  version?: { id: string; source?: string } | null;
 };
+
+/** 前日に実際に出した予想の回か（version.source の文言は picks.py の append_history と合わせる） */
+export const PUBLISHED_SOURCE = "前日の計算";
+export function publishedBefore(r: GPRace): boolean {
+  return r.version?.source === PUBLISHED_SOURCE;
+}
 
 export type GPRuleTerm = { text: string; w: number; small: boolean; key: string };
 export type GPRuleText = { filter: string | null; terms: GPRuleTerm[]; tie: string };

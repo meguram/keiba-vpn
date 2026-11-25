@@ -1,6 +1,6 @@
 "use client";
 
-import { SKIP_LABEL, fin, horseShort, newVersion, odds, pct, rec, yen, type GPFigure, type GPHorse, type GPPicked, type GPRace, type GPRule, type GPSimple } from "@/lib/gradedPicks";
+import { SKIP_LABEL, fin, horseShort, newVersion, odds, pct, publishedBefore, rec, yen, type GPFigure, type GPHorse, type GPPicked, type GPRace, type GPRule, type GPSimple } from "@/lib/gradedPicks";
 
 const CSS = `
 .gp-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -165,6 +165,7 @@ export function GradedPicks({ fig, notes }: { fig: GPFigure; notes?: string[] })
         {nv ? `${(t.picked!.version!.discovery.to ?? "").slice(0, 4)} 年までのこの重賞の回で決めた条件です（直近の回は検証に使用）。` : "2024 年までのデータで決めた条件です（2025 年以降は、その条件で選んだ結果）。"}
         {fig.rkey}・{fig.grade}・{fig.course}
         {t.race && t.period === "dev" && <span className="gp-tag">この回は条件を決めた期間の中</span>}
+        {t.race && t.period !== "dev" && !publishedBefore(t.race) && <span className="gp-tag" title="この回は前日に予想を出していません。レースの後に、前日までのデータで規則を当てはめた印です。">前日に出した予想ではありません</span>}
         {t.picked?.version?.flag === "val_weak" && <span className="gp-tag" title="発見の期間で決めた条件が、検証の 2 回では ◎ の単勝の回収率 100% 未満でした">検証では振るわず</span>}</div>
       <div className="gp-sec">
         <Picks fig={fig} />
@@ -180,7 +181,7 @@ export function GradedPicks({ fig, notes }: { fig: GPFigure; notes?: string[] })
         <div className="gp-sec">
           <h3>過去該当馬（このレースより前の回）</h3>
           <PastSimple fig={fig} />
-          <div className="gp-note">〜2024 は条件を決めた期間なので良く見えます。選んだ期間の回収率は、将来を表さないので出していません。消し馬の着は、消した馬の頭数で数えます。</div>
+          <div className="gp-note">〜2024 は条件を決めた期間なので良く見えます。選んだ期間の回収率は、将来を表さないので出していません。成績には、レース後に前日までのデータで規則を当てはめた回を含みます（前日に実際に出した予想だけの成績ではありません）。消し馬の着は、消した馬の頭数で数えます。</div>
         </div>
         {base && !t.race && <div className="gp-note">前日版の点の ◎（参考）: {horseShort(base)}</div>}
         {t.race && <div className="gp-sec"><h3>このレースの結果</h3><RaceDetail x={t.race} /></div>}
