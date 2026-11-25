@@ -7308,8 +7308,21 @@ async def _race_predictions_compute(race_id: str):
             logger.warning("買い目からの印の付与に失敗 %s: %s", race_id, exc)
             return resp
 
+    def _with_complete_marks(resp: dict) -> dict:
+        # 印を過不足なく（◎○▲★ を各 1 頭。ユーザーの方針 2026-11-25）。買い目からの印・印のルールの後の最後の段。全区分で同じ印
+        preds = resp.get("predictions")
+        if not isinstance(preds, list) or not preds or not resp.get("has_prediction", True):
+            return resp
+        try:
+            from src.utils.race_probabilities import complete_marks
+
+            return {**resp, "predictions": complete_marks(preds, keep_assigned=resp.get("marks_basis") == "bets")}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("印の埋め直しに失敗 %s: %s", race_id, exc)
+            return resp
+
     def _with_position(resp: dict) -> dict:
-        resp = _with_bet_marks(_with_calibrated_ev(resp))
+        resp = _with_complete_marks(_with_bet_marks(_with_calibrated_ev(resp)))
         # 過去走の通過順位から作る位置取り予想（実モデルの予測ではない）。失敗しても予測の応答は返す
         try:
             from src.pipeline.inference.position_forecast import attach_position_forecast

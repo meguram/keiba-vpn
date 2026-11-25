@@ -467,6 +467,85 @@ def assign_mece_marks_v2(entries: list[dict], params: dict | None = None) -> Non
         e["mark_type"] = "anchor"
 
 
+# 過不足のない印（ユーザーの方針 2026-11-25）: 予測があるすべてのレースで ◎・○・▲・★ を各 1 頭（頭数が 4 未満なら上から頭数まで）。
+# 1 頭に 2 つの印は付けない。足りない印は、印のルールが使う評価の順で埋める（閾値・オッズの幅の条件は外す）。△・消は 0 頭以上のまま。
+TOP_MARKS = ("honmei", "pair", "show_val", "star")
+_FILL_ORDER = ("honmei", "pair", "star", "show_val")       # 埋める順は v2 の印の順（◎ → ○ → ★ → ▲）
+
+
+def _ev(x: dict, kind: str) -> float:
+    """較正後の期待値があればそれ（0.0 も値として使う）、無ければ未較正の値。"""
+    v = x.get(f"ev_{kind}_cal")
+    return float(v) if v is not None else _f(x, f"ev_{kind}")
+
+
+def _fill_key(mt: str):
+    """足りない印を埋めるときの順位。◎・○ は順位の印なので勝率の順（期待値で選ぶと人気薄が ◎ に上がり、○ より弱くなる）。
+    ★ は ◎○▲ の次の注目馬なので期待値の順、▲ は 3 着以内の確率の順。"""
+    if mt in ("honmei", "pair"):
+        return lambda x: (_f(x, "win_prob"), _f(x, "top2_prob"), _f(x, "top3_prob"))
+    if mt == "star":
+        return lambda x: (max(_ev(x, "win"), _ev(x, "place")), _f(x, "top3_prob"))
+    return lambda x: (_f(x, "top3_prob"), _f(x, "win_prob"))
+
+
+def _markable(e: dict) -> bool:
+    """印を付けてよい馬: 馬番があり、勝率がある（取消・除外の馬・確率の無い馬には付けない。予測成績の集計と同じ絞り込み）。"""
+    return isinstance(e, dict) and e.get("win_prob") is not None and bool(e.get("horse_number")) and e.get("mark_type") != "scratched"
+
+
+def complete_marks(entries: list[dict], *, keep_assigned: bool = False) -> list[dict]:
+    """印を過不足なくする（新しい一覧を返す。入力は書き換えない）。
+    - ◎○▲★ が 2 頭以上なら、評価の高い 1 頭を残し、残りは △ にする。頭数（印を付けてよい馬）が 4 未満なら ◎○▲★ の上から頭数まで。
+    - 足りない印を ◎ → ○ → ★ → ▲ の順に埋める。◎・○ は下の印（○・★・▲）の馬も候補にして勝率の順で繰り上げ、空いた印は後の番で埋める。
+    - keep_assigned=True（買い目から印を決めたレース）: 付いている印（◎○▲△）は書き換えず、足りない印は無印の馬から埋める（無ければ △ の馬）。
+    - 消の馬は、ほかに馬がいない時だけ使う。印を変えた馬の説明文（recommendation）は外す（古い印の説明が残らないように）。"""
+    out = [dict(e) if isinstance(e, dict) else e for e in entries]
+    rows = [e for e in out if _markable(e)]
+    n = len(rows)
+    if n == 0:
+        return out
+    before = {id(e): e.get("mark_type") for e in rows}
+    for mt in TOP_MARKS:
+        have = [e for e in rows if e.get("mark_type") == mt]
+        if len(have) > 1:
+            keep = max(have, key=_fill_key(mt))
+            for e in have:
+                if e is not keep:
+                    e["mark_type"] = "anchor"
+    required = TOP_MARKS[: min(4, n)]
+    for e in rows:
+        if e.get("mark_type") in TOP_MARKS and e["mark_type"] not in required:
+            e["mark_type"] = "anchor"
+    order = [mt for mt in _FILL_ORDER if mt in required]
+    for i, mt in enumerate(order):                     # 繰り上げた後の空きは後ろの番で埋まる
+        if any(e.get("mark_type") == mt for e in rows):
+            continue
+        lower = set(order[i + 1:]) if (mt in ("honmei", "pair") and not keep_assigned) else set()
+        tiers = ([{"none", "", None}, {"anchor"}, {"kesi"}] if keep_assigned
+                 else [{"none", "", None, "anchor"} | lower, {"kesi"}])
+        for tier in tiers:
+            pool = [e for e in rows if e.get("mark_type") in tier]
+            if pool:
+                pick = max(pool, key=_fill_key(mt))
+                pick["mark_type"] = mt
+                pick.pop("kesi_reason", None)
+                break
+    for e in rows:
+        if e.get("mark_type") != before[id(e)]:
+            e.pop("recommendation", None)
+    return out
+
+
+def marks_complete(entries: list[dict]) -> bool:
+    """過不足の検査: ◎○▲★ がちょうど 1 頭ずつ（頭数が 4 未満なら上から頭数まで）、1 頭 1 印。"""
+    rows = [e for e in entries if _markable(e)]
+    n = len(rows)
+    counts = {mt: sum(1 for e in rows if e.get("mark_type") == mt) for mt in TOP_MARKS}
+    want = TOP_MARKS[: min(4, n)]
+    return all(counts[mt] == 1 for mt in want) and all(counts[mt] == 0 for mt in TOP_MARKS[min(4, n):])
+
+
 def assign_mece_marks(entries: list[dict], situational: bool | None = None, cfg: dict[str, float] | None = None) -> None:
     """印を付ける入口。版は mark_rule_version()（既定 v1＝従来どおり。situational / cfg を指定した呼び出しは常に v1）。"""
     if situational is None and cfg is None and mark_rule_version() == 2:
