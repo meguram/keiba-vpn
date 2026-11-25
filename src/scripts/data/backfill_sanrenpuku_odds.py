@@ -2,6 +2,7 @@
 
 python -m src.scripts.data.backfill_sanrenpuku_odds --years 2025 --limit 20     # パイロット
 python -m src.scripts.data.backfill_sanrenpuku_odds --years 2025 2024 2023 2022 # 新しい年から順
+python -m src.scripts.data.backfill_sanrenpuku_odds --race-ids-file <ファイル>       # 指定のレースだけ（--years は使わない）
 
 2019〜2025 年の保存済み race_pair_odds は、3連複対応より前に取ったため sanrenpuku が空。type=7 だけを 1 レース 1 リクエストで取り、
 既存文書の sanrenpuku キーだけを埋めて HybridStorage.save で保存し直す（馬連・ワイド・馬単など他のキーは変えない）。
@@ -30,6 +31,7 @@ PROGRESS = ROOT / "data/local/meta/sanrenpuku_backfill_progress.json"
 OTHER_SCRAPERS = r"python[0-9.]* -m src\.(scripts\.maintenance\.repair_|scripts\.scraping\.(?!backfill_horse_race_remarks|fetch_status)|scraper\.(run|export_tables)|scripts\.data\.backfill_trifecta_odds)"
 LONG_RUNNING = r"python[0-9.]* -m src\.scraper\.backfill"
 MAX_LOAD = 18.0
+DEFAULT_YEARS = [2025, 2024, 2023, 2022]
 
 
 def race_ids_for_year(year: int) -> list[str]:
@@ -45,6 +47,29 @@ def race_ids_for_year(year: int) -> list[str]:
         return []
     d = pl.read_parquet(f, columns=["race_id", "date"]).group_by("race_id").agg(pl.col("date").max().alias("d"))
     return [r for r, _ in sorted(d.iter_rows(), key=lambda x: (str(x[1]), x[0]), reverse=True) if r]
+
+
+def race_ids_from_file(path: Path) -> list[str]:
+    """1 行 1 レース（12 桁の数字）。空行・# で始まる行は飛ばし、重複は除き、ファイルの順を保つ。それ以外の行はエラー。"""
+    out: list[str] = []
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
+        rid = line.strip()
+        if not rid or rid.startswith("#"):
+            continue
+        if len(rid) != 12 or not rid.isdigit():
+            raise ValueError(f"レース ID ではない行: {rid!r}")
+        if rid not in out:
+            out.append(rid)
+    if not out:
+        raise ValueError(f"レース ID が 1 件も無い: {path}")
+    return out
+
+
+def target_ids(race_ids_file: Path | None, years: list[int] | None) -> list[str]:
+    """対象のレース。ファイルの指定があればそれだけ（年からの一覧は作らない）。無ければ年ごと（既定は 2025〜2022 年）。"""
+    if race_ids_file is not None:
+        return race_ids_from_file(race_ids_file)
+    return [r for y in (years or DEFAULT_YEARS) for r in race_ids_for_year(y)]
 
 
 def _count(pattern: str) -> int:
@@ -114,12 +139,18 @@ def fetch_sanrenpuku(session, parser_cls, race_id: str) -> list[dict] | None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--years", type=int, nargs="+", default=[2025, 2024, 2023, 2022])
+    g = ap.add_mutually_exclusive_group()
+    g.add_argument("--years", type=int, nargs="+", default=None, help=f"対象の年（既定 {DEFAULT_YEARS}）")
+    g.add_argument("--race-ids-file", type=Path, default=None, help="このファイルのレースだけ（1 行 1 レース。--years とは同時に使えない）")
     ap.add_argument("--limit", type=int, default=0, help="新規に取得するレース数の上限（パイロット用）")
     ap.add_argument("--retry-failed", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="対象数だけ数える")
     ap.add_argument("--max-wait", type=int, default=900, help="他の取得が動いている間に待つ最大秒数（1 回の待機あたり）")
     a = ap.parse_args()
+    try:
+        ids = target_ids(a.race_ids_file, a.years)      # ファイルの不備は初期化の前に止める
+    except (OSError, ValueError) as exc:
+        ap.error(str(exc))
 
     from src.scraper.client import _GlobalSlot
     from src.scraper.parsers import OddsParser
@@ -128,12 +159,11 @@ def main() -> None:
     runner = ScraperRunner()
     prog = load_progress()
     todo: list[str] = []
-    for y in a.years:
-        for rid in race_ids_for_year(y):
-            if rid in prog["no_data"] and not a.retry_failed:
-                continue
-            todo.append(rid)
-    print(f"候補 {len(todo)} レース（年: {a.years}）。race_pair_odds が無い・sanrenpuku が既にあるものは取得時に飛ばします", flush=True)
+    for rid in ids:
+        if rid in prog["no_data"] and not a.retry_failed:
+            continue
+        todo.append(rid)
+    print(f"候補 {len(todo)} レース（{('ファイル: ' + str(a.race_ids_file)) if a.race_ids_file else ('年: ' + str(a.years or DEFAULT_YEARS))}）。race_pair_odds が無い・sanrenpuku が既にあるものは取得時に飛ばします", flush=True)
     if a.dry_run:
         return
 
