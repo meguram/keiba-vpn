@@ -206,6 +206,7 @@ def main() -> None:
     ap.add_argument("case", choices=["A", "B", "C", "D", "E", "F", "G", "N", "null", "ref"])
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--no-n", action="store_true", help="件数の列（*_n・*_nrun・res_n）を外す（帰無の世代・時代の説明の確かめ）")
+    ap.add_argument("--keep-own", action="store_true", help="帰無の確かめ 3: as-of の集計で自分の過去走を引かない")
     a = ap.parse_args()
     t0 = time.time()
     data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"v5_{a.case}_{a.seed}",
@@ -213,6 +214,8 @@ def main() -> None:
     res = {"case": a.case}
     if a.case == "null":
         from src.research.pedigree_lab import features4
+        if a.keep_own:
+            data.SUBTRACT_OWN = False
         r = data.load_dev(reason=f"帰無（血統の行の入れ替え・回 {a.seed}）", version=f"null_{a.seed}")
         ped = data.load_ped()
         by = ped["horse_id"].str[:4]
@@ -233,6 +236,9 @@ def main() -> None:
         o = oof_for(Xn, cols, "dd")
         dev = Xn["split"].isin([0, 1]).to_numpy()
         res |= {"seed": a.seed, "no_n": a.no_n, "dd_win_gain": gain(Xn, o["win"], dev), "n_cols": len(cols)}
+        pd.DataFrame({"race_id": Xn["race_id"], "horse_id": Xn["horse_id"], "p_win": o["win"], "rage": Xn["rage"],
+                      "win": Xn["win"], "n_run": Xn["n_run"], "split": Xn["split"]}).to_parquet(
+            data.OUT / f"kf_null{a.seed}{'_noN' if a.no_n else ''}{'_keepown' if a.keep_own else ''}_dd.parquet", index=False)      # レースの年齢条件で分けるため
     else:
         X = base_frame({"E": "v5e", "F": "v6e", "G": "v7g"}.get(a.case, "v4"))
         dev = X["split"].isin([0, 1]).to_numpy()
@@ -273,7 +279,8 @@ def main() -> None:
                     data.OUT / f"kf_v5{a.case}_dd.parquet", index=False)
     res["sec"] = round(time.time() - t0)
     print(json.dumps(res, ensure_ascii=False, default=str))
-    name = f"v5_{a.case}" + (f"_{a.seed}" if a.case == "null" else "") + ("_noN" if a.no_n else "")
+    name = f"v5_{a.case}" + (f"_{a.seed}" if a.case == "null" else "") + ("_noN" if a.no_n else "") + ("_keepown" if a.keep_own else "")
+    res["keep_own"] = a.keep_own
     (data.OUT / f"{name}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=str))
     with open(data.OUT / "trials.jsonl", "a") as fh:
         fh.write(json.dumps(res, ensure_ascii=False, default=str) + "\n")

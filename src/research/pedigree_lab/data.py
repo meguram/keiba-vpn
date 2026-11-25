@@ -81,6 +81,9 @@ def split_meetings(meetings: pd.Series, seed: int = 20261125, fr=(0.70, 0.15, 0.
     return meetings.map(dict(zip(u, lab))).astype(np.int8)
 
 
+SUBTRACT_OWN = True      # 帰無の確かめ 3 だけが False にする（自分の過去走を引かない作り。本番・本物の研究では常に True）
+
+
 def asof(df: pd.DataFrame, keys: list[str], vals: list[str]) -> tuple[np.ndarray, np.ndarray]:
     """鍵ごとに「その日より厳密に前」の和（列ごと）と件数。その馬自身の、同じ鍵での過去走は引く。
 
@@ -115,6 +118,6 @@ def asof(df: pd.DataFrame, keys: list[str], vals: list[str]) -> tuple[np.ndarray
     h = h.sort_values(["kid", "hid", "d"], kind="stable")
     own = h.groupby(["kid", "hid"])[[*vals, "_n"]].cumsum() - h[[*vals, "_n"]]
     own = own.sort_index().to_numpy()
-    res = tot - own
+    res = tot - own if SUBTRACT_OWN else tot
     res[bad] = 0.0
     return res[:, :-1], res[:, -1]
