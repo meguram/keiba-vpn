@@ -872,9 +872,9 @@ export default function RaceDetailPage() {
         </div>
       ) : null}
 
-      <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 12 }}>
+      {!lock && <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 12 }}>
         買い判断は期待値の最大で判定。期待値: {calibratedEv ? "過去の実績に合わせて較正した期待回収率。緑≥1.10 / 青≥1.00 / 灰≥0.90 / 赤＜0.90。買い判断（期待値 高・中・様子見）は較正後の期待値の最大で判定" : "緑≥1.3 / 青≥1.0 / 赤＜0.8"}
-      </p>
+      </p>}
     </div>
   );
 
