@@ -82,7 +82,7 @@ def evaluate(X: pd.DataFrame, p: np.ndarray, oof_gain: float) -> dict:
     res = {"rows": len(T), "races": int(T["race_id"].nunique()), "meetings": int(nu)}
     g = float(d_race.mean())
     lo = float(np.percentile(bs, 2.5))
-    res["M1"] = {"gain": round(g, 5), "ci": [round(lo, 5), round(float(np.percentile(bs, 97.5)), 5)], "oof_gain": oof_gain,
+    res["M1"] = {"gain_minus_null_over_ped": round((g - 0.0087) / 0.073, 3), "gain": round(g, 5), "ci": [round(lo, 5), round(float(np.percentile(bs, 97.5)), 5)], "oof_gain": oof_gain,
                  "ratio": round(g / oof_gain, 3), "pass": bool(g >= 0.75 * oof_gain and lo >= 0.5 * oof_gain)}
     # M2 較正（10 分位のロジットの傾き・平均の比）
     T["dec"] = pd.qcut(T["p_win"].rank(method="first"), 10, labels=False)
@@ -110,11 +110,15 @@ def evaluate(X: pd.DataFrame, p: np.ndarray, oof_gain: float) -> dict:
     b = clogit(T[["lp", "lq"]].to_numpy(), T["win"].to_numpy(float), rc)
     sc = gates.scene_alpha(T, {"FD": T["FD"].to_numpy()}, n_boot=200, by_sire=True)["FD"]
     res["M4"] = {**sc, "pass": bool(sc["alpha_extra"] >= 0.18)}
+    res["M4"]["SD_desc"] = gates.scene_alpha(T, {"SD": T["SD"].to_numpy()}, n_boot=100)["SD"]     # 記述（1 号の追加）
     wq = T["win"].to_numpy() == 1
-    res["M5"] = {"alpha_all": round(float(b[0]), 4), "beta": round(float(b[1]), 4),
+    res["M5"] = {"alpha_all": round(float(b[0]), 4), "beta": round(float(b[1]), 4), "ped_specific_desc": None,
                  "market_race_ll": round(float(-np.mean(np.log(T["q"].to_numpy()[wq]))), 4),
                  "model_race_ll": round(float(-np.mean(np.log(T["p_win"].to_numpy()[wq]))), 4)}
-    sub = {"2歳戦": T["rage"] == "A2", "新馬戦": T["cls"] == "NEW", "初年度の産駒の父（as-of 300 走未満）": T["sire_all_n"] < np.log1p(300)}
+    dev_sires = set(pd.read_parquet(data.OUT / "feat_v4.parquet", columns=["sire"])["sire"].unique())
+    new_sire = ~T["sire"].isin(dev_sires)
+    res["M5"]["new_sire_share"] = round(float(new_sire.mean()), 4)        # 学習の行（2024 年まで）に産駒が無い父の行の割合
+    sub = {"学習に無い新しい父": new_sire, "2歳戦": T["rage"] == "A2", "新馬戦": T["cls"] == "NEW", "初年度の産駒の父（as-of 300 走未満）": T["sire_all_n"] < np.log1p(300)}
     for nm, m in sub.items():
         m = m.to_numpy() & wq
         res["M5"][nm] = {"rows_win": int(m.sum()),
@@ -138,6 +142,8 @@ def main() -> None:
         return
     F = gates.scenes(X[gates.FCOLS].copy())
     X["FD"] = F["FD"].to_numpy()
+    X["SD"] = F["SD"].to_numpy()
+    assert (X.groupby("race_id")["date"].nunique() == 1).all()          # as-of の締め: 1 レースは 1 日（同じ日の結果は data.asof で入らない）
     p = predict(X, a.version)
     oof = {"v4": 0.08152}.get(a.version)
     res = {"version": a.version, "check": chk, **evaluate(X, p, oof)}
