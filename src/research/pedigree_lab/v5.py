@@ -202,7 +202,7 @@ def run_D(X: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("case", choices=["A", "B", "C", "D", "E", "null"])
+    ap.add_argument("case", choices=["A", "B", "C", "D", "E", "null", "ref"])
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
     t0 = time.time()
@@ -234,7 +234,9 @@ def main() -> None:
         dev = X["split"].isin([0, 1]).to_numpy()
         ref = v4_ref(X)
         res["v4_dd_win_gain"] = gain(X, ref["dd"]["p_win"].to_numpy(), dev)
-        if a.case == "C":
+        if a.case == "ref":          # 第 4 版を同じ道具（alphas）で測り直す（決め方の線の比べの元）
+            res |= {"alpha_dd": alphas(X, ref["dd"]["p_win"].to_numpy(), dev)}
+        elif a.case == "C":
             res |= run_C(X, ref)
         else:
             if a.case == "A":

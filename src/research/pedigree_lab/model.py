@@ -16,7 +16,7 @@ import pandas as pd
 
 CTX = {"surf", "dband", "going", "cls", "ageb", "sexb", "by", "career", "prev_date", "prev_dist", "n_surf_before",
        "debut", "layoff", "first_surf", "dchg"}
-FEAT_RE = re.compile(r"^(sire|bms|ss|sss|bms2|dam|dd|nick|nickl|full)_|^ib_|^rel_")
+FEAT_RE = re.compile(r"^(sire|bms|ss|sss|bms2|dam|dd|nick|nickl|full|anc)_|^ib_|^rel_")
 SUB_RE = r"_(deb|lay|fs|dchg)_"      # 副の版（馬の状態の鍵）の列
 
 
