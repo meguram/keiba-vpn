@@ -11,12 +11,6 @@ export const ADSENSE_HOSTS = ["app.megu-keiba.com", "stg.megu-keiba.com"];
 /** 読み込みの部品（components/ads/AdSenseLoader.tsx）の script の id */
 export const ADSENSE_SCRIPT_ID = "adsbygoogle-js";
 
-/** このタブで広告のスクリプトを読み込んだか（ログイン後に全体を読み直すかの判定に使う）。 */
-export function adsenseLoaded(): boolean {
-  if (typeof window === "undefined") return false;
-  return !!document.getElementById(ADSENSE_SCRIPT_ID) || "adsbygoogle" in window;
-}
-
 export type AdAuth = { loading: boolean; failed?: boolean; isMember: boolean; isAdmin: boolean };
 
 /**

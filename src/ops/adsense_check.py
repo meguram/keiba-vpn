@@ -29,7 +29,8 @@ ADS_LINE = f"google.com, {PUB_ID}, DIRECT, f08c47fec0942fa0"
 APP = "https://app.megu-keiba.com"
 STG = "https://stg.megu-keiba.com"
 ROOT = "https://megu-keiba.com"
-PAGES = ["/", "/races"]
+PAGES = ["/", "/races", "/learn", "/learn/guide", "/learn/glossary", "/learn/column/even-gate"]
+LEARN_MIN_CHARS = 300
 ADS_BOTS = ["Mediapartners-Google", "Google-Display-Ads-Bot"]
 UA = "keiba-adsense-check/1"
 TIMEOUT = 15
@@ -95,7 +96,17 @@ def check_page(base: str, path: str) -> tuple[bool, str]:
     if code != 200:
         return False, f"HTTP {code}{' ' + chain[-1] if chain else ''}"
     meta = re.search(r'<meta[^>]+name="google-adsense-account"[^>]+content="ca-' + PUB_ID + '"', body) is not None
-    return meta, f"meta {'あり' if meta else 'なし'}"
+    n = text_chars(body)
+    # 文章のページ（/learn）は本文が HTML に入っていること（サーバで描く）。クライアントで描く形に戻ったら落とす
+    thin = path.startswith("/learn") and n < LEARN_MIN_CHARS
+    return meta and not thin, f"meta {'あり' if meta else 'なし'}・本文 {n:,} 字{'（少なすぎ）' if thin else ''}"
+
+
+def text_chars(html: str) -> int:
+    """HTML の本文の文字数（script・style・タグ・空白を除く）。審査の巡回が読める中身の目安"""
+    t = re.sub(r"<script.*?</script>|<style.*?</style>", "", html, flags=re.S)
+    t = re.sub(r"<[^>]+>", " ", t)
+    return len(re.sub(r"\s+", "", t))
 
 
 class CredsError(Exception):

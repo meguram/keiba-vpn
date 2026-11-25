@@ -11,13 +11,12 @@ def _fake(routes):
 
 
 def test_all_ok(monkeypatch, capsys):
-    meta = f'<meta name="google-adsense-account" content="ca-{ac.PUB_ID}"/>'
+    meta = f'<meta name="google-adsense-account" content="ca-{ac.PUB_ID}"/>' + "<p>" + "本文" * 200 + "</p>"
     routes = {
         f"{ac.ROOT}/ads.txt": (200, f"{ac.APP}/ads.txt", ac.ADS_LINE + "\n", [f"301 → {ac.APP}/ads.txt"]),
         f"{ac.APP}/ads.txt": (200, f"{ac.APP}/ads.txt", ac.ADS_LINE + "\n", []),
         f"{ac.APP}/robots.txt": (200, "", "User-agent: Mediapartners-Google\nAllow: /\nUser-agent: Google-Display-Ads-Bot\nAllow: /\nUser-agent: *\nDisallow: /\n", []),
-        f"{ac.APP}/": (200, "", meta, []),
-        f"{ac.APP}/races": (200, "", meta, []),
+        **{f"{ac.APP}{p}": (200, "", meta, []) for p in ac.PAGES},
     }
     monkeypatch.setattr(ac, "_get", _fake(routes))
     assert ac.main(["--no-api"]) == 0  # stg が届かなくても 0
@@ -85,3 +84,8 @@ def test_review_state_bad_file_is_not_unset(monkeypatch, tmp_path):
     bad.write_text('{"client_id": "x"}', encoding="utf-8")
     monkeypatch.setenv("ADSENSE_OAUTH_FILE", str(bad))
     assert "設定の誤り" in ac.review_state()[0]
+
+
+def test_text_chars_ignores_scripts_and_tags():
+    html = "<html><head><script>var a='長い文字列';</script><style>p{}</style></head><body><p>本文 です</p></body></html>"
+    assert ac.text_chars(html) == 4
