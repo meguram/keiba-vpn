@@ -24,7 +24,7 @@ def _predicted_odds_for(c, predicted: dict | None) -> float | None:
     return None
 
 
-SKIP_NOTE = "このレースは見送りです（推奨馬券はありません）。"
+SKIP_NOTE = "このレースは見送りです（サンプル買い目はありません）。"
 
 
 def is_skipped_payload(payload: dict[str, Any]) -> bool:
@@ -332,7 +332,7 @@ def _optimize_target(body: dict[str, Any], view: str, storage: Any | None = None
     return {
         "view": view, **out, "race_tier": tier, "legend": PZ.legend(), "max_total_bet": cap,
         "disclaimer": cfg.get("notice") or PZ.disclaimer(), "evidence": cfg.get("evidence"),
-        "note": "購入額は『当たったときに払戻が約%g倍になる』ように決めています。倍率・払戻は想定オッズ（AI の予測）で、実際のオッズではありません。" % out["target_multiple"],
+        "note": "金額は『当たったときに払戻が約%g倍になる』ように決めています。倍率・払戻は想定オッズ（AI の予測）で、実際のオッズではありません。" % out["target_multiple"],
     }, 200
 
 
@@ -362,7 +362,7 @@ def bet_horse_marks(race_id: str) -> dict[int, str] | None:
 
 
 def _paid_error(payload: dict[str, Any], code: int) -> tuple[dict[str, Any], int]:
-    return {"view": "paid", "error": str(payload.get("error") or "推奨馬券を計算できません")}, code
+    return {"view": "paid", "error": str(payload.get("error") or "サンプル買い目を計算できません")}, code
 
 
 def _predicted_singles(storage, race_id: str) -> dict | None:

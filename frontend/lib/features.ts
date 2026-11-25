@@ -1,7 +1,7 @@
 /**
  * UI 機能フラグ（唯一の正）。
  *
- * 現在の UI のゴールは「AI 予測結果の表示 → 期待値計算 → 推奨馬券の提示」の最小構成。
+ * 現在の UI のゴールは「AI 予測結果の表示 → 期待値計算 → サンプル買い目の提示」の最小構成。
  * それ以外の機能はコードを残したまま enabled:false で隠している（ホームのカード・ナビ・
  * 直リンクが対象。API は変更しない）。
  *
@@ -21,7 +21,7 @@ export type FeatureDef = {
 export const FEATURES = {
   // ── 最小構成（有効） ──
   predictions: { label: "AI予測（レース一覧・予測表示）", enabled: true, paths: ["/weekly-predictions", "/races"] },
-  "race-detail": { label: "レース詳細（予測・期待値・推奨馬券）", enabled: true, paths: ["/race"] },
+  "race-detail": { label: "レース詳細（予測・期待値・サンプル買い目）", enabled: true, paths: ["/race"] },
   betting: { label: "馬券最適化", enabled: false, paths: ["/betting"] },
   "prediction-results": { label: "予測成績（予測結果の集計・ホームの速報）", enabled: true, paths: ["/prediction-results"] },
   auth: { label: "ログイン", enabled: true, paths: ["/login"] },

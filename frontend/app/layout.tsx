@@ -5,6 +5,7 @@ import { NavProgress } from "@/components/NavProgress";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
+import { SiteFooter } from "@/components/SiteFooter";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -41,6 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }
         >
           {children}
+          <SiteFooter />
         </MaintenanceShell>
       </body>
     </html>

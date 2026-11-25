@@ -160,7 +160,7 @@ export function PredictionNews() {
         </div>
       </div>
       {!loading && !isMember && (
-        <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--text-dim)" }}>推奨馬券の回収率は、ログインすると表示されます。</p>
+        <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--text-dim)" }}>サンプル買い目の回収率は、ログインすると表示されます。</p>
       )}
     </section>
   );

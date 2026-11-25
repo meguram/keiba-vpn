@@ -165,7 +165,7 @@ type PredData = {
   gate_bias?: GateBias;
   status?: string;
   has_prediction?: boolean;
-  /** "bets" = 印を推奨馬券（買い目）から決めている */
+  /** "bets" = 印をサンプル買い目（買い目）から決めている */
   model_type?: string;
   model_description?: string;
   prediction_source?: string;
@@ -178,7 +178,7 @@ type PredData = {
   prob_calibration?: ProbCalibration | null;
   /** 出馬表の公示の段階（特別登録／出走馬決定／出馬表確定／馬体重発表済み）と最終更新 */
   entries_status?: EntriesStatus | null;
-  /** 予測パイプライン（出馬表→馬体重→AI予測→オッズ→推奨買い目）の進み具合 */
+  /** 予測パイプライン（出馬表→馬体重→AI予測→オッズ→サンプル買い目）の進み具合 */
   pipeline_status?: PipelineStatusData | null;
   provisional_entries?: boolean;
   [k: string]: unknown;
@@ -211,7 +211,7 @@ function gradeStyle(grade: string | undefined): React.CSSProperties {
 
 function evColor(v: number | null | undefined, cal = false): string {
   if (v == null) return "var(--text-dim)";
-  if (cal) return v >= 1.1 ? "var(--ok)" : v >= 1.0 ? "var(--accent)" : v >= 0.9 ? "var(--text-dim)" : "var(--err)";      // 較正後: 買い推奨度の閾値に合わせる
+  if (cal) return v >= 1.1 ? "var(--ok)" : v >= 1.0 ? "var(--accent)" : v >= 0.9 ? "var(--text-dim)" : "var(--err)";      // 較正後: 買い判断（buy_tier）の閾値に合わせる
   if (v >= 1.3) return "var(--ok)";
   if (v >= 1.0) return "var(--accent)";
   if (v >= 0.8) return "var(--text-dim)";
@@ -223,7 +223,7 @@ type Tab = "shutuba" | "result" | "predict" | "bet" | "horses";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "predict", label: "🤖 AI予測・期待値" },
-  { id: "bet", label: "💴 推奨馬券" },
+  { id: "bet", label: "💴 サンプル買い目" },
   { id: "shutuba", label: "出馬表" },
   { id: "result", label: "レース結果" },
   ...(SHOW_TRACKING ? [{ id: "horses" as Tab, label: "出走馬詳細" }] : []),
@@ -854,7 +854,7 @@ export default function RaceDetailPage() {
       ) : null}
 
       <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 12 }}>
-        買い判断は期待値の最大で判定。期待値: {calibratedEv ? "過去の実績に合わせて較正した期待回収率。緑≥1.10 / 青≥1.00 / 灰≥0.90 / 赤＜0.90。推奨は較正後の期待値の最大で判定" : "緑≥1.3 / 青≥1.0 / 赤＜0.8"}
+        買い判断は期待値の最大で判定。期待値: {calibratedEv ? "過去の実績に合わせて較正した期待回収率。緑≥1.10 / 青≥1.00 / 灰≥0.90 / 赤＜0.90。買い判断（期待値 高・中・様子見）は較正後の期待値の最大で判定" : "緑≥1.3 / 青≥1.0 / 赤＜0.8"}
       </p>
     </div>
   );
@@ -949,7 +949,7 @@ export default function RaceDetailPage() {
       {tab === "shutuba" && ShutubaTbl}
       {tab === "result" && renderResultTbl()}
       {tab === "predict" && PredPanel}
-      {tab === "bet" && (lock ? <MemberLockCard title="推奨馬券" /> : <BetRecommend raceId={raceId} hasPrediction={hasPred} />)}
+      {tab === "bet" && (lock ? <MemberLockCard title="サンプル買い目" /> : <BetRecommend raceId={raceId} hasPrediction={hasPred} />)}
       {tab === "horses" && HorseDetails}
     </div>
   );

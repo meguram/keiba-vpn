@@ -597,9 +597,9 @@ def buy_recommendation_tier(entry: dict) -> str:
     else:
         best = max(float(entry.get("ev_win") or 0), float(entry.get("ev_top2") or 0), float(entry.get("ev_place") or 0))
     if best >= th["strong"]:
-        return "強推奨"
+        return "期待値 高"
     if best >= th["recommend"]:
-        return "推奨"
+        return "期待値 中"
     if best >= th["watch"]:
         return "様子見"
     return "—"

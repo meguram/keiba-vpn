@@ -162,7 +162,7 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", fontSize: 11, color: "var(--text-dim)" }}>
           {hasTier(values) ? (
             <>
-              <span>買い目の推奨度:</span>
+              <span>買い目の参考度:</span>
               {TIER_LEGEND.map((t) => (
                 <span key={t.label} title={isTargetValues(values) ? TARGET_TIER_HINT[t.label] : LEVEL_STYLE[t.level].hint} style={{ padding: "1px 8px", borderRadius: 6, border: `1px solid ${LEVEL_STYLE[t.level].border}`, background: LEVEL_STYLE[t.level].bg, color: LEVEL_STYLE[t.level].color, opacity: t.level === "pass" ? 0.8 : 1 }}>
                   {t.level === "hot" ? "★ " : ""}{t.label}
@@ -172,7 +172,7 @@ export function RaceNav({ raceId, date }: { raceId: string; date: string }) {
             </>
           ) : (
             <>
-              <span>推奨の期待回収率（較正後）:</span>
+              <span>サンプル買い目の期待回収率（較正後）:</span>
               {(["hot", "good", "ok", "pass"] as ValueLevel[]).map((k) => (
             <span key={k} title={LEVEL_STYLE[k].hint} style={{ padding: "1px 8px", borderRadius: 6, border: `1px solid ${LEVEL_STYLE[k].border}`, background: LEVEL_STYLE[k].bg, color: LEVEL_STYLE[k].color, opacity: k === "pass" ? 0.8 : 1 }}>
               {LEVEL_STYLE[k].label}

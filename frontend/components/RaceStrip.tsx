@@ -33,7 +33,7 @@ export function useNarrow(): boolean {
 
 /**
  * 開催日の中でレースを移動するバー。レース詳細（RaceNav）と同じ作り:
- * 開催場タブ（★ = 特に価値の高いレースの数）、R チップ（推奨の期待回収率で色分け）、前後の R ボタン。
+ * 開催場タブ（★ = 特に価値の高いレースの数）、R チップ（サンプル買い目の期待回収率で色分け）、前後の R ボタン。
  */
 export function RaceStrip({
   races, venue, onVenue, values, valuesState, selectedRaceId, onSelectRace, onWarm, showValue = true, disabledIds, disabledHint = "まだ選べません",
@@ -42,7 +42,7 @@ export function RaceStrip({
   venue: string;
   onVenue: (v: string) => void;
   values: Map<string, RaceValue>;
-  /** 推奨度の取得状態（取得中は『…』、失敗は『!』を出して、未計算の『–』と区別する） */
+  /** 参考度の取得状態（取得中は『…』、失敗は『!』を出して、未計算の『–』と区別する） */
   valuesState?: { loading: boolean; failed: boolean };
   selectedRaceId: string;
   onSelectRace: (raceId: string) => void;
@@ -51,7 +51,7 @@ export function RaceStrip({
   /** 選べないレース（出馬表が未取得など）。チップを無効にし、前後ボタンもそのレースには移動しない */
   disabledIds?: Set<string>;
   disabledHint?: string;
-  /** false にすると、R チップの推奨度（下段の文字・凡例・★）を出さない（推奨度と無関係な画面で使うとき） */
+  /** false にすると、R チップの参考度（下段の文字・凡例・★）を出さない（参考度と無関係な画面で使うとき） */
   showValue?: boolean;
 }) {
   const narrow = useNarrow();
@@ -169,7 +169,7 @@ export function RaceStrip({
 
       {showValue && values.size > 0 && !narrow && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", fontSize: 11, color: "var(--text-dim)" }}>
-          <span>{hasTier(values) ? "買い目の推奨度:" : "推奨の期待回収率:"}</span>
+          <span>{hasTier(values) ? "買い目の参考度:" : "サンプル買い目の期待回収率:"}</span>
           {hasTier(values)
             ? TIER_LEGEND.map((t) => (
               <span key={t.label} title={isTargetValues(values) ? TARGET_TIER_HINT[t.label] : LEVEL_STYLE[t.level].hint} style={{ padding: "1px 8px", borderRadius: 6, border: `1px solid ${LEVEL_STYLE[t.level].border}`, background: LEVEL_STYLE[t.level].bg, color: LEVEL_STYLE[t.level].color, opacity: t.level === "pass" ? 0.8 : 1 }}>

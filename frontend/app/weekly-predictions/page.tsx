@@ -129,7 +129,7 @@ function fmtPct(v: number | null | undefined): string {
   return `${(v * 100).toFixed(1)}%`;
 }
 
-/** 較正後の期待値（cal=true）の色の閾値は、買い推奨度（強推奨 1.10 / 推奨 1.00 / 様子見 0.90）に合わせる */
+/** 較正後の期待値（cal=true）の色の閾値は、買い判断（buy_tier: 期待値 高 1.10 / 中 1.00 / 様子見 0.90）の閾値に合わせる */
 function fmtEv(v: number | null | undefined, cal = false): { text: string; color: string; bg: string } {
   if (v == null) return { text: "-", color: "var(--text-dim)", bg: "transparent" };
   const n = Number(v);
@@ -513,7 +513,7 @@ function RacePanel({
     }
     return m;
   }, [preds]);
-  const tabs: [typeof tab, string][] = [["predict", "AI予測・期待値"], ["bet", "推奨馬券"], ...(result ? [["result", "レース結果"] as [typeof tab, string]] : started && !locked ? [["result", "レース結果（待ち）"] as [typeof tab, string]] : [])];
+  const tabs: [typeof tab, string][] = [["predict", "AI予測・期待値"], ["bet", "サンプル買い目"], ...(result ? [["result", "レース結果"] as [typeof tab, string]] : started && !locked ? [["result", "レース結果（待ち）"] as [typeof tab, string]] : [])];
 
   return (
     <section
@@ -552,7 +552,7 @@ function RacePanel({
               boxShadow: LEVEL_STYLE[value.level].glow,
             }}
           >
-            {value.level === "hot" ? "★ " : ""}推奨 {value.tier?.label ?? (value.expected_roi != null ? `${(value.expected_roi * 100).toFixed(0)}%` : "見送り")}
+            {value.level === "hot" ? "★ " : ""}{value.tier?.label ? `参考度 ${value.tier.label}` : value.expected_roi != null ? `期待回収率 ${(value.expected_roi * 100).toFixed(0)}%` : "見送り"}
           </span>
         )}
 
@@ -680,7 +680,7 @@ export default function WeeklyPredictionsPage() {
     const v = q.get("venue");
     if (v) setSelectedVenue(v);
     const dq = q.get("date");
-    if (dq && /^\d{8}$/.test(dq) && !USE_MOCK) {         // 開催日一覧・認証の確認を待たずに、開く日のレース一覧と推奨度を先に取り始める
+    if (dq && /^\d{8}$/.test(dq) && !USE_MOCK) {         // 開催日一覧・認証の確認を待たずに、開く日のレース一覧と参考度を先に取り始める
       prefetchJson(`/api/race-list/${dq}`, { ttlMs: 60_000 });
       prefetchRaceValues(dq);
     }
@@ -748,7 +748,7 @@ export default function WeeklyPredictionsPage() {
         const list: string[] = d.dates ?? d ?? [];
         setDates(list);
         if (list.length) setSelectedDate(initial(list));
-        if (list.length) {                                  // 近い開催日の推奨度も裏で温めておく（日付を切り替えたときすぐ出る）
+        if (list.length) {                                  // 近い開催日の参考度も裏で温めておく（日付を切り替えたときすぐ出る）
           const t0 = new Date();
           const day = (x: string) => Date.UTC(+x.slice(0, 4), +x.slice(4, 6) - 1, +x.slice(6, 8));
           const near = list.filter((x) => Math.abs(day(x) - Date.UTC(t0.getFullYear(), t0.getMonth(), t0.getDate())) <= 7 * 86400000).slice(0, 8);
@@ -920,7 +920,7 @@ export default function WeeklyPredictionsPage() {
         <details className="wp-legend" open={!narrow}>
         <summary>印・期待値の見方</summary>
         <div style={{ marginBottom: 16, padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-dim)", display: "flex", gap: 16, flexWrap: "wrap" }}>
-          <span>推奨馬券が出るレースの印は推奨馬券から決まります（◎=買い目の購入額が最大・○▲=2・3番手・△=買い目に入るその他の馬・買い目に入らない馬は印なし）。見送りのレースは下の定義のままです。</span>
+          <span>サンプル買い目が出るレースの印はサンプル買い目から決まります（◎=買い目の金額が最大・○▲=2・3番手・△=買い目に入るその他の馬・買い目に入らない馬は印なし）。見送りのレースは下の定義のままです。</span>
           <span>印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / 消: 3着内に来る確率が低い（10人気以下で複勝確率が低い馬。過去の実績では約2.5%・目標5%以下。複数付くことも付かないこともある）</span>
           <span>
             期待値（過去の実績に合わせて較正した期待回収率）: <strong style={{ color: "#22c55e" }}>≥1.10</strong> / <strong style={{ color: "#60a5fa" }}>≥1.00</strong> / <strong style={{ color: "var(--text-dim)" }}>≥0.90</strong> / <strong style={{ color: "#f87171" }}>＜0.90</strong>
