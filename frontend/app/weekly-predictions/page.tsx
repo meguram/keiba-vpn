@@ -13,7 +13,7 @@ import { useAutoRetry } from "@/lib/hooks/useAutoRetry";
 import { PredictionSourceBadge } from "@/components/PredictionSourceBadge";
 import { WeekPicker } from "@/components/WeekPicker";
 import { sameRoundIn } from "@/lib/raceGrade";
-import { RaceStrip, useNarrow } from "@/components/RaceStrip";
+import { RaceStrip } from "@/components/RaceStrip";
 import { CardTab, EntryCardPanel } from "@/components/EntryCardPanel";
 import { MeguTable } from "@/components/MeguTable";
 import { WeeklyBetTab } from "@/components/WeeklyBetTab";
@@ -433,7 +433,7 @@ function PredTable({ raceId, preds, hasPred, message, megu }: { raceId: string; 
             <tr>
               {th("bracket", "枠", { title: "枠番（前日に確定）" })}
               {th("num", "馬番")}
-              {th("mark", "印", { title: "印。押すと ◎ > ○ > ▲ > ★ > △ > 無印 > 消 の順（もう一度押すと逆）" })}
+              {th("mark", "印", { title: "印（◎○▲★△消）。押すと ◎ > ○ > ▲ > ★ > △ > 無印 > 消 の順（もう一度押すと逆）" })}
               {th("name", "馬名", { align: "left", title: "馬名（押すと近走・血統・騎手・調教師の情報）" })}
               {th("win", <>{lock ? "🔒" : ""}AI<br />勝率</>, { align: "right", cls: "sep", title: lock ? "AI の勝率（会員限定）" : "AI の勝率" })}
               {th("top3", <>{lock ? "🔒" : ""}AI<br />複勝率</>, { align: "right", title: lock ? "AI の複勝率（会員限定）" : "AI の複勝率（3着以内に入る確率）" })}
@@ -648,7 +648,6 @@ function RacePanel({
 
 /* ── メインページ ── */
 export default function WeeklyPredictionsPage() {
-  const narrow = useNarrow();
   const [dates, setDates] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState("");
   const [races, setRaces] = useState<RaceItem[]>([]);
@@ -931,18 +930,7 @@ export default function WeeklyPredictionsPage() {
 
       {/* メインコンテンツ */}
       <div className="wp-main" style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 24px" }}>
-        {/* 凡例（狭い画面では折りたたむ） */}
-        <details className="wp-legend" open={!narrow}>
-        <summary>印・期待値の見方</summary>
-        <div style={{ marginBottom: 16, padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11, color: "var(--text-dim)", display: "flex", gap: 16, flexWrap: "wrap" }}>
-          <span>サンプル買い目が出るレースの印はサンプル買い目から決まります（◎=買い目の金額が最大・○▲=2・3番手・△=買い目に入るその他の馬・買い目に入らない馬は印なし）。見送りのレースは下の定義のままです。</span>
-          <span>印の列は、見出しを押すと ◎ &gt; ○ &gt; ▲ &gt; ★ &gt; △ &gt; 無印 &gt; 消 の順に並びます。</span>
-          <span>印: ◎1着優位・○連対候補・▲単穴・★中穴妙味は各1頭 / △は馬券内に来るかもしれない馬（複数・3連系の相手候補） / 消: 3着内に来る確率が低い（10人気以下で複勝確率が低い馬。過去の実績では約2.5%・目標5%以下。複数付くことも付かないこともある）</span>
-          <span>
-            期待値（過去の実績に合わせて較正した期待回収率）: <strong style={{ color: "#22c55e" }}>≥1.10</strong> / <strong style={{ color: "#60a5fa" }}>≥1.00</strong> / <strong style={{ color: "var(--text-dim)" }}>≥0.90</strong> / <strong style={{ color: "#f87171" }}>＜0.90</strong>
-          </span>
-        </div>
-        </details>
+        {/* 印・期待値の凡例は外した（2026-11-25 ユーザーの指摘）。印の並びは印の列の見出しの title に 1 行 */}
 
         {loadingRaces && <LoadingNotice what="レース一覧" size={36} padding="60px 0" onRetry={() => loadRaces(selectedDate)} />}
 
