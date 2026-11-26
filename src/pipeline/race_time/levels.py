@@ -39,15 +39,16 @@ def pace_label(z: float | None) -> str | None:
     return "ハイ" if z <= -PACE_Z else "スロー" if z >= PACE_Z else "平均"
 
 
-def shrink_k(per1k: pd.Series, keys: pd.DataFrame) -> float:
-    """縮みの強さ k = 日の中のばらつき ÷ 日の間のばらつき（2〜10 に切る）。学習の期間の値で決めて固定する。"""
+def shrink_k(per1k: pd.Series, keys: pd.DataFrame, clip: bool = True) -> float:
+    """縮みの強さ k = 日の中のばらつき ÷ 日の間のばらつき（clip=True なら 2〜10 に切る）。学習の期間の値で決めて固定する。
+    近い形の推定（平均の件数・平均の分散）で、開催日レベルは中央値なので本来の k はもう少し大きい（12/1 以降に直す）。"""
     d = pd.concat([keys.reset_index(drop=True), per1k.reset_index(drop=True).rename("v")], axis=1).dropna()
     g = d.groupby(["date", "venue", "surf"])["v"]
     within = float(g.var(ddof=1).dropna().mean())
     between = float(g.mean().var(ddof=1)) - within / float(g.size().mean())
     if not np.isfinite(within) or not np.isfinite(between) or between <= 0:
         return K_MAX
-    return float(np.clip(within / between, K_MIN, K_MAX))
+    return float(np.clip(within / between, K_MIN, K_MAX)) if clip else float(within / between)
 
 
 def _shrunk_median(v: np.ndarray, k: float) -> float:

@@ -3,10 +3,10 @@
 形（すべての変数で単調。ユーザーの指定 2026-11-26「基本は単調増加か単調減少。これを破らない」）:
     T̂ = a_c + s_cls·Σ_j B^cls_{c,j} I_j(クラス) + s_pace·Σ_j B^pace_{c,j} I_j(前半の差) + s_fld·Σ_j B^fld_{c,j} I_j(頭数)
          − (d1·[年齢≥3歳] + d2·[年齢≥古馬]) + b_new·[新馬]
-- I_j は 2 次の I-spline（C1 で滑らか・0→1 の単調）。係数 B ≥ 0 なので、各コースの合計の曲線が必ず単調（係数の制約で保証）。
+- I_j は 3 次の B-spline を右から足した I-spline（C2 で滑らか・0→1 の単調。DEGREE=2 は「次数 +1 の B-spline を使う」の意味）。係数 B ≥ 0 なので、各コースの合計の曲線が必ず単調（係数の制約で保証）。
 - 向き: クラスは上がるほど速い（s=−1）、前半が遅いほど遅い（s=+1）、年齢は古馬ほど速い（d≥0）。
   頭数の向きは、増と減の両方で当てはめて損失（検証の期間の残差の MAD）の小さい方に固定する（数字を見る前に決めた規則）。
-- コースごとの傾き B_c は、共通の形 θ へ縮める（ridge。λ は検証の期間の MAD で {20, 100, 500} から選ぶ）。
+- コースごとの傾き B_c は、共通の形 θ へ縮める（ridge。λ の選び方は src/research/race_time/__main__.py。v2 は学習の中で {1,5,20,100,500}）。
   水準 a_c は、芝ダ × 距離帯の水準へ縮める（λa=20）。滑らかさ: 隣の係数の差に小さい罰則（ρ=2）。
 - 損失: Huber（δ = 1.345 × 最初の当てはめの残差の MAD×1.4826）。
 """
@@ -235,7 +235,9 @@ class RaceTimeModel:
             return float(loss), np.concatenate([G[k].ravel() for k, _ in shapes])
 
         v = np.concatenate([P0[k].ravel() for k, _ in shapes])
+        used_delta = delta[0]
         for stage in range(2):                                            # 1 回目の残差の MAD から δ を決めて当てはめ直す
+            used_delta = delta[0]
             res = minimize(obj, v, jac=True, method="L-BFGS-B", bounds=self._bounds(), options={"maxiter": maxiter})
             v = res.x
             r = y - self._predict_design(self._unpack(v), D)
@@ -249,7 +251,7 @@ class RaceTimeModel:
             if len(g) >= 50:
                 self.resid_q[str(key)] = [round(float(x), 4) for x in np.quantile(g["r"], qs)]
         self.resid_q["_all"] = [round(float(x), 4) for x in np.quantile(r, qs)]
-        self.meta.update({"n_train": int(len(d)), "converged": bool(res.success), "huber_delta": round(delta[0], 4),
+        self.meta.update({"n_train": int(len(d)), "converged": bool(res.success), "huber_delta": round(used_delta, 4),
                           "train_mad": round(float(np.median(np.abs(r))), 4), "n_courses": K})
         return self
 

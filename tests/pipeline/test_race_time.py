@@ -101,3 +101,44 @@ def test_age_from_runners_when_race_class_is_missing():
 
     assert age_ord_from_runners(["牡2", "牝2"]) == 0 and age_ord_from_runners(["牡3", "牝3"]) == 1
     assert age_ord_from_runners(["牡3", "牡5"]) == 2 and age_ord_from_runners([None, ""]) is None
+
+
+def test_compare_helpers():
+    from src.research.race_time.__main__ import icc, loo_mad, next_day_corr
+
+    rng = np.random.default_rng(0)
+    rows = []
+    for day in range(60):
+        eff = rng.normal(0, 1.0)
+        for r in range(6):
+            rows.append({"date": f"2024{1 + day // 28:02d}{1 + day % 28:02d}", "venue": "東京", "surf": "芝", "v": eff + rng.normal(0, 0.3), "w": rng.normal(0, 1.0)})
+    d = pd.DataFrame(rows)
+    assert icc(d, "v") > 0.8 and abs(icc(d, "w")) < 0.2                                           # 日の分が大きいほど ICC が高い
+    assert loo_mad(d, "v")[0] < loo_mad(d, "w")[0]                                                 # 日の分を引くとばらつきが小さい
+    corr, n = next_day_corr(d, "v")
+    assert n > 10 and np.isfinite(corr)
+
+
+def test_engine_rebuilt_restores_module_constants_and_never_writes_the_real_baselines(monkeypatch, tmp_path):
+    import src.research.race.track_speed_engine as E
+    from src.research.race_time import __main__ as R
+
+    before = (E.BASELINES_PATH, E.PACE_BASELINES_PATH, E.COND_POOLS, E.COND_CANDIDATES, E.PROJECT_ROOT)
+    seen = {}
+
+    class Boom:
+        def __init__(self, base_dir):
+            seen["bl"] = E.BASELINES_PATH
+            seen["root"] = E.PROJECT_ROOT
+            seen["pools"] = dict(E.COND_POOLS)
+
+        def build_baselines(self, years):
+            raise RuntimeError("止める")
+
+    monkeypatch.setattr(E, "TrackSpeedEngine", Boom)
+    with pytest.raises(RuntimeError):
+        R.engine_rebuilt([2016], [2023], cond=False, work=tmp_path)
+    assert str(seen["bl"]).startswith(str(tmp_path)) and str(seen["root"]).startswith(str(tmp_path))   # 書き先は一時のフォルダだけ
+    assert list(seen["pools"]) == ["all"]                                                              # 群なしの版
+    assert (E.BASELINES_PATH, E.PACE_BASELINES_PATH, E.COND_POOLS, E.COND_CANDIDATES, E.PROJECT_ROOT) == before   # 例外でも戻る
+    assert (tmp_path / "root_nocond/data/local/knowledge").is_symlink()                                 # 内外・改修の表を読ませる
