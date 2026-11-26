@@ -64,6 +64,19 @@ def age_ord(race_class: str | None) -> int | None:
     return None
 
 
+def age_ord_from_runners(sex_ages: Iterable[Any]) -> int | None:
+    """race_class が空のとき（2026-11 の結果表の一部）: 出走馬の性齢の最高の年齢から。2 歳だけなら 0、最高が 3 歳なら 1、それより上は 2。"""
+    ages = []
+    for v in sex_ages:
+        digits = "".join(ch for ch in str(v or "") if ch.isdigit())
+        if digits:
+            ages.append(int(digits))
+    if not ages:
+        return None
+    top = max(ages)
+    return 0 if top <= 2 else 1 if top == 3 else 2
+
+
 def _laps(v: Any) -> list | None:
     if v is None:
         return None
@@ -81,8 +94,8 @@ def _laps(v: Any) -> list | None:
 def race_table(years: Iterable[int], tables_root: Path) -> pd.DataFrame:
     """レースごとの入力の表。列: race_id, date, venue, surf, distance, course, class_ord, newcomer, age_ord, field_size,
     front600, y_top5, y_win, y_2nd, n_finish, track_condition。"""
-    cols = ["race_id", "date", "venue", "surface", "distance", "grade", "race_class", "field_size", "lap_times",
-            "finish_position", "time_sec", "track_condition"]
+    cols = ["race_id", "date", "venue", "surface", "distance", "grade", "race_class", "race_name", "field_size", "lap_times",
+            "finish_position", "time_sec", "track_condition", "sex_age"]
     rows = []
     for y in years:
         p = Path(tables_root) / str(y) / "race_result_flat.parquet"
@@ -96,7 +109,11 @@ def race_table(years: Iterable[int], tables_root: Path) -> pd.DataFrame:
                 continue
             h = g.iloc[0]
             co = CLASS_ORD.get(str(h["grade"]))
-            ao = age_ord(h["race_class"])
+            ao = age_ord(h["race_class"]) if h["race_class"] else None
+            if ao is None:
+                ao = age_ord(h["race_name"]) if any(t in str(h["race_name"] or "") for t in ("歳",)) else None
+            if ao is None:
+                ao = age_ord_from_runners(g["sex_age"])
             dist = int(h["distance"])
             fr = front_time_at(_laps(h["lap_times"]), dist, 600.0)
             if co is None or ao is None:

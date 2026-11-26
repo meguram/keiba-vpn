@@ -7824,15 +7824,26 @@ def _tracking_difficulty_public_payload(data: dict) -> dict:
 
 
 @app.get("/api/race/{race_id}/result", response_class=JSONResponse)
-async def api_race_result(race_id: str):
-    """レース結果（着順・払戻）。確定があれば確定、無ければ発走 +15 分に取る速報。無いときは available=false。"""
+async def api_race_result(request: Request, race_id: str):
+    """レース結果（着順・払戻）。確定があれば確定、無ければ発走 +15 分に取る速報。無いときは available=false。
+    確定のレースには、会員・開発者だけにレースレベル・開催日レベル・メンバーレベル（race_level。ホストで事前に計算した値を読むだけ。
+    src/pipeline/race_time/levels.py）を足す。匿名の応答には入れない（共有キャッシュに置く匿名の応答と混ざらない）。"""
     if not (race_id.isdigit() and len(race_id) == 12):
         return JSONResponse({"error": "race_id は 12 桁の数字です"}, status_code=400)
+    with_level = is_member(request) or is_developer(request)
 
     def _run():
         from src.pipeline.inference.race_result_view import build_result_view
 
-        return build_result_view(_get_storage(), race_id)
+        view = build_result_view(_get_storage(), race_id)
+        if with_level and view.get("available") and view.get("status") == "final":
+            try:
+                from src.pipeline.race_time.levels import result_block
+
+                view["race_level"] = result_block(race_id, str(view.get("date") or race_id[:4]))
+            except Exception as exc:  # noqa: BLE001  レベルが読めなくても結果は返す
+                logger.warning("レースレベルの読み込みに失敗 %s: %s", race_id, exc)
+        return view
 
     return JSONResponse(await asyncio.to_thread(_run))
 

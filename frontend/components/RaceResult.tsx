@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import type { RaceResultData } from "@/lib/hooks/useRaceResult";
+import type { RaceLevel, RaceResultData } from "@/lib/hooks/useRaceResult";
 import { MARK_ORDER } from "@/lib/tableSort";
 
 const TH: CSSProperties = { padding: "5px 8px", textAlign: "right", fontSize: 12, color: "var(--text-dim)", fontWeight: 600, whiteSpace: "nowrap" };
@@ -12,6 +12,33 @@ const yen = (n: number) => `${n.toLocaleString("ja-JP")}円`;
 /** そのレースのめぐAI印（馬番 → ◎○▲★△消。無印は入れない）。予測の表と同じ印（確定したレースは発走前の最後のオッズで付けた印） */
 export type MarkMap = Record<number, string>;
 
+
+/** 秒の値（負なら速い）を「−0.8 秒」の形に */
+const secText = (v: number | null | undefined) => (v == null ? null : `${v > 0 ? "+" : v < 0 ? "−" : "±"}${Math.abs(v).toFixed(1)} 秒`);
+
+/** レース結果の上の 3 行: レースレベル（ペース補正後と補正前・ペース）・開催日レベル・メンバーレベル。値は事前に計算したものを読むだけ */
+export function RaceLevelNote({ lv }: { lv?: RaceLevel }) {
+  if (!lv) return null;
+  const box: CSSProperties = { margin: "0 0 10px", padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)", fontSize: 12.5, lineHeight: 1.7 };
+  if (!lv.available) return <div style={box}><b>レースレベル</b>：算出なし</div>;
+  const r = lv.race, d = lv.day, m = lv.member;
+  const withWord = (sec: number | null | undefined, w: string | null | undefined) => (sec == null ? "算出なし" : `${secText(sec)}${w ? `・${w}` : ""}`);
+  const memberText = m?.sec == null ? "算出なし"
+    : Math.abs(m.sec) < 0.05 ? `同じクラスの基準と同じくらい${m.word ? `（${m.word}）` : ""}`
+    : `同じクラスの基準より ${Math.abs(m.sec).toFixed(1)} 秒${m.sec < 0 ? "速い" : "遅い"}${m.word ? `（${m.word}）` : ""}`;
+  return (
+    <div style={box} data-testid="race-level">
+      <div><b>レースレベル（ペース補正後）</b>：{withWord(r?.sec, r?.word)}
+        {r?.raw_sec != null && <span style={{ color: "var(--text-dim)" }}> ／ 補正前 {secText(r.raw_sec)}</span>}
+        {r?.pace && <span style={{ color: "var(--text-dim)" }}> ／ ペース：{r.pace}</span>}</div>
+      <div><b>開催日レベル{d?.venue ? `（${d.venue}${d.surf ?? ""}）` : ""}</b>：{withWord(d?.sec, d?.word)}</div>
+      <div><b>メンバーレベル（馬場・ペース補正後）</b>：{memberText}</div>
+      <div style={{ marginTop: 4, fontSize: 11, color: "var(--text-dim)" }}>
+        秒はこのレースの距離の分で、負の値は基準より速い。{lv.formula} 基準の時計の関数は、従来の馬場の速さの物差しより一つ抜きのばらつきで 1000m あたり 0.02 秒だけ良かった（同じ日の一貫性は従来の方が高い）。
+      </div>
+    </div>
+  );
+}
 
 /** 週間予測の『レース結果』タブ。着順表（めぐAI印つき）と払戻表。速報は払戻が揃うまで『速報』と出す。 */
 export function RaceResult({ result, marks }: { result: RaceResultData; marks?: MarkMap }) {
@@ -29,6 +56,7 @@ export function RaceResult({ result, marks }: { result: RaceResultData; marks?: 
         {result.fetched_at && <span style={{ color: "var(--text-dim)", fontSize: 11.5 }}>取得 {result.fetched_at}</span>}
       </div>
 
+      {!provisional && <RaceLevelNote lv={result.race_level} />}
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid var(--border)", background: "var(--surface)" }}>
           <thead style={{ background: "var(--surface2)" }}>

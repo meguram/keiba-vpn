@@ -13,6 +13,15 @@ export type RaceResultData = {
   available: boolean; race_id: string; status?: "final" | "provisional"; official?: boolean;
   race_name?: string; date?: string; venue?: string; surface?: string; distance?: number | null; weather?: string; track_condition?: string; start_time?: string;
   field_size?: number | null; finish?: ResultFinish[]; payoff?: ResultPayoff[]; fetched_at?: string;
+  /** 確定のレースだけ・会員と開発者だけ。ホストで事前に計算した値（src/pipeline/race_time/levels.py） */
+  race_level?: RaceLevel;
+};
+/** レースレベル・開催日レベル・メンバーレベル（秒。負なら基準より速い）。値が無ければ available=false で「算出なし」 */
+export type RaceLevel = {
+  available: boolean; note?: string; version?: string; built?: string; formula?: string;
+  race?: { sec: number | null; raw_sec: number | null; word: string | null; pace: string | null };
+  day?: { sec: number | null; word: string | null; venue?: string; surf?: string; n_races?: number | null };
+  member?: { sec: number | null; word: string | null };
 };
 
 /** 速報は発走 15 分後に取得されるので、発走後 1 分おきに見に行く（確定の払戻まで揃ったら止める）。この時間を過ぎたら追いかけない。 */

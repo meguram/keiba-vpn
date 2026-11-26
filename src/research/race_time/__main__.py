@@ -273,11 +273,67 @@ def cmd_compare2(a: argparse.Namespace) -> None:
                      ensure_ascii=False, indent=1, default=float))
 
 
+LEVEL_DIR = Path(os.environ.get("KEIBA_RACE_LEVEL_OUT") or REPO / "data/page_reference/race_level")   # 書き先（既定は作業場所の data/）
+
+
+def member_next_run_check(levels: pd.DataFrame, tables: Path, years: list[int]) -> dict:
+    """メンバーレベルの確かめ（計画で固定。2023〜24）: 3 分位ごとに、出走馬が次走で同じクラスに出たときの 3 着内率と着順の偏差（着順 ÷ 頭数）。
+    高い組（速い側）が、低い組より 3 着内率が高く着順の偏差が小さいこと。結果の後に作る値なので予測には使わない（後ろ向きの確かめ）。"""
+    cols = ["race_id", "date", "horse_id", "finish_position", "field_size", "grade"]
+    h = pd.concat([pd.read_parquet(tables / str(y) / "race_result_flat.parquet", columns=cols) for y in years if (tables / str(y) / "race_result_flat.parquet").exists()])
+    h = h[h["finish_position"] > 0].copy()
+    h["date"] = h["date"].astype(str).str.replace("-", "")
+    h = h.sort_values(["horse_id", "date"])
+    h["next_race"] = h.groupby("horse_id")["race_id"].shift(-1)
+    h["next_pos"] = h.groupby("horse_id")["finish_position"].shift(-1)
+    h["next_field"] = h.groupby("horse_id")["field_size"].shift(-1)
+    h["next_grade"] = h.groupby("horse_id")["grade"].shift(-1)
+    h = h[h["next_race"].notna() & (h["next_grade"] == h["grade"])]
+    lv = levels[(levels["date"] >= "20230101") & (levels["date"] < "20250101") & (levels["n_other_races"] >= 2)].dropna(subset=["member_level_per1k"])
+    lv = lv.assign(tert=pd.qcut(lv["member_level_per1k"], 3, labels=["高い（速い）", "中", "低い（遅い）"]))
+    m = h.merge(lv[["race_id", "tert"]], on="race_id")
+    g = m.groupby("tert", observed=True).apply(lambda x: pd.Series({"n": len(x), "top3": float((x["next_pos"] <= 3).mean()),
+                                                                     "pos_dev": float((x["next_pos"] / x["next_field"]).mean())}))
+    hi, lo = g.loc["高い（速い）"], g.loc["低い（遅い）"]
+    corr = float(lv[["member_level_per1k", "member_level_win_per1k"]].dropna().corr().iloc[0, 1]) if "member_level_win_per1k" in lv else float("nan")
+    ok = bool(hi["top3"] > lo["top3"] and hi["pos_dev"] < lo["pos_dev"] and corr >= 0.7)
+    return {"by_tertile": g.round(4).reset_index().to_dict("records"), "corr_top5_win": round(corr, 4), "pass": ok,
+            "rule": "高い組の次走（同じクラス）の 3 着内率 > 低い組 かつ 着順の偏差 < 低い組、かつ 2 つの作りの相関 ≥ 0.7"}
+
+
+def cmd_levels(a: argparse.Namespace) -> None:
+    """v2 でレースレベル・開催日レベル・メンバーレベルを作り、page_reference/race_level/races_<年>・days_<年>.parquet に書く（手で流す）。"""
+    from src.pipeline.race_time.levels import compute, shrink_k
+
+    df = load(Path(a.tables), a.rebuild)
+    model = RaceTimeModel.load(MODEL_PATH.with_name("v2.json"))
+    wp = MODEL_PATH.with_name("v2_win.json")
+    if wp.exists():
+        win = RaceTimeModel.load(wp)
+    else:
+        win = RaceTimeModel(target="y_win", lam=model.lam, field_sign=model.field_sign, spec="v2").fit(df[df.date < "20250101"])
+        win.meta.update({"version": "race_time_v2_win", "built": date.today().isoformat(), "train": "2016-01-01〜2024-12-31"})
+        win.save(wp)
+    tr = df[df.date < "20250101"].dropna(subset=["front600"])
+    k = shrink_k((tr["y_top5"] - model.predict(tr)) / (tr["distance"] / 1000.0), tr[["date", "venue", "surf"]])
+    races, days = compute(df, model, k, win_model=win)
+    check = member_next_run_check(races, Path(a.tables), [2023, 2024, 2025])
+    LEVEL_DIR.mkdir(parents=True, exist_ok=True)
+    for y in sorted({d[:4] for d in races["date"]}):
+        races[races["date"].str.startswith(y)].to_parquet(LEVEL_DIR / f"races_{y}.parquet", index=False)
+        days[days["date"].str.startswith(y)].to_parquet(LEVEL_DIR / f"days_{y}.parquet", index=False)
+    meta = {"version": model.meta.get("version"), "built": date.today().isoformat(), "model_built": model.meta.get("built"),
+            "shrink_k": round(k, 3), "member_check": check, "member_visible": check["pass"], "n_races": int(len(races))}
+    (LEVEL_DIR / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+    REPORT.with_name("levels_report.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+    print(json.dumps(meta, ensure_ascii=False, indent=1, default=float))
+
+
 def cmd_bootstrap(a: argparse.Namespace) -> None:
     """採用の版（2016〜24）について、主なコース（件数の上位 8）の曲線の 95% 区間。開催日を単位に取り直す。"""
     df = load(Path(a.tables))
     d = df[df.date < "20250101"].dropna(subset=["front600"])
-    base = RaceTimeModel.load(MODEL_PATH)
+    base = RaceTimeModel.load(Path(a.model))
     top = d["course"].value_counts().head(8).index.tolist()
     grids = {t: np.linspace(term.lo, term.hi, 41) for t, term in base.terms.items()}
     days = d["date"].unique()
@@ -285,21 +341,23 @@ def cmd_bootstrap(a: argparse.Namespace) -> None:
     curves: dict[str, dict[str, list]] = {c: {t: [] for t in grids} for c in [*top, "_common"]}
     age = []
     init = {k: np.asarray(v, float) for k, v in base.params.items()}
+    viol_total = 0
     for i in range(a.reps):
         pick = rng.choice(days, size=len(days), replace=True)
         cnt = pd.Series(pick).value_counts()
         s = d[d["date"].isin(cnt.index)]
         s = s.loc[s.index.repeat(s["date"].map(cnt).to_numpy())]
-        m = RaceTimeModel(lam=base.lam, field_sign=base.field_sign)
+        m = RaceTimeModel(lam=base.lam, field_sign=base.field_sign, spec=base.spec)
         m.terms, m.courses, m.course_band, m.pace_ref, m.pace_sd = base.terms, base.courses, base.course_band, base.pace_ref, base.pace_sd
         m.fit(s, maxiter=150, init=init)
         for c in curves:
             for t, xs in grids.items():
                 curves[c][t].append(m.term_curve(None if c == "_common" else c, t, xs).tolist())
         age.append(m.params["age"])
+        viol_total += sum(sum(r.values()) for r in m.monotone_violations(n_grid=60).values())
         if (i + 1) % 20 == 0:
             print(f"{i + 1}/{a.reps}", flush=True)
-    out = {"reps": a.reps, "courses": top, "grids": {t: xs.tolist() for t, xs in grids.items()}, "curves": {}}
+    out = {"reps": a.reps, "model": base.meta.get("version"), "courses": top, "grids": {t: xs.tolist() for t, xs in grids.items()}, "curves": {}}
     for c, tt in curves.items():
         out["curves"][c] = {}
         for t, arr in tt.items():
@@ -308,7 +366,8 @@ def cmd_bootstrap(a: argparse.Namespace) -> None:
                                    "lo": np.quantile(A, 0.025, axis=0).round(4).tolist(), "hi": np.quantile(A, 0.975, axis=0).round(4).tolist()}
     A = np.asarray(age)
     out["age"] = {"mid": base.params["age"], "lo": np.quantile(A, 0.025, axis=0).round(4).tolist(), "hi": np.quantile(A, 0.975, axis=0).round(4).tolist()}
-    p = REPORT.with_name("bootstrap.json")
+    out["monotone_violations_all_reps"] = int(viol_total)
+    p = REPORT.with_name(f"bootstrap_{base.spec}.json")
     p.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
     print("wrote", p)
 
@@ -322,13 +381,17 @@ def main(argv: list[str] | None = None) -> None:
     b = sub.add_parser("bootstrap")
     b.add_argument("--tables", default=str(TABLES))
     b.add_argument("--reps", type=int, default=200)
+    b.add_argument("--model", default=str(MODEL_PATH.with_name("v2.json")))
     c = sub.add_parser("compare")
     c.add_argument("--tables", default=str(TABLES))
     c2 = sub.add_parser("compare2")
     c2.add_argument("--tables", default=str(TABLES))
     c2.add_argument("--rebuild", action="store_true")
+    lv = sub.add_parser("levels")
+    lv.add_argument("--tables", default=str(TABLES))
+    lv.add_argument("--rebuild", action="store_true")
     a = ap.parse_args(argv)
-    {"fit": cmd_fit, "bootstrap": cmd_bootstrap, "compare": cmd_compare, "compare2": cmd_compare2}[a.cmd](a)
+    {"fit": cmd_fit, "bootstrap": cmd_bootstrap, "compare": cmd_compare, "compare2": cmd_compare2, "levels": cmd_levels}[a.cmd](a)
 
 
 if __name__ == "__main__":

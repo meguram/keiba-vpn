@@ -23,6 +23,8 @@ import { LoadingNotice } from "@/components/LoadingNotice";
 import { useAutoRetry } from "@/lib/hooks/useAutoRetry";
 import { firstCornerPos } from "@/lib/resultCheck";
 import { MarkNote } from "@/components/MarkNote";
+import { RaceLevelNote } from "@/components/RaceResult";
+import type { RaceLevel, RaceResultData } from "@/lib/hooks/useRaceResult";
 
 const SHOW_MEGU = featureEnabled("megu-index");
 const SHOW_TRACKING = featureEnabled("tracking-difficulty");
@@ -281,6 +283,7 @@ export default function RaceDetailPage() {
   const [meguSource, setMeguSource] = useState<"db" | "mock">("mock");
   const { isMember, isAdmin, loading: authLoading } = useAuthStatus();
   const lock = !authLoading && !isMember;      // 匿名は勝率・複勝率まで（それ以外はサーバが落としている）
+  const [raceLevel, setRaceLevel] = useState<RaceLevel | undefined>(undefined);   // レースレベル・開催日レベル・メンバーレベル（会員だけ。確定の結果の API）
   const narrow = useNarrow();
 
   const loadSeq = useRef(0);
@@ -381,6 +384,18 @@ export default function RaceDetailPage() {
     if (!raceData || tabInitialized) return;
     setTabInitialized(true);
   }, [raceData, tabInitialized]);
+
+  // レースレベル・開催日レベル・メンバーレベル（会員だけ。確定の結果の API が事前に計算した値を返す）
+  const hasResult = (raceData?.race_result?.entries?.length ?? 0) > 0;
+  useEffect(() => {
+    setRaceLevel(undefined);                                       // 別のレースへ移ったら前の値を消す
+    if (!raceId || !hasResult || lock || authLoading || USE_MOCK) return;
+    let alive = true;
+    getJson<RaceResultData>(`/api/race/${raceId}/result`, { ttlMs: PRED_TTL_MS })
+      .then((d) => { if (alive && d?.status === "final") setRaceLevel(d.race_level); })
+      .catch(() => { /* 取れなければ出さない */ });
+    return () => { alive = false; };
+  }, [raceId, hasResult, lock, authLoading]);
 
   // めぐ指数（実測。レース結果の表に出す）を API から取得
   useEffect(() => {
@@ -614,6 +629,7 @@ export default function RaceDetailPage() {
     <div style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>🏆 レース結果データがありません</div>
   ) : (
     <div style={{ overflowX: "auto" }}>
+      {!lock && <RaceLevelNote lv={raceLevel} />}
       <table data-no-sort style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 13 }}>
         <thead style={{ background: "var(--surface2)" }}>
           <tr>

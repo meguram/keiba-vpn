@@ -94,3 +94,10 @@ def test_v2_course_age_steps_stay_monotone_and_finer_knots():
     assert sum(sum(r.values()) for r in m.monotone_violations().values()) == 0
     m2 = RaceTimeModel.from_json(m.to_json())
     assert m2.spec == "v2" and np.allclose(m.predict(d), m2.predict(d))
+
+
+def test_age_from_runners_when_race_class_is_missing():
+    from src.pipeline.race_time.features import age_ord_from_runners
+
+    assert age_ord_from_runners(["牡2", "牝2"]) == 0 and age_ord_from_runners(["牡3", "牝3"]) == 1
+    assert age_ord_from_runners(["牡3", "牡5"]) == 2 and age_ord_from_runners([None, ""]) is None
