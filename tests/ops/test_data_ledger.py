@@ -428,6 +428,7 @@ _GUARD_ENTRY = {
     "src/research/rules_council/forward_union.py": {"cmd_build", "cmd_ledger"},   # RC-2 の和集合の前向きの台帳（eval_only・forward。研究の CLI）
     "src/research/rules_council/results_table.py": {"main"},   # R0-07 説明の結果の表（select。研究の CLI・1 回だけ）
     "src/research/pedigree_lab/pl_ledger.py": {"open_token"},     # 血統だけのモデルの研究（select・confirm・eval_only。研究の CLI からだけ）
+    "src/research/track_bias/tb_ledger.py": {"open_token"},       # トラックバイアスの記述（calibrate は select・build-all は eval_only。研究の CLI からだけ）
     "src/research/megu_cycles/mc_final.py": {"cmd_final", "cmd_drift"},     # めぐサイクルの最後の 1 回の確かめ・再現の楽観の測り（eval_only）   # めぐサイクルの 2022〜24 の確かめ（confirm）・割引きと最後の確かめ（eval_only）
 }
 _PROD = ("src/pipeline/inference/stage2_bets.py", "src/pipeline/inference/candidate_runner.py", "src/api/stage2_live.py")

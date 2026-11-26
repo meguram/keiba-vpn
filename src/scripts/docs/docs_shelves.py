@@ -82,6 +82,7 @@ OVERRIDE: dict[str, str] = {
     # 馬券と印（学習・実験の部にある馬券の記録）
     "bet_cycles": "res-bet", "latest_strategy_tables": "res-bet", "megu_why_below_100": "res-bet", "megu_cycles_50": "res-bet", "longshot_course_rules": "res-bet", "rules_council_summary": "res-bet", "rules_council_favorites": "res-bet", "rules_council_t60_band": "res-bet", "rules_council_daybias": "res-bet", "rules_council_debut": "res-bet", "bet_patterns_from_honmei": "res-bet", "bet_optimization_story": "res-bet", "bet_r2_walkthrough": "res-bet", "rules_bet_opt": "res-bet", "odds_rank_accuracy": "res-bet",
     # 特徴量と要因（学習・実験の部や馬券の部にある要因の調査）
+    "track_bias": "res-feature", "track_bias_labels": "res-feature",
     "running_map_course_axis": "res-feature", "running_map_course_axis_rationale": "res-feature", "running_axis_curves": "res-feature", "running_style_pairs": "res-feature",
     "feature_investigation_catalog": "res-feature",
     "pace_consistency": "res-feature", "lap_forecast": "res-feature", "tracking_difficulty_v2": "res-feature",
@@ -208,7 +209,7 @@ GROUPS: dict[str, list[Group]] = {
               ["megu_index_v3a", "megu_excusable", "megu_marking", "index_variance", "class_benchmark", "race_performance_rating_system"]),
         Group("コースと展開", "コースの形・成績の連動・展開と位置取り。",
               ["course_geometry_atlas", "course_performance_similarity", "course_aptitude_groups", "course_specific_effects", "position_pace_course",
-               "pace_type", "pace_benefit", "pace_consistency", "lap_forecast", "tracking_difficulty_v2", "race_volatility"]),
+               "pace_type", "pace_benefit", "pace_consistency", "lap_forecast", "tracking_difficulty_v2", "race_volatility", "track_bias", "track_bias_labels"]),
         Group("調教・状態・騎手", "追い切り・休養・輸送・騎手と調教師。",
               ["final_week_training_pattern", "training_condition_growth", "workout_remaining_ideas", "lap_groups_and_trainer_stats", "rest_and_interval",
                "transport_and_stay", "equipment_and_change", "geld_after_races", "growth_curve_weight", "jockey_trainer_roi", "jockey_switch_ev",
