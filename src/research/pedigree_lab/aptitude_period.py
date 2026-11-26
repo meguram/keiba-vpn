@@ -13,6 +13,7 @@ import numpy as np
 from src.research.pedigree_lab import aptitude as ap_
 from src.research.pedigree_lab import aptitude_checks as ck
 from src.research.pedigree_lab import data
+from src.research.pedigree_lab.explore2 import fit_boot
 import pandas as pd
 
 
@@ -33,8 +34,8 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("what")
     p.add_argument("--boot", type=int, default=200)
-    p.add_argument("--mode", choices=["period", "exp", "turf", "hold"], default="period",
-                   help="period=2 期・exp=それまでのその面の出走数（0〜1 / 5 以上。1 号の R2）・turf=列を芝の行に当てる補の型・hold=保留 split 2 で 1 回（2 号の R2）")
+    p.add_argument("--mode", choices=["period", "exp", "turf", "hold", "judge"], default="period",
+                   help="period=2 期・exp=それまでのその面の出走数（0〜1 / 5 以上。1 号の R2）・turf=列を芝の行に当てる補の型・hold=保留 split 2 で 1 回（2 号の R2）・judge=前向きの判定と同じ作りを開発の行で 1 回（会議の 1 号の R3 の直し 1）")
     a = p.parse_args()
     purpose = "confirm" if a.mode == "hold" else "select"
     data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), purpose, f"aptitude_period_{a.what}_{a.mode}",
@@ -54,6 +55,28 @@ def main() -> None:
     else:
         S0 = X[X["_A"].astype(bool)].reset_index(drop=True)
     res = {"what": a.what, "mode": a.mode}
+    if a.mode == "judge":
+        # 判定と同じ作り: [lp, lq, lv5, sire, bms, mat5]・父の水準なし・確定の q・列はレースの中で中心化して開発の行の sd（定数）で割る。
+        # 束ねは開催日（主）と開催（副）。split 2 は attach_part の dev で外れている
+        S = S0.reset_index(drop=True)
+        rid = S["race_id"].to_numpy()
+        cen = {k: S[f"z_{k}"].to_numpy() - pd.Series(S[f"z_{k}"].to_numpy()).groupby(rid).transform("mean").to_numpy()
+               for k in ("lv5", "sire", "bms", "mat5")}
+        sd = {k: float(v.std()) for k, v in cen.items()}
+        M = np.c_[S["lp"], S["lq"], cen["lv5"] / sd["lv5"], cen["sire"] / sd["sire"], cen["bms"] / sd["bms"], cen["mat5"] / sd["mat5"]]
+        res["sd_const"] = {k: round(v, 8) for k, v in sd.items()}
+        res["rows"] = int(len(S))
+        for cl, col in (("date", S["date"].dt.strftime("%Y%m%d")), ("meeting", S["meeting"])):
+            b, bs = fit_boot(S.assign(meeting=col.to_numpy()), M, 1000)
+            res[f"by_{cl}"] = {"mat5": round(float(b[5]), 4), "one_sided_lo95": round(float(np.percentile(bs[:, 5], 5)), 4),
+                               "ci95": np.percentile(bs[:, 5], [2.5, 97.5]).round(4).tolist(),
+                               "sire": round(float(b[3]), 4), "bms": round(float(b[4]), 4), "lv5": round(float(b[2]), 4)}
+            print(cl, res[f"by_{cl}"], flush=True)
+        path = data.OUT / f"aptitude_period_{a.what}_judge.json"
+        path.write_text(json.dumps(res, ensure_ascii=False, indent=1))
+        print(json.dumps(res, ensure_ascii=False), flush=True)
+        data.finish_all(str(path))
+        return
     if a.mode == "exp":
         young = pd.to_numeric(S0["horse_id"].str[:4]) >= 2014    # 2016 年より前の走りが無い古馬を外す（critic 2 回目の 3）
         parts = {"exp0_1": (S0["_nsurf"] <= 1) & young, "exp5p": (S0["_nsurf"] >= 5) & young}
