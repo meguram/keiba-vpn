@@ -846,3 +846,4 @@ v5bag は年ごとに前へ進めて学んだ勝ちの確率（/home/jovyan/work
   - 帰無（祖先の単位の十分位で帯を作る版・critic 3 回目の 2）は 3 回とも ≈0（−0.001〜+0.007）。
   - 障害のデータ（次の計画）: 障害は年に約 130 レース・約 1,300 走。手元の race_result_flat は平地だけ。取得するなら、netkeiba の障害のレースの結果ページを、2016〜24 年で約 1,200 レース分読む（手元の取得の道具で 1 ページ 1 回・GCS を使わないので 0 円。取得の担当と頻度の決まりに従う）。
 - 前向きの登録（docs/operations/pedigree_lab/prereg_dirt_mat5.md）: 統括役の承認、会議の 1 号の R3（条件付きで承認・直し 6 つ）。直し 1（判定と同じ作りの開発の値）は +0.0799・片側 95% の下限 +0.053 で、記録を始める。決定は docs/operations/roi_plus_council/decisions.md に追記した。
+- 登録の commit: 9c9dc4f7（2026-11-26）。凍結の記録の道具 forward_record.py の sha256 は fe8d829dcc42a6e8…、aptitude.py は 8039df5aa8418a11…、aptitude_checks.py は 0685fea2cf91f7b3…。
