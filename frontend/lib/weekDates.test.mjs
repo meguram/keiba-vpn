@@ -124,3 +124,17 @@ test("pickPastWeeks: 未来の開催を含めず、今日以前の最新 2 開�
   assert.deepEqual(W.pickPastWeeks(dates, "20261018").map((p) => p.week.dates).pop(), ["20261017", "20261018"]);
   assert.deepEqual(W.pickPastWeeks(["20261024"], "20261019"), []);
 });
+
+test("likelyDefaultDates: 既定の開催日（pickTwoWeeks の next の firstDateOf）の見込み", () => {
+  const dates = ["20261121", "20261122", "20261123", "20261128", "20261129"];
+  const initial = (today) => W.firstDateOf(W.pickTwoWeeks(dates, today).find((w) => w.role === "next").week, today);
+  for (const today of ["20261126", "20261127", "20261124", "20261125"]) {     // 木・金・火・水 → 次の土曜が既定
+    assert.ok(W.likelyDefaultDates(today).includes(initial(today)), today);
+  }
+  assert.deepEqual(W.likelyDefaultDates("20261128"), ["20261128"]);            // 土曜は今日
+  assert.deepEqual(W.likelyDefaultDates("20261129"), ["20261129"]);            // 日曜は今日
+  assert.deepEqual(W.likelyDefaultDates("20261126"), ["20261128", "20261129"]);
+  // 月曜の祝日開催の当日は外れる（次の土日を返す。むだは最大 2 本）
+  assert.equal(initial("20261123"), "20261123");
+  assert.deepEqual(W.likelyDefaultDates("20261123"), ["20261128", "20261129"]);
+});

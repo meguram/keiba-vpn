@@ -32,7 +32,7 @@ import { bracketChipStyle, bracketOf } from "@/lib/bracket";
 import type { GateBias, PaceForecast, PositionForecast as PosFc, TrackingV2 } from "@/lib/positionForecast";
 import type { PaceType, ScenarioForecast } from "@/lib/paceType";
 import type { ClassBenchmark, ExpectedMegu, ExpectedMeguMeta } from "@/lib/expectedMegu";
-import { firstDateOf, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
+import { firstDateOf, likelyDefaultDates, meetingKeyOf, pickTwoWeeks, todayJst, venuesOf } from "@/lib/weekDates";
 
 const SHOW_HORSE_LINK = featureEnabled("horse-detail");
 /* ── 型 ── */
@@ -635,13 +635,17 @@ export default function WeeklyPredictionsPage() {
     if (dq && /^\d{8}$/.test(dq) && !USE_MOCK) {         // 開催日一覧・認証の確認を待たずに、開く日のレース一覧と参考度を先に取り始める
       prefetchJson(`/api/race-list/${dq}`, { ttlMs: 60_000 });
       prefetchRaceValues(dq);
+    } else if (!USE_MOCK && !process.env.NEXT_PUBLIC_DEFAULT_RACE_DATE) {
+      // ?date= が無い（か日付でない）とき: 開催日一覧 → レース一覧 → 予測 の 3 段の直列を 2 段にする。既定の開催日の見込み（土日）の一覧を並べて取る
+      for (const d of likelyDefaultDates(today)) prefetchJson(`/api/race-list/${d}`, { ttlMs: 60_000 });
     }
     const r = q.get("race");
     if (r) {
       setSelectedRaceId(r);
       if (!USE_MOCK) prefetchJson(`/api/race/${r}/predictions`, { ttlMs: PRED_TTL_MS, persist: true });      // 日付・一覧の取得を待たずに、開くレースの予測を先に取り始める
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);                                  // 開いたときの 1 回だけ（today は useMemo で固定）
 
   function chooseVenue(v: string) {
     // 今と同じレース番号を選ぶ（無ければ一番近い番号）。1R に飛ばさない

@@ -91,6 +91,17 @@ export function pickPastWeeks(dates: string[], today: string): PickedWeek[] {
   return groupWeeks(dates.filter((d) => d <= today)).slice(-2).map((week) => ({ week, role: "prev" as const, rel: relOf(week, today) }));
 }
 
+/** 開催日の一覧（scrape-dates）を待たずに先に取り始める、既定の開催日の見込み。土日は今日、それ以外は次の土日。
+ *  外れても一覧が返った後の正しい日で取り直すだけで、表示は変わらない。外れたときは race-list が最大 2 本むだになる
+ *  （月曜の祝日開催の当日・開催の無い週・次の土日がまだ一覧に無い平日）。週の予想の画面は同じ開催の日をすべて取るので、
+ *  当たったときは要求が増えない */
+export function likelyDefaultDates(today: string): string[] {
+  const w = weekdayOf(today);
+  if (w === 6 || w === 0) return [today];
+  const sat = addDays(today, 6 - w);
+  return [sat, addDays(sat, 1)];
+}
+
 /** 開催の最初の開催日。開催中（今日が最初の日以降）なら、今日以降で最初の開催日（無ければ最初の日） */
 export function firstDateOf(week: RaceWeek, today: string): string {
   return (today >= week.dates[0] ? week.dates.find((d) => d >= today) : undefined) ?? week.dates[0];
