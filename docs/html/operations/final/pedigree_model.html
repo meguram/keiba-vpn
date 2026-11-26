@@ -332,6 +332,7 @@ details[open] > summary { border-bottom:1px solid var(--border); }
   <li>障害向きは、障害の結果の表（2016〜24 年で約 1,200 レース）を取ってから。</li>
   <li>ユーザーの方針（どの馬にも同じ規則で作れる値）に沿って、(B) の第 2 版を作る。種牡馬と祖先の競走成績（2016 年より前）を取り、勝った距離・芝ダ・重馬場・強かった年齢の形を、血量で重み付けて足す。ダートの牝系 5 代は、祖先の「ダートで勝ったか」の形で作り直して同じ効きが出るかを見る（予想: 産駒の集計の版の半分ほど）。</li>
   <li>2024 年の効きが ≈0 だったので、市場が追いついた可能性を前向きの記録で見る。</li>
+  <li><b>血統予想家のペルソナ</b>（ユーザーの依頼・設計案のみ）: docs/operations/pedigree_lab/persona_design.md（第 2 版）。印は出さず、「血統の上位の人気薄」・理由の文・レースの事実の札を別の欄に出す案。成績は前向きの登録の満期まで一切計算しない（会議の 1 号の決定）。会員の画面に出す前に、統括役とユーザーの承認が要る。</li>
   </ul></li>
 <li>再現: <code>src/research/pedigree_lab/</code>（build_base → run_features --gen 4 → kfold → benter・gates・pl2・v5・final_eval）。中間の出力は <code>/home/jovyan/work/pedigree_lab_out/</code>（git の外）。凍結の sha は <code>freeze_v4_gate.sha256</code>。</li>
 </ul>
