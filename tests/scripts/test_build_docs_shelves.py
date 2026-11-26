@@ -36,7 +36,7 @@ def test_every_html_belongs_to_exactly_one_shelf(items):
     paths = [it.path.resolve() for it in items]
     assert len(paths) == len(set(paths)), "同じファイルが 2 回載っている"
     assert all(it.shelf in S.SHELF for it in items)
-    on_disk = {p.resolve() for p in G.HTML_DIR.rglob("*.html") if p.name != B.BOOK_NAME} - G.nav_pages()
+    on_disk = {p.resolve() for p in G.HTML_DIR.rglob("*.html") if p.name != B.BOOK_NAME} - G.nav_pages() - B.standalone_files()   # 単独のページは棚にも載せない
     shelved = {p for p in paths if G.HTML_DIR.resolve() in p.parents}
     assert on_disk == shelved, f"棚に無い: {sorted(map(str, on_disk - shelved))[:5]} / ファイルが無い: {sorted(map(str, shelved - on_disk))[:5]}"
     meta = {p.resolve() for p in G.meta_html_files()}

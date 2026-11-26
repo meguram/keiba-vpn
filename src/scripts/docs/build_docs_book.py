@@ -71,12 +71,6 @@ class Part:
 C = Chapter
 
 
-def _track_bias_year_pages() -> list[str]:
-    """トラックバイアスの名札の年ごとのページ（src/research/track_bias/report.py が年の数だけ作る。棚と同じ関数）。"""
-    from src.scripts.docs.docs_shelves import track_bias_year_pages
-    return track_bias_year_pages()
-
-
 def _decision_chapters() -> list[Chapter]:
     """docs/decisions/*.html を、MASTER → AREA → DEC の順に章にする（説明は元のページの最初の段落から）。"""
     files = sorted(p.stem for p in (DOCS_DIR / "decisions").glob("*.html"))
@@ -324,9 +318,6 @@ PARTS: list[Part] = [
         C("track_bias_labels", "トラックバイアスの名札（前後・内外）の、2016〜最新の全部の開催日 × 場 × 芝・ダートの一覧。", "結果",
           src="html/operations/final/track_bias_labels.html",
           see=[("track_bias", "トラックバイアスの判定")]),
-        *[C(stem, f"トラックバイアスの名札の {stem[-4:]} 年の分。開催日 × 場 × 芝・ダートの名札と、レースごとの 1〜3 着（人気・通過順・序盤と 4 角の 番手/頭数）。", "結果",
-            src=f"html/operations/final/{stem}.html", see=[("track_bias_labels", "トラックバイアスの名札の一覧")])
-          for stem in _track_bias_year_pages()],
         C("running_map_course_axis", "走法マップの良馬場のコース別 寄与率（6 軸）と、コース形状との関係の検証。Hペース耐性が全コースで首位になる理由（実力の代理）、人気調整後・クラス別・タイム指数水準別、直線長・小回り・坂との回帰、67 コースの表。", "結果",
           src="html/operations/running_map_course_axis.html",
           see=[("model_versions", "モデルの版と採用状況"), ("retrain_order", "再学習の順番と依存関係")]),
@@ -510,13 +501,23 @@ KINDS = {"要件": "#f87171", "設計": "#7aa9ff", "仕様": "#34d399", "運用"
 STATUS = {"legacy": ("旧設計", "#fb923c"), "snapshot": ("時点の記録", "#7aa9ff"), "history": ("決定の履歴", "#a3e635")}
 
 
+# 本の章にしない単独のページの型（docs/ からの相対の glob）。ここに 1 か所だけ書く（tests/scripts/test_build_docs_book.py が見張る）。
+# - トラックバイアスの名札の年ごとのページ（1 枚約 1.1MB × 年の数。本の大きさを抑えるため、名札の一覧の章からリンクで飛ぶ）
+STANDALONE_GLOBS: tuple[str, ...] = ("html/operations/final/track_bias_labels_[0-9][0-9][0-9][0-9].html",)
+
+
+def standalone_files() -> set[Path]:
+    """本に載せない単独のページ（STANDALONE_GLOBS に当たる HTML）。"""
+    return {p.resolve() for g in STANDALONE_GLOBS for p in DOCS_DIR.glob(g)}
+
+
 def all_source_files() -> set[Path]:
-    """本に載せるべき HTML（docs/ 配下の全 HTML。本自身・docs/ideas/inbox/・目次のページを除く）。"""
+    """本に載せるべき HTML（docs/ 配下の全 HTML。本自身・docs/ideas/inbox/・目次のページ・単独のページを除く）。"""
     from src.scripts.docs.build_docs_shelves import nav_pages
     nav = nav_pages()   # 目次のページ（docs/html/index.html と各棚の 目次.html）は本に載せない
     out = {p for p in DOCS_DIR.rglob("*.html") if p.name != BOOK_NAME and "node_modules" not in p.parts
            and (DOCS_DIR / "ideas" / "inbox") not in p.parents}   # inbox は参考テキストの置き場で本には載せない
-    return {p.resolve() for p in out} - nav
+    return {p.resolve() for p in out} - nav - standalone_files()
 
 
 # ── 読み込みと整形 ─────────────────────────────────────────────────────────────
