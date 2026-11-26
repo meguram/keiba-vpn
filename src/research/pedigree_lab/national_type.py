@@ -3,6 +3,9 @@
     KEIBA_SESSION=pedigree-lab nice -n 19 python -m src.research.pedigree_lab.national_type --table     # 札の表と付く割合（着順を使わない）
     KEIBA_SESSION=pedigree-lab OMP_NUM_THREADS=6 nice -n 19 python -m src.research.pedigree_lab.national_type
     KEIBA_SESSION=pedigree-lab nice -n 19 python -m src.research.pedigree_lab.national_type --ae          # 父の札 × 芝ダ × 馬場の A/E（記述）
+    KEIBA_SESSION=pedigree-lab nice -n 19 python -m src.research.pedigree_lab.national_type --pair        # 父の札 × 母父の札 × 芝ダの A/E（記述・調べ I）
+    KEIBA_SESSION=pedigree-lab nice -n 19 python -m src.research.pedigree_lab.national_type --early       # 2016〜18 年の米・欧 × ダートの道悪の A/E（調べ K）
+    KEIBA_SESSION=pedigree-lab nice -n 19 python -m src.research.pedigree_lab.national_type --early2      # 同じ形の logit(q) の 2 次の回帰（調べ K2）
 
 - 札の表: 2020〜24 年の smartrc_race_flat（2025・26 年は開けない） の各行の馬（hcode）について、手元の血統表の父・母父の id に f_・mf_ の札を、
   父の母父（3:2）・母の母父（3:6）の id に fmf_・mmf_ の札を対応させる。同じ種牡馬の id で札が割れたら、多い方を使う。
@@ -92,10 +95,68 @@ def add_cols(X: pd.DataFrame, T: pd.DataFrame) -> list[str]:
 
 
 def main() -> None:
-    mode = "table" if "--table" in sys.argv else ("ae" if "--ae" in sys.argv else ("pair" if "--pair" in sys.argv else "fit"))
+    mode = "table" if "--table" in sys.argv else ("ae" if "--ae" in sys.argv else ("pair" if "--pair" in sys.argv else ("early" if "--early" in sys.argv else ("early2" if "--early2" in sys.argv else "fit"))))
     data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"national_type_{mode}", "国別の型（SmartRC の分類）の比べと記述"))
     T = stallion_table()
     X = pd.read_parquet(data.OUT / "feat_v4.parquet")
+    if mode == "early":
+        # 調べ K: 2016〜18 年の行で、父の札が米・欧のダートの道悪の、同じ人気に対する A/E（全体で割る）
+        X = X[(X["date"].dt.year.between(2016, 2018)) & X["split"].isin([0, 1])].reset_index(drop=True)
+        add_cols(X, T)
+        od = pd.to_numeric(X["odds"], errors="coerce").where(lambda v: v > 0)
+        X["q"] = (1 / od) / (1 / od).groupby(X["race_id"]).transform("sum")
+        X = X[X["_cty_s"].notna() & X["q"].notna()]
+        tot = X["win"].sum() / X["q"].sum()
+        rng = np.random.default_rng(3)
+        res = {"全体の A/E（割る数）": round(float(tot), 4)}
+        for c in ("米", "欧"):
+            d = X[(X["_cty_s"] == c) & X["surf"].eq("D") & X["going"].ne("G")]
+            sires = d["sire"].to_numpy(); su = np.unique(sires)
+            idx = {s_: np.flatnonzero(sires == s_) for s_ in su}
+            w, q = d["win"].to_numpy(float), d["q"].to_numpy()
+            bs = []
+            for _ in range(10000):
+                ii = np.concatenate([idx[s_] for s_ in rng.choice(su, len(su))])
+                bs.append(w[ii].sum() / q[ii].sum() / tot)
+            res[f"{c}・ダ・道悪"] = {"走り": int(len(d)), "勝ち": int(w.sum()), "種牡馬": int(len(su)),
+                                  "A/E（同じ人気に対して）": round(float(w.sum() / q.sum() / tot), 3), "95%": np.percentile(bs, [2.5, 97.5]).round(3).tolist()}
+            print(c, res[f"{c}・ダ・道悪"], flush=True)
+        path = data.OUT / "national_type_early.json"
+        path.write_text(json.dumps(res, ensure_ascii=False, indent=1))
+        data.finish_all(str(path))
+        return
+    if mode == "early2":
+        # 調べ K2: ダートの道悪の行で、勝ち ~ logit(q) + logit(q)^2 + 米の印 + 欧の印（日が基準）の米の印の係数
+        from src.research.pedigree_lab.sire_market import irls
+        X = X[X["split"].isin([0, 1]) & (X["date"] <= pd.Timestamp(data.DEV_END))].reset_index(drop=True)
+        add_cols(X, T)
+        od = pd.to_numeric(X["odds"], errors="coerce").where(lambda v: v > 0)
+        X["q"] = (1 / od) / (1 / od).groupby(X["race_id"]).transform("sum")
+        X = X[X["_cty_s"].notna() & X["q"].notna() & X["surf"].eq("D") & X["going"].ne("G")].reset_index(drop=True)
+        qq = X["q"].clip(1e-4, 1 - 1e-4)
+        X["lq"] = np.log(qq / (1 - qq))
+        rng = np.random.default_rng(3)
+        res = {}
+        for nm, (a, b) in (("2016〜18 年（確かめ）", (2016, 2018)), ("2019〜24 年（見つけた期間）", (2019, 2024))):
+            D = X[X["date"].dt.year.between(a, b)].reset_index(drop=True)
+            lq = D["lq"].to_numpy()
+            M = np.column_stack([np.ones(len(D)), lq, lq ** 2, D["_cty_s"].eq("米").to_numpy(float), D["_cty_s"].eq("欧").to_numpy(float)])
+            y = D["win"].to_numpy(float)
+            b0 = irls(M, y)
+            sires = D["sire"].to_numpy(); su = np.unique(sires)
+            idx = {s_: np.flatnonzero(sires == s_) for s_ in su}
+            bs = []
+            for _ in range(2000):
+                ii = np.concatenate([idx[s_] for s_ in rng.choice(su, len(su))])
+                bs.append(irls(M[ii], y[ii])[3:5])
+            bs = np.array(bs)
+            res[nm] = {"走り": int(len(D)), "米の印": [round(float(b0[3]), 3), np.percentile(bs[:, 0], [2.5, 97.5]).round(3).tolist()],
+                       "欧の印": [round(float(b0[4]), 3), np.percentile(bs[:, 1], [2.5, 97.5]).round(3).tolist()]}
+            print(nm, res[nm], flush=True)
+        path = data.OUT / "national_type_early2.json"
+        path.write_text(json.dumps(res, ensure_ascii=False, indent=1))
+        data.finish_all(str(path))
+        return
     X = X[(X["date"].dt.year >= 2017) & (X["date"] <= pd.Timestamp(data.DEV_END))].reset_index(drop=True)
     new = add_cols(X, T)
     if mode == "table":
