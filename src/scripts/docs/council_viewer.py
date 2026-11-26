@@ -4,8 +4,8 @@
     python -m src.scripts.docs.council_viewer --port 8090 --root /path/to/keiba-vpn
 
 - 要求のたびに ``docs/operations/roi_plus_council/`` の Markdown を読み、HTML にして返す（キャッシュしない。常に最新）。
-- 加えて ``docs/html/operations/final/`` の会議に関係する HTML（許可した名前だけ）をそのまま返す。
-- 読むのは上の 2 か所だけ。``..``・絶対パス・シンボリックリンクで外に出る要求は 404。書き込みはしない。
+- 加えて ``docs/html/operations/final/`` と ``docs/html/operations/`` の直下の HTML（名前は英数字・``_``・``-`` だけ）をそのまま返す。
+- 読むのは上の 3 か所だけ。サブフォルダの HTML は出さない。``..``・絶対パス・シンボリックリンクで外に出る要求は 404。書き込みはしない。
 - 認証が無いので、既定は 127.0.0.1 で待ち受ける（Cursor の Remote-SSH・ssh -L で手元へ転送して見る）。
 - GCS・外部の網は読まない（費用 0 円）。
 """
@@ -29,8 +29,15 @@ COUNCIL_PREFIX = "/council/"
 DOC_ALIAS = "/doc/"  # /council/ と同じ
 EASY_SUMMARY = "easy_summary.md"
 HTML_PREFIX = "/html/operations/final/"
+HTML_OPS_REL = Path("docs/html/operations")
+HTML_OPS_PREFIX = "/html/operations/"
+# URL の接頭辞 → 置き場。長い接頭辞（final）を先に照らす
+HTML_DIRS = ((HTML_PREFIX, HTML_REL), (HTML_OPS_PREFIX, HTML_OPS_REL))
+HTML_NAME = re.compile(r"^[A-Za-z0-9_\-]+\.html$")
+# 目次の「関係の HTML」に出す、会議に関係する HTML
 HTML_FIXED = frozenset({"longshot_course_rules.html", "megu_cycles_50.html", "megu_why_below_100.html"})
 HTML_PATTERN = re.compile(r"^rules_council_[A-Za-z0-9_\-]+\.html$")
+TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
 RC_NAME = re.compile(r"^R(\d+)_(\d+)_.*\.md$")
 DATE_RE = re.compile(r"20\d\d-\d\d-\d\d")
 RC_NO = re.compile(r"RC-(\d+)")
@@ -86,7 +93,38 @@ def safe_resolve(base: Path, rel: str) -> Path | None:
 
 
 def allowed_html(name: str) -> bool:
+    """直下の *.html なら出す（名前の形だけで判定。サブフォルダ・``..`` は形に合わない）。"""
+    return bool(HTML_NAME.fullmatch(name))  # match の $ は末尾の改行の前でも合うので fullmatch
+
+
+def council_html(name: str) -> bool:
+    """目次の「関係の HTML」に出す名前か。"""
     return name in HTML_FIXED or bool(HTML_PATTERN.match(name))
+
+
+def html_title(path: Path) -> str:
+    """HTML の <title>（先頭 64 KiB から）。無ければ空。"""
+    try:
+        with path.open("rb") as f:
+            head = f.read(65536).decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+    m = TITLE_RE.search(head)
+    return " ".join(html.unescape(re.sub(r"<[^>]+>", "", m.group(1))).split()) if m else ""
+
+
+def list_html(root: Path, rel: Path) -> list[tuple[str, Path]]:
+    """``rel`` の直下の出せる HTML の（URL に使う元の名前, 解決後のパス）（名前順）。"""
+    hdir = root / rel
+    if not hdir.is_dir():
+        return []
+    out = []
+    for p in sorted(hdir.glob("*.html")):
+        if allowed_html(p.name):
+            t = safe_resolve(hdir, p.name)
+            if t is not None:
+                out.append((p.name, t))
+    return out
 
 
 # ── Markdown → HTML ──
@@ -258,12 +296,28 @@ def index_html(root: Path) -> str:
 
     parts.append("<h2>関係の HTML</h2>")
     hdir = root / HTML_REL
-    names = sorted(p.name for p in hdir.glob("*.html") if allowed_html(p.name)) if hdir.is_dir() else []
+    names = sorted(p.name for p in hdir.glob("*.html") if council_html(p.name)) if hdir.is_dir() else []
     names = [n for n in names if safe_resolve(hdir, n) is not None]
     if names:
         parts.append("<ul>" + "".join(f'<li><a href="{HTML_PREFIX}{urllib.parse.quote(n)}">{esc(n)}</a></li>' for n in names) + "</ul>")
     else:
         parts.append('<p class="mu">関係の HTML がありません。</p>')
+
+    parts.append("<h2>成果の HTML</h2>")
+    any_html = False
+    for prefix, rel in HTML_DIRS:
+        files = list_html(root, rel)
+        if not files:
+            continue
+        any_html = True
+        parts.append(f"<h3><code>{esc(rel.as_posix())}/</code></h3>")
+        parts.append('<div class="scroll"><table><thead><tr><th>ファイル</th><th>題名</th></tr></thead><tbody>')
+        for name, p in files:
+            href = prefix + urllib.parse.quote(name)
+            parts.append(f'<tr><td><a href="{href}">{esc(name)}</a></td><td>{esc(html_title(p))}</td></tr>')
+        parts.append("</tbody></table></div>")
+    if not any_html:
+        parts.append('<p class="mu">成果の HTML がありません。</p>')
     return page("会議の記録", "".join(parts))
 
 
@@ -276,15 +330,18 @@ def md_page(root: Path, rel: str) -> str | None:
     return page(first_heading(text) or rel, nav + md_to_html(text, posixpath.dirname(rel)))
 
 
-def html_file(root: Path, name: str) -> bytes | None:
+def html_file(root: Path, name: str, rel: Path = HTML_REL) -> bytes | None:
+    """``rel``（既定は final）の直下の HTML の中身。名前の形に合わない・無いなら None。"""
     if "/" in name or not allowed_html(name):
         return None
-    target = safe_resolve(root / HTML_REL, name)
+    target = safe_resolve(root / rel, name)
     return target.read_bytes() if target else None
 
 
 # ── サーバ ──
 
+# 成果の HTML は自前の生成物だが <script> を含むものがある。sandbox で origin を分け、/council/・/live/stream を読ませない
+HTML_CSP = "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox"
 CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'"
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "[::1]"})
 
@@ -451,9 +508,10 @@ def make_handler(root: Path, feed=None):
                     if path.startswith(prefix):
                         body = md_page(root, path[len(prefix):])
                         return self._send(200, body.encode("utf-8"), csp=True) if body else self._not_found()
-                if path.startswith(HTML_PREFIX):
-                    data = html_file(root, path[len(HTML_PREFIX):])
-                    return self._send(200, data) if data is not None else self._not_found()
+                for prefix, rel in HTML_DIRS:
+                    if path.startswith(prefix):
+                        data = html_file(root, path[len(prefix):], rel)
+                        return self._send(200, data, csp=HTML_CSP) if data is not None else self._not_found()
             except Exception as e:  # noqa: BLE001  1 件の失敗でサーバを止めない
                 self.log_error("error: %r", e)
                 return self._send(500, page("エラー", "<h1>読み込みに失敗しました</h1>").encode("utf-8"))
