@@ -34,7 +34,7 @@ export function RaceLevelNote({ lv }: { lv?: RaceLevel }) {
       <div><b>開催日レベル{d?.venue ? `（${d.venue}${d.surf ?? ""}）` : ""}</b>：{withWord(d?.sec, d?.word)}</div>
       <div><b>メンバーレベル（馬場・ペース補正後）</b>：{memberText}</div>
       <div style={{ marginTop: 4, fontSize: 11, color: "var(--text-dim)" }}>
-        秒はこのレースの距離の分で、負の値は基準より速い。{lv.formula} 基準の時計の関数は、従来の馬場の速さの物差しより一つ抜きのばらつきで 1000m あたり 0.02 秒だけ良かった（同じ日の一貫性は従来の方が高い）。
+        秒はこのレースの距離の分で、負の値は基準より速い。{lv.formula} 基準の時計の関数は、従来の馬場の速さの物差しより一つ抜きのばらつきで 0.02 秒だけ良かった（同じ日の一貫性は従来の方が高い）。
       </div>
     </div>
   );
