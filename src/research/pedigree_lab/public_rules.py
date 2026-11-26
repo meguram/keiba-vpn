@@ -10,6 +10,7 @@
 - XP（X の偽薬）: 同じ列を、牡・騸の馬だけに入れる（牡では通り道でない。同じ位置で性だけが違う）。X − XP が X 因子の主張の分。
   母の側の通り道（3:6 など）は、母の父の列（bms_*）の有無で比べにくいので使わない（critic）。
 - 子孫は、5 代のどこかにその祖先を持つ馬（重なりは 1 馬 1 行）。値は、指定の枠に出るたびに重みを付けて足す。
+- SB（性の釣り合った近交・調べ G）: 同じ祖先が、息子を通る筋と娘を通る筋の両方で 5 代以内に出る祖先の数（pr_sb）と一番近い代（pr_sb_g）。基準に ib_ を入れる。
 - 帰無（--null）: 祖先の集計は本物の血統表のまま作り、各馬に同じ生年の別の馬の祖先の並びを馬の単位で貸して、
   その日より前の集計を引く（2 号の「借り手の血統」。血統表を入れ替えてから集計し直すと、値が全体へ縮んで甘い帰無になる）。
 - (A)（第 4 版の 189 列）＋ 列を時間の順（walkforward.fit_year）で当て、行ごとの予測を parquet に残す（compare_null で比べる）。
@@ -137,10 +138,27 @@ def col_RF(A: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def col_SB(A: pd.DataFrame) -> pd.DataFrame:
+    """性の釣り合った近交（同じ祖先へ、息子を通る筋と娘を通る筋の両方で出る。log.md「調べ G」）。牡牝どちらの祖先も数える。"""
+    F = A[A["gen"] >= 2].copy()
+    F["cg"], F["cp"] = F["gen"] - 1, F["pos"] // 2               # その祖先を通る子の位置（子の性は cp の偶奇: 偶数が牡）
+    F["child_m"] = (F["cp"] % 2 == 0)
+    F = F[F.duplicated(["horse_id", "anc"], keep=False)]
+    F["child_f"] = ~F["child_m"]
+    g = F.groupby(["horse_id", "anc"]).agg(m=("child_m", "max"), f=("child_f", "max"), gmin=("gen", "min"))
+    g = g[g["m"] & g["f"]]
+    R = g.groupby("horse_id").agg(n=("gmin", "size"), gmin=("gmin", "min"))
+    out = pd.DataFrame({"horse_id": A["horse_id"].unique()})
+    out["pr_sb"] = out["horse_id"].map(R["n"]).fillna(0).astype(float)            # 釣り合った近交の祖先の数
+    out["pr_sb_g"] = out["horse_id"].map(R["gmin"]).fillna(6).astype(float)       # 一番近い代（無ければ 6）
+    return out
+
+
 def main() -> None:
     kind = sys.argv[sys.argv.index("--kind") + 1]
-    assert kind in ("D", "RF", "X", "XP"), kind
+    assert kind in ("D", "RF", "X", "XP", "SB", "IB"), kind     # IB = (A) ＋ ib_ だけ（SB・RF の比べ先。critic・2 号）
     null_seed = int(sys.argv[sys.argv.index("--null") + 1]) if "--null" in sys.argv else None
+    assert not (kind == "IB" and null_seed is not None), "IB は比べ先なので帰無を作らない（critic）"
     data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"public_rules_{kind}" + ("_null" if null_seed is not None else ""),
                                    "公開の手法を規則で作った列の時間の順の比べ（尤度だけ・記述）"))
     X = pd.read_parquet(data.OUT / "feat_v4.parquet")
@@ -163,6 +181,10 @@ def main() -> None:
         C = col_D(X, A, Ab)
     elif kind in ("X", "XP"):
         C = col_X(X, A, female=(kind == "X"), Ab=Ab)
+    elif kind == "IB":
+        C = pd.DataFrame(index=X.index)
+    elif kind == "SB":
+        C = X[["horse_id"]].merge(col_SB(A if Ab is None else Ab), on="horse_id", how="left").drop(columns="horse_id")
     else:
         C = X[["horse_id"]].merge(col_RF(A if Ab is None else Ab), on="horse_id", how="left").drop(columns="horse_id")
     new = list(C.columns)
@@ -171,8 +193,8 @@ def main() -> None:
     print("coverage", {c: round(float(pd.Series(X[c]).notna().mean()), 3) for c in new},
           "mean", {c: round(float(np.nanmean(X[c].to_numpy(float))), 4) for c in new}, flush=True)
     X = X[X["date"].dt.year >= 2017].reset_index(drop=True)
-    # RF の比べだけは近交の係数（ib_）を基準に入れ、近交一般の効きを除く（1 号）
-    use = [c for c in ablate.col_sets(X)["pure"] if kind == "RF" or not c.startswith("ib_")] + new
+    # RF・SB・IB は近交の係数（ib_）を基準に入れ、近交一般の効きを除く（1 号・2 号）
+    use = [c for c in ablate.col_sets(X)["pure"] if kind in ("RF", "SB", "IB") or not c.startswith("ib_")] + new
     yr = X["date"].dt.year.to_numpy()
     p = np.full(len(X), np.nan)
     for t in range(2019, 2025):
