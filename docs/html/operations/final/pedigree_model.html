@@ -266,6 +266,13 @@ details[open] > summary { border-bottom:1px solid var(--border); }
 <li>はじめに「無作為の分けは新しい父で約 0.04 甘い」と書いたのは、帯の勝ち馬だけを採点する物差しの誤りで、取り下げた（critic）。</li>
 <li>直し方の案（新しい父の精度は落ちていないので、優先は低い）: 母父の上の階層・新しい父の平均の強さ・種牡馬の現役の成績（手元に無い）。</li>
 </ul>
+<h3>(A) 種牡馬ごとの集計 と (B) 規則で作れる値（11/26・ユーザーの設計の方針）</h3>
+<p>(A) は第 4 版の 189 列（父・父の父・父の父の父・母父・母・2 代母・全きょうだい・父 × 母父の産駒の as-of の集計と rel_*）。(B) の第 1 版は 48 列（父系と母父系の 4・5 代上の祖先の区分・5 代に多く出る祖先 30 頭の血量・近交・父と母自身の競走成績の形）。時間の順（2019〜24 年・27.5 万行・勝ち・行ごとの二値の改善）で比べた。</p>
+<div class="scroll"><table><thead><tr><th>行（開発の行・父が空でない）</th><th>(A)</th><th>(B)</th><th>(A)+(B)</th><th>(A)+(B) − (A) [95%]</th></tr></thead><tbody>
+<tr><td>全体（235,698 行）</td><td class="n">0.00659</td><td class="n">0.00248</td><td class="n">0.00680</td><td class="n">+0.00021 [+0.00003, 0.00039]</td></tr>
+<tr><td>学習の期間に父の産駒が 1 走も無い（8,231 行）</td><td class="n">0.01152</td><td class="n">0.00162</td><td class="n">0.01139</td><td class="n">−0.00013 [−0.00113, 0.00081]</td></tr>
+</tbody></table></div>
+<p>(B) だけはどの行でも (A) より明らかに弱い。新しい父の行で (B) を足す効きは見分けられない。「(A) が新しい父でも強いのは父以外の列のおかげ」は未確認（父の列を抜く比べは次の計画）。父自身の競走成績が手元にあるのは 16%（新しい父で 58%）で、祖先の競走成績は手元に無い。(B) の第 2 版（祖先の競走成績の形・細かい系統の区分）と、ダートの牝系 5 代の (B) 版は次の計画。</p>
 <h3>モデルの種類と表し方</h3>
 <div class="scroll"><table><thead><tr><th>版</th><th>勝ちの改善</th><th>第 4 版（二値の LightGBM）との差</th></tr></thead><tbody>
 <tr><td>線形の条件付きロジット（26 列）</td><td class="n">0.071</td><td class="n">−0.011</td></tr>
@@ -286,6 +293,7 @@ details[open] > summary { border-bottom:1px solid var(--border); }
   <ul>
   <li>ダートの牝系の前向きの記録は、開催日の前の夜に手で流して commit する（docs/operations/pedigree_lab/prereg_dirt_mat5.md）。途中は健康の確かめだけ。</li>
   <li>障害向きは、障害の結果の表（2016〜24 年で約 1,200 レース）を取ってから。</li>
+  <li>ユーザーの方針（どの馬にも同じ規則で作れる値）に沿って、(B) の第 2 版を作る。種牡馬と祖先の競走成績（2016 年より前）を取り、勝った距離・芝ダ・重馬場・強かった年齢の形を、血量で重み付けて足す。ダートの牝系 5 代は、祖先の「ダートで勝ったか」の形で作り直して同じ効きが出るかを見る（予想: 産駒の集計の版の半分ほど）。</li>
   <li>2024 年の効きが ≈0 だったので、市場が追いついた可能性を前向きの記録で見る。</li>
   </ul></li>
 <li>再現: <code>src/research/pedigree_lab/</code>（build_base → run_features --gen 4 → kfold → benter・gates・pl2・v5・final_eval）。中間の出力は <code>/home/jovyan/work/pedigree_lab_out/</code>（git の外）。凍結の sha は <code>freeze_v4_gate.sha256</code>。</li>
