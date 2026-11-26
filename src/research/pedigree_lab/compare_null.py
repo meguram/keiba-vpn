@@ -25,13 +25,18 @@ def main() -> None:
     ap.add_argument("nulls", nargs="+")
     ap.add_argument("--col", default="p_TB")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--ntests", type=int, default=N_TESTS)   # 試した数（2 号: 公開の手法の分から 24）
+    ap.add_argument("--ntests", type=int, default=N_TESTS)    # 試した数（2 号: 公開の手法の分から 24）
+    ap.add_argument("--base", default=None)                    # 比べ先の (A) の parquet（列は --col と同じ名前）
     a = ap.parse_args()
     data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"compare_null_{a.out}", "版と帰無の比べ（尤度だけ・記述）"))
     X = pd.read_parquet(data.OUT / "feat_v4.parquet", columns=["race_id", "horse_id", "date", "sire", "win", "n_run", "split"])
     X = X[(X["date"].dt.year >= 2017) & (X["date"].dt.year <= 2024)]
     fr = X.groupby("sire")["date"].min()
-    T = pd.read_parquet(data.OUT / "rulebased_wf.parquet")[["race_id", "horse_id", "p_A"]]
+    if a.base:
+        # 比べ先の (A) を、同じ学習の窓で当てた予測にする（critic: 2018 年からの版と 2017 年からの (A) を比べない）
+        T = pd.read_parquet(data.OUT / a.base)[["race_id", "horse_id", a.col]].rename(columns={a.col: "p_A"})
+    else:
+        T = pd.read_parquet(data.OUT / "rulebased_wf.parquet")[["race_id", "horse_id", "p_A"]]
     V = pd.read_parquet(data.OUT / a.version)[["race_id", "horse_id", a.col]].rename(columns={a.col: "p_V"})
     T = T.merge(V, on=["race_id", "horse_id"])
     for i, f in enumerate(a.nulls):
