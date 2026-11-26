@@ -139,5 +139,45 @@ def main() -> None:
     print(json.dumps(out["bands"], ensure_ascii=False, indent=1))
 
 
+def cmd_check() -> dict:
+    """B（1 号の決定: A の commit の後の照らし合わせ）。探す側 70%（2016〜24）で、3 着内に来た馬の確定の複勝の払戻が、
+    確定の幅のどこに落ちたか（w = (払戻 − 下限) ÷ (上限 − 下限)）の中央値と分位を、人気帯 × 大本命あり／なしで出す。
+    出すのは中央値・分位・件数だけ。的中の率・回収率は出さない。確かめの側 30%・2025・26 は読まない。"""
+    E.check_stop()
+    pay = pd.read_parquet(REPO / "data/local/modeling/betting/payoff.parquet", columns=["race_id", "bet_type", "combo", "payout"])
+    pay["race_id"] = pay["race_id"].astype(str)
+    pay = pay[(pay["bet_type"] == "fukusho") & (pay["race_id"].str[:4].astype(int) <= F.YEAR_END)].copy()
+    pay = pay[E.search70(pay["race_id"].str[:8].to_numpy())]
+    pay["horse_number"] = pd.to_numeric(pay["combo"].astype(str), errors="coerce")
+    pay = pay.groupby(["race_id", "horse_number"], as_index=False)["payout"].sum()        # 同着は足す
+    rows = []
+    for y in range(2016, F.YEAR_END + 1):
+        d = pd.read_parquet(TABLES / str(y) / "race_odds_flat.parquet", columns=["race_id", "surface", "field_size", "horse_number", "win_odds", "place_odds_min", "place_odds_max"])
+        d = d[d["surface"].astype(str).str[0].isin(["芝", "ダ"])].copy()
+        d["race_id"] = d["race_id"].astype(str)
+        d = d[E.search70(d["race_id"].str[:8].to_numpy())]
+        for c in ("win_odds", "place_odds_min", "place_odds_max", "horse_number"):
+            d[c] = pd.to_numeric(d[c], errors="coerce")
+        d["fav_race"] = d.groupby("race_id")["place_odds_max"].transform(lambda s_: bool((s_ <= 1.1).any()))
+        rows.append(d)
+    d = pd.concat(rows, ignore_index=True).merge(pay, on=["race_id", "horse_number"], how="inner")
+    d = d[(d["place_odds_min"] > 1.1 + 1e-9) & (d["place_odds_max"] > d["place_odds_min"])]
+    d["w_real"] = (d["payout"] / 100.0 - d["place_odds_min"]) / (d["place_odds_max"] - d["place_odds_min"])
+    d["band"] = pd.cut(d["win_odds"], BANDS, labels=BAND_NAMES, right=False)
+    out = {"note": "探す側 70%（払戻の表がある 2020〜24）の 3 着内の馬だけ。下限が 1.1 に張り付いた馬は外した。出すのは中央値・分位・件数だけ（的中の率・回収率は出さない）",
+           "bands": {}}
+    for fv, g in d.groupby("fav_race"):
+        b = {}
+        for band, h in g.groupby("band", observed=True):
+            ww = h["w_real"]
+            b[str(band)] = {"n": int(len(h)), "w_mean": float(ww.mean()), "w_median": float(ww.median()), "w_q25": float(ww.quantile(0.25)), "w_q75": float(ww.quantile(0.75))}
+        out["bands"]["大本命あり" if fv else "大本命なし"] = b
+    p_ = REPO / "docs/operations/retrain_trials/rules_council_r17_place_w_check.json"
+    p_.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(json.dumps(out["bands"], ensure_ascii=False, indent=1))
+    return out
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+    cmd_check() if sys.argv[1:] == ["check"] else main()
