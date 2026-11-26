@@ -1,0 +1,124 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>血統の研究をやさしく</title><style>
+:root { --bg:#f7f8fb; --panel:#ffffff; --panel2:#eef1f7; --border:#d5dbe7; --text:#1b2333; --muted:#5b6578;
+  --accent:#2f5fc4; --ok:#1d7f45; --warn:#9a6200; --bad:#b4232c; --bar1:#9aa7c7; --bar2:#2f5fc4; --bar3:#1d7f45; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60;
+  --text:#e6ecff; --muted:#9aa7c7; --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --bar1:#5b6578; --bar2:#7aa9ff; --bar3:#4ade80; } }
+:root[data-theme="dark"] { --bg:#0f172a; --panel:#15213c; --panel2:#1b2a4a; --border:#2a3a60; --text:#e6ecff; --muted:#9aa7c7;
+  --accent:#7aa9ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --bar1:#5b6578; --bar2:#7aa9ff; --bar3:#4ade80; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:16px/1.8 "Noto Sans JP",system-ui,sans-serif; }
+main { max-width:980px; margin:0 auto; padding:28px 16px 80px; }
+a { color:var(--accent); }
+h1 { font-size:25px; margin:0 0 6px; line-height:1.4; }
+h2 { font-size:20px; margin:40px 0 8px; padding-top:16px; border-top:1px solid var(--border); }
+p, li { overflow-wrap:anywhere; }
+.sub { color:var(--muted); font-size:14px; margin:0 0 8px; }
+.big { background:var(--panel); border:2px solid var(--accent); border-radius:14px; padding:14px 18px; margin:14px 0; font-size:17px; }
+.scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:8px 0 14px; border:1px solid var(--border); border-radius:8px; }
+table { border-collapse:collapse; width:100%; min-width:720px; font-size:14.5px; background:var(--panel); }
+th, td { border-bottom:1px solid var(--border); border-right:1px solid var(--border); padding:7px 10px; text-align:left; vertical-align:top; }
+th { background:var(--panel2); color:var(--muted); font-weight:600; white-space:nowrap; }
+tr:last-child td { border-bottom:none; }
+.ok { color:var(--ok); font-weight:600; } .warn { color:var(--warn); font-weight:600; } .bad { color:var(--bad); font-weight:600; }
+.box { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 16px; margin:12px 0; }
+svg text { fill:var(--text); font-size:13px; }
+</style></head><body><main>
+<h1>血統の研究をやさしく</h1>
+<p class="sub">作成 2026-11-26（JST）。担当 pedigree-lab。くわしい版は <a href="pedigree_model.html">血統だけの勝率・複勝率モデル</a>。記録は <code>docs/operations/pedigree_lab/log.md</code>。</p>
+
+<h2>ひとことで言うと</h2>
+<div class="big">
+<p><b>血統（お父さん・お母さんの家系）だけでは、馬券の回収率 100% は超えられなかった。</b></p>
+<ul>
+<li>血統だけで、どの馬が勝ちやすいかは、ある程度当てられた。</li>
+<li>ただし、オッズ（みんなが馬券を買った結果の人気）は、血統の約 8 倍よく当たる。</li>
+<li>オッズには血統の情報がほぼ全部入っている。血統で上乗せできる分は、ほんのわずかだった。</li>
+<li>馬券は、売り上げの約 2 割が先に引かれる（控除）。わずかな上乗せでは、その 2 割を取り返せない。</li>
+</ul>
+</div>
+
+<h2>当たり具合をくらべると</h2>
+<p>「でたらめ（どの馬も同じ確率）」より、どれだけよく当たるかの棒。長いほどよく当たる。</p>
+<svg viewBox="0 0 640 190" width="100%" role="img" aria-label="当たり具合の比べ。でたらめ 0、血統 0.08、オッズ 0.69">
+  <text x="0" y="38">でたらめ</text>
+  <rect x="120" y="22" width="2" height="24" fill="var(--bar1)"/>
+  <text x="130" y="38">0（ものさしの 0）</text>
+  <text x="0" y="88">血統だけ</text>
+  <rect x="120" y="72" width="57" height="24" fill="var(--bar2)"/>
+  <text x="185" y="88">0.08（2025〜26 年でも 0.077）</text>
+  <text x="0" y="138">オッズ</text>
+  <rect x="120" y="122" width="490" height="24" fill="var(--bar3)"/>
+  <text x="440" y="116">0.69</text>
+  <text x="0" y="180" style="fill:var(--muted);font-size:12px">数は「でたらめからの改善」（勝ち馬に付けた確率の対数の平均の差・nats）。2017〜24 年の開発の行。</text>
+</svg>
+<ul>
+<li>血統だけの当たり具合は、オッズの約 8 分の 1。</li>
+<li>見ていない 2025〜26 年でも、同じくらい当たった（0.0815 → 0.0773）。血統の当て方そのものは、年が変わっても崩れない。</li>
+</ul>
+
+<h2>試したことの一覧</h2>
+<p>「確かめ」の欄の言葉: <b>探す側だけ</b>＝作った期間の中だけで見た。<b>2025〜26 でも</b>＝見ていない 2 年でも同じだった。<b>取り下げ</b>＝あとで誤りが見つかった。</p>
+<div class="scroll"><table><thead><tr><th>試したこと</th><th>なぜ効くと思ったか</th><th>結果</th><th>確かめ</th></tr></thead><tbody>
+<tr><td colspan="4"><b>血統の手がかり（特徴量）</b></td></tr>
+<tr><td>お父さんの馬の、芝とダートの得意</td><td>筋肉や蹄の形は親から受けつぐ</td><td class="ok">効いた</td><td>2025〜26 でも同じ向き</td></tr>
+<tr><td>お父さんの馬の、得意な距離</td><td>短い距離向き・長い距離向きは受けつぐ</td><td class="ok">効いた</td><td>2025〜26 でも同じ向き</td></tr>
+<tr><td>お父さんの馬の、早く強くなるか遅く強くなるか（早熟・晩成）</td><td>成長の速さは受けつぐ</td><td class="ok">効いた</td><td>2025〜26 でも同じ向き</td></tr>
+<tr><td>お母さんのお父さん（母父）</td><td>お母さんの力の代わりになる</td><td class="ok">効いた</td><td>2025〜26 でも同じ向き</td></tr>
+<tr><td>兄弟・姉妹の成績</td><td>同じお母さんから生まれた</td><td class="ok">効いた（若い馬ほど強く）</td><td>2025〜26 でも同じ向き</td></tr>
+<tr><td>おばあさん（2 代母）の家系</td><td>家系の強さ</td><td class="ok">少し効いた</td><td>2025〜26 でも同じ向き</td></tr>
+<tr><td>お父さんとお母さんのお父さんの相性（ニックス）</td><td>相性の良い組み合わせがある</td><td class="ok">少し効いた</td><td>2025〜26 でも同じ向き（理由はまだ分からない）</td></tr>
+<tr><td>同じお父さん・同じお母さん（全きょうだい）</td><td>もっと似ているはず</td><td class="bad">効かなかった</td><td>お父さんの分にすでに入っていた</td></tr>
+<tr><td>近い親せき同士の血（インブリード）</td><td>濃くすると強い・弱いの説</td><td class="warn">ほぼ 0</td><td>探す側だけ</td></tr>
+<tr><td>お父さん × 競馬場、お父さん × 雨の馬場</td><td>得意な競馬場・雨の得意がある</td><td class="bad">測れなかった</td><td>数が足りず、雑音に埋もれた</td></tr>
+<tr><td>ひいおじいさんの家系（3・4 代の祖先の子孫）</td><td>遠い祖先の得意も少しずつ入る</td><td class="ok">少し効いた（+0.004）</td><td>探す側だけ（2025〜26 は見ていない）</td></tr>
+<tr><td colspan="4"><b>モデルの作り方</b></td></tr>
+<tr><td>木の形のモデル（LightGBM）</td><td>手がかりの組み合わせを自動で見つける</td><td class="ok">一番よく当たった</td><td>2025〜26 でも 95% を保った</td></tr>
+<tr><td>まっすぐの式のモデル（線形）</td><td>単純で分かりやすい</td><td class="warn">木の約 87%</td><td>探す側だけ</td></tr>
+<tr><td>順位を学ぶモデル（lambdarank）</td><td>着順そのものを学ぶ</td><td class="bad">木より悪い</td><td>探す側だけ</td></tr>
+<tr><td colspan="4"><b>オッズとの組み合わせ</b></td></tr>
+<tr><td>初めてダートを走る馬（初ダート）</td><td>芝の成績しか無いので、みんな血統を軽く見る</td><td class="warn">作った期間では効いた（+0.36）</td><td>2025〜26 では +0.08 で、決められなかった</td></tr>
+<tr><td>そのほか 11 の場面（休み明け・初めての距離・2 歳戦など）</td><td>本人の手がかりが少ない場面</td><td class="bad">どれも残らなかった</td><td>12 本まとめて調べると、どれも偶然の範囲</td></tr>
+<tr><td colspan="4"><b>馬券の買い方</b>（どれも、お金の計算の前に「届かない」と分かって閉じた）</td></tr>
+<tr><td>初ダートで血統の上位の馬の単勝・複勝</td><td>みんなが軽く見る馬を買う</td><td class="bad">届かない</td><td>オッズの約 1.2 倍の当たりで、要る 1.25 倍に届かない</td></tr>
+<tr><td>発走 60 分前のオッズで、得な馬だけを買う</td><td>もっと得な馬に絞る</td><td class="bad">届かない</td><td>得さが足りないか、買える数が年 23〜143 回と少ない</td></tr>
+<tr><td>初ダートの馬を軸にしたワイド・馬連</td><td>上乗せが組み合わせで増える</td><td class="bad">届かない</td><td>1.22〜1.24 倍で、要る 1.29 倍に届かない</td></tr>
+<tr><td colspan="4"><b>そのほかの切り口</b>（探す側だけ・未確認）</td></tr>
+<tr><td>コースの性質 6 つ（急な坂・長い直線・北海道の洋芝・冬のダート・左回り・芝スタートのダート）</td><td>コースの得意は受けつぐ</td><td class="bad">残らなかった</td><td>洋芝は一度効いたように見えたが、作り方の癖だった</td></tr>
+<tr><td>人気の種牡馬（お父さん）の子は買われすぎ</td><td>有名な名前で買われる</td><td class="bad">取り下げ</td><td>一度 −0.036 と出たが、未来の情報が混ざる漏れだった</td></tr>
+<tr><td>新しい種牡馬の最初の子どもの 2 歳戦</td><td>みんな情報が少ない</td><td class="warn">決められない</td><td>数が 679 回しかない</td></tr>
+<tr><td>お父さん・お母さんのお父さんを数の並び（埋め込み）で表す</td><td>似た種牡馬をまとめる</td><td class="bad">上乗せなし</td><td>探す側だけ</td></tr>
+<tr><td>お父さん側とお母さん側で、どちらをみんなが軽く見るか</td><td>新聞はお父さんの名前を見る</td><td class="warn">差は分からない</td><td>探す側だけ</td></tr>
+<tr><td>勝つ力と 3 着までに入る力の違い</td><td>お母さん側は安定に効く</td><td class="bad">違いは無い</td><td>血統は「強さ」の 1 本の物差しとして効く</td></tr>
+</tbody></table></div>
+
+<h2>分かったこと</h2>
+<ul>
+<li><b>血統だけで、勝ちやすさはある程度当てられる。</b>新馬戦・2 歳戦ほどよく当たる（本人の成績がまだ少ないから）。</li>
+<li><b>お母さん側（母父・兄弟姉妹・家系）には、ほかに無い情報がある。</b>手がかりを 1 つずつ外すと、お母さん側を外したときに一番当たりが落ちた。</li>
+<li><b>オッズは血統をほぼ全部知っている。</b>オッズにさらに血統を足しても、当たりはほとんど良くならない。お店の予想モデル（めぐ AI）に足しても、ほぼ 0 だった。</li>
+<li><b>初ダートは、作った期間では効いたが、2025〜26 年では決められなかった。</b>作った期間の値は、たくさんの中から一番良いものを選んだ分だけ大きく見えていた。</li>
+</ul>
+
+<h2>失敗と教訓</h2>
+<ul>
+<li><b>漏れ（あとから知るはずの情報が混ざること）が 2 回見つかった。</b>どちらも、別の係（critic）がコードを読んで見つけた。
+  <ul>
+  <li>1 回目: ひいおじいさんの家系の手がかりで、その日のレースの結果が少しだけ混ざっていた。直すと結果が変わり、使うモデルの選び方を誤っていたと分かった。</li>
+  <li>2 回目: 「人気の種牡馬の子は買われすぎ」は、未来のレースで学んだ予測を、過去の値として使っていた。時間の順に作り直すと消えた。</li>
+  </ul></li>
+<li>教訓 1: 新しい手がかりは、使うモデルを決める前に、別の係に読んでもらう。</li>
+<li>教訓 2: 過去の値として集めるものは、必ず時間の順に作る。</li>
+<li>教訓 3: たくさん試したら、まとめて調べる（1 本ずつだと、偶然を「効いた」と見まちがえる）。</li>
+<li>教訓 4: 見ていない 2025〜26 年は 1 回しか使えない。使う前に、物差しと合格の線を決めておく。</li>
+</ul>
+
+<h2>次の課題と対策</h2>
+<ul>
+<li>血統だけの回収率 100% 超は、今回で閉じた。同じ形では試さない。</li>
+<li>血統の 1 割ほどの当たりは、血統ではない情報（どこから来るかは未確定）だった。出どころを調べる。</li>
+<li>ひいおじいさんの家系の手がかりは、作った期間では少し効いた。時間の外では確かめていない。</li>
+<li>本番の予想モデルは、すでに血統の手がかりを持っている。血統を足して良くする余地は小さい。</li>
+<li>出馬表の時点の血統の点を、前向きに記録する道具を作った（お金はかからない）。将来の確かめの材料にする。</li>
+</ul>
+</main></body></html>

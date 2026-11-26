@@ -33,6 +33,7 @@ details[open] > summary { border-bottom:1px solid var(--border); }
 <h1>血統だけの勝率・複勝率モデル</h1>
 <p class="sub">作成 2026-11-26（JST）。担当 pedigree-lab（2026-11-25 22:40〜11-26 22:40）。血統の専門家 2 体（1 号 血統理論・2 号 統計）と「絶対回収率プラスにするマン」3 体の会議で進めた。記録は <code>docs/operations/pedigree_lab/log.md</code>・<code>decisions.md</code>。費用 0 円（手元のファイルだけ）。</p>
 
+<p class="sub">やさしい版は <a href="pedigree_easy.html">血統の研究をやさしく</a>。</p>
 <h2>結論</h2>
 <div class="box"><ul>
 <li><b>血統だけで、勝率は確かに当たる。</b>純粋な血統（年齢・性・成績・オッズを使わない約 170 列）の勝ちの対数損失は、一様（1/頭数）より 0.082 nats 良い（開発の 2 代母の単位の 5 分割の OOF）。<b>見ていない 2025・26 年でも 0.077 [0.067, 0.089]</b> と 95% を保ち、較正の傾きは 1.04 だった。</li>
