@@ -47,7 +47,7 @@ def shrink_k(per1k: pd.Series, keys: pd.DataFrame, clip: bool = True) -> float:
     within = float(g.var(ddof=1).dropna().mean())
     between = float(g.mean().var(ddof=1)) - within / float(g.size().mean())
     if not np.isfinite(within) or not np.isfinite(between) or between <= 0:
-        return K_MAX
+        return K_MAX if clip else float("nan")
     return float(np.clip(within / between, K_MIN, K_MAX)) if clip else float(within / between)
 
 

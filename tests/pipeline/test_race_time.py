@@ -136,9 +136,18 @@ def test_engine_rebuilt_restores_module_constants_and_never_writes_the_real_base
             raise RuntimeError("止める")
 
     monkeypatch.setattr(E, "TrackSpeedEngine", Boom)
-    with pytest.raises(RuntimeError):
-        R.engine_rebuilt([2016], [2023], cond=False, work=tmp_path)
+    know = tmp_path / "data/page_reference/knowledge"
+    know.mkdir(parents=True)
+    monkeypatch.setattr(R, "DATA", tmp_path / "data")
+    with pytest.raises(FileNotFoundError):
+        R.engine_rebuilt([2016], [2023], cond=False, work=tmp_path)                                     # 表が無ければ黙って進まない
+    (know / "course_layout_map.json").write_text('{"entries": {"京都_芝_1600": "外"}}', encoding="utf-8")
+    (know / "track_renovations.json").write_text("{}", encoding="utf-8")
+    for _ in range(2):                                                                                 # 同じ作業場所で 2 回呼んでも落ちない
+        with pytest.raises(RuntimeError):
+            R.engine_rebuilt([2016], [2023], cond=False, work=tmp_path)
     assert str(seen["bl"]).startswith(str(tmp_path)) and str(seen["root"]).startswith(str(tmp_path))   # 書き先は一時のフォルダだけ
     assert list(seen["pools"]) == ["all"]                                                              # 群なしの版
     assert (E.BASELINES_PATH, E.PACE_BASELINES_PATH, E.COND_POOLS, E.COND_CANDIDATES, E.PROJECT_ROOT) == before   # 例外でも戻る
-    assert (tmp_path / "root_nocond/data/local/knowledge").is_symlink()                                 # 内外・改修の表を読ませる
+    link = tmp_path / "root_nocond/data/local/knowledge"
+    assert link.is_symlink() and (link / "course_layout_map.json").is_file()                            # 内外・改修の表を読ませる

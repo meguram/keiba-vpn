@@ -81,9 +81,10 @@ def build() -> Path:
     r25 = c2.get("reference_2025_not_for_decision", {})
     wins = []
     if nv and en:
-        wins.append(f"一つ抜きの MAD は第 2 版が {en['loo_mad'] - nv['loo_mad']:.3f} 秒小さい")
-        wins.append(f"土日の相関の差は {nv['next_day'] - en['next_day']:+.3f}")
-        wins.append(f"ICC は従来が {en['icc'] - nv['icc']:.3f} 高い")
+        d1, d2, d3 = en["loo_mad"] - nv["loo_mad"], nv["next_day"] - en["next_day"], en["icc"] - nv["icc"]
+        wins.append(f"一つ抜きの MAD は{'第 2 版' if d1 >= 0 else '従来'}が {abs(d1):.3f} 秒小さい")
+        wins.append(f"土日の相関は{'第 2 版' if d2 >= 0 else '従来'}が {abs(d2):.3f} 高い")
+        wins.append(f"ICC は{'従来' if d3 >= 0 else '第 2 版'}が {abs(d3):.3f} 高い")
     ref = ""
     if r25.get("new_v2") and r25.get("eng_nocond"):
         a, b = r25["new_v2"], r25["eng_nocond"]
@@ -92,7 +93,8 @@ def build() -> Path:
                f"一つ抜きのばらつきの勝ちは 2025 年でも{'続く' if a['loo_mad'] < b['loo_mad'] else '続かない'}が、"
                f"土日の相関の勝ちは{'続く' if a['next_day'] > b['next_day'] else '続かない'}。")
     lvm = rep.get("levels_report.json", {})
-    margin = "・".join(wins) + "。" + ref + (f" 開催日レベルの縮みの強さ k は生の推定 {lvm['shrink_k_raw']} を下限の 2 に切った。" if "shrink_k_raw" in lvm else "")
+    margin = "・".join(wins) + "。" + ref + (f" 開催日レベルの縮みの強さ k: 生の推定 {lvm['shrink_k_raw']}、使った値 {lvm['shrink_k']}（{lvm.get('shrink_k_note', '')}）。"
+                                              if "shrink_k_raw" in lvm else "")
     page = TEMPLATE.replace("%VERSION%", html.escape(str(meta.get("version")))) \
         .replace("%BUILT%", html.escape(str(meta.get("built")))).replace("%TRAIN%", html.escape(str(meta.get("train")))) \
         .replace("%STATUS%", html.escape(str(meta.get("status")))).replace("%LAM%", str(meta.get("lam"))).replace("%FSIGN%", "減（多いほど速い）" if meta.get("field_sign") == -1 else "増（多いほど遅い）") \

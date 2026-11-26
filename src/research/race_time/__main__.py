@@ -174,10 +174,15 @@ def engine_rebuilt(years_fit: list[int], years_eval: list[int], cond: bool, work
         # engine は内外の表（course_layout_map.json）と改修の表（track_renovations.json）を PROJECT_ROOT/data/local/knowledge から読むが、
         # 実物は data/page_reference/knowledge にある（2026-11-26 の critic の指摘）。読めないと内外を分けず改修前も混ぜた弱い基準になるので、
         # 一時の root の data/local/knowledge を実物へのリンクにして、本物と同じ作りにする
+        src = DATA / "page_reference/knowledge"
+        missing = [f for f in ("course_layout_map.json", "track_renovations.json") if not (src / f).is_file()]
+        if missing:
+            raise FileNotFoundError(f"内外・改修の表が無い: {src} {missing}（KEIBA_RACE_TIME_DATA で本体の data/ を指す）")
         kroot = work / f"root_{tag}"
         (kroot / "data/local").mkdir(parents=True, exist_ok=True)
-        if not (kroot / "data/local/knowledge").exists():
-            (kroot / "data/local/knowledge").symlink_to(DATA / "page_reference/knowledge")
+        link = kroot / "data/local/knowledge"
+        if not (link.is_symlink() or link.exists()):
+            link.symlink_to(src)
         E.PROJECT_ROOT = kroot
         E.BASELINES_PATH = work / f"bl_{tag}.parquet"
         E.PACE_BASELINES_PATH = work / f"pace_{tag}.parquet"
@@ -304,14 +309,16 @@ def member_next_run_check(levels: pd.DataFrame, tables: Path, years: list[int]) 
     cols = ["race_id", "date", "horse_id", "finish_position", "field_size", "grade", "surface"]
     h = pd.concat([pd.read_parquet(tables / str(y) / "race_result_flat.parquet", columns=cols) for y in years if (tables / str(y) / "race_result_flat.parquet").exists()])
     h = h[h["surface"].isin(["芝", "ダート"])].copy()                     # 障害は除く（平地の次走だけを見る）
-    h = h[h["finish_position"] != 0]                                    # 0 は出走していない（取消・除外）。中止（-1）は次走に残し 3 着内でないに数える
+    # 着順 0 以下（-1）は取消・除外・中止。結果表では元の文字が空のことが多く見分けられない（2024 年の平地で 359 件、ほとんどが取消・除外）。
+    # 取消を「次走」に数えないよう、すべて走っていないとして除く（中止は年に数件で、3 着内でないに数えない分の偏りは小さい）
+    h = h[h["finish_position"] > 0]
     h["date"] = h["date"].astype(str).str.replace("-", "")
     h["cls"] = h["grade"].map(CLASS_ORD)                                # 同じクラスはモデルと同じ段（新馬＝未勝利・OP＝L）
     h = h.sort_values(["horse_id", "date"])
     g = h.groupby("horse_id")
     h["next_race"], h["next_pos"], h["next_field"], h["next_cls"] = g["race_id"].shift(-1), g["finish_position"].shift(-1), g["field_size"].shift(-1), g["cls"].shift(-1)
-    h = h[(h["finish_position"] > 0) & h["next_race"].notna() & (h["next_cls"] == h["cls"])]
-    h["next_dev"] = np.where(h["next_pos"] > 0, h["next_pos"] / h["next_field"], 1.0)   # 中止は最下位の扱い
+    h = h[h["next_race"].notna() & (h["next_cls"] == h["cls"])]
+    h["next_dev"] = h["next_pos"] / h["next_field"]
     lv = levels[(levels["date"] >= "20230101") & (levels["date"] < "20250101") & (levels["n_other_races"] >= 2)].dropna(subset=["member_level_per1k"])
     lv = lv.assign(tert=pd.qcut(lv["member_level_per1k"], 3, labels=["高い（速い）", "中", "低い（遅い）"]))
     m = h.merge(lv[["race_id", "tert"]], on="race_id")
@@ -328,7 +335,7 @@ def cmd_levels(a: argparse.Namespace) -> None:
     """v2 でレースレベル・開催日レベル・メンバーレベルを作り、page_reference/race_level/races_<年>・days_<年>.parquet に書く（手で流す）。"""
     from src.pipeline.race_time.levels import compute, shrink_k
 
-    df = load(Path(a.tables), True)                                       # 毎回作り直す（新しいレースを黙って落とさない）
+    df = load(Path(a.tables), True)                                       # 毎回作り直す（新しいレースを黙って落とさない。共有の races.parquet も新しくなる）
     model = RaceTimeModel.load(MODEL_PATH.with_name("v2.json"))
     wp = MODEL_PATH.with_name("v2_win.json")
     if wp.exists():
@@ -345,14 +352,17 @@ def cmd_levels(a: argparse.Namespace) -> None:
     tr22 = df[df.date < "20230101"]
     m22 = RaceTimeModel(lam=model.lam, field_sign=model.field_sign, spec="v2").fit(tr22)
     w22 = RaceTimeModel(target="y_win", lam=model.lam, field_sign=model.field_sign, spec="v2").fit(tr22)
-    r22, _ = compute(df[df.date < "20250101"], m22, k, win_model=w22)
+    t22 = tr22.dropna(subset=["front600"])
+    k22 = float(np.clip(shrink_k((t22["y_top5"] - m22.predict(t22)) / (t22["distance"] / 1000.0), t22[["date", "venue", "surf"]], clip=False), 2.0, 10.0))
+    r22, _ = compute(df[df.date < "20250101"], m22, k22, win_model=w22)
     check = member_next_run_check(r22, Path(a.tables), [2023, 2024, 2025])
     LEVEL_DIR.mkdir(parents=True, exist_ok=True)
     for y in sorted({d[:4] for d in races["date"]}):
         races[races["date"].str.startswith(y)].to_parquet(LEVEL_DIR / f"races_{y}.parquet", index=False)
         days[days["date"].str.startswith(y)].to_parquet(LEVEL_DIR / f"days_{y}.parquet", index=False)
     meta = {"version": model.meta.get("version"), "built": date.today().isoformat(), "model_built": model.meta.get("built"),
-            "shrink_k": round(k, 3), "shrink_k_raw": round(float(k_raw), 3), "shrink_k_note": "生の推定が下限 2 を下回ったので 2 に切った",
+            "shrink_k": round(k, 3), "shrink_k_raw": round(float(k_raw), 3),
+            "shrink_k_note": ("生の推定が下限 2 を下回ったので 2 に切った" if k_raw < 2 else "生の推定が上限 10 を超えたので 10 に切った" if k_raw > 10 else "生の推定のまま"),
             "member_check": check, "member_check_fit": "2016〜2022（学習の外の 2023〜24 で確かめる）", "member_visible": check["pass"], "n_races": int(len(races))}
     (LEVEL_DIR / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
     REPORT.with_name("levels_report.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
