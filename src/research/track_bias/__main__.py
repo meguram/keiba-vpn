@@ -27,16 +27,10 @@ OUT_DIR = D.REPO / "data/local/research/track_bias"
 LEDGER_FROM = "2022-01-01"          # これより前は台帳の「開発」の期間（記録しない）
 
 
-def build_races(ks: dict | None = None):
+def build_races(ks: dict, extras: dict | None = None):
     h = D.horse_values(D.load_horses())
     R = D.race_values(h)
-    if ks is None:
-        ks = {}
-        for c in D.METRICS:
-            ks[c], _ = B.choose_k(R, c)
-        for c in D.AUX:
-            ks[c] = ks["front_early"]
-    R = B.add_baseline(R, D.METRICS + D.AUX, ks)
+    R = B.add_baseline(R, D.METRICS + D.AUX, ks, extras)
     return h, R, ks
 
 
@@ -52,33 +46,24 @@ def cmd_calibrate(a) -> int:
     with tb_ledger.open_token((LEDGER_FROM, "2024-12-31"), _code_version(), "k と日の z の校正（μ・s）を決める。2016〜24 だけ", purpose="select") as tok:
         out = _calibrate_inner()
         tok.finish(CAL_PATH)
-    print(json.dumps({"k": out["k"], "persist": out["persist"]}, ensure_ascii=False))
+    print(json.dumps({"main": out["main"], "extras": out["extras"], "notes": out["compare"]["notes"]}, ensure_ascii=False))
     return 0
 
 
 def _calibrate_inner() -> dict:
-    h = D.horse_values(D.load_horses(range(D.FIRST_YEAR, 2025)))
-    R = D.race_values(h)
-    ks, mses = {}, {}
-    for c in D.METRICS:
-        ks[c], mses[c] = B.choose_k(R, c)
-    for c in D.AUX:
-        ks[c] = ks["front_early"]
-    R = B.add_baseline(R, D.METRICS + D.AUX, ks)
-    days = Y.day_raw(R)
-    cal = Y.calibrate(days)
-    # 日の持続: 同じ場・芝ダで、次の開催日（1〜2 日後）の z_raw との相関（土日の続き）
-    persist = {}
-    for c in (Y.FRONT_MAIN, Y.INNER_MAIN):
-        d = days[(days["n_races"] >= Y.MIN_RACES) & (days["date"] >= Y.CAL_FROM)].copy()
-        d["dt"] = pd.to_datetime(d["date"])
-        d = d.sort_values(["venue", "surf", "dt"])
-        nxt = d.groupby(["venue", "surf"])[[f"zr_{c}", "dt"]].shift(-1)
-        ok = (nxt["dt"] - d["dt"]).dt.days.between(1, 2)
-        persist[c] = {"corr_next_day": float(d.loc[ok, f"zr_{c}"].corr(nxt.loc[ok, f"zr_{c}"])), "pairs": int(ok.sum())}
+    """候補の比較（compare.run。決まりは compare の冒頭）と、採った作りでの校正。2016〜24 だけ。"""
+    from src.research.track_bias import compare
+    res = compare.run()
+    cal = res["cal"]
     out = {"made": pd.Timestamp.now(tz="Asia/Tokyo").strftime("%Y-%m-%d %H:%M"), "data_to": "2024-12-31",
-           "k": ks, "k_mse": {c: {str(k): v for k, v in m.items()} for c, m in mses.items()},
-           "persist": persist, **cal}
+           "k": res["k"], "extras": res["extras"], "main": res["main"],
+           "compare": {"extras_table": res["extras_table"], "yardstick": res["yardstick"], "yardstick_final": res["yardstick_final"], "notes": res["notes"]},
+           "info_sources": D.info_sources(),
+           # 持続: 主の値は採った基準線（追加の項あり）の値、ほかは追加の項なしの基準線の値
+           "persist": {c: {"corr_next_day": (res["yardstick_final"].get(c) or res["yardstick"][c])["next_day"],
+                           "pairs": (res["yardstick_final"].get(c) or res["yardstick"][c])["next_pairs"],
+                           "baseline": "採った基準線" if c in res["yardstick_final"] else "追加の項なしの基準線"} for c in D.METRICS},
+           **cal}
     CAL_PATH.parent.mkdir(parents=True, exist_ok=True)
     CAL_PATH.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     return out
@@ -99,7 +84,7 @@ def _version(cal_path: Path) -> str:
 
 def build_all(out: Path, cal_path: Path = CAL_PATH) -> dict:
     cal = load_cal(cal_path)
-    h, R, _ = build_races(cal["k"])
+    h, R, _ = build_races(cal["k"], cal.get("extras"))
     last = str(R["date"].max())
     if last < LEDGER_FROM:
         return _write_all(h, R, cal, out, None)
@@ -112,6 +97,8 @@ def build_all(out: Path, cal_path: Path = CAL_PATH) -> dict:
 def _write_all(h, R, cal: dict, out: Path, tok) -> dict:
     last = str(R["date"].max())
     days = Y.apply(Y.day_raw(R), cal)
+    info = ["kai", "meet_day", "rail", "cushion_value", "turf_moisture_goal", "turf_moisture_4corner", "dirt_moisture_goal", "dirt_moisture_4corner"]
+    days = days.merge(R.groupby(Y.DAY_KEYS)[info].first().reset_index(), on=Y.DAY_KEYS, how="left")
     contrib = Y.race_contrib(R, days, cal)
     segs = Y.segments(R, cal)
     out.mkdir(parents=True, exist_ok=True)
@@ -119,9 +106,12 @@ def _write_all(h, R, cal: dict, out: Path, tok) -> dict:
     contrib.to_parquet(out / "race_metrics.parquet", index=False)
     h.drop(columns=["corner_passing"]).to_parquet(out / "horses.parquet", index=False)
     segs.to_parquet(out / "segments.parquet", index=False)
-    cols = ["date", "venue", "surf", "label", "front_label", "inner_label", "inner_provisional", "n_races",
+    meta = {"made": pd.Timestamp.now(tz="Asia/Tokyo").strftime("%Y-%m-%d %H:%M"), "main": {"front": Y.FRONT_MAIN, "inner": Y.INNER_MAIN},
+            "extras": cal.get("extras", {}), "course_info_to": str(D.course_info()["date"].max()), "info_sources": D.info_sources()}
+    (out / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+    cols = ["date", "venue", "surf", "label", "front_label", "inner_label", "n_races",
             f"z_{Y.FRONT_MAIN}", f"lo_{Y.FRONT_MAIN}", f"hi_{Y.FRONT_MAIN}", "z_front_4c",
-            f"z_{Y.INNER_MAIN}", f"lo_{Y.INNER_MAIN}", f"hi_{Y.INNER_MAIN}", "z_inner_a", "z_inner_b"]
+            f"z_{Y.INNER_MAIN}", f"lo_{Y.INNER_MAIN}", f"hi_{Y.INNER_MAIN}", "z_inner_a", "z_inner_b", "z_inner_c"] + info
     for y, g in days.groupby(days["date"].str[:4]):
         g[cols].to_csv(out / f"daily_labels_{y}.csv", index=False, encoding="utf-8")
     res = {"days": int(len(days)), "races": int(len(R)), "from": str(R["date"].min()), "to": last, "out": str(out)}
@@ -145,9 +135,10 @@ def day_report(date: str, venue: str, out: Path = OUT_DIR) -> dict:
     res = {"date": date, "venue": venue, "surfaces": {}}
     for _, d in days[(days["date"] == date) & (days["venue"] == venue)].iterrows():
         s = d["surf"]
+        Y.set_main({"main": {"front": d["front_main"], "inner": d["inner_main"]}})   # 名札を作ったときの主
         races = rm[(rm["date"] == date) & (rm["venue"] == venue) & (rm["surf"] == s)].sort_values("round")
         res["surfaces"][s] = {
-            "label": d["label"], "front": d["front_label"], "inner": d["inner_label"] + ("（仮・案 C）" if d["inner_provisional"] else ""),
+            "label": d["label"], "front": d["front_label"], "inner": d["inner_label"], "main": {"front": d["front_main"], "inner": d["inner_main"]},
             "n_races": int(d["n_races"]),
             "z": {m: round(float(d[f"z_{m}"]), 2) for m in D.METRICS},
             "D_front_80": [round(float(d[f"lo_{Y.FRONT_MAIN}"]), 2), round(float(d[f"hi_{Y.FRONT_MAIN}"]), 2)],
@@ -155,7 +146,8 @@ def day_report(date: str, venue: str, out: Path = OUT_DIR) -> dict:
             "races": [{"round": int(r["round"]), "race_id": r["race_id"], "distance": int(r["distance"]), "class": r["grade"],
                        "cond": r["track_condition"], "N": int(r["N"]),
                        "S-E_front": round(float(r[f"SE_{Y.FRONT_MAIN}"]), 3), "z_contrib_front": round(float(r[f"zc_{Y.FRONT_MAIN}"]), 3),
-                       "S-E_front_4c": round(float(r["SE_front_4c"]), 3), "S-E_inner_c": round(float(r[f"SE_{Y.INNER_MAIN}"]), 3)}
+                       "S-E_front_4c": round(float(r["SE_front_4c"]), 3), "S-E_inner": round(float(r[f"SE_{Y.INNER_MAIN}"]), 3),
+                       "z_contrib_inner": round(float(r[f"zc_{Y.INNER_MAIN}"]), 3)}
                       for _, r in races.iterrows()],
         }
         res["surfaces"][s]["n_horses"] = int(hs["race_id"].isin(races["race_id"]).sum())

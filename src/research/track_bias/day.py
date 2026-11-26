@@ -5,7 +5,7 @@
   2016 年は基準線の溜め（as-of の履歴が短い）なので校正に入れない。2025・26 年は校正に使わない。
 - 区分の閾値（数字を見る前に決めた）: |z| < 1 中立、1 ≤ |z| < 2 有利、|z| ≥ 2 強い。レース 3 未満は判定なし。
 - 区間: D の 80% 区間 = D ± 1.28 · s · √ΣV（校正の尺度で広げた区間）。
-- 名札: 内外（主は案 C。ユーザーが案を選ぶまで「仮」）× 前後（主は序盤の位置）を 1 文に。両方中立なら「中立」。
+- 名札: 内外 × 前後 を 1 文に（両方中立なら「中立」）。主の値は校正の JSON の main（compare で決める。既定は前後 front_early・内外 inner_b_g）。
 """
 
 from __future__ import annotations
@@ -20,9 +20,17 @@ CAL_FROM, CAL_TO = "2017-01-01", "2024-12-31"
 MIN_RACES = 3
 TH_WEAK, TH_STRONG = 1.0, 2.0
 Z80 = 1.2816
-FRONT_MAIN = "front_early"
-INNER_MAIN = "inner_c"
-INNER_PROVISIONAL = True        # 内外の案をユーザーが選ぶまで True（名札に「仮」）
+DEFAULT_FRONT, DEFAULT_INNER = "front_early", "inner_b_g"
+FRONT_MAIN = DEFAULT_FRONT      # 主の値。calibrate の比較（compare）で決まり、set_main(cal) で校正の JSON の main に合わせる
+INNER_MAIN = DEFAULT_INNER      # 内外は案 B 系（2026-11-26 の統括役の決定）。変種は compare の決まりで決まる
+
+
+def set_main(cal: dict) -> None:
+    """校正の JSON の main（compare で決めた主）を、このモジュールの主の値にする。"""
+    global FRONT_MAIN, INNER_MAIN
+    m = cal.get("main") or {}
+    FRONT_MAIN = m.get("front", DEFAULT_FRONT)       # main が無い JSON は既定に戻す（呼ぶ順で主が変わらない）
+    INNER_MAIN = m.get("inner", DEFAULT_INNER)
 
 FRONT_WORDS = {2: "強い前残り", 1: "前残り", 0: "前後は中立", -1: "差し有利", -2: "強い差し有利"}
 INNER_WORDS = {2: "強い内有利", 1: "内有利", 0: "内外は中立", -1: "外有利", -2: "強い外有利"}
@@ -86,7 +94,8 @@ def calibrate(days: pd.DataFrame, cols=METRICS + AUX) -> dict:
 
 
 def apply(days: pd.DataFrame, cal: dict, cols=METRICS + AUX) -> pd.DataFrame:
-    """z・区分・区間・名札を足す。"""
+    """z・区分・区間・名札を足す（主の値は校正の JSON の main）。"""
+    set_main(cal)
     d = days.copy()
     for c in cols:
         mu = d["surf"].map(lambda s: cal["metrics"][c].get(s, {}).get("mu", 0.0))
@@ -101,12 +110,14 @@ def apply(days: pd.DataFrame, cal: dict, cols=METRICS + AUX) -> pd.DataFrame:
     d["front_label"] = [FRONT_WORDS[v] if n >= MIN_RACES else NO_JUDGE for v, n in zip(d[f"lv_{FRONT_MAIN}"], nf)]
     d["inner_label"] = [INNER_WORDS[v] if n >= MIN_RACES else NO_JUDGE for v, n in zip(d[f"lv_{INNER_MAIN}"], ni)]
     d["label"] = [label(f, i, min(a, b)) for f, i, a, b in zip(d[f"lv_{FRONT_MAIN}"], d[f"lv_{INNER_MAIN}"], nf, ni)]
-    d["inner_provisional"] = INNER_PROVISIONAL
+    d["front_main"], d["inner_main"] = FRONT_MAIN, INNER_MAIN
     return d
 
 
-def race_contrib(R: pd.DataFrame, days: pd.DataFrame, cal: dict, cols=(FRONT_MAIN, "front_4c", "inner_a", "inner_b", INNER_MAIN)) -> pd.DataFrame:
+def race_contrib(R: pd.DataFrame, days: pd.DataFrame, cal: dict, cols=None) -> pd.DataFrame:
     """レースごとの S − E と、日の z への寄与（寄与の和 + その日の −μ/s の分 = 日の z）。"""
+    if cols is None:
+        cols = tuple(dict.fromkeys(METRICS))
     m = R.merge(days[DAY_KEYS + [f"V_{c}" for c in cols]].rename(columns={f"V_{c}": f"dV_{c}" for c in cols}), on=DAY_KEYS, how="left")
     for c in cols:
         sd = m["surf"].map(lambda s: cal["metrics"][c].get(s, {}).get("sd", 1.0))
@@ -115,10 +126,11 @@ def race_contrib(R: pd.DataFrame, days: pd.DataFrame, cal: dict, cols=(FRONT_MAI
     return m
 
 
-def segments(R: pd.DataFrame, cal: dict, col: str = FRONT_MAIN) -> pd.DataFrame:
+def segments(R: pd.DataFrame, cal: dict, col: str | None = None) -> pd.DataFrame:
     """1 日の中の区切り（前半 〜6R・後半 7R〜、馬場の替わり）ごとの z（記述だけ。区分は付けない）。
     区切りの z は、その区切りのレースだけの D / √(区切りの ΣV) を日の尺度 s で割ったもの（μ は引かない）。
     分母が区切りの ΣV なので、race_contrib の寄与（分母は日の ΣV）を区切りで足した値とは一致しない。"""
+    col = col or FRONT_MAIN
     rows = []
     for key, g in R.groupby(DAY_KEYS, sort=True):
         g = g.sort_values("round")

@@ -24,7 +24,10 @@ TABLES = REPO / "data/page_reference/tables"
 FIRST_YEAR = 2016
 
 # 1 レースの値の名前（x の名前）。front_* は前後、inner_* は内外（A・B・C の 3 案）
-METRICS = ("front_early", "front_4c", "inner_a", "inner_b", "inner_c")
+METRICS = ("front_early", "front_4c", "front_l3f", "front_combo", "inner_a", "inner_b", "inner_b_r", "inner_b_g", "inner_c")
+# x の名前（馬ごとの列）
+X_COL = {"front_early": "c_early", "front_4c": "c_4c", "front_l3f": "c_l3f_neg", "front_combo": "c_combo",
+         "inner_a": "g_a", "inner_b": "g_b", "inner_b_r": "g_b_r", "inner_b_g": "g_b_g", "inner_c": "g_c"}
 AUX = ("fr3_ex", "bk3_ex", "in3_ex", "out3_ex", "fav_front_ex", "long_back_ex")
 
 DIST_BANDS = ((1400, "短"), (1800, "マイル"), (2200, "中"), (10**9, "長"))
@@ -84,7 +87,26 @@ def parse_order_text(text: str) -> dict[int, int]:
     return out
 
 
-def last_corner_lateral(cp) -> dict[int, int]:
+def parse_order_groups(text: str) -> dict[int, tuple[int, int]]:
+    """馬番 → (群の中の内からの位置, 群の頭数)。単独の馬は (0, 1)。"""
+    pos = parse_order_text(text)
+    out: dict[int, tuple[int, int]] = {}
+    depth, members = 0, []
+    for tk in _TOKEN.findall(str(text or "")):
+        if tk == "(":
+            depth, members = 1, []
+        elif tk == ")":
+            for h in members:
+                out[h] = (pos[h], len(members))
+            depth = 0
+        elif depth:
+            members.append(int(tk))
+        else:
+            out[int(tk)] = (0, 1)
+    return out
+
+
+def last_corner_lateral(cp, groups: bool = False):
     """corner_passing（JSON の配列）の最後の角（4 角があれば 4 角）の、馬番 → 群の中の内からの位置。"""
     try:
         arr = json.loads(cp) if isinstance(cp, str) else (cp or [])
@@ -98,7 +120,8 @@ def last_corner_lateral(cp) -> dict[int, int]:
     cs = [e for e in arr if isinstance(e, dict) and corner_no(e) >= 1 and e.get("order_text")]
     if not cs:
         return {}
-    return parse_order_text(max(cs, key=corner_no)["order_text"])
+    text = max(cs, key=corner_no)["order_text"]
+    return parse_order_groups(text) if groups else parse_order_text(text)
 
 
 # ---------------------------------------------------------------- 市場の見込み
@@ -218,24 +241,38 @@ def top3_share(r: pd.DataFrame) -> pd.Series:
     return y.where(fin != 3, share)
 
 
+def resid_within(r: pd.DataFrame, ycol: str, xcol: str) -> pd.Series:
+    """レースの中で ycol を xcol に回帰（切片つき）した残り。ycol の欠けはそのまま欠け。"""
+    ok = r[ycol].notna()
+    rid = r["race_id"]
+    ym = r[ycol].where(ok).groupby(rid).transform("mean")
+    xm = r[xcol].where(ok).groupby(rid).transform("mean")
+    dy, dx = r[ycol] - ym, (r[xcol] - xm).where(ok)
+    beta = (dx * dy).groupby(rid).transform("sum") / (dx * dx).groupby(rid).transform("sum").replace(0, np.nan)
+    return dy - beta.fillna(0) * dx
+
+
 def horse_values(r: pd.DataFrame) -> pd.DataFrame:
     """馬ごとに q・y・c（前らしさ）・g（内らしさ）・脚質の名札を足す。"""
     r = r.copy()
     q = np.empty(len(r))
     lat = np.full(len(r), np.nan)
+    gsz = np.full(len(r), np.nan)
     for _, idx in r.groupby("race_id", sort=False).indices.items():
         o = r["odds"].to_numpy()[idx]
         p = (1 / o) / (1 / o).sum()
         q[idx] = harville_top3(p)
         cp = r["corner_passing"].iloc[idx[0]]
         if isinstance(cp, str) and cp:
-            m = last_corner_lateral(cp)
+            m = last_corner_lateral(cp, groups=True)
             if m:
                 hn = r["horse_number"].to_numpy()[idx].astype(int)
-                lat[idx] = [m.get(int(h), np.nan) for h in hn]   # 並びに無い馬は欠け（そのレースの案 B は欠けになる）
+                lat[idx] = [m[int(h)][0] if int(h) in m else np.nan for h in hn]   # 並びに無い馬は欠け（そのレースの案 B は欠けになる）
+                gsz[idx] = [m[int(h)][1] if int(h) in m else np.nan for h in hn]
     r["q"] = q
     r["y"] = top3_share(r)
     r["lat4"] = lat
+    r["grp4"] = gsz
     g = r.groupby("race_id")
     n1 = (r["N"] - 1).clip(lower=1)
     r["f_early"] = (g["pos_first"].rank(method="average") - 1) / n1
@@ -245,12 +282,19 @@ def horse_values(r: pd.DataFrame) -> pd.DataFrame:
     r["c_4c"] = 0.5 - r["f_4c"]
     r["g_a"] = 0.5 - r["f_gate"]
     r["g_b"] = -(r["lat4"] - g["lat4"].transform("mean"))       # 4 角で群の外にいるほど負
-    # 案 C: g_a から序盤の位置（c_early）の分を除いた残り（レースの中の最小二乗）
-    cm = g["c_early"].transform("mean")
-    gm = g["g_a"].transform("mean")
-    dc, dg = r["c_early"] - cm, r["g_a"] - gm
-    beta = (dc * dg).groupby(r["race_id"]).transform("sum") / (dc * dc).groupby(r["race_id"]).transform("sum").replace(0, np.nan)
-    r["g_c"] = dg - beta.fillna(0) * dc
+    # 案 B の変種 g: 群の中の相対位置（内 +0.5〜外 −0.5）。単独の馬は内外が分からないので 0（中ほど）。
+    # 単独の馬を最も内（lat 0）と数える元の B は、単独で走ることの多い逃げ・先行の馬を内側に数える
+    rel = np.where(r["grp4"] >= 2, r["lat4"] / (r["grp4"] - 1).clip(lower=1) - 0.5, 0.0)
+    r["g_b_g"] = np.where(r["lat4"].notna(), -rel, np.nan)
+    # 上がり 3F の速さ（速いほど +）。中止などで無い馬は最も遅い側に置く。前有利の日は末脚の馬が来ないので、x は符号を反転
+    l3 = pd.to_numeric(r["last_3f"], errors="coerce")
+    l3 = l3.fillna(l3.groupby(r["race_id"]).transform("max") + 1)
+    r["f_l3f"] = (l3.groupby(r["race_id"]).rank(method="average") - 1) / n1
+    r["c_l3f_neg"] = -(0.5 - r["f_l3f"])
+    r["c_combo"] = (r["c_early"] + r["c_l3f_neg"]) / 2       # 序盤の前らしさ と 末脚の遅さ の平均
+    # 案 C: g_a から序盤の位置（c_early）の分を除いた残り（レースの中の最小二乗）。B の変種 B_r も同じ形で g_b から除く
+    r["g_c"] = resid_within(r, "g_a", "c_early")
+    r["g_b_r"] = resid_within(r, "g_b", "c_early")
     # 脚質の名札（序盤の位置から）: 逃げ＝序盤の先頭、先行＝前 1/3、差し＝〜2/3、追込＝残り
     r["run_style"] = np.select([g["pos_first"].transform("min") == r["pos_first"], r["f_early"] <= 1 / 3, r["f_early"] <= 2 / 3],
                            ["逃げ", "先行", "差し"], "追込")
@@ -260,9 +304,8 @@ def horse_values(r: pd.DataFrame) -> pd.DataFrame:
 def race_values(h: pd.DataFrame) -> pd.DataFrame:
     """1 レース 1 行: S（METRICS）と補助の値（AUX）と区分の鍵。"""
     e = h["y"] - h["q"]
-    cols = {"front_early": "c_early", "front_4c": "c_4c", "inner_a": "g_a", "inner_b": "g_b", "inner_c": "g_c"}
     t = pd.DataFrame({"race_id": h["race_id"]})
-    for k, x in cols.items():
+    for k, x in X_COL.items():
         t[k] = e * h[x]
     t["fr3_ex"] = e * (h["f_early"] <= 1 / 3)
     t["bk3_ex"] = e * (h["f_early"] > 2 / 3)
@@ -273,7 +316,7 @@ def race_values(h: pd.DataFrame) -> pd.DataFrame:
     t["long_back_ex"] = e * ((pop >= 6) & (h["f_early"] > 2 / 3))
     R = t.groupby("race_id", sort=False).sum(min_count=1)
     nb = h.groupby("race_id", sort=False)["lat4"].apply(lambda s: s.notna().all())
-    R.loc[~nb.reindex(R.index).fillna(False).astype(bool), "inner_b"] = np.nan
+    R.loc[~nb.reindex(R.index).fillna(False).astype(bool), ["inner_b", "inner_b_r", "inner_b_g"]] = np.nan
     first = h.groupby("race_id", sort=False).first()
     for c in ("date", "venue", "surf", "distance", "grade", "track_condition", "round", "start_time", "N"):
         R[c] = first[c]
@@ -281,4 +324,97 @@ def race_values(h: pd.DataFrame) -> pd.DataFrame:
     R["class_g"] = R["grade"].map(class_group)
     R["cond_g"] = R["track_condition"].map(COND_GROUP).fillna("良")
     R["field_g"] = R["N"].astype(int).map(field_group)
-    return R.reset_index()
+    R = R.reset_index()
+    return add_course_info(R)
+
+
+# ---------------------------------------------------------------- 開催の情報（仮柵・何日目・クッション値・含水率）
+
+COURSE_POS = REPO / "data/page_reference/course_position"
+CUSHION = REPO / "data/page_reference/cushion"
+
+
+def _main_tree(p: Path) -> Path:
+    """worktree（.claude/worktrees/<名前>）に無い置き場は、その worktree の本体の作業ツリーの同じ場所を読む（どちらも手元のファイル）。"""
+    if p.exists() and any(p.iterdir()):
+        return p
+    parts = REPO.parts
+    if ".claude" in parts and "worktrees" in parts:
+        alt = Path(*parts[:parts.index(".claude")]) / p.relative_to(REPO)
+        if alt.exists():
+            return alt
+    return p
+
+
+def info_sources() -> dict:
+    """開催の情報の元のファイルの hash（校正の記録に残す。本体の作業ツリーの表は cron で書き換わるため）。"""
+    import hashlib
+    out = {}
+    for base, pat in ((COURSE_POS, "course_position_*.json"), (CUSHION, "cushion_20*.json")):
+        for f in sorted(_main_tree(base).glob(pat)):
+            out[str(f)] = hashlib.sha256(f.read_bytes()).hexdigest()[:12]
+    return out
+
+
+def course_info() -> pd.DataFrame:
+    """日付 × 場 → 開催（回）・何日目・芝の仮柵（A・B・C・D）。"""
+    rows = []
+    for p in sorted(_main_tree(COURSE_POS).glob("course_position_*.json")):
+        for d, xs in (json.loads(p.read_text(encoding="utf-8")).get("dates") or {}).items():
+            for x in xs:
+                rows.append({"date": d, "venue": x.get("venue"), "kai": x.get("kai"), "meet_day": x.get("day"), "rail": x.get("turf_course") or "?"})
+    return pd.DataFrame(rows).drop_duplicates(["date", "venue"])
+
+
+def cushion_info() -> pd.DataFrame:
+    """日付 × 場 → クッション値・含水率（ゴール前・4 角）。その日の朝の測りの値（発表は発走前）。"""
+    rows = []
+    for p in sorted(_main_tree(CUSHION).glob("cushion_20*.json")):
+        rows += json.loads(p.read_text(encoding="utf-8"))
+    if not rows:
+        return pd.DataFrame(columns=["date", "venue"])
+    c = pd.DataFrame(rows)
+    c = c[c["date"].astype(str).str.len() >= 10].rename(columns={"venue_name": "venue"})
+    for k in ("cushion_value", "turf_moisture_goal", "turf_moisture_4corner", "dirt_moisture_goal", "dirt_moisture_4corner"):
+        c[k] = pd.to_numeric(c.get(k), errors="coerce")
+    return c[["date", "venue", "cushion_value", "turf_moisture_goal", "turf_moisture_4corner", "dirt_moisture_goal", "dirt_moisture_4corner"]].drop_duplicates(["date", "venue"], keep="last")
+
+
+def meet_band(d) -> str:
+    if pd.isna(d):
+        return "?"
+    d = int(d)
+    return "1〜2日目" if d <= 2 else ("3〜4日目" if d <= 4 else ("5〜6日目" if d <= 6 else "7日目〜"))
+
+
+def cushion_band(v) -> str:
+    if pd.isna(v):
+        return "?"
+    return "〜8.9" if v < 9 else ("9〜9.9" if v < 10 else "10〜")
+
+
+def moist_band(v) -> str:
+    if pd.isna(v):
+        return "?"
+    return "〜4.9" if v < 5 else ("5〜9.9" if v < 10 else "10〜")
+
+
+def add_course_info(R: pd.DataFrame) -> pd.DataFrame:
+    """R に 開催・何日目・仮柵・クッション値・含水率と、その帯（基準線の区分の候補）を足す。"""
+    R = R.drop(columns=[c for c in ("kai", "meet_day", "rail", "cushion_value", "turf_moisture_goal", "turf_moisture_4corner",
+                                     "dirt_moisture_goal", "dirt_moisture_4corner") if c in R.columns])
+    ci, cu = course_info(), cushion_info()
+    if len(ci):
+        R = R.merge(ci, on=["date", "venue"], how="left")
+    else:
+        R["kai"] = np.nan; R["meet_day"] = np.nan; R["rail"] = "?"
+    if len(cu):
+        R = R.merge(cu, on=["date", "venue"], how="left")
+    for k in ("cushion_value", "turf_moisture_goal", "turf_moisture_4corner", "dirt_moisture_goal", "dirt_moisture_4corner"):
+        if k not in R.columns:
+            R[k] = np.nan
+    R["meet_band"] = R["meet_day"].map(meet_band)
+    R["rail"] = np.where(R["surf"] == "芝", R["rail"].fillna("?").astype(str), "-")
+    # 馬場の硬さ・含水の帯: 芝はクッション値、ダートはゴール前の含水率
+    R["firm_band"] = np.where(R["surf"] == "芝", R["cushion_value"].map(cushion_band), R["dirt_moisture_goal"].map(moist_band))
+    return R
