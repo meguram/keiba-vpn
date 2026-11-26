@@ -1,0 +1,33 @@
+{
+ "version": "race_time_v2",
+ "built": "2026-11-26",
+ "model_built": "2026-11-26",
+ "shrink_k": 2.0,
+ "member_check": {
+  "by_tertile": [
+   {
+    "tert": "高い（速い）",
+    "n": 19670.0,
+    "top3": 0.2341,
+    "pos_dev": 0.5098
+   },
+   {
+    "tert": "中",
+    "n": 21176.0,
+    "top3": 0.2129,
+    "pos_dev": 0.5277
+   },
+   {
+    "tert": "低い（遅い）",
+    "n": 21149.0,
+    "top3": 0.201,
+    "pos_dev": 0.5389
+   }
+  ],
+  "corr_top5_win": 0.9148,
+  "pass": true,
+  "rule": "高い組の次走（同じクラス）の 3 着内率 > 低い組 かつ 着順の偏差 < 低い組、かつ 2 つの作りの相関 ≥ 0.7"
+ },
+ "member_visible": true,
+ "n_races": 36327
+}

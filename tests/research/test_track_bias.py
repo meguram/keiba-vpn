@@ -208,3 +208,45 @@ def test_persistence_averages_surfaces(monkeypatch):
     R = pd.DataFrame({"surf": ["芝", "ダ"]})
     out = C.persistence(R, R, "front_early")
     assert out["split_half"] == pytest.approx(0.1) and out["next_day"] == pytest.approx(0.2) and out["split_days"] == 5
+
+
+def test_top3_text_shows_passing_order_and_rank_over_field():
+    from src.research.track_bias import report as RP
+    r = _race("P", "2020-01-05", n=10, fins=[1, 2, 2, 4, 5, 6, 7, 8, 9, 10], pos=[3, 1, 9, 2, 4, 5, 6, 7, 8, 10])
+    h = D.horse_values(D.clean(r))
+    s = RP._top3_text(h)
+    assert s.startswith("1着 1番 1人気（通過 3-3・序盤 3/10・4 角 3/10）")
+    assert s.count("2着") == 2                                  # 同着はそのまま並べる
+    assert "逃げ" not in s and "差し" not in s and "run_style" not in h.columns
+    x = h.iloc[0].copy()
+    x["passing_order"] = ""
+    assert RP.pos_text(x) == "通過なし"
+    x["passing_order"] = np.nan
+    assert RP.pos_text(x) == "通過なし"
+
+
+def test_year_page_anchors_match_and_attrs_double_quoted():
+    import re
+    from src.research.track_bias import report as RP
+    h = D.horse_values(D.clean(_many(days=4)))
+    R = B.add_baseline(D.race_values(h), D.METRICS + D.AUX, {c: 50 for c in D.METRICS + D.AUX})
+    cal = {"metrics": {c: {"芝": {"mu": 0.0, "sd": 1.0}} for c in D.METRICS + D.AUX}}
+    days = Y.apply(Y.day_raw(R), cal)
+    rm = Y.race_contrib(R, days, cal)
+    lab = RP.labels_page(days, "x")
+    yp = RP.year_page("2018", days, rm, h, "x")
+    assert "href='" not in lab and "id='" not in yp                     # 本の namespace() は二重引用符だけを張り替える
+    hrefs = set(re.findall(r'href="track_bias_labels_2018\.html#([^"]+)"', lab))
+    ids = set(re.findall(r'id="([^"]+)"', yp))
+    assert hrefs and hrefs <= ids
+
+
+def test_horse_table_hides_positions_without_passing_order():
+    from src.research.track_bias import report as RP
+    a = _race("Q", "2020-01-05")
+    a["finish_position_raw"] = a["finish_position"].astype(str)
+    a["finish_status"] = "finished"
+    a.loc[9, ["finish_position", "finish_position_raw", "finish_status", "passing_order"]] = [-1, "中", "dnf", ""]
+    h = D.horse_values(D.clean(a))
+    out = RP.horse_table(h)
+    assert "11/10" not in out and "通過なし" in out and "nan" not in out

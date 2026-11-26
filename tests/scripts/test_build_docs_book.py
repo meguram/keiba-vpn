@@ -28,6 +28,22 @@ def test_every_html_under_docs_belongs_to_exactly_one_chapter():
     assert all(p.exists() for p in paths), "章の元ファイル（.md を含む）が無い"
 
 
+def test_standalone_pages_are_only_the_declared_patterns():
+    """本の章にしない単独のページは STANDALONE_GLOBS に当たるもの（型は build_docs_book に 1 か所）。
+    当たるのはトラックバイアスの名札の年ごとのページだけで、章には入らず、名札の一覧から両方向でそろってリンクされ、中のリンクは切れていない。"""
+    sa = B.standalone_files()
+    assert sa, "単独のページ（トラックバイアスの名札の年ごとのページ）が無い"
+    assert all(re.fullmatch(r"track_bias_labels_\d{4}\.html", p.name) for p in sa), "型に当たるのは年のページだけ"
+    chapters = {c.path.resolve() for p in B.PARTS for c in p.chapters}
+    assert not (sa & chapters) and not (sa & B.all_source_files())
+    idx_path = B.HTML_DIR / "operations/final/track_bias_labels.html"
+    linked = set(re.findall(r'href="(track_bias_labels_\d{4}\.html)', idx_path.read_text(encoding="utf-8")))
+    assert linked == {p.name for p in sa}, "名札の一覧のリンク先と、置いてある年のページが一致しない"
+    for p in sa:                                   # 本・棚のリンクの確かめから外れるので、ここで中の相対リンクを確かめる
+        for target in set(re.findall(r'(?:href|src)="([^"#:]+)(?:#[^"]*)?"', p.read_text(encoding="utf-8"))):
+            assert (p.parent / unquote(target)).exists(), f"{p.name} のリンク切れ: {target}"
+
+
 def test_related_chapters_exist():
     for p in B.PARTS:
         for c in p.chapters:

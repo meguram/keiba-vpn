@@ -23,6 +23,8 @@ import { LoadingNotice } from "@/components/LoadingNotice";
 import { useAutoRetry } from "@/lib/hooks/useAutoRetry";
 import { firstCornerPos } from "@/lib/resultCheck";
 import { MarkNote } from "@/components/MarkNote";
+import { RaceLevelNote } from "@/components/RaceResult";
+import type { RaceLevel, RaceResultData } from "@/lib/hooks/useRaceResult";
 
 const SHOW_MEGU = featureEnabled("megu-index");
 const SHOW_TRACKING = featureEnabled("tracking-difficulty");
@@ -281,6 +283,7 @@ export default function RaceDetailPage() {
   const [meguSource, setMeguSource] = useState<"db" | "mock">("mock");
   const { isMember, isAdmin, loading: authLoading } = useAuthStatus();
   const lock = !authLoading && !isMember;      // 匿名は勝率・複勝率まで（それ以外はサーバが落としている）
+  const [raceLevel, setRaceLevel] = useState<RaceLevel | undefined>(undefined);   // レースレベル・開催日レベル・メンバーレベル（会員だけ。確定の結果の API）
   const narrow = useNarrow();
 
   const loadSeq = useRef(0);
@@ -382,7 +385,19 @@ export default function RaceDetailPage() {
     setTabInitialized(true);
   }, [raceData, tabInitialized]);
 
-  // めぐ指数（想定・実測）を API から取得
+  // レースレベル・開催日レベル・メンバーレベル（会員だけ。確定の結果の API が事前に計算した値を返す）
+  const hasResult = (raceData?.race_result?.entries?.length ?? 0) > 0;
+  useEffect(() => {
+    setRaceLevel(undefined);                                       // 別のレースへ移ったら前の値を消す
+    if (!raceId || !hasResult || lock || authLoading || USE_MOCK) return;
+    let alive = true;
+    getJson<RaceResultData>(`/api/race/${raceId}/result`, { ttlMs: PRED_TTL_MS })
+      .then((d) => { if (alive && d?.status === "final") setRaceLevel(d.race_level); })
+      .catch(() => { /* 取れなければ出さない */ });
+    return () => { alive = false; };
+  }, [raceId, hasResult, lock, authLoading]);
+
+  // めぐ指数（実測。レース結果の表に出す）を API から取得
   useEffect(() => {
     if (!raceId || !SHOW_MEGU) return;
     if (USE_MOCK) {
@@ -553,8 +568,6 @@ export default function RaceDetailPage() {
         <thead style={{ background: "var(--surface2)" }}>
           <tr>
             {[["枠", "m-hide"], ["馬番", ""], ["馬名", ""], ["性齢", "m-hide"], ["斤量", "m-hide"], ["騎手", "m-hide"], ["調教師", "m-hide"], ["勝率", ""], ["複勝率", ""], ["想定単勝", ""]].map(([h, c]) => <th key={h} className={c || undefined} style={TH}>{lock && ["勝率", "複勝率", "想定単勝"].includes(h) ? "🔒" : ""}{h}</th>)}
-            {SHOW_MEGU && <th style={{ ...TH, borderLeft: "2px solid rgba(167,139,250,0.3)", color: "#a78bfa" }}>想定めぐ指数</th>}
-            {SHOW_MEGU && <th style={{ ...TH, color: "#a78bfa" }}>実測めぐ指数</th>}
           </tr>
         </thead>
         <tbody>
@@ -564,7 +577,6 @@ export default function RaceDetailPage() {
             const hn = hasNo ? String(rawNo) : "";
             const pr = hasNo ? predByNo.get(rawNo) : undefined;
             const { text: oddsText } = fmtOdds(pr?.win_odds ?? undefined);
-            const megu = getMeguValues(e);
             return (
               <tr key={hasNo ? hn : `p${i}-${e.horse_id ?? ""}`} style={{ transition: "background 0.12s" }}>
                 <td className="m-hide" style={{ ...TD, textAlign: "center" }}><BracketBadge bn={hasNo ? wakuOf(Number(hn), shutubaEntries.length, Number(e.bracket_number) || null) : null} /></td>
@@ -580,8 +592,6 @@ export default function RaceDetailPage() {
                 <td style={TD}>{pctCell(pr?.win_prob, pr?.redacted)}</td>
                 <td style={TD}>{pctCell(pr?.top3_prob, pr?.redacted)}</td>
                 <td style={{ ...TD, color: "var(--text-dim)" }}>{lock || pr?.redacted || pr?.win_odds == null ? (lock ? "🔒" : "—") : oddsText}</td>
-                {SHOW_MEGU && <MeguCell value={megu.megu_final} title="想定めぐ指数（過去走から推定）" />}
-                {SHOW_MEGU && <MeguCell value={megu.actual_megu} title="実測めぐ指数（レース後）" borderLeft={false} />}
               </tr>
             );
           })}
@@ -619,6 +629,7 @@ export default function RaceDetailPage() {
     <div style={{ textAlign: "center", padding: 40, color: "var(--text-dim)" }}>🏆 レース結果データがありません</div>
   ) : (
     <div style={{ overflowX: "auto" }}>
+      {!lock && <RaceLevelNote lv={raceLevel} />}
       <table data-no-sort style={{ width: "100%", borderCollapse: "collapse", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", fontSize: 13 }}>
         <thead style={{ background: "var(--surface2)" }}>
           <tr>
@@ -628,8 +639,7 @@ export default function RaceDetailPage() {
                 {c.label}<span aria-hidden style={{ marginLeft: 3, fontSize: 9, opacity: resSort?.key === c.key ? 1 : 0.3 }}>{resSort?.key === c.key ? (resSort.dir === 1 ? "▲" : "▼") : "↕"}</span>
               </th>
             ))}
-            {SHOW_MEGU && <th style={{ ...TH, borderLeft: "2px solid rgba(167,139,250,0.3)", color: "#a78bfa" }}>想定めぐ指数</th>}
-            {SHOW_MEGU && <th style={{ ...TH, color: "#a78bfa" }}>実測めぐ指数</th>}
+            {SHOW_MEGU && <th style={{ ...TH, borderLeft: "2px solid rgba(167,139,250,0.3)", color: "#a78bfa" }}>実測めぐ指数</th>}
           </tr>
         </thead>
         <tbody>
@@ -656,12 +666,6 @@ export default function RaceDetailPage() {
                 {showFinalOdds && <td style={TD}>{positive(e.odds) != null ? `${positive(e.odds)!.toFixed(1)}倍` : "—"}</td>}
                 {SHOW_MEGU && (
                   <MeguCell
-                    value={megu.megu_final}
-                    title={meguSource === "db" ? "想定めぐ指数（出走前予測）" : "想定めぐ指数（β版モック）"}
-                  />
-                )}
-                {SHOW_MEGU && (
-                  <MeguCell
                     value={megu.actual_megu}
                     title={meguSource === "db" ? "実測めぐ指数（レース後算出）" : "実測めぐ指数（β版モック）"}
                   />
@@ -675,7 +679,7 @@ export default function RaceDetailPage() {
       <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <span style={{ color: "#a78bfa", fontWeight: 600 }}>めぐ指数</span>
         {meguSource === "db"
-          ? <span>想定＝過去5走 megu 加重平均（能力推定）／ 実測＝レース後算出。当日の走りとの差は約10点前後が典型（1点≒0.1秒）。</span>
+          ? <span>レース後の走破タイムから算出（1点≒0.1秒）。</span>
           : <span>β版モック算出（API 未取得時のフォールバック）。</span>
         }
         <span style={{ borderLeft: "1px solid var(--border)", paddingLeft: 10 }}>
