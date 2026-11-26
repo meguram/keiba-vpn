@@ -7261,6 +7261,11 @@ async def _race_predictions_compute(race_id: str, source: str = "request"):
 
     tm = StageTimer()              # 段ごとの秒数（Server-Timing とログ。計測用で、中身は時間だけ）
     t_start = _time.perf_counter()
+    from src.api import preload_gate
+
+    if preload_gate.pending():     # 起動直後: 裏の先読み（cloudrun_entry.preload_models）の完了を上限つきで待ち、同じ読み込みを二重に払わない
+        with tm.stage("preload_wait"):
+            await asyncio.to_thread(preload_gate.wait)
 
     def _done(payload) -> JSONResponse:
         resp = JSONResponse(payload)

@@ -237,7 +237,13 @@ def test_preload_models_runs_each_step_and_survives_failures(entry, monkeypatch)
     monkeypatch.setattr(expected_megu, "runs_for_horse", lambda hid, d: calls.append(("megu", hid, d)) or ([], ""))
     took = entry.preload_models("20261123")
     assert calls == ["tv2", ("megu", "", "20261123")]
-    assert set(took) == {"tracking_v2", "pace_type", "expected_megu"}
+    assert {"tracking_v2", "pace_type", "expected_megu", "megu_models", "hem_jockey"} <= set(took)
+    calls.clear()
+    assert "expected_megu" not in entry.preload_models("20261123", part="models")   # config/ の分は data/ を読まない（束より先に流す）
+    assert calls == ["tv2"]
+    calls.clear()
+    took = entry.preload_models("20261123", part="data")
+    assert calls == [("megu", "", "20261123")] and "tracking_v2" not in took
 
 
 def _bundle_pulled(entry, monkeypatch, ok: bool):
@@ -266,7 +272,8 @@ def test_ready_before_warmup_when_bundle_pulled_everything(entry, monkeypatch, f
     monkeypatch.setenv("KEIBA_READY_BEFORE_WARMUP", flag)
     _bundle_pulled(entry, monkeypatch, ok)
     preloaded = []
-    monkeypatch.setattr(entry, "preload_models", lambda: preloaded.append(1) or {})
+    monkeypatch.setattr(entry, "preload_models", lambda today=None, part="all": preloaded.append(part) or {})
+    from src.api import preload_gate
 
     async def run():
         gw_app = entry.build_app()
@@ -287,7 +294,9 @@ def test_ready_before_warmup_when_bundle_pulled_everything(entry, monkeypatch, f
         release.set()
         await content
         await asyncio.wait_for(gw._startup_task, 5)
-        assert preloaded == ([] if waits else [1])                  # 早く通すときは、ウォームアップの代わりに先読みだけ
+        assert preloaded[0] == "models"                             # config/ の分は束と並べて最初に（どちらの道でも）
+        assert preloaded[1:] == ([] if waits else ["data"])          # 早く通すときは、ウォームアップの代わりに data/ の先読みだけ
+        assert not preload_gate.pending()                            # 予測の待ちの印は必ず下りる
         await q.put({"type": "lifespan.shutdown"})
         await task
 

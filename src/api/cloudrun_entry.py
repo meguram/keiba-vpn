@@ -123,6 +123,15 @@ def early_auth_enabled() -> bool:
     return (os.environ.get("KEIBA_EARLY_AUTH") or "1").strip() != "0"
 
 
+PRELOAD_MODELS_JOIN_SEC = 30.0  # 束の後、config/ の先読み（裏のスレッド）の終わりを待つ上限。超えても data/ の分を読み、予測の待ちの印を立てる
+
+
+def preload_early_enabled() -> bool:
+    """config/ だけを読む先読み（モデル・ライブラリ）を、束の取り込みと並べて起動の最初に始める（既定 1）。KEIBA_PRELOAD_EARLY=0 で従来の束の後だけ。
+    2026-11-26: 束の後に裏で流していた先読みと、起動直後の 1 本目の予測が同時に同じ読み込みを払い、1 本目が 10〜11 秒だった（stg）。"""
+    return (os.environ.get("KEIBA_PRELOAD_EARLY") or "1").strip() != "0"
+
+
 def ready_before_warmup_enabled() -> bool:
     """束と追いつきが成功した起動（gcs_mirror.initial_bundle_ok）では、ウォームアップ（自分への 5 件の要求・約 15 秒）を待たずに要求を通す（既定 1）。
     2026-11-25: 0 台からの最初の要求が、束まで約 15 秒＋ウォームアップ約 15 秒の計 約 30 秒待っていた（stg の timed.log・Cloud Run のログ）。
@@ -200,10 +209,14 @@ async def warm_sequence(get: Callable[[str], Awaitable[tuple[int, Any]]], today:
     return called
 
 
-def preload_models(today: str | None = None) -> dict[str, float]:
+def preload_models(today: str | None = None, part: str = "all") -> dict[str, float]:
     """台ごとに初回だけ重い読み込みを、起動処理の中（起動プローブが通る前・CPU がある間）で先に済ませる。かかった秒数を返す。
     ウォームアップの 1 レースの予測だけでは通らない経路がある（予測の無いレースの出馬表だけの経路が使う追走の v2 のモデル 1.5 秒など。
-    2026-11-23 の手元の計測）。どれも lru_cache・ファイルの更新時刻のキャッシュで、2 回目からは読み直さない。失敗しても起動は続ける。"""
+    2026-11-23 の手元の計測）。どれも lru_cache・ファイルの更新時刻のキャッシュで、2 回目からは読み直さない。失敗しても起動は続ける。
+
+    part: "models" はイメージの中（config/・ライブラリの import）だけを読む分で、束の取り込みを待たずに始めてよい。
+    "data" は束で取り込む data/ を読む分で、束の後に読む（束より先に読むと、無いファイルの結果をキャッシュしてしまう）。"all" は両方。
+    起動直後の 1 本目の予測で、pace_type 2.6〜4.1 秒・めぐ指数 4.6〜5.1 秒が初回の読み込みだった（2026-11-26 の stg）。"""
     from datetime import datetime, timedelta, timezone
 
     today = today or datetime.now(timezone(timedelta(hours=9))).strftime("%Y%m%d")
@@ -232,10 +245,91 @@ def preload_models(today: str | None = None) -> dict[str, float]:
 
         expected_megu.runs_for_horse("", today)          # その年と前 2 年の表を読んで、更新時刻のキャッシュに載せる
 
-    step("tracking_v2", _tv2)
-    step("pace_type", _pace)
-    step("expected_megu", _megu_years)
+    def _pace_config() -> None:
+        from src.pipeline.inference import pace_type
+
+        pace_type.load_config()
+
+    def _libs() -> None:                                  # 予測の付け足しが初回に import する重いライブラリ
+        import numpy  # noqa: F401
+        import pandas  # noqa: F401
+        import pyarrow.parquet  # noqa: F401
+
+    def _megu_models() -> None:                           # 想定めぐ指数が初回に読む config/ のモデル・表（どれもプロセスのキャッシュに載る）
+        from src.pipeline.inference import class_benchmark, expected_megu, hem_megu_infer, megu_mark
+        from src.pipeline.megu_index import excusable
+        from src.scripts.data import hem_megu  # noqa: F401
+
+        expected_megu.load_model()
+        hem_megu_infer.load_hem()
+        excusable.load_default_model()
+        class_benchmark.load_table()
+        megu_mark.load_config()
+
+    def _growth() -> None:                                # 成長の指数（KEIBA_GROWTH_INDEX=1 のときだけ。LightGBM のモデルと polars の import）
+        from src.pipeline.inference import growth_attach
+
+        if growth_attach.enabled():
+            growth_attach.load_assets()
+            from src.pipeline.inference import serving_ped_extras, training_serving  # noqa: F401
+
+    def _hem_jockey() -> None:
+        from src.pipeline.inference import hem_megu_infer
+
+        hem_megu_infer.load_jockey_table()
+
+    if part in ("models", "all"):
+        step("libs", _libs)
+        step("tracking_v2", _tv2)
+        step("pace_type", _pace)
+        step("pace_type_config", _pace_config)
+        step("megu_models", _megu_models)
+        step("growth", _growth)
+    if part in ("data", "all"):
+        step("expected_megu", _megu_years)
+        step("hem_jockey", _hem_jockey)
     return took
+
+
+def _preload_models_part(part: str) -> None:
+    """先読みの一部を流し、段ごとの秒数とメモリを起動のログに出す（print は Cloud Run のログに出る）。"""
+    from src.api import preload_gate
+
+    t0 = time.monotonic()
+    took = preload_models(part=part)
+    print(f"起動の段(先読み): {part} {time.monotonic() - t0:.1f} 秒（起動から {time.monotonic() - _STARTED_AT:.1f} 秒） {took} {preload_gate.memory_note()}", flush=True)
+
+
+def _start_models_preload() -> Any:
+    """config/ だけを読む先読みを、束の取り込みと並べて裏のスレッドで始める。予測の計算は preload_gate で完了を待つ。"""
+    import threading
+
+    from src.api import preload_gate
+
+    preload_gate.begin()
+    def run() -> None:
+        try:
+            _preload_models_part("models")
+        except Exception as exc:  # noqa: BLE001  先読みの失敗で起動を止めない（要求の中で今までどおり読む）
+            logger.warning("起動時のモデルの先読みに失敗: %r", exc)
+
+    t = threading.Thread(target=run, name="preload-models", daemon=True)
+    t.start()
+    return t
+
+
+def _finish_preload(models_thread: Any) -> None:
+    """束の後: モデルの先読みの終わりを待ち（上限あり）、data/ の分を読み、印を立てる。失敗しても印は必ず立てる。"""
+    from src.api import preload_gate
+
+    try:
+        if models_thread is not None:
+            models_thread.join(PRELOAD_MODELS_JOIN_SEC)
+        _preload_models_part("data")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("起動時の先読みに失敗: %r", exc)
+    finally:
+        preload_gate.finish()
 
 
 class Gateway:
@@ -319,6 +413,7 @@ class Gateway:
                     if self.warmup is not None and early_auth_enabled():
                         import asyncio                # 案 A: 束の取り込み（名簿 → 束）だけを済ませてポートを開き、ウォームアップは裏で進める
 
+                        models_thread = _start_models_preload() if preload_early_enabled() else None   # config/ の分は束と並べて
                         t0 = time.monotonic()
                         if mirror_pull_enabled():
                             from src.ops.gcs_mirror import initial_recent_pulled
@@ -335,8 +430,15 @@ class Gateway:
                                                   else "束の道が済んでいないので、従来どおり起動処理の完了まで要求を待たせる"), flush=True)
                         if early:
                             self.ready.set()
-                            self._startup_task = asyncio.create_task(asyncio.to_thread(preload_models))
+                            if models_thread is not None:
+                                self._startup_task = asyncio.create_task(asyncio.to_thread(_finish_preload, models_thread))
+                            else:
+                                self._startup_task = asyncio.create_task(asyncio.to_thread(preload_models))
                         else:
+                            if models_thread is not None:      # 従来の道は要求を起動処理の完了まで待たせるので、予測の側の待ちは要らない
+                                from src.api import preload_gate
+
+                                preload_gate.finish()
                             self._startup_task = asyncio.create_task(self._run_startup())
                     elif self.warmup is not None:     # 従来: uvicorn は lifespan の完了後にポートを開く = 温まるまで要求が来ない
                         import asyncio
