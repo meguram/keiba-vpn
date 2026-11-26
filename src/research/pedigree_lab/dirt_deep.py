@@ -28,10 +28,13 @@ V5BAG = "/home/jovyan/work/megu_cycles_out/rich_pred_v5bag.parquet"
 PED_JSON = "/home/jovyan/work/keiba-vpn/data/local/horse_pedigree_5gen"
 
 
-def setup(aspect: str = "dirt"):
+def setup(aspect: str = "dirt", null_seed: int | None = None):
     F = ap_.base_frame()
-    A, keys = ap_.group_a(F, aspect)
-    L = ap_.maternal_long(F, drop_common=False)
+    if aspect == "turf":                       # 芝の側の対（aptitude.py は凍結なので、ここで群を作る。dirt と同じく芝ダで分けない）
+        A, keys = (F["surf"] == "T").to_numpy(), []
+    else:
+        A, keys = ap_.group_a(F, aspect)
+    L = ap_.maternal_long(F, drop_common=False, null_seed=null_seed)
     F["z_sire"] = ap_.apt_by(F, A, ["sire"] + keys)
     F["z_bms"] = ap_.apt_by(F, A, ["ds"] + keys)
     F["z_mat5"], F["z_lv5"] = ck.mat_cols(F, A, keys, L)
@@ -79,7 +82,11 @@ def run_anc(F, A, keys, L) -> dict:
 def dirt_rows(F) -> pd.DataFrame:
     """観点の群 A（_A）の開発の行（名前はダートの前提のままだが、--aspect の観点の行を返す）。"""
     X = attach_part(F, "dev")
-    return X[X["_A"].astype(bool)].reset_index(drop=True)
+    S = X[X["_A"].astype(bool)].reset_index(drop=True)
+    rid = S["race_id"].to_numpy()
+    S["_lqc"] = S["lq"].to_numpy() - pd.Series(S["lq"].to_numpy()).groupby(rid).transform("mean").to_numpy()
+    S["_rk"] = S.groupby("race_id")["odds"].rank(method="first").to_numpy()
+    return S
 
 
 def zs(S: pd.DataFrame) -> dict[str, np.ndarray]:
@@ -110,6 +117,42 @@ def run_v5bag(F, n_boot: int) -> dict:
     return res
 
 
+CALIB = {"on": False}
+
+
+def calib_cols(S: pd.DataFrame) -> list[np.ndarray]:
+    """市場の確率の曲がり（較正）を足す列: 中心化した lq の 2 乗・人気の帯の印・lq × 帯・道悪 × lq（--calib のときだけ）。
+    lq の中心化と人気の順位は、場面で絞る前の全頭で作った列（_lqc・_rk。dirt_rows）を使う（critic 4 回目の 4）。
+    道悪の印がどのレースでも同じ値（道悪だけ・良だけの場面や観点）なら、道悪の 2 列は lq・lq の 2 乗と共線になるので入れない（critic 4 回目の 1〜3）。"""
+    if not CALIB["on"]:
+        return []
+    lqc, rk = S["_lqc"].to_numpy(), S["_rk"].to_numpy()
+    out = [lqc ** 2]
+    for lo, hi in ((4, 6), (7, 9), (10, 99)):
+        mk = ((rk >= lo) & (rk <= hi)).astype(float)
+        out += [mk, lqc * mk]
+    wet = S["going"].isin(["S", "W"]).to_numpy().astype(float)
+    if 0 < wet.mean() < 1:
+        out += [lqc * wet, lqc ** 2 * wet]          # 道悪で市場の曲がりが違う分（統括役の (4)）
+    return out
+
+
+def run_basic(F, n_boot: int) -> dict:
+    S = dirt_rows(F)
+    Z = zs(S)
+    res = {"rows": int(len(S))}
+    for market in (False, True):
+        base = [S["lp"].to_numpy(), S["lq"].to_numpy()] if market else [S["lp"].to_numpy()]
+        M = np.c_[tuple(base) + (Z["ctrl"], Z["lv5"], Z["sire"], Z["bms"], Z["mat5"]) + tuple(calib_cols(S) if market else [])]
+        nb = len(base)
+        idx = {"sire": nb + 2, "bms": nb + 3, "mat5": nb + 4}
+        b, bs = fit_boot(S, M, n_boot)
+        c, r = sim_ci(b, bs, idx)
+        res["mkt" if market else "nomkt"] = {"c": round(c, 3), **{k: {"gamma": v["gamma"], "sim_ci": v["sim_ci"]} for k, v in r.items()}}
+        print("mkt" if market else "nomkt", res["mkt" if market else "nomkt"], flush=True)
+    return res
+
+
 def scene_masks(S: pd.DataFrame) -> dict[str, np.ndarray]:
     d, m = S["distance"].to_numpy(), S["date"].dt.month.to_numpy()
     young = (pd.to_numeric(S["horse_id"].str[:4]) >= 2014).to_numpy()
@@ -123,16 +166,17 @@ def scene_masks(S: pd.DataFrame) -> dict[str, np.ndarray]:
     }
 
 
-def run_scenes(F, n_boot: int) -> dict:
+def run_scenes(F, n_boot: int, by_year: bool = False) -> dict:
     S = dirt_rows(F)
     res = {}
-    for nm, mk in scene_masks(S).items():
+    masks = {f"{y} 年": (S["date"].dt.year == y).to_numpy() for y in sorted(S["date"].dt.year.unique())} if by_year else scene_masks(S)
+    for nm, mk in masks.items():
         T = S[mk].reset_index(drop=True)
         if len(T) < 3000:
             res[nm] = {"rows": int(len(T))}
             continue
         Zt = zs(T)
-        M = np.c_[T["lp"], T["lq"], Zt["ctrl"], Zt["lv5"], Zt["sire"], Zt["bms"], Zt["mat5"]]
+        M = np.c_[tuple([T["lp"].to_numpy(), T["lq"].to_numpy(), Zt["ctrl"], Zt["lv5"], Zt["sire"], Zt["bms"], Zt["mat5"]] + calib_cols(T))]
         b, bs = fit_boot(T, M, n_boot)
         res[nm] = {"rows": int(len(T)), "mat5": round(float(b[6]), 4), "ci": np.percentile(bs[:, 6], [2.5, 97.5]).round(4).tolist(),
                    "se": round(float(bs[:, 6].std()), 4), "sire": round(float(b[4]), 4)}
@@ -159,33 +203,72 @@ def run_popsire(F, n_boot: int) -> dict:
     for nm, mk in bands.items():
         cols.append(inband(Z["sire"], mk))
         names_.append(nm)
-    M = np.c_[tuple(cols)]
+    M = np.c_[tuple(cols + calib_cols(S))]
     idx = {n: 6 + i for i, n in enumerate(names_)}
     b, bs = fit_boot(S, M, n_boot)
     c, r = sim_ci(b, bs, idx)
     # 牝系も同じ帯で
     cols2 = [S["lp"].to_numpy(), S["lq"].to_numpy(), Z["ctrl"], Z["lv5"], Z["sire"], Z["bms"]] + [inband(Z["mat5"], mk) for mk in bands.values()]
-    b2, bs2 = fit_boot(S, np.c_[tuple(cols2)], n_boot)
+    b2, bs2 = fit_boot(S, np.c_[tuple(cols2 + calib_cols(S))], n_boot)
     c2, r2 = sim_ci(b2, bs2, idx)
     return {"sire_by_band": {"c": round(c, 3), **{k: {"gamma": v["gamma"], "sim_ci": v["sim_ci"]} for k, v in r.items()}},
             "mat5_by_band": {"c": round(c2, 3), **{k: {"gamma": v["gamma"], "sim_ci": v["sim_ci"]} for k, v in r2.items()}},
             "note": "人気の帯は確定オッズの順位（kf_v4 の予測がある行の中の順位・同じオッズは馬番の順）。列は帯の中で中心化（帯の中の効き）"}
 
 
+def run_gens(F, A, keys, L, n_boot: int) -> dict:
+    """代ごとの牝系の列（2 代＝母父・3 代・4 代・5 代）を同時に当てる（どの深さが効くか。記述）。
+    aptitude.py は前向きの記録で凍結しているので触らず、まとめた後の表を代で絞る（同じ祖先が複数の代に出るときは一番近い代に入り、
+    その重みには遠い代の血量も足されている）。"""
+    cols = {}
+    for g in (2, 3, 4, 5):
+        Lg = L[L["gen"] == g].reset_index(drop=True)
+        cols[f"g{g}"], _ = ck.mat_cols(F, A, keys, Lg)
+    for k, v in cols.items():
+        F[f"z_{k}"] = v
+    S = dirt_rows(F)
+    Z = zs(S)
+    G = {k: ap_.zA(S, S[f"z_{k}"].to_numpy()) for k in cols}
+    res = {"rows": int(len(S))}
+    for market in (False, True):
+        base = [S["lp"].to_numpy(), S["lq"].to_numpy()] if market else [S["lp"].to_numpy()]
+        M = np.c_[tuple(base) + (Z["ctrl"], Z["lv5"], Z["sire"]) + tuple(G.values())]
+        idx = {k: len(base) + 3 + i for i, k in enumerate(G)}
+        b, bs = fit_boot(S, M, n_boot)
+        c, r = sim_ci(b, bs, idx)
+        res["mkt" if market else "nomkt"] = {"c": round(c, 3), **{k: {"gamma": v["gamma"], "sim_ci": v["sim_ci"]} for k, v in r.items()}}
+        print("mkt" if market else "nomkt", res["mkt" if market else "nomkt"], flush=True)
+    res["note"] = "g2 は母父（2 代）。母父の列（z_bms）は入れず、代ごとの列で置き換えた"
+    return res
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("what", choices=["anc", "v5bag", "scenes", "popsire"])
+    p.add_argument("what", choices=["anc", "v5bag", "scenes", "popsire", "gens", "basic", "years"])
     p.add_argument("--boot", type=int, default=200)
-    p.add_argument("--aspect", default="dirt", choices=["rand", "early", "pace_h", "pace_s", "wet", "ext", "short", "steep", "straight", "yoshiba", "dirt", "long"], help="popsire だけ: 8 観点の型（early・ext・straight・wet など。統括役の (d)）")
+    p.add_argument("--calib", action="store_true", help="市場の確率の曲がり（lq の 2 乗・人気の帯・道悪）を基準に足す（統括役の (3)(4)）")
+    p.add_argument("--null-seed", type=int, default=None, help="牝系の祖先の札の帰無（aptitude の作り）")
+    p.add_argument("--aspect", default="dirt", choices=["rand", "early", "pace_h", "pace_s", "wet", "ext", "short", "steep", "straight", "yoshiba", "dirt", "long", "turf"], help="popsire だけ: 8 観点の型（early・ext・straight・wet など。統括役の (d)）")
     a = p.parse_args()
-    if a.aspect != "dirt" and a.what != "popsire":
-        raise SystemExit("--aspect は popsire だけ")
-    data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"dirt_deep_{a.what}" if a.aspect == "dirt" else f"dirt_deep_{a.what}_{a.aspect}",
+    CALIB["on"] = a.calib
+    if a.calib and a.what not in ("popsire", "scenes", "basic", "years"):
+        raise SystemExit("--calib は popsire・scenes・basic・years だけ")
+    if a.aspect != "dirt" and a.what not in ("popsire", "gens", "basic", "years"):
+        raise SystemExit("--aspect は popsire・gens・basic・years だけ")
+    data.TOKENS.append(data._guard(("2016-01-01", "2024-12-31"), "select", f"dirt_deep_{a.what}" + ("" if a.aspect == "dirt" else f"_{a.aspect}") + ("_calib" if a.calib else "") + ("" if a.null_seed is None else f"_null{a.null_seed}"),
                                    f"ダートの牝系の候補の深掘り: {a.what} {a.aspect}（尤度だけ・記述）"))
-    F, A, keys, L = setup(a.aspect)
-    res = run_anc(F, A, keys, L) if a.what == "anc" else {"v5bag": run_v5bag, "scenes": run_scenes, "popsire": run_popsire}[a.what](F, a.boot)
-    res["aspect"] = a.aspect
-    path = data.OUT / (f"dirt_deep_{a.what}.json" if a.aspect == "dirt" else f"dirt_deep_{a.what}_{a.aspect}.json")
+    F, A, keys, L = setup(a.aspect, a.null_seed)
+    if a.what == "gens":
+        res = run_gens(F, A, keys, L, a.boot)
+    elif a.what == "basic":
+        res = run_basic(F, a.boot)
+    elif a.what == "years":
+        res = run_scenes(F, a.boot, by_year=True)
+    else:
+        res = run_anc(F, A, keys, L) if a.what == "anc" else {"v5bag": run_v5bag, "scenes": run_scenes, "popsire": run_popsire}[a.what](F, a.boot)
+    res["aspect"], res["calib"], res["null_seed"] = a.aspect, a.calib, a.null_seed
+    tag = ("" if a.aspect == "dirt" else f"_{a.aspect}") + ("_calib" if a.calib else "") + ("" if a.null_seed is None else f"_null{a.null_seed}")
+    path = data.OUT / f"dirt_deep_{a.what}{tag}.json"
     path.write_text(json.dumps(res, ensure_ascii=False, indent=1))
     print(json.dumps(res, ensure_ascii=False)[:4000], flush=True)
     data.finish_all(str(path))
